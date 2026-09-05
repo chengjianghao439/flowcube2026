@@ -9,7 +9,7 @@ export function SaleOrderOverview({ order }: { order: SaleOrder }) {
   const cells = [
     { label: '客户', value: order.customerName || '—', icon: Building2 },
     { label: '出库仓库', value: order.isMultiWarehouse ? '多仓履约' : (order.warehouseName || '—'), icon: Warehouse },
-    { label: '商品明细', value: `${order.items?.length ?? 0} 种`, icon: PackageOpen },
+    { label: '商品明细', value: `${order.items?.length ?? 0} 行`, icon: PackageOpen },
     { label: '订单金额', value: `¥${payableAmount.toFixed(2)}`, icon: CircleDollarSign },
   ]
   return (

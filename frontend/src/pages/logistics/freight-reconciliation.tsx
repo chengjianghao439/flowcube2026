@@ -137,7 +137,7 @@ export default function FreightReconciliationPage() {
       </SectionCard>
 
       <Dialog open={billDialog} onOpenChange={v => !v && setBillDialog(false)}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-xl">
           <DialogHeader><DialogTitle>录入运费账单</DialogTitle></DialogHeader>
           <div className="space-y-3 py-2">
             <div>

@@ -1,3 +1,4 @@
+import { QueryFormLayout } from '@/components/shared/QueryFormLayout'
 import { useEffect, useState } from 'react'
 import { AppDialog } from '@/components/shared/AppDialog'
 import { Button } from '@/components/ui/button'
@@ -42,7 +43,7 @@ export default function CreditOverrideQueryDialog({ open, initial, onClose, onAp
       dialogId="credit-override-query"
       title="查询超额放行申请"
       resizable={false}
-      defaultWidth={520}
+      defaultWidth={640}
       defaultHeight={460}
       minWidth={420}
       minHeight={400}
@@ -56,7 +57,7 @@ export default function CreditOverrideQueryDialog({ open, initial, onClose, onAp
         </div>
       }
     >
-      <div className="grid h-full grid-cols-2 gap-4 overflow-y-auto px-5 py-4">
+      <QueryFormLayout>
         <label className="flex flex-col gap-1 col-span-2">
           <span className="text-xs font-medium text-muted-foreground">申请单号 / 销售单号 / 客户</span>
           <Input
@@ -89,7 +90,7 @@ export default function CreditOverrideQueryDialog({ open, initial, onClose, onAp
           <DatePicker value={draft.endDate} min={draft.startDate || undefined}
             onChange={v => set('endDate', v)} className="h-9" />
         </label>
-      </div>
+      </QueryFormLayout>
     </AppDialog>
   )
 }

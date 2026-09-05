@@ -112,7 +112,7 @@ export default function RequisitionsPage() {
     <div className="space-y-4">
       <PageHeader
         title="采购申请"
-        description="发起采购需求，经一级审批后转为采购单（可按供应商拆分）。审批人不能是申请人本人。"
+        description="登记采购需求，审批后按供应商转为采购单。"
         actions={
           <>
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>

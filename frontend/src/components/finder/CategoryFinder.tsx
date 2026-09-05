@@ -62,11 +62,11 @@ function CategoryTree({
                   ? <ChevronDown className="h-4 w-4 shrink-0" />
                   : <ChevronRight className="h-4 w-4 shrink-0" />
                 : <span className="h-4 w-4 shrink-0" />}
-              <span className={cn('truncate', selected && 'font-medium')}>{cat.name}</span>
+              <span className={cn('min-w-0 break-words leading-5', selected && 'font-medium')}>{cat.name}</span>
               {cat.status === 0 && <span className="ml-auto shrink-0 text-xs text-muted-foreground">停用</span>}
             </button>
             {hasChildren && expanded && (
-              <div className="ml-4 mt-1 rounded-lg border border-border/60 bg-background/80 p-2">
+              <div className="ml-5 mt-1 border-l border-border pl-3">
                 <CategoryTree
                   nodes={cat.children!}
                   selectedId={selectedId}
@@ -137,13 +137,13 @@ export function CategoryFinder({ open, onClose, onConfirm, value, leafOnly = tru
       onOpenChange={v => { if (!v) onClose() }}
       dialogId="category-finder"
       title={<span className="flex items-center gap-2"><FolderTree className="h-4 w-4 text-primary" />选择分类</span>}
-      defaultWidth={420}
-      defaultHeight={480}
+      defaultWidth={640}
+      defaultHeight={560}
       minWidth={320}
       minHeight={300}
       footer={
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-muted-foreground">{selectedName || '未选择'}</span>
+        <div className="flex items-center justify-between gap-4">
+          <span className="text-sm text-muted-foreground">{selectedName ? `当前分类：${selectedName}` : '展开分类后点击末级分类填入'}</span>
           <div className="flex gap-2">
             <Button variant="outline" onClick={onClose}>取消</Button>
             <Button onClick={handleConfirm} disabled={selectedId == null}>确认</Button>
@@ -154,7 +154,7 @@ export function CategoryFinder({ open, onClose, onConfirm, value, leafOnly = tru
       {categoryTree.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted-foreground">暂无分类</p>
       ) : (
-        <div className="h-full overflow-y-auto p-1">
+        <div className="h-full overflow-y-auto p-4">
           <CategoryTree
             nodes={categoryTree}
             selectedId={selectedId}

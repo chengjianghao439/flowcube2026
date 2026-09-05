@@ -62,10 +62,10 @@ export default function SaleQueryDialog({ open, initial, onClose, onApply }: Pro
         open={open}
         onOpenChange={v => { if (!v) onClose() }}
         dialogId="sale-query"
-        title="高级查询"
+        title="查询销售订单"
         resizable={false}
-        defaultWidth={520}
-        defaultHeight={520}
+        defaultWidth={680}
+        defaultHeight={600}
         minWidth={420}
         minHeight={420}
         footer={
@@ -78,7 +78,8 @@ export default function SaleQueryDialog({ open, initial, onClose, onApply }: Pro
           </div>
         }
       >
-        <div className="grid h-full grid-cols-1 gap-4 overflow-y-auto px-5 py-4 sm:grid-cols-2">
+        <div className="grid content-start grid-cols-1 gap-x-5 gap-y-3 overflow-y-auto px-5 py-4 sm:grid-cols-2">
+          <p className="col-span-full text-sm font-semibold">订单条件</p>
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground">单号</span>
             <Input
@@ -96,10 +97,10 @@ export default function SaleQueryDialog({ open, initial, onClose, onApply }: Pro
               <SelectTrigger className="h-9"><SelectValue placeholder="全部状态" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="__all__">全部状态</SelectItem>
-                <SelectItem value="1">草稿</SelectItem>
+                <SelectItem value="1">待占库</SelectItem>
                 <SelectItem value="6">部分占库</SelectItem>
                 <SelectItem value="2">已占库</SelectItem>
-                <SelectItem value="3">拣货中</SelectItem>
+                <SelectItem value="3">执行中</SelectItem>
                 <SelectItem value="4">已出库</SelectItem>
                 <SelectItem value="5">已取消</SelectItem>
               </SelectContent>
@@ -146,6 +147,7 @@ export default function SaleQueryDialog({ open, initial, onClose, onApply }: Pro
             />
           </label>
 
+          <p className="col-span-full border-t pt-4 text-sm font-semibold">日期与备注</p>
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground">创建日期（起）</span>
             <DatePicker value={draft.startDate} max={draft.endDate || undefined}

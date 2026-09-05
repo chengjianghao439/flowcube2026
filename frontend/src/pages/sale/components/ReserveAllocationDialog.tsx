@@ -1,3 +1,4 @@
+import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
 import { useEffect, useMemo, useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -6,6 +7,7 @@ import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
 import { Loader2, AlertTriangle, Boxes, PackageSearch, Warehouse } from 'lucide-react'
 import { clampAllocationQty, isAllocationQtyValid } from './saleAllocation'
 import { cn } from '@/lib/utils'
+import { summarizeSaleQuantities } from '@/lib/salePresentation'
 import { useSaleReservePreview, useReserveSale } from '@/hooks/useSale'
 import { ApiClientError } from '@/api/client'
 import type { StockShortageItem } from './StockShortageDialog'
@@ -52,10 +54,12 @@ export default function ReserveAllocationDialog({ open, orderId, onClose, onShor
     () => items.filter(i => rows[i.itemId]?.checked && (rows[i.itemId]?.qty ?? 0) > 0),
     [items, rows],
   )
-  const orderQty = items.reduce((sum, item) => sum + item.quantity, 0)
-  const reservedQty = items.reduce((sum, item) => sum + item.reservedQty, 0)
-  const remainingQty = items.reduce((sum, item) => sum + item.remainToReserve, 0)
-  const selectedQty = selectedRows.reduce((sum, item) => sum + (rows[item.itemId]?.qty ?? 0), 0)
+  const quantityGroups = summarizeSaleQuantities(items)
+  const orderQty = quantityGroups.map(q => `${q.ordered} ${q.unit}`).join(' / ') || '—'
+  const reservedQty = quantityGroups.map(q => `${q.reserved} ${q.unit}`).join(' / ') || '—'
+  const remainingQty = summarizeSaleQuantities(items.map(i => ({ ...i, quantity: i.remainToReserve }))).map(q => `${q.ordered} ${q.unit}`).join(' / ') || '—'
+  const selectedQty = summarizeSaleQuantities(selectedRows.map(i => ({ ...i, quantity: rows[i.itemId]?.qty ?? 0 }))).map(q => `${q.ordered} ${q.unit}`).join(' / ') || '—'
+
 
   const availableFor = (itemId: number, warehouseId: number) =>
     items.find(i => i.itemId === itemId)?.warehouses.find(w => w.warehouseId === warehouseId)?.available ?? 0
@@ -127,7 +131,7 @@ export default function ReserveAllocationDialog({ open, orderId, onClose, onShor
 
         <div className="grid grid-cols-2 border-b border-border bg-muted/20 sm:grid-cols-4">
           {[
-            ['商品明细', `${items.length} 种`],
+            ['商品明细', `${items.length} 行`],
             ['订单总量', String(orderQty)],
             ['已占数量', String(reservedQty)],
             ['待占数量', String(remainingQty)],
@@ -159,13 +163,13 @@ export default function ReserveAllocationDialog({ open, orderId, onClose, onShor
 
           {!isLoading && (
             <div className="overflow-x-auto rounded-xl border border-border">
-              <table className="w-full min-w-[1040px] text-sm">
-                <thead className="sticky top-0 z-[1] bg-muted/70 text-xs text-muted-foreground backdrop-blur">
+              <table className="w-full min-w-[1560px] text-sm">
+                <thead className="sticky top-0 z-[1] bg-muted text-xs text-muted-foreground">
                   <tr>
                     <th className="w-12 px-4 py-3">
                       <input type="checkbox" checked={allChecked} onChange={e => toggleAll(e.target.checked)} aria-label="全选可占商品" />
                     </th>
-                    <th className="min-w-[330px] px-2 py-3 text-left">商品身份</th>
+                    <ProductIdentityHeaders /><th className="min-w-20 px-3 py-3 text-left">单位</th>
                     <th className="w-44 px-3 py-3 text-left">订购情况</th>
                     <th className="w-52 px-3 py-3 text-left">发货仓库</th>
                     <th className="w-36 px-3 py-3 text-left">本次占库</th>
@@ -186,27 +190,14 @@ export default function ReserveAllocationDialog({ open, orderId, onClose, onShor
                         <td className="px-4 py-4 text-center">
                           <input type="checkbox" checked={!!st.checked} disabled={fullyReserved} onChange={e => setRow(item.itemId, { checked: e.target.checked })} aria-label={`选择 ${item.productName} ${item.spec || ''} ${item.color || ''}`} />
                         </td>
-                        <td className="px-2 py-4">
-                          <div className="flex items-start gap-3">
-                            <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-primary"><PackageSearch className="h-4 w-4" /></span>
-                            <div className="min-w-0 flex-1">
-                              <div className="font-semibold text-foreground">{item.productName}</div>
-                              <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                                <div><span className="text-muted-foreground">编码</span><span className="ml-2 font-mono text-foreground">{item.productCode || '—'}</span></div>
-                                <div><span className="text-muted-foreground">供应商型号</span><span className="ml-2 text-foreground">{item.articleNumber || '—'}</span></div>
-                                <div><span className="text-muted-foreground">型号</span><span className="ml-2 font-medium text-foreground">{item.spec || '—'}</span></div>
-                                <div><span className="text-muted-foreground">颜色</span><span className="ml-2 font-medium text-foreground">{item.color || '—'}</span></div>
-                              </div>
-                            </div>
-                          </div>
-                        </td>
+                        <ProductIdentityCells product={item} /><td className="px-3 py-3">{item.unit || '—'}</td>
                         <td className="px-3 py-4">
                           <div className="grid grid-cols-3 gap-2 text-center">
                             <div><div className="text-[11px] text-muted-foreground">需求</div><div className="mt-1 font-semibold tabular-nums">{item.quantity}</div></div>
                             <div><div className="text-[11px] text-muted-foreground">已占</div><div className="mt-1 font-semibold tabular-nums">{item.reservedQty}</div></div>
                             <div><div className="text-[11px] text-muted-foreground">待占</div><div className="mt-1 font-semibold tabular-nums text-primary">{item.remainToReserve}</div></div>
                           </div>
-                          <div className="mt-2 text-center text-[11px] text-muted-foreground">单位：{item.unit || '—'}</div>
+
                         </td>
                         <td className="px-3 py-4">
                           <div className="mb-1.5 flex items-center gap-1.5 text-[11px] text-muted-foreground"><Warehouse className="h-3.5 w-3.5" />选择库存所在仓库</div>
@@ -214,7 +205,7 @@ export default function ReserveAllocationDialog({ open, orderId, onClose, onShor
                         </td>
                         <td className="px-3 py-4">
                           <div className="mb-1.5 text-[11px] text-muted-foreground">最多可占 {item.remainToReserve} {item.unit}</div>
-                          <Input type="number" min={0} max={item.remainToReserve} value={st.qty ?? 0} disabled={!st.checked} onChange={e => setRow(item.itemId, { qty: Number(e.target.value) })} className="h-9 text-right text-sm font-semibold tabular-nums" />
+                          <Input aria-label={`${item.productName}本次占库数量`} type="number" step={0.0001} min={0} max={item.remainToReserve} value={st.qty ?? 0} disabled={!st.checked} onChange={e => setRow(item.itemId, { qty: Number(e.target.value) })} className="h-9 text-right text-sm font-semibold tabular-nums" />
                         </td>
                         <td className="px-4 py-4 text-right">
                           <div className={cn('text-base font-semibold tabular-nums', short && 'text-destructive')}>{available} <span className="text-xs font-normal">{item.unit}</span></div>
@@ -229,7 +220,7 @@ export default function ReserveAllocationDialog({ open, orderId, onClose, onShor
                     )
                   })}
                   {!items.length && (
-                    <tr><td colSpan={6} className="px-4 py-16 text-center text-muted-foreground"><PackageSearch className="mx-auto mb-2 h-8 w-8 opacity-35" />没有可占用库存的商品明细</td></tr>
+                    <tr><td colSpan={11} className="px-4 py-16 text-center text-muted-foreground"><PackageSearch className="mx-auto mb-2 h-8 w-8 opacity-35" />没有可占用库存的商品明细</td></tr>
                   )}
                 </tbody>
               </table>
@@ -242,7 +233,7 @@ export default function ReserveAllocationDialog({ open, orderId, onClose, onShor
             {shortRows.length > 0 ? (
               <span className="inline-flex items-center gap-1.5 text-destructive"><AlertTriangle className="h-4 w-4" />{shortRows.length} 项数量无效或库存不足，请检查数量（最多四位小数）与仓库</span>
             ) : (
-              <span className="text-muted-foreground">已选择 <strong className="text-foreground">{selectedRows.length}</strong> 种商品，占用数量合计 <strong className="text-foreground">{selectedQty}</strong></span>
+              <span className="text-muted-foreground">已选择 <strong className="text-foreground">{selectedRows.length}</strong> 行明细，占用数量合计 <strong className="text-foreground">{selectedQty}</strong></span>
             )}
           </div>
           <div className="flex gap-2">

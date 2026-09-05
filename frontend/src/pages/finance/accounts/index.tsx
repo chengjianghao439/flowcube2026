@@ -1,3 +1,5 @@
+import { ReportTable } from '@/components/shared/ReportTable'
+import { RecordIdentity } from '@/components/shared/RecordIdentity'
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
@@ -53,7 +55,7 @@ function AccountsQueryDialog({ open, initial, onClose, onApply }: {
             <Input className="h-9" placeholder="编码 / 名称 / 账号" value={v.keyword}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setV(p => ({ ...p, keyword: e.target.value }))} />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">
               <Label>账户类型</Label>
               <Select value={v.type || '__all__'} onValueChange={x => setV(p => ({ ...p, type: x === '__all__' ? '' : x }))}>
@@ -176,15 +178,14 @@ export default function FinanceAccountsPage() {
   }
 
   const columns: TableColumn<FinanceAccount>[] = [
-    { key: 'code', title: '编码', width: 110, render: v => <span className="text-doc-code">{String(v)}</span> },
-    { key: 'name', title: '账户名称', width: 180 },
+    { key: 'code', title: '账户 / 编码', width: 280, render: (_, r) => <RecordIdentity title={r.name || '—'} code={r.code} /> },
     { key: 'type', title: '类型', width: 100, render: (_, row) => <SoftStatusLabel label={(row as FinanceAccount).typeName} tone="info" /> },
     { key: 'accountNo', title: '账号', width: 180, render: (v, row) => {
       const r = row as FinanceAccount
       return v ? <span className="text-doc-code-muted">{String(v)}{r.bankName ? ` · ${r.bankName}` : ''}</span> : <span className="text-muted-foreground">—</span>
     }},
-    { key: 'openingBalance', title: '期初余额', width: 120, render: v => <span className="tabular-nums text-muted-foreground">{money(v as number)}</span> },
-    { key: 'currentBalance', title: '当前余额', width: 130, render: v => (
+    { key: 'openingBalance', title: '期初余额', width: 120, align: 'right', render: v => <span className="tabular-nums text-muted-foreground">{money(v as number)}</span> },
+    { key: 'currentBalance', title: '当前余额', width: 130, align: 'right', render: v => (
       <span className={`tabular-nums font-semibold ${Number(v) < 0 ? 'text-destructive' : 'text-foreground'}`}>{money(v as number)}</span>
     )},
     { key: 'isActive', title: '状态', width: 80, render: (_, row) => {
@@ -241,7 +242,7 @@ export default function FinanceAccountsPage() {
       <Dialog open={formOpen} onOpenChange={v => !v && setFormOpen(false)}>
         <DialogContent className="max-w-2xl">
           <DialogHeader><DialogTitle>{editing ? '编辑账户' : '新建账户'}</DialogTitle></DialogHeader>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">
               <Label>账户名称 *</Label>
               <Input value={form.name} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, name: e.target.value }))} placeholder="如：工商银行基本户" />
@@ -308,7 +309,7 @@ export default function FinanceAccountsPage() {
             </div>
           )}
           <div className="max-h-96 overflow-y-auto rounded-md border">
-            <table className="w-full text-sm">
+            <ReportTable className="w-full text-sm">
               <thead className="sticky top-0 bg-muted/50 text-xs text-muted-foreground">
                 <tr>
                   <th className="px-2 py-1.5 text-left">日期</th>
@@ -336,7 +337,7 @@ export default function FinanceAccountsPage() {
                   <tr><td colSpan={7} className="px-2 py-6 text-center text-muted-foreground">该账户还没有流水</td></tr>
                 )}
               </tbody>
-            </table>
+            </ReportTable>
           </div>
           <DialogFooter><Button variant="outline" onClick={() => setTxAccount(null)}>关闭</Button></DialogFooter>
         </DialogContent>
@@ -349,7 +350,7 @@ export default function FinanceAccountsPage() {
           <p className="text-sm text-muted-foreground">
             账实不符时用它对平。系统会按差额补一笔「余额调整」流水，不会直接改写余额，调整过程可追溯。
           </p>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">
               <Label>当前余额</Label>
               <Input value={adjustTarget ? money(adjustTarget.currentBalance) : ''} disabled className="bg-muted/50" />

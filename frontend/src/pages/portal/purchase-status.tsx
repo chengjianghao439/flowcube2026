@@ -1,3 +1,4 @@
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Truck } from 'lucide-react'
@@ -19,7 +20,7 @@ export default function PortalPurchaseStatusPage() {
   const [finderOpen, setFinderOpen] = useState(false)
   const [page, setPage] = useState(1)
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['portal-purchase-status', supplier?.id, page],
     queryFn: () => getPortalPurchaseStatusApi({ supplierId: supplier!.id, page, pageSize: PAGE_SIZE }),
     enabled: !!supplier,
@@ -64,17 +65,10 @@ export default function PortalPurchaseStatusPage() {
         )}
       </FilterCard>
 
-      <DataTable
-        columns={columns}
-        data={data?.list ?? []}
-        loading={isLoading}
-        emptyText={supplier ? '该供应商暂无采购订单' : '请先选择供应商'}
-      />
-
-      {supplier && (
-        <Pagination page={page} totalPages={totalPages} total={total} unit="单"
-          onPageChange={setPage} />
-      )}
+      {supplier && (isError ? <QueryErrorState error={error} onRetry={() => void refetch()} /> : <>
+        <DataTable columns={columns} data={data?.list ?? []} loading={isLoading} emptyText="该供应商暂无采购订单" />
+        <Pagination page={page} totalPages={totalPages} total={total} unit="单" onPageChange={setPage} />
+      </>)}
 
       <SupplierFinder
         open={finderOpen}
@@ -83,7 +77,7 @@ export default function PortalPurchaseStatusPage() {
       />
 
       {!supplier && (
-        <div className="flex flex-col items-center gap-2 py-16 text-muted-foreground">
+        <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed bg-card py-20 text-muted-foreground">
           <Truck className="h-8 w-8 opacity-40" />
           <span className="text-sm">选择供应商后查看到货进度</span>
         </div>

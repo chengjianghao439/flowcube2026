@@ -1,3 +1,6 @@
+import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
+import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
+import { ReportTable } from '@/components/shared/ReportTable'
 import { useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
@@ -84,11 +87,7 @@ export default function ReplenishmentPage() {
   }, [list, selected])
 
   const columns: TableColumn<ReplenishmentItem>[] = [
-    { key: 'productCode', title: '商品编码', width: 110, render: v => <span className="text-doc-code">{String(v)}</span> },
-    { key: 'articleNumber', title: '货号', width: 90, render: v => (v as string) || '—' },
-    { key: 'spec', title: '型号', width: 100, render: v => (v as string) || '—' },
-    { key: 'productName', title: '商品名称' },
-    { key: 'color', title: '颜色', width: 70, render: v => (v as string) || '—' },
+    ...productIdentityColumns(),
     { key: 'warehouseName', title: '仓库', width: 110 },
     { key: 'available', title: '可用', width: 90, align: 'right', render: v => <span className="tabular-nums">{fmtQty(v)}</span> },
     { key: 'inTransit', title: '在途采购', width: 100, align: 'right', render: v => Number(v) > 0
@@ -240,7 +239,7 @@ export default function ReplenishmentPage() {
       )}
 
       <Dialog open={confirmOpen} onOpenChange={v => !v && setConfirmOpen(false)}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>生成采购申请单</DialogTitle>
           </DialogHeader>
@@ -250,22 +249,22 @@ export default function ReplenishmentPage() {
               {selectedRows[0]?.warehouseName ?? '—'}」），进入审批流程。数量取各行的「建议采购量」，可在采购申请单中调整。
             </p>
             <div className="max-h-56 overflow-auto rounded-md border">
-              <table className="w-full text-sm">
+              <ReportTable className="w-full min-w-[1500px] text-sm">
                 <thead className="sticky top-0 bg-muted/60">
                   <tr className="text-left text-muted-foreground">
-                    <th className="px-3 py-1.5 font-medium">商品</th>
-                    <th className="px-3 py-1.5 text-right font-medium">建议采购量</th>
+                    <ProductIdentityHeaders />
+                    <th className="px-4 py-3 text-right font-medium">建议采购量</th>
                   </tr>
                 </thead>
                 <tbody>
                   {selectedRows.map(r => (
                     <tr key={r.productId} className="border-t">
-                      <td className="px-3 py-1.5">{r.productName} <span className="text-doc-code text-xs">{r.productCode}</span></td>
-                      <td className="px-3 py-1.5 text-right tabular-nums">{fmtQty(r.suggestQty)} {r.unit}</td>
+                      <ProductIdentityCells product={r} />
+                      <td className="px-4 py-3 text-right tabular-nums">{fmtQty(r.suggestQty)} {r.unit}</td>
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </ReportTable>
             </div>
           </div>
           <DialogFooter>

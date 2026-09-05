@@ -1,3 +1,5 @@
+import { ProductIdentityGridCells, ProductIdentityGridHeaders } from '@/components/shared/ProductIdentityCells'
+import { SectionCard } from '@/components/shared/SectionCard'
 import { useContext, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Loader2, Save, ShoppingCart, X } from 'lucide-react'
@@ -14,12 +16,7 @@ import { toast } from '@/lib/toast'
 import { PurchaseItemPickerDialog, type PickedPurchaseItem } from './PurchaseItemPickerDialog'
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="card-base p-5">
-      <h3 className="text-section-title mb-4 border-b border-border/50 pb-2">{title}</h3>
-      {children}
-    </div>
-  )
+  return <SectionCard title={title} compact>{children}</SectionCard>
 }
 
 export default function InboundTaskCreatePage() {
@@ -190,35 +187,25 @@ export default function InboundTaskCreatePage() {
 
           {selectedRows.length > 0 && (
             <>
-              <div className="overflow-hidden rounded-lg border border-border">
-                <div className="grid grid-cols-[140px_minmax(260px,1fr)_120px_90px_120px_60px] gap-3 border-b bg-muted/30 px-4 py-3 text-xs font-medium text-muted-foreground">
+              <div className="max-h-[60vh] overflow-auto rounded-lg border border-border">
+                <div className="grid min-w-[1640px] grid-cols-[140px_160px_160px_144px_224px_112px_80px_120px_90px_120px_60px] gap-3 border-b bg-muted/30 px-4 py-3 text-xs font-medium text-muted-foreground">
                   <span>采购单</span>
-                  <span>商品</span>
+                  <ProductIdentityGridHeaders /><span>单位</span>
                   <span>仓库</span>
                   <span className="text-right">单价</span>
                   <span className="text-right">本次到货</span>
                   <span></span>
                 </div>
 
-                <div className="max-h-[52vh] overflow-auto">
+                <div className="">
                   <div className="divide-y">
                     {selectedRows.map(({ item, qty }) => (
                       <div
                         key={item.purchaseItemId}
-                        className="grid grid-cols-[140px_minmax(260px,1fr)_120px_90px_120px_60px] gap-3 px-4 py-3 text-sm"
+                        className="grid min-w-[1640px] grid-cols-[140px_160px_160px_144px_224px_112px_80px_120px_90px_120px_60px] gap-3 px-4 py-3 text-sm"
                       >
                         <div className="text-doc-code">{item.purchaseOrderNo}</div>
-                        <div className="min-w-0">
-                          <div className="truncate text-xs text-muted-foreground">
-                            <span className="font-mono text-doc-code-muted">{item.productCode}</span>
-                            {' · 货号 '}{item.articleNumber || '—'}
-                            {' · 型号 '}{item.spec || '—'}
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            <span className="truncate font-medium text-foreground">{item.productName}</span>
-                            <span className="shrink-0 text-xs text-muted-foreground">颜色 {item.color || '—'}（{item.unit ?? '—'}）</span>
-                          </div>
-                        </div>
+                        <ProductIdentityGridCells product={item} /><div>{item.unit || '—'}</div>
                         <div className="text-muted-foreground">{item.warehouseName}</div>
                         <div className="text-right tabular-nums text-muted-foreground">{item.unitPrice.toFixed(2)}</div>
                         <div>

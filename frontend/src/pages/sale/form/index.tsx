@@ -1,3 +1,4 @@
+import { SaleOrderItemsSection } from './components/SaleOrderItemsSection'
 /**
  * SaleFormPage — 销售单新建 / 查看页面（独立路由）
  *
@@ -11,7 +12,7 @@
 
 import { useState, useCallback, useContext, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Activity, AlertTriangle, ClipboardList, Clock, History, Loader2, PackageCheck, PackageOpen, Pencil, Plus, Save, ScanLine, Warehouse, X } from 'lucide-react'
+import { Activity, AlertTriangle, ClipboardList, Clock, History, Loader2, PackageCheck, Pencil, Save, ScanLine, Warehouse, X } from 'lucide-react'
 import { PrintPreviewOverlay } from '@/components/print/SaleOrderPrintTemplate'
 import { Button }  from '@/components/ui/button'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
@@ -305,29 +306,13 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
       />
 
       {/* 商品明细：跟采购单/调拨单/退货单一致，点击"添加商品"弹出选品对话框 */}
-      <SectionCard
-        title="商品明细"
-        compact
-        actions={
-          <Button type="button" size="sm" variant="outline" onClick={addItem} className="gap-1.5">
-            <Plus className="h-4 w-4" />
-            添加商品
-          </Button>
-        }
-      >
-        {items.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border py-12 text-center">
-            <PackageOpen className="h-8 w-8 text-muted-foreground/40" />
-            <p className="text-sm text-muted-foreground">尚未添加商品明细，点击右上角「添加商品」开始录入</p>
-          </div>
-        ) : (
+      <SaleOrderItemsSection hasItems={items.length > 0} onAdd={addItem}>
           <SaleOrderItemsTable
             items={items} invalidItemKeys={invalidItemKeys} quantityRefs={quantityRefs} priceLoading={priceLoading}
             setFinderItemKey={setFinderItemKey} setFinderOpen={setFinderOpen}
             updateItem={updateItem} removeItem={removeItem}
           />
-        )}
-      </SectionCard>
+      </SaleOrderItemsSection>
 
       <SaleOrderSummaryCard items={items} total={total} discount={discount} discountedTotal={discountedTotal}
         discountAmount={discountAmount} onDiscountChange={setDiscountAmount}
@@ -335,6 +320,8 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
 
       {/* 商品选择中心 */}
       <ProductFinder
+        mode="sale"
+        warehouseName={warehouseName}
         open={finderOpen}
         warehouseId={warehouseId ? +warehouseId : null}
         onConfirm={handleFinderConfirm}
@@ -436,35 +423,21 @@ function EditView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<ty
       />
 
       {/* 商品明细：跟采购单/调拨单/退货单一致，点击"添加商品"弹出选品对话框 */}
-      <SectionCard
-        title="商品明细"
-        compact
-        actions={
-          <Button type="button" size="sm" variant="outline" onClick={addItem} className="gap-1.5">
-            <Plus className="h-4 w-4" />
-            添加商品
-          </Button>
-        }
-      >
-        {items.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border py-12 text-center">
-            <PackageOpen className="h-8 w-8 text-muted-foreground/40" />
-            <p className="text-sm text-muted-foreground">尚未添加商品明细，点击右上角「添加商品」开始录入</p>
-          </div>
-        ) : (
+      <SaleOrderItemsSection hasItems={items.length > 0} onAdd={addItem}>
           <SaleOrderItemsTable
             items={items} invalidItemKeys={invalidItemKeys} quantityRefs={quantityRefs} priceLoading={priceLoading}
             setFinderItemKey={setFinderItemKey} setFinderOpen={setFinderOpen}
             updateItem={updateItem} removeItem={removeItem}
           />
-        )}
-      </SectionCard>
+      </SaleOrderItemsSection>
 
       <SaleOrderSummaryCard items={items} total={total} discount={discount} discountedTotal={discountedTotal}
         discountAmount={discountAmount} onDiscountChange={setDiscountAmount}
         warningText="存在低于进价的销售行，保存后会记录到时间线" />
 
       <ProductFinder
+        mode="sale"
+        warehouseName={warehouseName}
         open={finderOpen}
         warehouseId={warehouseId ? +warehouseId : null}
         onConfirm={handleFinderConfirm}
@@ -570,34 +543,20 @@ function AdjustView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<
         remark={remark} setRemark={setRemark}
       />
 
-      <SectionCard
-        title="商品明细"
-        compact
-        actions={
-          <Button type="button" size="sm" variant="outline" onClick={addItem} className="gap-1.5">
-            <Plus className="h-4 w-4" />
-            添加商品
-          </Button>
-        }
-      >
-        {items.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border py-12 text-center">
-            <PackageOpen className="h-8 w-8 text-muted-foreground/40" />
-            <p className="text-sm text-muted-foreground">尚未添加商品明细，点击右上角「添加商品」开始录入</p>
-          </div>
-        ) : (
+      <SaleOrderItemsSection hasItems={items.length > 0} onAdd={addItem}>
           <SaleOrderItemsTable
             items={items} invalidItemKeys={invalidItemKeys} quantityRefs={quantityRefs} priceLoading={priceLoading}
             setFinderItemKey={setFinderItemKey} setFinderOpen={setFinderOpen}
             updateItem={updateItem} removeItem={removeItem}
           />
-        )}
-      </SectionCard>
+      </SaleOrderItemsSection>
 
       <SaleOrderSummaryCard items={items} total={total} discount={discount} discountedTotal={discountedTotal}
         discountAmount={discountAmount} editableDiscount={false} />
 
       <ProductFinder
+        mode="sale"
+        warehouseName={warehouseName}
         open={finderOpen}
         warehouseId={warehouseId ? +warehouseId : null}
         onConfirm={handleFinderConfirm}
@@ -768,6 +727,7 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
           <button
             key={key}
             type="button"
+            aria-pressed={detailTab === key}
             onClick={() => setDetailTab(key)}
             className={`flex min-w-28 flex-1 items-center justify-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-[background-color,color,box-shadow] ${
               detailTab === key
@@ -818,7 +778,7 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
             <DataTable
               columns={[
                 { key: 'productCode', title: '编码', width: 130 },
-                { key: 'articleNumber', title: '货号', width: 110, render: v => (v as string) || '-' },
+                { key: 'articleNumber', title: '供应商型号', width: 110, render: v => (v as string) || '-' },
                 { key: 'spec', title: '型号', width: 110, render: v => (v as string) || '-' },
                 { key: 'productName', title: '名称', width: 180 },
                 { key: 'color', title: '颜色', width: 100, render: v => (v as string) || '-' },
@@ -869,45 +829,34 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
             />
           </SectionCard>
 
-          {/* 金额统计 */}
-          <SectionCard title="金额统计">
-            <div className="flex items-center justify-between">
-              <p className="text-sm">共 {order.items?.length ?? 0} 种商品</p>
-              <div className="space-y-2 text-right">
-                <div><p className="mb-1 text-xs">合计金额</p><p className="text-3xl font-bold">¥{Number(order.totalAmount).toFixed(2)}</p></div>
-                {Number(order.discountAmount ?? 0) > 0 && (
-                  <>
-                    <div>
-                      <p className="mb-1 text-xs">折扣</p>
-                      <p className="text-3xl font-bold">-¥{Number(order.discountAmount).toFixed(2)}</p>
-                    </div>
-                    <div>
-                      <p className="mb-1 text-xs">折后金额</p>
-                      <p className="text-3xl font-bold">¥{Math.max(0, Number(order.totalAmount) - Number(order.discountAmount ?? 0)).toFixed(2)}</p>
-                    </div>
-                  </>
-                )}
-              </div>
+          <SectionCard title="订单汇总" compact>
+            <div className="flex items-center justify-between gap-8 text-sm">
+              <p className="text-muted-foreground">共 <span className="font-medium tabular-nums text-foreground">{order.items?.length ?? 0}</span> 行商品明细</p>
+              <dl className="flex items-center gap-10 text-right">
+                <div><dt className="text-xs text-muted-foreground">商品金额</dt><dd className="mt-1 tabular-nums">¥{Number(order.totalAmount).toFixed(2)}</dd></div>
+                <div><dt className="text-xs text-muted-foreground">折扣金额</dt><dd className="mt-1 tabular-nums">-¥{Number(order.discountAmount ?? 0).toFixed(2)}</dd></div>
+                <div className="border-l pl-8"><dt className="text-xs text-muted-foreground">订单净额</dt><dd className="mt-1 text-2xl font-semibold tabular-nums">¥{Math.max(0, Number(order.totalAmount) - Number(order.discountAmount ?? 0)).toFixed(2)}</dd></div>
+              </dl>
             </div>
           </SectionCard>
         </>
       )}
 
       {detailTab === 'progress' && (
-        <div className="card-base p-5">
+        <div className="card-base p-4">
           {order.taskNo ? (
             <div className="space-y-4">
               <FulfillmentProgressCard order={order} />
               <DataTable
                 columns={[
                   { key: 'productCode', title: '编码', width: 130 },
-                  { key: 'articleNumber', title: '货号', width: 110, render: v => (v as string) || '-' },
+                  { key: 'articleNumber', title: '供应商型号', width: 110, render: v => (v as string) || '-' },
                   { key: 'spec', title: '型号', width: 110, render: v => (v as string) || '-' },
                   { key: 'productName', title: '名称', width: 180 },
                   { key: 'color', title: '颜色', width: 100, render: v => (v as string) || '-' },
                   { key: 'unit', title: '单位', width: 70 },
-                  { key: 'quantity', title: '订单数量', width: 90 },
-                  { key: 'picked', title: '取货数量', width: 90, render: v => (v as number) || '-' },
+                  { key: 'quantity', title: '订单数量', width: 90, align: 'right' },
+                  { key: 'picked', title: '取货数量', width: 90, align: 'right', render: v => <span className="tabular-nums">{Number(v ?? 0)}</span> },
                 ] satisfies TableColumn<SaleOrderItem & { picked: number }>[]}
                 data={(order.items ?? []).map(item => ({ ...item, picked: (item.scans ?? []).reduce((s, sc) => s + sc.qty, 0) }))}
                 rowKey="id"
@@ -921,12 +870,12 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
       )}
 
       {detailTab === 'scan' && (
-        <div className="card-base p-5">
+        <div className="card-base p-4">
           {order.taskNo ? (
             <DataTable
               columns={[
                 { key: 'productCode', title: '编码', width: 130 },
-                { key: 'articleNumber', title: '货号', width: 110, render: v => (v as string) || '-' },
+                { key: 'articleNumber', title: '供应商型号', width: 110, render: v => (v as string) || '-' },
                 { key: 'spec', title: '型号', width: 110, render: v => (v as string) || '-' },
                 { key: 'productName', title: '名称', width: 180 },
                 { key: 'color', title: '颜色', width: 100, render: v => (v as string) || '-' },
@@ -961,30 +910,30 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
       )}
 
       {detailTab === 'pack' && (
-        <div className="card-base p-5">
+        <div className="card-base p-4">
           {order.taskNo ? (
             <div className="space-y-4">
               {(() => {
                 const pkgs = order.packages ?? []
                 const done = pkgs.filter(p => p.status === 2).length
-                const totalItems = pkgs.reduce((s, p) => s + p.items.reduce((ss, it) => ss + it.qty, 0), 0)
+                const totalLines = pkgs.reduce((sum, pkg) => sum + pkg.items.length, 0)
                 return (
-                  <div className="grid grid-cols-4 gap-3 text-sm">
-                    <div className="rounded-lg border bg-muted/30 p-3 text-center">
-                      <p className="text-2xl font-bold">{pkgs.length}</p>
+                  <div className="grid grid-cols-4 divide-x rounded-lg border py-3 text-sm">
+                    <div className="px-4 text-center">
+                      <p className="text-2xl font-semibold tabular-nums">{pkgs.length}</p>
                       <p className="text-xs text-muted-foreground">箱子总数</p>
                     </div>
-                    <div className="rounded-lg border bg-muted/30 p-3 text-center">
-                      <p className="text-2xl font-bold text-success">{done}</p>
+                    <div className="px-4 text-center">
+                      <p className="text-2xl font-semibold tabular-nums text-success">{done}</p>
                       <p className="text-xs text-muted-foreground">已完成</p>
                     </div>
-                    <div className="rounded-lg border bg-muted/30 p-3 text-center">
-                      <p className="text-2xl font-bold">{pkgs.length - done}</p>
+                    <div className="px-4 text-center">
+                      <p className="text-2xl font-semibold tabular-nums">{pkgs.length - done}</p>
                       <p className="text-xs text-muted-foreground">未完成</p>
                     </div>
-                    <div className="rounded-lg border bg-muted/30 p-3 text-center">
-                      <p className="text-2xl font-bold">{totalItems}</p>
-                      <p className="text-xs text-muted-foreground">装箱总件</p>
+                    <div className="px-4 text-center">
+                      <p className="text-2xl font-semibold tabular-nums">{totalLines}</p>
+                      <p className="text-xs text-muted-foreground">装箱明细行数</p>
                     </div>
                   </div>
                 )
@@ -992,11 +941,11 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
               {(order.packages ?? []).length > 0 ? (
                 (order.packages ?? []).map(pkg => (
                   <div key={pkg.id} className="rounded-lg border border-border/70 bg-card px-4 py-3">
-                    <div className="mb-2 text-sm font-medium">{pkg.barcode}</div>
+                    <div className="mb-3 flex items-center justify-between border-b pb-3 text-sm"><span className="font-mono font-medium">{pkg.barcode}</span><SoftStatusLabel label={pkg.status === 2 ? '已完成' : '未完成'} tone={pkg.status === 2 ? 'success' : 'active'} /></div>
                     <DataTable
                       columns={[
                         { key: 'productCode', title: '编码', width: 130 },
-                        { key: 'articleNumber', title: '货号', width: 110, render: v => (v as string) || '-' },
+                        { key: 'articleNumber', title: '供应商型号', width: 110, render: v => (v as string) || '-' },
                         { key: 'spec', title: '型号', width: 110, render: v => (v as string) || '-' },
                         { key: 'productName', title: '名称', width: 180 },
                         { key: 'color', title: '颜色', width: 100, render: v => (v as string) || '-' },
@@ -1021,17 +970,17 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
       )}
 
       {detailTab === 'log' && (
-        <div className="card-base p-5">
+        <div className="card-base p-4">
           {order.timeline?.length ? (
-            <div className="space-y-2">
-              <div className="grid grid-cols-[1fr_auto_1fr] gap-4 border-b pb-2 text-table-head text-sm">
+            <div className="divide-y">
+              <div className="grid grid-cols-[minmax(0,1fr)_180px_140px] gap-4 px-4 pb-3 text-table-head text-sm">
                 <span>事项</span>
                 <span className="text-center">时间</span>
                 <span className="text-right">操作人</span>
               </div>
               {order.timeline.map(event => (
-                <div key={event.id} className="grid grid-cols-[1fr_auto_1fr] gap-4 items-center rounded-lg border border-border/70 bg-card px-4 py-3 text-sm">
-                  <span>{event.title}</span>
+                <div key={event.id} className="grid grid-cols-[minmax(0,1fr)_180px_140px] items-start gap-4 px-4 py-3 text-sm">
+                  <div><p className="font-medium">{event.title}</p>{event.description && <p className="mt-1 whitespace-pre-wrap break-words text-xs leading-5 text-muted-foreground">{event.description}</p>}</div>
                   <span className="text-center text-muted-foreground">{formatDisplayDateTime(event.createdAt)}</span>
                   <span className="text-right text-muted-foreground">{event.createdByName || '系统'}</span>
                 </div>
@@ -1052,6 +1001,7 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
         description={confirmState.description}
         variant={confirmState.variant}
         confirmText={confirmState.confirmText}
+        cancelText="返回订单"
         loading={isPending}
         onConfirm={confirmState.onConfirm}
         onCancel={() => setConfirmState(s => ({ ...s, open: false }))}

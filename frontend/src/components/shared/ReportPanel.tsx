@@ -29,11 +29,11 @@ export function ReportPanel({
 }: ReportPanelProps) {
   return (
     <section className={cn('rounded-lg border border-border bg-card p-4', className)}>
-      <div className="mb-3 flex items-center justify-between gap-3">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-border pb-3">
         <div className="min-w-0">
-          <p className="text-card-title">{title}</p>
+          <h2 className="text-card-title">{title}</h2>
           {(description || helper) && (
-            <p className="mt-1 text-helper">{description || helper}</p>
+            <p className="mt-1 max-w-4xl text-xs leading-5 text-muted-foreground">{description || helper}</p>
           )}
         </div>
         {actionLabel && onAction && (

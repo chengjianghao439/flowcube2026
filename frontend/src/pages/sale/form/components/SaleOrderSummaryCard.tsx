@@ -1,8 +1,9 @@
-import { AlertTriangle, PackageOpen, ReceiptText } from 'lucide-react'
+import { AlertTriangle } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { SectionCard } from '@/components/shared/SectionCard'
 import { cn } from '@/lib/utils'
-import type { DraftItem } from '../validate'
+import { baseQtyOf, type DraftItem } from '../validate'
+import { summarizeSaleQuantities } from '@/lib/salePresentation'
 
 export function SaleOrderSummaryCard({
   items, total, discount, discountedTotal, discountAmount, onDiscountChange,
@@ -18,23 +19,20 @@ export function SaleOrderSummaryCard({
   warningText?: string
 }) {
   const filled = items.filter(item => item.productId > 0)
-  const quantity = filled.reduce((sum, item) => sum + item.quantity, 0)
+  const quantities = summarizeSaleQuantities(filled.map(item => ({ ...item, quantity: baseQtyOf(item) })))
   const belowCost = filled.some(item => item.costPrice != null && item.unitPrice < Number(item.costPrice))
 
   return (
-    <SectionCard title="订单汇总" compact className="overflow-hidden">
-      <div className="grid gap-5 md:grid-cols-3 md:items-center">
-        <div className="flex items-center gap-3 rounded-lg bg-muted/35 p-3">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            <PackageOpen className="h-[18px] w-[18px]" />
-          </span>
+    <SectionCard compact className="overflow-hidden" contentClassName="px-5 py-4">
+      <div className="grid grid-cols-[1.2fr_1fr_.8fr] items-center gap-8">
+        <div className="flex items-center gap-3">
           <div className="grid flex-1 grid-cols-2 gap-3 text-sm">
-            <div><p className="text-xs text-muted-foreground">商品种数</p><p className="mt-0.5 font-semibold tabular-nums">{filled.length} 种</p></div>
-            <div><p className="text-xs text-muted-foreground">合计数量</p><p className="mt-0.5 font-semibold tabular-nums">{quantity}</p></div>
+            <div><p className="text-xs text-muted-foreground">商品明细</p><p className="mt-0.5 font-semibold tabular-nums">{filled.length} 行</p></div>
+            <div><p className="text-xs text-muted-foreground">基本单位数量</p><p className="mt-0.5 font-semibold tabular-nums">{quantities.map(q => `${q.ordered} ${q.unit}`).join(' / ') || '—'}</p></div>
           </div>
         </div>
 
-        <div className="space-y-3 border-border text-sm md:border-l md:pl-5">
+        <div className="space-y-2 border-border text-sm md:border-l md:pl-5">
           <div className="flex items-center justify-between gap-3 text-muted-foreground">
             <span>商品金额</span><span className="tabular-nums text-foreground">¥{total.toFixed(2)}</span>
           </div>
@@ -48,8 +46,8 @@ export function SaleOrderSummaryCard({
         </div>
 
         <div className="border-t border-border pt-4 md:border-l md:border-t-0 md:pl-5 md:pt-0">
-          <div className="flex items-center gap-2 text-xs font-medium text-primary"><ReceiptText className="h-3.5 w-3.5" />订单金额</div>
-          <p className="mt-2 text-3xl font-semibold tracking-tight text-foreground tabular-nums">¥{discountedTotal.toFixed(2)}</p>
+          <div className="text-xs font-medium text-muted-foreground">订单金额</div>
+          <p className="mt-1 text-2xl font-semibold tracking-tight text-foreground tabular-nums">¥{discountedTotal.toFixed(2)}</p>
         </div>
 
         {belowCost && warningText && (

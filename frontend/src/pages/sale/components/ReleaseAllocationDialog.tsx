@@ -1,5 +1,6 @@
+import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
 import { useEffect, useState } from 'react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
@@ -66,15 +67,15 @@ export default function ReleaseAllocationDialog({ open, orderId, items, onClose 
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) onClose() }}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="flex max-h-[90dvh] w-[calc(100%-2rem)] max-w-4xl flex-col gap-4 p-4 sm:p-6">
         <DialogHeader><DialogTitle>取消占库</DialogTitle></DialogHeader>
-        <p className="text-sm text-muted-foreground">
+        <DialogDescription>
           选择需要释放的商品并填写数量。未勾选的明细继续保留占库。
-        </p>
+        </DialogDescription>
 
-        <div className="max-h-80 overflow-y-auto rounded-lg border border-border">
-          <table className="w-full text-sm">
-            <thead className="sticky top-0 bg-muted/50 text-xs text-muted-foreground">
+        <div className="min-h-0 overflow-auto rounded-lg border border-border">
+          <table className="w-full min-w-[1560px] text-sm">
+            <thead className="sticky top-0 bg-muted text-xs text-muted-foreground">
               <tr>
                 <th className="w-10 px-3 py-2">
                   <input
@@ -84,8 +85,9 @@ export default function ReleaseAllocationDialog({ open, orderId, items, onClose 
                     aria-label="全选"
                   />
                 </th>
-                <th className="px-2 py-2 text-left">商品</th>
-                <th className="w-20 px-2 py-2 text-right">已占</th>
+                <ProductIdentityHeaders /><th className="min-w-20 px-3 py-3 text-left">单位</th>
+                <th className="w-28 px-2 py-2 text-left">仓库</th>
+                <th className="w-24 px-2 py-2 text-right">已占数量</th>
                 <th className="w-28 px-2 py-2 text-right">释放数量</th>
               </tr>
             </thead>
@@ -102,16 +104,15 @@ export default function ReleaseAllocationDialog({ open, orderId, items, onClose 
                         aria-label={`选择 ${item.productName}`}
                       />
                     </td>
-                    <td className="px-2 py-2">
-                      <div className="font-medium">{item.productName}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {item.productCode}{item.articleNumber ? ` · 货号 ${item.articleNumber}` : ''}{item.spec ? ` · ${item.spec}` : ''}{item.color ? ` · ${item.color}` : ''}
-                      </div>
-                    </td>
+                    <ProductIdentityCells product={item} /><td className="px-3 py-3">{item.unit || '—'}</td>
+                    <td className="px-2 py-2 text-muted-foreground">{item.warehouseName || '—'}</td>
                     <td className="px-2 py-2 text-right tabular-nums">{item.reservedQty} {item.unit}</td>
                     <td className="px-2 py-2">
                       <Input
                         type="number"
+                        step="0.0001"
+                        aria-label={`${item.productName}释放数量`}
+                        aria-invalid={st.checked && !isAllocationQtyValid(st.qty, item.reservedQty ?? 0)}
                         min={0}
                         max={item.reservedQty ?? 0}
                         value={st.qty ?? 0}
@@ -124,14 +125,15 @@ export default function ReleaseAllocationDialog({ open, orderId, items, onClose 
                 )
               })}
               {!reservedItems.length && (
-                <tr><td colSpan={4} className="px-2 py-6 text-center text-muted-foreground">没有已占库存的明细</td></tr>
+                <tr><td colSpan={10} className="px-2 py-6 text-center text-muted-foreground">没有已占库存的明细</td></tr>
               )}
             </tbody>
           </table>
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={releaseAll} disabled={release.isPending}>整单全释放</Button>
+        {invalid.length > 0 && <p role="alert" className="text-sm text-destructive">释放数量须大于 0、不超过已占数量，最多保留 4 位小数。</p>}
+        <DialogFooter className="gap-2 border-t pt-4 sm:space-x-0">
+          <Button variant="outline" onClick={releaseAll} disabled={release.isPending}>选中全部已占数量</Button>
           <Button variant="outline" onClick={onClose}>取消</Button>
           <Button disabled={release.isPending || !selected.length || invalid.length > 0} onClick={() => handleConfirm(true)}>
             {release.isPending ? '释放中…' : `释放选中 ${selected.length} 项`}

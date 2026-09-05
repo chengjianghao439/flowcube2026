@@ -87,7 +87,7 @@ export default function WarehouseOpsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* 标题栏 */}
       <PageHeader
         title="仓库运营看板"
@@ -131,7 +131,7 @@ export default function WarehouseOpsPage() {
           <StatTile icon={Undo2} label="撤销次数" value={s?.undoCount ?? 0} hint="今日" accent={(s?.undoCount ?? 0) > 5} />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 xl:grid-cols-[1.2fr_1fr] gap-4">
           <ReportPanel
             title="流程瓶颈分析"
             description="各步骤任务堆积量"
@@ -154,9 +154,9 @@ export default function WarehouseOpsPage() {
             <>
               <HourlyChart data={data.hourlyTrend} />
               <div className="flex justify-between mt-1">
-                <span className="text-[10px] text-muted-foreground">06:00</span>
-                <span className="text-[10px] text-muted-foreground">14:00</span>
-                <span className="text-[10px] text-muted-foreground">22:00</span>
+                <span className="text-xs text-muted-foreground">06:00</span>
+                <span className="text-xs text-muted-foreground">14:00</span>
+                <span className="text-xs text-muted-foreground">22:00</span>
               </div>
             </>
           </ReportPanel>
@@ -181,12 +181,12 @@ export default function WarehouseOpsPage() {
                       <p className="text-helper shrink-0">{op.pickQty} 件</p>
                     </div>
                     <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-[10px] text-muted-foreground">扫码 {op.scanCount}</span>
+                      <span className="text-xs text-muted-foreground">扫码 {op.scanCount}</span>
                       {op.errorCount > 0 && (
-                        <span className="text-[10px] text-red-500">错误 {op.errorCount}（{op.errorRate}）</span>
+                        <span className="text-xs text-red-500">错误 {op.errorCount}（{op.errorRate}）</span>
                       )}
                       {op.efficiency && (
-                        <span className="text-[10px] text-green-600">{op.efficiency} 件/分</span>
+                        <span className="text-xs text-green-600">{op.efficiency} 件/分</span>
                       )}
                     </div>
                   </div>
@@ -209,7 +209,7 @@ export default function WarehouseOpsPage() {
                   <AlertTriangle className="size-4 text-red-400 shrink-0 mt-0.5" />
                   <div className="min-w-0">
                     <p className="text-xs font-medium text-red-700 truncate">{e.reason}</p>
-                    <p className="text-[10px] text-red-500">{e.operatorName} · {e.barcode} · {formatDisplayDateTime(e.createdAt)}</p>
+                    <p className="text-xs text-red-500">{e.operatorName} · {e.barcode} · {formatDisplayDateTime(e.createdAt)}</p>
                   </div>
                 </div>
               ))}

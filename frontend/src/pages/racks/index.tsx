@@ -123,7 +123,7 @@ export default function RacksPage() {
     {
       key: 'barcode',
       title: '货架条码',
-      width: 120,
+      width: 220,
       render: (v) =>
         v ? <span className="text-doc-code-strong">{v as string}</span> : <span className="text-muted-foreground">—</span>,
     },
@@ -162,7 +162,7 @@ export default function RacksPage() {
         deleteMessage="若库位或库存仍指向该货架编码，将禁止删除。"
         createLabel="+ 新建货架"
         saveSuccessMessage={(editing) => editing ? '货架已保存' : '货架已创建'}
-        formWidthClass="sm:max-w-md"
+        formWidthClass="sm:max-w-2xl"
         onOpen={handleOpen}
         canSubmit={(editing) => !!form.code && (!!editing || !!form.warehouseId)}
         headerActions={

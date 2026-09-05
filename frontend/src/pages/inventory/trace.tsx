@@ -1,3 +1,4 @@
+import { FilterCard } from '@/components/shared/FilterCard'
 import { useState } from 'react'
 import { Search, Package, History, Layers } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
@@ -131,19 +132,19 @@ export default function TracePage() {
         description="按库存条码或塑料盒条码，追踪单个容器从入库到出库的全部流水"
       />
 
-      <div className="flex gap-2">
+      <FilterCard>
         <Input
           placeholder="输入库存条码（如 I000001）或塑料盒条码"
           value={barcode}
           onChange={(e) => setBarcode(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleTrace()}
-          className="max-w-md font-mono"
+          className="w-[420px] font-mono" aria-label="库存或塑料盒条码"
         />
         <Button onClick={handleTrace} disabled={loading}>
           <Search className="mr-2 h-4 w-4" />
           {loading ? '查询中...' : '查询'}
         </Button>
-      </div>
+      </FilterCard>
 
       {error && (
         <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-destructive">

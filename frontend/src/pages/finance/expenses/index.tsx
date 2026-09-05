@@ -1,3 +1,6 @@
+import { ReportTable } from '@/components/shared/ReportTable'
+import { RecordIdentity } from '@/components/shared/RecordIdentity'
+import { SummaryStrip } from '@/components/shared/SummaryStrip'
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
@@ -52,10 +55,10 @@ function ExpensesQueryDialog({ open, initial, onClose, onApply }: {
   const set = (patch: Partial<ExpQuery>) => setV(p => ({ ...p, ...patch }))
   return (
     <Dialog open={open} onOpenChange={x => !x && onClose()}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-3xl">
         <DialogHeader><DialogTitle>查询费用报销单</DialogTitle></DialogHeader>
         <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-x-5 gap-y-4">
             <div className="space-y-1">
               <Label>关键字</Label>
               <Input className="h-9" placeholder="单号 / 事由 / 申请人" value={v.keyword}
@@ -216,11 +219,10 @@ export default function ExpenseClaimsPage() {
   }
 
   const columns: TableColumn<ExpenseClaim>[] = [
-    { key: 'claimNo', title: '报销单号', width: 150, render: v => <span className="text-doc-code">{String(v)}</span> },
-    { key: 'title', title: '事由', width: 180, render: v => (v as string) || <span className="text-muted-foreground">—</span> },
+    { key: 'claimNo', title: '报销事由 / 单号', width: 280, render: (_, r) => <RecordIdentity title={r.title || '—'} code={r.claimNo} /> },
     { key: 'applicantName', title: '申请人', width: 110 },
     { key: 'itemCount', title: '笔数', width: 70, render: v => `${v ?? 0} 笔` },
-    { key: 'totalAmount', title: '金额', width: 120, render: v => <span className="tabular-nums font-medium">{money(v as number)}</span> },
+    { key: 'totalAmount', title: '金额', width: 120, align: 'right', render: v => <span className="tabular-nums font-medium">{money(v as number)}</span> },
     { key: 'status', title: '状态', width: 100, render: (_, row) => {
       const c = row as ExpenseClaim
       return <SoftStatusLabel label={c.statusName} tone={c.statusTone as StatusTone} />
@@ -275,22 +277,7 @@ export default function ExpenseClaimsPage() {
         )}
       />
 
-      {summary && (
-        <div className="grid grid-cols-3 gap-4">
-          <div className="rounded-lg border border-border bg-card p-4">
-            <p className="text-sm text-muted-foreground">报销总额</p>
-            <p className="tabular-nums text-2xl font-bold text-foreground">{money(summary.totalAmount)}</p>
-          </div>
-          <div className="rounded-lg border border-border bg-card p-4">
-            <p className="text-sm text-muted-foreground">待审批</p>
-            <p className="tabular-nums text-2xl font-bold text-warning">{money(summary.pendingAmount)}</p>
-          </div>
-          <div className="rounded-lg border border-border bg-card p-4">
-            <p className="text-sm text-muted-foreground">已付款</p>
-            <p className="tabular-nums text-2xl font-bold text-success">{money(summary.paidAmount)}</p>
-          </div>
-        </div>
-      )}
+      {summary && <SummaryStrip items={[{ label: '报销总额', value: money(summary.totalAmount) }, { label: '待审批', value: money(summary.pendingAmount), tone: 'text-warning' }, { label: '已付款', value: money(summary.paidAmount), tone: 'text-success' }]} />}
 
       <QueryChips chips={queryChips} onClearAll={() => { setQuery(EMPTY_EXP_QUERY); setPage(1) }} />
 
@@ -304,9 +291,9 @@ export default function ExpenseClaimsPage() {
 
       {/* 新建 / 编辑 */}
       <Dialog open={formOpen} onOpenChange={v => !v && setFormOpen(false)}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="max-w-5xl">
           <DialogHeader><DialogTitle>{editingId ? '编辑报销单' : '新建报销单'}</DialogTitle></DialogHeader>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-x-5 gap-y-4">
             <div className="space-y-1">
               <Label>事由</Label>
               <Input value={title} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTitle(e.target.value)} placeholder="如：7月差旅与办公" />
@@ -369,7 +356,7 @@ export default function ExpenseClaimsPage() {
 
       {/* 明细 */}
       <Dialog open={detailId != null} onOpenChange={v => !v && setDetailId(null)}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-3xl">
           <DialogHeader><DialogTitle>报销单 — <span className="text-doc-code-strong">{detail?.claimNo}</span></DialogTitle></DialogHeader>
           {detail && (
             <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
@@ -386,7 +373,7 @@ export default function ExpenseClaimsPage() {
             </p>
           )}
           <div className="max-h-80 overflow-y-auto rounded-md border">
-            <table className="w-full text-sm">
+            <ReportTable className="w-full text-sm">
               <thead className="bg-muted/50 text-xs text-muted-foreground">
                 <tr>
                   <th className="px-2 py-1.5 text-left">类别</th>
@@ -405,7 +392,7 @@ export default function ExpenseClaimsPage() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </ReportTable>
           </div>
           <DialogFooter><Button variant="outline" onClick={() => setDetailId(null)}>关闭</Button></DialogFooter>
         </DialogContent>
@@ -459,7 +446,7 @@ export default function ExpenseClaimsPage() {
           <DialogHeader><DialogTitle>驳回报销单 — {rejectTarget?.claimNo}</DialogTitle></DialogHeader>
           <div className="space-y-1">
             <Label>驳回原因 *</Label>
-            <Input value={rejectReason} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRejectReason(e.target.value)}
+            <textarea aria-label="驳回原因" className="min-h-28 w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" value={rejectReason} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setRejectReason(e.target.value)}
               placeholder="如：缺少发票，请补充后重新提交" />
           </div>
           <DialogFooter>

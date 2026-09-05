@@ -149,16 +149,16 @@ export function OrderPrintOverlay({ templateType, title, data, items, onClose }:
         id="fc-print-tb"
         style={{
           position: 'sticky', top: 0, zIndex: 1,
-          background: '#fff', borderBottom: '1px solid #d0d0d0',
+          background: 'hsl(var(--background))', color: 'hsl(var(--foreground))', borderBottom: '1px solid hsl(var(--border))',
           padding: '10px 24px', display: 'flex', alignItems: 'center',
           justifyContent: 'space-between', boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
           gap: 12,
         }}
       >
         <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: '#333' }}>打印预览</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'hsl(var(--foreground))' }}>打印预览</span>
           <span style={{ color: '#bbb' }}>·</span>
-          <span style={{ fontSize: 13, color: '#333' }}>{title}</span>
+          <span style={{ fontSize: 13, color: 'hsl(var(--foreground))' }}>{title}</span>
           <span style={{ color: '#bbb' }}>·</span>
           {loading ? (
             <span style={{ fontSize: 12, color: '#999', display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -167,11 +167,13 @@ export function OrderPrintOverlay({ templateType, title, data, items, onClose }:
             </span>
           ) : selected ? (
             <button
+              aria-label="选择打印模板"
+              aria-expanded={showPicker}
               onClick={() => setShowPicker(p => !p)}
               style={{
                 display: 'flex', alignItems: 'center', gap: 4,
-                padding: '3px 8px', borderRadius: 6, border: '1px solid #d0d0d0',
-                background: '#fafafa', cursor: 'pointer', fontSize: 12, color: '#444',
+                padding: '3px 8px', borderRadius: 6, border: '1px solid hsl(var(--border))',
+                background: 'hsl(var(--background))', cursor: 'pointer', fontSize: 13, color: 'hsl(var(--foreground))',
               }}
             >
               {selected.name}
@@ -184,7 +186,7 @@ export function OrderPrintOverlay({ templateType, title, data, items, onClose }:
           {showPicker && templates.length > 1 && (
             <div style={{
               position: 'absolute', top: '100%', left: 0, marginTop: 4,
-              background: '#fff', border: '1px solid #ddd', borderRadius: 8,
+              background: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: 8,
               boxShadow: '0 4px 16px rgba(0,0,0,0.12)', zIndex: 10, minWidth: 200, padding: 4,
             }}>
               {templates.map(t => (
@@ -193,13 +195,13 @@ export function OrderPrintOverlay({ templateType, title, data, items, onClose }:
                   onClick={() => { setSelected(t); setShowPicker(false) }}
                   style={{
                     display: 'block', width: '100%', textAlign: 'left',
-                    padding: '7px 12px', border: 'none', background: t.id === selected?.id ? '#f0f4ff' : 'transparent',
-                    color: t.id === selected?.id ? '#3b6fd4' : '#333', cursor: 'pointer', borderRadius: 6,
+                    padding: '7px 12px', border: 'none', background: t.id === selected?.id ? 'hsl(var(--accent))' : 'transparent',
+                    color: t.id === selected?.id ? 'hsl(var(--primary))' : 'hsl(var(--popover-foreground))', cursor: 'pointer', borderRadius: 6,
                     fontSize: 13,
                   }}
                 >
                   {t.name}
-                  {t.isDefault && <span style={{ fontSize: 10, marginLeft: 6, color: '#f59e0b' }}>默认</span>}
+                  {t.isDefault && <span style={{ fontSize: 12, marginLeft: 6, color: 'hsl(var(--muted-foreground))' }}>默认</span>}
                 </button>
               ))}
             </div>

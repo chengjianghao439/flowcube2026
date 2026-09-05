@@ -1,3 +1,4 @@
+import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import { Button } from '@/components/ui/button'
@@ -41,11 +42,7 @@ export default function AvgCostReconciliationPage() {
   }
 
   const columns: TableColumn<AvgCostRow>[] = [
-    { key: 'productCode', title: '商品编码', width: 110, render: v => <span className="text-doc-code">{String(v)}</span> },
-    { key: 'articleNumber', title: '货号', width: 90, render: v => (v as string) || '—' },
-    { key: 'spec', title: '型号', width: 100, render: v => (v as string) || '—' },
-    { key: 'productName', title: '商品名称' },
-    { key: 'color', title: '颜色', width: 70, render: v => (v as string) || '—' },
+    ...productIdentityColumns(),
     { key: 'unitCost', title: '单位成本', width: 90, align: 'right', render: v => <span className="tabular-nums">{money(Number(v))}</span> },
     { key: 'cacheQty', title: '缓存数量', width: 100, align: 'right', render: v => <span className="tabular-nums">{fmtQty(v)}</span> },
     { key: 'containerQty', title: '容器实际', width: 100, align: 'right', render: v => <span className="tabular-nums">{fmtQty(v)}</span> },

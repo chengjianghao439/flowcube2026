@@ -1,3 +1,6 @@
+import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
+import { ProductIdentityCells } from '@/components/shared/ProductIdentityCells'
+import { ImportSteps } from '@/components/shared/ImportSteps'
 import { useState, useRef } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Package, Warehouse, Lock, CheckCircle, X } from 'lucide-react'
@@ -212,7 +215,7 @@ export default function InventoryPage() {
   const logCols: TableColumn<InventoryLog>[] = [
     { key: 'createdAt', title: '时间', width: 160, render: v => formatDisplayDateTime(v) },
     { key: 'typeName', title: '类型', width: 80, render: (_, r) => <SoftStatusLabel label={TYPE_NAMES[r.type]} tone={TYPE_TONE[r.type] ?? 'info'} /> },
-    { key: 'productName', title: '商品', width: 140 },
+    ...productIdentityColumns(),
     { key: 'warehouseName', title: '仓库', width: 140 },
     { key: 'quantity', title: '数量', width: 90, render: (_, r) => <span>{r.type === 2 ? `-${r.quantity}` : r.quantity}</span> },
     { key: 'beforeQty', title: '变动前', width: 90, render: v => <span className="text-muted-foreground">{v as number}</span> },
@@ -291,20 +294,17 @@ export default function InventoryPage() {
           {/* 库存表格 */}
           <div className="card-base overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full min-w-[1500px] text-sm">
                 <thead>
                   <tr className="border-b bg-muted/30">
                     {[
-                      { label: '商品编码', cls: 'w-32 text-left' },
-                      { label: '货号', cls: 'w-24 text-left' },
-                      { label: '型号', cls: 'w-24 text-left' },
-                      { label: '商品名称', cls: 'text-left' },
-                      { label: '颜色', cls: 'w-20 text-left' },
+                      ...['编码', '供应商型号', '型号', '名称', '颜色'].map(label => ({ label, cls: label === '名称' ? 'min-w-[220px] text-left' : 'min-w-[140px] text-left' })),
+                      { label: '单位', cls: 'min-w-[80px] text-left' },
                       { label: '分类路径', cls: 'text-left' },
                       { label: '仓库', cls: 'w-28 text-left' },
-                      { label: '在库数量', cls: 'w-28 text-left' },
-                      { label: '已预占', cls: 'w-24 text-left' },
-                      { label: '可用库存', cls: 'w-24 text-left', title: '可用库存 = 在库 − 已预占' },
+                      { label: '在库数量', cls: 'w-28 text-right' },
+                      { label: '已预占', cls: 'w-24 text-right' },
+                      { label: '可用库存', cls: 'w-24 text-right', title: '可用库存 = 在库 − 已预占' },
                       { label: '最近更新', cls: 'w-36 text-left' },
                       { label: '操作', cls: 'w-24 text-left' },
                     ].map(col => (
@@ -321,16 +321,12 @@ export default function InventoryPage() {
                   ) : (
                     list.map((row: InventoryOverviewItem) => (
                       <tr key={row.id} className={`border-b border-border/40 transition-colors hover:bg-muted/20 ${drawerItem?.id === row.id && drawerOpen ? 'bg-primary/5' : ''}`}>
-                        <td className="px-4 py-3"><span className="text-doc-code-muted">{row.productCode}</span></td>
-                        <td className="px-4 py-3 text-xs text-muted-foreground">{row.articleNumber || '—'}</td>
-                        <td className="px-4 py-3 text-xs text-muted-foreground">{row.spec || '—'}</td>
-                        <td className="px-4 py-3 font-medium">{row.productName}</td>
-                        <td className="px-4 py-3 text-xs text-muted-foreground">{row.color || '—'}</td>
+                        <ProductIdentityCells product={row} /><td className="px-4 py-3">{row.unit || '—'}</td>
                         <td className="px-4 py-3 text-xs text-muted-foreground"><CategoryPathDisplay path={row.categoryPath} /></td>
                         <td className="px-4 py-3 text-muted-foreground">{row.warehouseName}</td>
-                        <td className="px-4 py-3 text-left"><span className="font-medium">{formatQty(row.onHand)}</span><span className="ml-1 text-xs text-muted-foreground">{row.unit}</span></td>
-                        <td className="px-4 py-3 text-left">{row.reserved > 0 ? <span className="font-medium text-amber-600">{formatQty(row.reserved)}</span> : <span className="text-muted-foreground">—</span>}</td>
-                        <td className="px-4 py-3 text-left"><AvailableBadge available={row.available} onHand={row.onHand} /></td>
+                        <td className="px-4 py-3 text-right tabular-nums"><span className="font-medium">{formatQty(row.onHand)}</span></td>
+                        <td className="px-4 py-3 text-right tabular-nums">{row.reserved > 0 ? <span className="font-medium text-amber-600">{formatQty(row.reserved)}</span> : <span className="text-muted-foreground">—</span>}</td>
+                        <td className="px-4 py-3 text-right tabular-nums"><AvailableBadge available={row.available} onHand={row.onHand} /></td>
                         <td className="px-4 py-3 text-left text-xs text-muted-foreground">{formatDisplayDateTime(row.updatedAt)}</td>
                         <td className="px-4 py-3 text-left">
                           <Button size="sm" variant={drawerItem?.id === row.id && drawerOpen ? 'secondary' : 'ghost'}
@@ -364,7 +360,7 @@ export default function InventoryPage() {
 
       {/* 出库弹窗 */}
       <Dialog open={opOpen} onOpenChange={v => !v && setOpOpen(false)}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader><DialogTitle>出库</DialogTitle></DialogHeader>
           <form onSubmit={handleOp} className="space-y-4 py-2">
             <div className="space-y-2"><Label>商品 *</Label><FinderTrigger value={form.productName} placeholder="点击选择商品…" onClick={() => setProductFinderOpen(true)} disabled={isPending} /></div>
@@ -392,14 +388,16 @@ export default function InventoryPage() {
 
       {/* 库存导入弹窗：下载模板 → 填数上传 → 后端逐行建容器 */}
       <Dialog open={importOpen} onOpenChange={v => { setImportOpen(v); if (!v) setImportResult(null) }}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-3xl">
           <DialogHeader><DialogTitle>批量导入库存</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <p className="text-sm text-muted-foreground">请先下载模板，按照格式填写后上传。模板用于初始化各仓库的商品期初库存。</p>
-            <div className="flex gap-2">
+            <ImportSteps template={
+              <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={() => downloadExport('/import/stock/template').catch(e => toast.error((e as Error).message))}>下载导入模板</Button>
             </div>
-            <div className="space-y-1">
+            } upload={
+              <div className="space-y-1">
               <Label>选择文件（.xlsx）</Label>
               <input ref={importFileRef} type="file" accept=".xlsx,.xls" className="hidden"
                 onChange={e => { const f = e.target.files?.[0]; if (f) void handleImportStock(f); e.target.value = '' }} />
@@ -407,11 +405,12 @@ export default function InventoryPage() {
                 {importing ? '导入中…' : '选择文件并上传'}
               </Button>
             </div>
+            } />
             {importResult && (
               <div className="rounded-lg border p-3 text-sm space-y-1">
                 <p className="text-success font-medium">导入成功：{importResult.success} 条</p>
                 {importResult.errors.length > 0 && (
-                  <div className="max-h-40 overflow-y-auto text-destructive text-xs space-y-0.5">
+                  <div className="max-h-64 overflow-y-auto text-destructive text-sm leading-6 space-y-0.5">
                     {importResult.errors.slice(0, 20).map((err, i) => <p key={i}>{err}</p>)}
                   </div>
                 )}

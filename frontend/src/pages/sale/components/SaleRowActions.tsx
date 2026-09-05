@@ -47,6 +47,7 @@ export function SaleRowActions({
   if (row.status === 2) {
     return (
       <TableActionsMenu
+        primaryVariant="outline"
         primaryLabel="核对发货"
         primaryDisabled={anyPending}
         onPrimaryClick={onDetail}
@@ -66,6 +67,7 @@ export function SaleRowActions({
     // 部分占库：可补占（占满剩余）、发货（只发已占）、改单、取消占库、取消订单
     return (
       <TableActionsMenu
+        primaryVariant="outline"
         primaryLabel="补占"
         primaryDisabled={anyPending}
         onPrimaryClick={() => onReserveSale(row.id)}

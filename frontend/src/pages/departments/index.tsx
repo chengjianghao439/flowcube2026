@@ -268,11 +268,11 @@ export default function DepartmentsPage() {
       )}
 
       <Dialog open={formOpen} onOpenChange={(v) => !v && setFormOpen(false)}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>{editing ? '编辑部门' : '新增部门'}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-2">
+          <div className="grid grid-cols-2 gap-x-5 gap-y-4 py-2">
             <div className="space-y-2">
               <Label>部门名称</Label>
               <Input value={form.name} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, name: e.target.value })} placeholder="如：采购部" />
@@ -309,7 +309,7 @@ export default function DepartmentsPage() {
               <Label>排序</Label>
               <Input type="number" min={0} value={form.sortOrder} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, sortOrder: Number(e.target.value) || 0 })} />
             </div>
-            <div className="space-y-2">
+            <div className="col-span-2 space-y-2">
               <Label>备注</Label>
               <Input value={form.remark} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, remark: e.target.value })} />
             </div>

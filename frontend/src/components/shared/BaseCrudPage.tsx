@@ -1,3 +1,4 @@
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
 /**
  * BaseCrudPage — 基础资料 CRUD 列表页共享骨架
  *
@@ -86,7 +87,7 @@ export default function BaseCrudPage<T extends RowLike>(props: Props<T>) {
   const [editing, setEditing] = useState<T | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<T | null>(null)
 
-  const { data, isLoading } = useQuery({ queryKey, queryFn: listQuery })
+  const { data, isLoading, isError, error, refetch } = useQuery({ queryKey, queryFn: listQuery })
   const invalidate = () => qc.invalidateQueries({ queryKey: [queryKey[0]] })
 
   const saveMut = useMutation({
@@ -152,7 +153,7 @@ export default function BaseCrudPage<T extends RowLike>(props: Props<T>) {
 
       {renderToolbar}
 
-      <DataTable columns={columns} data={list} loading={isLoading} rowKey="id" emptyText={emptyText} />
+      {isError ? <QueryErrorState error={error} onRetry={() => void refetch()} title={`${title}加载失败`} compact /> : <DataTable columns={columns} data={list} loading={isLoading} rowKey="id" emptyText={emptyText} />}
       {pagination && (
         <Pagination
           page={pagination.page}
@@ -168,7 +169,7 @@ export default function BaseCrudPage<T extends RowLike>(props: Props<T>) {
           <DialogHeader>
             <DialogTitle>{formTitle ? formTitle(editing) : (editing ? `编辑${title.replace(/管理$/, '')}` : `新建${title.replace(/管理$/, '')}`)}</DialogTitle>
           </DialogHeader>
-          <div className="max-h-[70vh] space-y-3 overflow-y-auto py-2 pr-1">{renderForm(editing, formOpen)}</div>
+          <div className="min-h-0 max-h-[65vh] space-y-4 overflow-y-auto py-2 pr-1">{renderForm(editing, formOpen)}</div>
           <DialogFooter>
             <Button variant="outline" onClick={closeDialog}>取消</Button>
             <Button

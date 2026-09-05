@@ -1,3 +1,4 @@
+import { ProductIdentityGridCells, ProductIdentityGridHeaders } from '@/components/shared/ProductIdentityCells'
 import { useEffect, useState } from 'react'
 import { AppDialog } from '@/components/shared/AppDialog'
 import { Button } from '@/components/ui/button'
@@ -19,7 +20,7 @@ interface Props {
   onConfirm: (rows: PickedPurchaseItem[]) => void
 }
 
-const GRID_COLS = 'grid-cols-[110px_minmax(220px,1fr)_100px_80px_80px_80px_80px_120px]'
+const GRID_COLS = 'grid-cols-[150px_160px_160px_144px_224px_112px_80px_100px_80px_80px_80px_80px_120px]'
 
 export function PurchaseItemPickerDialog({ open, supplierId, initialSelection, onClose, onConfirm }: Props) {
   const [search, setSearch] = useState('')
@@ -71,7 +72,7 @@ export function PurchaseItemPickerDialog({ open, supplierId, initialSelection, o
       onOpenChange={v => { if (!v) onClose() }}
       dialogId="inbound-purchase-item-picker"
       title="选择收货商品"
-      defaultWidth={1080}
+      defaultWidth={1280}
       defaultHeight={620}
       minWidth={860}
       minHeight={420}
@@ -89,6 +90,7 @@ export function PurchaseItemPickerDialog({ open, supplierId, initialSelection, o
         <div className="flex flex-col gap-3 md:flex-row md:items-center">
           <Input
             className="flex-1"
+            aria-label="搜索采购单或商品"
             placeholder="按采购单号 / SKU / 商品名称搜索"
             value={search}
             onChange={e => setSearch(e.target.value)}
@@ -110,19 +112,19 @@ export function PurchaseItemPickerDialog({ open, supplierId, initialSelection, o
           </div>
         </div>
 
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border">
-          <div className={`grid ${GRID_COLS} gap-3 border-b bg-muted/30 px-4 py-3 text-xs font-medium text-muted-foreground`}>
+        <div className="flex min-h-0 flex-1 flex-col overflow-auto rounded-lg border border-border">
+          <div className={`grid min-w-[1820px] ${GRID_COLS} gap-3 border-b bg-muted/30 px-4 py-3 text-xs font-medium text-muted-foreground`}>
             <span>采购单</span>
-            <span>商品</span>
+            <ProductIdentityGridHeaders /><span>单位</span>
             <span>仓库</span>
-            <span className="text-left">订单数量</span>
-            <span className="text-left">已收数量</span>
-            <span className="text-left">未收数量</span>
-            <span className="text-left">单价</span>
-            <span className="text-left">本次数量</span>
+            <span className="text-right">订单数量</span>
+            <span className="text-right">已收数量</span>
+            <span className="text-right">未收数量</span>
+            <span className="text-right">单价</span>
+            <span className="text-right">本次数量</span>
           </div>
 
-          <div className="flex-1 overflow-auto">
+          <div className="flex-1">
             {!isLoading && candidates.length === 0 && (
               <div className="py-12 text-center text-sm text-muted-foreground">
                 暂无可用采购明细
@@ -131,28 +133,19 @@ export function PurchaseItemPickerDialog({ open, supplierId, initialSelection, o
 
             <div className="divide-y">
               {candidates.map(item => (
-                <div key={item.purchaseItemId} className={`grid ${GRID_COLS} gap-3 px-4 py-3 text-sm`}>
+                <div key={item.purchaseItemId} className={`grid min-w-[1820px] ${GRID_COLS} gap-3 px-4 py-3 text-sm`}>
                   <div className="text-doc-code">{item.purchaseOrderNo}</div>
-                  <div className="min-w-0">
-                    <div className="truncate text-xs text-muted-foreground">
-                      <span className="font-mono text-doc-code-muted">{item.productCode}</span>
-                      {' · 货号 '}{item.articleNumber || '—'}
-                      {' · 型号 '}{item.spec || '—'}
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="truncate font-medium text-foreground">{item.productName}</span>
-                      <span className="shrink-0 text-xs text-muted-foreground">颜色 {item.color || '—'}（{item.unit ?? '—'}）</span>
-                    </div>
-                  </div>
+                  <ProductIdentityGridCells product={item} /><div>{item.unit || '—'}</div>
                   <div className="text-muted-foreground">{item.warehouseName}</div>
-                  <div className="text-left text-muted-foreground">{item.orderedQty}</div>
-                  <div className="text-left text-muted-foreground">{item.receivedQty}</div>
-                  <div className="text-left font-medium text-foreground">{item.remainingQty}</div>
-                  <div className="text-left text-muted-foreground">{item.unitPrice.toFixed(2)}</div>
+                  <div className="text-right text-muted-foreground">{item.orderedQty}</div>
+                  <div className="text-right text-muted-foreground">{item.receivedQty}</div>
+                  <div className="text-right font-medium text-foreground">{item.remainingQty}</div>
+                  <div className="text-right text-muted-foreground">{item.unitPrice.toFixed(2)}</div>
                   <div>
                     <Input
-                      className="text-left"
+                      className="text-right"
                       placeholder="0"
+                      aria-label={`${item.purchaseOrderNo} ${item.productName}本次收货数量`}
                       value={qtyMap[item.purchaseItemId] ?? ''}
                       onChange={e => setLineQty(item.purchaseItemId, item.remainingQty, e.target.value)}
                     />

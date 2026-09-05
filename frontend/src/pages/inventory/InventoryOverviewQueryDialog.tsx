@@ -1,3 +1,4 @@
+import { QueryFormLayout } from '@/components/shared/QueryFormLayout'
 import { useEffect, useState } from 'react'
 import { AppDialog } from '@/components/shared/AppDialog'
 import { Button } from '@/components/ui/button'
@@ -51,7 +52,7 @@ export default function InventoryOverviewQueryDialog({ open, initial, onClose, o
         </div>
       }
     >
-      <div className="grid h-full grid-cols-2 gap-4 overflow-y-auto px-5 py-4">
+      <QueryFormLayout>
         <label className="flex flex-col gap-1 col-span-2">
           <span className="text-xs font-medium text-muted-foreground">商品编码 / 名称</span>
           <Input
@@ -85,7 +86,7 @@ export default function InventoryOverviewQueryDialog({ open, initial, onClose, o
             className="h-9"
           />
         </label>
-      </div>
+      </QueryFormLayout>
     </AppDialog>
   )
 }

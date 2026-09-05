@@ -1,3 +1,4 @@
+import { QueryFormLayout } from '@/components/shared/QueryFormLayout'
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { AppDialog } from '@/components/shared/AppDialog'
@@ -52,7 +53,7 @@ export default function WaybillQueryDialog({ open, initial, onClose, onApply }: 
       dialogId="waybill-query"
       title="查询物流运单"
       resizable={false}
-      defaultWidth={520}
+      defaultWidth={640}
       defaultHeight={520}
       minWidth={420}
       minHeight={420}
@@ -66,7 +67,7 @@ export default function WaybillQueryDialog({ open, initial, onClose, onApply }: 
         </div>
       }
     >
-      <div className="grid h-full grid-cols-2 gap-4 overflow-y-auto px-5 py-4">
+      <QueryFormLayout>
         <label className="flex flex-col gap-1 col-span-2">
           <span className="text-xs font-medium text-muted-foreground">运单号 / 快递单号 / 销售单 / 收件人</span>
           <Input
@@ -112,7 +113,7 @@ export default function WaybillQueryDialog({ open, initial, onClose, onApply }: 
           <DatePicker value={draft.endDate} min={draft.startDate || undefined}
             onChange={v => set('endDate', v)} className="h-9" />
         </label>
-      </div>
+      </QueryFormLayout>
     </AppDialog>
   )
 }

@@ -13,9 +13,10 @@ import {
 } from '@/hooks/useDashboard'
 import {
   WIDGETS, WIDGET_MAP, CATEGORY_LABEL, CATEGORY_ORDER,
-  buildDefaultLayout, mergeLayout, type WidgetCategory,
+  buildDefaultLayout, buildAllLayout, DASHBOARD_SECTIONS, mergeLayout, type WidgetCategory,
 } from '@/components/dashboard/registry'
 import type { DashboardLayout, DashboardWidgetLayout } from '@/types/dashboard'
+import '@/components/dashboard/dashboard.css'
 
 // 列跨度 → Tailwind col-span（静态映射，避免动态拼接被 purge）。
 // sm 只有 2 列，故 w≥2 一律占满 sm；lg 4 列按 w 展开。
@@ -29,7 +30,7 @@ const SPAN: Record<number, string> = {
 function ReadOnlyWidget({ widget, className }: { widget: DashboardWidgetLayout; className: string }) {
   const Body = WIDGET_MAP[widget.id].Component
   return (
-    <div className={cn('min-w-0 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-1 motion-safe:duration-300', className)}>
+    <div data-widget-id={widget.id} className={cn('dashboard-item min-w-0', className)}>
       <Suspense fallback={<div className="flex h-full items-center justify-center text-xs text-muted-foreground">加载中…</div>}>
         <Body />
       </Suspense>
@@ -37,33 +38,26 @@ function ReadOnlyWidget({ widget, className }: { widget: DashboardWidgetLayout; 
   )
 }
 
-function DashboardSection({
-  eyebrow, title, description, widgets, kind,
-}: {
-  eyebrow: string
-  title: string
-  description: string
-  widgets: DashboardWidgetLayout[]
-  kind: 'kpi' | 'panel' | 'personal'
+function DashboardSection({ id, title, description, widgets }: {
+  id: string; title: string; description: string; widgets: DashboardWidgetLayout[]
 }) {
   if (!widgets.length) return null
+  const metrics = widgets.filter(w => WIDGET_MAP[w.id].category === 'kpi')
+  const panels = widgets.filter(w => WIDGET_MAP[w.id].category !== 'kpi')
   return (
-    <section aria-labelledby={`dashboard-${kind}-${eyebrow}`}>
-      <div className={kind === 'personal' ? 'mb-3 flex items-end justify-between gap-4' : 'sr-only'}>
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">{eyebrow}</p>
-          <h2 id={`dashboard-${kind}-${eyebrow}`} className="mt-1 text-base font-semibold text-foreground">{title}</h2>
-        </div>
-        <p className="hidden max-w-md text-right text-xs text-muted-foreground lg:block">{description}</p>
+    <section id={`dashboard-section-${id}`} aria-labelledby={`dashboard-heading-${id}`} className="scroll-mt-4 space-y-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-border pb-3">
+        <h2 id={`dashboard-heading-${id}`} className="text-base font-semibold">{title}<span className="ml-2 text-xs font-normal tabular-nums text-muted-foreground">{widgets.length} 张卡片</span></h2>
+        <p className="text-xs text-muted-foreground">{description}</p>
       </div>
-      <div className={cn('grid grid-cols-1', kind === 'panel' ? 'gap-5 sm:grid-cols-2 lg:grid-cols-4' : kind === 'kpi' ? 'gap-0 overflow-hidden rounded-xl border border-border bg-card sm:grid-cols-2 lg:grid-cols-4 [&_.card-base]:rounded-none [&_.card-base]:border-0 [&_.card-base]:shadow-none [&_.card-base]:bg-transparent [&_.card-base]:border-r [&_.card-base]:border-border' : 'gap-3 sm:grid-cols-2 lg:grid-cols-4')}>
-        {widgets.map(widget => (
-          <ReadOnlyWidget key={widget.id} widget={widget} className={cn(
-            kind === 'panel' || (kind === 'personal' && WIDGET_MAP[widget.id].size === 'lg') ? 'h-[380px]' : 'h-32',
-            SPAN[widget.w] ?? SPAN[2],
-          )} />
-        ))}
-      </div>
+      {metrics.length > 0 && <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {metrics.map(widget => <ReadOnlyWidget key={widget.id} widget={widget} className={cn(widget.w === 4 ? 'min-h-24' : 'min-h-36', SPAN[widget.w] ?? SPAN[1])} />)}
+      </div>}
+      {panels.length > 0 && <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {panels.map(widget => <ReadOnlyWidget key={widget.id} widget={widget} className={cn(
+          WIDGET_MAP[widget.id].size === 'lg' ? 'h-[380px]' : 'h-[260px]', SPAN[widget.w] ?? SPAN[2],
+        )} />)}
+      </div>}
     </section>
   )
 }
@@ -106,16 +100,14 @@ export default function DashboardPage() {
 
   // 渲染的可见小组件：显示 + 有权限
   const visible = layout.widgets.filter(w => WIDGET_MAP[w.id] && w.visible && allowed[w.id])
-  const kpiWidgets = visible.filter(w => WIDGET_MAP[w.id].category === 'kpi')
-  const listWidgets = visible.filter(w => WIDGET_MAP[w.id].category === 'list')
-  const chartWidgets = visible.filter(w => WIDGET_MAP[w.id].category === 'chart')
-  const extraWidgets = visible.filter(w => ['fun', 'system'].includes(WIDGET_MAP[w.id].category))
+  const sections = DASHBOARD_SECTIONS.map(section => ({ ...section, widgets: visible.filter(w => section.widgetIds.includes(w.id)) })).filter(section => section.widgets.length > 0)
   // 组件库可添加：隐藏 + 有权限
   const addable = layout.widgets.filter(w => WIDGET_MAP[w.id] && !w.visible && allowed[w.id])
 
   // ── 编辑操作 ──────────────────────────────────────────────────────────────
   function startEdit() { setDraft(mergeLayout(saved)); setEditing(true) }
   function cancelEdit() { setEditing(false); setDraft(null); setLibOpen(false) }
+  function showAll() { setDraft(buildAllLayout()); setEditing(true); setLibOpen(false) }
   function resetDefault() { setDraft(buildDefaultLayout()); toast.success('已载入默认布局，保存后生效') }
   async function save() {
     if (!draft) return
@@ -163,13 +155,14 @@ export default function DashboardPage() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-page-title">仪表盘</h1>
-          <p className="text-muted-body mt-1">{editing ? '拖拽卡片排序 · 调整宽度 · 隐藏或从组件库添加，完成后保存' : '先处理待办，再看经营变化。'}</p>
+          <p className="text-muted-body mt-1">{editing ? '拖拽调整分区内顺序 · 调整宽度 · 隐藏或添加卡片，完成后保存' : '按业务分区查看指标、待办与个人工具。'}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {!editing ? (
-            <Button variant="outline" size="sm" onClick={startEdit}>
-              <Pencil className="h-3.5 w-3.5" /> 编辑仪表盘
-            </Button>
+            <>
+              <Button variant="outline" size="sm" onClick={showAll}><LayoutGrid className="h-3.5 w-3.5" /> {addable.length > 0 ? '展示全部卡片' : '推荐排版'}</Button>
+              <Button variant="outline" size="sm" onClick={startEdit}><Pencil className="h-3.5 w-3.5" /> 编辑仪表盘</Button>
+            </>
           ) : (
             <>
               <Button variant="outline" size="sm" onClick={() => setLibOpen(v => !v)}>
@@ -254,14 +247,15 @@ export default function DashboardPage() {
           {!editing && <Button size="sm" variant="outline" onClick={startEdit}><Pencil className="h-3.5 w-3.5" /> 编辑仪表盘</Button>}
         </div>
       ) : editing ? (
-        <div className="grid auto-rows-[184px] grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {visible.map(w => {
             const def = WIDGET_MAP[w.id]
             const Body = def.Component
             return (
               <div
                 key={w.id}
-                style={{ gridRow: `span ${def.size === 'lg' ? 2 : 1}` }}
+                data-widget-id={w.id}
+                style={{ height: def.size === 'lg' ? 380 : def.category === 'kpi' ? 160 : 260 }}
                 className={cn(SPAN[w.w] ?? SPAN[2], 'relative', dragging === w.id && 'opacity-40')}
                 draggable={editing}
                 onDragStart={editing ? () => { dragId.current = w.id; setDragging(w.id) } : undefined}
@@ -301,11 +295,11 @@ export default function DashboardPage() {
           })}
         </div>
       ) : (
-        <div className="space-y-5">
-          <DashboardSection eyebrow="经营摘要" title="今日重点" description="先看需要处理的订单、履约进度与资金风险。" widgets={kpiWidgets} kind="kpi" />
-          <DashboardSection eyebrow="执行视图" title="待办与风险" description="把会阻塞业务推进的审批、库存和到货问题集中处理。" widgets={listWidgets} kind="panel" />
-          <DashboardSection eyebrow="经营分析" title="业务走势" description="用趋势判断经营变化，减少被单日数字干扰。" widgets={chartWidgets} kind="panel" />
-          <DashboardSection eyebrow="个性化" title="我的组件" description="你主动保留的效率工具与系统信息。" widgets={extraWidgets} kind="personal" />
+        <div className="space-y-8">
+          <nav aria-label="仪表盘分区" className="flex flex-wrap gap-2">
+            {sections.map(section => <Button key={section.id} size="sm" variant="outline" onClick={() => document.getElementById(`dashboard-section-${section.id}`)?.scrollIntoView({ block: 'start' })}>{section.title}</Button>)}
+          </nav>
+          {sections.map(section => <DashboardSection key={section.id} {...section} />)}
         </div>
       )}
 

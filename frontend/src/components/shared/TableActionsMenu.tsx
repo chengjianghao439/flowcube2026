@@ -35,7 +35,7 @@ export default function TableActionsMenu({
 }: TableActionsMenuProps) {
   // 主按钮样式：与下面拼接模式的主按钮保持完全一致（同高、同字号），避免有无下拉时大小不一
   const primaryClass = cn(
-    'px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50',
+    'shrink-0 whitespace-nowrap px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50',
     primaryVariant === 'outline'
       ? 'bg-transparent text-foreground hover:bg-muted'
       : primaryVariant === 'destructive'

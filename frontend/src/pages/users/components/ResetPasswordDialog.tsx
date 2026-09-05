@@ -34,7 +34,7 @@ export default function ResetPasswordDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="sm:max-w-sm">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>重置密码</DialogTitle>
         </DialogHeader>
@@ -52,6 +52,7 @@ export default function ResetPasswordDialog({
               value={newPassword}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewPassword(e.target.value)}
               placeholder="至少 6 位"
+              autoComplete="new-password"
               disabled={isPending}
               autoFocus
             />

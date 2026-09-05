@@ -101,7 +101,7 @@ export default function KpiPage() {
       {isError && !data ? (
         <QueryErrorState error={error} onRetry={() => void refetch()} title="经营 KPI 加载失败" description="当前 KPI 数据暂时无法加载，请重试或稍后再试。" compact />
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
           {(data?.metrics ?? Array.from({ length: 5 }, (_, i) => ({
             key: ['gmv', 'grossProfit', 'orderCount', 'received', 'avgOrderValue'][i],
             label: ['GMV', '毛利', '订单数', '回款', '平均客单'][i],
@@ -123,7 +123,7 @@ export default function KpiPage() {
             emptyTitle="暂无趋势数据"
             emptyDescription="当前期间范围内没有销售或回款记录"
           >
-            <div className="h-72">
+            <div className="h-80">
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={chartRows} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />

@@ -1,3 +1,5 @@
+import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
+import { SectionCard } from '@/components/shared/SectionCard'
 /**
  * 收货订单详情 — 上架进度 / 打印
  * 收货和上架仅允许通过 PDA 完成；全部上架完成后系统自动结算应付，无需人工审核
@@ -28,12 +30,7 @@ import type { TableColumn } from '@/types'
 import type { InboundTaskItem } from '@/types/inbound-tasks'
 
 function Section({ title, children, sectionId }: { title: string; children: React.ReactNode; sectionId?: string }) {
-  return (
-    <div id={sectionId} className="card-base p-5 space-y-4 scroll-mt-24">
-      <h3 className="text-section-title pb-2 border-b border-border/50">{title}</h3>
-      {children}
-    </div>
-  )
+  return <section id={sectionId} className="scroll-mt-24"><SectionCard title={title} compact contentClassName="space-y-4">{children}</SectionCard></section>
 }
 
 type StatusTone = 'draft' | 'active' | 'success' | 'danger' | 'warning' | 'info'
@@ -228,11 +225,7 @@ export default function InboundTaskDetailPage() {
       <Section title="任务明细" sectionId="task-items">
         <DataTable
           columns={[
-            { key: 'productCode', title: '编码', width: 110, render: v => <span className="text-doc-code-muted">{(v as string) || '—'}</span> },
-            { key: 'articleNumber', title: '货号', width: 100, render: v => <span className="text-muted-foreground">{(v as string) || '—'}</span> },
-            { key: 'spec', title: '型号', width: 100, render: v => <span className="text-muted-foreground">{(v as string) || '—'}</span> },
-            { key: 'productName', title: '商品', width: 180, render: v => <span className="font-medium">{String(v)}</span> },
-            { key: 'color', title: '颜色', width: 90, render: v => <span className="text-muted-foreground">{(v as string) || '—'}</span> },
+            ...productIdentityColumns(),
             { key: 'unit', title: '单位', width: 70, render: v => <span className="text-muted-foreground">{(v as string) || '—'}</span> },
             { key: 'orderedQty', title: '应到', width: 90, align: 'right', render: v => <span className="tabular-nums">{String(v)}</span> },
             {
@@ -252,12 +245,12 @@ export default function InboundTaskDetailPage() {
             },
             { key: 'putawayQty', title: '已上架', width: 90, align: 'right', render: v => <span className="tabular-nums">{String(v)}</span> },
             { key: 'unitPrice', title: '单价', width: 100, align: 'right', render: v => <span className="text-muted-foreground tabular-nums">{v != null ? `¥${(v as number).toFixed(2)}` : '—'}</span> },
-            { key: 'lineAmount', title: '小记', width: 110, align: 'right', render: v => <span className="font-medium tabular-nums">{v != null ? `¥${(v as number).toFixed(2)}` : '—'}</span> },
+            { key: 'lineAmount', title: '小计', width: 110, align: 'right', render: v => <span className="font-medium tabular-nums">{v != null ? `¥${(v as number).toFixed(2)}` : '—'}</span> },
           ] satisfies TableColumn<InboundTaskItem & { lineRemain: number; lineAmount: number | null }>[]}
           data={items.map(it => ({
             ...it,
             lineRemain: Math.max(0, it.orderedQty - it.receivedQty),
-            // 小记按「已上架」量算，跟审核结算（recomputePurchasePayable）的取数口径一致——
+            // 小计按「已上架」量算，跟审核结算（recomputePurchasePayable）的取数口径一致——
             // 已收但还没上架的部分还不算真正确认入库，不计入金额，避免这里的数字和最终应付对不上。
             lineAmount: it.unitPrice != null ? it.putawayQty * it.unitPrice : null,
           }))}

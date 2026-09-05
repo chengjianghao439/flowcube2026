@@ -128,7 +128,7 @@ export default function AccountingPeriodsPage() {
 
       {/* 生成结转确认 */}
       <Dialog open={!!generating} onOpenChange={v => !v && setGenerating(null)}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-xl">
           <DialogHeader><DialogTitle>生成结转凭证</DialogTitle></DialogHeader>
           <p className="text-sm text-muted-foreground">
             确认 {generating && fmtPeriod(generating.period)} 的损益结转凭证
@@ -143,7 +143,7 @@ export default function AccountingPeriodsPage() {
 
       {/* 结账确认 */}
       <Dialog open={!!closing} onOpenChange={v => !v && setClosing(null)}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-xl">
           <DialogHeader><DialogTitle>结账</DialogTitle></DialogHeader>
           <p className="text-sm text-muted-foreground">
             确认结账 {closing && fmtPeriod(closing.period)}？结账后该期间凭证锁定，账面视为已确认；如需调整须反结账。

@@ -1,3 +1,4 @@
+import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { X } from 'lucide-react'
@@ -59,11 +60,7 @@ export default function InventoryAgingPage() {
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   const agingCols: TableColumn<AgingItem>[] = [
-    { key: 'productCode', title: '商品编码', width: 110, render: v => <span className="text-doc-code">{String(v)}</span> },
-    { key: 'articleNumber', title: '货号', width: 90, render: v => (v as string) || '—' },
-    { key: 'spec', title: '型号', width: 100, render: v => (v as string) || '—' },
-    { key: 'productName', title: '商品名称' },
-    { key: 'color', title: '颜色', width: 70, render: v => (v as string) || '—' },
+    ...productIdentityColumns(),
     { key: 'warehouseName', title: '仓库', width: 100 },
     { key: 'qty0_30', title: '0-30天', width: 80, align: 'right', render: v => <span className="tabular-nums">{fmtQty(v)}</span> },
     { key: 'qty30_60', title: '30-60天', width: 82, align: 'right', render: v => <span className="tabular-nums">{fmtQty(v)}</span> },
@@ -77,11 +74,7 @@ export default function InventoryAgingPage() {
   ]
 
   const expiryCols: TableColumn<ExpiryAlert>[] = [
-    { key: 'productCode', title: '商品编码', width: 110, render: v => <span className="text-doc-code">{String(v)}</span> },
-    { key: 'articleNumber', title: '货号', width: 90, render: v => (v as string) || '—' },
-    { key: 'spec', title: '型号', width: 100, render: v => (v as string) || '—' },
-    { key: 'productName', title: '商品名称' },
-    { key: 'color', title: '颜色', width: 70, render: v => (v as string) || '—' },
+    ...productIdentityColumns(),
     { key: 'warehouseName', title: '仓库', width: 100 },
     { key: 'batchNo', title: '批次', width: 130, render: v => (v as string) || '—' },
     { key: 'expDate', title: '到期日', width: 110, render: v => v ? String(v).slice(0, 10) : '—' },

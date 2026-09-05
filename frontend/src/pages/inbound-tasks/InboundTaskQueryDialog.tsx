@@ -1,3 +1,4 @@
+import { QueryFormLayout } from '@/components/shared/QueryFormLayout'
 import { useEffect, useState } from 'react'
 import { AppDialog } from '@/components/shared/AppDialog'
 import OperatorSelectField from '@/components/shared/OperatorSelectField'
@@ -79,7 +80,7 @@ export default function InboundTaskQueryDialog({ open, initial, onClose, onApply
           </div>
         }
       >
-        <div className="grid h-full grid-cols-2 gap-4 overflow-y-auto px-5 py-4">
+        <QueryFormLayout>
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground">单号</span>
             <Input
@@ -165,7 +166,7 @@ export default function InboundTaskQueryDialog({ open, initial, onClose, onApply
               className="h-9"
             />
           </label>
-        </div>
+        </QueryFormLayout>
       </AppDialog>
 
       <SupplierFinder

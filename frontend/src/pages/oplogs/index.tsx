@@ -47,7 +47,7 @@ function RawValue({ value }: { value: unknown }) {
 
 function DetailRow({ label, value }: { label: string; value: unknown }) {
   return (
-    <div className="grid gap-1 rounded-lg border border-border px-3 py-2 sm:grid-cols-[120px_1fr]">
+    <div className="grid gap-1 rounded-lg border border-border px-3 py-2 sm:grid-cols-[160px_minmax(0,1fr)]">
       <div className="text-xs font-medium text-muted-foreground">{label}</div>
       <RawValue value={value} />
     </div>
@@ -187,7 +187,7 @@ export default function OpLogsPage() {
         onCancel={() => setClearConfirm(false)}
       />
       <Dialog open={!!detail} onOpenChange={open => { if (!open) setDetail(null) }}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>操作日志详情</DialogTitle>
           </DialogHeader>

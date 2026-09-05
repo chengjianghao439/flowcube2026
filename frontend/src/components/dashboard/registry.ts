@@ -63,10 +63,10 @@ export const WIDGETS: WidgetDef[] = [
   { id: 'kpi-total-qty',       title: '库存总数量',      description: '各仓库库存数量汇总',        icon: Boxes,         category: 'kpi', permission: PERMISSIONS.DASHBOARD_VIEW,       defaultW: 1, size: 'sm', Component: Kpi.KpiTotalQty },
   { id: 'kpi-total-value',     title: '库存总价值',      description: '按成本价估算的库存金额',    icon: Wallet,        category: 'kpi', permission: PERMISSIONS.DASHBOARD_VIEW,       defaultW: 1, size: 'sm', Component: Kpi.KpiTotalValue },
   { id: 'kpi-pending-purchase', title: '待处理采购',     description: '草稿 + 已提交的采购单数',   icon: ShoppingCart,  category: 'kpi', permission: PERMISSIONS.DASHBOARD_VIEW,       defaultW: 1, size: 'sm', Component: Kpi.KpiPendingPurchase },
-  { id: 'kpi-pending-sale',    title: '待处理销售',      description: '草稿 + 占库 + 拣货中订单数', icon: ClipboardList, category: 'kpi', permission: PERMISSIONS.DASHBOARD_VIEW,       defaultW: 1, size: 'sm', Component: Kpi.KpiPendingSale },
+  { id: 'kpi-pending-sale',    title: '待处理销售',      description: '待占库、部分占库与已占库订单数', icon: ClipboardList, category: 'kpi', permission: PERMISSIONS.DASHBOARD_VIEW,       defaultW: 1, size: 'sm', Component: Kpi.KpiPendingSale },
   { id: 'kpi-shipped-today',   title: '今日出库',        description: '今日已出库单数',            icon: Truck,         category: 'kpi', permission: PERMISSIONS.REPORT_VIEW,          defaultW: 1, size: 'sm', Component: Kpi.KpiShippedToday },
   { id: 'kpi-scan-today',      title: '今日扫码量',      description: '今日 PDA 扫码次数',         icon: ScanLine,      category: 'kpi', permission: PERMISSIONS.REPORT_VIEW,          defaultW: 1, size: 'sm', Component: Kpi.KpiScanToday },
-  { id: 'kpi-receivable',      title: '应收敞口',        description: '未收回应收账款合计',        icon: HandCoins,     category: 'kpi', permission: PERMISSIONS.PAYMENT_VIEW,         defaultW: 1, size: 'sm', Component: Kpi.KpiReceivable },
+  { id: 'kpi-receivable',      title: '未清应收',        description: '未收回应收账款合计',        icon: HandCoins,     category: 'kpi', permission: PERMISSIONS.PAYMENT_VIEW,         defaultW: 1, size: 'sm', Component: Kpi.KpiReceivable },
   { id: 'kpi-payable',         title: '应付敞口',        description: '待支付应付账款合计',        icon: CreditCard,    category: 'kpi', permission: PERMISSIONS.PAYMENT_VIEW,         defaultW: 1, size: 'sm', Component: Kpi.KpiPayable },
   { id: 'kpi-account-balance', title: '账户余额合计',    description: '启用资金账户余额合计',      icon: Landmark,      category: 'kpi', permission: PERMISSIONS.FINANCE_ACCOUNT_VIEW, defaultW: 1, size: 'sm', Component: Kpi.KpiAccountBalance },
   { id: 'kpi-credit-warning',  title: '授信预警',         description: '客户授信超限/高危占用',       icon: Gauge,         category: 'kpi', permission: PERMISSIONS.SALE_CREDIT_VIEW,    defaultW: 1, size: 'sm', Component: Kpi.KpiCreditWarning },
@@ -75,7 +75,7 @@ export const WIDGETS: WidgetDef[] = [
   { id: 'chart-io-trend',       title: '出入库趋势',      description: '近 7 天出入库数量走势',     icon: Activity,      category: 'chart', permission: PERMISSIONS.DASHBOARD_VIEW,       defaultW: 2, size: 'lg', Component: ChartIoTrend },
   { id: 'chart-top-stock',      title: '库存价值 Top 10', description: '库存金额最高的商品',        icon: BarChart3,     category: 'chart', permission: PERMISSIONS.DASHBOARD_VIEW,       defaultW: 2, size: 'lg', Component: ChartTopStock },
   { id: 'chart-warehouse-stock', title: '各仓库存分布',   description: '各仓库库存价值对比',        icon: Warehouse,     category: 'chart', permission: PERMISSIONS.REPORT_VIEW,          defaultW: 2, size: 'lg', Component: ChartWarehouseStock },
-  { id: 'chart-sale-trend',     title: '月度销售趋势',    description: '近半年销售额与发货额',      icon: TrendingUp,    category: 'chart', permission: PERMISSIONS.REPORT_VIEW,          defaultW: 2, size: 'lg', Component: ChartSaleTrend },
+  { id: 'chart-sale-trend',     title: '月度销售趋势',    description: '近半年订单金额、已出库订单金额与单数',      icon: TrendingUp,    category: 'chart', permission: PERMISSIONS.REPORT_VIEW,          defaultW: 2, size: 'lg', Component: ChartSaleTrend },
   { id: 'chart-purchase-trend', title: '月度采购趋势',    description: '近半年采购额与收货额',      icon: ShoppingBag,   category: 'chart', permission: PERMISSIONS.REPORT_VIEW,          defaultW: 2, size: 'lg', Component: ChartPurchaseTrend },
   { id: 'chart-aging',          title: '应收应付账龄',    description: '账龄桶分布对比',            icon: CalendarClock, category: 'chart', permission: PERMISSIONS.PAYMENT_VIEW,         defaultW: 2, size: 'lg', Component: ChartAging },
   { id: 'chart-cashflow',       title: '月度现金流',      description: '近半年收入 / 支出 / 净额',  icon: Coins,         category: 'chart', permission: PERMISSIONS.FINANCE_ACCOUNT_VIEW, defaultW: 2, size: 'lg', Component: ChartCashflow },
@@ -96,7 +96,7 @@ export const WIDGETS: WidgetDef[] = [
   // —— 趣味 ——
   { id: 'fun-wooden-fish', title: '电子木鱼',   description: '敲一敲，功德 +1（连击特效）', icon: Sparkles,    category: 'fun', defaultW: 1, size: 'sm', Component: Fun.WoodenFish },
   { id: 'fun-offwork',     title: '下班倒计时', description: '到点撒花，周末识别',          icon: Timer,       category: 'fun', defaultW: 1, size: 'sm', Component: Fun.OffWorkCountdown },
-  { id: 'fun-holiday',     title: '假期倒计时', description: '可自定义的假期日历倒计时',    icon: PartyPopper, category: 'fun', defaultW: 2, size: 'sm', Component: Fun.HolidayCountdown },
+  { id: 'fun-holiday',     title: '假期倒计时', description: '可自定义的假期日历倒计时',    icon: PartyPopper, category: 'fun', defaultW: 2, size: 'lg', Component: Fun.HolidayCountdown },
   { id: 'fun-pomodoro',    title: '番茄钟',     description: '25 分钟专注计时',            icon: Hourglass,   category: 'fun', defaultW: 1, size: 'sm', Component: Fun.PomodoroTimer },
   { id: 'fun-quote',       title: '每日一言',   description: '每天一句，点击换一条',       icon: Quote,       category: 'fun', defaultW: 2, size: 'sm', Component: Fun.DailyQuote },
   { id: 'fun-slacking',    title: '摸鱼倒计时', description: '距周末 / 发薪日还有几天',     icon: Fish,        category: 'fun', defaultW: 1, size: 'sm', Component: Fun.SlackingCountdown },
@@ -128,8 +128,35 @@ const DEFAULT_VISIBLE_ORDER = [
   'board-sales-actions', 'board-business-risk', 'chart-sale-trend', 'chart-receivable-due',
 ]
 
-// 旧默认布局以三项趣味组件为组合标记；迁移后仍可从组件库按需加回。
-const LEGACY_DEFAULT_MARKERS = ['fun-wooden-fish', 'fun-offwork', 'fun-holiday']
+/** 业务阅读分区；每个注册组件只出现一次，区内保留用户保存的顺序。 */
+export const DASHBOARD_SECTIONS = [
+  { id: 'focus', title: '今日重点', description: '待办、履约进度与需要优先处理的风险', widgetIds: [
+    'kpi-pending-sale', 'kpi-shipped-today', 'kpi-receivable', 'kpi-approval-count',
+    'board-sales-actions', 'board-business-risk', 'board-workbench', 'list-pending-approvals',
+  ] },
+  { id: 'trade', title: '采购与销售', description: '订单走势、到货安排与主要往来方', widgetIds: [
+    'kpi-pending-purchase', 'chart-sale-trend', 'chart-purchase-trend', 'board-incoming', 'list-top-customer', 'list-top-supplier',
+  ] },
+  { id: 'warehouse', title: '库存与仓储', description: '库存分布、实物预警与 PDA 作业情况', widgetIds: [
+    'kpi-total-qty', 'kpi-total-value', 'kpi-scan-today', 'chart-io-trend', 'chart-top-stock',
+    'chart-warehouse-stock', 'list-low-stock', 'list-pda-perf', 'list-anomaly',
+  ] },
+  { id: 'finance', title: '财务与资金', description: '应收应付、授信和资金流动', widgetIds: [
+    'kpi-payable', 'kpi-account-balance', 'kpi-credit-warning', 'chart-receivable-due',
+    'chart-aging', 'chart-cashflow', 'chart-account-balance', 'list-collect-top', 'list-pay-top',
+  ] },
+  { id: 'personal', title: '个人工具', description: '专注、便签与日常提醒 · 个人内容保存在本机', widgetIds: [
+    'fun-pomodoro', 'fun-offwork', 'fun-water', 'fun-year', 'fun-todo', 'fun-holiday',
+    'fun-quote', 'fun-slacking', 'fun-wooden-fish', 'fun-fortune',
+  ] },
+  { id: 'system', title: '系统信息', description: '客户端版本与更新说明', widgetIds: ['system-version'] },
+]
+
+export function buildAllLayout(): DashboardLayout {
+  const ids = DASHBOARD_SECTIONS.flatMap(section => section.widgetIds)
+  const widths: Record<string, number> = { 'kpi-pending-purchase': 4, 'kpi-scan-today': 2, 'kpi-credit-warning': 2, 'board-incoming': 4, 'fun-quote': 1, 'system-version': 4 }
+  return { widgets: ids.map(id => ({ id, visible: true, w: widths[id] ?? WIDGET_MAP[id].defaultW })) }
+}
 
 export function buildDefaultLayout(): DashboardLayout {
   const visible = DEFAULT_VISIBLE_ORDER
@@ -149,8 +176,7 @@ export function mergeLayout(saved: DashboardLayout | null | undefined): Dashboar
   if (!saved?.widgets?.length) return buildDefaultLayout()
   const previousVisible = saved.widgets.filter(w => w.visible)
   if (previousVisible.length === PREVIOUS_VISIBLE_ORDER.length && previousVisible.every((w,i) => w.id === PREVIOUS_VISIBLE_ORDER[i] && w.w === WIDGET_MAP[w.id]?.defaultW)) return buildDefaultLayout()
-  const legacyVisible = new Set(saved.widgets.filter(w => w.visible && WIDGET_MAP[w.id]).map(w => w.id))
-  if (LEGACY_DEFAULT_MARKERS.every(id => legacyVisible.has(id))) return buildDefaultLayout()
+  // 不再用三张趣味卡片猜测旧默认：全部展示和合法的个性化组合也会命中。
   const seen = new Set<string>()
   const merged: DashboardLayout['widgets'] = []
   for (const w of saved.widgets) {

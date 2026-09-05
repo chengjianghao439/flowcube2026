@@ -1,3 +1,4 @@
+import { OrderStatusFilter } from '@/components/shared/OrderStatusFilter'
 /**
  * 收货订单列表（采购入库 / inbound_tasks）
  * 路由：/inbound-tasks
@@ -191,7 +192,6 @@ export default function InboundTasksPage() {
     supplierId && { key: 'supplier', label: `供应商：${supplierName || supplierId}`, onRemove: () => updateParams({ supplierId: null, supplierName: null, page: 1 }) },
     remark && { key: 'remark', label: `备注：${remark}`, onRemove: () => updateParams({ remark: null, page: 1 }) },
     operatorId && { key: 'operator', label: `操作人：${operatorName || operatorId}`, onRemove: () => updateParams({ operatorId: null, operatorName: null, page: 1 }) },
-    statusFilter && { key: 'status', label: `状态：${STATUS_LABELS[statusFilter] ?? statusFilter}`, onRemove: () => updateParams({ status: null, page: 1 }) },
     warehouseId && { key: 'warehouse', label: `仓库：${warehouseName || warehouseId}`, onRemove: () => updateParams({ warehouseId: null, warehouseName: null, page: 1 }) },
     productId && { key: 'product', label: `商品：${productName || productId}`, onRemove: () => updateParams({ productId: null, productCode: null, productName: null, page: 1 }) },
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
@@ -393,6 +393,10 @@ export default function InboundTasksPage() {
           </>
         }
       />
+
+      <OrderStatusFilter label="收货状态分类" value={statusFilter}
+        options={[{value: '', label: '全部订单'}, ...Object.entries(STATUS_LABELS).map(([value, label]) => ({value, label}))]}
+        onChange={status => updateParams({status: status || null, page: 1})} />
 
       {chips.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">

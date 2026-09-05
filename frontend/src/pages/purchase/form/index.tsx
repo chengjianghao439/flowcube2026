@@ -1,3 +1,5 @@
+import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
+import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
 /**
  * PurchaseFormPage — 采购单新建 / 查看页面（独立路由）
  *
@@ -379,14 +381,10 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
         ) : (
           <>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[1320px] text-sm">
               <thead>
                 <tr className="border-b text-table-head">
-                  <th className="w-28 pb-2 text-left">编码</th>
-                  <th className="w-20 pb-2 text-left">货号</th>
-                  <th className="w-20 pb-2 text-left">型号</th>
-                  <th className="pb-2 text-left">商品</th>
-                  <th className="w-20 pb-2 text-left">颜色</th>
+                  <ProductIdentityHeaders />
                   <th className="w-16 pb-2 text-center">单位</th>
                   <th className="w-20 pb-2 text-right">数量</th>
                   <th className="w-24 pb-2 text-right">单价 (¥)</th>
@@ -397,11 +395,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
               <tbody>
                 {items.map(item => (
                   <tr key={item._key} className="border-b border-border/40">
-                    <td className="py-2.5 text-doc-code-muted">{item.productCode || '—'}</td>
-                    <td className="py-2.5 text-muted-foreground">{item.articleNumber || '—'}</td>
-                    <td className="py-2.5 text-muted-foreground">{item.spec || '—'}</td>
-                    <td className="py-2.5 pr-3">
-                      <button
+                    <ProductIdentityCells product={item} nameContent={<button
                         type="button"
                         onClick={() => {
                           setFinderItemKey(item._key)
@@ -419,11 +413,9 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
                         )}
                       >
                         {item.productName
-                          ? <span className="truncate font-medium text-foreground">{item.productName}</span>
+                          ? <span className="break-words font-medium text-foreground">{item.productName}</span>
                           : <span className="text-muted-foreground">点击选择商品…</span>}
-                      </button>
-                    </td>
-                    <td className="py-2.5 text-muted-foreground">{item.color || '—'}</td>
+                      </button>} />
 
                     <td className="py-2.5 text-center">
                       {(item.units && item.units.filter(u => !u.isBase).length > 0) ? (
@@ -491,7 +483,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
 
           <div className="flex items-center justify-between border-t border-border pt-4">
             <p className="text-muted-body">
-              商品种数：{items.length} 种　合计数量：{totalQuantity}
+              商品明细：{items.length} 行　合计数量：{totalQuantity}
             </p>
             <div className="text-right">
               <p className="text-helper">合计金额</p>
@@ -503,6 +495,8 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
       </SectionCard>
 
       <ProductFinder
+        mode="purchase"
+        warehouseName={warehouseName}
         open={finderOpen}
         warehouseId={warehouseId ? +warehouseId : null}
         onConfirm={handleFinderConfirm}
@@ -718,11 +712,7 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
       <SectionCard title="商品明细" compact>
         <DataTable
           columns={[
-            { key: 'productCode', title: '编码', width: 130, render: v => <span className="text-doc-code-muted">{String(v)}</span> },
-            { key: 'articleNumber', title: '货号', width: 110, render: v => <span className="text-muted-foreground">{(v as string) || '—'}</span> },
-            { key: 'spec', title: '型号', width: 110, render: v => <span className="text-muted-foreground">{(v as string) || '—'}</span> },
-            { key: 'productName', title: '商品', width: 180, render: v => <span className="font-medium">{String(v)}</span> },
-            { key: 'color', title: '颜色', width: 100, render: v => <span className="text-muted-foreground">{(v as string) || '—'}</span> },
+            ...productIdentityColumns(),
             { key: 'unit', title: '单位', width: 70, render: (_, r) => <span className="text-muted-foreground">{(r.entryUnit && r.entryUnit !== r.unit) ? r.entryUnit : r.unit}</span> },
             {
               key: 'quantity', title: '数量', width: 120, align: 'right',
@@ -749,7 +739,7 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
 
         <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
           <p className="text-muted-body">
-            共 {order.items?.length ?? 0} 种商品
+            共 {order.items?.length ?? 0} 行商品明细
           </p>
           <div className="text-right">
             <p className="text-helper">合计金额</p>

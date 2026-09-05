@@ -1,3 +1,4 @@
+import { ProductIdentityGridCells, ProductIdentityGridHeaders } from '@/components/shared/ProductIdentityCells'
 import { useState } from 'react'
 import { toast } from '@/lib/toast'
 import { Button } from '@/components/ui/button'
@@ -96,11 +97,11 @@ export default function CreateDisposalDialog({ open, onClose }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) { reset(); onClose() } }}>
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle>新建滞销处理单</DialogTitle></DialogHeader>
         <div className="space-y-4 py-2">
           {/* 仓库 + 滞销建议列表 */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-5">
             <div className="space-y-1">
               <Label>选择仓库 *</Label>
               <Select value={whId || '__none__'} onValueChange={v => { setWhId(v === '__none__' ? '' : v); setRows([]) }}>
@@ -123,33 +124,29 @@ export default function CreateDisposalDialog({ open, onClose }: Props) {
           </div>
 
           {/* 建议列表 */}
-          <div className="border rounded-lg max-h-56 overflow-y-auto">
-            <div className="grid grid-cols-12 gap-2 px-3 py-2 text-xs text-muted-foreground font-medium border-b sticky top-0 bg-background">
-              <div className="col-span-1"></div>
-              <div className="col-span-3">商品</div>
-              <div className="col-span-1">在库量</div>
-              <div className="col-span-2">库存价值</div>
-              <div className="col-span-3">最后出库</div>
-              <div className="col-span-2">操作</div>
+          <div className="border rounded-lg max-h-56 overflow-auto">
+            <div className="grid min-w-[1480px] grid-cols-[40px_160px_160px_144px_224px_112px_100px_140px_180px_100px] gap-2 px-3 py-2 text-xs text-muted-foreground font-medium border-b sticky top-0 bg-background">
+              <div className=""></div>
+              <ProductIdentityGridHeaders />
+              <div className="">在库量</div>
+              <div className="">库存价值</div>
+              <div className="">最后出库</div>
+              <div className="">操作</div>
             </div>
             {(suggestions?.list || []).map(s => {
               const selected = selectedIds.has(Number(s.productId))
               return (
-                <div key={`${s.productId}`} className={`grid grid-cols-12 gap-2 items-center px-3 py-1.5 border-b last:border-0 text-sm ${selected ? 'bg-primary/5' : ''}`}>
-                  <div className="col-span-1">
+                <div key={`${s.productId}`} className={`grid min-w-[1480px] grid-cols-[40px_160px_160px_144px_224px_112px_100px_140px_180px_100px] gap-2 items-center px-3 py-3 border-b last:border-0 text-sm ${selected ? 'bg-primary/5' : ''}`}>
+                  <div className="">
                     <input type="checkbox" checked={selected} onChange={() => toggleSuggestion(s)} className="accent-primary" />
                   </div>
-                  <div className="col-span-3">
-                    <span className="text-doc-code">{s.productCode}</span>{' '}
-                    <span className="text-muted-foreground">{s.productName}</span>
-                    <div className="text-xs text-muted-foreground">{s.articleNumber ? `货号 ${s.articleNumber}` : ''}{s.spec ? ` · 型号 ${s.spec}` : ''}{s.color ? ` · ${s.color}` : ''}</div>
-                  </div>
-                  <div className="col-span-1 tabular-nums">{s.totalQty}{s.unit}</div>
-                  <div className="col-span-2 tabular-nums">¥{s.totalValue.toLocaleString('zh-CN', { maximumFractionDigits: 2 })}</div>
-                  <div className="col-span-3 text-xs text-muted-foreground">
+                  <ProductIdentityGridCells product={s} />
+                  <div className="tabular-nums">{s.totalQty}{s.unit}</div>
+                  <div className="tabular-nums">¥{s.totalValue.toLocaleString('zh-CN', { maximumFractionDigits: 2 })}</div>
+                  <div className="text-xs text-muted-foreground">
                     {s.lastOutboundAt ? s.lastOutboundAt : '从未出库'}
                   </div>
-                  <div className="col-span-2">
+                  <div className="">
                     <Button type="button" size="sm" variant={selected ? 'outline' : 'secondary'} className="h-7 text-xs" onClick={() => toggleSuggestion(s)}>
                       {selected ? '移除' : '加入'}
                     </Button>
@@ -168,32 +165,29 @@ export default function CreateDisposalDialog({ open, onClose }: Props) {
           {rows.length > 0 && (
             <div className="space-y-2">
               <Label>处置明细（{rows.length} 项）</Label>
-              <div className="border rounded-lg">
-                <div className="grid grid-cols-12 gap-2 px-3 py-2 text-xs text-muted-foreground font-medium border-b">
-                  <div className="col-span-4">商品</div>
-                  <div className="col-span-2">处置数量</div>
-                  <div className="col-span-2">处置方式</div>
-                  <div className="col-span-3">备注</div>
-                  <div className="col-span-1"></div>
+              <div className="border rounded-lg overflow-x-auto">
+                <div className="grid min-w-[1500px] grid-cols-[160px_160px_144px_224px_112px_140px_160px_240px_40px] gap-2 px-3 py-2 text-xs text-muted-foreground font-medium border-b">
+                  <ProductIdentityGridHeaders />
+                  <div className="">处置数量</div>
+                  <div className="">处置方式</div>
+                  <div className="">备注</div>
+                  <div className=""></div>
                 </div>
                 {rows.map(r => (
-                  <div key={r.suggestion.productId} className="grid grid-cols-12 gap-2 items-center px-3 py-1.5 border-b last:border-0 text-sm">
-                    <div className="col-span-4">
-                      <span className="text-doc-code">{r.suggestion.productCode}</span>{' '}
-                      <span className="text-muted-foreground">{r.suggestion.productName}</span>
-                      <div className="text-xs text-muted-foreground">在库 {r.suggestion.totalQty}{r.suggestion.unit} · 成本 ¥{r.suggestion.unitValue}</div>
-                    </div>
-                    <div className="col-span-2">
+                  <div key={r.suggestion.productId} className="grid min-w-[1500px] grid-cols-[160px_160px_144px_224px_112px_140px_160px_240px_40px] gap-2 items-center px-3 py-3 border-b last:border-0 text-sm">
+                    <ProductIdentityGridCells product={r.suggestion} />
+                    <div className="">
                       <div className="flex items-center gap-1">
                         <Input
                           type="number" min="0" step="0.01" className="h-8 text-sm"
+                          title={`在库 ${r.suggestion.totalQty} ${r.suggestion.unit}，成本 ¥${r.suggestion.unitValue}`}
                           value={r.quantity}
                           onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateRow(r.suggestion.productId, { quantity: e.target.value })}
                         />
                         <span className="text-xs text-muted-foreground">{r.suggestion.unit}</span>
                       </div>
                     </div>
-                    <div className="col-span-2">
+                    <div className="">
                       <Select
                         value={String(r.disposeType)}
                         onValueChange={(v) => updateRow(r.suggestion.productId, { disposeType: Number(v) as DisposeType })}
@@ -204,11 +198,11 @@ export default function CreateDisposalDialog({ open, onClose }: Props) {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="col-span-3">
+                    <div className="">
                       <Input className="h-8 text-sm" placeholder="备注" value={r.remark || ''}
                         onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateRow(r.suggestion.productId, { remark: e.target.value })} />
                     </div>
-                    <div className="col-span-1">
+                    <div className="">
                       <Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-xs text-destructive" onClick={() => removeRow(r.suggestion.productId)}>移除</Button>
                     </div>
                   </div>

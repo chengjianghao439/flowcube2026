@@ -61,8 +61,8 @@ export default function ErpDesktopConnectionGate({ children }: { children: React
 
   if (phase === 'fail' && !onLogin) {
     return (
-      <div className="flex h-[100dvh] flex-col items-center justify-center gap-4 bg-background px-6 text-center">
-        <p className="text-base font-medium text-destructive">
+      <div className="mx-auto flex min-h-[100dvh] max-w-xl flex-col items-center justify-center gap-5 bg-background px-8 text-center">
+        <p className="text-xl font-semibold text-foreground">
           {origin ? '无法连接服务器，请检查地址与网络' : '安装包未配置服务器地址'}
         </p>
         {origin ? (
@@ -70,7 +70,7 @@ export default function ErpDesktopConnectionGate({ children }: { children: React
             正在连接：<span className="text-foreground">{origin}</span>
           </p>
         ) : null}
-        <p className="max-w-md text-xs text-muted-foreground">
+        <p className="max-w-md text-sm leading-6 text-muted-foreground">
           {origin
             ? '请确认后端已启动、服务器网络可达；若长期无法连接，请联系管理员。'
             : '当前安装包未注入服务器地址，请联系管理员重新构建安装包（注入生产 API 地址）。'}

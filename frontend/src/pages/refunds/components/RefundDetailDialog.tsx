@@ -47,20 +47,20 @@ export default function RefundDetailDialog({ open, onClose, id }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next && !actionLocked) onClose() }}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-4xl">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-3">
+          <DialogTitle className="flex flex-wrap items-center gap-3">
             退款单详情
             {refund && <SoftStatusLabel label={refund.statusName} tone={STATUS_TONE[refund.status] ?? 'draft'} />}
           </DialogTitle>
         </DialogHeader>
         {isLoading && <p className="text-center py-8 text-muted-foreground">加载中…</p>}
         {refund && (
-          <div className="grid grid-cols-2 gap-4 py-2 text-sm">
+          <div className="grid grid-cols-2 gap-x-8 gap-y-5 rounded-lg border border-border bg-muted/20 p-5 text-sm [&>div]:break-words [&>div]:leading-6">
             <div><span className="text-muted-foreground">退款单号：</span><span className="text-doc-code-strong">{refund.refundNo}</span></div>
             <div><span className="text-muted-foreground">销售单：</span><span className="text-doc-code">{refund.saleOrderNo}</span></div>
             <div><span className="text-muted-foreground">客户：</span>{refund.customerName}</div>
-            <div><span className="text-muted-foreground">退款金额：</span><span className="tabular-nums font-medium">¥{m(refund.amount)}</span></div>
+            <div><span className="text-muted-foreground">退款金额：</span><span className="tabular-nums text-xl font-semibold">¥{m(refund.amount)}</span></div>
             <div><span className="text-muted-foreground">退款日期：</span>{refund.refundDate ? String(refund.refundDate).slice(0, 10) : '—'}</div>
             <div><span className="text-muted-foreground">经办人：</span>{refund.operatorName || '—'}</div>
             {refund.confirmedByName && <div><span className="text-muted-foreground">确认人：</span>{refund.confirmedByName}</div>}
@@ -93,7 +93,7 @@ export default function RefundDetailDialog({ open, onClose, id }: Props) {
               confirmText: '取消',
               variant: 'destructive',
               onConfirm: () => run(() => cancel.mutateAsync(refund!.id), '退款单已取消'),
-            })} disabled={cancel.isPending || actionLocked}>取消</Button>
+            })} disabled={cancel.isPending || actionLocked}>取消退款单</Button>
           )}
           <Button variant="outline" onClick={onClose} disabled={actionLocked}>关闭</Button>
         </DialogFooter>

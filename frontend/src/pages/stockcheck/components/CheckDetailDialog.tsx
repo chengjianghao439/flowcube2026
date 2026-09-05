@@ -1,3 +1,4 @@
+import { ProductIdentityGridCells, ProductIdentityGridHeaders } from '@/components/shared/ProductIdentityCells'
 import { useState, useEffect, useMemo } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
@@ -150,7 +151,7 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
   return (
     <>
     <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) requestClose() }}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
             盘点单详情
@@ -160,21 +161,20 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
         {isLoading && <p className="text-center py-8 text-muted-foreground">加载中…</p>}
         {check && (
           <div className="space-y-4">
-            <div className="grid grid-cols-3 gap-4 text-sm">
+            <div className="grid grid-cols-3 gap-x-6 gap-y-3 rounded-lg bg-muted/30 p-4 text-sm">
               <div><span className="text-muted-foreground">盘点单号：</span><span className="text-doc-code-strong">{check.checkNo}</span></div>
               <div><span className="text-muted-foreground">仓库：</span>{check.warehouseName}</div>
               <div><span className="text-muted-foreground">经办人：</span>{check.operatorName}</div>
               {check.remark && <div className="col-span-3"><span className="text-muted-foreground">备注：</span>{check.remark}</div>}
             </div>
-            <div>
-              <div className="grid grid-cols-12 gap-2 text-xs text-muted-foreground font-medium border-b pb-1 mb-1">
-                <div className="col-span-2">编码</div>
-                <div className="col-span-3">名称</div>
-                <div className="col-span-1">单位</div>
-                <div className="col-span-2">账面数量</div>
-                <div className="col-span-2">实盘数量</div>
-                <div className="col-span-1">差异</div>
-                <div className="col-span-1"></div>
+            <div className="overflow-x-auto">
+              <div className="grid min-w-[1440px] grid-cols-[160px_160px_144px_224px_112px_80px_120px_180px_120px_100px] gap-2 text-xs text-muted-foreground font-medium border-b bg-muted/30 py-3 mb-1">
+                <ProductIdentityGridHeaders />
+                <div className="">单位</div>
+                <div className="">账面数量</div>
+                <div className="">实盘数量</div>
+                <div className="">差异</div>
+                <div className=""></div>
               </div>
               {check.items?.map((item: CheckItem)=>{
                 const actualRaw = actuals[item.id]
@@ -184,12 +184,11 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
                   ? (item.diffQty ?? null)
                   : (actual!=null && !hasError ? actual - item.bookQty : null)
                 return (
-                  <div key={item.id} className="grid grid-cols-12 gap-2 items-center py-1 border-b last:border-0">
-                    <div className="col-span-2 text-sm">{item.productCode}</div>
-                    <div className="col-span-3 text-sm">{item.productName}</div>
-                    <div className="col-span-1 text-sm text-muted-foreground">{item.unit}</div>
-                    <div className="col-span-2 text-sm">{item.bookQty}</div>
-                    <div className="col-span-2">
+                  <div key={item.id} className="grid min-w-[1440px] grid-cols-[160px_160px_144px_224px_112px_80px_120px_180px_120px_100px] gap-2 items-center py-3 border-b last:border-0">
+                    <ProductIdentityGridCells product={item} />
+                    <div className="text-sm text-muted-foreground">{item.unit}</div>
+                    <div className="text-sm">{item.bookQty}</div>
+                    <div className="">
                       {item.scanDriven ? (
                         <div className="space-y-0.5">
                           <span className="text-sm block">
@@ -203,7 +202,7 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
                             type="number"
                             min="0"
                             step="0.01"
-                            className="h-8 text-sm"
+                            className="h-9 text-right text-sm tabular-nums" aria-label={`${item.productName}实盘数量`}
                             value={actuals[item.id]??''}
                             onChange={(e: React.ChangeEvent<HTMLInputElement>)=>handleActualChange(item.id, e.target.value)}
                             aria-invalid={hasError}
@@ -214,10 +213,10 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
                         <span className="text-sm block">{item.actualQty??'-'}</span>
                       )}
                     </div>
-                    <div className={`col-span-1 text-sm font-medium ${diff!=null&&diff>0?'text-green-600':diff!=null&&diff<0?'text-red-600':''}`}>
+                    <div className={`text-sm font-medium ${diff!=null&&diff>0?'text-green-600':diff!=null&&diff<0?'text-red-600':''}`}>
                       {diff!=null ? (diff>0?'+':'')+diff.toFixed(2) : '-'}
                     </div>
-                    <div className="col-span-1">
+                    <div className="">
                       {check.status===1 && (
                         <Button
                           variant="ghost"

@@ -116,7 +116,7 @@ export default function LocationsPage() {
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   const columns: TableColumn<Location>[] = [
-    { key: 'code',          title: '库位编号', width: 120,
+    { key: 'code',          title: '库位编号', width: 220,
       render: v => <span className="text-doc-code-strong">{v as string}</span> },
     { key: 'warehouseName', title: '仓库', width: 140,
       render: v => (v as string | null) ?? <span className="text-muted-foreground">—</span> },
@@ -150,7 +150,7 @@ export default function LocationsPage() {
         deleteMessage="仅未被库存容器引用的库位允许删除；若仍在使用，请改为编辑后停用。"
         createLabel="+ 新建库位"
         saveSuccessMessage={(editing) => editing ? '库位已保存' : '库位已创建'}
-        formWidthClass="max-w-md"
+        formWidthClass="max-w-2xl"
         onOpen={handleOpen}
         canSubmit={() => !!form.warehouseId && !!form.code}
         headerActions={

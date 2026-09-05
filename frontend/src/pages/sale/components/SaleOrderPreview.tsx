@@ -1,3 +1,4 @@
+import { ProductIdentityDetails } from '@/components/shared/ProductIdentityCells'
 import * as Dialog from '@radix-ui/react-dialog'
 import { ArrowUpRight, ChevronLeft, ChevronRight, X } from 'lucide-react'
 import { useSaleDetail } from '@/hooks/useSale'
@@ -121,6 +122,14 @@ export default function SaleOrderPreview({
                       </dt>
                       <dd>{getReceivableStatus(order).label}</dd>
                     </div>
+                    <div>
+                      <dt className="mb-1 text-xs text-muted-foreground">运输 / 承运商</dt>
+                      <dd className="break-words">{order.carrier || '未指定'}</dd>
+                    </div>
+                    <div>
+                      <dt className="mb-1 text-xs text-muted-foreground">运费方式</dt>
+                      <dd>{order.freightTypeName || '未指定'}</dd>
+                    </div>
                   </dl>
                   {attention?.label && (
                     <div className="mt-5 rounded-md bg-muted/50 p-3">
@@ -178,13 +187,7 @@ export default function SaleOrderPreview({
                       key={item.id}
                       className="border-b border-border py-4 last:border-0 last:pb-0"
                     >
-                      <p className="text-sm font-medium">{item.productName}</p>
-                      <div className="mt-2 grid grid-cols-2 gap-1.5 text-xs text-muted-foreground">
-                        <span>编码 {item.productCode}</span>
-                        <span>供应商型号 {item.articleNumber || '—'}</span>
-                        <span>型号 {item.spec || '—'}</span>
-                        <span>颜色 {item.color || '—'}</span>
-                      </div>
+                      <ProductIdentityDetails product={item} />
                       <p className="mt-2 text-xs text-muted-foreground">
                         {item.warehouseName || order.warehouseName}
                       </p>

@@ -127,7 +127,7 @@ function AccountFormDialog({ open, mode, parentAcct, editAcct, onClose }: FormDi
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>
             {mode === 'create'

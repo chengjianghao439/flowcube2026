@@ -1,3 +1,4 @@
+import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
@@ -133,11 +134,7 @@ export default function PriceChangePage() {
 
   const columns: TableColumn<PriceChangeRequest>[] = [
     { key: 'requestNo', title: '申请单号', width: 150 },
-    { key: 'productCode', title: '商品编码', width: 110 },
-    { key: 'articleNumber', title: '货号', width: 100, render: v => (v as string) || '—' },
-    { key: 'spec', title: '型号', width: 110, render: v => (v as string) || '—' },
-    { key: 'productName', title: '商品名称', width: 180 },
-    { key: 'color', title: '颜色', width: 80, render: v => (v as string) || '—' },
+    ...productIdentityColumns(),
     { key: 'priceType', title: '价格类型', width: 90, render: (v) => PRICE_TYPE_LABEL[String(v)] ?? String(v) },
     { key: 'oldPrice', title: '现价', width: 90, align: 'right', render: (v) => v != null ? `¥${Number(v).toFixed(2)}` : '—' },
     { key: 'newPrice', title: '新价', width: 90, align: 'right', render: (v) => `¥${Number(v).toFixed(2)}` },
@@ -173,12 +170,12 @@ export default function PriceChangePage() {
 
       {/* 新建改价申请 */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-2xl">
           <DialogHeader><DialogTitle>申请改价</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <div>
               <p className="mb-1 text-sm font-medium">商品</p>
-              <Button variant="outline" className="w-full justify-start" onClick={() => setProductFinderOpen(true)}>
+              <Button variant="outline" className="h-auto min-h-10 w-full justify-start whitespace-normal py-2 text-left" onClick={() => setProductFinderOpen(true)}>
                 {product ? `${product.code} · ${product.name}` : '选择商品…'}
               </Button>
             </div>
@@ -216,7 +213,7 @@ export default function PriceChangePage() {
 
       {/* 驳回 */}
       <Dialog open={!!rejectTarget} onOpenChange={(o) => { if (!o) setRejectTarget(null) }}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>驳回改价申请</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <p className="text-sm text-muted-foreground">商品「{rejectTarget?.productName}」：¥{rejectTarget?.oldPrice ?? '—'} → ¥{rejectTarget?.newPrice}</p>

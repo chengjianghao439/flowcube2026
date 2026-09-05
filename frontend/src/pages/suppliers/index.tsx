@@ -1,3 +1,4 @@
+import { RecordIdentity } from '@/components/shared/RecordIdentity'
 import { useState, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Input } from '@/components/ui/input'
@@ -77,8 +78,7 @@ export default function SuppliersPage() {
   }
 
   const cols:TableColumn<Supplier>[] = [
-    { key:'code', title:'编码', width:120 },
-    { key:'name', title:'名称', width:180 },
+    { key:'name', title:'供应商 / 编码', width:260, render:(_,r)=><RecordIdentity title={r.name} code={r.code} /> },
     { key:'contact', title:'联系人', width:100, render:v=>(v as string)||'-' },
     { key:'phone', title:'电话', width:130, render:v=>(v as string)||'-' },
     { key:'email', title:'邮箱', render:v=>(v as string)||'-' },
@@ -109,7 +109,7 @@ export default function SuppliersPage() {
         </>
       }
       saveSuccessMessage={(editing) => editing ? '供应商已保存' : '供应商已创建'}
-      formWidthClass="sm:max-w-lg"
+      formWidthClass="sm:max-w-3xl"
       canSubmit={() => !!form.name}
       onOpen={handleOpen}
       renderToolbar={
@@ -150,8 +150,9 @@ export default function SuppliersPage() {
       renderForm={(editing) => {
         const isEdit = !!editing
         return (
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-5">
+            <h3 className="text-sm font-medium">供应商与联系方式</h3>
+            <div className="grid grid-cols-2 gap-x-6 gap-y-3">
               {isEdit && (
                 <div className="space-y-1">
                   <Label>供应商编码</Label>
@@ -161,10 +162,11 @@ export default function SuppliersPage() {
               <div className="space-y-1"><Label>名称 *</Label><LimitedInput maxLength={20} value={form.name} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('name',e.target.value)} placeholder="供应商名称"/></div>
               <div className="space-y-1"><Label>联系人</Label><LimitedInput maxLength={5} value={form.contact} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('contact',e.target.value)}/></div>
               <div className="space-y-1"><Label>电话</Label><LimitedInput maxLength={11} value={form.phone} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('phone',e.target.value)} placeholder="11位手机号" inputMode="numeric"/></div>
+              <div className="space-y-1"><Label>邮箱</Label><Input value={form.email} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('email',e.target.value)} placeholder="选填"/></div>
             </div>
-            <div className="space-y-1"><Label>邮箱</Label><Input value={form.email} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('email',e.target.value)} placeholder="选填"/></div>
             <div className="space-y-1"><Label>地址</Label><LimitedInput maxLength={30} value={form.address} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('address',e.target.value)}/></div>
             <div className="space-y-1"><Label>备注</Label><LimitedInput maxLength={30} value={form.remark} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('remark',e.target.value)}/></div>
+            <h3 className="border-t pt-4 text-sm font-medium">结算与供货</h3>
             <SettlementTypeField
               side="payable"
               settlementType={form.settlementType}

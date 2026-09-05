@@ -74,7 +74,7 @@ export default function WarehousesPage() {
       deleteMessage="仅未被库位、库存、任务或业务单据引用的仓库允许删除；若已被引用，请改为编辑后停用。"
       createLabel="新增仓库"
       saveSuccessMessage={(editing) => editing ? '仓库已保存' : '仓库已创建'}
-      formWidthClass="sm:max-w-lg"
+      formWidthClass="sm:max-w-2xl"
       canSubmit={() => !!form.name}
       onOpen={handleOpen}
       renderToolbar={

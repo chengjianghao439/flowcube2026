@@ -2,7 +2,7 @@
  * FilterCard — 筛选区容器卡片
  *
  * 用于包裹筛选条件（搜索框、下拉、日期等）。
- * 默认模式无外层卡片包裹，筛选控件直接展示。
+ * 默认模式使用轻边框横向工具条，筛选控件可换行。
  * 折叠模式（collapsible=true）使用小圆角、去阴影的轻量卡片。
  *
  * 使用示例：
@@ -20,7 +20,7 @@
  * ```
  */
 
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -44,11 +44,12 @@ export function FilterCard({
   label = '筛选条件',
   defaultOpen = true,
 }: FilterCardProps) {
+  const contentId = useId()
   const [open, setOpen] = useState(defaultOpen)
 
   if (!collapsible) {
     return (
-      <div className={cn('flex flex-wrap items-center gap-2', className)}>
+      <div className={cn('flex min-w-0 flex-wrap items-center gap-3 rounded-lg border border-border bg-card px-4 py-3', className)}>
         {children}
       </div>
     )
@@ -60,6 +61,8 @@ export function FilterCard({
       <button
         type="button"
         className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium text-foreground"
+        aria-expanded={open}
+        aria-controls={contentId}
         onClick={() => setOpen(v => !v)}
       >
         <span>{label}</span>
@@ -69,7 +72,7 @@ export function FilterCard({
       </button>
 
       {open && (
-        <div className="border-t border-border px-4 py-3">
+        <div id={contentId} className="border-t border-border px-4 py-3">
           <div className="flex flex-wrap items-center gap-2">{children}</div>
         </div>
       )}

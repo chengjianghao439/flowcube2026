@@ -1,3 +1,4 @@
+import { ReportTable } from '@/components/shared/ReportTable'
 import { useEffect, useMemo, useState, forwardRef, useImperativeHandle } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import DataTable from '@/components/shared/DataTable'
@@ -188,7 +189,7 @@ export const StatementPanel = forwardRef<StatementPanelHandle, Props>(function S
 
       {/* 对账单明细 */}
       <Dialog open={detailId != null} onOpenChange={v => !v && setDetailId(null)}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="max-w-5xl">
           <DialogHeader>
             <DialogTitle>对账单 — <span className="text-doc-code-strong">{detail?.statementNo}</span></DialogTitle>
           </DialogHeader>
@@ -203,7 +204,7 @@ export const StatementPanel = forwardRef<StatementPanelHandle, Props>(function S
             </div>
           )}
           <div className="max-h-96 overflow-y-auto rounded-md border">
-            <table className="w-full text-sm">
+            <ReportTable className="w-full text-sm">
               <thead className="bg-muted/50 text-xs text-muted-foreground">
                 <tr>
                   <th className="px-2 py-1.5 text-left">关联单号</th>
@@ -235,7 +236,7 @@ export const StatementPanel = forwardRef<StatementPanelHandle, Props>(function S
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </ReportTable>
           </div>
           <DialogFooter>
             {detail && detail.status !== 1 && (
@@ -296,10 +297,10 @@ function CreateStatementDialog({ open, onClose, type, onCreated }: {
 
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="max-w-5xl">
         <DialogHeader><DialogTitle>新建对账单</DialogTitle></DialogHeader>
 
-        <div className="grid grid-cols-4 items-end gap-3">
+        <div className="grid grid-cols-[minmax(240px,2fr)_1fr_1fr_auto] items-end gap-4">
           <div className="space-y-1 col-span-2">
             <Label>{partyLabel} *</Label>
             <Input value={partyName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPartyName(e.target.value)} placeholder={`输入${partyLabel}名称`} />

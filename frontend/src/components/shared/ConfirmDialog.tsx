@@ -98,8 +98,8 @@ export function ConfirmDialog({
       }}
       dialogId="confirm-dialog"
       resizable={false}
-      defaultWidth={440}
-      defaultHeight={210}
+      defaultWidth={520}
+      defaultHeight={250}
       minWidth={360}
       minHeight={180}
       title={
@@ -121,7 +121,7 @@ export function ConfirmDialog({
         </div>
       }
     >
-      <div className="overflow-auto px-5 py-4 text-sm text-muted-foreground">
+      <div className="overflow-auto px-5 py-4 text-sm leading-6 break-words text-muted-foreground">
         {description}
       </div>
     </AppDialog>

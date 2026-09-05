@@ -1,3 +1,4 @@
+import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
@@ -206,7 +207,7 @@ export default function ReportsPage() {
                         rankColumn(),
                         { key: 'supplierName', title: '供应商', width: 180 },
                         { key: 'orderCount', title: '单数', width: 90 },
-                        { key: 'totalAmount', title: '金额', width: 120, render: v => <span className="font-medium">¥{Number(v).toFixed(2)}</span> },
+                        { key: 'totalAmount', title: '金额', width: 120, align: 'right', render: v => <span className="font-medium">¥{Number(v).toFixed(2)}</span> },
                       ]}
                       data={withRank(purchaseQ.data.bySupplier)}
                       rowKey="rank"
@@ -219,13 +220,9 @@ export default function ReportsPage() {
                   <DataTable
                     columns={[
                       rankColumn(),
-                      { key: 'productCode', title: '编码', width: 110, render: v => <span className="text-doc-code">{String(v)}</span> },
-                      { key: 'articleNumber', title: '货号', width: 90, render: v => (v as string) || '—' },
-                      { key: 'spec', title: '型号', width: 100, render: v => (v as string) || '—' },
-                      { key: 'productName', title: '商品', width: 160 },
-                      { key: 'color', title: '颜色', width: 70, render: v => (v as string) || '—' },
+                      ...productIdentityColumns(),
                       { key: 'totalQty', title: '数量', width: 90 },
-                      { key: 'totalAmount', title: '金额', width: 120, render: v => <span className="font-medium">¥{Number(v).toFixed(2)}</span> },
+                      { key: 'totalAmount', title: '金额', width: 120, align: 'right', render: v => <span className="font-medium">¥{Number(v).toFixed(2)}</span> },
                     ]}
                     data={withRank(purchaseQ.data.byProduct)}
                     rowKey="rank"
@@ -305,7 +302,7 @@ export default function ReportsPage() {
                         rankColumn(),
                         { key: 'customerName', title: '客户', width: 180 },
                         { key: 'orderCount', title: '单数', width: 90 },
-                        { key: 'totalAmount', title: '金额', width: 120, render: v => <span className="font-medium">¥{Number(v).toFixed(2)}</span> },
+                        { key: 'totalAmount', title: '金额', width: 120, align: 'right', render: v => <span className="font-medium">¥{Number(v).toFixed(2)}</span> },
                       ]}
                       data={withRank(saleQ.data.byCustomer)}
                       rowKey="rank"

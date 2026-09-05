@@ -1,3 +1,4 @@
+import { RecordIdentity } from '@/components/shared/RecordIdentity'
 /**
  * 物流运单列表页
  * 路由：/logistics
@@ -95,14 +96,12 @@ export default function LogisticsPage() {
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   const columns: TableColumn<LogisticsWaybill>[] = [
-    { key: 'waybillNo', title: '运单号', width: 150, render: v => <span className="text-doc-code">{String(v)}</span> },
-    { key: 'trackingNo', title: '快递单号', width: 160, render: v => v ? <span className="text-doc-code">{String(v)}</span> : <span className="text-muted-foreground">—</span> },
+    { key: 'waybillNo', title: '运单 / 创建时间', width: 230, render: (_, row) => <RecordIdentity title={row.waybillNo} detail={formatDisplayDateTime(row.createdAt)} /> },
+    { key: 'trackingNo', title: '快递单号 / 承运商', width: 250, render: (_, row) => <RecordIdentity title={row.trackingNo || '未录入快递单号'} detail={row.carrierName || '未指定承运商'} /> },
     { key: 'saleOrderNo', title: '销售单', width: 140, render: v => v ? String(v) : <span className="text-muted-foreground">—</span> },
-    { key: 'carrierName', title: '承运商', width: 110, render: v => (v as string | null) ?? <span className="text-muted-foreground">—</span> },
     { key: 'receiverName', title: '收件人', width: 100, render: v => (v as string | null) ?? <span className="text-muted-foreground">—</span> },
     { key: 'estFreight', title: '预估运费', width: 100, align: 'right', render: v => <span className="tabular-nums text-muted-foreground">{fmtMoney(v as number | null)}</span> },
     { key: 'status', title: '状态', width: 90, render: (_, r) => <SoftStatusLabel label={r.statusLabel} tone={r.statusTone} /> },
-    { key: 'createdAt', title: '创建时间', width: 150, render: v => <span className="text-sm text-muted-foreground">{formatDisplayDateTime(String(v))}</span> },
     {
       key: 'id', title: '操作', width: 130,
       render: (_, row) => {
@@ -135,7 +134,7 @@ export default function LogisticsPage() {
     <div className="space-y-4">
       <PageHeader
         title="物流运单"
-        description="每个已发出的包裹对应一张运单。指定承运商并开通电子面单后，打包完成即自动生成待取号运单，取号成功自动回写快递单号并打印面单；未对接平台时可手工录入快递单号。"
+        description="按包裹查看运单、取号状态与物流轨迹，处理待录入和取号失败的运单。"
         actions={
           <>
             <Button variant="outline" onClick={() => downloadExport('/export/waybills').catch(e => toast.error((e as Error).message))}>导出</Button>
@@ -144,6 +143,11 @@ export default function LogisticsPage() {
           </>
         }
       />
+
+      <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+        <span className="text-muted-foreground">创建日期：{applied.startDate || '不限'} 至 {applied.endDate || '不限'}</span>
+        <span className="text-xs text-muted-foreground">当前显示 {list.length} 张运单（最多 500 张）</span>
+      </div>
 
       {chips.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
@@ -172,13 +176,13 @@ export default function LogisticsPage() {
       )}
 
       <Dialog open={!!trackTarget} onOpenChange={v => { if (!v) { setTrackTarget(null); setTrackingInput('') } }}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>手工录快递单号</DialogTitle></DialogHeader>
-          <div className="space-y-3 py-2">
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>录入快递单号</DialogTitle></DialogHeader>
+          <div className="space-y-4 py-3">
             <p className="text-sm text-muted-foreground">运单 {trackTarget?.waybillNo}｜{trackTarget?.carrierName ?? '未指定承运商'}</p>
             <div>
-              <Label>快递单号</Label>
-              <Input className="mt-1" placeholder="输入承运商快递单号" value={trackingInput} onChange={e => setTrackingInput(e.target.value)} autoFocus />
+              <Label htmlFor="logistics-tracking-number">快递单号</Label>
+              <Input id="logistics-tracking-number" className="mt-2 font-mono" placeholder="输入承运商快递单号" value={trackingInput} onChange={e => setTrackingInput(e.target.value)} autoFocus />
             </div>
           </div>
           <DialogFooter>

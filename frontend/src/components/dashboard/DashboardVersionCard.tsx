@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Package, BellRing, Download, RefreshCw } from 'lucide-react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { WidgetShell } from './WidgetShell'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { getAppUpdateLatestApi } from '@/api/appUpdate'
@@ -100,87 +100,26 @@ export default function DashboardVersionCard() {
   }
 
   return (
-    <Card className="flex h-full flex-col overflow-hidden">
-      <CardHeader className="shrink-0 pb-3">
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <Package className="h-4 w-4" aria-hidden />
-            </span>
-            <div>
-              <CardTitle className="text-base">系统版本</CardTitle>
-              <CardDescription className="mt-1">与服务器发布信息同步</CardDescription>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {!showNewAvailable && (
-              <Button
-                type="button"
-                size="sm"
-                disabled={checking}
-                onClick={() => void handleCheckUpdate()}
-              >
-                <RefreshCw className={`h-3.5 w-3.5 ${checking ? 'animate-spin' : ''}`} />
-                {checking ? '检查中…' : '检查更新'}
-              </Button>
-            )}
-            {showNewAvailable && (
-              <Badge variant="outline" className={cn('gap-1 text-xs font-medium', STATUS_TONE_CLASS.warning)}>
-                <BellRing className="h-3 w-3" />
-                有新版本可用
-              </Badge>
-            )}
-            {showNewAvailable && !showDesktopUpdateButton && (
-              <span className="text-xs text-muted-foreground">
-                浏览器中无法自动更新，请打开 极序 Flow 桌面客户端完成更新
-              </span>
-            )}
-            {showDesktopUpdateButton && (
-              <Button
-                type="button"
-                size="sm"
-                disabled={updateBusy}
-                onClick={() => void handleDesktopUpdate()}
-              >
-                <Download className="h-3.5 w-3.5" />
-                {updateBusy ? '处理中…' : '立即更新'}
-              </Button>
-            )}
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="min-h-0 flex-1 space-y-3 overflow-y-auto text-sm">
+    <WidgetShell title="系统版本" icon={Package} scrollBody
+      action={<Button type="button" size="sm" variant="outline" className="h-8 text-xs" disabled={checking} onClick={() => void handleCheckUpdate()}>
+        <RefreshCw className={checking ? 'motion-safe:animate-spin' : ''} />{checking ? '检查中…' : '检查更新'}
+      </Button>}
+    >
+      <div className="space-y-4">
+        <p className="text-xs text-muted-foreground">与服务器发布信息同步</p>
+        <dl className="grid grid-cols-2 gap-4 border-b border-border pb-4">
+          <div><dt className="text-xs text-muted-foreground">当前版本</dt><dd className="mt-1 text-xl font-semibold tabular-nums">v{normalizeVersion(currentDisplay)}</dd></div>
+          <div><dt className="text-xs text-muted-foreground">服务端最新</dt><dd className="mt-1 text-xl font-semibold tabular-nums">{isLoading ? '加载中…' : isError || !latestVer ? '暂无法获取' : `v${normalizeVersion(latestVer)}`}</dd></div>
+        </dl>
+        {showNewAvailable && <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="outline" className={cn('gap-1 text-xs font-medium', STATUS_TONE_CLASS.warning)}><BellRing className="h-3 w-3" />有新版本可用</Badge>
+          {showDesktopUpdateButton ? <Button size="sm" disabled={updateBusy} onClick={() => void handleDesktopUpdate()}><Download />{updateBusy ? '处理中…' : '立即更新'}</Button> : <p className="text-xs leading-5 text-muted-foreground">请在极序 Flow 桌面客户端完成自动更新。</p>}
+        </div>}
         <div>
-          <span className="text-muted-foreground">当前版本：</span>
-          <span className="font-mono font-semibold text-foreground">
-            v{normalizeVersion(currentDisplay)}
-          </span>
+          <h4 className="mb-2 text-xs font-medium text-muted-foreground">更新内容</h4>
+          <div className="whitespace-pre-wrap break-words text-xs leading-6 text-foreground">{isLoading ? '正在加载更新内容…' : isError || !notes ? '暂无说明或获取失败，可点击检查更新重试。' : notes}</div>
         </div>
-        <div>
-          <span className="text-muted-foreground">服务端最新：</span>
-          {isLoading ? (
-            <span className="text-muted-foreground">加载中…</span>
-          ) : isError || !latestVer ? (
-            <span className="text-muted-foreground">暂无法获取</span>
-          ) : (
-            <span className="font-mono font-semibold text-foreground">
-              v{normalizeVersion(latestVer)}
-            </span>
-          )}
-        </div>
-        <div>
-          <p className="mb-1.5 text-muted-foreground">更新内容</p>
-          {isLoading ? (
-            <p className="text-muted-foreground">加载中…</p>
-          ) : isError || !notes ? (
-            <p className="text-muted-foreground">暂无说明或获取失败</p>
-          ) : (
-            <pre className="max-h-48 overflow-y-auto whitespace-pre-wrap break-words rounded-lg border border-border bg-muted/30 p-3 font-sans text-xs leading-relaxed text-foreground">
-              {notes}
-            </pre>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+      </div>
+    </WidgetShell>
   )
 }

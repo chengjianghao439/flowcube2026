@@ -39,6 +39,7 @@ export interface UpdateProductParams {
 
 /** 商品选择中心返回结果 */
 export interface ProductFinderResult {
+  barcode?: string | null
   id: number; code: string; name: string
   skuCode: string | null; articleNumber: string | null
   categoryId: number | null; categoryName: string | null

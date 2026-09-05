@@ -1,3 +1,4 @@
+import { ReportTable } from '@/components/shared/ReportTable'
 import { useState, forwardRef, useImperativeHandle } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import DataTable from '@/components/shared/DataTable'
@@ -96,11 +97,11 @@ export const ReceiptPanel = forwardRef<ReceiptPanelHandle, Props>(function Recei
   }))
 
   const columns: TableColumn<PaymentReceipt>[] = [
-    { key: 'receiptNo', title: '单号', width: 150, render: v => <span className="text-doc-code">{String(v)}</span> },
+    { key: 'receiptNo', title: '单号', width: 220, render: v => <span className="text-doc-code">{String(v)}</span> },
     { key: 'partyName', title: partyLabel, width: 160 },
-    { key: 'amount', title: `${actionLabel}金额`, width: 110, render: v => <span className="tabular-nums font-medium">{money(v as number)}</span> },
-    { key: 'settledAmount', title: '已核销', width: 110, render: v => <span className="tabular-nums text-success">{money(v as number)}</span> },
-    { key: 'balance', title: '未核销', width: 110, render: v => (
+    { key: 'amount', title: `${actionLabel}金额`, width: 110, align: 'right', render: v => <span className="tabular-nums font-medium">{money(v as number)}</span> },
+    { key: 'settledAmount', title: '已核销', width: 110, align: 'right', render: v => <span className="tabular-nums text-success">{money(v as number)}</span> },
+    { key: 'balance', title: '未核销', width: 110, align: 'right', render: v => (
       <span className={`tabular-nums ${Number(v) > 0 ? 'font-semibold text-warning' : 'text-muted-foreground'}`}>{money(v as number)}</span>
     )},
     { key: 'status', title: '状态', width: 100, render: (v, row) => (
@@ -109,7 +110,7 @@ export const ReceiptPanel = forwardRef<ReceiptPanelHandle, Props>(function Recei
     { key: 'paymentDate', title: '日期', width: 110, render: v => v ? formatDisplayDate(String(v)) : '-' },
     { key: 'method', title: '方式', width: 80, render: v => (v as string) || '-' },
     { key: 'operatorName', title: '经办人', width: 90, render: v => (v as string) || '-' },
-    { key: 'id', title: '操作', width: 120, render: (_, row) => {
+    { key: 'id', title: '操作', width: 180, render: (_, row) => {
       const r = row as PaymentReceipt
       // 与「按单登记」tab 一致：主按钮 + 下拉次操作（有余额→继续核销为主、明细进下拉；已核销完→只有明细）
       return r.balance > 0 ? (
@@ -162,7 +163,7 @@ export const ReceiptPanel = forwardRef<ReceiptPanelHandle, Props>(function Recei
 
       {/* 核销明细：这笔钱冲抵了哪些订单 */}
       <Dialog open={detailId != null} onOpenChange={v => !v && setDetailId(null)}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-5xl">
           <DialogHeader>
             <DialogTitle>核销明细 — <span className="text-doc-code-strong">{detail?.receiptNo}</span></DialogTitle>
           </DialogHeader>
@@ -173,22 +174,22 @@ export const ReceiptPanel = forwardRef<ReceiptPanelHandle, Props>(function Recei
             </div>
           )}
           <div className="max-h-80 overflow-y-auto rounded-md border">
-            <table className="w-full text-sm">
+            <ReportTable className="w-full text-sm">
               <thead className="bg-muted/50 text-xs text-muted-foreground">
                 <tr>
-                  <th className="px-2 py-1.5 text-left">关联单号</th>
-                  <th className="px-2 py-1.5 text-right">本次核销</th>
-                  <th className="px-2 py-1.5 text-right">订单总额</th>
-                  <th className="px-2 py-1.5 text-right">剩余余额</th>
+                  <th className="px-4 py-3 text-left">关联单号</th>
+                  <th className="px-4 py-3 text-right">本次核销</th>
+                  <th className="px-4 py-3 text-right">订单总额</th>
+                  <th className="px-4 py-3 text-right">剩余余额</th>
                 </tr>
               </thead>
               <tbody>
                 {detail?.settlements?.map(s => (
                   <tr key={s.entryId} className="border-t">
-                    <td className="px-2 py-1.5 text-doc-code">{s.orderNo}</td>
-                    <td className="px-2 py-1.5 text-right tabular-nums">{money(s.amount)}</td>
-                    <td className="px-2 py-1.5 text-right tabular-nums text-muted-foreground">{money(s.orderTotal)}</td>
-                    <td className="px-2 py-1.5 text-right tabular-nums">
+                    <td className="px-4 py-3 text-doc-code">{s.orderNo}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">{money(s.amount)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{money(s.orderTotal)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">
                       {s.orderBalance > 0
                         ? <span className="text-destructive">{money(s.orderBalance)}</span>
                         : <span className="text-success">已结清</span>}
@@ -199,7 +200,7 @@ export const ReceiptPanel = forwardRef<ReceiptPanelHandle, Props>(function Recei
                   <tr><td colSpan={4} className="px-2 py-6 text-center text-muted-foreground">这笔款尚未核销任何订单</td></tr>
                 )}
               </tbody>
-            </table>
+            </ReportTable>
           </div>
           <DialogFooter><Button variant="outline" onClick={() => setDetailId(null)}>关闭</Button></DialogFooter>
         </DialogContent>

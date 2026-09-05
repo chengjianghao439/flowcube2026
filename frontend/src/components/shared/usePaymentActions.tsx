@@ -123,7 +123,7 @@ export function usePaymentActions(type: 1 | 2) {
     <>
       {/* 登记付款 / 收款 */}
       <Dialog open={payOpen} onOpenChange={setPayOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader><DialogTitle>{actionLabel}</DialogTitle></DialogHeader>
           {selected && (
             <div className="text-sm text-muted-foreground mb-2 space-y-1">
@@ -170,7 +170,7 @@ export function usePaymentActions(type: 1 | 2) {
       {/* 应付结算确认：核对「实际上架量 × 采购单价 − 退货冲减」后确认，确认后才能付款 */}
       {isPayable && (
         <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-4xl">
             <DialogHeader><DialogTitle>应付结算确认 — <span className="text-doc-code-strong">{selected?.orderNo}</span></DialogTitle></DialogHeader>
             <p className="text-sm text-muted-foreground">
               该应付由收货上架自动结算生成。请核对以下明细（实际上架量 × 采购单价）后确认；确认后才可登记付款。

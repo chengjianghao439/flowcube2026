@@ -1,3 +1,4 @@
+import { OrderStatusFilter } from '@/components/shared/OrderStatusFilter'
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { X } from 'lucide-react'
@@ -200,7 +201,6 @@ export default function PurchasePage() {
     keyword && { key: 'keyword', label: `单号：${keyword}`, onRemove: () => updateParams({ keyword: null, page: 1 }) },
     remark && { key: 'remark', label: `备注：${remark}`, onRemove: () => updateParams({ remark: null, page: 1 }) },
     operatorId && { key: 'operator', label: `经办人：${operatorName || operatorId}`, onRemove: () => updateParams({ operatorId: null, operatorName: null, page: 1 }) },
-    statusFilter && { key: 'status', label: `状态：${STATUS_LABELS[statusFilter] ?? statusFilter}`, onRemove: () => updateParams({ status: null, page: 1 }) },
     supplierId && { key: 'supplier', label: `供应商：${supplierName || supplierId}`, onRemove: () => updateParams({ supplierId: null, supplierName: null, page: 1 }) },
     warehouseId && { key: 'warehouse', label: `仓库：${warehouseName || warehouseId}`, onRemove: () => updateParams({ warehouseId: null, warehouseName: null, page: 1 }) },
     productId && { key: 'product', label: `商品：${productName || productId}`, onRemove: () => updateParams({ productId: null, productCode: null, productName: null, page: 1 }) },
@@ -219,13 +219,13 @@ export default function PurchasePage() {
     { key: 'operatorName', title: '经办人', width: 11 },
     { key: 'createdAt', title: '创建时间', width: 13, render: (v) => formatDisplayDateTime(v) },
     {
-      key: 'remark', title: '备注', width: 13,
+      key: 'remark', title: '备注', width: 11,
       render: (v) => v
         ? <span className="line-clamp-1 text-muted-foreground" title={String(v)}>{String(v)}</span>
         : <span className="text-muted-foreground/50">—</span>
     },
     {
-      key: 'id', title: '操作', width: 8, render: (_, row) => {
+      key: 'id', title: '操作', width: 10, render: (_, row) => {
         const r = row as PurchaseOrder
         return (
           <TableActionsMenu
@@ -325,6 +325,10 @@ export default function PurchasePage() {
         }
       />
 
+      <OrderStatusFilter label="采购状态分类" value={statusFilter}
+        options={[{value: '', label: '全部订单'}, ...Object.entries(STATUS_LABELS).map(([value, label]) => ({value, label}))]}
+        onChange={status => updateParams({status: status || null, page: 1})} />
+
       {chips.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
           {chips.map(c => (
@@ -345,7 +349,7 @@ export default function PurchasePage() {
         loading={isLoading}
         onRowDoubleClick={goToDetail}
         fluid
-        columnStorageKey="purchase:fluid-v2"
+        columnStorageKey="purchase:status-v3"
       />
 
       {/* 分页 */}

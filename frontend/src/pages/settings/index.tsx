@@ -91,7 +91,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-6xl space-y-4">
       <PageHeader
         title="系统设置"
         description="配置全局参数与角色权限。"
@@ -106,7 +106,7 @@ export default function SettingsPage() {
       )}
 
       {/* 品牌标识 */}
-      <section className="rounded-xl border border-border bg-card">
+      <section className="rounded-lg border border-border bg-card">
         <div className="flex flex-col gap-6 p-6 sm:flex-row sm:items-start">
           <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-border bg-muted/30">
             {logo?.url && !logoImgFailed ? (
@@ -148,20 +148,21 @@ export default function SettingsPage() {
       </section>
 
       {/* 基础参数 */}
-      <section className="rounded-xl border border-border bg-card">
+      <section className="rounded-lg border border-border bg-card">
         <div className="border-b border-border/60 px-6 py-4">
           <h2 className="text-base font-semibold">基础参数</h2>
           <p className="mt-0.5 text-sm text-muted-foreground">影响业务流程的全局配置，保存后立即生效。</p>
         </div>
-        <div className="space-y-4 p-6">
+        <div className="divide-y divide-border px-5">
           {data?.list.filter(s => s.type !== 'image' && s.type !== 'timestamp').map(s => (
-            <div key={s.key_name} className="grid gap-1.5 sm:grid-cols-[220px_1fr] sm:gap-6">
+            <div key={s.key_name} className="grid gap-3 py-4 sm:grid-cols-[minmax(280px,0.8fr)_1fr] sm:gap-8">
               <div>
-                <Label className="font-medium">{s.label}</Label>
+                <Label htmlFor={`setting-${s.key_name}`} className="font-medium">{s.label}</Label>
                 {s.remark && <p className="mt-0.5 text-xs text-muted-foreground">{s.remark}</p>}
               </div>
               <div className="space-y-1.5">
                 <Input
+                  id={`setting-${s.key_name}`}
                   value={form[s.key_name] ?? ''}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(p => ({ ...p, [s.key_name]: e.target.value }))}
                   type={s.type === 'number' ? 'number' : 'text'}

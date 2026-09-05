@@ -286,7 +286,7 @@ export default function DataTable<T extends object>({
   return (
     <div className="rounded-lg border border-border bg-card overflow-hidden">
       <div className="overflow-x-auto">
-        <table className="table-fixed text-sm" style={fluid ? { width: '100%' } : { width: Math.max(tableWidth, 0), minWidth: '100%' }}>
+        <table aria-busy={loading} className="table-fixed text-sm" style={fluid ? { width: '100%' } : { width: Math.max(tableWidth, 0), minWidth: '100%' }}>
           <colgroup ref={colgroupRef}>
             {isSelectEnabled && <col style={{ width: 56 }} />}
             {orderedColumns.map(col => (
@@ -324,7 +324,7 @@ export default function DataTable<T extends object>({
                   onDragEnd={() => setDraggingKey(null)}
                   className={`px-4 py-2.5 text-left text-table-head ${
                     isAction(String(col.key), col.title)
-                      ? 'sticky right-0 z-20 min-w-[180px] bg-muted/30 shadow-[-12px_0_16px_-12px_rgba(0,0,0,0.12)]'
+                      ? 'sticky right-0 z-20 min-w-[180px] bg-muted shadow-[-12px_0_16px_-12px_rgba(0,0,0,0.12)]'
                       : 'cursor-move select-none'
                   }`}
                   style={fluid ? { width: `${getColumnWidth(col)}%` } : (getColumnWidth(col) ? { width: getColumnWidth(col), minWidth: getColumnWidth(col) } : undefined)}
@@ -389,7 +389,7 @@ export default function DataTable<T extends object>({
                 </td>
               </tr>
             ) : (
-              data.map((row) => {
+              data.map((row, rowIndex) => {
                 const rowId = Number((row as Record<string, unknown>)[String(rowKey)])
                 const isSelected = selectedIds?.has(rowId) ?? false
                 const rowSelectable = selectableCheck ? selectableCheck(row) : true
@@ -397,14 +397,15 @@ export default function DataTable<T extends object>({
                   <tr
                     key={String(row[rowKey])}
                     onDoubleClick={onRowDoubleClick ? () => onRowDoubleClick(row) : undefined}
-                    className={`min-h-12 border-b border-border last:border-0 transition-colors ${
-                      isSelected ? 'bg-primary/5' : 'hover:bg-muted/30'
+                    className={`group min-h-12 border-b border-border/70 last:border-0 transition-colors ${
+                      isSelected ? 'bg-primary/[0.07]' : 'hover:bg-muted/30'
                     } ${onRowDoubleClick ? 'cursor-pointer' : ''}`}
                   >
                     {isSelectEnabled && (
                       <td className="px-4">
                         <input
                           type="checkbox"
+                          aria-label={`选择第 ${rowIndex + 1} 行`}
                           checked={isSelected}
                           disabled={!rowSelectable}
                           onChange={() => toggleRow(rowId)}
@@ -431,7 +432,7 @@ export default function DataTable<T extends object>({
                         {isAction(String(col.key), col.title)
                           ? (col.render ? (col.render(rawValue, row) as ReactNode) : textValue)
                           : (
-                            <div className={`truncate ${alignClass}`} title={textValue}>
+                            <div className={`${col.render ? 'min-w-0 whitespace-normal break-words' : 'truncate'} ${alignClass}`} title={textValue}>
                               {col.render ? (col.render(rawValue, row) as ReactNode) : textValue}
                             </div>
                           )}

@@ -1,3 +1,5 @@
+import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
+import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
 /**
  * TransferFormPage — 调拨单新建 / 编辑 / 查看页面（独立路由）
  *
@@ -269,14 +271,10 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
         ) : (
           <>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[1320px] text-sm">
               <thead>
                 <tr className="border-b text-table-head">
-                  <th className="w-28 pb-2 text-left">编码</th>
-                  <th className="w-20 pb-2 text-left">货号</th>
-                  <th className="w-20 pb-2 text-left">型号</th>
-                  <th className="pb-2 text-left">商品</th>
-                  <th className="w-20 pb-2 text-left">颜色</th>
+                  <ProductIdentityHeaders />
                   <th className="w-16 pb-2 text-center">单位</th>
                   <th className="w-24 pb-2 text-right">调拨数量</th>
                   <th className="w-10 pb-2" />
@@ -285,11 +283,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
               <tbody>
                 {items.map(item => (
                   <tr key={item._key} className="border-b border-border/40">
-                    <td className="py-2.5 text-doc-code-muted">{item.productCode || '—'}</td>
-                    <td className="py-2.5 text-muted-foreground">{item.articleNumber || '—'}</td>
-                    <td className="py-2.5 text-muted-foreground">{item.spec || '—'}</td>
-                    <td className="py-2.5 pr-3">
-                      <button
+                    <ProductIdentityCells product={item} nameContent={<button
                         type="button"
                         onClick={() => { setFinderItemKey(item._key); setFinderOpen(true) }}
                         className={cn(
@@ -298,11 +292,9 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
                         )}
                       >
                         {item.productName
-                          ? <span className="truncate font-medium">{item.productName}</span>
+                          ? <span className="break-words font-medium">{item.productName}</span>
                           : <span className="text-muted-foreground">点击选择商品…</span>}
-                      </button>
-                    </td>
-                    <td className="py-2.5 text-muted-foreground">{item.color || '—'}</td>
+                      </button>} />
 
                     <td className="py-2.5 text-center text-muted-body">{item.unit || '—'}</td>
 
@@ -344,6 +336,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
       </SectionCard>
 
       <ProductFinder
+        warehouseName={fromWarehouseName}
         open={finderOpen}
         warehouseId={fromWarehouseId ? +fromWarehouseId : null}
         onConfirm={handleFinderConfirm}
@@ -453,11 +446,7 @@ function DetailView({ transferId, closeTab, tabPath }: { transferId: number; clo
       <SectionCard title="调拨明细" compact>
         <DataTable
           columns={[
-            { key: 'productCode', title: '编码', width: 130, render: v => <span className="text-doc-code-muted">{String(v)}</span> },
-            { key: 'articleNumber', title: '货号', width: 100, render: v => <span className="text-muted-foreground">{(v as string) || '—'}</span> },
-            { key: 'spec', title: '型号', width: 100, render: v => <span className="text-muted-foreground">{(v as string) || '—'}</span> },
-            { key: 'productName', title: '商品', width: 180, render: v => <span className="font-medium">{String(v)}</span> },
-            { key: 'color', title: '颜色', width: 90, render: v => <span className="text-muted-foreground">{(v as string) || '—'}</span> },
+            ...productIdentityColumns(),
             { key: 'unit', title: '单位', width: 70, render: v => <span className="text-muted-foreground">{String(v)}</span> },
             { key: 'quantity', title: '计划', width: 90 },
             ...(showProgress ? [

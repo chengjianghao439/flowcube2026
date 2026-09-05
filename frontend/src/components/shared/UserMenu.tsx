@@ -61,7 +61,7 @@ export default function UserMenu() {
         </div>
         <div className="hidden sm:block text-left">
           <p className="text-xs font-medium leading-tight">{user?.realName || user?.username}</p>
-          <p className="text-[10px] text-muted-foreground">{user?.roleName || '管理员'}</p>
+          <p className="text-xs text-muted-foreground">{user?.roleName || '管理员'}</p>
         </div>
         <ChevronDown className="size-3 text-muted-foreground" />
       </button>
@@ -69,7 +69,7 @@ export default function UserMenu() {
       {menuOpen && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
-          <div className="absolute right-0 top-full mt-1 w-56 bg-white rounded-lg shadow-lg border z-50 overflow-hidden">
+          <div className="absolute right-0 top-full mt-1 w-72 bg-popover text-popover-foreground rounded-lg shadow-lg border z-50 overflow-hidden">
             {/* 登录信息卡片 */}
             <div className="px-4 py-3 border-b bg-muted/30">
               <div className="flex items-center gap-3">
@@ -78,8 +78,8 @@ export default function UserMenu() {
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm font-medium truncate">{user?.realName || user?.username}</p>
-                  <p className="text-[11px] text-muted-foreground truncate">@{user?.username}</p>
-                  <p className="text-[11px] text-muted-foreground truncate">{user?.roleName}</p>
+                  <p className="text-xs text-muted-foreground truncate">@{user?.username}</p>
+                  <p className="text-xs text-muted-foreground truncate">{user?.roleName}</p>
                 </div>
               </div>
             </div>
@@ -132,16 +132,16 @@ export default function UserMenu() {
 
       {/* 我的信息弹窗 */}
       <Dialog open={infoOpen} onOpenChange={setInfoOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-2xl">
           <DialogHeader><DialogTitle>我的信息</DialogTitle></DialogHeader>
           <div className="space-y-3 py-2">
             <div className="rounded-lg border border-border">
               <div className="border-b border-border bg-muted/30 px-4 py-2 text-xs font-semibold text-muted-foreground">账号信息</div>
               <dl className="divide-y divide-border/60 text-sm">
-                <div className="flex justify-between px-4 py-2"><dt className="text-muted-foreground">姓名</dt><dd className="font-medium">{myInfo?.realName || user?.realName || '—'}</dd></div>
-                <div className="flex justify-between px-4 py-2"><dt className="text-muted-foreground">登录账号</dt><dd className="font-medium">{myInfo?.username || user?.username || '—'}</dd></div>
-                <div className="flex justify-between px-4 py-2"><dt className="text-muted-foreground">角色</dt><dd className="flex items-center gap-1.5"><ShieldCheck className="size-3.5 text-muted-foreground" />{myInfo?.roleName || user?.roleName || '—'}</dd></div>
-                <div className="flex justify-between px-4 py-2"><dt className="text-muted-foreground">部门</dt><dd className="flex items-center gap-1.5"><Building2 className="size-3.5 text-muted-foreground" />{myInfo?.departmentName || '—'}</dd></div>
+                <div className="grid grid-cols-[110px_minmax(0,1fr)] gap-4 px-4 py-3 [&_dd]:break-words"><dt className="text-muted-foreground">姓名</dt><dd className="font-medium">{myInfo?.realName || user?.realName || '—'}</dd></div>
+                <div className="grid grid-cols-[110px_minmax(0,1fr)] gap-4 px-4 py-3 [&_dd]:break-words"><dt className="text-muted-foreground">登录账号</dt><dd className="font-medium">{myInfo?.username || user?.username || '—'}</dd></div>
+                <div className="grid grid-cols-[110px_minmax(0,1fr)] gap-4 px-4 py-3 [&_dd]:break-words"><dt className="text-muted-foreground">角色</dt><dd className="flex items-center gap-1.5"><ShieldCheck className="size-3.5 text-muted-foreground" />{myInfo?.roleName || user?.roleName || '—'}</dd></div>
+                <div className="grid grid-cols-[110px_minmax(0,1fr)] gap-4 px-4 py-3 [&_dd]:break-words"><dt className="text-muted-foreground">部门</dt><dd className="flex items-center gap-1.5"><Building2 className="size-3.5 text-muted-foreground" />{myInfo?.departmentName || '—'}</dd></div>
               </dl>
             </div>
             <div className="rounded-lg border border-border">
@@ -152,7 +152,7 @@ export default function UserMenu() {
                 {whLoading ? (
                   <div className="flex items-center gap-2 text-muted-foreground py-1"><Loader2 className="size-3.5 animate-spin" /> 加载中…</div>
                 ) : isUnrestricted ? (
-                  <p className="text-emerald-600 font-medium">不限仓库（可访问全部仓库）</p>
+                  <p className="text-success font-medium">不限仓库（可访问全部仓库）</p>
                 ) : (
                   <div className="flex flex-wrap gap-1.5">
                     {myWarehouses?.map(w => (
@@ -171,7 +171,7 @@ export default function UserMenu() {
 
       {/* 浏览器端退出确认（桌面端走原生 messageBox） */}
       <Dialog open={logoutOpen} onOpenChange={setLogoutOpen}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>退出系统</DialogTitle>
             <DialogDescription>
@@ -197,12 +197,12 @@ export default function UserMenu() {
       </Dialog>
 
       <Dialog open={pwdOpen} onOpenChange={setPwdOpen}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>修改密码</DialogTitle></DialogHeader>
           <form onSubmit={handlePwdSubmit} className="space-y-4 py-2">
-            <div className="space-y-1"><Label>当前密码 *</Label><Input type="password" value={oldPwd} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setOldPwd(e.target.value)} required autoComplete="current-password" /></div>
-            <div className="space-y-1"><Label>新密码 *（至少6位）</Label><Input type="password" value={newPwd} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewPwd(e.target.value)} required minLength={6} autoComplete="new-password" /></div>
-            <div className="space-y-1"><Label>确认新密码 *</Label><Input type="password" value={confirmPwd} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setConfirmPwd(e.target.value)} required autoComplete="new-password" /></div>
+            <div className="space-y-1"><Label htmlFor="profile-old-password">当前密码 *</Label><Input id="profile-old-password" type="password" value={oldPwd} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setOldPwd(e.target.value)} required autoComplete="current-password" /></div>
+            <div className="space-y-1"><Label htmlFor="profile-new-password">新密码 *（至少6位）</Label><Input id="profile-new-password" type="password" value={newPwd} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewPwd(e.target.value)} required minLength={6} autoComplete="new-password" /></div>
+            <div className="space-y-1"><Label htmlFor="profile-confirm-password">确认新密码 *</Label><Input id="profile-confirm-password" type="password" value={confirmPwd} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setConfirmPwd(e.target.value)} required autoComplete="new-password" /></div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setPwdOpen(false)}>取消</Button>
               <Button type="submit" disabled={changePwd.isPending}>{changePwd.isPending ? '提交中…' : '确认修改'}</Button>

@@ -111,7 +111,7 @@ export class GlobalErrorBoundary extends Component<Props, State> {
                 {error.name}: {error.message}
               </p>
               {errorInfo?.componentStack && (
-                <pre className="mt-2 whitespace-pre-wrap text-[10px] text-muted-foreground">
+                <pre className="mt-2 whitespace-pre-wrap text-xs leading-5 text-muted-foreground">
                   {errorInfo.componentStack.trim().slice(0, 800)}
                 </pre>
               )}

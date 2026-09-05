@@ -1,3 +1,4 @@
+import { QueryFormLayout } from '@/components/shared/QueryFormLayout'
 import { useEffect, useState } from 'react'
 import { AppDialog } from '@/components/shared/AppDialog'
 import { Button } from '@/components/ui/button'
@@ -37,9 +38,9 @@ export default function ReplenishmentQueryDialog({ open, initial, onClose, onApp
       title="查询补货建议"
       resizable={false}
       defaultWidth={520}
-      defaultHeight={440}
+      defaultHeight={360}
       minWidth={420}
-      minHeight={400}
+      minHeight={340}
       footer={
         <div className="flex justify-between gap-2">
           <Button variant="ghost" onClick={() => setDraft(EMPTY)}>重置</Button>
@@ -50,7 +51,7 @@ export default function ReplenishmentQueryDialog({ open, initial, onClose, onApp
         </div>
       }
     >
-      <div className="grid h-full grid-cols-2 gap-4 overflow-y-auto px-5 py-4">
+      <QueryFormLayout>
         <label className="flex flex-col gap-1 col-span-2">
           <span className="text-xs font-medium text-muted-foreground">商品编码 / 名称</span>
           <Input
@@ -84,7 +85,7 @@ export default function ReplenishmentQueryDialog({ open, initial, onClose, onApp
             className="h-9 w-full"
           />
         </label>
-      </div>
+      </QueryFormLayout>
     </AppDialog>
   )
 }

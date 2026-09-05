@@ -110,7 +110,7 @@ function CategoryFormDialog({ open, mode, parentCat, editCat, onClose }: FormDia
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>
             {mode === 'create'

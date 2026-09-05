@@ -164,9 +164,9 @@ export default function PermissionsPage() {
         actions={isSuperAdmin ? <Button onClick={handleSave} disabled={save.isPending}>{save.isPending ? '保存中…' : '保存权限配置'}</Button> : null}
       />
 
-      <div className="flex flex-col gap-6 items-start lg:flex-row">
+      <div className="grid items-start gap-4 lg:grid-cols-[240px_minmax(0,1fr)]">
         {/* 左栏：角色列表（选中高亮，hover 显示复制/删除） */}
-        <aside className="w-full shrink-0 rounded-lg border bg-card p-3 lg:w-60">
+        <aside className="w-full shrink-0 rounded-lg border bg-card p-3 lg:sticky lg:top-4">
           <div className="mb-2 flex items-center justify-between px-2">
             <h2 className="text-sm font-semibold text-muted-foreground">角色</h2>
             {isSuperAdmin && (
@@ -197,7 +197,7 @@ export default function PermissionsPage() {
                       type="button"
                       title={`复制「${r.name}」`}
                       onClick={() => setDupTarget(r)}
-                      className="mr-1 rounded-md p-1 text-muted-foreground opacity-0 transition-all group-hover:opacity-100 hover:bg-muted hover:text-foreground"
+                      className="mr-1 rounded-md p-1 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 hover:bg-muted hover:text-foreground"
                     >
                       <Copy className="h-3.5 w-3.5" />
                     </button>
@@ -207,7 +207,7 @@ export default function PermissionsPage() {
                       type="button"
                       title={`删除「${r.name}」`}
                       onClick={() => setDelTarget(r)}
-                      className="mr-1.5 rounded-md p-1 text-muted-foreground opacity-0 transition-all group-hover:opacity-100 hover:bg-muted hover:text-destructive"
+                      className="mr-1.5 rounded-md p-1 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 hover:bg-muted hover:text-destructive"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
@@ -242,7 +242,7 @@ export default function PermissionsPage() {
                           onClick={() => toggle(p.code)}
                           disabled={!isSuperAdmin}
                           aria-pressed={active}
-                          className={`inline-flex h-8 items-center rounded-full border px-3 text-sm transition-colors ${active ? 'border-primary bg-primary/10 font-medium text-primary' : 'border-border text-muted-foreground hover:border-primary/40 hover:text-foreground'} ${!isSuperAdmin ? 'cursor-default' : 'cursor-pointer'}`}
+                          className={`inline-flex min-h-9 items-center rounded-md border px-3 py-1.5 text-left text-sm transition-colors ${active ? 'border-primary bg-primary/10 font-medium text-primary' : 'border-border text-muted-foreground hover:border-primary/40 hover:text-foreground'} ${!isSuperAdmin ? 'cursor-default' : 'cursor-pointer'}`}
                         >
                           {p.label}
                         </button>

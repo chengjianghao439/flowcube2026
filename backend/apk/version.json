@@ -1,7 +1,7 @@
 {
-  "version": "0.9.5",
-  "versionCode": 113,
+  "version": "0.9.6",
+  "versionCode": 114,
   "filename": "app-release.apk",
-  "releaseNote": "仪表盘与销售订单全面升级，优化待办处理、订单预览和风险查看，修复占库、分批发货与执行期改单的一致性问题。",
-  "publishedAt": "2026-09-04T20:53:49.809Z"
+  "releaseNote": "- 统一 PC 页面、查询弹窗、表格、分页和操作按钮的显示风格，优化登录、采购、销售、库存、仓储、财务和报表页面。",
+  "publishedAt": "2026-09-05T07:16:12.291Z"
 }

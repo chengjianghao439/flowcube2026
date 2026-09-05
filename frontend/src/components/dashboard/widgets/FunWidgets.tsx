@@ -94,13 +94,13 @@ export function WoodenFish() {
       title="电子木鱼" icon={Sparkles} tone="warning"
       action={
         <button type="button" onClick={toggleSound} title={sound ? '关闭音效' : '开启音效'}
-          className="flex h-7 w-7 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted">
+          className="flex h-8 w-8 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted">
           {sound ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
         </button>
       }
     >
       <div className="flex h-full flex-col items-center justify-center gap-1.5">
-        <button type="button" onClick={knock} aria-label="敲木鱼，功德加一" className="relative select-none outline-none">
+        <button type="button" onClick={knock} aria-label="敲木鱼，功德加一" className="relative select-none rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
           {combo >= 3 && (
             <span className={cn('absolute -right-2 -top-1 z-20 whitespace-nowrap rounded-full bg-orange-500/15 px-2 py-0.5 text-xs font-bold text-orange-500 transition-transform',
               combo >= 8 && 'scale-110 text-red-500')}>
@@ -162,15 +162,15 @@ export function OffWorkCountdown() {
   let big: ReactNode
   let hint: string
   if (isWeekend) {
-    big = <span className="text-2xl font-bold text-success">周末愉快 🎉</span>
+    big = <span className="text-2xl font-semibold text-success">周末愉快 🎉</span>
     hint = '今天休息，别想工作'
   } else if (done) {
-    big = <span className="text-2xl font-bold text-success">已下班，辛苦啦 🎉</span>
+    big = <span className="text-2xl font-semibold text-success">已下班，辛苦啦 🎉</span>
     hint = `下班时间 ${off} · 点这里再撒把花`
   } else {
     const s = Math.floor(diffMs / 1000)
     big = (
-      <span className="font-mono text-3xl font-bold tabular-nums text-primary">
+      <span className="text-3xl font-semibold tabular-nums text-primary">
         {pad(Math.floor(s / 3600))}:{pad(Math.floor((s % 3600) / 60))}:{pad(s % 60)}
       </span>
     )
@@ -179,20 +179,20 @@ export function OffWorkCountdown() {
 
   return (
     <WidgetShell
-      title="下班倒计时" icon={Timer} tone="primary"
+      title="下班倒计时" icon={Timer} tone="primary" scrollBody
       action={
         <button type="button" onClick={() => setEditing(e => !e)} title="设置下班时间"
-          className="flex h-7 w-7 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted">
+          className="flex h-8 w-8 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted">
           <Settings2 className="h-4 w-4" />
         </button>
       }
     >
       <div className="relative flex h-full flex-col items-center justify-center gap-1.5">
         {celebrate && <Confetti />}
-        <button type="button" onClick={() => done && setCelebrate(true)} className="outline-none" disabled={!done}>{big}</button>
+        <button type="button" onClick={() => done && setCelebrate(true)} className="rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" disabled={!done}>{big}</button>
         <p className="text-xs text-muted-foreground">{hint}</p>
         {editing && (
-          <input type="time" value={off}
+          <input aria-label="下班时间" type="time" value={off}
             onChange={e => { setOff(e.target.value); localStorage.setItem('dash-offwork', e.target.value) }}
             className="mt-1 rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground" />
         )}
@@ -254,7 +254,7 @@ export function HolidayCountdown() {
       title="假期倒计时" icon={PartyPopper} tone="success" scrollBody={editing}
       action={
         <button type="button" onClick={() => setEditing(e => !e)} title="管理假期"
-          className={cn('flex h-7 w-7 items-center justify-center rounded transition-colors hover:bg-muted', editing ? 'text-primary' : 'text-muted-foreground')}>
+          className={cn('flex h-8 w-8 items-center justify-center rounded transition-colors hover:bg-muted', editing ? 'text-primary' : 'text-muted-foreground')}>
           <Settings2 className="h-4 w-4" />
         </button>
       }
@@ -270,7 +270,7 @@ export function HolidayCountdown() {
             ) : (
               <p className="text-center leading-tight">
                 <span className="text-xs text-muted-foreground">距离{next.name}还有 </span>
-                <span className="text-3xl font-bold tabular-nums text-success">{days}</span>
+                <span className="text-3xl font-semibold tabular-nums text-success">{days}</span>
                 <span className="text-sm text-muted-foreground"> 天</span>
               </p>
             )}
@@ -284,17 +284,17 @@ export function HolidayCountdown() {
               下一个：{next.emoji} {next.name} · {days === 0 ? '就是今天' : `${days} 天后`}
             </p>
           )}
-          <div className="space-y-2 rounded-lg border border-border p-2.5">
+          <div className="space-y-2 border-b border-border pb-3">
             <div className="flex flex-wrap gap-2">
-              <input type="date" value={date} onChange={e => setDate(e.target.value)}
+              <input aria-label="假期日期" type="date" value={date} onChange={e => setDate(e.target.value)}
                 className="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground" />
-              <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="假期名称" maxLength={12}
+              <input aria-label="假期名称" type="text" value={name} onChange={e => setName(e.target.value)} placeholder="假期名称" maxLength={12}
                 className="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground" />
             </div>
             <div className="flex flex-wrap gap-1">
               {EMOJI_CHOICES.map(e => (
                 <button key={e} type="button" onClick={() => setEmoji(e)}
-                  className={cn('flex h-7 w-7 items-center justify-center rounded transition-colors hover:bg-muted', emoji === e && 'bg-primary/10 ring-1 ring-primary')}>
+                  className={cn('flex h-8 w-8 items-center justify-center rounded transition-colors hover:bg-muted', emoji === e && 'bg-primary/10 ring-1 ring-primary')}>
                   {e}
                 </button>
               ))}
@@ -353,8 +353,8 @@ export function PomodoroTimer() {
               strokeDasharray={C} strokeDashoffset={C * (left / FOCUS_SEC)} className="transition-[stroke-dashoffset] duration-500" />
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="font-mono text-lg font-bold tabular-nums text-foreground">{pad(mm)}:{pad(ss)}</span>
-            <span className="text-[9px] leading-tight text-muted-foreground">{done ? '完成 🎉' : running ? '专注中' : '待开始'}</span>
+            <span className="text-xl font-semibold tabular-nums text-foreground">{pad(mm)}:{pad(ss)}</span>
+            <span className="text-xs leading-tight text-muted-foreground">{done ? '完成 🎉' : running ? '专注中' : '待开始'}</span>
           </div>
         </div>
         <div className="flex flex-col gap-2">
@@ -399,7 +399,7 @@ export function DailyQuote() {
       title="每日一言" icon={Quote} tone="info"
       action={
         <button type="button" onClick={() => setI(x => (x + 1) % QUOTES.length)} title="换一条"
-          className="flex h-7 w-7 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted">
+          className="flex h-8 w-8 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted">
           <RefreshCw className="h-4 w-4" />
         </button>
       }
@@ -428,22 +428,22 @@ export function SlackingCountdown() {
 
   return (
     <WidgetShell
-      title="摸鱼倒计时" icon={Fish} tone="info"
+      title="摸鱼倒计时" icon={Fish} tone="info" scrollBody
       action={
         <button type="button" onClick={() => setEditing(e => !e)} title="设置发薪日"
-          className="flex h-7 w-7 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted">
+          className="flex h-8 w-8 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted">
           <Settings2 className="h-4 w-4" />
         </button>
       }
     >
       <div className="flex h-full flex-col justify-center gap-2">
-        <div className="flex items-center justify-between rounded-lg bg-muted/30 px-3 py-2">
+        <div className="flex items-center justify-between border-b border-border px-1 py-3">
           <span className="text-sm text-muted-foreground">距离周末</span>
           <span className="text-sm font-semibold text-foreground">
             {isWeekend ? '正在摸鱼 🐟' : daysToWeekend === 0 ? '就是今天 🎉' : `还有 ${daysToWeekend} 天`}
           </span>
         </div>
-        <div className="flex items-center justify-between rounded-lg bg-muted/30 px-3 py-2">
+        <div className="flex items-center justify-between border-b border-border px-1 py-3">
           <span className="text-sm text-muted-foreground">距离发薪日</span>
           <span className="text-sm font-semibold text-success">
             {daysToPay === 0 ? '发钱啦 🤑' : `还有 ${daysToPay} 天`}
@@ -452,7 +452,7 @@ export function SlackingCountdown() {
         {editing && (
           <div className="flex items-center gap-2 pt-1 text-xs text-muted-foreground">
             <span>每月发薪日</span>
-            <input type="number" min={1} max={28} value={payday}
+            <input aria-label="每月发薪日" type="number" min={1} max={28} value={payday}
               onChange={e => { const v = Math.min(28, Math.max(1, Number(e.target.value) || 1)); setPayday(v); localStorage.setItem('dash-payday', String(v)) }}
               className="w-16 rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground" />
             <span>号</span>
@@ -522,7 +522,7 @@ export function WaterTracker() {
       title="喝水提醒" icon={Droplet} tone="info"
       action={
         <button type="button" onClick={() => set(0)} title="重置"
-          className="flex h-7 w-7 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted">
+          className="flex h-8 w-8 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted">
           <RotateCcw className="h-4 w-4" />
         </button>
       }
@@ -563,9 +563,9 @@ export function TodoNote() {
     >
       <div className="space-y-2">
         <div className="sticky top-0 flex gap-2 bg-card pb-1">
-          <input value={text} onChange={e => setText(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') add() }} placeholder="添加待办，回车确认…" maxLength={40}
+          <input aria-label="待办内容" value={text} onChange={e => setText(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') add() }} placeholder="添加待办，回车确认…" maxLength={40}
             className="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground" />
-          <button type="button" onClick={add} disabled={!text.trim()}
+          <button aria-label="添加待办" type="button" onClick={add} disabled={!text.trim()}
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-40">
             <Plus className="h-4 w-4" />
           </button>
@@ -581,7 +581,7 @@ export function TodoNote() {
                 </button>
                 <span className={cn('min-w-0 flex-1 truncate', t.done && 'text-muted-foreground line-through')}>{t.text}</span>
                 <button type="button" onClick={() => persist(todos.filter(x => x.id !== t.id))} title="删除"
-                  className="flex h-6 w-6 items-center justify-center rounded text-destructive opacity-0 transition-opacity hover:bg-destructive/10 group-hover:opacity-100">
+                  className="flex h-6 w-6 items-center justify-center rounded text-destructive opacity-70 transition-opacity hover:bg-destructive/10 focus-visible:opacity-100 group-hover:opacity-100">
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
               </div>
@@ -608,7 +608,7 @@ export function YearProgress() {
       <div className="flex h-full flex-col justify-center gap-2.5">
         <div className="flex items-baseline justify-between">
           <span className="text-sm text-muted-foreground">{y} 年</span>
-          <span className="text-2xl font-bold tabular-nums text-primary">{(ratio * 100).toFixed(1)}%</span>
+          <span className="text-2xl font-semibold tabular-nums text-primary">{(ratio * 100).toFixed(1)}%</span>
         </div>
         <div className="h-2.5 overflow-hidden rounded-full bg-muted">
           <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${ratio * 100}%` }} />

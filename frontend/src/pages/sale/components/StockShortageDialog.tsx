@@ -1,4 +1,4 @@
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { AlertTriangle } from 'lucide-react'
 
@@ -14,16 +14,24 @@ interface Props { open: boolean; onClose: () => void; shortages: StockShortageIt
 export default function StockShortageDialog({ open, onClose, shortages }: Props) {
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) onClose() }}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-h-[90dvh] w-[calc(100%-2rem)] max-w-xl">
         <DialogHeader><DialogTitle className="flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-destructive" />可用库存不足</DialogTitle></DialogHeader>
-        <p className="text-sm text-muted-foreground">以下商品本次占库数量超过可用库存，请关闭后回占库弹窗调整数量：</p>
-        <div className="space-y-1.5 max-h-64 overflow-y-auto">
-          {shortages.map(s => (
-            <div key={s.productId} className="flex items-center justify-between rounded-lg border border-border px-3 py-2.5 text-sm">
-              <span className="font-medium">{s.productName}</span>
-              <span className="text-muted-foreground">需 {s.required} · <span className="text-destructive font-medium">可用 {s.available}</span></span>
-            </div>
-          ))}
+        <DialogDescription>以下商品本次占库数量超过可用库存，请关闭后回占库弹窗调整数量：</DialogDescription>
+        <div className="max-h-72 overflow-auto rounded-md border">
+          <table className="w-full text-sm">
+            <thead className="sticky top-0 bg-muted text-xs text-muted-foreground">
+              <tr><th className="px-3 py-2 text-left font-medium">商品</th><th className="px-3 py-2 text-right font-medium">本次需占</th><th className="px-3 py-2 text-right font-medium">可用数量</th></tr>
+            </thead>
+            <tbody className="divide-y">
+              {shortages.map((s, index) => (
+                <tr key={`${s.productId}-${index}`}>
+                  <td className="max-w-48 break-words px-3 py-3 font-medium">{s.productName}</td>
+                  <td className="px-3 py-3 text-right tabular-nums">{s.required}</td>
+                  <td className="px-3 py-3 text-right font-medium tabular-nums text-destructive">{s.available}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
         <DialogFooter>
           <Button onClick={onClose}>关闭，调整数量</Button>

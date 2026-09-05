@@ -1,3 +1,4 @@
+import { QueryFormLayout } from '@/components/shared/QueryFormLayout'
 import { useEffect, useState } from 'react'
 import { AppDialog } from '@/components/shared/AppDialog'
 import { Button } from '@/components/ui/button'
@@ -57,7 +58,7 @@ export default function InventoryLogsQueryDialog({ open, initial, onClose, onApp
           </div>
         }
       >
-        <div className="grid h-full grid-cols-2 gap-4 overflow-y-auto px-5 py-4">
+        <QueryFormLayout>
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground">类型</span>
             <Select value={draft.type == null ? '__all__' : String(draft.type)} onValueChange={v => setDraft(d => ({ ...d, type: v === '__all__' ? null : Number(v) }))}>
@@ -90,7 +91,7 @@ export default function InventoryLogsQueryDialog({ open, initial, onClose, onApp
             onOpen={() => setProductOpen(true)}
             onClear={() => setDraft(d => ({ ...d, productId: null, productCode: '', productName: '' }))}
           />
-        </div>
+        </QueryFormLayout>
       </AppDialog>
 
       <ProductFinder

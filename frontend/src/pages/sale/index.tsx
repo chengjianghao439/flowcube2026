@@ -1,13 +1,13 @@
-import { useEffect, useState, lazy, Suspense } from 'react'
+import { OrderStatusFilter } from '@/components/shared/OrderStatusFilter'
+import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { CalendarDays, Download, Plus, RefreshCw, Search, SlidersHorizontal, X } from 'lucide-react'
+import { X } from 'lucide-react'
 import { downloadExport } from '@/lib/exportDownload'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import Pagination from '@/components/shared/Pagination'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { SaleRowActions } from './components/SaleRowActions'
 import StockShortageDialog, { type StockShortageItem } from './components/StockShortageDialog'
@@ -22,14 +22,12 @@ import { formatDisplayDateTime, formatDisplayDate } from '@/lib/dateTime'
 import { readStringParam, upsertSearchParams } from '@/lib/urlSearchParams'
 import { getSaleWorkflowStatus } from '@/lib/saleWorkflowStatus'
 import { getReceivableStatus } from '@/lib/receivableStatus'
-import { getSaleAttention } from '@/lib/salePresentation'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import type { SaleOrder } from '@/types/sale'
 import type { TableColumn } from '@/types'
 
-const SaleOrderPreview = lazy(() => import('./components/SaleOrderPreview'))
 
 // ─── 二次确认 state 类型 ─────────────────────────────────────────────────────
 interface ConfirmState {
@@ -71,17 +69,13 @@ export default function SalePage() {
   const endDate       = readStringParam(searchParams, 'endDate')
   const page          = Math.max(1, Number(searchParams.get('page') || '1') || 1)
 
-  const [previewId, setPreviewId] = useState<number | null>(null)
-  const [compact, setCompact] = useState(() => { try { return localStorage.getItem('flowcube:sale-density') !== 'comfortable' } catch { return true } })
   const { can } = usePermission()
-  function changeDensity(value: boolean) { setCompact(value); try { localStorage.setItem('flowcube:sale-density', value ? 'compact' : 'comfortable') } catch { /* 存储不可用不阻断切换 */ } }
   const [queryOpen, setQueryOpen] = useState(false)
-  const [quickKeyword, setQuickKeyword] = useState(keyword)
   const [confirmState, setConfirmState] = useState<ConfirmState>(EMPTY_CONFIRM)
   const [printOrder,   setPrintOrder]   = useState<SaleOrder | null>(null)
 
   const PAGE_SIZE = 20
-  const { data, isLoading, isFetching, refetch, error } = useSaleList({
+  const { data, isLoading, refetch, error } = useSaleList({
     page,
     pageSize: PAGE_SIZE,
     focus: focus || undefined,
@@ -118,7 +112,6 @@ export default function SalePage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-  useEffect(() => setQuickKeyword(keyword), [keyword])
 
   function goToNew() {
     addTab({ key: '/sale/new', title: '新建销售单', path: '/sale/new' })
@@ -199,7 +192,6 @@ export default function SalePage() {
       page: 1,
     })
   }
-  function submitQuickSearch() { updateParams({ keyword: quickKeyword.trim() || null, page: 1 }) }
 
   // 当前生效筛选摘要（可逐项移除）
   const chips = [
@@ -207,77 +199,55 @@ export default function SalePage() {
     keyword && { key: 'keyword', label: `单号：${keyword}`, onRemove: () => updateParams({ keyword: null, page: 1 }) },
     remark && { key: 'remark', label: `备注：${remark}`, onRemove: () => updateParams({ remark: null, page: 1 }) },
     operatorId && { key: 'operator', label: `经办人：${operatorName || operatorId}`, onRemove: () => updateParams({ operatorId: null, operatorName: null, page: 1 }) },
-    statusFilter && { key: 'status', label: `状态：${STATUS_LABELS[statusFilter] ?? statusFilter}`, onRemove: () => updateParams({ status: null, page: 1 }) },
+    statusFilter && !QUICK_STATUSES.some(item => item.value === statusFilter) && { key: 'status', label: `状态：${STATUS_LABELS[statusFilter] ?? statusFilter}`, onRemove: () => updateParams({ status: null, page: 1 }) },
     customerId && { key: 'customer', label: `客户：${customerName || customerId}`, onRemove: () => updateParams({ customerId: null, customerName: null, page: 1 }) },
     warehouseId && { key: 'warehouse', label: `仓库：${warehouseName || warehouseId}`, onRemove: () => updateParams({ warehouseId: null, warehouseName: null, page: 1 }) },
     productId && { key: 'product', label: `商品：${productName || productId}`, onRemove: () => updateParams({ productId: null, productCode: null, productName: null, page: 1 }) },
-    // 日期筛选按需求不在主页展示，仅在查询弹窗中呈现
+    // 日期筛选在查询弹窗中呈现
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   // ── 列定义 ───────────────────────────────────────────────────────────────
   const columns: TableColumn<SaleOrder>[] = [
-    { key:'orderNo', title:'订单号 / 创建时间', width:17, render:(_,r) => <div><button className="font-medium text-primary hover:underline focus-visible:ring-2 focus-visible:ring-primary" onClick={() => setPreviewId(r.id)}>{r.orderNo}</button><p className="mt-1 text-xs text-muted-foreground">{formatDisplayDateTime(r.createdAt)} · {r.operatorName}</p></div> },
-    { key:'customerName', title:'客户 / 仓库', width:17, render:(_,r) => <div><p className="truncate font-medium" title={r.customerName}>{r.customerName}</p><p className="mt-1 text-xs text-muted-foreground">{r.warehouseName}{r.isMultiWarehouse ? ' · 多仓' : ''}</p></div> },
-    { key:'totalAmount', title:'折后金额', width:10, align:'right', render:(_,r) => <span className="font-medium tabular-nums">¥{Math.max(0,r.totalAmount-(r.discountAmount ?? 0)).toFixed(2)}</span> },
-    { key:'status', title:'履约状态', width:9, render:(_,r) => {const ws=getSaleWorkflowStatus(r); return <SoftStatusLabel label={ws.label} tone={ws.tone} title={ws.detail} />} },
-    { key:'quantitySummary', title:'已占 / 已派发 / 已出库', width:17, render:(_,r) => <div className="space-y-1 text-xs tabular-nums">{r.quantitySummary?.length ? r.quantitySummary.map(q => <div key={q.unit}><p>占 {q.reserved}　派 {q.dispatched}　出 {q.shipped}</p><p className="mt-1 text-muted-foreground">订单 {q.ordered} {q.unit}</p></div>) : '—'}</div> },
-    { key:'pendingAdjustment', title:'当前关注', width:12, render:(_,r) => {const a=getSaleAttention(r);return <div title={r.remark || a.label}>{a.label ? <SoftStatusLabel label={a.label} tone={a.tone}/> : <span className="text-muted-foreground">—</span>}{r.remark && <p className="mt-1 truncate text-xs text-muted-foreground">{r.remark}</p>}</div>} },
-    { key:'receivableStatus',title:'回款状态',width:8,render:(_,r)=>{const rs=getReceivableStatus(r);return <SoftStatusLabel label={rs.label} tone={rs.tone}/>}},
+    { key: 'orderNo', title: '销售单号', width: 12 },
+    { key: 'customerName', title: '客户', width: 14 },
+    { key: 'warehouseName', title: '仓库', width: 8 },
+    { key: 'totalAmount', title: '折后金额', width: 8, align: 'right', render: (_, r) => <span className="font-medium tabular-nums">¥{Math.max(0, r.totalAmount - (r.discountAmount ?? 0)).toFixed(2)}</span> },
+    { key: 'remark', title: '备注', width: 15, render: v => (v as string) || '—' },
+    { key: 'status', title: '状态', width: 8, render: (_, r) => { const ws = getSaleWorkflowStatus(r); return <SoftStatusLabel label={ws.label} tone={ws.tone} title={ws.detail} onClick={r.taskNo && r.taskId ? () => goToDetail(r) : undefined} /> } },
+    { key: 'receivableStatus', title: '回款状态', width: 8, render: (_, r) => { const rs = getReceivableStatus(r); return <SoftStatusLabel label={rs.label} tone={rs.tone} title={rs.dueDate ? `账期至 ${rs.dueDate.slice(0, 10)}` : undefined} /> } },
+    { key: 'operatorName', title: '经办人', width: 7 },
+    { key: 'createdAt', title: '创建时间', width: 10, render: v => formatDisplayDateTime(v) },
     { key:'id', title:'操作', width:10, render:(_,r) => <SaleRowActions row={r} anyPending={cancel.isPending || deleteMutate.isPending}
         onAsk={(title,desc,cb)=>openConfirm(title,desc,()=>{closeConfirm();cb()})}
         onReserveSale={setReserveDialogOrderId} onCancelSale={id=>cancel.mutate(id)} onDeleteSale={id=>deleteMutate.mutate(id)}
-        onViewTask={()=>setPreviewId(r.id)} onDetail={()=>goToDetail(r)} onPrint={()=>handlePrint(r.id)} /> },
+        onViewTask={()=>goToDetail(r)} onDetail={()=>goToDetail(r)} onPrint={()=>handlePrint(r.id)} /> },
   ]
 
   // ── 渲染 ─────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       {/* 页头 */}
       <PageHeader
         title="销售订单"
-        description="先看订单卡在哪里，再处理下一步。点击订单号可快速预览。"
+        description="销售单创建、占库与出库"
         actions={
           <>
-            <Button variant="outline" className="hidden sm:inline-flex"
+            <Button variant="outline"
               onClick={() => downloadExport('/export/sale', exportParams).catch(e => toast.error((e as Error).message))}>
-              <Download className="h-4 w-4" /> 导出
+              导出 Excel
             </Button>
-            {can(PERMISSIONS.SALE_ORDER_CREATE) && <Button onClick={goToNew}><Plus className="h-4 w-4" /> 新建销售单</Button>}
+            <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
+            {can(PERMISSIONS.SALE_ORDER_CREATE) && <Button onClick={goToNew}>+ 新建销售单</Button>}
           </>
         }
       />
 
-      <section className="overflow-hidden rounded-xl border border-border bg-card" aria-label="销售订单筛选">
-        <div className="flex flex-col gap-4 border-b border-border px-4 py-4">
-          <div className="flex min-w-0 flex-wrap items-center gap-2 border-b border-border pb-3">
-            {QUICK_STATUSES.map(item => (
-              <button key={item.value || 'all'} type="button" aria-pressed={statusFilter === item.value}
-                onClick={() => updateParams({ status: item.value || null, page: 1 })}
-                className={`min-h-8 rounded-md px-3 text-sm font-medium transition-[background-color,color,box-shadow] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${statusFilter === item.value ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-background/60 hover:text-foreground'}`}>
-                {item.label}<span className="ml-1.5 text-xs tabular-nums">{data?.statusCounts ? (item.value ? data.statusCounts[item.value] ?? 0 : Object.values(data.statusCounts).reduce((a,b)=>a+b,0)) : '—'}</span>
-              </button>
-            ))}
-          </div>
-          <div className="flex w-full items-center gap-2 xl:w-auto">
-            <div className="relative min-w-0 flex-1 xl:w-72 xl:flex-none">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input value={quickKeyword} onChange={event => setQuickKeyword(event.target.value)}
-                onKeyDown={event => { if (event.key === 'Enter') submitQuickSearch() }} placeholder="搜索销售单号" aria-label="搜索销售单号" className="pl-9 pr-16" />
-              <button type="button" onClick={submitQuickSearch} className="absolute right-1.5 top-1/2 min-h-7 -translate-y-1/2 rounded px-2 text-xs font-medium text-primary hover:bg-primary/10">搜索</button>
-            </div>
-            <Button variant="outline" onClick={() => setQueryOpen(true)}><SlidersHorizontal className="h-4 w-4" /><span className="hidden sm:inline">高级查询</span></Button>
-            <div className="ml-auto hidden items-center gap-1 sm:flex" aria-label="表格密度"><Button size="sm" variant={!compact?'secondary':'ghost'} aria-pressed={!compact} onClick={()=>changeDensity(false)}>舒适</Button><Button size="sm" variant={compact?'secondary':'ghost'} aria-pressed={compact} onClick={()=>changeDensity(true)}>紧凑</Button></div>
-            <Button variant="ghost" size="icon" onClick={() => void refetch()} aria-label="刷新订单" title="刷新订单"><RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} /></Button>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center justify-between gap-2 bg-muted/20 px-4 py-2.5 text-xs text-muted-foreground">
-          <span>共 <strong className="font-semibold tabular-nums text-foreground">{total}</strong> 张订单{statusFilter ? ` · ${STATUS_LABELS[statusFilter] ?? statusFilter}` : ''}</span>
-          {(startDate || endDate) && <span className="inline-flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5" />{startDate || '不限'} 至 {endDate || '不限'}</span>}
-        </div>
-      </section>
+      <OrderStatusFilter label="销售状态分类" value={statusFilter}
+        options={QUICK_STATUSES}
+        onChange={status => updateParams({status: status || null, page: 1})} />
 
       {chips.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/20 px-3 py-2">
+        <div className="flex flex-wrap items-center gap-2">
           {chips.map(c => (
             <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
               {c.label}
@@ -290,22 +260,19 @@ export default function SalePage() {
         </div>
       )}
 
-      {error ? <QueryErrorState error={error} onRetry={()=>void refetch()} /> : <div className={compact ? '[&_tbody_td]:!py-2 [&_table]:min-w-[1180px]' : '[&_tbody_td]:!py-4 [&_table]:min-w-[1180px]'}><DataTable
+      {error ? <QueryErrorState error={error} onRetry={()=>void refetch()} /> : <DataTable
         columns={columns}
         data={data?.list ?? []}
         loading={isLoading}
         onRowDoubleClick={goToDetail}
-        selectedIds={previewId != null ? new Set([previewId]) : undefined}
         fluid
-        columnStorageKey="sale:fluid-v2"
-      /></div>}
+        columnStorageKey="sale:classic-v5"
+      />}
 
       {/* 分页 */}
       <Pagination page={page} totalPages={totalPages} total={total} unit="单"
         onPageChange={(p) => updateParams({ page: p })} />
 
-      <p className="text-xs text-muted-foreground">数量按基本单位分别展示。未占量不等于缺货；待实物归还期间，已占量可暂高于改单目标。</p>
-      {previewId != null && <Suspense fallback={null}><SaleOrderPreview id={previewId} navigation={{ids:(data?.list ?? []).map(r=>r.id),onSelect:setPreviewId}} onClose={()=>setPreviewId(null)} onDetail={goToDetail} onReserve={setReserveDialogOrderId}/></Suspense>}
       {/* 二次确认弹窗 */}
       <ConfirmDialog
         open={confirmState.open}

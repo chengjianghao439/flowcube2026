@@ -31,16 +31,16 @@ export default function WarehouseScopeDialog({ open, onClose, userId, userName }
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) onClose() }}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-3xl">
         <DialogHeader><DialogTitle>仓库数据权限{userName ? ` — ${userName}` : ''}</DialogTitle></DialogHeader>
-        <p className="text-sm text-muted-foreground">
+        <p className="rounded-md border border-border bg-muted/30 p-4 text-sm leading-6 text-muted-foreground">
           不勾选任何仓库 = 不限仓（默认）。勾选后该用户只能查看/操作所选仓库的数据（超级管理员始终不限仓）。
         </p>
         {isLoading && <p className="py-4 text-center text-muted-foreground text-sm">加载中…</p>}
-        <div className="max-h-64 space-y-1 overflow-y-auto">
+        <div className="grid max-h-[420px] grid-cols-2 gap-3 overflow-y-auto">
           {list.map((w: { id: number; name: string; code?: string }) => (
-            <label key={w.id} className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted/50">
-              <input type="checkbox" className="h-4 w-4" checked={selected.has(w.id)}
+            <label key={w.id} className="flex items-start gap-3 rounded-md border px-4 py-3 text-sm hover:bg-muted/50">
+              <input type="checkbox" className="mt-1 h-4 w-4 shrink-0 accent-primary" checked={selected.has(w.id)}
                 onChange={e => {
                   setSelected(prev => {
                     const next = new Set(prev)
@@ -48,11 +48,12 @@ export default function WarehouseScopeDialog({ open, onClose, userId, userName }
                     return next
                   })
                 }} />
-              <span>{w.name}</span>
+              <span className="min-w-0 flex-1 break-words leading-6">{w.name}</span>
               {w.code && <span className="text-xs text-muted-foreground">{w.code}</span>}
             </label>
           ))}
         </div>
+        <p className="text-sm text-muted-foreground">已选择 {selected.size} 个仓库{selected.size === 0 ? ' · 当前为不限仓' : ''}</p>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>取消</Button>
           <Button disabled={save.isPending} onClick={() => save.mutate([...selected], {

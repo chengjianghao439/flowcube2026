@@ -65,10 +65,11 @@ export default function CustomerFormDialog({ open, onClose, customer }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle>{isEdit ? '编辑客户' : '新增客户'}</DialogTitle></DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4 py-2">
-          <div className="grid grid-cols-2 gap-4">
+        <form onSubmit={handleSubmit} className="space-y-5 py-2">
+          <h3 className="text-sm font-medium">客户与联系方式</h3>
+          <div className="grid grid-cols-2 gap-x-6 gap-y-3">
             {isEdit && (
               <div className="space-y-1">
                 <Label>客户编码</Label>
@@ -76,30 +77,31 @@ export default function CustomerFormDialog({ open, onClose, customer }: Props) {
               </div>
             )}
             <div className="space-y-1">
-              <Label>客户名称 *</Label>
-              <LimitedInput maxLength={20} value={f.name} onChange={set('name')} placeholder="公司/个人名称" required />
+              <Label htmlFor="customer-name">客户名称 *</Label>
+              <LimitedInput maxLength={20} id="customer-name" value={f.name} onChange={set('name')} placeholder="公司/个人名称" required />
             </div>
             <div className="space-y-1">
-              <Label>联系人</Label>
-              <LimitedInput maxLength={5} value={f.contact} onChange={set('contact')} placeholder="联系人姓名" />
+              <Label htmlFor="customer-contact">联系人</Label>
+              <LimitedInput maxLength={5} id="customer-contact" value={f.contact} onChange={set('contact')} placeholder="联系人姓名" />
             </div>
             <div className="space-y-1">
-              <Label>联系电话</Label>
-              <LimitedInput maxLength={11} value={f.phone} onChange={set('phone')} placeholder="11位手机号" inputMode="numeric" />
+              <Label htmlFor="customer-phone">联系电话</Label>
+              <LimitedInput maxLength={11} id="customer-phone" value={f.phone} onChange={set('phone')} placeholder="11位手机号" inputMode="numeric" />
             </div>
             <div className="space-y-1">
-              <Label>邮箱</Label>
-              <Input value={f.email} onChange={set('email')} placeholder="example@email.com" type="email" />
+              <Label htmlFor="customer-email">邮箱</Label>
+              <Input id="customer-email" value={f.email} onChange={set('email')} placeholder="example@email.com" type="email" />
             </div>
             <div className="space-y-1">
-              <Label>地址</Label>
-              <LimitedInput maxLength={30} value={f.address} onChange={set('address')} placeholder="详细地址" />
+              <Label htmlFor="customer-address">地址</Label>
+              <LimitedInput maxLength={30} id="customer-address" value={f.address} onChange={set('address')} placeholder="详细地址" />
             </div>
           </div>
           <div className="space-y-1">
-            <Label>备注</Label>
-            <LimitedInput maxLength={30} value={f.remark} onChange={set('remark')} placeholder="备注信息" />
+            <Label htmlFor="customer-remark">备注</Label>
+            <LimitedInput maxLength={30} id="customer-remark" value={f.remark} onChange={set('remark')} placeholder="备注信息" />
           </div>
+          <h3 className="border-t pt-4 text-sm font-medium">结算与授信</h3>
           <SettlementTypeField
             side="receivable"
             settlementType={f.settlementType}
@@ -107,7 +109,7 @@ export default function CustomerFormDialog({ open, onClose, customer }: Props) {
             onChange={next => setF(p => ({ ...p, ...next }))}
             disabled={loading}
           />
-          <div className="space-y-2 rounded-md border border-border/60 p-3">
+          <div className="space-y-3 rounded-md bg-muted/40 p-4">
             <label className="flex items-center gap-2 text-sm font-medium">
               <input type="checkbox" className="h-4 w-4" checked={f.creditEnabled}
                 onChange={e => setF(p => ({ ...p, creditEnabled: e.target.checked }))} disabled={loading} />
@@ -115,15 +117,15 @@ export default function CustomerFormDialog({ open, onClose, customer }: Props) {
             </label>
             {f.creditEnabled ? (
               <div className="space-y-1">
-                <Label>授信额度</Label>
-                <Input type="number" min="0" step="0.01" value={f.creditLimit} onChange={set('creditLimit')} disabled={loading}
-                  placeholder="0=现款现货（任何赊欠都拦）；占库时校验 已用+本单 ≤ 额度" />
+                <Label htmlFor="customer-creditLimit">授信额度</Label>
+                <Input type="number" min="0" step="0.01" id="customer-creditLimit" value={f.creditLimit} onChange={set('creditLimit')} disabled={loading}
+                  placeholder="输入授信额度，0 表示不允许赊欠" />
               </div>
             ) : (
-              <p className="text-xs text-muted-foreground">未启用：该客户不做授信校验，可随意赊账下单。</p>
+              <p className="text-xs text-muted-foreground">未启用时，不对该客户执行授信额度校验。</p>
             )}
           </div>
-          <DialogFooter>
+          <DialogFooter className="border-t pt-4">
             <Button type="button" variant="outline" onClick={onClose}>取消</Button>
             <Button type="submit" disabled={loading}>{loading ? '保存中…' : '保存'}</Button>
           </DialogFooter>

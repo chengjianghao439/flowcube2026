@@ -1,3 +1,4 @@
+import { PaginationArrow } from '@/components/shared/PaginationArrow'
 /**
  * 发票管理（文档 10 · Phase 3）
  * 进项/销项发票池 + 录入 + 认证/抵扣/红冲台账。发票与业务单弱关联，税额只在凭证映射时拆分。
@@ -67,7 +68,7 @@ function InvoiceDialog({ open, invoiceType, edit, onClose }: { open: boolean; in
   const typeName = invoiceType === 1 ? '进项' : '销项'
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose() }}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader><DialogTitle>{edit ? '编辑' : '录入'}{typeName}发票</DialogTitle></DialogHeader>
         <div className="grid grid-cols-2 gap-4 py-1">
           <div className="space-y-1.5"><Label>发票代码</Label><Input value={f.invoiceCode} onChange={e => setF(s => ({ ...s, invoiceCode: e.target.value }))} disabled={isPending} className="font-mono" /></div>
@@ -171,9 +172,9 @@ export default function InvoicesPage() {
 
       {totalPages > 1 && (
         <div className="mt-3 flex items-center justify-end gap-2 text-sm">
-          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>上一页</Button>
+          <PaginationArrow direction="previous" disabled={page <= 1} onClick={() => setPage(p => p - 1)} />
           <span className="tabular-nums">{page} / {totalPages}</span>
-          <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>下一页</Button>
+          <PaginationArrow direction="next" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)} />
         </div>
       )}
 

@@ -52,7 +52,7 @@ function BatchDialog({ open, onClose, onSuccess }: { open: boolean; onClose: () 
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-sm">
+      <DialogContent className="max-w-2xl">
         <DialogHeader><DialogTitle>批量创建分拣格</DialogTitle></DialogHeader>
         <div className="space-y-4 py-2">
           <div>
@@ -144,7 +144,7 @@ export default function SortingBinsPage() {
   })
 
   const columns: TableColumn<SortingBin>[] = [
-    { key: 'code',          title: '分拣格编号', width: 120,
+    { key: 'code',          title: '分拣格编号', width: 200,
       render: (v) => <span className="text-doc-code-strong">{v as string}</span> },
     { key: 'warehouseName', title: '仓库', width: 140 },
     { key: 'status',        title: '状态', width: 80,
@@ -175,7 +175,7 @@ export default function SortingBinsPage() {
         deleteMessage="确认删除该分拣格？"
         createLabel="+ 新建分拣格"
         saveSuccessMessage={(editing) => editing ? '已更新' : '分拣格已创建'}
-        formWidthClass="max-w-sm"
+        formWidthClass="max-w-2xl"
         onOpen={handleOpen}
         canSubmit={(editing) => editing ? true : !!form.code && !!form.warehouseId}
         headerActions={

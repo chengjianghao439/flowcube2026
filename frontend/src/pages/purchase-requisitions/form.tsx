@@ -1,3 +1,5 @@
+import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
+import { SectionCard } from '@/components/shared/SectionCard'
 /**
  * 采购申请单 — 新建 / 编辑 / 详情页（独立路由）
  *   /purchase-requisitions/new   → 新建
@@ -42,15 +44,7 @@ interface ConvertRow {
 }
 
 function Section({ title, children, actions }: { title: string; children: React.ReactNode; actions?: React.ReactNode }) {
-  return (
-    <div className="card-base p-5">
-      <div className="mb-4 flex items-center justify-between border-b border-border/50 pb-2">
-        <h3 className="text-section-title">{title}</h3>
-        {actions}
-      </div>
-      {children}
-    </div>
-  )
+  return <SectionCard title={title} actions={actions} compact>{children}</SectionCard>
 }
 
 /** 多级审批流进度时间线（引擎实例快照展示；无实例时后端不返回 approval，前端不渲染） */
@@ -310,7 +304,7 @@ export default function RequisitionFormPage() {
       )}
 
       <Section title="基本信息">
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-4 gap-x-5 gap-y-4">
           <div className="space-y-1.5">
             <Label>事由</Label>
             <Input value={title} onChange={e => setTitle(e.target.value)} disabled={!editable || busy} maxLength={100} placeholder="选填，如「前置仓补货」" />
@@ -336,10 +330,10 @@ export default function RequisitionFormPage() {
 
       <Section title="采购申请明细" actions={editable && <Button size="sm" variant="outline" onClick={() => setProductFinderOpen(true)} disabled={busy}><Plus className="mr-1 h-4 w-4" />添加商品</Button>}>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[1500px] text-sm">
             <thead>
               <tr className="border-b bg-muted/30 text-xs text-muted-foreground">
-                <th className="px-3 py-2 text-left">商品</th>
+                <ProductIdentityHeaders /><th className="min-w-20 px-3 py-3 text-left">单位</th>
                 <th className="px-3 py-2 text-right w-28">采购申请数量</th>
                 <th className="px-3 py-2 text-right w-28">预估单价</th>
                 <th className="px-3 py-2 text-left w-48">建议供应商</th>
@@ -349,10 +343,10 @@ export default function RequisitionFormPage() {
             </thead>
             <tbody>
               {items.length === 0 ? (
-                <tr><td colSpan={5} className="py-10 text-center text-muted-foreground">暂无明细{editable ? '，点右上角「添加商品」' : ''}</td></tr>
+                <tr><td colSpan={10} className="py-10 text-center text-muted-foreground">暂无明细{editable ? '，点右上角「添加商品」' : ''}</td></tr>
               ) : items.map((it, idx) => (
                 <tr key={idx} className="border-b border-border/40">
-                  <td className="px-3 py-2"><div className="font-medium">{it.productName}</div><div className="text-xs text-muted-foreground">{it.productCode}{it.articleNumber ? ` · 货号 ${it.articleNumber}` : ''}{it.spec ? ` · ${it.spec}` : ''}{it.color ? ` · ${it.color}` : ''} · {it.unit}</div></td>
+                  <ProductIdentityCells product={it} /><td className="px-3 py-3">{it.unit || '—'}</td>
                   <td className="px-3 py-2 text-right">
                     {editable ? <Input type="number" step="0.0001" min="0" value={it.quantity} onChange={e => setItem(idx, { quantity: e.target.value })} disabled={busy} className="h-8 text-right tabular-nums" />
                       : <span className="tabular-nums">{it.quantity}</span>}
@@ -374,16 +368,16 @@ export default function RequisitionFormPage() {
         </div>
       </Section>
 
-      <ProductFinder open={productFinderOpen} warehouseId={warehouseId} onConfirm={onPickProduct} onClose={() => setProductFinderOpen(false)} />
+      <ProductFinder mode="purchase" warehouseName={warehouseName} open={productFinderOpen} warehouseId={warehouseId} onConfirm={onPickProduct} onClose={() => setProductFinderOpen(false)} />
       <SupplierFinder open={!!supplierTarget} onClose={() => setSupplierTarget(null)} onConfirm={onPickSupplier} />
 
       {/* 驳回原因 */}
       <Dialog open={rejectOpen} onOpenChange={v => !v && setRejectOpen(false)}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader><DialogTitle>驳回采购申请单</DialogTitle></DialogHeader>
           <div className="space-y-2 py-2">
             <Label>驳回原因 *</Label>
-            <Input value={rejectReason} onChange={e => setRejectReason(e.target.value)} maxLength={300} placeholder="请填写驳回原因" />
+            <textarea aria-label="驳回原因" className="min-h-28 w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" value={rejectReason} onChange={e => setRejectReason(e.target.value)} maxLength={300} placeholder="请填写驳回原因" />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRejectOpen(false)} disabled={busy}>取消</Button>
@@ -394,14 +388,14 @@ export default function RequisitionFormPage() {
 
       {/* 转采购单 */}
       <Dialog open={convertOpen} onOpenChange={v => !v && setConvertOpen(false)}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="sm:max-w-4xl">
           <DialogHeader><DialogTitle>转采购单</DialogTitle></DialogHeader>
           <p className="text-xs text-muted-foreground">按供应商自动拆分成多张采购单草稿。每行填转采购数量、供应商与单价；数量填 0 表示本次不转。</p>
           <div className="max-h-[50vh] overflow-y-auto py-2">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[1500px] text-sm">
               <thead>
                 <tr className="border-b bg-muted/30 text-xs text-muted-foreground">
-                  <th className="px-2 py-2 text-left">商品</th>
+                  <ProductIdentityHeaders /><th className="min-w-20 px-3 py-3 text-left">单位</th>
                   <th className="px-2 py-2 text-right w-24">可转余量</th>
                   <th className="px-2 py-2 text-right w-24">转采购</th>
                   <th className="px-2 py-2 text-left w-40">供应商</th>
@@ -411,7 +405,7 @@ export default function RequisitionFormPage() {
               <tbody>
                 {convertRows.map((r, idx) => (
                   <tr key={r.requisitionItemId} className="border-b border-border/40">
-                    <td className="px-2 py-2">{r.productName}</td>
+                    <ProductIdentityCells product={detail?.items?.find(item => item.id === r.requisitionItemId) ?? r} /><td className="px-3 py-3">{detail?.items?.find(item => item.id === r.requisitionItemId)?.unit || '—'}</td>
                     <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">{r.remaining}</td>
                     <td className="px-2 py-2"><Input type="number" step="0.0001" min="0" max={r.remaining} value={r.quantity} onChange={e => setConvertRows(rows => rows.map((x, i) => i === idx ? { ...x, quantity: e.target.value } : x))} className="h-8 text-right tabular-nums" /></td>
                     <td className="px-2 py-2"><FinderTrigger value={r.supplierName} placeholder="选择供应商" onClick={() => setSupplierTarget({ scope: 'convert', index: idx })} /></td>

@@ -1,3 +1,4 @@
+import { RecordIdentity } from '@/components/shared/RecordIdentity'
 import { useState, useRef, useEffect } from 'react'
 import { Users } from 'lucide-react'
 import { FinderModal } from './FinderModal'
@@ -14,10 +15,9 @@ export interface CustomerFinderProps {
 type Row = Customer & Record<string, unknown>
 
 const COLUMNS: FinderColumn<Row>[] = [
-  { key: 'code',    title: '编码',   width: 110 },
-  { key: 'name',    title: '客户名称' },
-  { key: 'contact', title: '联系人', width: 110, render: v => (v as string | null) ?? '—' },
-  { key: 'phone',   title: '电话',   width: 140, render: v => (v as string | null) ?? '—' },
+  { key: 'name', title: '客户 / 编码', render: (_, row) => <RecordIdentity title={row.name} code={row.code} /> },
+  { key: 'contact', title: '联系人', width: 140 },
+  { key: 'phone', title: '联系电话', width: 180 },
 ]
 
 export function CustomerFinder({ open, onClose, onConfirm }: CustomerFinderProps) {

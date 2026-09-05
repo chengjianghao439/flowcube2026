@@ -1,5 +1,6 @@
+import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
 import { useEffect, useMemo, useState } from 'react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
 import { PackageCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -48,16 +49,16 @@ export default function ShipSelectDialog({ open, onClose, order, loading, onConf
     <Dialog open={open} onOpenChange={(next) => { if (!next) onClose() }}>
       <DialogContent className="flex max-h-[86vh] w-[min(94vw,900px)] max-w-none flex-col overflow-hidden">
         <DialogHeader><DialogTitle className="flex items-center gap-2"><PackageCheck className="h-5 w-5 text-primary" />发起出库</DialogTitle></DialogHeader>
-        <p className="text-sm text-muted-foreground">
+        <DialogDescription>
           选择本次发货商品并填写数量。未发部分保留，可稍后继续发货。
           {order.isMultiWarehouse && ' 本单将按仓库分别创建出库任务。'}
-        </p>
+        </DialogDescription>
         <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-border">
-          <table className="w-full min-w-[760px] text-sm">
-            <thead className="sticky top-0 bg-muted/70 text-xs text-muted-foreground">
+          <table className="w-full min-w-[1560px] text-sm">
+            <thead className="sticky top-0 bg-muted text-xs text-muted-foreground">
               <tr>
-                <th className="w-10 px-3 py-2"><input type="checkbox" checked={allSelected} onChange={e => setRows(Object.fromEntries(undispatched.map(item => [item.id, { checked: e.target.checked, qty: limitFor(item.id) }])))} /></th>
-                <th className="px-3 py-2 text-left">商品身份</th>
+                <th className="w-10 px-3 py-2"><input type="checkbox" aria-label="选择全部可出库明细" checked={allSelected} onChange={e => setRows(Object.fromEntries(undispatched.map(item => [item.id, { checked: e.target.checked, qty: limitFor(item.id) }])))} /></th>
+                <ProductIdentityHeaders /><th className="min-w-20 px-3 py-3 text-left">单位</th>
                 <th className="w-40 px-3 py-2 text-left">发货仓库</th>
                 <th className="w-28 px-3 py-2 text-right">已占未发</th>
                 <th className="w-36 px-3 py-2 text-right">本次发货</th>
@@ -69,31 +70,25 @@ export default function ShipSelectDialog({ open, onClose, order, loading, onConf
                 const invalidQty = state.checked && !isAllocationQtyValid(state.qty, limitFor(item.id))
                 return (
                   <tr key={item.id} className="border-t align-top hover:bg-muted/20">
-                    <td className="px-3 py-3 text-center"><input type="checkbox" checked={state.checked} onChange={e => setRow(item.id, { checked: e.target.checked })} /></td>
-                    <td className="px-3 py-3">
-                      <div className="font-medium">{item.productName}</div>
-                      <div className="mt-1 grid grid-cols-2 gap-x-3 text-xs text-muted-foreground">
-                        <span>编码 {item.productCode || '—'}</span><span>供应商型号 {item.articleNumber || '—'}</span>
-                        <span>型号 {item.spec || '—'}</span><span>颜色 {item.color || '—'}</span>
-                      </div>
-                    </td>
+                    <td className="px-3 py-3 text-center"><input type="checkbox" aria-label={`选择 ${item.productName}`} checked={state.checked} onChange={e => setRow(item.id, { checked: e.target.checked })} /></td>
+                    <ProductIdentityCells product={item} /><td className="px-3 py-3">{item.unit || '—'}</td>
                     <td className="px-3 py-3">{item.warehouseName || order.warehouseName}</td>
                     <td className="px-3 py-3 text-right tabular-nums">{limitFor(item.id)} {item.unit}</td>
                     <td className="px-3 py-3">
-                      <Input type="number" min={0.0001} step={0.0001} max={limitFor(item.id)} value={state.qty} disabled={!state.checked}
+                      <Input aria-label={`${item.productName}本次出库数量`} aria-invalid={invalidQty} type="number" min={0.0001} step={0.0001} max={limitFor(item.id)} value={state.qty} disabled={!state.checked}
                         onChange={e => setRow(item.id, { qty: Number(e.target.value) })}
                         className={cn('h-9 text-right tabular-nums', invalidQty && 'border-destructive')} />
                     </td>
                   </tr>
                 )
               })}
-              {!undispatched.length && <tr><td colSpan={5} className="px-3 py-8 text-center text-muted-foreground">没有可发货明细，请先占库</td></tr>}
+              {!undispatched.length && <tr><td colSpan={10} className="px-3 py-8 text-center text-muted-foreground">没有可发货明细，请先占库</td></tr>}
             </tbody>
           </table>
         </div>
         <DialogFooter className="sm:items-center sm:justify-between">
           <span className={cn('mr-auto text-sm text-muted-foreground', invalid.length > 0 && 'text-destructive')}>
-            {invalid.length ? `${invalid.length} 项数量无效` : `已选择 ${selected.length} 项`}
+            {invalid.length ? `${invalid.length} 项数量无效：须大于 0、不超过已占未发量，最多 4 位小数` : `已选择 ${selected.length} 项`}
           </span>
           <Button variant="outline" onClick={onClose}>取消</Button>
           <Button disabled={loading || !selected.length || invalid.length > 0}

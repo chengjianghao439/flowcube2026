@@ -1,3 +1,6 @@
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { FilterCard } from '@/components/shared/FilterCard'
+import { ReportTable } from '@/components/shared/ReportTable'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
@@ -20,7 +23,7 @@ function LedgerTable({ title, rows, total, accent }: { title: string; rows: Arra
   return (
     <div className="rounded-lg border border-border">
       <div className="border-b border-border bg-muted/40 px-4 py-2 text-sm font-medium">{title} <span className="ml-1 text-muted-foreground font-normal">{money(total)}</span></div>
-      <table className="w-full text-sm">
+      <ReportTable className="w-full text-sm">
         <tbody>
           {rows.map(r => (
             <tr key={r.code} className="border-t border-border/60">
@@ -31,7 +34,7 @@ function LedgerTable({ title, rows, total, accent }: { title: string; rows: Arra
           ))}
           {!rows.length && <tr><td colSpan={3} className="px-4 py-4 text-center text-muted-foreground">无数据</td></tr>}
         </tbody>
-      </table>
+      </ReportTable>
     </div>
   )
 }
@@ -110,13 +113,13 @@ export default function ConsolidationPage() {
       <DataTable columns={companyColumns} data={companyList} rowKey="id" loading={!companies} emptyText="暂无账套" />
 
       {/* 合并报表 */}
-      <div className="flex items-center gap-2">
+      <FilterCard className="mb-4">
         <div className="text-sm font-medium">合并期间</div>
         <Input value={period} onChange={e => setPeriod(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="YYYYMM" className="w-32 text-center" />
         <div className="text-sm text-muted-foreground">
           {group ? `合并根：${group.name}` : '选择集团账套后可查看合并报表'}
         </div>
-      </div>
+      </FilterCard>
 
       {companyId > 0 && (group?.isGroup || companyId === 1) && (
         <div className="grid gap-4 lg:grid-cols-2">
@@ -142,22 +145,17 @@ export default function ConsolidationPage() {
         </div>
       )}
 
-      {createOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setCreateOpen(false)}>
-          <div className="w-96 rounded-lg bg-background p-5 shadow-lg" onClick={e => e.stopPropagation()}>
-            <h3 className="mb-3 text-base font-semibold">新建账套</h3>
-            <div className="space-y-2">
-              <Input placeholder="账套编码，如 SUB5" value={newCode} onChange={e => setNewCode(e.target.value)} />
-              <Input placeholder="账套名称" value={newName} onChange={e => setNewName(e.target.value)} />
-              <p className="text-xs text-muted-foreground">新账套会自动复制主账套的预置会计科目；后续可在会计科目页维护其独立科目。</p>
-            </div>
-            <div className="mt-4 flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setCreateOpen(false)}>取消</Button>
-              <Button onClick={createCompany}>创建</Button>
-            </div>
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader><DialogTitle>新建账套</DialogTitle></DialogHeader>
+          <div className="grid grid-cols-2 gap-4">
+            <label className="space-y-2 text-sm">账套编码<Input placeholder="如 SUB5" value={newCode} onChange={e => setNewCode(e.target.value)} /></label>
+            <label className="space-y-2 text-sm">账套名称<Input placeholder="账套名称" value={newName} onChange={e => setNewName(e.target.value)} /></label>
           </div>
-        </div>
-      )}
+          <p className="text-xs leading-6 text-muted-foreground">新账套会自动复制主账套的预置会计科目；后续可在会计科目页维护其独立科目。</p>
+          <DialogFooter><Button variant="outline" onClick={() => setCreateOpen(false)}>取消</Button><Button onClick={createCompany}>创建</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

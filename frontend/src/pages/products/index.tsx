@@ -1,3 +1,5 @@
+import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
+import { ImportSteps } from '@/components/shared/ImportSteps'
 import { useState, useRef, useMemo } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { X } from 'lucide-react'
@@ -156,12 +158,8 @@ export default function ProductsPage() {
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   const cols:TableColumn<Product>[] = [
-    { key:'code', title:'编码', width:120 },
-    { key:'articleNumber', title:'供应商型号', width:100, render:v=>(v as string)||'-' },
-    { key:'spec', title:'型号', render:v=>(v as string)||'-' },
-    { key:'name', title:'商品名称', width:180 },
+    ...productIdentityColumns({code: 'code', name: 'name'}),
     { key:'categoryName', title:'分类', width:180, render:(_, r)=><CategoryPathDisplay path={r.categoryId ? categoryPathMap.get(r.categoryId) ?? null : null} fallback={r.categoryName} /> },
-    { key:'color', title:'颜色', width:80, render:v=>(v as string)||'-' },
     { key:'unit', title:'单位', width:140, render:(_,r)=>{
       const aux=(r.units||[]).filter(u=>!u.isBase)
       return <div className="flex flex-wrap items-center gap-1"><span>{r.unit}</span>{aux.map(u=><span key={u.unitName} className="rounded bg-muted px-1 text-xs text-muted-foreground tabular-nums">{u.unitName}×{u.conversionRate}</span>)}</div>
@@ -215,20 +213,23 @@ export default function ProductsPage() {
 
       {/* 批量导入弹窗 */}
       <Dialog open={importOpen} onOpenChange={v=>{ setImportOpen(v); if(!v) setImportResult(null) }}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-3xl">
           <DialogHeader><DialogTitle>批量导入商品</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <p className="text-sm text-muted-foreground">请先下载模板，按照格式填写后上传。编码已存在的商品将自动跳过。</p>
-            <div className="flex gap-2">
+            <ImportSteps template={
+              <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={()=>downloadExport('/import/products/template').catch(e=>toast.error((e as Error).message))}>下载导入模板</Button>
             </div>
-            <div className="space-y-1">
+            } upload={
+              <div className="space-y-1">
               <Label>选择文件（.xlsx）</Label>
               <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleImport} />
               <Button variant="outline" className="w-full" onClick={()=>fileRef.current?.click()} disabled={importing}>
                 {importing ? '导入中…' : '选择文件并上传'}
               </Button>
             </div>
+            } />
             {importResult && (
               <div className="rounded-lg border p-3 text-sm space-y-1">
                 <p className="text-success font-medium">导入成功：{importResult.success} 条</p>
@@ -236,7 +237,7 @@ export default function ProductsPage() {
                 {importResult.errors.length > 0 && (
                   <div className="mt-2">
                     <p className="text-destructive font-medium">失败 {importResult.errors.length} 条：</p>
-                    <ul className="mt-1 space-y-0.5 text-destructive text-xs max-h-32 overflow-y-auto">
+                    <ul className="mt-1 space-y-0.5 text-destructive text-sm leading-6 max-h-32 overflow-y-auto">
                       {importResult.errors.map((e, i) => <li key={i}>{e}</li>)}
                     </ul>
                   </div>

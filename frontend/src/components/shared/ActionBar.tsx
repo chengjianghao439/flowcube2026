@@ -5,7 +5,7 @@
  *   [ 主标题  副标题(可选) ]  |  [ rightActions ]
  *
  * 视觉规范：
- * - 高度固定 h-14（56px）
+ * - 最小高度 56px，长标题或操作按钮自动换行
  * - border-b 分割，无阴影，无渐变
  * - 极简 SaaS 风格，保持与顶部导航栏同高
  *
@@ -68,13 +68,13 @@ export function ActionBar({
   return (
     <div
       className={cn(
-        'flex h-14 items-center justify-between border-b bg-background px-6',
+        'flex min-h-14 flex-wrap items-center justify-between gap-x-4 gap-y-2 py-2 border-b bg-background px-6',
         sticky && 'sticky top-0 z-10 -mx-6 -mt-6',
       )}
     >
       {/* 左侧：主标题 + 副标题 */}
-      <div className="flex items-center gap-3">
-        <h1 className="text-xl font-semibold leading-none text-foreground">
+      <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+        <h1 className="break-words text-xl font-semibold leading-6 text-foreground">
           {title}
         </h1>
         {subtitle && (
@@ -84,7 +84,7 @@ export function ActionBar({
 
       {/* 右侧：操作按钮 —— 统一压到 sm 尺寸，详情/表单页顶栏比列表页工具栏更紧凑 */}
       {rightActions && (
-        <div className="flex items-center gap-2 [&>button]:h-9 [&>button]:px-3">{rightActions}</div>
+        <div className="flex flex-wrap items-center gap-2 [&>button]:h-9 [&>button]:px-3">{rightActions}</div>
       )}
     </div>
   )

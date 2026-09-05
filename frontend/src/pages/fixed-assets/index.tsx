@@ -1,3 +1,4 @@
+import { RecordIdentity } from '@/components/shared/RecordIdentity'
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
@@ -38,14 +39,14 @@ function CreateDialog({ open, onClose, onSaved }: { open: boolean; onClose: () =
   const set = (k: keyof typeof form) => (v: string) => setForm(prev => ({ ...prev, [k]: v }))
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-3xl">
         <DialogHeader><DialogTitle>新增固定资产</DialogTitle></DialogHeader>
         <div className="space-y-3 py-2">
           <div className="space-y-1">
             <Label>资产名称 *</Label>
             <Input value={form.assetName} onChange={e => set('assetName')(e.target.value)} placeholder="如：联想台式机" />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-x-5 gap-y-4">
             <div className="space-y-1">
               <Label>类别</Label>
               <Input value={form.category} onChange={e => set('category')(e.target.value)} placeholder="电子设备" />
@@ -55,7 +56,7 @@ function CreateDialog({ open, onClose, onSaved }: { open: boolean; onClose: () =
               <Input value={form.departmentName} onChange={e => set('departmentName')(e.target.value)} placeholder="财务部" />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-x-5 gap-y-4">
             <div className="space-y-1">
               <Label>购置日期 *</Label>
               <Input type="date" value={form.acquireDate} onChange={e => set('acquireDate')(e.target.value)} />
@@ -65,7 +66,7 @@ function CreateDialog({ open, onClose, onSaved }: { open: boolean; onClose: () =
               <Input type="number" value={form.originalCost} onChange={e => set('originalCost')(e.target.value)} placeholder="12000" className="text-right" />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-x-5 gap-y-4">
             <div className="space-y-1">
               <Label>残值率（默认 5%）</Label>
               <Input type="number" value={form.residualRate} onChange={e => set('residualRate')(e.target.value)} step="0.01" className="text-right" />
@@ -104,7 +105,7 @@ function DisposeDialog({ asset, onClose }: { asset: FixedAsset | null; onClose: 
   if (!asset) return null
   return (
     <Dialog open onOpenChange={v => !v && onClose()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader><DialogTitle>处置资产 · {asset.assetName}</DialogTitle></DialogHeader>
         <div className="space-y-3 py-2">
           <div className="rounded-md bg-muted/60 px-3 py-2 text-sm">
@@ -121,7 +122,7 @@ function DisposeDialog({ asset, onClose }: { asset: FixedAsset | null; onClose: 
             <Label>处置日期</Label>
             <Input type="date" value={form.disposeDate} onChange={e => setForm(p => ({ ...p, disposeDate: e.target.value }))} />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-x-5 gap-y-4">
             <div className="space-y-1">
               <Label>处置收入</Label>
               <Input type="number" value={form.income} onChange={e => setForm(p => ({ ...p, income: e.target.value }))} className="text-right" />
@@ -165,8 +166,7 @@ export default function FixedAssetsPage() {
   const total = data?.pagination.total ?? 0
 
   const columns: TableColumn<FixedAsset>[] = [
-    { key: 'assetNo', title: '资产编号', width: 120, render: v => <span className="text-doc-code">{String(v)}</span> },
-    { key: 'assetName', title: '资产名称' },
+    { key: 'assetNo', title: '固定资产 / 编号', width: 280, render: (_, r) => <RecordIdentity title={r.assetName || '—'} code={r.assetNo} /> },
     { key: 'category', title: '类别', width: 110, render: v => String(v || '—') },
     { key: 'departmentName', title: '使用部门', width: 110, render: v => String(v || '—') },
     { key: 'acquireDate', title: '购置日期', width: 110, render: v => String(v) },

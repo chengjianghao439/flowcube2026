@@ -1,6 +1,8 @@
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
 import { useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import { CircleCheck, Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react'
+import { Eye, EyeOff, ArrowRight } from 'lucide-react'
 import { useLogin } from '@/hooks/useAuth'
 import SystemBrand from '@/components/shared/SystemBrand'
 import { applyErpApiBaseFromStorage } from '@/lib/apiOrigin'
@@ -26,204 +28,32 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen bg-background-light font-display text-slate-900 antialiased dark:bg-background-dark dark:text-slate-100">
-
-      {/* ── 左侧：品牌区 ─────────────────────────────────── */}
-      <div className="relative hidden w-7/12 flex-col justify-between overflow-hidden border-r border-slate-200 bg-slate-50 p-12 dark:border-slate-800 dark:bg-slate-900/50 lg:flex">
-
-        {/* Logo */}
-        <div className="relative z-10 flex items-center gap-3">
-          <SystemBrand boxClassName="h-8 w-8 rounded-lg" iconClassName="size-5" />
-          <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">极序 Flow</h1>
-          <div className="absolute -bottom-4 left-11 whitespace-nowrap text-[10px] font-medium uppercase tracking-widest text-slate-400">
-            企业管理系统
-          </div>
+    <main className="grid min-h-screen bg-background text-foreground lg:grid-cols-[1fr_1fr]">
+      <aside className="hidden flex-col justify-between border-r border-border bg-muted/30 p-12 lg:flex xl:p-16">
+        <div className="flex items-center gap-3"><SystemBrand boxClassName="h-10 w-10 rounded-lg" iconClassName="size-6" /><span className="text-xl font-semibold">极序 Flow</span></div>
+        <div className="max-w-lg space-y-8 py-12">
+          <div><p className="mb-4 text-sm text-muted-foreground">ERP · 仓储与经营协同</p><h2 className="text-4xl font-semibold leading-tight">从订单到出库，<br />每一步都有据可查。</h2></div>
+          <dl className="divide-y divide-border border-y border-border">
+            {[['订单与履约', '采购到货、销售占库和分批发货'], ['库存与仓储', '条码追溯、库位管理和 PDA 作业'], ['账款与经营', '应收应付、对账核销和经营报表']].map(([title, detail]) => <div key={title} className="grid grid-cols-[120px_1fr] gap-4 py-5"><dt className="font-medium">{title}</dt><dd className="text-sm leading-6 text-muted-foreground">{detail}</dd></div>)}
+          </dl>
         </div>
-
-        {/* 主文案 + 特性列表 + 预览卡片 */}
-        <div className="relative z-10 max-w-xl">
-          <h2 className="mb-6 text-5xl font-bold leading-[1.1] tracking-tight text-slate-900 dark:text-white">
-            让企业管理更简单、更高效
-          </h2>
-          <ul className="mb-10 space-y-4">
-            <li className="flex items-center gap-3 font-medium text-slate-600 dark:text-slate-300">
-              <CircleCheck className="size-[22px] text-primary" />
-              <span>进销存一体化管理</span>
-            </li>
-            <li className="flex items-center gap-3 font-medium text-slate-600 dark:text-slate-300">
-              <CircleCheck className="size-[22px] text-primary" />
-              <span>实时库存与批次追踪</span>
-            </li>
-            <li className="flex items-center gap-3 font-medium text-slate-600 dark:text-slate-300">
-              <CircleCheck className="size-[22px] text-primary" />
-              <span>仓库作业 PDA 条码扫描</span>
-            </li>
-          </ul>
-
-          {/* 预览卡片 */}
-          <div className="relative rounded-lg border border-slate-200 bg-white p-4 shadow-xl transition-transform duration-700 dark:border-slate-700 dark:bg-slate-800">
-            <div className="mb-4 flex items-center gap-2 border-b border-slate-100 pb-3 dark:border-slate-700">
-              <div className="flex gap-1.5">
-                <div className="h-3 w-3 rounded-full bg-red-400/20" />
-                <div className="h-3 w-3 rounded-full bg-amber-400/20" />
-                <div className="h-3 w-3 rounded-full bg-emerald-400/20" />
-              </div>
-              <div className="mx-auto h-4 w-32 rounded-full bg-slate-100 dark:bg-slate-700" />
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="col-span-2 h-32 rounded-lg bg-slate-50 p-3 dark:bg-slate-700/50">
-                <div className="mb-2 h-4 w-1/2 rounded bg-primary/10" />
-                <div className="h-20 w-full rounded bg-primary/5" />
-              </div>
-              <div className="flex h-32 flex-col items-center justify-center gap-2 rounded-lg bg-slate-50 dark:bg-slate-700/50">
-                <div className="h-10 w-10 rounded-full bg-primary/10" />
-                <div className="h-2 w-12 rounded bg-slate-200 dark:bg-slate-600" />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Spacer */}
-        <div className="h-12" />
-
-        {/* 背景装饰圆 */}
-        <div className="absolute right-0 top-0 -mr-20 -mt-20 h-96 w-96 rounded-full bg-primary/[0.03] blur-3xl" />
-        <div className="absolute bottom-0 left-0 -mb-20 -ml-20 h-96 w-96 rounded-full bg-primary/[0.03] blur-3xl" />
-      </div>
-
-      {/* ── 右侧：登录面板 ────────────────────────────────── */}
-      <div className="relative flex flex-1 flex-col justify-center bg-white px-8 dark:bg-background-dark sm:px-16 lg:px-24 xl:px-32">
-        <div className="mx-auto w-full max-w-lg">
-
-          {/* Mobile Logo（仅小屏显示） */}
-          <div className="relative mb-12 flex items-center gap-3 lg:hidden">
-            <SystemBrand boxClassName="h-8 w-8 rounded-lg" iconClassName="size-5" />
-            <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">极序 Flow</h1>
-            <div className="absolute -bottom-4 left-11 whitespace-nowrap text-[10px] font-medium uppercase tracking-widest text-slate-400">
-              企业管理系统
-            </div>
-          </div>
-
-          {/* 标题 */}
-          <div className="mb-10">
-            <h3 className="mb-2 text-3xl font-bold text-slate-900 dark:text-white">欢迎登录</h3>
-            <p className="text-slate-500 dark:text-slate-400">请输入账号信息登录系统</p>
-          </div>
-
-          {/* 错误提示 */}
-          {error && (
-            <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-400">
-              {error.message || '登录失败，请核对账号与密码'}
-            </div>
-          )}
-
-          {/* 登录表单 */}
-          <form className="space-y-6" onSubmit={handleSubmit} noValidate>
-
-            {/* 账号 */}
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300" htmlFor="username">
-                登录账号
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-slate-400" />
-                <input
-                  id="username"
-                  name="username"
-                  type="text"
-                  placeholder="登录账号"
-                  autoComplete="username"
-                  autoFocus
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  disabled={isPending}
-                  className="w-full rounded-lg border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-slate-900 outline-none placeholder:text-slate-400 transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800/50 dark:text-white"
-                />
-              </div>
-            </div>
-
-            {/* 密码 */}
-            <div>
-              <div className="mb-2 flex items-center justify-between">
-                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300" htmlFor="password">
-                  登录密码
-                </label>
-                <a
-                  className="text-sm font-semibold text-primary transition-opacity hover:opacity-80"
-                  href="#"
-                  onClick={(e) => e.preventDefault()}
-                >
-                  忘记密码？
-                </a>
-              </div>
-              <div className="relative">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-slate-400" />
-                <input
-                  id="password"
-                  name="password"
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="登录密码"
-                  autoComplete="current-password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  disabled={isPending}
-                  className="w-full rounded-lg border border-slate-200 bg-slate-50 py-3 pl-11 pr-12 text-slate-900 outline-none placeholder:text-slate-400 transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800/50 dark:text-white"
-                />
-                <button
-                  type="button"
-                  tabIndex={-1}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 transition-colors hover:text-slate-600"
-                  onClick={() => setShowPassword((v) => !v)}
-                >
-                  {showPassword ? <EyeOff className="size-5" /> : <Eye className="size-5" />}
-                </button>
-              </div>
-            </div>
-
-            <p className="text-xs text-slate-500 dark:text-slate-500">
-              仅在本机记住账号，不保存密码；退出后需重新登录。
-            </p>
-
-            {/* 提交按钮 */}
-            <button
-              type="submit"
-              disabled={isPending || !username.trim() || !password.trim()}
-              className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-6 py-3 font-bold text-white transition-all hover:bg-primary/90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isPending ? (
-                <>
-                  <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                  <span>登录中…</span>
-                </>
-              ) : (
-                <>
-                  <span>登录系统</span>
-                  <ArrowRight className="size-[18px]" />
-                </>
-              )}
-            </button>
-
+        <p className="text-sm text-muted-foreground">使用企业分配的账号进入工作区。</p>
+      </aside>
+      <section className="flex items-center justify-center px-8 py-12">
+        <div className="w-full max-w-md">
+          <div className="mb-8 flex items-center gap-3 lg:hidden"><SystemBrand boxClassName="h-9 w-9 rounded-lg" iconClassName="size-5" /><span className="text-xl font-semibold">极序 Flow</span></div>
+          <h1 className="text-2xl font-semibold">登录工作区</h1>
+          <p className="mb-8 mt-3 text-sm leading-6 text-muted-foreground">输入账号与密码，继续处理今天的业务。</p>
+          {error && <p role="alert" className="mb-5 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">{error.message || '登录失败，请核对账号与密码'}</p>}
+          <form className="space-y-5" onSubmit={handleSubmit} noValidate>
+            <div className="space-y-2"><label htmlFor="username" className="text-sm font-medium">登录账号</label><Input id="username" name="username" autoComplete="username" autoFocus value={username} onChange={e => setUsername(e.target.value)} disabled={isPending} placeholder="企业账号" className="h-11" /></div>
+            <div className="space-y-2"><label htmlFor="password" className="text-sm font-medium">登录密码</label><div className="relative"><Input id="password" name="password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} disabled={isPending} placeholder="输入密码" className="h-11 pr-12" /><button type="button" aria-label={showPassword ? '隐藏密码' : '显示密码'} aria-pressed={showPassword} onClick={() => setShowPassword(v => !v)} className="absolute right-1 top-1 rounded-md p-2 text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{showPassword ? <EyeOff className="size-5" /> : <Eye className="size-5" />}</button></div></div>
+            <p className="text-sm leading-6 text-muted-foreground">忘记密码或尚未开通账号，请联系企业管理员。</p>
+            <Button type="submit" className="h-11 w-full" disabled={isPending || !username.trim() || !password.trim()}>{isPending ? '登录中…' : '登录工作区'}<ArrowRight className="ml-2 size-4" /></Button>
+            <p className="text-xs leading-5 text-muted-foreground">仅在本机记住账号，不保存密码。</p>
           </form>
-
-          {/* 底部 */}
-          <div className="mt-12 text-center text-slate-500 dark:text-slate-400">
-            <p>
-              尚未开通系统账号？{' '}
-              <a
-                className="font-bold text-primary hover:underline"
-                href="#"
-                onClick={(e) => e.preventDefault()}
-              >
-                联系管理员
-              </a>
-            </p>
-          </div>
-
         </div>
-      </div>
-    </div>
+      </section>
+    </main>
   )
 }

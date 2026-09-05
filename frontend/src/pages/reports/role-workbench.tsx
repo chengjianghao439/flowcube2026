@@ -39,7 +39,7 @@ function PriorityBanner({
   onOpen: () => void
 }) {
   return (
-    <section className="rounded-lg border border-rose-200 bg-gradient-to-r from-rose-50 via-white to-white p-5">
+    <section className="rounded-lg border border-warning/30 bg-warning/5 p-5">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -51,9 +51,9 @@ function PriorityBanner({
           <p className="mt-2 text-xs text-muted-foreground">来源：{sectionTitle}</p>
         </div>
         <div className="flex shrink-0 items-center gap-3">
-          <div className="rounded-lg border border-rose-200 bg-white px-4 py-3 text-left">
+          <div className="px-4 py-2 text-right">
             <p className="text-xs text-muted-foreground">待处理数</p>
-            <p className="text-3xl font-bold text-rose-700">{count}</p>
+            <p className="text-2xl font-semibold tabular-nums text-warning">{count}</p>
           </div>
           <Button onClick={onOpen}>立即处理</Button>
         </div>
@@ -73,26 +73,27 @@ function SectionList({ cards, onOpen }: { cards: WorkbenchCard[]; onOpen: (path:
               <p className="mt-0.5 text-xs text-muted-foreground">{card.description}</p>
             </div>
             <div className="flex shrink-0 items-center gap-3">
-              <Badge variant="outline" className="rounded-full border-border/60 bg-white/90 px-2">{card.count}</Badge>
+              <Badge variant="outline" className="rounded-full border-border/60 bg-background px-2">{card.count}</Badge>
               <Button size="sm" variant="outline" onClick={() => onOpen(card.path, card.title)}>{card.actionLabel}</Button>
             </div>
           </div>
           {card.items.length > 0 && (
             <div className="mt-3 space-y-1.5 border-t border-border/60 pt-3">
-              {card.items.map(item => (
+              {card.items.map((item, index) => (
                 <button
-                  key={`${card.key}-${item.id}`}
+                  // 一张收货单可有多条打印失败记录；只读预览按返回行区分，不能按单据 ID 合并。
+                  key={`${card.key}-${item.id}-${index}`}
                   type="button"
                   onClick={() => onOpen(item.path, item.title)}
-                  className="w-full rounded-lg border border-border/60 bg-white/70 px-3 py-2 text-left transition-colors hover:border-primary/30 hover:bg-primary/5"
+                  className="w-full rounded-lg border border-border/60 bg-background px-3 py-2 text-left transition-colors hover:border-primary/30 hover:bg-primary/5"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
                         <p className="truncate text-sm font-medium text-foreground">{item.title}</p>
-                        {item.badge && <Badge variant="outline" className="h-5 rounded-full px-2 text-[10px]">{item.badge}</Badge>}
+                        {item.badge && <Badge variant="outline" className="h-5 rounded-full px-2 text-xs">{item.badge}</Badge>}
                       </div>
-                      {item.subtitle && <p className="mt-0.5 truncate text-xs text-muted-foreground">{item.subtitle}</p>}
+                      {item.subtitle && <p className="mt-0.5 break-words text-xs leading-5 text-muted-foreground">{item.subtitle}</p>}
                     </div>
                     <span className="shrink-0 text-xs text-muted-foreground">{item.hint || (item.createdAt ? formatDisplayDateTime(item.createdAt) : '待处理')}</span>
                   </div>
@@ -138,7 +139,7 @@ function ReminderBlock({ items, onOpen }: { items: NotificationItem[]; onOpen: (
                     <p className="mt-1 text-xs opacity-80">{getNotificationCategoryLabel(item.category)}提醒</p>
                   </div>
                 </div>
-                <Badge variant="outline" className="shrink-0 border-current/20 bg-white/70">
+                <Badge variant="outline" className="shrink-0 border-current/20 bg-background">
                   P{item.priority ?? 9}
                 </Badge>
               </div>

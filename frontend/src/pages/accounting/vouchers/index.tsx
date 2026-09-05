@@ -1,3 +1,5 @@
+import { PaginationArrow } from '@/components/shared/PaginationArrow'
+import { ReportTable } from '@/components/shared/ReportTable'
 /**
  * 记账凭证（文档 10 · Phase 1）
  *
@@ -88,7 +90,7 @@ function GenerateDialog({ open, onClose }: { open: boolean; onClose: () => void 
   }
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose() }}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-xl">
         <DialogHeader><DialogTitle>生成本期凭证</DialogTitle></DialogHeader>
         <div className="space-y-4 py-1">
           <p className="text-xs text-muted-foreground">
@@ -120,7 +122,7 @@ function DetailDialog({ id, onClose }: { id: number | null; onClose: () => void 
   const { data: v, isLoading } = useVoucher(id)
   return (
     <Dialog open={!!id} onOpenChange={o => { if (!o) onClose() }}>
-      <DialogContent className="sm:max-w-3xl">
+      <DialogContent className="sm:max-w-6xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             凭证 {v?.voucherNo}
@@ -139,7 +141,7 @@ function DetailDialog({ id, onClose }: { id: number | null; onClose: () => void 
               <div className="col-span-2 sm:col-span-4"><span className="text-muted-foreground">摘要：</span>{v.summary || '—'}</div>
             </div>
             <div className="overflow-x-auto rounded-lg border border-border/60">
-              <table className="w-full text-sm">
+              <ReportTable className="w-full text-sm">
                 <thead className="bg-muted/40 text-muted-foreground">
                   <tr>
                     <th className="px-3 py-2 text-left font-medium">摘要</th>
@@ -165,7 +167,7 @@ function DetailDialog({ id, onClose }: { id: number | null; onClose: () => void 
                     <td className="px-3 py-2 text-right tabular-nums">{fmtMoney(v.totalCredit)}</td>
                   </tr>
                 </tbody>
-              </table>
+              </ReportTable>
             </div>
           </div>
         )}
@@ -206,7 +208,7 @@ function ManualDialog({ open, onClose }: { open: boolean; onClose: () => void })
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose() }}>
-      <DialogContent className="sm:max-w-3xl">
+      <DialogContent className="sm:max-w-6xl">
         <DialogHeader><DialogTitle>手工凭证录入</DialogTitle></DialogHeader>
         <div className="space-y-3 py-1">
           <div className="grid grid-cols-2 gap-4">
@@ -403,9 +405,9 @@ export default function VouchersPage() {
       {/* 分页 */}
       {totalPages > 1 && (
         <div className="mt-3 flex items-center justify-end gap-2 text-sm">
-          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>上一页</Button>
+          <PaginationArrow direction="previous" disabled={page <= 1} onClick={() => setPage(p => p - 1)} />
           <span className="tabular-nums">{page} / {totalPages}</span>
-          <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>下一页</Button>
+          <PaginationArrow direction="next" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)} />
         </div>
       )}
 

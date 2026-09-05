@@ -40,12 +40,12 @@ export function DesktopUpdateBridge() {
 
   return (
     <Dialog open={update != null} onOpenChange={open => { if (!open && !busy) setUpdate(null) }}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>发现新版本{update?.forceDebug ? '（调试）' : ''}</DialogTitle>
           <DialogDescription>新版本 {update?.version} 已发布，当前版本为 {update?.current}。</DialogDescription>
         </DialogHeader>
-        <div className="max-h-72 overflow-y-auto whitespace-pre-wrap break-words text-sm leading-relaxed">
+        <div className="max-h-[400px] overflow-y-auto whitespace-pre-wrap break-words rounded-lg border border-border bg-muted/20 p-4 text-sm leading-6">
           {update?.notes.trim() || '暂无更新说明'}
         </div>
         <DialogFooter>

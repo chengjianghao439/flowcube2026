@@ -135,8 +135,8 @@ async function findForFinder({ page = 1, pageSize = 20, keyword = '', categoryId
 
   if (keyword) {
     const like = `%${keyword}%`
-    conditions.push('(p.code LIKE ? OR p.name LIKE ? OR p.barcode LIKE ?)')
-    queryParams.push(like, like, like)
+    conditions.push('(p.code LIKE ? OR p.name LIKE ? OR p.barcode LIKE ? OR p.article_number LIKE ? OR p.spec LIKE ? OR p.color LIKE ?)')
+    queryParams.push(like, like, like, like, like, like)
   }
   if (catIds) {
     conditions.push(`p.category_id IN (${catIds.map(() => '?').join(',')})`)
@@ -155,13 +155,13 @@ async function findForFinder({ page = 1, pageSize = 20, keyword = '', categoryId
 
   const [rows] = await pool.query(
     `SELECT p.id, p.code, p.sku_code, p.article_number, p.name, p.category_id, p.supplier_id, p.unit, p.sale_price, p.sale_price_a, p.sale_price_b, p.sale_price_c, p.sale_price_d, p.cost_price, p.spec, p.color, p.barcode,
-            c.name AS category_name, s.name AS supplier_name, ${stockCol} AS stock
+            c.name AS category_name, sup.name AS supplier_name, ${stockCol} AS stock
      FROM product_items p
      LEFT JOIN product_categories c ON p.category_id = c.id AND c.deleted_at IS NULL
-     LEFT JOIN supply_suppliers s ON p.supplier_id = s.id
+     LEFT JOIN supply_suppliers sup ON p.supplier_id = sup.id
      ${stockJoin}
      ${where}
-     ORDER BY p.name ASC LIMIT ? OFFSET ?`,
+     ORDER BY p.name ASC, p.id ASC LIMIT ? OFFSET ?`,
     [...stockParams, ...queryParams, ps, offset],
   )
 
@@ -175,7 +175,7 @@ async function findForFinder({ page = 1, pageSize = 20, keyword = '', categoryId
 
   return {
     list: rows.map(r => ({
-      id: r.id, code: r.code, name: r.name,
+      id: r.id, code: r.code, name: r.name, barcode: r.barcode || null,
       skuCode: r.sku_code || null, articleNumber: r.article_number || null,
       categoryId:   r.category_id   || null,
       categoryName: r.category_name || null,

@@ -64,20 +64,20 @@ export function SectionCard({
       {/* 标题行 */}
       {hasHeader && (
         <div className={cn(
-          'flex items-center justify-between border-b border-border',
-          compact ? 'px-4 py-2.5' : 'px-5 py-3.5',
+          'flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-border',
+          compact ? 'px-4 py-2.5' : 'px-5 py-3',
         )}>
           {title && (
-            <h3 className="text-card-title">{title}</h3>
+            <h3 className="min-w-0 break-words text-card-title">{title}</h3>
           )}
           {actions && (
-            <div className="flex items-center gap-2">{actions}</div>
+            <div className="flex flex-wrap items-center gap-2">{actions}</div>
           )}
         </div>
       )}
 
       {/* Body */}
-      <div className={cn(!noPadding && (compact ? 'p-4' : 'p-5'), contentClassName)}>
+      <div className={cn('min-w-0', !noPadding && (compact ? 'p-4' : 'p-5'), contentClassName)}>
         {children}
       </div>
     </div>

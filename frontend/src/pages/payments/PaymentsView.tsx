@@ -96,9 +96,9 @@ export default function PaymentsView({ type }: { type: PaymentType }) {
   const columns: TableColumn<PaymentRecord>[] = [
     { key: 'orderNo', title: '关联单号', width: 160, render: (v) => <span className="text-doc-code">{String(v)}</span> },
     { key: 'partyName', title: copy.party, width: 140 },
-    { key: 'totalAmount', title: '总金额', width: 100, render: (v) => `¥${Number(v).toFixed(2)}` },
-    { key: 'paidAmount', title: copy.amountCol, width: 100, render: (v) => <span className="tabular-nums text-success">¥{Number(v).toFixed(2)}</span> },
-    { key: 'balance', title: '余额', width: 100, render: (v) => <span className={`tabular-nums ${Number(v) > 0 ? 'font-medium text-destructive' : 'text-muted-foreground'}`}>¥{Number(v).toFixed(2)}</span> },
+    { key: 'totalAmount', title: '总金额', width: 100, align: 'right', render: (v) => `¥${Number(v).toFixed(2)}` },
+    { key: 'paidAmount', title: copy.amountCol, width: 100, align: 'right', render: (v) => <span className="tabular-nums text-success">¥{Number(v).toFixed(2)}</span> },
+    { key: 'balance', title: '余额', width: 100, align: 'right', render: (v) => <span className={`tabular-nums ${Number(v) > 0 ? 'font-medium text-destructive' : 'text-muted-foreground'}`}>¥{Number(v).toFixed(2)}</span> },
     { key: 'status', title: '状态', width: 130, render: (v, row) => {
       const r = row as PaymentRecord
       // 现结当天到期，逾期信息原本挂在到期日列上；那列换成创建日期后移到这里，避免丢失

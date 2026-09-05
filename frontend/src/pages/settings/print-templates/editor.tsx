@@ -223,7 +223,7 @@ function PalettePanel({
   return (
     <div className="flex w-52 shrink-0 flex-col overflow-hidden border-r bg-muted/20">
       <div className="border-b px-4 py-3">
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">字段列表</p>
+        <p className="text-sm font-medium text-foreground">字段列表</p>
         <p className="mt-0.5 text-xs text-muted-foreground">{hint ?? '拖拽字段到画布'}</p>
       </div>
       {showLayers ? (
@@ -244,7 +244,7 @@ function PalettePanel({
           {/* 元素图层（评审 P2）：列表点击选中、上下移动调 z 序、× 删除——重叠元素不再只能「删了重加」 */}
           <div className="flex min-h-0 flex-1 flex-col border-t border-border/60">
             <div className="px-4 py-2.5">
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">元素图层</p>
+              <p className="text-sm font-medium text-foreground">元素图层</p>
               <p className="mt-0.5 text-xs text-muted-foreground">越靠上越先绘制（可重叠置顶置底）</p>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3 space-y-1">
@@ -639,7 +639,7 @@ function PropertiesPanel({ el, multiCount, isLabel, canvasW, canvasH, onChange, 
     return (
       <div className="flex w-60 shrink-0 flex-col border-l bg-muted/20">
         <div className="border-b px-4 py-3">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">属性面板</p>
+          <p className="text-sm font-medium text-foreground">属性面板</p>
         </div>
         <div className="flex h-40 items-center justify-center text-xs text-muted-foreground">
           点击画布中的元素以编辑属性
@@ -653,7 +653,7 @@ function PropertiesPanel({ el, multiCount, isLabel, canvasW, canvasH, onChange, 
     return (
       <div className="flex w-60 shrink-0 flex-col overflow-hidden border-l bg-muted/20">
         <div className="flex items-center justify-between border-b px-4 py-3">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">属性面板</p>
+          <p className="text-sm font-medium text-foreground">属性面板</p>
           <span className="text-xs text-muted-foreground">已选 {multiCount} 项</span>
         </div>
         <div className="flex-1 space-y-5 overflow-y-auto p-4">
@@ -706,7 +706,7 @@ function PropertiesPanel({ el, multiCount, isLabel, canvasW, canvasH, onChange, 
   return (
     <div className="flex w-60 shrink-0 flex-col overflow-hidden border-l bg-muted/20">
       <div className="flex items-center justify-between border-b px-4 py-3">
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">属性面板</p>
+        <p className="text-sm font-medium text-foreground">属性面板</p>
         <Button size="sm" variant="ghost" className="size-7 p-0 text-destructive hover:text-destructive"
           onClick={() => onDelete(el.id)}>
           <Trash2 className="size-3.5" />
@@ -1940,7 +1940,7 @@ export default function PrintTemplateEditor() {
             value={name}
             onChange={e => setName(e.target.value)}
             placeholder="模板名称"
-            className="h-9 w-44 text-sm"
+            className="h-9 w-60 text-sm" aria-label="模板名称"
           />
 
           <Select value={String(type)} onValueChange={handleTypeChange}>
@@ -2017,7 +2017,7 @@ export default function PrintTemplateEditor() {
             </div>
           ) : (
             <Select value={paperSize} onValueChange={v => setPaperSize(v as PaperSize)}>
-              <SelectTrigger className="h-9 min-w-[10rem] px-2 text-sm">
+              <SelectTrigger className="h-9 w-56 shrink-0 px-2 text-sm">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -2190,7 +2190,7 @@ export default function PrintTemplateEditor() {
           )}
 
           <div
-            className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto bg-muted/40 p-6 gap-4"
+            className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto bg-muted/30 p-4 gap-3"
             ref={canvasColRef}
           >
             {preview && (
@@ -2346,7 +2346,7 @@ export default function PrintTemplateEditor() {
               )}
 
               {elements.length === 0 && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-muted-foreground/40 pointer-events-none">
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-muted-foreground pointer-events-none">
                   <Table2 className="size-10" />
                   <p className="text-sm">从左侧拖拽字段到这里</p>
                 </div>

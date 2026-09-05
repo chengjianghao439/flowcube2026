@@ -99,12 +99,12 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{isEdit ? '编辑用户' : '新增用户'}</DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4 py-2">
+        <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-x-5 gap-y-4 py-2">
           {!isEdit && (
             <>
               <div className="space-y-2">
@@ -143,8 +143,23 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
           </div>
 
           <div className="space-y-2">
+            <Label>部门</Label>
+            <Select value={departmentId ? String(departmentId) : '0'} onValueChange={(v) => setDepartmentId(v === '0' ? null : Number(v))}>
+              <SelectTrigger className="w-full" disabled={isPending}>
+                <SelectValue placeholder="未分配" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="0">未分配</SelectItem>
+                {(departments ?? []).map((d) => (
+                  <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="col-span-2 space-y-2">
             <Label>角色</Label>
-            <div className="flex gap-4">
+            <div className="flex flex-wrap gap-x-4 gap-y-2">
               {isSuperAdmin(roleId) && (
                 <label className="flex items-center gap-2 cursor-not-allowed opacity-60">
                   <input
@@ -175,21 +190,6 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label>部门</Label>
-            <Select value={departmentId ? String(departmentId) : '0'} onValueChange={(v) => setDepartmentId(v === '0' ? null : Number(v))}>
-              <SelectTrigger className="w-full" disabled={isPending}>
-                <SelectValue placeholder="未分配" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="0">未分配</SelectItem>
-                {(departments ?? []).map((d) => (
-                  <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
           {isEdit && (
             <>
               <div className="flex items-center gap-2">
@@ -208,7 +208,7 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
                   （后端 users.service.assertCanGrantSelfApprove 是权威校验，这里只是不给非超管入口）。
                   非超管编辑用户时整块不渲染 ⇒ 表单不传该字段 ⇒ 后端保持原值，不会触发 403。 */}
               {isOperatorSuperAdmin && (
-                <div className="space-y-1 rounded-md border border-border bg-muted/30 p-3">
+                <div className="col-span-2 space-y-1 rounded-md border border-border bg-muted/30 p-3">
                   <div className="flex items-center gap-2">
                     <input
                       type="checkbox"
@@ -230,12 +230,12 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
           )}
 
           {error && (
-            <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            <p className="col-span-2 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
               {error.message}
             </p>
           )}
 
-          <DialogFooter className="pt-2">
+          <DialogFooter className="col-span-2 border-t pt-4">
             <Button type="button" variant="outline" onClick={onClose} disabled={isPending}>
               取消
             </Button>

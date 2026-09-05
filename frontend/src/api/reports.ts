@@ -1,14 +1,25 @@
 import { payloadClient as client } from './client'
 
+/** 已有统计接口的商品身份字段，与 reports.metrics.js 投影保持一致。 */
+export interface ProductStatsRow {
+  productCode: string
+  productName: string
+  articleNumber: string | null
+  spec: string | null
+  color: string | null
+  totalQty: number
+  totalAmount: number
+}
+
 export interface PurchaseStats {
   byMonth: { month: string; orderCount: number; totalAmount: number; receivedAmount: number }[]
   bySupplier: { supplierName: string; orderCount: number; totalAmount: number; receivedAmount: number }[]
-  byProduct: { productName: string; totalQty: number; totalAmount: number }[]
+  byProduct: ProductStatsRow[]
 }
 export interface SaleStats {
   byMonth: { month: string; orderCount: number; totalAmount: number; shippedAmount: number }[]
   byCustomer: { customerName: string; orderCount: number; totalAmount: number }[]
-  byProduct: { productName: string; totalQty: number; totalAmount: number }[]
+  byProduct: ProductStatsRow[]
 }
 export interface InventoryStats {
   turnover: {

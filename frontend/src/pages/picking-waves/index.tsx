@@ -1,3 +1,4 @@
+import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
 /**
  * 批次拣货管理页
  * 路由：/picking-waves
@@ -273,7 +274,7 @@ export default function PickingWavesPage() {
       <Pagination page={page} totalPages={totalPages} total={total} unit="个" onPageChange={setPage} />
 
       <Dialog open={!!selectedWaveId} onOpenChange={v => !v && closeDetail()}>
-        <DialogContent className="max-w-4xl">
+        <DialogContent className="max-w-6xl">
           <DialogHeader>
             <DialogTitle>
               批次详情 — <span className="text-doc-code-strong">{detail?.waveNo ?? `#${selectedWaveId}`}</span>
@@ -340,7 +341,7 @@ export default function PickingWavesPage() {
                   </Button>
                 </div>
               </div>
-              <div className="grid gap-3 md:grid-cols-7">
+              <div className="grid gap-4 md:grid-cols-4">
                 <StatBlock label="包裹总数" value={printSummary?.totalPackages ?? 0} />
                 <StatBlock label="未生成任务" value={printSummary?.noJobCount ?? 0} />
                 <StatBlock label="待派发" value={printSummary?.pendingCount ?? 0} />
@@ -366,27 +367,24 @@ export default function PickingWavesPage() {
                   <h3 className="text-card-title">批次商品汇总</h3>
                   <p className="text-muted-body">按商品查看应拣与已拣，快速定位缺口。</p>
                 </div>
-                <table className="w-full text-sm">
+                <div className="overflow-x-auto"><table className="w-full min-w-[1100px] text-sm">
                   <thead>
                     <tr className="border-b border-border text-left text-muted-foreground">
-                      <th className="px-3 py-2">商品</th>
-                      <th className="px-3 py-2 text-left">应拣</th>
-                      <th className="px-3 py-2 text-left">已拣</th>
+                      <ProductIdentityHeaders />
+                      <th className="px-3 py-2 text-right">应拣</th>
+                      <th className="px-3 py-2 text-right">已拣</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
                     {detail.items.map(item => (
                       <tr key={item.id}>
-                        <td className="px-3 py-2">
-                          <div className="font-medium">{item.productName}</div>
-                          <div className="text-xs text-muted-foreground">{item.productCode}{item.articleNumber ? ` · 货号 ${item.articleNumber}` : ''}{item.spec ? ` · ${item.spec}` : ''}{item.color ? ` · ${item.color}` : ''}</div>
-                        </td>
-                        <td className="px-3 py-2 text-left">{item.totalQty}</td>
-                        <td className="px-3 py-2 text-left">{item.pickedQty}</td>
+                        <ProductIdentityCells product={item} />
+                        <td className="px-3 py-2 text-right tabular-nums">{item.totalQty}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{item.pickedQty}</td>
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </table></div>
               </section>
             ) : null}
           </div>

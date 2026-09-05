@@ -176,7 +176,7 @@ export default function PdaDevicesPage() {
 
       {/* 登记新设备 */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>登记新 PDA 设备</DialogTitle>
             <DialogDescription>
@@ -222,7 +222,7 @@ export default function PdaDevicesPage() {
 
       {/* 密钥与绑定二维码：仅此一次 */}
       <Dialog open={!!secretView} onOpenChange={open => { if (!open) setSecretView(null) }}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>用 PDA 扫这个码完成绑定</DialogTitle>
             <DialogDescription>
@@ -263,7 +263,7 @@ export default function PdaDevicesPage() {
 
       {/* 编辑 */}
       <Dialog open={!!editing} onOpenChange={open => { if (!open) setEditing(null) }}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>编辑设备</DialogTitle>
             <DialogDescription>改绑仓库会吊销这台机器当前的会话，需要重新登录。</DialogDescription>

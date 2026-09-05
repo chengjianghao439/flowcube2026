@@ -1,3 +1,4 @@
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
@@ -14,9 +15,9 @@ const TYPE_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
 }
 /** 语义色：danger 红 / warning 琥珀 / info 蓝 —— 表达通知的严重程度（行底色 + 图标） */
 const TYPE_STYLE: Record<string, { icon: string; row: string }> = {
-  danger:  { icon: 'text-red-600', row: 'bg-red-50/60 border-l-2 border-red-400 hover:bg-red-50' },
-  warning: { icon: 'text-amber-600', row: 'bg-amber-50/60 border-l-2 border-amber-400 hover:bg-amber-50' },
-  info:    { icon: 'text-blue-600', row: 'bg-blue-50/60 border-l-2 border-blue-400 hover:bg-blue-50' },
+  danger:  { icon: 'text-destructive', row: 'bg-destructive/5 hover:bg-destructive/10' },
+  warning: { icon: 'text-warning', row: 'bg-warning/5 hover:bg-warning/10' },
+  info:    { icon: 'text-primary', row: 'bg-primary/5 hover:bg-primary/10' },
 }
 
 export default function NotificationBell() {
@@ -63,24 +64,23 @@ export default function NotificationBell() {
   }
 
   return (
-    <div className="relative">
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
       <button
-        onClick={() => setOpen(o => !o)}
+        aria-label={`通知中心${total > 0 ? `，${total} 条待处理` : ''}`}
         className="relative p-2 rounded-lg hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
         title="通知中心"
       >
         <Bell className="size-[18px]" />
         {total > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center px-1 font-bold">
+          <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 bg-destructive text-destructive-foreground text-[10px] rounded-full flex items-center justify-center px-1 font-bold">
             {total > 99 ? '99+' : total}
           </span>
         )}
       </button>
 
-      {open && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full mt-2 w-[22rem] bg-white rounded-xl shadow-lg border z-50 overflow-hidden">
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-[420px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-lg p-0" aria-label="通知中心">
             {/* 头部 */}
             <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/20">
               <div className="flex items-center gap-2">
@@ -89,7 +89,7 @@ export default function NotificationBell() {
               </div>
               {total > 0 && (
                 <span className="text-xs text-muted-foreground">
-                  <span className="font-semibold text-red-600">{total}</span> 条待处理
+                  <span className="font-semibold text-destructive">{total}</span> 条待处理
                 </span>
               )}
             </div>
@@ -97,24 +97,22 @@ export default function NotificationBell() {
             {/* 内容 */}
             {sorted.length === 0 ? (
               <div className="py-12 text-center">
-                <CheckCircle2 className="mx-auto size-8 text-emerald-500 mb-2" />
+                <CheckCircle2 className="mx-auto size-8 text-success mb-2" />
                 <p className="text-sm font-medium text-foreground">暂无待处理事项</p>
                 <p className="mt-0.5 text-xs text-muted-foreground">有新逾期、库存预警或待办事项时，将在此提醒</p>
               </div>
             ) : (
-              <div className="max-h-[24rem] overflow-y-auto">
+              <div className="max-h-[60vh] divide-y divide-border/60 overflow-y-auto">
                 {sorted.map(renderItem)}
               </div>
             )}
 
             {/* 尾部 */}
             <div className="flex items-center justify-center gap-1.5 px-4 py-2 border-t text-xs text-muted-foreground">
-              <span className="inline-block size-1.5 rounded-full bg-emerald-500" />
+              <span className="inline-block size-1.5 rounded-full bg-success" />
               每分钟自动刷新
             </div>
-          </div>
-        </>
-      )}
-    </div>
+      </PopoverContent>
+    </Popover>
   )
 }

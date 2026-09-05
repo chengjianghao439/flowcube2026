@@ -36,9 +36,9 @@ function EfficiencyBar({ value, max }: { value: number; max: number }) {
   return (
     <div className="flex items-center gap-2">
       <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
-        <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${pct}%` }} />
+        <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
       </div>
-      <span className="text-xs text-foreground w-16 text-left shrink-0">
+      <span className="text-xs tabular-nums text-foreground w-20 text-right shrink-0">
         {value.toFixed(1)} 件/分
       </span>
     </div>

@@ -22,18 +22,18 @@ export function FulfillmentProgressCard({ order }: { order: SaleOrder }) {
   if (tasks.length > 1) {
     const wtTone = (s: number): StatusTone => s === 7 ? 'success' : s === 8 ? 'danger' : 'active'
     return (
-      <div className="rounded-lg border border-border bg-card p-5 space-y-3">
+      <div className="space-y-3">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h3 className="text-sm font-semibold text-foreground">分仓履约进度</h3>
+            <h3 className="text-sm font-semibold text-foreground">仓库任务进度</h3>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              该订单从 {tasks.length} 个仓库分别发货，已发 {order.shippedTotalQty ?? 0}/{order.orderedTotalQty ?? 0}
+              共 {tasks.length} 个仓库任务，各任务独立推进作业。
             </p>
           </div>
         </div>
-        <div className="space-y-2">
+        <div className="divide-y rounded-lg border px-3">
           {tasks.map(t => (
-            <div key={t.taskId} className="flex items-center justify-between rounded-md border border-border/60 px-3 py-2 text-sm">
+            <div key={t.taskId} className="flex items-center justify-between gap-4 py-3 text-sm">
               <div className="min-w-0">
                 <span className="font-medium">{t.warehouseName || `仓库#${t.warehouseId}`}</span>
                 <span className="ml-2 text-xs text-muted-foreground">{t.taskNo}</span>
@@ -49,7 +49,7 @@ export function FulfillmentProgressCard({ order }: { order: SaleOrder }) {
   if (!order.taskNo) return null
 
   return (
-    <div className="space-y-4 rounded-lg border border-border bg-card p-5">
+    <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold text-foreground">作业进度</h3>
@@ -58,7 +58,7 @@ export function FulfillmentProgressCard({ order }: { order: SaleOrder }) {
         {isCancelled ? (
           <SoftStatusLabel label="已取消" tone="danger" />
         ) : isPicking ? (
-          <SoftStatusLabel label={order.warehouseTaskStatusName || `阶段 ${current}`} tone="active" />
+          <SoftStatusLabel label={order.warehouseTaskStatusName || `阶段 ${current}`} tone={current === 7 ? 'success' : 'active'} />
         ) : null}
       </div>
 

@@ -1,7 +1,8 @@
+import { ProductIdentityDetails } from '@/components/shared/ProductIdentityCells'
 /**
  * ContainerDrawer — 库存条码可视化侧滑面板
  *
- * 从库存总览行点击「查看条码」触发，右侧弹出 520px 面板。
+ * 从库存总览行点击「查看条码」触发，右侧弹出 640px 面板。
  * 仅展示数据，不允许修改容器。点击单条条码可展开其流转时间线（追溯）。
  */
 
@@ -39,39 +40,30 @@ export default function ContainerDrawer({ open, onClose, item }: ContainerDrawer
       {/* 覆盖 SheetContent 的默认宽度 */}
       <SheetContent
         side="right"
-        className="flex w-[520px] max-w-[520px] flex-col gap-0 p-0 sm:max-w-[520px]"
+        className="flex w-[640px] max-w-[640px] flex-col gap-0 p-0 sm:max-w-[640px]"
       >
         {/* ── 顶部信息区 ───────────────────────────────────────────────── */}
-        <SheetHeader className="border-b px-6 py-5">
+        <SheetHeader className="border-b px-6 py-5 pr-12">
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
               <Box className="h-4 w-4 text-primary" />
             </div>
             <div className="min-w-0">
-              <SheetTitle className="truncate text-base">
+              <SheetTitle className="break-words text-base">
                 {item?.productName ?? '—'}
               </SheetTitle>
-              <SheetDescription className="font-mono text-xs">
-                {item?.productCode}
-                {item?.articleNumber && <span className="ml-2 rounded bg-muted px-1.5 py-0.5 font-sans text-xs not-italic">供应商型号 {item.articleNumber}</span>}
-                {item?.spec && <span className="ml-2 rounded bg-muted px-1.5 py-0.5 font-sans text-xs not-italic">{item.spec}</span>}
-                {item?.color && <span className="ml-2 rounded bg-muted px-1.5 py-0.5 font-sans text-xs not-italic">{item.color}</span>}
-                {item?.warehouseName && (
-                  <span className="ml-2 rounded bg-muted px-1.5 py-0.5 font-sans text-xs not-italic">
-                    {item.warehouseName}
-                  </span>
-                )}
-              </SheetDescription>
+              <SheetDescription>{item?.warehouseName || '库存容器'}</SheetDescription>
+              {item && <div className="mt-4"><ProductIdentityDetails product={item} /></div>}
             </div>
           </div>
 
           {/* 库存摘要 */}
           {item && (
             <div className="mt-3 grid grid-cols-3 divide-x divide-border rounded-lg border bg-muted/30">
-              <StockMini label="在库" value={formatQty(item.onHand)}   unit={item.unit} color="text-blue-600" />
-              <StockMini label="预占" value={formatQty(item.reserved)} unit={item.unit} color="text-amber-600" />
+              <StockMini label="在库" value={formatQty(item.onHand)}   unit={item.unit} color="text-primary" />
+              <StockMini label="预占" value={formatQty(item.reserved)} unit={item.unit} color="text-warning" />
               <StockMini label="可用" value={formatQty(item.available)} unit={item.unit}
-                color={item.available <= 0 ? 'text-destructive' : 'text-emerald-600'} />
+                color={item.available <= 0 ? 'text-destructive' : 'text-success'} />
             </div>
           )}
         </SheetHeader>
@@ -123,7 +115,7 @@ export default function ContainerDrawer({ open, onClose, item }: ContainerDrawer
                           {idx + 1}
                         </span>
                         <button
-                          className="flex items-center gap-1 font-mono text-xs text-foreground hover:text-primary"
+                          className="flex items-center gap-1 break-words font-mono text-xs text-foreground hover:text-primary"
                           title="查看流转时间线"
                           onClick={() => setExpandedId(expandedId === c.id ? null : c.id)}
                         >
@@ -169,7 +161,7 @@ export default function ContainerDrawer({ open, onClose, item }: ContainerDrawer
                       )}
                       {c.expDate && (
                         <Field label="到期日期" value={c.expDate}
-                          valueClass={isExpiringSoon(c.expDate) ? 'text-amber-600 font-medium' : undefined}
+                          valueClass={isExpiringSoon(c.expDate) ? 'text-warning font-medium' : undefined}
                         />
                       )}
                       <Field label="入库时间" value={formatDisplayDateTime(c.createdAt)} className="col-span-2" />

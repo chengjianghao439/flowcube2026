@@ -79,7 +79,7 @@ export default function RefundsPage() {
     { key: 'saleOrderNo', title: '销售单', width: 150, render: (v) => <span className="text-doc-code-muted">{String(v)}</span> },
     { key: 'customerName', title: '客户', width: 120 },
     {
-      key: 'amount', title: '退款金额', width: 120,
+      key: 'amount', title: '退款金额', width: 120, align: 'right',
       render: (v) => <span className="text-right tabular-nums">¥{m(Number(v))}</span>,
     },
     {
@@ -181,7 +181,7 @@ function CreateRefundDialog({ open, onClose }: { open: boolean; onClose: () => v
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) { reset(); onClose() } }}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader><DialogTitle>新建退款单</DialogTitle></DialogHeader>
         <div className="space-y-4 py-2">
           <div className="space-y-1">

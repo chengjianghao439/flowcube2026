@@ -39,19 +39,19 @@ export default class TabErrorBoundary extends Component<Props, State> {
     if (this.state.hasError) {
       return (
         <div className="flex h-full items-center justify-center bg-background/50">
-          <div className="flex flex-col items-center gap-4 p-8 text-center max-w-sm">
-            <AlertTriangle className="h-10 w-10 text-amber-500" />
+          <div className="flex flex-col items-center gap-4 m-6 rounded-lg border border-border bg-card p-8 text-center max-w-lg">
+            <AlertTriangle className="h-10 w-10 text-warning" />
             <div>
-              <h3 className="text-sm font-semibold text-foreground mb-1">
+              <h3 className="text-lg font-semibold text-foreground mb-2">
                 {this.props.tabName ? `「${this.props.tabName}」页面出错` : '页面加载出错'}
               </h3>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-sm leading-6 text-muted-foreground">
                 此页面渲染时发生错误，已自动隔离。您可尝试重新加载此页面，其他页面不受影响。
               </p>
             </div>
             <button
               onClick={this.handleRetry}
-              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-4 py-2 text-sm font-medium text-foreground hover:bg-accent active:scale-95"
+              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-4 py-2 text-sm font-medium text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <RefreshCw className="h-3.5 w-3.5" />
               重新加载

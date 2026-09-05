@@ -1,3 +1,4 @@
+import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
 import { useContext, useState, useEffect, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
@@ -108,7 +109,7 @@ export default function AbcClassPage() {
 
   const abcColumns: TableColumn<AbcClassRow>[] = [
     { key: 'abcClass', title: '类别', width: 130, render: (_, r) => <SoftStatusLabel label={`${r.abcClass} 类 · ${ABC_HINT[r.abcClass]}`} tone={ABC_TONE[r.abcClass] ?? 'info'} /> },
-    { key: 'productName', title: '商品', render: (_, r) => <div><div>{r.productName}</div><div className="mt-0.5 flex gap-2 text-xs text-muted-foreground"><span className="text-doc-code">{r.productCode}</span>{r.articleNumber && <span>货号 {r.articleNumber}</span>}{r.spec && <span>型号 {r.spec}</span>}{r.color && <span>颜色 {r.color}</span>}</div></div> },
+    ...productIdentityColumns(),
     { key: 'metricValue', title: metricType === 'stock_value' ? '库存占用金额' : '出库消耗金额', width: 150, align: 'right', render: (v) => <span className="tabular-nums">{Number(v).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span> },
     { key: 'cumulativePct', title: '累计占比', width: 110, align: 'right', render: (v) => <span className="tabular-nums">{(Number(v) * 100).toFixed(2)}%</span> },
     { key: 'windowDays', title: '统计天数', width: 80, align: 'right', render: (v) => <span className="tabular-nums">{Number(v)} 天</span> },

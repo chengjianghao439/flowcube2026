@@ -1,3 +1,4 @@
+import { RecordIdentity } from '@/components/shared/RecordIdentity'
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -200,7 +201,7 @@ export default function ReturnsPage() {
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   const columns: TableColumn<RowType>[] = [
-    { key: 'returnNo', title: '退货单号', width: 170 },
+    { key: 'returnNo', title: type === 'sale' ? '退货单 / 创建时间' : '退货单号', width: type === 'sale' ? 240 : 170, render: (v, row) => type === 'sale' ? <RecordIdentity title={String(v)} detail={formatDisplayDateTime(row.createdAt)} /> : String(v) },
     { key: partyKey, title: partyLabel, width: 140 },
     { key: 'warehouseName', title: '仓库', width: 140 },
     { key: 'totalAmount', title: '金额', width: 100, align: 'right', render: (v) => <span className="tabular-nums">¥{Number(v).toFixed(2)}</span> },
@@ -210,7 +211,7 @@ export default function ReturnsPage() {
       return <SoftStatusLabel label={(row as RowType).statusName} tone={tone} />
     } },
     { key: 'operatorName', title: '经办人', width: 90 },
-    { key: 'createdAt', title: '时间', width: 160, render: (v) => formatDisplayDateTime(v) },
+    ...(type === 'purchase' ? [{ key: 'createdAt', title: '时间', width: 160, render: (v: unknown) => formatDisplayDateTime(v) } satisfies TableColumn<RowType>] : []),
     {
       key: 'remark', title: '备注', width: 200,
       render: (v) => v
@@ -248,7 +249,7 @@ export default function ReturnsPage() {
     <div className="space-y-4">
       <PageHeader
         title={type === 'purchase' ? '采购退货' : '销售退货'}
-        description={type === 'purchase' ? '退回供应商，出库减少库存' : '客户退回，入库增加库存'}
+        description={type === 'purchase' ? '退回供应商，出库减少库存' : '查看退货单、收货与质检进度；上架完成后更新库存和应收。'}
         actions={
           <>
             <Button variant="outline"
@@ -261,6 +262,7 @@ export default function ReturnsPage() {
         }
       />
 
+      {type === 'sale' && <div className="flex items-center justify-between rounded-lg border bg-card px-4 py-3 text-sm"><span className="text-muted-foreground">创建日期：{startDate || '不限'} 至 {endDate || '不限'}</span><span className="text-xs text-muted-foreground">共 {total.toLocaleString()} 张退货单</span></div>}
       {chips.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
           {chips.map(c => (

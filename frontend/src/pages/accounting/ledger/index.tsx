@@ -1,3 +1,5 @@
+import { FilterCard } from '@/components/shared/FilterCard'
+import { ReportTable } from '@/components/shared/ReportTable'
 /**
  * 总账 / 试算平衡（文档 10 · Phase 2）
  * 科目余额表：期初/本期发生/期末，借贷两栏；底部合计 + 借贷平衡指示。点科目看明细账。
@@ -21,11 +23,11 @@ function LedgerDialog({ accountId, code, name, period, onClose }: { accountId: n
   const { data, isLoading } = useAccountLedger(accountId, period)
   return (
     <Dialog open={!!accountId} onOpenChange={o => { if (!o) onClose() }}>
-      <DialogContent className="sm:max-w-3xl">
+      <DialogContent className="sm:max-w-5xl">
         <DialogHeader><DialogTitle>明细账 · {code} {name} <span className="text-sm font-normal text-muted-foreground">（{period}）</span></DialogTitle></DialogHeader>
         {isLoading || !data ? <div className="py-10 text-center text-sm text-muted-foreground">加载中…</div> : (
           <div className="max-h-[60vh] overflow-auto rounded-lg border border-border/60">
-            <table className="w-full text-sm">
+            <ReportTable className="w-full text-sm">
               <thead className="sticky top-0 bg-muted/60 text-muted-foreground">
                 <tr>
                   <th className="px-3 py-2 text-left font-medium">日期</th>
@@ -56,7 +58,7 @@ function LedgerDialog({ accountId, code, name, period, onClose }: { accountId: n
                   <td className="px-3 py-2 text-right tabular-nums">{m(data.closingBalance)}</td>
                 </tr>
               </tbody>
-            </table>
+            </ReportTable>
           </div>
         )}
       </DialogContent>
@@ -75,7 +77,7 @@ export default function LedgerPage() {
     <div>
       <PageHeader title="总账 / 试算平衡" description="查看科目期初、本期发生与期末余额；借贷发生额和期末余额应各自平衡" />
 
-      <div className="mb-3 flex items-center gap-2">
+      <FilterCard className="mb-4">
         <span className="text-sm text-muted-foreground">会计期间</span>
         <Input value={period} onChange={e => setPeriod(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="YYYYMM" className="h-9 w-36 font-mono" />
         {data && (
@@ -85,10 +87,10 @@ export default function LedgerPage() {
               : <SoftStatusLabel label="不平衡" tone="danger" />}
           </span>
         )}
-      </div>
+      </FilterCard>
 
       <div className="card-base overflow-x-auto p-0">
-        <table className="w-full text-sm">
+        <ReportTable className="w-full text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/40 text-xs text-muted-foreground">
               <th rowSpan={2} className="px-3 py-2 text-left font-medium">科目</th>
@@ -143,7 +145,7 @@ export default function LedgerPage() {
               </tr>
             </tfoot>
           )}
-        </table>
+        </ReportTable>
       </div>
 
       <LedgerDialog accountId={detail?.accountId ?? null} code={detail?.code} name={detail?.name} period={period} onClose={() => setDetail(null)} />

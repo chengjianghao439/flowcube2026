@@ -1,3 +1,4 @@
+import { QueryFormLayout } from '@/components/shared/QueryFormLayout'
 import { useEffect, useState } from 'react'
 import { AppDialog } from '@/components/shared/AppDialog'
 import OperatorSelectField from '@/components/shared/OperatorSelectField'
@@ -66,7 +67,7 @@ export default function ReturnQueryDialog({ open, type, initial, onClose, onAppl
         dialogId="return-query"
         title={type === 'purchase' ? '查询采购退货单' : '查询销售退货单'}
         resizable={false}
-        defaultWidth={520}
+        defaultWidth={type === 'sale' ? 680 : 520}
         defaultHeight={520}
         minWidth={420}
         minHeight={420}
@@ -80,7 +81,7 @@ export default function ReturnQueryDialog({ open, type, initial, onClose, onAppl
           </div>
         }
       >
-        <div className="grid h-full grid-cols-2 gap-4 overflow-y-auto px-5 py-4">
+        <QueryFormLayout>
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground">单号</span>
             <Input
@@ -167,7 +168,7 @@ export default function ReturnQueryDialog({ open, type, initial, onClose, onAppl
               className="h-9"
             />
           </label>
-        </div>
+        </QueryFormLayout>
       </AppDialog>
 
       {type === 'purchase' ? (

@@ -7,7 +7,8 @@ import Pagination from '@/components/shared/Pagination'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { FinderTrigger } from '@/components/finder'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { CustomerFinder } from '@/components/finder/CustomerFinder'
 import { getPortalStatementsApi, type PortalStatementRow } from '@/api/portal'
 import type { TableColumn } from '@/types'
@@ -19,7 +20,7 @@ export default function PortalStatementsPage() {
   const [finderOpen, setFinderOpen] = useState(false)
   const [page, setPage] = useState(1)
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['portal-statements', customer?.id, page],
     queryFn: () => getPortalStatementsApi({ customerId: customer!.id, page, pageSize: PAGE_SIZE }),
     enabled: !!customer,
@@ -52,29 +53,23 @@ export default function PortalStatementsPage() {
     <div className="space-y-4">
       <PageHeader
         title="客户对账门户"
-        description="客户查看本司名下对账单：金额与核销情况与财务「客户对账」页一致，只读。"
+        description="按客户核对对账期间、汇总金额与核销进度。此页面只读。"
       />
 
       <FilterCard>
-        <Input
-          className="w-56"
-          placeholder={customer ? `当前客户：${customer.name}` : '请选择客户'}
-          value={customer?.name ?? ''}
-          readOnly
-          onClick={() => setFinderOpen(true)}
-        />
-        <Button variant="outline" onClick={() => setFinderOpen(true)}>选择客户</Button>
+        <span className="text-sm font-medium">对账客户</span>
+        <div className="w-80"><FinderTrigger value={customer?.name ?? ''} placeholder="选择需要核对的客户" onClick={() => setFinderOpen(true)} /></div>
         {customer && (
           <Button variant="ghost" size="sm" onClick={() => { setCustomer(null); setPage(1) }}>清空</Button>
         )}
       </FilterCard>
 
-      <DataTable
+      {customer && (isError ? <QueryErrorState error={error} onRetry={() => void refetch()} title="对账单加载失败" compact /> : <DataTable
         columns={columns}
         data={data?.list ?? []}
         loading={isLoading}
-        emptyText={customer ? '该客户暂无对账单' : '请先选择客户'}
-      />
+        emptyText="该客户暂无对账单"
+      />)}
 
       {customer && (
         <Pagination page={page} totalPages={totalPages} total={total} unit="张"
@@ -88,9 +83,11 @@ export default function PortalStatementsPage() {
       />
 
       {!customer && (
-        <div className="flex flex-col items-center gap-2 py-16 text-muted-foreground">
+        <div className="flex flex-col items-center gap-3 rounded-lg border bg-card py-20 text-muted-foreground">
           <FileText className="h-8 w-8 opacity-40" />
-          <span className="text-sm">选择客户后查看其对账单</span>
+          <h2 className="font-medium text-foreground">先选择一位客户</h2>
+          <p className="text-sm">查看该客户的对账期间、已核销金额与未核销余额。</p>
+          <Button variant="outline" onClick={() => setFinderOpen(true)}>选择客户</Button>
         </div>
       )}
     </div>

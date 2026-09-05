@@ -1,3 +1,4 @@
+import { RecordIdentity } from '@/components/shared/RecordIdentity'
 import { useState, useRef } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
@@ -77,11 +78,8 @@ export default function CustomersPage() {
   }
 
   const columns: TableColumn<Customer>[] = [
-    { key: 'code', title: '编码', width: 120 },
-    { key: 'name', title: '客户名称', width: 180 },
-    { key: 'contact', title: '联系人', width: 100 },
-    { key: 'phone', title: '电话', width: 130 },
-    { key: 'email', title: '邮箱', width: 160 },
+    { key: 'name', title: '客户 / 编码', width: 260, render: (_, row) => <RecordIdentity title={row.name} code={row.code} /> },
+    { key: 'contact', title: '联系信息', width: 250, render: (_, row) => <RecordIdentity title={row.contact || '未填写联系人'} detail={<>{row.phone || '未填写电话'}<br />{row.email || '未填写邮箱'}</>} /> },
     { key: 'priceLevelName' as keyof Customer, title: '价格等级', width: 120, render: (_, row) => <SoftStatusLabel label={`价格${row.priceLevel ?? 'A'}`} tone="info" /> },
     { key: 'settlementType', title: '结算方式', width: 110, render: (_, row) => (
       <SoftStatusLabel
@@ -108,22 +106,24 @@ export default function CustomersPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="客户管理" description="管理销售客户档案，可绑定价格 A / B / C / D" actions={
+      <PageHeader title="客户管理" description="维护客户档案、结算与授信，配置销售默认价格等级。" actions={
         <>
           <Button variant="outline" onClick={() => downloadExport('/export/customers').catch(e => toast.error((e as Error).message))}>导出</Button>
           <Button variant="outline" onClick={() => setImportOpen(v => !v)}>批量导入</Button>
-          <Button onClick={()=>{ setEditing(null); setDialogOpen(true) }}>+ 新增客户</Button>
+          <Button onClick={()=>{ setEditing(null); setDialogOpen(true) }}>新增客户</Button>
         </>
       } />
       <FilterCard>
-        <Input placeholder="搜索编码/名称…" value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} className="h-9 w-64" onKeyDown={(e: React.KeyboardEvent)=>{ if(e.key==='Enter'){ setKeyword(search); setPage(1) } }} />
+        <Input aria-label="搜索客户编码或名称" placeholder="搜索客户编码或名称" value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} className="h-9 w-80" onKeyDown={(e: React.KeyboardEvent)=>{ if(e.key==='Enter'){ setKeyword(search); setPage(1) } }} />
         <Button size="sm" variant="outline" onClick={()=>{ setKeyword(search); setPage(1) }}>搜索</Button>
         {keyword && <Button size="sm" variant="ghost" onClick={()=>{ setSearch(''); setKeyword(''); setPage(1) }}>重置</Button>}
+      <span className="ml-auto text-xs text-muted-foreground">共 {total.toLocaleString()} 位客户</span>
       </FilterCard>
 
       {importOpen && (
         <div className="rounded-lg border border-border bg-card p-4 space-y-3">
-          <p className="text-sm text-muted-foreground">请先下载模板，按照格式填写后上传。列：客户编码（可空，留空自动生成）、客户名称、联系人、电话、结算方式（现结/月结/预付定金/货到付款）、授信额度（可空）。名称重复或编码重复的行会跳过并留痕。</p>
+          <h3 className="text-sm font-medium">批量导入客户</h3>
+          <p className="max-w-4xl text-sm leading-6 text-muted-foreground">请先下载模板，按照格式填写后上传。列：客户编码（可空，留空自动生成）、客户名称、联系人、电话、结算方式（现结/月结/预付定金/货到付款）、授信额度（可空）。名称重复或编码重复的行会跳过并留痕。</p>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={() => downloadExport('/import/customers/template').catch(e => toast.error((e as Error).message))}>下载导入模板</Button>
             <div className="flex items-center gap-2">
@@ -160,12 +160,13 @@ export default function CustomersPage() {
 
       {/* 绑定价格等级弹窗 */}
       <Dialog open={bindOpen} onOpenChange={setBindOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>绑定价格等级 — {bindCustomer?.name}</DialogTitle></DialogHeader>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>绑定价格等级</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
+            <RecordIdentity title={bindCustomer?.name} code={bindCustomer?.code} />
             <p className="text-sm text-muted-foreground">选择客户默认价格等级，下销售单时会自动带入对应的 A / B / C / D 价格。</p>
             <Select value={selectedPriceLevel} onValueChange={v => setSelectedPriceLevel(v as 'A' | 'B' | 'C' | 'D')}>
-              <SelectTrigger className="h-10 w-full">
+              <SelectTrigger aria-label="客户默认价格等级" className="h-10 w-full">
                 <SelectValue placeholder="选择价格等级" />
               </SelectTrigger>
               <SelectContent>

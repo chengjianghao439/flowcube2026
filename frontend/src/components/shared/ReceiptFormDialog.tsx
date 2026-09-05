@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -41,6 +41,7 @@ const money = (n: number) => `¥${Number(n).toFixed(2)}`
  * 小于汇款额（余额留在汇款单上，即预收款），也允许单笔只核销一部分（账款留部分付）。
  */
 export function ReceiptFormDialog({ open, onClose, type, settlementTypes, receipt, target = 'record' }: Props) {
+  const titleRef = useRef<HTMLHeadingElement>(null)
   const byStatement = target === 'statement'
   const qc = useQueryClient()
   const isContinue = !!receipt
@@ -159,14 +160,17 @@ export function ReceiptFormDialog({ open, onClose, type, settlementTypes, receip
 
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="max-w-6xl" onOpenAutoFocus={event => {
+        // 继续核销的首个可编辑字段是日期；先聚焦标题，避免自动展开日历遮挡明细。
+        if (isContinue) { event.preventDefault(); titleRef.current?.focus() }
+      }}>
         <DialogHeader>
-          <DialogTitle>
+          <DialogTitle ref={titleRef} tabIndex={-1} className="focus:outline-none">
             {isContinue ? `继续核销 — ${receipt?.receiptNo}` : `登记${actionLabel}并核销`}
           </DialogTitle>
         </DialogHeader>
 
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-[minmax(160px,1fr)_minmax(220px,1.4fr)_1fr_1fr] gap-4">
           <div className="space-y-1 col-span-2">
             <Label>{partyLabel} *</Label>
             <Input
@@ -191,7 +195,7 @@ export function ReceiptFormDialog({ open, onClose, type, settlementTypes, receip
         </div>
 
         {!isContinue && (
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-[minmax(160px,1fr)_minmax(220px,1.4fr)_1fr_1fr] gap-4">
             <div className="space-y-1">
               <Label>方式</Label>
               <Select value={method} onValueChange={setMethod}>
@@ -223,7 +227,7 @@ export function ReceiptFormDialog({ open, onClose, type, settlementTypes, receip
 
         {/* 分配区 */}
         <div className="rounded-lg border border-border">
-          <div className="flex items-center justify-between border-b bg-muted/40 px-3 py-2">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-muted/40 px-4 py-3">
             <span className="text-sm font-medium">
               {byStatement ? '待核销对账单' : `待核销${isPayableType(type) ? '应付' : '应收'}`}
               {partyName.trim() ? `（${candidates.length} 笔）` : ''}
@@ -239,7 +243,7 @@ export function ReceiptFormDialog({ open, onClose, type, settlementTypes, receip
             </div>
           </div>
 
-          <div className="max-h-72 overflow-y-auto">
+          <div className="max-h-[400px] overflow-y-auto">
             {!partyName.trim() && <p className="px-3 py-6 text-center text-sm text-muted-foreground">请先填写{partyLabel}名称</p>}
             {partyName.trim() && isFetching && <p className="px-3 py-6 text-center text-sm text-muted-foreground">加载中…</p>}
             {partyName.trim() && !isFetching && !candidates.length && (
@@ -248,9 +252,9 @@ export function ReceiptFormDialog({ open, onClose, type, settlementTypes, receip
               </p>
             )}
             {candidates.map(c => (
-              <div key={c.key} className="flex items-center gap-3 border-b px-3 py-2 last:border-b-0">
+              <div key={c.key} className="flex items-center gap-4 border-b px-4 py-3 last:border-b-0">
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="text-doc-code">{c.label}</span>
                     <SoftStatusLabel label={c.statusName} tone={c.tone} />
                   </div>
@@ -262,7 +266,8 @@ export function ReceiptFormDialog({ open, onClose, type, settlementTypes, receip
                 </div>
                 <Input
                   type="number" min="0" step="0.01" max={c.balance}
-                  className="h-8 w-32 text-right"
+                  className="h-10 w-40 text-right tabular-nums"
+                  aria-label={`${c.label}本次核销金额`}
                   placeholder="0.00"
                   value={alloc[c.key] ?? ''}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAlloc(p => ({ ...p, [c.key]: e.target.value }))}

@@ -1,3 +1,4 @@
+import { SectionCard } from '@/components/shared/SectionCard'
 /**
  * ProductFormPage — 商品新建 / 编辑页面（独立路由）
  *
@@ -33,12 +34,7 @@ function profitRate(cost: number, sale: number): number | null {
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="card-base p-5">
-      <h3 className="text-section-title mb-4 pb-2 border-b border-border/50">{title}</h3>
-      {children}
-    </div>
-  )
+  return <SectionCard title={title} compact>{children}</SectionCard>
 }
 
 export default function ProductFormPage() {
@@ -214,7 +210,7 @@ export default function ProductFormPage() {
       />
 
       <Section title="基本信息">
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-3 gap-x-6 gap-y-4">
           <div className="space-y-1.5">
             <Label>名称 *</Label>
             <Input value={form.name} onChange={e => set('name', e.target.value)} disabled={submitting} />
@@ -310,7 +306,7 @@ export default function ProductFormPage() {
 
       <Section title="销售价格">
         <p className="mb-3 text-xs text-muted-foreground">留空则按系统加价比例自动生成（价格A +{priceRates.A}%  B +{priceRates.B}%  C +{priceRates.C}%  D +{priceRates.D}%）。</p>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-4 gap-x-6 gap-y-4">
           {priceLevels.map(item => {
             const cost = Number(form.costPrice || 0)
             const sale = Number(form[item.field] || 0)
@@ -338,7 +334,7 @@ export default function ProductFormPage() {
 
       <Section title="库存策略">
         <p className="mb-3 text-xs text-muted-foreground">通用默认补货基准（对该商品所有仓库生效）。留空表示不启用；某仓需单独设置可在「报表 → 补货建议」页按仓覆盖。</p>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-x-6 gap-y-4">
           <div className="space-y-1.5">
             <Label>安全库存</Label>
             <Input type="number" step="0.0001" min="0" value={form.safetyStock}

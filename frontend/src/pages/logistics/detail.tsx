@@ -24,9 +24,9 @@ import TrackTimeline from './components/TrackTimeline'
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex flex-col gap-0.5">
+    <div className="min-w-0 flex flex-col gap-1.5">
       <span className="text-xs text-muted-foreground">{label}</span>
-      <span className="text-sm text-foreground">{children ?? '—'}</span>
+      <span className="break-words text-sm text-foreground">{children ?? '—'}</span>
     </div>
   )
 }
@@ -109,9 +109,9 @@ export default function LogisticsDetailPage() {
         }
       />
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <SectionCard title="运单信息">
-          <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+        <SectionCard title="运单信息" compact>
+          <div className="grid grid-cols-3 gap-x-6 gap-y-5">
             <Field label="快递单号">{wb?.trackingNo ? <span className="text-doc-code">{wb.trackingNo}</span> : '—'}</Field>
             <Field label="承运商">{wb?.carrierName}</Field>
             <Field label="对接平台">{wb?.platformCode ?? '未对接'}</Field>
@@ -137,19 +137,19 @@ export default function LogisticsDetailPage() {
           )}
         </SectionCard>
 
-        <SectionCard title="物流轨迹">
+        <SectionCard title="物流轨迹" compact>
           <TrackTimeline events={events ?? []} />
         </SectionCard>
       </div>
 
       <Dialog open={trackOpen} onOpenChange={v => { if (!v) { setTrackOpen(false); setTrackingInput('') } }}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>手工录快递单号</DialogTitle></DialogHeader>
-          <div className="space-y-3 py-2">
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>录入快递单号</DialogTitle></DialogHeader>
+          <div className="space-y-4 py-3">
             <p className="text-sm text-muted-foreground">运单 {wb?.waybillNo}｜{wb?.carrierName ?? '未指定承运商'}</p>
             <div>
-              <Label>快递单号</Label>
-              <Input className="mt-1" placeholder="输入承运商快递单号" value={trackingInput} onChange={e => setTrackingInput(e.target.value)} autoFocus />
+              <Label htmlFor="logistics-detail-tracking-number">快递单号</Label>
+              <Input id="logistics-detail-tracking-number" className="mt-2 font-mono" placeholder="输入承运商快递单号" value={trackingInput} onChange={e => setTrackingInput(e.target.value)} autoFocus />
             </div>
           </div>
           <DialogFooter>

@@ -185,12 +185,12 @@ export default function ApprovalFlowsPage() {
       <DataTable columns={columns} data={flows} loading={false} rowKey="id" />
 
       <Dialog open={formOpen} onOpenChange={(v) => !v && setFormOpen(false)}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle>{editing ? '编辑审批流' : '新增审批流'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-x-5 gap-y-4">
               <div className="space-y-2">
                 <Label>业务类型</Label>
                 <select
@@ -207,7 +207,7 @@ export default function ApprovalFlowsPage() {
                 <Input value={form.name} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, name: e.target.value })} placeholder="如：采购申请多级审批" />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-x-5 gap-y-4">
               <div className="space-y-2">
                 <Label>适用金额下限（含）</Label>
                 <Input type="number" min={0} value={form.minAmount} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, minAmount: e.target.value })} placeholder="0" />
@@ -224,14 +224,14 @@ export default function ApprovalFlowsPage() {
                 <Button size="sm" variant="outline" onClick={addStep}>+ 添加节点</Button>
               </div>
               {form.steps.map((s, i) => (
-                <div key={i} className="rounded-md border p-3 space-y-3">
+                <div key={i} className="rounded-lg border border-border bg-muted/20 p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium">第 {s.stepOrder} 级</span>
                     {form.steps.length > 1 && (
                       <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => removeStep(i)}>移除</Button>
                     )}
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 gap-x-5 gap-y-4">
                     <div className="space-y-1">
                       <Label>审批人类型</Label>
                       <select

@@ -83,7 +83,7 @@ export default function StockCheckPage() {
       <Pagination page={page} totalPages={totalPages} total={total} unit="单" onPageChange={setPage} />
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader><DialogTitle>新建盘点单</DialogTitle></DialogHeader>
           <form onSubmit={handleCreate} className="space-y-4 py-2">
             <div className="space-y-1">

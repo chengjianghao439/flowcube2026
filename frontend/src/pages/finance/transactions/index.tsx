@@ -1,3 +1,4 @@
+import { SummaryStrip } from '@/components/shared/SummaryStrip'
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
@@ -168,15 +169,15 @@ export default function FinanceTransactionsPage() {
       ? <span className="text-doc-code-muted">{String(v)}</span>
       : <span className="text-muted-foreground">—</span> },
     { key: 'partyName', title: '往来方', width: 150, render: v => (v as string) || <span className="text-muted-foreground">—</span> },
-    { key: 'amount', title: '收入', width: 120, render: (_, row) => {
+    { key: 'amount', title: '收入', width: 120, align: 'right', render: (_, row) => {
       const t = row as AccountTransaction
       return t.direction === 1 ? <span className="tabular-nums font-medium text-success">{money(t.amount)}</span> : <span className="text-muted-foreground">—</span>
     }},
-    { key: 'direction', title: '支出', width: 120, render: (_, row) => {
+    { key: 'direction', title: '支出', width: 120, align: 'right', render: (_, row) => {
       const t = row as AccountTransaction
       return t.direction === 2 ? <span className="tabular-nums font-medium text-destructive">{money(t.amount)}</span> : <span className="text-muted-foreground">—</span>
     }},
-    { key: 'balanceAfter', title: '账户余额', width: 130, render: v => (
+    { key: 'balanceAfter', title: '账户余额', width: 130, align: 'right', render: v => (
       <span className={`tabular-nums ${Number(v) < 0 ? 'text-destructive' : 'text-foreground'}`}>{money(v as number)}</span>
     )},
     { key: 'operatorName', title: '操作人', width: 100, render: v => (v as string) || <span className="text-muted-foreground">—</span> },
@@ -206,22 +207,7 @@ export default function FinanceTransactionsPage() {
         )}
       />
 
-      {summary && (
-        <div className="grid grid-cols-3 gap-4">
-          <div className="rounded-lg border border-border bg-card p-4">
-            <p className="text-sm text-muted-foreground">期间收入</p>
-            <p className="tabular-nums text-2xl font-bold text-success">{money(summary.inAmount)}</p>
-          </div>
-          <div className="rounded-lg border border-border bg-card p-4">
-            <p className="text-sm text-muted-foreground">期间支出</p>
-            <p className="tabular-nums text-2xl font-bold text-destructive">{money(summary.outAmount)}</p>
-          </div>
-          <div className="rounded-lg border border-border bg-card p-4">
-            <p className="text-sm text-muted-foreground">净额</p>
-            <p className={`tabular-nums text-2xl font-bold ${netAmount < 0 ? 'text-destructive' : 'text-foreground'}`}>{money(netAmount)}</p>
-          </div>
-        </div>
-      )}
+      {summary && <SummaryStrip items={[{ label: '期间收入', value: money(summary.inAmount), tone: 'text-success' }, { label: '期间支出', value: money(summary.outAmount), tone: 'text-destructive' }, { label: '净额', value: money(netAmount), tone: netAmount < 0 ? 'text-destructive' : 'text-foreground' }]} />}
 
       <QueryChips chips={queryChips} onClearAll={() => { setQuery({ ...EMPTY_TX_QUERY, startDate: '', endDate: '' }); setPage(1) }} />
 

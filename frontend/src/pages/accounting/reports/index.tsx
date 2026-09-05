@@ -1,3 +1,5 @@
+import { FilterCard } from '@/components/shared/FilterCard'
+import { ReportTable } from '@/components/shared/ReportTable'
 /**
  * 会计报表（文档 10 · Phase 2 简版）：利润表 / 资产负债表 / 现金流量表。
  * 简版口径：利润表=主营收入−成本−费用；资产负债表=资产 vs 负债+权益+未分配利润；
@@ -25,7 +27,7 @@ const TABS: Array<{ key: Tab; label: string }> = [
 function SimpleReport({ rows, loading }: { rows: ReportRow[]; loading: boolean }) {
   if (loading) return <div className="py-12 text-center text-sm text-muted-foreground">加载中…</div>
   return (
-    <table className="w-full text-sm">
+    <ReportTable className="w-full text-sm">
       <tbody>
         {rows.map((r, i) => (
           <tr key={i} className={cn('border-b border-border/40', r.bold && 'bg-muted/20 font-semibold')}>
@@ -34,7 +36,7 @@ function SimpleReport({ rows, loading }: { rows: ReportRow[]; loading: boolean }
           </tr>
         ))}
       </tbody>
-    </table>
+    </ReportTable>
   )
 }
 
@@ -54,7 +56,7 @@ function BalanceSheetView({ period }: { period: string }) {
   const side = (title: string, items: BalanceSheetItem[], total: number, totalLabel: string) => (
     <div className="card-base overflow-hidden p-0">
       <div className="border-b border-border bg-muted/40 px-4 py-2 text-sm font-medium">{title}</div>
-      <table className="w-full text-sm">
+      <ReportTable className="w-full text-sm">
         <tbody>
           {items.length === 0 ? (
             <tr><td className="px-4 py-3 text-muted-foreground">无</td></tr>
@@ -66,7 +68,7 @@ function BalanceSheetView({ period }: { period: string }) {
           ))}
           <tr className="bg-muted/20 font-semibold"><td className="px-4 py-2.5">{totalLabel}</td><td className="px-4 py-2.5 text-right tabular-nums">{m(total)}</td></tr>
         </tbody>
-      </table>
+      </ReportTable>
     </div>
   )
   return (
@@ -94,7 +96,7 @@ export default function ReportsPage() {
     <div>
       <PageHeader title="会计报表" description="利润表 / 资产负债表 / 现金流量表（简版，取数以凭证与资金流水为准）" />
 
-      <div className="mb-3 flex flex-wrap items-center gap-2">
+      <FilterCard className="mb-4">
         <div className="flex rounded-lg border border-border/70 bg-card p-0.5">
           {TABS.map(t => (
             <button key={t.key} onClick={() => setTab(t.key)}
@@ -106,7 +108,7 @@ export default function ReportsPage() {
         <span className="ml-2 text-sm text-muted-foreground">会计期间</span>
         <Input value={period} onChange={e => setPeriod(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="YYYYMM" className="h-9 w-36 font-mono" />
         {tab === 'balance' && <Button variant="ghost" size="sm" disabled className="text-xs text-muted-foreground">期末时点</Button>}
-      </div>
+      </FilterCard>
 
       {tab === 'income' && <IncomeView period={period} />}
       {tab === 'balance' && <BalanceSheetView period={period} />}

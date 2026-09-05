@@ -19,11 +19,11 @@ function BarRow({ label, value, max, color = 'bg-red-400' }: { label: string; va
   const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0
   return (
     <div className="flex items-center gap-3">
-      <p className="w-32 shrink-0 text-sm text-foreground truncate">{label}</p>
+      <p className="w-44 shrink-0 break-words text-sm leading-5 text-foreground">{label}</p>
       <div className="flex-1 h-2.5 rounded-full bg-muted overflow-hidden">
         <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
       </div>
-      <p className="w-10 text-left text-sm font-semibold text-foreground">{value}</p>
+      <p className="w-14 text-right tabular-nums text-sm font-semibold text-foreground">{value}</p>
     </div>
   )
 }

@@ -1,3 +1,4 @@
+import { RecordIdentity } from '@/components/shared/RecordIdentity'
 /**
  * 承运商管理页
  * 路由：/carriers
@@ -57,15 +58,14 @@ export default function CarriersPage() {
   }
 
   const columns: TableColumn<Carrier>[] = [
-    { key: 'code',     title: '编号', width: 120,
-      render: v => <span className="text-doc-code">{v as string}</span> },
-    { key: 'name',     title: '名称', width: 180 },
+    { key: 'name', title: '承运商 / 编号', width: 260, render: (_, row) => <RecordIdentity title={row.name} code={row.code} /> },
     { key: 'type',     title: '类型', width: 80,
       render: v => CARRIER_TYPE_LABELS[v as CarrierType] },
     { key: 'contact',  title: '联系人',
       render: v => (v as string | null) ?? <span className="text-muted-foreground">—</span> },
     { key: 'phone',    title: '电话',
       render: v => (v as string | null) ?? <span className="text-muted-foreground">—</span> },
+    { key: 'waybillEnabled', title: '电子面单', width: 130, render: v => <span className="text-sm text-muted-foreground">{v ? '已开通' : '未开通'}</span> },
     { key: 'isActive', title: '状态', width: 80,
       render: v => <SoftStatusLabel label={v ? '启用' : '停用'} tone={activeTone(v as boolean)} /> },
   ]
@@ -80,9 +80,9 @@ export default function CarriersPage() {
       pagination={{ page, pageSize: 20, unit: '个', onPageChange: setPage }}
       deleteApi={(id) => deleteCarrierApi(id, { skipGlobalError: true })}
       deleteMessage="确认删除该承运商？删除后不可恢复。"
-      createLabel="+ 新建承运商"
+      createLabel="新建承运商"
       saveSuccessMessage={(editing) => editing ? '承运商已保存' : '承运商已创建'}
-      formWidthClass="max-w-md"
+      formWidthClass="max-w-3xl"
       headerActions={
         <Button variant="outline" onClick={() => downloadExport('/export/carriers').catch(e => toast.error((e as Error).message))}>导出</Button>
       }
@@ -92,7 +92,7 @@ export default function CarriersPage() {
         <FilterCard>
           <div className="flex flex-wrap gap-3 items-end">
             <div className="flex-1 min-w-[180px]">
-              <Input placeholder="名称 / 编号" value={search}
+              <Input aria-label="搜索承运商名称或编号" placeholder="搜索承运商名称或编号" value={search}
                 onChange={e => setSearch(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') { setKeyword(search); setPage(1) } }}
               />
@@ -103,27 +103,28 @@ export default function CarriersPage() {
         </FilterCard>
       }
       renderForm={(editing) => (
-        <div className="space-y-3 py-2">
-          <div><Label>名称</Label><Input className="mt-1" placeholder="承运商名称" value={form.name} onChange={e => set('name', e.target.value)} /></div>
+        <div className="grid grid-cols-2 gap-x-6 gap-y-4 py-2">
+          <h3 className="col-span-2 text-sm font-medium">基本资料</h3>
+          <div><Label htmlFor="carrier-name">名称</Label><Input className="mt-1" placeholder="承运商名称" id="carrier-name" value={form.name} onChange={e => set('name', e.target.value)} /></div>
           <div>
             <Label>类型</Label>
             <Select value={form.type} onValueChange={v => set('type', v)}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label="承运商类型" className="mt-1"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {CARRIER_TYPE_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
-          <div><Label>联系人</Label><Input className="mt-1" placeholder="可选" value={form.contact} onChange={e => set('contact', e.target.value)} /></div>
-          <div><Label>电话</Label><Input className="mt-1" placeholder="可选" value={form.phone} onChange={e => set('phone', e.target.value)} /></div>
-          <div><Label>备注</Label><Input className="mt-1" placeholder="可选" value={form.remark} onChange={e => set('remark', e.target.value)} /></div>
+          <div><Label htmlFor="carrier-contact">联系人</Label><Input className="mt-1" placeholder="可选" id="carrier-contact" value={form.contact} onChange={e => set('contact', e.target.value)} /></div>
+          <div><Label htmlFor="carrier-phone">电话</Label><Input className="mt-1" placeholder="可选" id="carrier-phone" value={form.phone} onChange={e => set('phone', e.target.value)} /></div>
+          <div><Label htmlFor="carrier-remark">备注</Label><Input className="mt-1" placeholder="可选" id="carrier-remark" value={form.remark} onChange={e => set('remark', e.target.value)} /></div>
 
           {/* 电子面单对接（文档 06）。密钥走服务端 env，前端只填非敏感对接项。 */}
-          <div className="border-t border-border pt-3 mt-1 space-y-3">
+          <div className="col-span-2 border-t border-border pt-4 mt-1 space-y-4">
             <div className="flex items-center justify-between">
               <Label>电子面单取号</Label>
               <Select value={form.waybillEnabled ? '1' : '0'} onValueChange={v => set('waybillEnabled', v === '1')}>
-                <SelectTrigger className="h-8 w-28"><SelectValue /></SelectTrigger>
+                <SelectTrigger aria-label="电子面单取号状态" className="h-8 w-28"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="0">未开通</SelectItem>
                   <SelectItem value="1">已开通</SelectItem>
@@ -131,23 +132,23 @@ export default function CarriersPage() {
               </Select>
             </div>
             {form.waybillEnabled && (
-              <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label>对接平台</Label>
                   <Select value={form.platformCode || ''} onValueChange={v => set('platformCode', v)}>
-                    <SelectTrigger className="mt-1"><SelectValue placeholder="选择平台" /></SelectTrigger>
+                    <SelectTrigger aria-label="对接平台" className="mt-1"><SelectValue placeholder="选择平台" /></SelectTrigger>
                     <SelectContent>
                       {WAYBILL_PLATFORM_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
-                <div><Label>快递公司编码</Label><Input className="mt-1" placeholder="如 SF / YTO / ZTO" value={form.platformCarrier} onChange={e => set('platformCarrier', e.target.value)} /></div>
-                <div><Label>月结账号</Label><Input className="mt-1" placeholder="可选" value={form.monthlyAccount} onChange={e => set('monthlyAccount', e.target.value)} /></div>
-                <div><Label>网点编码</Label><Input className="mt-1" placeholder="可选" value={form.netSiteCode} onChange={e => set('netSiteCode', e.target.value)} /></div>
+                <div><Label htmlFor="carrier-platformCarrier">快递公司编码</Label><Input className="mt-1" placeholder="如 SF / YTO / ZTO" id="carrier-platformCarrier" value={form.platformCarrier} onChange={e => set('platformCarrier', e.target.value)} /></div>
+                <div><Label htmlFor="carrier-monthlyAccount">月结账号</Label><Input className="mt-1" placeholder="可选" id="carrier-monthlyAccount" value={form.monthlyAccount} onChange={e => set('monthlyAccount', e.target.value)} /></div>
+                <div><Label htmlFor="carrier-netSiteCode">网点编码</Label><Input className="mt-1" placeholder="可选" id="carrier-netSiteCode" value={form.netSiteCode} onChange={e => set('netSiteCode', e.target.value)} /></div>
                 <div>
-                  <Label>凭据引用名</Label>
-                  <Input className="mt-1" placeholder="指向 env 中的密钥组，如 kdniao_main" value={form.credentialRef} onChange={e => set('credentialRef', e.target.value)} />
-                  <p className="mt-1 text-xs text-muted-foreground">密钥（app_key/secret）配置在服务端环境变量，不在此填写。</p>
+                  <Label htmlFor="carrier-credentialRef">凭据引用名</Label>
+                  <Input className="mt-1" placeholder="由系统管理员提供的凭据引用名" id="carrier-credentialRef" value={form.credentialRef} onChange={e => set('credentialRef', e.target.value)} />
+                  <p className="mt-1 text-xs text-muted-foreground">填写已配置的凭据引用名，无需填写密钥。</p>
                 </div>
               </div>
             )}

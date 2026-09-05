@@ -131,9 +131,9 @@ export default function ReconciliationView({ type }: { type: StatementType }) {
     { key: 'partyName', title: copy.party, width: 160 },
     // 中间的源单号/收货单列已删：源单号与关联单号(采购单/销售单号)几乎总是重复，收货单又多为空；
     // 供应商与客户对账都不再显示中间列，源单/收货单一律从操作列「原单」下拉进入。
-    { key: 'totalAmount', title: '总金额', width: 110, render: v => <span className="tabular-nums font-medium">¥{Number(v).toFixed(2)}</span> },
-    { key: 'paidAmount', title: copy.paidCol, width: 110, render: v => <span className="tabular-nums text-success">¥{Number(v).toFixed(2)}</span> },
-    { key: 'balance', title: '余额', width: 110, render: v => <span className={`tabular-nums ${Number(v) > 0 ? 'font-semibold text-destructive' : 'text-muted-foreground'}`}>¥{Number(v).toFixed(2)}</span> },
+    { key: 'totalAmount', title: '总金额', width: 110, align: 'right', render: v => <span className="tabular-nums font-medium">¥{Number(v).toFixed(2)}</span> },
+    { key: 'paidAmount', title: copy.paidCol, width: 110, align: 'right', render: v => <span className="tabular-nums text-success">¥{Number(v).toFixed(2)}</span> },
+    { key: 'balance', title: '余额', width: 110, align: 'right', render: v => <span className={`tabular-nums ${Number(v) > 0 ? 'font-semibold text-destructive' : 'text-muted-foreground'}`}>¥{Number(v).toFixed(2)}</span> },
     { key: 'status', title: '状态', width: 120, render: (v, row) => {
       const record = row as ReconciliationRecord
       const overdue = isOverdue(record)

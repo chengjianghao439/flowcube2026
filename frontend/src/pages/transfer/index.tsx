@@ -272,8 +272,8 @@ export default function TransferPage() {
         onOpenChange={(v) => { if (!v && pendingId !== forceCloseState.id) setForceCloseState({ open: false, id: null }) }}
         dialogId="transfer-force-close-dialog"
         resizable={false}
-        defaultWidth={460}
-        defaultHeight={320}
+        defaultWidth={600}
+        defaultHeight={400}
         minWidth={380}
         minHeight={280}
         title="在途异常了结"
@@ -296,7 +296,7 @@ export default function TransferPage() {
           </div>
         }
       >
-        <div className="space-y-3 px-1 py-1 text-sm">
+        <div className="space-y-4 px-1 py-1 text-sm leading-6">
           <p className="text-muted-foreground">
             仅用于运输途中货物丢失、长期无法送达等无法正常扫码入库的情况。确认后，该调拨单在途容器将作为运输损耗核销（不会回到调出仓，也不会计入调入仓库存），调拨单标记为已完成，此操作不可撤回。
           </p>

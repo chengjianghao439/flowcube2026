@@ -1,3 +1,4 @@
+import { RecordIdentity } from '@/components/shared/RecordIdentity'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -54,8 +55,7 @@ export default function ProcurementPlanListPage() {
   })
 
   const columns: TableColumn<ProcurementPlan>[] = [
-    { key: 'code', title: '计划编号', width: 180, render: v => <span className="text-doc-code">{String(v)}</span> },
-    { key: 'name', title: '名称', render: (v) => (v as string) || <span className="text-muted-foreground">—</span> },
+    { key: 'code', title: '采购计划 / 编号', width: 280, render: (_, r) => <RecordIdentity title={r.name || '采购计划'} code={r.code} /> },
     { key: 'forecastWindow', title: '预测窗口', width: 100, align: 'right', render: v => <span className="tabular-nums">{Number(v)} 天</span> },
     { key: 'horizonDays', title: '覆盖周期', width: 100, align: 'right', render: v => <span className="tabular-nums">{Number(v)} 天</span> },
     { key: 'itemCount', title: '建议行数', width: 100, align: 'right', render: v => <span className="tabular-nums">{Number(v)}</span> },
@@ -69,7 +69,7 @@ export default function ProcurementPlanListPage() {
     <div className="space-y-4">
       <PageHeader
         title="采购计划"
-        description="基于历史出库趋势预测未来需求，结合库存与在途套用净需求算出建议采购量；可逐行调整，按供应商转为采购单草稿（需人工确认后提交）。"
+        description="按库存与历史出库生成采购建议，核对后转为采购单草稿。"
         actions={canManage ? <Button onClick={() => setGenOpen(true)}>+ 生成计划</Button> : undefined}
       />
       <FilterCard>
@@ -80,7 +80,7 @@ export default function ProcurementPlanListPage() {
       <DataTable columns={columns} data={data?.list ?? []} loading={isLoading} />
 
       <Dialog open={genOpen} onOpenChange={setGenOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader><DialogTitle>生成采购计划</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <div className="grid grid-cols-2 gap-3">
@@ -92,7 +92,7 @@ export default function ProcurementPlanListPage() {
               <div className="space-y-1">
                 <Label>覆盖周期（天）</Label>
                 <Input type="number" value={horizon} onChange={(e) => setHorizon(Number(e.target.value) || 30)} className="h-10 text-right tabular-nums" />
-                <p className="text-xs text-muted-foreground">这批货要撑多久</p>
+                <p className="text-xs text-muted-foreground">计划覆盖未来多少天的需求</p>
               </div>
             </div>
             <div className="space-y-1">

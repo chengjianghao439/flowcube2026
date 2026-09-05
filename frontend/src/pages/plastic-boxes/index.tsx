@@ -1,3 +1,4 @@
+import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
 import { useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -34,7 +35,7 @@ export default function PlasticBoxesPage() {
 
   const columns: TableColumn<PlasticBox>[] = [
     { key: 'barcode', title: '条码', width: 140, render: v => <span className="text-doc-code">{String(v)}</span> },
-    { key: 'productName', title: '绑定商品', width: 220, render: (_, row) => row.productName ? <span>{row.productName} ({row.productCode}){row.articleNumber ? ` · 货号 ${row.articleNumber}` : ''}{row.spec ? ` · ${row.spec}` : ''}{row.color ? ` · ${row.color}` : ''}</span> : '—' },
+    ...productIdentityColumns(),
     { key: 'warehouseName', title: '仓库', width: 140 },
     { key: 'remainingQty', title: '当前数量', width: 80, render: v => <span className="font-semibold">{String(v)}</span> },
     {
@@ -133,7 +134,7 @@ function DetailDialog({ box, onClose }: { box: PlasticBox | null; onClose: () =>
 
   return (
     <Dialog open={!!box} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-5xl">
         <DialogHeader>
           <DialogTitle>塑料盒流水 · {box?.barcode}</DialogTitle>
         </DialogHeader>

@@ -1,3 +1,4 @@
+import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
@@ -77,38 +78,30 @@ export default function ProfitAnalysisPage() {
     { key: 'orderNo', title: '销售单号', width: 160, render: v => <span className="text-doc-code">{String(v)}</span> },
     { key: 'customerName', title: '客户' },
     { key: 'warehouseName', title: '仓库', width: 120 },
-    { key: 'totalAmount', title: '销售额', width: 110, render: v => <span className="font-medium">¥{Number(v).toFixed(2)}</span> },
-    { key: 'costAmount', title: '成本', width: 110, render: v => <span className="text-muted-foreground">¥{Number(v).toFixed(2)}</span> },
-    { key: 'grossProfit', title: '毛利', width: 110, render: v => <span className="font-semibold text-success">¥{Number(v).toFixed(2)}</span> },
-    { key: 'marginRate', title: '毛利率', width: 100, render: v => <Badge variant="outline">{Number(v).toFixed(1)}%</Badge> },
+    { key: 'totalAmount', title: '销售额', width: 110, align: 'right', render: v => <span className="font-medium">¥{Number(v).toFixed(2)}</span> },
+    { key: 'costAmount', title: '成本', width: 110, align: 'right', render: v => <span className="text-muted-foreground">¥{Number(v).toFixed(2)}</span> },
+    { key: 'grossProfit', title: '毛利', width: 110, align: 'right', render: v => <span className="font-semibold text-success">¥{Number(v).toFixed(2)}</span> },
+    { key: 'marginRate', title: '毛利率', width: 100, align: 'right', render: v => <Badge variant="outline">{Number(v).toFixed(1)}%</Badge> },
     { key: 'path', title: '操作', width: 120, render: v => <Button size="sm" variant="outline" onClick={() => openPath(String(v), '销售单详情')}>打开原单</Button> },
   ]
 
   const productColumns: TableColumn<ProfitProductRow>[] = [
-    { key: 'code', title: '商品编码', width: 120, render: v => <span className="text-doc-code">{String(v)}</span> },
-    { key: 'articleNumber', title: '货号', width: 90, render: v => (v as string) || '—' },
-    { key: 'spec', title: '型号', width: 100, render: v => (v as string) || '—' },
-    { key: 'name', title: '商品名称' },
-    { key: 'color', title: '颜色', width: 70, render: v => (v as string) || '—' },
+    ...productIdentityColumns({code: 'code', name: 'name'}),
     { key: 'unit', title: '单位', width: 70 },
-    { key: 'totalQty', title: '销售量', width: 90, render: v => <span>{Number(v).toFixed(2)}</span> },
-    { key: 'revenueAmount', title: '销售额', width: 110, render: v => <span>¥{Number(v).toFixed(2)}</span> },
-    { key: 'costAmount', title: '成本', width: 110, render: v => <span className="text-muted-foreground">¥{Number(v).toFixed(2)}</span> },
-    { key: 'grossProfit', title: '毛利', width: 110, render: v => <span className="font-semibold text-success">¥{Number(v).toFixed(2)}</span> },
-    { key: 'marginRate', title: '毛利率', width: 100, render: v => <Badge variant="outline">{Number(v).toFixed(1)}%</Badge> },
+    { key: 'totalQty', title: '销售量', width: 90, align: 'right', render: v => <span>{Number(v).toFixed(2)}</span> },
+    { key: 'revenueAmount', title: '销售额', width: 110, align: 'right', render: v => <span>¥{Number(v).toFixed(2)}</span> },
+    { key: 'costAmount', title: '成本', width: 110, align: 'right', render: v => <span className="text-muted-foreground">¥{Number(v).toFixed(2)}</span> },
+    { key: 'grossProfit', title: '毛利', width: 110, align: 'right', render: v => <span className="font-semibold text-success">¥{Number(v).toFixed(2)}</span> },
+    { key: 'marginRate', title: '毛利率', width: 100, align: 'right', render: v => <Badge variant="outline">{Number(v).toFixed(1)}%</Badge> },
     { key: 'path', title: '操作', width: 120, render: v => <Button size="sm" variant="outline" onClick={() => openPath(String(v), '商品管理')}>查看商品</Button> },
   ]
 
   const stockColumns: TableColumn<ProfitStockValueRow>[] = [
-    { key: 'code', title: '商品编码', width: 120, render: v => <span className="text-doc-code">{String(v)}</span> },
-    { key: 'articleNumber', title: '货号', width: 90, render: v => (v as string) || '—' },
-    { key: 'spec', title: '型号', width: 100, render: v => (v as string) || '—' },
-    { key: 'name', title: '商品名称' },
-    { key: 'color', title: '颜色', width: 70, render: v => (v as string) || '—' },
+    ...productIdentityColumns({code: 'code', name: 'name'}),
     { key: 'warehouseName', title: '仓库', width: 120 },
     { key: 'unit', title: '单位', width: 70 },
-    { key: 'totalQty', title: '库存数量', width: 100, render: v => <span className="font-medium">{Number(v).toFixed(2)}</span> },
-    { key: 'totalValue', title: '库存金额', width: 120, render: v => <span className="font-semibold">¥{Number(v).toFixed(2)}</span> },
+    { key: 'totalQty', title: '库存数量', width: 100, align: 'right', render: v => <span className="font-medium">{Number(v).toFixed(2)}</span> },
+    { key: 'totalValue', title: '库存金额', width: 120, align: 'right', render: v => <span className="font-semibold">¥{Number(v).toFixed(2)}</span> },
     { key: 'path', title: '操作', width: 120, render: v => <Button size="sm" variant="outline" onClick={() => openPath(String(v), '库存总览')}>查看库存</Button> },
   ]
 

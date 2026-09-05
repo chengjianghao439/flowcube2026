@@ -14,7 +14,7 @@ interface FinderTableProps<T extends Record<string, unknown>> {
 }
 
 function colTrack<T>(col: FinderColumn<T>): string {
-  if (!col.width) return '1fr'
+  if (!col.width) return 'minmax(220px,1fr)'
   return typeof col.width === 'number' ? `${col.width}px` : col.width
 }
 
@@ -35,7 +35,7 @@ export function FinderTable<T extends Record<string, unknown>>({
     <div className="w-full">
       {/* Column header — sticky so it stays visible while scrolling */}
       <div
-        className="sticky top-0 z-10 grid gap-2 border-b bg-muted/40 px-6 py-2 text-xs font-medium text-muted-foreground backdrop-blur-sm"
+        className="sticky top-0 z-10 grid gap-2 border-b bg-muted px-6 py-3 text-xs font-medium text-muted-foreground backdrop-blur-sm"
         style={{ gridTemplateColumns: gridTemplate }}
       >
         {columns.map(col => <span key={col.key} className={alignClass(col.align)}>{col.title}</span>)}
@@ -63,6 +63,7 @@ export function FinderTable<T extends Record<string, unknown>>({
             <div
               key={key}
               role="row"
+              aria-selected={isSelected}
               tabIndex={0}
               onClick={() => onSelect(row)}
               onDoubleClick={() => onDoubleClickRow?.(row)}
@@ -71,7 +72,7 @@ export function FinderTable<T extends Record<string, unknown>>({
                 if (e.key === ' ' && onDoubleClickRow) { e.preventDefault(); onDoubleClickRow(row) }
               }}
               className={cn(
-                'grid cursor-pointer gap-2 border-b px-6 py-3 text-sm transition-colors',
+                'grid cursor-pointer items-center gap-2 border-b px-6 py-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary',
                 isSelected ? 'bg-primary/10 text-primary' : 'hover:bg-muted/40',
               )}
               style={{ gridTemplateColumns: gridTemplate }}
@@ -79,11 +80,11 @@ export function FinderTable<T extends Record<string, unknown>>({
               {columns.map(col => {
                 const raw = row[col.key]
                 return (
-                  <span key={col.key} className={cn('truncate leading-5', alignClass(col.align))}>
+                  <div key={col.key} className={cn('min-w-0 break-words leading-5', alignClass(col.align))}>
                     {col.render
                       ? col.render(raw, row)
                       : raw != null && raw !== '' ? String(raw) : '—'}
-                  </span>
+                  </div>
                 )
               })}
             </div>

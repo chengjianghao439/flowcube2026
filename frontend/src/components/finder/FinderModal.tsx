@@ -42,9 +42,9 @@ export function FinderModal<T extends Record<string, unknown>>({
       open={open}
       onOpenChange={v => !v && onClose()}
       dialogId={dialogId}
-      defaultWidth={700}
+      defaultWidth={960}
       defaultHeight={560}
-      minWidth={500}
+      minWidth={640}
       minHeight={420}
       title={title}
     >
@@ -65,7 +65,7 @@ export function FinderModal<T extends Record<string, unknown>>({
         </div>
 
         {/* ── Table body (scrollable) ──────────────────────────────── */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="min-h-0 flex-1 overflow-auto">
           <FinderTable
             columns={columns}
             data={data}
@@ -79,18 +79,18 @@ export function FinderModal<T extends Record<string, unknown>>({
 
         {/* ── Footer ──────────────────────────────────────────────── */}
         <div className="shrink-0 border-t bg-muted/20 px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-muted-foreground">
+          <div className="flex items-center justify-between gap-5">
+            <div className="min-w-0 flex-1 text-sm text-muted-foreground">
               {selected && selectedLabel ? (
                 <span className="flex items-center gap-2">
                   <span className="font-medium text-foreground">已选：</span>
-                  <span>{selectedLabel(selected)}</span>
+                  <span className="break-words leading-5" title={selectedLabel(selected)}>{selectedLabel(selected)}</span>
                 </span>
               ) : (
-                '点击行选择'
+                '单击选择，双击直接填入'
               )}
             </div>
-            <div className="flex gap-2">
+            <div className="flex shrink-0 gap-2">
               <Button variant="outline" onClick={onClose}>取消</Button>
               <Button disabled={!selected} onClick={onConfirm}>确认选择</Button>
             </div>

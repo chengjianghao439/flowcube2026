@@ -1,3 +1,5 @@
+import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
+import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
 /**
  * PurchaseReturnFormPage — 采购退货单新建 / 详情页面（独立路由）
  *
@@ -309,14 +311,10 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
         ) : (
           <>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[1320px] text-sm">
               <thead>
                 <tr className="border-b text-table-head">
-                  <th className="w-28 pb-2 text-left">编码</th>
-                  <th className="w-20 pb-2 text-left">货号</th>
-                  <th className="w-20 pb-2 text-left">型号</th>
-                  <th className="pb-2 text-left">商品</th>
-                  <th className="w-20 pb-2 text-left">颜色</th>
+                  <ProductIdentityHeaders />
                   <th className="w-16 pb-2 text-center">单位</th>
                   <th className="w-20 pb-2 text-right">数量</th>
                   <th className="w-24 pb-2 text-right">单价 (¥)</th>
@@ -328,11 +326,7 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
                 {items.map(item => (
                   <Fragment key={item._key}>
                     <tr className={cn('border-border/40', (item.originalQty == null && item.returnedQty == null) && 'border-b')}>
-                      <td className="py-2.5 text-doc-code-muted">{item.productCode || '—'}</td>
-                      <td className="py-2.5 text-muted-foreground">{item.articleNumber || '—'}</td>
-                      <td className="py-2.5 text-muted-foreground">{item.spec || '—'}</td>
-                      <td className="py-2.5 pr-3">
-                        <button
+                      <ProductIdentityCells product={item} nameContent={<button
                           type="button"
                           disabled={!!boundSource}
                           onClick={() => { setFinderItemKey(item._key); setFinderOpen(true) }}
@@ -343,11 +337,9 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
                           )}
                         >
                           {item.productName
-                            ? <span className="truncate font-medium">{item.productName}</span>
+                            ? <span className="break-words font-medium">{item.productName}</span>
                             : <span className="text-muted-foreground">点击选择商品…</span>}
-                        </button>
-                      </td>
-                      <td className="py-2.5 text-muted-foreground">{item.color || '—'}</td>
+                        </button>} />
                       <td className="py-2.5 text-center text-muted-body">
                         {(!boundSource && item.units && item.units.filter(u => !u.isBase).length > 0) ? (
                           <select
@@ -399,7 +391,7 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
             </table>
           </div>
           <div className="flex items-center justify-between border-t border-border pt-4">
-            <p className="text-muted-body">商品种数：{items.length} 种</p>
+            <p className="text-muted-body">商品明细：{items.length} 行</p>
             <div className="text-right">
               <p className="text-helper">合计金额</p>
               <p className="text-2xl font-semibold text-foreground">¥{total.toFixed(2)}</p>
@@ -411,6 +403,7 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
 
       <ProductFinder
         open={finderOpen}
+        warehouseName={warehouseName}
         warehouseId={warehouseId ? +warehouseId : null}
         onConfirm={handleFinderConfirm}
         onClose={() => { setFinderOpen(false); setFinderItemKey(null) }}
@@ -572,11 +565,7 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
       <SectionCard title="退货明细" compact>
         <DataTable
           columns={[
-            { key: 'productCode', title: '编码', width: 130, render: v => <span className="text-doc-code-muted">{String(v)}</span> },
-            { key: 'articleNumber', title: '货号', width: 110, render: v => <span className="text-muted-foreground">{(v as string) || '—'}</span> },
-            { key: 'spec', title: '型号', width: 110, render: v => <span className="text-muted-foreground">{(v as string) || '—'}</span> },
-            { key: 'productName', title: '商品', width: 180, render: v => <span className="font-medium">{String(v)}</span> },
-            { key: 'color', title: '颜色', width: 100, render: v => <span className="text-muted-foreground">{(v as string) || '—'}</span> },
+            ...productIdentityColumns(),
             { key: 'unit', title: '单位', width: 70, render: (_, item) => <span className="text-muted-foreground">{(item.entryUnit && item.entryUnit !== item.unit) ? item.entryUnit : item.unit}</span> },
             { key: 'quantity', title: '数量', width: 120, align: 'right', render: (v, item) => (item.entryUnit && item.entryUnit !== item.unit && item.entryQty != null)
               ? <span className="tabular-nums">{item.entryQty} {item.entryUnit}<span className="ml-1 text-xs text-muted-foreground">（{Number(v)} {item.unit}）</span></span>
@@ -591,7 +580,7 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
           emptyText="暂无退货明细"
         />
         <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
-          <p className="text-muted-body">共 {ret.items?.length ?? 0} 种商品</p>
+          <p className="text-muted-body">共 {ret.items?.length ?? 0} 行退货明细</p>
           <div className="text-right">
             <p className="text-helper">合计金额</p>
             <p className="text-2xl font-semibold text-foreground">¥{Number(ret.totalAmount).toFixed(2)}</p>

@@ -1,3 +1,4 @@
+import PageHeader from '@/components/shared/PageHeader'
 /**
  * 打印机管理页面
  * 路由：/settings/printers
@@ -71,19 +72,16 @@ interface BindDialogProps {
 
 function BindDialog({ printer, bindings, onToggleBind, busy, onClose }: BindDialogProps) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
-      <div
-        className="w-[22rem] max-h-[90vh] overflow-y-auto rounded-lg border border-border bg-card p-6 shadow-xl"
-        onClick={e => e.stopPropagation()}
-      >
-        <p className="mb-1 text-card-title">绑定业务用途</p>
+    <Dialog open onOpenChange={open => { if (!open) onClose() }}>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader><DialogTitle>绑定业务用途</DialogTitle></DialogHeader>
         <p className="mb-1 text-muted-body">
           {printer.name} <span className="text-doc-code">({printer.code})</span>
         </p>
         <p className="mb-4 text-helper leading-relaxed">
           与添加打印机时的「设备类型」不同：此处指定各业务场景使用的打印机。已绑定本项时再次点击可解除绑定。
         </p>
-        <div className="space-y-2">
+        <div className="grid grid-cols-2 gap-3">
           {BIND_TYPES.map(t => {
             const isBound = bindings[t.key]?.printer_code === printer.code
             const currentCode = bindings[t.key]?.printer_code
@@ -95,15 +93,15 @@ function BindDialog({ printer, bindings, onToggleBind, busy, onClose }: BindDial
                 onClick={() => onToggleBind(t.key, printer)}
                 className={[
                   'w-full rounded-lg border px-4 py-3 text-left text-sm transition-colors disabled:opacity-60',
-                  isBound ? 'border-blue-400 bg-blue-50 text-blue-800' : 'border-border hover:bg-muted/40',
+                  isBound ? 'border-primary/40 bg-primary/10 text-primary' : 'border-border hover:bg-muted/40',
                 ].join(' ')}
               >
                 <div className="font-medium">{t.label}</div>
                 <div className="mt-0.5 text-helper leading-snug">{t.desc}</div>
                 {currentCode && !isBound && (
-                  <div className="mt-1 text-xs text-amber-700">当前已绑：{currentCode}</div>
+                  <div className="mt-1 text-xs text-warning">当前已绑：{currentCode}</div>
                 )}
-                {isBound && <div className="mt-1 text-xs font-medium text-blue-700">✓ 已绑定本机 · 再点解除</div>}
+                {isBound && <div className="mt-1 text-xs font-medium text-primary">✓ 已绑定本机 · 再点解除</div>}
               </button>
             )
           })}
@@ -116,8 +114,8 @@ function BindDialog({ printer, bindings, onToggleBind, busy, onClose }: BindDial
         >
           关闭
         </button>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -362,10 +360,7 @@ export default function PrintersPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-page-title">打印机管理</h2>
-        <Button onClick={openAddDialog}>+ 添加打印机</Button>
-      </div>
+      <PageHeader title="打印机管理" description="管理打印设备、标签用途与任务绑定" actions={<Button onClick={openAddDialog}>添加打印机</Button>} />
 
       {IS_ELECTRON_DESKTOP && (
         <div className="rounded-lg border border-border bg-card p-4">
@@ -378,7 +373,7 @@ export default function PrintersPage() {
       )}
 
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>从本机添加打印机</DialogTitle>
             <DialogDescription>
