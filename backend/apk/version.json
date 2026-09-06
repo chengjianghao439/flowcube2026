@@ -1,7 +1,7 @@
 {
-  "version": "0.9.7",
-  "versionCode": 115,
+  "version": "0.9.8",
+  "versionCode": 116,
   "filename": "app-release.apk",
-  "releaseNote": "修复调拨分批收发、财务核销与权限边界，提升账号切换和 PDA 作业的可靠性。",
-  "publishedAt": "2026-09-05T15:30:10.384Z"
+  "releaseNote": "- 新增顺丰、德邦月结直连和快递账号管理页，可在同一页面新增、修改、暂停、解绑账号，并保护已有业务记录不被删除。",
+  "publishedAt": "2026-09-06T11:56:56.839Z"
 }
