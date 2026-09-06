@@ -75,8 +75,7 @@ async function getInventoryAging({ page = 1, pageSize = 20, keyword = '', wareho
             ON lo.product_id = c.product_id AND lo.warehouse_id = c.warehouse_id
      WHERE ${where}
      GROUP BY c.product_id, p.code, p.name, p.unit, c.warehouse_id, w.name, lo.last_outbound_at
-     ORDER BY total_value DESC
-     LIMIT ? OFFSET ?`,
+     ORDER BY total_value DESC, c.product_id ASC, c.warehouse_id ASC LIMIT ? OFFSET ?`,
     [...whereParams, pageSize, offset],
   )
 

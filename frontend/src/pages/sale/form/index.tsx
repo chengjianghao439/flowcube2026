@@ -1,3 +1,5 @@
+import { OrderFulfillmentPanel } from '@/components/shared/OrderFulfillmentPanel'
+import { DocumentActivityPanel } from '@/components/shared/DocumentActivityPanel'
 import { SaleOrderItemsSection } from './components/SaleOrderItemsSection'
 /**
  * SaleFormPage — 销售单新建 / 查看页面（独立路由）
@@ -54,7 +56,7 @@ export default function SaleFormPage() {
   const tabPath  = useContext(TabPathContext)
   const navigate = useNavigate()
   const isNew    = tabPath === '/sale/new' || tabPath === ''
-  const rawSaleId = isNew ? null : tabPath.split('/').pop() ?? null
+  const rawSaleId = isNew ? null : tabPath.split('?')[0].split('/').pop() ?? null
   const saleId   = rawSaleId && /^\d+$/.test(rawSaleId) ? Number(rawSaleId) : null
 
   // ── 关闭当前 Tab 并返回 ──
@@ -89,6 +91,7 @@ function useSaleOrderForm(tabPath: string, order?: NonNullable<ReturnType<typeof
   const [warehouseName,   setWarehouseName]   = useState(order?.warehouseName ?? '')
   const [remark,          setRemark]          = useState(order?.remark ?? '')
   const [carrierId,       setCarrierId]       = useState(order?.carrierId ? String(order.carrierId) : '')
+  const [shippingProduct, setShippingProduct] = useState(order?.shippingProduct ?? '')
   const [freightType,     setFreightType]     = useState(order?.freightType ? String(order.freightType) : '')
   const [receiverName,    setReceiverName]    = useState(order?.receiverName ?? '')
   const [receiverPhone,   setReceiverPhone]   = useState(order?.receiverPhone ?? '')
@@ -138,10 +141,10 @@ function useSaleOrderForm(tabPath: string, order?: NonNullable<ReturnType<typeof
   // 编辑态初始值本就非空，"是否非空"不能代表"是否改过"，改成和进入编辑时的快照比较；
   // 新建态没有快照可比，沿用"任意字段非空即算改过"。
   const editSnapshotRef = useRef(order
-    ? JSON.stringify({ customerId, warehouseId, remark, carrierId, freightType, receiverName, receiverPhone, receiverAddress, discountAmount, items })
+    ? JSON.stringify({ customerId, warehouseId, remark, carrierId, shippingProduct, freightType, receiverName, receiverPhone, receiverAddress, discountAmount, items })
     : null)
   const isDirty = order
-    ? JSON.stringify({ customerId, warehouseId, remark, carrierId, freightType, receiverName, receiverPhone, receiverAddress, discountAmount, items }) !== editSnapshotRef.current
+    ? JSON.stringify({ customerId, warehouseId, remark, carrierId, shippingProduct, freightType, receiverName, receiverPhone, receiverAddress, discountAmount, items }) !== editSnapshotRef.current
     : !!(customerId || warehouseId || remark || carrierId || receiverName || items.length)
   useDirtyGuard(tabPath, isDirty)
 
@@ -213,7 +216,7 @@ function useSaleOrderForm(tabPath: string, order?: NonNullable<ReturnType<typeof
   return {
     customerId, setCustomerId, customerName, setCustomerName,
     warehouseId, setWarehouseId, warehouseName, setWarehouseName,
-    remark, setRemark, carrierId, setCarrierId, freightType, setFreightType,
+    remark, setRemark, carrierId, setCarrierId, shippingProduct, setShippingProduct, freightType, setFreightType,
     receiverName, setReceiverName, receiverPhone, setReceiverPhone, receiverAddress, setReceiverAddress,
     discountAmount, setDiscountAmount, total, discount, discountedTotal,
     quantityRefs, carrierOptions,
@@ -236,7 +239,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
   const {
     customerId, customerName,
     warehouseId, setWarehouseId, warehouseName, setWarehouseName,
-    remark, setRemark, carrierId, setCarrierId, freightType, setFreightType,
+    remark, setRemark, carrierId, setCarrierId, shippingProduct, setShippingProduct, freightType, setFreightType,
     receiverName, setReceiverName, receiverPhone, setReceiverPhone, receiverAddress, setReceiverAddress,
     discountAmount, setDiscountAmount, total, discount, discountedTotal,
     quantityRefs, carrierOptions,
@@ -265,6 +268,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
         warehouseId: +warehouseId, warehouseName,
         remark: remark || undefined,
         discountAmount: Number(discountAmount) || 0,
+        shippingProduct: shippingProduct || null,
         carrierId: carrierId ? +carrierId : null,
         freightType: freightType ? +freightType : null,
         receiverName: receiverName || undefined,
@@ -298,6 +302,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
         warehouseId={warehouseId} setWarehouseId={setWarehouseId} setWarehouseName={setWarehouseName}
         warehouseError={warehouseError} setWarehouseError={setWarehouseError}
         carrierId={carrierId} setCarrierId={setCarrierId} carrierOptions={carrierOptions}
+        shippingProduct={shippingProduct} setShippingProduct={setShippingProduct}
         freightType={freightType} setFreightType={setFreightType}
         receiverName={receiverName} setReceiverName={setReceiverName}
         receiverPhone={receiverPhone} setReceiverPhone={setReceiverPhone}
@@ -351,7 +356,7 @@ function EditView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<ty
   const {
     customerId, customerName,
     warehouseId, setWarehouseId, warehouseName, setWarehouseName,
-    remark, setRemark, carrierId, setCarrierId, freightType, setFreightType,
+    remark, setRemark, carrierId, setCarrierId, shippingProduct, setShippingProduct, freightType, setFreightType,
     receiverName, setReceiverName, receiverPhone, setReceiverPhone, receiverAddress, setReceiverAddress,
     discountAmount, setDiscountAmount, total, discount, discountedTotal,
     quantityRefs, carrierOptions,
@@ -381,6 +386,7 @@ function EditView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<ty
         warehouseId: +warehouseId, warehouseName,
         remark: remark || undefined,
         discountAmount: Number(discountAmount) || 0,
+        shippingProduct: shippingProduct || null,
         carrierId: carrierId ? +carrierId : null,
         freightType: freightType ? +freightType : null,
         receiverName: receiverName || undefined,
@@ -415,6 +421,7 @@ function EditView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<ty
         warehouseId={warehouseId} setWarehouseId={setWarehouseId} setWarehouseName={setWarehouseName}
         warehouseError={warehouseError} setWarehouseError={setWarehouseError}
         carrierId={carrierId} setCarrierId={setCarrierId} carrierOptions={carrierOptions}
+        shippingProduct={shippingProduct} setShippingProduct={setShippingProduct}
         freightType={freightType} setFreightType={setFreightType}
         receiverName={receiverName} setReceiverName={setReceiverName}
         receiverPhone={receiverPhone} setReceiverPhone={setReceiverPhone}
@@ -471,7 +478,7 @@ function AdjustView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<
   const {
     customerId, customerName,
     warehouseId, setWarehouseId, warehouseName, setWarehouseName,
-    remark, setRemark, carrierId, setCarrierId, freightType, setFreightType,
+    remark, setRemark, carrierId, setCarrierId, shippingProduct, setShippingProduct, freightType, setFreightType,
     receiverName, setReceiverName, receiverPhone, setReceiverPhone, receiverAddress, setReceiverAddress,
     discountAmount, total, discount, discountedTotal,
     quantityRefs, carrierOptions,
@@ -536,6 +543,7 @@ function AdjustView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<
         warehouseId={warehouseId} setWarehouseId={setWarehouseId} setWarehouseName={setWarehouseName}
         warehouseError={warehouseError} setWarehouseError={setWarehouseError}
         carrierId={carrierId} setCarrierId={setCarrierId} carrierOptions={carrierOptions}
+        shippingProduct={shippingProduct} setShippingProduct={setShippingProduct} shippingProductDisabled
         freightType={freightType} setFreightType={setFreightType}
         receiverName={receiverName} setReceiverName={setReceiverName}
         receiverPhone={receiverPhone} setReceiverPhone={setReceiverPhone}
@@ -585,7 +593,15 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
   const cancelMutate   = useCancelSale()
 
   const [printOpen, setPrintOpen] = useState(false)
-  const [detailTab, setDetailTab] = useState<'info'|'progress'|'scan'|'pack'|'log'>('info')
+  const [detailTab, setDetailTab] = useState<'info'|'progress'|'scan'|'pack'|'log'>(() => window.location.hash.includes('focus=fulfillment') ? 'progress' : 'info')
+  useEffect(() => {
+    const focus = () => {
+      const [pathname, search = ''] = window.location.hash.slice(1).split('?')
+      if (pathname === `/sale/${saleId}` && new URLSearchParams(search).get('focus') === 'fulfillment') setDetailTab('progress')
+    }
+    window.addEventListener('hashchange', focus)
+    return () => window.removeEventListener('hashchange', focus)
+  }, [saleId])
   const [adjustMode, setAdjustMode] = useState(false)
   const [editing, setEditing] = useState(false)
   const [shipDialogOpen, setShipDialogOpen] = useState(false)
@@ -752,6 +768,7 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
                 <div><span className="text-muted-foreground">时间：</span><span>{formatDisplayDateTime(order.createdAt)}</span></div>
                 <div><span className="text-muted-foreground">经办人：</span><span>{order.operatorName}</span></div>
                 <div><span className="text-muted-foreground">承运商：</span><span>{order.carrier || '-'}</span></div>
+                <div><span className="text-muted-foreground">发货产品：</span><span>{order.shippingProduct || '沿用承运商配置'}</span></div>
                 <div><span className="text-muted-foreground">运费方式：</span><span>{order.freightTypeName || '-'}</span></div>
                 <div><span className="text-muted-foreground">收货人：</span><span>{order.receiverName || '-'}</span></div>
                 <div><span className="text-muted-foreground">联系电话：</span><span>{order.receiverPhone || '-'}</span></div>
@@ -843,7 +860,8 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
       )}
 
       {detailTab === 'progress' && (
-        <div className="card-base p-4">
+        <div className="card-base space-y-4 p-4">
+          <OrderFulfillmentPanel key={order.id} type="sale" id={order.id} />
           {order.taskNo ? (
             <div className="space-y-4">
               <FulfillmentProgressCard order={order} />
@@ -969,28 +987,7 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
         </div>
       )}
 
-      {detailTab === 'log' && (
-        <div className="card-base p-4">
-          {order.timeline?.length ? (
-            <div className="divide-y">
-              <div className="grid grid-cols-[minmax(0,1fr)_180px_140px] gap-4 px-4 pb-3 text-table-head text-sm">
-                <span>事项</span>
-                <span className="text-center">时间</span>
-                <span className="text-right">操作人</span>
-              </div>
-              {order.timeline.map(event => (
-                <div key={event.id} className="grid grid-cols-[minmax(0,1fr)_180px_140px] items-start gap-4 px-4 py-3 text-sm">
-                  <div><p className="font-medium">{event.title}</p>{event.description && <p className="mt-1 whitespace-pre-wrap break-words text-xs leading-5 text-muted-foreground">{event.description}</p>}</div>
-                  <span className="text-center text-muted-foreground">{formatDisplayDateTime(event.createdAt)}</span>
-                  <span className="text-right text-muted-foreground">{event.createdByName || '系统'}</span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="py-8 text-center text-sm text-muted-foreground">暂无操作记录</p>
-          )}
-        </div>
-      )}
+      {detailTab === 'log' && <DocumentActivityPanel type="sale" id={order.id} view="log" />}
 
       {/* 底部安全间距 */}
       <div className="h-4" />

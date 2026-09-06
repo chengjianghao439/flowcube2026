@@ -1,10 +1,11 @@
+import { OrderActivityDialog } from '@/components/shared/OrderActivityDialog'
 import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
-import Pagination from '@/components/shared/Pagination'
+import ListSummary from '@/components/shared/ListSummary'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -59,7 +60,6 @@ interface ApproveResult {
 export default function PriceChangePage() {
   const qc = useQueryClient()
   const [searchParams] = useSearchParams()
-  const [page, setPage] = useState(1)
   const [keyword, setKeyword] = useState('')
   const [search, setSearch] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
@@ -90,11 +90,10 @@ export default function PriceChangePage() {
 
   const PAGE_SIZE = 20
   const { data, isLoading } = useQuery({
-    queryKey: ['price-change', { page, keyword }],
-    queryFn: () => payloadClient.get<PriceChangeListResult>('/price-change', { params: { page, pageSize: PAGE_SIZE, keyword } }),
+    queryKey: ['price-change', { page: 1, keyword }],
+    queryFn: () => payloadClient.get<PriceChangeListResult>('/price-change', { params: { page: 1, pageSize: PAGE_SIZE, keyword } }),
   })
   const total = data?.pagination?.total ?? 0
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const list: PriceChangeRequest[] = data?.list ?? []
 
   const createMut = useMutation({
@@ -143,6 +142,9 @@ export default function PriceChangePage() {
     { key: 'createdAt', title: '申请时间', width: 160 },
     { key: 'id', title: '操作', width: 200, render: (_, row) => (
       <div className="flex gap-1">
+        <OrderActivityDialog type="price" id={row.id} title={row.requestNo} fields={[
+          ['商品', row.productName], ['价格类型', PRICE_TYPE_LABEL[row.priceType]], ['原价格', row.oldPrice], ['申请价格', row.newPrice], ['状态', STATUS_LABEL[row.status]], ['申请人', row.applicantName], ['申请原因', row.reason],
+        ]} />
         {row.status === 1 && (
           <>
             <Button size="sm" variant="outline" onClick={() => submitMut.mutate(row.id)} disabled={submitMut.isPending}>提交</Button>
@@ -161,12 +163,12 @@ export default function PriceChangePage() {
         <Button onClick={() => setCreateOpen(true)}>+ 申请改价</Button>
       } />
       <FilterCard>
-        <Input placeholder="搜索单号/商品…" value={search} onChange={(e) => setSearch(e.target.value)} className="h-9 w-64" onKeyDown={(e) => { if (e.key === 'Enter') { setKeyword(search); setPage(1) } }} />
-        <Button size="sm" variant="outline" onClick={() => { setKeyword(search); setPage(1) }}>搜索</Button>
-        {keyword && <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword(''); setPage(1) }}>重置</Button>}
+        <Input placeholder="搜索单号/商品…" value={search} onChange={(e) => setSearch(e.target.value)} className="h-9 w-64" onKeyDown={(e) => { if (e.key === 'Enter') { setKeyword(search); } }} />
+        <Button size="sm" variant="outline" onClick={() => { setKeyword(search); }}>搜索</Button>
+        {keyword && <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword(''); }}>重置</Button>}
       </FilterCard>
       <DataTable columns={columns} data={list} loading={isLoading} />
-      <Pagination page={page} totalPages={totalPages} total={total} unit="单" onPageChange={setPage} />
+      <ListSummary total={total} unit="单" />
 
       {/* 新建改价申请 */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>

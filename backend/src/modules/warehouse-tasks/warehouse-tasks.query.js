@@ -24,7 +24,7 @@ async function findAll({ page=1, pageSize=20, keyword='', status=null, warehouse
   }
   const where = conds.join(' AND ')
 
-  const [rows] = await pool.query(`SELECT * FROM warehouse_tasks WHERE ${where} ORDER BY priority ASC, created_at DESC LIMIT ? OFFSET ?`, [...params, ps, offset])
+  const [rows] = await pool.query(`SELECT * FROM warehouse_tasks WHERE ${where} ORDER BY priority ASC, created_at DESC, id DESC LIMIT ? OFFSET ?`, [...params, ps, offset])
   const [[{ total }]] = await pool.query(`SELECT COUNT(*) AS total FROM warehouse_tasks WHERE ${where}`, params)
   return { list: rows.map(fmt), pagination: { page, pageSize: ps, total } }
 }

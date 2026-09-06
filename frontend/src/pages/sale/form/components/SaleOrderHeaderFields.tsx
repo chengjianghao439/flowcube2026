@@ -1,3 +1,5 @@
+import { ShippingProductField } from '@/components/shared/ShippingProductField'
+import type { CarrierOption } from '@/types/carriers'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Input }  from '@/components/ui/input'
@@ -17,6 +19,7 @@ export function SaleOrderHeaderFields({
   customerId, customerName, customerError, setCustomerFinderOpen,
   warehouseId, setWarehouseId, setWarehouseName, warehouseError, setWarehouseError,
   carrierId, setCarrierId, carrierOptions,
+  shippingProduct, setShippingProduct, shippingProductDisabled = false,
   freightType, setFreightType,
   receiverName, setReceiverName,
   receiverPhone, setReceiverPhone,
@@ -27,13 +30,15 @@ export function SaleOrderHeaderFields({
   customerName: string; customerError: boolean; setCustomerFinderOpen: (v: boolean) => void
   warehouseId: string; setWarehouseId: (v: string) => void; setWarehouseName: (v: string) => void
   warehouseError: boolean; setWarehouseError: (v: boolean) => void
-  carrierId: string; setCarrierId: (v: string) => void; carrierOptions: { id: number; name: string }[]
+  carrierId: string; setCarrierId: (v: string) => void; carrierOptions: CarrierOption[]
+  shippingProduct: string; setShippingProduct: (v: string) => void; shippingProductDisabled?: boolean
   freightType: string; setFreightType: (v: string) => void
   receiverName: string; setReceiverName: (v: string) => void
   receiverPhone: string; setReceiverPhone: (v: string) => void
   receiverAddress: string; setReceiverAddress: (v: string) => void
   remark: string; setRemark: (v: string) => void
 }) {
+  const selectedCarrier = carrierOptions.find(c => String(c.id) === carrierId)
   const navigate = useNavigate()
   const [addrOpen, setAddrOpen] = useState(false)
   const openAddrBook = () => {
@@ -61,7 +66,7 @@ export function SaleOrderHeaderFields({
         </div>
         <div className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground">
           <Label>承运商</Label>
-          <Select value={carrierId || '__none__'} onValueChange={v => setCarrierId(v === '__none__' ? '' : v)}>
+          <Select value={carrierId || '__none__'} onValueChange={v => { setCarrierId(v === '__none__' ? '' : v); setShippingProduct('') }}>
             <SelectTrigger className="h-9 w-full">
               <SelectValue placeholder={carrierOptions.length === 0 ? '暂无承运商，请先创建' : '请选择承运商'} />
             </SelectTrigger>
@@ -88,6 +93,11 @@ export function SaleOrderHeaderFields({
           </Select>
         </div>
       </div>
+      {['sf', 'deppon'].includes(selectedCarrier?.platformCode || '') && <div className="mt-3 max-w-sm space-y-1.5">
+        <Label htmlFor="sale-shipping-product">本单发货产品</Label>
+        <ShippingProductField id="sale-shipping-product" platform={selectedCarrier?.platformCode} value={shippingProduct} onChange={setShippingProduct} defaultCode={selectedCarrier?.shippingProduct} disabled={shippingProductDisabled} />
+        <p className="text-xs text-muted-foreground">{shippingProductDisabled ? '执行期改单只修改商品明细；寄件资料在提交平台前可从运单详情补充。' : '通常沿用默认产品，航空等特殊发货按合同指定。件数由打包结果自动填写。'}</p>
+      </div>}
       <div className="my-4 border-t border-border" />
       <div className="mb-2 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground"><MapPin className="h-3.5 w-3.5 text-primary" />收货信息</div>

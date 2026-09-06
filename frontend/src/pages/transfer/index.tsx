@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { X } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
-import Pagination from '@/components/shared/Pagination'
+import ListSummary from '@/components/shared/ListSummary'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { AppDialog } from '@/components/shared/AppDialog'
@@ -61,13 +61,12 @@ export default function TransferPage() {
   const warehouseName = readStringParam(searchParams, 'warehouseName')
   const startDate     = readStringParam(searchParams, 'startDate')
   const endDate       = readStringParam(searchParams, 'endDate')
-  const page          = Math.max(1, Number(searchParams.get('page') || '1') || 1)
 
   const PAGE_SIZE = 20
   const { data, isLoading } = useQuery({
-    queryKey: ['transfer', { keyword, remark, operatorId, statusFilter, productId, warehouseId, startDate, endDate, page }],
+    queryKey: ['transfer', { keyword, remark, operatorId, statusFilter, productId, warehouseId, startDate, endDate }],
     queryFn: () => getTransferListApi({
-      page,
+      page: 1,
       pageSize: PAGE_SIZE,
       keyword,
       remark: remark || undefined,
@@ -80,7 +79,6 @@ export default function TransferPage() {
     }).then(r => r!),
   })
   const total = data?.pagination?.total ?? 0
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
   const mut = (fn: () => Promise<unknown>, id?: number) => {
     if (id) setPendingId(id)
@@ -253,9 +251,7 @@ export default function TransferPage() {
 
       <DataTable columns={columns} data={data?.list || []} loading={isLoading} onRowDoubleClick={goToDetail} />
 
-      {/* 分页 */}
-      <Pagination page={page} totalPages={totalPages} total={total} unit="单"
-        onPageChange={(p) => updateParams({ page: p })} />
+      <ListSummary total={total} unit="单" />
 
       <ConfirmDialog
         open={confirmState.open}

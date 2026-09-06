@@ -1,3 +1,4 @@
+import { FulfillmentTodos } from '@/components/shared/FulfillmentTodos'
 import { useNavigate } from 'react-router-dom'
 import {
   AlertTriangle, Truck, ScanLine, HandCoins, Wallet, ListTodo, Users, Building2, TriangleAlert, ChevronRight, ClipboardCheck,
@@ -158,10 +159,14 @@ export function BoardWorkbench() {
   const cards = (data?.sections ?? []).flatMap(s => s.cards).filter(c => c.count > 0).sort((a, b) => b.priorityRank - a.priorityRank).slice(0, 6)
   function go(path: string, title: string) { addTab({ key: path, title, path }); navigate(path) }
   return (
-    <WidgetShell loading={isLoading} error={error} onRetry={() => void refetch()} title="我的工作台" icon={ListTodo} tone="primary" scrollBody
-      action={data && data.summary.totalAlerts > 0 ? <SoftStatusLabel label={`${data.summary.totalAlerts} 待办`} tone="warning" /> : undefined}>
-      {cards.length === 0 ? <p className={EMPTY_HINT}>暂无待处理事项，一切就绪</p> : (
-        <div className="space-y-1">
+    <WidgetShell loading={isLoading} error={error} onRetry={() => void refetch()} title="我的待办" icon={ListTodo} tone="primary" scrollBody
+      action={<div className="flex items-center gap-3">
+        {data && data.summary.totalAlerts > 0 && <SoftStatusLabel label={`${data.summary.totalAlerts} 待办`} tone="warning" />}
+        <button type="button" className="text-sm text-primary hover:underline" onClick={() => go('/reports/role-workbench', '待办中心')}>查看全部</button>
+      </div>}>
+      <FulfillmentTodos summary />
+      {cards.length === 0 ? <p className={EMPTY_HINT}>暂无业务待办；财务与系统提醒可在待办中心查看。</p> : (
+        <div className="grid gap-x-4 gap-y-1 grid-cols-[repeat(auto-fit,minmax(min(100%,240px),1fr))]">
           {cards.map(c => (
             <button key={c.key} type="button" onClick={() => go(c.path, c.title)}
               className="flex w-full items-center gap-3 dashboard-row-action border-b border-border px-2 py-3 text-left">

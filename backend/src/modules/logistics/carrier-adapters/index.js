@@ -13,6 +13,8 @@ const kdniao = require('./kdniao')
 const REGISTRY = {
   mock,
   kdniao,
+  sf: require('./sf'),
+  deppon: require('./deppon'),
 }
 
 /**

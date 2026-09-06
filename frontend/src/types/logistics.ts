@@ -1,7 +1,13 @@
 import type { StatusTone } from '@/lib/statusTone'
 
 /** 运单状态：1待取号 2取号中 3已取号 4取号失败 5已作废 */
-export type WaybillStatus = 1 | 2 | 3 | 4 | 5
+export type WaybillStatus = 1 | 2 | 3 | 4 | 5 | 6
+export interface ShipmentContact { name: string; phone: string; province: string; city: string; county: string; address: string }
+export interface DirectShipment {
+  sender: ShipmentContact; receiver: ShipmentContact; cargoName: string; productCode: string; deliveryType: string
+  packages: { id: number; barcode?: string }[]
+}
+export type UpdateShipmentParams = Omit<DirectShipment, 'packages'> & { freightType: 1 | 2 }
 
 export interface LogisticsWaybill {
   id:               number
@@ -18,6 +24,9 @@ export interface LogisticsWaybill {
   platformCode:     string | null
   platformCarrier:  string | null
   trackingNo:       string | null
+  trackingNumbers?: string[]
+  shipment?: DirectShipment | null
+  submittedToPlatform?: boolean
   status:           WaybillStatus
   statusLabel:      string
   statusTone:       StatusTone

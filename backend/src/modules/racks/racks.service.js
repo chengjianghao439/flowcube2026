@@ -42,8 +42,7 @@ async function findAll({ page = 1, pageSize = 20, keyword = '', warehouseId = nu
      FROM warehouse_racks r
      LEFT JOIN inventory_warehouses w ON w.id = r.warehouse_id
      WHERE ${where}
-     ORDER BY r.warehouse_id ASC, r.zone ASC, r.code ASC
-     LIMIT ? OFFSET ?`,
+     ORDER BY r.warehouse_id ASC, r.zone ASC, r.code ASC, r.id ASC LIMIT ? OFFSET ?`,
     [...whereParams, ps, offset],
   )
   const [[{ total }]] = await pool.query(

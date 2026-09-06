@@ -26,5 +26,5 @@ export const updateApprovalFlowApi = (id: number, d: Partial<{
 
 export const deleteApprovalFlowApi = (id: number) => apiClient.delete<null>(`/approvals/flows/${id}`)
 
-export const listPendingApprovalsApi = (p: { page?: number; pageSize?: number } = {}) =>
-  apiClient.get<PaginatedData<PendingApproval>>('/approvals/pending', { params: p })
+export const listPendingApprovalsApi = (p: { page?: number; pageSize?: number } = {}, summary = false) =>
+  apiClient.get<PaginatedData<PendingApproval>>('/approvals/pending', { params: p, ...(summary ? {listMode: 'summary' as const} : {}) })

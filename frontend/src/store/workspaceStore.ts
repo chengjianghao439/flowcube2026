@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { getMergedPageGroup } from '@/router/mergedPageGroups'
 import { buildWorkspaceTabRegistrationFromPath } from '@/router/workspaceRouteMeta'
 export { PATH_TITLES } from '@/router/routeDefinitions'
 
@@ -38,6 +39,12 @@ interface WorkspaceState {
   syncFromLocation: (path: string, title?: string) => void
 }
 
+/** 旧快捷入口与持久化标题同步新名称，不改其他单据的自定义标题。 */
+function currentTabTitle(path: string, fallback: string): string {
+  return getMergedPageGroup(path)?.title
+    ?? (path.split(/[?#]/)[0] === '/reports/role-workbench' ? '待办中心' : fallback)
+}
+
 function sanitizeTabs(rawTabs: unknown): WorkspaceTab[] {
   const tabs = Array.isArray(rawTabs) ? rawTabs as Partial<WorkspaceTab>[] : []
   const deduped = new Map<string, WorkspaceTab>()
@@ -51,7 +58,7 @@ function sanitizeTabs(rawTabs: unknown): WorkspaceTab[] {
     deduped.set(normalized.key, {
       key: normalized.key,
       path: normalized.path,
-      title: typeof tab.title === 'string' && tab.title ? tab.title : normalized.path,
+      title: currentTabTitle(normalized.path, typeof tab.title === 'string' && tab.title ? tab.title : normalized.path),
       closable: true,
     })
   }
@@ -73,7 +80,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         const { tabs } = get()
         if (!isDesktopWorkspacePath(tab.path)) return false
         const normalized = buildWorkspaceTabRegistrationFromPath(tab.path)
-        const title = tab.title
+        const title = currentTabTitle(normalized.path, tab.title)
         const existing = tabs.find((t) => t.key === normalized.key)
         if (existing) {
           set({
@@ -140,7 +147,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
               {
                 key: normalized.key,
                 path: normalized.path,
-                title: title || normalized.path,
+                title: currentTabTitle(normalized.path, title || normalized.path),
                 closable: normalized.key !== HOME_TAB.key,
               },
             ],
@@ -148,7 +155,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           })
           return
         }
-        const nextTitle = title || existing.title
+        const nextTitle = currentTabTitle(normalized.path, title || existing.title)
         set({
           tabs: tabs.map((tab) => (
             tab.key === normalized.key

@@ -21,6 +21,10 @@
     "test:print": "node tests/print-policy.test.js && node tests/print-status.test.js",
     "test:print-purge": "node tests/print-jobs-purge.test.js",
     "test:oplog": "node tests/oplogger.test.js",
+    "test:direct-express": "node --test tests/direct-express.test.js tests/direct-express-worker.test.js tests/carrier-account-binding.test.js",
+    "smoke:direct-express": "node tests/direct-express.smoke.test.js",
+    "check:direct-express": "node scripts/check-direct-express.cjs",
+    "test:document-activity": "node --test tests/document-activity.test.js",
     "test:permissions": "node tests/permission-codes.test.js",
     "test:accounting": "node tests/accounting-voucher-mapping.test.js",
     "test:audit-tooling": "node --test tests/audit-tooling.test.js tests/audit-deployment.test.js",
@@ -59,6 +63,10 @@
     "smoke:round2-transfer": "node tests/round2-transfer.smoke.test.js",
     "smoke:round2-payroll": "node tests/round2-payroll.smoke.test.js",
     "smoke:round2-runtime": "node tests/round2-runtime.smoke.test.js",
-    "test:round2-runtime": "node --test tests/round2-runtime.test.js tests/round2-restore.test.js tests/round2-observability.test.js"
+    "test:round2-runtime": "node --test tests/round2-runtime.test.js tests/round2-restore.test.js tests/round2-observability.test.js",
+    "test:fulfillment": "node --test tests/fulfillment.test.js",
+    "smoke:fulfillment": "node tests/fulfillment.smoke.test.js",
+    "test:procurement-planning": "node --test tests/procurement-planning.test.js",
+    "smoke:procurement-planning": "node --test tests/procurement-planning.smoke.test.js"
   }
 }

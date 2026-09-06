@@ -499,6 +499,26 @@ async function getStockProjection(conn, {
   }
 }
 
+/** Batch read-only ACTIVE projection; callers bound pairs to 500 per batch. */
+async function getStockProjections(conn, pairs) {
+  const dimensions = [...new Map(pairs.map(p => [`${Number(p.productId)}:${Number(p.warehouseId)}`, [Number(p.productId), Number(p.warehouseId)]])).values()]
+  const result = new Map()
+  for (let offset = 0; offset < dimensions.length; offset += 500) {
+    const batch = dimensions.slice(offset, offset + 500)
+    const placeholders = batch.map(() => '(?,?)').join(',')
+    const [stock] = await conn.query(`SELECT product_id,warehouse_id,reserved FROM inventory_stock WHERE (product_id,warehouse_id) IN (${placeholders})`, batch.flat())
+    const [containers] = await conn.query(`SELECT product_id,warehouse_id,SUM(remaining_qty) AS quantity FROM inventory_containers WHERE status=? AND deleted_at IS NULL AND (product_id,warehouse_id) IN (${placeholders}) GROUP BY product_id,warehouse_id`, [CONTAINER_STATUS.ACTIVE, ...batch.flat()])
+    const quantities = new Map(containers.map(r => [`${Number(r.product_id)}:${Number(r.warehouse_id)}`, Number(r.quantity)]))
+    const reservations = new Map(stock.map(r => [`${Number(r.product_id)}:${Number(r.warehouse_id)}`, Number(r.reserved)]))
+    for (const [productId, warehouseId] of batch) {
+      const key = `${productId}:${warehouseId}`
+      const quantity = quantities.get(key) || 0, reserved = reservations.get(key) || 0
+      result.set(key, { quantity, reserved, available: Math.max(0, quantity - reserved) })
+    }
+  }
+  return result
+}
+
 /**
  * 业务判定型库存读取：
  * - quantity 基于 ACTIVE 容器事实层汇总
@@ -1270,6 +1290,7 @@ module.exports = {
   deductFromTaskLockedContainers,
   syncStockFromContainers,
   getStockProjection,
+  getStockProjections,
   getAvailableStockForDecision,
   transferContainers,
   adjustContainersForStockcheck,

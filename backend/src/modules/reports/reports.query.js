@@ -396,7 +396,9 @@ async function fetchWarehouseOpsRows(scopeWarehouseIds = null) {
   }
 }
 
-async function fetchRoleWorkbenchRows({ thresholds, highRiskWindowHours, scopeWarehouseIds = null }) {
+async function fetchRoleWorkbenchRows({ thresholds, highRiskWindowHours, scopeWarehouseIds = null, batchPage = 1, batchSize = 5 }) {
+  const take = Math.min(200, Math.max(1, Math.floor(Number(batchSize) || 5)))
+  const offset = Math.max(0, Math.floor(Number(batchPage) || 1) - 1) * take
   const inventoryDisplayProjectionSql = getInventoryDisplayProjectionSql()
   const tWh = scopeFilter(scopeWarehouseIds, 't.warehouse_id')
   const oWh = scopeFilter(scopeWarehouseIds, 'o.warehouse_id')
@@ -404,6 +406,13 @@ async function fetchRoleWorkbenchRows({ thresholds, highRiskWindowHours, scopeWa
   // print_failure / waiting_putaway 经容器关联收货任务，用任务仓库过滤
   const cWh = scopeFilter(scopeWarehouseIds, 't.warehouse_id')
   const sWh = scopeFilter(scopeWarehouseIds, 's.warehouse_id')
+  const healthScope = Array.isArray(scopeWarehouseIds) ? ` AND (
+    (related_table='sale_orders' AND EXISTS(SELECT 1 FROM sale_orders hd WHERE hd.id=related_id AND hd.warehouse_id IN (?) AND hd.deleted_at IS NULL)) OR
+    (related_table='inbound_tasks' AND EXISTS(SELECT 1 FROM inbound_tasks hd WHERE hd.id=related_id AND hd.warehouse_id IN (?) AND hd.deleted_at IS NULL)) OR
+    (related_table='warehouse_tasks' AND EXISTS(SELECT 1 FROM warehouse_tasks hd WHERE hd.id=related_id AND hd.warehouse_id IN (?) AND hd.deleted_at IS NULL)) OR
+    (related_table='inventory_stock' AND EXISTS(SELECT 1 FROM inventory_stock hd WHERE hd.id=related_id AND hd.warehouse_id IN (?)))
+  )` : ''
+  const healthScopeParams = healthScope ? Array.from({ length: 4 }, () => scopeWarehouseIds.length ? scopeWarehouseIds : [-1]) : []
   return {
     pendingReceiveCount: await fetchOne(
       `SELECT COUNT(*) AS count
@@ -421,8 +430,8 @@ async function fetchRoleWorkbenchRows({ thresholds, highRiskWindowHours, scopeWa
               t.created_at AS createdAt
        FROM inbound_tasks t
        WHERE t.deleted_at IS NULL AND t.status IN (1, 2)${tWh.sql}
-       ORDER BY t.created_at ASC
-       LIMIT 5`,
+       ORDER BY t.created_at ASC,t.id ASC
+       LIMIT ${take} OFFSET ${offset}`,
       tWh.params,
     ),
     waitingPutawayCount: await fetchOne(
@@ -450,8 +459,8 @@ async function fetchRoleWorkbenchRows({ thresholds, highRiskWindowHours, scopeWa
        WHERE c.deleted_at IS NULL
          AND c.status = 0
          AND c.inbound_task_id IS NOT NULL${cWh.sql}
-       ORDER BY COALESCE(c.putaway_deadline_at, c.created_at) ASC
-       LIMIT 5`,
+       ORDER BY COALESCE(c.putaway_deadline_at, c.created_at) ASC,c.id ASC
+       LIMIT ${take} OFFSET ${offset}`,
       cWh.params,
     ),
     printFailureCount: await fetchOne(
@@ -468,7 +477,7 @@ async function fetchRoleWorkbenchRows({ thresholds, highRiskWindowHours, scopeWa
       [Number(thresholds.printTimeoutMinutes), ...cWh.params],
     ),
     printFailureRows: await fetchMany(
-      `SELECT c.inbound_task_id AS id,
+      `SELECT j.id AS id,
               COALESCE(t.task_no, '收货任务') AS title,
               CONCAT(COALESCE(c.barcode, '库存条码'), ' · ', COALESCE(j.status, 'queued')) AS subtitle,
               CONCAT('/inbound-tasks/', c.inbound_task_id) AS path,
@@ -488,8 +497,8 @@ async function fetchRoleWorkbenchRows({ thresholds, highRiskWindowHours, scopeWa
            OR (j.status IN (0, 1) AND TIMESTAMPDIFF(MINUTE, j.updated_at, NOW()) >= ?)
            OR (j.status = 3 AND IFNULL(j.error_message, '') = 'no printer available')
          )${cWh.sql}
-       ORDER BY j.updated_at DESC
-       LIMIT 5`,
+       ORDER BY j.updated_at DESC,j.id DESC
+       LIMIT ${take} OFFSET ${offset}`,
       [Number(thresholds.printTimeoutMinutes), ...cWh.params],
     ),
     pendingShipCount: await fetchOne(
@@ -508,8 +517,8 @@ async function fetchRoleWorkbenchRows({ thresholds, highRiskWindowHours, scopeWa
               o.created_at AS createdAt
        FROM sale_orders o
        WHERE o.deleted_at IS NULL AND o.status IN (2, 3, 6)${oWh.sql}
-       ORDER BY o.created_at ASC
-       LIMIT 5`,
+       ORDER BY o.created_at ASC,o.id ASC
+       LIMIT ${take} OFFSET ${offset}`,
       oWh.params,
     ),
     saleAnomalyCount: await fetchOne(
@@ -517,8 +526,8 @@ async function fetchRoleWorkbenchRows({ thresholds, highRiskWindowHours, scopeWa
        FROM system_health_logs
        WHERE created_at >= NOW() - INTERVAL ? HOUR
          AND severity IN ('high', 'danger')
-         AND related_table = 'sale_orders'`,
-      [highRiskWindowHours],
+         AND related_table = 'sale_orders'${healthScope}`,
+      [highRiskWindowHours, ...healthScopeParams],
     ),
     saleAnomalyRows: await fetchMany(
       `SELECT id,
@@ -535,10 +544,10 @@ async function fetchRoleWorkbenchRows({ thresholds, highRiskWindowHours, scopeWa
        FROM system_health_logs
        WHERE created_at >= NOW() - INTERVAL ? HOUR
          AND severity IN ('high', 'danger')
-         AND related_table = 'sale_orders'
-       ORDER BY created_at DESC
-       LIMIT 5`,
-      [highRiskWindowHours],
+         AND related_table = 'sale_orders'${healthScope}
+       ORDER BY created_at DESC,id DESC
+       LIMIT ${take} OFFSET ${offset}`,
+      [highRiskWindowHours, ...healthScopeParams],
     ),
     belowCostCount: await fetchOne(
       `SELECT COUNT(DISTINCT o.id) AS count
@@ -569,8 +578,8 @@ async function fetchRoleWorkbenchRows({ thresholds, highRiskWindowHours, scopeWa
          AND p.cost_price > 0
          AND soi.unit_price < p.cost_price${oWh.sql}
        GROUP BY o.id, o.order_no, o.customer_name, o.created_at
-       ORDER BY SUM((p.cost_price - soi.unit_price) * soi.quantity) DESC
-       LIMIT 5`,
+       ORDER BY SUM((p.cost_price - soi.unit_price) * soi.quantity) DESC,o.id DESC
+       LIMIT ${take} OFFSET ${offset}`,
       oWh.params,
     ),
     inventoryAnomalyCount: await fetchOne(
@@ -628,16 +637,16 @@ async function fetchRoleWorkbenchRows({ thresholds, highRiskWindowHours, scopeWa
          INNER JOIN product_items p ON p.id = ip.product_id
          WHERE ip.quantity < ip.reserved${ipWh.sql}
        ) t
-       ORDER BY sort_rank ASC, createdAt DESC
-       LIMIT 5`,
+       ORDER BY sort_rank ASC, createdAt DESC,id ASC
+       LIMIT ${take} OFFSET ${offset}`,
       [...ipWh.params, ...sWh.params, ...ipWh.params],
     ),
     highRiskCount: await fetchOne(
       `SELECT COUNT(*) AS count
        FROM system_health_logs
        WHERE created_at >= NOW() - INTERVAL ? HOUR
-         AND severity IN ('high', 'danger', 'fix_failed')`,
-      [highRiskWindowHours],
+         AND severity IN ('high', 'danger', 'fix_failed')${healthScope}`,
+      [highRiskWindowHours, ...healthScopeParams],
     ),
     highRiskRows: await fetchMany(
       `SELECT id,
@@ -655,10 +664,10 @@ async function fetchRoleWorkbenchRows({ thresholds, highRiskWindowHours, scopeWa
               created_at AS createdAt
        FROM system_health_logs
        WHERE created_at >= NOW() - INTERVAL ? HOUR
-         AND severity IN ('high', 'danger', 'fix_failed')
-       ORDER BY created_at DESC
-       LIMIT 5`,
-      [highRiskWindowHours],
+         AND severity IN ('high', 'danger', 'fix_failed')${healthScope}
+       ORDER BY created_at DESC,id DESC
+       LIMIT ${take} OFFSET ${offset}`,
+      [highRiskWindowHours, ...healthScopeParams],
     ),
   }
 }

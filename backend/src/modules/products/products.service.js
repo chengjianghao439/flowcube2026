@@ -266,7 +266,7 @@ async function findAll({ page=1, pageSize=20, keyword='', categoryId=null, statu
     `SELECT p.*, c.name AS category_name, s.name AS supplier_name
      FROM product_items p LEFT JOIN product_categories c ON p.category_id=c.id
      LEFT JOIN supply_suppliers s ON p.supplier_id=s.id
-     WHERE ${where} ORDER BY p.created_at DESC LIMIT ? OFFSET ?`,
+     WHERE ${where} ORDER BY p.created_at DESC, p.id DESC LIMIT ? OFFSET ?`,
     [...params, ps, offset],
   )
 

@@ -1,3 +1,4 @@
+import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
 import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
 import { SectionCard } from '@/components/shared/SectionCard'
 /**
@@ -60,7 +61,7 @@ export default function InboundTaskDetailPage() {
   const tabPath = useContext(TabPathContext)
   const params = useParams<{ id?: string }>()
   const navigate = useNavigate()
-  const rawId = (tabPath || params.id || '').split('/').filter(Boolean).pop() ?? ''
+  const rawId = (tabPath || params.id || '').split('?')[0].split('/').filter(Boolean).pop() ?? ''
   const taskId = Number(rawId)
   const validId = Number.isFinite(taskId) && taskId > 0 ? taskId : null
 
@@ -200,6 +201,7 @@ export default function InboundTaskDetailPage() {
         }
       />
 
+      <OrderDetailSections type="inbound" id={task.id}>
       {/* 整体状态已经在标题旁的徽章里显示过，这里不重复；只展示三个组成状态各自的进度 */}
       <div className="grid gap-3 md:grid-cols-3">
         <StatusCard
@@ -268,6 +270,8 @@ export default function InboundTaskDetailPage() {
           </div>
         </div>
       </Section>
+
+      </OrderDetailSections>
 
       <ConfirmDialog
         open={cancelConfirmOpen}

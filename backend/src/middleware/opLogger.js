@@ -1,5 +1,6 @@
 const { pool } = require('../config/db')
 const logger = require('../utils/logger')
+const { resolveOperation } = require('../modules/document-activity/document-operation')
 
 // 精确键匹配集合：PDA 设备密钥/会话令牌、幂等键等均不得明文落库。
 // 除精确匹配外，sanitizeBody 还会把键名做 snake_case → camelCase 归一化后再次比对，
@@ -72,6 +73,8 @@ function opLogger(req, res, next) {
 
   const originalJson = res.json.bind(res)
   res.json = function (body) {
+    const requestPath = (req.originalUrl || req.path).split('?')[0]
+    const operation = resolveOperation(req.method, requestPath, res.statusCode, body)
     setImmediate(async () => {
       try {
         const userId = req.user?.userId || null
@@ -81,10 +84,20 @@ function opLogger(req, res, next) {
           ? JSON.stringify(safe).substring(0, 500)
           : null
         const ip = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || null
-        await pool.query(
+        const [logged] = await pool.query(
           `INSERT INTO operation_logs (user_id,user_name,action,method,path,module,request_body,status_code,ip) VALUES (?,?,?,?,?,?,?,?,?)`,
-          [userId, userName, `${req.method} ${req.path}`, req.method, req.path, getModule(req.path), bodyStr, res.statusCode, ip]
+          [userId, userName, `${req.method} ${requestPath}`, req.method, requestPath, getModule(requestPath), bodyStr, res.statusCode, ip]
         )
+        if (operation) {
+          // 仅保存明确的操作说明，不复制请求体或认证、付款等字段。
+          const reason = typeof req.body?.reason === 'string' ? req.body.reason.slice(0, 500) : null
+          await pool.query(
+            `INSERT INTO document_operation_events
+             (document_type,document_id,operation_log_id,title,description,created_by,created_by_name)
+             VALUES (?,?,?,?,?,?,?)`,
+            [operation.type, operation.id, logged.insertId, operation.title, reason, userId, req.user?.realName || userName],
+          )
+        }
       } catch (error) {
         logger.error('写入操作日志失败', error, { path: req.path, method: req.method }, 'OPLOG')
       }

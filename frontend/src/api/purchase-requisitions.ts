@@ -9,8 +9,8 @@ export const listRequisitionsApi = (p: Record<string, unknown>) =>
 export const getRequisitionApi = (id: number) =>
   apiClient.get<PurchaseRequisition>(`/purchase-requisitions/${id}`)
 
-export const createRequisitionApi = (d: CreateRequisitionParams) =>
-  apiClient.post<{ id: number; requisitionNo: string }>('/purchase-requisitions', d)
+export const createRequisitionApi = (d: CreateRequisitionParams, config?: Parameters<typeof apiClient.post>[2]) =>
+  apiClient.post<{ id: number; requisitionNo: string }>('/purchase-requisitions', d, config)
 
 export const updateRequisitionApi = (id: number, d: Partial<CreateRequisitionParams>) =>
   apiClient.put<null>(`/purchase-requisitions/${id}`, d)

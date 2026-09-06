@@ -1,8 +1,8 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { getCustomersApi, createCustomerApi, updateCustomerApi, deleteCustomerApi } from '@/api/customers'
 import type { CreateCustomerParams, UpdateCustomerParams } from '@/types/customers'
 import { toast } from '@/lib/toast'
-export const useCustomers = (params: object) => useQuery({ queryKey: ['customers', params], queryFn: () => getCustomersApi(params).then(r=>r!) })
+export const useCustomers = (params: object, keepPrevious = false) => useQuery({ queryKey: ['customers', params], queryFn: () => getCustomersApi(params).then(r=>r!), placeholderData: keepPrevious ? keepPreviousData : undefined })
 export const useCreateCustomer = () => {
   const qc=useQueryClient()
   return useMutation({

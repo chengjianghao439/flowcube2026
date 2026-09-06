@@ -7,6 +7,9 @@ const { beginOperationRequest, completeOperationRequest } = require('../../utils
 const { generateMasterCode } = require('../../utils/codeGenerator')
 const { getProcurementPlan } = require('../inventory/inventory.procurement')
 const purchaseService = require('../purchase/purchase.service')
+const { lockPlanning, roundPurchase } = require('./procurement.planning')
+const { beijingTodayYmd } = require('../../utils/backendTime')
+const { getPolicy } = require('./procurement.policies')
 const { normalizePagination } = require('../../utils/pagination')
 
 const PLAN_STATUS = { DRAFT: 1, PARTIAL: 2, DONE: 3, VOID: 4 }
@@ -36,27 +39,28 @@ function fmtItem(r) {
     adu: Number(r.adu), forecastDemand: Number(r.forecast_demand), safetyStock: Number(r.safety_stock),
     available: Number(r.available), inTransit: Number(r.in_transit), leadTimeDays: Number(r.lead_time_days),
     suggestedQty: Number(r.suggested_qty), adjustedQty: Number(r.adjusted_qty),
-    expectedArrival: r.expected_arrival, status: Number(r.status), statusName: ITEM_STATUS_NAME[Number(r.status)] || '',
+    expectedArrival: r.expected_arrival instanceof Date ? beijingTodayYmd(r.expected_arrival) : r.expected_arrival, status: Number(r.status), statusName: ITEM_STATUS_NAME[Number(r.status)] || '',
+    supplySnapshot: typeof r.supply_snapshot === 'string' ? JSON.parse(r.supply_snapshot) : (r.supply_snapshot || null),
     purchaseOrderId: r.purchase_order_id != null ? Number(r.purchase_order_id) : null,
   }
 }
 
 /**
  * 生成采购计划（文档 11 单据化）。复用 MVP 只读计算 getProcurementPlan 得出建议行，整批快照落库为单据。
- * 计算阶段纯只读（不碰库存/在途/占库），落库只写 procurement_plans / _items。X-Request-Key 幂等防连点生成两批。
+ * 同事务规划锁后读取共享净需求；活跃计划、请购与采购草稿参与覆盖，跨请求键也不重复生成。
  */
 async function generatePlan({ window = 30, horizon = 30, warehouseId = null, name = null, defaultLeadTime = 7, forecastMethod = 'sma', remark = null, operator, requestKey, scopeWarehouseIds = null }) {
   // 目标仓若指定，须在数据权限内
   if (warehouseId) assertInScope(scopeWarehouseIds, warehouseId, '仓库')
-  // 只读计算（在事务外做，避免长事务）
-  const { list, params } = await getProcurementPlan({ window, horizon, warehouseId, defaultLeadTime, scopeWarehouseIds, forecastMethod })
-  if (!list.length) throw new AppError('按当前参数没有需要采购的商品（近期无出库或供给已充足）', 400)
-
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    await lockPlanning(conn)
     const requestState = await beginOperationRequest(conn, { requestKey, action: 'procurement.plan.generate', userId: operator?.userId ?? null })
     if (requestState.replay) { await conn.rollback(); return requestState.responseData }
+
+    const { list, params } = await getProcurementPlan({ window, horizon, warehouseId, defaultLeadTime, scopeWarehouseIds, forecastMethod, includeCovered: false }, conn)
+    if (!list.length) throw new AppError('当前需求已由库存、在途采购或已有计划/请购覆盖，无需重复生成', 409)
 
     const code = await generateMasterCode(conn, 'PLAN', 'procurement_plans')
     const [r] = await conn.query(
@@ -74,6 +78,7 @@ async function generatePlan({ window = 30, horizon = 30, warehouseId = null, nam
         [planId, it.productId, it.warehouseId, it.productCode, it.productName, it.unit, it.warehouseName, it.supplierId, it.supplierName,
           it.adu, it.forecastDemand, it.safetyStock, it.available, it.inTransit, it.leadTimeDays, it.suggestedQty, it.suggestedQty, it.expectedArrival, ITEM_STATUS.PENDING],
       )
+      await conn.query('UPDATE procurement_plan_items SET supply_snapshot=? WHERE plan_id=? AND product_id=? AND warehouse_id=?', [JSON.stringify(it), planId, it.productId, it.warehouseId])
       // 需求预测明细快照（文档11 Phase3）：每次生成落一份，供未来准确度评估（actual_sold 后回填）
       await conn.query(
         `INSERT INTO demand_forecasts (plan_id, warehouse_id, product_id, forecast_method, window_days, horizon_days, adu, forecast_demand)
@@ -116,13 +121,23 @@ async function getPlan(id, scopeWarehouseIds = null) {
   // 明细按数据权限过滤（跨仓计划里，限权用户只看自己仓的行）
   const scope = scopeFilter(scopeWarehouseIds, 'warehouse_id')
   const [items] = await pool.query(
-    `SELECT ppi.*, p.article_number, p.spec, p.color
+    `SELECT ppi.*, p.article_number, p.spec, p.color, pol.entry_unit AS policy_entry_unit, COALESCE(pol.pack_multiple,0) AS policy_pack, COALESCE(pol.minimum_order_qty,0) AS policy_minimum, COALESCE(CASE WHEN pol.entry_unit=p.unit THEN 1 ELSE pu.conversion_rate END,1) AS policy_rate
        FROM procurement_plan_items ppi
        JOIN product_items p ON p.id = ppi.product_id
+       LEFT JOIN supplier_product_purchase_policies pol ON pol.product_id=ppi.product_id AND pol.supplier_id=ppi.supplier_id
+       LEFT JOIN product_units pu ON pu.product_id=ppi.product_id AND pu.unit_name=pol.entry_unit
       WHERE ppi.plan_id = ?${scope.sql} ORDER BY ppi.suggested_qty DESC, ppi.id`,
     [id, ...scope.params],
   )
-  return { ...fmtPlan(plan), items: items.map(fmtItem) }
+  if (!items.length && scopeWarehouseIds !== null) throw new AppError('无权查看该采购计划', 403)
+  const { list: live } = await getProcurementPlan({ window: plan.forecast_window, horizon: plan.horizon_days, defaultLeadTime: plan.default_lead_time, forecastMethod: plan.forecast_method, scopeWarehouseIds, excludePlanItemIds: items.filter(i => Number(i.status) === 1).map(i => Number(i.id)), includeAll: true })
+  const liveMap = new Map(live.map(r => [r.id, r]))
+  return { ...fmtPlan(plan), items: items.map(r => {
+    const current = liveMap.get(`${r.product_id}-${r.warehouse_id}`)
+    const packMultiple = Number(r.policy_pack) * Number(r.policy_rate), minimumOrderQty = Number(r.policy_minimum) * Number(r.policy_rate)
+    const suggestedQty = roundPurchase(current?.netRequirement || 0, packMultiple, minimumOrderQty)
+    return { ...fmtItem(r), currentSupply: current ? { ...current, supplierId: r.supplier_id, supplierName: r.supplier_name, entryUnit: r.policy_entry_unit || r.unit, conversionRate: Number(r.policy_rate), packMultiple, minimumOrderQty, suggestedQty, excessQty: Math.round((suggestedQty - current.netRequirement) * 10000) / 10000 } : null }
+  }) }
 }
 
 /** 改一行：调整量 / 补选供应商 / 忽略。仅草稿或部分转采购态可改；已转采购的行不可再改。 */
@@ -130,7 +145,8 @@ async function updatePlanItem(planId, itemId, { adjustedQty, supplierId, ignore 
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const plan = await lockStatusRow(conn, { table: 'procurement_plans', id: planId, columns: 'id, status', entityName: '采购计划' })
+    await lockPlanning(conn)
+    const plan = await lockStatusRow(conn, { table: 'procurement_plans', id: planId, columns: 'id, status, forecast_window, horizon_days, forecast_method, default_lead_time', entityName: '采购计划' })
     assertStatusAction('procurementPlan', 'edit', plan.status)
     const [[item]] = await conn.query('SELECT * FROM procurement_plan_items WHERE id = ? AND plan_id = ? FOR UPDATE', [itemId, planId])
     if (!item) throw new AppError('计划明细不存在', 404)
@@ -156,6 +172,10 @@ async function updatePlanItem(planId, itemId, { adjustedQty, supplierId, ignore 
     if (ignore != null) { sets.push('status = ?'); params.push(ignore ? ITEM_STATUS.IGNORED : ITEM_STATUS.PENDING) }
     if (!sets.length) throw new AppError('没有要修改的字段', 400)
     await conn.query(`UPDATE procurement_plan_items SET ${sets.join(', ')} WHERE id = ?`, [...params, itemId])
+    const [[updated]] = await conn.query('SELECT * FROM procurement_plan_items WHERE id=?', [itemId])
+    if (Number(updated.status) === ITEM_STATUS.PENDING && Number(updated.adjusted_qty) > 0) {
+      await validatePlanSupply(conn, plan, [updated], scopeWarehouseIds, supplierId !== undefined && adjustedQty == null)
+    }
     await conn.commit()
     return getPlan(planId, scopeWarehouseIds)
   } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
@@ -173,10 +193,11 @@ async function convert(planId, { itemIds, target = 'purchase', operator, request
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const requestState = await beginOperationRequest(conn, { requestKey, action: 'procurement.plan.convert', userId: operator?.userId ?? null })
+    await lockPlanning(conn)
+    const requestState = await beginOperationRequest(conn, { requestKey, action: `procurement.plan.convert.${planId}`, userId: operator?.userId ?? null })
     if (requestState.replay) { await conn.rollback(); return requestState.responseData }
 
-    const plan = await lockStatusRow(conn, { table: 'procurement_plans', id: planId, columns: 'id, status', entityName: '采购计划' })
+    const plan = await lockStatusRow(conn, { table: 'procurement_plans', id: planId, columns: 'id, status, forecast_window, horizon_days, forecast_method, default_lead_time', entityName: '采购计划' })
     assertStatusAction('procurementPlan', 'convert', plan.status)
 
     const [items] = await conn.query(
@@ -190,6 +211,8 @@ async function convert(planId, { itemIds, target = 'purchase', operator, request
       if (!it.supplier_id) throw new AppError(`${it.product_name} 尚未选择供应商，请先在明细里补选`, 400)
       if (Number(it.adjusted_qty) <= 0) throw new AppError(`${it.product_name} 采购量为 0，请先调整或忽略该行`, 400)
     }
+
+    await validatePlanSupply(conn, plan, items, scopeWarehouseIds)
 
     // 按 (供应商, 仓库) 分组，每组一张采购单草稿
     const groups = new Map()
@@ -206,7 +229,7 @@ async function convert(planId, { itemIds, target = 'purchase', operator, request
       // 复用采购创建链路：产出草稿(status=1)，单价留 0 由采购员确认时补。requestKey 加组后缀防组间撞幂等键。
       const po = await purchaseService.createWithinTransaction(conn, {
         supplierId, supplierName: first.supplier_name,
-        warehouseId, warehouseName: first.warehouse_name,
+        warehouseId, warehouseName: first.warehouse_name, expectedDate: first.expected_arrival,
         remark: `由采购计划 ${plan.id} 转入`,
         items: groupItems.map(it => ({
           productId: Number(it.product_id), productCode: it.product_code, productName: it.product_name,
@@ -240,19 +263,35 @@ async function cancel(planId, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const plan = await lockStatusRow(conn, { table: 'procurement_plans', id: planId, columns: 'id, status', entityName: '采购计划' })
+    await lockPlanning(conn)
+    const plan = await lockStatusRow(conn, { table: 'procurement_plans', id: planId, columns: 'id, status, forecast_window, horizon_days, forecast_method, default_lead_time', entityName: '采购计划' })
     // 作废仅需计划头级校验；明细跨仓，limited 用户能否作废由是否看得到该计划兜底（此处放行 scope=null 情形）
     if (scopeWarehouseIds) {
-      const [[owned]] = await conn.query(
-        `SELECT 1 AS ok FROM procurement_plan_items WHERE plan_id = ?${scopeFilter(scopeWarehouseIds, 'warehouse_id').sql} LIMIT 1`,
-        [planId, ...scopeFilter(scopeWarehouseIds, 'warehouse_id').params],
-      )
-      if (!owned) throw new AppError('无权作废该采购计划', 403)
+      const [warehouses] = await conn.query('SELECT DISTINCT warehouse_id FROM procurement_plan_items WHERE plan_id=? AND status=1', [planId])
+      if (!warehouses.length) throw new AppError('没有可作废的明细', 400)
+      for (const row of warehouses) assertInScope(scopeWarehouseIds, row.warehouse_id, '计划明细')
     }
     const rule = assertStatusAction('procurementPlan', 'cancel', plan.status)
     await compareAndSetStatus(conn, { table: 'procurement_plans', id: planId, fromStatus: plan.status, toStatus: rule.to, entityName: '采购计划' })
     await conn.commit()
   } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
+}
+
+async function validatePlanSupply(conn, plan, items, scopeWarehouseIds, alignQuantity = false) {
+  const { list } = await getProcurementPlan({ window: plan.forecast_window, horizon: plan.horizon_days, defaultLeadTime: plan.default_lead_time, forecastMethod: plan.forecast_method, scopeWarehouseIds, excludePlanItemIds: items.map(i => Number(i.id)), includeAll: true }, conn)
+  const supply = new Map(list.map(r => [r.id, r]))
+  for (const item of items) {
+    const row = supply.get(`${item.product_id}-${item.warehouse_id}`)
+    const policy = await getPolicy(item.product_id, item.supplier_id, conn)
+    const maximum = roundPurchase(row?.netRequirement || 0, policy.packMultiple * policy.conversionRate, policy.minimumOrderQty * policy.conversionRate)
+    if (alignQuantity) {
+      item.adjusted_qty = roundPurchase(Math.min(Number(item.adjusted_qty), row?.netRequirement || 0), policy.packMultiple * policy.conversionRate, policy.minimumOrderQty * policy.conversionRate)
+      await conn.query('UPDATE procurement_plan_items SET adjusted_qty=? WHERE id=?', [item.adjusted_qty, item.id])
+    }
+    if (Number(item.adjusted_qty) > maximum + 0.00001) throw new AppError(`「${item.product_name}」最新供给已变化，当前最多需采购 ${maximum}，请调整数量或忽略该行`, 409, 'PROCUREMENT_COVERAGE_CHANGED')
+    const rounded = roundPurchase(Number(item.adjusted_qty), policy.packMultiple * policy.conversionRate, policy.minimumOrderQty * policy.conversionRate)
+    if (Math.abs(rounded - Number(item.adjusted_qty)) > 0.00001) throw new AppError(`「${item.product_name}」采购量须满足包装与起订量，建议 ${rounded}`, 400, 'PURCHASE_PACKAGING_INVALID')
+  }
 }
 
 module.exports = { generatePlan, listPlans, getPlan, updatePlanItem, convert, cancel }

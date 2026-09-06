@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { X } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
-import Pagination from '@/components/shared/Pagination'
+import ListSummary from '@/components/shared/ListSummary'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { Button } from '@/components/ui/button'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
@@ -49,16 +49,15 @@ export default function BarcodePrintQueryPage() {
   const [keyword, setKeyword] = useState(initialKeyword)
   const [status, setStatus] = useState('__all__')
   const [queryOpen, setQueryOpen] = useState(false)
-  const [page, setPage] = useState(1)
   const isActiveTab = useActiveWorkspaceTab()
 
   const query = useQuery({
-    queryKey: ['barcode-print-records', category, keyword, status, initialInboundTaskId, initialInboundTaskItemId, page],
+    queryKey: ['barcode-print-records', category, keyword, status, initialInboundTaskId, initialInboundTaskItemId],
     queryFn: () => getBarcodePrintRecordsApi({
       category,
       keyword,
         status: status === '__all__' ? undefined : status,
-      page,
+      page: 1,
       pageSize: 20,
       inboundTaskId: category === 'inbound' ? initialInboundTaskId : undefined,
       inboundTaskItemId: category === 'inbound' ? initialInboundTaskItemId : undefined,
@@ -67,17 +66,15 @@ export default function BarcodePrintQueryPage() {
     refetchInterval: isActiveTab ? 3000 : false,
   })
   const total = query.data?.pagination?.total ?? 0
-  const totalPages = Math.max(1, Math.ceil(total / 20))
 
   // ── 查询弹窗筛选值 ──
   const initialQuery: BarcodePrintQueryValues = { keyword, status }
   function applyQuery(v: BarcodePrintQueryValues) {
     setKeyword(v.keyword)
-    setStatus(v.status)
-    setPage(1)
+    setStatus(v.status);
     setQueryOpen(false)
   }
-  function clearAll() { setKeyword(''); setStatus('__all__'); setPage(1) }
+  function clearAll() { setKeyword(''); setStatus('__all__'); }
 
   // 当前生效筛选摘要（可逐项移除）
   const chips = [
@@ -380,8 +377,7 @@ export default function BarcodePrintQueryPage() {
             key={item.value}
             type="button"
             onClick={() => {
-              setCategory(item.value)
-              setPage(1)
+              setCategory(item.value);
             }}
             className={[
               'rounded-lg border p-4 text-left transition-colors',
@@ -423,7 +419,7 @@ export default function BarcodePrintQueryPage() {
         loading={query.isLoading}
         rowKey="recordId"
       />
-      <Pagination page={page} totalPages={totalPages} total={total} unit="条" onPageChange={setPage} />
+      <ListSummary total={total} unit="条" />
 
       {<div className="px-1 text-helper">状态每 3 秒自动刷新</div>}
 

@@ -50,6 +50,8 @@ async function packDoneWithinTransaction(conn, id, { requestKey, userId, scopeWa
     toStatus: rule.toStatus,
     entityName: '仓库任务',
   })
+  const { createDirectWaybillsForTaskTx } = require('../logistics/logistics.direct-create')
+  await createDirectWaybillsForTaskTx(conn, id, userId)
 
   // 分拣格在这里才真正释放：货物未装箱前一直占用分拣格，打包完成货物才算真正
   // 离开格子（见 warehouse-tasks.sort.js 里对应的说明）。

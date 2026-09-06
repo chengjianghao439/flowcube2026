@@ -2,15 +2,17 @@ const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
+const { isDirect, json } = require('./logistics.direct')
 
 // ─── 内联状态机（不进 documentStatusRules.js，像 return_tasks）────────────────
-const WB_STATUS = { PENDING: 1, FETCHING: 2, FETCHED: 3, FAILED: 4, VOID: 5 }
+const WB_STATUS = { PENDING: 1, FETCHING: 2, FETCHED: 3, FAILED: 4, VOID: 5, UNKNOWN: 6 }
 const WB_STATUS_META = {
   1: { label: '待取号', tone: 'active' },
   2: { label: '取号中', tone: 'warning' },
   3: { label: '已取号', tone: 'success' },
   4: { label: '取号失败', tone: 'danger' },
   5: { label: '已作废', tone: 'draft' },
+  6: { label: '下单待核实', tone: 'warning' },
 }
 const FREIGHT_TYPE_LABEL = { 1: '寄付', 2: '到付', 3: '第三方付' }
 
@@ -31,6 +33,9 @@ function fmt(r) {
     platformCode: r.platform_code || null,
     platformCarrier: r.platform_carrier || null,
     trackingNo: r.tracking_no || null,
+    trackingNumbers: json(r.tracking_numbers, []),
+    shipment: json(r.shipment_json),
+    submittedToPlatform: !!r.direct_request,
     status: Number(r.status),
     statusLabel: meta.label,
     statusTone: meta.tone,
@@ -146,6 +151,7 @@ async function createPendingWaybillTx(conn, { packageId, createdBy = null } = {}
     [packageId],
   )
   if (!info || !info.sale_order_id || !info.carrier_id) return null // 无销售单/未指定承运商 → 不建运单
+  if (isDirect(info.platform_code)) return null // 官方直连在整批 packDone 后按实际箱数创建
 
   // 已存在则直接返回（uk_package），避免依赖异常路径
   const [[existing]] = await conn.query(
@@ -184,7 +190,8 @@ async function manualSetTracking(id, { trackingNo }, { warehouseIds = null } = {
     const [[row]] = await conn.query('SELECT * FROM logistics_waybills WHERE id = ? FOR UPDATE', [id])
     if (!row) throw new AppError('运单不存在', 404)
     assertInScope(warehouseIds, row.warehouse_id, '运单')
-    if (Number(row.status) === WB_STATUS.VOID) throw new AppError('运单已作废，无法录号', 409)
+    if (isDirect(row.platform_code)) throw new AppError('直连运单由平台返回整批母子单号，请通过原单查询核实', 409)
+    if (![1, 3, 4].includes(Number(row.status))) throw new AppError('当前状态不能手工录入快递单号', 409)
     await conn.query(
       `UPDATE logistics_waybills
        SET tracking_no = ?, status = ?, print_data_ref = 'manual', error_message = NULL
@@ -209,6 +216,12 @@ async function retryFetch(id, { warehouseIds = null } = {}) {
     const [[row]] = await conn.query('SELECT * FROM logistics_waybills WHERE id = ? FOR UPDATE', [id])
     if (!row) throw new AppError('运单不存在', 404)
     assertInScope(warehouseIds, row.warehouse_id, '运单')
+    if (isDirect(row.platform_code) && [1, 4, 6].includes(Number(row.status))) {
+      await conn.query(`UPDATE logistics_waybills SET status = ?, retry_count = 0, last_tried_at = NULL, error_message = NULL WHERE id = ?`,
+        [row.direct_request || Number(row.status) === 6 ? 6 : 1, id])
+      await conn.commit()
+      return getWaybillById(id, { warehouseIds })
+    }
     if (![WB_STATUS.PENDING, WB_STATUS.FAILED].includes(Number(row.status))) {
       throw new AppError('仅待取号/取号失败的运单可重试', 409)
     }
@@ -238,6 +251,9 @@ async function voidWaybill(id, { reason = null } = {}, { warehouseIds = null } =
     assertInScope(warehouseIds, row.warehouse_id, '运单')
     if (Number(row.status) === WB_STATUS.VOID) throw new AppError('运单已作废', 409)
     if (Number(row.status) === WB_STATUS.FETCHING) throw new AppError('取号进行中，请稍后再作废', 409)
+    if (isDirect(row.platform_code) && (row.direct_request || [3, 6].includes(Number(row.status)))) {
+      throw new AppError('该运单已向快递平台提交，请通过快递官方处理取消；本地作废不能取消真实快递订单', 409)
+    }
     await conn.query(
       `UPDATE logistics_waybills SET status = ?, error_message = ? WHERE id = ? AND status <> ?`,
       [WB_STATUS.VOID, reason ? `已作废：${reason}` : '已作废', id, WB_STATUS.VOID],

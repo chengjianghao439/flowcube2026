@@ -1,9 +1,11 @@
+import { ShippingProductField } from '@/components/shared/ShippingProductField'
 import { RecordIdentity } from '@/components/shared/RecordIdentity'
 /**
  * 承运商管理页
  * 路由：/carriers
  */
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Input } from '@/components/ui/input'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { activeTone } from '@/lib/statusTone'
@@ -21,13 +23,15 @@ import { toast } from '@/lib/toast'
 type FormState = CreateCarrierParams & { isActive: boolean }
 const EMPTY_FORM: FormState = {
   name: '', type: 'express', contact: '', phone: '', remark: '', isActive: true,
-  platformCode: '', platformCarrier: '', monthlyAccount: '', netSiteCode: '', credentialRef: '', waybillEnabled: false,
+  shippingProduct: '', shippingDeliveryType: '', platformCode: '', platformCarrier: '', monthlyAccount: '', netSiteCode: '', credentialRef: '', waybillEnabled: false,
 }
 
 // 建/改承运商时提交的对接字段（密钥不在前端）
 function platformPayload(f: FormState) {
   return {
-    platformCode: f.waybillEnabled ? f.platformCode : '',
+    platformCode: f.platformCode,
+    shippingProduct: f.shippingProduct,
+    shippingDeliveryType: f.shippingDeliveryType,
     platformCarrier: f.platformCarrier,
     monthlyAccount: f.monthlyAccount,
     netSiteCode: f.netSiteCode,
@@ -37,9 +41,10 @@ function platformPayload(f: FormState) {
 }
 
 export default function CarriersPage() {
+  const navigate = useNavigate()
   const [keyword, setKeyword] = useState('')
   const [search, setSearch] = useState('')
-  const [page, setPage] = useState(1)
+  const page = 1
   const [form, setForm] = useState<FormState>(EMPTY_FORM)
 
   const set = (k: keyof FormState, v: string | boolean) => setForm(f => ({ ...f, [k]: v }))
@@ -49,6 +54,7 @@ export default function CarriersPage() {
     if (editing) {
       setForm({
         name: editing.name, type: editing.type, contact: editing.contact ?? '', phone: editing.phone ?? '', remark: editing.remark ?? '', isActive: editing.isActive,
+        shippingProduct: editing.shippingProduct ?? '', shippingDeliveryType: editing.shippingDeliveryType ?? '',
         platformCode: editing.platformCode ?? '', platformCarrier: editing.platformCarrier ?? '', monthlyAccount: editing.monthlyAccount ?? '',
         netSiteCode: editing.netSiteCode ?? '', credentialRef: editing.credentialRef ?? '', waybillEnabled: editing.waybillEnabled,
       })
@@ -65,7 +71,7 @@ export default function CarriersPage() {
       render: v => (v as string | null) ?? <span className="text-muted-foreground">—</span> },
     { key: 'phone',    title: '电话',
       render: v => (v as string | null) ?? <span className="text-muted-foreground">—</span> },
-    { key: 'waybillEnabled', title: '电子面单', width: 130, render: v => <span className="text-sm text-muted-foreground">{v ? '已开通' : '未开通'}</span> },
+    { key: 'waybillEnabled', title: '电子面单', width: 130, render: v => <span className="text-sm text-muted-foreground">{v ? '取号已启用' : '取号未启用'}</span> },
     { key: 'isActive', title: '状态', width: 80,
       render: v => <SoftStatusLabel label={v ? '启用' : '停用'} tone={activeTone(v as boolean)} /> },
   ]
@@ -77,15 +83,16 @@ export default function CarriersPage() {
       columns={columns}
       queryKey={['carriers', { page, pageSize: 20, keyword }]}
       listQuery={() => getCarriersApi({ keyword, page, pageSize: 20 })}
-      pagination={{ page, pageSize: 20, unit: '个', onPageChange: setPage }}
+      recordUnit="个"
       deleteApi={(id) => deleteCarrierApi(id, { skipGlobalError: true })}
       deleteMessage="确认删除该承运商？删除后不可恢复。"
       createLabel="新建承运商"
       saveSuccessMessage={(editing) => editing ? '承运商已保存' : '承运商已创建'}
       formWidthClass="max-w-3xl"
-      headerActions={
+      headerActions={<>
+        <Button variant="outline" onClick={() => navigate('/carrier-accounts')}>绑定快递账号</Button>
         <Button variant="outline" onClick={() => downloadExport('/export/carriers').catch(e => toast.error((e as Error).message))}>导出</Button>
-      }
+      </>}
       onOpen={handleOpen}
       canSubmit={() => !!form.name}
       renderToolbar={
@@ -94,11 +101,11 @@ export default function CarriersPage() {
             <div className="flex-1 min-w-[180px]">
               <Input aria-label="搜索承运商名称或编号" placeholder="搜索承运商名称或编号" value={search}
                 onChange={e => setSearch(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') { setKeyword(search); setPage(1) } }}
+                onKeyDown={e => { if (e.key === 'Enter') { setKeyword(search) } }}
               />
             </div>
-            <Button size="sm" variant="outline" onClick={() => { setKeyword(search); setPage(1) }}>搜索</Button>
-            <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword(''); setPage(1) }}>重置</Button>
+            <Button size="sm" variant="outline" onClick={() => { setKeyword(search) }}>搜索</Button>
+            <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword('') }}>重置</Button>
           </div>
         </FilterCard>
       }
@@ -135,13 +142,19 @@ export default function CarriersPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label>对接平台</Label>
-                  <Select value={form.platformCode || ''} onValueChange={v => set('platformCode', v)}>
+                  <Select value={form.platformCode || ''} onValueChange={v => setForm(f => ({ ...f, platformCode: v, shippingProduct: '', shippingDeliveryType: '' }))}>
                     <SelectTrigger aria-label="对接平台" className="mt-1"><SelectValue placeholder="选择平台" /></SelectTrigger>
                     <SelectContent>
                       {WAYBILL_PLATFORM_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
+                {['sf', 'deppon'].includes(form.platformCode || '') && <>
+                  <div><Label htmlFor="carrier-product">默认发货产品</Label><div className="mt-1"><ShippingProductField id="carrier-product" platform={form.platformCode} value={form.shippingProduct || ''} onChange={v => set('shippingProduct', v)} /></div>
+                    <p className="mt-1 text-xs text-muted-foreground">按月结合同填写，销售单可单独指定；顺丰航空服务以合同产品为准。</p></div>
+                  {form.platformCode === 'deppon' && <div><Label>德邦送货方式</Label><Select value={form.shippingDeliveryType || ''} onValueChange={v => set('shippingDeliveryType', v)}><SelectTrigger aria-label="德邦送货方式" className="mt-1"><SelectValue placeholder="选择送货方式" /></SelectTrigger><SelectContent><SelectItem value="1">自提</SelectItem><SelectItem value="3">送货不上楼</SelectItem><SelectItem value="4">送货上楼</SelectItem></SelectContent></Select></div>}
+                  <p className="col-span-2 text-xs text-muted-foreground">打包完成后自动按实际箱数下单，重量由快递员称重确认。启用前须完成官方接口联调。</p>
+                </>}
                 <div><Label htmlFor="carrier-platformCarrier">快递公司编码</Label><Input className="mt-1" placeholder="如 SF / YTO / ZTO" id="carrier-platformCarrier" value={form.platformCarrier} onChange={e => set('platformCarrier', e.target.value)} /></div>
                 <div><Label htmlFor="carrier-monthlyAccount">月结账号</Label><Input className="mt-1" placeholder="可选" id="carrier-monthlyAccount" value={form.monthlyAccount} onChange={e => set('monthlyAccount', e.target.value)} /></div>
                 <div><Label htmlFor="carrier-netSiteCode">网点编码</Label><Input className="mt-1" placeholder="可选" id="carrier-netSiteCode" value={form.netSiteCode} onChange={e => set('netSiteCode', e.target.value)} /></div>

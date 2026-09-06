@@ -73,7 +73,7 @@ async function findAll({ page = 1, pageSize = 20, keyword = '', status = null, s
   const joins = 'LEFT JOIN sale_orders so ON so.id = ro.sale_order_id'
   const [[{ total }]] = await pool.query(`SELECT COUNT(*) AS total FROM refund_orders ro ${joins} WHERE ${where}`, params)
   const [rows] = await pool.query(
-    `SELECT ro.* FROM refund_orders ro ${joins} WHERE ${where} ORDER BY ro.created_at DESC LIMIT ? OFFSET ?`,
+    `SELECT ro.* FROM refund_orders ro ${joins} WHERE ${where} ORDER BY ro.created_at DESC, ro.id DESC LIMIT ? OFFSET ?`,
     [...params, ps, offset],
   )
   return { list: rows.map(fmt), pagination: { page, pageSize: ps, total: Number(total) } }

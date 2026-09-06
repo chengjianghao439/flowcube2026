@@ -1,3 +1,4 @@
+import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
 import { useState } from 'react'
 import { toast } from '@/lib/toast'
 import { confirmAction } from '@/lib/confirm'
@@ -54,6 +55,8 @@ export default function RefundDetailDialog({ open, onClose, id }: Props) {
             {refund && <SoftStatusLabel label={refund.statusName} tone={STATUS_TONE[refund.status] ?? 'draft'} />}
           </DialogTitle>
         </DialogHeader>
+        <OrderDetailSections type="refund" id={id || 0}>
+
         {isLoading && <p className="text-center py-8 text-muted-foreground">加载中…</p>}
         {refund && (
           <div className="grid grid-cols-2 gap-x-8 gap-y-5 rounded-lg border border-border bg-muted/20 p-5 text-sm [&>div]:break-words [&>div]:leading-6">
@@ -68,6 +71,7 @@ export default function RefundDetailDialog({ open, onClose, id }: Props) {
             {refund.remark && <div className="col-span-2"><span className="text-muted-foreground">备注：</span>{refund.remark}</div>}
           </div>
         )}
+        </OrderDetailSections>
         <DialogFooter className="gap-2">
           {canSubmit && (
             <Button onClick={() => confirmAction({

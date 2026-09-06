@@ -3,7 +3,7 @@ import { X } from 'lucide-react'
 import { toast } from '@/lib/toast'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
-import Pagination from '@/components/shared/Pagination'
+import ListSummary from '@/components/shared/ListSummary'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -41,12 +41,11 @@ export default function RefundsPage() {
   const [queryOpen, setQueryOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
   const [detailId, setDetailId] = useState<number | null>(null)
-  const [page, setPage] = useState(1)
   const { can } = usePermission()
   const canCreate = can(PERMISSIONS.REFUND_ORDER_CREATE)
 
   const { data, isLoading } = useRefundList({
-    page,
+    page: 1,
     pageSize: 20,
     keyword,
     status: statusFilter || undefined,
@@ -54,7 +53,6 @@ export default function RefundsPage() {
     endDate: endDate || undefined,
   })
   const total = data?.pagination?.total ?? 0
-  const totalPages = Math.max(1, Math.ceil(total / 20))
 
   // ── 查询弹窗筛选值 ──
   const initialQuery: RefundQueryValues = { keyword, status: statusFilter, startDate, endDate }
@@ -62,11 +60,10 @@ export default function RefundsPage() {
     setKeyword(v.keyword)
     setStatusFilter(v.status)
     setStartDate(v.startDate)
-    setEndDate(v.endDate)
-    setPage(1)
+    setEndDate(v.endDate);
     setQueryOpen(false)
   }
-  function clearAll() { setKeyword(''); setStatusFilter(''); setStartDate(''); setEndDate(''); setPage(1) }
+  function clearAll() { setKeyword(''); setStatusFilter(''); setStartDate(''); setEndDate(''); }
 
   const chips = [
     keyword && { key: 'keyword', label: `关键字：${keyword}`, onRemove: () => setKeyword('') },
@@ -126,7 +123,7 @@ export default function RefundsPage() {
       )}
 
       <DataTable columns={columns} data={data?.list || []} loading={isLoading} />
-      <Pagination page={page} totalPages={totalPages} total={total} unit="单" onPageChange={setPage} />
+      <ListSummary total={total} unit="单" />
 
       <CreateRefundDialog open={createOpen} onClose={() => setCreateOpen(false)} />
       <RefundDetailDialog open={!!detailId} onClose={() => setDetailId(null)} id={detailId} />

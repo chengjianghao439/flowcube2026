@@ -87,7 +87,7 @@ export const WIDGETS: WidgetDef[] = [
   { id: 'list-pda-perf',     title: '今日 PDA 作业', description: '今日扫码 / 拣货与操作员排行', icon: ScanLine,     category: 'list', permission: PERMISSIONS.REPORT_VIEW,    defaultW: 2, size: 'lg', Component: List.ListPdaPerf },
   { id: 'list-collect-top',  title: '催收 Top',      description: '应收敞口最高的往来方',      icon: HandCoins,     category: 'list', permission: PERMISSIONS.PAYMENT_VIEW,   defaultW: 2, size: 'lg', Component: List.ListCollectTop },
   { id: 'list-pay-top',      title: '催付 Top',      description: '应付敞口最高的往来方',      icon: Wallet,        category: 'list', permission: PERMISSIONS.PAYMENT_VIEW,   defaultW: 2, size: 'lg', Component: List.ListPayTop },
-  { id: 'board-workbench',   title: '我的工作台',    description: '按角色聚合的待处理事项',    icon: ListTodo,      category: 'list', permission: PERMISSIONS.REPORT_VIEW,    defaultW: 2, size: 'lg', Component: List.BoardWorkbench },
+  { id: 'board-workbench',   title: '我的待办',    description: '按角色聚合的待处理事项',    icon: ListTodo,      category: 'list', permission: PERMISSIONS.REPORT_VIEW,    defaultW: 2, size: 'lg', Component: List.BoardWorkbench },
   { id: 'list-top-customer', title: 'Top 客户',      description: '销售额最高的客户',          icon: Users,         category: 'list', permission: PERMISSIONS.REPORT_VIEW,    defaultW: 2, size: 'lg', Component: List.ListTopCustomer },
   { id: 'list-top-supplier', title: 'Top 供应商',    description: '采购额最高的供应商',        icon: Building2,     category: 'list', permission: PERMISSIONS.REPORT_VIEW,    defaultW: 2, size: 'lg', Component: List.ListTopSupplier },
   { id: 'list-anomaly',      title: '异常扫码分析',  description: '近 30 天扫码异常概况',      icon: TriangleAlert, category: 'list', permission: PERMISSIONS.SCAN_LOG_VIEW,  defaultW: 2, size: 'lg', Component: List.ListAnomaly },
@@ -123,10 +123,12 @@ const PREVIOUS_VISIBLE_ORDER = [
   'list-low-stock', 'board-incoming',
   'chart-sale-trend', 'chart-io-trend',
 ]
-const DEFAULT_VISIBLE_ORDER = [
+const PRE_MERGE_VISIBLE_ORDER = [
   'kpi-pending-sale', 'kpi-shipped-today', 'kpi-receivable', 'kpi-approval-count',
   'board-sales-actions', 'board-business-risk', 'chart-sale-trend', 'chart-receivable-due',
 ]
+
+const DEFAULT_VISIBLE_ORDER = [...PRE_MERGE_VISIBLE_ORDER.slice(0, 4), 'board-workbench', ...PRE_MERGE_VISIBLE_ORDER.slice(4)]
 
 /** 业务阅读分区；每个注册组件只出现一次，区内保留用户保存的顺序。 */
 export const DASHBOARD_SECTIONS = [
@@ -161,7 +163,7 @@ export function buildAllLayout(): DashboardLayout {
 export function buildDefaultLayout(): DashboardLayout {
   const visible = DEFAULT_VISIBLE_ORDER
     .filter(id => WIDGET_MAP[id])
-    .map(id => ({ id, visible: true, w: WIDGET_MAP[id].defaultW }))
+    .map(id => ({ id, visible: true, w: id === 'board-workbench' ? 4 : WIDGET_MAP[id].defaultW }))
   const rest = WIDGETS
     .filter(w => !DEFAULT_VISIBLE_ORDER.includes(w.id))
     .map(w => ({ id: w.id, visible: false, w: w.defaultW }))
@@ -175,7 +177,7 @@ export function buildDefaultLayout(): DashboardLayout {
 export function mergeLayout(saved: DashboardLayout | null | undefined): DashboardLayout {
   if (!saved?.widgets?.length) return buildDefaultLayout()
   const previousVisible = saved.widgets.filter(w => w.visible)
-  if (previousVisible.length === PREVIOUS_VISIBLE_ORDER.length && previousVisible.every((w,i) => w.id === PREVIOUS_VISIBLE_ORDER[i] && w.w === WIDGET_MAP[w.id]?.defaultW)) return buildDefaultLayout()
+  if ([PREVIOUS_VISIBLE_ORDER, PRE_MERGE_VISIBLE_ORDER].some(order => previousVisible.length === order.length && previousVisible.every((w,i) => w.id === order[i] && w.w === WIDGET_MAP[w.id]?.defaultW))) return buildDefaultLayout()
   // 不再用三张趣味卡片猜测旧默认：全部展示和合法的个性化组合也会命中。
   const seen = new Set<string>()
   const merged: DashboardLayout['widgets'] = []

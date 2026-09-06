@@ -1,3 +1,4 @@
+import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
 import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
 import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
 /**
@@ -78,7 +79,7 @@ export default function PurchaseFormPage() {
   const tabPath = useContext(TabPathContext)
   const navigate = useNavigate()
   const isNew = tabPath === '/purchase/new' || tabPath === ''
-  const purchaseId = isNew ? null : Number(tabPath.split('/').pop())
+  const purchaseId = isNew ? null : Number(tabPath.split('?')[0].split('/').pop())
 
   function closeTab(targetPath = '/purchase') {
     const { removeTab } = useWorkspaceStore.getState()
@@ -639,6 +640,7 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
         }
       />
 
+      <OrderDetailSections type="purchase" id={order.id}>
       <SectionCard title="基础信息" compact>
         <dl className="grid grid-cols-3 gap-x-6 gap-y-3 text-sm">
           {[
@@ -747,6 +749,8 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
           </div>
         </div>
       </SectionCard>
+
+      </OrderDetailSections>
 
       <div className="h-4" />
 

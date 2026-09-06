@@ -5,7 +5,7 @@ import { X } from 'lucide-react'
 import { downloadExport } from '@/lib/exportDownload'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
-import Pagination from '@/components/shared/Pagination'
+import ListSummary from '@/components/shared/ListSummary'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { Button } from '@/components/ui/button'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
@@ -67,7 +67,6 @@ export default function SalePage() {
   const warehouseName = readStringParam(searchParams, 'warehouseName')
   const startDate     = readStringParam(searchParams, 'startDate')
   const endDate       = readStringParam(searchParams, 'endDate')
-  const page          = Math.max(1, Number(searchParams.get('page') || '1') || 1)
 
   const { can } = usePermission()
   const [queryOpen, setQueryOpen] = useState(false)
@@ -76,7 +75,7 @@ export default function SalePage() {
 
   const PAGE_SIZE = 20
   const { data, isLoading, refetch, error } = useSaleList({
-    page,
+    page: 1,
     pageSize: PAGE_SIZE,
     focus: focus || undefined,
     keyword,
@@ -90,7 +89,6 @@ export default function SalePage() {
     endDate: endDate || undefined,
   })
   const total = data?.pagination?.total ?? 0
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const [shortageDialog, setShortageDialog] = useState<{ orderId: number; shortages: StockShortageItem[] } | null>(null)
   const [reserveDialogOrderId, setReserveDialogOrderId] = useState<number | null>(null)
   const cancel        = useCancelSale()
@@ -269,9 +267,7 @@ export default function SalePage() {
         columnStorageKey="sale:classic-v5"
       />}
 
-      {/* 分页 */}
-      <Pagination page={page} totalPages={totalPages} total={total} unit="单"
-        onPageChange={(p) => updateParams({ page: p })} />
+      <ListSummary total={total} unit="单" />
 
       {/* 二次确认弹窗 */}
       <ConfirmDialog

@@ -49,7 +49,7 @@ async function getStockSnapshotForDisplay({ page=1, pageSize=20, keyword='', war
      JOIN inventory_warehouses w ON dims.warehouse_id=w.id AND w.deleted_at IS NULL
      WHERE (p.code LIKE ? OR p.name LIKE ?) ${whFilter}
        AND (COALESCE(c.quantity, 0) > 0 OR COALESCE(s.reserved, 0) > 0)
-     ORDER BY p.name ASC LIMIT ? OFFSET ?`,
+     ORDER BY p.name ASC, p.id ASC, w.id ASC LIMIT ? OFFSET ?`,
     params,
   )
 
@@ -165,7 +165,7 @@ async function getLogs({ page=1, pageSize=20, type=null, productId=null, warehou
      JOIN product_items p ON l.product_id=p.id
      JOIN inventory_warehouses w ON l.warehouse_id=w.id
      LEFT JOIN supply_suppliers s ON l.supplier_id=s.id
-     WHERE ${where} ORDER BY l.created_at DESC LIMIT ? OFFSET ?`,
+     WHERE ${where} ORDER BY l.created_at DESC, l.id DESC LIMIT ? OFFSET ?`,
     [...params, ...scope.params, ps, offset],
   )
 
@@ -367,8 +367,7 @@ async function getOverview({ page=1, pageSize=20, keyword='', warehouseId=null, 
      JOIN product_items p ON ip.product_id = p.id
      JOIN inventory_warehouses w ON ip.warehouse_id = w.id AND w.deleted_at IS NULL
      WHERE ${where}
-     ORDER BY p.name ASC, w.name ASC
-     LIMIT ? OFFSET ?`,
+     ORDER BY p.name ASC, w.name ASC, p.id ASC, w.id ASC LIMIT ? OFFSET ?`,
     [...baseParams, ps, offset],
   )
 
@@ -1128,118 +1127,12 @@ async function splitContainerOp(containerId, { qty, remark, printLabel, targetCo
 // 不用于关键业务判定；补货基准按仓取 COALESCE(本仓行, warehouse_id=0 默认行, 0)。
 
 /**
- * 补货建议列表：可用 = GREATEST(0, quantity - reserved)（已扣预占，不再 +reserved）；
- * 在途采购 = 已提交(status=2)采购单下单量 − 已上架量；只列「补货点>0 且 可用+在途 < 补货点」。
- * 数据权限走 scopeFilter(ip.warehouse_id)。
+ * 补货建议复用采购净需求：ACTIVE 实物、预计采购、未发销售与单据覆盖；目标库存已含安全库存。
  */
-async function getReplenishment({ page = 1, pageSize = 20, keyword = '', warehouseId = null, categoryId = null, scopeWarehouseIds = null }) {
-  const inventoryDisplayProjectionSql = getInventoryDisplayProjectionSql()
-
-  // 在途采购子查询（按 仓库×商品）：每个 PO 行先 GREATEST(0, 下单−已上架) 再求和，
-  // 避免超收(负值)跨单抵消；poi 先按 (order_id, product_id) 聚合、避免与 recv JOIN 时 fan-out 放大。
-  const inTransitSql = `(
-    SELECT warehouse_id, product_id, SUM(leg) AS in_transit FROM (
-      SELECT po.warehouse_id, oi.product_id,
-             GREATEST(0, oi.ordered - COALESCE(recv.putaway_qty, 0)) AS leg
-      FROM purchase_orders po
-      JOIN (SELECT order_id, product_id, SUM(quantity) AS ordered
-            FROM purchase_order_items GROUP BY order_id, product_id) oi ON oi.order_id = po.id
-      LEFT JOIN (SELECT iti.purchase_order_id, iti.product_id, SUM(iti.putaway_qty) AS putaway_qty
-                 FROM inbound_task_items iti
-                 JOIN inbound_tasks it ON it.id = iti.task_id AND it.deleted_at IS NULL
-                 WHERE iti.purchase_order_id IS NOT NULL
-                 GROUP BY iti.purchase_order_id, iti.product_id) recv
-             ON recv.purchase_order_id = po.id AND recv.product_id = oi.product_id
-      WHERE po.deleted_at IS NULL AND po.status = 2
-    ) legs GROUP BY warehouse_id, product_id
-  )`
-
-  const availableExpr = 'GREATEST(0, ip.quantity - ip.reserved)'
-  const inTransitExpr = 'COALESCE(pt.in_transit, 0)'
-  const reorderExpr   = 'COALESCE(sp_wh.reorder_point, sp_def.reorder_point, 0)'
-  const safetyExpr    = 'COALESCE(sp_wh.safety_stock, sp_def.safety_stock, 0)'
-  const targetExpr    = 'COALESCE(sp_wh.target_stock, sp_def.target_stock, sp_wh.reorder_point, sp_def.reorder_point, 0)'
-
-  const conditions = ['p.deleted_at IS NULL', 'p.is_active = 1']
-  const baseParams = []
-  if (keyword) { conditions.push('(p.code LIKE ? OR p.name LIKE ?)'); baseParams.push(`%${keyword}%`, `%${keyword}%`) }
-  if (warehouseId) { conditions.push('ip.warehouse_id = ?'); baseParams.push(warehouseId) }
-  if (categoryId) { conditions.push('p.category_id = ?'); baseParams.push(categoryId) }
-  const scope = scopeFilter(scopeWarehouseIds, 'ip.warehouse_id')
-  // 只列需补货：补货点>0 且 可用+在途 < 补货点（表达式直接入 WHERE，避免依赖 ONLY_FULL_GROUP_BY 下的 HAVING）
-  const filterCond = `${reorderExpr} > 0 AND (${availableExpr} + ${inTransitExpr}) < ${reorderExpr}`
-  const where = conditions.join(' AND ') + scope.sql + ' AND ' + filterCond
-  baseParams.push(...scope.params)
-
-  const joins = `
-    FROM ${inventoryDisplayProjectionSql} ip
-    JOIN product_items p ON ip.product_id = p.id
-    JOIN inventory_warehouses w ON ip.warehouse_id = w.id AND w.deleted_at IS NULL
-    LEFT JOIN product_stock_policies sp_wh  ON sp_wh.product_id = ip.product_id AND sp_wh.warehouse_id = ip.warehouse_id
-    LEFT JOIN product_stock_policies sp_def ON sp_def.product_id = ip.product_id AND sp_def.warehouse_id = 0
-    LEFT JOIN ${inTransitSql} pt ON pt.warehouse_id = ip.warehouse_id AND pt.product_id = ip.product_id
-    LEFT JOIN supply_suppliers sup ON sup.id = p.supplier_id AND sup.deleted_at IS NULL
-    LEFT JOIN (SELECT wti.product_id, wt.warehouse_id, SUM(wti.picked_qty) AS sold_90d
-               FROM warehouse_tasks wt JOIN warehouse_task_items wti ON wti.task_id=wt.id
-               WHERE wt.task_type='sale_out' AND wt.status=7 AND wt.shipped_at >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)
-               GROUP BY wti.product_id, wt.warehouse_id) sold ON sold.product_id=ip.product_id AND sold.warehouse_id=ip.warehouse_id
-    WHERE ${where}`
-
-  const { pageSize: ps, offset } = normalizePagination({ page, pageSize })
-  const [rows] = await pool.query(
-    `SELECT p.id AS product_id, p.code AS product_code, p.name AS product_name, p.unit,
-            p.article_number, p.spec, p.color,
-            w.id AS warehouse_id, w.name AS warehouse_name,
-            ip.quantity, ip.reserved,
-            ${availableExpr} AS available,
-            ${inTransitExpr} AS in_transit,
-            ${reorderExpr}   AS reorder_point,
-            ${safetyExpr}    AS safety_stock,
-            ${targetExpr}    AS target_stock,
-            GREATEST(0, ${targetExpr} - ${availableExpr} - ${inTransitExpr}) AS suggest_qty,
-            COALESCE(sup.lead_time_days, 7) AS lead_time_days,
-            COALESCE(sold.sold_90d, 0) AS sold_90d
-     ${joins}
-     ORDER BY suggest_qty DESC, p.name ASC
-     LIMIT ? OFFSET ?`,
-    [...baseParams, ps, offset],
-  )
-
-  const [[{ total }]] = await pool.query(`SELECT COUNT(*) AS total ${joins}`, baseParams)
-
-  return {
-    list: rows.map(r => {
-      // 建议补货点（文档01 Phase2）：日均销量 × 提前期 + 安全库存。90 天窗口 ADU。
-      // 是「建议值」供参考，不覆盖手工设置的 reorder_point（reorder_point 仍是权威判定）。
-      const adu = Number(r.sold_90d) / 90
-      const leadTime = Number(r.lead_time_days) > 0 ? Number(r.lead_time_days) : 7
-      const suggestReorder = Math.max(0, Math.round((adu * leadTime + Number(r.safety_stock)) * 100) / 100)
-      return {
-        id: `${r.product_id}-${r.warehouse_id}`,
-        productId: r.product_id,
-        productCode: r.product_code,
-        productName: r.product_name,
-        unit: r.unit,
-        articleNumber: r.article_number || null,
-        spec: r.spec || null,
-        color: r.color || null,
-        warehouseId: r.warehouse_id,
-        warehouseName: r.warehouse_name,
-        onHand: Number(r.quantity),
-        reserved: Number(r.reserved),
-        available: Number(r.available),
-        inTransit: Number(r.in_transit),
-        safetyStock: Number(r.safety_stock),
-        reorderPoint: Number(r.reorder_point),
-        targetStock: Number(r.target_stock),
-        suggestQty: Number(r.suggest_qty),
-        adu: Math.round(adu * 100) / 100,
-        leadTimeDays: leadTime,
-        suggestReorderPoint: suggestReorder,
-      }
-    }),
-    pagination: { page, pageSize: ps, total },
-  }
+async function getReplenishment(options) {
+  const { page, pageSize, offset } = normalizePagination(options)
+  const { list } = await require('./inventory.procurement').getSupplyRows({ ...options, mode: 'replenishment' })
+  return { list: list.slice(offset, offset + pageSize), pagination: { page, pageSize, total: list.length } }
 }
 
 /** 读某商品的全部补货策略行（含 warehouse_id=0 通用默认），供策略维护界面用 */

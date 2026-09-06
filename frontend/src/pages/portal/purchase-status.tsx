@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Truck } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
-import Pagination from '@/components/shared/Pagination'
+import ListSummary from '@/components/shared/ListSummary'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { Button } from '@/components/ui/button'
@@ -18,16 +18,14 @@ const PAGE_SIZE = 20
 export default function PortalPurchaseStatusPage() {
   const [supplier, setSupplier] = useState<{ id: number; name: string } | null>(null)
   const [finderOpen, setFinderOpen] = useState(false)
-  const [page, setPage] = useState(1)
 
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ['portal-purchase-status', supplier?.id, page],
-    queryFn: () => getPortalPurchaseStatusApi({ supplierId: supplier!.id, page, pageSize: PAGE_SIZE }),
+    queryKey: ['portal-purchase-status', supplier?.id],
+    queryFn: () => getPortalPurchaseStatusApi({ supplierId: supplier!.id, page: 1, pageSize: PAGE_SIZE }),
     enabled: !!supplier,
   })
 
   const total = data?.pagination?.total ?? 0
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
   const columns: TableColumn<PortalPurchaseStatusRow>[] = [
     { key: 'orderNo', title: '采购单号', width: 150, render: v => <span className="text-doc-code">{String(v)}</span> },
@@ -61,19 +59,19 @@ export default function PortalPurchaseStatusPage() {
         />
         <Button variant="outline" onClick={() => setFinderOpen(true)}>选择供应商</Button>
         {supplier && (
-          <Button variant="ghost" size="sm" onClick={() => { setSupplier(null); setPage(1) }}>清空</Button>
+          <Button variant="ghost" size="sm" onClick={() => { setSupplier(null); }}>清空</Button>
         )}
       </FilterCard>
 
       {supplier && (isError ? <QueryErrorState error={error} onRetry={() => void refetch()} /> : <>
         <DataTable columns={columns} data={data?.list ?? []} loading={isLoading} emptyText="该供应商暂无采购订单" />
-        <Pagination page={page} totalPages={totalPages} total={total} unit="单" onPageChange={setPage} />
+        <ListSummary total={total} unit="单" />
       </>)}
 
       <SupplierFinder
         open={finderOpen}
         onClose={() => setFinderOpen(false)}
-        onConfirm={(r) => { setSupplier({ id: r.id, name: r.name }); setPage(1) }}
+        onConfirm={(r) => { setSupplier({ id: r.id, name: r.name }); }}
       />
 
       {!supplier && (

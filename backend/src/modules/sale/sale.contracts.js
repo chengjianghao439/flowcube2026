@@ -46,6 +46,7 @@ const createSaleSchema = z.object({
   remark: z.string().max(200).optional(),
   carrierId: z.number().int().positive().optional().nullable(),
   carrier: z.string().optional(),
+  shippingProduct: z.string().max(32).optional().nullable(),
   freightType: z.number().int().min(1).max(3).optional().nullable(),
   receiverName: z.string().max(30, '收货人最多 30 个字符').optional(),
   receiverPhone: salePhoneRule,

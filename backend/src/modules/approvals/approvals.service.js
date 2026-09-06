@@ -182,10 +182,10 @@ async function removeFlow(id) {
 /** 审批待办列表（引擎只按 user_id 命中，这里补业务概要 + 分页）。 */
 async function listPending({ page = 1, pageSize = 20 }, userId) {
   const ps = Math.min(Math.max(Number(pageSize) || 20, 1), 100)
-  const offset = (Number(page) - 1) * ps
-  const totalRows = await approvalEngine.listPendingTasks(pool, { userId })
-  const total = totalRows.length
-  const rows = totalRows.slice(offset, offset + ps)
+  const [total, rows] = await Promise.all([
+    approvalEngine.countPendingTasks(pool, { userId }),
+    approvalEngine.listPendingTasks(pool, { userId, page, pageSize: ps }),
+  ])
 
   // N+1 优化：按 biz_type 分组后批量查询，避免逐行查询
   const bizTypeMeta = {

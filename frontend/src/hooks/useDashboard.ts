@@ -11,6 +11,7 @@ import { getFinanceDashboardApi } from '@/api/finance'
 import { getAgingApi } from '@/api/payments'
 import { listPendingApprovalsApi } from '@/api/approvals'
 import { getRelativeDateRange } from '@/lib/dateRange'
+import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import type { DashboardLayout } from '@/types/dashboard'
 
 // 图表/统计类小组件的默认区间：在模块加载时求值一次，保证同一页面生命周期内 queryKey 稳定
@@ -36,13 +37,16 @@ export const useWarehouseOps    = () => useQuery({ queryKey:['dash-warehouse-ops
 export const useFinanceDashboard = () => useQuery({ queryKey:['dash-finance',RANGE_180], queryFn:()=>getFinanceDashboardApi(RANGE_180).then(r=>r!), staleTime:300000 })
 export const useAging           = () => useQuery({ queryKey:['dash-aging'], queryFn:()=>getAgingApi(8).then(r=>r!), staleTime:300000 })
 export const useCreditWarning    = () => useQuery({ queryKey:['dash-credit-warning'], queryFn:()=>getCreditWarningApi().then(r=>r!), staleTime:300000 })
-export const useRoleWorkbench   = () => useQuery({ queryKey:['dash-workbench'], queryFn:()=>getRoleWorkbenchApi().then(r=>r!), refetchInterval:isVisible()?60000:false })
+export function useRoleWorkbench() {
+  const active = useActiveWorkspaceTab()
+  return useQuery({ queryKey: ['role-workbench'], queryFn: () => getRoleWorkbenchApi().then(r => r!), enabled: active, staleTime: 60_000, refetchInterval: active ? 60_000 : false })
+}
 export const useSaleStats       = () => useQuery({ queryKey:['dash-sale-stats',RANGE_180], queryFn:()=>getSaleStatsApi(RANGE_180).then(r=>r!), staleTime:300000 })
 export const usePurchaseStats   = () => useQuery({ queryKey:['dash-purchase-stats',RANGE_180], queryFn:()=>getPurchaseStatsApi(RANGE_180).then(r=>r!), staleTime:300000 })
 export const useInventoryStats  = () => useQuery({ queryKey:['dash-inventory-stats'], queryFn:()=>getInventoryStatsApi({}).then(r=>r!), staleTime:300000 })
 export const usePdaAnomaly      = () => useQuery({ queryKey:['dash-anomaly',RANGE_30], queryFn:()=>getPdaAnomalyApi(RANGE_30).then(r=>r!), staleTime:300000 })
 /** 待我审批（approval.task.view）——首页 widget 每 60s 与通知中心同步刷新 */
-export const usePendingApprovalsBrief = () => useQuery({ queryKey:['dash-pending-approvals'], queryFn:()=>listPendingApprovalsApi({ page: 1, pageSize: 5 }).then(r=>r!), refetchInterval:isVisible()?60000:false })
+export const usePendingApprovalsBrief = () => useQuery({ queryKey:['dash-pending-approvals'], queryFn:()=>listPendingApprovalsApi({ page: 1, pageSize: 5 }, true).then(r=>r!), refetchInterval:isVisible()?60000:false })
 
 // ── 个性化布局存取 ─────────────────────────────────────────────────────────────
 export const useDashboardLayout = () => useQuery({

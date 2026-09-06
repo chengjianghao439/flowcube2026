@@ -45,7 +45,7 @@ export default function LocationsPage() {
   const [zoneFilter, setZoneFilter]     = useState('')
   const [queryOpen, setQueryOpen]     = useState(false)
   const [form, setForm]               = useState<CreateLocationParams>(EMPTY_FORM)
-  const [page, setPage]               = useState(1)
+  const page = 1
 
   const { data: whData } = useQuery({
     queryKey: ['warehouses-simple'],
@@ -102,10 +102,9 @@ export default function LocationsPage() {
     setWarehouseFilter(v.warehouseId)
     setStatusFilter(v.status)
     setZoneFilter(v.zone)
-    setPage(1)
     setQueryOpen(false)
   }
-  function clearAll() { setKeyword(''); setWarehouseFilter(null); setStatusFilter(''); setZoneFilter(''); setPage(1) }
+  function clearAll() { setKeyword(''); setWarehouseFilter(null); setStatusFilter(''); setZoneFilter('') }
 
   // 当前生效筛选摘要（可逐项移除）
   const chips = [
@@ -136,7 +135,7 @@ export default function LocationsPage() {
         title="库位管理"
         description="管理仓库内的存储库位"
         columns={columns}
-        queryKey={['locations', keyword, warehouseFilter, statusFilter, zoneFilter, page]}
+        queryKey={['locations', keyword, warehouseFilter, statusFilter, zoneFilter]}
         listQuery={() => getLocationsApi({
           keyword,
           warehouseId: warehouseFilter ?? undefined,
@@ -145,7 +144,7 @@ export default function LocationsPage() {
           pageSize: 20,
           page,
         })}
-        pagination={{ page, pageSize: 20, unit: '个', onPageChange: setPage }}
+        recordUnit="个"
         deleteApi={(id) => deleteLocationApi(id, { skipGlobalError: true })}
         deleteMessage="仅未被库存容器引用的库位允许删除；若仍在使用，请改为编辑后停用。"
         createLabel="+ 新建库位"

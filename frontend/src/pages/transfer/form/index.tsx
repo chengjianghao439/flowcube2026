@@ -1,3 +1,5 @@
+import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
+import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
 import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
 import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
 /**
@@ -10,8 +12,8 @@ import { productIdentityColumns } from '@/components/shared/productIdentityColum
  * 结构参照采购单 pages/purchase/form/index.tsx：FormView + DetailView。
  */
 
-import { useContext, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useContext, useState, useMemo } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Loader2, Plus, Save, PackageOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -48,8 +50,8 @@ interface DraftItem extends Omit<TransferItem, 'id'> {
 export default function TransferFormPage() {
   const tabPath = useContext(TabPathContext)
   const navigate = useNavigate()
-  const isNew = tabPath === '/transfer/new' || tabPath === ''
-  const transferId = isNew ? null : Number(tabPath.split('/').pop())
+  const isNew = tabPath.split('?')[0] === '/transfer/new' || tabPath === ''
+  const transferId = isNew ? null : Number(tabPath.split('?')[0].split('/').pop())
 
   function closeTab(targetPath = '/transfer') {
     const { removeTab } = useWorkspaceStore.getState()
@@ -69,20 +71,38 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
 }) {
   const qc = useQueryClient()
   const isEdit = !!editOrder
+  const [procurementDraft] = useState<Partial<TransferOrder> | undefined>(() => {
+    if (editOrder) return undefined
+    const key = new URLSearchParams(tabPath.split('?')[1] || '').get('procurement')
+    if (!key?.startsWith('procurement-transfer-')) return undefined
+    try {
+      const value = JSON.parse(sessionStorage.getItem(key) || 'null') as Partial<TransferOrder> | null
+      return value && Number(value.fromWarehouseId) > 0 && Number(value.toWarehouseId) > 0 && Array.isArray(value.items) ? value : undefined
+    } catch { return undefined }
+  })
+  const location = useLocation()
+  const active = useActiveWorkspaceTab()
+  const [appliedProcurementKey, setAppliedProcurementKey] = useState(new URLSearchParams(tabPath.split('?')[1] || '').get('procurement'))
+  const incomingKey = active && !isEdit && location.pathname === '/transfer/new' ? new URLSearchParams(location.search).get('procurement') : null
+  const incomingDraft = useMemo(() => {
+    if (!incomingKey?.startsWith('procurement-transfer-') || incomingKey === appliedProcurementKey) return null
+    try { return JSON.parse(sessionStorage.getItem(incomingKey) || 'null') as Partial<TransferOrder> | null } catch { return null }
+  }, [incomingKey, appliedProcurementKey])
+  const initialOrder = editOrder || procurementDraft
 
-  const [fromWarehouseId, setFromWarehouseId] = useState(editOrder ? String(editOrder.fromWarehouseId) : '')
-  const [fromWarehouseName, setFromWarehouseName] = useState(editOrder?.fromWarehouseName ?? '')
-  const [toWarehouseId, setToWarehouseId] = useState(editOrder ? String(editOrder.toWarehouseId) : '')
-  const [toWarehouseName, setToWarehouseName] = useState(editOrder?.toWarehouseName ?? '')
-  const [remark, setRemark] = useState(editOrder?.remark ?? '')
+  const [fromWarehouseId, setFromWarehouseId] = useState(initialOrder ? String(initialOrder.fromWarehouseId) : '')
+  const [fromWarehouseName, setFromWarehouseName] = useState(initialOrder?.fromWarehouseName ?? '')
+  const [toWarehouseId, setToWarehouseId] = useState(initialOrder ? String(initialOrder.toWarehouseId) : '')
+  const [toWarehouseName, setToWarehouseName] = useState(initialOrder?.toWarehouseName ?? '')
+  const [remark, setRemark] = useState(initialOrder?.remark ?? '')
   const [items, setItems] = useState<DraftItem[]>(
-    (editOrder?.items ?? []).map((it, idx) => ({
+    (initialOrder?.items ?? []).map((it, idx) => ({
       _key: idx, productId: it.productId, productCode: it.productCode, productName: it.productName,
       unit: it.unit, articleNumber: it.articleNumber ?? null, spec: it.spec ?? null, color: it.color ?? null,
       quantity: it.quantity, remark: it.remark ?? '',
     })),
   )
-  const [counter, setCounter] = useState(editOrder?.items?.length ?? 0)
+  const [counter, setCounter] = useState(initialOrder?.items?.length ?? 0)
   const [finderOpen, setFinderOpen] = useState(false)
   const [finderItemKey, setFinderItemKey] = useState<number | null>(null)
   const [submitLocked, setSubmitLocked] = useState(false)
@@ -187,10 +207,23 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
     }
   }
 
+  function applyProcurementDraft() {
+    if (!incomingDraft || !incomingKey || !Array.isArray(incomingDraft.items)) return
+    setFromWarehouseId(String(incomingDraft.fromWarehouseId || ''))
+    setFromWarehouseName(incomingDraft.fromWarehouseName || '')
+    setToWarehouseId(String(incomingDraft.toWarehouseId || ''))
+    setToWarehouseName(incomingDraft.toWarehouseName || '')
+    setRemark(incomingDraft.remark || '')
+    setItems(incomingDraft.items.map((item, index) => ({ ...item, _key: index })))
+    setCounter(incomingDraft.items.length)
+    setAppliedProcurementKey(incomingKey)
+  }
+
   const totalQuantity = items.reduce((s, i) => s + i.quantity, 0)
 
   return (
     <div className="flex flex-col gap-3">
+      {incomingDraft && <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-muted/30 px-4 py-3 text-sm"><p>收到采购调拨建议：{incomingDraft.fromWarehouseName} → {incomingDraft.toWarehouseName}。{isDirty ? '当前有未保存内容，带入将替换当前表单。' : '核对后带入表单。'}</p><div className="flex gap-2"><Button size="sm" variant="outline" onClick={() => setAppliedProcurementKey(incomingKey)}>保留当前表单</Button><Button size="sm" onClick={applyProcurementDraft}>带入采购建议</Button></div></div>}
       <ActionBar
         title={isEdit ? '编辑调拨单' : '新建调拨单'}
         subtitle={!isEdit && isDirty ? (
@@ -421,6 +454,7 @@ function DetailView({ transferId, closeTab, tabPath }: { transferId: number; clo
         }
       />
 
+      <OrderDetailSections type="transfer" id={order.id}>
       <SectionCard title="基础信息" compact>
         <dl className="grid grid-cols-3 gap-x-6 gap-y-3 text-sm">
           {[
@@ -463,6 +497,8 @@ function DetailView({ transferId, closeTab, tabPath }: { transferId: number; clo
           <p className="text-muted-body">共 {order.items?.length ?? 0} 种商品</p>
         </div>
       </SectionCard>
+
+      </OrderDetailSections>
 
       <div className="h-4" />
 

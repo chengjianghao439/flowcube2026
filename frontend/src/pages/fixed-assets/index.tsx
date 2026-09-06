@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
-import Pagination from '@/components/shared/Pagination'
+import ListSummary from '@/components/shared/ListSummary'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -149,13 +149,12 @@ export default function FixedAssetsPage() {
   const qc = useQueryClient()
   const [keyword, setKeyword] = useState('')
   const [applied, setApplied] = useState<{ keyword: string }>({ keyword: '' })
-  const [page, setPage] = useState(1)
   const [createOpen, setCreateOpen] = useState(false)
   const [disposeTarget, setDisposeTarget] = useState<FixedAsset | null>(null)
 
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: useCompanyQueryKey(['fixed-assets', applied, page]),
-    queryFn: () => listFixedAssetsApi({ page, pageSize: 20, keyword: applied.keyword || undefined }),
+    queryKey: useCompanyQueryKey(['fixed-assets', applied]),
+    queryFn: () => listFixedAssetsApi({ page: 1, pageSize: 20, keyword: applied.keyword || undefined }),
   })
   const { mutate: runDepr, isPending: deprPending } = useMutation({
     mutationFn: runDepreciationApi,
@@ -201,8 +200,8 @@ export default function FixedAssetsPage() {
       />
 
       <FilterCard>
-        <Input placeholder="编号 / 名称 / 类别" value={keyword} onChange={e => setKeyword(e.target.value)} onKeyDown={e => e.key === 'Enter' && (setApplied({ keyword }), setPage(1))} className="w-56" />
-        <Button size="sm" variant="outline" onClick={() => (setApplied({ keyword }), setPage(1))}>搜索</Button>
+        <Input placeholder="编号 / 名称 / 类别" value={keyword} onChange={e => setKeyword(e.target.value)} onKeyDown={e => e.key === 'Enter' && setApplied({ keyword })} className="w-56" />
+        <Button size="sm" variant="outline" onClick={() => setApplied({ keyword })}>搜索</Button>
         <div className="ml-auto text-sm text-muted-foreground">共 <span className="font-semibold text-foreground">{total}</span> 项</div>
       </FilterCard>
 
@@ -211,7 +210,7 @@ export default function FixedAssetsPage() {
       ) : (
         <DataTable columns={columns} data={list} loading={isLoading} rowKey="id" emptyText="暂无固定资产卡片" />
       )}
-      {total > 0 && <Pagination page={page} totalPages={Math.ceil(total / 20)} total={total} onPageChange={setPage} />}
+      {total > 0 && <ListSummary total={total} />}
 
       <CreateDialog open={createOpen} onClose={() => setCreateOpen(false)} onSaved={() => refetch()} />
       <DisposeDialog asset={disposeTarget} onClose={() => setDisposeTarget(null)} />

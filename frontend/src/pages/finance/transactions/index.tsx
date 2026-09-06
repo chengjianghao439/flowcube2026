@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
-import Pagination from '@/components/shared/Pagination'
+import ListSummary from '@/components/shared/ListSummary'
 import { QueryChips, type QueryChip } from '@/components/shared/QueryChips'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -115,17 +115,16 @@ function TransactionsQueryDialog({ open, initial, accounts, onClose, onApply }: 
  * 资金流水：所有资金账户的收支明细。
  *
  * 与账户管理页的单账户流水弹窗同一数据源（GET /finance/accounts/transactions），
- * 区别是这里可跨账户查、带筛选与分页。流水是账户余额的唯一事实源，只读不可改——
+ * 区别是这里可跨账户查、带筛选。流水是账户余额的唯一事实源，只读不可改——
  * 要调整余额走账户管理页的「余额调整」（补一笔差额流水留痕）。
  */
 export default function FinanceTransactionsPage() {
   const [query, setQuery] = useState<TxQuery>(EMPTY_TX_QUERY)
   const [queryOpen, setQueryOpen] = useState(false)
-  const [page, setPage] = useState(1)
 
   const PAGE_SIZE = 50
   const params = {
-    page,
+    page: 1,
     pageSize: PAGE_SIZE,
     accountId: query.accountId ? Number(query.accountId) : undefined,
     bizType: query.bizType || undefined,
@@ -135,7 +134,7 @@ export default function FinanceTransactionsPage() {
     keyword: query.keyword || undefined,
   }
   const { data, isLoading } = useQuery({
-    queryKey: ['finance-account-transactions', 'page', query, page],
+    queryKey: ['finance-account-transactions', 'page', query],
     queryFn: () => getAccountTransactionsApi(params),
   })
   const { data: accounts } = useQuery({
@@ -144,11 +143,10 @@ export default function FinanceTransactionsPage() {
   })
 
   const total = data?.pagination?.total ?? 0
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
   const queryChips: QueryChip[] = []
   const dropQ = (...ks: (keyof TxQuery)[]) => () => {
-    setQuery(q => ks.reduce((a, k) => ({ ...a, [k]: '' }), { ...q })); setPage(1)
+    setQuery(q => ks.reduce((a, k) => ({ ...a, [k]: '' }), { ...q }));
   }
   const accountName = accounts?.find(a => String(a.id) === query.accountId)?.name
   if (query.accountId) queryChips.push({ key: 'acc', text: `账户：${accountName ?? query.accountId}`, onClear: dropQ('accountId') })
@@ -209,18 +207,18 @@ export default function FinanceTransactionsPage() {
 
       {summary && <SummaryStrip items={[{ label: '期间收入', value: money(summary.inAmount), tone: 'text-success' }, { label: '期间支出', value: money(summary.outAmount), tone: 'text-destructive' }, { label: '净额', value: money(netAmount), tone: netAmount < 0 ? 'text-destructive' : 'text-foreground' }]} />}
 
-      <QueryChips chips={queryChips} onClearAll={() => { setQuery({ ...EMPTY_TX_QUERY, startDate: '', endDate: '' }); setPage(1) }} />
+      <QueryChips chips={queryChips} onClearAll={() => { setQuery({ ...EMPTY_TX_QUERY, startDate: '', endDate: '' }); }} />
 
       <DataTable columns={columns} data={data?.list || []} loading={isLoading} rowKey="id" />
 
-      <Pagination page={page} totalPages={totalPages} total={total} unit="笔" onPageChange={setPage} />
+      <ListSummary total={total} unit="笔" />
 
       <TransactionsQueryDialog
         open={queryOpen}
         initial={query}
         accounts={accounts ?? []}
         onClose={() => setQueryOpen(false)}
-        onApply={q => { setQuery(q); setPage(1) }}
+        onApply={q => { setQuery(q); }}
       />
     </div>
   )

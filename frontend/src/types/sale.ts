@@ -129,6 +129,7 @@ export interface SaleOrder {
   taskNo?: string | null
   /** 分仓：一个订单的多个仓库任务（详情页返回，多仓时用它而非单个 taskId） */
   tasks?: SaleOrderTask[]
+  shippingProduct?: string | null
   carrierId?: number | null
   carrier?: string | null
   freightType?: 1 | 2 | 3 | null
@@ -151,6 +152,7 @@ export interface CreateSaleParams {
   remark?: string
   /** 整单折扣金额（P2-4） */
   discountAmount?: number
+  shippingProduct?: string | null
   carrierId?: number | null
   carrier?: string
   freightType?: number | null

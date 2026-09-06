@@ -50,7 +50,7 @@ async function ensureScopedUser(pool, allowedWarehouseId) {
 }
 
 async function search(log, http, token, keyword) {
-  const res = await http.get(`/api/search?q=${encodeURIComponent(keyword)}&startDate=&endDate=`, { token })
+  const res = await http.get(`/api/search?q=${encodeURIComponent(keyword)}`, { token })
   return res
 }
 

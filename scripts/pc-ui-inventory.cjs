@@ -31,14 +31,14 @@ const records = files.sort().map(file => {
   if (/createPortal\(/.test(code)) surfaces.push('createPortal（独立覆盖层）')
   return { file: path.relative(root, file), surfaces }
 })
-const registry = fs.readFileSync(path.join(sourceRoot, 'router/routeRegistry.ts'), 'utf8')
-const ast = ts.createSourceFile('routeRegistry.ts', registry, ts.ScriptTarget.Latest, true)
+const registry = fs.readFileSync(path.join(sourceRoot, 'router/routeDefinitions.ts'), 'utf8')
+const ast = ts.createSourceFile('routeDefinitions.ts', registry, ts.ScriptTarget.Latest, true)
 const routes = []
 function routesVisit(node) {
   if (ts.isObjectLiteralExpression(node)) {
     const values = new Map(node.properties.filter(ts.isPropertyAssignment).map(p => [p.name.getText(ast), p.initializer.getText(ast)]))
-    if (values.has('component') && (values.has('path') || values.has('pattern'))) {
-      routes.push([values.get('path') || values.get('pattern'), values.get('title') || '', values.get('component')])
+    if ((values.has('component') || values.has('componentKey')) && (values.has('path') || values.has('pattern'))) {
+      routes.push([values.get('path') || values.get('pattern'), values.get('title') || '', values.get('component') || values.get('componentKey')])
     }
   }
   ts.forEachChild(node, routesVisit)

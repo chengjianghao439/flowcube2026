@@ -8,7 +8,7 @@ import { downloadExport } from '@/lib/exportDownload'
 import { toast } from '@/lib/toast'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
-import Pagination from '@/components/shared/Pagination'
+import ListSummary from '@/components/shared/ListSummary'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
@@ -100,9 +100,7 @@ export default function InventoryPage() {
   const logWarehouseId = readNullableIntParam(searchParams, 'logWarehouseId')
   const logWarehouseName = readStringParam(searchParams, 'logWarehouseName')
 
-  // 分页参数：总览与流水各用各的（/inventory/overview 与 /inventory/logs 各归各的接口）
-  const page     = Math.max(1, Number(searchParams.get('page') || '1') || 1)
-  const logPage  = Math.max(1, Number(searchParams.get('logPage') || '1') || 1)
+  // 总览和流水分别按当前筛选条件读取完整列表。
 
   // 容器侧滑
   const [drawerItem, setDrawerItem] = useState<InventoryOverviewItem | null>(null)
@@ -125,16 +123,14 @@ export default function InventoryPage() {
 
   const PAGE_SIZE = 20
   const { data: overview, isLoading: overviewLoading } = useInventoryOverview({
-    page, pageSize: PAGE_SIZE, keyword, warehouseId, categoryId,
+    page: 1, pageSize: PAGE_SIZE, keyword, warehouseId, categoryId,
   })
   const { data: logs, isLoading: logLoading } = useLogs({
-    page: logPage, pageSize: PAGE_SIZE, type: logType,
+    page: 1, pageSize: PAGE_SIZE, type: logType,
     productId: logProductId ?? undefined, warehouseId: logWarehouseId ?? undefined,
   })
   const overviewTotal = overview?.pagination?.total ?? 0
-  const overviewTotalPages = Math.max(1, Math.ceil(overviewTotal / PAGE_SIZE))
   const logsTotal = logs?.pagination?.total ?? 0
-  const logsTotalPages = Math.max(1, Math.ceil(logsTotal / PAGE_SIZE))
   const { data: warehouses } = useWarehousesActive()
   const { data: categoryTree = [] } = useCategoryTree()
   const { mutate: outbound, isPending } = useOutbound()
@@ -340,9 +336,7 @@ export default function InventoryPage() {
             </div>
           </div>
 
-          {/* 分页 */}
-          <Pagination page={page} totalPages={overviewTotalPages} total={overviewTotal} unit="条"
-            onPageChange={(p) => updateParams({ page: p })} />
+          <ListSummary total={overviewTotal} unit="条" />
 
           <ContainerDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} item={drawerItem} />
         </>
@@ -352,9 +346,7 @@ export default function InventoryPage() {
         <>
           <DataTable columns={logCols} data={logs?.list ?? []} loading={logLoading} rowKey="id" />
 
-          {/* 分页 */}
-          <Pagination page={logPage} totalPages={logsTotalPages} total={logsTotal} unit="条"
-            onPageChange={(p) => updateParams({ logPage: p })} />
+          <ListSummary total={logsTotal} unit="条" />
         </>
       )}
 

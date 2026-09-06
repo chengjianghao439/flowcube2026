@@ -58,7 +58,7 @@ async function findAll({ page = 1, pageSize = 20, keyword = '', scopeWarehouseId
   const [rows] = await pool.query(
     `SELECT * FROM inventory_warehouses
      WHERE deleted_at IS NULL AND (code LIKE ? OR name LIKE ?)${scope.sql}
-     ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+     ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`,
     [like, like, ...scope.params, ps, offset],
   )
 

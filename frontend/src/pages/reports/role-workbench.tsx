@@ -1,15 +1,16 @@
+import { FulfillmentTodos } from '@/components/shared/FulfillmentTodos'
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import PageHeader from '@/components/shared/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
-import { getRoleWorkbenchApi, type WorkbenchCard } from '@/api/reports'
+import type { WorkbenchCard } from '@/api/reports'
 import { getNotificationsApi, type NotificationItem } from '@/api/notifications'
 import { getNotificationCategoryLabel, getReminderNotifications } from '@/lib/notifications'
+import { useRoleWorkbench } from '@/hooks/useDashboard'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 
@@ -21,45 +22,6 @@ function getReminderTone(item: NotificationItem) {
     return 'border-amber-200 bg-amber-50 text-amber-700'
   }
   return 'border-blue-200 bg-blue-50 text-blue-700'
-}
-
-function PriorityBanner({
-  title,
-  description,
-  count,
-  sectionTitle,
-  badge,
-  onOpen,
-}: {
-  title: string
-  description: string
-  count: number
-  sectionTitle: string
-  badge: string
-  onOpen: () => void
-}) {
-  return (
-    <section className="rounded-lg border border-warning/30 bg-warning/5 p-5">
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <SoftStatusLabel label={badge} tone="danger" />
-            <span className="text-xs text-muted-foreground">最优先待办</span>
-          </div>
-          <h2 className="mt-2 text-xl font-semibold text-foreground">{title}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{description}</p>
-          <p className="mt-2 text-xs text-muted-foreground">来源：{sectionTitle}</p>
-        </div>
-        <div className="flex shrink-0 items-center gap-3">
-          <div className="px-4 py-2 text-right">
-            <p className="text-xs text-muted-foreground">待处理数</p>
-            <p className="text-2xl font-semibold tabular-nums text-warning">{count}</p>
-          </div>
-          <Button onClick={onOpen}>立即处理</Button>
-        </div>
-      </div>
-    </section>
-  )
 }
 
 function SectionList({ cards, onOpen }: { cards: WorkbenchCard[]; onOpen: (path: string, title: string) => void }) {
@@ -156,12 +118,7 @@ export default function RoleWorkbenchPage() {
   const addTab = useWorkspaceStore(s => s.addTab)
   const isActiveTab = useActiveWorkspaceTab()
 
-  const workbenchQ = useQuery({
-    queryKey: ['role-workbench'],
-    queryFn: () => getRoleWorkbenchApi(),
-    enabled: isActiveTab,
-    refetchInterval: isActiveTab ? 60_000 : false,
-  })
+  const workbenchQ = useRoleWorkbench()
 
   const notificationsQ = useQuery({
     queryKey: ['notifications-page'],
@@ -175,7 +132,6 @@ export default function RoleWorkbenchPage() {
   const reminderItems = useMemo(() => getReminderNotifications(notificationItems), [notificationItems])
 
   const { data, isLoading, isError, error, refetch } = workbenchQ
-  const topAlert = data?.topAlert
   const sections = [...(data?.sections ?? [])].sort((a, b) => a.priorityRank - b.priorityRank)
 
   function openPath(path: string, title: string) {
@@ -186,21 +142,12 @@ export default function RoleWorkbenchPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="岗位工作台"
+        title="待办中心"
         description="按岗位分组展示待办事项，优先处理最紧急的事项；财务与系统级提醒统一在页面底部汇总。"
-        actions={<Button onClick={() => refetch()}>立即刷新</Button>}
+        actions={<Button onClick={() => { void refetch(); void notificationsQ.refetch() }}>立即刷新</Button>}
       />
 
-      {topAlert && (
-        <PriorityBanner
-          title={topAlert.title}
-          description={topAlert.description}
-          count={topAlert.count}
-          sectionTitle={topAlert.sectionTitle}
-          badge={topAlert.badge}
-          onOpen={() => openPath(topAlert.path, topAlert.title)}
-        />
-      )}
+      <FulfillmentTodos />
 
       {isLoading && (
         <div className="grid gap-4">
@@ -213,7 +160,7 @@ export default function RoleWorkbenchPage() {
         <QueryErrorState
           error={error}
           onRetry={() => void refetch()}
-          title="岗位工作台加载失败"
+          title="待办中心加载失败"
           compact
         />
       )}

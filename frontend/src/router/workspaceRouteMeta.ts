@@ -1,4 +1,5 @@
 import { ROUTE_ALIASES, resolveRouteTabIdentity, type RouteTabIdentity } from '@/router/routeDefinitions'
+import { getMergedPageGroup } from './mergedPageGroups'
 
 /**
  * 当页面主要上下文由 query 决定时，必须在这里登记。
@@ -67,6 +68,8 @@ export function buildCanonicalWorkspacePath(pathname: string, search = ''): stri
 
 export function buildWorkspaceTabKey(pathname: string, search = ''): string {
   const normalizedPath = normalizeWorkspacePath(pathname)
+  const group = getMergedPageGroup(normalizedPath)
+  if (group) return group.key
   const rule = resolveWorkspaceTabIdentity(normalizedPath, search)
   if (rule.kind === 'pathname') return normalizedPath
 
@@ -92,5 +95,6 @@ export function buildWorkspaceTabRegistrationFromPath(path: string): { key: stri
 }
 
 export function isQuerySensitiveWorkspaceRoute(path: string): boolean {
-  return buildWorkspaceTabKey(path.split(/[?#]/)[0] || '/', path.includes('?') ? path.slice(path.indexOf('?')) : '') !== normalizeWorkspacePath(path)
+  const pathname = path.split(/[?#]/)[0] || '/'
+  return buildWorkspaceTabKey(pathname, path.includes('?') ? path.slice(path.indexOf('?')) : '') !== buildWorkspaceTabKey(pathname)
 }

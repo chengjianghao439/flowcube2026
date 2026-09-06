@@ -1,5 +1,8 @@
+import { createRequestKey, withRequestKeyHeaders } from '@/lib/requestKey'
+import ProcurementSupplyDetails from '@/components/shared/ProcurementSupplyDetails'
+import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
 import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
-import { useState, useContext, useMemo } from 'react'
+import { useState, useContext, useMemo, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { TabPathContext } from '@/components/layout/TabPathContext'
@@ -19,7 +22,7 @@ import type { StatusTone } from '@/lib/statusTone'
 
 const PLAN_TONE: Record<number, StatusTone> = { 1: 'draft', 2: 'active', 3: 'success', 4: 'danger' }
 const ITEM_TONE: Record<number, StatusTone> = { 1: 'draft', 2: 'success', 3: 'warning' }
-const num = (v: number) => Number(v).toLocaleString('zh-CN', { maximumFractionDigits: 2 })
+const num = (v: number) => Number(v).toLocaleString('zh-CN', { maximumFractionDigits: 4 })
 
 export default function ProcurementPlanDetailPage() {
   // keep-alive catch-all：路径取自 TabPathContext（useParams 取不到 id）
@@ -28,6 +31,7 @@ export default function ProcurementPlanDetailPage() {
   const planId = Number((tabPath || params.id || '').split('/').filter(Boolean).pop() ?? '')
   const navigate = useNavigate()
   const qc = useQueryClient()
+  const convertKey = useRef(createRequestKey('plan-convert'))
   const { can } = usePermission()
   const canManage = can(PERMISSIONS.PROCUREMENT_PLAN_MANAGE)
   const canConvert = can(PERMISSIONS.PURCHASE_ORDER_CREATE)
@@ -43,8 +47,8 @@ export default function ProcurementPlanDetailPage() {
     onError: (e: unknown) => toast.error((e as { message?: string })?.message || '保存失败'),
   })
   const convert = useMutation({
-    mutationFn: (ids: number[]) => convertPlanApi(planId, ids, { skipGlobalError: true }),
-    onSuccess: (r) => { toast.success(`已生成 ${r!.createdOrders.length} 张采购单草稿`); setSelected(new Set()); invalidate(); qc.invalidateQueries({ queryKey: ['procurement-plans'] }) },
+    mutationFn: (ids: number[]) => convertPlanApi(planId, ids, { skipGlobalError: true, headers: withRequestKeyHeaders(convertKey.current) }),
+    onSuccess: (r) => { convertKey.current = createRequestKey('plan-convert'); toast.success(`已生成 ${r!.createdOrders.length} 张采购单草稿`); setSelected(new Set()); invalidate(); qc.invalidateQueries({ queryKey: ['procurement-plans'] }) },
     onError: (e: unknown) => toast.error((e as { message?: string })?.message || '转采购失败'),
   })
   const cancelPlan = useMutation({
@@ -77,6 +81,7 @@ export default function ProcurementPlanDetailPage() {
         </div>}
       />
 
+      <OrderDetailSections type="plan" id={plan.id}>
       <div className="overflow-x-auto rounded-lg border border-border">
         <table className="w-full min-w-[1900px] text-sm">
           <thead className="bg-muted/40 text-muted-foreground">
@@ -87,11 +92,13 @@ export default function ProcurementPlanDetailPage() {
               <ProductIdentityHeaders /><th className="min-w-20 px-3 py-3 text-left">单位</th>
               <th className="px-3 py-2 text-left font-medium">仓库</th>
               <th className="px-3 py-2 text-right font-medium">日均</th>
-              <th className="px-3 py-2 text-right font-medium">毛需求</th>
+              <th className="px-3 py-2 text-right font-medium">预测需求</th>
+              <th className="px-3 py-2 text-right font-medium">未发销售</th>
               <th className="px-3 py-2 text-right font-medium">安全库存</th>
               <th className="px-3 py-2 text-right font-medium">可用</th>
               <th className="px-3 py-2 text-right font-medium">在途</th>
-              <th className="px-3 py-2 text-right font-medium">建议量</th>
+              <th className="px-3 py-2 text-right font-medium">生成时建议量</th>
+              <th className="px-3 py-2 text-right font-medium">最新净需求 / 建议量</th>
               <th className="px-3 py-2 text-right font-medium">采购量</th>
               <th className="px-3 py-2 text-left font-medium">供应商</th>
               <th className="px-3 py-2 text-left font-medium">建议到货</th>
@@ -111,10 +118,12 @@ export default function ProcurementPlanDetailPage() {
                   <td className="px-3 py-2">{it.warehouseName}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{num(it.adu)}</td>
                   <td className="px-3 py-2 text-right tabular-nums" title="日均 ×(提前期+覆盖周期)">{num(it.forecastDemand)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{it.supplySnapshot ? num(it.supplySnapshot.confirmedDemand) : '—'}</td>
                   <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{num(it.safetyStock)}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{num(it.available)}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{it.inTransit > 0 ? num(it.inTransit) : '—'}</td>
                   <td className="px-3 py-2 text-right tabular-nums font-semibold text-primary">{num(it.suggestedQty)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{it.currentSupply ? `${num(it.currentSupply.netRequirement)} / ${num(it.currentSupply.suggestedQty)}` : '—'}</td>
                   <td className="px-3 py-2 text-right">
                     {editable && pending
                       ? <Input type="number" defaultValue={it.adjustedQty} key={`${it.id}-${it.adjustedQty}`} className="ml-auto h-8 w-24 text-right tabular-nums"
@@ -142,6 +151,7 @@ export default function ProcurementPlanDetailPage() {
                     {it.purchaseOrderId && <button className="ml-1 text-xs text-primary underline" onClick={() => navigate(`/purchase/${it.purchaseOrderId}`)}>#{it.purchaseOrderId}</button>}
                   </td>
                   <td className="px-3 py-2 text-center">
+                    {it.currentSupply && <ProcurementSupplyDetails supply={it.currentSupply} supplierId={it.supplierId} />}
                     {editable && pending && (
                       <button className="text-xs text-muted-foreground hover:text-danger" onClick={() => updateItem.mutate({ itemId: it.id, patch: { ignore: true } })}>忽略</button>
                     )}
@@ -158,12 +168,13 @@ export default function ProcurementPlanDetailPage() {
 
       {editable && canConvert && (
         <div className="flex items-center justify-between">
-          <p className="text-xs text-muted-foreground">勾选待处理行后，将按供应商与仓库分组生成采购单草稿（需人工确认提交）。未指定供应商的行无法转采购。</p>
+          <p className="text-xs text-muted-foreground">按供应商与仓库分组生成采购单草稿。转换时重新核对最新供给和包装规则；数量过期时先调整或忽略，切换供应商时按其包装规则重新调整数量。未选供应商的行不能转换。</p>
           <Button disabled={selected.size === 0 || convert.isPending} onClick={() => convert.mutate([...selected])}>
             {convert.isPending ? '转采购中…' : `转采购（${selected.size} 行）`}
           </Button>
         </div>
       )}
+      </OrderDetailSections>
     </div>
   )
 }

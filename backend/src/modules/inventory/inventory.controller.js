@@ -258,7 +258,8 @@ async function procurementPlan(req, res, next) {
       defaultLeadTime: req.query.defaultLeadTime ? +req.query.defaultLeadTime : 7,
       scopeWarehouseIds: req.user?.warehouseIds ?? null,
     })
-    return successResponse(res, result, '查询成功')
+    const { page, pageSize, offset } = require('../../utils/pagination').normalizePagination(req.query)
+    return successResponse(res, { ...result, list: result.list.slice(offset, offset + pageSize), pagination: { page, pageSize, total: result.list.length } }, '查询成功')
   } catch (e) { next(e) }
 }
 

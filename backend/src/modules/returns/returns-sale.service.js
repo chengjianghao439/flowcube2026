@@ -147,7 +147,7 @@ async function findAllSR({ page=1, pageSize=20, keyword='', status=null, product
   const scope = scopeFilter(scopeWarehouseIds, 'warehouse_id')
   if (scope.sql) { whereExtra += scope.sql; params.push(...scope.params) }
   const where = `deleted_at IS NULL AND (return_no LIKE ? OR customer_name LIKE ?) ${whereExtra}`
-  const [rows]=await pool.query(`SELECT * FROM sale_returns WHERE ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,[...params,ps,offset])
+  const [rows]=await pool.query(`SELECT * FROM sale_returns WHERE ${where} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`,[...params,ps,offset])
   const [[{total}]]=await pool.query(`SELECT COUNT(*) AS total FROM sale_returns WHERE ${where}`,params)
   return { list:rows.map(fmtSR), pagination:{page,pageSize:ps,total} }
 }

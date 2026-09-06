@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Package, Factory, User, ShoppingCart, Truck, ClipboardList, ArrowLeftRight, Undo2, Inbox, Receipt, Archive, Banknote, ShieldCheck, ListChecks, FileText } from 'lucide-react'
-import { searchGlobalApi } from '@/api/search'
+import { searchGlobalApi, type GlobalSearchItem } from '@/api/search'
 
-interface SearchResult { id: number; type: string; typeLabel: string; title: string; subtitle: string; path: string }
+type SearchResult = GlobalSearchItem
 
 const TYPE_ICON: Record<string, React.ComponentType<{className?: string}>> = {
   product: Package,
@@ -26,36 +26,13 @@ const TYPE_ICON: Record<string, React.ComponentType<{className?: string}>> = {
 // 分组展示顺序（与后端 ENTITIES 一致）
 const TYPE_ORDER = ['product','supplier','customer','purchase','sale','requisition','transfer','purchaseReturn','saleReturn','inbound','expense','disposal','refund','creditOverride','stockcheck','invoice']
 
-/** 时间筛选选项（2026-08-21：默认「今天」，可切最近 7 天/30 天/全部） */
-const RANGE_OPTIONS = [
-  { key: 'today',  label: '今天',     days: 0 },
-  { key: 'week',   label: '近 7 天',  days: 7 },
-  { key: 'month',  label: '近 30 天', days: 30 },
-  { key: 'all',    label: '全部',     days: null },
-] as const
-
-function toYmd(d: Date): string {
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
-
-/** 按范围 key 计算 [startDate, endDate]（全部返回空串 = 不过滤） */
-function rangeToDates(key: string): { startDate: string; endDate: string } {
-  const opt = RANGE_OPTIONS.find(o => o.key === key)
-  if (!opt || opt.days === null) return { startDate: '', endDate: '' }
-  const end = new Date()
-  const start = new Date()
-  if (opt.days > 0) start.setDate(start.getDate() - opt.days)
-  return { startDate: toYmd(start), endDate: toYmd(end) }
-}
-
 export default function GlobalSearch() {
   const [query, setQuery] = useState('')
-  const [rangeKey, setRangeKey] = useState<string>('today')
   const [results, setResults] = useState<SearchResult[]>([])
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const requestId = useRef(0)
+  const abort = useRef<AbortController | null>(null)
   const [focused, setFocused] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const navigate = useNavigate()
@@ -69,36 +46,50 @@ export default function GlobalSearch() {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); inputRef.current?.focus() }
-      if (e.key === 'Escape') { setQuery(''); inputRef.current?.blur() }
+      if (e.key === 'Escape') {
+        requestId.current += 1
+        clearTimeout(timer.current)
+        abort.current?.abort()
+        setQuery(''); setResults([]); setLoading(false); setError(''); setFocused(false)
+        inputRef.current?.blur()
+      }
     }
     window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
+    return () => {
+      window.removeEventListener('keydown', handler)
+      clearTimeout(timer.current)
+      requestId.current += 1
+      abort.current?.abort()
+    }
   }, [])
 
-  const search = (q: string, range: string) => {
+  const search = (q: string) => {
     setQuery(q)
-    setRangeKey(range)
+    const currentRequest = ++requestId.current
     clearTimeout(timer.current)
-    if (!q.trim()) { setResults([]); return }
-    const { startDate, endDate } = rangeToDates(range)
+    setResults([])
+    abort.current?.abort()
+    setError('')
+    const keyword = q.trim()
+    setLoading(Boolean(keyword))
+    if (!keyword) return
+    const controller = new AbortController()
+    abort.current = controller
     timer.current = setTimeout(async () => {
-      setLoading(true)
       try {
-        const r = await searchGlobalApi(q, startDate, endDate)
-        setResults(r as unknown as SearchResult[] || [])
-      } catch (_) {}
-      setLoading(false)
+        const page = await searchGlobalApi(keyword, { signal: controller.signal })
+        if (currentRequest === requestId.current) setResults(page.items)
+      } catch {
+        if (currentRequest === requestId.current) setError('搜索失败，请重新输入关键词后重试')
+      } finally {
+        if (currentRequest === requestId.current) setLoading(false)
+      }
     }, 300)
-  }
-
-  const changeRange = (range: string) => {
-    setRangeKey(range)
-    if (query.trim()) search(query, range)
   }
 
   const go = (result: SearchResult) => {
     navigate(result.path)
-    setQuery(''); setResults([])
+    search(''); setFocused(false)
   }
 
   // 回车跳转第一个结果；阻止点击时被 blur 抢先收起（mousedown 时记录，避免 150ms 竞争）
@@ -123,31 +114,21 @@ export default function GlobalSearch() {
           ref={inputRef}
           aria-label="全局搜索单据与资料"
           value={query}
-          onChange={e => search(e.target.value, rangeKey)}
+          onChange={e => search(e.target.value)}
           onFocus={() => setFocused(true)}
           onBlur={() => { if (!suppressBlur.current) setTimeout(() => setFocused(false), 150); suppressBlur.current = false }}
           onKeyDown={onKeyDown}
           placeholder={`搜索… ${shortcutHint}`}
           className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground min-w-0"
         />
-        {/* 时间筛选（2026-08-21：默认「今天」，下拉切换范围） */}
-        <select
-          value={rangeKey}
-          onChange={e => changeRange(e.target.value)}
-          onMouseDown={e => e.stopPropagation()}
-          className="shrink-0 border-l pl-2 pr-1 py-0.5 text-xs text-muted-foreground bg-transparent outline-none cursor-pointer"
-          title="搜索时间范围"
-        >
-          {RANGE_OPTIONS.map(o => (
-            <option key={o.key} value={o.key}>{o.label}</option>
-          ))}
-        </select>
         {loading && <span className="text-xs text-muted-foreground shrink-0">...</span>}
       </div>
 
       {showDropdown && (
-        <div className="absolute top-full right-0 mt-2 w-[480px] max-w-[calc(100vw-2rem)] bg-popover text-popover-foreground rounded-lg shadow-lg border border-border z-50 max-h-[70vh] overflow-y-auto">
-          {results.length === 0 && !loading && (
+        <div data-search-results className="absolute top-full right-0 mt-2 w-[560px] max-w-[calc(100vw-2rem)] bg-popover text-popover-foreground rounded-lg shadow-lg border border-border z-50 max-h-[70vh] overflow-y-auto">
+          {loading && <div role="status" className="py-8 text-center text-sm text-muted-foreground">正在搜索全部历史记录…</div>}
+          {error && <div role="alert" className="px-4 py-8 text-center text-sm text-destructive">{error}</div>}
+          {results.length === 0 && !loading && !error && (
             <div className="py-8 text-center text-sm text-muted-foreground">未找到「{query}」相关内容</div>
           )}
           {results.length > 0 && (
@@ -167,19 +148,20 @@ export default function GlobalSearch() {
                         className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-accent transition-colors text-left">
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium break-words leading-5">{r.title}</p>
-                          {r.subtitle && <p className="text-xs text-muted-foreground break-words leading-5">{r.subtitle}</p>}
+                          {r.subtitle && r.subtitle !== r.title && <p className="text-xs text-muted-foreground break-words leading-5">{r.subtitle}</p>}
+                          {!!r.details?.length && <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
+                            {r.details.map(detail => <span key={detail.label} className="break-words min-w-0 max-w-full leading-5">{detail.label}：{detail.value}</span>)}
+                          </div>}
                         </div>
                         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-muted-foreground shrink-0">
                           <path d="M5 12h14M12 5l7 7-7 7"/>
                         </svg>
                       </button>
                     ))}
+
                   </div>
                 )
               })}
-              <div className="border-t px-4 py-2 text-center text-xs text-muted-foreground">
-                点击跳转到对应页面
-              </div>
             </div>
           )}
         </div>

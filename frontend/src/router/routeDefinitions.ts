@@ -1,3 +1,4 @@
+import { getMergedPageGroup } from './mergedPageGroups'
 import type { PermCode } from '@/lib/permissions'
 import { PERMISSIONS } from '@/lib/permission-codes'
 
@@ -6,7 +7,7 @@ export type RouteTabIdentity =
   | { kind: 'full-url' }
   | { kind: 'query-keys'; keys: string[] }
 
-export type RouteComponentKey = 'DashboardPage' | 'SalePage' | 'SaleFormPage' | 'PurchasePage' | 'PurchaseFormPage' | 'RequisitionsPage' | 'RequisitionFormPage' | 'ProductPage' | 'PriceChangePage' | 'ProductFormPage' | 'CategoryPage' | 'WarehouseStructurePage' | 'InventoryPage' | 'InventoryTracePage' | 'PlasticBoxesPage' | 'StockcheckPage' | 'AbcClassPage' | 'DisposalPage' | 'ProcurementPlanListPage' | 'ProcurementPlanDetailPage' | 'TransferPage' | 'TransferFormPage' | 'InboundTasksPage' | 'InboundTaskCreatePage' | 'InboundTaskDetailPage' | 'PickingWavesPage' | 'CustomersPage' | 'CarriersPage' | 'LogisticsPage' | 'LogisticsDetailPage' | 'FreightReconciliationPage' | 'SuppliersPage' | 'ReturnsPage' | 'PurchaseReturnFormPage' | 'SaleReturnFormPage' | 'PayablePage' | 'ReceivablePage' | 'UsersPage' | 'DepartmentsPage' | 'ApprovalFlowsPage' | 'ApprovalPendingPage' | 'PermissionsPage' | 'SettingsPage' | 'BarcodePrintQueryPage' | 'OplogsPage' | 'ReportsPage' | 'RoleWorkbenchPage' | 'FinanceDashboardPage' | 'FinanceAccountsPage' | 'FinanceTransactionsPage' | 'ExpenseClaimsPage' | 'ExpenseCategoriesPage' | 'AcctAccountsPage' | 'AcctVouchersPage' | 'AcctLedgerPage' | 'AcctReportsPage' | 'AcctInvoicesPage' | 'RefundsPage' | 'CreditOverridesPage' | 'AcctPeriodsPage' | 'AcctConsolidationPage' | 'AcctTaxPage' | 'FixedAssetsPage' | 'AvgCostReconciliationPage' | 'ReconciliationPayablePage' | 'ReconciliationReceivablePage' | 'ProfitAnalysisPage' | 'KpiPage' | 'ReplenishmentPage' | 'InventoryAgingPage' | 'WavePerformancePage' | 'PdaAnomalyPage' | 'WarehouseOpsPage' | 'PrintTemplatesPage' | 'PrintTemplateEditorPage' | 'PrintersPage' | 'PdaDevicesPage' | 'PortalStatementsPage' | 'PortalPurchaseStatusPage'
+export type RouteComponentKey = 'DashboardPage' | 'SalePage' | 'SaleFormPage' | 'PurchasePage' | 'PurchaseFormPage' | 'RequisitionsPage' | 'RequisitionFormPage' | 'ProductPage' | 'PriceChangePage' | 'ProductFormPage' | 'CategoryPage' | 'WarehouseStructurePage' | 'InventoryPage' | 'InventoryTracePage' | 'PlasticBoxesPage' | 'StockcheckPage' | 'AbcClassPage' | 'DisposalPage' | 'ProcurementPlanListPage' | 'ProcurementPlanDetailPage' | 'TransferPage' | 'TransferFormPage' | 'InboundTasksPage' | 'InboundTaskCreatePage' | 'InboundTaskDetailPage' | 'PickingWavesPage' | 'CustomersPage' | 'CarriersPage' | 'CarrierAccountsPage' | 'LogisticsPage' | 'LogisticsDetailPage' | 'FreightReconciliationPage' | 'SuppliersPage' | 'ReturnsPage' | 'PurchaseReturnFormPage' | 'SaleReturnFormPage' | 'PayablePage' | 'ReceivablePage' | 'UsersPage' | 'DepartmentsPage' | 'ApprovalFlowsPage' | 'ApprovalPendingPage' | 'PermissionsPage' | 'SettingsPage' | 'BarcodePrintQueryPage' | 'OplogsPage' | 'ReportsPage' | 'RoleWorkbenchPage' | 'FinanceDashboardPage' | 'FinanceAccountsPage' | 'FinanceTransactionsPage' | 'ExpenseClaimsPage' | 'ExpenseCategoriesPage' | 'AcctAccountsPage' | 'AcctVouchersPage' | 'AcctLedgerPage' | 'AcctReportsPage' | 'AcctInvoicesPage' | 'RefundsPage' | 'CreditOverridesPage' | 'AcctPeriodsPage' | 'AcctConsolidationPage' | 'AcctTaxPage' | 'FixedAssetsPage' | 'AvgCostReconciliationPage' | 'ReconciliationPayablePage' | 'ReconciliationReceivablePage' | 'ProfitAnalysisPage' | 'KpiPage' | 'ReplenishmentPage' | 'InventoryAgingPage' | 'WavePerformancePage' | 'PdaAnomalyPage' | 'WarehouseOpsPage' | 'PrintTemplatesPage' | 'PrintTemplateEditorPage' | 'PrintersPage' | 'PdaDevicesPage' | 'PortalStatementsPage' | 'PortalPurchaseStatusPage'
 
 type RouteNavMeta =
   | { kind: 'link'; label: string; order: number; iconKey?: string }
@@ -104,7 +105,7 @@ export const routeRegistry: RouteRegistryEntry[] = [
   },
   {
     path: '/procurement',
-    title: '采购计划',
+    title: '采购建议',
     permission: PERMISSIONS.PROCUREMENT_PLAN_VIEW,
     componentKey: 'ProcurementPlanListPage',
     keepAlive: true,
@@ -215,6 +216,16 @@ export const routeRegistry: RouteRegistryEntry[] = [
     keepAlive: true,
     tabIdentity: pathnameIdentity,
     nav: { kind: 'menu', group: '销售', section: '基础资料', order: 40 },
+  },
+
+  {
+    path: '/carrier-accounts',
+    title: '快递账号绑定',
+    permission: PERMISSIONS.CARRIER_VIEW,
+    componentKey: 'CarrierAccountsPage',
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '销售', section: '基础资料', order: 41 },
   },
 
   // ── 库存 ──────────────────────────────────────────────
@@ -554,7 +565,7 @@ export const routeRegistry: RouteRegistryEntry[] = [
   },
   {
     path: '/reports/profit-analysis',
-    title: '利润 / 库存分析',
+    title: '报表中心',
     permission: PERMISSIONS.REPORT_VIEW,
     componentKey: 'ProfitAnalysisPage',
     keepAlive: true,
@@ -572,7 +583,7 @@ export const routeRegistry: RouteRegistryEntry[] = [
   },
   {
     path: '/reports/kpi',
-    title: '经营 KPI',
+    title: '报表中心',
     permission: PERMISSIONS.REPORT_VIEW,
     componentKey: 'KpiPage',
     keepAlive: true,
@@ -581,12 +592,12 @@ export const routeRegistry: RouteRegistryEntry[] = [
   },
   {
     path: '/reports/replenishment',
-    title: '补货建议',
+    title: '采购建议',
     permission: PERMISSIONS.REPORT_VIEW,
     componentKey: 'ReplenishmentPage',
     keepAlive: true,
     tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '报表', section: '库存分析', order: 35 },
+    nav: { kind: 'menu', group: '采购', section: '采购作业', order: 6 },
   },
   {
     path: '/reports/inventory-aging',
@@ -599,7 +610,7 @@ export const routeRegistry: RouteRegistryEntry[] = [
   },
   {
     path: '/reports/warehouse-ops',
-    title: '仓库运营看板',
+    title: '仓库运营',
     permission: PERMISSIONS.REPORT_VIEW,
     componentKey: 'WarehouseOpsPage',
     keepAlive: true,
@@ -608,7 +619,7 @@ export const routeRegistry: RouteRegistryEntry[] = [
   },
   {
     path: '/reports/wave-performance',
-    title: '批次效率',
+    title: '仓库运营',
     permission: PERMISSIONS.REPORT_VIEW,
     componentKey: 'WavePerformancePage',
     keepAlive: true,
@@ -617,7 +628,7 @@ export const routeRegistry: RouteRegistryEntry[] = [
   },
   {
     path: '/reports/pda-anomaly',
-    title: 'PDA 异常分析',
+    title: '仓库运营',
     permission: PERMISSIONS.REPORT_VIEW,
     componentKey: 'PdaAnomalyPage',
     keepAlive: true,
@@ -626,14 +637,14 @@ export const routeRegistry: RouteRegistryEntry[] = [
   },
   {
     path: '/reports/role-workbench',
-    title: '岗位工作台',
+    title: '待办中心',
     permission: PERMISSIONS.REPORT_VIEW,
     componentKey: 'RoleWorkbenchPage',
     keepAlive: true,
     tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '报表', section: '岗位与审批', order: 60 },
+    nav: { kind: 'menu', group: '审批中心', order: 5 },
     // 后端报表/通知接口返回的「异常工作台」path（reports.query.js / reports.metrics.js）
-    // 前端从未注册该页面，归一到岗位工作台（待办/异常聚合入口，语义一致），避免死链
+    // 前端从未注册该页面，归一到待办中心（待办/异常聚合入口，语义一致），避免死链
     aliases: ['/reports/exception-workbench'],
   },
 
@@ -899,13 +910,19 @@ export const PATH_PERMS: Record<string, PermCode> = routeRegistry.reduce<Record<
   return acc
 }, {})
 
-export function buildTopNavSections(): TopNavSection[] {
+export function buildTopNavSections(can: (permission: PermCode) => boolean = () => true): TopNavSection[] {
+  const seenGroups = new Set<string>()
   const links: Array<TopNavSection & { order: number }> = []
   /** group → section 标题（'' 表示无标题段）→ 子项 */
   const groups = new Map<string, Map<string, Array<NavChildItem & { order: number }>>>()
 
   for (const route of routeRegistry) {
-    if (!route.nav) continue
+    if (!route.nav || !can(route.permission)) continue
+    const mergedGroup = getMergedPageGroup(route.path)
+    if (mergedGroup) {
+      if (seenGroups.has(mergedGroup.key)) continue
+      seenGroups.add(mergedGroup.key)
+    }
     if (route.nav.kind === 'link') {
       links.push({
         kind: 'link',

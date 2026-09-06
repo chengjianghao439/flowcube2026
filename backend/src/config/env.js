@@ -97,13 +97,13 @@ if (!Number.isSafeInteger(env.DB_ACQUIRE_TIMEOUT_MS) || env.DB_ACQUIRE_TIMEOUT_M
 /**
  * 快递面单平台凭据解析（文档 06）。
  *
- * 硬约束：app_id / app_key / app_secret **绝不入库明文**，只走环境变量。
+ * 硬约束：app_key / app_secret **绝不入库明文**，只走环境变量。公开接入标识 app_id 可随原始业务报文保存，用于验证查询仍使用原账号。
  * carriers.credential_ref 只存"用哪一组凭据"的引用名（如 kdniao_main），运行时在此映射到
  * 对应的 env 变量组 WAYBILL_<REF大写>_APP_ID/APP_KEY/APP_SECRET/API_BASE。
- * 返回值只在 worker（事务外）调用适配器时使用，永不落库、不入日志、不返回前端。
+ * 完整凭据仅供 worker 使用，不落库、不入日志、不返回前端；请求快照只留凭据引用、公开接入标识、环境及官方地址，绝不留密钥。
  *
  * @param {string} credentialRef - carriers.credential_ref
- * @returns {{appId:string, appKey:string, appSecret:string, apiBase:string}|null}
+ * @returns {{appId:string, appKey:string, appSecret:string, apiBase:string, queryApiBase:string, mode:string, orderPrefix:string}|null}
  */
 function getWaybillCredential(credentialRef) {
   const ref = String(credentialRef || '').trim()
@@ -114,7 +114,10 @@ function getWaybillCredential(credentialRef) {
   const appSecret = readString(`WAYBILL_${key}_APP_SECRET`, { defaultValue: '', allowEmpty: true })
   const apiBase   = readString(`WAYBILL_${key}_API_BASE`,   { defaultValue: '', allowEmpty: true })
   if (!appKey && !appSecret && !appId) return null
-  return { appId, appKey, appSecret, apiBase }
+  const queryApiBase = readString(`WAYBILL_${key}_QUERY_API_BASE`)
+  const mode = readString(`WAYBILL_${key}_MODE`, { defaultValue: 'sandbox' })
+  const orderPrefix = readString(`WAYBILL_${key}_ORDER_PREFIX`)
+  return { appId, appKey, appSecret, apiBase, queryApiBase, mode, orderPrefix }
 }
 
 if (IS_PROD) {
@@ -132,4 +135,15 @@ if (IS_PROD) {
   }
 }
 
-module.exports = { env, getWaybillCredential }
+// 仅供月结账号引导页使用；已验收账号清单不返回客户端。
+function getWaybillBindingSetup(credentialRef) {
+  const key = String(credentialRef || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '_')
+  let products = []
+  try {
+    const parsed = JSON.parse(readString(`WAYBILL_${key}_PRODUCTS`, { defaultValue: '[]' }))
+    if (Array.isArray(parsed)) products = parsed.filter(p => p && typeof p === 'object').slice(0, 50)
+  } catch { /* 配置有误时页面提示管理员设置，不猜测合同服务 */ }
+  const verifiedAccounts = readString(`WAYBILL_${key}_VERIFIED_MONTHLY_ACCOUNTS`, { defaultValue: '' }).split(',').map(s => s.trim()).filter(Boolean)
+  return { products, verifiedAccounts }
+}
+module.exports = { env, getWaybillCredential, getWaybillBindingSetup }

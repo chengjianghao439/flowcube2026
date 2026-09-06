@@ -62,7 +62,7 @@ async function findAll({ page=1, pageSize=20, keyword='', status=null, scopeWare
   const base=status?[like,like,status,...scopeParams]:[like,like,...scopeParams]
   const extra=[...base,ps,offset]
   const cntExtra=base
-  const [rows] = await pool.query(`SELECT * FROM inventory_checks WHERE deleted_at IS NULL AND (check_no LIKE ? OR warehouse_name LIKE ?) ${cond} ORDER BY created_at DESC LIMIT ? OFFSET ?`,extra)
+  const [rows] = await pool.query(`SELECT * FROM inventory_checks WHERE deleted_at IS NULL AND (check_no LIKE ? OR warehouse_name LIKE ?) ${cond} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`,extra)
   const [[{total}]] = await pool.query(`SELECT COUNT(*) AS total FROM inventory_checks WHERE deleted_at IS NULL AND (check_no LIKE ? OR warehouse_name LIKE ?) ${cond}`,cntExtra)
   return { list:rows.map(fmt), pagination:{page,pageSize:ps,total} }
 }

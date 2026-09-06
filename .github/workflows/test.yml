@@ -98,6 +98,9 @@ jobs:
       - name: 前端单元测试 — vitest
         run: npm --prefix frontend run test:unit
 
+      - name: 履约与采购建议计算回归
+        run: npm run test:fulfillment && npm run test:procurement-planning
+
   regression:
     name: 回归门禁（smoke + 集成）
     runs-on: ubuntu-latest
@@ -158,6 +161,12 @@ jobs:
       - name: 单元测试 — 操作日志脱敏（纯函数，无需 DB）
         run: npm run test:oplog
 
+      - name: 单元测试 — 快递官方接口与防重复下单（无需 DB）
+        run: npm run test:direct-express
+
+      - name: 单元测试 — 订单记录归属与数据范围（无需 DB）
+        run: npm run test:document-activity
+
       - name: 单元测试 — 状态机动作表完整性（纯静态，防常量漂移）
         run: node tests/status-rules-integrity.test.js
 
@@ -184,6 +193,9 @@ jobs:
 
       - name: 数据库迁移 — smoke 库
         run: npm --prefix backend run migrate
+
+      - name: 快递月结直连 — MySQL 入队与并发恢复回归
+        run: npm run smoke:direct-express
 
       - name: Schema 对账（迁移建表后：已执行迁移声明的表 vs 实际库，文档12）
         run: npm run check:schema
@@ -273,7 +285,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [prelaunch-finance, prelaunch-scope-export, prelaunch-hr, round2-transfer, round2-payroll, round2-runtime]
+        suite: [prelaunch-finance, prelaunch-scope-export, prelaunch-hr, round2-transfer, round2-payroll, round2-runtime, fulfillment, procurement-planning]
     services:
       mysql:
         image: mysql:8.0

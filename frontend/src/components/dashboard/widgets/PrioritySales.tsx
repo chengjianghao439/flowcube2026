@@ -27,7 +27,7 @@ function Queue() {
     page: 1,
     pageSize: 5,
     focus: 'pending',
-  })
+  }, true)
   const [id, setId] = useState<number | null>(null)
   const navigate = useNavigate()
   const addTab = useWorkspaceStore((s) => s.addTab)

@@ -172,3 +172,32 @@ test('旧账套迟到的成功响应不能进入新账套页面', async () => {
   try { await vi.waitFor(() => expect(started).toBe(true)); company.companyId = 1 } finally { release() }
   expect(axios.isCancel(await request)).toBe(true)
 })
+
+test('列表自动取齐，旧 URL 页码失效，所有批次保持筛选与账套', async () => {
+  axios.defaults.adapter = async config => {
+    requests.push(config)
+    const p = Number(config.params.page)
+    const pageSize = Number(config.params.pageSize)
+    return {config,status:200,statusText:'OK',headers:{},data:{success:true,data:{list:Array.from({length:p===1?200:5},(_,i)=>({id:(p-1)*pageSize+i})),pagination:{page:p,pageSize,total:205},summary:{amount:123}}}}
+  }
+  const {payloadClient} = await import('./client')
+  const response = await payloadClient.get<{list:unknown[];summary:{amount:number}}>('/accounting/invoices?page=9&pageSize=20&keyword=%E5%AE%A2%E6%88%B7', {params:{warehouseId:7}})
+  expect(response.list).toHaveLength(205)
+  expect(response.summary.amount).toBe(123)
+  expect(requests.map(r=>r.params.page)).toEqual([1,2])
+  expect(requests.every(r=>r.params.warehouseId===7 && r.headers['X-Company-Id']==='1')).toBe(true)
+  expect(requests[0].url).not.toContain('page=9')
+  expect(requests[1].url).toContain('keyword=')
+})
+
+test.each(['session','company'])('完整列表读取中 %s 改变，不再接入新范围续批', async kind => {
+  axios.defaults.adapter = async config => {
+    requests.push(config)
+    if(kind==='session') session.sessionGeneration++
+    else company.companyId=2
+    return {config,status:200,statusText:'OK',headers:{},data:{success:true,data:{list:[{id:1}],pagination:{page:1,pageSize:1,total:2}}}}
+  }
+  const {payloadClient} = await import('./client')
+  await expect(payloadClient.get('/accounting/invoices',{params:{page:1,pageSize:20}})).rejects.toThrow()
+  expect(requests).toHaveLength(1)
+})

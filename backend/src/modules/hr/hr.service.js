@@ -75,7 +75,7 @@ async function listPayrolls({ page = 1, pageSize = 20, period = '', companyId = 
   const where = `WHERE ${conds.join(' AND ')}`
   const [rows] = await pool.query(
     `SELECT p.*, (SELECT COUNT(*) FROM hr_payroll_lines l WHERE l.payroll_id=p.id) AS emp_count
-     FROM hr_payrolls p ${where} ORDER BY p.period DESC LIMIT ? OFFSET ?`,
+     FROM hr_payrolls p ${where} ORDER BY p.period DESC, p.id DESC LIMIT ? OFFSET ?`,
     [...params, ps, offset],
   )
   const [[{ total }]] = await pool.query(`SELECT COUNT(*) AS total FROM hr_payrolls p ${where}`, params)

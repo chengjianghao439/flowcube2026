@@ -224,8 +224,7 @@ async function buildNotifications(scopeWarehouseIds = null, userId = null) {
   let pendingApprovals = 0
   if (userId != null) {
     const approvalEngine = require('../../engine/approvalEngine')
-    const pendingRows = await approvalEngine.listPendingTasks(pool, { userId: Number(userId) })
-    pendingApprovals = pendingRows.length
+    pendingApprovals = await approvalEngine.countPendingTasks(pool, { userId: Number(userId) })
   }
   const items = []
   const seen = new Set()

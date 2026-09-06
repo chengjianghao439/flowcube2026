@@ -18,7 +18,7 @@ import {
   type InboundTask,
 } from '@/types/inbound-tasks'
 import DataTable from '@/components/shared/DataTable'
-import Pagination from '@/components/shared/Pagination'
+import ListSummary from '@/components/shared/ListSummary'
 import type { TableColumn } from '@/types'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { useSubmitInboundTask, useCancelInbound, useVoidInboundReceipt, useCloseReceivingInbound } from '@/hooks/useInboundTasks'
@@ -86,15 +86,14 @@ export default function InboundTasksPage() {
   const warehouseName = readStringParam(searchParams, 'warehouseName')
   const startDate     = readStringParam(searchParams, 'startDate')
   const endDate       = readStringParam(searchParams, 'endDate')
-  const page          = Math.max(1, Number(searchParams.get('page') || '1') || 1)
 
   const isActiveTab = useActiveWorkspaceTab()
   const PAGE_SIZE = 20
   // 收货现场变化频繁，标签页常驻挂载时若不轮询容易停留在打开时的陈旧进度
   const { data, isLoading } = useQuery({
-    queryKey: ['inbound-tasks', { keyword, remark, operatorId, statusFilter, productId, supplierId, warehouseId, startDate, endDate, page }],
+    queryKey: ['inbound-tasks', { keyword, remark, operatorId, statusFilter, productId, supplierId, warehouseId, startDate, endDate }],
     queryFn: () => getInboundTasksApi({
-      page,
+      page: 1,
       pageSize: PAGE_SIZE,
       keyword,
       remark: remark || undefined,
@@ -109,7 +108,6 @@ export default function InboundTasksPage() {
     refetchInterval: isActiveTab ? 20_000 : false,
   })
   const total = data?.pagination?.total ?? 0
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
   function updateParams(updates: Record<string, string | number | null | undefined>) {
     setSearchParams(upsertSearchParams(searchParams, updates))
@@ -422,9 +420,7 @@ export default function InboundTasksPage() {
         onRowDoubleClick={openDetail}
       />
 
-      {/* 分页 */}
-      <Pagination page={page} totalPages={totalPages} total={total} unit="单"
-        onPageChange={(p) => updateParams({ page: p })} />
+      <ListSummary total={total} unit="单" />
 
       <InboundTaskQueryDialog
         open={queryOpen}

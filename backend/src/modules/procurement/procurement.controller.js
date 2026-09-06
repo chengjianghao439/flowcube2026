@@ -46,4 +46,11 @@ async function cancel(req, res, next) {
   try { await svc.cancel(+req.params.id, scope(req)); return successResponse(res, null, '已作废') } catch (e) { next(e) }
 }
 
-module.exports = { generate, list, detail, updateItem, convert, cancel }
+async function purchasePolicy(req, res, next) {
+  try { return successResponse(res, await require('./procurement.policies').getPolicy(+req.query.productId, +req.query.supplierId), '查询成功') } catch (e) { next(e) }
+}
+async function savePurchasePolicy(req, res, next) {
+  try { return successResponse(res, await require('./procurement.policies').savePolicy(req.body), '已保存采购包装规则') } catch (e) { next(e) }
+}
+
+module.exports = { purchasePolicy, savePurchasePolicy, generate, list, detail, updateItem, convert, cancel }

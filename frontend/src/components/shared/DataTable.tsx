@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
-import { Inbox } from 'lucide-react'
+import { Inbox, RotateCcw } from 'lucide-react'
 import type { TableColumn } from '@/types'
 
 interface DataTableProps<T extends object> {
@@ -25,9 +25,8 @@ interface DataTableProps<T extends object> {
   sortDirection?: 'asc' | 'desc'
   onSortChange?: (key: string) => void
   /**
-   * 按比例缩放模式：列宽以百分比（而非固定 px）存储和渲染，表格始终占满容器宽度，
-   * 容器变宽时各列按当前比例一起放大，无需用户重新拖拽。col.width 在此模式下按
-   * 百分比（0-100）解读。默认关闭，不影响其他仍按固定 px 记忆列宽的页面。
+   * 默认按百分比铺满容器，兼容旧比例设置；手动调整后按像素独立记忆列宽。
+   * 恢复默认列宽后重新使用 col.width 的百分比布局。
    */
   fluid?: boolean
 }
@@ -47,63 +46,69 @@ export default function DataTable<T extends object>({
 }: DataTableProps<T>) {
   const [columnOrder, setColumnOrder] = useState<string[]>([])
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({})
+  const [widthUnit, setWidthUnit] = useState<'px' | 'percent'>(fluid ? 'percent' : 'px')
+  const usesPercent = fluid && widthUnit === 'percent'
   const [draggingKey, setDraggingKey] = useState<string | null>(null)
-  const columnWidthsRef = useRef<Record<string, number>>({})
+  const resizeCleanupRef = useRef<(() => void) | null>(null)
+  const columnKeySignature = JSON.stringify(columns.map(col => String(col.key)))
+  const currentKeys = useMemo<string[]>(() => JSON.parse(columnKeySignature), [columnKeySignature])
+  // keepAlive 页面继续渲染时，使用本表挂载时的路径，避免写入当前其他页的列宽。
+  const [pageKey] = useState(() => typeof window === 'undefined' ? 'root' : window.location.hash.split('?')[0].replace(/^#/, '') || 'root')
   const colgroupRef = useRef<HTMLTableColElement>(null)
+  const tableRef = useRef<HTMLTableElement>(null)
 
   const resolvedStorageKey = useMemo(() => {
     if (columnStorageKey) return `flowcube:table-columns:${columnStorageKey}`
     if (typeof window === 'undefined') return null
-    const pageKey = window.location.hash.split('?')[0].replace(/^#/, '') || 'root'
-    const columnKeys = columns.map(col => String(col.key)).join('|')
+    const columnKeys = currentKeys.join('|')
     return `flowcube:table-columns:${pageKey}:${columnKeys}`
-  }, [columnStorageKey, columns])
+  }, [columnStorageKey, currentKeys, pageKey])
 
   useEffect(() => {
     if (!resolvedStorageKey || typeof window === 'undefined') return
+    setWidthUnit(fluid ? 'percent' : 'px')
     try {
       const raw = window.localStorage.getItem(resolvedStorageKey)
       if (!raw) {
-        setColumnOrder(columns.map(col => String(col.key)))
+        setColumnOrder(currentKeys)
         setColumnWidths({})
         return
       }
       const saved = JSON.parse(raw)
       if (Array.isArray(saved)) {
-        const currentKeys = columns.map(col => String(col.key))
         const merged = [
           ...saved.filter((key): key is string => typeof key === 'string' && currentKeys.includes(key)),
           ...currentKeys.filter(key => !saved.includes(key)),
         ]
-        setColumnOrder(merged)
+        setColumnOrder([...new Set(merged)])
         setColumnWidths({})
         return
       }
       if (!saved || typeof saved !== 'object') {
-        setColumnOrder(columns.map(col => String(col.key)))
+        setColumnOrder(currentKeys)
         setColumnWidths({})
         return
       }
-      const currentKeys = columns.map(col => String(col.key))
       const savedOrder = Array.isArray(saved.order) ? saved.order : []
       const merged = [
         ...savedOrder.filter((key: unknown): key is string => typeof key === 'string' && currentKeys.includes(key)),
         ...currentKeys.filter(key => !savedOrder.includes(key)),
       ]
-      setColumnOrder(merged)
+      setColumnOrder([...new Set(merged)])
       const widths = saved.widths && typeof saved.widths === 'object'
         ? Object.fromEntries(
             Object.entries(saved.widths).filter(
-              ([key, value]) => currentKeys.includes(key) && typeof value === 'number' && Number.isFinite(value),
+              ([key, value]) => currentKeys.includes(key) && typeof value === 'number' && Number.isFinite(value) && value > 0,
             ),
           )
         : {}
       setColumnWidths(widths as Record<string, number>)
+      if (saved.widthUnit === 'px') setWidthUnit('px')
     } catch {
-      setColumnOrder(columns.map(col => String(col.key)))
+      setColumnOrder(currentKeys)
       setColumnWidths({})
     }
-  }, [columns, resolvedStorageKey])
+  }, [currentKeys, resolvedStorageKey, fluid])
 
   const orderedColumns = useMemo(() => {
     if (!columnOrder.length) return columns
@@ -115,21 +120,18 @@ export default function DataTable<T extends object>({
     return merged
   }, [columnOrder, columns])
 
-  useEffect(() => {
-    columnWidthsRef.current = columnWidths
-  }, [columnWidths])
+  useEffect(() => () => resizeCleanupRef.current?.(), [currentKeys, resolvedStorageKey, fluid])
 
-  const persistLayout = (nextOrder: string[], nextWidths: Record<string, number>) => {
+  const persistLayout = (nextOrder: string[], nextWidths: Record<string, number>, nextUnit = widthUnit) => {
     setColumnOrder(nextOrder)
     setColumnWidths(nextWidths)
+    setWidthUnit(nextUnit)
     if (!resolvedStorageKey || typeof window === 'undefined') return
-    window.localStorage.setItem(
-      resolvedStorageKey,
-      JSON.stringify({
-        order: nextOrder,
-        widths: nextWidths,
-      }),
-    )
+    try {
+      window.localStorage.setItem(resolvedStorageKey, JSON.stringify({ order: nextOrder, widths: nextWidths, widthUnit: nextUnit }))
+    } catch {
+      // 存储被禁用或配额不足时，本次页面内仍可正常调整。
+    }
   }
 
   const persistOrder = (next: string[]) => {
@@ -148,106 +150,124 @@ export default function DataTable<T extends object>({
     setDraggingKey(null)
   }
 
-  // useCallback 不是为了性能，是为了让 tableWidth 的依赖能写全：这个函数读了
-  // columnWidths / fluid / orderedColumns / columns 四个值，原先 tableWidth 的依赖数组
-  // 手写了前三个、漏了 columns（fluid 模式下的 fallback 用 columns.length）。
   const getColumnWidth = useCallback((col: TableColumn<T>) => {
     const key = String(col.key)
-    const fallback = fluid
-      ? 100 / (orderedColumns.length || columns.length || 1)
-      : (isAction(key, col.title) ? 180 : 160)
-    const width = columnWidths[key] ?? col.width ?? fallback
-    if (typeof width === 'number' && Number.isFinite(width)) return width
-    const parsed = fluid ? Number.parseFloat(String(width)) : Number.parseInt(String(width), 10)
-    return Number.isFinite(parsed) ? parsed : fallback
-  }, [columnWidths, fluid, orderedColumns, columns])
+    const fallback = usesPercent ? 100 / (columns.length || 1) : (isAction(key, col.title) ? 180 : 160)
+    // 比例表在手动模式新增列时，百分比默认值不能被当作几个像素。
+    const width = columnWidths[key] ?? (fluid && !usesPercent ? fallback : col.width) ?? fallback
+    const parsed = Number.parseFloat(String(width))
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+  }, [columnWidths, fluid, usesPercent, columns])
 
   const isSelectEnabled = !!(selectable || selectionMode)
+  const hasCustomWidths = Object.keys(columnWidths).length > 0
+  const tableWidth = orderedColumns.reduce((sum, col) => sum + getColumnWidth(col), isSelectEnabled ? 56 : 0)
 
-  const tableWidth = useMemo(() => {
-    if (fluid) return 0
-    const base = orderedColumns.reduce((sum, col) => sum + getColumnWidth(col), 0)
-    return base + (isSelectEnabled ? 56 : 0)
-  }, [orderedColumns, isSelectEnabled, fluid, getColumnWidth])
+  const measureWidths = () => {
+    const elements = Array.from(colgroupRef.current?.querySelectorAll('col') ?? []).slice(isSelectEnabled ? 1 : 0)
+    return Object.fromEntries(orderedColumns.map((col, index) => [String(col.key), elements[index]?.getBoundingClientRect().width || getColumnWidth(col)]))
+  }
+
+  const savePixelWidths = (widths: Record<string, number>) => {
+    persistLayout(columnOrder.length ? columnOrder : currentKeys, widths, 'px')
+  }
 
   const startResize = (event: ReactMouseEvent, col: TableColumn<T>) => {
     event.preventDefault()
     event.stopPropagation()
-    if (typeof window === 'undefined') return
+    if (event.button !== 0) return
+    resizeCleanupRef.current?.()
+    const table = tableRef.current
+    if (!table) return
     const key = String(col.key)
-
-    // 快照所有列当前渲染宽度 + 找相邻列作为补偿列（只影响这一对相邻列，
-    // 不会像"固定找最后一列补偿"那样把最后一列越挤越窄，导致后面任何列都拖不动）
-    const allCols = orderedColumns.length ? orderedColumns : columns
-    const colIndex = allCols.findIndex(c => String(c.key) === key)
-    const isLast = colIndex === allCols.length - 1
-    const neighborCol = isLast ? allCols[colIndex - 1] : allCols[colIndex + 1]
-    const minWidth = isAction(key, col.title) ? 120 : 80
-
-    const snapshot: Record<string, number> = {}
-    if (colgroupRef.current) {
-      const colEls = colgroupRef.current.querySelectorAll('col')
-      let ci = isSelectEnabled ? 1 : 0
-      colEls.forEach(el => {
-        if (isSelectEnabled && ci === 0) { ci++; return }
-        const idx = isSelectEnabled ? ci - 1 : ci
-        if (idx >= 0 && idx < allCols.length) {
-          snapshot[String(allCols[idx].key)] = el.getBoundingClientRect().width
-        }
-        ci++
-      })
-    } else {
-      allCols.forEach(c => { snapshot[String(c.key)] = getColumnWidth(c) })
-    }
-
+    const snapshot = measureWidths()
+    const colElements = Array.from(colgroupRef.current?.querySelectorAll('col') ?? []).slice(isSelectEnabled ? 1 : 0)
+    const originalStyles = colElements.map(element => element.style.width)
+    const originalWidth = table.style.width
+    const originalMinWidth = table.style.minWidth
+    const handle = event.currentTarget as HTMLButtonElement
+    const previousCursor = document.body.style.cursor
+    const previousUserSelect = document.body.style.userSelect
     const startX = event.clientX
-    // 如果拖拽的不是最后一列，用右边相邻列补偿；如果拖拽最后一列，用左边相邻列补偿
-    const compKey = String(neighborCol.key)
-    const compMinW = isAction(compKey, neighborCol.title) ? 120 : 80
+    let targetWidth = snapshot[key]
+    let frame: number | null = null
+    let changed = false
 
-    // fluid 模式下，拖拽过程中的像素运算不变（更符合直觉），只在写入 state/持久化前
-    // 按拖拽开始时的总宽度换算成百分比，使全部列宽始终归一化到 100%。
-    const totalSnapshotWidth = allCols.reduce((sum, c) => sum + snapshot[String(c.key)], 0)
-    const toStoredWidths = (widthsPx: Record<string, number>): Record<string, number> => {
-      if (!fluid || totalSnapshotWidth <= 0) return widthsPx
-      return Object.fromEntries(
-        Object.entries(widthsPx).map(([k, v]) => [k, (v / totalSnapshotWidth) * 100]),
-      )
+    // 只在动画帧中更新 colgroup/table；不会随鼠标移动重新执行所有行的 render。
+    const preview = () => {
+      frame = null
+      table.style.minWidth = '0px'
+      table.style.width = `${Object.values(snapshot).reduce((sum, width) => sum + width, isSelectEnabled ? 56 : 0) + targetWidth - snapshot[key]}px`
+      colElements.forEach((element, index) => {
+        const columnKey = String(orderedColumns[index].key)
+        element.style.width = `${columnKey === key ? targetWidth : snapshot[columnKey]}px`
+      })
     }
-
-    const handleMouseMove = (moveEvent: MouseEvent) => {
-      const rawTarget = Math.round(snapshot[key] + moveEvent.clientX - startX)
-      const maxTarget = snapshot[key] + snapshot[compKey] - compMinW
-      const newTarget = Math.max(minWidth, Math.min(maxTarget, rawTarget))
-      const newComp = Math.max(compMinW, Math.round(snapshot[compKey] - (newTarget - snapshot[key])))
-      setColumnWidths(prev => ({ ...prev, ...toStoredWidths({ [key]: newTarget, [compKey]: newComp }) }))
+    const updateTarget = (clientX: number) => {
+      targetWidth = Math.max(80, Math.round(snapshot[key] + clientX - startX))
+      changed = targetWidth !== snapshot[key]
     }
-
-    const handleMouseUp = (moveEvent: MouseEvent) => {
-      const rawTarget = Math.round(snapshot[key] + moveEvent.clientX - startX)
-      const maxTarget = snapshot[key] + snapshot[compKey] - compMinW
-      const newTarget = Math.max(minWidth, Math.min(maxTarget, rawTarget))
-      const newComp = Math.max(compMinW, Math.round(snapshot[compKey] - (newTarget - snapshot[key])))
-      const nextWidths = toStoredWidths({ ...snapshot, [key]: newTarget, [compKey]: newComp })
-      persistLayout(columnOrder.length ? columnOrder : columns.map(item => String(item.key)), nextWidths)
-      cleanup()
-    }
-
-    // 失焦兜底：拖拽中 Alt-Tab 切走，mousemove/mouseup 不会触发，残留监听器直到下次 mousedown（对齐 editor 的 onWindowBlur）
     const cleanup = () => {
-      window.removeEventListener('mousemove', handleMouseMove)
-      window.removeEventListener('mouseup', handleMouseUp)
-      window.removeEventListener('blur', handleBlur)
-      document.body.style.cursor = ''
-      document.body.style.userSelect = ''
+      if (frame !== null) window.cancelAnimationFrame(frame)
+      window.removeEventListener('mousemove', handleMove)
+      window.removeEventListener('mouseup', handleUp)
+      window.removeEventListener('keydown', handleKey)
+      window.removeEventListener('blur', cancel)
+      table.style.width = originalWidth
+      table.style.minWidth = originalMinWidth
+      colElements.forEach((element, index) => { element.style.width = originalStyles[index] })
+      delete handle.dataset.resizing
+      document.body.style.cursor = previousCursor
+      document.body.style.userSelect = previousUserSelect
+      resizeCleanupRef.current = null
     }
-    const handleBlur = () => { cleanup() }
-
+    const cancel = () => cleanup()
+    const handleKey = (keyEvent: KeyboardEvent) => {
+      if (keyEvent.key === 'Escape') { keyEvent.preventDefault(); cancel() }
+    }
+    const handleMove = (moveEvent: MouseEvent) => {
+      updateTarget(moveEvent.clientX)
+      if (frame === null) frame = window.requestAnimationFrame(preview)
+    }
+    const handleUp = (upEvent: MouseEvent) => {
+      updateTarget(upEvent.clientX)
+      cleanup()
+      if (changed) savePixelWidths({ ...snapshot, [key]: targetWidth })
+    }
+    resizeCleanupRef.current = cleanup
+    handle.dataset.resizing = 'true'
     document.body.style.cursor = 'col-resize'
     document.body.style.userSelect = 'none'
-    window.addEventListener('mousemove', handleMouseMove)
-    window.addEventListener('mouseup', handleMouseUp)
-    window.addEventListener('blur', handleBlur)
+    window.addEventListener('mousemove', handleMove)
+    window.addEventListener('mouseup', handleUp)
+    window.addEventListener('keydown', handleKey)
+    window.addEventListener('blur', cancel)
+  }
+
+  const fitColumn = (col: TableColumn<T>) => {
+    resizeCleanupRef.current?.()
+    const index = orderedColumns.findIndex(item => item.key === col.key) + (isSelectEnabled ? 1 : 0)
+    const snapshot = measureWidths()
+    let width = 80
+    // 双击时才测量已加载内容；临时使用自然宽度，支持被 truncate 截断的文字和表单控件。
+    for (const row of Array.from(tableRef.current?.rows ?? [])) {
+      const cell = row.cells[index]
+      if (!cell || cell.colSpan > 1) continue
+      const content = cell.firstElementChild as HTMLElement | null
+      if (!content) continue
+      const previous = content.style.cssText
+      try {
+        content.style.width = 'max-content'
+        content.style.maxWidth = 'none'
+        content.style.whiteSpace = 'nowrap'
+        // scrollWidth 为整数，额外留 4px 避免小数像素和字体渲染造成刚好换行。
+        width = Math.max(width, Math.max(content.scrollWidth, content.getBoundingClientRect().width) + 36)
+      } finally {
+        content.style.cssText = previous
+      }
+    }
+    // 超长备注仍换行，避免一次适配生成数千像素的列；手动拖动不设此上限。
+    savePixelWidths({ ...snapshot, [String(col.key)]: Math.min(800, Math.ceil(width)) })
   }
 
   const allIds = data.map(r => Number((r as Record<string, unknown>)[String(rowKey)]))
@@ -285,12 +305,19 @@ export default function DataTable<T extends object>({
 
   return (
     <div className="rounded-lg border border-border bg-card overflow-hidden">
+      <div className="flex justify-end border-b border-border/60 px-2 py-1">
+        <button type="button" aria-label="恢复默认列宽" disabled={!hasCustomWidths}
+          onClick={() => { resizeCleanupRef.current?.(); persistLayout(columnOrder.length ? columnOrder : currentKeys, {}, fluid ? 'percent' : 'px') }}
+          className="inline-flex h-7 items-center gap-1.5 rounded px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-default disabled:opacity-40">
+          <RotateCcw className="h-3.5 w-3.5" />恢复默认列宽
+        </button>
+      </div>
       <div className="overflow-x-auto">
-        <table aria-busy={loading} className="table-fixed text-sm" style={fluid ? { width: '100%' } : { width: Math.max(tableWidth, 0), minWidth: '100%' }}>
+        <table ref={tableRef} aria-busy={loading} className="table-fixed text-sm" style={usesPercent ? { width: '100%' } : { width: tableWidth, minWidth: hasCustomWidths ? 0 : '100%' }}>
           <colgroup ref={colgroupRef}>
             {isSelectEnabled && <col style={{ width: 56 }} />}
             {orderedColumns.map(col => (
-              <col key={String(col.key)} style={{ width: fluid ? `${getColumnWidth(col)}%` : getColumnWidth(col) }} />
+              <col key={String(col.key)} style={{ width: usesPercent ? `${getColumnWidth(col)}%` : getColumnWidth(col) }} />
             ))}
           </colgroup>
           <thead>
@@ -313,7 +340,7 @@ export default function DataTable<T extends object>({
                   scope="col"
                   aria-sort={sortKey === String(col.key) ? (sortDirection === 'asc' ? 'ascending' : 'descending') : undefined}
                   draggable={!isAction(String(col.key), col.title)}
-                  onDragStart={() => setDraggingKey(String(col.key))}
+                  onDragStart={event => { if (resizeCleanupRef.current) event.preventDefault(); else setDraggingKey(String(col.key)) }}
                   onDragOver={(e) => {
                     if (draggingKey && draggingKey !== String(col.key)) e.preventDefault()
                   }}
@@ -325,9 +352,8 @@ export default function DataTable<T extends object>({
                   className={`px-4 py-2.5 text-left text-table-head ${
                     isAction(String(col.key), col.title)
                       ? 'sticky right-0 z-20 min-w-[180px] bg-muted shadow-[-12px_0_16px_-12px_rgba(0,0,0,0.12)]'
-                      : 'cursor-move select-none'
+                      : 'relative cursor-move select-none'
                   }`}
-                  style={fluid ? { width: `${getColumnWidth(col)}%` } : (getColumnWidth(col) ? { width: getColumnWidth(col), minWidth: getColumnWidth(col) } : undefined)}
                 >
                   <div className="group flex items-center gap-2">
                     {col.sortable && onSortChange ? (
@@ -335,7 +361,7 @@ export default function DataTable<T extends object>({
                         type="button"
                         aria-label={`按${col.title}排序`}
                         onClick={() => onSortChange(String(col.key))}
-                        className={`min-w-0 flex-1 whitespace-nowrap transition-colors hover:text-foreground ${
+                        className={`min-w-0 flex-1 truncate transition-colors hover:text-foreground ${
                           col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left'
                         } ${sortKey === String(col.key) ? 'text-primary' : ''}`}
                         title={col.title}
@@ -344,7 +370,7 @@ export default function DataTable<T extends object>({
                       </button>
                     ) : (
                       <span
-                        className={`min-w-0 flex-1 whitespace-nowrap ${
+                        className={`min-w-0 flex-1 truncate ${
                           col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : ''
                         }`}
                         title={col.title}
@@ -355,10 +381,22 @@ export default function DataTable<T extends object>({
                         type="button"
                         aria-label={`调整${col.title}列宽`}
                         onMouseDown={(event) => startResize(event, col)}
-                        onClick={event => event.preventDefault()}
-                        className="ml-auto flex h-5 w-3 shrink-0 cursor-col-resize items-center justify-center rounded-sm opacity-70 transition-opacity group-hover:opacity-100"
+                        title="拖动调整列宽，双击适应内容；方向键微调，Enter 适应内容"
+                        draggable={false}
+                        onClick={event => { event.preventDefault(); event.stopPropagation() }}
+                        onDoubleClick={event => { event.stopPropagation(); fitColumn(col) }}
+                        onKeyDown={event => {
+                          if (event.key === 'Enter') { event.preventDefault(); fitColumn(col) }
+                          if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+                            event.preventDefault(); event.stopPropagation()
+                            const widths = measureWidths()
+                            const key = String(col.key)
+                            savePixelWidths({ ...widths, [key]: Math.max(80, widths[key] + (event.key === 'ArrowRight' ? 1 : -1) * (event.shiftKey ? 40 : 10)) })
+                          }
+                        }}
+                        className="group/resize absolute inset-y-0 right-0 z-30 flex w-3 cursor-col-resize items-center justify-end touch-none hover:bg-primary/10 focus-visible:outline-none focus-visible:bg-primary/10 data-[resizing=true]:bg-primary/15"
                       >
-                        <span className="block h-4 w-px bg-border/80" />
+                        <span className="pointer-events-none h-full w-px bg-border group-hover/resize:w-0.5 group-hover/resize:bg-primary group-focus-visible/resize:bg-primary group-data-[resizing=true]/resize:w-0.5 group-data-[resizing=true]/resize:bg-primary" />
                       </button>
                     )}
                   </div>
@@ -427,7 +465,6 @@ export default function DataTable<T extends object>({
                             ? 'sticky right-0 z-10 min-w-[180px] bg-card py-2.5 shadow-[-12px_0_16px_-12px_rgba(0,0,0,0.08)] group-hover:bg-muted/30'
                             : 'overflow-hidden py-2.5'
                         }`}
-                        style={fluid ? { width: `${getColumnWidth(col)}%` } : (getColumnWidth(col) ? { width: getColumnWidth(col), minWidth: getColumnWidth(col) } : undefined)}
                       >
                         {isAction(String(col.key), col.title)
                           ? (col.render ? (col.render(rawValue, row) as ReactNode) : textValue)

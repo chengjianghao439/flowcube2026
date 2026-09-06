@@ -4,7 +4,7 @@ import { useSearchParams } from 'react-router-dom'
 import { X } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
-import Pagination from '@/components/shared/Pagination'
+import ListSummary from '@/components/shared/ListSummary'
 import { Button } from '@/components/ui/button'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import type { StatusTone } from '@/lib/statusTone'
@@ -59,7 +59,6 @@ export default function OpLogsPage() {
   const qc = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
   const [queryOpen, setQueryOpen] = useState(false)
-  const [page, setPage] = useState(1)
   const [clearConfirm, setClearConfirm] = useState(false)
   const [detail, setDetail] = useState<OpLog | null>(null)
 
@@ -71,11 +70,10 @@ export default function OpLogsPage() {
 
   const PAGE_SIZE = 20
   const { data, isLoading } = useQuery({
-    queryKey: ['oplogs', { keyword, module, startDate, endDate, page }],
-    queryFn: () => getOpLogsApi({ page, pageSize: PAGE_SIZE, keyword, module, startDate, endDate }),
+    queryKey: ['oplogs', { keyword, module, startDate, endDate }],
+    queryFn: () => getOpLogsApi({ page: 1, pageSize: PAGE_SIZE, keyword, module, startDate, endDate }),
   })
   const total = data?.pagination?.total ?? 0
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const clear = useMutation({ mutationFn: clearLogsApi, onSuccess: () => qc.invalidateQueries({ queryKey: ['oplogs'] }) })
 
   function updateParams(updates: Record<string, string | number | null | undefined>) {
@@ -91,14 +89,12 @@ export default function OpLogsPage() {
       module: v.module || null,
       startDate: v.startDate || null,
       endDate: v.endDate || null,
-    })
-    setPage(1)
+    });
     setQueryOpen(false)
   }
 
   function clearAll() {
-    updateParams({ keyword: null, module: null, startDate: null, endDate: null })
-    setPage(1)
+    updateParams({ keyword: null, module: null, startDate: null, endDate: null });
   }
 
   // 当前生效筛选摘要（可逐项移除）
@@ -174,9 +170,7 @@ export default function OpLogsPage() {
       )}
       <DataTable columns={columns} data={data?.list || []} loading={isLoading} />
 
-      {/* 分页 */}
-      <Pagination page={page} totalPages={totalPages} total={total} unit="条"
-        onPageChange={setPage} />
+      <ListSummary total={total} unit="条" />
       <ConfirmDialog
         open={clearConfirm}
         title="清理旧日志"

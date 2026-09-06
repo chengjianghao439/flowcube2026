@@ -116,6 +116,6 @@ export const capabilityGroups = [
     description:
       "按岗位权限、仓库范围和设备绑定分工；审批待办、作业异常进入对应处理入口。",
     route: "#/reports/role-workbench",
-    link: "岗位工作台",
+    link: "待办中心",
   },
 ];

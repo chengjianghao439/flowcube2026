@@ -1,3 +1,4 @@
+import type { ProcurementSupply } from '@/api/procurement-supply'
 export interface ProcurementPlanItem {
   id: number
   planId: number
@@ -24,6 +25,8 @@ export interface ProcurementPlanItem {
   status: 1 | 2 | 3          // 1待处理 2已转采购 3已忽略
   statusName: string
   purchaseOrderId: number | null
+  supplySnapshot: ProcurementSupply | null
+  currentSupply: ProcurementSupply | null
 }
 
 export interface ProcurementPlan {

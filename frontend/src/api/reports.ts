@@ -1,3 +1,4 @@
+import { useAuthStore } from '@/store/authStore'
 import { payloadClient as client } from './client'
 
 /** 已有统计接口的商品身份字段，与 reports.metrics.js 投影保持一致。 */
@@ -147,6 +148,7 @@ export interface WorkbenchSection {
   cards: WorkbenchCard[]
 }
 export interface RoleWorkbenchData {
+  hasMore?: boolean
   summary: {
     totalAlerts: number
     warehouseCount: number
@@ -168,8 +170,25 @@ export interface RoleWorkbenchData {
   sections: WorkbenchSection[]
 }
 
-export const getRoleWorkbenchApi = () =>
-  client.get<RoleWorkbenchData>('/reports/role-workbench')
+export async function getRoleWorkbenchApi() {
+  const sessionGeneration = useAuthStore.getState().sessionGeneration
+  let result: RoleWorkbenchData | null = null
+  for (let batchPage = 1; ; batchPage++) {
+    const batch = await client.get<RoleWorkbenchData>('/reports/role-workbench', { params: { batchPage, batchSize: 200 }, _authSessionGeneration: sessionGeneration })
+    if (!result) result = batch
+    else {
+      if (JSON.stringify(result.summary) !== JSON.stringify(batch.summary)) throw new Error('待办数量发生变化，请刷新重试')
+      for (const section of result.sections) for (const card of section.cards) {
+        const next = batch.sections.find(s => s.key === section.key)?.cards.find(c => c.key === card.key)
+        if (!next) throw new Error('待办分类发生变化，请刷新重试')
+        const seen = new Set(card.items.map(i => `${i.id}:${i.badge}:${i.subtitle}`))
+        if (next.items.some(i => seen.has(`${i.id}:${i.badge}:${i.subtitle}`))) throw new Error('待办批次发生重复，请刷新重试')
+        card.items.push(...next.items)
+      }
+    }
+    if (!batch.hasMore) return result
+  }
+}
 
 export interface ReconciliationRecord {
   id: number

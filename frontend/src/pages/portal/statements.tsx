@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { FileText } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
-import Pagination from '@/components/shared/Pagination'
+import ListSummary from '@/components/shared/ListSummary'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { Button } from '@/components/ui/button'
@@ -18,16 +18,14 @@ const PAGE_SIZE = 20
 export default function PortalStatementsPage() {
   const [customer, setCustomer] = useState<{ id: number; name: string } | null>(null)
   const [finderOpen, setFinderOpen] = useState(false)
-  const [page, setPage] = useState(1)
 
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ['portal-statements', customer?.id, page],
-    queryFn: () => getPortalStatementsApi({ customerId: customer!.id, page, pageSize: PAGE_SIZE }),
+    queryKey: ['portal-statements', customer?.id],
+    queryFn: () => getPortalStatementsApi({ customerId: customer!.id, page: 1, pageSize: PAGE_SIZE }),
     enabled: !!customer,
   })
 
   const total = data?.pagination?.total ?? 0
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
   const columns: TableColumn<PortalStatementRow>[] = [
     { key: 'statementNo', title: '对账单号', width: 150, render: v => <span className="text-doc-code">{String(v)}</span> },
@@ -60,7 +58,7 @@ export default function PortalStatementsPage() {
         <span className="text-sm font-medium">对账客户</span>
         <div className="w-80"><FinderTrigger value={customer?.name ?? ''} placeholder="选择需要核对的客户" onClick={() => setFinderOpen(true)} /></div>
         {customer && (
-          <Button variant="ghost" size="sm" onClick={() => { setCustomer(null); setPage(1) }}>清空</Button>
+          <Button variant="ghost" size="sm" onClick={() => { setCustomer(null); }}>清空</Button>
         )}
       </FilterCard>
 
@@ -72,14 +70,13 @@ export default function PortalStatementsPage() {
       />)}
 
       {customer && (
-        <Pagination page={page} totalPages={totalPages} total={total} unit="张"
-          onPageChange={setPage} />
+        <ListSummary total={total} unit="张" />
       )}
 
       <CustomerFinder
         open={finderOpen}
         onClose={() => setFinderOpen(false)}
-        onConfirm={(r) => { setCustomer({ id: r.id, name: r.name }); setPage(1) }}
+        onConfirm={(r) => { setCustomer({ id: r.id, name: r.name }); }}
       />
 
       {!customer && (

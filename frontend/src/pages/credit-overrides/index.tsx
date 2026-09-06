@@ -1,10 +1,11 @@
+import { OrderActivityDialog } from '@/components/shared/OrderActivityDialog'
 import { RecordIdentity } from '@/components/shared/RecordIdentity'
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { X } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
-import Pagination from '@/components/shared/Pagination'
+import ListSummary from '@/components/shared/ListSummary'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -127,11 +128,10 @@ export default function CreditOverridesPage() {
   const startDate = readStringParam(searchParams, 'startDate')
   const endDate   = readStringParam(searchParams, 'endDate')
 
-  const [page, setPage] = useState(1)
   const [createOpen, setCreateOpen] = useState(false)
 
   const { data, isLoading, isError, error, refetch } = useCreditOverrides({
-    page,
+    page: 1,
     pageSize: 20,
     status: status || undefined,
     keyword: keyword || undefined,
@@ -159,14 +159,12 @@ export default function CreditOverridesPage() {
       status: v.status || null,
       startDate: v.startDate || null,
       endDate: v.endDate || null,
-    })
-    setPage(1)
+    });
     setQueryOpen(false)
   }
 
   function clearAll() {
-    updateParams({ keyword: null, status: null, startDate: null, endDate: null })
-    setPage(1)
+    updateParams({ keyword: null, status: null, startDate: null, endDate: null });
   }
 
   // 当前生效筛选摘要（可逐项移除）
@@ -203,7 +201,9 @@ export default function CreditOverridesPage() {
       title: '操作',
       width: 200,
       render: (_, row) => {
-        const els: React.ReactNode[] = []
+        const els: React.ReactNode[] = [<OrderActivityDialog key="detail" type="credit" id={row.id} title={row.overrideNo} fields={[
+          ['销售单', row.saleOrderNo], ['客户', row.customerName], ['本单净额', money(row.thisAmount)], ['授信额度', money(row.creditLimit)], ['超额金额', money(row.overAmount)], ['状态', row.statusName], ['申请人', row.applicantName], ['申请原因', row.reason], ['驳回原因', row.rejectReason],
+        ]} />]
         if (row.status === 1) els.push(<Button key="submit" size="sm" variant="outline" onClick={() => submit(row.id, { onSuccess: () => toast.success('已提交审批'), onError: (e: Error) => toast.error(e.message) })}>提交</Button>)
         if (row.status === 2 && canApply) els.push(<Button key="ap" size="sm" variant="outline" onClick={() => approve(row.id, { onSuccess: () => toast.success('已批准'), onError: (e: Error) => toast.error(e.message) })}>批准</Button>)
         if (row.status === 2 && canApply) els.push(<Button key="rj" size="sm" variant="ghost" className="text-destructive" onClick={() => {
@@ -252,7 +252,7 @@ export default function CreditOverridesPage() {
       ) : (
         <DataTable columns={columns} data={list} loading={isLoading} rowKey="id" emptyText="暂无超额放行申请" />
       )}
-      {total > 0 && <Pagination page={page} totalPages={Math.ceil(total / 20)} total={total} onPageChange={setPage} />}
+      {total > 0 && <ListSummary total={total} />}
 
       <Dialog open={!!rejectTarget} onOpenChange={open => { if (!open && !rejecting) setRejectTarget(null) }}>
         <DialogContent className="max-w-lg">

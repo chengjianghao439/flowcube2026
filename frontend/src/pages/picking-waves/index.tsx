@@ -1,9 +1,10 @@
+import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
 import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
 /**
  * 批次拣货管理页
  * 路由：/picking-waves
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { X } from 'lucide-react'
@@ -20,7 +21,7 @@ import {
   type PickingWave, type WaveStatus,
 } from '@/api/picking-waves'
 import DataTable from '@/components/shared/DataTable'
-import Pagination from '@/components/shared/Pagination'
+import ListSummary from '@/components/shared/ListSummary'
 import { confirmAction } from '@/lib/confirm'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import type { TableColumn } from '@/types'
@@ -63,16 +64,6 @@ function getWaveClosureCopy(wave: PickingWave | null) {
   return { stageLabel: wave.statusName, description: '当前批次可继续查看执行与打印信息。', nextAction: '检查主链处理状态' }
 }
 
-function StatBlock({ label, value, hint }: { label: string; value: number | string; hint?: string }) {
-  return (
-    <div className="rounded-lg border border-border bg-muted/20 px-4 py-3">
-      <p className="text-helper">{label}</p>
-      <p className="mt-1 text-2xl font-bold text-foreground">{value}</p>
-      {hint ? <p className="mt-1 text-helper">{hint}</p> : null}
-    </div>
-  )
-}
-
 export default function PickingWavesPage() {
   const qc = useQueryClient()
   const navigate = useNavigate()
@@ -81,33 +72,20 @@ export default function PickingWavesPage() {
   const [keyword, setKeyword] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [queryOpen, setQueryOpen] = useState(false)
-  const [page, setPage] = useState(1)
   const selectedWaveId = Number(searchParams.get('waveId') || 0) || null
   const focus = searchParams.get('focus') || ''
-  const progressRef = useRef<HTMLDivElement | null>(null)
-  const printClosureRef = useRef<HTMLDivElement | null>(null)
 
   const { data, isLoading } = useQuery({
-    queryKey: ['picking-waves', keyword, statusFilter, page],
-    queryFn: () => getWavesApi({ keyword, page, pageSize: 20, ...(statusFilter ? { status: statusFilter } : {}) }),
+    queryKey: ['picking-waves', keyword, statusFilter],
+    queryFn: () => getWavesApi({ keyword, page: 1, pageSize: 20, ...(statusFilter ? { status: statusFilter } : {}) }),
   })
   const total = data?.pagination?.total ?? 0
-  const totalPages = Math.max(1, Math.ceil(total / 20))
 
   const { data: detail } = useQuery({
     queryKey: ['picking-wave-detail', selectedWaveId],
     queryFn: () => getWaveByIdApi(selectedWaveId!),
     enabled: !!selectedWaveId,
   })
-
-  useEffect(() => {
-    if (!detail || !focus) return
-    const target = focus === 'print-closure' ? printClosureRef.current : progressRef.current
-    if (!target) return
-    window.setTimeout(() => {
-      target.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }, 160)
-  }, [detail, focus])
 
   function invalidate() {
     qc.invalidateQueries({ queryKey: ['picking-waves'] })
@@ -158,11 +136,10 @@ export default function PickingWavesPage() {
   }
   function applyQuery(v: WaveQueryValues) {
     setKeyword(v.keyword)
-    setStatusFilter(v.status)
-    setPage(1)
+    setStatusFilter(v.status);
     setQueryOpen(false)
   }
-  function clearAll() { setKeyword(''); setStatusFilter(''); setPage(1) }
+  function clearAll() { setKeyword(''); setStatusFilter(''); }
 
   const chips = [
     keyword && { key: 'keyword', label: `批次号：${keyword}`, onRemove: () => setKeyword('') },
@@ -238,10 +215,6 @@ export default function PickingWavesPage() {
   ], [openPath, openWaveDetail])
 
   const detailCopy = getWaveClosureCopy(detail ?? null)
-  const printSummary = detail?.printSummary
-  const totalQty = detail?.items?.reduce((sum, item) => sum + item.totalQty, 0) ?? 0
-  const pickedQty = detail?.items?.reduce((sum, item) => sum + item.pickedQty, 0) ?? 0
-  const progressPct = totalQty > 0 ? Math.round((pickedQty / totalQty) * 100) : 0
 
   return (
     <div className="space-y-5">
@@ -271,7 +244,7 @@ export default function PickingWavesPage() {
       )}
 
       <DataTable columns={columns} data={data?.list ?? []} loading={isLoading} rowKey="id" />
-      <Pagination page={page} totalPages={totalPages} total={total} unit="个" onPageChange={setPage} />
+      <ListSummary total={total} unit="个" />
 
       <Dialog open={!!selectedWaveId} onOpenChange={v => !v && closeDetail()}>
         <DialogContent className="max-w-6xl">
@@ -282,6 +255,7 @@ export default function PickingWavesPage() {
           </DialogHeader>
 
           <div className="max-h-[75vh] space-y-5 overflow-y-auto py-2">
+            <OrderDetailSections type="wave" id={selectedWaveId || 0} initialView={focus === 'print-closure' ? 'print' : focus ? 'progress' : 'info'} printProgress={<div className="flex justify-end"><Button size="sm" variant="outline" onClick={() => openPath(`/settings/barcode-print-query?category=outbound&keyword=${encodeURIComponent(detail?.waveNo ?? '')}`, '条码打印查询')}>打开出库补打</Button></div>}>
             <section className="rounded-lg border border-primary/20 bg-primary/5 px-4 py-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
@@ -292,72 +266,6 @@ export default function PickingWavesPage() {
                   <p className="text-helper">下一步动作</p>
                   <p className="mt-1 font-semibold text-foreground">{detailCopy.nextAction}</p>
                 </div>
-              </div>
-            </section>
-
-            <section ref={progressRef} className="space-y-4 rounded-lg border border-border bg-card p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-card-title">批次进度</h3>
-                  <p className="text-muted-body">统一查看拣货进度、任务数量和当前责任人。</p>
-                </div>
-                {detail ? <SoftStatusLabel label={WAVE_STATUS_LABEL[detail.status]} tone={detail.status === 4 ? 'success' : detail.status === 5 ? 'danger' : detail.status === 1 ? 'draft' : 'active'} /> : null}
-              </div>
-              <div className="grid gap-3 md:grid-cols-4">
-                <StatBlock label="任务数" value={detail?.taskCount ?? 0} />
-                <StatBlock label="应拣总数" value={totalQty} />
-                <StatBlock label="已拣总数" value={pickedQty} />
-                <StatBlock label="当前进度" value={`${progressPct}%`} hint={detail?.operatorName ? `责任人：${detail.operatorName}` : '待分配'} />
-              </div>
-              {detail?.tasks?.length ? (
-                <div className="rounded-lg border border-border">
-                  <div className="grid grid-cols-[160px_1fr_120px] gap-3 border-b border-border px-4 py-3 text-sm font-medium text-muted-foreground">
-                    <span>仓库任务</span>
-                    <span>销售单 / 客户</span>
-                    <span>当前状态</span>
-                  </div>
-                  <div className="divide-y divide-border">
-                    {detail.tasks.map(task => (
-                      <div key={task.taskId} className="grid grid-cols-[160px_1fr_120px] gap-3 px-4 py-3 text-sm">
-                        <span className="text-doc-code">{task.taskNo}</span>
-                        <span>{task.saleOrderNo} / {task.customerName || '—'}</span>
-                        <span className="text-muted-foreground">{task.taskStatus}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-            </section>
-
-            <section ref={printClosureRef} className="space-y-4 rounded-lg border border-border bg-card p-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-card-title">出库箱贴打印</h3>
-                  <p className="text-muted-body">在这里统一处理箱贴补打、打印超时确认，以及定位批次进度受阻环节。</p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button size="sm" variant="outline" onClick={() => openPath(`/settings/barcode-print-query?category=outbound&keyword=${encodeURIComponent(detail?.waveNo ?? '')}`, '条码打印查询')}>
-                    打开出库补打
-                  </Button>
-                </div>
-              </div>
-              <div className="grid gap-4 md:grid-cols-4">
-                <StatBlock label="包裹总数" value={printSummary?.totalPackages ?? 0} />
-                <StatBlock label="未生成任务" value={printSummary?.noJobCount ?? 0} />
-                <StatBlock label="待派发" value={printSummary?.pendingCount ?? 0} />
-                <StatBlock label="已打印" value={printSummary?.successCount ?? 0} />
-                <StatBlock label="打印失败" value={printSummary?.failedCount ?? 0} />
-                <StatBlock label="超时待确认" value={printSummary?.timeoutCount ?? 0} />
-                <StatBlock label="排队 / 打印中" value={printSummary?.processingCount ?? 0} />
-              </div>
-              <div className="rounded-lg border border-dashed border-border px-4 py-3 text-sm text-muted-foreground">
-                {printSummary?.noJobCount
-                  ? `当前有 ${printSummary.noJobCount} 个包裹未生成打印任务，请先回打包或补打入口生成可追踪任务。`
-                  : printSummary?.failedCount || printSummary?.timeoutCount
-                  ? `当前仍有 ${Number(printSummary?.failedCount ?? 0) + Number(printSummary?.timeoutCount ?? 0)} 个出库标签需要处理。建议先补打，再继续分拣或出库。`
-                  : '当前未发现阻断出库的打印异常，可继续推进批次执行。'}
-                {printSummary?.recentPrinter ? ` 最近打印机：${printSummary.recentPrinter}。` : ''}
-                {printSummary?.recentError ? ` 最近异常：${printSummary.recentError}。` : ''}
               </div>
             </section>
 
@@ -387,6 +295,7 @@ export default function PickingWavesPage() {
                 </table></div>
               </section>
             ) : null}
+            </OrderDetailSections>
           </div>
 
           <DialogFooter className="gap-2">

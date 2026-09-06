@@ -153,7 +153,7 @@ async function findAll({ page = 1, pageSize = 20, keyword = '', status = null, w
 
 // ── 详情 ──────────────────────────────────────────────────────────────────────
 
-async function findById(id, scopeWarehouseIds = null) {
+async function findById(id, scopeWarehouseIds = null, { refreshProgress = true } = {}) {
   const [[row]] = await pool.query(
     `SELECT w.*, wh.name AS warehouse_name
      FROM picking_waves w
@@ -165,7 +165,7 @@ async function findById(id, scopeWarehouseIds = null) {
   // 单据级数据权限（2026-08-21 审计 A.3 修复）：限仓用户不能看他人仓库波次
   assertInScope(scopeWarehouseIds, row.warehouse_id, '波次')
 
-  if (row.status < 4) {
+  if (refreshProgress && row.status < 4) {
     await refreshWavePickedFromTasks(pool, id)
   }
 

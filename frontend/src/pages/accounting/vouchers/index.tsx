@@ -1,10 +1,10 @@
-import { PaginationArrow } from '@/components/shared/PaginationArrow'
+import ListSummary from '@/components/shared/ListSummary'
 import { ReportTable } from '@/components/shared/ReportTable'
 /**
  * 记账凭证（文档 10 · Phase 1）
  *
  * 凭证由 voucher-engine 从既有业务事实全量重算生成（幂等、借贷平衡、只读业务表）。本页提供：
- * 列表筛选/分页、详情（借贷分录）、一键「生成本期凭证」、导出（通用/金蝶）、手工凭证录入、红字冲销。
+ * 列表筛选、详情（借贷分录）、一键「生成本期凭证」、导出（通用/金蝶）、手工凭证录入、红字冲销。
  * 前端不复制任何会计规则（借贷方向/金额/勾稽一律以接口为准）。
  */
 
@@ -278,16 +278,14 @@ export default function VouchersPage() {
   const [status, setStatus] = useState('')
   const [keyword, setKeyword] = useState('')
   const [queryOpen, setQueryOpen] = useState(false)
-  const [page, setPage] = useState(1)
   const query = useMemo(() => ({
     period: period || undefined, sourceType: sourceType || undefined,
     status: status ? Number(status) : undefined, keyword: keyword || undefined,
-    page, pageSize: PAGE_SIZE,
-  }), [period, sourceType, status, keyword, page])
+    page: 1, pageSize: PAGE_SIZE,
+  }), [period, sourceType, status, keyword])
   const { data, isLoading } = useVouchers(query)
   const list = data?.list ?? []
   const total = data?.pagination?.total ?? 0
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
   // ── 查询弹窗筛选值 ──
   const initialQuery: VoucherQueryValues = { period, sourceType, status, keyword }
@@ -295,11 +293,10 @@ export default function VouchersPage() {
     setPeriod(v.period)
     setSourceType(v.sourceType)
     setStatus(v.status)
-    setKeyword(v.keyword)
-    setPage(1)
+    setKeyword(v.keyword);
     setQueryOpen(false)
   }
-  function clearAll() { setPeriod(''); setSourceType(''); setStatus(''); setKeyword(''); setPage(1) }
+  function clearAll() { setPeriod(''); setSourceType(''); setStatus(''); setKeyword(''); }
 
   // 当前生效筛选摘要（可逐项移除）
   const chips = [
@@ -402,14 +399,7 @@ export default function VouchersPage() {
         <DataTable columns={columns} data={list} loading={isLoading} emptyText="暂无凭证，点击「生成本期凭证」" columnStorageKey="acct-vouchers" />
       </div>
 
-      {/* 分页 */}
-      {totalPages > 1 && (
-        <div className="mt-3 flex items-center justify-end gap-2 text-sm">
-          <PaginationArrow direction="previous" disabled={page <= 1} onClick={() => setPage(p => p - 1)} />
-          <span className="tabular-nums">{page} / {totalPages}</span>
-          <PaginationArrow direction="next" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)} />
-        </div>
-      )}
+      <ListSummary total={total} />
 
       <GenerateDialog open={genOpen} onClose={() => setGenOpen(false)} />
       <ManualDialog open={manualOpen} onClose={() => setManualOpen(false)} />

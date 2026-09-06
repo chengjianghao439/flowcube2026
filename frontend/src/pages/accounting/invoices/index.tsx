@@ -1,4 +1,4 @@
-import { PaginationArrow } from '@/components/shared/PaginationArrow'
+import ListSummary from '@/components/shared/ListSummary'
 /**
  * 发票管理（文档 10 · Phase 3）
  * 进项/销项发票池 + 录入 + 认证/抵扣/红冲台账。发票与业务单弱关联，税额只在凭证映射时拆分。
@@ -107,12 +107,10 @@ export default function InvoicesPage() {
   const canManage = can(PERMISSIONS.INVOICE_MANAGE)
   const [invoiceType, setInvoiceType] = useState(1)
   const [keyword, setKeyword] = useState('')
-  const [page, setPage] = useState(1)
-  const query = useMemo(() => ({ invoiceType, keyword: keyword || undefined, page, pageSize: PAGE_SIZE }), [invoiceType, keyword, page])
+  const query = useMemo(() => ({ invoiceType, keyword: keyword || undefined, page: 1, pageSize: PAGE_SIZE }), [invoiceType, keyword])
   const { data, isLoading } = useInvoices(query)
   const list = data?.list ?? []
   const total = data?.pagination?.total ?? 0
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editTarget, setEditTarget] = useState<Invoice | null>(null)
@@ -158,11 +156,11 @@ export default function InvoicesPage() {
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <div className="flex rounded-lg border border-border/70 bg-card p-0.5">
           {[{ v: 1, l: '进项发票' }, { v: 2, l: '销项发票' }].map(t => (
-            <button key={t.v} onClick={() => { setInvoiceType(t.v); setPage(1) }}
+            <button key={t.v} onClick={() => { setInvoiceType(t.v); }}
               className={cn('rounded-md px-3 py-1.5 text-sm transition-colors', invoiceType === t.v ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>{t.l}</button>
           ))}
         </div>
-        <Input value={keyword} onChange={e => { setKeyword(e.target.value); setPage(1) }} placeholder="发票号 / 单位 / 单号" className="h-9 w-52" />
+        <Input value={keyword} onChange={e => { setKeyword(e.target.value); }} placeholder="发票号 / 单位 / 单号" className="h-9 w-52" />
         <span className="ml-auto text-sm text-muted-foreground">共 {total} 张</span>
       </div>
 
@@ -170,13 +168,7 @@ export default function InvoicesPage() {
         <DataTable columns={columns} data={list} loading={isLoading} emptyText="暂无发票，点击右上角录入" columnStorageKey={`acct-invoices-${invoiceType}`} />
       </div>
 
-      {totalPages > 1 && (
-        <div className="mt-3 flex items-center justify-end gap-2 text-sm">
-          <PaginationArrow direction="previous" disabled={page <= 1} onClick={() => setPage(p => p - 1)} />
-          <span className="tabular-nums">{page} / {totalPages}</span>
-          <PaginationArrow direction="next" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)} />
-        </div>
-      )}
+      <ListSummary total={total} />
 
       <InvoiceDialog open={dialogOpen} invoiceType={editTarget?.invoiceType ?? invoiceType} edit={editTarget} onClose={() => { setDialogOpen(false); setEditTarget(null) }} />
       <ConfirmDialog

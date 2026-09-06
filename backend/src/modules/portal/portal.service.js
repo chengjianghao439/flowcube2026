@@ -68,7 +68,7 @@ async function listPurchaseStatus({ supplierId = null, page = 1, pageSize = 20, 
        ${where}
       GROUP BY po.id, po.order_no, po.status, po.expected_date, po.total_amount,
                po.warehouse_name, po.remark, po.created_at
-      ORDER BY po.created_at DESC LIMIT ? OFFSET ?`,
+      ORDER BY po.created_at DESC, po.id DESC LIMIT ? OFFSET ?`,
     [...params, ps, offset],
   )
   const [[{ total }]] = await pool.query(

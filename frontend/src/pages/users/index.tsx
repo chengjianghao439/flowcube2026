@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useAuthStore } from '@/store/authStore'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
-import Pagination from '@/components/shared/Pagination'
+import ListSummary from '@/components/shared/ListSummary'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -42,16 +42,13 @@ export default function UsersPage() {
   const [resetOpen, setResetOpen] = useState(false)
   const [resetTarget, setResetTarget] = useState<SysUser | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<SysUser | null>(null)
-  const [page, setPage] = useState(1)
 
-  const { data, isLoading, isError, error, refetch } = useUsers({ page, pageSize: 20, keyword })
+  const { data, isLoading, isError, error, refetch } = useUsers({ page: 1, pageSize: 20, keyword })
   const total = data?.pagination?.total ?? 0
-  const totalPages = Math.max(1, Math.ceil(total / 20))
   const { mutate: deleteUser } = useDeleteUser()
 
   function handleSearch() {
-    setKeyword(search)
-    setPage(1)
+    setKeyword(search);
   }
 
   function handleEdit(user: SysUser) {
@@ -152,7 +149,7 @@ export default function UsersPage() {
         />
         <Button size="sm" variant="outline" onClick={handleSearch}>搜索</Button>
         {keyword && (
-          <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword(''); setPage(1) }}>
+          <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword(''); }}>
             重置
           </Button>
         )}
@@ -168,7 +165,7 @@ export default function UsersPage() {
             loading={isLoading}
             rowKey="id"
           />
-          <Pagination page={page} totalPages={totalPages} total={total} unit="个" onPageChange={setPage} />
+          <ListSummary total={total} unit="个" />
         </>
       )}
 

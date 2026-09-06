@@ -1,3 +1,4 @@
+import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
 import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
 import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
 /**
@@ -537,8 +538,7 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
         }
       />
 
-      {ret.task && <TaskProgressCard task={ret.task} />}
-
+      <OrderDetailSections type="purchase-return" id={ret.id} progress={ret.task ? <TaskProgressCard task={ret.task} /> : undefined}>
       <SectionCard title="基础信息" compact>
         <dl className="grid grid-cols-3 gap-x-6 gap-y-3 text-sm">
           {[
@@ -587,6 +587,8 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
           </div>
         </div>
       </SectionCard>
+
+      </OrderDetailSections>
 
       <div className="h-4" />
 

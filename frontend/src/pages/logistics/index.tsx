@@ -67,7 +67,7 @@ export default function LogisticsPage() {
   })
   const retryMut = useMutation({
     mutationFn: (id: number) => retryWaybillApi(id, { skipGlobalError: true }),
-    onSuccess: () => { toast.success('已重新提交取号'); invalidate() },
+    onSuccess: () => { toast.success('已提交处理；已发送的平台订单仅查询原单'); invalidate() },
     onError: (e: unknown) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '操作失败'),
   })
   const voidMut = useMutation({
@@ -105,14 +105,15 @@ export default function LogisticsPage() {
     {
       key: 'id', title: '操作', width: 130,
       render: (_, row) => {
+        const direct = ['sf', 'deppon'].includes(row.platformCode || '')
         const items = []
-        if (canManage && (row.status === 1 || row.status === 4)) {
+        if (canManage && !direct && (row.status === 1 || row.status === 4)) {
           items.push({ label: '手工录入快递单号', onClick: () => { setTrackTarget(row); setTrackingInput(row.trackingNo ?? '') } })
         }
-        if (canManage && row.status === 4 && row.platformCode) {
-          items.push({ label: '重试取号', onClick: () => retryMut.mutate(row.id) })
+        if (canManage && [4, 6].includes(row.status) && row.platformCode) {
+          items.push({ label: row.submittedToPlatform || row.status === 6 ? '查询原单' : '重试取号', onClick: () => retryMut.mutate(row.id) })
         }
-        if (canManage && row.status !== 5) {
+        if (canManage && ![2, 5].includes(row.status) && !(direct && (row.submittedToPlatform || [3, 6].includes(row.status)))) {
           items.push({ label: '作废', destructive: true, onClick: () => confirmAction({
             title: '作废运单', description: `确认作废运单 ${row.waybillNo}？`, variant: 'destructive', confirmText: '确认作废',
             onConfirm: () => voidMut.mutate(row.id),
@@ -146,7 +147,7 @@ export default function LogisticsPage() {
 
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
         <span className="text-muted-foreground">创建日期：{applied.startDate || '不限'} 至 {applied.endDate || '不限'}</span>
-        <span className="text-xs text-muted-foreground">当前显示 {list.length} 张运单（最多 500 张）</span>
+        <span className="text-xs text-muted-foreground">共 {list.length} 张运单</span>
       </div>
 
       {chips.length > 0 && (

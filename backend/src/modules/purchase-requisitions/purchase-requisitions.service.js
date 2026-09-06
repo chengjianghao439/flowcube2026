@@ -6,6 +6,9 @@ const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransi
 const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
 const { normalizePagination } = require('../../utils/pagination')
+const { lockPlanning, roundPurchase } = require('../procurement/procurement.planning')
+const { getSupplyRows } = require('../inventory/inventory.procurement')
+const { getPolicy } = require('../procurement/procurement.policies')
 const approvalEngine = require('../../engine/approvalEngine')
 const { assertNotSelfApproval } = require('../../utils/selfApprove')
 
@@ -86,14 +89,18 @@ async function replaceItems(conn, requisitionId, items) {
   return refreshTotal(conn, requisitionId)
 }
 
-async function create({ title, warehouseId, expectedDate, source = 'manual', items = [], remark }, operator) {
+async function create({ title, warehouseId, expectedDate, source = 'manual', items = [], remark, requestKey }, operator) {
   if (!items.length) throw new AppError('请至少填写一条请购明细', 400)
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    await lockPlanning(conn)
+    const requestState = await beginOperationRequest(conn, { requestKey, action: 'purchase.requisition.create', userId: operator?.userId ?? operator?.operatorId ?? null })
+    if (requestState.replay) { await conn.rollback(); return requestState.responseData }
     const [[wh]] = await conn.query('SELECT id,name FROM inventory_warehouses WHERE id=? AND deleted_at IS NULL', [Number(warehouseId)])
     if (!wh) throw new AppError('期望入库仓不存在', 400)
     assertInScope(operator?.warehouseIds ?? null, wh.id, '请购单')
+    if (source === 'replenishment') await validateReplenishmentSupply(conn, warehouseId, items, operator?.warehouseIds ?? null)
     const requisitionNo = await generateDailyCode(conn, 'PR', 'purchase_requisitions', 'requisition_no')
     const [r] = await conn.query(
       `INSERT INTO purchase_requisitions
@@ -102,8 +109,10 @@ async function create({ title, warehouseId, expectedDate, source = 'manual', ite
       [requisitionNo, title || null, wh.id, wh.name, operator.operatorId, operator.operatorName, source, expectedDate || null, remark || null],
     )
     const total = await replaceItems(conn, r.insertId, items)
+    const result = { id: r.insertId, requisitionNo, estimatedAmount: total }
+    await completeOperationRequest(conn, requestState, { data: result, message: '请购单已创建', resourceType: 'purchase_requisition', resourceId: r.insertId })
     await conn.commit()
-    return { id: r.insertId, requisitionNo, estimatedAmount: total }
+    return result
   } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
 }
 
@@ -111,11 +120,13 @@ async function update(id, { title, warehouseId, expectedDate, items, remark }, o
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const row = await lockStatusRow(conn, { table: 'purchase_requisitions', id, columns: 'id, status, applicant_id, warehouse_id', entityName: '请购单' })
+    await lockPlanning(conn)
+    const row = await lockStatusRow(conn, { table: 'purchase_requisitions', id, columns: 'id, status, applicant_id, warehouse_id, source', entityName: '请购单' })
     if (Number(operator?.roleId) !== 1 && Number(row.applicant_id) !== Number(operator?.operatorId)) {
       throw new AppError('只能编辑本人提交的请购单', 403)
     }
     assertStatusAction('purchaseRequisition', 'edit', row.status)
+    assertInScope(operator?.warehouseIds ?? null, row.warehouse_id, '请购单')
     let wh = null
     if (warehouseId) {
       const [[w]] = await conn.query('SELECT id,name FROM inventory_warehouses WHERE id=? AND deleted_at IS NULL', [Number(warehouseId)])
@@ -127,6 +138,10 @@ async function update(id, { title, warehouseId, expectedDate, items, remark }, o
       'UPDATE purchase_requisitions SET title=?, expected_date=?, remark=?' + (wh ? ', warehouse_id=?, warehouse_name=?' : '') + ' WHERE id=?',
       wh ? [title || null, expectedDate || null, remark || null, wh.id, wh.name, id] : [title || null, expectedDate || null, remark || null, id],
     )
+    if (row.source === 'replenishment') {
+      const [stored] = await conn.query('SELECT product_id AS productId,quantity,suggested_supplier_id AS suggestedSupplierId FROM purchase_requisition_items WHERE requisition_id=?', [id])
+      await validateReplenishmentSupply(conn, wh?.id || row.warehouse_id, Array.isArray(items) ? items : stored, operator?.warehouseIds ?? null, id)
+    }
     if (Array.isArray(items)) {
       if (!items.length) throw new AppError('请至少填写一条请购明细', 400)
       await replaceItems(conn, id, items)
@@ -153,6 +168,7 @@ async function submit(id, operator) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    await lockPlanning(conn)
     const row = await lockStatusRow(conn, {
       table: 'purchase_requisitions', id,
       columns: 'id, requisition_no, status, applicant_id, applicant_name, estimated_amount, warehouse_id',
@@ -182,8 +198,9 @@ async function withdraw(id, operator) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    await lockPlanning(conn)
     const row = await lockStatusRow(conn, {
-      table: 'purchase_requisitions', id, columns: 'id, status, applicant_id, warehouse_id', entityName: '请购单',
+      table: 'purchase_requisitions', id, columns: 'id, status, applicant_id, warehouse_id, source', entityName: '请购单',
     })
     assertInScope(operator?.warehouseIds ?? null, row.warehouse_id, '请购单')
     // 有活跃审批实例 → 撤销实例（同事务）
@@ -202,8 +219,9 @@ async function cancel(id, operator) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    await lockPlanning(conn)
     const row = await lockStatusRow(conn, {
-      table: 'purchase_requisitions', id, columns: 'id, status, applicant_id, warehouse_id', entityName: '请购单',
+      table: 'purchase_requisitions', id, columns: 'id, status, applicant_id, warehouse_id, source', entityName: '请购单',
     })
     assertInScope(operator?.warehouseIds ?? null, row.warehouse_id, '请购单')
     const active = await approvalEngine.getActiveInstanceByBiz(conn, { bizType: 'purchase_requisition', bizId: id })
@@ -226,6 +244,7 @@ async function approve(id, operator) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    await lockPlanning(conn)
     const row = await lockStatusRow(conn, {
       table: 'purchase_requisitions', id,
       columns: 'id, status, applicant_id, warehouse_id, estimated_amount', entityName: '请购单',
@@ -265,8 +284,9 @@ async function reject(id, { reason }, operator) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    await lockPlanning(conn)
     const row = await lockStatusRow(conn, {
-      table: 'purchase_requisitions', id, columns: 'id, status, applicant_id, warehouse_id', entityName: '请购单',
+      table: 'purchase_requisitions', id, columns: 'id, status, applicant_id, warehouse_id, source', entityName: '请购单',
     })
     assertInScope(operator?.warehouseIds ?? null, row.warehouse_id, '请购单')
     await assertNotSelfApproval(row.applicant_id, operator.operatorId, '不能驳回自己提交的请购单')
@@ -302,12 +322,13 @@ async function convert(id, { lines, requestKey }, operator) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const st = await beginOperationRequest(conn, { requestKey, action: 'purchase.requisition.convert', userId: operator?.userId ?? null })
+    await lockPlanning(conn)
+    const st = await beginOperationRequest(conn, { requestKey, action: `purchase.requisition.convert.${id}`, userId: operator?.userId ?? null })
     if (st.replay) { await conn.rollback(); return st.responseData }
 
     const head = await lockStatusRow(conn, {
       table: 'purchase_requisitions', id,
-      columns: 'id, requisition_no, status, warehouse_id, warehouse_name, expected_date', entityName: '请购单',
+      columns: 'id, requisition_no, status, warehouse_id, warehouse_name, expected_date, source', entityName: '请购单',
     })
     assertInScope(operator?.warehouseIds ?? null, head.warehouse_id, '请购单')
     assertStatusAction('purchaseRequisition', 'convert', head.status)   // from[3]
@@ -316,6 +337,7 @@ async function convert(id, { lines, requestKey }, operator) {
     const itemMap = new Map()
     for (const ln of lines) {
       const itemId = Number(ln.requisitionItemId)
+      if (itemMap.has(itemId)) throw new AppError('同一请购明细不能重复提交', 400)
       const qty = Number(ln.quantity)
       const supplierId = Number(ln.supplierId)
       const unitPrice = Number(ln.unitPrice)
@@ -332,6 +354,8 @@ async function convert(id, { lines, requestKey }, operator) {
       if (qty > remaining + 1e-9) throw new AppError(`商品「${item.product_name}」本次转采购 ${qty} 超过可转余量 ${remaining}`, 400)
       itemMap.set(itemId, { item, qty, supplierId, supplierName: ln.supplierName || null, unitPrice })
     }
+
+    if (head.source === 'replenishment') await validateReplenishmentSupply(conn, head.warehouse_id, [...itemMap.values()].map(v => ({ productId: v.item.product_id, quantity: v.qty, suggestedSupplierId: v.supplierId })), operator?.warehouseIds ?? null, id)
 
     // 校验供应商启用（照 purchase.create），并按 supplierId 分组
     const groups = new Map()
@@ -413,7 +437,7 @@ async function findAll({ page = 1, pageSize = 20, status = '', keyword = '', war
   const [rows] = await pool.query(
     `SELECT r.*, (SELECT COUNT(*) FROM purchase_requisition_items i WHERE i.requisition_id=r.id) AS item_count
        FROM purchase_requisitions r ${where}
-      ORDER BY r.created_at DESC LIMIT ? OFFSET ?`,
+      ORDER BY r.created_at DESC, r.id DESC LIMIT ? OFFSET ?`,
     [...allParams, ps, offset],
   )
   const [[{ total }]] = await pool.query(`SELECT COUNT(*) AS total FROM purchase_requisitions r ${where}`, allParams)
@@ -477,6 +501,23 @@ async function findById(id, scopeWarehouseIds = null) {
       remark: i.remark,
     })),
     approval,
+  }
+}
+
+async function validateReplenishmentSupply(conn, warehouseId, items, scopeWarehouseIds, excludeRequisitionId = 0) {
+  const { list } = await getSupplyRows({ mode: 'replenishment', warehouseId, scopeWarehouseIds, excludeRequisitionId, includeAll: true }, conn)
+  const byProduct = new Map(list.map(r => [r.productId, r]))
+  const requested = new Map()
+  for (const item of items) {
+    const productId = Number(item.productId)
+    if (requested.has(productId)) throw new AppError('同一商品请合并为一条请购明细', 400)
+    requested.set(productId, item)
+    const row = byProduct.get(productId)
+    const policy = await getPolicy(productId, item.suggestedSupplierId || row?.supplierId, conn)
+    const maximum = roundPurchase(row?.netRequirement || 0, policy.packMultiple * policy.conversionRate, policy.minimumOrderQty * policy.conversionRate)
+    if (Number(item.quantity) > maximum + 0.00001) throw new AppError(`商品「${row?.productName || productId}」当前最多需补货 ${maximum}；需求已被其他计划、请购或采购覆盖，请刷新或减量`, 409, 'PROCUREMENT_COVERAGE_CHANGED')
+    const rounded = roundPurchase(Number(item.quantity), policy.packMultiple * policy.conversionRate, policy.minimumOrderQty * policy.conversionRate)
+    if (Math.abs(rounded - Number(item.quantity)) > 0.00001) throw new AppError(`商品「${row?.productName || productId}」须满足包装与起订量，建议 ${rounded}`, 400, 'PURCHASE_PACKAGING_INVALID')
   }
 }
 

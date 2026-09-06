@@ -4,7 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { X } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
-import Pagination from '@/components/shared/Pagination'
+import ListSummary from '@/components/shared/ListSummary'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { Button } from '@/components/ui/button'
@@ -73,7 +73,6 @@ export default function PurchasePage() {
   const warehouseName = readStringParam(searchParams, 'warehouseName')
   const startDate     = readStringParam(searchParams, 'startDate')
   const endDate       = readStringParam(searchParams, 'endDate')
-  const page          = Math.max(1, Number(searchParams.get('page') || '1') || 1)
 
   const [confirmState, setConfirmState] = useState<{
     open: boolean
@@ -90,7 +89,7 @@ export default function PurchasePage() {
 
   const PAGE_SIZE = 20
   const { data, isLoading } = usePurchaseList({
-    page,
+    page: 1,
     pageSize: PAGE_SIZE,
     keyword,
     remark: remark || undefined,
@@ -104,7 +103,6 @@ export default function PurchasePage() {
     overdueOnly: overdueOnly || undefined,
   })
   const total = data?.pagination?.total ?? 0
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const confirm = useConfirmPurchase()
   const withdrawConfirm = useWithdrawConfirmPurchase()
   const approve = useApprovePurchase()
@@ -352,9 +350,7 @@ export default function PurchasePage() {
         columnStorageKey="purchase:status-v3"
       />
 
-      {/* 分页 */}
-      <Pagination page={page} totalPages={totalPages} total={total} unit="单"
-        onPageChange={(p) => updateParams({ page: p })} />
+      <ListSummary total={total} unit="单" />
 
       {printDetail && (
         <OrderPrintOverlay

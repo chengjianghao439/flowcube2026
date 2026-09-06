@@ -75,8 +75,7 @@ async function findAll({ page = 1, pageSize = 20, keyword = '', warehouseId = nu
      FROM warehouse_locations wl
      LEFT JOIN inventory_warehouses iw ON iw.id = wl.warehouse_id
      WHERE ${where}
-     ORDER BY wl.warehouse_id ASC, wl.code ASC
-     LIMIT ? OFFSET ?`,
+     ORDER BY wl.warehouse_id ASC, wl.code ASC, wl.id ASC LIMIT ? OFFSET ?`,
     [...whereParams, ps, offset],
   )
 

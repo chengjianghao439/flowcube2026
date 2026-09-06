@@ -1,3 +1,5 @@
+const { normalizeProduct } = require('../logistics/shipping-products')
+const { snapshotItemCommitments, restoreItemCommitments } = require('../fulfillment/fulfillment.sale-items')
 const { loadSalePresentation } = require('./sale.presentation')
 const { pool } = require('../../config/db')
 const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
@@ -71,6 +73,7 @@ const fmt = row => ({
     && row.receivable_due_date != null
     && beijingTodayYmd(new Date(row.receivable_due_date)) < beijingTodayYmd(),
   carrierId:row.carrier_id||null,
+  shippingProduct: row.shipping_product || null,
   carrier: row.carrier_name || row.carrier || null,   // 优先承运商表名称，回退文本字段
   freightType:row.freight_type||null,
   freightTypeName:row.freight_type ? (FREIGHT_TYPE[row.freight_type]||null) : null,
@@ -146,7 +149,7 @@ function assertNoDuplicateSaleItemLines(items, fallbackWarehouseId) {
   }
 }
 
-async function hydrateSaleInput(conn, { customerId, warehouseId, carrierId = null, items, scopeWarehouseIds }) {
+async function hydrateSaleInput(conn, { customerId, warehouseId, carrierId = null, shippingProduct = null, items, scopeWarehouseIds }) {
   assertInScope(scopeWarehouseIds, warehouseId, '销售单')
   const [[customer]] = await conn.query(
     'SELECT id, name, is_active FROM sale_customers WHERE id=? AND deleted_at IS NULL',
@@ -176,14 +179,16 @@ async function hydrateSaleInput(conn, { customerId, warehouseId, carrierId = nul
   )
   const productById = new Map(products.map(row => [Number(row.id), row]))
   let carrier = null
+  let product = null
   if (carrierId != null) {
     const [[carrierRow]] = await conn.query(
-      'SELECT id, name, is_active FROM carriers WHERE id = ? AND deleted_at IS NULL',
+      'SELECT id, name, is_active, platform_code, shipping_product FROM carriers WHERE id = ? AND deleted_at IS NULL',
       [Number(carrierId)],
     )
     if (!carrierRow) throw new AppError('承运商不存在', 404)
     if (!carrierRow.is_active) throw new AppError(`承运商「${carrierRow.name}」已停用，无法保存销售单`, 400)
     carrier = carrierRow.name
+    product = normalizeProduct(carrierRow.platform_code, shippingProduct || carrierRow.shipping_product)
   }
   const hydratedItems = items.map(item => {
     const product = productById.get(Number(item.productId))
@@ -207,6 +212,7 @@ async function hydrateSaleInput(conn, { customerId, warehouseId, carrierId = nul
     customerName: customer.name,
     warehouseName: warehouseById.get(Number(warehouseId)).name,
     carrier,
+    shippingProduct: product,
     items: hydratedItems,
   }
 }
@@ -741,7 +747,7 @@ async function findById(id, scopeWarehouseIds = null) {
 }
 
 async function create({ customerId, warehouseId, remark,
-  carrierId, carrier, freightType, receiverName, receiverPhone, receiverAddress, items, operator, requestKey, discountAmount, scopeWarehouseIds = null }) {
+  carrierId, carrier, freightType, shippingProduct, receiverName, receiverPhone, receiverAddress, items, operator, requestKey, discountAmount, scopeWarehouseIds = null }) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
@@ -754,10 +760,11 @@ async function create({ customerId, warehouseId, remark,
       await conn.rollback()
       return requestState.responseData
     }
-    const hydrated = await hydrateSaleInput(conn, { customerId, warehouseId, carrierId, items, scopeWarehouseIds })
+    const hydrated = await hydrateSaleInput(conn, { customerId, warehouseId, carrierId, shippingProduct, items, scopeWarehouseIds })
     const customerName = hydrated.customerName
     const warehouseName = hydrated.warehouseName
     carrier = hydrated.carrier
+    shippingProduct = hydrated.shippingProduct
     items = hydrated.items
     assertNoDuplicateSaleItemLines(items, warehouseId)
     const orderNo = await genOrderNo(conn)
@@ -766,8 +773,8 @@ async function create({ customerId, warehouseId, remark,
     const discount = Math.max(0, Number(discountAmount) || 0)
     assertDiscountWithinTotal(discount, total)
     const [r] = await conn.query(
-      `INSERT INTO sale_orders (order_no,customer_id,customer_name,warehouse_id,warehouse_name,sale_date,total_amount,discount_amount,remark,carrier_id,carrier,freight_type,receiver_name,receiver_phone,receiver_address,operator_id,operator_name) VALUES (?,?,?,?,?,CURDATE(),?,?,?,?,?,?,?,?,?,?,?)`,
-      [orderNo,customerId,customerName,warehouseId,warehouseName,total,discount,remark||null,carrierId||null,carrier||null,freightType||null,receiverName||null,receiverPhone||null,receiverAddress||null,operator.userId,operator.realName]
+      `INSERT INTO sale_orders (order_no,customer_id,customer_name,warehouse_id,warehouse_name,sale_date,total_amount,discount_amount,remark,carrier_id,carrier,freight_type,receiver_name,receiver_phone,receiver_address,shipping_product,operator_id,operator_name) VALUES (?,?,?,?,?,CURDATE(),?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [orderNo,customerId,customerName,warehouseId,warehouseName,total,discount,remark||null,carrierId||null,carrier||null,freightType||null,receiverName||null,receiverPhone||null,receiverAddress||null,shippingProduct,operator.userId,operator.realName]
     )
     const orderId = r.insertId
     for(const item of folded) {
@@ -793,7 +800,7 @@ async function create({ customerId, warehouseId, remark,
 
 // 编辑草稿：仅在 status=1（草稿）时允许，整体替换明细行
 async function update(id, { customerId, warehouseId, remark,
-  carrierId, carrier, freightType, receiverName, receiverPhone, receiverAddress, items, operator, scopeWarehouseIds = null, discountAmount }) {
+  carrierId, carrier, freightType, shippingProduct, receiverName, receiverPhone, receiverAddress, items, operator, scopeWarehouseIds = null, discountAmount }) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
@@ -801,19 +808,21 @@ async function update(id, { customerId, warehouseId, remark,
     assertInScope(scopeWarehouseIds, orderRow.warehouse_id, '销售单')
     assertStatusAction('sale', 'edit', orderRow.status)
     if (!items || !items.length) throw new AppError('至少需要一条商品明细', 400)
-    const hydrated = await hydrateSaleInput(conn, { customerId, warehouseId, carrierId, items, scopeWarehouseIds })
+    const hydrated = await hydrateSaleInput(conn, { customerId, warehouseId, carrierId, shippingProduct, items, scopeWarehouseIds })
     const customerName = hydrated.customerName
     const warehouseName = hydrated.warehouseName
     carrier = hydrated.carrier
+    shippingProduct = hydrated.shippingProduct
     items = hydrated.items
     assertNoDuplicateSaleItemLines(items, warehouseId)
     const folded = await foldEntryItems(conn, items)   // 多单位折算成基本单位口径（后端权威）
     const total = round2(folded.reduce((s, i) => s + i.amount, 0))
     const discount = Math.max(0, Number(discountAmount) || 0)
     assertDiscountWithinTotal(discount, total)
+    const deliverySnapshot = await snapshotItemCommitments(conn, id)
     await conn.query(
-      `UPDATE sale_orders SET customer_id=?,customer_name=?,warehouse_id=?,warehouse_name=?,total_amount=?,discount_amount=?,remark=?,carrier_id=?,carrier=?,freight_type=?,receiver_name=?,receiver_phone=?,receiver_address=? WHERE id=?`,
-      [customerId, customerName, warehouseId, warehouseName, total, discount, remark||null, carrierId||null, carrier||null, freightType||null, receiverName||null, receiverPhone||null, receiverAddress||null, id]
+      `UPDATE sale_orders SET customer_id=?,customer_name=?,warehouse_id=?,warehouse_name=?,total_amount=?,discount_amount=?,remark=?,carrier_id=?,carrier=?,freight_type=?,receiver_name=?,receiver_phone=?,receiver_address=?,shipping_product=? WHERE id=?`,
+      [customerId, customerName, warehouseId, warehouseName, total, discount, remark||null, carrierId||null, carrier||null, freightType||null, receiverName||null, receiverPhone||null, receiverAddress||null, shippingProduct, id]
     )
     await conn.query('DELETE FROM sale_order_items WHERE order_id=?', [id])
     for (const item of folded) {
@@ -824,6 +833,7 @@ async function update(id, { customerId, warehouseId, remark,
         [id, itemWhId, itemWhName, item.productId, item.productCode, item.productName, item.unit, item.entryUnit, item.articleNumber||null, item.spec||null, item.color||null, item.quantity, item.entryQty, item.conversionRate, item.unitPrice, item.amount, item.remark||null]
       )
     }
+    await restoreItemCommitments(conn, id, deliverySnapshot)
     await appendSaleEvent(conn, id, 'updated', '编辑订单', `现有 ${items.length} 条明细`, operator)
     await buildPricingEvents(conn, id, folded, operator)
     await conn.commit()
@@ -940,6 +950,7 @@ async function requestAdjustment(id, { items, operator, requestKey, scopeWarehou
     const total = round2(folded.reduce((s, i) => s + i.amount, 0))
     assertDiscountWithinTotal(orderRow.discount_amount, total)
     await conn.query('UPDATE sale_orders SET total_amount=? WHERE id=?', [total, id])
+    const deliverySnapshot = await snapshotItemCommitments(conn, id)
     await conn.query('DELETE FROM sale_order_items WHERE order_id=?', [id])
     // dispatched=1：本分支只在订单已有在跑的仓库任务(orderRow.task_id)时才会走到，
     // 改的是这个已有任务的 required_qty（见 applyProductDeltaWithinTransaction），
@@ -963,6 +974,8 @@ async function requestAdjustment(id, { items, operator, requestKey, scopeWarehou
         [id, keptWarehouseId, keptWarehouseName, item.productId, item.productCode, item.productName, item.unit, item.entryUnit, item.articleNumber||null, item.spec||null, item.color||null, item.quantity, item.entryQty, item.conversionRate, item.unitPrice, item.amount, item.remark||null, item.quantity, item.quantity]
       )
     }
+
+    await restoreItemCommitments(conn, id, deliverySnapshot)
 
     // 同样按 product_id 升序处理：applyProductDeltaWithinTransaction 内部会锁容器与
     // inventory_stock，Set 的迭代顺序取决于新旧明细的录入次序，并发改单时顺序不一致同样死锁。
@@ -1158,6 +1171,7 @@ async function adjustReservedWithinTransaction(conn, { orderRow, items, operator
   const total = round2(folded.reduce((s, i) => s + i.amount, 0))
   assertDiscountWithinTotal(orderRow.discount_amount, total)
   await conn.query('UPDATE sale_orders SET total_amount=? WHERE id=?', [total, id])
+  const deliverySnapshot = await snapshotItemCommitments(conn, id)
   await conn.query('DELETE FROM sale_order_items WHERE order_id=?', [id])
   for (const item of folded) {
     const whId = item.warehouseId != null ? Number(item.warehouseId) : Number(orderRow.warehouse_id)
@@ -1169,6 +1183,8 @@ async function adjustReservedWithinTransaction(conn, { orderRow, items, operator
       [id, whId, whName, item.productId, item.productCode, item.productName, item.unit, item.entryUnit, item.articleNumber || null, item.spec || null, item.color || null, item.quantity, item.entryQty, item.conversionRate, item.unitPrice, item.amount, item.remark || null, reservedQty],
     )
   }
+
+  await restoreItemCommitments(conn, id, deliverySnapshot)
 
   // 重算状态：所有行 reserved_qty >= quantity → 已占库(2)，否则部分占库(6)
   const [[{ unfilled }]] = await conn.query(

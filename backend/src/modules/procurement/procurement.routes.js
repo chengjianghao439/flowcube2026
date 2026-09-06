@@ -27,6 +27,8 @@ const convertSchema = z.object({
 })
 
 router.use(authMiddleware)
+router.get('/purchase-policy', requirePermission(PERMISSIONS.PROCUREMENT_PLAN_MANAGE), ctrl.purchasePolicy)
+router.put('/purchase-policy', requirePermission(PERMISSIONS.PROCUREMENT_PLAN_MANAGE), validateBody(z.object({ productId: z.number().int().positive(), supplierId: z.number().int().positive(), entryUnit: z.string().min(1).max(32), packMultiple: z.number().nonnegative().max(100000000).multipleOf(0.0001), minimumOrderQty: z.number().nonnegative().max(100000000).multipleOf(0.0001) })), ctrl.savePurchasePolicy)
 router.get('/plans', requirePermission(PERMISSIONS.PROCUREMENT_PLAN_VIEW), ctrl.list)
 router.post('/plans', requirePermission(PERMISSIONS.PROCUREMENT_PLAN_MANAGE), validateBody(generateSchema), ctrl.generate)
 router.get('/plans/:id', requirePermission(PERMISSIONS.PROCUREMENT_PLAN_VIEW), ctrl.detail)

@@ -5,7 +5,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { X } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
-import Pagination from '@/components/shared/Pagination'
+import ListSummary from '@/components/shared/ListSummary'
 import CategoryPathDisplay from '@/components/shared/CategoryPathDisplay'
 import { Button } from '@/components/ui/button'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
@@ -47,7 +47,6 @@ export default function ProductsPage() {
   const supplierName = readStringParam(searchParams, 'supplierName')
   const minPrice = readStringParam(searchParams, 'minPrice')
   const maxPrice = readStringParam(searchParams, 'maxPrice')
-  const page = Math.max(1, Number(searchParams.get('page') || '1') || 1)
   const [queryOpen, setQueryOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const [confirmProduct, setConfirmProduct] = useState<Product | null>(null)
@@ -70,14 +69,13 @@ export default function ProductsPage() {
 
   const PAGE_SIZE = 20
   const { data, isLoading } = useProducts({
-    page, pageSize: PAGE_SIZE, keyword, categoryId: catFilter,
+    page: 1, pageSize: PAGE_SIZE, keyword, categoryId: catFilter,
     status: statusFilter || undefined,
     supplierId: supplierId ?? undefined,
     minPrice: minPrice || undefined,
     maxPrice: maxPrice || undefined,
   })
   const total = data?.pagination?.total ?? 0
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const { data: categoryTree = [] } = useCategoryTree()
   const { data: supplierData } = useSuppliers({ pageSize: 500, page: 1 })
   const { mutate: del } = useDeleteProduct()
@@ -208,8 +206,7 @@ export default function ProductsPage() {
       )}
 
       <DataTable columns={cols} data={data?.list??[]} loading={isLoading} rowKey="id" />
-      <Pagination page={page} totalPages={totalPages} total={total} unit="件"
-        onPageChange={(p) => updateParams({ page: p })} />
+      <ListSummary total={total} unit="件" />
 
       {/* 批量导入弹窗 */}
       <Dialog open={importOpen} onOpenChange={v=>{ setImportOpen(v); if(!v) setImportResult(null) }}>

@@ -135,7 +135,7 @@ async function findAll({ page=1, pageSize=20, keyword='', status=null, productId
        ), 0) AS putaway_received_qty
      FROM purchase_orders po
      WHERE po.deleted_at IS NULL ${whereExtra}
-     ORDER BY po.created_at DESC LIMIT ? OFFSET ?`,
+     ORDER BY po.created_at DESC, po.id DESC LIMIT ? OFFSET ?`,
     [...params, ps, offset],
   )
   const [[{ total }]] = await pool.query(

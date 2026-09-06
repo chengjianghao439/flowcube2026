@@ -1,5 +1,6 @@
+import { createRequestKey, withRequestKeyHeaders } from '@/lib/requestKey'
 import { RecordIdentity } from '@/components/shared/RecordIdentity'
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
@@ -26,6 +27,7 @@ const STATUS_TONE: Record<number, StatusTone> = { 1: 'draft', 2: 'active', 3: 's
 export default function ProcurementPlanListPage() {
   const navigate = useNavigate()
   const qc = useQueryClient()
+  const requestKey = useRef(createRequestKey('procurement-plan'))
   const { can } = usePermission()
   const canManage = can(PERMISSIONS.PROCUREMENT_PLAN_MANAGE)
   const { data: warehouses } = useWarehousesActive()
@@ -44,8 +46,9 @@ export default function ProcurementPlanListPage() {
   })
 
   const generate = useMutation({
-    mutationFn: () => generatePlanApi({ window: win, horizon, warehouseId: whId === '0' ? null : Number(whId), name: name.trim() || null, forecastMethod: method }, { skipGlobalError: true }),
+    mutationFn: () => generatePlanApi({ window: win, horizon, warehouseId: whId === '0' ? null : Number(whId), name: name.trim() || null, forecastMethod: method }, { skipGlobalError: true, headers: withRequestKeyHeaders(requestKey.current) }),
     onSuccess: (r) => {
+      requestKey.current = createRequestKey('procurement-plan')
       toast.success(`已生成采购计划 ${r!.code}（${r!.itemCount} 行）`)
       setGenOpen(false); setName('')
       qc.invalidateQueries({ queryKey: ['procurement-plans'] })
@@ -69,7 +72,7 @@ export default function ProcurementPlanListPage() {
     <div className="space-y-4">
       <PageHeader
         title="采购计划"
-        description="按库存与历史出库生成采购建议，核对后转为采购单草稿。"
+        description="按未发销售、历史预测与现有供给生成采购计划，核对包装、交期和覆盖后转为采购单草稿。"
         actions={canManage ? <Button onClick={() => setGenOpen(true)}>+ 生成计划</Button> : undefined}
       />
       <FilterCard>
@@ -120,7 +123,7 @@ export default function ProcurementPlanListPage() {
               <Label>计划名称（可选）</Label>
               <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="默认按生成时间" className="h-10" />
             </div>
-            <p className="text-xs text-muted-foreground">数据基于库存缓存与历史出库趋势，仅供参考；生成的是可编辑的计划草稿。</p>
+            <p className="text-xs text-muted-foreground">使用 ACTIVE 实物与预计采购；未发销售包含未占库订单，销售先消耗预测。已有计划、申请和采购草稿会抵扣，避免重复采购。</p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setGenOpen(false)} disabled={generate.isPending}>取消</Button>

@@ -100,8 +100,7 @@ async function getSuggestions({ page = 1, pageSize = 50, keyword = '', warehouse
      WHERE ${where}
      GROUP BY c.product_id, p.code, p.name, p.unit, p.avg_cost, c.warehouse_id, w.name
      HAVING MAX(lo.last_outbound_at) IS NULL OR DATEDIFF(NOW(), MAX(lo.last_outbound_at)) > ?
-     ORDER BY total_value DESC
-     LIMIT ? OFFSET ?`,
+     ORDER BY total_value DESC, c.product_id ASC, c.warehouse_id ASC LIMIT ? OFFSET ?`,
     [...whereParams, staleDays, ps, offset],
   )
 

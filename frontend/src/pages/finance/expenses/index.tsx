@@ -1,3 +1,4 @@
+import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
 import { ReportTable } from '@/components/shared/ReportTable'
 import { RecordIdentity } from '@/components/shared/RecordIdentity'
 import { SummaryStrip } from '@/components/shared/SummaryStrip'
@@ -5,7 +6,7 @@ import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
-import Pagination from '@/components/shared/Pagination'
+import ListSummary from '@/components/shared/ListSummary'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { QueryChips, type QueryChip } from '@/components/shared/QueryChips'
 import { Button } from '@/components/ui/button'
@@ -112,7 +113,6 @@ export default function ExpenseClaimsPage() {
 
   const [query, setQuery] = useState<ExpQuery>(EMPTY_EXP_QUERY)
   const [queryOpen, setQueryOpen] = useState(false)
-  const [page, setPage] = useState(1)
   const [formOpen, setFormOpen] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [title, setTitle] = useState('')
@@ -126,9 +126,9 @@ export default function ExpenseClaimsPage() {
 
   const PAGE_SIZE = 20
   const { data, isLoading } = useQuery({
-    queryKey: ['expense-claims', query, page],
+    queryKey: ['expense-claims', query],
     queryFn: () => getExpenseClaimsApi({
-      page,
+      page: 1,
       pageSize: PAGE_SIZE,
       keyword: query.keyword || undefined,
       status: query.status || undefined,
@@ -139,10 +139,9 @@ export default function ExpenseClaimsPage() {
     }),
   })
   const total = data?.pagination?.total ?? 0
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
   const queryChips: QueryChip[] = []
-  const dropQ = (...ks: (keyof ExpQuery)[]) => () => { setQuery(q => ks.reduce((a, k) => ({ ...a, [k]: '' }), { ...q })); setPage(1) }
+  const dropQ = (...ks: (keyof ExpQuery)[]) => () => { setQuery(q => ks.reduce((a, k) => ({ ...a, [k]: '' }), { ...q })); }
   if (query.keyword) queryChips.push({ key: 'kw', text: `搜索：${query.keyword}`, onClear: dropQ('keyword') })
   if (query.status) queryChips.push({ key: 'status', text: `状态：${STATUS_NAME[query.status] ?? query.status}`, onClear: dropQ('status') })
   if (query.startDate || query.endDate) queryChips.push({ key: 'date', text: `创建日期：${query.startDate || '…'} ~ ${query.endDate || '…'}`, onClear: dropQ('startDate', 'endDate') })
@@ -279,15 +278,13 @@ export default function ExpenseClaimsPage() {
 
       {summary && <SummaryStrip items={[{ label: '报销总额', value: money(summary.totalAmount) }, { label: '待审批', value: money(summary.pendingAmount), tone: 'text-warning' }, { label: '已付款', value: money(summary.paidAmount), tone: 'text-success' }]} />}
 
-      <QueryChips chips={queryChips} onClearAll={() => { setQuery(EMPTY_EXP_QUERY); setPage(1) }} />
+      <QueryChips chips={queryChips} onClearAll={() => { setQuery(EMPTY_EXP_QUERY); }} />
 
       <DataTable columns={columns} data={data?.list || []} loading={isLoading} rowKey="id" />
 
-      {/* 分页 */}
-      <Pagination page={page} totalPages={totalPages} total={total} unit="张"
-        onPageChange={setPage} />
+      <ListSummary total={total} unit="张" />
 
-      <ExpensesQueryDialog open={queryOpen} initial={query} onClose={() => setQueryOpen(false)} onApply={(q) => { setQuery(q); setPage(1) }} />
+      <ExpensesQueryDialog open={queryOpen} initial={query} onClose={() => setQueryOpen(false)} onApply={(q) => { setQuery(q); }} />
 
       {/* 新建 / 编辑 */}
       <Dialog open={formOpen} onOpenChange={v => !v && setFormOpen(false)}>
@@ -358,6 +355,8 @@ export default function ExpenseClaimsPage() {
       <Dialog open={detailId != null} onOpenChange={v => !v && setDetailId(null)}>
         <DialogContent className="max-w-3xl">
           <DialogHeader><DialogTitle>报销单 — <span className="text-doc-code-strong">{detail?.claimNo}</span></DialogTitle></DialogHeader>
+          <OrderDetailSections type="expense" id={detailId || 0}>
+
           {detail && (
             <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
               <span>{detail.applicantName}</span>
@@ -394,6 +393,7 @@ export default function ExpenseClaimsPage() {
               </tbody>
             </ReportTable>
           </div>
+          </OrderDetailSections>
           <DialogFooter><Button variant="outline" onClick={() => setDetailId(null)}>关闭</Button></DialogFooter>
         </DialogContent>
       </Dialog>

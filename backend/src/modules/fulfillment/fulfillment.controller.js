@@ -1,0 +1,15 @@
+const { successResponse } = require('../../utils/response')
+const AppError = require('../../utils/AppError')
+const service = require('./fulfillment.service')
+const wrap = fn => async (req, res, next) => { try { return successResponse(res, await fn(req), '操作成功') } catch (error) { next(error) } }
+const key = req => String(req.headers['x-request-key'] || '')
+exports.list = wrap(req => service.listIssues(req.query, req.user))
+exports.get = wrap(req => service.getDocument(req.params.type, Number(req.params.id), req.user))
+exports.sync = wrap(req => service.syncDocument(req.params.type, Number(req.params.id), req.user))
+exports.setDates = wrap(req => service.setDates(req.params.type, Number(req.params.id), req.body, req.user, key(req)))
+exports.createIssue = wrap(req => service.createIssue(req.params.type, Number(req.params.id), req.body, req.user, key(req)))
+exports.changeIssue = wrap(req => {
+  const issueId = Number(req.params.issueId)
+  if (!Number.isSafeInteger(issueId) || issueId < 1) throw new AppError('无效事项编号', 400)
+  return service.changeIssue(req.params.type, Number(req.params.id), issueId, req.body, req.user, key(req))
+})

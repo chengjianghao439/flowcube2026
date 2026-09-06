@@ -160,10 +160,10 @@ async function warehouseOps(scopeWarehouseIds = null) {
   }
 }
 
-async function roleWorkbench(scopeWarehouseIds = null) {
+async function roleWorkbench(scopeWarehouseIds = null, batch = {}) {
   const thresholds = await getInboundClosureThresholds()
   const highRiskWindowHours = 24
-  const rows = await fetchRoleWorkbenchRows({ thresholds, highRiskWindowHours, scopeWarehouseIds })
+  const rows = await fetchRoleWorkbenchRows({ thresholds, highRiskWindowHours, scopeWarehouseIds, batchPage: batch.batchPage, batchSize: batch.batchSize })
 
   const sections = [
     {
@@ -291,6 +291,7 @@ async function roleWorkbench(scopeWarehouseIds = null) {
     summary,
     topAlert: pickTopWorkbenchCard(sortedSections),
     sections: sortedSections,
+    hasMore: Object.entries(rows).some(([key, value]) => key.endsWith('Rows') && Array.isArray(value) && value.length >= Math.min(200, Math.max(1, Math.floor(Number(batch.batchSize) || 5)))),
   }
 }
 

@@ -58,7 +58,7 @@ async function findAll({ page = 1, pageSize = 20, keyword = '', status = null, p
     `SELECT pcr.*, p.article_number, p.spec, p.color
        FROM price_change_requests pcr
        JOIN product_items p ON p.id = pcr.product_id
-      ${where} ORDER BY pcr.created_at DESC LIMIT ? OFFSET ?`,
+      ${where} ORDER BY pcr.created_at DESC, pcr.id DESC LIMIT ? OFFSET ?`,
     [...params, ps, offset],
   )
   return { list: rows.map(fmt), pagination: { page, pageSize: ps, total: Number(total) } }

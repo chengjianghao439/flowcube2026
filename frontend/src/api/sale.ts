@@ -2,7 +2,7 @@ import { payloadClient as client } from './client'
 import { withRequestKeyHeaders } from '@/lib/requestKey'
 import type { PaginatedData } from '@/types'
 import type { SaleOrder, CreateSaleParams, UpdateSaleParams, AdjustSaleResult, ReservePreview, ReserveItemOverride, ShipItemRequest } from '@/types/sale'
-export const getSaleListApi    = (params: object) => client.get<PaginatedData<SaleOrder> & { statusCounts?: Record<string, number> }>('/sale', { params })
+export const getSaleListApi    = (params: object, summary = false) => client.get<PaginatedData<SaleOrder> & { statusCounts?: Record<string, number> }>('/sale', { params, ...(summary ? { listMode: 'summary' as const } : {}) })
 export const getSaleDetailApi  = (id: number) => client.get<SaleOrder>(`/sale/${id}`)
 export const getSaleReservePreviewApi = (id: number) => client.get<ReservePreview>(`/sale/${id}/reserve-preview`)
 export const createSaleApi     = (data: CreateSaleParams, requestKey?: string) =>

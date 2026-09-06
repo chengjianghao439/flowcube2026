@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { X } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
-import Pagination from '@/components/shared/Pagination'
+import ListSummary from '@/components/shared/ListSummary'
 import { Button } from '@/components/ui/button'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
@@ -72,7 +72,6 @@ export default function ReturnsPage() {
   const warehouseName = readStringParam(searchParams, 'warehouseName')
   const startDate     = readStringParam(searchParams, 'startDate')
   const endDate       = readStringParam(searchParams, 'endDate')
-  const page          = Math.max(1, Number(searchParams.get('page') || '1') || 1)
 
   const apiList   = type === 'purchase' ? getPurchaseReturnsApi : getSaleReturnsApi
   const confirmFn = type === 'purchase' ? confirmPurchaseReturnApi : confirmSaleReturnApi
@@ -81,9 +80,9 @@ export default function ReturnsPage() {
 
   const PAGE_SIZE = 20
   const { data, isLoading } = useQuery({
-    queryKey: ['returns', type, { keyword, remark, operatorId, statusFilter, productId, partyId, warehouseId, startDate, endDate, page }],
+    queryKey: ['returns', type, { keyword, remark, operatorId, statusFilter, productId, partyId, warehouseId, startDate, endDate }],
     queryFn: () => apiList({
-      page,
+      page: 1,
       pageSize: PAGE_SIZE,
       keyword,
       remark: remark || undefined,
@@ -97,7 +96,6 @@ export default function ReturnsPage() {
     }).then(r => r!),
   })
   const total = data?.pagination?.total ?? 0
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const inv = () => qc.invalidateQueries({ queryKey: ['returns', type] })
   const partyKey = type === 'purchase' ? 'supplierName' : 'customerName'
 
@@ -279,9 +277,7 @@ export default function ReturnsPage() {
 
       <DataTable columns={columns} data={(data?.list || []) as RowType[]} loading={isLoading} onRowDoubleClick={goToDetail} />
 
-      {/* 分页 */}
-      <Pagination page={page} totalPages={totalPages} total={total} unit="单"
-        onPageChange={(p) => updateParams({ page: p })} />
+      <ListSummary total={total} unit="单" />
 
       <ConfirmDialog
         open={confirmState.open}

@@ -1,5 +1,4 @@
 import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
-import { PaginationArrow } from '@/components/shared/PaginationArrow'
 import { useEffect, useState } from 'react'
 import { Check, ChevronDown, ChevronRight, PackageSearch, Search, X } from 'lucide-react'
 import { AppDialog } from '@/components/shared/AppDialog'
@@ -47,17 +46,15 @@ function ProductFinderContent({ warehouseId, warehouseName, mode = 'lookup', onC
   const [keyword, setKeyword] = useState('')
   const [searchText, setSearchText] = useState('')
   const [category, setCategory] = useState<{ id: number; name: string } | null>(null)
-  const [page, setPage] = useState(1)
   const [selected, setSelected] = useState<ProductFinderResult | null>(null)
   const categories = useCategoryTree()
-  const query = useProductFinder({ page, pageSize: PAGE_SIZE, keyword: searchText, categoryId: category?.id ?? null, warehouseId: warehouseId ?? null })
+  const query = useProductFinder({ page: 1, pageSize: PAGE_SIZE, keyword: searchText, categoryId: category?.id ?? null, warehouseId: warehouseId ?? null })
   useEffect(() => { const timer = setTimeout(() => setSearchText(keyword.trim()), 300); return () => clearTimeout(timer) }, [keyword])
   const pending = keyword.trim() !== searchText || query.isFetching || query.isPlaceholderData
   const products = query.data?.list ?? []
   const total = query.data?.pagination.total ?? 0
-  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const canConfirm = selected && !pending && !query.isError && products.some(p => p.id === selected.id)
-  const resetSelection = () => { setPage(1); setSelected(null) }
+  const resetSelection = () => { setSelected(null) }
   const chooseCategory = (id: number, name: string) => { setCategory({ id, name }); resetSelection() }
   const confirm = (product: ProductFinderResult) => { if (pending || query.isError) return; onConfirm(product); onClose() }
   const hasStock = warehouseId != null && warehouseId > 0
@@ -91,7 +88,6 @@ function ProductFinderContent({ warehouseId, warehouseName, mode = 'lookup', onC
               </tr>)}</tbody>
             </table>}
           </div>
-          <div className="flex shrink-0 items-center justify-between gap-3 border-t px-4 py-2"><span className="text-xs text-muted-foreground">每页 {PAGE_SIZE} 个{hasStock ? ' · 库存参考不含预计到货' : ''}</span><div className="flex items-center gap-2"><PaginationArrow direction="previous" disabled={page <= 1 || !!pending} onClick={() => { setPage(p => p - 1); setSelected(null) }} /><span className="text-xs tabular-nums">{page} / {pages}</span><PaginationArrow direction="next" disabled={page >= pages || !!pending || query.isError} onClick={() => { setPage(p => p + 1); setSelected(null) }} /></div></div>
         </div>
       </div>
       <div className="min-h-[94px] shrink-0 border-t bg-muted/20 px-5 py-3" aria-live="polite">

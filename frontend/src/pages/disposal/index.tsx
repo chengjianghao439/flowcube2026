@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { X } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
-import Pagination from '@/components/shared/Pagination'
+import ListSummary from '@/components/shared/ListSummary'
 import { Button } from '@/components/ui/button'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { useDisposalList } from '@/hooks/useDisposal'
@@ -29,12 +29,11 @@ export default function DisposalPage() {
   const [queryOpen, setQueryOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
   const [detailId, setDetailId] = useState<number | null>(null)
-  const [page, setPage] = useState(1)
   const { can } = usePermission()
   const { data: warehouses } = useWarehousesActive()
 
   const { data, isLoading } = useDisposalList({
-    page,
+    page: 1,
     pageSize: 20,
     keyword: keyword || undefined,
     status: statusFilter || undefined,
@@ -43,7 +42,6 @@ export default function DisposalPage() {
     endDate: endDate || undefined,
   })
   const total = data?.pagination?.total ?? 0
-  const totalPages = Math.max(1, Math.ceil(total / 20))
 
   const initialQuery: DisposalQueryValues = {
     keyword, status: statusFilter,
@@ -56,15 +54,13 @@ export default function DisposalPage() {
     setWarehouseFilter(v.warehouseId)
     setWarehouseName(v.warehouseName)
     setStartDate(v.startDate)
-    setEndDate(v.endDate)
-    setPage(1)
+    setEndDate(v.endDate);
     setQueryOpen(false)
   }
   function clearAll() {
     setKeyword(''); setStatusFilter('')
     setWarehouseFilter(null); setWarehouseName('')
-    setStartDate(''); setEndDate('')
-    setPage(1)
+    setStartDate(''); setEndDate('');
   }
 
   const whName = warehouseFilter
@@ -134,7 +130,7 @@ export default function DisposalPage() {
       )}
 
       <DataTable columns={columns} data={data?.list || []} loading={isLoading} />
-      <Pagination page={page} totalPages={totalPages} total={total} unit="单" onPageChange={setPage} />
+      <ListSummary total={total} unit="单" />
 
       <CreateDisposalDialog open={createOpen} onClose={() => setCreateOpen(false)} />
       <DisposalDetailDialog open={!!detailId} onClose={() => setDetailId(null)} id={detailId} />

@@ -25,7 +25,7 @@ async function lockExpectedPurchaseOrders(conn, pairs) {
 /** lock=true 使用当前读，避免事务早先快照漏看刚提交的上架/销售绑定。 */
 async function getExpectedStock(conn, pairs, { lock = false } = {}) {
   const list = pairParams(pairs)
-  const out = { byPair: new Map(), boundByPair: new Map(), items: [] }
+  const out = { byPair: new Map(), boundByPair: new Map(), items: [], supplyItems: [] }
   if (!list.length) return out
   const [rows] = await conn.query(
     `SELECT poi.product_id,po.warehouse_id,po.id AS purchase_order_id,poi.id AS purchase_item_id,
@@ -58,6 +58,7 @@ async function getExpectedStock(conn, pairs, { lock = false } = {}) {
     const boundQty = bound.get(Number(r.purchase_item_id)) || 0
     out.byPair.set(key, qty((out.byPair.get(key) || 0) + open))
     out.boundByPair.set(key, qty((out.boundByPair.get(key) || 0) + boundQty))
+    if (open > 0) out.supplyItems.push({ productId: Number(r.product_id), warehouseId: Number(r.warehouse_id), quantity: open, expectedDate: r.expected_date || null })
     const burnable = Math.max(0, qty(open - boundQty))
     if (burnable > 0) out.items.push({
       product_id: Number(r.product_id), warehouse_id: Number(r.warehouse_id),

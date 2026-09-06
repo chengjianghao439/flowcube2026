@@ -310,7 +310,7 @@ async function findAll({ page = 1, pageSize = 20, keyword = '', status = null, p
   const where = conds.join(' AND ')
 
   const [rows] = await pool.query(
-    `SELECT t.* FROM inbound_tasks t WHERE ${where} ORDER BY t.created_at DESC LIMIT ? OFFSET ?`,
+    `SELECT t.* FROM inbound_tasks t WHERE ${where} ORDER BY t.created_at DESC, t.id DESC LIMIT ? OFFSET ?`,
     [...params, ps, offset],
   )
   const [[{ total }]] = await pool.query(

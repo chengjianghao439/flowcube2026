@@ -2,8 +2,8 @@
  * 物流异步 worker（文档 06 · 5.1/5.5）——取号 + 轨迹拉取。
  *
  * 铁律：HTTP **绝不进业务事务**。这里所有平台调用都在事务外；写库是短事务/单语句。
- * 并发安全靠 CAS 抢占：把 status 1/4 → 2(取号中) 的 UPDATE 作为"抢锁"，affectedRows!==1 即别人已抢走。
- * 参考 print sweeper 的抢占式回收：中断在"取号中"的运单由 reclaimStale 兜底打回失败可重试。
+ * 旧适配器靠 CAS 抢占 status 1/4 → 2；顺丰/德邦通过 logistics.direct 保存请求快照及租约。
+ * 旧适配器中断可重试；直连单中断进入状态 6，只查询原单，不能重新 create。
  */
 const crypto = require('crypto')
 const { pool } = require('../../config/db')
@@ -11,6 +11,8 @@ const logger = require('../../utils/logger')
 const { getWaybillCredential } = require('../../config/env')
 const { getAdapter } = require('./carrier-adapters')
 const { WB_STATUS } = require('./logistics.service')
+const { createDirectWorker } = require('./logistics.direct')
+const directWorker = createDirectWorker({ pool, getAdapter, getCredential: getWaybillCredential })
 
 const FETCH_BATCH = 20
 const TRACK_BATCH = 30
@@ -29,7 +31,8 @@ async function reclaimStaleFetching() {
   const [r] = await pool.query(
     `UPDATE logistics_waybills
      SET status = ?, error_message = '取号中断（超时回收），可重试', retry_count = retry_count + 1
-     WHERE status = ? AND last_tried_at < NOW() - INTERVAL ? SECOND`,
+     WHERE status = ? AND (platform_code IS NULL OR platform_code NOT IN ('sf','deppon'))
+       AND last_tried_at < NOW() - INTERVAL ? SECOND`,
     [WB_STATUS.FAILED, WB_STATUS.FETCHING, STALE_FETCHING_SEC],
   )
   if (r.affectedRows > 0) logger.warn(`[logistics] 回收中断取号 ${r.affectedRows} 单`, {}, 'Logistics')
@@ -38,6 +41,7 @@ async function reclaimStaleFetching() {
 /** 取号 worker：扫待取号(1) + 可重试的失败单(4)，抢占后事务外调平台 */
 async function runFetchWaybills() {
   try {
+    await directWorker.run()
     await reclaimStaleFetching()
     const [rows] = await pool.query(
       `SELECT w.id, w.waybill_no, w.warehouse_id, w.platform_code, w.platform_carrier, w.request_key,
@@ -45,7 +49,7 @@ async function runFetchWaybills() {
               c.credential_ref, c.monthly_account, c.net_site_code
        FROM logistics_waybills w
        JOIN carriers c ON c.id = w.carrier_id
-       WHERE c.waybill_enabled = 1 AND w.platform_code IS NOT NULL
+       WHERE c.waybill_enabled = 1 AND w.platform_code IS NOT NULL AND w.platform_code NOT IN ('sf','deppon')
          AND (
            w.status = ?
            OR (w.status = ? AND w.retry_count < ? AND (w.last_tried_at IS NULL OR w.last_tried_at < NOW() - INTERVAL ? SECOND))
@@ -142,7 +146,7 @@ async function runTrackWaybills() {
        FROM logistics_waybills w
        JOIN carriers c ON c.id = w.carrier_id
        WHERE w.status = ? AND w.track_status = 0 AND w.tracking_no IS NOT NULL
-         AND c.waybill_enabled = 1 AND w.platform_code IS NOT NULL
+         AND c.waybill_enabled = 1 AND w.platform_code IS NOT NULL AND w.platform_code NOT IN ('sf','deppon')
        ORDER BY w.id ASC
        LIMIT ?`,
       [WB_STATUS.FETCHED, TRACK_BATCH],

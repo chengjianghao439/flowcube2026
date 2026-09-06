@@ -277,17 +277,26 @@ async function getLatestInstanceByBiz(conn, { bizType, bizId }) {
  * 命中条件 = 该用户出现在某审批中实例的当前节点 approvers 快照中。
  * 由调用方补业务单号/名称（引擎不知道业务表结构）。
  */
-async function listPendingTasks(pool, { userId }) {
+const PENDING_TASKS_FROM = `FROM approval_instance_task_approvers a
+       JOIN approval_instance_tasks t ON t.id=a.task_id
+       JOIN approval_instances i ON i.id=a.instance_id AND i.status=1
+      WHERE a.user_id=? AND t.status=1 AND t.step_order=i.current_step`
+
+async function countPendingTasks(pool, { userId }) {
+  const [[{ total }]] = await pool.query(`SELECT COUNT(*) AS total ${PENDING_TASKS_FROM}`, [Number(userId)])
+  return Number(total)
+}
+
+async function listPendingTasks(pool, { userId, page = 1, pageSize = 100 }) {
+  const size = Math.min(100, Math.max(1, Math.trunc(Number(pageSize) || 100)))
+  const offset = (Math.max(1, Math.trunc(Number(page) || 1)) - 1) * size
   const [rows] = await pool.query(
     `SELECT i.id AS instance_id, i.biz_type, i.biz_id, i.applicant_id, i.applicant_name,
             i.amount, i.flow_id, i.created_at, i.current_step,
             t.id AS task_id, t.step_order, t.approver_name, t.created_at AS task_created_at
-       FROM approval_instance_task_approvers a
-       JOIN approval_instance_tasks t ON t.id=a.task_id
-       JOIN approval_instances i        ON i.id=a.instance_id AND i.status=1
-      WHERE a.user_id=? AND t.status=1 AND t.step_order=i.current_step
-      ORDER BY i.created_at DESC LIMIT 100`,
-    [Number(userId)],
+       ${PENDING_TASKS_FROM}
+      ORDER BY i.created_at DESC, i.id DESC, t.id DESC LIMIT ? OFFSET ?`,
+    [Number(userId), size, offset],
   )
   return rows
 }
@@ -295,5 +304,5 @@ async function listPendingTasks(pool, { userId }) {
 module.exports = {
   INSTANCE_STATUS, TASK_STATUS, APPROVER_TYPE,
   startApproval, approveStep, rejectStep, cancelInstance,
-  getActiveInstanceByBiz, getLatestInstanceByBiz, listPendingTasks,
+  getActiveInstanceByBiz, getLatestInstanceByBiz, listPendingTasks, countPendingTasks,
 }

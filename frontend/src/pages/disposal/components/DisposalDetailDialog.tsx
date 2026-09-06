@@ -1,3 +1,4 @@
+import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
 import { ProductIdentityGridCells, ProductIdentityGridHeaders } from '@/components/shared/ProductIdentityCells'
 import { useState } from 'react'
 import { toast } from '@/lib/toast'
@@ -57,6 +58,8 @@ export default function DisposalDetailDialog({ open, onClose, id }: Props) {
             {disposal && <SoftStatusLabel label={disposal.statusName} tone={STATUS_TONE[disposal.status] ?? 'draft'} />}
           </DialogTitle>
         </DialogHeader>
+        <OrderDetailSections type="disposal" id={id || 0}>
+
         {isLoading && <p className="text-center py-8 text-muted-foreground">加载中…</p>}
         {disposal && (
           <div className="space-y-4">
@@ -98,6 +101,7 @@ export default function DisposalDetailDialog({ open, onClose, id }: Props) {
             </div>
           </div>
         )}
+        </OrderDetailSections>
         <DialogFooter className="gap-2">
           {canSubmit && (
             <Button onClick={() => confirmAction({

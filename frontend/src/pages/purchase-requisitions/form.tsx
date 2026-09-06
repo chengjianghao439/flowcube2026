@@ -1,3 +1,4 @@
+import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
 import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
 import { SectionCard } from '@/components/shared/SectionCard'
 /**
@@ -299,10 +300,8 @@ export default function RequisitionFormPage() {
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-2 text-sm text-destructive">驳回原因：{detail.rejectReason}</div>
       )}
 
-      {detail?.approval && (
-        <ApprovalProgress approval={detail.approval} />
-      )}
 
+      <OrderDetailSections type="requisition" id={editId || 0} progress={detail?.approval ? <ApprovalProgress approval={detail.approval} /> : undefined}>
       <Section title="基本信息">
         <div className="grid grid-cols-4 gap-x-5 gap-y-4">
           <div className="space-y-1.5">
@@ -367,6 +366,8 @@ export default function RequisitionFormPage() {
           </table>
         </div>
       </Section>
+
+      </OrderDetailSections>
 
       <ProductFinder mode="purchase" warehouseName={warehouseName} open={productFinderOpen} warehouseId={warehouseId} onConfirm={onPickProduct} onClose={() => setProductFinderOpen(false)} />
       <SupplierFinder open={!!supplierTarget} onClose={() => setSupplierTarget(null)} onConfirm={onPickSupplier} />

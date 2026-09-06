@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -9,7 +8,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
-import Pagination from '@/components/shared/Pagination'
+import ListSummary from '@/components/shared/ListSummary'
 import { Button } from '@/components/ui/button'
 import { getLowStockPageApi, getCreditRiskPageApi } from '@/api/dashboard'
 import { useWorkspaceStore } from '@/store/workspaceStore'
@@ -24,15 +23,14 @@ export default function RiskDetails({
   kind: 'stock' | 'credit'
   onClose: () => void
 }) {
-  const [page, setPage] = useState(1)
   const stock = useQuery({
-    queryKey: ['dashboard-low-stock-page', page],
-    queryFn: () => getLowStockPageApi(page),
+    queryKey: ['dashboard-low-stock-list'],
+    queryFn: () => getLowStockPageApi(),
     enabled: kind === 'stock',
   })
   const credit = useQuery({
-    queryKey: ['dashboard-credit-risk-page', page],
-    queryFn: () => getCreditRiskPageApi(page),
+    queryKey: ['dashboard-credit-risk-list'],
+    queryFn: () => getCreditRiskPageApi(),
     enabled: kind === 'credit',
   })
   const query = kind === 'stock' ? stock : credit
@@ -60,7 +58,7 @@ export default function RiskDetails({
           <DialogDescription>
             {kind === 'stock'
               ? '按商品和仓库合计实物库存，筛选数量 ≤ 10；不是可承诺库存判断。'
-              : '仅列出当前占用额度超过授信限额的客户；全量结果分页展示。'}
+              : '仅列出当前占用额度超过授信限额的客户；展示全部符合条件的结果。'}
           </DialogDescription>
         </DialogHeader>
         <div className="max-h-[65vh] overflow-y-auto">
@@ -74,8 +72,7 @@ export default function RiskDetails({
           ) : (
             <>
               <p className="mb-3 text-xs text-muted-foreground">
-                共 {total} {kind === 'stock' ? '项' : '家'} · 本页{' '}
-                {query.data?.list.length ?? 0} {kind === 'stock' ? '项' : '家'}
+                共 {total} {kind === 'stock' ? '项' : '家'}
               </p>
               {kind === 'stock'
                 ? stock.data?.list.map((row) => (
@@ -147,12 +144,7 @@ export default function RiskDetails({
                   当前没有符合条件的风险项。
                 </p>
               )}
-              <Pagination
-                page={page}
-                totalPages={Math.max(1, Math.ceil(total / 10))}
-                total={total}
-                onPageChange={setPage}
-              />
+              <ListSummary total={total} />
             </>
           )}
         </div>

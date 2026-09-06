@@ -24,13 +24,31 @@ const createSchema = z.object({
   netSiteCode:     optStr(60),
   credentialRef:   optStr(60),
   waybillEnabled:  z.boolean().optional(),
+  shippingProduct: optStr(32),
+  shippingDeliveryType: optStr(8),
 })
 
 const updateSchema = createSchema.extend({
   isActive: z.boolean(),
 })
 
+const bindingSchema = z.union([z.object({ action: z.enum(['pause', 'unbind']), revision: z.string().regex(/^[a-f0-9]{64}$/) }).strict(), z.object({
+  platformCode: z.enum(['sf', 'deppon']),
+  monthlyAccount: z.string().trim().max(32).regex(/^[A-Za-z0-9_-]*$/, '请填写月结账号，不要填写手机号或密码'),
+  shippingProduct: z.string().trim().max(32),
+  shippingDeliveryType: z.enum(['', '1', '3', '4']),
+  enabled: z.boolean(),
+  revision: z.string().regex(/^[a-f0-9]{64}$/),
+}).strict()])
+const newAccountSchema = z.object({
+  name: z.string().trim().min(1).max(10, '账号名称最多10个字符'),
+  platformCode: z.enum(['sf', 'deppon']),
+  monthlyAccount: z.string().trim().min(1).max(32).regex(/^[A-Za-z0-9_-]+$/, '请填写月结账号'),
+}).strict()
 router.use(authMiddleware)
+router.post('/account-bindings', requirePermission(PERMISSIONS.CARRIER_CREATE), validateBody(newAccountSchema), ctrl.createAccountBinding)
+router.get('/:id/account-binding', requirePermission(PERMISSIONS.CARRIER_VIEW), ctrl.accountBinding)
+router.put('/:id/account-binding', requirePermission(PERMISSIONS.CARRIER_UPDATE), validateBody(bindingSchema), ctrl.saveAccountBinding)
 
 router.get('/active', requirePermission(PERMISSIONS.CARRIER_VIEW), ctrl.listActive)
 router.get('/',        requirePermission(PERMISSIONS.CARRIER_VIEW), ctrl.list)

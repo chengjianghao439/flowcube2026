@@ -21,16 +21,17 @@ async function mount(context: { mode?: 'lookup' | 'sale' | 'purchase'; warehouse
   return { host, root }
 }
 afterEach(() => { hosts.splice(0).forEach(h => h.remove()) })
-it('分页后清空选择，默认查询场景不显示价格和无仓库存列', async () => {
+it('完整商品列表无翻页，筛选变化清空选择，默认不显示价格和无仓库存列', async () => {
   const { host, root } = await mount()
   const next = Array.from(host.querySelectorAll('button')).find(b => b.textContent?.includes('下一页'))!
-  expect(next).toBeTruthy()
+  expect(next).toBeUndefined()
   const confirm = Array.from(host.querySelectorAll('button')).find(b => b.textContent === '确认选择')!
   await act(async () => host.querySelector<HTMLTableRowElement>('tbody tr')!.click())
   expect(confirm.disabled).toBe(false)
-  await act(async () => next.click())
+  const category = Array.from(host.querySelectorAll('button')).find(b => b.textContent === '配件')!
+  await act(async () => category.click())
   expect(confirm.disabled).toBe(true)
-  expect(finder.params.page).toBe(2)
+  expect(finder.params.categoryId).toBe(1)
   expect(host.textContent).not.toContain('售价')
   expect(host.textContent).not.toContain('可用库存')
   await act(async () => root.unmount())

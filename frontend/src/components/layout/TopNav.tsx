@@ -8,6 +8,7 @@
 import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { ChevronDown } from 'lucide-react'
+import { getMergedPageGroup } from '@/router/mergedPageGroups'
 import { cn } from '@/lib/utils'
 import { usePermission } from '@/hooks/usePermission'
 import { useWorkspaceStore } from '@/store/workspaceStore'
@@ -184,7 +185,12 @@ export function TopNav() {
   const location = useLocation()
   const { addTab } = useWorkspaceStore()
   const pathname = location.pathname
-  const activePath = resolveActiveNavPath(pathname)
+  const visibleNav = buildTopNavSections(can)
+  const activeGroup = getMergedPageGroup(pathname)
+  const activePath = activeGroup
+    ? visibleNav.flatMap(section => section.kind === 'menu' ? section.children : [section])
+      .find(item => getMergedPageGroup(item.path)?.key === activeGroup.key)?.path ?? null
+    : resolveActiveNavPath(pathname)
 
   /** 打开/激活目标页：KeepAlive 保留当前标签状态，无需确认 */
   const openNavPath = useCallback(
@@ -198,7 +204,7 @@ export function TopNav() {
 
   const nodes: ReactNode[] = []
 
-  for (const section of TOP_NAV_SECTIONS) {
+  for (const section of visibleNav) {
     if (section.kind === 'link') {
       if (!can(section.perm)) continue
       nodes.push(

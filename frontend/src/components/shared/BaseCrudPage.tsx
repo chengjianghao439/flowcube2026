@@ -16,7 +16,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from '@/lib/toast'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
-import Pagination from '@/components/shared/Pagination'
+import ListSummary from '@/components/shared/ListSummary'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
@@ -70,8 +70,8 @@ interface Props<T extends RowLike> {
   emptyText?: string
   /** 是否显示操作列（默认 true） */
   showActions?: boolean
-  /** 真分页参数（pageSize 默认 20，total 由组件从列表响应取 pagination.total）；传入后启用通用分页控件 */
-  pagination?: { page: number; pageSize?: number; unit?: string; onPageChange: (page: number) => void }
+  /** 记录总数单位 */
+  recordUnit?: string
 }
 
 export default function BaseCrudPage<T extends RowLike>(props: Props<T>) {
@@ -79,7 +79,7 @@ export default function BaseCrudPage<T extends RowLike>(props: Props<T>) {
     title, description, columns: dataColumns, queryKey, listQuery, deleteApi, deleteMessage,
     renderForm, submitForm, saveSuccessMessage, formTitle, formWidthClass = 'max-w-md',
     renderRowExtra, renderActions, createLabel = '+ 新建', canSubmit, headerActions, renderToolbar,
-    emptyText, showActions = true, pagination,
+    emptyText, showActions = true, recordUnit,
   } = props
 
   const qc = useQueryClient()
@@ -154,15 +154,7 @@ export default function BaseCrudPage<T extends RowLike>(props: Props<T>) {
       {renderToolbar}
 
       {isError ? <QueryErrorState error={error} onRetry={() => void refetch()} title={`${title}加载失败`} compact /> : <DataTable columns={columns} data={list} loading={isLoading} rowKey="id" emptyText={emptyText} />}
-      {pagination && (
-        <Pagination
-          page={pagination.page}
-          totalPages={Math.max(1, Math.ceil(((data as { pagination?: { total?: number } } | undefined)?.pagination?.total ?? 0) / (pagination.pageSize ?? 20)))}
-          total={(data as { pagination?: { total?: number } } | undefined)?.pagination?.total ?? 0}
-          unit={pagination.unit}
-          onPageChange={pagination.onPageChange}
-        />
-      )}
+      <ListSummary total={(data as { pagination?: { total?: number } } | undefined)?.pagination?.total ?? list.length} unit={recordUnit} />
 
       <Dialog open={formOpen} onOpenChange={v => !v && closeDialog()}>
         <DialogContent className={formWidthClass}>

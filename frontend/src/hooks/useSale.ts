@@ -10,7 +10,7 @@ import { PERMISSIONS } from '@/lib/permission-codes'
 import { confirmAction } from '@/lib/confirm'
 import type { CreateSaleParams, UpdateSaleParams, ReserveItemOverride, ShipItemRequest } from '@/types/sale'
 
-export const useSaleList   = (params: object) => useQuery({ queryKey: ['sale', params], queryFn: () => getSaleListApi(params) })
+export const useSaleList   = (params: object, summary = false) => useQuery({ queryKey: ['sale', params, summary], queryFn: () => getSaleListApi(params, summary) })
 export const useSaleDetail = (id: number)     => useQuery({ queryKey: ['sale', id],     queryFn: () => getSaleDetailApi(id), enabled: !!id })
 // 占库分仓弹窗打开时才拉取，避免为每个草稿行都请求一次
 export const useSaleReservePreview = (id: number, enabled: boolean) =>

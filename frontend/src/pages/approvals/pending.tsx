@@ -1,8 +1,7 @@
-import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
-import Pagination from '@/components/shared/Pagination'
+import ListSummary from '@/components/shared/ListSummary'
 import { Button } from '@/components/ui/button'
 import { usePendingApprovals } from '@/hooks/useApprovals'
 import { formatDisplayDateTime } from '@/lib/dateTime'
@@ -18,8 +17,7 @@ const BIZ_LABEL: Record<string, string> = {
 
 export default function ApprovalPendingPage() {
   const navigate = useNavigate()
-  const [page, setPage] = useState(1)
-  const { data, isLoading } = usePendingApprovals(page)
+  const { data, isLoading } = usePendingApprovals(1)
 
   const list = data?.list ?? []
   const total = data?.pagination.total ?? 0
@@ -93,7 +91,7 @@ export default function ApprovalPendingPage() {
         emptyText={list.length === 0 && !isLoading ? '没有待你审批的单据' : undefined}
       />
       {total > 0 && (
-        <Pagination page={page} totalPages={Math.ceil(total / 20)} total={total} onPageChange={setPage} />
+        <ListSummary total={total} />
       )}
     </div>
   )

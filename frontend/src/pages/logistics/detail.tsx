@@ -1,3 +1,6 @@
+import { DirectShipmentDialog } from './DirectShipmentDialog'
+import { shippingProductLabel } from '@/lib/shippingProducts'
+import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
 /**
  * 物流运单详情页（含轨迹时间线）
  * 路由：/logistics/:id
@@ -19,8 +22,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { formatDisplayDateTime } from '@/lib/dateTime'
-import { getWaybillDetailApi, getWaybillTrackApi, setWaybillTrackingApi, retryWaybillApi, voidWaybillApi } from '@/api/logistics'
-import TrackTimeline from './components/TrackTimeline'
+import { getWaybillDetailApi, setWaybillTrackingApi, retryWaybillApi, voidWaybillApi } from '@/api/logistics'
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -42,17 +44,13 @@ export default function LogisticsDetailPage() {
   const { can } = usePermission()
   const canManage = can(PERMISSIONS.LOGISTICS_MANAGE)
 
+  const [shipmentOpen, setShipmentOpen] = useState(false)
   const [trackOpen, setTrackOpen] = useState(false)
   const [trackingInput, setTrackingInput] = useState('')
 
   const { data: wb, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['waybill', waybillId],
     queryFn: () => getWaybillDetailApi(waybillId),
-    enabled: Number.isFinite(waybillId) && waybillId > 0,
-  })
-  const { data: events } = useQuery({
-    queryKey: ['waybill-track', waybillId],
-    queryFn: () => getWaybillTrackApi(waybillId),
     enabled: Number.isFinite(waybillId) && waybillId > 0,
   })
 
@@ -69,7 +67,7 @@ export default function LogisticsDetailPage() {
   })
   const retryMut = useMutation({
     mutationFn: () => retryWaybillApi(waybillId, { skipGlobalError: true }),
-    onSuccess: () => { toast.success('已重新提交取号'); invalidate() },
+    onSuccess: () => { toast.success('已提交处理；已发送的平台订单仅查询原单'); invalidate() },
     onError: (e: unknown) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '操作失败'),
   })
   const voidMut = useMutation({
@@ -87,9 +85,11 @@ export default function LogisticsDetailPage() {
     )
   }
 
-  const canRecord = wb && (wb.status === 1 || wb.status === 4)
-  const canRetry = wb && wb.status === 4 && wb.platformCode
-  const canVoid = wb && wb.status !== 5
+  const direct = wb && ['sf', 'deppon'].includes(wb.platformCode || '')
+  const canEditShipment = direct && !wb.submittedToPlatform && [1, 4].includes(wb.status) && wb.shipment
+  const canRecord = wb && !direct && (wb.status === 1 || wb.status === 4)
+  const canRetry = wb && [4, 6].includes(wb.status) && wb.platformCode
+  const canVoid = wb && ![2, 5].includes(wb.status) && !(direct && (wb.submittedToPlatform || [3, 6].includes(wb.status)))
 
   return (
     <div className="space-y-4">
@@ -98,8 +98,9 @@ export default function LogisticsDetailPage() {
         description={wb ? <SoftStatusLabel label={wb.statusLabel} tone={wb.statusTone} /> : undefined}
         actions={
           <div className="flex items-center gap-2">
+            {canManage && canEditShipment && <Button variant="outline" onClick={() => setShipmentOpen(true)}>补充寄件资料</Button>}
             {canManage && canRecord && <Button variant="outline" onClick={() => { setTrackingInput(wb?.trackingNo ?? ''); setTrackOpen(true) }}>手工录入快递单号</Button>}
-            {canManage && canRetry && <Button variant="outline" onClick={() => retryMut.mutate()} disabled={retryMut.isPending}>重试取号</Button>}
+            {canManage && canRetry && <Button variant="outline" onClick={() => retryMut.mutate()} disabled={retryMut.isPending}>{wb?.submittedToPlatform || wb?.status === 6 ? '查询原单' : '重试取号'}</Button>}
             {canManage && canVoid && <Button variant="outline" className="text-destructive" onClick={() => confirmAction({
               title: '作废运单', description: `确认作废运单 ${wb?.waybillNo}？`, variant: 'destructive', confirmText: '确认作废',
               onConfirm: () => voidMut.mutate(),
@@ -109,7 +110,8 @@ export default function LogisticsDetailPage() {
         }
       />
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+      <OrderDetailSections type="logistics" id={wb?.id || 0}>
+      <div className="space-y-4">
         <SectionCard title="运单信息" compact>
           <div className="grid grid-cols-3 gap-x-6 gap-y-5">
             <Field label="快递单号">{wb?.trackingNo ? <span className="text-doc-code">{wb.trackingNo}</span> : '—'}</Field>
@@ -117,10 +119,14 @@ export default function LogisticsDetailPage() {
             <Field label="对接平台">{wb?.platformCode ?? '未对接'}</Field>
             <Field label="预估运费">{wb?.estFreight != null ? Number(wb.estFreight).toFixed(2) : '—'}</Field>
             <Field label="运费方式">{wb?.freightTypeLabel}</Field>
-            <Field label="面单数据">{wb?.printDataRef ?? '—'}</Field>
+            <Field label="面单数据">{wb?.printDataRef === 'official_platform' ? '请通过快递官方打印面单' : wb?.printDataRef ?? '—'}</Field>
             <Field label="销售单">{wb?.saleOrderNo}</Field>
-            <Field label="包裹条码">{wb?.packageBarcode}</Field>
+            <Field label="包裹条码">{wb?.shipment?.packages.map(p => p.barcode || p.id).join('、') || wb?.packageBarcode}</Field>
             <Field label="仓库">{wb?.warehouseName}</Field>
+            {direct && <Field label="实际打包件数">{wb?.shipment?.packages.length ?? '—'}</Field>}
+            {direct && <Field label="发货产品">{shippingProductLabel(wb?.platformCode, wb?.shipment?.productCode)}</Field>}
+            {direct && <Field label="重量">由快递员称重确认</Field>}
+            {!!wb?.trackingNumbers?.length && <div className="col-span-3"><Field label="本批全部快递单号">{wb.trackingNumbers.join('、')}</Field></div>}
             <Field label="创建时间">{wb ? formatDisplayDateTime(wb.createdAt) : '—'}</Field>
           </div>
           <div className="mt-4 border-t border-border pt-4">
@@ -130,18 +136,17 @@ export default function LogisticsDetailPage() {
               <div className="sm:col-span-2"><Field label="收件地址">{wb?.receiverAddress}</Field></div>
             </div>
           </div>
-          {wb?.status === 4 && wb.errorMessage && (
+          {wb && [4, 6].includes(wb.status) && wb.errorMessage && (
             <div className="mt-4 rounded-md border border-danger/20 bg-danger/10 px-3 py-2 text-sm text-danger">
-              取号失败：{wb.errorMessage}（已重试 {wb.retryCount} 次）
+              {wb.statusLabel}：{wb.errorMessage}（已重试 {wb.retryCount} 次）
             </div>
           )}
         </SectionCard>
-
-        <SectionCard title="物流轨迹" compact>
-          <TrackTimeline events={events ?? []} />
-        </SectionCard>
       </div>
 
+      </OrderDetailSections>
+
+      {shipmentOpen && wb && <DirectShipmentDialog waybill={wb} onClose={() => setShipmentOpen(false)} onSaved={invalidate} />}
       <Dialog open={trackOpen} onOpenChange={v => { if (!v) { setTrackOpen(false); setTrackingInput('') } }}>
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>录入快递单号</DialogTitle></DialogHeader>

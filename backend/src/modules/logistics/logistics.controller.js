@@ -25,11 +25,14 @@ const detail = async (req, res, next) => {
 const track = async (req, res, next) => {
   try { return successResponse(res, await svc.getTrackEvents(+req.params.id, { warehouseIds: scope(req) })) } catch (e) { next(e) }
 }
+const updateShipment = async (req, res, next) => {
+  try { return successResponse(res, await require('./logistics.shipment').updateShipment(+req.params.id, req.body, { warehouseIds: scope(req) }), '寄件资料已保存，等待自动下单') } catch (e) { next(e) }
+}
 const setTracking = async (req, res, next) => {
   try { return successResponse(res, await svc.manualSetTracking(+req.params.id, req.body, { warehouseIds: scope(req) }), '已录入快递单号') } catch (e) { next(e) }
 }
 const retry = async (req, res, next) => {
-  try { return successResponse(res, await svc.retryFetch(+req.params.id, { warehouseIds: scope(req) }), '已重新提交取号') } catch (e) { next(e) }
+  try { return successResponse(res, await svc.retryFetch(+req.params.id, { warehouseIds: scope(req) }), '已提交处理；已发送的平台订单仅查询原单') } catch (e) { next(e) }
 }
 const voidOne = async (req, res, next) => {
   try { return successResponse(res, await svc.voidWaybill(+req.params.id, { reason: req.body?.reason || null }, { warehouseIds: scope(req) }), '运单已作废') } catch (e) { next(e) }
@@ -68,6 +71,6 @@ const generateSettlement = async (req, res, next) => {
 }
 
 module.exports = {
-  list, detail, track, setTracking, retry, voidOne,
+  list, detail, track, updateShipment, setTracking, retry, voidOne,
   listBills, createBill, listSettlements, generateSettlement,
 }

@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { collectAllRecords } from './allRecords'
 import type { AxiosError, AxiosRequestConfig, AxiosResponse, InternalAxiosRequestConfig } from 'axios'
 import { Capacitor } from '@capacitor/core'
 import { IS_CAPACITOR_PDA } from '@/lib/platform'
@@ -144,6 +145,8 @@ function formatPrintQuotaToast(message: string, p: PrintQuotaErrorPayload) {
  */
 declare module 'axios' {
   interface AxiosRequestConfig {
+    /** 首页摘要显式使用单批；所有业务列表默认自动取齐。 */
+    listMode?: 'summary'
     skipGlobalError?: boolean
     /** ERP API fallback 已尝试过，避免循环重试 */
     _erpApiFallbackTried?: boolean
@@ -396,7 +399,34 @@ async function payloadRequest<T>(request: Promise<AxiosResponse<T>>): Promise<Pa
 
 export const payloadClient = {
   get<T = unknown>(url: string, config?: AxiosRequestConfig) {
-    return payloadRequest(apiClient.get<T>(url, config))
+    if (config?.listMode === 'summary' || config?.responseType === 'blob' || config?.responseType === 'arraybuffer') {
+      return payloadRequest(apiClient.get<T>(url, config))
+    }
+    // 在整次列表读取开始时绑定会话/账套，避免续批随用户切换而混入另一范围。
+    const fixedConfig: AxiosRequestConfig = {
+      ...config,
+      _authSessionGeneration: config?._authSessionGeneration ?? useAuthStore.getState().sessionGeneration,
+      ...(isAccountingRequest(url) ? { _companyScopeId: config?._companyScopeId ?? useCompanyStore.getState().companyId } : {}),
+    }
+    const [path, query = ''] = url.split('?')
+    const queryParams = new URLSearchParams(query)
+    const params = config?.params instanceof URLSearchParams ? Object.fromEntries(config.params) : { ...config?.params }
+    const hasBatchParams = 'page' in params || 'pageSize' in params || queryParams.has('page') || queryParams.has('pageSize')
+    delete params.page; delete params.pageSize
+    queryParams.delete('page'); queryParams.delete('pageSize')
+    const encodedQuery = queryParams.toString()
+    const requestUrl = encodedQuery ? `${path}?${encodedQuery}` : path
+    return collectAllRecords((page, pageSize) => payloadRequest(apiClient.get<T>(requestUrl, {
+      ...fixedConfig,
+      params: { ...params, ...(hasBatchParams || page > 1 ? { page, pageSize: pageSize ?? 200 } : {}) },
+    })), config?.signal).catch((error: unknown) => {
+      // 传输错误已由拦截器提示；这里只补完整性校验失败，不能静默显示残缺/空列表。
+      if (!config?.skipGlobalError && !(error instanceof ApiClientError) && !axios.isCancel(error)
+        && !(error instanceof DOMException && error.name === 'AbortError')) {
+        toast.error(error instanceof Error ? error.message : '列表加载失败，请刷新后重试')
+      }
+      throw error
+    })
   },
   post<T = unknown>(url: string, data?: unknown, config?: AxiosRequestConfig) {
     return payloadRequest(apiClient.post<T>(url, data, config))

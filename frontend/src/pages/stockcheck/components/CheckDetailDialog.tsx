@@ -1,3 +1,4 @@
+import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
 import { ProductIdentityGridCells, ProductIdentityGridHeaders } from '@/components/shared/ProductIdentityCells'
 import { useState, useEffect, useMemo } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
@@ -158,6 +159,8 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
             {check && <SoftStatusLabel label={check.statusName} tone={check.status===1?'active':check.status===2?'success':'danger'} />}
           </DialogTitle>
         </DialogHeader>
+        <OrderDetailSections type="stockcheck" id={checkId || 0}>
+
         {isLoading && <p className="text-center py-8 text-muted-foreground">加载中…</p>}
         {check && (
           <div className="space-y-4">
@@ -234,6 +237,7 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
             </div>
           </div>
         )}
+        </OrderDetailSections>
         <DialogFooter className="gap-2">
           {check?.status===1 && <>
             <Button variant="outline" onClick={handleSave} disabled={updateItems.isPending || saveLocked}>保存实盘数</Button>

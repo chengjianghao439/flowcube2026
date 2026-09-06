@@ -18,7 +18,7 @@ const defaultForm = {
 export default function WarehousesPage() {
   const [keyword, setKeyword] = useState('')
   const [search, setSearch] = useState('')
-  const [page, setPage] = useState(1)
+  const page = 1
   const [form, setForm] = useState(defaultForm)
 
   function set(field: string, value: string | number | boolean) {
@@ -69,7 +69,7 @@ export default function WarehousesPage() {
       columns={columns}
       queryKey={['warehouses', { page, pageSize: 20, keyword }]}
       listQuery={() => getWarehousesApi({ page, pageSize: 20, keyword })}
-      pagination={{ page, pageSize: 20, unit: '个', onPageChange: setPage }}
+      recordUnit="个"
       deleteApi={(id) => deleteWarehouseApi(id, { skipGlobalError: true })}
       deleteMessage="仅未被库位、库存、任务或业务单据引用的仓库允许删除；若已被引用，请改为编辑后停用。"
       createLabel="新增仓库"
@@ -81,11 +81,11 @@ export default function WarehousesPage() {
         <FilterCard>
           <Input placeholder="搜索编码或名称" value={search}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
-            onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') { setKeyword(search); setPage(1) } }}
+            onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') { setKeyword(search) } }}
             className="h-9 w-60" />
-          <Button size="sm" variant="outline" onClick={() => { setKeyword(search); setPage(1) }}>搜索</Button>
+          <Button size="sm" variant="outline" onClick={() => { setKeyword(search) }}>搜索</Button>
           {keyword && (
-            <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword(''); setPage(1) }}>重置</Button>
+            <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword('') }}>重置</Button>
           )}
         </FilterCard>
       }

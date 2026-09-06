@@ -24,7 +24,7 @@ const inventory = async(req,res,next)=>{ try{return successResponse(res,await sv
 const pdaPerformance = async(req,res,next)=>{ try{return successResponse(res,await svc.pdaPerformance(req.user?.warehouseIds??null),'查询成功')}catch(e){next(e)} }
 const wavePerformance = async(req,res,next)=>{ try{return successResponse(res,await svc.wavePerformance({...parseQuery(req.query), scopeWarehouseIds: req.user?.warehouseIds??null}),'查询成功')}catch(e){next(e)} }
 const warehouseOps = async(req,res,next)=>{ try{return successResponse(res,await svc.warehouseOps(req.user?.warehouseIds??null),'查询成功')}catch(e){next(e)} }
-const roleWorkbench = async(req,res,next)=>{ try{return successResponse(res,await svc.roleWorkbench(req.user?.warehouseIds??null),'查询成功')}catch(e){next(e)} }
+const roleWorkbench = async(req,res,next)=>{ try{return successResponse(res,await svc.roleWorkbench(req.user?.warehouseIds??null,req.query),'查询成功')}catch(e){next(e)} }
 const reconciliation = async(req,res,next)=>{ try{return successResponse(res,await svc.reconciliationReport(parseReconciliationQuery(req.query)),'查询成功')}catch(e){next(e)} }
 const avgCostReconciliation = async(req,res,next)=>{ try{return successResponse(res,await svc.avgCostReconciliation({ scopeWarehouseIds: req.user?.warehouseIds??null }),'查询成功')}catch(e){next(e)} }
 const profitAnalysis = async(req,res,next)=>{ try{return successResponse(res,await svc.profitAnalysis({...parseQuery(req.query), scopeWarehouseIds: req.user?.warehouseIds??null}),'查询成功')}catch(e){next(e)} }

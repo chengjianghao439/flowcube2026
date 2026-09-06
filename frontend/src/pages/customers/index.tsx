@@ -3,7 +3,7 @@ import { useState, useRef } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
-import Pagination from '@/components/shared/Pagination'
+import ListSummary from '@/components/shared/ListSummary'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -24,13 +24,11 @@ import type { Customer } from '@/types/customers'
 import type { TableColumn } from '@/types'
 
 const PRICE_LEVELS = ['A', 'B', 'C', 'D'] as const
-const PAGE_SIZE = 20
 
 export default function CustomersPage() {
   const qc = useQueryClient()
   const [keyword, setKeyword] = useState('')
   const [search, setSearch] = useState('')
-  const [page, setPage] = useState(1)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Customer | null>(null)
   const [bindOpen, setBindOpen] = useState(false)
@@ -60,9 +58,8 @@ export default function CustomersPage() {
     }
   }
 
-  const { data, isLoading } = useCustomers({ page, pageSize: PAGE_SIZE, keyword })
+  const { data, isFetching } = useCustomers({ page: 1, pageSize: 200, keyword }, true)
   const total = data?.pagination?.total ?? 0
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const del = useDeleteCustomer()
   const [confirmTarget, setConfirmTarget] = useState<Customer | null>(null)
   const bindMut = useMutation({
@@ -78,8 +75,11 @@ export default function CustomersPage() {
   }
 
   const columns: TableColumn<Customer>[] = [
-    { key: 'name', title: '客户 / 编码', width: 260, render: (_, row) => <RecordIdentity title={row.name} code={row.code} /> },
-    { key: 'contact', title: '联系信息', width: 250, render: (_, row) => <RecordIdentity title={row.contact || '未填写联系人'} detail={<>{row.phone || '未填写电话'}<br />{row.email || '未填写邮箱'}</>} /> },
+    { key: 'code', title: '编码', width: 120 },
+    { key: 'name', title: '客户名称', width: 180 },
+    { key: 'contact', title: '联系人', width: 100 },
+    { key: 'phone', title: '电话', width: 130 },
+    { key: 'email', title: '邮箱', width: 160 },
     { key: 'priceLevelName' as keyof Customer, title: '价格等级', width: 120, render: (_, row) => <SoftStatusLabel label={`价格${row.priceLevel ?? 'A'}`} tone="info" /> },
     { key: 'settlementType', title: '结算方式', width: 110, render: (_, row) => (
       <SoftStatusLabel
@@ -114,9 +114,9 @@ export default function CustomersPage() {
         </>
       } />
       <FilterCard>
-        <Input aria-label="搜索客户编码或名称" placeholder="搜索客户编码或名称" value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} className="h-9 w-80" onKeyDown={(e: React.KeyboardEvent)=>{ if(e.key==='Enter'){ setKeyword(search); setPage(1) } }} />
-        <Button size="sm" variant="outline" onClick={()=>{ setKeyword(search); setPage(1) }}>搜索</Button>
-        {keyword && <Button size="sm" variant="ghost" onClick={()=>{ setSearch(''); setKeyword(''); setPage(1) }}>重置</Button>}
+        <Input aria-label="搜索客户编码或名称" placeholder="搜索客户编码或名称" value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} className="h-9 w-80" onKeyDown={(e: React.KeyboardEvent)=>{ if(e.key==='Enter'){ setKeyword(search); } }} />
+        <Button size="sm" variant="outline" onClick={()=>{ setKeyword(search); }}>搜索</Button>
+        {keyword && <Button size="sm" variant="ghost" onClick={()=>{ setSearch(''); setKeyword(''); }}>重置</Button>}
       <span className="ml-auto text-xs text-muted-foreground">共 {total.toLocaleString()} 位客户</span>
       </FilterCard>
 
@@ -145,8 +145,12 @@ export default function CustomersPage() {
           )}
         </div>
       )}
-      <DataTable columns={columns} data={data?.list||[]} loading={isLoading} />
-      <Pagination page={page} totalPages={totalPages} total={total} unit="个" onPageChange={setPage} />
+      <section aria-label="客户列表">
+        <DataTable columns={columns} data={data?.list||[]} loading={isFetching} />
+        <footer className="px-1 py-3">
+          <ListSummary total={total} unit="条" />
+        </footer>
+      </section>
       <CustomerFormDialog open={dialogOpen} onClose={()=>setDialogOpen(false)} customer={editing} />
       <ConfirmDialog
         open={!!confirmTarget}

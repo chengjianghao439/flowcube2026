@@ -1,3 +1,4 @@
+import type { ProcurementSupply } from './procurement-supply'
 import { payloadClient as apiClient } from './client'
 import type { PaginatedData, QueryParams } from '@/types'
 import type { StockItem, InventoryLog, StockChangeParams, InventoryOverviewParams, InventoryOverviewResult, InventoryContainer } from '@/types/inventory'
@@ -127,7 +128,7 @@ export const splitContainerApi = async (
 
 // ─── 补货建议与补货策略（文档 01）──────────────────────────────────────────────
 
-export interface ReplenishmentItem {
+export interface ReplenishmentItem extends ProcurementSupply {
   id: string
   productId: number
   productCode: string

@@ -1,0 +1,22 @@
+const { Router } = require('express')
+const { z } = require('zod')
+const { authMiddleware } = require('../../middleware/auth')
+const { loadRolePermissions } = require('../../middleware/loadRolePermissions')
+const { validateBody } = require('../../utils/route')
+const AppError = require('../../utils/AppError')
+const controller = require('./fulfillment.controller')
+const { definition } = require('./fulfillment.access')
+const router = Router()
+router.use(authMiddleware, loadRolePermissions)
+router.get('/issues', controller.list)
+router.use('/:type/:id', (req, res, next) => {
+  try { definition(req.params.type); if (!/^[1-9]\d*$/.test(req.params.id) || !Number.isSafeInteger(Number(req.params.id))) throw new AppError('无效单据编号', 400); next() } catch (error) { next(error) }
+})
+const reason = z.string().trim().min(1, '请填写原因或结果').max(500)
+const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable()
+router.get('/:type/:id', controller.get)
+router.post('/:type/:id/sync', controller.sync)
+router.put('/:type/:id/dates', validateBody(z.object({ itemId: z.number().int().nonnegative().default(0), date, processingDays: z.number().int().min(0).max(365).nullable().optional(), reason })), controller.setDates)
+router.post('/:type/:id/issues', validateBody(z.object({ title: z.string().trim().min(1).max(100), reason, ownerId: z.number().int().positive().nullable().optional(), dueDate: date.optional() })), controller.createIssue)
+router.patch('/:type/:id/issues/:issueId', validateBody(z.object({ action: z.enum(['claim', 'assign', 'progress', 'resolve', 'reopen']), version: z.number().int().positive(), ownerId: z.number().int().positive().nullable().optional(), result: reason.optional(), dueDate: date.optional() })), controller.changeIssue)
+module.exports = router

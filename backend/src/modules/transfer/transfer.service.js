@@ -76,7 +76,7 @@ async function findAll({ page=1, pageSize=20, keyword='', status=null, productId
   const scope = transferScopeFilter(scopeWarehouseIds, 'from_warehouse_id', 'to_warehouse_id')
   if (scope.sql) { whereExtra += scope.sql; params.push(...scope.params) }
   const where = `deleted_at IS NULL AND (order_no LIKE ? OR from_warehouse_name LIKE ? OR to_warehouse_name LIKE ?) ${whereExtra}`
-  const [rows]=await pool.query(`SELECT * FROM transfer_orders WHERE ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,[...params,ps,offset])
+  const [rows]=await pool.query(`SELECT * FROM transfer_orders WHERE ${where} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`,[...params,ps,offset])
   const [[{total}]]=await pool.query(`SELECT COUNT(*) AS total FROM transfer_orders WHERE ${where}`,params)
   // 只批量读取当前授权分页内的明细；PDA 在途单需逐行判断剩余出库计划。
   const itemsByOrder = new Map(rows.map(row => [Number(row.id), []]))

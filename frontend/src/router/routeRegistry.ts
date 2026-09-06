@@ -6,6 +6,8 @@ export type RouteComponent = LazyExoticComponent<ComponentType>
 export type RouteRegistryEntry = definitions.RouteRegistryEntry & { component: RouteComponent }
 export type RoutePatternEntry = definitions.RoutePatternEntry & { component: RouteComponent }
 
+const mergedPage = lazy(() => import('@/components/shared/MergedPage'))
+
 // 仅 ERP 渲染入口加载页面；工作区元数据不再把所有页面带入 PDA。
 const components: Record<definitions.RouteComponentKey, RouteComponent> = {
   DashboardPage: lazy(() => import('@/pages/dashboard')),
@@ -26,7 +28,7 @@ const components: Record<definitions.RouteComponentKey, RouteComponent> = {
   StockcheckPage: lazy(() => import('@/pages/stockcheck')),
   AbcClassPage: lazy(() => import('@/pages/stockcheck/abc')),
   DisposalPage: lazy(() => import('@/pages/disposal')),
-  ProcurementPlanListPage: lazy(() => import('@/pages/procurement')),
+  ProcurementPlanListPage: mergedPage,
   ProcurementPlanDetailPage: lazy(() => import('@/pages/procurement/detail')),
   TransferPage: lazy(() => import('@/pages/transfer')),
   TransferFormPage: lazy(() => import('@/pages/transfer/form')),
@@ -36,6 +38,7 @@ const components: Record<definitions.RouteComponentKey, RouteComponent> = {
   PickingWavesPage: lazy(() => import('@/pages/picking-waves')),
   CustomersPage: lazy(() => import('@/pages/customers')),
   CarriersPage: lazy(() => import('@/pages/carriers')),
+  CarrierAccountsPage: lazy(() => import('@/pages/carrier-accounts')),
   LogisticsPage: lazy(() => import('@/pages/logistics')),
   LogisticsDetailPage: lazy(() => import('@/pages/logistics/detail')),
   FreightReconciliationPage: lazy(() => import('@/pages/logistics/freight-reconciliation')),
@@ -53,7 +56,7 @@ const components: Record<definitions.RouteComponentKey, RouteComponent> = {
   SettingsPage: lazy(() => import('@/pages/settings')),
   BarcodePrintQueryPage: lazy(() => import('@/pages/settings/barcode-print-query')),
   OplogsPage: lazy(() => import('@/pages/oplogs')),
-  ReportsPage: lazy(() => import('@/pages/reports')),
+  ReportsPage: mergedPage,
   RoleWorkbenchPage: lazy(() => import('@/pages/reports/role-workbench')),
   FinanceDashboardPage: lazy(() => import('@/pages/finance/dashboard')),
   FinanceAccountsPage: lazy(() => import('@/pages/finance/accounts')),
@@ -74,13 +77,13 @@ const components: Record<definitions.RouteComponentKey, RouteComponent> = {
   AvgCostReconciliationPage: lazy(() => import('@/pages/reports/avg-cost-reconciliation')),
   ReconciliationPayablePage: lazy(() => import('@/pages/reports/reconciliation-payable')),
   ReconciliationReceivablePage: lazy(() => import('@/pages/reports/reconciliation-receivable')),
-  ProfitAnalysisPage: lazy(() => import('@/pages/reports/profit-analysis')),
-  KpiPage: lazy(() => import('@/pages/reports/kpi')),
-  ReplenishmentPage: lazy(() => import('@/pages/reports/replenishment')),
+  ProfitAnalysisPage: mergedPage,
+  KpiPage: mergedPage,
+  ReplenishmentPage: mergedPage,
   InventoryAgingPage: lazy(() => import('@/pages/reports/inventory-aging')),
-  WavePerformancePage: lazy(() => import('@/pages/reports/wave-performance')),
-  PdaAnomalyPage: lazy(() => import('@/pages/reports/pda-anomaly')),
-  WarehouseOpsPage: lazy(() => import('@/pages/reports/warehouse-ops')),
+  WavePerformancePage: mergedPage,
+  PdaAnomalyPage: mergedPage,
+  WarehouseOpsPage: mergedPage,
   PrintTemplatesPage: lazy(() => import('@/pages/settings/print-templates')),
   PrintTemplateEditorPage: lazy(() => import('@/pages/settings/print-templates/editor')),
   PrintersPage: lazy(() => import('@/pages/settings/printers')),

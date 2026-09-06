@@ -34,7 +34,7 @@ import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import DataTable from '@/components/shared/DataTable'
 import { FilterCard } from '@/components/shared/FilterCard'
 import TableActionsMenu, { type TableActionItem } from '@/components/shared/TableActionsMenu'
-import Pagination from '@/components/shared/Pagination'
+import ListSummary from '@/components/shared/ListSummary'
 import PageHeader from '@/components/shared/PageHeader'
 import { toast } from '@/lib/toast'
 import { formatDisplayDateTime } from '@/lib/dateTime'
@@ -51,7 +51,6 @@ const NO_WAREHOUSE = '__none__'
 export default function PdaDevicesPage() {
   const qc = useQueryClient()
   const [keyword, setKeyword] = useState('')
-  const [page, setPage] = useState(1)
   const [createOpen, setCreateOpen] = useState(false)
   const [form, setForm] = useState<{ deviceName: string; warehouseId: string }>({ deviceName: '', warehouseId: NO_WAREHOUSE })
   const [secretView, setSecretView] = useState<PdaDeviceWithSecret | null>(null)
@@ -59,8 +58,8 @@ export default function PdaDevicesPage() {
   const [resetTarget, setResetTarget] = useState<PdaDevice | null>(null)
 
   const { data, isLoading } = useQuery({
-    queryKey: ['pda-devices', page, keyword],
-    queryFn: () => listPdaDevicesApi({ page, pageSize: 20, keyword }),
+    queryKey: ['pda-devices', keyword],
+    queryFn: () => listPdaDevicesApi({ page: 1, pageSize: 20, keyword }),
   })
   const { data: warehouses } = useQuery({
     queryKey: ['warehouse-options'],
@@ -146,7 +145,7 @@ export default function PdaDevicesPage() {
           className="w-64"
           placeholder="搜索设备名称或设备码"
           value={keyword}
-          onChange={e => { setKeyword(e.target.value); setPage(1) }}
+          onChange={e => { setKeyword(e.target.value); }}
         />
       </FilterCard>
 
@@ -165,13 +164,7 @@ export default function PdaDevicesPage() {
       />
 
       {(data?.pagination?.total ?? 0) > 20 && (
-        <Pagination
-          page={page}
-          totalPages={Math.ceil((data?.pagination?.total ?? 0) / 20)}
-          total={data?.pagination?.total ?? 0}
-          unit="台"
-          onPageChange={setPage}
-        />
+        <ListSummary total={data?.pagination?.total ?? 0} unit="台" />
       )}
 
       {/* 登记新设备 */}
