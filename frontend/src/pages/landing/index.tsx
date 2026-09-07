@@ -25,6 +25,7 @@ import {
   Smartphone,
   X,
 } from "lucide-react";
+import SystemBrand from "@/components/shared/SystemBrand";
 import "./landing.css";
 import { landingUpdates } from "./updates";
 import { productScenes as scenes, capabilityGroups } from "./product-content";
@@ -41,9 +42,7 @@ const nav = [
 function Brand() {
   return (
     <span className="flow-brand">
-      <span className="flow-logo">
-        <Layers size={23} strokeWidth={2.4} />
-      </span>
+      <SystemBrand className="flow-logo" />
       极序 <b>Flow</b>
     </span>
   );

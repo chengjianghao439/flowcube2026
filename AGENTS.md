@@ -242,7 +242,7 @@ npm run test:permissions
 - DataTable 列宽采用独立调整：从全部业务列实际宽度取快照，勾选列不参与，只改变目标列，超出容器后横向滚动。表头分隔线支持拖动、双击适应内容及方向键微调，单列也可调整；恢复默认列宽保留用户列顺序。比例布局仅作为默认和旧设置兼容，手动调整后保存 widthUnit=px；恢复默认后回到页面原布局。拖动通过动画帧更新 colgroup/table，松手一次提交，不反复重绘明细；Escape、失焦、卸载及结构变化均取消预览、释放监听并恢复样式。普通重新渲染不得重载旧布局，默认存储路径绑定表格挂载页面。回归与验证见 `docs/table-column-resize-2026-09-06.md`。
 - 复用 DataTable、TableActionsMenu、QueryErrorState、finder、usePermission、useDirtyGuard、useInvalidate 等已有结构；keepAlive 表单在挂载/参数变化时重置，未保存内容有退出保护。
 - 桌面端判定使用运行时 `window.flowcubeDesktop`，不能用构建 flag 把浏览器误判成 Electron。
-- 系统品牌用于登录/PDA 门面，公司 Logo 用于 ERP 顶栏/单据打印；不混用。
+- 系统品牌采用已确认的蓝底双曲线 F；官网、ERP/PDA 登录页、PDA 首页通过 `SystemBrand` 复用本地哈希资源。网页 favicon/触屏图标、桌面程序/安装器、Android 普通/圆形/自适应图标与启动屏由 `scripts/generate-brand-icons.cjs` 从 `docs/branding/flow-icon-approved.png` 导出。公司 Logo 仍只用于 ERP 顶栏/单据打印，保持公司图优先及文字回退，不混用。素材、生成方式与验收见 `docs/brand-icons-2026-09-07.md`。
 - 用户术语沿用“批次、采购申请、滞销、存放时长、分批盘点、型号、供应商型号”，不为改文案变更权限码、路由或数据库列。
 - PDA 不做离线自动重放；不确定写入结果先用幂等回执/已有 `resolveServerState` 恢复路径核实。
 - 原生绑定相机扫码使用 `useCameraScanner.ts` 的既定本地解码路径，注意预览时 WebView 背景透明、权限引导和关闭清理。浏览器预览不能证明 APK 相机功能正常。
@@ -254,6 +254,7 @@ npm run test:permissions
 - HTML 单据模板 image 与 ZPL 标签分开；编辑器预览与打印渲染、旧 layout_json 默认值保持一致。
 - `main` 是发布来源，push main 触发检查与部署；浏览器、桌面发布前必须等待**实际待发布 SHA** 的 Tests 与 Security Scan 成功，旧 SHA/失败/取消/超时不放行。桌面手动 checkout_ref 也用实际 git HEAD，版本输入必须匹配其 package。PDA 还需同 SHA 浏览器部署成功；仅推 main 不等于桌面发版。
 - 发版必须读取 `release-flowcube` 技能。同步三端 package/lock、PDA versionName/versionCode 与 `backend/apk/version.json`；同版本重跑不应虚增版本号或发布时间。脚本用实际存在路径，不照搬旧 `.Codex/skills` 路径。
+- 桌面图标在 `desktop/build/`；Windows 保持 `signAndEditExecutable: true` 写入图标和元信息，并用 `signExecutable: false` 保持当前不签名策略，不能以关闭资源编辑代替关闭签名。Windows CI 打包后执行 `scripts/verify-desktop-icon.cjs` 校验实际 PE 内嵌图标摘要。
 - 生产安装包由 Windows CI 构建；迁移由 `scripts/server-update.sh` 部署链执行。不能直接改服务器代码，不能默认跳过发布门禁。
 - Docker 构建上下文由根 `.dockerignore` 排除真实环境/密钥、本机依赖、历史安装包、日志和工具目录；运行配置从部署环境注入。新增构建依赖需确认未误排除，不能为构建成功把真实 .env 或 node_modules 加回上下文。
 - GitHub runner 构建带 SHA 标签与 OCI revision 的 Linux amd64 镜像，通过 SSH 传输归档；生产禁止重新编译。部署在同一锁内固定 SHA、保存运行镜像 ID，检查空间与归档 SHA-256、加载并核对镜像 revision、等待 MySQL 健康、一次性容器迁移，再切换应用。产物校验/加载/迁移/本地或公网健康/页面门禁失败统一恢复旧应用镜像并检查健康；首次部署无旧版本要明确说明。数据库 DDL 不自动回滚，新迁移必须兼容旧代码；回退失败必须报人工恢复。部署门禁低磁盘时禁止清除回退镜像，直接失败。人工脚本入口要求显式 EXPECTED_COMMIT 并查询 GitHub 同 SHA 检查，推荐通过 workflow_dispatch 执行。

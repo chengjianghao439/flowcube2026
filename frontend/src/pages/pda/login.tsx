@@ -22,7 +22,7 @@ export default function PdaLoginPage() {
 
       {/* Logo */}
       <div className="mb-8 flex flex-col items-center gap-2">
-        <SystemBrand boxClassName="h-14 w-14 rounded-2xl shadow-lg shadow-primary/20" iconClassName="size-8" />
+        <SystemBrand boxClassName="h-14 w-14 rounded-2xl shadow-lg shadow-primary/20" />
         <h1 className="text-2xl font-bold tracking-tight text-foreground">极序 Flow</h1>
         <p className="text-sm text-muted-foreground">仓库作业终端</p>
       </div>

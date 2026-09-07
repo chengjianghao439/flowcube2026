@@ -1,7 +1,7 @@
 {
   "name": "flowcube-desktop",
   "private": true,
-  "version": "0.9.8",
+  "version": "0.9.9",
   "description": "极序 Flow 桌面客户端（Electron）",
   "main": "main.js",
   "scripts": {
@@ -35,7 +35,8 @@
       "preload.js",
       "lib/**/*.js",
       "lib/**/*.ps1",
-      ".git-build-sha"
+      ".git-build-sha",
+      "build/icon.png"
     ],
     "extraResources": [
       {
@@ -47,7 +48,7 @@
       }
     ],
     "win": {
-      "signAndEditExecutable": false,
+      "signAndEditExecutable": true,
       "target": [
         {
           "target": "nsis",
@@ -55,25 +56,31 @@
             "x64"
           ]
         }
-      ]
+      ],
+      "signExecutable": false,
+      "icon": "build/icon.ico"
     },
     "mac": {
       "target": [
         "dmg"
       ],
-      "category": "public.app-category.business"
+      "category": "public.app-category.business",
+      "icon": "build/icon.icns"
     },
     "linux": {
       "target": [
         "AppImage"
-      ]
+      ],
+      "icon": "build/icon.png"
     },
     "nsis": {
       "oneClick": false,
       "perMachine": true,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
+      "createStartMenuShortcut": true,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico"
     }
   }
 }

@@ -1,7 +1,7 @@
 {
-  "version": "0.9.8",
-  "versionCode": 116,
+  "version": "0.9.9",
+  "versionCode": 117,
   "filename": "app-release.apk",
-  "releaseNote": "- 新增顺丰、德邦月结直连和快递账号管理页，可在同一页面新增、修改、暂停、解绑账号，并保护已有业务记录不被删除。",
-  "publishedAt": "2026-09-06T11:56:56.839Z"
+  "releaseNote": "- 极序 Flow 启用蓝底双曲线 F 新图标，统一官网、登录页、PDA 首页及浏览器标签图标。",
+  "publishedAt": "2026-09-07T04:26:07.058Z"
 }

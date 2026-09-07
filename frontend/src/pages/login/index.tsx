@@ -30,7 +30,7 @@ export default function LoginPage() {
   return (
     <main className="grid min-h-screen bg-background text-foreground lg:grid-cols-[1fr_1fr]">
       <aside className="hidden flex-col justify-between border-r border-border bg-muted/30 p-12 lg:flex xl:p-16">
-        <div className="flex items-center gap-3"><SystemBrand boxClassName="h-10 w-10 rounded-lg" iconClassName="size-6" /><span className="text-xl font-semibold">极序 Flow</span></div>
+        <div className="flex items-center gap-3"><SystemBrand boxClassName="h-10 w-10 rounded-lg" /><span className="text-xl font-semibold">极序 Flow</span></div>
         <div className="max-w-lg space-y-8 py-12">
           <div><p className="mb-4 text-sm text-muted-foreground">ERP · 仓储与经营协同</p><h2 className="text-4xl font-semibold leading-tight">从订单到出库，<br />每一步都有据可查。</h2></div>
           <dl className="divide-y divide-border border-y border-border">
@@ -41,7 +41,7 @@ export default function LoginPage() {
       </aside>
       <section className="flex items-center justify-center px-8 py-12">
         <div className="w-full max-w-md">
-          <div className="mb-8 flex items-center gap-3 lg:hidden"><SystemBrand boxClassName="h-9 w-9 rounded-lg" iconClassName="size-5" /><span className="text-xl font-semibold">极序 Flow</span></div>
+          <div className="mb-8 flex items-center gap-3 lg:hidden"><SystemBrand boxClassName="h-9 w-9 rounded-lg" /><span className="text-xl font-semibold">极序 Flow</span></div>
           <h1 className="text-2xl font-semibold">登录工作区</h1>
           <p className="mb-8 mt-3 text-sm leading-6 text-muted-foreground">输入账号与密码，继续处理今天的业务。</p>
           {error && <p role="alert" className="mb-5 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">{error.message || '登录失败，请核对账号与密码'}</p>}

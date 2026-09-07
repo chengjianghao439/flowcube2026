@@ -90,7 +90,7 @@ export default function DashboardPage() {
     notified.current = true
     if (!('Notification' in window)) return
     const send = () => new Notification('极序 Flow 低库存预警', {
-      body: `${lowStock.length} 种商品库存不足，请及时补货`, icon: '/favicon.ico',
+      body: `${lowStock.length} 种商品库存不足，请及时补货`, icon: `${import.meta.env.BASE_URL}icons/icon-192.png?v=0.9.9`,
     })
     if (Notification.permission === 'granted') send()
     else if (Notification.permission !== 'denied') Notification.requestPermission().then(p => { if (p === 'granted') send() })

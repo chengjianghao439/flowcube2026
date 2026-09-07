@@ -374,6 +374,10 @@ jobs:
           ls -la
           ls -la release | head -30
 
+      - name: Verify embedded application icon
+        shell: bash
+        run: node scripts/verify-desktop-icon.cjs "desktop/release/win-unpacked/极序 Flow.exe"
+
       - name: Verify exe exists
         run: |
           Write-Host "=== Verify exe exists (desktop/release/*.exe) ==="

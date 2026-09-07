@@ -8,7 +8,7 @@
  *
  * 读取公司 Logo（GET /api/settings/logo，公开接口——未登录也显示）。
  * 有 Logo：渲染 <img>（imgClassName 控制高度，宽自适应 object-contain）；
- * 无 Logo / 图片加载失败：渲染默认「Layers 图标 + 品牌色圆角色块」回退，
+ * 无 Logo / 图片加载失败：渲染默认「极序 Flow 双曲线 F」回退，
  *   或传 hideFallbackIcon 退回空（不渲染图标的位置）；或传 text 渲染纯文字。
  *
  * 使用 React Query 共享查询键（['brand-logo']），多点位只发一次请求；
@@ -19,7 +19,7 @@
 
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Layers } from 'lucide-react'
+import SystemBrand from './SystemBrand'
 import { getLogoApi } from '@/api/settings'
 import { cn } from '@/lib/utils'
 
@@ -32,7 +32,7 @@ export default function BrandLogo(props: {
   imgClassName?: string
   /** 无 Logo 回退色块盒的样式（如 h-8 w-8 rounded-lg） */
   boxClassName?: string
-  /** 回退 Layers 图标的大小 */
+  /** 回退系统图标的图像样式 */
   iconClassName?: string
   className?: string
   /** 无 Logo 时不渲染回退图标（仅调用方文字保留，用于现状无图标的品牌位） */
@@ -71,8 +71,6 @@ export default function BrandLogo(props: {
   }
   if (hideFallbackIcon) return null
   return (
-    <span className={cn('inline-flex shrink-0 items-center justify-center bg-primary text-white', boxClassName, className)}>
-      <Layers className={cn('size-5', iconClassName)} />
-    </span>
+    <SystemBrand boxClassName={boxClassName} iconClassName={iconClassName} className={className} />
   )
 }
