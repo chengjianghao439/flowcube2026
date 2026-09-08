@@ -1,4 +1,4 @@
-# v0.9.11 全分支整合与发布记录
+# v0.9.12 全分支整合与发布记录
 
 ## 发布范围
 
@@ -18,11 +18,11 @@
 
 ## 版本与发布门禁
 
-目标三端 0.9.11，PDA versionCode 119。未新增数据库迁移。更新内容见 `docs/release-notes/0.9.11.md`，官网摘要同步。
+目标三端 0.9.12，PDA versionCode 120。未新增数据库迁移。更新内容见 `docs/release-notes/0.9.12.md`，官网摘要同步。
 
 正式发布须核对该 tag SHA 的 Tests、Security Scan、Deploy Browser App、Build Desktop Installer（tag）、Build PDA APK，及线上健康/更新清单/安装包摘要。Windows/Android 实机升级、打印走纸及快递真实订单不在本机软件验收范围内。
 
-发布提交 `15196363a7ad2bd10ec66eaeff651cd7497c021f` 已推送 main 与 v0.9.11 tag。Tests 在打印预览的管理员空库断言失败：前序退款测试已有销售单；本地按同顺序复现。Security Scan 与独立专项通过，浏览器部署被门禁阻止，未上线此版本。修复测试隔离后改发 v0.9.12，不复用 v0.9.11 tag；最终记录见 `docs/release-v0.9.12-result.md`。
+v0.9.11 的共享测试库空数据断言导致 CI 失败并阻止部署，保留其标签。修复仅调整测试隔离：未登录 401 独立验证，十类空数据回退由专属仓库与商品夹具验证；按退款测试 → 打印预览测试顺序在一次性测试库复现失败后验证通过。v0.9.12 正式发布验证进行中，最终证据保存到 `output/release-v0.9.12/`。
 
 ## 权限验收账号
 

@@ -5,7 +5,7 @@
  */
 export const landingUpdates = [
   {
-    version: "0.9.11",
+    version: "0.9.12",
     category: "标签打印与操作体验",
     title: "用真实数据排标签，常用操作更顺手。",
     description: "模板支持真实数据预览和更多标签字段，改善表格拖动与页面切换。",

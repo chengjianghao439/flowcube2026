@@ -271,7 +271,7 @@ npm run test:permissions
 - 桌面客户端拉取打印任务，按打印机绑定、client_id 和心跳派发，与登录账号无关；保留 claim 行锁/CAS、ack_token、超时回收。
 - HTML 单据模板 image 与 ZPL 标签分开；编辑器预览与打印渲染、旧 layout_json 默认值保持一致。
 - 条码标签 type 5–10 支持按需拖入商品身份、仓库、库位、批次/日期及对应货架/箱子信息，原默认布局不变。真实预览与打印共享取值；缺字段留空，容器取数复用调用事务，保存不固化样例业务值。字段清单与取值口径见 `docs/label-optional-fields-2026-09-09.md`。
-- 打印模板新建/编辑默认用对应类型最新可查看业务记录辅助排版与预览；取数同时要求模板查看与原业务查看权限，沿用仓库范围。无记录/无权限保留当前空白或既有占位，网络错误明确提示并可重试；真实记录缺字段不混入示例值。初始空画布有记录时提供可撤销的默认字段排版，不覆盖已有布局或后续编辑；保存仅包含字段与几何，不包含样例业务值。取数只读、不入队，类型/登录会话隔离，隐藏页不新取数。接口、类型映射与验证见 `docs/print-template-real-preview-2026-09-09.md`。
+- 打印模板新建/编辑默认用对应类型最新可查看业务记录辅助排版与预览；取数同时要求模板查看与原业务查看权限，沿用仓库范围。无记录/无权限保留当前空白或既有占位，网络错误明确提示并可重试；真实记录缺字段不混入示例值。初始空画布有记录时提供可撤销的默认字段排版，不覆盖已有布局或后续编辑；保存仅包含字段与几何，不包含样例业务值。空数据回归使用本测试新建仓库范围，不假设共享测试库全局为空。取数只读、不入队，类型/登录会话隔离，隐藏页不新取数。接口、类型映射与验证见 `docs/print-template-real-preview-2026-09-09.md`。
 - `main` 是发布来源，push main 触发检查与部署；浏览器、桌面发布前必须等待**实际待发布 SHA** 的 Tests 与 Security Scan 成功，旧 SHA/失败/取消/超时不放行。桌面手动 checkout_ref 也用实际 git HEAD，版本输入必须匹配其 package。PDA 还需同 SHA 浏览器部署成功；仅推 main 不等于桌面发版。
 - 发版必须读取 `release-flowcube` 技能。同步三端 package/lock、PDA versionName/versionCode 与 `backend/apk/version.json`；同版本重跑不应虚增版本号或发布时间。脚本用实际存在路径，不照搬旧 `.Codex/skills` 路径。
 - 桌面图标在 `desktop/build/`；Windows 保持 `signAndEditExecutable: true` 写入图标和元信息，并用 `signExecutable: false` 保持当前不签名策略，不能以关闭资源编辑代替关闭签名。Windows CI 打包后执行 `scripts/verify-desktop-icon.cjs` 校验实际 PE 内嵌图标摘要。
@@ -279,7 +279,7 @@ npm run test:permissions
 - Docker 构建上下文由根 `.dockerignore` 排除真实环境/密钥、本机依赖、历史安装包、日志和工具目录；运行配置从部署环境注入。新增构建依赖需确认未误排除，不能为构建成功把真实 .env 或 node_modules 加回上下文。
 - GitHub runner 构建带 SHA 标签与 OCI revision 的 Linux amd64 镜像，通过 SSH 传输归档；生产禁止重新编译。部署在同一锁内固定 SHA、保存运行镜像 ID，检查空间与归档 SHA-256、加载并核对镜像 revision、等待 MySQL 健康、一次性容器迁移，再切换应用。迁移前失败或已兼容数据库的健康/门禁失败恢复旧应用镜像并检查健康；迁移开始但未完整成功时保持后端停写。首次应用 240 记账契约、实际旧镜像缺少 `io.flowcube.party-ledger-contract=1` 标签，或停写后兼容性尚未核实时，失败保持停写；重试也不能恢复不传单位 ID 的旧后端，须核实迁移并启动兼容新后端。数据库 DDL 不自动回滚，首次部署无旧版本、回退或权限恢复失败均明确报告。部署门禁低磁盘时禁止清除回退镜像，直接失败。人工脚本入口要求显式 EXPECTED_COMMIT 并查询 GitHub 同 SHA 检查，推荐通过 workflow_dispatch 执行。
 - 发布辅助负载边界：Docker 请求由 `scripts/lib/runtime-guards.sh` 设时限；处于 CI 总时限内时共享信号范围，保证清理/回退可执行，宽限为 600 秒；页面验收顺序执行，每次 1 CPU / 1 GiB（不额外交换）/ 256 进程，容器内 14 分钟，超时/中断清理本次容器，按数据库兼容边界回退应用或保持停写。浏览器镜像须预装，部署前检查存在且 `--pull never`；磁盘不足直接失败，禁止门禁自动 prune。监控用独占锁拒绝重叠，Docker 5 秒、TLS 10 秒，失败必须记为异常。详见 `docs/DEPLOY.md` 和 `tests/deployment-resources.test.js`。这些改动已随 v0.9.3 于 2026-09-05 正式部署；候选 89 项部署/运维/CORS/客户端回归通过，同 SHA 的 Tests、Security 与实际生产页面/对账门禁均成功。实际容器资源限制、镜像提交号、线上清单与发布结果见 `docs/release-v0.9.3-result.md`。
-- 生产权限验收账号（2026-09-09 用户明确长期保留）：`smoke_limited`（ID 8）恢复启用，仅保留 dashboard.view / inbound.order.view 两项权限，发布完成后不删除。口令已轮换为随机值，原会话撤销；发布脚本通过 `SMOKE_LIMITED_USERNAME` / `SMOKE_LIMITED_PASSWORD` 安全配置读取，不再内置固定口令，也不自动恢复其他已删除账号或跳过权限验证。GitHub Secrets 在部署时注入门禁容器，缺少任一配置立即失败。该长期授权替代 v0.9.10 的一次性恢复约定，见 `docs/release-v0.9.11-result.md`。
+- 生产权限验收账号（2026-09-09 用户明确长期保留）：`smoke_limited`（ID 8）恢复启用，仅保留 dashboard.view / inbound.order.view 两项权限，发布完成后不删除。口令已轮换为随机值，原会话撤销；发布脚本通过 `SMOKE_LIMITED_USERNAME` / `SMOKE_LIMITED_PASSWORD` 安全配置读取，不再内置固定口令，也不自动恢复其他已删除账号或跳过权限验证。GitHub Secrets 在部署时注入门禁容器，缺少任一配置立即失败。该长期授权替代 v0.9.10 的一次性恢复约定，见 `docs/release-v0.9.12-result.md`。
 - 桌面更新清单由 `scripts/release-desktop.js` 写入 `/var/www/flowcube-downloads/latest.json`；`backend/downloads/` 已废弃。
 - 桌面更新使用可信 HTTPS 清单，由主进程重新取清单并绑定 version、URL、sha256；下载后及启动安装前均验摘要。无摘要不能自动安装，系统证书校验失败默认拒绝；取消按 IP/域名放行任意证书的旧行为。根组件消费更新事件，preload 保留订阅前待通知结果并支持清理监听。
 - PDA 已发布状态由不入 Git 的 `backend/apk/published-version.json` 指向唯一 APK；CI 先落安装包再原子替换清单。`backend/apk/version.json` 是构建目标/旧部署兼容清单，不能让浏览器 git reset 把未发布 APK 的版本提前对外公布。PDA 发布只更新挂载产物，不重置 Git 或重建后端；部署回退时将 version.json 原子恢复为已发布清单，兼容不识别 published-version.json 的旧镜像。
@@ -335,6 +335,6 @@ R2-01–08 的工作区实现已落地，修复前报告和原始证据保留于
 
 两轮审计修复已随三端0.9.7、PDA版本码115发布，发布SHA为`f755085908b9338e61ba48cf60c8f098c921abc9`。同SHA Tests、Security、浏览器、Windows tag和PDA工作流全部成功；实时就绪、两类更新清单及实际下载摘要核对通过。范围、证据与真机/外部配置限制见`docs/release-v0.9.7-result.md`及JSON。发布后的业务中心工作未包含在此SHA中，后续修改不得冒用本次绿灯。
 
-## 17. v0.9.11 全分支整合（2026-09-09）
+## 17. v0.9.12 全分支整合（2026-09-09）
 
-打印、表格操作、登录/履约与快递账号改动统一进入本次发布，三端 0.9.11、PDA 119；分支覆盖、冲突处理和验证边界见 `docs/release-v0.9.11-result.md`。原分支中的历史输出和本机凭据不作为发布源码；固定受限验收账号按本次最新授权长期保留；发布门禁凭据使用安全配置，不能恢复源码固定口令。
+打印、表格操作、登录/履约与快递账号改动统一进入本次发布，三端 0.9.12、PDA 120；分支覆盖、冲突处理和验证边界见 `docs/release-v0.9.12-result.md`。原分支中的历史输出和本机凭据不作为发布源码；固定受限验收账号按本次最新授权长期保留；发布门禁凭据使用安全配置，不能恢复源码固定口令。
