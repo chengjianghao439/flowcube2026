@@ -1,3 +1,5 @@
+import KeepAliveSection from '@/components/shared/KeepAliveSection'
+import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { useMemo, useState, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
@@ -24,27 +26,27 @@ export type StatementType = 1 | 2
 const MONTHLY_SCOPE = String(SETTLEMENT_TYPE.MONTHLY)
 
 /**
- * 供应商对账与客户对账读同一张 `payment_records`、走同一个接口，页面结构完全一致，
+ * 月结供应商对账与月结客户对账读同一张 `payment_records`、走同一个接口，页面结构完全一致，
  * 差异只有文案和跳转目标。因此只写一份实现，由 reconciliation-payable.tsx /
  * reconciliation-receivable.tsx 传 type 渲染成两个独立页面。
  */
 const COPY = {
   1: {
-    title: '供应商对账',
-    description: '月结供应商的应付账单：按账期核对、登记付款、导出 Excel，可从对账单直接打开采购单与收货单。现结供应商见「应付账款」。',
+    title: '月结供应商对账',
+    description: '月结供应商的应付账单：按账期核对、登记付款、导出 Excel，可从对账单直接打开采购单与收货单。现结供应商见「现结供应商账款」。',
     party: '供应商',
     paidCol: '已付',
     payPath: '/payments/payable',
-    payTitle: '应付账款',
+    payTitle: '现结供应商账款',
     statusOptions: [['1', '未付'], ['2', '部分付'], ['3', '已付清']] as const,
   },
   2: {
-    title: '客户对账',
-    description: '月结客户的应收账单：按账期核对、登记收款、导出 Excel，可从对账单直接打开销售单。现结客户见「应收账款」。',
+    title: '月结客户对账',
+    description: '月结客户的应收账单：按账期核对、登记收款、导出 Excel，可从对账单直接打开销售单。现结客户见「现结客户账款」。',
     party: '客户',
     paidCol: '已收',
     payPath: '/payments/receivable',
-    payTitle: '应收账款',
+    payTitle: '现结客户账款',
     statusOptions: [['1', '未收'], ['2', '部分收'], ['3', '已收清']] as const,
   },
 } as const
@@ -63,6 +65,7 @@ export default function ReconciliationView({ type }: { type: StatementType }) {
   const addTab = useWorkspaceStore(s => s.addTab)
   const copy = COPY[type]
   // 第一期：对账明细 + 收款核销。第二期会把「对账明细」换成汇总对账单。
+  const active = useActiveWorkspaceTab()
   const [tab, setTab] = useState<'statements' | 'receipts' | 'records'>('statements')
   // 查询条件统一收在弹窗里；不设默认日期，进来即全量（可在查询弹窗里自行按日期筛）
   const [query, setQuery] = useState<PaymentQueryValues>(EMPTY_PAYMENT_QUERY)
@@ -93,6 +96,7 @@ export default function ReconciliationView({ type }: { type: StatementType }) {
   const reconciliationQ = useQuery({
     queryKey: ['reconciliation', type, query],
     queryFn: () => getReconciliationApi({ ...exportParams, pageSize: 500, settlementTypes: MONTHLY_SCOPE }),
+    enabled: active && tab === 'records',
   })
 
   const { data, isLoading, isError, error, refetch } = reconciliationQ
@@ -130,7 +134,7 @@ export default function ReconciliationView({ type }: { type: StatementType }) {
     { key: 'orderNo', title: '关联单号', width: 170, render: v => <span className="text-doc-code">{String(v)}</span> },
     { key: 'partyName', title: copy.party, width: 160 },
     // 中间的源单号/收货单列已删：源单号与关联单号(采购单/销售单号)几乎总是重复，收货单又多为空；
-    // 供应商与客户对账都不再显示中间列，源单/收货单一律从操作列「原单」下拉进入。
+    // 供应商与月结客户对账都不再显示中间列，源单/收货单一律从操作列「原单」下拉进入。
     { key: 'totalAmount', title: '总金额', width: 110, align: 'right', render: v => <span className="tabular-nums font-medium">¥{Number(v).toFixed(2)}</span> },
     { key: 'paidAmount', title: copy.paidCol, width: 110, align: 'right', render: v => <span className="tabular-nums text-success">¥{Number(v).toFixed(2)}</span> },
     { key: 'balance', title: '余额', width: 110, align: 'right', render: v => <span className={`tabular-nums ${Number(v) > 0 ? 'font-semibold text-destructive' : 'text-muted-foreground'}`}>¥{Number(v).toFixed(2)}</span> },
@@ -219,10 +223,10 @@ export default function ReconciliationView({ type }: { type: StatementType }) {
         ))}
       </div>
 
-      {tab === 'statements' && <StatementPanel ref={statementRef} type={type} hideToolbar />}
-      {tab === 'receipts' && <ReceiptPanel ref={receiptRef} type={type} settlementTypes={MONTHLY_SCOPE} target="statement" hideToolbar />}
+      <KeepAliveSection active={tab === 'statements'}><StatementPanel ref={statementRef} type={type} hideToolbar /></KeepAliveSection>
+      <KeepAliveSection active={tab === 'receipts'}><ReceiptPanel ref={receiptRef} type={type} settlementTypes={MONTHLY_SCOPE} target="statement" hideToolbar /></KeepAliveSection>
 
-      {tab === 'records' && (<>
+      <KeepAliveSection active={tab === 'records'} className="space-y-4">
       <PaymentQueryBar query={query} onChange={setQuery} labels={queryLabels} />
 
       <PaymentQueryDialog
@@ -255,7 +259,7 @@ export default function ReconciliationView({ type }: { type: StatementType }) {
           emptyText="暂无对账数据"
         />
       )}
-      </>)}
+      </KeepAliveSection>
 
     </div>
   )

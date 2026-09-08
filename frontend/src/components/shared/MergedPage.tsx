@@ -4,6 +4,7 @@ import { TabPathContext } from '@/components/layout/TabPathContext'
 import { PageHeaderContext } from './PageHeaderContext'
 import { getMergedPageGroup, type MergedPageGroup } from '@/router/mergedPageGroups'
 import { usePermission } from '@/hooks/usePermission'
+import KeepAliveSection from './KeepAliveSection'
 
 // 每个视图独立分包；进入一个中心不会加载其余图表或触发其查询。
 const views: Record<string, LazyExoticComponent<ComponentType>> = {
@@ -49,7 +50,7 @@ function MergedPageViews({ group, ownPath }: { group: MergedPageGroup; ownPath: 
     {visibleViews.filter(view => paths[view.path]).map(view => {
       const Component = views[view.path]
       return (
-        <div key={view.path} hidden={pathname !== view.path}>
+        <KeepAliveSection key={view.path} active={pathname === view.path}>
           <TabPathContext.Provider value={paths[view.path]}>
             <PageHeaderContext.Provider value={{ title: group.title, navigation }}>
               <Suspense fallback={<p className="py-12 text-center text-muted-foreground">正在加载{view.label}…</p>}>
@@ -57,7 +58,7 @@ function MergedPageViews({ group, ownPath }: { group: MergedPageGroup; ownPath: 
               </Suspense>
             </PageHeaderContext.Provider>
           </TabPathContext.Provider>
-        </div>
+        </KeepAliveSection>
       )
     })}
   </>

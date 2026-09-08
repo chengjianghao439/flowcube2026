@@ -63,7 +63,7 @@ npm run release:prod
    - 等待同一 SHA、main 可信事件的 `Tests` 与 `Security Scan` 最新运行成功，失败/取消/超时不得部署
    - GitHub Actions 解析部署配置后 SSH 到服务器，在重置代码前获取部署锁，固定实际 SHA
    - GitHub runner 通过 `scripts/build-deploy-images.sh` 构建 Linux amd64 镜像、写 OCI revision 标签并打包；`server-update.sh` 保存旧运行镜像 ID，验证归档 SHA-256 / 镜像 revision，加载镜像、等 MySQL 健康、一次性容器迁移，再切换应用并执行本地/公网健康与页面门禁。生产不再编译
-   - 任何核心步骤失败统一恢复旧应用镜像并验证；DDL 不回滚，迁移须兼容旧代码
+   - 迁移前失败或数据库兼容的应用失败恢复旧镜像；迁移未完整成功、首次引入 240 记账契约后的本次失败均保持后端停写，核实迁移并启动兼容新后端。DDL 不自动回滚。
 
 2. `npm run release:tag-desktop`
    - 自动读取 `desktop/package.json` 的 `version`
@@ -177,20 +177,9 @@ DEPLOY_IMAGE_SHA256=<该CI归档的SHA256> bash scripts/server-update.sh
 
 ## 回滚
 
-正常 Docker 部署的失败回退由 server-update.sh 统一执行。旧镜像 ID 来自实际容器，不能以已被新构建覆盖的 latest 标签代替；门禁低磁盘时保留旧镜像并失败，不运行 image prune。恢复失败会明确要求人工处理；首次部署无旧镜像时只停止本次应用。旧镜像启动前，将 version.json 原子恢复为已发布清单以兼容旧 PDA API（因此失败回退后该文件可与 Git 目标版本不同）。数据库迁移不回滚，也不能仅通过恢复旧镜像撤销数据变更。
+正常 Docker 部署的失败回退由 server-update.sh 统一执行。迁移在停止 backend（含 scheduler/worker）后运行；临时开放的 MySQL 触发器创建权限在成功、失败和中断时恢复，恢复失败保持停写。迁移开始但未完整成功时不能恢复业务写入。首次应用 240 后，本次门禁失败也不得启动不传汇款单位 ID 的旧后端；停止写入后兼容性尚未核实的失败同样保持停写。实际旧镜像必须有 `io.flowcube.party-ledger-contract=1` 标签，重试不能仅凭数据库已有迁移记录放行；完成迁移核查后使用兼容新后端恢复，详见 `party-ledger-2026-09-08.md`。旧镜像 ID 来自实际容器，不能以已被新构建覆盖的 latest 标签代替；门禁低磁盘时保留旧镜像并失败，不运行 image prune。恢复失败会明确要求人工处理；首次部署无旧镜像时只停止本次应用。旧镜像启动前，将 version.json 原子恢复为已发布清单以兼容旧 PDA API（因此失败回退后该文件可与 Git 目标版本不同）。数据库迁移不回滚，也不能仅通过恢复旧镜像撤销数据变更。
 
-服务器应急回滚示例：
-
-```bash
-ssh flowcube-prod 'cd /opt/flowcube && git log --oneline -n 5'
-ssh flowcube-prod 'cd /opt/flowcube && git reset --hard <旧提交> && docker compose up -d --build backend frontend'
-```
-
-注意：
-
-- `git reset --hard` 属于回滚操作，只应在明确确认后执行。
-- 正常情况下优先用新提交修复，不用直接硬回滚。
-
+应急恢复先核实迁移记录、触发器完整性及目标镜像的数据库契约。优先通过新提交修复并重新运行正式发布流程；不得只恢复旧提交后启动不兼容代码，也不得在生产重新编译。
 
 ## 发布时的资源与超时边界（2026-09-05）
 

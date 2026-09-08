@@ -1,7 +1,10 @@
+import KeepAliveSection from '@/components/shared/KeepAliveSection'
+import { TabPathContext } from '@/components/layout/TabPathContext'
+import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
 import { ProductIdentityCells } from '@/components/shared/ProductIdentityCells'
 import { ImportSteps } from '@/components/shared/ImportSteps'
-import { useState, useRef } from 'react'
+import { useState, useRef, useContext } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Package, Warehouse, Lock, CheckCircle, X } from 'lucide-react'
 import { downloadExport } from '@/lib/exportDownload'
@@ -83,7 +86,10 @@ function findCatName(nodes: Category[], id: number): string | null {
 // ─── 主页面 ───────────────────────────────────────────────────────────────────
 
 export default function InventoryPage() {
-  const [searchParams, setSearchParams] = useSearchParams()
+  const active = useActiveWorkspaceTab()
+  const tabPath = useContext(TabPathContext)
+  const [locationSearchParams, setSearchParams] = useSearchParams()
+  const searchParams = tabPath ? new URLSearchParams(tabPath.split('?')[1] || '') : locationSearchParams
   const tab = (searchParams.get('tab') === 'logs' ? 'logs' : 'overview') as Tab
 
   // 总览参数
@@ -124,11 +130,11 @@ export default function InventoryPage() {
   const PAGE_SIZE = 20
   const { data: overview, isLoading: overviewLoading } = useInventoryOverview({
     page: 1, pageSize: PAGE_SIZE, keyword, warehouseId, categoryId,
-  })
+  }, active && tab === 'overview')
   const { data: logs, isLoading: logLoading } = useLogs({
     page: 1, pageSize: PAGE_SIZE, type: logType,
     productId: logProductId ?? undefined, warehouseId: logWarehouseId ?? undefined,
-  })
+  }, active && tab === 'logs')
   const overviewTotal = overview?.pagination?.total ?? 0
   const logsTotal = logs?.pagination?.total ?? 0
   const { data: warehouses } = useWarehousesActive()
@@ -273,8 +279,7 @@ export default function InventoryPage() {
         </div>
       )}
 
-      {tab === 'overview' && (
-        <>
+      <KeepAliveSection active={tab === 'overview'} className="space-y-4">
           {/* 统计卡片 */}
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             <StatCard icon={<Package className="h-5 w-5 text-muted-foreground" />} label="商品 SKU 数"
@@ -339,16 +344,13 @@ export default function InventoryPage() {
           <ListSummary total={overviewTotal} unit="条" />
 
           <ContainerDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} item={drawerItem} />
-        </>
-      )}
+      </KeepAliveSection>
 
-      {tab === 'logs' && (
-        <>
+      <KeepAliveSection active={tab === 'logs'} className="space-y-4">
           <DataTable columns={logCols} data={logs?.list ?? []} loading={logLoading} rowKey="id" />
 
           <ListSummary total={logsTotal} unit="条" />
-        </>
-      )}
+      </KeepAliveSection>
 
       {/* 出库弹窗 */}
       <Dialog open={opOpen} onOpenChange={v => !v && setOpOpen(false)}>

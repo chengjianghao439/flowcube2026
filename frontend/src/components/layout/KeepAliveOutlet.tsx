@@ -39,6 +39,7 @@ import {
 import { getHashRouterWindowLocation } from '@/router/hashLocation'
 import { TabPathContext } from './TabPathContext'
 import { useCompanyStore } from '@/store/companyStore'
+import { SectionVisibilityContext } from './SectionVisibilityContext'
 
 // ── 加载占位 ──────────────────────────────────────────────────────────────────
 function PageLoader() {
@@ -73,10 +74,12 @@ function TabPanel({ tabKey, path, isActive }: TabPanelProps) {
   return (
     // TabPathContext 向下传递该 Tab 自己的路径，供动态路由页面读取
     <TabPathContext.Provider value={path}>
+      <SectionVisibilityContext.Provider value={isActive}>
       <div
         key={tabKey}
         style={{ display: isActive ? 'block' : 'none' }}
         className="h-full overflow-y-auto"
+        data-workspace-scroll
       >
         <div className="p-6">
           {Comp ? (
@@ -93,6 +96,7 @@ function TabPanel({ tabKey, path, isActive }: TabPanelProps) {
           )}
         </div>
       </div>
+      </SectionVisibilityContext.Provider>
     </TabPathContext.Provider>
   )
 }

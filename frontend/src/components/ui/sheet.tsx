@@ -1,5 +1,6 @@
 "use client"
 
+import { useVisibleDisclosure } from '@/hooks/useVisibleDisclosure'
 import * as React from "react"
 import * as SheetPrimitive from "@radix-ui/react-dialog"
 import { cva, type VariantProps } from "class-variance-authority"
@@ -7,7 +8,10 @@ import { X } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
-const Sheet = SheetPrimitive.Root
+function Sheet(props: React.ComponentProps<typeof SheetPrimitive.Root>) {
+  const disclosure = useVisibleDisclosure(props)
+  return <SheetPrimitive.Root {...props} {...disclosure} />
+}
 
 const SheetTrigger = SheetPrimitive.Trigger
 

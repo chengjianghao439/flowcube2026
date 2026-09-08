@@ -37,12 +37,13 @@ if [[ "$ACTION" = stop ]]; then
 fi
 "${COMPOSE[@]}" up -d --wait --wait-timeout 150
 
+# 仅迁移进程使用管理员（binlog 下创建触发器所需）；运行账户不变。
 # 只对固定的独立开发库执行结构迁移，不改写现有 backend/.env。
 set -a
 source "$CONFIG"
 set +a
 cd "$ROOT"
-NODE_ENV=development DB_HOST=127.0.0.1 DB_PORT=3307 DB_NAME=flowcube_dev8 DB_USER=flowcube_dev \
-  DB_PASSWORD="$FLOWCUBE_DEV_MYSQL_PASSWORD" JWT_SECRET="$FLOWCUBE_DEV_JWT_SECRET" \
+NODE_ENV=development DB_HOST=127.0.0.1 DB_PORT=3307 DB_NAME=flowcube_dev8 DB_USER=root \
+  DB_PASSWORD="$FLOWCUBE_DEV_MYSQL_ROOT_PASSWORD" JWT_SECRET="$FLOWCUBE_DEV_JWT_SECRET" \
   npm --prefix backend run migrate
 echo 'MySQL 8 已就绪：127.0.0.1:3307 / flowcube_dev8。本命令只启动数据库并执行结构迁移；后端连接以 backend/.env 及运行中进程为准。'

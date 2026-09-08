@@ -17,7 +17,7 @@ function deployment(scenario) {
   for (const file of ['server-update.sh', 'lib/ops-common.sh']) fs.copyFileSync(path.join(root, 'scripts', file), path.join(dir, 'scripts', file))
   for (const file of ['lib/runtime-guards.sh']) if (fs.existsSync(path.join(root, 'scripts', file))) fs.copyFileSync(path.join(root, 'scripts', file), path.join(dir, 'scripts', file))
   fs.copyFileSync(path.join(root, 'docker-compose.yml'), path.join(dir, 'docker-compose.yml'))
-  fs.writeFileSync(path.join(dir, 'scripts/release-gate.sh'), '#!/bin/bash\n[[ "$DEPLOY_TEST_SCENARIO" != gate && "$DEPLOY_TEST_SCENARIO" != rollback_failure && "$DEPLOY_TEST_SCENARIO" != first_deploy && "$DEPLOY_TEST_SCENARIO" != legacy ]]\n')
+  fs.writeFileSync(path.join(dir, 'scripts/release-gate.sh'), '#!/bin/bash\n[[ "$DEPLOY_TEST_SCENARIO" != gate && "$DEPLOY_TEST_SCENARIO" != ledger_gate && "$DEPLOY_TEST_SCENARIO" != ledger_retry && "$DEPLOY_TEST_SCENARIO" != rollback_failure && "$DEPLOY_TEST_SCENARIO" != first_deploy && "$DEPLOY_TEST_SCENARIO" != legacy ]]\n')
   if (scenario === 'legacy') {
     fs.mkdirSync(path.join(dir, 'backend/apk'), { recursive: true })
     fs.writeFileSync(path.join(dir, 'backend/apk/version.json'), JSON.stringify({ version: '2.0.0', versionCode: 2 }))
@@ -39,7 +39,11 @@ if(cmd==='df'){console.log('Filesystem 1M-blocks Used Available Use% Mounted on\
 if(cmd==='curl'){console.log('<title>极序 Flow</title>');process.exit((s==='health'&&!fs.existsSync(rolled))||(s==='public'&&args.some(a=>a.startsWith('https://')))?22:0);}
 if(cmd==='docker') {
  const a=args.join(' ');
- if(args[0]==='image'&&args[1]==='inspect')console.log((s==='wrong-image'?'b':'a').repeat(40));
+ if(a.includes('SELECT @@GLOBAL.log_bin_trust_function_creators')) {if(s==='ledger_retry_pre_migration')process.exit(1);console.log('0');}
+ if(a.includes("table_name='db_migrations'"))console.log('1');
+ if(a.includes("filename='240_party_ledger_explicit_identity.sql'"))console.log(s==='ledger_gate'?'0':'1');
+ if(s==='restore_permission'&&a.includes('SET GLOBAL log_bin_trust_function_creators=0'))process.exit(1);
+ if(args[0]==='image'&&args[1]==='inspect')console.log(a.includes('io.flowcube.party-ledger-contract')?(s.startsWith('ledger_retry')?'':'1'):(s==='wrong-image'?'b':'a').repeat(40));
  if(s==='load'&&args[0]==='load')process.exit(1);
  if(a.startsWith('compose ps')&&s!=='first_deploy')console.log(args.at(-1)==='backend'?'old-backend-container':'old-frontend-container');
  if(args[0]==='inspect')console.log(args.at(-1).includes('backend')?'sha256:'+'1'.repeat(64):'sha256:'+'2'.repeat(64));
@@ -72,7 +76,7 @@ process.exit(0);
   } finally { fs.rmSync(dir, { recursive: true, force: true }) }
 }
 
-for (const scenario of ['load', 'mysql', 'migration', 'start', 'health', 'gate', 'public', 'lowdisk']) {
+for (const scenario of ['load', 'mysql', 'start', 'health', 'gate', 'public', 'lowdisk']) {
   test(`部署 ${scenario} 失败必须退出并恢复实际旧镜像`, () => {
     const result = deployment(scenario)
     assert.equal(result.status, 1, result.stderr)
@@ -85,11 +89,27 @@ for (const scenario of ['load', 'mysql', 'migration', 'start', 'health', 'gate',
   })
 }
 
+for (const scenario of ['migration','ledger_gate','ledger_retry','ledger_retry_pre_migration','restore_permission']) {
+  test(`${scenario} 失败必须保持停写，不能重启不兼容或半迁移的后端`, () => {
+    const result = deployment(scenario)
+    assert.equal(result.status,1,result.stderr)
+    assert.match(result.stderr,/保持.*停写/)
+    if (scenario !== 'ledger_retry_pre_migration') assert.ok(result.commands.some(c => c.join(' ').includes('SET GLOBAL log_bin_trust_function_creators=0')))
+    assert.ok(!result.commands.some(c => c.includes('--force-recreate')))
+    const migration = result.commands.findIndex(c => c.join(' ').includes('backend npm run migrate'))
+    if (scenario === 'migration') assert.ok(!result.commands.slice(migration+1).some(c => c.join(' ').includes('compose up')))
+    if (scenario === 'ledger_gate') assert.ok(result.commands.filter(c => c.join(' ').includes('compose stop -t 60 backend')).length>=2)
+  })
+}
+
 test('成功部署先迁移后替换应用，并通过门禁后结束', () => {
   const result = deployment('success')
   assert.equal(result.status, 0, result.stdout + result.stderr)
   const migrate = result.commands.findIndex(c => c[0] === 'docker' && c.slice(1, 3).join(' ') === 'compose run' && c.join(' ').includes('backend npm run migrate'))
   const replace = result.commands.findIndex(c => c.join(' ').includes('compose up -d --no-build backend frontend'))
+  const pause = result.commands.findIndex(c => c.join(' ').includes('compose stop -t 60 backend'))
+  const restore = result.commands.findIndex(c => c.join(' ').includes('SET GLOBAL log_bin_trust_function_creators=0'))
+  assert.ok(pause >= 0 && pause < migrate && restore > migrate && restore < replace, JSON.stringify(result.commands))
   assert.ok(migrate >= 0 && replace > migrate, JSON.stringify(result.commands))
   assert.ok(!result.commands.some(c => c.includes('--force-recreate')))
   assert.ok(!result.commands.some(c => c[0] === 'docker' && c.includes('build')), '生产不得编译')

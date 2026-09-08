@@ -130,7 +130,7 @@ const PRE_MERGE_VISIBLE_ORDER = [
 
 const DEFAULT_VISIBLE_ORDER = [...PRE_MERGE_VISIBLE_ORDER.slice(0, 4), 'board-workbench', ...PRE_MERGE_VISIBLE_ORDER.slice(4)]
 
-/** 业务阅读分区；每个注册组件只出现一次，区内保留用户保存的顺序。 */
+/** 推荐排版的业务分类；仅生成推荐顺序，不重排用户保存的布局。 */
 export const DASHBOARD_SECTIONS = [
   { id: 'focus', title: '今日重点', description: '待办、履约进度与需要优先处理的风险', widgetIds: [
     'kpi-pending-sale', 'kpi-shipped-today', 'kpi-receivable', 'kpi-approval-count',

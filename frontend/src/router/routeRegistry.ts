@@ -46,6 +46,7 @@ const components: Record<definitions.RouteComponentKey, RouteComponent> = {
   ReturnsPage: lazy(() => import('@/pages/returns')),
   PurchaseReturnFormPage: lazy(() => import('@/pages/returns/purchase/form')),
   SaleReturnFormPage: lazy(() => import('@/pages/returns/sale/form')),
+  PartyLedgerPage: lazy(() => import('@/pages/payments/party-ledger')),
   PayablePage: lazy(() => import('@/pages/payments/payable')),
   ReceivablePage: lazy(() => import('@/pages/payments/receivable')),
   UsersPage: lazy(() => import('@/pages/users')),

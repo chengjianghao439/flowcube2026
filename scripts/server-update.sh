@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 服务器只加载 CI 镜像、迁移和切换；失败统一恢复旧应用镜像并验证健康。
+# 服务器只加载 CI 镜像、迁移和切换；不安全的数据库回退保持停写。
 set -Eeuo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -24,6 +24,11 @@ APPLICATION_SWITCHED=0
 PREVIOUS_BACKEND_IMAGE=''
 PREVIOUS_FRONTEND_IMAGE=''
 MIGRATION_CONTAINER=''
+MIGRATION_TRUST_PREVIOUS=''
+MIGRATION_STARTED=0
+MIGRATION_COMPLETED=0
+LEDGER_COMPATIBILITY_CHANGED=0
+ROLLBACK_COMPATIBILITY_VERIFIED=1
 ROLLBACK_RESULT='应用容器未切换'
 
 wait_for_health() {
@@ -44,6 +49,16 @@ wait_for_frontend() {
   done
   echo '!! 前端响应检查超时' >&2
   return 1
+}
+
+# 创建触发器需要管理员提供短暂的迁移窗口；不授予应用 SUPER，不永久放宽配置。
+mysql_admin_sql() {
+  docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot --database="$MYSQL_DATABASE" --batch --skip-column-names -e "$1"' sh "$1"
+}
+restore_migration_permissions() {
+  [ -n "$MIGRATION_TRUST_PREVIOUS" ] || return 0
+  mysql_admin_sql "SET GLOBAL log_bin_trust_function_creators=$MIGRATION_TRUST_PREVIOUS" || return 1
+  MIGRATION_TRUST_PREVIOUS=''
 }
 
 rollback_deployment() {
@@ -94,7 +109,17 @@ fail_deploy() {
     DOCKER_COMMAND_TIMEOUT=20 docker rm -f "$MIGRATION_CONTAINER" >/dev/null 2>&1 \
       || echo '!! 迁移容器清理失败，需人工核对其状态与迁移记录' >&2
   fi
-  rollback_deployment || true
+  if ! restore_migration_permissions; then
+    echo '!! 迁移权限恢复失败，旧应用保持停写，需恢复 MySQL log_bin_trust_function_creators 后人工恢复服务' >&2
+    exit 1
+  fi
+  if [ "$ROLLBACK_COMPATIBILITY_VERIFIED" != '1' ] || { [ "$MIGRATION_STARTED" = '1' ] && [ "$MIGRATION_COMPLETED" != '1' ]; }; then
+    DOCKER_COMMAND_TIMEOUT=90 docker compose stop -t 60 backend \
+      || echo '!! 后端停止失败，须立即人工阻断写入' >&2
+    ROLLBACK_RESULT='保持业务停写：须完成并核实迁移后启动兼容的新后端，禁止恢复不兼容旧镜像；数据库未回滚'
+  else
+    rollback_deployment || true
+  fi
   echo "!! 部署失败：${reason}；${ROLLBACK_RESULT}" >&2
   dingtalk_send "$(read_dingtalk_webhook "$PROJECT_DIR")" "🔴 FlowCube 部署失败（$(ts)）：${reason}；${ROLLBACK_RESULT}"
   exit 1
@@ -153,10 +178,38 @@ if command -v docker >/dev/null 2>&1 && [ -f docker-compose.yml ]; then
   for service in backend frontend; do docker tag "flowcube-${service}:${expected}" "flowcube-${service}:latest"; done
   assert_expected_commit
   DOCKER_COMMAND_TIMEOUT=150 docker compose up -d --no-build --wait --wait-timeout 120 mysql
+  # 迁移 238 的历史结转需要一致的停写边界；backend 内含 scheduler/worker。
+  # 迁移前失败可以恢复旧服务；部分 DDL 或首次引入新记账契约后禁止旧后端恢复写入。
+  APPLICATION_SWITCHED=1
+  ROLLBACK_COMPATIBILITY_VERIFIED=0
+  echo '==> 暂停业务写入，建立数据库迁移窗口...'
+  DOCKER_COMMAND_TIMEOUT=90 docker compose stop -t 60 backend
+  migration_table_exists=$(mysql_admin_sql "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='db_migrations'")
+  [[ "$migration_table_exists" =~ ^[01]$ ]] || fail_deploy '无法核实数据库迁移记录'
+  ledger_compatible=0
+  if [ "$migration_table_exists" = '1' ]; then
+    ledger_compatible=$(mysql_admin_sql "SELECT COUNT(*) FROM db_migrations WHERE filename='240_party_ledger_explicit_identity.sql'")
+  fi
+  [[ "$ledger_compatible" =~ ^[01]$ ]] || fail_deploy '无法核实往来明细兼容状态'
+  if [ "$ledger_compatible" = '0' ]; then LEDGER_COMPATIBILITY_CHANGED=1; fi
+  # 上次迁移成功而页面门禁失败时，数据库已升级但停着的仍可能是旧镜像。
+  # 以实际回退镜像的契约标签复核，不能只看迁移记录就允许下一次回退。
+  if [ -n "$PREVIOUS_BACKEND_IMAGE" ]; then
+    previous_ledger_contract=$(docker image inspect -f '{{index .Config.Labels "io.flowcube.party-ledger-contract"}}' "$PREVIOUS_BACKEND_IMAGE")
+    if [ "$previous_ledger_contract" != '1' ]; then LEDGER_COMPATIBILITY_CHANGED=1; fi
+  fi
+  if [ "$LEDGER_COMPATIBILITY_CHANGED" = '0' ]; then ROLLBACK_COMPATIBILITY_VERIFIED=1; fi
+  migration_trust_candidate=$(mysql_admin_sql 'SELECT @@GLOBAL.log_bin_trust_function_creators')
+  [[ "$migration_trust_candidate" =~ ^[01]$ ]] || fail_deploy '无法核实 MySQL 迁移权限状态'
+  MIGRATION_TRUST_PREVIOUS=$migration_trust_candidate
+  mysql_admin_sql 'SET GLOBAL log_bin_trust_function_creators=1'
   echo '==> 用新镜像的一次性容器执行迁移...'
   MIGRATION_CONTAINER="flowcube-migrate-$$-$(date +%s)"
+  MIGRATION_STARTED=1
   DOCKER_COMMAND_TIMEOUT=300 docker compose run --rm --no-deps --name "$MIGRATION_CONTAINER" backend npm run migrate
+  MIGRATION_COMPLETED=1
   MIGRATION_CONTAINER=''
+  restore_migration_permissions
   assert_expected_commit
 
   echo '==> 切换 backend / frontend...'
@@ -183,6 +236,7 @@ if command -v docker >/dev/null 2>&1 && [ -f docker-compose.yml ]; then
   exit 0
 fi
 
+[ "${FLOWCUBE_MIGRATION_WRITES_PAUSED:-0}" = '1' ] || fail_deploy '非 Docker 部署须先停止业务服务和定时任务，确认停写后设置 FLOWCUBE_MIGRATION_WRITES_PAUSED=1；不会自动操作未知的进程管理器'
 echo '==> 非 Docker：安装依赖并迁移，进程重启由现有进程管理器负责'
 cd backend
 if [ -f package-lock.json ]; then npm ci --omit=dev; else npm install --omit=dev; fi

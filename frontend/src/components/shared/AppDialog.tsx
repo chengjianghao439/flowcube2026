@@ -40,7 +40,7 @@ import { useLayoutEffect, useState } from 'react'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { X } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { DialogPortal, DialogOverlay } from '@/components/ui/dialog'
+import { Dialog, DialogPortal, DialogOverlay } from '@/components/ui/dialog'
 import { useResizableDialog } from '@/hooks/useResizableDialog'
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -149,7 +149,7 @@ export function AppDialog({
   }, [open])
 
   return (
-    <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogPortal>
         {/* 半透明背景遮罩 */}
         <DialogOverlay />
@@ -205,6 +205,6 @@ export function AppDialog({
           {resizable && <ResizeHandle onMouseDown={handleResizeMouseDown} />}
         </DialogPrimitive.Content>
       </DialogPortal>
-    </DialogPrimitive.Root>
+    </Dialog>
   )
 }

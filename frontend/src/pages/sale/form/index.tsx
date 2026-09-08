@@ -1,3 +1,4 @@
+import KeepAliveSection from '@/components/shared/KeepAliveSection'
 import { OrderFulfillmentPanel } from '@/components/shared/OrderFulfillmentPanel'
 import { DocumentActivityPanel } from '@/components/shared/DocumentActivityPanel'
 import { SaleOrderItemsSection } from './components/SaleOrderItemsSection'
@@ -757,8 +758,7 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
         ))}
       </div>
 
-      {detailTab === 'info' && (
-        <>
+      <KeepAliveSection active={detailTab === 'info'} className="space-y-3"><>
           {/* 基础信息 */}
           <SectionCard title="基础信息" compact contentClassName="p-3">
             <div className="space-y-2 text-sm">
@@ -856,11 +856,9 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
               </dl>
             </div>
           </SectionCard>
-        </>
-      )}
+        </></KeepAliveSection>
 
-      {detailTab === 'progress' && (
-        <div className="card-base space-y-4 p-4">
+      <KeepAliveSection active={detailTab === 'progress'} className="space-y-3"><div className="card-base space-y-4 p-4">
           <OrderFulfillmentPanel key={order.id} type="sale" id={order.id} />
           {order.taskNo ? (
             <div className="space-y-4">
@@ -884,11 +882,9 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
           ) : (
             <p className="py-8 text-center text-sm text-muted-foreground">尚未创建仓库任务，订单状态为 {getSaleWorkflowStatus(order).label}</p>
           )}
-        </div>
-      )}
+        </div></KeepAliveSection>
 
-      {detailTab === 'scan' && (
-        <div className="card-base p-4">
+      <KeepAliveSection active={detailTab === 'scan'} className="space-y-3"><div className="card-base p-4">
           {order.taskNo ? (
             <DataTable
               columns={[
@@ -924,11 +920,9 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
           ) : (
             <p className="py-8 text-center text-sm text-muted-foreground">尚未创建仓库任务</p>
           )}
-        </div>
-      )}
+        </div></KeepAliveSection>
 
-      {detailTab === 'pack' && (
-        <div className="card-base p-4">
+      <KeepAliveSection active={detailTab === 'pack'} className="space-y-3"><div className="card-base p-4">
           {order.taskNo ? (
             <div className="space-y-4">
               {(() => {
@@ -984,10 +978,9 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
           ) : (
             <p className="py-8 text-center text-sm text-muted-foreground">尚未创建仓库任务</p>
           )}
-        </div>
-      )}
+        </div></KeepAliveSection>
 
-      {detailTab === 'log' && <DocumentActivityPanel type="sale" id={order.id} view="log" />}
+      <KeepAliveSection active={detailTab === 'log'} className="space-y-3"><DocumentActivityPanel type="sale" id={order.id} view="log" /></KeepAliveSection>
 
       {/* 底部安全间距 */}
       <div className="h-4" />

@@ -1,37 +1,10 @@
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const { CONTAINER_STATUS } = require('../../engine/containerEngine')
-const AppError = require('../../utils/AppError')
+const { assertPurchaseOrderOpen, assertPurchaseOrdersOpen } = require('./inbound-purchase-source')
 
 const TASK_STATUS = { 1: '待收货', 2: '收货中', 3: '待上架', 4: '已完成', 5: '已取消' }
 
 const genTaskNo = conn => generateDailyCode(conn, 'IT', 'inbound_tasks', 'task_no')
-
-async function assertPurchaseOrderOpen(conn, purchaseOrderId, actionLabel = '收货') {
-  if (!Number.isFinite(Number(purchaseOrderId)) || Number(purchaseOrderId) <= 0) return
-  const [[purchaseRow]] = await conn.query(
-    'SELECT id, order_no, status FROM purchase_orders WHERE id = ? AND deleted_at IS NULL FOR UPDATE',
-    [purchaseOrderId],
-  )
-  if (!purchaseRow) throw new AppError('关联采购单不存在', 404)
-  if (Number(purchaseRow.status) === 4) {
-    throw new AppError(`采购单 ${purchaseRow.order_no} 已取消，不能继续${actionLabel}`, 409)
-  }
-}
-
-/**
- * 校验收货订单涉及的所有采购单均未取消。混合采购单收货单的 inbound_tasks.purchase_order_id
- * 头字段为空，因此从 inbound_task_items 按明细归属的采购单逐一查，而非只看头字段。
- * receive()、putaway() 都要过这道校验，任何一处只看头字段都会在混单场景下漏检。
- */
-async function assertPurchaseOrdersOpen(conn, taskId, actionLabel = '收货') {
-  const [rows] = await conn.query(
-    'SELECT DISTINCT purchase_order_id FROM inbound_task_items WHERE task_id = ? ORDER BY purchase_order_id',
-    [taskId],
-  )
-  for (const row of rows) {
-    await assertPurchaseOrderOpen(conn, Number(row.purchase_order_id), actionLabel)
-  }
-}
 
 function parseJson(value) {
   if (!value) return null

@@ -1,10 +1,14 @@
+import { useVisibleDisclosure } from '@/hooks/useVisibleDisclosure'
 import * as React from "react"
 import * as SelectPrimitive from "@radix-ui/react-select"
 import { Check, ChevronDown, ChevronUp } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
-const Select = SelectPrimitive.Root
+function Select(props: React.ComponentProps<typeof SelectPrimitive.Root>) {
+  const disclosure = useVisibleDisclosure(props)
+  return <SelectPrimitive.Root {...props} {...disclosure} />
+}
 
 const SelectGroup = SelectPrimitive.Group
 

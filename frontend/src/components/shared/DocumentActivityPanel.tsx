@@ -13,10 +13,11 @@ export function DocumentActivityPanel({ type, id, view, extra }: { type: Documen
   const active = useActiveWorkspaceTab()
   const query = useQuery({ queryKey: ['document-activity', type, id], queryFn: ({ signal }) => getDocumentActivityApi(type, id, signal), enabled: id > 0 && active, staleTime: 0, refetchInterval: active ? 20_000 : false })
   if (query.isPending) return <p role="status" className="py-10 text-center text-sm text-muted-foreground">加载进度与记录…</p>
-  if (query.isError) return <div role="alert" className="space-y-3 py-8 text-center"><p className="text-sm text-destructive">{query.error.message || '记录加载失败'}</p><Button variant="outline" onClick={() => query.refetch()}>重新加载</Button></div>
+  if (query.isError && !query.data) return <div role="alert" className="space-y-3 py-8 text-center"><p className="text-sm text-destructive">{query.error.message || '记录加载失败'}</p><Button variant="outline" onClick={() => query.refetch()}>重新加载</Button></div>
   const data = query.data
   const sections = data.sections.filter(s => s.group === view)
   return <div className="space-y-3">
+    {query.isError && <p role="alert" className="text-sm text-destructive">刷新失败，当前显示上次记录；已填写内容保留，请重试。</p>}
     <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
       <p className="text-muted-foreground">当前状态：<span className="font-medium text-foreground">{data.status || '—'}</span></p>
       <Button size="sm" variant="outline" onClick={() => query.refetch()} disabled={query.isFetching}><RefreshCw className="mr-1.5 h-3.5 w-3.5" />刷新</Button>

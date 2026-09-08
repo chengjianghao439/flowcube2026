@@ -1,3 +1,5 @@
+import KeepAliveSection from '@/components/shared/KeepAliveSection'
+import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
@@ -38,6 +40,7 @@ function SummaryCard({ label, value, hint, tone, onClick }: { label: string; val
 }
 
 export default function ProfitAnalysisPage() {
+  const active = useActiveWorkspaceTab()
   const navigate = useNavigate()
   const addTab = useWorkspaceStore(s => s.addTab)
   const [tab, setTab] = useState<ProfitTab>('sale')
@@ -50,6 +53,7 @@ export default function ProfitAnalysisPage() {
 
   const profitQ = useQuery({
     queryKey: ['profit-analysis', applied],
+    enabled: active,
     queryFn: () => getProfitAnalysisApi({
       startDate: applied.startDate || undefined,
       endDate: applied.endDate || undefined,
@@ -180,7 +184,7 @@ export default function ProfitAnalysisPage() {
         ))}
       </div>
 
-      {tab === 'sale' && !isError && (
+      <KeepAliveSection active={tab === 'sale' && !isError}>
         <DataTable
           columns={saleColumns}
           data={data?.saleOrders ?? []}
@@ -188,9 +192,9 @@ export default function ProfitAnalysisPage() {
           emptyText="暂无销售毛利数据"
           onRowDoubleClick={row => openPath(row.path, row.orderNo)}
         />
-      )}
+      </KeepAliveSection>
 
-      {tab === 'product' && !isError && (
+      <KeepAliveSection active={tab === 'product' && !isError}>
         <DataTable
           columns={productColumns}
           data={data?.products ?? []}
@@ -198,9 +202,9 @@ export default function ProfitAnalysisPage() {
           emptyText="暂无商品毛利数据"
           onRowDoubleClick={row => openPath(row.path, row.name)}
         />
-      )}
+      </KeepAliveSection>
 
-      {tab === 'stock' && !isError && (
+      <KeepAliveSection active={tab === 'stock' && !isError}>
         <DataTable
           columns={stockColumns}
           data={data?.stockValue ?? []}
@@ -208,7 +212,7 @@ export default function ProfitAnalysisPage() {
           emptyText="暂无库存金额数据"
           onRowDoubleClick={row => openPath(row.path, row.name)}
         />
-      )}
+      </KeepAliveSection>
     </div>
   )
 }

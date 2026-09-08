@@ -1,5 +1,8 @@
+import KeepAliveSection from '@/components/shared/KeepAliveSection'
+import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
+import { confirmAction } from '@/lib/confirm'
 import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
-import { useContext, useState, useEffect, useMemo } from 'react'
+import { useContext, useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
@@ -24,7 +27,16 @@ import type { TableColumn } from '@/types'
 const ABC_TONE: Record<string, StatusTone> = { A: 'warning', B: 'info', C: 'draft' }
 const ABC_HINT: Record<string, string> = { A: '卖得快 · 盘得勤', B: '卖得中等', C: '卖得慢 · 盘得少' }
 
+function sameRules(a: CycleRule[], b: CycleRule[]) {
+  return a.length === b.length && a.every((r, i) => {
+    const other = b[i]
+    return r.abcClass === other.abcClass && Number(r.intervalDays) === Number(other.intervalDays)
+      && Number(r.batchLimit) === Number(other.batchLimit) && !!r.enabled === !!other.enabled
+  })
+}
+
 export default function AbcClassPage() {
+  const active = useActiveWorkspaceTab()
   const { can } = usePermission()
   const canManage = can(PERMISSIONS.STOCKCHECK_ABC_MANAGE)
   const { data: warehouses } = useWarehousesActive()
@@ -39,7 +51,7 @@ export default function AbcClassPage() {
   const abcQ = useQuery({
     queryKey: ['abc-classes', warehouseId],
     queryFn: () => getAbcListApi({ warehouseId }),
-    enabled: tab === 'abc' && warehouseId > 0,
+    enabled: active && tab === 'abc' && warehouseId > 0,
   })
   const recompute = useMutation({
     mutationFn: () => recomputeAbcApi({ warehouseId, metricType, windowDays }, { skipGlobalError: true }),
@@ -51,36 +63,42 @@ export default function AbcClassPage() {
   const rulesQ = useQuery({
     queryKey: ['cycle-rules', warehouseId],
     queryFn: () => getCycleRulesApi(warehouseId || undefined),
-    enabled: tab === 'rules',
+    enabled: active && tab === 'rules',
   })
-  const [draft, setDraft] = useState<CycleRule[]>([])
-  // 切仓/切数据时重置草稿（keepAlive 页面必须显式重置，避免残留上一仓的编辑）
-  useEffect(() => { if (rulesQ.data?.rules) setDraft(rulesQ.data.rules.map(r => ({ ...r }))) }, [rulesQ.data])
+  const [ruleDraft, setRuleDraft] = useState<{ warehouseId: number; baseline: CycleRule[]; rules: CycleRule[] }>({ warehouseId: 0, baseline: [], rules: [] })
+  const draft = ruleDraft.warehouseId === warehouseId ? ruleDraft.rules : []
+  const hasUnsavedRules = !sameRules(ruleDraft.rules, ruleDraft.baseline)
+  // 切仓重新取基线；同仓刷新只更新未编辑草稿，不能覆盖用户输入。
+  useEffect(() => {
+    if (!rulesQ.data?.rules) return
+    setRuleDraft(prev => {
+      if (prev.warehouseId === warehouseId && !sameRules(prev.rules, prev.baseline)) return prev
+      return { warehouseId, baseline: rulesQ.data.rules, rules: rulesQ.data.rules.map(r => ({ ...r })) }
+    })
+  }, [rulesQ.data, warehouseId])
   const saveRules = useMutation({
-    mutationFn: () => saveCycleRulesApi({ warehouseId, rules: draft.map(r => ({ abcClass: r.abcClass, intervalDays: r.intervalDays, batchLimit: r.batchLimit, enabled: r.enabled })) }, { skipGlobalError: true }),
-    onSuccess: () => { toast.success('分批盘点规则已保存'); qc.invalidateQueries({ queryKey: ['cycle-rules', warehouseId] }) },
+    mutationFn: (submitted: { warehouseId: number; rules: CycleRule[] }) => saveCycleRulesApi({ warehouseId: submitted.warehouseId, rules: submitted.rules.map(r => ({ abcClass: r.abcClass, intervalDays: r.intervalDays, batchLimit: r.batchLimit, enabled: r.enabled })) }, { skipGlobalError: true }),
+    onSuccess: (_result, submitted) => {
+      toast.success('分批盘点规则已保存')
+      qc.setQueryData(['cycle-rules', submitted.warehouseId], { rules: submitted.rules })
+      setRuleDraft(prev => prev.warehouseId === submitted.warehouseId ? { ...prev, baseline: submitted.rules } : prev)
+      qc.invalidateQueries({ queryKey: ['cycle-rules', submitted.warehouseId] })
+    },
     onError: (e: unknown) => toast.error((e as { message?: string })?.message || '保存失败'),
   })
   const patchDraft = (cls: string, patch: Partial<CycleRule>) =>
-    setDraft(prev => prev.map(r => r.abcClass === cls ? { ...r, ...patch } : r))
+    setRuleDraft(prev => ({ ...prev, rules: prev.rules.map(r => r.abcClass === cls ? { ...r, ...patch } : r) }))
 
-  // 未保存变更保护：仅规则 tab 且可编辑时，草稿偏离服务端基线即脏（关闭标签拦截）
+  // 未保存规则属于整个大页面，切换内部页签也保留关闭保护。
   const tabPath = useContext(TabPathContext) || ''
-  const isDirty = useMemo(() => {
-    if (tab !== 'rules' || !canManage) return false
-    const norm = (list: CycleRule[]) => list.map(r => ({ abcClass: r.abcClass, intervalDays: Number(r.intervalDays), batchLimit: Number(r.batchLimit), enabled: !!r.enabled }))
-    const base = norm(rulesQ.data?.rules ?? [])
-    const cur = norm(draft)
-    if (cur.length !== base.length) return true
-    return cur.some((r, i) => { const b = base[i]; return !b || r.intervalDays !== b.intervalDays || r.batchLimit !== b.batchLimit || r.enabled !== b.enabled })
-  }, [tab, canManage, draft, rulesQ.data])
+  const isDirty = canManage && hasUnsavedRules
   useDirtyGuard(tabPath, isDirty)
 
   // ── 按期盘点率看板（文档08）──
   const coverageQ = useQuery({
     queryKey: ['cycle-coverage'],
     queryFn: () => getCoverageApi({}),
-    enabled: tab === 'coverage',
+    enabled: active && tab === 'coverage',
   })
   const coverageRows = (coverageQ.data ?? []).filter(r => warehouseId <= 0 || r.warehouseId === warehouseId)
 
@@ -117,7 +135,16 @@ export default function AbcClassPage() {
   ]
 
   const warehouseSelect = (
-    <Select value={String(warehouseId)} onValueChange={(v) => setWarehouseId(Number(v))}>
+    <Select value={String(warehouseId)} onValueChange={(v) => {
+      const nextWarehouseId = Number(v)
+      if (nextWarehouseId === warehouseId) return
+      const changeWarehouse = () => {
+        setRuleDraft({ warehouseId: nextWarehouseId, baseline: [], rules: [] })
+        setWarehouseId(nextWarehouseId)
+      }
+      if (hasUnsavedRules) confirmAction({ title: '切换仓库', description: '当前规则有未保存的修改，切换仓库将丢弃这些修改。', confirmText: '丢弃并切换', onConfirm: changeWarehouse })
+      else changeWarehouse()
+    }}>
       <SelectTrigger className="h-9 w-52"><SelectValue /></SelectTrigger>
       <SelectContent>
         <SelectItem value="0">{tab === 'rules' ? '全局默认（所有仓库）' : '请选择仓库'}</SelectItem>
@@ -140,8 +167,7 @@ export default function AbcClassPage() {
         <Button variant={tab === 'coverage' ? 'default' : 'outline'} size="sm" onClick={() => setTab('coverage')}>按期盘点率</Button>
       </div>
 
-      {tab === 'abc' ? (
-        <>
+      <KeepAliveSection active={tab === 'abc'} className="space-y-4">
           <FilterCard>
             {warehouseSelect}
             <Select value={metricType} onValueChange={setMetricType}>
@@ -164,9 +190,8 @@ export default function AbcClassPage() {
           {warehouseId <= 0
             ? <div className="rounded-lg border border-dashed border-border p-10 text-center text-sm text-muted-foreground">请先选择一个仓库查看其商品分档（分档按仓划分）</div>
             : <DataTable columns={abcColumns} data={abcQ.data ?? []} loading={abcQ.isLoading} />}
-        </>
-      ) : tab === 'rules' ? (
-        <div className="space-y-4">
+      </KeepAliveSection>
+      <KeepAliveSection active={tab === 'rules'} className="space-y-4">
           <FilterCard>
             {warehouseSelect}
             <span className="text-sm text-muted-foreground">
@@ -206,20 +231,18 @@ export default function AbcClassPage() {
             </table>
           </div>
           <div className="flex justify-end">
-            <Button disabled={!canManage || saveRules.isPending || !draft.length} onClick={() => saveRules.mutate()}>
+            <Button disabled={!canManage || saveRules.isPending || !draft.length} onClick={() => saveRules.mutate({ warehouseId, rules: draft.map(r => ({ ...r })) })}>
               {saveRules.isPending ? '保存中…' : '保存规则'}
             </Button>
           </div>
-        </div>
-      ) : (
-        <div className="space-y-4">
+      </KeepAliveSection>
+      <KeepAliveSection active={tab === 'coverage'} className="space-y-4">
           <FilterCard>
             {warehouseSelect}
             <span className="text-sm text-muted-foreground">按「距上次盘点的天数超过该档位的周期」判定到期；按期盘点率 = 已按期盘 / 应盘。</span>
           </FilterCard>
           <DataTable columns={coverageColumns} data={coverageRows} loading={coverageQ.isLoading} rowKey="rowKey" emptyText="暂无按期盘点数据（先运行一次分档重算）" />
-        </div>
-      )}
+      </KeepAliveSection>
     </div>
   )
 }

@@ -1,3 +1,8 @@
+import { CustomerFinder } from '@/components/finder/CustomerFinder'
+import { SupplierFinder } from '@/components/finder/SupplierFinder'
+import { usePermission } from '@/hooks/usePermission'
+import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
+import { PERMISSIONS } from '@/lib/permission-codes'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
@@ -41,6 +46,7 @@ const money = (n: number) => `¥${Number(n).toFixed(2)}`
  * 小于汇款额（余额留在汇款单上，即预收款），也允许单笔只核销一部分（账款留部分付）。
  */
 export function ReceiptFormDialog({ open, onClose, type, settlementTypes, receipt, target = 'record' }: Props) {
+  const active = useActiveWorkspaceTab()
   const titleRef = useRef<HTMLHeadingElement>(null)
   const byStatement = target === 'statement'
   const qc = useQueryClient()
@@ -48,6 +54,9 @@ export function ReceiptFormDialog({ open, onClose, type, settlementTypes, receip
   const partyLabel = isPayableType(type) ? '供应商' : '客户'
   const actionLabel = isPayableType(type) ? '付款' : '收款'
 
+  const { can } = usePermission()
+  const [partyId, setPartyId] = useState<number | null>(null)
+  const [finderOpen, setFinderOpen] = useState(false)
   const [partyName, setPartyName] = useState('')
   const [amount, setAmount] = useState('')
   const [payDate, setPayDate] = useState(todayYmd())
@@ -60,6 +69,8 @@ export function ReceiptFormDialog({ open, onClose, type, settlementTypes, receip
   useEffect(() => {
     if (!open) return
     setPartyName(receipt?.partyName ?? '')
+    setPartyId(receipt?.partyId ?? null)
+    setFinderOpen(false)
     setAmount(receipt ? String(receipt.balance) : '')
     setPayDate(receipt?.paymentDate?.slice(0, 10) ?? todayYmd())
     setMethod(receipt?.method || '转账')
@@ -70,19 +81,19 @@ export function ReceiptFormDialog({ open, onClose, type, settlementTypes, receip
 
   // 往来方确定后才拉候选；status!==3 由前端过滤（接口的 status 只能传单值）
   const { data, isFetching } = useQuery({
-    queryKey: ['payments', 'settleable', { type, partyName, settlementTypes, target }],
+    queryKey: ['payments', 'settleable', { type, partyId, partyName, settlementTypes, target }],
     // 两个分支返回的 list 元素类型不同，显式收敛成联合类型交给下面的 candidates 归一
     queryFn: async (): Promise<{ list: (PaymentRecord | ReconciliationStatement)[] }> => byStatement
-      ? getStatementsApi({ type, pageSize: 500, keyword: partyName })
-      : getPaymentsApi({ type, pageSize: 500, keyword: partyName, settlementTypes }),
-    enabled: open && partyName.trim().length > 0,
+      ? getStatementsApi({ type, pageSize: 500, ...(partyId ? { partyId } : { keyword: partyName }) })
+      : getPaymentsApi({ type, pageSize: 500, ...(partyId ? { partyId } : { keyword: partyName }), settlementTypes }),
+    enabled: active && open && partyName.trim().length > 0,
   })
 
   // 收付款必须落到具体账户上，否则账户余额永远不准
   const { data: accounts } = useQuery({
     queryKey: ['finance-accounts', 'active'],
     queryFn: () => getActiveAccountsApi(),
-    enabled: open && !isContinue,
+    enabled: active && open && !isContinue,
   })
 
   /** 统一成 {key, label, balance, sub} 结构，下方列表不必区分两种目标 */
@@ -91,19 +102,19 @@ export function ReceiptFormDialog({ open, onClose, type, settlementTypes, receip
     if (byStatement) {
       return (raw as ReconciliationStatement[])
         // 只有已确认(2)的对账单能核销；草稿还能改明细，核了会对不上账
-        .filter(s => s.partyName === partyName.trim() && s.status === 2 && s.balance > 0)
+        .filter(s => (partyId != null || s.partyName === partyName.trim()) && s.status === 2 && s.balance > 0)
         .map(s => ({ key: s.id, label: s.statementNo, balance: s.balance, total: s.totalAmount,
                      sub: `${s.itemCount ?? 0} 笔明细`, statusName: s.statusName, tone: 'active' as const }))
     }
     return (raw as PaymentRecord[])
-      .filter(r => r.partyName === partyName.trim() && r.status !== 3)
+      .filter(r => (partyId != null || r.partyName === partyName.trim()) && r.status !== 3)
       // 应付未经财务确认不能出款，先挡在选择阶段，避免提交时才报错
       .filter(r => !(isPayableType(type) && r.confirmStatus === 0))
       .sort((a, b) => String(a.dueDate ?? '').localeCompare(String(b.dueDate ?? '')))
       .map(r => ({ key: r.id, label: r.orderNo, balance: r.balance, total: r.totalAmount,
                    sub: r.dueDate ? `到期 ${formatDisplayDate(r.dueDate)}` : '', statusName: r.statusName,
                    tone: (r.status === 2 ? 'active' : 'draft') as 'active' | 'draft' }))
-  }, [data, partyName, type, byStatement])
+  }, [data, partyId, partyName, type, byStatement])
 
   const totalAmount = Number(amount) || 0
   const allocatedTotal = useMemo(
@@ -136,7 +147,7 @@ export function ReceiptFormDialog({ open, onClose, type, settlementTypes, receip
       const key = createRequestKey('receipt')
       if (isContinue && receipt) return settleReceiptApi(receipt.id, allocations, key)
       return createReceiptApi({
-        type, partyName: partyName.trim(), amount: totalAmount,
+        type, ...(partyId ? { partyId } : {}), partyName: partyName.trim(), amount: totalAmount,
         paymentDate: payDate, method, accountId: Number(accountId),
         remark: remark || undefined, allocations,
       }, key)
@@ -175,10 +186,11 @@ export function ReceiptFormDialog({ open, onClose, type, settlementTypes, receip
             <Label>{partyLabel} *</Label>
             <Input
               value={partyName}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setPartyName(e.target.value); setAlloc({}) }}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setPartyName(e.target.value); setPartyId(null); setAlloc({}) }}
               placeholder={`输入${partyLabel}名称`}
               disabled={isContinue}
             />
+            {!isContinue && can(type === 2 ? PERMISSIONS.CUSTOMER_VIEW : PERMISSIONS.SUPPLIER_VIEW) && <Button type="button" size="sm" variant="outline" onClick={() => setFinderOpen(true)}>选择{partyLabel}</Button>}
           </div>
           <div className="space-y-1">
             <Label>{isContinue ? '可核销余额' : '汇款金额 *'}</Label>
@@ -302,6 +314,8 @@ export function ReceiptFormDialog({ open, onClose, type, settlementTypes, receip
           </Button>
         </DialogFooter>
       </DialogContent>
+      {type === 2 ? <CustomerFinder open={finderOpen} onClose={() => setFinderOpen(false)} onConfirm={party => { setPartyId(party.id); setPartyName(party.name); setAlloc({}); setFinderOpen(false) }} />
+        : <SupplierFinder open={finderOpen} onClose={() => setFinderOpen(false)} onConfirm={party => { setPartyId(party.id); setPartyName(party.name); setAlloc({}); setFinderOpen(false) }} />}
     </Dialog>
   )
 }

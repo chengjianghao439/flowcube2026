@@ -444,6 +444,12 @@ async function getPaymentsExportPayload(query) {
     status: query.status || '',
     keyword: query.keyword || '',
     settlementTypes: query.settlementTypes || null,
+    orderNo: query.orderNo || '', partyName: query.partyName || '',
+    partyId: query.partyId ?? null,
+    confirmStatus: query.confirmStatus ?? '',
+    startDate: query.startDate || '', endDate: query.endDate || '',
+    dueStart: query.dueStart || '', dueEnd: query.dueEnd || '',
+    minAmount: query.minAmount ?? '', maxAmount: query.maxAmount ?? '',
   })
   const isPayable = Number(query.type) === 1
   const sheetName = isPayable ? '应付账款' : '应收账款'

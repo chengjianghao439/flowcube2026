@@ -162,8 +162,7 @@ async function warehouseOps(scopeWarehouseIds = null) {
 
 async function roleWorkbench(scopeWarehouseIds = null, batch = {}) {
   const thresholds = await getInboundClosureThresholds()
-  const highRiskWindowHours = 24
-  const rows = await fetchRoleWorkbenchRows({ thresholds, highRiskWindowHours, scopeWarehouseIds, batchPage: batch.batchPage, batchSize: batch.batchSize })
+  const rows = await fetchRoleWorkbenchRows({ thresholds, scopeWarehouseIds, batchPage: batch.batchPage, batchSize: batch.batchSize })
 
   const sections = [
     {
@@ -206,7 +205,7 @@ async function roleWorkbench(scopeWarehouseIds = null, batch = {}) {
     {
       key: 'sale',
       title: '销售/客服',
-      description: '出库推进、价格风险和销售异常，优先看影响业务结果的单据。',
+      description: '出库推进和销售价格提醒，直接查看关联销售单。',
       cards: [
         {
           key: 'sale-pending-ship',
@@ -217,16 +216,6 @@ async function roleWorkbench(scopeWarehouseIds = null, batch = {}) {
           actionLabel: rows.pendingShipRows[0] ? '打开首单' : '查看销售单',
           accent: 'blue',
           items: rows.pendingShipRows.map(mapWorkbenchItem),
-        },
-        {
-          key: 'sale-anomaly',
-          title: '异常销售单',
-          description: '近期命中的销售相关高风险巡检问题。',
-          count: firstValue(rows.saleAnomalyCount, 'count'),
-          path: rows.saleAnomalyRows[0]?.path ?? '/reports/exception-workbench',
-          actionLabel: rows.saleAnomalyRows[0] ? '查看首条' : '打开异常工作台',
-          accent: 'rose',
-          items: rows.saleAnomalyRows.map(mapWorkbenchItem),
         },
         {
           key: 'sale-below-cost',
@@ -240,50 +229,13 @@ async function roleWorkbench(scopeWarehouseIds = null, batch = {}) {
         },
       ],
     },
-    {
-      key: 'management',
-      title: '管理角色',
-      description: '看收口进度、异常任务和高风险问题，优先盯住会拖慢闭环的点。',
-      cards: [
-        {
-          key: 'management-anomaly-task',
-          title: '异常任务',
-          description: '销售/仓库流程中的巡检异常与任务延迟。',
-          count: Math.max(firstValue(rows.saleAnomalyCount, 'count'), firstValue(rows.highRiskCount, 'count')),
-          path: '/reports/exception-workbench',
-          actionLabel: '打开异常工作台',
-          accent: 'rose',
-          items: rows.highRiskRows.map(mapWorkbenchItem),
-        },
-        {
-          key: 'management-stock',
-          title: '库存异常',
-          description: '负库存、负预占和可用库存为负的风险项。',
-          count: firstValue(rows.inventoryAnomalyCount, 'count'),
-          path: '/inventory/overview',
-          actionLabel: '查看库存总览',
-          accent: 'amber',
-          items: rows.inventoryAnomalyRows.map(mapWorkbenchItem),
-        },
-        {
-          key: 'management-high-risk',
-          title: '近期高风险问题',
-          description: '最近 24 小时内的高风险巡检结果。',
-          count: firstValue(rows.highRiskCount, 'count'),
-          path: '/reports/exception-workbench',
-          actionLabel: '打开异常工作台',
-          accent: 'slate',
-          items: rows.highRiskRows.map(mapWorkbenchItem),
-        },
-      ],
-    },
   ]
 
   const summary = {
     totalAlerts: sections.reduce((sum, section) => sum + section.cards.reduce((cardSum, card) => cardSum + card.count, 0), 0),
     warehouseCount: sections[0].cards.reduce((sum, card) => sum + card.count, 0),
     saleCount: sections[1].cards.reduce((sum, card) => sum + card.count, 0),
-    managementCount: sections[2].cards.reduce((sum, card) => sum + card.count, 0),
+    managementCount: 0,
   }
 
   const sortedSections = sortWorkbenchSections(sections)

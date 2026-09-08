@@ -1,3 +1,4 @@
+const { assertAllocationParty, resolveReceiptParty } = require('./party-identity')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { generateDailyCode } = require('../../utils/codeGenerator')
@@ -28,6 +29,7 @@ function fmtReceipt(row) {
     type: Number(row.type),
     typeName: Number(row.type) === 1 ? '付款单' : '收款单',
     partyName: row.party_name,
+    partyId: row.party_id ? Number(row.party_id) : null,
     amount: Number(row.amount),
     settledAmount: Number(row.settled_amount),
     balance: Number(row.balance),
@@ -56,7 +58,7 @@ async function expandStatementAllocation(conn, statementId, amount, receipt) {
   )
   if (!st) throw new AppError(`对账单 ${statementId} 不存在`, 404)
   if (Number(st.type) !== Number(receipt.type)) throw new AppError(`${st.statement_no} 与本单类型不符`, 400)
-  if (st.party_name !== receipt.party_name) {
+  if (receipt.party_id == null && st.party_name !== receipt.party_name) {
     throw new AppError(`${st.statement_no} 属于「${st.party_name}」，与本单往来方「${receipt.party_name}」不一致`, 400)
   }
   if (Number(st.status) === statementSvc.ST.DRAFT) {
@@ -154,7 +156,7 @@ async function applyAllocations(conn, receipt, allocations, operator) {
     if (Number(record.type) !== Number(receipt.type)) {
       throw new AppError(`${record.order_no} 与本${receipt.type === 1 ? '付款' : '收款'}单类型不符`, 400)
     }
-    if (record.party_name !== receipt.party_name) {
+    if (receipt.party_id == null && record.party_name !== receipt.party_name) {
       throw new AppError(`${record.order_no} 属于「${record.party_name}」，与本单往来方「${receipt.party_name}」不一致`, 400)
     }
     if (Number(record.status) === 3) {
@@ -169,6 +171,7 @@ async function applyAllocations(conn, receipt, allocations, operator) {
       throw new AppError(`${record.order_no} 核销 ¥${alloc.amount.toFixed(2)} 超出其余额 ¥${recordBalance.toFixed(2)}`, 400)
     }
 
+    await assertAllocationParty(conn, record.id, receipt)
     const newPaid = Number(record.paid_amount) + alloc.amount
     const newBalance = Number(record.total_amount) - newPaid
     const newStatus = newBalance <= 1e-6 ? 3 : 2
@@ -228,7 +231,7 @@ async function applyAllocations(conn, receipt, allocations, operator) {
  * 新建收付款单，并可同时核销若干账款（allocations 可为空 = 先挂账，之后再核销）。
  * 接 requestKey 幂等：核销直接改钱，连点两次或断网重试都不能重复扣。
  */
-async function create({ type, partyName, amount, paymentDate, method, accountId, remark, allocations = [] }, operator, requestKey) {
+async function create({ type, partyId, partyName, amount, paymentDate, method, accountId, remark, allocations = [] }, operator, requestKey) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
@@ -246,14 +249,20 @@ async function create({ type, partyName, amount, paymentDate, method, accountId,
     const total = Number(amount)
     if (!Number.isFinite(total) || total <= 0) throw new AppError('汇款金额必须大于 0', 400)
 
+    const resolvedPartyId = await resolveReceiptParty(conn, { type, partyId, partyName, allocations })
+    if (resolvedPartyId != null) {
+      const table = Number(type) === 2 ? 'sale_customers' : 'supply_suppliers'
+      const [[party]] = await conn.query(`SELECT name FROM ${table} WHERE id=?`, [resolvedPartyId])
+      if (party) partyName = party.name
+    }
     const prefix = Number(type) === 1 ? 'PY' : 'RC'
     const receiptNo = await generateDailyCode(conn, prefix, 'payment_receipts', 'receipt_no')
     const [r] = await conn.query(
       `INSERT INTO payment_receipts
-         (receipt_no,type,party_name,amount,settled_amount,balance,status,payment_date,method,account_id,remark,operator_id,operator_name)
-       VALUES (?,?,?,?,0,?,1,?,?,?,?,?,?)`,
+         (receipt_no,type,party_name,amount,settled_amount,balance,status,payment_date,method,account_id,remark,operator_id,operator_name,party_id)
+       VALUES (?,?,?,?,0,?,1,?,?,?,?,?,?,?)`,
       [receiptNo, Number(type), partyName, total, total, paymentDate, method || null, accountId || null,
-       remark || null, operator.operatorId, operator.operatorName],
+       remark || null, operator.operatorId, operator.operatorName, resolvedPartyId],
     )
 
     // 资金流水与收付款单同事务：钱记在哪个账户上必须和这笔业务同生共死。
@@ -272,7 +281,7 @@ async function create({ type, partyName, amount, paymentDate, method, accountId,
       }, operator)
     }
     const receipt = {
-      id: r.insertId, receipt_no: receiptNo, type: Number(type), party_name: partyName,
+      id: r.insertId, receipt_no: receiptNo, type: Number(type), party_name: partyName, party_id: resolvedPartyId,
       amount: total, settled_amount: 0, payment_date: paymentDate, method: method || null,
     }
 

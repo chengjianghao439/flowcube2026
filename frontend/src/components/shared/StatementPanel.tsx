@@ -1,3 +1,4 @@
+import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { ReportTable } from '@/components/shared/ReportTable'
 import { useEffect, useMemo, useState, forwardRef, useImperativeHandle } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -51,6 +52,7 @@ export const StatementPanel = forwardRef<StatementPanelHandle, Props>(function S
   { type, hideToolbar = false }, ref,
 ) {
   const qc = useQueryClient()
+  const active = useActiveWorkspaceTab()
   const isPayable = type === 1
   const partyLabel = isPayable ? '供应商' : '客户'
 
@@ -79,11 +81,12 @@ export const StatementPanel = forwardRef<StatementPanelHandle, Props>(function S
   const { data, isLoading } = useQuery({
     queryKey: ['payment-statements', { type, query }],
     queryFn: () => getStatementsApi({ ...exportParams, pageSize: 500 }),
+    enabled: active,
   })
   const { data: detail } = useQuery({
     queryKey: ['payment-statement-detail', detailId],
     queryFn: () => getStatementDetailApi(detailId!),
-    enabled: detailId != null,
+    enabled: active && detailId != null,
   })
 
   const invalidate = () => {
@@ -257,6 +260,7 @@ export const StatementPanel = forwardRef<StatementPanelHandle, Props>(function S
 function CreateStatementDialog({ open, onClose, type, onCreated }: {
   open: boolean; onClose: () => void; type: 1 | 2; onCreated: () => void
 }) {
+  const active = useActiveWorkspaceTab()
   const partyLabel = type === 1 ? '供应商' : '客户'
   const recent30d = getRelativeDateRange(30)
   const [partyName, setPartyName] = useState('')
@@ -276,7 +280,7 @@ function CreateStatementDialog({ open, onClose, type, onCreated }: {
   const { data: candidates, isFetching } = useQuery({
     queryKey: ['statement-candidates', applied],
     queryFn: () => getStatementCandidatesApi({ type, partyName: applied!.partyName, startDate: applied!.startDate, endDate: applied!.endDate }),
-    enabled: open && !!applied,
+    enabled: active && open && !!applied,
   })
 
   // 必须 useMemo：`candidates ?? []` 每次渲染都是新数组引用，会让下面依赖 list 的

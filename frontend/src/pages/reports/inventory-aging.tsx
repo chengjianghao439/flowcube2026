@@ -1,3 +1,5 @@
+import KeepAliveSection from '@/components/shared/KeepAliveSection'
+import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
@@ -19,6 +21,7 @@ function fmtQty(v: unknown): string {
 const fmtMoney = (v: unknown) => `¥${Number(v).toFixed(2)}`
 
 export default function InventoryAgingPage() {
+  const active = useActiveWorkspaceTab()
   const [warehouseId, setWarehouseId] = useState<number | null>(null)
   const [keyword, setKeyword] = useState('')
   const [staleDays, setStaleDays] = useState(90)
@@ -26,13 +29,14 @@ export default function InventoryAgingPage() {
   const [queryOpen, setQueryOpen] = useState(false)
 
   const agingQ = useQuery({
+    enabled: active,
     queryKey: ['inventory-aging', keyword, warehouseId, staleDays],
     queryFn: () => getInventoryAgingApi({ page: 1, pageSize: 500, keyword: keyword || undefined, warehouseId: warehouseId ?? undefined, staleDays }),
   })
   const expiryQ = useQuery({
     queryKey: ['expiry-alerts', warehouseId],
     queryFn: () => getExpiryAlertsApi({ warehouseId: warehouseId ?? undefined, warnDays: 30 }),
-    enabled: tab === 'expiry',
+    enabled: active && tab === 'expiry',
   })
 
   const buckets = agingQ.data?.buckets ?? []
@@ -127,9 +131,12 @@ export default function InventoryAgingPage() {
         ))}
       </div>
 
-      {tab === 'aging'
-        ? <DataTable columns={agingCols} data={list} loading={agingQ.isLoading} rowKey="id" emptyText="暂无库存数据" />
-        : <DataTable columns={expiryCols} data={expiryList} loading={expiryQ.isLoading} rowKey="id" emptyText="暂无临期 / 过期批次（仅批次管理商品参与效期预警）" />}
+      <KeepAliveSection active={tab === 'aging'}>
+        <DataTable columns={agingCols} data={list} loading={agingQ.isLoading} rowKey="id" emptyText="暂无库存数据" />
+      </KeepAliveSection>
+      <KeepAliveSection active={tab === 'expiry'}>
+        <DataTable columns={expiryCols} data={expiryList} loading={expiryQ.isLoading} rowKey="id" emptyText="暂无临期 / 过期批次（仅批次管理商品参与效期预警）" />
+      </KeepAliveSection>
 
       <InventoryAgingQueryDialog
         open={queryOpen}

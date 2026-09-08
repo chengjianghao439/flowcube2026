@@ -156,7 +156,7 @@ export function BoardWorkbench() {
   const { data, isLoading, error, refetch } = useRoleWorkbench()
   const navigate = useNavigate()
   const addTab = useWorkspaceStore(s => s.addTab)
-  const cards = (data?.sections ?? []).flatMap(s => s.cards).filter(c => c.count > 0).sort((a, b) => b.priorityRank - a.priorityRank).slice(0, 6)
+  const cards = (data?.sections ?? []).flatMap(s => s.cards).filter(c => c.count > 0).sort((a, b) => a.priorityRank - b.priorityRank).slice(0, 6)
   function go(path: string, title: string) { addTab({ key: path, title, path }); navigate(path) }
   return (
     <WidgetShell loading={isLoading} error={error} onRetry={() => void refetch()} title="我的待办" icon={ListTodo} tone="primary" scrollBody

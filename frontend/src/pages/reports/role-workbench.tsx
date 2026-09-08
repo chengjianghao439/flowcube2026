@@ -13,6 +13,8 @@ import { getNotificationCategoryLabel, getReminderNotifications } from '@/lib/no
 import { useRoleWorkbench } from '@/hooks/useDashboard'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { formatDisplayDateTime } from '@/lib/dateTime'
+import { usePermission } from '@/hooks/usePermission'
+import { canOpenWorkbenchPath } from '@/lib/workbench'
 
 function getReminderTone(item: NotificationItem) {
   if (item.type === 'danger') {
@@ -117,6 +119,7 @@ export default function RoleWorkbenchPage() {
   const navigate = useNavigate()
   const addTab = useWorkspaceStore(s => s.addTab)
   const isActiveTab = useActiveWorkspaceTab()
+  const { can } = usePermission()
 
   const workbenchQ = useRoleWorkbench()
 
@@ -129,12 +132,13 @@ export default function RoleWorkbenchPage() {
 
   // 必须 useMemo：`?? []` 每次渲染都是新数组引用，下面 reminderItems 的过滤会每次重跑
   const notificationItems = useMemo(() => notificationsQ.data?.items ?? [], [notificationsQ.data])
-  const reminderItems = useMemo(() => getReminderNotifications(notificationItems), [notificationItems])
+  const reminderItems = getReminderNotifications(notificationItems).filter(item => canOpenWorkbenchPath(item.path, can))
 
   const { data, isLoading, isError, error, refetch } = workbenchQ
   const sections = [...(data?.sections ?? [])].sort((a, b) => a.priorityRank - b.priorityRank)
 
   function openPath(path: string, title: string) {
+    if (!canOpenWorkbenchPath(path, can)) return
     addTab({ key: path, title, path })
     navigate(path)
   }

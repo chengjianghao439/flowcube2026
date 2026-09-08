@@ -1,5 +1,7 @@
+import KeepAliveSection from '@/components/shared/KeepAliveSection'
+import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { FilterCard } from '@/components/shared/FilterCard'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import { Button } from '@/components/ui/button'
@@ -26,25 +28,6 @@ export default function TaxFilingPage() {
     return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`
   })
   const [tab, setTab] = useState<'vat' | 'income'>('vat')
-  const [adjItem, setAdjItem] = useState('')
-  const [adjAmount, setAdjAmount] = useState('')
-
-  const taxType = tab === 'vat' ? 1 : 2
-  const { data: vat } = useTaxVat(companyId, period, !!period)
-  const { data: income } = useTaxIncome(companyId, period, !!period)
-  const { data: adjustments } = useTaxAdjustments(companyId, period, taxType, !!period)
-
-  const { mutate: addAdj, isPending } = useCreateTaxAdjustment(companyId, period, tab)
-  const { mutate: removeAdj } = useDeleteTaxAdjustment(companyId, period, tab)
-
-  const adjColumns: TableColumn<TaxAdjustment>[] = [
-    { key: 'period', title: '期间', width: 100, render: v => <span className="text-doc-code">{String(v)}</span> },
-    { key: 'adjustItem', title: '调整项' },
-    { key: 'amount', title: '金额', width: 120, align: 'right', render: v => <span className={`tabular-nums ${Number(v) !== 0 ? 'text-amber-600 font-medium' : ''}`}>{money(Number(v))}</span> },
-    { key: 'remark', title: '备注', render: v => String(v || '—') },
-    { key: 'id', title: '操作', width: 80, render: (_, r) => <Button size="sm" variant="ghost" className="text-destructive" onClick={() => removeAdj(r.id)}>删除</Button> },
-  ]
-
   return (
     <div className="space-y-4">
       <PageHeader
@@ -62,6 +45,56 @@ export default function TaxFilingPage() {
         </div>
       </FilterCard>
 
+      <KeepAliveSection active={tab === 'vat'}>
+        <TaxReport companyId={companyId} period={period} tab="vat" />
+      </KeepAliveSection>
+      <KeepAliveSection active={tab === 'income'}>
+        <TaxReport companyId={companyId} period={period} tab="income" />
+      </KeepAliveSection>
+    </div>
+  )
+}
+
+// 固定税种实例持有自己的草稿，异步回执只更新提交所属的实例。
+function TaxReport({ companyId, period, tab }: { companyId: number; period: string; tab: 'vat' | 'income' }) {
+  const active = useActiveWorkspaceTab()
+  const [adjItem, setAdjItem] = useState('')
+  const [adjAmount, setAdjAmount] = useState('')
+  const draftRevision = useRef(0)
+
+  const taxType = tab === 'vat' ? 1 : 2
+  const { data: vat } = useTaxVat(companyId, period, active && tab === 'vat' && !!period)
+  const { data: income } = useTaxIncome(companyId, period, active && tab === 'income' && !!period)
+  const { data: adjustments } = useTaxAdjustments(companyId, period, taxType, active && !!period)
+
+  const { mutate: addAdj, isPending } = useCreateTaxAdjustment(companyId, period, tab)
+  const { mutate: removeAdj } = useDeleteTaxAdjustment(companyId, period, tab)
+
+  function submitAdjustment() {
+    const submittedRevision = draftRevision.current
+    addAdj({ adjustItem: adjItem, amount: Number(adjAmount) }, {
+      onSuccess: () => {
+        toast.success('调整项已保存')
+        // 用户可以在请求期间继续编辑；旧回执只清理尚未改动的提交版本。
+        if (draftRevision.current !== submittedRevision) return
+        draftRevision.current += 1
+        setAdjItem('')
+        setAdjAmount('')
+      },
+      onError: (e: Error) => toast.error(e.message),
+    })
+  }
+
+  const adjColumns: TableColumn<TaxAdjustment>[] = [
+    { key: 'period', title: '期间', width: 100, render: v => <span className="text-doc-code">{String(v)}</span> },
+    { key: 'adjustItem', title: '调整项' },
+    { key: 'amount', title: '金额', width: 120, align: 'right', render: v => <span className={`tabular-nums ${Number(v) !== 0 ? 'text-amber-600 font-medium' : ''}`}>{money(Number(v))}</span> },
+    { key: 'remark', title: '备注', render: v => String(v || '—') },
+    { key: 'id', title: '操作', width: 80, render: (_, r) => <Button size="sm" variant="ghost" className="text-destructive" onClick={() => removeAdj(r.id)}>删除</Button> },
+  ]
+
+  return (
+    <>
       {tab === 'vat' ? (
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="space-y-2">
@@ -78,12 +111,9 @@ export default function TaxFilingPage() {
             <div className="rounded-lg border border-border">
               <div className="border-b border-border bg-muted/40 px-4 py-2 text-sm font-medium">税会差异调整（增值税）</div>
               <div className="flex gap-2 p-3">
-                <Input placeholder="调整项，如：视同销售" value={adjItem} onChange={e => setAdjItem(e.target.value)} className="h-9" />
-                <Input placeholder="金额" type="number" value={adjAmount} onChange={e => setAdjAmount(e.target.value)} className="h-9 w-28 text-right" />
-                <Button size="sm" disabled={!adjItem.trim() || isPending} onClick={() => addAdj({ adjustItem: adjItem, amount: Number(adjAmount) }, {
-                  onSuccess: () => { toast.success('调整项已保存'); setAdjItem(''); setAdjAmount('') },
-                  onError: (e: Error) => toast.error(e.message),
-                })}>添加</Button>
+                <Input placeholder="调整项，如：视同销售" value={adjItem} onChange={e => { draftRevision.current += 1; setAdjItem(e.target.value) }} className="h-9" />
+                <Input placeholder="金额" type="number" value={adjAmount} onChange={e => { draftRevision.current += 1; setAdjAmount(e.target.value) }} className="h-9 w-28 text-right" />
+                <Button size="sm" disabled={!adjItem.trim() || isPending} onClick={submitAdjustment}>添加</Button>
               </div>
             </div>
             <DataTable columns={adjColumns} data={adjustments ?? []} rowKey="id" emptyText="无调整项" />
@@ -107,18 +137,15 @@ export default function TaxFilingPage() {
             <div className="rounded-lg border border-border">
               <div className="border-b border-border bg-muted/40 px-4 py-2 text-sm font-medium">税会差异调整（所得税）</div>
               <div className="flex gap-2 p-3">
-                <Input placeholder="调整项，如：业务招待费调增" value={adjItem} onChange={e => setAdjItem(e.target.value)} className="h-9" />
-                <Input placeholder="金额" type="number" value={adjAmount} onChange={e => setAdjAmount(e.target.value)} className="h-9 w-28 text-right" />
-                <Button size="sm" disabled={!adjItem.trim() || isPending} onClick={() => addAdj({ adjustItem: adjItem, amount: Number(adjAmount) }, {
-                  onSuccess: () => { toast.success('调整项已保存'); setAdjItem(''); setAdjAmount('') },
-                  onError: (e: Error) => toast.error(e.message),
-                })}>添加</Button>
+                <Input placeholder="调整项，如：业务招待费调增" value={adjItem} onChange={e => { draftRevision.current += 1; setAdjItem(e.target.value) }} className="h-9" />
+                <Input placeholder="金额" type="number" value={adjAmount} onChange={e => { draftRevision.current += 1; setAdjAmount(e.target.value) }} className="h-9 w-28 text-right" />
+                <Button size="sm" disabled={!adjItem.trim() || isPending} onClick={submitAdjustment}>添加</Button>
               </div>
             </div>
             <DataTable columns={adjColumns} data={adjustments ?? []} rowKey="id" emptyText="无调整项" />
           </div>
         </div>
       )}
-    </div>
+    </>
   )
 }

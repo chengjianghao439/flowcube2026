@@ -220,7 +220,7 @@ async function removeItem(id, recordId) {
 
 async function findAll({
   page = 1, pageSize = 20, type = '', status = '', keyword = '',
-  statementNo = '', partyName = '', customerId = null,
+  statementNo = '', partyName = '', customerId = null, partyId = null,
   startDate = '', endDate = '', minAmount = '', maxAmount = '',
 } = {}) {
   const { page: p, pageSize: ps, offset } = normalizePagination({ page, pageSize })
@@ -243,6 +243,19 @@ async function findAll({
       WHERE ci.statement_id=s.id AND (co.customer_id IS NULL OR co.customer_id<>?)
     )`)
     params.push(id, id)
+  }
+  if (partyId != null) {
+    const id = Number(partyId), side = Number(type)
+    if (![1,2].includes(side) || !Number.isSafeInteger(id) || id < 1) throw new AppError('往来单位参数无效',400)
+    const table = side === 2 ? 'sale_orders' : 'purchase_orders'
+    const column = side === 2 ? 'customer_id' : 'supplier_id'
+    conds.push(`EXISTS(SELECT 1 FROM reconciliation_statement_items ci
+      JOIN payment_records cp ON cp.id=ci.record_id AND cp.type=?
+      JOIN ${table} co ON co.id=cp.order_id WHERE ci.statement_id=s.id AND co.${column}=?)
+      AND NOT EXISTS(SELECT 1 FROM reconciliation_statement_items ci
+      LEFT JOIN payment_records cp ON cp.id=ci.record_id AND cp.type=?
+      LEFT JOIN ${table} co ON co.id=cp.order_id WHERE ci.statement_id=s.id AND (co.${column} IS NULL OR co.${column}<>?))`)
+    params.push(side,id,side,id)
   }
   if (status) { conds.push('s.status=?'); params.push(Number(status)) }
   const kw = String(keyword || '').trim()

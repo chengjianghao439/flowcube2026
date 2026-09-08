@@ -1,6 +1,7 @@
 const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { buildDueDateSql, normalizeSettlementType } = require('../../constants/settlementType')
 const { compareAndSetStatus } = require('../../utils/statusTransition')
+const { assertPurchaseSettlementSources } = require('./inbound-purchase-source')
 
 /**
  * 重算并 upsert 某采购单的应付。
@@ -25,6 +26,7 @@ async function recomputePurchasePayable(conn, purchaseOrderId) {
     [poId],
   )
   if (!po) return
+  await assertPurchaseSettlementSources(conn, poId)
   // 聚合必须走当前读（FOR UPDATE），不能用快照读。否则在默认 REPEATABLE READ 下会 lost-update：
   // 同一采购单的多张收货单并发上架末箱、各自触发本函数时，事务的 read view 早在 putaway 前段
   // （非锁定 SELECT）就已固定，此处快照 SUM 看不到并发事务刚提交的另一张收货单 audit_status=1，

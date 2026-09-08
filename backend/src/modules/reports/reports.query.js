@@ -396,23 +396,13 @@ async function fetchWarehouseOpsRows(scopeWarehouseIds = null) {
   }
 }
 
-async function fetchRoleWorkbenchRows({ thresholds, highRiskWindowHours, scopeWarehouseIds = null, batchPage = 1, batchSize = 5 }) {
+async function fetchRoleWorkbenchRows({ thresholds, scopeWarehouseIds = null, batchPage = 1, batchSize = 5 }) {
   const take = Math.min(200, Math.max(1, Math.floor(Number(batchSize) || 5)))
   const offset = Math.max(0, Math.floor(Number(batchPage) || 1) - 1) * take
-  const inventoryDisplayProjectionSql = getInventoryDisplayProjectionSql()
   const tWh = scopeFilter(scopeWarehouseIds, 't.warehouse_id')
   const oWh = scopeFilter(scopeWarehouseIds, 'o.warehouse_id')
-  const ipWh = scopeFilter(scopeWarehouseIds, 'ip.warehouse_id')
   // print_failure / waiting_putaway 经容器关联收货任务，用任务仓库过滤
   const cWh = scopeFilter(scopeWarehouseIds, 't.warehouse_id')
-  const sWh = scopeFilter(scopeWarehouseIds, 's.warehouse_id')
-  const healthScope = Array.isArray(scopeWarehouseIds) ? ` AND (
-    (related_table='sale_orders' AND EXISTS(SELECT 1 FROM sale_orders hd WHERE hd.id=related_id AND hd.warehouse_id IN (?) AND hd.deleted_at IS NULL)) OR
-    (related_table='inbound_tasks' AND EXISTS(SELECT 1 FROM inbound_tasks hd WHERE hd.id=related_id AND hd.warehouse_id IN (?) AND hd.deleted_at IS NULL)) OR
-    (related_table='warehouse_tasks' AND EXISTS(SELECT 1 FROM warehouse_tasks hd WHERE hd.id=related_id AND hd.warehouse_id IN (?) AND hd.deleted_at IS NULL)) OR
-    (related_table='inventory_stock' AND EXISTS(SELECT 1 FROM inventory_stock hd WHERE hd.id=related_id AND hd.warehouse_id IN (?)))
-  )` : ''
-  const healthScopeParams = healthScope ? Array.from({ length: 4 }, () => scopeWarehouseIds.length ? scopeWarehouseIds : [-1]) : []
   return {
     pendingReceiveCount: await fetchOne(
       `SELECT COUNT(*) AS count
@@ -521,34 +511,6 @@ async function fetchRoleWorkbenchRows({ thresholds, highRiskWindowHours, scopeWa
        LIMIT ${take} OFFSET ${offset}`,
       oWh.params,
     ),
-    saleAnomalyCount: await fetchOne(
-      `SELECT COUNT(DISTINCT related_id) AS count
-       FROM system_health_logs
-       WHERE created_at >= NOW() - INTERVAL ? HOUR
-         AND severity IN ('high', 'danger')
-         AND related_table = 'sale_orders'${healthScope}`,
-      [highRiskWindowHours, ...healthScopeParams],
-    ),
-    saleAnomalyRows: await fetchMany(
-      `SELECT id,
-              related_id AS saleId,
-              CONCAT(check_type, IF(related_id IS NULL, '', CONCAT(' #', related_id))) AS title,
-              message AS subtitle,
-              CASE
-                WHEN related_id IS NOT NULL THEN CONCAT('/sale/', related_id)
-                ELSE '/reports/exception-workbench'
-              END AS path,
-              severity AS badge,
-              DATE_FORMAT(created_at, '%m-%d %H:%i') AS hint,
-              created_at AS createdAt
-       FROM system_health_logs
-       WHERE created_at >= NOW() - INTERVAL ? HOUR
-         AND severity IN ('high', 'danger')
-         AND related_table = 'sale_orders'${healthScope}
-       ORDER BY created_at DESC,id DESC
-       LIMIT ${take} OFFSET ${offset}`,
-      [highRiskWindowHours, ...healthScopeParams],
-    ),
     belowCostCount: await fetchOne(
       `SELECT COUNT(DISTINCT o.id) AS count
        FROM sale_orders o
@@ -581,93 +543,6 @@ async function fetchRoleWorkbenchRows({ thresholds, highRiskWindowHours, scopeWa
        ORDER BY SUM((p.cost_price - soi.unit_price) * soi.quantity) DESC,o.id DESC
        LIMIT ${take} OFFSET ${offset}`,
       oWh.params,
-    ),
-    inventoryAnomalyCount: await fetchOne(
-      `SELECT COUNT(*) AS count
-       FROM (
-         SELECT CONCAT('neg_on_hand-', ((ip.product_id * 1000000) + ip.warehouse_id)) AS issue_key
-         FROM ${inventoryDisplayProjectionSql} ip
-         WHERE ip.quantity < 0${ipWh.sql}
-         UNION ALL
-         SELECT CONCAT('neg_reserved-', s.id)
-         FROM inventory_stock s
-         WHERE s.reserved < 0${sWh.sql}
-         UNION ALL
-         SELECT CONCAT('reserved_exceeds-', ((ip.product_id * 1000000) + ip.warehouse_id))
-         FROM ${inventoryDisplayProjectionSql} ip
-         WHERE ip.quantity < ip.reserved${ipWh.sql}
-       ) x`,
-      [...ipWh.params, ...sWh.params, ...ipWh.params],
-    ),
-    inventoryAnomalyRows: await fetchMany(
-      `SELECT * FROM (
-         SELECT ((ip.product_id * 1000000) + ip.warehouse_id) AS id,
-                p.name AS title,
-                CONCAT('展示库存 ', ip.quantity, '，预占 ', ip.reserved) AS subtitle,
-                '/inventory/overview' AS path,
-                '库存异常' AS badge,
-                '展示投影库存为负' AS hint,
-                NOW() AS createdAt,
-                1 AS sort_rank
-         FROM ${inventoryDisplayProjectionSql} ip
-         INNER JOIN product_items p ON p.id = ip.product_id
-         WHERE ip.quantity < 0${ipWh.sql}
-         UNION ALL
-         SELECT s.id,
-                p.name AS title,
-                CONCAT('展示库存 ', s.quantity, '，预占 ', s.reserved) AS subtitle,
-                '/inventory/overview' AS path,
-                '库存异常' AS badge,
-                '预占 projection 为负' AS hint,
-                s.updated_at AS createdAt,
-                2 AS sort_rank
-         FROM inventory_stock s
-         INNER JOIN product_items p ON p.id = s.product_id
-         WHERE s.reserved < 0${sWh.sql}
-         UNION ALL
-         SELECT ((ip.product_id * 1000000) + ip.warehouse_id) AS id,
-                p.name AS title,
-                CONCAT('展示库存 ', ip.quantity, '，预占 ', ip.reserved) AS subtitle,
-                '/inventory/overview' AS path,
-                '库存异常' AS badge,
-                '展示可用库存为负' AS hint,
-                NOW() AS createdAt,
-                3 AS sort_rank
-         FROM ${inventoryDisplayProjectionSql} ip
-         INNER JOIN product_items p ON p.id = ip.product_id
-         WHERE ip.quantity < ip.reserved${ipWh.sql}
-       ) t
-       ORDER BY sort_rank ASC, createdAt DESC,id ASC
-       LIMIT ${take} OFFSET ${offset}`,
-      [...ipWh.params, ...sWh.params, ...ipWh.params],
-    ),
-    highRiskCount: await fetchOne(
-      `SELECT COUNT(*) AS count
-       FROM system_health_logs
-       WHERE created_at >= NOW() - INTERVAL ? HOUR
-         AND severity IN ('high', 'danger', 'fix_failed')${healthScope}`,
-      [highRiskWindowHours, ...healthScopeParams],
-    ),
-    highRiskRows: await fetchMany(
-      `SELECT id,
-              CONCAT(check_type, IF(related_id IS NULL, '', CONCAT(' #', related_id))) AS title,
-              message AS subtitle,
-              CASE
-                WHEN related_table = 'sale_orders' AND related_id IS NOT NULL THEN CONCAT('/sale/', related_id)
-                WHEN related_table = 'inbound_tasks' AND related_id IS NOT NULL THEN CONCAT('/inbound-tasks/', related_id)
-                WHEN related_table = 'warehouse_tasks' AND related_id IS NOT NULL THEN '/reports/exception-workbench'
-                WHEN related_table = 'inventory_stock' THEN '/inventory/overview'
-                ELSE '/reports/exception-workbench'
-              END AS path,
-              severity AS badge,
-              DATE_FORMAT(created_at, '%m-%d %H:%i') AS hint,
-              created_at AS createdAt
-       FROM system_health_logs
-       WHERE created_at >= NOW() - INTERVAL ? HOUR
-         AND severity IN ('high', 'danger', 'fix_failed')${healthScope}
-       ORDER BY created_at DESC,id DESC
-       LIMIT ${take} OFFSET ${offset}`,
-      [highRiskWindowHours, ...healthScopeParams],
     ),
   }
 }

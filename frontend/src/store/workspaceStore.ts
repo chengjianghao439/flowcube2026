@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { PATH_TITLES } from '@/router/routeDefinitions'
 import { getMergedPageGroup } from '@/router/mergedPageGroups'
 import { buildWorkspaceTabRegistrationFromPath } from '@/router/workspaceRouteMeta'
 export { PATH_TITLES } from '@/router/routeDefinitions'
@@ -41,6 +42,8 @@ interface WorkspaceState {
 
 /** 旧快捷入口与持久化标题同步新名称，不改其他单据的自定义标题。 */
 function currentTabTitle(path: string, fallback: string): string {
+  const base = path.split(/[?#]/)[0]
+  if (['/payments/payable','/payments/receivable','/reports/reconciliation/payable','/reports/reconciliation/receivable'].includes(base)) return PATH_TITLES[base]
   return getMergedPageGroup(path)?.title
     ?? (path.split(/[?#]/)[0] === '/reports/role-workbench' ? '待办中心' : fallback)
 }

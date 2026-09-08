@@ -1,3 +1,5 @@
+const ledgerSvc = require('./party-ledger.service')
+const ledger = async (req,res,next) => { try { return successResponse(res, await ledgerSvc.findLedger(req.query), '查询成功') } catch (e) { next(e) } }
 const svc = require('./payments.service')
 const receiptSvc = require('./payment-receipts.service')
 const stmtSvc = require('./reconciliation-statements.service')
@@ -32,7 +34,7 @@ const statementUnlock = async(req,res,next)=>{ try{return successResponse(res,aw
 const statementRemoveItem = async(req,res,next)=>{ try{return successResponse(res,await stmtSvc.removeItem(+req.params.id,+req.params.recordId),'已移出对账单')}catch(e){next(e)} }
 
 module.exports = {
-  list, create, pay, entries, confirm, settlementDetail, aging,
+  ledger, list, create, pay, entries, confirm, settlementDetail, aging,
   receiptList, receiptDetail, receiptCreate, receiptSettle,
   statementList, statementCandidates, statementDetail, statementCreate,
   statementConfirm, statementUnlock, statementRemoveItem,

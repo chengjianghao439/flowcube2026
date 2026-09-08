@@ -28,6 +28,7 @@ router.get('/receipts/:id',  requirePermission(PERMISSIONS.PAYMENT_VIEW), vParam
 router.post('/receipts',     requirePermission(PERMISSIONS.PAYMENT_EXECUTE), validateBody(z.object({
   type: z.number().int().min(1).max(2),
   partyName: z.string().min(1, '往来方不能为空').max(100),
+  partyId: z.number().int().positive().optional(),
   amount: z.number().positive('汇款金额必须大于 0'),
   paymentDate: z.string().min(1, '请选择汇款日期'),
   method: z.string().max(50).optional(),
@@ -58,6 +59,8 @@ router.delete('/statements/:id/items/:recordId', requirePermission(PERMISSIONS.P
   vParams(z.object({ id: z.coerce.number().int().positive(), recordId: z.coerce.number().int().positive() })), ctrl.statementRemoveItem)
 
 // 账龄分析（as-of 今天，应收/应付分桶敞口 + Top 往来方）。静态路径，注册在 '/:id/...' 动态路由之前
+router.get('/party-ledger', requirePermission(PERMISSIONS.PAYMENT_VIEW), ctrl.ledger)
+
 router.get('/aging', requirePermission(PERMISSIONS.PAYMENT_VIEW), ctrl.aging)
 
 // 列表（含合计）

@@ -1,3 +1,4 @@
+import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { ReportTable } from '@/components/shared/ReportTable'
 import { useState, forwardRef, useImperativeHandle } from 'react'
 import { useQuery } from '@tanstack/react-query'
@@ -50,6 +51,7 @@ export interface ReceiptPanelHandle {
 export const ReceiptPanel = forwardRef<ReceiptPanelHandle, Props>(function ReceiptPanel(
   { type, settlementTypes, target = 'record', hideToolbar = false }, ref,
 ) {
+  const active = useActiveWorkspaceTab()
   const isPayable = type === 1
   const actionLabel = isPayable ? '付款' : '收款'
   const partyLabel = isPayable ? '供应商' : '客户'
@@ -80,11 +82,12 @@ export const ReceiptPanel = forwardRef<ReceiptPanelHandle, Props>(function Recei
   const { data, isLoading } = useQuery({
     queryKey: ['payment-receipts', { type, query }],
     queryFn: () => getReceiptsApi({ ...exportParams, pageSize: 500 }),
+    enabled: active,
   })
   const { data: detail } = useQuery({
     queryKey: ['payment-receipt-detail', detailId],
     queryFn: () => getReceiptDetailApi(detailId!),
-    enabled: detailId != null,
+    enabled: active && detailId != null,
   })
 
   const handleExport = () => downloadExport('/export/payment-receipts', exportParams)

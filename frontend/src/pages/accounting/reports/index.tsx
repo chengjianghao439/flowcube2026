@@ -1,3 +1,4 @@
+import KeepAliveSection from '@/components/shared/KeepAliveSection'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { ReportTable } from '@/components/shared/ReportTable'
 /**
@@ -110,9 +111,9 @@ export default function ReportsPage() {
         {tab === 'balance' && <Button variant="ghost" size="sm" disabled className="text-xs text-muted-foreground">期末时点</Button>}
       </FilterCard>
 
-      {tab === 'income' && <IncomeView period={period} />}
-      {tab === 'balance' && <BalanceSheetView period={period} />}
-      {tab === 'cashflow' && <CashFlowView period={period} />}
+      <KeepAliveSection active={tab === 'income'}><IncomeView period={period} /></KeepAliveSection>
+      <KeepAliveSection active={tab === 'balance'}><BalanceSheetView period={period} /></KeepAliveSection>
+      <KeepAliveSection active={tab === 'cashflow'}><CashFlowView period={period} /></KeepAliveSection>
     </div>
   )
 }

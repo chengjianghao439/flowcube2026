@@ -34,6 +34,15 @@ async function record(conn, {
       requestId,
     ],
   )
+  // 在同一业务事务内为自动记账补上真实退货/退款单号；不再次记金额。
+  if (eventType === PAYMENT_EVENT.ADJUSTED_BY_RETURN && payload?.returnNo) {
+    await conn.query(`UPDATE party_ledger_events SET event_type='RETURN',document_no=?
+      WHERE record_id=? AND event_type='CHARGE_ADJUSTMENT' AND delta=? ORDER BY id DESC LIMIT 1`,
+    [payload.returnNo,paymentRecordId,-Number(payload.adjustAmount)])
+  } else if (eventType === PAYMENT_EVENT.REFUND && payload?.refundNo) {
+    await conn.query(`UPDATE party_ledger_events SET document_no=?
+      WHERE record_id=? AND event_type='REFUND' ORDER BY id DESC LIMIT 1`, [payload.refundNo,paymentRecordId])
+  }
   logger.info('记录账款事件', {
     paymentRecordId,
     orderNo,

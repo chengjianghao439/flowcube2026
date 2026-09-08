@@ -43,6 +43,7 @@ export const getAgingApi = (topLimit = 8) =>
 
 /** 一笔实际汇款。settledAmount 已核销、balance 剩余可核销（>0 即为预收/预付款） */
 export interface PaymentReceipt {
+  partyId?: number | null
   id: number
   receiptNo: string
   type: 1 | 2
@@ -88,7 +89,7 @@ export const getReceiptDetailApi = (id: number) =>
 
 /** 新建汇款单并同时核销；allocations 为空表示先挂账，之后再核销 */
 export const createReceiptApi = (d: {
-  type: 1 | 2; partyName: string; amount: number; paymentDate: string
+  type: 1 | 2; partyId?: number; partyName: string; amount: number; paymentDate: string
   method?: string; accountId: number; remark?: string; allocations: ReceiptAllocation[]
 }, requestKey: string) =>
   client.post<{ id:number; receiptNo:string; settledAmount:number; balance:number }>(

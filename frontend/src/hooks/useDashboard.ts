@@ -13,6 +13,8 @@ import { listPendingApprovalsApi } from '@/api/approvals'
 import { getRelativeDateRange } from '@/lib/dateRange'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import type { DashboardLayout } from '@/types/dashboard'
+import { usePermission } from './usePermission'
+import { visibleWorkbench } from '@/lib/workbench'
 
 // 图表/统计类小组件的默认区间：在模块加载时求值一次，保证同一页面生命周期内 queryKey 稳定
 // （趋势看板不需要秒级更新区间；刷新页面自然取新区间）。
@@ -39,7 +41,8 @@ export const useAging           = () => useQuery({ queryKey:['dash-aging'], quer
 export const useCreditWarning    = () => useQuery({ queryKey:['dash-credit-warning'], queryFn:()=>getCreditWarningApi().then(r=>r!), staleTime:300000 })
 export function useRoleWorkbench() {
   const active = useActiveWorkspaceTab()
-  return useQuery({ queryKey: ['role-workbench'], queryFn: () => getRoleWorkbenchApi().then(r => r!), enabled: active, staleTime: 60_000, refetchInterval: active ? 60_000 : false })
+  const { can } = usePermission()
+  return useQuery({ queryKey: ['role-workbench'], queryFn: () => getRoleWorkbenchApi().then(r => r!), select: data => visibleWorkbench(data, can), enabled: active, staleTime: 60_000, refetchInterval: active ? 60_000 : false })
 }
 export const useSaleStats       = () => useQuery({ queryKey:['dash-sale-stats',RANGE_180], queryFn:()=>getSaleStatsApi(RANGE_180).then(r=>r!), staleTime:300000 })
 export const usePurchaseStats   = () => useQuery({ queryKey:['dash-purchase-stats',RANGE_180], queryFn:()=>getPurchaseStatsApi(RANGE_180).then(r=>r!), staleTime:300000 })

@@ -94,6 +94,17 @@ async function runMigrations({ checkGapsOnly = false } = {}) {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `)
 
+    // 在结转数据写入前核实触发器创建权限，避免权限不足留下半次初始化。
+    const [ledgerMigrations] = await conn.query("SELECT filename FROM db_migrations WHERE filename IN ('238_party_ledger.sql','239_party_ledger_receipt_identity.sql','240_party_ledger_explicit_identity.sql')")
+    if (ledgerMigrations.length < 3 && files.includes('238_party_ledger.sql')) {
+      const [[flags]] = await conn.query('SELECT @@GLOBAL.log_bin binlog,@@GLOBAL.log_bin_trust_function_creators trusted')
+      if (Number(flags.binlog) && !Number(flags.trusted)) {
+        const [grants] = await conn.query('SHOW GRANTS')
+        const allowed = grants.some(row => /GRANT (?:ALL PRIVILEGES ON \*\.\*|[^\n]*\bSUPER\b)/i.test(String(Object.values(row)[0])))
+        if (!allowed) throw new Error('往来明细迁移需要触发器创建权限：请停写后使用迁移管理员，或通过正式部署脚本的临时权限窗口执行；未写入结转数据')
+      }
+    }
+
     // 先执行按编号排序的 SQL 建表迁移，保证基础表存在后再做增量 ALTER
     let ran = 0
     for (const file of files) {

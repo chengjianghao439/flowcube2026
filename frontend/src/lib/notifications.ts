@@ -16,6 +16,7 @@ export function normalizeNotifications(items: NotificationEntry[]) {
   const normalized: NotificationEntry[] = []
 
   for (const item of items) {
+    if (item.code === 'SYSTEM_HEALTH_ANOMALY') continue
     const dedupeKey = item.dedupeKey || `${item.category || 'general'}:${item.text}:${item.path}`
     if (seen.has(dedupeKey)) continue
     seen.add(dedupeKey)

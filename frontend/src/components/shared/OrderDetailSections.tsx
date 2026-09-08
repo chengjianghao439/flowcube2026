@@ -2,11 +2,13 @@ import { useEffect, useId, useState, type ReactNode } from 'react'
 import { Activity, ClipboardList, History, PackageCheck, Printer, ScanLine } from 'lucide-react'
 import type { ActivityView, DocumentType } from '@/api/document-activity'
 import { DocumentActivityPanel } from './DocumentActivityPanel'
+import KeepAliveSection from './KeepAliveSection'
 interface Props { type: DocumentType; id: number; children: ReactNode; progress?: ReactNode; printProgress?: ReactNode; initialView?: 'info' | ActivityView }
-export function OrderDetailSections(props: Props) { return props.id > 0 ? <DetailSections key={`${props.type}-${props.id}-${props.initialView || 'info'}`} {...props} /> : <>{props.children}</> }
+export function OrderDetailSections(props: Props) { return props.id > 0 ? <DetailSections key={`${props.type}-${props.id}`} {...props} /> : <>{props.children}</> }
 function DetailSections({ type, id, children, progress, printProgress, initialView }: Props) {
   const prefix = useId()
   const [selected, setSelected] = useState<'info' | ActivityView>(initialView || (typeof window !== 'undefined' && /[?&]focus=/.test(window.location.hash) ? (/[?&]focus=print(?:&|$)/.test(window.location.hash) ? 'print' : 'progress') : 'info'))
+  useEffect(() => { if (initialView) setSelected(initialView) }, [initialView])
   useEffect(() => {
     const path = type === 'inbound' ? '/inbound-tasks' : `/${type}`
     const focus = () => {
@@ -31,7 +33,7 @@ function DetailSections({ type, id, children, progress, printProgress, initialVi
           event.preventDefault(); setSelected(tabs[next].key); document.getElementById(`${prefix}-${tabs[next].key}-tab`)?.focus()
         }} className={`flex min-w-28 flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selected === key ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}><Icon className="h-4 w-4" />{label}</button>)}
     </div>
-    <div role="tabpanel" id={`${prefix}-info-panel`} aria-labelledby={`${prefix}-info-tab`} hidden={selected !== 'info'}><div className="space-y-3">{children}</div></div>
-    {selected !== 'info' && <div role="tabpanel" id={`${prefix}-${selected}-panel`} aria-labelledby={`${prefix}-${selected}-tab`}><DocumentActivityPanel type={type} id={id} view={selected} extra={selected === 'progress' ? progress : selected === 'print' ? printProgress : undefined} /></div>}
+    <KeepAliveSection active={selected === 'info'} role="tabpanel" id={`${prefix}-info-panel`} aria-labelledby={`${prefix}-info-tab`}><div className="space-y-3">{children}</div></KeepAliveSection>
+    {tabs.filter(tab => tab.key !== 'info').map(tab => <KeepAliveSection key={tab.key} active={selected === tab.key} role="tabpanel" id={`${prefix}-${tab.key}-panel`} aria-labelledby={`${prefix}-${tab.key}-tab`}><DocumentActivityPanel type={type} id={id} view={tab.key as ActivityView} extra={tab.key === 'progress' ? progress : tab.key === 'print' ? printProgress : undefined} /></KeepAliveSection>)}
   </div>
 }

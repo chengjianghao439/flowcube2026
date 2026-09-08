@@ -1,3 +1,4 @@
+import { usePartyLedger } from '@/hooks/usePartyLedger'
 import { RecordIdentity } from '@/components/shared/RecordIdentity'
 import { useState, useRef } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
@@ -26,6 +27,7 @@ import type { TableColumn } from '@/types'
 const PRICE_LEVELS = ['A', 'B', 'C', 'D'] as const
 
 export default function CustomersPage() {
+  const ledger = usePartyLedger(2)
   const qc = useQueryClient()
   const [keyword, setKeyword] = useState('')
   const [search, setSearch] = useState('')
@@ -97,6 +99,7 @@ export default function CustomersPage() {
         primaryVariant="outline"
         onPrimaryClick={()=>{ setEditing(row as Customer); setDialogOpen(true) }}
         items={[
+          ...(ledger.canView ? [{ label: '往来明细', onClick: () => ledger.open(row) }] : []),
           { label: '绑定价格', onClick:()=>openBind(row as Customer) },
           { label: '删除', onClick:()=> setConfirmTarget(row as Customer), destructive: true, separatorBefore: true },
         ]}

@@ -13,7 +13,7 @@ import {
 } from '@/hooks/useDashboard'
 import {
   WIDGETS, WIDGET_MAP, CATEGORY_LABEL, CATEGORY_ORDER,
-  buildDefaultLayout, buildAllLayout, DASHBOARD_SECTIONS, mergeLayout, type WidgetCategory,
+  buildDefaultLayout, buildAllLayout, mergeLayout, type WidgetCategory,
 } from '@/components/dashboard/registry'
 import type { DashboardLayout, DashboardWidgetLayout } from '@/types/dashboard'
 import '@/components/dashboard/dashboard.css'
@@ -35,30 +35,6 @@ function ReadOnlyWidget({ widget, className }: { widget: DashboardWidgetLayout; 
         <Body />
       </Suspense>
     </div>
-  )
-}
-
-function DashboardSection({ id, title, description, widgets }: {
-  id: string; title: string; description: string; widgets: DashboardWidgetLayout[]
-}) {
-  if (!widgets.length) return null
-  const metrics = widgets.filter(w => WIDGET_MAP[w.id].category === 'kpi')
-  const panels = widgets.filter(w => WIDGET_MAP[w.id].category !== 'kpi')
-  return (
-    <section id={`dashboard-section-${id}`} aria-labelledby={`dashboard-heading-${id}`} className="scroll-mt-4 space-y-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-border pb-3">
-        <h2 id={`dashboard-heading-${id}`} className="text-base font-semibold">{title}<span className="ml-2 text-xs font-normal tabular-nums text-muted-foreground">{widgets.length} 张卡片</span></h2>
-        <p className="text-xs text-muted-foreground">{description}</p>
-      </div>
-      {metrics.length > 0 && <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {metrics.map(widget => <ReadOnlyWidget key={widget.id} widget={widget} className={cn(widget.w === 4 ? 'min-h-24' : 'min-h-36', SPAN[widget.w] ?? SPAN[1])} />)}
-      </div>}
-      {panels.length > 0 && <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {panels.map(widget => <ReadOnlyWidget key={widget.id} widget={widget} className={cn(
-          WIDGET_MAP[widget.id].size === 'lg' ? 'h-[380px]' : 'h-[260px]', SPAN[widget.w] ?? SPAN[2],
-        )} />)}
-      </div>}
-    </section>
   )
 }
 
@@ -100,7 +76,6 @@ export default function DashboardPage() {
 
   // 渲染的可见小组件：显示 + 有权限
   const visible = layout.widgets.filter(w => WIDGET_MAP[w.id] && w.visible && allowed[w.id])
-  const sections = DASHBOARD_SECTIONS.map(section => ({ ...section, widgets: visible.filter(w => section.widgetIds.includes(w.id)) })).filter(section => section.widgets.length > 0)
   // 组件库可添加：隐藏 + 有权限
   const addable = layout.widgets.filter(w => WIDGET_MAP[w.id] && !w.visible && allowed[w.id])
 
@@ -155,7 +130,7 @@ export default function DashboardPage() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-page-title">仪表盘</h1>
-          <p className="text-muted-body mt-1">{editing ? '拖拽调整分区内顺序 · 调整宽度 · 隐藏或添加卡片，完成后保存' : '按业务分区查看指标、待办与个人工具。'}</p>
+          <p className="text-muted-body mt-1">{editing ? '拖拽调整卡片顺序 · 调整宽度 · 隐藏或添加卡片，完成后保存' : '按你保存的顺序查看指标、待办与个人工具。'}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {!editing ? (
@@ -295,11 +270,11 @@ export default function DashboardPage() {
           })}
         </div>
       ) : (
-        <div className="space-y-8">
-          <nav aria-label="仪表盘分区" className="flex flex-wrap gap-2">
-            {sections.map(section => <Button key={section.id} size="sm" variant="outline" onClick={() => document.getElementById(`dashboard-section-${section.id}`)?.scrollIntoView({ block: 'start' })}>{section.title}</Button>)}
-          </nav>
-          {sections.map(section => <DashboardSection key={section.id} {...section} />)}
+        <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {visible.map(widget => <ReadOnlyWidget key={widget.id} widget={widget} className={cn(
+            WIDGET_MAP[widget.id].size === 'lg' ? 'h-[380px]' : WIDGET_MAP[widget.id].category === 'kpi' ? 'h-[160px]' : 'h-[260px]',
+            SPAN[widget.w] ?? SPAN[2],
+          )} />)}
         </div>
       )}
 

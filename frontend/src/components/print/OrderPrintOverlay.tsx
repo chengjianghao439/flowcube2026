@@ -6,7 +6,8 @@
  */
 
 import { createPortal, flushSync } from 'react-dom'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
+import { useSectionActive } from '@/components/layout/SectionVisibilityContext'
 import { useQuery } from '@tanstack/react-query'
 import { Printer, X, ChevronDown, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -39,14 +40,14 @@ function marginsOf(t: PrintTemplate | null): { top: number; bottom: number; left
   }
 }
 
-function buildPrintCss(t: PrintTemplate | null): string {
+function buildPrintCss(t: PrintTemplate | null, rootId: string): string {
   const m = marginsOf(t)
   return `
 @media print {
-  body > *:not(#fc-print-root) { display: none !important; }
-  #fc-print-root   { position: static !important; overflow: visible !important; background: #fff !important; }
-  #fc-print-tb     { display: none !important; }
-  #fc-print-page   { box-shadow: none !important; margin: 0 !important; width: 100% !important; height: auto !important; overflow: visible !important; transform: none !important; }
+  body > *:not(#${rootId}) { display: none !important; }
+  #${rootId}   { position: static !important; overflow: visible !important; background: #fff !important; }
+  #${rootId}-tb     { display: none !important; }
+  #${rootId}-page   { box-shadow: none !important; margin: 0 !important; width: 100% !important; height: auto !important; overflow: visible !important; transform: none !important; }
   /* 页边距读模板 layout.margins（编辑器「页边距」可调）：避免边缘裁切、续页不贴顶；左右边距参与避免 210mm 内容溢出 */
   @page            { size: ${paperCssSize(t?.paperSize ?? 'A4')}; margin: ${m.top}mm ${m.right}mm ${m.bottom}mm ${m.left}mm; }
 }
@@ -62,6 +63,11 @@ export interface OrderPrintOverlayProps {
 }
 
 export function OrderPrintOverlay({ templateType, title, data, items, onClose }: OrderPrintOverlayProps) {
+  const active = useSectionActive()
+  const instanceId = useId().replace(/:/g, '')
+  const printRootId = `fc-print-root-${instanceId}`
+  const printGeneration = useRef(0)
+  const canPrint = useRef(false)
   const [templates, setTemplates] = useState<PrintTemplate[]>([])
   const [selected,  setSelected]  = useState<PrintTemplate | null>(null)
   const [loading,   setLoading]   = useState(true)
@@ -75,31 +81,41 @@ export function OrderPrintOverlay({ templateType, title, data, items, onClose }:
   // 公司 Logo（image 元素数据源）：与 BrandLogo/设置页共享查询键；未上传 url='' → 模板 image 元素不渲染
   const { data: brandLogo } = useQuery({
     queryKey: ['brand-logo'],
+    enabled: active,
     queryFn: () => getLogoApi({ skipGlobalError: true }),
     staleTime: 5 * 60_000,
     retry: 1,
   })
 
-  // @page 边距跟随选中模板（layout.margins），切换模板时重写 style 标签
-  useEffect(() => {
-    const el = document.getElementById(PRINT_STYLE_ID)
-    if (el) {
-      el.textContent = buildPrintCss(selected)
-    } else {
-      const style = document.createElement('style')
-      style.id = PRINT_STYLE_ID
-      style.textContent = buildPrintCss(selected)
-      document.head.appendChild(style)
+  // 隐藏/卸载立即使此前等待图片解码的打印请求失效；再次显示也不能恢复旧请求。
+  useLayoutEffect(() => {
+    canPrint.current = active
+    return () => {
+      canPrint.current = false
+      printGeneration.current += 1
     }
-    return () => { document.getElementById(PRINT_STYLE_ID)?.remove() }
-  }, [selected])
+  }, [active])
 
-  useEffect(() => {
+  // 每个预览只管理自己创建的样式；隐藏预览不能影响其他页面的打印。
+  useLayoutEffect(() => {
+    if (!active) return
+    const style = document.createElement('style')
+    style.id = `${PRINT_STYLE_ID}-${instanceId}`
+    style.textContent = buildPrintCss(selected, printRootId)
+    document.head.appendChild(style)
+    return () => { style.remove() }
+  }, [active, selected, instanceId, printRootId])
+
+  useLayoutEffect(() => {
+    if (!active) return
+    let printing = false
     const before = () => {
+      printing = true
       prePrintZoomRef.current = docZoomRef.current
       flushSync(() => setDocZoom(1))
     }
     const after = () => {
+      printing = false
       flushSync(() => setDocZoom(prePrintZoomRef.current))
     }
     window.addEventListener('beforeprint', before)
@@ -107,8 +123,9 @@ export function OrderPrintOverlay({ templateType, title, data, items, onClose }:
     return () => {
       window.removeEventListener('beforeprint', before)
       window.removeEventListener('afterprint', after)
+      if (printing) setDocZoom(prePrintZoomRef.current)
     }
-  }, [])
+  }, [active])
 
   useEffect(() => {
     setLoading(true)
@@ -127,12 +144,20 @@ export function OrderPrintOverlay({ templateType, title, data, items, onClose }:
    * decode() 失败（如 CORS/非法图片）时静默放行，不阻塞打印。
    */
   async function handlePrint() {
+    if (!canPrint.current) return
+    const generation = printGeneration.current
     const root = printRootRef.current
     if (root) {
       const imgs = Array.from(root.querySelectorAll('img'))
       await Promise.all(imgs.map(img => (img.decode?.() ?? Promise.resolve()).catch(() => {})))
     }
+    if (!canPrint.current || generation !== printGeneration.current || !printRootRef.current) return
     window.print()
+  }
+
+  function handleClose() {
+    printGeneration.current += 1
+    onClose()
   }
 
   /** 传给 TemplateRenderer 的 data：把公司 Logo URL 注入 companyLogo 键（模板 image 元素取用） */
@@ -140,13 +165,14 @@ export function OrderPrintOverlay({ templateType, title, data, items, onClose }:
 
   return createPortal(
     <div
-      id="fc-print-root"
+      id={printRootId}
+      hidden={!active}
       ref={printRootRef}
-      style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999, overflowY: 'auto', background: '#e0e0e0' }}
+      style={{ display: active ? undefined : 'none', position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999, overflowY: 'auto', background: '#e0e0e0' }}
     >
       {/* 工具栏 */}
       <div
-        id="fc-print-tb"
+        id={`${printRootId}-tb`}
         style={{
           position: 'sticky', top: 0, zIndex: 1,
           background: 'hsl(var(--background))', color: 'hsl(var(--foreground))', borderBottom: '1px solid hsl(var(--border))',
@@ -217,7 +243,7 @@ export function OrderPrintOverlay({ templateType, title, data, items, onClose }:
             <Printer className="mr-1.5 h-4 w-4" />
             打印
           </Button>
-          <Button size="sm" variant="outline" onClick={onClose}>
+          <Button size="sm" variant="outline" onClick={handleClose}>
             <X className="mr-1.5 h-4 w-4" />
             关闭
           </Button>
@@ -233,7 +259,7 @@ export function OrderPrintOverlay({ templateType, title, data, items, onClose }:
           </div>
         ) : selected ? (
           <div
-            id="fc-print-page"
+            id={`${printRootId}-page`}
             style={{ background: '#fff', boxShadow: '0 4px 24px rgba(0,0,0,0.15)' }}
           >
             <TemplateRenderer

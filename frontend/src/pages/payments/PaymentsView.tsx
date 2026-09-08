@@ -16,9 +16,13 @@ import type { TableColumn } from '@/types'
 import { formatDisplayDate } from '@/lib/dateTime'
 import { downloadExport } from '@/lib/exportDownload'
 import { toast } from '@/lib/toast'
+import KeepAliveSection from '@/components/shared/KeepAliveSection'
+import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 
 /** 账款页只管现结；月结走对账页，两边合起来才是全量 */
 const IMMEDIATE_SCOPE = IMMEDIATE_SETTLEMENT_TYPES.join(',')
+const ALL_DATES_QUERY: PaymentQueryValues = { ...EMPTY_PAYMENT_QUERY, startDate: '', endDate: '' }
+const DEFAULT_RECORD_QUERY: PaymentQueryValues = { ...ALL_DATES_QUERY, status: 'unsettled' }
 
 /** 1未付 = 尚未发生 · 2部分付 = 进行中 · 3已付清 = 终态成功 */
 const ST_TONE: Record<number, StatusTone> = { 1: 'draft', 2: 'active', 3: 'success' }
@@ -32,32 +36,33 @@ export type PaymentType = 1 | 2
  */
 const COPY = {
   1: {
-    title: '应付账款',
-    description: '现结供应商：到货即结，逐笔确认结算后登记付款；月结供应商见「供应商对账」',
+    title: '现结供应商账款',
+    description: '现结供应商：到货即结，逐笔确认结算后登记付款；月结供应商见「月结供应商对账」',
     party: '供应商',
     amountCol: '已付金额',
     payAction: '登记付款',
     payDialog: '登记付款',
-    statusOptions: [['1', '未付'], ['2', '部分付款'], ['3', '已结清']] as const,
+    statusOptions: [['unsettled', '未结清（含部分付款）'], ['1', '未付'], ['2', '部分付款'], ['3', '已结清']] as const,
   },
   2: {
-    title: '应收账款',
-    description: '现结客户：出库即结，出库后逐笔登记收款；月结客户见「客户对账」',
+    title: '现结客户账款',
+    description: '现结客户：出库即结，出库后逐笔登记收款；月结客户见「月结客户对账」',
     party: '客户',
     amountCol: '已收金额',
     payAction: '登记收款',
     payDialog: '登记收款',
-    statusOptions: [['1', '未收'], ['2', '部分收款'], ['3', '已结清']] as const,
+    statusOptions: [['unsettled', '未结清（含部分收款）'], ['1', '未收'], ['2', '部分收款'], ['3', '已结清']] as const,
   },
 } as const
 
 export default function PaymentsView({ type }: { type: PaymentType }) {
+  const active = useActiveWorkspaceTab()
   const copy = COPY[type]
   const isPayable = type === 1
   // 按单登记 = 逐笔登记（客户只付一单）；收款核销 = 一笔汇款冲抵多单
   const [tab, setTab] = useState<'records' | 'receipts'>('records')
   // query 是「已生效」的完整查询条件，筛选栏与高级查询弹窗都写它，导出也复用同一份
-  const [query, setQuery] = useState<PaymentQueryValues>(EMPTY_PAYMENT_QUERY)
+  const [query, setQuery] = useState<PaymentQueryValues>(DEFAULT_RECORD_QUERY)
   const [queryOpen, setQueryOpen] = useState(false)
   // 核销 tab 的动作按钮挪到本页 PageHeader（与「按单登记」tab 对齐），通过 ref 触发面板内部动作
   const receiptRef = useRef<ReceiptPanelHandle>(null)
@@ -85,6 +90,7 @@ export default function PaymentsView({ type }: { type: PaymentType }) {
   const { data, isLoading } = useQuery({
     queryKey: ['payments', { type, query }],
     queryFn: () => getPaymentsApi({ ...exportParams, page: 1, pageSize: PAGE_SIZE, settlementTypes: IMMEDIATE_SCOPE }),
+    enabled: active && tab === 'records',
   })
   const total = data?.pagination?.total ?? 0
 
@@ -165,10 +171,10 @@ export default function PaymentsView({ type }: { type: PaymentType }) {
         ))}
       </div>
 
-      {tab === 'receipts' && <ReceiptPanel ref={receiptRef} type={type} settlementTypes={IMMEDIATE_SCOPE} hideToolbar />}
+      <KeepAliveSection active={tab === 'receipts'}><ReceiptPanel ref={receiptRef} type={type} settlementTypes={IMMEDIATE_SCOPE} hideToolbar /></KeepAliveSection>
 
-      {tab === 'records' && (<>
-      <PaymentQueryBar query={query} onChange={(q) => { setQuery(q); }} labels={queryLabels} />
+      <KeepAliveSection active={tab === 'records'} className="space-y-4">
+      <PaymentQueryBar query={query} onChange={(q) => { setQuery(q); }} labels={queryLabels} clearValue={ALL_DATES_QUERY} />
 
       <DataTable columns={columns} data={data?.list || []} loading={isLoading} />
 
@@ -177,6 +183,7 @@ export default function PaymentsView({ type }: { type: PaymentType }) {
       <PaymentQueryDialog
         open={queryOpen}
         initial={query}
+        clearValue={ALL_DATES_QUERY}
         onClose={() => setQueryOpen(false)}
         onApply={applyQuery}
         labels={queryLabels}
@@ -185,7 +192,7 @@ export default function PaymentsView({ type }: { type: PaymentType }) {
         showConfirmStatus={isPayable}
         singleDate
       />
-      </>)}
+      </KeepAliveSection>
 
       {dialogs}
     </div>

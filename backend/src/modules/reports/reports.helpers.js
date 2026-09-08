@@ -19,29 +19,17 @@ function mapWorkbenchItem(row) {
 const WORKBENCH_CARD_PRIORITY = {
   'warehouse-pending-receive': 10,
   'warehouse-putaway': 20,
-  'warehouse-audit': 30,
   'warehouse-print': 40,
   'sale-pending-ship': 10,
-  'sale-anomaly': 20,
   'sale-below-cost': 30,
-  'management-audit': 10,
-  'management-anomaly-task': 20,
-  'management-stock': 30,
-  'management-high-risk': 40,
 }
 
 const WORKBENCH_CARD_PRIORITY_LABEL = {
   'warehouse-pending-receive': 'P1',
   'warehouse-putaway': 'P2',
-  'warehouse-audit': 'P3',
   'warehouse-print': 'P4',
   'sale-pending-ship': 'P1',
-  'sale-anomaly': 'P2',
   'sale-below-cost': 'P3',
-  'management-audit': 'P1',
-  'management-anomaly-task': 'P2',
-  'management-stock': 'P3',
-  'management-high-risk': 'P4',
 }
 
 const WORKBENCH_SECTION_PRIORITY = {

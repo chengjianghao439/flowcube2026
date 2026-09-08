@@ -30,5 +30,5 @@ export interface CreditWarning {
 
 /** 单个小组件在个性化布局中的状态：注册表 id + 是否显示 + 列跨度（1–4） */
 export interface DashboardWidgetLayout { id: string; visible: boolean; w: number }
-/** 用户仪表盘布局：widgets 数组顺序决定业务分区内的渲染顺序（拖拽改变） */
+/** 用户仪表盘布局：widgets 数组顺序决定全页渲染顺序（跨分类拖拽改变），编辑和展示保持一致 */
 export interface DashboardLayout { widgets: DashboardWidgetLayout[] }

@@ -50,7 +50,7 @@ function normalizeSettlementList(input) {
  */
 async function findAll({
   page = 1, pageSize = 20, type = '', status = '', settlementTypes = null, keyword = '',
-  orderNo = '', partyName = '',
+  orderNo = '', partyName = '', partyId = null,
   confirmStatus = '', startDate = '', endDate = '', dueStart = '', dueEnd = '',
   minAmount = '', maxAmount = '',
 } = {}) {
@@ -62,7 +62,17 @@ async function findAll({
     conds.push('pr.type=?')
     params.push(Number(type))
   }
-  if (status) {
+  if (partyId != null) {
+    const id = Number(partyId), side = Number(type)
+    if (![1,2].includes(side) || !Number.isSafeInteger(id) || id < 1) throw new AppError('往来单位参数无效',400)
+    const table = side === 2 ? 'sale_orders' : 'purchase_orders'
+    const column = side === 2 ? 'customer_id' : 'supplier_id'
+    conds.push(`EXISTS(SELECT 1 FROM ${table} po WHERE po.id=pr.order_id AND po.${column}=?)`)
+    params.push(id)
+  }
+  if (status === 'unsettled') {
+    conds.push('pr.status IN (1,2) AND pr.balance>0')
+  } else if (status) {
     conds.push('pr.status=?')
     params.push(Number(status))
   }

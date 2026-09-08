@@ -1,10 +1,14 @@
+import { useVisibleDisclosure } from '@/hooks/useVisibleDisclosure'
 import * as React from "react"
 import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { X } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
-const Dialog = DialogPrimitive.Root
+function Dialog(props: React.ComponentProps<typeof DialogPrimitive.Root>) {
+  const disclosure = useVisibleDisclosure(props)
+  return <DialogPrimitive.Root {...props} {...disclosure} />
+}
 
 const DialogTrigger = DialogPrimitive.Trigger
 

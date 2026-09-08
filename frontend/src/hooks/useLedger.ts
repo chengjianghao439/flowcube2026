@@ -1,3 +1,4 @@
+import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { useCompanyQueryKey } from '@/hooks/useCompanyQueryKey'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -18,10 +19,10 @@ export const useAccountLedger = (accountId: number | null, period: string) =>
   })
 
 export const useIncomeStatement = (period: string) =>
-  useQuery({ queryKey: useCompanyQueryKey([QK, 'income', period]), queryFn: () => getIncomeStatementApi(period), enabled: /^\d{6}$/.test(period) })
+  useQuery({ queryKey: useCompanyQueryKey([QK, 'income', period]), queryFn: () => getIncomeStatementApi(period), enabled: useActiveWorkspaceTab() && /^\d{6}$/.test(period) })
 
 export const useBalanceSheet = (period: string) =>
-  useQuery({ queryKey: useCompanyQueryKey([QK, 'balance', period]), queryFn: () => getBalanceSheetApi(period), enabled: /^\d{6}$/.test(period) })
+  useQuery({ queryKey: useCompanyQueryKey([QK, 'balance', period]), queryFn: () => getBalanceSheetApi(period), enabled: useActiveWorkspaceTab() && /^\d{6}$/.test(period) })
 
 export const useCashFlow = (period: string) =>
-  useQuery({ queryKey: useCompanyQueryKey([QK, 'cashflow', period]), queryFn: () => getCashFlowApi(period), enabled: /^\d{6}$/.test(period) })
+  useQuery({ queryKey: useCompanyQueryKey([QK, 'cashflow', period]), queryFn: () => getCashFlowApi(period), enabled: useActiveWorkspaceTab() && /^\d{6}$/.test(period) })

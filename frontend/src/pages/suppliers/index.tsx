@@ -1,3 +1,5 @@
+import TableActionsMenu from '@/components/shared/TableActionsMenu'
+import { usePartyLedger } from '@/hooks/usePartyLedger'
 import { RecordIdentity } from '@/components/shared/RecordIdentity'
 import { useState, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
@@ -29,6 +31,7 @@ const empty = {
 }
 
 export default function SuppliersPage() {
+  const ledger = usePartyLedger(1)
   const [keyword, setKeyword] = useState(''); const [search, setSearch] = useState('')
   const page = 1
   const [form, setForm] = useState(empty)
@@ -96,6 +99,10 @@ export default function SuppliersPage() {
       title="供应商管理"
       description="管理采购供应商档案"
       columns={cols}
+      renderActions={(row, helpers) => <TableActionsMenu primaryLabel="编辑" primaryVariant="outline" onPrimaryClick={() => helpers.openEdit(row)} items={[
+        ...(ledger.canView ? [{ label: '往来明细', onClick: () => ledger.open(row) }] : []),
+        { label: '删除', destructive: true, onClick: () => helpers.openDelete(row) },
+      ]} />}
       queryKey={['suppliers', { page, pageSize: 20, keyword }]}
       listQuery={() => getSuppliersApi({ page, pageSize: 20, keyword })}
       recordUnit="个"

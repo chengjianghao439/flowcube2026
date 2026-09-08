@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
-import { Inbox, RotateCcw } from 'lucide-react'
+import { Inbox } from 'lucide-react'
 import type { TableColumn } from '@/types'
 
 interface DataTableProps<T extends object> {
@@ -26,7 +26,7 @@ interface DataTableProps<T extends object> {
   onSortChange?: (key: string) => void
   /**
    * 默认按百分比铺满容器，兼容旧比例设置；手动调整后按像素独立记忆列宽。
-   * 恢复默认列宽后重新使用 col.width 的百分比布局。
+   * 没有已保存宽度时使用 col.width 的默认布局。
    */
   fluid?: boolean
 }
@@ -305,13 +305,6 @@ export default function DataTable<T extends object>({
 
   return (
     <div className="rounded-lg border border-border bg-card overflow-hidden">
-      <div className="flex justify-end border-b border-border/60 px-2 py-1">
-        <button type="button" aria-label="恢复默认列宽" disabled={!hasCustomWidths}
-          onClick={() => { resizeCleanupRef.current?.(); persistLayout(columnOrder.length ? columnOrder : currentKeys, {}, fluid ? 'percent' : 'px') }}
-          className="inline-flex h-7 items-center gap-1.5 rounded px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-default disabled:opacity-40">
-          <RotateCcw className="h-3.5 w-3.5" />恢复默认列宽
-        </button>
-      </div>
       <div className="overflow-x-auto">
         <table ref={tableRef} aria-busy={loading} className="table-fixed text-sm" style={usesPercent ? { width: '100%' } : { width: tableWidth, minWidth: hasCustomWidths ? 0 : '100%' }}>
           <colgroup ref={colgroupRef}>

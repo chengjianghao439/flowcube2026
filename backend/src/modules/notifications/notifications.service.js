@@ -11,7 +11,7 @@ function pushNotification(items, seen, item) {
 
 /**
  * 站内通知：按当前用户仓库 scope 过滤「仓库相关」的计数（采购/销售/库存/调拨/收货/打印）。
- * 账款、系统健康等无仓库维度的全局项不受影响。
+ * 账款等无仓库维度的全局项不受影响；已取消的系统巡检不再产生通知。
  */
 async function buildNotifications(scopeWarehouseIds = null, userId = null) {
   const inboundThresholds = await getInboundClosureThresholds()
@@ -214,12 +214,6 @@ async function buildNotifications(scopeWarehouseIds = null, userId = null) {
        )`,
     [printTimeoutMinutes],
   )
-  const [[{ healthAnomalies }]] = await pool.query(
-    `SELECT COUNT(*) AS healthAnomalies
-     FROM system_health_logs
-     WHERE created_at >= NOW() - INTERVAL 24 HOUR
-       AND severity IN ('danger', 'warning', 'fix_failed')`,
-  )
   // 审批待办（2026-08-22 功能）：按当前用户待审批数（userId 为空时跳过，如 scheduler 全局扫描）
   let pendingApprovals = 0
   if (userId != null) {
@@ -247,7 +241,6 @@ async function buildNotifications(scopeWarehouseIds = null, userId = null) {
   if (logisticsPrintFailures > 0) pushNotification(items, seen, { code: 'LOGISTICS_PRINT_FAILED', category: 'operations', priority: 22, type: 'warning', icon: '🚛', text: `${logisticsPrintFailures} 条物流标签打印失败待补打`, path: '/settings/barcode-print-query?category=logistics&status=failed' })
   if (staleWavePicking > 0) pushNotification(items, seen, { code: 'WAVE_STALE_PICKING', category: 'operations', priority: 18, type: 'warning', icon: '🛒', text: `${staleWavePicking} 个波次拣货推进缓慢`, path: staleWavePickingTarget?.waveId ? `/picking-waves?waveId=${staleWavePickingTarget.waveId}&focus=wave-progress` : '/picking-waves' })
   if (staleWaveSorting > 0) pushNotification(items, seen, { code: 'WAVE_STALE_SORTING', category: 'operations', priority: 19, type: 'warning', icon: '📚', text: `${staleWaveSorting} 个波次分拣超时`, path: staleWaveSortingTarget?.waveId ? `/picking-waves?waveId=${staleWaveSortingTarget.waveId}&focus=wave-progress` : '/picking-waves' })
-  if (healthAnomalies > 0) pushNotification(items, seen, { code: 'SYSTEM_HEALTH_ANOMALY', category: 'system', priority: 5, type: 'warning', icon: '🩺', text: `近 24 小时发现 ${healthAnomalies} 条系统异常记录`, path: '/reports/pda-anomaly' })
 
   items.sort((a, b) => (a.priority ?? 100) - (b.priority ?? 100))
 
@@ -273,7 +266,7 @@ async function buildNotifications(scopeWarehouseIds = null, userId = null) {
       staleWavePicking,
       staleWaveSorting,
       logisticsPrintFailures,
-      healthAnomalies,
+      healthAnomalies: 0, // 保留旧响应字段；巡检功能已取消，不再查询或发提醒。
     },
   }
 }

@@ -171,7 +171,7 @@ function ReceivableRisk() {
   const open = useOpenPage()
   return (
     <RiskRow label="逾期应收" count={overdue?.count} unit="笔" icon={HandCoins} error={!!error}
-      onClick={() => open('/payments/receivable', '应收账款')}
+      onClick={() => open('/payments/receivable', '现结客户账款')}
       hint={overdue ? `合计 ${money(overdue.amount)} · 按明确到期日统计` : '点击查看账款'} />
   )
 }
@@ -242,7 +242,7 @@ export function ReceivableDueDistribution() {
       action={
         <Button variant="ghost" size="sm"
           className="h-8 px-2 text-xs text-primary"
-          onClick={() => open('/payments/receivable', '应收账款')}
+          onClick={() => open('/payments/receivable', '现结客户账款')}
         >
           查看账款 <ArrowUpRight aria-hidden />
         </Button>

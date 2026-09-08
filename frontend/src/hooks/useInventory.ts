@@ -7,7 +7,7 @@ import type { StockChangeParams, InventoryOverviewParams } from '@/types/invento
 const KS = 'inventory-stock'
 const KL = 'inventory-logs'
 export const useStock = (p: QueryParams) => useQuery({ queryKey: [KS, p], queryFn: () => getStockApi(p) })
-export const useLogs  = (p: QueryParams) => useQuery({ queryKey: [KL, p], queryFn: () => getLogsApi(p) })
+export const useLogs  = (p: QueryParams, enabled = true) => useQuery({ enabled, queryKey: [KL, p], queryFn: () => getLogsApi(p) })
 
 export function useInbound() {
   const invalidate = useInvalidate()
@@ -23,8 +23,8 @@ export function useAdjust() {
 }
 
 const KO = 'inventory-overview'
-export const useInventoryOverview = (p: InventoryOverviewParams) =>
-  useQuery({ queryKey: [KO, p], queryFn: () => getInventoryOverviewApi(p), placeholderData: prev => prev })
+export const useInventoryOverview = (p: InventoryOverviewParams, enabled = true) =>
+  useQuery({ enabled, queryKey: [KO, p], queryFn: () => getInventoryOverviewApi(p), placeholderData: prev => prev })
 
 const KC = 'inventory-containers'
 export const useInventoryContainers = (productId: number | null, warehouseId: number | null) =>

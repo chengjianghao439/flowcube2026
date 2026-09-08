@@ -117,14 +117,13 @@ test('双击分隔线按内容宽度适配，仅改变本列', () => {
   expect(widths().slice(1)).toEqual([300, 320])
 })
 
-test('恢复默认只清除宽度，保留用户列顺序', () => {
+test('加载已保存的列顺序和宽度，不因工具栏移除而重置', () => {
   localStorage.setItem('flowcube:table-columns:resize-test', JSON.stringify({ order: ['code', 'name', 'actions'], widths: { name: 400, code: 300, actions: 180 }, widthUnit: 'px' }))
   render()
-  act(() => host.querySelector('[aria-label="恢复默认列宽"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true })))
-  expect(widths()).toEqual([160, 160, 180])
+  expect(widths()).toEqual([300, 400, 180])
   const saved = JSON.parse(localStorage.getItem('flowcube:table-columns:resize-test')!)
   expect(saved.order).toEqual(['code', 'name', 'actions'])
-  expect(saved.widths).toEqual({})
+  expect(saved.widths).toEqual({ name: 400, code: 300, actions: 180 })
 })
 
 

@@ -62,10 +62,11 @@ interface FieldLabels {
  * 「查询」按钮已移到各页面右上角，这里只负责把生效条件显示成可逐个移除的小标签。
  * 无生效条件时不渲染任何东西（面板保持干净）。
  */
-export function PaymentQueryBar({ query, onChange, labels }: {
+export function PaymentQueryBar({ query, onChange, labels, clearValue = EMPTY_PAYMENT_QUERY }: {
   query: PaymentQueryValues
   onChange: (next: PaymentQueryValues) => void
   labels: FieldLabels
+  clearValue?: PaymentQueryValues
 }) {
   const chips: QueryChip[] = []
   const drop = (...keys: (keyof PaymentQueryValues)[]) =>
@@ -94,12 +95,13 @@ export function PaymentQueryBar({ query, onChange, labels }: {
     chips.push({ key: 'amount', text: `${labels.amountLabel}：${query.minAmount || '0'} ~ ${query.maxAmount || '不限'}`, onClear: drop('minAmount', 'maxAmount') })
   }
 
-  return <QueryChips chips={chips} onClearAll={() => onChange(EMPTY_PAYMENT_QUERY)} />
+  return <QueryChips chips={chips} onClearAll={() => onChange(clearValue)} />
 }
 
 interface Props {
   open: boolean
   initial: PaymentQueryValues
+  clearValue?: PaymentQueryValues
   onClose: () => void
   onApply: (values: PaymentQueryValues) => void
   labels: FieldLabels
@@ -125,7 +127,7 @@ interface Props {
  * 固定高度会在底部留一大片空白。
  */
 export function PaymentQueryDialog({
-  open, initial, onClose, onApply, labels, partyType, statusOptions,
+  open, initial, onClose, onApply, labels, partyType, statusOptions, clearValue = EMPTY_PAYMENT_QUERY,
   showDueDate = false, showConfirmStatus = false, singleDate = false,
 }: Props) {
   const [v, setV] = useState<PaymentQueryValues>(initial)
@@ -251,7 +253,7 @@ export function PaymentQueryDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="ghost" onClick={() => setV(EMPTY_PAYMENT_QUERY)}>清空</Button>
+          <Button variant="ghost" onClick={() => setV(clearValue)}>清空</Button>
           <Button variant="outline" onClick={onClose}>取消</Button>
           <Button onClick={() => { onApply(v); onClose() }}>查询</Button>
         </DialogFooter>

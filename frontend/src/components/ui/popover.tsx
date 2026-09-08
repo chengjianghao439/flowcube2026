@@ -1,9 +1,13 @@
+import { useVisibleDisclosure } from '@/hooks/useVisibleDisclosure'
 import * as React from "react"
 import * as PopoverPrimitive from "@radix-ui/react-popover"
 
 import { cn } from "@/lib/utils"
 
-const Popover = PopoverPrimitive.Root
+function Popover(props: React.ComponentProps<typeof PopoverPrimitive.Root>) {
+  const disclosure = useVisibleDisclosure(props)
+  return <PopoverPrimitive.Root {...props} {...disclosure} />
+}
 
 const PopoverTrigger = PopoverPrimitive.Trigger
 

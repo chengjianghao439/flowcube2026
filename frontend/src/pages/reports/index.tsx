@@ -1,3 +1,5 @@
+import KeepAliveSection from '@/components/shared/KeepAliveSection'
+import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
@@ -71,6 +73,7 @@ function AmountBar({ value, max }: { value: number; max: number }) {
 }
 
 export default function ReportsPage() {
+  const active = useActiveWorkspaceTab()
   const [tab, setTab] = useState<SummaryTab>('purchase')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
@@ -89,24 +92,24 @@ export default function ReportsPage() {
   const purchaseQ = useQuery({
     queryKey: ['report-purchase', applied],
     queryFn: () => getPurchaseStatsApi(applied),
-    enabled: tab === 'purchase',
+    enabled: active && tab === 'purchase',
   })
   const saleQ = useQuery({
     queryKey: ['report-sale', applied],
     queryFn: () => getSaleStatsApi(applied),
-    enabled: tab === 'sale',
+    enabled: active && tab === 'sale',
   })
   const invQ = useQuery({
     queryKey: ['report-inv', applied],
     queryFn: () => getInventoryStatsApi(applied),
-    enabled: tab === 'inventory',
+    enabled: active && tab === 'inventory',
   })
 
   // 采购价格趋势：只在商品已选且位于采购 tab 时请求
   const priceTrendQ = useQuery({
     queryKey: ['report-price-trend', priceProduct?.id, applied],
     queryFn: () => getPurchasePriceTrendApi({ productId: priceProduct!.id, ...applied }),
-    enabled: tab === 'purchase' && priceProduct != null,
+    enabled: active && tab === 'purchase' && priceProduct != null,
   })
 
   const activeQ = tab === 'purchase' ? purchaseQ : tab === 'sale' ? saleQ : invQ
@@ -178,7 +181,7 @@ export default function ReportsPage() {
           />
         )}
 
-        {tab === 'purchase' && !activeQ.isError && (
+        <KeepAliveSection active={tab === 'purchase' && !purchaseQ.isError}>
           <div className="space-y-6">
             {purchaseQ.isLoading && <p className="py-12 text-center text-muted-foreground">加载中…</p>}
             {purchaseQ.data && (
@@ -271,9 +274,9 @@ export default function ReportsPage() {
               </>
             )}
           </div>
-        )}
+        </KeepAliveSection>
 
-        {tab === 'sale' && !activeQ.isError && (
+        <KeepAliveSection active={tab === 'sale' && !saleQ.isError}>
           <div className="space-y-6">
             {saleQ.isLoading && <p className="py-12 text-center text-muted-foreground">加载中…</p>}
             {saleQ.data && (
@@ -313,9 +316,9 @@ export default function ReportsPage() {
               </>
             )}
           </div>
-        )}
+        </KeepAliveSection>
 
-        {tab === 'inventory' && !activeQ.isError && (
+        <KeepAliveSection active={tab === 'inventory' && !invQ.isError}>
           <div className="space-y-6">
             {invQ.isLoading && <p className="py-12 text-center text-muted-foreground">加载中…</p>}
             {invQ.data && (
@@ -336,7 +339,7 @@ export default function ReportsPage() {
               </>
             )}
           </div>
-        )}
+        </KeepAliveSection>
       </section>
 
       <ProductFinderModal

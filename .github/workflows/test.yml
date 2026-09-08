@@ -167,6 +167,12 @@ jobs:
       - name: 单元测试 — 订单记录归属与数据范围（无需 DB）
         run: npm run test:document-activity
 
+      - name: 单元测试 — 待办入口与巡检下线（无需 DB）
+        run: npm run test:workbench
+
+      - name: 单元测试 — 采购来源与历史修复守卫（无需 DB）
+        run: npm run test:purchase-repair
+
       - name: 单元测试 — 状态机动作表完整性（纯静态，防常量漂移）
         run: node tests/status-rules-integrity.test.js
 
@@ -193,6 +199,12 @@ jobs:
 
       - name: 数据库迁移 — smoke 库
         run: npm --prefix backend run migrate
+
+      - name: 往来明细 — 单位归属、预收核销、退款和余额回归
+        run: npm run smoke:party-ledger
+
+      - name: 按单登记 — 未结清与导出查询一致性
+        run: npm run smoke:payments-default-scope
 
       - name: 快递月结直连 — MySQL 入队与并发恢复回归
         run: npm run smoke:direct-express
