@@ -12,6 +12,7 @@ async function main() {
   const ctx = await prepareSmokeContext()
   const { pool, http } = ctx
   const inserted = []
+  const originalBindings = []
   let passed = 0
   const insert = async (table, data) => {
     const [r] = await pool.query(`INSERT INTO ${table} SET ?`, [data])
@@ -141,7 +142,14 @@ async function main() {
     // Virtual printer only: queued jobs are inspected and deleted without dispatch.
     const printer = await insert('printers', { name: '字段测试虚拟机', code: `${code}-LABEL`, type: 1, warehouse_id: w, status: 1 })
     for (const printType of ['rack_label', 'location_label', 'container_label', 'package_label', 'product_label']) {
-      await insert('printer_bindings', { warehouse_id: w, print_type: printType, printer_id: printer, printer_code: `${code}-LABEL` })
+      const [[existing]] = await pool.query('SELECT * FROM printer_bindings WHERE print_type=?', [printType])
+      const binding = { warehouse_id: w, print_type: printType, printer_id: printer, printer_code: `${code}-LABEL` }
+      if (existing) {
+        originalBindings.push(existing)
+        await pool.query('UPDATE printer_bindings SET ? WHERE id=?', [binding, existing.id])
+      } else {
+        await insert('printer_bindings', binding)
+      }
     }
     const [oldDefaults] = await pool.query('SELECT id,is_default FROM print_templates WHERE type BETWEEN 5 AND 10')
     const jobIds = []
@@ -220,6 +228,11 @@ async function main() {
     console.log('[PASS] 类型3支持最新采购退货及销售退货契约'); passed++
     console.log(`${passed} passed, 0 failed`)
   } finally {
+    for (const binding of originalBindings) {
+      await pool.query('UPDATE printer_bindings SET ? WHERE id=?', [binding, binding.id])
+      const [[restored]] = await pool.query('SELECT * FROM printer_bindings WHERE id=?', [binding.id])
+      assert.deepEqual(restored, binding, '共享打印绑定须完整恢复')
+    }
     for (const [table, id] of inserted.reverse()) {
       if (table === 'sys_users') await pool.query('DELETE FROM user_warehouse_scope WHERE user_id=?', [id])
       if (table === 'sys_roles') await pool.query('DELETE FROM sys_role_permissions WHERE role_id=?', [id])

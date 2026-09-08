@@ -1,7 +1,7 @@
 {
-  "version": "0.9.12",
-  "versionCode": 120,
+  "version": "0.9.13",
+  "versionCode": 121,
   "filename": "app-release.apk",
   "releaseNote": "- 打印模板默认使用可查看的真实单据和标签数据辅助排版，没有数据时保留空白模板。",
-  "publishedAt": "2026-09-08T18:30:54.758Z"
+  "publishedAt": "2026-09-08T18:36:45.290Z"
 }

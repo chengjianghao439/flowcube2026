@@ -1,4 +1,4 @@
-# v0.9.12 全分支整合与发布记录
+# v0.9.13 全分支整合与发布记录
 
 ## 发布范围
 
@@ -18,7 +18,7 @@
 
 ## 版本与发布门禁
 
-目标三端 0.9.12，PDA versionCode 120。未新增数据库迁移。更新内容见 `docs/release-notes/0.9.12.md`，官网摘要同步。
+目标三端 0.9.13，PDA versionCode 121。未新增数据库迁移。更新内容见 `docs/release-notes/0.9.13.md`，官网摘要同步。
 
 正式发布须核对该 tag SHA 的 Tests、Security Scan、Deploy Browser App、Build Desktop Installer（tag）、Build PDA APK，及线上健康/更新清单/安装包摘要。Windows/Android 实机升级、打印走纸及快递真实订单不在本机软件验收范围内。
 
@@ -29,3 +29,7 @@ v0.9.11 的共享测试库空数据断言导致 CI 失败并阻止部署，保�
 用户于本次发布明确批准恢复并长期保留受限验收账号，发布后不删除，替代上版的一次性恢复约定。已核实并恢复 ID 8，角色仅含 dashboard.view 和 inbound.order.view；口令轮换为随机值，旧访问令牌和刷新会话撤销。GitHub Secrets 已配置 `SMOKE_LIMITED_USERNAME` / `SMOKE_LIMITED_PASSWORD`，发布页面门禁要求显式注入，保留原有 403 与有权页面的对照验证。
 
 生产备份：服务器 `backups/release-v0.9.11/flowcube_20260909_021805.sql.gz` 完整性校验通过，SHA-256 `0ecbdd0263b147293bc6b3bb56132f7a8b78b870963347b25a813a9e8829aa73`。备份保存在服务器受限目录，不冒充异地灾备验证。
+
+## v0.9.13 发布进度
+
+打印夹具恢复旧绑定并断言全部字段一致，避免前序测试残留导致唯一键冲突。按 CI 顺序完成 29 个测试文件，全部退出 0，一次性测试库已清理。发布前版本检查与最终证据记录于 `output/release-v0.9.13/`。
