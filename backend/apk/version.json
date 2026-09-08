@@ -1,7 +1,7 @@
 {
-  "version": "0.9.9",
-  "versionCode": 117,
+  "version": "0.9.10",
+  "versionCode": 118,
   "filename": "app-release.apk",
-  "releaseNote": "- 极序 Flow 启用蓝底双曲线 F 新图标，统一官网、登录页、PDA 首页及浏览器标签图标。",
-  "publishedAt": "2026-09-07T04:26:07.058Z"
+  "releaseNote": "- 新增客户、供应商往来明细，可查看期初余额、逐笔变化及期末余额，客户多付款项可在往来净额中查看。",
+  "publishedAt": "2026-09-08T09:57:37.430Z"
 }
