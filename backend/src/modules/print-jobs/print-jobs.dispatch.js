@@ -33,6 +33,7 @@ async function claimClientJobs({ clientId, limit = 3 } = {}) {
        FROM print_jobs j
        INNER JOIN printers p ON p.id = j.printer_id
        WHERE j.status = ?
+         AND (j.expires_at IS NULL OR j.expires_at > NOW())
          AND p.status = 1
          AND p.client_id = ?
        ORDER BY j.priority DESC, j.id ASC
@@ -51,20 +52,23 @@ async function claimClientJobs({ clientId, limit = 3 } = {}) {
       ackToken: crypto.randomBytes(16).toString('hex'),
     }))
 
+    const claimed = []
     for (const job of jobsWithToken) {
-      await conn.query(
+      const [result] = await conn.query(
         `UPDATE print_jobs
          SET status = ?, ack_token = ?, dispatched_at = NOW(), error_message = NULL,
              expires_at = DATE_ADD(NOW(), INTERVAL ? MINUTE)
-         WHERE id = ? AND status = ?`,
+         WHERE id = ? AND status = ?
+           AND (expires_at IS NULL OR expires_at > NOW())`,
         [STATUS.PRINTING, job.ackToken, ttlMinutes(), job.id, STATUS.PENDING],
       )
+      if (result.affectedRows) claimed.push(job)
     }
 
     await conn.commit()
 
-    const jobs = await listJobsByIds(ids, { includeAckToken: true })
-    const tokenMap = new Map(jobsWithToken.map((job) => [job.id, job.ackToken]))
+    const jobs = await listJobsByIds(claimed.map((job) => job.id), { includeAckToken: true })
+    const tokenMap = new Map(claimed.map((job) => [job.id, job.ackToken]))
     return jobs.map((job) => ({
       ...job,
       ackToken: tokenMap.get(Number(job.id)) || job.ackToken || null,

@@ -7,16 +7,8 @@
  *   - 新建标签模板的默认画布元素
  *   - 单据明细表格的列选项
  *
- * 修改打印变量时（例如后端 enqueue*LabelJob 新增一个变量），只改本文件即可，
- * 字段面板与预览数据会自动跟随，避免漏改一处导致「字段拖不出来 / 预览空白」。
- *
- * 对照后端变量来源（backend/src/modules/print-jobs/print-jobs.label-command.js）：
- *   type 5 货架:  rack_barcode, rack_code, zone, name
- *   type 6 库存:  container_code, product_name, qty
- *   type 7 物流:  box_code, task_no, customer_name, carrier_name, freight_type_name, piece_count, summary, item_list
- *   type 8 产品:  product_code, product_name, spec, unit, price
- *   type 9 塑料盒: container_code, product_name
- *   type 10 库位: location_barcode, location_code, zone, name
+ * 新增变量需同步后端共享取值与本文件，字段面板、示例值和真实打印保持一致。
+ * 标签取值来源：backend/src/modules/print-jobs/labelVariables.js。
  */
 
 import type { TemplateElement } from '@/types/print-template'
@@ -55,18 +47,34 @@ export const DOC_FIELD_DEFS: PrintFieldDef[] = [
   { key: 'itemsTable', label: '商品明细', type: 'table', defaultW: 170, defaultH: 50 },
 ]
 
-/** 各标签类型可拖拽字段（type 5–9），与后端 enqueue*LabelJob 提供变量一致 */
+/** 各标签类型可拖拽字段（type 5–10），与后端 enqueue*LabelJob 提供变量一致 */
 export const LABEL_FIELD_DEFS_BY_TYPE: Record<number, PrintFieldDef[]> = {
   5: [
     { key: 'rack_barcode', label: '货架条码', type: 'barcode', defaultW: 72, defaultH: 14 },
     { key: 'rack_code', label: '货架编码', type: 'text', defaultW: 72, defaultH: 7 },
     { key: 'zone', label: '库区', type: 'text', defaultW: 72, defaultH: 7 },
     { key: 'name', label: '名称', type: 'text', defaultW: 72, defaultH: 8 },
+    { key: 'warehouse_name', label: '仓库名称', type: 'text', defaultW: 72, defaultH: 7 },
+    { key: 'warehouse_code', label: '仓库编码', type: 'text', defaultW: 72, defaultH: 7 },
+    { key: 'max_levels', label: '货架层数', type: 'text', defaultW: 72, defaultH: 7 },
+    { key: 'max_positions', label: '每层位置数', type: 'text', defaultW: 72, defaultH: 7 },
+    { key: 'remark', label: '备注', type: 'text', defaultW: 72, defaultH: 10 },
   ],
   6: [
     { key: 'container_code', label: '库存条码', type: 'barcode', defaultW: 72, defaultH: 14 },
     { key: 'product_name', label: '品名', type: 'text', defaultW: 72, defaultH: 10 },
     { key: 'qty', label: '数量', type: 'text', defaultW: 72, defaultH: 7 },
+    { key: 'product_code', label: '商品编码', type: 'text', defaultW: 72, defaultH: 7 },
+    { key: 'article_number', label: '供应商型号', type: 'text', defaultW: 72, defaultH: 7 },
+    { key: 'spec', label: '型号', type: 'text', defaultW: 72, defaultH: 7 },
+    { key: 'color', label: '颜色', type: 'text', defaultW: 72, defaultH: 7 },
+    { key: 'unit', label: '单位', type: 'text', defaultW: 72, defaultH: 7 },
+    { key: 'warehouse_name', label: '仓库名称', type: 'text', defaultW: 72, defaultH: 7 },
+    { key: 'warehouse_code', label: '仓库编码', type: 'text', defaultW: 72, defaultH: 7 },
+    { key: 'location_code', label: '库位编码', type: 'text', defaultW: 72, defaultH: 7 },
+    { key: 'batch_no', label: '批次号', type: 'text', defaultW: 72, defaultH: 7 },
+    { key: 'mfg_date', label: '生产日期', type: 'text', defaultW: 72, defaultH: 7 },
+    { key: 'exp_date', label: '到期日期', type: 'text', defaultW: 72, defaultH: 7 },
   ],
   7: [
     { key: 'box_code', label: '物流条码', type: 'barcode', defaultW: 72, defaultH: 12 },
@@ -77,6 +85,10 @@ export const LABEL_FIELD_DEFS_BY_TYPE: Record<number, PrintFieldDef[]> = {
     { key: 'piece_count', label: '件数', type: 'text', defaultW: 32, defaultH: 6 },
     { key: 'summary', label: '行数/件数摘要', type: 'text', defaultW: 32, defaultH: 6 },
     { key: 'item_list', label: '装箱内容', type: 'text', defaultW: 72, defaultH: 12 },
+    { key: 'sale_order_no', label: '销售单号', type: 'text', defaultW: 72, defaultH: 7 },
+    { key: 'warehouse_name', label: '仓库名称', type: 'text', defaultW: 72, defaultH: 7 },
+    { key: 'warehouse_code', label: '仓库编码', type: 'text', defaultW: 72, defaultH: 7 },
+    { key: 'remark', label: '箱子备注', type: 'text', defaultW: 72, defaultH: 10 },
   ],
   8: [
     { key: 'product_code', label: '产品条码', type: 'barcode', defaultW: 72, defaultH: 14 },
@@ -84,16 +96,37 @@ export const LABEL_FIELD_DEFS_BY_TYPE: Record<number, PrintFieldDef[]> = {
     { key: 'spec', label: '型号', type: 'text', defaultW: 72, defaultH: 7 },
     { key: 'unit', label: '单位', type: 'text', defaultW: 24, defaultH: 6 },
     { key: 'price', label: '售价', type: 'text', defaultW: 40, defaultH: 6 },
+    { key: 'article_number', label: '供应商型号', type: 'text', defaultW: 72, defaultH: 7 },
+    { key: 'color', label: '颜色', type: 'text', defaultW: 72, defaultH: 7 },
   ],
   9: [
     { key: 'container_code', label: '塑料盒条码', type: 'barcode', defaultW: 72, defaultH: 16 },
     { key: 'product_name', label: '品名', type: 'text', defaultW: 72, defaultH: 12 },
+    { key: 'qty', label: '数量', type: 'text', defaultW: 72, defaultH: 7 },
+    { key: 'product_code', label: '商品编码', type: 'text', defaultW: 72, defaultH: 7 },
+    { key: 'article_number', label: '供应商型号', type: 'text', defaultW: 72, defaultH: 7 },
+    { key: 'spec', label: '型号', type: 'text', defaultW: 72, defaultH: 7 },
+    { key: 'color', label: '颜色', type: 'text', defaultW: 72, defaultH: 7 },
+    { key: 'unit', label: '单位', type: 'text', defaultW: 72, defaultH: 7 },
+    { key: 'warehouse_name', label: '仓库名称', type: 'text', defaultW: 72, defaultH: 7 },
+    { key: 'warehouse_code', label: '仓库编码', type: 'text', defaultW: 72, defaultH: 7 },
+    { key: 'location_code', label: '库位编码', type: 'text', defaultW: 72, defaultH: 7 },
+    { key: 'batch_no', label: '批次号', type: 'text', defaultW: 72, defaultH: 7 },
+    { key: 'mfg_date', label: '生产日期', type: 'text', defaultW: 72, defaultH: 7 },
+    { key: 'exp_date', label: '到期日期', type: 'text', defaultW: 72, defaultH: 7 },
   ],
   10: [
     { key: 'location_barcode', label: '库位条码', type: 'barcode', defaultW: 72, defaultH: 14 },
     { key: 'location_code', label: '库位编码', type: 'text', defaultW: 72, defaultH: 7 },
     { key: 'zone', label: '区域', type: 'text', defaultW: 72, defaultH: 7 },
     { key: 'name', label: '名称', type: 'text', defaultW: 72, defaultH: 8 },
+    { key: 'warehouse_name', label: '仓库名称', type: 'text', defaultW: 72, defaultH: 7 },
+    { key: 'warehouse_code', label: '仓库编码', type: 'text', defaultW: 72, defaultH: 7 },
+    { key: 'aisle', label: '通道', type: 'text', defaultW: 72, defaultH: 7 },
+    { key: 'rack', label: '货架号', type: 'text', defaultW: 72, defaultH: 7 },
+    { key: 'level', label: '层', type: 'text', defaultW: 72, defaultH: 7 },
+    { key: 'position', label: '位置', type: 'text', defaultW: 72, defaultH: 7 },
+    { key: 'remark', label: '备注', type: 'text', defaultW: 72, defaultH: 10 },
   ],
 }
 
@@ -118,7 +151,7 @@ export const TABLE_COLUMN_OPTIONS: TableColumnOption[] = [
 ]
 
 /**
- * 标签模板默认画布元素（type 5–9）。
+ * 标签模板默认画布元素（type 5–10）。
  * 与后端 backend/src/database/079_seed_default_print_templates.sql 种子模板同构；
  * 默认纸张 75×50mm。
  */
@@ -162,12 +195,12 @@ export const DEFAULT_LABEL_ELEMENTS: Record<number, TemplateElement[]> = {
 
 /** 标签画布预览示例数据（与打印变量一致，字段面板收敛后自动跟随） */
 export const LABEL_PREVIEW_SAMPLE: Record<number, Record<string, string>> = {
-  5: { rack_barcode: 'H000001', rack_code: 'A-01-02', zone: 'A区', name: '主通道货架' },
-  6: { container_code: 'I000123', product_name: '示例商品', qty: '12' },
-  7: { box_code: 'L000001', task_no: 'WT202403010001', customer_name: '某某客户', carrier_name: '顺丰速运', freight_type_name: '寄付', piece_count: '3 件', summary: '2 行 / 3 件', item_list: '商品A×2, 商品B×1' },
-  8: { product_code: 'SP0001', product_name: '示例 SKU', spec: '500g', unit: '件', price: '12.50' },
-  9: { container_code: 'B000456', product_name: '零散商品' },
-  10: { location_barcode: 'R000001', location_code: 'A01-01-0101', zone: 'A区', name: '主通道货架-1' },
+  5: { rack_barcode: 'H000001', rack_code: 'A-01-02', zone: 'A区', name: '主通道货架', warehouse_name: '主仓库', warehouse_code: 'WH001', max_levels: '5', max_positions: '10', remark: '主通道' },
+  6: { container_code: 'I000123', product_name: '示例商品', qty: '12', product_code: 'SP0001', article_number: 'JH-1001', spec: '500g', color: '蓝色', unit: '件', warehouse_name: '主仓库', warehouse_code: 'WH001', location_code: 'A01-01-0101', batch_no: 'BATCH-20260901', mfg_date: '2026-09-01', exp_date: '2027-09-01' },
+  7: { box_code: 'L000001', task_no: 'WT202403010001', customer_name: '某某客户', carrier_name: '顺丰速运', freight_type_name: '寄付', piece_count: '3 件', summary: '2 行 / 3 件', item_list: '商品A×2, 商品B×1', sale_order_no: 'SO202609010001', warehouse_name: '主仓库', warehouse_code: 'WH001', remark: '轻拿轻放' },
+  8: { product_code: 'SP0001', product_name: '示例 SKU', spec: '500g', unit: '件', price: '12.50', article_number: 'JH-1001', color: '蓝色' },
+  9: { container_code: 'B000456', product_name: '零散商品', qty: '12', product_code: 'SP0001', article_number: 'JH-1001', spec: '500g', color: '蓝色', unit: '件', warehouse_name: '主仓库', warehouse_code: 'WH001', location_code: 'A01-01-0101', batch_no: 'BATCH-20260901', mfg_date: '2026-09-01', exp_date: '2027-09-01' },
+  10: { location_barcode: 'R000001', location_code: 'A01-01-0101', zone: 'A区', name: '主通道货架-1', warehouse_name: '主仓库', warehouse_code: 'WH001', aisle: '01', rack: '01', level: '1', position: '1', remark: '靠近入口' },
 }
 
 /** 单据画布预览示例数据（type 1–4） */

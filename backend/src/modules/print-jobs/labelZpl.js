@@ -13,13 +13,13 @@ const { resolveLayout } = require('./labelGeometry')
 /** 203 dpi：1mm ≈ 8 点 */
 const MM_TO_DOT = 203 / 25.4
 
-function sanitizeZplValue(v) {
-  return String(v ?? '')
-    .replace(/\^/g, ' ')
-    // NUL 混进 ZPL 会让打印机把整条指令吞掉，清洗控制字符正是本函数的目的
+function sanitizeZplValue(v, { trim = true } = {}) {
+  const value = String(v ?? '')
+    // 业务值不能携带 ZPL 指令前缀或 C0/C1 控制字符；模板正文由调用方保留。
     // eslint-disable-next-line no-control-regex
-    .replace(/[\r\n\x00]/g, ' ')
-    .trim()
+    .replace(/[\^~\x00-\x1f\x7f-\x9f]/g, ' ')
+  // Code128 的普通首尾空格属于有效编码内容，不应改变其值或模块宽度。
+  return trim ? value.trim() : value
 }
 
 /**
@@ -27,14 +27,13 @@ function sanitizeZplValue(v) {
  * @param {Record<string, string|number|null|undefined>} vars
  */
 function applyZplTemplate(body, vars) {
-  let s = String(body ?? '')
+  const s = String(body ?? '')
   const keys = Object.keys(vars || {})
-  for (const key of keys) {
-    const safe = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const re = new RegExp(`\\{\\{\\s*${safe}\\s*\\}\\}`, 'g')
-    s = s.replace(re, sanitizeZplValue(vars[key]))
-  }
-  return s
+  if (!keys.length) return s
+  const alternatives = keys.map(key => key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')
+  const re = new RegExp(`\\{\\{\\s*(${alternatives})\\s*\\}\\}`, 'g')
+  // 单次 callback 替换：$& 等保持字面量，替换值中的 {{字段}} 不再次展开。
+  return s.replace(re, (_, key) => sanitizeZplValue(vars[key]))
 }
 
 function calcBarcodeModuleWidth(codeLen, desiredWidthDots) {
@@ -59,24 +58,27 @@ function mmDot(mm) {
  * @returns {string|null}
  */
 function generateZplFromElements(layout, vars, paperSize) {
-  const { widthMm, primitives } = resolveLayout(layout, vars, paperSize)
+  const { widthMm, heightMm, primitives } = resolveLayout(layout, vars, paperSize)
   if (!primitives.length) return null
 
   const widthDots = Math.round(widthMm * MM_TO_DOT)
-  let body = `^XA^CI28^LH0,0^PW${widthDots}`
+  const heightDots = mmDot(heightMm)
+  let body = `^XA^CI28^LH0,0^PW${widthDots}^LL${heightDots}`
   for (const p of primitives) {
     const x = Math.round(p.xMm * MM_TO_DOT)
     const y = Math.round(p.yMm * MM_TO_DOT)
 
     if (p.kind === 'barcode') {
+      const value = sanitizeZplValue(p.value, { trim: false })
+      if (!value) continue
       const barH = mmDot(p.heightMm)
       const hri = p.hri === false ? 'N' : 'Y'
       if (p.symbology === 'ean13') {
         // ^BE: o,h,f(HRI),g(above)
-        body += `^FO${x},${y}^BY2^BEN,${barH},${hri},N^FD${p.value}^FS`
+        body += `^FO${x},${y}^BY2^BEN,${barH},${hri},N^FD${value}^FS`
       } else {
-        const by = calcBarcodeModuleWidth(p.value.length, Math.round(p.widthMm * MM_TO_DOT))
-        body += `^FO${x},${y}^BY${by}^BCN,${barH},${hri},N,N^FD${p.value}^FS`
+        const by = calcBarcodeModuleWidth(value.length, Math.round(p.widthMm * MM_TO_DOT))
+        body += `^FO${x},${y}^BY${by}^BCN,${barH},${hri},N,N^FD${value}^FS`
       }
     } else {
       const t = sanitizeZplValue(p.text)

@@ -49,8 +49,8 @@ function isConflictError(e: unknown): boolean {
 }
 
 /**
- * 打印终态上报（complete/fail）专用：网络卡顿时短退避重试；409（任务状态已变化）说明早前某次
- * 尝试其实已经生效（比如请求送达了但响应在回程丢失），视为已上报成功，不再重试也不算失败。
+ * 打印终态上报（complete/fail）专用：网络卡顿时短退避重试；409 表示任务状态或领取令牌
+ * 已变化，继续提交同一回执没有意义，停止重试。它不证明本次回执已生效或纸张已打印。
  */
 export async function reportPrintOutcomeWithRetry(
   url: string,

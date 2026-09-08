@@ -1,0 +1,47 @@
+{
+  "database": "flowcube_printaudit_55d0c86d_test",
+  "checks": [
+    {
+      "case": "stale_failure_overwrites_new_claim",
+      "tokenChanged": true,
+      "statusAfterStaleFailure": 3,
+      "confirmed": true
+    },
+    {
+      "case": "waybill_without_binding_routes_to_label_printer",
+      "printerId": 3,
+      "printerType": 1,
+      "confirmed": true
+    },
+    {
+      "case": "warehouse_without_printer_falls_back_to_other_warehouse",
+      "jobWarehouseId": 2,
+      "printerWarehouseId": 1,
+      "confirmed": true
+    },
+    {
+      "case": "expired_pending_can_be_claimed_before_sweep",
+      "confirmed": true
+    },
+    {
+      "case": "copies_ignored_in_real_bridge_function",
+      "copiesRequested": 3,
+      "printCalls": 1,
+      "completionCalls": 1,
+      "confirmed": true
+    },
+    {
+      "case": "canvas_height_ignored_by_zpl",
+      "sameOutput": true,
+      "hasLabelLength": false,
+      "confirmed": true
+    },
+    {
+      "case": "fallback_template_unescaped_data",
+      "confirmed": true,
+      "rawTemplateTildePreserved": true
+    }
+  ],
+  "purgeExit": 0,
+  "databaseRemoved": true
+}

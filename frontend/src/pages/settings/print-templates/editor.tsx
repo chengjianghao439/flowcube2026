@@ -12,6 +12,8 @@ import { useState, useRef, useEffect, useCallback, useContext, useId, useMemo } 
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { TabPathContext } from '@/components/layout/TabPathContext'
+import { usePrintTemplatePreview } from '@/hooks/usePrintTemplatePreview'
+import { defaultPreviewElements, type PreviewTableRow } from '@/lib/printTemplatePreview'
 import { useDirtyGuard } from '@/hooks/useDirtyGuard'
 import {
   Save, Eye, EyeOff, Trash2, Loader2, X,
@@ -356,6 +358,8 @@ interface ElementNodeProps {
   selected: boolean
   preview: boolean
   previewData: Record<string, string>
+  previewItems: PreviewTableRow[]
+  useRealData: boolean
   /** mm → 画布 px（已含 MM_PX × 缩放） */
   scale: number
   /** 标签类型（5-9）：字高用 mm 真实比例、去加粗、文本走 showLabel 规则，与真机 ZPL 一致 */
@@ -369,8 +373,9 @@ interface ElementNodeProps {
   onColumnResizeStart: (e: React.MouseEvent, colKey: string) => void
 }
 
-function ElementNode({ el, selected, preview, previewData, scale, isLabel, onMouseDown, onClick, onResizeStart, onFocusSelect, onColumnResizeStart }: ElementNodeProps) {
+function ElementNode({ el, selected, preview, previewData, previewItems, useRealData, scale, isLabel, onMouseDown, onClick, onResizeStart, onFocusSelect, onColumnResizeStart }: ElementNodeProps) {
   const px = (mm: number) => mm * scale
+  const showData = preview || useRealData
   // 评审修复（P1 ①）：编辑预览的文本显示与打印端（TemplateRenderer）保持一致——
   // 打印端单据模板无条件拼「label：value」前缀；预览若不显示，用户会以为没有前缀。
   // 旧实现 sampleVal = previewData[fieldKey] ?? label 不显示前缀，是「预览≠打印」的第一处。
@@ -400,7 +405,7 @@ function ElementNode({ el, selected, preview, previewData, scale, isLabel, onMou
   if (el.type === 'image') {
     // 公司 Logo：预览态取系统 Logo URL 渲染图片；编辑态（或未上传）显示占位提示
     const src = previewData[el.fieldKey] ?? ''
-    content = preview && src ? (
+    content = showData && src ? (
       <img
         src={src}
         alt={el.label}
@@ -416,8 +421,8 @@ function ElementNode({ el, selected, preview, previewData, scale, isLabel, onMou
   } else if (el.type === 'divider') {
     content = <div className="h-px w-full bg-current" style={{ marginTop: px(el.height) / 2 - 0.5 }} />
   } else if (el.type === 'barcode') {
-    const v = (previewData[el.fieldKey] ?? '') || el.label
-    content = preview
+    const v = useRealData ? (previewData[el.fieldKey] ?? '') : ((previewData[el.fieldKey] ?? '') || el.label)
+    content = showData
       ? <div style={{ width: '100%', height: '100%', padding: '1px 2px' }}>
           <BarcodePreview value={v} symbology={el.barcodeSymbology} hri={el.barcodeHRI} />
         </div>
@@ -472,7 +477,7 @@ function ElementNode({ el, selected, preview, previewData, scale, isLabel, onMou
           </tr>
         </thead>
         <tbody>
-          {(preview ? DOC_PREVIEW_ITEMS : DOC_PREVIEW_ITEMS.slice(0, 2)).map((row, i) => (
+          {(preview ? previewItems : previewItems.slice(0, 2)).map((row, i) => (
             <tr key={i}>
               {allCols.map(k => {
                 const raw = k === '#' ? String(i + 1) : (row as Record<string, string>)[k] ?? ''
@@ -496,7 +501,7 @@ function ElementNode({ el, selected, preview, previewData, scale, isLabel, onMou
     // label 前缀恒显示；title 无前缀、取值失败回退 label，与打印端 title 分支一致）
     const docText = previewData[el.fieldKey] ?? ''
     const isDocTitle = !isLabel && el.type === 'title'
-    content = preview
+    content = showData
       ? <span
           className={!isLabel && el.type === 'title' ? 'font-semibold' : undefined}
           style={isLabel ? { fontFamily: "'Courier New', monospace" } : undefined}
@@ -1430,9 +1435,15 @@ export default function PrintTemplateEditor() {
     : elements.find(e => e.id === selectedIds[0]) ?? null
 
   const paletteFields = isZplLabelType(type) ? (LABEL_FIELD_DEFS_BY_TYPE[type] ?? []) : DOC_FIELD_DEFS
-  const previewData: Record<string, string> = isZplLabelType(type)
-    ? { ...(LABEL_PREVIEW_SAMPLE[type] ?? {}) }
-    : { ...DOC_PREVIEW_SAMPLE, companyLogo: brandLogo?.url ?? '', printDate: formatDisplayDateTime(new Date()) }
+  const realPreview = usePrintTemplatePreview(type, isNew || hydrated === Number(id))
+  const previewData: Record<string, string> = realPreview.mapped
+    ? { ...realPreview.mapped.data, companyLogo: brandLogo?.url ?? '' }
+    : isZplLabelType(type) ? { ...(LABEL_PREVIEW_SAMPLE[type] ?? {}) }
+      : { ...DOC_PREVIEW_SAMPLE, companyLogo: brandLogo?.url ?? '', printDate: formatDisplayDateTime(new Date()) }
+  const previewItems = realPreview.mapped?.items ?? DOC_PREVIEW_ITEMS
+  const seededPreview = useRef(new Set<string>())
+  const editedPreviewLayouts = useRef(new Set<string>())
+
 
   // ── Undo / redo history ──────────────────────────────────────
   // 快照为全量 EditorSnapshot（elements + type + 纸张 + 画布 + 边距）：
@@ -1489,11 +1500,23 @@ export default function PrintTemplateEditor() {
 
   /** 在改动「之前」调用：压入当前快照、清空 redo 栈 */
   const snapshot = useCallback(() => {
+    editedPreviewLayouts.current.add(`${tabPath}:${snapshotRefs.current.type}`)
     historyPast.current.push(currentSnapshot())
     if (historyPast.current.length > 100) historyPast.current.shift()
     historyFuture.current = []
     bumpHist(v => v + 1)
-  }, [currentSnapshot])
+  }, [currentSnapshot, tabPath])
+  useEffect(() => {
+    if (!realPreview.source || (!isNew && hydrated !== Number(id))) return
+    const key = `${tabPath}:${type}`
+    if (seededPreview.current.has(key)) return
+    seededPreview.current.add(key)
+    // 只给初始空布局补默认字段；后续手工清空、编辑及撤销不会被异步数据覆盖。
+    if (elementsRef.current.length === 0 && !editedPreviewLayouts.current.has(key)) {
+      snapshot()
+      setElements(defaultPreviewElements(type, paper.w, paper.h))
+    }
+  }, [realPreview.source, isNew, hydrated, id, tabPath, type, paper.w, paper.h, snapshot])
   const undo = useCallback(() => {
     if (!historyPast.current.length) return
     historyFuture.current.push(currentSnapshot())
@@ -2193,12 +2216,16 @@ export default function PrintTemplateEditor() {
             className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto bg-muted/30 p-4 gap-3"
             ref={canvasColRef}
           >
-            {preview && (
-              <div className="mx-auto flex items-center gap-2 rounded-full bg-primary/10 px-4 py-1.5 text-xs font-medium text-primary">
-                <Eye className="size-3.5" />
-                预览模式 — 示例数据
-              </div>
-            )}
+            <div className="mx-auto flex max-w-full flex-wrap items-center justify-center gap-2 text-xs text-muted-foreground" role="status">
+              {realPreview.source && <span className="max-w-full break-words">真实数据：{realPreview.source.sourceLabel}</span>}
+              {realPreview.isError ? <>
+                  <span>{(realPreview.error as { status?: number }).status === 403 ? '暂无可用业务数据（无查看权限）' : '真实数据加载失败，保留当前模板'}</span>
+                  <Button variant="ghost" size="sm" onClick={() => { void realPreview.refetch() }}>重试</Button>
+                </>
+                : !realPreview.source && (realPreview.isPending ? <span>正在加载真实数据…</span>
+                  : <span>暂无可用业务数据，保留当前模板</span>)}
+              {preview && <span>· 预览模式</span>}
+            </div>
             {!preview && (
               <p className="mx-auto text-xs text-muted-foreground text-center max-w-xl">
                 {isZplLabelType(type)
@@ -2305,6 +2332,8 @@ export default function PrintTemplateEditor() {
                     selected={selectedIds.includes(el.id)}
                     preview={preview}
                     previewData={previewData}
+                    previewItems={previewItems}
+                    useRealData={!!realPreview.source}
                     scale={canvasScale}
                     isLabel={isZplLabelType(type)}
                     onMouseDown={e => handleElementMouseDown(e, el)}

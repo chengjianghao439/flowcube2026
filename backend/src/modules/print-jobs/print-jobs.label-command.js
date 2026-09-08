@@ -1,4 +1,5 @@
 const { pool } = require('../../config/db')
+const { readLabelVariables, containerLabelVariables } = require('./labelVariables')
 const AppError = require('../../utils/AppError')
 const logger = require('../../utils/logger')
 const { resolvePrinterForJob } = require('./print-dispatch')
@@ -15,19 +16,24 @@ const { create, createWithinTransaction } = require('./print-jobs.command')
 const { findById } = require('./print-jobs.query')
 const { getDispatchHintForJob } = require('./print-jobs.dispatch')
 
-async function resolveLabelPrinterId() {
+async function resolveLabelPrinterId(warehouseId) {
+  const wh = Number(warehouseId)
+  const scoped = Number.isFinite(wh) && wh > 0
+  const scopeSql = scoped ? ' AND (warehouse_id IS NULL OR warehouse_id = ?)' : ''
+  const scopeParams = scoped ? [wh] : []
   const code = (process.env.INBOUND_LABEL_PRINTER_CODE || process.env.PDA_LABEL_PRINTER_CODE || '').trim()
   if (code) {
     const [[byCode]] = await pool.query(
-      'SELECT id, code FROM printers WHERE code = ? AND status = 1',
-      [code],
+      `SELECT id, code FROM printers WHERE code = ? AND status = 1 AND type = 1${scopeSql}`,
+      [code, ...scopeParams],
     )
     if (byCode) return byCode.id
-    logger.warn(`[print] 环境变量指定的标签机 code=${code} 不存在或未在线，将尝试使用默认标签机`, {}, 'PrintJobs')
+    logger.warn(`[print] 环境变量指定的标签机 code=${code} 不可用于当前仓库，将尝试使用同仓或全局标签机`, {}, 'PrintJobs')
   }
   const [[first]] = await pool.query(
-    `SELECT id, code FROM printers WHERE status = 1 AND type = 1
+    `SELECT id, code FROM printers WHERE status = 1 AND type = 1${scopeSql}
      ORDER BY id ASC LIMIT 1`,
+    scopeParams,
   )
   return first?.id ?? null
 }
@@ -83,7 +89,7 @@ async function resolveLabelPrinter({
   let printerId = resolved.printerId
   let dispatchReason = resolved.dispatchReason || 'fallback'
   if (!printerId && !requireBinding) {
-    printerId = await resolveLabelPrinterId()
+    printerId = await resolveLabelPrinterId(wh)
     dispatchReason = 'fallback'
   }
   return { printerId, dispatchReason }
@@ -123,12 +129,14 @@ async function enqueueContainerLabelJob(payload) {
     jobType: 'container_label',
   })
   if (!printerId) return null
+  const isPlasticBox = String(data.container_code || '').toUpperCase().startsWith('B')
+  const source = containerId > 0 ? await readLabelVariables(isPlasticBox ? 9 : 6, { id: containerId, conn: conn || pool }) : null
   const vars = {
+    ...(source?.vars || containerLabelVariables()),
     container_code: data.container_code,
     product_name: data.product_name,
     qty: data.qty,
   }
-  const isPlasticBox = String(data.container_code || '').toUpperCase().startsWith('B')
   const label = await buildLabelBody({
     printerId,
     templateType: isPlasticBox ? 9 : 6,
@@ -157,14 +165,11 @@ async function enqueueRackLabelJob(payload) {
   const rackId = payload?.rackId
   if (!rackId) return null
   let row
+  let vars
   try {
-    const [rows] = await pool.query(
-      `SELECT r.id, r.barcode, r.code, r.zone, r.name, r.warehouse_id
-       FROM warehouse_racks r
-       WHERE r.id = ? AND r.deleted_at IS NULL`,
-      [rackId],
-    )
-    row = rows[0]
+    const source = await readLabelVariables(5, { id: rackId })
+    row = source?.row
+    vars = source?.vars
   } catch (e) {
     if (e.code === 'ER_BAD_FIELD_ERROR' || /Unknown column ['`]?barcode/i.test(String(e.message))) {
       throw new AppError('数据库缺少 warehouse_racks.barcode，请执行迁移 051_warehouse_racks_barcode.sql', 503, 'DB_CONFIG_MISSING')
@@ -178,12 +183,6 @@ async function enqueueRackLabelJob(payload) {
     jobType: 'rack_label',
   })
   if (!printerId) return null
-  const vars = {
-    rack_barcode: row.barcode,
-    rack_code: row.code,
-    zone: row.zone,
-    name: row.name,
-  }
   const label = await buildLabelBody({
     printerId,
     templateType: 5,
@@ -228,12 +227,8 @@ async function enqueueRackLabelJob(payload) {
 async function enqueueLocationLabelJob(payload) {
   const locationId = payload?.locationId
   if (!locationId) return null
-  const [[row]] = await pool.query(
-    `SELECT wl.id, wl.barcode, wl.code, wl.zone, wl.aisle, wl.rack, wl.level, wl.position, wl.name, wl.warehouse_id
-     FROM warehouse_locations wl
-     WHERE wl.id = ? AND wl.deleted_at IS NULL`,
-    [locationId],
-  )
+  const source = await readLabelVariables(10, { id: locationId })
+  const row = source?.row
   if (!row || !row.barcode) return null
   const wh = row.warehouse_id != null ? Number(row.warehouse_id) : null
   const { printerId, dispatchReason } = await resolveLabelPrinter({
@@ -241,12 +236,7 @@ async function enqueueLocationLabelJob(payload) {
     jobType: 'location_label',
   })
   if (!printerId) return null
-  const vars = {
-    location_barcode: row.barcode,
-    location_code: row.code,
-    zone: row.zone,
-    name: row.name,
-  }
+  const vars = source.vars
   const label = await buildLabelBody({
     printerId,
     templateType: 10,
@@ -290,33 +280,9 @@ async function enqueuePackageLabelJob(payload) {
   const packageId = payload?.packageId
   if (!packageId) return null
   const conn = payload?.conn || null
-  const exec = conn || pool
-  const [[row]] = await exec.query(
-    `SELECT p.id, p.barcode, wt.task_no, wt.customer_name, wt.warehouse_id, so.freight_type,
-            c.name AS carrier_name,
-            (SELECT COUNT(*) FROM package_items pi WHERE pi.package_id = p.id) AS line_count,
-            (SELECT COALESCE(SUM(pi.qty), 0) FROM package_items pi WHERE pi.package_id = p.id) AS total_qty
-     FROM packages p
-     JOIN warehouse_tasks wt ON wt.id = p.warehouse_task_id
-     LEFT JOIN sale_orders so ON so.id = wt.sale_order_id
-     LEFT JOIN carriers c ON c.id = so.carrier_id
-     WHERE p.id = ?`,
-    [packageId],
-  )
+  const source = await readLabelVariables(7, { id: packageId, conn: conn || pool })
+  const row = source?.row
   if (!row) return null
-
-  const [itemRows] = await exec.query(
-    `SELECT pi.qty, pr.name AS product_name
-     FROM package_items pi
-     JOIN product_items pr ON pr.id = pi.product_id
-     WHERE pi.package_id = ?
-     ORDER BY pi.id`,
-    [packageId],
-  )
-  const itemList = (itemRows || []).map(it => `${it.product_name}×${it.qty}`).join(', ')
-  const freightLabels = { 1: '寄付', 2: '到付', 3: '第三方付' }
-  const freightName = freightLabels[row.freight_type] || ''
-  const pieceCount = `${Number(row.total_qty)} 件`
 
   const wh = row.warehouse_id != null ? Number(row.warehouse_id) : null
   const { printerId, dispatchReason } = await resolveLabelPrinter({
@@ -326,16 +292,7 @@ async function enqueuePackageLabelJob(payload) {
     allowBindingFallback: false,
   })
   if (!printerId) return null
-  const vars = {
-    box_code: row.barcode,
-    task_no: row.task_no,
-    customer_name: row.customer_name,
-    carrier_name: row.carrier_name || '',
-    freight_type_name: freightName,
-    piece_count: pieceCount,
-    item_list: itemList,
-    summary: `${Number(row.line_count)} 行 / ${Number(row.total_qty)} 件`,
-  }
+  const vars = source.vars
   const label = await buildLabelBody({
     printerId,
     templateType: 7,
@@ -366,7 +323,7 @@ async function enqueuePackageLabelJob(payload) {
  * 平台取号成功后由**异步 worker（事务外）**调用，把平台返回的面单 ZPL 原样入队走现有 print_jobs 链。
  * 面单版式由快递平台决定，**不经本地模板**（不 buildLabelBody）。
  * 无面单机绑定时返回 null（跳过入队，取号仍算成功，之后可用 reprintLogisticsBarcode 补打），
- * 绝不退回 type=1 标签机（面单不能印到普通标签机上）。
+ * 只使用明确配置的 waybill 用途绑定，不自动回退到普通标签机。
  * jobUniqueKey 默认 `waybill:<id>`，同运单重复入队幂等（活跃期唯一索引挡重复出纸）。
  */
 async function enqueueWaybillLabelJob(payload) {
@@ -378,8 +335,8 @@ async function enqueueWaybillLabelJob(payload) {
     warehouseId: Number.isFinite(wh) && wh > 0 ? wh : undefined,
     jobType: 'waybill',
     contentType: 'zpl',
-    requireBinding: false,
-    allowBindingFallback: true,
+    requireBinding: true,
+    allowBindingFallback: false,
   })
   const printerId = resolved?.printerId
   if (!printerId) return null
@@ -403,12 +360,8 @@ async function enqueueWaybillLabelJob(payload) {
 async function enqueueProductLabelJob(payload) {
   const productId = payload?.productId
   if (!productId) return null
-  const [[row]] = await pool.query(
-    `SELECT p.id, p.code, p.name, p.spec, p.unit, p.sale_price
-     FROM product_items p
-     WHERE p.id = ? AND p.deleted_at IS NULL`,
-    [productId],
-  )
+  const source = await readLabelVariables(8, { id: productId })
+  const row = source?.row
   if (!row) return null
 
   // 商品无仓库归属：优先派给发起请求的那台桌面客户端的打印机，避免跨仓库出纸
@@ -418,13 +371,7 @@ async function enqueueProductLabelJob(payload) {
   })
   if (!printerId) return null
 
-  const vars = {
-    product_code: row.code,
-    product_name: row.name,
-    spec: row.spec,
-    unit: row.unit,
-    price: row.sale_price != null ? Number(row.sale_price).toFixed(2) : '',
-  }
+  const vars = source.vars
   const label = await buildLabelBody({
     printerId,
     templateType: 8,

@@ -116,7 +116,7 @@ async function completeLocal(req, res, next) {
 
 async function fail(req, res, next) {
   try {
-    return successResponse(res, await svc.fail(+req.params.id, req.body.errorMessage))
+    return successResponse(res, await svc.fail(+req.params.id, req.body))
   } catch (e) {
     next(e)
   }

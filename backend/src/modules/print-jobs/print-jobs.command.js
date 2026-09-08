@@ -74,6 +74,10 @@ async function createRecord(exec, {
     )
   }
 
+  if (typeof copies !== 'number' || !Number.isInteger(copies) || copies < 1 || copies > 100) {
+    throw new AppError('打印份数必须为 1–100 的整数', 400, 'PRINT_COPIES_INVALID')
+  }
+
   const jobUniqueKey = jobUniqueKeyRaw != null ? String(jobUniqueKeyRaw).trim() || null : null
   if (jobUniqueKey && jobUniqueKey.length > 160) {
     throw new AppError('jobUniqueKey 长度不能超过 160', 400, 'PRINT_JOB_UNIQUE_KEY_TOO_LONG')
@@ -312,7 +316,10 @@ async function completeLocalDesktop(id) {
   return findById(id)
 }
 
-async function fail(id, errorMessage) {
+async function fail(id, { ackToken, errorMessage } = {}) {
+  if (typeof ackToken !== 'string' || !ackToken.trim()) {
+    throw new AppError('缺少本次领取令牌，无法标记打印失败', 400, 'PRINT_ACK_TOKEN_REQUIRED')
+  }
   const job = await findById(id)
   const retryCount = Math.min(Number(job.retryCount || 0) + 1, MAX_RETRY)
 
@@ -320,8 +327,8 @@ async function fail(id, errorMessage) {
   const [ur] = await pool.query(
     `UPDATE print_jobs
      SET status=?, retry_count=?, error_message=?, ack_token=NULL, dispatched_at=NULL
-     WHERE id=? AND status IN (?, ?)`,
-    [STATUS.FAILED, retryCount, msg, id, STATUS.PENDING, STATUS.PRINTING],
+     WHERE id=? AND status=? AND ack_token=?`,
+    [STATUS.FAILED, retryCount, msg, id, STATUS.PRINTING, ackToken],
   )
   if (!ur.affectedRows) {
     throw new AppError('打印任务状态已变化，无法标记失败', 409, 'PRINT_JOB_STATE_CONFLICT')
