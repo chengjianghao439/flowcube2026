@@ -52,6 +52,7 @@ bump 三端版本 ──┐
 按顺序执行。用户明确要求发版后，可沿用本次任务已确认的范围，自行选择常规 patch 版本并整理更新内容，先向用户说明再执行；不要逐步重复索要同一授权。重大兼容性变化、范围不明或用户未授权的生产操作仍需澄清。仅咨询发版流程不构成发布授权。
 
 ### 0. 前置检查
+- 生产页面门禁须配置主账号 `SMOKE_USERNAME` / `SMOKE_PASSWORD` 与受限账号 `SMOKE_LIMITED_USERNAME` / `SMOKE_LIMITED_PASSWORD` 四项 Secrets。受限账号按用户 2026-09-09 授权长期保留、发布后不删除，使用随机口令及仅仪表盘/收货查看权限；不恢复源码固定测试口令，不自动恢复其他已删除账号，不跳过权限门禁。
 - 确认在项目根目录、当前在 `main`、工作区干净、本地 main 与 `origin/main` 一致。
   ```bash
   git rev-parse --abbrev-ref HEAD   # 应为 main

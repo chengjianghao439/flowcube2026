@@ -65,6 +65,9 @@ export default function CarriersPage() {
 
   const columns: TableColumn<Carrier>[] = [
     { key: 'name', title: '承运商 / 编号', width: 260, render: (_, row) => <RecordIdentity title={row.name} code={row.code} /> },
+    { key: 'platformCode', title: '对接平台', width: 130, render: v => WAYBILL_PLATFORM_OPTIONS.find(o => o.value === v)?.label || '未设置' },
+    { key: 'monthlyAccount', title: '月结账号', width: 160, render: v => (v as string) || '未填写' },
+    { key: 'accountBinding', title: '快递账号', width: 130, render: (_, row) => (!row.platformCode || ['sf', 'deppon'].includes(row.platformCode)) ? <Button variant="link" className="px-0" onClick={() => navigate(`/carrier-accounts?carrierId=${row.id}`)}>管理月结账号</Button> : '—' },
     { key: 'type',     title: '类型', width: 80,
       render: v => CARRIER_TYPE_LABELS[v as CarrierType] },
     { key: 'contact',  title: '联系人',
@@ -128,6 +131,16 @@ export default function CarriersPage() {
 
           {/* 电子面单对接（文档 06）。密钥走服务端 env，前端只填非敏感对接项。 */}
           <div className="col-span-2 border-t border-border pt-4 mt-1 space-y-4">
+            <div>
+              <Label>快递公司 / 对接平台</Label>
+              <Select value={form.platformCode || ''} onValueChange={v => setForm(f => ({ ...f, platformCode: v, shippingProduct: '', shippingDeliveryType: '' }))}>
+                <SelectTrigger aria-label="快递公司 / 对接平台" className="mt-1"><SelectValue placeholder="选择平台" /></SelectTrigger>
+                <SelectContent>
+                  {WAYBILL_PLATFORM_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <p className="text-sm text-muted-foreground">在这里选择一次，快递账号绑定页会自动带入。尚未对接的物流可留空，选择平台不会启用自动下单。</p>
             <div className="flex items-center justify-between">
               <Label>电子面单取号</Label>
               <Select value={form.waybillEnabled ? '1' : '0'} onValueChange={v => set('waybillEnabled', v === '1')}>
@@ -140,15 +153,6 @@ export default function CarriersPage() {
             </div>
             {form.waybillEnabled && (
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label>对接平台</Label>
-                  <Select value={form.platformCode || ''} onValueChange={v => setForm(f => ({ ...f, platformCode: v, shippingProduct: '', shippingDeliveryType: '' }))}>
-                    <SelectTrigger aria-label="对接平台" className="mt-1"><SelectValue placeholder="选择平台" /></SelectTrigger>
-                    <SelectContent>
-                      {WAYBILL_PLATFORM_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
                 {['sf', 'deppon'].includes(form.platformCode || '') && <>
                   <div><Label htmlFor="carrier-product">默认发货产品</Label><div className="mt-1"><ShippingProductField id="carrier-product" platform={form.platformCode} value={form.shippingProduct || ''} onChange={v => set('shippingProduct', v)} /></div>
                     <p className="mt-1 text-xs text-muted-foreground">按月结合同填写，销售单可单独指定；顺丰航空服务以合同产品为准。</p></div>

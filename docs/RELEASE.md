@@ -90,6 +90,7 @@ Electron 使用 `file://` 打开页面时没有浏览器域名，旧逻辑会默
 - Secrets
   - `SSH_PRIVATE_KEY`
   - `SMOKE_USERNAME`、`SMOKE_PASSWORD`（服务器页面与对账回跳门禁账号）
+  - `SMOKE_LIMITED_USERNAME`、`SMOKE_LIMITED_PASSWORD`（长期保留的受限权限验收账号，仅仪表盘和收货查看；使用随机口令，不复用源码测试口令）
 
 说明：
 

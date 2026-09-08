@@ -78,7 +78,13 @@ services:
       APP_UPDATE_DOWNLOADS_DIR: /var/www/flowcube-downloads
       # 日志集中检索（P2-12）：起 observability profile 后填 loki 服务地址即可接入
       LOKI_URL: ${LOKI_URL:-}
-      # 德邦正式直连凭据仅传给后端；测试配置不能用于生产运行。
+      # 官方快递连接仅注入后端；从根目录私有 .env 读取，不能进入 Vite 构建。
+      WAYBILL_SF_MAIN_APP_ID: ${WAYBILL_SF_MAIN_APP_ID:-}
+      WAYBILL_SF_MAIN_APP_KEY: ${WAYBILL_SF_MAIN_APP_KEY:-}
+      WAYBILL_SF_MAIN_MODE: ${WAYBILL_SF_MAIN_MODE:-production}
+      WAYBILL_SF_MAIN_API_BASE: ${WAYBILL_SF_MAIN_API_BASE:-https://sfapi.sf-express.com/std/service}
+      WAYBILL_SF_MAIN_PRODUCTS: ${WAYBILL_SF_MAIN_PRODUCTS:-}
+      WAYBILL_SF_MAIN_VERIFIED_MONTHLY_ACCOUNTS: ${WAYBILL_SF_MAIN_VERIFIED_MONTHLY_ACCOUNTS:-}
       WAYBILL_DEPPON_MAIN_APP_ID: ${WAYBILL_DEPPON_MAIN_APP_ID:-}
       WAYBILL_DEPPON_MAIN_APP_KEY: ${WAYBILL_DEPPON_MAIN_APP_KEY:-}
       WAYBILL_DEPPON_MAIN_MODE: ${WAYBILL_DEPPON_MAIN_MODE:-production}

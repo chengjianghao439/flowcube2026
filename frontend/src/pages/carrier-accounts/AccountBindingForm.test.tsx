@@ -15,7 +15,9 @@ async function render(data = base, canEdit = true) {
 test('缺少接口配置时明确显示待开通；仓库表单不采集密钥、技术引用、重量或短信验证码', async () => {
   const h = await render()
   try {
-    expect(h.host.textContent).toContain('等待管理员开通')
+    expect(h.host.textContent).toContain('快递接口未开通')
+    expect(h.host.querySelectorAll('[role="status"]')).toHaveLength(1)
+    expect(h.host.textContent).not.toMatch(/下一步|开通条件|部署维护人员|不是登录手机号|默认 1 kg/)
     const labels = Array.from(h.host.querySelectorAll('label')).map(e => e.textContent).join(' ')
     expect(labels).toContain('月结账号')
     expect(labels).not.toMatch(/密钥|凭据|重量|验证码|产品编码/)

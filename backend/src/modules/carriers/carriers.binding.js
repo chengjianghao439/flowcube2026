@@ -3,6 +3,8 @@ const crypto = require('node:crypto')
 const AppError = require('../../utils/AppError')
 const { credentials } = require('../logistics/carrier-adapters/direct-common')
 const { normalizeProduct } = require('../logistics/shipping-products')
+// 2026-09-08 核对顺丰官方 /laas/menu/getExpressTypeMenu.pub；展示产品不代表月结合同已授权。
+const SF_OPTIONS = [{ code: '1', label: '顺丰特快' }, { code: '2', label: '顺丰标快' }]
 const DEPPON_OPTIONS = [ ['DJBK', '大件标快'], ['DJTK', '大件特快'], ['DJTH', '大件特惠'], ['XJBK', '小件标快'], ['XJTK', '小件特快'], ['XJTH', '小件特惠'], ['YTYDS', '精准大票电商'] ].map(([code, label]) => ({ code, label }))
 const clean = v => String(v || '').trim()
 function platformFor(row, selected) {
@@ -68,7 +70,7 @@ function createBindingService({ pool, operations, getCredential = ref => require
       }
       connectionReady = true
     } catch { /* 仅输出准备状态，不能把凭据或原始错误回传 */ }
-    const products = platformCode === 'deppon' ? DEPPON_OPTIONS : (setup.products || []).filter(p => {
+    const products = platformCode === 'deppon' ? DEPPON_OPTIONS : (setup.products?.length ? setup.products : SF_OPTIONS).filter(p => {
       try { return !!normalizeProduct(platformCode, p.code) && typeof p.label === 'string' && p.label.trim().length > 0 && p.label.length <= 40 } catch { return false }
     }).map(p => ({ code: clean(p.code), label: p.label.trim() }))
     const accountVerified = !!row.monthly_account && (setup.verifiedAccounts || []).includes(row.monthly_account)

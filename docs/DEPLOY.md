@@ -224,3 +224,7 @@ node backend/scripts/check-error-tracking.js --send-test # 显式发送无业务
 探针关闭 SDK client reports，仅发送一条合成事件；底层 HTTP 请求 4 秒未完成则 destroy，flush 等待不能代替 socket 释放。只有接收端 HTTP 2xx 且 flush 完成才返回成功；还须在平台按事件 ID 核对检索、分组和告警。生产错误上报的 client reports 默认行为未改变。缺 DSN 返回 2，未接收或网络失败返回 1；不输出 DSN/密钥。生产接收端与自动异地备份目标仍未配置，需要提供获准服务/安全配置位置并单独完成实际验收，不能根据本机测试标记已接通。
 
 发版秘密扫描覆盖本次候选快照及归档证据。`.gitleaks.toml`精确列出二轮探针四个固定幂等键与一份源码SHA256，均已核实为非认证值；不排除审计目录，不扩大为任意request_key或哈希放行。
+
+## 受限权限门禁凭据（v0.9.11）
+
+正式页面验收同时要求主账号 `SMOKE_USERNAME` / `SMOKE_PASSWORD` 和受限账号 `SMOKE_LIMITED_USERNAME` / `SMOKE_LIMITED_PASSWORD`；配置到 GitHub Secrets，由部署步骤透传到远端 gate 容器，不打入镜像、不写日志或源码。手动运行 release:gate 同样需要显式安全注入四项。缺少配置即失败，不跳过 403 对照。受限账号按用户 2026-09-09 明确授权长期保留，发布后不删除；只能保留 dashboard.view / inbound.order.view。

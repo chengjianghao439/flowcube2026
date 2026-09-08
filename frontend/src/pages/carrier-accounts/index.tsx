@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
@@ -13,12 +13,13 @@ import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { createRequestKey } from '@/lib/requestKey'
 import { toast } from '@/lib/toast'
-import type { SaveCarrierAccountBinding, PauseCarrierAccountBinding, NewCarrierAccount } from '@/types/carriers'
+import type { CarrierAccountBinding, SaveCarrierAccountBinding, PauseCarrierAccountBinding, NewCarrierAccount } from '@/types/carriers'
 import { AccountBindingForm } from './AccountBindingForm'
 import { NewAccountForm } from './NewAccountForm'
 
 export default function CarrierAccountsPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [params] = useSearchParams()
   const [carrierId, setCarrierId] = useState(params.get('carrierId') || '')
   const [chosenPlatform, setPlatform] = useState<'' | 'sf' | 'deppon'>('')
@@ -26,6 +27,8 @@ export default function CarrierAccountsPage() {
   const [creating, setCreating] = useState(false)
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
+  const [editingData, setEditingData] = useState<CarrierAccountBinding | null>(null)
+  const lastRequested = useRef(location.key)
   const [nextSelection, setNextSelection] = useState<string | null>(null)
   const createAttempt = useRef({ signature: '', key: '' })
   const busy = useRef(false)
@@ -38,11 +41,25 @@ export default function CarrierAccountsPage() {
   const visible = available.filter(c => `${c.name} ${c.monthlyAccount || ''} ${c.code}`.toLowerCase().includes(keyword.trim().toLowerCase()))
   const selected = available.find(c => String(c.id) === carrierId)
   const platform = (selected?.platformCode || chosenPlatform) as '' | 'sf' | 'deppon'
-  const queryKey = ['carrier-account-binding', carrierId, platform]
+  const queryKey = ['carriers', 'account-binding-detail', carrierId, platform]
   const binding = useQuery({ queryKey, queryFn: () => getCarrierAccountBindingApi(Number(carrierId), platform as 'sf' | 'deppon'), enabled: !creating && !!selected && !!platform, refetchOnWindowFocus: false })
-  function switchTo(id: string) {
+  const switchTo = useCallback((id: string) => {
+    setEditingData(null)
     setCreating(id === 'new'); setCarrierId(id === 'new' ? '' : id); setPlatform(''); setDirty(false); setNextSelection(null)
-  }
+  }, [])
+  useEffect(() => {
+    if (location.pathname !== '/carrier-accounts' || location.key === lastRequested.current) return
+    lastRequested.current = location.key
+    const requested = params.get('carrierId')
+    if (!requested || requested === carrierId) return
+    if (dirty) setNextSelection(requested)
+    else switchTo(requested)
+  }, [params, location.pathname, location.key, carrierId, dirty, switchTo])
+  const onBindingDirty = useCallback((value: boolean) => {
+    setDirty(value)
+    setEditingData(previous => value ? previous || binding.data || null : null)
+  }, [binding.data])
+  const formData = dirty && editingData ? editingData : binding.data
   function select(id: string) {
     if (saving) return
     if (dirty) { setNextSelection(id); return }
@@ -54,9 +71,9 @@ export default function CarrierAccountsPage() {
     busy.current = true; setSaving(true)
     try {
       const result = await saveCarrierAccountBindingApi(Number(carrierId), input)
-      client.setQueryData(queryKey, result); setDirty(false)
+      client.setQueryData(queryKey, result); setDirty(false); setEditingData(null)
       await refreshCarriers()
-      toast.success('action' in input ? input.action === 'unbind' ? '账号已解绑，历史记录已保留' : '自动下单已暂停' : input.enabled ? '自动下单已启用' : '月结资料已保存，请查看开通进度')
+      toast.success('action' in input ? input.action === 'unbind' ? '账号已解绑，历史记录已保留' : '自动下单已暂停' : input.enabled ? '自动下单已启用' : '月结资料已保存')
     } finally { busy.current = false; setSaving(false) }
   }
   async function create(data: NewCarrierAccount) {
@@ -68,11 +85,11 @@ export default function CarrierAccountsPage() {
       const result = await createCarrierAccountApi(data, createAttempt.current.key)
       await refreshCarriers()
       switchTo(String(result.id)); createAttempt.current = { signature: '', key: '' }
-      toast.success('账号已新增，请继续选择常用服务')
+      toast.success('承运商账号已新增')
     } finally { busy.current = false; setSaving(false) }
   }
   return <div className="p-4 sm:p-6">
-    <PageHeader title="快递账号绑定" description="管理顺丰、德邦月结账号。新增和保存资料均不会自动发货。" actions={<>{canCreate && <Button disabled={saving} onClick={() => select('new')}>新增账号</Button>}<Button variant="outline" disabled={saving || dirty || creating} onClick={() => navigate('/carriers')}>承运商管理</Button></>} />
+    <PageHeader title="快递账号绑定" description="管理顺丰、德邦月结账号。" actions={<>{canCreate && <Button disabled={saving} onClick={() => select('new')}>新增承运商账号</Button>}<Button variant="outline" disabled={saving || dirty || creating} onClick={() => navigate('/carriers')}>承运商管理</Button></>} />
     <div className="grid items-start gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
       <aside aria-label="快递账号列表" className="min-w-0 space-y-3">
         <Input aria-label="搜索快递账号" placeholder="搜索名称或月结号" value={keyword} onChange={e => setKeyword(e.target.value)} />
@@ -85,12 +102,13 @@ export default function CarrierAccountsPage() {
         </div>}
       </aside>
       <section aria-label="账号管理" className="min-w-0 rounded-lg border bg-card p-4 sm:p-6">
-        {creating && canCreate ? <NewAccountForm onDirtyChange={setDirty} saving={saving} onCreate={create} onCancel={() => select('')} /> : !selected ? <div className="py-10"><h2 className="font-medium">选择一个账号，或新增快递账号</h2><p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground">已有承运商可直接选择并填写月结号。修改、暂停和解绑都在这里完成，无需填写接口密钥。</p></div> : <>
+        {creating && canCreate ? <NewAccountForm onDirtyChange={setDirty} saving={saving} onCreate={create} onCancel={() => select('')} /> : !selected ? <div className="py-10"><h2 className="font-medium">选择承运商，管理它的快递账号</h2><p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground">从左侧选择已有承运商，或新增账号。</p></div> : <>
           <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b pb-4"><div><h2 className="font-semibold">{selected.name}</h2><p className="mt-1 text-sm text-muted-foreground">{selected.code} · {selected.isActive ? '承运商正常使用' : '承运商已停用'}</p></div><div className="flex flex-wrap gap-2">
             {platform && <Button variant="outline" disabled={saving || dirty || binding.isFetching} onClick={() => void binding.refetch()}>刷新开通状态</Button>}
           </div></div>
-          {!selected.platformCode && <div className="mb-6 max-w-xs space-y-2"><Label htmlFor="binding-company">快递公司</Label><Select value={platform || '__empty__'} disabled={saving || dirty || !canEdit} onValueChange={v => setPlatform(v === '__empty__' ? '' : v as 'sf' | 'deppon')}><SelectTrigger id="binding-company"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="__empty__">请选择快递公司</SelectItem><SelectItem value="sf">顺丰</SelectItem><SelectItem value="deppon">德邦</SelectItem></SelectContent></Select></div>}
-          {!platform ? <p className="text-sm text-muted-foreground">请先选择快递公司，再绑定月结账号。</p> : binding.isError ? <p role="alert">{binding.error instanceof Error ? binding.error.message : '开通状态读取失败，请刷新重试'}</p> : binding.data ? <AccountBindingForm key={`${carrierId}:${platform}:${binding.data.revision}`} data={binding.data} canEdit={canEdit} saving={saving} onSave={save} onDirtyChange={setDirty} /> : <p role="status">正在检查账号准备状态…</p>}
+          {selected.platformCode && <p className="mb-5 text-sm"><span className="font-medium">快递公司：{platform === 'sf' ? '顺丰' : '德邦'}</span><span className="ml-3 text-muted-foreground">承运商资料已带入</span></p>}
+          {!selected.platformCode && <div className="mb-6 max-w-xs space-y-2"><Label htmlFor="binding-company">补充快递公司</Label><Select value={platform || '__empty__'} disabled={saving || dirty || !canEdit} onValueChange={v => setPlatform(v === '__empty__' ? '' : v as 'sf' | 'deppon')}><SelectTrigger id="binding-company"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="__empty__">请选择快递公司</SelectItem><SelectItem value="sf">顺丰</SelectItem><SelectItem value="deppon">德邦</SelectItem></SelectContent></Select></div>}
+          {!platform ? <p className="text-sm text-muted-foreground">请选择快递公司。</p> : binding.isError ? <p role="alert">{binding.error instanceof Error ? binding.error.message : '开通状态读取失败，请刷新重试'}</p> : formData ? <AccountBindingForm key={`${carrierId}:${platform}:${formData.revision}`} data={formData} canEdit={canEdit} saving={saving} onSave={save} onDirtyChange={onBindingDirty} /> : <p role="status">正在检查账号准备状态…</p>}
         </>}
       </section>
     </div>

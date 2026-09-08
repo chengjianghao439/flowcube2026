@@ -26,6 +26,17 @@ test('状态只返回当前账号是否验收，不泄漏密钥、接入地址�
   assert.doesNotMatch(JSON.stringify(v), /SECRET_MUST_NOT_LEAK|TEST_ID|PRIVATE_OTHER_ACCOUNT|sfapi/)
   assert.equal(v.products[0].label, '日常普快')
 })
+test('顺丰内置官方常用服务，不依赖手填产品配置且不冒充月结授权', async () => {
+  const h = harness({ s: { products: [], verifiedAccounts: [] } })
+  const v = await h.svc.get(7)
+  assert.deepEqual(v.products, [{ code: '1', label: '顺丰特快' }, { code: '2', label: '顺丰标快' }])
+  assert.equal(v.productReady, true)
+  assert.equal(v.accountVerified, false)
+  assert.equal(v.canEnable, false)
+  const saved = await h.svc.save(7, input(v, { shippingProduct: '1' }))
+  assert.equal(saved.shippingProduct, '1')
+  assert.equal(saved.enabled, false)
+})
 test('缺少平台配置也能先保存月结号，但不得宣称账号已验收或启用', async () => {
   const h = harness({ c: null }); const v = await h.svc.get(7)
   assert.equal(v.canEnable, false); assert.equal(v.connectionReady, false)

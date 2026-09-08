@@ -92,6 +92,65 @@ test('德邦按客户订单号查原单，不能再次create追加子件', async
   })
   assert.equal((await adapter('deppon').lookupOrder(payload('deppon'))).trackingNo, 'DPK_TEST_001')
 })
+const depponSandboxCreate = 'http://27.115.3.108:10348/dop-interface-async/standard-order/createOrderNotify.action'
+const depponSandboxQuery = 'http://27.115.3.108:10347/dop-interface-sync/standard-query/queryOriginalOrderInfo.action'
+test('德邦指定HTTP沙箱可下单并查原单，禁止跟随重定向', async t => {
+  const p = payload('deppon')
+  p.credential.apiBase = depponSandboxCreate
+  p.credential.queryApiBase = depponSandboxQuery
+  fakeFetch(t, { result: 'true', mailNo: 'DPK_TEST_001' }, (url, options) => {
+    assert.equal(url, depponSandboxCreate)
+    assert.equal(options.redirect, 'error')
+  })
+  assert.equal((await adapter('deppon').createOrder(p)).trackingNo, 'DPK_TEST_001')
+  t.mock.restoreAll()
+  fakeFetch(t, { result: 'true', data: { custOrderNo: p.waybill.waybillNo, mailNo: 'DPK_TEST_001' } }, (url, options, form) => {
+    assert.equal(url, depponSandboxQuery)
+    assert.equal(options.redirect, 'error')
+    assert.deepEqual(JSON.parse(form.get('params')), { custOrderNo: p.waybill.waybillNo })
+  })
+  assert.equal((await adapter('deppon').lookupOrder(p)).trackingNo, 'DPK_TEST_001')
+})
+test('德邦HTTP白名单绑定完整地址及下单/查询用途，错误配置不发请求', async t => {
+  let calls = 0
+  t.mock.method(global, 'fetch', async () => { calls++ })
+  for (const url of [
+    depponSandboxQuery,
+    depponSandboxCreate.replace('10348', '10347'),
+    depponSandboxCreate.replace('27.115.3.108', '127.0.0.1'),
+    depponSandboxCreate.replace('27.115.3.108', 'sandbox.deppon.com'),
+    depponSandboxCreate.replace('http://', 'http://user:pass@'),
+    depponSandboxCreate + '?redirect=1', depponSandboxCreate + '#fragment',
+    depponSandboxCreate + '/extra', depponSandboxCreate.replace('standard-order/', ' standard-order/'),
+  ]) {
+    const p = payload('deppon'); p.credential.apiBase = url
+    await assert.rejects(adapter('deppon').createOrder(p), e => e.code === 'WAYBILL_CONFIG_INVALID' && !e.uncertain)
+  }
+  const p = payload('deppon'); p.credential.queryApiBase = depponSandboxCreate
+  await assert.rejects(adapter('deppon').lookupOrder(p), e => e.code === 'WAYBILL_CONFIG_INVALID')
+  assert.equal(calls, 0)
+})
+test('HTTP沙箱例外不适用于正式模式、未知模式或顺丰', () => {
+  const { credentials } = require(path.join(base, 'direct-common'))
+  for (const mode of ['production', 'invalid']) {
+    const c = { ...payload('deppon').credential, mode, apiBase: depponSandboxCreate, queryApiBase: depponSandboxQuery }
+    for (const lookup of [false, true]) assert.throws(() => credentials(c, 'deppon', lookup), { code: 'WAYBILL_CONFIG_INVALID' })
+  }
+  assert.throws(() => credentials({ ...payload().credential, apiBase: depponSandboxCreate }, 'sf'), { code: 'WAYBILL_CONFIG_INVALID' })
+})
+test('生产进程禁止德邦HTTP沙箱，正式HTTPS仍可使用', () => {
+  const { credentials } = require(path.join(base, 'direct-common'))
+  const previous = process.env.NODE_ENV
+  process.env.NODE_ENV = 'production'
+  try {
+    const c = { ...payload('deppon').credential, apiBase: depponSandboxCreate, queryApiBase: depponSandboxQuery }
+    for (const lookup of [false, true]) assert.throws(() => credentials(c, 'deppon', lookup), { code: 'WAYBILL_CONFIG_INVALID' })
+    assert.equal(credentials({ ...c, mode: 'production', apiBase: 'https://api.deppon.com/create' }, 'deppon'), 'https://api.deppon.com/create')
+  } finally {
+    if (previous === undefined) delete process.env.NODE_ENV
+    else process.env.NODE_ENV = previous
+  }
+})
 test('德邦查询多运单结果要求人工核实，不能随便取第一个', async t => {
   fakeFetch(t, { result: 'true', data: { custOrderNo: 'WB20260906001', mailNo: 'DPK_1,DPK_2' } })
   await assert.rejects(adapter('deppon').lookupOrder(payload('deppon')), e => e.uncertain === true)

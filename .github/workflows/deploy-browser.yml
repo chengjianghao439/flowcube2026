@@ -124,8 +124,15 @@ jobs:
         env:
           SMOKE_USERNAME: ${{ secrets.SMOKE_USERNAME }}
           SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
+          SMOKE_LIMITED_USERNAME: ${{ secrets.SMOKE_LIMITED_USERNAME }}
+          SMOKE_LIMITED_PASSWORD: ${{ secrets.SMOKE_LIMITED_PASSWORD }}
         run: |
           set -euo pipefail
+          # 缺少任何一组验收凭据时，必须在 SSH、上传或迁移前停止。
+          : "${SMOKE_USERNAME:?缺少 SMOKE_USERNAME}"
+          : "${SMOKE_PASSWORD:?缺少 SMOKE_PASSWORD}"
+          : "${SMOKE_LIMITED_USERNAME:?缺少 SMOKE_LIMITED_USERNAME}"
+          : "${SMOKE_LIMITED_PASSWORD:?缺少 SMOKE_LIMITED_PASSWORD}"
           # 将新发布器带到旧 checkout，首次迁移清单必须早于 Git 更新。
           BOOTSTRAP_SCRIPT="/tmp/flowcube-pda-bootstrap-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.sh"
           IMAGE_ARCHIVE="/tmp/flowcube-images-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz"
@@ -144,7 +151,8 @@ jobs:
             "EXPECTED_COMMIT=$GITHUB_SHA" "BOOTSTRAP_SCRIPT=$BOOTSTRAP_SCRIPT" \
             "DEPLOY_IMAGE_ARCHIVE=$IMAGE_ARCHIVE" "DEPLOY_IMAGE_SHA256=$IMAGE_SHA256" \
             "DEPLOY_PUBLIC_ORIGIN=${{ steps.deploy_config.outputs.erp_origin }}" \
-            "SMOKE_USERNAME=$SMOKE_USERNAME" "SMOKE_PASSWORD=$SMOKE_PASSWORD" bash -s
+            "SMOKE_USERNAME=$SMOKE_USERNAME" "SMOKE_PASSWORD=$SMOKE_PASSWORD" \
+            "SMOKE_LIMITED_USERNAME=$SMOKE_LIMITED_USERNAME" "SMOKE_LIMITED_PASSWORD=$SMOKE_LIMITED_PASSWORD" bash -s
           ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=10 -o ConnectTimeout=20 \
             -p "${{ steps.deploy_config.outputs.server_ssh_port }}" "${{ steps.deploy_config.outputs.server_user }}@${{ steps.deploy_config.outputs.server_host }}" "$REMOTE_COMMAND" <<'EOF'
           set -euo pipefail

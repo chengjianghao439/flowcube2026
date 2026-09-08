@@ -1,7 +1,7 @@
 {
-  "version": "0.9.10",
-  "versionCode": 118,
+  "version": "0.9.11",
+  "versionCode": 119,
   "filename": "app-release.apk",
-  "releaseNote": "- 新增客户、供应商往来明细，可查看期初余额、逐笔变化及期末余额，客户多付款项可在往来净额中查看。",
-  "publishedAt": "2026-09-08T09:57:37.430Z"
+  "releaseNote": "- 打印模板默认使用可查看的真实单据和标签数据辅助排版，没有数据时保留空白模板。",
+  "publishedAt": "2026-09-08T18:15:23.402Z"
 }

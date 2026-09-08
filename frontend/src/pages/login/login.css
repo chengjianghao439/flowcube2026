@@ -1,0 +1,123 @@
+/* ERP / Electron 共用登录页。主题中性色承载内容，品牌蓝仅用于重点与主操作。 */
+.erp-login {
+  --login-brand: 221 58% 47%;
+  display: grid;
+  grid-template-columns: minmax(360px, 0.95fr) minmax(440px, 1.05fr);
+  min-height: 100svh;
+  padding: 16px;
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+}
+
+.erp-login-story {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 40px 48px;
+  border-radius: 20px;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+.erp-login-brand,
+.erp-login-mobile-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.erp-login-brand b,
+.erp-login-mobile-brand b { font-weight: 650; }
+.erp-login-story-content { padding: 60px 0; }
+.erp-login-story-label { margin-bottom: 24px; font-size: 14px; color: hsl(var(--foreground) / 70%); }
+.erp-login-story h2 { font-size: 48px; font-weight: 600; line-height: 1.4; letter-spacing: -0.035em; }
+.erp-login-story h2 span { color: hsl(var(--primary)); }
+.erp-login-story-description { margin-top: 24px; font-size: 16px; line-height: 1.9; color: hsl(var(--foreground) / 70%); }
+
+.erp-login-flow {
+  display: grid;
+  grid-template-columns: 1fr 20px 1fr 20px 1fr;
+  align-items: center;
+  gap: 12px;
+  margin-top: 52px;
+  padding-top: 30px;
+  border-top: 1px solid hsl(var(--border));
+}
+
+.erp-login-flow > div { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.erp-login-flow > div > svg { width: 23px; height: 23px; margin-bottom: 8px; stroke-width: 1.5; color: hsl(var(--primary)); }
+.erp-login-flow span { font-size: 15px; font-weight: 500; }
+.erp-login-flow small { font-size: 12px; white-space: nowrap; color: hsl(var(--foreground) / 70%); }
+.erp-login-flow-arrow { width: 18px; height: 18px; color: hsl(var(--foreground) / 70%); }
+.erp-login-story-footer { font-size: 12px; color: hsl(var(--foreground) / 70%); }
+.dark .erp-login-story { background: hsl(var(--muted) / 40%); }
+
+.erp-login-workspace { display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; padding: 64px; }
+.erp-login-mobile-brand { display: none; }
+.erp-login-panel { width: 100%; max-width: 384px; }
+.erp-login-heading { margin-bottom: 36px; }
+.erp-login-heading h1 { font-size: 30px; font-weight: 600; line-height: 1.4; letter-spacing: -0.025em; }
+.erp-login-heading p { margin-top: 12px; font-size: 14px; line-height: 1.7; color: hsl(var(--muted-foreground)); }
+.erp-login-form { display: flex; flex-direction: column; gap: 24px; }
+.erp-login-field { display: flex; flex-direction: column; gap: 10px; }
+.erp-login-field label { font-size: 14px; font-weight: 500; }
+.erp-login-input { height: 48px; border-radius: 8px; background: hsl(var(--card)); transition: border-color 160ms ease, box-shadow 160ms ease; }
+.erp-login-input:hover:not(:disabled) { border-color: hsl(var(--muted-foreground) / 50%); }
+.erp-login-password { position: relative; }
+.erp-login-password-toggle { position: absolute; top: 2px; right: 3px; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 6px; color: hsl(var(--muted-foreground)); }
+.erp-login-password-toggle:hover:not(:disabled) { color: hsl(var(--foreground)); background: hsl(var(--muted)); }
+.erp-login-password-toggle:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 1px; }
+.erp-login-password-toggle:disabled { opacity: 0.5; cursor: not-allowed; }
+.erp-login .erp-login-submit { width: 100%; height: 48px; margin-top: 4px; gap: 10px; border-radius: 8px; font-size: 14px; background: hsl(var(--login-brand)); color: #fff; }
+.erp-login .erp-login-submit:hover:not(:disabled) { background: hsl(221 58% 42%); }
+.erp-login-remember { display: flex; justify-content: center; align-items: center; gap: 7px; margin-top: -10px; color: hsl(var(--muted-foreground)); font-size: 12px; line-height: 1.7; }
+.erp-login-error { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border: 1px solid hsl(var(--destructive) / 25%); border-radius: 8px; background: hsl(var(--destructive) / 6%); color: hsl(var(--destructive)); font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+.erp-login-error > svg { margin-top: 2px; }
+.erp-login-help { margin-top: 32px; padding-top: 24px; border-top: 1px solid hsl(var(--border)); font-size: 12px; line-height: 1.8; }
+.erp-login-help p { margin-bottom: 4px; font-weight: 500; }
+.erp-login-help span { color: hsl(var(--muted-foreground)); }
+.erp-login-workspace-footer { position: absolute; bottom: 24px; color: hsl(var(--muted-foreground)); font-size: 11px; }
+.dark .erp-login-error { color: #fca5a5; }
+
+@media (min-width: 1440px) {
+  .erp-login-story { padding: 48px 64px; }
+  .erp-login-story h2 { font-size: 56px; }
+}
+
+@media (max-width: 1100px) {
+  .erp-login-story { padding: 32px; }
+  .erp-login-story h2 { font-size: 40px; }
+  .erp-login-workspace { padding: 48px; }
+  .erp-login-flow { gap: 8px; }
+}
+
+@media (max-height: 740px) and (min-width: 900px) {
+  .erp-login-story-content { padding: 32px 0; }
+  .erp-login-story-label { margin-bottom: 16px; }
+  .erp-login-story h2 { font-size: 40px; }
+  .erp-login-flow { margin-top: 32px; padding-top: 24px; }
+  .erp-login-workspace { padding-top: 36px; padding-bottom: 56px; }
+  .erp-login-heading { margin-bottom: 24px; }
+  .erp-login-form { gap: 20px; }
+  .erp-login-help { margin-top: 24px; padding-top: 20px; }
+  .erp-login-workspace-footer { bottom: 16px; }
+}
+
+@media (max-width: 899px) {
+  .erp-login { display: flex; flex-direction: column; padding: 0; }
+  .erp-login-story { display: none; }
+  .erp-login-workspace { flex: 1; padding: 32px 24px 24px; }
+  .erp-login-mobile-brand { display: flex; width: 100%; max-width: 384px; margin-bottom: 48px; font-size: 20px; }
+  .erp-login-panel { margin: auto 0; padding-bottom: 40px; }
+  .erp-login-heading h1 { font-size: 28px; }
+  .erp-login-workspace-footer { position: static; margin-top: 24px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .erp-login-input,
+  .erp-login-submit { transition: none; }
+  .erp-login-submit:active { transform: none; }
+}

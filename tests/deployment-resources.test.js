@@ -49,7 +49,7 @@ test('真实 GNU timeout 会终止挂起的 Docker 客户端进程', () => {
   } finally { fs.rmSync(dir, { recursive: true, force: true }) }
 })
 
-function gate(scenario) {
+function gate(scenario, credentials = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'flowcube-gate-test-'))
   fs.mkdirSync(path.join(dir, 'scripts/lib'), { recursive: true })
   fs.mkdirSync(path.join(dir, 'bin'))
@@ -68,13 +68,15 @@ if(cmd==='timeout') {
  const r=spawnSync(args[3],args.slice(4),{stdio:'inherit'});process.exit(r.status??1);
 }
 if(cmd==='docker' && args[0]==='run' && s==='failure') process.exit(1);
+if(cmd==='docker' && args[0]==='run' && ['SMOKE_LIMITED_USERNAME','SMOKE_LIMITED_PASSWORD'].some(key=>process.env[key]!=='fixture-limited')) process.exit(65);
 process.exit(0);
 `
   for (const c of ['docker', 'timeout', 'df', 'node', 'flock']) fs.writeFileSync(path.join(dir, 'bin', c), mock, { mode: 0o755 })
   try {
     const result = spawnSync('bash', ['scripts/release-gate.sh'], { cwd: dir, encoding: 'utf8', timeout: 15000,
       env: { ...process.env, PATH: path.join(dir, 'bin') + ':' + process.env.PATH, GATE_SCENARIO: scenario, GATE_LOG: log,
-        SMOKE_USERNAME: 'fixture', SMOKE_PASSWORD: 'fixture' } })
+        SMOKE_USERNAME: 'fixture', SMOKE_PASSWORD: 'fixture',
+        SMOKE_LIMITED_USERNAME: 'fixture-limited', SMOKE_LIMITED_PASSWORD: 'fixture-limited', ...credentials } })
     return { ...result, commands: fs.existsSync(log) ? fs.readFileSync(log, 'utf8').trim().split('\n').map(JSON.parse) : [] }
   } finally { fs.rmSync(dir, { recursive: true, force: true }) }
 }
@@ -85,11 +87,21 @@ test('两轮浏览器验收均有 CPU、内存、交换、进程上限与容器�
   const runs = r.commands.filter(c => c[0] === 'docker' && c[1] === 'run')
   assert.equal(runs.length, 2)
   for (const c of runs) {
+    for (const name of ['SMOKE_USERNAME', 'SMOKE_PASSWORD', 'SMOKE_LIMITED_USERNAME', 'SMOKE_LIMITED_PASSWORD']) assert.equal(c[c.indexOf(name) - 1], '-e', `${name} 必须传给 Docker`)
     for (const [flag, value] of [['--cpus', '1'], ['--memory', '1g'], ['--memory-swap', '1g'], ['--pids-limit', '256']]) assert.equal(c[c.indexOf(flag) + 1], value)
     assert.ok(c.includes('--init') && c.includes('--name') && c.includes('timeout'))
   }
   assert.equal(r.commands.filter(c => c[0] === 'timeout' && c[5] === 'run').length, 2)
 })
+
+for (const name of ['SMOKE_LIMITED_USERNAME', 'SMOKE_LIMITED_PASSWORD']) {
+  test(`发布门禁缺少 ${name} 时在执行 Docker 前拒绝`, () => {
+    const result = gate('success', { [name]: '' })
+    assert.equal(result.status, 1)
+    assert.match(result.stderr, new RegExp(name))
+    assert.equal(result.commands.length, 0)
+  })
+}
 
 for (const scenario of ['timeout', 'failure']) {
   test(`浏览器 ${scenario} 必须失败并清理专属验收容器`, () => {

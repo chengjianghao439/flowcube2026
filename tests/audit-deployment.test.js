@@ -63,7 +63,7 @@ process.exit(0);
   const archive = path.join(dir, 'images.tar.gz')
   fs.writeFileSync(archive, 'fixture archive')
   const env = { ...process.env, PATH: bin + ':' + process.env.PATH, DEPLOY_TEST_SCENARIO: scenario, DEPLOY_TEST_LOG: log,
-    SKIP_GIT_PULL: '1', EXPECTED_COMMIT: 'a'.repeat(40), SKIP_RELEASE_GATE: '0', DEPLOY_LOCK_FILE: path.join(dir, 'deploy.lock'), DINGTALK_WEBHOOK: '', HEALTH_CHECK_ATTEMPTS: '2', HEALTH_CHECK_DELAY: '0', SMOKE_USERNAME: 'fixture', SMOKE_PASSWORD: 'fixture' }
+    SKIP_GIT_PULL: '1', EXPECTED_COMMIT: 'a'.repeat(40), SKIP_RELEASE_GATE: '0', DEPLOY_LOCK_FILE: path.join(dir, 'deploy.lock'), DINGTALK_WEBHOOK: '', HEALTH_CHECK_ATTEMPTS: '2', HEALTH_CHECK_DELAY: '0', SMOKE_USERNAME: 'fixture', SMOKE_PASSWORD: 'fixture', SMOKE_LIMITED_USERNAME: 'fixture-limited', SMOKE_LIMITED_PASSWORD: 'fixture-limited' }
   env.DEPLOY_IMAGE_ARCHIVE = scenario === 'missing-archive' ? '' : archive
   env.DEPLOY_IMAGE_SHA256 = scenario === 'corrupt-archive' ? '0'.repeat(64) : createHash('sha256').update('fixture archive').digest('hex')
   if (scenario === 'public') env.DEPLOY_PUBLIC_ORIGIN = 'https://deployment.example.invalid'

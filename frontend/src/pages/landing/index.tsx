@@ -623,7 +623,7 @@ export default function LandingPage() {
               看看极序 Flow 最近的改进。
             </p>
             <span className="flow-history-note">
-              精选版本记录 · 安装版本以下载清单为准
+              最近 3 个版本 · 安装版本以下载清单为准
             </span>
             <button
               className="flow-text-button"
@@ -633,7 +633,7 @@ export default function LandingPage() {
             </button>
           </div>
           <div className="flow-update-list">
-            {landingUpdates.map((update, index) => (
+            {landingUpdates.slice(0, 3).map((update, index) => (
               <article
                 className="flow-update-entry"
                 key={update.version}

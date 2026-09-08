@@ -15,7 +15,7 @@ import { SaleOrderItemsSection } from './components/SaleOrderItemsSection'
 
 import { useState, useCallback, useContext, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Activity, AlertTriangle, ClipboardList, Clock, History, Loader2, PackageCheck, Pencil, Save, ScanLine, Warehouse, X } from 'lucide-react'
+import { Activity, AlertTriangle, CalendarClock, ClipboardList, Clock, History, Loader2, PackageCheck, Pencil, Save, ScanLine, Warehouse, X } from 'lucide-react'
 import { PrintPreviewOverlay } from '@/components/print/SaleOrderPrintTemplate'
 import { Button }  from '@/components/ui/button'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
@@ -587,6 +587,11 @@ function AdjustView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<
 // 查看视图（已有销售单详情 + 状态操作）
 // ════════════════════════════════════════════════════════════════════════════
 
+function isFulfillmentFocus(saleId: number) {
+  const [pathname, search = ''] = window.location.hash.slice(1).split('?')
+  return pathname === `/sale/${saleId}` && new URLSearchParams(search).get('focus') === 'fulfillment'
+}
+
 function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: string; closeTab: () => void }) {
   const { data: order, isLoading } = useSaleDetail(saleId)
   const shipMutate     = useShipSale()
@@ -594,11 +599,10 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
   const cancelMutate   = useCancelSale()
 
   const [printOpen, setPrintOpen] = useState(false)
-  const [detailTab, setDetailTab] = useState<'info'|'progress'|'scan'|'pack'|'log'>(() => window.location.hash.includes('focus=fulfillment') ? 'progress' : 'info')
+  const [detailTab, setDetailTab] = useState<'info'|'fulfillment'|'progress'|'scan'|'pack'|'log'>(() => isFulfillmentFocus(saleId) ? 'fulfillment' : 'info')
   useEffect(() => {
     const focus = () => {
-      const [pathname, search = ''] = window.location.hash.slice(1).split('?')
-      if (pathname === `/sale/${saleId}` && new URLSearchParams(search).get('focus') === 'fulfillment') setDetailTab('progress')
+      if (isFulfillmentFocus(saleId)) setDetailTab('fulfillment')
     }
     window.addEventListener('hashchange', focus)
     return () => window.removeEventListener('hashchange', focus)
@@ -736,6 +740,7 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
       <div className="flex gap-1 overflow-x-auto rounded-lg border border-border bg-muted/30 p-1">
         {([
           ['info', '订单信息', ClipboardList],
+          ['fulfillment', '发货安排', CalendarClock],
           ['progress', '作业进度', Activity],
           ['scan', '取货明细', ScanLine],
           ['pack', '装箱进度', PackageCheck],
@@ -858,8 +863,11 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
           </SectionCard>
         </></KeepAliveSection>
 
+      <KeepAliveSection active={detailTab === 'fulfillment'} className="space-y-3">
+        <OrderFulfillmentPanel key={order.id} type="sale" id={order.id} />
+      </KeepAliveSection>
+
       <KeepAliveSection active={detailTab === 'progress'} className="space-y-3"><div className="card-base space-y-4 p-4">
-          <OrderFulfillmentPanel key={order.id} type="sale" id={order.id} />
           {order.taskNo ? (
             <div className="space-y-4">
               <FulfillmentProgressCard order={order} />

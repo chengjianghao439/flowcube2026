@@ -8,6 +8,8 @@ const SESSION = process.env.PLAYWRIGHT_CLI_SESSION || `fps-${process.pid}-${Math
 const BASE_URL = process.env.PAGE_SMOKE_BASE_URL || 'http://127.0.0.1:8080'
 const SMOKE_USERNAME = String(process.env.SMOKE_USERNAME || '').trim()
 const SMOKE_PASSWORD = String(process.env.SMOKE_PASSWORD || '').trim()
+const SMOKE_LIMITED_USERNAME = String(process.env.SMOKE_LIMITED_USERNAME || '').trim()
+const SMOKE_LIMITED_PASSWORD = String(process.env.SMOKE_LIMITED_PASSWORD || '').trim()
 
 // ── 超时参数（可用环境变量覆盖，CI 环境特别慢时可调而不改代码）──
 const PAGE_SMOKE_TIMEOUT_MS = Number(process.env.PAGE_SMOKE_TIMEOUT_MS || 20000) // 页面等待总超时
@@ -19,7 +21,13 @@ function requireSmokeCredentials() {
   if (!SMOKE_USERNAME || !SMOKE_PASSWORD) {
     throw new Error('缺少 SMOKE_USERNAME / SMOKE_PASSWORD，请通过环境变量显式注入测试账号凭据')
   }
+  if (!SMOKE_LIMITED_USERNAME || !SMOKE_LIMITED_PASSWORD) {
+    throw new Error('缺少 SMOKE_LIMITED_USERNAME / SMOKE_LIMITED_PASSWORD，请通过环境变量显式注入受限测试账号凭据')
+  }
 }
+
+// 两组凭据必须在探测命令、创建浏览器配置或运行浏览器前完整提供。
+requireSmokeCredentials()
 
 function pickRunner() {
   if (cmdExists('npm')) {
@@ -315,7 +323,6 @@ async function openPdaAndCheck(path, expected) {
 }
 
 async function main() {
-  requireSmokeCredentials()
   ensureBrowser()
   await login()
   await openAndCheck('/reports/role-workbench', '待办中心')
@@ -350,11 +357,11 @@ async function main() {
   await openAndCheck('/settings/barcode-print-query?category=outbound&status=failed')
   await openAndCheck('/settings/barcode-print-query?category=logistics&status=failed')
 
-  // ── 403 权限场景（受限账号，密码与 tests/helpers/smokeTestKit.js 一致）──
-  // 用 smoke_limited（仅 inbound.order.view + dashboard.view）访问需要
+  // ── 403 权限场景（长期保留的受限账号，凭据从环境变量安全注入）──
+  // 用显式注入的受限账号（仅 inbound.order.view + dashboard.view）访问需要
   // picking.wave.view 的页面，应被前端权限拦截转到 403 页。
   // 登录断言用任一匹配：落仪表盘（有 dashboard.view）或被弹 403 都算登录成功。
-  await loginAs('smoke_limited', 'SmokeLimited123!', { expectedTexts: ['仪表盘', '无访问权限'], fallbackHash: '/' })
+  await loginAs(SMOKE_LIMITED_USERNAME, SMOKE_LIMITED_PASSWORD, { expectedTexts: ['仪表盘', '无访问权限'], fallbackHash: '/' })
   await assertForbidden('/picking-waves')
   // 受限账号有权访问的页面不应 403（对照：inbound.order.view 授权了新建收货订单）
   await setHashAndConfirm('/inbound-tasks/new')

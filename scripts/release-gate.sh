@@ -7,8 +7,10 @@ cd "$ROOT"
 PLAYWRIGHT_IMAGE="${PLAYWRIGHT_IMAGE:-mcr.microsoft.com/playwright:v1.55.0-noble}"
 export PAGE_SMOKE_BASE_URL="${SMOKE_BASE_URL:-http://127.0.0.1:8080}"
 export SMOKE_USERNAME="${SMOKE_USERNAME:-}" SMOKE_PASSWORD="${SMOKE_PASSWORD:-}"
+export SMOKE_LIMITED_USERNAME="${SMOKE_LIMITED_USERNAME:-}" SMOKE_LIMITED_PASSWORD="${SMOKE_LIMITED_PASSWORD:-}"
 [ -f docker-compose.yml ] || { echo '!! 未找到 docker-compose.yml' >&2; exit 1; }
 [ -n "$SMOKE_USERNAME" ] && [ -n "$SMOKE_PASSWORD" ] || { echo '!! 缺少 SMOKE_USERNAME / SMOKE_PASSWORD' >&2; exit 1; }
+[ -n "$SMOKE_LIMITED_USERNAME" ] && [ -n "$SMOKE_LIMITED_PASSWORD" ] || { echo '!! 缺少 SMOKE_LIMITED_USERNAME / SMOKE_LIMITED_PASSWORD' >&2; exit 1; }
 
 exec 8>"${RELEASE_GATE_LOCK_FILE:-/tmp/flowcube-release-gate.lock}"
 flock -n 8 || { echo '!! 已有发布门禁运行，拒绝重叠执行' >&2; exit 1; }
@@ -41,6 +43,7 @@ for script in smoke-pages.node.js smoke-reconciliation-jumps.node.js; do
   DOCKER_COMMAND_TIMEOUT=900 docker run --rm --init --pull never --name "$gate_name" --network host \
     --cpus 1 --memory 1g --memory-swap 1g --pids-limit 256 --shm-size 256m \
     -e PAGE_SMOKE_BASE_URL -e SMOKE_USERNAME -e SMOKE_PASSWORD \
+    -e SMOKE_LIMITED_USERNAME -e SMOKE_LIMITED_PASSWORD \
     -e PLAYWRIGHT_BROWSER_NAME=chromium -e PLAYWRIGHT_SKIP_BROWSER_INSTALL=1 \
     -v "$ROOT":"$ROOT" -w "$ROOT" "$PLAYWRIGHT_IMAGE" \
     timeout -k 10 840 node "scripts/$script"
