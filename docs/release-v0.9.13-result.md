@@ -18,7 +18,7 @@
 
 ## 版本与发布门禁
 
-目标三端 0.9.13，PDA versionCode 121。未新增数据库迁移。更新内容见 `docs/release-notes/0.9.13.md`，官网摘要同步。
+已发布三端 0.9.13，PDA versionCode 121。未新增数据库迁移。更新内容见 `docs/release-notes/0.9.13.md`，官网摘要同步。
 
 正式发布须核对该 tag SHA 的 Tests、Security Scan、Deploy Browser App、Build Desktop Installer（tag）、Build PDA APK，及线上健康/更新清单/安装包摘要。Windows/Android 实机升级、打印走纸及快递真实订单不在本机软件验收范围内。
 
@@ -30,6 +30,30 @@ v0.9.11 的共享测试库空数据断言导致 CI 失败并阻止部署，保�
 
 生产备份：服务器 `backups/release-v0.9.11/flowcube_20260909_021805.sql.gz` 完整性校验通过，SHA-256 `0ecbdd0263b147293bc6b3bb56132f7a8b78b870963347b25a813a9e8829aa73`。备份保存在服务器受限目录，不冒充异地灾备验证。
 
-## v0.9.13 发布进度
+## 正式发布验收
 
-打印夹具恢复旧绑定并断言全部字段一致，避免前序测试残留导致唯一键冲突。按 CI 顺序完成 29 个测试文件，全部退出 0，一次性测试库已清理。发布前版本检查与最终证据记录于 `output/release-v0.9.13/`。
+发布提交 `f423ec1015111d8e51eb632365ee72cada1fcb82`，tag `v0.9.13`。2026-09-09 全部同 SHA 工作流成功：
+
+| 检查 | 结果 |
+|---|---|
+| [Build Desktop Installer（v0.9.13）](https://github.com/chengjianghao439/flowcube2026/actions/runs/34264118491) | success |
+| [Security Scan（main）](https://github.com/chengjianghao439/flowcube2026/actions/runs/34264111014) | success |
+| [Tests（main）](https://github.com/chengjianghao439/flowcube2026/actions/runs/34264110947) | success |
+| [Build Desktop Installer（main）](https://github.com/chengjianghao439/flowcube2026/actions/runs/34264111005) | success |
+| [Deploy Browser App（main）](https://github.com/chengjianghao439/flowcube2026/actions/runs/34264110953) | success |
+| [Build PDA APK（main）](https://github.com/chengjianghao439/flowcube2026/actions/runs/34264111068) | success |
+
+- 服务器 Git HEAD、前后端镜像 OCI revision 均与发布提交一致；MySQL healthy，前后端 running，公网 `/api/ready` 与 `/api/health` 正常。
+- 生产页面、PDA 页面、条码查询、受限账号 403/授权访问对照及财务对账回跳门禁全部通过；本次验收容器已退出，服务器未残留 gate 容器。
+- `/latest.json` 与 `/api/app-update/latest` 为 0.9.13，包含本版更新内容和 `/versions/v0.9.13/` 下载地址。Windows 安装包实际下载 112,343,448 字节，SHA-256 `cc5d7e5119548eb246bda5c863c68639612ff887f363cc0f6d8afa7854cdc692`，与清单及 GitHub Release digest 一致。
+- `/api/pda/version` 为 0.9.13 / 121、available=true。实际 APK 下载 15,013,522 字节，SHA-256 `11270cc013801f01478dcc30821c0e993ac1bc7f44951866ae038de48a502ec2` 与清单一致；aapt 实测包名 com.flowcube.pda、versionName 0.9.13、versionCode 121。
+- 发布后只读核验 ID 8 仍启用且未删除，权限仍只有 dashboard.view / inbound.order.view；按用户要求长期保留，没有执行删除或停用。
+- 按 CI 顺序完成 29 个本地测试文件，全部退出 0，一次性测试库已清理。最终新增提交范围 Gitleaks 无检出。
+
+发布元数据见 `docs/release-v0.9.13-result.json`；原始日志、下载包与本地测试日志保留在主目录 `output/release-v0.9.13/`，不纳入源码。原始私有分支与输出备份保留，不删除其他任务资源。
+
+## 收尾与限制
+
+验收记录单独提交于 codex/release-v0.9.13，发布 main/tag 保持上述已验证 SHA。所有开发/历史发布工作树已核验；本次浏览器会话已关闭，本机 agent-browser 会话列表为空。发布工作树停留在专用分支，不占用 main。AGENTS.md 与相关说明已同步。
+
+当前电脑没有打印机，未做物理走纸验收；Windows/Android 实机安装升级和真实快递下单仍需对应设备及正式业务验收。软件与发布验证不替代这些结果。

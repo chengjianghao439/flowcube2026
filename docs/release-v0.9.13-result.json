@@ -1,0 +1,89 @@
+{
+  "version": "0.9.13",
+  "versionCode": 121,
+  "sha": "f423ec1015111d8e51eb632365ee72cada1fcb82",
+  "tag": "v0.9.13",
+  "verifiedAt": "2026-09-08T18:55:28.236360+00:00",
+  "workflows": [
+    {
+      "conclusion": "success",
+      "databaseId": 34264118491,
+      "headBranch": "v0.9.13",
+      "headSha": "f423ec1015111d8e51eb632365ee72cada1fcb82",
+      "status": "completed",
+      "url": "https://github.com/chengjianghao439/flowcube2026/actions/runs/34264118491",
+      "workflowName": "Build Desktop Installer"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 34264111014,
+      "headBranch": "main",
+      "headSha": "f423ec1015111d8e51eb632365ee72cada1fcb82",
+      "status": "completed",
+      "url": "https://github.com/chengjianghao439/flowcube2026/actions/runs/34264111014",
+      "workflowName": "Security Scan"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 34264110947,
+      "headBranch": "main",
+      "headSha": "f423ec1015111d8e51eb632365ee72cada1fcb82",
+      "status": "completed",
+      "url": "https://github.com/chengjianghao439/flowcube2026/actions/runs/34264110947",
+      "workflowName": "Tests"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 34264111005,
+      "headBranch": "main",
+      "headSha": "f423ec1015111d8e51eb632365ee72cada1fcb82",
+      "status": "completed",
+      "url": "https://github.com/chengjianghao439/flowcube2026/actions/runs/34264111005",
+      "workflowName": "Build Desktop Installer"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 34264110953,
+      "headBranch": "main",
+      "headSha": "f423ec1015111d8e51eb632365ee72cada1fcb82",
+      "status": "completed",
+      "url": "https://github.com/chengjianghao439/flowcube2026/actions/runs/34264110953",
+      "workflowName": "Deploy Browser App"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 34264111068,
+      "headBranch": "main",
+      "headSha": "f423ec1015111d8e51eb632365ee72cada1fcb82",
+      "status": "completed",
+      "url": "https://github.com/chengjianghao439/flowcube2026/actions/runs/34264111068",
+      "workflowName": "Build PDA APK"
+    }
+  ],
+  "downloads": {
+    "verifiedAt": "2026-09-08T18:54:11.201317+00:00",
+    "files": [
+      {
+        "file": "Flowcube-0.9.13.exe",
+        "url": "https://jixuflow.com/versions/v0.9.13/FlowCube-Setup-0.9.13.exe",
+        "size": 112343448,
+        "sha256": "cc5d7e5119548eb246bda5c863c68639612ff887f363cc0f6d8afa7854cdc692"
+      },
+      {
+        "file": "Flowcube-PDA-0.9.13.apk",
+        "url": "https://jixuflow.com/api/pda/download?v=0.9.13&code=121&sha256=11270cc013801f01478dcc30821c0e993ac1bc7f44951866ae038de48a502ec2&t=1788893645093",
+        "size": 15013522,
+        "sha256": "11270cc013801f01478dcc30821c0e993ac1bc7f44951866ae038de48a502ec2"
+      }
+    ]
+  },
+  "limitedAccount": {
+    "id": 8,
+    "active": true,
+    "deleted": false,
+    "permissions": [
+      "dashboard.view",
+      "inbound.order.view"
+    ]
+  }
+}
