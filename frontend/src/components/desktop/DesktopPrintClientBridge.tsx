@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { payloadClient as apiClient } from '@/api/client'
 import { useAuthStore } from '@/store/authStore'
 import { IS_ELECTRON_DESKTOP } from '@/lib/platform'
+import { preparePrintJobContent } from '@/lib/printJobContent'
 import { reportPrintOutcomeWithRetry } from '@/lib/desktopLocalPrint'
 import { registerPrintPoller, setDesktopClientId } from '@/lib/printQueue'
 
@@ -13,6 +14,7 @@ type ClaimedJob = {
   printerName: string | null
   content: string
   contentType: string
+  copies?: number
   ackToken?: string | null
 }
 
@@ -70,10 +72,10 @@ async function completeClientJob(info: ClientInfo, jobId: number, ackToken?: str
   )
 }
 
-async function failClientJob(info: ClientInfo, jobId: number, errorMessage: string) {
+async function failClientJob(info: ClientInfo, jobId: number, errorMessage: string, ackToken?: string | null) {
   await reportPrintOutcomeWithRetry(
     `/print-jobs/${jobId}/fail-client`,
-    { errorMessage },
+    { errorMessage, ackToken },
     { headers: { 'X-Client-Id': info.clientId }, skipGlobalError: true },
   )
 }
@@ -82,24 +84,25 @@ async function printClaimedJob(info: ClientInfo, job: ClaimedJob) {
   const printerName = String(job.printerName || '').trim()
   const content = String(job.content || '')
   if (!printerName) {
-    await failClientJob(info, job.id, '打印机未配置本机名称').catch(() => {})
+    await failClientJob(info, job.id, '打印机未配置本机名称', job.ackToken).catch(() => {})
     return
   }
   if (!content.trim()) {
-    await failClientJob(info, job.id, '打印内容为空').catch(() => {})
+    await failClientJob(info, job.id, '打印内容为空', job.ackToken).catch(() => {})
     return
   }
   try {
-    await window.flowcubeDesktop!.printZpl!({ printerName, content })
+    const batch = preparePrintJobContent(content, job.copies)
+    await window.flowcubeDesktop!.printZpl!({ printerName, content: batch })
   } catch (e) {
     const message =
       e instanceof Error && e.message.trim()
         ? e.message.trim()
         : '本机 RAW 打印失败'
-    await failClientJob(info, job.id, message).catch(() => {})
+    await failClientJob(info, job.id, message, job.ackToken).catch(() => {})
     return
   }
-  // 物理打印已经成功：核销上报失败（网络卡顿/断网）不等于打印失败，不能再判为 fail，
+  // RAW 已提交到操作系统：核销上报失败（网络卡顿/断网）不等于打印失败，不能再判为 fail，
   // 否则会把已经印好的标签误记为失败，后续人工重试会导致重复出纸。失败留给 TTL 兜底清扫。
   await completeClientJob(info, job.id, job.ackToken).catch(() => {})
 }

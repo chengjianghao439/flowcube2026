@@ -147,3 +147,44 @@ test('方向键可精确调整，存储不可用也不阻断交互', () => {
   act(() => host.querySelector('[aria-label="调整名称列宽"]')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', shiftKey: true, bubbles: true })))
   expect(widths()).toEqual([320, 300, 320])
 })
+
+test('操作列可独立拖动调整宽度并在重新挂载后保留', () => {
+  render(); measure([280, 300, 180])
+  const handle = host.querySelector('[aria-label="调整操作列宽"]')
+  expect(handle).not.toBeNull()
+  act(() => handle!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, clientX: 700, button: 0 })))
+  move(760); up(760)
+  expect(widths()).toEqual([280, 300, 240])
+  act(() => root!.unmount()); root = createRoot(host); render()
+  expect(widths()).toEqual([280, 300, 240])
+})
+
+test('操作列可拖到普通列之前，顺序和宽度一起保存', () => {
+  render()
+  const headers = host.querySelectorAll('th')
+  expect(headers[2].draggable).toBe(true)
+  act(() => headers[2].dispatchEvent(new Event('dragstart', { bubbles: true })))
+  act(() => headers[0].dispatchEvent(new Event('drop', { bubbles: true, cancelable: true })))
+  expect(Array.from(host.querySelectorAll('th span[title]'), el => el.textContent)).toEqual(['操作', '名称', '编码'])
+  expect(widths()).toEqual([180, 160, 160])
+  act(() => root!.unmount()); root = createRoot(host); render()
+  expect(Array.from(host.querySelectorAll('th span[title]'), el => el.textContent)).toEqual(['操作', '名称', '编码'])
+})
+
+test('以标题识别的操作列支持键盘调整且双击按钮不触发行双击', () => {
+  const onAction = vi.fn(); const onRowDoubleClick = vi.fn()
+  act(() => root!.render(<DataTable columns={[...columns.slice(0, 2), {
+    key: 'id', title: '操作', width: 120,
+    render: () => <button onClick={onAction}>编辑</button>,
+  }]} data={[{ id: 1, name: '商品', code: 'P001' }]} onRowDoubleClick={onRowDoubleClick} />))
+  measure([280, 300, 120])
+  const handle = host.querySelector('[aria-label="调整操作列宽"]')
+  expect(handle).not.toBeNull()
+  act(() => handle!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })))
+  expect(widths()).toEqual([280, 300, 130])
+  const button = host.querySelector('tbody button')!
+  act(() => button.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+  act(() => button.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })))
+  expect(onAction).toHaveBeenCalledOnce()
+  expect(onRowDoubleClick).not.toHaveBeenCalled()
+})

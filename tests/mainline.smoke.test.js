@@ -225,7 +225,7 @@ async function main() {
     const failOk = await http.post(`/api/print-jobs/${printJobId2}/fail`, {
       token: adminToken,
       headers: { 'X-Client-Id': printer.clientId },
-      json: { errorMessage: 'smoke fail' },
+      json: { ackToken: claimedJob2.ackToken, errorMessage: 'smoke fail' },
     })
     await expectJsonSuccess(log, failOk, '打印任务 fail 成功')
 

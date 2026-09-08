@@ -332,7 +332,7 @@ export default function DataTable<T extends object>({
                   key={String(col.key)}
                   scope="col"
                   aria-sort={sortKey === String(col.key) ? (sortDirection === 'asc' ? 'ascending' : 'descending') : undefined}
-                  draggable={!isAction(String(col.key), col.title)}
+                  draggable
                   onDragStart={event => { if (resizeCleanupRef.current) event.preventDefault(); else setDraggingKey(String(col.key)) }}
                   onDragOver={(e) => {
                     if (draggingKey && draggingKey !== String(col.key)) e.preventDefault()
@@ -342,11 +342,7 @@ export default function DataTable<T extends object>({
                     moveColumn(String(col.key))
                   }}
                   onDragEnd={() => setDraggingKey(null)}
-                  className={`px-4 py-2.5 text-left text-table-head ${
-                    isAction(String(col.key), col.title)
-                      ? 'sticky right-0 z-20 min-w-[180px] bg-muted shadow-[-12px_0_16px_-12px_rgba(0,0,0,0.12)]'
-                      : 'relative cursor-move select-none'
-                  }`}
+                  className="relative cursor-move select-none px-4 py-2.5 text-left text-table-head"
                 >
                   <div className="group flex items-center gap-2">
                     {col.sortable && onSortChange ? (
@@ -369,29 +365,27 @@ export default function DataTable<T extends object>({
                         title={col.title}
                       >{col.title}</span>
                     )}
-                    {!isAction(String(col.key), col.title) && (
-                      <button
-                        type="button"
-                        aria-label={`调整${col.title}列宽`}
-                        onMouseDown={(event) => startResize(event, col)}
-                        title="拖动调整列宽，双击适应内容；方向键微调，Enter 适应内容"
-                        draggable={false}
-                        onClick={event => { event.preventDefault(); event.stopPropagation() }}
-                        onDoubleClick={event => { event.stopPropagation(); fitColumn(col) }}
-                        onKeyDown={event => {
-                          if (event.key === 'Enter') { event.preventDefault(); fitColumn(col) }
-                          if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-                            event.preventDefault(); event.stopPropagation()
-                            const widths = measureWidths()
-                            const key = String(col.key)
-                            savePixelWidths({ ...widths, [key]: Math.max(80, widths[key] + (event.key === 'ArrowRight' ? 1 : -1) * (event.shiftKey ? 40 : 10)) })
-                          }
-                        }}
-                        className="group/resize absolute inset-y-0 right-0 z-30 flex w-3 cursor-col-resize items-center justify-end touch-none hover:bg-primary/10 focus-visible:outline-none focus-visible:bg-primary/10 data-[resizing=true]:bg-primary/15"
-                      >
-                        <span className="pointer-events-none h-full w-px bg-border group-hover/resize:w-0.5 group-hover/resize:bg-primary group-focus-visible/resize:bg-primary group-data-[resizing=true]/resize:w-0.5 group-data-[resizing=true]/resize:bg-primary" />
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      aria-label={`调整${col.title}列宽`}
+                      onMouseDown={(event) => startResize(event, col)}
+                      title="拖动调整列宽，双击适应内容；方向键微调，Enter 适应内容"
+                      draggable={false}
+                      onClick={event => { event.preventDefault(); event.stopPropagation() }}
+                      onDoubleClick={event => { event.stopPropagation(); fitColumn(col) }}
+                      onKeyDown={event => {
+                        if (event.key === 'Enter') { event.preventDefault(); fitColumn(col) }
+                        if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+                          event.preventDefault(); event.stopPropagation()
+                          const widths = measureWidths()
+                          const key = String(col.key)
+                          savePixelWidths({ ...widths, [key]: Math.max(80, widths[key] + (event.key === 'ArrowRight' ? 1 : -1) * (event.shiftKey ? 40 : 10)) })
+                        }
+                      }}
+                      className="group/resize absolute inset-y-0 right-0 z-30 flex w-3 cursor-col-resize items-center justify-end touch-none hover:bg-primary/10 focus-visible:outline-none focus-visible:bg-primary/10 data-[resizing=true]:bg-primary/15"
+                    >
+                      <span className="pointer-events-none h-full w-px bg-border group-hover/resize:w-0.5 group-hover/resize:bg-primary group-focus-visible/resize:bg-primary group-data-[resizing=true]/resize:w-0.5 group-data-[resizing=true]/resize:bg-primary" />
+                    </button>
                   </div>
                 </th>
               ))}
@@ -453,14 +447,11 @@ export default function DataTable<T extends object>({
                       <td
                         key={String(col.key)}
                         onDoubleClick={isAction(String(col.key), col.title) ? e => e.stopPropagation() : undefined}
-                        className={`px-4 text-foreground align-middle ${
-                          isAction(String(col.key), col.title)
-                            ? 'sticky right-0 z-10 min-w-[180px] bg-card py-2.5 shadow-[-12px_0_16px_-12px_rgba(0,0,0,0.08)] group-hover:bg-muted/30'
-                            : 'overflow-hidden py-2.5'
-                        }`}
+                        className="overflow-hidden px-4 py-2.5 text-foreground align-middle"
                       >
                         {isAction(String(col.key), col.title)
-                          ? (col.render ? (col.render(rawValue, row) as ReactNode) : textValue)
+                          // 极窄操作列在格内滚动，保留所有按钮的可达性，避免越界覆盖相邻列。
+                          ? <div className={`min-w-0 overflow-x-auto ${alignClass}`}>{col.render ? (col.render(rawValue, row) as ReactNode) : textValue}</div>
                           : (
                             <div className={`${col.render ? 'min-w-0 whitespace-normal break-words' : 'truncate'} ${alignClass}`} title={textValue}>
                               {col.render ? (col.render(rawValue, row) as ReactNode) : textValue}

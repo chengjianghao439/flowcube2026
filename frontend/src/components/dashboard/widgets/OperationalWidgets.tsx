@@ -183,7 +183,7 @@ function CreditRisk({onOpen}:{onOpen:()=>void}) {
   )
 }
 function StockRisk({onOpen}:{onOpen:()=>void}) {
-  const {data,error} = useQuery({queryKey:['dashboard-low-stock-page',1],queryFn:()=>getLowStockPageApi(1)})
+  const {data,error} = useQuery({queryKey:['dashboard-low-stock-summary'],queryFn:()=>getLowStockPageApi(1, 'summary')})
   return (
     <RiskRow label="低库存预警" count={data?.pagination.total} unit="项" icon={Boxes} error={!!error}
       onClick={onOpen} hint="实物库存 ≤ 10 · 查看全部明细" />

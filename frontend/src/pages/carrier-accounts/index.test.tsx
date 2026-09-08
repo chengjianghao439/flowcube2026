@@ -11,7 +11,7 @@ vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: api.can }
 vi.mock('@/components/shared/PageHeader', () => ({ default: ({ title, actions }: { title: string; actions: React.ReactNode }) => <header>{title}{actions}</header> }))
 vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn() } }))
 
-test('单页提供新增、选择现有账号、删除入口，并按权限隐藏新增删除', async () => {
+test('单页支持新增和选择账号，拥有删除权限也不显示删除入口', async () => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
   api.getCarriersApi.mockResolvedValue({ list: [{ id: 7, name: '测试顺丰', code: 'CAR000007', isActive: true, platformCode: 'sf', monthlyAccount: null, waybillEnabled: false }], pagination: { page: 1, pageSize: 100, total: 1 } })
   api.getCarrierAccountBindingApi.mockResolvedValue({ carrierId: 7, carrierName: '测试顺丰', platformCode: 'sf', monthlyAccount: '', revision: 'a'.repeat(64), products: [], shippingProduct: '', shippingDeliveryType: '', enabled: false, active: true })
@@ -23,7 +23,9 @@ test('单页提供新增、选择现有账号、删除入口，并按权限隐�
     await act(async () => { await new Promise(r => setTimeout(r, 20)) })
     expect(host.textContent).toContain('新增账号')
     await act(async () => { Array.from(host.querySelectorAll('button')).find(b => b.textContent?.includes('测试顺丰'))!.click(); await new Promise(r => setTimeout(r, 20)) })
-    expect(host.textContent).toContain('删除承运商')
+    expect(host.textContent).not.toContain('删除承运商')
+    expect(host.textContent).not.toContain('删除仅适用于')
+    expect(api.deleteCarrierApi).not.toHaveBeenCalled()
     await act(async () => Array.from(host.querySelectorAll('button')).find(b => b.textContent === '新增账号')!.click())
     expect(host.querySelector('#new-account-name')).not.toBeNull()
     api.can.mockReturnValue(false)

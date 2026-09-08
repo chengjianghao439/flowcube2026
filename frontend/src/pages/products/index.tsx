@@ -1,6 +1,6 @@
 import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
 import { ImportSteps } from '@/components/shared/ImportSteps'
-import { useState, useRef, useMemo } from 'react'
+import { memo, useCallback, useLayoutEffect, useState, useRef, useMemo } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { X } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
@@ -28,6 +28,9 @@ import type { Product } from '@/types/products'
 import type { TableColumn } from '@/types'
 import type { Category } from '@/types/categories'
 
+const ProductsTable = memo(DataTable<Product>)
+const EMPTY_PRODUCTS: Product[] = []
+
 function buildCategoryPathMap(nodes: Category[], ancestors: string[] = [], map = new Map<number, string>()) {
   for (const node of nodes) {
     const chain = [...ancestors, node.name]
@@ -39,6 +42,10 @@ function buildCategoryPathMap(nodes: Category[], ancestors: string[] = [], map =
 
 export default function ProductsPage() {
   const navigate = useNavigate()
+  // Router 的 navigate 引用随其他工作区路径变化；事件调用最新导航，表格列保持稳定。
+  const navigateRef = useRef(navigate)
+  useLayoutEffect(() => { navigateRef.current = navigate }, [navigate])
+  const navigateFromTable = useCallback((path: string) => navigateRef.current(path), [])
   const [searchParams, setSearchParams] = useSearchParams()
   const keyword = readStringParam(searchParams, 'keyword')
   const catFilter = readNullableIntParam(searchParams, 'categoryId')
@@ -84,7 +91,7 @@ export default function ProductsPage() {
     setSearchParams(upsertSearchParams(searchParams, updates))
   }
 
-  async function handlePrintProductLabel(p: Product) {
+  const handlePrintProductLabel = useCallback(async (p: Product) => {
     if (printingIds.has(p.id)) return
     setPrintingIds((prev) => new Set(prev).add(p.id))
     try {
@@ -107,7 +114,7 @@ export default function ProductsPage() {
         return next
       })
     }
-  }
+  }, [printingIds])
 
   const categoryPathMap = useMemo(() => buildCategoryPathMap(categoryTree), [categoryTree])
 
@@ -155,7 +162,7 @@ export default function ProductsPage() {
     maxPrice && { key: 'maxPrice', label: `售价≤${maxPrice}`, onRemove: () => updateParams({ maxPrice: null, page: 1 }) },
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
-  const cols:TableColumn<Product>[] = [
+  const cols = useMemo<TableColumn<Product>[]>(() => [
     ...productIdentityColumns({code: 'code', name: 'name'}),
     { key:'categoryName', title:'分类', width:180, render:(_, r)=><CategoryPathDisplay path={r.categoryId ? categoryPathMap.get(r.categoryId) ?? null : null} fallback={r.categoryName} /> },
     { key:'unit', title:'单位', width:140, render:(_,r)=>{
@@ -168,16 +175,16 @@ export default function ProductsPage() {
       <TableActionsMenu
         primaryLabel="编辑"
         primaryVariant="outline"
-        onPrimaryClick={()=>navigate(`/products/${r.id}`)}
+        onPrimaryClick={()=>navigateFromTable(`/products/${r.id}`)}
         items={[
           { label:'打印标签', onClick:()=>void handlePrintProductLabel(r), disabled: printingIds.has(r.id) },
           // 改价走审批（v0.5.1 价格体系）：跳转改价申请页并预填商品
-          { label:'申请改价', onClick:()=>navigate(`/price-change?productId=${r.id}`) },
+          { label:'申请改价', onClick:()=>navigateFromTable(`/price-change?productId=${r.id}`) },
           { label:'删除', onClick:()=>setConfirmProduct(r), destructive:true, separatorBefore:true },
         ]}
       />
     )},
-  ]
+  ], [categoryPathMap, navigateFromTable, handlePrintProductLabel, printingIds])
 
   return (
     <div className="space-y-4">
@@ -205,7 +212,7 @@ export default function ProductsPage() {
         </div>
       )}
 
-      <DataTable columns={cols} data={data?.list??[]} loading={isLoading} rowKey="id" />
+      <ProductsTable columns={cols} data={data?.list ?? EMPTY_PRODUCTS} loading={isLoading} rowKey="id" />
       <ListSummary total={total} unit="件" />
 
       {/* 批量导入弹窗 */}

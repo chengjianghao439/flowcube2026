@@ -20,6 +20,8 @@
     "test:label": "node tests/label-geometry.test.js && node tests/label-zpl.test.js && node tests/label-geometry-frontend.test.js",
     "test:print": "node tests/print-policy.test.js && node tests/print-status.test.js",
     "test:print-purge": "node tests/print-jobs-purge.test.js",
+    "smoke:print-queue": "node tests/print-queue.smoke.test.js",
+    "smoke:print-template-preview": "node tests/print-template-preview.smoke.test.js",
     "test:oplog": "node tests/oplogger.test.js",
     "test:direct-express": "node --test tests/direct-express.test.js tests/direct-express-worker.test.js tests/carrier-account-binding.test.js",
     "smoke:direct-express": "node tests/direct-express.smoke.test.js",

@@ -262,6 +262,12 @@ jobs:
       - name: 冒烟测试 — 会计期间结转/月结（期间锁定+结转链，2026-08-22 补入 CI）
         run: npm run smoke:accounting-period
 
+      - name: 冒烟测试 — 打印模板真实数据与权限范围
+        run: npm run smoke:print-template-preview
+
+      - name: 冒烟测试 — 打印领取令牌、过期、路由及份数
+        run: npm run smoke:print-queue
+
       - name: 冒烟测试 — 打印任务过期/回收清理（队列防卡死）
         run: npm run test:print-purge
 

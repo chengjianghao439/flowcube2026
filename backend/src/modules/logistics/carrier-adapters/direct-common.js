@@ -8,14 +8,20 @@ function required(value, label, max = 100) {
   if (!s || s.length > max) throw failure(`请填写有效的${label}（最多 ${max} 字）`)
   return s
 }
-function endpoint(value, platform, mode = 'sandbox') {
+// 德邦对接人分配的测试入口；仅 sandbox 精确匹配，不放行其他路径或端口。
+const DEPPON_SANDBOX_ENDPOINTS = {
+  create: 'http://27.115.3.108:10348/dop-interface-async/standard-order/createOrderNotify.action',
+  query: 'http://27.115.3.108:10347/dop-interface-sync/standard-query/queryOriginalOrderInfo.action',
+}
+function endpoint(value, platform, mode = 'sandbox', lookup = false) {
   let url
   try { url = new URL(value) } catch { throw failure('请配置官方接口地址') }
   const sfHost = mode === 'production' ? 'sfapi.sf-express.com' : 'sfapi-sbox.sf-express.com'
   const allowed = platform === 'sf' ? url.hostname === sfHost
-    : /(^|\.)deppon\.com(?:\.cn)?$/.test(url.hostname)
-  if (!['sandbox', 'production'].includes(mode) || !allowed || url.protocol !== 'https:' || url.username || url.password || url.hash || url.search) {
-    throw failure('接口必须是与所选环境对应的官方 HTTPS 地址，不允许第三方网关')
+    : platform === 'deppon' && /(^|\.)deppon\.com(?:\.cn)?$/.test(url.hostname)
+  const sandboxHttp = platform === 'deppon' && mode === 'sandbox' && value === DEPPON_SANDBOX_ENDPOINTS[lookup ? 'query' : 'create']
+  if (!['sandbox', 'production'].includes(mode) || !(allowed && url.protocol === 'https:' || sandboxHttp) || url.username || url.password || url.hash || url.search) {
+    throw failure('接口须使用官方 HTTPS 地址；德邦沙箱仅允许指定用途的测试入口')
   }
   if (process.env.NODE_ENV === 'production' && mode !== 'production') throw failure('生产服务不能使用沙箱运单')
   return url.toString()
@@ -25,7 +31,7 @@ function credentials(credential, platform, lookup = false) {
   required(credential?.appKey, '开放平台校验密钥', 256)
   const mode = credential.mode || 'sandbox'
   const sfDefault = mode === 'production' ? 'https://sfapi.sf-express.com/std/service' : 'https://sfapi-sbox.sf-express.com/std/service'
-  return endpoint(platform === 'sf' ? credential.apiBase || sfDefault : lookup ? credential.queryApiBase : credential.apiBase, platform, mode)
+  return endpoint(platform === 'sf' ? credential.apiBase || sfDefault : lookup ? credential.queryApiBase : credential.apiBase, platform, mode, lookup)
 }
 function contact(value, label, structured = false) {
   const c = value || {}

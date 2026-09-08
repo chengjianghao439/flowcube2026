@@ -168,3 +168,27 @@ test('德邦合法多箱原单查询保存全号，首号仅作为代表单号',
   assert.deepEqual(result.trackingNos, ['DPK_CHILD', 'DPK_PARENT'])
   assert.equal(result.trackingNo, 'DPK_CHILD')
 })
+
+test('德邦指定 HTTP 沙箱入口按创建与查原单用途放行', () => {
+  const { credentials } = require(path.join(base, 'direct-common'))
+  const p = payload('deppon')
+  p.credential.apiBase = 'http://27.115.3.108:10348/dop-interface-async/standard-order/createOrderNotify.action'
+  p.credential.queryApiBase = 'http://27.115.3.108:10347/dop-interface-sync/standard-query/queryOriginalOrderInfo.action'
+  assert.equal(credentials(p.credential, 'deppon'), p.credential.apiBase)
+  assert.equal(credentials(p.credential, 'deppon', true), p.credential.queryApiBase)
+  assert.equal(adapter('deppon').prepareOrder(p).packageInfo.totalWeight, 1)
+  for (const apiBase of [p.credential.queryApiBase, p.credential.apiBase + '?token=x', p.credential.apiBase + '/other', p.credential.apiBase.replace('10348', '10347')]) {
+    assert.throws(() => credentials({ ...p.credential, apiBase }, 'deppon'))
+  }
+  assert.throws(() => credentials({ ...p.credential, queryApiBase: p.credential.apiBase }, 'deppon', true))
+  assert.throws(() => credentials({ ...p.credential, mode: 'production' }, 'deppon'))
+})
+
+test('生产运行时禁止德邦 HTTP 沙箱入口', t => {
+  const previous = process.env.NODE_ENV
+  t.after(() => { if (previous === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = previous })
+  process.env.NODE_ENV = 'production'
+  const { credentials } = require(path.join(base, 'direct-common'))
+  const c = { ...payload('deppon').credential, apiBase: 'http://27.115.3.108:10348/dop-interface-async/standard-order/createOrderNotify.action' }
+  assert.throws(() => credentials(c, 'deppon'))
+})

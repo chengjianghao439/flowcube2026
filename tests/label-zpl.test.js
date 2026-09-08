@@ -12,9 +12,10 @@
 const path = require('path')
 const assert = require('assert')
 
-const { generateZplFromElements, MM_TO_DOT } = require(
+const { generateZplFromElements, MM_TO_DOT, sanitizeZplValue, applyZplTemplate } = require(
   path.resolve(__dirname, '../backend/src/modules/print-jobs/labelZpl'),
 )
+const builtInLabels = require('../backend/src/modules/print-jobs/print-jobs.template')
 
 const results = []
 let failures = 0
@@ -93,6 +94,87 @@ check('EAN13 + HRI=false → ^BEN,h,N,N', () => {
   )
   assert.ok(/\^BEN,\d+,N,N\^FD6901234567892\^FS/.test(z), z)
 })
+
+check('纸高进入 ^LL：默认 50mm、自定义 75mm，坐标和纸宽不变', () => {
+  const vars = { rack_barcode: 'H000001', rack_code: 'A-01-02' }
+  const custom = generateZplFromElements({ ...layout, canvasHeightMm: 75 }, vars, 'thermal75')
+  assert.ok(zpl.includes(`^PW${dot(75)}^LL${dot(50)}`), zpl)
+  assert.ok(custom.includes(`^PW${dot(75)}^LL${dot(75)}`), custom)
+  assert.strictEqual(custom.replace(/\^LL\d+/, ''), zpl.replace(/\^LL\d+/, ''))
+})
+
+function assertNoControls(value) {
+  assert.ok(![...value].some(char => {
+    const code = char.charCodeAt(0)
+    return code < 32 || (code >= 127 && code <= 159)
+  }), '输出不应含 C0/C1 控制字符')
+}
+
+check('字段清洗移除 ^、~ 以及全部 C0/C1 控制字符，保留中文和字面量符号', () => {
+  const controls = Array.from({ length: 65 }, (_, index) => String.fromCharCode(index < 32 ? index : index + 95)).join('')
+  const result = sanitizeZplValue(`中文 $& $' $$ {{other}} ^~${controls}尾`)
+  assertNoControls(result)
+  assert.ok(!/[\^~]/.test(result), result)
+  assert.ok(result.startsWith("中文 $& $' $$ {{other}} "), result)
+})
+
+check('自定义模板一次替换：美元替换符与插入值中的占位符保持字面量', () => {
+  const body = '^XA~SD10^FD{{first}}|{{second}}|{{missing}}^FS^XZ'
+  const first = "$& $' $$ $` {{second}}"
+  assert.strictEqual(
+    applyZplTemplate(body, { first, second: '已替换' }),
+    `^XA~SD10^FD${first}|已替换|{{missing}}^FS^XZ`,
+  )
+})
+
+check('自定义模板支持重复占位符、空白和含正则符号字段，正文指令保留', () => {
+  assert.strictEqual(
+    applyZplTemplate('^XA~SD10^FD{{ a.b }}|{{a.b}}|{{zero}}|{{nil}}^FS^XZ', { 'a.b': '^XZ~JA', zero: 0, nil: null }),
+    '^XA~SD10^FDXZ JA|XZ JA|0|^FS^XZ',
+  )
+})
+
+check('画布文本与条码字段均清理控制字符，不能增加 ZPL 指令', () => {
+  const generated = generateZplFromElements(layout, { rack_barcode: 'H\u0000\u001b\u007f\u0085', rack_code: 'A^XZ~JA\u0000\u001b' }, 'thermal75')
+  assertNoControls(generated)
+  assert.ok(!generated.includes('~'), generated)
+  assert.strictEqual((generated.match(/\^XZ/g) || []).length, 1)
+})
+
+const builtInCases = [
+  ['buildContainerLabelZpl', { container_code: 'C001', product_name: '商品', qty: 12 }],
+  ['buildPlasticBoxLabelZpl', { container_code: 'B001', product_name: '商品' }],
+  ['buildRackLabelZpl', { rack_barcode: 'H001', rack_code: 'A01', zone: '一区', name: '货架' }],
+  ['buildLocationLabelZpl', { location_barcode: 'R001', location_code: 'A01', zone: '一区', name: '库位' }],
+  ['buildPackageLabelZpl', { box_code: 'P001', task_no: 'WT001', customer_name: '客户', carrier_name: '快递', freight_type_name: '寄付', piece_count: 1, item_list: '商品', summary: '摘要' }],
+  ['buildProductLabelZpl', { product_code: 'SP001', product_name: '商品', spec: '规格', unit: '件', price: 12 }],
+]
+
+check('画布 Code128 保留普通首尾空格与原有模块宽度', () => {
+  const generated = generateZplFromElements(
+    { elements: [{ type: 'barcode', fieldKey: 'code', x: 0, y: 0, width: 40, height: 10 }] },
+    { code: ' ABC ' }, 'thermal80',
+  )
+  assert.ok(generated.includes(`^BY3^BCN,${dot(10)},Y,N,N^FD ABC ^FS`), generated)
+})
+
+for (const [builderName, values] of builtInCases) {
+  check(`内置标签 ${builderName} 的条码保留普通首尾空格`, () => {
+    const barcodeKey = Object.keys(values)[0]
+    const generated = builtInLabels[builderName]({ ...values, [barcodeKey]: ' ABC ' })
+    assert.ok(generated.includes('^FD ABC ^FS'), generated)
+  })
+  for (const key of Object.keys(values)) {
+    check(`内置标签 ${builderName}.${key} 不能注入指令或控制字符`, () => {
+      const builder = builtInLabels[builderName]
+      const baseline = builder(values)
+      const generated = builder({ ...values, [key]: '^XZ~JA\u0000\u001b\u007f\u0085' })
+      assertNoControls(generated)
+      assert.ok(!generated.includes('~'), generated)
+      assert.deepStrictEqual(generated.match(/\^[A-Z][A-Z0-9]/g), baseline.match(/\^[A-Z][A-Z0-9]/g))
+    })
+  }
+}
 
 console.log('标签 ZPL 生成测试：')
 console.log(results.join('\n'))

@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { getCarriersApi, getCarrierAccountBindingApi, saveCarrierAccountBindingApi, createCarrierAccountApi, deleteCarrierApi } from '@/api/carriers'
+import { getCarriersApi, getCarrierAccountBindingApi, saveCarrierAccountBindingApi, createCarrierAccountApi } from '@/api/carriers'
 import { collectAllRecords } from '@/api/allRecords'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
@@ -27,14 +27,11 @@ export default function CarrierAccountsPage() {
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
   const [nextSelection, setNextSelection] = useState<string | null>(null)
-  const [deleting, setDeleting] = useState(false)
-  const [error, setError] = useState('')
   const createAttempt = useRef({ signature: '', key: '' })
   const busy = useRef(false)
   const { can } = usePermission()
   const canCreate = can(PERMISSIONS.CARRIER_CREATE)
   const canEdit = can(PERMISSIONS.CARRIER_UPDATE)
-  const canDelete = can(PERMISSIONS.CARRIER_DELETE)
   const client = useQueryClient()
   const carriers = useQuery({ queryKey: ['carriers', 'account-binding'], queryFn: ({ signal }) => collectAllRecords((page, pageSize = 100) => getCarriersApi({ page, pageSize }), signal) })
   const available = (carriers.data?.list || []).filter(c => !c.platformCode || ['sf', 'deppon'].includes(c.platformCode))
@@ -44,7 +41,7 @@ export default function CarrierAccountsPage() {
   const queryKey = ['carrier-account-binding', carrierId, platform]
   const binding = useQuery({ queryKey, queryFn: () => getCarrierAccountBindingApi(Number(carrierId), platform as 'sf' | 'deppon'), enabled: !creating && !!selected && !!platform, refetchOnWindowFocus: false })
   function switchTo(id: string) {
-    setCreating(id === 'new'); setCarrierId(id === 'new' ? '' : id); setPlatform(''); setError(''); setDirty(false); setNextSelection(null)
+    setCreating(id === 'new'); setCarrierId(id === 'new' ? '' : id); setPlatform(''); setDirty(false); setNextSelection(null)
   }
   function select(id: string) {
     if (saving) return
@@ -74,16 +71,6 @@ export default function CarrierAccountsPage() {
       toast.success('账号已新增，请继续选择常用服务')
     } finally { busy.current = false; setSaving(false) }
   }
-  async function remove() {
-    if (!selected || busy.current) return
-    busy.current = true; setSaving(true); setError('')
-    try {
-      await deleteCarrierApi(selected.id, { skipGlobalError: true })
-      client.removeQueries({ queryKey: ['carrier-account-binding', carrierId] })
-      switchTo(''); await refreshCarriers(); toast.success('未使用的承运商已删除')
-    } catch (e) { setError(e instanceof Error ? e.message : '删除失败，请重试') }
-    finally { busy.current = false; setSaving(false); setDeleting(false) }
-  }
   return <div className="p-4 sm:p-6">
     <PageHeader title="快递账号绑定" description="管理顺丰、德邦月结账号。新增和保存资料均不会自动发货。" actions={<>{canCreate && <Button disabled={saving} onClick={() => select('new')}>新增账号</Button>}<Button variant="outline" disabled={saving || dirty || creating} onClick={() => navigate('/carriers')}>承运商管理</Button></>} />
     <div className="grid items-start gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
@@ -98,19 +85,15 @@ export default function CarrierAccountsPage() {
         </div>}
       </aside>
       <section aria-label="账号管理" className="min-w-0 rounded-lg border bg-card p-4 sm:p-6">
-        {error && <p role="alert" className="mb-4 text-sm text-destructive">{error}</p>}
         {creating && canCreate ? <NewAccountForm onDirtyChange={setDirty} saving={saving} onCreate={create} onCancel={() => select('')} /> : !selected ? <div className="py-10"><h2 className="font-medium">选择一个账号，或新增快递账号</h2><p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground">已有承运商可直接选择并填写月结号。修改、暂停和解绑都在这里完成，无需填写接口密钥。</p></div> : <>
           <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b pb-4"><div><h2 className="font-semibold">{selected.name}</h2><p className="mt-1 text-sm text-muted-foreground">{selected.code} · {selected.isActive ? '承运商正常使用' : '承运商已停用'}</p></div><div className="flex flex-wrap gap-2">
             {platform && <Button variant="outline" disabled={saving || dirty || binding.isFetching} onClick={() => void binding.refetch()}>刷新开通状态</Button>}
-            {canDelete && <Button variant="ghost" disabled={saving || dirty || !!selected.monthlyAccount || selected.waybillEnabled} onClick={() => setDeleting(true)}>删除承运商</Button>}
           </div></div>
           {!selected.platformCode && <div className="mb-6 max-w-xs space-y-2"><Label htmlFor="binding-company">快递公司</Label><Select value={platform || '__empty__'} disabled={saving || dirty || !canEdit} onValueChange={v => setPlatform(v === '__empty__' ? '' : v as 'sf' | 'deppon')}><SelectTrigger id="binding-company"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="__empty__">请选择快递公司</SelectItem><SelectItem value="sf">顺丰</SelectItem><SelectItem value="deppon">德邦</SelectItem></SelectContent></Select></div>}
           {!platform ? <p className="text-sm text-muted-foreground">请先选择快递公司，再绑定月结账号。</p> : binding.isError ? <p role="alert">{binding.error instanceof Error ? binding.error.message : '开通状态读取失败，请刷新重试'}</p> : binding.data ? <AccountBindingForm key={`${carrierId}:${platform}:${binding.data.revision}`} data={binding.data} canEdit={canEdit} saving={saving} onSave={save} onDirtyChange={setDirty} /> : <p role="status">正在检查账号准备状态…</p>}
-          {canDelete && <p className="mt-6 border-t pt-4 text-xs leading-5 text-muted-foreground">删除仅适用于已解绑且没有关联业务记录的承运商。已使用的账号可以暂停或解绑，历史记录会保留。</p>}
         </>}
       </section>
     </div>
     <ConfirmDialog open={nextSelection !== null} title="放弃尚未保存的资料？" description="切换后当前未保存的填写内容会丢失。" confirmText="放弃并继续" onConfirm={() => switchTo(nextSelection || '')} onCancel={() => setNextSelection(null)} />
-    <ConfirmDialog open={deleting} title="删除未使用的承运商" description={`确认删除「${selected?.name || ''}」？系统会检查月结绑定和关联业务；已有业务记录时不允许删除。此操作不会解除快递官网授权。`} variant="destructive" confirmText="确认删除" loading={saving} onConfirm={() => void remove()} onCancel={() => setDeleting(false)} />
   </div>
 }

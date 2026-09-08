@@ -12,5 +12,6 @@ export const getCreditWarningApi = () => client.get<CreditWarning>('/dashboard/c
 export const getDashboardLayoutApi  = () => client.get<DashboardLayout | null>('/dashboard/layout')
 export const saveDashboardLayoutApi = (layout: DashboardLayout) => client.put<DashboardLayout>('/dashboard/layout', layout)
 
-export const getLowStockPageApi = (page = 1) => client.get<import('@/types').PaginatedData<LowStockItem>>('/dashboard/low-stock', {params:{page,pageSize:10}})
+/** 概览仅取首批及总数；明细默认继续读取完整列表。 */
+export const getLowStockPageApi = (page = 1, listMode?: 'summary') => client.get<import('@/types').PaginatedData<LowStockItem>>('/dashboard/low-stock', {params:{page,pageSize:10}, listMode})
 export const getCreditRiskPageApi = (page = 1) => client.get<import('@/types').PaginatedData<CreditWarning['top'][number]>>('/dashboard/credit-warning', {params:{page,pageSize:10}})
