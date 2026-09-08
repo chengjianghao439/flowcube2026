@@ -1,0 +1,135 @@
+{
+  "version": "0.9.7",
+  "pdaVersionCode": 115,
+  "releaseSha": "f755085908b9338e61ba48cf60c8f098c921abc9",
+  "tag": "v0.9.7",
+  "verifiedAt": "2026-09-06T00:07:54+08:00",
+  "workflows": [
+    {
+      "conclusion": "success",
+      "createdAt": "2026-09-05T15:32:13Z",
+      "databaseId": 33975098901,
+      "headBranch": "v0.9.7",
+      "headSha": "f755085908b9338e61ba48cf60c8f098c921abc9",
+      "status": "completed",
+      "updatedAt": "2026-09-05T15:35:58Z",
+      "url": "https://github.com/chengjianghao439/flowcube2026/actions/runs/33975098901",
+      "workflowName": "Build Desktop Installer"
+    },
+    {
+      "conclusion": "success",
+      "createdAt": "2026-09-05T15:32:08Z",
+      "databaseId": 33975094667,
+      "headBranch": "main",
+      "headSha": "f755085908b9338e61ba48cf60c8f098c921abc9",
+      "status": "completed",
+      "updatedAt": "2026-09-05T15:32:41Z",
+      "url": "https://github.com/chengjianghao439/flowcube2026/actions/runs/33975094667",
+      "workflowName": "Security Scan"
+    },
+    {
+      "conclusion": "success",
+      "createdAt": "2026-09-05T15:32:08Z",
+      "databaseId": 33975094623,
+      "headBranch": "main",
+      "headSha": "f755085908b9338e61ba48cf60c8f098c921abc9",
+      "status": "completed",
+      "updatedAt": "2026-09-05T15:34:18Z",
+      "url": "https://github.com/chengjianghao439/flowcube2026/actions/runs/33975094623",
+      "workflowName": "Tests"
+    },
+    {
+      "conclusion": "success",
+      "createdAt": "2026-09-05T15:32:08Z",
+      "databaseId": 33975094686,
+      "headBranch": "main",
+      "headSha": "f755085908b9338e61ba48cf60c8f098c921abc9",
+      "status": "completed",
+      "updatedAt": "2026-09-05T15:34:50Z",
+      "url": "https://github.com/chengjianghao439/flowcube2026/actions/runs/33975094686",
+      "workflowName": "Build Desktop Installer"
+    },
+    {
+      "conclusion": "success",
+      "createdAt": "2026-09-05T15:32:08Z",
+      "databaseId": 33975094597,
+      "headBranch": "main",
+      "headSha": "f755085908b9338e61ba48cf60c8f098c921abc9",
+      "status": "completed",
+      "updatedAt": "2026-09-05T15:47:27Z",
+      "url": "https://github.com/chengjianghao439/flowcube2026/actions/runs/33975094597",
+      "workflowName": "Build PDA APK"
+    },
+    {
+      "conclusion": "success",
+      "createdAt": "2026-09-05T15:32:08Z",
+      "databaseId": 33975094641,
+      "headBranch": "main",
+      "headSha": "f755085908b9338e61ba48cf60c8f098c921abc9",
+      "status": "completed",
+      "updatedAt": "2026-09-05T15:46:53Z",
+      "url": "https://github.com/chengjianghao439/flowcube2026/actions/runs/33975094641",
+      "workflowName": "Deploy Browser App"
+    }
+  ],
+  "server": {
+    "checkout": "f755085908b9338e61ba48cf60c8f098c921abc9",
+    "backendVersion": "0.9.7",
+    "services": [
+      {
+        "service": "backend",
+        "state": "running",
+        "health": "",
+        "revision": "f755085908b9338e61ba48cf60c8f098c921abc9"
+      },
+      {
+        "service": "frontend",
+        "state": "running",
+        "health": "",
+        "revision": "f755085908b9338e61ba48cf60c8f098c921abc9"
+      },
+      {
+        "service": "mysql",
+        "state": "running",
+        "health": "healthy",
+        "revision": null
+      }
+    ],
+    "gateContainersRemaining": 0
+  },
+  "browserGates": [
+    "报表烟雾检查通过",
+    "页面烟雾检查通过",
+    "对账回跳烟雾检查通过",
+    "发布门禁通过",
+    "部署完成，健康检查与发布门禁已通过"
+  ],
+  "desktopDownload": {
+    "version": "0.9.7",
+    "url": "https://jixuflow.com/versions/v0.9.7/FlowCube-Setup-0.9.7.exe",
+    "sha256": "5b30159d3ac6618729445bf2aff18bd222d560eaa57e43dd574dfd49af4d1bab",
+    "bytes": 112212654,
+    "manifestMatchesDirect": true,
+    "checkedAt": "2026-09-05T23:38:18+0800"
+  },
+  "pdaDownload": {
+    "version": "0.9.7",
+    "versionCode": 115,
+    "url": "https://jixuflow.com/api/pda/download?v=0.9.7&code=115&sha256=46988a08689d81b28aef60b1dad188344bfdffd25b412c36298fe88abef96425&t=1788623242271",
+    "sha256": "46988a08689d81b28aef60b1dad188344bfdffd25b412c36298fe88abef96425",
+    "bytes": 14971173,
+    "checkedAt": "2026-09-06T00:04:42+0800"
+  },
+  "liveReadiness": {
+    "url": "https://jixuflow.com/api/ready",
+    "httpStatus": 200,
+    "status": "ready"
+  },
+  "remaining": [
+    "Windows install/update UI and physical printing acceptance",
+    "Android physical scanner, Keystore and native printing acceptance",
+    "Production error tracking receiver and offsite backup configuration",
+    "Historical anomaly repair requires separate fact review"
+  ],
+  "scope": "Includes both prelaunch audit fix rounds; later merge-business-centers workspace changes excluded."
+}
