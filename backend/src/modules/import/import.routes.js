@@ -7,7 +7,8 @@ const controller = require('./import.controller')
 const router = Router()
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 },
+  // 仅接收单文件；业务参数不从 multipart 文本字段读取，拒绝额外字段以限制解析开销。
+  limits: { files: 1, fields: 0, fieldArrayIndexLimit: 0, fileSize: 5 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const allowed = [
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

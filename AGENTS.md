@@ -285,7 +285,7 @@ npm run test:permissions
 - PDA 已发布状态由不入 Git 的 `backend/apk/published-version.json` 指向唯一 APK；CI 先落安装包再原子替换清单。`backend/apk/version.json` 是构建目标/旧部署兼容清单，不能让浏览器 git reset 把未发布 APK 的版本提前对外公布。PDA 发布只更新挂载产物，不重置 Git 或重建后端；部署回退时将 version.json 原子恢复为已发布清单，兼容不识别 published-version.json 的旧镜像。
 - 审计目录中的原始`.log`保留工具输出字节与摘要，`.gitattributes`仅对这两轮归档日志关闭源码空白检查；业务源码、配置和Markdown继续检查空白。
 - Gitleaks 审计证据误报只允许豁免经核实的固定非认证值，不能排除整个证据目录；当前四个测试调拨幂等键及一份源码SHA256采用精确匹配，原因写在`.gitleaks.toml`。
-- 依赖审计安装/网络/JSON 错误必须失败，不能视为零漏洞；扫描完整依赖树，直接和传递依赖的所有 high/critical 均阻断，不能用 omit=dev 排除 Electron 分发运行时。当前 HashRouter 使用 React Router 7；后端 qs 安全补丁由 overrides 固定最低修复版，移除覆盖前重新审计上游依赖范围。
+- 依赖审计安装/网络/JSON 错误必须失败，不能视为零漏洞；扫描完整依赖树，直接和传递依赖的所有 high/critical 均阻断，不能用 omit=dev 排除 Electron 分发运行时。v0.9.14 起上传依赖 multer 最低为 2.3.0，前端工具链 js-yaml 4.x 锁定安全补丁 4.3.2；上传与 Logo 接口只接收单文件、拒绝未使用的 multipart 文本字段，数量超限返回 HTTP 400（`test:upload` 离线回归并纳入 Tests CI），升级后仍扫描完整依赖树。当前 HashRouter 使用 React Router 7；后端 qs 安全补丁由 overrides 固定最低修复版，移除覆盖前重新审计上游依赖范围。
 - 运维容器解析复用 `scripts/lib/ops-common.sh` 的 `resolve_container()`，不硬编码 Docker 容器名。备份先写临时文件、验证后落正式文件；失败清残留并告警。
 - 恢复演练默认总时限900秒、768m内存、1 CPU、256进程，禁网络与额外swap；正常、超时或TERM退出清理自有容器及匿名卷，外层exec GNU timeout保证信号传递。新鲜度按备份文件修改时间判断，自动演练默认拒绝超过 48 小时的文件（`BACKUP_MAX_AGE_HOURS`）；显式指定历史备份只检查恢复能力并提示过期。没有新销售单不能判定备份损坏。MySQL 连接数探针在容器内认证，查询失败或无效值必须记录异常，不得回退为零；隔离回归见 `tests/ops-monitor-restore.test.js`。
 - 库存漂移巡检只报警，不自动修库存缓存掩盖根因。调度器与服务器 cron 是不同机制，改动时检查 scheduler、install-cron 和部署同步链路。

@@ -10,7 +10,8 @@ const router = Router()
 // Logo 图片上传：memoryStorage（校验后转 base64 写库，不落盘），2MB 上限
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 2 * 1024 * 1024 },
+  // 仅接收单文件；业务参数不从 multipart 文本字段读取，拒绝额外字段以限制解析开销。
+  limits: { files: 1, fields: 0, fieldArrayIndexLimit: 0, fileSize: 2 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const allowed = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml']
     if (allowed.includes(file.mimetype)) cb(null, true)

@@ -1,4 +1,5 @@
 const AppError = require('../utils/AppError')
+const { MulterError } = require('multer')
 const logger   = require('../utils/logger')
 const { errorResponse } = require('../utils/response')
 const { env } = require('../config/env')
@@ -25,6 +26,11 @@ function errorHandler(err, req, res, next) {
   const userId = req.user?.userId ?? '-'
   const refNo  = req.body?.orderNo || req.body?.ref_no || req.params?.id || ''
   const requestId = req.requestId || null
+
+  // 单文件上传的字段/文件数量限制属于预期输入错误，不能记作服务器异常。
+  if (err instanceof MulterError && ['LIMIT_FIELD_COUNT', 'LIMIT_FILE_COUNT'].includes(err.code)) {
+    err = new AppError('仅支持上传一个文件，请移除额外文件或表单字段', 400, err.code)
+  }
 
   // ── 业务异常（可预期，不记录 error 级别）──────────────────────────────────
   if (err instanceof AppError && err.isOperational) {

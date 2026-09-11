@@ -1,6 +1,6 @@
 {
   "name": "flowcube-backend",
-  "version": "0.9.13",
+  "version": "0.9.14",
   "description": "极序 Flow ERP Backend API",
   "main": "index.js",
   "type": "commonjs",
@@ -27,7 +27,7 @@
     "helmet": "^8.0.0",
     "jsbarcode": "3.12.3",
     "jsonwebtoken": "^9.0.2",
-    "multer": "^2.1.1",
+    "multer": "^2.3.0",
     "mysql2": "^3.12.0",
     "zod": "^3.24.1"
   },
