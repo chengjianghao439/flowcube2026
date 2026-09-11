@@ -1,5 +1,6 @@
 /** F01–F05: actual MySQL 8 services; rollback fixtures, exact-ID cleanup for two-connection tests. */
 const assert = require('node:assert/strict')
+const { decodeLabelZpl } = require('./helpers/decodeLabelZpl')
 const { configureTestEnvironment } = require('./helpers/testEnvironment')
 configureTestEnvironment()
 const path = require('node:path')
@@ -154,7 +155,7 @@ async function main() {
     const [jobs] = await conn.query('SELECT content_type,content,ref_code FROM print_jobs WHERE id IN (?)', [checked.printJobIds])
     for (const job of jobs) {
       assert.equal(job.content_type, 'zpl')
-      assert(job.content.includes(job.ref_code))
+      assert.equal(decodeLabelZpl(job.content), job.ref_code)
     }
     assert.deepEqual(await rt.check(conn, taskId, checkArgs), checked)
     const [[count]] = await conn.query('SELECT COUNT(*) AS n FROM print_jobs WHERE warehouse_id=?', [wh])
