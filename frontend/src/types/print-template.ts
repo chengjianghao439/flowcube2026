@@ -52,6 +52,8 @@ export type TemplateLayout =
       elements: TemplateElement[]
       canvasWidthMm?: number
       canvasHeightMm?: number
+      /** 打印分辨率，历史模板缺省 203 */
+      dpi?: 203 | 300
       margins?: PrintPageMargins
     }
   | { format: 'zpl'; body: string }

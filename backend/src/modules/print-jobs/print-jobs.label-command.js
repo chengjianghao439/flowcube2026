@@ -4,14 +4,8 @@ const AppError = require('../../utils/AppError')
 const logger = require('../../utils/logger')
 const { resolvePrinterForJob } = require('./print-dispatch')
 const { getLabelZplFromDefaultTemplate } = require('./labelZplTemplate')
-const {
-  buildContainerLabelZpl,
-  buildPlasticBoxLabelZpl,
-  buildRackLabelZpl,
-  buildLocationLabelZpl,
-  buildPackageLabelZpl,
-  buildProductLabelZpl,
-} = require('./print-jobs.template')
+const { renderLabelAsync } = require('./labelRasterService')
+const { defaultLabelLayout } = require('./labelRasterDefaults')
 const { create, createWithinTransaction } = require('./print-jobs.command')
 const { findById } = require('./print-jobs.query')
 const { getDispatchHintForJob } = require('./print-jobs.dispatch')
@@ -95,8 +89,8 @@ async function resolveLabelPrinter({
   return { printerId, dispatchReason }
 }
 
-async function buildLabelBody({ templateType, vars, zplBuilder }) {
-  const content = (await getLabelZplFromDefaultTemplate(templateType, vars)) ?? zplBuilder(vars)
+async function buildLabelBody({ templateType, vars }) {
+  const content = (await getLabelZplFromDefaultTemplate(templateType, vars)) ?? (await renderLabelAsync({ layout: defaultLabelLayout(templateType), data: vars, preview: false })).zpl
   return { contentType: 'zpl', content }
 }
 
@@ -141,7 +135,6 @@ async function enqueueContainerLabelJob(payload) {
     printerId,
     templateType: isPlasticBox ? 9 : 6,
     vars,
-    zplBuilder: isPlasticBox ? buildPlasticBoxLabelZpl : buildContainerLabelZpl,
   })
   const createJob = conn ? createWithinTransaction.bind(null, conn) : create
   return createJob({
@@ -187,7 +180,6 @@ async function enqueueRackLabelJob(payload) {
     printerId,
     templateType: 5,
     vars,
-    zplBuilder: buildRackLabelZpl,
   })
   try {
     const job = await create({
@@ -208,8 +200,8 @@ async function enqueueRackLabelJob(payload) {
       printerCode: job.printerCode,
       printerName: job.printerName,
       dispatchHint,
-      contentType: label.contentType,
-      content: label.content,
+      contentType: job.contentType,
+      content: job.content,
     }
   } catch (e) {
     if (e.code === 'ER_BAD_FIELD_ERROR' || /Unknown column/i.test(String(e.message))) {
@@ -241,7 +233,6 @@ async function enqueueLocationLabelJob(payload) {
     printerId,
     templateType: 10,
     vars,
-    zplBuilder: buildLocationLabelZpl,
   })
   try {
     const job = await create({
@@ -265,8 +256,8 @@ async function enqueueLocationLabelJob(payload) {
       printerCode: job.printerCode,
       printerName: job.printerName,
       dispatchHint,
-      contentType: label.contentType,
-      content: label.content,
+      contentType: job.contentType,
+      content: job.content,
     }
   } catch (e) {
     if (e.code === 'ER_BAD_FIELD_ERROR' || /Unknown column/i.test(String(e.message))) {
@@ -297,7 +288,6 @@ async function enqueuePackageLabelJob(payload) {
     printerId,
     templateType: 7,
     vars,
-    zplBuilder: buildPackageLabelZpl,
   })
   const createJob = conn ? createWithinTransaction.bind(null, conn) : create
   return createJob({
@@ -376,7 +366,6 @@ async function enqueueProductLabelJob(payload) {
     printerId,
     templateType: 8,
     vars,
-    zplBuilder: buildProductLabelZpl,
   })
 
   const job = await create({
@@ -400,8 +389,8 @@ async function enqueueProductLabelJob(payload) {
     printerCode: job.printerCode,
     printerName: job.printerName,
     dispatchHint,
-    contentType: label.contentType,
-    content: label.content,
+    contentType: job.contentType,
+    content: job.content,
   }
 }
 

@@ -8,7 +8,7 @@
  *   - 画布内移动：mouse events
  */
 
-import { useState, useRef, useEffect, useCallback, useContext, useId, useMemo } from 'react'
+import { useState, useRef, useEffect, useCallback, useContext, useId } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { TabPathContext } from '@/components/layout/TabPathContext'
@@ -50,7 +50,8 @@ import {
 } from '@/constants/printFieldDefs'
 import { DEFAULT_LABEL_ELEMENTS } from '@/constants/printFieldDefs'
 import BarcodePreview from '@/components/print/BarcodePreview'
-import { PT_TO_MM, resolveLayout } from '@/lib/labelGeometry'
+import { PT_TO_MM, resolveLabelWidthMm, resolveLabelHeightMm } from '@/lib/labelGeometry'
+import LabelRasterPreview from '@/components/print/LabelRasterPreview'
 
 /** 标签元素字高（mm）：优先 v2 fontHeightMm，旧模板回退 fontSize(pt)×PT_TO_MM —— 与后端 normalize 一致 */
 function labelFontMm(el: TemplateElement): number {
@@ -390,7 +391,7 @@ function ElementNode({ el, selected, preview, previewData, previewItems, useReal
     fontSize: isLabel ? `${labelFontMm(el) * scale}px` : `${el.fontSize * scale * 0.35}px`,
     fontWeight: isLabel ? 'normal' : el.fontWeight,
     textAlign: el.textAlign,
-    border:   (el.border && el.type !== 'table') ? '1px solid #999' : undefined,
+    border:   (!isLabel && el.border && el.type !== 'table') ? '1px solid #999' : undefined,
     outline:  (!preview && selected) ? '2px solid hsl(var(--primary))' : undefined,
     cursor:   preview ? 'default' : 'move',
     // 编辑+选中时露出 resize 手柄；其余裁剪以模拟真机边界
@@ -402,7 +403,10 @@ function ElementNode({ el, selected, preview, previewData, previewItems, useReal
   }
 
   let content: React.ReactNode
-  if (el.type === 'image') {
+  if (isLabel) {
+    // Selection/resize handles stay interactive; the raster layer owns all visible label content.
+    content = <span className="sr-only">{labelText(el, previewData)}</span>
+  } else if (el.type === 'image') {
     // 公司 Logo：预览态取系统 Logo URL 渲染图片；编辑态（或未上传）显示占位提示
     const src = previewData[el.fieldKey] ?? ''
     content = showData && src ? (
@@ -540,81 +544,6 @@ function ElementNode({ el, selected, preview, previewData, previewItems, useReal
       {content}
       {!preview && selected && <ResizeHandles onStart={onResizeStart} />}
     </div>
-  )
-}
-
-interface LabelPreviewOverlayProps {
-  /** 标签元素（评审次要项：由父组件拆分传入，layout 对象不再每次新建，useMemo 依赖可稳定比较） */
-  elements: TemplateElement[]
-  canvasWidthMm: number
-  canvasHeightMm: number
-  data: Record<string, string>
-  paperSize: PaperSize
-  /** mm → px（已含 MM_PX × 缩放） */
-  scale: number
-}
-
-/**
- * 标签预览走统一几何层：resolveLayout → DrawPrimitive[] → 按 mm 原样渲染。
- * 与后端 ZPL（×MM_TO_DOT）共用同一几何，字框 / 字高 / showLabel 前缀 /
- * 空值跳过规则与真机一致，不再用「等宽字体 + PT_TO_MM」近似。
- */
-function LabelPreviewOverlay({ elements, canvasWidthMm, canvasHeightMm, data, paperSize, scale }: LabelPreviewOverlayProps) {
-  const resolved = useMemo(
-    () => resolveLayout({ elements, canvasWidthMm, canvasHeightMm }, data, paperSize),
-    [elements, canvasWidthMm, canvasHeightMm, data, paperSize]
-  )
-  const px = (mm: number) => mm * scale
-
-  return (
-    <>
-      {resolved.primitives.map((p, i) => {
-        if (p.kind === 'barcode') {
-          return (
-            <div
-              key={i}
-              style={{
-                position: 'absolute',
-                left: px(p.xMm),
-                top: px(p.yMm),
-                width: px(p.widthMm),
-                height: px(p.heightMm),
-                padding: '1px 2px',
-                boxSizing: 'border-box',
-                overflow: 'hidden',
-                pointerEvents: 'none',
-              }}
-            >
-              <BarcodePreview value={p.value} symbology={p.symbology} hri={p.hri} />
-            </div>
-          )
-        }
-        return (
-          <div
-            key={i}
-            style={{
-              position: 'absolute',
-              left: px(p.xMm),
-              top: px(p.yMm),
-              width: px(p.widthMm),
-              height: px(p.heightMm),
-              fontSize: `${p.fontHeightMm * scale}px`,
-              lineHeight: `${p.fontHeightMm * scale}px`,
-              textAlign: p.align,
-              fontFamily: "'Courier New', monospace",
-              whiteSpace: 'pre-wrap',
-              overflow: 'hidden',
-              boxSizing: 'border-box',
-              padding: '1px 2px',
-              pointerEvents: 'none',
-              userSelect: 'none',
-            }}
-          >
-            {p.text}
-          </div>
-        )
-      })}
-    </>
   )
 }
 
@@ -1157,6 +1086,7 @@ export default function PrintTemplateEditor() {
   /** 标签类型 5–9：画布纸张（mm），与 layout.canvasWidthMm/HeightMm 同步 */
   const [canvasWidthMm,  setCanvasWidthMm]  = useState(75)
   const [canvasHeightMm, setCanvasHeightMm] = useState(50)
+  const [dpi, setDpi] = useState<203 | 300>(203)
   /** 单据类型页面边距（mm），写入 layout.margins；打印 @page 与安全区共用 */
   const [margins, setMargins] = useState<PrintPageMargins>({ top: 8, bottom: 8, left: 0, right: 0 })
   /** 多选：Shift+点击 toggle；空数组 = 未选中 */
@@ -1190,10 +1120,12 @@ export default function PrintTemplateEditor() {
   canvasWidthMmRef.current = canvasWidthMm
   const canvasHeightMmRef = useRef(canvasHeightMm)
   canvasHeightMmRef.current = canvasHeightMm
+  const dpiRef = useRef(dpi)
+  dpiRef.current = dpi
   const marginsRef = useRef(margins)
   marginsRef.current = margins
-  const snapshotRefs = useRef({ type, paperSize, canvasWidthMm, canvasHeightMm, margins })
-  snapshotRefs.current = { type, paperSize, canvasWidthMm, canvasHeightMm, margins }
+  const snapshotRefs = useRef({ type, paperSize, canvasWidthMm, canvasHeightMm, dpi, margins })
+  snapshotRefs.current = { type, paperSize, canvasWidthMm, canvasHeightMm, dpi, margins }
 
   /** 未保存检测基准：水合完成时快照（评审 P1 修复） */
   const cleanSnapshotRef = useRef<CleanSnapshot | null>(null)
@@ -1206,6 +1138,7 @@ export default function PrintTemplateEditor() {
       paperSize: paperSizeRef.current,
       canvasWidthMm: canvasWidthMmRef.current,
       canvasHeightMm: canvasHeightMmRef.current,
+      dpi: dpiRef.current,
       margins: { ...marginsRef.current },
       elements: elementsRef.current,
     }
@@ -1225,6 +1158,7 @@ export default function PrintTemplateEditor() {
         paperSizeRef.current !== clean.paperSize ||
         canvasWidthMmRef.current !== clean.canvasWidthMm ||
         canvasHeightMmRef.current !== clean.canvasHeightMm ||
+        dpiRef.current !== clean.dpi ||
         JSON.stringify(s.margins) !== JSON.stringify(clean.margins) ||
         JSON.stringify(elementsRef.current) !== JSON.stringify(clean.elements)
       )
@@ -1244,6 +1178,7 @@ export default function PrintTemplateEditor() {
       setName(remote.name)
       setType(remote.type)
       setPaperSize(remote.paperSize)
+      setDpi(!isZplTemplateLayout(remote.layout) && remote.layout.dpi === 300 ? 300 : 203)
       if (isZplTemplateLayout(remote.layout)) {
         setElements(cloneDefaultLabelElements(remote.type))
         toast.warning('原 ZPL 文本模板已切换为可视化布局，保存后即按新格式存储')
@@ -1263,8 +1198,8 @@ export default function PrintTemplateEditor() {
           })
         }
         if (isZplLabelType(remote.type)) {
-          const cw = typeof lo.canvasWidthMm === 'number' ? lo.canvasWidthMm : 75
-          const ch = typeof lo.canvasHeightMm === 'number' ? lo.canvasHeightMm : 50
+          const cw = resolveLabelWidthMm(lo, remote.paperSize)
+          const ch = resolveLabelHeightMm(lo)
           setCanvasWidthMm(Math.min(120, Math.max(30, cw)))
           setCanvasHeightMm(Math.min(500, Math.max(40, ch)))
         }
@@ -1277,16 +1212,13 @@ export default function PrintTemplateEditor() {
         name: remote.name,
         type: remote.type,
         paperSize: remote.paperSize,
+        dpi: !isZplTemplateLayout(remote.layout) && remote.layout.dpi === 300 ? 300 : 203,
         canvasWidthMm: isZplTemplateLayout(remote.layout)
           ? (isZplLabelType(remote.type) ? 75 : 80)
-          : typeof (remote.layout as { canvasWidthMm?: number }).canvasWidthMm === 'number'
-            ? Number((remote.layout as { canvasWidthMm?: number }).canvasWidthMm)
-            : 75,
+          : isZplLabelType(remote.type) ? resolveLabelWidthMm(remote.layout, remote.paperSize) : 75,
         canvasHeightMm: isZplTemplateLayout(remote.layout)
           ? (isZplLabelType(remote.type) ? 50 : 200)
-          : typeof (remote.layout as { canvasHeightMm?: number }).canvasHeightMm === 'number'
-            ? Number((remote.layout as { canvasHeightMm?: number }).canvasHeightMm)
-            : 50,
+          : isZplLabelType(remote.type) ? Math.max(40, resolveLabelHeightMm(remote.layout)) : 50,
         margins: (() => {
           if (isZplTemplateLayout(remote.layout)) return { top: 8, bottom: 8, left: 0, right: 0 }
           const m = (remote.layout as { margins?: PrintPageMargins }).margins
@@ -1455,6 +1387,7 @@ export default function PrintTemplateEditor() {
     paperSize: PaperSize
     canvasWidthMm: number
     canvasHeightMm: number
+    dpi: 203 | 300
     margins: PrintPageMargins
     /** 撤销保持选中（评审次要项）：记录选中 id，恢复时沿用仍存在的元素 */
     selectedIds: string[]
@@ -1466,6 +1399,7 @@ export default function PrintTemplateEditor() {
     paperSize: PaperSize
     canvasWidthMm: number
     canvasHeightMm: number
+    dpi: 203 | 300
     margins: PrintPageMargins
     elements: TemplateElement[]
   }
@@ -1482,6 +1416,7 @@ export default function PrintTemplateEditor() {
       paperSize: s.paperSize,
       canvasWidthMm: s.canvasWidthMm,
       canvasHeightMm: s.canvasHeightMm,
+      dpi: s.dpi,
       margins: { ...s.margins },
       selectedIds: selectedIdsRef.current,
     }
@@ -1493,6 +1428,7 @@ export default function PrintTemplateEditor() {
     setPaperSize(snap.paperSize)
     setCanvasWidthMm(snap.canvasWidthMm)
     setCanvasHeightMm(snap.canvasHeightMm)
+    setDpi(snap.dpi)
     setMargins({ ...snap.margins })
     // 撤销保持选中（仅保留仍存在的元素 id，防选中已删元素）
     setSelectedIds(snap.selectedIds.filter(id => snap.elements.some(e => e.id === id)))
@@ -1682,7 +1618,7 @@ export default function PrintTemplateEditor() {
       ? (cw >= 75 ? 'thermal80' : cw >= 58 ? 'thermal75' : 'thermal58')
       : paperSize
     const layout: TemplateLayout = isZplLabelType(type)
-      ? { elements, canvasWidthMm: cw, canvasHeightMm: ch }
+      ? { elements, canvasWidthMm: cw, canvasHeightMm: ch, dpi }
       : { elements, margins }
     if (isNew) {
       createMut.mutate({ name, type, paperSize: derivedPaper, layout })
@@ -2010,6 +1946,11 @@ export default function PrintTemplateEditor() {
                 title="高度 mm"
               />
               <span className="text-xs text-muted-foreground">宽×高</span>
+              <select aria-label="打印分辨率" title="须与打印机分辨率一致" value={dpi}
+                onChange={e => { snapshot(); setDpi(Number(e.target.value) === 300 ? 300 : 203) }}
+                className="h-9 rounded-md border border-input bg-background px-2 text-sm">
+                <option value={203}>203 DPI</option><option value={300}>300 DPI</option>
+              </select>
               <Button
                 type="button"
                 variant="outline"
@@ -2314,17 +2255,19 @@ export default function PrintTemplateEditor() {
                 }} />
               )}
 
-              {isZplLabelType(type) && preview ? (
-                <LabelPreviewOverlay
+              {isZplLabelType(type) && elements.length > 0 && (
+                <LabelRasterPreview
                   // 评审次要项：layout 对象字面量每渲染新建导致子组件 useMemo 恒失效，改为传原始 state 由子组件稳定化
                   elements={elements}
                   canvasWidthMm={safeCw}
                   canvasHeightMm={safeCh}
+                  dpi={dpi}
                   data={previewData}
                   paperSize={labelPaperSize}
                   scale={canvasScale}
                 />
-              ) : (
+              )}
+              {(!isZplLabelType(type) || !preview) && (
                 elements.map(el => (
                   <ElementNode
                     key={el.id}

@@ -1,11 +1,12 @@
 /**
  * 标签 ZPL（DB 层）：从 print_templates（type 5–10）默认模板生成 ZPL。
- * 纯映射逻辑在 labelZpl.js（零依赖、可独立测试）；本文件只负责读库 + 兜底取模板。
+ * 本文件负责读库；画布进入 labelRasterService，手写正文沿用 labelZpl 的单次变量替换。
  */
 
 const { pool } = require('../../config/db')
 const { safeJsonParse } = require('../../utils/safeJsonParse')
 const logger = require('../../utils/logger')
+const { renderLabelAsync } = require('./labelRasterService')
 const {
   applyZplTemplate,
   sanitizeZplValue,
@@ -55,7 +56,7 @@ async function getLabelZplFromDefaultTemplate(templateType, vars) {
     return applyZplTemplate(layout.body.trim(), vars)
   }
   if (Array.isArray(layout?.elements)) {
-    return generateZplFromElements(layout, vars, paperSize)
+    return (await renderLabelAsync({ layout, data: vars, paperSize, preview: false })).zpl
   }
   return null
 }

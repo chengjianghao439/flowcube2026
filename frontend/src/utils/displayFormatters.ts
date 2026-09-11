@@ -53,6 +53,8 @@ export function formatBackendCode(code: unknown, fallback = '操作失败，请�
   const raw = asTrimmedString(code)
   if (!raw) return fallback
   const upper = raw.toUpperCase()
+  // Layout validation has a specific, actionable Chinese message supplied by the renderer.
+  if (upper === 'LABEL_RENDER_INVALID') return fallback
   if (BACKEND_CODE_LABELS[upper]) return BACKEND_CODE_LABELS[upper]
   if (upper.endsWith('_CONFLICT')) return '状态已变化，请刷新后重试'
   if (upper.endsWith('_INVALID')) return '当前操作无效，请刷新后重试'

@@ -72,7 +72,7 @@ export function resolveLabelWidthMm(layout: any, paperSize: string): number {
 /** 标签纸高（mm）：canvasHeightMm 优先，否则默认 50 */
 export function resolveLabelHeightMm(layout: any): number {
   const n = Number(layout?.canvasHeightMm)
-  if (Number.isFinite(n) && n > 0 && n <= 300) return Math.round(n)
+  if (Number.isFinite(n) && n > 0 && n <= 500) return Math.round(n)
   return 50
 }
 

@@ -9,7 +9,7 @@ import { DEFAULT_LABEL_ELEMENTS } from '@/constants/printFieldDefs'
 import PrintTemplateEditor from './editor'
 
 const mocks = vi.hoisted(() => ({ detail: vi.fn(), sample: vi.fn(), save: vi.fn(), generation: 1 }))
-vi.mock('@/api/print-templates', () => ({ getPrintTemplateDetailApi: mocks.detail, getPrintTemplatePreviewApi: mocks.sample, updatePrintTemplateApi: mocks.save, createPrintTemplateApi: mocks.save }))
+vi.mock('@/api/print-templates', () => ({ getPrintTemplateDetailApi: mocks.detail, getPrintTemplatePreviewApi: mocks.sample, updatePrintTemplateApi: mocks.save, createPrintTemplateApi: mocks.save, renderLabelPreviewApi: async () => ({ imageDataUrl: 'data:image/png;base64,AA' }) }))
 vi.mock('@/api/settings', () => ({ getLogoApi: async () => ({ url: '' }) }))
 vi.mock('@/store/authStore', () => ({ useAuthStore: (select: (s: { sessionGeneration: number; isAuthenticated: boolean }) => unknown) => select({ sessionGeneration: mocks.generation, isAuthenticated: true }) }))
 vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), warning: vi.fn(), error: vi.fn() } }))
@@ -122,4 +122,22 @@ test('新增标签字段可拖入并显示真实值，保存仅保存字段定�
   expect(saved).toHaveLength(DEFAULT_LABEL_ELEMENTS[8].length + 1)
   expect(saved.at(-1).fieldKey).toBe('article_number')
   expect(JSON.stringify(saved)).not.toContain('SUP-REAL-99')
+})
+
+
+test('DPI is saved and participates in undo/redo', async () => {
+  await render()
+  const select = host.querySelector<HTMLSelectElement>('select[aria-label="打印分辨率"]')!
+  expect(select.value).toBe('203')
+  await act(async () => { select.value = '300'; select.dispatchEvent(new Event('change', { bubbles: true })) })
+  await click('保存'); expect(mocks.save.mock.calls.at(-1)![0].layout.dpi).toBe(300)
+  await click('撤销'); expect(select.value).toBe('203')
+  await click('重做'); expect(select.value).toBe('300')
+})
+
+
+test('legacy thermal58 without explicit width hydrates the same dimensions as the printer', async () => {
+  mocks.detail.mockResolvedValue({ ...tpl, paperSize: 'thermal58', layout: { elements: [] } })
+  await render()
+  expect(host.querySelector<HTMLInputElement>('input[title="宽度 mm"]')!.value).toBe('58')
 })

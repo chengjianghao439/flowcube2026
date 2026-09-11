@@ -3,7 +3,7 @@
  *
  * 设计目标：消除「预览 / 真机 ZPL」两套几何不一致。
  * 几何只算一次 —— resolveLayout 把 layout_json + 数据 解析成中性「绘制图元」(DrawPrimitive)，
- * 坐标/尺寸/字高全部用 mm 表达；前端预览 ×MM_PX、后端 ZPL ×MM_TO_DOT 各自映射。
+ * 坐标/尺寸/字高全部用 mm 表达；当前画布预览与打印统一在 labelRaster 中映射到打印点。
  *
  * 本文件是「单一事实源」。前端镜像 frontend/src/lib/labelGeometry.ts 必须与本文件
  * 行为一致，由 tests/fixtures/label-geometry-cases.json 快照锁定（两端跑同一组样例）。
@@ -55,7 +55,7 @@ function resolveLabelWidthMm(layout, paperSize) {
 /** 标签纸高（mm）：canvasHeightMm 优先，否则默认 50（常见 75×50 标签） */
 function resolveLabelHeightMm(layout) {
   const n = Number(layout?.canvasHeightMm)
-  if (Number.isFinite(n) && n > 0 && n <= 300) return Math.round(n)
+  if (Number.isFinite(n) && n > 0 && n <= 500) return Math.round(n)
   return 50
 }
 

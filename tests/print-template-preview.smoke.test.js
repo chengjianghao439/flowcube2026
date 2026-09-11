@@ -29,6 +29,21 @@ async function main() {
       assert.equal(r.status, 200, `type ${type}: ${JSON.stringify(r.data)}`)
       return r.data.data
     }
+    const rasterLayout = { canvasWidthMm: 75, canvasHeightMm: 50, dpi: 300, elements: [
+      { id: 'bc', type: 'barcode', fieldKey: 'product_code', x: 2, y: 2, width: 71, height: 12 },
+      { id: 'text', type: 'text', fieldKey: 'product_name', x: 2, y: 18, width: 71, height: 10, fontHeightMm: 3 },
+    ] }
+    const rasterRequest = { layout: rasterLayout, paperSize: 'thermal75', data: { product_code: 'SP000001', product_name: '中文测试' } }
+    assert.equal((await http.post('/api/print-templates/render-label', { json: rasterRequest })).status, 401)
+    const rasterResponse = await http.post('/api/print-templates/render-label', { token: admin, json: rasterRequest })
+    assert.equal(rasterResponse.status, 200)
+    assert.equal(rasterResponse.data.data.dpi, 300)
+    assert.ok(rasterResponse.data.data.imageDataUrl.startsWith('data:image/png;base64,'))
+    assert.equal(rasterResponse.data.data.zpl, undefined)
+    for (const invalid of [{ ...rasterRequest, layout: { ...rasterLayout, dpi: 600 } }, { ...rasterRequest, data: { product_code: '中文' } }]) {
+      assert.equal((await http.post('/api/print-templates/render-label', { token: admin, json: invalid })).status, 400)
+    }
+    console.log('[PASS] 点阵接口鉴权、中文图片、DPI及非法条码校验'); passed++
     assert.equal((await http.get('/api/print-templates/preview-data?type=1')).status, 401)
     console.log('[PASS] 未登录访问返回401'); passed++
     // CI shares a test database across suites; empty-data assertions below use
@@ -137,6 +152,16 @@ async function main() {
       }
       console.log(`[PASS] 类型${type}真实字段、最新可访问与删除/跨仓过滤`); passed++
     }
+    // Per-user preview throttling must not group all authenticated users under an undefined key.
+    let throttled = false
+    for (let i = 0; i < 121; i++) {
+      const response = await http.post('/api/print-templates/render-label', { token: admin, json: { ...rasterRequest, layout: { ...rasterLayout, dpi: 600 } } })
+      if (response.status === 429) { throttled = true; break }
+      assert.equal(response.status, 400)
+    }
+    assert.ok(throttled)
+    assert.equal((await http.post('/api/print-templates/render-label', { token: limited, json: { ...rasterRequest, layout: { ...rasterLayout, dpi: 600 } } })).status, 400)
+    console.log('[PASS] 标签预览限流按真实用户ID隔离'); passed++
     assert.equal(await snapshot(), before, '预览请求不得修改业务数据或入队打印')
     console.log('[PASS] 10类预览前后业务/库存/打印数据完全一致'); passed++
     // Virtual printer only: queued jobs are inspected and deleted without dispatch.
@@ -172,6 +197,23 @@ async function main() {
         const [[saved]] = await pool.query('SELECT content FROM print_jobs WHERE id=?', [job.id])
         assert.equal(saved.content, '^XA' + Object.entries(vars).map(([key, value]) => `^FD${key}=${value}^FS`).join('') + '^XZ')
         console.log(`[PASS] 类型${type}自定义模板真实ZPL包含全部可选字段并与预览一致`); passed++
+      }
+      // Queue content must exactly equal the render used by the editor, not the legacy ^A0/^BC mapper.
+      const [[rasterTemplate]] = await pool.query('SELECT id, layout_json FROM print_templates WHERE type=8 AND is_default=1')
+      try {
+        await pool.query('UPDATE print_templates SET layout_json=? WHERE id=?', [JSON.stringify(rasterLayout), rasterTemplate.id])
+        const vars = expectedLabels[8]
+        const { renderLabel } = require('../backend/src/modules/print-jobs/labelRaster')
+        const expectedRaster = renderLabel({ layout: rasterLayout, data: vars, paperSize: 'thermal80', preview: false })
+        const previous = await enqueue[8]()
+        const [[oldJob]] = await pool.query('SELECT content FROM print_jobs WHERE id=?', [previous.id])
+        assert.ok(previous.content === oldJob.content, '幂等重放必须返回原队列快照，不能返回重绘内容')
+        const job = await labels.enqueueProductLabelJob({ productId: product, jobUniqueKey: `${code}-raster` }); assert.ok(job.id); jobIds.push(job.id)
+        const [[stored]] = await pool.query('SELECT content FROM print_jobs WHERE id=?', [job.id])
+        assert.ok(stored.content === expectedRaster.zpl, '入队点阵应与预览一致')
+        console.log('[PASS] 实际商品标签入队使用与预览相同的300 DPI点阵'); passed++
+      } finally {
+        await pool.query('UPDATE print_templates SET layout_json=? WHERE id=?', [typeof rasterTemplate.layout_json === 'string' ? rasterTemplate.layout_json : JSON.stringify(rasterTemplate.layout_json), rasterTemplate.id])
       }
       const conn = await pool.getConnection()
       let uncommittedJob

@@ -1,5 +1,6 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
+const { validateLabelInput } = require('../print-jobs/labelRasterValidation')
 const { safeJsonParse } = require('../../utils/safeJsonParse')
 
 const TYPE_NAME = {
@@ -26,6 +27,7 @@ function validateLayout(type, layout) {
       return
     }
     if (Array.isArray(layout.elements)) {
+      validateLabelInput({ layout })
       if (layout.elements.length === 0) {
         throw new AppError('标签模板至少包含一个画布元素', 400)
       }

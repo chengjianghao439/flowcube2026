@@ -1,5 +1,6 @@
 const svc = require('./print-templates.service')
 const preview = require('./print-templates.preview')
+const { renderLabelAsync } = require('../print-jobs/labelRasterService')
 const { successResponse } = require('../../utils/response')
 
 const list      = async (req, res, next) => { try { return successResponse(res, await svc.findAll({ type: req.query.type ? +req.query.type : null }), '查询成功') } catch (e) { next(e) } }
@@ -15,4 +16,13 @@ const previewData = async (req, res, next) => {
   } catch (error) { next(error) }
 }
 
-module.exports = { previewData, list, detail, create, update, setDefault, remove }
+const renderLabel = async (req, res, next) => {
+  try {
+    const { layout, data, paperSize } = req.body || {}
+    const { zpl: _zpl, ...result } = await renderLabelAsync({ layout, data, paperSize })
+    res.set('Cache-Control', 'no-store')
+    return successResponse(res, result, '绘制成功')
+  } catch (error) { next(error) }
+}
+
+module.exports = { renderLabel, previewData, list, detail, create, update, setDefault, remove }

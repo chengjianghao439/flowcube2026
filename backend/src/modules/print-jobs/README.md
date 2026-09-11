@@ -5,7 +5,8 @@ business logic to `print-jobs.service.js`.
 
 - `labelVariables.js`: shared read-only variables for label previews and enqueue commands; scoped latest selection and transaction-aware reads. Optional field catalog: `docs/label-optional-fields-2026-09-09.md`.
 - `print-jobs.template.js`: pure built-in label content builders only. No DB, no job creation.
-- `labelZplTemplate.js` / `labelZpl.js`: load configured templates and render raw ZPL, sanitizing business values separately from trusted template commands.
+- `labelZplTemplate.js`: load configured templates; canvas layouts use `labelRasterService.js`, raw bodies retain `labelZpl.js` substitution.
+- `labelRaster*.js`: bounded worker rendering with bundled CJK font; one 1-bit bitmap feeds PNG previews and ASCII ^GFA. `labelRasterDefaults.js` supplies fallback layouts. Legacy exported string builders remain for compatibility, not the canvas enqueue path.
 - `print-jobs.command.js`: create print job records and mutate print job state (`complete`, `fail`, `retry`).
 - `print-jobs.label-command.js`: label-print orchestration commands (`enqueue*LabelJob`, barcode reprint). It may read source records, choose a label format, then call `print-jobs.command`.
 - `print-jobs.query.js`: read-only print job and barcode query APIs.
@@ -23,6 +24,9 @@ for compatibility while callers are gradually migrated.
 - Claim SELECT and UPDATE exclude expired jobs; only successful claims are returned.
 - Waybills require an explicit waybill binding. Ordinary label fallback (including environment selection) stays within the target warehouse or global devices.
 - copies is a numeric integer from 1 to 100 (default 1). Desktop submits all copies in one RAW batch. A template containing ^PQ cannot combine with task copies > 1; a single-copy task preserves the original template.
-- Canvas labels emit ^LL at the existing 203 dpi scale. Field values remove command/control characters; barcodes preserve ordinary leading/trailing spaces. Variable replacement is a single pass and keeps dollar expressions literal.
+- Canvas labels store optional `layout.dpi` (203 or 300; absent = 203). ^PW/^LL and PNG use the same dot dimensions; ^GFA is split into fields of at most 99999 bytes. Text wraps and clips inside its box; barcodes retain quiet zones and integer module widths, rejecting invalid/undersized/out-of-paper codes.
+- Only referenced variables enter the worker; long display text is bounded to 4096 characters and clipped by its box, so large unused package summaries cannot block packing. Queue depth is 16 with a 15-second deadline; errors do not fall back to incomplete printing.
+- Idempotent label responses return the stored job content, including when the template has changed. Old jobs are not re-rendered. Raw template variable replacement remains a single pass, sanitizes control/command characters, and preserves barcode spaces.
+- See `docs/label-raster-2026-09-11.md` for renderer, endpoint, font licensing and verification boundaries.
 
 Run `npm run smoke:print-queue` only with the independent test environment required by AGENTS.md. Software regression and OS submission are not physical-print acceptance. See `docs/label-print-audit-2026-09-09.md` for evidence and remaining device checks.

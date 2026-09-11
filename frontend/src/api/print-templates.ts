@@ -10,3 +10,12 @@ export const deletePrintTemplateApi    = (id: number, config?: Parameters<typeof
 
 /** 只取一条有权限的真实预览记录，不触发业务列表全量读取。 */
 export const getPrintTemplatePreviewApi = (type: number, signal?: AbortSignal) => client.get<import('@/lib/printTemplatePreview').PrintTemplatePreview | null>('/print-templates/preview-data', { params: { type }, signal, listMode: 'summary', skipGlobalError: true })
+
+/** Uses the same raster renderer as print enqueue; no source records are fetched here. */
+export const renderLabelPreviewApi = (data: {
+  layout: import('@/types/print-template').TemplateLayout
+  data: Record<string, string>
+  paperSize: import('@/types/print-template').PaperSize
+}, signal?: AbortSignal) => client.post<{
+  imageDataUrl: string; widthDots: number; heightDots: number; widthMm: number; heightMm: number; dpi: 203 | 300
+}>('/print-templates/render-label', data, { signal, skipGlobalError: true })

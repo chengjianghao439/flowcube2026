@@ -17,6 +17,8 @@ WORKDIR /app
 COPY backend/package*.json ./
 RUN npm ci --omit=dev
 COPY --chown=node:node backend/ .
+# Fail the image build if the native renderer or bundled Chinese font is missing.
+RUN node scripts/check-label-renderer.cjs
 COPY --chown=node:node docker/backend-entrypoint.sh /usr/local/bin/backend-entrypoint.sh
 RUN chmod +x /usr/local/bin/backend-entrypoint.sh
 EXPOSE 3000
