@@ -1,3 +1,4 @@
+import { ReportQueryFeedback } from './ReportQueryFeedback'
 import KeepAliveSection from '@/components/shared/KeepAliveSection'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
@@ -95,7 +96,7 @@ export default function InventoryAgingPage() {
         actions={
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
-            <Button onClick={() => { agingQ.refetch(); expiryQ.refetch() }}>刷新</Button>
+            <Button disabled={tab === 'aging' ? agingQ.isFetching : expiryQ.isFetching} onClick={() => void (tab === 'aging' ? agingQ.refetch() : expiryQ.refetch())}>{(tab === 'aging' ? agingQ.isFetching : expiryQ.isFetching) ? '正在刷新…' : '刷新'}</Button>
           </div>
         }
       />
@@ -114,6 +115,7 @@ export default function InventoryAgingPage() {
         </div>
       )}
 
+      <ReportQueryFeedback title="存放明细" hasData={!!agingQ.data} isError={agingQ.isError} isFetching={agingQ.isFetching} error={agingQ.error} onRetry={() => void agingQ.refetch()} />
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         {buckets.map(b => (
           <div key={b.bucket} className="card-base p-4">
@@ -131,11 +133,12 @@ export default function InventoryAgingPage() {
         ))}
       </div>
 
-      <KeepAliveSection active={tab === 'aging'}>
+      <KeepAliveSection active={tab === 'aging' && (!agingQ.isError || !!agingQ.data)}>
         <DataTable columns={agingCols} data={list} loading={agingQ.isLoading} rowKey="id" emptyText="暂无库存数据" />
       </KeepAliveSection>
       <KeepAliveSection active={tab === 'expiry'}>
-        <DataTable columns={expiryCols} data={expiryList} loading={expiryQ.isLoading} rowKey="id" emptyText="暂无临期 / 过期批次（仅批次管理商品参与效期预警）" />
+        <ReportQueryFeedback title="效期预警" hasData={!!expiryQ.data} isError={expiryQ.isError} isFetching={expiryQ.isFetching} error={expiryQ.error} onRetry={() => void expiryQ.refetch()} />
+        {(!expiryQ.isError || !!expiryQ.data) && <DataTable columns={expiryCols} data={expiryList} loading={expiryQ.isLoading} rowKey="id" emptyText="暂无临期 / 过期批次（仅批次管理商品参与效期预警）" />}
       </KeepAliveSection>
 
       <InventoryAgingQueryDialog

@@ -294,7 +294,7 @@ async function reconciliationReport(params = {}) {
 }
 
 async function profitAnalysis(params = {}) {
-  const { summaryRow, saleRows, productRows, stockRows, slowRows } = await fetchProfitAnalysisRows(params)
+  const { summaryRow, stockSummaryRow, slowSummaryRow, saleRows, productRows, stockRows, slowRows } = await fetchProfitAnalysisRows(params)
   const saleAmount = safeNum(summaryRow.saleAmount)
   const costAmount = safeNum(summaryRow.costAmount)
 
@@ -303,9 +303,9 @@ async function profitAnalysis(params = {}) {
       saleAmount,
       costAmount,
       grossProfit: saleAmount - costAmount,
-      stockValue: stockRows.reduce((sum, row) => sum + safeNum(row.total_value), 0),
-      slowMovingValue: slowRows.reduce((sum, row) => sum + safeNum(row.stock_value), 0),
-      slowMovingCount: slowRows.length,
+      stockValue: safeNum(stockSummaryRow.stockValue),
+      slowMovingValue: safeNum(slowSummaryRow.slowMovingValue),
+      slowMovingCount: Number(slowSummaryRow.slowMovingCount || 0),
     },
     saleOrders: saleRows.map(row => ({
       id: Number(row.id),
@@ -341,6 +341,7 @@ async function profitAnalysis(params = {}) {
       articleNumber: row.article_number || null,
       spec: row.spec || null,
       color: row.color || null,
+      warehouseId: Number(row.warehouse_id),
       warehouseName: row.warehouse_name,
       totalQty: safeNum(row.total_qty),
       totalValue: safeNum(row.total_value),

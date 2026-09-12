@@ -265,6 +265,7 @@ export interface ProfitProductRow {
 
 export interface ProfitStockValueRow {
   id: number
+  warehouseId: number
   code: string
   name: string
   unit: string

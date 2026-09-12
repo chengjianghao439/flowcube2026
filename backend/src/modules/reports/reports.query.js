@@ -674,132 +674,129 @@ async function fetchReconciliationRows({ type = 1, startDate = null, endDate = n
 
 async function fetchProfitAnalysisRows({ startDate = null, endDate = null, scopeWarehouseIds = null } = {}) {
   const inventoryDisplayProjectionSql = getInventoryDisplayProjectionSql()
-  const productInventoryProjectionSql = getProductInventoryProjectionSql()
   const saleDate = buildDateFilter('so.created_at', startDate, endDate)
   const soWh = scopeFilter(scopeWarehouseIds, 'so.warehouse_id')
   const ipWh = scopeFilter(scopeWarehouseIds, 'ip.warehouse_id')
-  const saleWhere = `WHERE so.deleted_at IS NULL AND so.status = 4${saleDate.sql}${soWh.sql}`
-  const saleParams = [...saleDate.params, ...soWh.params]
-
-  const summaryRow = await fetchOne(
-    `SELECT
-       COALESCE(SUM(so.total_amount), 0) AS saleAmount,
-       COALESCE(SUM(soi.quantity * COALESCE(soi.cost_snapshot, NULLIF(p.cost_price, 0), p.sale_price, 0)), 0) AS costAmount
+  const lWh = scopeFilter(scopeWarehouseIds, 'l.warehouse_id')
+  // 与销售列表保持整单权限：任一明细仓越权时整单排除，不截成局部收入。
+  const itemScopeSql = Array.isArray(scopeWarehouseIds) && scopeWarehouseIds.length
+    ? ' AND NOT EXISTS (SELECT 1 FROM sale_order_items si_scope WHERE si_scope.order_id = so.id AND si_scope.warehouse_id NOT IN (?))'
+    : ''
+  const saleWhere = `WHERE so.deleted_at IS NULL AND so.status = 4${saleDate.sql}${soWh.sql}${itemScopeSql}`
+  const saleParams = [...saleDate.params, ...soWh.params, ...(itemScopeSql ? [scopeWarehouseIds] : [])]
+  // total_amount 为折前原值；净额沿用 getNetOrderAmount 的非负折扣/净额口径。
+  // 先聚合成一单一行，再累加净额，防止明细 JOIN 重复销售额。
+  const saleOrderSql = `SELECT
+       so.id, so.order_no, so.customer_name, so.warehouse_name, so.created_at,
+       GREATEST(0, GREATEST(0, so.total_amount) - GREATEST(0, COALESCE(so.discount_amount, 0))) AS total_amount,
+       COALESCE(SUM(soi.amount), 0) AS items_amount,
+       COALESCE(SUM(soi.quantity * COALESCE(soi.cost_snapshot, NULLIF(p.cost_price, 0), p.sale_price, 0)), 0) AS cost_amount
      FROM sale_orders so
      INNER JOIN sale_order_items soi ON soi.order_id = so.id
      INNER JOIN product_items p ON p.id = soi.product_id
-     ${saleWhere}`,
+     ${saleWhere}
+     GROUP BY so.id`
+
+  const summaryRow = await fetchOne(
+    `SELECT COALESCE(SUM(s.total_amount), 0) AS saleAmount,
+            COALESCE(SUM(s.cost_amount), 0) AS costAmount
+     FROM (${saleOrderSql}) s`,
     saleParams,
   )
 
   const saleRows = await fetchMany(
-    `SELECT
-       so.id,
-       so.order_no,
-       so.customer_name,
-       so.warehouse_name,
-       so.total_amount,
-       COALESCE(SUM(soi.quantity * COALESCE(soi.cost_snapshot, NULLIF(p.cost_price, 0), p.sale_price, 0)), 0) AS cost_amount,
-       COALESCE(SUM(soi.amount), 0) - COALESCE(SUM(soi.quantity * COALESCE(soi.cost_snapshot, NULLIF(p.cost_price, 0), p.sale_price, 0)), 0) AS gross_profit
-     FROM sale_orders so
-     INNER JOIN sale_order_items soi ON soi.order_id = so.id
-     INNER JOIN product_items p ON p.id = soi.product_id
-     ${saleWhere}
-     GROUP BY so.id, so.order_no, so.customer_name, so.warehouse_name, so.total_amount
-     ORDER BY gross_profit DESC, so.created_at DESC
+    `SELECT s.*, s.total_amount - s.cost_amount AS gross_profit
+     FROM (${saleOrderSql}) s
+     ORDER BY gross_profit DESC, s.created_at DESC, s.id DESC
      LIMIT 20`,
     saleParams,
   )
 
+  // 商品收入按明细金额占整单明细总额的比例分摊净销售额；零金额单不除零。
+  // 中间值不按分截断，避免多行分摊反复舍入；展示/导出各自格式化金额。
+  const productRevenue = 'COALESCE(SUM(so.total_amount * soi.amount / NULLIF(so.items_amount, 0)), 0)'
+  const productCost = 'COALESCE(SUM(soi.quantity * COALESCE(soi.cost_snapshot, NULLIF(p.cost_price, 0), p.sale_price, 0)), 0)'
   const productRows = await fetchMany(
     `SELECT
-       p.id,
-       p.code,
-       p.name,
-       p.unit,
-       p.article_number,
-       p.spec,
-       p.color,
+       p.id, p.code, p.name, p.unit, p.article_number, p.spec, p.color,
        COALESCE(SUM(soi.quantity), 0) AS total_qty,
-       COALESCE(SUM(soi.amount), 0) AS revenue_amount,
-       COALESCE(SUM(soi.quantity * COALESCE(soi.cost_snapshot, NULLIF(p.cost_price, 0), p.sale_price, 0)), 0) AS cost_amount,
-       COALESCE(SUM(soi.amount), 0) - COALESCE(SUM(soi.quantity * COALESCE(soi.cost_snapshot, NULLIF(p.cost_price, 0), p.sale_price, 0)), 0) AS gross_profit
-     FROM sale_orders so
+       ${productRevenue} AS revenue_amount,
+       ${productCost} AS cost_amount,
+       ${productRevenue} - ${productCost} AS gross_profit
+     FROM (${saleOrderSql}) so
      INNER JOIN sale_order_items soi ON soi.order_id = so.id
      INNER JOIN product_items p ON p.id = soi.product_id
-     ${saleWhere}
      GROUP BY p.id, p.code, p.name, p.unit, p.article_number, p.spec, p.color
-     ORDER BY gross_profit DESC, revenue_amount DESC
+     ORDER BY gross_profit DESC, revenue_amount DESC, p.id ASC
      LIMIT 20`,
     saleParams,
   )
 
-  const stockRows = await fetchMany(
-    `SELECT
-       p.id,
-       p.code,
-       p.name,
-       p.unit,
-       p.article_number,
-       p.spec,
-       p.color,
-       w.name AS warehouse_name,
-       SUM(ip.quantity) AS total_qty,
-       SUM(ip.quantity * COALESCE(NULLIF(p.cost_price, 0), p.sale_price, 0)) AS total_value
-     FROM ${inventoryDisplayProjectionSql} ip
+  const stockFrom = `FROM ${inventoryDisplayProjectionSql} ip
      INNER JOIN product_items p ON p.id = ip.product_id
      INNER JOIN inventory_warehouses w ON w.id = ip.warehouse_id
-     WHERE p.deleted_at IS NULL AND w.deleted_at IS NULL${ipWh.sql}
-     GROUP BY p.id, p.code, p.name, p.unit, p.article_number, p.spec, p.color, w.name
-     ORDER BY total_value DESC
+     WHERE p.deleted_at IS NULL AND w.deleted_at IS NULL${ipWh.sql}`
+  const stockSummaryRow = await fetchOne(
+    `SELECT COALESCE(SUM(ip.quantity * COALESCE(NULLIF(p.cost_price, 0), p.sale_price, 0)), 0) AS stockValue
+     ${stockFrom}`,
+    ipWh.params,
+  )
+  const stockRows = await fetchMany(
+    `SELECT
+       p.id, p.code, p.name, p.unit, p.article_number, p.spec, p.color,
+       w.id AS warehouse_id, w.name AS warehouse_name,
+       SUM(ip.quantity) AS total_qty,
+       SUM(ip.quantity * COALESCE(NULLIF(p.cost_price, 0), p.sale_price, 0)) AS total_value
+     ${stockFrom}
+     GROUP BY p.id, p.code, p.name, p.unit, p.article_number, p.spec, p.color, w.id, w.name
+     ORDER BY total_value DESC, p.id ASC, w.id ASC
      LIMIT 30`,
     ipWh.params,
   )
 
-  const slowRows = await fetchMany(
-    `SELECT
-       p.id,
-       p.code,
-       p.name,
-       p.unit,
-       p.article_number,
-       p.spec,
-       p.color,
-       COALESCE(st.qty, 0) AS current_qty,
-       COALESCE(st.value, 0) AS stock_value,
-       lo.last_outbound_at,
-       COALESCE(lo.outbound_90d, 0) AS outbound_90d
-     FROM product_items p
-     LEFT JOIN (
-       SELECT ip.product_id,
-              ip.quantity AS qty,
-              ip.quantity * COALESCE(NULLIF(p.cost_price, 0), p.sale_price, 0) AS value
-       FROM ${productInventoryProjectionSql} ip
-       INNER JOIN product_items p ON p.id = ip.product_id
+  // 汇总和排行复用同一未截断集合；库存与最近出库都限定在授权、未删除仓库。
+  const slowFrom = `FROM product_items p
+     INNER JOIN (
+       SELECT ip.product_id, SUM(ip.quantity) AS qty,
+              SUM(ip.quantity * COALESCE(NULLIF(p.cost_price, 0), p.sale_price, 0)) AS value
+       ${stockFrom}
+       GROUP BY ip.product_id
      ) st ON st.product_id = p.id
      LEFT JOIN (
-       SELECT
-         product_id,
-         MAX(created_at) AS last_outbound_at,
-         SUM(CASE WHEN created_at >= DATE_SUB(CURDATE(), INTERVAL 90 DAY) THEN quantity ELSE 0 END) AS outbound_90d
-       FROM inventory_logs
-       WHERE type = 2
-       GROUP BY product_id
+       SELECT l.product_id,
+              MAX(l.created_at) AS last_outbound_at,
+              SUM(CASE WHEN l.created_at >= DATE_SUB(CURDATE(), INTERVAL 90 DAY) THEN l.quantity ELSE 0 END) AS outbound_90d
+       FROM inventory_logs l
+       INNER JOIN inventory_warehouses w ON w.id = l.warehouse_id AND w.deleted_at IS NULL
+       WHERE l.type = 2${lWh.sql}
+       GROUP BY l.product_id
      ) lo ON lo.product_id = p.id
-     WHERE p.deleted_at IS NULL
-       AND COALESCE(st.qty, 0) > 0
-       AND (lo.last_outbound_at IS NULL OR lo.last_outbound_at < DATE_SUB(CURDATE(), INTERVAL 90 DAY))
-     ORDER BY stock_value DESC, current_qty DESC
+     WHERE p.deleted_at IS NULL AND st.qty > 0
+       AND (lo.last_outbound_at IS NULL OR lo.last_outbound_at < DATE_SUB(CURDATE(), INTERVAL 90 DAY))`
+  const slowParams = [...ipWh.params, ...lWh.params]
+  const slowSummaryRow = await fetchOne(
+    `SELECT COUNT(*) AS slowMovingCount, COALESCE(SUM(st.value), 0) AS slowMovingValue
+     ${slowFrom}`,
+    slowParams,
+  )
+  const slowRows = await fetchMany(
+    `SELECT
+       p.id, p.code, p.name, p.unit, p.article_number, p.spec, p.color,
+       st.qty AS current_qty, st.value AS stock_value,
+       lo.last_outbound_at, COALESCE(lo.outbound_90d, 0) AS outbound_90d
+     ${slowFrom}
+     ORDER BY stock_value DESC, current_qty DESC, p.id ASC
      LIMIT 30`,
+    slowParams,
   )
 
-  return { summaryRow, saleRows, productRows, stockRows, slowRows }
+  return { summaryRow, stockSummaryRow, slowSummaryRow, saleRows, productRows, stockRows, slowRows }
 }
 
 /**
  * 经营 KPI 聚合（P2-10）：GMV / 毛利 / 回款 / 订单数 / 平均客单 + 上一周期对比。
  * period 形如 '2026-08'（月度）；offsetPeriods 为对比偏移（-1 = 上月）。
- * 复用 profitAnalysis 的毛利口径（cost_snapshot 优先），保证两个报表数字一致。
+ * 成本优先级沿用 cost_snapshot；GMV 仍为原有折前统计，不能与利润分析的折后净额等同。
  */
 async function fetchKpiRows({ period = null, offsetPeriods = -1, scopeWarehouseIds = null } = {}) {
   // 默认期间 = 北京时间的当月（显式 backendTime：月报口径按业务日历分月）

@@ -584,7 +584,9 @@ async function getStatementDetailExportPayload(id) {
 
 /**
  * 利润/库存分析导出：复用 reports.metrics.profitAnalysis 的查询逻辑与毛利口径
- * （cost_snapshot 优先），四个区块（销售毛利/商品毛利/库存金额/滞销库存）各一页。
+ * （扣除整单折扣、商品按明细金额比例分摊，cost_snapshot 优先）。
+ * 四个区块（销售毛利/商品毛利/库存金额/滞销库存）各一页，保留页面 Top 20/30 范围；
+ * 汇总卡片是完整集合，不把导出排行合计视为全量汇总。
  */
 async function getProfitAnalysisExportPayload(query) {
   const data = await reportsService.profitAnalysis({
@@ -639,7 +641,7 @@ async function getProfitAnalysisExportPayload(query) {
           { header: '销售单号', key: 'orderNo', width: 22 },
           { header: '客户', key: 'customerName', width: 20 },
           { header: '仓库', key: 'warehouseName', width: 16 },
-          { header: '销售额', key: 'totalAmount', width: 14 },
+          { header: '销售额（折后）', key: 'totalAmount', width: 18 },
           { header: '成本', key: 'costAmount', width: 14 },
           { header: '毛利', key: 'grossProfit', width: 14 },
           { header: '毛利率', key: 'marginRate', width: 10 },
@@ -653,7 +655,7 @@ async function getProfitAnalysisExportPayload(query) {
           { header: '商品名称', key: 'name', width: 24 },
           { header: '单位', key: 'unit', width: 8 },
           { header: '销售量', key: 'totalQty', width: 12 },
-          { header: '销售额', key: 'revenueAmount', width: 14 },
+          { header: '分摊销售额（折后）', key: 'revenueAmount', width: 22 },
           { header: '成本', key: 'costAmount', width: 14 },
           { header: '毛利', key: 'grossProfit', width: 14 },
           { header: '毛利率', key: 'marginRate', width: 10 },
