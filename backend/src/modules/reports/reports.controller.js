@@ -28,7 +28,7 @@ const roleWorkbench = async(req,res,next)=>{ try{return successResponse(res,awai
 const reconciliation = async(req,res,next)=>{ try{return successResponse(res,await svc.reconciliationReport(parseReconciliationQuery(req.query)),'查询成功')}catch(e){next(e)} }
 const avgCostReconciliation = async(req,res,next)=>{ try{return successResponse(res,await svc.avgCostReconciliation({ scopeWarehouseIds: req.user?.warehouseIds??null }),'查询成功')}catch(e){next(e)} }
 const profitAnalysis = async(req,res,next)=>{ try{return successResponse(res,await svc.profitAnalysis({...parseQuery(req.query), scopeWarehouseIds: req.user?.warehouseIds??null}),'查询成功')}catch(e){next(e)} }
-const kpi = async(req,res,next)=>{ try{return successResponse(res,await svc.kpiMetrics({ period: req.query.period || null, offsetPeriods: req.query.offset ? Number(req.query.offset) : -1, scopeWarehouseIds: req.user?.warehouseIds??null }),'查询成功')}catch(e){next(e)} }
+const kpi = async(req,res,next)=>{ try{return successResponse(res,await svc.kpiMetrics({ period: req.query.period || null, offsetPeriods: req.query.offset ? Number(req.query.offset) : -1, months: req.query.months ?? 12, scopeWarehouseIds: req.user?.warehouseIds??null }),'查询成功')}catch(e){next(e)} }
 const purchasePriceTrend = async(req,res,next)=>{ try{return successResponse(res,await svc.purchasePriceTrend({ productId: req.query.productId || null, ...parseQuery(req.query), scopeWarehouseIds: req.user?.warehouseIds??null }),'查询成功')}catch(e){next(e)} }
 
 module.exports = { purchase, sale, inventory, pdaPerformance, wavePerformance, warehouseOps, roleWorkbench, reconciliation, profitAnalysis, kpi, avgCostReconciliation, purchasePriceTrend }

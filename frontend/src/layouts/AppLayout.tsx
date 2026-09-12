@@ -19,10 +19,10 @@ export default function AppLayout() {
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
       {/*
-        顶栏两行：① Logo + TopNav（系统菜单）+ 工具区 ② 工作区标签（独占一行，避免与菜单挤在同一行）
+        宽屏首行 Logo + 系统菜单 + 工具区；窄屏菜单独占下一行。工作区标签始终独占末行。
       */}
       <header className="flex shrink-0 flex-col border-b border-border bg-background">
-        <div className="flex h-12 shrink-0 items-center gap-2 px-3">
+        <div className="flex min-h-12 shrink-0 flex-wrap items-center gap-2 px-3 py-1">
           <div className="flex shrink-0 items-center gap-2 pr-1">
             {/* 公司 Logo：有 Logo 只显示图片（右侧不再跟「极序 Flow」文字）；未上传时回退纯文字 */}
             <BrandLogo
@@ -33,11 +33,11 @@ export default function AppLayout() {
             />
           </div>
 
-          <div className="min-w-0 flex-1">
+          <div className="order-last w-full min-w-0 lg:order-none lg:w-auto lg:flex-1">
             <TopNav />
           </div>
 
-          <div className="flex shrink-0 items-center gap-2 border-l border-border pl-3">
+          <div className="ml-auto flex shrink-0 items-center gap-2 border-l border-border pl-3">
             {canUseGlobalTools ? <GlobalSearch /> : null}
             {canUseGlobalTools ? <NotificationBell /> : null}
             <UserMenu />

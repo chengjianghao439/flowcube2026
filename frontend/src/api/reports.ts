@@ -347,7 +347,7 @@ export interface KpiReport {
   trend: KpiTrendRow[]
   byWarehouse: KpiByWarehouseRow[]
 }
-export const getKpiApi = (params: { period?: string; offset?: number } = {}) =>
+export const getKpiApi = (params: { period?: string; offset?: number; months?: number } = {}) =>
   client.get<KpiReport>(`/reports/kpi?${q(params)}`)
 
 export interface WaveStats {

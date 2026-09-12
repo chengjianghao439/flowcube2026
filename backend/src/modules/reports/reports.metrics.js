@@ -18,6 +18,7 @@ const {
   fetchRoleWorkbenchRows,
   fetchReconciliationRows,
   fetchProfitAnalysisRows,
+  normalizeKpiParams,
   fetchKpiRows,
   fetchKpiTrendRows,
   fetchKpiByWarehouseRows,
@@ -364,17 +365,18 @@ async function profitAnalysis(params = {}) {
   }
 }
 
-/** 经营 KPI 仪表盘（P2-10）：GMV/毛利/回款/订单数/客单 + 上期对比 + 近12月趋势 + 当月分仓 */
+/** 经营 KPI：销售净额/毛利/回款/订单数/客单 + 对比期 + 月度趋势 + 当月分仓。gmv key 保持兼容。 */
 async function kpiMetrics(params = {}) {
-  const { period, prevPeriod, current, previous } = await fetchKpiRows(params)
-  const trend = await fetchKpiTrendRows(params)
-  const byWarehouse = await fetchKpiByWarehouseRows(params)
-  // 环比变化率（%）：上期为 0 时返回 null（无法计算）
+  const normalized = normalizeKpiParams(params)
+  const { period, prevPeriod, current, previous } = await fetchKpiRows(normalized)
+  const trend = await fetchKpiTrendRows(normalized)
+  const byWarehouse = await fetchKpiByWarehouseRows(normalized)
+  // 环比变化率（%）：上期为负时按绝对值作分母；上期为 0 时返回 null（同为0则0）
   const pct = (cur, prev) => {
     const c = Number(cur) || 0
     const p = Number(prev) || 0
     if (p === 0) return c === 0 ? 0 : null
-    return Math.round(((c - p) / p) * 1000) / 10
+    return Math.round(((c - p) / Math.abs(p)) * 1000) / 10
   }
   return {
     period,
@@ -382,7 +384,7 @@ async function kpiMetrics(params = {}) {
     trend,
     byWarehouse,
     metrics: [
-      { key: 'gmv', label: 'GMV', current: current.gmv, previous: previous.gmv, changePct: pct(current.gmv, previous.gmv) },
+      { key: 'gmv', label: '销售净额', current: current.gmv, previous: previous.gmv, changePct: pct(current.gmv, previous.gmv) },
       { key: 'grossProfit', label: '毛利', current: current.grossProfit, previous: previous.grossProfit, changePct: pct(current.grossProfit, previous.grossProfit) },
       { key: 'orderCount', label: '订单数', current: current.orderCount, previous: previous.orderCount, changePct: pct(current.orderCount, previous.orderCount) },
       { key: 'received', label: '回款', current: current.received, previous: previous.received, changePct: pct(current.received, previous.received) },

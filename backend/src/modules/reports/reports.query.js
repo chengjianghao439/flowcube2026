@@ -5,6 +5,7 @@ const { getInventoryDisplayProjectionSql, getProductInventoryProjectionSql } = r
 const { scopeFilter } = require('../../utils/warehouseScope')
 const { beijingTodayYmd } = require('../../utils/backendTime')
 const logger = require('../../utils/logger')
+const AppError = require('../../utils/AppError')
 
 async function fetchOne(sql, params = []) {
   const [[row]] = await pool.query(sql, params)
@@ -675,15 +676,11 @@ async function fetchReconciliationRows({ type = 1, startDate = null, endDate = n
 async function fetchProfitAnalysisRows({ startDate = null, endDate = null, scopeWarehouseIds = null } = {}) {
   const inventoryDisplayProjectionSql = getInventoryDisplayProjectionSql()
   const saleDate = buildDateFilter('so.created_at', startDate, endDate)
-  const soWh = scopeFilter(scopeWarehouseIds, 'so.warehouse_id')
+  const soWh = saleReportScope(scopeWarehouseIds)
   const ipWh = scopeFilter(scopeWarehouseIds, 'ip.warehouse_id')
   const lWh = scopeFilter(scopeWarehouseIds, 'l.warehouse_id')
-  // 与销售列表保持整单权限：任一明细仓越权时整单排除，不截成局部收入。
-  const itemScopeSql = Array.isArray(scopeWarehouseIds) && scopeWarehouseIds.length
-    ? ' AND NOT EXISTS (SELECT 1 FROM sale_order_items si_scope WHERE si_scope.order_id = so.id AND si_scope.warehouse_id NOT IN (?))'
-    : ''
-  const saleWhere = `WHERE so.deleted_at IS NULL AND so.status = 4${saleDate.sql}${soWh.sql}${itemScopeSql}`
-  const saleParams = [...saleDate.params, ...soWh.params, ...(itemScopeSql ? [scopeWarehouseIds] : [])]
+  const saleWhere = `WHERE so.deleted_at IS NULL AND so.status = 4${saleDate.sql}${soWh.sql}`
+  const saleParams = [...saleDate.params, ...soWh.params]
   // total_amount 为折前原值；净额沿用 getNetOrderAmount 的非负折扣/净额口径。
   // 先聚合成一单一行，再累加净额，防止明细 JOIN 重复销售额。
   const saleOrderSql = `SELECT
@@ -793,192 +790,149 @@ async function fetchProfitAnalysisRows({ startDate = null, endDate = null, scope
   return { summaryRow, stockSummaryRow, slowSummaryRow, saleRows, productRows, stockRows, slowRows }
 }
 
-/**
- * 经营 KPI 聚合（P2-10）：GMV / 毛利 / 回款 / 订单数 / 平均客单 + 上一周期对比。
- * period 形如 '2026-08'（月度）；offsetPeriods 为对比偏移（-1 = 上月）。
- * 成本优先级沿用 cost_snapshot；GMV 仍为原有折前统计，不能与利润分析的折后净额等同。
- */
-async function fetchKpiRows({ period = null, offsetPeriods = -1, scopeWarehouseIds = null } = {}) {
-  // 默认期间 = 北京时间的当月（显式 backendTime：月报口径按业务日历分月）
-  const p = period && /^\d{4}-\d{2}$/.test(period) ? period : beijingTodayYmd().slice(0, 7)
-  const [y, m] = p.split('-').map(Number)
-  const offset = Number(offsetPeriods) || -1
-  const monthsAgo = (n) => {
-    const d = new Date(Date.UTC(y, m - 1 + n, 1))
-    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
+/** 统一验证 KPI 月份与窗口；所有边界均须是 MySQL DATE 支持的月份首日。 */
+function normalizeKpiParams({ period = null, offsetPeriods = -1, months = 12, scopeWarehouseIds = null } = {}) {
+  const selected = period == null || period === '' ? beijingTodayYmd().slice(0, 7) : period
+  if (typeof selected !== 'string' || !/^[1-9]\d{3}-(?:0[1-9]|1[0-2])$/.test(selected)) {
+    throw new AppError('统计月份无效，请使用 YYYY-MM 格式和有效年月', 400, 'KPI_INVALID_PERIOD')
   }
-  const cur = `${p}-01`
-  const curEnd = `${p}-31`
-  const prev = monthsAgo(offset)
-  const prevEnd = `${prev}-31`
-  const soWh = scopeFilter(scopeWarehouseIds, 'so.warehouse_id')
+  const offset = Number(offsetPeriods)
+  const count = Number(months)
+  if (!Number.isInteger(offset) || offset < -36 || offset > 36) {
+    throw new AppError('对比月份偏移必须是 -36 到 36 的整数', 400, 'KPI_INVALID_OFFSET')
+  }
+  if (!Number.isInteger(count) || count < 1 || count > 36) {
+    throw new AppError('趋势月份数必须是 1 到 36 的整数', 400, 'KPI_INVALID_MONTHS')
+  }
+  // 提前验证当期、对比期及趋势两端，不能先执行一部分查询再遇到越界日期。
+  for (const delta of [1, offset, offset + 1, -(count - 1)]) shiftKpiMonth(selected, delta)
+  return { period: selected, offsetPeriods: offset, months: count, scopeWarehouseIds }
+}
 
-  // 当期 + 上期 GMV/毛利/订单数（销售单已出库口径，sale_date 按期间）
-  const curSale = await fetchOne(
-    `SELECT
-       COALESCE(SUM(so.total_amount), 0) AS gmv,
-       COALESCE(SUM(soi.quantity * COALESCE(soi.cost_snapshot, NULLIF(p.cost_price, 0), p.sale_price, 0)), 0) AS cost,
-       COUNT(DISTINCT so.id) AS orderCount
-     FROM sale_orders so
-     INNER JOIN sale_order_items soi ON soi.order_id = so.id
-     INNER JOIN product_items p ON p.id = soi.product_id
-     WHERE so.deleted_at IS NULL AND so.status = 4 AND so.sale_date BETWEEN ? AND ?${soWh.sql}`,
-    [...soWh.params, cur, curEnd],
-  )
-  const prevSale = await fetchOne(
-    `SELECT
-       COALESCE(SUM(so.total_amount), 0) AS gmv,
-       COALESCE(SUM(soi.quantity * COALESCE(soi.cost_snapshot, NULLIF(p.cost_price, 0), p.sale_price, 0)), 0) AS cost,
-       COUNT(DISTINCT so.id) AS orderCount
-     FROM sale_orders so
-     INNER JOIN sale_order_items soi ON soi.order_id = so.id
-     INNER JOIN product_items p ON p.id = soi.product_id
-     WHERE so.deleted_at IS NULL AND so.status = 4 AND so.sale_date BETWEEN ? AND ?${soWh.sql}`,
-    [...soWh.params, `${prev}-01`, prevEnd],
-  )
+function shiftKpiMonth(period, delta) {
+  const [year, month] = period.split('-').map(Number)
+  const serial = year * 12 + month - 1 + delta
+  const shiftedYear = Math.floor(serial / 12)
+  if (shiftedYear < 1000 || shiftedYear > 9999) {
+    throw new AppError('统计日期窗口超出支持范围（1000 至 9999 年）', 400, 'KPI_PERIOD_OUT_OF_RANGE')
+  }
+  return `${shiftedYear}-${String(serial % 12 + 1).padStart(2, '0')}`
+}
 
-  // 回款（当期已收款到账金额：payment_records type=2 的 paid_amount 按期间）
-  // payment_records 无 created_at 期间维度？有 created_at；按 created_at 期间统计回款
-  const curReceipt = await fetchOne(
-    `SELECT COALESCE(SUM(pe.amount), 0) AS received
-     FROM payment_entries pe
-     INNER JOIN payment_records pr ON pr.id = pe.record_id AND pr.type = 2
-     WHERE pe.payment_date BETWEEN ? AND ?`,
-    [cur, curEnd],
-  )
-  const prevReceipt = await fetchOne(
-    `SELECT COALESCE(SUM(pe.amount), 0) AS received
-     FROM payment_entries pe
-     INNER JOIN payment_records pr ON pr.id = pe.record_id AND pr.type = 2
-     WHERE pe.payment_date BETWEEN ? AND ?`,
-    [`${prev}-01`, prevEnd],
-  )
-
+// 销售报表与销售列表使用同一整单权限：不能展示含越权明细仓的局部销售单。
+function saleReportScope(scopeWarehouseIds) {
+  const wh = scopeFilter(scopeWarehouseIds, 'so.warehouse_id')
+  if (!Array.isArray(scopeWarehouseIds) || !scopeWarehouseIds.length) return wh
   return {
-    period: p,
-    prevPeriod: prev,
-    current: {
-      gmv: Math.round(Number(curSale.gmv || 0) * 100) / 100,
-      grossProfit: Math.round((Number(curSale.gmv || 0) - Number(curSale.cost || 0)) * 100) / 100,
-      orderCount: Number(curSale.orderCount || 0),
-      received: Math.round(Number(curReceipt.received || 0) * 100) / 100,
-      avgOrderValue: Number(curSale.orderCount || 0) > 0
-        ? Math.round((Number(curSale.gmv || 0) / Number(curSale.orderCount)) * 100) / 100
-        : 0,
-    },
-    previous: {
-      gmv: Math.round(Number(prevSale.gmv || 0) * 100) / 100,
-      grossProfit: Math.round((Number(prevSale.gmv || 0) - Number(prevSale.cost || 0)) * 100) / 100,
-      orderCount: Number(prevSale.orderCount || 0),
-      received: Math.round(Number(prevReceipt.received || 0) * 100) / 100,
-      avgOrderValue: Number(prevSale.orderCount || 0) > 0
-        ? Math.round((Number(prevSale.gmv || 0) / Number(prevSale.orderCount)) * 100) / 100
-        : 0,
-    },
+    sql: `${wh.sql} AND NOT EXISTS (SELECT 1 FROM sale_order_items si_scope WHERE si_scope.order_id = so.id AND si_scope.warehouse_id NOT IN (?))`,
+    params: [...wh.params, scopeWarehouseIds],
   }
 }
 
-/**
- * 经营 KPI 月度趋势序列：近 N 个月（含所选月）的 GMV/毛利/订单数/回款/客单。
- * 口径与 fetchKpiRows 完全一致（销售 status=4 + sale_date；回款 payment_entries 按 payment_date），
- * 只是把「单月 fetchOne」扩成「按月 GROUP BY」；空月补零，保证序列连续。
- * months 为包含当前月在内的月数（默认 12）；period 为空时以当前月为最后一个点。
- */
-async function fetchKpiTrendRows({ period = null, months = 12, scopeWarehouseIds = null } = {}) {
-  // 默认末月 = 北京时间的当月（同 fetchKpiRows 口径）
-  const p = period && /^\d{4}-\d{2}$/.test(period) ? period : beijingTodayYmd().slice(0, 7)
-  const n = Math.max(1, Math.min(36, Number(months) || 12))
-  const [y, m] = p.split('-').map(Number)
-  const monthsAgo = (k) => {
-    const d = new Date(Date.UTC(y, m - 1 + k, 1))
-    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
+// 与利润分析的净额、成本快照一致；KPI 日期仍用 sale_date，先得到一单一行。
+function kpiSalesQuery(start, end, scopeWarehouseIds) {
+  const wh = saleReportScope(scopeWarehouseIds)
+  return {
+    sql: `SELECT so.id, so.sale_date, so.warehouse_id, so.warehouse_name,
+            GREATEST(0, GREATEST(0, so.total_amount) - GREATEST(0, COALESCE(so.discount_amount, 0))) AS gmv,
+            COALESCE(SUM(soi.quantity * COALESCE(soi.cost_snapshot, NULLIF(p.cost_price, 0), p.sale_price, 0)), 0) AS cost
+          FROM sale_orders so
+          INNER JOIN sale_order_items soi ON soi.order_id = so.id
+          INNER JOIN product_items p ON p.id = soi.product_id
+          WHERE so.deleted_at IS NULL AND so.status = 4
+            AND so.sale_date >= ? AND so.sale_date < ?${wh.sql}
+          GROUP BY so.id`,
+    params: [start, end, ...wh.params],
   }
-  const start = `${monthsAgo(-(n - 1))}-01`
-  const soWh = scopeFilter(scopeWarehouseIds, 'so.warehouse_id')
+}
 
-  // 销售侧：按月 GROUP BY（status=4 + sale_date 口径，与卡片一致）
+function kpiReceiptsQuery(start, end, scopeWarehouseIds) {
+  const wh = saleReportScope(scopeWarehouseIds)
+  // 不限仓时保留公司全部 type=2 分录，包括手工/历史无来源款。
+  // 有范围时，只有来源销售整单可查看才能归属；不依订单出库状态过滤已发生的回款。
+  const receiptScope = !Array.isArray(scopeWarehouseIds) ? ''
+    : ` AND EXISTS (SELECT 1 FROM sale_orders so WHERE so.id = pr.order_id AND so.deleted_at IS NULL${wh.sql})`
+  return {
+    sql: `FROM payment_entries pe
+          INNER JOIN payment_records pr ON pr.id = pe.record_id AND pr.type = 2
+          WHERE pe.payment_date >= ? AND pe.payment_date < ?${receiptScope}`,
+    params: [start, end, ...wh.params],
+  }
+}
+
+function mapKpiValues(sale = {}, received = 0) {
+  const gmv = Number(sale.gmv || 0)
+  const cost = Number(sale.cost || 0)
+  const orderCount = Number(sale.orderCount || 0)
+  return {
+    gmv: Math.round(gmv * 100) / 100,
+    grossProfit: Math.round((gmv - cost) * 100) / 100,
+    orderCount,
+    received: Math.round(Number(received || 0) * 100) / 100,
+    avgOrderValue: orderCount > 0 ? Math.round((gmv / orderCount) * 100) / 100 : 0,
+  }
+}
+
+/** KPI 当期与对比期：销售按业务日期，回款按到账日期，均用半开月区间。 */
+async function fetchKpiRows(params = {}) {
+  const { period, offsetPeriods, scopeWarehouseIds } = normalizeKpiParams(params)
+  const prevPeriod = shiftKpiMonth(period, offsetPeriods)
+  const readMonth = async (month) => {
+    const start = `${month}-01`
+    const end = `${shiftKpiMonth(month, 1)}-01`
+    const saleQuery = kpiSalesQuery(start, end, scopeWarehouseIds)
+    const receiptQuery = kpiReceiptsQuery(start, end, scopeWarehouseIds)
+    const sale = await fetchOne(
+      `SELECT COALESCE(SUM(s.gmv), 0) AS gmv, COALESCE(SUM(s.cost), 0) AS cost, COUNT(*) AS orderCount
+       FROM (${saleQuery.sql}) s`, saleQuery.params,
+    )
+    const receipt = await fetchOne(`SELECT COALESCE(SUM(pe.amount), 0) AS received ${receiptQuery.sql}`, receiptQuery.params)
+    return mapKpiValues(sale, receipt.received)
+  }
+  return { period, prevPeriod, current: await readMonth(period), previous: await readMonth(prevPeriod) }
+}
+
+/** 最近 N 个月（含所选月）；查询在数据库截断至下月首日，空月补零。 */
+async function fetchKpiTrendRows(params = {}) {
+  const { period, months, scopeWarehouseIds } = normalizeKpiParams(params)
+  const start = `${shiftKpiMonth(period, -(months - 1))}-01`
+  const end = `${shiftKpiMonth(period, 1)}-01`
+  const saleQuery = kpiSalesQuery(start, end, scopeWarehouseIds)
+  const receiptQuery = kpiReceiptsQuery(start, end, scopeWarehouseIds)
   const saleRows = await fetchMany(
-    `SELECT DATE_FORMAT(so.sale_date,'%Y-%m') AS month,
-            COALESCE(SUM(so.total_amount), 0) AS gmv,
-            COALESCE(SUM(soi.quantity * COALESCE(soi.cost_snapshot, NULLIF(p.cost_price, 0), p.sale_price, 0)), 0) AS cost,
-            COUNT(DISTINCT so.id) AS orderCount
-     FROM sale_orders so
-     INNER JOIN sale_order_items soi ON soi.order_id = so.id
-     INNER JOIN product_items p ON p.id = soi.product_id
-     WHERE so.deleted_at IS NULL AND so.status = 4 AND so.sale_date >= ?${soWh.sql}
-     GROUP BY month ORDER BY month ASC`,
-    [start, ...soWh.params],
+    `SELECT DATE_FORMAT(s.sale_date, '%Y-%m') AS month,
+            COALESCE(SUM(s.gmv), 0) AS gmv, COALESCE(SUM(s.cost), 0) AS cost, COUNT(*) AS orderCount
+     FROM (${saleQuery.sql}) s
+     GROUP BY month ORDER BY month ASC`, saleQuery.params,
   )
-
-  // 回款侧：按月 GROUP BY（payment_entries 无仓库列，延续 fetchKpiRows 现状不带 scope）
   const receiptRows = await fetchMany(
-    `SELECT DATE_FORMAT(pe.payment_date,'%Y-%m') AS month,
-            COALESCE(SUM(pe.amount), 0) AS received
-     FROM payment_entries pe
-     INNER JOIN payment_records pr ON pr.id = pe.record_id AND pr.type = 2
-     WHERE pe.payment_date >= ?
-     GROUP BY month ORDER BY month ASC`,
-    [start],
+    `SELECT DATE_FORMAT(pe.payment_date, '%Y-%m') AS month, COALESCE(SUM(pe.amount), 0) AS received
+     ${receiptQuery.sql}
+     GROUP BY month ORDER BY month ASC`, receiptQuery.params,
   )
-
   const saleMap = new Map(saleRows.map(r => [r.month, r]))
-  const receiptMap = new Map(receiptRows.map(r => [r.month, Number(r.received)]))
-
-  // 空月补零，序列连续（最近 n 个月，含所选月）
-  return Array.from({ length: n }, (_, i) => {
-    const month = monthsAgo(i - (n - 1))
-    const s = saleMap.get(month)
-    const gmv = s ? Number(s.gmv) : 0
-    const orderCount = s ? Number(s.orderCount) : 0
-    const cost = s ? Number(s.cost) : 0
-    const received = receiptMap.get(month) ?? 0
-    return {
-      month,
-      gmv: Math.round(gmv * 100) / 100,
-      grossProfit: Math.round((gmv - cost) * 100) / 100,
-      orderCount,
-      received: Math.round(received * 100) / 100,
-      avgOrderValue: orderCount > 0 ? Math.round((gmv / orderCount) * 100) / 100 : 0,
-    }
+  const receiptMap = new Map(receiptRows.map(r => [r.month, r.received]))
+  return Array.from({ length: months }, (_, i) => {
+    const month = shiftKpiMonth(period, i - (months - 1))
+    return { month, ...mapKpiValues(saleMap.get(month), receiptMap.get(month)) }
   })
 }
 
-/**
- * 经营 KPI 分仓口径：所选月的各仓 GMV/毛利/订单数/客单。
- * 按订单头 so.warehouse_id 分组（与 KPI 卡片口径一致，不用行级 soi.warehouse_id——
- * 分仓发货单的归属以订单头仓为准，与卡片数字同口径对比）。
- */
-async function fetchKpiByWarehouseRows({ period = null, scopeWarehouseIds = null } = {}) {
-  // 默认期间 = 北京时间的当月（同 fetchKpiRows 口径）
-  const p = period && /^\d{4}-\d{2}$/.test(period) ? period : beijingTodayYmd().slice(0, 7)
-  const soWh = scopeFilter(scopeWarehouseIds, 'so.warehouse_id')
-
+/** 分仓归属沿用订单头；按仓库 ID 合并历史名称变化，已删除仓的历史销售保留。 */
+async function fetchKpiByWarehouseRows(params = {}) {
+  const { period, scopeWarehouseIds } = normalizeKpiParams(params)
+  const saleQuery = kpiSalesQuery(`${period}-01`, `${shiftKpiMonth(period, 1)}-01`, scopeWarehouseIds)
   const rows = await fetchMany(
-    `SELECT so.warehouse_id, so.warehouse_name,
-            COALESCE(SUM(so.total_amount), 0) AS gmv,
-            COALESCE(SUM(soi.quantity * COALESCE(soi.cost_snapshot, NULLIF(p.cost_price, 0), p.sale_price, 0)), 0) AS cost,
-            COUNT(DISTINCT so.id) AS orderCount
-     FROM sale_orders so
-     INNER JOIN sale_order_items soi ON soi.order_id = so.id
-     INNER JOIN product_items p ON p.id = soi.product_id
-     WHERE so.deleted_at IS NULL AND so.status = 4 AND so.sale_date BETWEEN ? AND ?${soWh.sql}
-     GROUP BY so.warehouse_id, so.warehouse_name
-     ORDER BY gmv DESC`,
-    [...soWh.params, `${p}-01`, `${p}-31`],
+    `SELECT s.warehouse_id, COALESCE(MAX(w.name), MAX(s.warehouse_name)) AS warehouse_name,
+            COALESCE(SUM(s.gmv), 0) AS gmv, COALESCE(SUM(s.cost), 0) AS cost, COUNT(*) AS orderCount
+     FROM (${saleQuery.sql}) s
+     LEFT JOIN inventory_warehouses w ON w.id = s.warehouse_id
+     GROUP BY s.warehouse_id
+     ORDER BY gmv DESC, s.warehouse_id ASC`, saleQuery.params,
   )
-
   return rows.map(r => {
-    const gmv = Number(r.gmv) || 0
-    const cost = Number(r.cost) || 0
-    const orderCount = Number(r.orderCount) || 0
-    return {
-      warehouseId: Number(r.warehouse_id),
-      warehouseName: r.warehouse_name,
-      gmv: Math.round(gmv * 100) / 100,
-      grossProfit: Math.round((gmv - cost) * 100) / 100,
-      orderCount,
-      avgOrderValue: orderCount > 0 ? Math.round((gmv / orderCount) * 100) / 100 : 0,
-    }
+    const { received: _received, ...values } = mapKpiValues(r)
+    return { warehouseId: Number(r.warehouse_id), warehouseName: r.warehouse_name, ...values }
   })
 }
 
@@ -1022,6 +976,7 @@ module.exports = {
   fetchRoleWorkbenchRows,
   fetchReconciliationRows,
   fetchProfitAnalysisRows,
+  normalizeKpiParams,
   fetchKpiRows,
   fetchKpiTrendRows,
   fetchKpiByWarehouseRows,

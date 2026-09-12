@@ -15,6 +15,7 @@
  *   5. 范围筛选（startDate/endDate）生效：报表只统计筛选窗口内的单
  *
  *   6. profitAnalysis：折后净额/商品分摊/成本快照、全量库存滞销汇总、整单及库存仓库范围
+ *   7. KPI：月区间/净额与成本、卡片趋势分仓一致、回款来源权限、参数边界及负基数环比
  *
  * 用独立随机商品/仓库造数；采购/销售历史兼容检查用新增量下界，
  * 利润库存按专属仓库及日期做精确断言，finally 清理本次夹具。
@@ -137,6 +138,146 @@ async function verifyProfitAnalysis(ctx, log) {
   }
 }
 
+async function verifyKpiMetrics(ctx, log) {
+  const { pool, customer } = ctx
+  const warehouses = [], products = [], orders = [], records = []
+  const stamp = randomRef('KPI')
+  const near = (a, b) => Math.abs(Number(a) - b) < 0.0001
+  const queries = require('../backend/src/modules/reports/reports.query')
+  const metric = (data, key) => data.metrics.find(r => r.key === key)
+  const getKpi = async (params) => {
+    try { return await reportsSvc.kpiMetrics(params) } catch (e) {
+      log.assert(`KPI 查询应成功 ${JSON.stringify(params)}`, false, e.message)
+      return { period: params.period, prevPeriod: '', trend: [], byWarehouse: [], metrics: ['gmv', 'grossProfit', 'orderCount', 'received', 'avgOrderValue'].map(key => ({ key, current: 0, previous: 0, changePct: 0 })) }
+    }
+  }
+  try {
+    for (let i = 0; i < 3; i++) {
+      const [r] = await pool.query('INSERT INTO inventory_warehouses (code, name) VALUES (?, ?)', [`${stamp}-W${i}`, 'KPI同名仓'])
+      warehouses.push(r.insertId)
+    }
+    const [a, b, outside] = warehouses
+    for (let i = 0; i < 2; i++) {
+      const [r] = await pool.query("INSERT INTO product_items (code, name, unit, cost_price, sale_price) VALUES (?, 'KPI商品', '个', 2, 5)", [`${stamp}-P${i}`])
+      products.push(r.insertId)
+    }
+    const addOrder = async (date, total = 300, discount = 30, { wh = a, itemWh = wh, status = 4, deleted = false, costs = [3, 0], quantity = 10, name = 'KPI同名仓' } = {}) => {
+      const [r] = await pool.query(
+        `INSERT INTO sale_orders (order_no, customer_id, customer_name, warehouse_id, warehouse_name, sale_date,
+          total_amount, discount_amount, status, operator_id, operator_name, created_at, deleted_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'KPI测试员', '2041-12-15 12:00:00', ?)`,
+        [randomRef('KPISO'), customer.id, customer.name, wh, name, date, total, discount, status, deleted ? '2041-12-16 00:00:00' : null])
+      orders.push(r.insertId)
+      for (let i = 0; i < 2; i++) await pool.query(
+        `INSERT INTO sale_order_items (order_id, product_id, product_code, product_name, unit, warehouse_id, quantity, unit_price, amount, cost_snapshot)
+         VALUES (?, ?, ?, 'KPI商品', '个', ?, ?, ?, ?, ?)`,
+        [r.insertId, products[i], `${stamp}-P${i}`, i === 1 ? itemWh : wh, quantity, total / 2 / quantity, total / 2, costs[i]])
+      return r.insertId
+    }
+    const addReceipt = async (orderId, entries, type = 2) => {
+      const [r] = await pool.query(
+        "INSERT INTO payment_records (type, order_id, order_no, party_name, total_amount, paid_amount, balance, status) VALUES (?, ?, ?, 'KPI往来方', 9999, 9999, 0, 3)",
+        [type, orderId, randomRef('KPIPR')])
+      records.push(r.insertId)
+      for (const [date, amount] of entries) await pool.query('INSERT INTO payment_entries (record_id, amount, payment_date) VALUES (?, ?, ?)', [r.insertId, amount, date])
+    }
+    const [[baseline]] = await pool.query("SELECT COALESCE(SUM(pe.amount),0) AS amount FROM payment_entries pe JOIN payment_records pr ON pr.id=pe.record_id AND pr.type=2 WHERE pe.payment_date >= '2040-02-01' AND pe.payment_date < '2040-03-01'")
+    const first = await addOrder('2040-02-01')
+    await addOrder('2040-02-29', 300, 30, { name: 'KPI历史仓名' })
+    await addOrder('2040-02-15', 100, 100, { costs: [null, 0], quantity: 1 })
+    const jan = await addOrder('2040-01-31', 100, 10, { costs: [3, 0], quantity: 1 })
+    const mar = await addOrder('2040-03-01', 1000, 0)
+    const whB = await addOrder('2040-02-20', 100, 10, { wh: b, costs: [null, 0], quantity: 1 })
+    const whOut = await addOrder('2040-02-20', 100, 0, { wh: outside, quantity: 1 })
+    const split = await addOrder('2040-02-20', 400, 0, { itemWh: outside, quantity: 1 })
+    const deleted = await addOrder('2040-02-20', 900, 0, { deleted: true })
+    const draft = await addOrder('2040-02-20', 900, 0, { status: 1 })
+    await addOrder('2040-02-20', 900, 0, { status: 5 })
+    await addOrder('2039-02-28', 100, 10, { quantity: 1 })
+    // 亏损由 -100 改善到 -50，再恶化到 -150。
+    await addOrder('2040-04-01', 100, 0, { costs: [20, 0] })
+    await addOrder('2040-05-01', 100, 0, { costs: [15, 0] })
+    await addOrder('2040-06-01', 100, 0, { costs: [25, 0] })
+    await addReceipt(first, [['2040-02-01', 30], ['2040-02-29', 40]])
+    await addReceipt(jan, [['2040-01-31', 12]])
+    await addReceipt(mar, [['2040-03-01', 1000]])
+    await addReceipt(whB, [['2040-02-20', 20]])
+    await addReceipt(whOut, [['2040-02-20', 99]])
+    await addReceipt(split, [['2040-02-20', 88]])
+    await addReceipt(deleted, [['2040-02-20', 55]])
+    await addReceipt(draft, [['2040-02-20', 11]])
+    await addReceipt(null, [['2040-02-20', 77]])
+    await addReceipt(999999999, [['2040-02-20', 66]])
+    await addReceipt(first, [['2040-02-20', 999]], 1)
+    const params = { period: '2040-02', scopeWarehouseIds: [a], months: 3 }
+    const data = await getKpi(params)
+    const current = Object.fromEntries(data.metrics.map(r => [r.key, r.current]))
+    const previous = Object.fromEntries(data.metrics.map(r => [r.key, r.previous]))
+    log.assert('KPI 闰年2月按sale_date统计净额且同额多行单不重复', near(current.gmv, 540) && current.orderCount === 3 && near(current.avgOrderValue, 180), JSON.stringify(current))
+    log.assert('KPI 毛利保留快照零值与缺省成本，整单折扣计入', near(current.grossProfit, 478))
+    log.assert('KPI 上月半开区间包含1月31日且排除2月1日', near(previous.gmv, 90) && previous.orderCount === 1 && near(previous.grossProfit, 87))
+    log.assert('KPI 回款按到账日期与来源销售整单权限，仅排除无归属和越权款', near(current.received, 81) && near(previous.received, 12), JSON.stringify({ current, previous }))
+    const curTrend = data.trend.find(r => r.month === '2040-02')
+    const prevTrend = data.trend.find(r => r.month === '2040-01')
+    log.assert('KPI 卡片与趋势当期/上期五项数值一致', Object.keys(current).every(k => near(curTrend?.[k], current[k]) && near(prevTrend?.[k], previous[k])))
+    log.assert('KPI 趋势范围精确并补零空月', data.trend.length === 3 && data.trend[0].month === '2039-12' && data.trend[0].gmv === 0 && data.trend.every(r => r.month <= '2040-02'))
+    log.assert('KPI 同一头仓历史名称变化不拆成两仓且分仓与卡片一致', data.byWarehouse.length === 1 && data.byWarehouse[0].warehouseId === a && near(data.byWarehouse[0].gmv, 540) && near(data.byWarehouse[0].grossProfit, 478))
+    const both = await getKpi({ ...params, scopeWarehouseIds: [a, b] })
+    log.assert('KPI 多仓头仓归属与总额、回款闭合', both.byWarehouse.length === 2 && near(metric(both, 'gmv').current, 630) && near(metric(both, 'received').current, 101) && near(both.byWarehouse.reduce((sum, r) => sum + r.gmv, 0), 630))
+    await pool.query('UPDATE inventory_warehouses SET deleted_at=NOW() WHERE id=?', [b])
+    const full = await getKpi({ ...params, scopeWarehouseIds: warehouses })
+    log.assert('KPI 授权全部行仓后计入跨仓整单及回款', near(metric(full, 'gmv').current, 1130) && near(metric(full, 'received').current, 288))
+    log.assert('KPI 软删除仓库不抹去历史销售与到账事实', full.byWarehouse.some(r => r.warehouseId === b && near(r.gmv, 90)))
+    const unrestricted = await getKpi({ ...params, scopeWarehouseIds: null })
+    log.assert('KPI 无仓库限制保留全部type2到账含手工/来源缺失/删除', near(metric(unrestricted, 'received').current, Number(baseline.amount) + (30 + 40 + 20 + 99 + 88 + 55 + 11 + 77 + 66)))
+    const empty = await getKpi({ ...params, scopeWarehouseIds: [] })
+    log.assert('KPI 空scope卡片、趋势、分仓不泄漏销售或回款', empty.metrics.every(r => r.current === 0 && r.previous === 0) && empty.trend.every(r => r.gmv === 0 && r.received === 0) && empty.byWarehouse.length === 0)
+    const ordinary = await getKpi({ ...params, period: '2039-02' })
+    log.assert('KPI 普通年份2月28日有效并排除下一月', near(metric(ordinary, 'gmv').current, 90))
+    const self = await getKpi({ ...params, offsetPeriods: 0 })
+    log.assert('KPI offset=0保留本期自比，不被默认值吞掉', self.prevPeriod === '2040-02' && self.metrics.every(r => r.current === r.previous && r.changePct === 0))
+    const future = await getKpi({ ...params, offsetPeriods: 1 })
+    log.assert('KPI 支持有界正向对比月份', future.prevPeriod === '2040-03' && near(metric(future, 'gmv').previous, 1000))
+    const improved = await getKpi({ ...params, period: '2040-05' })
+    const worsened = await getKpi({ ...params, period: '2040-06' })
+    log.assert('KPI 负毛利改善/恶化按上期绝对值计算环比', metric(improved, 'grossProfit').changePct === 50 && metric(worsened, 'grossProfit').changePct === -200)
+    log.assert('KPI 上期为零的变化率保持null或零', metric(ordinary, 'gmv').changePct === null && metric(empty, 'gmv').changePct === 0)
+    for (const invalid of [{period:'2040-00'}, {period:'2040-13'}, {period:'bad'}, {period:'0999-12'}, {period:'9999-12'}, {period:'1000-01'}, {months:0}, {months:1.5}, {months:37}, {offsetPeriods:0.5}, {offsetPeriods:37}, {offsetPeriods:-37}]) {
+      let error
+      try { await reportsSvc.kpiMetrics({ ...params, ...invalid }) } catch (e) { error = e }
+      log.assert(`KPI 非法期间参数返回400 ${JSON.stringify(invalid)}`, error?.statusCode === 400)
+    }
+    // Controller 映射走真实 service/SQL，只替换 Express 的响应接收对象。
+    const controller = require('../backend/src/modules/reports/reports.controller')
+    const callController = async (query) => {
+      const result = {}
+      const res = { status(code) { result.status = code; return this }, json(body) { result.body = body; return this } }
+      await controller.kpi({ query: { period: '2040-02', ...query }, user: { warehouseIds: [a] } }, res, error => { result.error = error })
+      return result
+    }
+    const oneMonth = await callController({ months: '1' })
+    log.assert('KPI controller 转发 months=1 到真实service', oneMonth.status === 200 && oneMonth.body?.data?.trend.length === 1 && near(oneMonth.body?.data?.trend[0]?.gmv, 540))
+    const defaultMonths = await callController({})
+    log.assert('KPI controller 不传months时默认12个月', defaultMonths.status === 200 && defaultMonths.body?.data?.trend.length === 12)
+    for (const months of ['0', '37', '1.5']) {
+      const rejected = await callController({ months })
+      log.assert(`KPI controller 非法months=${months}传递400业务错误`, rejected.error?.statusCode === 400 && !rejected.body)
+    }
+    // 趋势SQL上下界是查询性能契约，结果填零会掩盖“查了未来月份再丢弃”的错误。
+    const sqlCalls = []
+    const reportPool = require('../backend/src/config/db').pool
+    const originalQuery = reportPool.query
+    reportPool.query = function(sql, args) { sqlCalls.push({ sql, args }); return originalQuery.call(this, sql, args) }
+    try { await queries.fetchKpiTrendRows(params) } finally { reportPool.query = originalQuery }
+    log.assert('KPI 趋势销售/回款SQL均在数据库按下月首日截断', sqlCalls.length === 2 && sqlCalls.every(({sql,args}) => /(?:sale_date|payment_date)\s*<\s*\?/.test(sql) && args.includes('2040-03-01')))
+  } finally {
+    if (records.length) { await pool.query('DELETE FROM payment_entries WHERE record_id IN (?)', [records]); await pool.query('DELETE FROM payment_records WHERE id IN (?)', [records]) }
+    if (orders.length) { await pool.query('DELETE FROM sale_order_items WHERE order_id IN (?)', [orders]); await pool.query('DELETE FROM sale_orders WHERE id IN (?)', [orders]) }
+    if (products.length) await pool.query('DELETE FROM product_items WHERE id IN (?)', [products])
+    if (warehouses.length) await pool.query('DELETE FROM inventory_warehouses WHERE id IN (?)', [warehouses])
+  }
+}
+
 async function main() {
   const log = createLogger()
   const ctx = await prepareSmokeContext()
@@ -236,6 +377,7 @@ async function main() {
 
   try {
     await verifyProfitAnalysis(ctx, log)
+    await verifyKpiMetrics(ctx, log)
   } finally {
     await ctx.close()
   }
