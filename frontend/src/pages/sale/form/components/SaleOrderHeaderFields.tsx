@@ -51,11 +51,11 @@ export function SaleOrderHeaderFields({
         <UserRound className="h-3.5 w-3.5 text-primary" />客户与履约
       </div>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <div className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground">
+        <div data-entry-field="party" className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground">
           <Label>客户 *</Label>
           <FinderTrigger value={customerName} placeholder="点击选择客户…" onClick={() => setCustomerFinderOpen(true)} onDoubleClick={() => { setCustomerFinderOpen(false); navigate('/customers') }} className={cn('h-9', customerError && 'border-destructive/60 bg-destructive/5')} />
         </div>
-        <div className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground">
+        <div data-entry-field="warehouse" className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground">
           <Label>出库仓库 *</Label>
           <WarehouseSelect
             value={warehouseId ? +warehouseId : null}
@@ -110,7 +110,7 @@ export function SaleOrderHeaderFields({
         </div>
         <div className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground xl:col-span-2">
           <Label>联系电话</Label>
-          <LimitedInput maxLength={30} value={receiverPhone} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setReceiverPhone(e.target.value)} placeholder="手机、座机或国际号码" inputMode="tel" className="h-9" />
+          <LimitedInput data-entry-field="phone" aria-label="联系电话" maxLength={30} value={receiverPhone} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setReceiverPhone(e.target.value)} placeholder="手机、座机或国际号码" inputMode="tel" className="h-9" />
         </div>
         <div className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground xl:col-span-5">
           <Label className="inline-flex items-center gap-1.5"><Truck className="h-3.5 w-3.5 text-muted-foreground" />收货地址</Label>

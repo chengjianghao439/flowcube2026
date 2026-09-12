@@ -1,3 +1,6 @@
+import { OrderEntryIssues } from '@/components/shared/OrderEntryIssues'
+import { collectOrderIssues } from '@/lib/orderEntry'
+import { handleEntryKeyDown } from '@/lib/orderEntryNavigation'
 import KeepAliveSection from '@/components/shared/KeepAliveSection'
 import { OrderFulfillmentPanel } from '@/components/shared/OrderFulfillmentPanel'
 import { DocumentActivityPanel } from '@/components/shared/DocumentActivityPanel'
@@ -13,7 +16,7 @@ import { SaleOrderItemsSection } from './components/SaleOrderItemsSection'
  * 确保 keep-alive 多标签场景下路径隔离正确。
  */
 
-import { useState, useCallback, useContext, useEffect, useRef } from 'react'
+import { useState, useContext, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Activity, AlertTriangle, CalendarClock, ClipboardList, Clock, History, Loader2, PackageCheck, Pencil, Save, ScanLine, Warehouse, X } from 'lucide-react'
 import { PrintPreviewOverlay } from '@/components/print/SaleOrderPrintTemplate'
@@ -22,7 +25,6 @@ import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { useWorkspaceStore } from '@/store/workspaceStore'
-import { useDirtyGuard } from '@/hooks/useDirtyGuard'
 import { ActionBar }      from '@/components/shared/ActionBar'
 import { ConfirmDialog }  from '@/components/shared/ConfirmDialog'
 import ShipSelectDialog from '@/pages/sale/components/ShipSelectDialog'
@@ -32,24 +34,19 @@ import ReleaseAllocationDialog from '@/pages/sale/components/ReleaseAllocationDi
 import { SectionCard }    from '@/components/shared/SectionCard'
 import { CustomerFinder, ProductFinder } from '@/components/finder'
 import { useCreateSale, useUpdateSale, useAdjustSale, useSaleDetail, useShipSale, useCancelSale, useDeleteSale } from '@/hooks/useSale'
-import { useCarriersActive } from '@/hooks/useCarriers'
-import { toast } from '@/lib/toast'
 import { getSaleWorkflowStatus } from '@/lib/saleWorkflowStatus'
 import { getReceivableStatus } from '@/lib/receivableStatus'
 import DataTable from '@/components/shared/DataTable'
 import type { TableColumn } from '@/types'
-import { getCustomerPriceApi } from '@/api/price-lists'
 import { cn } from '@/lib/utils'
 import type { SaleOrderItem } from '@/types/sale'
-import type { ProductFinderResult, ProductUnit } from '@/types/products'
-import type { FinderResult } from '@/types/finder'
-import { getProductApi } from '@/api/products'
 import { FulfillmentProgressCard } from './components/FulfillmentProgressCard'
 import { SaleOrderHeaderFields } from './components/SaleOrderHeaderFields'
 import { SaleOrderItemsTable } from './components/SaleOrderItemsTable'
 import { SaleOrderSummaryCard } from './components/SaleOrderSummaryCard'
 import { SaleOrderOverview } from './components/SaleOrderOverview'
-import { validateSaleForm, type DraftItem, type ScanRow } from './validate'
+import { validateSaleForm, type ScanRow } from './validate'
+import { useSaleOrderForm } from './useSaleOrderForm'
 
 // ─── 主页面 ───────────────────────────────────────────────────────────────────
 
@@ -84,153 +81,6 @@ export default function SaleFormPage() {
   return <DetailView saleId={saleId} tabPath={tabPath} closeTab={closeTab} />
 }
 
-/** CreateView / EditView 共用的表单状态与操作逻辑；传 order 则从已有订单初始化（编辑），不传则从空白开始（新建）。 */
-function useSaleOrderForm(tabPath: string, order?: NonNullable<ReturnType<typeof useSaleDetail>['data']>) {
-  const [customerId,      setCustomerId]      = useState(order ? String(order.customerId) : '')
-  const [customerName,    setCustomerName]    = useState(order?.customerName ?? '')
-  const [warehouseId,     setWarehouseId]     = useState(order ? String(order.warehouseId) : '')
-  const [warehouseName,   setWarehouseName]   = useState(order?.warehouseName ?? '')
-  const [remark,          setRemark]          = useState(order?.remark ?? '')
-  const [carrierId,       setCarrierId]       = useState(order?.carrierId ? String(order.carrierId) : '')
-  const [shippingProduct, setShippingProduct] = useState(order?.shippingProduct ?? '')
-  const [freightType,     setFreightType]     = useState(order?.freightType ? String(order.freightType) : '')
-  const [receiverName,    setReceiverName]    = useState(order?.receiverName ?? '')
-  const [receiverPhone,   setReceiverPhone]   = useState(order?.receiverPhone ?? '')
-  const [receiverAddress, setReceiverAddress] = useState(order?.receiverAddress ?? '')
-  const [discountAmount,  setDiscountAmount]  = useState(order?.discountAmount ? String(order.discountAmount) : '')
-  const counterRef    = useRef((order?.items ?? []).length)
-  const quantityRefs  = useRef<Map<number, HTMLInputElement>>(new Map())
-  const mkEmpty = (): DraftItem => ({ _key: ++counterRef.current, productId: 0, productCode: '', productName: '', articleNumber: null, spec: null, color: null, unit: '', entryUnit: '', units: [], quantity: 1, unitPrice: 0, remark: '', priceSource: 'default', resolvedPrice: null, resolvedPriceLevel: null, costPrice: null })
-
-  const { data: carrierOptions = [] } = useCarriersActive()
-
-  const [items, setItems] = useState<DraftItem[]>(() =>
-    (order?.items ?? []).map((item, i) => ({
-      _key: i, productId: item.productId, productCode: item.productCode,
-      productName: item.productName, articleNumber: item.articleNumber ?? null, spec: item.spec ?? null, color: item.color ?? null,
-      unit: item.unit, entryUnit: item.entryUnit ?? item.unit, units: [],
-      // 表单的数量/单价是「录入单位」口径：数量=entryQty(箱)，单价=每录入单位价（由 amount/entryQty 精确还原）
-      quantity: item.entryQty ?? item.quantity,
-      warehouseId: item.warehouseId ?? null, warehouseName: item.warehouseName ?? null,
-      unitPrice: item.entryQty && item.entryQty > 0 ? Math.round((item.amount / item.entryQty) * 100) / 100 : item.unitPrice,
-      remark: item.remark ?? '', priceSource: 'default' as const, costPrice: item.costPrice ?? null, resolvedPrice: null, resolvedPriceLevel: null,
-    })),
-  )
-  // 编辑/改单态：为每个明细行商品拉多计量单位，供单位下拉回显（新建态在 handleFinderConfirm 里拉）
-  useEffect(() => {
-    const src = order?.items ?? []
-    const productIds = [...new Set(src.filter(i => i.productId > 0).map(i => i.productId))]
-    if (!productIds.length) return
-    let cancelled = false
-    Promise.all(productIds.map(pid =>
-      getProductApi(pid).then(p => [pid, p?.units ?? []] as [number, ProductUnit[]]).catch(() => [pid, [] as ProductUnit[]] as [number, ProductUnit[]]),
-    )).then(pairs => {
-      if (cancelled) return
-      const map = new Map<number, ProductUnit[]>(pairs)
-      setItems(prev => prev.map(i => (map.has(i.productId) ? { ...i, units: map.get(i.productId)! } : i)))
-    })
-    return () => { cancelled = true }
-  }, [order])
-  const [priceLoading, setPriceLoading] = useState<Record<number, boolean>>({})
-  const [finderOpen,    setFinderOpen]    = useState(false)
-  const [finderItemKey, setFinderItemKey] = useState<number | null>(null)
-  const [customerFinderOpen,  setCustomerFinderOpen]  = useState(false)
-  const [customerError, setCustomerError] = useState(false)
-  const [warehouseError, setWarehouseError] = useState(false)
-  const [invalidItemKeys, setInvalidItemKeys] = useState<Set<number>>(new Set())
-
-  // 编辑态初始值本就非空，"是否非空"不能代表"是否改过"，改成和进入编辑时的快照比较；
-  // 新建态没有快照可比，沿用"任意字段非空即算改过"。
-  const editSnapshotRef = useRef(order
-    ? JSON.stringify({ customerId, warehouseId, remark, carrierId, shippingProduct, freightType, receiverName, receiverPhone, receiverAddress, discountAmount, items })
-    : null)
-  const isDirty = order
-    ? JSON.stringify({ customerId, warehouseId, remark, carrierId, shippingProduct, freightType, receiverName, receiverPhone, receiverAddress, discountAmount, items }) !== editSnapshotRef.current
-    : !!(customerId || warehouseId || remark || carrierId || receiverName || items.length)
-  useDirtyGuard(tabPath, isDirty)
-
-  // 添加商品：新增一行并立即弹出选品对话框，与采购单/调拨单/退货单一致
-  const addItem = () => {
-    const item = mkEmpty()
-    setItems(prev => [...prev, item])
-    setFinderItemKey(item._key)
-    setFinderOpen(true)
-  }
-
-  // 触发已有商品行的客户价格等级查询（只查价，不设 customerId）
-  const handleCustomerChange = useCallback(async (cid: string) => {
-    if (!cid) return
-    setItems(prev => prev.map(i => {
-      if (!i.productId) return i
-      void (async () => {
-        try {
-          const r = await getCustomerPriceApi(+cid, i.productId)
-          if (r?.salePrice !== undefined) {
-            setItems(p => p.map(x => x._key === i._key ? { ...x, unitPrice: r!.salePrice, priceSource: 'list', resolvedPrice: r!.salePrice, resolvedPriceLevel: r!.priceLevel } : x))
-          }
-        } catch (_) {}
-      })()
-      return i
-    }))
-  }, [])
-
-  function handleCustomerConfirm(result: FinderResult) {
-    setCustomerId(String(result.id))
-    setCustomerName(result.name)
-    setCustomerError(false)
-    void handleCustomerChange(String(result.id))
-  }
-
-  const removeItem = (k: number) => setItems(prev => prev.filter(i => i._key !== k))
-
-  const updateItem = (k: number, field: string, val: string | number) =>
-    setItems(prev => prev.map(i => i._key === k ? { ...i, [field]: val, priceSource: field === 'unitPrice' ? 'manual' : i.priceSource } : i))
-
-  async function handleFinderConfirm(product: ProductFinderResult) {
-    if (finderItemKey === null) return
-    const k = finderItemKey
-    setItems(prev => prev.map(i => i._key === k
-      ? { ...i, productId: product.id, productCode: product.code, productName: product.name, articleNumber: product.articleNumber ?? null, spec: product.spec ?? null, color: product.color ?? null, unit: product.unit, entryUnit: product.unit, units: [], quantity: 0, unitPrice: product.salePrice ?? 0, priceSource: 'default', costPrice: product.costPrice ?? null, resolvedPrice: null, resolvedPriceLevel: null }
-      : i
-    ))
-    // 商品选择后自动聚焦到该行数量框
-    setTimeout(() => { const inp = quantityRefs.current.get(k); if (inp) { inp.focus(); inp.select() } }, 0)
-    // 拉该商品多计量单位，供单位下拉（无辅助单位则只保留基本单位、下拉不出现）
-    getProductApi(product.id)
-      .then(full => { const units = full?.units ?? []; setItems(prev => prev.map(i => (i._key === k && i.productId === product.id ? { ...i, units } : i))) })
-      .catch(() => { /* 拉取失败：按基本单位录入 */ })
-    if (customerId) {
-      setPriceLoading(prev => ({ ...prev, [k]: true }))
-      try {
-        const r = await getCustomerPriceApi(+customerId, product.id)
-        if (r?.salePrice !== undefined)
-          setItems(prev => prev.map(i => i._key === k ? { ...i, unitPrice: r!.salePrice, priceSource: 'list', resolvedPrice: r!.salePrice, resolvedPriceLevel: r!.priceLevel } : i))
-      } catch (_) {}
-      setPriceLoading(prev => ({ ...prev, [k]: false }))
-    }
-  }
-
-  const total = items.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
-  const discount = Math.max(0, Number(discountAmount) || 0)
-  const discountedTotal = Math.max(0, total - discount)
-
-  return {
-    customerId, setCustomerId, customerName, setCustomerName,
-    warehouseId, setWarehouseId, warehouseName, setWarehouseName,
-    remark, setRemark, carrierId, setCarrierId, shippingProduct, setShippingProduct, freightType, setFreightType,
-    receiverName, setReceiverName, receiverPhone, setReceiverPhone, receiverAddress, setReceiverAddress,
-    discountAmount, setDiscountAmount, total, discount, discountedTotal,
-    quantityRefs, carrierOptions,
-    items, priceLoading,
-    finderOpen, setFinderOpen, finderItemKey, setFinderItemKey,
-    customerFinderOpen, setCustomerFinderOpen,
-    customerError, setCustomerError, warehouseError, setWarehouseError,
-    invalidItemKeys, setInvalidItemKeys,
-    isDirty, addItem, removeItem, updateItem,
-    handleCustomerConfirm, handleFinderConfirm,
-  }
-}
-
 // ════════════════════════════════════════════════════════════════════════════
 // 新建视图
 // ════════════════════════════════════════════════════════════════════════════
@@ -244,25 +94,26 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
     receiverName, setReceiverName, receiverPhone, setReceiverPhone, receiverAddress, setReceiverAddress,
     discountAmount, setDiscountAmount, total, discount, discountedTotal,
     quantityRefs, carrierOptions,
-    items, priceLoading,
+    items, priceLoading, priceErrors,
     finderOpen, setFinderOpen, setFinderItemKey,
     customerFinderOpen, setCustomerFinderOpen,
-    customerError, setCustomerError, warehouseError, setWarehouseError,
-    invalidItemKeys, setInvalidItemKeys,
+    setCustomerError, setWarehouseError,
+    setInvalidItemKeys,
     isDirty, addItem, removeItem, updateItem,
     handleCustomerConfirm, handleFinderConfirm,
   } = useSaleOrderForm(tabPath)
 
+  const [validationAttempted, setValidationAttempted] = useState(false)
+  const allIssues = collectOrderIssues({ kind: 'sale', partyId: customerId, partyName: customerName, warehouseId, warehouseName, items, receiverPhone, discountAmount, priceLoading, priceErrors })
+  const issues = validationAttempted ? allIssues : []
+
   async function handleSubmit() {
+    setValidationAttempted(true)
     const filledItems = validateSaleForm({
-      items, customerId, customerName, warehouseId, warehouseName, receiverPhone,
+      items, customerId, customerName, warehouseId, warehouseName, receiverPhone, discountAmount, priceLoading, priceErrors,
       setCustomerError, setWarehouseError, setInvalidItemKeys,
     })
     if (!filledItems) return
-    if (discount > total) {
-      toast.warning('折扣金额不能超过订单合计')
-      return
-    }
     try {
       await createMutate.mutateAsync({
         customerId: +customerId, customerName,
@@ -282,7 +133,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
   }
 
   return (
-    <div className="flex flex-col gap-2.5">
+    <div data-order-entry onKeyDown={handleEntryKeyDown} className="flex flex-col gap-2.5">
       <ActionBar
         title="新建销售单"
         subtitle={isDirty ? <span className="text-xs font-normal text-muted-foreground">未保存</span> : undefined}
@@ -298,10 +149,11 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
         }
       />
 
+      <OrderEntryIssues issues={issues} />
       <SaleOrderHeaderFields
-        customerId={customerId} customerName={customerName} customerError={customerError} setCustomerFinderOpen={setCustomerFinderOpen}
+        customerId={customerId} customerName={customerName} customerError={issues.some(i => i.target === 'party')} setCustomerFinderOpen={setCustomerFinderOpen}
         warehouseId={warehouseId} setWarehouseId={setWarehouseId} setWarehouseName={setWarehouseName}
-        warehouseError={warehouseError} setWarehouseError={setWarehouseError}
+        warehouseError={issues.some(i => i.target === 'warehouse')} setWarehouseError={setWarehouseError}
         carrierId={carrierId} setCarrierId={setCarrierId} carrierOptions={carrierOptions}
         shippingProduct={shippingProduct} setShippingProduct={setShippingProduct}
         freightType={freightType} setFreightType={setFreightType}
@@ -314,7 +166,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
       {/* 商品明细：跟采购单/调拨单/退货单一致，点击"添加商品"弹出选品对话框 */}
       <SaleOrderItemsSection hasItems={items.length > 0} onAdd={addItem}>
           <SaleOrderItemsTable
-            items={items} invalidItemKeys={invalidItemKeys} quantityRefs={quantityRefs} priceLoading={priceLoading}
+            items={items} invalidItemKeys={new Set(issues.flatMap(i => i.itemKey === undefined ? [] : [i.itemKey]))} quantityRefs={quantityRefs} priceLoading={priceLoading} priceErrors={priceErrors}
             setFinderItemKey={setFinderItemKey} setFinderOpen={setFinderOpen}
             updateItem={updateItem} removeItem={removeItem}
           />
@@ -361,25 +213,26 @@ function EditView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<ty
     receiverName, setReceiverName, receiverPhone, setReceiverPhone, receiverAddress, setReceiverAddress,
     discountAmount, setDiscountAmount, total, discount, discountedTotal,
     quantityRefs, carrierOptions,
-    items, priceLoading,
+    items, priceLoading, priceErrors,
     finderOpen, setFinderOpen, setFinderItemKey,
     customerFinderOpen, setCustomerFinderOpen,
-    customerError, setCustomerError, warehouseError, setWarehouseError,
-    invalidItemKeys, setInvalidItemKeys,
+    setCustomerError, setWarehouseError,
+    setInvalidItemKeys,
     addItem, removeItem, updateItem,
     handleCustomerConfirm, handleFinderConfirm,
   } = useSaleOrderForm(tabPath, order)
 
+  const [validationAttempted, setValidationAttempted] = useState(false)
+  const allIssues = collectOrderIssues({ kind: 'sale', partyId: customerId, partyName: customerName, warehouseId, warehouseName, items, receiverPhone, discountAmount, priceLoading, priceErrors })
+  const issues = validationAttempted ? allIssues : []
+
   async function handleSubmit() {
+    setValidationAttempted(true)
     const filledItems = validateSaleForm({
-      items, customerId, customerName, warehouseId, warehouseName, receiverPhone,
+      items, customerId, customerName, warehouseId, warehouseName, receiverPhone, discountAmount, priceLoading, priceErrors,
       setCustomerError, setWarehouseError, setInvalidItemKeys,
     })
     if (!filledItems) return
-    if (discount > total) {
-      toast.warning('折扣金额不能超过订单合计')
-      return
-    }
     try {
       await updateMutate.mutateAsync({
         id: order.id,
@@ -400,7 +253,7 @@ function EditView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<ty
   }
 
   return (
-    <div className="flex flex-col gap-2.5">
+    <div data-order-entry onKeyDown={handleEntryKeyDown} className="flex flex-col gap-2.5">
       <ActionBar
         title={`${order.orderNo} · 编辑`}
         rightActions={
@@ -417,10 +270,11 @@ function EditView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<ty
         }
       />
 
+      <OrderEntryIssues issues={issues} />
       <SaleOrderHeaderFields
-        customerId={customerId} customerName={customerName} customerError={customerError} setCustomerFinderOpen={setCustomerFinderOpen}
+        customerId={customerId} customerName={customerName} customerError={issues.some(i => i.target === 'party')} setCustomerFinderOpen={setCustomerFinderOpen}
         warehouseId={warehouseId} setWarehouseId={setWarehouseId} setWarehouseName={setWarehouseName}
-        warehouseError={warehouseError} setWarehouseError={setWarehouseError}
+        warehouseError={issues.some(i => i.target === 'warehouse')} setWarehouseError={setWarehouseError}
         carrierId={carrierId} setCarrierId={setCarrierId} carrierOptions={carrierOptions}
         shippingProduct={shippingProduct} setShippingProduct={setShippingProduct}
         freightType={freightType} setFreightType={setFreightType}
@@ -433,7 +287,7 @@ function EditView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<ty
       {/* 商品明细：跟采购单/调拨单/退货单一致，点击"添加商品"弹出选品对话框 */}
       <SaleOrderItemsSection hasItems={items.length > 0} onAdd={addItem}>
           <SaleOrderItemsTable
-            items={items} invalidItemKeys={invalidItemKeys} quantityRefs={quantityRefs} priceLoading={priceLoading}
+            items={items} invalidItemKeys={new Set(issues.flatMap(i => i.itemKey === undefined ? [] : [i.itemKey]))} quantityRefs={quantityRefs} priceLoading={priceLoading} priceErrors={priceErrors}
             setFinderItemKey={setFinderItemKey} setFinderOpen={setFinderOpen}
             updateItem={updateItem} removeItem={removeItem}
           />
@@ -483,18 +337,23 @@ function AdjustView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<
     receiverName, setReceiverName, receiverPhone, setReceiverPhone, receiverAddress, setReceiverAddress,
     discountAmount, total, discount, discountedTotal,
     quantityRefs, carrierOptions,
-    items, priceLoading,
+    items, priceLoading, priceErrors,
     finderOpen, setFinderOpen, setFinderItemKey,
     customerFinderOpen, setCustomerFinderOpen,
-    customerError, setCustomerError, warehouseError, setWarehouseError,
-    invalidItemKeys, setInvalidItemKeys,
+    setCustomerError, setWarehouseError,
+    setInvalidItemKeys,
     addItem, removeItem, updateItem,
     handleCustomerConfirm, handleFinderConfirm,
   } = useSaleOrderForm(tabPath, order)
 
+  const [validationAttempted, setValidationAttempted] = useState(false)
+  const allIssues = collectOrderIssues({ kind: 'sale', partyId: customerId, partyName: customerName, warehouseId, warehouseName, items, receiverPhone, discountAmount, priceLoading, priceErrors })
+  const issues = validationAttempted ? allIssues.map(issue => issue.target === 'discount' ? { ...issue, message: '原单折扣超过当前商品合计，请调整商品数量或单价' } : issue) : []
+
   async function handleSubmit() {
+    setValidationAttempted(true)
     const filledItems = validateSaleForm({
-      items, customerId, customerName, warehouseId, warehouseName, receiverPhone,
+      items, customerId, customerName, warehouseId, warehouseName, receiverPhone, discountAmount, priceLoading, priceErrors,
       setCustomerError, setWarehouseError, setInvalidItemKeys,
     })
     if (!filledItems) return
@@ -517,7 +376,7 @@ function AdjustView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<
   }
 
   return (
-    <div className="flex flex-col gap-2.5">
+    <div data-order-entry onKeyDown={handleEntryKeyDown} className="flex flex-col gap-2.5">
       <ActionBar
         title={`${order.orderNo} · 修改订单`}
         rightActions={
@@ -539,10 +398,11 @@ function AdjustView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<
         <span>订单已发往仓库执行。增加数量将触发重新拣货；减少数量若涉及已拣或已打包的商品，需经仓库扫码确认放回库位 / 拆箱后方可生效。</span>
       </div>
 
+      <OrderEntryIssues issues={issues} />
       <SaleOrderHeaderFields
-        customerId={customerId} customerName={customerName} customerError={customerError} setCustomerFinderOpen={setCustomerFinderOpen}
+        customerId={customerId} customerName={customerName} customerError={issues.some(i => i.target === 'party')} setCustomerFinderOpen={setCustomerFinderOpen}
         warehouseId={warehouseId} setWarehouseId={setWarehouseId} setWarehouseName={setWarehouseName}
-        warehouseError={warehouseError} setWarehouseError={setWarehouseError}
+        warehouseError={issues.some(i => i.target === 'warehouse')} setWarehouseError={setWarehouseError}
         carrierId={carrierId} setCarrierId={setCarrierId} carrierOptions={carrierOptions}
         shippingProduct={shippingProduct} setShippingProduct={setShippingProduct} shippingProductDisabled
         freightType={freightType} setFreightType={setFreightType}
@@ -554,7 +414,7 @@ function AdjustView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<
 
       <SaleOrderItemsSection hasItems={items.length > 0} onAdd={addItem}>
           <SaleOrderItemsTable
-            items={items} invalidItemKeys={invalidItemKeys} quantityRefs={quantityRefs} priceLoading={priceLoading}
+            items={items} invalidItemKeys={new Set(issues.flatMap(i => i.itemKey === undefined ? [] : [i.itemKey]))} quantityRefs={quantityRefs} priceLoading={priceLoading} priceErrors={priceErrors}
             setFinderItemKey={setFinderItemKey} setFinderOpen={setFinderOpen}
             updateItem={updateItem} removeItem={removeItem}
           />

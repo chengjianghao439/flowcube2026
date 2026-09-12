@@ -11,8 +11,8 @@
  * 默认尺寸：
  *   width:     900px   minWidth:  600px
  *   height:    600px   minHeight: 400px
- *   maxWidth:  95vw（由 resize handler 动态限制）
- *   maxHeight: 90vh（由 resize handler 动态限制）
+ *   maxWidth:  95vw（初次打开、恢复尺寸、窗口变化和拖拽均限制）
+ *   maxHeight: 90vh（视口不足时优先保证关闭及底部操作可见）
  *
  * 按钮层级约定（在 footer 中）：
  *   destructive → outline → default（从左到右，primary 在最右）
@@ -117,7 +117,7 @@ export function AppDialog({
   minHeight     = 400,
   resizable     = true,
 }: AppDialogProps) {
-  const { width, height, handleResizeMouseDown } = useResizableDialog({
+  const { width: preferredWidth, height: preferredHeight, handleResizeMouseDown } = useResizableDialog({
     dialogId,
     defaultWidth,
     defaultHeight,
@@ -125,6 +125,18 @@ export function AppDialog({
     minHeight,
     resizable,
   })
+
+  const [viewport, setViewport] = useState(() => ({ width: window.innerWidth, height: window.innerHeight }))
+  useLayoutEffect(() => {
+    if (!open) return
+    const update = () => setViewport({ width: window.innerWidth, height: window.innerHeight })
+    update()
+    window.addEventListener('resize', update)
+    return () => window.removeEventListener('resize', update)
+  }, [open])
+  // 只限制呈现尺寸，不把临时窄窗口覆盖到用户已保存的尺寸偏好。
+  const width = Math.min(preferredWidth, Math.floor(viewport.width * .95))
+  const height = Math.min(preferredHeight, Math.floor(viewport.height * .9))
 
   /**
    * 弹窗位置：
@@ -144,9 +156,9 @@ export function AppDialog({
         top:  Math.max(0, Math.floor((window.innerHeight - height) / 2)),
       })
     }
-  // 仅在 open 变化时重新居中，resize 过程中保持 pos 不变
+  // 打开或窗口变化时居中；拖拽只改变尺寸，不触发重新居中。
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open])
+  }, [open, viewport.width, viewport.height])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -166,8 +178,8 @@ export function AppDialog({
             'duration-200',
           )}
           style={{
-            left:   pos.left,
-            top:    pos.top,
+            left:   Math.min(pos.left, Math.max(0, viewport.width - width)),
+            top:    Math.min(pos.top, Math.max(0, viewport.height - height)),
             width,
             height,
           }}

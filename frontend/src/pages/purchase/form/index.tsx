@@ -1,3 +1,6 @@
+import { OrderEntryIssues } from '@/components/shared/OrderEntryIssues'
+import { collectOrderIssues } from '@/lib/orderEntry'
+import { handleEntryKeyDown } from '@/lib/orderEntryNavigation'
 import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
 import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
 import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
@@ -126,9 +129,11 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
   const [finderItemKey, setFinderItemKey] = useState<number | null>(null)
   const [supplierFinderOpen, setSupplierFinderOpen] = useState(false)
   const [submitLocked, setSubmitLocked] = useState(false)
+  const [validationAttempted, setValidationAttempted] = useState(false)
+  const quantityRefs = useRef<Map<number, HTMLInputElement>>(new Map())
   const [supplierError, setSupplierError] = useState(false)
   const [warehouseError, setWarehouseError] = useState(false)
-  const [invalidItemKeys, setInvalidItemKeys] = useState<Set<number>>(new Set())
+
 
   // 编辑态：初始值本就非空，"是否非空"不能代表"是否改过"；改成与编辑开始时的快照比较
   const editSnapshotRef = useRef(isEdit ? JSON.stringify({ supplierId, warehouseId, expectedDate, remark, items }) : null)
@@ -184,6 +189,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
   function handleFinderConfirm(product: ProductFinderResult) {
     if (finderItemKey === null) return
     const k = finderItemKey
+    setTimeout(() => { const input = quantityRefs.current.get(k); if (input?.isConnected) { input.focus(); input.select() } }, 0)
     setItems(prev =>
       prev.map(i =>
         i._key === k
@@ -203,12 +209,6 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
           : i,
       ),
     )
-    setInvalidItemKeys(prev => {
-      if (!prev.has(k)) return prev
-      const next = new Set(prev)
-      next.delete(k)
-      return next
-    })
     // 拉该商品多计量单位，供单位下拉（无辅助单位则只保留基本单位、下拉不出现）
     getProductApi(product.id)
       .then(full => {
@@ -224,38 +224,15 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
     setSupplierError(false)
   }
 
+  const allIssues = collectOrderIssues({ kind: 'purchase', partyId: supplierId, partyName: supplierName, warehouseId, warehouseName, items })
+  const issues = validationAttempted ? allIssues : []
+
   async function handleSubmit() {
     if (submitLocked || submitting) return
-    const missingSupplier = !supplierId || !supplierName
-    const missingWarehouse = !warehouseId || !warehouseName
-    setSupplierError(missingSupplier)
-    setWarehouseError(missingWarehouse)
-    if (missingSupplier) {
-      toast.warning('请选择供应商')
-      return
-    }
-    if (missingWarehouse) {
-      toast.warning('请选择仓库')
-      return
-    }
-    if (!items.length) {
-      toast.warning('请添加至少一条明细')
-      return
-    }
-    const missingProductKeys = new Set(items.filter(i => !i.productId).map(i => i._key))
-    setInvalidItemKeys(missingProductKeys)
-    if (missingProductKeys.size) {
-      toast.warning('请完整填写所有明细')
-      return
-    }
-    if (items.find(i => !Number.isInteger(i.quantity) || i.quantity <= 0)) {
-      toast.warning('采购数量必须为大于 0 的整数')
-      return
-    }
-    if (items.find(i => !Number.isFinite(i.unitPrice) || i.unitPrice < 0)) {
-      toast.warning('采购单价不能为负数')
-      return
-    }
+    setValidationAttempted(true)
+    setSupplierError(allIssues.some(i => i.target === 'party'))
+    setWarehouseError(allIssues.some(i => i.target === 'warehouse'))
+    if (allIssues.length) return
     const payload = {
       supplierId: +supplierId,
       supplierName,
@@ -286,7 +263,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
   const totalQuantity = items.reduce((s, i) => s + i.quantity, 0)
 
   return (
-    <div className="flex flex-col gap-3">
+    <div data-order-entry onKeyDown={handleEntryKeyDown} className="flex flex-col gap-3">
       <ActionBar
         title={isEdit ? '编辑采购单' : '新建采购单'}
         subtitle={!isEdit && isDirty ? (
@@ -316,9 +293,10 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
         }
       />
 
+      <OrderEntryIssues issues={issues} />
       <SectionCard title="订单信息" compact>
         <div className="flex items-start gap-4">
-          <div className="w-[272px] shrink-0 space-y-1.5">
+          <div data-entry-field="party" className="w-[272px] shrink-0 space-y-1.5">
             <Label htmlFor="purchase-supplier">供应商 *</Label>
             <FinderTrigger
               id="purchase-supplier"
@@ -334,7 +312,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
             {supplierError && <p className="text-xs text-destructive">请选择供应商</p>}
           </div>
 
-          <div className="w-56 shrink-0 space-y-1.5">
+          <div data-entry-field="warehouse" className="w-56 shrink-0 space-y-1.5">
             <Label htmlFor="purchase-warehouse">入库仓库 *</Label>
             <WarehouseSelect
               id="purchase-warehouse"
@@ -368,12 +346,13 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
         title="商品明细"
         compact
         actions={
-          <Button type="button" size="sm" variant="outline" onClick={addItem} className="gap-1.5">
+          <Button data-entry-add data-entry-field="add" type="button" size="sm" variant="outline" onClick={addItem} className="gap-1.5">
             <Plus className="h-4 w-4" />
             添加商品
           </Button>
         }
       >
+        {items.length > 0 && <p className="mb-2 text-xs text-muted-foreground">数量、单价按 Enter 前进，Shift+Enter 返回；末行可继续添加商品。</p>}
         {items.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border py-12 text-center">
             <PackageOpen className="h-8 w-8 text-muted-foreground/40" />
@@ -398,6 +377,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
                   <tr key={item._key} className="border-b border-border/40">
                     <ProductIdentityCells product={item} nameContent={<button
                         type="button"
+                        data-entry-field={`item-${item._key}-product`}
                         onClick={() => {
                           setFinderItemKey(item._key)
                           setFinderOpen(true)
@@ -410,7 +390,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
                         className={cn(
                           EDIT_CELL_CLASS,
                           'flex items-center overflow-hidden text-left',
-                          invalidItemKeys.has(item._key) && 'border-destructive/60 bg-destructive/5',
+                          issues.some(i => i.target === `item-${item._key}-product`) && 'border-destructive/60 bg-destructive/5',
                         )}
                       >
                         {item.productName
@@ -438,6 +418,8 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
                         type="number"
                         min="1"
                         step="1"
+                        data-entry-input data-entry-field={`item-${item._key}-quantity`} aria-label={`${item.productName || '商品'}数量`} aria-invalid={issues.some(i => i.target === `item-${item._key}-quantity`)}
+                        ref={el => { if (el) quantityRefs.current.set(item._key, el); else quantityRefs.current.delete(item._key) }}
                         placeholder="数量"
                         value={item.quantity}
                         onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'quantity', parsePositiveInteger(e.target.value))}
@@ -453,6 +435,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
                         type="number"
                         min="0"
                         step="0.01"
+                        data-entry-input data-entry-field={`item-${item._key}-price`} aria-label={`${item.productName || '商品'}单价`} aria-invalid={issues.some(i => i.target === `item-${item._key}-price`)}
                         placeholder="单价"
                         value={item.unitPrice}
                         onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'unitPrice', +e.target.value)}

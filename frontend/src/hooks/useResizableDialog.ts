@@ -108,6 +108,8 @@ export function useResizableDialog({
     mouseY: number
     initW: number
     initH: number
+    left: number
+    top: number
   } | null>(null)
 
   const handleResizeMouseDown = useCallback(
@@ -116,11 +118,15 @@ export function useResizableDialog({
       e.preventDefault()
       e.stopPropagation()
 
+      // 已保存尺寸可能大于当前窗口；从实际呈现的边界开始拖动，避免首帧跳变。
+      const bounds = e.currentTarget.closest('[role="dialog"]')?.getBoundingClientRect()
       dragStartRef.current = {
         mouseX: e.clientX,
         mouseY: e.clientY,
-        initW: currentSizeRef.current.width,
-        initH: currentSizeRef.current.height,
+        initW: bounds?.width || currentSizeRef.current.width,
+        initH: bounds?.height || currentSizeRef.current.height,
+        left: bounds?.left ?? 0,
+        top: bounds?.top ?? 0,
       }
 
       // 拖拽期间禁止文本选中
@@ -132,8 +138,8 @@ export function useResizableDialog({
         const dy = ev.clientY - dragStartRef.current.mouseY
 
         // 动态计算允许的最大尺寸（相对当前视口）
-        const maxW = Math.floor(window.innerWidth * 0.95)
-        const maxH = Math.floor(window.innerHeight * 0.9)
+        const maxW = Math.floor(Math.min(window.innerWidth * 0.95, window.innerWidth - dragStartRef.current.left))
+        const maxH = Math.floor(Math.min(window.innerHeight * 0.9, window.innerHeight - dragStartRef.current.top))
 
         const newW = Math.min(Math.max(dragStartRef.current.initW + dx, minWidth), maxW)
         const newH = Math.min(Math.max(dragStartRef.current.initH + dy, minHeight), maxH)

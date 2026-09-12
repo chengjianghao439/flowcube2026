@@ -39,9 +39,9 @@ export function SaleOrderSummaryCard({
           <div className="flex items-center justify-between gap-3">
             <label className="text-muted-foreground" htmlFor="sale-discount-amount">折扣金额</label>
             {editableDiscount ? (
-              <Input id="sale-discount-amount" type="number" min={0} step={0.01} value={discountAmount}
+              <Input data-entry-field="discount" id="sale-discount-amount" type="number" min={0} step={0.01} value={discountAmount}
                 onChange={event => onDiscountChange?.(event.target.value)} placeholder="0.00" className="h-8 w-28 text-right text-sm tabular-nums" />
-            ) : <span className="tabular-nums text-foreground">-¥{discount.toFixed(2)}</span>}
+            ) : <span data-entry-field="discount" tabIndex={-1} className="tabular-nums text-foreground focus:outline-none focus:ring-2 focus:ring-ring" title="改单保留原折扣；明细金额不能低于该折扣">-¥{discount.toFixed(2)}</span>}
           </div>
         </div>
 

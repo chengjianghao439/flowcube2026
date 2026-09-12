@@ -11,10 +11,11 @@ export function SaleOrderItemsSection({ hasItems, onAdd, children }: {
 }) {
   return (
     <SectionCard title="商品明细" compact actions={
-      <Button type="button" size="sm" variant="outline" onClick={onAdd} className="gap-1.5">
+      <Button data-entry-add data-entry-field="add" type="button" size="sm" variant="outline" onClick={onAdd} className="gap-1.5">
         <Plus className="h-4 w-4" />添加商品
       </Button>
     }>
+      {hasItems && <p className="mb-2 text-xs text-muted-foreground">数量、单价按 Enter 前进，Shift+Enter 返回；末行可继续添加商品。</p>}
       {hasItems ? children : (
         <div className="flex items-center justify-center gap-4 py-10 text-left">
           <PackageOpen className="h-9 w-9 shrink-0 text-muted-foreground/50" />
