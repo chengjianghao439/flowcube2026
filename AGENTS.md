@@ -112,6 +112,7 @@ npm run test:permissions
 | 报表、开票 | `npm run smoke:reports`、`npm run smoke:reports-values`、`npm run smoke:invoice-quota` |
 
 `npm run test:fulfillment`、`test:procurement-planning` 为履约与采购净额纯规则回归；`smoke:fulfillment`、`smoke:procurement-planning` 必须使用本节独立测试库，已加入 Tests CI 专项矩阵。
+`npm run test:fulfillment-refresh` 检查履约提交后合并通知、有界队列、失败退避与执行中再变更；`smoke:fulfillment` 同时验证业务单号筛选、仓库权限及提交后供应依赖刷新，仍仅允许独立测试库。
 
 `npm run test:direct-express` 为官方签名、默认重量 1 及防重复下单离线回归；`npm run smoke:direct-express` 验证 MySQL 批次入队、销售产品快照与并发恢复，必须使用下述独立测试环境。`npm run check:direct-express -- sf sf_main`（德邦用 `deppon deppon_main`）只检查配置，不联网、不输出凭据。
 
@@ -188,6 +189,8 @@ npm run test:permissions
 - **盘点**：账面读取 ACTIVE 容器；提交前整单检查账面漂移，任一漂移拒绝整单，刷新账面会清空对应实盘值。差异调整走引擎。
 - **商品快照**：已有业务快照读快照，无快照的过程表按既定 JOIN 读取主档。`article_number` / `articleNumber` 语义为供应商型号，不恢复随机生成；`spec` 为系统型号，不能因改展示名擅改历史列名。
 
+- 履约及时性（2026-09-12）：关键业务提交成功后以 `commitFulfillment` 合并通知，在事务外按有界批次刷新本单及相关销售供应依赖；回滚不通知。删行或改仓前在事务内捕获旧商品/仓库维度，提交后同时通知旧供应依赖；每单最多保留 500 个维度（读取第 501 项检测截断），截断计入 `snapshotOverflow`，不能为获取快照提前到授信所需客户锁之前。单据和库存维度提示共享 1,000 项有界队列，相关单据分批推进游标；普通依赖刷新不得重置已有展开游标。原 30 秒周期游标扫描保留为重启/丢通知兜底。队列的积压和处理时间决定实际延迟，不承诺全量单据每秒完成。业务交期与事项人工处理期限分开，不因刷新擅自覆盖人工期限。查询和事件职责从 service 拆出并保留兼容导出。待办显示业务单号、往来方及仓库，支持单据类型和关键词筛选；状态/类型按用户保存在本机，关键词和业务数据不持久化，返回原工作区保留筛选和滚动位置。详见 `docs/fulfillment-refresh-2026-09-12.md`。
+
 ## 8. 财务、权限与时间
 
 - **顺丰/德邦月结直连（顺丰沙箱已联调、正式月结已绑定，正式下单待验收）**：直连运单在整批 `packDone` 校验通过后，按当前仓库任务已完成箱子自动填件数；每批最多 30 箱，超出分批，各批独立订单号，保存全部母子单号。界面不采集重量；按用户最新约定，顺丰 `totalWeight`、德邦 `packageInfo.totalWeight` 默认传 1（kg），件数仍来自实际箱数，不随件数放大默认重量。该值仅用于下单，最终实重由快递员称重确认，不写入实际重量/运费账单。旧 `DEFERRED_WEIGHT_MODE` 不再使用；已提交请求快照保持原样、仅查询原单。产品默认来自承运商、本单可覆盖，PDA 不决策。未提交平台的运单可补充寄收件、产品与寄付/到付，件数和箱子归属仅后端维护；系统缩批自动移除的未提交批次可恢复，人工作废不自动恢复；已提交箱子变更需先核实原单，当前取消确认同步尚未接入。HTTP 在事务外，提交前固化原始业务报文和凭据引用、不保存密钥；结果不明、进程中断及失败回写后只查原单，不再 create（德邦同渠道号重下可能追加子件）。状态 6 为下单待核实，旧重试入口对此仅查询，已提交直连单禁止通过本地作废伪装平台取消。官方面单打印及实际轨迹查询开通属于独立能力，取到号不等于已完成打印。2026-09-06 已用顺丰官方测试月结号验证本地适配器实际联网下单/原单查询，以及独立沙箱取消、轨迹、两页 PDF 面单；全部测试订单已确认取消。顺丰下单、原单查询、取消、轨迹、PDF 五项官方接口均已上线，应用显示 5/5，正式月结绑定已获平台成功回执。该结果不代表正式下单、生产启用、队列全链路或本地取消/轨迹/PDF 功能已验收。开通与验收见 `docs/direct-express-2026-09-06.md`。
@@ -253,6 +256,7 @@ npm run test:permissions
 - 服务端业务规则不复制到前端，不让前端传目标状态决定流转。生成的状态常量通过 `npm run generate:status` 更新。
 - 状态展示统一 `StatusBadge` / `SoftStatusLabel` 与 `statusTone.ts` 语义色，不硬编码彩色 Badge。
 - DataTable 列宽采用独立调整：从全部业务列实际宽度取快照，勾选列不参与，只改变目标列，超出容器后横向滚动。操作列与其他业务列一样支持拖动表头调整顺序；所有业务列表头分隔线支持拖动、双击适应内容及方向键微调，单列也可调整；按用户要求，表格上方不再显示“恢复默认列宽”按钮及其工具栏。既有列顺序和宽度设置保留，比例布局仅作为默认和旧设置兼容，手动调整后保存 widthUnit=px。拖动通过动画帧更新 colgroup/table，松手一次提交，不反复重绘明细；Escape、失焦、卸载及结构变化均取消预览、释放监听并恢复样式。普通重新渲染不得重载旧布局，默认存储路径绑定表格挂载页面。回归与验证见 `docs/table-column-resize-2026-09-06.md`。行内 `TableActionsMenu` 首次展开前只渲染普通按钮，首次展开后保留菜单实例与原键盘、焦点、页面隐藏规则，避免完整列表预挂载数千个菜单；商品列表按数据、分类和打印状态缓存列定义与表格，无关路由变化不重绘完整商品表；性能定位与边界见 `docs/dev-navigation-performance-2026-09-09.md`。
+- 大列表优化（2026-09-12）：商品、库存总览/流水、销售和履约待办在至少 200 行时使用共享 `VirtualTableBody`，按真实行高仅挂载视口与缓冲行，沿用工作区滚动条；完整列表数据、服务端权限、全选/导出范围不变。列布局与交互提取至 `useTableColumns`。高频列表通过 `useVisibleQuery` 在隐藏时解除订阅，独占的在途请求经 AbortSignal 取消，同键可见消费者不受影响；切回按缓存状态读取。商品和销售筛选绑定自己的 TabPath，不能串用另一工作区 URL。具体实现、浏览器验证及已知边界见 `docs/operations-optimization-2026-09-12.md`。
 - 复用 DataTable、TableActionsMenu、QueryErrorState、finder、usePermission、useDirtyGuard、useInvalidate 等已有结构；keepAlive 表单在挂载/参数变化时重置，未保存内容有退出保护。
 - 桌面端判定使用运行时 `window.flowcubeDesktop`，不能用构建 flag 把浏览器误判成 Electron。
 - 系统品牌采用已确认的蓝底双曲线 F；官网、ERP/PDA 登录页、PDA 首页通过 `SystemBrand` 复用本地哈希资源。网页 favicon/触屏图标、桌面程序/安装器、Android 普通/圆形/自适应图标与启动屏由 `scripts/generate-brand-icons.cjs` 从 `docs/branding/flow-icon-approved.png` 导出。公司 Logo 仍只用于 ERP 顶栏/单据打印，保持公司图优先及文字回退，不混用。素材、生成方式与验收见 `docs/brand-icons-2026-09-07.md`。

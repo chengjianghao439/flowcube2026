@@ -1,3 +1,4 @@
+const { commitFulfillment } = require('../fulfillment/fulfillment.refresh')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { CONTAINER_STATUS, syncStockFromContainers, lockStockDimension, getStockProjection } = require('../../engine/containerEngine')
@@ -182,7 +183,7 @@ async function voidReceipt(taskId, operator, scopeWarehouseIds = null) {
       { containerCount: containers.length },
     )
 
-    await conn.commit()
+    await commitFulfillment(conn, 'inbound', taskId)
     return findById(taskId)
   } catch (e) {
     await conn.rollback()

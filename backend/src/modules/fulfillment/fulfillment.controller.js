@@ -3,6 +3,7 @@ const AppError = require('../../utils/AppError')
 const service = require('./fulfillment.service')
 const wrap = fn => async (req, res, next) => { try { return successResponse(res, await fn(req), '操作成功') } catch (error) { next(error) } }
 const key = req => String(req.headers['x-request-key'] || '')
+exports.refreshStatus = wrap(req => require('./fulfillment.refresh').getRefreshStatus(req.user))
 exports.list = wrap(req => service.listIssues(req.query, req.user))
 exports.get = wrap(req => service.getDocument(req.params.type, Number(req.params.id), req.user))
 exports.sync = wrap(req => service.syncDocument(req.params.type, Number(req.params.id), req.user))

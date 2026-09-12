@@ -1,3 +1,4 @@
+import { VirtualTableBody, VIRTUAL_TABLE_THRESHOLD } from '@/components/shared/VirtualTableBody'
 import KeepAliveSection from '@/components/shared/KeepAliveSection'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
@@ -33,6 +34,8 @@ import type { TableColumn } from '@/types'
 import type { Category } from '@/types/categories'
 import { readNullableIntParam, readStringParam, upsertSearchParams } from '@/lib/urlSearchParams'
 import { importStockApi } from '@/api/inventory'
+
+const inventoryRowKey = (row: InventoryOverviewItem) => row.id
 
 type Tab = 'overview' | 'logs'
 type OpType = 'outbound'
@@ -243,6 +246,22 @@ export default function InventoryPage() {
     }
   }
 
+  const renderInventoryRow = (row: InventoryOverviewItem) => (
+    <tr key={row.id} className={`border-b border-border/40 transition-colors hover:bg-muted/20 ${drawerItem?.id === row.id && drawerOpen ? 'bg-primary/5' : ''}`}>
+      <ProductIdentityCells product={row} /><td className="px-4 py-3">{row.unit || '—'}</td>
+      <td className="px-4 py-3 text-xs text-muted-foreground"><CategoryPathDisplay path={row.categoryPath} /></td>
+      <td className="px-4 py-3 text-muted-foreground">{row.warehouseName}</td>
+      <td className="px-4 py-3 text-right tabular-nums"><span className="font-medium">{formatQty(row.onHand)}</span></td>
+      <td className="px-4 py-3 text-right tabular-nums">{row.reserved > 0 ? <span className="font-medium text-amber-600">{formatQty(row.reserved)}</span> : <span className="text-muted-foreground">—</span>}</td>
+      <td className="px-4 py-3 text-right tabular-nums"><AvailableBadge available={row.available} onHand={row.onHand} /></td>
+      <td className="px-4 py-3 text-left text-xs text-muted-foreground">{formatDisplayDateTime(row.updatedAt)}</td>
+      <td className="px-4 py-3 text-left">
+        <Button size="sm" variant={drawerItem?.id === row.id && drawerOpen ? 'secondary' : 'ghost'}
+          className="h-7 px-2 text-xs" onClick={() => { setDrawerItem(row); setDrawerOpen(true) }}>查看条码</Button>
+      </td>
+    </tr>
+  )
+
   return (
     <div className="space-y-4">
       <PageHeader title="库存管理" description="库存总览与出入库记录；采购入库请走「收货订单」上架后计入库存" actions={
@@ -295,7 +314,8 @@ export default function InventoryPage() {
           {/* 库存表格 */}
           <div className="card-base overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1500px] text-sm">
+              <table aria-rowcount={list.length + 1} className="w-full table-fixed text-sm" style={{ minWidth: 1816 }}>
+                <colgroup>{[160, 160, 144, 224, 112, 80, 180, 112, 112, 96, 96, 144, 96].map((width, index) => <col key={index} style={{ width }} />)}</colgroup>
                 <thead>
                   <tr className="border-b bg-muted/30">
                     {[
@@ -314,29 +334,15 @@ export default function InventoryPage() {
                     ))}
                   </tr>
                 </thead>
-                <tbody>
+                {!overviewLoading && list.length >= VIRTUAL_TABLE_THRESHOLD ? <VirtualTableBody data={list} columns={13} getRowKey={inventoryRowKey} renderRow={renderInventoryRow} /> : <tbody>
                   {overviewLoading ? (
                     <tr><td colSpan={13} className="py-16 text-center text-sm text-muted-foreground">加载中…</td></tr>
                   ) : list.length === 0 ? (
                     <tr><td colSpan={13} className="py-16 text-center text-sm text-muted-foreground">暂无库存数据</td></tr>
                   ) : (
-                    list.map((row: InventoryOverviewItem) => (
-                      <tr key={row.id} className={`border-b border-border/40 transition-colors hover:bg-muted/20 ${drawerItem?.id === row.id && drawerOpen ? 'bg-primary/5' : ''}`}>
-                        <ProductIdentityCells product={row} /><td className="px-4 py-3">{row.unit || '—'}</td>
-                        <td className="px-4 py-3 text-xs text-muted-foreground"><CategoryPathDisplay path={row.categoryPath} /></td>
-                        <td className="px-4 py-3 text-muted-foreground">{row.warehouseName}</td>
-                        <td className="px-4 py-3 text-right tabular-nums"><span className="font-medium">{formatQty(row.onHand)}</span></td>
-                        <td className="px-4 py-3 text-right tabular-nums">{row.reserved > 0 ? <span className="font-medium text-amber-600">{formatQty(row.reserved)}</span> : <span className="text-muted-foreground">—</span>}</td>
-                        <td className="px-4 py-3 text-right tabular-nums"><AvailableBadge available={row.available} onHand={row.onHand} /></td>
-                        <td className="px-4 py-3 text-left text-xs text-muted-foreground">{formatDisplayDateTime(row.updatedAt)}</td>
-                        <td className="px-4 py-3 text-left">
-                          <Button size="sm" variant={drawerItem?.id === row.id && drawerOpen ? 'secondary' : 'ghost'}
-                            className="h-7 px-2 text-xs" onClick={() => { setDrawerItem(row); setDrawerOpen(true) }}>查看条码</Button>
-                        </td>
-                      </tr>
-                    ))
+                    list.map(renderInventoryRow)
                   )}
-                </tbody>
+                </tbody>}
               </table>
             </div>
           </div>
@@ -347,7 +353,7 @@ export default function InventoryPage() {
       </KeepAliveSection>
 
       <KeepAliveSection active={tab === 'logs'} className="space-y-4">
-          <DataTable columns={logCols} data={logs?.list ?? []} loading={logLoading} rowKey="id" />
+          <DataTable virtualized columns={logCols} data={logs?.list ?? []} loading={logLoading} rowKey="id" />
 
           <ListSummary total={logsTotal} unit="条" />
       </KeepAliveSection>

@@ -36,3 +36,12 @@ test('切换到其他菜单不重新渲染未变化的商品表格', async () =>
     act(() => root.unmount()); query.clear(); host.remove()
   }
 })
+
+test('后台商品页筛选绑定自己的工作区，不串用当前销售页的查询条件', async () => {
+  const { TabPathContext } = await import('@/components/layout/TabPathContext')
+  const host = document.createElement('div'); const root = createRoot(host); const query = new QueryClient()
+  try {
+    await act(async () => root.render(<QueryClientProvider client={query}><MemoryRouter initialEntries={['/sale?keyword=销售条件']}><TabPathContext.Provider value="/products?keyword=商品条件"><ProductsPage /></TabPathContext.Provider></MemoryRouter></QueryClientProvider>))
+    expect(host.textContent).toContain('商品条件'); expect(host.textContent).not.toContain('销售条件')
+  } finally { act(() => root.unmount()); query.clear() }
+})

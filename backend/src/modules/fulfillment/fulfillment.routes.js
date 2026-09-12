@@ -9,6 +9,7 @@ const { definition } = require('./fulfillment.access')
 const router = Router()
 router.use(authMiddleware, loadRolePermissions)
 router.get('/issues', controller.list)
+router.get('/refresh-status', controller.refreshStatus)
 router.use('/:type/:id', (req, res, next) => {
   try { definition(req.params.type); if (!/^[1-9]\d*$/.test(req.params.id) || !Number.isSafeInteger(Number(req.params.id))) throw new AppError('无效单据编号', 400); next() } catch (error) { next(error) }
 })

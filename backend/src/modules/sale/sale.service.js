@@ -1,3 +1,4 @@
+const { commitFulfillment, captureDimensions } = require('../fulfillment/fulfillment.refresh')
 const { normalizeProduct } = require('../logistics/shipping-products')
 const { snapshotItemCommitments, restoreItemCommitments } = require('../fulfillment/fulfillment.sale-items')
 const { loadSalePresentation } = require('./sale.presentation')
@@ -792,7 +793,7 @@ async function create({ customerId, warehouseId, remark,
       resourceType: 'sale_order',
       resourceId: orderId,
     })
-    await conn.commit()
+    await commitFulfillment(conn, 'sale', orderId)
     return result
   } catch(e){ await conn.rollback(); throw e }
   finally { conn.release() }
@@ -806,6 +807,7 @@ async function update(id, { customerId, warehouseId, remark,
     await conn.beginTransaction()
     const orderRow = await lockStatusRow(conn, { table: 'sale_orders', id, columns: 'id, status, warehouse_id', entityName: '销售单' })
     assertInScope(scopeWarehouseIds, orderRow.warehouse_id, '销售单')
+    const previousDimensions = await captureDimensions(conn, 'sale', id)
     assertStatusAction('sale', 'edit', orderRow.status)
     if (!items || !items.length) throw new AppError('至少需要一条商品明细', 400)
     const hydrated = await hydrateSaleInput(conn, { customerId, warehouseId, carrierId, shippingProduct, items, scopeWarehouseIds })
@@ -836,7 +838,7 @@ async function update(id, { customerId, warehouseId, remark,
     await restoreItemCommitments(conn, id, deliverySnapshot)
     await appendSaleEvent(conn, id, 'updated', '编辑订单', `现有 ${items.length} 条明细`, operator)
     await buildPricingEvents(conn, id, folded, operator)
-    await conn.commit()
+    await commitFulfillment(conn, 'sale', id, previousDimensions)
   } catch (e) { await conn.rollback(); throw e }
   finally { conn.release() }
 }
@@ -866,6 +868,7 @@ async function requestAdjustment(id, { items, operator, requestKey, scopeWarehou
       entityName: '销售单',
     })
     assertInScope(scopeWarehouseIds, orderRow.warehouse_id, '销售单')
+    const previousDimensions = await captureDimensions(conn, 'sale', id)
     assertStatusAction('sale', 'adjust', orderRow.status)
     const hydrated = await hydrateSaleInput(conn, {
       customerId: orderRow.customer_id,
@@ -892,7 +895,7 @@ async function requestAdjustment(id, { items, operator, requestKey, scopeWarehou
     if (!orderRow.task_id) {
       // 占库期改单：状态 2（已占库）/6（部分占库）尚未发货、无仓库任务，改单不再依赖 WMS 任务联动。
       // 保留已占量：改数量时已占量夹到新数量内；删商品释放其已占；加商品占 0。重建明细后重算状态 2/6。
-      return await adjustReservedWithinTransaction(conn, { orderRow, items, operator, requestState })
+      return await adjustReservedWithinTransaction(conn, { orderRow, items, operator, requestState, previousDimensions })
     }
 
     const [executionTasks] = await conn.query(
@@ -1032,7 +1035,7 @@ async function requestAdjustment(id, { items, operator, requestKey, scopeWarehou
       await completeOperationRequest(conn, requestState, {
         data: result, message: '修改成功', resourceType: 'sale_order', resourceId: id,
       })
-      await conn.commit()
+      await commitFulfillment(conn, 'sale', id, previousDimensions)
       return result
     }
 
@@ -1108,7 +1111,7 @@ async function requestAdjustment(id, { items, operator, requestKey, scopeWarehou
       resourceType: 'sale_order',
       resourceId: id,
     })
-    await conn.commit()
+    await commitFulfillment(conn, 'sale', id, previousDimensions)
     return result
   } catch (e) { await conn.rollback(); throw e }
   finally { conn.release() }
@@ -1122,7 +1125,7 @@ async function requestAdjustment(id, { items, operator, requestKey, scopeWarehou
 //   - 加商品：占 0（改完单后仍需用户去占库弹窗补占）。
 // 明细行整体删除重建（同 update() 模式），重建时按 (product, warehouse) 聚合后的数量与
 // 已占量对齐；改完重新统计所有行 reserved_qty 是否全满 → 已占库(2)/部分占库(6)。
-async function adjustReservedWithinTransaction(conn, { orderRow, items, operator, requestState }) {
+async function adjustReservedWithinTransaction(conn, { orderRow, items, operator, requestState, previousDimensions }) {
   const id = Number(orderRow.id)
   const folded = await foldEntryItems(conn, items)
   if (!folded.length) throw new AppError('至少需要一条商品明细', 400)
@@ -1205,7 +1208,7 @@ async function adjustReservedWithinTransaction(conn, { orderRow, items, operator
   await completeOperationRequest(conn, requestState, {
     data: result, message: '修改成功', resourceType: 'sale_order', resourceId: id,
   })
-  await conn.commit()
+  await commitFulfillment(conn, 'sale', id, previousDimensions)
   return result
 }
 
@@ -1336,6 +1339,9 @@ async function reserveStock(id, operator, items = [], { confirmCreditOverride = 
           { creditLimit: limit, used, thisOrder, overBy, via: approvedOverrideId != null ? 'approved_override' : 'manual_override', approvedOverrideId })
       }
     }
+
+    // RR普通SELECT会建立快照，必须在客户行锁和授信读取之后捕获旧维度。
+    const previousDimensions = await captureDimensions(conn, 'sale', id)
 
     // 按 items 里的 id 精确取本次要占的明细行，并用 items 里的 qty/仓库覆盖
     const [allItemRows] = await conn.query('SELECT * FROM sale_order_items WHERE order_id = ? ORDER BY id', [id])
@@ -1475,7 +1481,7 @@ async function reserveStock(id, operator, items = [], { confirmCreditOverride = 
       resourceType: 'sale_order',
       resourceId: id,
     })
-    await conn.commit()
+    await commitFulfillment(conn, 'sale', id, previousDimensions)
   } catch (e) { await conn.rollback(); throw e }
   finally { conn.release() }
 }
@@ -1594,7 +1600,7 @@ async function ship(id, operator, { itemIds = null, items = null, scopeWarehouse
       resourceType: 'sale_order',
       resourceId: id,
     })
-    await conn.commit()
+    await commitFulfillment(conn, 'sale', id)
   } catch (e) { await conn.rollback(); throw e }
   finally { conn.release() }
 }
@@ -1679,7 +1685,7 @@ async function releaseStock(id, operator, items = null, scopeWarehouseIds = null
       resourceType: 'sale_order',
       resourceId: id,
     })
-    await conn.commit()
+    await commitFulfillment(conn, 'sale', id)
   } catch (e) { await conn.rollback(); throw e }
   finally { conn.release() }
 }
@@ -1700,6 +1706,7 @@ async function cancel(id, operator, scopeWarehouseIds = null, requestKey = null)
     }
     const orderRow = await lockStatusRow(conn, { table: 'sale_orders', id, entityName: '销售单' })
     assertInScope(scopeWarehouseIds, orderRow.warehouse_id, '销售单')
+    const previousDimensions = await captureDimensions(conn, 'sale', id)
     const rule = assertStatusAction('sale', 'cancel', orderRow.status)
 
     if (Number(orderRow.status) === 2 || Number(orderRow.status) === 6) {
@@ -1789,7 +1796,7 @@ async function cancel(id, operator, scopeWarehouseIds = null, requestKey = null)
         await completeOperationRequest(conn, requestState, {
           data: null, message: '已关闭剩余未发', resourceType: 'sale_order', resourceId: id,
         })
-        await conn.commit()
+        await commitFulfillment(conn, 'sale', id, previousDimensions)
         return
       }
     }
@@ -1805,7 +1812,7 @@ async function cancel(id, operator, scopeWarehouseIds = null, requestKey = null)
     await completeOperationRequest(conn, requestState, {
       data: null, message: '已取消', resourceType: 'sale_order', resourceId: id,
     })
-    await conn.commit()
+    await commitFulfillment(conn, 'sale', id, previousDimensions)
   } catch (e) {
     await conn.rollback()
     throw e
@@ -1842,7 +1849,7 @@ async function deleteOrder(id, operator, scopeWarehouseIds = null, requestKey = 
     await completeOperationRequest(conn, requestState, {
       data: null, message: '订单删除成功', resourceType: 'sale_order', resourceId: id,
     })
-    await conn.commit()
+    await commitFulfillment(conn, 'sale', id)
   } catch (e) {
     await conn.rollback()
     throw e

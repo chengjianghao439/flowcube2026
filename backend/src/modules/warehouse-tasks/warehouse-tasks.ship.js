@@ -1,3 +1,4 @@
+const { commitFulfillment } = require('../fulfillment/fulfillment.refresh')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { moveStock, MOVE_TYPE } = require('../../engine/inventoryEngine')
@@ -238,7 +239,7 @@ async function ship(id, operator, saleData, { requestKey, scopeWarehouseIds = nu
   try {
     await conn.beginTransaction()
     const payload = await shipWithinTransaction(conn, id, operator, saleData, { requestKey, scopeWarehouseIds, pdaWarehouseId })
-    await conn.commit()
+    await commitFulfillment(conn, 'warehouse', id)
     return payload
   } catch (e) { await conn.rollback(); throw e }
   finally { conn.release() }

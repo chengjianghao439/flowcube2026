@@ -7,7 +7,7 @@ export const getProductsForFinderApi = async (p: ProductFinderParams) =>
   apiClient.get<PaginatedData<ProductFinderResult>>('/products/finder', { params: p })
 
 export const getProductApi        = async (id: number) => apiClient.get<Product>(`/products/${id}`)
-export const getProductsApi       = async (p: QueryParams) => apiClient.get<PaginatedData<Product>>('/products', { params: p })
+export const getProductsApi       = async (p: QueryParams, signal?: AbortSignal) => apiClient.get<PaginatedData<Product>>('/products', { params: p, signal })
 export const createProductApi     = async (d: CreateProductParams) => apiClient.post<{id:number}>('/products', d)
 export const updateProductApi     = async (id:number, d: UpdateProductParams) => { await apiClient.put(`/products/${id}`, d) }
 export const deleteProductApi     = async (id:number, config?: Parameters<typeof apiClient.delete>[1]) => { await apiClient.delete(`/products/${id}`, config) }

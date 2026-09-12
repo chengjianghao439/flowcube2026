@@ -1,3 +1,4 @@
+const { commitFulfillment } = require('../fulfillment/fulfillment.refresh')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { assertInScope } = require('../../utils/warehouseScope')
@@ -282,7 +283,7 @@ async function cancel(id, options = {}) {
           eventType: WT_EVENT.CANCEL_REQUESTED,
         })
       }
-      if (manageConn) await conn.commit()
+      if (manageConn) await commitFulfillment(conn, 'warehouse', id)
       return
     }
 
@@ -349,7 +350,7 @@ async function cancel(id, options = {}) {
         eventType: WT_EVENT.TASK_CANCELLED,
       })
     }
-    if (manageConn) await conn.commit()
+    if (manageConn) await commitFulfillment(conn, 'warehouse', id)
   } catch (e) {
     if (manageConn) await conn.rollback()
     throw e

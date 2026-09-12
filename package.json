@@ -75,6 +75,7 @@
     "smoke:round2-payroll": "node tests/round2-payroll.smoke.test.js",
     "smoke:round2-runtime": "node tests/round2-runtime.smoke.test.js",
     "test:round2-runtime": "node --test tests/round2-runtime.test.js tests/round2-restore.test.js tests/round2-observability.test.js",
+    "test:fulfillment-refresh": "node --test tests/fulfillment-refresh.test.js",
     "test:fulfillment": "node --test tests/fulfillment.test.js",
     "smoke:fulfillment": "node tests/fulfillment.smoke.test.js",
     "test:procurement-planning": "node --test tests/procurement-planning.test.js",

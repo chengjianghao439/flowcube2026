@@ -46,6 +46,8 @@ function startWorker(name, fn, intervalMs) {
 function startScheduler() {
   const { runFulfillmentSync } = require('./modules/fulfillment/fulfillment.worker')
   startWorker('order-fulfillment', runFulfillmentSync, 30 * 1000)
+  const { runFulfillmentRefresh } = require('./modules/fulfillment/fulfillment.refresh')
+  startWorker('order-fulfillment-refresh', runFulfillmentRefresh, 1000)
 
   // 每 6 小时清理超过 7 天的 operation_requests 记录
   startCleanupSweeper({ intervalMs: 6 * 60 * 60 * 1000, ttlDays: 7 })

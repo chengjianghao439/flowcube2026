@@ -1,3 +1,4 @@
+const { commitFulfillment } = require('../fulfillment/fulfillment.refresh')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { syncStockFromContainers, lockStockDimension, CONTAINER_STATUS, SOURCE_TYPE } = require('../../engine/containerEngine')
@@ -317,7 +318,7 @@ async function putaway(taskId, { containerId, locationId, deviatedFromSuggestion
       resourceType: 'inbound_task',
       resourceId: taskId,
     })
-    await conn.commit()
+    await commitFulfillment(conn, 'inbound', taskId)
     return payload
   } catch (e) {
     await conn.rollback()

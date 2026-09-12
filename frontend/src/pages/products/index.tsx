@@ -1,3 +1,5 @@
+import { TabPathContext } from '@/components/layout/TabPathContext'
+import { useContext } from 'react'
 import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
 import { ImportSteps } from '@/components/shared/ImportSteps'
 import { memo, useCallback, useLayoutEffect, useState, useRef, useMemo } from 'react'
@@ -46,7 +48,9 @@ export default function ProductsPage() {
   const navigateRef = useRef(navigate)
   useLayoutEffect(() => { navigateRef.current = navigate }, [navigate])
   const navigateFromTable = useCallback((path: string) => navigateRef.current(path), [])
-  const [searchParams, setSearchParams] = useSearchParams()
+  const tabPath = useContext(TabPathContext)
+  const [locationParams, setSearchParams] = useSearchParams()
+  const searchParams = tabPath ? new URLSearchParams(tabPath.split('?')[1] || '') : locationParams
   const keyword = readStringParam(searchParams, 'keyword')
   const catFilter = readNullableIntParam(searchParams, 'categoryId')
   const statusFilter = readStringParam(searchParams, 'status')
@@ -212,7 +216,7 @@ export default function ProductsPage() {
         </div>
       )}
 
-      <ProductsTable columns={cols} data={data?.list ?? EMPTY_PRODUCTS} loading={isLoading} rowKey="id" />
+      <ProductsTable virtualized columns={cols} data={data?.list ?? EMPTY_PRODUCTS} loading={isLoading} rowKey="id" />
       <ListSummary total={total} unit="件" />
 
       {/* 批量导入弹窗 */}

@@ -1,7 +1,7 @@
 const { pool } = require('../../config/db')
 const { definitions, eligibleOwners } = require('./fulfillment.access')
 const { detect } = require('./fulfillment.detect')
-const { event } = require('./fulfillment.service')
+const { event } = require('./fulfillment.events')
 
 async function syncDocument(type, id) {
   const conn = await pool.getConnection()

@@ -1,3 +1,4 @@
+import { useVisibleQuery } from './useVisibleQuery'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { getStockApi, getLogsApi, inboundApi, outboundApi, adjustApi, getInventoryOverviewApi, getInventoryContainersApi } from '@/api/inventory'
 import { useInvalidate } from '@/hooks/useInvalidate'
@@ -7,7 +8,7 @@ import type { StockChangeParams, InventoryOverviewParams } from '@/types/invento
 const KS = 'inventory-stock'
 const KL = 'inventory-logs'
 export const useStock = (p: QueryParams) => useQuery({ queryKey: [KS, p], queryFn: () => getStockApi(p) })
-export const useLogs  = (p: QueryParams, enabled = true) => useQuery({ enabled, queryKey: [KL, p], queryFn: () => getLogsApi(p) })
+export const useLogs  = (p: QueryParams, enabled = true) => useVisibleQuery({ enabled, queryKey: [KL, p], queryFn: ({ signal }) => getLogsApi(p, signal) })
 
 export function useInbound() {
   const invalidate = useInvalidate()
@@ -24,7 +25,7 @@ export function useAdjust() {
 
 const KO = 'inventory-overview'
 export const useInventoryOverview = (p: InventoryOverviewParams, enabled = true) =>
-  useQuery({ enabled, queryKey: [KO, p], queryFn: () => getInventoryOverviewApi(p), placeholderData: prev => prev })
+  useVisibleQuery({ enabled, queryKey: [KO, p], queryFn: ({ signal }) => getInventoryOverviewApi(p, signal), placeholderData: prev => prev })
 
 const KC = 'inventory-containers'
 export const useInventoryContainers = (productId: number | null, warehouseId: number | null) =>

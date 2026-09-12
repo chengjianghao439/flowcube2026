@@ -1,3 +1,4 @@
+const { commitFulfillment, captureDimensions } = require('../fulfillment/fulfillment.refresh')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { generateDailyCode } = require('../../utils/codeGenerator')
@@ -240,7 +241,7 @@ async function create({ supplierId, supplierName, warehouseId, warehouseName, ex
       resourceType: 'purchase_order',
       resourceId: result.id,
     })
-    await conn.commit()
+    await commitFulfillment(conn, 'purchase', result.id)
     return result
   } catch(e){ await conn.rollback(); throw e }
   finally { conn.release() }
@@ -255,6 +256,7 @@ async function update(id, { supplierId, supplierName, warehouseId, warehouseName
     // 改单同时限制目标仓：不能把单据「搬」到 scope 之外的仓库
     assertInScope(scopeWarehouseIds, warehouseId, '采购单')
     assertStatusAction('purchase', 'edit', row.status)
+    const previousDimensions = await captureDimensions(conn, 'purchase', id)
     await assertNoActiveSaleBinding(conn, id, '修改采购明细')
     const folded = []
     for (const item of items) folded.push(await foldEntryItem(conn, item))
@@ -270,7 +272,7 @@ async function update(id, { supplierId, supplierName, warehouseId, warehouseName
         [id,item.productId,item.productCode,item.productName,item.unit,item.entryUnit,item.articleNumber||null,item.spec||null,item.color||null,item.quantity,item.entryQty,item.conversionRate,item.unitPrice,item.amount,item.remark||null]
       )
     }
-    await conn.commit()
+    await commitFulfillment(conn, 'purchase', id, previousDimensions)
   } catch(e){ await conn.rollback(); throw e }
   finally { conn.release() }
   const saved = await findById(id)
@@ -341,7 +343,7 @@ async function closeRemaining(id, operator, scopeWarehouseIds = null) {
       fromStatus: rule.from, toStatus: rule.to, entityName: '采购单',
       extraSet: { closed_reason: 'short_close' },
     })
-    await conn.commit()
+    await commitFulfillment(conn, 'purchase', id)
   } catch(e){ await conn.rollback(); throw e }
   finally { conn.release() }
 }
@@ -369,7 +371,7 @@ async function confirm(id, operator, scopeWarehouseIds = null) {
       toStatus,
       entityName: '采购单',
     })
-    await conn.commit()
+    await commitFulfillment(conn, 'purchase', id)
     return { needApproval, status: toStatus, approved: !needApproval }
   } catch (e) {
     await conn.rollback()
@@ -422,7 +424,7 @@ async function withdrawConfirm(id, operator, scopeWarehouseIds = null) {
       toStatus: rule.to,
       entityName: '采购单',
     })
-    await conn.commit()
+    await commitFulfillment(conn, 'purchase', id)
   } catch (e) {
     await conn.rollback()
     throw e
@@ -454,7 +456,7 @@ async function approve(id, operator, scopeWarehouseIds = null) {
       toStatus: rule.to,
       entityName: '采购单',
     })
-    await conn.commit()
+    await commitFulfillment(conn, 'purchase', id)
     return { id: Number(id), orderNo: orderRow.order_no, status: 2 }
   } catch (e) {
     await conn.rollback()
@@ -486,7 +488,7 @@ async function reject(id, { reason }, operator, scopeWarehouseIds = null) {
       toStatus: rule.to,
       entityName: '采购单',
     })
-    await conn.commit()
+    await commitFulfillment(conn, 'purchase', id)
     return { id: Number(id), orderNo: orderRow.order_no, status: 1 }
   } catch (e) {
     await conn.rollback()
@@ -585,7 +587,7 @@ async function cancel(id, operator, scopeWarehouseIds = null) {
       toStatus: cancelRule.to,
       entityName: '采购单',
     })
-    await conn.commit()
+    await commitFulfillment(conn, 'purchase', id)
   } catch (e) {
     await conn.rollback()
     throw e

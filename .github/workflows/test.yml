@@ -102,7 +102,7 @@ jobs:
         run: npm --prefix frontend run test:unit
 
       - name: 履约与采购建议计算回归
-        run: npm run test:fulfillment && npm run test:procurement-planning
+        run: npm run test:fulfillment && npm run test:fulfillment-refresh && npm run test:procurement-planning
 
   regression:
     name: 回归门禁（smoke + 集成）

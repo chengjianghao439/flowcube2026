@@ -1,3 +1,4 @@
+const { commitFulfillment } = require('../fulfillment/fulfillment.refresh')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { createContainer, CONTAINER_STATUS, SOURCE_TYPE } = require('../../engine/containerEngine')
@@ -78,7 +79,7 @@ async function createFromPoId(purchaseOrderId, scopeWarehouseIds = null) {
       purchaseOrderNo: order.orderNo,
       warehouseName: order.warehouseName,
     })
-    await conn.commit()
+    await commitFulfillment(conn, 'inbound', taskId)
     return { taskId, taskNo }
   } catch (e) {
     await conn.rollback()
@@ -183,7 +184,7 @@ async function createManualTask({ supplierId, supplierName, remark, items }, sco
       warehouseName,
     })
 
-    await conn.commit()
+    await commitFulfillment(conn, 'inbound', taskId)
     return { taskId, taskNo }
   } catch (e) {
     await conn.rollback()
@@ -223,7 +224,7 @@ async function submit(taskId, operator, scopeWarehouseIds = null) {
       operator,
       null,
     )
-    await conn.commit()
+    await commitFulfillment(conn, 'inbound', taskId)
     return findById(taskId)
   } catch (e) {
     await conn.rollback()
@@ -686,7 +687,7 @@ async function receive(taskId, payload, { userId, requestKey, pdaWarehouseId, sc
       resourceType: 'inbound_task',
       resourceId: taskId,
     })
-    await conn.commit()
+    await commitFulfillment(conn, 'inbound', taskId)
   } catch (e) {
     await conn.rollback()
     throw e
@@ -826,7 +827,7 @@ async function cancel(taskId, scopeWarehouseIds = null) {
       null,
       null,
     )
-    await conn.commit()
+    await commitFulfillment(conn, 'inbound', taskId)
   } catch (e) {
     await conn.rollback()
     throw e
@@ -877,7 +878,7 @@ async function closeReceiving(taskId, operator, scopeWarehouseIds = null) {
       operator ? { userId: operator.userId, realName: operator.realName } : null,
       null,
     )
-    await conn.commit()
+    await commitFulfillment(conn, 'inbound', taskId)
   } catch (e) {
     await conn.rollback()
     throw e

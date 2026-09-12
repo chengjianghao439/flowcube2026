@@ -4,6 +4,7 @@ import { withRequestKeyHeaders } from '@/lib/requestKey'
 export type FulfillmentType = 'sale' | 'purchase' | 'inbound' | 'transfer'
 export interface FulfillmentIssue {
   id: number; document_type: FulfillmentType; document_id: number; source: 'auto' | 'manual'; source_key: string
+  documentNo?: string | null; partyName?: string | null; warehouseName?: string | null
   title: string; reason: string; action_path: string; owner_id: number | null; ownerName: string | null
   status: 'open' | 'processing' | 'resolved'; due_at: string | null; result: string | null; version: number
   overdue: number; dueSoon: number; conditionActive?: boolean
@@ -23,7 +24,7 @@ export interface FulfillmentDocument {
 }
 export interface FulfillmentList extends PaginatedData<FulfillmentIssue> { summary: { open: number; mine: number; overdue: number; unassigned: number } }
 export const getFulfillment = (type: FulfillmentType, id: number, signal?: AbortSignal) => client.get<FulfillmentDocument>(`/fulfillment/${type}/${id}`, { signal, skipGlobalError: true })
-export const getFulfillmentIssues = (filter: string, summary = false, signal?: AbortSignal) => client.get<FulfillmentList>('/fulfillment/issues', { params: { filter, page: 1, pageSize: summary ? 1 : 200 }, listMode: summary ? 'summary' : undefined, signal, skipGlobalError: true })
+export const getFulfillmentIssues = (filter: string, summary = false, signal?: AbortSignal, options: { keyword?: string; documentType?: string } = {}) => client.get<FulfillmentList>('/fulfillment/issues', { params: { ...options, filter, page: 1, pageSize: summary ? 1 : 200 }, listMode: summary ? 'summary' : undefined, signal, skipGlobalError: true })
 export type FulfillmentCommand =
   | { action: 'sync' }
   | { action: 'dates'; itemId: number; date: string | null; processingDays: number | null; reason: string }

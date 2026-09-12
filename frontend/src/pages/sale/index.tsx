@@ -1,3 +1,5 @@
+import { TabPathContext } from '@/components/layout/TabPathContext'
+import { useContext } from 'react'
 import { OrderStatusFilter } from '@/components/shared/OrderStatusFilter'
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -49,7 +51,9 @@ const DEFAULT_RANGE_DAYS = 7
 // ─── 主页面 ───────────────────────────────────────────────────────────────────
 
 export default function SalePage() {
-  const [searchParams, setSearchParams] = useSearchParams()
+  const tabPath = useContext(TabPathContext)
+  const [locationParams, setSearchParams] = useSearchParams()
+  const searchParams = tabPath ? new URLSearchParams(tabPath.split('?')[1] || '') : locationParams
 
   // ── 当前生效的筛选（全部存于 URL 参数，刷新/分享可保留） ──
   const focus = readStringParam(searchParams, 'focus')
@@ -258,7 +262,7 @@ export default function SalePage() {
         </div>
       )}
 
-      {error ? <QueryErrorState error={error} onRetry={()=>void refetch()} /> : <DataTable
+      {error ? <QueryErrorState error={error} onRetry={()=>void refetch()} /> : <DataTable virtualized
         columns={columns}
         data={data?.list ?? []}
         loading={isLoading}

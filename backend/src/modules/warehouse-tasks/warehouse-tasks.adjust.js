@@ -1,3 +1,4 @@
+const { commitFulfillment } = require('../fulfillment/fulfillment.refresh')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
@@ -377,7 +378,7 @@ async function confirmPackageVoid(voidId, { operator, scopeWarehouseIds = null, 
   try {
     await conn.beginTransaction()
     const [[voidRow]] = await conn.query(
-      `SELECT v.id, wt.warehouse_id
+      `SELECT v.id, wt.id AS warehouse_task_id, wt.warehouse_id
        FROM sale_order_adjustment_package_voids v
        INNER JOIN sale_order_adjustment_items i ON i.id = v.adjustment_item_id
        INNER JOIN sale_order_adjustments soa ON soa.id = i.adjustment_id
@@ -401,7 +402,7 @@ async function confirmPackageVoid(voidId, { operator, scopeWarehouseIds = null, 
       [voidId],
     )
     const outcome = await checkAdjustmentClearedAndFinalize(conn, Number(row.adjustment_id), { operator })
-    await conn.commit()
+    await commitFulfillment(conn, 'warehouse', voidRow.warehouse_task_id)
     return outcome
   } catch (e) { await conn.rollback(); throw e }
   finally { conn.release() }
@@ -419,7 +420,7 @@ async function confirmContainerReturn(returnId, { targetLocationId = null, opera
   try {
     await conn.beginTransaction()
     const [[ret]] = await conn.query(
-      `SELECT r.*, wt.warehouse_id
+      `SELECT r.*, wt.id AS warehouse_task_id, wt.warehouse_id
        FROM sale_order_adjustment_container_returns r
        INNER JOIN sale_order_adjustment_items i ON i.id = r.adjustment_item_id
        INNER JOIN sale_order_adjustments soa ON soa.id = i.adjustment_id
@@ -467,7 +468,7 @@ async function confirmContainerReturn(returnId, { targetLocationId = null, opera
       [returnId],
     )
     const outcome = await checkAdjustmentClearedAndFinalize(conn, Number(row.adjustment_id), { operator })
-    await conn.commit()
+    await commitFulfillment(conn, 'warehouse', ret.warehouse_task_id)
     return outcome
   } catch (e) { await conn.rollback(); throw e }
   finally { conn.release() }

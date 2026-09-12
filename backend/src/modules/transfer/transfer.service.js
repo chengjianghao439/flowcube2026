@@ -1,3 +1,4 @@
+const { commitFulfillment, captureDimensions } = require('../fulfillment/fulfillment.refresh')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { MOVE_TYPE, writeInventoryLog } = require('../../engine/inventoryEngine')
@@ -122,7 +123,7 @@ async function create({ fromWarehouseId, fromWarehouseName, toWarehouseId, toWar
         totalQty: items.reduce((sum, item) => sum + Number(item.quantity || 0), 0),
       },
     })
-    await conn.commit()
+    await commitFulfillment(conn, 'transfer', r.insertId)
     return { id:r.insertId, orderNo }
   } catch(e){ await conn.rollback(); throw e } finally { conn.release() }
 }
@@ -139,10 +140,11 @@ async function update(id, { fromWarehouseId, fromWarehouseName, toWarehouseId, t
     // 改单同样受限：改完之后源仓/目标仓至少有一端仍要在自己的 scope 内
     assertTransferInScope(scopeWarehouseIds, fromWarehouseId, toWarehouseId)
     assertStatusAction('transfer', 'edit', row.status)
+    const previousDimensions = await captureDimensions(conn, 'transfer', id)
     await conn.query(`UPDATE transfer_orders SET from_warehouse_id=?, from_warehouse_name=?, to_warehouse_id=?, to_warehouse_name=?, remark=? WHERE id=?`,[fromWarehouseId,fromWarehouseName,toWarehouseId,toWarehouseName,remark||null,id])
     await conn.query('DELETE FROM transfer_order_items WHERE order_id=?', [id])
     for(const item of items) await conn.query(`INSERT INTO transfer_order_items (order_id,product_id,product_code,product_name,unit,article_number,spec,color,quantity,remark) VALUES (?,?,?,?,?,?,?,?,?,?)`,[id,item.productId,item.productCode,item.productName,item.unit,item.articleNumber||null,item.spec||null,item.color||null,item.quantity,item.remark||null])
-    await conn.commit()
+    await commitFulfillment(conn, 'transfer', id, previousDimensions)
   } catch(e){ await conn.rollback(); throw e } finally { conn.release() }
   return findById(id)
 }
@@ -193,7 +195,7 @@ async function confirm(id, operator = null, scopeWarehouseIds = null) {
         totalQty: itemRows.reduce((sum, row) => sum + Number(row.quantity || 0), 0),
       },
     })
-    await conn.commit()
+    await commitFulfillment(conn, 'transfer', id)
   } catch (e) {
     await conn.rollback()
     throw e
@@ -329,7 +331,7 @@ async function scanOut(id, { containerBarcode }, operator, requestKey, scopeWare
 
     const result = { transferId: Number(id), containerBarcode: c.barcode, productId: c.product_id, productName: c.product_name, qty }
     await completeOperationRequest(conn, requestState, { data: result, message: '出库成功', resourceType: 'transfer_order', resourceId: Number(id) })
-    await conn.commit()
+    await commitFulfillment(conn, 'transfer', id)
     return result
   } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
 }
@@ -439,7 +441,7 @@ async function scanIn(id, { containerBarcode, locationId }, operator, requestKey
 
     const result = { transferId: Number(id), containerBarcode: c.barcode, productId: c.product_id, productName: c.product_name, qty, completed }
     await completeOperationRequest(conn, requestState, { data: result, message: completed ? '调拨完成' : '入库成功', resourceType: 'transfer_order', resourceId: Number(id) })
-    await conn.commit()
+    await commitFulfillment(conn, 'transfer', id)
     return result
   } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
 }
@@ -468,7 +470,7 @@ async function cancel(id, operator = null, scopeWarehouseIds = null) {
       operatorName: operator?.realName ?? null,
       requestId: getRequestId(),
     })
-    await conn.commit()
+    await commitFulfillment(conn, 'transfer', id)
   } catch (e) {
     await conn.rollback()
     throw e
@@ -530,7 +532,7 @@ async function forceCloseInTransit(id, operator, { reason } = {}, scopeWarehouse
         voidedContainers: containers.map(c => ({ id: c.id, barcode: c.barcode, productId: c.product_id, qty: Number(c.remaining_qty) })),
       },
     })
-    await conn.commit()
+    await commitFulfillment(conn, 'transfer', id)
   } catch (e) {
     await conn.rollback()
     throw e

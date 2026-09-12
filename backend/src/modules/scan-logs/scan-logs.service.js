@@ -1,3 +1,4 @@
+const { commitFulfillment } = require('../fulfillment/fulfillment.refresh')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { lockContainer, CONTAINER_STATUS } = require('../../engine/containerEngine')
@@ -476,7 +477,7 @@ async function createCancelReturnScanLog({
       resourceType: 'scan_log',
       resourceId: ins.insertId,
     })
-    await conn.commit()
+    await commitFulfillment(conn, 'warehouse', taskId)
     return payload
   } catch (e) {
     await conn.rollback()
@@ -560,7 +561,7 @@ async function createCancelReturnBoxScanLog({
       resourceType: 'scan_log',
       resourceId: pkg.id,
     })
-    await conn.commit()
+    await commitFulfillment(conn, 'warehouse', taskId)
     return payload
   } catch (e) {
     await conn.rollback()
