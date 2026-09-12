@@ -21,4 +21,33 @@
 
 CUA 在本候选独立本地预览中确认采用版官网布局、五场景切换、0.9.15 更新摘要和真实登录入口；未登录或写开发数据，验证页已关闭。模块数据库专项证据见此前同源码回归文档；正式 CI 将重新执行同 SHA 测试与生产页面门禁。
 
-CI 与生产产物尚待此次推送后的实际运行结果，不以本地通过推断发布成功。
+发布已完成。业务发布提交和 tag `v0.9.15` 均为 `d3fc189e342dec2b2e07d3005ee8e7a57c7701cc`。以下均核对同一 SHA：
+
+| 工作流 | 结果 | 运行记录 |
+|---|---|---|
+| Tests（13 jobs） | success | [34709047081](https://github.com/chengjianghao439/flowcube2026/actions/runs/34709047081) |
+| Security Scan（5 jobs） | success | [34709047104](https://github.com/chengjianghao439/flowcube2026/actions/runs/34709047104) |
+| Deploy Browser App | success | [34709047074](https://github.com/chengjianghao439/flowcube2026/actions/runs/34709047074) |
+| Windows tag 正式发布 | success | [34709067739](https://github.com/chengjianghao439/flowcube2026/actions/runs/34709067739) |
+| Build PDA APK | success | [34709047071](https://github.com/chengjianghao439/flowcube2026/actions/runs/34709047071) |
+
+Windows main 验证构建 34709047128 亦成功，但它不作为正式安装包发布依据。
+
+服务器发布日志确认所有迁移已经执行、无需新增更新，页面烟雾检查和对账回跳检查通过。经本机已配置的 `flowcube-prod` SSH 别名只读核对，前后端镜像 revision 都为上述 SHA，后端 package 版本为 0.9.15；公网 health=ok、ready=ready。此前直接 IP 未选择项目密钥的一次 SSH 失败不作为生产证明。
+
+## 安装包核验
+
+`/latest.json` 与 `/api/app-update/latest` 均为 0.9.15，指向版本化 Windows 安装包；GitHub Release 为正式发布、非 draft/prerelease。PDA 清单为 0.9.15 / 123、available=true。
+
+| 产物 | 实际下载字节数 | SHA-256 |
+|---|---:|---|
+| Windows | 112357898 | `6b9aab7e880cc259f247c5a990da22da2508e4ae7645f75f357f48b90e2871af` |
+| PDA APK | 15013526 | `1a635dea6a2f96532579fe930de248f6ee6c6066b933cde922b6a7a6dba8ee02` |
+
+从公网完整读取文件并计算摘要，与各自清单相符。没有在本机安装 EXE/APK，也未进行真机升级、扫描或实体打印验收；Windows 继续既有未签名策略，未声称拥有代码签名或免 SmartScreen 提示。
+
+## 收尾
+
+所有待提交业务改动已整合进主线，签名功能按用户明确指令移除并保留本机恢复归档。主目录新增列表依赖已按 lock 安装；原开发服务保留，本次 5189 验证服务和临时浏览器页已关闭，发布工作树保持专用 codex 分支，不占用 main。
+
+本记录为发布后纯文档补充，单独提交；业务部署及安装包证据仍以已完成全套门禁的 d3fc189 为准，不把文档提交冒充新的业务构建。
