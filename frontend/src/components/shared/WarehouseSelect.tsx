@@ -29,7 +29,7 @@ export function WarehouseSelect({
 
   return (
     <Select
-      value={value != null ? String(value) : '__all__'}
+      value={value != null ? String(value) : allowClear ? '__all__' : ''}
       onValueChange={v => {
         if (v === '__all__') { onChange(null, ''); return }
         const id = Number(v)

@@ -284,6 +284,9 @@ async function create({ taskIds, remark, priority = 2 }, scopeWarehouseIds = nul
       [uniqueTaskIds],
     )
 
+    // 先验证每个已查到任务的仓库，再返回状态/绑定信息，避免越仓请求泄漏任务或波次编号。
+    for (const task of tasks) assertInScope(scopeWarehouseIds, task.warehouse_id, '波次')
+
     if (tasks.length !== uniqueTaskIds.length) {
       throw new AppError('部分任务不存在', 400)
     }
@@ -340,12 +343,18 @@ async function create({ taskIds, remark, priority = 2 }, scopeWarehouseIds = nul
       )
     }
 
-    // 汇总商品：查询所有任务的明细
+    // 同商品主档可能改名，成员快照仍保留原值；按商品合计，使用最早明细的显示快照。
+    // 波次行唯一键是 wave_id/product_id，不能按名称或编码再分组。
     const [allItems] = await conn.query(
-      `SELECT product_id, product_code, product_name, unit, SUM(required_qty) AS total_qty
-       FROM warehouse_task_items
-       WHERE task_id IN (?)
-       GROUP BY product_id, product_code, product_name, unit`,
+      `SELECT i.product_id, i.product_code, i.product_name, i.unit, g.total_qty
+       FROM (
+         SELECT product_id, MIN(id) AS snapshot_item_id, SUM(required_qty) AS total_qty
+         FROM warehouse_task_items
+         WHERE task_id IN (?)
+         GROUP BY product_id
+       ) g
+       JOIN warehouse_task_items i ON i.id = g.snapshot_item_id
+       ORDER BY i.product_id ASC`,
       [uniqueTaskIds],
     )
 
@@ -410,7 +419,7 @@ async function finishPicking(id, scopeWarehouseIds = null) {
       `SELECT wt.id AS task_id, wt.status
        FROM picking_wave_tasks pwt
        JOIN warehouse_tasks wt ON wt.id = pwt.task_id
-       WHERE pwt.wave_id = ? ORDER BY pwt.id ASC`,
+       WHERE pwt.wave_id = ? ORDER BY wt.id ASC FOR UPDATE`,
       [id],
     )
     for (const t of waveTasks) {
@@ -446,17 +455,28 @@ async function finish(id, scopeWarehouseIds = null) {
     await refreshWavePickedFromTasks(conn, id)
 
     const [waveTasks] = await conn.query(
-      `SELECT wt.id AS task_id, wt.status
+      `SELECT wt.id AS task_id, wt.status, wt.cancel_requested_at, wt.adjustment_requested_at
        FROM picking_wave_tasks pwt
        JOIN warehouse_tasks wt ON wt.id = pwt.task_id
-       WHERE pwt.wave_id = ? ORDER BY pwt.id ASC`,
+       WHERE pwt.wave_id = ? ORDER BY wt.id ASC FOR UPDATE`,
       [id],
     )
     for (const t of waveTasks) {
       // 成员任务可能已经脱离波次被单独取消（/warehouse-tasks/:id/cancel 不会通知所属波次），
       // 此时它不再是 WT_STATUS_ACTIVE，强行推进会因非法状态迁移抛异常，导致整个波次永久卡在
       // 待分拣、无法完成也无法取消。跳过已终结的成员任务，不阻塞其余仍在进行中的任务。
-      if (!WT_STATUS_ACTIVE.includes(Number(t.status))) continue
+      const taskStatus = Number(t.status)
+      if (!WT_STATUS_ACTIVE.includes(taskStatus)) continue
+      // 已推进的活动成员仍可能等待实物归还/改单确认，保留单任务拣货完成的相同守卫。
+      if (t.cancel_requested_at) {
+        throw new AppError('该任务正在拣货退回中，不可继续拣货', 409)
+      }
+      if (t.adjustment_requested_at) {
+        throw new AppError('该任务有改单正在等待仓库确认，请先处理完成', 409)
+      }
+      // 单任务/PDA 入口可以先完成拣货；已进入分拣或后续阶段的成员无需再次推进。
+      // 波次只把仍在拣货的任务交接到待分拣，不能令已推进成员倒退或卡住整批。
+      if ([WT_STATUS.SORTING, WT_STATUS.CHECKING, WT_STATUS.PACKING, WT_STATUS.SHIPPING].includes(taskStatus)) continue
       await readyToShipWithinTransaction(conn, Number(t.task_id))
     }
 

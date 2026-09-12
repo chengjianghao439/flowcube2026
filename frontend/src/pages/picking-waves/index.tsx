@@ -27,7 +27,7 @@ import { formatDisplayDateTime } from '@/lib/dateTime'
 import type { TableColumn } from '@/types'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import WaveQueryDialog, { type WaveQueryValues } from './WaveQueryDialog'
-import { todayYmd } from '@/lib/dateTime'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
 
 function getWaveClosureCopy(wave: PickingWave | null) {
   if (!wave) {
@@ -71,17 +71,21 @@ export default function PickingWavesPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [keyword, setKeyword] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('')
+  const [warehouseFilter, setWarehouseFilter] = useState<number | null>(null)
+  const [warehouseName, setWarehouseName] = useState('')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
   const [queryOpen, setQueryOpen] = useState(false)
   const selectedWaveId = Number(searchParams.get('waveId') || 0) || null
   const focus = searchParams.get('focus') || ''
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['picking-waves', keyword, statusFilter],
-    queryFn: () => getWavesApi({ keyword, page: 1, pageSize: 20, ...(statusFilter ? { status: statusFilter } : {}) }),
+  const { data, isLoading, isError, error, refetch } = useQuery({
+    queryKey: ['picking-waves', keyword, statusFilter, warehouseFilter, startDate, endDate],
+    queryFn: () => getWavesApi({ keyword, page: 1, pageSize: 20, ...(statusFilter ? { status: statusFilter } : {}), ...(warehouseFilter ? { warehouseId: warehouseFilter } : {}), ...(startDate ? { startDate } : {}), ...(endDate ? { endDate } : {}) }),
   })
   const total = data?.pagination?.total ?? 0
 
-  const { data: detail } = useQuery({
+  const { data: detail, isLoading: detailLoading, isError: detailError, error: detailFailure, refetch: retryDetail } = useQuery({
     queryKey: ['picking-wave-detail', selectedWaveId],
     queryFn: () => getWaveByIdApi(selectedWaveId!),
     enabled: !!selectedWaveId,
@@ -132,16 +136,23 @@ export default function PickingWavesPage() {
 
   // ── 查询弹窗筛选值 ──
   const initialQuery: WaveQueryValues = {
-    keyword, status: statusFilter, warehouseId: null, startDate: todayYmd(), endDate: todayYmd(),
+    keyword, status: statusFilter, warehouseId: warehouseFilter, warehouseName, startDate, endDate,
   }
   function applyQuery(v: WaveQueryValues) {
     setKeyword(v.keyword)
-    setStatusFilter(v.status);
+    setStatusFilter(v.status)
+    setWarehouseFilter(v.warehouseId)
+    setWarehouseName(v.warehouseName || '')
+    setStartDate(v.startDate)
+    setEndDate(v.endDate)
     setQueryOpen(false)
   }
-  function clearAll() { setKeyword(''); setStatusFilter(''); }
+  function clearAll() { setKeyword(''); setStatusFilter(''); setWarehouseFilter(null); setWarehouseName(''); setStartDate(''); setEndDate('') }
 
   const chips = [
+    warehouseFilter && { key: 'warehouse', label: `仓库：${warehouseName || warehouseFilter}`, onRemove: () => { setWarehouseFilter(null); setWarehouseName('') } },
+    startDate && { key: 'startDate', label: `创建自：${startDate}`, onRemove: () => setStartDate('') },
+    endDate && { key: 'endDate', label: `创建至：${endDate}`, onRemove: () => setEndDate('') },
     keyword && { key: 'keyword', label: `批次号：${keyword}`, onRemove: () => setKeyword('') },
     statusFilter && { key: 'status', label: `状态：${WAVE_STATUS_LABEL[Number(statusFilter) as WaveStatus] ?? statusFilter}`, onRemove: () => setStatusFilter('') },
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
@@ -243,8 +254,10 @@ export default function PickingWavesPage() {
         </div>
       )}
 
-      <DataTable columns={columns} data={data?.list ?? []} loading={isLoading} rowKey="id" />
-      <ListSummary total={total} unit="个" />
+      {isError ? <QueryErrorState error={error} onRetry={() => { void refetch() }} title="批次列表加载失败" /> : <>
+        <DataTable columns={columns} data={data?.list ?? []} loading={isLoading} rowKey="id" />
+        {!isLoading && <ListSummary total={total} unit="个" />}
+      </>}
 
       <Dialog open={!!selectedWaveId} onOpenChange={v => !v && closeDetail()}>
         <DialogContent className="max-w-6xl">
@@ -255,7 +268,7 @@ export default function PickingWavesPage() {
           </DialogHeader>
 
           <div className="max-h-[75vh] space-y-5 overflow-y-auto py-2">
-            <OrderDetailSections type="wave" id={selectedWaveId || 0} initialView={focus === 'print-closure' ? 'print' : focus ? 'progress' : 'info'} printProgress={<div className="flex justify-end"><Button size="sm" variant="outline" onClick={() => openPath(`/settings/barcode-print-query?category=outbound&keyword=${encodeURIComponent(detail?.waveNo ?? '')}`, '条码打印查询')}>打开出库补打</Button></div>}>
+            {detailError ? <QueryErrorState error={detailFailure} onRetry={() => { void retryDetail() }} title="批次详情加载失败" /> : detailLoading ? <p className="py-8 text-center text-muted-foreground">正在加载批次详情…</p> : detail ? <OrderDetailSections type="wave" id={selectedWaveId || 0} initialView={focus === 'print-closure' ? 'print' : focus ? 'progress' : 'info'} printProgress={<div className="flex justify-end"><Button size="sm" variant="outline" onClick={() => openPath(`/settings/barcode-print-query?category=outbound&keyword=${encodeURIComponent(detail?.waveNo ?? '')}`, '条码打印查询')}>打开出库补打</Button></div>}>
             <section className="rounded-lg border border-primary/20 bg-primary/5 px-4 py-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
@@ -295,14 +308,14 @@ export default function PickingWavesPage() {
                 </table></div>
               </section>
             ) : null}
-            </OrderDetailSections>
+            </OrderDetailSections> : null}
           </div>
 
           <DialogFooter className="gap-2">
-            {detail?.status === 1 ? <Button onClick={() => startMut.mutate(detail.id)} disabled={startMut.isPending}>开始拣货</Button> : null}
-            {detail?.status === 2 ? <Button onClick={() => finishPickMut.mutate(detail.id)} disabled={finishPickMut.isPending}>完成拣货</Button> : null}
-            {detail?.status === 3 ? <Button onClick={() => finishMut.mutate(detail.id)} disabled={finishMut.isPending}>完成批次</Button> : null}
-            {detail && [1, 2, 3].includes(detail.status) ? (
+            {!detailError && detail?.status === 1 ? <Button onClick={() => startMut.mutate(detail.id)} disabled={startMut.isPending}>开始拣货</Button> : null}
+            {!detailError && detail?.status === 2 ? <Button onClick={() => finishPickMut.mutate(detail.id)} disabled={finishPickMut.isPending}>完成拣货</Button> : null}
+            {!detailError && detail?.status === 3 ? <Button onClick={() => finishMut.mutate(detail.id)} disabled={finishMut.isPending}>完成批次</Button> : null}
+            {!detailError && detail && [1, 2, 3].includes(detail.status) ? (
               <Button
                 variant="destructive"
                 onClick={() => confirmAction({

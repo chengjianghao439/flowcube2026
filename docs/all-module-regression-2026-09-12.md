@@ -85,8 +85,8 @@
 | `/api/inbound-tasks` 收货执行 | mainline、p0-regression、p1-regression、warehouse-scope、print-template-preview | 通过收货/上架/短装/超收防重/成本归属/打印事务断言 | /inbound-tasks 已打开；pending-containers GET写逾期标记，未当纯只读补测。 |
 | `/api/admin` 管理上架 | mainline | 管理员补录上架成功与权限拒绝断言通过 | 仅 POST /putaway，无独立 UI/GET；成功路径只在独立测试库执行。 |
 | `/api/containers` 容器逾期 | 无该挂载模块直接专项 | 未执行 /containers/overdue，仅源码识别副作用 | 库存引擎测试不等于该API通过；GET刷新逾期标记，frontend无直接消费者。 |
-| `/api/plastic-boxes` 塑料盒 | prelaunch-scope-export；concurrency-guards 的容器拆分分支 | 通过所测盒管理仓范围/删除并发守卫及相关拆分断言 | /plastic-boxes 入口已打开；实物盒扫码、所有管理字段尚未验。 |
-| `/api/picking-waves` 拣货波次 | concurrency-guards / sale-adjustment 的仓库执行；reports 的波次指标 | 相关执行断言通过；波次管理仅入口读取 | /picking-waves 已打开；波次创建/合并/释放的独立完整流程未证明。 |
+| `/api/plastic-boxes` 塑料盒 | prelaunch-scope-export、concurrency-guards、warehouse-assets-waves | 补 65 项真实 HTTP 断言，覆盖空盒新建/读取/删除/流水、字段/权限/仓范围/引用保护及零库存副作用 | 页面新建必选与草稿重置、流水、无结果搜索和恢复已查；实物盒扫码未验。 |
+| `/api/picking-waves` 拣货波次 | concurrency-guards、sale-adjustment、reports、warehouse-assets-waves | 补 135 项真实 HTTP 断言，覆盖创建/绑定并发、各阶段/取消保护、限仓/日期及成员提前推进；修复历史快照冲突与完成卡住 | 实测仓库/日期查询、已取消详情五视图和不存在详情错误；状态写入仅独立测试库，PDA 实际扫码/装箱未验。 |
 | `/api/packages` 包裹 | concurrency-guards；print-template-preview | 通过打包、取消拆箱归还与事务内箱标签数据断言 | 无独立静态入口；箱内商品所有编辑路径和实物标签未完整验。 |
 | `/api/sorting-bins` 分拣格 | prelaunch-scope-export、concurrency-guards、warehouse-masterdata | 补真实管理接口 63 断言通过，覆盖批量/容量/占用删除保护及双向释放/限仓扫描 | 页面批量预览、单个新建、编辑/筛选已查；写入和释放只在独立库，实际分拣格扫码未验。 |
 | `/api/pda` PDA接口 | pda-device-session；test:audit-client；PDA前端构建 | 设备未绑定拒绝/会话边界及原生更新静态用例通过 | 30个PDA叶子入口尚未全程操作；设备绑定、加密存储、扫码、APK安装升级需单列。 |
@@ -119,6 +119,7 @@
 | GET `/api/printers/online-clients`、`/all-clients` | `printers.service.js:237/265` 将超时客户端status置0 | 在线投影写入不能标成纯只读 |
 | Electron自动打印桥 | 登录后心跳、领取队列和实际打印 | 本次CUA普通浏览器无printZpl桥；不启动真实Electron自动消费者 |
 | 履约“更新问题/认领/处理”、物流“重试/作废”、配置“保存” | 更新业务或投影状态，物流可能入队 | 入口加载不点击这些动作，不据此主张成功写入 |
+| GET `/api/picking-waves/:id` 活动波次详情 | 默认刷新 `picking_wave_items.picked_qty` 投影 | 本轮开发库仅打开已取消波次；活动波次行为在独立测试库验证 |
 | GET `/api/scan-logs/anomaly` | `getAnomalyReport` 执行两条 `CREATE TABLE IF NOT EXISTS` 初始化日志表 | 本轮仅在独立测试库执行；迁移化未纳入本次修复，不标为完全只读 |
 | GET `/api/app-update/latest` | 允许GitHub直连且缺清单时可发外网请求 | 元数据、实际下载、安装更新分开；缺清单业务404不当作代码异常 |
 
@@ -240,3 +241,7 @@ CUA 使用本工作树的 `localhost:5175`，普通浏览器复用现有管理�
 同日继续补四模块直接HTTP回归302条断言（客户89、供应商77、部门65、分类71）。修复供应商创建500、部门无效父级与负责人误清空，客户编辑补启停入口并完成前端3项测试和CUA复核；分类日志恢复正常字段。详见 `docs/masterdata-regression-2026-09-12.md`，仍不代表每个业务组合或全部并发场景已验。
 
 仓储配置专项补测与页面证据见 [2026-09-13 仓储配置管理回归](warehouse-masterdata-regression-2026-09-13.md)，不以管理接口通过替代硬件、全部状态或生产验收。
+
+## 塑料盒与批次拣货补测（2026-09-13）
+
+专项 `smoke:warehouse-assets-waves` 共 200 断言通过，3 个前端测试文件新增 7 项回归通过；共享仓库选择器变更后，全量前端 74 文件 / 370 项测试通过。后端 lint、前端 lint（0 错误，5 条既有警告）、正确配置的 TypeScript 检查与 ERP 构建通过。页面与隔离边界见 `warehouse-assets-waves-regression-2026-09-13.md`；这不扩展为所有模块全部业务状态、远程 CI 或硬件验收通过。

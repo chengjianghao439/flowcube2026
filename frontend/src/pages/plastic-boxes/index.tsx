@@ -14,6 +14,7 @@ import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import type { TableColumn } from '@/types'
 import type { FinderResult } from '@/types/finder'
 import BaseCrudPage from '@/components/shared/BaseCrudPage'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { downloadExport } from '@/lib/exportDownload'
 import {
   getPlasticBoxesApi,
@@ -64,6 +65,8 @@ export default function PlasticBoxesPage() {
         }
         saveSuccessMessage={() => '塑料盒已创建'}
         formWidthClass="max-w-md"
+        onOpen={() => { setProduct(null); setWarehouse(null); setProductFinderOpen(false) }}
+        canSubmit={() => !!product && !!warehouse}
         renderToolbar={
           <FilterCard>
             <Input
@@ -94,12 +97,13 @@ export default function PlasticBoxesPage() {
         renderForm={() => (
           <div className="space-y-4">
             <div className="space-y-1.5">
-              <Label>绑定商品 *</Label>
-              <FinderTrigger value={product?.name ?? ''} placeholder="点击选择商品…" onClick={() => setProductFinderOpen(true)} />
+              <Label htmlFor="plastic-box-product">绑定商品 *</Label>
+              <FinderTrigger id="plastic-box-product" value={product?.name ?? ''} placeholder="点击选择商品…" onClick={() => setProductFinderOpen(true)} />
             </div>
             <div className="space-y-1.5">
-              <Label>所属仓库 *</Label>
+              <Label htmlFor="plastic-box-warehouse">所属仓库 *</Label>
               <WarehouseSelect
+                id="plastic-box-warehouse"
                 value={warehouse?.id ?? null}
                 onChange={(id, name) => setWarehouse(id ? { id, name } : null)}
                 placeholder="选择仓库"
@@ -128,7 +132,7 @@ export default function PlasticBoxesPage() {
 }
 
 function DetailDialog({ box, onClose }: { box: PlasticBox | null; onClose: () => void }) {
-  const { data, isLoading } = usePlasticBoxMovements(box?.id ?? null)
+  const { data, isLoading, isError, error, refetch } = usePlasticBoxMovements(box?.id ?? null)
   const TYPE_NAMES: Record<number, string> = { 1: '入库', 2: '出库', 3: '调整' }
   const TYPE_TONE: Record<number, 'success' | 'danger' | 'info'> = { 1: 'success', 2: 'danger', 3: 'info' }
 
@@ -144,7 +148,9 @@ function DetailDialog({ box, onClose }: { box: PlasticBox | null; onClose: () =>
           {` · 当前数量 ${box?.remainingQty ?? 0}`}
         </div>
         <div className="max-h-[420px] overflow-y-auto">
-          {isLoading ? (
+          {isError ? (
+            <QueryErrorState error={error} onRetry={() => { void refetch() }} title="塑料盒流水加载失败" compact />
+          ) : isLoading ? (
             <div className="py-8 text-center text-sm text-muted-foreground">加载中…</div>
           ) : !data?.length ? (
             <div className="py-8 text-center text-sm text-muted-foreground">暂无流水</div>

@@ -7,19 +7,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DatePicker } from '@/components/shared/DatePicker'
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
 import { WAVE_STATUS_LABEL, type WaveStatus } from '@/api/picking-waves'
-import { todayYmd } from '@/lib/dateTime'
 
 /** 批次查询弹窗对外的筛选值 */
 export interface WaveQueryValues {
   keyword: string
   status: string
   warehouseId: number | null
+  warehouseName?: string
   startDate: string
   endDate: string
 }
 
 const EMPTY: WaveQueryValues = {
-  keyword: '', status: '', warehouseId: null, startDate: todayYmd(), endDate: '',
+  keyword: '', status: '', warehouseId: null, warehouseName: '', startDate: '', endDate: '',
 }
 
 interface Props {
@@ -88,7 +88,7 @@ export default function WaveQueryDialog({ open, initial, onClose, onApply }: Pro
           <span className="text-xs font-medium text-muted-foreground">仓库</span>
           <WarehouseSelect
             value={draft.warehouseId}
-            onChange={id => set('warehouseId', id)}
+            onChange={(id, name) => setDraft(d => ({ ...d, warehouseId: id, warehouseName: name }))}
             allowClear
             clearLabel="全部仓库"
             placeholder="全部仓库"
@@ -96,14 +96,14 @@ export default function WaveQueryDialog({ open, initial, onClose, onApply }: Pro
           />
         </label>
 
-        <label className="flex flex-col gap-1">
+        <label htmlFor="wave-query-start" className="flex flex-col gap-1">
           <span className="text-xs font-medium text-muted-foreground">创建日期（起）</span>
-          <DatePicker value={draft.startDate} max={draft.endDate || undefined}
+          <DatePicker id="wave-query-start" value={draft.startDate} max={draft.endDate || undefined}
             onChange={v => set('startDate', v)} className="h-9" />
         </label>
-        <label className="flex flex-col gap-1">
+        <label htmlFor="wave-query-end" className="flex flex-col gap-1">
           <span className="text-xs font-medium text-muted-foreground">创建日期（止）</span>
-          <DatePicker value={draft.endDate} min={draft.startDate || undefined}
+          <DatePicker id="wave-query-end" value={draft.endDate} min={draft.startDate || undefined}
             onChange={v => set('endDate', v)} className="h-9" />
         </label>
       </QueryFormLayout>

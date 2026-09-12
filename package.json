@@ -62,6 +62,7 @@
     "smoke:warehouse-ops": "node tests/warehouse-ops.smoke.test.js",
     "smoke:masterdata": "node tests/masterdata.smoke.test.js",
     "smoke:warehouse-masterdata": "node tests/warehouse-masterdata.smoke.test.js",
+    "smoke:warehouse-assets-waves": "node tests/warehouse-assets-waves.smoke.test.js",
     "smoke:credit-outbound": "node tests/credit-outbound.smoke.test.js",
     "smoke:purchase-approval": "node tests/purchase-approval.smoke.test.js",
     "smoke:approval-flow": "node tests/approval-flow.smoke.test.js",
