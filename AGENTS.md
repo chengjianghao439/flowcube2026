@@ -277,6 +277,7 @@ npm run test:permissions
 - 大列表优化（2026-09-12）：商品、库存总览/流水、销售、履约待办、条码打印查询和操作日志在至少 200 行时使用共享 `VirtualTableBody`，按真实行高仅挂载视口与缓冲行，沿用工作区滚动条；完整列表数据、服务端权限、全选/导出范围不变。列布局与交互提取至 `useTableColumns`。高频列表通过 `useVisibleQuery` 在隐藏时解除订阅，独占的在途请求经 AbortSignal 取消，同键可见消费者不受影响；切回按缓存状态读取。商品和销售筛选绑定自己的 TabPath，不能串用另一工作区 URL。具体实现、浏览器验证及已知边界见 `docs/operations-optimization-2026-09-12.md`。 条码打印查询的当前收货链路仅由显式合法 `inboundTaskId` 筛选建立，异常计数只包含该单，普通全量入口不从首行推断当前单据。全模块验证与修复见 `docs/all-module-regression-2026-09-12.md`。
 - 复用 DataTable、TableActionsMenu、QueryErrorState、finder、usePermission、useDirtyGuard、useInvalidate 等已有结构；keepAlive 表单在挂载/参数变化时重置，未保存内容有退出保护。
 - 桌面端判定使用运行时 `window.flowcubeDesktop`，不能用构建 flag 把浏览器误判成 Electron。
+- 官网候选参考源码保留于 `frontend/src/pages/landing-preview/`，不注册路由、不替换正式入口；正式页面使用用户已确认的 `frontend/src/pages/landing/` 第一版。候选历史验证见 `docs/landing-preview-2026-09-12.md`，当前采用记录见 `docs/landing-adoption-2026-09-12.md`。
 - 系统品牌采用已确认的蓝底双曲线 F；官网、ERP/PDA 登录页、PDA 首页通过 `SystemBrand` 复用本地哈希资源。网页 favicon/触屏图标、桌面程序/安装器、Android 普通/圆形/自适应图标与启动屏由 `scripts/generate-brand-icons.cjs` 从 `docs/branding/flow-icon-approved.png` 导出。公司 Logo 仍只用于 ERP 顶栏/单据打印，保持公司图优先及文字回退，不混用。素材、生成方式与验收见 `docs/brand-icons-2026-09-07.md`。
 - 用户术语沿用“批次、采购申请、滞销、存放时长、分批盘点、型号、供应商型号”，不为改文案变更权限码、路由或数据库列。
 - PDA 不做离线自动重放；不确定写入结果先用幂等回执/已有 `resolveServerState` 恢复路径核实。
