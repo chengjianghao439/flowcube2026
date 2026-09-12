@@ -283,6 +283,9 @@ jobs:
       - name: 冒烟测试 — 报表数值正确性（与底层表核对，审计 4.6）
         run: npm run smoke:reports-values
 
+      - name: 冒烟测试 — 仓库运营与 PDA 异常指标、日期和仓库范围
+        run: npm run smoke:warehouse-ops
+
       - name: 冒烟测试 — 出库信用复查（审计 4.8）
         run: npm run smoke:credit-outbound
 

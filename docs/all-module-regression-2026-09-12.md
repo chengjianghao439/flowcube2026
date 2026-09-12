@@ -23,7 +23,7 @@
 ### 独立数据库回归
 
 - **40 个独立套件、42 次命令执行，39 个套件首次业务执行通过**。快递直连套件首次发生真实并发重放死锁；单独复跑通过只能说明时序变化，不能宣称竞态已修复。
-- 报表第一次隔离包装因 `npm --prefix` 改变cwd而找不到模块，尚未执行业务；修正output包装绝对路径后原脚本执行通过。11个报表服务入口返回成功，但仓库运营4项历史可选指标降级，详见第4节。
+- 报表第一次隔离包装因 `npm --prefix` 改变cwd而找不到模块，尚未执行业务；修正output包装绝对路径后原脚本执行通过。11个报表服务入口返回成功；首轮仓库运营4项历史可选指标降级，后续已补非零数值、日期与仓库范围专项39/39（含现行状态口径），详见第4节。
 - 数据库用例串行、有界执行；快递使用注入adapter，打印使用独立库虚拟设备，无真实快递、支付或物理打印。报表使用任务专属预加载验证显式测试配置并阻止dotenv读真实backend/.env。
 - party-ledger 动态临时库创建前不存在，创建/清理守卫与最终不存在结果已记录；未清理任何原有repair测试库。
 
@@ -45,8 +45,8 @@
 | `/api/customer-addresses` 客户地址 | 无直接专项 | 销售新建表单选择客户后地址簿弹层已打开 | 无独立注册页；地址详情、默认地址、创建删除未单独测试。 |
 | `/api/carriers` 承运商与快递账户 | test:direct-express；smoke:direct-express | 离线50项通过；DB首轮发现并发死锁，修复后专项通过，见第4节 | /carriers、/carrier-accounts 已打开；未发真实快递请求，不能称正式月结下单已验。 |
 | `/api/logistics` 物流 | test:direct-express；smoke:direct-express | 离线签名/防重复断言通过；共享幂等死锁已修复并完成定向回归证据 | /logistics、运费对账入口已打开；轨迹读取与真实下单、作废、运费支付分开。 |
-| `/api/purchase` 采购 | mainline、purchase-approval、p0-regression、p1-regression、warehouse-scope | 通过采购收货结算、短装、采购归属及仓范围所测断言 | /purchase 入口已打开；历史采购修复 DB 专项未运行。 |
-| `/api/purchase-requisitions` 采购申请 | approval-flow、procurement-planning | 通过请购审批与采购计划转换/覆盖承诺所测断言 | /purchase-requisitions 入口已打开；表单完整交互仍待补。 |
+| `/api/purchase` 采购 | mainline、purchase-approval、p0-regression、p1-regression、warehouse-scope | 通过采购收货结算、短装、采购归属及仓范围所测断言 | /purchase 入口已打开；历史采购修复 DB 专项已在后续临时独立实例补跑8/8，见第4节。 |
+| `/api/purchase-requisitions` 采购申请 | approval-flow、procurement-planning | 通过请购审批与采购计划转换/覆盖承诺所测断言 | 采购申请新建表单已补查必填字段、明细空状态与关闭；未保存。 |
 | `/api/procurement` 采购建议 | test:procurement-planning；smoke:procurement-planning | 通过纯规则与并发生成、请购覆盖、转换取消等DB断言 | /procurement、/reports/replenishment 入口已打开；未从开发库创建真实采购建议。 |
 | `/api/sale` 销售 | sale-adjustment、atp、p0-regression、p1-regression、credit-outbound、warehouse-scope | 通过所测占库/分仓/改单/信用与出库分支 | /sale 入口已打开；未由浏览器执行真实订单写入全流程。 |
 | `/api/stockcheck` 盘点 | test:integration、warehouse-scope、audit-inventory | 通过盘点/库存主链路及仓范围所测断言 | /stockcheck、/stockcheck/abc 入口已打开；ABC规则维护与扫码实机未完整验。 |
@@ -56,21 +56,21 @@
 | `/api/dashboard` 仪表盘 | frontend-unit 中组件用例；无 dashboard API 专项结论 | 仅 /dashboard 入口读取；静态组件用例通过不等于指标对账 | 不保存用户布局；低库存可能触发浏览器通知权限提示。 |
 | `/api/settings` 系统设置 | 无系统设置管理直接专项 | 仅 /settings 入口读取 | 未保存配置、上传品牌图或改变开发/生产连接。 |
 | `/api/roles` 角色权限 | test:permissions；users-roles/warehouse-scope 为用户角色边界 | 181个前后端权限码3项一致性通过；角色管理仅入口读取 | /permissions 已打开；角色权限配置 CRUD 及所有角色矩阵未证明。 |
-| `/api/reports` 报表 | reports、reports-values、mainline、audit-finance-security；test:workbench | 所测报表结构/数值通过；11服务入口成功，warehouseOps四项降级 | 全部对应静态报表入口已打开；errSummary/undoSummary/errByOp/recentErrors 未证明可用。 |
+| `/api/reports` 报表 | reports、reports-values、warehouse-ops、mainline、audit-finance-security；test:workbench | 所测报表结构/数值通过；首轮四指标降级已补真实非零与仓范围/日期专项 | 全部对应静态报表入口已打开；仓库运营与PDA读取专项39/39（含现行状态口径），见 `docs/warehouse-ops-regression-2026-09-12.md`。 |
 | `/api/export` 导出 | mainline、prelaunch-scope-export、payments-default-scope、audit-finance-security | 通过所测字段、账套/仓范围、超500行与超限拒绝断言 | 覆盖的导出类型见日志；不推导每一种导出格式和所有筛选组合均通过。 |
 | `/api/import` 导入 | mainline；test:upload | 商品/库存模板与商品导入入口通过；上传限制6项通过 | 未在开发库正式导入；供应商/客户/价格表等全部导入消费者未完整验。 |
 | `/api/transfer` 调拨 | round2-transfer、test:integration、warehouse-scope | 通过重复商品数量分配、扫码回执与跨仓主链路断言 | /transfer 已打开；PDA 实机双仓扫描仍待验。 |
 | `/api/returns` 退货 | audit-inventory、test:integration、refund-orders | 通过所测退货数量/容器/账款联动断言 | /returns/purchase、/returns/sale 已打开；不等于前端退货表单全流程。 |
 | `/api/return-tasks` 退货执行 | audit-inventory；test:audit-client 内退货扫码用例 | 通过所测退货执行/部分质检与扫码解析断言 | 主要为 PDA 动态作业入口，浏览器/原生硬件操作未完整验。 |
-| `/api/payments` 往来账款 | party-ledger、payments-default-scope、finance、refund-orders、prelaunch-finance | 通过所测往来归属、核销、余额与退款联动 | 应收/应付/对账入口已打开；legacy-receivable-repair 的DB专项未运行。 |
+| `/api/payments` 往来账款 | party-ledger、payments-default-scope、finance、refund-orders、prelaunch-finance | 通过所测往来归属、核销、余额与退款联动 | 应收/应付/对账入口已打开；历史应收修复相关DB专项已在后续临时独立实例补跑13/13，见第4节。 |
 | `/api/finance` 资金费用 | finance、prelaunch-finance、refund-orders | 通过账户/流水/费用报销及资金回归所测断言 | 资金/费用静态入口已打开；没有真实支付操作或外部支付验收。 |
 | `/api/accounting` 会计 | test:accounting；accounting、accounting-period、invoice-quota、audit-finance-security | 通过科目映射及凭证、期间、发票配额/冲销所测断言 | 科目/凭证/总账/报表/发票/期间/合并/税务入口已打开；不能将少数账套样本当完整会计验收。 |
 | `/api/fixed-assets` 固定资产 | prelaunch-scope-export、prelaunch-finance | 通过已测账套导出、日期/提足状态与相关财务保护 | /accounting/fixed-assets 已打开；资产完整新增/折旧/处置生命周期未单独证明。 |
 | `/api/hr` 人事工资 | test:hr-tax、prelaunch-hr、round2-payroll | 通过税额纯函数及工资事务/并发专项所测断言 | 没有 ERP/PDA 注册页；员工管理HTTP列表和全字段维护无 UI 验收，工资原生输入流程亦不存在注册入口。 |
 | `/api/oplogs` 操作日志 | test:oplog | 脱敏11项检查通过；/oplogs 入口读取 | 查询筛选/导出/留存策略不由脱敏单测全部覆盖。 |
 | `/api/fulfillment` 履约 | test:fulfillment、test:fulfillment-refresh；smoke:fulfillment | 通过规则、刷新队列与自动发现/认领/版本冲突/交期/仓范围断言 | 待办/订单详情消费者入口已打开；未在开发库点认领、更新问题或修改日期。 |
-| `/api/document-activity` 单据活动 | test:document-activity | 7项归属/脱敏/数据范围断言通过 | 无独立静态页；订单详情嵌入的真实行数/交互待UI补证。 |
-| `/api/notifications` 通知 | 无通知API直接专项 | 仅全局壳层读取，通知区域待UI逐项补证 | 无独立注册页，当前模块仅 GET 聚合提醒；不能由dashboard打开认定每类提醒正确。 |
+| `/api/document-activity` 单据活动 | test:document-activity | 7项归属/脱敏/数据范围断言通过 | 无独立静态页；已补查一笔收货详情的操作记录视图；创建、收货、上架、结算历史事件显示正常，未覆盖全部订单种类。 |
+| `/api/notifications` 通知 | 无通知API直接专项 | 已打开全局通知面板，显示12类待处理提醒 | 无独立注册页，当前模块仅 GET 聚合提醒；面板显示不证明各类数量对账或跳转全部通过。 |
 | `/api/search` 搜索 | node tests/search-scope.smoke.test.js；mainline | 通过数组契约及单仓/超管搜索隔离断言 | 全局搜索实际输入/跳转由UI补证，不能只用壳层读取代替。 |
 | `/api/warehouse-tasks` 仓库任务 | concurrency-guards、sale-adjustment、p0-regression、p1-regression、warehouse-scope | 通过取消逆向归还、阶段保护、分仓出库与跨仓拒绝断言 | 无独立ERP注册页；波次/销售详情消费者与PDA实机阶段操作分开。 |
 | `/api/price-lists` 价格表 | frontend-unit 中销售价格解析mock用例；无价格表DB专项结论 | 仅客户/销售入口读取；不能以mock通过宣称真实定价通过 | 无独立注册页；需补真实 customer-price、价格表明细与权限API用例。 |
@@ -81,7 +81,7 @@
 | `/api/print-jobs` 打印队列 | test:print；mainline、print-queue、test:print-purge | 通过入队/领取/令牌/失败重试/过期/回滚与清理断言 | 条码打印查询入口已打开；没有物理消费者，未触发真实补打。 |
 | `/api/locations` 库位 | prelaunch-scope-export 的跨仓/停用库位拒绝；mainline 上架 | 通过所测业务引用与上架归属断言 | /locations 入口已打开；库位管理CRUD与扫码器硬件未完整测试。 |
 | `/api/racks` 货架 | 无货架管理直接专项 | 仅 /racks 入口读取 | 货架编码、结构管理及删除约束未专测。 |
-| `/api/scan-logs` 扫描日志 | concurrency-guards、sale-adjustment、pda-device-session | 通过所测扫描、取消归还和阶段拒绝断言 | 扫描日志报表入口已打开；实际扫描设备及全部异常类型未验。 |
+| `/api/scan-logs` 扫描日志 | concurrency-guards、sale-adjustment、pda-device-session、warehouse-ops | 原扫描/取消归还断言通过；补统计/异常/任务详情仓范围、日期和真实HTTP401/403/404 | 修复读取串仓及结束日遗漏；实际扫描设备和全部异常类型未验，GET anomaly运行时DDL边界保留。 |
 | `/api/inbound-tasks` 收货执行 | mainline、p0-regression、p1-regression、warehouse-scope、print-template-preview | 通过收货/上架/短装/超收防重/成本归属/打印事务断言 | /inbound-tasks 已打开；pending-containers GET写逾期标记，未当纯只读补测。 |
 | `/api/admin` 管理上架 | mainline | 管理员补录上架成功与权限拒绝断言通过 | 仅 POST /putaway，无独立 UI/GET；成功路径只在独立测试库执行。 |
 | `/api/containers` 容器逾期 | 无该挂载模块直接专项 | 未执行 /containers/overdue，仅源码识别副作用 | 库存引擎测试不等于该API通过；GET刷新逾期标记，frontend无直接消费者。 |
@@ -104,8 +104,8 @@
 
 ### 未运行/部分降级
 
-- `smoke:purchase-repair`、`smoke:legacy-receivable-repair` 未运行。它们固定要求 `flowcube_repair20260908_test` 且存在全表清理动作；该库已有payment_entries=14、payment_record_events=32、payment_records=18，已保留。离线守卫单测通过不等于这两个DB修复专项通过。
-- warehouseOps 的 `errSummary`、`undoSummary`、`errByOp`、`recentErrors` 因测试库不存在 `pda_error_logs`、`pda_undo_logs` 返回既有降级值并警告。本次只证明降级后接口可返回，不证明4项指标有真实数值。
+- 首轮未运行的 `smoke:purchase-repair`、`smoke:legacy-receivable-repair` 已在后续补跑：新建任务专属 MySQL 8.0.46 临时容器，在随机回环端口使用固定库名 `flowcube_repair20260908_test`，完整迁移后串行8/8、13/13通过。原3307同名库及原有数据未动；临时容器、匿名数据卷及凭据文件已清理并核验。详见 `docs/module-followup-2026-09-12.md`。
+- warehouseOps 首轮四项降级已完成补证：两日志表确为现行按需创建，真实记录服务初始化后查到非零数值；另发现并修复四指标串仓、出库参数顺序、空范围SQL、最新异常日期，以及PDA统计/异常/任务详情读取越权与结束日遗漏。读取范围专项先由6过9失败、扩展23过14失败到37/37；评审随后识别旧状态夹具不足，按现行状态机补测35过4失败，修复后最终39/39、零SQL降级。出库按SHIPPED与真实出库日优先（NULL回退更新时间），拣货仅PICKING，入库仅全部上架完成，流程为六个活动阶段，均排除软删除；实际HTTP权限和九表夹具残留0均已核实。细节见 `docs/warehouse-ops-regression-2026-09-12.md`，不代表生产/实机已验。
 - `smoke:pages`、`smoke:reconciliation` 两个脚本未作为本轮数据库/静态命令执行；CUA页面验收单独记录，不冒用这两个脚本“通过”。
 - 13条ERP动态规则及30个PDA叶子入口不自动包含在72静态入口的加载数内。原生扫码、设备绑定/加密存储、Android APK安装升级、Windows安装更新、Linux容器字体和物理打印/条码扫描均需独立验收。
 - `backend` 的 `test:package-add-item`、`test:package-finish-print` 只是 `echo removed`，不算测试项目。
@@ -119,6 +119,7 @@
 | GET `/api/printers/online-clients`、`/all-clients` | `printers.service.js:237/265` 将超时客户端status置0 | 在线投影写入不能标成纯只读 |
 | Electron自动打印桥 | 登录后心跳、领取队列和实际打印 | 本次CUA普通浏览器无printZpl桥；不启动真实Electron自动消费者 |
 | 履约“更新问题/认领/处理”、物流“重试/作废”、配置“保存” | 更新业务或投影状态，物流可能入队 | 入口加载不点击这些动作，不据此主张成功写入 |
+| GET `/api/scan-logs/anomaly` | `getAnomalyReport` 执行两条 `CREATE TABLE IF NOT EXISTS` 初始化日志表 | 本轮仅在独立测试库执行；迁移化未纳入本次修复，不标为完全只读 |
 | GET `/api/app-update/latest` | 允许GitHub直连且缺清单时可发外网请求 | 元数据、实际下载、安装更新分开；缺清单业务404不当作代码异常 |
 
 ## 5. ERP入口记录
@@ -228,4 +229,8 @@ CUA 使用本工作树的 `localhost:5175`，普通浏览器复用现有管理�
 
 `AGENTS.md` 同步幂等共享当前读、两处新增虚拟化页面和收货上下文规则；本报告及UI修复记录与代码同批提交。临时浏览器标签已关闭并核验，视口覆盖已恢复，用户原页面回到补货建议；本地开发服务保留。原始output日志保留本机，未将完整业务行复制到提交中。本文不记录也不授权发布、推送、生产重启或生产数据修改。
 
-剩余范围是表中明确未覆盖的CRUD/全部状态组合、两个需专用清理库的历史修复专项、四项降级报表指标，以及用户暂缓的生产/实机/物理打印与正式快递验收。无独立专项的模块按UI读取记录，不升级为全业务通过。
+剩余范围是表中明确未覆盖的CRUD/全部状态组合，以及用户暂缓的生产/实机/物理打印与正式快递验收。两项历史修复专项和四项降级报表指标已在后续补证闭合。无独立专项的模块按UI读取记录，不升级为全业务通过。
+
+## 8. 后续补证
+
+同日继续完成两项历史修复DB专项21项、7个新建表单的安全读取、模板预览、通知面板以及一笔收货详情/操作记录。仓库运营与PDA读取修复另有真实范围、日期、状态回归。分别见 `docs/module-followup-2026-09-12.md` 和 `docs/warehouse-ops-regression-2026-09-12.md`；没有把这些结果升级为全业务状态或设备验收。

@@ -63,7 +63,7 @@ const createCancelReturnBoxScan = async (req, res, next) => {
 
 const listByTask = async (req, res, next) => {
   try {
-    const data = await svc.findByTask(+req.params.taskId)
+    const data = await svc.findByTask(+req.params.taskId, req.user?.warehouseIds ?? null)
     return successResponse(res, data)
   } catch (e) { next(e) }
 }
@@ -95,7 +95,7 @@ const logUndo = async (req, res, next) => {
 const getStats = async (req, res, next) => {
   try {
     const { startDate, endDate } = req.query
-    const data = await svc.getStats({ startDate, endDate })
+    const data = await svc.getStats({ startDate, endDate, scopeWarehouseIds: req.user?.warehouseIds ?? null })
     return successResponse(res, data)
   } catch (e) { next(e) }
 }
@@ -103,7 +103,7 @@ const getStats = async (req, res, next) => {
 const getAnomalyReport = async (req, res, next) => {
   try {
     const { startDate, endDate } = req.query
-    const data = await svc.getAnomalyReport({ startDate, endDate })
+    const data = await svc.getAnomalyReport({ startDate, endDate, scopeWarehouseIds: req.user?.warehouseIds ?? null })
     return successResponse(res, data)
   } catch (e) { next(e) }
 }

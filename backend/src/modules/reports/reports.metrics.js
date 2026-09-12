@@ -1,5 +1,6 @@
 const { getInboundClosureThresholds } = require('../../utils/inboundThresholds')
 const AppError = require('../../utils/AppError')
+const { WT_STATUS_ACTIVE, WT_STATUS_NAME } = require('../../constants/warehouseTaskStatus')
 const {
   firstValue,
   mapWorkbenchItem,
@@ -124,10 +125,9 @@ async function warehouseOps(scopeWarehouseIds = null) {
     }
   })
 
-  const STATUS_LABEL = { 1: '待拣货', 2: '拣货中', 3: '待复核', 4: '打包中', 5: '已完成' }
-  const flowBottleneck = [1, 2, 3, 4, 5].map(s => ({
+  const flowBottleneck = WT_STATUS_ACTIVE.map(s => ({
     status: s,
-    label: STATUS_LABEL[s],
+    label: WT_STATUS_NAME[s],
     count: Number(flowRows.find(r => r.status === s)?.cnt ?? 0),
   }))
 

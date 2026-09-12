@@ -109,7 +109,7 @@ npm run test:permissions
 | 退款、处置、授信 | `npm run smoke:refund-orders`、`npm run smoke:disposal`、`npm run smoke:credit-outbound` |
 | 权限、设备 | `npm run test:permissions`、`npm run smoke:warehouse-scope`、`npm run smoke:pda-device-session` |
 | 打印、标签 | `npm run test:label`、`npm run test:print`、`npm run test:print-purge`、`npm run smoke:print-queue`、`npm run smoke:print-template-preview` |
-| 报表、开票 | `npm run smoke:reports`、`npm run smoke:reports-values`、`npm run smoke:invoice-quota` |
+| 报表、开票 | `npm run smoke:reports`、`npm run smoke:reports-values`、`npm run smoke:warehouse-ops`、`npm run smoke:invoice-quota` |
 
 `npm run test:fulfillment`、`test:procurement-planning` 为履约与采购净额纯规则回归；`smoke:fulfillment`、`smoke:procurement-planning` 必须使用本节独立测试库，已加入 Tests CI 专项矩阵。
 `npm run test:fulfillment-refresh` 检查履约提交后合并通知、有界队列、失败退避与执行中再变更；`smoke:fulfillment` 同时验证业务单号筛选、仓库权限及提交后供应依赖刷新，仍仅允许独立测试库。
@@ -121,6 +121,8 @@ npm run test:permissions
 `npm run audit:business-consistency` 使用显式数据库环境变量执行只读跨模块一致性检查，输出全量异常计数及每项最多 100 条样本；退出码 0=未检出、2=存在待核对项、1=执行错误。报告中的推算金额依赖来源字段完整性，不能直接用作自动修复指令。`test:legacy-receivable-repair` 为定向修复守卫单测；`smoke:legacy-receivable-repair` 必须使用已迁移的回环独立 `flowcube_repair20260908_test` 库，串行执行真实事务/回滚/幂等及扫描口径回归。定向修复脚本默认只读，生产 apply 要求预检摘要一致和私有备份路径，具体范围见 `docs/production-receivable-audit-2026-09-08.md`。
 
 `npm run test:purchase-repair` 检查空采购来源、错行归属和定向修复守卫，已加入 Tests CI 配置；`npm run smoke:purchase-repair` 在同一专用 `flowcube_repair20260908_test` 库验证事务回滚、幂等、库存/应付不变和规范化后真实应付重算，必须与应收专项串行运行。生产只执行已授权的定向修复脚本，不执行这些测试。
+
+固定库名的采购/应收修复专项含全表清理，原有同名测试库存在未确认数据时不得复用。可在任务专属 MySQL 临时实例的随机回环端口创建同名库，完整迁移后串行执行；随机凭据仅留受限临时文件，结束清理并验证本任务容器、数据卷和凭据文件。不得放宽测试库守卫或清理原实例来迁就脚本。补证见 `docs/module-followup-2026-09-12.md`。
 
 运行涉及数据库的测试前确认连接目标与测试数据清理行为，**不得连接生产库跑测试**。公共 `tests/helpers/testEnvironment.js` 要求 `NODE_ENV=test`、显式回环 `DB_HOST`、合法 `DB_PORT`、`DB_USER`/`DB_PASSWORD`、`flowcube_test` 或 `flowcube_<用途>_test` 库名；测试不再加载真实 `backend/.env`。可用 `FLOWCUBE_TEST_ENV_FILE=/绝对路径/.env.test` 显式加载测试专用配置，命令行环境优先，配置错误及迁移失败立即终止。新数据库测试必须复用此校验。没有运行或环境不具备时明确说明；不能据此声称全部通过。纯文档修改核对内容、路径和 diff 即可，不必启动数据库或全量业务回归。
 
@@ -208,6 +210,10 @@ npm run test:permissions
 - 成本 `avg_cost` 按既定入库移动加权，退货/撤回不反冲是既有设计；利润使用成本快照，不“顺手修正”。
 - 利润/库存分析（2026-09-12，工作区修复）：销售仅统计已完成订单，日期按开单时间；净额为整单原值扣折扣，每单只计一次，商品按明细金额比例分摊净额，成本快照回退链保持不变。读取沿用销售整单仓库范围（头仓及全部明细仓均需授权）。库存/滞销汇总覆盖全部授权数据，不从前 20/30 条排行榜推算；滞销库存与最后出库采用同一授权仓库集合，按商品合并，含无出库记录。本页滞销卡片打开同口径明细；分仓库龄与移动加权成本估值仍属另一分析口径。报表加载未知值不显示零，刷新失败保留旧数据并警示；库龄与效期分别重试，未打开效期不主动刷新。详见 `docs/report-correctness-2026-09-12.md`。
 - 经营 KPI（2026-09-12，工作区修复）：销售沿用 `sale_date` 业务日期和已出库状态，净额扣整单折扣，每单只计一次；当期/上期/趋势/分仓使用同一金额、成本快照及销售整单仓库范围。月份采用半开区间，趋势止于所选月末；回款按 `payment_date`，无限制仓库账号保留全部应收分录，受限账号仅纳入可归属至有权查看的非删除销售单回款（不要求来源单已出库），无来源手工款不推断仓库。分仓仍按订单头仓库，销售占比为本仓净额/全部分仓净额；负值上期环比以绝对值作分母。接口 `gmv` 键兼容保留，展示名改为销售净额；利润页按创建时间，两个页面不能直接比较日期汇总。详见 `docs/kpi-correctness-2026-09-12.md`。
+- 仓库运营状态与当前状态机保持一致：今日出库只统计 `WT_STATUS.SHIPPED`，优先按 `shipped_at`，历史空值回退 `updated_at`；拣货中只统计 `PICKING`，今日入库只统计收货订单 `finish.to` 的已全部上架状态，完成日期暂沿用 `updated_at`。三项及流程积压排除软删除任务；积压只含 `WT_STATUS_ACTIVE` 六个阶段，标签来自后端状态名，前端颜色引用生成常量，不再手写旧五阶段映射。
+
+- 仓库运营与 PDA 日志读取统一按当前用户仓库范围过滤；错误/撤销/扫码通过任务归属仓库，受限用户排除无归属日志，空仓库范围返回空结果。`/scan-logs/task/:taskId` 先校验任务存在与范围；统计/异常日期按北京时间整日，结束日使用次日排他上界，单侧日期独立生效。仓库运营最新异常限今日最近10条并追加ID稳定排序。GET异常分析仍有既有按需建表DDL，不能当作数据库完全只读。新增 `smoke:warehouse-ops` 使用第3节独立测试环境，已接入Tests CI；范围、日期、现行状态口径及本机证据见 `docs/warehouse-ops-regression-2026-09-12.md`。
+
 - 区分公司级业务口径与带 company_id 的会计/发票账套口径；不能只在报表一端加账套过滤、另一端凭证生成仍读全量，造成勾稽失衡。改变隔离必须核对数据表、写入、回填、查询和报表全链路。历史背景见 `CLAUDE.md` 第 20 节第 50 条。
 - 采购来源凭证金额变化/归零使用自动红字修订链，保留原分录；迁移 `232_acct_voucher_source_revisions.sql` 的 `source_root_id` 指向唯一来源根凭证。恢复金额新增正向修订，重算幂等；人工红冲后不自动恢复，已结账期间不可改写。凭证写入与期间开关先锁账套行；序号最大值使用当前锁定读。总账/导出必须包含原凭证及其红字抵消，不能用 `status<>3` 过滤掉原凭证。普通删除不得删除红字、被冲销凭证或有冲销关联的凭证。
 - 重置密码、禁用或删除超管时在服务层锁定操作人/目标，验证操作人确为超管；拥有普通用户管理权限不等于能接管超管。改价未匹配审批流应返回明确配置业务错误，不越过审批或抛空引用 500。

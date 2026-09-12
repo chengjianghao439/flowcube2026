@@ -6,6 +6,8 @@ const { scopeFilter } = require('../../utils/warehouseScope')
 const { beijingTodayYmd } = require('../../utils/backendTime')
 const logger = require('../../utils/logger')
 const AppError = require('../../utils/AppError')
+const { WT_STATUS, WT_STATUS_ACTIVE } = require('../../constants/warehouseTaskStatus')
+const { getStatusRule } = require('../../constants/documentStatusRules')
 
 async function fetchOne(sql, params = []) {
   const [[row]] = await pool.query(sql, params)
@@ -302,26 +304,31 @@ async function fetchWarehouseOpsRows(scopeWarehouseIds = null) {
   // scope：warehouse_tasks / inbound_tasks 自带 warehouse_id；scan_logs 经 task_id 关联。
   const wtWh = scopeFilter(scopeWarehouseIds, 'wt.warehouse_id')
   const itWh = scopeFilter(scopeWarehouseIds, 'it.warehouse_id')
-  const slJoin = scopeWarehouseIds && Array.isArray(scopeWarehouseIds)
-    ? `INNER JOIN warehouse_tasks wt ON wt.id = sl.task_id AND wt.warehouse_id IN (${scopeWarehouseIds.map(() => '?').join(',')})`
+  // 受限用户只看能解析到授权仓任务的日志；无任务归属仅不限仓用户可见。
+  const logJoin = alias => Array.isArray(scopeWarehouseIds)
+    ? `INNER JOIN warehouse_tasks wt ON wt.id = ${alias}.task_id${wtWh.sql}`
     : ''
-  const slParams = scopeWarehouseIds && Array.isArray(scopeWarehouseIds) ? scopeWarehouseIds : []
+  const slJoin = logJoin('sl')
+  const slParams = wtWh.params
+  // 当前出库入口写 shipped_at；旧记录缺失时保留 updated_at 兼容口径。
   const todayShipped = await fetchOptional('warehouseOps.todayShipped', fetchOne(
     `SELECT COUNT(*) AS shipped_count
      FROM warehouse_tasks wt
-     WHERE wt.status = 5 AND DATE(wt.updated_at) = ?${wtWh.sql}`,
-    [...wtWh.params, today],
+     WHERE wt.deleted_at IS NULL AND wt.status = ?
+       AND COALESCE(wt.shipped_at, wt.updated_at) >= ?
+       AND COALESCE(wt.shipped_at, wt.updated_at) < DATE_ADD(?, INTERVAL 1 DAY)${wtWh.sql}`,
+    [WT_STATUS.SHIPPED, today, today, ...wtWh.params],
   ), { shipped_count: 0 })
   const todayPicking = await fetchOptional('warehouseOps.todayPicking', fetchOne(
     `SELECT COUNT(*) AS picking_count
-     FROM warehouse_tasks wt WHERE wt.status IN (2,3,4)${wtWh.sql}`,
-    wtWh.params,
+     FROM warehouse_tasks wt WHERE wt.deleted_at IS NULL AND wt.status = ?${wtWh.sql}`,
+    [WT_STATUS.PICKING, ...wtWh.params],
   ), { picking_count: 0 })
   const todayInbound = await fetchOptional('warehouseOps.todayInbound', fetchOne(
     `SELECT COUNT(*) AS inbound_count
      FROM inbound_tasks it
-     WHERE it.status = 3 AND it.updated_at >= ? AND it.updated_at < DATE_ADD(?, INTERVAL 1 DAY)${itWh.sql}`,
-    [today, today, ...itWh.params],
+     WHERE it.deleted_at IS NULL AND it.status = ? AND it.updated_at >= ? AND it.updated_at < DATE_ADD(?, INTERVAL 1 DAY)${itWh.sql}`,
+    [getStatusRule('inboundTask', 'finish').to, today, today, ...itWh.params],
   ), { inbound_count: 0 })
   const scanSummary = await fetchOptional('warehouseOps.scanSummary', fetchOne(
     `SELECT COUNT(*) AS scan_count, COALESCE(SUM(qty),0) AS pick_qty
@@ -332,13 +339,15 @@ async function fetchWarehouseOpsRows(scopeWarehouseIds = null) {
   ), { scan_count: 0, pick_qty: 0 })
   const errSummary = await fetchOptional('warehouseOps.errSummary', fetchOne(
     `SELECT COUNT(*) AS error_count
-     FROM pda_error_logs WHERE created_at >= ? AND created_at < DATE_ADD(?, INTERVAL 1 DAY)`,
-    [today, today],
+     FROM pda_error_logs el ${logJoin('el')}
+     WHERE el.created_at >= ? AND el.created_at < DATE_ADD(?, INTERVAL 1 DAY)`,
+    [...slParams, today, today],
   ), { error_count: 0 })
   const undoSummary = await fetchOptional('warehouseOps.undoSummary', fetchOne(
     `SELECT COUNT(*) AS undo_count
-     FROM pda_undo_logs WHERE created_at >= ? AND created_at < DATE_ADD(?, INTERVAL 1 DAY)`,
-    [today, today],
+     FROM pda_undo_logs ul ${logJoin('ul')}
+     WHERE ul.created_at >= ? AND ul.created_at < DATE_ADD(?, INTERVAL 1 DAY)`,
+    [...slParams, today, today],
   ), { undo_count: 0 })
   const byOperator = await fetchOptional('warehouseOps.byOperator', fetchMany(
     `SELECT
@@ -356,17 +365,18 @@ async function fetchWarehouseOpsRows(scopeWarehouseIds = null) {
     [...slParams, today, today],
   ), [])
   const errByOp = await fetchOptional('warehouseOps.errByOp', fetchMany(
-    `SELECT operator_id AS operatorId, COUNT(*) AS errCount
-     FROM pda_error_logs WHERE created_at >= ? AND created_at < DATE_ADD(?, INTERVAL 1 DAY)
-     GROUP BY operator_id`,
-    [today, today],
+    `SELECT el.operator_id AS operatorId, COUNT(*) AS errCount
+     FROM pda_error_logs el ${logJoin('el')}
+     WHERE el.created_at >= ? AND el.created_at < DATE_ADD(?, INTERVAL 1 DAY)
+     GROUP BY el.operator_id`,
+    [...slParams, today, today],
   ), [])
   const flowRows = await fetchOptional('warehouseOps.flowRows', fetchMany(
     `SELECT status, COUNT(*) AS cnt
      FROM warehouse_tasks wt
-     WHERE wt.status IN (1,2,3,4,5)${wtWh.sql}
+     WHERE wt.deleted_at IS NULL AND wt.status IN (?)${wtWh.sql}
      GROUP BY status`,
-    wtWh.params,
+    [WT_STATUS_ACTIVE, ...wtWh.params],
   ), [])
   const hourlyRows = await fetchOptional('warehouseOps.hourlyRows', fetchMany(
     `SELECT HOUR(sl.scanned_at) AS hr, COUNT(*) AS cnt
@@ -377,9 +387,11 @@ async function fetchWarehouseOpsRows(scopeWarehouseIds = null) {
     [...slParams, today, today],
   ), [])
   const recentErrors = await fetchOptional('warehouseOps.recentErrors', fetchMany(
-    `SELECT id, task_id AS taskId, barcode, reason, operator_name AS operatorName, created_at AS createdAt
-     FROM pda_error_logs
-     ORDER BY created_at DESC LIMIT 10`,
+    `SELECT el.id, el.task_id AS taskId, el.barcode, el.reason, el.operator_name AS operatorName, el.created_at AS createdAt
+     FROM pda_error_logs el ${logJoin('el')}
+     WHERE el.created_at >= ? AND el.created_at < DATE_ADD(?, INTERVAL 1 DAY)
+     ORDER BY el.created_at DESC, el.id DESC LIMIT 10`,
+    [...slParams, today, today],
   ), [])
   return {
     today,

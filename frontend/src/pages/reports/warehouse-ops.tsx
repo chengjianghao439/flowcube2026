@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { usePollingReport } from '@/hooks/usePollingReport'
 import { formatDisplayDateTime } from '@/lib/dateTime'
+import { WT_STATUS } from '@/generated/status'
 import type { OpsOperator, FlowBottleneck } from '@/api/reports'
 
 // ── 每小时趋势图 ────────────────────────────────────────────────────────────
@@ -37,11 +38,12 @@ function HourlyChart({ data }: { data: { hour: string; count: number }[] }) {
 
 // ── 流程瓶颈条 ─────────────────────────────────────────────────────────────
 const FLOW_COLOR: Record<number, string> = {
-  1: 'bg-gray-300',
-  2: 'bg-blue-400',
-  3: 'bg-yellow-400',
-  4: 'bg-orange-400',
-  5: 'bg-green-400',
+  [WT_STATUS.PENDING]: 'bg-gray-300',
+  [WT_STATUS.PICKING]: 'bg-blue-400',
+  [WT_STATUS.SORTING]: 'bg-yellow-400',
+  [WT_STATUS.CHECKING]: 'bg-orange-400',
+  [WT_STATUS.PACKING]: 'bg-purple-400',
+  [WT_STATUS.SHIPPING]: 'bg-cyan-400',
 }
 
 function FlowBar({ items }: { items: FlowBottleneck[] }) {
@@ -125,7 +127,7 @@ export default function WarehouseOpsPage() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <StatTile icon={Truck} label="今日出库单数" value={s?.shippedToday ?? 0} hint="已完成出库" tone="success" />
           <StatTile icon={Layers} label="拣货中任务" value={s?.pickingNow ?? 0} hint="进行中" />
-          <StatTile icon={PackageOpen} label="今日入库单数" value={s?.inboundToday ?? 0} hint="已完成收货" />
+          <StatTile icon={PackageOpen} label="今日入库单数" value={s?.inboundToday ?? 0} hint="已全部上架完成" />
           <StatTile icon={BarChart3} label="今日扫码" value={s?.scanCount ?? 0} hint={`拣货 ${s?.pickQty ?? 0} 件`} />
           <StatTile icon={AlertTriangle} label="扫码错误" value={s?.errorCount ?? 0} hint={`错误率 ${s?.errorRate}`} accent={(s?.errorCount ?? 0) > 0} />
           <StatTile icon={Undo2} label="撤销次数" value={s?.undoCount ?? 0} hint="今日" accent={(s?.undoCount ?? 0) > 5} />
@@ -135,7 +137,7 @@ export default function WarehouseOpsPage() {
           <ReportPanel
             title="流程瓶颈分析"
             description="各步骤任务堆积量"
-            helper="用于查看拣货、复核、打包、完成的积压情况"
+            helper="查看待拣货、拣货、分拣、复核、打包和待出库任务的积压"
             empty={data.flowBottleneck.length === 0}
             emptyTitle="暂无流程瓶颈数据"
             emptyDescription="暂无流程堆积"
