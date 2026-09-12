@@ -18,6 +18,7 @@ import ProductFinderModal from '@/components/shared/ProductFinderModal'
 import { payloadClient } from '@/api/client'
 import { usePermission } from '@/hooks/usePermission'
 import { readNullableIntParam } from '@/lib/urlSearchParams'
+import { formatDisplayDateTime } from '@/lib/dateTime'
 import type { TableColumn } from '@/types'
 
 const STATUS_TONE: Record<number, 'warning' | 'success' | 'danger' | 'info'> = { 1: 'warning', 2: 'success', 3: 'danger', 4: 'info' }
@@ -139,7 +140,7 @@ export default function PriceChangePage() {
     { key: 'newPrice', title: '新价', width: 90, align: 'right', render: (v) => `¥${Number(v).toFixed(2)}` },
     { key: 'status', title: '状态', width: 80, render: (v) => <SoftStatusLabel label={STATUS_LABEL[Number(v)] ?? String(v)} tone={STATUS_TONE[Number(v)] ?? 'info'} /> },
     { key: 'applicantName', title: '申请人', width: 100 },
-    { key: 'createdAt', title: '申请时间', width: 160 },
+    { key: 'createdAt', title: '申请时间', width: 160, render: v => formatDisplayDateTime(v) },
     { key: 'id', title: '操作', width: 200, render: (_, row) => (
       <div className="flex gap-1">
         <OrderActivityDialog type="price" id={row.id} title={row.requestNo} fields={[

@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { SupplierFinder } from '@/components/finder/SupplierFinder'
 import { getPortalPurchaseStatusApi, type PortalPurchaseStatusRow } from '@/api/portal'
+import { formatDisplayDateTime } from '@/lib/dateTime'
 import type { TableColumn } from '@/types'
 
 const PAGE_SIZE = 20
@@ -39,7 +40,7 @@ export default function PortalPurchaseStatusPage() {
     { key: 'receivedQty', title: '已收量', width: 90, align: 'right', render: v => <span className="font-medium tabular-nums">{Number(v).toFixed(2)}</span> },
     { key: 'totalAmount', title: '金额', width: 110, align: 'right', render: v => <span className="tabular-nums">¥{Number(v).toFixed(2)}</span> },
     { key: 'warehouseName', title: '仓库', width: 100 },
-    { key: 'createdAt', title: '创建时间', width: 150, render: v => String(v).slice(0, 16) },
+    { key: 'createdAt', title: '创建时间', width: 150, render: v => formatDisplayDateTime(v) },
   ]
 
   return (

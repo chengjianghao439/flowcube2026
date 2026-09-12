@@ -711,6 +711,12 @@ async function main() {
   const log = createLogger()
   const ctx = await prepareSmokeContext()
   try {
+    try {
+      await require('./operation-request-concurrency.smoke.test').runOperationRequestConcurrencyChecks(ctx.pool)
+      log.assert('公共操作幂等并发、当前读与回执隔离回归通过', true)
+    } catch (e) {
+      log.assert('公共操作幂等并发、当前读与回执隔离回归通过', false, e.message)
+    }
     const adminLogin = await login(ctx.http, 'smoke_admin', 'SmokeAdmin123!')
     const adminToken = adminLogin.token
     log.assert('smoke_admin 登录成功', !!adminToken, `status=${adminLogin.response.status}`)

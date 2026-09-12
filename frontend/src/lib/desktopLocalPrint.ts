@@ -7,7 +7,7 @@
  */
 import axios from 'axios'
 import { payloadClient as apiClient } from '@/api/client'
-import { IS_ELECTRON_DESKTOP } from '@/lib/platform'
+import { isElectronRuntime } from '@/lib/platform'
 import { getDesktopClientId } from '@/lib/printQueue'
 
 /**
@@ -17,10 +17,7 @@ import { getDesktopClientId } from '@/lib/printQueue'
  *   路由。商品标签这类没有仓库归属的打印尤其依赖它，否则会被派到其它仓库的机器上。
  */
 export function desktopLocalPrintRequestHeaders(): Record<string, string> {
-  const isDesktop =
-    (typeof window !== 'undefined' && typeof window.flowcubeDesktop?.printZpl === 'function')
-    || IS_ELECTRON_DESKTOP
-  if (!isDesktop) return {}
+  if (!isElectronRuntime()) return {}
   const headers: Record<string, string> = { 'X-Flowcube-Desktop-Local-Print': '1' }
   const clientId = getDesktopClientId()
   if (clientId) headers['X-Print-Client-Id'] = clientId
@@ -33,14 +30,14 @@ function isDesktopLocalPrintAvailable(): boolean {
   )
 }
 
-/** 本机 RAW 能否执行：浏览器内永远为 browser；桌面包内若预加载失败则为 electron_no_bridge */
+/** 按实际运行时判断本机打印能力；桌面接口存在但缺少打印方法时为 electron_no_bridge。 */
 export function getLocalPrintEnvironmentKind():
   | 'ok'
   | 'browser'
   | 'electron_no_bridge' {
   if (typeof window === 'undefined') return 'browser'
   if (isDesktopLocalPrintAvailable()) return 'ok'
-  if (IS_ELECTRON_DESKTOP) return 'electron_no_bridge'
+  if (isElectronRuntime()) return 'electron_no_bridge'
   return 'browser'
 }
 

@@ -170,7 +170,7 @@ npm run test:permissions
 8. 状态变更先 `lockStatusRow()`，经 `assertStatusAction` / `assertWarehouseTaskAction` 校验并使用 `compareAndSetStatus()`；CAS 冲突返回 409。既有财务内联状态机保留等效的事务行锁校验，不退化成裸 UPDATE。
 9. 数量为 DECIMAL，销售等单据输入最多 4 位小数，单位折算后若小于 0.0001 必须拒绝，不能舍入成零；比较/累加防浮点误差，打包沿用 `toQtyUnits/fromQtyUnits`。
 10. 不恢复已关闭的手动入库/手动库存调整入口；入库走收货，调整走盘点。初始化导入等专用流程遵守其既有校验，不扩展通用后门。
-11. 写操作考虑连点与断网重试：前端稳定 `X-Request-Key`，后端 `beginOperationRequest/completeOperationRequest`，结合唯一键和 CAS。资源级写操作的 action 必须绑定单据 ID，避免同一请求键跨单据误重放；重放返回原回执，不能重复加库存、推进状态或入账。
+11. 写操作考虑连点与断网重试：前端稳定 `X-Request-Key`，后端 `beginOperationRequest/completeOperationRequest`，结合唯一键和 CAS。资源级写操作的 action 必须绑定单据 ID，避免同一请求键跨单据误重放；重放返回原回执，不能重复加库存、推进状态或入账。公共操作幂等在重复 INSERT 后以 `FOR SHARE` 当前读检查既有回执，避免两个重放事务将唯一键共享锁升级为排他锁而死锁；不能改成可能漏掉新提交回执的快照读。确定性并发专项已接入 `smoke:concurrency-guards`，验证与全模块覆盖见 `docs/all-module-regression-2026-09-12.md`。
 12. 事务内禁止外部 HTTP 或物理打印。打印只在数据库入队，实际动作异步；补打不建容器、不加库存、不改账款。
 13. 缓存漂移先只读检查；需要修复时走既有 resync/引擎入口，不能手改数据库。不要为了“验证”擅自跑会修复数据的命令。
 14. 改引擎或状态机前读完整调用链与历史事故注释；副作用变化同步 `WT_ON_ENTER_ACTIONS` / `WT_ON_EXIT_ACTIONS` 及相关测试。
@@ -259,7 +259,7 @@ npm run test:permissions
 - 状态展示统一 `StatusBadge` / `SoftStatusLabel` 与 `statusTone.ts` 语义色，不硬编码彩色 Badge。
 - DataTable 列宽采用独立调整：从全部业务列实际宽度取快照，勾选列不参与，只改变目标列，超出容器后横向滚动。操作列与其他业务列一样支持拖动表头调整顺序；所有业务列表头分隔线支持拖动、双击适应内容及方向键微调，单列也可调整；按用户要求，表格上方不再显示“恢复默认列宽”按钮及其工具栏。既有列顺序和宽度设置保留，比例布局仅作为默认和旧设置兼容，手动调整后保存 widthUnit=px。拖动通过动画帧更新 colgroup/table，松手一次提交，不反复重绘明细；Escape、失焦、卸载及结构变化均取消预览、释放监听并恢复样式。普通重新渲染不得重载旧布局，默认存储路径绑定表格挂载页面。回归与验证见 `docs/table-column-resize-2026-09-06.md`。行内 `TableActionsMenu` 首次展开前只渲染普通按钮，首次展开后保留菜单实例与原键盘、焦点、页面隐藏规则，避免完整列表预挂载数千个菜单；商品列表按数据、分类和打印状态缓存列定义与表格，无关路由变化不重绘完整商品表；性能定位与边界见 `docs/dev-navigation-performance-2026-09-09.md`。
 - 开单提效（2026-09-12，工作区实现）：销售新建/草稿编辑/改单、采购新建/草稿编辑在首次保存后集中列出当前填写问题，点击仅定位本表单，修正后即时更新。销售空占位行继续忽略，采购空商品行必须补全；销售数量/单价为正，采购数量为正整数且允许零单价，非有限值拒绝。明细数量/单价使用 Enter 前进、Shift+Enter 返回，末行只聚焦添加按钮，不自动保存或新增，保留 Tab 与输入法。销售异步价格绑定客户、商品及请求版本，手动改价优先于之前发出的请求；明确切换客户仍重新定价。查询未结束或失败/无有效价格时不得保存，失败后允许用户明确确认当前单价。后端继续权威校验，详见 `docs/order-entry-efficiency-2026-09-12.md`。
-- 大列表优化（2026-09-12）：商品、库存总览/流水、销售和履约待办在至少 200 行时使用共享 `VirtualTableBody`，按真实行高仅挂载视口与缓冲行，沿用工作区滚动条；完整列表数据、服务端权限、全选/导出范围不变。列布局与交互提取至 `useTableColumns`。高频列表通过 `useVisibleQuery` 在隐藏时解除订阅，独占的在途请求经 AbortSignal 取消，同键可见消费者不受影响；切回按缓存状态读取。商品和销售筛选绑定自己的 TabPath，不能串用另一工作区 URL。具体实现、浏览器验证及已知边界见 `docs/operations-optimization-2026-09-12.md`。
+- 大列表优化（2026-09-12）：商品、库存总览/流水、销售、履约待办、条码打印查询和操作日志在至少 200 行时使用共享 `VirtualTableBody`，按真实行高仅挂载视口与缓冲行，沿用工作区滚动条；完整列表数据、服务端权限、全选/导出范围不变。列布局与交互提取至 `useTableColumns`。高频列表通过 `useVisibleQuery` 在隐藏时解除订阅，独占的在途请求经 AbortSignal 取消，同键可见消费者不受影响；切回按缓存状态读取。商品和销售筛选绑定自己的 TabPath，不能串用另一工作区 URL。具体实现、浏览器验证及已知边界见 `docs/operations-optimization-2026-09-12.md`。 条码打印查询的当前收货链路仅由显式合法 `inboundTaskId` 筛选建立，异常计数只包含该单，普通全量入口不从首行推断当前单据。全模块验证与修复见 `docs/all-module-regression-2026-09-12.md`。
 - 复用 DataTable、TableActionsMenu、QueryErrorState、finder、usePermission、useDirtyGuard、useInvalidate 等已有结构；keepAlive 表单在挂载/参数变化时重置，未保存内容有退出保护。
 - 桌面端判定使用运行时 `window.flowcubeDesktop`，不能用构建 flag 把浏览器误判成 Electron。
 - 系统品牌采用已确认的蓝底双曲线 F；官网、ERP/PDA 登录页、PDA 首页通过 `SystemBrand` 复用本地哈希资源。网页 favicon/触屏图标、桌面程序/安装器、Android 普通/圆形/自适应图标与启动屏由 `scripts/generate-brand-icons.cjs` 从 `docs/branding/flow-icon-approved.png` 导出。公司 Logo 仍只用于 ERP 顶栏/单据打印，保持公司图优先及文字回退，不混用。素材、生成方式与验收见 `docs/brand-icons-2026-09-07.md`。

@@ -11,6 +11,7 @@ import { FinderTrigger } from '@/components/finder'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { CustomerFinder } from '@/components/finder/CustomerFinder'
 import { getPortalStatementsApi, type PortalStatementRow } from '@/api/portal'
+import { formatDisplayDateTime } from '@/lib/dateTime'
 import type { TableColumn } from '@/types'
 
 const PAGE_SIZE = 20
@@ -44,7 +45,7 @@ export default function PortalStatementsPage() {
       const tone = r.status === 3 ? 'success' : r.status === 2 ? 'active' : 'draft'
       return <SoftStatusLabel label={r.statusName} tone={tone} />
     } },
-    { key: 'createdAt', title: '创建时间', width: 150, render: v => String(v).slice(0, 16) },
+    { key: 'createdAt', title: '创建时间', width: 150, render: v => formatDisplayDateTime(v) },
   ]
 
   return (

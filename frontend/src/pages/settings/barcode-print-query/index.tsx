@@ -12,6 +12,7 @@ import { getBarcodePrintRecordsApi, reprintBarcodeRecordApi } from '@/api/print-
 import { printQueueFeedback, triggerPrintPoll } from '@/lib/printQueue'
 import { toast } from '@/lib/toast'
 import { formatDisplayDateTime } from '@/lib/dateTime'
+import { readNullableIntParam } from '@/lib/urlSearchParams'
 import type { TableColumn } from '@/types'
 import type { BarcodePrintCategory, BarcodePrintRecord } from '@/types/print-jobs'
 import { useWorkspaceStore } from '@/store/workspaceStore'
@@ -42,8 +43,8 @@ export default function BarcodePrintQueryPage() {
   const qc = useQueryClient()
   const [searchParams] = useSearchParams()
   const initialCategory = (searchParams.get('category') as BarcodePrintCategory | null) || 'inbound'
-  const initialInboundTaskId = Number(searchParams.get('inboundTaskId') || 0) || undefined
-  const initialInboundTaskItemId = Number(searchParams.get('inboundTaskItemId') || 0) || undefined
+  const initialInboundTaskId = readNullableIntParam(searchParams, 'inboundTaskId') ?? undefined
+  const initialInboundTaskItemId = readNullableIntParam(searchParams, 'inboundTaskItemId') ?? undefined
   const initialKeyword = searchParams.get('keyword') || ''
   const [category, setCategory] = useState<BarcodePrintCategory>(initialCategory)
   const [keyword, setKeyword] = useState(initialKeyword)
@@ -218,13 +219,13 @@ export default function BarcodePrintQueryPage() {
 
   const rows = useMemo(() => query.data?.list ?? [], [query.data])
   const inboundContext = useMemo(() => {
-    if (category !== 'inbound') return null
-    const taskId = initialInboundTaskId || rows.find(row => row.inboundTaskId)?.inboundTaskId
-    if (!taskId) return null
-    const failedCount = rows.filter(row => row.latestJob?.statusKey === 'failed').length
-    const timeoutCount = rows.filter(row => row.latestJob?.statusKey === 'timeout').length
-    const printingCount = rows.filter(row => row.latestJob?.statusKey === 'printing' || row.latestJob?.statusKey === 'queued').length
-    const taskNo = rows.find(row => row.inboundTaskId === taskId)?.bizNo ?? `#${taskId}`
+    if (category !== 'inbound' || !initialInboundTaskId) return null
+    const taskId = initialInboundTaskId
+    const taskRows = rows.filter(row => row.inboundTaskId === taskId)
+    const failedCount = taskRows.filter(row => row.latestJob?.statusKey === 'failed').length
+    const timeoutCount = taskRows.filter(row => row.latestJob?.statusKey === 'timeout').length
+    const printingCount = taskRows.filter(row => row.latestJob?.statusKey === 'printing' || row.latestJob?.statusKey === 'queued').length
+    const taskNo = taskRows[0]?.bizNo ?? `#${taskId}`
     return {
       taskId,
       taskNo,
@@ -414,6 +415,7 @@ export default function BarcodePrintQueryPage() {
       )}
 
       <DataTable
+        virtualized
         columns={columns}
         data={rows}
         loading={query.isLoading}

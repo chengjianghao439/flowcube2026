@@ -182,18 +182,13 @@ export default function RacksPage() {
               >
                 {localPrintEnv === 'browser' ? (
                   <>
-                    <strong>当前页面无法本机出纸：</strong>
-                    检测到在普通浏览器中打开，不会调用 Windows
-                    打印队列，故「打印队列里什么也没有」是正常现象。请安装并打开
-                    <strong> 极序 Flow ERP 桌面客户端</strong>
-                    ，在桌面程序里登录同一服务器后再点「打印」。
+                    <strong>浏览器可提交打印任务。</strong>
+                    如需使用本机标签打印机，请打开极序 Flow 桌面客户端。
                   </>
                 ) : (
                   <>
-                    <strong>桌面端未加载本机打印桥接：</strong>
-                    无法向标签机送 RAW。请完全退出后重启极序 Flow ERP；仍不行请检查安全软件是否拦截预加载脚本。在控制台执行{' '}
-                    <code className="rounded bg-muted px-1">typeof window.flowcubeDesktop?.printZpl</code> 应显示{' '}
-                    <code className="rounded bg-muted px-1">&quot;function&quot;</code>。
+                    <strong>本机打印暂不可用。</strong>
+                    请退出后重新打开极序 Flow；若仍无法打印，请联系管理员。
                   </>
                 )}
               </div>

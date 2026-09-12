@@ -17,7 +17,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { toast } from '@/lib/toast'
-import { IS_ELECTRON_DESKTOP } from '@/lib/platform'
+import { isElectronRuntime } from '@/lib/platform'
 import { ensureUniquePrinterCode, systemNameToPrinterCode } from '@/utils/printerCode'
 import {
   normalizeSystemPrinterName,
@@ -136,8 +136,9 @@ export default function PrintersPage() {
   const [deleteTarget, setDeleteTarget] = useState<Printer | null>(null)
   const [aliasDraft, setAliasDraft] = useState<Record<string, string>>({})
 
+  const isDesktop = isElectronRuntime()
   const canUseSystemPrinters =
-    IS_ELECTRON_DESKTOP && typeof window.flowcubeDesktop?.getSystemPrinters === 'function'
+    isDesktop && typeof window.flowcubeDesktop?.getSystemPrinters === 'function'
 
   const { data: printers = [], isLoading } = usePrinters()
 
@@ -362,14 +363,19 @@ export default function PrintersPage() {
     <div className="space-y-6">
       <PageHeader title="打印机管理" description="管理打印设备、标签用途与任务绑定" actions={<Button onClick={openAddDialog}>添加打印机</Button>} />
 
-      {IS_ELECTRON_DESKTOP && (
+      {canUseSystemPrinters ? (
         <div className="rounded-lg border border-border bg-card p-4">
-          <h3 className="text-card-title">本机打印标签（原始指令模式）</h3>
+          <h3 className="text-card-title">本机标签打印机</h3>
           <p className="mt-2 text-muted-body leading-relaxed">
-            无需填写任何网络地址。请使用下方「从本机添加」，在系统已安装的打印机里选中您的标签机，并在用途中绑定「库存标签」等；打印时软件会按该打印机在系统中的名称自动出纸。请勿随意修改 ERP
-            里该打印机的「名称」，以免与系统不一致导致打不出来。
+            点击「添加打印机」选择本机已安装的设备，再绑定标签用途。打印机名称需与系统中的名称保持一致。
           </p>
         </div>
+      ) : (
+        <p className="text-muted-body">
+          {isDesktop
+            ? '本机打印机读取暂不可用，请重新打开极序 Flow；若仍无法读取，请联系管理员。'
+            : '如需添加本机打印机，请在极序 Flow 桌面客户端打开本页。'}
+        </p>
       )}
 
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>

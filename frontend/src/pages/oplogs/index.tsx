@@ -168,7 +168,7 @@ export default function OpLogsPage() {
           <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>
         </div>
       )}
-      <DataTable columns={columns} data={data?.list || []} loading={isLoading} />
+      <DataTable virtualized columns={columns} data={data?.list || []} loading={isLoading} />
 
       <ListSummary total={total} unit="条" />
       <ConfirmDialog

@@ -21,11 +21,11 @@ function parseResponseJson(raw) {
   }
 }
 
-async function getOperationRequest({ requestKey, action, userId, conn = pool, forUpdate = false }) {
+async function getOperationRequest({ requestKey, action, userId, conn = pool, forShare = false }) {
   const key = normalizeRequestKey(requestKey)
   if (!key) return null
   const uid = userId != null ? Number(userId) : null
-  const lockSql = forUpdate ? ' FOR UPDATE' : ''
+  const lockSql = forShare ? ' FOR SHARE' : ''
   const [[row]] = await conn.query(
     `SELECT *
      FROM operation_requests
@@ -62,12 +62,15 @@ async function beginOperationRequest(conn, { requestKey, action, userId }) {
     }
   } catch (error) {
     if (error?.code !== 'ER_DUP_ENTRY') throw error
+    // 重复INSERT已持有唯一键S锁；这里只读既有状态，不应升级X锁。
+    // 多个重放者同时FOR UPDATE会互相等待对方的S锁而死锁。
+    // FOR SHARE仍是当前读，能看到事务旧快照之后提交的回执，不能换成普通SELECT。
     const existing = await getOperationRequest({
       requestKey: key,
       action: normalizedAction,
       userId: uid,
       conn,
-      forUpdate: true,
+      forShare: true,
     })
     if (!existing) {
       throw new AppError('请求结果暂不可确认，请稍后重试', 409)
