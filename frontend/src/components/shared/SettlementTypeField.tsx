@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
@@ -28,6 +29,9 @@ interface Props {
  * 避免存出「现结但账期 30 天」的矛盾数据。
  */
 export function SettlementTypeField({ settlementType, paymentTermsDays, onChange, disabled, side }: Props) {
+  const fieldId = useId()
+  const typeId = `${fieldId}-type`
+  const termsId = `${fieldId}-terms`
   const isMonthly = settlementType === SETTLEMENT_TYPE.MONTHLY
   const termsLabel = side === 'payable' ? '应付账期' : '应收账期'
 
@@ -43,9 +47,9 @@ export function SettlementTypeField({ settlementType, paymentTermsDays, onChange
   return (
     <div className="grid grid-cols-2 gap-4">
       <div className="space-y-1">
-        <Label>结算方式</Label>
+        <Label htmlFor={typeId}>结算方式</Label>
         <Select value={String(settlementType)} onValueChange={handleTypeChange} disabled={disabled}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger id={typeId}><SelectValue /></SelectTrigger>
           <SelectContent>
             {Object.entries(SETTLEMENT_TYPE_NAME).map(([value, label]) => (
               <SelectItem key={value} value={value}>{label}</SelectItem>
@@ -57,13 +61,13 @@ export function SettlementTypeField({ settlementType, paymentTermsDays, onChange
 
       {isMonthly && (
         <div className="space-y-1">
-          <Label>{termsLabel}</Label>
+          <Label htmlFor={termsId}>{termsLabel}</Label>
           <Select
             value={String(paymentTermsDays || 30)}
             onValueChange={v => onChange({ settlementType, paymentTermsDays: Number(v) })}
             disabled={disabled}
           >
-            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectTrigger id={termsId}><SelectValue /></SelectTrigger>
             <SelectContent>
               {MONTHLY_TERMS_OPTIONS.map(d => (
                 <SelectItem key={d} value={String(d)}>{d} 天</SelectItem>

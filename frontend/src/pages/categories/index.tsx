@@ -122,9 +122,9 @@ function CategoryFormDialog({ open, mode, parentCat, editCat, onClose }: FormDia
         <form onSubmit={handleSubmit} className="space-y-4 py-1">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label>分类名称 *</Label>
+              <Label htmlFor="category-name">分类名称 *</Label>
               <Input
-                value={form.name ?? ''}
+                id="category-name" value={form.name ?? ''}
                 onChange={e => set('name', e.target.value)}
                 placeholder="请输入分类名称"
                 disabled={isPending}
@@ -132,15 +132,15 @@ function CategoryFormDialog({ open, mode, parentCat, editCat, onClose }: FormDia
             </div>
             {mode === 'edit' && editCat?.code && (
               <div className="space-y-1.5">
-                <Label>分类编码</Label>
-                <Input value={editCat.code} disabled className="bg-muted/50 font-mono text-sm" />
+                <Label htmlFor="category-code">分类编码</Label>
+                <Input id="category-code" value={editCat.code} disabled className="bg-muted/50 font-mono text-sm" />
               </div>
             )}
             <div className="space-y-1.5">
-              <Label>排序</Label>
+              <Label htmlFor="category-sortOrder">排序</Label>
               <Input
                 type="number"
-                value={form.sortOrder ?? 0}
+                id="category-sortOrder" value={form.sortOrder ?? 0}
                 onChange={e => set('sortOrder', e.target.value)}
                 placeholder="数字越小越靠前"
                 disabled={isPending}
@@ -160,9 +160,9 @@ function CategoryFormDialog({ open, mode, parentCat, editCat, onClose }: FormDia
             )}
           </div>
           <div className="space-y-1.5">
-            <Label>备注</Label>
+            <Label htmlFor="category-remark">备注</Label>
             <Input
-              value={form.remark ?? ''}
+              id="category-remark" value={form.remark ?? ''}
               onChange={e => set('remark', e.target.value)}
               placeholder="选填"
               disabled={isPending}

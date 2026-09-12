@@ -274,13 +274,13 @@ export default function DepartmentsPage() {
           </DialogHeader>
           <div className="grid grid-cols-2 gap-x-5 gap-y-4 py-2">
             <div className="space-y-2">
-              <Label>部门名称</Label>
-              <Input value={form.name} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, name: e.target.value })} placeholder="如：采购部" />
+              <Label htmlFor="department-name">部门名称</Label>
+              <Input id="department-name" value={form.name} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, name: e.target.value })} placeholder="如：采购部" />
             </div>
             <div className="space-y-2">
-              <Label>上级部门</Label>
+              <Label htmlFor="department-parentId">上级部门</Label>
               <Select value={String(form.parentId)} onValueChange={(v) => setForm({ ...form, parentId: Number(v) })}>
-                <SelectTrigger className="w-full">
+                <SelectTrigger id="department-parentId" className="w-full">
                   <SelectValue placeholder="无（顶级部门）" />
                 </SelectTrigger>
                 <SelectContent>
@@ -292,9 +292,9 @@ export default function DepartmentsPage() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>部门负责人</Label>
+              <Label htmlFor="department-managerId">部门负责人</Label>
               <Select value={form.managerId ? String(form.managerId) : '0'} onValueChange={(v) => setForm({ ...form, managerId: v === '0' ? null : Number(v) })}>
-                <SelectTrigger className="w-full">
+                <SelectTrigger id="department-managerId" className="w-full">
                   <SelectValue placeholder="未设置" />
                 </SelectTrigger>
                 <SelectContent>
@@ -306,12 +306,12 @@ export default function DepartmentsPage() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>排序</Label>
-              <Input type="number" min={0} value={form.sortOrder} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, sortOrder: Number(e.target.value) || 0 })} />
+              <Label htmlFor="department-sortOrder">排序</Label>
+              <Input type="number" min={0} id="department-sortOrder" value={form.sortOrder} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, sortOrder: Number(e.target.value) || 0 })} />
             </div>
             <div className="col-span-2 space-y-2">
-              <Label>备注</Label>
-              <Input value={form.remark} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, remark: e.target.value })} />
+              <Label htmlFor="department-remark">备注</Label>
+              <Input id="department-remark" value={form.remark} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, remark: e.target.value })} />
             </div>
           </div>
           <DialogFooter>

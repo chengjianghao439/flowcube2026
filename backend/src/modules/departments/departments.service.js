@@ -74,7 +74,8 @@ async function update(id, { name, parentId, managerId, sortOrder, remark }) {
       if (seen.has(cur)) break
       seen.add(cur)
       const [[pp]] = await pool.query('SELECT parent_id FROM sys_departments WHERE id=? AND deleted_at IS NULL', [cur])
-      cur = pp ? Number(pp.parent_id) : 0
+      if (!pp) throw new AppError('上级部门不存在', 400)
+      cur = Number(pp.parent_id)
     }
   }
   if (managerId) {
@@ -86,7 +87,7 @@ async function update(id, { name, parentId, managerId, sortOrder, remark }) {
     [
       name !== undefined && name !== null && String(name).trim() ? String(name).trim() : d.name,
       newParent,
-      managerId ? Number(managerId) : null,
+      managerId === undefined ? d.manager_id : (managerId ? Number(managerId) : null),
       sortOrder !== undefined ? Number(sortOrder) || 0 : Number(d.sort_order),
       remark !== undefined ? remark : d.remark,
       Number(id),

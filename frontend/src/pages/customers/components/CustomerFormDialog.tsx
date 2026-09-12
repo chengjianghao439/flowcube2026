@@ -18,6 +18,7 @@ const empty = {
   paymentTermsDays: 30,
   creditEnabled: false,
   creditLimit: '' as string,
+  isActive: true,
 }
 const PHONE_RE = /^1\d{10}$/
 
@@ -38,6 +39,7 @@ export default function CustomerFormDialog({ open, onClose, customer }: Props) {
         paymentTermsDays: customer.paymentTermsDays ?? 30,
         creditEnabled: customer.creditLimit != null,
         creditLimit: customer.creditLimit != null ? String(customer.creditLimit) : '',
+        isActive: customer.isActive,
       })
     } else {
       setF(empty)
@@ -47,11 +49,11 @@ export default function CustomerFormDialog({ open, onClose, customer }: Props) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (f.phone && !PHONE_RE.test(f.phone)) { toast.error('请输入正确的手机号'); return }
-    const { creditEnabled, creditLimit: cl, ...rest } = f
+    const { creditEnabled, creditLimit: cl, isActive, ...rest } = f
     const payload = { ...rest, creditLimit: creditEnabled ? (cl === '' ? 0 : Number(cl)) : null }
     try {
       if (isEdit && customer) {
-        await update.mutateAsync({ id:customer.id, data:{ ...payload, isActive:customer.isActive } })
+        await update.mutateAsync({ id:customer.id, data:{ ...payload, isActive } })
       } else {
         await create.mutateAsync(payload)
       }
@@ -72,8 +74,8 @@ export default function CustomerFormDialog({ open, onClose, customer }: Props) {
           <div className="grid grid-cols-2 gap-x-6 gap-y-3">
             {isEdit && (
               <div className="space-y-1">
-                <Label>客户编码</Label>
-                <Input value={customer?.code ?? ''} disabled className="bg-muted/50 font-mono text-sm" />
+                <Label htmlFor="customer-code">客户编码</Label>
+                <Input id="customer-code" value={customer?.code ?? ''} disabled className="bg-muted/50 font-mono text-sm" />
               </div>
             )}
             <div className="space-y-1">
@@ -125,6 +127,15 @@ export default function CustomerFormDialog({ open, onClose, customer }: Props) {
               <p className="text-xs text-muted-foreground">未启用时，不对该客户执行授信额度校验。</p>
             )}
           </div>
+          {isEdit && (
+            <div className="flex items-center gap-2 border-t pt-4">
+              <input type="checkbox" id="customer-active" checked={f.isActive}
+                onChange={e => setF(p => ({ ...p, isActive: e.target.checked }))}
+                disabled={loading} className="accent-primary" />
+              <Label htmlFor="customer-active" className="cursor-pointer">启用</Label>
+              <span className="text-xs text-muted-foreground">停用后不能用于新建业务，历史单据保留。</span>
+            </div>
+          )}
           <DialogFooter className="border-t pt-4">
             <Button type="button" variant="outline" onClick={onClose}>取消</Button>
             <Button type="submit" disabled={loading}>{loading ? '保存中…' : '保存'}</Button>

@@ -162,17 +162,17 @@ export default function SuppliersPage() {
             <div className="grid grid-cols-2 gap-x-6 gap-y-3">
               {isEdit && (
                 <div className="space-y-1">
-                  <Label>供应商编码</Label>
-                  <Input value={editing.code} disabled className="bg-muted/50 font-mono text-sm" />
+                  <Label htmlFor="supplier-code">供应商编码</Label>
+                  <Input id="supplier-code" value={editing.code} disabled className="bg-muted/50 font-mono text-sm" />
                 </div>
               )}
-              <div className="space-y-1"><Label>名称 *</Label><LimitedInput maxLength={20} value={form.name} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('name',e.target.value)} placeholder="供应商名称"/></div>
-              <div className="space-y-1"><Label>联系人</Label><LimitedInput maxLength={5} value={form.contact} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('contact',e.target.value)}/></div>
-              <div className="space-y-1"><Label>电话</Label><LimitedInput maxLength={11} value={form.phone} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('phone',e.target.value)} placeholder="11位手机号" inputMode="numeric"/></div>
-              <div className="space-y-1"><Label>邮箱</Label><Input value={form.email} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('email',e.target.value)} placeholder="选填"/></div>
+              <div className="space-y-1"><Label htmlFor="supplier-name">名称 *</Label><LimitedInput maxLength={20} id="supplier-name" value={form.name} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('name',e.target.value)} placeholder="供应商名称"/></div>
+              <div className="space-y-1"><Label htmlFor="supplier-contact">联系人</Label><LimitedInput maxLength={5} id="supplier-contact" value={form.contact} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('contact',e.target.value)}/></div>
+              <div className="space-y-1"><Label htmlFor="supplier-phone">电话</Label><LimitedInput maxLength={11} id="supplier-phone" value={form.phone} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('phone',e.target.value)} placeholder="11位手机号" inputMode="numeric"/></div>
+              <div className="space-y-1"><Label htmlFor="supplier-email">邮箱</Label><Input id="supplier-email" value={form.email} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('email',e.target.value)} placeholder="选填"/></div>
             </div>
-            <div className="space-y-1"><Label>地址</Label><LimitedInput maxLength={30} value={form.address} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('address',e.target.value)}/></div>
-            <div className="space-y-1"><Label>备注</Label><LimitedInput maxLength={30} value={form.remark} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('remark',e.target.value)}/></div>
+            <div className="space-y-1"><Label htmlFor="supplier-address">地址</Label><LimitedInput maxLength={30} id="supplier-address" value={form.address} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('address',e.target.value)}/></div>
+            <div className="space-y-1"><Label htmlFor="supplier-remark">备注</Label><LimitedInput maxLength={30} id="supplier-remark" value={form.remark} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('remark',e.target.value)}/></div>
             <h3 className="border-t pt-4 text-sm font-medium">结算与供货</h3>
             <SettlementTypeField
               side="payable"
@@ -181,8 +181,8 @@ export default function SuppliersPage() {
               onChange={next => setForm(f => ({ ...f, ...next }))}
             />
             <div className="space-y-1">
-              <Label>采购提前期（天）</Label>
-              <Input type="number" min="0" max="365" value={String(form.leadTimeDays)}
+              <Label htmlFor="supplier-leadTimeDays">采购提前期（天）</Label>
+              <Input id="supplier-leadTimeDays" type="number" min="0" max="365" value={String(form.leadTimeDays)}
                 onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setForm(f=>({...f, leadTimeDays: Number(e.target.value) || 0}))}
                 placeholder="下单到到货天数，用于采购计划预测" />
             </div>

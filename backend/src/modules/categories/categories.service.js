@@ -111,7 +111,7 @@ async function create({ name, parentId, sortOrder, remark }, operatorId) {
      VALUES (?, ?, ?, ?, ?, 1, ?, ?)`,
     [code, name, parentId || null, level, sortOrder ?? 0, path, remark || null],
   )
-  logger.info('categories', `创建分类 [${name}] level=${level} code=${code}`, { id: r.insertId, operatorId })
+  logger.info(`创建分类 [${name}] level=${level} code=${code}`, { id: r.insertId, operatorId }, 'categories')
   return { id: r.insertId, code }
 }
 
@@ -124,7 +124,7 @@ async function update(id, { name, sortOrder, status, remark }, operatorId) {
      WHERE id = ? AND deleted_at IS NULL`,
     [name, sortOrder ?? 0, status !== undefined ? (status ? 1 : 0) : 1, remark || null, id],
   )
-  logger.info('categories', `更新分类 [id=${id}]`, { operatorId })
+  logger.info(`更新分类 [id=${id}]`, { operatorId }, 'categories')
 }
 
 async function remove(id, operatorId) {
@@ -145,7 +145,7 @@ async function remove(id, operatorId) {
   await pool.query(
     'UPDATE product_categories SET deleted_at = NOW() WHERE id = ? AND deleted_at IS NULL', [id]
   )
-  logger.info('categories', `删除分类 [${cat.name}]`, { operatorId })
+  logger.info(`删除分类 [${cat.name}]`, { operatorId }, 'categories')
 }
 
 async function toggleStatus(id, status, operatorId) {
@@ -153,7 +153,7 @@ async function toggleStatus(id, status, operatorId) {
   await pool.query(
     'UPDATE product_categories SET status = ? WHERE id = ? AND deleted_at IS NULL', [status, id]
   )
-  logger.info('categories', `${status ? '启用' : '停用'}分类 [${cat.name}]`, { operatorId })
+  logger.info(`${status ? '启用' : '停用'}分类 [${cat.name}]`, { operatorId }, 'categories')
 }
 
 module.exports = { getTree, getFlat, getLeaves, getById, create, update, remove, toggleStatus }

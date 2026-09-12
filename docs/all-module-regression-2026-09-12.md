@@ -35,13 +35,13 @@
 |---|---|---|---|
 | `/api/auth` 认证 | users-roles、warehouse-scope、pda-device-session；cors-policy | 通过所测登录、改密/禁用令牌失效、设备会话与来源断言 | ERP 现有登录不代表所有角色或全部续期竞态；不登出用户会话。 |
 | `/api/users` 用户 | users-roles、warehouse-scope、audit-finance-security | 通过所测用户创建/改密/禁用与超管保护 | 用户页入口已打开；列表筛选及全部管理动作仍需逐项确认。 |
-| `/api/departments` 部门 | 无部门管理直接专项 | 仅 /departments 入口读取 | approval-flow 的部门/审批 fixture 不等于部门 CRUD 或部门树权限验证。 |
+| `/api/departments` 部门 | masterdata | 65条HTTP断言通过：CRUD、父级/防环、负责人、省略/清空、成员引用与权限 | 部门表单、空名校验及父级排除自身已查；未在开发库保存。 |
 | `/api/approvals` 审批 | approval-flow、purchase-approval | 通过多级审批引擎与采购审批所测分支 | /approvals/pending、/approvals/flows 入口已打开；审批流配置 CRUD 未单独证明。 |
 | `/api/warehouses` 仓库 | warehouse-scope、prelaunch-scope-export | 通过业务单据跨仓守卫及停用仓拒绝等断言 | /warehouses 入口已打开；建仓/删除/仓库结构管理未完整测试。 |
-| `/api/suppliers` 供应商 | 无供应商管理直接专项 | 仅 /suppliers 入口读取 | 供应商作为采购 fixture、打印数据源不等于供应商 CRUD 通过。 |
+| `/api/suppliers` 供应商 | masterdata | 77条HTTP断言通过；修复新建SQL占位符错误，覆盖CRUD、查询、输入、结算与引用保护 | 新建/编辑字段与标签已查，未在开发库保存。 |
 | `/api/products` 商品 | mainline 的商品导入；prelaunch-scope-export 的停用商品保护 | 通过导入入口及指定主数据引用保护 | /products 入口已打开；商品全字段编辑、价格等级等不由这些断言覆盖。 |
 | `/api/inventory` 库存 | audit-inventory、atp、p0-regression、p1-regression、test:integration | 通过 ACTIVE 容器事实、预计绑定及主链路数量一致性断言 | /inventory、/inventory/trace 等入口已打开；未在开发库执行缓存重算或库存调整。 |
-| `/api/customers` 客户 | 无客户管理 CRUD 专项；prelaunch-scope-export 验门户客户 ID 与导出 | 客户管理仅入口读取；关联身份/导出所测断言通过 | 同名/改名门户归属测试不等于客户主档编辑全流程。 |
+| `/api/customers` 客户 | masterdata；prelaunch-scope-export | 89条主数据HTTP断言通过，覆盖CRUD、查询、授信权限/审计、引用与停用 | 客户筛选、空名保护及新增编辑启停入口已查；前端3项回归通过，未保存开发库。 |
 | `/api/customer-addresses` 客户地址 | 无直接专项 | 销售新建表单选择客户后地址簿弹层已打开 | 无独立注册页；地址详情、默认地址、创建删除未单独测试。 |
 | `/api/carriers` 承运商与快递账户 | test:direct-express；smoke:direct-express | 离线50项通过；DB首轮发现并发死锁，修复后专项通过，见第4节 | /carriers、/carrier-accounts 已打开；未发真实快递请求，不能称正式月结下单已验。 |
 | `/api/logistics` 物流 | test:direct-express；smoke:direct-express | 离线签名/防重复断言通过；共享幂等死锁已修复并完成定向回归证据 | /logistics、运费对账入口已打开；轨迹读取与真实下单、作废、运费支付分开。 |
@@ -75,7 +75,7 @@
 | `/api/warehouse-tasks` 仓库任务 | concurrency-guards、sale-adjustment、p0-regression、p1-regression、warehouse-scope | 通过取消逆向归还、阶段保护、分仓出库与跨仓拒绝断言 | 无独立ERP注册页；波次/销售详情消费者与PDA实机阶段操作分开。 |
 | `/api/price-lists` 价格表 | frontend-unit 中销售价格解析mock用例；无价格表DB专项结论 | 仅客户/销售入口读取；不能以mock通过宣称真实定价通过 | 无独立注册页；需补真实 customer-price、价格表明细与权限API用例。 |
 | `/api/price-change` 改价 | audit-finance-security | 无匹配/停用/金额不匹配审批流拒绝且不改价断言通过 | /price-change 已打开；完整改价批准成功路径与UI交互未单独证明。 |
-| `/api/categories` 分类 | 无分类管理直接专项 | 仅 /categories 入口读取 | 分类树、层级调整/删除与商品引用约束未专测。 |
+| `/api/categories` 分类 | masterdata | 71条HTTP断言通过：四级树/祖先路径、第五级拒绝、状态、引用删除与权限 | 原有树和新建空表单已查；未在开发库创建树。 |
 | `/api/print-templates` 打印模板 | test:label；print-template-preview | 点阵/几何和10类真实预览数据、权限/DPI/回滚等断言通过 | 模板列表入口已打开；Linux容器字体、物理出纸与扫描不能由本机测试证明。 |
 | `/api/printers` 打印机 | print-queue 测打印路由绑定结果；无打印机管理CRUD专项 | 普通打印机页入口读取，队列消费者所测路由断言通过 | online-clients/all-clients GET会写离线投影；管理设备保存和硬件打印未验。 |
 | `/api/print-jobs` 打印队列 | test:print；mainline、print-queue、test:print-purge | 通过入队/领取/令牌/失败重试/过期/回滚与清理断言 | 条码打印查询入口已打开；没有物理消费者，未触发真实补打。 |
@@ -234,3 +234,7 @@ CUA 使用本工作树的 `localhost:5175`，普通浏览器复用现有管理�
 ## 8. 后续补证
 
 同日继续完成两项历史修复DB专项21项、7个新建表单的安全读取、模板预览、通知面板以及一笔收货详情/操作记录。仓库运营与PDA读取修复另有真实范围、日期、状态回归。分别见 `docs/module-followup-2026-09-12.md` 和 `docs/warehouse-ops-regression-2026-09-12.md`；没有把这些结果升级为全业务状态或设备验收。
+
+## 9. 主数据专项补证
+
+同日继续补四模块直接HTTP回归302条断言（客户89、供应商77、部门65、分类71）。修复供应商创建500、部门无效父级与负责人误清空，客户编辑补启停入口并完成前端3项测试和CUA复核；分类日志恢复正常字段。详见 `docs/masterdata-regression-2026-09-12.md`，仍不代表每个业务组合或全部并发场景已验。

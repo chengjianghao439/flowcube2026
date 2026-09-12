@@ -83,7 +83,7 @@ async function create({ name, contact, phone, email, address, remark, settlement
   const settle = normalizeSettlementType(settlementType)
   const terms = normalizeTermsDays(settle, paymentTermsDays)
   const [r] = await pool.query(
-    `INSERT INTO supply_suppliers (code,name,contact,phone,email,address,remark,settlement_type,payment_terms_days,lead_time_days) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+    `INSERT INTO supply_suppliers (code,name,contact,phone,email,address,remark,settlement_type,payment_terms_days,lead_time_days) VALUES (?,?,?,?,?,?,?,?,?,?)`,
     [code, normalizedName, contact||null, phone||null, email||null, address||null, remark||null, settle, terms, Math.max(0, Number(leadTimeDays) || 0)],
   )
   return { id: r.insertId, code }
