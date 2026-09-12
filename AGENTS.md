@@ -255,6 +255,7 @@ npm run test:permissions
 - DataTable 列宽采用独立调整：从全部业务列实际宽度取快照，勾选列不参与，只改变目标列，超出容器后横向滚动。操作列与其他业务列一样支持拖动表头调整顺序；所有业务列表头分隔线支持拖动、双击适应内容及方向键微调，单列也可调整；按用户要求，表格上方不再显示“恢复默认列宽”按钮及其工具栏。既有列顺序和宽度设置保留，比例布局仅作为默认和旧设置兼容，手动调整后保存 widthUnit=px。拖动通过动画帧更新 colgroup/table，松手一次提交，不反复重绘明细；Escape、失焦、卸载及结构变化均取消预览、释放监听并恢复样式。普通重新渲染不得重载旧布局，默认存储路径绑定表格挂载页面。回归与验证见 `docs/table-column-resize-2026-09-06.md`。行内 `TableActionsMenu` 首次展开前只渲染普通按钮，首次展开后保留菜单实例与原键盘、焦点、页面隐藏规则，避免完整列表预挂载数千个菜单；商品列表按数据、分类和打印状态缓存列定义与表格，无关路由变化不重绘完整商品表；性能定位与边界见 `docs/dev-navigation-performance-2026-09-09.md`。
 - 复用 DataTable、TableActionsMenu、QueryErrorState、finder、usePermission、useDirtyGuard、useInvalidate 等已有结构；keepAlive 表单在挂载/参数变化时重置，未保存内容有退出保护。
 - 桌面端判定使用运行时 `window.flowcubeDesktop`，不能用构建 flag 把浏览器误判成 Electron。
+- 宣传页候选设计隔离：2026-09-12 的新版位于独立 `codex/landing-preview-20260912` 工作树，主要代码为 `frontend/src/pages/landing-preview/`；该工作树的官网入口暂指向候选页，主工作区与生产版本不随预览改变。候选页保留品牌蓝、五场景示例、三阶段供货解释、三端入口和最近三版摘要；演示不读取真实经营数据、不修改 hash 导航或鉴权。用户确认后才合并替换，不满意可停止本任务预览服务后整体删除候选工作树。启动、验证与范围见 `docs/landing-preview-2026-09-12.md`。
 - 系统品牌采用已确认的蓝底双曲线 F；官网、ERP/PDA 登录页、PDA 首页通过 `SystemBrand` 复用本地哈希资源。网页 favicon/触屏图标、桌面程序/安装器、Android 普通/圆形/自适应图标与启动屏由 `scripts/generate-brand-icons.cjs` 从 `docs/branding/flow-icon-approved.png` 导出。公司 Logo 仍只用于 ERP 顶栏/单据打印，保持公司图优先及文字回退，不混用。素材、生成方式与验收见 `docs/brand-icons-2026-09-07.md`。
 - 用户术语沿用“批次、采购申请、滞销、存放时长、分批盘点、型号、供应商型号”，不为改文案变更权限码、路由或数据库列。
 - PDA 不做离线自动重放；不确定写入结果先用幂等回执/已有 `resolveServerState` 恢复路径核实。
