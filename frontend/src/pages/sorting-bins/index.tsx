@@ -56,9 +56,9 @@ function BatchDialog({ open, onClose, onSuccess }: { open: boolean; onClose: () 
         <DialogHeader><DialogTitle>批量创建分拣格</DialogTitle></DialogHeader>
         <div className="space-y-4 py-2">
           <div>
-            <Label>仓库</Label>
+            <Label htmlFor="sorting-batch-warehouse">仓库</Label>
             <Select value={warehouseId} onValueChange={setWarehouseId}>
-              <SelectTrigger className="mt-1"><SelectValue placeholder="选择仓库" /></SelectTrigger>
+              <SelectTrigger id="sorting-batch-warehouse" className="mt-1"><SelectValue placeholder="选择仓库" /></SelectTrigger>
               <SelectContent>
                 {(whData ?? []).map((w: { id: number; name: string }) => (
                   <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>
@@ -67,9 +67,9 @@ function BatchDialog({ open, onClose, onSuccess }: { open: boolean; onClose: () 
             </Select>
           </div>
           <div className="grid grid-cols-3 gap-3">
-            <div><Label>前缀</Label><Input className="mt-1" placeholder="A" value={prefix} onChange={e => setPrefix(e.target.value.toUpperCase())} maxLength={5} /></div>
-            <div><Label>起始序号</Label><Input className="mt-1" type="number" min={1} value={from} onChange={e => setFrom(e.target.value)} /></div>
-            <div><Label>结束序号</Label><Input className="mt-1" type="number" min={1} value={to} onChange={e => setTo(e.target.value)} /></div>
+            <div><Label htmlFor="sorting-batch-prefix">前缀</Label><Input id="sorting-batch-prefix" className="mt-1" placeholder="A" value={prefix} onChange={e => setPrefix(e.target.value.toUpperCase())} maxLength={5} /></div>
+            <div><Label htmlFor="sorting-batch-from">起始序号</Label><Input id="sorting-batch-from" className="mt-1" type="number" min={1} value={from} onChange={e => setFrom(e.target.value)} /></div>
+            <div><Label htmlFor="sorting-batch-to">结束序号</Label><Input id="sorting-batch-to" className="mt-1" type="number" min={1} value={to} onChange={e => setTo(e.target.value)} /></div>
           </div>
           {preview && <p className="text-sm text-muted-foreground">将创建：{preview}</p>}
         </div>
@@ -221,19 +221,19 @@ export default function SortingBinsPage() {
         renderForm={(editing) => editing ? (
           <div className="space-y-4 py-2">
             <div>
-              <Label>容量阈值（件）</Label>
-              <Input className="mt-1" type="number" min={1} placeholder="不限容量" value={form.capacity} onChange={e => setForm(f => ({ ...f, capacity: e.target.value }))} />
+              <Label htmlFor="sorting-bin-capacity">容量阈值（件）</Label>
+              <Input id="sorting-bin-capacity" className="mt-1" type="number" min={1} placeholder="不限容量" value={form.capacity} onChange={e => setForm(f => ({ ...f, capacity: e.target.value }))} />
               <p className="mt-1 text-xs text-muted-foreground">分拣件数超过阈值时，PDA 端会提醒但不阻断作业；留空表示不限容量。</p>
             </div>
-            <div><Label>备注</Label><Input className="mt-1" placeholder="可选" value={form.remark} onChange={e => setForm(f => ({ ...f, remark: e.target.value }))} /></div>
+            <div><Label htmlFor="sorting-bin-remark">备注</Label><Input id="sorting-bin-remark" className="mt-1" placeholder="可选" value={form.remark} onChange={e => setForm(f => ({ ...f, remark: e.target.value }))} /></div>
           </div>
         ) : (
           <div className="space-y-4 py-2">
-            <div><Label>编号</Label><Input className="mt-1" placeholder="如 A01" value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value }))} /></div>
+            <div><Label htmlFor="sorting-bin-code">编号</Label><Input id="sorting-bin-code" className="mt-1" placeholder="如 A01" value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value }))} /></div>
             <div>
-              <Label>仓库</Label>
+              <Label htmlFor="sorting-bin-warehouse">仓库</Label>
               <Select value={form.warehouseId} onValueChange={v => setForm(f => ({ ...f, warehouseId: v }))}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="选择仓库" /></SelectTrigger>
+                <SelectTrigger id="sorting-bin-warehouse" className="mt-1"><SelectValue placeholder="选择仓库" /></SelectTrigger>
                 <SelectContent>
                   {(whData ?? []).map((w: { id: number; name: string }) => (
                     <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>
@@ -241,7 +241,7 @@ export default function SortingBinsPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div><Label>备注</Label><Input className="mt-1" placeholder="可选" value={form.remark} onChange={e => setForm(f => ({ ...f, remark: e.target.value }))} /></div>
+            <div><Label htmlFor="sorting-bin-remark">备注</Label><Input id="sorting-bin-remark" className="mt-1" placeholder="可选" value={form.remark} onChange={e => setForm(f => ({ ...f, remark: e.target.value }))} /></div>
           </div>
         )}
         submitForm={(editing) => {

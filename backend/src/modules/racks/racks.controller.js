@@ -21,7 +21,7 @@ async function list(req, res, next) {
 async function listActive(req, res, next) {
   try {
     const warehouseId = req.query.warehouseId ? parseInt(req.query.warehouseId) : null
-    const data = await racksService.findActive(warehouseId)
+    const data = await racksService.findActive(warehouseId, scopeOf(req))
     return successResponse(res, data, '查询成功')
   } catch (err) { next(err) }
 }
@@ -35,7 +35,7 @@ async function detail(req, res, next) {
 
 async function create(req, res, next) {
   try {
-    const result = await racksService.create(req.body)
+    const result = await racksService.create(req.body, scopeOf(req))
     return successResponse(res, result, '创建成功', 201)
   } catch (err) { next(err) }
 }
@@ -98,7 +98,7 @@ async function printLabel(req, res, next) {
 
 async function scanHint(req, res, next) {
   try {
-    const result = await racksService.scanHint(req.body)
+    const result = await racksService.scanHint(req.body, scopeOf(req))
     return successResponse(res, result, 'ok')
   } catch (err) { next(err) }
 }

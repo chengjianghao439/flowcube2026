@@ -96,20 +96,20 @@ export default function WarehousesPage() {
             <div className="grid grid-cols-2 gap-4">
               {isEdit && (
                 <div className="space-y-2">
-                  <Label>仓库编码</Label>
-                  <Input value={editing.code} disabled className="bg-muted/50 font-mono text-sm" />
+                  <Label htmlFor="warehouse-code">仓库编码</Label>
+                  <Input id="warehouse-code" value={editing.code} disabled className="bg-muted/50 font-mono text-sm" />
                 </div>
               )}
               <div className="space-y-2">
-                <Label>仓库名称 *</Label>
-                <Input value={form.name} onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('name', e.target.value)}
+                <Label htmlFor="warehouse-name">仓库名称 *</Label>
+                <Input id="warehouse-name" value={form.name} onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('name', e.target.value)}
                   placeholder="仓库名称" />
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label>仓库类型 *</Label>
-              <div className="flex flex-wrap gap-4">
+              <Label id="warehouse-type-label">仓库类型 *</Label>
+              <div role="radiogroup" aria-labelledby="warehouse-type-label" className="flex flex-wrap gap-4">
                 {WAREHOUSE_TYPES.map((t) => (
                   <label key={t.value} className="flex items-center gap-2 cursor-pointer">
                     <input type="radio" name="type" value={t.value}
@@ -124,26 +124,26 @@ export default function WarehousesPage() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>负责人</Label>
-                <Input value={form.manager} onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('manager', e.target.value)}
+                <Label htmlFor="warehouse-manager">负责人</Label>
+                <Input id="warehouse-manager" value={form.manager} onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('manager', e.target.value)}
                   placeholder="负责人姓名" />
               </div>
               <div className="space-y-2">
-                <Label>联系电话</Label>
-                <Input value={form.phone} onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('phone', e.target.value)}
+                <Label htmlFor="warehouse-phone">联系电话</Label>
+                <Input id="warehouse-phone" value={form.phone} onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('phone', e.target.value)}
                   placeholder="联系电话" />
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label>仓库地址</Label>
-              <Input value={form.address} onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('address', e.target.value)}
+              <Label htmlFor="warehouse-address">仓库地址</Label>
+              <Input id="warehouse-address" value={form.address} onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('address', e.target.value)}
                 placeholder="详细地址" />
             </div>
 
             <div className="space-y-2">
-              <Label>备注</Label>
-              <Input value={form.remark} onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('remark', e.target.value)}
+              <Label htmlFor="warehouse-remark">备注</Label>
+              <Input id="warehouse-remark" value={form.remark} onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('remark', e.target.value)}
                 placeholder="备注信息" />
             </div>
 

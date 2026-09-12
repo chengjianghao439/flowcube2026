@@ -52,13 +52,14 @@ async function findAll({ page = 1, pageSize = 20, keyword = '', warehouseId = nu
   return { list: rows.map(fmt), pagination: { page, pageSize: ps, total } }
 }
 
-async function findActive(warehouseId) {
+async function findActive(warehouseId, scopeWarehouseIds = null) {
   const conds = ['r.deleted_at IS NULL', 'r.status = 1']
   const params = []
   if (warehouseId) { conds.push('r.warehouse_id = ?'); params.push(warehouseId) }
+  const scope = scopeFilter(scopeWarehouseIds, 'r.warehouse_id')
   const [rows] = await pool.query(
-    `SELECT r.* FROM warehouse_racks r WHERE ${conds.join(' AND ')} ORDER BY r.zone ASC, r.code ASC`,
-    params,
+    `SELECT r.* FROM warehouse_racks r WHERE ${conds.join(' AND ')}${scope.sql} ORDER BY r.zone ASC, r.code ASC`,
+    [...params, ...scope.params],
   )
   return rows.map(fmt)
 }
@@ -76,9 +77,10 @@ async function findById(id, scopeWarehouseIds = null) {
   return fmt(row)
 }
 
-async function create(data) {
+async function create(data, scopeWarehouseIds = null) {
   const { warehouseId, zone = '', code, name = '', maxLevels = 5, maxPositions = 10, remark } = data
   if (!warehouseId) throw new AppError('仓库不能为空', 400)
+  assertInScope(scopeWarehouseIds, warehouseId, '货架')
   if (!code)        throw new AppError('货架编码不能为空', 400)
 
   const [[exists]] = await pool.query(
@@ -115,13 +117,13 @@ async function create(data) {
 }
 
 async function update(id, data, scopeWarehouseIds = null) {
-  await findById(id, scopeWarehouseIds)
+  const current = await findById(id, scopeWarehouseIds)
   const { zone, code, name, maxLevels, maxPositions, status, remark } = data
 
   if (code) {
     const [[dup]] = await pool.query(
-      'SELECT id FROM warehouse_racks WHERE code = ? AND id <> ? AND deleted_at IS NULL',
-      [code, id],
+      'SELECT id FROM warehouse_racks WHERE warehouse_id = ? AND code = ? AND id <> ? AND deleted_at IS NULL',
+      [current.warehouseId, code, id],
     )
     if (dup) throw new AppError(`货架编码 ${code} 已存在`, 400)
   }
@@ -189,8 +191,9 @@ async function softDelete(id, scopeWarehouseIds = null) {
 /**
  * 新建货架前扫描提示：H 冲突、P/I/商品编码 与 rack 维度上在库关系
  */
-async function scanHint({ warehouseId, rackCode, scanRaw, excludeRackId = null }) {
+async function scanHint({ warehouseId, rackCode, scanRaw, excludeRackId = null }, scopeWarehouseIds = null) {
   const wid = Number(warehouseId)
+  assertInScope(scopeWarehouseIds, wid, '货架')
   const code = String(rackCode || '').trim()
   const raw = String(scanRaw || '').trim()
   if (!wid || !code || !raw) {
@@ -202,9 +205,10 @@ async function scanHint({ warehouseId, rackCode, scanRaw, excludeRackId = null }
   const rackScan = /^(?:H|RCK)(\d+)$/i.exec(raw)
   if (rackScan) {
     try {
+      const scope = scopeFilter(scopeWarehouseIds, 'warehouse_id')
       const [[existing]] = await pool.query(
-        `SELECT id, code FROM warehouse_racks WHERE UPPER(barcode) = ? AND deleted_at IS NULL`,
-        [up],
+        `SELECT id, code FROM warehouse_racks WHERE UPPER(barcode) = ? AND deleted_at IS NULL${scope.sql}`,
+        [up, ...scope.params],
       )
       if (existing && (!excludeRackId || Number(existing.id) !== Number(excludeRackId))) {
         return {

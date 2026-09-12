@@ -23,7 +23,7 @@ async function listActive(req, res, next) {
 
 async function detail(req, res, next) {
   try {
-    const data = await warehousesService.findById(parseInt(req.params.id))
+    const data = await warehousesService.findById(parseInt(req.params.id), req.user?.warehouseIds ?? null)
     return successResponse(res, data, '查询成功')
   } catch (err) { next(err) }
 }
@@ -37,14 +37,14 @@ async function create(req, res, next) {
 
 async function update(req, res, next) {
   try {
-    await warehousesService.update(parseInt(req.params.id), req.body)
+    await warehousesService.update(parseInt(req.params.id), req.body, req.user?.warehouseIds ?? null)
     return successResponse(res, null, '更新成功')
   } catch (err) { next(err) }
 }
 
 async function remove(req, res, next) {
   try {
-    await warehousesService.softDelete(parseInt(req.params.id))
+    await warehousesService.softDelete(parseInt(req.params.id), req.user?.warehouseIds ?? null)
     return successResponse(res, null, '删除成功')
   } catch (err) { next(err) }
 }

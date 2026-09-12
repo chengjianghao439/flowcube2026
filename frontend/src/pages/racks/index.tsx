@@ -215,6 +215,7 @@ export default function RacksPage() {
             primaryDisabled={printMut.isPending && printMut.variables === row.id}
             onPrimaryClick={() => printMut.mutate(row.id)}
             items={[
+              { label: '编辑', onClick: () => helpers.openEdit(row) },
               {
                 label: '删除',
                 destructive: true,
@@ -229,15 +230,15 @@ export default function RacksPage() {
           return (
             <div className="space-y-4 py-2">
               <div className="space-y-2">
-                <Label>所属仓库 *</Label>
+                <Label htmlFor="rack-warehouse">所属仓库 *</Label>
                 {isEdit ? (
-                  <Input value={editing?.warehouseName ?? ''} disabled className="bg-muted/50 text-sm" />
+                  <Input id="rack-warehouse" value={editing?.warehouseName ?? ''} disabled className="bg-muted/50 text-sm" />
                 ) : (
                   <Select
                     value={form.warehouseId ? String(form.warehouseId) : '__none__'}
                     onValueChange={v => setForm(f => ({ ...f, warehouseId: v === '__none__' ? 0 : +v }))}
                   >
-                    <SelectTrigger className="h-9 w-full">
+                    <SelectTrigger id="rack-warehouse" className="h-9 w-full">
                       <SelectValue placeholder="请选择仓库" />
                     </SelectTrigger>
                     <SelectContent>
@@ -252,12 +253,13 @@ export default function RacksPage() {
 
               {!isEdit && (
                 <div className="space-y-2 rounded-lg border border-dashed border-border bg-muted/15 px-3 py-3">
-                  <Label className="text-xs text-muted-foreground">扫码校验（选填）</Label>
+                  <Label htmlFor="rack-scan" className="text-xs text-muted-foreground">扫码校验（选填）</Label>
                   <p className="text-xs text-muted-foreground">
                     填写仓库与货架编码后，可扫 H / P / I 或商品编码，检查条码冲突或在库绑定提示。
                   </p>
                   <div className="flex flex-col gap-2 sm:flex-row">
                     <Input
+                      id="rack-scan"
                       value={scanRaw}
                       onChange={(e: React.ChangeEvent<HTMLInputElement>) => setScanRaw(e.target.value)}
                       placeholder="扫描或粘贴条码后回车"
@@ -296,8 +298,8 @@ export default function RacksPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>库区</Label>
-                  <Input
+                  <Label htmlFor="rack-zone">库区</Label>
+                  <Input id="rack-zone"
                     value={form.zone}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, zone: e.target.value }))}
                     placeholder="A"
@@ -305,8 +307,8 @@ export default function RacksPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>货架编码 *</Label>
-                  <Input
+                  <Label htmlFor="rack-code">货架编码 *</Label>
+                  <Input id="rack-code"
                     value={form.code}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, code: e.target.value }))}
                     placeholder="A01"
@@ -316,8 +318,8 @@ export default function RacksPage() {
               </div>
 
               <div className="space-y-2">
-                <Label>货架名称</Label>
-                <Input
+                <Label htmlFor="rack-name">货架名称</Label>
+                <Input id="rack-name"
                   value={form.name}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, name: e.target.value }))}
                   placeholder="货架名称（选填）"
@@ -327,16 +329,16 @@ export default function RacksPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>最大层数</Label>
-                  <Input
+                  <Label htmlFor="rack-maxLevels">最大层数</Label>
+                  <Input id="rack-maxLevels"
                     type="number" min={1} max={99}
                     value={form.maxLevels}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, maxLevels: +e.target.value }))}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>每层位数</Label>
-                  <Input
+                  <Label htmlFor="rack-maxPositions">每层位数</Label>
+                  <Input id="rack-maxPositions"
                     type="number" min={1} max={99}
                     value={form.maxPositions}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, maxPositions: +e.target.value }))}
@@ -346,9 +348,9 @@ export default function RacksPage() {
 
               {isEdit && (
                 <div className="space-y-2">
-                  <Label>状态</Label>
+                  <Label htmlFor="rack-status">状态</Label>
                   <Select value={String(form.status)} onValueChange={v => setForm(f => ({ ...f, status: +v }))}>
-                    <SelectTrigger className="h-9 w-full">
+                    <SelectTrigger id="rack-status" className="h-9 w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -361,8 +363,8 @@ export default function RacksPage() {
               )}
 
               <div className="space-y-2">
-                <Label>备注</Label>
-                <Input
+                <Label htmlFor="rack-remark">备注</Label>
+                <Input id="rack-remark"
                   value={form.remark}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, remark: e.target.value }))}
                   placeholder="备注信息"
@@ -374,13 +376,13 @@ export default function RacksPage() {
         submitForm={(editing) => {
           if (editing) {
             return updateRackApi(editing.id, {
-              zone:         form.zone         || undefined,
+              zone:         form.zone,
               code:         form.code         || undefined,
-              name:         form.name         || undefined,
+              name:         form.name,
               maxLevels:    form.maxLevels,
               maxPositions: form.maxPositions,
               status:       form.status,
-              remark:       form.remark       || undefined,
+              remark:       form.remark,
             })
           }
           return createRackApi({

@@ -37,7 +37,7 @@
 | `/api/users` 用户 | users-roles、warehouse-scope、audit-finance-security | 通过所测用户创建/改密/禁用与超管保护 | 用户页入口已打开；列表筛选及全部管理动作仍需逐项确认。 |
 | `/api/departments` 部门 | masterdata | 65条HTTP断言通过：CRUD、父级/防环、负责人、省略/清空、成员引用与权限 | 部门表单、空名校验及父级排除自身已查；未在开发库保存。 |
 | `/api/approvals` 审批 | approval-flow、purchase-approval | 通过多级审批引擎与采购审批所测分支 | /approvals/pending、/approvals/flows 入口已打开；审批流配置 CRUD 未单独证明。 |
-| `/api/warehouses` 仓库 | warehouse-scope、prelaunch-scope-export | 通过业务单据跨仓守卫及停用仓拒绝等断言 | /warehouses 入口已打开；建仓/删除/仓库结构管理未完整测试。 |
+| `/api/warehouses` 仓库 | warehouse-scope、prelaunch-scope-export、warehouse-masterdata | 补真实管理接口 64 断言通过，覆盖权限/限仓/筛选/启停/引用删除保护 | 四模块仓储专项见 2026-09-13 报告；已查仓库创建/编辑/筛选/取消，其他业务单据引用未逐一构造。 |
 | `/api/suppliers` 供应商 | masterdata | 77条HTTP断言通过；修复新建SQL占位符错误，覆盖CRUD、查询、输入、结算与引用保护 | 新建/编辑字段与标签已查，未在开发库保存。 |
 | `/api/products` 商品 | mainline 的商品导入；prelaunch-scope-export 的停用商品保护 | 通过导入入口及指定主数据引用保护 | /products 入口已打开；商品全字段编辑、价格等级等不由这些断言覆盖。 |
 | `/api/inventory` 库存 | audit-inventory、atp、p0-regression、p1-regression、test:integration | 通过 ACTIVE 容器事实、预计绑定及主链路数量一致性断言 | /inventory、/inventory/trace 等入口已打开；未在开发库执行缓存重算或库存调整。 |
@@ -79,8 +79,8 @@
 | `/api/print-templates` 打印模板 | test:label；print-template-preview | 点阵/几何和10类真实预览数据、权限/DPI/回滚等断言通过 | 模板列表入口已打开；Linux容器字体、物理出纸与扫描不能由本机测试证明。 |
 | `/api/printers` 打印机 | print-queue 测打印路由绑定结果；无打印机管理CRUD专项 | 普通打印机页入口读取，队列消费者所测路由断言通过 | online-clients/all-clients GET会写离线投影；管理设备保存和硬件打印未验。 |
 | `/api/print-jobs` 打印队列 | test:print；mainline、print-queue、test:print-purge | 通过入队/领取/令牌/失败重试/过期/回滚与清理断言 | 条码打印查询入口已打开；没有物理消费者，未触发真实补打。 |
-| `/api/locations` 库位 | prelaunch-scope-export 的跨仓/停用库位拒绝；mainline 上架 | 通过所测业务引用与上架归属断言 | /locations 入口已打开；库位管理CRUD与扫码器硬件未完整测试。 |
-| `/api/racks` 货架 | 无货架管理直接专项 | 仅 /racks 入口读取 | 货架编码、结构管理及删除约束未专测。 |
+| `/api/locations` 库位 | prelaunch-scope-export、mainline、warehouse-masterdata | 补真实管理接口 57 断言及前端编码 3 项回归通过，修复越仓创建/目标更新/下拉/扫码与过期编码 | 页面生成/清空编码及筛选恢复已查；保留历史手写码，全局编码唯一策略未改，扫码硬件未验。 |
+| `/api/racks` 货架 | warehouse-masterdata | 68 HTTP 断言及前端清空文本/编辑入口 2 项回归通过；修复限仓遗漏、跨仓同码更新误拦截、清空文本无效及编辑入口缺失 | 创建/扫码前置提示/滚动表单/筛选已查；未触发物理打印。 |
 | `/api/scan-logs` 扫描日志 | concurrency-guards、sale-adjustment、pda-device-session、warehouse-ops | 原扫描/取消归还断言通过；补统计/异常/任务详情仓范围、日期和真实HTTP401/403/404 | 修复读取串仓及结束日遗漏；实际扫描设备和全部异常类型未验，GET anomaly运行时DDL边界保留。 |
 | `/api/inbound-tasks` 收货执行 | mainline、p0-regression、p1-regression、warehouse-scope、print-template-preview | 通过收货/上架/短装/超收防重/成本归属/打印事务断言 | /inbound-tasks 已打开；pending-containers GET写逾期标记，未当纯只读补测。 |
 | `/api/admin` 管理上架 | mainline | 管理员补录上架成功与权限拒绝断言通过 | 仅 POST /putaway，无独立 UI/GET；成功路径只在独立测试库执行。 |
@@ -88,7 +88,7 @@
 | `/api/plastic-boxes` 塑料盒 | prelaunch-scope-export；concurrency-guards 的容器拆分分支 | 通过所测盒管理仓范围/删除并发守卫及相关拆分断言 | /plastic-boxes 入口已打开；实物盒扫码、所有管理字段尚未验。 |
 | `/api/picking-waves` 拣货波次 | concurrency-guards / sale-adjustment 的仓库执行；reports 的波次指标 | 相关执行断言通过；波次管理仅入口读取 | /picking-waves 已打开；波次创建/合并/释放的独立完整流程未证明。 |
 | `/api/packages` 包裹 | concurrency-guards；print-template-preview | 通过打包、取消拆箱归还与事务内箱标签数据断言 | 无独立静态入口；箱内商品所有编辑路径和实物标签未完整验。 |
-| `/api/sorting-bins` 分拣格 | prelaunch-scope-export、concurrency-guards | 占用/空闲/导出边界及打包后释放所测断言通过 | /sorting-bins 已打开；配置CRUD和实际分拣格扫码未全面验。 |
+| `/api/sorting-bins` 分拣格 | prelaunch-scope-export、concurrency-guards、warehouse-masterdata | 补真实管理接口 63 断言通过，覆盖批量/容量/占用删除保护及双向释放/限仓扫描 | 页面批量预览、单个新建、编辑/筛选已查；写入和释放只在独立库，实际分拣格扫码未验。 |
 | `/api/pda` PDA接口 | pda-device-session；test:audit-client；PDA前端构建 | 设备未绑定拒绝/会话边界及原生更新静态用例通过 | 30个PDA叶子入口尚未全程操作；设备绑定、加密存储、扫码、APK安装升级需单列。 |
 | `/api/printer-bindings` 打印绑定 | print-queue 的无绑定/专用绑定入队断言 | 消费者路由绑定结果通过；管理API未单独测试 | 无独立页，绑定列表/新增删除未由普通打印机页读取证明。 |
 | `/api/app-update` 桌面更新 | test:audit-client（NODE_PATH复用后31/31） | 桌面版本清单/URL/hash/证书及损坏安装包相关断言通过 | 无独立ERP注册页；本地latest真实响应/Windows下载安装尚待补，缺清单可返回业务404。 |
@@ -238,3 +238,5 @@ CUA 使用本工作树的 `localhost:5175`，普通浏览器复用现有管理�
 ## 9. 主数据专项补证
 
 同日继续补四模块直接HTTP回归302条断言（客户89、供应商77、部门65、分类71）。修复供应商创建500、部门无效父级与负责人误清空，客户编辑补启停入口并完成前端3项测试和CUA复核；分类日志恢复正常字段。详见 `docs/masterdata-regression-2026-09-12.md`，仍不代表每个业务组合或全部并发场景已验。
+
+仓储配置专项补测与页面证据见 [2026-09-13 仓储配置管理回归](warehouse-masterdata-regression-2026-09-13.md)，不以管理接口通过替代硬件、全部状态或生产验收。

@@ -28,7 +28,7 @@ async function detail(req, res, next) {
 
 async function create(req, res, next) {
   try {
-    const result = await locationsService.create(req.body)
+    const result = await locationsService.create(req.body, scopeOf(req))
     return successResponse(res, result, '创建成功', 201)
   } catch (err) { next(err) }
 }
@@ -49,14 +49,14 @@ async function remove(req, res, next) {
 
 async function findByCode(req, res, next) {
   try {
-    const data = await locationsService.findByCode(req.params.code)
+    const data = await locationsService.findByCode(req.params.code, scopeOf(req))
     return successResponse(res, data, '查询成功')
   } catch (err) { next(err) }
 }
 
 async function listByWarehouse(req, res, next) {
   try {
-    const data = await locationsService.findAllByWarehouseId(req.params.warehouseId)
+    const data = await locationsService.findAllByWarehouseId(req.params.warehouseId, scopeOf(req))
     return successResponse(res, data, '查询成功')
   } catch (err) { next(err) }
 }

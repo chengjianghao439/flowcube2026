@@ -101,9 +101,10 @@ async function findById(id, scopeWarehouseIds = null) {
 }
 
 /** 某仓库下全部库位（下拉/上架选位，与前端 getLocationsByWarehouseApi 一致） */
-async function findAllByWarehouseId(warehouseId) {
+async function findAllByWarehouseId(warehouseId, scopeWarehouseIds = null) {
   const wid = Number(warehouseId)
   if (!Number.isFinite(wid) || wid <= 0) throw new AppError('仓库 ID 无效', 400)
+  assertInScope(scopeWarehouseIds, wid, '库位')
   const [rows] = await pool.query(
     `SELECT wl.*, iw.name AS warehouse_name
      FROM warehouse_locations wl
@@ -115,9 +116,10 @@ async function findAllByWarehouseId(warehouseId) {
   return rows.map(formatRow)
 }
 
-async function create(data) {
+async function create(data, scopeWarehouseIds = null) {
   const { warehouseId, zone, aisle, rack, level, position, name, remark } = data
   if (!warehouseId) throw new AppError('仓库不能为空', 400)
+  assertInScope(scopeWarehouseIds, warehouseId, '库位')
 
   const code = generateCode({ zone, aisle, rack, level, position })
   if (!code) throw new AppError('库位编码字段不完整', 400)
@@ -159,6 +161,7 @@ async function create(data) {
 async function update(id, data, scopeWarehouseIds = null) {
   await findById(id, scopeWarehouseIds)
   const { warehouseId, zone, aisle, rack, level, position, name, remark, status } = data
+  assertInScope(scopeWarehouseIds, warehouseId, '库位')
 
   const code = generateCode({ zone, aisle, rack, level, position })
   if (!code) throw new AppError('库位编码字段不完整', 400)
@@ -201,7 +204,7 @@ async function softDelete(id, scopeWarehouseIds = null) {
  * @param {string} params.position   - 位，如 "03" 或 "3"
  * @returns {number} location_id
  */
-async function findByCode(code) {
+async function findByCode(code, scopeWarehouseIds = null) {
   let rows
   try {
     ;[rows] = await pool.query(
@@ -221,6 +224,7 @@ async function findByCode(code) {
   }
   if (!rows.length) throw new AppError(`库位编码 ${code} 不存在`, 404)
   const r = rows[0]
+  assertInScope(scopeWarehouseIds, r.warehouse_id, '库位')
   if (Number(r.status) !== 1) throw new AppError(`库位 ${code} 已停用`, 400)
   return { id: r.id, code: r.code, barcode: r.barcode ?? null, name: r.name, zone: r.zone, aisle: r.aisle, rack: r.rack, level: r.level, position: r.position, warehouseId: r.warehouse_id, status: r.status }
 }

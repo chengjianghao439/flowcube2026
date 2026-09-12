@@ -1,5 +1,5 @@
 const { pool } = require('../../config/db')
-const { scopeFilter } = require('../../utils/warehouseScope')
+const { assertInScope, scopeFilter } = require('../../utils/warehouseScope')
 const AppError = require('../../utils/AppError')
 const { generateMasterCode } = require('../../utils/codeGenerator')
 const { normalizePagination } = require('../../utils/pagination')
@@ -80,12 +80,13 @@ async function findAllActive(scopeWarehouseIds = null) {
   return rows.map((r) => ({ id: r.id, code: r.code, name: r.name, type: r.type }))
 }
 
-async function findById(id) {
+async function findById(id, scopeWarehouseIds = null) {
   const [rows] = await pool.query(
     'SELECT * FROM inventory_warehouses WHERE id = ? AND deleted_at IS NULL',
     [id],
   )
   if (!rows[0]) throw new AppError('仓库不存在', 404)
+  assertInScope(scopeWarehouseIds, rows[0].id, '仓库')
   return formatRow(rows[0])
 }
 
@@ -99,8 +100,8 @@ async function create({ name, type, manager, phone, address, remark }) {
   return { id: result.insertId, code }
 }
 
-async function update(id, { name, type, manager, phone, address, remark, isActive }) {
-  await findById(id)
+async function update(id, { name, type, manager, phone, address, remark, isActive }, scopeWarehouseIds = null) {
+  await findById(id, scopeWarehouseIds)
   await pool.query(
     `UPDATE inventory_warehouses
      SET name=?, type=?, manager=?, phone=?, address=?, remark=?, is_active=?
@@ -109,8 +110,8 @@ async function update(id, { name, type, manager, phone, address, remark, isActiv
   )
 }
 
-async function softDelete(id) {
-  await findById(id)
+async function softDelete(id, scopeWarehouseIds = null) {
+  await findById(id, scopeWarehouseIds)
   await assertWarehouseDeletable(id)
   await pool.query(
     'UPDATE inventory_warehouses SET deleted_at = NOW() WHERE id = ? AND deleted_at IS NULL',

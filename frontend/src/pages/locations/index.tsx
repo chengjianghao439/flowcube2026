@@ -45,6 +45,7 @@ export default function LocationsPage() {
   const [zoneFilter, setZoneFilter]     = useState('')
   const [queryOpen, setQueryOpen]     = useState(false)
   const [form, setForm]               = useState<CreateLocationParams>(EMPTY_FORM)
+  const [legacyCode, setLegacyCode] = useState('')
   const page = 1
 
   const { data: whData } = useQuery({
@@ -72,23 +73,25 @@ export default function LocationsPage() {
   // 打开弹窗时回填表单（新建=默认值，编辑=行数据）
   function handleOpen(editing: Location | null) {
     if (editing) {
+      setLegacyCode(buildCode(editing.zone ?? '', editing.aisle ?? '', editing.rack ?? '', editing.level ?? '', editing.position ?? '') ? '' : editing.code)
       setForm({ warehouseId: editing.warehouseId, code: editing.code, zone: editing.zone ?? '', aisle: editing.aisle ?? '', rack: editing.rack ?? '', level: editing.level ?? '', position: editing.position ?? '', capacity: editing.capacity, status: editing.status, remark: editing.remark ?? '' })
     } else {
+      setLegacyCode('')
       setForm(EMPTY_FORM)
     }
   }
 
   /**
    * 分段字段（区/巷/架/层/位）变化时自动重建编码。
-   * 仅当五段齐全（buildCode 返回非空）才覆盖 code：编辑存量手写编码的库位时，
-   * 若分段不完整，保留原编码而不是被清空——避免把历史库位编码洗掉。
+   * 新建及原分段完整的库位，在分段缺失时清空过期编码，阻止保存不一致的地址。
+   * 只有打开时分段不全的历史库位保留原手写编码；补齐五段后仍正常生成。
    */
   const SEGMENT_KEYS = new Set<keyof CreateLocationParams>(['zone', 'aisle', 'rack', 'level', 'position'])
   const set = (k: keyof CreateLocationParams, v: string | number) => setForm(f => {
     const next = { ...f, [k]: v }
     if (SEGMENT_KEYS.has(k)) {
       const code = buildCode(String(next.zone ?? ''), String(next.aisle ?? ''), String(next.rack ?? ''), String(next.level ?? ''), String(next.position ?? ''))
-      if (code) next.code = code
+      next.code = code || legacyCode
     }
     return next
   })
@@ -193,9 +196,9 @@ export default function LocationsPage() {
         renderForm={(editing) => (
           <div className="space-y-3 py-2">
             <div>
-              <Label>仓库</Label>
+              <Label htmlFor="location-warehouse">仓库</Label>
               <Select value={String(form.warehouseId || '')} onValueChange={v => set('warehouseId', +v)} disabled={!!editing}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="选择仓库" /></SelectTrigger>
+                <SelectTrigger id="location-warehouse" className="mt-1"><SelectValue placeholder="选择仓库" /></SelectTrigger>
                 <SelectContent>
                   {(whData ?? []).map((w: { id: number; name: string }) => (
                     <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>
@@ -204,22 +207,22 @@ export default function LocationsPage() {
               </Select>
             </div>
             <div className="grid grid-cols-3 gap-3">
-              <div><Label>库区</Label><Input className="mt-1" placeholder="如 A" value={form.zone ?? ''} onChange={e => set('zone', e.target.value)} /></div>
-              <div><Label>巷道</Label><Input className="mt-1" placeholder="如 01" value={form.aisle ?? ''} onChange={e => set('aisle', e.target.value)} /></div>
-              <div><Label>货架</Label><Input className="mt-1" placeholder="如 01" value={form.rack ?? ''} onChange={e => set('rack', e.target.value)} /></div>
-              <div><Label>层</Label><Input className="mt-1" placeholder="如 01" value={form.level ?? ''} onChange={e => set('level', e.target.value)} /></div>
-              <div><Label>位</Label><Input className="mt-1" placeholder="如 01" value={form.position ?? ''} onChange={e => set('position', e.target.value)} /></div>
+              <div><Label htmlFor="location-zone">库区</Label><Input id="location-zone" className="mt-1" placeholder="如 A" value={form.zone ?? ''} onChange={e => set('zone', e.target.value)} /></div>
+              <div><Label htmlFor="location-aisle">巷道</Label><Input id="location-aisle" className="mt-1" placeholder="如 01" value={form.aisle ?? ''} onChange={e => set('aisle', e.target.value)} /></div>
+              <div><Label htmlFor="location-rack">货架</Label><Input id="location-rack" className="mt-1" placeholder="如 01" value={form.rack ?? ''} onChange={e => set('rack', e.target.value)} /></div>
+              <div><Label htmlFor="location-level">层</Label><Input id="location-level" className="mt-1" placeholder="如 01" value={form.level ?? ''} onChange={e => set('level', e.target.value)} /></div>
+              <div><Label htmlFor="location-position">位</Label><Input id="location-position" className="mt-1" placeholder="如 01" value={form.position ?? ''} onChange={e => set('position', e.target.value)} /></div>
               <div>
-                <Label>库位编码</Label>
-                <Input className="mt-1 bg-muted/50 font-mono" placeholder="自动生成" value={form.code} readOnly />
+                <Label htmlFor="location-code">库位编码</Label>
+                <Input id="location-code" className="mt-1 bg-muted/50 font-mono" placeholder="自动生成" value={form.code} readOnly />
               </div>
             </div>
-            <div><Label>容量</Label><Input className="mt-1" type="number" min={0} value={form.capacity} onChange={e => set('capacity', +e.target.value)} /></div>
+            <div><Label htmlFor="location-capacity">容量</Label><Input id="location-capacity" className="mt-1" type="number" min={0} value={form.capacity} onChange={e => set('capacity', +e.target.value)} /></div>
             {editing && (
               <div>
-                <Label>状态</Label>
+                <Label htmlFor="location-status">状态</Label>
                 <Select value={String(form.status ?? editing.status ?? 1)} onValueChange={v => set('status' as keyof CreateLocationParams, +v)}>
-                  <SelectTrigger className="mt-1"><SelectValue placeholder="选择状态" /></SelectTrigger>
+                  <SelectTrigger id="location-status" className="mt-1"><SelectValue placeholder="选择状态" /></SelectTrigger>
                   <SelectContent>
                     {LOCATION_STATUS_OPTIONS.map((option) => (
                       <SelectItem key={option.value} value={String(option.value)}>{option.label}</SelectItem>
@@ -228,7 +231,7 @@ export default function LocationsPage() {
                 </Select>
               </div>
             )}
-            <div><Label>备注</Label><Input className="mt-1" placeholder="可选" value={form.remark} onChange={e => set('remark', e.target.value)} /></div>
+            <div><Label htmlFor="location-remark">备注</Label><Input id="location-remark" className="mt-1" placeholder="可选" value={form.remark} onChange={e => set('remark', e.target.value)} /></div>
           </div>
         )}
         submitForm={(editing) => {
