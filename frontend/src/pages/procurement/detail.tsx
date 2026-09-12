@@ -1,3 +1,6 @@
+import { ProcurementArrivalStatus } from '@/components/shared/ProcurementSupplyExplanation'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
+import { formatDisplayDateTime } from '@/lib/dateTime'
 import { createRequestKey, withRequestKeyHeaders } from '@/lib/requestKey'
 import ProcurementSupplyDetails from '@/components/shared/ProcurementSupplyDetails'
 import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
@@ -38,7 +41,7 @@ export default function ProcurementPlanDetailPage() {
   const { data: suppliers } = useSuppliersActive()
 
   const [selected, setSelected] = useState<Set<number>>(new Set())
-  const { data: plan, isLoading } = useQuery({ queryKey: ['procurement-plan', planId], queryFn: () => getPlanApi(planId), enabled: planId > 0 })
+  const { data: plan, isLoading, isError, error, refetch, isFetching, dataUpdatedAt } = useQuery({ queryKey: ['procurement-plan', planId], queryFn: () => getPlanApi(planId), enabled: planId > 0 })
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['procurement-plan', planId] })
   const updateItem = useMutation({
@@ -65,6 +68,7 @@ export default function ProcurementPlanDetailPage() {
   const toggleAll = () => setSelected(prev => prev.size === pendingIds.length ? new Set() : new Set(pendingIds))
 
   if (isLoading) return <div className="p-8 text-center text-muted-foreground">加载中…</div>
+  if (isError && !plan) return <QueryErrorState error={error} onRetry={() => void refetch()} title="采购计划加载失败" />
   if (!plan) return <div className="p-8 text-center text-muted-foreground">采购计划不存在</div>
 
   return (
@@ -72,7 +76,8 @@ export default function ProcurementPlanDetailPage() {
       <PageHeader
         title={`采购计划 ${plan.code}`}
         description={`预测窗口 ${plan.forecastWindow} 天 · 覆盖周期 ${plan.horizonDays} 天 · 默认提前期 ${plan.defaultLeadTime} 天 · 共 ${plan.itemCount} 行`}
-        actions={<div className="flex items-center gap-2">
+        actions={<div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" size="sm" disabled={isFetching} onClick={() => void refetch()}>{isFetching ? '刷新中…' : '刷新需求'}</Button>
           <SoftStatusLabel label={plan.statusName} tone={PLAN_TONE[plan.status] ?? 'draft'} />
           <Button variant="outline" size="sm" onClick={() => navigate('/procurement')}>返回列表</Button>
           {editable && (
@@ -81,6 +86,8 @@ export default function ProcurementPlanDetailPage() {
         </div>}
       />
 
+      {isError && <QueryErrorState error={error} onRetry={() => void refetch()} title="刷新失败，当前显示上次读取的数据" compact />}
+      <p className="text-xs text-muted-foreground">需求与覆盖读取于 {dataUpdatedAt ? formatDisplayDateTime(new Date(dataUpdatedAt).toISOString()) : '—'}；转换时仍会重新核对。</p>
       <OrderDetailSections type="plan" id={plan.id}>
       <div className="overflow-x-auto rounded-lg border border-border">
         <table className="w-full min-w-[1900px] text-sm">
@@ -102,6 +109,7 @@ export default function ProcurementPlanDetailPage() {
               <th className="px-3 py-2 text-right font-medium">采购量</th>
               <th className="px-3 py-2 text-left font-medium">供应商</th>
               <th className="px-3 py-2 text-left font-medium">建议到货</th>
+              <th className="min-w-44 px-3 py-2 text-left font-medium">交期核对</th>
               <th className="px-3 py-2 text-left font-medium">状态</th>
               <th className="px-3 py-2 text-center font-medium">操作</th>
             </tr>
@@ -123,7 +131,7 @@ export default function ProcurementPlanDetailPage() {
                   <td className="px-3 py-2 text-right tabular-nums">{num(it.available)}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{it.inTransit > 0 ? num(it.inTransit) : '—'}</td>
                   <td className="px-3 py-2 text-right tabular-nums font-semibold text-primary">{num(it.suggestedQty)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{it.currentSupply ? `${num(it.currentSupply.netRequirement)} / ${num(it.currentSupply.suggestedQty)}` : '—'}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{it.currentSupply ? `${num(it.currentSupply.netRequirement)} / ${num(it.currentSupply.suggestedQty)}` : '当前需求暂不可用'}</td>
                   <td className="px-3 py-2 text-right">
                     {editable && pending
                       ? <Input type="number" defaultValue={it.adjustedQty} key={`${it.id}-${it.adjustedQty}`} className="ml-auto h-8 w-24 text-right tabular-nums"
@@ -146,12 +154,13 @@ export default function ProcurementPlanDetailPage() {
                       : (it.supplierName || <span className="text-muted-foreground">—</span>)}
                   </td>
                   <td className="px-3 py-2 text-muted-foreground tabular-nums">{it.expectedArrival ? String(it.expectedArrival).slice(0, 10) : '—'}</td>
+                  <td className="min-w-44 px-3 py-2">{it.currentSupply ? <ProcurementArrivalStatus supply={it.currentSupply} /> : <span className="text-xs text-muted-foreground">当前需求暂不可用</span>}</td>
                   <td className="px-3 py-2">
                     <SoftStatusLabel label={it.statusName} tone={ITEM_TONE[it.status] ?? 'draft'} />
-                    {it.purchaseOrderId && <button className="ml-1 text-xs text-primary underline" onClick={() => navigate(`/purchase/${it.purchaseOrderId}`)}>#{it.purchaseOrderId}</button>}
+                    {it.purchaseOrderId && <button className="ml-1 text-xs text-primary underline" onClick={() => navigate(`/purchase/${it.purchaseOrderId}`)}>采购单 #{it.purchaseOrderId}</button>}
                   </td>
                   <td className="px-3 py-2 text-center">
-                    {it.currentSupply && <ProcurementSupplyDetails supply={it.currentSupply} supplierId={it.supplierId} />}
+                    {it.currentSupply && <ProcurementSupplyDetails supply={it.currentSupply} snapshot={it.supplySnapshot} supplierId={it.supplierId} />}
                     {editable && pending && (
                       <button className="text-xs text-muted-foreground hover:text-danger" onClick={() => updateItem.mutate({ itemId: it.id, patch: { ignore: true } })}>忽略</button>
                     )}
@@ -167,7 +176,7 @@ export default function ProcurementPlanDetailPage() {
       </div>
 
       {editable && canConvert && (
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-xs text-muted-foreground">按供应商与仓库分组生成采购单草稿。转换时重新核对最新供给和包装规则；数量过期时先调整或忽略，切换供应商时按其包装规则重新调整数量。未选供应商的行不能转换。</p>
           <Button disabled={selected.size === 0 || convert.isPending} onClick={() => convert.mutate([...selected])}>
             {convert.isPending ? '转采购中…' : `转采购（${selected.size} 行）`}

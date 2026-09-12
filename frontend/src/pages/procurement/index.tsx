@@ -1,3 +1,4 @@
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { createRequestKey, withRequestKeyHeaders } from '@/lib/requestKey'
 import { RecordIdentity } from '@/components/shared/RecordIdentity'
 import { useState, useRef } from 'react'
@@ -40,7 +41,7 @@ export default function ProcurementPlanListPage() {
   const [whId, setWhId] = useState('0')
   const [name, setName] = useState('')
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ['procurement-plans', keyword],
     queryFn: () => listPlansApi({ pageSize: 200, keyword }),
   })
@@ -73,14 +74,15 @@ export default function ProcurementPlanListPage() {
       <PageHeader
         title="采购计划"
         description="按未发销售、历史预测与现有供给生成采购计划，核对包装、交期和覆盖后转为采购单草稿。"
-        actions={canManage ? <Button onClick={() => setGenOpen(true)}>+ 生成计划</Button> : undefined}
+        actions={<div className="flex flex-wrap gap-2"><Button variant="outline" disabled={isFetching} onClick={() => void refetch()}>{isFetching ? '刷新中…' : '立即刷新'}</Button>{canManage && <Button onClick={() => setGenOpen(true)}>+ 生成计划</Button>}</div>}
       />
       <FilterCard>
         <Input placeholder="搜索计划编号/名称…" value={search} onChange={(e) => setSearch(e.target.value)} className="h-9 w-56" onKeyDown={(e) => { if (e.key === 'Enter') setKeyword(search) }} />
         <Button size="sm" variant="outline" onClick={() => setKeyword(search)}>搜索</Button>
         {keyword && <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword('') }}>重置</Button>}
       </FilterCard>
-      <DataTable columns={columns} data={data?.list ?? []} loading={isLoading} />
+      {isError && <QueryErrorState error={error} onRetry={() => void refetch()} title={data ? '刷新失败，当前显示上次读取的数据' : '采购计划加载失败'} compact />}
+      {(!isError || data) && <DataTable columns={columns} data={data?.list ?? []} loading={isLoading} />}
 
       <Dialog open={genOpen} onOpenChange={setGenOpen}>
         <DialogContent className="sm:max-w-2xl">

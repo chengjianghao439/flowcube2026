@@ -19,7 +19,7 @@ describe('procurement supply explanation', () => {
     expect(document.body.textContent).toContain('108 件')
     expect(document.body.textContent).toContain('多购 35')
     expect(document.body.textContent).toContain('其中销售草稿')
-    expect(document.body.textContent).toContain('最早销售交期：待确认')
+    expect(document.body.textContent).toContain('销售交期待确认')
   })
   it('hands candidate to a distinct editable transfer form without creating any transfer', () => {
     const path = prepareProcurementTransfer(supply, { warehouseId: 3, warehouseName: '来源仓', quantity: 20, arrivalCondition: '需人工确认', expectedArrival: null })

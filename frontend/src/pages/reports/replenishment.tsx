@@ -1,3 +1,4 @@
+import { ProcurementArrivalStatus } from '@/components/shared/ProcurementSupplyExplanation'
 import { createRequestKey, withRequestKeyHeaders } from '@/lib/requestKey'
 import ProcurementSupplyDetails from '@/components/shared/ProcurementSupplyDetails'
 import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
@@ -116,6 +117,7 @@ export default function ReplenishmentPage() {
     { key: 'suggestQty', title: '建议采购量', width: 120, align: 'right', render: (v, r) => (
         <span className="tabular-nums font-semibold text-primary">{fmtQty(v)}<span className="ml-1 text-xs font-normal text-muted-foreground">{r.unit}</span></span>
       ) },
+    { key: 'earliestDemandDate', title: '交期核对', width: 180, render: (_, r) => <ProcurementArrivalStatus supply={r} /> },
     { key: 'id', title: '操作', width: 240, render: (_, r) => <div className="flex gap-2"><ProcurementSupplyDetails supply={r} mode="replenishment" />{canAdjustInventory && Math.round(r.suggestReorderPoint) !== Math.round(r.reorderPoint) && <Button size="sm" variant="outline" onClick={() => adoptReorder({ row: r })}>采纳补货点</Button>}</div> },
   ]
 
