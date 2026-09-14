@@ -85,7 +85,7 @@ jobs:
       - name: 跨域回归 — 桌面端与 PDA 精确来源
         run: node --test tests/cors-policy.test.js
 
-      - name: PDA 契约回归 — pdaOnly 路由必须带 X-Client: pda
+      - name: "PDA 契约回归 — pdaOnly 路由必须带 X-Client 头"
         run: node --test tests/pda-only-client-header.test.js
 
       - name: ESLint — 后端
