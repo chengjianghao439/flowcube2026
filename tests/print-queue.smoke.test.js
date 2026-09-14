@@ -117,6 +117,53 @@ async function main() {
       } finally { conn.release() }
       assert.equal(await state(id), undefined)
     })
+
+    // 2026-09-14：补打中心不该给「从未进过打印队列」的塑料盒凭空造任务。
+    // 塑料盒（container_type=2 / B 码）的条码由现场人工处理，只有真的打过任务的
+    // （PDA 拆分勾选「打印新塑料盒条码」那种）才保留补打入口。
+    const inboundQuery = require('../backend/src/modules/print-jobs/print-jobs.query')
+    const fixtureIds = []
+    const inboundList = async () => {
+      const res = await inboundQuery.findBarcodeRecords({ category: 'inbound', pageSize: 200 })
+      return (res.list ?? []).filter(r => fixtureIds.includes(r.recordId))
+    }
+    const addContainer = async (barcode, containerType) => {
+      const [r] = await pool.query(
+        'INSERT INTO inventory_containers (barcode,container_type,product_id,warehouse_id,status,initial_qty,remaining_qty,source_type,is_legacy) VALUES (?,?,?,?,1,0,0,\'manual\',0)',
+        [barcode, containerType, ctx.product.id, ctx.warehouse.id],
+      )
+      fixtureIds.push(r.insertId)
+      return r.insertId
+    }
+    const addJob = async (containerId, barcode) => {
+      const [r] = await pool.query(
+        "INSERT INTO print_jobs (printer_id,title,content_type,content,copies,priority,job_type,job_unique_key,ref_type,ref_id,ref_code,status) VALUES (?,?,'zpl','^XA^XZ',1,0,'container_label',?,'inventory_container',?,?,2)",
+        [p.insertId, 'sut', `sut:${barcode}`, containerId, barcode],
+      )
+      return r.insertId
+    }
+    await check('补打中心隐藏从未打过任务的塑料盒，保留库存条码补打入口', async () => {
+      const boxNever = await addContainer(`BT${code}`, 2)
+      const boxWithJob = await addContainer(`BJ${code}`, 2)
+      await addJob(boxWithJob, `BJ${code}`)
+      const invNever = await addContainer(`IT${code}`, 1)
+      const listed = await inboundList()
+      const ids = listed.map(r => r.recordId)
+      assert.ok(!ids.includes(boxNever), '从未打过任务的塑料盒不应出现在补打中心')
+      assert.ok(ids.includes(boxWithJob), '打过任务的塑料盒应保留（失败/丢失补打）')
+      assert.ok(ids.includes(invNever), '库存条码的补打入口不能受影响（收货无可用打印机时靠它补打）')
+    })
+    await check('直接调补打接口也不给无任务的塑料盒造任务，库存条码仍可补打', async () => {
+      const boxNever = await addContainer(`BX${code}`, 2)
+      const invNever = await addContainer(`IX${code}`, 1)
+      await assert.rejects(
+        () => labels.reprintBarcodeRecord({ category: 'inbound', recordId: boxNever, createdBy: null }),
+        (e) => e.code === 'PRINT_BARCODE_PLASTIC_BOX_NOT_PRINTED',
+      )
+      assert.ok((await labels.reprintBarcodeRecord({ category: 'inbound', recordId: invNever, createdBy: null }))?.id, '库存条码应仍能生成补打任务')
+    })
+    await pool.query('DELETE FROM print_jobs WHERE ref_type=? AND ref_id IN (?)', ['inventory_container', fixtureIds])
+    await pool.query('DELETE FROM inventory_containers WHERE id IN (?)', [fixtureIds])
   } finally {
     if (originalEnvCode === undefined) delete process.env.INBOUND_LABEL_PRINTER_CODE
     else process.env.INBOUND_LABEL_PRINTER_CODE = originalEnvCode

@@ -108,6 +108,17 @@ async function findBarcodeRecords({ category, keyword = '', status, page = 1, pa
   return findLogisticsBarcodeRecords({ keyword, status: normalizedStatus, page, pageSize })
 }
 
+/**
+ * 补打中心「入库条码」范围（2026-09-14）：塑料盒（container_type=2 / B 码）不参与系统
+ * 打印的正常流程——ERP 新建空盒只建容器记录、不入队标签。所以列表只保留**真的进过打印
+ * 队列**的塑料盒（PDA 拆分勾选「打印新塑料盒条码」那种，出问题还得能补打）；从未打过
+ * 任务的塑料盒不再列出，避免像 B000001 那样从列表里凭空造出一条打印任务。
+ *
+ * 库存条码不受影响：收货时无可用打印机导致「未生成打印任务」的容器**必须**保留补打入口
+ * （收货回执就是这么提示现场稍后补打的）。
+ */
+const INBOUND_PLASTIC_BOX_REQUIRES_JOB = `AND NOT ((c.container_type = 2 OR c.barcode LIKE 'B%') AND pj.id IS NULL)`
+
 function inboundStatusClause(status, thresholdMinutes) {
   if (!status) return { sql: '', params: [] }
   if (status === 'cancelled') {
@@ -242,6 +253,7 @@ async function findInboundBarcodeRecords({ keyword = '', status, page = 1, pageS
          OR IFNULL(p.name, '') LIKE ?
          OR IFNULL(t.task_no, '') LIKE ?
        )
+       ${INBOUND_PLASTIC_BOX_REQUIRES_JOB}
        ${statusClause.sql}
      ORDER BY c.id DESC
      LIMIT ? OFFSET ?`,
@@ -308,6 +320,7 @@ async function findInboundBarcodeRecords({ keyword = '', status, page = 1, pageS
          OR IFNULL(p.name, '') LIKE ?
          OR IFNULL(t.task_no, '') LIKE ?
        )
+       ${INBOUND_PLASTIC_BOX_REQUIRES_JOB}
        ${statusClause.sql}`,
     [...inboundFilterParams, like, like, like, like, ...statusClause.params],
   )

@@ -398,13 +398,21 @@ async function reprintInboundBarcode(recordId, { createdBy = null } = {}) {
   const id = Number(recordId)
   if (!Number.isFinite(id) || id <= 0) throw new AppError('入库条码不存在', 404, 'PRINT_BARCODE_RECORD_NOT_FOUND')
   const [[row]] = await pool.query(
-    `SELECT c.id, c.barcode, c.remaining_qty, c.warehouse_id, p.name AS product_name
+    `SELECT c.id, c.barcode, c.remaining_qty, c.warehouse_id, c.container_type,
+            p.name AS product_name,
+            EXISTS(SELECT 1 FROM print_jobs j WHERE j.ref_type = 'inventory_container' AND j.ref_id = c.id) AS has_print_job
      FROM inventory_containers c
      LEFT JOIN product_items p ON p.id = c.product_id
      WHERE c.id = ? AND c.deleted_at IS NULL`,
     [id],
   )
   if (!row) throw new AppError('入库条码不存在', 404, 'PRINT_BARCODE_RECORD_NOT_FOUND')
+  // 与补打中心列表同一口径：塑料盒不参与系统打印的正常流程，只有真的进过打印队列的
+  // 才允许补打（PDA 拆分勾选「打印新塑料盒条码」那种）。避免从补打中心给一个人工
+  // 处理条码凭空造出打印任务（2026-09-14 误操作）。库存条码不受限制。
+  if ((Number(row.container_type) === 2 || /^B/i.test(String(row.barcode))) && !Number(row.has_print_job)) {
+    throw new AppError('塑料盒条码不由系统打印，无法从补打中心生成打印任务', 400, 'PRINT_BARCODE_PLASTIC_BOX_NOT_PRINTED')
+  }
   return enqueueContainerLabelJob({
     containerId: id,
     warehouseId: row.warehouse_id != null ? Number(row.warehouse_id) : null,
