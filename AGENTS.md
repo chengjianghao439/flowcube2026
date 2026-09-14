@@ -283,6 +283,7 @@ npm run test:permissions
 - 系统品牌采用已确认的蓝底双曲线 F；官网、ERP/PDA 登录页、PDA 首页通过 `SystemBrand` 复用本地哈希资源。网页 favicon/触屏图标、桌面程序/安装器、Android 普通/圆形/自适应图标与启动屏由 `scripts/generate-brand-icons.cjs` 从 `docs/branding/flow-icon-approved.png` 导出。公司 Logo 仍只用于 ERP 顶栏/单据打印，保持公司图优先及文字回退，不混用。素材、生成方式与验收见 `docs/brand-icons-2026-09-07.md`。
 - 用户术语沿用“批次、采购申请、滞销、存放时长、分批盘点、型号、供应商型号”，不为改文案变更权限码、路由或数据库列。
 - PDA 不做离线自动重放；不确定写入结果先用幂等回执/已有 `resolveServerState` 恢复路径核实。
+- PDA 收货页**不再有扫码框**，改为点选「待收商品」卡片选商品；点一次「打印并登记」即提交（2026-09-14 用户决定）。来货没有条码、商品资料也不再维护条码，原来只认商品编码 `Pxxxxxx`／`P<商品ID>` 的扫码框没有任何可匹配的值，"未核对→再点一次"的二次确认闸门于是只剩摩擦。一个商品收完后**自动切到下一个未收完的商品**（挑选时排除刚收完的那条旧快照行），全部收完才退回空态提示可继续上架。API 层的 `scannedBarcode` 仍保留（后端可选校验，未传即跳过），但收货页不再发送；批量/效期、超收确认、重复扫码确认等闸门不受影响。回归见 `frontend/src/pages/pda/receive.test.tsx`，决策与影响见 `docs/pda-receive-remove-scan-2026-09-14.md`。
 - 原生绑定相机扫码使用 `useCameraScanner.ts` 的既定本地解码路径，注意预览时 WebView 背景透明、权限引导和关闭清理。浏览器预览不能证明 APK 相机功能正常。
 
 ## 10. 打印、部署与运维

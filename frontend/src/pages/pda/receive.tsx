@@ -7,14 +7,11 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getInboundTaskByIdApi, receiveInboundApi } from '@/api/inbound-tasks'
 import type { InboundTask } from '@/types/inbound-tasks'
 import PdaHeader from '@/components/pda/PdaHeader'
-import PdaBottomBar from '@/components/pda/PdaBottomBar'
-import PdaScanner from '@/components/pda/PdaScanner'
 import PdaCard from '@/components/pda/PdaCard'
 import PdaFlash from '@/components/pda/PdaFlash'
 import { PdaLoading } from '@/components/pda/PdaEmptyState'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { parseBarcode } from '@/utils/barcode'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
 
@@ -230,7 +227,6 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
     product: ProductSummary
     boxes: Array<{ qty: number }>
     totalQty: number
-    scannedBarcode?: string
     confirmDuplicate?: boolean
     orderedQty: number
     receivedQty: number
@@ -241,10 +237,6 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
   // DUPLICATE_SCAN_CONFIRM_REQUIRED，这里进入待确认状态，再点一次带 confirmDuplicate 放行。
   // 本地无法自行判断（前端每次提交都是新的 requestKey，看不到别人/上一次的提交），必须由后端发起。
   const [duplicateArmed, setDuplicateArmed] = useState<{ productId: number; qty: number } | null>(null)
-  // 错货防护：扫码选中的商品视为已核对（记录原始扫码值供后端兜底比对）；
-  // 手动点选的商品提交前给一次"未核对"警示（armed 二次点击放行，兼容商品无条码的场景）
-  const [scanVerified, setScanVerified] = useState<{ productId: number; barcode: string } | null>(null)
-  const [noScanArmed, setNoScanArmed] = useState<number | null>(null)
   // 批次/效期采集（选填折叠区）：批次管理商品后端强制校验，未填会明确报错引导补录
   const [batchOpen, setBatchOpen] = useState(false)
   const [batchNo, setBatchNo] = useState('')
@@ -300,37 +292,13 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
     setSelectedProductId(productId)
     // 按箱收货：切到配了辅助单位的商品时，第一箱预填箱规（每箱件数），率由系统给定不可改（文档03 Phase4b）
     resetBoxes(1, boxFill(selectableProducts.find(x => x.productId === productId) ?? null))
-    // 切换商品即重置核对状态（扫码选中路径会在 handleScan 里重新置位）与批次录入
-    setScanVerified(null)
-    setNoScanArmed(null)
+    // 切换商品即重置批次录入
     setBatchNo(''); setMfgDate(''); setExpDate(''); setBatchOpen(false)
-  }
-
-  function handleScan(raw: string) {
-    const parsed = parseBarcode(raw)
-    if (parsed.type !== 'product' && parsed.type !== 'unknown') {
-      err('扫描商品条码')
-      return
-    }
-
-    const normalized = raw.trim().toUpperCase()
-    const match = selectableProducts.find(product =>
-      normalized === String(product.productCode ?? '').toUpperCase()
-      || parsed.id === product.productId,
-    )
-    if (!match) {
-      err(`商品不在本收货单：${raw}`)
-      return
-    }
-
-    selectProduct(match.productId)
-    setScanVerified({ productId: match.productId, barcode: raw.trim() })
-    ok(`已选中 ${match.productName}（已扫码核对）`)
   }
 
   function submitReceive() {
     if (!activeProduct) {
-      err('请先扫描或选择商品')
+      err('请先选择商品')
       return
     }
 
@@ -355,13 +323,6 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
     // 超收不再由前端预判：阈值（比例 OR 金额）只在后端维护一份，触发时返回
     // 409 OVER_RECEIVE_CONFIRM_REQUIRED，带着准确的数量与金额，前端据此弹确认框。
     // 以前前端也硬编码了一份 0.2 的比例判断，既算不出金额，又会和后端阈值悄悄漂移。
-    const scanOk = scanVerified?.productId === activeProduct.productId
-    // 错货防护：手动点选（未扫码核对）的商品，第一次提交给警示，再次点击放行
-    if (!scanOk && noScanArmed !== activeProduct.productId) {
-      setNoScanArmed(activeProduct.productId)
-      warn('该商品未经扫码核对，建议扫描实物商品条码确认；确认实物无误可再次点击直接提交')
-      return
-    }
     if (totalQty < activeProduct.remainingQty) {
       warn(`当前只登记 ${totalQty}，提交后该商品还剩 ${activeProduct.remainingQty - totalQty}`)
     }
@@ -370,7 +331,6 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
       product: activeProduct,
       boxes: normalizedBoxes.map(box => ({ qty: box.qty })),
       totalQty,
-      scannedBarcode: scanOk ? scanVerified?.barcode : undefined,
       confirmDuplicate: duplicateConfirmed,
     })
   }
@@ -380,11 +340,10 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
     product: ProductSummary
     boxes: Array<{ qty: number }>
     totalQty: number
-    scannedBarcode?: string
     confirmDuplicate?: boolean
     overReceiveReason?: OverReceiveReasonCode
   }) {
-    const { product, boxes: pkgs, totalQty, scannedBarcode, confirmDuplicate, overReceiveReason } = opts
+    const { product, boxes: pkgs, totalQty, confirmDuplicate, overReceiveReason } = opts
     setSubmitting(true)
     const expectedReceivedQty = product.receivedQty + totalQty
     void receiveAction.run(
@@ -395,7 +354,6 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
           confirmOverReceive: overReceiveReason ? true : undefined,
           overReceiveReason,
           confirmDuplicate: confirmDuplicate || undefined,
-          scannedBarcode,
           batchNo: batchNo.trim() || undefined,
           mfgDate: mfgDate || undefined,
           expDate: expDate || undefined,
@@ -408,8 +366,14 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
         if ((product.remainingQty - totalQty) > 0) {
           resetBoxes(1, boxFill(product))   // 继续收同商品：预填箱规（文档03 Phase4b）
         } else {
-          setSelectedProductId(null)
-          resetBoxes(1)
+          // 本商品收完：收货页已无扫码框，自动切到下一个还没收完的商品，免去现场再点一次卡片。
+          // 用 selectableProducts 的旧快照挑选，必须排除刚收完的这个（它的 remainingQty 还没刷新）；
+          // 全部收完时退回空态，文案提示可继续上架。
+          const next = selectableProducts.find(
+            item => item.productId !== product.productId && item.remainingQty > 0,
+          ) ?? null
+          setSelectedProductId(next?.productId ?? null)
+          resetBoxes(1, boxFill(next))
         }
       } else {
         // 结果待确认：清空当前箱数输入，避免用户误以为这些箱子还没提交而重复填报
@@ -430,7 +394,6 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
           product,
           boxes: pkgs,
           totalQty,
-          scannedBarcode,
           confirmDuplicate,
           orderedQty: Number(data?.orderedQty ?? product.orderedQty),
           receivedQty: Number(data?.receivedQty ?? product.receivedQty),
@@ -576,18 +539,15 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
           />
         ) : (
           <PdaCard>
-            <p className="text-sm text-muted-foreground">扫描商品条码</p>
+            {/* 商品没有可扫的码（来货无条码、商品资料也不再维护），只能点选商品卡片 */}
+            <p className="text-sm text-muted-foreground">
+              {selectableProducts.length === 0
+                ? '本单商品已全部收货完成，可继续上架。'
+                : '请在上方「待收商品」中点选要收货的商品。'}
+            </p>
           </PdaCard>
         )}
       </div>
-
-      <PdaBottomBar>
-        <PdaScanner
-          onScan={handleScan}
-          placeholder="扫描商品条码"
-          disabled={submitting || receiveAction.submitBlocked}
-        />
-      </PdaBottomBar>
 
       {overReceivePrompt && (
         <PdaOverReceiveDialog
@@ -609,7 +569,6 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
               product: pending.product,
               boxes: pending.boxes,
               totalQty: pending.totalQty,
-              scannedBarcode: pending.scannedBarcode,
               confirmDuplicate: pending.confirmDuplicate,
               overReceiveReason: reason,
             })
