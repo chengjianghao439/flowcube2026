@@ -354,6 +354,10 @@ export default function PdaPackPage() {
         const hint = job?.dispatchHint
         if (hint && hint.clientOnline === false) warn(packageLabelTraceMessage(job), 5000)
         else ok(packageLabelTraceMessage(job), 4000)
+      } else {
+        // 2026-09-14：没有可用打印机时后端只留一条打印记录（不算已排队），
+        // 必须明确提示先绑定打印机，否则现场会以为箱贴已经在打。
+        warn('未绑定可用打印机，箱贴未出纸；记录已保留，请先绑定打印机再到「打印记录」页补打', 5000)
       }
     },
     onError: (e: unknown) => err((e as { message?: string })?.message ?? '打印失败'),

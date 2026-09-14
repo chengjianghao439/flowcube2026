@@ -110,6 +110,18 @@ async function printLabel(req, res, next) {
     if (!job) {
       return res.status(409).json({ success: false, message: '箱贴未进入打印链，请检查打印配置后重试', data: null })
     }
+    if (job.unprintable) {
+      // 2026-09-14：没有可用打印机时后端也会留一条打印记录（保证箱贴始终有记录、之后可补打），
+      // 但这不等于「已加入打印队列」——必须明确提示先去绑定打印机，别让现场以为已经在打。
+      const payload = { queued: false, job: null, noPrinter: true }
+      await completeOperationRequest(pool, requestState, {
+        data: payload,
+        message: '未绑定可用打印机，已记录本次打印',
+        resourceType: 'print_job',
+        resourceId: job.id,
+      })
+      return successResponse(res, payload, '未绑定可用打印机，已记录本次打印；请先绑定打印机，再到打印记录页补打')
+    }
     const dispatchHint = await printJobs.getDispatchHintForJob(job.printerCode, job.id)
     const payload = { queued: true, job: { ...job, dispatchHint } }
     await completeOperationRequest(pool, requestState, {

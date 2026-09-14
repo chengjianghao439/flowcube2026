@@ -137,7 +137,13 @@ async function recordUnprintableJob(createJob, fields) {
     refCode: fields.refCode ?? null,
     unprintableReason: NO_PRINTER_REASON,
   })
-  return job ? { ...job, unprintable: true } : null
+  if (!job) return null
+  // createJob 命中幂等键时会返回**已存在的**任务（例如同一对象此前真的打过），
+  // 那种情况必须原样返回——只有确实是这次落的「无打印机记录」才算 unprintable，
+  // 否则会把一次真实打印误报成「没打印机、只留了记录」。
+  const isNoPrinterRecord =
+    job.printerId == null && Number(job.status) === 3 && String(job.errorMessage || '') === NO_PRINTER_REASON
+  return isNoPrinterRecord ? { ...job, unprintable: true } : job
 }
 
 async function enqueueContainerLabelJob(payload) {

@@ -415,7 +415,8 @@ async function buildFinishedPackagePrintResult(exec, packageId, warehouseTaskId,
     'SELECT COUNT(*) AS remaining FROM packages WHERE warehouse_task_id=? AND status=1',
     [warehouseTaskId],
   )
-  const dispatchHint = job?.id
+  // unprintable（无可用打印机，只留记录）不参与派发提示判断，否则会被说成「客户端未绑定」
+  const dispatchHint = job?.id && !job.unprintable
     ? await printJobs.getDispatchHintForJob(job.printerCode, Number(job.id))
     : null
   return {

@@ -90,3 +90,33 @@
 - 后端 `POST /api/inbound-tasks/:id/reprint`（整单/明细/条码补打）**没有任何前端调用**：
   按「补打只在打印记录页」的规则，它已不属于 UI 入口。保留未删（避免擅自弃用接口），
   后续要不要下线由用户决定。
+
+## 自审发现并已修复（同一批次）
+
+1. **打印失败通知指错地方**：`INBOUND_PRINT_FAILED` 原本跳到
+   `/inbound-tasks/:id?focus=print-batches`，而收货详情已不再展示打印记录、也没有补打入口。
+   改为落 `打印记录页 + inboundTaskId 过滤`（`/settings/barcode-print-query?category=inbound&status=failed&inboundTaskId=…`）。
+2. **打包控制器把「只留记录」当成功**：`POST /packages/:id/print-label` 在无打印机时返回
+   `queued:true / 已加入打印队列` 且拿 `printerCode=null` 去算派发提示。现在返回
+   `queued:false` + 「已记录本次打印，请先绑定打印机再到打印记录页补打」，PDA 打包页也补了对应提示。
+3. **`packDone` 的派发提示**同样会对无打印机记录算出「客户端未绑定」，已跳过该判断。
+4. **幂等键误标**：`recordUnprintableJob` 在幂等键命中、返回的是**已存在的真实任务**时，
+   也会被加上 `unprintable`，会让调用方把一次真实打印报成「没打印机」。现在只有确实是
+   本次落下的无打印机记录（`printerId=null` + 失败 + `no printer available`）才标记。
+
+### 自审核过、确认不是问题
+
+- 幂等唯一键 `uk_print_jobs_idem_scope_live` 含生成列 `idem_scope_live_guard`，`status=3` 时为
+  NULL——**同键多条失败记录不会被唯一键拒绝**，重复入队不会 409。
+- 领取（claim-client）与失联回收都 `INNER JOIN printers`，`printer_id` 为 NULL 的行**永远不会被
+  任何客户端领取**，物理打印路径不受影响。
+- `focus=print-batches` 深链：正则 `/[?&]focus=print(?:&|$)/` 不会命中它，会落到「作业进度」，
+  不会出现空面板。
+- 打印记录页列表、单据进度、通知统计对 `printers` 都是 `LEFT JOIN`，`printer_id` 为空不会丢行。
+
+### 记录未改（供决策）
+
+- 「N 条打印任务失败，建议补打」统计所有 `status=3`，含货架/库位/商品这类不进记录页的标签失败，
+  数字可能大于记录页可见行数（既有口径，本次未动）。
+- 塑料盒「打印条码」用 `INVENTORY_VIEW`（与库位标签同口径），而货架标签用专门的
+  `RACK_PRINT_LABEL`、记录页补打用 `PRINT_JOB_REPRINT`——权限口径不完全一致。
