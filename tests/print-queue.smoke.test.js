@@ -129,10 +129,10 @@ async function main() {
       const res = await inboundQuery.findBarcodeRecords({ category: 'inbound', pageSize: 200 })
       return (res.list ?? []).filter(r => fixtureIds.includes(r.recordId))
     }
-    const addContainer = async (barcode, containerType) => {
+    const addContainer = async (barcode, containerType, sourceRefType = null) => {
       const [r] = await pool.query(
-        'INSERT INTO inventory_containers (barcode,container_type,product_id,warehouse_id,status,initial_qty,remaining_qty,source_type,is_legacy) VALUES (?,?,?,?,1,0,0,\'manual\',0)',
-        [barcode, containerType, ctx.product.id, ctx.warehouse.id],
+        'INSERT INTO inventory_containers (barcode,container_type,product_id,warehouse_id,status,initial_qty,remaining_qty,source_type,source_ref_type,is_legacy) VALUES (?,?,?,?,1,0,0,?,?,0)',
+        [barcode, containerType, ctx.product.id, ctx.warehouse.id, sourceRefType ? 'container_split' : 'manual', sourceRefType],
       )
       fixtureIds.push(r.insertId)
       return r.insertId
@@ -146,21 +146,28 @@ async function main() {
     }
     // 2026-09-14 用户决定：补打中心 = 打印记录，只列**真的生成过打印任务**的对象。
     // 从未打印过的容器（含塑料盒）不再出现，其打印入口在业务单据本身（收货订单详情补打）。
-    await check('补打中心只列有打印记录的对象，从未打印过的不出现', async () => {
-      const boxNever = await addContainer(`BT${code}`, 2)
-      const boxWithJob = await addContainer(`BJ${code}`, 2)
-      await addJob(boxWithJob, `BJ${code}`)
+    await check('补打中心=唯一码的打印记录：空盒不进，散货/库存条码要有记录才进', async () => {
+      // 可复用空盒（塑料盒自身的码）：即使打过标签也不进（非唯一码）
+      const reusable = await addContainer(`BP${code}`, 2, 'plastic_box_create')
+      await addJob(reusable, `BP${code}`)
+      // 拆分产生的散货（同为 B 码，但每次新建、唯一）：有打印记录就该进
+      const splitBox = await addContainer(`BS${code}`, 2, 'container_split')
+      await addJob(splitBox, `BS${code}`)
+      const boxNever = await addContainer(`BT${code}`, 2, 'container_split')
       const invNever = await addContainer(`IT${code}`, 1)
       const invWithJob = await addContainer(`IJ${code}`, 1)
       await addJob(invWithJob, `IJ${code}`)
       const ids = (await inboundList()).map(r => r.recordId)
-      assert.ok(!ids.includes(boxNever), '从未打印过的塑料盒不应出现')
+      assert.ok(!ids.includes(reusable), '可复用空盒（非唯一码）即使有打印记录也不应出现')
+      assert.ok(!ids.includes(boxNever), '从未打印过的散货不应出现')
       assert.ok(!ids.includes(invNever), '从未打印过的库存容器不应出现（补打中心=打印记录）')
-      assert.ok(ids.includes(boxWithJob), '有打印记录的塑料盒应保留（失败/丢失补打）')
+      assert.ok(ids.includes(splitBox), '有打印记录的拆分散货应保留（唯一码）')
       assert.ok(ids.includes(invWithJob), '有打印记录的库存容器应保留')
     })
     await check('补打接口只接受有打印记录的对象', async () => {
-      const boxNever = await addContainer(`BX${code}`, 2)
+      const boxNever = await addContainer(`BX${code}`, 2, 'container_split')
+      const reusable = await addContainer(`BZ${code}`, 2, 'plastic_box_create')
+      await addJob(reusable, `BZ${code}`)
       const invNever = await addContainer(`IX${code}`, 1)
       const invWithJob = await addContainer(`IY${code}`, 1)
       await addJob(invWithJob, `IY${code}`)
@@ -170,7 +177,20 @@ async function main() {
           (e) => e.code === 'PRINT_BARCODE_NO_PRINT_RECORD',
         )
       }
+      // 非唯一码（可复用空盒）即使有打印记录也从这里拒绝，指向塑料盒功能
+      await assert.rejects(
+        () => labels.reprintBarcodeRecord({ category: 'inbound', recordId: reusable, createdBy: null }),
+        (e) => e.code === 'PRINT_BARCODE_NOT_UNIQUE',
+      )
       assert.ok((await labels.reprintBarcodeRecord({ category: 'inbound', recordId: invWithJob, createdBy: null }))?.id, '有打印记录的容器应能补打')
+    })
+    await check('可复用空盒不进打印记录，但在「塑料盒」功能里可重复打印', async () => {
+      const box = await addContainer(`BH${code}`, 2, 'plastic_box_create')
+      const boxSvc = require('../backend/src/modules/plastic-boxes/plastic-boxes.service')
+      const job = await boxSvc.printLabel(box, { userId: null, scopeWarehouseIds: null })
+      assert.ok(job?.id, '塑料盒页面重打应生成打印任务')
+      const ids = (await inboundList()).map(r => r.recordId)
+      assert.ok(!ids.includes(box), '即使这次打印产生了任务，可复用空盒也不应出现在打印记录页')
     })
     await check('出库箱贴同样只列有打印记录的对象', async () => {
       const [wt] = await pool.query(

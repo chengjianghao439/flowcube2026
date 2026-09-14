@@ -18,7 +18,7 @@ import { SaleOrderItemsSection } from './components/SaleOrderItemsSection'
 
 import { useState, useContext, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Activity, AlertTriangle, CalendarClock, ClipboardList, Clock, History, Loader2, PackageCheck, Pencil, Save, ScanLine, Warehouse, X } from 'lucide-react'
+import { Activity, AlertTriangle, CalendarClock, ClipboardList, Clock, History, Loader2, PackageCheck, Pencil, Printer, Save, ScanLine, Warehouse, X } from 'lucide-react'
 import { PrintPreviewOverlay } from '@/components/print/SaleOrderPrintTemplate'
 import { Button }  from '@/components/ui/button'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
@@ -459,7 +459,7 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
   const cancelMutate   = useCancelSale()
 
   const [printOpen, setPrintOpen] = useState(false)
-  const [detailTab, setDetailTab] = useState<'info'|'fulfillment'|'progress'|'scan'|'pack'|'log'>(() => isFulfillmentFocus(saleId) ? 'fulfillment' : 'info')
+  const [detailTab, setDetailTab] = useState<'info'|'fulfillment'|'progress'|'scan'|'pack'|'print'|'log'>(() => isFulfillmentFocus(saleId) ? 'fulfillment' : 'info')
   useEffect(() => {
     const focus = () => {
       if (isFulfillmentFocus(saleId)) setDetailTab('fulfillment')
@@ -604,6 +604,7 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
           ['progress', '作业进度', Activity],
           ['scan', '取货明细', ScanLine],
           ['pack', '装箱进度', PackageCheck],
+          ['print', '条码打印', Printer],
           ['log', '操作记录', History],
         ] as const).map(([key, label, Icon]) => (
           <button
@@ -849,6 +850,8 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
         </div></KeepAliveSection>
 
       <KeepAliveSection active={detailTab === 'log'} className="space-y-3"><DocumentActivityPanel type="sale" id={order.id} view="log" /></KeepAliveSection>
+      {/* 客服靠这里跟踪每个箱贴的打印进度（后端 document-progress 已产出 print 分组） */}
+      <KeepAliveSection active={detailTab === 'print'} className="space-y-3"><DocumentActivityPanel type="sale" id={order.id} view="print" /></KeepAliveSection>
 
       {/* 底部安全间距 */}
       <div className="h-4" />

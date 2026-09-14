@@ -17,6 +17,8 @@ router.post('/',           requirePermission(PERMISSIONS.INVENTORY_CONTAINER_SPL
 })), ctrl.create)
 router.get('/:id',         requirePermission(PERMISSIONS.INVENTORY_VIEW), ctrl.detail)
 router.get('/:id/movements', requirePermission(PERMISSIONS.INVENTORY_VIEW), ctrl.movements)
+// 重复打印塑料盒条码：只读业务（入队打印、不改库存），与库位/货架标签同口径用查看权限
+router.post('/:id/print-label', requirePermission(PERMISSIONS.INVENTORY_VIEW), ctrl.printLabel)
 router.delete('/:id',      requirePermission(PERMISSIONS.INVENTORY_CONTAINER_SPLIT), ctrl.remove)
 
 module.exports = router

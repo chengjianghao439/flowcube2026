@@ -124,6 +124,39 @@ async function remove(id, scopeWarehouseIds = null) {
   } finally { conn.release() }
 }
 
+/**
+ * 重复打印塑料盒条码（2026-09-14 用户规则）。
+ *
+ * 塑料盒自身的码是可复用的固定码，**不进补打中心**（那里只放唯一对象的打印记录），
+ * 所以「对应的功能里可以重复打印」这条要由本页提供：不校验历史打印记录，随时可重打一份。
+ */
+async function printLabel(id, { userId = null, scopeWarehouseIds = null } = {}) {
+  const { enqueueContainerLabelJob } = require('../print-jobs/print-jobs.service')
+  const boxId = Number(id)
+  if (!Number.isFinite(boxId) || boxId <= 0) throw new AppError('塑料盒不存在', 404)
+  const [[row]] = await pool.query(
+    `SELECT c.id, c.barcode, c.remaining_qty, c.warehouse_id, p.name AS product_name
+     FROM inventory_containers c
+     LEFT JOIN product_items p ON p.id = c.product_id
+     WHERE c.id = ? AND c.barcode LIKE 'B%' AND c.deleted_at IS NULL`,
+    [boxId],
+  )
+  if (!row) throw new AppError('塑料盒不存在', 404)
+  assertInScope(scopeWarehouseIds, row.warehouse_id, '塑料盒')
+  // 找不到可用打印机时 enqueueContainerLabelJob 返回 null（预期状态，非异常），由控制器提示。
+  return enqueueContainerLabelJob({
+    containerId: Number(row.id),
+    warehouseId: row.warehouse_id != null ? Number(row.warehouse_id) : null,
+    data: {
+      container_code: row.barcode,
+      product_name: row.product_name,
+      qty: row.remaining_qty,
+    },
+    createdBy: userId,
+    jobUniqueKey: `plastic_box_label:${row.id}:${Date.now()}`,
+  })
+}
+
 function fmt(row) {
   return {
     id: Number(row.id),
@@ -146,4 +179,4 @@ function fmt(row) {
   }
 }
 
-module.exports = { findAll, findById, findMovements, create, remove }
+module.exports = { findAll, findById, findMovements, create, remove, printLabel }

@@ -20,6 +20,7 @@ import {
   getPlasticBoxesApi,
   createPlasticBoxApi,
   deletePlasticBoxApi,
+  printPlasticBoxLabelApi,
   usePlasticBoxMovements,
   type PlasticBox,
 } from '@/hooks/usePlasticBoxes'
@@ -86,6 +87,18 @@ export default function PlasticBoxesPage() {
             primaryVariant="outline"
             onPrimaryClick={() => setDetailTarget(row)}
             items={[
+              {
+                label: '打印条码',
+                // 塑料盒是固定可复用码，不进补打中心；丢失/破损时在本页重复打印即可
+                onClick: () => {
+                  void printPlasticBoxLabelApi(row.id)
+                    .then((r) => {
+                      if (r?.queued) toast.success(`已加入打印队列：${row.barcode}`)
+                      else toast.warning('没有可用的标签打印机，请先在「打印机管理」绑定后再试')
+                    })
+                    .catch((e: unknown) => toast.error((e as Error)?.message ?? '打印失败'))
+                },
+              },
               ...(row.remainingQty === 0 ? [{
                 label: '删除',
                 destructive: true,

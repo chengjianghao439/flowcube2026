@@ -16,5 +16,16 @@ const create = async (req, res, next) => {
 const remove = async (req, res, next) => {
   try { await svc.remove(+req.params.id, req.user.warehouseIds); return successResponse(res, null, '删除成功') } catch (e) { next(e) }
 }
+/** 重复打印塑料盒条码（塑料盒是固定可复用码，不进补打中心） */
+const printLabel = async (req, res, next) => {
+  try {
+    const job = await svc.printLabel(+req.params.id, {
+      userId: req.user?.userId ?? null,
+      scopeWarehouseIds: req.user.warehouseIds,
+    })
+    if (!job) return successResponse(res, { queued: false, jobId: null }, '未绑定打印机，未创建打印任务')
+    return successResponse(res, { queued: true, jobId: Number(job.id), printerCode: job.printerCode ?? null, printerName: job.printerName ?? null }, '已加入打印队列')
+  } catch (e) { next(e) }
+}
 
-module.exports = { list, detail, movements, create, remove }
+module.exports = { list, detail, movements, create, remove, printLabel }

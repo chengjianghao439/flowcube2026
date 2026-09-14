@@ -111,9 +111,15 @@ async function findBarcodeRecords({ category, keyword = '', status, page = 1, pa
 /**
  * 补打中心 = 打印记录（2026-09-14 用户决定）。
  *
- * 列表只列**真的生成过打印任务**的对象：入库条码按容器、出库条码按箱贴，各自要求最近一条
- * `print_jobs` 存在（物流条码本来就取自 print_jobs）。从未打印过的容器/箱子不出现在这里——
- * 它们的打印入口在业务单据本身（如收货订单详情的「整单 / 明细 / 条码补打」）。
+ * 列表只列**唯一对象**且**真的生成过打印任务**的记录：入库条码按容器、出库条码按箱贴，
+ * 各自要求最近一条 `print_jobs` 存在（物流条码本来就取自 print_jobs）。从未打印过的容器/箱子
+ * 不出现在这里——它们的打印入口在业务单据本身（如收货订单详情的「整单 / 明细 / 条码补打」）。
+ *
+ * 「唯一」的含义（2026-09-14 用户规则）：条码指向一个唯一对象才值得留打印记录，丢了能按记录补打。
+ * 因此排除可复用的固定码——塑料盒自身的码（`source_ref_type='plastic_box_create'`，同一个盒子
+ * 反复装不同货）不进本页，它在「塑料盒」功能里随时重复打印；货架/库位标签同理（本就不在本页取数）。
+ * 拆分产生的散货容器（`container_split` / `sale_order_adjustment_return`）虽然也是 `B` 码，
+ * 但每次新建、指向唯一一批货，**照常记录**。
  *
  * 这样「补打」才真的等于重打：点下去为该对象新建一条任务，而不是给一个从没打过标签的
  * 对象凭空造任务（2026-09-14 生产误操作：从未打印过的塑料盒 B000001 被从补打中心打了出去）。
@@ -253,6 +259,7 @@ async function findInboundBarcodeRecords({ keyword = '', status, page = 1, pageS
          OR IFNULL(t.task_no, '') LIKE ?
        )
        AND pj.id IS NOT NULL
+       AND IFNULL(c.source_ref_type, '') <> 'plastic_box_create'
        ${statusClause.sql}
      ORDER BY c.id DESC
      LIMIT ? OFFSET ?`,
@@ -320,6 +327,7 @@ async function findInboundBarcodeRecords({ keyword = '', status, page = 1, pageS
          OR IFNULL(t.task_no, '') LIKE ?
        )
        AND pj.id IS NOT NULL
+       AND IFNULL(c.source_ref_type, '') <> 'plastic_box_create'
        ${statusClause.sql}`,
     [...inboundFilterParams, like, like, like, like, ...statusClause.params],
   )

@@ -398,7 +398,7 @@ async function reprintInboundBarcode(recordId, { createdBy = null } = {}) {
   const id = Number(recordId)
   if (!Number.isFinite(id) || id <= 0) throw new AppError('入库条码不存在', 404, 'PRINT_BARCODE_RECORD_NOT_FOUND')
   const [[row]] = await pool.query(
-    `SELECT c.id, c.barcode, c.remaining_qty, c.warehouse_id, c.container_type,
+    `SELECT c.id, c.barcode, c.remaining_qty, c.warehouse_id, c.container_type, c.source_ref_type,
             p.name AS product_name,
             EXISTS(SELECT 1 FROM print_jobs j WHERE j.ref_type = 'inventory_container' AND j.ref_id = c.id) AS has_print_job
      FROM inventory_containers c
@@ -407,6 +407,11 @@ async function reprintInboundBarcode(recordId, { createdBy = null } = {}) {
     [id],
   )
   if (!row) throw new AppError('入库条码不存在', 404, 'PRINT_BARCODE_RECORD_NOT_FOUND')
+  // 非唯一码不进打印记录：塑料盒自身的码是可复用的固定码（同一个盒子反复装不同货），
+  // 它不该在打印历史里，也不该从这里补打——请在「塑料盒」页面重复打印。
+  if (String(row.source_ref_type || '') === 'plastic_box_create') {
+    throw new AppError('塑料盒条码不是唯一码，不在打印记录中；请在「塑料盒」页面重复打印', 400, 'PRINT_BARCODE_NOT_UNIQUE')
+  }
   // 与补打中心列表同一口径：补打=重打，只对**有打印记录**的对象成立。从未打印过的容器
   // 不会被列表列出（2026-09-14 用户决定），也不能靠直接调接口凭空造任务；那种情况请从
   // 收货订单详情发起「整单 / 明细 / 条码补打」。

@@ -32,6 +32,14 @@ export function createPlasticBoxApi(data: Record<string, unknown>, config?: Para
 export function deletePlasticBoxApi(id: number, config?: Parameters<typeof payloadClient.delete>[1]) {
   return payloadClient.delete(`/plastic-boxes/${id}`, config)
 }
+/** 重复打印塑料盒条码：塑料盒是固定可复用码，不进补打中心，重打入口在本页 */
+export function printPlasticBoxLabelApi(id: number) {
+  return payloadClient.post<{ queued: boolean; jobId: number | null; printerCode?: string | null; printerName?: string | null }>(
+    `/plastic-boxes/${id}/print-label`,
+    {},
+    { skipGlobalError: true },
+  )
+}
 
 export function usePlasticBoxes(keyword: string) {
   return useQuery({
