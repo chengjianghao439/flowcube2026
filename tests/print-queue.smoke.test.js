@@ -123,6 +123,8 @@ async function main() {
     // （PDA 拆分勾选「打印新塑料盒条码」那种）才保留补打入口。
     const inboundQuery = require('../backend/src/modules/print-jobs/print-jobs.query')
     const fixtureIds = []
+    const packageIds = []
+    const taskIds = []
     const inboundList = async () => {
       const res = await inboundQuery.findBarcodeRecords({ category: 'inbound', pageSize: 200 })
       return (res.list ?? []).filter(r => fixtureIds.includes(r.recordId))
@@ -142,28 +144,71 @@ async function main() {
       )
       return r.insertId
     }
-    await check('补打中心隐藏从未打过任务的塑料盒，保留库存条码补打入口', async () => {
+    // 2026-09-14 用户决定：补打中心 = 打印记录，只列**真的生成过打印任务**的对象。
+    // 从未打印过的容器（含塑料盒）不再出现，其打印入口在业务单据本身（收货订单详情补打）。
+    await check('补打中心只列有打印记录的对象，从未打印过的不出现', async () => {
       const boxNever = await addContainer(`BT${code}`, 2)
       const boxWithJob = await addContainer(`BJ${code}`, 2)
       await addJob(boxWithJob, `BJ${code}`)
       const invNever = await addContainer(`IT${code}`, 1)
-      const listed = await inboundList()
-      const ids = listed.map(r => r.recordId)
-      assert.ok(!ids.includes(boxNever), '从未打过任务的塑料盒不应出现在补打中心')
-      assert.ok(ids.includes(boxWithJob), '打过任务的塑料盒应保留（失败/丢失补打）')
-      assert.ok(ids.includes(invNever), '库存条码的补打入口不能受影响（收货无可用打印机时靠它补打）')
+      const invWithJob = await addContainer(`IJ${code}`, 1)
+      await addJob(invWithJob, `IJ${code}`)
+      const ids = (await inboundList()).map(r => r.recordId)
+      assert.ok(!ids.includes(boxNever), '从未打印过的塑料盒不应出现')
+      assert.ok(!ids.includes(invNever), '从未打印过的库存容器不应出现（补打中心=打印记录）')
+      assert.ok(ids.includes(boxWithJob), '有打印记录的塑料盒应保留（失败/丢失补打）')
+      assert.ok(ids.includes(invWithJob), '有打印记录的库存容器应保留')
     })
-    await check('直接调补打接口也不给无任务的塑料盒造任务，库存条码仍可补打', async () => {
+    await check('补打接口只接受有打印记录的对象', async () => {
       const boxNever = await addContainer(`BX${code}`, 2)
       const invNever = await addContainer(`IX${code}`, 1)
-      await assert.rejects(
-        () => labels.reprintBarcodeRecord({ category: 'inbound', recordId: boxNever, createdBy: null }),
-        (e) => e.code === 'PRINT_BARCODE_PLASTIC_BOX_NOT_PRINTED',
+      const invWithJob = await addContainer(`IY${code}`, 1)
+      await addJob(invWithJob, `IY${code}`)
+      for (const id of [boxNever, invNever]) {
+        await assert.rejects(
+          () => labels.reprintBarcodeRecord({ category: 'inbound', recordId: id, createdBy: null }),
+          (e) => e.code === 'PRINT_BARCODE_NO_PRINT_RECORD',
+        )
+      }
+      assert.ok((await labels.reprintBarcodeRecord({ category: 'inbound', recordId: invWithJob, createdBy: null }))?.id, '有打印记录的容器应能补打')
+    })
+    await check('出库箱贴同样只列有打印记录的对象', async () => {
+      const [wt] = await pool.query(
+        'INSERT INTO warehouse_tasks (task_no,sale_order_id,sale_order_no,customer_id,customer_name,warehouse_id,warehouse_name) VALUES (?,0,?,?,?,?,?)',
+        [`SUT${code}`, `SO${code}`, ctx.customer.id, ctx.customer.name, ctx.warehouse.id, ctx.warehouse.name],
       )
-      assert.ok((await labels.reprintBarcodeRecord({ category: 'inbound', recordId: invNever, createdBy: null }))?.id, '库存条码应仍能生成补打任务')
+      taskIds.push(wt.insertId)
+      const makePkg = async (barcode) => {
+        const [r] = await pool.query('INSERT INTO packages (barcode,warehouse_task_id,status) VALUES (?,?,1)', [barcode, wt.insertId])
+        packageIds.push(r.insertId)
+        return r.insertId
+      }
+      const never = await makePkg(`LB${code}`)
+      const withJob = await makePkg(`LJ${code}`)
+      await pool.query(
+        "INSERT INTO print_jobs (printer_id,title,content_type,content,copies,priority,job_type,job_unique_key,ref_type,ref_id,ref_code,status) VALUES (?,?,'zpl','^XA^XZ',1,0,'package_label',?,'package',?,?,2)",
+        [p.insertId, 'sut', `sut-pkg:${code}`, withJob, `LJ${code}`],
+      )
+      const listed = await inboundQuery.findBarcodeRecords({ category: 'outbound', pageSize: 200 })
+      const ids = (listed.list ?? []).filter(r => packageIds.includes(r.recordId)).map(r => r.recordId)
+      assert.ok(!ids.includes(never), '从未打印过的箱贴不应出现')
+      assert.ok(ids.includes(withJob), '有打印记录的箱贴应保留')
+      // 出库计数查询原先把最新任务子查询别名写成 j，而状态条件按 pj 拼——一带状态筛选就报
+      // Unknown column 'pj.status'。这里同时钉住别名已统一。
+      const filtered = await inboundQuery.findBarcodeRecords({ category: 'outbound', status: 'success', pageSize: 200 })
+      assert.ok((filtered.list ?? []).some(r => r.recordId === withJob), '出库带状态筛选应能正常查询并命中已打印记录')
+      await assert.rejects(
+        () => labels.reprintBarcodeRecord({ category: 'outbound', recordId: never, createdBy: null }),
+        (e) => e.code === 'PRINT_BARCODE_NO_PRINT_RECORD',
+      )
     })
     await pool.query('DELETE FROM print_jobs WHERE ref_type=? AND ref_id IN (?)', ['inventory_container', fixtureIds])
     await pool.query('DELETE FROM inventory_containers WHERE id IN (?)', [fixtureIds])
+    if (packageIds.length) {
+      await pool.query("DELETE FROM print_jobs WHERE ref_type='package' AND ref_id IN (?)", [packageIds])
+      await pool.query('DELETE FROM packages WHERE id IN (?)', [packageIds])
+    }
+    if (taskIds.length) await pool.query('DELETE FROM warehouse_tasks WHERE id IN (?)', [taskIds])
   } finally {
     if (originalEnvCode === undefined) delete process.env.INBOUND_LABEL_PRINTER_CODE
     else process.env.INBOUND_LABEL_PRINTER_CODE = originalEnvCode

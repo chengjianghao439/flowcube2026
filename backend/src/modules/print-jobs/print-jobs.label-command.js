@@ -407,11 +407,11 @@ async function reprintInboundBarcode(recordId, { createdBy = null } = {}) {
     [id],
   )
   if (!row) throw new AppError('入库条码不存在', 404, 'PRINT_BARCODE_RECORD_NOT_FOUND')
-  // 与补打中心列表同一口径：塑料盒不参与系统打印的正常流程，只有真的进过打印队列的
-  // 才允许补打（PDA 拆分勾选「打印新塑料盒条码」那种）。避免从补打中心给一个人工
-  // 处理条码凭空造出打印任务（2026-09-14 误操作）。库存条码不受限制。
-  if ((Number(row.container_type) === 2 || /^B/i.test(String(row.barcode))) && !Number(row.has_print_job)) {
-    throw new AppError('塑料盒条码不由系统打印，无法从补打中心生成打印任务', 400, 'PRINT_BARCODE_PLASTIC_BOX_NOT_PRINTED')
+  // 与补打中心列表同一口径：补打=重打，只对**有打印记录**的对象成立。从未打印过的容器
+  // 不会被列表列出（2026-09-14 用户决定），也不能靠直接调接口凭空造任务；那种情况请从
+  // 收货订单详情发起「整单 / 明细 / 条码补打」。
+  if (!Number(row.has_print_job)) {
+    throw new AppError('该条码没有打印记录，无法补打；从未打印过的容器请到收货订单详情发起补打', 400, 'PRINT_BARCODE_NO_PRINT_RECORD')
   }
   return enqueueContainerLabelJob({
     containerId: id,
@@ -429,6 +429,12 @@ async function reprintInboundBarcode(recordId, { createdBy = null } = {}) {
 async function reprintOutboundBarcode(recordId, { createdBy = null } = {}) {
   const id = Number(recordId)
   if (!Number.isFinite(id) || id <= 0) throw new AppError('条码记录不存在', 404, 'PRINT_BARCODE_RECORD_NOT_FOUND')
+  // 与补打中心列表同一口径：只对已经有过打印记录的箱贴补打（见 reprintInboundBarcode 注释）。
+  const [[existing]] = await pool.query(
+    "SELECT id FROM print_jobs WHERE ref_type = 'package' AND ref_id = ? LIMIT 1",
+    [id],
+  )
+  if (!existing) throw new AppError('该箱贴没有打印记录，无法补打', 400, 'PRINT_BARCODE_NO_PRINT_RECORD')
   return enqueuePackageLabelJob({
     packageId: id,
     createdBy,

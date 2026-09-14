@@ -109,16 +109,15 @@ async function findBarcodeRecords({ category, keyword = '', status, page = 1, pa
 }
 
 /**
- * 补打中心「入库条码」范围（2026-09-14）：塑料盒（container_type=2 / B 码）不参与系统
- * 打印的正常流程——ERP 新建空盒只建容器记录、不入队标签。所以列表只保留**真的进过打印
- * 队列**的塑料盒（PDA 拆分勾选「打印新塑料盒条码」那种，出问题还得能补打）；从未打过
- * 任务的塑料盒不再列出，避免像 B000001 那样从列表里凭空造出一条打印任务。
+ * 补打中心 = 打印记录（2026-09-14 用户决定）。
  *
- * 库存条码不受影响：收货时无可用打印机导致「未生成打印任务」的容器**必须**保留补打入口
- * （收货回执就是这么提示现场稍后补打的）。
+ * 列表只列**真的生成过打印任务**的对象：入库条码按容器、出库条码按箱贴，各自要求最近一条
+ * `print_jobs` 存在（物流条码本来就取自 print_jobs）。从未打印过的容器/箱子不出现在这里——
+ * 它们的打印入口在业务单据本身（如收货订单详情的「整单 / 明细 / 条码补打」）。
+ *
+ * 这样「补打」才真的等于重打：点下去为该对象新建一条任务，而不是给一个从没打过标签的
+ * 对象凭空造任务（2026-09-14 生产误操作：从未打印过的塑料盒 B000001 被从补打中心打了出去）。
  */
-const INBOUND_PLASTIC_BOX_REQUIRES_JOB = `AND NOT ((c.container_type = 2 OR c.barcode LIKE 'B%') AND pj.id IS NULL)`
-
 function inboundStatusClause(status, thresholdMinutes) {
   if (!status) return { sql: '', params: [] }
   if (status === 'cancelled') {
@@ -253,7 +252,7 @@ async function findInboundBarcodeRecords({ keyword = '', status, page = 1, pageS
          OR IFNULL(p.name, '') LIKE ?
          OR IFNULL(t.task_no, '') LIKE ?
        )
-       ${INBOUND_PLASTIC_BOX_REQUIRES_JOB}
+       AND pj.id IS NOT NULL
        ${statusClause.sql}
      ORDER BY c.id DESC
      LIMIT ? OFFSET ?`,
@@ -320,7 +319,7 @@ async function findInboundBarcodeRecords({ keyword = '', status, page = 1, pageS
          OR IFNULL(p.name, '') LIKE ?
          OR IFNULL(t.task_no, '') LIKE ?
        )
-       ${INBOUND_PLASTIC_BOX_REQUIRES_JOB}
+       AND pj.id IS NOT NULL
        ${statusClause.sql}`,
     [...inboundFilterParams, like, like, like, like, ...statusClause.params],
   )
@@ -382,6 +381,7 @@ async function findOutboundBarcodeRecords({ keyword = '', status, page = 1, page
           OR IFNULL(wt.task_no, '') LIKE ?
           OR IFNULL(wt.customer_name, '') LIKE ?
        )
+       AND pj.id IS NOT NULL
        ${statusClause.sql}
      ORDER BY p.id DESC
      LIMIT ? OFFSET ?`,
@@ -438,12 +438,13 @@ async function findOutboundBarcodeRecords({ keyword = '', status, page = 1, page
          WHERE ref_type = 'package'
          GROUP BY ref_id
        ) latest ON latest.max_id = j.id
-     ) j ON j.ref_id = p.id
+     ) pj ON pj.ref_id = p.id
      WHERE (
           p.barcode LIKE ?
           OR IFNULL(wt.task_no, '') LIKE ?
           OR IFNULL(wt.customer_name, '') LIKE ?
        )
+       AND pj.id IS NOT NULL
        ${statusClause.sql}`,
     [like, like, like, ...statusClause.params],
   )

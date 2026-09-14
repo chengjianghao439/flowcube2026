@@ -22,9 +22,9 @@ import BarcodePrintQueryDialog, { type BarcodePrintQueryValues } from './Barcode
 import { BARCODE_PRINT_STATUS_OPTIONS } from './constants'
 
 const CATEGORY_OPTIONS: Array<{ value: BarcodePrintCategory; label: string; hint: string }> = [
-  { value: 'inbound', label: '入库条码', hint: '库存条码、塑料盒条码的打印状态与补打' },
-  { value: 'outbound', label: '出库条码', hint: '出库箱贴 / L 条码的打印状态与补打' },
-  { value: 'logistics', label: '物流条码', hint: '物流标签与面单打印状态；可处理残缺补打' },
+  { value: 'inbound', label: '入库条码', hint: '库存容器标签的打印记录与补打（从未打印过的不在此列）' },
+  { value: 'outbound', label: '出库条码', hint: '出库箱贴 / L 条码的打印记录与补打' },
+  { value: 'logistics', label: '物流条码', hint: '物流标签与面单的打印记录与补打' },
 ]
 
 function statusBadge(job: BarcodePrintRecord['latestJob']) {

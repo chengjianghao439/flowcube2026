@@ -1,66 +1,84 @@
-# 补打中心范围修正：塑料盒条码（2026-09-14）
+# 补打中心改为「打印记录」口径（2026-09-14）
 
-## 用户提出的问题
+## 背景与用户决定
 
-> 我在补打中心看到了「塑料盒条码补打」。补打中心不应该是检测到打印失败的记录才补打吗？
-> 这个任务是怎么出来的？塑料盒条码不应该是人工处理吗？
+用户在补打中心看到从未打印过的塑料盒 `B000001` 也带着补打按钮，点下去系统就凭空生成了一条
+打印任务（任务 198，16:31:58）。查明原因后用户明确决定：
 
-原始困惑：来货没有条码、商品条码功能已删除，为什么收货打印会被拦（已另行修复，见
-`docs/pda-receive-pda-only-2026-09-14.md`）；以及补打中心里为什么会出现塑料盒条码。
+> 改为补打中心**严格等于「打印记录」**
 
-## 事实（只读核查生产数据）
+## 原实现为什么会出现「没打过的也在列表里」
 
-- 生产只有一个塑料盒：容器 108 / `B000001` / `container_type=2`，**2026-09-14 10:45:37** 创建。
-- 它唯一的打印任务是 **198**，创建于 **16:31:58**；同秒的操作日志是
-  `POST /api/print-jobs/barcodes/reprint 200` —— 也就是**本人在补打中心点了「重新打印」**才生成的。
-- 该操作日志 `user_name=admin`，与用户自述一致。
+- 入库条码列表直接读 `inventory_containers`（`LEFT JOIN` 每个容器最近一条打印任务），
+  出库条码读 `packages`，物流条码才直接读 `print_jobs`；
+- 页面默认状态筛选是「全部」，后端不传 `status` 时不加状态条件 → **所有容器/箱子**都列出；
+- 服务端对入库/出库记录恒返回 `canReprint: true`，所以「未生成打印任务」的行也能点补打，
+  点下去 `reprintInboundBarcode()` 不区分对象类型、也不要求原有打印记录，直接建新任务。
 
-## 为什么它会出现在列表里（这才是问题）
+这套「台账 + 丢失补打」设计本来是有意的：收货时若没有可用打印机，容器不会生成打印任务，
+而回执提示现场「稍后补打」。用户判断这个语义太绕，要求改为纯粹的重打。
 
-补打中心的「入库条码」并**不是失败清单**，而是条码打印状态查询：
+## 本次改动
 
-- 取数直接来自 `inventory_containers`（`LEFT JOIN` 每个容器最近一条
-  `print_jobs(ref_type='inventory_container')`），`container_type=2` 或 `B` 开头标记为
-  「塑料盒条码」；
-- 页面默认状态筛选是 `__all__`，后端在不传 `status` 时不加任何状态条件，于是**所有容器**
-  都会列出来，没有打印任务的显示「未生成打印任务」；
-- 服务端对入库/出库记录一律返回 `canReprint: true`，所以「未生成打印任务」的行也能点
-  「重新打印」，点下去 `reprintInboundBarcode()` 就按容器 id 建一条 `container_label` 任务——
-  这就是「凭空冒出来的任务」。
+**列表范围（`backend/src/modules/print-jobs/print-jobs.query.js`）**
 
-页面自己的说明写的是「查询……打印状态，支持失败追踪与**丢失补打**」，也就是说：全量列出
-+无任务也可补打是**有意设计**（标签丢了、或收货时没打印机导致根本没生成任务，都要能补打），
-不是缺陷。缺陷只是**塑料盒不该在这个范围里**——塑料盒条码由现场人工处理，ERP 新建空盒
-（`plastic-boxes.service.js`）没有任何入队打印的代码。
+- 入库：`AND pj.id IS NOT NULL`（列表与计数各一处）
+- 出库：`AND pj.id IS NOT NULL`（列表与计数各一处）
+- 物流本就取自 `print_jobs`，无需改动
 
-## 修复（限塑料盒，不动库存条码）
+**补打接口（`backend/src/modules/print-jobs/print-jobs.label-command.js`）**
 
-- `backend/src/modules/print-jobs/print-jobs.query.js`：入库列表与计数同时加上
-  `AND NOT ((c.container_type = 2 OR c.barcode LIKE 'B%') AND pj.id IS NULL)`。
-  **只有「真的进过打印队列」的塑料盒保留在列表里**（PDA 拆分勾选「打印新塑料盒条码」会产生
-  这种任务，打失败还得能补打）。
-- `backend/src/modules/print-jobs/print-jobs.label-command.js`：`reprintInboundBarcode` 增加同
-  口径校验，无任务的塑料盒直接 400 `PRINT_BARCODE_PLASTIC_BOX_NOT_PRINTED`，防止旧前端缓存
-  或直接调接口再次造任务。
-- 库存条码完全不受影响：收货回执提示的「稍后到补打中心补打」路径原样保留。
+- `reprintInboundBarcode`：按容器查 `EXISTS(print_jobs …)`，无记录返回 400
+  `PRINT_BARCODE_NO_PRINT_RECORD`
+- `reprintOutboundBarcode`：同样校验箱贴是否有过打印任务
+
+**顺带修掉的既有缺陷**：出库**计数**查询里最新任务子查询别名写成了 `j`，而状态条件
+`genericStatusClause(status, 'pj')` 按 `pj` 拼——只要给「出库条码」加任何状态筛选，
+计数查询就会报 `Unknown column 'pj.status' in 'where clause'`。现已把别名统一为 `pj`，
+回归里加了一条带状态筛选的出库查询。
+
+**前端（`frontend/src/pages/settings/barcode-print-query/`）**
+
+- 状态筛选项移除「未生成任务」（三类都不再可能命中）
+- 三个类目的说明文案统一改为「打印记录与补打」
+
+**文案（`frontend/src/pages/pda/receive.tsx`、`sale-return-receive.tsx`）**
+
+- 收货无打印机时的提示改为指向**本单**的「查看打印 / 补打」，不再指向补打中心
+- 退货收货的提示不再承诺一个具体入口（原因见下方缺口）
 
 ## 验证
 
-在本地临时 MySQL（mysql:8.0，colima-flowcube）+ 当天的生产备份（已验证可恢复）上，
-用**真实查询模块**做了改动前后对照；另起空库跑完整迁移（241 个文件）后执行 CI 的打印队列回归：
+在本地临时 MySQL（`mysql:8.0`，colima-flowcube）上新建独立测试库
+`flowcube_print_test`，跑完整迁移（241 个文件）后执行 CI 的打印队列回归
+`npm run smoke:print-queue`：
 
-| 场景 | 改动前 | 改动后 |
-|---|---|---|
-| 塑料盒 + 无打印任务 | 在列表、可补打 | **不在列表**；直接调补打接口被拒 `PRINT_BARCODE_PLASTIC_BOX_NOT_PRINTED` |
-| 塑料盒 + 已打印任务 | 在列表 | 在列表（丢失补打） |
-| 塑料盒 + 打印失败任务 | 在列表 | 在列表（失败补打） |
-| 库存条码 + 无打印任务 | 在列表 | **仍在列表**（收货无打印机时的补打入口） |
+```
+[PASS] 补打中心只列有打印记录的对象，从未打印过的不出现
+[PASS] 补打接口只接受有打印记录的对象
+[PASS] 出库箱贴同样只列有打印记录的对象
+11 passed, 0 failed
+```
 
-`npm run smoke:print-queue`（独立测试库）：**10 passed, 0 failed**，其中新增两项即为上表规则。
-后端 `eslint src/` 无错误。临时容器与临时文件已清理。
+覆盖矩阵：塑料盒/库存容器 × 有任务/无任务、箱贴 × 有任务/无任务，以及
+`reprintInboundBarcode` 与 `reprintOutboundBarcode` 的拒绝与放行、出库带状态筛选的计数查询。
+另有：后端 `eslint src/` 无错误、前端 `tsc --noEmit` 通过、`eslint` 0 error、
+`build`/`build:pda` 通过、`receive.test.tsx` 3/3。临时容器与临时文件已清理。
 
-## 未做 / 边界
+## 已知缺口（需要下一步处理）
 
-- 真机打印未复测（本次只改列表范围与接口校验，不动物理打印路径）。
-- 「补打中心是否要区分失败与丢失两种语义」属于更外的产品决定，本次不动：当前实现有意
-  覆盖「失败」与「标签丢失/从未生成」两种补打需求。
+「补打中心 = 打印记录」之后，**从未生成过打印任务的容器就只剩业务单据侧的入口**：
+
+- 收货订单：有「整单 / 明细 / 条码补打」（`POST /api/inbound-tasks/:id/reprint`，
+  按任务取容器，不要求原有任务）—— 覆盖完整。
+- **退货任务：没有任何补打入口**（ERP 退货详情与 PDA 退货页都没有，后端也没有对应路由）。
+  退货容器若在收货时因无可用打印机而未生成任务，改了本口径后**再也无法补打**。
+
+建议补一个退货任务的补打入口（复用 `queueReturnLabels`，在 ERP 退货详情或 PDA 退货收货页
+提供「补打容器标签」）。本次未实现——属于新增入口，等用户确认形态后再做。
+
+## 未做
+
+- 真机打印未复测（本次只改列表范围、接口校验与文案）。
+- 未把「无可用打印机」的容器改成先建任务后补打（需要 `print_jobs.printer_id` 允许为空，
+  属迁移级改动），因此上述缺口用业务单据入口覆盖。
