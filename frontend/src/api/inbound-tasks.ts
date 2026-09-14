@@ -30,10 +30,13 @@ export const submitInboundTaskApi = (id: number, config?: Parameters<typeof clie
 export const getInboundTaskContainersApi = (id: number) =>
   client.get<InboundContainersResult>(`/inbound-tasks/${id}/containers`)
 
+/** 仅 PDA 可调：后端 pdaOnly 校验请求头 X-Client: pda（漏带头会 403 PDA_ONLY） */
 export const receiveInboundApi = (id: number, data: ReceiveParams, requestKey?: string) =>
-  client.post<ReceivePackageResult>(`/inbound-tasks/${id}/receive`, data, requestKey
-    ? { headers: withRequestKeyHeaders(requestKey) }
-    : undefined)
+  client.post<ReceivePackageResult>(`/inbound-tasks/${id}/receive`, data, {
+    headers: requestKey
+      ? withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' })
+      : { 'X-Client': 'pda' },
+  })
 
 /** 仅 PDA 可调：后端校验请求头 X-Client: pda */
 export const putawayInboundApi = (id: number, data: PutawayParams, requestKey?: string) =>
