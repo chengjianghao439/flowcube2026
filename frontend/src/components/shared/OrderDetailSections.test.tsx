@@ -20,9 +20,11 @@ test('默认订单信息，切换进度保留未保存内容，操作记录单�
   act(() => tab('操作记录')!.click())
   expect(host.textContent).toContain('记录 12 log')
 })
-test('收货有容器和打印，无装箱环节，切换单据重置页签', () => {
+test('收货保留条码明细但不展示打印记录，无装箱环节，切换单据重置页签', () => {
   act(() => root.render(<OrderDetailSections type="inbound" id={1}>单据一</OrderDetailSections>))
-  expect(tab('条码打印')).toBeTruthy()
+  // 2026-09-14 用户决定：收货订单只显示任务进度，不展示打印记录（补打只在打印记录页）
+  expect(tab('条码明细')).toBeTruthy()
+  expect(tab('条码打印')).toBeUndefined()
   expect(tab('装箱进度')).toBeUndefined()
   act(() => tab('操作记录')!.click())
   act(() => root.render(<OrderDetailSections type="inbound" id={2}>单据二</OrderDetailSections>))

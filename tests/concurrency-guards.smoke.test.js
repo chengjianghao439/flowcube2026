@@ -185,10 +185,15 @@ async function scenarioInboundReceiveNoPrinterStillRecords(log, ctx, adminToken)
   log.assert('收货数量正常落地', received === 5, `received=${received}`)
   const jobs = await dbQuery(
     ctx.pool,
-    `SELECT id FROM print_jobs WHERE ref_type = 'inventory_container' AND ref_id = ?`,
+    `SELECT id, printer_id, status FROM print_jobs WHERE ref_type = 'inventory_container' AND ref_id = ?`,
     [containers[0]?.id || 0],
   )
-  log.assert('无打印机时不生成打印任务', jobs.length === 0, `count=${jobs.length}`)
+  // 2026-09-14 用户决定（方案 A）：没有可用打印机时也要留一条打印记录，
+  // 对象因此出现在打印记录页、绑定打印机后可补打。这类记录不绑打印机、直接置为失败，
+  // 领取按 printer_id 过滤，所以永远不会被客户端打出来。
+  log.assert('无打印机时留下不可打印的记录（printer_id 为空、状态失败）',
+    jobs.length === 1 && jobs[0].printer_id === null && Number(jobs[0].status) === 3,
+    JSON.stringify(jobs))
 }
 
 async function scenarioSplitConcurrent(log, ctx) {
