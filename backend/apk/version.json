@@ -1,7 +1,7 @@
 {
-  "version": "0.9.15",
-  "versionCode": 123,
+  "version": "0.9.16",
+  "versionCode": 124,
   "filename": "app-release.apk",
-  "releaseNote": "提升大列表与开单体验，完善报表和仓储管理，更新官网产品介绍。",
-  "publishedAt": "2026-09-12T17:39:40.586Z"
+  "releaseNote": "仓储 PDA 收货修复，打印记录（补打）口径调整。",
+  "publishedAt": "2026-09-14T13:10:08.954Z"
 }
