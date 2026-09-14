@@ -22,7 +22,8 @@ function DetailSections({ type, id, children, progress, printProgress, initialVi
   const tabs = [{ key: 'info' as const, label: '订单信息', Icon: ClipboardList }, { key: 'progress' as const, label: progressLabel, Icon: Activity },
     ...(['purchase-return', 'wave', 'transfer', 'stockcheck'].includes(type) ? [{ key: 'scan' as const, label: type === 'transfer' ? '调拨明细' : type === 'stockcheck' ? '盘点扫码' : '取货明细', Icon: ScanLine }] : []),
     ...(['inbound', 'sale-return'].includes(type) ? [{ key: 'containers' as const, label: '条码明细', Icon: PackageCheck }] : []),
-    ...(['inbound', 'sale-return', 'wave'].includes(type) ? [{ key: 'print' as const, label: type === 'wave' ? '装箱／打印进度' : '条码打印', Icon: Printer }] : []),
+    // 2026-09-14 用户决定：收货订单只显示任务进度，不展示打印记录（补打只在打印记录页）。
+    ...(['sale-return', 'wave'].includes(type) ? [{ key: 'print' as const, label: type === 'wave' ? '装箱／打印进度' : '条码打印', Icon: Printer }] : []),
     { key: 'log' as const, label: '操作记录', Icon: History }]
   return <div className="space-y-3">
     <div role="tablist" aria-label="订单详情" className="flex gap-1 overflow-x-auto rounded-lg border border-border bg-muted/30 p-1">

@@ -266,10 +266,10 @@ function ReturnLabelReceiptView({ receipt }: { receipt: Partial<ReturnTaskAction
     <section aria-label="退货容器标签" className="space-y-2 rounded-md border p-3 text-sm">
       <p className="font-medium">本次容器标签</p>
       <p className="text-muted-foreground">请按数量分开放置并贴上对应标签；质检拆分后应更换旧标签。</p>
-      {/* 补打中心口径已收紧为「打印记录」，从未生成过任务的退货容器不会再出现在那里，
-          这里不再承诺一个具体入口，只提示先解决打印机。退货任务的补打入口待补（见 2026-09-14 记录）。 */}
+      {/* 2026-09-14 起没有可用打印机也会留一条打印记录，退货容器同样会出现在「打印记录」页，
+          现场先解决打印机，再从那里补打（系统内唯一补打入口）。 */}
       {(receipt.noPrinterCount || 0) > 0 ? (
-        <p role="alert" className="text-destructive">{receipt.noPrinterCount} 张标签未找到可用标签打印机，收货已记录。请先配置标签打印机，再联系系统管理员补打容器标签，然后扫码上架。</p>
+        <p role="alert" className="text-destructive">{receipt.noPrinterCount} 张标签未找到可用标签打印机，收货已记录并留有打印记录；请先配置标签打印机，再到「打印记录」页补打后再扫码上架。</p>
       ) : <p role="status" className="text-muted-foreground">{receipt.printJobIds?.length || 0} 张标签已加入打印队列，请确认出纸后贴标。</p>}
       <ul className="divide-y">
         {receipt.containers.map(container => (

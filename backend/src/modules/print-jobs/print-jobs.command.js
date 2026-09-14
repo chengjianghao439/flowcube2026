@@ -61,12 +61,15 @@ async function createRecord(exec, {
   copies = 1,
   createdBy,
   reloadAfterCreate = false,
+  // 2026-09-14：没有可用打印机时也要留一条打印记录（用户规则：「只要发出打印任务都要记录」）。
+  // 这类记录不绑定打印机、直接置为失败并标注原因，对象因此出现在打印记录页，打印机就绪后补打。
+  unprintableReason = null,
 }) {
-  if (!content) throw new AppError('打印内容不能为空', 400, 'PRINT_CONTENT_REQUIRED')
+  if (!content && !unprintableReason) throw new AppError('打印内容不能为空', 400, 'PRINT_CONTENT_REQUIRED')
   if (!title) throw new AppError('任务标题不能为空', 400, 'PRINT_TITLE_REQUIRED')
   // 桌面客户端物理打印目前只认 ZPL RAW（含 content_type 默认值 html 在内），
   // 其它格式一律在入队前直接拒绝，避免任务静默排队到 TTL 超时才发现根本打不通。
-  if (String(contentType || '').trim().toLowerCase() !== 'zpl') {
+  if (!unprintableReason && String(contentType || '').trim().toLowerCase() !== 'zpl') {
     throw new AppError(
       '打印任务队列当前仅支持 ZPL（热敏标签直连打印），不支持 html/pdf 队列打印；如需打印单据请使用页面内浏览器打印或导出功能',
       400,
@@ -111,7 +114,10 @@ async function createRecord(exec, {
   let resolvedId = explicitPrinter ? Number(printerId) : null
   let dispatchReason = 'explicit'
 
-  if (!explicitPrinter) {
+  if (unprintableReason) {
+    resolvedId = null
+    dispatchReason = 'no_printer'
+  } else if (!explicitPrinter) {
     const r = await resolvePrinterForJob({
       warehouseId: warehouseId ?? undefined,
       jobType: jobTypeNorm,
@@ -122,19 +128,23 @@ async function createRecord(exec, {
   }
   if (dispatchReasonIn) dispatchReason = String(dispatchReasonIn)
 
-  if (!resolvedId) {
+  if (!unprintableReason && !resolvedId) {
     throw new AppError('无法分配打印机：请指定 printerId，或传入 warehouseId 并配置打印机用途绑定', 400, 'PRINT_PRINTER_ASSIGNMENT_REQUIRED')
   }
 
-  const [[printer]] = await exec.query('SELECT id, code, status FROM printers WHERE id=?', [resolvedId])
-  if (!printer) throw new AppError('打印机不存在', 404, 'PRINT_PRINTER_NOT_FOUND')
+  if (!unprintableReason) {
+    const [[printer]] = await exec.query('SELECT id, code, status FROM printers WHERE id=?', [resolvedId])
+    if (!printer) throw new AppError('打印机不存在', 404, 'PRINT_PRINTER_NOT_FOUND')
+  }
+  const jobStatus = unprintableReason ? 3 : 0
+  const jobError = unprintableReason ? String(unprintableReason).slice(0, 500) : null
 
   const ttl = ttlMinutes()
   let r
   try {
     ;[r] = await exec.query(
-      `INSERT INTO print_jobs (printer_id, template_id, title, content_type, content, copies, priority, job_type, warehouse_id, job_unique_key, dispatch_reason, ref_type, ref_id, ref_code, created_by, expires_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,DATE_ADD(NOW(), INTERVAL ? MINUTE))`,
+      `INSERT INTO print_jobs (printer_id, template_id, title, content_type, content, copies, priority, job_type, warehouse_id, job_unique_key, dispatch_reason, ref_type, ref_id, ref_code, created_by, status, error_message, expires_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,DATE_ADD(NOW(), INTERVAL ? MINUTE))`,
       [
         resolvedId,
         templateId || null,
@@ -151,6 +161,8 @@ async function createRecord(exec, {
         refId,
         refCode,
         createdBy || null,
+        jobStatus,
+        jobError,
         ttl,
       ],
     )

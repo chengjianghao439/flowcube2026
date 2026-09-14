@@ -80,6 +80,15 @@ async function reprintBarcode(req, res, next) {
       // 未解析到打印机（未绑定 / 绑定缺失），补打不产生任何业务副作用，直接告知前端
       return successResponse(res, { queued: false, jobId: null, printerCode: null, printerName: null, dispatchHint: null })
     }
+    if (job.unprintable) {
+      // 2026-09-14：没有可用打印机时也会落一条失败记录（保证对象始终有打印记录）。
+      // 这不算「已提交打印」，前端要提示先去绑定打印机，而不是报成功。
+      return successResponse(
+        res,
+        { queued: false, jobId: Number(job.id), printerCode: null, printerName: null, dispatchHint: null },
+        '未绑定可用打印机，已记录本次补打，请先绑定打印机后再补打',
+      )
+    }
     // 与 packages.controller / racks.controller 一致：入队后补算派发提示，
     // 让前端能区分「客户端离线」「打印机未绑定客户端」与正常排队，而不是一律 toast 成功。
     const dispatchHint = await svc.getDispatchHintForJob(job.printerCode, job.id)

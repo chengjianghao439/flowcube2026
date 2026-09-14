@@ -79,7 +79,11 @@ async function main() {
 
     await check('无面单绑定时不回退，专用绑定后可入队', async () => {
       const payload = { waybillId: Date.now(), warehouseId, content: '^XA^FDWAYBILL^FS^XZ' }
-      assert.equal(await labels.enqueueWaybillLabelJob(payload), null)
+      // 2026-09-14：没有面单机绑定时不再静默丢弃，而是留一条「无打印机」记录
+      // （打印记录页可见、绑定后可补打）；关键不变量仍是**不回退**到普通标签机。
+      const noBinding = await labels.enqueueWaybillLabelJob(payload)
+      assert.equal(noBinding.printerId, null)
+      assert.equal(noBinding.unprintable, true)
       const [p2] = await pool.query('INSERT INTO printers (name,code,type,warehouse_id,client_id,status) VALUES (?,?,2,?,?,1)', ['虚拟面单机', `${code}-W`, warehouseId, clientId])
       printerIds.push(p2.insertId)
       await pool.query('INSERT INTO printer_bindings (warehouse_id,print_type,printer_id,printer_code) VALUES (?, ?, ?, ?)', [warehouseId, 'waybill', p2.insertId, `${code}-W`])
@@ -91,7 +95,11 @@ async function main() {
       try {
         process.env.INBOUND_LABEL_PRINTER_CODE = code
         const payload = { containerId: Date.now(), data: { container_code: 'C-TEST', product_name: '测试', qty: 1 } }
-        assert.equal(await labels.enqueueContainerLabelJob({ ...payload, warehouseId: other.insertId }), null)
+        // 2026-09-14：无设备仓不再静默丢弃，而是留一条「无打印机」记录；
+        // 关键不变量是不能跨仓兜底到别的仓的打印机。
+        const noDevice = await labels.enqueueContainerLabelJob({ ...payload, warehouseId: other.insertId })
+        assert.equal(noDevice.printerId, null)
+        assert.equal(noDevice.unprintable, true)
         assert.equal((await labels.enqueueContainerLabelJob({ ...payload, warehouseId })).printerId, p.insertId)
       } finally {
         await pool.query('DELETE FROM inventory_warehouses WHERE id=?', [other.insertId])
@@ -129,10 +137,10 @@ async function main() {
       const res = await inboundQuery.findBarcodeRecords({ category: 'inbound', pageSize: 200 })
       return (res.list ?? []).filter(r => fixtureIds.includes(r.recordId))
     }
-    const addContainer = async (barcode, containerType, sourceRefType = null) => {
+    const addContainer = async (barcode, containerType, sourceRefType = null, warehouseId = ctx.warehouse.id) => {
       const [r] = await pool.query(
         'INSERT INTO inventory_containers (barcode,container_type,product_id,warehouse_id,status,initial_qty,remaining_qty,source_type,source_ref_type,is_legacy) VALUES (?,?,?,?,1,0,0,?,?,0)',
-        [barcode, containerType, ctx.product.id, ctx.warehouse.id, sourceRefType ? 'container_split' : 'manual', sourceRefType],
+        [barcode, containerType, ctx.product.id, warehouseId, sourceRefType ? 'container_split' : 'manual', sourceRefType],
       )
       fixtureIds.push(r.insertId)
       return r.insertId
@@ -191,6 +199,27 @@ async function main() {
       assert.ok(job?.id, '塑料盒页面重打应生成打印任务')
       const ids = (await inboundList()).map(r => r.recordId)
       assert.ok(!ids.includes(box), '即使这次打印产生了任务，可复用空盒也不应出现在打印记录页')
+    })
+    // 2026-09-14 用户决定（方案 A）：没有可用打印机时也要留打印记录，
+    // 对象因此出现在打印记录页，绑定打印机后可以从那里补打。
+    await check('没有可用打印机时也留打印记录，对象因此可被找到', async () => {
+      const [npWh] = await pool.query('INSERT INTO inventory_warehouses (name,code) VALUES (?,?)', ['无标签机仓', `${code}-NP`])
+      try {
+        const cid = await addContainer(`IP${code}`, 1, null, npWh.insertId)
+        const job = await labels.enqueueContainerLabelJob({
+          containerId: cid,
+          warehouseId: npWh.insertId,
+          data: { container_code: `IP${code}`, product_name: '测试', qty: 1 },
+          createdBy: null,
+          jobUniqueKey: `sut-noprinter:${code}`,
+        })
+        assert.equal(job.printerId, null, '没有可用打印机时不应绑定打印机')
+        assert.equal(job.unprintable, true, '应标记为只留记录')
+        const ids = (await inboundList()).map(r => r.recordId)
+        assert.ok(ids.includes(cid), '有打印记录的容器（即使没打成）应出现在打印记录页')
+      } finally {
+        await pool.query('DELETE FROM inventory_warehouses WHERE id=?', [npWh.insertId])
+      }
     })
     await check('出库箱贴同样只列有打印记录的对象', async () => {
       const [wt] = await pool.query(

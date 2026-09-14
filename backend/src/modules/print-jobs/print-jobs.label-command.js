@@ -111,6 +111,35 @@ function defaultLabelJobKey(kind, refId) {
   return `${kind}:${id}:${Math.floor(Date.now() / (labelJobKeyBucketSeconds() * 1000))}`
 }
 
+/** 无可用打印机时的失败原因；与历史 TTL 超时文案一致，便于「超时待确认」筛选命中 */
+const NO_PRINTER_REASON = 'no printer available'
+
+/**
+ * 无可用打印机时的打印记录（2026-09-14 用户规则：「只要发出打印任务都要记录」）。
+ *
+ * 不产生可打印任务、不占客户端队列：落一条失败记录，对象因此出现在打印记录页；
+ * 打印机就绪后从那里补打即可。返回值带 `unprintable: true`，调用方据此区分
+ * 「已排到打印机」与「只留了记录」，避免把没打出来的标签当成已提交打印。
+ */
+async function recordUnprintableJob(createJob, fields) {
+  const job = await createJob({
+    printerId: null,
+    warehouseId: fields.warehouseId,
+    jobType: fields.jobType,
+    title: fields.title,
+    contentType: 'zpl',
+    content: '',
+    copies: 1,
+    createdBy: fields.createdBy ?? null,
+    jobUniqueKey: fields.jobUniqueKey,
+    refType: fields.refType ?? null,
+    refId: fields.refId ?? null,
+    refCode: fields.refCode ?? null,
+    unprintableReason: NO_PRINTER_REASON,
+  })
+  return job ? { ...job, unprintable: true } : null
+}
+
 async function enqueueContainerLabelJob(payload) {
   const data = payload?.data
   if (!data?.container_code) return null
@@ -118,12 +147,24 @@ async function enqueueContainerLabelJob(payload) {
   const containerId =
     payload?.containerId != null && Number.isFinite(Number(payload.containerId)) ? Number(payload.containerId) : null
   const wh = payload.warehouseId != null ? Number(payload.warehouseId) : null
+  const isPlasticBox = String(data.container_code || '').toUpperCase().startsWith('B')
+  const createJob = conn ? createWithinTransaction.bind(null, conn) : create
   const { printerId, dispatchReason } = await resolveLabelPrinter({
     warehouseId: wh,
     jobType: 'container_label',
   })
-  if (!printerId) return null
-  const isPlasticBox = String(data.container_code || '').toUpperCase().startsWith('B')
+  if (!printerId) {
+    return recordUnprintableJob(createJob, {
+      warehouseId: Number.isFinite(wh) && wh > 0 ? wh : null,
+      jobType: 'container_label',
+      title: `${isPlasticBox ? '塑料盒标' : '容器标'} ${data.container_code}`,
+      refType: containerId ? 'inventory_container' : null,
+      refId: containerId,
+      refCode: data.container_code,
+      createdBy: payload.createdBy ?? null,
+      jobUniqueKey: payload.jobUniqueKey ?? defaultLabelJobKey('container_label', containerId),
+    })
+  }
   const source = containerId > 0 ? await readLabelVariables(isPlasticBox ? 9 : 6, { id: containerId, conn: conn || pool }) : null
   const vars = {
     ...(source?.vars || containerLabelVariables()),
@@ -136,7 +177,6 @@ async function enqueueContainerLabelJob(payload) {
     templateType: isPlasticBox ? 9 : 6,
     vars,
   })
-  const createJob = conn ? createWithinTransaction.bind(null, conn) : create
   return createJob({
     printerId,
     dispatchReason,
@@ -276,20 +316,31 @@ async function enqueuePackageLabelJob(payload) {
   if (!row) return null
 
   const wh = row.warehouse_id != null ? Number(row.warehouse_id) : null
+  const createJob = conn ? createWithinTransaction.bind(null, conn) : create
   const { printerId, dispatchReason } = await resolveLabelPrinter({
     warehouseId: wh,
     jobType: 'package_label',
     requireBinding: true,
     allowBindingFallback: false,
   })
-  if (!printerId) return null
+  if (!printerId) {
+    return recordUnprintableJob(createJob, {
+      warehouseId: Number.isFinite(wh) && wh > 0 ? wh : null,
+      jobType: 'package_label',
+      title: `箱贴 ${row.barcode}`,
+      refType: 'package',
+      refId: Number(packageId),
+      refCode: row.barcode,
+      createdBy: payload.createdBy ?? null,
+      jobUniqueKey: payload.jobUniqueKey ?? defaultLabelJobKey('package_label', packageId),
+    })
+  }
   const vars = source.vars
   const label = await buildLabelBody({
     printerId,
     templateType: 7,
     vars,
   })
-  const createJob = conn ? createWithinTransaction.bind(null, conn) : create
   return createJob({
     printerId,
     dispatchReason,
@@ -329,7 +380,18 @@ async function enqueueWaybillLabelJob(payload) {
     allowBindingFallback: false,
   })
   const printerId = resolved?.printerId
-  if (!printerId) return null
+  if (!printerId) {
+    return recordUnprintableJob(create, {
+      warehouseId: Number.isFinite(wh) && wh > 0 ? wh : null,
+      jobType: 'waybill',
+      title: payload.title || `面单 ${waybillId}`,
+      refType: 'waybill',
+      refId: waybillId,
+      refCode: payload.refCode ?? null,
+      createdBy: payload.createdBy ?? null,
+      jobUniqueKey: payload.jobUniqueKey ?? `waybill:${waybillId}`,
+    })
+  }
   return create({
     printerId,
     dispatchReason: resolved.dispatchReason || 'fallback',

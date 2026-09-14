@@ -648,7 +648,9 @@ async function receive(taskId, payload, { userId, requestKey, pdaWarehouseId, sc
         createdBy: userId ?? null,
         jobUniqueKey: `inbound_receive:${taskId}:container:${container.containerId}`,
       })
-      if (!job?.id) {
+      // job.unprintable：没有可用打印机，只落了一条失败记录（打印记录页可见、可补打），
+      // 不能算「已提交打印」——否则现场会以为标签已经在打。
+      if (!job?.id || job.unprintable) {
         noPrinterCount += 1
         continue
       }
@@ -762,6 +764,7 @@ async function reprint(taskId, { mode = 'task', itemId = null, barcode = null } 
     if (!containers.length) throw new AppError('没有可补打的库存条码', 400)
 
     const jobs = []
+    let noPrinterCount = 0
     for (const container of containers) {
       const job = await enqueueContainerLabelJob({
         containerId: Number(container.id),
@@ -774,7 +777,10 @@ async function reprint(taskId, { mode = 'task', itemId = null, barcode = null } 
         createdBy: operator?.userId ?? null,
         jobUniqueKey: `reprint_inbound:${taskId}:${normalizedMode}:${container.id}:${reprintBucket}`,
       })
-      if (job) jobs.push(job)
+      if (!job) continue
+      // 没有可用打印机时只留下记录（unprintable），不能算已完成补打
+      if (job.unprintable) { noPrinterCount += 1; continue }
+      jobs.push(job)
     }
 
     await appendInboundEvent(
@@ -792,6 +798,7 @@ async function reprint(taskId, { mode = 'task', itemId = null, barcode = null } 
       count: jobs.length,
       jobIds: jobs.map(job => Number(job.id)),
       barcodes: containers.map(item => item.barcode),
+      noPrinterCount,
     }
   } finally {
     conn.release()

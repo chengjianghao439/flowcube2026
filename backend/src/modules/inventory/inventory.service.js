@@ -1108,8 +1108,15 @@ async function splitContainerOp(containerId, { qty, remark, printLabel, targetCo
       if (!job?.id) {
         throw new AppError(`容器 ${row.barcode} 的打印任务创建失败`, 500)
       }
-      result.printJobId = Number(job.id)
-      result.printJobIds.push(Number(job.id))
+      // unprintable：没有可用打印机，只留下打印记录（打印记录页可见、之后可补打），
+      // 不算「已提交打印」，避免现场以为标签已经在打。
+      if (job.unprintable) {
+        result.printJobId = null
+        result.noPrinterCount = 1
+      } else {
+        result.printJobId = Number(job.id)
+        result.printJobIds.push(Number(job.id))
+      }
     }
     await conn.commit()
   } catch (e) {

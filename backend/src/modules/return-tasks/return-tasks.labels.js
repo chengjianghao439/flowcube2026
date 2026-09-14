@@ -13,7 +13,8 @@ async function queueReturnLabels(conn, { taskId, warehouseId, productName, conta
       createdBy: userId ?? null,
       jobUniqueKey: `return_${phase}:${taskId}:${container.containerId}:${container.status}:${container.qty}`,
     })
-    if (job?.id) printJobIds.push(Number(job.id))
+    // unprintable：没有可用打印机，只留下打印记录（打印记录页可见、可补打）
+    if (job?.id && !job.unprintable) printJobIds.push(Number(job.id))
     else noPrinterCount++
   }
   return { printJobIds, noPrinterCount }

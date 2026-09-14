@@ -91,7 +91,9 @@ export default function BarcodePrintQueryPage() {
     onSuccess: (d) => {
       if (!d) return
       if (!d.queued) {
-        toast.warning('未绑定打印机，未创建打印任务')
+        // 2026-09-14：没有打印机时后端也会留一条失败记录（保证对象始终有打印记录），
+        // 所以这里不再说「未创建任务」，而是提示先去绑定打印机。
+        toast.warning('未绑定可用打印机，本次未出纸；记录已保留，绑定打印机后可再补打')
         qc.invalidateQueries({ queryKey: ['barcode-print-records'] })
         qc.invalidateQueries({ queryKey: ['print-jobs'] })
         return
