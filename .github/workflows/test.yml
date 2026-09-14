@@ -80,7 +80,7 @@ jobs:
         run: npm run test:audit-tooling && npm run test:audit-client && npm run test:prelaunch-runtime && npm run test:round2-runtime
 
       - name: 运维回归 — 备份恢复判定与数据库指标
-        run: node --test tests/ops-monitor-restore.test.js tests/deployment-resources.test.js
+        run: node --test tests/ops-monitor-restore.test.js tests/deployment-resources.test.js tests/restore-trigger-normalize.test.js tests/migration-trigger-bodies.test.js
 
       - name: 跨域回归 — 桌面端与 PDA 精确来源
         run: node --test tests/cors-policy.test.js

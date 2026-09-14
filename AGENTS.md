@@ -139,6 +139,7 @@ npm run test:permissions
 正式 Tests CI 的独立数据库专项矩阵包含两轮审计 finance、scope-export、hr、round2-transfer、round2-payroll、round2-runtime，每项先迁移专用测试库；static job 同时执行第二轮运行时/恢复/错误追踪回归。
 
 审计回归入口：`npm run smoke:audit-inventory`、`npm run smoke:audit-finance-security`、`npm run test:audit-client`、`npm run test:audit-tooling`。标签镜像检查使用前端已安装的 TypeScript 在 Node 22 编译并运行，`test:label` 需要前端依赖，不再按 Node 版本跳过；CI 在安装两端依赖后的 static job 执行。
+运维/迁移回归（static job 「运维回归」步骤）：`node --test tests/ops-monitor-restore.test.js tests/deployment-resources.test.js tests/restore-trigger-normalize.test.js tests/migration-trigger-bodies.test.js`。前两项验备份恢复判定与资源边界，后两项验触发器分号规范化与迁移逐条切分，均不连数据库。
 
 ## 4. Codex 本地预览
 
@@ -163,6 +164,7 @@ npm run test:permissions
 - 错误使用 `AppError` 交给统一 errorHandler；成功使用 `successResponse`。信封为 `{ success, message, data }`，失败可含 `code`；列表分页位于 `data.pagination`。
 - SQL 参数化；API 小写、连字符、复数名词。页面不分页，但传输与 SQL 保留有界批次；批次查询按主排序追加唯一 ID（库存按商品/仓库组合）保持稳定，防止相同时间或名称在不同批次重复/遗漏。后台批次复用 `normalizePagination`，导出遵循既有上限与截断告警，不能用无限大 pageSize 绕过分页。
 - 新迁移按当前最大编号新增，**不得修改已执行的迁移**，不得未经明确授权删除字段、兼容代码或迁移文件。编号冲突、幂等执行、回填与消费者兼容要一起考虑。
+- **迁移必须逐条执行**：`backend/src/database/migrate.js` 经 `sqlStatements.js` 切分后逐条 `query`。整文件当一条多语句发送时，非末条 `CREATE TRIGGER ... <单语句>;` 的函数体会把结尾分号一起写进 `ACTION_STATEMENT`，mysqldump 导出成 `... ); */;;`，导入必然 1064 且备份不可恢复（2026-09-14 事故，见 `docs/backup-restore-trigger-terminator-2026-09-14.md`）。新增触发器迁移后要确认函数体不残留结尾分号；`sqlStatements.js` 不支持 `DELIMITER`，需要时先扩展再写迁移。
 - 后端启动不自动迁移；本地显式 migrate。生产由部署脚本执行，不能把两者混为一谈。
 - 数据库列注释可能过期，状态含义以常量和执行代码为准。不能凭历史迁移文本认定生产已经存在某列。
 
@@ -311,6 +313,7 @@ npm run test:permissions
 - 依赖审计安装/网络/JSON 错误必须失败，不能视为零漏洞；扫描完整依赖树，直接和传递依赖的所有 high/critical 均阻断，不能用 omit=dev 排除 Electron 分发运行时。v0.9.14 起上传依赖 multer 最低为 2.3.0，前端工具链 js-yaml 4.x 锁定安全补丁 4.3.2；上传与 Logo 接口只接收单文件、拒绝未使用的 multipart 文本字段，数量超限返回 HTTP 400（`test:upload` 离线回归并纳入 Tests CI），升级后仍扫描完整依赖树。当前 HashRouter 使用 React Router 7；后端 qs 安全补丁由 overrides 固定最低修复版，移除覆盖前重新审计上游依赖范围。
 - 运维容器解析复用 `scripts/lib/ops-common.sh` 的 `resolve_container()`，不硬编码 Docker 容器名。备份先写临时文件、验证后落正式文件；失败清残留并告警。
 - 恢复演练默认总时限900秒、768m内存、1 CPU、256进程，禁网络与额外swap；正常、超时或TERM退出清理自有容器及匿名卷，外层exec GNU timeout保证信号传递。新鲜度按备份文件修改时间判断，自动演练默认拒绝超过 48 小时的文件（`BACKUP_MAX_AGE_HOURS`）；显式指定历史备份只检查恢复能力并提示过期。没有新销售单不能判定备份损坏。MySQL 连接数探针在容器内认证，查询失败或无效值必须记录异常，不得回退为零；隔离回归见 `tests/ops-monitor-restore.test.js`。
+- 备份可恢复性口径（2026-09-14 事故后）：mysqldump 可能把触发器函数体残留的结尾分号导出成 `... ); */;;`，直接导入会 1064。`scripts/restore-check.sh` 导入前只把该分号移出可执行注释（不改写备份文件），并透出 MySQL 真实报错以区分「文件损坏」与「导入语法问题」；`docs/runbooks/failure-recovery.md` 的手工恢复用同一口径。备份是否可恢复以完整导入临时 MySQL 为准，不能只看文件存在或 `gzip -t`。隔离回归见 `tests/restore-trigger-normalize.test.js`。
 - 库存漂移巡检只报警，不自动修库存缓存掩盖根因。调度器与服务器 cron 是不同机制，改动时检查 scheduler、install-cron 和部署同步链路。
 - 故障处理先读 `docs/runbooks/failure-recovery.md`，确认现场与备份后执行已授权操作；测试与生产严格区分。
 - CORS 规则集中在 `backend/src/config/cors.js`：`CORS_ORIGIN` 支持逗号分隔的精确来源，Electron 的字符串 `null` 由 `CORS_ALLOW_NULL_ORIGIN` 单独控制；内置 Android PDA 当前源码默认来源为 `https://localhost`。不要为兼容客户端而打开任意来源反射。v0.9.3 新后端已部署，当前生产保留既有反射兼容配置，须完成实际客户端验证后再收窄来源；测试见 `tests/cors-policy.test.js`，部署说明见 `docs/DEPLOY.md`。

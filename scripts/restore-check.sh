@@ -5,6 +5,10 @@
 # 取最新备份在「临时 MySQL 容器」中完整导入，校验表数与关键表行数，
 # 作为「备份真的能恢复」的证明。只读操作，不影响生产库。
 #
+# 导入前会规范化 mysqldump 对触发器函数体的已知导出缺陷（2026-09-14 事故）：
+# 函数体残留的结尾分号会被导出成 `... ); */;;`，直接导入必然 1064。这里只在
+# 导入管道里把该分号移出可执行注释，绝不改写备份文件本身。
+#
 # 用法：
 #   bash scripts/restore-check.sh              # 校验最新备份
 #   bash scripts/restore-check.sh <file.sql.gz> # 校验指定备份
@@ -74,6 +78,13 @@ BACKUP_MAX_AGE_HOURS="${BACKUP_MAX_AGE_HOURS:-${FRESH_HOURS:-48}}"
 
 ts() { date '+%Y-%m-%d %H:%M:%S'; }
 
+# mysqldump 会把触发器函数体残留的结尾分号导出成 `... ); */;;`。可执行注释
+# /*!50003 ... */ 里的这个分号会提前终止语句，剩下的 `*/` 触发 1064 语法错误，
+# 于是完整的备份被误判成「损坏」。把分号移到注释外即可，触发器定义本身不变。
+normalize_trigger_terminators() {
+  sed 's|;[[:space:]]*\*/;;[[:space:]]*\r*$| */;;|'
+}
+
 fail() {
   local reason="$1"
   echo "[$(ts)] [ERROR] $reason" >&2
@@ -114,6 +125,7 @@ cleanup() {
   # MySQL 镜像声明匿名数据卷；只清本任务容器及其卷，避免演练长期积累数据。
   DOCKER_COMMAND_TIMEOUT=5 docker rm -f -v "$CONTAINER" >/dev/null 2>&1 \
     || echo "[WARN] 临时恢复容器清理失败，请检查 $CONTAINER" >&2
+  [ -n "${IMPORT_LOG:-}" ] && rm -f "$IMPORT_LOG"
 }
 trap cleanup EXIT
 trap 'exit 124' TERM
@@ -146,10 +158,26 @@ echo "[$(ts)] [INFO] 解压并导入备份到 $RESTORE_DB ..."
 # 须显式指定目标库；先建库确保存在（幂等），再导入。
 docker exec "$CONTAINER" \
   mysql -uroot -prestore_check_pw -e "CREATE DATABASE IF NOT EXISTS \`$RESTORE_DB\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci" >/dev/null 2>&1
-gunzip -c "$FILE" | DOCKER_COMMAND_TIMEOUT="$RESTORE_TIMEOUT_SECONDS" docker exec -i "$CONTAINER" \
-  mysql -uroot -prestore_check_pw "$RESTORE_DB" >/dev/null 2>&1 || {
-    fail "备份导入失败 —— 备份可能损坏"
-  }
+# 导入失败时要拿到真实原因：旧写法把 stderr 丢进 /dev/null，只报「备份可能损坏」，
+# 让一份完好的备份被误判（2026-09-14）。这里落盘再透出，区分文件损坏与语法问题。
+IMPORT_LOG="$(mktemp)"
+set +e
+{ gunzip -c "$FILE" | normalize_trigger_terminators \
+  | DOCKER_COMMAND_TIMEOUT="$RESTORE_TIMEOUT_SECONDS" docker exec -i "$CONTAINER" \
+      mysql -uroot -prestore_check_pw "$RESTORE_DB" >/dev/null; } 2>"$IMPORT_LOG"
+IMPORT_RC=$?
+set -e
+if [ "$IMPORT_RC" -ne 0 ]; then
+  IMPORT_DETAIL="$(grep -v -i 'using a password' "$IMPORT_LOG" 2>/dev/null \
+    | grep -v '^[[:space:]]*$' | head -1 || true)"
+  if [ -z "$IMPORT_DETAIL" ] && grep -q -i 'unexpected end of file\|not in gzip format\|invalid compressed data' "$IMPORT_LOG" 2>/dev/null; then
+    IMPORT_DETAIL='备份压缩包无法完整解压，文件疑似截断或损坏'
+  fi
+  [ -n "$IMPORT_DETAIL" ] && echo "[$(ts)] [ERROR] 导入失败详情：$IMPORT_DETAIL" >&2
+  # dingtalk_send 直接拼接 JSON，报错文本里的引号/反斜杠会让钉钉静默失败，先净化。
+  IMPORT_ALERT="$(printf '%s' "$IMPORT_DETAIL" | tr '\n\r\t' '   ' | sed 's/["\\]//g' | cut -c1-200)"
+  fail "备份导入失败（退出码 ${IMPORT_RC}）：${IMPORT_ALERT:-未捕获到 MySQL 输出}"
+fi
 
 # 校验表数
 TABLES=$(docker exec "$CONTAINER" \

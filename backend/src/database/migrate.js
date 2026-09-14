@@ -10,6 +10,7 @@ const fs = require('fs')
 const path = require('path')
 const mysql2 = require('mysql2/promise')
 const { env } = require('../config/env')
+const { splitSqlStatements } = require('./sqlStatements')
 
 /** 历史遗留的重复编号（审计 4.10 现状）：这些是既有事实，校验放行不失败。
  *  只有「新增的重复编号」才应让 CI 失败——防止开发者手滑新建与已有迁移撞号的文件。 */
@@ -114,7 +115,12 @@ async function runMigrations({ checkGapsOnly = false } = {}) {
       if (existing) continue
 
       const sql = fs.readFileSync(path.join(dir, file), 'utf8')
-      await conn.query(sql)
+      // 逐条执行：整文件当一条多语句发送时，非末条 CREATE TRIGGER 的函数体会把
+      // 结尾分号一起写进 ACTION_STATEMENT，导出成无法导入的 `... ); */;;`（见
+      // sqlStatements.js 说明与 2026-09-14 备份恢复演练事故）。
+      for (const statement of splitSqlStatements(sql)) {
+        await conn.query(statement)
+      }
       await conn.query('INSERT INTO db_migrations (filename) VALUES (?)', [file])
       console.log(`[Migrate] ✓ ${file}`)
       ran++

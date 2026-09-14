@@ -64,7 +64,12 @@ docker compose logs mysql | tail -100
    docker compose up -d mysql                      # 空卷首次启动会建空库（不会自动跑迁移！）
    docker compose exec -T backend npm run migrate  # 手动补齐表结构（部署链路才会自动迁移）
    # 再导入备份数据（注意先建好表结构再灌数据，或用含 CREATE TABLE 的完整备份）
-   gunzip -c /opt/flowcube/backups/flowcube_XXX.sql.gz | docker exec -i flowcube-mysql mysql -uroot -p"$MYSQL_ROOT_PASSWORD" <库名>
+   # 备份由 mysqldump 导出，触发器函数体可能残留结尾分号（2026-09-14 事故，见
+   # docs/backup-restore-trigger-terminator-2026-09-14.md），必须按 restore-check.sh
+   # 的同一口径规范化，否则导入会在 `... ); */;;` 处报 1064 并中断。
+   gunzip -c /opt/flowcube/backups/flowcube_XXX.sql.gz \
+     | sed 's|;[[:space:]]*\*/;;[[:space:]]*$| */;;|' \
+     | docker exec -i flowcube-mysql mysql -uroot -p"$MYSQL_ROOT_PASSWORD" <库名>
    # 启动后端并验证
    docker compose up -d backend
    curl -fsS http://127.0.0.1:3000/api/health
