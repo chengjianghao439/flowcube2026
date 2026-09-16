@@ -18,6 +18,7 @@
     "generate:status": "node scripts/generate-status-constants.js",
     "deploy:keygen": "bash scripts/setup-deploy-key.sh",
     "test:upload": "node --test tests/upload-limits.test.js",
+    "test:export": "node --test tests/export-xlsx.test.js",
     "test:label": "node tests/label-geometry.test.js && node tests/label-zpl.test.js && node tests/label-geometry-frontend.test.js && node --test tests/label-raster.test.js",
     "test:print": "node tests/print-policy.test.js && node tests/print-status.test.js",
     "test:print-purge": "node tests/print-jobs-purge.test.js",

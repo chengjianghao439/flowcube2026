@@ -113,6 +113,9 @@ export default function GlobalSearch() {
         <input
           ref={inputRef}
           aria-label="全局搜索单据与资料"
+          // 不声明的话，浏览器会把登录表单的用户名自动填充灌进这个框（进系统就看到
+          // 搜索框里是当前账号名、还挂着一条"未找到 xxx"的提示）——2026-09-16 修复
+          autoComplete="off"
           value={query}
           onChange={e => search(e.target.value)}
           onFocus={() => setFocused(true)}

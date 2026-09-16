@@ -620,11 +620,26 @@ export default function PdaReceivePage() {
     )
   }
 
-  if (task.putawayStatus?.key === 'waiting' || task.putawayStatus?.key === 'putting_away' || task.status >= 3) {
+  // 能否继续收货只看任务状态：后端只有全部明细行收满才把任务推进到 3 待上架，
+  // status 3/4/5 时再收会被服务端拒绝，这里提前拦住并给出下一步。
+  // 这里以前还看 putawayStatus 的 waiting/putting_away——那是「有容器在等上架」，每收一箱就成立，
+  // 于是多商品收货单收到一半就整页变成「收货已完成」，剩下没收到货的商品再也进不来；而上架页同一时刻
+  // 又拦着说「收货尚未完成」，现场被卡在两个页面之间（2026-09-15 生产 IN20260914001 两项商品只收了一项）。
+  // 上架页用的是 task.status（putaway.tsx），两处判据从此一致。
+  if (task.status >= 3) {
     return (
       <div className="min-h-screen bg-background p-6 text-center space-y-3">
-        <p className="text-muted-foreground">收货已完成，该订单已进入上架阶段。</p>
-        <button type="button" className="text-primary font-medium" onClick={() => navigate('/pda/inbound')}>返回列表</button>
+        <p className="text-muted-foreground">
+          {task.status === 3
+            ? '本单已全部收货，请前往「扫码上架」扫描库存条码与货架条码。'
+            : task.status === 4
+              ? '该收货订单已完成。'
+              : '该收货订单已取消。'}
+        </p>
+        {task.status === 3 && (
+          <button type="button" className="block mx-auto text-primary font-medium" onClick={() => navigate(`/pda/putaway/${task.id}`)}>扫码上架</button>
+        )}
+        <button type="button" className="block mx-auto text-primary font-medium" onClick={() => navigate('/pda/inbound')}>返回列表</button>
       </div>
     )
   }

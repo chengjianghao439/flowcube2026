@@ -53,6 +53,15 @@ function fillSheet(ws, columns, data, startRow = 1) {
     const r = ws.getRow(startRow + 1 + i)
     r.eachCell(cell => {
       cell.border = { bottom: { style: 'hair', color: { argb: 'FFDDDDDD' } } }
+      // mysql2 把 DATE/DATETIME 列返回成 JS Date 对象，exceljs 会按默认的 mm-dd-yy 写成日期单元格
+      // （英文习惯，且与同一份表里 DATE_FORMAT 成字符串的列格式不一致）。这里统一指定数字格式：
+      // 纯日期写 yyyy-mm-dd，带时分秒的写 yyyy-mm-dd hh:mm。设置 numFmt 而不是转字符串，
+      // 是为了让 Excel 里仍可按日期排序与筛选（2026-09-16 修复）。
+      if (cell.value instanceof Date) {
+        const d = cell.value
+        const hasTime = d.getHours() || d.getMinutes() || d.getSeconds()
+        cell.numFmt = hasTime ? 'yyyy-mm-dd hh:mm' : 'yyyy-mm-dd'
+      }
     })
     if (i % 2 === 1) {
       r.eachCell(cell => { cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F7FA' } } }

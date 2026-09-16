@@ -3,7 +3,7 @@ import { OrderStatusFilter } from '@/components/shared/OrderStatusFilter'
  * 收货订单列表（采购入库 / inbound_tasks）
  * 路由：/inbound-tasks
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { X } from 'lucide-react'
@@ -24,7 +24,7 @@ import { useWorkspaceStore } from '@/store/workspaceStore'
 import { useSubmitInboundTask, useCancelInbound, useVoidInboundReceipt, useCloseReceivingInbound } from '@/hooks/useInboundTasks'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { toast } from '@/lib/toast'
-import { formatDisplayDateTime } from '@/lib/dateTime'
+import { formatDisplayDateTime, defaultRangeYmds } from '@/lib/dateTime'
 import { downloadExport } from '@/lib/exportDownload'
 import { readStringParam, upsertSearchParams } from '@/lib/urlSearchParams'
 import InboundTaskQueryDialog, { type InboundTaskQueryValues } from './InboundTaskQueryDialog'
@@ -33,12 +33,7 @@ const STATUS_LABELS: Record<string, string> = INBOUND_STATUS_LABEL as unknown as
 
 /** 首次打开收货订单页时默认筛选的天数窗口（最近一周） */
 const DEFAULT_RANGE_DAYS = 7
-function toYmd(d: Date): string {
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
+
 
 export default function InboundTasksPage() {
   const navigate = useNavigate()
@@ -86,12 +81,20 @@ export default function InboundTasksPage() {
   const warehouseName = readStringParam(searchParams, 'warehouseName')
   const startDate     = readStringParam(searchParams, 'startDate')
   const endDate       = readStringParam(searchParams, 'endDate')
+  // 用户没填日期时按默认窗口（最近一周）筛选。默认值在「构造查询」这一层兜底，
+  // 不依赖下面那个只跑一次的 effect——否则是否带默认窗口取决于页签是否已挂载过，
+  // 同一入口两次打开范围不同（2026-09-16 用户确认 7 天是既定规则，任何入口都要一致）。
+  // range=all 是「清空」写下的显式意图（看全部），不再套默认。
+  const rangeAll = searchParams.get('range') === 'all'
+  const defaultRange = useMemo(() => defaultRangeYmds(DEFAULT_RANGE_DAYS), [])
+  const effectiveStartDate = startDate || (rangeAll ? '' : defaultRange.start)
+  const effectiveEndDate = endDate || (rangeAll ? '' : defaultRange.end)
 
   const isActiveTab = useActiveWorkspaceTab()
   const PAGE_SIZE = 20
   // 收货现场变化频繁，标签页常驻挂载时若不轮询容易停留在打开时的陈旧进度
   const { data, isLoading } = useQuery({
-    queryKey: ['inbound-tasks', { keyword, remark, operatorId, statusFilter, productId, supplierId, warehouseId, startDate, endDate }],
+    queryKey: ['inbound-tasks', { keyword, remark, operatorId, statusFilter, productId, supplierId, warehouseId, startDate: effectiveStartDate, endDate: effectiveEndDate }],
     queryFn: () => getInboundTasksApi({
       page: 1,
       pageSize: PAGE_SIZE,
@@ -102,8 +105,8 @@ export default function InboundTasksPage() {
       productId: productId || undefined,
       supplierId: supplierId || undefined,
       warehouseId: warehouseId || undefined,
-      startDate: startDate || undefined,
-      endDate: endDate || undefined,
+      startDate: effectiveStartDate || undefined,
+      endDate: effectiveEndDate || undefined,
     }),
     refetchInterval: isActiveTab ? 20_000 : false,
   })
@@ -113,13 +116,11 @@ export default function InboundTasksPage() {
     setSearchParams(upsertSearchParams(searchParams, updates))
   }
 
-  // 首次打开：无日期筛选时默认套用最近一周
+  // 首次打开：把默认窗口写进 URL（便于分享与回看）。筛选兜底在构造查询处，
+  // 所以即使这个 effect 没跑（页签已挂载），范围也一致。
   useEffect(() => {
-    if (!startDate && !endDate) {
-      const end = new Date()
-      const start = new Date()
-      start.setDate(start.getDate() - DEFAULT_RANGE_DAYS)
-      setSearchParams(upsertSearchParams(searchParams, { startDate: toYmd(start), endDate: toYmd(end) }), { replace: true })
+    if (!startDate && !endDate && searchParams.get('range') !== 'all') {
+      setSearchParams(upsertSearchParams(searchParams, { startDate: defaultRange.start, endDate: defaultRange.end }), { replace: true })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -149,7 +150,7 @@ export default function InboundTasksPage() {
     productId, productCode, productName,
     supplierId, supplierName,
     warehouseId, warehouseName,
-    startDate, endDate,
+    startDate: effectiveStartDate, endDate: effectiveEndDate,
   }
 
   function applyQuery(v: InboundTaskQueryValues) {
@@ -168,6 +169,8 @@ export default function InboundTasksPage() {
       warehouseName: v.warehouseName || null,
       startDate: v.startDate || null,
       endDate: v.endDate || null,
+      // 弹窗里清空日期＝明确要看全部；设了日期则清掉 range 标记
+      range: (!v.startDate && !v.endDate) ? 'all' : null,
       page: 1, // 筛选变化回到第一页
     })
     setQueryOpen(false)
@@ -180,6 +183,8 @@ export default function InboundTasksPage() {
       supplierId: null, supplierName: null,
       warehouseId: null, warehouseName: null,
       startDate: null, endDate: null,
+      // 显式声明「看全部」：否则「没有日期」会被默认窗口接管，清空之后又只剩最近一周
+      range: 'all',
       page: 1,
     })
   }

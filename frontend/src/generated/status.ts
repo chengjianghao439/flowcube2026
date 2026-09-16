@@ -303,9 +303,10 @@ export const SALE_ACTION_RULES = {
   "adjust": {
     "from": [
       2,
-      3
+      3,
+      6
     ],
-    "message": "只有已占库/拣货中的销售单可修改明细，已出库后不可修改"
+    "message": "只有已占库/部分占库/拣货中的销售单可修改明细，已出库后不可修改"
   },
   "cancel": {
     "blocked": {
@@ -341,6 +342,12 @@ export const SALE_ACTION_RULES = {
     "message": "只有草稿状态的销售单可以编辑"
   },
   "release": {
+    "blocked": {
+      "1": "草稿状态无需释放占库",
+      "3": "拣货中的订单不能直接取消占库，请先取消仓库任务",
+      "4": "已出库的订单不能取消占库",
+      "5": "订单已取消"
+    },
     "from": [
       2,
       6

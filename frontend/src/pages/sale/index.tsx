@@ -1,7 +1,7 @@
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { useContext } from 'react'
 import { OrderStatusFilter } from '@/components/shared/OrderStatusFilter'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { X } from 'lucide-react'
 import { downloadExport } from '@/lib/exportDownload'
@@ -20,7 +20,7 @@ import { getSaleDetailApi } from '@/api/sale'
 import { PrintPreviewOverlay } from '@/components/print/SaleOrderPrintTemplate'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { toast } from '@/lib/toast'
-import { formatDisplayDateTime, formatDisplayDate } from '@/lib/dateTime'
+import { formatDisplayDateTime, defaultRangeYmds } from '@/lib/dateTime'
 import { readStringParam, upsertSearchParams } from '@/lib/urlSearchParams'
 import { getSaleWorkflowStatus } from '@/lib/saleWorkflowStatus'
 import { getReceivableStatus } from '@/lib/receivableStatus'
@@ -71,6 +71,15 @@ export default function SalePage() {
   const warehouseName = readStringParam(searchParams, 'warehouseName')
   const startDate     = readStringParam(searchParams, 'startDate')
   const endDate       = readStringParam(searchParams, 'endDate')
+  // 用户没填日期时按默认窗口（最近一周）筛选。默认值在「构造查询」这一层兜底，
+  // 而不是只靠下面那个只跑一次的 effect 去写 URL——否则"进入页面是否带默认窗口"取决于
+  // 该页签是否已挂载过：首次打开是 7 天，之后从菜单切回来却是全部，同一个入口两种范围
+  // （2026-09-16 用户确认 7 天是既定规则，这里让它在任何入口都稳定生效）。
+  // range=all 是「清空」写下的显式意图（看全部），不再套默认。
+  const rangeAll = searchParams.get('range') === 'all'
+  const defaultRange = useMemo(() => defaultRangeYmds(DEFAULT_RANGE_DAYS), [])
+  const effectiveStartDate = startDate || (rangeAll ? '' : defaultRange.start)
+  const effectiveEndDate = endDate || (rangeAll ? '' : defaultRange.end)
 
   const { can } = usePermission()
   const [queryOpen, setQueryOpen] = useState(false)
@@ -89,8 +98,8 @@ export default function SalePage() {
     productId: productId || undefined,
     customerId: customerId || undefined,
     warehouseId: warehouseId || undefined,
-    startDate: startDate || undefined,
-    endDate: endDate || undefined,
+    startDate: effectiveStartDate || undefined,
+    endDate: effectiveEndDate || undefined,
   })
   const total = data?.pagination?.total ?? 0
   const [shortageDialog, setShortageDialog] = useState<{ orderId: number; shortages: StockShortageItem[] } | null>(null)
@@ -104,13 +113,11 @@ export default function SalePage() {
     setSearchParams(upsertSearchParams(searchParams, updates))
   }
 
-  // 首次打开：无日期筛选时默认套用最近一周（打开即看本周订单；之后可自由改或清空看全部）
+  // 首次打开：把默认窗口写进 URL（便于分享与回看）。这只是让 URL 反映筛选，
+  // 真正的筛选兜底在构造查询处——所以即使这个 effect 没跑（页签已挂载），范围也一致。
   useEffect(() => {
     if (!startDate && !endDate && searchParams.get('range') !== 'all') {
-      const end = new Date()
-      const start = new Date()
-      start.setTime(end.getTime() - (DEFAULT_RANGE_DAYS - 1) * 86400000)
-      setSearchParams(upsertSearchParams(searchParams, { startDate: formatDisplayDate(start), endDate: formatDisplayDate(end) }), { replace: true })
+      setSearchParams(upsertSearchParams(searchParams, { startDate: defaultRange.start, endDate: defaultRange.end }), { replace: true })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -150,17 +157,17 @@ export default function SalePage() {
     ...(productId ? { productId: String(productId) } : {}),
     ...(customerId ? { customerId: String(customerId) } : {}),
     ...(warehouseId ? { warehouseId: String(warehouseId) } : {}),
-    ...(startDate ? { startDate } : {}),
-    ...(endDate ? { endDate } : {}),
+    ...(effectiveStartDate ? { startDate: effectiveStartDate } : {}),
+    ...(effectiveEndDate ? { endDate: effectiveEndDate } : {}),
   }
 
-  // 查询弹窗初始值
+  // 查询弹窗初始值：日期用「当前实际生效」的范围（含默认窗口），用户打开就能看见
   const initialQuery: SaleQueryValues = {
     keyword, remark, operatorId, operatorName, status: statusFilter,
     productId, productCode, productName,
     customerId, customerName,
     warehouseId, warehouseName,
-    startDate, endDate,
+    startDate: effectiveStartDate, endDate: effectiveEndDate,
   }
 
   function applyQuery(v: SaleQueryValues) {
@@ -179,6 +186,8 @@ export default function SalePage() {
       warehouseName: v.warehouseName || null,
       startDate: v.startDate || null,
       endDate: v.endDate || null,
+      // 弹窗里清空日期＝明确要看全部；设了日期则清掉 range 标记
+      range: (!v.startDate && !v.endDate) ? 'all' : null,
       page: 1, // 筛选变化回到第一页
     })
     setQueryOpen(false)
@@ -191,6 +200,8 @@ export default function SalePage() {
       customerId: null, customerName: null,
       warehouseId: null, warehouseName: null,
       startDate: null, endDate: null,
+      // 显式声明「看全部」：否则「没有日期」会被默认窗口接管，清空之后又只剩最近一周
+      range: 'all',
       page: 1,
     })
   }
@@ -210,10 +221,10 @@ export default function SalePage() {
 
   // ── 列定义 ───────────────────────────────────────────────────────────────
   const columns: TableColumn<SaleOrder>[] = [
-    { key: 'orderNo', title: '销售单号', width: 12 },
+    { key: 'orderNo', title: '销售单号', width: 14, render: v => <span className="whitespace-nowrap">{String(v ?? '')}</span> },
     { key: 'customerName', title: '客户', width: 14 },
     { key: 'warehouseName', title: '仓库', width: 8 },
-    { key: 'totalAmount', title: '折后金额', width: 8, align: 'right', render: (_, r) => <span className="font-medium tabular-nums">¥{Math.max(0, r.totalAmount - (r.discountAmount ?? 0)).toFixed(2)}</span> },
+    { key: 'totalAmount', title: '折后金额', width: 10, align: 'right', render: (_, r) => <span className="font-medium tabular-nums whitespace-nowrap">¥{Math.max(0, r.totalAmount - (r.discountAmount ?? 0)).toFixed(2)}</span> },
     { key: 'remark', title: '备注', width: 15, render: v => (v as string) || '—' },
     { key: 'status', title: '状态', width: 8, render: (_, r) => { const ws = getSaleWorkflowStatus(r); return <SoftStatusLabel label={ws.label} tone={ws.tone} title={ws.detail} onClick={r.taskNo && r.taskId ? () => goToDetail(r) : undefined} /> } },
     { key: 'receivableStatus', title: '回款状态', width: 8, render: (_, r) => { const rs = getReceivableStatus(r); return <SoftStatusLabel label={rs.label} tone={rs.tone} title={rs.dueDate ? `账期至 ${rs.dueDate.slice(0, 10)}` : undefined} /> } },

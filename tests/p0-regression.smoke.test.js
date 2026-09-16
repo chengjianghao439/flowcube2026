@@ -223,6 +223,22 @@ async function scenarioShortReceiveClosesOut(ctx, log, token) {
   const [t1] = await dbQuery(pool, 'SELECT status FROM inbound_tasks WHERE id=?', [taskId])
   log.assert('未收满时任务停在收货中(2)', Number(t1.status) === 2, `status=${t1.status}`)
 
+  // 收满才能上架：还有商品没收完、任务停在「收货中(2)」时，上架必须由服务端拒绝。
+  // 此前 putaway 的 from 含 2，服务端会放行未收满的单（只有 PDA 页面在拦），
+  // 这正是「收满才能上架」这条规则此前只管住了前端、没管住接口的漏洞。
+  const cBeforeClose = await http.get(`/api/inbound-tasks/${taskId}/containers`, { token })
+  const waitingBeforeClose = cBeforeClose.data?.data?.waiting || cBeforeClose.data?.data?.list || []
+  log.assert('结案前已存在待上架容器', waitingBeforeClose.length > 0, JSON.stringify(cBeforeClose.data).slice(0, 200))
+  const earlyPutaway = await http.post(`/api/inbound-tasks/${taskId}/putaway`, {
+    token, headers: pdaHeaders(),
+    json: { containerId: Number(waitingBeforeClose[0].id), locationId: Number(location.id) },
+  })
+  log.assert(
+    '★未收满（收货中）时上架被服务端拒绝，且提示指向继续收货或短装结案',
+    earlyPutaway.status === 400 && /短装结案/.test(earlyPutaway.data?.message || ''),
+    `status=${earlyPutaway.status} message=${earlyPutaway.data?.message}`,
+  )
+
   const closeResp = await http.post(`/api/inbound-tasks/${taskId}/close-receiving`, { token })
   log.assert('可以提前结束收货', closeResp.ok, JSON.stringify(closeResp.data).slice(0, 200))
 

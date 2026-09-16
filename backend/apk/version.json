@@ -1,7 +1,7 @@
 {
-  "version": "0.9.16",
-  "versionCode": 124,
+  "version": "0.9.17",
+  "versionCode": 125,
   "filename": "app-release.apk",
-  "releaseNote": "仓储 PDA 收货修复，打印记录（补打）口径调整。",
-  "publishedAt": "2026-09-14T13:10:08.954Z"
+  "releaseNote": "- **PDA 收货：多商品收货单收到一半被卡住**",
+  "publishedAt": "2026-09-16T15:20:50.038Z"
 }

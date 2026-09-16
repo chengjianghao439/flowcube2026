@@ -1,5 +1,5 @@
 import { OrderStatusFilter } from '@/components/shared/OrderStatusFilter'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { X } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
@@ -18,7 +18,7 @@ import { PERMISSIONS } from '@/lib/permission-codes'
 import { OrderPrintOverlay } from '@/components/print/OrderPrintOverlay'
 import { mapPurchaseOrderToPrint } from '@/lib/orderPrintData'
 import { downloadExport } from '@/lib/exportDownload'
-import { formatDisplayDateTime } from '@/lib/dateTime'
+import { formatDisplayDateTime, defaultRangeYmds } from '@/lib/dateTime'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { toast } from '@/lib/toast'
 import { readStringParam, upsertSearchParams } from '@/lib/urlSearchParams'
@@ -30,12 +30,6 @@ const STATUS_LABELS: Record<string, string> = { '1': '草稿', '2': '已提交',
 
 /** 首次打开采购页时默认筛选的天数窗口（最近一周） */
 const DEFAULT_RANGE_DAYS = 7
-function toYmd(d: Date): string {
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
 
 export default function PurchasePage() {
   const navigate   = useNavigate()
@@ -73,6 +67,14 @@ export default function PurchasePage() {
   const warehouseName = readStringParam(searchParams, 'warehouseName')
   const startDate     = readStringParam(searchParams, 'startDate')
   const endDate       = readStringParam(searchParams, 'endDate')
+  // 用户没填日期时按默认窗口（最近一周）筛选。默认值在「构造查询」这一层兜底，
+  // 不依赖下面那个只跑一次的 effect——否则是否带默认窗口取决于页签是否已挂载过，
+  // 同一入口两次打开范围不同（2026-09-16 用户确认 7 天是既定规则，任何入口都要一致）。
+  // range=all 是「清空」写下的显式意图（看全部），不再套默认。
+  const rangeAll = searchParams.get('range') === 'all'
+  const defaultRange = useMemo(() => defaultRangeYmds(DEFAULT_RANGE_DAYS), [])
+  const effectiveStartDate = startDate || (rangeAll ? '' : defaultRange.start)
+  const effectiveEndDate = endDate || (rangeAll ? '' : defaultRange.end)
 
   const [confirmState, setConfirmState] = useState<{
     open: boolean
@@ -98,8 +100,8 @@ export default function PurchasePage() {
     productId: productId || undefined,
     supplierId: supplierId || undefined,
     warehouseId: warehouseId || undefined,
-    startDate: overdueOnly ? undefined : (startDate || undefined),
-    endDate: overdueOnly ? undefined : (endDate || undefined),
+    startDate: overdueOnly ? undefined : (effectiveStartDate || undefined),
+    endDate: overdueOnly ? undefined : (effectiveEndDate || undefined),
     overdueOnly: overdueOnly || undefined,
   })
   const total = data?.pagination?.total ?? 0
@@ -117,13 +119,11 @@ export default function PurchasePage() {
     setSearchParams(upsertSearchParams(searchParams, updates))
   }
 
-  // 首次打开：无日期筛选时默认套用最近一周（打开即看本周订单；之后可自由改或清空看全部）
+  // 首次打开：把默认窗口写进 URL（便于分享与回看）。筛选兜底在构造查询处，
+  // 所以即使这个 effect 没跑（页签已挂载），范围也一致。
   useEffect(() => {
-    if (!startDate && !endDate) {
-      const end = new Date()
-      const start = new Date()
-      start.setDate(start.getDate() - DEFAULT_RANGE_DAYS)
-      setSearchParams(upsertSearchParams(searchParams, { startDate: toYmd(start), endDate: toYmd(end) }), { replace: true })
+    if (!startDate && !endDate && searchParams.get('range') !== 'all') {
+      setSearchParams(upsertSearchParams(searchParams, { startDate: defaultRange.start, endDate: defaultRange.end }), { replace: true })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -149,17 +149,17 @@ export default function PurchasePage() {
     ...(productId ? { productId: String(productId) } : {}),
     ...(supplierId ? { supplierId: String(supplierId) } : {}),
     ...(warehouseId ? { warehouseId: String(warehouseId) } : {}),
-    ...(startDate ? { startDate } : {}),
-    ...(endDate ? { endDate } : {}),
+    ...(!overdueOnly && effectiveStartDate ? { startDate: effectiveStartDate } : {}),
+    ...(!overdueOnly && effectiveEndDate ? { endDate: effectiveEndDate } : {}),
   }
 
-  // 查询弹窗初始值
+  // 查询弹窗初始值：日期用「当前实际生效」的范围（含默认窗口），用户打开就能看见
   const initialQuery: PurchaseQueryValues = {
     keyword, remark, operatorId, operatorName, status: statusFilter,
     productId, productCode, productName,
     supplierId, supplierName,
     warehouseId, warehouseName,
-    startDate, endDate,
+    startDate: effectiveStartDate, endDate: effectiveEndDate,
   }
 
   function applyQuery(v: PurchaseQueryValues) {
@@ -178,6 +178,8 @@ export default function PurchasePage() {
       warehouseName: v.warehouseName || null,
       startDate: v.startDate || null,
       endDate: v.endDate || null,
+      // 弹窗里清空日期＝明确要看全部；设了日期则清掉 range 标记
+      range: (!v.startDate && !v.endDate) ? 'all' : null,
       page: 1, // 筛选变化回到第一页
     })
     setQueryOpen(false)
@@ -190,6 +192,8 @@ export default function PurchasePage() {
       supplierId: null, supplierName: null,
       warehouseId: null, warehouseName: null,
       startDate: null, endDate: null,
+      // 显式声明「看全部」：否则「没有日期」会被默认窗口接管，清空之后又只剩最近一周
+      range: 'all',
       page: 1,
     })
   }

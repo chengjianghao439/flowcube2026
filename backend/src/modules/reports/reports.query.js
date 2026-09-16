@@ -8,6 +8,7 @@ const logger = require('../../utils/logger')
 const AppError = require('../../utils/AppError')
 const { WT_STATUS, WT_STATUS_ACTIVE } = require('../../constants/warehouseTaskStatus')
 const { getStatusRule } = require('../../constants/documentStatusRules')
+const { CONTAINER_STATUS } = require('../../engine/containerEngine')
 
 async function fetchOne(sql, params = []) {
   const [[row]] = await pool.query(sql, params)
@@ -437,14 +438,16 @@ async function fetchRoleWorkbenchRows({ thresholds, scopeWarehouseIds = null, ba
        LIMIT ${take} OFFSET ${offset}`,
       tWh.params,
     ),
+    // 待上架容器是 status=4（CONTAINER_STATUS.PENDING_PUTAWAY），此前这里写成 `status = 0`，
+    // 容器根本没有 0 状态，条件恒不成立——岗位工作台/待办的「待上架」卡片一直是空的（2026-09-16 修复）。
     waitingPutawayCount: await fetchOne(
       `SELECT COUNT(*) AS count
        FROM inventory_containers c
        LEFT JOIN inbound_tasks t ON t.id = c.inbound_task_id
        WHERE c.deleted_at IS NULL
-         AND c.status = 0
+         AND c.status = ?
          AND c.inbound_task_id IS NOT NULL${cWh.sql}`,
-      cWh.params,
+      [CONTAINER_STATUS.PENDING_PUTAWAY, ...cWh.params],
     ),
     waitingPutawayRows: await fetchMany(
       `SELECT c.id,
@@ -460,11 +463,11 @@ async function fetchRoleWorkbenchRows({ thresholds, scopeWarehouseIds = null, ba
        FROM inventory_containers c
        LEFT JOIN inbound_tasks t ON t.id = c.inbound_task_id
        WHERE c.deleted_at IS NULL
-         AND c.status = 0
+         AND c.status = ?
          AND c.inbound_task_id IS NOT NULL${cWh.sql}
        ORDER BY COALESCE(c.putaway_deadline_at, c.created_at) ASC,c.id ASC
        LIMIT ${take} OFFSET ${offset}`,
-      cWh.params,
+      [CONTAINER_STATUS.PENDING_PUTAWAY, ...cWh.params],
     ),
     printFailureCount: await fetchOne(
       `SELECT COUNT(*) AS count

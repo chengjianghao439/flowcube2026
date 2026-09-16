@@ -477,6 +477,12 @@ async function scenarioContainerCarriesPurchaseOwnership(ctx, log, token) {
     `容器归属=${boxPricey?.inbound_task_item_id} 期望=${linePricey.id}`,
   )
 
+  // 收满才能上架：贵的那行应到 15 只来了 10（短装），任务仍停在「收货中(2)」，此时不能上架。
+  // 按业务流程先做短装结案（剩余未收量作罢、任务推进到待上架），再上架已收到的部分——
+  // 规则收紧后这是唯一允许的上架路径（此前服务端 putaway 的 from 含 2，未结案也能上架）。
+  const closeShort = await http.post(`/api/inbound-tasks/${taskId}/close-receiving`, { token })
+  log.assert('★短装结案后任务进入待上架', closeShort.ok, JSON.stringify(closeShort.data).slice(0, 200))
+
   // 现场先扫到哪箱就先上哪箱——这里先上贵的那箱，正是 first-fit 会错配的顺序：
   // 按 id 顺序它会把这 10 件记到便宜行头上（便宜行 cap=5，先吃满 5，剩 5 才给贵行）
   const putPricey = await http.post(`/api/inbound-tasks/${taskId}/putaway`, {

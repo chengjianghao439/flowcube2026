@@ -716,7 +716,7 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
               <p className="text-muted-foreground">共 <span className="font-medium tabular-nums text-foreground">{order.items?.length ?? 0}</span> 行商品明细</p>
               <dl className="flex items-center gap-10 text-right">
                 <div><dt className="text-xs text-muted-foreground">商品金额</dt><dd className="mt-1 tabular-nums">¥{Number(order.totalAmount).toFixed(2)}</dd></div>
-                <div><dt className="text-xs text-muted-foreground">折扣金额</dt><dd className="mt-1 tabular-nums">-¥{Number(order.discountAmount ?? 0).toFixed(2)}</dd></div>
+                <div><dt className="text-xs text-muted-foreground">折扣金额</dt><dd className="mt-1 tabular-nums">{Number(order.discountAmount ?? 0) > 0 ? `-¥${Number(order.discountAmount).toFixed(2)}` : '¥0.00'}</dd></div>
                 <div className="border-l pl-8"><dt className="text-xs text-muted-foreground">订单净额</dt><dd className="mt-1 text-2xl font-semibold tabular-nums">¥{Math.max(0, Number(order.totalAmount) - Number(order.discountAmount ?? 0)).toFixed(2)}</dd></div>
               </dl>
             </div>

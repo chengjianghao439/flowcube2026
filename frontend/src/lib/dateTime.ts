@@ -74,6 +74,17 @@ export function todayYmd(): string {
   return `${f.y}-${pad(f.mo)}-${pad(f.d)}`
 }
 
+/**
+ * 列表默认筛选窗口：最近 N 天（含今天），北京时间。
+ * 销售/采购/收货三个单据列表共用一份算法——此前各写各的，销售按「今天减 6 天」算 7 天，
+ * 采购与收货按「今天减 7 天」算成了 8 天，同一个「最近一周」在三个列表里窗口不一样（2026-09-16 修复）。
+ */
+export function defaultRangeYmds(days = 7): { start: string; end: string } {
+  const end = new Date()
+  const start = new Date(end.getTime() - (days - 1) * 86400000)
+  return { start: formatDisplayDate(start), end: formatDisplayDate(end) }
+}
+
 /** 北京时间的当前小时（0-23）：PDA 首页问候语等按「北京几点」而不是宿主时区的场景 */
 export function beijingHour(): number {
   return beijingFields(new Date()).h

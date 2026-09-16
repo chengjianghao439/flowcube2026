@@ -1,6 +1,7 @@
 const { pool } = require('../../config/db')
 const { getInboundClosureThresholds } = require('../../utils/inboundThresholds')
 const { scopeFilter } = require('../../utils/warehouseScope')
+const { CONTAINER_STATUS } = require('../../engine/containerEngine')
 
 function pushNotification(items, seen, item) {
   const dedupeKey = item.dedupeKey || `${item.category || 'general'}:${item.text}:${item.path}`
@@ -122,23 +123,26 @@ async function buildNotifications(scopeWarehouseIds = null, userId = null) {
      LIMIT 1`,
     [printTimeoutMinutes],
   )
+  // 待上架容器是 status=4（CONTAINER_STATUS.PENDING_PUTAWAY）。此前这里写成 `status = 0`，
+  // 容器根本没有 0 状态，条件恒不成立——「打印后未上架超时」这条通知从来没有出现过，
+  // 现场收完货不上架没人提醒（2026-09-16 修复：生产有 2 张单各压着 1 个待上架容器躺了 5 个多月）。
   const [[{ overdueInboundPutaway }]] = await pool.query(
     `SELECT COUNT(*) AS overdueInboundPutaway
      FROM inventory_containers
      WHERE deleted_at IS NULL
-       AND status = 0
+       AND status = ?
        AND inbound_task_id IS NOT NULL
        AND (
          (putaway_deadline_at IS NOT NULL AND putaway_deadline_at < NOW())
          OR (putaway_deadline_at IS NULL AND TIMESTAMPDIFF(HOUR, created_at, NOW()) >= ?)
        )`,
-    [putawayTimeoutHours],
+    [CONTAINER_STATUS.PENDING_PUTAWAY, putawayTimeoutHours],
   )
   const [[putawayTimeoutTarget]] = await pool.query(
     `SELECT inbound_task_id AS taskId
      FROM inventory_containers
      WHERE deleted_at IS NULL
-       AND status = 0
+       AND status = ?
        AND inbound_task_id IS NOT NULL
        AND (
          (putaway_deadline_at IS NOT NULL AND putaway_deadline_at < NOW())
@@ -146,7 +150,7 @@ async function buildNotifications(scopeWarehouseIds = null, userId = null) {
        )
      ORDER BY created_at ASC
      LIMIT 1`,
-    [putawayTimeoutHours],
+    [CONTAINER_STATUS.PENDING_PUTAWAY, putawayTimeoutHours],
   )
   const [[{ outboundPrintFailures }]] = await pool.query(
     `SELECT COUNT(*) AS outboundPrintFailures
