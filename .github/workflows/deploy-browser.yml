@@ -14,7 +14,11 @@ permissions:
 # 跑 docker compose up --build 互相抢容器。concurrency 让同一时间只跑一个 Deploy——
 # 已开始的部署必须完成或走回退，不在应用切换中途取消；待运行队列保留最新提交。
 concurrency:
-  group: deploy-production
+  # 与 build-desktop / build-pda-apk 共用同一个 group：三者都要 SSH 到同一台服务器操作
+  # （服务器端还有 flock 兜底，但那把锁只等 5 分钟，等不到就会被外层 timeout 强杀——
+  #  2026-09-16 发 v0.9.17 时就这样失败过）。用同一个 group 让 GitHub 侧先排队，
+  # 从源头上避免同时抢锁。
+  group: flowcube-server-deploy
   cancel-in-progress: false
 
 env:

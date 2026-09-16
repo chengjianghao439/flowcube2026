@@ -17,10 +17,15 @@ permissions:
   actions: read
 
 # 并发保护（2026-08-11 生产事故修复）：多次 push 触发的 PDA 构建会在服务器互相覆盖 /tmp 产物
-# （旧 commit 构建覆盖新 commit）。concurrency 让同一时间只构建最新的一次。
+# 与 deploy-browser / build-desktop 共用同一个 group：三者都要 SSH 到同一台服务器操作，
+# 必须串行（服务器端那把 flock 只等 5 分钟，等不到就被外层 timeout 强杀——
+# 2026-09-16 发 v0.9.17 时就这样失败过）。
+# 这里由 true 改为 false：取消一个正在部署的 run 会留下半成品；排队虽然可能多跑一次，
+# 但每次部署都是"reset 到指定 commit"的幂等操作，最终状态由最后完成的那次决定，
+# 不会出现旧 commit 覆盖新 commit。
 concurrency:
-  group: build-pda
-  cancel-in-progress: true
+  group: flowcube-server-deploy
+  cancel-in-progress: false
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
