@@ -165,7 +165,11 @@ if command -v docker >/dev/null 2>&1 && [ -f docker-compose.yml ]; then
   actual_checksum=$(bounded 120 sha256sum "$archive")
   [ "${actual_checksum%% *}" = "$checksum" ] || fail_deploy 'CI 镜像归档摘要不匹配'
   echo '==> 加载并验证 CI 应用镜像（旧应用仍在运行）...'
-  DOCKER_COMMAND_TIMEOUT=600 docker load -i "$archive"
+  # docker load 要解压全部层：首次加载一个新镜像时在慢盘上可能超过 10 分钟。
+  # 2026-09-16 发 v0.9.17 时就卡在这里——600 秒整被 bounded 强杀（exit code 124，
+  # 日志停在"加载并验证 CI 应用镜像"之后、没有任何 docker 输出），重跑时层已存在所以只要 9 秒。
+  # 放宽到 1800 秒：外层部署 timeout 为 2400 秒（GNU timeout 到点后 -k 600 强杀），仍能容纳。
+  DOCKER_COMMAND_TIMEOUT=1800 docker load -i "$archive"
   for service in backend frontend; do
     image_ref="flowcube-${service}:${expected}"
     revision=$(docker image inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$image_ref")

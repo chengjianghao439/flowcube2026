@@ -32,12 +32,15 @@ permissions:
   contents: write
   actions: read
 
-# 与 deploy-browser / build-pda-apk 共用同一个 group：打 tag 触发桌面发布时，往往同时还有
-# push main 触发的浏览器部署与 PDA 构建在跑，三者都要 SSH 到同一台服务器操作，必须串行。
-# 此前本文件没有 concurrency，是 2026-09-16 发 v0.9.17 时三个 workflow 同时抢部署锁、
-# 导致浏览器部署与 PDA 构建双双超时失败的直接原因。
+# 打 tag 触发桌面**发布**（会 SSH 到服务器跑 release-desktop.js），必须与 deploy-browser /
+# build-pda-apk 串行，共用 flowcube-server-deploy。
+# 但 push main 触发的只是**验证构建**——本文件所有 SSH/发布步骤都带 `if: github.ref_type == 'tag'`，
+# 它根本不碰服务器，却同样占着部署 group、把真正的部署挤在 pending 里排队；
+# 更糟的是 GitHub 的语义是「同一 group 里后进入的 pending 会取消先前的 pending」，
+# 三个 workflow 同时被触发时会有其中一个被 cancelled（2026-09-16 发 v0.9.17 时 Build PDA APK 就是这样被取消的）。
+# 所以按事件分开 group：tag / 手动触发走部署组，push main 走独立组，互不干扰。
 concurrency:
-  group: flowcube-server-deploy
+  group: ${{ (github.ref_type == 'tag' || github.event_name == 'workflow_dispatch') && 'flowcube-server-deploy' || 'build-desktop-ci' }}
   cancel-in-progress: false
 
 env:
