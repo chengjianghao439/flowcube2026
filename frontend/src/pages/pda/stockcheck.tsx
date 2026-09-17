@@ -40,6 +40,8 @@ function CheckList() {
   const navigate = useNavigate()
   const { data, isLoading } = useQuery({
     queryKey: ['pda-stockcheck-pending'],
+    // 重进列表必须立刻取最新数据（2026-09-17 验收 ISSUE-017：新派发单据长时间看不到）
+    refetchOnMount: 'always',
     queryFn: () => getPendingScanChecksApi().then(r => r ?? []),
     refetchInterval: 15_000,
   })
@@ -58,7 +60,11 @@ function CheckList() {
                   <p className="font-medium text-foreground">{c.checkNo}</p>
                   <p className="text-xs text-muted-foreground">{c.warehouseName}</p>
                 </div>
-                <span className="text-sm tabular-nums">待盘 <b className="text-amber-600">{c.pendingCount}</b>/{c.itemCount}</span>
+                {c.itemCount === 0
+                  // 空盘点单（历史数据）：在 PDA 上明说无法盘点，并指出收口入口，
+                  // 不要显示「待盘 0/0」这种看不出怎么办的状态（2026-09-17 验收 ISSUE-009）。
+                  ? <span className="text-xs text-amber-600 text-right">无盘点明细<br />请在 ERP 取消后重建</span>
+                  : <span className="text-sm tabular-nums">待盘 <b className="text-amber-600">{c.pendingCount}</b>/{c.itemCount}</span>}
               </div>
             </PdaCard>
           </button>

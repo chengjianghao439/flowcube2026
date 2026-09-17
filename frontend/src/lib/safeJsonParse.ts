@@ -11,13 +11,18 @@ export function normalizeJsonText(raw: string): string {
 }
 
 /**
- * @param logBeforeParse 为 true 时解析前 console.warn（本地存储恢复等低频场景）
+ * @param logBeforeParse 为 true 时解析前输出调试日志（本地存储恢复等低频场景）
+ *
+ * 2026-09-17 验收 ISSUE-007：这里原本无条件 console.warn，而 usePendingRequests
+ * 每次读取待确认记录都会调用一次，PDA 上十几秒就能刷十几条 `length=2 预览: []`
+ * 的同名 warn，把真实告警淹没。空集合/空对象这类没有排障价值的内容不再打印，
+ * 有内容时仍保留 warn（排障需要）；失败路径保持 console.error。
  */
 export function safeJsonParse<T>(raw: string | null | undefined, label: string, logBeforeParse = true): T | undefined {
   if (raw == null || raw === '') return undefined
   const normalized = normalizeJsonText(raw)
   if (!normalized) return undefined
-  if (logBeforeParse) {
+  if (logBeforeParse && normalized.length > 2) {
     const preview = normalized.length > 400 ? `${normalized.slice(0, 400)}…[length=${normalized.length}]` : normalized
     console.warn(`[${label}] 即将解析 JSON length=${normalized.length} 预览:`, preview)
   }

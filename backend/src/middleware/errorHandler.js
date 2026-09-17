@@ -6,16 +6,6 @@ const { env } = require('../config/env')
 const { initializeErrorTracking, captureUnexpectedError } = require('../utils/errorTracking')
 initializeErrorTracking({ dsn: env.SENTRY_DSN, environment: env.NODE_ENV })
 
-function defaultErrorCode(statusCode, fallback = 'INTERNAL_ERROR') {
-  if (statusCode === 400) return 'BAD_REQUEST'
-  if (statusCode === 401) return 'UNAUTHORIZED'
-  if (statusCode === 403) return 'FORBIDDEN'
-  if (statusCode === 404) return 'NOT_FOUND'
-  if (statusCode === 409) return 'CONFLICT'
-  if (statusCode === 422) return 'VALIDATION_ERROR'
-  return fallback
-}
-
 /**
  * 全局错误处理中间件（4 个参数，必须最后注册）
  * 处理顺序：AppError（业务错误）→ MySQL 错误 → Zod 校验 → 未知错误
@@ -47,7 +37,13 @@ function errorHandler(err, req, res, next) {
 
   // ── 业务异常（可预期，不记录 error 级别）──────────────────────────────────
   if (err instanceof AppError && err.isOperational) {
-    const errorCode = err.code || defaultErrorCode(err.statusCode, 'BUSINESS_ERROR')
+    // 只在业务代码显式给了 code 时才带 code。此前对未带 code 的 4xx 兜底
+    // CONFLICT/BAD_REQUEST 之类的通用码，前端会优先用通用码覆盖后端中文原因，
+    // 把「箱贴仍待确认…请先收口打印任务」「该容器 5 件超出调拨单剩余可调量 1 件」
+    // 这类可操作提示统一显示成「状态已变化，请刷新后重试」（2026-09-17 验收
+    // ISSUE-003 / ISSUE-016：现场反复刷新永远无效）。保留 message 保真，
+    // 调用方仍可自行生成 code（如 AppError 第三参数）。
+    const errorCode = err.code || null
     logger.warn(`[AppError] ${err.message}`, { path, userId, refNo, requestId, code: errorCode, statusCode: err.statusCode }, 'ERR')
     return errorResponse(res, err.message, err.statusCode, err.data ?? null, errorCode)
   }

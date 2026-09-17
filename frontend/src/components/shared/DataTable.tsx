@@ -46,6 +46,15 @@ export default function DataTable<T extends object>({
 }: DataTableProps<T>) {
   const isSelectEnabled = !!(selectable || selectionMode)
   const { orderedColumns, usesPercent, getColumnWidth, colgroupRef, tableRef, tableWidth, hasCustomWidths, setDraggingKey, draggingKey, moveColumn, startResize, fitColumn, resizeCleanupRef, measureWidths, savePixelWidths } = useTableColumns({ columns, fluid, columnStorageKey, isSelectEnabled, fitData: virtualized ? data : undefined })
+
+  // 宽表横向滚动时，操作列固定在右侧：列宽总和经常超过视口，原来的「操作」列会
+  // 被挤到屏幕外，现场只能看到一个被切掉的「详」字（2026-09-17 验收 ISSUE-013）。
+  // 用 sticky 让它始终可见，列宽与排序规则不变。
+  const stickyActionKey = (() => {
+    const last = orderedColumns[orderedColumns.length - 1]
+    if (!last) return null
+    return isAction(String(last.key), String(last.title)) ? String(last.key) : null
+  })()
   const enabledIds = useMemo(() => data.filter(row => !selectableCheck || selectableCheck(row))
     .map(row => Number((row as Record<string, unknown>)[String(rowKey)])), [data, rowKey, selectableCheck])
   const allSelected = enabledIds.length > 0 && enabledIds.every(id => selectedIds?.has(id))
@@ -112,7 +121,11 @@ export default function DataTable<T extends object>({
           <td
             key={String(col.key)}
             onDoubleClick={isAction(String(col.key), col.title) ? e => e.stopPropagation() : undefined}
-            className="overflow-hidden px-4 py-2.5 text-foreground align-middle"
+            className={`overflow-hidden px-4 py-2.5 text-foreground align-middle ${
+              stickyActionKey === String(col.key)
+                ? 'sticky right-0 z-10 border-l border-border bg-card group-hover:bg-muted/30'
+                : ''
+            }`}
           >
             {isAction(String(col.key), col.title)
               // 极窄操作列在格内滚动，保留所有按钮的可达性，避免越界覆盖相邻列。
@@ -170,7 +183,9 @@ export default function DataTable<T extends object>({
                     moveColumn(String(col.key))
                   }}
                   onDragEnd={() => setDraggingKey(null)}
-                  className="relative cursor-move select-none px-4 py-2.5 text-left text-table-head"
+                  className={`relative cursor-move select-none px-4 py-2.5 text-left text-table-head ${
+                    stickyActionKey === String(col.key) ? 'sticky right-0 z-20 border-l border-border bg-muted' : ''
+                  }`}
                 >
                   <div className="group flex items-center gap-2">
                     {col.sortable && onSortChange ? (

@@ -47,6 +47,8 @@ export default function PdaTransferPage() {
   const navigate = useNavigate()
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['pda-transfers'],
+    // 重进列表必须立刻取最新数据（2026-09-17 验收 ISSUE-017：新派发单据长时间看不到）
+    refetchOnMount: 'always',
     queryFn: () => getTransferListApi({ page: 1, pageSize: 200 }).then(r => r?.list ?? []),
     refetchInterval: 30_000,
   })

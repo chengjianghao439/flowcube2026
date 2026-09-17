@@ -95,10 +95,41 @@ export function formatErrorMessage(messageOrCode: unknown, fallback = '操作失
   return fallback
 }
 
+/**
+ * 后端通用错误码**不得覆盖后端自己的中文原因**。
+ *
+ * 后端对未带业务码的 4xx 曾兜底 CONFLICT/BUSINESS_ERROR 之类的通用码，前端一旦
+ * 优先用通用码渲染，就会把「箱贴仍待确认：箱号 L000493 尚未打印完成，请先收口
+ * 打印任务」「该容器 5 件超出调拨单剩余可调量 1 件，无法整箱扫码」这类**唯一可
+ * 操作的提示**替换成「状态已变化，请刷新后重试」，现场反复刷新永远无效
+ * （2026-09-17 验收 ISSUE-003 / ISSUE-016）。
+ *
+ * 规则：只有具体业务码（如 PDA_WAREHOUSE_MISMATCH、CONTAINER_LOCK_CONFLICT）
+ * 才允许覆盖后端文案；通用码一律以后端中文原文优先，原文不可用时才退回兜底文案。
+ */
+const GENERIC_ERROR_CODES = new Set([
+  'CONFLICT',
+  'BUSINESS_ERROR',
+  'INTERNAL_ERROR',
+  'ERROR',
+  'UNKNOWN',
+])
+
+export function resolveApiErrorMessage(
+  code: unknown,
+  serverMessage: unknown,
+  fallback = '操作失败，请稍后重试',
+): string {
+  const serverText = formatErrorMessage(serverMessage, fallback)
+  const rawCode = asTrimmedString(code)
+  if (!rawCode) return serverText
+  if (GENERIC_ERROR_CODES.has(rawCode.toUpperCase())) return serverText
+  return formatBackendCode(rawCode, serverText)
+}
+
 export function formatPrinterSource(source?: string | null): string {
   if (source === 'client') return '打印客户端'
   if (source === 'local_desktop') return '本机系统'
   if (source === 'manual') return '手动添加'
   return '手动添加'
 }
-

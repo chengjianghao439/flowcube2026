@@ -97,14 +97,19 @@ export default function PdaSaleReturnReceivePage() {
   })
 
   const handleScan = useCallback((raw: string) => {
-    const parsed = parseBarcode(raw.trim())
-    if (parsed?.type !== 'product') {
-      err('请扫描商品条码')
-      return
-    }
-    const product = productList.find(p => p.productCode === parsed.code || p.productId === Number(parsed.code))
+    const trimmed = raw.trim()
+    if (!trimmed) return
+    const parsed = parseBarcode(trimmed)
+    // 现场标签上印的通常是商品编码（SKU0001），而 ERP 早已不再维护商品条码
+    //（见 docs/pda-receive-remove-scan-2026-09-14.md）。此前这里只接受 P<id>/PRD<id>，
+    // 扫商品编码一律被拒，退货收货在真机上根本用不了（2026-09-17 续测发现）。
+    // 现在：商品编码、P<id>/PRD<id> 商品条码、纯数字 ID 都尝试匹配当前退货任务明细。
+    const product =
+      productList.find(p => p.productCode === trimmed)
+      || productList.find(p => parsed?.type === 'product' && p.productId === Number(parsed.id))
+      || (/^\d+$/.test(trimmed) ? productList.find(p => p.productId === Number(trimmed)) : undefined)
     if (!product) {
-      err('该产品不在当前退货任务中')
+      err(parsed?.type === 'product' ? '该产品不在当前退货任务中' : '该商品不在当前退货任务中，请核对条码或直接点选商品')
       return
     }
     ok(`${product.productName} ${product.productCode}`)

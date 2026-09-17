@@ -3,7 +3,7 @@
  * 路由：/pda/task/:id  (独立全屏，不走 AppLayout)
  */
 import { MapPin, CircleCheck } from 'lucide-react'
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef } from 'react'
 import { parseBarcode } from '@/utils/barcode'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -13,12 +13,11 @@ import {
 } from '@/api/warehouse-tasks'
 import { getContainerByBarcodeApi } from '@/api/inventory'
 import type { PickSuggestionItem, PickSuggestionContainer } from '@/api/warehouse-tasks'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import PdaHeader from '@/components/pda/PdaHeader'
 import PdaCard from '@/components/pda/PdaCard'
 import PdaBottomBar from '@/components/pda/PdaBottomBar'
+import PdaScanner from '@/components/pda/PdaScanner'
 import PdaFlash from '@/components/pda/PdaFlash'
 import { PdaLoading } from '@/components/pda/PdaEmptyState'
 import PdaStepHint from '@/components/pda/PdaStepHint'
@@ -115,8 +114,6 @@ export default function PdaTaskPage() {
   const qc        = useQueryClient()
   const { submitScan, logError } = useOfflineScan()
 
-  const inputRef  = useRef<HTMLInputElement>(null)
-  const [inputVal, setInputVal]   = useState('')
   const { flash, ok, err, warn }  = usePdaFeedback()
   const [scanning, setScanning]   = useState(false)
   const [finished, setFinished] = useState<'completed'|null>(null)
@@ -126,6 +123,11 @@ export default function PdaTaskPage() {
     label: `拣货任务 ${taskId}`,
     onConfirmed: async () => {
       await qc.invalidateQueries({ queryKey: ['pda-task', taskId] })
+      // 拣货动作会改变任务状态，必须同时作废列表缓存：PDA 拣货列表（订单视图与
+      // 商品汇总视图）在 keep-alive 下不会自动重取，曾出现「订单列表已空、商品
+      // 列表仍显示待拣 0/2」的矛盾数据（2026-09-17 验收 ISSUE-001）。
+      await qc.invalidateQueries({ queryKey: ['pda-my-tasks'] })
+      await qc.invalidateQueries({ queryKey: ['pda-my-task-sku-summary'] })
       const latest = await qc.fetchQuery({
         queryKey: ['pda-task', taskId],
         queryFn: () => getTaskByIdApi(taskId),
@@ -151,6 +153,8 @@ export default function PdaTaskPage() {
       setFinished('completed')
       await qc.invalidateQueries({ queryKey: ['pda-task', taskId] })
       await qc.invalidateQueries({ queryKey: ['pda-suggestions', taskId] })
+      await qc.invalidateQueries({ queryKey: ['pda-my-tasks'] })
+      await qc.invalidateQueries({ queryKey: ['pda-my-task-sku-summary'] })
     },
     resolveServerState: async () => {
       const latest = await getTaskByIdApi(taskId)
@@ -181,13 +185,6 @@ export default function PdaTaskPage() {
     refetchOnWindowFocus: false,
   })
 
-  // ── Mutations ─────────────────────────────────────────────────────────
-  // ── Focus ─────────────────────────────────────────────────────────────
-  const focusInput = useCallback(() => {
-    if (!finished) inputRef.current?.focus()
-  }, [finished])
-  useEffect(() => { focusInput() }, [focusInput, sugData])
-
   // ── Flash helpers ─────────────────────────────────────────────────────
   // (由 usePdaFeedback 提供，下方旧定义已移除)
 
@@ -201,7 +198,6 @@ export default function PdaTaskPage() {
     if (parseBarcode(b).type !== 'container') {
       err(`条码格式无效：${b}`)
       logError({ taskId, barcode: b, reason: `条码格式无效：${b}` })
-      setInputVal('')
       return
     }
 
@@ -264,7 +260,7 @@ export default function PdaTaskPage() {
       const rawMsg = (e as {response?:{data?:{message?:string}}})?.response?.data?.message ?? '扫码失败，请重试'
       err(formatPdaErrorMessage(rawMsg, '扫码失败，请检查条码或任务状态'))
       logError({ taskId, barcode: b, reason: rawMsg })
-    } finally { setScanning(false); setInputVal(''); setTimeout(focusInput, 80) }
+    } finally { setScanning(false) }
   }
 
   const items: PickSuggestionItem[] = sugData?.items ?? []
@@ -282,7 +278,7 @@ export default function PdaTaskPage() {
   )
 
   return (
-    <div className="flex min-h-screen flex-col bg-background" onClick={focusInput}>
+    <div className="flex min-h-screen flex-col bg-background">
       <PdaHeader
         title={task?.taskNo ?? '…'}
         subtitle={task?.customerName}
@@ -345,16 +341,17 @@ export default function PdaTaskPage() {
         />
       </div>
 
-      <PdaBottomBar contentClassName="flex-row items-center gap-3">
-        <Input ref={inputRef} value={inputVal}
-          onChange={e => setInputVal(e.target.value)}
-          onKeyDown={e => { if(e.key==='Enter') handleScan(inputVal) }}
-          placeholder={scanning?'处理中…':'扫描库存条码'}
-          disabled={scanning||!!finished || pickAction.submitBlocked || readyAction.submitBlocked}
-          className="flex-1 h-12 text-base"
-          autoComplete="off" autoCorrect="off" spellCheck={false}
+      {/*
+        默认「扫码模式」：不渲染输入框、不聚焦，进页面不会弹软键盘，扫码枪直接扫；
+        需要手输时点「手动输入」按钮才渲染输入框并唤起软键盘（2026-09-17 用户要求）。
+      */}
+      <PdaBottomBar>
+        <PdaScanner
+          onScan={handleScan}
+          placeholder="扫描库存条码"
+          disabled={scanning || !!finished || pickAction.submitBlocked || readyAction.submitBlocked}
+          onDuplicate={() => err('重复扫码，请稍候')}
         />
-        <Button size="pda" onClick={() => handleScan(inputVal)} disabled={!inputVal||scanning||!!finished || pickAction.submitBlocked || readyAction.submitBlocked}>确认</Button>
       </PdaBottomBar>
 
 

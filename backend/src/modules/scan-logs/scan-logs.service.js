@@ -413,14 +413,14 @@ async function createCancelReturnScanLog({
     if (Number(loc.warehouse_id) !== Number(taskRow.warehouse_id)) {
       throw new AppError('库位与任务所属仓库不一致', 400)
     }
-    if (c.location_id == null || Number(loc.id) !== Number(c.location_id)) {
-      const [[originalLoc]] = c.location_id
-        ? await conn.query('SELECT code FROM warehouse_locations WHERE id = ?', [c.location_id])
-        : [[null]]
-      throw new AppError(
-        originalLoc ? `必须放回原库位 ${originalLoc.code}，不能放到其它库位` : '该容器原库位信息缺失，无法归还，请联系管理员',
-        400,
-      )
+    // 有原库位：必须放回原库位（防止随手丢到别的货位）。
+    // 没有原库位（Excel 导入/历史容器 location_id 为空）：允许放回**本仓任意启用库位**——
+    // 此前一律拒绝，这类容器一旦被拣货就只能找管理员改库，订单取消也收不了尾
+    //（2026-09-17 续测：拣货退回扫 R396842 被拒，任务与容器锁卡死）。放回时会把扫描到的
+    // 库位写回容器（下方 UPDATE），下次再拣就有原库位了。
+    if (c.location_id != null && Number(loc.id) !== Number(c.location_id)) {
+      const [[originalLoc]] = await conn.query('SELECT code FROM warehouse_locations WHERE id = ?', [c.location_id])
+      throw new AppError(`必须放回原库位 ${originalLoc?.code ?? c.location_id}，不能放到其它库位`, 400)
     }
 
     const [[itemRow]] = await conn.query(

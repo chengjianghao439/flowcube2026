@@ -120,8 +120,15 @@ export default function PdaTransferOutPage() {
             onDismissError={() => scanAction.clearError()}
           />
 
-          <p className="text-xs text-muted-foreground">扫描调出仓容器条码，整容器调拨出库</p>
-          {(order.items ?? []).map(item => (
+          {/*
+            整容器调拨要求「容器数量 ≤ 该商品剩余可调量」，扫到更大的容器会被服务端拒绝。
+            页面直接把剩余可调量摆出来，避免现场拿 5 件/100 件的整箱去凑 1 件的计划
+            （2026-09-17 验收 ISSUE-016）。
+          */}
+          <p className="text-xs text-muted-foreground">扫描调出仓容器条码，整容器调拨出库（容器数量需不超过剩余可调量）</p>
+          {(order.items ?? []).map(item => {
+            const remaining = Math.max(0, Number(item.quantity || 0) - Number(item.deductedQty ?? 0))
+            return (
             <PdaCard key={item.id}>
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
@@ -131,10 +138,12 @@ export default function PdaTransferOutPage() {
                 <div className="text-right shrink-0">
                   <p className="text-xs text-muted-foreground">计划 {item.quantity}</p>
                   <p className="text-sm font-semibold text-amber-600">已出库 {item.deductedQty ?? 0}</p>
+                  <p className="text-xs text-muted-foreground">剩余可调 {remaining}</p>
                 </div>
               </div>
             </PdaCard>
-          ))}
+            )
+          })}
         </div>
       </div>
 

@@ -6,6 +6,9 @@
  *  2. 手动模式：用户点击「手动输入」按钮后激活，此时弹出软键盘，输入后回车提交
  *
  * 扫码枪识别特征：字符间隔 < 50ms + 末尾 Enter（或超时自动 flush）
+ *
+ * 重要：扫码模式**永不聚焦输入框**，进页面/扫码结束都不弹软键盘；
+ * 软键盘只在用户点「手动输入」后才出现（2026-09-17 用户要求，不要再加 autoFocus 之类的入参）。
  */
 import { useRef, useState, useCallback } from 'react'
 import { Loader2, Keyboard, CheckCircle2, ScanLine } from 'lucide-react'
@@ -17,7 +20,6 @@ interface PdaScannerProps {
   placeholder?: string
   disabled?: boolean
   showTypeHint?: boolean
-  autoFocus?: boolean
   /** false：仅扫码枪，隐藏「手动输入」（上架等强制扫码场景） */
   allowManualEntry?: boolean
   /** 同一条码 1 秒内重复扫描时触发（可选，比如弹提示告诉用户"重复扫码"）；不传则静默丢弃 */
@@ -43,7 +45,10 @@ export default function PdaScanner({
     if (!code || disabled) return
     if (showTypeHint) {
       const parsed = parseBarcode(code)
-      setLastCode(parsed.label ?? code)
+      // 条码前缀识别不出类型时（商品编码 SKU0001、自定义编码等）直接回显原文，
+      // 不要显示「未知条码」——扫描其实已经成功，这句负面措辞会让现场以为扫错了
+      //（2026-09-17 验收 ISSUE-008）。
+      setLastCode(parsed.type === 'unknown' ? code : (parsed.label ?? code))
       setFlash(true)
       setTimeout(() => setFlash(false), 800)
     }

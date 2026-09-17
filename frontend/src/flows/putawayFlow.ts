@@ -30,10 +30,6 @@ function isStrictContainerScan(raw: string): boolean {
   return /^(?:I|CNT)\d+$/i.test(raw.trim())
 }
 
-function isStrictLocationScan(raw: string): boolean {
-  return /^(?:R\d+|LOC[-A-Z0-9]+)$/i.test(raw.trim())
-}
-
 export function makePutawayFlow(
   opts?: {
     onAfterPutaway?: () => void | Promise<void>
@@ -101,14 +97,14 @@ export function makePutawayFlow(
         barcodeType: 'bin',
         handle:      async (raw, ctx) => {
           const trimmed = raw.trim()
-          if (!isStrictLocationScan(trimmed)) {
-            return { ok: false, message: '扫描货架条码' }
-          }
-          const parsed = parseBarcode(trimmed)
-          if (parsed.type !== 'location') return { ok: false, message: '扫描货架条码' }
+          if (!trimmed) return { ok: false, message: '扫描货架条码' }
           if (!ctx.containerId) return { ok: false, message: '扫描库存条码' }
+          // 库位一律交给后端按「编码或条码」解析：现场打印出来的库位标签既可能是
+          // `R000123` 这样的条码，也可能是库位编码（如 `SH-A01`、`SMK-396842`），
+          // 前端再用 R/LOC 前缀卡格式会把历史库位全部挡死（2026-09-17 验收 ISSUE-018）。
+          // 归属仓/库状态/范围仍由服务端校验。
           const loc = await getLocationByCodeApi(trimmed)
-          if (!loc) return { ok: false, message: '库位不存在' }
+          if (!loc?.id) return { ok: false, message: `库位不存在：${trimmed}` }
 
           // 偏离推荐库位：同一库位需连扫两次确认（第一次提示，第二次放行并留痕）
           const suggestions = ctx.suggestedLocations ?? null

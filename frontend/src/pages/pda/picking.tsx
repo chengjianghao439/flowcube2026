@@ -113,7 +113,12 @@ export default function PdaPickingPage() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['pda-my-tasks'],
     queryFn: () => getMyTasksApi().then(r => r ?? []),
-    refetchInterval: 30_000, retry: 1,
+    refetchInterval: 30_000,
+    // 重进列表（keep-alive 下组件仍在挂载）必须立刻取一次最新状态，
+    // 否则会出现「商品列表还显示已完成任务、订单列表已经没有」的自相矛盾
+    //（2026-09-17 验收 ISSUE-001 / ISSUE-017）。
+    refetchOnMount: 'always',
+    retry: 1,
   })
   const tasks = data ?? []
 
@@ -122,9 +127,19 @@ export default function PdaPickingPage() {
     queryFn: () => getMyTaskSkuSummaryApi().then(r => r ?? []),
     enabled: viewMode === 'sku',
     refetchInterval: viewMode === 'sku' ? 30_000 : false,
+    refetchOnMount: 'always',
     retry: 1,
   })
   const skuList = skuData ?? []
+
+  // 「刷新」必须同时刷新订单列表与商品汇总：只刷一个就会出现两个视图数据打架
+  //（2026-09-17 验收 ISSUE-001）。
+  const refreshAll = async () => {
+    await Promise.all([
+      refetch(),
+      qc.invalidateQueries({ queryKey: ['pda-my-task-sku-summary'] }),
+    ])
+  }
 
   // ── 开始/继续拣货 ──────────────────────────────────────────────────────────
   const startMut = useMutation({
@@ -149,7 +164,7 @@ export default function PdaPickingPage() {
     <div className="min-h-screen bg-background">
       <PdaHeader title="拣货任务"
         onBack={() => navigate('/pda')}
-        right={<PdaRefreshButton onRefresh={() => refetch()} />}
+        right={<PdaRefreshButton onRefresh={() => { void refreshAll() }} />}
       />
 
       {/* 视图切换 */}

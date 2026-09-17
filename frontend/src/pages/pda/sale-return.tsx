@@ -40,6 +40,8 @@ export default function PdaSaleReturnListPage() {
   const nav = useNavigate()
   const { data: tasks, isLoading } = useQuery({
     queryKey: ['pda-return-tasks'],
+    // 重进列表必须立刻取最新数据（2026-09-17 验收 ISSUE-017）
+    refetchOnMount: 'always',
     queryFn: getPdaReturnTasksApi,
     refetchInterval: 15_000,
   })

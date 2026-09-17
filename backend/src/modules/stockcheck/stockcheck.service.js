@@ -89,12 +89,17 @@ async function findById(id, scopeWarehouseIds = null) {
 /** PDA 扫码盘点任务池：进行中的盘点单 + 各行填写进度（受仓库数据范围约束） */
 async function listPendingScanChecks(scopeWarehouseIds = null) {
   const scope = scopeFilter(scopeWarehouseIds, 'ic.warehouse_id')
+  // LEFT JOIN（不是 JOIN）：没有明细的空单（历史遗留数据）也必须出现在列表里，
+  // 否则 PDA 上永远看不见、ERP 里又卡在「进行中」，无人能收口
+  //（2026-09-17 验收 ISSUE-009）。
+  // 注意：SQL 文本里不要写 `--` 行内注释——后面若跟全角标点 MySQL 不认为它是注释，
+  // 直接 ER_PARSE_ERROR（本轮就踩过一次）。
   const [rows] = await pool.query(
     `SELECT ic.id, ic.check_no, ic.warehouse_id, ic.warehouse_name, ic.created_at,
             COUNT(ici.id) AS itemCount,
-            SUM(CASE WHEN ici.actual_qty IS NULL THEN 1 ELSE 0 END) AS pendingCount
+            COALESCE(SUM(CASE WHEN ici.id IS NOT NULL AND ici.actual_qty IS NULL THEN 1 ELSE 0 END), 0) AS pendingCount
        FROM inventory_checks ic
-       JOIN inventory_check_items ici ON ici.check_id = ic.id
+       LEFT JOIN inventory_check_items ici ON ici.check_id = ic.id
       WHERE ic.status = 1 AND ic.deleted_at IS NULL${scope.sql}
       GROUP BY ic.id, ic.check_no, ic.warehouse_id, ic.warehouse_name, ic.created_at
       ORDER BY ic.created_at ASC`,
@@ -263,6 +268,10 @@ async function create({ warehouseId, warehouseName, remark, operator, scopeWareh
     // 循环抽盘(type=2)只拉命中范围的商品；全盘(type=1)拉全仓（productIds 传 null）。
     const stocks = await listBookStocksFromActiveContainers(conn, warehouseId, type === 2 ? productIds : null)
     if (type === 2 && !stocks.length) throw new AppError('该抽盘范围内没有有货商品，无需盘点', 400)
+    // 全盘(1) 同样不能建出 0 明细的空单：PDA 扫码盘点按明细 INNER JOIN 过滤，
+    // 空单在 PDA 永远不出现，ERP 打开是空白表格，单据卡在「进行中」无人能收口
+    //（2026-09-17 验收 ISSUE-009：开发库 SC20260917005 就是这样卡住的）。
+    if (!stocks.length) throw new AppError('该仓库当前没有在库商品，无需创建盘点单', 400)
     for(const s of stocks) {
       await conn.query(`INSERT INTO inventory_check_items (check_id,product_id,product_code,product_name,unit,book_qty) VALUES (?,?,?,?,?,?)`,[checkId,s.product_id,s.product_code,s.product_name,s.unit,s.quantity])
     }    await conn.commit()

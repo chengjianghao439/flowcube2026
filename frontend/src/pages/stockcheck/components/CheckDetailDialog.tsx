@@ -70,6 +70,12 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
       return { ok: false as const, items, message: '实盘数量必须为大于或等于 0 的数字' }
     }
     if (!items.length) {
+      // 全部明细由 PDA 扫码盘点时没有任何"手工填写行"，但这并不代表单据是空的：
+      // 实盘数量已经由扫码确定（后端按扫码集合派生 actual_qty）。此前这里一律报
+      // 「请至少填写一行实盘数量」，导致**纯 PDA 扫码完成的盘点单在 ERP 永远提交不了**
+      //（2026-09-17 验收续测发现），盘点链断在最后一步。
+      const scannedRows = check.items.filter(i => i.scanDriven && i.actualQty != null)
+      if (scannedRows.length) return { ok: true as const, items }
       return { ok: false as const, items, message: '请至少填写一行实盘数量后再保存' }
     }
     return { ok: true as const, items }

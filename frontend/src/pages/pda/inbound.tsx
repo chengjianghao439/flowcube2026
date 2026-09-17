@@ -64,6 +64,8 @@ export default function PdaInboundPage() {
   const navigate = useNavigate()
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['pda-inbound-tasks'],
+    // 重进列表必须立刻取最新数据（2026-09-17 验收 ISSUE-017：新派发单据长时间看不到）
+    refetchOnMount: 'always',
     // 待收货/收货中/待上架三种状态走服务端过滤，不再拉全量历史订单回来前端筛
     queryFn: () => getInboundTasksApi({ page:1, pageSize:500, status:[1,2,3] }).then(r => r?.list ?? []),
     refetchInterval: 30_000,

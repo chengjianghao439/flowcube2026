@@ -47,6 +47,8 @@ function TaskSelectStep({ onSelect }: { onSelect: (t: WarehouseTask) => void }) 
   const navigate = useNavigate()
   const { data, isLoading } = useQuery({
     queryKey: ['pda-pack-tasks'],
+    // 重进列表必须立刻取最新数据（2026-09-17 验收 ISSUE-017：新派发单据长时间看不到）
+    refetchOnMount: 'always',
     queryFn: () => getTasksApi({ status: WT_STATUS.PACKING, pageSize: 200 }),
   })
   const tasks = data?.list ?? []
@@ -145,6 +147,19 @@ function PackageCard({ pkg, active, onActivate, onFinish, finishing, onPrintLabe
           >
             {printingLabel ? '打印中…' : '打印箱贴'}
           </Button>
+          {/*
+            箱贴打印状态必须显示出来：完成打包要求箱贴打印成功（服务端强制），
+            此前页面不显示打印状态，操作员只能反复点「完成打包并进入待出库」
+            （2026-09-17 验收 ISSUE-003）。
+          */}
+          <p className={`mt-1 text-xs ${
+            pkg.printStatus?.key === 'success' ? 'text-emerald-600'
+              : pkg.printStatus?.key === 'failed' ? 'text-destructive'
+                : 'text-amber-600'
+          }`}>
+            箱贴：{pkg.printStatus?.label ?? '未生成箱贴'}
+            {pkg.printStatus?.errorMessage ? `（${pkg.printStatus.errorMessage}）` : ''}
+          </p>
           {editable && pkg.items.length > 0 && (
             <Button size="sm" className="w-full mt-1" onClick={onFinish} disabled={finishing}>
               {finishing ? '处理中…' : '✓ 完成此箱'}
@@ -476,6 +491,8 @@ export default function PdaPackPage() {
   const totalBoxes = activeBoxes.length
   const doneBoxes  = activeBoxes.filter(p => p.status === 2).length
   const totalItems = activeBoxes.reduce((s, p) => s + p.items.reduce((ss, i) => ss + i.qty, 0), 0)
+  // 已完成但箱贴还没打印成功的箱子：它们正是「完成打包」被服务端拦下的原因
+  const unprintedBoxes = activeBoxes.filter(p => p.status === 2 && p.printStatus?.key !== 'success')
   // ── 全部完成页 ────────────────────────────────────────────────────────────
   if (allDone) return (
     <PdaDoneView
@@ -569,14 +586,32 @@ export default function PdaPackPage() {
             </div>
           )}
           {totalBoxes > 0 && activeBoxes.every((pkg) => pkg.status === 2) ? (
-            <Button
-              type="button"
-              className="w-full"
-              onClick={() => finalizeMut.mutate()}
-              disabled={finalizeMut.isPending || finalizeAction.submitBlocked}
-            >
-              {finalizeMut.isPending ? '处理中…' : '完成打包并进入待出库'}
-            </Button>
+            <>
+              {/*
+                箱贴未打印成功时，完成打包会被服务端拒绝（出库前置：箱贴必须有打印成功记录）。
+                这里把原因与出路直接摆出来，避免操作员只看到通用错误后反复无效重试。
+              */}
+              {unprintedBoxes.length > 0 && (
+                <div className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-800 space-y-1">
+                  <p className="font-semibold">箱贴尚未打印完成，暂时不能进入待出库</p>
+                  <p>
+                    待处理箱：{unprintedBoxes.map(pkg => `${pkg.barcode}（${pkg.printStatus?.label ?? '未生成箱贴'}）`).join('、')}
+                  </p>
+                  <p className="text-amber-700">
+                    处理办法：点该箱的「打印箱贴」重新入队，或在 ERP「系统 → 条码打印查询 → 出库条码」重新打印；
+                    若无出纸，请先启动绑定该打印机的极序 Flow 桌面端，客户端上线后会自动领取待派发任务。
+                  </p>
+                </div>
+              )}
+              <Button
+                type="button"
+                className="w-full"
+                onClick={() => finalizeMut.mutate()}
+                disabled={finalizeMut.isPending || finalizeAction.submitBlocked}
+              >
+                {finalizeMut.isPending ? '处理中…' : '完成打包并进入待出库'}
+              </Button>
+            </>
           ) : null}
         </div>
       </div>

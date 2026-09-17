@@ -42,6 +42,30 @@ async function listByTask(taskId) {
     })
   })
 
+  // 箱贴打印状态：PDA 打包页要能看出「为什么完成打包被拦」。此前打印未完成只在
+  // 服务端校验里报错，页面什么都不显示，操作员只能反复点「完成打包并进入待出库」
+  // （2026-09-17 验收 ISSUE-003）。
+  const { statusKey, printStateLabel } = require('../print-jobs/print-jobs.status')
+  const [jobs] = await pool.query(
+    `SELECT j.ref_id, j.status, j.error_message
+       FROM print_jobs j
+       INNER JOIN (
+         SELECT ref_id, MAX(id) AS max_id
+           FROM print_jobs
+          WHERE ref_type = 'package' AND ref_id IN (${ids.map(() => '?').join(',')})
+          GROUP BY ref_id
+       ) latest ON latest.max_id = j.id`,
+    ids,
+  )
+  const jobMap = {}
+  jobs.forEach(j => {
+    jobMap[j.ref_id] = {
+      key: statusKey(j.status),
+      label: printStateLabel(j.status),
+      errorMessage: j.error_message || null,
+    }
+  })
+
   return pkgs.map(p => ({
     id:        p.id,
     barcode:   p.barcode,
@@ -50,6 +74,8 @@ async function listByTask(taskId) {
     remark:    p.remark  || null,
     createdAt: p.created_at,
     items:     itemMap[p.id] || [],
+    // 没有打印任务 = 还没生成箱贴任务（例如刚装箱、还没点「打印箱贴」）
+    printStatus: jobMap[p.id] || { key: 'no_job', label: '未生成箱贴', errorMessage: null },
   }))
 }
 

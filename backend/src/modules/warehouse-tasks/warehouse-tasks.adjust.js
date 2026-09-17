@@ -438,14 +438,11 @@ async function confirmContainerReturn(returnId, { targetLocationId = null, opera
     )
     if (!container) throw new AppError('容器不存在', 404)
     // 归还库位强校验：必须扫回容器当前登记的原库位（拆分出的新容器继承同一库位，故先按源容器校验再拆分）。
-    if (container.location_id == null || Number(targetLocationId) !== Number(container.location_id)) {
-      const [[originalLoc]] = container.location_id
-        ? await conn.query('SELECT code FROM warehouse_locations WHERE id=?', [container.location_id])
-        : [[null]]
-      throw new AppError(
-        originalLoc ? `必须放回原库位 ${originalLoc.code}，不能放到其它库位` : '该容器原库位信息缺失，无法归还，请联系管理员',
-        400,
-      )
+    // 口径与 scan-logs 的拣货退回一致：有原库位必须放回原库位；无原库位（导入/历史容器）
+    // 允许放回本仓任意启用库位并写回容器（2026-09-17 续测）。
+    if (container.location_id != null && Number(targetLocationId) !== Number(container.location_id)) {
+      const [[originalLoc]] = await conn.query('SELECT code FROM warehouse_locations WHERE id=?', [container.location_id])
+      throw new AppError(`必须放回原库位 ${originalLoc?.code ?? container.location_id}，不能放到其它库位`, 400)
     }
 
     const returnedContainerId = Number(ret.source_container_id)

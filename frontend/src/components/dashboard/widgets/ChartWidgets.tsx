@@ -9,19 +9,26 @@ import {
   Activity, BarChart3, Warehouse, TrendingUp, ShoppingBag, CalendarClock, Coins,
   PieChart as PieChartIcon,
 } from 'lucide-react'
-import { WidgetShell } from '../WidgetShell'
+import { ChartWidgetShell } from '../WidgetShell'
 import { chartTooltip, axisTick, CHART_COLORS, money, wan, EMPTY_HINT } from '../chartTheme'
 import {
   useTrend, useTopStock, useInventoryStats, useSaleStats, usePurchaseStats,
   useAging, useFinanceDashboard,
 } from '@/hooks/useDashboard'
 
+/**
+ * 分布类图表的系列上限：仓库/账户这类主数据数量没有上界（开发库 253 个仓库、
+ * 94 个账户），全量成系列会让图表彻底不可读，统一取 Top N + 「其他」合并
+ *（2026-09-17 验收 ISSUE-010）。
+ */
+const TOP_SERIES_LIMIT = 8
+
 // —— 出入库趋势（dashboard.view）——
 export function ChartIoTrend() {
   const { data, isLoading, error, refetch } = useTrend(7)
   const rows = (data ?? []).map(d => ({ date: formatDisplayDate(d.date).slice(5), 入库: d.inbound, 出库: d.outbound }))
   return (
-    <WidgetShell loading={isLoading} error={error} onRetry={() => void refetch()} title="近 7 天出入库趋势" icon={Activity} tone="info">
+    <ChartWidgetShell loading={isLoading} error={error} onRetry={() => void refetch()} title="近 7 天出入库趋势" icon={Activity} tone="info">
       {rows.length === 0 ? <p className={EMPTY_HINT}>暂无出入库流水</p> : (
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={rows} margin={{ top: 8, right: 12, left: 0, bottom: 4 }}>
@@ -45,7 +52,7 @@ export function ChartIoTrend() {
           </AreaChart>
         </ResponsiveContainer>
       )}
-    </WidgetShell>
+    </ChartWidgetShell>
   )
 }
 
@@ -57,7 +64,7 @@ export function ChartTopStock() {
     价值: Math.round(d.value),
   }))
   return (
-    <WidgetShell loading={isLoading} error={error} onRetry={() => void refetch()} title="库存价值 Top 10" icon={BarChart3} tone="primary">
+    <ChartWidgetShell loading={isLoading} error={error} onRetry={() => void refetch()} title="库存价值 Top 10" icon={BarChart3} tone="primary">
       {rows.length === 0 ? <p className={EMPTY_HINT}>暂无库存数据</p> : (
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={rows} layout="vertical" margin={{ top: 4, right: 12, left: 0, bottom: 4 }}>
@@ -69,16 +76,27 @@ export function ChartTopStock() {
           </BarChart>
         </ResponsiveContainer>
       )}
-    </WidgetShell>
+    </ChartWidgetShell>
   )
 }
 
 // —— 各仓库存分布（report.view）——
 export function ChartWarehouseStock() {
   const { data, isLoading, error, refetch } = useInventoryStats()
-  const rows = (data?.byWarehouse ?? []).map(w => ({ name: w.warehouseName, 价值: Math.round(w.totalValue) }))
+  // 仓库数量没有上限（开发/演练库 253 个仓库），全量成系列时图例与坐标轴直接糊成一团。
+  // 按价值取 Top 8，其余合并为「其他 N 个仓」，与「库存价值 Top 10」同一口径
+  //（2026-09-17 验收 ISSUE-010）。
+  const rows = (() => {
+    const all = (data?.byWarehouse ?? [])
+      .map(w => ({ name: w.warehouseName, 价值: Math.round(w.totalValue) }))
+      .sort((a, b) => b.价值 - a.价值)
+    if (all.length <= TOP_SERIES_LIMIT) return all
+    const head = all.slice(0, TOP_SERIES_LIMIT)
+    const restValue = all.slice(TOP_SERIES_LIMIT).reduce((sum, w) => sum + w.价值, 0)
+    return [...head, { name: `其他 ${all.length - TOP_SERIES_LIMIT} 个仓`, 价值: restValue }]
+  })()
   return (
-    <WidgetShell loading={isLoading} error={error} onRetry={() => void refetch()} title="各仓库存价值分布" icon={Warehouse} tone="info" scrollBody>
+    <ChartWidgetShell loading={isLoading} error={error} onRetry={() => void refetch()} title="各仓库存价值分布" icon={Warehouse} tone="info" scrollBody>
       {rows.length === 0 ? <p className={EMPTY_HINT}>暂无仓库库存数据</p> : (
         <div style={{ height: Math.max(240, rows.length * 30) }}><ResponsiveContainer width="100%" height="100%">
           <BarChart data={rows} layout="vertical" margin={{ top: 4, right: 16, left: 4, bottom: 4 }}>
@@ -90,7 +108,7 @@ export function ChartWarehouseStock() {
           </BarChart>
         </ResponsiveContainer></div>
       )}
-    </WidgetShell>
+    </ChartWidgetShell>
   )
 }
 
@@ -101,7 +119,7 @@ export function ChartSaleTrend() {
   const choices = [{key:'totalAmount',label:'订单金额'}, {key:'shippedAmount',label:'已出库订单金额'}, {key:'orderCount',label:'订单数'}] as const
   const count = metric === 'orderCount'
   const label = choices.find(c=>c.key===metric)!.label
-  return <WidgetShell loading={isLoading} error={error} onRetry={() => void refetch()} title="月度销售趋势" icon={TrendingUp} bodyClassName="flex flex-col" action={<select aria-label="销售趋势指标" value={metric} onChange={e=>setMetric(e.target.value as typeof metric)} className="h-8 max-w-full rounded-md border border-border bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{choices.map(c=><option key={c.key} value={c.key}>{c.label}</option>)}</select>}>
+  return <ChartWidgetShell loading={isLoading} error={error} onRetry={() => void refetch()} title="月度销售趋势" icon={TrendingUp} bodyClassName="flex flex-col" action={<select aria-label="销售趋势指标" value={metric} onChange={e=>setMetric(e.target.value as typeof metric)} className="h-8 max-w-full rounded-md border border-border bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{choices.map(c=><option key={c.key} value={c.key}>{c.label}</option>)}</select>}>
     <p className="mb-2 text-xs text-muted-foreground">按订单创建月份归集 · {count ? '单位：单' : '单位：元，沿用报表订单金额'}{metric === 'shippedAmount' && ' · 仅统计已出库状态订单'}</p>
     {error ? <QueryErrorState error={error} onRetry={()=>void refetch()} compact/> : isLoading ? <div className="h-40 rounded bg-muted motion-safe:animate-pulse"/> : !data?.byMonth.length ? <p className={EMPTY_HINT}>该区间内暂无销售</p> : <div className="min-h-0 flex-1"><ResponsiveContainer width="100%" height="100%">
       <BarChart data={data.byMonth} margin={{top:12,right:12,left:0,bottom:4}}>
@@ -111,7 +129,7 @@ export function ChartSaleTrend() {
         <Bar isAnimationActive={false} dataKey={metric} name={label} fill="hsl(var(--primary))" radius={[4,4,0,0]} maxBarSize={32}/>
       </BarChart>
     </ResponsiveContainer></div>}
-  </WidgetShell>
+  </ChartWidgetShell>
 }
 
 // —— 月度采购趋势（report.view）——
@@ -119,7 +137,7 @@ export function ChartPurchaseTrend() {
   const { data, isLoading, error, refetch } = usePurchaseStats()
   const rows = (data?.byMonth ?? []).map(m => ({ month: m.month, 采购额: m.totalAmount, 已收货: m.receivedAmount }))
   return (
-    <WidgetShell loading={isLoading} error={error} onRetry={() => void refetch()} title="月度采购趋势" icon={ShoppingBag} tone="warning">
+    <ChartWidgetShell loading={isLoading} error={error} onRetry={() => void refetch()} title="月度采购趋势" icon={ShoppingBag} tone="warning">
       {rows.length === 0 ? <p className={EMPTY_HINT}>该区间内暂无采购</p> : (
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={rows} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
@@ -133,7 +151,7 @@ export function ChartPurchaseTrend() {
           </ComposedChart>
         </ResponsiveContainer>
       )}
-    </WidgetShell>
+    </ChartWidgetShell>
   )
 }
 
@@ -150,7 +168,7 @@ export function ChartAging() {
     : []
   const empty = rows.every(r => r.应收 === 0 && r.应付 === 0)
   return (
-    <WidgetShell loading={isLoading} error={error} onRetry={() => void refetch()} title="应收 / 应付账龄" icon={CalendarClock} tone="info">
+    <ChartWidgetShell loading={isLoading} error={error} onRetry={() => void refetch()} title="应收 / 应付账龄" icon={CalendarClock} tone="info">
       {empty ? <p className={EMPTY_HINT}>当前没有未结清账款</p> : (
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={rows} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
@@ -164,7 +182,7 @@ export function ChartAging() {
           </BarChart>
         </ResponsiveContainer>
       )}
-    </WidgetShell>
+    </ChartWidgetShell>
   )
 }
 
@@ -173,7 +191,7 @@ export function ChartCashflow() {
   const { data, isLoading, error, refetch } = useFinanceDashboard()
   const rows = (data?.monthly ?? []).map(m => ({ month: m.month, 收入: m.inAmount, 支出: m.outAmount, 净额: m.netAmount }))
   return (
-    <WidgetShell loading={isLoading} error={error} onRetry={() => void refetch()} title="月度现金流" icon={Coins} tone="primary">
+    <ChartWidgetShell loading={isLoading} error={error} onRetry={() => void refetch()} title="月度现金流" icon={Coins} tone="primary">
       {rows.length === 0 ? <p className={EMPTY_HINT}>该区间内没有资金流水</p> : (
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={rows} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
@@ -188,16 +206,23 @@ export function ChartCashflow() {
           </ComposedChart>
         </ResponsiveContainer>
       )}
-    </WidgetShell>
+    </ChartWidgetShell>
   )
 }
 
 // —— 账户余额分布（finance.account.view）——
 export function ChartAccountBalance() {
   const { data, isLoading, error, refetch } = useFinanceDashboard()
-  const accounts = data?.accounts ?? []
+  // 同上：账户数量无上界（开发库 94 个），取余额 Top 8 + 「其他」（ISSUE-010）
+  const accounts = (() => {
+    const all = [...(data?.accounts ?? [])].sort((a, b) => Number(b.balance) - Number(a.balance))
+    if (all.length <= TOP_SERIES_LIMIT) return all
+    const head = all.slice(0, TOP_SERIES_LIMIT)
+    const restBalance = all.slice(TOP_SERIES_LIMIT).reduce((sum, a) => sum + Number(a.balance), 0)
+    return [...head, { id: -1, name: `其他 ${all.length - TOP_SERIES_LIMIT} 个账户`, balance: restBalance }]
+  })()
   return (
-    <WidgetShell loading={isLoading} error={error} onRetry={() => void refetch()}
+    <ChartWidgetShell loading={isLoading} error={error} onRetry={() => void refetch()}
       title="账户余额分布" icon={PieChartIcon} tone="primary" scrollBody
       action={data ? <span className="text-xs tabular-nums text-muted-foreground">合计 {money(data.summary.totalBalance)}</span> : undefined}
     >
@@ -214,6 +239,6 @@ export function ChartAccountBalance() {
           </BarChart>
         </ResponsiveContainer></div>
       )}
-    </WidgetShell>
+    </ChartWidgetShell>
   )
 }

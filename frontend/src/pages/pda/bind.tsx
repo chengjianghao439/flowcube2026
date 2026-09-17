@@ -97,6 +97,10 @@ export default function PdaBindPage() {
       }
       setCredential(getDeviceCredential())
       setSession(created)
+      // 绑定成功后立刻清空并收起手动输入区：64 位密钥是设备身份凭据，留在屏幕上
+      // 属于旁观泄露风险（2026-09-17 验收 ISSUE-005）。
+      setManual({ code: '', secret: '' })
+      setManualOpen(false)
       ok('设备绑定成功')
     } finally {
       setBinding(false)

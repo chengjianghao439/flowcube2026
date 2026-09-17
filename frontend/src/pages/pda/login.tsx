@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { User, Lock, Eye, EyeOff, LogIn } from 'lucide-react'
+import { User, Lock, Eye, EyeOff, LogIn, CircleAlert } from 'lucide-react'
 import { useLogin } from '@/hooks/useAuth'
 import SystemBrand from '@/components/shared/SystemBrand'
 import { loadSavedLoginForm } from '@/lib/loginCredentials'
@@ -33,8 +33,14 @@ export default function PdaLoginPage() {
         <h2 className="mb-6 text-center text-xl font-bold text-foreground">操作员登录</h2>
 
         {/* 错误提示 */}
+        {/* 浅色卡片上必须用浅色主题配色：此前是给深色背景准备的 red-950/40 + red-400，
+            在白底上几乎看不清（2026-09-17 验收 ISSUE-004）。 */}
         {error && (
-          <div className="mb-5 rounded-xl border border-red-800/40 bg-red-950/40 px-4 py-3 text-sm text-red-400">
+          <div
+            role="alert"
+            className="mb-5 flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive"
+          >
+            <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
             {error.message || '登录失败，请检查账号和密码'}
           </div>
         )}

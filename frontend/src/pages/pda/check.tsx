@@ -45,6 +45,8 @@ function TaskSelectStep({
   const navigate = useNavigate()
   const { data, isLoading } = useQuery({
     queryKey: ['pda-check-tasks'],
+    // 重进列表必须立刻取最新数据（2026-09-17 验收 ISSUE-017：新派发单据长时间看不到）
+    refetchOnMount: 'always',
     queryFn: () => getTasksApi({ status: WT_STATUS.CHECKING, pageSize: 200 }),
   })
 

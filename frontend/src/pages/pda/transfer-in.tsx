@@ -71,10 +71,12 @@ export default function PdaTransferInPage() {
       return
     }
     // 第二步：扫库位
-    if (parsed.type !== 'location') { err('请扫描目标库位条码'); return }
+    // 库位交给后端按「编码或条码」解析：现场标签可能是 R000123 条码，也可能是
+    // 库位编码（如 SH-A01）。前端再用 R/LOC 前缀卡格式会把历史库位挡死
+    //（2026-09-17 验收 ISSUE-018）；归属仓与状态仍由服务端校验。
     try {
       const loc = await getLocationByCodeApi(b)
-      if (!loc?.id) { err('库位不存在'); return }
+      if (!loc?.id) { err(`库位不存在：${b}`); return }
       submitMut.mutate({ containerBarcode: pendingContainer, locationId: loc.id })
     } catch (e) {
       err((e as { message?: string })?.message ?? '库位查询失败')

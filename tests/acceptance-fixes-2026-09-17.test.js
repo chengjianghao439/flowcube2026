@@ -60,6 +60,25 @@ test('超大请求体返回 413，未知错误仍是 500', () => {
   assert.equal(unknown.body.code, 'INTERNAL_ERROR')
 })
 
+// 2026-09-17 验收 ISSUE-003 / ISSUE-016：箱贴未打印、整箱数量超计划这类 409 都带
+// 可操作的中文原因，此前被兜底成 CONFLICT，前端再映射成「状态已变化，请刷新后重试」，
+// 现场反复刷新永远无效。后端不得再给未带业务码的 AppError 编造通用码。
+test('未带业务码的 AppError 必须保留后端中文原因，不再兜底 CONFLICT', () => {
+  const errorHandler = require('../backend/src/middleware/errorHandler')
+  const AppError = require('../backend/src/utils/AppError')
+  const req = { originalUrl: '/api/warehouse-tasks/1999/pack-done', method: 'PUT', body: {}, params: { id: '1999' }, requestId: 'test-req' }
+
+  const noCode = fakeRes()
+  errorHandler(new AppError('箱贴仍待确认：箱号 L000493 尚未打印完成，请先收口打印任务', 409), req, noCode, () => {})
+  assert.equal(noCode.statusCode, 409)
+  assert.equal(noCode.body.code, null, '没有业务码时不得编造 CONFLICT')
+  assert.match(noCode.body.message, /箱贴仍待确认/, '可操作的中文原因必须原样返回')
+
+  const withCode = fakeRes()
+  errorHandler(new AppError('设备绑定仓库与调拨源仓不一致，无法扫出', 403, 'PDA_WAREHOUSE_MISMATCH'), req, withCode, () => {})
+  assert.equal(withCode.body.code, 'PDA_WAREHOUSE_MISMATCH', '显式业务码必须保留')
+})
+
 test('已废弃设置键从列表隐藏且不接受写入', () => {
   const source = read('backend/src/modules/settings/settings.service.js')
   const deprecated = ['sale_prefix', 'purchase_prefix', 'stockcheck_prefix', 'code_digits',

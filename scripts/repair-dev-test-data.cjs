@@ -51,6 +51,8 @@ const TEST_DIM_PRODUCT = `EXISTS (SELECT 1 FROM product_items p WHERE p.id = c.p
 const TEST_DIM_WAREHOUSE = `EXISTS (SELECT 1 FROM inventory_warehouses w WHERE w.id = c.warehouse_id AND (${TEST_WAREHOUSE_PATTERNS.map(() => 'w.name LIKE ?').join(' OR ')}))`
 
 const like = (patterns) => patterns.map(() => 'name LIKE ?').join(' OR ')
+/** 指定列名的 LIKE 组合（账号、设备码等不叫 name 的表） */
+const likeCol = (column, patterns) => patterns.map(() => `${column} LIKE ?`).join(' OR ')
 
 async function main() {
   const env = loadEnv()
@@ -176,6 +178,22 @@ async function main() {
     // 11) 僵尸任务清理（G-2）：真实仓里也有 7 月卡住的拣货中任务，占着分拣格与容器锁。
     //     判定：仍在执行态 1..6 且超过 30 天没有更新的任务 → 置为已取消(8)，并释放其占用。
     const STALE_DAYS = 30
+
+    // 12) 验收还发现账号与 PDA 设备列表同样被测试数据淹没（2026-09-17 验收 ISSUE-002）：
+    //     sys_users 里 smoke_*/esc_*/pc_* 提权与冒烟账号仍启用；pda_devices 里
+    //     SMOKE-PDA-*/PDA-2607*/PDA-2608* 回归机仍是启用中。按同一口径「停用不删除」，
+    //     只动明确带测试前缀的行，业务账号（admin/test01/sales01…）不受影响。
+    const TEST_USER_PATTERNS = ['smoke_%', 'esc_%', 'pc_%']
+    const TEST_DEVICE_PATTERNS = ['SMOKE-PDA-%', 'PDA-2607%', 'PDA-2608%', 'PDA-2609%', 'VERIFY-PDA-%']
+    await run('停用冒烟/提权测试账号',
+      `SELECT COUNT(*) n FROM sys_users WHERE (${likeCol('username', TEST_USER_PATTERNS)}) AND is_active = 1 AND deleted_at IS NULL`,
+      TEST_USER_PATTERNS,
+      `UPDATE sys_users SET is_active = 0 WHERE (${likeCol('username', TEST_USER_PATTERNS)}) AND is_active = 1 AND deleted_at IS NULL`)
+    await run('停用冒烟/回归 PDA 设备',
+      `SELECT COUNT(*) n FROM pda_devices WHERE (${likeCol('device_code', TEST_DEVICE_PATTERNS)}) AND status = 'active'`,
+      TEST_DEVICE_PATTERNS,
+      `UPDATE pda_devices SET status = 'disabled' WHERE (${likeCol('device_code', TEST_DEVICE_PATTERNS)}) AND status = 'active'`)
+
     await run(`停掉超 ${STALE_DAYS} 天僵尸任务`,
       `SELECT COUNT(*) n FROM warehouse_tasks t WHERE t.deleted_at IS NULL AND t.status IN (1,2,3,4,5,6)
         AND t.updated_at < DATE_SUB(NOW(), INTERVAL ${STALE_DAYS} DAY)`, [],

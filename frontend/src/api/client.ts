@@ -17,7 +17,7 @@ import {
   setApiBase,
 } from '@/config/api'
 import { getHashRouterWindowLocation } from '@/router/hashLocation'
-import { formatBackendCode, formatErrorMessage } from '@/utils/displayFormatters'
+import { resolveApiErrorMessage } from '@/utils/displayFormatters'
 import { getDeviceSession } from '@/lib/pdaDeviceBinding'
 import { ensureDeviceSession, renewDeviceSession } from './pda-session'
 
@@ -328,9 +328,8 @@ apiClient.interceptors.response.use(
       ?? (transportCode === 'ECONNABORTED' ? 'REQUEST_TIMEOUT' : null)
       ?? (transportCode === 'ERR_NETWORK' ? 'NETWORK_ERROR' : null)
       ?? null
-    const displayMessage = businessCode
-      ? formatBackendCode(businessCode, formatErrorMessage(message))
-      : formatErrorMessage(message)
+    // 通用码（CONFLICT/BUSINESS_ERROR…）不能覆盖后端中文原因，见 resolveApiErrorMessage
+    const displayMessage = resolveApiErrorMessage(businessCode, message)
     const structuredError = new ApiClientError({
       message: displayMessage,
       status,

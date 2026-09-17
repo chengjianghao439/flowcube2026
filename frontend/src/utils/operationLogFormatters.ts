@@ -135,6 +135,79 @@ export function isSensitivePath(path: unknown): boolean {
   return SENSITIVE_PATH_KEYWORDS.some(keyword => normalized.includes(keyword))
 }
 
+/**
+ * 业务接口 → 「模块 · 动作」。
+ *
+ * 操作日志列表的「操作内容」此前对绝大多数写操作只显示「系统接口访问」，管理员
+ * 要逐条点开详情才知道改了什么（2026-09-17 验收 ISSUE-014）。这里按模块前缀给出
+ * 中文描述，特殊动作（收货/上架/出库/扫码）单独命名，其余按 HTTP 方法归类。
+ */
+const BUSINESS_ENDPOINT_LABELS: Array<[RegExp, string]> = [
+  [/^\/api\/purchase-orders?(?:\/|$)/, '采购单'],
+  [/^\/api\/purchase(?:\/|$)/, '采购单'],
+  [/^\/api\/purchase-requisitions?(?:\/|$)/, '采购申请'],
+  [/^\/api\/procurement(?:\/|$)/, '采购建议'],
+  [/^\/api\/inbound-tasks?(?:\/|$)/, '收货订单'],
+  [/^\/api\/sale-orders?(?:\/|$)/, '销售单'],
+  [/^\/api\/sales?(?:\/|$)/, '销售单'],
+  [/^\/api\/returns?(?:\/|$)/, '退货单'],
+  [/^\/api\/transfer(?:\/|$)/, '调拨单'],
+  [/^\/api\/warehouse-tasks?(?:\/|$)/, '仓库任务'],
+  [/^\/api\/packages?(?:\/|$)/, '装箱'],
+  [/^\/api\/stockcheck(?:\/|$)/, '盘点单'],
+  [/^\/api\/inventory(?:\/|$)/, '库存'],
+  [/^\/api\/containers?(?:\/|$)/, '库存容器'],
+  [/^\/api\/plastic-boxes(?:\/|$)/, '塑料盒'],
+  [/^\/api\/products?(?:\/|$)/, '商品'],
+  [/^\/api\/customers?(?:\/|$)/, '客户'],
+  [/^\/api\/suppliers?(?:\/|$)/, '供应商'],
+  [/^\/api\/carriers?(?:\/|$)/, '承运商'],
+  [/^\/api\/users?(?:\/|$)/, '用户'],
+  [/^\/api\/roles?(?:\/|$)/, '角色权限'],
+  [/^\/api\/departments?(?:\/|$)/, '部门'],
+  [/^\/api\/settings?(?:\/|$)/, '系统设置'],
+  [/^\/api\/pda-devices?(?:\/|$)/, 'PDA 设备'],
+  [/^\/api\/print-jobs?(?:\/|$)/, '打印任务'],
+  [/^\/api\/printers?(?:\/|$)/, '打印机'],
+  [/^\/api\/logistics(?:\/|$)/, '物流运单'],
+  [/^\/api\/payments?(?:\/|$)/, '账款'],
+  [/^\/api\/refunds?(?:\/|$)/, '退款单'],
+  [/^\/api\/finance(?:\/|$)/, '资金'],
+  [/^\/api\/accounting(?:\/|$)/, '会计'],
+]
+
+const ACTION_SUFFIX_LABELS: Array<[RegExp, string]> = [
+  [/\/receive(?:\?|$)/, '收货登记'],
+  [/\/putaway(?:\?|$)/, '上架登记'],
+  [/\/scan-out(?:\?|$)/, '扫码出库'],
+  [/\/scan-in(?:\?|$)/, '扫码入库'],
+  [/\/pack-done(?:\?|$)/, '完成打包'],
+  [/\/ship(?:\?|$)/, '出库确认'],
+  [/\/confirm(?:\?|$)/, '确认'],
+  [/\/cancel(?:\?|$)/, '取消'],
+  [/\/submit(?:\?|$)/, '提交'],
+  [/\/void(?:\?|$)/, '作废'],
+  [/\/add-item(?:\?|$)/, '装箱上架商品'],
+  [/\/remove-item(?:\?|$)/, '移出商品'],
+  [/\/print-label(?:\?|$)/, '打印标签'],
+  [/\/items\/[^/]+\/scan(?:\?|$)/, '扫码盘点'],
+]
+
+function describeBusinessEndpoint(lowerPath: string, method?: unknown): string | null {
+  const hit = BUSINESS_ENDPOINT_LABELS.find(([pattern]) => pattern.test(lowerPath))
+  if (!hit) return null
+  const suffix = ACTION_SUFFIX_LABELS.find(([pattern]) => pattern.test(lowerPath))
+  if (suffix) return `${hit[1]} · ${suffix[1]}`
+  switch (String(method || '').toUpperCase()) {
+    case 'POST': return `${hit[1]} · 新增/提交`
+    case 'PUT':
+    case 'PATCH': return `${hit[1]} · 修改`
+    case 'DELETE': return `${hit[1]} · 删除`
+    case 'GET': return `${hit[1]} · 查询`
+    default: return hit[1]
+  }
+}
+
 export function formatApiPath(path: unknown, method?: unknown, statusCode?: unknown): string {
   const normalized = normalizePath(path)
   const lower = normalized.toLowerCase()
@@ -151,7 +224,12 @@ export function formatApiPath(path: unknown, method?: unknown, statusCode?: unkn
   if (/\/api\/warehouse-tasks\/[^/]+\/check-done(?:\?|$)/.test(lower)) return '仓库任务完成复核'
   if (/\/api\/warehouse-tasks\/[^/]+\/sort-done(?:\?|$)/.test(lower)) return '仓库任务完成分拣'
   if (lower === '/api/pda/sessions' || lower.startsWith('/api/pda/sessions/')) return 'PDA 设备会话'
-  if (lower.startsWith('/api')) return '系统接口访问'
+  // 未单列映射的业务接口：按模块给出「模块名 + 动作」，比笼统的「系统接口访问」
+  // 有用得多（2026-09-17 验收 ISSUE-014：操作日志整列都是同一句话，无法一眼看出改了
+  // 什么，只能逐条点开详情）。非业务接口保留方法 + 路径，便于排障。
+  const business = describeBusinessEndpoint(lower, method)
+  if (business) return business
+  if (lower.startsWith('/api')) return `${String(method || 'GET').toUpperCase()} ${normalized}`
 
   const methodLabel = formatHttpMethod(method)
   const resultLabel = formatStatusCode(statusCode)

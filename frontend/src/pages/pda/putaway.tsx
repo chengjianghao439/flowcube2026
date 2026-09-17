@@ -102,6 +102,23 @@ function PutawayRunner({ taskId }: { taskId: number }) {
         />
         <PdaFlowSteps steps={flowDef.steps} currentId={engine.stepId} />
         <p className="text-xs text-muted-foreground mt-2">{engine.currentStep.label}</p>
+        {/*
+          偏离推荐库位需要「同一库位连扫两次」确认，此前只弹一条一闪而过的提示，
+          现场很容易当成扫了没反应（2026-09-17 验收 ISSUE-014）。这里把待确认状态
+          常驻显示，直到再扫一次或改扫推荐库位。
+        */}
+        {engine.context.deviationArmedCode ? (
+          <div className="mt-3 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+            <p className="font-semibold">与推荐库位不同，需要再扫一次确认</p>
+            <p className="mt-1">
+              已扫库位 <span className="font-mono">{engine.context.deviationArmedCode}</span>
+              {engine.context.suggestedLocations?.[0]?.locationCode
+                ? <>，建议库位 <span className="font-mono">{engine.context.suggestedLocations[0].locationCode}</span></>
+                : null}
+              。确认放到该库位请再扫一次同一库位条码；改放建议库位则直接扫建议库位条码。
+            </p>
+          </div>
+        ) : null}
       </div>
 
       <div className="flex-1" />

@@ -155,6 +155,21 @@ export function AppToast() {
   const addToast = useCallback((type: ToastType, message: string, duration = 3000) => {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`
     setToasts(prev => {
+      // 同一句话（同类型）在 5 秒内重复触发时不再叠加：未绑定设备 / 网络断开这类
+      // 场景会被多个并发请求各弹一条完全相同的红条，堆在右上角挡视野
+      //（2026-09-17 验收 ISSUE-006）。
+      const now = Date.now()
+      const dup = prev.find(t =>
+        t.type === type
+        && t.message === message
+        && t.open
+        && now - Number(t.id.split('-')[0]) < 5000,
+      )
+      if (dup) {
+        // 保留原条目、只把它挪到末尾并按需延长停留时间，避免 key 变化导致重新挂载
+        const rest = prev.filter(t => t.id !== dup.id)
+        return [...rest, { ...dup, duration: Math.max(dup.duration, duration) }]
+      }
       const next = [...prev, { id, type, message, duration, open: true }]
       return next.length > MAX_TOASTS ? next.slice(next.length - MAX_TOASTS) : next
     })

@@ -21,6 +21,8 @@ export interface Package {
   remark: string | null
   createdAt: string
   items: PackageItem[]
+  /** 箱贴（L 条码）打印状态；未生成打印任务时为 no_job。完成打包要求 success */
+  printStatus?: { key: string; label: string; errorMessage?: string | null }
 }
 
 export const getPackagesApi = (taskId: number) =>

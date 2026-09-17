@@ -2,6 +2,7 @@ import type { LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { TONE_ICON, type WidgetTone } from './tokens'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
+import { useSectionActive } from '@/components/layout/SectionVisibilityContext'
 
 /**
  * 图表/列表类小组件的统一外框：圆角语义色图标底座 + 标题 + 可选右上角操作 + 内容区。
@@ -45,5 +46,23 @@ export function WidgetShell({
         ) : children}
       </div>
     </div>
+  )
+}
+
+/**
+ * 图表小组件专用外壳：在不可见的标签页（keep-alive 用 display:none 隐藏）里，
+ * 图表容器尺寸为 0，Recharts 会持续打印 `width(-1) and height(-1) ... should be
+ * greater than 0` 的警告，并先渲染出一张空图（2026-09-17 验收 ISSUE-011）。
+ *
+ * 这里让图表在所在标签真正可见时才挂载；切回标签时 SectionVisibilityContext
+ * 变化会立即触发渲染，所以不会影响正常查看。文字/交互类小组件仍用 WidgetShell，
+ * 避免它们在切换标签时丢掉本地状态（番茄钟、喝水提醒等）。
+ */
+export function ChartWidgetShell(props: React.ComponentProps<typeof WidgetShell>) {
+  const active = useSectionActive()
+  return (
+    <WidgetShell {...props}>
+      {active ? props.children : <div className="h-full min-h-40" aria-hidden />}
+    </WidgetShell>
   )
 }

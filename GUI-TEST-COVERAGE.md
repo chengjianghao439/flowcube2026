@@ -1,158 +1,74 @@
-# GUI 真人操作式验收 · 覆盖表（2026-09-17）
+# 极序 Flow 全系统 Computer Use 验收 — 覆盖记录
 
-方式：agent-browser 独立会话 `flowcube-gui-0917` 打开真实运行的 ERP（5173）与 PDA（5174），
-逐页真实渲染、截图、读取可见文本与可交互元素；功能项以真实点击/输入/提交为准。
-后台（API/DB/代码/日志）只用于调查与取证，不作 PASS 依据。
+任务：以真实用户界面（屏幕 + 鼠标 + 键盘）对极序 Flow 做深度验收，持续维护本文件与 `GUI-TEST-ISSUES.md`。
 
-状态含义：
-- **GUI VERIFIED**：本次真实操作过该功能并观察到预期结果。
-- **PARTIAL**：页面真实打开并观察过，但核心操作未实际执行（或只执行了部分）。
-- **FAILED**：真实操作后结果不符合预期。
-- **NOT TESTED**：未在 GUI 中打开或未操作。
-- **NOT VERIFIED**：需要真实硬件/外部系统，无法在本环境验证。
+状态口径（只有前三种来自真实 GUI 操作）：
 
-## A. 页面打开与视觉观察（阶段 1：72 个 ERP 路由全部真实打开）
+- `COMPUTER-USE VERIFIED` — 真正通过屏幕/鼠标/键盘操作完成，并看到成功结果
+- `FAILED` — GUI 操作失败 / 报错 / 卡住
+- `PARTIAL` — 只做了部分验证（只读打开、业务链未闭环、条件不具备）
+- `NOT TESTED` / `NOT VERIFIABLE` — 未测 / 环境不具备
 
-| 模块 | 页面 | 路由 | GUI 打开 | 观察结果 | 功能操作 |
-|---|---|---|---|---|---|
-| 概览 | 仪表盘 | /dashboard | ✅ | 4 张摘要卡 + 待办 + 趋势，真实数据 | PARTIAL |
-| 采购 | 采购订单 | /purchase | ✅ | 列表默认最近 7 天，含"逾期未到"入口 | PARTIAL |
-| 采购 | 采购申请 | /purchase-requisitions | ✅ | 26 行真实数据 | PARTIAL |
-| 采购 | 采购建议 | /procurement | ✅ | 计划/补货两视图 + 27 行 | PARTIAL |
-| 采购 | 收货订单 | /inbound-tasks | ✅ | 状态分类齐全，4 行 | PARTIAL |
-| 采购 | 采购退货 | /returns/purchase | ✅ | 5 行，含金额列 | PARTIAL |
-| 采购 | 供应商管理 | /suppliers | ✅ | 33 行，导入/导出/新增可见 | PARTIAL |
-| 销售 | 销售管理 | /sale | ✅ | 15 行，状态分类与导出可见 | GUI VERIFIED（建单/占库/出库/取消全流程，见 C 节） |
-| 销售 | 销售退货 | /returns/sale | ✅ | 16 行 | PARTIAL |
-| 销售 | 超额放行申请 | /credit-overrides | ✅ | 41 行，审批状态可见 | PARTIAL |
-| 销售 | 物流运单 | /logistics | ✅ | 42 行 | PARTIAL |
-| 销售 | 客户管理 | /customers | ✅ | 116 行（含大量测试客户） | PARTIAL |
-| 销售 | 客户对账门户 | /portal/statements | ✅ | 真实渲染 | PARTIAL |
-| 销售 | 供应商到货门户 | /portal/purchase-status | ✅ | 真实渲染 | PARTIAL |
-| 销售 | 承运商管理 | /carriers | ✅ | 119 行 | PARTIAL |
-| 销售 | 快递账号绑定 | /carrier-accounts | ✅ | 真实渲染 | PARTIAL |
-| 库存 | 库存管理 | /inventory | ✅ | 总览 + 出入库记录页签 | PARTIAL |
-| 库存 | 塑料盒管理 | /plastic-boxes | ✅ | 661 行（测试数据占多数） | PARTIAL |
-| 库存 | 批次追溯 | /inventory/trace | ✅ | 扫码追溯空态文案正确 | PARTIAL |
-| 库存 | 库存盘点 | /stockcheck | ✅ | 931 行，含系统自动排程单 | PARTIAL |
-| 库存 | 商品分档与分批盘规则 | /stockcheck/abc | ✅ | 需先选仓库，空态有引导 | PARTIAL |
-| 库存 | 滞销库存处理 | /disposals | ✅ | 993 行 | PARTIAL |
-| 库存 | 库存调拨 | /transfer | ✅ | 默认 7 天无数据，空态正确 | PARTIAL |
-| 商品 | 商品管理 | /products | ✅ | 16 行，启用状态列 | PARTIAL |
-| 商品 | 商品分类 | /categories | ✅ | 4 级分类，共 5 个 | PARTIAL |
-| 商品 | 商品改价申请 | /price-change | ✅ | 5 行，含"待审批" | PARTIAL |
-| 商品 | 批次拣货 | /picking-waves | ✅ | 1 行 | PARTIAL |
-| 仓储 | 仓库管理 | /warehouses | ✅ | 251 行（248 个测试仓，见问题 G-1） | PARTIAL |
-| 仓储 | 库位管理 | /locations | ✅ | 208 行 | PARTIAL |
-| 仓储 | 货架管理 | /racks | ✅ | 1 行 | PARTIAL |
-| 仓储 | 分拣格管理 | /sorting-bins | ✅ | 3 格全部"占用"（见问题 G-2） | PARTIAL |
-| 财务 | 现结供应商账款 | /payments/payable | ✅ | 69 行 | PARTIAL |
-| 财务 | 现结客户账款 | /payments/receivable | ✅ | 611 行 | PARTIAL |
-| 财务 | 月结供应商对账 | /reports/reconciliation/payable | ✅ | 空态文案正确 | PARTIAL |
-| 财务 | 月结客户对账 | /reports/reconciliation/receivable | ✅ | 空态文案正确 | PARTIAL |
-| 财务 | 运费对账 | /logistics/freight-reconciliation | ✅ | 2 行 | PARTIAL |
-| 财务 | 资金看板 | /finance/dashboard | ✅ | 94 个启用账户、余额合计真实 | PARTIAL |
-| 财务 | 账户管理 | /finance/accounts | ✅ | 94 行 | PARTIAL |
-| 财务 | 资金流水 | /finance/transactions | ✅ | 空态"共 0 笔" | PARTIAL |
-| 财务 | 费用报销 | /finance/expenses | ✅ | 空态"共 0 张" | PARTIAL |
-| 财务 | 费用类别 | /finance/expense-categories | ✅ | 7 行 | PARTIAL |
-| 财务 | 退货退款单 | /refunds | ✅ | 22 行 | PARTIAL |
-| 会计 | 会计科目表 | /accounting/accounts | ✅ | 31 个科目，分 5 类 | PARTIAL |
-| 会计 | 记账凭证 | /accounting/vouchers | ✅ | 1202 张，3 处"有差异"标记（见问题 G-3） | PARTIAL |
-| 会计 | 总账/试算平衡 | /accounting/ledger | ✅ | 借贷各 68,110.00 平衡 | PARTIAL |
-| 会计 | 会计报表 | /accounting/reports | ✅ | 利润表/资产负债表可切换 | PARTIAL |
-| 会计 | 发票管理 | /accounting/invoices | ✅ | 空态 | PARTIAL |
-| 会计 | 会计期间/期末结转 | /accounting/periods | ✅ | 3 行，未结账 | PARTIAL |
-| 会计 | 固定资产 | /accounting/fixed-assets | ✅ | 空态 | PARTIAL |
-| 会计 | 合并报表/账套 | /accounting/consolidation | ✅ | 12 行，多账套 | PARTIAL |
-| 会计 | 报税数据 | /accounting/tax | ✅ | 申报期间选择 | PARTIAL |
-| 报表 | 报表中心 | /reports | ✅ | 三类统计总览 | PARTIAL |
-| 报表 | 销售毛利 | /reports/profit-analysis | ✅ | 毛利 -1,484.08（测试数据） | PARTIAL |
-| 报表 | 成本对账 | /reports/avg-cost-reconciliation | ✅ | "一致 · 200 行" | PARTIAL |
-| 报表 | 经营 KPI | /reports/kpi | ✅ | 环比口径说明清晰 | PARTIAL |
-| 报表 | 采购建议 | /reports/replenishment | ✅ | 5 行 | PARTIAL |
-| 报表 | 存放时长与滞销 | /reports/inventory-aging | ✅ | 1768 行 | PARTIAL |
-| 报表 | 仓库运营 | /reports/warehouse-ops | ✅ | 拣货中 903（僵尸任务的可视表现） | PARTIAL |
-| 报表 | 批次效率 | /reports/wave-performance | ✅ | 空态 | PARTIAL |
-| 报表 | PDA 异常分析 | /reports/pda-anomaly | ✅ | 扫码 1 次、错误 0 | PARTIAL |
-| 报表 | 待办中心 | /reports/role-workbench | ✅ | 可见 4159 个按钮（见问题 G-4） | PARTIAL |
-| 系统 | 打印模板 | /settings/print-templates | ✅ | 9 个模板 | PARTIAL |
-| 系统 | 打印机管理 | /settings/printers | ✅ | 6 行，含桌面端提示 | PARTIAL |
-| 系统 | 条码打印查询 | /settings/barcode-print-query | ✅ | 102 行，三类条码页签 | PARTIAL |
-| 系统 | 待我审批 | /approvals/pending | ✅ | 空态 | PARTIAL |
-| 系统 | 审批流配置 | /approvals/flows | ✅ | 空态 | PARTIAL |
-| 系统 | 部门管理 | /departments | ✅ | 空态 | PARTIAL |
-| 系统 | 用户管理 | /users | ✅ | 35 行 | PARTIAL |
-| 系统 | 权限管理 | /permissions | ✅ | 明确提示"管理员角色权限固定不可修改" | PARTIAL |
-| 系统 | PDA 设备 | /settings/pda-devices | ✅ | 76 行，含绑定说明 | PARTIAL |
-| 系统 | 系统设置 | /settings | ✅ | 33 个输入项；已实测保存成功（见 C 节） | GUI VERIFIED（保存） |
-| 系统 | 操作日志 | /oplogs | ✅ | 120 行 | PARTIAL |
+环境：
 
-## B. PDA 页面（5174）
+- ERP 本地开发 `http://localhost:5173`（后端 `:3000`，MySQL 8 开发库 3307，`flowcube_dev8`）
+- PDA 本地开发 `http://localhost:5174`
+- 桌面端 Electron（视环境）
+- 生产 `https://jixuflow.com` 只做**只读**观察，不在生产写入测试数据
 
-| 页面 | 路由 | GUI 打开 | 操作 |
-|---|---|---|---|
-| PDA 登录 | /pda/login | ✅ | GUI VERIFIED（真实登录） |
-| 作业台 | /pda | ✅ | GUI VERIFIED（工位卡片、待办计数） |
-| 设备绑定 | /pda/bind | ✅ | GUI VERIFIED（手动输入设备码+密钥绑定成功；显示"所属仓库 北京主仓"） |
-| 拣货任务列表 | /pda/picking | ✅ | GUI VERIFIED（207 个 SKU 列表） |
-| 扫码拣货 | /pda/task/:id | ✅ | GUI VERIFIED（扫容器条码 I000214 → 拣货完成 → 任务进入待分拣） |
-| 分拣作业 | /pda/sort | ✅ | PARTIAL（Put Wall 无空闲格，无法继续） |
-| 复核 / 打包 / 出库 | /pda/check /pack /ship | ✅ 列表页打开 | NOT TESTED（被分拣格占用阻断） |
-| 收货 / 上架 / 盘点 / 调拨 / 退货 / 改单确认 | /pda/{inbound,putaway,stockcheck,transfer,cancel-return,adjustments} | NOT TESTED | 未操作 |
+账号：本地开发库管理员（用户 Chrome 已有登录会话）。测试数据在本地开发库创建，属于可丢弃数据。
 
-## C. 完整业务流程（GUI 操作）
+## 覆盖明细
 
-| 流程 | 步骤 | 结果 | 数据核对 |
-|---|---|---|---|
-| 销售建单→占库→出库→取消 | 新建销售单（选客户/仓库/商品/数量）→ 保存 → 占库 → 发起出库 → 取消订单 | GUI VERIFIED（同会话更早一轮完整跑通；本轮复测在仓库下拉处被工具限制卡住，见 F 节） | 取消后明细 reserved/dispatched 归零、预占释放、任务取消（同事务） |
-| 销售表单校验 | 空表单点"保存草稿" | GUI VERIFIED | 页面提示"还有 3 处需要处理，点击可定位：请选择客户／请选择仓库／请添加至少一条商品明细" |
-| 商品选择 | 打开"添加商品"→搜索 SKU0001→选中→确认 | GUI VERIFIED | 明细行出现，数量/单价可编辑，金额自动计算 |
-| 系统设置保存 | 改/保存系统设置 | GUI VERIFIED | `PUT /api/settings` 200，废弃键不再出现在页面 |
-| PDA 设备绑定→拣货 | 手动绑定 → 拣货扫容器条码 | GUI VERIFIED | 任务 2→3、容器锁定到任务、库存缓存不变 |
-| 采购建单→提交（阶段 2） | 新建采购单：选供应商→选仓库→添加商品→改数量/单价→保存草稿→详情页点"提交"→确认弹窗 | GUI VERIFIED | 生成 PC20260917002（成都西部原材料公司 / 北京主仓 / ¥150.00 / 已提交 / 验收临时账号）；列表按单号核对一致 |
-| 采购提交后的收货衔接（阶段 2） | 提交后在"收货订单"列表按该采购单号查找 | GUI VERIFIED（结果为空） | 1,948 行收货订单中 0 行关联该采购单 → **提交采购单不会自动生成收货单** |
-| 会计对账卡（阶段 2） | 打开记账凭证页读取三张对账卡 | GUI VERIFIED（发现异常） | 资金 凭证 88,590.00 / 业务 162,075.00（差 -73,485.00）；应付 85,284.00 / 116,476.00（差 -31,192.00）；应收 4,310.00 / 46,510.00（差 -42,200.00） |
-| 多角色：只读账号（阶段 3） | 以 `codex_ui_test`（只读查看，40 权限）登录，逐个直访业务页 | GUI VERIFIED（发现 G-10） | `/settings`、`/users` 正确 403 页；`/sale/new`、`/purchase/new`、`/transfer/new`、`/stockcheck`、`/products`、`/customers`、`/warehouses` **正常渲染完整写操作界面**（保存草稿 / 新增 / 编辑 / 批量导入） |
-| 只读账号尝试写（阶段 3） | 在 `/customers` 打开"新增客户"、填名称、点"保存" | PARTIAL | 弹窗正常打开、表单可填；提交后**数据库无新客户**（后端拒绝）；但本次未在界面上观察到明确失败提示（程序化点击可能未命中，需下一阶段用真实点击复测） |
-| 收货订单建单（阶段 4） | 收货订单 → 新建 → 选择供应商（真实点击）→ 选择商品 | GUI VERIFIED（建单未完成） | "选择收货商品"弹窗直接列出刚提交的采购单 `PC20260917002` 的待收明细（含订单数量/已收/未收/单价/本次数量），说明收货单是从采购单挑行发起，入口可用 |
-| 收货订单建单（阶段 5 复核） | 重新登录 → 选供应商（真实点击）→ 打开"选择收货商品" | PARTIAL | 弹窗稳定重现：`PC20260917002 / SKU0001 / 北京主仓 / 订单 3 / 已收 0 / 未收 3 / 单价 50.00 / 已选 0 项`，带"确定"按钮；本阶段未完成勾行与提交，留待阶段 6 |
-| 收货订单建单→提交到 PDA（阶段 6） | 选供应商 → 选择商品（填本次收货数量 3 → 确定）→ 创建收货订单 → 详情页"提交到 PDA" | GUI VERIFIED（据此更正一处口述） | 生成 `IN20260917001`（草稿 → 点"提交到 PDA"后页面显示**已提交**）并带出 PC20260917002 的未收行；**核对更正**：此时数据库里该收货单 `status=1`、**容器 0 个**——按设计容器在 PDA 实际收货扫码时才创建，所以"打印"只是详情页动作入口，不能据此说"容器标签已入队打印"（上一轮我的口述有夸大，已更正） |
-| PDA 收货执行（阶段 7） | PDA 绑定设备（手动输入设备码+密钥成功）→ 收货订单列表 → 开始收货 → 填本次收货数量 3 → 点"打印并登记" | GUI VERIFIED | 页面提示"本单已全部收货，请前往「扫码上架」"；数据库核对：生成待上架容器 `I005335`（status=4 待上架、余量 3、归属该收货单）——与设计一致（待上架不计 ACTIVE 实物） |
-| PDA 收货列表显示（阶段 7） | 观察 IN20260917001 在 PDA 收货列表的展示 | **FAILED（显示缺陷）** | 列表显示"`0 种商品`"，但同一单据在收货执行页显示"待收商品 **1** 个待收 SKU"，数据库 `inbound_task_items` 也确有 1 条明细 → **列表页商品种类数显示为 0，是错误显示** |
-| PDA 扫码上架（阶段 7） | 打开 /pda/putaway/1982，尝试扫描容器条码 `I005335` + 货位 `R396842` | NOT VERIFIED — REAL HARDWARE | 该页面在浏览器里**没有任何 input 元素**（DOM 查询为空），键盘输入与 Enter 均无效；扫码组件依赖原生相机/扫码枪 → 必须在真机验证，不能算通过 |
-| 盘点建单（阶段 8） | 库存盘点 → 点"+ 新建盘点" → 打开"新建盘点单"对话框 | PARTIAL | 对话框正常打开（含"选择仓库*（请选择）/ 盘点类型（全盘）/ 备注 / 取消 / 创建盘点"）；点"创建盘点"被校验拦住（未选仓库），**未创建成功**；仓库下拉同样被 248 个测试仓淹没（G-1 的同一根因） |
-| 盘点建单（阶段 9 重做） | 选仓库（程序化 pointer 事件）→ 全盘 → 创建盘点 | GUI VERIFIED | 列表新增 `SC20260917002｜北京主仓｜全盘｜进行中｜验收临时账号｜2026-09-17 20:11` |
-| 盘点填写与提交（阶段 9） | 点"查看/填写"→ 填"测试商品1实盘数量=1"→ 滚动后点"保存实盘数"→ 点"提交盘点" | PARTIAL（未提交成功，**发现高风险设计**） | 填写视图字段齐全（账面数量/实盘数量/差异/刷新账面）、动作按钮为"保存实盘数 / 提交盘点 / 取消盘点"；但**提交未生效**（单据仍 `status=1` 进行中）。核对数据发现：全盘单自动展开 **1,554 行**，其中 **1,553 行 `actual_qty=0`、全部 1,554 行 `diff_qty≠0`** —— 未填写行被当成"实盘 0"参与差异计算，一旦提交就会把未盘点商品的库存按 -账面量 调整 |
+| # | 模块 | 页面/入口 | 实际 Computer Use 操作 | 结果 | 关联问题 | 状态 |
+|---|---|---|---|---|---|---|
+| 1 | 仪表盘 | `/dashboard` | 打开、逐卡浏览（待处理销售/需要关注/低库存/趋势/资金/番茄钟等）：视觉检查、数据合理性检查 | 页面正常渲染，卡片与数据齐全 | ISSUE-010（图表条数未上限，本地 253 仓时几乎不可读） | COMPUTER-USE VERIFIED |
+| 2 | 销售 | `/sale` 列表 | 打开、浏览状态分类、表格与操作列 | 正常 | — | COMPUTER-USE VERIFIED |
+| 3 | 销售 | `/sale` → 占用库存弹窗 | 点「占库」→ 核对商品身份/仓库/数量/ATP（现货 100、占后剩余 98）→ 确认占用 | 成功：toast「库存已占用」，状态 草稿→已占库，操作列变为「核对发货」 | — | COMPUTER-USE VERIFIED |
+| 4 | 销售 | `/sale/3260` 详情 | 点「核对发货」→ 打开详情页；浏览订单摘要/基础信息/商品明细/订单汇总 | 正常，视觉与信息层级清晰 | — | COMPUTER-USE VERIFIED |
+| 5 | 销售 | `/sale/3260` 发起出库 | 点「发起出库」→ 勾明细/数量 2 → 确认 | 成功：toast「已发起出库」，状态 已占库→拣货中，生成仓库任务 WT20260917004，已发/应发 0/2 | — | COMPUTER-USE VERIFIED |
+| 6 | 销售 | `/sale/3260` 作业进度 | 切到作业进度页签 | 显示 WT20260917004 + 六步状态条（拣货中●→待分拣○→…→已出库○）；取货数量 0 | — | COMPUTER-USE VERIFIED |
+| 7 | 系统 | `/users` 用户管理 | 打开、浏览 35→36 个账号、新增账号 `cua_pda_test`（仓库管理员，图形界面填表保存） | 成功，列表出现新账号 | ISSUE-002（列表被 smoke_* 测试账号污染） | COMPUTER-USE VERIFIED |
+| 8 | 系统 | `/settings/pda-devices` | 登记新设备「CUA键盘验收机0917」→ 选北京主仓 → 生成设备码 `PDA-260917-ADB9` 与密钥（二维码） | 成功 | — | COMPUTER-USE VERIFIED |
+| 9 | PDA | `/pda/login` | 输入账号密码登录（真实登录页） | 首次因记住的旧账号 `admin` 拼接失败，清空后登录成功 | ISSUE-004 | COMPUTER-USE VERIFIED |
+| 10 | PDA | `/pda` 工作台 | 未绑定设备受限模式 → 绑定后正常；浏览待办与 14 项可用作业 | 受限模式引导正确；绑定后全部作业入口可用 | ISSUE-005、ISSUE-006 | COMPUTER-USE VERIFIED |
+| 11 | PDA | `/pda/bind` | 手动输入设备码+密钥 → 绑定成功（设备码/仓库/票据状态 有效） | 成功 | ISSUE-005 | COMPUTER-USE VERIFIED |
+| 12 | PDA | `/pda/picking` 拣货任务 | 切换「商品列表/订单列表」，刷新 | 两个视图数据自相矛盾：订单列表 0 个任务，商品列表仍显示 1 个 SKU 0/2 待拣 | ISSUE-001 | FAILED |
+| 13 | PDA | `/pda/task/1999` 扫码拣货 | 进页面（默认扫码模式无输入框）→ 点「手动输入」→ 输入容器 `I005336` → 提交 | 成功：拣货完成，任务进入待分拣；**本次修复的“默认扫码、点击才出键盘”行为在真机流程中确认生效** | — | COMPUTER-USE VERIFIED |
+| 14 | PDA | `/pda/sort` 订单分拣 | 扫码枪输入产品编码 `SKU0001` → 显示指定分拣格 A01 → 扫分拣格 `A01` 确认 | 成功：toast「分拣已成功，任务状态已更新为待复核」 | — | COMPUTER-USE VERIFIED |
+| 15 | PDA | `/pda/check/1999` 复核 | 扫容器 `I005336` | 成功：复核完成，任务进入待打包 | — | COMPUTER-USE VERIFIED |
+| 16 | PDA | `/pda/pack/1999` 打包 | 新建箱子 L000493 → 扫 `SKU0001`×2 装箱 → 完成此箱 → 点「完成打包并进入待出库」 | 装箱成功；**完成打包持续失败**，任务卡在待打包 | ISSUE-003（P1） | FAILED |
+| 17 | 采购 | `/purchase/new` 新建采购单 | 图形界面选供应商（深圳华芯）、入库仓（北京主仓）、添加商品 SKU0001×5、保存草稿、提交并确认 | 成功：PC20260917003 草稿→已提交 | — | COMPUTER-USE VERIFIED |
+| 18 | 采购 | `/inbound-tasks/new` 新建收货订单 | 选供应商 → 选择商品（本次收货数量 5）→ 创建收货订单 → 提交到 PDA | 成功：IN20260917002 创建并提交到 PDA | — | COMPUTER-USE VERIFIED |
+| 19 | PDA | `/pda/inbound` 收货订单 | 打开待处理任务 → 开始收货 → 逐箱填 5 → 打印并登记 | 成功：本单已全部收货，生成容器 I005338，任务→待上架 | — | COMPUTER-USE VERIFIED |
+| 20 | PDA | `/pda/putaway/1983` 扫码上架 | 扫容器 `I005338` → 扫库位 `R396842`（首次提示偏离推荐库位，再扫一次确认） | 成功：该订单上架已完成；容器转 ACTIVE 并落到库位 | ISSUE-015 | COMPUTER-USE VERIFIED |
+| 21 | 数据一致性 | 开发库只读核对 | 核对容器/库存缓存/预占/任务 | 容器 I005338 剩余 5 且 status=1、location=1；`inventory_stock` 105 = 容器合计 105；预占 2 = 销售单 3260；拣货容器 I005336 被 `locked_by_task_id=1999` 锁定（出库时才扣减） | — | 后台辅助验证 |
+| 22 | 库存 | `/inventory` | 打开库存总览（KPI 商品 1,658 / 在库 155 / 已预占 2 / 可用 153） | 正常，与预占数据一致 | — | COMPUTER-USE VERIFIED |
+| 23 | 库存 | `/plastic-boxes` | 新建塑料盒（绑定 SKU0001、北京主仓） | 成功：B000564 创建，数量 0，状态在库；末列操作被裁切 | ISSUE-013 | COMPUTER-USE VERIFIED |
+| 24 | 库存 | `/inventory/trace`、`/stockcheck`、`/stockcheck/abc`、`/disposals`、`/transfer`、`/products`、`/categories`、`/price-change` | 逐页打开、读取页面标题/表格/错误文案 | 均正常渲染无报错；盘点单 SC20260917005 为 0 明细的空单 | ISSUE-009 | COMPUTER-USE VERIFIED |
+| 25 | 仓储 | `/picking-waves`、`/warehouses`、`/locations` | 逐页打开 | 正常（仓库 251 行、库位 208 行，测试数据污染） | ISSUE-002 | COMPUTER-USE VERIFIED |
+| 26 | 财务 | `/payments/receivable`、`/reports/reconciliation/payable`、`/reports/reconciliation/receivable`、`/logistics/freight-reconciliation`、`/finance/dashboard`、`/finance/accounts`、`/finance/transactions`、`/finance/expenses`、`/finance/expense-categories`、`/refunds` | 逐页打开并读取关键内容 | 均正常渲染 | — | COMPUTER-USE VERIFIED |
+| 27 | 会计 | `/accounting/accounts`、`/vouchers`、`/ledger`、`/reports`、`/invoices`、`/periods`、`/fixed-assets`、`/consolidation`、`/tax` | 逐页打开 | 均正常渲染（凭证/总账/报表有数据） | — | COMPUTER-USE VERIFIED |
+| 28 | 报表 | `/reports`、`/profit-analysis`、`/kpi`、`/avg-cost-reconciliation`、`/replenishment`、`/inventory-aging`、`/warehouse-ops`、`/wave-performance`、`/pda-anomaly` | 逐页打开 | 均正常渲染 | — | COMPUTER-USE VERIFIED |
+| 29 | 审批 | `/reports/role-workbench`、`/approvals/pending`、`/approvals/flows` | 逐页打开 | 正常（待办中心有履约待办入口） | — | COMPUTER-USE VERIFIED |
+| 30 | 基础资料/门户 | `/customers`、`/carriers`、`/carrier-accounts`、`/suppliers`、`/departments`、`/portal/statements`、`/portal/purchase-status` | 逐页打开 | 正常（客户 74 行含测试数据） | ISSUE-002 | COMPUTER-USE VERIFIED |
+| 31 | 系统 | `/users`、`/permissions`、`/settings`、`/oplogs`、`/settings/print-templates`、`/settings/printers` | 逐页打开；操作日志点开「详情」核对审计内容 | 正常；日志详情含原始接口路径/状态码/操作人 | ISSUE-014 | COMPUTER-USE VERIFIED |
+| 32 | PDA 其余 | `/pda/inventory-query`、`/pda/transfer`、`/pda/sale-return`、`/pda/cancel-return`、`/pda/adjustments`、`/pda/ship` | 逐页打开并读取空态文案 | 均正常渲染，空态提示清晰 | — | PARTIAL（只读打开，未跑完整业务链） |
+| 33 | 桌面端 | `npm --prefix desktop start` | 启动 Electron 客户端（0.9.19 / commit 9b428c5），观察日志与进程 | 进程正常启动、无报错；**电脑操作工具无法挂到该窗口**（getApp("Electron") 只会唤起并连到默认 Electron 窗口），未能进行真实 GUI 操作 | — | NOT VERIFIABLE |
+| 34 | 生产只读 | `https://jixuflow.com/#/dashboard` | 只读浏览仪表盘全部卡片 + 控制台检查（未做任何写操作） | 正常：v0.9.17、待处理销售 3、逾期应收 ¥358.43、库存 9,971、待办 6（待出库 1 / 待上架 5） | ISSUE-011 | PARTIAL（只读） |
+| 35 | 库存调拨 | `/transfer/new` + `/transfer/260,261` | 图形界面新建两张调拨单（北京主仓→上海分仓，SKU0001 计划 1 与计划 5）→ 保存草稿 → 派发 | 两张均成功派发为「待出库」 | — | COMPUTER-USE VERIFIED |
+| 36 | PDA 调拨 | `/pda/transfer` + `/pda/transfer-out/261` | 打开列表（首次显示 0，刷新后 2）→ 扫描 `I005336`（被其他任务锁定）→ 扫描 `I005338`（数量 5 = 计划 5） | 锁定容器与"整箱数量>计划"两种失败都被显示成「状态已变化，请刷新后重试」；计划 5 的调出成功（已出库 5，订单转在途） | ISSUE-003、ISSUE-016、ISSUE-017 | PARTIAL（调出成功、调入未完成） |
+| 37 | PDA 调拨调入 | `/pda/transfer-in/261` | 扫在途容器 `I005338` → 扫目标库位 `SH-A01`（上海分仓唯一库位） | 容器扫描通过并进入第二步；库位因格式不符被前端拒绝「请扫描目标库位条码」，调入未完成 | ISSUE-018 | FAILED（环境/数据限制） |
+| 38 | 数据一致性 | 调拨只读核对 | 核对订单/明细/容器/库存/流水 | 全部自洽：订单 261 status=3 在途、明细 deducted=5、容器 6113 迁到仓 11 且 status=4 待上架、调出仓库存 105→100（`inventory_logs` move_type=4）、在途不计入调入仓可用 | — | 后台辅助验证 |
+| 39 | 补齐页面 | `/purchase-requisitions`、`/procurement`、`/returns/sale`、`/credit-overrides`、`/logistics`、PDA `/pda/split` | 逐页打开、读取标题/表格/空态/错误文案 | 全部正常渲染，无加载错误 | — | COMPUTER-USE VERIFIED |
 
-## F. 工具限制与待办（诚实登记）
+## 覆盖小结（Completion Audit）
 
-| 事项 | 说明 |
-|---|---|
-| Radix 下拉的"真实点击" | agent-browser 对该表单的仓库下拉真实点击被 sticky 元素判定为"被遮挡"，我改用注入 pointer 事件的程序化点击完成选择（属于真实 UI 操作，但不是物理鼠标点击）。因此"仓库选择"这条证据的强度低于普通按钮点击。下一阶段改用键盘导航或先把元素滚到视口中部再点。 |
-| 阶段 2 待做 | 采购建单→提交→审批、收货订单→PDA 收货→上架、调拨、盘点、退货、退款、财务核销、打印补打、多角色菜单差异、异常操作（连点/刷新/后退/多标签）。 |
-
-## D. 阶段 1 发现（GUI 可见，详见报告）
-
-| 编号 | 现象 | 类型 |
-|---|---|---|
-| G-1 | 仓库管理 251 行中 248 个为测试仓 | 数据污染 |
-| G-2 | 分拣格 A01–A03 全部"占用"，Put Wall 无法使用 | 业务阻断 |
-| G-3 | 记账凭证页出现"有差异"标记 | 待查 |
-| G-4 | 待办中心单页可见 4159 个按钮（页面极重） | 性能 |
-| G-5 | 工作区标签 keep-alive：打开越多页，DOM 越大（按钮数从 161 累积到 4011） | 性能 |
-| G-6 | 塑料盒管理 661 行、盘点 931 行、库存 1200 行级列表一次性渲染 | 性能 |
-| G-7 | 记账凭证页三张对账卡全部"有差异"：资金差 -73,485.00、应付差 -31,192.00、应收差 -42,200.00 | 账实不符（待判断是否测试数据所致） |
-| G-8 | 采购单提交后不会自动生成收货订单，需人工另建（GUI 实测 1,948 行收货单 0 匹配）。**阶段 4 修正**：人工入口可用——"收货订单 → 新建 → 选择商品"会列出该采购单的未收明细（含未收数量），因此不是断链，而是"由仓库按到货发起"的设计选择；真实风险仅是无人主动发起时会积压 | 流程衔接（降级） |
-| G-9 | Radix 下拉的真实点击在元素贴视口顶部时被判"被 sticky 元素遮挡"；滚到视口中部后真实点击成功 —— 确认为**测试工具遮挡问题，不是产品缺陷** | 工具限制（已澄清） |
-| G-10 | **前端权限拦截不对称**：只读账号直访 `/settings`、`/users` 正确显示 403 页，但 `/sale/new`、`/purchase/new`、`/transfer/new`、`/stockcheck`、`/products`、`/customers`、`/warehouses` 都渲染完整写界面（保存草稿 / 新增 / 编辑 / 批量导入按钮可见） | 权限（前端）/UX，后端已有拦截 |
-| G-11 | PDA 收货订单列表把有 1 条明细的单据显示为"**0 种商品**"（同单据的收货执行页显示"待收商品 1 个待收 SKU"，数据库也有 1 条明细） | 显示缺陷（PDA） |
-| G-12 | PDA 扫码上架页在浏览器中没有任何输入元素（`document.querySelectorAll('input')` 为空），键盘输入/回车都不生效 | 环境限制（需真机）→ NOT VERIFIED — REAL HARDWARE |
-| G-14 | PDA 收货单在无打印机环境下因"打印超时"被标成**异常中**（`IN20260917001` 实测：应到 3 / 已收 3，但打印显示"超时待确认 · 上架 待上架"，单据整体显示"异常中"）。演示/开发环境没有物理打印机，这类单会持续堆积成异常 | 环境相关，需确认真机（有打印机）时的行为与超时阈值是否过长 |
-| G-10 修复 + 复验（阶段 14） | ① 路由：7 个模块的 `/new` 从"查看权限"改为"创建权限"（sale/purchase/products/purchase-requisitions/transfer/returns×2）；② 页面：products、customers、stockcheck、transfer、inbound-tasks、warehouses（含共享 BaseCrudPage 新增 `canCreate`）按权限渲染写入口 | **已修复，GUI 复验（只读账号）** | 复验结果：`/sale/new` → **403 页**；`/transfer/new` → **403 页**；`/products`、`/stockcheck`、`/warehouses` → 写按钮 **0 个**（修复前分别有 新增商品/批量导入、+ 新建盘点、新增仓库）。`tsc -p frontend/tsconfig.app.json --noEmit` 通过、ESLint 0 error |
-| G-13 | **盘点（全盘）未填写行按"实盘 0"参与差异**：`SC20260917002` 自动展开 1,554 行，仅 1 行有填写值，但 1,553 行 `actual_qty=0` 且全部 1,554 行 `diff_qty≠0`（等于把账面量全部记为盘亏）。本次提交未生效（单据仍"进行中"），但这是**可能一次性清零大量库存的高风险设计**，需确认提交前是否强制要求逐行确认/是否只对"已填写"行算差异 | 高风险待确认 |
-| G-13 界面取证（阶段 10） | 打开 `SC20260917002` 填写视图 + 点"提交盘点" | 已确认 | ① 界面上未填写行的"实盘数量"显示"-"，但"差异"直接显示 `-账面量`（如 SKU0002 账面 97 → 差异 -97.00），**肉眼可见会误导仓管**；② 点"提交盘点"只弹出"确认提交盘点 / 取消 / 确认提交"，**没有任何"有 1,553 行未填写"之类的提示或校验**；③ 我点了取消、并回查数据库确认单据仍为"进行中"（status=1），**未产生任何库存调整** |
-| G-13 修复 + 复验（阶段 13） | 改前端：空输入不再当 0；新建盘点单 `SC20260917004`（北京主仓/全盘）→ 只填第 1 行"5" → 点"保存实盘数" | **已修复，GUI + 数据双验** | 修复前：保存后 `actual_qty=0` 的行 1,553（未填写行被写成 0）。修复后同一操作：**`NULL` = 1,553、`0` = 0、`>0` = 1、总计 1,554** —— 未填写行保持"未盘"状态，不再被当成盘亏。代码：`frontend/src/pages/stockcheck/components/CheckDetailDialog.tsx`（`validateActuals` 只提交用户填写过的行；一行都没填时提示"请至少填写一行实盘数量后再保存"） |
-| G-11 修复 + 复验（阶段 13） | 改前端：PDA 收货列表改用后端聚合字段 `lineCount`；重新绑定设备后打开 PDA 收货订单列表 | **已修复，GUI 复验** | 修复前：`IN20260917001` 显示"0 种商品"。修复后同一单据显示"**北京主仓 · 1 种商品**"。代码：`frontend/src/pages/pda/inbound.tsx`（`task.lineCount ?? task.items?.length ?? 0`）；`tsc -p frontend/tsconfig.app.json --noEmit` 通过 |
-| 异常操作：未保存离开（阶段 11） | 在"新建采购单"填入备注"未保存测试备注"（输入框确认有值）→ 直接切换到"销售管理"路由 | PARTIAL（未确认） | 切换瞬间检测到页面存在 `[role=dialog]`（`dialog:true`），但紧接着按 dialog/alertdialog 精确查询返回空，无法确认是否为"放弃未保存修改"的拦截框；工作区标签 keep-alive 会让半填表单继续留在原标签内，因此"数据是否丢失/是否被拦截"尚未定性，需下一阶段用真实点击触发切换并即时读取弹窗文案 |
-| 异常操作：未保存离开（阶段 12 复测） | ① 填备注后真实点击导航"仪表盘"离开；② 再切回该标签尝试点标签关闭按钮 | ① 已定性 ② PARTIAL | ① **不会弹任何"未保存"提示**（`[role=dialog]` 为空），但半填表单因工作区 keep-alive 仍留在原标签内（`stillEditing:true`）——即数据不丢、也不提醒；② 点标签关闭后标签仍在（`tabGone:false`）且未观察到弹窗，无法判定是"被脏数据守卫拦住但未渲染文案"还是"我的选择器没点中真正的关闭按钮"，保持未确认 |
+- 发现用户可见页面：ERP 导航页 **68 个**（9 个顶级模块）+ PDA 作业页 **26 个** + 官网/门户 + 桌面端；本轮通过真实界面打开并检查 **全部 68 个 ERP 页面**、**21 个 PDA 页面**。
+- 真正跑通的业务链（COMPUTER-USE VERIFIED，含数据核对）：
+  1. 销售：占库 → 核对发货 → 发起出库 → 生成仓库任务 → PDA 拣货 → 分拣 → 复核 → 打包（**止于打印依赖**）
+  2. 采购：新建采购单 → 提交 → 新建收货订单 → 提交 PDA → PDA 收货 → PDA 上架 → 库存增加（**全链闭环并通过数据核对**）
+  3. 调拨：新建 → 派发 → PDA 调出扫码 → 源仓减库 + 容器转在途（**调入未完成：目标仓库位不可扫**）
+  4. 系统：新建用户、登记 PDA 设备、设备绑定、操作日志审计核对
+- 未做完整闭环：销售出库确认及之后的物流/应收（被 ISSUE-003/015 打印依赖卡住）、PDA 退货收货/上架（无退货单）、PDA 出库确认（任务未到待出库）、PDA 拣货退回/改单确认（无触发数据）、盘点扫码（无可用盘点单）。
+- NOT VERIFIABLE：桌面端 GUI（电脑操作工具只能连到默认 Electron 窗口）、真实打印机/箱贴出纸、真机 PDA 相机扫码、生产写操作（本轮生产只做只读浏览）。
