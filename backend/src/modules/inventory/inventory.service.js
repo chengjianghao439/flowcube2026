@@ -842,15 +842,43 @@ async function checkStockConsistency({ productId = null, warehouseId = null, lim
 async function resyncStock({ scopeWarehouseIds = null } = {}) {
   const { list } = await findStockDrift({ scopeWarehouseIds })
   const drifted = list.filter(r => r.drifted)
-  if (!drifted.length) return { ok: true, fixed: 0, total: 0, rows: [] }
-
   const fixed = []
   for (const r of drifted) {
     const after = await syncStockFromContainers(pool, r.productId, r.warehouseId)
     fixed.push({ productId: r.productId, warehouseId: r.warehouseId, before: r.cacheQty, after })
   }
 
-  return { ok: true, fixed: fixed.length, total: drifted.length, rows: fixed }
+  // reserved 缓存与预占账对账（2026-09-17 验收修复）：
+  // quantity 修好 ≠ 可用量正确。reserved 由引擎增量维护，任何绕过引擎的写入（数据修复脚本、
+  // 人工 SQL）都会让缓存与账本脱节，而此前**没有任何入口能重建它**——实测账本 0 条有效预占、
+  // 缓存仍留 873，可用量被算成 0，占库按钮直接禁用并提示"库存不足"，把人引向完全错误的方向。
+  const { syncReservedFromLedger } = require('../../engine/reservationEngine')
+  const scS = scopeFilter(scopeWarehouseIds, 's.warehouse_id')
+  const [reservedDrift] = await pool.query(
+    `SELECT s.product_id AS productId, s.warehouse_id AS warehouseId,
+            COALESCE(s.reserved, 0) AS cacheReserved, COALESCE(r.qty, 0) AS ledgerReserved
+       FROM inventory_stock s
+       LEFT JOIN (SELECT product_id, warehouse_id, SUM(qty) AS qty
+                    FROM stock_reservations WHERE status = 1
+                   GROUP BY product_id, warehouse_id) r
+              ON r.product_id = s.product_id AND r.warehouse_id = s.warehouse_id
+      WHERE ABS(COALESCE(s.reserved, 0) - COALESCE(r.qty, 0)) > 0.0001${scS.sql}`,
+    scS.params,
+  )
+  const reservedFixed = []
+  for (const r of reservedDrift) {
+    const after = await syncReservedFromLedger(pool, r.productId, r.warehouseId)
+    reservedFixed.push({ productId: r.productId, warehouseId: r.warehouseId, before: Number(r.cacheReserved), after })
+  }
+
+  return {
+    ok: true,
+    fixed: fixed.length,
+    total: drifted.length,
+    rows: fixed,
+    reservedFixed: reservedFixed.length,
+    reservedRows: reservedFixed,
+  }
 }
 
 async function getContainerByBarcode(barcode) {

@@ -34,7 +34,10 @@ function InboundCard({ task, onTap }: { task:InboundTask; onTap:()=>void }) {
           <div className="min-w-0">
             <p className="font-mono text-xs text-muted-foreground">{task.taskNo}</p>
             <p className="font-semibold text-foreground truncate">{task.supplierName ?? '未知供应商'}</p>
-            <p className="text-sm text-muted-foreground mt-0.5">{task.warehouseName} · {task.items?.length ?? 0} 种商品</p>
+            {/* 2026-09-17 验收修复（G-11）：列表接口为省流量不返回 items 明细，
+                商品种类数要取后端聚合字段 lineCount，否则整列恒显示"0 种商品"
+                （实测：IN20260917001 有 1 条明细却显示 0 种商品）。 */}
+            <p className="text-sm text-muted-foreground mt-0.5">{task.warehouseName} · {task.lineCount ?? task.items?.length ?? 0} 种商品</p>
             <p className="text-xs text-muted-foreground">采购单：{task.purchaseOrderNo ?? '—'}</p>
           </div>
           <SoftStatusLabel label={task.receiptStatus?.label ?? task.statusName} tone={STATUS_TONE[task.status] ?? 'draft'} />

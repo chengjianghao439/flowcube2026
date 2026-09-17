@@ -307,4 +307,31 @@ async function partialReleaseByProduct(conn, { refType, refId, productId, wareho
   }
 }
 
-module.exports = { reserve, releaseByRef, markFulfilled, partialReleaseByProduct }
+/**
+ * 按预占账重建 inventory_stock.reserved（2026-09-17 验收修复）。
+ *
+ * reserved 是缓存，事实源是 stock_reservations 里 status=1 的有效预占；
+ * 引擎的正常路径（reserve 增量加、releaseByRef/partialReleaseByProduct 增量减）能维持两者一致，
+ * 但任何绕过引擎的写入（数据修复脚本、人工 SQL）都会让缓存与账本脱节，而且**没有入口能修**——
+ * 实测：账本 0 条有效预占、缓存仍留 873，可用量被算成 0，占库按钮直接禁用且提示"库存不足"。
+ * 与 syncStockFromContainers（重算 quantity）配对，供库存重算入口调用。
+ */
+async function syncReservedFromLedger(conn, productId, warehouseId) {
+  const [[{ total }]] = await conn.query(
+    `SELECT COALESCE(SUM(qty), 0) AS total
+       FROM stock_reservations
+      WHERE product_id=? AND warehouse_id=? AND status=1
+      FOR UPDATE`,
+    [productId, warehouseId]
+  )
+  const qty = Number(total)
+  await conn.query(
+    `INSERT INTO inventory_stock (product_id, warehouse_id, quantity, reserved)
+     VALUES (?,?,0,?)
+     ON DUPLICATE KEY UPDATE reserved=?`,
+    [productId, warehouseId, qty, qty]
+  )
+  return qty
+}
+
+module.exports = { reserve, releaseByRef, markFulfilled, partialReleaseByProduct, syncReservedFromLedger }

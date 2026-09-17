@@ -1,4 +1,6 @@
 import { usePartyLedger } from '@/hooks/usePartyLedger'
+import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
 import { RecordIdentity } from '@/components/shared/RecordIdentity'
 import { useState, useRef } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
@@ -27,6 +29,8 @@ import type { TableColumn } from '@/types'
 const PRICE_LEVELS = ['A', 'B', 'C', 'D'] as const
 
 export default function CustomersPage() {
+  // 2026-09-17 验收修复（G-10）：写入口按权限渲染
+  const { can } = usePermission()
   const ledger = usePartyLedger(2)
   const qc = useQueryClient()
   const [keyword, setKeyword] = useState('')
@@ -112,8 +116,8 @@ export default function CustomersPage() {
       <PageHeader title="客户管理" description="维护客户档案、结算与授信，配置销售默认价格等级。" actions={
         <>
           <Button variant="outline" onClick={() => downloadExport('/export/customers').catch(e => toast.error((e as Error).message))}>导出</Button>
-          <Button variant="outline" onClick={() => setImportOpen(v => !v)}>批量导入</Button>
-          <Button onClick={()=>{ setEditing(null); setDialogOpen(true) }}>新增客户</Button>
+          {can(PERMISSIONS.CUSTOMER_CREATE) && <Button variant="outline" onClick={() => setImportOpen(v => !v)}>批量导入</Button>}
+          {can(PERMISSIONS.CUSTOMER_CREATE) && <Button onClick={()=>{ setEditing(null); setDialogOpen(true) }}>新增客户</Button>}
         </>
       } />
       <FilterCard>

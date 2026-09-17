@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
 import { Input } from '@/components/ui/input'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { activeTone } from '@/lib/statusTone'
@@ -16,6 +18,8 @@ const defaultForm = {
 }
 
 export default function WarehousesPage() {
+  // 2026-09-17 验收修复（G-10）：只读角色不显示"新增仓库"
+  const { can } = usePermission()
   const [keyword, setKeyword] = useState('')
   const [search, setSearch] = useState('')
   const page = 1
@@ -73,6 +77,7 @@ export default function WarehousesPage() {
       deleteApi={(id) => deleteWarehouseApi(id, { skipGlobalError: true })}
       deleteMessage="仅未被库位、库存、任务或业务单据引用的仓库允许删除；若已被引用，请改为编辑后停用。"
       createLabel="新增仓库"
+      canCreate={can(PERMISSIONS.WAREHOUSE_CREATE)}
       saveSuccessMessage={(editing) => editing ? '仓库已保存' : '仓库已创建'}
       formWidthClass="sm:max-w-2xl"
       canSubmit={() => !!form.name}

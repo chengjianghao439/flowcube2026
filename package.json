@@ -30,6 +30,7 @@
     "check:direct-express": "node scripts/check-direct-express.cjs",
     "test:document-activity": "node --test tests/document-activity.test.js",
     "test:workbench": "node --test tests/workbench.test.js",
+    "test:acceptance-fixes": "node --test tests/acceptance-fixes-2026-09-17.test.js",
     "test:legacy-receivable-repair": "node --test tests/legacy-receivable-repair.test.js",
     "test:purchase-repair": "node --test tests/inbound-purchase-source.test.js tests/legacy-purchase-repair.test.js",
     "smoke:party-ledger": "node --test tests/party-ledger.smoke.test.js",

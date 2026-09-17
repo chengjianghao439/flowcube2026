@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
 import { toast } from '@/lib/toast'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
@@ -22,6 +24,8 @@ import type { TableColumn } from '@/types'
 const STATUS_TONE: Record<number, StatusTone> = { 1:'active', 2:'success', 3:'danger' }
 
 export default function StockCheckPage() {
+  // 2026-09-17 验收修复（G-10）：新建盘点按钮按权限渲染
+  const { can } = usePermission()
   const [keyword, setKeyword] = useState('')
   const [search, setSearch] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
@@ -71,7 +75,7 @@ export default function StockCheckPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="库存盘点" description="创建盘点单并填写实盘数量，提交后自动调整库存" actions={<Button onClick={()=>setCreateOpen(true)}>+ 新建盘点</Button>} />
+      <PageHeader title="库存盘点" description="创建盘点单并填写实盘数量，提交后自动调整库存" actions={can(PERMISSIONS.STOCKCHECK_CREATE) ? <Button onClick={()=>setCreateOpen(true)}>+ 新建盘点</Button> : undefined} />
       <FilterCard>
         <Input placeholder="搜索单号/仓库…" value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} className="h-9 w-56" onKeyDown={(e: React.KeyboardEvent)=>{ if(e.key==='Enter'){ setKeyword(search); } }} />
         <Button size="sm" variant="outline" onClick={()=>{ setKeyword(search); }}>搜索</Button>

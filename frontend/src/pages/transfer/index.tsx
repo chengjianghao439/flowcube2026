@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
+import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { X } from 'lucide-react'
@@ -27,6 +29,8 @@ const STATUS_LABELS: Record<string, string> = { '1': '草稿', '2': '待出库',
 const DEFAULT_RANGE_DAYS = 7
 
 export default function TransferPage() {
+  // 2026-09-17 验收修复（G-10）：新建调拨按钮按权限渲染
+  const { can } = usePermission()
   const qc = useQueryClient()
   const navigate = useNavigate()
   const { addTab } = useWorkspaceStore()
@@ -234,7 +238,7 @@ export default function TransferPage() {
             导出 Excel
           </Button>
           <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
-          <Button onClick={goToNew}>+ 新建调拨单</Button>
+          {can(PERMISSIONS.TRANSFER_ORDER_CREATE) && <Button onClick={goToNew}>+ 新建调拨单</Button>}
         </>
       } />
 

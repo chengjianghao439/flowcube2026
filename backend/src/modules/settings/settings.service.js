@@ -1,14 +1,43 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 
+/**
+ * 已废弃的设置键（表里仍保留行，但不对外展示、也不接受写入）。
+ *
+ * 2026-09-17 验收发现：系统设置页同时展示「采购单号前缀 PO」「销售单号前缀 SO」
+ * 「盘点单号前缀 IC」以及真正生效的「采购单前缀 PC」「销售单前缀 SL」「盘点单前缀 SC」，
+ * 管理员改前者没有任何效果，页面的「生成示例 SO20260917」也是错的。
+ * 根因：迁移 230/231 已把单号前缀统一交给 code_prefix_*（codeGenerator.resolvePrefix），
+ * 旧的 *_prefix 键不再被任何代码读取；编号位数 code_digits 同样无人读取
+ * （主数据编码固定 6 位、单据流水固定 3 位，见 utils/codeGenerator.js）。
+ *
+ * 另外三个主数据前缀（code_prefix_customer/supplier/product）同样不生效：
+ * generateMasterCode 刻意不接入前缀覆盖（见 utils/codeGenerator.js 注释），
+ * 实测 /api/customers/next-code 返回 CUS000001、/api/suppliers/next-code 返回 SUP000001、
+ * /api/products/next-code 返回 P000001，与设置页展示的 CU/SU/PR 无关。
+ *
+ * 处理方式：列表过滤 + 写入白名单拒绝，行本身保留（不删数据，随时可回滚）。
+ * 若将来要恢复这些能力，应先把 codeGenerator 真正接上配置并处理新老编号格式分叉。
+ */
+const DEPRECATED_SETTING_KEYS = new Set([
+  'sale_prefix',
+  'purchase_prefix',
+  'stockcheck_prefix',
+  'code_digits',
+  'code_prefix_customer',
+  'code_prefix_supplier',
+  'code_prefix_product',
+])
+
 async function getAll() {
   const [rows] = await pool.query('SELECT key_name, value, label, type, remark FROM sys_settings ORDER BY id ASC')
+  const visibleRows = rows.filter(r => !DEPRECATED_SETTING_KEYS.has(r.key_name))
   const map = {}
-  rows.forEach(r => { map[r.key_name] = { value: r.value, label: r.label, type: r.type, remark: r.remark } })
+  visibleRows.forEach(r => { map[r.key_name] = { value: r.value, label: r.label, type: r.type, remark: r.remark } })
   // company_logo 的 value 是 base64 data URL（可达 ~2.8MB），不进列表响应——
   // 前端读 logo 走专门的 /settings/logo（元数据）+ /settings/logo/image（图片流），
   // 这里把 value 置空只保留 meta，避免系统设置页一次拉动几 MB。
-  const list = rows.map(r => (r.key_name === 'company_logo' ? { ...r, value: '' } : r))
+  const list = visibleRows.map(r => (r.key_name === 'company_logo' ? { ...r, value: '' } : r))
   const mapSafe = {}
   Object.entries(map).forEach(([k, v]) => { mapSafe[k] = k === 'company_logo' ? { ...v, value: '' } : v })
   return { list, map: mapSafe }
@@ -39,10 +68,13 @@ async function updateMany(updates) {
       throw new AppError(`设置项 ${key} 有独立上传/时间戳管理，请勿通过此处修改`, 400, 'SETTINGS_KEY_SPECIAL')
     }
   }
+  // 弃用键静默忽略而不是报错：旧版客户端表单仍会带上这些字段，
+  // 报错会让整次保存失败；忽略则「保存成功但该死键不再被写入」。
+  const writableEntries = entries.filter(([key]) => !DEPRECATED_SETTING_KEYS.has(key))
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    for (const [key, value] of entries) {
+    for (const [key, value] of writableEntries) {
       await conn.query('UPDATE sys_settings SET value=? WHERE key_name=?', [value, key])
     }
     await conn.commit()

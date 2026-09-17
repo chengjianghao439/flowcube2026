@@ -1,4 +1,6 @@
 import { TabPathContext } from '@/components/layout/TabPathContext'
+import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
 import { useContext } from 'react'
 import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
 import { ImportSteps } from '@/components/shared/ImportSteps'
@@ -43,6 +45,8 @@ function buildCategoryPathMap(nodes: Category[], ancestors: string[] = [], map =
 }
 
 export default function ProductsPage() {
+  // 2026-09-17 验收修复（G-10）：写入口必须按权限渲染，只读角色不应看到"新增/批量导入"
+  const { can } = usePermission()
   const navigate = useNavigate()
   // Router 的 navigate 引用随其他工作区路径变化；事件调用最新导航，表格列保持稳定。
   const navigateRef = useRef(navigate)
@@ -196,9 +200,9 @@ export default function ProductsPage() {
         <div className="flex gap-2 flex-wrap">
           <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
           <Button variant="outline" onClick={()=>downloadExport('/export/stock').catch(e=>toast.error((e as Error).message))}>导出库存</Button>
-          <Button variant="outline" onClick={()=>setImportOpen(true)}>批量导入</Button>
+          {can(PERMISSIONS.PRODUCT_CREATE) && <Button variant="outline" onClick={()=>setImportOpen(true)}>批量导入</Button>}
           <Button variant="outline" onClick={()=>navigate('/categories')}>分类管理</Button>
-          <Button onClick={()=>navigate('/products/new')}>新增商品</Button>
+          {can(PERMISSIONS.PRODUCT_CREATE) && <Button onClick={()=>navigate('/products/new')}>新增商品</Button>}
         </div>
       } />
 

@@ -119,7 +119,7 @@ npm run test:permissions
 
 `npm run test:document-activity` 为不连接数据库的订单记录归属、脱敏及数据范围回归，已接入 CI。
 
-`npm run audit:business-consistency` 使用显式数据库环境变量执行只读跨模块一致性检查，输出全量异常计数及每项最多 100 条样本；退出码 0=未检出、2=存在待核对项、1=执行错误。报告中的推算金额依赖来源字段完整性，不能直接用作自动修复指令。`test:legacy-receivable-repair` 为定向修复守卫单测；`smoke:legacy-receivable-repair` 必须使用已迁移的回环独立 `flowcube_repair20260908_test` 库，串行执行真实事务/回滚/幂等及扫描口径回归。定向修复脚本默认只读，生产 apply 要求预检摘要一致和私有备份路径，具体范围见 `docs/production-receivable-audit-2026-09-08.md`。
+`npm run audit:business-consistency` 使用显式数据库环境变量执行只读跨模块一致性检查，输出全量异常计数及每项最多 100 条样本；退出码 0=未检出、2=存在待核对项、1=执行错误。报告中的推算金额依赖来源字段完整性，不能直接用作自动修复指令。2026-09-17 起新增 `container_product_orphan`、`container_warehouse_orphan`、`task_lock_leak` 三项检查（孤儿容器与已完结任务仍持有容器锁），共 41 项，见 `docs/acceptance-2026-09-17.md`。`test:legacy-receivable-repair` 为定向修复守卫单测；`smoke:legacy-receivable-repair` 必须使用已迁移的回环独立 `flowcube_repair20260908_test` 库，串行执行真实事务/回滚/幂等及扫描口径回归。定向修复脚本默认只读，生产 apply 要求预检摘要一致和私有备份路径，具体范围见 `docs/production-receivable-audit-2026-09-08.md`。
 
 `npm run test:purchase-repair` 检查空采购来源、错行归属和定向修复守卫，已加入 Tests CI 配置；`npm run smoke:purchase-repair` 在同一专用 `flowcube_repair20260908_test` 库验证事务回滚、幂等、库存/应付不变和规范化后真实应付重算，必须与应收专项串行运行。生产只执行已授权的定向修复脚本，不执行这些测试。
 
@@ -139,7 +139,7 @@ npm run test:permissions
 
 正式 Tests CI 的独立数据库专项矩阵包含两轮审计 finance、scope-export、hr、round2-transfer、round2-payroll、round2-runtime，每项先迁移专用测试库；static job 同时执行第二轮运行时/恢复/错误追踪回归。
 
-审计回归入口：`npm run smoke:audit-inventory`、`npm run smoke:audit-finance-security`、`npm run test:audit-client`、`npm run test:audit-tooling`。标签镜像检查使用前端已安装的 TypeScript 在 Node 22 编译并运行，`test:label` 需要前端依赖，不再按 Node 版本跳过；CI 在安装两端依赖后的 static job 执行。
+审计回归入口：`npm run smoke:audit-inventory`、`npm run smoke:audit-finance-security`、`npm run test:audit-client`、`npm run test:audit-tooling`。2026-09-17 验收修复守卫 `npm run test:acceptance-fixes`（请求体解析错误码、废弃设置键、取消单明细投影、审计脚本覆盖、迁移存在性）为纯离线断言，已接入 Tests CI static job。标签镜像检查使用前端已安装的 TypeScript 在 Node 22 编译并运行，`test:label` 需要前端依赖，不再按 Node 版本跳过；CI 在安装两端依赖后的 static job 执行。
 运维/迁移回归（static job 「运维回归」步骤）：`node --test tests/ops-monitor-restore.test.js tests/deployment-resources.test.js tests/restore-trigger-normalize.test.js tests/migration-trigger-bodies.test.js`。前两项验备份恢复判定与资源边界，后两项验触发器分号规范化与迁移逐条切分，均不连数据库。
 
 导出格式回归：`npm run test:export`（static job 与 `test:upload` 同一步执行）——校验 xlsx 导出的日期列写成日期单元格并带 `yyyy-mm-dd` / `yyyy-mm-dd hh:mm` 数字格式（2026-09-16 起），不连数据库。
@@ -165,6 +165,8 @@ npm run test:permissions
 - 严格 `routes → controller → service → db`。routes 注册路径、鉴权、权限、zod/PDA 校验；controller 取参并返回响应，不写 SQL；service 放 SQL 和业务规则，不接 HTTP 对象。
 - 大模块新增逻辑放对应窄职责文件，例如 `inbound-tasks.putaway.js`、`warehouse-tasks.ship.js`，不要堆回 service 门面。
 - 错误使用 `AppError` 交给统一 errorHandler；成功使用 `successResponse`。信封为 `{ success, message, data }`，失败可含 `code`；列表分页位于 `data.pagination`。
+- **请求体解析错误必须映射为 4xx**：body-parser 的 `entity.parse.failed` → 400、`entity.too.large` → 413，不能在 errorHandler 里落到「未知错误」500（2026-09-17 验收修复，此前畸形 JSON 会返回 500 并把堆栈记成 `[Unhandled]`）。
+- **系统设置项只允许「真正生效的键」对外**：`settings.service` 维护 `DEPRECATED_SETTING_KEYS`，其中的键不出现在 `GET /api/settings` 列表、也被批量保存静默跳过。当前包含 `sale_prefix`/`purchase_prefix`/`stockcheck_prefix`（迁移 230/231 后由 `code_prefix_*` 接管）、`code_digits`（codeGenerator 未读取，固定 6 位主数据/3 位流水）与 `code_prefix_customer`/`code_prefix_supplier`/`code_prefix_product`（`generateMasterCode` 刻意不接入前缀覆盖）。恢复这些能力必须先把 codeGenerator 真正接上配置并处理新老编号格式分叉，不能只把键放回页面。
 - SQL 参数化；API 小写、连字符、复数名词。页面不分页，但传输与 SQL 保留有界批次；批次查询按主排序追加唯一 ID（库存按商品/仓库组合）保持稳定，防止相同时间或名称在不同批次重复/遗漏。后台批次复用 `normalizePagination`，导出遵循既有上限与截断告警，不能用无限大 pageSize 绕过分页。
 - 新迁移按当前最大编号新增，**不得修改已执行的迁移**，不得未经明确授权删除字段、兼容代码或迁移文件。编号冲突、幂等执行、回填与消费者兼容要一起考虑。
 - **迁移必须逐条执行**：`backend/src/database/migrate.js` 经 `sqlStatements.js` 切分后逐条 `query`。整文件当一条多语句发送时，非末条 `CREATE TRIGGER ... <单语句>;` 的函数体会把结尾分号一起写进 `ACTION_STATEMENT`，mysqldump 导出成 `... ); */;;`，导入必然 1064 且备份不可恢复（2026-09-14 事故，见 `docs/backup-restore-trigger-terminator-2026-09-14.md`）。新增触发器迁移后要确认函数体不残留结尾分号；`sqlStatements.js` 不支持 `DELIMITER`，需要时先扩展再写迁移。
@@ -195,7 +197,7 @@ npm run test:permissions
 - **采购来源完整性保护（v0.9.10）**：收货/上架/撤回复用 `inbound-purchase-source.js`，每行必须有合法采购及明细 ID，且明细所属订单、商品一致，空来源不再跳过取消校验。应付重算前拒绝缺关联的有效收货或未归入收货明细的旧直接入库，不能用空 JOIN 的零金额冲掉历史应付。线上启用状态须以同 SHA 部署及迁移结果核实；生产历史记录另走有备份和审计的定向修复，见 `docs/purchase-repair-2026-09-08.md`。
 - **销售分仓/按量占库**：行级 warehouse_id 必须参与关联；同商品多仓不能 JOIN 放大。订单头仓库和每条明细的目标仓库都必须通过当前用户仓库范围校验。`reserved_qty` 是已占量，`dispatched_qty` 是已派发量；销售数量允许正小数，发起出库可按明细指定本批数量但不得超过已占未发差额，部分占、补占、释放、分批发货和改单保持数量账一致。改单、取消、删除等写操作必须携带稳定请求键以防重试重复执行。
 - **销售 ATP**：总可占量 = ACTIVE 实物 + 采购未上架总量 − 全部有效预占；预计量不能先减绑定后再减 reserved。绑定只表示尚依赖采购的数量，上架按采购明细 FIFO 兑现，不减少销售预占；出库只能使用本单已有实物份额及未分配实物，不能截断其他订单合法的预计预占。采购撤回、驳回、取消、减量/删行和短装关闭均保护有效绑定；撤回上架不能移除支撑现有销售承诺的供应。多商品释放先按统一顺序锁全部库存维度，再锁预占/预计绑定；旧快照漏维度返回 409 重试。规则与回归见 `expectedStock.js`、`sale-atp.smoke.test.js` 和 `audit-inventory.smoke.test.js`。
-- **销售执行**：拣货 → 分拣 → 复核 → 打包 → 出库，各阶段校验闭合；执行期减量、取消涉及已搬动物料时走 PDA 物理确认/逆向归还。销售关联仓库任务禁止从仓库任务入口单独取消，必须从销售订单统一取消同单任务和剩余预占。已有部分出库时取消剩余需保留已发事实，按实发原值比例保留整单折扣并重算应收，不能整单当未发取消。执行期改单仅支持单个仓库任务且所有明细已完整占库、完整派发的订单；同仓多任务或部分派发返回 409，列表和详情同步禁用入口。重建执行期明细必须写回 reserved_qty/dispatched_qty，不能只写旧 dispatched 标记。待实物归还期间 reserved_qty 按实际有效预占账保留，可暂大于改单目标量；PDA 确认释放后同事务同步已占量，dispatched_qty 表示调整后的派发目标。占库期或执行期改单重算货款后必须再次校验原折扣不超过新合计。同商品分仓的扫描记录必须同时按任务仓库与商品归属，不能只按 product_id 混在多条明细上。
+- **销售执行**：拣货 → 分拣 → 复核 → 打包 → 出库，各阶段校验闭合；执行期减量、取消涉及已搬动物料时走 PDA 物理确认/逆向归还。销售关联仓库任务禁止从仓库任务入口单独取消，必须从销售订单统一取消同单任务和剩余预占。已有部分出库时取消剩余需保留已发事实，按实发原值比例保留整单折扣并重算应收，不能整单当未发取消。**执行期取消且没有任何已出库任务时必须把明细 `reserved_qty`/`dispatched_qty` 一并归零**（2026-09-17 验收修复：此前只释放预占账与任务，明细仍显示已占/已派发，开发库累积 56 张此类单据）；有实发时按实发精简明细的分支不变。执行期改单仅支持单个仓库任务且所有明细已完整占库、完整派发的订单；同仓多任务或部分派发返回 409，列表和详情同步禁用入口。重建执行期明细必须写回 reserved_qty/dispatched_qty，不能只写旧 dispatched 标记。待实物归还期间 reserved_qty 按实际有效预占账保留，可暂大于改单目标量；PDA 确认释放后同事务同步已占量，dispatched_qty 表示调整后的派发目标。占库期或执行期改单重算货款后必须再次校验原折扣不超过新合计。同商品分仓的扫描记录必须同时按任务仓库与商品归属，不能只按 product_id 混在多条明细上。
 - **销售主数据快照**：建单和草稿编辑时，客户、默认仓库、明细仓库、商品与承运商名称及商品编码、单位、供应商型号、型号、颜色、成本均从当前启用的服务端主数据生成；不能信任客户端传入的显示名称。停用或删除的客户、仓库、商品、承运商必须拒绝保存。
 - **退货**：采购退货走标准仓库出库并冲减应付；销售退货走收货、质检、上架并冲减应收。部分质检必须保留合格、拒收、未检三份数量并守恒，未检容器可继续质检；收货/分箱标签与数量变化同事务入队，回传容器条码、打印任务及无打印机提示。上架扫码经当前任务范围解析真实容器/库位 ID，提交再次校验归属、状态、设备仓与权限；不能将完整条码直接转 Number，也不能通过列表选 ID 代替扫码。return_tasks 有内联状态机，不能仅查 documentStatusRules。
 - **调拨**：列表批量返回本页已授权单据的逐行计划、已出、已收数量，不做逐单N+1；在途且任一行尚未出完时，PDA列表保留源仓出库入口，全部出完才隐藏。源仓扫码出 → 在途 → 目标仓扫码入；在途不可普通取消，异常走有独立权限的 force-close。正常完成须每行计划量=已出量=已收量且无在途容器，部分发收不能提前结束。重复商品行合法，整箱按商品合计余量校验，再按行 ID 用万分之一整数单位分配；不拆实物容器。创建、读写沿用至少一端在用户仓库范围的跨仓规则。扫码 action 为 `transfer.scanOut.<id>` / `transfer.scanIn.<id>`，执行及重放先验单据、仓库范围和设备仓；旧固定 action 只兼容资源归属一致的回执。自有回执查询保留权限调整后的读取契约，不等同于再次执行权限。

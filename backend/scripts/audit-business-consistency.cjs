@@ -115,6 +115,19 @@ add('reservation_source_identity', `SELECT r.id,r.ref_id,r.ref_no,o.order_no FRO
 add('active_reservation_state', `SELECT r.id,r.ref_id,r.ref_no,o.status,o.deleted_at FROM stock_reservations r LEFT JOIN sale_orders o ON o.id=r.ref_id
   WHERE r.ref_type='sale_order' AND r.status=1 AND (o.id IS NULL OR o.deleted_at IS NOT NULL OR o.status IN (1,4))`)
 add('container_quantities', `SELECT id,barcode,status,initial_qty,remaining_qty FROM inventory_containers WHERE deleted_at IS NULL AND (remaining_qty<0 OR remaining_qty>initial_qty+0.0001)`)
+// 2026-09-17 验收新增：孤儿容器与锁泄漏。全库只有 1 个外键、4 个触发器，
+// 引用完整性几乎完全靠应用层，物理删除脚本一旦介入就会留下这类脏数据
+// （实测开发库：11 个 ACTIVE 容器指向不存在的商品，合计 5,003 单位）。
+add('container_product_orphan', `SELECT c.id,c.barcode,c.product_id,c.status,c.remaining_qty FROM inventory_containers c
+  LEFT JOIN product_items p ON p.id=c.product_id
+  WHERE c.deleted_at IS NULL AND p.id IS NULL AND c.remaining_qty<>0`)
+add('container_warehouse_orphan', `SELECT c.id,c.barcode,c.warehouse_id,c.status,c.remaining_qty FROM inventory_containers c
+  LEFT JOIN inventory_warehouses w ON w.id=c.warehouse_id
+  WHERE c.deleted_at IS NULL AND w.id IS NULL AND c.remaining_qty<>0`)
+// 已完结任务（已出库 7 / 已取消 8）不应再持有容器锁，否则这部分实物永远无法被其他单据选中。
+add('task_lock_leak', `SELECT c.id,c.barcode,c.remaining_qty,c.locked_by_task_id,t.task_no,t.status FROM inventory_containers c
+  JOIN warehouse_tasks t ON t.id=c.locked_by_task_id
+  WHERE c.deleted_at IS NULL AND c.remaining_qty>0 AND t.status IN (7,8)`)
 add('transfer_quantities', `SELECT id,order_id,quantity,deducted_qty,received_qty FROM transfer_order_items
   WHERE quantity<0 OR deducted_qty<0 OR received_qty<0 OR deducted_qty>quantity+0.0001 OR received_qty>deducted_qty+0.0001`)
 add('stockcheck_arithmetic', `SELECT id,check_id,book_qty,actual_qty,diff_qty FROM inventory_check_items

@@ -76,6 +76,9 @@ jobs:
       - name: 上传单文件与字段限制回归
         run: npm run test:upload && npm run test:export
 
+      - name: "验收修复回归 — 请求体解析错误码、废弃设置键、取消单明细投影、审计覆盖"
+        run: npm run test:acceptance-fixes
+
       - name: 审计回归 — 工具隔离、发布门禁、原生更新与退货扫码
         run: npm run test:audit-tooling && npm run test:audit-client && npm run test:prelaunch-runtime && npm run test:round2-runtime
 

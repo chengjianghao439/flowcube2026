@@ -1799,6 +1799,14 @@ async function cancel(id, operator, scopeWarehouseIds = null, requestKey = null)
         await commitFulfillment(conn, 'sale', id, previousDimensions)
         return
       }
+      // 无实发（没有任何已出库任务）的执行期取消：整单作废，明细的已占/已派发投影必须归零。
+      // 2026-09-17 验收修复：此前只释放预占账与取消任务，sale_order_items 仍留着
+      // reserved_qty/dispatched_qty，取消单继续显示「已占/已派发」，与预占账（已 release）不一致，
+      // 也让任何以明细列为口径的下游功能读到错误的占用（开发库已累积 56 张此类单据）。
+      await conn.query(
+        'UPDATE sale_order_items SET reserved_qty = 0, dispatched_qty = 0 WHERE order_id = ?',
+        [id],
+      )
     }
 
     await compareAndSetStatus(conn, {

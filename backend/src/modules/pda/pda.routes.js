@@ -30,6 +30,7 @@ router.post('/sessions', authMiddleware, validateBody(createSessionSchema), asyn
     scopes: data.scopes,
     expires_at: data.expiresAt,
     warehouse_id: data.warehouseId,
+    warehouse_name: data.warehouseName ?? null,
   }, 'PDA 设备会话已创建')
 }))
 
@@ -45,6 +46,7 @@ router.post('/sessions/renew', authMiddleware, pdaSessionRequired(), asyncRoute(
     scopes: data.scopes,
     expires_at: data.expiresAt,
     warehouse_id: data.warehouseId,
+    warehouse_name: data.warehouseName ?? null,
   }, 'PDA 设备会话已续期')
 }))
 

@@ -15,6 +15,7 @@ interface CreateSessionResponse {
   scopes: string[]
   expires_at: string | null
   warehouse_id: number | null
+  warehouse_name?: string | null
 }
 
 /**
@@ -43,6 +44,7 @@ export async function ensureDeviceSession(): Promise<PdaDeviceSession | null> {
     const session: PdaDeviceSession = {
       token: data.session_token,
       warehouseId: data.warehouse_id ?? null,
+      warehouseName: data.warehouse_name ?? null,
       expiresAt: data.expires_at ?? null,
       scopes: Array.isArray(data.scopes) ? data.scopes : [],
     }
@@ -88,6 +90,7 @@ export async function renewDeviceSession(): Promise<PdaDeviceSession | null> {
     const renewed: PdaDeviceSession = {
       token: data.session_token,
       warehouseId: data.warehouse_id ?? null,
+      warehouseName: data.warehouse_name ?? null,
       expiresAt: data.expires_at ?? null,
       scopes: Array.isArray(data.scopes) ? data.scopes : [],
     }

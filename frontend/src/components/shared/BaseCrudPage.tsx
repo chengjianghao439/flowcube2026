@@ -60,6 +60,8 @@ interface Props<T extends RowLike> {
   renderActions?: (row: T, helpers: { openEdit: (row: T) => void; openDelete: (row: T) => void }) => ReactNode
   /** 新建按钮文案 */
   createLabel?: string
+  /** 2026-09-17 验收修复（G-10）：写入口按权限渲染；默认 true 保持既有页面行为 */
+  canCreate?: boolean
   /** 保存校验 */
   canSubmit?: (editing: T | null) => boolean
   /** PageHeader 额外动作（查询/导出等，置于新建按钮之前） */
@@ -78,7 +80,7 @@ export default function BaseCrudPage<T extends RowLike>(props: Props<T>) {
   const {
     title, description, columns: dataColumns, queryKey, listQuery, deleteApi, deleteMessage,
     renderForm, submitForm, saveSuccessMessage, formTitle, formWidthClass = 'max-w-md',
-    renderRowExtra, renderActions, createLabel = '+ 新建', canSubmit, headerActions, renderToolbar,
+    renderRowExtra, renderActions, createLabel = '+ 新建', canCreate = true, canSubmit, headerActions, renderToolbar,
     emptyText, showActions = true, recordUnit,
   } = props
 
@@ -146,7 +148,7 @@ export default function BaseCrudPage<T extends RowLike>(props: Props<T>) {
         actions={
           <>
             {headerActions}
-            <Button onClick={openCreate}>{createLabel}</Button>
+            {canCreate && <Button onClick={openCreate}>{createLabel}</Button>}
           </>
         }
       />

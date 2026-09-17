@@ -56,10 +56,21 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
     if (!check?.items?.length) return { ok: true as const, items: [] as { id: number; actualQty: number }[] }
     const firstFieldError = Object.values(fieldErrors).find(Boolean)
     if (firstFieldError) return { ok: false as const, items: [] as { id: number; actualQty: number }[], message: firstFieldError }
-    const items = check.items.filter(i => !i.scanDriven).map(i => ({ id: i.id, actualQty: parseActualQty(actuals[i.id] ?? '') }))
+    // 2026-09-17 验收修复（G-13）：只提交用户真正填写的行。
+    // 此前对每个非扫码行都调用 parseActualQty('')，而空值被当作 0，于是「保存实盘数」
+    // 会把整单未填写行写成实盘 0（差异 = -账面量），提交后会把全仓库存按盘亏清零
+    // ——全盘单实测一次写入 1,553 行 0。留空必须保持 NULL（= 未盘），不能等同「实盘 0」。
+    const items = check.items
+      .filter(i => !i.scanDriven)
+      .map(i => ({ id: i.id, raw: String(actuals[i.id] ?? '').trim() }))
+      .filter(i => i.raw !== '')
+      .map(i => ({ id: i.id, actualQty: parseActualQty(i.raw) }))
     const invalid = items.find(i => Number.isNaN(i.actualQty) || i.actualQty < 0)
     if (invalid) {
       return { ok: false as const, items, message: '实盘数量必须为大于或等于 0 的数字' }
+    }
+    if (!items.length) {
+      return { ok: false as const, items, message: '请至少填写一行实盘数量后再保存' }
     }
     return { ok: true as const, items }
   }

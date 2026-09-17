@@ -27,6 +27,8 @@ export interface PdaDeviceCredential {
 export interface PdaDeviceSession {
   token: string
   warehouseId: number | null
+  /** 绑定仓名称（2026-09-17 起随会话返回）；旧缓存会话可能为 undefined，展示时回退 #id */
+  warehouseName?: string | null
   expiresAt: string | null
   scopes: string[]
 }

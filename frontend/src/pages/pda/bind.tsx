@@ -157,7 +157,14 @@ export default function PdaBindPage() {
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">所属仓库</span>
-                <span>{session?.warehouseId ? `#${session.warehouseId}` : '未绑定仓库（可跨仓作业）'}</span>
+                {/* 2026-09-17 验收修复：此前只显示原始仓库 ID（#1），仓库主管无法核对绑到哪个仓 */}
+                <span>
+                  {session?.warehouseName
+                    ? session.warehouseName
+                    : session?.warehouseId
+                      ? `#${session.warehouseId}`
+                      : '未绑定仓库（可跨仓作业）'}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">票据状态</span>

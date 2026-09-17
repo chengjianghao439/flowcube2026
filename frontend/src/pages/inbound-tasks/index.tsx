@@ -1,4 +1,6 @@
 import { OrderStatusFilter } from '@/components/shared/OrderStatusFilter'
+import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
 /**
  * 收货订单列表（采购入库 / inbound_tasks）
  * 路由：/inbound-tasks
@@ -36,6 +38,8 @@ const DEFAULT_RANGE_DAYS = 7
 
 
 export default function InboundTasksPage() {
+  // 2026-09-17 验收修复（G-10）：新建收货订单按钮按权限渲染
+  const { can } = usePermission()
   const navigate = useNavigate()
   const addTab = useWorkspaceStore(s => s.addTab)
   const [searchParams, setSearchParams] = useSearchParams()
@@ -384,7 +388,7 @@ export default function InboundTasksPage() {
               导出 Excel
             </Button>
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
-            <Button
+            {can(PERMISSIONS.INBOUND_ORDER_CREATE) && <Button
               onClick={() => {
                 const path = '/inbound-tasks/new'
                 addTab({ key: path, title: '新建收货订单', path })
@@ -392,7 +396,7 @@ export default function InboundTasksPage() {
               }}
             >
               + 新建收货订单
-            </Button>
+            </Button>}
           </>
         }
       />

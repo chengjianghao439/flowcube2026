@@ -57,9 +57,11 @@ async function createSession({ deviceCode, deviceSecret, userId }) {
   if (!secret) throw new AppError('device_secret 必填', 400, 'PDA_DEVICE_SECRET_REQUIRED')
 
   const [[device]] = await pool.query(
-    `SELECT id, device_code, warehouse_id, status, secret_hash
-     FROM pda_devices
-     WHERE device_code = ?`,
+    `SELECT d.id, d.device_code, d.warehouse_id, d.status, d.secret_hash,
+            w.name AS warehouse_name
+       FROM pda_devices d
+       LEFT JOIN inventory_warehouses w ON w.id = d.warehouse_id
+      WHERE d.device_code = ?`,
     [code],
   )
   if (!device) throw new AppError('PDA 设备不存在或未登记', 404, 'PDA_DEVICE_NOT_FOUND')
@@ -100,6 +102,9 @@ async function createSession({ deviceCode, deviceSecret, userId }) {
     scopes,
     expiresAt: session?.expires_at || null,
     warehouseId: device.warehouse_id ?? null,
+    // 2026-09-17 验收修复：绑定页此前只显示「所属仓库 #1」，用户无法核对绑到哪个仓。
+    // 与 warehouseId 成对返回名称，前端优先显示名称、回退 #id。
+    warehouseName: device.warehouse_name || null,
   }
 }
 
@@ -115,9 +120,11 @@ async function renewSession({ sessionToken }) {
   const [[row]] = await pool.query(
     `SELECT s.id AS session_id, s.device_id, s.user_id, s.scopes,
             s.warehouse_id AS session_warehouse_id, s.expires_at, s.revoked_at,
-            d.warehouse_id AS device_warehouse_id, d.status AS device_status
+            d.warehouse_id AS device_warehouse_id, d.status AS device_status,
+            w.name AS warehouse_name
        FROM pda_device_sessions s
        INNER JOIN pda_devices d ON d.id = s.device_id
+       LEFT JOIN inventory_warehouses w ON w.id = COALESCE(s.warehouse_id, d.warehouse_id)
       WHERE s.session_token_hash = ?
       LIMIT 1`,
     [tokenHash],
@@ -145,6 +152,7 @@ async function renewSession({ sessionToken }) {
     scopes: normalizeScopes(row.scopes),
     expiresAt: new Date(Date.now() + ttlHours * 3600 * 1000).toISOString(),
     warehouseId: row.session_warehouse_id ?? row.device_warehouse_id ?? null,
+    warehouseName: row.warehouse_name || null,
   }
 }
 

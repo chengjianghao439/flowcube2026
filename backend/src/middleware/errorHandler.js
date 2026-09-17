@@ -32,6 +32,19 @@ function errorHandler(err, req, res, next) {
     err = new AppError('仅支持上传一个文件，请移除额外文件或表单字段', 400, err.code)
   }
 
+  // ── 请求体解析失败（body-parser）────────────────────────────────────────
+  // 2026-09-17 验收修复：畸形 JSON（如 '{}{}'）此前落到「未知错误」分支，
+  // 返回 500「服务器内部错误」并打完整堆栈。这是客户端输入错误，必须是 400。
+  // 未鉴权端点也能触发，记成 ERR 会污染错误日志与错误追踪。
+  if (err.type === 'entity.parse.failed') {
+    logger.warn('请求体不是合法 JSON', { path, userId, requestId, code: 'BAD_REQUEST' }, 'ERR')
+    return errorResponse(res, '请求体不是合法的 JSON', 400, null, 'BAD_REQUEST')
+  }
+  if (err.type === 'entity.too.large') {
+    logger.warn('请求体超过大小限制', { path, userId, requestId, code: 'PAYLOAD_TOO_LARGE' }, 'ERR')
+    return errorResponse(res, '请求体过大', 413, null, 'PAYLOAD_TOO_LARGE')
+  }
+
   // ── 业务异常（可预期，不记录 error 级别）──────────────────────────────────
   if (err instanceof AppError && err.isOperational) {
     const errorCode = err.code || defaultErrorCode(err.statusCode, 'BUSINESS_ERROR')
