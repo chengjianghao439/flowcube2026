@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { X } from 'lucide-react'
@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { getOpLogsApi, clearLogsApi } from '@/api/oplogs'
 import { usePermission } from '@/hooks/usePermission'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
-import { formatDisplayDateTime } from '@/lib/dateTime'
+import { formatDisplayDateTime, defaultRangeYmds } from '@/lib/dateTime'
 import { downloadExport } from '@/lib/exportDownload'
 import { toast } from '@/lib/toast'
 import {
@@ -31,6 +31,9 @@ import OpLogQueryDialog, { type OpLogQueryValues } from './OpLogQueryDialog'
 import type { OpLog } from '@/api/oplogs'
 import type { TableColumn } from '@/types'
 import { PERMISSIONS } from '@/lib/permission-codes'
+
+/** 默认筛选的天数窗口（最近一周，含今天），口径与单据列表一致 */
+const DEFAULT_RANGE_DAYS = 7
 
 /** 日志结果 tone → 全站统一状态 tone（`@/lib/statusTone`） */
 const RESULT_TONE: Record<OperationLogStatusTone, StatusTone> = {
@@ -69,9 +72,17 @@ export default function OpLogsPage() {
   const endDate   = readStringParam(searchParams, 'endDate')
 
   const PAGE_SIZE = 20
+
+  // 默认窗口在「构造查询参数处」兜底：不依赖那个只跑一次的 effect，首次打开与切回已挂载页签范围一致。
+  // 操作日志是全站增长最快的表（每次写操作一条），没有窗口时首屏要串行拉全表。
+  const rangeAll = searchParams.get('range') === 'all'
+  const defaultRange = useMemo(() => defaultRangeYmds(DEFAULT_RANGE_DAYS), [])
+  const effectiveStartDate = startDate || (rangeAll ? '' : defaultRange.start)
+  const effectiveEndDate = endDate || (rangeAll ? '' : defaultRange.end)
+
   const { data, isLoading } = useQuery({
-    queryKey: ['oplogs', { keyword, module, startDate, endDate }],
-    queryFn: () => getOpLogsApi({ page: 1, pageSize: PAGE_SIZE, keyword, module, startDate, endDate }),
+    queryKey: ['oplogs', { keyword, module, effectiveStartDate, effectiveEndDate }],
+    queryFn: () => getOpLogsApi({ page: 1, pageSize: PAGE_SIZE, keyword, module, startDate: effectiveStartDate, endDate: effectiveEndDate }),
   })
   const total = data?.pagination?.total ?? 0
   const clear = useMutation({ mutationFn: clearLogsApi, onSuccess: () => qc.invalidateQueries({ queryKey: ['oplogs'] }) })
@@ -80,8 +91,16 @@ export default function OpLogsPage() {
     setSearchParams(upsertSearchParams(searchParams, updates))
   }
 
-  // 查询弹窗初始值
-  const initialQuery: OpLogQueryValues = { keyword, module, startDate, endDate }
+  // 首次打开：把默认窗口写进 URL（便于分享与回看）。真正的筛选兜底在构造查询处。
+  useEffect(() => {
+    if (!startDate && !endDate && searchParams.get('range') !== 'all') {
+      setSearchParams(upsertSearchParams(searchParams, { startDate: defaultRange.start, endDate: defaultRange.end }), { replace: true })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // 查询弹窗初始值：日期用「当前实际生效」的范围（含默认窗口），用户打开就能看见
+  const initialQuery: OpLogQueryValues = { keyword, module, startDate: effectiveStartDate, endDate: effectiveEndDate }
 
   function applyQuery(v: OpLogQueryValues) {
     updateParams({
@@ -89,12 +108,22 @@ export default function OpLogsPage() {
       module: v.module || null,
       startDate: v.startDate || null,
       endDate: v.endDate || null,
+      // 弹窗里清空日期＝明确要看全部；设了日期则清掉 range 标记
+      range: (!v.startDate && !v.endDate) ? 'all' : null,
     });
     setQueryOpen(false)
   }
 
   function clearAll() {
-    updateParams({ keyword: null, module: null, startDate: null, endDate: null });
+    updateParams({ keyword: null, module: null, startDate: null, endDate: null, range: 'all' });
+  }
+
+  // 导出参数（与列表当前筛选保持一致，含默认窗口）
+  const exportParams = {
+    ...(keyword ? { keyword } : {}),
+    ...(module ? { module } : {}),
+    ...(effectiveStartDate ? { startDate: effectiveStartDate } : {}),
+    ...(effectiveEndDate ? { endDate: effectiveEndDate } : {}),
   }
 
   // 当前生效筛选摘要（可逐项移除）
@@ -150,7 +179,7 @@ export default function OpLogsPage() {
     <div className="space-y-4">
       <PageHeader title="操作日志" description="记录所有写操作，追踪变更历史" actions={
         <>
-          <Button variant="outline" onClick={() => downloadExport('/export/oplogs').catch(e => toast.error((e as Error).message))}>导出</Button>
+          <Button variant="outline" onClick={() => downloadExport('/export/oplogs', exportParams).catch(e => toast.error((e as Error).message))}>导出</Button>
           <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
           {can(PERMISSIONS.AUDIT_LOG_CLEAR) ? <Button variant="destructive" size="sm" onClick={() => setClearConfirm(true)}>清理旧日志</Button> : undefined}
         </>
@@ -171,6 +200,12 @@ export default function OpLogsPage() {
       <DataTable virtualized columns={columns} data={data?.list || []} loading={isLoading} />
 
       <ListSummary total={total} unit="条" />
+      {/* 操作日志是全站增长最快的表：自动取齐到上限即停，这里如实说明，避免"看起来只有这么多" */}
+      {data?.truncated && (
+        <p className="mt-1 text-xs text-muted-foreground">
+          仅加载最近 {data.list.length.toLocaleString()} 条（已达取数上限），请缩小时间范围或加筛选条件查看更早的日志。
+        </p>
+      )}
       <ConfirmDialog
         open={clearConfirm}
         title="清理旧日志"
@@ -224,6 +259,7 @@ export default function OpLogsPage() {
       <OpLogQueryDialog
         open={queryOpen}
         initial={initialQuery}
+        resetValues={{ startDate: defaultRange.start, endDate: defaultRange.end }}
         onClose={() => setQueryOpen(false)}
         onApply={applyQuery}
       />

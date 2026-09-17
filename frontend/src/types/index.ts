@@ -16,6 +16,11 @@ export interface ApiErrorResponse<T = unknown> {
 export interface PaginatedData<T> {
   list: T[]
   pagination: Pagination
+  /**
+   * 列表被自动取齐的上限截断时为 true（此时 `pagination.total` 仍是真实总数、`list` 只到上限）。
+   * 页面应据此提示用户用筛选缩小范围。
+   */
+  truncated?: boolean
 }
 
 export interface Pagination {

@@ -33,3 +33,20 @@ test('中止后不再请求后续批次', async () => {
   await expect(collectAllRecords(fetch,controller.signal)).rejects.toThrow()
   expect(fetch).toHaveBeenCalledTimes(1)
 })
+
+test('达到取数上限即停并如实标记，不因拉不满而报错', async () => {
+  // 3.8 万条日志表：上限 400 时只取 2 页就停，不再串行拉完 190+ 页
+  const fetch = vi.fn(async (page: number, pageSize?: number) => batch(page, 38554, pageSize))
+  const result = await collectAllRecords(fetch, undefined, 400) as { truncated?: boolean; list: unknown[]; pagination: { total: number } }
+
+  expect(result.list).toHaveLength(400)
+  expect(fetch).toHaveBeenCalledTimes(2)
+  expect(result.pagination.total, '真实总数仍如实返回，便于页面提示用户').toBe(38554)
+  expect(result.truncated).toBe(true)
+})
+
+test('未达上限时标记为非截断', async () => {
+  const result = await collectAllRecords(async (page, pageSize) => batch(page, 1205, pageSize), undefined, 5000) as { truncated?: boolean; list: unknown[] }
+  expect(result.list).toHaveLength(1205)
+  expect(result.truncated).toBe(false)
+})
