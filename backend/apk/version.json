@@ -1,7 +1,7 @@
 {
-  "version": "0.9.17",
-  "versionCode": 125,
+  "version": "0.9.18",
+  "versionCode": 126,
   "filename": "app-release.apk",
-  "releaseNote": "- **PDA 收货：多商品收货单收到一半被卡住**",
-  "publishedAt": "2026-09-16T15:20:50.038Z"
+  "releaseNote": "- **操作日志能正常打开了**",
+  "publishedAt": "2026-09-17T10:21:37.098Z"
 }
