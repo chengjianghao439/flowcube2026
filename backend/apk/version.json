@@ -1,7 +1,7 @@
 {
-  "version": "0.9.18",
-  "versionCode": 126,
+  "version": "0.9.19",
+  "versionCode": 127,
   "filename": "app-release.apk",
-  "releaseNote": "- **操作日志能正常打开了**",
-  "publishedAt": "2026-09-17T10:21:37.098Z"
+  "releaseNote": "本版以修复为主，集中在权限拦截、盘点安全、PDA 显示与库存口径准确性上。",
+  "publishedAt": "2026-09-17T12:57:03.508Z"
 }
