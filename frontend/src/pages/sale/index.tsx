@@ -303,6 +303,7 @@ export default function SalePage() {
       <SaleQueryDialog
         open={queryOpen}
         initial={initialQuery}
+        resetValues={{ startDate: defaultRange.start, endDate: defaultRange.end }}
         onClose={() => setQueryOpen(false)}
         onApply={applyQuery}
       />

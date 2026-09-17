@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { X } from 'lucide-react'
@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { getTransferListApi, confirmTransferApi, cancelTransferApi, forceCloseTransferApi } from '@/api/transfer'
 import { downloadExport } from '@/lib/exportDownload'
-import { formatDisplayDateTime } from '@/lib/dateTime'
+import { formatDisplayDateTime, defaultRangeYmds } from '@/lib/dateTime'
 import { readStringParam, upsertSearchParams } from '@/lib/urlSearchParams'
 import { toast } from '@/lib/toast'
 import { useWorkspaceStore } from '@/store/workspaceStore'
@@ -23,14 +23,8 @@ import type { TableColumn } from '@/types'
 
 const STATUS_LABELS: Record<string, string> = { '1': '草稿', '2': '待出库', '3': '在途', '4': '已完成', '5': '已取消' }
 
-/** 首次打开调拨页时默认筛选的天数窗口（最近一周） */
+/** 默认筛选的天数窗口（最近一周，含今天），口径与销售/采购/收货一致 */
 const DEFAULT_RANGE_DAYS = 7
-function toYmd(d: Date): string {
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
 
 export default function TransferPage() {
   const qc = useQueryClient()
@@ -62,9 +56,16 @@ export default function TransferPage() {
   const startDate     = readStringParam(searchParams, 'startDate')
   const endDate       = readStringParam(searchParams, 'endDate')
 
+  // 默认窗口在「构造查询参数处」兜底（与销售/采购/收货同一写法）：不依赖那个只跑一次的 effect，
+  // 因此首次打开与从菜单切回已挂载页签的范围一致。range=all 是「清空」写下的显式意图（看全部）。
+  const rangeAll = searchParams.get('range') === 'all'
+  const defaultRange = useMemo(() => defaultRangeYmds(DEFAULT_RANGE_DAYS), [])
+  const effectiveStartDate = startDate || (rangeAll ? '' : defaultRange.start)
+  const effectiveEndDate = endDate || (rangeAll ? '' : defaultRange.end)
+
   const PAGE_SIZE = 20
   const { data, isLoading } = useQuery({
-    queryKey: ['transfer', { keyword, remark, operatorId, statusFilter, productId, warehouseId, startDate, endDate }],
+    queryKey: ['transfer', { keyword, remark, operatorId, statusFilter, productId, warehouseId, effectiveStartDate, effectiveEndDate }],
     queryFn: () => getTransferListApi({
       page: 1,
       pageSize: PAGE_SIZE,
@@ -74,8 +75,8 @@ export default function TransferPage() {
       status: statusFilter || undefined,
       productId: productId || undefined,
       warehouseId: warehouseId || undefined,
-      startDate: startDate || undefined,
-      endDate: endDate || undefined,
+      startDate: effectiveStartDate || undefined,
+      endDate: effectiveEndDate || undefined,
     }).then(r => r!),
   })
   const total = data?.pagination?.total ?? 0
@@ -92,13 +93,11 @@ export default function TransferPage() {
     setSearchParams(upsertSearchParams(searchParams, updates))
   }
 
-  // 首次打开：无日期筛选时默认套用最近一周
+  // 首次打开：把默认窗口写进 URL（便于分享与回看）。这只是让 URL 反映筛选，
+  // 真正的筛选兜底在构造查询处——所以即使这个 effect 没跑（页签已挂载），范围也一致。
   useEffect(() => {
-    if (!startDate && !endDate) {
-      const end = new Date()
-      const start = new Date()
-      start.setDate(start.getDate() - DEFAULT_RANGE_DAYS)
-      setSearchParams(upsertSearchParams(searchParams, { startDate: toYmd(start), endDate: toYmd(end) }), { replace: true })
+    if (!startDate && !endDate && searchParams.get('range') !== 'all') {
+      setSearchParams(upsertSearchParams(searchParams, { startDate: defaultRange.start, endDate: defaultRange.end }), { replace: true })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -121,16 +120,16 @@ export default function TransferPage() {
     ...(statusFilter ? { status: statusFilter } : {}),
     ...(productId ? { productId: String(productId) } : {}),
     ...(warehouseId ? { warehouseId: String(warehouseId) } : {}),
-    ...(startDate ? { startDate } : {}),
-    ...(endDate ? { endDate } : {}),
+    ...(effectiveStartDate ? { startDate: effectiveStartDate } : {}),
+    ...(effectiveEndDate ? { endDate: effectiveEndDate } : {}),
   }
 
-  // 查询弹窗初始值
+  // 查询弹窗初始值：日期用「当前实际生效」的范围（含默认窗口），用户打开就能看见
   const initialQuery: TransferQueryValues = {
     keyword, remark, operatorId, operatorName, status: statusFilter,
     productId, productCode, productName,
     warehouseId, warehouseName,
-    startDate, endDate,
+    startDate: effectiveStartDate, endDate: effectiveEndDate,
   }
 
   function applyQuery(v: TransferQueryValues) {
@@ -147,6 +146,8 @@ export default function TransferPage() {
       warehouseName: v.warehouseName || null,
       startDate: v.startDate || null,
       endDate: v.endDate || null,
+      // 弹窗里清空日期＝明确要看全部；设了日期则清掉 range 标记
+      range: (!v.startDate && !v.endDate) ? 'all' : null,
       page: 1, // 筛选变化回到第一页
     })
     setQueryOpen(false)
@@ -158,6 +159,8 @@ export default function TransferPage() {
       productId: null, productCode: null, productName: null,
       warehouseId: null, warehouseName: null,
       startDate: null, endDate: null,
+      // 显式声明「看全部」：否则「没有日期」会被默认窗口接管，清空之后又只剩最近一周
+      range: 'all',
       page: 1,
     })
   }
@@ -308,6 +311,7 @@ export default function TransferPage() {
       <TransferQueryDialog
         open={queryOpen}
         initial={initialQuery}
+        resetValues={{ startDate: defaultRange.start, endDate: defaultRange.end }}
         onClose={() => setQueryOpen(false)}
         onApply={applyQuery}
       />

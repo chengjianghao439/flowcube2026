@@ -147,13 +147,16 @@ async function getAvailabilityByProducts({ productIds, scopeWarehouseIds = null,
 
 // ─── 流水记录 ─────────────────────────────────────────────────────────────────
 
-async function getLogs({ page=1, pageSize=20, type=null, productId=null, warehouseId=null, scopeWarehouseIds=null }) {
+async function getLogs({ page=1, pageSize=20, type=null, productId=null, warehouseId=null, startDate=null, endDate=null, scopeWarehouseIds=null }) {
   const { pageSize: ps, offset } = normalizePagination({ page, pageSize })
   const conditions = ['1=1']
   const params = []
   if (type) { conditions.push('l.type=?'); params.push(type) }
   if (productId) { conditions.push('l.product_id=?'); params.push(productId) }
   if (warehouseId) { conditions.push('l.warehouse_id=?'); params.push(warehouseId) }
+  // 日期用半开区间，与 /export/inventory-logs 同一口径（流水按天累积，列表默认带窗口以免取齐全表）
+  if (startDate) { conditions.push('l.created_at >= ?'); params.push(`${String(startDate).slice(0, 10)} 00:00:00`) }
+  if (endDate) { conditions.push('l.created_at < DATE_ADD(?, INTERVAL 1 DAY)'); params.push(String(endDate).slice(0, 10)) }
   const scope = scopeFilter(scopeWarehouseIds, 'l.warehouse_id')
   const where = conditions.join(' AND ') + scope.sql
 

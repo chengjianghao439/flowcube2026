@@ -338,6 +338,8 @@ export default function PickingWavesPage() {
       <WaveQueryDialog
         open={queryOpen}
         initial={initialQuery}
+        // 本页默认与重置均不限制日期（见 AGENTS.md 第 9 节），显式声明以免 EMPTY 变化时行为漂移
+        resetValues={{ startDate: '', endDate: '' }}
         onClose={() => setQueryOpen(false)}
         onApply={applyQuery}
       />

@@ -22,12 +22,15 @@ const EMPTY: RefundQueryValues = {
 interface Props {
   open: boolean
   initial: RefundQueryValues
+  /** 「重置」回到的值；页面用它把日期重置回该页面的默认窗口（不传则用弹窗空值） */
+  resetValues?: Partial<RefundQueryValues>
   onClose: () => void
   onApply: (values: RefundQueryValues) => void
 }
 
-export default function RefundQueryDialog({ open, initial, onClose, onApply }: Props) {
+export default function RefundQueryDialog({ open, initial, resetValues, onClose, onApply }: Props) {
   const [draft, setDraft] = useState<RefundQueryValues>(EMPTY)
+  const resetDraft = () => ({ ...EMPTY, ...resetValues })
 
   useEffect(() => { if (open) setDraft(initial) }, [open, initial])
 
@@ -48,7 +51,7 @@ export default function RefundQueryDialog({ open, initial, onClose, onApply }: P
       minHeight={420}
       footer={
         <div className="flex justify-between gap-2">
-          <Button variant="ghost" onClick={() => setDraft(EMPTY)}>重置</Button>
+          <Button variant="ghost" onClick={() => setDraft(resetDraft())}>重置</Button>
           <div className="flex gap-2">
             <Button variant="outline" onClick={onClose}>取消</Button>
             <Button onClick={() => onApply(draft)}>查询</Button>

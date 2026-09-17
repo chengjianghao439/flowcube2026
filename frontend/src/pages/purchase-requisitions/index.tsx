@@ -149,6 +149,7 @@ export default function RequisitionsPage() {
       <RequisitionQueryDialog
         open={queryOpen}
         initial={initialQuery}
+        resetValues={{ startDate: '', endDate: '' }}
         onClose={() => setQueryOpen(false)}
         onApply={applyQuery}
       />

@@ -430,6 +430,7 @@ export default function InboundTasksPage() {
       <InboundTaskQueryDialog
         open={queryOpen}
         initial={initialQuery}
+        resetValues={{ startDate: defaultRange.start, endDate: defaultRange.end }}
         onClose={() => setQueryOpen(false)}
         onApply={applyQuery}
       />

@@ -41,12 +41,15 @@ interface Props {
   open: boolean
   type: 'purchase' | 'sale'
   initial: ReturnQueryValues
+  /** 「重置」回到的值；页面用它把日期重置回该页面的默认窗口（不传则用弹窗空值） */
+  resetValues?: Partial<ReturnQueryValues>
   onClose: () => void
   onApply: (values: ReturnQueryValues) => void
 }
 
-export default function ReturnQueryDialog({ open, type, initial, onClose, onApply }: Props) {
+export default function ReturnQueryDialog({ open, type, initial, resetValues, onClose, onApply }: Props) {
   const [draft, setDraft] = useState<ReturnQueryValues>(EMPTY)
+  const resetDraft = () => ({ ...EMPTY, ...resetValues })
   const [partyOpen, setPartyOpen] = useState(false)
   const [productOpen, setProductOpen] = useState(false)
   const partyLabel = type === 'purchase' ? '供应商' : '客户'
@@ -73,7 +76,7 @@ export default function ReturnQueryDialog({ open, type, initial, onClose, onAppl
         minHeight={420}
         footer={
           <div className="flex justify-between gap-2">
-            <Button variant="ghost" onClick={() => setDraft(EMPTY)}>重置</Button>
+            <Button variant="ghost" onClick={() => setDraft(resetDraft())}>重置</Button>
             <div className="flex gap-2">
               <Button variant="outline" onClick={onClose}>取消</Button>
               <Button onClick={() => onApply(draft)}>查询</Button>

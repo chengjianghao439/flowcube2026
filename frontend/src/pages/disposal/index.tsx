@@ -137,6 +137,7 @@ export default function DisposalPage() {
       <DisposalQueryDialog
         open={queryOpen}
         initial={initialQuery}
+        resetValues={{ startDate: '', endDate: '' }}
         onClose={() => setQueryOpen(false)}
         onApply={applyQuery}
       />

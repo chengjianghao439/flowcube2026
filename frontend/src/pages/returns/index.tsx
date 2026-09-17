@@ -1,5 +1,5 @@
 import { RecordIdentity } from '@/components/shared/RecordIdentity'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { X } from 'lucide-react'
@@ -16,7 +16,7 @@ import { mapReturnOrderToPrint } from '@/lib/orderPrintData'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { toast } from '@/lib/toast'
 import { useWorkspaceStore } from '@/store/workspaceStore'
-import { formatDisplayDateTime } from '@/lib/dateTime'
+import { formatDisplayDateTime, defaultRangeYmds } from '@/lib/dateTime'
 import { readStringParam, upsertSearchParams } from '@/lib/urlSearchParams'
 import ReturnQueryDialog, { type ReturnQueryValues } from './ReturnQueryDialog'
 import type { PurchaseReturn, SaleReturn } from '@/api/returns'
@@ -27,14 +27,8 @@ type ReturnType = 'purchase' | 'sale'
 
 const STATUS_LABELS: Record<string, string> = { '1': '草稿', '2': '已确认', '3': '已执行', '4': '已取消' }
 
-/** 首次打开退货页时默认筛选的天数窗口（最近一周） */
+/** 默认筛选的天数窗口（最近一周，含今天），口径与销售/采购/收货/调拨一致 */
 const DEFAULT_RANGE_DAYS = 7
-function toYmd(d: Date): string {
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
 
 export default function ReturnsPage() {
   const qc = useQueryClient()
@@ -79,8 +73,16 @@ export default function ReturnsPage() {
   const partyParamKey = type === 'purchase' ? 'supplierId' : 'customerId'
 
   const PAGE_SIZE = 20
+
+  // 默认窗口在「构造查询参数处」兜底（与销售/采购/收货/调拨同一写法）：不依赖那个只跑一次的
+  // effect，因此首次打开与从菜单切回已挂载页签的范围一致。range=all 是「清空」的显式意图（看全部）。
+  const rangeAll = searchParams.get('range') === 'all'
+  const defaultRange = useMemo(() => defaultRangeYmds(DEFAULT_RANGE_DAYS), [])
+  const effectiveStartDate = startDate || (rangeAll ? '' : defaultRange.start)
+  const effectiveEndDate = endDate || (rangeAll ? '' : defaultRange.end)
+
   const { data, isLoading } = useQuery({
-    queryKey: ['returns', type, { keyword, remark, operatorId, statusFilter, productId, partyId, warehouseId, startDate, endDate }],
+    queryKey: ['returns', type, { keyword, remark, operatorId, statusFilter, productId, partyId, warehouseId, effectiveStartDate, effectiveEndDate }],
     queryFn: () => apiList({
       page: 1,
       pageSize: PAGE_SIZE,
@@ -91,8 +93,8 @@ export default function ReturnsPage() {
       productId: productId || undefined,
       [partyParamKey]: partyId || undefined,
       warehouseId: warehouseId || undefined,
-      startDate: startDate || undefined,
-      endDate: endDate || undefined,
+      startDate: effectiveStartDate || undefined,
+      endDate: effectiveEndDate || undefined,
     }).then(r => r!),
   })
   const total = data?.pagination?.total ?? 0
@@ -111,13 +113,11 @@ export default function ReturnsPage() {
     setSearchParams(upsertSearchParams(searchParams, updates))
   }
 
-  // 首次打开：无日期筛选时默认套用最近一周
+  // 首次打开：把默认窗口写进 URL（便于分享与回看）。这只是让 URL 反映筛选，
+  // 真正的筛选兜底在构造查询处——所以即使这个 effect 没跑（页签已挂载），范围也一致。
   useEffect(() => {
-    if (!startDate && !endDate) {
-      const end = new Date()
-      const start = new Date()
-      start.setDate(start.getDate() - DEFAULT_RANGE_DAYS)
-      setSearchParams(upsertSearchParams(searchParams, { startDate: toYmd(start), endDate: toYmd(end) }), { replace: true })
+    if (!startDate && !endDate && searchParams.get('range') !== 'all') {
+      setSearchParams(upsertSearchParams(searchParams, { startDate: defaultRange.start, endDate: defaultRange.end }), { replace: true })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -142,17 +142,17 @@ export default function ReturnsPage() {
     ...(productId ? { productId: String(productId) } : {}),
     ...(partyId ? { [partyParamKey]: String(partyId) } : {}),
     ...(warehouseId ? { warehouseId: String(warehouseId) } : {}),
-    ...(startDate ? { startDate } : {}),
-    ...(endDate ? { endDate } : {}),
+    ...(effectiveStartDate ? { startDate: effectiveStartDate } : {}),
+    ...(effectiveEndDate ? { endDate: effectiveEndDate } : {}),
   }
 
-  // 查询弹窗初始值
+  // 查询弹窗初始值：日期用「当前实际生效」的范围（含默认窗口），用户打开就能看见
   const initialQuery: ReturnQueryValues = {
     keyword, remark, operatorId, operatorName, status: statusFilter,
     productId, productCode, productName,
     partyId, partyName,
     warehouseId, warehouseName,
-    startDate, endDate,
+    startDate: effectiveStartDate, endDate: effectiveEndDate,
   }
 
   function applyQuery(v: ReturnQueryValues) {
@@ -171,6 +171,8 @@ export default function ReturnsPage() {
       warehouseName: v.warehouseName || null,
       startDate: v.startDate || null,
       endDate: v.endDate || null,
+      // 弹窗里清空日期＝明确要看全部；设了日期则清掉 range 标记
+      range: (!v.startDate && !v.endDate) ? 'all' : null,
       page: 1, // 筛选变化回到第一页
     })
     setQueryOpen(false)
@@ -183,6 +185,8 @@ export default function ReturnsPage() {
       partyId: null, partyName: null,
       warehouseId: null, warehouseName: null,
       startDate: null, endDate: null,
+      // 显式声明「看全部」：否则「没有日期」会被默认窗口接管，清空之后又只剩最近一周
+      range: 'all',
       page: 1,
     })
   }
@@ -260,7 +264,6 @@ export default function ReturnsPage() {
         }
       />
 
-      {type === 'sale' && <div className="flex items-center justify-between rounded-lg border bg-card px-4 py-3 text-sm"><span className="text-muted-foreground">创建日期：{startDate || '不限'} 至 {endDate || '不限'}</span><span className="text-xs text-muted-foreground">共 {total.toLocaleString()} 张退货单</span></div>}
       {chips.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
           {chips.map(c => (
@@ -302,6 +305,7 @@ export default function ReturnsPage() {
         open={queryOpen}
         type={type}
         initial={initialQuery}
+        resetValues={{ startDate: defaultRange.start, endDate: defaultRange.end }}
         onClose={() => setQueryOpen(false)}
         onApply={applyQuery}
       />

@@ -67,6 +67,8 @@ async function logs(req, res, next) {
       type: req.query.type ? +req.query.type : null,
       productId: req.query.productId ? +req.query.productId : null,
       warehouseId: req.query.warehouseId ? +req.query.warehouseId : null,
+      startDate: req.query.startDate || null,
+      endDate: req.query.endDate || null,
       scopeWarehouseIds: req.user?.warehouseIds ?? null,
     })
     return successResponse(res, result, '查询成功')

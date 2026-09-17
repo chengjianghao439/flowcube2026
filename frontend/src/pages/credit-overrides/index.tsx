@@ -275,6 +275,7 @@ export default function CreditOverridesPage() {
       <CreditOverrideQueryDialog
         open={queryOpen}
         initial={initialQuery}
+        resetValues={{ startDate: '', endDate: '' }}
         onClose={() => setQueryOpen(false)}
         onApply={applyQuery}
       />

@@ -130,6 +130,7 @@ export default function RefundsPage() {
       <RefundQueryDialog
         open={queryOpen}
         initial={initialQuery}
+        resetValues={{ startDate: '', endDate: '' }}
         onClose={() => setQueryOpen(false)}
         onApply={applyQuery}
       />

@@ -25,12 +25,15 @@ const EMPTY: WaveQueryValues = {
 interface Props {
   open: boolean
   initial: WaveQueryValues
+  /** 「重置」回到的值；页面用它把日期重置回该页面的默认窗口（不传则用弹窗空值） */
+  resetValues?: Partial<WaveQueryValues>
   onClose: () => void
   onApply: (values: WaveQueryValues) => void
 }
 
-export default function WaveQueryDialog({ open, initial, onClose, onApply }: Props) {
+export default function WaveQueryDialog({ open, initial, resetValues, onClose, onApply }: Props) {
   const [draft, setDraft] = useState<WaveQueryValues>(EMPTY)
+  const resetDraft = () => ({ ...EMPTY, ...resetValues })
 
   useEffect(() => { if (open) setDraft(initial) }, [open, initial])
 
@@ -51,7 +54,7 @@ export default function WaveQueryDialog({ open, initial, onClose, onApply }: Pro
       minHeight={420}
       footer={
         <div className="flex justify-between gap-2">
-          <Button variant="ghost" onClick={() => setDraft(EMPTY)}>重置</Button>
+          <Button variant="ghost" onClick={() => setDraft(resetDraft())}>重置</Button>
           <div className="flex gap-2">
             <Button variant="outline" onClick={onClose}>取消</Button>
             <Button onClick={() => onApply(draft)}>查询</Button>

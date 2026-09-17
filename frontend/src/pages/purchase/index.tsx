@@ -379,6 +379,7 @@ export default function PurchasePage() {
       <PurchaseQueryDialog
         open={queryOpen}
         initial={initialQuery}
+        resetValues={{ startDate: defaultRange.start, endDate: defaultRange.end }}
         onClose={() => setQueryOpen(false)}
         onApply={applyQuery}
       />

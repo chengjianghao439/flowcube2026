@@ -5,7 +5,7 @@ import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
 import { ProductIdentityCells } from '@/components/shared/ProductIdentityCells'
 import { ImportSteps } from '@/components/shared/ImportSteps'
-import { useState, useRef, useContext } from 'react'
+import { useState, useRef, useContext, useMemo } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Package, Warehouse, Lock, CheckCircle, X } from 'lucide-react'
 import { downloadExport } from '@/lib/exportDownload'
@@ -26,7 +26,7 @@ import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
 import ContainerDrawer from '@/components/shared/ContainerDrawer'
 import CategoryPathDisplay from '@/components/shared/CategoryPathDisplay'
 import { useCategoryTree } from '@/hooks/useCategories'
-import { formatDisplayDateTime } from '@/lib/dateTime'
+import { formatDisplayDateTime, defaultRangeYmds } from '@/lib/dateTime'
 import InventoryOverviewQueryDialog, { type InventoryOverviewQueryValues } from './InventoryOverviewQueryDialog'
 import InventoryLogsQueryDialog, { type InventoryLogsQueryValues } from './InventoryLogsQueryDialog'
 import type { InventoryLog, InventoryOverviewItem } from '@/types/inventory'
@@ -86,6 +86,9 @@ function findCatName(nodes: Category[], id: number): string | null {
   return null
 }
 
+/** 出入库记录默认筛选的天数窗口（最近一周，含今天），口径与单据列表一致 */
+const LOG_DEFAULT_RANGE_DAYS = 7
+
 // ─── 主页面 ───────────────────────────────────────────────────────────────────
 
 export default function InventoryPage() {
@@ -108,6 +111,8 @@ export default function InventoryPage() {
   const logProductName = readStringParam(searchParams, 'logProductName')
   const logWarehouseId = readNullableIntParam(searchParams, 'logWarehouseId')
   const logWarehouseName = readStringParam(searchParams, 'logWarehouseName')
+  const logStartDate = readStringParam(searchParams, 'logStartDate')
+  const logEndDate = readStringParam(searchParams, 'logEndDate')
 
   // 总览和流水分别按当前筛选条件读取完整列表。
 
@@ -131,12 +136,21 @@ export default function InventoryPage() {
   const [productFinderOpen,  setProductFinderOpen]  = useState(false)
 
   const PAGE_SIZE = 20
+
+  // 出入库记录按天累积（每次库存动作一条），默认窗口在「构造查询参数处」兜底，不依赖 effect：
+  // 首次打开与切回已挂载页签范围一致。logRange=all 是「清空」写下的显式意图（看全部）。
+  const logRangeAll = searchParams.get('logRange') === 'all'
+  const defaultLogRange = useMemo(() => defaultRangeYmds(LOG_DEFAULT_RANGE_DAYS), [])
+  const effectiveLogStartDate = logStartDate || (logRangeAll ? '' : defaultLogRange.start)
+  const effectiveLogEndDate = logEndDate || (logRangeAll ? '' : defaultLogRange.end)
+
   const { data: overview, isLoading: overviewLoading } = useInventoryOverview({
     page: 1, pageSize: PAGE_SIZE, keyword, warehouseId, categoryId,
   }, active && tab === 'overview')
   const { data: logs, isLoading: logLoading } = useLogs({
     page: 1, pageSize: PAGE_SIZE, type: logType,
     productId: logProductId ?? undefined, warehouseId: logWarehouseId ?? undefined,
+    startDate: effectiveLogStartDate || undefined, endDate: effectiveLogEndDate || undefined,
   }, active && tab === 'logs')
   const overviewTotal = overview?.pagination?.total ?? 0
   const logsTotal = logs?.pagination?.total ?? 0
@@ -182,6 +196,8 @@ export default function InventoryPage() {
     type: logType,
     productId: logProductId, productCode: '', productName: logProductName,
     warehouseId: logWarehouseId, warehouseName: logWarehouseName || logsWarehouseName || '',
+    // 日期用「当前实际生效」的范围（含默认窗口），用户打开就能看见
+    startDate: effectiveLogStartDate, endDate: effectiveLogEndDate,
   }
   function applyLogsQuery(v: InventoryLogsQueryValues) {
     updateParams({
@@ -190,6 +206,10 @@ export default function InventoryPage() {
       logProductName: v.productName || null,
       logWarehouseId: v.warehouseId || null,
       logWarehouseName: v.warehouseName || null,
+      logStartDate: v.startDate || null,
+      logEndDate: v.endDate || null,
+      // 弹窗里清空日期＝明确要看全部；设了日期则清掉 range 标记
+      logRange: (!v.startDate && !v.endDate) ? 'all' : null,
       logPage: 1,
     })
     setLogsQueryOpen(false)
@@ -213,7 +233,7 @@ export default function InventoryPage() {
     if (tab === 'overview') {
       updateParams({ keyword: null, categoryId: null, warehouseId: null, warehouseName: null, page: 1 })
     } else {
-      updateParams({ logType: null, logProductId: null, logProductName: null, logWarehouseId: null, logWarehouseName: null, logPage: 1 })
+      updateParams({ logType: null, logProductId: null, logProductName: null, logWarehouseId: null, logWarehouseName: null, logStartDate: null, logEndDate: null, logRange: 'all', logPage: 1 })
     }
   }
 
@@ -267,7 +287,14 @@ export default function InventoryPage() {
       <PageHeader title="库存管理" description="库存总览与出入库记录；采购入库请走「收货订单」上架后计入库存" actions={
         <div className="flex gap-2 flex-wrap">
           <Button variant="outline" onClick={() => tab === 'logs' ? setLogsQueryOpen(true) : setOverviewQueryOpen(true)}>查询</Button>
-          <Button variant="outline" onClick={() => downloadExport(tab === 'logs' ? '/export/inventory-logs' : '/export/stock').catch(e => toast.error((e as Error).message))}>导出 Excel</Button>
+          <Button variant="outline" onClick={() => downloadExport(
+            tab === 'logs' ? '/export/inventory-logs' : '/export/stock',
+            // 出入库记录导出沿用列表的日期窗口（该导出接口目前只支持日期条件）
+            tab === 'logs' ? {
+              ...(effectiveLogStartDate ? { startDate: effectiveLogStartDate } : {}),
+              ...(effectiveLogEndDate ? { endDate: effectiveLogEndDate } : {}),
+            } : undefined,
+          ).catch(e => toast.error((e as Error).message))}>导出 Excel</Button>
           <Button variant="outline" onClick={() => setImportOpen(true)} disabled={tab !== 'overview'}>导入库存</Button>
           <Button variant="outline" onClick={() => openOp('outbound')}>出库</Button>
           <Button variant="outline" asChild><Link to="/stockcheck">库存盘点</Link></Button>
@@ -433,6 +460,7 @@ export default function InventoryPage() {
       <InventoryLogsQueryDialog
         open={logsQueryOpen}
         initial={initialLogsQuery}
+        resetValues={{ startDate: defaultLogRange.start, endDate: defaultLogRange.end }}
         onClose={() => setLogsQueryOpen(false)}
         onApply={applyLogsQuery}
       />

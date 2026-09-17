@@ -12,6 +12,7 @@ import { confirmAction } from '@/lib/confirm'
 import { downloadExport } from '@/lib/exportDownload'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
+import ListSummary from '@/components/shared/ListSummary'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
@@ -145,11 +146,6 @@ export default function LogisticsPage() {
         }
       />
 
-      <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-        <span className="text-muted-foreground">创建日期：{applied.startDate || '不限'} 至 {applied.endDate || '不限'}</span>
-        <span className="text-xs text-muted-foreground">共 {list.length} 张运单</span>
-      </div>
-
       {chips.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
           {chips.map(c => (
@@ -167,13 +163,16 @@ export default function LogisticsPage() {
       {isError && !data ? (
         <QueryErrorState error={error} onRetry={() => void refetch()} title="运单加载失败" compact />
       ) : (
-        <DataTable
-          columns={columns}
-          data={list}
-          loading={isLoading}
-          rowKey="id"
-          emptyText="暂无运单"
-        />
+        <>
+          <DataTable
+            columns={columns}
+            data={list}
+            loading={isLoading}
+            rowKey="id"
+            emptyText="暂无运单"
+          />
+          <ListSummary total={list.length} unit="张运单" />
+        </>
       )}
 
       <Dialog open={!!trackTarget} onOpenChange={v => { if (!v) { setTrackTarget(null); setTrackingInput('') } }}>
@@ -196,6 +195,7 @@ export default function LogisticsPage() {
       <WaybillQueryDialog
         open={queryOpen}
         initial={initialQuery}
+        resetValues={{ startDate: todayYmd(), endDate: todayYmd() }}
         onClose={() => setQueryOpen(false)}
         onApply={applyQuery}
       />

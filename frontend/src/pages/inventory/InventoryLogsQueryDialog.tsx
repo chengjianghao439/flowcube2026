@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ProductFinder } from '@/components/finder'
 import { QueryPickerField } from '@/components/shared/QueryPickerField'
+import { DatePicker } from '@/components/shared/DatePicker'
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
 
 /** 出入库记录查询弹窗对外的筛选值（与 URL 参数一一对应） */
@@ -15,24 +16,30 @@ export interface InventoryLogsQueryValues {
   productName: string
   warehouseId: number | null
   warehouseName: string
+  startDate: string
+  endDate: string
 }
 
 const EMPTY: InventoryLogsQueryValues = {
   type: null,
   productId: null, productCode: '', productName: '',
   warehouseId: null, warehouseName: '',
+  startDate: '', endDate: '',
 }
 
 interface Props {
   open: boolean
   initial: InventoryLogsQueryValues
+  /** 「重置」回到的值；页面用它把日期重置回该页面的默认窗口（不传则用弹窗空值） */
+  resetValues?: Partial<InventoryLogsQueryValues>
   onClose: () => void
   onApply: (values: InventoryLogsQueryValues) => void
 }
 
-export default function InventoryLogsQueryDialog({ open, initial, onClose, onApply }: Props) {
+export default function InventoryLogsQueryDialog({ open, initial, resetValues, onClose, onApply }: Props) {
   const [draft, setDraft] = useState<InventoryLogsQueryValues>(EMPTY)
   const [productOpen, setProductOpen] = useState(false)
+  const resetDraft = () => ({ ...EMPTY, ...resetValues })
 
   useEffect(() => { if (open) setDraft(initial) }, [open, initial])
 
@@ -50,7 +57,7 @@ export default function InventoryLogsQueryDialog({ open, initial, onClose, onApp
         minHeight={380}
         footer={
           <div className="flex justify-between gap-2">
-            <Button variant="ghost" onClick={() => setDraft(EMPTY)}>重置</Button>
+            <Button variant="ghost" onClick={() => setDraft(resetDraft())}>重置</Button>
             <div className="flex gap-2">
               <Button variant="outline" onClick={onClose}>取消</Button>
               <Button onClick={() => onApply(draft)}>查询</Button>
@@ -91,6 +98,17 @@ export default function InventoryLogsQueryDialog({ open, initial, onClose, onApp
             onOpen={() => setProductOpen(true)}
             onClear={() => setDraft(d => ({ ...d, productId: null, productCode: '', productName: '' }))}
           />
+
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-muted-foreground">日期（起）</span>
+            <DatePicker value={draft.startDate} max={draft.endDate || undefined}
+              onChange={v => setDraft(d => ({ ...d, startDate: v }))} className="h-9" />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-muted-foreground">日期（止）</span>
+            <DatePicker value={draft.endDate} min={draft.startDate || undefined}
+              onChange={v => setDraft(d => ({ ...d, endDate: v }))} className="h-9" />
+          </label>
         </QueryFormLayout>
       </AppDialog>
 

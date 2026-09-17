@@ -27,12 +27,15 @@ const EMPTY: WaybillQueryValues = {
 interface Props {
   open: boolean
   initial: WaybillQueryValues
+  /** 「重置」回到的值；页面用它把日期重置回该页面的默认窗口（不传则用弹窗空值） */
+  resetValues?: Partial<WaybillQueryValues>
   onClose: () => void
   onApply: (values: WaybillQueryValues) => void
 }
 
-export default function WaybillQueryDialog({ open, initial, onClose, onApply }: Props) {
+export default function WaybillQueryDialog({ open, initial, resetValues, onClose, onApply }: Props) {
   const [draft, setDraft] = useState<WaybillQueryValues>(EMPTY)
+  const resetDraft = () => ({ ...EMPTY, ...resetValues })
 
   const { data: carriers } = useQuery({
     queryKey: ['carriers-active'],
@@ -59,7 +62,7 @@ export default function WaybillQueryDialog({ open, initial, onClose, onApply }: 
       minHeight={420}
       footer={
         <div className="flex justify-between gap-2">
-          <Button variant="ghost" onClick={() => setDraft(EMPTY)}>重置</Button>
+          <Button variant="ghost" onClick={() => setDraft(resetDraft())}>重置</Button>
           <div className="flex gap-2">
             <Button variant="outline" onClick={onClose}>取消</Button>
             <Button onClick={() => onApply(draft)}>查询</Button>
