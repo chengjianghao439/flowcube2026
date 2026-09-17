@@ -76,6 +76,10 @@
 遗留：该 run 被取消，其 Actions artifact（桌面 exe 与 `flowcube-pda-apk` 的冗余备份）没有上传。
 正式产物仍在服务器下载目录与 GitHub Release 上，不影响更新与分发。
 
+**不要再重跑 `v0.9.20` 的 tag 构建**：Windows 打包不是逐字节可复现的，重跑会生成另一份 exe 并
+用新的 sha256 覆盖 `/latest.json` 与 `/versions/v0.9.20/`，而 GitHub Release 上的附件仍是本次
+补传的旧字节，两边摘要就会对不上。若要补齐 Actions 构件备份，等下一次正常发版即可。
+
 ## 未验证 / 下一轮
 
 - **真机与物理环境**：Android PDA 实际安装本版 APK、扫描头不弹软键盘的现场效果、相机扫码、
