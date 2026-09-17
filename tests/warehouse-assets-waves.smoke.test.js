@@ -178,7 +178,10 @@ async function main() {
       await pool.query(`UPDATE warehouse_tasks SET ${flag}=NOW() WHERE id=?`,[pendingTasks[1].task])
       const [eventsBefore]=await pool.query('SELECT id FROM warehouse_task_events WHERE task_id=? ORDER BY id',[pendingTasks[0].task])
       const blocked=await expect(W,`${label}拒绝完成波次`, `/${pendingWave}/finish`,'POST',{},409)
-      check(W,`${label}沿用业务错误`,[blocked.code,blocked.message],['CONFLICT',message])
+      // 2026-09-17 错误码保真：未显式带业务码的 AppError 不再被后端兜底成 CONFLICT，
+      // 前端改为直接展示中文原因（见 AGENTS.md「错误提示保真」）。这里断言原文保真且
+      // 不再编造通用码。
+      check(W,`${label}沿用业务错误`,[blocked.code,blocked.message],[null,message])
       check(W,`${label}波次保持待分拣`,(await req(W,`/${pendingWave}`)).data.status,3)
       const [members]=await pool.query('SELECT status FROM warehouse_tasks WHERE id IN (?) ORDER BY id',[pendingTasks.map(t=>t.task)])
       check(W,`${label}先推进成员事务回滚`,members.map(t=>t.status),[WT_STATUS.PICKING,WT_STATUS.SORTING])

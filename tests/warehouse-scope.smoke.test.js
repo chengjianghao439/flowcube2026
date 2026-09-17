@@ -255,7 +255,13 @@ async function scenarioStockcheckAndReturnsScope(ctx, log, adminToken, scopedTok
   log.section('盘点单与退货单：列表过滤 + 详情拦截')
   const { http, pool, customer, supplier } = ctx
 
+  // 2026-09-17 起，仓库没有在库商品时不允许创建盘点单（避免建出 PDA 永远看不见、
+  // 又卡在「进行中」的空单，见 docs/acceptance-issues-fix-2026-09-17.md 与
+  // AGENTS.md「盘点单不允许 0 明细」）。本场景只关心仓库范围隔离，所以先在
+  // 目标仓铺底一箱在库商品，让建单走通。
+  const checkProduct = await createProduct(pool, 'chk')
   const mkCheck = async (warehouse) => {
+    await seedStock(pool, checkProduct.id, warehouse.id, 1)
     const resp = await http.post('/api/stockcheck', {
       token: adminToken,
       json: { warehouseId: warehouse.id, warehouseName: warehouse.name },
