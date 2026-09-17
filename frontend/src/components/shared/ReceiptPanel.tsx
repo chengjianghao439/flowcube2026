@@ -1,16 +1,15 @@
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
-import { ReportTable } from '@/components/shared/ReportTable'
 import { useState, forwardRef, useImperativeHandle } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import DataTable from '@/components/shared/DataTable'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import type { StatusTone } from '@/lib/statusTone'
-import { ReceiptFormDialog } from '@/components/shared/ReceiptFormDialog'
+import { SettleReceiptDialog } from '@/components/shared/payments/SettleReceiptDialog'
+import { ReceiptDetailDialog } from '@/components/shared/payments/ReceiptDetailDialog'
 import { PaymentQueryDialog, PaymentQueryBar, EMPTY_PAYMENT_QUERY, type PaymentQueryValues } from '@/components/shared/PaymentQueryDialog'
-import { getReceiptsApi, getReceiptDetailApi, type PaymentReceipt } from '@/api/payments'
+import { getReceiptsApi, type PaymentReceipt } from '@/api/payments'
 import { formatDisplayDate } from '@/lib/dateTime'
 import { downloadExport } from '@/lib/exportDownload'
 import { toast } from '@/lib/toast'
@@ -84,11 +83,6 @@ export const ReceiptPanel = forwardRef<ReceiptPanelHandle, Props>(function Recei
     queryFn: () => getReceiptsApi({ ...exportParams, pageSize: 500 }),
     enabled: active,
   })
-  const { data: detail } = useQuery({
-    queryKey: ['payment-receipt-detail', detailId],
-    queryFn: () => getReceiptDetailApi(detailId!),
-    enabled: active && detailId != null,
-  })
 
   const handleExport = () => downloadExport('/export/payment-receipts', exportParams)
     .catch(e => toast.error((e as Error).message))
@@ -155,7 +149,7 @@ export const ReceiptPanel = forwardRef<ReceiptPanelHandle, Props>(function Recei
         statusOptions={[['1','待核销'],['2','部分核销'],['3','已核销']] as const}
       />
 
-      <ReceiptFormDialog
+      <SettleReceiptDialog
         open={formOpen}
         onClose={() => { setFormOpen(false); setContinueTarget(null) }}
         type={type}
@@ -165,49 +159,12 @@ export const ReceiptPanel = forwardRef<ReceiptPanelHandle, Props>(function Recei
       />
 
       {/* 核销明细：这笔钱冲抵了哪些订单 */}
-      <Dialog open={detailId != null} onOpenChange={v => !v && setDetailId(null)}>
-        <DialogContent className="max-w-5xl">
-          <DialogHeader>
-            <DialogTitle>核销明细 — <span className="text-doc-code-strong">{detail?.receiptNo}</span></DialogTitle>
-          </DialogHeader>
-          {detail && (
-            <div className="text-sm text-muted-foreground">
-              {detail.partyName} · {actionLabel} {money(detail.amount)} · 已核销 <span className="text-success">{money(detail.settledAmount)}</span>
-              {detail.balance > 0 && <> · 未核销 <span className="font-medium text-warning">{money(detail.balance)}</span></>}
-            </div>
-          )}
-          <div className="max-h-80 overflow-y-auto rounded-md border">
-            <ReportTable className="w-full text-sm">
-              <thead className="bg-muted/50 text-xs text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-3 text-left">关联单号</th>
-                  <th className="px-4 py-3 text-right">本次核销</th>
-                  <th className="px-4 py-3 text-right">订单总额</th>
-                  <th className="px-4 py-3 text-right">剩余余额</th>
-                </tr>
-              </thead>
-              <tbody>
-                {detail?.settlements?.map(s => (
-                  <tr key={s.entryId} className="border-t">
-                    <td className="px-4 py-3 text-doc-code">{s.orderNo}</td>
-                    <td className="px-4 py-3 text-right tabular-nums">{money(s.amount)}</td>
-                    <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{money(s.orderTotal)}</td>
-                    <td className="px-4 py-3 text-right tabular-nums">
-                      {s.orderBalance > 0
-                        ? <span className="text-destructive">{money(s.orderBalance)}</span>
-                        : <span className="text-success">已结清</span>}
-                    </td>
-                  </tr>
-                ))}
-                {detail && !detail.settlements?.length && (
-                  <tr><td colSpan={4} className="px-2 py-6 text-center text-muted-foreground">这笔款尚未核销任何订单</td></tr>
-                )}
-              </tbody>
-            </ReportTable>
-          </div>
-          <DialogFooter><Button variant="outline" onClick={() => setDetailId(null)}>关闭</Button></DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ReceiptDetailDialog
+        open={detailId != null}
+        onClose={() => setDetailId(null)}
+        receiptId={detailId}
+        type={type}
+      />
     </div>
   )
 })

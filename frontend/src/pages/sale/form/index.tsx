@@ -22,6 +22,7 @@ import { Activity, AlertTriangle, CalendarClock, ClipboardList, Clock, History, 
 import { PrintPreviewOverlay } from '@/components/print/SaleOrderPrintTemplate'
 import { Button }  from '@/components/ui/button'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
+import { EditModeBadge, UnsavedBadge } from '@/components/shared/EditModeBadge'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { useWorkspaceStore } from '@/store/workspaceStore'
@@ -136,7 +137,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
     <div data-order-entry onKeyDown={handleEntryKeyDown} className="flex flex-col gap-2.5">
       <ActionBar
         title="新建销售单"
-        subtitle={isDirty ? <span className="text-xs font-normal text-muted-foreground">未保存</span> : undefined}
+        subtitle={<UnsavedBadge show={isDirty} />}
         rightActions={
           <>
 
@@ -218,6 +219,7 @@ function EditView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<ty
     customerFinderOpen, setCustomerFinderOpen,
     setCustomerError, setWarehouseError,
     setInvalidItemKeys,
+    isDirty,
     addItem, removeItem, updateItem,
     handleCustomerConfirm, handleFinderConfirm,
   } = useSaleOrderForm(tabPath, order)
@@ -256,6 +258,7 @@ function EditView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<ty
     <div data-order-entry onKeyDown={handleEntryKeyDown} className="flex flex-col gap-2.5">
       <ActionBar
         title={`${order.orderNo} · 编辑`}
+        subtitle={<><EditModeBadge /><UnsavedBadge show={isDirty} /></>}
         rightActions={
           <>
             <Button variant="outline" onClick={onDone} disabled={updateMutate.isPending}>
@@ -264,7 +267,7 @@ function EditView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<ty
             <Button onClick={handleSubmit} disabled={updateMutate.isPending} className="gap-1.5">
               {updateMutate.isPending
                 ? <><Loader2 className="h-4 w-4 animate-spin" />保存中…</>
-                : <><Save className="h-4 w-4" />保存</>}
+                : <><Save className="h-4 w-4" />保存修改</>}
             </Button>
           </>
         }
@@ -342,6 +345,7 @@ function AdjustView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<
     customerFinderOpen, setCustomerFinderOpen,
     setCustomerError, setWarehouseError,
     setInvalidItemKeys,
+    isDirty,
     addItem, removeItem, updateItem,
     handleCustomerConfirm, handleFinderConfirm,
   } = useSaleOrderForm(tabPath, order)
@@ -379,6 +383,7 @@ function AdjustView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<
     <div data-order-entry onKeyDown={handleEntryKeyDown} className="flex flex-col gap-2.5">
       <ActionBar
         title={`${order.orderNo} · 修改订单`}
+        subtitle={<><EditModeBadge label="改单中" /><UnsavedBadge show={isDirty} /></>}
         rightActions={
           <>
             <Button variant="outline" onClick={onDone} disabled={adjustMutate.isPending}>

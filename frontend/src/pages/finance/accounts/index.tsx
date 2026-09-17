@@ -18,6 +18,7 @@ import { toast } from '@/lib/toast'
 import { formatDisplayDate } from '@/lib/dateTime'
 import { downloadExport } from '@/lib/exportDownload'
 import { usePermission } from '@/hooks/usePermission'
+import { EditModeBadge } from '@/components/shared/EditModeBadge'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import {
   getAccountsApi, createAccountApi, updateAccountApi, deleteAccountApi,
@@ -241,7 +242,18 @@ export default function FinanceAccountsPage() {
       {/* 新建 / 编辑 */}
       <Dialog open={formOpen} onOpenChange={v => !v && setFormOpen(false)}>
         <DialogContent className="max-w-2xl">
-          <DialogHeader><DialogTitle>{editing ? '编辑账户' : '新建账户'}</DialogTitle></DialogHeader>
+          {/* 编辑态与默认（新建）态一眼可分 */}
+          <DialogHeader>
+            <DialogTitle className="flex flex-wrap items-center gap-2">
+              {editing ? '编辑账户' : '新建账户'}
+              {editing && <EditModeBadge />}
+            </DialogTitle>
+            {editing && (
+              <p className="text-helper mt-1">
+                正在编辑：<span className="font-medium text-foreground">{editing.code ? `${editing.code} · ` : ''}{editing.name}</span>
+              </p>
+            )}
+          </DialogHeader>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">
               <Label>账户名称 *</Label>
@@ -289,7 +301,7 @@ export default function FinanceAccountsPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setFormOpen(false)}>取消</Button>
             <Button disabled={!form.name.trim() || saveMut.isPending} onClick={() => saveMut.mutate()}>
-              {saveMut.isPending ? '保存中…' : '保存'}
+              {saveMut.isPending ? '保存中…' : (editing ? '保存修改' : '保存')}
             </Button>
           </DialogFooter>
         </DialogContent>

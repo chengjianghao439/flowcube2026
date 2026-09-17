@@ -12,11 +12,12 @@ import { productIdentityColumns } from '@/components/shared/productIdentityColum
  * 结构参照采购单 pages/purchase/form/index.tsx：FormView + DetailView。
  */
 
-import { useContext, useState, useMemo } from 'react'
+import { useContext, useRef, useState, useMemo } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Loader2, Plus, Save, PackageOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { EditModeBadge, UnsavedBadge } from '@/components/shared/EditModeBadge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { TabPathContext } from '@/components/layout/TabPathContext'
@@ -111,7 +112,11 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
   const [invalidItemKeys, setInvalidItemKeys] = useState<Set<number>>(new Set())
 
   const sameWarehouse = !!fromWarehouseId && fromWarehouseId === toWarehouseId
-  const isDirty = !!(fromWarehouseId || toWarehouseId || remark || items.length)
+  // 编辑态：初始值本就非空，"是否非空"不能代表"是否改过"；改成与进入编辑时的快照比较
+  const editSnapshotRef = useRef(isEdit ? JSON.stringify({ fromWarehouseId, toWarehouseId, remark, items }) : null)
+  const isDirty = isEdit
+    ? JSON.stringify({ fromWarehouseId, toWarehouseId, remark, items }) !== editSnapshotRef.current
+    : !!(fromWarehouseId || toWarehouseId || remark || items.length)
   useDirtyGuard(tabPath, isDirty)
 
   const createMutate = useMutation({ mutationFn: createTransferApi })
@@ -199,6 +204,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
       } else {
         const res = await createMutate.mutateAsync(payload)
         qc.invalidateQueries({ queryKey: ['transfer'] })
+        toast.success('调拨单已创建')
         closeTab(res?.id ? `/transfer/${res.id}` : '/transfer')
       }
     } catch (_) {
@@ -226,9 +232,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
       {incomingDraft && <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-muted/30 px-4 py-3 text-sm"><p>收到采购调拨建议：{incomingDraft.fromWarehouseName} → {incomingDraft.toWarehouseName}。{isDirty ? '当前有未保存内容，带入将替换当前表单。' : '核对后带入表单。'}</p><div className="flex gap-2"><Button size="sm" variant="outline" onClick={() => setAppliedProcurementKey(incomingKey)}>保留当前表单</Button><Button size="sm" onClick={applyProcurementDraft}>带入采购建议</Button></div></div>}
       <ActionBar
         title={isEdit ? '编辑调拨单' : '新建调拨单'}
-        subtitle={!isEdit && isDirty ? (
-          <span className="text-xs font-normal text-muted-foreground">未保存</span>
-        ) : undefined}
+        subtitle={isEdit || isDirty ? <>{isEdit && <EditModeBadge />}<UnsavedBadge show={isDirty} /></> : undefined}
         rightActions={
           <>
             {isEdit && (
@@ -240,7 +244,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
               {submitting || submitLocked ? (
                 <><Loader2 className="h-4 w-4 animate-spin" />保存中…</>
               ) : (
-                <><Save className="h-4 w-4" />{isEdit ? '保存' : '保存草稿'}</>
+                <><Save className="h-4 w-4" />{isEdit ? '保存修改' : '保存草稿'}</>
               )}
             </Button>
           </>

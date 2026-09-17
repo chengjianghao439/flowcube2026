@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { usePermission } from '@/hooks/usePermission'
+import { EditModeBadge, UnsavedBadge } from '@/components/shared/EditModeBadge'
 import { useDirtyGuard } from '@/hooks/useDirtyGuard'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { PERMISSIONS } from '@/lib/permission-codes'
@@ -25,7 +26,16 @@ export default function SettingsPage() {
   const qc = useQueryClient()
 
   const { data } = useQuery({ queryKey: ['settings'], queryFn: () => getSettingsApi() })
-  const save = useMutation({ mutationFn: updateSettingsApi, onSuccess: () => { qc.invalidateQueries({ queryKey: ['settings'] }); toast.success('保存成功') } })
+  // 保存成功后回到默认（只读）态：页面状态本身的变化就是「已保存」的反馈
+  const save = useMutation({
+    mutationFn: updateSettingsApi,
+    onSuccess: (_result, submitted) => {
+      qc.invalidateQueries({ queryKey: ['settings'] })
+      // 保存期间又输入了新内容时留在编辑态，不能把后续草稿当成已保存
+      if (JSON.stringify(formRef.current) === JSON.stringify(submitted)) setEditing(false)
+      toast.success('保存成功')
+    },
+  })
 
   // 品牌 Logo：与 BrandLogo 组件共享同一查询键（多点位只发一次请求）
   const { data: logo } = useQuery({
@@ -36,31 +46,42 @@ export default function SettingsPage() {
   })
 
   const [form, setForm] = useState<Record<string, string>>({})
+  /** 最新表单值（保存回执判断用）：与提交内容一致才回到默认态 */
+  const formRef = useRef(form)
+  formRef.current = form
+  /** 默认态=只读查看；点「编辑」才可改，保存成功后自动回到默认态 */
+  const [editing, setEditing] = useState(false)
   const [logoImgFailed, setLogoImgFailed] = useState(false)
-  useEffect(() => {
-    if (data?.list) {
-      const m: Record<string, string> = {}
-      // image/timestamp 键（公司 Logo）不进表单：它们有自己的上传链路与校验，
-      // 混进「保存设置」的批量提交会把 Logo 覆盖成空值（后端 updateMany 也拒绝，双保险）
-      data.list.forEach(s => {
-        if (s.type === 'image' || s.type === 'timestamp') return
-        m[s.key_name] = s.value ?? ''
-      })
-      setForm(m)
-    }
+
+  /** 设置基线：与后端返回一致，用于「是否改过」判断与「取消编辑」回滚 */
+  const baseline = useMemo(() => {
+    const m: Record<string, string> = {}
+    // image/timestamp 键（公司 Logo）不进表单：它们有自己的上传链路与校验，
+    // 混进「保存设置」的批量提交会把 Logo 覆盖成空值（后端 updateMany 也拒绝，双保险）
+    data?.list?.forEach(s => {
+      if (s.type === 'image' || s.type === 'timestamp') return
+      m[s.key_name] = s.value ?? ''
+    })
+    return m
   }, [data])
 
-  const handleSave = () => save.mutate(form)
+  useEffect(() => {
+    if (data?.list) setForm(baseline)
+  }, [data, baseline])
 
-  // 未保存变更保护：表单与设置基线不同即脏（关闭标签拦截）
+  const handleSave = () => save.mutate(form)
+  /** 进入编辑态：以基线为起点，避免上次未保存残留 */
+  const startEdit = () => { setForm(baseline); setEditing(true) }
+  /** 取消编辑：丢弃改动回到默认（只读）态 */
+  const cancelEdit = () => { setForm(baseline); setEditing(false) }
+
+  // 未保存变更保护：编辑态下表单与基线不同即脏（关闭标签拦截）
   const tabPath = useContext(TabPathContext) || ''
   const isDirty = useMemo(() => {
-    if (!data?.list) return false
-    const base: Record<string, string> = {}
-    data.list.forEach(s => { if (s.type === 'image' || s.type === 'timestamp') return; base[s.key_name] = s.value ?? '' })
-    return Object.keys(form).length !== Object.keys(base).length
-      || Object.entries(base).some(([k, v]) => form[k] !== v)
-  }, [data, form])
+    if (!editing) return false
+    return Object.keys(form).length !== Object.keys(baseline).length
+      || Object.entries(baseline).some(([k, v]) => form[k] !== v)
+  }, [editing, baseline, form])
   useDirtyGuard(tabPath, isDirty)
 
   // ── Logo 上传 ──────────────────────────────────────────────────────────
@@ -94,8 +115,23 @@ export default function SettingsPage() {
     <div className="max-w-6xl space-y-4">
       <PageHeader
         title="系统设置"
-        description="配置全局参数与角色权限。"
-        actions={canUpdate ? <Button onClick={handleSave} disabled={save.isPending}>{save.isPending ? '保存中…' : '保存设置'}</Button> : null}
+        description={editing ? (
+          <span className="inline-flex flex-wrap items-center gap-2">
+            <EditModeBadge />
+            <UnsavedBadge show={isDirty} />
+            <span>正在编辑全局配置，保存后立即生效并回到查看状态。</span>
+          </span>
+        ) : canUpdate ? '当前为查看状态；需要修改请点右上角「编辑」。' : '配置全局参数与角色权限。'}
+        actions={canUpdate ? (
+          editing ? (
+            <>
+              <Button variant="outline" onClick={cancelEdit} disabled={save.isPending}>取消编辑</Button>
+              <Button onClick={handleSave} disabled={save.isPending}>{save.isPending ? '保存中…' : '保存修改'}</Button>
+            </>
+          ) : (
+            <Button variant="outline" onClick={startEdit}>编辑</Button>
+          )
+        ) : null}
       />
 
       {isDirty && (
@@ -127,7 +163,7 @@ export default function SettingsPage() {
                 公司 Logo 显示于 ERP 顶栏与打印单据模板（销售单/采购单/出库单/仓库任务单）。支持 {LOGO_FRIENDLY}，≤2MB，上传后立即生效。
               </p>
             </div>
-            {canUpdate ? (
+            {editing && canUpdate ? (
               <div>
                 <input
                   ref={fileRef}
@@ -141,7 +177,9 @@ export default function SettingsPage() {
                 </Button>
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">当前账号无修改权限</p>
+              <p className="text-sm text-muted-foreground">
+                {canUpdate ? '点右上角「编辑」后可上传/更换 Logo。' : '当前账号无修改权限'}
+              </p>
             )}
           </div>
         </div>
@@ -157,18 +195,30 @@ export default function SettingsPage() {
           {data?.list.filter(s => s.type !== 'image' && s.type !== 'timestamp').map(s => (
             <div key={s.key_name} className="grid gap-3 py-4 sm:grid-cols-[minmax(280px,0.8fr)_1fr] sm:gap-8">
               <div>
-                <Label htmlFor={`setting-${s.key_name}`} className="font-medium">{s.label}</Label>
+                {editing ? (
+                  <Label htmlFor={`setting-${s.key_name}`} className="font-medium">{s.label}</Label>
+                ) : (
+                  <p className="text-sm font-medium text-foreground">{s.label}</p>
+                )}
                 {s.remark && <p className="mt-0.5 text-xs text-muted-foreground">{s.remark}</p>}
               </div>
               <div className="space-y-1.5">
-                <Input
-                  id={`setting-${s.key_name}`}
-                  value={form[s.key_name] ?? ''}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(p => ({ ...p, [s.key_name]: e.target.value }))}
-                  type={s.type === 'number' ? 'number' : 'text'}
-                  disabled={!canUpdate}
-                  className="max-w-2xl"
-                />
+                {editing ? (
+                  <Input
+                    id={`setting-${s.key_name}`}
+                    value={form[s.key_name] ?? ''}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(p => ({ ...p, [s.key_name]: e.target.value }))}
+                    type={s.type === 'number' ? 'number' : 'text'}
+                    disabled={!canUpdate}
+                    className="max-w-2xl"
+                  />
+                ) : (
+                  <p className="max-w-2xl text-sm font-medium text-foreground">
+                    {form[s.key_name]?.trim()
+                      ? form[s.key_name]
+                      : <span className="font-normal text-muted-foreground">未设置</span>}
+                  </p>
+                )}
                 {s.label.includes('前缀') && !s.label.includes('编号') && (
                   <p className="text-xs text-muted-foreground">
                     生成的单号示例：<span className="font-mono text-foreground/80">{form[s.key_name] || '—'}{todayYmd().replace(/-/g, '')}</span>

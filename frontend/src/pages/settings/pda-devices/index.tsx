@@ -36,6 +36,7 @@ import { FilterCard } from '@/components/shared/FilterCard'
 import TableActionsMenu, { type TableActionItem } from '@/components/shared/TableActionsMenu'
 import ListSummary from '@/components/shared/ListSummary'
 import PageHeader from '@/components/shared/PageHeader'
+import { EditModeBadge } from '@/components/shared/EditModeBadge'
 import { toast } from '@/lib/toast'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import type { TableColumn } from '@/types'
@@ -258,7 +259,15 @@ export default function PdaDevicesPage() {
       <Dialog open={!!editing} onOpenChange={open => { if (!open) setEditing(null) }}>
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>编辑设备</DialogTitle>
+            <DialogTitle className="flex flex-wrap items-center gap-2">
+              编辑设备
+              <EditModeBadge />
+            </DialogTitle>
+            {editing && (
+              <p className="text-helper mt-1">
+                正在编辑：<span className="font-medium text-foreground">{editing.deviceName || editing.deviceCode}</span>
+              </p>
+            )}
             <DialogDescription>改绑仓库会吊销这台机器当前的会话，需要重新登录。</DialogDescription>
           </DialogHeader>
           {editing && (
@@ -297,7 +306,7 @@ export default function PdaDevicesPage() {
                 warehouseId: editing.warehouseId,
               })}
             >
-              保存
+              保存修改
             </Button>
           </DialogFooter>
         </DialogContent>

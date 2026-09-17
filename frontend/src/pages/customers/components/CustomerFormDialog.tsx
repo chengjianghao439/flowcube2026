@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { EditModeBadge, UnsavedBadge } from '@/components/shared/EditModeBadge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { LimitedInput } from '@/components/shared/LimitedInput'
@@ -27,12 +28,14 @@ export default function CustomerFormDialog({ open, onClose, customer }: Props) {
   const create = useCreateCustomer()
   const update = useUpdateCustomer()
   const [f, setF] = useState(empty)
+  // 基线：编辑=加载到的记录值，新增=默认值。改动后与默认态明显区分（「未保存」标识）
+  const [baseline, setBaseline] = useState(empty)
   const set = (k: keyof typeof empty) => (e: React.ChangeEvent<HTMLInputElement>) => setF(p=>({...p,[k]:e.target.value}))
 
   useEffect(() => {
     if (!open) return
     if (customer) {
-      setF({
+      const next = {
         name:customer.name, contact:customer.contact||'', phone:customer.phone||'', email:customer.email||'',
         address:customer.address||'', remark:customer.remark||'',
         settlementType: customer.settlementType ?? SETTLEMENT_TYPE.MONTHLY,
@@ -40,11 +43,16 @@ export default function CustomerFormDialog({ open, onClose, customer }: Props) {
         creditEnabled: customer.creditLimit != null,
         creditLimit: customer.creditLimit != null ? String(customer.creditLimit) : '',
         isActive: customer.isActive,
-      })
+      }
+      setF(next)
+      setBaseline(next)
     } else {
       setF(empty)
+      setBaseline(empty)
     }
   }, [customer, open])
+
+  const isDirty = JSON.stringify(f) !== JSON.stringify(baseline)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -68,7 +76,19 @@ export default function CustomerFormDialog({ open, onClose, customer }: Props) {
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader><DialogTitle>{isEdit ? '编辑客户' : '新增客户'}</DialogTitle></DialogHeader>
+        {/* 编辑态与默认（新增）态必须一眼可分：带「编辑中」标识 + 编辑对象 + 未保存提示 */}
+        <DialogHeader>
+          <DialogTitle className="flex flex-wrap items-center gap-2">
+            {isEdit ? '编辑客户' : '新增客户'}
+            {isEdit && <EditModeBadge />}
+            <UnsavedBadge show={isDirty} />
+          </DialogTitle>
+          {isEdit && customer && (
+            <p className="text-helper mt-1">
+              正在编辑：<span className="font-medium text-foreground">{customer.code} · {customer.name}</span>
+            </p>
+          )}
+        </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-5 py-2">
           <h3 className="text-sm font-medium">客户与联系方式</h3>
           <div className="grid grid-cols-2 gap-x-6 gap-y-3">
@@ -138,7 +158,7 @@ export default function CustomerFormDialog({ open, onClose, customer }: Props) {
           )}
           <DialogFooter className="border-t pt-4">
             <Button type="button" variant="outline" onClick={onClose}>取消</Button>
-            <Button type="submit" disabled={loading}>{loading ? '保存中…' : '保存'}</Button>
+            <Button type="submit" disabled={loading}>{loading ? '保存中…' : (isEdit ? '保存修改' : '保存')}</Button>
           </DialogFooter>
         </form>
       </DialogContent>

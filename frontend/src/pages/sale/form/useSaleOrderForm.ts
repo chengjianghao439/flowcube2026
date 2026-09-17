@@ -4,6 +4,7 @@ import { useCarriersActive } from '@/hooks/useCarriers'
 import type { useSaleDetail } from '@/hooks/useSale'
 import { getCustomerPriceApi } from '@/api/price-lists'
 import { getProductApi } from '@/api/products'
+import { dirtyItems } from '@/lib/editMode'
 import type { ProductFinderResult, ProductUnit } from '@/types/products'
 import type { FinderResult } from '@/types/finder'
 import type { DraftItem } from './validate'
@@ -104,11 +105,14 @@ export function useSaleOrderForm(tabPath: string, order?: NonNullable<ReturnType
 
   // 编辑态初始值本就非空，"是否非空"不能代表"是否改过"，改成和进入编辑时的快照比较；
   // 新建态没有快照可比，沿用"任意字段非空即算改过"。
-  const editSnapshotRef = useRef(order
-    ? JSON.stringify({ customerId, warehouseId, remark, carrierId, shippingProduct, freightType, receiverName, receiverPhone, receiverAddress, discountAmount, items })
-    : null)
+  // 明细行只比对用户可改字段：units（多计量单位）由接口异步回填，见 dirtyItems。
+  const dirtyComparable = () => JSON.stringify({
+    customerId, warehouseId, remark, carrierId, shippingProduct, freightType,
+    receiverName, receiverPhone, receiverAddress, discountAmount, items: dirtyItems(items),
+  })
+  const editSnapshotRef = useRef(order ? dirtyComparable() : null)
   const isDirty = order
-    ? JSON.stringify({ customerId, warehouseId, remark, carrierId, shippingProduct, freightType, receiverName, receiverPhone, receiverAddress, discountAmount, items }) !== editSnapshotRef.current
+    ? dirtyComparable() !== editSnapshotRef.current
     : !!(customerId || warehouseId || remark || carrierId || receiverName || items.length)
   useDirtyGuard(tabPath, isDirty)
 

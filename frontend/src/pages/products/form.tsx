@@ -18,6 +18,7 @@ import { toast } from '@/lib/toast'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { useDirtyGuard } from '@/hooks/useDirtyGuard'
 import { ActionBar } from '@/components/shared/ActionBar'
+import { EditModeBadge, UnsavedBadge } from '@/components/shared/EditModeBadge'
 import { useProduct, useCreateProduct, useUpdateProduct } from '@/hooks/useProducts'
 import { LimitedInput } from '@/components/shared/LimitedInput'
 import { getSettingsApi } from '@/api/settings'
@@ -126,7 +127,9 @@ export default function ProductFormPage() {
   const { mutateAsync: create } = useCreateProduct()
   const { mutateAsync: update } = useUpdateProduct()
 
-  useDirtyGuard(tabPath, JSON.stringify(formRef.current) !== JSON.stringify(initialForm))
+  // 是否改过：与进入页面时的基线比较（新建态基线是空表单）
+  const isDirty = JSON.stringify(formRef.current) !== JSON.stringify(initialForm)
+  useDirtyGuard(tabPath, isDirty)
 
   const priceLevels = [
     { key: 'A', field: 'salePriceA' as const, rate: priceRates.A, color: 'text-blue-600' },
@@ -198,12 +201,22 @@ export default function ProductFormPage() {
     <div className="flex flex-col gap-4">
       <ActionBar
         title={isNew ? '新增商品' : '编辑商品'}
-        subtitle={isEdit && product ? <span className="text-sm text-muted-foreground">编码：<code className="font-mono">{product.code}</code></span> : undefined}
+        subtitle={isEdit || isDirty ? (
+          <>
+            {isEdit && <EditModeBadge />}
+            {isEdit && product
+              ? <span className="text-sm text-muted-foreground">编码：<code className="font-mono">{product.code}</code></span>
+              : null}
+            <UnsavedBadge show={isDirty} />
+          </>
+        ) : undefined}
         rightActions={
           <>
 
             <Button onClick={handleSubmit} disabled={submitting || !form.name} className="gap-1.5">
-              {submitting ? <><Loader2 className="h-4 w-4 animate-spin" />保存中…</> : <><Save className="h-4 w-4" />保存</>}
+              {submitting
+                ? <><Loader2 className="h-4 w-4 animate-spin" />保存中…</>
+                : <><Save className="h-4 w-4" />{isEdit ? '保存修改' : '保存'}</>}
             </Button>
           </>
         }

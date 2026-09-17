@@ -81,6 +81,13 @@ export interface AppDialogProps {
    * 小型确认框等场景可设为 false。
    */
   resizable?: boolean
+
+  /**
+   * Radix 打开时自动聚焦的拦截钩子（透传给 Dialog.Content）。
+   * 登记/核销类大弹窗用它拒绝默认聚焦，避免首个可编辑字段是日期时自动展开日历遮挡明细。
+   * 不传时保持 Radix 默认行为。
+   */
+  onOpenAutoFocus?: (event: Event) => void
 }
 
 // ─── Resize Handle ────────────────────────────────────────────────────────────
@@ -116,6 +123,7 @@ export function AppDialog({
   minWidth      = 600,
   minHeight     = 400,
   resizable     = true,
+  onOpenAutoFocus,
 }: AppDialogProps) {
   const { width: preferredWidth, height: preferredHeight, handleResizeMouseDown } = useResizableDialog({
     dialogId,
@@ -169,6 +177,7 @@ export function AppDialog({
         {/* 弹窗主体：使用 Radix Content 原语，完全控制位置和尺寸 */}
         <DialogPrimitive.Content
           aria-describedby={undefined}
+          onOpenAutoFocus={onOpenAutoFocus}
           className={cn(
             'fixed z-50 flex flex-col rounded-lg border bg-background shadow-xl',
             'focus:outline-none',

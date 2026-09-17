@@ -17,6 +17,7 @@ import { useUserOptions, userOptionLabel } from '@/hooks/useUserOptions'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { formatDisplayDateTime } from '@/lib/dateTime'
+import { EditModeBadge } from '@/components/shared/EditModeBadge'
 import type { Department } from '@/types/department'
 import type { TableColumn } from '@/types'
 
@@ -270,7 +271,16 @@ export default function DepartmentsPage() {
       <Dialog open={formOpen} onOpenChange={(v) => !v && setFormOpen(false)}>
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{editing ? '编辑部门' : '新增部门'}</DialogTitle>
+            {/* 编辑态与默认（新增）态一眼可分 */}
+            <DialogTitle className="flex flex-wrap items-center gap-2">
+              {editing ? '编辑部门' : '新增部门'}
+              {editing && <EditModeBadge />}
+            </DialogTitle>
+            {editing && (
+              <p className="text-helper mt-1">
+                正在编辑：<span className="font-medium text-foreground">{editing.name}</span>
+              </p>
+            )}
           </DialogHeader>
           <div className="grid grid-cols-2 gap-x-5 gap-y-4 py-2">
             <div className="space-y-2">
@@ -316,7 +326,7 @@ export default function DepartmentsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setFormOpen(false)}>取消</Button>
-            <Button onClick={handleSave}>保存</Button>
+            <Button onClick={handleSave}>{editing ? '保存修改' : '保存'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

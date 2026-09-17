@@ -2,7 +2,7 @@ import KeepAliveSection from '@/components/shared/KeepAliveSection'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { confirmAction } from '@/lib/confirm'
 import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
-import { useContext, useState, useEffect } from 'react'
+import { useContext, useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
@@ -11,6 +11,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
+import { EditModeBadge, UnsavedBadge } from '@/components/shared/EditModeBadge'
+import { activeTone } from '@/lib/statusTone'
 import { toast } from '@/lib/toast'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { downloadExport } from '@/lib/exportDownload'
@@ -66,6 +68,8 @@ export default function AbcClassPage() {
     enabled: active && tab === 'rules',
   })
   const [ruleDraft, setRuleDraft] = useState<{ warehouseId: number; baseline: CycleRule[]; rules: CycleRule[] }>({ warehouseId: 0, baseline: [], rules: [] })
+  /** 默认态=只读查看规则；点「编辑规则」才可改，保存成功后自动回到默认态 */
+  const [rulesEditing, setRulesEditing] = useState(false)
   const draft = ruleDraft.warehouseId === warehouseId ? ruleDraft.rules : []
   const hasUnsavedRules = !sameRules(ruleDraft.rules, ruleDraft.baseline)
   // 切仓重新取基线；同仓刷新只更新未编辑草稿，不能覆盖用户输入。
@@ -80,6 +84,9 @@ export default function AbcClassPage() {
     mutationFn: (submitted: { warehouseId: number; rules: CycleRule[] }) => saveCycleRulesApi({ warehouseId: submitted.warehouseId, rules: submitted.rules.map(r => ({ abcClass: r.abcClass, intervalDays: r.intervalDays, batchLimit: r.batchLimit, enabled: r.enabled })) }, { skipGlobalError: true }),
     onSuccess: (_result, submitted) => {
       toast.success('分批盘点规则已保存')
+      // 保存成功后回到默认（只读）态——页面状态变化本身就是「已保存」的反馈；
+      // 但保存期间又改过的内容不能被当成已保存，此时留在编辑态并保留关闭保护。
+      if (sameRules(latestRulesRef.current, submitted.rules)) setRulesEditing(false)
       qc.setQueryData(['cycle-rules', submitted.warehouseId], { rules: submitted.rules })
       setRuleDraft(prev => prev.warehouseId === submitted.warehouseId ? { ...prev, baseline: submitted.rules } : prev)
       qc.invalidateQueries({ queryKey: ['cycle-rules', submitted.warehouseId] })
@@ -88,6 +95,14 @@ export default function AbcClassPage() {
   })
   const patchDraft = (cls: string, patch: Partial<CycleRule>) =>
     setRuleDraft(prev => ({ ...prev, rules: prev.rules.map(r => r.abcClass === cls ? { ...r, ...patch } : r) }))
+  /** 最新草稿（保存回执判断用） */
+  const latestRulesRef = useRef(draft)
+  latestRulesRef.current = draft
+  /** 取消编辑：丢弃草稿回到已保存的规则 */
+  function cancelRuleEdit() {
+    setRuleDraft(prev => ({ ...prev, rules: prev.baseline.map(r => ({ ...r })) }))
+    setRulesEditing(false)
+  }
 
   // 未保存规则属于整个大页面，切换内部页签也保留关闭保护。
   const tabPath = useContext(TabPathContext) || ''
@@ -195,8 +210,12 @@ export default function AbcClassPage() {
           <FilterCard>
             {warehouseSelect}
             <span className="text-sm text-muted-foreground">
-              {warehouseId > 0 ? '编辑本仓覆盖规则（不填则继承全局默认）' : '编辑全局默认规则（适用于未单独设置的所有仓库）'}
+              {rulesEditing
+                ? (warehouseId > 0 ? '编辑本仓覆盖规则（不填则继承全局默认）' : '编辑全局默认规则（适用于未单独设置的所有仓库）')
+                : (warehouseId > 0 ? '查看本仓覆盖规则；点「编辑规则」后可修改。' : '查看全局默认规则；点「编辑规则」后可修改。')}
             </span>
+            {rulesEditing && <EditModeBadge />}
+            <UnsavedBadge show={hasUnsavedRules} />
           </FilterCard>
           <div className="overflow-x-auto rounded-lg border border-border">
             <table className="w-full text-sm">
@@ -214,13 +233,19 @@ export default function AbcClassPage() {
                   <tr key={r.abcClass} className="border-t border-border">
                     <td className="px-4 py-3"><SoftStatusLabel label={`${r.abcClass} 类 · ${ABC_HINT[r.abcClass]}`} tone={ABC_TONE[r.abcClass] ?? 'info'} /></td>
                     <td className="px-4 py-2 text-right">
-                      <Input type="number" value={r.intervalDays} disabled={!canManage} onChange={(e) => patchDraft(r.abcClass, { intervalDays: Number(e.target.value) || 0 })} className="ml-auto h-9 w-28 text-right tabular-nums" />
+                      {rulesEditing
+                        ? <Input type="number" value={r.intervalDays} disabled={!canManage} onChange={(e) => patchDraft(r.abcClass, { intervalDays: Number(e.target.value) || 0 })} className="ml-auto h-9 w-28 text-right tabular-nums" />
+                        : <span className="tabular-nums">{r.intervalDays}</span>}
                     </td>
                     <td className="px-4 py-2 text-right">
-                      <Input type="number" value={r.batchLimit} disabled={!canManage} onChange={(e) => patchDraft(r.abcClass, { batchLimit: Number(e.target.value) || 0 })} className="ml-auto h-9 w-28 text-right tabular-nums" />
+                      {rulesEditing
+                        ? <Input type="number" value={r.batchLimit} disabled={!canManage} onChange={(e) => patchDraft(r.abcClass, { batchLimit: Number(e.target.value) || 0 })} className="ml-auto h-9 w-28 text-right tabular-nums" />
+                        : <span className="tabular-nums">{r.batchLimit}</span>}
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <input type="checkbox" checked={r.enabled} disabled={!canManage} onChange={(e) => patchDraft(r.abcClass, { enabled: e.target.checked })} className="h-4 w-4 accent-primary" />
+                      {rulesEditing
+                        ? <input type="checkbox" checked={r.enabled} disabled={!canManage} onChange={(e) => patchDraft(r.abcClass, { enabled: e.target.checked })} className="h-4 w-4 accent-primary" aria-label={`${r.abcClass} 类启用`} />
+                        : <SoftStatusLabel label={r.enabled ? '启用' : '停用'} tone={activeTone(r.enabled)} />}
                     </td>
                     <td className="px-4 py-3">
                       <SoftStatusLabel label={r.isOverride ? '本仓覆盖' : '继承默认'} tone={r.isOverride ? 'success' : 'draft'} />
@@ -231,9 +256,16 @@ export default function AbcClassPage() {
             </table>
           </div>
           <div className="flex justify-end">
-            <Button disabled={!canManage || saveRules.isPending || !draft.length} onClick={() => saveRules.mutate({ warehouseId, rules: draft.map(r => ({ ...r })) })}>
-              {saveRules.isPending ? '保存中…' : '保存规则'}
-            </Button>
+            {canManage && (rulesEditing ? (
+              <>
+                <Button variant="outline" disabled={saveRules.isPending} onClick={cancelRuleEdit}>取消编辑</Button>
+                <Button className="ml-2" disabled={saveRules.isPending || !draft.length} onClick={() => saveRules.mutate({ warehouseId, rules: draft.map(r => ({ ...r })) })}>
+                  {saveRules.isPending ? '保存中…' : '保存修改'}
+                </Button>
+              </>
+            ) : (
+              <Button variant="outline" disabled={!draft.length} onClick={() => setRulesEditing(true)}>编辑规则</Button>
+            ))}
           </div>
       </KeepAliveSection>
       <KeepAliveSection active={tab === 'coverage'} className="space-y-4">

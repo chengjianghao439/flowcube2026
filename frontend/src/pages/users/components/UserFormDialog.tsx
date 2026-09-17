@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { EditModeBadge } from '@/components/shared/EditModeBadge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -101,7 +102,16 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{isEdit ? '编辑用户' : '新增用户'}</DialogTitle>
+          {/* 编辑态与默认（新增）态一眼可分 */}
+          <DialogTitle className="flex flex-wrap items-center gap-2">
+            {isEdit ? '编辑用户' : '新增用户'}
+            {isEdit && <EditModeBadge />}
+          </DialogTitle>
+          {isEdit && editUser && (
+            <p className="text-helper mt-1">
+              正在编辑：<span className="font-medium text-foreground">{editUser.username}</span>
+            </p>
+          )}
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-x-5 gap-y-4 py-2">
@@ -240,7 +250,7 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
               取消
             </Button>
             <Button type="submit" disabled={isPending}>
-              {isPending ? '保存中…' : '保存'}
+              {isPending ? '保存中…' : (isEdit ? '保存修改' : '保存')}
             </Button>
           </DialogFooter>
         </form>

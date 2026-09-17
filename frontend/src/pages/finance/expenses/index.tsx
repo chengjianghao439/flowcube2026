@@ -23,6 +23,7 @@ import { downloadExport } from '@/lib/exportDownload'
 import { formatDisplayDate } from '@/lib/dateTime'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
+import { EditModeBadge } from '@/components/shared/EditModeBadge'
 import { getActiveAccountsApi } from '@/api/finance'
 import {
   getExpenseClaimsApi, getExpenseClaimApi, createExpenseClaimApi, updateExpenseClaimApi,
@@ -115,6 +116,8 @@ export default function ExpenseClaimsPage() {
   const [queryOpen, setQueryOpen] = useState(false)
   const [formOpen, setFormOpen] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
+  /** 编辑态显示的报销单号（编辑态与默认态区分的编辑对象） */
+  const [editingNo, setEditingNo] = useState('')
   const [title, setTitle] = useState('')
   const [remark, setRemark] = useState('')
   const [items, setItems] = useState<DraftItem[]>([emptyItem()])
@@ -205,11 +208,11 @@ export default function ExpenseClaimsPage() {
   })
 
   function openCreate() {
-    setEditingId(null); setTitle(''); setRemark(''); setItems([emptyItem()]); setFormOpen(true)
+    setEditingId(null); setEditingNo(''); setTitle(''); setRemark(''); setItems([emptyItem()]); setFormOpen(true)
   }
   async function openEdit(c: ExpenseClaim) {
     const d = await getExpenseClaimApi(c.id)
-    setEditingId(c.id); setTitle(d.title ?? ''); setRemark(d.remark ?? '')
+    setEditingId(c.id); setEditingNo(c.claimNo || ''); setTitle(d.title ?? ''); setRemark(d.remark ?? '')
     setItems(d.items.map(i => ({
       categoryId: String(i.categoryId), amount: String(i.amount),
       happenedAt: String(i.happenedAt).slice(0, 10), description: i.description ?? '',
@@ -289,7 +292,18 @@ export default function ExpenseClaimsPage() {
       {/* 新建 / 编辑 */}
       <Dialog open={formOpen} onOpenChange={v => !v && setFormOpen(false)}>
         <DialogContent className="max-w-5xl">
-          <DialogHeader><DialogTitle>{editingId ? '编辑报销单' : '新建报销单'}</DialogTitle></DialogHeader>
+          {/* 编辑态与默认（新建）态一眼可分 */}
+          <DialogHeader>
+            <DialogTitle className="flex flex-wrap items-center gap-2">
+              {editingId ? '编辑报销单' : '新建报销单'}
+              {editingId && <EditModeBadge />}
+            </DialogTitle>
+            {editingId && (
+              <p className="text-helper mt-1">
+                正在编辑：<span className="font-medium text-foreground">{editingNo || `#${editingId}`}{title ? ` · ${title}` : ''}</span>
+              </p>
+            )}
+          </DialogHeader>
           <div className="grid grid-cols-2 gap-x-5 gap-y-4">
             <div className="space-y-1">
               <Label>事由</Label>
@@ -345,7 +359,7 @@ export default function ExpenseClaimsPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setFormOpen(false)}>取消</Button>
             <Button disabled={totalAmount <= 0 || saveMut.isPending} onClick={() => saveMut.mutate()}>
-              {saveMut.isPending ? '保存中…' : `保存（${money(totalAmount)}）`}
+              {saveMut.isPending ? '保存中…' : `${editingId ? '保存修改' : '保存'}（${money(totalAmount)}）`}
             </Button>
           </DialogFooter>
         </DialogContent>

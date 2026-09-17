@@ -55,15 +55,20 @@ test('承运商修改后绑定资料同步刷新，已有草稿保留并沿用�
     await act(settle)
     expect(host.querySelector('#binding-company')).toBeNull()
     expect(host.textContent).toContain('承运商资料已带入')
+    // 默认态只读：后台刷新直接把新资料反映在只读展示里
+    expect(host.textContent).toContain('M001')
     detail = { ...detail, monthlyAccount: 'M002', revision: 'b'.repeat(64) }; row.monthlyAccount = 'M002'
     await act(async () => { await client.invalidateQueries({ queryKey: ['carriers'] }); await settle() })
+    expect(host.textContent).toContain('M002')
+    // 点「编辑」进入编辑态：回填最新资料
+    await act(async () => { [...host.querySelectorAll('button')].find(b => b.textContent === '编辑')!.click(); await settle() })
     expect(host.querySelector<HTMLInputElement>('#binding-monthly')!.value).toBe('M002')
     await act(async () => { const el = host.querySelector<HTMLInputElement>('#binding-monthly')!; Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(el, 'MY-DRAFT'); el.dispatchEvent(new Event('input', { bubbles: true })) })
     detail = { ...detail, monthlyAccount: 'M003', revision: 'c'.repeat(64) }; row.monthlyAccount = 'M003'
     await act(async () => { await client.invalidateQueries({ queryKey: ['carriers'] }); await settle() })
     expect(host.querySelector<HTMLInputElement>('#binding-monthly')!.value).toBe('MY-DRAFT')
     api.saveCarrierAccountBindingApi.mockRejectedValueOnce(new Error('资料已变更'))
-    await act(async () => [...host.querySelectorAll('button')].find(b => b.textContent === '保存月结资料')!.click())
+    await act(async () => [...host.querySelectorAll('button')].find(b => b.textContent === '保存修改')!.click())
     expect(api.saveCarrierAccountBindingApi).toHaveBeenLastCalledWith(7, expect.objectContaining({ monthlyAccount: 'MY-DRAFT', revision: 'b'.repeat(64) }))
   } finally { await act(async () => root.unmount()); host.remove(); client.clear() }
 })
@@ -84,6 +89,7 @@ test('已打开的账号页响应承运商跳转，有草稿时可取消或确�
     await act(async () => root.render(<MemoryRouter initialEntries={['/carrier-accounts?carrierId=7']}><QueryClientProvider client={client}><AccountLinks /></QueryClientProvider></MemoryRouter>))
     await act(settle); await act(settle)
     await click('打开账号8')
+    await click('编辑')
     expect(host.querySelector<HTMLInputElement>('#binding-monthly')!.value).toBe('M8')
     await act(async () => { const el = host.querySelector<HTMLInputElement>('#binding-monthly')!; Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(el, 'DRAFT8'); el.dispatchEvent(new Event('input', { bubbles: true })) })
     await click('打开账号7')
@@ -92,6 +98,8 @@ test('已打开的账号页响应承运商跳转，有草稿时可取消或确�
     expect(host.querySelector<HTMLInputElement>('#binding-monthly')!.value).toBe('DRAFT8')
     await click('打开账号7')
     await click('放弃并继续')
-    expect(host.querySelector<HTMLInputElement>('#binding-monthly')!.value).toBe('M7')
+    // 切换后新账号以只读默认态打开
+    expect(host.querySelector('#binding-monthly')).toBeNull()
+    expect(host.textContent).toContain('M7')
   } finally { await act(async () => root.unmount()); host.remove(); client.clear() }
 })

@@ -17,6 +17,7 @@ import { Label }   from '@/components/ui/label'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { activeTone } from '@/lib/statusTone'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { EditModeBadge } from '@/components/shared/EditModeBadge'
 import PageHeader  from '@/components/shared/PageHeader'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import {
@@ -112,11 +113,18 @@ function CategoryFormDialog({ open, mode, parentCat, editCat, onClose }: FormDia
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>
+          {/* 编辑态与默认（新增）态一眼可分 */}
+          <DialogTitle className="flex flex-wrap items-center gap-2">
             {mode === 'create'
               ? `新增${LEVEL_LABEL[targetLevel] ?? ''}分类${parentCat ? ` · 父级：${parentCat.name}` : ''}`
-              : `编辑分类 · ${editCat?.name}`}
+              : `编辑${LEVEL_LABEL[editCat?.level ?? 1] ?? ''}分类`}
+            {mode === 'edit' && <EditModeBadge />}
           </DialogTitle>
+          {mode === 'edit' && editCat && (
+            <p className="text-helper mt-1">
+              正在编辑：<span className="font-medium text-foreground">{editCat.code ? `${editCat.code} · ` : ''}{editCat.name}</span>
+            </p>
+          )}
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4 py-1">
@@ -171,7 +179,7 @@ function CategoryFormDialog({ open, mode, parentCat, editCat, onClose }: FormDia
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose} disabled={isPending}>取消</Button>
-            <Button type="submit" disabled={isPending || !form.name}>{isPending ? '保存中…' : '保存'}</Button>
+            <Button type="submit" disabled={isPending || !form.name}>{isPending ? '保存中…' : (mode === 'edit' ? '保存修改' : '保存')}</Button>
           </DialogFooter>
         </form>
       </DialogContent>

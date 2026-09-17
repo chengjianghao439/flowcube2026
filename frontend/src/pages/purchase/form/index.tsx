@@ -19,6 +19,7 @@ import { useContext, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Loader2, Plus, Save, PackageOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { EditModeBadge, UnsavedBadge } from '@/components/shared/EditModeBadge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -27,6 +28,7 @@ import { TabPathContext } from '@/components/layout/TabPathContext'
 import { toast } from '@/lib/toast'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { useDirtyGuard } from '@/hooks/useDirtyGuard'
+import { dirtyItems } from '@/lib/editMode'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { confirmDirtyLeave } from '@/lib/unsavedChanges'
 import { ActionBar } from '@/components/shared/ActionBar'
@@ -136,9 +138,11 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
 
 
   // 编辑态：初始值本就非空，"是否非空"不能代表"是否改过"；改成与编辑开始时的快照比较
-  const editSnapshotRef = useRef(isEdit ? JSON.stringify({ supplierId, warehouseId, expectedDate, remark, items }) : null)
+  // 明细行只比对用户可改字段（units 是多计量单位投影，编辑态由接口异步回填）
+  const dirtyComparable = () => JSON.stringify({ supplierId, warehouseId, expectedDate, remark, items: dirtyItems(items) })
+  const editSnapshotRef = useRef(isEdit ? dirtyComparable() : null)
   const isDirty = isEdit
-    ? JSON.stringify({ supplierId, warehouseId, expectedDate, remark, items }) !== editSnapshotRef.current
+    ? dirtyComparable() !== editSnapshotRef.current
     : !!(supplierId || warehouseId || expectedDate || remark || items.length)
   useDirtyGuard(tabPath, isDirty)
 
@@ -251,6 +255,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
       } else {
         const res = await createMutate.mutateAsync(payload)
         const id = res?.id
+        toast.success('采购单已创建')
         closeTab(id ? `/purchase/${id}` : '/purchase')
       }
     } catch (_) {
@@ -266,9 +271,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
     <div data-order-entry onKeyDown={handleEntryKeyDown} className="flex flex-col gap-3">
       <ActionBar
         title={isEdit ? '编辑采购单' : '新建采购单'}
-        subtitle={!isEdit && isDirty ? (
-          <span className="text-xs font-normal text-muted-foreground">未保存</span>
-        ) : undefined}
+        subtitle={isEdit || isDirty ? <>{isEdit && <EditModeBadge />}<UnsavedBadge show={isDirty} /></> : undefined}
         rightActions={
           <>
             {isEdit && (
@@ -285,7 +288,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
               ) : (
                 <>
                   <Save className="h-4 w-4" />
-                  {isEdit ? '保存' : '保存草稿'}
+                  {isEdit ? '保存修改' : '保存草稿'}
                 </>
               )}
             </Button>

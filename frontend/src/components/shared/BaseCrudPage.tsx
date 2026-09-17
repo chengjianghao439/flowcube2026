@@ -21,6 +21,8 @@ import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
+import { EditModeBadge } from '@/components/shared/EditModeBadge'
+import { editTargetLabel } from '@/lib/editMode'
 import type { TableColumn } from '@/types'
 
 interface RowLike { id: number }
@@ -48,6 +50,8 @@ interface Props<T extends RowLike> {
   saveSuccessMessage?: (editing: T | null) => string
   /** 弹窗标题 */
   formTitle?: (editing: T | null) => string
+  /** 编辑态标题旁的编辑对象描述（默认取行对象的 code · name） */
+  formIdentity?: (editing: T) => string
   /** 弹窗宽度类名（默认 max-w-md） */
   formWidthClass?: string
   /** 行内额外操作（追加到操作列，位于删除之前） */
@@ -81,7 +85,7 @@ export default function BaseCrudPage<T extends RowLike>(props: Props<T>) {
     title, description, columns: dataColumns, queryKey, listQuery, deleteApi, deleteMessage,
     renderForm, submitForm, saveSuccessMessage, formTitle, formWidthClass = 'max-w-md',
     renderRowExtra, renderActions, createLabel = '+ 新建', canCreate = true, canSubmit, headerActions, renderToolbar,
-    emptyText, showActions = true, recordUnit,
+    formIdentity, emptyText, showActions = true, recordUnit,
   } = props
 
   const qc = useQueryClient()
@@ -161,7 +165,16 @@ export default function BaseCrudPage<T extends RowLike>(props: Props<T>) {
       <Dialog open={formOpen} onOpenChange={v => !v && closeDialog()}>
         <DialogContent className={formWidthClass}>
           <DialogHeader>
-            <DialogTitle>{formTitle ? formTitle(editing) : (editing ? `编辑${title.replace(/管理$/, '')}` : `新建${title.replace(/管理$/, '')}`)}</DialogTitle>
+            {/* 编辑态与默认（新建）态必须一眼可分：编辑态带「编辑中」标识 + 编辑对象 */}
+            <DialogTitle className="flex flex-wrap items-center gap-2">
+              {formTitle ? formTitle(editing) : (editing ? `编辑${title.replace(/管理$/, '')}` : `新建${title.replace(/管理$/, '')}`)}
+              {editing && <EditModeBadge />}
+            </DialogTitle>
+            {editing && (formIdentity ? formIdentity(editing) : editTargetLabel(editing)) && (
+              <p className="text-helper mt-1">
+                正在编辑：<span className="font-medium text-foreground">{formIdentity ? formIdentity(editing) : editTargetLabel(editing)}</span>
+              </p>
+            )}
           </DialogHeader>
           <div className="min-h-0 max-h-[65vh] space-y-4 overflow-y-auto py-2 pr-1">{renderForm(editing, formOpen)}</div>
           <DialogFooter>
@@ -170,7 +183,7 @@ export default function BaseCrudPage<T extends RowLike>(props: Props<T>) {
               disabled={(canSubmit && !canSubmit(editing)) || saveMut.isPending}
               onClick={() => saveMut.mutate()}
             >
-              {saveMut.isPending ? '保存中…' : (editing ? '保存' : '创建')}
+              {saveMut.isPending ? '保存中…' : (editing ? '保存修改' : '创建')}
             </Button>
           </DialogFooter>
         </DialogContent>

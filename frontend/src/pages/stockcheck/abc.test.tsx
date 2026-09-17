@@ -27,6 +27,8 @@ beforeEach(async () => {
   await act(async () => { root.render(<QueryClientProvider client={qc}><AbcClassPage /></QueryClientProvider>) })
   await click('分批盘点规则')
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)) })
+  // 默认态只读，先进入编辑态才能改规则
+  await click('编辑规则')
 })
 afterEach(() => { act(() => root.unmount()); qc.clear(); host.remove() })
 async function click(text: string) { await act(async () => { [...host.querySelectorAll('button')].find(b => b.textContent === text)!.click() }) }
@@ -46,14 +48,18 @@ test('规则后台数据刷新不得覆盖尚未保存的编辑', async () => {
 test('保存期间继续编辑，成功回执不能清掉后续草稿或关闭保护', async () => {
   let finish!: (result: object) => void
   mocks.save.mockImplementation(() => new Promise(resolve => { finish = resolve }))
-  edit(); await click('保存规则'); edit('23')
+  edit(); await click('保存修改'); edit('23')
   mocks.rules.mockResolvedValue({ rules: [{ ...rule, intervalDays: 17 }] })
   await act(async () => { finish({}); await new Promise(resolve => setTimeout(resolve, 10)) })
   expect(input().value).toBe('23'); expect(mocks.guard.mock.lastCall?.[1]).toBe(true)
 })
-test('成功保存原草稿后清除关闭保护', async () => {
+test('成功保存原草稿后清除关闭保护并回到只读默认态', async () => {
   mocks.rules.mockResolvedValue({ rules: [{ ...rule, intervalDays: 17 }] })
-  edit(); await click('保存规则')
+  edit(); await click('保存修改')
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)) })
-  expect(input().value).toBe('17'); expect(mocks.guard.mock.lastCall?.[1]).toBe(false)
+  // 保存成功后回到默认（只读）态：不再有输入框，值以文本展示
+  const rulesTable = host.querySelector('table')!
+  expect(rulesTable.querySelectorAll('input')).toHaveLength(0)
+  expect(rulesTable.textContent).toContain('17')
+  expect(mocks.guard.mock.lastCall?.[1]).toBe(false)
 })

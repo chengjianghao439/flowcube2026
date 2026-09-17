@@ -87,31 +87,36 @@ export function DatePicker({ id, value, onChange, min, max, placeholder = 'yyyy-
         </div>
       </PopoverAnchor>
       <PopoverContent className="w-auto p-0" align="start">
-        <Calendar
-          mode="single"
-          selected={selected}
-          defaultMonth={selected}
-          onSelect={(d) => {
-            onChange(d ? format(d, DATE_FMT) : '')
-            setOpen(false)
-          }}
-          disabled={(d) => (minDate ? d < minDate : false) || (maxDate ? d > maxDate : false)}
-        />
-        <div className="flex items-center justify-between border-t px-3 py-2">
-          <button
-            type="button"
-            className="text-sm text-primary hover:underline"
-            onClick={() => { onChange(''); setOpen(false) }}
-          >
-            清除
-          </button>
-          <button
-            type="button"
-            className="text-sm text-primary hover:underline"
-            onClick={() => { onChange(format(new Date(), DATE_FMT)); setOpen(false) }}
-          >
-            今天
-          </button>
+        {/* 视口高度不足时只滚动日历本体，底部"清除/今天"始终可见 */}
+        <div className="flex max-h-[var(--radix-popper-available-height)] flex-col">
+          <div className="min-h-0 overflow-y-auto">
+            <Calendar
+              mode="single"
+              selected={selected}
+              defaultMonth={selected}
+              onSelect={(d) => {
+                onChange(d ? format(d, DATE_FMT) : '')
+                setOpen(false)
+              }}
+              disabled={(d) => (minDate ? d < minDate : false) || (maxDate ? d > maxDate : false)}
+            />
+          </div>
+          <div className="flex shrink-0 items-center justify-between border-t px-3 py-2">
+            <button
+              type="button"
+              className="text-sm text-primary hover:underline"
+              onClick={() => { onChange(''); setOpen(false) }}
+            >
+              清除
+            </button>
+            <button
+              type="button"
+              className="text-sm text-primary hover:underline"
+              onClick={() => { onChange(format(new Date(), DATE_FMT)); setOpen(false) }}
+            >
+              今天
+            </button>
+          </div>
         </div>
       </PopoverContent>
     </Popover>

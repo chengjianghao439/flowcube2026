@@ -20,6 +20,7 @@ import { toast } from '@/lib/toast'
 import { todayYmd } from '@/lib/dateTime'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
+import { EditModeBadge } from '@/components/shared/EditModeBadge'
 import { useInvoices, useCreateInvoice, useUpdateInvoice, useChangeInvoiceStatus, useDeleteInvoice } from '@/hooks/useInvoices'
 import type { TableColumn } from '@/types'
 import type { Invoice, CreateInvoiceParams } from '@/types/accounting'
@@ -69,7 +70,18 @@ function InvoiceDialog({ open, invoiceType, edit, onClose }: { open: boolean; in
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose() }}>
       <DialogContent className="sm:max-w-2xl">
-        <DialogHeader><DialogTitle>{edit ? '编辑' : '录入'}{typeName}发票</DialogTitle></DialogHeader>
+        {/* 编辑态与默认（录入）态一眼可分 */}
+        <DialogHeader>
+          <DialogTitle className="flex flex-wrap items-center gap-2">
+            {edit ? '编辑' : '录入'}{typeName}发票
+            {edit && <EditModeBadge />}
+          </DialogTitle>
+          {edit && (
+            <p className="text-helper mt-1">
+              正在编辑：<span className="font-medium text-foreground">{f.invoiceNo ? `发票号 ${f.invoiceNo}` : `#${edit.id}`}{f.partyName ? ` · ${f.partyName}` : ''}</span>
+            </p>
+          )}
+        </DialogHeader>
         <div className="grid grid-cols-2 gap-4 py-1">
           <div className="space-y-1.5"><Label>发票代码</Label><Input value={f.invoiceCode} onChange={e => setF(s => ({ ...s, invoiceCode: e.target.value }))} disabled={isPending} className="font-mono" /></div>
           <div className="space-y-1.5"><Label>发票号码 *</Label><Input value={f.invoiceNo} onChange={e => setF(s => ({ ...s, invoiceNo: e.target.value }))} disabled={isPending} className="font-mono" /></div>
@@ -94,7 +106,7 @@ function InvoiceDialog({ open, invoiceType, edit, onClose }: { open: boolean; in
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={isPending}>取消</Button>
-          <Button onClick={submit} disabled={isPending || !f.invoiceNo.trim() || !f.partyName.trim() || !(withTax > 0)}>{isPending ? '保存中…' : '保存'}</Button>
+          <Button onClick={submit} disabled={isPending || !f.invoiceNo.trim() || !f.partyName.trim() || !(withTax > 0)}>{isPending ? '保存中…' : (edit ? '保存修改' : '保存')}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -1,26 +1,21 @@
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
-import { ReportTable } from '@/components/shared/ReportTable'
-import { useEffect, useMemo, useState, forwardRef, useImperativeHandle } from 'react'
+import { useState, forwardRef, useImperativeHandle } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import DataTable from '@/components/shared/DataTable'
 import TableActionsMenu, { type TableActionItem } from '@/components/shared/TableActionsMenu'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { DatePicker } from '@/components/shared/DatePicker'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import type { StatusTone } from '@/lib/statusTone'
 import { toast } from '@/lib/toast'
 import { formatDisplayDate } from '@/lib/dateTime'
 import { downloadExport } from '@/lib/exportDownload'
 import {
-  getStatementsApi, getStatementDetailApi, getStatementCandidatesApi,
-  createStatementApi, confirmStatementApi, unlockStatementApi, removeStatementItemApi,
-  type ReconciliationStatement, type StatementItem,
+  getStatementsApi, confirmStatementApi, unlockStatementApi,
+  type ReconciliationStatement,
 } from '@/api/payments'
-import { getRelativeDateRange } from '@/lib/dateRange'
 import { PaymentQueryDialog, PaymentQueryBar, EMPTY_PAYMENT_QUERY, type PaymentQueryValues } from '@/components/shared/PaymentQueryDialog'
+import { CreateStatementDialog } from '@/components/shared/payments/CreateStatementDialog'
+import { StatementDetailDialog } from '@/components/shared/payments/StatementDetailDialog'
 import type { TableColumn } from '@/types'
 
 /** 1草稿 = 还能改 · 2已确认 = 锁定可发对方 · 3已核销 = 收完款 */
@@ -83,11 +78,6 @@ export const StatementPanel = forwardRef<StatementPanelHandle, Props>(function S
     queryFn: () => getStatementsApi({ ...exportParams, pageSize: 500 }),
     enabled: active,
   })
-  const { data: detail } = useQuery({
-    queryKey: ['payment-statement-detail', detailId],
-    queryFn: () => getStatementDetailApi(detailId!),
-    enabled: active && detailId != null,
-  })
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['payment-statements'] })
@@ -112,11 +102,6 @@ export const StatementPanel = forwardRef<StatementPanelHandle, Props>(function S
     mutationFn: (id: number) => unlockStatementApi(id),
     onSuccess: () => { invalidate(); toast.success('已解锁为草稿，可继续调整明细') },
   })
-  const removeItemMut = useMutation({
-    mutationFn: ({ id, recordId }: { id:number; recordId:number }) => removeStatementItemApi(id, recordId),
-    onSuccess: () => { invalidate(); toast.success('已移出对账单') },
-  })
-
   const columns: TableColumn<ReconciliationStatement>[] = [
     { key: 'statementNo', title: '对账单号', width: 150, render: v => <span className="text-doc-code">{String(v)}</span> },
     { key: 'partyName', title: partyLabel, width: 160 },
@@ -191,187 +176,12 @@ export const StatementPanel = forwardRef<StatementPanelHandle, Props>(function S
       />
 
       {/* 对账单明细 */}
-      <Dialog open={detailId != null} onOpenChange={v => !v && setDetailId(null)}>
-        <DialogContent className="max-w-5xl">
-          <DialogHeader>
-            <DialogTitle>对账单 — <span className="text-doc-code-strong">{detail?.statementNo}</span></DialogTitle>
-          </DialogHeader>
-          {detail && (
-            <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-              <span>{detail.partyName}</span>
-              <SoftStatusLabel label={detail.statusName} tone={ST_TONE[detail.status] ?? 'draft'} />
-              <span>· 汇总 <span className="font-medium text-foreground">{money(detail.totalAmount)}</span></span>
-              <span>· 已核销 <span className="text-success">{money(detail.settledAmount)}</span></span>
-              {detail.balance > 0 && <span>· 未核销 <span className="font-medium text-destructive">{money(detail.balance)}</span></span>}
-              {detail.confirmedByName && <span>· 确认人 {detail.confirmedByName}</span>}
-            </div>
-          )}
-          <div className="max-h-96 overflow-y-auto rounded-md border">
-            <ReportTable className="w-full text-sm">
-              <thead className="bg-muted/50 text-xs text-muted-foreground">
-                <tr>
-                  <th className="px-2 py-1.5 text-left">关联单号</th>
-                  <th className="px-2 py-1.5 text-right">金额</th>
-                  <th className="px-2 py-1.5 text-right">已{isPayable ? '付' : '收'}</th>
-                  <th className="px-2 py-1.5 text-right">余额</th>
-                  <th className="px-2 py-1.5 text-left">到期日</th>
-                  {detail?.status === 1 && <th className="px-2 py-1.5"></th>}
-                </tr>
-              </thead>
-              <tbody>
-                {detail?.items?.map(it => (
-                  <tr key={it.recordId} className="border-t">
-                    <td className="px-2 py-1.5 text-doc-code">{it.orderNo}</td>
-                    <td className="px-2 py-1.5 text-right tabular-nums">{money(it.totalAmount)}</td>
-                    <td className="px-2 py-1.5 text-right tabular-nums text-success">{money(it.paidAmount)}</td>
-                    <td className="px-2 py-1.5 text-right tabular-nums">
-                      {it.balance > 0 ? <span className="text-destructive">{money(it.balance)}</span> : <span className="text-success">已结清</span>}
-                    </td>
-                    <td className="px-2 py-1.5 text-xs text-muted-foreground">{it.dueDate ? formatDisplayDate(it.dueDate) : '—'}</td>
-                    {detail.status === 1 && (
-                      <td className="px-2 py-1.5 text-right">
-                        <Button size="sm" variant="ghost"
-                          onClick={() => removeItemMut.mutate({ id: detail.id, recordId: it.recordId })}>
-                          移出
-                        </Button>
-                      </td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </ReportTable>
-          </div>
-          <DialogFooter>
-            {detail && detail.status !== 1 && (
-              <Button variant="outline"
-                onClick={() => downloadExport(`/export/statements/${detail.id}`, {}).catch(e => toast.error((e as Error).message))}>
-                导出对账单（发对方核对）
-              </Button>
-            )}
-            <Button variant="outline" onClick={() => setDetailId(null)}>关闭</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <StatementDetailDialog
+        open={detailId != null}
+        onClose={() => setDetailId(null)}
+        statementId={detailId}
+        type={type}
+      />
     </div>
   )
 })
-
-/** 新建对账单：选往来方 + 期间 → 勾选待对账账款 */
-function CreateStatementDialog({ open, onClose, type, onCreated }: {
-  open: boolean; onClose: () => void; type: 1 | 2; onCreated: () => void
-}) {
-  const active = useActiveWorkspaceTab()
-  const partyLabel = type === 1 ? '供应商' : '客户'
-  const recent30d = getRelativeDateRange(30)
-  const [partyName, setPartyName] = useState('')
-  const [startDate, setStartDate] = useState(recent30d.startDate)
-  const [endDate, setEndDate] = useState(recent30d.endDate)
-  const [applied, setApplied] = useState<{ partyName:string; startDate:string; endDate:string } | null>(null)
-  const [picked, setPicked] = useState<Set<number>>(new Set())
-  const [remark, setRemark] = useState('')
-
-  useEffect(() => {
-    if (!open) return
-    setPartyName(''); setStartDate(recent30d.startDate); setEndDate(recent30d.endDate)
-    setApplied(null); setPicked(new Set()); setRemark('')
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open])
-
-  const { data: candidates, isFetching } = useQuery({
-    queryKey: ['statement-candidates', applied],
-    queryFn: () => getStatementCandidatesApi({ type, partyName: applied!.partyName, startDate: applied!.startDate, endDate: applied!.endDate }),
-    enabled: active && open && !!applied,
-  })
-
-  // 必须 useMemo：`candidates ?? []` 每次渲染都是新数组引用，会让下面依赖 list 的
-  // useMemo 每次都重算（等于没缓存）
-  const list = useMemo(() => (candidates ?? []) as StatementItem[], [candidates])
-  const pickedTotal = useMemo(
-    () => list.filter(x => picked.has(x.recordId)).reduce((s, x) => s + x.totalAmount, 0),
-    [list, picked],
-  )
-
-  const mut = useMutation({
-    mutationFn: () => createStatementApi({
-      type, partyName: applied!.partyName, periodStart: applied!.startDate, periodEnd: applied!.endDate,
-      recordIds: [...picked], remark: remark || undefined,
-    }),
-    onSuccess: (res) => { toast.success(`对账单 ${res.statementNo} 已生成`); onCreated() },
-  })
-
-  return (
-    <Dialog open={open} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="max-w-5xl">
-        <DialogHeader><DialogTitle>新建对账单</DialogTitle></DialogHeader>
-
-        <div className="grid grid-cols-[minmax(240px,2fr)_1fr_1fr_auto] items-end gap-4">
-          <div className="space-y-1 col-span-2">
-            <Label>{partyLabel} *</Label>
-            <Input value={partyName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPartyName(e.target.value)} placeholder={`输入${partyLabel}名称`} />
-          </div>
-          <div className="space-y-1"><Label>期间起</Label><DatePicker value={startDate} onChange={setStartDate} max={endDate} /></div>
-          <div className="space-y-1"><Label>期间止</Label><DatePicker value={endDate} onChange={setEndDate} min={startDate} /></div>
-        </div>
-        <Button
-          size="sm"
-          className="w-32"
-          disabled={!partyName.trim()}
-          onClick={() => { setPicked(new Set()); setApplied({ partyName: partyName.trim(), startDate, endDate }) }}
-        >
-          查待对账账款
-        </Button>
-
-        <div className="rounded-lg border border-border">
-          <div className="flex items-center justify-between border-b bg-muted/40 px-3 py-2 text-sm">
-            <span className="font-medium">待对账账款{applied ? `（${list.length} 笔）` : ''}</span>
-            <div className="flex items-center gap-3 text-xs">
-              <span className="text-muted-foreground">已选 {picked.size} 笔 · 合计 <span className="tabular-nums font-medium text-foreground">{money(pickedTotal)}</span></span>
-              <Button size="sm" variant="outline" disabled={!list.length}
-                onClick={() => setPicked(picked.size === list.length ? new Set() : new Set(list.map(x => x.recordId)))}>
-                {picked.size === list.length && list.length > 0 ? '取消全选' : '全选'}
-              </Button>
-            </div>
-          </div>
-          <div className="max-h-72 overflow-y-auto">
-            {!applied && <p className="px-3 py-6 text-center text-sm text-muted-foreground">填写{partyLabel}与期间后点「查待对账账款」</p>}
-            {applied && isFetching && <p className="px-3 py-6 text-center text-sm text-muted-foreground">加载中…</p>}
-            {applied && !isFetching && !list.length && (
-              <p className="px-3 py-6 text-center text-sm text-muted-foreground">该期间内没有未对账的月结账款</p>
-            )}
-            {list.map(it => (
-              <label key={it.recordId} className="flex cursor-pointer items-center gap-3 border-b px-3 py-2 last:border-b-0 hover:bg-muted/30">
-                <input
-                  type="checkbox" className="accent-primary"
-                  checked={picked.has(it.recordId)}
-                  onChange={e => setPicked(prev => {
-                    const next = new Set(prev)
-                    if (e.target.checked) next.add(it.recordId); else next.delete(it.recordId)
-                    return next
-                  })}
-                />
-                <span className="text-doc-code flex-1">{it.orderNo}</span>
-                <span className="text-xs text-muted-foreground">
-                  {it.dueDate ? `到期 ${formatDisplayDate(it.dueDate)}` : ''}
-                </span>
-                <span className="tabular-nums text-sm font-medium">{money(it.totalAmount)}</span>
-                {it.paidAmount > 0 && <span className="text-xs text-success">已{type === 1 ? '付' : '收'} {money(it.paidAmount)}</span>}
-              </label>
-            ))}
-          </div>
-        </div>
-
-        <div className="space-y-1">
-          <Label>备注</Label>
-          <Input value={remark} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRemark(e.target.value)} placeholder="选填" />
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>取消</Button>
-          <Button disabled={!picked.size || mut.isPending} onClick={() => mut.mutate()}>
-            {mut.isPending ? '生成中…' : `生成对账单（${picked.size} 笔 / ${money(pickedTotal)}）`}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}

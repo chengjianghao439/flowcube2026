@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { Copy, Plus, Trash2 } from 'lucide-react'
 import { toast } from '@/lib/toast'
 import PageHeader from '@/components/shared/PageHeader'
@@ -9,6 +9,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { usePermission } from '@/hooks/usePermission'
+import { EditModeBadge, UnsavedBadge } from '@/components/shared/EditModeBadge'
+import { useDirtyGuardStore } from '@/store/dirtyGuardStore'
 import {
   useRoles, useRolePermissions, useSaveRolePermissions, useDuplicateRole, useCreateRole, useDeleteRole,
   type Role,
@@ -136,10 +138,18 @@ export default function PermissionsPage() {
   const [createOpen, setCreateOpen] = useState(false)
   const [delTarget, setDelTarget] = useState<Role | null>(null)
   const [perms, setPerms] = useState<Set<string>>(new Set())
+  /** 默认态=只读查看权限；点「编辑」才可勾选，保存成功后自动回到默认态 */
+  const [editing, setEditing] = useState(false)
+  /** 最新勾选（保存回执判断用）：与提交内容一致才回到默认态 */
+  const permsRef = useRef(perms)
+  permsRef.current = perms
 
   const { data: roles } = useRoles()
   const { data: rolePerms, isLoading, isError, error, refetch } = useRolePermissions(selectedRole)
   const { mutate: deleteRole } = useDeleteRole()
+
+  /** 当前角色的权限基线：用于「是否改过」判断与「取消编辑」回滚 */
+  const baseline = useMemo(() => new Set(rolePerms ?? []), [rolePerms])
 
   useEffect(() => { if (rolePerms) setPerms(new Set(rolePerms)) }, [rolePerms])
 
@@ -150,8 +160,37 @@ export default function PermissionsPage() {
     setPerms(p => { const n = new Set(p); if (n.has(code)) n.delete(code); else n.add(code); return n })
   }
 
+  const isDirty = editing && (
+    perms.size !== baseline.size || Array.from(perms).some(c => !baseline.has(c))
+  )
+
+  /** 进入编辑态：以基线为起点，避免残留上次未保存的勾选 */
+  const startEdit = () => { setPerms(new Set(baseline)); setEditing(true) }
+  /** 取消编辑：丢弃改动回到默认（只读）态 */
+  const cancelEdit = () => { setPerms(new Set(baseline)); setEditing(false) }
+
+  /** 切换角色：编辑态有未保存改动时先确认，避免静默丢失 */
+  function selectRole(id: number) {
+    if (id === selectedRole) return
+    if (editing && isDirty) {
+      useDirtyGuardStore.getState().showConfirm('切换角色将丢弃当前未保存的权限修改，确定切换吗？', () => {
+        setEditing(false)
+        setSelectedRole(id)
+      })
+      return
+    }
+    setEditing(false)
+    setSelectedRole(id)
+  }
+
   const handleSave = () => save.mutate({ roleId: selectedRole, permissions: Array.from(perms) }, {
-    onSuccess: () => toast.success('权限已更新，用户下次登录生效'),
+    // 保存成功后回到默认（只读）态——页面状态本身的变化就是「已保存」的反馈
+    onSuccess: (_result, submitted) => {
+      // 保存期间又勾选/取消时留在编辑态，不能把后续改动当成已保存
+      const latest = permsRef.current
+      if (!submitted.permissions.some(code => !latest.has(code)) && latest.size === submitted.permissions.length) setEditing(false)
+      toast.success('权限已更新，用户下次登录生效')
+    },
   })
 
   const roleList = roles ?? []
@@ -160,8 +199,25 @@ export default function PermissionsPage() {
     <div className="space-y-6">
       <PageHeader
         title="权限管理"
-        description="动态配置各角色可访问的功能"
-        actions={isSuperAdmin ? <Button onClick={handleSave} disabled={save.isPending}>{save.isPending ? '保存中…' : '保存权限配置'}</Button> : null}
+        description={editing ? (
+          <span className="inline-flex flex-wrap items-center gap-2">
+            <EditModeBadge />
+            <UnsavedBadge show={isDirty} />
+            <span>正在编辑「{roleList.find(r => r.id === selectedRole)?.name ?? ''}」的权限，保存后回到查看状态。</span>
+          </span>
+        ) : (isSuperAdmin
+          ? '当前为查看状态；需要调整权限请点右上角「编辑」。'
+          : '动态配置各角色可访问的功能')}
+        actions={isSuperAdmin ? (
+          editing ? (
+            <>
+              <Button variant="outline" onClick={cancelEdit} disabled={save.isPending}>取消编辑</Button>
+              <Button onClick={handleSave} disabled={save.isPending}>{save.isPending ? '保存中…' : '保存修改'}</Button>
+            </>
+          ) : (
+            <Button variant="outline" onClick={startEdit}>编辑</Button>
+          )
+        ) : null}
       />
 
       <div className="grid items-start gap-4 lg:grid-cols-[240px_minmax(0,1fr)]">
@@ -186,7 +242,7 @@ export default function PermissionsPage() {
                   className={`group flex items-center rounded-md transition-colors ${active ? 'bg-accent' : 'hover:bg-accent/50'}`}
                 >
                   <button
-                    onClick={() => setSelectedRole(r.id)}
+                    onClick={() => selectRole(r.id)}
                     aria-pressed={active}
                     className="min-w-0 flex-1 truncate px-3 py-2 text-left text-sm font-medium transition-colors"
                   >
@@ -234,7 +290,7 @@ export default function PermissionsPage() {
                 <div key={group.group} className="rounded-lg border bg-card p-4">
                   <h3 className="mb-3 text-sm font-medium text-muted-foreground">{group.group}</h3>
                   <div className="flex flex-wrap gap-2">
-                    {group.items.map(p => {
+                    {editing && isSuperAdmin ? group.items.map(p => {
                       const active = perms.has(p.code)
                       return (
                         <button
@@ -247,10 +303,22 @@ export default function PermissionsPage() {
                           {p.label}
                         </button>
                       )
-                    })}
+                    }) : (
+                      // 默认态：只读展示已授予项，与编辑态（全部可点选）明显不同
+                      group.items.filter(p => perms.has(p.code)).length
+                        ? group.items.filter(p => perms.has(p.code)).map(p => (
+                          <span key={p.code} className="inline-flex min-h-8 items-center rounded-md border border-primary/30 bg-primary/10 px-2.5 py-1 text-sm font-medium text-primary">
+                            {p.label}
+                          </span>
+                        ))
+                        : <span className="text-sm text-muted-foreground">未授予</span>
+                    )}
                   </div>
                 </div>
               ))}
+              {!editing && (
+                <p className="text-sm text-muted-foreground">该角色共授予 {perms.size} 项权限。</p>
+              )}
             </div>
           )}
 
