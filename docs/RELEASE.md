@@ -12,6 +12,7 @@
 - 触发：`push` 到 `v*` **tag**（推荐发版路径）、或 `push` 到 `main`（验证构建）、或 Actions 里手动运行。手动发布必须使用工作流的发布参数，输入版本匹配实际检出 package；关联 tag 时还须核对其 SHA。
 - Runner：`windows-latest`。
 - 步骤概要：`npm ci`（frontend → desktop）→ `npm run build`（frontend，桌面包）→ 固定下载 **NSIS 3.0.4.1** → `dist:win`（electron-builder NSIS）→ 校验产物内部为 **`Nullsoft Install System v3.04`** → 将 `desktop/release/*.exe` 上传 **GitHub Release**（**仅 tag 推送**）→ 通过服务器 `scripts/release-desktop.js` 发布到 canonical 下载目录。
+- Release 附件上传走 `scripts/publish-release-asset.cjs`（不再用 `gh release upload`）：GitHub 附件存储会间歇性返回 `HTTP 500 Error saving asset`（2026-09-18 v0.9.20 上传多次挂起 15 分钟以上即此原因，gh CLI 不超时、不重试、不校验，中断还会留下没有附件的**草稿** Release）。脚本流程是「确保 Release 存在（缺则建草稿）→ 删同名附件 → 默认 5 次尝试、每次 10 分钟超时、失败 10 秒后重试 → 校验远端附件大小 → 才 `draft=false` + latest」，任何一步失败都以非零退出并打印 `::error::`。补传用同一脚本并传入 `--tag/--version/--file`，文件必须取自服务器 `/versions/v<版本>/` 的 CI 构建包（先复算 sha256 与 `latest.json` 一致）；回归见 `npm run test:release-tooling`。
 - 权限：`contents: write`（`GITHUB_TOKEN` 创建 Release）、`actions: read`（读取待发布实际 SHA 的 Tests 与 Security Scan 结果）。
 - Tag 推送时 CI 会校验：**`Git tag` 去掉 `v` 后**必须与 **`desktop/package.json` 的 `version`** 一致，否则失败（避免 exe / Release / 仓库版本错乱）。
 
@@ -121,7 +122,13 @@ Electron 使用 `file://` 打开页面时没有浏览器域名，旧逻辑会默
    npm run release:tag-desktop
    ```
 
-已完成版本同步、更新说明和本地验证，并将所有待发布改动提交到 main 后，可运行 `npm run release:prod` 一次完成推送 main 与新 tag。脚本返回仅代表提交发布请求；还须等待对应 SHA 的检查、浏览器部署及桌面/PDA 发布成功，核对线上健康版本、`/latest.json`、`/api/app-update/latest` 和 `/api/pda/version`。
+已完成版本同步、更新说明和本地验证，并将所有待发布改动提交到 main 后，可运行 `npm run release:prod` 一次完成推送 main 与新 tag。脚本返回仅代表提交发布请求；还须等待对应 SHA 的检查、浏览器部署及桌面/PDA 发布成功，再核对线上版本：
+
+```bash
+npm run release:verify -- --origin https://<生产域名>
+```
+
+逐项核对 `/latest.json`、`/api/app-update/latest`、`/api/pda/version`（版本 + versionCode + 可下载）与 `/api/health`；**PDA 落后即视为发版未完成**（v0.9.19 曾出现浏览器/桌面已发布、PDA 停在上一版而无人发现）。PDA 补跑见 `.agents/skills/release-flowcube/SKILL.md` 的「PDA 没跟上时」。
 
 ## 获取 EXE
 
@@ -148,6 +155,11 @@ Electron 使用 `file://` 打开页面时没有浏览器域名，旧逻辑会默
 1. 打开 GitHub **Actions**，进入 **Build Desktop Installer** 对应运行记录。
 2. 确认该次运行状态为 **success**；若为失败，展开 **Build desktop installer**（`npm run dist:win`）与 **electron-builder** 日志排查。
 3. 确认本次发版是 **推送 tag** 触发的运行（仅 `main` 推送不会上传 Release，但会保留 workflow artifact 供排错）。
+4. 若失败在 **Upload EXE to Release**：GitHub 附件存储偶发的 `HTTP 500 Error saving asset` 由 `scripts/publish-release-asset.cjs` 自动重试；仍失败时按日志处置，并从服务器 `/versions/v<版本>/` 取回 **CI 构建的同一份 exe**（先复算 sha256 与 `latest.json` 一致）补传：
+   ```bash
+   node scripts/publish-release-asset.cjs --tag v<版本> --version <版本> --file <exe>
+   ```
+   该脚本会在附件校验通过后才把 Release 从草稿转正。不要在本机重新构建 exe，也不要重跑 tag 构建——重跑会用新摘要覆盖 `latest.json`，与已传附件对不上。
 
 ## 本地跳过检查（仅应急）
 

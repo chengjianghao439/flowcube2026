@@ -53,6 +53,13 @@
 处置：在最终 SHA 上 `gh workflow run build-pda-apk.yml --ref main` 补跑，发布成功，
 生产 PDA 清单追平到 0.9.20 / 128。
 
+**加固（同日落地）**：① 该工作流新增 `checkout_ref` 输入，并以**实际检出的提交**作为
+「等浏览器部署 / 服务器 HEAD 校验」的基准（此前只看 `github.sha`，补跑一旦落在后续的
+文档提交上就会等一个永不出现的部署）；② `scripts/wait-release-checks.js` 对「该提交根本
+没有对应运行」在约 5 分钟内快速失败并提示指定发布提交，不再空等 30 分钟；③ 新增
+`npm run release:verify -- --origin https://<生产域名>` 逐项核对线上三端版本，
+**PDA 落后即视为发版未完成**——这正是本次能发现 v0.9.19 欠账的检查。
+
 ### 3. 桌面 tag 发布的「Upload EXE to Release」在 Windows runner 上挂起（连续两次）
 
 现象：`Build Desktop Installer`（tag `v0.9.20`）在 `Upload EXE to Release` 步骤停滞 15 分钟以上
@@ -63,6 +70,10 @@
 影响面：**面向用户的更新链路不受影响**——`latest.json` 与服务器 `/versions/v0.9.20/` 由挂起步骤
 **之前**的「Publish EXE to canonical download directory」写入并已成功；挂住的只是 GitHub Release 附件。
 
+**根因（当日用新脚本复现）**：GitHub 附件存储会间歇性返回
+`HTTP 500 {"message":"Error saving asset"}`——本地复现时连续两次 500、第三次成功。
+`gh release upload` 对这种瞬时错误既不超时、也不重试、也不报告，表现就是"卡住"。
+
 处置：
 
 1. 取消挂起的 run（`concurrency: flowcube-server-deploy` 因此释放，排队的 PDA 补跑得以执行）；
@@ -72,6 +83,13 @@
 4. 发现挂起中断的 `gh release create` 留下的是**草稿** Release（这就是前面 `gh release view`
    能看到 Release 却没有任何附件的原因），用 `gh release edit v0.9.20 --draft=false
    --title "FlowCube ERP 0.9.20" --latest` 正式发布。
+
+**加固（同日落地，随下一次发版生效）**：该步骤改用 `scripts/publish-release-asset.cjs`，
+流程为「确保 Release 存在（缺则建草稿）→ 删同名附件 → 默认 5 次尝试、每次 10 分钟超时、
+失败 10 秒后重试 → 校验远端附件大小 → 才 `draft=false` + latest」；中断只会留下可见的草稿
+和明确日志，不会出现"看起来发布了却没有包"。脚本已在真实仓库验证：用临时附件名对
+v0.9.20 走完整流程，前两次 500、第三次成功，校验与转正正常，验证附件随后删除，
+正式附件与 latest.json 保持不变。
 
 遗留：该 run 被取消，其 Actions artifact（桌面 exe 与 `flowcube-pda-apk` 的冗余备份）没有上传。
 正式产物仍在服务器下载目录与 GitHub Release 上，不影响更新与分发。

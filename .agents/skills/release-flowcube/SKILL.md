@@ -115,13 +115,28 @@ npm run release:tag-desktop
 
 ### 6. 验证
 - CI：`gh run list --branch main --limit 6`，确认同一 SHA 的 `Deploy Browser App`、`Tests`、`Security Scan`、`Build Desktop Installer` 都 success。PDA 还需同 SHA 浏览器部署成功后才上传已验证 APK。
-- latest.json 已更新到新版本：
+- **一条命令核对线上三端版本**（推荐，覆盖下面手写的 curl）：
   ```bash
-  curl -s https://<生产域名>/latest.json
-  curl -s https://<生产域名>/api/app-update/latest
+  npm run release:verify -- --origin https://<生产域名>
   ```
-  应看到 `version` = 新版本、`notes` = 你写的更新内容、`url` 指向 `/versions/v<version>/...`。
+  它会逐项核对 `/latest.json`（版本 / 包路径 / sha256 / notes）、`/api/app-update/latest`、
+  `/api/pda/version`（版本 / versionCode / 是否可下载）与 `/api/health`，任何一项不一致就退出 1。
+  **PDA 落后必须当成发版未完成**：早期版本（v0.9.19）就出现过代码、镜像、桌面清单都已发布、
+  唯独 PDA 一直停在上一版而无人发现。
 - 桌面端：在比新版本旧的客户端上启动，应弹「发现新版本 <version>」并显示更新内容。
+
+#### PDA 没跟上时（`Build PDA APK` 失败 / 被取消 / 根本没触发）
+
+`Build PDA APK` 的 push 触发带路径过滤（`frontend/**`、`backend/apk/version.json` 等）：**只改
+测试或文档的后续提交不会触发它**，所以补跑要在**已部署的发布提交**上做，并显式指定提交，
+不要依赖当前 main HEAD（HEAD 可能已经是带 `[skip ci]` 的文档提交，那个提交永远不会有部署）：
+
+```bash
+gh workflow run build-pda-apk.yml --ref main -f checkout_ref=<发布提交 SHA>
+```
+
+工作流会以 `checkout_ref` 检出的提交为准去等它的浏览器部署，并在 `resolve target commit`
+步骤打印实际目标；若这个提交上根本没有部署运行，会在约 5 分钟内快速失败并提示，而不是空等 30 分钟。
 
 ## 排查：桌面端检测不到更新
 
@@ -132,6 +147,13 @@ npm run release:tag-desktop
 3. **CI 构建失败**：`gh run list` 看 `Build Desktop Installer` 是否 success；失败常见于 tag 与 `desktop/package.json` 不一致、或 NSIS 校验失败。
 4. **latest.json 没更新**：`curl /latest.json` 看 version 是否真的变了。没变说明服务器发布步骤没跑（多半是 SSH/部署配置缺失，看该 run 日志）。
 5. **桌面端侧诊断**：在桌面端设 `FLOWCUBE_UPDATE_DIAG=1` 启动，会强制走一次检查并把接口返回、解析出的下载地址全部打日志 + 弹窗，用于定位是「没拿到 manifest」还是「版本判断没过」还是「下载地址无效」。调试还可用 `FORCE_UPDATE=1` 跳过版本比较强制弹窗。
+6. **GitHub Release 里没有安装包**：看 run 的 `Upload EXE to Release` 日志。该步骤走
+   `scripts/publish-release-asset.cjs`（带超时 + 重试 + 落地校验），GitHub 附件存储偶发
+   `HTTP 500 Error saving asset`，脚本会自动重试并在校验大小后才把 Release 转正；
+   若最终仍失败，日志里会有明确原因，Release 会停在草稿状态（不会出现"看起来发布了却没有包"）。
+   补传：从服务器 `/versions/v<版本>/` 取回 CI 构建的同一份 exe（复算 sha256 与 latest.json 一致）
+   后 `node scripts/publish-release-asset.cjs --tag v<版本> --version <版本> --file <exe>`；
+   **不要在本机重新构建 exe**，重跑 tag 构建会让 latest.json 的新摘要与已传附件对不上。
 
 ## 回滚
 

@@ -565,12 +565,16 @@ jobs:
           echo "=== 发布完成；权威入口: /latest.json，安装包路径: /versions/${tag}/FlowCube-Setup-${version}.exe ==="
 
       # 推送 git tag：创建/更新 GitHub Release 并附上 exe。
-      # 使用 gh CLI，避免依赖第三方 action runtime 触发 Node 20 deprecation 告警。
+      # 用 scripts/publish-release-asset.cjs（直连 REST API），不用 `gh release upload`：
+      # gh CLI 没有超时、中断会留下**没有附件的草稿 Release**、也不校验附件是否真的落地
+      # （2026-09-18 发 v0.9.20 时在 Windows runner 上连续两次卡死 15 分钟以上）。
+      # 脚本行为：确保 Release 存在（缺则建草稿）→ 删同名 → 带超时重试上传 → 校验大小 → 才发布。
       - name: Upload EXE to Release
         if: ${{ github.ref_type == 'tag' }}
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
           tag="${{ steps.version.outputs.tag }}"
@@ -586,15 +590,7 @@ jobs:
             printf ' - %s\n' "${files[@]}"
             exit 1
           fi
-          if gh release view "$tag" >/dev/null 2>&1; then
-            gh release upload "$tag" "${files[0]}" --clobber
-            gh release edit "$tag" --title "FlowCube ERP ${version}" --latest
-          else
-            gh release create "$tag" "${files[0]}" \
-              --title "FlowCube ERP ${version}" \
-              --generate-notes \
-              --latest
-          fi
+          node scripts/publish-release-asset.cjs --tag "$tag" --version "$version" --file "${files[0]}"
 
       # 手动运行：补传 exe 到已存在的 Release（例如先用 gh release create 建了空 Release、或 tag 构建失败）
       - name: Upload EXE to existing Release (workflow_dispatch)
@@ -602,9 +598,11 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
           release_tag="${{ github.event.inputs.release_tag }}"
+          version="${{ steps.version.outputs.version }}"
           shopt -s nullglob
           files=(desktop/release/*.exe)
           if [ "${#files[@]}" -eq 0 ]; then
@@ -616,8 +614,7 @@ jobs:
             printf ' - %s\n' "${files[@]}"
             exit 1
           fi
-          gh release view "$release_tag" >/dev/null
-          gh release upload "$release_tag" "${files[0]}" --clobber
+          node scripts/publish-release-asset.cjs --tag "$release_tag" --version "$version" --file "${files[0]}"
 
       - name: Detect portable ZIP artifact
         id: portable_zip

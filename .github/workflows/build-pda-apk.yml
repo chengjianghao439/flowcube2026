@@ -11,6 +11,11 @@ on:
       - 'backend/src/modules/pda/**'
       - 'docker-compose.yml'
   workflow_dispatch:
+    inputs:
+      checkout_ref:
+        description: '可选。补跑某次发布提交时填它的 SHA（留空 = 当前分支 HEAD）。必须在那个提交上已有成功的浏览器部署。'
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -38,7 +43,20 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
+          # 手动补跑可以显式指定发布提交；留空时用本次触发的提交（push = 该次推送，dispatch = 所选 ref 的 HEAD）。
+          ref: ${{ github.event.inputs.checkout_ref || github.sha }}
           fetch-depth: 0
+
+      # 后续「等本提交浏览器部署成功」「服务器 HEAD == 本提交」「版本端点校验」都必须以
+      # **实际检出的提交**为准，不能用 github.sha——补跑时两者可能不同（2026-09-18 v0.9.20）。
+      - name: Resolve target commit
+        id: target
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha="$(git rev-parse HEAD)"
+          echo "sha=${sha}" >> "$GITHUB_OUTPUT"
+          echo "目标提交：${sha}（触发事件 ${{ github.event_name }}，触发 SHA ${{ github.sha }}）"
 
       - name: Resolve deploy config
         id: deploy_config
@@ -203,6 +221,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           REQUIRE_BROWSER_DEPLOY: '1'
+          # 以实际检出的提交为准（补跑时与 github.sha 可能不同）
+          GITHUB_SHA: ${{ steps.target.outputs.sha }}
         run: node scripts/wait-release-checks.js
 
       - name: Add SSH known_hosts
@@ -218,6 +238,8 @@ jobs:
       - name: Publish PDA APK to server
         if: github.ref == 'refs/heads/main'
         shell: bash
+        env:
+          TARGET_SHA: ${{ steps.target.outputs.sha }}
         run: |
           set -euo pipefail
           APK_PATH="frontend/android/app/build/outputs/apk/release/app-release.apk"
@@ -235,7 +257,7 @@ jobs:
           cd "$APP_PATH"
           exec 9>/tmp/flowcube-deploy.lock
           flock -w 1800 9
-          test "\$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "\$(git rev-parse HEAD)" = "${TARGET_SHA}"
           trap 'rm -f "${UPLOAD_PREFIX}.apk" "${UPLOAD_PREFIX}.json"' EXIT
           bash scripts/publish-pda.sh "${UPLOAD_PREFIX}.apk" "${UPLOAD_PREFIX}.json" backend/apk
           EOF

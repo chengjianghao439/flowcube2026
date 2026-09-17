@@ -12,9 +12,15 @@ function assessRuns(runs, sha) {
 }
 
 async function waitForChecks({ repository, sha, token, apiUrl = 'https://api.github.com', timeoutMs = 25 * 60 * 1000, intervalMs = 15000,
-  requiredWorkflows = REQUIRED_WORKFLOWS, fetchImpl = fetch, now = Date.now, sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), log = console.log }) {
+  requiredWorkflows = REQUIRED_WORKFLOWS, fetchImpl = fetch, now = Date.now, sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), log = console.log,
+  // 「这个提交根本没有对应工作流运行」与「运行还在跑」是两回事：
+  // 2026-09-18 发 v0.9.20 时，PDA 补跑差点被触发在只改了测试/文档的提交上——该提交带
+  // [skip ci] 不会产生任何部署运行，按原逻辑会白等 30 分钟才超时。缺运行的等待上限
+  // 远小于总超时，并且给出可操作的提示（用手动补跑并指定已部署的提交）。
+  missingRunTimeoutMs = 5 * 60 * 1000 }) {
   if (!/^[\w.-]+\/[\w.-]+$/.test(repository || '') || !/^[a-f0-9]{40}$/i.test(sha || '') || !token) throw new Error('缺少合法仓库、提交 SHA 或 GitHub token')
   const deadline = now() + timeoutMs
+  const missingSince = new Map()
   while (true) {
     const states = await Promise.all(requiredWorkflows.map(async workflow => {
       const url = new URL(`/repos/${repository}/actions/workflows/${workflow}/runs`, apiUrl)
@@ -30,6 +36,20 @@ async function waitForChecks({ repository, sha, token, apiUrl = 'https://api.git
     if (states.every(s => s.state === 'success')) {
       log(`同一提交 ${sha} 的必要工作流均已成功：${requiredWorkflows.join(', ')}`)
       return states
+    }
+    const missing = states.filter(s => !s.run)
+    if (missing.length) {
+      missing.forEach(s => { if (!missingSince.has(s.workflow)) missingSince.set(s.workflow, now()) })
+      const expired = missing.find(s => now() - missingSince.get(s.workflow) >= missingRunTimeoutMs)
+      if (expired) {
+        throw new Error(
+          `提交 ${sha} 上找不到 ${expired.workflow} 的运行（push/workflow_dispatch）。`
+          + '该提交多半没有触发部署（例如只改了文档并带 [skip ci]）；请改用实际发布提交重跑，'
+          + '手动补跑时在 checkout_ref 里填那次发布提交。',
+        )
+      }
+    } else {
+      missingSince.clear()
     }
     if (now() >= deadline) throw new Error(`等待同一提交检查超时：${sha}`)
     log(`等待检查：${states.filter(s => s.state === 'pending').map(s => s.workflow).join(', ')}`)

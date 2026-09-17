@@ -92,6 +92,36 @@ test('发布检查轮询真实 API 契约，两个工作流成功后才放行', 
   assert.ok(calls.some(url => url.includes('security-scan.yml')))
 })
 
+test('提交上缺少某个工作流运行时要快速失败，不空等总超时', async () => {
+  // 2026-09-18 发 v0.9.20：PDA 手动补跑差点跑在只改文档、带 [skip ci] 的提交上——
+  // 那个提交永远不会有 Deploy Browser App 运行，旧逻辑会白等 30 分钟才超时。
+  const { waitForChecks } = require('../scripts/wait-release-checks')
+  const sha = 'a'.repeat(40)
+  let tick = 0
+  await assert.rejects(
+    () => waitForChecks({
+      repository: 'fixture/repo', sha, token: 'fixture',
+      requiredWorkflows: ['test.yml', 'deploy-browser.yml'],
+      now: () => tick,
+      sleep: async ms => { tick += ms },
+      intervalMs: 10,
+      timeoutMs: 60 * 60 * 1000,
+      missingRunTimeoutMs: 100,
+      log: () => {},
+      fetchImpl: async url => ({
+        ok: true,
+        json: async () => ({
+          workflow_runs: url.toString().includes('test.yml')
+            ? [{ id: 1, run_attempt: 1, head_sha: sha, head_branch: 'main', event: 'push', status: 'completed', conclusion: 'success' }]
+            : [],
+        }),
+      }),
+    }),
+    error => /找不到 deploy-browser\.yml 的运行/.test(error.message) && /checkout_ref/.test(error.message),
+  )
+  assert.ok(tick <= 200, `应在缺运行上限内失败，实际耗时 ${tick}ms`)
+})
+
 test('查询失败、损坏检查结果、超时和检查失败均拒绝发布', async () => {
   const { waitForChecks } = require('../scripts/wait-release-checks')
   const base = { repository: 'fixture/repo', sha: 'a'.repeat(40), token: 'fixture', timeoutMs: 0, log: () => {} }
