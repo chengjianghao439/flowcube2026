@@ -36,7 +36,68 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
+  # 前置门（2026-09-18 加入）：
+  #  ① 版本清单一致性——`backend/apk/version.json` 与 `frontend/android/app/build.gradle`
+  #     必须在构建前就一致（v0.9.19 就是发布提交先推、清单同步提交在后，PDA 构建白跑
+  #     4 分钟才在「Verify APK version」失败）。
+  #  ② 目标版本是否已发布——已发布的 versionCode 不允许换成不同字节的安装包
+  #     （`scripts/publish-pda.sh` 会拒绝，客户端也不会因为同 versionCode 更新）。发版后再动
+  #     `frontend/**` 或本工作流文件会触发这个构建，旧行为是白构建 4 分钟再红；现在直接跳过。
+  preflight:
+    runs-on: ubuntu-latest
+    outputs:
+      should_build: ${{ steps.gate.outputs.should_build }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.event.inputs.checkout_ref || github.sha }}
+
+      - name: 版本清单一致性（构建前快失败）
+        shell: bash
+        run: |
+          set -euo pipefail
+          JSON_NAME="$(node -p "require('./backend/apk/version.json').version")"
+          JSON_CODE="$(node -p "require('./backend/apk/version.json').versionCode")"
+          GRADLE_NAME="$(sed -n 's/.*versionName "\([^"]*\)".*/\1/p' frontend/android/app/build.gradle | head -1)"
+          GRADLE_CODE="$(sed -n 's/.*versionCode \([0-9]*\).*/\1/p' frontend/android/app/build.gradle | head -1)"
+          echo "version.json=${JSON_NAME}/${JSON_CODE} build.gradle=${GRADLE_NAME}/${GRADLE_CODE}"
+          if [ "$JSON_NAME" != "$GRADLE_NAME" ] || [ "$JSON_CODE" != "$GRADLE_CODE" ]; then
+            echo "::error::backend/apk/version.json 与 build.gradle 不一致，PDA 无法正确检测更新；请用 bump-version.sh 一次性同步三端与 PDA 版本后再发版。"
+            exit 1
+          fi
+
+      - name: 目标版本是否已发布
+        id: gate
+        shell: bash
+        env:
+          ERP_ORIGIN_VAR: ${{ vars.VITE_ERP_PRODUCTION_ORIGIN }}
+        run: |
+          set -euo pipefail
+          target_name="$(node -p "require('./backend/apk/version.json').version")"
+          target_code="$(node -p "require('./backend/apk/version.json').versionCode")"
+          origin="${ERP_ORIGIN_VAR:-}"
+          [ -n "$origin" ] || origin="$(node scripts/read-deploy-config.js erpOrigin 2>/dev/null || true)"
+          if [ -z "$origin" ]; then
+            echo "无法确定生产 origin，按需要构建处理（后续发布步骤会自行校验）。"
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          live="$(curl -fsSL -H 'Cache-Control: no-cache' "${origin%/}/api/pda/version?_=$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" || true)"
+          live_name="$(printf '%s' "$live" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{console.log(JSON.parse(s).data?.version||'')}catch{console.log('')}})")"
+          live_code="$(printf '%s' "$live" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{console.log(JSON.parse(s).data?.versionCode||'')}catch{console.log('')}})")"
+          echo "目标 ${target_name}/${target_code} · 线上已发布 ${live_name:-未知}/${live_code:-未知}"
+          if [ "$live_name" = "$target_name" ] && [ "$live_code" = "$target_code" ]; then
+            echo "该版本（${target_name} / versionCode ${target_code}）已经发布，跳过本次构建。"
+            echo "同一 versionCode 不允许换成不同字节的安装包（客户端不会因此更新）；需要新安装包请先提升版本号。"
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+          fi
+
   build-pda:
+    needs: preflight
+    if: needs.preflight.outputs.should_build == 'true'
     runs-on: ubuntu-latest
 
     steps:

@@ -60,6 +60,12 @@
 `npm run release:verify -- --origin https://<生产域名>` 逐项核对线上三端版本，
 **PDA 落后即视为发版未完成**——这正是本次能发现 v0.9.19 欠账的检查。
 
+④ 工作流再加 `preflight` 前置门（构建前判定）：版本清单不一致直接快失败；目标版本**已发布**
+则整条构建跳过。触发加固的直接原因是本次推 workflow 改动时 PDA 构建又红了——它按同一
+versionCode 生成了不同字节的 APK，被 `publish-pda.sh` 的「同一 versionCode 不能对应不同
+版本或安装包」守卫拒绝。该守卫本身是对的（客户端不会因同 versionCode 更新），但"发版后再动
+`frontend/**` 就白构建 4 分钟再红"属于噪音，前置门把这类运行变成明确的跳过。
+
 ### 3. 桌面 tag 发布的「Upload EXE to Release」在 Windows runner 上挂起（连续两次）
 
 现象：`Build Desktop Installer`（tag `v0.9.20`）在 `Upload EXE to Release` 步骤停滞 15 分钟以上

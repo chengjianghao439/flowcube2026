@@ -85,6 +85,7 @@ Electron 使用 `file://` 打开页面时没有浏览器域名，旧逻辑会默
 - 目标：服务器获得部署锁后同步至该 SHA，再执行 `scripts/server-update.sh`；不得跳过发布门禁。
 - 结果：GitHub runner 构建 SHA 标记的镜像，通过 SSH 传输并核验归档摘要和镜像 revision；生产保存运行中镜像，只加载 CI 产物，等待 MySQL 健康，暂停业务写入并执行迁移，再切换应用并验证接口、页面和公网入口。数据库兼容时失败恢复旧镜像；迁移未完成或旧镜像不支持 240 记账契约时保持停写，核实后恢复兼容新后端，DDL 不回滚。
 - PDA 首次迁移时先保存旧 APK 的已发布清单；新 APK 经独立构建校验、同 SHA 浏览器部署成功后，才由 `scripts/publish-pda.sh` 原子发布。
+- `Build PDA APK` 构建前有 `preflight` 前置门：先校验 `backend/apk/version.json` 与 `build.gradle` 一致（不一致直接失败，不白构建），再比对线上 `/api/pda/version`——目标版本号 + versionCode 都已发布时整条构建跳过并记为成功。`publish-pda.sh` 不允许「同一 versionCode 换成不同字节的安装包」（客户端不会因此更新），所以发版后再改 `frontend/**` 触发的构建会被跳过而不是白跑 4 分钟再失败；**要发新包必须先提升版本号**。手动补跑用 `gh workflow run build-pda-apk.yml --ref main -f checkout_ref=<发布提交 SHA>`。
 
 ### 需要的 Actions 配置
 

@@ -138,6 +138,15 @@ gh workflow run build-pda-apk.yml --ref main -f checkout_ref=<发布提交 SHA>
 工作流会以 `checkout_ref` 检出的提交为准去等它的浏览器部署，并在 `resolve target commit`
 步骤打印实际目标；若这个提交上根本没有部署运行，会在约 5 分钟内快速失败并提示，而不是空等 30 分钟。
 
+工作流还有一个 `preflight` 前置门，两种情况会**在构建前**就结束（不再白跑 4 分钟）：
+
+- `backend/apk/version.json` 与 `frontend/android/app/build.gradle` 的版本号/versionCode 不一致
+  （通常是把三端与 PDA 版本分开提交造成的，用 `bump-version.sh` 一次性同步再发）；
+- 目标版本**已经发布**（线上 `/api/pda/version` 的版本号与 versionCode 都是这一版）→ 整条构建
+  跳过并记为成功。原因：`publish-pda.sh` 拒绝「同一 versionCode 换成不同字节的安装包」，客户端也
+  不会因此更新；发版后再改 `frontend/**`（或改本工作流文件）会触发构建，旧行为是白构建再变红。
+  **要发新安装包必须提升版本号**，不要试图覆盖同 versionCode 的包。
+
 ## 排查：桌面端检测不到更新
 
 按这个顺序定位（多数情况是前两条）：
