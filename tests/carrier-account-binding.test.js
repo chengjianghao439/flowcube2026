@@ -124,7 +124,13 @@ test('快捷新增将资料一次保存为暂停状态，重试只返回原账�
     if (sql.includes('maxNum')) return [[{ maxNum: 8 }]]
     writes.push({ sql, args }); return [{ insertId: 9 }]
   } }
-  const operations = { async beginOperationRequest() { return response ? { replay: true, responseData: response } : {} }, async completeOperationRequest(_conn, _state, result) { response = result.data } }
+  // 注入的 operations 必须与真实模块同接口：创建类动作走 beginCreationOperationRequest
+  // （带载荷指纹，2026-09-18 审计 [6] 收尾）。这里按同样的「第二次同键回放」语义模拟。
+  const operations = {
+    async beginOperationRequest() { return response ? { replay: true, responseData: response } : {} },
+    async beginCreationOperationRequest(_conn, opts) { return operations.beginOperationRequest(_conn, opts) },
+    async completeOperationRequest(_conn, _state, result) { response = result.data },
+  }
   const svc = load().createBindingService({ pool: { getConnection: async () => conn }, operations })
   assert.equal(typeof svc.create, 'function', '缺少快捷新增能力')
   const data = { name: '仓库顺丰', platformCode: 'sf', monthlyAccount: '00123' }
