@@ -170,10 +170,12 @@ async function createPayroll({ period }, operator, companyId = 1) {
     const [emps] = await conn.query(
       `SELECT id FROM hr_employees WHERE company_id=? AND status=1 AND is_active=1
        AND (hire_date IS NULL OR DATE_FORMAT(hire_date, '%Y%m')<=?) ORDER BY id FOR UPDATE`, [cid, p])
-    for (const e of emps) {
+    // 批量插入（2026-09-18）：此前逐员工一次往返，公司人数上百时建单明显变慢；
+    // `VALUES ?` 空数组会 ER_PARSE_ERROR，故先判长度（与 procurement.service 同一写法）。
+    if (emps.length) {
       await conn.query(
-        `INSERT INTO hr_payroll_lines (payroll_id, employee_id) VALUES (?,?)`,
-        [payrollId, e.id],
+        `INSERT INTO hr_payroll_lines (payroll_id, employee_id) VALUES ?`,
+        [emps.map(e => [payrollId, e.id])],
       )
     }
     await conn.commit()

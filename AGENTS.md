@@ -169,6 +169,7 @@ npm run test:permissions
 - **请求体解析错误必须映射为 4xx**：body-parser 的 `entity.parse.failed` → 400、`entity.too.large` → 413，不能在 errorHandler 里落到「未知错误」500（2026-09-17 验收修复，此前畸形 JSON 会返回 500 并把堆栈记成 `[Unhandled]`）。
 - **系统设置项只允许「真正生效的键」对外**：`settings.service` 维护 `DEPRECATED_SETTING_KEYS`，其中的键不出现在 `GET /api/settings` 列表、也被批量保存静默跳过。当前包含 `sale_prefix`/`purchase_prefix`/`stockcheck_prefix`（迁移 230/231 后由 `code_prefix_*` 接管）、`code_digits`（codeGenerator 未读取，固定 6 位主数据/3 位流水）与 `code_prefix_customer`/`code_prefix_supplier`/`code_prefix_product`（`generateMasterCode` 刻意不接入前缀覆盖）。恢复这些能力必须先把 codeGenerator 真正接上配置并处理新老编号格式分叉，不能只把键放回页面。
 - **SQL 标识符（表名/列名/列清单/别名）必须经 `assertSqlIdentifier` / `assertSqlColumnList` 白名单校验**（`backend/src/utils/sqlIdentifier.js`）；值走 `?` 占位，但**占位符保护不了标识符**，两者必须同时做。契约测试 `npm run test:sql-identifier` 扫描全部 SQL 模板插值，要求每个标识符型插值在**所属函数内**有校验，或命中三种可机械验证的安全形式（硬编码三元白名单、for-of 字面量数组、文件内箭头函数参数）；不接受一句话豁免。2026-09-18 全仓审视据此收口 `lockStatusRow.columns`、`generateMasterCode.table/codeField`、`price-change.applyApprovedPrice`、`search.columns`、`scan-logs` 别名、`carriers.binding` 表名、`price-lists.field` 等 7 处——其中 `columns`、`generateMasterCode` 两处是「同类守卫有、新增入口漏一个参数」的又一实例。背景、审视范围与反向验证证据见 `docs/sql-identifier-guard-2026-09-18.md`。
+- **批量写入用 `VALUES ?`（mysql2 展开二维数组），禁止在循环里逐行 INSERT/UPDATE**：一次生成可能有上百行的路径（采购计划、工资单等）逐行走一次往返会明显变慢。**`VALUES ?` 传空数组会 `ER_PARSE_ERROR`，必须先判 `length`**；表名与列名固定、值走批量参数。2026-09-18 已在 `procurement.service.generatePlan`（每行 3 次往返 → 2 次，快照并入 INSERT）与 `hr.service.createPayroll`（N → 1）落地，实测 MySQL 8.0.46 可用。
 - SQL 参数化；API 小写、连字符、复数名词。页面不分页，但传输与 SQL 保留有界批次；批次查询按主排序追加唯一 ID（库存按商品/仓库组合）保持稳定，防止相同时间或名称在不同批次重复/遗漏。后台批次复用 `normalizePagination`，导出遵循既有上限与截断告警，不能用无限大 pageSize 绕过分页。
 - 新迁移按当前最大编号新增，**不得修改已执行的迁移**，不得未经明确授权删除字段、兼容代码或迁移文件。编号冲突、幂等执行、回填与消费者兼容要一起考虑。
 - **迁移必须逐条执行**：`backend/src/database/migrate.js` 经 `sqlStatements.js` 切分后逐条 `query`。整文件当一条多语句发送时，非末条 `CREATE TRIGGER ... <单语句>;` 的函数体会把结尾分号一起写进 `ACTION_STATEMENT`，mysqldump 导出成 `... ); */;;`，导入必然 1064 且备份不可恢复（2026-09-14 事故，见 `docs/backup-restore-trigger-terminator-2026-09-14.md`）。新增触发器迁移后要确认函数体不残留结尾分号；`sqlStatements.js` 不支持 `DELIMITER`，需要时先扩展再写迁移。
@@ -376,6 +377,7 @@ npm run test:permissions
 - **`print-jobs` 三张条码子查询分别用 `c.`/`wt.`/`j.warehouse_id`**；SQL 文本替换必须带足上下文并真跑三种范围
 - **`complete-local` 同 `complete-client`/`fail-client` 做工作站校验**；写路由必须 `requirePermission`（`fulfillment.routes.js`）
 - **新增不变量必须落 CI 契约测试并接进 `package.json` 与 `.github/workflows/test.yml`**（`docs/audit-2026-09-18.md`）
+- **批量写入用 `VALUES ?` 且先判空**：空数组会 `ER_PARSE_ERROR`；禁止循环内逐行 INSERT（`procurement.service.js`、`hr.service.js`）
 - **前端业务日期一律走 `lib/dateTime.ts`／`lib/dateRange.ts`**，禁止自拼 `getFullYear`/`getMonth`/`getDate`；`test:frontend-date-source` 拦截，非 +08 时区下自实现会偏一天（含会计期间）（`lib/dateTime.ts`）
 - **SQL 标识符插值必须显式校验**：表名/列名/列清单/别名一律走 `assertSqlIdentifier`/`assertSqlColumnList`（`utils/sqlIdentifier.js`）；`test:sql-identifier` 抓「同类守卫漏一个参数」
 - **`updateInvoice` 的 `assertInvoiceQuota` 必须传同一事务 `conn`**

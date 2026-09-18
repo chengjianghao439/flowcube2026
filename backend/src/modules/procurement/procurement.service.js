@@ -69,21 +69,25 @@ async function generatePlan({ window = 30, horizon = 30, warehouseId = null, nam
       [code, name || null, params.horizon, params.forecastMethod, params.window, params.defaultLeadTime, PLAN_STATUS.DRAFT, list.length, operator.userId, operator.realName || null, remark || null],
     )
     const planId = r.insertId
-    for (const it of list) {
+    // 批量写入（2026-09-18）：此前每行 3 次往返（INSERT 明细 → UPDATE 补快照 → INSERT 预测），
+    // 行数 = 待补货 SKU 数，一次生成可能有上百行。改为两条 `VALUES ?` 批量插入，往返降为 2 次；
+    // supply_snapshot 直接在 INSERT 里带上，省掉「插入后再 UPDATE」那一轮。
+    // 说明：这是全仓第一处 `VALUES ?` 批量插入（mysql2 把二维数组展开成多组值），
+    // 已实测 MySQL 8.0.46 + mysql2 可用；**空数组会 ER_PARSE_ERROR**，所以必须先判长度。
+    if (list.length) {
       await conn.query(
         `INSERT INTO procurement_plan_items
            (plan_id, product_id, warehouse_id, product_code, product_name, unit, warehouse_name, supplier_id, supplier_name,
-            adu, forecast_demand, safety_stock, available, in_transit, lead_time_days, suggested_qty, adjusted_qty, expected_arrival, status)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [planId, it.productId, it.warehouseId, it.productCode, it.productName, it.unit, it.warehouseName, it.supplierId, it.supplierName,
-          it.adu, it.forecastDemand, it.safetyStock, it.available, it.inTransit, it.leadTimeDays, it.suggestedQty, it.suggestedQty, it.expectedArrival, ITEM_STATUS.PENDING],
+            adu, forecast_demand, safety_stock, available, in_transit, lead_time_days, suggested_qty, adjusted_qty, expected_arrival, status, supply_snapshot)
+         VALUES ?`,
+        [list.map(it => [planId, it.productId, it.warehouseId, it.productCode, it.productName, it.unit, it.warehouseName, it.supplierId, it.supplierName,
+          it.adu, it.forecastDemand, it.safetyStock, it.available, it.inTransit, it.leadTimeDays, it.suggestedQty, it.suggestedQty, it.expectedArrival, ITEM_STATUS.PENDING, JSON.stringify(it)])],
       )
-      await conn.query('UPDATE procurement_plan_items SET supply_snapshot=? WHERE plan_id=? AND product_id=? AND warehouse_id=?', [JSON.stringify(it), planId, it.productId, it.warehouseId])
       // 需求预测明细快照（文档11 Phase3）：每次生成落一份，供未来准确度评估（actual_sold 后回填）
       await conn.query(
         `INSERT INTO demand_forecasts (plan_id, warehouse_id, product_id, forecast_method, window_days, horizon_days, adu, forecast_demand)
-         VALUES (?,?,?,?,?,?,?,?)`,
-        [planId, it.warehouseId, it.productId, params.forecastMethod, params.window, params.horizon, it.adu, it.forecastDemand],
+         VALUES ?`,
+        [list.map(it => [planId, it.warehouseId, it.productId, params.forecastMethod, params.window, params.horizon, it.adu, it.forecastDemand])],
       )
     }
     const result = { id: planId, code, itemCount: list.length }
