@@ -106,7 +106,13 @@ async function create({ fromWarehouseId, fromWarehouseName, toWarehouseId, toWar
     await conn.beginTransaction()
     const orderNo=await genNo(conn)
     const [r]=await conn.query(`INSERT INTO transfer_orders (order_no,from_warehouse_id,from_warehouse_name,to_warehouse_id,to_warehouse_name,remark,operator_id,operator_name) VALUES (?,?,?,?,?,?,?,?)`,[orderNo,fromWarehouseId,fromWarehouseName,toWarehouseId,toWarehouseName,remark||null,operator.userId,operator.realName])
-    for(const item of items) await conn.query(`INSERT INTO transfer_order_items (order_id,product_id,product_code,product_name,unit,article_number,spec,color,quantity,remark) VALUES (?,?,?,?,?,?,?,?,?,?)`,[r.insertId,item.productId,item.productCode,item.productName,item.unit,item.articleNumber||null,item.spec||null,item.color||null,item.quantity,item.remark||null])
+    // 批量插入（2026-09-18）：同一明细表在循环里逐行 INSERT，改为一次 `VALUES ?`；
+    // 空数组会 ER_PARSE_ERROR，故先判长度（约定见 AGENTS.md 第 5 节）。
+    if (items.length) await conn.query(
+      `INSERT INTO transfer_order_items (order_id,product_id,product_code,product_name,unit,article_number,spec,color,quantity,remark) VALUES ?`,
+      [items.map(item => [r.insertId, item.productId, item.productCode, item.productName, item.unit,
+        item.articleNumber || null, item.spec || null, item.color || null, item.quantity, item.remark || null])],
+    )
     await recordTransferEvent(conn, {
       transferOrderId: r.insertId,
       orderNo,
@@ -143,7 +149,13 @@ async function update(id, { fromWarehouseId, fromWarehouseName, toWarehouseId, t
     const previousDimensions = await captureDimensions(conn, 'transfer', id)
     await conn.query(`UPDATE transfer_orders SET from_warehouse_id=?, from_warehouse_name=?, to_warehouse_id=?, to_warehouse_name=?, remark=? WHERE id=?`,[fromWarehouseId,fromWarehouseName,toWarehouseId,toWarehouseName,remark||null,id])
     await conn.query('DELETE FROM transfer_order_items WHERE order_id=?', [id])
-    for(const item of items) await conn.query(`INSERT INTO transfer_order_items (order_id,product_id,product_code,product_name,unit,article_number,spec,color,quantity,remark) VALUES (?,?,?,?,?,?,?,?,?,?)`,[id,item.productId,item.productCode,item.productName,item.unit,item.articleNumber||null,item.spec||null,item.color||null,item.quantity,item.remark||null])
+    // 批量插入（2026-09-18）：同一明细表在循环里逐行 INSERT，改为一次 `VALUES ?`；
+    // 空数组会 ER_PARSE_ERROR，故先判长度（约定见 AGENTS.md 第 5 节）。
+    if (items.length) await conn.query(
+      `INSERT INTO transfer_order_items (order_id,product_id,product_code,product_name,unit,article_number,spec,color,quantity,remark) VALUES ?`,
+      [items.map(item => [id, item.productId, item.productCode, item.productName, item.unit,
+        item.articleNumber || null, item.spec || null, item.color || null, item.quantity, item.remark || null])],
+    )
     await commitFulfillment(conn, 'transfer', id, previousDimensions)
   } catch(e){ await conn.rollback(); throw e } finally { conn.release() }
   return findById(id)
