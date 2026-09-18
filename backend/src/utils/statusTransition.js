@@ -1,11 +1,5 @@
 const AppError = require('./AppError')
-
-function assertSqlIdentifier(value, label) {
-  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(value)) {
-    // 程序员错误性质（配置缺陷），统一走 AppError 便于日志/Sentry 归类
-    throw new AppError(`Invalid SQL identifier for ${label}: ${value}`, 500, 'INTERNAL_CONFIG')
-  }
-}
+const { assertSqlIdentifier, assertSqlColumnList } = require('./sqlIdentifier')
 
 function normalizeStatusList(fromStatus) {
   const list = Array.isArray(fromStatus) ? fromStatus : [fromStatus]
@@ -34,6 +28,9 @@ async function lockStatusRow(conn, {
   deletedAt = true,
 }) {
   assertSqlIdentifier(table, 'table')
+  // columns 是本文件里唯一「由调用方给出、直接插进 SELECT」的标识符清单。
+  // 2026-09-18 收口：此前只有 table/statusColumn/extraSet 键有校验，漏了它。
+  assertSqlColumnList(columns, 'columns')
   const whereDeleted = deletedAt ? ' AND deleted_at IS NULL' : ''
   const [[row]] = await conn.query(
     `SELECT ${columns} FROM ${table} WHERE id = ?${whereDeleted} FOR UPDATE`,

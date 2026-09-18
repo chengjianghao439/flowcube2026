@@ -44,6 +44,8 @@
  * @param {string} [table] - 数据表名，用于同前缀冲突时的精确路由
  * @returns {Promise<string>} - 实际生效的前缀
  */
+const { assertSqlIdentifier } = require('./sqlIdentifier')
+
 const PREFIX_KEY_OVERRIDES = {
   'reconciliation_statements:SC': 'code_prefix_scstmt',
 }
@@ -77,6 +79,11 @@ async function resolvePrefix(conn, prefix, table = '') {
  * @returns {Promise<string>}  - 如 'CUS000001'
  */
 async function generateMasterCode(conn, prefix, table, codeField = 'code') {
+  // 2026-09-18 收口：table / codeField 直接插进 FROM 与列引用，此前无任何守卫。
+  // 现有调用方全是字面量，但 `code_prefix_*` 设置项说明本仓确有「配置驱动编码」的路径，
+  // 不能等有人真的把配置值传进来才补校验。
+  assertSqlIdentifier(table, 'table')
+  assertSqlIdentifier(codeField, 'codeField')
   const prefixLen = prefix.length
   const [[{ maxNum }]] = await conn.query(
     `SELECT COALESCE(MAX(CAST(SUBSTRING(\`${codeField}\`, ?) AS UNSIGNED)), 0) AS maxNum

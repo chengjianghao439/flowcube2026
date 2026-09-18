@@ -11,6 +11,7 @@
 
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
+const { assertSqlIdentifier } = require('../../utils/sqlIdentifier')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
@@ -139,6 +140,9 @@ async function applyApprovedPrice(conn, { requestId }) {
   const [[req]] = await conn.query('SELECT * FROM price_change_requests WHERE id=?', [requestId])
   if (!req || Number(req.status) !== 2) return // 已应用过或非通过态，跳过
   const column = PRICE_COLUMN[req.price_type]
+  // create 入口在 :83 已挡非法 price_type；审批通过路径读的是库里的历史值，
+  // 不能依赖「当初写入时校验过」，这里独立再挡一次（2026-09-18 收口）。
+  assertSqlIdentifier(column, 'column')
   await conn.query(`UPDATE product_items SET \`${column}\`=? WHERE id=? AND deleted_at IS NULL`, [Number(req.new_price), req.product_id])
   await conn.query(
     `INSERT INTO product_price_history

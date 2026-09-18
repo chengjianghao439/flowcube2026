@@ -2,6 +2,7 @@ const { commitFulfillment } = require('../fulfillment/fulfillment.refresh')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
+const { assertSqlIdentifier } = require('../../utils/sqlIdentifier')
 const { lockContainer, CONTAINER_STATUS } = require('../../engine/containerEngine')
 const { WT_STATUS } = require('../../constants/warehouseTaskStatus')
 const { checkDoneWithinTransaction, checkCancelReturnClearedAndFinalize } = require('../warehouse-tasks/warehouse-tasks.service')
@@ -688,6 +689,9 @@ async function logUndo({ taskId, itemId, barcode, prevQty, newQty, operatorId, o
 
 // 日期以北京时间整日为界；仓库日志只能经真实任务解析归属。
 function buildLogReadFilter({ startDate, endDate, scopeWarehouseIds }, alias, dateColumn) {
+  // 调用方传的是一致的字面量（'sl' / 'scanned_at'）；校验防的是后续被改成由调用数据决定。
+  assertSqlIdentifier(alias, 'alias')
+  assertSqlIdentifier(dateColumn, 'dateColumn')
   const parts = [], params = []
   if (startDate) {
     parts.push(`AND ${alias}.${dateColumn} >= ?`)

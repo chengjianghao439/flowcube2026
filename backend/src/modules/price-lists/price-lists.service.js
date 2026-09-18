@@ -1,6 +1,7 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { priceLevelLabel } = require('../../utils/priceLevels')
+const { assertSqlIdentifier } = require('../../utils/sqlIdentifier')
 
 const findAll = async () => {
   const [rows] = await pool.query(
@@ -39,6 +40,7 @@ const findCustomerPrice = async (customerId, productId) => {
   const level = String(cust?.price_level || 'A').toUpperCase()
   const fieldMap = { A: 'sale_price_a', B: 'sale_price_b', C: 'sale_price_c', D: 'sale_price_d' }
   const field = fieldMap[level] || fieldMap.A
+  assertSqlIdentifier(field, 'field')
   const [[item]] = await pool.query(
     `SELECT ${field} AS sale_price FROM product_items WHERE id=? AND deleted_at IS NULL`,
     [productId])

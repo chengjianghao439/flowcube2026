@@ -1,6 +1,7 @@
 'use strict'
 const crypto = require('node:crypto')
 const AppError = require('../../utils/AppError')
+const { assertSqlIdentifier } = require('../../utils/sqlIdentifier')
 const { credentials } = require('../logistics/carrier-adapters/direct-common')
 const { normalizeProduct } = require('../logistics/shipping-products')
 const { assertAccountChangeAllowed, accountChangedOf } = require('./carriers.guards')
@@ -53,6 +54,7 @@ function createBindingService({ pool, operations, getCredential = ref => require
       if (row.monthly_account) throw new AppError('请先解绑月结账号，再删除承运商', 409)
       // 保留所有历史引用，包括已结束或已软删除的销售单；不删除运单与账款。
       for (const table of ['sale_orders', 'logistics_waybills', 'logistics_freight_bills', 'logistics_freight_settlements']) {
+        assertSqlIdentifier(table, 'table')
         const [[{ total }]] = await conn.query(`SELECT COUNT(*) AS total FROM ${table} WHERE carrier_id=?`, [id])
         if (Number(total)) throw new AppError('该承运商已有订单、运单或运费记录，不能删除；请保留记录并暂停自动下单', 409)
       }

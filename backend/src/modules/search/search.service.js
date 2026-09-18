@@ -1,5 +1,6 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
+const { assertSqlIdentifier, assertSqlColumnList } = require('../../utils/sqlIdentifier')
 
 /**
  * 全局搜索（跨单据 + 基础资料）。
@@ -80,6 +81,12 @@ async function searchGlobal(rawQuery, scopeWarehouseIds = null, options = {}) {
     const fields = DETAIL_FIELDS[ent.type]
     const master = MASTER_TYPES.has(ent.type)
     const columns = [...new Set([...fields.map(([field]) => field), ...(master ? ['name'] : [])])]
+    // 表名/列名全部来自本文件的 ENTITIES / DETAIL_FIELDS 常量注册表；校验是为了
+    // 万一将来注册表改由配置或外部数据生成时仍然拦住注入（2026-09-18 收口）。
+    assertSqlIdentifier(ent.table, 'ent.table')
+    assertSqlIdentifier(ent.noField, 'ent.noField')
+    assertSqlIdentifier(ent.subtitleField, 'ent.subtitleField')
+    assertSqlColumnList(columns.join(', '), 'columns')
     const [rows] = await pool.query(
       `SELECT id, ${ent.noField} AS no_val, ${ent.subtitleField} AS subtitle, ${columns.join(', ')}
        FROM ${ent.table} WHERE ${conds.join(' AND ')} ORDER BY id DESC LIMIT ${PAGE_SIZE + 1}`, params,

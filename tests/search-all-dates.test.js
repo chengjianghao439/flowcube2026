@@ -9,6 +9,7 @@ test('全局搜索忽略旧客户端日期参数，保留限仓条件及查询�
   const queries = []
   const sandbox = { module: { exports: {} }, require: name => {
     if (name === '../../utils/AppError') return require('../backend/src/utils/AppError')
+    if (name === '../../utils/sqlIdentifier') return require('../backend/src/utils/sqlIdentifier')
     assert.equal(name, '../../config/db')
     return { pool: { query: async (sql, params) => { queries.push({ sql, params }); return [[]] } } }
   } }
@@ -26,7 +27,11 @@ test('全局搜索忽略旧客户端日期参数，保留限仓条件及查询�
 })
 
 function loadService(query) {
-  const sandbox = { module: { exports: {} }, require: name => name === '../../utils/AppError' ? require('../backend/src/utils/AppError') : ({ pool: { query } }) }
+  const sandbox = { module: { exports: {} }, require: name => {
+    if (name === '../../utils/AppError') return require('../backend/src/utils/AppError')
+    if (name === '../../utils/sqlIdentifier') return require('../backend/src/utils/sqlIdentifier')
+    return { pool: { query } }
+  } }
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../backend/src/modules/search/search.service.js'), 'utf8'), sandbox)
   return sandbox.module.exports
 }
