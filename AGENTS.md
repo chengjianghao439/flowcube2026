@@ -274,7 +274,7 @@ npm run test:permissions
 - **待上架待办与超时提醒按容器真实状态查询**（2026-09-16 修复）：`inventory_containers.status` 的待上架是 **4**（`CONTAINER_STATUS.PENDING_PUTAWAY`），容器状态只有 1..6、**没有 0**。岗位工作台的「待上架」卡片（`reports.query.js`）与「打印后未上架超时」通知（`notifications.service.js`）此前都写成 `status = 0`，条件恒不成立：卡片永远 0 条、提醒从不出现，收完货不上架没人知道（当时生产已有 2 张单各压着 1 个待上架容器躺了 5 个多月）。改动这两处一律引用 `CONTAINER_STATUS` 常量、不写数字字面量；回归见 `tests/workbench.test.js`（断言不得出现 `status = 0`、参数必须含 4）。详见 `docs/inbound-putaway-reminder-2026-09-16.md`。
 - ERP 仪表盘默认首屏为待处理销售/今日出库/未清应收/待我审批四项摘要，下接待办摘要、业务待办、销售趋势与应收到期分布；编辑态与阅读态按保存的卡片顺序渲染。见 docs/dashboard-card-order-2026-09-08.md。
 - 销售订单列表用普通表格，单号/客户/仓库/折后金额/状态等列独立；默认最近七天（北京时间），range=all 不套日期；未生成应收显示「未生成应收」，不用客户结算回退值制造未付/逾期。见 docs/sale-classic-layout-2026-09-05.md。
-- 单据列表默认时间窗口统一由 lib/dateTime.ts 的 defaultRangeYmds(7) 生成；操作日志与库存流水默认最近 7 天。默认值在构造查询参数处兜底（与查询弹窗初始值同源），range=all 表示看全部。全局搜索 autoComplete="off"。
+- **前端业务日期只有一个来源**：`lib/dateTime.ts`（`todayYmd` / `beijingYmd` / `beijingPeriod` / `shiftYmd` / `formatDisplayDate`）与基于它的 `lib/dateRange.ts`（近 N 天 / 本月窗口）。**禁止用 `getFullYear`/`getMonth`/`getDate` 自己拼业务日期**——那是宿主时区语义，非 +08 环境（UTC 容器、系统重装、出差改时区）下会偏一天，会计期间更会取到相邻月份；守卫 `npm run test:frontend-date-source` 扫全前端，唯一豁免是趣味小工具（本地存储标记，不参与业务日期）。2026-09-18 据此收敛 9 处：会计模块 5 份 `currentPeriod`、`PaymentQueryDialog` 的「今天」按钮、报销明细默认日期、运费对账当前年月、`lib/dateRange.ts` 整体。单据列表默认时间窗口统一由 lib/dateTime.ts 的 defaultRangeYmds(7) 生成；操作日志与库存流水默认最近 7 天。默认值在构造查询参数处兜底（与查询弹窗初始值同源），range=all 表示看全部。全局搜索 autoComplete="off"。
 - 官网展示页为 frontend/src/pages/landing/：版本摘要维护在 updates.ts，不以工作区 package 版本冒充已发布版本；清单缺失时禁用下载入口。**每版发版必须把本版补进该列表最前**（官网「版本更新」区只读它，不读 package 版本）——此前文件注释声明了这条流程、但技能与 `docs/RELEASE.md` 都没写，0.9.16–0.9.22 连漏 7 版；现由 `npm run test:landing-updates` 守住（缺当前版本 / 顺序错 / 字段不全即失败）。见 docs/landing-adoption-2026-09-12.md。
 
 - **页内 Tab 状态保留（v0.9.10）**：子页首次激活才挂载，切换子页或工作区后保留筛选、草稿、选择、展开和滚动，关闭整个大页面才卸载；不新增跨刷新草稿存储。统一用 `KeepAliveSection` 与可见性上下文，隐藏子页暂停自身查询/轮询和浮层显示，不以关闭回调清空草稿；打印预览隐藏时撤销自身打印样式/监听，并取消等待图片解码的旧打印动作；已提交请求继续处理自身回执。原单据身份、账套切换及鉴权隔离边界保留。ABC 未保存规则切走仍有关闭保护、刷新不覆盖草稿；税务草稿与保存回执按税种隔离。覆盖清单与验证见 `docs/inner-tabs-retention-2026-09-08.md`。
@@ -375,6 +375,7 @@ npm run test:permissions
 - **`print-jobs` 三张条码子查询分别用 `c.`/`wt.`/`j.warehouse_id`**；SQL 文本替换必须带足上下文并真跑三种范围
 - **`complete-local` 同 `complete-client`/`fail-client` 做工作站校验**；写路由必须 `requirePermission`（`fulfillment.routes.js`）
 - **新增不变量必须落 CI 契约测试并接进 `package.json` 与 `.github/workflows/test.yml`**（`docs/audit-2026-09-18.md`）
+- **前端业务日期一律走 `lib/dateTime.ts`／`lib/dateRange.ts`**，禁止自拼 `getFullYear`/`getMonth`/`getDate`；`test:frontend-date-source` 拦截，非 +08 时区下自实现会偏一天（含会计期间）（`lib/dateTime.ts`）
 - **SQL 标识符插值必须显式校验**：表名/列名/列清单/别名一律走 `assertSqlIdentifier`/`assertSqlColumnList`（`utils/sqlIdentifier.js`）；`test:sql-identifier` 抓「同类守卫漏一个参数」
 - **`updateInvoice` 的 `assertInvoiceQuota` 必须传同一事务 `conn`**
 - **销售退货可退量按 `wt.warehouse_id = COALESCE(soi.warehouse_id, 销售单头仓)` 关联**（`returns-sale.service.js`）

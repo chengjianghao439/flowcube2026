@@ -11,11 +11,6 @@ import { QueryChips, type QueryChip } from '@/components/shared/QueryChips'
 import { getMonthDateRange, getRelativeDateRange } from '@/lib/dateRange'
 import { todayYmd } from '@/lib/dateTime'
 
-const todayStr = () => {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
 /** 账款 / 汇款单 / 对账单三类列表共用的查询条件；用不到的字段由开关关掉 */
 export interface PaymentQueryValues {
   /** 单据编号（账款=关联单号，汇款单=收付款单号，对账单=对账单号） */
@@ -202,7 +197,7 @@ export function PaymentQueryDialog({
               <Label>{labels.dateLabel}</Label>
               <div className="flex gap-1">
                 {(singleDate
-                  ? ([['今天', () => { const t = todayStr(); return { startDate: t, endDate: t } }]] as const)
+                  ? ([['今天', () => { const t = todayYmd(); return { startDate: t, endDate: t } }]] as const)
                   : ([
                       ['近 30 天', () => getRelativeDateRange(30)],
                       ['近 90 天', () => getRelativeDateRange(90)],

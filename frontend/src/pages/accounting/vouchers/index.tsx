@@ -23,7 +23,7 @@ import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { cn } from '@/lib/utils'
 import { toast } from '@/lib/toast'
-import { todayYmd } from '@/lib/dateTime'
+import { todayYmd, beijingPeriod } from '@/lib/dateTime'
 import { downloadExport } from '@/lib/exportDownload'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
@@ -43,7 +43,6 @@ const PAGE_SIZE = 20
 const fmtMoney = (n: number | null | undefined) =>
   (Number(n) || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const fmtDate = (v: string) => (v ? String(v).slice(0, 10) : '')
-const currentPeriod = () => { const d = new Date(); return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}` }
 const statusTone = (s: number) => (s === 3 ? 'danger' : s === 2 ? 'active' : 'success')
 
 // ─── 勾稽对账卡片 ─────────────────────────────────────────────────────────────
@@ -77,7 +76,7 @@ function ReconciliationCard() {
 
 // ─── 生成本期凭证弹窗 ─────────────────────────────────────────────────────────
 function GenerateDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [period, setPeriod] = useState(currentPeriod())
+  const [period, setPeriod] = useState(beijingPeriod())
   const [allPeriods, setAllPeriods] = useState(false)
   const { mutate: gen, isPending } = useGenerateVouchers()
   function submit() {

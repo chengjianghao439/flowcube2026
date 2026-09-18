@@ -20,11 +20,11 @@ import { getCarriersActiveApi } from '@/api/carriers'
 import { getFreightBillsApi, createFreightBillApi, getFreightSettlementsApi, generateFreightSettlementApi } from '@/api/logistics'
 import type { FreightBill, FreightSettlement } from '@/types/logistics'
 import type { TableColumn } from '@/types'
+import { todayYmd } from '@/lib/dateTime'
 
 function currentPeriod(): string {
-  // 不用 new Date() 之外的能力；页面运行期取当前年月
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  // 当年月按**北京时间**取（此前用宿主本地字段，非 +08 时区会取到上个月）
+  return todayYmd().slice(0, 7)
 }
 
 export default function FreightReconciliationPage() {

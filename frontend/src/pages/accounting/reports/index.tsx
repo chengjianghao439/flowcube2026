@@ -14,9 +14,9 @@ import PageHeader from '@/components/shared/PageHeader'
 import { cn } from '@/lib/utils'
 import { useIncomeStatement, useBalanceSheet, useCashFlow } from '@/hooks/useLedger'
 import type { ReportRow, BalanceSheetItem } from '@/types/accounting'
+import { beijingPeriod } from '@/lib/dateTime'
 
 type Tab = 'income' | 'balance' | 'cashflow'
-const currentPeriod = () => { const d = new Date(); return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}` }
 const m = (n: number) => (Number(n) || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 const TABS: Array<{ key: Tab; label: string }> = [
@@ -91,7 +91,7 @@ function BalanceSheetView({ period }: { period: string }) {
 }
 
 export default function ReportsPage() {
-  const [period, setPeriod] = useState(currentPeriod())
+  const [period, setPeriod] = useState(beijingPeriod())
   const [tab, setTab] = useState<Tab>('income')
   return (
     <div>

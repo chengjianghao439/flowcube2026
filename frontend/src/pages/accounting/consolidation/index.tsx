@@ -17,6 +17,7 @@ import {
 import { toast } from '@/lib/toast'
 import { downloadExport } from '@/lib/exportDownload'
 import type { TableColumn } from '@/types'
+import { beijingPeriod } from '@/lib/dateTime'
 
 const money = (n: number) => `¥${Number(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
@@ -42,10 +43,7 @@ function LedgerTable({ title, rows, total, accent }: { title: string; rows: Arra
 
 export default function ConsolidationPage() {
   const { companyId, setCompany } = useCompanyStore()
-  const [period, setPeriod] = useState(() => {
-    const now = new Date()
-    return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`
-  })
+  const [period, setPeriod] = useState(() => beijingPeriod())
   const queryClient = useQueryClient()
   const createInFlight = useRef(false)
   const [createOpen, setCreateOpen] = useState(false)

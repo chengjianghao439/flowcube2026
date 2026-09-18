@@ -9,6 +9,7 @@ import DataTable from '@/components/shared/DataTable'
 import ListSummary from '@/components/shared/ListSummary'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { QueryChips, type QueryChip } from '@/components/shared/QueryChips'
+import { todayYmd } from '@/lib/dateTime'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -37,15 +38,11 @@ const money = (n: number) => `¥${Number(n).toFixed(2)}`
 const STATUS_OPTIONS = [
   ['1', '草稿'], ['2', '待审批'], ['3', '已批准'], ['4', '已付款'], ['5', '已驳回'], ['6', '已取消'],
 ] as const
-const todayStr = () => {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
 type DraftItem = { categoryId: string; amount: string; happenedAt: string; description: string }
-const emptyItem = (): DraftItem => ({ categoryId: '', amount: '', happenedAt: todayStr(), description: '' })
+const emptyItem = (): DraftItem => ({ categoryId: '', amount: '', happenedAt: todayYmd(), description: '' })
 
 interface ExpQuery { keyword: string; status: string; startDate: string; endDate: string; minAmount: string; maxAmount: string }
-const EMPTY_EXP_QUERY: ExpQuery = { keyword: '', status: '', startDate: todayStr(), endDate: todayStr(), minAmount: '', maxAmount: '' }
+const EMPTY_EXP_QUERY: ExpQuery = { keyword: '', status: '', startDate: todayYmd(), endDate: todayYmd(), minAmount: '', maxAmount: '' }
 const STATUS_NAME: Record<string, string> = Object.fromEntries(STATUS_OPTIONS.map(([v, l]) => [v, l]))
 
 /** 费用报销查询弹窗：关键字 + 状态 + 创建日期区间 + 金额区间（比原来平铺的一格搜索框多了日期/金额） */

@@ -68,10 +68,31 @@ export function formatDisplayDate(value: unknown, fallback = '—'): string {
   return `${f.y}-${pad(f.mo)}-${pad(f.d)}`
 }
 
+/**
+ * 任意时刻 → 北京日期 YYYY-MM-DD。
+ * 与 `formatDisplayDate` 的区别：后者面向展示（可 fallback），本函数面向**计算**
+ * （筛选窗口、日期加减、默认值），输入必须是确定的 Date。
+ */
+export function beijingYmd(date: Date = new Date()): string {
+  const f = beijingFields(date)
+  return `${f.y}-${pad(f.mo)}-${pad(f.d)}`
+}
+
+/**
+ * 纯日期加减（YYYY-MM-DD → YYYY-MM-DD），按 UTC 解析/输出。
+ * 用于筛选窗口：**不要在 Date 上用 setDate 做加减**——那是宿主时区语义，
+ * 非 +08 时区下会偏一天（2026-09-18 收敛）。
+ */
+export function shiftYmd(ymd: string, days: number): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ymd))
+  if (!m) throw new Error(`shiftYmd 需要 YYYY-MM-DD，收到：${ymd}`)
+  const shifted = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]) + days * 86400000)
+  return `${shifted.getUTCFullYear()}-${pad(shifted.getUTCMonth() + 1)}-${pad(shifted.getUTCDate())}`
+}
+
 /** 北京时间的今天 YYYY-MM-DD（2026-08-21：查询弹窗默认时间统一用这个） */
 export function todayYmd(): string {
-  const f = beijingFields(new Date())
-  return `${f.y}-${pad(f.mo)}-${pad(f.d)}`
+  return beijingYmd()
 }
 
 /**
@@ -80,9 +101,18 @@ export function todayYmd(): string {
  * 采购与收货按「今天减 7 天」算成了 8 天，同一个「最近一周」在三个列表里窗口不一样（2026-09-16 修复）。
  */
 export function defaultRangeYmds(days = 7): { start: string; end: string } {
-  const end = new Date()
-  const start = new Date(end.getTime() - (days - 1) * 86400000)
-  return { start: formatDisplayDate(start), end: formatDisplayDate(end) }
+  const end = beijingYmd()
+  return { start: shiftYmd(end, -(days - 1)), end }
+}
+
+/**
+ * 北京时间的年月 YYYYMM（会计期间默认值）。
+ * 会计期间对时区尤其敏感：宿主不是 +08 时，月初/月末会取到相邻月份，
+ * 关账期间跟着错。此前会计模块把这个函数抄了 5 份（2026-09-18 收敛）。
+ */
+export function beijingPeriod(date: Date = new Date()): string {
+  const f = beijingFields(date)
+  return `${f.y}${pad(f.mo)}`
 }
 
 /** 北京时间的当前小时（0-23）：PDA 首页问候语等按「北京几点」而不是宿主时区的场景 */

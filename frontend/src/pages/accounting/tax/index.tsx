@@ -18,15 +18,13 @@ import {
   type TaxAdjustment,
 } from '@/hooks/useTax'
 import type { TableColumn } from '@/types'
+import { beijingPeriod } from '@/lib/dateTime'
 
 const money = (n: number) => `¥${Number(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
 export default function TaxFilingPage() {
   const { companyId } = useCompanyStore()
-  const [period, setPeriod] = useState(() => {
-    const now = new Date()
-    return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`
-  })
+  const [period, setPeriod] = useState(() => beijingPeriod())
   const [tab, setTab] = useState<'vat' | 'income'>('vat')
   return (
     <div className="space-y-4">

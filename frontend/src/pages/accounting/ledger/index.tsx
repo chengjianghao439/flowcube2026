@@ -14,8 +14,8 @@ import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { cn } from '@/lib/utils'
 import { useTrialBalance, useAccountLedger } from '@/hooks/useLedger'
 import type { TrialBalanceRow } from '@/types/accounting'
+import { beijingPeriod } from '@/lib/dateTime'
 
-const currentPeriod = () => { const d = new Date(); return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}` }
 const m = (n: number) => (Number(n) || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const cell = (v: number) => (v ? m(v) : '')
 
@@ -67,7 +67,7 @@ function LedgerDialog({ accountId, code, name, period, onClose }: { accountId: n
 }
 
 export default function LedgerPage() {
-  const [period, setPeriod] = useState(currentPeriod())
+  const [period, setPeriod] = useState(beijingPeriod())
   const { data, isLoading } = useTrialBalance(period)
   const [detail, setDetail] = useState<TrialBalanceRow | null>(null)
   const list = data?.list ?? []

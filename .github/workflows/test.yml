@@ -182,6 +182,8 @@ jobs:
 
       - name: 契约测试 — AGENTS.md 注入守卫（禁 CLAUDE.md 候选、体积预算、docs 引用有效性）
         run: npm run test:agents-md-guard
+      - name: 契约测试 — 前端业务日期必须走 lib/dateTime（防自拼日期偏一天）
+        run: npm run test:frontend-date-source
 
       - name: 契约测试 — 前端登出必须走统一封装（防漏清缓存/漏作废 refresh）
         run: npm run test:frontend-session-contract
