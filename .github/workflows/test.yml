@@ -72,6 +72,8 @@ jobs:
 
       - name: 单元测试 — 标签几何及前端镜像（Node 22 实际执行）
         run: npm run test:label
+      - name: 契约测试 — 官网版本摘要必须与发版版本同步（防 bump 后漏同步）
+        run: npm run test:landing-updates
 
       - name: 上传单文件与字段限制回归
         run: npm run test:upload && npm run test:export

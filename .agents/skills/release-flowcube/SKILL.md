@@ -95,6 +95,15 @@ bash .agents/skills/release-flowcube/scripts/bump-version.sh <version>
 ```
 写给**最终用户**看，讲「他们能感知到的变化」，不要堆砌内部重构术语。
 
+**同一版还要同步官网更新摘要** `frontend/src/pages/landing/updates.ts`：官网「版本更新」区
+只读这个列表，**不读 package 版本**。把本版按现有格式补到数组最前（`version` / `category` /
+`title` / `description` / `details`），保持整体从新到旧，文案同样写给最终用户看。
+
+> 为什么必须写进流程：该文件注释一直声明「发布时按 release-flowcube 流程同步此列表」，
+> 但本技能与 `docs/RELEASE.md` 都**没有**这一步，于是 0.9.16–0.9.22 **连续 7 个版本都没同步**，
+> 官网上展示的还是 0.9.15 / 0.9.14 / 0.9.13。现已由 `npm run test:landing-updates` 机械守住：
+> 列表缺当前版本、顺序不是从新到旧、或某条字段不全，CI 直接失败。
+
 ### 4. 提交并推送 main（触发浏览器部署）
 ```bash
 # 先核对本次任务的所有改动，再逐路径暂存。不能把不明来源的旧改动一并纳入。
@@ -179,6 +188,7 @@ node scripts/release-desktop.js <旧version> --rollback
 - PDA 发布通过 `scripts/publish-pda.sh` 写唯一 APK 后原子切换 `backend/apk/published-version.json`；源码 version.json 只表示目标版本，不能先改生产清单再上传包。发布只更新挂载目录，不重置 Git 或重建后端。
 - 客户端需要可信 HTTPS 清单和 sha256，下载后及安装前均验摘要；移除了按 IP 放行任意证书的旧逻辑。无摘要/证书错误需修正发布源后再更新。
 
+- **发版必须同步官网更新摘要** `frontend/src/pages/landing/updates.ts`（官网只读它，不读 package 版本）；`npm run test:landing-updates` 会拦住「bump 了却没同步」。
 - **桌面正式包只能由 GitHub Actions 的 Windows runner 构建**。本机 Mac 的 `makensis` 可能被污染，打出的 exe 在部分 Windows 上「双击无反应」。本机只用于开发调试。
 - **不要手工复制 exe 到发布目录**。必须经 `release-desktop.js`，它负责生成 `metadata.json` / `latest.json` / `current/version.txt` 并强制 `latest.json` 指向 `/versions/`。
 - **tag 不可复用**：同一版本号的 tag 已存在就不能再发，必须升版本。`release-desktop-tag.sh` 会拦截重复 tag。
