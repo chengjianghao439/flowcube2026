@@ -399,7 +399,8 @@ npm run test:permissions
 - **迁移逐条执行、触发器函数体不得残留结尾分号**；`test:print-purge` 是**数据库测试**（`tests/print-jobs-purge.test.js` import `helpers/smokeTestKit`，要 `NODE_ENV=test` + 第 3 节独立测试库），同时必须给可写 `APP_UPDATE_DOWNLOADS_DIR`——**别把它当纯离线测试跑**（2026-09-18 实测：只设 downloads 目录会在 `testEnvironment` 处报「必须设置 NODE_ENV=test」）
 - **schema 对账必须查 `information_schema` 按名字+列序比对且在生产库核对**（`CREATE TABLE IF NOT EXISTS` 后补索引/外键静默失效）（`schema-reconcile.js`）
 - **PDA 设备改绑仓库/停用必须单事务**：行锁判换仓、`revokeSessions(..., conn)`，非 active 无条件吊销（`middleware/pdaSession.js`）
-- **源码文本契约测试先去注释**；锁顺序按「上一个 `FOR UPDATE` 之后」归属，`INSERT` 列数必须与 `?` 一致（`tests/inventory-lock-order-contract.test.js`、`tests/sql-placeholder-contract.test.js`）
+- **源码文本契约测试先去注释**（只剔整行注释：按 `//` 全剔会把 `http://127.0.0.1` 这类字面量的后半行一起砍掉，2026-09-18 实测导致守卫自我误报）；锁顺序按「上一个 `FOR UPDATE` 之后」归属，`INSERT` 列数必须与 `?` 一致（`tests/inventory-lock-order-contract.test.js`、`tests/sql-placeholder-contract.test.js`、`tests/deployment-resources.test.js`）
+- **smoke 套件的测试 HTTP 服务必须 `app.listen(0, '127.0.0.1')`**（端口交给 OS + 显式绑回环 IPv4）：`3100 + random(0..999)` 这个范围**包含 3306**（CI 的 MySQL），命中即 `EADDRINUSE: address already in use :::3306`；不指定 host 还可能只绑 IPv6 而 baseUrl 走 `127.0.0.1`，表现为 `TypeError: fetch failed`。两者都约 1/1000、失败步骤每次都不同，2026-09-18 连续拦下两次发版；`tests/deployment-resources.test.js` 机械守住（`tests/helpers/smokeTestKit.js`）
 - **状态文案只能取 `generated/status.ts`**；`WT_ON_ENTER/EXIT_ACTIONS` 是纯文档清单（`frontend/src/pages/sale/index.tsx`、`SaleQueryDialog.tsx`、`tests/status-rules-integrity.test.js`）
 - **`printers.service.update` 的 `status` 只允许 0/1（路由+service 双重）**，写语句同事务行锁，缺失字段沿用现值
 - **资源级幂等 action 必须绑定单据 ID**（`action.<resourceId>`，旧固定 action 只在 SUCCESS 且资源一致时回放）；创建类用载荷指纹；回执查询剥尾部 `.<ID>` 取 base；调拨必须是 `transfer.scanOut.<id>`/`transfer.scanIn.<id>`（`utils/operationRequest.js`、`transfer.service.js`）

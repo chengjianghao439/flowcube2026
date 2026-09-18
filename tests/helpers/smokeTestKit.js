@@ -257,12 +257,21 @@ async function prepareSmokeContext() {
   const pdaSessionToken = pdaSession.sessionToken
 
   // 5. 启动 Express 服务
-  const PORT = Number(process.env.TEST_API_PORT || 0) || 3100 + Math.floor(Math.random() * 1000)
+  // 端口交给 OS 分配（listen(0)）并显式绑定回环 IPv4，不要自己挑端口范围：
+  // 原实现是 `3100 + Math.floor(Math.random() * 1000)`，而该范围**包含 3306**——
+  // CI 的 MySQL 就监听 3306，随机命中时直接 `EADDRINUSE: address already in use :::3306`
+  // （2026-09-18 实测，概率约 1/1000，表现为「偶发」失败，且失败步骤每次都不同）。
+  // 不指定 host 还会让服务可能只绑到 IPv6 `::`，而 baseUrl 固定走 127.0.0.1，
+  // 非 dual-stack 环境下表现为 `TypeError: fetch failed`（同日另一次失败即此形态）。
+  // 其余 smoke 套件一直是 `app.listen(0, '127.0.0.1')`，这里与它们对齐。
+  // 另外补 error 监听：端口异常要明确失败，不能让 Promise 永久挂起到超时。
+  const requestedPort = Number(process.env.TEST_API_PORT || 0)
   const app = require('../../backend/src/app')
-  const server = await new Promise((resolve) => {
-    const s = app.listen(PORT, () => resolve(s))
+  const server = await new Promise((resolve, reject) => {
+    const s = app.listen(requestedPort > 0 ? requestedPort : 0, '127.0.0.1', () => resolve(s))
+    s.once('error', reject)
   })
-  const baseUrl = `http://127.0.0.1:${PORT}`
+  const baseUrl = `http://127.0.0.1:${server.address().port}`
   const http = createHttpClient(baseUrl)
 
   // 6. 返回上下文

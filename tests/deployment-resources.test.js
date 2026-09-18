@@ -193,3 +193,21 @@ test('镜像上传时限必须与 docker load 一致，且步骤/job 预算容�
   assert.ok(jobSeconds > declared,
     `job 上限 ${jobSeconds}s 必须大于各步骤声明上限之和 ${declared}s，否则 job 级会先被强杀`)
 })
+
+// 2026-09-18 实测：`smokeTestKit` 用 `3100 + Math.random()*1000` 自选测试服务端口，而该范围
+// **包含 3306**——CI 的 MySQL 正好监听 3306，随机命中即 `EADDRINUSE: address already in use :::3306`；
+// 它启动时又没指定 host，可能只绑到 IPv6 `::` 而 baseUrl 固定走 127.0.0.1，表现为 `TypeError: fetch failed`。
+// 两者都只在 CI 偶发（约 1/1000），且失败步骤每次都不同，极难复现——连续两次发版都被它拦下。
+// 其余 10 个 smoke 套件一直是 `app.listen(0, '127.0.0.1')`。此断言钉住正确写法，避免再退回自选端口。
+test('测试服务端口必须交给 OS 分配并绑定回环 IPv4（禁止自选端口范围）', () => {
+  // 契约测试先去注释：说明本问题的注释里就写着那个错误写法，不去掉会自我误报。
+  // 只剔除整行注释——按 `//` 全剔会连带砍掉 URL 字面量里的 `//`（如 `http://127.0.0.1`）。
+  const code = fs.readFileSync(path.join(root, 'tests/helpers/smokeTestKit.js'), 'utf8')
+    .split('\n').filter(line => !/^\s*\/\//.test(line)).join('\n')
+  assert.ok(!/3100\s*\+\s*Math\.floor\(/.test(code),
+    'smokeTestKit 不得用 3100+random 自选端口：该范围包含 3306（CI 的 MySQL 端口），会随机 EADDRINUSE')
+  assert.ok(code.includes("'127.0.0.1'"),
+    "smokeTestKit 必须显式绑定 '127.0.0.1'，否则可能只绑 IPv6 而 baseUrl 走 IPv4（fetch failed）")
+  assert.ok(code.includes('server.address().port'),
+    'baseUrl 的端口必须取自 server.address().port，而不是自己记的常量')
+})
