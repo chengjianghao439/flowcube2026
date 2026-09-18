@@ -162,7 +162,9 @@ jobs:
           set -euo pipefail
           cd "$SERVER_APP_PATH"
           exec 9>/tmp/flowcube-deploy.lock
-          flock -w 300 9
+          # 等锁上限与 PDA 发布（build-pda-apk.yml）保持一致：一次完整部署可能十几分钟，
+          # 5 分钟会在与其它发布流程错峰时抢锁超时（2026-09-16 v0.9.17 即为此失败）。
+          flock -w 1800 9
           trap 'rm -f "$BOOTSTRAP_SCRIPT" "$DEPLOY_IMAGE_ARCHIVE"' EXIT
           if [ ! -f backend/apk/published-version.json ] && [ -f backend/apk/version.json ] && [ -f backend/apk/app-release.apk ]; then
             bash "$BOOTSTRAP_SCRIPT" backend/apk/app-release.apk backend/apk/version.json backend/apk
