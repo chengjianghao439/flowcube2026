@@ -388,7 +388,7 @@ npm run test:permissions
 - **软删主数据活跃唯一性用生成列 `active_unique_guard`**；`252_*` 遇重复活跃编码 fail-loud，`codeGenerator.js` 取号进事务+撞号换号（`248_generated_active_unique_guards.sql`、`252_product_supplier_active_code_uniques.sql`）
 - **已执行迁移的漂移只能新增条件式迁移订正**（仅当值仍是已知错误值）（`249_fix_default_label_paper_size_drift.sql`）
 - **新增迁移必须幂等、编号最大+1，不得改已执行迁移或删字段**（含 `245_backfill_location_barcode.sql`）；索引/外键用幂等 DDL 单独补（`250_payment_entries_record_id_index.sql`、`251_payment_entries_record_fk.sql`）；只按 `print_type` 的全局唯一索引用幂等 DDL 删除（`246_drop_stray_printer_bindings_print_type_unique.sql`）
-- **迁移逐条执行、触发器函数体不得残留结尾分号**；`print-jobs-purge.test.js` 必须给可写 `APP_UPDATE_DOWNLOADS_DIR`（`print-jobs-purge.test.js`）
+- **迁移逐条执行、触发器函数体不得残留结尾分号**；`test:print-purge` 是**数据库测试**（`tests/print-jobs-purge.test.js` import `helpers/smokeTestKit`，要 `NODE_ENV=test` + 第 3 节独立测试库），同时必须给可写 `APP_UPDATE_DOWNLOADS_DIR`——**别把它当纯离线测试跑**（2026-09-18 实测：只设 downloads 目录会在 `testEnvironment` 处报「必须设置 NODE_ENV=test」）
 - **schema 对账必须查 `information_schema` 按名字+列序比对且在生产库核对**（`CREATE TABLE IF NOT EXISTS` 后补索引/外键静默失效）（`schema-reconcile.js`）
 - **PDA 设备改绑仓库/停用必须单事务**：行锁判换仓、`revokeSessions(..., conn)`，非 active 无条件吊销（`middleware/pdaSession.js`）
 - **源码文本契约测试先去注释**；锁顺序按「上一个 `FOR UPDATE` 之后」归属，`INSERT` 列数必须与 `?` 一致（`tests/inventory-lock-order-contract.test.js`、`tests/sql-placeholder-contract.test.js`）
