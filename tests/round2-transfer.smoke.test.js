@@ -39,7 +39,23 @@ before(async () => {
  ctx={http,item,payload,order,scan,state,receipt,wh,uid,suffix,next:()=>containers[ci++]}
  evidence.fixtures={suffix,uid,role,wh,loc,product,containers:containers.map(c=>c.containerId)}
 })
-after(async () => {fs.writeFileSync(process.env.FLOWCUBE_TRANSFER_EVIDENCE_PATH || '/tmp/flowcube-round2-fix-transfer-evidence.json',JSON.stringify(evidence,null,2));if(server)await new Promise(r=>server.close(r));await pool.end()})
+after(async () => {
+ fs.writeFileSync(process.env.FLOWCUBE_TRANSFER_EVIDENCE_PATH || '/tmp/flowcube-round2-fix-transfer-evidence.json',JSON.stringify(evidence,null,2))
+ // 清理本次运行自建的角色/用户/设备（2026-09-18）：sys_role_permissions.role_id 是 TINYINT UNSIGNED，
+ // 而本用例每次都新建一个角色且从不清理，在本机测试库累积到 255 以上后，下一轮会在 fixture 阶段
+ // 直接 ER_WARN_DATA_OUT_OF_RANGE 失败（本地自毒化；CI 每次新建库所以看不到）。逐条尽力而为，
+ // 任何一步失败都不影响用例结论。
+ const f=evidence.fixtures||{}
+ const best=async(sql,args)=>{try{await q(sql,args)}catch(e){console.error('[round2-transfer] 夹具清理跳过:',e.code||e.message)}}
+ if(f.suffix){
+  await best('DELETE s FROM pda_device_sessions s JOIN pda_devices d ON d.id=s.device_id WHERE d.device_code LIKE ?',[f.suffix+'D%'])
+  await best('DELETE FROM pda_devices WHERE device_code LIKE ?',[f.suffix+'D%'])
+ }
+ if(f.uid) await best('DELETE FROM user_warehouse_scope WHERE user_id=?',[f.uid])
+ if(f.uid) await best('DELETE FROM sys_users WHERE id=?',[f.uid])
+ if(f.role){await best('DELETE FROM sys_role_permissions WHERE role_id=?',[f.role]);await best('DELETE FROM sys_roles WHERE id=?',[f.role])}
+ if(server)await new Promise(r=>server.close(r));await pool.end()
+})
 
 function success(r) { assert.equal(r.status,200,JSON.stringify(r)); return r.response.data }
 test('R2-06 creation rejects both warehouses outside scope without inserting',async()=>{

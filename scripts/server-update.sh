@@ -121,7 +121,11 @@ fail_deploy() {
     rollback_deployment || true
   fi
   echo "!! 部署失败：${reason}；${ROLLBACK_RESULT}" >&2
-  dingtalk_send "$(read_dingtalk_webhook "$PROJECT_DIR")" "🔴 FlowCube 部署失败（$(ts)）：${reason}；${ROLLBACK_RESULT}"
+  # 告警发送结果**不得改变本脚本的退出码**：这里是 set -e，而 dingtalk_send 在未配置 webhook
+  # 或发送失败时会返回非 0（2026-09-18 审计修复）。不显式吞掉的话，调用失败会在下面 exit 1
+  # 之前中断，把「部署失败」的退出码从 1 变成 2（CI 的 audit-deployment 用例就按 1 断言）。
+  # 告警失败本身已由 dingtalk_send 写 stderr，运维在部署日志里看得到。
+  dingtalk_send "$(read_dingtalk_webhook "$PROJECT_DIR")" "🔴 FlowCube 部署失败（$(ts)）：${reason}；${ROLLBACK_RESULT}" || true
   exit 1
 }
 trap 'fail_deploy "第 ${LINENO} 行执行失败（exit=$?）"' ERR

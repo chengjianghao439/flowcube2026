@@ -226,13 +226,28 @@ async function getOperationRequestStatus({ requestKey, action, userId }) {
  *     绝不能任选一单成功（那正是本缺陷要消灭的错法）。
  */
 async function getScopedOperationRequestStatus({ requestKey, action, userId }) {
-  const baseAction = String(action ?? '').trim()
-  const exact = await getOperationRequestStatus({ requestKey, action: baseAction, userId })
+  const requestedAction = String(action ?? '').trim()
+  const exact = await getOperationRequestStatus({ requestKey, action: requestedAction, userId })
   if (exact.status !== 'not_found') return exact
 
+  // 请求方可能传**基础 action**（旧客户端：`transfer.scanIn`），也可能传**完整 scoped action**
+  // （新客户端：`transfer.scanIn.15`）。后者必须先把尾巴去掉才能在库里找到迁移前留下的
+  // 旧固定 action 行——否则「上一次提交到底成没成」在升级后会一律查不到，PDA 只能靠
+  // resolveServerState 兜底（CI 的 round2-transfer 用例正是守这一条，2026-09-18 修复）。
+  const scoped = /^(.*)\.([1-9]\d*)$/.exec(requestedAction)
+  const baseAction = scoped ? scoped[1] : requestedAction
+  const requestedId = scoped ? Number(scoped[2]) : null
+
   const candidates = await findScopedOperationRequests({ requestKey, baseAction, userId })
-  if (candidates.length !== 1) return exact
-  return getOperationRequestStatus({ requestKey, action: candidates[0].action, userId })
+  // 明确问了某一张单据时，只接受资源 ID 对得上的那一行：旧固定 action 行同样写了
+  // resource_type/resource_id（见 beginResourceOperationRequest 的兼容读），所以这里能判。
+  // 不做这一步就会出现「问 A 单却回 B 单回执」——正是审计点名的错法。
+  const matched = requestedId == null
+    ? candidates
+    : candidates.filter(r => Number(r.resource_id) === requestedId)
+  // 同键对应多单时保持「待核实」，不任选一单（与迁移前 transfer 的语义一致）
+  if (matched.length !== 1) return exact
+  return getOperationRequestStatus({ requestKey, action: matched[0].action, userId })
 }
 
 async function findScopedOperationRequests({ requestKey, baseAction, userId }) {
@@ -240,7 +255,7 @@ async function findScopedOperationRequests({ requestKey, baseAction, userId }) {
   if (!key || !baseAction) return []
   const uid = userId != null ? Number(userId) : null
   const [rows] = await pool.query(
-    `SELECT action FROM operation_requests
+    `SELECT action, resource_id FROM operation_requests
      WHERE request_key = ? AND user_id <=> ? AND (action = ? OR action LIKE ?)
      ORDER BY id LIMIT 2`,
     [key, uid, baseAction, `${baseAction}.%`],
