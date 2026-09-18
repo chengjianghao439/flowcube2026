@@ -3,7 +3,7 @@
  * 路由：/pda/inventory-query
  *
  * 扫描库存条码（I…/B…）→ 展示容器在库信息（商品/仓库/库位/批次/效期/剩余量）。
- * 只读查询：不提供改数量、移库位等任何决策入口（守 CLAUDE.md「仓库端只执行不决策」）。
+ * 只读查询：不提供改数量、移库位等任何决策入口（守 docs/claude-md-archive-2026-09-04.md「仓库端只执行不决策」）。
  * 数据权限由后端 scopeFilter 按用户仓库范围过滤。
  */
 import { useState, useCallback } from 'react'

@@ -397,7 +397,7 @@ async function kpiMetrics(params = {}) {
  * avg_cost 对账报表（文档12）：容器口径 vs 缓存口径的数量/价值漂移检查。
  * 容器口径 = ACTIVE 容器 remaining_qty 合计 × avg_cost（唯一事实源）；
  * 缓存口径 = inventory_stock.quantity × avg_cost（只应由 syncStockFromContainers 写）。
- * 数量或价值有差异即视为缓存漂移（违反 CLAUDE.md 不变量 1/2），提示走 resync 修复。
+ * 数量或价值有差异即视为缓存漂移（违反 docs/claude-md-archive-2026-09-04.md 不变量 1/2），提示走 resync 修复。
  * 纯只读，不写库。基座复用 inventory.service 的 findStockDrift，与
  * /inventory/check-consistency 同一实现，避免同一不变量两套 SQL。
  */

@@ -5,7 +5,7 @@
  * 绑定二维码是 QR 码（二维），红外枪扫不了 → 绑定页必须有相机扫码入口。
  * 走 @capacitor-mlkit/barcode-scanning（Android ML Kit 原生解码，工业屏暗光/反光鲁棒）。
  *
- * 为什么用 startScan 而不是 scan()（2026-08-27 修复，根因见 CLAUDE.md 第 20 节）：
+ * 为什么用 startScan 而不是 scan()（2026-08-27 修复，根因见 docs/claude-md-archive-2026-09-04.md 第 20 节）：
  * 8.1.0 的 scan() 路由到 GMS Code Scanner 的「一键式界面」——要求设备装有 Google
  * Play Services 并预装 GMS 扫码模块（isGoogleBarcodeScannerModuleAvailable 为假时
  * 直接 reject ERROR_GOOGLE_BARCODE_SCANNER_MODULE_NOT_AVAILABLE）；而本项目在

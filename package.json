@@ -43,6 +43,7 @@
     "test:finance-lock-order": "node tests/finance-lock-order-contract.test.js",
     "test:inventory-lock-order": "node tests/inventory-lock-order-contract.test.js",
     "test:sql-placeholder": "node tests/sql-placeholder-contract.test.js",
+    "test:agents-md-guard": "node tests/agents-md-injection-guard.test.js",
     "test:frontend-session-contract": "node tests/frontend-session-contract.test.js",
     "test:frontend-polling-contract": "node tests/frontend-polling-contract.test.js",
     "test:sale-order-contract": "node tests/sale-order-contract.test.js",

@@ -24,7 +24,7 @@ function assert(name, cond, detail = '') {
   else { failed++; console.log(`  [FAIL] ${name} ${detail}`) }
 }
 
-// ── 1. 各机器的已知状态集（手工维护，与 CLAUDE.md 第 10 节一致） ──
+// ── 1. 各机器的已知状态集（手工维护，与 docs/claude-md-archive-2026-09-04.md 第 10 节一致） ──
 // 注意：warehouseTask 不在 documentStatusRules（独立在 warehouseTaskStatus.js），单独测试。
 // 有意的「原地推进」动作（from 含 to，语义为续扫/续收）：transfer.scanOut(2,3→3)、
 // inboundTask.receiveComplete(2,3→3)——不算空转，空转检查跳过这两个。

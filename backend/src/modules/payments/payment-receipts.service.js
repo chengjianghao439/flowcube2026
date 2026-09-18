@@ -106,7 +106,7 @@ function resolveReceiptStatus(amount, settled) {
  * 把一笔汇款分配核销到若干账款。调用方已开启事务并锁好 receipt 行。
  *
  * 加锁顺序：账款按 id 升序逐行 FOR UPDATE，与 payments.service.recordPayment 的单行锁
- * 共存时不会形成环路（见 CLAUDE.md 第 11 节「加锁顺序统一」）。
+ * 共存时不会形成环路（见 docs/claude-md-archive-2026-09-04.md 第 11 节「加锁顺序统一」）。
  */
 async function applyAllocations(conn, receipt, allocations, operator) {
   // 统一加锁顺序 statement→record，且 statement 之间也按 id 全局升序：先把本次会触及的所有对账单行

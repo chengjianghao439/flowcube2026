@@ -12,7 +12,7 @@ const round8 = n => Math.round((Number(n) || 0) * 1e8) / 1e8
 
 /**
  * 取 (商品, 录入单位) 的权威换算率：录入单位缺省/等于基本单位 → 1（不查表）；辅助单位查 product_units；
- * 非法单位报错。前端传的率只作呈现，不采信（守 CLAUDE.md 第13/17节前端不复制后端业务规则）。
+ * 非法单位报错。前端传的率只作呈现，不采信（守 docs/claude-md-archive-2026-09-04.md 第13/17节前端不复制后端业务规则）。
  */
 async function resolveConversionRate(conn, productId, entryUnit, baseUnit) {
   if (!entryUnit || (baseUnit && entryUnit === baseUnit)) return 1

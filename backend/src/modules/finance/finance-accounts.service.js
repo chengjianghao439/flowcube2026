@@ -9,7 +9,7 @@ const { normalizePagination } = require('../../utils/pagination')
  *
  * **流水是唯一事实源**：`finance_accounts.current_balance` 只是它的投影，由
  * `refreshBalance()` 在每次写流水后于同一事务内重算（期初 + Σ收 − Σ支），
- * 绝不做「读余额 → 加减 → 写回」的独立累加。理由见 CLAUDE.md 第 9 节
+ * 绝不做「读余额 → 加减 → 写回」的独立累加。理由见 docs/claude-md-archive-2026-09-04.md 第 9 节
  * （inventory_stock 的缓存漂移事故），钱的账目更不能出这种事。
  *
  * 收款核销、付款核销、费用报销都调 `recordTransaction()` 写流水，账户余额才完整。

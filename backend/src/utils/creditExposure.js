@@ -3,7 +3,7 @@
  *
  * 已用授信 = 未清应收余额(A) + 在途订单敞口(B)。
  * 必须传事务连接 conn：额度校验要在客户行锁 FOR UPDATE 内、同一事务读，才能挡住
- * "同客户两单并发都读到旧已用值、双双放行、合计超限"的竞态（CLAUDE.md 第 11 节）。
+ * "同客户两单并发都读到旧已用值、双双放行、合计超限"的竞态（docs/claude-md-archive-2026-09-04.md 第 11 节）。
  */
 
 async function getCustomerCreditUsed(conn, customerId, { excludeSaleOrderId = null } = {}) {
