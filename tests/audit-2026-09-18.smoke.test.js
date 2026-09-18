@@ -897,6 +897,64 @@ async function main() {
     )
   })
 
+  test('★P3 盘点扫码必须写幂等回执（此前 PDA 查 stockcheck.scan 恒为 not_found）', async f => {
+    // 修复前：saveItemContainerScans **完全不写 operation_requests**，而 PDA 盘点页用
+    // requestAction='stockcheck.scan' 查「上次提交到底成没成」→ 必然 not_found，只能靠
+    // resolveServerState 兜底（2026-09-18 审计 [6] 残留）。现在按 stockcheck.scan.<盘点单ID>
+    // 绑定单据，前端用基础 action 查时由 `<base>.%` 分支解析。
+    const svc = require('../backend/src/modules/stockcheck/stockcheck.service')
+    const { getScopedOperationRequestStatus } = require('../backend/src/utils/operationRequest')
+    const containerId = await f.activeContainer(5)
+    const [[container]] = await conn.query('SELECT barcode FROM inventory_containers WHERE id=?', [containerId])
+    const checkId = await insert(`INSERT INTO inventory_checks
+      (check_no,warehouse_id,warehouse_name,operator_id,operator_name,status)
+      VALUES (?,?,'审计回归仓',1,'测试',1)`, [unique('SC'), f.wh])
+    const itemId = await insert(`INSERT INTO inventory_check_items
+      (check_id,product_id,product_code,product_name,unit,book_qty)
+      VALUES (?,?,?,'审计回归','个',5)`, [checkId, f.productId, f.code])
+    const key = unique('KEY')
+
+    const first = await svc.saveItemContainerScans(checkId, itemId, [{ barcode: container.barcode, countedQty: 5 }], operator, null, key)
+    assert.equal(first.scannedContainers, 1)
+    const [[row]] = await conn.query(
+      'SELECT action, resource_type, resource_id, status FROM operation_requests WHERE request_key=?', [key])
+    assert.equal(row.action, `stockcheck.scan.${checkId}`, '动作用必须绑定盘点单 ID')
+    assert.equal(row.resource_type, 'stockcheck')
+    assert.equal(Number(row.resource_id), checkId)
+    assert.equal(Number(row.status), 1, '扫码成功必须落成回执（status=1）')
+
+    const receipt = await getScopedOperationRequestStatus({ requestKey: key, action: 'stockcheck.scan', userId: operator.userId })
+    assert.equal(receipt.status, 'success', `PDA 用基础 action 必须查得到回执（修复前恒为 not_found），实际=${receipt.status}`)
+    assert.equal(Number(receipt.data?.itemId), itemId)
+
+    // 同键重放：返回同一份结果，不得重复写入
+    const replay = await svc.saveItemContainerScans(checkId, itemId, [{ barcode: container.barcode, countedQty: 5 }], operator, null, key)
+    assert.deepEqual(replay, first, '同请求键重放必须回放原结果')
+  })
+
+  test('★P3 创建类幂等：同一请求键换内容不得回放上一单的创建结果', async () => {
+    // 修复前：sale.create / purchase.create / payment.receipt.create / carrier.createAccount /
+    // 请购 / 采购计划 / 退货建单 都只有常量 action，而创建类动作在 begin 时刻没有单据 ID 可绑，
+    // 于是同一个请求键被误用到**另一次内容不同**的创建上时，会直接回放第一次的成功回执（返回
+    // 别单的 ID），调用方以为建成功了。现在 action 带**请求载荷指纹**：内容不同 → 不同作用域。
+    const { pool } = require('../backend/src/config/db')   // 已被本文件的 harness 映射到 SAVEPOINT 连接
+    const binding = require('../backend/src/modules/carriers/carriers.binding').createBindingService({ pool })
+    const key = unique('KEY')
+    const base = { name: '审计承运', platformCode: 'sf', monthlyAccount: 'ACC0001' }
+
+    const first = await binding.create(base, { requestKey: key, userId: 2 })
+    const [[row]] = await conn.query('SELECT action, resource_type, resource_id FROM operation_requests WHERE request_key=?', [key])
+    assert.match(String(row.action), /^carrier\.createAccount\.[0-9a-f]{16}$/, '创建类动作必须带载荷指纹')
+    assert.equal(row.resource_type, 'carrier')
+    assert.equal(Number(row.resource_id), Number(first.id))
+
+    const replay = await binding.create(base, { requestKey: key, userId: 2 })
+    assert.equal(replay.id, first.id, '同键同内容必须回放原结果（幂等不能丢）')
+
+    const second = await binding.create({ ...base, monthlyAccount: 'ACC0002' }, { requestKey: key, userId: 2 })
+    assert.notEqual(second.id, first.id, '同键换内容必须真的新建，不能回放上一单结果（修复前返回的是第一单 id）')
+  })
+
   test('★P2 track_status 只能有一个解释：1=已签收（导出曾读成「已揽收/在途」）', async f => {
     const logiSvc = require('../backend/src/modules/logistics/logistics.service')
     assert.equal(logiSvc.trackStatusLabel(0), '未签收')

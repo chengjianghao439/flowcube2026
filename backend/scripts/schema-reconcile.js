@@ -6,9 +6,16 @@
  * 本脚本从已执行的迁移文件里提取 CREATE TABLE 的表名，与 information_schema 实际表比对，
  * 报告：缺失的表、意外存在的表。只读检查不写库。
  *
+ * 2026-09-18 审计 [16]④ 补第二部分：**索引级对账**。只比对表名看不见「表在、索引没建」这类
+ * 漂移——而本仓最典型的漏法是 `CREATE TABLE IF NOT EXISTS` 对历史表是空操作（004 就因此
+ * 声明了 uk_product_code 却从未生效），于是「活跃期唯一性」在演化库上完全不存在（NULL 互不
+ * 相等 → 活跃行零约束）或反过来把软删行的编码永久占住。这里按**名字 + 列序**核对代码真正依赖
+ * 的那批活跃期唯一键（REQUIRED_ACTIVE_UNIQUES），并对残留的旧式 `(业务键, deleted_at)` 唯一键
+ * 给出提示（它们对活跃行零约束，只在同一秒软删两条同码行时撞车，已由 075/248/252 逐步移除）。
+ *
  * 用法：
  *   node scripts/schema-reconcile.js            # 全量对账，缺失/意外表不中断（warn）
- *   node scripts/schema-reconcile.js --strict   # 任一缺失表即 exit 1（可挂 CI 门禁）
+ *   node scripts/schema-reconcile.js --strict   # 缺失表或活跃期唯一键不达标即 exit 1（可挂 CI 门禁）
  */
 require('dotenv').config()
 const fs = require('fs')
@@ -20,6 +27,21 @@ const strict = process.argv.includes('--strict')
 
 /** 运行时自建表（代码里 CREATE TABLE IF NOT EXISTS，非迁移建的表）——对账时豁免 */
 const KNOWN_RUNTIME_TABLES = new Set(['db_migrations', 'pda_error_logs', 'pda_undo_logs'])
+
+/**
+ * 「活跃期唯一键」契约：代码与业务真正依赖的唯一性，靠 active_unique_guard 生成列实现
+ * （软删行该列自动为 NULL，MySQL 唯一键把 NULL 视为互不相同 → 活跃行唯一、软删行可复用编码）。
+ * 列序必须完全一致（列序决定最左前缀能否服务 `WHERE code = ?` 的查询）。
+ */
+const REQUIRED_ACTIVE_UNIQUES = [
+  { table: 'product_items', index: 'uk_product_items_code_active', columns: ['code', 'active_unique_guard'] },
+  { table: 'supply_suppliers', index: 'uk_supply_suppliers_code_active', columns: ['code', 'active_unique_guard'] },
+  { table: 'carriers', index: 'uk_carrier_code', columns: ['code', 'active_unique_guard'] },
+  { table: 'warehouse_locations', index: 'uk_location_code', columns: ['code', 'active_unique_guard'] },
+  { table: 'inventory_warehouses', index: 'uk_inventory_warehouses_code_active', columns: ['code', 'active_unique_guard'] },
+  { table: 'sale_customers', index: 'uk_sale_customers_code_active', columns: ['code', 'active_unique_guard'] },
+  { table: 'sys_users', index: 'uk_sys_users_username_active', columns: ['username', 'active_unique_guard'] },
+]
 
 /** 从 SQL 文本提取 CREATE TABLE 的表名 */
 function extractTableNames(sql) {
@@ -81,7 +103,33 @@ async function main() {
   // 意外表：实际存在、但不在任何迁移声明里且非运行时自建表
   const unexpected = [...actualTables].filter(t => !declaredTables.has(t) && !KNOWN_RUNTIME_TABLES.has(t)).sort()
 
-  const ok = missing.length === 0
+  // ── ② 索引级对账：活跃期唯一键 ────────────────────────────────────────────
+  const [indexRows] = await conn.query(
+    `SELECT TABLE_NAME AS tbl, INDEX_NAME AS idx, NON_UNIQUE AS nonUnique,
+            GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX) AS cols
+       FROM information_schema.STATISTICS
+      WHERE TABLE_SCHEMA = DATABASE()
+      GROUP BY TABLE_NAME, INDEX_NAME, NON_UNIQUE`,
+  )
+  const indexMap = new Map(indexRows.map(r => [
+    `${String(r.tbl).toLowerCase()}.${String(r.idx)}`,
+    { unique: Number(r.nonUnique) === 0, columns: String(r.cols || '').split(',') },
+  ]))
+  const uniqueProblems = []
+  for (const req of REQUIRED_ACTIVE_UNIQUES) {
+    const found = indexMap.get(`${req.table}.${req.index}`)
+    const want = req.columns.join(',')
+    if (!found) uniqueProblems.push(`${req.table}.${req.index} 不存在（期望 UNIQUE(${want})）`)
+    else if (!found.unique) uniqueProblems.push(`${req.table}.${req.index} 不是唯一键（期望 UNIQUE(${want})）`)
+    else if (found.columns.join(',') !== want) uniqueProblems.push(`${req.table}.${req.index} 列序不符：实际 (${found.columns.join(',')})，期望 (${want})`)
+  }
+  // 旧式 (业务键, deleted_at) 唯一键：只提示，不判失败——演化库上它们大多是历史遗留噪音
+  const legacyPairUniques = indexRows
+    .filter(r => Number(r.nonUnique) === 0 && String(r.cols || '').endsWith(',deleted_at'))
+    .map(r => `${String(r.tbl).toLowerCase()}.${String(r.idx)}(${r.cols})`)
+    .sort()
+
+  const ok = missing.length === 0 && uniqueProblems.length === 0
   console.log('═'.repeat(60))
   console.log('  Schema 对账')
   console.log('═'.repeat(60))
@@ -96,6 +144,19 @@ async function main() {
     console.warn(`  ⚠ 意外表 ${unexpected.length} 个（库中存在但不在任何迁移声明里）：`)
     for (const t of unexpected.slice(0, 20)) console.warn(`    - ${t}`)
     if (unexpected.length > 20) console.warn(`    ... 等 ${unexpected.length} 个`)
+  }
+  // ② 活跃期唯一键
+  if (uniqueProblems.length) {
+    console.error(`  ✗ 活跃期唯一键不达标 ${uniqueProblems.length} 处（软删后同码重建/活跃期唯一性会失效）：`)
+    for (const p of uniqueProblems) console.error(`    - ${p}`)
+  } else {
+    console.log(`  [PASS] ${REQUIRED_ACTIVE_UNIQUES.length} 个活跃期唯一键全部存在且列序正确`)
+  }
+  if (legacyPairUniques.length) {
+    console.warn(`  ⚠ 仍在使用旧式 (业务键, deleted_at) 唯一键 ${legacyPairUniques.length} 处——`
+      + '对活跃行零约束（MySQL 里 NULL 互不相等），只会在同一秒软删两条同码行时撞车，建议按 075/248/252 的模板换成 active_unique_guard：')
+    for (const p of legacyPairUniques.slice(0, 12)) console.warn(`    - ${p}`)
+    if (legacyPairUniques.length > 12) console.warn(`    ... 等 ${legacyPairUniques.length} 个`)
   }
   console.log('═'.repeat(60))
 

@@ -3,7 +3,7 @@ const AppError = require('../../utils/AppError')
 const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
-const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
+const { beginOperationRequest, beginCreationOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { generateMasterCode } = require('../../utils/codeGenerator')
 const { getProcurementPlan } = require('../inventory/inventory.procurement')
 const purchaseService = require('../purchase/purchase.service')
@@ -56,7 +56,7 @@ async function generatePlan({ window = 30, horizon = 30, warehouseId = null, nam
   try {
     await conn.beginTransaction()
     await lockPlanning(conn)
-    const requestState = await beginOperationRequest(conn, { requestKey, action: 'procurement.plan.generate', userId: operator?.userId ?? null })
+    const requestState = await beginCreationOperationRequest(conn, { requestKey, action: 'procurement.plan.generate', userId: operator?.userId ?? null, payload: { window, horizon, warehouseId, name, defaultLeadTime, forecastMethod, remark } })
     if (requestState.replay) { await conn.rollback(); return requestState.responseData }
 
     const { list, params } = await getProcurementPlan({ window, horizon, warehouseId, defaultLeadTime, scopeWarehouseIds, forecastMethod, includeCovered: false }, conn)

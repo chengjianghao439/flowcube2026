@@ -3,7 +3,7 @@ const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const { getRequestId } = require('../../utils/requestContext')
-const { beginOperationRequest, beginResourceOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
+const { beginCreationOperationRequest, beginResourceOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { PAYMENT_EVENT, record: recordPaymentEvent } = require('./payment-events.service')
 const statementSvc = require('./reconciliation-statements.service')
 const accountSvc = require('../finance/finance-accounts.service')
@@ -235,10 +235,11 @@ async function create({ type, partyId, partyName, amount, paymentDate, method, a
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const reqState = await beginOperationRequest(conn, {
+    const reqState = await beginCreationOperationRequest(conn, {
       requestKey,
       action: 'payment.receipt.create',
       userId: operator.operatorId,
+      payload: { type, partyId, partyName, amount, paymentDate, method, accountId, remark, allocations },
     })
     if (reqState.replay) {
       // 重放命中已成功的请求：直接返回原响应，绝不重复核销

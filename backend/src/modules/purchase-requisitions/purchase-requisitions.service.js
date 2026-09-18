@@ -3,7 +3,7 @@ const AppError = require('../../utils/AppError')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
-const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
+const { beginOperationRequest, beginCreationOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
 const { normalizePagination } = require('../../utils/pagination')
 const { lockPlanning, roundPurchase } = require('../procurement/procurement.planning')
@@ -95,7 +95,7 @@ async function create({ title, warehouseId, expectedDate, source = 'manual', ite
   try {
     await conn.beginTransaction()
     await lockPlanning(conn)
-    const requestState = await beginOperationRequest(conn, { requestKey, action: 'purchase.requisition.create', userId: operator?.userId ?? operator?.operatorId ?? null })
+    const requestState = await beginCreationOperationRequest(conn, { requestKey, action: 'purchase.requisition.create', userId: operator?.userId ?? operator?.operatorId ?? null, payload: { title, warehouseId, expectedDate, source, items, remark } })
     if (requestState.replay) { await conn.rollback(); return requestState.responseData }
     const [[wh]] = await conn.query('SELECT id,name FROM inventory_warehouses WHERE id=? AND deleted_at IS NULL', [Number(warehouseId)])
     if (!wh) throw new AppError('期望入库仓不存在', 400)

@@ -256,8 +256,8 @@ jobs:
       - name: 快递月结直连 — MySQL 入队与并发恢复回归
         run: npm run smoke:direct-express
 
-      - name: Schema 对账（迁移建表后：已执行迁移声明的表 vs 实际库，文档12）
-        run: npm run check:schema
+      - name: Schema 对账（迁移建表后：已执行迁移声明的表 + 活跃期唯一键 vs 实际库，文档12 / 审计 [16]④）
+        run: node backend/scripts/schema-reconcile.js --strict
 
       - name: 数据库迁移 — 集成库
         run: npm --prefix backend run migrate

@@ -7,7 +7,7 @@ const { buildTaskWithClosure, loadInboundTaskClosureSummary } = require('../inbo
 const { getInboundClosureThresholds } = require('../../utils/inboundThresholds')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
-const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
+const { beginCreationOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { recomputePurchasePayable } = require('../inbound-tasks/inbound-tasks.settle')
 const { foldEntryItem, round2 } = require('../../utils/unitConversion')  // 多单位折算（文档03 · 方案A，共享util）
 const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
@@ -222,10 +222,11 @@ async function create({ supplierId, supplierName, warehouseId, warehouseName, ex
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const requestState = await beginOperationRequest(conn, {
+    const requestState = await beginCreationOperationRequest(conn, {
       requestKey,
       action: 'purchase.create',
       userId: operator?.userId ?? null,
+      payload: { supplierId, supplierName, warehouseId, warehouseName, expectedDate, remark, items },
     })
     if (requestState.replay) {
       await conn.rollback()

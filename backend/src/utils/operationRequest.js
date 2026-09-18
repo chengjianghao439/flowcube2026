@@ -1,3 +1,4 @@
+const crypto = require('node:crypto')
 const { pool } = require('../config/db')
 const AppError = require('./AppError')
 
@@ -214,6 +215,65 @@ async function getOperationRequestStatus({ requestKey, action, userId }) {
   }
 }
 
+
+/** 创建类动作的载荷指纹：稳定序列化（键排序）后取 sha256 前 16 位 */
+function stableStringify(value) {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value ?? null)
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`
+  const keys = Object.keys(value).filter(k => value[k] !== undefined).sort()
+  return `{${keys.map(k => `${JSON.stringify(k)}:${stableStringify(value[k])}`).join(',')}}`
+}
+function creationFingerprint(payload) {
+  return crypto.createHash('sha256').update(stableStringify(payload)).digest('hex').slice(0, 16)
+}
+
+/**
+ * **创建类**动作的幂等（2026-09-18 审计 [6] 的收尾）。
+ *
+ * 收货/出库/付款这类资源级动作能绑「既有单据 ID」，但 `purchase.create`、`sale.create`、
+ * `payment.receipt.create`、`carrier.createAccount`、请购/采购计划/退货建单这些动作在 begin
+ * 时刻**还没有单据 ID**，只能沿用常量 action。后果：同一个请求键被误用到**另一次内容不同**的
+ * 创建上时，第二次会直接回放第一次的成功回执（返回别单的 ID），调用方以为建成功了。
+ *
+ * 这里用**请求载荷指纹**充当作用域：`<base>.<sha256(payload)[0:16]>`。
+ *   · 同一次创建的重试（载荷一致）→ 同指纹 → 命中回执，幂等照旧；
+ *   · 载荷不同 → 不同指纹 → 不构成重放，该建的照建（不再把别单结果冒充本单成功）；
+ *   · 升级瞬间的旧行兼容：库里若已有**裸 base action** 的成功行（旧版本写的），仍然按旧语义
+ *     回放——否则部署瞬间正在重试的请求会真的重复建单。
+ */
+async function beginCreationOperationRequest(conn, { requestKey, action, userId, payload }) {
+  const key = normalizeRequestKey(requestKey)
+  if (!key) return beginOperationRequest(conn, { requestKey, action, userId })
+
+  const uid = userId != null ? Number(userId) : null
+  const baseAction = String(action)
+
+  const legacy = await getOperationRequest({ requestKey: key, action: baseAction, userId: uid, conn })
+  if (legacy) {
+    if (Number(legacy.status) === STATUS.SUCCESS) {
+      return {
+        enabled: true,
+        id: Number(legacy.id),
+        requestKey: key,
+        action: baseAction,
+        userId: uid,
+        replay: true,
+        pending: false,
+        responseData: legacy.responseData,
+        responseMessage: legacy.response_message || null,
+      }
+    }
+    throw new AppError(
+      Number(legacy.status) === STATUS.PENDING
+        ? '上次提交结果仍待确认，请刷新或稍后查询结果'
+        : (legacy.error_message || '上次提交失败，请重新操作'),
+      409,
+    )
+  }
+
+  return beginOperationRequest(conn, { requestKey: key, action: `${baseAction}.${creationFingerprint(payload)}`, userId: uid })
+}
+
 /**
  * 资源级回执查询：PDA 断网重连后拿旧客户端保存的固定 action 来问「上次到底成没成」，
  * 而库里存的已经是 `<base>.<id>`（见 beginResourceOperationRequest），所以必须做一次
@@ -301,6 +361,7 @@ module.exports = {
   STATUS,
   beginOperationRequest,
   beginResourceOperationRequest,
+  beginCreationOperationRequest,
   completeOperationRequest,
   failOperationRequest,
   getOperationRequestStatus,

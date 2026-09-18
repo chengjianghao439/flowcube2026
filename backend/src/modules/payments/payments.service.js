@@ -1,7 +1,7 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { getRequestId } = require('../../utils/requestContext')
-const { beginOperationRequest, beginResourceOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
+const { beginCreationOperationRequest, beginResourceOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { PAYMENT_EVENT, record: recordPaymentEvent } = require('./payment-events.service')
 const statementSvc = require('./reconciliation-statements.service')
 const accountSvc = require('../finance/finance-accounts.service')
@@ -139,10 +139,11 @@ async function createManual({ type, orderNo, partyName, totalAmount, dueDate, re
     // order_id 恒 NULL 使 UNIQUE(type, order_id) 失效（多个 NULL 不冲突），连点两次
     // 会落两条同金额账款各自可核销翻倍。这里与 recordPayment 对齐接 requestKey。
     // 缺 X-Request-Key 时 beginOperationRequest 返回 enabled:false 直接放行，不影响老客户端。
-    const reqState = await beginOperationRequest(conn, {
+    const reqState = await beginCreationOperationRequest(conn, {
       requestKey,
       action: 'payment.record.create',
       userId: operator?.operatorId ?? null,
+      payload: { type, orderNo, partyName, totalAmount, dueDate, remark },
     })
     if (reqState.replay) {
       await conn.commit()

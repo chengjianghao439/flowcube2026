@@ -5,7 +5,7 @@ const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { RETURN_EVENT, record: recordReturnEvent } = require('./return-events.service')
 const { WT_STATUS_NAME, WT_STATUS_ACTIVE } = require('../../constants/warehouseTaskStatus')
 const { getRequestId } = require('../../utils/requestContext')
-const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
+const { beginCreationOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { genNo, adjustPaymentRecordForReturn, assertReturnPaymentHeadroom } = require('./returns.helpers')
 const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
 const { foldEntryItems } = require('../../utils/unitConversion')  // 多单位折算（文档03 Phase4a，退货按箱）
@@ -177,10 +177,11 @@ async function createPR({ supplierId, supplierName, warehouseId, warehouseName, 
   const conn=await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const requestState = await beginOperationRequest(conn, {
+    const requestState = await beginCreationOperationRequest(conn, {
       requestKey,
       action: 'purchaseReturn.create',
       userId: operator?.userId ?? null,
+      payload: { supplierId, supplierName, warehouseId, warehouseName, purchaseOrderId, purchaseOrderNo, remark, items },
     })
     if (requestState.replay) {
       await conn.rollback()

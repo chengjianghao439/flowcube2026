@@ -19,7 +19,7 @@ const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { SALE_STATUS, SALE_STATUS_NAME } = require('../../constants/saleOrderStatus')
 const { SETTLEMENT_TYPE, buildDueDateSql, normalizeSettlementType } = require('../../constants/settlementType')
 const { WT_STATUS_NAME, WT_STATUS_ACTIVE } = require('../../constants/warehouseTaskStatus')
-const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
+const { beginOperationRequest, beginCreationOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { beijingTodayYmd } = require('../../utils/backendTime')
 const adjustSvc = require('../warehouse-tasks/warehouse-tasks.adjust')
 const { WT_EVENT, record: recordWtEvent } = require('../warehouse-tasks/warehouse-task-events.service')
@@ -752,10 +752,13 @@ async function create({ customerId, warehouseId, remark,
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const requestState = await beginOperationRequest(conn, {
+    // 创建类动作没有既有单据 ID 可绑，用**载荷指纹**充当作用域（2026-09-18 审计 [6] 收尾）：
+    // 同一次创建的重试仍幂等，而把同一个键误用到另一次内容不同的创建上时不会再回放上一单的结果。
+    const requestState = await beginCreationOperationRequest(conn, {
       requestKey,
       action: 'sale.create',
       userId: operator?.userId ?? null,
+      payload: { customerId, warehouseId, remark, carrierId, carrier, freightType, shippingProduct, receiverName, receiverPhone, receiverAddress, items, discountAmount },
     })
     if (requestState.replay) {
       await conn.rollback()

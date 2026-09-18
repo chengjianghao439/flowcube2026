@@ -29,7 +29,10 @@ function createBindingService({ pool, operations, getCredential = ref => require
     const conn = await pool.getConnection()
     try {
       await conn.beginTransaction()
-      const state = await op.beginOperationRequest(conn, { requestKey, userId, action: 'carrier.createAccount' })
+      const state = await op.beginCreationOperationRequest(conn, {
+        requestKey, userId, action: 'carrier.createAccount',
+        payload: { name, platformCode: platform, monthlyAccount: monthly },
+      })
       if (state.replay) { await conn.commit(); return state.responseData }
       const code = await require('../../utils/codeGenerator').generateMasterCode(conn, 'CAR', 'carriers')
       const [r] = await conn.query(`INSERT INTO carriers (code,name,type,platform_code,monthly_account,credential_ref,waybill_enabled)

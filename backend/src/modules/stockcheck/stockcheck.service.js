@@ -169,10 +169,22 @@ async function getScanItems(id, scopeWarehouseIds = null) {
  *  - 数量容器实盘须 ≥0 且不得多于账面剩余——盘盈不是仓库现场能决策的事，走 ERP 手工调整；
  *  - 同一条码本批重复 → 拒。
  */
-async function saveItemContainerScans(id, itemId, scans, operator, scopeWarehouseIds = null) {
+async function saveItemContainerScans(id, itemId, scans, operator, scopeWarehouseIds = null, requestKey = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    // 幂等回执（2026-09-18 审计 [6] 残留）：盘点扫码此前**完全不写 operation_requests**，
+    // 而 PDA 页面用 requestAction='stockcheck.scan' 查回执 → 断网重连必然 not_found，只能靠
+    // resolveServerState 兜底。这里按 stockcheck.scan.<盘点单ID> 绑定单据（与 submit 同款写法），
+    // 前端用基础 action 查时由 getScopedOperationRequestStatus 的 `<base>.%` 分支解析回执。
+    const requestState = await beginResourceOperationRequest(conn, {
+      requestKey,
+      action: 'stockcheck.scan',
+      userId: operator?.userId ?? null,
+      resourceType: 'stockcheck',
+      resourceId: id,
+    })
+    if (requestState.replay) return requestState.responseData
     const checkRow = await lockStatusRow(conn, { table:'inventory_checks', id, columns:'id, warehouse_id, status', entityName:'盘点单' })
     assertInScope(scopeWarehouseIds, checkRow.warehouse_id, '盘点单')
     assertStatusAction('stockcheck', 'edit', checkRow.status)
@@ -246,8 +258,10 @@ async function saveItemContainerScans(id, itemId, scans, operator, scopeWarehous
       'UPDATE inventory_check_items SET actual_qty=?, diff_qty=? WHERE id=?',
       [actualQty, actualQty - Number(item.book_qty), itemId],
     )
+    const result = { itemId: Number(itemId), scannedContainers: rows.length, actualQty, bookQty: Number(item.book_qty), diffQty: actualQty - Number(item.book_qty) }
+    await completeOperationRequest(conn, requestState, { data: result, message: '扫码结果已记录', resourceType: 'stockcheck', resourceId: id })
     await conn.commit()
-    return { itemId: Number(itemId), scannedContainers: rows.length, actualQty, bookQty: Number(item.book_qty), diffQty: actualQty - Number(item.book_qty) }
+    return result
   } catch (e) { await conn.rollback(); throw e }
   finally { conn.release() }
 }
