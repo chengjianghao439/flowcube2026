@@ -251,7 +251,17 @@ async function scenarioOverQuantityRejected(ctx, log, token) {
 async function main() {
   const log = createLogger()
   const ctx = await prepareSmokeContext()
+  // 处置单的 approve/reject 现在有「申请人不得自批」闸门（2026-09-18 审计 P2：approve 是库存注销的
+  // 唯一闸门，原先可单人走完建单→提交→批准→执行）。本套件全程用同一个 smoke_admin 建单并审批，
+  // 因此按仓库既有范式（tests/finance.smoke.test.js:651-674）临时开启该账号的自批豁免，
+  // 并在 finally 收回——**绝不把豁免留在库里**，否则后续运行的审批类断言会失真。
+  const [[admin]] = await ctx.pool.query("SELECT id FROM sys_users WHERE username='smoke_admin' LIMIT 1")
+  let selfApproveGranted = false
   try {
+    if (admin) {
+      await ctx.pool.query('UPDATE sys_users SET allow_self_approve=1 WHERE id=?', [admin.id])
+      selfApproveGranted = true
+    }
     const { token } = await login(ctx.http, 'smoke_admin', 'SmokeAdmin123!')
     if (!token) throw new Error('登录失败，无法执行处置单回归')
 
@@ -260,6 +270,9 @@ async function main() {
     await scenarioStatusGuards(ctx, log, token)
     await scenarioOverQuantityRejected(ctx, log, token)
   } finally {
+    if (selfApproveGranted) {
+      await ctx.pool.query('UPDATE sys_users SET allow_self_approve=0 WHERE id=?', [admin.id])
+    }
     await ctx.close()
   }
   const counts = log.summary()

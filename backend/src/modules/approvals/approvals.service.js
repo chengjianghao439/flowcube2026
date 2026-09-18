@@ -1,6 +1,8 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const approvalEngine = require('../../engine/approvalEngine')
+const { PERMISSIONS: P } = require('../../constants/permissions')
+const { assertInScope } = require('../../utils/warehouseScope')
 
 /**
  * 审批流配置（P2-7）：审批流 CRUD + 待我审批列表。
@@ -22,6 +24,20 @@ const BIZ_TYPES = [
 ]
 
 const APPROVER_TYPE_LABEL = { 1: '指定角色', 2: '部门负责人', 3: '指定用户' }
+
+/**
+ * 业务类型 → 底层单据表 / 查看权限 / 仓库列（2026-09-18 审计 P2）。
+ * 用于 getBizApproval 的单据级授权：审批查看权限不等于可读任意业务单据。
+ * warehouseCol 为 null 的是公司级单据（财务报销、客户授信、价格申请），没有仓库维度。
+ */
+const BIZ_DOC_META = {
+  purchase_requisition: { table: 'purchase_requisitions', permission: P.PURCHASE_REQUISITION_VIEW, warehouseCol: 'warehouse_id', name: '采购请购单' },
+  sale_credit_override: { table: 'sale_credit_overrides', permission: P.SALE_CREDIT_OVERRIDE_VIEW, warehouseCol: null, name: '超额放行申请' },
+  expense_claim: { table: 'expense_claims', permission: P.FINANCE_EXPENSE_VIEW, warehouseCol: null, name: '费用报销' },
+  purchase_order: { table: 'purchase_orders', permission: P.PURCHASE_ORDER_VIEW, warehouseCol: 'warehouse_id', name: '采购单' },
+  inventory_disposal: { table: 'inventory_disposal_orders', permission: P.INVENTORY_DISPOSAL_VIEW, warehouseCol: 'warehouse_id', name: '呆滞处置单' },
+  product_price: { table: 'price_change_requests', permission: P.PRODUCT_VIEW, warehouseCol: null, name: '商品改价申请' },
+}
 
 function fmtFlow(r) {
   return {
@@ -231,10 +247,28 @@ async function listPending({ page = 1, pageSize = 20 }, userId) {
 }
 
 /** 供业务详情页查询审批进度（含终态历史）。 */
-async function getBizApproval({ bizType, bizId }) {
+async function getBizApproval({ bizType, bizId, user = null, scopeWarehouseIds = null }) {
+  const meta = BIZ_DOC_META[bizType]
+  if (!meta) throw new AppError('业务类型无效', 400)
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    // 单据级授权（2026-09-18 审计 P2）：本接口此前只挂 APPROVAL_TASK_VIEW，任何有审批查看
+    // 权限的登录用户都能用任意 bizId 枚举出单据的审批金额、申请人与各节点审批意见。
+    // 这里要求同时持有底层单据的查看权限；有仓库列的类型再做范围校验。
+    // 用 SQL 直查角色权限而不是依赖中间件注入的 req.user.permissions，避免依赖挂载顺序。
+    if (user && Number(user.roleId) !== 1) {
+      const [[allowed]] = await conn.query(
+        'SELECT 1 AS ok FROM sys_role_permissions WHERE role_id=? AND permission=? LIMIT 1',
+        [Number(user.roleId), meta.permission],
+      )
+      if (!allowed) throw new AppError('无权查看该单据的审批信息', 403, 'APPROVAL_BIZ_FORBIDDEN')
+    }
+    if (meta.warehouseCol) {
+      const [[doc]] = await conn.query(
+        `SELECT ${meta.warehouseCol} AS wh FROM ${meta.table} WHERE id=? LIMIT 1`, [bizId])
+      if (doc) assertInScope(scopeWarehouseIds, doc.wh, meta.name)
+    }
     const got = await approvalEngine.getLatestInstanceByBiz(conn, { bizType, bizId })
     if (!got) {
       // 纯读事务无写入，commit 安全（避免 rollback 抛错落入 catch 二次 rollback 的双重回滚）

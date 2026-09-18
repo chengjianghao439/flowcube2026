@@ -130,6 +130,62 @@ async function failOperationRequest({ requestKey, action, userId, errorMessage, 
   )
 }
 
+/**
+ * 资源级幂等：把单据 ID 绑进 action（`<base>.<resourceId>`）。
+ *
+ * 背景（2026-09-18 审计 P2[6]）：唯一键是 (request_key, action, user_id)，若 action 是常量，
+ * 客户端把同一个 X-Request-Key 用在**另一张单据**上时会命中已有回执、直接回放上一单的
+ * responseData，第二张单据的操作根本没执行——两端都显示成功，库存/账款静默不符。
+ * 因此资源级写操作必须让不同单据天然落在不同幂等记录上（同单据同键仍可重放）。
+ *
+ * 兼容迁移前留下的旧固定 action 行：先按旧 action 精确查一次，
+ * 成功且回执行的 resource_type/resource_id 都属于本单据才原样回放；否则明确 409。
+ * resourceId 必须是正整数；调用方传入非正整数属编程错误，直接 500，不静默降级。
+ */
+async function beginResourceOperationRequest(conn, { requestKey, action, userId, resourceType, resourceId }) {
+  const key = normalizeRequestKey(requestKey)
+  if (!key) return { enabled: false }
+
+  const uid = userId != null ? Number(userId) : null
+  const baseAction = String(action)
+  const numericResourceId = Number(resourceId)
+  if (!Number.isInteger(numericResourceId) || numericResourceId <= 0) {
+    throw new AppError(`资源级幂等要求正整数 resourceId（action=${baseAction}）`, 500)
+  }
+  const scopedAction = `${baseAction}.${numericResourceId}`
+
+  const legacy = await getOperationRequest({ requestKey: key, action: baseAction, userId: uid, conn })
+  if (legacy) {
+    const sameResource = legacy.resource_type === String(resourceType)
+      && Number(legacy.resource_id) === numericResourceId
+    if (Number(legacy.status) === STATUS.SUCCESS && sameResource) {
+      return {
+        enabled: true,
+        id: Number(legacy.id),
+        requestKey: key,
+        action: baseAction,
+        userId: uid,
+        replay: true,
+        pending: false,
+        responseData: legacy.responseData,
+        responseMessage: legacy.response_message || null,
+      }
+    }
+    if (Number(legacy.status) === STATUS.SUCCESS) {
+      throw new AppError('该请求键已有其它操作的回执，请核对原操作后重试', 409)
+    }
+    // 旧行仍待确认或已失败：沿用 beginOperationRequest 的既有 409 文案，不另造一套。
+    throw new AppError(
+      Number(legacy.status) === STATUS.PENDING
+        ? '上次提交结果仍待确认，请刷新或稍后查询结果'
+        : (legacy.error_message || '上次提交失败，请重新操作'),
+      409,
+    )
+  }
+
+  return beginOperationRequest(conn, { requestKey: key, action: scopedAction, userId: uid })
+}
+
 async function getOperationRequestStatus({ requestKey, action, userId }) {
   const row = await getOperationRequest({ requestKey, action, userId })
   if (!row) {
@@ -156,6 +212,40 @@ async function getOperationRequestStatus({ requestKey, action, userId }) {
     data: null,
     message: '结果待确认，请稍后重试查询',
   }
+}
+
+/**
+ * 资源级回执查询：PDA 断网重连后拿旧客户端保存的固定 action 来问「上次到底成没成」，
+ * 而库里存的已经是 `<base>.<id>`（见 beginResourceOperationRequest），所以必须做一次
+ * 作用域解析，否则非调拨动作一律查不到回执（P0-6 的确认路径会重新断掉）。
+ *
+ * 语义（与 transfer 的旧客户端兼容分支一致）：
+ *  1. 先按传入 action 精确匹配；
+ *  2. 没有则查 `action = <base> OR action LIKE '<base>.%'`（同一 request_key + user_id）；
+ *  3. **恰好一条**才返回它——同一请求键对应多张单据时必须保持「待核实」，
+ *     绝不能任选一单成功（那正是本缺陷要消灭的错法）。
+ */
+async function getScopedOperationRequestStatus({ requestKey, action, userId }) {
+  const baseAction = String(action ?? '').trim()
+  const exact = await getOperationRequestStatus({ requestKey, action: baseAction, userId })
+  if (exact.status !== 'not_found') return exact
+
+  const candidates = await findScopedOperationRequests({ requestKey, baseAction, userId })
+  if (candidates.length !== 1) return exact
+  return getOperationRequestStatus({ requestKey, action: candidates[0].action, userId })
+}
+
+async function findScopedOperationRequests({ requestKey, baseAction, userId }) {
+  const key = normalizeRequestKey(requestKey)
+  if (!key || !baseAction) return []
+  const uid = userId != null ? Number(userId) : null
+  const [rows] = await pool.query(
+    `SELECT action FROM operation_requests
+     WHERE request_key = ? AND user_id <=> ? AND (action = ? OR action LIKE ?)
+     ORDER BY id LIMIT 2`,
+    [key, uid, baseAction, `${baseAction}.%`],
+  )
+  return rows
 }
 
 /**
@@ -195,9 +285,11 @@ function startCleanupSweeper({ intervalMs = 6 * 60 * 60 * 1000, ttlDays = 7 } = 
 module.exports = {
   STATUS,
   beginOperationRequest,
+  beginResourceOperationRequest,
   completeOperationRequest,
   failOperationRequest,
   getOperationRequestStatus,
+  getScopedOperationRequestStatus,
   cleanupExpiredRequests,
   startCleanupSweeper,
 }

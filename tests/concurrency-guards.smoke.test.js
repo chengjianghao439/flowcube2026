@@ -337,6 +337,166 @@ async function scenarioSaleOperationIdempotencyIsolation(log, ctx, adminToken) {
     rows.length === 2 && rows.every(row => Number(row.status) === 5), JSON.stringify(rows))
 }
 
+// 2026-09-18 审计 P2[6]：资源级幂等的 action 必须绑定单据 ID。
+// 判据（回退修复后必然失败）：同一个 X-Request-Key 用在另一张收货单上时，
+// 第二单自己的操作必须真的执行（库里出现本单的容器/收货量），且返回的是本单的结果，
+// 而不是静默回放第一单的成功回执。
+//
+// 说明：绑定资源后「同键跨单」是两条不同幂等记录，第二单正常执行、不报错——这是预期行为。
+// 真正要防的是「第二单没执行却收到成功」。只有在客户端错误复用键去提交**同一单据**的
+// 不同操作时（旧固定 action 行仍在），才会走 409 那一支。
+async function scenarioInboundReceiveCrossTaskKeyReuse(log, ctx, adminToken) {
+  log.section('Scenario: 收货幂等键跨单复用（资源级 action 绑定单据 ID）')
+  const a = await createSubmittedInboundTask(ctx.http, adminToken, {
+    supplier: ctx.supplier, warehouse: ctx.warehouse, product: ctx.product, quantity: 4,
+  })
+  const b = await createSubmittedInboundTask(ctx.http, adminToken, {
+    supplier: ctx.supplier, warehouse: ctx.warehouse, product: ctx.product, quantity: 4,
+  })
+  const requestKey = randomRef('recv-cross-task')
+  const receive = taskId => ctx.http.post(`/api/inbound-tasks/${taskId}/receive`, {
+    token: adminToken,
+    headers: ctx.pdaHeaders({ 'X-Request-Key': requestKey }),
+    json: { productId: Number(ctx.product.id), packages: [{ qty: 4 }] },
+  })
+
+  const first = await receive(a.inboundTaskId)
+  log.assert('第一张收货单带键收货成功', first.ok, `status=${first.status} body=${JSON.stringify(first.data).slice(0, 160)}`)
+
+  const second = await receive(b.inboundTaskId)
+  log.assert('同一请求键提交第二张收货单不会被第一单的回执短路（修复前这里会回放第一单的「收货成功」）',
+    second.ok, `status=${second.status} body=${JSON.stringify(second.data).slice(0, 200)}`)
+
+  const containersB = await dbQuery(
+    ctx.pool,
+    'SELECT id FROM inventory_containers WHERE inbound_task_id = ? AND deleted_at IS NULL',
+    [b.inboundTaskId],
+  )
+  log.assert('★第二张收货单的操作真的执行了（库里有本单容器）', containersB.length === 1, `count=${containersB.length}`)
+  const itemsB = await dbQuery(ctx.pool, 'SELECT received_qty FROM inbound_task_items WHERE task_id = ?', [b.inboundTaskId])
+  const receivedB = itemsB.reduce((sum, row) => sum + Number(row.received_qty || 0), 0)
+  log.assert('★第二张收货单收货量真的落地为 4', receivedB === 4, `received=${receivedB}`)
+  const itemsA = await dbQuery(ctx.pool, 'SELECT received_qty FROM inbound_task_items WHERE task_id = ?', [a.inboundTaskId])
+  const receivedA = itemsA.reduce((sum, row) => sum + Number(row.received_qty || 0), 0)
+  log.assert('第一张收货单自身仍正常落地', receivedA === 4, `received=${receivedA}`)
+
+  const firstData = first.data?.data || {}
+  const secondData = second.data?.data || {}
+  log.assert('★第二张收货单返回的是本单结果，不是第一张的回执',
+    Number(secondData.containerId) !== Number(firstData.containerId)
+      && Number(secondData.containerId) === Number(containersB[0]?.id),
+    `first=${JSON.stringify(firstData).slice(0, 140)} second=${JSON.stringify(secondData).slice(0, 140)}`)
+
+  const [scopedRows] = await ctx.pool.query(
+    'SELECT action, resource_type, resource_id, response_json FROM operation_requests WHERE request_key = ? ORDER BY id',
+    [requestKey],
+  )
+  log.assert('★两张单据各自落一条 action=<base>.<单据ID> 的幂等记录（不再是同一条常量 action）',
+    scopedRows.length === 2
+      && scopedRows[0].action === `inbound.receive.${a.inboundTaskId}`
+      && Number(scopedRows[0].resource_id) === a.inboundTaskId
+      && scopedRows[1].action === `inbound.receive.${b.inboundTaskId}`
+      && Number(scopedRows[1].resource_id) === b.inboundTaskId,
+    JSON.stringify(scopedRows.map(r => ({ action: r.action, type: r.resource_type, id: r.resource_id }))))
+  const parsedFirst = JSON.parse(scopedRows[0]?.response_json || 'null')
+  log.assert('第一张单据的回执内容未被第二张覆盖',
+    Number(parsedFirst?.containerId) === Number(firstData.containerId),
+    JSON.stringify(parsedFirst).slice(0, 140))
+
+  // 回执查询必须跟着一起改：PDA「断网重连先查回执」上报的是固定 action，
+  // 而库里已是 <base>.<单据ID>，非调拨动作不能因此查不到（否则确认路径重新断掉）。
+  // 本用例的键对应两张单据，所以这里同时验证「保持待核实」这一半；下一场景（复核扫码）
+  // 的键只对应一张单据，验证的是「唯一命中可还原」那一半。
+  const receipt = await ctx.http.get(
+    `/api/system/request-status/${encodeURIComponent(requestKey)}?action=inbound.receive`,
+    { token: adminToken },
+  )
+  log.assert('★同键对应多张单据时回执查询保持「待核实」，不任选一单成功',
+    receipt.status === 200 && receipt.data?.data?.status === 'not_found',
+    `status=${receipt.status} body=${JSON.stringify(receipt.data?.data).slice(0, 200)}`)
+}
+
+// 对照组：同一单据 + 同一请求键重复提交仍必须走重放（收口不能把幂等一起杀掉）。
+// 用复核扫码：它先 beginOperationRequest、再读任务校验，重放分支在加载单据之前
+// （审计 P2[6] 指出的 16 处之一），因此既适合证明「同一单据可重放」，也适合证明
+// 「同一请求键用在另一张单据上时不会回放别单」。
+async function scenarioScanLogCheckReplaySameTask(log, ctx, adminToken) {
+  log.section('Scenario: 同单据同请求键仍走回执重放（复核扫码）')
+  // fixture A 用来证明同单据重放
+  const a = await setupTaskWithLockedContainer(ctx, adminToken)
+  await advanceTaskToStage(ctx, adminToken, { taskId: a.taskId, container: a.container }, 'checking')
+  const requestKey = randomRef('check-replay')
+  const call = (taskId, container, key) => ctx.http.post('/api/scan-logs/check', {
+    token: adminToken,
+    headers: ctx.pdaHeaders({ 'X-Request-Key': key }),
+    json: { taskId, barcode: container.barcode },
+  })
+  const first = await call(a.taskId, a.container, requestKey)
+  log.assert('第一次复核扫码成功且任务收口', first.ok, `status=${first.status} body=${JSON.stringify(first.data).slice(0, 160)}`)
+  const second = await call(a.taskId, a.container, requestKey)
+  log.assert('同单据同请求键重复提交仍返回成功（走重放而非重执行）',
+    second.ok, `status=${second.status} body=${JSON.stringify(second.data).slice(0, 200)}`)
+  log.assert('重放返回与首次完全相同的响应体',
+    JSON.stringify(second.data?.data) === JSON.stringify(first.data?.data),
+    `first=${JSON.stringify(first.data?.data)} second=${JSON.stringify(second.data?.data)}`)
+  const [scans] = await dbQuery(
+    ctx.pool,
+    'SELECT COUNT(*) AS n FROM scan_logs WHERE task_id = ? AND scan_purpose = 2',
+    [a.taskId],
+  )
+  log.assert('重放没有重复写入 scan_logs', Number(scans.n) === 1, `count=${scans.n}`)
+
+  // fixture B/C 用来证明跨单不复用（这里要的是与 A 不同的两张单据，与 A 无关）
+  const b = await setupTaskWithLockedContainer(ctx, adminToken)
+  const c = await setupTaskWithLockedContainer(ctx, adminToken)
+  await advanceTaskToStage(ctx, adminToken, { taskId: b.taskId, container: b.container }, 'checking')
+  await advanceTaskToStage(ctx, adminToken, { taskId: c.taskId, container: c.container }, 'checking')
+  const sharedKey = randomRef('check-cross-task')
+  const firstOfB = await call(b.taskId, b.container, sharedKey)
+  log.assert('第一张任务带键复核成功', firstOfB.ok, `status=${firstOfB.status}`)
+  const firstOfC = await call(c.taskId, c.container, sharedKey)
+  log.assert('★同一请求键提交第二张任务的复核不会被回放（修复前这里直接返回 B 的载荷、本单不动）',
+    firstOfC.ok, `status=${firstOfC.status} body=${JSON.stringify(firstOfC.data).slice(0, 200)}`)
+  const scansC = await dbQuery(
+    ctx.pool,
+    'SELECT id FROM scan_logs WHERE task_id = ? AND scan_purpose = 2',
+    [c.taskId],
+  )
+  log.assert('★第二张任务真的写入了本单复核扫码记录', scansC.length === 1, `count=${scansC.length}`)
+  const [taskC] = await dbQuery(ctx.pool, 'SELECT status FROM warehouse_tasks WHERE id = ?', [c.taskId])
+  log.assert('★第二张任务的状态真的被推进（复核扫满自动收口到待打包 5）',
+    Number(taskC.status) === 5, `status=${taskC.status}`)
+  log.assert('★第二张任务返回的是本单记录 id，不是第一张的',
+    Number(firstOfC.data?.data?.id) !== Number(firstOfB.data?.data?.id)
+      && Number(firstOfC.data?.data?.id) === Number(scansC[0].id),
+    `b=${firstOfB.data?.data?.id} c=${firstOfC.data?.data?.id} db=${scansC[0]?.id}`)
+
+  const [rows] = await ctx.pool.query(
+    'SELECT action, resource_type, resource_id FROM operation_requests WHERE request_key = ? ORDER BY id',
+    [sharedKey],
+  )
+  log.assert('★两张任务各自落一条 action=<base>.<任务ID> 的幂等记录',
+    rows.length === 2
+      && rows[0].action === `scan-log.check.${b.taskId}`
+      && rows[1].action === `scan-log.check.${c.taskId}`
+      && rows.every(row => row.resource_type === 'warehouse_task'),
+    JSON.stringify(rows.map(r => ({ action: r.action, type: r.resource_type, id: r.resource_id }))))
+
+  // 单键单单据：老客户端上报固定 action、传 scoped action 两种写法都要能还原回执
+  const receiptByBase = await ctx.http.get(
+    `/api/system/request-status/${encodeURIComponent(requestKey)}?action=scan-log.check`,
+    { token: adminToken },
+  )
+  log.assert('★固定 action 仍能查到已变成 <base>.<单据ID> 的回执（断网重连确认路径不断）',
+    receiptByBase.status === 200
+      && receiptByBase.data?.data?.status === 'success'
+      && Number(receiptByBase.data?.data?.resourceId) === a.taskId,
+    `status=${receiptByBase.status} body=${JSON.stringify(receiptByBase.data?.data).slice(0, 200)}`)
+  log.assert('★传完整 scoped action 时精确命中同一回执',
+    JSON.stringify(receiptByBase.data?.data?.data) === JSON.stringify(first.data?.data),
+    `receipt=${JSON.stringify(receiptByBase.data?.data?.data)} first=${JSON.stringify(first.data?.data)}`)
+}
+
 // 建单→占库→ship→PDA拣一个容器，返回 { taskId, container, itemId }。
 // 供下面「取消逆向归还」系列场景复用：这些场景都需要一个「已经拣了至少一个容器」的任务
 // 作为起点，才会触发新的取消分流分支（0容器仍走老的立即取消逻辑，不在这里覆盖）。
@@ -649,7 +809,12 @@ async function scenarioCancelReverseReturnShipping(log, ctx, adminToken) {
   // pack-done 要求箱贴打印任务已收口完成（assertTaskPackagePrintClosure），
   // 本机没有真机打印客户端在跑，直接用 complete-local 模拟"已打印完成"。
   const printJobId = Number(finishResp.data?.data?.printJobId)
-  await ctx.http.post(`/api/print-jobs/${printJobId}/complete-local`, { token: adminToken, json: {} })
+  await ctx.http.post(`/api/print-jobs/${printJobId}/complete-local`, {
+    token: adminToken,
+    // 同上：complete-local 现在校验工作站，补上夹具登记的 client id
+    headers: { 'X-Client-Id': ctx.printer.clientId },
+    json: {},
+  })
 
   const packDoneResp = await ctx.http.put(`/api/warehouse-tasks/${taskId}/pack-done`, { token: adminToken, headers: ctx.pdaHeaders() })
   log.assert('打包完成成功，推进到待出库(6)', packDoneResp.ok, `status=${packDoneResp.status}`)
@@ -750,6 +915,8 @@ async function main() {
     await scenarioSplitRollback(log, ctx)
     await scenarioWarehouseCancel(log, ctx, adminToken)
     await scenarioSaleOperationIdempotencyIsolation(log, ctx, adminToken)
+    await scenarioInboundReceiveCrossTaskKeyReuse(log, ctx, adminToken)
+    await scenarioScanLogCheckReplaySameTask(log, ctx, adminToken)
     await scenarioCancelReverseReturnBasics(log, ctx, adminToken)
     await scenarioCancelReverseReturnFinalize(log, ctx, adminToken)
     await scenarioCancelReverseReturnConcurrency(log, ctx, adminToken)

@@ -1,4 +1,3 @@
-import { ShippingProductField } from '@/components/shared/ShippingProductField'
 import { RecordIdentity } from '@/components/shared/RecordIdentity'
 /**
  * 承运商管理页
@@ -12,7 +11,7 @@ import { activeTone } from '@/lib/statusTone'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { getCarriersApi, createCarrierApi, updateCarrierApi, deleteCarrierApi } from '@/api/carriers'
-import { CARRIER_TYPE_OPTIONS, CARRIER_TYPE_LABELS, WAYBILL_PLATFORM_OPTIONS, type Carrier, type CarrierType, type CreateCarrierParams } from '@/types/carriers'
+import { CARRIER_TYPE_OPTIONS, CARRIER_TYPE_LABELS, WAYBILL_PLATFORM_ALL, WAYBILL_PLATFORM_OPTIONS, isDirectCarrierPlatform, type Carrier, type CarrierType, type CreateCarrierParams } from '@/types/carriers'
 import type { TableColumn } from '@/types'
 import BaseCrudPage from '@/components/shared/BaseCrudPage'
 import { Button } from '@/components/ui/button'
@@ -26,12 +25,13 @@ const EMPTY_FORM: FormState = {
   shippingProduct: '', shippingDeliveryType: '', platformCode: '', platformCarrier: '', monthlyAccount: '', netSiteCode: '', credentialRef: '', waybillEnabled: false,
 }
 
-// 建/改承运商时提交的对接字段（密钥不在前端）
+// 建/改承运商时提交的对接字段（密钥不在前端）。
+// 顺丰/德邦只提交「选了哪家快递公司」——月结账号、默认服务、取号开关一律走「快递账号绑定」页，
+// 后端对这两个平台的账号字段直接 400，不在这里重复实现一遍闸门（2026-09-18 审计 [9]）。
 function platformPayload(f: FormState) {
+  if (isDirectCarrierPlatform(f.platformCode)) return { platformCode: f.platformCode }
   return {
     platformCode: f.platformCode,
-    shippingProduct: f.shippingProduct,
-    shippingDeliveryType: f.shippingDeliveryType,
     platformCarrier: f.platformCarrier,
     monthlyAccount: f.monthlyAccount,
     netSiteCode: f.netSiteCode,
@@ -65,7 +65,7 @@ export default function CarriersPage() {
 
   const columns: TableColumn<Carrier>[] = [
     { key: 'name', title: '承运商 / 编号', width: 260, render: (_, row) => <RecordIdentity title={row.name} code={row.code} /> },
-    { key: 'platformCode', title: '对接平台', width: 130, render: v => WAYBILL_PLATFORM_OPTIONS.find(o => o.value === v)?.label || '未设置' },
+    { key: 'platformCode', title: '对接平台', width: 130, render: v => WAYBILL_PLATFORM_ALL.find(o => o.value === v)?.label || '未设置' },
     { key: 'monthlyAccount', title: '月结账号', width: 160, render: v => (v as string) || '未填写' },
     { key: 'accountBinding', title: '快递账号', width: 130, render: (_, row) => (!row.platformCode || ['sf', 'deppon'].includes(row.platformCode)) ? <Button variant="link" className="px-0" onClick={() => navigate(`/carrier-accounts?carrierId=${row.id}`)}>管理月结账号</Button> : '—' },
     { key: 'type',     title: '类型', width: 80,
@@ -141,6 +141,17 @@ export default function CarriersPage() {
               </Select>
             </div>
             <p className="text-sm text-muted-foreground">在这里选择一次，快递账号绑定页会自动带入。尚未对接的物流可留空，选择平台不会启用自动下单。</p>
+            {isDirectCarrierPlatform(form.platformCode) ? (
+              /* 顺丰/德邦：账号资料与取号开关由「快递账号绑定」页维护（后端会拒绝在此提交），这里只读 */
+              <div className="rounded-md border border-border bg-muted/40 p-3 text-sm">
+                <p>顺丰/德邦的月结账号、常用服务与「电子面单取号」开关在「快递账号绑定」页维护，这里只读展示。</p>
+                <p className="mt-2 text-muted-foreground">当前：月结账号 {form.monthlyAccount || '未绑定'} · 取号 {form.waybillEnabled ? '已启用' : '未启用'}</p>
+                <Button type="button" variant="outline" size="sm" className="mt-3"
+                  onClick={() => navigate(editing ? `/carrier-accounts?carrierId=${editing.id}` : '/carrier-accounts')}>
+                  去管理月结账号
+                </Button>
+              </div>
+            ) : <>
             <div className="flex items-center justify-between">
               <Label>电子面单取号</Label>
               <Select value={form.waybillEnabled ? '1' : '0'} onValueChange={v => set('waybillEnabled', v === '1')}>
@@ -153,12 +164,6 @@ export default function CarriersPage() {
             </div>
             {form.waybillEnabled && (
               <div className="grid grid-cols-2 gap-4">
-                {['sf', 'deppon'].includes(form.platformCode || '') && <>
-                  <div><Label htmlFor="carrier-product">默认发货产品</Label><div className="mt-1"><ShippingProductField id="carrier-product" platform={form.platformCode} value={form.shippingProduct || ''} onChange={v => set('shippingProduct', v)} /></div>
-                    <p className="mt-1 text-xs text-muted-foreground">按月结合同填写，销售单可单独指定；顺丰航空服务以合同产品为准。</p></div>
-                  {form.platformCode === 'deppon' && <div><Label>德邦送货方式</Label><Select value={form.shippingDeliveryType || ''} onValueChange={v => set('shippingDeliveryType', v)}><SelectTrigger aria-label="德邦送货方式" className="mt-1"><SelectValue placeholder="选择送货方式" /></SelectTrigger><SelectContent><SelectItem value="1">自提</SelectItem><SelectItem value="3">送货不上楼</SelectItem><SelectItem value="4">送货上楼</SelectItem></SelectContent></Select></div>}
-                  <p className="col-span-2 text-xs text-muted-foreground">打包完成后自动按实际箱数下单，重量由快递员称重确认。启用前须完成官方接口联调。</p>
-                </>}
                 <div><Label htmlFor="carrier-platformCarrier">快递公司编码</Label><Input className="mt-1" placeholder="如 SF / YTO / ZTO" id="carrier-platformCarrier" value={form.platformCarrier} onChange={e => set('platformCarrier', e.target.value)} /></div>
                 <div><Label htmlFor="carrier-monthlyAccount">月结账号</Label><Input className="mt-1" placeholder="可选" id="carrier-monthlyAccount" value={form.monthlyAccount} onChange={e => set('monthlyAccount', e.target.value)} /></div>
                 <div><Label htmlFor="carrier-netSiteCode">网点编码</Label><Input className="mt-1" placeholder="可选" id="carrier-netSiteCode" value={form.netSiteCode} onChange={e => set('netSiteCode', e.target.value)} /></div>
@@ -169,6 +174,7 @@ export default function CarriersPage() {
                 </div>
               </div>
             )}
+            </>}
           </div>
 
           {editing && (

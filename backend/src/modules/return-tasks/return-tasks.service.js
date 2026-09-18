@@ -3,7 +3,7 @@ const AppError = require('../../utils/AppError')
 const { createContainer, syncStockFromContainers, lockStockDimension, SOURCE_TYPE, CONTAINER_STATUS } = require('../../engine/containerEngine')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
-const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
+const { beginResourceOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { assertInScope } = require('../../utils/warehouseScope')
 const { queueReturnLabels } = require('./return-tasks.labels')
 
@@ -153,7 +153,10 @@ async function submit(id, operator, scopeWarehouseIds = null) {
 // ─── PDA 收货 ────────────────────────────────────────────────────────
 async function receive(conn, taskId, { productId, packages, requestKey, userId, pdaWarehouseId = null }) {
   const requestState = requestKey
-    ? await beginOperationRequest(conn, { requestKey, action: 'return.receive', userId })
+    ? await beginResourceOperationRequest(conn, {
+      requestKey, action: 'return.receive', userId,
+      resourceType: 'return_task', resourceId: taskId,
+    })
     : { enabled: false }
   if (requestState.replay) return requestState.responseData
 
@@ -350,7 +353,10 @@ async function tryFinishReturnTaskPutaway(conn, taskId, taskNo, returnId) {
 
 async function check(conn, taskId, { productId, passedQty, rejectedQty = 0, requestKey, userId, pdaWarehouseId = null }) {
   const requestState = requestKey
-    ? await beginOperationRequest(conn, { requestKey, action: 'return.check', userId })
+    ? await beginResourceOperationRequest(conn, {
+      requestKey, action: 'return.check', userId,
+      resourceType: 'return_task', resourceId: taskId,
+    })
     : { enabled: false }
   if (requestState.replay) return requestState.responseData
 
@@ -432,7 +438,10 @@ async function check(conn, taskId, { productId, passedQty, rejectedQty = 0, requ
 // ─── PDA 上架 ────────────────────────────────────────────────────────
 async function putaway(conn, taskId, { containerId, locationId, requestKey, userId, pdaWarehouseId = null, scopeWarehouseIds = null }) {
   const requestState = requestKey
-    ? await beginOperationRequest(conn, { requestKey, action: 'return.putaway', userId })
+    ? await beginResourceOperationRequest(conn, {
+      requestKey, action: 'return.putaway', userId,
+      resourceType: 'return_task', resourceId: taskId,
+    })
     : { enabled: false }
   if (requestState.replay) return requestState.responseData
 

@@ -4,6 +4,7 @@ const { generateMasterCode } = require('../../utils/codeGenerator')
 const { loadPriceRates, computeTierPrices } = require('../../utils/priceLevels')
 const { getInventoryDisplayProjectionSql } = require('../inventory/inventoryProjection')
 const { normalizePagination } = require('../../utils/pagination')
+const { assertInScope } = require('../../utils/warehouseScope')
 
 async function ensureCategoryExists(categoryId) {
   if (!categoryId) throw new AppError('请选择商品分类', 400)
@@ -102,7 +103,11 @@ async function validateProductPayload({ name, categoryId, barcode, costPrice, cu
  * - 可选传入 warehouseId 以联查该仓库当前展示用可用库存（容器汇总 + reserved projection）
  * - 自动构建完整分类路径（一级 > 二级 > 三级 > 四级）
  */
-async function findForFinder({ page = 1, pageSize = 20, keyword = '', categoryId = null, warehouseId = null }) {
+async function findForFinder({ page = 1, pageSize = 20, keyword = '', categoryId = null, warehouseId = null, scopeWarehouseIds = null }) {
+  // 商品选择器会按 warehouseId 返回该仓的可用库存；warehouseId 由前端传入，
+  // 若不校验范围，限仓用户只要换一个 warehouseId 就能枚举任意仓库的可用量
+  // （2026-09-18 审计 P2）。传 null 表示不限仓，与既有约定一致。
+  assertInScope(scopeWarehouseIds, warehouseId, '仓库')
   const { pageSize: ps, offset } = normalizePagination({ page, pageSize })
   const inventoryDisplayProjectionSql = getInventoryDisplayProjectionSql()
   // 1. 先取所有分类，用于路径拼接 + 子孙 ID 展开
@@ -316,10 +321,7 @@ async function findById(id) {
 async function create({ name, categoryId, supplierId, unit, spec, color, barcode, costPrice, remark, skuCode, articleNumber, salePriceA, salePriceB, salePriceC, salePriceD, batchManaged, shelfLifeDays, safetyStock, reorderPoint, units }) {
   const { normalizedBarcode, normalizedCost } = await validateProductPayload({ name, categoryId, barcode, costPrice })
   const normalizedUnits = validateUnits(unit, units)   // 纯校验，任何非法输入在建单前就抛错
-  const code = await generateMasterCode(pool, 'P', 'product_items')
-  const generatedSku = skuCode || await generateMasterCode(pool, 'SKU', 'product_items', 'sku_code')
   const generatedArticle = articleNumber || null   // 供应商型号（供应商给的型号，人工填；缺失即 NULL，不再随机生成）
-  const generatedBarcode = normalizedBarcode || await generateMasterCode(pool, 'BC', 'product_items', 'barcode')
   const rates = await loadPriceRates(pool)
   const auto = computeTierPrices(normalizedCost, rates)
   const spA = salePriceA != null ? Number(salePriceA) : auto.salePriceA
@@ -330,15 +332,35 @@ async function create({ name, categoryId, supplierId, unit, spec, color, barcode
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const [r] = await conn.query(
-      `INSERT INTO product_items (code,sku_code,article_number,name,category_id,supplier_id,unit,spec,color,barcode,cost_price,sale_price,sale_price_a,sale_price_b,sale_price_c,sale_price_d,remark,batch_managed,shelf_life_days)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [code, generatedSku, generatedArticle, String(name).trim(), categoryId||null, supplierId, unit, spec, color, generatedBarcode, normalizedCost, sp, spA, spB, spC, spD, remark||null, batchManaged?1:0, shelfLifeDays||null],
-    )
-    await replaceProductUnits(conn, r.insertId, normalizedUnits)
-    await upsertDefaultStockPolicy(conn, r.insertId, { safetyStock, reorderPoint })
+    // 编码/条码用「全局最大 +1」生成，本身带并发窗口（两个事务能读到同一个 MAX）。
+    // 数据库级的兜底是迁移 252 加的活跃编码唯一键 `uk_product_items_code_active`；
+    // 真正的撞号在这里换号重试一次，而不是把「数据已存在，请勿重复提交」这种与真实原因
+    // 无关的报错甩给用户（2026-09-18 审计 [16]）。取号也从事务外挪进事务内，顺序更合理。
+    let code = null
+    let generatedSku = null
+    let generatedBarcode = null
+    let insertId = null
+    for (let attempt = 0; attempt < 2 && insertId == null; attempt++) {
+      code = await generateMasterCode(conn, 'P', 'product_items')
+      generatedSku = skuCode || await generateMasterCode(conn, 'SKU', 'product_items', 'sku_code')
+      generatedBarcode = normalizedBarcode || await generateMasterCode(conn, 'BC', 'product_items', 'barcode')
+      try {
+        const [r] = await conn.query(
+          `INSERT INTO product_items (code,sku_code,article_number,name,category_id,supplier_id,unit,spec,color,barcode,cost_price,sale_price,sale_price_a,sale_price_b,sale_price_c,sale_price_d,remark,batch_managed,shelf_life_days)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          [code, generatedSku, generatedArticle, String(name).trim(), categoryId||null, supplierId, unit, spec, color, generatedBarcode, normalizedCost, sp, spA, spB, spC, spD, remark||null, batchManaged?1:0, shelfLifeDays||null],
+        )
+        insertId = r.insertId
+      } catch (e) {
+        // 只有编码/条码撞号才值得换号重试；用户显式传入 sku_code/barcode 造成的重复
+        // 在第二次尝试里会同样失败，如实抛出。
+        if (e.code !== 'ER_DUP_ENTRY' || attempt > 0) throw e
+      }
+    }
+    await replaceProductUnits(conn, insertId, normalizedUnits)
+    await upsertDefaultStockPolicy(conn, insertId, { safetyStock, reorderPoint })
     await conn.commit()
-    return { id: r.insertId, code, skuCode: generatedSku, articleNumber: generatedArticle }
+    return { id: insertId, code, skuCode: generatedSku, articleNumber: generatedArticle }
   } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
 }
 

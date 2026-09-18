@@ -1,6 +1,7 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { getInboundClosureThresholds } = require('../../utils/inboundThresholds')
+const { assertInScope } = require('../../utils/warehouseScope')
 const { fmt } = require('./print-jobs.helpers')
 const {
   STATUS,
@@ -30,11 +31,17 @@ async function listJobsByIds(ids, { includeAckToken = false } = {}) {
   }))
 }
 
-async function findAll({ printerId, status, page = 1, pageSize = 50 } = {}) {
+async function findAll({ printerId, status, page = 1, pageSize = 50, scopeWarehouseIds = null } = {}) {
   const conds = ['1=1']
   const params = []
   if (printerId) { conds.push('j.printer_id=?'); params.push(printerId) }
   if (status !== undefined && status !== null) { conds.push('j.status=?'); params.push(status) }
+  // 仓库数据权限（2026-09-18 审计 P2）：打印任务带完整 ZPL 内容（含箱贴/面单与业务条码），
+  // 此前列表与详情都不做范围过滤，限仓用户可跨仓读取全部打印内容。
+  if (Array.isArray(scopeWarehouseIds)) {
+    if (scopeWarehouseIds.length) { conds.push('j.warehouse_id IN (?)'); params.push(scopeWarehouseIds) }
+    else conds.push('1=0')
+  }
   const where = 'WHERE ' + conds.join(' AND ')
   const offset = (page - 1) * pageSize
   const [rows] = await pool.query(
@@ -54,8 +61,10 @@ async function findAll({ printerId, status, page = 1, pageSize = 50 } = {}) {
   }
 }
 
-async function findById(id) {
-  return findByIdWithExecutor(pool, id)
+async function findById(id, scopeWarehouseIds = null) {
+  const job = await findByIdWithExecutor(pool, id)
+  assertInScope(scopeWarehouseIds, job.warehouseId, '打印任务')
+  return job
 }
 
 async function findByIdWithExecutor(exec, id) {
@@ -97,15 +106,17 @@ async function listPrinterHealth() {
   }))
 }
 
-async function findBarcodeRecords({ category, keyword = '', status, page = 1, pageSize = 20, inboundTaskId = null, inboundTaskItemId = null } = {}) {
+async function findBarcodeRecords({ category, keyword = '', status, page = 1, pageSize = 20, inboundTaskId = null, inboundTaskItemId = null, scopeWarehouseIds = null } = {}) {
   const type = String(category || '').trim().toLowerCase()
   if (!['inbound', 'outbound', 'logistics'].includes(type)) {
     throw new AppError('条码分类无效', 400, 'PRINT_BARCODE_CATEGORY_INVALID')
   }
   const normalizedStatus = normalizeBarcodeRecordStatus(status)
-  if (type === 'inbound') return findInboundBarcodeRecords({ keyword, status: normalizedStatus, page, pageSize, inboundTaskId, inboundTaskItemId })
-  if (type === 'outbound') return findOutboundBarcodeRecords({ keyword, status: normalizedStatus, page, pageSize })
-  return findLogisticsBarcodeRecords({ keyword, status: normalizedStatus, page, pageSize })
+  // 仓库范围必须透传到三个子查询（2026-09-18 审计 P2）：条码补打中心会列出容器/箱贴条码、
+  // 商品、供应商与库位，此前无范围过滤，限仓用户可跨仓读取。
+  if (type === 'inbound') return findInboundBarcodeRecords({ keyword, status: normalizedStatus, page, pageSize, inboundTaskId, inboundTaskItemId, scopeWarehouseIds })
+  if (type === 'outbound') return findOutboundBarcodeRecords({ keyword, status: normalizedStatus, page, pageSize, scopeWarehouseIds })
+  return findLogisticsBarcodeRecords({ keyword, status: normalizedStatus, page, pageSize, scopeWarehouseIds })
 }
 
 /**
@@ -181,7 +192,18 @@ function genericStatusClause(status, alias = 'j') {
   return { sql: '', params: [] }
 }
 
-async function findInboundBarcodeRecords({ keyword = '', status, page = 1, pageSize = 20, inboundTaskId = null, inboundTaskItemId = null } = {}) {
+/**
+ * 仓库范围 → SQL 谓词与参数（2026-09-18 审计 P2）。
+ * 返回的 sql 是不含 AND 的完整谓词；调用方决定拼成 `AND <sql>` 还是 `<sql> AND `。
+ * 调用方必须把 params 插到与 sql 在语句中相同的相对位置，否则会静默绑错值。
+ */
+function warehouseScopePredicate(scopeWarehouseIds, column) {
+  if (!Array.isArray(scopeWarehouseIds)) return { sql: '', params: [] }
+  if (!scopeWarehouseIds.length) return { sql: '1=0', params: [] }
+  return { sql: `${column} IN (?)`, params: [scopeWarehouseIds] }
+}
+
+async function findInboundBarcodeRecords({ keyword = '', status, page = 1, pageSize = 20, inboundTaskId = null, inboundTaskItemId = null, scopeWarehouseIds = null } = {}) {
   const thresholds = await getInboundClosureThresholds()
   const timeoutMinutes = Number(thresholds.printTimeoutMinutes || 30)
   const like = `%${normalizeBarcodeQueryKeyword(keyword)}%`
@@ -196,6 +218,13 @@ async function findInboundBarcodeRecords({ keyword = '', status, page = 1, pageS
   if (Number.isFinite(inboundTaskItemIdNum) && inboundTaskItemIdNum > 0) {
     inboundFilterSql.push('AND EXISTS (SELECT 1 FROM inbound_task_items iti WHERE iti.task_id = c.inbound_task_id AND iti.id = ? AND iti.product_id = c.product_id)')
     inboundFilterParams.push(inboundTaskItemIdNum)
+  }
+  // 仓库范围：片段追加在 inboundFilterSql 末尾、参数追加在 inboundFilterParams 末尾，
+  // 两者在 SQL 与 params 中的相对位置一致，因此主查询与计数查询都能直接复用
+  const inboundScope = warehouseScopePredicate(scopeWarehouseIds, 'c.warehouse_id')
+  if (inboundScope.sql) {
+    inboundFilterSql.push('AND ' + inboundScope.sql)
+    inboundFilterParams.push(...inboundScope.params)
   }
 
   const offset = (page - 1) * pageSize
@@ -337,7 +366,8 @@ async function findInboundBarcodeRecords({ keyword = '', status, page = 1, pageS
   }
 }
 
-async function findOutboundBarcodeRecords({ keyword = '', status, page = 1, pageSize = 20 } = {}) {
+async function findOutboundBarcodeRecords({ keyword = '', status, page = 1, pageSize = 20, scopeWarehouseIds = null } = {}) {
+  const outboundScope = warehouseScopePredicate(scopeWarehouseIds, 'wt.warehouse_id')
   const like = `%${normalizeBarcodeQueryKeyword(keyword)}%`
   const offset = (page - 1) * pageSize
   const statusClause = genericStatusClause(status, 'pj')
@@ -384,7 +414,7 @@ async function findOutboundBarcodeRecords({ keyword = '', status, page = 1, page
          GROUP BY ref_id
        ) latest ON latest.max_id = j.id
      ) pj ON pj.ref_id = p.id
-     WHERE (
+     WHERE ${outboundScope.sql ? outboundScope.sql + ' AND ' : ''}(
           p.barcode LIKE ?
           OR IFNULL(wt.task_no, '') LIKE ?
           OR IFNULL(wt.customer_name, '') LIKE ?
@@ -393,7 +423,7 @@ async function findOutboundBarcodeRecords({ keyword = '', status, page = 1, page
        ${statusClause.sql}
      ORDER BY p.id DESC
      LIMIT ? OFFSET ?`,
-    [like, like, like, ...statusClause.params, pageSize, offset],
+    [...outboundScope.params, like, like, like, ...statusClause.params, pageSize, offset],
   )
   const mapped = rows.map((row) => {
     const derived = deriveGenericBarcodeStatus(row)
@@ -447,14 +477,14 @@ async function findOutboundBarcodeRecords({ keyword = '', status, page = 1, page
          GROUP BY ref_id
        ) latest ON latest.max_id = j.id
      ) pj ON pj.ref_id = p.id
-     WHERE (
+     WHERE ${outboundScope.sql ? outboundScope.sql + ' AND ' : ''}(
           p.barcode LIKE ?
           OR IFNULL(wt.task_no, '') LIKE ?
           OR IFNULL(wt.customer_name, '') LIKE ?
        )
        AND pj.id IS NOT NULL
        ${statusClause.sql}`,
-    [like, like, like, ...statusClause.params],
+    [...outboundScope.params, like, like, like, ...statusClause.params],
   )
 
   return {
@@ -463,7 +493,8 @@ async function findOutboundBarcodeRecords({ keyword = '', status, page = 1, page
   }
 }
 
-async function findLogisticsBarcodeRecords({ keyword = '', status, page = 1, pageSize = 20 } = {}) {
+async function findLogisticsBarcodeRecords({ keyword = '', status, page = 1, pageSize = 20, scopeWarehouseIds = null } = {}) {
+  const logisticsScope = warehouseScopePredicate(scopeWarehouseIds, 'j.warehouse_id')
   const like = `%${normalizeBarcodeQueryKeyword(keyword)}%`
   const offset = (page - 1) * pageSize
   const statusClause = genericStatusClause(status, 'j')
@@ -471,7 +502,7 @@ async function findLogisticsBarcodeRecords({ keyword = '', status, page = 1, pag
     `SELECT j.*, p.code AS printer_code, p.name AS printer_name
      FROM print_jobs j
      LEFT JOIN printers p ON p.id = j.printer_id
-     WHERE (j.ref_type = 'waybill' OR j.job_type = 'waybill')
+     WHERE ${logisticsScope.sql ? logisticsScope.sql + ' AND ' : ''}(j.ref_type = 'waybill' OR j.job_type = 'waybill')
        AND (
          IFNULL(j.ref_code, '') LIKE ?
          OR IFNULL(j.title, '') LIKE ?
@@ -479,7 +510,7 @@ async function findLogisticsBarcodeRecords({ keyword = '', status, page = 1, pag
        ${statusClause.sql}
      ORDER BY j.id DESC
      LIMIT ? OFFSET ?`,
-    [like, like, ...statusClause.params, pageSize, offset],
+    [...logisticsScope.params, like, like, ...statusClause.params, pageSize, offset],
   )
   const mapped = rows.map((row) => {
     const derived = deriveGenericBarcodeStatus(row)
@@ -516,13 +547,13 @@ async function findLogisticsBarcodeRecords({ keyword = '', status, page = 1, pag
   const [[{ total: totalRaw }]] = await pool.query(
     `SELECT COUNT(*) AS total
      FROM print_jobs j
-     WHERE (j.ref_type = 'waybill' OR j.job_type = 'waybill')
+     WHERE ${logisticsScope.sql ? logisticsScope.sql + ' AND ' : ''}(j.ref_type = 'waybill' OR j.job_type = 'waybill')
        AND (
          IFNULL(j.ref_code, '') LIKE ?
          OR IFNULL(j.title, '') LIKE ?
        )
        ${statusClause.sql}`,
-    [like, like, ...statusClause.params],
+    [...logisticsScope.params, like, like, ...statusClause.params],
   )
 
   return {

@@ -100,6 +100,12 @@ async function buildPlClosingSpec(conn, period, companyId = 1) {
 /**
  * 构造年结 spec（仅 12 月）：4103 本年利润全年净额转 4104 利润分配。
  * 全年净利润 = 4103 贷方−借方（含各月损益结转）；净额为 0 返回 null。
+ *
+ * 必须排除**年结凭证自身**（2026-09-18 审计 P1）：本函数产出的凭证正是「借 4103 / 贷 4104」，
+ * 若把它也算进来，生成后 4103 被自身借方冲平 → profit 变 0 → 返回 null → closingStatus 判为
+ * 'stale' → closePeriod 永远拒绝结账（12 月无出路）；人工冲销后原凭证 status=3 又被
+ * upsertVoucher 永久跳过，状态反转成 'missing' 继续拒绝。排除后 yspec 在任何状态下都等于
+ * 当前应记金额，source_hash 可稳定比对为 current。
  */
 async function buildYearClosingSpec(conn, period, companyId = 1) {
   const y = period.slice(0, 4)
@@ -110,8 +116,9 @@ async function buildYearClosingSpec(conn, period, companyId = 1) {
        JOIN acct_vouchers v ON v.id = e.voucher_id
        JOIN acct_accounts a ON a.id = e.account_id
       WHERE a.code = '4103' AND a.company_id = ? AND a.deleted_at IS NULL
+        AND v.source_type <> ?
         AND v.voucher_date BETWEEN ? AND ?`,
-    [companyId, `${y}-01-01`, `${y}-12-31`],
+    [companyId, SOURCE_TYPES.PERIOD_CLOSE_Y, `${y}-01-01`, `${y}-12-31`],
   )
   const profit = engine.round2(Number(row.c) - Number(row.d))
   if (profit === 0) return null
@@ -188,6 +195,18 @@ async function generateClosingVouchers(period, userId, companyId = 1) {
       const ySpec = await buildYearClosingSpec(conn, p, companyId)
       if (ySpec) {
         const r = await engine.upsertVoucher(conn, ySpec, accountMap, allocSeq, userId, companyId)
+        // 已冲销(3)的年结凭证不会被自动重算覆盖（保留冲销痕迹）。必须显式报错而不是静默 skip
+        // （2026-09-18 审计 P1）：静默 skip 会让界面一直停在「年终结转凭证未生成」，
+        // 用户反复点「生成」也没有任何变化，不知道要去处理那张已冲销的凭证。
+        if (r.skipped && r.reason === 'reversed') {
+          throw new AppError(
+            `${p.slice(0, 4)} 年的年终结转凭证已被冲销，系统不会自动覆盖已冲销凭证。`
+            + '请先在会计凭证页核对该冲销记录并从业务上确认本年利润，再联系管理员处理后再结账。',
+            409,
+            'ACCT_YEAR_CLOSING_VOUCHER_REVERSED',
+            { voucherId: r.id ?? null, period: p },
+          )
+        }
         results.push({ kind: '年终结转', ...r })
         if (r.id) {
           await conn.query('DELETE FROM acct_closing_details WHERE company_id=? AND period=? AND closing_type=?', [companyId, p, 'year'])

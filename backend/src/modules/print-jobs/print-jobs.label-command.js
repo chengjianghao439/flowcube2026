@@ -121,7 +121,16 @@ const NO_PRINTER_REASON = 'no printer available'
  * 打印机就绪后从那里补打即可。返回值带 `unprintable: true`，调用方据此区分
  * 「已排到打印机」与「只留了记录」，避免把没打出来的标签当成已提交打印。
  */
+/** 渲染失败降级原因：与「无可用打印机」区分开，便于在打印记录页与日志里排查 */
+function renderFailureReason(e) {
+  const code = e?.code ? String(e.code) : 'LABEL_RENDER_FAILED'
+  return `label render failed: ${code}`
+}
+
 async function recordUnprintableJob(createJob, fields) {
+  // 支持传入非「无打印机」的降级原因（2026-09-18 审计 P1）：标签渲染/模板读取失败时
+  // 必须降级为可补打的失败记录，而不是抛错把整笔业务事务一起回滚。
+  const reason = fields.unprintableReason || NO_PRINTER_REASON
   const job = await createJob({
     printerId: null,
     warehouseId: fields.warehouseId,
@@ -135,15 +144,15 @@ async function recordUnprintableJob(createJob, fields) {
     refType: fields.refType ?? null,
     refId: fields.refId ?? null,
     refCode: fields.refCode ?? null,
-    unprintableReason: NO_PRINTER_REASON,
+    unprintableReason: reason,
   })
   if (!job) return null
   // createJob 命中幂等键时会返回**已存在的**任务（例如同一对象此前真的打过），
-  // 那种情况必须原样返回——只有确实是这次落的「无打印机记录」才算 unprintable，
+  // 那种情况必须原样返回——只有确实是这次落的「降级记录」才算 unprintable，
   // 否则会把一次真实打印误报成「没打印机、只留了记录」。
-  const isNoPrinterRecord =
-    job.printerId == null && Number(job.status) === 3 && String(job.errorMessage || '') === NO_PRINTER_REASON
-  return isNoPrinterRecord ? { ...job, unprintable: true } : job
+  const isDegradedRecord =
+    job.printerId == null && Number(job.status) === 3 && String(job.errorMessage || '') === reason
+  return isDegradedRecord ? { ...job, unprintable: true } : job
 }
 
 async function enqueueContainerLabelJob(payload) {
@@ -178,25 +187,43 @@ async function enqueueContainerLabelJob(payload) {
     product_name: data.product_name,
     qty: data.qty,
   }
-  const label = await buildLabelBody({
-    printerId,
-    templateType: isPlasticBox ? 9 : 6,
-    vars,
-  })
-  return createJob({
-    printerId,
-    dispatchReason,
+  const jobFields = {
     warehouseId: Number.isFinite(wh) && wh > 0 ? wh : null,
     jobType: 'container_label',
     title: `${isPlasticBox ? '塑料盒标' : '容器标'} ${data.container_code}`,
-    contentType: label.contentType,
-    content: label.content,
-    copies: 1,
-    createdBy: payload.createdBy ?? null,
-    jobUniqueKey: payload.jobUniqueKey ?? defaultLabelJobKey('container_label', containerId),
     refType: containerId ? 'inventory_container' : null,
     refId: containerId,
     refCode: data.container_code,
+    createdBy: payload.createdBy ?? null,
+    jobUniqueKey: payload.jobUniqueKey ?? defaultLabelJobKey('container_label', containerId),
+  }
+  let label
+  try {
+    label = await buildLabelBody({
+      printerId,
+      templateType: isPlasticBox ? 9 : 6,
+      vars,
+    })
+  } catch (e) {
+    // 标签渲染/模板读取失败**不得回滚业务事务**（2026-09-18 审计 P1）：本函数的调用方是收货、
+    // 容器拆分、退货上架——那些是「货已经动了」的事实记录，渲染只是打印系统可用性问题。
+    // 原先渲染抛错（LABEL_RENDER_TIMEOUT/BUSY/FAILED、模板读取异常）会把整笔收货/拆分滚掉，
+    // 实物已收、系统无记录，操作员必须重扫。现降级为可补打的失败记录（打印记录页可见可重打）。
+    logger.warn('标签渲染失败，降级为无内容打印任务', {
+      jobType: 'container_label',
+      containerId,
+      code: e?.code || null,
+      message: e?.message || String(e),
+    }, 'LabelRenderDegraded')
+    return recordUnprintableJob(createJob, { ...jobFields, unprintableReason: renderFailureReason(e) })
+  }
+  return createJob({
+    ...jobFields,
+    printerId,
+    dispatchReason,
+    contentType: label.contentType,
+    content: label.content,
+    copies: 1,
   })
 }
 
@@ -342,25 +369,41 @@ async function enqueuePackageLabelJob(payload) {
     })
   }
   const vars = source.vars
-  const label = await buildLabelBody({
-    printerId,
-    templateType: 7,
-    vars,
-  })
-  return createJob({
-    printerId,
-    dispatchReason,
+  const jobFields = {
     warehouseId: Number.isFinite(wh) && wh > 0 ? wh : null,
     jobType: 'package_label',
     title: `箱贴 ${row.barcode}`,
-    contentType: label.contentType,
-    content: label.content,
-    copies: 1,
-    createdBy: payload.createdBy ?? null,
-    jobUniqueKey: payload.jobUniqueKey ?? defaultLabelJobKey('package_label', packageId),
     refType: 'package',
     refId: Number(packageId),
     refCode: row.barcode,
+    createdBy: payload.createdBy ?? null,
+    jobUniqueKey: payload.jobUniqueKey ?? defaultLabelJobKey('package_label', packageId),
+  }
+  let label
+  try {
+    label = await buildLabelBody({
+      printerId,
+      templateType: 7,
+      vars,
+    })
+  } catch (e) {
+    // 同 enqueueContainerLabelJob：完成装箱是「箱已经装好了」的事实记录，渲染失败不得回滚它
+    // （2026-09-18 审计 P1）。降级为可补打的失败记录，箱贴仍需在打印记录页可见。
+    logger.warn('箱贴渲染失败，降级为无内容打印任务', {
+      jobType: 'package_label',
+      packageId: Number(packageId),
+      code: e?.code || null,
+      message: e?.message || String(e),
+    }, 'LabelRenderDegraded')
+    return recordUnprintableJob(createJob, { ...jobFields, unprintableReason: renderFailureReason(e) })
+  }
+  return createJob({
+    ...jobFields,
+    printerId,
+    dispatchReason,
+    contentType: label.contentType,
+    content: label.content,
+    copies: 1,
   })
 }
 

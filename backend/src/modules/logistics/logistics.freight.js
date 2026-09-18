@@ -88,7 +88,19 @@ async function createFreightBill({ carrierId, trackingNo, waybillId = null, bill
   let wid = waybillId ? Number(waybillId) : null
   let period = billPeriod
   if (!wid) {
-    const [[wb]] = await pool.query('SELECT id FROM logistics_waybills WHERE tracking_no = ? LIMIT 1', [tn])
+    // 匹配「代表号 + 全部母子单号」（2026-09-18 审计 P2）：直连取号的运单把平台返回的全部
+    // 母子单号存进 tracking_numbers（JSON 字符串数组，见 logistics.direct.js 的
+    // `JSON.stringify(result.trackingNos)`），而 tracking_no 只是其中一个代表号。
+    // 原先只按 tracking_no 单列等值匹配，多箱单的子单号几乎**永远匹配不上** → waybill_id 落 NULL，
+    // 而 generateSettlement 的合格条件含 `OR b.waybill_id IS NULL`，于是关联失败的到付账单
+    // 被默认当成我方成本并入结算。
+    const [[wb]] = await pool.query(
+      `SELECT id FROM logistics_waybills
+        WHERE tracking_no = ?
+           OR (tracking_numbers IS NOT NULL AND JSON_CONTAINS(tracking_numbers, JSON_QUOTE(?)))
+        LIMIT 1`,
+      [tn, tn],
+    )
     if (wb) wid = wb.id
   }
   if (!period) {

@@ -88,8 +88,11 @@ normalize_trigger_terminators() {
 fail() {
   local reason="$1"
   echo "[$(ts)] [ERROR] $reason" >&2
+  # 告警发送结果**不得改变本脚本的退出码**：本脚本是 set -e，而 dingtalk_send 现在会在
+  # 未配置/发送失败时返回非 0（2026-09-18 审计修复），不显式吞掉就会在下面 exit 1 之前中断，
+  # 把「恢复演练失败」的退出码 1 变成 2。告警失败本身已由 dingtalk_send 写 stderr。
   dingtalk_send "$(read_dingtalk_webhook "$PROJECT_DIR")" \
-    "🔴 FlowCube 备份恢复演练失败（$(ts)）：${reason}\n备份可能无法恢复，请尽快人工验证！"
+    "🔴 FlowCube 备份恢复演练失败（$(ts)）：${reason}\n备份可能无法恢复，请尽快人工验证！" || true
   exit 1
 }
 

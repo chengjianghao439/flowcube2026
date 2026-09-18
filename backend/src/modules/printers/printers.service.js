@@ -119,6 +119,10 @@ async function update(id, {
   warehouseId,
   clientId,
 }, scopeWarehouseIds = null) {
+  // 状态白名单：原先 `status ?? 1` 会把任意值直写进去（2026-09-18 审计 [34]）
+  if (status !== undefined && ![0, 1].includes(Number(status))) {
+    throw new AppError('打印机状态只能是 0(停用) 或 1(启用)', 400)
+  }
   const existing = await findById(id, scopeWarehouseIds)
   const nameVal = name !== undefined ? normalizePrinterName(name) : existing.name
   if (name !== undefined && !nameVal) throw new AppError('名称不能为空', 400)
@@ -132,6 +136,12 @@ async function update(id, {
       : warehouseId != null && warehouseId !== '' && Number.isFinite(Number(warehouseId))
         ? Number(warehouseId)
         : null
+  // 部分更新必须沿用现值：code/type 是 NOT NULL 列，只传 {status} 时原来会把它们写成 NULL
+  // → ER_BAD_NULL_ERROR 500（2026-09-18 审计 [34] 顺手收口）
+  const codeVal = code !== undefined ? code : existing.code
+  const typeVal = type !== undefined ? type : existing.type
+  const descVal = description !== undefined ? (description || null) : existing.description
+  const statusVal = status !== undefined ? Number(status) : existing.status
   const sets = [
     'name=?',
     'code=?',
@@ -140,16 +150,33 @@ async function update(id, {
     'status=?',
     'client_id=?',
   ]
-  const params = [nameVal, code, type, description || null, status ?? 1, clientIdVal]
+  const params = [nameVal, codeVal, typeVal, descVal, statusVal, clientIdVal]
   if (wh !== undefined) {
     sets.push('warehouse_id=?')
     params.push(wh)
   }
   params.push(id)
-  await pool.query(
-    `UPDATE printers SET ${sets.join(', ')} WHERE id=?`,
-    params,
-  )
+  // 写语句本身必须带前置条件（2026-09-18 审计 [34]）：原先只有裸 `WHERE id=?`，
+  // 行在 findById 之后消失也会「成功」。这里同事务锁行 + 校验 affectedRows。
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const [locked] = await conn.query('SELECT id FROM printers WHERE id=? FOR UPDATE', [id])
+    if (!locked.length) throw new AppError('打印机不存在', 404)
+    await conn.query(
+      `UPDATE printers SET ${sets.join(', ')} WHERE id=?`,
+      params,
+    )
+    // 存在性由上面的 FOR UPDATE 行锁保证，**不要**改成校验 affectedRows：
+    // mysql2 没开 CLIENT_FOUND_ROWS，affectedRows 是「真正改动的行数」，
+    // 前端把整份未改动的对象回传时就等于 0，那样会把正常保存误判成 404。
+    await conn.commit()
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
+  }
   return findById(id)
 }
 
@@ -172,10 +199,6 @@ async function remove(id, scopeWarehouseIds = null) {
   } finally {
     conn.release()
   }
-}
-
-async function setStatus(id, status) {
-  await pool.query('UPDATE printers SET status=? WHERE id=?', [status, id])
 }
 
 // ─── 桌面客户端心跳 / 在线状态（审计 4.9：从 controller 下沉，消除直写 SQL） ─────────
@@ -278,4 +301,4 @@ async function updateClientAlias(clientId, aliasName) {
   return row
 }
 
-module.exports = { findAll, findById, create, update, remove, setStatus, heartbeatClient, markOfflineClients, listOnlineClients, listAllClients, updateClientAlias }
+module.exports = { findAll, findById, create, update, remove, heartbeatClient, markOfflineClients, listOnlineClients, listAllClients, updateClientAlias }

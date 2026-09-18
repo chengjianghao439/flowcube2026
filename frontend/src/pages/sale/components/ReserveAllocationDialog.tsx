@@ -201,7 +201,10 @@ export default function ReserveAllocationDialog({ open, orderId, onClose, onShor
                         </td>
                         <td className="px-3 py-4">
                           <div className="mb-1.5 flex items-center gap-1.5 text-[11px] text-muted-foreground"><Warehouse className="h-3.5 w-3.5" />选择库存所在仓库</div>
-                          <WarehouseSelect value={st.warehouseId} onChange={(id, name) => { if (id == null) return; setRow(item.itemId, { warehouseId: id, warehouseName: name }) }} className="h-9 text-sm" disabled={!st.checked} />
+                          <WarehouseSelect value={st.warehouseId} onChange={(id, name) => { if (id == null) return; setRow(item.itemId, { warehouseId: id, warehouseName: name }) }} className="h-9 text-sm" disabled={!st.checked || Number(item.remainToReserve) < Number(item.quantity)} />
+                          {Number(item.remainToReserve) < Number(item.quantity) && (
+                            <div className="mt-1 text-[11px] text-muted-foreground">该行已有预占，不能改发货仓库；如需换仓请先释放该行预占</div>
+                          )}
                         </td>
                         <td className="px-3 py-4">
                           <div className="mb-1.5 text-[11px] text-muted-foreground">最多可占 {item.remainToReserve} {item.unit}</div>

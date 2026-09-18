@@ -22,7 +22,7 @@ const {
 const { findById, loadPurchasableCandidates } = require('./inbound-tasks.query')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
-const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
+const { beginResourceOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 
 
 async function createFromPoId(purchaseOrderId, scopeWarehouseIds = null) {
@@ -406,10 +406,12 @@ async function receive(taskId, payload, { userId, requestKey, pdaWarehouseId, sc
   }
   try {
     await conn.beginTransaction()
-    const requestState = await beginOperationRequest(conn, {
+    const requestState = await beginResourceOperationRequest(conn, {
       requestKey,
       action: 'inbound.receive',
       userId: userId || null,
+      resourceType: 'inbound_task',
+      resourceId: taskId,
     })
     if (requestState.replay) {
       await conn.rollback()

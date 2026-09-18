@@ -1,7 +1,7 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { getRequestId } = require('../../utils/requestContext')
-const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
+const { beginOperationRequest, beginResourceOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { PAYMENT_EVENT, record: recordPaymentEvent } = require('./payment-events.service')
 const statementSvc = require('./reconciliation-statements.service')
 const accountSvc = require('../finance/finance-accounts.service')
@@ -195,10 +195,12 @@ async function recordPayment(id, { amount, paymentDate, method, remark, accountI
     await conn.beginTransaction()
     // 幂等：直接登记付款/收款也是「改钱」，连点两次/断网重试不能重复登记（与收付款核销一致）。
     // 缺 X-Request-Key 时 beginOperationRequest 返回 enabled:false 直接放行，不影响老客户端。
-    const reqState = await beginOperationRequest(conn, {
+    const reqState = await beginResourceOperationRequest(conn, {
       requestKey,
       action: 'payment.record.pay',
       userId: operator.operatorId,
+      resourceType: 'payment_record',
+      resourceId: id,
     })
     if (reqState.replay) {
       await conn.commit()

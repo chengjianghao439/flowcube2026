@@ -105,7 +105,16 @@ async function findById(id, scopeWarehouseIds = null) {
  * PDA 任务池 — 返回所有待分配/备货中的任务（供 PDA 主页显示）
  * 使用 JOIN + GROUP BY 替代 N+1 子查询
  */
-async function findMyTasks() {
+async function findMyTasks(scopeWarehouseIds = null) {
+  // 仓库范围（2026-09-18 审计 P1）：2026-08-21 的「warehouse-tasks 唯一不过 scope」修复
+  // 只覆盖了 list/detail/cancel/ship，任务池与会话统计这三个读接口漏了——限仓账号能看到
+  // 别仓的待拣任务与商品明细。这里与 findAll 同口径。
+  const params = []
+  let scopeSql = ''
+  if (Array.isArray(scopeWarehouseIds)) {
+    if (scopeWarehouseIds.length) { scopeSql = ' AND wt.warehouse_id IN (?)'; params.push(scopeWarehouseIds) }
+    else scopeSql = ' AND 1=0'
+  }
   const [rows] = await pool.query(`
     SELECT wt.*,
       COUNT(wti.id)                     AS item_count,
@@ -114,11 +123,11 @@ async function findMyTasks() {
     FROM warehouse_tasks wt
     LEFT JOIN warehouse_task_items wti ON wti.task_id = wt.id
     WHERE wt.status IN (${WT_STATUS_PICK_POOL.join(',')}) AND wt.deleted_at IS NULL
-      AND wt.cancel_requested_at IS NULL
+      AND wt.cancel_requested_at IS NULL${scopeSql}
     GROUP BY wt.id
     ORDER BY wt.priority ASC, wt.created_at DESC
     LIMIT 50
-  `)
+  `, params)
   return rows.map(r => ({
     ...fmt(r),
     itemCount:     Number(r.item_count),
@@ -127,7 +136,13 @@ async function findMyTasks() {
   }))
 }
 
-async function findMyTaskSkuSummary() {
+async function findMyTaskSkuSummary(scopeWarehouseIds = null) {
+  const params = []
+  let scopeSql = ''
+  if (Array.isArray(scopeWarehouseIds)) {
+    if (scopeWarehouseIds.length) { scopeSql = ' AND wt.warehouse_id IN (?)'; params.push(scopeWarehouseIds) }
+    else scopeSql = ' AND 1=0'
+  }
   const [rows] = await pool.query(`
     SELECT
       wti.product_id AS product_id,
@@ -145,13 +160,13 @@ async function findMyTaskSkuSummary() {
     INNER JOIN warehouse_task_items wti ON wti.task_id = wt.id
     WHERE wt.status IN (${WT_STATUS_PICK_POOL.join(',')})
       AND wt.deleted_at IS NULL
-      AND wt.cancel_requested_at IS NULL
+      AND wt.cancel_requested_at IS NULL${scopeSql}
     GROUP BY wti.product_id, wti.product_code, wti.product_name, wti.unit, wti.article_number, wti.spec, wti.color
     ORDER BY
       CASE WHEN COALESCE(SUM(wti.picked_qty),0) >= COALESCE(SUM(wti.required_qty),0) THEN 1 ELSE 0 END ASC,
       wti.product_name ASC,
       wti.product_code ASC
-  `)
+  `, params)
   return rows.map((row) => ({
     productId: Number(row.product_id),
     productCode: row.product_code,
@@ -170,14 +185,20 @@ async function findMyTaskSkuSummary() {
   }))
 }
 
-async function getTaskStats() {
+async function getTaskStats(scopeWarehouseIds = null) {
   const counts = { picking: 0, sorting: 0, checking: 0, packing: 0, shipping: 0, done: 0, urgent: 0 }
+  const params = []
+  let scopeSql = ''
+  if (Array.isArray(scopeWarehouseIds)) {
+    if (scopeWarehouseIds.length) { scopeSql = ' AND warehouse_id IN (?)'; params.push(scopeWarehouseIds) }
+    else scopeSql = ' AND 1=0'
+  }
   const [rows] = await pool.query(`
     SELECT status, COUNT(*) AS total
     FROM warehouse_tasks
-    WHERE deleted_at IS NULL
+    WHERE deleted_at IS NULL${scopeSql}
     GROUP BY status
-  `)
+  `, params)
   for (const row of rows) {
     const status = Number(row.status)
     const total = Number(row.total)
@@ -193,8 +214,8 @@ async function getTaskStats() {
      FROM warehouse_tasks
      WHERE deleted_at IS NULL
        AND priority = 1
-       AND status < ?`,
-    [WT_STATUS.SHIPPED],
+       AND status < ?${scopeSql}`,
+    [WT_STATUS.SHIPPED, ...params],
   )
   counts.urgent = Number(urgentRow?.total || 0)
   return counts

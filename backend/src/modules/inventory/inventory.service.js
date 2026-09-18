@@ -1,12 +1,12 @@
 const { pool } = require('../../config/db')
-const { scopeFilter } = require('../../utils/warehouseScope')
+const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
 const AppError = require('../../utils/AppError')
 const { MOVE_TYPE, MOVE_TYPE_LABEL, writeInventoryLog } = require('../../engine/inventoryEngine')
 const { adjustContainerStock, SOURCE_TYPE, splitContainer, syncStockFromContainers } = require('../../engine/containerEngine')
 const { getInventoryDisplayProjectionSql } = require('./inventoryProjection')
 const { normalizePagination } = require('../../utils/pagination')
 const { getExpectedStock } = require('../../utils/expectedStock')
-const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
+const { beginResourceOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 
 // ─── 库存查询 ─────────────────────────────────────────────────────────────────
 
@@ -208,10 +208,12 @@ async function changeStock({ type, productId, warehouseId, supplierId, quantity,
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const requestState = await beginOperationRequest(conn, {
+    const requestState = await beginResourceOperationRequest(conn, {
       requestKey,
       action: 'inventory.manual-out',
       userId: operator?.userId ?? null,
+      resourceType: 'inventory',
+      resourceId: productId,
     })
     if (requestState.replay) {
       await conn.rollback()
@@ -1054,28 +1056,35 @@ async function queryByProduct({ productId, warehouseId, scopeWarehouseIds = null
  * @param {number} locationId
  * @returns {{ containerId, barcode, locationCode }}
  */
-async function assignContainerLocation(containerId, locationId) {
+async function assignContainerLocation(containerId, locationId, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
 
-    // 校验容器存在且状态有效（status=1 ACTIVE）
+    // 校验容器存在且状态有效（status=1 ACTIVE）。
+    // warehouse_id 必须一并取出：库存容器是唯一事实源，写入口必须做仓库数据权限校验
+    // （2026-09-18 审计 P0-2），同时用于校验目标库位与容器同仓。
     const [[container]] = await conn.query(
-      'SELECT id, barcode, status FROM inventory_containers WHERE id=? AND deleted_at IS NULL FOR UPDATE',
+      'SELECT id, barcode, status, warehouse_id FROM inventory_containers WHERE id=? AND deleted_at IS NULL FOR UPDATE',
       [containerId],
     )
     if (!container) throw new AppError('容器不存在', 404)
+    assertInScope(scopeWarehouseIds, container.warehouse_id, '库存容器')
     if (Number(container.status) === 4) {
       throw new AppError('待上架容器请使用「入库任务」上架接口绑定库位', 400)
     }
     if (Number(container.status) !== 1) throw new AppError('容器已清空或作废，无法移动库位', 400)
 
-    // 校验库位存在
+    // 校验库位存在，且必须与容器同仓：跨仓库位会让容器带着「别仓库位」在册，
+    // 之后的拣货路由、盘点与追溯都会按这个错误位置取数（静默数据错误）。
     const [[location]] = await conn.query(
-      'SELECT id, code FROM warehouse_locations WHERE id=? AND deleted_at IS NULL',
+      'SELECT id, code, warehouse_id FROM warehouse_locations WHERE id=? AND deleted_at IS NULL',
       [locationId],
     )
     if (!location) throw new AppError('库位不存在', 404)
+    if (Number(location.warehouse_id) !== Number(container.warehouse_id)) {
+      throw new AppError('目标库位不属于该容器所在仓库，无法移动库位', 400)
+    }
 
     await conn.query(
       'UPDATE inventory_containers SET location_id=? WHERE id=?',
@@ -1100,12 +1109,20 @@ async function assignContainerLocation(containerId, locationId) {
 /**
  * 同仓容器拆分（散件）：单容器扣减并生成新塑料盒条码（B），可选打印新标签
  */
-async function splitContainerOp(containerId, { qty, remark, printLabel, targetContainerId, userId, userName = null }) {
+async function splitContainerOp(containerId, { qty, remark, printLabel, targetContainerId, userId, userName = null }, scopeWarehouseIds = null) {
   const { enqueueContainerLabelJob } = require('../print-jobs/print-jobs.service')
   const conn = await pool.getConnection()
   let result
   try {
     await conn.beginTransaction()
+    // 拆分前先做仓库数据权限校验（2026-09-18 审计 P0-2）：拆分 = 扣减源容器余量 + 新建容器
+    // + 写库存流水，属于真实库存写操作，必须先确认调用方有权访问该容器所在仓库。
+    const [[scopeRow]] = await conn.query(
+      'SELECT warehouse_id FROM inventory_containers WHERE id=? AND deleted_at IS NULL',
+      [containerId],
+    )
+    if (!scopeRow) throw new AppError('容器不存在', 404)
+    assertInScope(scopeWarehouseIds, scopeRow.warehouse_id, '库存容器')
     result = await splitContainer(conn, {
       containerId, qty, remark, targetContainerId,
       operatorId: userId ?? null, operatorName: userName,

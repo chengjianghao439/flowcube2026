@@ -12,16 +12,21 @@ const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
 const { foldEntryItems } = require('../../utils/unitConversion')  // 多单位折算（文档03 Phase4a，退货按箱）
 const { normalizePagination } = require('../../utils/pagination')
 
-const SR_STATUS = { 1:'草稿', 2:'已确认', 3:'已退货入库', 4:'已取消' }
+// 同 returns-purchase：3 的显示名统一为「已执行」（documentStatusRules / 迁移 146 / 前端筛选项一致）
+const SR_STATUS = { 1:'草稿', 2:'已确认', 3:'已执行', 4:'已取消' }
 
 const fmtSR = r => ({ id:r.id, returnNo:r.return_no, customerId:r.customer_id, customerName:r.customer_name, warehouseId:r.warehouse_id, warehouseName:r.warehouse_name, saleOrderId:r.sale_order_id||null, saleOrderNo:r.sale_order_no, status:r.status, statusName:SR_STATUS[r.status], totalAmount:Number(r.total_amount), remark:r.remark, operatorId:r.operator_id, operatorName:r.operator_name, createdAt:r.created_at })
 
-async function loadSaleSourceOrderByNo(orderNo) {
+async function loadSaleSourceOrderByNo(orderNo, scopeWarehouseIds = null) {
   const [rows] = await pool.query(
     'SELECT * FROM sale_orders WHERE order_no=? AND deleted_at IS NULL LIMIT 1',
     [orderNo],
   )
   if (!rows[0]) throw new AppError('关联销售单不存在', 404)
+  // 按单号直查来源单会返回完整明细与单价金额，必须与按 ID 查详情同口径做仓库范围校验
+  // （2026-09-18 审计 P2）。销售单按「整单」口径：头仓与全部明细仓都要在范围内，
+  // 与 sale 模块和 fulfillment.access 的既有约定一致。
+  assertInScope(scopeWarehouseIds, rows[0].warehouse_id, '销售单')
   const order = rows[0]
   const [items] = await pool.query(
     `SELECT soi.*,
@@ -33,6 +38,7 @@ async function loadSaleSourceOrderByNo(orderNo) {
                 AND wt.status = 7
                 AND wt.deleted_at IS NULL
                 AND wti.product_id = soi.product_id
+                AND wt.warehouse_id = COALESCE(soi.warehouse_id, (SELECT so2.warehouse_id FROM sale_orders so2 WHERE so2.id = soi.order_id))
             ), 0) AS shipped_qty,
             COALESCE((
               SELECT SUM(sri.quantity)
@@ -47,6 +53,10 @@ async function loadSaleSourceOrderByNo(orderNo) {
       ORDER BY soi.id`,
     [order.id],
   )
+  // 销售单整单口径：明细行的发货仓也必须逐行在范围内（头仓在范围内不代表每行都可见）
+  for (const row of items) {
+    assertInScope(scopeWarehouseIds, row.warehouse_id ?? order.warehouse_id, '销售单')
+  }
   return {
     id: Number(order.id),
     orderNo: order.order_no,
@@ -92,6 +102,7 @@ async function validateSaleReturnItems(conn, saleOrderId, items) {
                 AND wt.status = 7
                 AND wt.deleted_at IS NULL
                 AND wti.product_id = soi.product_id
+                AND wt.warehouse_id = COALESCE(soi.warehouse_id, (SELECT so2.warehouse_id FROM sale_orders so2 WHERE so2.id = soi.order_id))
             ), 0) AS shipped_qty,
             COALESCE((
               SELECT SUM(sri.quantity)

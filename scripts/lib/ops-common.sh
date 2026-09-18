@@ -67,11 +67,48 @@ ts() { date '+%Y-%m-%d %H:%M:%S'; }
 
 # 推送钉钉文本消息；未配置 webhook 时静默跳过（仍由调用方写日志）。
 #   用法：dingtalk_send "$webhook" "消息内容"
+# JSON 字符串净化（2026-09-18 审计）：钉钉 text 消息体是手工拼接的 JSON，消息里的引号/反斜杠
+# 会让整个请求体非法、钉钉直接拒绝。旧实现把这种失败一起吞掉，等于告警静默失效。
+# 采用与 restore-check.sh 一致的「剥离」策略（去引号/反斜杠、换行折叠、截断），
+# 保证任何调用方送进来的文本都能变成合法 JSON 字符串。
+#   用法：json_escape "文本" [最大长度，默认 500]
+json_escape() {
+  printf '%s' "$1" | tr '\n\r\t' '   ' | sed 's/["\\]//g' | cut -c1-"${2:-500}"
+}
+
+# 推送钉钉文本消息。
+#   用法：dingtalk_send "$webhook" "消息内容"
+#   返回：0 = 钉钉已确认接收（errcode=0）；1 = 发送失败或钉钉拒绝；
+#         2 = 未配置 webhook（**刻意不算失败**，这是部署方的配置选择，避免 cron 空报错）
+#
+# 2026-09-18 审计修复：旧实现是 `curl ... >/dev/null 2>&1 || true`——**任何失败都返回 0**，
+# webhook 写错、被限流、网络不通对外全都表现为「已发送」。这正是「备份连续 12 天失败无人
+# 察觉」的同一条路径。现在校验 HTTP 状态码与响应体里的 errcode，失败写 stderr 并非 0 返回，
+# 由调用方决定是否升级；未配置时打 WARN 而不是静默跳过。
 dingtalk_send() {
   local webhook="$1" msg="$2"
-  [ -z "$webhook" ] && return 0
-  # 钉钉 text 消息体；msg 里的换行统一用字面 \n 由钉钉渲染
-  curl -s -m 10 -H 'Content-Type: application/json' \
-    -d "{\"msgtype\":\"text\",\"text\":{\"content\":\"${msg}\"}}" \
-    "$webhook" >/dev/null 2>&1 || true
+  if [ -z "$webhook" ]; then
+    echo "[$(ts)] [WARN] 未配置钉钉 webhook，告警未发送（见 .env.example 的 DINGTALK_WEBHOOK）：${msg}" >&2
+    return 2
+  fi
+  local body resp http_code payload
+  body="$(json_escape "$msg" 500)"
+  # 末行是 HTTP 状态码，其余是响应体
+  if ! resp="$(curl -s -m 10 -w '\n%{http_code}' -H 'Content-Type: application/json' \
+      -d "{\"msgtype\":\"text\",\"text\":{\"content\":\"${body}\"}}" \
+      "$webhook" 2>/dev/null)"; then
+    echo "[$(ts)] [ERROR] 钉钉告警发送失败（curl 未能完成，检查网络与 webhook 可达性）：${msg}" >&2
+    return 1
+  fi
+  http_code="$(printf '%s' "$resp" | tail -n1)"
+  payload="$(printf '%s' "$resp" | sed '$d')"
+  case "$http_code" in
+    2*) ;;
+    *) echo "[$(ts)] [ERROR] 钉钉告警 HTTP ${http_code}：${payload}" >&2; return 1 ;;
+  esac
+  # 钉钉即使 HTTP 200 也会用 errcode 表达业务失败（如 invalid webhook / 限流）
+  case "$payload" in
+    *'"errcode":0'*) return 0 ;;
+    *) echo "[$(ts)] [ERROR] 钉钉告警被拒：${payload}" >&2; return 1 ;;
+  esac
 }

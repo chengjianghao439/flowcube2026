@@ -325,7 +325,7 @@ async function recomputeSaleReceivable(conn, saleOrderId) {
     shippedGross: grossTotal,
     orderGross: orderTotal,
   })
-  // 扣除该销售单下所有「已退货入库(3)」的销售退货金额（与采购应付 recomputePurchasePayable 对称）。
+  // 扣除该销售单下所有「已执行(3)」的销售退货金额（与采购应付 recomputePurchasePayable 对称）。
   // 否则分批/分仓发货时，中途完成的销售退货冲减（syncSaleReturnCompleted 增量减）会被下一批
   // 出库的全量重算覆盖回全额，客户被静默多计应收——这正是采购侧 P0-1 的销售镜像。
   // 口径：按实际质检合格入库量（checked_qty − rejected_qty）× 退货单价，与 syncSaleReturnCompleted
@@ -877,6 +877,11 @@ async function requestAdjustment(id, { items, operator, requestKey, scopeWarehou
       scopeWarehouseIds,
     })
     items = hydrated.items
+    // 重复商品行（同 product+warehouse 两行）会在重建明细时逐行 INSERT、各自独立累加：
+    // 占库期分支会让 reserved_qty 合计放大、执行期分支会让 required_qty 失配（与 create/update 同源）。
+    // **必须在这里校验**（2026-09-18 审计 P1）：原先只在执行期分支内调用，而占库期分支在下面
+    // `if (!orderRow.task_id)` 处就 return 了，导致该校验对状态 2/6（无任务）的订单完全不可达。
+    assertNoDuplicateSaleItemLines(items, orderRow.warehouse_id)
     // 分仓/分批锁定边界：多仓订单、或已有任一行发过货的订单，明细一律锁定，不走执行期改单
     // （执行期改单只作用于"单任务"场景，见 warehouse-tasks.adjust.js）。单仓且零出库订单
     // 保持原有改单全流程，行为 100% 不变——这是控制回归风险的红线。
@@ -919,10 +924,6 @@ async function requestAdjustment(id, { items, operator, requestKey, scopeWarehou
     }
 
     if (!items || !items.length) throw new AppError('至少需要一条商品明细', 400)
-
-    // 重复商品行（同 product+warehouse 两行）会在重建明细时逐行 INSERT、各自独立累加，
-    // 占库期分支会让 reserved_qty 合计放大、执行期分支会让 required_qty 失配（与 create/update 同源）。
-    assertNoDuplicateSaleItemLines(items, orderRow.warehouse_id)
 
     // 多单位折算成基本单位口径（后端权威）——**必须在算新旧净变化之前**：录入单位量(箱)若不先折算，
     // 会与旧明细的基本单位量(件)错配，delta 与 WMS 增减量全错。folded 之后一律按基本单位 quantity 算。
@@ -1369,6 +1370,20 @@ async function reserveStock(id, operator, items = [], { confirmCreditOverride = 
       const whId = it.warehouseId != null ? Number(it.warehouseId)
         : (row.warehouse_id != null ? Number(row.warehouse_id) : Number(orderRow.warehouse_id))
       assertInScope(scopeWarehouseIds, whId, '销售单')
+      // 已占库的行禁止在补占时更换发货仓库（2026-09-18 审计 P0-4）。
+      // 预占账按 (商品, 仓库) 记账，而明细行只保存一个 warehouse_id：若无条件改写行仓库，
+      // 旧仓那笔预占会变成永不释放的孤儿（该仓可用量永久虚低），而新仓出库时又按「行仓库」
+      // 整量扣减，把新仓同商品其它订单的预占一并截断（inventoryEngine 的 GREATEST(0,...)
+      // 收敛 + [GUARD] 日志）——即静默释放他人预占 → 超卖。
+      // 想换仓必须先释放该行预占（releaseStock 按产品/数量）再重新占库。
+      const existingWhId = row.warehouse_id != null ? Number(row.warehouse_id) : Number(orderRow.warehouse_id)
+      if (Number(row.reserved_qty) > 0 && whId !== existingWhId) {
+        throw new AppError(
+          `商品「${row.product_name}」已有预占且在原仓库，不能在补占时更换发货仓库；请先释放该行预占后再重新占库`,
+          400,
+          'RESERVE_WAREHOUSE_CHANGE_NOT_ALLOWED',
+        )
+      }
       reserveItems.push({ ...row, reserveQty: qty, warehouseId: whId })
     }
     if (!reserveItems.length) throw new AppError('本次没有有效的占库数量', 400)

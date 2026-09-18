@@ -56,12 +56,11 @@ export function formatBackendCode(code: unknown, fallback = '操作失败，请�
   // Layout validation has a specific, actionable Chinese message supplied by the renderer.
   if (upper === 'LABEL_RENDER_INVALID') return fallback
   if (BACKEND_CODE_LABELS[upper]) return BACKEND_CODE_LABELS[upper]
-  if (upper.endsWith('_CONFLICT')) return '状态已变化，请刷新后重试'
-  if (upper.endsWith('_INVALID')) return '当前操作无效，请刷新后重试'
-  if (upper.endsWith('_NOT_FOUND')) return '数据不存在或已被删除'
-  if (upper.endsWith('_FORBIDDEN')) return '无权限操作'
-  if (upper.endsWith('_ERROR')) return '系统异常，请稍后重试'
-  if (upper.endsWith('_FAILED')) return '操作失败，请稍后重试'
+  // 2026-09-18 审计 P2：这里原本按 `_CONFLICT / _INVALID / _NOT_FOUND / _FORBIDDEN / _ERROR /
+  // _FAILED` 后缀批量映射成通用文案，于是**大量具体业务码**（如 AUTH_OLD_PASSWORD_INVALID、
+  // INBOUND_PURCHASE_SOURCE_INVALID、OVER_RECEIVE_CONFIRM_REQUIRED）会把后端给出的、可行动的
+  // 中文原文替换成「当前操作无效，请刷新后重试」——现场只能反复刷新，不知道该修什么。
+  // 现在只保留上面显式登记的码表；未登记的码一律交给调用方传入的 fallback（即后端原文）。
   return fallback
 }
 

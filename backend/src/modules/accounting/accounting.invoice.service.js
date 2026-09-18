@@ -60,9 +60,11 @@ function fmt(row) {
   }
 }
 
-async function listInvoices({ invoiceType, status, keyword, page = 1, pageSize = 20 } = {}) {
-  const where = ['deleted_at IS NULL']
-  const params = []
+async function listInvoices({ invoiceType, status, keyword, page = 1, pageSize = 20 } = {}, companyId = 1) {
+  // 账套过滤（2026-09-18 审计 P1）：写入端与税额汇总(loadTaxMaps)都严格按 company_id 过滤，
+  // 查询/编辑/红冲/删除此前却完全不过滤 —— 属单边过滤：A 账套能看到并改写 B 账套的发票。
+  const where = ['deleted_at IS NULL', 'company_id = ?']
+  const params = [Number(companyId) || 1]
   if (invoiceType) { where.push('invoice_type = ?'); params.push(Number(invoiceType)) }
   if (status)      { where.push('status = ?'); params.push(Number(status)) }
   if (keyword)     { where.push('(invoice_no LIKE ? OR party_name LIKE ? OR source_no LIKE ?)'); const k = `%${keyword}%`; params.push(k, k, k) }
@@ -76,8 +78,12 @@ async function listInvoices({ invoiceType, status, keyword, page = 1, pageSize =
   return { list: rows.map(fmt), pagination: { page: p, pageSize: ps, total: Number(total) } }
 }
 
-async function getInvoice(id) {
-  const [[row]] = await pool.query('SELECT * FROM fin_invoices WHERE id = ? AND deleted_at IS NULL', [Number(id)])
+async function getInvoice(id, companyId = 1) {
+  // 账套不符统一按 404：不要把「存在但属于别的账套」泄露成 403/400
+  const [[row]] = await pool.query(
+    'SELECT * FROM fin_invoices WHERE id = ? AND company_id = ? AND deleted_at IS NULL',
+    [Number(id), Number(companyId) || 1],
+  )
   if (!row) throw new AppError('发票不存在', 404)
   return fmt(row)
 }
@@ -196,49 +202,62 @@ async function createInvoice(d, operator, companyId = 1) {
   }
 }
 
-async function updateInvoice(id, d, operator) {
-  const cur = await getInvoice(id)
+async function updateInvoice(id, d, operator, companyId = 1) {
+  const cid = Number(companyId) || 1
+  const cur = await getInvoice(id, cid)
   if (cur.status !== 1) throw new AppError('仅待认证/已开具状态的发票可编辑', 400, 'INVOICE_LOCKED')
   const v = validatePayload({ ...cur, ...d })
-  // P2-5：编辑时排除自身，防止「改大本次开票金额被自己挡住」
-  const quota = await assertInvoiceQuota(
-    { ...cur, ...d, invoiceType: v.type, amountWithTax: v.withTax, sourceNo: d.sourceNo ?? cur.sourceNo },
-    id,
-  )
-  const sourceId = quota ? quota.sourceId : (d.sourceId ?? cur.sourceId)
+  const conn = await pool.getConnection()
   try {
+    await conn.beginTransaction()
+    // P2-5：编辑时排除自身，防止「改大本次开票金额被自己挡住」。
+    // 必须把 conn 传进去（2026-09-18 审计 P1）：此前漏传会落到连接池的另一条连接上，
+    // assertInvoiceQuota 的 FOR UPDATE 在自动提交下取到即释放，等于没有并发保护，
+    // 同单并发编辑/开票仍可超出配额；CAS 只能挡住状态变化，挡不住配额竞争。
+    const quota = await assertInvoiceQuota(
+      { ...cur, ...d, invoiceType: v.type, amountWithTax: v.withTax, sourceNo: d.sourceNo ?? cur.sourceNo },
+      id,
+      conn,
+    )
+    const sourceId = quota ? quota.sourceId : (d.sourceId ?? cur.sourceId)
     // 状态 CAS（2026-08-21 审计修复）：UPDATE 带 status=1 条件 + affectedRows 校验，
     // 防止「读到 status=1 → 并发红冲为 2 → 仍执行更新」的 TOCTOU（已红冲发票被改金额）
-    const [r] = await pool.query(
+    const [r] = await conn.query(
       `UPDATE fin_invoices SET invoice_code=?, invoice_no=?, party_name=?, party_tax_no=?,
          amount_no_tax=?, tax_rate=?, tax_amount=?, amount_with_tax=?, invoice_date=?,
          source_type=?, source_id=?, source_no=?, remark=?
-       WHERE id=? AND status=1 AND deleted_at IS NULL`,
+       WHERE id=? AND status=1 AND company_id=? AND deleted_at IS NULL`,
       [d.invoiceCode ?? cur.invoiceCode, v.no, v.party, d.partyTaxNo ?? cur.partyTaxNo,
        v.noTax, round2(d.taxRate ?? cur.taxRate), v.tax, v.withTax, fmtDate(d.invoiceDate ?? cur.invoiceDate),
-       d.sourceType ?? cur.sourceType, sourceId, d.sourceNo ?? cur.sourceNo, d.remark ?? cur.remark, Number(id)])
+       d.sourceType ?? cur.sourceType, sourceId, d.sourceNo ?? cur.sourceNo, d.remark ?? cur.remark, Number(id), cid])
     if (r.affectedRows !== 1) throw new AppError('发票状态已变化（可能已红冲/删除），请刷新重试', 409, 'INVOICE_STATUS_CHANGED')
+    await conn.commit()
     logger.info('accounting', `更新发票 [id=${id}]`, { operatorId: operator?.userId })
   } catch (e) {
+    await conn.rollback()
     if (e.code === 'ER_DUP_ENTRY') throw new AppError('发票代码+号码与已有发票重复', 400, 'INVOICE_DUP')
     throw e
+  } finally {
+    conn.release()
   }
 }
 
-async function changeStatus(id, action, operator) {
-  const cur = await getInvoice(id)
+async function changeStatus(id, action, operator, companyId = 1) {
+  const cid = Number(companyId) || 1
+  const cur = await getInvoice(id, cid)
   const rule = TRANSITIONS[cur.invoiceType] && TRANSITIONS[cur.invoiceType][action]
   if (!rule) throw new AppError('该发票不支持此操作', 400, 'INVOICE_ACTION_INVALID')
   const [from, to] = rule
   if (cur.status !== from) throw new AppError(`当前状态「${cur.statusName}」不可执行此操作`, 400, 'INVOICE_STATUS_INVALID')
-  const [r] = await pool.query('UPDATE fin_invoices SET status=? WHERE id=? AND status=? AND deleted_at IS NULL', [to, Number(id), from])
+  const [r] = await pool.query('UPDATE fin_invoices SET status=? WHERE id=? AND status=? AND company_id=? AND deleted_at IS NULL', [to, Number(id), from, cid])
   if (r.affectedRows !== 1) throw new AppError('状态已变化，请刷新重试', 409)
   logger.info('accounting', `发票 ${cur.invoiceNo} ${action} ${from}→${to}`, { operatorId: operator?.userId })
   return { status: to }
 }
 
-async function removeInvoice(id, operator) {
-  const cur = await getInvoice(id)
+async function removeInvoice(id, operator, companyId = 1) {
+  const cid = Number(companyId) || 1
+  const cur = await getInvoice(id, cid)
   // 状态校验（2026-08-21 审计修复）：已抵扣/已红冲的发票禁止删除——
   // 它们已影响凭证/税额，软删会让历史账目追溯断裂
   if (cur.status !== 1) {
@@ -246,8 +265,8 @@ async function removeInvoice(id, operator) {
   }
   // 带状态 CAS：防止「读到 status=1 → 并发红冲 → 仍软删」的 TOCTOU
   const [r] = await pool.query(
-    'UPDATE fin_invoices SET deleted_at=NOW() WHERE id=? AND status=1 AND deleted_at IS NULL',
-    [Number(id)],
+    'UPDATE fin_invoices SET deleted_at=NOW() WHERE id=? AND status=1 AND company_id=? AND deleted_at IS NULL',
+    [Number(id), cid],
   )
   if (r.affectedRows !== 1) throw new AppError('发票状态已变化，请刷新重试', 409, 'INVOICE_STATUS_CHANGED')
   logger.info('accounting', `删除发票 ${cur.invoiceNo}`, { operatorId: operator?.userId })

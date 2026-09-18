@@ -24,6 +24,7 @@ import type { PdaTodoCounts } from '@/api/pda'
 import { PdaEmptyCard } from '@/components/pda/PdaEmptyState'
 import SystemBrand from '@/components/shared/SystemBrand'
 import { PERMISSIONS } from '@/lib/permission-codes'
+import { performSessionLogout } from '@/lib/authSession'
 import { formatDisplayDateTime, beijingHour } from '@/lib/dateTime'
 import { getDeviceCredential, getDeviceSession } from '@/lib/pdaDeviceBinding'
 
@@ -93,7 +94,6 @@ const OP_TODO_KEY: Partial<Record<string, keyof PdaTodoCounts>> = {
 export default function PdaWorkbench() {
   const navigate = useNavigate()
   const user     = useAuthStore(s => s.user)
-  const logout   = useAuthStore(s => s.logout)
   // 问候语按北京时间分时段（不依赖设备时区——仓库 PDA 时间被改慢/改快不影响显示）
   const hour     = beijingHour()
   const greeting = hour < 12 ? '早上好' : hour < 18 ? '下午好' : '晚上好'
@@ -215,7 +215,13 @@ export default function PdaWorkbench() {
               title="权限未加载，PDA 已切换至受限模式"
               description="未获取到权限信息，PDA 部分功能不可用。请重新登录；若仍异常，请联系管理员。"
               actionText="重新登录"
-              onAction={() => { logout(); navigate('/pda/login') }}
+              onAction={() => {
+                // 必须走标准登出（2026-09-18 审计 P2）：原先直接调 store 的 logout()，只清了本地会话，
+                // 不清 React Query 缓存、不作废服务端 refresh token、也不清 PDA 待确认请求记录。
+                // PDA 是共用设备，换班/换人后可能看到上一账号的列表数据与「结果待确认」误报。
+                // performSessionLogout 内部已按当前路由 replace 到 /pda/login，无需再 navigate。
+                performSessionLogout()
+              }}
             />
           ) : allowedOps.length === 0 ? (
             <PdaEmptyCard

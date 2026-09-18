@@ -7,7 +7,7 @@ const { WT_STATUS } = require('../../constants/warehouseTaskStatus')
 const { checkDoneWithinTransaction, checkCancelReturnClearedAndFinalize } = require('../warehouse-tasks/warehouse-tasks.service')
 const { WT_EVENT, record: recordEvent } = require('../warehouse-tasks/warehouse-task-events.service')
 const { logSideEffectFailure: logWtSideEffectFailure } = require('../warehouse-tasks/warehouse-tasks.helpers')
-const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
+const { beginResourceOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const logger = require('../../utils/logger')
 
 const fmt = r => ({
@@ -64,15 +64,20 @@ async function pdaOptionalQuery(metricName, promise, fallback) {
 async function createScanLog({
   taskId, itemId, containerId, barcode, productId,
   qty, scanMode, operatorId, operatorName, locationCode,
-  requestKey,
+  requestKey, scopeWarehouseIds = null,
 }) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const requestState = await beginOperationRequest(conn, {
+    // 资源绑定用「仓库任务」而不是 scan_logs 自身的 insertId——扫码记录 ID 在 begin 时刻
+    // 还不存在（审计 P2[6] 明确指出），而 taskId 才能唯一标识「这次扫码动作所属单据」。
+    // 下方 completeOperationRequest 必须传同一组 resourceType/resourceId。
+    const requestState = await beginResourceOperationRequest(conn, {
       requestKey,
       action: 'scan-log.pick',
       userId: operatorId || null,
+      resourceType: 'warehouse_task',
+      resourceId: taskId,
     })
     if (requestState.replay) {
       await conn.rollback()
@@ -80,12 +85,22 @@ async function createScanLog({
     }
 
     const [[taskRow]] = await conn.query(
-      'SELECT id, warehouse_id, status, cancel_requested_at FROM warehouse_tasks WHERE id = ? AND deleted_at IS NULL FOR UPDATE',
+      'SELECT id, warehouse_id, status, cancel_requested_at, adjustment_requested_at FROM warehouse_tasks WHERE id = ? AND deleted_at IS NULL FOR UPDATE',
       [taskId],
     )
     if (!taskRow) throw new AppError('仓库任务不存在', 404)
+    // 仓库数据权限（2026-09-18 审计 P1）：拣货扫码会推进任务、锁定容器、累加 picked_qty，
+    // 属于真实库存写操作。此前四条写路径都只有权限码 + pdaOnly + 设备会话，没有范围校验，
+    // 限仓账号可用自己那台 PDA 直接操作别仓任务。与 packages / warehouse-tasks 同口径。
+    assertInScope(scopeWarehouseIds, taskRow.warehouse_id, '仓库任务')
     if (taskRow.cancel_requested_at) {
       throw new AppError('该任务已因订单取消停止拣货，请勿继续', 409)
+    }
+    // 改单挂起期间必须拦下拣货扫码（2026-09-18 审计 P1）：改单侧会立即把 required_qty 改成新目标、
+    // 并把 picked_qty 收敛到新目标，此时继续拣货会把 picked_qty 又推高，收尾校验（三重闭合）必然失败，
+    // 任务永久卡在拣货中且无自愈路径。与 pick.js/check.js/sort.js/pack.js/ship.js 同口径。
+    if (taskRow.adjustment_requested_at) {
+      throw new AppError('该任务有改单正在等待仓库确认，请先处理完成', 409)
     }
     if (Number(taskRow.status) !== WT_STATUS.PICKING) {
       throw new AppError('仅「拣货中」任务允许拣货扫码', 400)
@@ -201,8 +216,8 @@ async function createScanLog({
     await completeOperationRequest(conn, requestState, {
       data: payload,
       message: '扫描记录已保存',
-      resourceType: 'scan_log',
-      resourceId: r.insertId,
+      resourceType: 'warehouse_task',
+      resourceId: taskId,
     })
     await conn.commit()
     return payload
@@ -219,15 +234,17 @@ async function createScanLog({
  */
 async function createCheckScanLog({
   taskId, barcode, operatorId, operatorName,
-  requestKey,
+  requestKey, scopeWarehouseIds = null,
 }) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const requestState = await beginOperationRequest(conn, {
+    const requestState = await beginResourceOperationRequest(conn, {
       requestKey,
       action: 'scan-log.check',
       userId: operatorId || null,
+      resourceType: 'warehouse_task',
+      resourceId: taskId,
     })
     if (requestState.replay) {
       await conn.rollback()
@@ -235,15 +252,23 @@ async function createCheckScanLog({
     }
 
     const [[taskRow]] = await conn.query(
-      'SELECT id, status, warehouse_id, cancel_requested_at FROM warehouse_tasks WHERE id = ? AND deleted_at IS NULL FOR UPDATE',
+      'SELECT id, status, warehouse_id, cancel_requested_at, adjustment_requested_at FROM warehouse_tasks WHERE id = ? AND deleted_at IS NULL FOR UPDATE',
       [taskId],
     )
     if (!taskRow) throw new AppError('仓库任务不存在', 404)
+    assertInScope(scopeWarehouseIds, taskRow.warehouse_id, '仓库任务')
     if (Number(taskRow.status) !== WT_STATUS.CHECKING) {
       throw new AppError('仅「待复核」任务允许复核扫码', 400)
     }
     if (taskRow.cancel_requested_at) {
       throw new AppError('该任务正在拣货退回中，不可继续复核', 409)
+    }
+    // 改单挂起期间必须拦下复核扫码（2026-09-18 审计 P1）：改单侧已把 required_qty 改成新目标并把
+    // checked_qty 归零，但**不动 picked_qty**；此时继续复核会把 checked_qty 写到高于收尾后的 picked_qty，
+    // 收尾时三者无法闭合，任务永久卡在待复核且无自愈路径。
+    // 口径与 check.js:33 / pack.js:30 / ship.js:89 / sort.js:27 / pick.js:80 一致。
+    if (taskRow.adjustment_requested_at) {
+      throw new AppError('该任务有改单正在等待仓库确认，请先处理完成', 409)
     }
 
     const [[c]] = await conn.query(
@@ -343,8 +368,8 @@ async function createCheckScanLog({
     await completeOperationRequest(conn, requestState, {
       data: payload,
       message: allChecked ? '复核完成，已进入待打包' : '复核扫码已记录',
-      resourceType: 'scan_log',
-      resourceId: ins.insertId,
+      resourceType: 'warehouse_task',
+      resourceId: taskId,
     })
     await conn.commit()
     return payload
@@ -367,15 +392,17 @@ async function createCheckScanLog({
  */
 async function createCancelReturnScanLog({
   taskId, containerId, barcode, locationId,
-  operatorId, operatorName, requestKey,
+  operatorId, operatorName, requestKey, scopeWarehouseIds = null,
 }) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const requestState = await beginOperationRequest(conn, {
+    const requestState = await beginResourceOperationRequest(conn, {
       requestKey,
       action: 'scan-log.cancel-return',
       userId: operatorId || null,
+      resourceType: 'warehouse_task',
+      resourceId: taskId,
     })
     if (requestState.replay) {
       await conn.rollback()
@@ -387,6 +414,7 @@ async function createCancelReturnScanLog({
       [taskId],
     )
     if (!taskRow) throw new AppError('仓库任务不存在', 404)
+    assertInScope(scopeWarehouseIds, taskRow.warehouse_id, '仓库任务')
     if (!taskRow.cancel_requested_at) {
       throw new AppError('该任务未处于拣货退回状态，无需归还扫码', 400)
     }
@@ -475,8 +503,8 @@ async function createCancelReturnScanLog({
       message: finalized
         ? '归还完成，任务已取消'
         : `已归还，剩余 ${containersRemaining} 个容器 / ${packagesRemaining} 个箱子待处理`,
-      resourceType: 'scan_log',
-      resourceId: ins.insertId,
+      resourceType: 'warehouse_task',
+      resourceId: taskId,
     })
     await commitFulfillment(conn, 'warehouse', taskId)
     return payload
@@ -495,15 +523,17 @@ async function createCancelReturnScanLog({
  * 各自的原库位归还流程，箱子本身没有一个"应该被扫回哪里"的答案。
  */
 async function createCancelReturnBoxScanLog({
-  taskId, packageId, barcode, operatorId, operatorName, requestKey,
+  taskId, packageId, barcode, operatorId, operatorName, requestKey, scopeWarehouseIds = null,
 }) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const requestState = await beginOperationRequest(conn, {
+    const requestState = await beginResourceOperationRequest(conn, {
       requestKey,
       action: 'scan-log.cancel-return-box',
       userId: operatorId || null,
+      resourceType: 'warehouse_task',
+      resourceId: taskId,
     })
     if (requestState.replay) {
       await conn.rollback()
@@ -511,10 +541,11 @@ async function createCancelReturnBoxScanLog({
     }
 
     const [[taskRow]] = await conn.query(
-      'SELECT id, task_no, cancel_requested_at FROM warehouse_tasks WHERE id = ? AND deleted_at IS NULL FOR UPDATE',
+      'SELECT id, task_no, warehouse_id, cancel_requested_at FROM warehouse_tasks WHERE id = ? AND deleted_at IS NULL FOR UPDATE',
       [taskId],
     )
     if (!taskRow) throw new AppError('仓库任务不存在', 404)
+    assertInScope(scopeWarehouseIds, taskRow.warehouse_id, '仓库任务')
     if (!taskRow.cancel_requested_at) {
       throw new AppError('该任务未处于拣货退回状态，无需拆箱确认', 400)
     }
@@ -559,8 +590,8 @@ async function createCancelReturnBoxScanLog({
       message: finalized
         ? '拆箱确认完成，任务已取消'
         : `已确认拆箱，剩余 ${containersRemaining} 个容器 / ${packagesRemaining} 个箱子待处理`,
-      resourceType: 'scan_log',
-      resourceId: pkg.id,
+      resourceType: 'warehouse_task',
+      resourceId: taskId,
     })
     await commitFulfillment(conn, 'warehouse', taskId)
     return payload

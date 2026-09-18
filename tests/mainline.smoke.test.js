@@ -183,6 +183,9 @@ async function main() {
 
     const completeLocalWhilePrinting = await http.post(`/api/print-jobs/${printJobId}/complete-local`, {
       token: adminToken,
+      // 2026-09-18 审计 P1：complete-local 现在与 complete-client 一样校验工作站，
+      // 必须带上本机登记的 client id（夹具已提供），否则会先被 400 挡下而不是走到「已被领取」的 409
+      headers: { 'X-Client-Id': printer.clientId },
       json: {},
     })
     log.assert('打印中任务禁止本机核销', completeLocalWhilePrinting.status === 409, `status=${completeLocalWhilePrinting.status}`)

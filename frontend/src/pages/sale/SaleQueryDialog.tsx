@@ -9,6 +9,10 @@ import { DatePicker } from '@/components/shared/DatePicker'
 import { QueryPickerField } from '@/components/shared/QueryPickerField'
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
 import { todayYmd } from '@/lib/dateTime'
+import { SALE_STATUS, SALE_STATUS_NAME } from '@/generated/status'
+
+/** 查询弹窗的状态顺序（与列表快捷筛选一致，名字取自生成物） */
+const SALE_STATUS_QUERY_ORDER = [SALE_STATUS.DRAFT, SALE_STATUS.PARTIAL_RESERVED, SALE_STATUS.RESERVED, SALE_STATUS.PICKING, SALE_STATUS.SHIPPED, SALE_STATUS.CANCELLED]
 
 /** 销售查询弹窗对外的筛选值（与 URL 参数一一对应） */
 export interface SaleQueryValues {
@@ -100,12 +104,10 @@ export default function SaleQueryDialog({ open, initial, resetValues, onClose, o
               <SelectTrigger className="h-9"><SelectValue placeholder="全部状态" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="__all__">全部状态</SelectItem>
-                <SelectItem value="1">待占库</SelectItem>
-                <SelectItem value="6">部分占库</SelectItem>
-                <SelectItem value="2">已占库</SelectItem>
-                <SelectItem value="3">执行中</SelectItem>
-                <SelectItem value="4">已出库</SelectItem>
-                <SelectItem value="5">已取消</SelectItem>
+                {/* 与列表页同一份文案（生成物），不再手写——手写过一次就漂了（审计 [30]） */}
+                {SALE_STATUS_QUERY_ORDER.map(v => (
+                  <SelectItem key={v} value={String(v)}>{SALE_STATUS_NAME[String(v) as keyof typeof SALE_STATUS_NAME]}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </label>

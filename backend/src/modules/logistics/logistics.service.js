@@ -16,6 +16,20 @@ const WB_STATUS_META = {
 }
 const FREIGHT_TYPE_LABEL = { 1: '寄付', 2: '到付', 3: '第三方付' }
 
+/**
+ * 轨迹签收状态（logistics_waybills.track_status）的**唯一**解释处。
+ *
+ * 2026-09-18 审计 P2：这一列原先在两处被各自解释，而且互相矛盾——
+ * `logistics.worker.js` 只在收到 SIGNED 事件时才把它置 1（语义 = **已签收**），
+ * 而 `export.service.js` 却把它读成「已揽收/在途」，于是导出的在途运单显示「未揽收」、
+ * 已签收运单反而显示「已揽收/在途」，两个方向都错。
+ * 现在取值含义只在这里定义，导出与页面一律复用，不再各写一套解释。
+ *
+ * 注意：直连取号（sf/deppon）的运单不参与轨迹轮询，该列对其恒为 0，即「未签收」。
+ */
+const TRACK_STATUS_LABEL = { 0: '未签收', 1: '已签收' }
+const trackStatusLabel = (v) => TRACK_STATUS_LABEL[Number(v) || 0] || TRACK_STATUS_LABEL[0]
+
 function fmt(r) {
   const meta = WB_STATUS_META[Number(r.status)] || { label: String(r.status), tone: 'info' }
   return {
@@ -271,6 +285,8 @@ async function voidWaybill(id, { reason = null } = {}, { warehouseIds = null } =
 module.exports = {
   WB_STATUS,
   WB_STATUS_META,
+  TRACK_STATUS_LABEL,
+  trackStatusLabel,
   fmt,
   listWaybills,
   getWaybillById,

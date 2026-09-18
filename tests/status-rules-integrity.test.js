@@ -134,6 +134,61 @@ try {
 const putawayAtReady = assertStatusAction('inboundTask', 'putaway', 3)
 assert('待上架(3) 可以上架（收满或短装结案后）', putawayAtReady.from.includes(3))
 
+// ── 状态**文案**一致性（2026-09-18 审计 [30]） ───────────────────────────────
+// 状态码有 documentStatusRules 守着，文案没有——于是同一个状态在不同地方被手写成不同的名字：
+//   · 销售列表/查询弹窗写「待占库/执行中」，而后端与生成物是「草稿/拣货中」；
+//   · 退货状态 3 在后端 statusName 与导出 SQL 里写「已退货/已退货入库」，而 documentStatusRules
+//     的动作、迁移 146 的列注释、前端筛选项都是「已执行」——同一页面筛选写「已执行」、表格写「已退货」。
+// 这里做机械核对：文案只能有一个来源，且过时叫法不得再出现在**代码**里（注释里的历史说明除外）。
+console.log('状态文案一致性')
+
+const { readFileSync } = require('node:fs')
+const { join } = require('node:path')
+const ROOT = join(__dirname, '..')
+const readSrc = rel => readFileSync(join(ROOT, rel), 'utf8')
+/** 去掉注释后匹配——注释里会写「旧名叫已退货」这类历史说明，不该被当成违规 */
+function stripComments(src) {
+  return src.replace(/\/\*[\s\S]*?\*\//g, m => m.replace(/[^\n]/g, ' '))
+    .replace(/(^|[^:])\/\/[^\n]*/g, (m, p1) => p1 + ' '.repeat(m.length - p1.length))
+}
+
+const SALE_NAMES = { 1: '草稿', 2: '已占库', 3: '拣货中', 4: '已出库', 5: '已取消', 6: '部分占库' }
+const generated = readSrc('frontend/src/generated/status.ts')
+for (const [code, name] of Object.entries(SALE_NAMES)) {
+  assert(`generated/status.ts：销售状态 ${code} = ${name}`,
+    new RegExp(`"${code}":\\s*"${name}"`).test(generated), '请重新运行 npm run generate:status')
+}
+
+// ① 销售页不得再手写状态文案：必须从生成物取，且不出现与生成物冲突的字面量
+for (const rel of ['frontend/src/pages/sale/index.tsx', 'frontend/src/pages/sale/SaleQueryDialog.tsx']) {
+  const code = stripComments(readSrc(rel))
+  assert(`${rel} 从 @/generated/status 取状态文案`, /from '@\/generated\/status'/.test(code))
+  const conflicts = Object.entries(SALE_NAMES)
+    .filter(([c, n]) => new RegExp(`['"\`]${c}['"\`]\\s*[:>]\\s*(?:\\{?)\\s*['"]${n === '草稿' ? '待占库' : '执行中'}['"]`).test(code)
+      || new RegExp(`value=["']${c}["'][^>]*>\\s*(?:待占库|执行中)`).test(code))
+    .map(([c]) => c)
+  assert(`${rel} 不再出现与生成物冲突的销售状态文案`, conflicts.length === 0, `冲突状态码=${conflicts.join(',')}`)
+}
+
+// ② 退货状态 3 的文案统一为「已执行」（documentStatusRules / 迁移 146 / 前端筛选项）
+const STALE_RETURN_NAMES = ['已退货入库', '已退货']
+for (const rel of [
+  'backend/src/modules/returns/returns-purchase.service.js',
+  'backend/src/modules/returns/returns-sale.service.js',
+  'backend/src/modules/export/export.service.js',
+  'frontend/src/pages/returns/index.tsx',
+  'frontend/src/pages/returns/ReturnQueryDialog.tsx',
+]) {
+  const code = stripComments(readSrc(rel))
+  const stale = STALE_RETURN_NAMES.filter(n => code.includes(n))
+  assert(`${rel} 不再使用过时的退货状态名`, stale.length === 0, `残留=${stale.join(',')}`)
+}
+assert('后端采购退货 statusName 3 = 已执行', /3:\s*'已执行'/.test(readSrc('backend/src/modules/returns/returns-purchase.service.js')))
+assert('后端销售退货 statusName 3 = 已执行', /3:\s*'已执行'/.test(readSrc('backend/src/modules/returns/returns-sale.service.js')))
+assert('采购退货导出 SQL：3 → 已执行',
+  (readSrc('backend/src/modules/export/export.service.js').match(/WHEN 3 THEN '已执行'/g) || []).length === 2,
+  '采购退货单与销售退货单两条导出 SQL 都要改')
+
 console.log(`\n${'═'.repeat(60)}`)
 console.log(`  ${passed} passed, ${failed} failed`)
 process.exit(failed > 0 ? 1 : 0)

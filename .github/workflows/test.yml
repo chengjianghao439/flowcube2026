@@ -164,8 +164,43 @@ jobs:
       - name: 单元测试 — 前后端权限码一致性（纯静态，无需 DB）
         run: npm run test:permissions
 
+      - name: 契约测试 — 所有写路由必须挂 requirePermission（例外须登记理由且可验证）
+        run: npm run test:route-permission-contract
+
+      - name: 契约测试 — 财务域加锁顺序 账户→对账单→账款（防 ABBA 死锁环）
+        run: npm run test:finance-lock-order
+
+      - name: 库存域加锁顺序契约（机械核对）
+        run: npm run test:inventory-lock-order
+
+      - name: SQL 占位符与列数一致性契约（机械核对，防 ER_PARSE_ERROR）
+        run: npm run test:sql-placeholder
+
+      - name: 契约测试 — 前端登出必须走统一封装（防漏清缓存/漏作废 refresh）
+        run: npm run test:frontend-session-contract
+
+      - name: 契约测试 — 前端轮询间隔与批量（防小批量叠加高频轮询打满限流）
+        run: npm run test:frontend-polling-contract
+
+      # 以下 4 个是 2026-09-18 审计发现的「孤儿测试」：文件存在、能跑通，但从未被任何脚本或
+      # workflow 引用，因此从未真正守过任何东西。接线后它们才真正进入门禁。
+      - name: 单元测试 — 销售单数量契约（最小精度 0.0001 等，审计孤儿测试接线）
+        run: npm run test:sale-order-contract
+
+      - name: 单元测试 — 全局搜索日期口径（审计孤儿测试接线）
+        run: npm run test:search-all-dates
+
+      - name: 单元测试 — 审批待办计数口径（审计孤儿测试接线）
+        run: npm run test:approval-list-batches
+
+      - name: 单元测试 — 商品选择器（审计孤儿测试接线）
+        run: npm run test:product-finder
+
       - name: 单元测试 — 会计科目映射一致性（映射↔seed↔常量，纯静态，无需 DB）
         run: npm run test:accounting
+
+      - name: 单元测试 — 销售收入凭证整单折扣净额口径（纯函数，无需 DB）
+        run: npm run test:sale-revenue-discount
 
       - name: 单元测试 — 个税累计预扣法（纯函数，无需 DB）
         run: npm run test:hr-tax
@@ -231,6 +266,18 @@ jobs:
 
       - name: 审计回归 — 库存/退货/预计绑定
         run: npm run smoke:audit-inventory
+
+      - name: 审计回归 — 2026-09-18 深审计 P0（撤回收货×在途调拨 / 盘点×拣货锁定 / 补占换仓）
+        run: npm run smoke:audit-2026-09-18
+
+      - name: 审计回归 — 标签渲染失败降级不得回滚业务事务
+        run: npm run smoke:label-render-degrade
+
+      - name: 审计回归 — 仪表盘销售口径 v2（孤儿测试接线）
+        run: npm run smoke:dashboard-sales-v2
+
+      - name: 审计回归 — 幂等回执并发（孤儿测试接线）
+        run: npm run smoke:operation-request-concurrency
 
       - name: 审计回归 — 报表/来源修订/冲销/超管保护
         run: npm run smoke:audit-finance-security

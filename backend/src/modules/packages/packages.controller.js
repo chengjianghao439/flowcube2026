@@ -3,7 +3,7 @@ const printJobs = require('../print-jobs/print-jobs.service')
 const { successResponse } = require('../../utils/response')
 const { extractRequestKey } = require('../../utils/requestKey')
 const {
-  beginOperationRequest,
+  beginResourceOperationRequest,
   completeOperationRequest,
   failOperationRequest,
 } = require('../../utils/operationRequest')
@@ -57,10 +57,13 @@ async function finish(req, res, next) {
   const action = 'package.finish'
   try {
     const id = +req.params.id
-    const requestState = await beginOperationRequest(pool, {
+    // 资源绑定用 package id：它在本单事务开始前就已存在，且 finishPackage 内部会校验归属。
+    const requestState = await beginResourceOperationRequest(pool, {
       requestKey,
       action,
       userId: req.user?.userId ?? null,
+      resourceType: 'package',
+      resourceId: id,
     })
     if (requestState.replay) {
       return successResponse(res, requestState.responseData, requestState.responseMessage || '箱子已完成并已进入打印链')
@@ -91,10 +94,15 @@ async function printLabel(req, res, next) {
   const requestKey = extractRequestKey(req)
   const action = 'package.print-label'
   try {
-    const requestState = await beginOperationRequest(pool, {
+    const packageId = +req.params.id
+    // 资源绑定用 package id 而不是完成后才产生的 print_job id——job.id 在 begin 时刻未知。
+    // 下方两处 completeOperationRequest 也必须传 package/packageId，保持与旧行兼容判断一致。
+    const requestState = await beginResourceOperationRequest(pool, {
       requestKey,
       action,
       userId: req.user?.userId ?? null,
+      resourceType: 'package',
+      resourceId: packageId,
     })
     if (requestState.replay) {
       return successResponse(res, requestState.responseData, requestState.responseMessage || '已加入打印队列')
@@ -117,8 +125,8 @@ async function printLabel(req, res, next) {
       await completeOperationRequest(pool, requestState, {
         data: payload,
         message: '未绑定可用打印机，已记录本次打印',
-        resourceType: 'print_job',
-        resourceId: job.id,
+        resourceType: 'package',
+        resourceId: packageId,
       })
       return successResponse(res, payload, '未绑定可用打印机，已记录本次打印；请先绑定打印机，再到打印记录页补打')
     }
@@ -127,8 +135,8 @@ async function printLabel(req, res, next) {
     await completeOperationRequest(pool, requestState, {
       data: payload,
       message: '已加入打印队列',
-      resourceType: 'print_job',
-      resourceId: job.id,
+      resourceType: 'package',
+      resourceId: packageId,
     })
     return successResponse(res, payload, '已加入打印队列')
   } catch (e) {

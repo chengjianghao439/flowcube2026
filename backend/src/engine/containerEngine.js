@@ -953,6 +953,16 @@ async function splitContainer(conn, { containerId, qty, remark = null, targetCon
   if (!Number.isFinite(cid) || cid <= 0) throw new AppError('无效容器 ID', 400)
   if (!Number.isFinite(q) || q <= 0) throw new AppError('拆分数量须为正数', 400)
 
+  // 加锁顺序（2026-09-18 审计 P1）：本引擎的全局约定是「先 lockStockDimension(商品,仓库) 再锁容器」
+  // ——deductFromContainers 的注释与上架/出库/盘点路径都按此顺序。本函数原先直接 FOR UPDATE 容器，
+  // 顺序与它们相反，构成 ABBA 死锁面（拆分持容器等汇总锁，上架持汇总锁等容器）。
+  // 维度值来自一次非锁定读：容器所属商品/仓库不会因这一读而改变结论，随后仍以 FOR UPDATE 的读为准。
+  const [[dim]] = await conn.query(
+    'SELECT product_id, warehouse_id FROM inventory_containers WHERE id = ? AND deleted_at IS NULL',
+    [cid],
+  )
+  if (dim) await lockStockDimension(conn, dim.product_id, dim.warehouse_id)
+
   const [[row]] = await conn.query(
     `SELECT id, barcode, product_id, warehouse_id, location_id, remaining_qty, status,
             locked_by_task_id, batch_no, mfg_date, exp_date, unit,

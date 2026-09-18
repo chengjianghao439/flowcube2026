@@ -1,13 +1,17 @@
 const { pool } = require('../../config/db')
 const { CONTAINER_STATUS } = require('../../engine/containerEngine')
 const inboundTasksSvc = require('../inbound-tasks/inbound-tasks.service')
+const { scopeFilter } = require('../../utils/warehouseScope')
 
 /**
  * 监控：待上架且已标记超时的容器（先刷新超时标记）
+ * scopeWarehouseIds：仓库数据权限（2026-09-18 审计 P2）。此前该列表无范围过滤，
+ * 限仓用户能列出其他仓库全部超期待上架容器（含条码、数量、采购单号）。
  */
-async function listOverduePending() {
+async function listOverduePending(scopeWarehouseIds = null) {
   await inboundTasksSvc.refreshPutawayOverdueMarks()
 
+  const scope = scopeFilter(scopeWarehouseIds, 'c.warehouse_id')
   const [rows] = await pool.query(
     `SELECT c.id, c.barcode, c.product_id, c.warehouse_id, c.remaining_qty,
             c.created_at, c.putaway_deadline_at, c.is_overdue, c.putaway_flagged_overdue,
@@ -19,9 +23,9 @@ async function listOverduePending() {
      LEFT JOIN product_items p ON p.id = c.product_id
      WHERE c.status = ? AND c.deleted_at IS NULL
        AND (c.is_overdue = 1 OR c.putaway_flagged_overdue = 1)
-       AND (c.is_legacy = 0 OR c.is_legacy IS NULL)
+       AND (c.is_legacy = 0 OR c.is_legacy IS NULL)${scope.sql}
      ORDER BY c.putaway_deadline_at ASC, c.created_at ASC`,
-    [CONTAINER_STATUS.PENDING_PUTAWAY],
+    [CONTAINER_STATUS.PENDING_PUTAWAY, ...scope.params],
   )
 
   return rows.map(r => ({

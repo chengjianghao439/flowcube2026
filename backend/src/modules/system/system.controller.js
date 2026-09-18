@@ -1,5 +1,5 @@
 const { successResponse } = require('../../utils/response')
-const { getTransferRequestStatus } = require('../transfer/transfer-requests')
+const { getScopedOperationRequestStatus } = require('../../utils/operationRequest')
 const logger = require('../../utils/logger')
 
 /**
@@ -11,10 +11,16 @@ const logger = require('../../utils/logger')
  *
  * 只能查自己的回执：底层按 (request_key, action, user_id) 三元组匹配，
  * user_id 取自 JWT，不接受调用方传入，因此不存在越权查他人操作结果的路径。
+ *
+ * 2026-09-18 审计 P2[6]：资源级幂等的 action 已落库为 `<base>.<单据ID>`，而客户端
+ * （尤其老版本 PDA）保存/上报的仍是固定 action，因此这里走通用作用域解析——先精确匹配，
+ * 再用 `action = <base> OR action LIKE '<base>.%'` 兜底，恰好一条才回执。调拨原先的专用
+ * 分支已被该通用实现完全覆盖（同样的 exact→legacy 顺序、同样的「同键多单保持待核实」、
+ * 同样的回执行归属校验），故不再单独调用，避免两套逻辑漂移。
  */
 const requestStatus = async (req, res, next) => {
   try {
-    const data = await getTransferRequestStatus({
+    const data = await getScopedOperationRequestStatus({
       requestKey: req.params.key,
       action: req.query.action,
       userId: req.user?.userId ?? null,

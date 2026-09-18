@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { useAvgCostReconciliation, type AvgCostRow } from '@/hooks/useAvgCostReconciliation'
+import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
 import { resyncStockApi } from '@/api/inventory'
 import { confirmAction } from '@/lib/confirm'
 import { toast } from '@/lib/toast'
@@ -17,6 +19,10 @@ const fmtQty = (v: unknown) => Number(v).toLocaleString()
 export default function AvgCostReconciliationPage() {
   const { data, isLoading, isError, error, refetch } = useAvgCostReconciliation()
   const queryClient = useQueryClient()
+  // 「修复缓存」是写操作（重算 inventory_stock 与预占账），后端已改为要求 inventory.adjust；
+  // 这里同步按权限隐藏按钮，避免只有报表查看权限的用户点出一个静默 403。
+  const { can } = usePermission()
+  const canAdjustInventory = can(PERMISSIONS.INVENTORY_ADJUST)
 
   const resyncMut = useMutation({
     mutationFn: () => resyncStockApi(),
@@ -69,9 +75,11 @@ export default function AvgCostReconciliationPage() {
                 tone={data.ok ? 'success' : 'danger'}
               />
             )}
-            <Button variant="outline" disabled={!data || data.driftedCount === 0 || resyncMut.isPending} onClick={handleResync}>
-              {resyncMut.isPending ? '修复中…' : '修复缓存'}
-            </Button>
+            {canAdjustInventory && (
+              <Button variant="outline" disabled={!data || data.driftedCount === 0 || resyncMut.isPending} onClick={handleResync}>
+                {resyncMut.isPending ? '修复中…' : '修复缓存'}
+              </Button>
+            )}
             <Button variant="outline" onClick={() => refetch()}>刷新</Button>
           </div>
         }

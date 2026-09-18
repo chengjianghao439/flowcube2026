@@ -25,7 +25,7 @@ const AppError = require('../../utils/AppError')
 const { beijingTodayYmd } = require('../../utils/backendTime')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
-const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
+const { beginResourceOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { getRequestId } = require('../../utils/requestContext')
 const { PAYMENT_EVENT, record: recordPaymentEvent } = require('../payments/payment-events.service')
@@ -189,10 +189,12 @@ async function execute(id, operator, scopeWarehouseIds = null, requestKey = null
   try {
     await conn.beginTransaction()
     // 幂等（2026-08-22 补）：执行退款是多表写事务（冲账+流水+账户出账），连点两次/断网重试会重复退钱
-    const requestState = await beginOperationRequest(conn, {
+    const requestState = await beginResourceOperationRequest(conn, {
       requestKey,
       action: 'refund.execute',
       userId: operator?.userId ?? null,
+      resourceType: 'refund_order',
+      resourceId: id,
     })
     if (requestState.replay) {
       await conn.rollback()
@@ -212,6 +214,23 @@ async function execute(id, operator, scopeWarehouseIds = null, requestKey = null
       // 无关联账款（期初/手工）：只允许已收金额为 0 的特殊场景——实际不放行，退款必须有账款基准
       throw new AppError('该退款单未关联账款记录，无法执行退款', 400)
     }
+    // 统一加锁顺序（2026-09-18 审计 P1）：finance_accounts → reconciliation_statements → payment_records。
+    // 本函数原先先锁 payment_records，再经 recordTransaction 锁 finance_accounts、最后锁
+    // reconciliation_statements，方向与核销/直付路径（payments.service.js:208-225、
+    // payment-receipts.service.js:130-133 明文约定「账户 → 对账单 → 账款」）相反，
+    // 同一条账款并发「退款 execute」与「收款登记」会形成 record↔statement/account 的 ABBA 环。
+    // 这里把两把前置锁提到 record 之前；后面的 recordTransaction 对同一账户行是同事务重入，无副作用。
+    if (row.account_id) {
+      await conn.query('SELECT id FROM finance_accounts WHERE id=? FOR UPDATE', [row.account_id])
+    }
+    const [stmtRows] = await conn.query(
+      'SELECT DISTINCT statement_id FROM reconciliation_statement_items WHERE record_id = ? ORDER BY statement_id',
+      [row.payment_record_id],
+    )
+    for (const s of stmtRows) {
+      await conn.query('SELECT id FROM reconciliation_statements WHERE id=? FOR UPDATE', [s.statement_id])
+    }
+
     const [[record]] = await conn.query(
       'SELECT * FROM payment_records WHERE id = ? FOR UPDATE', [row.payment_record_id],
     )
@@ -256,13 +275,7 @@ async function execute(id, operator, scopeWarehouseIds = null, requestKey = null
     // 对账单投影刷新（2026-08-21 审计 E.3 修复）：退款冲减 paid_amount 后，
     // 若该账款属于某对账单，同事务刷新 settled_amount/状态——否则 unlock 用
     // 过期存储列误拒（已核销完的账款退款后永远无法解锁回草稿）。
-    const [stmtRows] = await conn.query(
-      'SELECT DISTINCT statement_id FROM reconciliation_statement_items WHERE record_id = ? ORDER BY statement_id',
-      [row.payment_record_id],
-    )
-    for (const s of stmtRows) {
-      await conn.query('SELECT id FROM reconciliation_statements WHERE id=? FOR UPDATE', [s.statement_id])
-    }
+    // 对账单行已在函数开头按统一加锁顺序锁住，这里只做聚合重算。
     for (const s of stmtRows) {
       await statementSvc.refreshSettlement(conn, s.statement_id)
     }

@@ -3,7 +3,7 @@ const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { reserve, partialReleaseByProduct } = require('../../engine/reservationEngine')
-const { reserveTaskLockedContainersForReturn, unlockAndRelocateContainer } = require('../../engine/containerEngine')
+const { reserveTaskLockedContainersForReturn, unlockAndRelocateContainer, lockStockDimension } = require('../../engine/containerEngine')
 const { WT_STATUS, assertWarehouseTaskAction } = require('../../constants/warehouseTaskStatus')
 const { WT_EVENT, record: recordEvent } = require('./warehouse-task-events.service')
 const { logSideEffectFailure, assertTaskScope } = require('./warehouse-tasks.helpers')
@@ -431,6 +431,17 @@ async function confirmContainerReturn(returnId, { targetLocationId = null, opera
     if (!ret) throw new AppError('该归还项不存在', 404)
     assertTaskScope(ret, { scopeWarehouseIds, pdaWarehouseId })
     if (Number(ret.status) !== 1) throw new AppError('该归还项已确认，无需重复操作', 400)
+
+    // 加锁顺序（2026-09-18 审计 [27]）：本仓全局约定「先 lockStockDimension(商品,仓库) 再锁单个容器」
+    // ——上架/出库/盘点/拆分/调拨都按此顺序。本函数原先直接 FOR UPDATE 容器，顺序相反，
+    // 与同 (商品,仓库) 的并加上架构成 ABBA 面（上架持维度锁等容器，这里持容器等维度锁）。
+    // 维度值取自一次非锁定读（容器所属商品/仓库不会因此改变结论），随后仍以 FOR UPDATE 的读为准。
+    // 容器不存在时跳过维度锁，让下面的 FOR UPDATE 照旧抛 404。
+    const [[dim]] = await conn.query(
+      'SELECT product_id, warehouse_id FROM inventory_containers WHERE id=? AND deleted_at IS NULL',
+      [ret.source_container_id],
+    )
+    if (dim) await lockStockDimension(conn, dim.product_id, dim.warehouse_id)
 
     const [[container]] = await conn.query(
       'SELECT id, barcode, location_id, product_id, remaining_qty, locked_by_task_id FROM inventory_containers WHERE id=? FOR UPDATE',

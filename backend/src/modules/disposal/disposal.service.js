@@ -22,6 +22,7 @@ const { generateDailyCode } = require('../../utils/codeGenerator')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
+const { assertNotSelfApproval } = require('../../utils/selfApprove')
 const { normalizePagination } = require('../../utils/pagination')
 
 const STATUS = { 1: '草稿', 2: '待审批', 3: '已批准', 4: '已处置', 5: '已驳回', 6: '已取消' }
@@ -334,8 +335,12 @@ async function approve(id, operator, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const row = await lockStatusRow(conn, { table: 'inventory_disposal_orders', id, columns: 'id, status, warehouse_id', entityName: '处置单' })
+    const row = await lockStatusRow(conn, { table: 'inventory_disposal_orders', id, columns: 'id, status, warehouse_id, operator_id', entityName: '处置单' })
     assertInScope(scopeWarehouseIds, row.warehouse_id, '处置单')
+    // 自行审批闸门（2026-09-18 审计 P2）：approve 是库存注销的唯一闸门，原先只做状态流转，
+    // 持 create+approve+execute 的账号可单人完成「建单→提交→批准→执行」全流程，内控形同虚设。
+    // 与采购请购单同范式，走统一 selfApprove（超管或显式开启 allow_self_approve 的账号可自批）。
+    await assertNotSelfApproval(row.operator_id, operator?.userId, '不能审批自己提交的处置单，请由他人审批')
     const rule = assertStatusAction('inventoryDisposal', 'approve', row.status)
     await compareAndSetStatus(conn, {
       table: 'inventory_disposal_orders', id, fromStatus: rule.from, toStatus: rule.to, entityName: '处置单',
@@ -358,8 +363,10 @@ async function reject(id, { reason, operator }, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const row = await lockStatusRow(conn, { table: 'inventory_disposal_orders', id, columns: 'id, status, warehouse_id', entityName: '处置单' })
+    const row = await lockStatusRow(conn, { table: 'inventory_disposal_orders', id, columns: 'id, status, warehouse_id, operator_id', entityName: '处置单' })
     assertInScope(scopeWarehouseIds, row.warehouse_id, '处置单')
+    // 驳回同样属于审批动作，一并与 approve 同闸门（否则可自建单→自驳回绕过留痕口径）
+    await assertNotSelfApproval(row.operator_id, operator?.userId, '不能驳回自己提交的处置单，请由他人审批')
     const rule = assertStatusAction('inventoryDisposal', 'reject', row.status)
     await compareAndSetStatus(conn, {
       table: 'inventory_disposal_orders', id, fromStatus: rule.from, toStatus: rule.to, entityName: '处置单',

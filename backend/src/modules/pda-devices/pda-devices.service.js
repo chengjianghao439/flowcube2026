@@ -89,9 +89,9 @@ async function findById(id, scopeWarehouseIds = null) {
   return fmt(row)
 }
 
-async function assertWarehouseExists(warehouseId) {
+async function assertWarehouseExists(warehouseId, conn = pool) {
   if (warehouseId == null) return
-  const [[wh]] = await pool.query(
+  const [[wh]] = await conn.query(
     'SELECT id FROM inventory_warehouses WHERE id = ? AND deleted_at IS NULL',
     [warehouseId],
   )
@@ -120,28 +120,53 @@ async function create({ deviceName, warehouseId = null, scopeWarehouseIds = null
 }
 
 async function update(id, { deviceName, warehouseId, scopeWarehouseIds = null }) {
-  const current = await findById(id, scopeWarehouseIds)
-  const name = deviceName !== undefined ? String(deviceName || '').trim() : current.deviceName
-  if (!name) throw new AppError('设备名称不能为空', 400)
-  const whId = warehouseId !== undefined ? (warehouseId != null ? Number(warehouseId) : null) : current.warehouseId
-  // 改绑仓库同样受限：不能把设备挪到自己管不着的仓
-  assertInScope(scopeWarehouseIds, whId, 'PDA 设备')
-  await assertWarehouseExists(whId)
+  // 单事务 + 行锁（2026-09-18 审计 P2）：原先是「无锁读 current → autocommit UPDATE 设备 →
+  // 再 autocommit 吊销会话」。两条 write 各自提交，中间失败就只改了仓库、没吊销旧会话；
+  // 更糟的是**重试时 current.warehouseId 已被改成新仓**，判断「是否换仓」恒为 false，
+  // 吊销被整段跳过——旧票据里缓存的 session_warehouse_id 仍是旧仓，在心跳续期下长期存活。
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    // 注意：pda_devices **没有 deleted_at 列**（与其它主数据表不同），这里不要照抄 deleted_at 过滤
+    const [[row]] = await conn.query(
+      'SELECT id, device_name, warehouse_id FROM pda_devices WHERE id = ? FOR UPDATE',
+      [id],
+    )
+    if (!row) throw new AppError('PDA 设备不存在', 404)
+    assertInScope(scopeWarehouseIds, row.warehouse_id, 'PDA 设备')
 
-  await pool.query(
-    'UPDATE pda_devices SET device_name = ?, warehouse_id = ? WHERE id = ?',
-    [name, whId, id],
-  )
-  // 换了仓库，旧票据里缓存的 warehouse_id 就是错的，必须让设备重新建会话
-  if (Number(whId || 0) !== Number(current.warehouseId || 0)) {
-    await revokeSessions(id, '设备改绑仓库')
+    const name = deviceName !== undefined ? String(deviceName || '').trim() : row.device_name
+    if (!name) throw new AppError('设备名称不能为空', 400)
+    const whId = warehouseId !== undefined
+      ? (warehouseId != null ? Number(warehouseId) : null)
+      : (row.warehouse_id != null ? Number(row.warehouse_id) : null)
+    // 改绑仓库同样受限：不能把设备挪到自己管不着的仓
+    assertInScope(scopeWarehouseIds, whId, 'PDA 设备')
+    await assertWarehouseExists(whId, conn)
+
+    await conn.query(
+      'UPDATE pda_devices SET device_name = ?, warehouse_id = ? WHERE id = ?',
+      [name, whId, id],
+    )
+    // 换了仓库，旧票据里缓存的 warehouse_id 就是错的，必须让设备重新建会话。
+    // 判据取**加锁读到的**原仓库，与 UPDATE 在同一事务，重试也不会误判。
+    if (Number(whId || 0) !== Number(row.warehouse_id || 0)) {
+      await revokeSessions(id, '设备改绑仓库', conn)
+    }
+    await conn.commit()
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
   }
   return findById(id, scopeWarehouseIds)
 }
 
-/** 吊销该设备当前全部有效会话：票据立刻失效，下次请求就会被挡下 */
-async function revokeSessions(deviceId, _reason = null) {
-  const [r] = await pool.query(
+/** 吊销该设备当前全部有效会话：票据立刻失效，下次请求就会被挡下。
+ *  conn 缺省走 pool；调用方已在事务里时必须传同一 conn，否则吊销会脱离事务。 */
+async function revokeSessions(deviceId, _reason = null, conn = pool) {
+  const [r] = await conn.query(
     'UPDATE pda_device_sessions SET revoked_at = NOW() WHERE device_id = ? AND revoked_at IS NULL',
     [deviceId],
   )
@@ -159,11 +184,30 @@ async function revokeSessions(deviceId, _reason = null) {
  */
 async function setStatus(id, status, scopeWarehouseIds = null) {
   if (!STATUS.includes(status)) throw new AppError('设备状态无效', 400)
-  await findById(id, scopeWarehouseIds)
-  await pool.query('UPDATE pda_devices SET status = ? WHERE id = ?', [status, id])
-  let revoked = 0
-  if (status !== 'active') revoked = await revokeSessions(id, `设备状态改为 ${status}`)
-  return { ...await findById(id, scopeWarehouseIds), revokedSessions: revoked }
+  await findById(id, scopeWarehouseIds)   // 存在性 + 仓库范围
+  // 状态与「吊销会话」必须同事务（2026-09-18 审计 [34]）：原先是两条 autocommit 语句，
+  // 状态已改成 disabled 而吊销失败时旧票据仍然可用，设备照样能作业——安全闸门形同虚设。
+  // 与 [10] 的「改绑仓 + 吊销」是同一种错法，修法也一致：单事务 + 行锁 + 复用同一 conn。
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const [locked] = await conn.query('SELECT id FROM pda_devices WHERE id = ? FOR UPDATE', [id])
+    // 行锁即存在性校验（findById 之后被删掉时这里就是空集）。
+    // 这里**不能**改成校验 UPDATE 的 affectedRows：mysql2 没开 CLIENT_FOUND_ROWS，
+    // 把状态设成与当前相同的值（重复点「停用」）affectedRows 就是 0，会被误判成 404。
+    if (!locked.length) throw new AppError('PDA 设备不存在', 404)
+    await conn.query('UPDATE pda_devices SET status = ? WHERE id = ?', [status, id])
+    let revoked = 0
+    // 非 active 一律吊销（不管状态值有没有变化）：接口说「已停用」，就不允许还存在可用票据
+    if (status !== 'active') revoked = await revokeSessions(id, `设备状态改为 ${status}`, conn)
+    await conn.commit()
+    return { ...await findById(id, scopeWarehouseIds), revokedSessions: revoked }
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
+  }
 }
 
 /** 重置密钥：旧密钥立即作废，同时吊销全部票据，现场必须拿新二维码重新绑定 */

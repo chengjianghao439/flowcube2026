@@ -3,6 +3,7 @@ const crypto = require('node:crypto')
 const AppError = require('../../utils/AppError')
 const { credentials } = require('../logistics/carrier-adapters/direct-common')
 const { normalizeProduct } = require('../logistics/shipping-products')
+const { assertAccountChangeAllowed, accountChangedOf } = require('./carriers.guards')
 // 2026-09-08 核对顺丰官方 /laas/menu/getExpressTypeMenu.pub；展示产品不代表月结合同已授权。
 const SF_OPTIONS = [{ code: '1', label: '顺丰特快' }, { code: '2', label: '顺丰标快' }]
 const DEPPON_OPTIONS = [ ['DJBK', '大件标快'], ['DJTK', '大件特快'], ['DJTH', '大件特惠'], ['XJBK', '小件标快'], ['XJTK', '小件特快'], ['XJTH', '小件特惠'], ['YTYDS', '精准大票电商'] ].map(([code, label]) => ({ code, label }))
@@ -107,14 +108,11 @@ function createBindingService({ pool, operations, getCredential = ref => require
       const delivery = platform === 'deppon' ? clean(data.shippingDeliveryType) || null : null
       if (product && !current.products.some(p => p.code === product) && product !== row.shipping_product) throw new AppError('请选择管理员配置的常用服务', 400)
       if (delivery && !['1', '3', '4'].includes(delivery)) throw new AppError('请选择有效的送货方式', 400)
-      const accountChanged = (row.monthly_account || '') !== monthly || (row.platform_code && row.platform_code !== platform)
+      const accountChanged = accountChangedOf(row, { platformCode: platform, monthlyAccount: monthly })
       const changed = accountChanged || (row.shipping_product || '') !== (product || '') || (row.shipping_delivery_type || '') !== (delivery || '')
       if (changed && data.enabled) throw new AppError('请先保存账号和服务资料，再启用自动下单', 400)
-      if (accountChanged && row.waybill_enabled) throw new AppError('更换月结账号前请先暂停自动下单', 409)
-      if (accountChanged) {
-        const [[{ total }]] = await conn.query('SELECT COUNT(*) AS total FROM logistics_waybills WHERE carrier_id=? AND status IN (1,2,4,6)', [id])
-        if (Number(total)) throw new AppError('该承运商尚有待处理运单，请核实原单后再更换月结账号', 409)
-      }
+      // 换账号/换快递公司的闸门与承运商管理页共用（carriers.guards.js），避免两条写路径判定不一致
+      await assertAccountChangeAllowed(conn, row, accountChanged)
       const next = { ...row, platform_code: platform, monthly_account: monthly || null, shipping_product: product, shipping_delivery_type: delivery, credential_ref: row.credential_ref || `${platform}_main`, waybill_enabled: data.enabled ? 1 : 0 }
       const result = view(next, platform)
       if (data.enabled && !row.is_active) throw new AppError('承运商已停用，不能启用自动下单', 400)

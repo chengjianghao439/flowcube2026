@@ -141,13 +141,31 @@ async function getSaleExportPayload(query) {
 }
 
 async function getReconciliationExportPayload(query) {
+  // 导出必须与对账页同口径（2026-09-18 审计 P1）：
+  // ① 此前只透传 type/startDate/endDate/keyword/status，**丢掉了页面上的 settlementTypes /
+  //    往来方 / 单号 / 金额区间 / 到期日区间**，于是「全部账款」导出会混入现结账款，
+  //    与页面上看到的不一致；
+  // ② 此前不传 page/pageSize，落到 fetchReconciliationRows 的默认 pageSize=20，
+  //    静默只导出前 20 行（页面显示「共 N 条」，导出却只有 20 行）。
+  // 现在透传全部筛选项，并显式取到上限；确实超过上限时在文件名里标注，不再静默截断。
   const data = await reportsService.reconciliationReport({
     type: query.type || '1',
     startDate: query.startDate || null,
     endDate: query.endDate || null,
     keyword: query.keyword || '',
+    orderNo: query.orderNo || '',
+    partyName: query.partyName || '',
     status: query.status || null,
+    settlementTypes: query.settlementTypes || null,
+    minAmount: query.minAmount || '',
+    maxAmount: query.maxAmount || '',
+    dueStart: query.dueStart || '',
+    dueEnd: query.dueEnd || '',
+    page: 1,
+    pageSize: EXPORT_MAX_ROWS,
   })
+  // 与其它导出同口径：超过上限直接拒绝并提示缩小范围，而不是静默截断
+  assertExportLimit(Number(data.pagination?.total || 0))
   const sheetName = data.type === 1 ? '供应商对账单' : '客户对账单'
   return {
     filename: `${sheetName}_${buildDateStamp()}`,
@@ -350,7 +368,7 @@ async function getTransferExportPayload(query = {}) {
 async function getPurchaseReturnsExportPayload(query = {}) {
   const { keyword, status, productId, supplierId, warehouseId, operatorId, startDate, endDate, remark, scopeWarehouseIds } = query
   let sql = `SELECT r.return_no,r.supplier_name,r.warehouse_name,r.purchase_order_no,
-      CASE r.status WHEN 1 THEN '草稿' WHEN 2 THEN '已确认' WHEN 3 THEN '已退货' WHEN 4 THEN '已取消' END AS status_name,
+      CASE r.status WHEN 1 THEN '草稿' WHEN 2 THEN '已确认' WHEN 3 THEN '已执行' WHEN 4 THEN '已取消' END AS status_name,
       r.total_amount,r.operator_name,DATE_FORMAT(r.created_at,'%Y-%m-%d %H:%i') AS created_at,r.remark
      FROM purchase_returns r WHERE r.deleted_at IS NULL`
   const params = []
@@ -394,7 +412,7 @@ async function getPurchaseReturnsExportPayload(query = {}) {
 async function getSaleReturnsExportPayload(query = {}) {
   const { keyword, status, productId, customerId, warehouseId, operatorId, startDate, endDate, remark, scopeWarehouseIds } = query
   let sql = `SELECT r.return_no,r.customer_name,r.warehouse_name,r.sale_order_no,
-      CASE r.status WHEN 1 THEN '草稿' WHEN 2 THEN '已确认' WHEN 3 THEN '已退货入库' WHEN 4 THEN '已取消' END AS status_name,
+      CASE r.status WHEN 1 THEN '草稿' WHEN 2 THEN '已确认' WHEN 3 THEN '已执行' WHEN 4 THEN '已取消' END AS status_name,
       r.total_amount,r.operator_name,DATE_FORMAT(r.created_at,'%Y-%m-%d %H:%i') AS created_at,r.remark
      FROM sale_returns r WHERE r.deleted_at IS NULL`
   const params = []
@@ -785,7 +803,9 @@ async function getWaybillsExportPayload(query = {}) {
     receiver_name: w.receiverName || '—',
     receiver_phone: w.receiverPhone || '—',
     receiver_address: w.receiverAddress || '—',
-    track_status: w.trackStatus ? '已揽收/在途' : '未揽收',
+    // 轨迹列的唯一解释处（2026-09-18 审计 P2）：worker 只在 SIGNED 事件时置 1，语义是**已签收**；
+    // 这里原先写成「已揽收/在途」，导致在途运单显示「未揽收」、已签收运单显示「已揽收/在途」，两个方向都错。
+    track_status: logisticsService.trackStatusLabel(w.trackStatus),
     error_message: w.errorMessage || '',
     created_at: w.createdAt ? String(w.createdAt).slice(0, 16) : '',
   }))
@@ -804,7 +824,7 @@ async function getWaybillsExportPayload(query = {}) {
       { header: '收件人', key: 'receiver_name', width: 12 },
       { header: '收件电话', key: 'receiver_phone', width: 16 },
       { header: '收件地址', key: 'receiver_address', width: 30 },
-      { header: '轨迹', key: 'track_status', width: 12 },
+      { header: '签收状态', key: 'track_status', width: 12 },
       { header: '错误信息', key: 'error_message', width: 24 },
       { header: '创建时间', key: 'created_at', width: 18 },
     ],

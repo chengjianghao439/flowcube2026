@@ -59,8 +59,18 @@ async function main() {
     ids.warehouse = await insert("INSERT INTO inventory_warehouses(code,name,manager,phone,address) VALUES(?,'快递专项测试仓','测试寄件人','13800000000','广东省深圳市南山区测试路1号')", [code()])
     ids.customer = await insert("INSERT INTO sale_customers(code,name) VALUES(?,'快递专项客户')", [code()])
     ids.product = await insert("INSERT INTO product_items(code,name,unit) VALUES(?,'快递专项商品','件')", [code()])
-    const carrier = { name: '快递专项德邦', platformCode: 'deppon', credentialRef: 'express_test', monthlyAccount: 'TEST', shippingProduct: 'DJBK', shippingDeliveryType: '3', waybillEnabled: true }
+    // 顺丰/德邦的账号资料只能经「快递账号绑定」页写入：承运商管理页对这两个平台的账号字段直接 400
+    // （2026-09-18 审计 [9]）。这里照真实路径准备夹具：建承运商 → 绑定月结资料 → 置为启用。
+    // 直接置 waybill_enabled=1 只是因为 canEnable 需要「正式凭据 + 账号已验收」，测试环境无法满足。
+    await assert.rejects(
+      () => carriers.create({ name: '快递专项德邦(绕过)', platformCode: 'deppon', monthlyAccount: 'TEST', waybillEnabled: true }),
+      e => e.code === 'CARRIER_ACCOUNT_FIELDS_MOVED',
+    )
+    const carrier = { name: '快递专项德邦' }
     ids.carrier = (await carriers.create(carrier)).id
+    const carrierBinding = await binding.get(ids.carrier, 'deppon')
+    await binding.save(ids.carrier, { platformCode: 'deppon', monthlyAccount: 'TEST', shippingProduct: 'DJBK', shippingDeliveryType: '3', enabled: false, revision: carrierBinding.revision })
+    await pool.query('UPDATE carriers SET credential_ref=?, waybill_enabled=1 WHERE id=?', ['express_test', ids.carrier])
     assert.equal((await carriers.findById(ids.carrier)).shippingProduct, 'DJBK')
     const active = (await carriers.findAllActive()).find(c => Number(c.id) === ids.carrier)
     assert.equal(active.platformCode, 'deppon'); assert.equal(active.credentialRef, undefined)

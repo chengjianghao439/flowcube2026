@@ -3,7 +3,7 @@ const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const { getRequestId } = require('../../utils/requestContext')
-const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
+const { beginOperationRequest, beginResourceOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { PAYMENT_EVENT, record: recordPaymentEvent } = require('./payment-events.service')
 const statementSvc = require('./reconciliation-statements.service')
 const accountSvc = require('../finance/finance-accounts.service')
@@ -313,10 +313,12 @@ async function settle(receiptId, { allocations = [] }, operator, requestKey) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const reqState = await beginOperationRequest(conn, {
+    const reqState = await beginResourceOperationRequest(conn, {
       requestKey,
       action: 'payment.receipt.settle',
       userId: operator.operatorId,
+      resourceType: 'payment_receipt',
+      resourceId: receiptId,
     })
     if (reqState.replay) {
       // 重放命中已成功的请求：直接返回原响应，绝不重复核销

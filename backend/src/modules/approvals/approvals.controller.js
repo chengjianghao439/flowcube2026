@@ -13,7 +13,12 @@ const listPending = async (req, res, next) => {
 }
 const getBizApproval = async (req, res, next) => {
   try {
-    return successResponse(res, await svc.getBizApproval({ bizType: req.params.bizType, bizId: +req.params.bizId }), '查询成功')
+    return successResponse(res, await svc.getBizApproval({
+      bizType: req.params.bizType,
+      bizId: +req.params.bizId,
+      user: req.user,
+      scopeWarehouseIds: req.user?.warehouseIds ?? null,
+    }), '查询成功')
   } catch (e) { next(e) }
 }
 

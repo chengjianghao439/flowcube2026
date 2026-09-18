@@ -170,6 +170,12 @@ async function prepareSmokeContext() {
     customers = [{ id: r.insertId, name: 'Smoke客户' }]
   }
   const customer = customers[0]
+  // 授信额度统一清空（NULL = 不校验），由需要它的用例自己设置。
+  // 2026-09-18 实测：某个用例题把该客户额度改成 1 后不还原，配上长期累积的残留销售单
+  // （当时 541 张、在途敞口 17192），导致 p0 / concurrency-guards / sale-adjustment /
+  // warehouse-scope 等 **5 个套件集体全红**，而错误信息全指向「客户授信额度不足」，
+  // 与真实缺陷极难区分。每个套件从这里拿到确定的起点，测试之间不再互相污染。
+  await pool.query('UPDATE sale_customers SET credit_limit = NULL WHERE id = ?', [customer.id])
 
   // printers 表无 deleted_at 列；type 为 TINYINT（1=标签）。
   // 不能像其它 fixture 一样 `LIMIT 1` 瞎捞——开发库里可能已有真实注册但未绑定

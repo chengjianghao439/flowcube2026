@@ -35,7 +35,9 @@ const policiesSchema = z.object({
 
 router.use(authMiddleware)
 router.get('/check-consistency',      requirePermission(PERMISSIONS.INVENTORY_TRACE_VIEW), ctrl.checkConsistency)
-router.post('/resync-stock',          requirePermission(PERMISSIONS.INVENTORY_TRACE_VIEW), ctrl.resyncStock)
+// 修复缓存漂移是**写操作**（重算 inventory_stock.quantity 与预占账），必须挂写语义权限；
+// 此前错挂 INVENTORY_TRACE_VIEW（只读追踪），等于让只读账号能重算库存缓存（2026-09-18 审计 P1）。
+router.post('/resync-stock',          requirePermission(PERMISSIONS.INVENTORY_ADJUST), ctrl.resyncStock)
 router.get('/trace/:productId',       requirePermission(PERMISSIONS.INVENTORY_TRACE_VIEW), ctrl.trace)
 router.get('/overview',                requirePermission(PERMISSIONS.INVENTORY_VIEW), ctrl.overview)
 router.get('/replenishment',           requirePermission(PERMISSIONS.REPORT_VIEW), ctrl.replenishment)

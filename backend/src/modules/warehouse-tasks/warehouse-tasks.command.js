@@ -107,9 +107,11 @@ async function createForPurchaseReturn({ returnId, returnNo, supplierName, wareh
   for (const item of items) {
     await conn.query(
       `INSERT INTO warehouse_task_items
-         (task_id, product_id, product_code, product_name, unit, article_number, spec, color, required_qty, picked_qty)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
-      [taskId, item.productId, item.productCode, item.productName, item.unit, item.articleNumber || null, item.spec || null, item.color || null, item.quantity],
+         (task_id, product_id, product_code, product_name, unit, article_number, spec, color, required_qty, picked_qty, purchase_return_item_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`,
+      [taskId, item.productId, item.productCode, item.productName, item.unit, item.articleNumber || null, item.spec || null, item.color || null, item.quantity,
+        // 行级关联（迁移 247）：出库要按这一行取单价，否则同一退货单内同商品多行会被 JOIN 放大
+        item.returnItemId != null ? Number(item.returnItemId) : null],
     )
   }
   try {

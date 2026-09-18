@@ -4,7 +4,7 @@ const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransi
 const sortingBinSvc = require('../sorting-bins/sorting-bins.service')
 const { isValidTransition, assertWarehouseTaskAction } = require('../../constants/warehouseTaskStatus')
 const { WT_EVENT, record: recordEvent } = require('./warehouse-task-events.service')
-const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
+const { beginResourceOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { logSideEffectFailure, assertTaskPickScanClosure, assertTaskScope } = require('./warehouse-tasks.helpers')
 
 /**
@@ -29,10 +29,12 @@ async function sortTaskWithinTransaction(conn, id, sortedItems = null, { request
   }
   const rule = assertWarehouseTaskAction('sortTask', taskRow.status)
   if (!isValidTransition(taskRow.status, rule.toStatus)) throw new AppError(`非法状态迁移：${taskRow.status} → ${rule.toStatus}`, 400)
-  const requestState = await beginOperationRequest(conn, {
+  const requestState = await beginResourceOperationRequest(conn, {
     requestKey,
     action: 'warehouse.sort',
     userId: userId || null,
+    resourceType: 'warehouse_task',
+    resourceId: id,
   })
   if (requestState.replay) {
     return requestState.responseData

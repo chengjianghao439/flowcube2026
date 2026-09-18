@@ -38,6 +38,28 @@ function fmt(row) {
 }
 
 /**
+ * 对账单的**实时口径**（2026-09-18 审计 [32]）。
+ *
+ * reconciliation_statements 上的 total_amount/settled_amount/balance/status 只是
+ * refreshSettlement 写下的**投影**，而退货冲减、分批补应收、运费应付重算这些路径会改写下属
+ * payment_records、却不会回刷对账单 → 投影会过期。于是同一个对象出现两种口径：列表 / 详情明细 /
+ * 导出读实时值，详情抬头读存储值，「已核销」与「未核销余额 > 0」还能同时出现在一个响应里。
+ *
+ * 这里把「实时金额 → 展示用行」收敛成一个函数，列表与详情共用，四处显示同源。
+ * 状态推导与 refreshSettlement 同一规则，并**保留**其既定决策：草稿单不因下属账款被别处核销
+ * 而自动进入终态（要改这条决策请显式改，不要在这里顺手改）。
+ */
+function realShaped(row, { total, paid }) {
+  const realTotal = Number(total) || 0
+  const realPaid = Math.min(Number(paid) || 0, realTotal)
+  const realBalance = Math.max(0, realTotal - realPaid)
+  const status = Number(row.status) === ST.DRAFT
+    ? ST.DRAFT
+    : (realBalance <= 1e-6 && realTotal > 0 ? ST.SETTLED : ST.CONFIRMED)
+  return { ...row, total_amount: realTotal, settled_amount: realPaid, balance: realBalance, status }
+}
+
+/**
  * 按下属明细的实际核销情况重算对账单金额与状态。
  * 每次核销后调用；调用方已在事务内并锁好对账单行。
  */
@@ -291,11 +313,7 @@ async function findAll({
   // 补应收会改下属账款 total_amount/paid_amount，但这些路径不触发 refreshSettlement，存储在
   // reconciliation_statements 上的投影会过期，导致列表总额与详情对不上、导出的对账额与系统实时值不符。
   // （minAmount/maxAmount 仍按入单时的存储额筛选，属辅助筛选，不追求与实时显示完全一致。）
-  const list = rows.map(r => {
-    const realTotal = Number(r.real_total)
-    const realPaid = Math.min(Number(r.real_paid), realTotal)
-    return fmt({ ...r, total_amount: realTotal, settled_amount: realPaid, balance: Math.max(0, realTotal - realPaid) })
-  })
+  const list = rows.map(r => fmt(realShaped(r, { total: r.real_total, paid: r.real_paid })))
   return { list, pagination: { page: p, pageSize: ps, total } }
 }
 
@@ -311,8 +329,12 @@ async function findById(id) {
       ORDER BY r.created_at ASC`,
     [id],
   )
+  // 抬头金额与状态改走实时口径，和上面的明细、列表、导出四处同源（修复前抬头读存储投影，
+  // 会与自身明细对不上：明细显示已收 100，抬头却还写未核销）
+  const realTotal = items.reduce((a, x) => a + Number(x.total_amount || 0), 0)
+  const realPaid = items.reduce((a, x) => a + Number(x.paid_amount || 0), 0)
   return {
-    ...fmt(row),
+    ...fmt(realShaped(row, { total: realTotal, paid: realPaid })),
     items: items.map(x => ({
       recordId: Number(x.record_id),
       orderNo: x.order_no,

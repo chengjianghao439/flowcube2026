@@ -7,7 +7,7 @@ const {
   assertWarehouseTaskAction,
 } = require('../../constants/warehouseTaskStatus')
 const { WT_EVENT, record: recordEvent } = require('./warehouse-task-events.service')
-const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
+const { beginResourceOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { logSideEffectFailure, assertTaskPickScanClosure, assertTaskScope } = require('./warehouse-tasks.helpers')
 const { findById } = require('./warehouse-tasks.query')
 
@@ -95,10 +95,12 @@ async function readyToShipWithinTransaction(conn, id, { requestKey, userId, scop
 
   let requestState = { enabled: false }
   if (requestKey) {
-    requestState = await beginOperationRequest(conn, {
+    requestState = await beginResourceOperationRequest(conn, {
       requestKey,
       action: 'warehouse.ready-to-ship',
       userId: userId || null,
+      resourceType: 'warehouse_task',
+      resourceId: id,
     })
     if (requestState.replay) {
       return requestState.responseData

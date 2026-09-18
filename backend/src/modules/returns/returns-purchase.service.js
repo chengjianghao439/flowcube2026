@@ -11,16 +11,21 @@ const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
 const { foldEntryItems } = require('../../utils/unitConversion')  // 多单位折算（文档03 Phase4a，退货按箱）
 const { normalizePagination } = require('../../utils/pagination')
 
-const PR_STATUS = { 1:'草稿', 2:'已确认', 3:'已退货', 4:'已取消' }
+// 状态名唯一口径 = documentStatusRules.purchaseReturn / 迁移 146 的列注释 / 前端筛选项（都是「已执行」）。
+// 旧名「已退货」「已退货入库」是更早的叫法，曾导致同一页面筛选写「已执行」、表格写「已退货」（2026-09-18 审计 [30]）。
+const PR_STATUS = { 1:'草稿', 2:'已确认', 3:'已执行', 4:'已取消' }
 
 const fmtPR = r => ({ id:r.id, returnNo:r.return_no, supplierId:r.supplier_id, supplierName:r.supplier_name, warehouseId:r.warehouse_id, warehouseName:r.warehouse_name, purchaseOrderId:r.purchase_order_id||null, purchaseOrderNo:r.purchase_order_no, status:r.status, statusName:PR_STATUS[r.status], totalAmount:Number(r.total_amount), remark:r.remark, operatorId:r.operator_id, operatorName:r.operator_name, createdAt:r.created_at })
 
-async function loadPurchaseSourceOrderByNo(orderNo) {
+async function loadPurchaseSourceOrderByNo(orderNo, scopeWarehouseIds = null) {
   const [rows] = await pool.query(
     'SELECT * FROM purchase_orders WHERE order_no=? AND deleted_at IS NULL LIMIT 1',
     [orderNo],
   )
   if (!rows[0]) throw new AppError('关联采购单不存在', 404)
+  // 按单号直查来源单会返回完整明细与单价金额，必须与按 ID 查详情同口径做仓库范围校验
+  // （2026-09-18 审计 P2：此前限仓用户可用别仓单号读出完整单据）
+  assertInScope(scopeWarehouseIds, rows[0].warehouse_id, '采购单')
   const order = rows[0]
   const [items] = await pool.query(
     `SELECT poi.*,
@@ -285,6 +290,7 @@ async function confirmPR(id, operator = null, scopeWarehouseIds = null) {
       warehouseId: Number(retRow.warehouse_id),
       warehouseName: retRow.warehouse_name,
       items: itemRows.map(r => ({
+        returnItemId: Number(r.id),
         productId: Number(r.product_id),
         productCode: r.product_code,
         productName: r.product_name,
@@ -340,7 +346,7 @@ async function cancelPR(id, operator = null, scopeWarehouseIds = null) {
 
     // 已确认(2)会自动创建出库仓库任务；取消时必须同步终止该任务，否则仓库端会
     // 继续把一个"已取消"的退货单执行完，造成账实不符（P0-2）。任务已出库(SHIPPED)
-    // 的情况不会出现在这里——那条路径会先把本单据的状态推进到 3(已退货)，
+    // 的情况不会出现在这里——那条路径会先把本单据的状态推进到 3(已执行)，
     // 与本函数只允许的 from:[1,2] 互斥（两边都对 purchase_returns 行加锁，天然互斥）。
     const [[linkedTask]] = await conn.query(
       `SELECT id, status FROM warehouse_tasks

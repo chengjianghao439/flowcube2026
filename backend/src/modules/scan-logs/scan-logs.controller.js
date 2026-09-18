@@ -11,6 +11,7 @@ const create = async (req, res, next) => {
       operatorId:   operator.operatorId,
       operatorName: operator.operatorName,
       requestKey: extractRequestKey(req),
+      scopeWarehouseIds: req.user?.warehouseIds ?? null,
     })
     return successResponse(res, data, '扫描记录已保存', 201)
   } catch (e) { next(e) }
@@ -25,6 +26,7 @@ const createCheckScan = async (req, res, next) => {
       operatorId:   operator.operatorId,
       operatorName: operator.operatorName,
       requestKey: extractRequestKey(req),
+      scopeWarehouseIds: req.user?.warehouseIds ?? null,
     })
     return successResponse(res, data, data.allChecked ? '复核完成，已进入待打包' : '复核扫码已记录', 201)
   } catch (e) { next(e) }
@@ -41,6 +43,7 @@ const createCancelReturnScan = async (req, res, next) => {
       operatorId:   operator.operatorId,
       operatorName: operator.operatorName,
       requestKey: extractRequestKey(req),
+      scopeWarehouseIds: req.user?.warehouseIds ?? null,
     })
     return successResponse(res, data, data.finalized ? '归还完成，任务已取消' : '归还已记录', 201)
   } catch (e) { next(e) }
@@ -56,6 +59,7 @@ const createCancelReturnBoxScan = async (req, res, next) => {
       operatorId:   operator.operatorId,
       operatorName: operator.operatorName,
       requestKey: extractRequestKey(req),
+      scopeWarehouseIds: req.user?.warehouseIds ?? null,
     })
     return successResponse(res, data, data.finalized ? '拆箱确认完成，任务已取消' : '拆箱确认已记录', 201)
   } catch (e) { next(e) }

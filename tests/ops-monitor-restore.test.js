@@ -140,3 +140,20 @@ for (const scenario of ['docker-timeout', 'tls-timeout']) {
     if (scenario === 'tls-timeout') assert.match(r.stdout, /证书.*(失败|超时)/)
   })
 }
+
+// 2026-09-18 审计：旧 dingtalk_send 是 `curl ... >/dev/null 2>&1 || true`——**任何失败都返回 0**，
+// webhook 写错/被限流/网络不通对外全都表现为「已发送」。这是「备份连续 12 天失败无人察觉」的同一条路径。
+test('钉钉告警失败必须非 0 返回，不得静默吞掉', () => {
+  const probe = [
+    `source "${path.join(root, 'scripts/lib/ops-common.sh')}"`,
+    'dingtalk_send "" "m" >/dev/null 2>&1; echo "EMPTY=$?"',
+    'dingtalk_send "http://127.0.0.1:9/nope" "m" >/dev/null 2>&1; echo "UNREACHABLE=$?"',
+    `json_escape 'a"b\\c' 100; echo`,
+  ].join('\n')
+  const r = spawnSync('bash', ['-c', probe], { encoding: 'utf8' })
+  assert.equal(r.status, 0, r.stderr)
+  const lines = r.stdout.trim().split('\n')
+  assert.match(lines[0], /^EMPTY=2$/, '未配置 webhook 应以 2 返回（WARN 而非静默 0）')
+  assert.match(lines[1], /^UNREACHABLE=1$/, '不可达 webhook 必须以 1 返回（旧实现恒返回 0）')
+  assert.equal(lines[2], 'abc', 'json_escape 必须剥离会破坏 JSON 的引号与反斜杠')
+})

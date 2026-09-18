@@ -22,6 +22,7 @@ const crypto = require('crypto')
 const AppError = require('../../utils/AppError')
 const logger = require('../../utils/logger')
 const { SOURCE_TYPES, DIR } = require('../../constants/voucherSource')
+const { calculateDiscountApplied } = require('../sale/sale.contracts')
 const { lockAccountingCompany } = require('./accounting.period-lock')
 const { revisePurchaseVoucher } = require('./voucher-source-revisions')
 
@@ -194,10 +195,20 @@ async function buildPurchaseSettle(conn, taxByPO) {
                JOIN purchase_order_items poi ON poi.id = iti.purchase_item_id
               WHERE iti.purchase_order_id = pr.order_id AND it.deleted_at IS NULL
                 AND it.status <> 5 AND it.audit_status = 1
+                -- 来源一致性（2026-09-18 审计 [35]）：明细行必须确实属于本采购单且同一商品。
+                -- 少了这两条，来源错位的行会静默不参与求和 → 毛额被算成 0，再被自动红冲刷掉
+                -- 账面应付，而 payment_records 上的账款还在（两边对不上）。
+                AND poi.order_id = iti.purchase_order_id AND poi.product_id = iti.product_id
            ), 0) AS gross
       FROM payment_records pr
       JOIN purchase_orders po ON po.id = pr.order_id
      WHERE pr.type = 1 AND pr.order_id IS NOT NULL`)
+  // 生成凭证前先证明来源完整（与结算侧 recomputePurchasePayable 同一套校验，这里是同一份实现）：
+  // 历史脏单（purchase_item_id 为空/指向别的单/别的商品）**必须报业务错误**，不能产出 0 金额凭证——
+  // 0 金额会走到 upsertVoucher 的 PURCHASE_SETTLE 分支触发自动红冲，账面应付被写掉。
+  // 放在 rows.map 之前：既在「已有凭证」判定之前，也在「无既有凭证则跳过」之前。
+  const { assertPurchaseSettlementSources } = require('../inbound-tasks/inbound-purchase-source')
+  for (const r of rows) await assertPurchaseSettlementSources(conn, Number(r.poId))
   return rows.map(r => {
     const gross = round2(r.gross)
     const tax = Math.min(round2(taxByPO.get(Number(r.poId)) || 0), gross)
@@ -219,22 +230,40 @@ async function buildSaleRevenue(conn, taxBySO) {
   const [rows] = await conn.query(`
     SELECT pr.order_id AS soId, pr.order_no, pr.created_at AS vdate,
            so.customer_id, so.customer_name,
+           COALESCE(so.discount_amount, 0) AS discount,
+           COALESCE(so.total_amount, 0) AS orderGross,
            COALESCE((SELECT SUM(shipped_qty * unit_price) FROM sale_order_items WHERE order_id = pr.order_id), 0) AS gross
       FROM payment_records pr
       JOIN sale_orders so ON so.id = pr.order_id
      WHERE pr.type = 2 AND pr.order_id IS NOT NULL`)
-  return rows.filter(r => round2(r.gross) > 0).map(r => {
+  const out = []
+  for (const r of rows) {
     const gross = round2(r.gross)
-    const tax = Math.min(round2(taxBySO.get(Number(r.soId)) || 0), gross)
-    const noTax = round2(gross - tax)
+    if (gross <= 0) continue
+    // 整单折扣必须在这里净额化（2026-09-18 审计 P0-3）。
+    // 本文件头声明的口径是「销售收入用毛额，销售退货单独冲 → 净额 = payment_records(type=2)」，
+    // 而 sale.service 的应收口径是「已发毛额 − 退货 − 折扣分摊」。退货有独立的销售退货凭证(8)
+    // 去冲，**折扣没有独立单据、也就没有单独的冲销凭证**：这里若仍按毛额记 1122，则总账 1122
+    // 永远比子账应收多出 Σ折扣，勾稽对不上，收入与利润同步虚增。故折扣按销售侧同一函数
+    // （按「已发原值/订单原值」比例分摊）在收入凭证内直接净额化。
+    const discountApplied = calculateDiscountApplied({
+      discount: r.discount,
+      shippedGross: gross,
+      orderGross: r.orderGross,
+    })
+    const net = round2(gross - discountApplied)
+    if (net <= 0) continue
+    const tax = Math.min(round2(taxBySO.get(Number(r.soId)) || 0), net)
+    const noTax = round2(net - tax)
     const legs = [
-      { code: '1122', direction: DIR.DEBIT, amount: gross, auxType: 1, auxId: r.customer_id || null, auxName: r.customer_name || null, summary: '应收账款' },
+      { code: '1122', direction: DIR.DEBIT, amount: net, auxType: 1, auxId: r.customer_id || null, auxName: r.customer_name || null, summary: '应收账款' },
       { code: '6001', direction: DIR.CREDIT, amount: noTax, summary: '主营业务收入' },
     ]
     if (tax > 0) legs.push({ code: '222102', direction: DIR.CREDIT, amount: tax, summary: '销项税额' })
-    return { sourceType: SOURCE_TYPES.SALE_REVENUE, sourceId: r.soId, sourceNo: r.order_no, voucherDate: r.vdate,
-      summary: `销售出库确认收入 ${r.order_no || ''}`.trim(), legs }
-  })
+    out.push({ sourceType: SOURCE_TYPES.SALE_REVENUE, sourceId: r.soId, sourceNo: r.order_no, voucherDate: r.vdate,
+      summary: `销售出库确认收入 ${r.order_no || ''}`.trim(), legs })
+  }
+  return out
 }
 
 /** 事件3：销售出库结转成本。借 主营业务成本6401 / 贷 库存商品1405，毛额=SUM(shipped×cost_snapshot) */
@@ -346,19 +375,25 @@ async function buildPurchaseReturn(conn) {
  *   借 主营业务收入6001（冲）+ 借 库存商品1405（退回入库）
  *   贷 应收账款1122〔客户〕 + 贷 主营业务成本6401（冲）
  * 应收冲减额 = SUM((合格入库量)×退货单价)（与 recomputeSaleReceivable 严格一致）；
- * 成本冲回额 = SUM((合格入库量)×原出库 cost_snapshot 回退 avg_cost/cost_price)（源系统不存，引擎自算）。
+ * 成本冲回额 = SUM((合格入库量)×原出库 cost_snapshot)（**只反转当初已确认的成本**，见下方注释）。
  */
 async function buildSaleReturn(conn) {
   const [rows] = await conn.query(`
     SELECT sr.id, sr.return_no, sr.customer_id, sr.customer_name, sr.updated_at AS vdate,
            COALESCE(SUM((rti.checked_qty - rti.rejected_qty) * sri.unit_price), 0) AS arAmount,
-           COALESCE(SUM((rti.checked_qty - rti.rejected_qty) * COALESCE(soi.cost_snapshot, p.avg_cost, p.cost_price, 0)), 0) AS cogsBack
+           -- 成本冲回只反转「当初出库时**已确认**的成本」（sale_order_items.cost_snapshot），
+           -- **不能**回退商品主档的 avg_cost/cost_price（2026-09-18 审计 [36]）：
+           --   ① 出库凭证 buildSaleCogs 用的是 COALESCE(cost_snapshot, 0)；cost_snapshot 为空时它记 0，
+           --      退货侧若回退主档值就会记一个正数 → 1405/6401 两边不等，账被单边写歪；
+           --   ② 主档 avg_cost/cost_price 随之后的入库漂移，回退它等于按「退货时点」的成本冲销，
+           --      与 cost_snapshot「首次固化、事后不追溯」的既定语义冲突（迁移 119/136、AGENTS.md 第 8 节）；
+           --   ③ 退货侧读主档、出库侧读快照，两边本来就不对称，换成同一表达式也仍旧不对称。
+           COALESCE(SUM((rti.checked_qty - rti.rejected_qty) * COALESCE(soi.cost_snapshot, 0)), 0) AS cogsBack
       FROM sale_returns sr
       JOIN return_tasks rt ON rt.return_id = sr.id AND rt.return_type = 'sale' AND rt.deleted_at IS NULL
       JOIN return_task_items rti ON rti.task_id = rt.id
       JOIN sale_return_items sri ON sri.id = rti.return_item_id
       LEFT JOIN sale_order_items soi ON soi.id = sri.sale_item_id
-      LEFT JOIN product_items p ON p.id = sri.product_id
      WHERE sr.status = 3 AND sr.deleted_at IS NULL
      GROUP BY sr.id, sr.return_no, sr.customer_id, sr.customer_name, sr.updated_at`)
   const specs = []
@@ -524,4 +559,10 @@ module.exports = {
   upsertVoucher,
   hashSpec,
   makeSeqAllocator,
+  buildSaleRevenue,
+  // [36] 成本结转与销售退货冲回必须严格对称，两个构造器导出供回归直接断言
+  buildSaleCogs,
+  buildSaleReturn,
+  // [35] 采购结算凭证的来源完整性闸门，导出供回归直接断言
+  buildPurchaseSettle,
 }

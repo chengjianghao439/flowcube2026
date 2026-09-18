@@ -217,25 +217,25 @@ async function getWarehouseScope(userId) {
   return rows.map(r => ({ warehouseId: Number(r.warehouse_id), warehouseName: r.warehouse_name }))
 }
 
-async function setWarehouseScope(userId, warehouseIds) {
-  await findById(userId)
+async function setWarehouseScope(userId, warehouseIds, operator = null) {
   const ids = [...new Set((warehouseIds || []).map(Number).filter(n => Number.isFinite(n) && n > 0))]
-  const conn = await pool.getConnection()
-  try {
-    await conn.beginTransaction()
-    await conn.query('DELETE FROM user_warehouse_scope WHERE user_id = ?', [userId])
-    for (const wid of ids) {
-      await conn.query('INSERT INTO user_warehouse_scope (user_id, warehouse_id) VALUES (?, ?)', [userId, wid])
+  // 走 withLockedTarget：它会同时锁定操作人/目标、拒绝非超管改超管（USER_ADMIN_PROTECTED）。
+  // 这里再补一条自我提权守卫（2026-09-18 审计 P1）：仓库范围是「无行 = 不限仓」的语义，
+  // 持 user.update 的限仓用户只要把自己那行清空就变成不限仓，从而在没有任何超管参与的情况下
+  // 获得全部仓库的读写（库存、单据、报表、导出），而操作日志里只留一条普通的授权变更记录。
+  return withLockedTarget(userId, operator, async (conn, target, actor) => {
+    if (Number(actor.roleId) !== 1 && Number(target.id) === Number(actor.userId)) {
+      throw new AppError('不能修改自己的仓库数据权限，请联系超级管理员', 403, 'USER_SCOPE_SELF_FORBIDDEN')
     }
-    await conn.commit()
-  } catch (e) {
-    await conn.rollback()
-    throw e
-  } finally {
-    conn.release()
-  }
-  require('../../utils/warehouseScope').clearScopeCache(userId)
-  return { userId: Number(userId), warehouseIds: ids }
+    await conn.query('DELETE FROM user_warehouse_scope WHERE user_id = ?', [target.id])
+    for (const wid of ids) {
+      await conn.query('INSERT INTO user_warehouse_scope (user_id, warehouse_id) VALUES (?, ?)', [target.id, wid])
+    }
+    return { userId: Number(target.id), warehouseIds: ids }
+  }).then((result) => {
+    require('../../utils/warehouseScope').clearScopeCache(userId)
+    return result
+  })
 }
 
 module.exports = { findAll, listOptions, findById, create, update, resetPassword, softDelete, getWarehouseScope, setWarehouseScope }

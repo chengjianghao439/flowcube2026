@@ -4,10 +4,11 @@ const { MOVE_TYPE, writeInventoryLog } = require('../../engine/inventoryEngine')
 const { adjustContainersForStockcheck, SOURCE_TYPE, CONTAINER_STATUS, lockStockDimension, syncStockFromContainers } = require('../../engine/containerEngine')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
-const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
+const { beginResourceOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
 const { normalizePagination } = require('../../utils/pagination')
+const logger = require('../../utils/logger')
 
 const STATUS = { 1:'进行中', 2:'已完成', 3:'已取消' }
 const fmt = r => ({ id:r.id, checkNo:r.check_no, warehouseId:r.warehouse_id, warehouseName:r.warehouse_name, checkType:r.check_type!=null?Number(r.check_type):1, scopeType:r.scope_type||null, scopeValue:r.scope_value||null, status:r.status, statusName:STATUS[r.status], remark:r.remark, operatorId:r.operator_id, operatorName:r.operator_name, createdAt:r.created_at })
@@ -361,10 +362,13 @@ async function submit(id, operator, scopeWarehouseIds = null, requestKey = null)
   try {
     await conn.beginTransaction()
     // 幂等（2026-08-22 补）：盘点提交是多表写事务，连点两次/断网重试会重复入账
-    const requestState = await beginOperationRequest(conn, {
+    const requestState = await beginResourceOperationRequest(conn, {
       requestKey,
       action: 'stockcheck.submit',
       userId: operator?.userId ?? null,
+      // 与下方 completeOperationRequest 同一组 resourceType/resourceId，旧行兼容判断才有意义
+      resourceType: 'stockcheck',
+      resourceId: id,
     })
     if (requestState.replay) {
       await conn.rollback()
@@ -436,12 +440,38 @@ async function submit(id, operator, scopeWarehouseIds = null, requestKey = null)
         if (Math.abs(scannedTotal - item.actualQty) > 1e-9) {
           throw new AppError(`商品「${item.productName}」的实盘数(${item.actualQty})与扫码集合计(${scannedTotal})不一致，请重新扫描后提交`, 409, 'SCAN_COUNT_MISMATCH')
         }
+        // 必须与 deductFromContainers 同口径排除「已被拣货任务锁定」的容器（审计 P0-1）：
+        // 这些货物理上已在料箱/分拣区，盘点员在货架上永远扫不到，一旦纳入账面集合就会被
+        // 当作「本次未扫到」→ 整只清零并置 EMPTY。后果是双向的：缓存与容器合计被立即下调
+        // （syncStockFromContainers），而持锁任务出库时 deductFromTaskLockedContainers 又找不到
+        // 可用锁定容器 → 400 永久卡在待出库，货就在料箱里系统却拒绝出库，现场无自解路径。
+        // 非扫码（差异）路径走 adjustContainersForStockcheck → deductFromContainers，本身已带
+        // 该条件；这里补齐扫码路径，使两条盘亏口径一致。
         const [bookContainers] = await conn.query(
           `SELECT id, barcode, remaining_qty FROM inventory_containers
             WHERE product_id=? AND warehouse_id=? AND status=? AND deleted_at IS NULL
+              AND locked_by_task_id IS NULL
             ORDER BY id ASC FOR UPDATE`,
           [item.productId, check.warehouseId, CONTAINER_STATUS.ACTIVE],
         )
+        // 被跳过的锁定容器留痕，便于事后解释「实盘低于账面」时差额去了哪里。
+        // 这里只记日志、不写 inventory_logs：本次并未对它们做任何库存变动。
+        const [[lockedRow]] = await conn.query(
+          `SELECT COUNT(*) AS n, COALESCE(SUM(remaining_qty),0) AS qty FROM inventory_containers
+            WHERE product_id=? AND warehouse_id=? AND status=? AND deleted_at IS NULL
+              AND locked_by_task_id IS NOT NULL`,
+          [item.productId, check.warehouseId, CONTAINER_STATUS.ACTIVE],
+        )
+        if (Number(lockedRow.n) > 0) {
+          logger.warn('盘点扫码跳过已被拣货任务锁定的容器', {
+            checkId: check.id,
+            checkNo: check.checkNo,
+            productId: item.productId,
+            warehouseId: check.warehouseId,
+            lockedContainers: Number(lockedRow.n),
+            lockedQty: Number(lockedRow.qty),
+          }, 'StockcheckScanGuard')
+        }
         const losses = []
         for (const bc of bookContainers) {
           const counted = scannedMap.get(Number(bc.id)) ?? 0   // 没扫到 = 这只不在现场 = 全亏

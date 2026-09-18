@@ -9,6 +9,7 @@ async function list(req, res, next) {
       status:    svc.parseListStatus(status),
       page:      +page || 1,
       pageSize:  +pageSize || 50,
+      scopeWarehouseIds: req.user?.warehouseIds ?? null,
     })
     return successResponse(res, result)
   } catch(e) { next(e) }
@@ -16,7 +17,7 @@ async function list(req, res, next) {
 
 async function detail(req, res, next) {
   try {
-    return successResponse(res, await svc.findById(+req.params.id))
+    return successResponse(res, await svc.findById(+req.params.id, req.user?.warehouseIds ?? null))
   } catch (e) {
     next(e)
   }
@@ -62,6 +63,7 @@ async function barcodeRecords(req, res, next) {
       pageSize: Number(pageSize) || 20,
       inboundTaskId: inboundTaskId ? Number(inboundTaskId) : null,
       inboundTaskItemId: inboundTaskItemId ? Number(inboundTaskItemId) : null,
+      scopeWarehouseIds: req.user?.warehouseIds ?? null,
     }))
   } catch (e) {
     next(e)

@@ -7,7 +7,7 @@ const { appendInboundEvent, assertPurchaseOrdersOpen } = require('./inbound-task
 const { assertTaskCanPutaway } = require('./inbound-tasks.status')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
-const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
+const { beginResourceOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { settlePurchaseOnAudit } = require('./inbound-tasks.settle')
 const { reduceExpectedBindings } = require('../../utils/expectedStock')
 const { assertInScope } = require('../../utils/warehouseScope')
@@ -86,10 +86,12 @@ async function putaway(taskId, { containerId, locationId, deviatedFromSuggestion
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const requestState = await beginOperationRequest(conn, {
+    const requestState = await beginResourceOperationRequest(conn, {
       requestKey,
       action: 'inbound.putaway',
       userId: operator?.userId ?? null,
+      resourceType: 'inbound_task',
+      resourceId: taskId,
     })
     if (requestState.replay) {
       await conn.rollback()

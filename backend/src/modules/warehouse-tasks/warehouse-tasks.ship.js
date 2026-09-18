@@ -7,7 +7,7 @@ const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransi
 const { getCustomerCreditUsed, hasCreditOverridePermission } = require('../../utils/creditExposure')
 const { isValidTransition, assertWarehouseTaskAction } = require('../../constants/warehouseTaskStatus')
 const { WT_EVENT, record: recordEvent } = require('./warehouse-task-events.service')
-const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
+const { beginResourceOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { getNetOrderAmount, getOutstandingOrderAmount } = require('../sale/sale.contracts')
 const {
   logSideEffectFailure,
@@ -91,10 +91,12 @@ async function shipWithinTransaction(conn, id, operator, saleData, { requestKey,
   }
   const rule = assertWarehouseTaskAction('ship', taskRow.status)
   if (!isValidTransition(taskRow.status, rule.toStatus)) throw new AppError(`非法状态迁移：${taskRow.status} → ${rule.toStatus}`, 400)
-  const requestState = await beginOperationRequest(conn, {
+  const requestState = await beginResourceOperationRequest(conn, {
     requestKey,
     action: 'warehouse.ship',
     userId: operator?.userId ?? null,
+    resourceType: 'warehouse_task',
+    resourceId: id,
   })
   if (requestState.replay) {
     return requestState.responseData
@@ -270,15 +272,40 @@ async function getShipContext(taskId) {
   const task = await findById(taskId)
 
   if (task.taskType === 'purchase_return') {
+    // 行级关联（迁移 247，2026-09-18 审计 P1-18）：出库必须按「任务明细行 → 退货明细行」精确取单价。
+    // 原先按 `pri.return_id = ? AND pri.product_id = wti.product_id` 关联：同一退货单里同商品有两行时
+    // LEFT JOIN 放大成 2 行，assertNoShipItemFanout 抛 409 → 出库被**永久卡死**（库存与应付永不冲减）。
+    // 现在的关联键 wti.purchase_return_item_id 唯一，不会放大。
+    // 历史任务没有该列（迁移前建的）时，只在该商品于本退货单内**唯一**的情况下回退到 product_id 关联；
+    // 同商品多行的历史任务保持无法解析，由下面显式报错要求人工核对——绝不用「随便挑一行」蒙过去。
     const [wmsItems] = await pool.query(
-      `SELECT wti.product_id, wti.product_name, wti.picked_qty, pri.unit_price
-       FROM warehouse_task_items wti
-       LEFT JOIN purchase_return_items pri ON pri.return_id = ? AND pri.product_id = wti.product_id
-       WHERE wti.task_id = ?`,
+      `SELECT wti.product_id, wti.product_name, wti.picked_qty,
+              COALESCE(pri.unit_price, legacy.unit_price) AS unit_price,
+              (pri.id IS NULL AND legacy.unit_price IS NULL AND wti.picked_qty <> 0) AS link_missing
+         FROM warehouse_task_items wti
+         LEFT JOIN purchase_return_items pri ON pri.id = wti.purchase_return_item_id
+         LEFT JOIN (
+           SELECT product_id, MIN(unit_price) AS unit_price, COUNT(*) AS line_count
+             FROM purchase_return_items
+            WHERE return_id = ?
+            GROUP BY product_id
+         ) legacy
+           ON wti.purchase_return_item_id IS NULL
+          AND legacy.product_id = wti.product_id
+          AND legacy.line_count = 1
+        WHERE wti.task_id = ?`,
       [task.returnId, taskId],
     )
     if (!wmsItems.length) throw new AppError('任务无出库明细', 400)
     await assertNoShipItemFanout(taskId, wmsItems.length)
+    if (wmsItems.some(i => Number(i.link_missing) === 1)) {
+      throw new AppError(
+        '该退货任务缺少行级关联（多为迁移 247 之前创建的历史任务，且该商品在退货单内有多行），'
+        + '无法确定各行的退货单价。请核对该退货单明细后重建任务，或联系管理员处理。',
+        409,
+        'PURCHASE_RETURN_ITEM_LINK_MISSING',
+      )
+    }
     return {
       saleOrderId: null,
       warehouseId: task.warehouseId,

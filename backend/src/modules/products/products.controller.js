@@ -4,7 +4,7 @@ const { getOperatorFromRequest } = require('../../utils/operator')
 const { SAFE_STATION_CLIENT_ID } = require('../print-jobs/print-jobs.middleware')
 
 // 商品选择中心
-const finder = async (req,res,next) => { try { return successResponse(res, await svc.findForFinder({ page:+req.query.page||1, pageSize:+req.query.pageSize||15, keyword:req.query.keyword||'', categoryId:req.query.categoryId?+req.query.categoryId:null, warehouseId:req.query.warehouseId?+req.query.warehouseId:null }), '查询成功') } catch(e){next(e)} }
+const finder = async (req,res,next) => { try { return successResponse(res, await svc.findForFinder({ page:+req.query.page||1, pageSize:+req.query.pageSize||15, keyword:req.query.keyword||'', categoryId:req.query.categoryId?+req.query.categoryId:null, warehouseId:req.query.warehouseId?+req.query.warehouseId:null, scopeWarehouseIds:req.user?.warehouseIds??null }), '查询成功') } catch(e){next(e)} }
 
 // 商品
 const list       = async (req,res,next) => { try { return successResponse(res, await svc.findAll({

@@ -104,12 +104,12 @@ const invoiceList = async (req, res, next) => {
     const { list, pagination } = await invoiceSvc.listInvoices({
       invoiceType: req.query.invoiceType, status: req.query.status, keyword: req.query.keyword,
       page: req.query.page, pageSize: req.query.pageSize,
-    })
+    }, companyOf(req))
     return successResponse(res, { list, pagination }, '查询成功')
   } catch (e) { next(e) }
 }
 const invoiceDetail = async (req, res, next) => {
-  try { return successResponse(res, await invoiceSvc.getInvoice(+req.params.id), '查询成功') } catch (e) { next(e) }
+  try { return successResponse(res, await invoiceSvc.getInvoice(+req.params.id, companyOf(req)), '查询成功') } catch (e) { next(e) }
 }
 const invoiceCreate = async (req, res, next) => {
   try { return successResponse(res, await invoiceSvc.createInvoice(req.body, req.user, companyOf(req)), '创建成功', 201) } catch (e) { next(e) }
@@ -118,10 +118,10 @@ const invoiceUpdate = async (req, res, next) => {
   try { await invoiceSvc.updateInvoice(+req.params.id, req.body, req.user, companyOf(req)); return successResponse(res, null, '更新成功') } catch (e) { next(e) }
 }
 const invoiceStatus = async (req, res, next) => {
-  try { return successResponse(res, await invoiceSvc.changeStatus(+req.params.id, req.body.action, req.user), '操作成功') } catch (e) { next(e) }
+  try { return successResponse(res, await invoiceSvc.changeStatus(+req.params.id, req.body.action, req.user, companyOf(req)), '操作成功') } catch (e) { next(e) }
 }
 const invoiceRemove = async (req, res, next) => {
-  try { await invoiceSvc.removeInvoice(+req.params.id, req.user); return successResponse(res, null, '删除成功') } catch (e) { next(e) }
+  try { await invoiceSvc.removeInvoice(+req.params.id, req.user, companyOf(req)); return successResponse(res, null, '删除成功') } catch (e) { next(e) }
 }
 
 // ── 期末结转 / 期间锁定 ───────────────────────────────────────────────

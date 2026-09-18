@@ -29,6 +29,7 @@ import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import type { SaleOrder } from '@/types/sale'
 import type { TableColumn } from '@/types'
+import { SALE_STATUS, SALE_STATUS_NAME } from '@/generated/status'
 
 
 // ─── 二次确认 state 类型 ─────────────────────────────────────────────────────
@@ -40,11 +41,17 @@ interface ConfirmState {
 }
 
 const EMPTY_CONFIRM: ConfirmState = { open: false, title: '', description: '', onConfirm: () => {} }
-const STATUS_LABELS: Record<string, string> = { '1': '待占库', '2': '已占库', '3': '执行中', '4': '已出库', '5': '已取消', '6': '部分占库' }
+// 状态文案唯一来源 = 后端常量生成的 `@/generated/status`（2026-09-18 审计 [30]）。
+// 本页原先本地写死 {'1':'待占库','3':'执行中'}，与后端/生成物（草稿、拣货中）不一致——
+// 同一张销售单在列表筛选、列表行、查询弹窗、详情里会显示成两个不同的状态名。
+const statusName = (v: string): string => (SALE_STATUS_NAME as Record<string, string>)[v] ?? v
+const STATUS_LABELS: Record<string, string> = SALE_STATUS_NAME
+// 快捷筛选沿用既有口径与顺序：不含「已取消」，首项为「全部订单」；名字全部取自生成物
 const QUICK_STATUSES = [
-  { value: '', label: '全部订单' }, { value: '1', label: '待占库' }, { value: '6', label: '部分占库' },
-  { value: '2', label: '已占库' }, { value: '3', label: '执行中' }, { value: '4', label: '已出库' },
-] as const
+  { value: '', label: '全部订单' },
+  ...[SALE_STATUS.DRAFT, SALE_STATUS.PARTIAL_RESERVED, SALE_STATUS.RESERVED, SALE_STATUS.PICKING, SALE_STATUS.SHIPPED]
+    .map(v => ({ value: String(v), label: statusName(String(v)) })),
+]
 
 /** 首次打开销售页时默认筛选的天数窗口（最近一周） */
 const DEFAULT_RANGE_DAYS = 7

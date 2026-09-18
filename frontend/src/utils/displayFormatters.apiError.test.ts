@@ -18,3 +18,20 @@ test('具体业务码仍按既有映射展示，缺失原因时退回兜底文�
     .toBe('容器已被其它任务占用')
   expect(resolveApiErrorMessage('CONFLICT', '')).toMatch(/操作失败/)
 })
+
+// 2026-09-18 审计 P2：formatBackendCode 原本按 `_INVALID / _CONFLICT / _NOT_FOUND / _FORBIDDEN /
+// _ERROR / _FAILED` 后缀批量映射成通用文案，于是**具体业务码**也被当成通用码，把后端给出的、
+// 可行动的中文原文替换成「当前操作无效，请刷新后重试」。现场只能反复刷新，不知道该修什么。
+// 现在只有显式登记在码表里的码才允许覆盖，其余一律透出后端原文。
+test('未登记的带后缀业务码必须保留后端原文，不被后缀映射吞掉', () => {
+  expect(resolveApiErrorMessage('AUTH_OLD_PASSWORD_INVALID', '旧密码错误'))
+    .toBe('旧密码错误')
+  expect(resolveApiErrorMessage('INBOUND_PURCHASE_SOURCE_INVALID', '该收货行缺少合法采购来源，请核对后重试'))
+    .toBe('该收货行缺少合法采购来源，请核对后重试')
+  expect(resolveApiErrorMessage('OVER_RECEIVE_CONFIRM_REQUIRED', '超收已超过确认阈值，请确认后重试'))
+    .toBe('超收已超过确认阈值，请确认后重试')
+  expect(resolveApiErrorMessage('PURCHASE_RETURN_ITEM_LINK_MISSING', '该退货任务缺少行级关联，请联系管理员处理'))
+    .toBe('该退货任务缺少行级关联，请联系管理员处理')
+  // 后端没给原因时仍退回兜底文案，不能变成空白
+  expect(resolveApiErrorMessage('SOMETHING_FAILED', '')).toMatch(/操作失败/)
+})

@@ -48,7 +48,7 @@ async function voidReceipt(taskId, operator, scopeWarehouseIds = null) {
     }
 
     const [containers] = await conn.query(
-      `SELECT id, product_id, warehouse_id, remaining_qty, initial_qty, status, locked_by_task_id
+      `SELECT id, product_id, warehouse_id, remaining_qty, initial_qty, status, locked_by_task_id, transfer_order_id
        FROM inventory_containers
        WHERE inbound_task_id = ? AND deleted_at IS NULL AND status IN (?, ?, ?)
        FOR UPDATE`,
@@ -60,6 +60,19 @@ async function voidReceipt(taskId, operator, scopeWarehouseIds = null) {
     if (locked.length) {
       throw new AppError(
         `存在 ${locked.length} 个库存条码正被其它仓库任务锁定拣货，无法撤回收货，请等待相关出库任务完成或取消后重试`,
+        409,
+      )
+    }
+    // 在途调拨必须单独拦截，不能只靠下面的数量比对：整箱调拨复用同一容器行
+    // （transfer.service.js 的 scanOut 只改 warehouse_id / status / transfer_order_id），
+    // remaining_qty 与 initial_qty 完全一致，locked_by_task_id 也为空——两道既有守卫
+    // 全部放行。一旦被置 VOID：源仓已减、目的仓未入，货从账上静默消失且不留流水，
+    // 调拨单还会因容器被作废而永久卡在「在途」（scanIn 校验 status=PENDING_PUTAWAY 失败）。
+    // 2026-09-18 审计 P0-5 修复。
+    const inTransit = containers.filter(c => c.transfer_order_id != null)
+    if (inTransit.length) {
+      throw new AppError(
+        `存在 ${inTransit.length} 个库存条码正在调拨在途，无法撤回收货，请先在调拨单完成扫入或异常了结后重试`,
         409,
       )
     }

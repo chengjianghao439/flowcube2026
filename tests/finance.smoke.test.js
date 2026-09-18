@@ -481,6 +481,45 @@ async function scenarioStatement(ctx, log, token, accountId) {
     `settled=${dpSt.settled_amount} balance=${dpSt.balance} status=${dpSt.status}`)
 }
 
+// ── 4b. 对账单口径：投影过期时四处必须同源 ────────────────────────────────────
+
+async function scenarioStatementProjection(ctx, log, token) {
+  log.section('对账单口径：投影过期时列表 / 详情抬头 / 详情明细 / 状态必须同源')
+  const { http, pool } = ctx
+  const party = randomRef('口径客户')
+
+  const rec = await seedRecord(http, token, pool, { type: 2, partyName: party, amount: 800, settlementType: 2 })
+  const created = await http.post('/api/payments/statements', { token, json: { type: 2, partyName: party, recordIds: [rec] } })
+  log.assert('建单成功（口径用例夹具）', created.ok, `status=${created.status}`)
+  const stId = Number(created.data?.data?.id)
+  await http.post(`/api/payments/statements/${stId}/confirm`, { token })
+
+  // 模拟「别的路径改了下属账款但没回刷对账单」——退货冲减应收、运费应付重算、直付都会这样。
+  // 此时 reconciliation_statements 上的 total_amount/settled_amount/status 全是过期投影。
+  await dbQuery(pool, 'UPDATE payment_records SET total_amount=1500, paid_amount=1500, balance=0 WHERE id=?', [rec])
+
+  const detail = await http.get(`/api/payments/statements/${stId}`, { token })
+  const head = detail.data?.data || {}
+  const items = head.items || []
+  const sumTotal = money(items.reduce((a, x) => a + Number(x.totalAmount || 0), 0))
+  const sumPaid = money(items.reduce((a, x) => a + Number(x.paidAmount || 0), 0))
+  // 修复前：抬头读存储投影（800/0/CONFIRMED），明细读实时值（1500/1500）——同一个响应自相矛盾
+  log.assert('★ 详情抬头金额与自身明细实时值一致（修复前抬头读过期投影）',
+    money(head.totalAmount) === sumTotal && money(head.settledAmount) === sumPaid,
+    `抬头 total=${head.totalAmount} settled=${head.settledAmount} 明细合计=${sumTotal}/${sumPaid}`)
+  log.assert('★ 已全额收回时状态必须是已核销(3)，不能与「余额 0」矛盾',
+    money(head.balance) === 0 && Number(head.status) === 3,
+    `balance=${head.balance} status=${head.status}`)
+
+  const list = await http.get(`/api/payments/statements?keyword=${encodeURIComponent(head.statementNo || '')}`, { token })
+  const row = (list.data?.data?.list || []).find(x => Number(x.id) === stId)
+  log.assert('★ 列表行与详情抬头同源（金额 + 状态）',
+    !!row && money(row.totalAmount) === money(head.totalAmount) && money(row.settledAmount) === money(head.settledAmount)
+      && Number(row.status) === Number(head.status),
+    `列表=${JSON.stringify(row && { t: row.totalAmount, s: row.settledAmount, st: row.status })} `
+      + `详情=${JSON.stringify({ t: head.totalAmount, s: head.settledAmount, st: head.status })}`)
+}
+
 // ── 5. 结算方式快照 ───────────────────────────────────────────────────────────
 
 async function scenarioSettlementSnapshot(ctx, log, token) {
@@ -794,6 +833,7 @@ async function main() {
     await scenarioAllocationGuards(ctx, log, token, accountId)
     await scenarioIdempotency(ctx, log, token, accountId)
     await scenarioStatement(ctx, log, token, accountId)
+    await scenarioStatementProjection(ctx, log, token)
     await scenarioSettlementSnapshot(ctx, log, token)
     await scenarioExpenseClaim(ctx, log, token, approverToken, accountId, Number(user?.id))
     await scenarioRecordPayment(ctx, log, token, accountId)

@@ -67,10 +67,10 @@ async function main() {
     }
 
     // 手动插两张业务凭证（模拟"发生了费用与收入"），voucher_no 用随机号避免撞车
-    const insVoucher = async (voucherNo, voucherDate, legs) => {
+    const insVoucher = async (voucherNo, voucherDate, legs, period = '209901') => {
       const [r] = await conn.query(
         'INSERT INTO acct_vouchers (voucher_no, voucher_date, period, source_type, source_id, summary, created_by) VALUES (?, ?, ?, ?, ?, ?, 1)',
-        [voucherNo, voucherDate, '209901', 'manual', null, '结转测试业务凭证'],
+        [voucherNo, voucherDate, period, 'manual', null, '结转测试业务凭证'],
       )
       let line = 0
       for (const l of legs) {
@@ -138,6 +138,42 @@ async function main() {
     let denied = false
     try { await periodSvc.closePeriod('209901', { userId: 1 }) } catch (e) { denied = e.code === 'ACCT_CLOSING_VOUCHER_REQUIRED' }
     log.assert('★ 结转凭证未生成时结账被拒', denied, '应抛 ACCT_CLOSING_VOUCHER_REQUIRED')
+
+    // ── ★P1 12 月年结（2026-09-18 审计）：生成年结凭证后必须仍能结账 ──────────
+    // 修复前 buildYearClosingSpec 把「年结凭证自身」也计入 4103 汇总，凭证一落库就把 4103
+    // 冲平 → 返回 null → closingStatus 判为 'stale' → closePeriod 永远拒绝（12 月无出路）。
+    // 用独立年度 2098，避免与上面 2099-01 的年度累计互相干扰。
+    log.section('12 月年结（生成 → 状态 current → 结账成功 → 反结账 → 重生成）')
+    await conn.query("DELETE FROM acct_periods WHERE period = '209812'")
+    await conn.query('DELETE FROM acct_voucher_entries WHERE voucher_id IN (SELECT id FROM acct_vouchers WHERE voucher_date BETWEEN ? AND ?)', ['2098-01-01', '2098-12-31'])
+    await conn.query('DELETE FROM acct_vouchers WHERE voucher_date BETWEEN ? AND ?', ['2098-01-01', '2098-12-31'])
+    await insVoucher(randomRef('V-CLOSE-Y1').slice(0, 30), '2098-12-31', [
+      { accountId: acct6601.id, code: '6601', name: '销售费用', direction: 1, amount: 200 },
+    ], '209812')
+    await insVoucher(randomRef('V-CLOSE-Y2').slice(0, 30), '2098-12-31', [
+      { accountId: acct6001.id, code: '6001', name: '主营业务收入', direction: 2, amount: 900 },
+    ], '209812')
+
+    const genYear = await periodSvc.generateClosingVouchers('209812', 1)
+    log.assert('★12 月：同时生成损益结转与年终结转',
+      genYear.generated >= 2 && genYear.status?.pl === 'current',
+      JSON.stringify(genYear.status))
+    log.assert('★12 月：生成年结凭证后 year 状态仍为 current（修复前为 stale，结账必被拒）',
+      genYear.status?.year === 'current', JSON.stringify(genYear.status))
+
+    const genYearAgain = await periodSvc.generateClosingVouchers('209812', 1)
+    log.assert('★12 月：重复生成幂等，year 仍为 current（修复前 4103 被自身冲平后变 stale）',
+      genYearAgain.status?.year === 'current', JSON.stringify(genYearAgain.status))
+
+    const closeYear = await periodSvc.closePeriod('209812', { userId: 1, realName: '测试员' })
+    log.assert('★12 月：结账成功（修复前抛 ACCT_CLOSING_VOUCHER_REQUIRED）',
+      closeYear.status === 2, JSON.stringify(closeYear))
+
+    const reopenYear = await periodSvc.reopenPeriod('209812', { userId: 1 })
+    log.assert('12 月：反结账成功', reopenYear.status === 1, JSON.stringify(reopenYear))
+    const regenYear = await periodSvc.generateClosingVouchers('209812', 1)
+    log.assert('★12 月：反结账后重生成仍为 current（yspec 不因凭证存在而变 null）',
+      regenYear.status?.year === 'current', JSON.stringify(regenYear.status))
 
     // ── 扫码盘点：个体容器扫到计 1、数量容器预填账面 ───────────────────
     log.section('扫码盘点（POST /api/stockcheck/:id/items/:itemId/scan）')

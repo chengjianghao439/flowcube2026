@@ -59,12 +59,19 @@ export default function BarcodePrintQueryPage() {
       keyword,
         status: status === '__all__' ? undefined : status,
       page: 1,
-      pageSize: 20,
+      // 不要在这里指定 pageSize（2026-09-18 审计 P2）：列表走 payloadClient 的自动取齐，
+      // 它会按 ceil(总数 / 批量) 串行请求。原先写死 pageSize: 20，相当于把批量从默认 200 缩到 20、
+      // 请求数放大 10 倍；再叠加下面 3 秒轮询，约 1000 条记录就是 50 次/3 秒 ≈ 1000 次/分，
+      // 恰好打满全局 IP 限流（app.js 默认 1000 次/60 秒）。限流按 IP，同一出口的整个办公室
+      // （多台 PDA/桌面端）会一起被限流，所有业务接口开始返回「请求过于频繁」。
+      // 省略后回到默认批量 200。
       inboundTaskId: category === 'inbound' ? initialInboundTaskId : undefined,
       inboundTaskItemId: category === 'inbound' ? initialInboundTaskItemId : undefined,
     }),
     enabled: isActiveTab,
-    refetchInterval: isActiveTab ? 3000 : false,
+    // 轮询间隔与其它记录类页面（PDA 10–30s）对齐：这是「查看打印记录」页，
+    // 没有 3 秒级实时性要求，而这个间隔直接乘在每轮的串行请求数上。
+    refetchInterval: isActiveTab ? 15000 : false,
   })
   const total = query.data?.pagination?.total ?? 0
 
