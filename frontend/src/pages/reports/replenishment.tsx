@@ -1,3 +1,4 @@
+import { qty } from '@/lib/format'
 import { ProcurementArrivalStatus } from '@/components/shared/ProcurementSupplyExplanation'
 import { createRequestKey, withRequestKeyHeaders } from '@/lib/requestKey'
 import ProcurementSupplyDetails from '@/components/shared/ProcurementSupplyDetails'
@@ -24,11 +25,8 @@ import type { TableColumn } from '@/types'
 import type { Category } from '@/types/categories'
 
 /** 数量展示：整数带千分位，小数保留两位 */
-function fmtQty(v: unknown): string {
-  const n = Number(v)
-  if (!Number.isFinite(n)) return '—'
-  return n.toLocaleString('zh-CN', { maximumFractionDigits: 4 })
-}
+// 数量统一走 lib/format 的 qty；这里只是把 unknown 收敛成它接受的类型
+const fmtQty = (v: unknown) => qty(v as number | null | undefined)
 
 export default function ReplenishmentPage() {
   const navigate = useNavigate()

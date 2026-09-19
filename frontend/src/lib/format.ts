@@ -32,3 +32,19 @@ export function money(value: number | null | undefined): string {
 export function amount(value: number | null | undefined): string {
   return formatNumber(value) ?? '—'
 }
+
+/**
+ * 数量：整数就显示整数、小数保留有效位（最多 4 位），空值 `—`。
+ *
+ * 与金额的区别是**不补零、不固定位数**：数量是 `1.2 公斤`，写成 `1.20` 是错的，
+ * 而 `¥1.20` 是对的。上限 4 位来自库存精度 `DECIMAL(14,4)`（见 unitConversion.round4）。
+ *
+ * 2026-09-20 收敛：此前全仓有 8 处各自定义的 formatQty/fmtQty/qty，至少 4 种口径——
+ * 有的固定两位（`1.2` 显示成 `1.20`）、有的 `String(n)` 连千分位都没有、有的默认最多 3 位。
+ */
+export function qty(value: number | null | undefined): string {
+  if (value == null) return '—'
+  const n = Number(value)
+  if (!Number.isFinite(n)) return '—'
+  return n.toLocaleString('zh-CN', { maximumFractionDigits: 4 })
+}

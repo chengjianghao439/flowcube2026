@@ -1,7 +1,12 @@
+import { qty as formatQty } from '@/lib/format'
 import { Fragment } from 'react'
 import type { ProcurementSupply } from '@/api/procurement-supply'
 
-const qty = (value: number | undefined | null, unit = '') => value == null || !Number.isFinite(value) ? '—' : `${value.toLocaleString('zh-CN', { maximumFractionDigits: 4 })}${unit ? ` ${unit}` : ''}`
+// 数量统一走 lib/format 的 qty（整数不补零、小数保留有效位），这里只负责拼单位
+const qty = (value: number | undefined | null, unit = '') => {
+  const text = formatQty(value)
+  return unit && text !== '—' ? `${text} ${unit}` : text
+}
 type Props = { supply: ProcurementSupply; snapshot?: ProcurementSupply | null; mode?: 'plan' | 'replenishment' }
 
 /** 只展示后端已判定的日期条件，不从总量覆盖推导按期到货。 */

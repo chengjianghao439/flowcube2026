@@ -1,3 +1,4 @@
+import { money } from '@/lib/format'
 import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
 import { ProductIdentityGridCells, ProductIdentityGridHeaders } from '@/components/shared/ProductIdentityCells'
 import { useState } from 'react'
@@ -67,7 +68,7 @@ export default function DisposalDetailDialog({ open, onClose, id }: Props) {
               <div><span className="text-muted-foreground">处置单号：</span><span className="text-doc-code-strong">{disposal.disposalNo}</span></div>
               <div><span className="text-muted-foreground">仓库：</span>{disposal.warehouseName}</div>
               <div><span className="text-muted-foreground">经办人：</span>{disposal.operatorName || '-'}</div>
-              <div><span className="text-muted-foreground">处置总价值：</span><span className="tabular-nums">¥{disposal.totalValue.toLocaleString('zh-CN', { maximumFractionDigits: 2 })}</span></div>
+              <div><span className="text-muted-foreground">处置总价值：</span><span className="tabular-nums">{money(disposal.totalValue)}</span></div>
               <div><span className="text-muted-foreground">创建时间：</span>{formatDisplayDateTime(disposal.createdAt)}</div>
               {disposal.approvedAt && <div><span className="text-muted-foreground">审批时间：</span>{formatDisplayDateTime(disposal.approvedAt)}</div>}
               {disposal.approvedByName && <div><span className="text-muted-foreground">审批人：</span>{disposal.approvedByName}</div>}
@@ -90,8 +91,8 @@ export default function DisposalDetailDialog({ open, onClose, id }: Props) {
                   <ProductIdentityGridCells product={item} />
                   <div className="text-muted-foreground">{item.unit}</div>
                   <div className="tabular-nums">{item.quantity}</div>
-                  <div className="tabular-nums">¥{item.unitValue.toLocaleString('zh-CN', { maximumFractionDigits: 2 })}</div>
-                  <div className="tabular-nums">¥{item.value.toLocaleString('zh-CN', { maximumFractionDigits: 2 })}</div>
+                  <div className="tabular-nums">{money(item.unitValue)}</div>
+                  <div className="tabular-nums">{money(item.value)}</div>
                   <div className="">
                     <SoftStatusLabel label={DISPOSE_TYPE_LABELS[item.disposeType]} tone={DISPOSE_TYPE_TONES[item.disposeType]} />
                   </div>

@@ -1,3 +1,4 @@
+import { qty as formatQty } from '@/lib/format'
 import { VirtualTableBody, VIRTUAL_TABLE_THRESHOLD } from '@/components/shared/VirtualTableBody'
 import KeepAliveSection from '@/components/shared/KeepAliveSection'
 import { TabPathContext } from '@/components/layout/TabPathContext'
@@ -64,11 +65,6 @@ function StatCard({ icon, label, value, sub, accent = 'text-foreground' }: {
       </div>
     </div>
   )
-}
-
-function formatQty(v?: number): string {
-  if (v === undefined || v === null) return '—'
-  return Number.isInteger(v) ? v.toLocaleString() : v.toFixed(2)
 }
 
 function AvailableBadge({ available, onHand }: { available: number; onHand: number }) {

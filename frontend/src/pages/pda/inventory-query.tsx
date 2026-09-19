@@ -6,6 +6,7 @@
  * 只读查询：不提供改数量、移库位等任何决策入口（守 docs/claude-md-archive-2026-09-04.md「仓库端只执行不决策」）。
  * 数据权限由后端 scopeFilter 按用户仓库范围过滤。
  */
+import { qty as formatQty } from '@/lib/format'
 import { useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import PdaHeader from '@/components/pda/PdaHeader'
@@ -18,10 +19,6 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { formatPdaErrorMessage } from '@/utils/displayFormatters'
 import { formatDisplayDate } from '@/lib/dateTime'
-
-function formatQty(qty: number): string {
-  return Number.isFinite(qty) ? String(qty) : '—'
-}
 
 function formatDate(v: string | null): string {
   if (!v) return '—'

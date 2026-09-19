@@ -1,3 +1,4 @@
+import { qty } from '@/lib/format'
 import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
 import { money } from '@/lib/format'
 import PageHeader from '@/components/shared/PageHeader'
@@ -14,7 +15,7 @@ import { toast } from '@/lib/toast'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import type { TableColumn } from '@/types'
 
-const fmtQty = (v: unknown) => Number(v).toLocaleString()
+const fmtQty = (v: unknown) => qty(v as number | null | undefined)
 
 export default function AvgCostReconciliationPage() {
   const { data, isLoading, isError, error, refetch } = useAvgCostReconciliation()

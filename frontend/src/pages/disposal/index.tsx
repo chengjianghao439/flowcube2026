@@ -1,3 +1,4 @@
+import { money } from '@/lib/format'
 import { useState } from 'react'
 import { X } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
@@ -85,7 +86,7 @@ export default function DisposalPage() {
     },
     {
       key: 'totalValue', title: '处置价值', width: 120,
-      render: (v) => <span className="text-right tabular-nums">¥{Number(v).toLocaleString('zh-CN', { maximumFractionDigits: 2 })}</span>,
+      render: (v) => <span className="text-right tabular-nums">{money(Number(v))}</span>,
     },
     { key: 'operatorName', title: '经办人', width: 100 },
     {

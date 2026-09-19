@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { amount, money } from './format'
+import { amount, money, qty } from './format'
 
 /**
  * 2026-09-19 收敛前，全仓有 20 处各自定义的 money()/fmtMoney()：11 处不带千分位、
@@ -24,5 +24,21 @@ test('空值与非有限数显示「—」，不伪装成 0', () => {
   for (const value of [null, undefined, NaN, Infinity, -Infinity]) {
     expect(money(value)).toBe('—')
     expect(amount(value)).toBe('—')
+  }
+})
+
+test('qty：整数不补零、小数保留有效位、最多 4 位', () => {
+  expect(qty(3)).toBe('3')
+  expect(qty(1.2)).toBe('1.2')
+  expect(qty(1.25)).toBe('1.25')
+  expect(qty(0.0001)).toBe('0.0001')
+  expect(qty(12345)).toBe('12,345')
+  // 超过 4 位（DECIMAL(14,4) 的精度）才截断——这是显示口径，不是校验
+  expect(qty(1.234567)).toBe('1.2346')
+})
+
+test('qty 的空值口径与金额一致', () => {
+  for (const value of [null, undefined, NaN, Infinity, -Infinity]) {
+    expect(qty(value)).toBe('—')
   }
 })

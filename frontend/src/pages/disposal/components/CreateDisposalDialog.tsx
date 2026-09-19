@@ -1,3 +1,4 @@
+import { money } from '@/lib/format'
 import { ProductIdentityGridCells, ProductIdentityGridHeaders } from '@/components/shared/ProductIdentityCells'
 import { useState } from 'react'
 import { toast } from '@/lib/toast'
@@ -146,7 +147,7 @@ export default function CreateDisposalDialog({ open, onClose }: Props) {
                   </div>
                   <ProductIdentityGridCells product={s} />
                   <div className="tabular-nums">{s.totalQty}{s.unit}</div>
-                  <div className="tabular-nums">¥{s.totalValue.toLocaleString('zh-CN', { maximumFractionDigits: 2 })}</div>
+                  <div className="tabular-nums">{money(s.totalValue)}</div>
                   <div className="text-xs text-muted-foreground">
                     {s.lastOutboundAt ? s.lastOutboundAt : '从未出库'}
                   </div>
@@ -213,7 +214,7 @@ export default function CreateDisposalDialog({ open, onClose }: Props) {
                 ))}
               </div>
               <p className="text-sm text-muted-foreground">
-                处置总价值：<span className="text-doc-code-strong tabular-nums">¥{totalValue.toLocaleString('zh-CN', { maximumFractionDigits: 2 })}</span>
+                处置总价值：<span className="text-doc-code-strong tabular-nums">{money(totalValue)}</span>
                 <span className="text-xs ml-2">（按持有成本估算，执行时以实际库存扣减为准）</span>
               </p>
             </div>

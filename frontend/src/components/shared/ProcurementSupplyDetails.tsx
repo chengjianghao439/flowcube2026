@@ -1,3 +1,4 @@
+import { qty } from '@/lib/format'
 import { ProcurementSupplyExplanation } from './ProcurementSupplyExplanation'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -13,7 +14,6 @@ import { PERMISSIONS } from '@/lib/permission-codes'
 import { toast } from '@/lib/toast'
 import { getPurchasePolicyApi, savePurchasePolicyApi, prepareProcurementTransfer, type ProcurementSupply, type PurchasePolicy } from '@/api/procurement-supply'
 
-const qty = (n = 0) => Number(n).toLocaleString('zh-CN', { maximumFractionDigits: 4 })
 
 export default function ProcurementSupplyDetails({ supply, supplierId, snapshot, mode = 'plan' }: { supply: ProcurementSupply; snapshot?: ProcurementSupply | null; supplierId?: number | null; mode?: 'plan' | 'replenishment' }) {
   const [open, setOpen] = useState(false)

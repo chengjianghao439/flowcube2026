@@ -1,3 +1,4 @@
+import { money } from '@/lib/format'
 import { useState } from 'react'
 import { DatePicker } from '@/components/shared/DatePicker'
 import { X } from 'lucide-react'
@@ -31,7 +32,6 @@ const STATUS_TONE: Record<number, StatusTone> = {
   4: 'danger',   // 已取消
 }
 
-const m = (n: number) => (Number(n) || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 export default function RefundsPage() {
   const STATUS_NAME: Record<number, string> = { 1: '草稿', 2: '已确认', 3: '已完成', 4: '已取消' }
@@ -78,7 +78,7 @@ export default function RefundsPage() {
     { key: 'customerName', title: '客户', width: 120 },
     {
       key: 'amount', title: '退款金额', width: 120, align: 'right',
-      render: (v) => <span className="text-right tabular-nums">¥{m(Number(v))}</span>,
+      render: (v) => <span className="text-right tabular-nums">{money(Number(v))}</span>,
     },
     {
       key: 'status', title: '状态', width: 90,

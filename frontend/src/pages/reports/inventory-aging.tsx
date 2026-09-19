@@ -1,3 +1,4 @@
+import { qty } from '@/lib/format'
 import { ReportQueryFeedback } from './ReportQueryFeedback'
 import { money } from '@/lib/format'
 import KeepAliveSection from '@/components/shared/KeepAliveSection'
@@ -15,11 +16,8 @@ import { getInventoryAgingApi, getExpiryAlertsApi, type AgingItem, type ExpiryAl
 import InventoryAgingQueryDialog, { type InventoryAgingQueryValues } from './InventoryAgingQueryDialog'
 import type { TableColumn } from '@/types'
 
-function fmtQty(v: unknown): string {
-  const n = Number(v)
-  if (!Number.isFinite(n)) return '—'
-  return Number.isInteger(n) ? n.toLocaleString() : n.toFixed(2)
-}
+// 数量统一走 lib/format 的 qty；这里只是把 unknown 收敛成它接受的类型
+const fmtQty = (v: unknown) => qty(v as number | null | undefined)
 
 export default function InventoryAgingPage() {
   const active = useActiveWorkspaceTab()

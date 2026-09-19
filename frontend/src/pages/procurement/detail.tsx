@@ -1,3 +1,4 @@
+import { qty as num } from '@/lib/format'
 import { ProcurementArrivalStatus } from '@/components/shared/ProcurementSupplyExplanation'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { formatDisplayDateTime } from '@/lib/dateTime'
@@ -26,7 +27,6 @@ import type { StatusTone } from '@/lib/statusTone'
 
 const PLAN_TONE: Record<number, StatusTone> = { 1: 'draft', 2: 'active', 3: 'success', 4: 'danger' }
 const ITEM_TONE: Record<number, StatusTone> = { 1: 'draft', 2: 'success', 3: 'warning' }
-const num = (v: number) => Number(v).toLocaleString('zh-CN', { maximumFractionDigits: 4 })
 
 export default function ProcurementPlanDetailPage() {
   // keep-alive catch-all：路径取自 TabPathContext（useParams 取不到 id）

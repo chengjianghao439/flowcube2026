@@ -1,3 +1,4 @@
+import { amount } from '@/lib/format'
 import KeepAliveSection from '@/components/shared/KeepAliveSection'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { confirmAction } from '@/lib/confirm'
@@ -143,7 +144,7 @@ export default function AbcClassPage() {
   const abcColumns: TableColumn<AbcClassRow>[] = [
     { key: 'abcClass', title: '类别', width: 130, render: (_, r) => <SoftStatusLabel label={`${r.abcClass} 类 · ${ABC_HINT[r.abcClass]}`} tone={ABC_TONE[r.abcClass] ?? 'info'} /> },
     ...productIdentityColumns(),
-    { key: 'metricValue', title: metricType === 'stock_value' ? '库存占用金额' : '出库消耗金额', width: 150, align: 'right', render: (v) => <span className="tabular-nums">{Number(v).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span> },
+    { key: 'metricValue', title: metricType === 'stock_value' ? '库存占用金额' : '出库消耗金额', width: 150, align: 'right', render: (v) => <span className="tabular-nums">{amount(Number(v))}</span> },
     { key: 'cumulativePct', title: '累计占比', width: 110, align: 'right', render: (v) => <span className="tabular-nums">{(Number(v) * 100).toFixed(2)}%</span> },
     { key: 'windowDays', title: '统计天数', width: 80, align: 'right', render: (v) => <span className="tabular-nums">{Number(v)} 天</span> },
     { key: 'computedAt', title: '计算时间', width: 160, render: (v) => formatDisplayDateTime(String(v)) },

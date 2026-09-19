@@ -1,3 +1,4 @@
+import { money } from '@/lib/format'
 import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
 import { useState } from 'react'
 import { toast } from '@/lib/toast'
@@ -17,7 +18,6 @@ const STATUS_TONE: Record<number, StatusTone> = {
   1: 'draft', 2: 'active', 3: 'success', 4: 'danger',
 }
 
-const m = (n: number) => (Number(n) || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 export default function RefundDetailDialog({ open, onClose, id }: Props) {
   const { data: refund, isLoading } = useRefundDetail(id || 0)
@@ -63,7 +63,7 @@ export default function RefundDetailDialog({ open, onClose, id }: Props) {
             <div><span className="text-muted-foreground">退款单号：</span><span className="text-doc-code-strong">{refund.refundNo}</span></div>
             <div><span className="text-muted-foreground">销售单：</span><span className="text-doc-code">{refund.saleOrderNo}</span></div>
             <div><span className="text-muted-foreground">客户：</span>{refund.customerName}</div>
-            <div><span className="text-muted-foreground">退款金额：</span><span className="tabular-nums text-xl font-semibold">¥{m(refund.amount)}</span></div>
+            <div><span className="text-muted-foreground">退款金额：</span><span className="tabular-nums text-xl font-semibold">{money(refund.amount)}</span></div>
             <div><span className="text-muted-foreground">退款日期：</span>{refund.refundDate ? String(refund.refundDate).slice(0, 10) : '—'}</div>
             <div><span className="text-muted-foreground">经办人：</span>{refund.operatorName || '—'}</div>
             {refund.confirmedByName && <div><span className="text-muted-foreground">确认人：</span>{refund.confirmedByName}</div>}
@@ -84,7 +84,7 @@ export default function RefundDetailDialog({ open, onClose, id }: Props) {
           {canExecute && (
             <Button variant="destructive" onClick={() => confirmAction({
               title: '执行退款',
-              description: '将从退款账户出账 ¥' + m(refund?.amount ?? 0) + ' 并冲减该销售单已收金额，此操作不可撤销。',
+              description: '将从退款账户出账 ' + money(refund?.amount) + ' 并冲减该销售单已收金额，此操作不可撤销。',
               confirmText: '执行退款',
               variant: 'destructive',
               onConfirm: () => run(() => execute.mutateAsync(refund!.id), '退款已完成'),

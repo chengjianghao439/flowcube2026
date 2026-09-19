@@ -1,3 +1,4 @@
+import { amount } from '@/lib/format'
 import KeepAliveSection from '@/components/shared/KeepAliveSection'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { ReportTable } from '@/components/shared/ReportTable'
@@ -17,7 +18,8 @@ import type { ReportRow, BalanceSheetItem } from '@/types/accounting'
 import { beijingPeriod } from '@/lib/dateTime'
 
 type Tab = 'income' | 'balance' | 'cashflow'
-const m = (n: number) => (Number(n) || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+// 统一走 lib/format 的 amount（会计口径：千分位 + 两位小数、不带 ¥）
+const m = amount
 
 const TABS: Array<{ key: Tab; label: string }> = [
   { key: 'income', label: '利润表' },

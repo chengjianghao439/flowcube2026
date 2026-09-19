@@ -1,3 +1,4 @@
+import { qty as formatQty } from '@/lib/format'
 import { ProductIdentityDetails } from '@/components/shared/ProductIdentityCells'
 import { EmptyState } from './EmptyState'
 /**
@@ -254,11 +255,6 @@ function Field({ label, value, mono, valueClass, className }: FieldProps) {
       <dd className={`mt-0.5 font-medium ${mono ? 'font-mono' : ''} ${valueClass ?? ''}`}>{value}</dd>
     </div>
   )
-}
-
-function formatQty(v?: number): string {
-  if (v === undefined || v === null) return '—'
-  return Number.isInteger(v) ? v.toLocaleString() : v.toFixed(2)
 }
 
 function isExpiringSoon(dateStr: string): boolean {

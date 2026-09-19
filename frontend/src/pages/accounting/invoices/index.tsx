@@ -1,3 +1,4 @@
+import { amount } from '@/lib/format'
 import ListSummary from '@/components/shared/ListSummary'
 import { DatePicker } from '@/components/shared/DatePicker'
 /**
@@ -27,7 +28,8 @@ import type { TableColumn } from '@/types'
 import type { Invoice, CreateInvoiceParams } from '@/types/accounting'
 
 const PAGE_SIZE = 20
-const m = (n: number | null | undefined) => (Number(n) || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+// 统一走 lib/format 的 amount（会计口径：千分位 + 两位小数、不带 ¥）
+const m = amount
 const TAX_RATES = [0.13, 0.09, 0.06, 0.03, 0.01, 0]
 const statusTone = (type: number, status: number) => {
   if (type === 1) return status === 3 ? 'success' : status === 2 ? 'active' : 'warning'
