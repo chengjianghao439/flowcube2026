@@ -1,3 +1,17 @@
+/**
+ * 履约卡点面板（订单详情 →「发货安排」标签）。
+ *
+ * 2026-09-19 只做了**可读性修复，未动机制**：修掉了「前往处理」与「处理」两个按钮撞名
+ * （且前者对多数卡点指向本页、等于死按钮）、状态与期限挤在同一个徽章、区块名与按钮名
+ * 对不上实际含义，以及后端 reason 里夹带操作建议这几处。
+ *
+ * 有意留下的待定项（先让现场用一段时间再看真实反馈，不凭猜测重构）：
+ *  - 是否改成「卡点 + 一个下一步动作」：每条只留结论、影响与一个主按钮，
+ *    认领/转派/记录进展收进「更多」。
+ *  - 是否去掉认领 / 转派 / 负责人 / 处理期限这套任务分派机制——销售单上自动检测出的卡点
+ *    多是「货源不足、采购延期」这类跨部门问题，认领一条记录本身并不解决货源。
+ *  - 是否整体下线该区块，把卡点提示并入「作业进度」标签。
+ */
 import { useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { getFulfillment, runFulfillmentCommand, type FulfillmentType, type FulfillmentCommand, type FulfillmentIssue, type DeliveryItem } from '@/api/fulfillment'
