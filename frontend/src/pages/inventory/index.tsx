@@ -21,7 +21,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Label } from '@/components/ui/label'
 import { useLogs, useOutbound, useInventoryOverview } from '@/hooks/useInventory'
 import { useWarehousesActive } from '@/hooks/useWarehouses'
-import { ProductFinder, FinderTrigger } from '@/components/finder'
+import { ProductFinder } from '@/components/finder'
+import { PickerField } from '@/components/shared/PickerField'
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
 import ContainerDrawer from '@/components/shared/ContainerDrawer'
 import CategoryPathDisplay from '@/components/shared/CategoryPathDisplay'
@@ -390,7 +391,7 @@ export default function InventoryPage() {
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader><DialogTitle>出库</DialogTitle></DialogHeader>
           <form onSubmit={handleOp} className="space-y-4 py-2">
-            <div className="space-y-2"><Label>商品 *</Label><FinderTrigger value={form.productName} placeholder="点击选择商品…" onClick={() => setProductFinderOpen(true)} disabled={isPending} /></div>
+            <div className="space-y-2"><Label>商品 *</Label><PickerField value={form.productName} placeholder="点击选择商品…" onOpen={() => setProductFinderOpen(true)} disabled={isPending} /></div>
             <div className="space-y-2">
               <Label>仓库 *</Label>
               <WarehouseSelect

@@ -9,7 +9,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { useDirtyGuard } from '@/hooks/useDirtyGuard'
-import { SupplierFinder, FinderTrigger } from '@/components/finder'
+import { SupplierFinder } from '@/components/finder'
+import { PickerField } from '@/components/shared/PickerField'
 import type { FinderResult } from '@/types/finder'
 import { useCreateInboundTask } from '@/hooks/useInboundTasks'
 import { toast } from '@/lib/toast'
@@ -149,10 +150,10 @@ export default function InboundTaskCreatePage() {
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div className="space-y-1.5">
             <p className="text-sm font-medium">供应商 *</p>
-            <FinderTrigger
+            <PickerField
               value={supplier?.name ?? ''}
               placeholder="点击选择供应商…"
-              onClick={() => setSupplierFinderOpen(true)}
+              onOpen={() => setSupplierFinderOpen(true)}
             />
           </div>
           <div className="space-y-1.5">

@@ -7,7 +7,7 @@ import { MapPin, MessageSquareText, Truck, UserRound } from 'lucide-react'
 import { Label }  from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from '@/lib/toast'
-import { FinderTrigger } from '@/components/finder'
+import { PickerField } from '@/components/shared/PickerField'
 import { SectionCard } from '@/components/shared/SectionCard'
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
 import { LimitedInput } from '@/components/shared/LimitedInput'
@@ -53,7 +53,7 @@ export function SaleOrderHeaderFields({
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
         <div data-entry-field="party" className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground">
           <Label>客户 *</Label>
-          <FinderTrigger value={customerName} placeholder="点击选择客户…" onClick={() => setCustomerFinderOpen(true)} onDoubleClick={() => { setCustomerFinderOpen(false); navigate('/customers') }} className={cn('h-9', customerError && 'border-destructive/60 bg-destructive/5')} />
+          <PickerField value={customerName} placeholder="点击选择客户…" onOpen={() => setCustomerFinderOpen(true)} onDoubleClick={() => { setCustomerFinderOpen(false); navigate('/customers') }} className={cn('h-9', customerError && 'border-destructive/60 bg-destructive/5')} />
         </div>
         <div data-entry-field="warehouse" className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground">
           <Label>出库仓库 *</Label>

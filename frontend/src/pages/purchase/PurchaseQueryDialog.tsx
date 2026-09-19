@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { SupplierFinder, ProductFinder } from '@/components/finder'
 import { DatePicker } from '@/components/shared/DatePicker'
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
-import { QueryPickerField } from '@/components/shared/QueryPickerField'
+import { PickerField } from '@/components/shared/PickerField'
 import { todayYmd } from '@/lib/dateTime'
 
 /** 采购查询弹窗对外的筛选值（与 URL 参数一一对应） */
@@ -108,7 +108,7 @@ export default function PurchaseQueryDialog({ open, initial, resetValues, onClos
             </Select>
           </label>
 
-          <QueryPickerField
+          <PickerField className="h-9"
             label="供应商"
             placeholder="选择供应商"
             value={draft.supplierName ? `${draft.supplierName}` : ''}
@@ -128,7 +128,7 @@ export default function PurchaseQueryDialog({ open, initial, resetValues, onClos
             />
           </label>
 
-          <QueryPickerField
+          <PickerField className="h-9"
             label="商品"
             placeholder="选择商品"
             value={draft.productName ? `${draft.productName}${draft.productCode ? ` (${draft.productCode})` : ''}` : ''}

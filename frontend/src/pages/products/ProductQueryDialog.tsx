@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import CategoryTreeSelect from '@/components/shared/CategoryTreeSelect'
 import { SupplierFinder } from '@/components/finder'
-import { QueryPickerField } from '@/components/shared/QueryPickerField'
+import { PickerField } from '@/components/shared/PickerField'
 
 /** 商品查询弹窗对外的筛选值（与 URL 参数一一对应） */
 export interface ProductQueryValues {
@@ -95,7 +95,7 @@ export default function ProductQueryDialog({ open, initial, onClose, onApply }: 
             </Select>
           </label>
 
-          <QueryPickerField
+          <PickerField className="h-9"
             label="供应商"
             placeholder="选择供应商"
             value={draft.supplierName ? `${draft.supplierName}` : ''}

@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { CustomerFinder, ProductFinder } from '@/components/finder'
 import { DatePicker } from '@/components/shared/DatePicker'
-import { QueryPickerField } from '@/components/shared/QueryPickerField'
+import { PickerField } from '@/components/shared/PickerField'
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
 import { todayYmd } from '@/lib/dateTime'
 import { SALE_STATUS, SALE_STATUS_NAME } from '@/generated/status'
@@ -112,7 +112,7 @@ export default function SaleQueryDialog({ open, initial, resetValues, onClose, o
             </Select>
           </label>
 
-          <QueryPickerField
+          <PickerField className="h-9"
             label="客户"
             placeholder="选择客户"
             value={draft.customerName ? `${draft.customerName}` : ''}
@@ -132,7 +132,7 @@ export default function SaleQueryDialog({ open, initial, resetValues, onClose, o
             />
           </label>
 
-          <QueryPickerField
+          <PickerField className="h-9"
             label="商品"
             placeholder="选择商品"
             value={draft.productName ? `${draft.productName}${draft.productCode ? ` (${draft.productCode})` : ''}` : ''}

@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ProductFinder } from '@/components/finder'
 import { DatePicker } from '@/components/shared/DatePicker'
-import { QueryPickerField } from '@/components/shared/QueryPickerField'
+import { PickerField } from '@/components/shared/PickerField'
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
 import { todayYmd } from '@/lib/dateTime'
 
@@ -117,7 +117,7 @@ export default function TransferQueryDialog({ open, initial, resetValues, onClos
             />
           </label>
 
-          <QueryPickerField
+          <PickerField className="h-9"
             label="商品"
             placeholder="选择商品"
             value={draft.productName ? `${draft.productName}${draft.productCode ? ` (${draft.productCode})` : ''}` : ''}

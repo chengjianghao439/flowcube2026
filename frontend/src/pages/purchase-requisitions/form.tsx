@@ -17,7 +17,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { ActionBar } from '@/components/shared/ActionBar'
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
-import { ProductFinder, SupplierFinder, FinderTrigger } from '@/components/finder'
+import { ProductFinder, SupplierFinder } from '@/components/finder'
+import { PickerField } from '@/components/shared/PickerField'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { toast } from '@/lib/toast'
 import { confirmAction } from '@/lib/confirm'
@@ -357,7 +358,7 @@ export default function RequisitionFormPage() {
                       : <span className="tabular-nums text-muted-foreground">{it.estimatedPrice || '—'}</span>}
                   </td>
                   <td className="px-3 py-2">
-                    {editable ? <FinderTrigger value={it.suggestedSupplierName} placeholder="选填，可转单时定" onClick={() => setSupplierTarget({ scope: 'item', index: idx })} />
+                    {editable ? <PickerField value={it.suggestedSupplierName} placeholder="选填，可转单时定" onOpen={() => setSupplierTarget({ scope: 'item', index: idx })} />
                       : <span className="text-muted-foreground">{it.suggestedSupplierName || '—'}</span>}
                   </td>
                   {!editable && <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{it.convertedQty ?? 0}</td>}
@@ -411,7 +412,7 @@ export default function RequisitionFormPage() {
                     <ProductIdentityCells product={detail?.items?.find(item => item.id === r.requisitionItemId) ?? r} /><td className="px-3 py-3">{detail?.items?.find(item => item.id === r.requisitionItemId)?.unit || '—'}</td>
                     <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">{r.remaining}</td>
                     <td className="px-2 py-2"><Input type="number" step="0.0001" min="0" max={r.remaining} value={r.quantity} onChange={e => setConvertRows(rows => rows.map((x, i) => i === idx ? { ...x, quantity: e.target.value } : x))} className="h-8 text-right tabular-nums" /></td>
-                    <td className="px-2 py-2"><FinderTrigger value={r.supplierName} placeholder="选择供应商" onClick={() => setSupplierTarget({ scope: 'convert', index: idx })} /></td>
+                    <td className="px-2 py-2"><PickerField value={r.supplierName} placeholder="选择供应商" onOpen={() => setSupplierTarget({ scope: 'convert', index: idx })} /></td>
                     <td className="px-2 py-2"><Input type="number" step="0.01" min="0" value={r.unitPrice} onChange={e => setConvertRows(rows => rows.map((x, i) => i === idx ? { ...x, unitPrice: e.target.value } : x))} className="h-8 text-right tabular-nums" placeholder="0.00" /></td>
                   </tr>
                 ))}

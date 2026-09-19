@@ -22,7 +22,8 @@ import { EditModeBadge, UnsavedBadge } from '@/components/shared/EditModeBadge'
 import { useProduct, useCreateProduct, useUpdateProduct } from '@/hooks/useProducts'
 import { LimitedInput } from '@/components/shared/LimitedInput'
 import { getSettingsApi } from '@/api/settings'
-import { CategoryFinder, SupplierFinder, FinderTrigger } from '@/components/finder'
+import { CategoryFinder, SupplierFinder } from '@/components/finder'
+import { PickerField } from '@/components/shared/PickerField'
 import type { FinderResult } from '@/types/finder'
 
 const DEFAULT_RATES = { A: 10, B: 20, C: 30, D: 40 }
@@ -230,10 +231,10 @@ export default function ProductFormPage() {
           </div>
           <div className="space-y-1.5">
             <Label>分类 *</Label>
-            <FinderTrigger
+            <PickerField
               value={categoryName}
               placeholder="点击选择分类…"
-              onClick={() => setCategoryFinderOpen(true)}
+              onOpen={() => setCategoryFinderOpen(true)}
               onDoubleClick={() => { setCategoryFinderOpen(false); navigate('/categories') }}
             />
             <CategoryFinder
@@ -246,10 +247,10 @@ export default function ProductFormPage() {
           </div>
           <div className="space-y-1.5">
             <Label>供应商 *</Label>
-            <FinderTrigger
+            <PickerField
               value={supplierName}
               placeholder="点击选择供应商…"
-              onClick={() => setSupplierFinderOpen(true)}
+              onOpen={() => setSupplierFinderOpen(true)}
               onDoubleClick={() => { setSupplierFinderOpen(false); navigate('/suppliers') }}
             />
             <SupplierFinder

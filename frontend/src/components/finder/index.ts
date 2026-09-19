@@ -10,7 +10,7 @@ export type { SupplierFinderProps } from './SupplierFinder'
 export { ProductFinder } from './ProductFinder'
 export type { ProductFinderProps } from './ProductFinder'
 
-export { FinderModal, FinderTrigger } from './FinderModal'
+export { FinderModal } from './FinderModal'
 export { FinderSearch } from './FinderSearch'
 export { FinderTable } from './FinderTable'
 

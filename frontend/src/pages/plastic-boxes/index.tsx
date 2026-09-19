@@ -4,7 +4,8 @@ import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
-import { ProductFinder, FinderTrigger } from '@/components/finder'
+import { ProductFinder } from '@/components/finder'
+import { PickerField } from '@/components/shared/PickerField'
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
 import { toast } from '@/lib/toast'
 import { formatDisplayDateTime } from '@/lib/dateTime'
@@ -111,7 +112,7 @@ export default function PlasticBoxesPage() {
           <div className="space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="plastic-box-product">绑定商品 *</Label>
-              <FinderTrigger id="plastic-box-product" value={product?.name ?? ''} placeholder="点击选择商品…" onClick={() => setProductFinderOpen(true)} />
+              <PickerField id="plastic-box-product" value={product?.name ?? ''} placeholder="点击选择商品…" onOpen={() => setProductFinderOpen(true)} />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="plastic-box-warehouse">所属仓库 *</Label>

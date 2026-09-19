@@ -4,7 +4,7 @@ import { AppDialog } from '@/components/shared/AppDialog'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ProductFinder } from '@/components/finder'
-import { QueryPickerField } from '@/components/shared/QueryPickerField'
+import { PickerField } from '@/components/shared/PickerField'
 import { DatePicker } from '@/components/shared/DatePicker'
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
 
@@ -91,7 +91,7 @@ export default function InventoryLogsQueryDialog({ open, initial, resetValues, o
             />
           </label>
 
-          <QueryPickerField
+          <PickerField className="h-9"
             label="商品"
             placeholder="选择商品"
             value={draft.productName ? `${draft.productName}${draft.productCode ? ` (${draft.productCode})` : ''}` : ''}

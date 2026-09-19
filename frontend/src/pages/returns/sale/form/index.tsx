@@ -25,7 +25,8 @@ import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { SectionCard } from '@/components/shared/SectionCard'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { StatusBadge } from '@/components/shared/StatusBadge'
-import { CustomerFinder, ProductFinder, FinderTrigger } from '@/components/finder'
+import { CustomerFinder, ProductFinder } from '@/components/finder'
+import { PickerField } from '@/components/shared/PickerField'
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useWorkspaceStore } from '@/store/workspaceStore'
@@ -244,10 +245,10 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
         <div className="grid grid-cols-3 gap-x-5 gap-y-4">
           <div className="space-y-1.5">
             <Label>客户 *</Label>
-            <FinderTrigger
+            <PickerField
               value={customer?.name ?? ''}
               placeholder="点击选择客户…"
-              onClick={() => setCustomerFinderOpen(true)}
+              onOpen={() => setCustomerFinderOpen(true)}
               onDoubleClick={() => { setCustomerFinderOpen(false); navigate('/customers') }}
               className={cn(customerError && 'border-destructive/60 bg-destructive/5', !!boundSource && 'pointer-events-none opacity-60')}
             />

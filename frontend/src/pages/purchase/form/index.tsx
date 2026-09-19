@@ -36,7 +36,8 @@ import { ActionBar } from '@/components/shared/ActionBar'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { SectionCard } from '@/components/shared/SectionCard'
-import { SupplierFinder, ProductFinder, FinderTrigger } from '@/components/finder'
+import { SupplierFinder, ProductFinder } from '@/components/finder'
+import { PickerField } from '@/components/shared/PickerField'
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
 import { formatDisplayDateTime, formatDisplayDate } from '@/lib/dateTime'
 import { cn } from '@/lib/utils'
@@ -302,11 +303,11 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
         <div className="flex items-start gap-4">
           <div data-entry-field="party" className="w-[272px] shrink-0 space-y-1.5">
             <Label htmlFor="purchase-supplier">供应商 *</Label>
-            <FinderTrigger
+            <PickerField
               id="purchase-supplier"
               value={supplierName}
               placeholder="点击选择供应商…"
-              onClick={() => setSupplierFinderOpen(true)}
+              onOpen={() => setSupplierFinderOpen(true)}
               onDoubleClick={() => {
                 setSupplierFinderOpen(false)
                 requestLeave(() => navigate('/suppliers'))

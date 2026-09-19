@@ -7,7 +7,7 @@ import ListSummary from '@/components/shared/ListSummary'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { Button } from '@/components/ui/button'
-import { FinderTrigger } from '@/components/finder'
+import { PickerField } from '@/components/shared/PickerField'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { CustomerFinder } from '@/components/finder/CustomerFinder'
 import { getPortalStatementsApi, type PortalStatementRow } from '@/api/portal'
@@ -57,7 +57,7 @@ export default function PortalStatementsPage() {
 
       <FilterCard>
         <span className="text-sm font-medium">对账客户</span>
-        <div className="w-80"><FinderTrigger value={customer?.name ?? ''} placeholder="选择要查看的客户" onClick={() => setFinderOpen(true)} /></div>
+        <div className="w-80"><PickerField value={customer?.name ?? ''} placeholder="选择要查看的客户" onOpen={() => setFinderOpen(true)} /></div>
         {customer && (
           <Button variant="ghost" size="sm" onClick={() => { setCustomer(null); }}>清空</Button>
         )}

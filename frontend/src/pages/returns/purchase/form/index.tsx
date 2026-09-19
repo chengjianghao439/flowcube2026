@@ -25,7 +25,8 @@ import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { SectionCard } from '@/components/shared/SectionCard'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { StatusBadge } from '@/components/shared/StatusBadge'
-import { SupplierFinder, ProductFinder, FinderTrigger } from '@/components/finder'
+import { SupplierFinder, ProductFinder } from '@/components/finder'
+import { PickerField } from '@/components/shared/PickerField'
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useWorkspaceStore } from '@/store/workspaceStore'
@@ -244,10 +245,10 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
         <div className="flex flex-wrap items-start gap-4">
           <div className="w-[272px] shrink-0 space-y-1.5">
             <Label>供应商 *</Label>
-            <FinderTrigger
+            <PickerField
               value={supplier?.name ?? ''}
               placeholder="点击选择供应商…"
-              onClick={() => setSupplierFinderOpen(true)}
+              onOpen={() => setSupplierFinderOpen(true)}
               onDoubleClick={() => { setSupplierFinderOpen(false); navigate('/suppliers') }}
               className={cn(supplierError && 'border-destructive/60 bg-destructive/5', !!boundSource && 'pointer-events-none opacity-60')}
             />
