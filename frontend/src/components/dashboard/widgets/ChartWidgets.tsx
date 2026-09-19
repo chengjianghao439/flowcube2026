@@ -11,17 +11,11 @@ import {
 } from 'lucide-react'
 import { ChartWidgetShell } from '../WidgetShell'
 import { chartTooltip, axisTick, CHART_COLORS, money, wan, EMPTY_HINT } from '../chartTheme'
+import { limitTopSeries } from '@/lib/topSeries'
 import {
   useTrend, useTopStock, useInventoryStats, useSaleStats, usePurchaseStats,
   useAging, useFinanceDashboard,
 } from '@/hooks/useDashboard'
-
-/**
- * 分布类图表的系列上限：仓库/账户这类主数据数量没有上界（开发库 253 个仓库、
- * 94 个账户），全量成系列会让图表彻底不可读，统一取 Top N + 「其他」合并
- *（2026-09-17 验收 ISSUE-010）。
- */
-const TOP_SERIES_LIMIT = 8
 
 // —— 出入库趋势（dashboard.view）——
 export function ChartIoTrend() {
@@ -86,15 +80,13 @@ export function ChartWarehouseStock() {
   // 仓库数量没有上限（开发/演练库 253 个仓库），全量成系列时图例与坐标轴直接糊成一团。
   // 按价值取 Top 8，其余合并为「其他 N 个仓」，与「库存价值 Top 10」同一口径
   //（2026-09-17 验收 ISSUE-010）。
-  const rows = (() => {
-    const all = (data?.byWarehouse ?? [])
-      .map(w => ({ name: w.warehouseName, 价值: Math.round(w.totalValue) }))
-      .sort((a, b) => b.价值 - a.价值)
-    if (all.length <= TOP_SERIES_LIMIT) return all
-    const head = all.slice(0, TOP_SERIES_LIMIT)
-    const restValue = all.slice(TOP_SERIES_LIMIT).reduce((sum, w) => sum + w.价值, 0)
-    return [...head, { name: `其他 ${all.length - TOP_SERIES_LIMIT} 个仓`, 价值: restValue }]
-  })()
+  const rows = limitTopSeries(
+    (data?.byWarehouse ?? []).map(w => ({ name: w.warehouseName, 价值: Math.round(w.totalValue) })),
+    {
+      value: w => w.价值,
+      makeRest: (rest, restValue) => ({ name: `其他 ${rest.length} 个仓`, 价值: restValue }),
+    },
+  )
   return (
     <ChartWidgetShell loading={isLoading} error={error} onRetry={() => void refetch()} title="各仓库存价值分布" icon={Warehouse} tone="info" scrollBody>
       {rows.length === 0 ? <p className={EMPTY_HINT}>暂无仓库库存数据</p> : (
@@ -214,13 +206,13 @@ export function ChartCashflow() {
 export function ChartAccountBalance() {
   const { data, isLoading, error, refetch } = useFinanceDashboard()
   // 同上：账户数量无上界（开发库 94 个），取余额 Top 8 + 「其他」（ISSUE-010）
-  const accounts = (() => {
-    const all = [...(data?.accounts ?? [])].sort((a, b) => Number(b.balance) - Number(a.balance))
-    if (all.length <= TOP_SERIES_LIMIT) return all
-    const head = all.slice(0, TOP_SERIES_LIMIT)
-    const restBalance = all.slice(TOP_SERIES_LIMIT).reduce((sum, a) => sum + Number(a.balance), 0)
-    return [...head, { id: -1, name: `其他 ${all.length - TOP_SERIES_LIMIT} 个账户`, balance: restBalance }]
-  })()
+  const accounts = limitTopSeries(
+    (data?.accounts ?? []).map(a => ({ id: a.id, name: a.name, balance: Number(a.balance) })),
+    {
+      value: a => a.balance,
+      makeRest: (rest, restBalance) => ({ id: -1, name: `其他 ${rest.length} 个账户`, balance: restBalance }),
+    },
+  )
   return (
     <ChartWidgetShell loading={isLoading} error={error} onRetry={() => void refetch()}
       title="账户余额分布" icon={PieChartIcon} tone="primary" scrollBody

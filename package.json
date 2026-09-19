@@ -56,6 +56,7 @@
     "test:api-route-contract": "node tests/api-route-contract.test.js",
     "test:query-loop": "node tests/query-loop-contract.test.js",
     "test:warehouse-scan-closure": "node --test tests/warehouse-scan-closure.test.js",
+    "test:chart-series-limit": "node --test tests/chart-series-limit-contract.test.js",
     "test:agents-md-guard": "node tests/agents-md-injection-guard.test.js",
     "test:frontend-session-contract": "node tests/frontend-session-contract.test.js",
     "test:frontend-polling-contract": "node tests/frontend-polling-contract.test.js",

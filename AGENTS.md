@@ -73,6 +73,7 @@
 - **前端容器必须删 `/docker-entrypoint.d/10-listen-on-ipv6-by-default.sh`**（`10-listen-on-ipv6-by-default.sh`）
 - **回退/还原逐个写全路径、不得 `||` 兜底猜路径**，改完立即 `git status --short`
 - **`backend/downloads/` 已废弃，只允许 `.gitignore`/`README.md`**：该目录的 `.gitignore` 只挡普通提交，`git add -f` 仍能把安装包塞进仓库，而守卫只看 git 视角——所以 `npm run release:check-downloads` 必须在 CI 静态 job 真跑（2026-09-19 前从未接线，等于规则无人执行）（`scripts/check-deprecated-downloads.js`）
+- **分布类图表（各仓库存价值、账户余额）的系列数必须有界**：调色板只有 8 色，而主数据数量没有上界（开发库 253 个仓、94 个启用账户），全量成系列时颜色重复、图例糊成一团。唯一实现是 `frontend/src/lib/topSeries.ts`（`TOP_SERIES_LIMIT = 8` + `limitTopSeries`），页面与组件不得再抄一份常量与切片逻辑；饼图「其他」切片用中性色，不能轮回到 `PIE_COLORS[0]` 与首个账户同色。`npm run test:chart-series-limit` 机械守住（财务看板饼图曾漏改，见 `docs/chart-series-limit-2026-09-19.md`）
 - **改共用函数或路由契约后跑全量套件**（调用点补 `X-Client-Id`）；本机单测 Node 26 假失败用 `NODE_OPTIONS='--localstorage-file=/tmp/fc-ls.json'` 复现（`src/components/shared/FulfillmentTodos.test.tsx`）
 
 ## 1. 协作与操作边界
@@ -203,6 +204,7 @@ npm run test:permissions
 `npm run test:logger-args-order`（logger 参数顺序守卫：`logger.info/warn` 的第二个参数必须是对象，即 `(msg, meta, module_)`；只传 msg 合法，`logger.error` 因签名含 err 不参与）同为纯离线断言，与上三条同批执行。
 `npm run test:pda-scan-focus`（PDA 聚焦守卫：按「这个页面要不要输入」判断——除 `login.tsx` 外的 PDA 页面不得出现 `autoFocus`，`PdaScanner` 每处 `.focus()` 必须自身带 manual 语义）同为纯离线断言，与上四条同批执行。
 `npm run test:api-route-contract`（前后端路由契约：把 `app.use('/api/x')` 前缀与各 routes 文件的平铺路由拼成完整路径，比对前端 `client.<method>('<path>')` 的静态调用——参数名与查询串归一化；不一致即运行期 404，构建/lint/类型检查都不会红）同为纯离线断言，与上五条同批执行。**改路由名、改前端调用路径或新增嵌套 `router.use` 后都要跑它**（嵌套 router 需先补守卫的展开逻辑，见该文件头「已知边界」）。
+`npm run test:chart-series-limit`（分布类图表系列上限守卫：`TOP_SERIES_LIMIT` 只能定义在 `frontend/src/lib/topSeries.ts`，每个 `<Pie>` 的 `data` 必须来自 `limitTopSeries(...)`，点名的两张分布卡片与「其他 N 个…」文案必须仍在，「其他」切片必须有中性色）为纯离线断言，与上面各契约测试同批执行。**改分布类图表或 `limitTopSeries` 后都要跑它**（三条反向验证：饼图退回 `data.accounts`、再抄一份常量、删掉「其他 N 个」文案，都必须失败）。
 运维/迁移回归（static job 「运维回归」步骤）：`node --test tests/ops-monitor-restore.test.js tests/deployment-resources.test.js tests/restore-trigger-normalize.test.js tests/migration-trigger-bodies.test.js`。前两项验备份恢复判定与资源边界，后两项验触发器分号规范化与迁移逐条切分，均不连数据库。
 
 废弃目录回归：`npm run release:check-downloads`（`backend/downloads/` 只允许 `.gitignore`/`README.md`）——`.gitignore` 挡得住普通提交、挡不住 `git add -f`，而守卫只看 git 视角，所以必须在 CI 静态 job 真跑，不连数据库。
@@ -371,7 +373,7 @@ npm run test:permissions
 - **PDA 打包页必须显示箱贴打印状态**：`GET /api/packages?taskId=` 返回每箱 `printStatus`，打包页显示「箱贴：待派发/已打印/打印失败」并在完成打包按钮上方常驻告警（列出待处理箱与出路：重新入队打印、ERP「条码打印查询 → 出库条码」重打、启动绑定打印机的桌面端）。「箱贴未打印成功不得进入待出库」是**服务端强制规则，不放开**；放开的是「看不见原因」。调拨调出页同理显示「剩余可调量」，因为整容器调拨要求容器数量不超过剩余计划量。
 - **PDA 列表必须即时刷新**：拣货「商品列表/订单列表」的刷新按钮同时刷新两个查询，拣货动作后作废两个列表缓存；收货、打包、复核、调拨、盘点、退货列表统一 `refetchOnMount: 'always'`。keep-alive 下组件常驻，不这样做就会出现「订单列表已空、商品列表仍显示待拣 0/2」或「ERP 刚派发的单据看不到」。`npm run test:pda-list-refresh` 机械守住：只扫 `useQuery({...})` **声明块内部**的列表类 `queryKey`（`invalidateQueries` 等同名调用不算——第一版没区分，把 21 处失效调用误报成违规；详情查询必然带 id 参数故不在范围内），且文档点名的七个 key 必须仍被扫到，防止删/改页面后守卫静默失效。
 - **库位扫码按「编码或条码」解析**：PDA 上架/调拨调入**不得**用 `R<数字>`/`LOC-*` 前缀卡格式（历史库位编码是 `SH-A01`、`SMK-396842` 这类），统一交给 `GET /api/locations/code/:code`（后端匹配 code 或 barcode）；归属仓、状态、范围仍由服务端校验。迁移 245 回填历史库位 `barcode`（`R+6位ID`）。**盘点单不允许 0 明细**：创建时取不到在库商品直接报错；PDA 待盘点列表用 LEFT JOIN，历史空单也会显示并提示去 ERP 取消。
-- **列表与图表的呈现约束**：`DataTable` 的最后一列操作列固定右侧（sticky，宽表横向滚动时仍然可见）；分布类图表（各仓库存价值分布、账户余额分布）统一 `TOP_SERIES_LIMIT = 8` + 「其他 N 个」，不得按主数据条数全量成系列；图表小组件用 `ChartWidgetShell` 只在可见标签内挂载（避免在 `display:none` 容器里报 width(-1) 并渲染空图），文字/交互型小组件仍用 `WidgetShell` 以保留本地状态。操作日志列表的「操作内容」按业务接口映射成「模块 · 动作」，未映射的显示方法 + 路径，不允许整列都是「系统接口访问」。`AppToast` 对 5 秒内同类型同文案去重。
+- **列表与图表的呈现约束**：`DataTable` 的最后一列操作列固定右侧（sticky，宽表横向滚动时仍然可见）；分布类图表（各仓库存价值分布、账户余额分布，含财务看板「账户余额分布」饼图）统一走 `frontend/src/lib/topSeries.ts` 的 `limitTopSeries`（`TOP_SERIES_LIMIT = 8`）+ 「其他 N 个」，不得按主数据条数全量成系列，也不得在页面/组件里另抄一份常量与切片逻辑，饼图「其他」切片用中性色而非轮回到 `PIE_COLORS[0]`；`npm run test:chart-series-limit` 机械守住（2026-09-19 财务看板饼图曾漏改：94 个启用账户 8 色轮转 12 轮，见 `docs/chart-series-limit-2026-09-19.md`）；图表小组件用 `ChartWidgetShell` 只在可见标签内挂载（避免在 `display:none` 容器里报 width(-1) 并渲染空图），文字/交互型小组件仍用 `WidgetShell` 以保留本地状态。操作日志列表的「操作内容」按业务接口映射成「模块 · 动作」，未映射的显示方法 + 路径，不允许整列都是「系统接口访问」。`AppToast` 对 5 秒内同类型同文案去重。
 - **列表页不再常驻展示日期筛选提示条**（2026-09-16）：主列表页的日期筛选与销售、采购一致——只在查询弹窗中查看（弹窗初始值即当前生效范围），页面上只保留可逐项移除的筛选 chips；已删除退货单（销售退货）与物流运单两处历史遗留的「创建日期：X 至 Y」横条，后者取代 `docs/sales-group-ui-2026-09-05.md` 中"明确日期"的展示约定。列表计数统一用 `ListSummary`（表格下方）；物流运单沿用其"当前显示数量"口径（自动取齐上限 500，不代表业务总量）。
 - **查询弹窗「重置」＝回到该页面的默认窗口**（2026-09-17）：各 `*QueryDialog` 新增可选 `resetValues`，重置把日期恢复成该页面的默认口径（单据类与操作日志/库存流水 = 最近 7 天、物流运单 = 当天、退款单/处置/放行/采购申请 = 不限），不再一律跳成"今天起"。页面要传与自身 `effectiveStartDate/EndDate` 兜底一致的值（如 `resetValues={{ startDate: defaultRange.start, endDate: defaultRange.end }}`），**新增列表页时两处必须同步**，否则「重置」和「打开弹窗看到的范围」会对不上。`PaymentQueryDialog` 早已用 `clearValue` 表达同一语义（账款页默认跨日期看未结清），沿用不改。
 
@@ -424,6 +426,7 @@ npm run test:permissions
 | 抽出的日记全文（原 §11–§18） | `docs/agents-md-archive-2026-09-18.md` |
 | 2026-09-18 深审计 | `docs/audit-2026-09-18.md`、`output/audit-2026-09-18/findings/*.json` |
 | 2026-09-19 CI 接线缺口排查 | `docs/ci-wiring-gaps-2026-09-19.md` |
+| 2026-09-19 分布类图表系列上限（财务看板饼图漏改） | `docs/chart-series-limit-2026-09-19.md` |
 | 2026-09-04 系统审计 | `docs/system-audit-2026-09-04.md`、`docs/system-audit-fixes-2026-09-04.md`、`docs/audit-fix-inventory-2026-09-04.md`、`docs/audit-fix-finance-2026-09-04.md`、`docs/audit-fix-client-2026-09-04.md` |
 | 2026-09-05 上线前两轮审计 | `docs/prelaunch-deep-audit-2026-09-05.md`、`docs/prelaunch-fixes-2026-09-05.md`、`docs/prelaunch-second-audit-2026-09-05.md`、`docs/audit-round2-2026-09-05/` |
 | 发布说明与结果 | `docs/release-notes/*.md`、`docs/release-v0.9.*-result.md` |

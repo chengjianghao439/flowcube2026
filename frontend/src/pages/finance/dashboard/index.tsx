@@ -22,6 +22,7 @@ import { getMonthDateRange, getRelativeDateRange } from '@/lib/dateRange'
 import { StatTile } from '@/components/dashboard/StatTile'
 import { downloadExport } from '@/lib/exportDownload'
 import { toast } from '@/lib/toast'
+import { limitTopSeries } from '@/lib/topSeries'
 
 const money = (n: number) => `¥${Number(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const wan = (n: number) => Math.abs(n) >= 10000 ? `${(n / 10000).toFixed(n >= 1e6 ? 0 : 1)}万` : String(Math.round(n))
@@ -37,11 +38,16 @@ const chartTooltip = {
 } as const
 const axisTick = { fontSize: 11, fill: 'hsl(var(--muted-foreground))' } as const
 
-// 账户余额饼图配色：语义色打头，其余用几个协调的固定色轮转
+// 账户余额饼图配色：语义色打头，其余用几个协调的固定色轮转。
+// 切片数由 limitTopSeries 限到 TOP_SERIES_LIMIT + 1，与本数组长度一致；「其他」项用中性灰，
+// 否则它会轮回到第 1 个账户的语义色，读者会误以为是同一个账户（2026-09-19 修复漏改）。
 const PIE_COLORS = [
   'hsl(var(--primary))', 'hsl(var(--success))', 'hsl(var(--warning))', 'hsl(var(--info))',
   '#8b5cf6', '#0ea5e9', '#f97316', 'hsl(var(--destructive))',
 ]
+const OTHER_ACCOUNT_COLOR = 'hsl(var(--muted-foreground))'
+// 「其他 N 个账户」聚合项的哨兵 ID：真实账户 ID 均为正数（自增主键）
+const OTHER_ACCOUNT_ID = -1
 
 // 账龄桶的短标签（X 轴用）与严重度配色
 const BUCKET_SHORT: Record<string, string> = {
@@ -166,6 +172,20 @@ export default function FinanceDashboardPage() {
       应付: aging.payable.buckets[i]?.amount ?? 0,
     }))
     : []
+  // 账户数量没有上界（开发库 94 个启用账户），而饼图只有 8 色：全量成系列时第 9 个切片开始
+  // 颜色重复、图例糊成一团。取余额 Top 8，其余合并为「其他 N 个账户」，占比同样守恒
+  //（2026-09-19 修复：本页此前漏了 Top 8 上限，同页其它图表与 ChartWidgets 早已有）
+  const accounts = limitTopSeries(data?.accounts ?? [], {
+    value: a => Number(a.balance),
+    makeRest: (rest, restBalance) => ({
+      id: OTHER_ACCOUNT_ID,
+      code: '',
+      name: `其他 ${rest.length} 个账户`,
+      typeName: '',
+      balance: restBalance,
+      share: rest.reduce((sum, a) => sum + a.share, 0),
+    }),
+  })
 
   return (
     <div className="space-y-5">
@@ -304,16 +324,21 @@ export default function FinanceDashboardPage() {
                 <h3 className="text-card-title">账户余额分布</h3>
                 <span className="tabular-nums text-xs text-muted-foreground">合计 {money(data.summary.totalBalance)}</span>
               </div>
-              {data.accounts.length === 0 ? (
+              {accounts.length === 0 ? (
                 <p className="py-8 text-center text-sm text-muted-foreground">还没有启用的资金账户</p>
               ) : (
                 <ResponsiveContainer width="100%" height={260}>
                   <PieChart>
                     <Pie
-                      data={data.accounts} dataKey="balance" nameKey="name"
+                      data={accounts} dataKey="balance" nameKey="name"
                       cx="50%" cy="50%" innerRadius={55} outerRadius={95} paddingAngle={2}
                     >
-                      {data.accounts.map((a, i) => <Cell key={a.id} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                      {accounts.map((a, i) => (
+                        <Cell
+                          key={a.id}
+                          fill={a.id === OTHER_ACCOUNT_ID ? OTHER_ACCOUNT_COLOR : PIE_COLORS[i % PIE_COLORS.length]}
+                        />
+                      ))}
                     </Pie>
                     <Tooltip formatter={(v, _n, p) => [`${money(Number(v ?? 0))} · ${pct((p?.payload?.share as number) ?? 0)}`, p?.payload?.name as string]} contentStyle={chartTooltip} />
                     <Legend wrapperStyle={{ fontSize: 12 }} />

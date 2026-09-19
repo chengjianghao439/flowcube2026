@@ -216,6 +216,9 @@ jobs:
       - name: 契约测试 — PDA 列表必须即时刷新（防 keep-alive 下看不到 ERP 刚派发的单据）
         run: npm run test:pda-list-refresh
 
+      - name: 契约测试 — 分布类图表系列必须有界（防 94 个账户/253 个仓全量成系列，调色板只有 8 色）
+        run: npm run test:chart-series-limit
+
       - name: 契约测试 — 前端调用的接口后端必须存在（防路由改名漏改前端后运行期 404）
         run: npm run test:api-route-contract
 
