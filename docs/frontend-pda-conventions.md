@@ -103,6 +103,8 @@
 
 **金额显示统一**：金额一律走 `lib/format` 的 `money()`（带 `¥`）或 `amount()`（会计凭证借贷方，不带符号），不得手写 `¥{x.toFixed(2)}`——后者没有千分位，`¥1234567.89` 在列表里读不出位数；空值还会显示成 `¥0.00`，让「没有数据」看起来像「金额为零」。统一后空值一律 `—`，负数一律 `¥-20.00`。仪表盘 `components/dashboard/chartTheme` 的 `money` 就是 `lib/format` 的再导出，不要再另存实现。三处刻意例外（逐条登记在 `tests/copy-conventions.test.js` 的 `MONEY_ALLOW`，失效即守卫失败）：打印渲染管线（按版面宽度排版的独立字符串管线）、以「万」为单位的库存价值卡片、以及单价 tooltip 里的 `toFixed(4)` 精确值。
 
+**数量输入联动商品精度**：商品可以设「只能整数」（迁移 254），因此数量输入框的 `step` 一律走 `lib/qtyStep.ts` 的 `qtyStep(allowDecimal)`，不再写死 `step="0.0001"`。某一行是否允许小数用 `hooks/useProductQtyPolicies.ts` 按需批量查（一次请求 + 5 分钟缓存，与明细行数据来自商品选择器还是后端接口无关），**查不到时按允许兜底**——宁可让用户先填、由服务端拦下，也不要因为一次查询失败就把整数框锁死。`step` 本身**不是校验**，它挡不住键入；真正的拦截在服务端 `utils/qtyPrecision.js`。采购单与 PDA 拆分的数量本来就只收整数，保持原样。
+
 **日期输入统一**：业务日期字段一律用 `components/shared/DatePicker`——外观与 `Input` 一致，可直接键入 `yyyy-MM-dd`（失焦或回车提交，非法输入回退上一个合法值），也可点左侧日历图标弹出选择。**不得再用原生 `<input type="date">`**：它的取值格式、清除能力与空值表现随浏览器/Electron 版本变化，且与同排的 `Input` 视觉不齐。两个例外：PDA 收货页的效期/生产日期（原生控件对触摸更友好），以及桌面小组件里的玩具输入。
 
 **确认弹窗的两种入口**：命令式 `confirmAction({...})`（`@/lib/confirm`，配合全局挂载的 `GlobalConfirmDialog`）与受控式 `<ConfirmDialog open=... />`（`@/components/shared/ConfirmDialog`）。**两者最终渲染同一个组件**，视觉与按钮文案一致，不存在「同一个操作两套弹窗」——差别只在调用方式：**默认用 `confirmAction`**（无需在页面里维护 open 状态，适合列表行内操作）；需要自己控制开关时机、或要把确认框嵌进既有受控流程时才用 `ConfirmDialog`。新增确认框不必为了「统一」回头改造既有调用点。
