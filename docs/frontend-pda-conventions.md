@@ -101,6 +101,8 @@
 
 **选择器统一**：「从弹窗里挑一条记录」的字段一律用 `components/shared/PickerField`——外观是**输入框样式 + 已选时的清除 X**，点击弹出 Finder。它合并自两个组件：表单用 `FinderTrigger`（做成输入框样、无清除），查询弹窗用 `QueryPickerField`（做成按钮样、带清除），于是同一个「选客户」在销售单表头与销售查询弹窗里长得不一样，用户不知道这里能不能打字。高度由 `className` 决定：查询弹窗传 `h-9`（与同排的 Select / Input 对齐），表单用默认 `h-10`。**真需要输入关键字筛选的场景（如客户列表搜索、超额放行页搜索）仍用原生 `Input`**，不要拿 PickerField 冒充输入框。
 
+**金额显示统一**：金额一律走 `lib/format` 的 `money()`（带 `¥`）或 `amount()`（会计凭证借贷方，不带符号），不得手写 `¥{x.toFixed(2)}`——后者没有千分位，`¥1234567.89` 在列表里读不出位数；空值还会显示成 `¥0.00`，让「没有数据」看起来像「金额为零」。统一后空值一律 `—`，负数一律 `¥-20.00`。仪表盘 `components/dashboard/chartTheme` 的 `money` 就是 `lib/format` 的再导出，不要再另存实现。三处刻意例外（逐条登记在 `tests/copy-conventions.test.js` 的 `MONEY_ALLOW`，失效即守卫失败）：打印渲染管线（按版面宽度排版的独立字符串管线）、以「万」为单位的库存价值卡片、以及单价 tooltip 里的 `toFixed(4)` 精确值。
+
 **日期输入统一**：业务日期字段一律用 `components/shared/DatePicker`——外观与 `Input` 一致，可直接键入 `yyyy-MM-dd`（失焦或回车提交，非法输入回退上一个合法值），也可点左侧日历图标弹出选择。**不得再用原生 `<input type="date">`**：它的取值格式、清除能力与空值表现随浏览器/Electron 版本变化，且与同排的 `Input` 视觉不齐。两个例外：PDA 收货页的效期/生产日期（原生控件对触摸更友好），以及桌面小组件里的玩具输入。
 
 **确认弹窗的两种入口**：命令式 `confirmAction({...})`（`@/lib/confirm`，配合全局挂载的 `GlobalConfirmDialog`）与受控式 `<ConfirmDialog open=... />`（`@/components/shared/ConfirmDialog`）。**两者最终渲染同一个组件**，视觉与按钮文案一致，不存在「同一个操作两套弹窗」——差别只在调用方式：**默认用 `confirmAction`**（无需在页面里维护 open 状态，适合列表行内操作）；需要自己控制开关时机、或要把确认框嵌进既有受控流程时才用 `ConfirmDialog`。新增确认框不必为了「统一」回头改造既有调用点。

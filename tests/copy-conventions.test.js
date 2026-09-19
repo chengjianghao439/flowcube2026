@@ -16,7 +16,12 @@
  *   2. 加载态动词统一为「加载」，「正在读取」不再使用；
  *   3. 中文之间不得混半角标点（`,;!?`）；
  *   4. 官网 `pages/landing` 与候选 `pages/landing-preview` 的关键文案必须双份一致
- *      （两者内容同源、仅 import 路径不同，改一处漏另一处是已经发生过的真实事故）。
+ *      （两者内容同源、仅 import 路径不同，改一处漏另一处是已经发生过的真实事故）；
+ *   5. 金额一律走 `lib/format` 的 `money()`/`amount()`，不得手写 `¥` + `toFixed(2)`。
+ *
+ * 第 5 条是 2026-09-19 金额收敛的守卫：`¥{x.toFixed(2)}` 没有千分位，`¥1234567.89` 在列表里
+ * 读不出位数；空值还会显示成 `¥0.00`，让「没有数据」看起来像「金额为零」。收敛后全仓只剩
+ * 打印管线与「x.xx万」卡片两类刻意例外（见 MONEY_ALLOW，逐条登记且失效即失败）。
  *
  * 只扫**用户可见文案**：去掉注释后的字符串字面量与 JSX 文本。变量名、注释、测试文件
  * 不在范围内——「容器」作为标识符（containerId）是允许的，禁止的是它出现在用户读到的句子里。
@@ -108,12 +113,24 @@ const HALF_WIDTH_BETWEEN_CJK = /[\u4e00-\u9fff][,;!?][\u4e00-\u9fff]/
 
 const LANDING_PAIRS = ['index.tsx', 'BusinessStory.tsx']
 
+/**
+ * 允许手写 `¥` + `toFixed(2)` 的文件（逐条登记，命中数归零即守卫失败）。
+ * 打印渲染是一条独立的字符串管线，单据版面按字符宽度排版，不能套用界面格式化；
+ * 仪表盘库存价值卡片以「万」为单位，数值本来就只有两三位。
+ */
+const MONEY_ALLOW = new Map([
+  ['frontend/src/components/print/TemplateRenderer.tsx', '打印单据渲染：独立字符串管线，按版面宽度排版'],
+  ['frontend/src/lib/orderPrintData.ts', '打印单据数据：同上'],
+  ['frontend/src/components/dashboard/widgets/KpiWidgets.tsx', '以「万」为单位的卡片数值，位数本来很短'],
+])
+
 function main() {
   const files = walk(SRC)
   assert.ok(files.length > 100, `前端源码文件数异常（${files.length}），目录结构可能变了`)
 
   const problems = []
   const usedAllow = new Set()
+  const usedMoneyAllow = new Set()
 
   for (const f of files) {
     const rel = `frontend/src/${path.relative(SRC, f)}`
@@ -150,18 +167,33 @@ function main() {
     }
   }
 
+  // 金额格式化：手写 `¥` + toFixed(2) 会丢掉千分位，空值还会被写成 ¥0.00
+  for (const f of files) {
+    const rel = `frontend/src/${path.relative(SRC, f)}`
+    const lines = stripComments(fs.readFileSync(f, 'utf8')).split('\n')
+    lines.forEach((line, i) => {
+      if (!line.includes('¥') || !/toFixed\(2\)/.test(line)) return
+      if (MONEY_ALLOW.has(rel)) { usedMoneyAllow.add(rel); return }
+      problems.push(`${rel}:${i + 1} 手写金额格式化（¥ + toFixed(2)）——改用 lib/format 的 money()（带 ¥）或 amount()（会计凭证）\n        原文：${line.trim().slice(0, 90)}`)
+    })
+  }
+
   const staleAllow = [...ALLOWLIST.keys()].filter((k) => !usedAllow.has(k))
   assert.deepEqual(staleAllow, [],
     `这些豁免已不再命中（代码已改或已删除），必须从清单里删掉：${staleAllow.join(', ')}`)
 
+  const staleMoneyAllow = [...MONEY_ALLOW.keys()].filter((k) => !usedMoneyAllow.has(k))
+  assert.deepEqual(staleMoneyAllow, [],
+    `这些金额格式化豁免已不再命中（写法已改或文件已删），必须从 MONEY_ALLOW 删掉：${staleMoneyAllow.join(', ')}`)
+
   console.log(`扫描源码 ${files.length} 个（frontend/src 全量，去注释后只看用户可见文案）`)
-  console.log(`禁用词 ${BANNED_IN_UI_COPY.size} 个、豁免 ${ALLOWLIST.size} 条`)
+  console.log(`禁用词 ${BANNED_IN_UI_COPY.size} 个、豁免 ${ALLOWLIST.size} 条、金额格式化豁免 ${MONEY_ALLOW.size} 条`)
 
   if (problems.length) {
     console.error('\n界面文案口径违规：')
     for (const p of problems) console.error('  ✗ ' + p)
   } else {
-    console.log('✓ 未发现实现词泄漏、半角标点或官网双份不一致')
+    console.log('✓ 未发现实现词泄漏、半角标点、官网双份不一致或手写金额格式化')
   }
 
   console.log('\n' + '─'.repeat(60))
