@@ -3,7 +3,11 @@
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
     "target": "ES2020",
     "useDefineForClassFields": true,
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    // lib 只影响类型检查，不改构建产物（emit 目标由上面的 target 与 Vite 的 esbuild target 决定）。
+    // 运行时是 Node 22 与常青浏览器，均已支持 ES2022，代码里也已在用 Array.prototype.at（7 处）。
+    // 此前 lib 停在 ES2020 却能通过，是因为 @types/node 的 lib 引用“顺带”提供了这些类型——
+    // 属于对传递依赖的隐性依赖，@types/node 升级后会突然报 TS2550。显式声明 ES2022 使类型检查与运行时一致。
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "skipLibCheck": true,
     "moduleResolution": "bundler",
