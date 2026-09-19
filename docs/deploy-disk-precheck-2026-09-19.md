@@ -253,6 +253,35 @@ IO 阻塞；不能排除同期 MySQL 写入叠加。**不是误删**——三条
 **只读**由 `tests/deployment-resources.test.js` 机械断言（出现删除/重启/清理类命令即失败；
 反向验证 3 例：加 `rm`、加 `docker system prune`、删掉必需采集项，都必须失败）。
 
+## 演练残留卷的根因链（2026-09-19 查清）
+
+**来源**：`scripts/restore-check.sh`（备份恢复演练，cron `0 5 * * 1` 每周一 05:00）用
+`docker run -d --name flowcube-restore-check-$$ ... mysql:8.0` 起临时 MySQL，**没有挂载具名卷**；而
+`mysql:8.0` 官方镜像声明了 `VOLUME /var/lib/mysql`，于是 Docker **自动创建匿名卷**（64 位 hex 名）。
+
+**为何会残留**：脚本本身有 `trap cleanup EXIT` + `docker rm -f -v "$CONTAINER"`，TERM/INT 也被 trap 转成正常退出
+——**只有 SIGKILL / 机器重启 / OOM 能绕过 trap**，而匿名卷无法按名字回收。结果 2026-08-10、08-25、09-01 三次演练
+（都是周一）各留下一个卷，其中 3 个含**完整业务表**（`.ibd` 111/135/136，对照在用库 145），另 4 个是初始化后即被中断的空实例。
+
+**铁证**：卷内数据库目录名就是 `flowcube_restore_check`，与脚本 `RESTORE_DB="${RESTORE_DB:-flowcube_restore_check}"`
+逐字对应；创建日期（UTC 8-09 / 8-24 / 8-31）换算成本地时间正是周一凌晨 05:00，与 cron 完全吻合。
+
+**修复**：改用具名卷 `flowcube_restore_check_tmp` + **启动前幂等清理**（`docker volume rm -f`），`cleanup()` 里也显式删卷
+（`docker rm -f -v` 对具名卷无效）。这样即使被 SIGKILL，下次演练启动时会自己清掉——异常中断不再累积。守卫见
+`tests/ops-monitor-restore.test.js`。
+
+**服务器侧**：7 个残留卷（4 空 + 3 含数据，约 1.55G）已全部删除，卷列表只剩 `flowcube_mysql_data`。
+
+**两条操作教训（都是我自己犯的）**：
+
+1. 第一次做反向验证时，验证脚本被外层 60 秒超时强杀、**来不及还原被改的脚本文件**，破坏逐次累加，导致
+   `docker run` 的 `-v` 挂载行丢失、测试从 15 pass 掉到 14 pass（靠 `git checkout -- <file>` + 重放修改才恢复）。
+   现改为**反向验证只在内存里做字符串注入**，不改动仓库文件；确需改文件验证时必须 `try/finally` 保证还原，
+   并把单次测试超时压到小于外层超时。
+2. 这次反向验证还抓出守卫自身的洞：`cleanup\(\)[^]*?` 会跨过 `}` 匹配到下面的「启动前清理」行，使「删掉 cleanup
+   内的删卷」**假通过**；已收紧为 `[^}]*?`（不跨函数体）。**没被破坏性验证过的守卫等于没有守卫**——这是本仓第三次
+   由反向验证抓出的守卫缺陷。
+
 ## 重启后全面清理（第三轮）与内存真象（2026-09-19 21:1x）
 
 **清理方式**（针对「不要再次死机」）：全程**一条 `ControlMaster` 复用连接**（不再反复新建、不再制造连接风暴），

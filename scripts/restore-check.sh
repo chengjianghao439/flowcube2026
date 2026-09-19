@@ -48,6 +48,11 @@ PROJECT_DIR="${PROJECT_DIR:-/opt/flowcube}"
 BACKUP_DIR="${BACKUP_DIR:-/opt/flowcube/backups}"
 RESTORE_IMAGE="${RESTORE_IMAGE:-mysql:8.0}"
 RESTORE_DB="${RESTORE_DB:-flowcube_restore_check}"
+# 临时数据卷用**具名**卷（而不是让 mysql 镜像自动建匿名卷）：名字固定，才能在每次演练启动时幂等
+# 清掉上次异常中断留下的残留。2026-09-19 查明：匿名卷一旦因 SIGKILL / 机器重启 / OOM 绕过 trap，
+# 就会以 64 位 hex 名长期堆积——2026-08-10、08-25、09-01 各残留一个含完整业务表的
+# flowcube_restore_check 卷，共 769MB。
+RESTORE_VOLUME="${RESTORE_VOLUME:-flowcube_restore_check_tmp}"
 RESTORE_MEMORY="${RESTORE_MEMORY:-768m}"
 RESTORE_CPUS="${RESTORE_CPUS:-1}"
 RESTORE_PIDS="${RESTORE_PIDS:-256}"
@@ -125,19 +130,28 @@ fi
 # 起一个临时 MySQL 容器（随机名防冲突），用 root 密码导入
 CONTAINER="flowcube-restore-check-$$"
 cleanup() {
-  # MySQL 镜像声明匿名数据卷；只清本任务容器及其卷，避免演练长期积累数据。
+  # 数据目录是**具名**卷（见 RESTORE_VOLUME）：`docker rm -f -v` 只删匿名卷、对具名卷无效，
+  # 因此必须再显式删卷，否则成功路径也会把整个恢复库留在盘上。
   DOCKER_COMMAND_TIMEOUT=5 docker rm -f -v "$CONTAINER" >/dev/null 2>&1 \
     || echo "[WARN] 临时恢复容器清理失败，请检查 $CONTAINER" >&2
+  DOCKER_COMMAND_TIMEOUT=10 docker volume rm -f "$RESTORE_VOLUME" >/dev/null 2>&1 \
+    || echo "[WARN] 临时恢复数据卷清理失败，请检查 $RESTORE_VOLUME" >&2
   [ -n "${IMPORT_LOG:-}" ] && rm -f "$IMPORT_LOG"
 }
 trap cleanup EXIT
 trap 'exit 124' TERM
 trap 'exit 130' INT
 
+# 启动前先清掉同名卷：上一次演练若被 SIGKILL / 机器重启 / OOM 杀掉，trap 不会执行、卷会留下；
+# 这里幂等清理让它自愈，异常中断也不再累积（旧写法用匿名卷，根本无法按名字回收）。
+echo "[$(ts)] [INFO] 清理可能残留的临时数据卷 $RESTORE_VOLUME ..."
+DOCKER_COMMAND_TIMEOUT=15 docker volume rm -f "$RESTORE_VOLUME" >/dev/null 2>&1 || true
+
 echo "[$(ts)] [INFO] 启动临时 MySQL 容器 $CONTAINER ..."
 docker run -d --name "$CONTAINER" \
   --network none --memory "$RESTORE_MEMORY" --memory-swap "$RESTORE_MEMORY" \
   --cpus "$RESTORE_CPUS" --pids-limit "$RESTORE_PIDS" \
+  -v "$RESTORE_VOLUME:/var/lib/mysql" \
   -e MYSQL_ROOT_PASSWORD=restore_check_pw \
   -e MYSQL_DATABASE="$RESTORE_DB" \
   "$RESTORE_IMAGE" >/dev/null

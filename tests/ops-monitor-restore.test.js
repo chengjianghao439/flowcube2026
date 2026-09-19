@@ -157,3 +157,30 @@ test('钉钉告警失败必须非 0 返回，不得静默吞掉', () => {
   assert.match(lines[1], /^UNREACHABLE=1$/, '不可达 webhook 必须以 1 返回（旧实现恒返回 0）')
   assert.equal(lines[2], 'abc', 'json_escape 必须剥离会破坏 JSON 的引号与反斜杠')
 })
+
+// 2026-09-19 查明：恢复演练用 `docker run` 起临时 MySQL，却没有挂载具名卷——`mysql:8.0` 镜像声明了
+// `VOLUME /var/lib/mysql`，Docker 于是自动创建**匿名卷**。脚本本来就有 `trap cleanup EXIT` 与
+// `docker rm -f -v`，但 SIGKILL / 机器重启 / OOM 会绕过 trap，而匿名卷无法按名字回收，于是长期堆积：
+// 2026-08-10、08-25、09-01（每周一的自动演练）各留下一个含**完整业务表**的 `flowcube_restore_check` 卷，
+// 合计 769MB，直到 2026-09-19 排查磁盘时才被发现并清理。现改为具名卷 + 启动前幂等清理，使异常中断自愈。
+// 反向验证：去掉启动前清理、退回不挂卷（匿名卷）写法，本断言都必须失败。
+test('恢复演练的临时数据卷必须具名，且启动前幂等清理（防匿名卷因 SIGKILL 累积）', () => {
+  const src = fs.readFileSync(path.join(root, 'scripts/restore-check.sh'), 'utf8')
+  assert.match(src, /RESTORE_VOLUME="\$\{RESTORE_VOLUME:-flowcube_restore_check_tmp\}/, '必须使用具名卷')
+  assert.match(src, /-v "\$RESTORE_VOLUME:\/var\/lib\/mysql"/, '必须把具名卷挂到 /var/lib/mysql（否则镜像会建匿名卷）')
+  assert.match(
+    src,
+    /DOCKER_COMMAND_TIMEOUT=15 docker volume rm -f "\$RESTORE_VOLUME" >\/dev\/null 2>&1 \|\| true/,
+    '必须在启动容器前幂等清理同名残留卷',
+  )
+  // 必须限定在 cleanup 函数体内匹配：`[^]*?` 会跨过 `}` 一直匹配到下面「启动前清理」那一行，
+  // 于是删掉 cleanup 里的删卷也能通过（反向验证时正是这样漏过的）。`[^}]*?` 不会跨出函数体。
+  assert.match(
+    src,
+    /cleanup\(\) \{[^}]*?docker volume rm -f "\$RESTORE_VOLUME"/,
+    'cleanup 必须显式删具名卷（rm -f -v 对具名卷无效）',
+  )
+  const pre = src.indexOf('DOCKER_COMMAND_TIMEOUT=15 docker volume rm -f "$RESTORE_VOLUME"')
+  const run = src.indexOf('docker run -d --name "$CONTAINER"')
+  assert.ok(pre > 0 && pre < run, '幂等清理必须发生在 docker run 之前')
+})
