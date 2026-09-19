@@ -122,6 +122,7 @@
     "smoke:fulfillment": "node tests/fulfillment.smoke.test.js",
     "test:procurement-planning": "node --test tests/procurement-planning.test.js",
     "smoke:procurement-planning": "node --test tests/procurement-planning.smoke.test.js",
-    "test:qty-precision-coverage": "node --test tests/qty-precision-coverage.test.js"
+    "test:qty-precision-coverage": "node --test tests/qty-precision-coverage.test.js",
+    "test:frontend-conventions": "node --test tests/frontend-conventions.test.js"
   }
 }

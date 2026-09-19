@@ -200,6 +200,9 @@ jobs:
       - name: 契约测试 — 数量精度开关的接入覆盖（新入口漏接即失败）
         run: npm run test:qty-precision-coverage
 
+      - name: 契约测试 — 前端命名与呈现结构（菜单/标签/页面标题同名、标签长度、重置口径、图标按钮可读）
+        run: npm run test:frontend-conventions
+
       - name: 契约测试 — 引擎不得自行管理事务（防写操作脱离调用方事务）
         run: npm run test:engine-transaction
 
