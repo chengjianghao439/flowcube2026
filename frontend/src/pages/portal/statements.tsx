@@ -38,8 +38,8 @@ export default function PortalStatementsPage() {
     } },
     { key: 'itemCount', title: '笔数', width: 60 },
     { key: 'totalAmount', title: '汇总金额', width: 110, align: 'right', render: v => <span className="font-medium tabular-nums">¥{Number(v).toFixed(2)}</span> },
-    { key: 'settledAmount', title: '已核销', width: 110, align: 'right', render: v => <span className="tabular-nums">¥{Number(v).toFixed(2)}</span> },
-    { key: 'balance', title: '未核销', width: 110, align: 'right', render: v => <span className="font-semibold tabular-nums">¥{Number(v).toFixed(2)}</span> },
+    { key: 'settledAmount', title: '已结算', width: 110, align: 'right', render: v => <span className="tabular-nums">¥{Number(v).toFixed(2)}</span> },
+    { key: 'balance', title: '未结算', width: 110, align: 'right', render: v => <span className="font-semibold tabular-nums">¥{Number(v).toFixed(2)}</span> },
     { key: 'status', title: '状态', width: 90, render: (_, row) => {
       const r = row as PortalStatementRow
       const tone = r.status === 3 ? 'success' : r.status === 2 ? 'active' : 'draft'
@@ -51,13 +51,13 @@ export default function PortalStatementsPage() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="客户对账门户"
-        description="按客户核对对账期间、汇总金额与核销进度。此页面只读。"
+        title="客户对账单查询"
+        description="选择客户后查看每期对账单：金额、已结算与未结算金额。本页仅供查看。"
       />
 
       <FilterCard>
         <span className="text-sm font-medium">对账客户</span>
-        <div className="w-80"><FinderTrigger value={customer?.name ?? ''} placeholder="选择需要核对的客户" onClick={() => setFinderOpen(true)} /></div>
+        <div className="w-80"><FinderTrigger value={customer?.name ?? ''} placeholder="选择要查看的客户" onClick={() => setFinderOpen(true)} /></div>
         {customer && (
           <Button variant="ghost" size="sm" onClick={() => { setCustomer(null); }}>清空</Button>
         )}
@@ -84,7 +84,7 @@ export default function PortalStatementsPage() {
         <div className="flex flex-col items-center gap-3 rounded-lg border bg-card py-20 text-muted-foreground">
           <FileText className="h-8 w-8 opacity-40" />
           <h2 className="font-medium text-foreground">先选择一位客户</h2>
-          <p className="text-sm">查看该客户的对账期间、已核销金额与未核销余额。</p>
+          <p className="text-sm">查看该客户每期对账单的金额、已结算与未结算金额。</p>
           <Button variant="outline" onClick={() => setFinderOpen(true)}>选择客户</Button>
         </div>
       )}

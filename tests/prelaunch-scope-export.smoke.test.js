@@ -37,9 +37,6 @@ async function main() {
   log.assert('拒绝不属于目标仓库的库位', badLocation.status === 400, badLocation.status)
   const invalidProduct = await ctx.http.post('/api/plastic-boxes', { token: admin.token, json: { ...box, productId: 99999999 } })
   log.assert('拒绝不存在的商品', invalidProduct.status === 400, invalidProduct.status)
-  await q('INSERT INTO purchase_orders(order_no,supplier_id,supplier_name,warehouse_id,warehouse_name,status,total_amount,operator_id,operator_name) VALUES(?,?,?,?,?,2,100,?,?)', [`FIX-PO-${suffix}`, ctx.supplier.id, ctx.supplier.name, wh.insertId, '外仓', user.id, '测试'])
-  const portal = await ctx.http.get(`/api/portal/purchase-status?supplierId=${ctx.supplier.id}`, { token: limited.token })
-  log.assert('门户采购不含外仓订单', !portal.data.data.list.some(o => o.orderNo === `FIX-PO-${suffix}`))
 
   const [customer] = await q('INSERT INTO sale_customers(code,name) VALUES(?,?)', [`FIX-C-${suffix}`, `甲${suffix}`])
   const [other] = await q('INSERT INTO sale_customers(code,name) VALUES(?,?)', [`FIX-C2-${suffix}`, `甲${suffix}乙`])

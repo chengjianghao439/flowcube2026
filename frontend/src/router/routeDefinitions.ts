@@ -7,7 +7,7 @@ export type RouteTabIdentity =
   | { kind: 'full-url' }
   | { kind: 'query-keys'; keys: string[] }
 
-export type RouteComponentKey = 'PartyLedgerPage' | 'DashboardPage' | 'SalePage' | 'SaleFormPage' | 'PurchasePage' | 'PurchaseFormPage' | 'RequisitionsPage' | 'RequisitionFormPage' | 'ProductPage' | 'PriceChangePage' | 'ProductFormPage' | 'CategoryPage' | 'WarehouseStructurePage' | 'InventoryPage' | 'InventoryTracePage' | 'PlasticBoxesPage' | 'StockcheckPage' | 'AbcClassPage' | 'DisposalPage' | 'ProcurementPlanListPage' | 'ProcurementPlanDetailPage' | 'TransferPage' | 'TransferFormPage' | 'InboundTasksPage' | 'InboundTaskCreatePage' | 'InboundTaskDetailPage' | 'PickingWavesPage' | 'CustomersPage' | 'CarriersPage' | 'CarrierAccountsPage' | 'LogisticsPage' | 'LogisticsDetailPage' | 'FreightReconciliationPage' | 'SuppliersPage' | 'ReturnsPage' | 'PurchaseReturnFormPage' | 'SaleReturnFormPage' | 'PayablePage' | 'ReceivablePage' | 'UsersPage' | 'DepartmentsPage' | 'ApprovalFlowsPage' | 'ApprovalPendingPage' | 'PermissionsPage' | 'SettingsPage' | 'BarcodePrintQueryPage' | 'OplogsPage' | 'ReportsPage' | 'RoleWorkbenchPage' | 'FinanceDashboardPage' | 'FinanceAccountsPage' | 'FinanceTransactionsPage' | 'ExpenseClaimsPage' | 'ExpenseCategoriesPage' | 'AcctAccountsPage' | 'AcctVouchersPage' | 'AcctLedgerPage' | 'AcctReportsPage' | 'AcctInvoicesPage' | 'RefundsPage' | 'CreditOverridesPage' | 'AcctPeriodsPage' | 'AcctConsolidationPage' | 'AcctTaxPage' | 'FixedAssetsPage' | 'AvgCostReconciliationPage' | 'ReconciliationPayablePage' | 'ReconciliationReceivablePage' | 'ProfitAnalysisPage' | 'KpiPage' | 'ReplenishmentPage' | 'InventoryAgingPage' | 'WavePerformancePage' | 'PdaAnomalyPage' | 'WarehouseOpsPage' | 'PrintTemplatesPage' | 'PrintTemplateEditorPage' | 'PrintersPage' | 'PdaDevicesPage' | 'PortalStatementsPage' | 'PortalPurchaseStatusPage'
+export type RouteComponentKey = 'PartyLedgerPage' | 'DashboardPage' | 'SalePage' | 'SaleFormPage' | 'PurchasePage' | 'PurchaseFormPage' | 'RequisitionsPage' | 'RequisitionFormPage' | 'ProductPage' | 'PriceChangePage' | 'ProductFormPage' | 'CategoryPage' | 'WarehouseStructurePage' | 'InventoryPage' | 'InventoryTracePage' | 'PlasticBoxesPage' | 'StockcheckPage' | 'AbcClassPage' | 'DisposalPage' | 'ProcurementPlanListPage' | 'ProcurementPlanDetailPage' | 'TransferPage' | 'TransferFormPage' | 'InboundTasksPage' | 'InboundTaskCreatePage' | 'InboundTaskDetailPage' | 'PickingWavesPage' | 'CustomersPage' | 'CarriersPage' | 'CarrierAccountsPage' | 'LogisticsPage' | 'LogisticsDetailPage' | 'FreightReconciliationPage' | 'SuppliersPage' | 'ReturnsPage' | 'PurchaseReturnFormPage' | 'SaleReturnFormPage' | 'PayablePage' | 'ReceivablePage' | 'UsersPage' | 'DepartmentsPage' | 'ApprovalFlowsPage' | 'ApprovalPendingPage' | 'PermissionsPage' | 'SettingsPage' | 'BarcodePrintQueryPage' | 'OplogsPage' | 'ReportsPage' | 'RoleWorkbenchPage' | 'FinanceDashboardPage' | 'FinanceAccountsPage' | 'FinanceTransactionsPage' | 'ExpenseClaimsPage' | 'ExpenseCategoriesPage' | 'AcctAccountsPage' | 'AcctVouchersPage' | 'AcctLedgerPage' | 'AcctReportsPage' | 'AcctInvoicesPage' | 'RefundsPage' | 'CreditOverridesPage' | 'AcctPeriodsPage' | 'AcctConsolidationPage' | 'AcctTaxPage' | 'FixedAssetsPage' | 'AvgCostReconciliationPage' | 'ReconciliationPayablePage' | 'ReconciliationReceivablePage' | 'ProfitAnalysisPage' | 'KpiPage' | 'ReplenishmentPage' | 'InventoryAgingPage' | 'WavePerformancePage' | 'PdaAnomalyPage' | 'WarehouseOpsPage' | 'PrintTemplatesPage' | 'PrintTemplateEditorPage' | 'PrintersPage' | 'PdaDevicesPage' | 'PortalStatementsPage'
 
 type RouteNavMeta =
   | { kind: 'link'; label: string; order: number; iconKey?: string }
@@ -146,7 +146,7 @@ export const routeRegistry: RouteRegistryEntry[] = [
   // ── 销售 ──────────────────────────────────────────────
   {
     path: '/sale',
-    title: '销售管理',
+    title: '销售订单',
     permission: PERMISSIONS.SALE_ORDER_VIEW,
     componentKey: 'SalePage',
     keepAlive: true,
@@ -192,21 +192,12 @@ export const routeRegistry: RouteRegistryEntry[] = [
   },
   {
     path: '/portal/statements',
-    title: '客户对账门户',
+    title: '客户对账单查询',
     permission: PERMISSIONS.PAYMENT_VIEW,
     componentKey: 'PortalStatementsPage',
     keepAlive: true,
     tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '销售', section: '门户', order: 50 },
-  },
-  {
-    path: '/portal/purchase-status',
-    title: '供应商到货门户',
-    permission: PERMISSIONS.PURCHASE_ORDER_VIEW,
-    componentKey: 'PortalPurchaseStatusPage',
-    keepAlive: true,
-    tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '采购', section: '门户', order: 50 },
+    nav: { kind: 'menu', group: '销售', section: '对外查询', order: 50 },
   },
   {
     path: '/carriers',
@@ -268,7 +259,7 @@ export const routeRegistry: RouteRegistryEntry[] = [
   },
   {
     path: '/stockcheck/abc',
-    title: '商品分档与分批盘规则',
+    title: '分档与盘点规则',
     permission: PERMISSIONS.STOCKCHECK_ABC_VIEW,
     componentKey: 'AbcClassPage',
     keepAlive: true,
@@ -480,7 +471,7 @@ export const routeRegistry: RouteRegistryEntry[] = [
   },
   {
     path: '/accounting/ledger',
-    title: '总账 / 试算平衡',
+    title: '总账与试算平衡',
     permission: PERMISSIONS.ACCOUNTING_LEDGER_VIEW,
     componentKey: 'AcctLedgerPage',
     keepAlive: true,
@@ -518,7 +509,7 @@ export const routeRegistry: RouteRegistryEntry[] = [
   },
   {
     path: '/accounting/periods',
-    title: '会计期间 / 期末结转',
+    title: '会计期间与结转',
     permission: PERMISSIONS.ACCOUNTING_LEDGER_VIEW,
     componentKey: 'AcctPeriodsPage',
     keepAlive: true,
@@ -536,7 +527,7 @@ export const routeRegistry: RouteRegistryEntry[] = [
   },
   {
     path: '/accounting/consolidation',
-    title: '合并报表 / 账套',
+    title: '合并报表与账套',
     permission: PERMISSIONS.ACCOUNTING_LEDGER_VIEW,
     componentKey: 'AcctConsolidationPage',
     keepAlive: true,

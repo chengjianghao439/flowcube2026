@@ -90,7 +90,6 @@ const components: Record<definitions.RouteComponentKey, RouteComponent> = {
   PrintersPage: lazy(() => import('@/pages/settings/printers')),
   PdaDevicesPage: lazy(() => import('@/pages/settings/pda-devices')),
   PortalStatementsPage: lazy(() => import('@/pages/portal/statements')),
-  PortalPurchaseStatusPage: lazy(() => import('@/pages/portal/purchase-status')),
 }
 
 export const routeRegistry: RouteRegistryEntry[] = definitions.routeRegistry.map(entry => ({ ...entry, component: components[entry.componentKey] }))

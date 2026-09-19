@@ -12,16 +12,4 @@ const statements = async (req, res, next) => {
   } catch (e) { next(e) }
 }
 
-const purchaseStatus = async (req, res, next) => {
-  try {
-    const data = await svc.listPurchaseStatus({
-      supplierId: req.query.supplierId,
-      scopeWarehouseIds: req.user.warehouseIds,
-      page: +req.query.page || 1,
-      pageSize: +req.query.pageSize || 20,
-    })
-    return successResponse(res, data, '查询成功')
-  } catch (e) { next(e) }
-}
-
-module.exports = { statements, purchaseStatus }
+module.exports = { statements }
