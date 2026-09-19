@@ -42,7 +42,7 @@ async function assertLocationDeletable(id) {
     [id],
   )
   if (containers[0]) {
-    throw new AppError('库位仍被库存容器引用，禁止删除；请改为停用', 409)
+    throw new AppError('库位仍被库存条码引用，禁止删除；请改为停用', 409)
   }
 }
 

@@ -83,13 +83,13 @@ async function assertTaskPickScanClosure(conn, taskId) {
   const lockedIds = new Set(locked.map(r => r.id))
   const pickIds = new Set(pickedContainers.map(r => r.cid))
   if (lockedIds.size !== pickIds.size) {
-    throw new AppError('锁定容器与拣货扫码容器不一致：每个锁定容器必须完成拣货扫码', 400)
+    throw new AppError('锁定的库存条码与拣货扫码的库存条码不一致：每个锁定的库存条码都必须完成拣货扫码', 400)
   }
   for (const id of lockedIds) {
-    if (!pickIds.has(id)) throw new AppError('存在未经拣货扫码的锁定容器', 400)
+    if (!pickIds.has(id)) throw new AppError('存在未经拣货扫码的锁定库存条码', 400)
   }
   for (const id of pickIds) {
-    if (!lockedIds.has(id)) throw new AppError('拣货扫码中的容器必须全部锁定于本任务', 400)
+    if (!lockedIds.has(id)) throw new AppError('拣货扫码的库存条码必须全部锁定于本任务', 400)
   }
 }
 

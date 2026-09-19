@@ -826,7 +826,7 @@ async function cancel(taskId, scopeWarehouseIds = null) {
       'SELECT COUNT(*) AS n FROM inventory_containers WHERE inbound_task_id = ? AND deleted_at IS NULL',
       [taskId],
     )
-    if (Number(n) > 0) throw new AppError('任务已产生容器，无法取消', 400)
+    if (Number(n) > 0) throw new AppError('任务已产生库存条码，无法取消', 400)
     const cancelRule = assertStatusAction('inboundTask', 'cancel', taskRow.status)
     await compareAndSetStatus(conn, {
       table: 'inbound_tasks',

@@ -76,7 +76,7 @@ async function lockWaveForTransition(conn, id) {
     'SELECT id, status, warehouse_id FROM picking_waves WHERE id = ? FOR UPDATE',
     [id],
   )
-  if (!wave) throw new AppError('波次不存在', 404)
+  if (!wave) throw new AppError('批次不存在', 404)
   return wave
 }
 
@@ -89,7 +89,7 @@ async function casWaveStatus(conn, { id, fromStatus, toStatus, extraSet = '', ex
     [toStatus, ...extraParams, id, fromStatus],
   )
   if (result.affectedRows !== 1) {
-    throw new AppError('波次状态已变化，请刷新后重试', 409)
+    throw new AppError('批次状态已变化，请刷新后重试', 409)
   }
 }
 
@@ -161,7 +161,7 @@ async function findById(id, scopeWarehouseIds = null, { refreshProgress = true }
      WHERE w.id = ?`,
     [id],
   )
-  if (!row) throw new AppError('波次不存在', 404)
+  if (!row) throw new AppError('批次不存在', 404)
   // 单据级数据权限（2026-08-21 审计 A.3 修复）：限仓用户不能看他人仓库波次
   assertInScope(scopeWarehouseIds, row.warehouse_id, '波次')
 
@@ -261,12 +261,12 @@ async function findById(id, scopeWarehouseIds = null, { refreshProgress = true }
 
 async function create({ taskIds, remark, priority = 2 }, scopeWarehouseIds = null) {
   if (!taskIds?.length || taskIds.length < 2) {
-    throw new AppError('请选择至少 2 个任务创建波次', 400)
+    throw new AppError('请选择至少 2 个任务创建批次', 400)
   }
   const normalizedTaskIds = taskIds.map(id => Number(id)).filter(id => Number.isFinite(id) && id > 0)
   const uniqueTaskIds = [...new Set(normalizedTaskIds)].sort((a, b) => a - b)
   if (uniqueTaskIds.length !== taskIds.length) {
-    throw new AppError('波次任务不可重复选择', 400)
+    throw new AppError('批次任务不可重复选择', 400)
   }
 
   const conn = await pool.getConnection()
@@ -316,7 +316,7 @@ async function create({ taskIds, remark, priority = 2 }, scopeWarehouseIds = nul
     // 校验：所有任务必须同一仓库
     const whIds = [...new Set(tasks.map(t => t.warehouse_id))]
     if (whIds.length > 1) {
-      throw new AppError('选中任务不属于同一仓库，无法创建波次', 400)
+      throw new AppError('选中任务不属于同一仓库，无法创建批次', 400)
     }
 
     // 仓库数据权限（2026-08-21 审计 A.3 修复）：限仓用户不能用他人仓库的任务建波次
@@ -450,7 +450,7 @@ async function finish(id, scopeWarehouseIds = null) {
     const wave = await lockWaveForTransition(conn, id)
     assertInScope(scopeWarehouseIds, wave.warehouse_id, '波次')
     if (Number(wave.status) !== WAVE_STATUS_CODE.SORTING) {
-      throw new AppError('只有"待分拣"状态可以完成波次', 409)
+      throw new AppError('只有「待分拣」状态可以完成批次', 409)
     }
     await refreshWavePickedFromTasks(conn, id)
 
@@ -504,7 +504,7 @@ async function cancel(id, scopeWarehouseIds = null) {
     assertInScope(scopeWarehouseIds, wave.warehouse_id, '波次')
     const currentStatus = Number(wave.status)
     if (currentStatus === WAVE_STATUS_CODE.DONE || currentStatus === WAVE_STATUS_CODE.CANCELLED) {
-      throw new AppError('波次已完成或已取消', 409)
+      throw new AppError('批次已完成或已取消', 409)
     }
     // 波次取消必须联动取消其下仍在进行中的仓库任务，否则任务会脱离波次孤立卡在
     // 拣货中/待分拣等状态：容器锁被下面这行简单粗暴地清空，但任务本身既没有被取消，

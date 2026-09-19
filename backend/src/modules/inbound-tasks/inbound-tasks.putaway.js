@@ -125,7 +125,7 @@ async function putaway(taskId, { containerId, locationId, deviatedFromSuggestion
       'SELECT product_id, warehouse_id FROM inventory_containers WHERE id = ? AND deleted_at IS NULL',
       [containerId],
     )
-    if (!cRef) throw new AppError('容器不存在', 404)
+    if (!cRef) throw new AppError('库存条码不存在', 404)
     await lockStockDimension(conn, cRef.product_id, cRef.warehouse_id)
 
     const [[c]] = await conn.query(
@@ -135,10 +135,10 @@ async function putaway(taskId, { containerId, locationId, deviatedFromSuggestion
        WHERE c.id = ? AND c.deleted_at IS NULL FOR UPDATE`,
       [containerId],
     )
-    if (!c) throw new AppError('容器不存在', 404)
-    if (Number(c.inbound_task_id) !== Number(taskId)) throw new AppError('容器不属于该入库任务', 400)
+    if (!c) throw new AppError('库存条码不存在', 404)
+    if (Number(c.inbound_task_id) !== Number(taskId)) throw new AppError('库存条码不属于该入库任务', 400)
     if (Number(c.status) !== CONTAINER_STATUS.PENDING_PUTAWAY) {
-      throw new AppError('容器须为待上架状态（status=4）', 400)
+      throw new AppError('库存条码须为待上架状态', 400)
     }
 
     const [[storedBefore]] = await conn.query(
@@ -166,7 +166,7 @@ async function putaway(taskId, { containerId, locationId, deviatedFromSuggestion
       [locationId],
     )
     if (!loc) throw new AppError('库位不存在或已停用', 404)
-    if (Number(loc.warehouse_id) !== Number(c.warehouse_id)) throw new AppError('库位与容器不在同一仓库', 400)
+    if (Number(loc.warehouse_id) !== Number(c.warehouse_id)) throw new AppError('库位与库存条码不在同一仓库', 400)
 
     await conn.query(
       `UPDATE inventory_containers

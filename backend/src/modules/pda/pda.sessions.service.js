@@ -115,7 +115,7 @@ async function createSession({ deviceCode, deviceSecret, userId }) {
  */
 async function renewSession({ sessionToken }) {
   const token = String(sessionToken || '')
-  if (!token) throw new AppError('缺少设备会话票据', 400, 'PDA_SESSION_REQUIRED')
+  if (!token) throw new AppError('缺少设备登录凭证', 400, 'PDA_SESSION_REQUIRED')
   const tokenHash = hashToken(token)
   const [[row]] = await pool.query(
     `SELECT s.id AS session_id, s.device_id, s.user_id, s.scopes,
@@ -129,11 +129,11 @@ async function renewSession({ sessionToken }) {
       LIMIT 1`,
     [tokenHash],
   )
-  if (!row) throw new AppError('设备会话不存在或已失效', 401, 'PDA_SESSION_INVALID')
-  if (row.revoked_at) throw new AppError('设备会话已吊销', 401, 'PDA_SESSION_REVOKED')
+  if (!row) throw new AppError('设备登录已失效，请重新登录', 401, 'PDA_SESSION_INVALID')
+  if (row.revoked_at) throw new AppError('设备登录已被停用', 401, 'PDA_SESSION_REVOKED')
   if (String(row.device_status) !== 'active') throw new AppError('PDA 设备未启用', 403, 'PDA_DEVICE_NOT_ACTIVE')
   if (row.expires_at && new Date(row.expires_at).getTime() <= Date.now()) {
-    throw new AppError('设备会话已过期，请重新登录', 401, 'PDA_SESSION_EXPIRED')
+    throw new AppError('设备登录已过期，请重新登录', 401, 'PDA_SESSION_EXPIRED')
   }
 
   const newToken = crypto.randomBytes(32).toString('hex')

@@ -16,8 +16,8 @@ function parseQuery(input) {
   const { startDate = '', endDate = '' } = input
   if ((startDate && !validDate(startDate)) || (endDate && !validDate(endDate)) || (startDate && endDate && startDate > endDate)) throw new AppError('查询日期无效', 400)
   const snapshotId = input.snapshotId == null ? null : Number(input.snapshotId)
-  if (snapshotId != null && (!Number.isSafeInteger(snapshotId) || snapshotId < 0)) throw new AppError('快照参数无效', 400)
-  if (input.snapshotCount != null && (!Number.isSafeInteger(Number(input.snapshotCount)) || Number(input.snapshotCount) < 0)) throw new AppError('快照参数无效',400)
+  if (snapshotId != null && (!Number.isSafeInteger(snapshotId) || snapshotId < 0)) throw new AppError('对账数据参数无效', 400)
+  if (input.snapshotCount != null && (!Number.isSafeInteger(Number(input.snapshotCount)) || Number(input.snapshotCount) < 0)) throw new AppError('对账数据参数无效',400)
   for (const key of ['page', 'pageSize']) {
     if (input[key] != null && (!Number.isSafeInteger(Number(input[key])) || Number(input[key]) < 1)) throw new AppError('分页参数无效', 400)
   }

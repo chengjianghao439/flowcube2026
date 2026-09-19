@@ -235,7 +235,7 @@ async function allocateTransferQuantity(conn, orderId, productId, qty, direction
   if (!items.length) throw new AppError('该商品不在本调拨单明细内', 400)
   const units = value => Math.round(Number(value) * 10000)
   let remaining = units(qty)
-  if (!Number.isSafeInteger(remaining) || remaining <= 0) throw new AppError('容器剩余数量无效，无法调拨', 409)
+  if (!Number.isSafeInteger(remaining) || remaining <= 0) throw new AppError('库存条码的剩余数量无效，无法调拨', 409)
   const capacities = items.map(item => {
     const planned = units(item.quantity), shipped = units(item.deducted_qty), received = units(item.received_qty)
     if (received < 0 || shipped < received || planned < shipped) throw new AppError('调拨明细数量不一致，请先核对单据', 409)
@@ -282,18 +282,18 @@ async function scanOut(id, { containerBarcode }, operator, requestKey, scopeWare
       'SELECT product_id FROM inventory_containers WHERE barcode = ? AND deleted_at IS NULL',
       [barcode],
     )
-    if (!cPeek) throw new AppError('容器条码不存在', 404)
+    if (!cPeek) throw new AppError('库存条码不存在', 404)
     await lockStockDimension(conn, cPeek.product_id, fromWh)
 
     const [[c]] = await conn.query(
       'SELECT * FROM inventory_containers WHERE barcode = ? AND deleted_at IS NULL FOR UPDATE',
       [barcode],
     )
-    if (!c) throw new AppError('容器条码不存在', 404)
-    if (Number(c.warehouse_id) !== fromWh) throw new AppError('该容器不在本调拨单的调出仓库', 400)
-    if (Number(c.status) !== CONTAINER_STATUS.ACTIVE) throw new AppError('该容器不是在库状态，无法调拨出库', 400)
-    if (c.locked_by_task_id) throw new AppError('该容器已被其他任务锁定', 409)
-    if (c.transfer_order_id) throw new AppError('该容器已在其他调拨在途中', 409)
+    if (!c) throw new AppError('库存条码不存在', 404)
+    if (Number(c.warehouse_id) !== fromWh) throw new AppError('该库存条码不在本调拨单的调出仓库', 400)
+    if (Number(c.status) !== CONTAINER_STATUS.ACTIVE) throw new AppError('该库存条码不是「在库」状态，无法调拨出库', 400)
+    if (c.locked_by_task_id) throw new AppError('该库存条码已被其他任务锁定', 409)
+    if (c.transfer_order_id) throw new AppError('该库存条码已在其他调拨在途中', 409)
 
     const qty = Number(c.remaining_qty)
     const allocations = await allocateTransferQuantity(conn, id, c.product_id, qty, 'out')
@@ -382,16 +382,16 @@ async function scanIn(id, { containerBarcode, locationId }, operator, requestKey
       'SELECT product_id, warehouse_id FROM inventory_containers WHERE barcode = ? AND deleted_at IS NULL',
       [String(containerBarcode || '').trim()],
     )
-    if (!cRef) throw new AppError('容器条码不存在', 404)
+    if (!cRef) throw new AppError('库存条码不存在', 404)
     await lockStockDimension(conn, cRef.product_id, toWh)
 
     const [[c]] = await conn.query(
       'SELECT * FROM inventory_containers WHERE barcode = ? AND deleted_at IS NULL FOR UPDATE',
       [String(containerBarcode || '').trim()],
     )
-    if (!c) throw new AppError('容器条码不存在', 404)
+    if (!c) throw new AppError('库存条码不存在', 404)
     if (Number(c.transfer_order_id) !== Number(id) || Number(c.status) !== CONTAINER_STATUS.PENDING_PUTAWAY) {
-      throw new AppError('该容器不是本调拨单的在途容器', 400)
+      throw new AppError('该库存条码不是本调拨单的在途库存条码', 400)
     }
 
     const [[loc]] = await conn.query(
@@ -529,7 +529,7 @@ async function forceCloseInTransit(id, operator, { reason } = {}, scopeWarehouse
       [id, CONTAINER_STATUS.PENDING_PUTAWAY],
     )
     if (!containers.length) {
-      throw new AppError('该调拨单已无在途容器，无需异常了结', 409)
+      throw new AppError('该调拨单已无在途库存条码，无需异常了结', 409)
     }
     await conn.query(
       'UPDATE inventory_containers SET status = ?, transfer_order_id = NULL WHERE transfer_order_id = ? AND status = ?',

@@ -147,18 +147,18 @@ async function createContainer(conn, {
 
   const sid = Number(sourceRefId)
   if (!isEmptyShell && (!Number.isFinite(sid) || sid <= 0)) {
-    throw new AppError('容器必须提供有效的 sourceRefId（正整数单据ID）', 400)
+    throw new AppError('库存条码必须关联有效单据（正整数单据 ID）', 400)
   }
 
   const st = Number(containerStatus)
   if (st === CONTAINER_STATUS.ACTIVE && !DIRECT_ACTIVE_SOURCE_TYPES.has(sourceType) && !isEmptyShell) {
     throw new AppError(
-      '禁止直接创建在库(ACTIVE)容器：仅「调拨入、同仓拆分」允许；盘点/导入/销售退货等须先待上架/质检再入账',
+      '禁止直接创建「在库」库存条码：仅「调拨入、同仓拆分」允许；盘点/导入/销售退货等须先待上架/质检再入账',
       400,
     )
   }
   if (st === CONTAINER_STATUS.ACTIVE && sourceType === SOURCE_TYPE.INBOUND_TASK) {
-    throw new AppError('禁止以在库状态创建入库任务容器，须先收货(待上架)再上架', 400)
+    throw new AppError('禁止以「在库」状态创建入库任务的库存条码，须先收货(待上架)再上架', 400)
   }
 
   let deadline = null
@@ -236,7 +236,7 @@ async function promotePendingContainerToActive(conn, containerId, productId, war
     [CONTAINER_STATUS.ACTIVE, containerId, CONTAINER_STATUS.PENDING_PUTAWAY],
   )
   if (r.affectedRows !== 1) {
-    throw new AppError('容器无法从待上架转为在库（状态已变更或不存在）', 409)
+    throw new AppError('库存条码无法从待上架转为在库（状态已变更或不存在）', 409)
   }
   return syncStockFromContainers(conn, productId, warehouseId)
 }
@@ -835,7 +835,7 @@ async function lockContainer(conn, containerId, taskId, options = {}) {
     [taskId, ...params],
   )
   if (result.affectedRows === 0) {
-    throw new AppError('容器不满足拣货锁定条件，可能已被其它任务锁定或库存/商品/仓库/条码不匹配', 409)
+    throw new AppError('库存条码不满足拣货锁定条件，可能已被其它任务锁定或库存/商品/仓库/条码不匹配', 409)
   }
 }
 
@@ -951,7 +951,7 @@ async function splitContainer(conn, { containerId, qty, remark = null, targetCon
   const cid = Number(containerId)
   const q = Number(qty)
   const tid = targetContainerId != null ? Number(targetContainerId) : null
-  if (!Number.isFinite(cid) || cid <= 0) throw new AppError('无效容器 ID', 400)
+  if (!Number.isFinite(cid) || cid <= 0) throw new AppError('库存条码无效', 400)
   if (!Number.isFinite(q) || q <= 0) throw new AppError('拆分数量须为正数', 400)
 
   // 加锁顺序（2026-09-18 审计 P1）：本引擎的全局约定是「先 lockStockDimension(商品,仓库) 再锁容器」
@@ -973,12 +973,12 @@ async function splitContainer(conn, { containerId, qty, remark = null, targetCon
      FOR UPDATE`,
     [cid],
   )
-  if (!row) throw new AppError('容器不存在', 404)
+  if (!row) throw new AppError('库存条码不存在', 404)
   // 「只能整数」的商品不得按小数拆分（迁移 254）。拆分数量常取自容器余量，
   // 历史存量可能带多位小数，故只校验整数约束、不校验「两位小数」上限。
   await assertQtyPrecision(conn, [{ productId: row.product_id, qty: q, label: '拆分数量' }], { checkScale: false })
   if (Number(row.status) !== CONTAINER_STATUS.ACTIVE) {
-    throw new AppError('源容器须为在库(ACTIVE)状态', 400)
+    throw new AppError('来源库存条码须为「在库」状态', 400)
   }
   // 个体容器（一件一码）不可拆分也不可并入塑料盒（设计文档 13 §2.2）：它的条码就是这件货的
   // 唯一身份，一旦并入盒中（盒里混着若干件、盒码只标识盒子）或整件迁入新 B 盒，身份即丢失。
@@ -1035,7 +1035,7 @@ async function splitContainer(conn, { containerId, qty, remark = null, targetCon
       throw new AppError('目标塑料盒绑定产品不匹配', 400)
     }
     if (Number(target.warehouse_id) !== Number(row.warehouse_id)) {
-      throw new AppError('目标塑料盒与源容器不在同一仓库，不可合并', 400)
+      throw new AppError('目标塑料盒与来源库存条码不在同一仓库，不可合并', 400)
     }
 
     // 批次一致性：此前并货只校验商品与仓库，不看批次，于是不同批次的货可以并进同一个盒，
@@ -1171,9 +1171,9 @@ async function splitTaskLockedContainerForReturn(conn, { taskId, containerId, qt
      FOR UPDATE`,
     [containerId],
   )
-  if (!row) throw new AppError('容器不存在', 404)
+  if (!row) throw new AppError('库存条码不存在', 404)
   if (Number(row.locked_by_task_id) !== Number(taskId)) {
-    throw new AppError('容器未锁定于该任务，无法拆分归还', 409)
+    throw new AppError('库存条码未锁定于该任务，无法拆分归还', 409)
   }
   const rem = Number(row.remaining_qty)
   const q = Number(qty)
@@ -1267,7 +1267,7 @@ async function reserveTaskLockedContainersForReturn(conn, { taskId, productId, q
     remaining -= take
   }
   if (remaining > 0) {
-    throw new AppError('任务锁定容器数量不足，无法拆出待归还数量，请核实拣货记录', 409)
+    throw new AppError('任务锁定的库存条码数量不足，无法拆出待归还数量，请核实拣货记录', 409)
   }
   return picks
 }
@@ -1293,7 +1293,7 @@ async function unlockAndRelocateContainer(conn, { containerId, targetLocationId 
     `UPDATE inventory_containers SET ${sets.join(', ')} WHERE id = ?`,
     params,
   )
-  if (result.affectedRows !== 1) throw new AppError('容器不存在', 404)
+  if (result.affectedRows !== 1) throw new AppError('库存条码不存在', 404)
 }
 
 module.exports = {

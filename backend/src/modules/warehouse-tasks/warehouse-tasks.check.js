@@ -73,7 +73,7 @@ async function checkDoneWithinTransaction(conn, id, { scopeWarehouseIds = null, 
 async function checkItems(taskId, items) {
   void taskId
   void items
-  throw new AppError('已禁止手动提交复核数量，请使用 PDA 复核扫码（扫描容器条码）', 400)
+  throw new AppError('已禁止手动提交复核数量，请使用 PDA 复核扫码（扫描库存条码）', 400)
 }
 
 module.exports = {

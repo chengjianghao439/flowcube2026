@@ -20,15 +20,15 @@ const SUGGEST_LIMIT = 5
 
 async function getPutawaySuggestion(taskId, containerId) {
   const cid = Number(containerId)
-  if (!Number.isFinite(cid) || cid <= 0) throw new AppError('容器无效', 400)
+  if (!Number.isFinite(cid) || cid <= 0) throw new AppError('库存条码无效', 400)
 
   const [[container]] = await pool.query(
     `SELECT id, inbound_task_id, product_id, warehouse_id, status
      FROM inventory_containers WHERE id=? AND deleted_at IS NULL`,
     [cid],
   )
-  if (!container) throw new AppError('容器不存在', 404)
-  if (Number(container.inbound_task_id) !== Number(taskId)) throw new AppError('容器不属于该收货订单', 400)
+  if (!container) throw new AppError('库存条码不存在', 404)
+  if (Number(container.inbound_task_id) !== Number(taskId)) throw new AppError('库存条码不属于该收货订单', 400)
 
   // 同商品已落位库位（按容器数降序）
   const [sameProductLocs] = await pool.query(

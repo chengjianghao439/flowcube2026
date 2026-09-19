@@ -238,11 +238,11 @@ async function changeStock({ type, productId, warehouseId, supplierId, quantity,
     if (!warehouse) throw new AppError('仓库不存在或已停用', 404)
 
     if (type === 1) {
-      throw new AppError('手动入库已关闭：请通过「入库任务」收货生成容器并上架后计入库存', 403)
+      throw new AppError('手动入库已关闭：请通过「入库任务」收货生成库存条码并上架后计入库存', 403)
     }
 
     if (type === 3) {
-      throw new AppError('库存调整已关闭：请创建并提交「盘点单」，差异将通过容器来源 stockcheck 落账', 403)
+      throw new AppError('库存调整已关闭：请创建并提交「盘点单」，差异由盘点结果落账', 403)
     }
 
     if (type !== 2) {
@@ -496,7 +496,7 @@ async function getContainers({ productId, warehouseId, includeLegacy = false }) 
  */
 async function getContainerLogs(containerId) {
   const cid = Number(containerId)
-  if (!Number.isFinite(cid) || cid <= 0) throw new AppError('无效容器 ID', 400)
+  if (!Number.isFinite(cid) || cid <= 0) throw new AppError('库存条码无效', 400)
   const [rows] = await pool.query(
     `SELECT il.quantity, il.move_type, il.type, il.created_at, il.remark,
             il.operator_name, il.ref_type, il.ref_no, pi.name AS product_name
@@ -908,7 +908,7 @@ async function getContainerByBarcode(barcode) {
      WHERE c.barcode = ? AND c.deleted_at IS NULL AND c.status IN (1, 4)`,
     [barcode],
   )
-  if (!row) throw new AppError('容器不存在或已失效', 404)
+  if (!row) throw new AppError('库存条码不存在或已失效', 404)
   return {
     containerId:   row.id,
     barcode:       row.barcode,
@@ -968,7 +968,7 @@ async function queryByBarcode(barcode, { scopeWarehouseIds = null } = {}) {
      LIMIT 10`,
     [bc, ...scope.params],
   )
-  if (!rows.length) throw new AppError('未找到该条码对应的库存容器', 404, 'INVENTORY_BARCODE_NOT_FOUND')
+  if (!rows.length) throw new AppError('未找到该条码对应的库存条码', 404, 'INVENTORY_BARCODE_NOT_FOUND')
   return rows.map(r => ({
     containerId:   r.id,
     barcode:       r.barcode,
@@ -1075,12 +1075,12 @@ async function assignContainerLocation(containerId, locationId, scopeWarehouseId
       'SELECT id, barcode, status, warehouse_id FROM inventory_containers WHERE id=? AND deleted_at IS NULL FOR UPDATE',
       [containerId],
     )
-    if (!container) throw new AppError('容器不存在', 404)
+    if (!container) throw new AppError('库存条码不存在', 404)
     assertInScope(scopeWarehouseIds, container.warehouse_id, '库存容器')
     if (Number(container.status) === 4) {
-      throw new AppError('待上架容器请使用「入库任务」上架接口绑定库位', 400)
+      throw new AppError('待上架库存条码请使用「入库任务」上架接口绑定库位', 400)
     }
-    if (Number(container.status) !== 1) throw new AppError('容器已清空或作废，无法移动库位', 400)
+    if (Number(container.status) !== 1) throw new AppError('库存条码已清空或作废，无法移动库位', 400)
 
     // 校验库位存在，且必须与容器同仓：跨仓库位会让容器带着「别仓库位」在册，
     // 之后的拣货路由、盘点与追溯都会按这个错误位置取数（静默数据错误）。
@@ -1090,7 +1090,7 @@ async function assignContainerLocation(containerId, locationId, scopeWarehouseId
     )
     if (!location) throw new AppError('库位不存在', 404)
     if (Number(location.warehouse_id) !== Number(container.warehouse_id)) {
-      throw new AppError('目标库位不属于该容器所在仓库，无法移动库位', 400)
+      throw new AppError('目标库位不属于该库存条码所在仓库，无法移动库位', 400)
     }
 
     await conn.query(
@@ -1128,7 +1128,7 @@ async function splitContainerOp(containerId, { qty, remark, printLabel, targetCo
       'SELECT warehouse_id FROM inventory_containers WHERE id=? AND deleted_at IS NULL',
       [containerId],
     )
-    if (!scopeRow) throw new AppError('容器不存在', 404)
+    if (!scopeRow) throw new AppError('库存条码不存在', 404)
     assertInScope(scopeWarehouseIds, scopeRow.warehouse_id, '库存容器')
     result = await splitContainer(conn, {
       containerId, qty, remark, targetContainerId,
@@ -1146,7 +1146,7 @@ async function splitContainerOp(containerId, { qty, remark, printLabel, targetCo
         [result.newContainerId],
       )
       if (!row) {
-        throw new AppError('拆分后新容器不存在，无法创建标签打印任务', 500)
+        throw new AppError('拆分后新库存条码不存在，无法创建标签打印任务', 500)
       }
       const job = await enqueueContainerLabelJob({
         conn,

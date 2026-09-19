@@ -527,7 +527,7 @@ async function reprintInboundBarcode(recordId, { createdBy = null } = {}) {
   // 不会被列表列出（2026-09-14 用户决定），也不能靠直接调接口凭空造任务；那种情况请从
   // 收货订单详情发起「整单 / 明细 / 条码补打」。
   if (!Number(row.has_print_job)) {
-    throw new AppError('该条码没有打印记录，无法补打；从未打印过的容器请到收货订单详情发起补打', 400, 'PRINT_BARCODE_NO_PRINT_RECORD')
+    throw new AppError('该条码没有打印记录，无法补打；从未打印过的库存条码请到收货订单详情发起补打', 400, 'PRINT_BARCODE_NO_PRINT_RECORD')
   }
   return enqueueContainerLabelJob({
     containerId: id,

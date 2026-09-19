@@ -90,7 +90,7 @@ function pdaSessionRequired() {
         { ...getRouteMeta(req), error: error?.message || String(error) },
         'PDASession',
       )
-      return next(new AppError('设备会话校验失败，请稍后重试', 503, 'PDA_SESSION_CHECK_FAILED'))
+      return next(new AppError('设备登录状态校验失败，请重新登录', 503, 'PDA_SESSION_CHECK_FAILED'))
     }
 
     if (!row) {

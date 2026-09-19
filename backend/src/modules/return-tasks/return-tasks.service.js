@@ -313,7 +313,7 @@ async function allocateQaContainers(conn, { taskId, taskNo, productId, passedQty
     rejRemaining = Number((rejRemaining - rejTake).toFixed(4))
   }
   if (passRemaining > 0 || rejRemaining > 0) {
-    throw new AppError('质检数量超出待质检容器可用数量', 409)
+    throw new AppError('质检数量超出待质检库存条码的可用数量', 409)
   }
   return changed
 }
@@ -468,8 +468,8 @@ async function putaway(conn, taskId, { containerId, locationId, requestKey, user
      WHERE id = ? AND source_ref_type = 'sale_return' AND source_ref_id = ? AND deleted_at IS NULL`,
     [containerId, taskId],
   )
-  if (!cRef) throw new AppError('容器不存在', 404)
-  if (Number(cRef.warehouse_id) !== Number(taskRow.warehouse_id)) throw new AppError('容器和退货任务不在同一仓库', 400)
+  if (!cRef) throw new AppError('库存条码不存在', 404)
+  if (Number(cRef.warehouse_id) !== Number(taskRow.warehouse_id)) throw new AppError('库存条码和退货任务不在同一仓库', 400)
   await lockStockDimension(conn, cRef.product_id, cRef.warehouse_id)
 
   // 验证容器
@@ -479,8 +479,8 @@ async function putaway(conn, taskId, { containerId, locationId, requestKey, user
      FOR UPDATE`,
     [containerId, taskId],
   )
-  if (!container) throw new AppError('容器不存在', 404)
-  if (Number(container.status) !== 4) throw new AppError('容器不是待上架状态', 400)
+  if (!container) throw new AppError('库存条码不存在', 404)
+  if (Number(container.status) !== 4) throw new AppError('库存条码不是待上架状态', 400)
 
   // 验证库位
   const [[location]] = await conn.query(
@@ -489,7 +489,7 @@ async function putaway(conn, taskId, { containerId, locationId, requestKey, user
   )
   if (!location) throw new AppError('库位不存在或已停用', 404)
   if (Number(location.warehouse_id) !== Number(container.warehouse_id)) {
-    throw new AppError('库位和容器不在同一仓库', 400)
+    throw new AppError('库位和库存条码不在同一仓库', 400)
   }
 
   // 容器上架
@@ -632,12 +632,12 @@ async function findPutawayContainer(taskId, barcode, access = {}) {
     'SELECT id, barcode, warehouse_id, status, source_ref_type, source_ref_id FROM inventory_containers WHERE UPPER(barcode) = UPPER(?) AND deleted_at IS NULL LIMIT 1',
     [String(barcode).trim()],
   )
-  if (!container) throw new AppError('容器条码不存在', 404)
+  if (!container) throw new AppError('库存条码不存在', 404)
   if (container.source_ref_type !== 'sale_return' || Number(container.source_ref_id) !== Number(task.id)) {
-    throw new AppError('容器不属于当前退货任务', 400)
+    throw new AppError('库存条码不属于当前退货任务', 400)
   }
-  if (Number(container.warehouse_id) !== Number(task.warehouse_id)) throw new AppError('容器和退货任务不在同一仓库', 400)
-  if (Number(container.status) !== CONTAINER_STATUS.PENDING_PUTAWAY) throw new AppError('容器不是待上架状态', 400)
+  if (Number(container.warehouse_id) !== Number(task.warehouse_id)) throw new AppError('库存条码和退货任务不在同一仓库', 400)
+  if (Number(container.status) !== CONTAINER_STATUS.PENDING_PUTAWAY) throw new AppError('库存条码不是待上架状态', 400)
   return { containerId: Number(container.id), barcode: container.barcode, taskId: Number(task.id), warehouseId: Number(container.warehouse_id), status: Number(container.status) }
 }
 

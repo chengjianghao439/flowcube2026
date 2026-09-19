@@ -173,7 +173,7 @@ async function beginResourceOperationRequest(conn, { requestKey, action, userId,
       }
     }
     if (Number(legacy.status) === STATUS.SUCCESS) {
-      throw new AppError('该请求键已有其它操作的回执，请核对原操作后重试', 409)
+      throw new AppError('该请求键已有其它操作的结果，请核对原操作后重试', 409)
     }
     // 旧行仍待确认或已失败：沿用 beginOperationRequest 的既有 409 文案，不另造一套。
     throw new AppError(

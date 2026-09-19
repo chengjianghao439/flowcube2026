@@ -128,22 +128,22 @@ async function createScanLog({
        FOR UPDATE`,
       [containerId],
     )
-    if (!containerRow) throw new AppError('容器不存在', 404)
+    if (!containerRow) throw new AppError('库存条码不存在', 404)
     if (String(containerRow.barcode) !== String(barcode)) {
-      throw new AppError('容器条码不匹配', 400)
+      throw new AppError('库存条码不匹配', 400)
     }
     if (Number(containerRow.product_id) !== Number(itemRow.product_id)) {
-      throw new AppError('容器商品不属于当前任务明细', 400)
+      throw new AppError('库存条码上的商品不属于当前任务明细', 400)
     }
     if (Number(containerRow.warehouse_id) !== Number(taskRow.warehouse_id)) {
-      throw new AppError('容器仓库与任务仓库不一致', 400)
+      throw new AppError('库存条码所在仓库与任务仓库不一致', 400)
     }
     if (Number(containerRow.status) !== CONTAINER_STATUS.ACTIVE) {
-      throw new AppError('容器状态不可拣货', 400)
+      throw new AppError('该库存条码当前状态不可拣货', 400)
     }
     const remainingQty = Number(containerRow.remaining_qty)
     if (remainingQty <= 0) {
-      throw new AppError('容器库存不足', 400)
+      throw new AppError('库存不足', 400)
     }
     if (qty > remainingQty) {
       throw new AppError(`扫码数量超过容器可用数量（剩余 ${remainingQty}）`, 400)
@@ -166,7 +166,7 @@ async function createScanLog({
       containerRow.locked_by_task_id != null
       && Number(containerRow.locked_by_task_id) !== Number(taskId)
     ) {
-      throw new AppError('容器已被其它任务锁定', 409)
+      throw new AppError('库存条码已被其它任务锁定', 409)
     }
 
     if (scanMode === '整件') {
@@ -176,7 +176,7 @@ async function createScanLog({
            AND COALESCE(scan_purpose, ${SCAN_PURPOSE.PICK}) = ${SCAN_PURPOSE.PICK}`,
         [taskId, containerId],
       )
-      if (dup) throw new AppError('该容器已整件扫描过，不可重复扫描', 409)
+      if (dup) throw new AppError('该库存条码已整件扫描过，不可重复扫描', 409)
     }
 
     const [[recent]] = await conn.query(
@@ -279,9 +279,9 @@ async function createCheckScanLog({
        FOR UPDATE`,
       [barcode, taskRow.warehouse_id],
     )
-    if (!c) throw new AppError('容器不存在或不属于本仓', 404)
+    if (!c) throw new AppError('库存条码不存在或不属于本仓', 404)
     if (Number(c.locked_by_task_id) !== Number(taskId)) {
-      throw new AppError('该容器未锁定于当前任务，无法复核', 400)
+      throw new AppError('该库存条码未锁定于当前任务，无法复核', 400)
     }
 
     const [pickGroups] = await conn.query(
@@ -292,7 +292,7 @@ async function createCheckScanLog({
       [taskId, c.id, SCAN_PURPOSE.PICK],
     )
     if (!pickGroups.length) {
-      throw new AppError('该容器无拣货扫码记录，请先完成拣货', 400)
+      throw new AppError('该库存条码没有拣货扫码记录，请先完成拣货', 400)
     }
 
     let targetItemId = null
@@ -311,7 +311,7 @@ async function createCheckScanLog({
       }
     }
     if (!targetItemId || addQty <= 0) {
-      throw new AppError('该容器已完成复核扫码', 409)
+      throw new AppError('该库存条码已完成复核扫码', 409)
     }
 
     const [[itemRow]] = await conn.query(
@@ -320,7 +320,7 @@ async function createCheckScanLog({
     )
     if (!itemRow) throw new AppError('任务明细不存在', 404)
     if (Number(itemRow.product_id) !== Number(c.product_id)) {
-      throw new AppError('容器商品与任务明细不一致', 400)
+      throw new AppError('库存条码上的商品与任务明细不一致', 400)
     }
     const nextChecked = Number(itemRow.checked_qty) + addQty
     if (nextChecked > Number(itemRow.picked_qty)) {
@@ -425,12 +425,12 @@ async function createCancelReturnScanLog({
        FROM inventory_containers WHERE id = ? AND deleted_at IS NULL FOR UPDATE`,
       [containerId],
     )
-    if (!c) throw new AppError('容器不存在', 404)
+    if (!c) throw new AppError('库存条码不存在', 404)
     if (Number(c.locked_by_task_id) !== Number(taskId)) {
-      throw new AppError('该容器不属于当前任务的待归还清单（可能已被归还或不属于本任务）', 400)
+      throw new AppError('该库存条码不在当前任务的待归还清单里（可能已被归还或不属于本任务）', 400)
     }
     if (String(c.barcode) !== String(barcode)) {
-      throw new AppError('容器条码不匹配', 400)
+      throw new AppError('库存条码不匹配', 400)
     }
 
     const [[loc]] = await conn.query(
@@ -456,7 +456,7 @@ async function createCancelReturnScanLog({
       'SELECT id FROM warehouse_task_items WHERE task_id = ? AND product_id = ? LIMIT 1',
       [taskId, c.product_id],
     )
-    if (!itemRow) throw new AppError('容器商品不属于当前任务，数据异常', 409)
+    if (!itemRow) throw new AppError('库存条码上的商品不属于当前任务，数据异常', 409)
 
     await conn.query(
       `UPDATE inventory_containers

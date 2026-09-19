@@ -447,7 +447,7 @@ async function confirmContainerReturn(returnId, { targetLocationId = null, opera
       'SELECT id, barcode, location_id, product_id, remaining_qty, locked_by_task_id FROM inventory_containers WHERE id=? FOR UPDATE',
       [ret.source_container_id],
     )
-    if (!container) throw new AppError('容器不存在', 404)
+    if (!container) throw new AppError('库存条码不存在', 404)
     // 归还库位强校验：必须扫回容器当前登记的原库位（拆分出的新容器继承同一库位，故先按源容器校验再拆分）。
     // 口径与 scan-logs 的拣货退回一致：有原库位必须放回原库位；无原库位（导入/历史容器）
     // 允许放回本仓任意启用库位并写回容器（2026-09-17 续测）。

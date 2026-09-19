@@ -15,7 +15,7 @@ async function updateShipment(id, input, { warehouseIds = null } = {}) {
     assertInScope(warehouseIds, row.warehouse_id, '运单')
     if (!isDirect(row.platform_code) || row.direct_request || ![1, 4].includes(Number(row.status))) throw new AppError('仅未提交平台的直连运单可以修改寄件资料', 409)
     const original = json(row.shipment_json)
-    if (!original?.packages?.length) throw new AppError('该运单缺少打包快照，请核实打包任务', 409)
+    if (!original?.packages?.length) throw new AppError('该运单缺少打包记录，请核实打包任务', 409)
     let contacts
     try { contacts = validateContacts({ shipment: input }, row.platform_code) } catch (e) { throw new AppError(e.message, 400) }
     const productCode = normalizeProduct(row.platform_code, input.productCode)

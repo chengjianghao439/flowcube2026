@@ -22,7 +22,7 @@ async function beginTransferRequest(conn, { requestKey, action, transferId, user
     )
     if (legacy) {
       if (Number(legacy.status) !== STATUS.SUCCESS || !receiptMatches(legacy, transferId)) {
-        throw new AppError('旧请求键结果不属于本调拨单或仍待确认，请核对原操作回执', 409)
+        throw new AppError('旧请求键结果不属于本调拨单或仍待确认，请核对原操作记录', 409)
       }
       return { replay: true, responseData: JSON.parse(legacy.response_json) }
     }

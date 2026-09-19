@@ -53,9 +53,9 @@ test.each([['I000123', 'R000456'], ['CNT000123', 'LOC-A01']])('%s then %s submit
 })
 
 test('invalid task container shows error and stays at container step', async () => {
-  api.container.mockRejectedValueOnce(new Error('容器不属于当前退货任务'))
+  api.container.mockRejectedValueOnce(new Error('库存条码不属于当前退货任务'))
   await scan('I000123')
-  expect(api.err).toHaveBeenCalledWith('容器不属于当前退货任务')
+  expect(api.err).toHaveBeenCalledWith('库存条码不属于当前退货任务')
   await scan('R000456')
   expect(api.location).not.toHaveBeenCalled()
   expect(api.putaway).not.toHaveBeenCalled()
@@ -72,10 +72,10 @@ test('invalid location never submits, valid rescan still works', async () => {
 })
 
 test('failed putaway is caught and shown, rather than an unhandled rejection', async () => {
-  api.putaway.mockRejectedValueOnce(new Error('容器不是待上架状态'))
+  api.putaway.mockRejectedValueOnce(new Error('库存条码不是待上架状态'))
   await scan('I000123')
   await scan('R000456')
-  expect(api.err).toHaveBeenCalledWith('容器不是待上架状态')
+  expect(api.err).toHaveBeenCalledWith('库存条码不是待上架状态')
   expect(api.ok).not.toHaveBeenCalledWith(expect.stringContaining('上架成功'))
 })
 

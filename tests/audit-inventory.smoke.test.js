@@ -205,7 +205,7 @@ async function main() {
       const call = action === 'lookup'
         ? () => rt.findPutawayContainer(taskId, container.barcode, access)
         : () => rt.putaway(conn, taskId, { containerId, locationId, userId: 1, ...access })
-      await assert.rejects(call(), error => error.statusCode === 404 && /容器/.test(error.message))
+      await assert.rejects(call(), error => error.statusCode === 404 && /库存条码/.test(error.message))
       const [[afterContainer]] = await conn.query('SELECT status,remaining_qty,location_id,deleted_at FROM inventory_containers WHERE id=?', [containerId])
       assert.equal(Number(afterContainer.status), ce.CONTAINER_STATUS.PENDING_PUTAWAY)
       assert.equal(Number(afterContainer.remaining_qty), 5)
