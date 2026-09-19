@@ -191,7 +191,7 @@ async function createInvoice(d, operator, companyId = 1) {
        d.sourceType || (quota ? 'invoice_order' : null), quota ? quota.sourceId : (d.sourceId || null), d.sourceNo || null, d.remark || null,
        operator?.userId || null, operator?.username || null, cid])
     await conn.commit()
-    logger.info('accounting', `录入${v.type === 1 ? '进项' : '销项'}发票 ${v.no} 价税${v.withTax} 账套${cid}`, { id: r.insertId, operatorId: operator?.userId })
+    logger.info(`录入${v.type === 1 ? '进项' : '销项'}发票 ${v.no} 价税${v.withTax} 账套${cid}`, { id: r.insertId, operatorId: operator?.userId }, 'accounting')
     return { id: r.insertId }
   } catch (e) {
     await conn.rollback()
@@ -232,7 +232,7 @@ async function updateInvoice(id, d, operator, companyId = 1) {
        d.sourceType ?? cur.sourceType, sourceId, d.sourceNo ?? cur.sourceNo, d.remark ?? cur.remark, Number(id), cid])
     if (r.affectedRows !== 1) throw new AppError('发票状态已变化（可能已红冲/删除），请刷新重试', 409, 'INVOICE_STATUS_CHANGED')
     await conn.commit()
-    logger.info('accounting', `更新发票 [id=${id}]`, { operatorId: operator?.userId })
+    logger.info(`更新发票 [id=${id}]`, { operatorId: operator?.userId }, 'accounting')
   } catch (e) {
     await conn.rollback()
     if (e.code === 'ER_DUP_ENTRY') throw new AppError('发票代码+号码与已有发票重复', 400, 'INVOICE_DUP')
@@ -251,7 +251,7 @@ async function changeStatus(id, action, operator, companyId = 1) {
   if (cur.status !== from) throw new AppError(`当前状态「${cur.statusName}」不可执行此操作`, 400, 'INVOICE_STATUS_INVALID')
   const [r] = await pool.query('UPDATE fin_invoices SET status=? WHERE id=? AND status=? AND company_id=? AND deleted_at IS NULL', [to, Number(id), from, cid])
   if (r.affectedRows !== 1) throw new AppError('状态已变化，请刷新重试', 409)
-  logger.info('accounting', `发票 ${cur.invoiceNo} ${action} ${from}→${to}`, { operatorId: operator?.userId })
+  logger.info(`发票 ${cur.invoiceNo} ${action} ${from}→${to}`, { operatorId: operator?.userId }, 'accounting')
   return { status: to }
 }
 
@@ -269,7 +269,7 @@ async function removeInvoice(id, operator, companyId = 1) {
     [Number(id), cid],
   )
   if (r.affectedRows !== 1) throw new AppError('发票状态已变化，请刷新重试', 409, 'INVOICE_STATUS_CHANGED')
-  logger.info('accounting', `删除发票 ${cur.invoiceNo}`, { operatorId: operator?.userId })
+  logger.info(`删除发票 ${cur.invoiceNo}`, { operatorId: operator?.userId }, 'accounting')
 }
 
 module.exports = { listInvoices, getInvoice, createInvoice, updateInvoice, changeStatus, removeInvoice, assertInvoiceQuota }

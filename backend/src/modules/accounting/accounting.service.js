@@ -133,7 +133,7 @@ async function create({ code, name, category, balanceDir, parentId, auxType, sor
     }
 
     await conn.commit()
-    logger.info('accounting', `新建科目 [${theCode} ${nm}] level=${level}`, { id: insertId, operatorId, companyId })
+    logger.info(`新建科目 [${theCode} ${nm}] level=${level}`, { id: insertId, operatorId, companyId }, 'accounting')
     return { id: insertId, code: theCode }
   } catch (e) {
     await conn.rollback()
@@ -152,7 +152,7 @@ async function update(id, { name, category, balanceDir, auxType, sortOrder, rema
       'UPDATE acct_accounts SET sort_order = ?, remark = ? WHERE id = ? AND company_id = ? AND deleted_at IS NULL',
       [sortOrder ?? acct.sortOrder, remark ?? acct.remark, id, companyId],
     )
-    logger.info('accounting', `更新预置科目排序/备注 [id=${id}]`, { operatorId })
+    logger.info(`更新预置科目排序/备注 [id=${id}]`, { operatorId }, 'accounting')
     return
   }
 
@@ -167,7 +167,7 @@ async function update(id, { name, category, balanceDir, auxType, sortOrder, rema
      WHERE id = ? AND company_id = ? AND deleted_at IS NULL`,
     [nm, cat, dir, auxType ? 1 : 0, sortOrder ?? acct.sortOrder, remark ?? acct.remark, id, companyId],
   )
-  logger.info('accounting', `更新科目 [${acct.code} ${nm}]`, { operatorId })
+  logger.info(`更新科目 [${acct.code} ${nm}]`, { operatorId }, 'accounting')
 }
 
 async function remove(id, operatorId, companyId = 1) {
@@ -207,7 +207,7 @@ async function remove(id, operatorId, companyId = 1) {
     }
 
     await conn.commit()
-    logger.info('accounting', `删除科目 [${acct.code} ${acct.name}]`, { operatorId })
+    logger.info(`删除科目 [${acct.code} ${acct.name}]`, { operatorId }, 'accounting')
   } catch (e) {
     await conn.rollback()
     throw e
@@ -220,7 +220,7 @@ async function toggleStatus(id, isActive, operatorId, companyId = 1) {
   const acct = await getById(id, pool, companyId)
   if (acct.isPreset) throw new AppError('系统预置科目不可停用（映射引擎依赖）', 400, 'ACCT_PRESET_LOCKED')
   await pool.query('UPDATE acct_accounts SET is_active = ? WHERE id = ? AND company_id = ? AND deleted_at IS NULL', [isActive ? 1 : 0, id, companyId])
-  logger.info('accounting', `${isActive ? '启用' : '停用'}科目 [${acct.code} ${acct.name}]`, { operatorId })
+  logger.info(`${isActive ? '启用' : '停用'}科目 [${acct.code} ${acct.name}]`, { operatorId }, 'accounting')
 }
 
 module.exports = { getTree, getFlat, getById, create, update, remove, toggleStatus }

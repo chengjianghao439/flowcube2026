@@ -174,7 +174,7 @@ async function createManualVoucher({ voucherDate, summary, entries, companyId = 
       )
     }
     await conn.commit()
-    logger.info('accounting', `手工凭证 ${voucherNo} 借贷各 ${round2(debit)}`, { id: r.insertId, userId })
+    logger.info(`手工凭证 ${voucherNo} 借贷各 ${round2(debit)}`, { id: r.insertId, userId }, 'accounting')
     return { id: r.insertId, voucherNo }
   } catch (e) {
     await conn.rollback()
@@ -201,7 +201,7 @@ async function removeVoucher(id, userId, companyId = 1) {
     await conn.query('DELETE FROM acct_voucher_entries WHERE voucher_id = ?', [Number(id)])
     await conn.query('DELETE FROM acct_vouchers WHERE id = ?', [Number(id)])
     await conn.commit()
-    logger.info('accounting', `删除手工凭证 ${v.voucher_no}`, { userId })
+    logger.info(`删除手工凭证 ${v.voucher_no}`, { userId }, 'accounting')
   } catch (e) {
     await conn.rollback()
     throw e
@@ -249,7 +249,7 @@ async function reverseVoucher(id, userId, companyId = 1) {
     }
     await conn.query('UPDATE acct_vouchers SET status = 3 WHERE id = ?', [Number(id)])
     await conn.commit()
-    logger.info('accounting', `冲销凭证 ${v.voucher_no} → 红字 ${voucherNo}`, { userId })
+    logger.info(`冲销凭证 ${v.voucher_no} → 红字 ${voucherNo}`, { userId }, 'accounting')
     return { id: r.insertId, voucherNo }
   } catch (e) {
     await conn.rollback()

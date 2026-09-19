@@ -35,6 +35,7 @@
 - **新增不变量必须落 CI 契约测试并接进 `package.json` 与 `.github/workflows/test.yml`**（`docs/audit-2026-09-18.md`）
 - **批量写入用 `VALUES ?` 且先判空**：空数组会 `ER_PARSE_ERROR`；禁止循环内逐行 INSERT（`procurement.service.js`、`hr.service.js`）
 - **有意 fail-loud 的错误不得被调用处吞成静默跳过**：`toDateStr` 对缺业务日期抛 `ACCT_VOUCHER_NO_DATE`，而 `generateVouchers` 曾用 `catch { continue }` 把它整个吞掉——该错误码因此全仓没有消费方、也没有测试，凭证静默消失且 `stats` 连 `total` 都不加，对账时看不出来（2026-09-18 审计）。现改为计入 `stats.skippedNoDate` + 逐条 `logger.warn`（保留「跳过单条、不整批失败」的既有行为）；`tests/accounting-voucher-mapping.test.js` 机械守住「不得退回静默 continue」。新增 fail-loud 分支后要确认调用处真的会暴露它（`voucher-engine.js`）
+- **`logger.info/warn` 的参数顺序是 `(msg, meta, module_)`，meta 必须是对象**：会计模块曾有 15 处按旧签名写成 `logger.info('accounting', \`消息\`, { userId })`，于是 msg 位置成了字面量、真正的业务消息被塞进 meta、模块名位置收到对象——不报错，但结账/反结账、手工凭证、发票增删改这些**最需要追溯的日志全部读不出来**（2026-09-18 审计，全仓只有会计模块这样写）。`logger.error` 是 `(msg, err, meta, module_)`，第二个参数本就是 Error，不在检查范围；`tests/logger-args-order-contract.test.js` 机械守住（只传 msg 合法，meta 默认 `{}`）
 - **前端业务日期一律走 `lib/dateTime.ts`／`lib/dateRange.ts`**，禁止自拼 `getFullYear`/`getMonth`/`getDate`；`test:frontend-date-source` 拦截，非 +08 时区下自实现会偏一天（含会计期间）（`lib/dateTime.ts`）
 - **SQL 标识符插值必须显式校验**：表名/列名/列清单/别名一律走 `assertSqlIdentifier`/`assertSqlColumnList`（`utils/sqlIdentifier.js`）；`test:sql-identifier` 抓「同类守卫漏一个参数」
 - **每处 `eslint-disable` 必须带可读理由，整文件禁用仅限机器产物**：逐行指令上方要有说明性注释，业务文件不得 `/* eslint-disable */`（生成物走 `FILE_DISABLE_ALLOWED` 白名单）；`test:eslint-disable-rationale` 机械守住（反向验证：删掉理由注释、往业务文件加整文件禁用、清空白名单，都必须失败）（`tests/eslint-disable-rationale.test.js`）
@@ -196,6 +197,7 @@ npm run test:permissions
 审计回归入口：`npm run smoke:audit-inventory`、`npm run smoke:audit-finance-security`、`npm run test:audit-client`、`npm run test:audit-tooling`。2026-09-17 验收修复守卫 `npm run test:acceptance-fixes`（请求体解析错误码、废弃设置键、取消单明细投影、审计脚本覆盖、迁移存在性）为纯离线断言，已接入 Tests CI static job。标签镜像检查使用前端已安装的 TypeScript 在 Node 22 编译并运行，`test:label` 需要前端依赖，不再按 Node 版本跳过；CI 在安装两端依赖后的 static job 执行。`npm run test:agents-md-guard`（AGENTS.md 注入守卫：禁 `CLAUDE.md` 候选、体积不超 128 KiB、关键章节与红线仍在、`docs/*.md` 与 `npm run` 脚本引用都有效）为纯离线断言，与其它机械契约测试同组执行（Tests CI 的 regression job「契约测试」段）。
 `npm run test:sql-identifier`（SQL 标识符插值守卫：每个表名/列名/列清单/别名插值都要有白名单校验）同为纯离线断言，与上一条同批执行。
 `npm run test:eslint-disable-rationale`（lint 禁用理由守卫：逐行 `eslint-disable-next-line`/`-line` 上方 15 行内必须有一条说明性注释；整文件 `/* eslint-disable */` 只允许出现在机器产物白名单里，生成器输出该字符串不算指令）同为纯离线断言，与上两条同批执行。
+`npm run test:logger-args-order`（logger 参数顺序守卫：`logger.info/warn` 的第二个参数必须是对象，即 `(msg, meta, module_)`；只传 msg 合法，`logger.error` 因签名含 err 不参与）同为纯离线断言，与上三条同批执行。
 运维/迁移回归（static job 「运维回归」步骤）：`node --test tests/ops-monitor-restore.test.js tests/deployment-resources.test.js tests/restore-trigger-normalize.test.js tests/migration-trigger-bodies.test.js`。前两项验备份恢复判定与资源边界，后两项验触发器分号规范化与迁移逐条切分，均不连数据库。
 
 导出格式回归：`npm run test:export`（static job 与 `test:upload` 同一步执行）——校验 xlsx 导出的日期列写成日期单元格并带 `yyyy-mm-dd` / `yyyy-mm-dd hh:mm` 数字格式（2026-09-16 起），不连数据库。

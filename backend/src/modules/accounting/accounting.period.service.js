@@ -216,7 +216,7 @@ async function generateClosingVouchers(period, userId, companyId = 1) {
     }
     const status = await closingStatus(conn, p, companyId)
     await conn.commit()
-    logger.info('accounting', `生成结转凭证 period=${p}`, { userId, results })
+    logger.info(`生成结转凭证 period=${p}`, { userId, results }, 'accounting')
     return { period: p, generated: results.length, results, status }
   } catch (e) { await conn.rollback(); throw e }
   finally { conn.release() }
@@ -247,7 +247,7 @@ async function closePeriod(period, operator, companyId = 1) {
       [companyId, p, operator?.userId ?? null, operator?.realName ?? null],
     )
     await conn.commit()
-    logger.info('accounting', `结账 period=${p}`, { userId: operator?.userId })
+    logger.info(`结账 period=${p}`, { userId: operator?.userId }, 'accounting')
     return { period: p, status: 2 }
   } catch (e) { await conn.rollback(); throw e }
   finally { conn.release() }
@@ -264,7 +264,7 @@ async function reopenPeriod(period, operator, companyId = 1) {
     if (!existing || Number(existing.status) !== 2) throw new AppError(`会计期间 ${p} 未处于结账状态`, 409)
     await conn.query('UPDATE acct_periods SET status = 1 WHERE period = ? AND company_id = ?', [p, companyId])
     await conn.commit()
-    logger.info('accounting', `反结账 period=${p}`, { userId: operator?.userId })
+    logger.info(`反结账 period=${p}`, { userId: operator?.userId }, 'accounting')
     return { period: p, status: 1 }
   } catch (e) { await conn.rollback(); throw e }
   finally { conn.release() }
