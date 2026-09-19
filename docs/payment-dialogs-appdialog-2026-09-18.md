@@ -2,6 +2,8 @@
 
 对应 2026-09-18 用户要求：“把现结/月结 × 客户/供应商 页面的大功能弹窗重构为专用弹窗，小功能例如查询不动”，并在追问中确认范围为这 4 个页面、形态为“独立组件 + AppDialog 工作区外壳（可拖拽、尺寸记忆）”。修改在本地开发模式验证，未发布、未做桌面端与 PDA 验收。
 
+> 2026-09-19 浏览器实测补正：「可拖拽」的**实际含义是右下角拖拽改尺寸**；`AppDialog` 的位置每次打开重新居中、**不可拖动移动、也不持久化**（尺寸记在 `localStorage: flowcube-dialog-size-{dialogId}`）。详见 `docs/local-ui-acceptance-2026-09-19.md` 第三轮。若「可拖拽」原本指“能拖动窗口位置”，那属于**尚未实现的功能**，需另行确认后再决定是否实现。
+
 ## 重构前的问题
 
 4 个页面（`/payments/payable`、`/payments/receivable`、`/reports/reconciliation/payable`、`/reports/reconciliation/receivable`）里的大功能弹窗都是轻量 `ui/DialogContent`，只用 `max-w-2xl/4xl/5xl/6xl` 拉宽度：
@@ -12,7 +14,7 @@
 
 ## 现行行为
 
-六类**大功能**弹窗改为独立专用组件，外壳统一 `AppDialog`（可拖拽调整、`dialogId` 记忆尺寸、Header/Body/Footer 固定、正文区自滚动）：
+六类**大功能**弹窗改为独立专用组件，外壳统一 `AppDialog`（**右下角拖拽调整尺寸**、`dialogId` 记忆尺寸、Header/Body/Footer 固定、正文区自滚动）：
 
 | 弹窗 | 文件 | dialogId | 默认尺寸 | 出现位置 |
 |---|---|---|---|---|
