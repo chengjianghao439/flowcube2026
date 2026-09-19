@@ -202,6 +202,9 @@ jobs:
       - name: 契约测试 — 前端调用的接口后端必须存在（防路由改名漏改前端后运行期 404）
         run: npm run test:api-route-contract
 
+      - name: 契约测试 — 只读路径不得逐行单查（防 N+1，锁内逐行加锁不在判定范围）
+        run: npm run test:query-loop
+
       - name: 契约测试 — 前端登出必须走统一封装（防漏清缓存/漏作废 refresh）
         run: npm run test:frontend-session-contract
 

@@ -10,6 +10,28 @@ async function recordParty(conn, recordId, type) {
   )
   return row?.party_id ? Number(row.party_id) : null
 }
+
+/**
+ * 批量解析归属，取代「逐条 recordParty」：一笔汇款核销几十条账款时是 N+1。
+ * 按输入顺序返回等长数组；查不到或非整数 id 一律 null——与逐条 recordParty 的返回值一致，
+ * 因此「多条记录归属不一致 / 存在未归属」仍然会构成不同的取值而触发 409。
+ */
+async function recordParties(conn, recordIds, type) {
+  const ids = [...new Set(recordIds.map(Number))]
+  const valid = ids.filter((id) => Number.isSafeInteger(id))
+  const byId = new Map()
+  if (valid.length) {
+    const [rows] = await conn.query(
+      `SELECT pr.id, CASE WHEN pr.type=2 THEN so.customer_id ELSE po.supplier_id END party_id
+       FROM payment_records pr
+       LEFT JOIN sale_orders so ON pr.type=2 AND so.id=pr.order_id
+       LEFT JOIN purchase_orders po ON pr.type=1 AND po.id=pr.order_id
+       WHERE pr.id IN (?) AND pr.type=?`, [valid, type],
+    )
+    for (const row of rows) byId.set(Number(row.id), row.party_id ? Number(row.party_id) : null)
+  }
+  return ids.map((id) => (byId.has(id) ? byId.get(id) : null))
+}
 async function resolveReceiptParty(conn, { type, partyId = null, partyName, allocations = [] }) {
   const specified = partyId == null ? null : Number(partyId)
   if (specified != null) {
@@ -19,13 +41,17 @@ async function resolveReceiptParty(conn, { type, partyId = null, partyName, allo
     if (!party) throw new AppError('往来单位不存在',400)
   }
   const recordIds = new Set(allocations.filter(a => a.recordId).map(a => Number(a.recordId)))
-  for (const allocation of allocations.filter(a => a.statementId)) {
-    const [rows] = await conn.query('SELECT record_id FROM reconciliation_statement_items WHERE statement_id=?', [allocation.statementId])
+  const statementIds = [...new Set(allocations.filter(a => a.statementId).map(a => Number(a.statementId)))]
+  if (statementIds.length) {
+    // 一次 IN 取回全部明细，取代逐张对账单各查一次
+    const [rows] = await conn.query(
+      'SELECT record_id FROM reconciliation_statement_items WHERE statement_id IN (?)',
+      [statementIds],
+    )
     rows.forEach(r => recordIds.add(Number(r.record_id)))
   }
   if (recordIds.size) {
-    const owners = new Set()
-    for (const id of recordIds) owners.add(await recordParty(conn,id,type))
+    const owners = new Set(await recordParties(conn, [...recordIds], type))
     if (owners.size !== 1 || (specified != null && !owners.has(specified))) throw new AppError('核销账款往来单位不一致或归属不明确',409)
     return [...owners][0]
   }

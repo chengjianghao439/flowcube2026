@@ -54,16 +54,20 @@ async function assertTaskPickScanClosure(conn, taskId) {
     'SELECT id, required_qty, picked_qty FROM warehouse_task_items WHERE task_id=?',
     [taskId],
   )
+  // 一次分组读取，取代「逐明细一次聚合查询」的 N+1：出库前置在每次推进时都会跑这条链路。
+  // 明细没有扫码行时按 0 处理——原写法 `SELECT COALESCE(SUM(qty),0)` 是聚合查询，无匹配行也返回 0。
+  const [pickScanAgg] = await conn.query(
+    `SELECT item_id, COALESCE(SUM(qty),0) AS sq FROM scan_logs
+     WHERE task_id=? AND COALESCE(scan_purpose,1)=1
+     GROUP BY item_id`,
+    [taskId],
+  )
+  const pickedScanByItem = new Map(pickScanAgg.map(r => [Number(r.item_id), Number(r.sq)]))
   for (const row of items) {
     if (Number(row.picked_qty) !== Number(row.required_qty)) {
       throw new AppError(`拣货未完成：存在未拣满明细（需 ${row.required_qty}，已拣 ${row.picked_qty}）`, 400)
     }
-    const [[agg]] = await conn.query(
-      `SELECT COALESCE(SUM(qty),0) AS sq FROM scan_logs
-       WHERE task_id=? AND item_id=? AND COALESCE(scan_purpose,1)=1`,
-      [taskId, row.id],
-    )
-    if (Number(agg.sq) !== Number(row.picked_qty)) {
+    if ((pickedScanByItem.get(Number(row.id)) ?? 0) !== Number(row.picked_qty)) {
       throw new AppError('拣货扫码合计与明细已拣数量不一致，无法推进', 400)
     }
   }
@@ -97,6 +101,14 @@ async function assertTaskCheckScanClosure(conn, taskId) {
     'SELECT id, picked_qty, required_qty, checked_qty FROM warehouse_task_items WHERE task_id=?',
     [taskId],
   )
+  // 同上：一次分组读取取代逐明细聚合；无扫码行的明细按 0（scan_purpose=2 为复核扫码）。
+  const [checkScanAgg] = await conn.query(
+    `SELECT item_id, COALESCE(SUM(qty),0) AS sq FROM scan_logs
+     WHERE task_id=? AND scan_purpose=2
+     GROUP BY item_id`,
+    [taskId],
+  )
+  const checkedScanByItem = new Map(checkScanAgg.map(r => [Number(r.item_id), Number(r.sq)]))
   for (const row of items) {
     const p = Number(row.picked_qty)
     const ch = Number(row.checked_qty)
@@ -106,12 +118,7 @@ async function assertTaskCheckScanClosure(conn, taskId) {
     if (ch !== p) {
       throw new AppError('出库前置：复核未完成（已核须等于拣货数量）', 400)
     }
-    const [[agg]] = await conn.query(
-      `SELECT COALESCE(SUM(qty),0) AS sq FROM scan_logs
-       WHERE task_id=? AND item_id=? AND scan_purpose=2`,
-      [taskId, row.id],
-    )
-    if (Number(agg.sq) !== ch) {
+    if ((checkedScanByItem.get(Number(row.id)) ?? 0) !== ch) {
       throw new AppError('复核扫码合计与已核数量不一致', 400)
     }
   }
