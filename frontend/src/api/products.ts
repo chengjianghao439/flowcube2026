@@ -1,10 +1,14 @@
 import { payloadClient as apiClient } from './client'
 import { desktopLocalPrintRequestHeaders } from '@/lib/desktopLocalPrint'
 import type { PaginatedData, QueryParams } from '@/types'
-import type { Product, CreateProductParams, UpdateProductParams, ProductFinderResult, ProductFinderParams } from '@/types/products'
+import type { Product, CreateProductParams, UpdateProductParams, ProductFinderResult, ProductFinderParams, ProductQtyPolicy } from '@/types/products'
 
 export const getProductsForFinderApi = async (p: ProductFinderParams) =>
   apiClient.get<PaginatedData<ProductFinderResult>>('/products/finder', { params: p })
+
+// 数量小数策略（迁移 254）：一次批量查，供数量输入框把 step 在 1 与 0.01 之间切换
+export const getProductQtyPoliciesApi = async (ids: number[]) =>
+  apiClient.get<ProductQtyPolicy[]>('/products/qty-policies', { params: { ids: ids.join(',') } })
 
 export const getProductApi        = async (id: number) => apiClient.get<Product>(`/products/${id}`)
 export const getProductsApi       = async (p: QueryParams, signal?: AbortSignal) => apiClient.get<PaginatedData<Product>>('/products', { params: p, signal })

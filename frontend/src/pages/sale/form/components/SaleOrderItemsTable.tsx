@@ -6,6 +6,8 @@ import { Input }   from '@/components/ui/input'
 import { Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { baseQtyOf, parsePositiveQuantity, parsePrice, type DraftItem } from '../validate'
+import { useProductQtyPolicies } from '@/hooks/useProductQtyPolicies'
+import { qtyStep } from '@/lib/qtyStep'
 
 export function SaleOrderItemsTable({
   items, invalidItemKeys, quantityRefs, priceLoading, priceErrors = {},
@@ -22,6 +24,8 @@ export function SaleOrderItemsTable({
   removeItem: (k: number) => void
 }) {
   const navigate = useNavigate()
+  // 「只能整数」的商品把数量框的 step 切成 1（迁移 254）；真正的拦截在服务端
+  const allowDecimalOf = useProductQtyPolicies(items.map(item => item.productId))
   return (
     <div className="overflow-x-auto rounded-lg border border-border">
       <table className="w-full min-w-[1320px] text-sm">
@@ -69,7 +73,7 @@ export function SaleOrderItemsTable({
                 <Input
                   data-entry-input data-entry-field={`item-${item._key}-quantity`} aria-invalid={invalidItemKeys.has(item._key) && (!Number.isFinite(item.quantity) || item.quantity <= 0)}
                   aria-label={`${item.productName || '商品'}数量`}
-                  type="number" min="0.0001" step="0.0001" placeholder="数量"
+                  type="number" min="0.0001" step={qtyStep(allowDecimalOf(item.productId))} placeholder="数量"
                   value={item.quantity}
                   ref={(el: HTMLInputElement | null) => { if (el) quantityRefs.current.set(item._key, el); else quantityRefs.current.delete(item._key) }}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'quantity', parsePositiveQuantity(e.target.value))}

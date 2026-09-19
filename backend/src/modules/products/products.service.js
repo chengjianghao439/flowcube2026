@@ -224,6 +224,24 @@ function fmtProduct(row) {
   }
 }
 
+/**
+ * 批量取商品的数量小数策略（迁移 254），供前端数量输入框联动 step。
+ * 与 allow_decimal_qty 同口径：NULL 视作允许。商品不存在则不出现在结果里，
+ * 前端按「允许」兜底——查询失败不该让用户填不了数量。
+ */
+async function findQtyPolicies(ids) {
+  const list = [...new Set((ids || []).map(Number).filter(Number.isInteger))]
+  if (!list.length) return []
+  const [rows] = await pool.query(
+    'SELECT id, allow_decimal_qty FROM product_items WHERE id IN (?) AND deleted_at IS NULL',
+    [list],
+  )
+  return rows.map((row) => ({
+    id: Number(row.id),
+    allowDecimal: row.allow_decimal_qty == null ? true : Number(row.allow_decimal_qty) === 1,
+  }))
+}
+
 async function assertProductDeletable(id) {
   const checks = [
     ['sale_order_items', 'SELECT 1 FROM sale_order_items WHERE product_id=? LIMIT 1'],
@@ -436,6 +454,7 @@ async function enqueueLabel(id, { createdBy = null, preferClientId = null } = {}
 }
 
 module.exports = {
+  findQtyPolicies,
   findAll, findAllActive, findById, create, update, softDelete,
   enqueueLabel,
   findForFinder,

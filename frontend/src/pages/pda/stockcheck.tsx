@@ -27,6 +27,8 @@ import type { PendingScanCheck, ScanCheckItem } from '@/types/stockcheck'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { formatPdaErrorMessage } from '@/utils/displayFormatters'
+import { useProductQtyPolicies } from '@/hooks/useProductQtyPolicies'
+import { qtyStep } from '@/lib/qtyStep'
 
 interface ScannedContainer {
   barcode: string
@@ -79,6 +81,8 @@ function CheckWork({ checkId }: { checkId: number }) {
   const navigate = useNavigate()
   const { flash, ok, err } = usePdaFeedback()
   const [activeItem, setActiveItem] = useState<ScanCheckItem | null>(null)
+  // 「只能整数」的商品把实盘数量框的 step 切成 1（迁移 254）
+  const allowDecimalOf = useProductQtyPolicies([activeItem?.productId])
   const [scanned, setScanned] = useState<ScannedContainer[]>([])
   const [manual, setManual] = useState('')
   const [checking, setChecking] = useState(false)
@@ -202,7 +206,7 @@ function CheckWork({ checkId }: { checkId: number }) {
                     <span className="flex items-center gap-1 text-xs text-muted-foreground">
                       实盘
                       <Input
-                        type="number" min={0} max={s.bookQty} step="0.0001"
+                        type="number" min={0} max={s.bookQty} step={qtyStep(allowDecimalOf(activeItem?.productId))}
                         data-scanner-manual="true"
                         className="h-7 w-20 text-right tabular-nums"
                         value={String(s.countedQty)}

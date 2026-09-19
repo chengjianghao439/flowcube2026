@@ -44,6 +44,8 @@ import {
 } from '@/api/transfer'
 import type { TransferOrder, TransferItem } from '@/api/transfer'
 import type { ProductFinderResult } from '@/types/products'
+import { useProductQtyPolicies } from '@/hooks/useProductQtyPolicies'
+import { qtyStep } from '@/lib/qtyStep'
 
 interface DraftItem extends Omit<TransferItem, 'id'> {
   _key: number
@@ -105,6 +107,8 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
     })),
   )
   const [counter, setCounter] = useState(initialOrder?.items?.length ?? 0)
+  // 「只能整数」的商品把调拨数量框的 step 切成 1（迁移 254）
+  const allowDecimalOf = useProductQtyPolicies(items.map(i => i.productId))
   const [finderOpen, setFinderOpen] = useState(false)
   const [finderItemKey, setFinderItemKey] = useState<number | null>(null)
   const [submitLocked, setSubmitLocked] = useState(false)
@@ -340,7 +344,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
                       <Input
                         type="number"
                         min="0"
-                        step="0.0001"
+                        step={qtyStep(allowDecimalOf(item.productId))}
                         placeholder="数量"
                         value={item.quantity}
                         onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'quantity', parsePositive(e.target.value))}

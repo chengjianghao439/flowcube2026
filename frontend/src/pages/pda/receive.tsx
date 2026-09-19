@@ -14,6 +14,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
+import { useProductQtyPolicies } from '@/hooks/useProductQtyPolicies'
+import { qtyStep } from '@/lib/qtyStep'
 
 import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
 import PdaOverReceiveDialog, { type OverReceiveReasonCode } from '@/components/pda/PdaOverReceiveDialog'
@@ -121,6 +123,8 @@ function ReceiveEditor({
   onReset: () => void
   onSubmit: () => void
 }) {
+  // 「只能整数」的商品把收货数量框的 step 切成 1（迁移 254）；服务端同样会拦
+  const allowDecimalOf = useProductQtyPolicies([product.productId])
   const parsedBoxes = boxes.map(parseQty).filter(qty => Number.isFinite(qty) && qty > 0)
   const totalQty = parsedBoxes.reduce((sum, qty) => sum + qty, 0)
   const remainingAfter = product.remainingQty - totalQty
@@ -157,7 +161,7 @@ function ReceiveEditor({
                 type="number"
                 inputMode="decimal"
                 min="0"
-                step="0.01"
+                step={qtyStep(allowDecimalOf(product.productId))}
                 value={value}
                 onChange={e => onChangeBox(index, e.target.value)}
                 placeholder="输入本箱数量"

@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { useCheckDetail, useUpdateCheckItems, useSubmitCheck, useRefreshCheckItem, useCancelCheck } from '@/hooks/useStockCheck'
+import { useProductQtyPolicies } from '@/hooks/useProductQtyPolicies'
+import { qtyStep } from '@/lib/qtyStep'
 import { confirmDirtyLeave } from '@/lib/unsavedChanges'
 import type { CheckItem } from '@/types/stockcheck'
 
@@ -20,6 +22,8 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
   const refreshItem = useRefreshCheckItem()
   const cancel = useCancelCheck()
   const [actuals, setActuals] = useState<Record<number, string>>({})
+  // 「只能整数」的商品把实盘数量框的 step 切成 1（迁移 254）
+  const allowDecimalOf = useProductQtyPolicies((check?.items ?? []).map(i => i.productId))
   const [submitConfirm, setSubmitConfirm] = useState(false)
   const [cancelConfirm, setCancelConfirm] = useState(false)
   const [saveLocked, setSaveLocked] = useState(false)
@@ -221,7 +225,7 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
                           <Input
                             type="number"
                             min="0"
-                            step="0.01"
+                            step={qtyStep(allowDecimalOf(item.productId))}
                             className="h-9 text-right text-sm tabular-nums" aria-label={`${item.productName}实盘数量`}
                             value={actuals[item.id]??''}
                             onChange={(e: React.ChangeEvent<HTMLInputElement>)=>handleActualChange(item.id, e.target.value)}

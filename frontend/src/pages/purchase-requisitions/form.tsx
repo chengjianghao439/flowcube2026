@@ -34,6 +34,8 @@ import {
   withdrawRequisitionApi, cancelRequisitionApi, approveRequisitionApi, rejectRequisitionApi, convertRequisitionApi,
 } from '@/api/purchase-requisitions'
 import type { FinderResult } from '@/types/finder'
+import { useProductQtyPolicies } from '@/hooks/useProductQtyPolicies'
+import { qtyStep } from '@/lib/qtyStep'
 
 interface EditItem {
   productId: number; productCode: string; productName: string; unit: string
@@ -43,7 +45,7 @@ interface EditItem {
   convertedQty?: number
 }
 interface ConvertRow {
-  requisitionItemId: number; productName: string; remaining: number
+  requisitionItemId: number; productId: number; productName: string; remaining: number
   quantity: string; supplierId: number | null; supplierName: string; unitPrice: string
 }
 
@@ -125,6 +127,8 @@ export default function RequisitionFormPage() {
   const [rejectReason, setRejectReason] = useState('')
   const [convertOpen, setConvertOpen] = useState(false)
   const [convertRows, setConvertRows] = useState<ConvertRow[]>([])
+  // 「只能整数」的商品把请购/转采购数量框的 step 切成 1（迁移 254）
+  const allowDecimalOf = useProductQtyPolicies([...items.map(i => i.productId), ...convertRows.map(r => r.productId)])
 
   const initial = useMemo(() => {
     if (detail && editId) {
@@ -243,7 +247,7 @@ export default function RequisitionFormPage() {
     const rows: ConvertRow[] = (detail?.items ?? [])
       .filter(i => Number(i.quantity) - Number(i.convertedQty ?? 0) > 1e-9)
       .map(i => ({
-        requisitionItemId: i.id as number, productName: i.productName ?? '',
+        requisitionItemId: i.id as number, productId: Number(i.productId), productName: i.productName ?? '',
         remaining: Number(i.quantity) - Number(i.convertedQty ?? 0),
         quantity: String(Number(i.quantity) - Number(i.convertedQty ?? 0)),
         supplierId: i.suggestedSupplierId ?? null, supplierName: i.suggestedSupplierName ?? '', unitPrice: '',
@@ -351,7 +355,7 @@ export default function RequisitionFormPage() {
                 <tr key={idx} className="border-b border-border/40">
                   <ProductIdentityCells product={it} /><td className="px-3 py-3">{it.unit || '—'}</td>
                   <td className="px-3 py-2 text-right">
-                    {editable ? <Input type="number" step="0.0001" min="0" value={it.quantity} onChange={e => setItem(idx, { quantity: e.target.value })} disabled={busy} className="h-8 text-right tabular-nums" />
+                    {editable ? <Input type="number" step={qtyStep(allowDecimalOf(it.productId))} min="0" value={it.quantity} onChange={e => setItem(idx, { quantity: e.target.value })} disabled={busy} className="h-8 text-right tabular-nums" />
                       : <span className="tabular-nums">{it.quantity}</span>}
                   </td>
                   <td className="px-3 py-2 text-right">
@@ -412,7 +416,7 @@ export default function RequisitionFormPage() {
                   <tr key={r.requisitionItemId} className="border-b border-border/40">
                     <ProductIdentityCells product={detail?.items?.find(item => item.id === r.requisitionItemId) ?? r} /><td className="px-3 py-3">{detail?.items?.find(item => item.id === r.requisitionItemId)?.unit || '—'}</td>
                     <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">{r.remaining}</td>
-                    <td className="px-2 py-2"><Input type="number" step="0.0001" min="0" max={r.remaining} value={r.quantity} onChange={e => setConvertRows(rows => rows.map((x, i) => i === idx ? { ...x, quantity: e.target.value } : x))} className="h-8 text-right tabular-nums" /></td>
+                    <td className="px-2 py-2"><Input type="number" step={qtyStep(allowDecimalOf(r.productId))} min="0" max={r.remaining} value={r.quantity} onChange={e => setConvertRows(rows => rows.map((x, i) => i === idx ? { ...x, quantity: e.target.value } : x))} className="h-8 text-right tabular-nums" /></td>
                     <td className="px-2 py-2"><PickerField value={r.supplierName} placeholder="选择供应商" onOpen={() => setSupplierTarget({ scope: 'convert', index: idx })} /></td>
                     <td className="px-2 py-2"><Input type="number" step="0.01" min="0" value={r.unitPrice} onChange={e => setConvertRows(rows => rows.map((x, i) => i === idx ? { ...x, unitPrice: e.target.value } : x))} className="h-8 text-right tabular-nums" placeholder="0.00" /></td>
                   </tr>

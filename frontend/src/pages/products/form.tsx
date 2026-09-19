@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { toast } from '@/lib/toast'
+import { qtyStep } from '@/lib/qtyStep'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { useDirtyGuard } from '@/hooks/useDirtyGuard'
 import { ActionBar } from '@/components/shared/ActionBar'
@@ -361,13 +362,13 @@ export default function ProductFormPage() {
         <div className="grid grid-cols-2 gap-x-6 gap-y-4">
           <div className="space-y-1.5">
             <Label>安全库存</Label>
-            <Input type="number" step="0.0001" min="0" value={form.safetyStock}
+            <Input type="number" step={qtyStep(form.allowDecimalQty)} min="0" value={form.safetyStock}
               onChange={e => set('safetyStock', e.target.value)} disabled={submitting}
               placeholder="低于此为紧急缺货风险" />
           </div>
           <div className="space-y-1.5">
             <Label>补货点</Label>
-            <Input type="number" step="0.0001" min="0" value={form.reorderPoint}
+            <Input type="number" step={qtyStep(form.allowDecimalQty)} min="0" value={form.reorderPoint}
               onChange={e => set('reorderPoint', e.target.value)} disabled={submitting}
               placeholder="可用+在途 低于此即出现在补货建议" />
           </div>

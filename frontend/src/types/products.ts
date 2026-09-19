@@ -39,6 +39,9 @@ export interface UpdateProductParams {
   salePriceA?: number | null; salePriceB?: number | null; salePriceC?: number | null; salePriceD?: number | null
 }
 
+/** 数量小数策略（迁移 254）：商品级开关，供数量输入框联动 step */
+export interface ProductQtyPolicy { id: number; allowDecimal: boolean }
+
 /** 商品选择中心返回结果 */
 export interface ProductFinderResult {
   barcode?: string | null

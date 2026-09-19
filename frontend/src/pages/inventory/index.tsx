@@ -3,6 +3,8 @@ import KeepAliveSection from '@/components/shared/KeepAliveSection'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
+import { useProductQtyPolicies } from '@/hooks/useProductQtyPolicies'
+import { qtyStep } from '@/lib/qtyStep'
 import { ProductIdentityCells } from '@/components/shared/ProductIdentityCells'
 import { ImportSteps } from '@/components/shared/ImportSteps'
 import { useState, useRef, useContext, useMemo } from 'react'
@@ -134,6 +136,8 @@ export default function InventoryPage() {
   // 出库弹窗
   const [opOpen, setOpOpen] = useState(false); const [, setOpType] = useState<OpType>('outbound')
   const [form, setForm] = useState(emptyOp)
+  // 「只能整数」的商品把手工调整数量框的 step 切成 1（迁移 254）
+  const allowDecimalOf = useProductQtyPolicies([Number(form.productId) || 0])
   const [productFinderOpen,  setProductFinderOpen]  = useState(false)
 
   const PAGE_SIZE = 20
@@ -402,7 +406,7 @@ export default function InventoryPage() {
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2"><Label>数量 *</Label><Input type="number" step="0.0001" min="0" value={form.quantity} onChange={e => setF('quantity', e.target.value)} disabled={isPending} /></div>
+              <div className="space-y-2"><Label>数量 *</Label><Input type="number" step={qtyStep(allowDecimalOf(Number(form.productId) || 0))} min="0" value={form.quantity} onChange={e => setF('quantity', e.target.value)} disabled={isPending} /></div>
               <div className="space-y-2"><Label>单价</Label><Input type="number" step="0.01" min="0" value={form.unitPrice} onChange={e => setF('unitPrice', e.target.value)} disabled={isPending} placeholder="选填" /></div>
             </div>
             <div className="space-y-2"><Label>备注</Label><Input value={form.remark} onChange={e => setF('remark', e.target.value)} disabled={isPending} placeholder="选填" /></div>

@@ -44,6 +44,8 @@ router.get('/next-code', async (req, res, next) => {
 })
 router.get('/finder', requirePermission(PERMISSIONS.PRODUCT_VIEW), ctrl.finder)
 router.get('/active', requirePermission(PERMISSIONS.PRODUCT_VIEW), ctrl.listActive)
+// 数量小数策略：必须在 '/:id' 之前注册，否则会被当成 id 匹配
+router.get('/qty-policies', requirePermission(PERMISSIONS.PRODUCT_VIEW), ctrl.qtyPolicies)
 router.get('/',       requirePermission(PERMISSIONS.PRODUCT_VIEW), ctrl.list)
 router.post('/:id/print-label', requirePermission(PERMISSIONS.PRODUCT_PRINT_LABEL), ctrl.printLabel)
 router.get('/:id',    requirePermission(PERMISSIONS.PRODUCT_VIEW), ctrl.detail)

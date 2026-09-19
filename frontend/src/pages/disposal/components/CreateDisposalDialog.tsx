@@ -9,6 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useDisposalSuggestions, useDisposalMutation } from '@/hooks/useDisposal'
 import { useWarehousesActive } from '@/hooks/useWarehouses'
 import type { DisposalSuggestion, DisposeType } from '@/types/disposal'
+import { useProductQtyPolicies } from '@/hooks/useProductQtyPolicies'
+import { qtyStep } from '@/lib/qtyStep'
 
 interface Props { open: boolean; onClose: () => void }
 
@@ -31,6 +33,8 @@ export default function CreateDisposalDialog({ open, onClose }: Props) {
   const [remark, setRemark] = useState('')
   const [keyword, setKeyword] = useState('')
   const [rows, setRows] = useState<PendingRow[]>([])
+  // 「只能整数」的商品把处置数量框的 step 切成 1（迁移 254）
+  const allowDecimalOf = useProductQtyPolicies(rows.map(r => r.suggestion.productId))
   const [submitting, setSubmitting] = useState(false)
   const { data: warehouses } = useWarehousesActive()
   const { data: suggestions } = useDisposalSuggestions({ warehouseId: whId ? Number(whId) : null, keyword: keyword || undefined })
@@ -179,7 +183,7 @@ export default function CreateDisposalDialog({ open, onClose }: Props) {
                     <div className="">
                       <div className="flex items-center gap-1">
                         <Input
-                          type="number" min="0" step="0.01" className="h-8 text-sm"
+                          type="number" min="0" step={qtyStep(allowDecimalOf(r.suggestion.productId))} className="h-8 text-sm"
                           title={`在库 ${r.suggestion.totalQty} ${r.suggestion.unit}，成本 ¥${r.suggestion.unitValue}`}
                           value={r.quantity}
                           onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateRow(r.suggestion.productId, { quantity: e.target.value })}

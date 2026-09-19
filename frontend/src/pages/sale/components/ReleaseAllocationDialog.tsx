@@ -7,6 +7,8 @@ import { cn } from '@/lib/utils'
 import { useReleaseSale } from '@/hooks/useSale'
 import type { SaleOrderItem, ReserveItemOverride } from '@/types/sale'
 import { isAllocationQtyValid } from './saleAllocation'
+import { useProductQtyPolicies } from '@/hooks/useProductQtyPolicies'
+import { qtyStep } from '@/lib/qtyStep'
 
 interface Props {
   open: boolean
@@ -26,6 +28,8 @@ export default function ReleaseAllocationDialog({ open, orderId, items, onClose 
   const [rows, setRows] = useState<Record<number, RowState>>({})
 
   const reservedItems = items.filter(i => (i.reservedQty ?? 0) > 0)
+  // 「只能整数」的商品把释放数量框的 step 切成 1（迁移 254）
+  const allowDecimalOf = useProductQtyPolicies(items.map(i => i.productId))
 
   // 依赖刻意只认 open：reservedItems 是 items.filter(...) 每次渲染新建的数组，
   // 入依赖会在用户每改一次数量（父组件重渲染）时重建 rows，冲掉已勾选与已填数量。
@@ -112,7 +116,7 @@ export default function ReleaseAllocationDialog({ open, orderId, items, onClose 
                     <td className="px-2 py-2">
                       <Input
                         type="number"
-                        step="0.0001"
+                        step={qtyStep(allowDecimalOf(item.productId))}
                         aria-label={`${item.productName}释放数量`}
                         aria-invalid={st.checked && !isAllocationQtyValid(st.qty, item.reservedQty ?? 0)}
                         min={0}

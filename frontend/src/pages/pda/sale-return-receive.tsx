@@ -13,6 +13,8 @@ import { getReturnTaskByIdApi, receiveReturnApi, checkReturnApi, type ReturnTask
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { parseBarcode } from '@/utils/barcode'
+import { useProductQtyPolicies } from '@/hooks/useProductQtyPolicies'
+import { qtyStep } from '@/lib/qtyStep'
 
 export default function PdaSaleReturnReceivePage() {
   const { id } = useParams<{ id: string }>()
@@ -20,6 +22,8 @@ export default function PdaSaleReturnReceivePage() {
   const nav = useNavigate()
   const { flash, ok, err } = usePdaFeedback()
   const [selectedProduct, setSelectedProduct] = useState<{ id: number; code: string; name: string; unit: string; remaining: number } | null>(null)
+  // 「只能整数」的商品把收货/质检数量框的 step 切成 1（迁移 254）
+  const allowDecimalOf = useProductQtyPolicies([selectedProduct?.id])
   const [boxes, setBoxes] = useState<number[]>([0])
   const [rejectedQty, setRejectedQty] = useState(0)
   const [step, setStep] = useState<'select' | 'qty' | 'check'>('select')
@@ -202,7 +206,7 @@ export default function PdaSaleReturnReceivePage() {
             {boxes.map((qty, i) => (
               <div key={i} className="flex items-center gap-2 mb-2">
                 <span className="text-sm w-10">箱{i + 1}</span>
-                <Input type="number" min={0} step={0.01} value={qty || ''} className="h-10 text-lg"
+                <Input type="number" min={0} step={qtyStep(allowDecimalOf(selectedProduct?.id))} value={qty || ''} className="h-10 text-lg"
                   onChange={e => {
                     const next = [...boxes]
                     next[i] = Number(e.target.value) || 0
@@ -227,13 +231,13 @@ export default function PdaSaleReturnReceivePage() {
             <div className="text-sm text-muted-foreground mb-3">已收货：{selectedProduct.remaining + (task?.items?.reduce((s, i) => i.productId === selectedProduct.id ? s + i.receivedQty : s, 0) || 0)} {selectedProduct.unit}</div>
             <div className="mb-3">
               <span className="text-sm">质检通过数量：</span>
-              <Input type="number" min={0} step={0.01} value={boxes[0] || ''} className="h-10 text-lg mt-1"
+              <Input type="number" min={0} step={qtyStep(allowDecimalOf(selectedProduct?.id))} value={boxes[0] || ''} className="h-10 text-lg mt-1"
                 onChange={e => setBoxes([Number(e.target.value) || 0])}
               />
             </div>
             <div className="mb-1">
               <span className="text-sm text-destructive">不合格数量：</span>
-              <Input type="number" min={0} step={0.01} value={rejectedQty || ''} className="h-10 text-lg mt-1"
+              <Input type="number" min={0} step={qtyStep(allowDecimalOf(selectedProduct?.id))} value={rejectedQty || ''} className="h-10 text-lg mt-1"
                 onChange={e => setRejectedQty(Number(e.target.value) || 0)}
               />
             </div>

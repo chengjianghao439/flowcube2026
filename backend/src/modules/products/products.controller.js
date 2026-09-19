@@ -17,6 +17,14 @@ const list       = async (req,res,next) => { try { return successResponse(res, a
 }), '查询成功') } catch(e){next(e)} }
 const listActive = async (req,res,next) => { try { return successResponse(res, await svc.findAllActive(), '查询成功') } catch(e){next(e)} }
 const detail     = async (req,res,next) => { try { return successResponse(res, await svc.findById(+req.params.id), '查询成功') } catch(e){next(e)} }
+// 数量小数策略批量查询（迁移 254）：前端数量输入框据此把 step 从 0.01 切成 1。
+// 只读、只回 id/allowDecimal 两个字段，上限 500 条防滥用。
+const qtyPolicies = async (req,res,next) => {
+  try {
+    const ids = String(req.query.ids || '').split(',').map(v => Number(v.trim())).filter(Number.isInteger).slice(0, 500)
+    return successResponse(res, await svc.findQtyPolicies(ids), '查询成功')
+  } catch(e){next(e)}
+}
 const create     = async (req,res,next) => { try { return successResponse(res, await svc.create(req.body), '创建成功', 201) } catch(e){next(e)} }
 const update     = async (req,res,next) => { try { await svc.update(+req.params.id, req.body, getOperatorFromRequest(req)); return successResponse(res,null,'更新成功') } catch(e){next(e)} }
 const remove     = async (req,res,next) => { try { await svc.softDelete(+req.params.id); return successResponse(res,null,'删除成功') } catch(e){next(e)} }
@@ -52,4 +60,4 @@ const printLabel = async (req,res,next) => {
   } catch (e) { next(e) }
 }
 
-module.exports = { finder, list, listActive, detail, create, update, remove, printLabel }
+module.exports = { finder, list, listActive, detail, qtyPolicies, create, update, remove, printLabel }

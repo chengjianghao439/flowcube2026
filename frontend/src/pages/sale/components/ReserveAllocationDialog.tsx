@@ -10,6 +10,8 @@ import { clampAllocationQty, isAllocationQtyValid } from './saleAllocation'
 import { cn } from '@/lib/utils'
 import { summarizeSaleQuantities } from '@/lib/salePresentation'
 import { useSaleReservePreview, useReserveSale } from '@/hooks/useSale'
+import { useProductQtyPolicies } from '@/hooks/useProductQtyPolicies'
+import { qtyStep } from '@/lib/qtyStep'
 import { ApiClientError } from '@/api/client'
 import type { StockShortageItem } from './StockShortageDialog'
 
@@ -48,6 +50,8 @@ export default function ReserveAllocationDialog({ open, orderId, onClose, onShor
   }, [preview])
 
   const items = useMemo(() => preview?.items ?? [], [preview])
+  // 「只能整数」的商品把占库数量框的 step 切成 1（迁移 254）
+  const allowDecimalOf = useProductQtyPolicies(items.map(i => i.productId))
   const credit = preview?.credit ?? null
 
   const selectedRows = useMemo(
@@ -208,7 +212,7 @@ export default function ReserveAllocationDialog({ open, orderId, onClose, onShor
                         </td>
                         <td className="px-3 py-4">
                           <div className="mb-1.5 text-[11px] text-muted-foreground">最多可占 {item.remainToReserve} {item.unit}</div>
-                          <Input aria-label={`${item.productName}本次占库数量`} type="number" step={0.0001} min={0} max={item.remainToReserve} value={st.qty ?? 0} disabled={!st.checked} onChange={e => setRow(item.itemId, { qty: Number(e.target.value) })} className="h-9 text-right text-sm font-semibold tabular-nums" />
+                          <Input aria-label={`${item.productName}本次占库数量`} type="number" step={qtyStep(allowDecimalOf(item.productId))} min={0} max={item.remainToReserve} value={st.qty ?? 0} disabled={!st.checked} onChange={e => setRow(item.itemId, { qty: Number(e.target.value) })} className="h-9 text-right text-sm font-semibold tabular-nums" />
                         </td>
                         <td className="px-4 py-4 text-right">
                           <div className={cn('text-base font-semibold tabular-nums', short && 'text-destructive')}>{available} <span className="text-xs font-normal">{item.unit}</span></div>

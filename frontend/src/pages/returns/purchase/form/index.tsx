@@ -45,6 +45,8 @@ import type { PurchaseReturn, PurchaseReturnSourceOrder, ReturnItem } from '@/ap
 import type { FinderResult } from '@/types/finder'
 import type { ProductFinderResult, ProductUnit } from '@/types/products'
 import { getProductApi } from '@/api/products'
+import { useProductQtyPolicies } from '@/hooks/useProductQtyPolicies'
+import { qtyStep } from '@/lib/qtyStep'
 import DataTable from '@/components/shared/DataTable'
 import type { TableColumn } from '@/types'
 
@@ -104,6 +106,8 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
   const requestKeyRef = useRef(createRequestKey('purchase-return'))
 
   const [items, setItems] = useState<DraftItem[]>([])
+  // 「只能整数」的商品把退货数量框的 step 切成 1（迁移 254）
+  const allowDecimalOf = useProductQtyPolicies(items.map(i => i.productId))
   const [counter, setCounter] = useState(0)
   const [finderOpen, setFinderOpen] = useState(false)
   const [finderItemKey, setFinderItemKey] = useState<number | null>(null)
@@ -357,7 +361,7 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
                       </td>
                       <td className="py-2.5 pr-2">
                         <Input
-                          type="number" min="0.01" step="0.01" placeholder="数量"
+                          type="number" min="0.01" step={qtyStep(allowDecimalOf(item.productId))} placeholder="数量"
                           value={item.quantity}
                           disabled={!!boundSource}
                           onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'quantity', +e.target.value)}
