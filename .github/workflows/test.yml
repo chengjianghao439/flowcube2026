@@ -204,6 +204,9 @@ jobs:
       - name: 契约测试 — PDA 扫码页不得自动聚焦（防软键盘挡住扫码视野）
         run: npm run test:pda-scan-focus
 
+      - name: 契约测试 — PDA 列表必须即时刷新（防 keep-alive 下看不到 ERP 刚派发的单据）
+        run: npm run test:pda-list-refresh
+
       - name: 契约测试 — 前端调用的接口后端必须存在（防路由改名漏改前端后运行期 404）
         run: npm run test:api-route-contract
 
