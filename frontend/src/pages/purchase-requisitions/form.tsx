@@ -367,7 +367,7 @@ export default function RequisitionFormPage() {
                       : <span className="text-muted-foreground">{it.suggestedSupplierName || '—'}</span>}
                   </td>
                   {!editable && <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{it.convertedQty ?? 0}</td>}
-                  {editable && <td className="px-3 py-2 text-center"><Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => removeItem(idx)} disabled={busy}><Trash2 className="h-4 w-4" /></Button></td>}
+                  {editable && <td className="px-3 py-2 text-center"><Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" aria-label="删除本行明细" onClick={() => removeItem(idx)} disabled={busy}><Trash2 className="h-4 w-4" /></Button></td>}
                 </tr>
               ))}
             </tbody>

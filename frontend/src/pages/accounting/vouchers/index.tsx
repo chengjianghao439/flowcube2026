@@ -238,7 +238,7 @@ function ManualDialog({ open, onClose }: { open: boolean; onClose: () => void })
                   placeholder="金额" className="w-32 text-right tabular-nums" disabled={isPending} />
                 <Input value={r.summary} onChange={e => setRow(i, { summary: e.target.value })}
                   placeholder="行摘要" className="w-40" disabled={isPending} />
-                <Button variant="ghost" size="sm" className="h-9 w-9 p-0 text-muted-foreground hover:text-destructive"
+                <Button variant="ghost" size="sm" className="h-9 w-9 p-0 text-muted-foreground hover:text-destructive" aria-label="删除本行分录"
                   onClick={() => setRows(rs => rs.length > 2 ? rs.filter((_, idx) => idx !== i) : rs)} disabled={isPending || rows.length <= 2}>
                   <Trash2 className="h-4 w-4" />
                 </Button>
@@ -342,7 +342,7 @@ export default function VouchersPage() {
           </Button>
         )}
         {canManage && r.sourceType === 'manual' && !r.isReversal && !r.reversedId && r.status !== 3 && (
-          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive" onClick={() => setDeleteTarget(r)}>
+          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive" aria-label="删除这张凭证" onClick={() => setDeleteTarget(r)}>
             <Trash2 className="h-3.5 w-3.5" />
           </Button>
         )}

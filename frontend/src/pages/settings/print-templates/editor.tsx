@@ -641,7 +641,7 @@ function PropertiesPanel({ el, multiCount, isLabel, canvasW, canvasH, onChange, 
     <div className="flex w-60 shrink-0 flex-col overflow-hidden border-l bg-muted/20">
       <div className="flex items-center justify-between border-b px-4 py-3">
         <p className="text-sm font-medium text-foreground">属性面板</p>
-        <Button size="sm" variant="ghost" className="size-7 p-0 text-destructive hover:text-destructive"
+        <Button size="sm" variant="ghost" className="size-7 p-0 text-destructive hover:text-destructive" aria-label="删除该元素"
           onClick={() => onDelete(el.id)}>
           <Trash2 className="size-3.5" />
         </Button>
@@ -773,6 +773,8 @@ function PropertiesPanel({ el, multiCount, isLabel, canvasW, canvasH, onChange, 
                 <Button
                   size="sm" variant={el.fontWeight === 'bold' ? 'default' : 'outline'}
                   className="size-7 p-0"
+                  aria-label="加粗"
+                  aria-pressed={el.fontWeight === 'bold'}
                   onClick={() => onChange(el.id, { fontWeight: el.fontWeight === 'bold' ? 'normal' : 'bold' })}
                 >
                   <Bold className="size-3.5" />
@@ -807,6 +809,8 @@ function PropertiesPanel({ el, multiCount, isLabel, canvasW, canvasH, onChange, 
                   size="sm"
                   variant={el.textAlign === a ? 'default' : 'outline'}
                   className="flex-1 p-0"
+                  aria-label={`对齐方式 ${a}`}
+                  aria-pressed={el.textAlign === a}
                   onClick={() => onChange(el.id, { textAlign: a })}
                 >
                   {a === 'left' && <AlignLeft className="size-3.5" />}

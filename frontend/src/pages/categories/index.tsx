@@ -385,7 +385,7 @@ export default function CategoriesPage() {
   return (
     <div>
       <PageHeader
-        title="商品分类管理"
+        title="商品分类"
         description={`支持 4 级分类，共 ${totalCount} 个`}
         actions={
           <Button onClick={handleAddRoot}>

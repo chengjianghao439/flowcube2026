@@ -141,6 +141,8 @@ export default function CategoryTreeSelect({
           variant="outline"
           className={cn('h-9 w-56 justify-between border-border/80 bg-background font-normal', className)}
           disabled={disabled}
+          // 按钮文字来自 placeholder/选中项（运行时才知道），给读屏一个稳定名字
+          aria-label={placeholder}
         >
           <span className={cn('truncate text-left', !selected && 'text-muted-foreground')}>
             {selected?.name ?? (value == null ? emptyLabel : placeholder)}
