@@ -44,6 +44,7 @@
     "test:inventory-lock-order": "node tests/inventory-lock-order-contract.test.js",
     "test:stock-cache-write": "node tests/stock-cache-write-contract.test.js",
     "test:print-entry": "node tests/print-entry-contract.test.js",
+    "test:engine-transaction": "node tests/engine-transaction-contract.test.js",
     "test:sql-placeholder": "node tests/sql-placeholder-contract.test.js",
     "test:sql-identifier": "node tests/sql-identifier-contract.test.js",
     "test:landing-updates": "node tests/landing-updates-guard.test.js",
