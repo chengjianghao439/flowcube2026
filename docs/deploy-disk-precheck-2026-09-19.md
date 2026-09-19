@@ -241,4 +241,23 @@ IO 阻塞；不能排除同期 MySQL 写入叠加。**不是误删**——三条
 - `/var/log`（journal 105M + `messages` ~15M）、`/opt/flowcube/backups`（5.2M）、`versions/`（644M 权威副本）、`current/`（108M）均保留。
 - 前端镜像内的 dist 孤儿文件需在 Dockerfile 层修，属代码改进而非服务器清理。
 
+
+## 只读诊断通道与内存现场（2026-09-19）
+
+**为什么加这个通道**：本机出口 IP 被服务器 sshd 限流（banner 阶段超时）后，我无法再直连服务器，
+而同一时刻 CI 出口 IP 完全正常（`Add SSH known_hosts: success`）。诊断能力不该绑在单一来源 IP 上，
+于是新增 `.github/workflows/server-diagnostics.yml`（`workflow_dispatch`，独立并发组，不占用部署组），
+经 CI SSH 采集：主机与负载、`free -m` 与 `MemAvailable`/`Cached`/`Slab`/`Committed_AS`、
+进程 TOP RSS 与「按命令聚合的 RSS」、容器状态与 `docker stats` 采样、容器 cgroup 内存、
+`dmesg`/`journal` 的 OOM 与被杀进程记录、磁盘与一级目录占用、应用与下载目录明细、镜像/卷计数。
+**只读**由 `tests/deployment-resources.test.js` 机械断言（出现删除/重启/清理类命令即失败；
+反向验证 3 例：加 `rm`、加 `docker system prune`、删掉必需采集项，都必须失败）。
+
+**内存为什么值得查**：`docker-compose.yml` 里 mysql/backend/frontend **三个容器都没有内存限制**
+（无 `mem_limit`、无 `deploy.resources`），backend 也没有 `--max-old-space-size`；
+`docker/mysql/my.cnf` 只设了时区、慢查询与 `max_connections=151`，**未设 `innodb_buffer_pool_size`**
+（用 8.0 默认 128M）。3.5GB 总内存的实例上，「内存占满」需要区分三种情况：Node 堆增长/泄漏、
+MySQL（`performance_schema`、连接缓冲、sort/join buffer）× 151 连接的峰值、以及可回收的 page cache——
+诊断输出见本节末尾的运行结果。
+
 **操作教训（本次自己踩的第二个坑）**：为盘点做了 30+ 次**独立 SSH 短连接**，其中多次被本地 `timeout` 强杀，随后出现「SSH 无输出/超时、而 HTTPS 一直 200」的现象——符合 sshd `MaxStartups` 对未正常关闭连接的限流特征。**生产机操作应复用连接**（`-o ControlMaster=auto -o ControlPath=... -o ControlPersist=300`），并把多条只读查询合并进一次会话，而不是反复新建 + 强杀。

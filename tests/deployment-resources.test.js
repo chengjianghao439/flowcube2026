@@ -8,6 +8,35 @@ const { spawnSync } = require('node:child_process')
 const { gunzipSync } = require('node:zlib')
 const root = path.resolve(__dirname, '..')
 
+// 2026-09-19：本机为盘点做了 30+ 次独立短 SSH 连接、多次被本地 timeout 强杀，把自己的出口 IP
+// 打到服务器 sshd 限流（banner 阶段超时），而同一时刻 CI 出口 IP 完全正常——诊断能力不该绑在
+// 单一来源 IP 上，因此新增 `workflow_dispatch` 的只读诊断 workflow（`.github/workflows/server-diagnostics.yml`）。
+// **只读是它存在的前提**：一旦有人往里加删除/重启/清理命令，它就变成一个没有回滚预案的生产写入口。
+// 反向验证：往远程脚本里加任一写操作命令、或删掉任一必需采集项，本断言都必须失败。
+test('服务器只读诊断 workflow 必须保持只读，且真的在采集现场信息', () => {
+  const yaml = require(path.resolve(root, 'frontend/node_modules/js-yaml'))
+  const file = path.join(root, '.github/workflows/server-diagnostics.yml')
+  assert.ok(fs.existsSync(file), '只读诊断 workflow 缺失（本机 IP 被限流时的唯一诊断通道）')
+  const wf = yaml.load(fs.readFileSync(file, 'utf8'))
+  const steps = Object.values(wf.jobs).flatMap(j => j.steps || [])
+  const run = steps.map(s => s.run || '').join('\n')
+  // 必须真的采集这些现场信息，否则脚本被清空后守卫会「静默通过」
+  for (const needle of ['free -m', 'df -h', 'docker ps', 'docker stats', 'oom', 'du -sh']) {
+    assert.ok(run.includes(needle), `诊断脚本必须包含 ${needle}`)
+  }
+  // 不得含写操作：按命令形态匹配（而非关键词），避免匹配到注释里的中文说明
+  const forbidden = [
+    /\brm\s+-/, /\brmi\b/, /\bmv\s+/, /\btruncate\b/, /\bdd\s+if=/,
+    /docker\s+(prune|system\s+prune|volume\s+rm|container\s+rm|stop|restart|kill)\b/,
+    /docker\s+compose\s+(up|down|stop|restart|rm)\b/,
+    /journalctl\s+--vacuum/, /\bsystemctl\s+(start|stop|restart|disable|enable)\b/,
+    /\bpkill\b/, /\bkillall\b/, /\bcrontab\b/,
+  ]
+  for (const re of forbidden) {
+    assert.ok(!re.test(run), `只读诊断脚本出现写操作命令：${re}`)
+  }
+})
+
 test('部署总超时穿透内层等待，清理和回退必须在强杀前执行', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'flowcube-nested-timeout-'))
   const log = path.join(dir, 'events'), pids = path.join(dir, 'pids')
