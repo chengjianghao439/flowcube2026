@@ -15,7 +15,60 @@
 5. 数量、版本、路径、“不存在/未启用/已部署”等断言必须当场核对。区分工作区已实现、已提交、已推送、已部署、已验证；不得把历史测试结果写成此次验证结果。无法验证的事实明确标注待核实。
 6. 修改跨文件契约时同步全部消费者：权限常量与 seed 迁移、状态常量与生成文件、API 与前端类型、页面标题与烟雾断言、发版脚本与技能说明。
 7. 任务完成前检查 diff，并在完成说明中交代：改了什么、如何验证、文档同步情况和剩余限制。
-8. `AGENTS.md` 应随仓库版本管理，不再作为本地忽略文件。**工作区目录链上不得再出现 `CLAUDE.md`**（根目录最严禁，一行指针也不行）：工作区指令注入按 `<项目根>/AGENTS.md` → `CLAUDE.md` 逐层收集候选，**总量受字节预算约束，超预算才从「更宽」的一端省略、最后只保留或截断最具体的那一个**。2026-09-18 实测：根目录同时存在 166 KB 的 `CLAUDE.md` 与 211 KB 的 `AGENTS.md`，总字节远超预算，新会话注入的是那份过时旧正文、`AGENTS.md` 显示 `omitted`——文件都在，但最权威的现行说明根本没进模型上下文，全链路不报错。旧文已归档为 `docs/claude-md-archive-2026-09-04.md`，现行约定只维护在本文件（抽出 §11–§18 日记后由 211 KB 降到约 107 KB）。**体积仍是硬约束**：默认预设预算 64 KiB，超出部分会被**截断尾部**（现文件在默认预算下会丢掉第 10 节与 §11.1 防呆清单），本机 `standard-fullctx` 副本把预算提到 128 KiB 才完整注入；所以本文件只留现行规则、过程记录放 `docs/`，不要靠加预算绕过。守卫 `npm run test:agents-md-guard`（无 `CLAUDE.md` 候选 / 体积 ≤128 KiB / 关键章节与红线仍在 / `docs/*.md` 与 `npm run` 脚本引用都有效）已进 Tests CI。确需保留历史全文时放 `docs/` 下并使用**非候选文件名**（不能叫 `CLAUDE.md`/`AGENTS.md`，否则一旦被本会话读写就会作为该目录的作用域指令注入）。
+8. `AGENTS.md` 应随仓库版本管理，不再作为本地忽略文件。**工作区目录链上不得再出现 `CLAUDE.md`**（根目录最严禁，一行指针也不行）：工作区指令注入按 `<项目根>/AGENTS.md` → `CLAUDE.md` 逐层收集候选，**总量受字节预算约束，超预算才从「更宽」的一端省略、最后只保留或截断最具体的那一个**。2026-09-18 实测：根目录同时存在 166 KB 的 `CLAUDE.md` 与 211 KB 的 `AGENTS.md`，总字节远超预算，新会话注入的是那份过时旧正文、`AGENTS.md` 显示 `omitted`——文件都在，但最权威的现行说明根本没进模型上下文，全链路不报错。旧文已归档为 `docs/claude-md-archive-2026-09-04.md`，现行约定只维护在本文件（抽出 §11–§18 日记后由 211 KB 降到约 107 KB）。**体积仍是硬约束**：默认预设预算 64 KiB，**超出部分截断尾部**——所以最要紧的约束必须放在文件前部，不能靠编号排在最后。§11.1 防呆清单原先正是排在文件末尾（118 KB 文件里的最后 10.6 KB），默认预算下 **100% 进不了上下文**；2026-09-18 已前移为 §0.1，并由 `npm run test:agents-md-guard` **断言「防呆清单与全部红线关键词必须落在默认预算 64 KiB 以内」**，把这条从「只告警」升级为「直接失败」。现文件在默认预算下仍会丢掉 §9 与 §10 的尾部内容，本机 `standard-fullctx` 副本把预算提到 128 KiB 才完整注入；所以本文件只留现行规则、过程记录放 `docs/`，不要靠加预算绕过。守卫还检查：无 `CLAUDE.md` 候选 / 体积 ≤128 KiB / 关键章节与红线仍在 / `docs/*.md` 与 `npm run` 脚本引用都有效；已进 Tests CI。确需保留历史全文时放 `docs/` 下并使用**非候选文件名**（不能叫 `CLAUDE.md`/`AGENTS.md`，否则一旦被本会话读写就会作为该目录的作用域指令注入）。
+
+
+## 0.1 防呆清单：审计沉淀下来的硬约束
+
+历次审计沉淀的**现行约束**，只写"现在必须怎么做"、不写发现过程。改动涉及这些文件时逐条对照。
+- **撤回收货拒绝在途调拨容器**：`transfer_order_id` 非空即 409（`inbound-tasks.void.js`）
+- **盘点扫码账面查询必须带 `locked_by_task_id IS NULL`**；action 用 `stockcheck.scan.<盘点单ID>` + 幂等回执（`stockcheck.service.js`、`frontend/src/pages/pda/stockcheck.tsx`、`stockcheck.tsx`）
+- **行已有预占时禁止更换发货仓库**：400 `RESERVE_WAREHOUSE_CHANGE_NOT_ALLOWED`（`sale.service.js`）
+- **销售收入凭证按已发原值占比净额化折扣、税额夹到折后净额**；退货冲回成本用 `COALESCE(soi.cost_snapshot,0)` 且去掉 `product_items` JOIN，成本/售价兜底留给 `reports.query.js`（`voucher-engine.js`、`reports.query.js`）
+- **采购结算毛额子查询必须按 `(order_id, product_id)` 关联并先跑来源断言**，脏单抛 `INBOUND_PURCHASE_SOURCE_INVALID`/`PURCHASE_LEGACY_RECEIPT_UNRECONCILED`（`voucher-engine.js`）
+- **移库/拆分必须 `assertInScope`**（移库还须目标库位同仓）；`resync-stock` 是写操作，用 `inventory.adjust`（`inventory.controller.js`、`inventory.service.js`）
+- **仓库范围写路由必须行锁、禁止自我提权**：`USER_SCOPE_SELF_FORBIDDEN`（`PUT /users/:id/warehouse-scope`）
+- **范围校验覆盖读写路径**：`scan-logs` 四条写路径、`POST /admin/putaway`、`findMyTasks`/`findMyTaskSkuSummary`/`getTaskStats`（空范围返回空）
+- **范围校验还必须覆盖** `GET /products/finder`、`GET /containers/overdue`、`GET /returns/{purchase,sale}/source-order`（明细逐行校验发货仓）、`GET /approvals/biz/:bizType/:bizId`（`BIZ_DOC_META`+`sys_role_permissions`，未知 400）、`print-jobs` 列表与条码补打
+- **`print-jobs` 三张条码子查询分别用 `c.`/`wt.`/`j.warehouse_id`**；SQL 文本替换必须带足上下文并真跑三种范围
+- **`complete-local` 同 `complete-client`/`fail-client` 做工作站校验**；写路由必须 `requirePermission`（`fulfillment.routes.js`）
+- **新增不变量必须落 CI 契约测试并接进 `package.json` 与 `.github/workflows/test.yml`**（`docs/audit-2026-09-18.md`）
+- **批量写入用 `VALUES ?` 且先判空**：空数组会 `ER_PARSE_ERROR`；禁止循环内逐行 INSERT（`procurement.service.js`、`hr.service.js`）
+- **前端业务日期一律走 `lib/dateTime.ts`／`lib/dateRange.ts`**，禁止自拼 `getFullYear`/`getMonth`/`getDate`；`test:frontend-date-source` 拦截，非 +08 时区下自实现会偏一天（含会计期间）（`lib/dateTime.ts`）
+- **SQL 标识符插值必须显式校验**：表名/列名/列清单/别名一律走 `assertSqlIdentifier`/`assertSqlColumnList`（`utils/sqlIdentifier.js`）；`test:sql-identifier` 抓「同类守卫漏一个参数」
+- **每处 `eslint-disable` 必须带可读理由，整文件禁用仅限机器产物**：逐行指令上方要有说明性注释，业务文件不得 `/* eslint-disable */`（生成物走 `FILE_DISABLE_ALLOWED` 白名单）；`test:eslint-disable-rationale` 机械守住（反向验证：删掉理由注释、往业务文件加整文件禁用、清空白名单，都必须失败）（`tests/eslint-disable-rationale.test.js`）
+- **`updateInvoice` 的 `assertInvoiceQuota` 必须传同一事务 `conn`**
+- **销售退货可退量按 `wt.warehouse_id = COALESCE(soi.warehouse_id, 销售单头仓)` 关联**（`returns-sale.service.js`）
+- **先 `lockStockDimension` 再锁容器**：`splitContainer` 与 `confirmContainerReturn` 都按此序（`warehouse-tasks.adjust.js`）
+- **月结对账导出透传全部筛选并取 `EXPORT_MAX_ROWS`、超限即拒**；年结排除自身凭证（`export.service.js`）
+- **占库期与执行期改单共用 `assertNoDuplicateSaleItemLines`**（在 `hydrateSaleInput` 之后）；改单挂起期间拣货/复核扫码补 `adjustment_requested_at` 并 409（措辞同 `check.js`）
+- **采购退货出库按 `pri.id = wti.purchase_return_item_id` 关联**，仅商品在本单内唯一才回退 `product_id`，否则 `PURCHASE_RETURN_ITEM_LINK_MISSING`（`warehouse-tasks.ship.js`、`247_warehouse_task_item_purchase_return_link.sql`）
+- **对账单 `findAll`/`findById` 共用金额整形、状态推导与 `refreshSettlement`**
+- **标签渲染失败不得回滚业务事务**（降级 `status=3` unprintable + `label render failed: <CODE>`）
+- **承运商 mock 需 `ALLOW_MOCK_CARRIER=1` 且非 production**，否则 `CARRIER_MOCK_NOT_ALLOWED`；管理页写月结/取号字段即 400 `CARRIER_ACCOUNT_FIELDS_MOVED`，闸门共用 `carriers.guards.js`（`carriers.service.js`）
+- **共享夹具必须自洁**：`prepareSmokeContext` 把 Smoke 客户 `credit_limit` 置 NULL；`tests/round2-transfer.smoke.test.js` 的 `after()` 清理本轮角色/权限/用户/设备（`tests/helpers/smokeTestKit.js`）
+- **处置单 `approve`/`reject` 必须走 `assertNotSelfApproval`**（`tests/disposal.smoke.test.js`）
+- **`dingtalk_send` 未配置→WARN 2，curl 失败/非 2xx/`errcode!=0`→ERROR 1**；键名必须 `DINGTALK_WEBHOOK`（`restore-check.sh`、`server-update.sh`、`tests/ops-monitor-restore.test.js`）
+- **软删主数据活跃唯一性用生成列 `active_unique_guard`**；`252_*` 遇重复活跃编码 fail-loud，`codeGenerator.js` 取号进事务+撞号换号（`248_generated_active_unique_guards.sql`、`252_product_supplier_active_code_uniques.sql`）
+- **已执行迁移的漂移只能新增条件式迁移订正**（仅当值仍是已知错误值）（`249_fix_default_label_paper_size_drift.sql`）
+- **新增迁移必须幂等、编号最大+1，不得改已执行迁移或删字段**（含 `245_backfill_location_barcode.sql`）；索引/外键用幂等 DDL 单独补（`250_payment_entries_record_id_index.sql`、`251_payment_entries_record_fk.sql`）；只按 `print_type` 的全局唯一索引用幂等 DDL 删除（`246_drop_stray_printer_bindings_print_type_unique.sql`）
+- **迁移逐条执行、触发器函数体不得残留结尾分号**；`test:print-purge` 是**数据库测试**（`tests/print-jobs-purge.test.js` import `helpers/smokeTestKit`，要 `NODE_ENV=test` + 第 3 节独立测试库），同时必须给可写 `APP_UPDATE_DOWNLOADS_DIR`——**别把它当纯离线测试跑**（2026-09-18 实测：只设 downloads 目录会在 `testEnvironment` 处报「必须设置 NODE_ENV=test」）
+- **schema 对账必须查 `information_schema` 按名字+列序比对且在生产库核对**（`CREATE TABLE IF NOT EXISTS` 后补索引/外键静默失效）（`schema-reconcile.js`）
+- **PDA 设备改绑仓库/停用必须单事务**：行锁判换仓、`revokeSessions(..., conn)`，非 active 无条件吊销（`middleware/pdaSession.js`）
+- **源码文本契约测试先去注释**（只剔整行注释：按 `//` 全剔会把 `http://127.0.0.1` 这类字面量的后半行一起砍掉，2026-09-18 实测导致守卫自我误报）；锁顺序按「上一个 `FOR UPDATE` 之后」归属，`INSERT` 列数必须与 `?` 一致（`tests/inventory-lock-order-contract.test.js`、`tests/sql-placeholder-contract.test.js`、`tests/deployment-resources.test.js`）
+- **smoke 套件的测试 HTTP 服务必须 `app.listen(0, '127.0.0.1')`**（端口交给 OS + 显式绑回环 IPv4）：`3100 + random(0..999)` 这个范围**包含 3306**（CI 的 MySQL），命中即 `EADDRINUSE: address already in use :::3306`；不指定 host 还可能只绑 IPv6 而 baseUrl 走 `127.0.0.1`，表现为 `TypeError: fetch failed`。两者都约 1/1000、失败步骤每次都不同，2026-09-18 连续拦下两次发版；`tests/deployment-resources.test.js` 机械守住（`tests/helpers/smokeTestKit.js`）
+- **状态文案只能取 `generated/status.ts`**；`WT_ON_ENTER/EXIT_ACTIONS` 是纯文档清单（`frontend/src/pages/sale/index.tsx`、`SaleQueryDialog.tsx`、`tests/status-rules-integrity.test.js`）
+- **`printers.service.update` 的 `status` 只允许 0/1（路由+service 双重）**，写语句同事务行锁，缺失字段沿用现值
+- **资源级幂等 action 必须绑定单据 ID**（`action.<resourceId>`，旧固定 action 只在 SUCCESS 且资源一致时回放）；创建类用载荷指纹；回执查询剥尾部 `.<ID>` 取 base；调拨必须是 `transfer.scanOut.<id>`/`transfer.scanIn.<id>`（`utils/operationRequest.js`、`transfer.service.js`）
+- **`track_status` 含义只在 `logistics.service.js` 定义一处、导出列名「签收状态」**；运费账单匹配用 `tracking_no = ? OR JSON_CONTAINS(tracking_numbers, JSON_QUOTE(?))`，写入方 `logistics.direct.js`（`logistics.worker.js`、`logistics.freight.js`）
+- **轮询页面不得写死小 `pageSize` 又高频轮询**（`refetchInterval` ≥ 5 秒，分页批量 ≥ 100），并计入 `backend/src/app.js` 的全局 IP 限流（1000 次/60 秒）
+- **前端登出必须走 `lib/authSession.performSessionLogout()`**，仅 `lib/authSession.ts`、`store/authStore.ts` 可封装（`pages/pda/index.tsx`）；错误码文案不得按后缀启发式映射（`docs/acceptance-issues-fix-2026-09-17.md`）
+- **发版三端+PDA 版本同步、写本版说明、同步官网 `landing/updates.ts` 并打 tag**；`latest.json` 与 current 指针只由 `release-desktop.js` 写；`test:landing-updates` 拦「bump 了却没同步官网」（`docs/release-notes/0.9.22.md`）
+- **部署链路的镜像上传（scp）与 `docker load` 时限必须同为 1800 秒，且 Deploy 步骤/job 上限容得下**：二者是同一慢盘根因上的两个环节，只放宽一个会让另一个先被强杀，并报出指向外层的 `exit code 124`（2026-09-18 v0.9.24 实际发生）；`tests/deployment-resources.test.js` 机械守住（`deploy-browser.yml`、`server-update.sh`）
+- **「等浏览器部署」与「持有部署组」不得同处一个 job**：`build-pda-apk.yml` 拆为 `build-pda`（`build-pda-ci` 组）/`wait-browser`（无组）/`publish-pda`（唯一持有 `flowcube-server-deploy`）；APK 经 artifact 从 build 传到 publish，故上传步骤不得 `continue-on-error`，`download-artifact` 与 `upload-artifact` 保持同一大版本线；`tests/deployment-resources.test.js` 机械守住（反向验证：加回 workflow 级部署组、把等待步骤挪进发布 job，都必须失败）
+- **前端容器必须删 `/docker-entrypoint.d/10-listen-on-ipv6-by-default.sh`**（`10-listen-on-ipv6-by-default.sh`）
+- **回退/还原逐个写全路径、不得 `||` 兜底猜路径**，改完立即 `git status --short`
+- **改共用函数或路由契约后跑全量套件**（调用点补 `X-Client-Id`）；本机单测 Node 26 假失败用 `NODE_OPTIONS='--localstorage-file=/tmp/fc-ls.json'` 复现（`src/components/shared/FulfillmentTodos.test.tsx`）
 
 ## 1. 协作与操作边界
 
@@ -364,55 +417,3 @@ npm run test:permissions
 | 2026-09-05 上线前两轮审计 | `docs/prelaunch-deep-audit-2026-09-05.md`、`docs/prelaunch-fixes-2026-09-05.md`、`docs/prelaunch-second-audit-2026-09-05.md`、`docs/audit-round2-2026-09-05/` |
 | 发布说明与结果 | `docs/release-notes/*.md`、`docs/release-v0.9.*-result.md` |
 | 本机环境与本地库切换 | `docs/local-tooling-2026-09-04.md`、`docs/local-mysql8-cutover-2026-09-04.md` |
-
-### 11.1 防呆清单：审计沉淀下来的硬约束
-
-历次审计沉淀的**现行约束**，只写"现在必须怎么做"、不写发现过程。改动涉及这些文件时逐条对照。
-- **撤回收货拒绝在途调拨容器**：`transfer_order_id` 非空即 409（`inbound-tasks.void.js`）
-- **盘点扫码账面查询必须带 `locked_by_task_id IS NULL`**；action 用 `stockcheck.scan.<盘点单ID>` + 幂等回执（`stockcheck.service.js`、`frontend/src/pages/pda/stockcheck.tsx`、`stockcheck.tsx`）
-- **行已有预占时禁止更换发货仓库**：400 `RESERVE_WAREHOUSE_CHANGE_NOT_ALLOWED`（`sale.service.js`）
-- **销售收入凭证按已发原值占比净额化折扣、税额夹到折后净额**；退货冲回成本用 `COALESCE(soi.cost_snapshot,0)` 且去掉 `product_items` JOIN，成本/售价兜底留给 `reports.query.js`（`voucher-engine.js`、`reports.query.js`）
-- **采购结算毛额子查询必须按 `(order_id, product_id)` 关联并先跑来源断言**，脏单抛 `INBOUND_PURCHASE_SOURCE_INVALID`/`PURCHASE_LEGACY_RECEIPT_UNRECONCILED`（`voucher-engine.js`）
-- **移库/拆分必须 `assertInScope`**（移库还须目标库位同仓）；`resync-stock` 是写操作，用 `inventory.adjust`（`inventory.controller.js`、`inventory.service.js`）
-- **仓库范围写路由必须行锁、禁止自我提权**：`USER_SCOPE_SELF_FORBIDDEN`（`PUT /users/:id/warehouse-scope`）
-- **范围校验覆盖读写路径**：`scan-logs` 四条写路径、`POST /admin/putaway`、`findMyTasks`/`findMyTaskSkuSummary`/`getTaskStats`（空范围返回空）
-- **范围校验还必须覆盖** `GET /products/finder`、`GET /containers/overdue`、`GET /returns/{purchase,sale}/source-order`（明细逐行校验发货仓）、`GET /approvals/biz/:bizType/:bizId`（`BIZ_DOC_META`+`sys_role_permissions`，未知 400）、`print-jobs` 列表与条码补打
-- **`print-jobs` 三张条码子查询分别用 `c.`/`wt.`/`j.warehouse_id`**；SQL 文本替换必须带足上下文并真跑三种范围
-- **`complete-local` 同 `complete-client`/`fail-client` 做工作站校验**；写路由必须 `requirePermission`（`fulfillment.routes.js`）
-- **新增不变量必须落 CI 契约测试并接进 `package.json` 与 `.github/workflows/test.yml`**（`docs/audit-2026-09-18.md`）
-- **批量写入用 `VALUES ?` 且先判空**：空数组会 `ER_PARSE_ERROR`；禁止循环内逐行 INSERT（`procurement.service.js`、`hr.service.js`）
-- **前端业务日期一律走 `lib/dateTime.ts`／`lib/dateRange.ts`**，禁止自拼 `getFullYear`/`getMonth`/`getDate`；`test:frontend-date-source` 拦截，非 +08 时区下自实现会偏一天（含会计期间）（`lib/dateTime.ts`）
-- **SQL 标识符插值必须显式校验**：表名/列名/列清单/别名一律走 `assertSqlIdentifier`/`assertSqlColumnList`（`utils/sqlIdentifier.js`）；`test:sql-identifier` 抓「同类守卫漏一个参数」
-- **每处 `eslint-disable` 必须带可读理由，整文件禁用仅限机器产物**：逐行指令上方要有说明性注释，业务文件不得 `/* eslint-disable */`（生成物走 `FILE_DISABLE_ALLOWED` 白名单）；`test:eslint-disable-rationale` 机械守住（反向验证：删掉理由注释、往业务文件加整文件禁用、清空白名单，都必须失败）（`tests/eslint-disable-rationale.test.js`）
-- **`updateInvoice` 的 `assertInvoiceQuota` 必须传同一事务 `conn`**
-- **销售退货可退量按 `wt.warehouse_id = COALESCE(soi.warehouse_id, 销售单头仓)` 关联**（`returns-sale.service.js`）
-- **先 `lockStockDimension` 再锁容器**：`splitContainer` 与 `confirmContainerReturn` 都按此序（`warehouse-tasks.adjust.js`）
-- **月结对账导出透传全部筛选并取 `EXPORT_MAX_ROWS`、超限即拒**；年结排除自身凭证（`export.service.js`）
-- **占库期与执行期改单共用 `assertNoDuplicateSaleItemLines`**（在 `hydrateSaleInput` 之后）；改单挂起期间拣货/复核扫码补 `adjustment_requested_at` 并 409（措辞同 `check.js`）
-- **采购退货出库按 `pri.id = wti.purchase_return_item_id` 关联**，仅商品在本单内唯一才回退 `product_id`，否则 `PURCHASE_RETURN_ITEM_LINK_MISSING`（`warehouse-tasks.ship.js`、`247_warehouse_task_item_purchase_return_link.sql`）
-- **对账单 `findAll`/`findById` 共用金额整形、状态推导与 `refreshSettlement`**
-- **标签渲染失败不得回滚业务事务**（降级 `status=3` unprintable + `label render failed: <CODE>`）
-- **承运商 mock 需 `ALLOW_MOCK_CARRIER=1` 且非 production**，否则 `CARRIER_MOCK_NOT_ALLOWED`；管理页写月结/取号字段即 400 `CARRIER_ACCOUNT_FIELDS_MOVED`，闸门共用 `carriers.guards.js`（`carriers.service.js`）
-- **共享夹具必须自洁**：`prepareSmokeContext` 把 Smoke 客户 `credit_limit` 置 NULL；`tests/round2-transfer.smoke.test.js` 的 `after()` 清理本轮角色/权限/用户/设备（`tests/helpers/smokeTestKit.js`）
-- **处置单 `approve`/`reject` 必须走 `assertNotSelfApproval`**（`tests/disposal.smoke.test.js`）
-- **`dingtalk_send` 未配置→WARN 2，curl 失败/非 2xx/`errcode!=0`→ERROR 1**；键名必须 `DINGTALK_WEBHOOK`（`restore-check.sh`、`server-update.sh`、`tests/ops-monitor-restore.test.js`）
-- **软删主数据活跃唯一性用生成列 `active_unique_guard`**；`252_*` 遇重复活跃编码 fail-loud，`codeGenerator.js` 取号进事务+撞号换号（`248_generated_active_unique_guards.sql`、`252_product_supplier_active_code_uniques.sql`）
-- **已执行迁移的漂移只能新增条件式迁移订正**（仅当值仍是已知错误值）（`249_fix_default_label_paper_size_drift.sql`）
-- **新增迁移必须幂等、编号最大+1，不得改已执行迁移或删字段**（含 `245_backfill_location_barcode.sql`）；索引/外键用幂等 DDL 单独补（`250_payment_entries_record_id_index.sql`、`251_payment_entries_record_fk.sql`）；只按 `print_type` 的全局唯一索引用幂等 DDL 删除（`246_drop_stray_printer_bindings_print_type_unique.sql`）
-- **迁移逐条执行、触发器函数体不得残留结尾分号**；`test:print-purge` 是**数据库测试**（`tests/print-jobs-purge.test.js` import `helpers/smokeTestKit`，要 `NODE_ENV=test` + 第 3 节独立测试库），同时必须给可写 `APP_UPDATE_DOWNLOADS_DIR`——**别把它当纯离线测试跑**（2026-09-18 实测：只设 downloads 目录会在 `testEnvironment` 处报「必须设置 NODE_ENV=test」）
-- **schema 对账必须查 `information_schema` 按名字+列序比对且在生产库核对**（`CREATE TABLE IF NOT EXISTS` 后补索引/外键静默失效）（`schema-reconcile.js`）
-- **PDA 设备改绑仓库/停用必须单事务**：行锁判换仓、`revokeSessions(..., conn)`，非 active 无条件吊销（`middleware/pdaSession.js`）
-- **源码文本契约测试先去注释**（只剔整行注释：按 `//` 全剔会把 `http://127.0.0.1` 这类字面量的后半行一起砍掉，2026-09-18 实测导致守卫自我误报）；锁顺序按「上一个 `FOR UPDATE` 之后」归属，`INSERT` 列数必须与 `?` 一致（`tests/inventory-lock-order-contract.test.js`、`tests/sql-placeholder-contract.test.js`、`tests/deployment-resources.test.js`）
-- **smoke 套件的测试 HTTP 服务必须 `app.listen(0, '127.0.0.1')`**（端口交给 OS + 显式绑回环 IPv4）：`3100 + random(0..999)` 这个范围**包含 3306**（CI 的 MySQL），命中即 `EADDRINUSE: address already in use :::3306`；不指定 host 还可能只绑 IPv6 而 baseUrl 走 `127.0.0.1`，表现为 `TypeError: fetch failed`。两者都约 1/1000、失败步骤每次都不同，2026-09-18 连续拦下两次发版；`tests/deployment-resources.test.js` 机械守住（`tests/helpers/smokeTestKit.js`）
-- **状态文案只能取 `generated/status.ts`**；`WT_ON_ENTER/EXIT_ACTIONS` 是纯文档清单（`frontend/src/pages/sale/index.tsx`、`SaleQueryDialog.tsx`、`tests/status-rules-integrity.test.js`）
-- **`printers.service.update` 的 `status` 只允许 0/1（路由+service 双重）**，写语句同事务行锁，缺失字段沿用现值
-- **资源级幂等 action 必须绑定单据 ID**（`action.<resourceId>`，旧固定 action 只在 SUCCESS 且资源一致时回放）；创建类用载荷指纹；回执查询剥尾部 `.<ID>` 取 base；调拨必须是 `transfer.scanOut.<id>`/`transfer.scanIn.<id>`（`utils/operationRequest.js`、`transfer.service.js`）
-- **`track_status` 含义只在 `logistics.service.js` 定义一处、导出列名「签收状态」**；运费账单匹配用 `tracking_no = ? OR JSON_CONTAINS(tracking_numbers, JSON_QUOTE(?))`，写入方 `logistics.direct.js`（`logistics.worker.js`、`logistics.freight.js`）
-- **轮询页面不得写死小 `pageSize` 又高频轮询**（`refetchInterval` ≥ 5 秒，分页批量 ≥ 100），并计入 `backend/src/app.js` 的全局 IP 限流（1000 次/60 秒）
-- **前端登出必须走 `lib/authSession.performSessionLogout()`**，仅 `lib/authSession.ts`、`store/authStore.ts` 可封装（`pages/pda/index.tsx`）；错误码文案不得按后缀启发式映射（`docs/acceptance-issues-fix-2026-09-17.md`）
-- **发版三端+PDA 版本同步、写本版说明、同步官网 `landing/updates.ts` 并打 tag**；`latest.json` 与 current 指针只由 `release-desktop.js` 写；`test:landing-updates` 拦「bump 了却没同步官网」（`docs/release-notes/0.9.22.md`）
-- **部署链路的镜像上传（scp）与 `docker load` 时限必须同为 1800 秒，且 Deploy 步骤/job 上限容得下**：二者是同一慢盘根因上的两个环节，只放宽一个会让另一个先被强杀，并报出指向外层的 `exit code 124`（2026-09-18 v0.9.24 实际发生）；`tests/deployment-resources.test.js` 机械守住（`deploy-browser.yml`、`server-update.sh`）
-- **「等浏览器部署」与「持有部署组」不得同处一个 job**：`build-pda-apk.yml` 拆为 `build-pda`（`build-pda-ci` 组）/`wait-browser`（无组）/`publish-pda`（唯一持有 `flowcube-server-deploy`）；APK 经 artifact 从 build 传到 publish，故上传步骤不得 `continue-on-error`，`download-artifact` 与 `upload-artifact` 保持同一大版本线；`tests/deployment-resources.test.js` 机械守住（反向验证：加回 workflow 级部署组、把等待步骤挪进发布 job，都必须失败）
-- **前端容器必须删 `/docker-entrypoint.d/10-listen-on-ipv6-by-default.sh`**（`10-listen-on-ipv6-by-default.sh`）
-- **回退/还原逐个写全路径、不得 `||` 兜底猜路径**，改完立即 `git status --short`
-- **改共用函数或路由契约后跑全量套件**（调用点补 `X-Client-Id`）；本机单测 Node 26 假失败用 `NODE_OPTIONS='--localstorage-file=/tmp/fc-ls.json'` 复现（`src/components/shared/FulfillmentTodos.test.tsx`）

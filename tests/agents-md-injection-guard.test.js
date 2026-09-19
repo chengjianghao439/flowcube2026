@@ -17,6 +17,8 @@
  * 本测试守住那次处置的**四个可机械验证的结论**，防止它们随日常改动悄悄失效：
  *   1. 目录链上不得再出现 `CLAUDE.md` 候选文件（根目录最严禁，一行指针也不行）；
  *   2. `AGENTS.md` 必须存在、非空、含关键章节，且体积不超注入预算（超默认预算只告警）；
+ *      更进一步：**防呆清单与全部红线关键词必须落在默认预算 64 KiB 以内**——
+ *      约束写在预算之外时不进上下文，等于没写；
  *   3. `AGENTS.md` 里 `docs/*.md` 引用必须真实存在，归档文件也不能丢——
  *      代理按这些指引去读证据，路径失效等于把「已完成」变成「查无此事」；
  *   4. 正文里 `npm run X` 引用的脚本必须还在 `package.json` 里（同上，失效指引）。
@@ -51,9 +53,9 @@ const BANNED_CANDIDATE = 'CLAUDE.md'
 /** `AGENTS.md` 必须保留的关键章节（丢了就是现行约束被误删）。 */
 const REQUIRED_SECTIONS = [
   '## 0. 第一时间同步文档',
+  '## 0.1 防呆清单',
   '## 6. 库存、事务与幂等',
   '## 7. 核心业务语义',
-  '### 11.1 防呆清单',
 ]
 
 /** 必须在正文出现的红线关键词：章节标题可能被改写，红线本身不能被搬走。 */
@@ -64,6 +66,17 @@ const REQUIRED_RED_LINES = [
   'X-Request-Key',
   '北京时间',
 ]
+
+/**
+ * 必须落在**默认预算 64 KiB 以内**的关键内容。只「存在」不够——默认预设只注入
+ * 前 64 KiB，排在后面的约束根本进不了模型上下文，等于没写，而且不会有任何报错。
+ *
+ * 2026-09-18 实测：防呆清单原先排在文件最末尾（`### 11.1`），占 10.6 KB，
+ * 而文件 118 KB——默认预算下它 **100% 被截断**，可它恰恰是「改动涉及这些文件时
+ * 逐条对照」的操作清单。同日已前移到 §0 之后（`## 0.1`，起点约 4.2 KB），
+ * 由本组断言钉住位置。反向验证：把它挪回文件末尾即失败。
+ */
+const MUST_BE_WITHIN_DEFAULT_BUDGET = ['## 0.1 防呆清单', ...REQUIRED_RED_LINES]
 
 /** 允许缺失的引用（需要理由；当前为空，登记必须是真例外）。 */
 const ALLOWED_MISSING_DOC_REFS = new Set([])
@@ -166,7 +179,23 @@ function main() {
     if (!scripts.has(r)) problems.push(`AGENTS.md 引用了不存在的 npm 脚本：npm run ${r}`)
   }
 
-  // ── 6. 默认预算预警（不失败，属部署侧配置） ───────────────────────────────
+  // ── 6. 关键内容必须真的注入得进去（写在预算之外 = 没写） ─────────────────
+  const head = Buffer.from(text, 'utf8').subarray(0, DEFAULT_BUDGET_BYTES).toString('utf8')
+  for (const item of MUST_BE_WITHIN_DEFAULT_BUDGET) {
+    if (head.includes(item)) continue
+    const at = text.indexOf(item)
+    if (at < 0) {
+      problems.push(`AGENTS.md 缺少必须可见的内容：${item}`)
+      continue
+    }
+    const pos = Buffer.byteLength(text.slice(0, at), 'utf8')
+    problems.push(
+      `「${item}」在文件第 ${pos} 字节处，落在默认注入预算 ${DEFAULT_BUDGET_BYTES} 之外：` +
+        '默认预设只注入前 64 KiB，排在后面的约束进不了上下文、等于没写。请前移到文件前部',
+    )
+  }
+
+  // ── 7. 默认预算预警（不失败，属部署侧配置） ───────────────────────────────
   const trunc = truncationReport(text)
   if (trunc) {
     console.log(
