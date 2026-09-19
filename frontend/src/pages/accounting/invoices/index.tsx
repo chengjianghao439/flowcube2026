@@ -1,4 +1,5 @@
 import ListSummary from '@/components/shared/ListSummary'
+import { DatePicker } from '@/components/shared/DatePicker'
 /**
  * 发票管理（文档 10 · Phase 3）
  * 进项/销项发票池 + 录入 + 认证/抵扣/红冲台账。发票与业务单弱关联，税额只在凭证映射时拆分。
@@ -102,7 +103,7 @@ function InvoiceDialog({ open, invoiceType, edit, onClose }: { open: boolean; in
             <span>税额 <span className="tabular-nums font-medium">{m(taxAmount)}</span></span>
             <span>价税合计 <span className="tabular-nums font-medium">{m(withTax)}</span></span>
           </div>
-          <div className="space-y-1.5"><Label>开票日期 *</Label><Input type="date" value={f.invoiceDate} onChange={e => setF(s => ({ ...s, invoiceDate: e.target.value }))} disabled={isPending} /></div>
+          <div className="space-y-1.5"><Label>开票日期 *</Label><DatePicker value={f.invoiceDate} onChange={v => setF(s => ({ ...s, invoiceDate: v }))} disabled={isPending} /></div>
           <div className="space-y-1.5"><Label>关联单号（选填）</Label><Input value={f.sourceNo} onChange={e => setF(s => ({ ...s, sourceNo: e.target.value }))} disabled={isPending} placeholder="采购/销售单号" /></div>
           <div className="space-y-1.5 col-span-2"><Label>备注</Label><Input value={f.remark} onChange={e => setF(s => ({ ...s, remark: e.target.value }))} disabled={isPending} /></div>
         </div>

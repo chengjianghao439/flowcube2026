@@ -13,6 +13,7 @@
  *  - 是否整体下线该区块，把卡点提示并入「作业进度」标签。
  */
 import { useRef, useState } from 'react'
+import { DatePicker } from './DatePicker'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { getFulfillment, runFulfillmentCommand, type FulfillmentType, type FulfillmentCommand, type FulfillmentIssue, type DeliveryItem } from '@/api/fulfillment'
 import { createRequestKey } from '@/lib/requestKey'
@@ -145,7 +146,7 @@ export function OrderFulfillmentPanel({ type, id }: { type: FulfillmentType; id:
       {dateEditor && <form className="mt-4 space-y-3 border-t pt-3" onSubmit={e => { e.preventDefault(); mutation.mutate({ action: 'dates', itemId, date: date || null, processingDays: days === '' ? null : Number(days), reason }) }}>
         <p className="text-sm font-medium">{itemId ? `修改商品 ${data.delivery?.items.find(item => item.id === itemId)?.productCode || itemId} 的发货安排` : type === 'sale' ? '修改整单发货安排' : '修改采购到货日期'}</p>
         <div className="flex flex-wrap items-end gap-3">
-          <label className="space-y-1 text-sm"><span className="block">{type === 'sale' ? '约定发货日期' : '预计到货日期'}</span><Input type="date" value={date} onChange={e => setDate(e.target.value)} /></label>
+          <label className="space-y-1 text-sm"><span className="block">{type === 'sale' ? '约定发货日期' : '预计到货日期'}</span><DatePicker value={date} onChange={setDate} /></label>
           {type === 'sale' && <label className="space-y-1 text-sm"><span className="block">仓库备货天数</span><Input type="number" min={0} max={365} step={1} placeholder="如：1" value={days} onChange={e => setDays(e.target.value)} /></label>}
           <label className="min-w-64 flex-1 space-y-1 text-sm"><span className="block">变更原因</span><Input required maxLength={500} value={reason} onChange={e => setReason(e.target.value)} /></label>
         </div>
@@ -184,7 +185,7 @@ export function OrderFulfillmentPanel({ type, id }: { type: FulfillmentType; id:
           {editing?.status === 'resolved' ? <option value="reopen">重新跟进</option> : <><option value="progress">记录进展 / 修改期限</option><option value="assign">更换负责人</option><option value="resolve" disabled={editing?.conditionActive}>标记为已处理{editing?.conditionActive ? '（问题仍存在，暂不能结束）' : ''}</option></>}
         </select></label>}
         <div className="flex flex-wrap gap-3">{(newIssue || operation === 'assign') && <label className="text-sm">负责人 <select aria-label="负责人" className={control} value={owner} onChange={e => setOwner(e.target.value)}><option value="">{newIssue ? '默认交给订单负责人' : '待认领'}</option>{data.owners.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}</select></label>}
-          <label className="text-sm">处理截止日期<Input type="date" value={due} onChange={e => setDue(e.target.value)} /></label></div>
+          <label className="text-sm">处理截止日期<DatePicker value={due} onChange={setDue} /></label></div>
         <label className="block text-sm">{newIssue ? '遇到了什么问题' : '处理进展 / 结果'}<textarea required maxLength={500} className="mt-1 block min-h-20 w-full rounded-md border border-input bg-background p-2" value={result} onChange={e => setResult(e.target.value)} /></label>
         <div className="flex gap-2"><Button type="submit" disabled={mutation.isPending}>保存</Button><Button type="button" variant="ghost" onClick={() => { setNewIssue(false); setEditing(null) }}>取消</Button></div>
       </form>}

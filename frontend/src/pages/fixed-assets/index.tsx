@@ -1,4 +1,5 @@
 import { useCompanyQueryKey } from '@/hooks/useCompanyQueryKey'
+import { DatePicker } from '@/components/shared/DatePicker'
 import { money } from '@/lib/format'
 import { RecordIdentity } from '@/components/shared/RecordIdentity'
 import { useState } from 'react'
@@ -60,7 +61,7 @@ function CreateDialog({ open, onClose, onSaved }: { open: boolean; onClose: () =
           <div className="grid grid-cols-2 gap-x-5 gap-y-4">
             <div className="space-y-1">
               <Label>购置日期 *</Label>
-              <Input type="date" value={form.acquireDate} onChange={e => set('acquireDate')(e.target.value)} />
+              <DatePicker value={form.acquireDate} onChange={v => set('acquireDate')(v)} />
             </div>
             <div className="space-y-1">
               <Label>原值（元）*</Label>
@@ -121,7 +122,7 @@ function DisposeDialog({ asset, onClose }: { asset: FixedAsset | null; onClose: 
           </div>
           <div className="space-y-1">
             <Label>处置日期</Label>
-            <Input type="date" value={form.disposeDate} onChange={e => setForm(p => ({ ...p, disposeDate: e.target.value }))} />
+            <DatePicker value={form.disposeDate} onChange={v => setForm(p => ({ ...p, disposeDate: v }))} />
           </div>
           <div className="grid grid-cols-2 gap-x-5 gap-y-4">
             <div className="space-y-1">

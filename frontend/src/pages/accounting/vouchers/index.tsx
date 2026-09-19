@@ -1,4 +1,5 @@
 import ListSummary from '@/components/shared/ListSummary'
+import { DatePicker } from '@/components/shared/DatePicker'
 import { amount } from '@/lib/format'
 import { ReportTable } from '@/components/shared/ReportTable'
 /**
@@ -212,7 +213,7 @@ function ManualDialog({ open, onClose }: { open: boolean; onClose: () => void })
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label>记账日期 *</Label>
-              <Input type="date" value={voucherDate} onChange={e => setVoucherDate(e.target.value)} disabled={isPending} />
+              <DatePicker value={voucherDate} onChange={setVoucherDate} disabled={isPending} />
             </div>
             <div className="space-y-1.5">
               <Label>摘要</Label>

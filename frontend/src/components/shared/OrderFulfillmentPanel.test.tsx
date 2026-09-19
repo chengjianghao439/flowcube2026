@@ -110,7 +110,7 @@ test('商品详情保留采购跳转和明细日期编辑，读取权限不暴�
   const edit = [...detail.querySelectorAll('button')].find(b => b.textContent === '修改日期')!
   await act(async () => edit.click())
   expect(host.textContent).toContain('修改商品 SKU0010')
-  expect(host.querySelector('input[type="date"]')).not.toBeNull()
+  expect(host.querySelector('input[placeholder="yyyy-mm-dd"]')).not.toBeNull()
 })
 
 test('只有读取权限时不展示日期修改入口', async () => {

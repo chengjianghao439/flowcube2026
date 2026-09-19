@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { DatePicker } from '@/components/shared/DatePicker'
 import { X } from 'lucide-react'
 import { toast } from '@/lib/toast'
 import PageHeader from '@/components/shared/PageHeader'
@@ -203,7 +204,7 @@ function CreateRefundDialog({ open, onClose }: { open: boolean; onClose: () => v
           </div>
           <div className="space-y-1">
             <Label>退款日期</Label>
-            <Input type="date" value={refundDate} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRefundDate(e.target.value)} />
+            <DatePicker value={refundDate} onChange={setRefundDate} />
           </div>
           <div className="space-y-1">
             <Label>备注</Label>

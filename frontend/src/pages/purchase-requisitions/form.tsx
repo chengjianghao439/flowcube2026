@@ -1,4 +1,5 @@
 import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
+import { DatePicker } from '@/components/shared/DatePicker'
 import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
 import { SectionCard } from '@/components/shared/SectionCard'
 /**
@@ -319,7 +320,7 @@ export default function RequisitionFormPage() {
           </div>
           <div className="space-y-1.5">
             <Label>期望到货日</Label>
-            <Input type="date" value={expectedDate ? String(expectedDate).slice(0, 10) : ''} onChange={e => setExpectedDate(e.target.value)} disabled={!editable || busy} />
+            <DatePicker value={expectedDate ? String(expectedDate).slice(0, 10) : ''} onChange={setExpectedDate} disabled={!editable || busy} />
           </div>
           {detail && (
             <div className="space-y-1.5">
