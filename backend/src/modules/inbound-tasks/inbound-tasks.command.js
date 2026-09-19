@@ -1,5 +1,6 @@
 const { commitFulfillment } = require('../fulfillment/fulfillment.refresh')
 const { pool } = require('../../config/db')
+const { assertQtyPrecisionWith } = require('../../utils/qtyPrecision')  // 商品级数量精度开关（迁移 254）
 const AppError = require('../../utils/AppError')
 const { createContainer, CONTAINER_STATUS, SOURCE_TYPE } = require('../../engine/containerEngine')
 const { enqueueContainerLabelJob } = require('../print-jobs/print-jobs.service')
@@ -362,10 +363,17 @@ async function receive(taskId, payload, { userId, requestKey, pdaWarehouseId, sc
   if (normalizedPackages.some(pkg => !Number.isFinite(pkg.qty) || pkg.qty <= 0)) throw new AppError('箱数量必须大于 0', 400)
 
   const [[productRow]] = await pool.query(
-    'SELECT barcode, code, batch_managed, shelf_life_days FROM product_items WHERE id=? AND deleted_at IS NULL',
+    'SELECT barcode, code, name, batch_managed, shelf_life_days, allow_decimal_qty FROM product_items WHERE id=? AND deleted_at IS NULL',
     [productIdN],
   )
   if (!productRow) throw new AppError('商品不存在', 404)
+  // 「只能整数」的商品不得按小数收货（迁移 254）。收货是执行类入口，数量常与在途单据的
+  // 应到量对齐，故只校验整数约束、不校验「两位小数」上限。
+  assertQtyPrecisionWith(
+    { name: productRow.name, allowDecimal: productRow.allow_decimal_qty == null ? true : Number(productRow.allow_decimal_qty) === 1 },
+    totalQty,
+    '本次收货数量',
+  )
 
   // 错货防护：PDA 端做过商品条码核对时会带上 scannedBarcode，后端兜底再验一次
   // （防止绕过前端直接调 API 用错误条码入账）。扫码值匹配商品条码或商品编码任一即可；

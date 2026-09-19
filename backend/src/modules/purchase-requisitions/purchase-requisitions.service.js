@@ -6,6 +6,7 @@ const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransi
 const { beginOperationRequest, beginCreationOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
 const { normalizePagination } = require('../../utils/pagination')
+const { assertQtyPrecision, assertQtyPrecisionWith } = require('../../utils/qtyPrecision')  // 商品级数量精度开关（迁移 254）
 const { lockPlanning, roundPurchase } = require('../procurement/procurement.planning')
 const { getSupplyRows } = require('../inventory/inventory.procurement')
 const { getPolicy } = require('../procurement/procurement.policies')
@@ -69,10 +70,16 @@ async function replaceItems(conn, requisitionId, items) {
     const qty = Number(it.quantity)
     if (!Number.isFinite(qty) || qty <= 0) throw new AppError('请购数量必须大于 0', 400)
     const [[p]] = await conn.query(
-      'SELECT id,code,name,unit,spec FROM product_items WHERE id=? AND deleted_at IS NULL',
+      'SELECT id,code,name,unit,spec,allow_decimal_qty FROM product_items WHERE id=? AND deleted_at IS NULL',
       [Number(it.productId)],
     )
     if (!p) throw new AppError(`商品 ${it.productId} 不存在`, 404)
+    // 「只能整数」的商品不得按小数请购（迁移 254）
+    assertQtyPrecisionWith(
+      { name: p.name, allowDecimal: p.allow_decimal_qty == null ? true : Number(p.allow_decimal_qty) === 1 },
+      qty,
+      '请购数量',
+    )
     let supplierName = null
     if (it.suggestedSupplierId) {
       const [[s]] = await conn.query('SELECT name FROM supply_suppliers WHERE id=? AND deleted_at IS NULL', [Number(it.suggestedSupplierId)])
@@ -354,6 +361,11 @@ async function convert(id, { lines, requestKey }, operator) {
       if (qty > remaining + 1e-9) throw new AppError(`商品「${item.product_name}」本次转采购 ${qty} 超过可转余量 ${remaining}`, 400)
       itemMap.set(itemId, { item, qty, supplierId, supplierName: ln.supplierName || null, unitPrice })
     }
+
+    // 「只能整数」的商品不得按小数转采购（迁移 254）
+    await assertQtyPrecision(conn, [...itemMap.values()].map((v, index) => ({
+      productId: v.item.product_id, qty: v.qty, label: `第 ${index + 1} 行转采购数量`,
+    })))
 
     if (head.source === 'replenishment') await validateReplenishmentSupply(conn, head.warehouse_id, [...itemMap.values()].map(v => ({ productId: v.item.product_id, quantity: v.qty, suggestedSupplierId: v.supplierId })), operator?.warehouseIds ?? null, id)
 

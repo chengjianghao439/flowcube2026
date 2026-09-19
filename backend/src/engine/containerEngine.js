@@ -17,6 +17,7 @@ const AppError = require('../utils/AppError')
 const logger   = require('../utils/logger')
 const { generateContainerCode } = require('../utils/codeGenerator')
 const { getExpectedForPair, lockExpectedPurchaseOrders } = require('../utils/expectedStock')
+const { assertQtyPrecision } = require('../utils/qtyPrecision')  // 商品级数量精度开关（迁移 254）
 
 /** 与 inventory_containers.status 一致 */
 const CONTAINER_STATUS = {
@@ -973,6 +974,9 @@ async function splitContainer(conn, { containerId, qty, remark = null, targetCon
     [cid],
   )
   if (!row) throw new AppError('容器不存在', 404)
+  // 「只能整数」的商品不得按小数拆分（迁移 254）。拆分数量常取自容器余量，
+  // 历史存量可能带多位小数，故只校验整数约束、不校验「两位小数」上限。
+  await assertQtyPrecision(conn, [{ productId: row.product_id, qty: q, label: '拆分数量' }], { checkScale: false })
   if (Number(row.status) !== CONTAINER_STATUS.ACTIVE) {
     throw new AppError('源容器须为在库(ACTIVE)状态', 400)
   }

@@ -15,6 +15,7 @@
  */
 
 const { pool } = require('../../config/db')
+const { assertQtyPrecisionWith } = require('../../utils/qtyPrecision')  // 商品级数量精度开关（迁移 254）
 const AppError = require('../../utils/AppError')
 const { MOVE_TYPE, writeInventoryLog } = require('../../engine/inventoryEngine')
 const { adjustContainerStock, SOURCE_TYPE, lockStockDimension } = require('../../engine/containerEngine')
@@ -213,7 +214,7 @@ async function create({ warehouseId, remark, items, operator, scopeWarehouseIds 
     // 汇总行成本：建议单价（avg_cost 优先，回落 cost_price / sale_price）
     const productIds = [...new Set(items.map(i => Number(i.productId)))]
     const [products] = await conn.query(
-      `SELECT id, code, name, unit,
+      `SELECT id, code, name, unit, allow_decimal_qty,
               COALESCE(NULLIF(avg_cost,0), NULLIF(cost_price,0), sale_price, 0) AS unit_value
          FROM product_items
         WHERE id IN (${productIds.map(() => '?').join(',')}) AND deleted_at IS NULL`,
@@ -237,6 +238,12 @@ async function create({ warehouseId, remark, items, operator, scopeWarehouseIds 
       const p = productMap.get(Number(it.productId))
       const unitValue = Number(p.unit_value)
       const quantity = Number(it.quantity)
+      // 「只能整数」的商品不得按小数录入处置数量（迁移 254）
+      assertQtyPrecisionWith(
+        { name: p.name, allowDecimal: p.allow_decimal_qty == null ? true : Number(p.allow_decimal_qty) === 1 },
+        quantity,
+        '处置数量',
+      )
       totalValue += unitValue * quantity
       await conn.query(
         `INSERT INTO inventory_disposal_items
@@ -271,7 +278,7 @@ async function update(id, { warehouseId, remark, items }, scopeWarehouseIds = nu
 
     const productIds = [...new Set(items.map(i => Number(i.productId)))]
     const [products] = await conn.query(
-      `SELECT id, code, name, unit,
+      `SELECT id, code, name, unit, allow_decimal_qty,
               COALESCE(NULLIF(avg_cost,0), NULLIF(cost_price,0), sale_price, 0) AS unit_value
          FROM product_items
         WHERE id IN (${productIds.map(() => '?').join(',')}) AND deleted_at IS NULL`,
@@ -288,6 +295,12 @@ async function update(id, { warehouseId, remark, items }, scopeWarehouseIds = nu
       const p = productMap.get(Number(it.productId))
       const unitValue = Number(p.unit_value)
       const quantity = Number(it.quantity)
+      // 「只能整数」的商品不得按小数录入处置数量（迁移 254）
+      assertQtyPrecisionWith(
+        { name: p.name, allowDecimal: p.allow_decimal_qty == null ? true : Number(p.allow_decimal_qty) === 1 },
+        quantity,
+        '处置数量',
+      )
       totalValue += unitValue * quantity
       await conn.query(
         `INSERT INTO inventory_disposal_items

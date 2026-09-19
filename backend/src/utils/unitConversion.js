@@ -1,4 +1,5 @@
 const AppError = require('./AppError')
+const { assertQtyPrecision } = require('./qtyPrecision')  // 商品级数量精度开关（迁移 254）
 
 /**
  * 多计量单位折算（文档03 · 方案A）——采购/销售建单落库前把「录入单位口径」折算成「基本单位口径」。
@@ -60,6 +61,14 @@ async function foldEntryItem(conn, item) {
 async function foldEntryItems(conn, items) {
   const out = []
   for (const item of items) out.push(await foldEntryItem(conn, item))
+  // 折算完成后按商品开关校验数量精度（迁移 254）：「只允许整数」的商品，折算到基本单位
+  // 的结果必须是整数。放在这一层而不是各模块里，是为了让销售建单/改单/改单申请、采购、
+  // 退货这些录入路径共用同一条校验——漏掉任何一条都会让用户绕过开关。
+  await assertQtyPrecision(conn, out.map((item, index) => ({
+    productId: item.productId,
+    qty: item.quantity,
+    label: `第 ${index + 1} 行数量`,
+  })))
   return out
 }
 

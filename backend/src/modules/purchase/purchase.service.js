@@ -9,7 +9,7 @@ const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransi
 const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { beginCreationOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { recomputePurchasePayable } = require('../inbound-tasks/inbound-tasks.settle')
-const { foldEntryItem, round2 } = require('../../utils/unitConversion')  // 多单位折算（文档03 · 方案A，共享util）
+const { foldEntryItems, round2 } = require('../../utils/unitConversion')  // 多单位折算（文档03 · 方案A，共享util）
 const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
 const { assertNotSelfApproval } = require('../../utils/selfApprove')
 const { normalizePagination } = require('../../utils/pagination')
@@ -201,8 +201,7 @@ async function createWithinTransaction(conn, { supplierId, supplierName, warehou
   if (!supplierRow) throw new AppError('供应商不存在', 404)
   if (!supplierRow.is_active) throw new AppError('该供应商已停用，无法新建采购单', 400)
   const orderNo = await genOrderNo(conn)
-  const folded = []
-  for (const item of items) folded.push(await foldEntryItem(conn, item))
+  const folded = await foldEntryItems(conn, items)
   const total = round2(folded.reduce((s,i)=>s+i.amount,0))
   const [r] = await conn.query(
     `INSERT INTO purchase_orders (order_no,supplier_id,supplier_name,warehouse_id,warehouse_name,expected_date,total_amount,remark,operator_id,operator_name) VALUES (?,?,?,?,?,?,?,?,?,?)`,
@@ -259,8 +258,7 @@ async function update(id, { supplierId, supplierName, warehouseId, warehouseName
     assertStatusAction('purchase', 'edit', row.status)
     const previousDimensions = await captureDimensions(conn, 'purchase', id)
     await assertNoActiveSaleBinding(conn, id, '修改采购明细')
-    const folded = []
-    for (const item of items) folded.push(await foldEntryItem(conn, item))
+    const folded = await foldEntryItems(conn, items)
     const total = round2(folded.reduce((s,i)=>s+i.amount,0))
     await conn.query(
       `UPDATE purchase_orders SET supplier_id=?, supplier_name=?, warehouse_id=?, warehouse_name=?, expected_date=?, total_amount=?, remark=? WHERE id=?`,

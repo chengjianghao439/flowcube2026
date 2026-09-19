@@ -7,6 +7,7 @@ const { getInventoryDisplayProjectionSql } = require('./inventoryProjection')
 const { normalizePagination } = require('../../utils/pagination')
 const { getExpectedStock } = require('../../utils/expectedStock')
 const { beginResourceOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
+const { assertQtyPrecisionWith } = require('../../utils/qtyPrecision')  // 商品级数量精度开关（迁移 254）
 
 // ─── 库存查询 ─────────────────────────────────────────────────────────────────
 
@@ -221,9 +222,15 @@ async function changeStock({ type, productId, warehouseId, supplierId, quantity,
     }
 
     const [[product]] = await conn.query(
-      'SELECT id, name, unit FROM product_items WHERE id=? AND deleted_at IS NULL', [productId],
+      'SELECT id, name, unit, allow_decimal_qty FROM product_items WHERE id=? AND deleted_at IS NULL', [productId],
     )
     if (!product) throw new AppError('商品不存在', 404)
+    // 「只能整数」的商品不得按小数手工调整库存（迁移 254）
+    assertQtyPrecisionWith(
+      { name: product.name, allowDecimal: product.allow_decimal_qty == null ? true : Number(product.allow_decimal_qty) === 1 },
+      quantity,
+      '调整数量',
+    )
 
     const [[warehouse]] = await conn.query(
       'SELECT id FROM inventory_warehouses WHERE id=? AND deleted_at IS NULL AND is_active=1', [warehouseId],

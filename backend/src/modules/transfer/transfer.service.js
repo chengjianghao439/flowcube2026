@@ -12,6 +12,7 @@ const { getRequestId } = require('../../utils/requestContext')
 const { completeOperationRequest } = require('../../utils/operationRequest')
 const { beginTransferRequest } = require('./transfer-requests')
 const { normalizePagination } = require('../../utils/pagination')
+const { assertQtyPrecision } = require('../../utils/qtyPrecision')  // 商品级数量精度开关（迁移 254）
 const STATUS = { 1:'草稿', 2:'待出库', 3:'在途', 4:'已完成', 5:'已取消' }
 
 const fmt = r => ({ id:r.id, orderNo:r.order_no, fromWarehouseId:r.from_warehouse_id, fromWarehouseName:r.from_warehouse_name, toWarehouseId:r.to_warehouse_id, toWarehouseName:r.to_warehouse_name, status:r.status, statusName:STATUS[r.status], remark:r.remark, submittedAt:r.submitted_at, submittedByName:r.submitted_by_name, operatorId:r.operator_id, operatorName:r.operator_name, createdAt:r.created_at })
@@ -108,6 +109,10 @@ async function create({ fromWarehouseId, fromWarehouseName, toWarehouseId, toWar
     const [r]=await conn.query(`INSERT INTO transfer_orders (order_no,from_warehouse_id,from_warehouse_name,to_warehouse_id,to_warehouse_name,remark,operator_id,operator_name) VALUES (?,?,?,?,?,?,?,?)`,[orderNo,fromWarehouseId,fromWarehouseName,toWarehouseId,toWarehouseName,remark||null,operator.userId,operator.realName])
     // 批量插入（2026-09-18）：同一明细表在循环里逐行 INSERT，改为一次 `VALUES ?`；
     // 空数组会 ER_PARSE_ERROR，故先判长度（约定见 AGENTS.md 第 5 节）。
+    // 「只能整数」的商品不得按小数调拨（迁移 254）
+    await assertQtyPrecision(conn, items.map((item, index) => ({
+      productId: item.productId, qty: item.quantity, label: `第 ${index + 1} 行数量`,
+    })))
     if (items.length) await conn.query(
       `INSERT INTO transfer_order_items (order_id,product_id,product_code,product_name,unit,article_number,spec,color,quantity,remark) VALUES ?`,
       [items.map(item => [r.insertId, item.productId, item.productCode, item.productName, item.unit,
@@ -151,6 +156,10 @@ async function update(id, { fromWarehouseId, fromWarehouseName, toWarehouseId, t
     await conn.query('DELETE FROM transfer_order_items WHERE order_id=?', [id])
     // 批量插入（2026-09-18）：同一明细表在循环里逐行 INSERT，改为一次 `VALUES ?`；
     // 空数组会 ER_PARSE_ERROR，故先判长度（约定见 AGENTS.md 第 5 节）。
+    // 「只能整数」的商品不得按小数调拨（迁移 254）
+    await assertQtyPrecision(conn, items.map((item, index) => ({
+      productId: item.productId, qty: item.quantity, label: `第 ${index + 1} 行数量`,
+    })))
     if (items.length) await conn.query(
       `INSERT INTO transfer_order_items (order_id,product_id,product_code,product_name,unit,article_number,spec,color,quantity,remark) VALUES ?`,
       [items.map(item => [id, item.productId, item.productCode, item.productName, item.unit,

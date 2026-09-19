@@ -8,6 +8,7 @@ const { beginResourceOperationRequest, completeOperationRequest } = require('../
 const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
 const { normalizePagination } = require('../../utils/pagination')
+const { assertQtyPrecision, assertQtyPrecisionWith, loadQtyPolicies } = require('../../utils/qtyPrecision')  // 商品级数量精度开关（迁移 254）
 const logger = require('../../utils/logger')
 
 const STATUS = { 1:'进行中', 2:'已完成', 3:'已取消' }
@@ -254,6 +255,9 @@ async function saveItemContainerScans(id, itemId, scans, operator, scopeWarehous
     }
     // 实盘数 = 各容器实盘之和（派生）；一个都没扫 = 0（全行盘亏），与序列号盘点同语义
     const actualQty = rows.reduce((sum, r) => sum + r.countedQty, 0)
+    // 「只能整数」的商品不得按小数盘盈/盘亏（迁移 254）。扫码累计值来自容器存量，
+    // 故只校验整数约束。
+    await assertQtyPrecision(conn, [{ productId: item.product_id, qty: actualQty, label: '扫码实盘数量' }], { checkScale: false })
     await conn.query(
       'UPDATE inventory_check_items SET actual_qty=?, diff_qty=? WHERE id=?',
       [actualQty, actualQty - Number(item.book_qty), itemId],
@@ -308,6 +312,8 @@ async function updateItems(id, items, scopeWarehouseIds = null) {
       `SELECT DISTINCT check_item_id FROM inventory_check_item_containers
         WHERE check_item_id IN (SELECT id FROM inventory_check_items WHERE check_id=?)`, [id])
     const scanDrivenIds = new Set(scanRows.map(r => Number(r.check_item_id)))
+    // 「只能整数」的商品不得按小数盘盈/盘亏（迁移 254）；实盘数由用户填写，属录入类
+    const qtyPolicies = await loadQtyPolicies(conn, itemRows.map(r => r.product_id))
     for(const item of items) {
       const row = itemRows.find(i => Number(i.id) === Number(item.id))
       // 该行已由 PDA 扫码盘点：实盘数以扫码集为准，手填会与之打架（文档13 §4.3）
@@ -315,6 +321,7 @@ async function updateItems(id, items, scopeWarehouseIds = null) {
         throw new AppError(`商品「${row.product_name}」已由 PDA 扫码盘点，实盘数以扫码为准，不能手工填写`, 400, 'SCAN_DRIVEN_ITEM')
       }
       const actualQty = assertValidActualQty(item.actualQty)
+      if (row) assertQtyPrecisionWith(qtyPolicies.get(Number(row.product_id)), actualQty, '实盘数量')
       const bookQty = Number(row?.book_qty || 0)
       const diff = actualQty - bookQty
       await conn.query('UPDATE inventory_check_items SET actual_qty=?,diff_qty=? WHERE id=? AND check_id=?',[actualQty,diff,item.id,id])

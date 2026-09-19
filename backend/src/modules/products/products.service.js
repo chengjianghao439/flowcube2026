@@ -159,7 +159,7 @@ async function findForFinder({ page = 1, pageSize = 20, keyword = '', categoryId
   const stockParams = warehouseId ? [warehouseId] : []
 
   const [rows] = await pool.query(
-    `SELECT p.id, p.code, p.sku_code, p.article_number, p.name, p.category_id, p.supplier_id, p.unit, p.sale_price, p.sale_price_a, p.sale_price_b, p.sale_price_c, p.sale_price_d, p.cost_price, p.spec, p.color, p.barcode,
+    `SELECT p.id, p.code, p.sku_code, p.article_number, p.name, p.category_id, p.supplier_id, p.unit, p.sale_price, p.sale_price_a, p.sale_price_b, p.sale_price_c, p.sale_price_d, p.cost_price, p.spec, p.color, p.barcode, p.allow_decimal_qty,
             c.name AS category_name, sup.name AS supplier_name, ${stockCol} AS stock
      FROM product_items p
      LEFT JOIN product_categories c ON p.category_id = c.id AND c.deleted_at IS NULL
@@ -215,6 +215,8 @@ function fmtProduct(row) {
     salePriceC: row.sale_price_c != null ? Number(row.sale_price_c) : null,
     salePriceD: row.sale_price_d != null ? Number(row.sale_price_d) : null,
     batchManaged: Number(row.batch_managed) === 1,
+    // 迁移 254：默认允许小数；只有显式关掉开关的商品才要求整数数量
+    allowDecimalQty: row.allow_decimal_qty == null ? true : Number(row.allow_decimal_qty) === 1,
     shelfLifeDays: row.shelf_life_days != null ? Number(row.shelf_life_days) : null,
     safetyStock: row.safety_stock != null ? Number(row.safety_stock) : null,
     reorderPoint: row.reorder_point != null ? Number(row.reorder_point) : null,
@@ -318,7 +320,7 @@ async function findById(id) {
   return product
 }
 
-async function create({ name, categoryId, supplierId, unit, spec, color, barcode, costPrice, remark, skuCode, articleNumber, salePriceA, salePriceB, salePriceC, salePriceD, batchManaged, shelfLifeDays, safetyStock, reorderPoint, units }) {
+async function create({ name, categoryId, supplierId, unit, spec, color, barcode, costPrice, remark, skuCode, articleNumber, salePriceA, salePriceB, salePriceC, salePriceD, batchManaged, shelfLifeDays, safetyStock, reorderPoint, units, allowDecimalQty }) {
   const { normalizedBarcode, normalizedCost } = await validateProductPayload({ name, categoryId, barcode, costPrice })
   const normalizedUnits = validateUnits(unit, units)   // 纯校验，任何非法输入在建单前就抛错
   const generatedArticle = articleNumber || null   // 供应商型号（供应商给的型号，人工填；缺失即 NULL，不再随机生成）
@@ -346,9 +348,9 @@ async function create({ name, categoryId, supplierId, unit, spec, color, barcode
       generatedBarcode = normalizedBarcode || await generateMasterCode(conn, 'BC', 'product_items', 'barcode')
       try {
         const [r] = await conn.query(
-          `INSERT INTO product_items (code,sku_code,article_number,name,category_id,supplier_id,unit,spec,color,barcode,cost_price,sale_price,sale_price_a,sale_price_b,sale_price_c,sale_price_d,remark,batch_managed,shelf_life_days)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-          [code, generatedSku, generatedArticle, String(name).trim(), categoryId||null, supplierId, unit, spec, color, generatedBarcode, normalizedCost, sp, spA, spB, spC, spD, remark||null, batchManaged?1:0, shelfLifeDays||null],
+          `INSERT INTO product_items (code,sku_code,article_number,name,category_id,supplier_id,unit,spec,color,barcode,cost_price,sale_price,sale_price_a,sale_price_b,sale_price_c,sale_price_d,remark,batch_managed,shelf_life_days,allow_decimal_qty)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          [code, generatedSku, generatedArticle, String(name).trim(), categoryId||null, supplierId, unit, spec, color, generatedBarcode, normalizedCost, sp, spA, spB, spC, spD, remark||null, batchManaged?1:0, shelfLifeDays||null, allowDecimalQty === false ? 0 : 1],
         )
         insertId = r.insertId
       } catch (e) {
@@ -364,7 +366,7 @@ async function create({ name, categoryId, supplierId, unit, spec, color, barcode
   } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
 }
 
-async function update(id, { name, categoryId, supplierId, unit, spec, color, barcode, costPrice, remark, isActive, articleNumber, salePriceA, salePriceB, salePriceC, salePriceD, batchManaged, shelfLifeDays, safetyStock, reorderPoint, units }, operator = null) {
+async function update(id, { name, categoryId, supplierId, unit, spec, color, barcode, costPrice, remark, isActive, articleNumber, salePriceA, salePriceB, salePriceC, salePriceD, batchManaged, shelfLifeDays, safetyStock, reorderPoint, units, allowDecimalQty }, operator = null) {
   const current = await findById(id)
   const { normalizedBarcode, normalizedCost } = await validateProductPayload({ name, categoryId, barcode, costPrice, currentId: id })
   const normalizedUnits = validateUnits(unit, units)
@@ -378,10 +380,14 @@ async function update(id, { name, categoryId, supplierId, unit, spec, color, bar
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    // 老客户端不带这个字段时保持原值，不能把「没传」当成「关闭小数」
+    const allowDecimalFlag = allowDecimalQty === undefined
+      ? (current.allowDecimalQty ? 1 : 0)
+      : (allowDecimalQty ? 1 : 0)
     await conn.query(
-      `UPDATE product_items SET name=?,category_id=?,supplier_id=?,unit=?,spec=?,color=?,barcode=?,cost_price=?,sale_price=?,sale_price_a=?,sale_price_b=?,sale_price_c=?,sale_price_d=?,remark=?,is_active=?,article_number=?,batch_managed=?,shelf_life_days=?
+      `UPDATE product_items SET name=?,category_id=?,supplier_id=?,unit=?,spec=?,color=?,barcode=?,cost_price=?,sale_price=?,sale_price_a=?,sale_price_b=?,sale_price_c=?,sale_price_d=?,remark=?,is_active=?,article_number=?,batch_managed=?,shelf_life_days=?,allow_decimal_qty=?
        WHERE id=? AND deleted_at IS NULL`,
-      [String(name).trim(), categoryId||null, supplierId, unit, spec, color, normalizedBarcode, normalizedCost, sp, spA, spB, spC, spD, remark||null, isActive?1:0, articleNumber||null, batchManaged?1:0, shelfLifeDays||null, id],
+      [String(name).trim(), categoryId||null, supplierId, unit, spec, color, normalizedBarcode, normalizedCost, sp, spA, spB, spC, spD, remark||null, isActive?1:0, articleNumber||null, batchManaged?1:0, shelfLifeDays||null, allowDecimalFlag, id],
     )
     await replaceProductUnits(conn, id, normalizedUnits)
     await upsertDefaultStockPolicy(conn, id, { safetyStock, reorderPoint })
