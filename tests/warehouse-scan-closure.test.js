@@ -156,7 +156,7 @@ test('锁定容器数量与拣货扫码容器数量不一致时拒绝', async ()
     locked: [{ id: 10 }, { id: 11 }],
     picked: [{ cid: 10 }],
   })
-  await expectReject(() => assertTaskPickScanClosure(conn, 1), '锁定容器与拣货扫码容器不一致')
+  await expectReject(() => assertTaskPickScanClosure(conn, 1), '锁定的库存条码与拣货扫码的库存条码不一致')
 })
 
 test('锁定容器的容器没有拣货扫码时拒绝（数量相同但成员不同）', async () => {
@@ -166,5 +166,5 @@ test('锁定容器的容器没有拣货扫码时拒绝（数量相同但成员�
     locked: [{ id: 10 }],
     picked: [{ cid: 11 }],   // 扫码的是另一个容器
   })
-  await expectReject(() => assertTaskPickScanClosure(conn, 1), '存在未经拣货扫码的锁定容器')
+  await expectReject(() => assertTaskPickScanClosure(conn, 1), '存在未经拣货扫码的锁定库存条码')
 })

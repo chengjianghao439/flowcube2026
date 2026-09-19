@@ -67,7 +67,7 @@ test('location lookup resolves R and LOC codes to actual primary key', async () 
 test('container lookup rejects different task, source, warehouse, and consumed state', async () => {
   for (const container of [{ source_ref_id: 99 }, { source_ref_type: 'purchase' }, { warehouse_id: 9 }, { status: 1 }]) {
     const h = fixture({ container })
-    await assert.rejects(() => h.svc.findPutawayContainer(31, 'I000123', access), /容器|仓库/)
+    await assert.rejects(() => h.svc.findPutawayContainer(31, 'I000123', access), /库存条码|仓库/)
   }
 })
 test('both lookups enforce task state, warehouse scope and device binding', async () => {
@@ -106,7 +106,7 @@ test('direct putaway cannot bypass device binding, scope or task/container wareh
     { patch: {}, access: { ...access, pdaWarehouseId: null }, message: /设备|绑定/ },
     { patch: {}, access: { ...access, scopeWarehouseIds: [9] }, message: /仓库/ },
     { patch: { container: { warehouse_id: 9 } }, access, message: /仓库/ },
-    { patch: { container: { source_ref_id: 99 } }, access, message: /容器/ },
+    { patch: { container: { source_ref_id: 99 } }, access, message: /库存条码/ },
     { patch: { container: { status: 1 } }, access, message: /待上架/ },
   ]) {
     const h = fixture(entry.patch)
@@ -117,10 +117,10 @@ test('direct putaway cannot bypass device binding, scope or task/container wareh
 
 test('soft-deleted batch labels cannot be looked up or put away, including deletion before the locked read', async () => {
   const deleted = { container: { deleted_at: '2026-09-04 12:00:00' } }
-  await assert.rejects(() => fixture(deleted).svc.findPutawayContainer(31, 'I000123', access), /容器.*不存在/)
+  await assert.rejects(() => fixture(deleted).svc.findPutawayContainer(31, 'I000123', access), /库存条码.*不存在/)
   for (const patch of [deleted, { deleteBeforeLock: true }]) {
     const h = fixture(patch)
-    await assert.rejects(() => h.svc.putaway(h.pool, 31, { containerId: 917, locationId: 804, ...access }), /容器不存在/)
+    await assert.rejects(() => h.svc.putaway(h.pool, 31, { containerId: 917, locationId: 804, ...access }), /库存条码不存在/)
     assert.ok(h.calls.every(c => !/^\s*(UPDATE|INSERT)\b/.test(c.sql)))
   }
 })
