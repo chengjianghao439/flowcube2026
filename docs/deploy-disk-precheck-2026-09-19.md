@@ -160,3 +160,56 @@ trap cleanup_remote_tmp EXIT
 **同类风险提示**：`/tmp` 与 `/opt/flowcube` 同处根分区，而上传前预检要 6144MB 余量——任何写在 `/tmp` 却
 不清理的服务器侧流程，最终都会以「部署莫名被拒」的形式暴露（本次只差 24MB）。新增此类中转目录时一律注册
 退出清理，或改写到 `versions/` 这类有归属的目录。
+
+## 事故：同一次清理引发了约 6 分钟的生产中断（2026-09-19，本地 UTC+8）
+
+**必须先说结论：这次中断最可能是我那次批量删除触发的，不是误删数据。** 时间线（服务器本地时间）：
+
+| 时间 | 事件 |
+|---|---|
+| 20:0x | 我执行清理：`rm -rf` 1.3G + 630M、`journalctl --vacuum-size=200M`；命令正常返回，`df` 复核 8.6G |
+| 20:06 起 | 系统进入**极端缓慢**：HTTPS 超时（`http_code=000`）、SSH 卡在 banner exchange；journal 出现多条来自我出口 IP 的 `sshd: ssh_dispatch_run_fatal … Broken pipe [preauth]` |
+| 20:10:43–20:11:22 | 有一次 SSH 会话真的建立（耗时约 39 秒），说明系统仍在响应，只是延迟达分钟级 |
+| 20:11:15 | `crond`：`Job execution of per-minute job scheduled for 20:10 delayed into subsequent minute 20:11. Skipping job run.`——**cron 被延迟到下一分钟并跳过**，直接证明是 IO/调度级阻塞而非进程死亡 |
+| 20:12:40 | MySQL 日志：`Received SHUTDOWN from user <via user signal>`（用户在控制台重启） |
+| 20:12:57 | `dockerd: Daemon shutdown complete`，容器以 `exitStatus 137` 停止（重启时的正常强杀） |
+| 20:13 | 系统引导；容器自动启动；20:14:43 `/api/health` → 200，`/api/ready` → 200 |
+
+**证据与判断**：
+
+- `ping` 全程正常（16–19ms、0% 丢包）而所有 TCP 服务无响应 → 内核网络栈在线，**用户态进程被阻塞**。
+- journal **没有断流**（20:00–20:12 共 117 条），但出现 cron 延迟跳过 → 不是完全 hang，而是长时间 IO 阻塞。
+- 无 OOM、无 `I/O error`、无 hung task、无 soft lockup（`dmesg` 已随重启清空，journal 无相关记录）。
+- 恢复后 `iostat -x`：`w_await 0.27ms`、`%util 0.60%`、`aqu-sz 0.01`；`vmstat` 的 `wa` 为 0–1% → 云盘当下完全空闲。
+- 该机在 2026-09-05 就有**官方确认的「云盘读写受限」**历史（见 AGENTS §10）。
+
+综合：在这块已知受限的云盘上，一次性 `unlink` 约 1.9G 文件（外加 journal 删除）产生了足以让服务响应退化到分钟级的
+IO 阻塞；不能排除同期 MySQL 写入叠加。**不是误删**——三条 `rm` 的路径都是确定字面量（无通配符误删系统目录的可能），
+重启后 `versions/`、`current/`、`latest.json`、22 份备份、docker 数据与容器均完好，MySQL 为**有序关闭且无 crash recovery**。
+
+**今后规范（已写入 AGENTS §0.1）**：
+
+1. 生产机上做批量删除前，先看 `iostat -x 1 2`（`%util`、`await`、`aqu-sz`）与 `vmstat`（`wa`）确认云盘余量。
+2. 分批删除（每批 ≤200MB、批间隔数秒），并用 `ionice -c3 nice -n19` 降低对在线服务的影响。
+3. 不在 MySQL 写入高峰或部署进行中做；尽量安排在维护窗口、用户在场时执行。
+4. 需要控制台级恢复（强制重启）时，明确请用户操作——本机只有 SSH 私钥，没有阿里云控制台凭据，且平台强制的本人验证不绕过。
+
+## 恢复与上线验证（2026-09-19 20:13 用户重启后）
+
+- 系统 20:13 引导，三个容器**自动启动**（`flowcube-frontend` / `flowcube-backend` Up；`flowcube-mysql` Up **healthy**），无需人工拉起。
+- MySQL 日志为**有序关闭**（`Received SHUTDOWN from user <via user signal>`）→ 无 crash recovery，数据完整；`/api/health` 与 `/api/ready` 均 200，关键表只读抽样正常。后端那条 `ECONNREFUSED 10.255.2.2:3306` 只出现在重启瞬间。
+- 清理释放的空间保留：重启后 `df` 8.6G，部署后 8.3G（镜像替换消耗约 0.3G）。
+- **`e6f26d1` 部署成功**（`gh run rerun 35441750214 --failed`）：12:28 `==> 发布门禁通过`、`==> 部署完成，健康检查与发布门禁已通过`；服务器 `/opt/flowcube` HEAD = `e6f26d1c`，前后端镜像 `org.opencontainers.image.revision` 同为 `e6f26d1cdc8a…`。
+
+**上线验证（公网静态资源链路，不依赖登录态）**：
+
+```
+线上 index.html → assets/index-PQBjLKLq.js（入口）
+                → 引用 assets/index-C-6mSpfO.js
+                → 引用 assets/index-BWAfSxii.js（财务看板实现）
+公网 GET /assets/index-BWAfSxii.js → 200，含「费用构成」（页面独有实现文案）与「个账户」（本次新增）
+```
+
+**定位教训**：`资金看板`、`账户余额分布` 这类文案在入口 chunk 与页面 chunk 里都会出现（路由标题 / ChartWidgets 组件），**不能用来判断「页面的实现是否更新」**；要用页面独有的实现文案（如 `费用构成（已付款）`）定位，并沿 `index.html → 入口 → import 链` 逐跳确认可达，最后用公网 `curl` 复验（容器内 `docker exec` 的嵌套 `sh -c` + grep 容易因转义产生误导性结果）。
+
+**附带发现（待办，未处理）**：前端容器 `/usr/share/nginx/html/assets` 有 250 个文件、3.7M，其中 `index-*.js` 多达 **59 个**，只有少数被当前入口引用，其余是历次构建留下的孤儿文件——Docker 层叠加 + `COPY dist` 不清理目标目录所致。当前**无害**（孤儿不被引用、hash 唯一不会误加载），但每个版本都会再叠加一份，是前端镜像与服务器磁盘的持续膨胀源。建议：前端 Dockerfile 在拷贝产物前清空目标目录（或改用清空 + 多阶段），并在部署后核对 `index.html` 引用的 chunk 确实存在。
