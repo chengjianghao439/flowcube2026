@@ -28,7 +28,7 @@ import type { FinderResult } from '@/types/finder'
 
 const DEFAULT_RATES = { A: 10, B: 20, C: 30, D: 40 }
 type AuxUnit = { unitName: string; conversionRate: string }
-const EMPTY_FORM = { name: '', categoryId: null as number | null, supplierId: null as number | null, unit: '', spec: '', color: '', costPrice: '' as string, salePriceA: '' as string, salePriceB: '' as string, salePriceC: '' as string, salePriceD: '' as string, remark: '', articleNumber: '', batchManaged: false, shelfLifeDays: '' as string, safetyStock: '' as string, reorderPoint: '' as string, isActive: true, units: [] as AuxUnit[] }
+const EMPTY_FORM = { name: '', categoryId: null as number | null, supplierId: null as number | null, unit: '', spec: '', color: '', costPrice: '' as string, salePriceA: '' as string, salePriceB: '' as string, salePriceC: '' as string, salePriceD: '' as string, remark: '', articleNumber: '', batchManaged: false, allowDecimalQty: true, shelfLifeDays: '' as string, safetyStock: '' as string, reorderPoint: '' as string, isActive: true, units: [] as AuxUnit[] }
 
 function profitRate(cost: number, sale: number): number | null {
   if (sale <= 0 || !Number.isFinite(cost) || !Number.isFinite(sale)) return null
@@ -79,6 +79,7 @@ export default function ProductFormPage() {
         color: product.color ?? '',
         costPrice: product.costPrice != null ? String(product.costPrice) : '',
         batchManaged: !!product.batchManaged,
+        allowDecimalQty: product.allowDecimalQty !== false,
         shelfLifeDays: product.shelfLifeDays != null ? String(product.shelfLifeDays) : '',
         safetyStock: product.safetyStock != null ? String(product.safetyStock) : '',
         reorderPoint: product.reorderPoint != null ? String(product.reorderPoint) : '',
@@ -156,6 +157,7 @@ export default function ProductFormPage() {
       color: form.color,
       costPrice: Number(form.costPrice),
       batchManaged: form.batchManaged,
+      allowDecimalQty: form.allowDecimalQty,
       shelfLifeDays: form.shelfLifeDays !== '' ? Number(form.shelfLifeDays) : null,
       safetyStock: form.safetyStock !== '' ? Number(form.safetyStock) : null,
       reorderPoint: form.reorderPoint !== '' ? Number(form.reorderPoint) : null,
@@ -278,6 +280,14 @@ export default function ProductFormPage() {
           <div className="space-y-1.5">
             <Label>进价 *</Label>
             <Input type="number" step="0.01" min="0.01" value={form.costPrice} onChange={e => set('costPrice', e.target.value)} disabled={submitting} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>数量小数</Label>
+            <label className="flex h-10 items-center gap-2 text-sm">
+              <input type="checkbox" className="h-4 w-4" checked={form.allowDecimalQty}
+                onChange={e => set('allowDecimalQty', e.target.checked)} disabled={submitting} />
+              <span className="text-muted-foreground">{form.allowDecimalQty ? '可以带小数，最多两位（如 1.25 公斤）' : '只能整数（如 3 个、2 台）'}</span>
+            </label>
           </div>
           <div className="space-y-1.5">
             <Label>批次管理</Label>

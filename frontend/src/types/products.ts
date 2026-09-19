@@ -3,6 +3,8 @@ export interface ProductUnit { unitName: string; conversionRate: number; isBase:
 
 export interface Product {
   batchManaged?: boolean
+  /** 迁移 254：false = 该商品数量只能是整数（不允许小数出货） */
+  allowDecimalQty?: boolean
   shelfLifeDays?: number | null
   safetyStock?: number | null
   reorderPoint?: number | null
@@ -20,7 +22,7 @@ export interface CreateProductParams {
   name: string; categoryId?: number | null; supplierId: number
   unit: string; spec: string; color: string
   costPrice?: number | null; remark?: string
-  batchManaged?: boolean; shelfLifeDays?: number | null
+  batchManaged?: boolean; allowDecimalQty?: boolean; shelfLifeDays?: number | null
   safetyStock?: number | null; reorderPoint?: number | null
   units?: { unitName: string; conversionRate: number }[]
   skuCode?: string; articleNumber?: string
@@ -30,7 +32,7 @@ export interface UpdateProductParams {
   name: string; categoryId?: number | null; supplierId: number
   unit: string; spec: string; color: string
   costPrice?: number | null; remark?: string; isActive: boolean
-  batchManaged?: boolean; shelfLifeDays?: number | null
+  batchManaged?: boolean; allowDecimalQty?: boolean; shelfLifeDays?: number | null
   safetyStock?: number | null; reorderPoint?: number | null
   units?: { unitName: string; conversionRate: number }[]
   articleNumber?: string
