@@ -191,8 +191,14 @@ jobs:
       - name: 契约测试 — 补打唯一入口且销售侧无条码打印（防订单页长出补打按钮）
         run: npm run test:print-entry
 
-      - name: 契约测试 — 界面文案口径（禁用实现词/半角标点/官网双份一致）
+      - name: 契约测试 — 界面文案口径（禁用实现词/半角标点/官网双份一致/金额格式化）
         run: npm run test:copy-conventions
+
+      - name: 契约测试 — 商品数量精度开关（只允许整数的商品不得按小数出入库）
+        run: npm run test:qty-precision
+
+      - name: 契约测试 — 数量精度开关的接入覆盖（新入口漏接即失败）
+        run: npm run test:qty-precision-coverage
 
       - name: 契约测试 — 引擎不得自行管理事务（防写操作脱离调用方事务）
         run: npm run test:engine-transaction

@@ -80,6 +80,7 @@
 - 恢复演练临时卷必须具名 + 启动前幂等清理；`dingtalk_send` 失败必须非 0 → `node --test tests/ops-monitor-restore.test.js`
 - 备份导入前只把触发器残留分号移出可执行注释 → `node --test tests/restore-trigger-normalize.test.js`
 - 迁移逐条执行、触发器函数体不得残留结尾分号 → `node --test tests/migration-trigger-bodies.test.js`
+- 只允许整数的商品（`allow_decimal_qty=0`）不得按小数下单/出入库/调拨/盘点；录入类模块须走 `foldEntryItems()` → `npm run test:qty-precision`、`npm run test:qty-precision-coverage`
 - `AGENTS.md` 体积、关键章节与红线必须在默认预算内，`docs/*.md` 与 `npm run` 引用有效 → `npm run test:agents-md-guard`
 
 ## 1. 协作与操作边界

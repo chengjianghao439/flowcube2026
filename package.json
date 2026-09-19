@@ -55,6 +55,7 @@
     "test:pda-list-refresh": "node tests/pda-list-refresh-contract.test.js",
     "test:api-route-contract": "node tests/api-route-contract.test.js",
     "test:copy-conventions": "node tests/copy-conventions.test.js",
+    "test:qty-precision": "node --test tests/qty-precision.test.js",
     "test:query-loop": "node tests/query-loop-contract.test.js",
     "test:warehouse-scan-closure": "node --test tests/warehouse-scan-closure.test.js",
     "test:chart-series-limit": "node --test tests/chart-series-limit-contract.test.js",
@@ -120,6 +121,7 @@
     "test:fulfillment": "node --test tests/fulfillment.test.js",
     "smoke:fulfillment": "node tests/fulfillment.smoke.test.js",
     "test:procurement-planning": "node --test tests/procurement-planning.test.js",
-    "smoke:procurement-planning": "node --test tests/procurement-planning.smoke.test.js"
+    "smoke:procurement-planning": "node --test tests/procurement-planning.smoke.test.js",
+    "test:qty-precision-coverage": "node --test tests/qty-precision-coverage.test.js"
   }
 }
