@@ -180,6 +180,21 @@ function main() {
   assert.deepEqual(staleAllow, [],
     `这些豁免已不再命中（代码已改或已删除），必须从清单里删掉：${staleAllow.join(', ')}`)
 
+  // 金额与数量的格式化各自只有一个入口（lib/format 的 money/amount 与 qty）。
+  // 上一轮只拦了 `¥` + toFixed(2)，漏掉同义的 toLocaleString 写法——ledger、invoices、
+  // accounting/reports、refunds、disposal 五处就是这么留下来的。改成拦「自己配小数位」，
+  // 换一种写法也拦得住；唯一豁免是 lib/format.ts 自己。
+  const FORMAT_ENTRY = 'frontend/src/lib/format.ts'
+  for (const f of files) {
+    const rel = `frontend/src/${path.relative(SRC, f)}`
+    if (rel === FORMAT_ENTRY) continue
+    const lines = stripComments(fs.readFileSync(f, 'utf8')).split('\n')
+    lines.forEach((line, i) => {
+      if (!/(minimumFractionDigits|maximumFractionDigits)/.test(line)) return
+      problems.push(`${rel}:${i + 1} 自己配了小数位——金额用 lib/format 的 money()/amount()，数量用 qty()\n        原文：${line.trim().slice(0, 90)}`)
+    })
+  }
+
   const staleMoneyAllow = [...MONEY_ALLOW.keys()].filter((k) => !usedMoneyAllow.has(k))
   assert.deepEqual(staleMoneyAllow, [],
     `这些金额格式化豁免已不再命中（写法已改或文件已删），必须从 MONEY_ALLOW 删掉：${staleMoneyAllow.join(', ')}`)
@@ -191,7 +206,7 @@ function main() {
     console.error('\n界面文案口径违规：')
     for (const p of problems) console.error('  ✗ ' + p)
   } else {
-    console.log('✓ 未发现实现词泄漏、半角标点、官网双份不一致或手写金额格式化')
+    console.log('✓ 未发现实现词泄漏、半角标点、官网双份不一致或自配的小数位')
   }
 
   console.log('\n' + '─'.repeat(60))
