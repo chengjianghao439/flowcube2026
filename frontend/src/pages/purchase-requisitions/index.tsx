@@ -1,3 +1,4 @@
+import { money } from '@/lib/format'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -102,7 +103,7 @@ export default function RequisitionsPage() {
     { key: 'title', title: '事由', render: v => (v as string) || '—' },
     { key: 'warehouseName', title: '期望入库仓', width: 120 },
     { key: 'applicantName', title: '申请人', width: 100 },
-    { key: 'estimatedAmount', title: '预估金额', width: 110, align: 'right', render: v => <span className="tabular-nums">¥{Number(v).toFixed(2)}</span> },
+    { key: 'estimatedAmount', title: '预估金额', width: 110, align: 'right', render: v => <span className="tabular-nums">{money(Number(v))}</span> },
     { key: 'itemCount', title: '明细数', width: 80, align: 'right', render: v => <span className="tabular-nums">{Number(v ?? 0)}</span> },
     { key: 'status', title: '状态', width: 100, render: (_, r) => <SoftStatusLabel label={r.statusName} tone={r.statusTone} /> },
     { key: 'createdAt', title: '创建时间', width: 160, render: v => formatDisplayDateTime(String(v)) },

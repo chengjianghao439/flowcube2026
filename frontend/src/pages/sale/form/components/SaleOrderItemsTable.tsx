@@ -1,3 +1,4 @@
+import { money } from '@/lib/format'
 import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
 import { useNavigate } from 'react-router-dom'
 import { Button }  from '@/components/ui/button'
@@ -94,7 +95,7 @@ export function SaleOrderItemsTable({
               </td>
 
               <td className="py-2.5 text-right font-medium tabular-nums">
-                ¥{(item.quantity * item.unitPrice).toFixed(2)}
+                {money(item.quantity * item.unitPrice)}
               </td>
 
               <td className="py-2.5 text-center">

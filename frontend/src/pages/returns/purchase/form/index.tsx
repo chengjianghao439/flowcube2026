@@ -1,3 +1,4 @@
+import { money } from '@/lib/format'
 import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
 import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
 import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
@@ -376,7 +377,7 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
                           className="text-right text-sm"
                         />
                       </td>
-                      <td className="py-2.5 text-right font-medium tabular-nums">¥{(item.quantity * item.unitPrice).toFixed(2)}</td>
+                      <td className="py-2.5 text-right font-medium tabular-nums">{money(item.quantity * item.unitPrice)}</td>
                       <td className="py-2.5 text-center">
                         <Button type="button" size="sm" variant="ghost" disabled={!!boundSource} className="h-8 w-9 p-0 text-muted-foreground hover:text-destructive" onClick={() => removeItem(item._key)}>✕</Button>
                       </td>
@@ -397,7 +398,7 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
             <p className="text-muted-body">商品明细：{items.length} 行</p>
             <div className="text-right">
               <p className="text-helper">合计金额</p>
-              <p className="text-2xl font-semibold text-foreground">¥{total.toFixed(2)}</p>
+              <p className="text-2xl font-semibold text-foreground">{money(total)}</p>
             </div>
           </div>
           </>
@@ -574,9 +575,9 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
               ? <span className="tabular-nums">{item.entryQty} {item.entryUnit}<span className="ml-1 text-xs text-muted-foreground">（{Number(v)} {item.unit}）</span></span>
               : <span className="tabular-nums">{String(v)}</span> },
             { key: 'unitPrice', title: '单价', width: 120, align: 'right', render: (v, item) => (item.entryUnit && item.entryUnit !== item.unit && item.entryQty && item.entryQty > 0)
-              ? <span className="tabular-nums" title={`¥${Number(v).toFixed(4)} / ${item.unit}`}>¥{(item.amount / item.entryQty).toFixed(2)}/{item.entryUnit}</span>
-              : <span className="tabular-nums">¥{Number(v).toFixed(2)}</span> },
-            { key: 'amount', title: '金额', width: 110, align: 'right', render: v => <span className="font-semibold tabular-nums">¥{Number(v).toFixed(2)}</span> },
+              ? <span className="tabular-nums" title={`¥${Number(v).toFixed(4)} / ${item.unit}`}>{money(item.amount / item.entryQty)}/{item.entryUnit}</span>
+              : <span className="tabular-nums">{money(Number(v))}</span> },
+            { key: 'amount', title: '金额', width: 110, align: 'right', render: v => <span className="font-semibold tabular-nums">{money(Number(v))}</span> },
           ] satisfies TableColumn<ReturnItem>[]}
           data={ret.items ?? []}
           rowKey="id"
@@ -586,7 +587,7 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
           <p className="text-muted-body">共 {ret.items?.length ?? 0} 行退货明细</p>
           <div className="text-right">
             <p className="text-helper">合计金额</p>
-            <p className="text-2xl font-semibold text-foreground">¥{Number(ret.totalAmount).toFixed(2)}</p>
+            <p className="text-2xl font-semibold text-foreground">{money(Number(ret.totalAmount))}</p>
           </div>
         </div>
       </SectionCard>

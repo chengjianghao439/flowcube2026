@@ -1,3 +1,4 @@
+import { money } from '@/lib/format'
 import { Building2, CircleDollarSign, PackageOpen, Warehouse } from 'lucide-react'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { getReceivableStatus } from '@/lib/receivableStatus'
@@ -10,7 +11,7 @@ export function SaleOrderOverview({ order }: { order: SaleOrder }) {
     { label: '客户', value: order.customerName || '—', icon: Building2 },
     { label: '出库仓库', value: order.isMultiWarehouse ? '多仓履约' : (order.warehouseName || '—'), icon: Warehouse },
     { label: '商品明细', value: `${order.items?.length ?? 0} 行`, icon: PackageOpen },
-    { label: '订单金额', value: `¥${payableAmount.toFixed(2)}`, icon: CircleDollarSign },
+    { label: '订单金额', value: money(payableAmount), icon: CircleDollarSign },
   ]
   return (
     <section className="overflow-hidden rounded-xl border border-border bg-card" aria-label="订单摘要">

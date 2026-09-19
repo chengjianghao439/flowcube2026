@@ -77,9 +77,9 @@ export default function ProfitAnalysisPage() {
     { key: 'orderNo', title: '销售单号', width: 160, render: v => <span className="text-doc-code">{String(v)}</span> },
     { key: 'customerName', title: '客户' },
     { key: 'warehouseName', title: '仓库', width: 120 },
-    { key: 'totalAmount', title: '销售额', width: 110, align: 'right', render: v => <span className="font-medium">¥{Number(v).toFixed(2)}</span> },
-    { key: 'costAmount', title: '成本', width: 110, align: 'right', render: v => <span className="text-muted-foreground">¥{Number(v).toFixed(2)}</span> },
-    { key: 'grossProfit', title: '毛利', width: 110, align: 'right', render: v => <span className={`font-semibold ${Number(v) < 0 ? 'text-destructive' : 'text-success'}`}>¥{Number(v).toFixed(2)}</span> },
+    { key: 'totalAmount', title: '销售额', width: 110, align: 'right', render: v => <span className="font-medium">{money(Number(v))}</span> },
+    { key: 'costAmount', title: '成本', width: 110, align: 'right', render: v => <span className="text-muted-foreground">{money(Number(v))}</span> },
+    { key: 'grossProfit', title: '毛利', width: 110, align: 'right', render: v => <span className={`font-semibold ${Number(v) < 0 ? 'text-destructive' : 'text-success'}`}>{money(Number(v))}</span> },
     { key: 'marginRate', title: '毛利率', width: 100, align: 'right', render: v => <Badge variant="outline">{Number(v).toFixed(1)}%</Badge> },
     { key: 'path', title: '操作', width: 120, render: v => <Button size="sm" variant="outline" onClick={() => openPath(String(v), '销售单详情')}>打开原单</Button> },
   ]
@@ -88,9 +88,9 @@ export default function ProfitAnalysisPage() {
     ...productIdentityColumns({code: 'code', name: 'name'}),
     { key: 'unit', title: '单位', width: 70 },
     { key: 'totalQty', title: '销售量', width: 90, align: 'right', render: v => <span>{Number(v).toFixed(2)}</span> },
-    { key: 'revenueAmount', title: '销售额', width: 110, align: 'right', render: v => <span>¥{Number(v).toFixed(2)}</span> },
-    { key: 'costAmount', title: '成本', width: 110, align: 'right', render: v => <span className="text-muted-foreground">¥{Number(v).toFixed(2)}</span> },
-    { key: 'grossProfit', title: '毛利', width: 110, align: 'right', render: v => <span className={`font-semibold ${Number(v) < 0 ? 'text-destructive' : 'text-success'}`}>¥{Number(v).toFixed(2)}</span> },
+    { key: 'revenueAmount', title: '销售额', width: 110, align: 'right', render: v => <span>{money(Number(v))}</span> },
+    { key: 'costAmount', title: '成本', width: 110, align: 'right', render: v => <span className="text-muted-foreground">{money(Number(v))}</span> },
+    { key: 'grossProfit', title: '毛利', width: 110, align: 'right', render: v => <span className={`font-semibold ${Number(v) < 0 ? 'text-destructive' : 'text-success'}`}>{money(Number(v))}</span> },
     { key: 'marginRate', title: '毛利率', width: 100, align: 'right', render: v => <Badge variant="outline">{Number(v).toFixed(1)}%</Badge> },
     { key: 'path', title: '操作', width: 120, render: v => <Button size="sm" variant="outline" onClick={() => openPath(String(v), '商品管理')}>查看商品</Button> },
   ]
@@ -100,7 +100,7 @@ export default function ProfitAnalysisPage() {
     { key: 'warehouseName', title: '仓库', width: 120 },
     { key: 'unit', title: '单位', width: 70 },
     { key: 'totalQty', title: '库存数量', width: 100, align: 'right', render: v => <span className="font-medium">{Number(v).toFixed(2)}</span> },
-    { key: 'totalValue', title: '库存金额', width: 120, align: 'right', render: v => <span className="font-semibold">¥{Number(v).toFixed(2)}</span> },
+    { key: 'totalValue', title: '库存金额', width: 120, align: 'right', render: v => <span className="font-semibold">{money(Number(v))}</span> },
     { key: 'path', title: '操作', width: 120, render: v => <Button size="sm" variant="outline" onClick={() => openPath(String(v), '库存总览')}>查看库存</Button> },
   ]
 

@@ -1,3 +1,4 @@
+import { money } from '@/lib/format'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { AppDialog } from '@/components/shared/AppDialog'
 import { Button } from '@/components/ui/button'
@@ -70,8 +71,8 @@ export function SettlementConfirmDialog({ open, onClose, record }: Props) {
                   <td className="px-2 py-1.5 text-doc-code">{l.taskNo}</td>
                   <td className="px-2 py-1.5">{l.productName}{l.articleNumber ? <span className="text-xs text-muted-foreground"> · {l.articleNumber}</span> : null}</td>
                   <td className="px-2 py-1.5 text-right tabular-nums">{l.putawayQty}</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">¥{l.unitPrice.toFixed(2)}</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">¥{l.amount.toFixed(2)}</td>
+                  <td className="px-2 py-1.5 text-right tabular-nums">{money(l.unitPrice)}</td>
+                  <td className="px-2 py-1.5 text-right tabular-nums">{money(l.amount)}</td>
                 </tr>
               ))}
               {settlement?.returns.map((r, i) => (
@@ -79,7 +80,7 @@ export function SettlementConfirmDialog({ open, onClose, record }: Props) {
                   <td className="px-2 py-1.5 text-doc-code">{r.returnNo}</td>
                   <td className="px-2 py-1.5">采购退货冲减</td>
                   <td className="px-2 py-1.5" colSpan={2}></td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">¥{r.amount.toFixed(2)}</td>
+                  <td className="px-2 py-1.5 text-right tabular-nums">{money(r.amount)}</td>
                 </tr>
               ))}
               {!settlement?.lines.length && !settlement?.returns.length && (
@@ -88,7 +89,7 @@ export function SettlementConfirmDialog({ open, onClose, record }: Props) {
             </tbody>
           </table>
         </div>
-        <p className="text-right text-sm">应付合计：<span className="font-bold tabular-nums">¥{record ? record.totalAmount.toFixed(2) : '0.00'}</span></p>
+        <p className="text-right text-sm">应付合计：<span className="font-bold tabular-nums">{money(record?.totalAmount)}</span></p>
       </div>
     </AppDialog>
   )

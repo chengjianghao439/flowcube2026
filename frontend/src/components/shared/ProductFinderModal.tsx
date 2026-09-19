@@ -1,3 +1,4 @@
+import { money } from '@/lib/format'
 import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
 import { useEffect, useState } from 'react'
 import { Check, ChevronDown, ChevronRight, PackageSearch, Search, X } from 'lucide-react'
@@ -84,7 +85,7 @@ function ProductFinderContent({ warehouseId, warehouseName, mode = 'lookup', onC
                 <td className="py-4 pl-3 text-primary">{selected?.id === product.id && <Check className="h-4 w-4" />}</td>
                 <ProductIdentityCells product={product} />
                 <td className="px-2 py-3 text-muted-foreground">{product.unit || '—'}</td><td className="break-words px-3 py-3 text-xs leading-5 text-muted-foreground">{mode === 'purchase' ? product.supplierName || '—' : product.categoryName || '未分类'}</td>
-                {hasStock && <td className="px-3 py-3 text-right tabular-nums">{product.stock}</td>}{mode === 'sale' && <td className="px-3 py-3 text-right tabular-nums">{product.salePrice == null ? '—' : `¥${product.salePrice.toFixed(2)}`}</td>}
+                {hasStock && <td className="px-3 py-3 text-right tabular-nums">{product.stock}</td>}{mode === 'sale' && <td className="px-3 py-3 text-right tabular-nums">{product.salePrice == null ? '—' : money(product.salePrice)}</td>}
               </tr>)}</tbody>
             </table>}
           </div>

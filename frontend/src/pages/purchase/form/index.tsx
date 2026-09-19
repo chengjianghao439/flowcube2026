@@ -1,3 +1,4 @@
+import { money } from '@/lib/format'
 import { OrderEntryIssues } from '@/components/shared/OrderEntryIssues'
 import { collectOrderIssues } from '@/lib/orderEntry'
 import { handleEntryKeyDown } from '@/lib/orderEntryNavigation'
@@ -449,7 +450,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
                     </td>
 
                     <td className="py-2.5 text-right font-medium tabular-nums">
-                      ¥{(item.quantity * item.unitPrice).toFixed(2)}
+                      {money(item.quantity * item.unitPrice)}
                     </td>
 
                     <td className="py-2.5 text-center">
@@ -476,7 +477,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
             </p>
             <div className="text-right">
               <p className="text-helper">合计金额</p>
-              <p className="text-2xl font-semibold text-foreground">¥{total.toFixed(2)}</p>
+              <p className="text-2xl font-semibold text-foreground">{money(total)}</p>
             </div>
           </div>
           </>
@@ -717,11 +718,11 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
                 const boxEntry = r.entryUnit && r.entryUnit !== r.unit && r.entryQty && r.entryQty > 0
                 const entryPrice = boxEntry ? r.amount / (r.entryQty as number) : Number(v)
                 return boxEntry
-                  ? <span className="tabular-nums" title={`¥${Number(v).toFixed(4)} / ${r.unit}`}>¥{entryPrice.toFixed(2)}/{r.entryUnit}</span>
-                  : <span className="tabular-nums">¥{Number(v).toFixed(2)}</span>
+                  ? <span className="tabular-nums" title={`¥${Number(v).toFixed(4)} / ${r.unit}`}>{money(entryPrice)}/{r.entryUnit}</span>
+                  : <span className="tabular-nums">{money(Number(v))}</span>
               },
             },
-            { key: 'amount', title: '金额', width: 110, align: 'right', render: v => <span className="font-semibold tabular-nums">¥{Number(v).toFixed(2)}</span> },
+            { key: 'amount', title: '金额', width: 110, align: 'right', render: v => <span className="font-semibold tabular-nums">{money(Number(v))}</span> },
           ] satisfies TableColumn<PurchaseOrderItem>[]}
           data={order.items ?? []}
           rowKey="id"
@@ -734,7 +735,7 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
           </p>
           <div className="text-right">
             <p className="text-helper">合计金额</p>
-            <p className="text-2xl font-semibold text-foreground">¥{Number(order.totalAmount).toFixed(2)}</p>
+            <p className="text-2xl font-semibold text-foreground">{money(Number(order.totalAmount))}</p>
           </div>
         </div>
       </SectionCard>

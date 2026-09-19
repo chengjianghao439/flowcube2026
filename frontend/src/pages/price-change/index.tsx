@@ -1,3 +1,4 @@
+import { money } from '@/lib/format'
 import { OrderActivityDialog } from '@/components/shared/OrderActivityDialog'
 import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
 import { useEffect, useState } from 'react'
@@ -136,8 +137,8 @@ export default function PriceChangePage() {
     { key: 'requestNo', title: '申请单号', width: 150 },
     ...productIdentityColumns(),
     { key: 'priceType', title: '价格类型', width: 90, render: (v) => PRICE_TYPE_LABEL[String(v)] ?? String(v) },
-    { key: 'oldPrice', title: '现价', width: 90, align: 'right', render: (v) => v != null ? `¥${Number(v).toFixed(2)}` : '—' },
-    { key: 'newPrice', title: '新价', width: 90, align: 'right', render: (v) => `¥${Number(v).toFixed(2)}` },
+    { key: 'oldPrice', title: '现价', width: 90, align: 'right', render: (v) => v != null ? money(Number(v)) : '—' },
+    { key: 'newPrice', title: '新价', width: 90, align: 'right', render: (v) => money(Number(v)) },
     { key: 'status', title: '状态', width: 80, render: (v) => <SoftStatusLabel label={STATUS_LABEL[Number(v)] ?? String(v)} tone={STATUS_TONE[Number(v)] ?? 'info'} /> },
     { key: 'applicantName', title: '申请人', width: 100 },
     { key: 'createdAt', title: '申请时间', width: 160, render: v => formatDisplayDateTime(v) },

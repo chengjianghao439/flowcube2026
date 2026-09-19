@@ -1,3 +1,4 @@
+import { money } from '@/lib/format'
 import { usePartyLedger } from '@/hooks/usePartyLedger'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
@@ -95,7 +96,7 @@ export default function CustomersPage() {
     ) },
     { key: 'creditLimit', title: '授信额度', width: 110, align: 'right', render: (_, row) => row.creditLimit == null
       ? <span className="text-xs text-muted-foreground">未启用</span>
-      : <span className="tabular-nums">¥{Number(row.creditLimit).toFixed(2)}</span> },
+      : <span className="tabular-nums">{money(Number(row.creditLimit))}</span> },
     { key: 'isActive', title: '状态', width: 70, render:(v)=> <SoftStatusLabel label={v ? '启用' : '停用'} tone={activeTone(v as boolean)} /> },
     { key: 'id', title: '操作', width: 120, render:(_, row)=>(
       <TableActionsMenu

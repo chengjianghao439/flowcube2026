@@ -1,3 +1,4 @@
+import { money } from '@/lib/format'
 import { RecordIdentity } from '@/components/shared/RecordIdentity'
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
@@ -206,7 +207,7 @@ export default function ReturnsPage() {
     { key: 'returnNo', title: type === 'sale' ? '退货单 / 创建时间' : '退货单号', width: type === 'sale' ? 240 : 170, render: (v, row) => type === 'sale' ? <RecordIdentity title={String(v)} detail={formatDisplayDateTime(row.createdAt)} /> : String(v) },
     { key: partyKey, title: partyLabel, width: 140 },
     { key: 'warehouseName', title: '仓库', width: 140 },
-    { key: 'totalAmount', title: '金额', width: 100, align: 'right', render: (v) => <span className="tabular-nums">¥{Number(v).toFixed(2)}</span> },
+    { key: 'totalAmount', title: '金额', width: 100, align: 'right', render: (v) => <span className="tabular-nums">{money(Number(v))}</span> },
     { key: 'status', title: '状态', width: 90, render: (v, row) => {
       const status = v as number
       const tone = status === 3 ? 'success' : status === 4 ? 'danger' : status === 1 ? 'draft' : 'active'

@@ -211,7 +211,7 @@ export default function ReportsPage() {
                         rankColumn(),
                         { key: 'supplierName', title: '供应商', width: 180 },
                         { key: 'orderCount', title: '单数', width: 90 },
-                        { key: 'totalAmount', title: '金额', width: 120, align: 'right', render: v => <span className="font-medium">¥{Number(v).toFixed(2)}</span> },
+                        { key: 'totalAmount', title: '金额', width: 120, align: 'right', render: v => <span className="font-medium">{money(Number(v))}</span> },
                       ]}
                       data={withRank(purchaseQ.data.bySupplier)}
                       rowKey="rank"
@@ -226,7 +226,7 @@ export default function ReportsPage() {
                       rankColumn(),
                       ...productIdentityColumns(),
                       { key: 'totalQty', title: '数量', width: 90 },
-                      { key: 'totalAmount', title: '金额', width: 120, align: 'right', render: v => <span className="font-medium">¥{Number(v).toFixed(2)}</span> },
+                      { key: 'totalAmount', title: '金额', width: 120, align: 'right', render: v => <span className="font-medium">{money(Number(v))}</span> },
                     ]}
                     data={withRank(purchaseQ.data.byProduct)}
                     rowKey="rank"
@@ -306,7 +306,7 @@ export default function ReportsPage() {
                         rankColumn(),
                         { key: 'customerName', title: '客户', width: 180 },
                         { key: 'orderCount', title: '单数', width: 90 },
-                        { key: 'totalAmount', title: '金额', width: 120, align: 'right', render: v => <span className="font-medium">¥{Number(v).toFixed(2)}</span> },
+                        { key: 'totalAmount', title: '金额', width: 120, align: 'right', render: v => <span className="font-medium">{money(Number(v))}</span> },
                       ]}
                       data={withRank(saleQ.data.byCustomer)}
                       rowKey="rank"

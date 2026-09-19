@@ -271,7 +271,7 @@ export function ListPendingApprovals() {
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-foreground">{item.no || `#${item.bizId}`}</p>
                 <p className="truncate text-xs text-muted-foreground">
-                  {item.title || '—'} · {item.applicantName} · ¥{item.amount.toFixed(2)}
+                  {item.title || '—'} · {item.applicantName} · {money(item.amount)}
                 </p>
               </div>
               <div className="shrink-0 text-right">

@@ -19,7 +19,8 @@ export const CHART_COLORS = [
   '#8b5cf6', '#0ea5e9', '#f97316', 'hsl(var(--destructive))',
 ]
 
-export const money = (n: number) => `¥${Number(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+/** 金额格式化与业务/财务页面同源（lib/format 的 money），仪表盘不再另存一份实现 */
+export { money } from '@/lib/format'
 export const wan = (n: number) => Math.abs(n) >= 10000 ? `${(n / 10000).toFixed(Math.abs(n) >= 1e6 ? 0 : 1)}万` : String(Math.round(n))
 export const pct = (n: number) => `${(n * 100).toFixed(1)}%`
 

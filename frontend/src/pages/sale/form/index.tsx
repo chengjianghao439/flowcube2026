@@ -1,3 +1,4 @@
+import { money } from '@/lib/format'
 import { OrderEntryIssues } from '@/components/shared/OrderEntryIssues'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { collectOrderIssues } from '@/lib/orderEntry'
@@ -701,19 +702,19 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
                     <div className="space-y-1">
                       <div className="tabular-nums">
                         {(item.entryUnit && item.entryUnit !== item.unit && item.entryQty && item.entryQty > 0)
-                          ? <span title={`¥${Number(v).toFixed(4)} / ${item.unit}`}>¥{(item.amount / item.entryQty).toFixed(2)}/{item.entryUnit}</span>
-                          : <>¥{Number(v).toFixed(2)}</>}
+                          ? <span title={`¥${Number(v).toFixed(4)} / ${item.unit}`}>{money(item.amount / item.entryQty)}/{item.entryUnit}</span>
+                          : <>{money(Number(v))}</>}
                       </div>
                       {item.belowCost && item.costPrice != null && (
                         <div className="inline-flex items-center gap-1 text-[11px] text-destructive">
                           <AlertTriangle className="h-3 w-3" />
-                          低于进价 ¥{Number(item.costPrice).toFixed(2)}
+                          低于进价 {money(Number(item.costPrice))}
                         </div>
                       )}
                     </div>
                   ),
                 },
-                { key: 'amount', title: '金额', width: 110, align: 'right', render: v => <span className="font-semibold tabular-nums">¥{Number(v).toFixed(2)}</span> },
+                { key: 'amount', title: '金额', width: 110, align: 'right', render: v => <span className="font-semibold tabular-nums">{money(Number(v))}</span> },
               ] satisfies TableColumn<SaleOrderItem>[]}
               data={order.items ?? []}
               rowKey="id"
@@ -725,9 +726,9 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
             <div className="flex items-center justify-between gap-8 text-sm">
               <p className="text-muted-foreground">共 <span className="font-medium tabular-nums text-foreground">{order.items?.length ?? 0}</span> 行商品明细</p>
               <dl className="flex items-center gap-10 text-right">
-                <div><dt className="text-xs text-muted-foreground">商品金额</dt><dd className="mt-1 tabular-nums">¥{Number(order.totalAmount).toFixed(2)}</dd></div>
-                <div><dt className="text-xs text-muted-foreground">折扣金额</dt><dd className="mt-1 tabular-nums">{Number(order.discountAmount ?? 0) > 0 ? `-¥${Number(order.discountAmount).toFixed(2)}` : '¥0.00'}</dd></div>
-                <div className="border-l pl-8"><dt className="text-xs text-muted-foreground">订单净额</dt><dd className="mt-1 text-2xl font-semibold tabular-nums">¥{Math.max(0, Number(order.totalAmount) - Number(order.discountAmount ?? 0)).toFixed(2)}</dd></div>
+                <div><dt className="text-xs text-muted-foreground">商品金额</dt><dd className="mt-1 tabular-nums">{money(Number(order.totalAmount))}</dd></div>
+                <div><dt className="text-xs text-muted-foreground">折扣金额</dt><dd className="mt-1 tabular-nums">{Number(order.discountAmount ?? 0) > 0 ? money(-Number(order.discountAmount)) : money(0)}</dd></div>
+                <div className="border-l pl-8"><dt className="text-xs text-muted-foreground">订单净额</dt><dd className="mt-1 text-2xl font-semibold tabular-nums">{money(Math.max(0, Number(order.totalAmount) - Number(order.discountAmount ?? 0)))}</dd></div>
               </dl>
             </div>
           </SectionCard>

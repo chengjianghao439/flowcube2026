@@ -1,3 +1,4 @@
+import { money } from '@/lib/format'
 import { OrderStatusFilter } from '@/components/shared/OrderStatusFilter'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -213,7 +214,7 @@ export default function PurchasePage() {
     { key: 'orderNo', title: '采购单号', width: 12 },
     { key: 'supplierName', title: '供应商', width: 17 },
     { key: 'warehouseName', title: '仓库', width: 9 },
-    { key: 'totalAmount', title: '金额', width: 9, align: 'right', render: (v) => <span className="tabular-nums">¥{Number(v).toFixed(2)}</span> },
+    { key: 'totalAmount', title: '金额', width: 9, align: 'right', render: (v) => <span className="tabular-nums">{money(Number(v))}</span> },
     {
       key: 'status', title: '状态', width: 8,
       render: (v, row) => <StatusBadge type="purchase" status={v as number} aria-label={(row as PurchaseOrder).statusName} />

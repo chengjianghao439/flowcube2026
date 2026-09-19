@@ -1,3 +1,4 @@
+import { money } from '@/lib/format'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { FileText } from 'lucide-react'
@@ -37,9 +38,9 @@ export default function PortalStatementsPage() {
       return `${start} ~ ${end}`
     } },
     { key: 'itemCount', title: '笔数', width: 60 },
-    { key: 'totalAmount', title: '汇总金额', width: 110, align: 'right', render: v => <span className="font-medium tabular-nums">¥{Number(v).toFixed(2)}</span> },
-    { key: 'settledAmount', title: '已结算', width: 110, align: 'right', render: v => <span className="tabular-nums">¥{Number(v).toFixed(2)}</span> },
-    { key: 'balance', title: '未结算', width: 110, align: 'right', render: v => <span className="font-semibold tabular-nums">¥{Number(v).toFixed(2)}</span> },
+    { key: 'totalAmount', title: '汇总金额', width: 110, align: 'right', render: v => <span className="font-medium tabular-nums">{money(Number(v))}</span> },
+    { key: 'settledAmount', title: '已结算', width: 110, align: 'right', render: v => <span className="tabular-nums">{money(Number(v))}</span> },
+    { key: 'balance', title: '未结算', width: 110, align: 'right', render: v => <span className="font-semibold tabular-nums">{money(Number(v))}</span> },
     { key: 'status', title: '状态', width: 90, render: (_, row) => {
       const r = row as PortalStatementRow
       const tone = r.status === 3 ? 'success' : r.status === 2 ? 'active' : 'draft'

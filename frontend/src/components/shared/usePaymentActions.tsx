@@ -1,3 +1,4 @@
+import { money } from '@/lib/format'
 import { useState } from 'react'
 import { EmptyState } from './EmptyState'
 import { useQuery } from '@tanstack/react-query'
@@ -88,7 +89,7 @@ export function usePaymentActions(type: 1 | 2) {
           <div className="space-y-2 max-h-96 overflow-y-auto">
             {entries?.map((e: PaymentEntry) => (
               <div key={e.id} className="flex justify-between items-center border-b pb-2 text-sm">
-                <div><p className="font-medium">¥{e.amount.toFixed(2)}</p><p className="text-xs text-muted-foreground">{e.paymentDate} · {e.method} · {e.operatorName}</p></div>
+                <div><p className="font-medium">{money(e.amount)}</p><p className="text-xs text-muted-foreground">{e.paymentDate} · {e.method} · {e.operatorName}</p></div>
                 {e.remark && <p className="text-xs text-muted-foreground max-w-32 text-left">{e.remark}</p>}
               </div>
             ))}

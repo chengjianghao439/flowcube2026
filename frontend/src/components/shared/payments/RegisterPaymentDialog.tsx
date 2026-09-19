@@ -1,3 +1,4 @@
+import { money } from '@/lib/format'
 import { useState } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { AppDialog } from '@/components/shared/AppDialog'
@@ -73,7 +74,7 @@ export function RegisterPaymentDialog({ open, onClose, type, record }: Props) {
     if (isPayable && acc && +payAmount > acc.currentBalance + 1e-6) {
       confirmAction({
         title: '账户余额不足',
-        description: `账户「${acc.name}」当前余额 ¥${acc.currentBalance.toFixed(2)}，本次付款 ¥${(+payAmount).toFixed(2)} 将形成负余额。确认继续？`,
+        description: `账户「${acc.name}」当前余额 ${money(acc.currentBalance)}，本次付款 ${money(Number(payAmount))} 将形成负余额。确认继续？`,
         variant: 'destructive',
         confirmText: '仍然付款',
         onConfirm: doPay,
@@ -104,7 +105,7 @@ export function RegisterPaymentDialog({ open, onClose, type, record }: Props) {
         {record && (
           <div className="mb-4 space-y-1 text-sm text-muted-foreground">
             <p>关联单号：<span className="text-doc-code-strong">{record.orderNo}</span> &nbsp;·&nbsp; {partyLabel}：{record.partyName}</p>
-            <p>余额：<span className="font-medium text-destructive">¥{record.balance.toFixed(2)}</span></p>
+            <p>余额：<span className="font-medium text-destructive">{money(record.balance)}</span></p>
           </div>
         )}
         <div className="grid grid-cols-2 gap-4">
@@ -113,7 +114,7 @@ export function RegisterPaymentDialog({ open, onClose, type, record }: Props) {
               <SelectTrigger className="h-10 w-full"><SelectValue placeholder={`选择${isPayable ? '付款' : '收款'}账户`} /></SelectTrigger>
               <SelectContent>
                 {(activeAccounts || []).map(a => (
-                  <SelectItem key={a.id} value={String(a.id)}>{a.name}（¥{a.currentBalance.toFixed(2)}）</SelectItem>
+                  <SelectItem key={a.id} value={String(a.id)}>{a.name}（{money(a.currentBalance)}）</SelectItem>
                 ))}
               </SelectContent>
             </Select>

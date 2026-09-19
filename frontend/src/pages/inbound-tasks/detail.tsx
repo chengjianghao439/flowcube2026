@@ -1,3 +1,4 @@
+import { money } from '@/lib/format'
 import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
 import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
 import { SectionCard } from '@/components/shared/SectionCard'
@@ -248,8 +249,8 @@ export default function InboundTaskDetailPage() {
               },
             },
             { key: 'putawayQty', title: '已上架', width: 90, align: 'right', render: v => <span className="tabular-nums">{String(v)}</span> },
-            { key: 'unitPrice', title: '单价', width: 100, align: 'right', render: v => <span className="text-muted-foreground tabular-nums">{v != null ? `¥${(v as number).toFixed(2)}` : '—'}</span> },
-            { key: 'lineAmount', title: '小计', width: 110, align: 'right', render: v => <span className="font-medium tabular-nums">{v != null ? `¥${(v as number).toFixed(2)}` : '—'}</span> },
+            { key: 'unitPrice', title: '单价', width: 100, align: 'right', render: v => <span className="text-muted-foreground tabular-nums">{v != null ? money(v as number) : '—'}</span> },
+            { key: 'lineAmount', title: '小计', width: 110, align: 'right', render: v => <span className="font-medium tabular-nums">{v != null ? money(v as number) : '—'}</span> },
           ] satisfies TableColumn<InboundTaskItem & { lineRemain: number; lineAmount: number | null }>[]}
           data={items.map(it => ({
             ...it,
@@ -267,7 +268,7 @@ export default function InboundTaskDetailPage() {
           <div className="text-right">
             <p className="text-helper">已上架金额合计</p>
             <p className="text-2xl font-semibold text-foreground">
-              ¥{items.reduce((sum, it) => sum + (it.unitPrice != null ? it.putawayQty * it.unitPrice : 0), 0).toFixed(2)}
+              {money(items.reduce((sum, it) => sum + (it.unitPrice != null ? it.putawayQty * it.unitPrice : 0), 0))}
             </p>
           </div>
         </div>

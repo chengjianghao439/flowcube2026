@@ -1,3 +1,4 @@
+import { money } from '@/lib/format'
 import { useNavigate } from 'react-router-dom'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
@@ -52,7 +53,7 @@ export default function ApprovalPendingPage() {
       key: 'amount',
       title: '金额',
       width: 120,
-      render: (v) => `¥${Number(v).toFixed(2)}`,
+      render: (v) => money(Number(v)),
     },    {
       key: 'currentStep',
       title: '审批进度',

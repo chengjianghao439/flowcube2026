@@ -1,3 +1,4 @@
+import { money } from '@/lib/format'
 import { AlertTriangle } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { SectionCard } from '@/components/shared/SectionCard'
@@ -34,20 +35,20 @@ export function SaleOrderSummaryCard({
 
         <div className="space-y-2 border-border text-sm md:border-l md:pl-5">
           <div className="flex items-center justify-between gap-3 text-muted-foreground">
-            <span>商品金额</span><span className="tabular-nums text-foreground">¥{total.toFixed(2)}</span>
+            <span>商品金额</span><span className="tabular-nums text-foreground">{money(total)}</span>
           </div>
           <div className="flex items-center justify-between gap-3">
             <label className="text-muted-foreground" htmlFor="sale-discount-amount">折扣金额</label>
             {editableDiscount ? (
               <Input data-entry-field="discount" id="sale-discount-amount" type="number" min={0} step={0.01} value={discountAmount}
                 onChange={event => onDiscountChange?.(event.target.value)} placeholder="0.00" className="h-8 w-28 text-right text-sm tabular-nums" />
-            ) : <span data-entry-field="discount" tabIndex={-1} className="tabular-nums text-foreground focus:outline-none focus:ring-2 focus:ring-ring" title="改单保留原折扣；明细金额不能低于该折扣">{discount > 0 ? `-¥${discount.toFixed(2)}` : '¥0.00'}</span>}
+            ) : <span data-entry-field="discount" tabIndex={-1} className="tabular-nums text-foreground focus:outline-none focus:ring-2 focus:ring-ring" title="改单保留原折扣；明细金额不能低于该折扣">{discount > 0 ? money(-discount) : money(0)}</span>}
           </div>
         </div>
 
         <div className="border-t border-border pt-4 md:border-l md:border-t-0 md:pl-5 md:pt-0">
           <div className="text-xs font-medium text-muted-foreground">订单金额</div>
-          <p className="mt-1 text-2xl font-semibold tracking-tight text-foreground tabular-nums">¥{discountedTotal.toFixed(2)}</p>
+          <p className="mt-1 text-2xl font-semibold tracking-tight text-foreground tabular-nums">{money(discountedTotal)}</p>
         </div>
 
         {belowCost && warningText && (

@@ -1,3 +1,4 @@
+import { money } from '@/lib/format'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { useContext } from 'react'
 import { OrderStatusFilter } from '@/components/shared/OrderStatusFilter'
@@ -231,7 +232,7 @@ export default function SalePage() {
     { key: 'orderNo', title: '销售单号', width: 14, render: v => <span className="whitespace-nowrap">{String(v ?? '')}</span> },
     { key: 'customerName', title: '客户', width: 14 },
     { key: 'warehouseName', title: '仓库', width: 8 },
-    { key: 'totalAmount', title: '折后金额', width: 10, align: 'right', render: (_, r) => <span className="font-medium tabular-nums whitespace-nowrap">¥{Math.max(0, r.totalAmount - (r.discountAmount ?? 0)).toFixed(2)}</span> },
+    { key: 'totalAmount', title: '折后金额', width: 10, align: 'right', render: (_, r) => <span className="font-medium tabular-nums whitespace-nowrap">{money(Math.max(0, r.totalAmount - (r.discountAmount ?? 0)))}</span> },
     { key: 'remark', title: '备注', width: 15, render: v => (v as string) || '—' },
     { key: 'status', title: '状态', width: 8, render: (_, r) => { const ws = getSaleWorkflowStatus(r); return <SoftStatusLabel label={ws.label} tone={ws.tone} title={ws.detail} onClick={r.taskNo && r.taskId ? () => goToDetail(r) : undefined} /> } },
     { key: 'receivableStatus', title: '回款状态', width: 8, render: (_, r) => { const rs = getReceivableStatus(r); return <SoftStatusLabel label={rs.label} tone={rs.tone} title={rs.dueDate ? `账期至 ${rs.dueDate.slice(0, 10)}` : undefined} /> } },

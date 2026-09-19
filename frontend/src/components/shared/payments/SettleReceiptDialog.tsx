@@ -194,7 +194,7 @@ export function SettleReceiptDialog({ open, onClose, type, settlementTypes, rece
               if (!isContinue && isPayableType(type) && acc && totalAmount > acc.currentBalance + 1e-6) {
                 confirmAction({
                   title: '账户余额不足',
-                  description: `账户「${acc.name}」当前余额 ¥${acc.currentBalance.toFixed(2)}，本次付款 ¥${totalAmount.toFixed(2)} 将形成负余额。确认继续？`,
+                  description: `账户「${acc.name}」当前余额 ${money(acc.currentBalance)}，本次付款 ${money(totalAmount)} 将形成负余额。确认继续？`,
                   variant: 'destructive',
                   confirmText: '仍然付款',
                   onConfirm: () => mut.mutate(),
