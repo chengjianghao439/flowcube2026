@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Package, Factory, User, ShoppingCart, Truck, ClipboardList, ArrowLeftRight, Undo2, Inbox, Receipt, Archive, Banknote, ShieldCheck, ListChecks, FileText } from 'lucide-react'
 import { searchGlobalApi, type GlobalSearchItem } from '@/api/search'
+import { EmptyState } from './EmptyState'
 
 type SearchResult = GlobalSearchItem
 
@@ -132,7 +133,7 @@ export default function GlobalSearch() {
           {loading && <div role="status" className="py-8 text-center text-sm text-muted-foreground">正在搜索全部历史记录…</div>}
           {error && <div role="alert" className="px-4 py-8 text-center text-sm text-destructive">{error}</div>}
           {results.length === 0 && !loading && !error && (
-            <div className="py-8 text-center text-sm text-muted-foreground">未找到「{query}」相关内容</div>
+            <EmptyState variant="no-result" compact title={`未找到「${query}」相关内容`} description="" />
           )}
           {results.length > 0 && (
             <div>

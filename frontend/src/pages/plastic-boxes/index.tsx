@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { ProductFinder } from '@/components/finder'
 import { PickerField } from '@/components/shared/PickerField'
+import { EmptyState } from '@/components/shared/EmptyState'
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
 import { toast } from '@/lib/toast'
 import { formatDisplayDateTime } from '@/lib/dateTime'
@@ -167,7 +168,7 @@ function DetailDialog({ box, onClose }: { box: PlasticBox | null; onClose: () =>
           ) : isLoading ? (
             <div className="py-8 text-center text-sm text-muted-foreground">加载中…</div>
           ) : !data?.length ? (
-            <div className="py-8 text-center text-sm text-muted-foreground">暂无流水</div>
+            <EmptyState variant="no-data" title="暂无流水" compact />
           ) : (
             <table className="w-full text-sm">
               <thead>

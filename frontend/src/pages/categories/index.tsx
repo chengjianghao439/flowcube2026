@@ -9,6 +9,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
+import { EmptyState } from '@/components/shared/EmptyState'
 import { ChevronDown, ChevronRight, Plus, Pencil, Trash2, Power, FolderOpen } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button }  from '@/components/ui/button'
@@ -415,7 +416,7 @@ export default function CategoriesPage() {
         ) : tree.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
             <FolderOpen className="mb-3 h-10 w-10 opacity-30" />
-            <p className="text-sm">暂无分类，点击右上角「新增一级分类」开始</p>
+            <EmptyState variant="no-data" title="暂无分类" description="点击右上角「新增一级分类」开始" compact />
           </div>
         ) : (
           <div className="space-y-2">

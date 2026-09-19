@@ -1,4 +1,5 @@
 import { ProductIdentityDetails } from '@/components/shared/ProductIdentityCells'
+import { EmptyState } from './EmptyState'
 /**
  * ContainerDrawer — 库存条码可视化侧滑面板
  *
@@ -202,7 +203,7 @@ function ContainerTimeline({ containerId }: { containerId: number }) {
     )
   }
   if (!data?.length) {
-    return <div className="mt-3 border-t border-border/60 pt-3 text-xs text-muted-foreground">暂无流转记录</div>
+    return <EmptyState variant="no-data" title="暂无流转记录" compact />
   }
   return (
     <div className="mt-3 border-t border-border/60 pt-3">

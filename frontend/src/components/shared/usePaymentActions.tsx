@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { EmptyState } from './EmptyState'
 import { useQuery } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
@@ -83,7 +84,7 @@ export function usePaymentActions(type: 1 | 2) {
       <Dialog open={entriesOpen} onOpenChange={setEntriesOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>{isPayable ? '付款流水' : '收款流水'} — <span className="text-doc-code-strong">{selected?.orderNo}</span></DialogTitle></DialogHeader>
-          {!entries?.length && <p className="text-sm text-muted-foreground text-center py-6">暂无流水记录</p>}
+          {!entries?.length && <EmptyState variant="no-data" title="暂无流水记录" compact />}
           <div className="space-y-2 max-h-96 overflow-y-auto">
             {entries?.map((e: PaymentEntry) => (
               <div key={e.id} className="flex justify-between items-center border-b pb-2 text-sm">

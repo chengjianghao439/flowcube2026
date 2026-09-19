@@ -1,4 +1,5 @@
 import KeepAliveSection from '@/components/shared/KeepAliveSection'
+import { EmptyState } from '@/components/shared/EmptyState'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
 import { useState } from 'react'
@@ -189,7 +190,7 @@ export default function ReportsPage() {
                 <div className="grid gap-6 lg:grid-cols-2">
                   <div className="rounded-lg border border-border bg-card p-5">
                     <h3 className="mb-4 text-card-title">按月趋势</h3>
-                    {!purchaseQ.data.byMonth.length && <p className="py-6 text-center text-muted-body">暂无数据</p>}
+                    {!purchaseQ.data.byMonth.length && <EmptyState variant="no-data" compact />}
                     {purchaseQ.data.byMonth.map(row => (
                       <div key={row.month} className="mb-2">
                         <div className="mb-1 flex justify-between text-sm">
@@ -284,7 +285,7 @@ export default function ReportsPage() {
                 <div className="grid gap-6 lg:grid-cols-2">
                   <div className="rounded-lg border border-border bg-card p-5">
                     <h3 className="mb-4 text-card-title">按月销售趋势</h3>
-                    {!saleQ.data.byMonth.length && <p className="py-6 text-center text-muted-body">暂无数据</p>}
+                    {!saleQ.data.byMonth.length && <EmptyState variant="no-data" compact />}
                     {saleQ.data.byMonth.map(row => (
                       <div key={row.month} className="mb-2">
                         <div className="mb-1 flex justify-between text-sm">

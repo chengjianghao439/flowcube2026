@@ -1,4 +1,5 @@
 import { OrderActivityDialog } from '@/components/shared/OrderActivityDialog'
+import { EmptyState } from '@/components/shared/EmptyState'
 import { money } from '@/lib/format'
 import { RecordIdentity } from '@/components/shared/RecordIdentity'
 import { useMemo, useState } from 'react'
@@ -85,7 +86,7 @@ function CreateDialog({ open, onClose }: { open: boolean; onClose: () => void })
             </div>
           )}
           {sales.length === 0 && kw && (
-            <p className="text-sm text-muted-foreground">未找到草稿状态的销售单</p>
+            <EmptyState variant="no-result" title="未找到草稿状态的销售单" description="" compact />
           )}
           {pickedSale && (
             <div className="rounded-md border border-warning/30 bg-warning/5 px-3 py-2 text-sm">

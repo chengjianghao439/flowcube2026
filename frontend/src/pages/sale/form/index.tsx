@@ -1,4 +1,5 @@
 import { OrderEntryIssues } from '@/components/shared/OrderEntryIssues'
+import { EmptyState } from '@/components/shared/EmptyState'
 import { collectOrderIssues } from '@/lib/orderEntry'
 import { handleEntryKeyDown } from '@/lib/orderEntryNavigation'
 import KeepAliveSection from '@/components/shared/KeepAliveSection'
@@ -849,7 +850,7 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
                   </div>
                 ))
               ) : (
-                <p className="py-4 text-center text-sm text-muted-foreground">暂无装箱记录</p>
+                <EmptyState variant="no-data" title="暂无装箱记录" compact />
               )}
             </div>
           ) : (
