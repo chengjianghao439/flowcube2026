@@ -64,7 +64,7 @@
 - **`printers.service.update` 的 `status` 只允许 0/1（路由+service 双重）**，写语句同事务行锁，缺失字段沿用现值
 - **资源级幂等 action 必须绑定单据 ID**（`action.<resourceId>`，旧固定 action 只在 SUCCESS 且资源一致时回放）；创建类用载荷指纹；回执查询剥尾部 `.<ID>` 取 base；调拨必须是 `transfer.scanOut.<id>`/`transfer.scanIn.<id>`（`utils/operationRequest.js`、`transfer.service.js`）
 - **`track_status` 含义只在 `logistics.service.js` 定义一处、导出列名「签收状态」**；运费账单匹配用 `tracking_no = ? OR JSON_CONTAINS(tracking_numbers, JSON_QUOTE(?))`，写入方 `logistics.direct.js`（`logistics.worker.js`、`logistics.freight.js`）
-- **轮询页面不得写死小 `pageSize` 又高频轮询**（`refetchInterval` ≥ 5 秒，分页批量 ≥ 100），并计入 `backend/src/app.js` 的全局 IP 限流（1000 次/60 秒）
+- **轮询页面不得写死小 `pageSize` 又高频轮询**（`refetchInterval` ≥ 5 秒，分页批量 ≥ 100），并计入 `backend/src/app.js` 的全局 IP 限流（1000 次/60 秒）；`test:frontend-polling-contract` 扫**整个 `frontend/src`（含 hooks/components，不只是 pages）**，`listMode: 'summary'` 单页直返的 top-N 摘要在守卫里逐条豁免（豁免必须被命中，否则测试失败）
 - **前端登出必须走 `lib/authSession.performSessionLogout()`**，仅 `lib/authSession.ts`、`store/authStore.ts` 可封装（`pages/pda/index.tsx`）；错误码文案不得按后缀启发式映射（`docs/acceptance-issues-fix-2026-09-17.md`）
 - **发版三端+PDA 版本同步、写本版说明、同步官网 `landing/updates.ts` 并打 tag**；`latest.json` 与 current 指针只由 `release-desktop.js` 写；`test:landing-updates` 拦「bump 了却没同步官网」（`docs/release-notes/0.9.22.md`）
 - **部署链路的镜像上传（scp）与 `docker load` 时限必须同为 1800 秒，且 Deploy 步骤/job 上限容得下**：二者是同一慢盘根因上的两个环节，只放宽一个会让另一个先被强杀，并报出指向外层的 `exit code 124`（2026-09-18 v0.9.24 实际发生）；`tests/deployment-resources.test.js` 机械守住（`deploy-browser.yml`、`server-update.sh`）

@@ -21,16 +21,28 @@ const fs = require('node:fs')
 const path = require('node:path')
 
 const ROOT = path.resolve(__dirname, '..')
-const PAGES = path.join(ROOT, 'frontend/src/pages')
+const SRC = path.join(ROOT, 'frontend/src')
 
 const MIN_INTERVAL_MS = 5000
 const MIN_POLLED_PAGE_SIZE = 100
 
+/**
+ * 扫整个 `frontend/src`，不只是 `pages/`。
+ *
+ * 2026-09-19 发现范围缺口：本测试自称「任何 `refetchInterval` 都不得小于 5 秒」，但只
+ * `walk(PAGES)`——而轮询点早已搬到 hooks 里（`usePdaAdjustment`、`usePdaCancelReturn`、
+ * `usePdaTodoCounts`、`usePollingReport`）。这些文件当时恰好合规（15s/30s），所以守卫一直
+ * 全绿；但只要有人在 hooks 里写 `refetchInterval: 3_000`，**自旋的页面就全都不在扫描范围里**。
+ * 这类「守卫覆盖小于它声明的规则」和规则本身同样危险，故一并扫 `hooks/`、`components/`。
+ */
 function walk(dir, out = []) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     const p = path.join(dir, e.name)
-    if (e.isDirectory()) walk(p, out)
-    else if (/\.tsx$/.test(e.name) && !/\.test\.tsx$/.test(e.name)) out.push(p)
+    if (e.isDirectory()) {
+      // generated 是机器产物，不参与源码契约
+      if (e.name === 'generated' || e.name === 'node_modules') continue
+      walk(p, out)
+    } else if (/\.tsx?$/.test(e.name) && !/\.test\.tsx?$/.test(e.name)) out.push(p)
   }
   return out
 }
@@ -51,8 +63,18 @@ function stripComments(src) {
 }
 
 function main() {
-  const files = walk(PAGES)
-  assert.ok(files.length > 20, `页面文件数异常（${files.length}），目录结构可能变了`)
+  const files = walk(SRC)
+  assert.ok(files.length > 100, `前端源码文件数异常（${files.length}），目录结构可能变了`)
+
+  // 已核对的有界摘要调用：pageSize 小是**故意**的，因为请求走 `listMode: 'summary'`——
+  // `payloadClient.get`（client.ts:401）遇到 summary 直接单页返回，不进入 `collectAllRecords`
+  // 自动取齐，所以不会按 ceil(总数/批量) 放大请求数。守卫只做文本匹配，看不到这个分支，
+  // 故逐条登记；未命中的登记条目会让测试失败，避免清单僵化。
+  const BOUNDED_SUMMARY_ALLOWLIST = new Map([
+    ['frontend/src/hooks/useDashboard.ts:52',
+      '首页「待我审批」只展示前 5 条摘要：listPendingApprovalsApi(..., true) → listMode: summary 单页直返'],
+  ])
+  const usedAllowlist = new Set()
 
   const problems = []
   let polled = 0
@@ -81,15 +103,20 @@ function main() {
       let ps
       while ((ps = pageSizeRe.exec(source)) !== null) {
         const size = Number(ps[1].replace(/_/g, ''))
-        if (size < MIN_POLLED_PAGE_SIZE) {
-          problems.push(`${rel}:${lineOf(source, ps.index)} 轮询页面的 pageSize=${size} 小于 ${MIN_POLLED_PAGE_SIZE}`
-            + '（自动取齐会按 ceil(总数/批量) 串行请求，批量越小请求越多）')
-        }
+        if (size >= MIN_POLLED_PAGE_SIZE) continue
+        const key = `${rel}:${lineOf(source, ps.index)}`
+        if (BOUNDED_SUMMARY_ALLOWLIST.has(key)) { usedAllowlist.add(key); continue }
+        problems.push(`${key} 轮询页面的 pageSize=${size} 小于 ${MIN_POLLED_PAGE_SIZE}`
+          + '（自动取齐会按 ceil(总数/批量) 串行请求，批量越小请求越多）')
       }
     }
   }
 
-  console.log(`扫描页面 ${files.length} 个，发现轮询点 ${polled} 处`)
+  const staleAllowlist = [...BOUNDED_SUMMARY_ALLOWLIST.keys()].filter(k => !usedAllowlist.has(k))
+  assert.deepEqual(staleAllowlist, [],
+    `这些有界摘要豁免已不再命中（代码已改或已删除），必须从清单里删掉：${staleAllowlist.join(', ')}`)
+
+  console.log(`扫描源码 ${files.length} 个（frontend/src 全量，含 hooks/components），发现轮询点 ${polled} 处`)
 
   if (problems.length) {
     console.error('\n前端轮询/分页契约违规：')
