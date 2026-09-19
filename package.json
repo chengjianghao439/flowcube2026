@@ -49,6 +49,7 @@
     "test:eslint-disable-rationale": "node tests/eslint-disable-rationale.test.js",
     "test:logger-args-order": "node tests/logger-args-order-contract.test.js",
     "test:pda-scan-focus": "node tests/pda-scan-focus-contract.test.js",
+    "test:api-route-contract": "node tests/api-route-contract.test.js",
     "test:agents-md-guard": "node tests/agents-md-injection-guard.test.js",
     "test:frontend-session-contract": "node tests/frontend-session-contract.test.js",
     "test:frontend-polling-contract": "node tests/frontend-polling-contract.test.js",
