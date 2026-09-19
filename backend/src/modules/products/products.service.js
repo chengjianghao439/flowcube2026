@@ -193,6 +193,8 @@ async function findForFinder({ page = 1, pageSize = 20, keyword = '', categoryId
       salePriceC: r.sale_price_c != null ? Number(r.sale_price_c) : null,
       salePriceD: r.sale_price_d != null ? Number(r.sale_price_d) : null,
       costPrice: r.cost_price != null ? Number(r.cost_price) : null,
+      // 商品选择器据此标出「只能整数」的商品（迁移 254）
+      allowDecimalQty: r.allow_decimal_qty == null ? true : Number(r.allow_decimal_qty) === 1,
       stock: Number(r.stock),
     })),
     pagination: { page, pageSize: ps, total },

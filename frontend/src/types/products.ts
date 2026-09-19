@@ -54,6 +54,8 @@ export interface ProductFinderResult {
   salePrice: number | null; costPrice: number | null
   salePriceA?: number | null; salePriceB?: number | null; salePriceC?: number | null; salePriceD?: number | null
   stock: number                 // 当前仓库可用库存（未传 warehouseId 时为 0）
+  /** 迁移 254：false = 该商品只能按整数出入库 */
+  allowDecimalQty?: boolean
 }
 
 export interface ProductFinderParams {
