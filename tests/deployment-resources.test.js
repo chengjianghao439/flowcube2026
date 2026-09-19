@@ -288,3 +288,61 @@ test('废弃 downloads 守卫必须有 CI 执行入口（防「脚本写了但�
   assert.ok(source.includes('backend/downloads'),
     '废弃 downloads 守卫必须检查 backend/downloads 目录')
 })
+
+// 2026-09-19：`smoke:atp` 守的是销售预计库存（ATP）——「采购预计量能否被占库、取消/短装前必须
+// 先解绑」这类规则，AGENTS.md §7 明确写着「规则与回归见 expectedStock.js、sale-atp.smoke.test.js」，
+// 但该套件从未出现在任何 workflow 里：8 条断言只在有人手工执行时才跑。CI 全绿时看不出任何异常，
+// 这正是 2026-09-18 审计记下的那类「写了但没接线」缺陷（同批还有孤儿测试与废弃目录守卫）。
+//
+// 不变量：**每个 smoke:*/test:* 脚本都必须能在 CI 里被跑到**，除非在下面的豁免表里并写明理由。
+// 豁免表双向断言——新出现的未接线脚本会失败，已经接线的旧豁免也会失败，防止表腐烂成"什么都豁免"。
+test('每个 smoke/test 脚本必须在 CI 里跑得到（未接线须显式豁免并写明理由）', () => {
+  const EXEMPTIONS = {
+    'smoke:legacy-receivable-repair': '需已迁移的专用 flowcube_repair20260908_test 库，且必须与采购修复串行执行',
+    'test:legacy-receivable-repair': '同上：专用修复库单测，随 smoke 手工串行执行',
+    'smoke:purchase-repair': '同上：专用修复库且与应收专项串行，生产只执行已授权的定向修复脚本',
+    'smoke:pages': 'CUA 页面验收，需要在线前端与测试账号凭据，不属于离线门禁',
+    'smoke:reconciliation': '需要在线 baseUrl、SMOKE_USERNAME/PASSWORD 与 playwright，属实机验收',
+  }
+
+  const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
+  const yaml = require(path.resolve(root, 'frontend/node_modules/js-yaml'))
+  const workflowDir = path.join(root, '.github/workflows')
+
+  let workflowText = ''
+  const matrixSuites = new Set()
+  for (const name of fs.readdirSync(workflowDir)) {
+    const text = fs.readFileSync(path.join(workflowDir, name), 'utf8')
+    workflowText += `\n${text}`
+    const parsed = yaml.load(text)
+    for (const job of Object.values(parsed.jobs || {})) {
+      const suites = job.strategy && job.strategy.matrix && job.strategy.matrix.suite
+      if (Array.isArray(suites)) suites.forEach(s => matrixSuites.add(`smoke:${s}`))
+    }
+  }
+
+  const isReached = (name) => {
+    if (workflowText.includes(`npm run ${name}`)) return true
+    if (matrixSuites.has(name)) return true
+    // 有些脚本在 CI 里按文件调用（如 node --test tests/xxx.test.js）
+    const files = (pkg.scripts[name].match(/[\w./-]+\.(js|sh|cjs)/g) || [])
+    return files.some(f => workflowText.includes(path.basename(f)))
+  }
+
+  const testScripts = Object.keys(pkg.scripts).filter(k => /^(smoke|test):/.test(k))
+  assert.ok(testScripts.length > 50, `smoke/test 脚本数量异常（${testScripts.length}），检查 package.json 是否被改动`)
+
+  const uncovered = testScripts.filter(name => !isReached(name))
+  const unexpected = uncovered.filter(name => !EXEMPTIONS[name])
+  const staleExemptions = Object.keys(EXEMPTIONS).filter(name => isReached(name))
+
+  for (const [name, reason] of Object.entries(EXEMPTIONS)) {
+    assert.ok(pkg.scripts[name], `豁免表里的 ${name} 已不存在，请删除该条豁免`)
+    assert.ok(String(reason).length >= 10, `豁免 ${name} 必须写明可核对的理由`)
+  }
+  assert.deepEqual(unexpected, [],
+    `这些测试脚本没有任何 workflow 会执行，等于只在手工跑时才有意义：${unexpected.join(', ')}。`
+    + '请接进 CI，或在豁免表里写明理由')
+  assert.deepEqual(staleExemptions, [],
+    `这些脚本已经接进 CI，豁免条目必须删除（否则豁免表会腐烂成"什么都豁免"）：${staleExemptions.join(', ')}`)
+})

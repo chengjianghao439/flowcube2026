@@ -320,6 +320,9 @@ jobs:
       - name: 冒烟测试 — 销售单执行期改单（增减量 / PDA物理确认）
         run: npm run smoke:sale-adjustment
 
+      - name: 冒烟测试 — 销售预计库存 ATP（采购预计量占库 / 取消与短装先解绑）
+        run: npm run smoke:atp
+
       - name: 冒烟测试 — P0 回归（预占泄漏 / 短装结案 / 改单丢仓库 / 出库放大）
         run: npm run smoke:p0-regression
 

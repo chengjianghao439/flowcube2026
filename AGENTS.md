@@ -33,6 +33,7 @@
 - **`print-jobs` 三张条码子查询分别用 `c.`/`wt.`/`j.warehouse_id`**；SQL 文本替换必须带足上下文并真跑三种范围
 - **`complete-local` 同 `complete-client`/`fail-client` 做工作站校验**；写路由必须 `requirePermission`（`fulfillment.routes.js`）
 - **新增不变量必须落 CI 契约测试并接进 `package.json` 与 `.github/workflows/test.yml`**（`docs/audit-2026-09-18.md`）
+- **新增 `smoke:*`/`test:*` 脚本必须能被 CI 跑到**：写了套件、`package.json` 也声明了，却没有 workflow 执行，等于只在有人手工跑时才有意义（`smoke:atp` 的 8 条 ATP 断言就这样漏了整轮 CI）。`tests/deployment-resources.test.js` 机械守住「每个 smoke/test 脚本要么 CI 可达，要么在豁免表里写明理由」，且豁免表双向校验——已接线的旧豁免必须删掉，防止表腐烂成"什么都豁免"
 - **批量写入用 `VALUES ?` 且先判空**：空数组会 `ER_PARSE_ERROR`；禁止循环内逐行 INSERT（`procurement.service.js`、`hr.service.js`）
 - **有意 fail-loud 的错误不得被调用处吞成静默跳过**：`toDateStr` 对缺业务日期抛 `ACCT_VOUCHER_NO_DATE`，而 `generateVouchers` 曾用 `catch { continue }` 把它整个吞掉——该错误码因此全仓没有消费方、也没有测试，凭证静默消失且 `stats` 连 `total` 都不加，对账时看不出来（2026-09-18 审计）。现改为计入 `stats.skippedNoDate` + 逐条 `logger.warn`（保留「跳过单条、不整批失败」的既有行为）；`tests/accounting-voucher-mapping.test.js` 机械守住「不得退回静默 continue」。新增 fail-loud 分支后要确认调用处真的会暴露它（`voucher-engine.js`）
 - **`logger.info/warn` 的参数顺序是 `(msg, meta, module_)`，meta 必须是对象**：会计模块曾有 15 处按旧签名写成 `logger.info('accounting', \`消息\`, { userId })`，于是 msg 位置成了字面量、真正的业务消息被塞进 meta、模块名位置收到对象——不报错，但结账/反结账、手工凭证、发票增删改这些**最需要追溯的日志全部读不出来**（2026-09-18 审计，全仓只有会计模块这样写）。`logger.error` 是 `(msg, err, meta, module_)`，第二个参数本就是 Error，不在检查范围；`tests/logger-args-order-contract.test.js` 机械守住（只传 msg 合法，meta 默认 `{}`）
@@ -421,6 +422,7 @@ npm run test:permissions
 | 迁移前历史（编号未变） | `docs/claude-md-archive-2026-09-04.md` |
 | 抽出的日记全文（原 §11–§18） | `docs/agents-md-archive-2026-09-18.md` |
 | 2026-09-18 深审计 | `docs/audit-2026-09-18.md`、`output/audit-2026-09-18/findings/*.json` |
+| 2026-09-19 CI 接线缺口排查 | `docs/ci-wiring-gaps-2026-09-19.md` |
 | 2026-09-04 系统审计 | `docs/system-audit-2026-09-04.md`、`docs/system-audit-fixes-2026-09-04.md`、`docs/audit-fix-inventory-2026-09-04.md`、`docs/audit-fix-finance-2026-09-04.md`、`docs/audit-fix-client-2026-09-04.md` |
 | 2026-09-05 上线前两轮审计 | `docs/prelaunch-deep-audit-2026-09-05.md`、`docs/prelaunch-fixes-2026-09-05.md`、`docs/prelaunch-second-audit-2026-09-05.md`、`docs/audit-round2-2026-09-05/` |
 | 发布说明与结果 | `docs/release-notes/*.md`、`docs/release-v0.9.*-result.md` |
