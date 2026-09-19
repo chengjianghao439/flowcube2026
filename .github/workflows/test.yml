@@ -95,6 +95,11 @@ jobs:
       - name: 运维回归 — 备份恢复判定与数据库指标
         run: node --test tests/ops-monitor-restore.test.js tests/deployment-resources.test.js tests/restore-trigger-normalize.test.js tests/migration-trigger-bodies.test.js
 
+      # 出库前置扫码闭环是纯离线断言（stub conn，不连数据库）：明细存在但一条扫码记录都没有时
+      # 必须拒绝——批量 GROUP BY 后这类明细在结果里不出现，改写成"缺失就跳过"会让闸门 fail-open。
+      - name: 出库前置扫码闭环 — 无扫码行必须拒绝（防批量改写 fail-open）
+        run: npm run test:warehouse-scan-closure
+
       - name: 跨域回归 — 桌面端与 PDA 精确来源
         run: node --test tests/cors-policy.test.js
 
