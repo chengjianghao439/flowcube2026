@@ -208,7 +208,7 @@ npm run test:permissions
 - 用户要求“开发者模式/给我网址”时，先检查当前可用的服务启动工具与已有服务。若有预览工具可使用；没有则通过终端运行第 3 节的 npm dev 命令，保留进程并读取实际监听地址。不能照搬不可用的 `preview_start`、`tabs_create` 等 Claude 工具名。
 - 现有 `.claude/launch.json` 可作为启动命令参考；它不意味着存在 `.Codex/launch.json` 或 Codex 已自动加载它。不要凭空创建替代路径。
 - 启动前检查端口与已有服务，并核对监听进程的工作目录确实属于目标 checkout；端口可访问不代表正在提供本任务代码。并行任务可能从另一工作树占用 5173，不能只凭端口认定主项目已更新；冲突时另选空闲端口，不杀其他任务进程。交付实际可访问且已核实源码归属的地址。
-- 2026-09-09 按用户授权新建本地界面验收账号 `codex_ui_test`，使用既有只读角色；仅在回环 3307 的 `flowcube_dev8` 创建，随机凭据保存为本机 agent-browser 加密凭据档 `flowcube-local-ui`。后续使用前核实账号仍启用，不依赖旧测试账号，也不在仓库保存密码。
+- 2026-09-09 按用户授权新建本地界面验收账号 `codex_ui_test`，使用既有只读角色；仅在回环 3307 的 `flowcube_dev8` 创建，随机凭据保存为本机 agent-browser 加密凭据档 `flowcube-local-ui`。后续使用前核实账号仍启用，不依赖旧测试账号，也不在仓库保存密码。**2026-09-19 实测其能力边界**：账号仍启用、可登录，但**只是受限只读角色**——打开 `/settings` 会正确落到 `#/403`（这是权限守卫生效，不是缺陷），因此**配置页（`/settings`、`/permissions`、`/carrier-accounts`、`/stockcheck/abc`）必须换管理员档案验收**（本机可用 `flowcube-gui-0917`）；同一次实测发现 `flowcube-local`（admin）档案的密码已失效（登录页返回「账号或密码错误」），需要时用 `agent-browser auth save` 重新保存。验收流程、逐条结论与未覆盖项见 `docs/local-ui-acceptance-2026-09-19.md`。
 - 登录按第 1 节“项目凭据代为输入”授权执行：优先复用已有会话，需要登录时可代为输入项目账号和密码并继续验证；仅在缺少凭据或认证步骤要求本人操作时请用户协助。不得为了预览临时关闭鉴权或越过权限，不在文档记录密码。
 - 本地 dev 连接本机后端时，`authStore.ts` 的 `USE_PERSISTENT_DEV_SESSION` 使用 localStorage；生产和本地前端连接生产 API 时仍使用 sessionStorage。边界由 Vite 的 `__DEV_LOCAL_BACKEND__` 控制，不能放宽。
 - 更换端口会更换 origin，不共享 localStorage。会话有效期与续期读 auth/env 代码，不照搬旧文档的“固定 7 天”。
