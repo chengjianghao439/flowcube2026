@@ -39,6 +39,8 @@ export function CreateStatementDialog({ open, onClose, type, onCreated }: Props)
   const [picked, setPicked] = useState<Set<number>>(new Set())
   const [remark, setRemark] = useState('')
 
+  // 依赖刻意只认 open：recent30d 是 getRelativeDateRange(30) 每次渲染新建的对象，
+  // 整体入依赖会在用户选好往来单位/日期后于填写途中被反复重置。
   useEffect(() => {
     if (!open) return
     setPartyName(''); setStartDate(recent30d.startDate); setEndDate(recent30d.endDate)

@@ -141,6 +141,7 @@ npm run test:permissions
 
 审计回归入口：`npm run smoke:audit-inventory`、`npm run smoke:audit-finance-security`、`npm run test:audit-client`、`npm run test:audit-tooling`。2026-09-17 验收修复守卫 `npm run test:acceptance-fixes`（请求体解析错误码、废弃设置键、取消单明细投影、审计脚本覆盖、迁移存在性）为纯离线断言，已接入 Tests CI static job。标签镜像检查使用前端已安装的 TypeScript 在 Node 22 编译并运行，`test:label` 需要前端依赖，不再按 Node 版本跳过；CI 在安装两端依赖后的 static job 执行。`npm run test:agents-md-guard`（AGENTS.md 注入守卫：禁 `CLAUDE.md` 候选、体积不超 128 KiB、关键章节与红线仍在、`docs/*.md` 与 `npm run` 脚本引用都有效）为纯离线断言，与其它机械契约测试同组执行（Tests CI 的 regression job「契约测试」段）。
 `npm run test:sql-identifier`（SQL 标识符插值守卫：每个表名/列名/列清单/别名插值都要有白名单校验）同为纯离线断言，与上一条同批执行。
+`npm run test:eslint-disable-rationale`（lint 禁用理由守卫：逐行 `eslint-disable-next-line`/`-line` 上方 15 行内必须有一条说明性注释；整文件 `/* eslint-disable */` 只允许出现在机器产物白名单里，生成器输出该字符串不算指令）同为纯离线断言，与上两条同批执行。
 运维/迁移回归（static job 「运维回归」步骤）：`node --test tests/ops-monitor-restore.test.js tests/deployment-resources.test.js tests/restore-trigger-normalize.test.js tests/migration-trigger-bodies.test.js`。前两项验备份恢复判定与资源边界，后两项验触发器分号规范化与迁移逐条切分，均不连数据库。
 
 导出格式回归：`npm run test:export`（static job 与 `test:upload` 同一步执行）——校验 xlsx 导出的日期列写成日期单元格并带 `yyyy-mm-dd` / `yyyy-mm-dd hh:mm` 数字格式（2026-09-16 起），不连数据库。
@@ -382,6 +383,7 @@ npm run test:permissions
 - **批量写入用 `VALUES ?` 且先判空**：空数组会 `ER_PARSE_ERROR`；禁止循环内逐行 INSERT（`procurement.service.js`、`hr.service.js`）
 - **前端业务日期一律走 `lib/dateTime.ts`／`lib/dateRange.ts`**，禁止自拼 `getFullYear`/`getMonth`/`getDate`；`test:frontend-date-source` 拦截，非 +08 时区下自实现会偏一天（含会计期间）（`lib/dateTime.ts`）
 - **SQL 标识符插值必须显式校验**：表名/列名/列清单/别名一律走 `assertSqlIdentifier`/`assertSqlColumnList`（`utils/sqlIdentifier.js`）；`test:sql-identifier` 抓「同类守卫漏一个参数」
+- **每处 `eslint-disable` 必须带可读理由，整文件禁用仅限机器产物**：逐行指令上方要有说明性注释，业务文件不得 `/* eslint-disable */`（生成物走 `FILE_DISABLE_ALLOWED` 白名单）；`test:eslint-disable-rationale` 机械守住（反向验证：删掉理由注释、往业务文件加整文件禁用、清空白名单，都必须失败）（`tests/eslint-disable-rationale.test.js`）
 - **`updateInvoice` 的 `assertInvoiceQuota` 必须传同一事务 `conn`**
 - **销售退货可退量按 `wt.warehouse_id = COALESCE(soi.warehouse_id, 销售单头仓)` 关联**（`returns-sale.service.js`）
 - **先 `lockStockDimension` 再锁容器**：`splitContainer` 与 `confirmContainerReturn` 都按此序（`warehouse-tasks.adjust.js`）

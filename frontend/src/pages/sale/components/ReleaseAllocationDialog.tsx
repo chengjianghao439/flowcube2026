@@ -27,6 +27,8 @@ export default function ReleaseAllocationDialog({ open, orderId, items, onClose 
 
   const reservedItems = items.filter(i => (i.reservedQty ?? 0) > 0)
 
+  // 依赖刻意只认 open：reservedItems 是 items.filter(...) 每次渲染新建的数组，
+  // 入依赖会在用户每改一次数量（父组件重渲染）时重建 rows，冲掉已勾选与已填数量。
   useEffect(() => {
     if (!open) return
     setRows(Object.fromEntries(

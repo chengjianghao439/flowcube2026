@@ -42,6 +42,8 @@ function InvoiceDialog({ open, invoiceType, edit, onClose }: { open: boolean; in
     invoiceCode: '', invoiceNo: '', partyName: '', partyTaxNo: '',
     withTax: '', taxRate: '0.13', invoiceDate: todayYmd(), sourceNo: '', remark: '',
   })
+  // 依赖刻意只认 open 与 edit?.id：edit 是 React Query 每次 refetch 都重建的对象引用，
+  // 整体入依赖会让后台刷新在用户填写途中重置表单；只有换了一条发票（id 变）才该重填。
   useEffect(() => {
     if (!open) return
     if (edit) setF({

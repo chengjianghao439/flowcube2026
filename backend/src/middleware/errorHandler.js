@@ -10,6 +10,7 @@ initializeErrorTracking({ dsn: env.SENTRY_DSN, environment: env.NODE_ENV })
  * 全局错误处理中间件（4 个参数，必须最后注册）
  * 处理顺序：AppError（业务错误）→ MySQL 错误 → Zod 校验 → 未知错误
  */
+// Express 按「形参个数是否为 4」识别错误中间件：next 必须留在签名里，删掉它就静默变成普通中间件、错误再也进不来
 // eslint-disable-next-line no-unused-vars
 function errorHandler(err, req, res, next) {
   const path   = req.originalUrl || req.path

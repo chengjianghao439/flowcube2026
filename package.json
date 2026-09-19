@@ -46,6 +46,7 @@
     "test:sql-identifier": "node tests/sql-identifier-contract.test.js",
     "test:landing-updates": "node tests/landing-updates-guard.test.js",
     "test:frontend-date-source": "node tests/frontend-date-source-contract.test.js",
+    "test:eslint-disable-rationale": "node tests/eslint-disable-rationale.test.js",
     "test:agents-md-guard": "node tests/agents-md-injection-guard.test.js",
     "test:frontend-session-contract": "node tests/frontend-session-contract.test.js",
     "test:frontend-polling-contract": "node tests/frontend-polling-contract.test.js",

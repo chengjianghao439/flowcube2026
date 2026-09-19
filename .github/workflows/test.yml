@@ -185,6 +185,9 @@ jobs:
       - name: 契约测试 — 前端业务日期必须走 lib/dateTime（防自拼日期偏一天）
         run: npm run test:frontend-date-source
 
+      - name: 契约测试 — 每处 eslint-disable 必须写明理由（防为过门禁屏蔽问题）
+        run: npm run test:eslint-disable-rationale
+
       - name: 契约测试 — 前端登出必须走统一封装（防漏清缓存/漏作废 refresh）
         run: npm run test:frontend-session-contract
 
