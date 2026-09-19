@@ -45,6 +45,14 @@ const DEFAULT_BUDGET_BYTES = 65536
 const HARD_BUDGET_BYTES = 131072
 
 /**
+ * 2026-09-19 文档体系重构后的**仓库级硬指标**：AGENTS.md 必须整体落在默认预算的一半以内。
+ * 重构前文件 130,634 字节，默认 64 KiB 下 §8 之后（财务/前端/打印/部署/运维）全部被截断——
+ * 规则照写、CI 照绿，但模型根本读不到。32 KiB 给「全文件可注入 + 一倍余量」留出空间。
+ * 超限即失败：新增约束前先问「能不能写成 tests/ 守卫」，而不是继续往里加文字。
+ */
+const AGENTS_MAX_BYTES = 32768
+
+/**
  * 被禁的候选文件名。注入候选是 `AGENTS.md` → `CLAUDE.md`（精确匹配、区分大小写），
  * `AGENTS.md` 是我们要的那份，`CLAUDE.md` 一旦重现就会与它竞争注入预算。
  */
@@ -52,10 +60,14 @@ const BANNED_CANDIDATE = 'CLAUDE.md'
 
 /** `AGENTS.md` 必须保留的关键章节（丢了就是现行约束被误删）。 */
 const REQUIRED_SECTIONS = [
-  '## 0. 第一时间同步文档',
-  '## 0.1 防呆清单',
-  '## 6. 库存、事务与幂等',
-  '## 7. 核心业务语义',
+  '## 0. 元规则',
+  '## 0.1 红线',
+  '## 0.2 有守卫的规则',
+  '## 1. 协作与操作边界',
+  '## 2. 项目、目录与本地环境',
+  '## 3. 验证速查',
+  '## 4. 主题文档索引',
+  '## 5. 历史、审计与发布结果索引',
 ]
 
 /** 必须在正文出现的红线关键词：章节标题可能被改写，红线本身不能被搬走。 */
@@ -65,6 +77,12 @@ const REQUIRED_RED_LINES = [
   'lockStockDimension',
   'X-Request-Key',
   '北京时间',
+  // 重构时按「有守卫 → 一行指针，无守卫 → 常驻」重新分类；这几个是**无守卫且后果重**的核心约束，
+  // 必须留在正文（重写时曾漏掉前两个，靠本条断言抓回）。
+  'RESERVE_WAREHOUSE_CHANGE_NOT_ALLOWED',
+  'EXPORT_MAX_ROWS',
+  'active_unique_guard',
+  'ControlMaster',
 ]
 
 /**
@@ -76,7 +94,7 @@ const REQUIRED_RED_LINES = [
  * 逐条对照」的操作清单。同日已前移到 §0 之后（`## 0.1`，起点约 4.2 KB），
  * 由本组断言钉住位置。反向验证：把它挪回文件末尾即失败。
  */
-const MUST_BE_WITHIN_DEFAULT_BUDGET = ['## 0.1 防呆清单', ...REQUIRED_RED_LINES]
+const MUST_BE_WITHIN_DEFAULT_BUDGET = ['## 0.1 红线', '## 0.2 有守卫的规则', ...REQUIRED_RED_LINES]
 
 /** 允许缺失的引用（需要理由；当前为空，登记必须是真例外）。 */
 const ALLOWED_MISSING_DOC_REFS = new Set([])
@@ -134,7 +152,7 @@ function main() {
   assert.ok(fs.existsSync(AGENTS_MD), 'AGENTS.md 不存在')
   const text = fs.readFileSync(AGENTS_MD, 'utf8')
   const bytes = Buffer.byteLength(text, 'utf8')
-  assert.ok(bytes > 20000, `AGENTS.md 体积异常（${bytes} 字节），可能被误清空`)
+  assert.ok(bytes > 15000, `AGENTS.md 体积异常（${bytes} 字节），可能被误清空`)
 
   for (const section of REQUIRED_SECTIONS) {
     if (!text.includes(section)) problems.push(`AGENTS.md 缺少关键章节：${section}`)
@@ -143,7 +161,14 @@ function main() {
     if (!text.includes(red)) problems.push(`AGENTS.md 缺少红线关键词：${red}`)
   }
 
-  // ── 3. 体积门禁 ──────────────────────────────────────────────────────────
+  // ── 3. 体积门禁（重构后是硬指标，不再只告警） ──────────────────────────────
+  if (bytes > AGENTS_MAX_BYTES) {
+    problems.push(
+      `AGENTS.md 已达 ${bytes} 字节，超过重构后硬指标 ${AGENTS_MAX_BYTES}（32 KiB）：` +
+        '默认注入预算 64 KiB 下会截断尾部，排在后面的约束将静默失效。' +
+        '新增规则前先判断能否写成 tests/ 守卫；项目知识放 docs/ 主题文档，不要往本文件里加文字',
+    )
+  }
   if (bytes > HARD_BUDGET_BYTES) {
     problems.push(
       `AGENTS.md 已达 ${bytes} 字节，超过注入硬预算 ${HARD_BUDGET_BYTES}（128 KiB）：` +
@@ -161,7 +186,7 @@ function main() {
   for (const m of text.matchAll(/(?:^|[\s`(])(docs\/[A-Za-z0-9._/-]+\.md)/g)) {
     refs.add(m[1])
   }
-  assert.ok(refs.size > 40, `只解析到 ${refs.size} 个 docs 引用，扫描逻辑可能失效`)
+  assert.ok(refs.size > 12, `只解析到 ${refs.size} 个 docs 引用，扫描逻辑可能失效`)
   const missing = [...refs].filter(
     (r) => !ALLOWED_MISSING_DOC_REFS.has(r) && !fs.existsSync(path.join(ROOT, r)),
   )
@@ -174,7 +199,7 @@ function main() {
   const scripts = new Set(Object.keys(pkg.scripts || {}))
   const runRefs = new Set()
   for (const m of text.matchAll(/npm run ([A-Za-z0-9:_-]+)/g)) runRefs.add(m[1])
-  assert.ok(runRefs.size > 30, `只解析到 ${runRefs.size} 个 npm 脚本引用，扫描逻辑可能失效`)
+  assert.ok(runRefs.size > 10, `只解析到 ${runRefs.size} 个 npm 脚本引用，扫描逻辑可能失效`)
   for (const r of runRefs) {
     if (!scripts.has(r)) problems.push(`AGENTS.md 引用了不存在的 npm 脚本：npm run ${r}`)
   }
@@ -208,7 +233,7 @@ function main() {
   for (const p of problems) console.log(`  [FAIL] ${p}`)
   console.log(
     `agents-md-injection-guard: 目录链 ${chain.length} 层、docs 引用 ${refs.size} 个、` +
-      `npm 脚本引用 ${runRefs.size} 个、AGENTS.md ${bytes} 字节（硬限 ${HARD_BUDGET_BYTES}）、失败 ${problems.length}`,
+      `npm 脚本引用 ${runRefs.size} 个、AGENTS.md ${bytes} 字节（硬限 ${AGENTS_MAX_BYTES}）、失败 ${problems.length}`,
   )
   if (problems.length) process.exit(1)
   console.log('  [OK] AGENTS.md 注入守卫通过')
