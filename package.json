@@ -54,6 +54,7 @@
     "test:pda-scan-focus": "node tests/pda-scan-focus-contract.test.js",
     "test:pda-list-refresh": "node tests/pda-list-refresh-contract.test.js",
     "test:api-route-contract": "node tests/api-route-contract.test.js",
+    "test:copy-conventions": "node tests/copy-conventions.test.js",
     "test:query-loop": "node tests/query-loop-contract.test.js",
     "test:warehouse-scan-closure": "node --test tests/warehouse-scan-closure.test.js",
     "test:chart-series-limit": "node --test tests/chart-series-limit-contract.test.js",

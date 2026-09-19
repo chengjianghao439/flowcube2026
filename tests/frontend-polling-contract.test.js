@@ -89,6 +89,16 @@ function main() {
     while ((m = intervalRe.exec(source)) !== null) {
       const expr = m[1]
       const nums = (expr.match(/\d[\d_]*/g) || []).map(s => Number(s.replace(/_/g, '')))
+      // 表达式用具名常量时（如 `isActiveTab ? AUTO_REFRESH_MS : false`），字面量扫描看不到数字，
+      // `!nums.length` 就 continue，于是**这个轮询点静默脱离守卫**——2026-09-19 把「条码打印查询」
+      // 的 15000 提成常量时踩到：polled 从 28 掉回 27，而输出仍是 PASS。这里回溯同文件的常量定义
+      // 把值捞回来，保证覆盖不因「提取常量」这种无害重构而消失（反向验证：把该常量改成 3000 必须失败）。
+      if (!nums.length) {
+        for (const ident of expr.match(/[A-Za-z_][A-Za-z0-9_]*/g) || []) {
+          const dm = source.match(new RegExp(`(?:const|let|var)\\s+${ident}\\s*=\\s*(\\d[\\d_]*)`))
+          if (dm) nums.push(Number(dm[1].replace(/_/g, '')))
+        }
+      }
       if (!nums.length) continue
       polled++
       const min = Math.min(...nums.filter(n => n > 0))

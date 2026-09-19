@@ -191,6 +191,9 @@ jobs:
       - name: 契约测试 — 补打唯一入口且销售侧无条码打印（防订单页长出补打按钮）
         run: npm run test:print-entry
 
+      - name: 契约测试 — 界面文案口径（禁用实现词/半角标点/官网双份一致）
+        run: npm run test:copy-conventions
+
       - name: 契约测试 — 引擎不得自行管理事务（防写操作脱离调用方事务）
         run: npm run test:engine-transaction
 
