@@ -71,12 +71,48 @@ printf '%s\n' "$DISK_USAGE" | awk '
   `NF<2` 必须 `bad = 1; next`、不得退回 `test "$(df …)" -ge 6144`。
   **反向验证三例全部成立**：退回静默 `test`、把 `NF<2` 改回 `exit 1`、删掉 SSH 失败分支，均使测试失败。
 
-## 现状与待办（未解决）
+## 当前影响
 
-- **生产仍是 `ea13046`（10:56 成功版本）**，之后的 `8a2a748`、`d7cb1cc`、`a654aac`、`0bce8f3` 均未上线；
-  这不是坏版本上线，而是部署被预检挡下。
-- **服务器磁盘低于 6 GiB 需要人工清理**：本机没有生产 SSH 私钥（只配在 GitHub Secrets），无法登录确认
-  `/tmp` 与 `/opt/flowcube` 各自的余量，也无法清理。按既有规则，低磁盘时门禁**不自动 prune、不清回退镜像**，
-  必须人工判断后清理再重跑。
-- 改善可诊断性后，下一轮部署日志会直接给出各挂载点的实际余量，可用于判断该清 `docker image`、
-  旧归档还是其它占用。
+- **生产仍停在 `ea13046`（10:56 那次成功部署）**。之后的 `8a2a748`、`d7cb1cc`、`a654aac`、`0bce8f3`、
+  `1c5ca52` 均未上线——不是坏版本上线，而是部署被预检挡在上传之前，线上服务未受影响。
+- 两个前端改动（财务看板饼图 Top 8、本次预检可诊断性）已通过 Tests 与 Security Scan，
+  等待磁盘恢复后随下一次成功部署上线。
+
+## 实测数值（2026-09-19 11:50，`1c5ca52` 那一轮部署）
+
+改造后的预检当场给出了确切原因，不再需要推断：
+
+```
+服务器可用空间（挂载点 可用）：
+/ 6120MB
+/ 6120MB
+##[error]/ 可用 6120MB，低于部署预检下限 6144MB：请先清理服务器磁盘再重跑（不得清除回退镜像）
+```
+
+- `/tmp` 与 `/opt/flowcube` **同处根分区 `/`**，可用 **6120MB**——距上传门限只差 24MB。
+- 服务器共有三道磁盘门禁、阈值不同：上传前预检 **6144MB**（`deploy-browser.yml`）、`docker load` 前
+  **4096MB**（`scripts/server-update.sh`）、发布门禁 **4096MB**（`scripts/release-gate.sh`）。
+  当前值高于 4096 那道、卡在 6144 这道，因此部署在**上传任何字节之前**就被拒绝。
+- 容量增长来源：每轮成功部署都会 `docker load` 新镜像，并保留正在运行与回退用的镜像，旧镜像不自动清理；
+  DB 备份由 `scripts/backup-db.sh` 按 `KEEP_DAYS`（默认 14 天）自动删旧，目录 `/opt/flowcube/backups`。
+
+## 需要人工处理
+
+本机**没有生产 SSH 私钥**（只配在 GitHub Secrets；`ssh root@jixuflow.com` 返回 `Permission denied`），
+既无法只读确认占用构成，也无法清理。按既有规则，低磁盘时门禁**不自动 prune、不清回退镜像**，
+必须人工判断后清理再重跑。建议的只读排查（不动任何数据）：
+
+```bash
+df -h /                                                       # 根分区余量
+du -sh /opt/flowcube/backups                                  # 备份占用（超 14 天的会被自动删）
+du -sh /var/www/flowcube-downloads /versions 2>/dev/null       # 历史安装包 / PDA 包
+ls -lh /tmp/flowcube-images-*.tar.gz /tmp/flowcube-pda-bootstrap-*.sh 2>/dev/null  # 被取消 run 的残留
+docker system df                                              # 镜像/缓存/卷占用
+docker image ls --format '{{.Repository}}:{{.Tag}} {{.Size}} {{.CreatedSince}}'
+```
+
+可安全清理的是：`/tmp` 上历史 run 的归档残留、确认不再使用的历史版本安装包、**明确不再回退**的旧
+`flowcube-*` 镜像。**正在运行与保留用于回退的镜像不得删除**（删之前先用 `docker inspect -f '{{.Image}}'`
+对照当前 backend/frontend 容器与实际运行镜像 ID）；不要整体执行 `docker system prune`。
+
+清理后重跑：`gh workflow run deploy-browser.yml --ref main`，或等下一次 push。
