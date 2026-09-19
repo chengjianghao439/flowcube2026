@@ -1,3 +1,4 @@
+import { money } from '@/lib/format'
 import type { SaleOrder } from '@/types/sale'
 import type { PurchaseOrder } from '@/types/purchase'
 import type { WarehouseTask } from '@/api/warehouse-tasks'
@@ -29,7 +30,7 @@ export function adaptTemplatePreview(source: PrintTemplatePreview): { data: Reco
       : mapReturnOrderToPrint({ ...source.record, orderNo: source.record.returnNo ?? source.record.orderNo })
   return {
     data: mapped.data,
-    items: mapped.items.map(it => ({ articleNo: it.articleNumber ?? '', code: it.productCode, name: it.productName, spec: it.spec ?? '', color: it.color ?? '', unit: it.unit, qty: String(it.quantity), price: Number(it.unitPrice).toFixed(2), amount: Number(it.amount).toFixed(2), remark: it.remark ?? '' })),
+    items: mapped.items.map(it => ({ articleNo: it.articleNumber ?? '', code: it.productCode, name: it.productName, spec: it.spec ?? '', color: it.color ?? '', unit: it.unit, qty: String(it.quantity), price: money(it.unitPrice), amount: money(it.amount), remark: it.remark ?? '' })),
   }
 }
 

@@ -9,6 +9,7 @@
 import type { TemplateLayout, TemplateElement } from '@/types/print-template'
 import { isZplTemplateLayout } from '@/types/print-template'
 import BarcodePreview from '@/components/print/BarcodePreview'
+import { money } from '@/lib/format'
 
 // ─── 常量 ────────────────────────────────────────────────────────────────────
 
@@ -75,8 +76,8 @@ function colValue(col: string, item: PrintItem): string {
     case 'color':     return item.color ?? ''
     case 'unit':      return item.unit
     case 'qty':       return String(item.quantity)
-    case 'price':     return `¥${(Number(item.unitPrice) || 0).toFixed(2)}`
-    case 'amount':    return `¥${(Number(item.amount) || 0).toFixed(2)}`
+    case 'price':     return money(item.unitPrice)
+    case 'amount':    return money(item.amount)
     case 'remark':    return item.remark ?? ''
     default:          return ''
   }
@@ -384,7 +385,7 @@ function FlowTable({ el, items, scale }: { el: TemplateElement; items: PrintItem
           </td>
           {cols.indexOf('amount') >= 0 && (
             <td style={tdStyle('right', wrap, minRowPx)}>
-              ¥{items.reduce((s, it) => s + Number(it.amount ?? 0), 0).toFixed(2)}
+              {money(items.reduce((s, it) => s + Number(it.amount ?? 0), 0))}
             </td>
           )}
         </tr>

@@ -4,6 +4,7 @@
  */
 
 import { formatDisplayDateTime, formatDisplayDate } from '@/lib/dateTime'
+import { money } from '@/lib/format'
 import type { PrintItem } from '@/components/print/TemplateRenderer'
 import type { SaleOrder } from '@/types/sale'
 import type { PurchaseOrder } from '@/types/purchase'
@@ -24,7 +25,7 @@ export function mapSaleOrderToPrint(order: SaleOrder): { data: Record<string, st
       receiverName:    order.receiverName ?? '',
       receiverPhone:   order.receiverPhone ?? '',
       receiverAddress: order.receiverAddress ?? '',
-      totalAmount:     `¥ ${Number(order.totalAmount ?? 0).toFixed(2)}`,
+      totalAmount:     money(order.totalAmount),
       remark:          order.remark ?? '',
       operator:        order.operatorName ?? '',
       printDate:       formatDisplayDateTime(new Date()),
@@ -59,7 +60,7 @@ export function mapPurchaseOrderToPrint(order: PurchaseOrder): { data: Record<st
       receiverName:    '',
       receiverPhone:   '',
       receiverAddress: '',
-      totalAmount:     `¥ ${Number(order.totalAmount ?? 0).toFixed(2)}`,
+      totalAmount:     money(order.totalAmount),
       remark:          order.remark ?? '',
       operator:        order.operatorName ?? '',
       printDate:       formatDisplayDateTime(new Date()),
@@ -155,7 +156,7 @@ export function mapReturnOrderToPrint(order: ReturnOrderLike): { data: Record<st
       receiverName:    '',
       receiverPhone:   '',
       receiverAddress: '',
-      totalAmount:     order.totalAmount != null ? `¥ ${Number(order.totalAmount).toFixed(2)}` : '',
+      totalAmount:     order.totalAmount != null ? money(order.totalAmount) : '',
       remark:          order.remark ?? '',
       operator:        order.operatorName ?? '',
       printDate:       formatDisplayDateTime(new Date()),
