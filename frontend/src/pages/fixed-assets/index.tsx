@@ -1,4 +1,5 @@
 import { useCompanyQueryKey } from '@/hooks/useCompanyQueryKey'
+import { money } from '@/lib/format'
 import { RecordIdentity } from '@/components/shared/RecordIdentity'
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -22,7 +23,6 @@ import type { StatusTone } from '@/lib/statusTone'
 import { downloadExport } from '@/lib/exportDownload'
 import { todayYmd } from '@/lib/dateTime'
 
-const money = (n: number | null | undefined) => `¥${Number(n ?? 0).toFixed(2)}`
 const ASSET_STATUS: Record<number, { label: string; tone: StatusTone }> = {
   1: { label: '使用中', tone: 'active' },
   2: { label: '已提足', tone: 'success' },

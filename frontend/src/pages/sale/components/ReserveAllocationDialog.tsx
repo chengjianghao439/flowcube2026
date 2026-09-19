@@ -1,4 +1,5 @@
 import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
+import { money } from '@/lib/format'
 import { useEffect, useMemo, useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -22,7 +23,6 @@ interface Props {
 
 type RowState = { checked: boolean; warehouseId: number; warehouseName: string; qty: number }
 
-const money = (n: number) => `¥${Number(n).toFixed(2)}`
 
 /**
  * 产品占库弹窗：按产品勾选 + 按数量指定本次占多少。

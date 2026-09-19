@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { money } from '@/lib/format'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -24,7 +25,6 @@ import { downloadExport } from '@/lib/exportDownload'
 import { toast } from '@/lib/toast'
 import { limitTopSeries } from '@/lib/topSeries'
 
-const money = (n: number) => `¥${Number(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const wan = (n: number) => Math.abs(n) >= 10000 ? `${(n / 10000).toFixed(n >= 1e6 ? 0 : 1)}万` : String(Math.round(n))
 const pct = (n: number) => `${(n * 100).toFixed(1)}%`
 

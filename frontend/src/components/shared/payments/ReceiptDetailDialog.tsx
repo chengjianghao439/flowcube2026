@@ -1,11 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
+import { money } from '@/lib/format'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { AppDialog } from '@/components/shared/AppDialog'
 import { Button } from '@/components/ui/button'
 import { ReportTable } from '@/components/shared/ReportTable'
 import { getReceiptDetailApi } from '@/api/payments'
 
-const money = (n: number) => `¥${Number(n).toFixed(2)}`
 
 interface Props {
   open: boolean

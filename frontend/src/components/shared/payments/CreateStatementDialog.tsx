@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { money } from '@/lib/format'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { AppDialog } from '@/components/shared/AppDialog'
@@ -11,7 +12,6 @@ import { getRelativeDateRange } from '@/lib/dateRange'
 import { toast } from '@/lib/toast'
 import { formatDisplayDate } from '@/lib/dateTime'
 
-const money = (n: number) => `¥${Number(n).toFixed(2)}`
 
 interface Props {
   open: boolean

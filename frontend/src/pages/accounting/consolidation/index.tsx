@@ -1,4 +1,5 @@
 import { useDirtyGuardStore } from '@/store/dirtyGuardStore'
+import { money } from '@/lib/format'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { ReportTable } from '@/components/shared/ReportTable'
@@ -19,7 +20,6 @@ import { downloadExport } from '@/lib/exportDownload'
 import type { TableColumn } from '@/types'
 import { beijingPeriod } from '@/lib/dateTime'
 
-const money = (n: number) => `¥${Number(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
 function LedgerTable({ title, rows, total, accent }: { title: string; rows: Array<{ code: string; name: string; amount: number }>; total: number; accent?: boolean }) {
   return (

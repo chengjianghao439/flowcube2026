@@ -1,4 +1,5 @@
 import { ReportTable } from '@/components/shared/ReportTable'
+import { money } from '@/lib/format'
 import { RecordIdentity } from '@/components/shared/RecordIdentity'
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -26,7 +27,6 @@ import {
 } from '@/api/finance'
 import type { TableColumn } from '@/types'
 
-const money = (n: number) => `¥${Number(n).toFixed(2)}`
 const TYPE_OPTIONS = [
   ['1', '银行账户'], ['2', '现金'], ['3', '支付宝'], ['4', '微信'], ['5', '其他'],
 ] as const

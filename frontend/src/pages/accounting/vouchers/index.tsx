@@ -1,4 +1,5 @@
 import ListSummary from '@/components/shared/ListSummary'
+import { amount } from '@/lib/format'
 import { ReportTable } from '@/components/shared/ReportTable'
 /**
  * 记账凭证（文档 10 · Phase 1）
@@ -40,8 +41,6 @@ import {
 import VoucherQueryDialog, { type VoucherQueryValues } from './VoucherQueryDialog'
 
 const PAGE_SIZE = 20
-const fmtMoney = (n: number | null | undefined) =>
-  (Number(n) || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const fmtDate = (v: string) => (v ? String(v).slice(0, 10) : '')
 const statusTone = (s: number) => (s === 3 ? 'danger' : s === 2 ? 'active' : 'success')
 
@@ -64,9 +63,9 @@ function ReconciliationCard() {
             {it.matched
               ? <CheckCircle2 className="h-4 w-4 text-success" />
               : <AlertTriangle className="h-4 w-4 text-warning" />}
-            <span className="tabular-nums">凭证 {fmtMoney(it.voucher)}</span>
-            <span className="text-muted-foreground">/ 业务 {fmtMoney(it.business)}</span>
-            {!it.matched && <span className="text-warning tabular-nums">差 {fmtMoney(it.diff)}</span>}
+            <span className="tabular-nums">凭证 {amount(it.voucher)}</span>
+            <span className="text-muted-foreground">/ 业务 {amount(it.business)}</span>
+            {!it.matched && <span className="text-warning tabular-nums">差 {amount(it.diff)}</span>}
           </div>
         </div>
       ))}
@@ -156,14 +155,14 @@ function DetailDialog({ id, onClose }: { id: number | null; onClose: () => void 
                       <td className="px-3 py-2">{e.summary || '—'}</td>
                       <td className="px-3 py-2"><span className="font-mono text-doc-code-muted">{e.accountCode}</span> {e.accountName}</td>
                       <td className="px-3 py-2 text-muted-foreground">{e.auxName || '—'}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">{e.direction === 1 ? fmtMoney(e.amount) : ''}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">{e.direction === 2 ? fmtMoney(e.amount) : ''}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{e.direction === 1 ? amount(e.amount) : ''}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{e.direction === 2 ? amount(e.amount) : ''}</td>
                     </tr>
                   ))}
                   <tr className="border-t-2 border-border bg-muted/20 font-medium">
                     <td className="px-3 py-2" colSpan={3}>合计</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{fmtMoney(v.totalDebit)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{fmtMoney(v.totalCredit)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{amount(v.totalDebit)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{amount(v.totalCredit)}</td>
                   </tr>
                 </tbody>
               </ReportTable>
@@ -250,8 +249,8 @@ function ManualDialog({ open, onClose }: { open: boolean; onClose: () => void })
           </div>
 
           <div className="flex items-center justify-end gap-4 rounded-md bg-muted/30 px-3 py-2 text-sm">
-            <span>借方合计 <span className="tabular-nums font-medium">{fmtMoney(debit)}</span></span>
-            <span>贷方合计 <span className="tabular-nums font-medium">{fmtMoney(credit)}</span></span>
+            <span>借方合计 <span className="tabular-nums font-medium">{amount(debit)}</span></span>
+            <span>贷方合计 <span className="tabular-nums font-medium">{amount(credit)}</span></span>
             {balanced
               ? <SoftStatusLabel label="借贷平衡" tone="success" />
               : <SoftStatusLabel label="借贷不平" tone="danger" />}
@@ -323,8 +322,8 @@ export default function VouchersPage() {
     { key: 'voucherDate', title: '日期', width: 110, render: (_v, r) => fmtDate(r.voucherDate) },
     { key: 'sourceTypeName', title: '来源', width: 100, render: (_v, r) => <SoftStatusLabel label={r.sourceTypeName} tone={r.sourceType === 'manual' ? 'draft' : 'info'} /> },
     { key: 'summary', title: '摘要', render: (_v, r) => <span className="truncate">{r.summary || '—'}</span> },
-    { key: 'totalDebit', title: '借方', width: 120, align: 'right', render: (_v, r) => <span className="tabular-nums">{fmtMoney(r.totalDebit)}</span> },
-    { key: 'totalCredit', title: '贷方', width: 120, align: 'right', render: (_v, r) => <span className="tabular-nums">{fmtMoney(r.totalCredit)}</span> },
+    { key: 'totalDebit', title: '借方', width: 120, align: 'right', render: (_v, r) => <span className="tabular-nums">{amount(r.totalDebit)}</span> },
+    { key: 'totalCredit', title: '贷方', width: 120, align: 'right', render: (_v, r) => <span className="tabular-nums">{amount(r.totalCredit)}</span> },
     { key: 'status', title: '状态', width: 100, render: (_v, r) => (
       <span className="flex items-center gap-1">
         <SoftStatusLabel label={VOUCHER_STATUS_LABELS[r.status]} tone={statusTone(r.status)} />

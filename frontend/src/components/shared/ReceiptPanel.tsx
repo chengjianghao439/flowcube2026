@@ -1,4 +1,5 @@
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
+import { money } from '@/lib/format'
 import { useState, forwardRef, useImperativeHandle } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import DataTable from '@/components/shared/DataTable'
@@ -17,7 +18,6 @@ import type { TableColumn } from '@/types'
 
 /** 1待核销 = 钱到了还没冲账 · 2部分核销 = 还有余额 · 3已核销完 */
 const RECEIPT_TONE: Record<number, StatusTone> = { 1: 'warning', 2: 'active', 3: 'success' }
-const money = (n: number) => `¥${Number(n).toFixed(2)}`
 
 interface Props {
   /** 1=付款（应付）2=收款（应收） */

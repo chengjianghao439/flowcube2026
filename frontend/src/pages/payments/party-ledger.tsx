@@ -1,4 +1,5 @@
 import { useState, useContext, useId } from 'react'
+import { money } from '@/lib/format'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { TabPathContext } from '@/components/layout/TabPathContext'
@@ -19,7 +20,6 @@ import { PERMISSIONS } from '@/lib/permission-codes'
 import type { TableColumn } from '@/types'
 
 // 四位小数与账款存储精度一致，常规金额仅显示两位。
-const money = (v: number) => v.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 4 })
 function exportLedger(data: PartyLedgerResult) {
   const rows: (string | number)[][] = [
     ['往来单位', data.party.name, '编码', data.party.code],

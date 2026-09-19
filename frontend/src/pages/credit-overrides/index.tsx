@@ -1,4 +1,5 @@
 import { OrderActivityDialog } from '@/components/shared/OrderActivityDialog'
+import { money } from '@/lib/format'
 import { RecordIdentity } from '@/components/shared/RecordIdentity'
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
@@ -29,7 +30,6 @@ import { CREDIT_OVERRIDE_STATUS_LABEL } from './constants'
 import type { CreditOverride } from '@/types/credit-override'
 import type { TableColumn } from '@/types'
 
-const money = (n: number | null | undefined) => `¥${Number(n ?? 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
 /** 发起申请弹窗：按销售单号/客户搜索草稿销售单，选中后发起 */
 function CreateDialog({ open, onClose }: { open: boolean; onClose: () => void }) {

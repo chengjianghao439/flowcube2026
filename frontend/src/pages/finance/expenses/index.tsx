@@ -1,4 +1,5 @@
 import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
+import { money } from '@/lib/format'
 import { ReportTable } from '@/components/shared/ReportTable'
 import { RecordIdentity } from '@/components/shared/RecordIdentity'
 import { SummaryStrip } from '@/components/shared/SummaryStrip'
@@ -34,7 +35,6 @@ import {
 } from '@/api/finance'
 import type { TableColumn } from '@/types'
 
-const money = (n: number) => `¥${Number(n).toFixed(2)}`
 const STATUS_OPTIONS = [
   ['1', '草稿'], ['2', '待审批'], ['3', '已批准'], ['4', '已付款'], ['5', '已驳回'], ['6', '已取消'],
 ] as const

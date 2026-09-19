@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { money } from '@/lib/format'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { AppDialog } from '@/components/shared/AppDialog'
 import { Button } from '@/components/ui/button'
@@ -12,7 +13,6 @@ import { formatDisplayDate } from '@/lib/dateTime'
 
 /** 1草稿 = 还能改 · 2已确认 = 锁定可发对方 · 3已核销 = 收完款 */
 const ST_TONE: Record<number, StatusTone> = { 1: 'draft', 2: 'active', 3: 'success' }
-const money = (n: number) => `¥${Number(n).toFixed(2)}`
 
 interface Props {
   open: boolean

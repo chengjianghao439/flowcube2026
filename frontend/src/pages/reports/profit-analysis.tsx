@@ -1,4 +1,5 @@
 import KeepAliveSection from '@/components/shared/KeepAliveSection'
+import { money } from '@/lib/format'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
 import { useMemo, useState } from 'react'
@@ -56,7 +57,6 @@ export default function ProfitAnalysisPage() {
   const { data, isLoading, isFetching, isError, error, refetch } = profitQ
   const summary = data?.summary
   const stockRows = useMemo(() => (data?.stockValue ?? []).map(row => ({ ...row, rowId: `${row.id}-${row.warehouseId}` })), [data?.stockValue])
-  const money = (value: number | undefined) => value == null ? '—' : `¥${value.toFixed(2)}`
 
   function openPath(path: string, title: string) {
     addTab({ key: path, title, path })

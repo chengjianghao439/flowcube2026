@@ -1,4 +1,5 @@
 import KeepAliveSection from '@/components/shared/KeepAliveSection'
+import { money } from '@/lib/format'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { useRef, useState } from 'react'
@@ -20,7 +21,6 @@ import {
 import type { TableColumn } from '@/types'
 import { beijingPeriod } from '@/lib/dateTime'
 
-const money = (n: number) => `¥${Number(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
 export default function TaxFilingPage() {
   const { companyId } = useCompanyStore()

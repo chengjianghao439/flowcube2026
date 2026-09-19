@@ -1,4 +1,5 @@
 import { ReportQueryFeedback } from './ReportQueryFeedback'
+import { money } from '@/lib/format'
 import KeepAliveSection from '@/components/shared/KeepAliveSection'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
@@ -19,7 +20,6 @@ function fmtQty(v: unknown): string {
   if (!Number.isFinite(n)) return '—'
   return Number.isInteger(n) ? n.toLocaleString() : n.toFixed(2)
 }
-const fmtMoney = (v: unknown) => `¥${Number(v).toFixed(2)}`
 
 export default function InventoryAgingPage() {
   const active = useActiveWorkspaceTab()
@@ -73,7 +73,7 @@ export default function InventoryAgingPage() {
     { key: 'qty90p', title: '90+天', width: 82, align: 'right', render: v => Number(v) > 0 ? <span className="tabular-nums font-medium text-amber-600">{fmtQty(v)}</span> : <span className="tabular-nums text-muted-foreground">—</span> },
     { key: 'totalQty', title: '合计', width: 80, align: 'right', render: v => <span className="tabular-nums font-medium">{fmtQty(v)}</span> },
     { key: 'avgAgeDays', title: '平均存放时长', width: 90, align: 'right', render: v => <span className="tabular-nums">{Number(v)} 天</span> },
-    { key: 'totalValue', title: '金额', width: 110, align: 'right', render: v => <span className="tabular-nums">{fmtMoney(v)}</span> },
+    { key: 'totalValue', title: '金额', width: 110, align: 'right', render: v => <span className="tabular-nums">{money(Number(v))}</span> },
     { key: 'lastOutboundAt', title: '最后出库', width: 150, render: v => v ? formatDisplayDateTime(String(v)) : <span className="text-muted-foreground">从未出库</span> },
     { key: 'isStale', title: '滞销', width: 96, render: (_, r) => r.isStale ? <SoftStatusLabel label={`滞销${r.daysSinceOutbound != null ? ` ${r.daysSinceOutbound}天` : ''}`} tone="danger" /> : <span className="text-xs text-muted-foreground">正常</span> },
   ]
@@ -120,7 +120,7 @@ export default function InventoryAgingPage() {
         {buckets.map(b => (
           <div key={b.bucket} className="card-base p-4">
             <p className="text-xs text-muted-foreground">{b.bucket} 天{b.bucket === '90+' ? '（积压）' : ''}</p>
-            <p className={`mt-1 text-2xl font-bold ${b.bucket === '90+' ? 'text-amber-600' : 'text-foreground'}`}>{fmtMoney(b.totalValue)}</p>
+            <p className={`mt-1 text-2xl font-bold ${b.bucket === '90+' ? 'text-amber-600' : 'text-foreground'}`}>{money(b.totalValue)}</p>
             <p className="mt-0.5 text-xs text-muted-foreground">{b.skuCount} SKU · {fmtQty(b.totalQty)} 件</p>
           </div>
         ))}

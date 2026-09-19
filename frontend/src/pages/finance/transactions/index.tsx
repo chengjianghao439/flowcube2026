@@ -1,4 +1,5 @@
 import { SummaryStrip } from '@/components/shared/SummaryStrip'
+import { money } from '@/lib/format'
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
@@ -18,7 +19,6 @@ import { formatDisplayDate, todayYmd } from '@/lib/dateTime'
 import { getAccountTransactionsApi, getActiveAccountsApi, type AccountTransaction } from '@/api/finance'
 import type { TableColumn } from '@/types'
 
-const money = (n: number) => `¥${Number(n).toFixed(2)}`
 
 /** 与后端 finance-accounts.service 的 BIZ_TYPE 对齐 */
 const BIZ_TYPE_OPTIONS = [

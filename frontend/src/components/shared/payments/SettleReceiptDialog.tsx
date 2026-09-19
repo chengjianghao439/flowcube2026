@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { money } from '@/lib/format'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { AppDialog } from '@/components/shared/AppDialog'
 import { CustomerFinder } from '@/components/finder/CustomerFinder'
@@ -37,7 +38,6 @@ interface Props {
 }
 
 const isPayableType = (t: 1 | 2) => t === 1
-const money = (n: number) => `¥${Number(n).toFixed(2)}`
 
 /**
  * 收款核销：录入一笔汇款，勾选若干待核销账款并分配金额。
