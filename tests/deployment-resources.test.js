@@ -13,6 +13,22 @@ const root = path.resolve(__dirname, '..')
 // 单一来源 IP 上，因此新增 `workflow_dispatch` 的只读诊断 workflow（`.github/workflows/server-diagnostics.yml`）。
 // **只读是它存在的前提**：一旦有人往里加删除/重启/清理命令，它就变成一个没有回滚预案的生产写入口。
 // 反向验证：往远程脚本里加任一写操作命令、或删掉任一必需采集项，本断言都必须失败。
+// 2026-09-19 实测：服务器 SSH 层**间歇性**不可用——12:06 部署失败、12:2x rerun 成功、12:49 诊断又失败，
+// 全部卡在同一步骤。四个 workflow 原先都是单次 `ssh-keyscan`（默认 5 秒超时、不重试），一次抖动就让
+// 部署/诊断整链终止，报「Add SSH known_hosts: failure」，与「网络不通」在日志上无法区分也无法自愈。
+// 反向验证：把任一处退回单次无重试的 ssh-keyscan，本断言必须失败。
+test('SSH known_hosts 的建立必须带重试（服务器 SSH 间歇不可用时不让整链路终止）', () => {
+  for (const f of ['deploy-browser.yml', 'server-diagnostics.yml', 'build-desktop.yml', 'build-pda-apk.yml']) {
+    const src = fs.readFileSync(path.join(root, '.github/workflows', f), 'utf8')
+    assert.match(src, /for attempt in 1 2 3 4 5; do/, `${f} 的 ssh-keyscan 必须带重试`)
+    assert.match(src, /ssh-keyscan -T 10/, `${f} 的 ssh-keyscan 必须显式设置 -T 超时`)
+    assert.ok(
+      !/^\s*ssh-keyscan\s+-H\s+-p\s+.*>>\s*~\/\.ssh\/known_hosts\s*$/m.test(src),
+      `${f} 不得退回单次无重试的 ssh-keyscan（一次抖动即整链失败）`,
+    )
+  }
+})
+
 test('服务器只读诊断 workflow 必须保持只读，且真的在采集现场信息', () => {
   const yaml = require(path.resolve(root, 'frontend/node_modules/js-yaml'))
   const file = path.join(root, '.github/workflows/server-diagnostics.yml')

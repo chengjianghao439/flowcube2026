@@ -253,6 +253,25 @@ IO 阻塞；不能排除同期 MySQL 写入叠加。**不是误删**——三条
 **只读**由 `tests/deployment-resources.test.js` 机械断言（出现删除/重启/清理类命令即失败；
 反向验证 3 例：加 `rm`、加 `docker system prune`、删掉必需采集项，都必须失败）。
 
+## SSH 前置步骤的间歇性失败与重试修复（2026-09-19）
+
+**现象**：`Add SSH known_hosts` 在 12:06（`deploy-browser`）与 12:49（`server-diagnostics`）两次以
+`ssh-keyscan` 超时（约 6.5 秒）exit 1 失败，而 12:2x 的 rerun 又成功——**服务器 SSH 层间歇性不可用**，
+不是「永久故障」也不是「网络不通」。
+
+**影响**：四个 workflow（`deploy-browser`、`server-diagnostics`、`build-desktop`、`build-pda-apk`）都用
+**单次** `ssh-keyscan`（默认 5 秒超时、不重试），一次抖动就让整条部署/诊断链终止，报错信息与「网络不通」
+完全无法区分，也无法自愈。
+
+**修复**：统一改为最多 5 次尝试（每次 `-T 10` + `timeout 20`，**只有拿到非空输出才算成功**），全失败才
+终止并打印 `/tmp/keyscan.err` 以便区分「服务器 SSH 忙」与「网络不通」。守卫见
+`tests/deployment-resources.test.js`（断言四处都必须带重试、且不得退回单次写法；反向验证 2 例成立）。
+
+**待核实（未解决）**：间歇不可用的来源——`sshd` 的 `MaxStartups` 丢弃、云侧连接数限流、还是主机负载。
+可能与我在本机做的 30+ 次短连接有关（被本地 `timeout` 强杀的连接在服务器侧未及时回收），但 12:06 那次
+早于我集中重试的时段，也可能与 CI 出口 IP 被限流有关。等 SSH 稳定后用只读诊断 workflow 观察
+`sshd` 连接数与 `ss -tn state established '( sport = :22 )'` 的堆积情况。
+
 **内存为什么值得查**：`docker-compose.yml` 里 mysql/backend/frontend **三个容器都没有内存限制**
 （无 `mem_limit`、无 `deploy.resources`），backend 也没有 `--max-old-space-size`；
 `docker/mysql/my.cnf` 只设了时区、慢查询与 `max_connections=151`，**未设 `innodb_buffer_pool_size`**
