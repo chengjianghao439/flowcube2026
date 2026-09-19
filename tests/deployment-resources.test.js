@@ -211,3 +211,44 @@ test('测试服务端口必须交给 OS 分配并绑定回环 IPv4（禁止自�
   assert.ok(code.includes('server.address().port'),
     'baseUrl 的端口必须取自 server.address().port，而不是自己记的常量')
 })
+
+// 2026-09-18 结构性修复的守卫：`Build PDA APK` 曾在 workflow 级持有 `flowcube-server-deploy`
+// 部署组，而它的 build job 里含「等本提交浏览器部署成功」——浏览器部署要同一个组，
+// 于是 **PDA 等浏览器部署、浏览器部署等 PDA 释放组**，形成环状自锁。GitHub 不会报错，
+// 只表现为 `Deploy Browser App` 长期 pending（v0.9.23 实操踩到，只能人工 cancel 让路）。
+//
+// 不变量：**「等待」与「持有部署锁」不得出现在同一个 job 里**，且部署组只能由真正
+// 需要 SSH 发布的那一步持有。这条关系适合机械守住——它太容易被下一次"顺手挪个步骤"破坏。
+test('PDA 工作流不得让「等浏览器部署」与「持有部署组」落在同一个 job（防自锁）', () => {
+  const DEPLOY_GROUP = 'flowcube-server-deploy'
+  const yaml = require(path.resolve(root, 'frontend/node_modules/js-yaml'))
+  const workflow = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/build-pda-apk.yml'), 'utf8'))
+
+  // workflow 级 concurrency 会把整条流水线都关进部署组，等待步骤自然也被关进去。
+  const topGroup = workflow.concurrency && workflow.concurrency.group
+  assert.notEqual(topGroup, DEPLOY_GROUP,
+    `build-pda-apk.yml 不得在 workflow 级持有 ${DEPLOY_GROUP}：那会把「等浏览器部署」也关进部署组，重新形成自锁`)
+
+  let holderCount = 0
+  const selfLocked = []
+  for (const [name, job] of Object.entries(workflow.jobs || {})) {
+    const group = job.concurrency && job.concurrency.group
+    const holdsDeployLock = group === DEPLOY_GROUP
+    if (holdsDeployLock) holderCount += 1
+    const waitsForBrowser = (job.steps || []).some(step => /wait-release-checks/.test(String(step.run || '')))
+    if (waitsForBrowser && holdsDeployLock) selfLocked.push(name)
+  }
+
+  assert.deepEqual(selfLocked, [],
+    `这些 job 既等待浏览器部署又持有 ${DEPLOY_GROUP}，会与 Deploy Browser App 互相等待：${selfLocked.join(', ')}`)
+  // 部署组必须有且只有一个持有者（真正的发布步骤），否则'等待'可能悄悄挪回持有者身边。
+  assert.equal(holderCount, 1,
+    `应当恰好有一个 job 持有 ${DEPLOY_GROUP}（发布临界区），实际 ${holderCount} 个`)
+
+  // 反向确认：等待步骤确实存在且不持有部署组，避免上面因为"把等待删了"而恒真。
+  const waiter = Object.entries(workflow.jobs || {})
+    .find(([, job]) => (job.steps || []).some(step => /wait-release-checks/.test(String(step.run || ''))))
+  assert.ok(waiter, '找不到执行 wait-release-checks 的 job：等待门禁不允许被删除，只允许搬家')
+  assert.notEqual(waiter[1].concurrency && waiter[1].concurrency.group, DEPLOY_GROUP,
+    `等待浏览器部署的 job（${waiter[0]}）不得持有 ${DEPLOY_GROUP}`)
+})

@@ -21,16 +21,16 @@ permissions:
   contents: read
   actions: read
 
-# 并发保护（2026-08-11 生产事故修复）：多次 push 触发的 PDA 构建会在服务器互相覆盖 /tmp 产物
-# 与 deploy-browser / build-desktop 共用同一个 group：三者都要 SSH 到同一台服务器操作，
-# 必须串行（服务器端那把 flock 只等 5 分钟，等不到就被外层 timeout 强杀——
-# 2026-09-16 发 v0.9.17 时就这样失败过）。
-# 这里由 true 改为 false：取消一个正在部署的 run 会留下半成品；排队虽然可能多跑一次，
-# 但每次部署都是"reset 到指定 commit"的幂等操作，最终状态由最后完成的那次决定，
-# 不会出现旧 commit 覆盖新 commit。
-concurrency:
-  group: flowcube-server-deploy
-  cancel-in-progress: false
+# 并发划分（2026-09-18 结构性重构）：
+# **workflow 级不再持有部署组。** 旧结构把 build job 整体挂在 `flowcube-server-deploy` 组下，
+# 而该 job 内含「等本提交浏览器部署成功」——浏览器部署同样要这个组，于是构成自锁：
+# PDA 等浏览器部署、浏览器部署等 PDA 释放组，表现是 `Deploy Browser App` 长期 pending
+# （v0.9.23 实操，见 docs/release-v0.9.23-result.md）。互等时 GitHub 不报错，只是干等。
+# 现在按「临界区」拆成三段，等待与持锁不再同处一个 job：
+#   - build-pda   只构建，走独立的 `build-pda-ci` 组（新提交可取消旧构建，不碰服务器锁）
+#   - wait-browser 只等待浏览器部署，**不占任何部署组**
+#   - publish-pda  只有这一步占用 `flowcube-server-deploy`（与 deploy-browser / build-desktop 串行）
+# 服务器端 flock 仍保留为兜底。publish 阶段用 artifact 承接构建产物。
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -95,10 +95,21 @@ jobs:
             echo "should_build=true" >> "$GITHUB_OUTPUT"
           fi
 
+  # 只负责构建并把 APK 交给 artifact；不等待任何部署、不持有服务器锁。
   build-pda:
     needs: preflight
     if: needs.preflight.outputs.should_build == 'true'
     runs-on: ubuntu-latest
+    # 独立的构建组：只影响构建本身。新提交取消旧构建是安全的——产物尚未发布，
+    # 且每次构建都从指定提交重新出包。绝不与部署组共用，避免又引入互等。
+    concurrency:
+      group: build-pda-ci
+      cancel-in-progress: true
+    outputs:
+      # 后续 job 的「等浏览器部署」「服务器 HEAD 校验」都以实际检出的提交为准。
+      sha: ${{ steps.target.outputs.sha }}
+      version: ${{ steps.target.outputs.version }}
+      version_code: ${{ steps.target.outputs.version_code }}
 
     steps:
       - name: Checkout code
@@ -108,16 +119,19 @@ jobs:
           ref: ${{ github.event.inputs.checkout_ref || github.sha }}
           fetch-depth: 0
 
-      # 后续「等本提交浏览器部署成功」「服务器 HEAD == 本提交」「版本端点校验」都必须以
-      # **实际检出的提交**为准，不能用 github.sha——补跑时两者可能不同（2026-09-18 v0.9.20）。
       - name: Resolve target commit
         id: target
         shell: bash
         run: |
           set -euo pipefail
           sha="$(git rev-parse HEAD)"
+          version="$(node -p "require('./backend/apk/version.json').version")"
+          version_code="$(node -p "require('./backend/apk/version.json').versionCode")"
           echo "sha=${sha}" >> "$GITHUB_OUTPUT"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "version_code=${version_code}" >> "$GITHUB_OUTPUT"
           echo "目标提交：${sha}（触发事件 ${{ github.event_name }}，触发 SHA ${{ github.sha }}）"
+          echo "目标版本：${version} / ${version_code}"
 
       - name: Resolve deploy config
         id: deploy_config
@@ -150,15 +164,12 @@ jobs:
           echo "server_ssh_port=$SERVER_SSH_PORT" >> "$GITHUB_OUTPUT"
           echo "server_app_path=$SERVER_APP_PATH" >> "$GITHUB_OUTPUT"
 
-      - name: Validate deploy inputs
+      # 构建只需要 erp_origin（Capacitor 同步要把它烧进包）；服务器凭据只在 publish 校验。
+      - name: Validate build inputs
         shell: bash
         run: |
           set -euo pipefail
-          [ -n "${{ steps.deploy_config.outputs.erp_origin }}" ] || { echo "::error::缺少 erp_origin"; exit 1; }
-          [ -n "${{ steps.deploy_config.outputs.server_host }}" ] || { echo "::error::缺少 server_host"; exit 1; }
-          [ -n "${{ steps.deploy_config.outputs.server_user }}" ] || { echo "::error::缺少 server_user"; exit 1; }
-          [ -n "${{ steps.deploy_config.outputs.server_app_path }}" ] || { echo "::error::缺少 server_app_path"; exit 1; }
-          [ -n "${{ secrets.SSH_PRIVATE_KEY }}" ] || { echo "::error::缺少 Actions Secret: SSH_PRIVATE_KEY"; exit 1; }
+          [ -n "${{ steps.deploy_config.outputs.erp_origin }}" ] || { echo "::error::缺少 erp_origin，PDA 包无法指向生产 API"; exit 1; }
 
       - name: Setup Node.js
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
@@ -247,20 +258,110 @@ jobs:
           VERSION="$(node -p "require('./backend/apk/version.json').version")"
           cp frontend/android/app/build/outputs/apk/release/app-release.apk "out/FlowCubePDA-${VERSION}.apk"
 
-      # 与桌面 build 同理：这个 Actions 构件只是「从 run 页面下载 APK」的冗余备份，
-      # PDA 实际更新走后面的「发布到服务器」步骤。若不设 continue-on-error，
-      # 存储配额满会让本步骤失败并连带跳过发布+校验，导致 APK 构建成功却没上线。
+      # 注意：这个 artifact 从「冗余备份」变成了**发布链路的唯一载体**——
+      # publish-pda 在独立 job 里下载它并上传到服务器。因此必须成功，
+      # 不能再 continue-on-error（那会让发布阶段拿不到包，或更糟：拿到旧包）。
       - name: Upload APK artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        continue-on-error: true
         with:
           name: flowcube-pda-apk
           path: out/*.apk
           if-no-files-found: error
           retention-days: 7
 
+  # 只「等」不「锁」：这一步存在的意义就是替 publish 把关，同时不占用部署组。
+  # 旧结构把它放在持有 deploy 组的 build job 里，正是自锁的来源。
+  wait-browser:
+    needs: build-pda
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.event.inputs.checkout_ref || github.sha }}
+
+      - name: Wait for verified browser deployment on this commit
+        timeout-minutes: 30
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REQUIRE_BROWSER_DEPLOY: '1'
+          # 以实际检出的提交为准（补跑时与 github.sha 可能不同）
+          GITHUB_SHA: ${{ needs.build-pda.outputs.sha }}
+        run: node scripts/wait-release-checks.js
+
+  # 临界区：只在这里持有 `flowcube-server-deploy`，与浏览器部署 / 桌面发布串行。
+  # 因为进入本 job 时浏览器部署已确认成功，等待不再是本 job 的一部分，自锁消除。
+  publish-pda:
+    needs: [build-pda, wait-browser]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: flowcube-server-deploy
+      cancel-in-progress: false
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.event.inputs.checkout_ref || github.sha }}
+          fetch-depth: 0
+
+      - name: Resolve target commit
+        id: target
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha="$(git rev-parse HEAD)"
+          echo "sha=${sha}" >> "$GITHUB_OUTPUT"
+          echo "目标提交：${sha}"
+          # 构建与发布必须是同一个提交，否则发布的包与校验的 HEAD 对不上。
+          if [ "$sha" != "${{ needs.build-pda.outputs.sha }}" ]; then
+            echo "::error::发布提交（${sha}）与构建提交（${{ needs.build-pda.outputs.sha }}）不一致，拒绝发布。"
+            exit 1
+          fi
+
+      - name: Resolve deploy config
+        id: deploy_config
+        shell: bash
+        env:
+          ERP_ORIGIN_VAR: ${{ vars.VITE_ERP_PRODUCTION_ORIGIN }}
+          SERVER_HOST_VAR: ${{ vars.FLOWCUBE_SERVER_HOST }}
+          SERVER_USER_VAR: ${{ vars.FLOWCUBE_SERVER_USER }}
+          SERVER_SSH_PORT_VAR: ${{ vars.FLOWCUBE_SERVER_SSH_PORT }}
+          SERVER_APP_PATH_VAR: ${{ vars.FLOWCUBE_SERVER_APP_PATH }}
+        run: |
+          set -euo pipefail
+          if node scripts/read-deploy-config.js >/tmp/flowcube-deploy-config.json 2>/tmp/flowcube-deploy-config.err; then
+            echo "erp_origin=$(node scripts/read-deploy-config.js erpOrigin)" >> "$GITHUB_OUTPUT"
+            echo "server_host=$(node scripts/read-deploy-config.js server.host)" >> "$GITHUB_OUTPUT"
+            echo "server_user=$(node scripts/read-deploy-config.js server.user)" >> "$GITHUB_OUTPUT"
+            echo "server_ssh_port=$(node scripts/read-deploy-config.js server.sshPort)" >> "$GITHUB_OUTPUT"
+            echo "server_app_path=$(node scripts/read-deploy-config.js server.appPath)" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          ERP_ORIGIN="${ERP_ORIGIN_VAR:-}"
+          [ -n "$ERP_ORIGIN" ] || { echo "::error::缺少部署配置：设置 deploy/production.local.json 或 GitHub Variable VITE_ERP_PRODUCTION_ORIGIN"; cat /tmp/flowcube-deploy-config.err || true; exit 1; }
+          SERVER_HOST="${SERVER_HOST_VAR:-$(node -e "const u=new URL(process.argv[1]); console.log(u.hostname)" "$ERP_ORIGIN")}"
+          SERVER_USER="${SERVER_USER_VAR:-root}"
+          SERVER_SSH_PORT="${SERVER_SSH_PORT_VAR:-22}"
+          SERVER_APP_PATH="${SERVER_APP_PATH_VAR:-/opt/flowcube}"
+          echo "erp_origin=$ERP_ORIGIN" >> "$GITHUB_OUTPUT"
+          echo "server_host=$SERVER_HOST" >> "$GITHUB_OUTPUT"
+          echo "server_user=$SERVER_USER" >> "$GITHUB_OUTPUT"
+          echo "server_ssh_port=$SERVER_SSH_PORT" >> "$GITHUB_OUTPUT"
+          echo "server_app_path=$SERVER_APP_PATH" >> "$GITHUB_OUTPUT"
+
+      - name: Validate deploy inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ -n "${{ steps.deploy_config.outputs.erp_origin }}" ] || { echo "::error::缺少 erp_origin"; exit 1; }
+          [ -n "${{ steps.deploy_config.outputs.server_host }}" ] || { echo "::error::缺少 server_host"; exit 1; }
+          [ -n "${{ steps.deploy_config.outputs.server_user }}" ] || { echo "::error::缺少 server_user"; exit 1; }
+          [ -n "${{ steps.deploy_config.outputs.server_app_path }}" ] || { echo "::error::缺少 server_app_path"; exit 1; }
+          [ -n "${{ secrets.SSH_PRIVATE_KEY }}" ] || { echo "::error::缺少 Actions Secret: SSH_PRIVATE_KEY"; exit 1; }
+
       - name: Setup SSH agent
-        if: github.ref == 'refs/heads/main'
         shell: bash
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
@@ -276,34 +377,45 @@ jobs:
           echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
           ssh-add "$KEY_FILE"
 
-      - name: Wait for verified browser deployment on this commit
-        if: github.ref == 'refs/heads/main'
-        timeout-minutes: 30
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          REQUIRE_BROWSER_DEPLOY: '1'
-          # 以实际检出的提交为准（补跑时与 github.sha 可能不同）
-          GITHUB_SHA: ${{ steps.target.outputs.sha }}
-        run: node scripts/wait-release-checks.js
-
       - name: Add SSH known_hosts
-        if: github.ref == 'refs/heads/main'
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
           ssh-keyscan -H -p "${{ steps.deploy_config.outputs.server_ssh_port }}" "${{ steps.deploy_config.outputs.server_host }}" >> ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
 
+      # 承接构建产物。必须在发布前校验存在性与版本，不能把「没拿到包」或「拿到旧包」静默带过去。
+      - name: Download APK artifact
+        # 与仓库在用的 upload-artifact 保持同一大版本线（那里 pin 的是 7.0.1）。
+        # 跨大版本配对虽在 v4+ 协议下通常可用，但没必要冒这个险。
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: flowcube-pda-apk
+          path: out
+
+      - name: Validate downloaded APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXPECTED_VERSION="${{ needs.build-pda.outputs.version }}"
+          APK_PATH="$(ls -1 out/*.apk 2>/dev/null | head -n 1 || true)"
+          [ -n "$APK_PATH" ] || { echo "::error::未取到构建产物（artifact flowcube-pda-apk）；构建阶段可能失败或被取消。"; ls -la out || true; exit 1; }
+          echo "APK_PATH=${APK_PATH}"
+          case "$(basename "$APK_PATH")" in
+            *"${EXPECTED_VERSION}"*) ;;
+            *) echo "::error::产物文件名与目标版本 ${EXPECTED_VERSION} 不匹配：$(basename "$APK_PATH")"; exit 1 ;;
+          esac
+          test -s "$APK_PATH"
+          echo "APK_BASENAME=$(basename "$APK_PATH")" >> "$GITHUB_ENV"
+          echo "APK_PATH=${APK_PATH}" >> "$GITHUB_ENV"
+
       - name: Publish PDA APK to server
-        if: github.ref == 'refs/heads/main'
         shell: bash
         env:
           TARGET_SHA: ${{ steps.target.outputs.sha }}
         run: |
           set -euo pipefail
-          APK_PATH="frontend/android/app/build/outputs/apk/release/app-release.apk"
+          APK_PATH="${APK_PATH}"
           VERSION_JSON="backend/apk/version.json"
           REMOTE="${{ steps.deploy_config.outputs.server_user }}@${{ steps.deploy_config.outputs.server_host }}"
           PORT="${{ steps.deploy_config.outputs.server_ssh_port }}"
@@ -324,7 +436,6 @@ jobs:
           EOF
 
       - name: Verify live PDA update endpoint
-        if: github.ref == 'refs/heads/main'
         shell: bash
         run: |
           set -euo pipefail

@@ -134,23 +134,27 @@ npm run release:tag-desktop
   唯独 PDA 一直停在上一版而无人发现。
 - 桌面端：在比新版本旧的客户端上启动，应弹「发现新版本 <version>」并显示更新内容。
 
-#### push main 后 `Deploy Browser App` 长时间 pending（2026-09-18 v0.9.23 实操）
+#### push main 后 `Deploy Browser App` 长时间 pending（2026-09-18 已结构性修复）
 
-`Deploy Browser App` 与 `Build PDA APK` 共用 `flowcube-server-deploy` 并发组，而 PDA 的
-build job 里含有「等本提交浏览器部署成功」这一步——**如果 PDA 先拿到组，两者会互等**：
-PDA 等浏览器部署，浏览器部署在等 PDA 释放组；PDA 的等待上限 25 分钟，期间线上不会更新，
-日志上表现为 `Deploy Browser App = pending` 而 `Build PDA APK = in_progress`。
+> **该形态自 2026-09-18 起已消除。** 保留本节仅供故障识别：若再次看到 pending，先按下面的
+> 「三段结构」核对 `build-pda-apk.yml` 的 job 划分是否被改动过——`tests/deployment-resources.test.js`
+> 里的「PDA 工作流不得让『等浏览器部署』与『持有部署组』落在同一个 job」会直接判失败。
 
-**处置（本次实操有效）**：
+**旧结构为何会自锁**：整个 `Build PDA APK` workflow 关在 `flowcube-server-deploy` 组里，而它的
+build job 内含「等本提交浏览器部署成功」——浏览器部署要同一个组，于是 PDA 等浏览器部署、
+浏览器部署等 PDA 释放组。表现为 `Deploy Browser App = pending` 而 `Build PDA APK = in_progress`；
+GitHub 不报错，只是干等（PDA 等待上限 25 分钟，期间线上不更新）。
 
-1. `gh run list --branch main --json databaseId,name,headSha` 找到本次提交的 PDA run id；
-2. `gh run cancel <pda-run-id>` 让出并发组 → 浏览器部署立即启动（约 15 分钟）；
-3. 等 `Deploy Browser App` success 后再打 tag（第 5 步）；
-4. 用 `checkout_ref=<发布提交 SHA>` 补跑 PDA（见下方命令），它会立即通过「等浏览器部署」并发布。
+**现行三段结构（等待与持锁分离）**：
 
-**已加固**：`deploy-browser.yml` 的服务器端 `flock` 等待由 300 秒对齐到 1800 秒（与 PDA 一致），
-避免错峰发布时抢锁超时。**仍是已知限制**：触发顺序无法指定，PDA 先拿到组时仍需按上面步骤人工让路；
-彻底解法是把 PDA 的「发布」拆成只让发布阶段占组的独立 job，需要专门一轮实施并在下次发版验证。
+| job | 并发组 | 职责 |
+|---|---|---|
+| `build-pda` | `build-pda-ci` | 只构建并上传 APK artifact；新提交可取消旧构建，不碰服务器锁 |
+| `wait-browser` | 无 | 只等本提交的浏览器部署；**不占任何部署组** |
+| `publish-pda` | `flowcube-server-deploy` | **唯一**持锁者（真正的发布临界区）；进入时浏览器部署已确认成功 |
+
+因此**不再需要**「`gh run cancel` 让路 → 等部署 → 打 tag → `checkout_ref` 补跑」这套人工处置。
+`deploy-browser.yml` 服务器端 `flock` 仍保持 1800 秒，与 PDA/桌面一致，作为兜底。
 
 #### PDA 没跟上时（`Build PDA APK` 失败 / 被取消 / 根本没触发）
 
