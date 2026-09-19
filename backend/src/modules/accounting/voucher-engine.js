@@ -525,10 +525,21 @@ async function generateVouchers(conn, { period = null, createdBy = null, closedP
     if (!purchaseIds.has(Number(root.source_id))) specs.push({ sourceType: SOURCE_TYPES.PURCHASE_SETTLE,
       sourceId: root.source_id, sourceNo: root.source_no, voucherDate: root.voucher_date, legs: [] })
   }
-  const stats = { created: 0, updated: 0, unchanged: 0, reversed: 0, empty: 0, skippedClosed: 0, total: 0 }
+  const stats = { created: 0, updated: 0, unchanged: 0, reversed: 0, empty: 0, skippedClosed: 0, skippedNoDate: 0, total: 0 }
   for (const spec of specs) {
     let dateStr
-    try { dateStr = toDateStr(spec.voucherDate) } catch { continue }
+    // toDateStr 对「缺少业务发生日期」是**有意 fail-loud** 的（ACCT_VOUCHER_NO_DATE）。这里不能退回静默 continue：
+    // 静默跳过的后果是这条业务凭证凭空消失，而且连 stats.total 都不增加、日志里看不出任何异常——
+    // 2026-09-18 审计发现该错误码因此从未被任何人看到（只有抛出点、没有消费方也没有测试）。
+    // 保留「跳过单条、不整批失败」的既有行为，但必须计数 + 逐条告警，让漏记可被发现。
+    try {
+      dateStr = toDateStr(spec.voucherDate)
+    } catch {
+      stats.skippedNoDate += 1
+      logger.warn(`跳过缺少业务发生日期的凭证：sourceType=${spec.sourceType} sourceId=${spec.sourceId} sourceNo=${spec.sourceNo || '-'}`,
+        { period: period || 'ALL', companyId: cid }, 'accounting')
+      continue
+    }
     if (period && periodOf(dateStr) !== period) continue
     stats.total += 1
     if (closedPeriods && closedPeriods.has(periodOf(dateStr))) { stats.skippedClosed += 1; continue }
@@ -545,7 +556,7 @@ async function generateVouchers(conn, { period = null, createdBy = null, closedP
     else if (res.reason === 'reversed') stats.reversed += 1
     else stats.empty += 1
   }
-  logger.info('accounting', `生成凭证 period=${period || 'ALL'} company=${cid} ${JSON.stringify(stats)}`, { createdBy })
+  logger.info(`生成凭证 period=${period || 'ALL'} company=${cid} ${JSON.stringify(stats)}`, { createdBy }, 'accounting')
   return stats
 }
 

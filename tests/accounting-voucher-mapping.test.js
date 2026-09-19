@@ -11,6 +11,8 @@
  *   2) 177_seed_acct_accounts.sql 落库的科目 code 集合，必须与 PRESET_ACCOUNTS 完全一致
  *      —— 防止 seed 与常量各改一处而悄悄漂移（历史上列注释/常量漂移是本仓反复踩的坑）。
  *   3) 每条事件映射至少各有一条借、一条贷（凭证借贷平衡的先决结构）。
+ *   4) 缺业务日期的凭证必须可被发现：toDateStr 对缺日期有意 fail-loud，调用处不得把它吞成
+ *      静默跳过（2026-09-18 审计发现 ACCT_VOUCHER_NO_DATE 全仓只有抛出点、没有消费方与测试）。
  */
 
 const path = require('path')
@@ -96,6 +98,38 @@ check('PRESET_ACCOUNTS 的 code 唯一，parentCode 若有须存在', () => {
   assert.strictEqual(new Set(codes).size, codes.length, 'code 有重复')
   const bad = PRESET_ACCOUNTS.filter(a => a.parentCode && !PRESET_CODES.has(a.parentCode))
   assert.deepStrictEqual(bad.map(a => a.code), [], '存在指向不存在父科目的项')
+})
+
+// ── 5. 缺业务日期的凭证必须可被发现，不能被静默跳过 ──────────────────────────
+// 2026-09-18 审计：`toDateStr` 对缺日期是**有意 fail-loud**（抛 ACCT_VOUCHER_NO_DATE），
+// 但 `generateVouchers` 里的 `catch { continue }` 把它整个吞掉——该错误码因此从未被任何人看到。
+// 静默跳过的后果是这条业务凭证凭空消失，而且连 stats.total 都不增加，对账时完全看不出来。
+// 下面两条钉住「保留跳过单条的行为，但必须计数 + 告警」。
+const voucherEnginePath = path.resolve(__dirname, '../backend/src/modules/accounting/voucher-engine.js')
+const voucherEngineSrc = fs.readFileSync(voucherEnginePath, 'utf8')
+const { toDateStr } = require(voucherEnginePath)
+
+check('toDateStr 对缺失的业务日期必须 fail-loud（ACCT_VOUCHER_NO_DATE）', () => {
+  for (const bad of [null, undefined, '']) {
+    let code = null
+    try { toDateStr(bad) } catch (e) { code = e.code }
+    assert.strictEqual(code, 'ACCT_VOUCHER_NO_DATE',
+      `toDateStr(${JSON.stringify(bad)}) 应抛 ACCT_VOUCHER_NO_DATE，实际 code=${code}`)
+  }
+})
+
+check('generateVouchers 跳过缺日期凭证时必须计数并告警，不得静默 continue', () => {
+  // 注意：文件里有两处 `toDateStr(spec.voucherDate)`（upsertVoucher 与 generateVouchers），
+  // 必须从 generateVouchers 函数体内定位，否则会断言到 upsertVoucher 的正常路径上。
+  const fnAt = voucherEngineSrc.indexOf('async function generateVouchers')
+  assert.ok(fnAt > 0, '找不到 generateVouchers 函数（实现已变动，请更新本断言）')
+  const at = voucherEngineSrc.indexOf('toDateStr(spec.voucherDate)', fnAt)
+  assert.ok(at > fnAt, '找不到 generateVouchers 里的日期解析点（实现已变动，请更新本断言）')
+  const seg = voucherEngineSrc.slice(at, at + 700)
+  assert.ok(/catch/.test(seg), '日期解析处应保留 catch 分支')
+  assert.ok(seg.includes('skippedNoDate'), '缺日期分支必须计入 stats.skippedNoDate，不得静默跳过')
+  assert.ok(seg.includes('logger.warn'), '缺日期分支必须逐条告警，否则漏记无人知')
+  assert.ok(/skippedNoDate:\s*0/.test(voucherEngineSrc), 'stats 初始化必须包含 skippedNoDate 计数')
 })
 
 // ── 汇总输出 ────────────────────────────────────────────────────────────────

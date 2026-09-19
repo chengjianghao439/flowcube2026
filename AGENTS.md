@@ -34,6 +34,7 @@
 - **`complete-local` 同 `complete-client`/`fail-client` 做工作站校验**；写路由必须 `requirePermission`（`fulfillment.routes.js`）
 - **新增不变量必须落 CI 契约测试并接进 `package.json` 与 `.github/workflows/test.yml`**（`docs/audit-2026-09-18.md`）
 - **批量写入用 `VALUES ?` 且先判空**：空数组会 `ER_PARSE_ERROR`；禁止循环内逐行 INSERT（`procurement.service.js`、`hr.service.js`）
+- **有意 fail-loud 的错误不得被调用处吞成静默跳过**：`toDateStr` 对缺业务日期抛 `ACCT_VOUCHER_NO_DATE`，而 `generateVouchers` 曾用 `catch { continue }` 把它整个吞掉——该错误码因此全仓没有消费方、也没有测试，凭证静默消失且 `stats` 连 `total` 都不加，对账时看不出来（2026-09-18 审计）。现改为计入 `stats.skippedNoDate` + 逐条 `logger.warn`（保留「跳过单条、不整批失败」的既有行为）；`tests/accounting-voucher-mapping.test.js` 机械守住「不得退回静默 continue」。新增 fail-loud 分支后要确认调用处真的会暴露它（`voucher-engine.js`）
 - **前端业务日期一律走 `lib/dateTime.ts`／`lib/dateRange.ts`**，禁止自拼 `getFullYear`/`getMonth`/`getDate`；`test:frontend-date-source` 拦截，非 +08 时区下自实现会偏一天（含会计期间）（`lib/dateTime.ts`）
 - **SQL 标识符插值必须显式校验**：表名/列名/列清单/别名一律走 `assertSqlIdentifier`/`assertSqlColumnList`（`utils/sqlIdentifier.js`）；`test:sql-identifier` 抓「同类守卫漏一个参数」
 - **每处 `eslint-disable` 必须带可读理由，整文件禁用仅限机器产物**：逐行指令上方要有说明性注释，业务文件不得 `/* eslint-disable */`（生成物走 `FILE_DISABLE_ALLOWED` 白名单）；`test:eslint-disable-rationale` 机械守住（反向验证：删掉理由注释、往业务文件加整文件禁用、清空白名单，都必须失败）（`tests/eslint-disable-rationale.test.js`）
