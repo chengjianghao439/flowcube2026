@@ -1,7 +1,7 @@
 {
-  "version": "0.10.0",
-  "versionCode": 135,
+  "version": "0.10.1",
+  "versionCode": 136,
   "filename": "app-release.apk",
-  "releaseNote": "本版加入**商品级「数量小数」开关**，并系统性地统一了金额与数量的显示口径、清理了提示里一直没被注意到的内部术语。",
-  "publishedAt": "2026-09-19T21:44:46.899Z"
+  "releaseNote": "修复 v0.10.0 的一个设计问题，并补齐上一次没有发出去的浏览器端与 PDA。",
+  "publishedAt": "2026-09-19T22:02:49.741Z"
 }
