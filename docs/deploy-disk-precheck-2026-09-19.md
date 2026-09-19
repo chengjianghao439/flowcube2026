@@ -116,3 +116,47 @@ docker image ls --format '{{.Repository}}:{{.Tag}} {{.Size}} {{.CreatedSince}}'
 对照当前 backend/frontend 容器与实际运行镜像 ID）；不要整体执行 `docker system prune`。
 
 清理后重跑：`gh workflow run deploy-browser.yml --ref main`，或等下一次 push。
+
+## 清理执行记录（2026-09-19，用户授权「顺便帮我清理一下服务器」）
+
+只读排查确认 `/tmp` 里没有本轮 CI 归档残留，备份目录只有 22 份 5.2M（`backup-db.sh` 有 14 天自动清理），
+apt 与家目录缓存可忽略；可回收的是三项：
+
+| 目标 | 大小 | 依据 |
+|---|---|---|
+| `/tmp/flowcube-desktop-release` | 1.3G | 桌面发布中转目录（v0.9.13–v0.9.25）；权威产物在 `versions/` |
+| `/var/www/flowcube-downloads/quarantine` | 630M | 3–4 月隔离物：0.3.x 旧安装包 550M、`tmp-upload` 79M、0 字节 Playwright 快照、440K 旧 SQL 等 |
+| `journalctl --vacuum-size=200M` | 672M | 标准日志收紧（保留最近 200M） |
+
+执行前的两道保护：
+
+1. **先归档再删除**：把 `quarantine/db-backups/flowcube_backup.sql`（443K，2026-03-28）与
+   `quarantine/manifest-20260425-230532.tsv`（64K）取回本机受限目录
+   `~/.config/flowcube/cleanup-backups/2026-09-19-quarantine/`，并留存删除前清单 `inventory.txt`。
+2. **先校验再删除**：`versions/v0.9.25/FlowCube-Setup-0.9.25.exe` 的 sha256 必须等于 `latest.json` 里的值
+   （实测两侧都是 `3f39d656…cab85`）才执行 `rm`——避免误删桌面更新的唯一权威副本。
+
+结果：根分区 **6.0G → 8.6G（88% → 82%）**；`current/`、`latest.json`、`versions/`（v0.9.20–v0.9.25）完好；
+**未触碰任何 docker 镜像/容器/卷**（运行中与回退镜像原样保留）。
+
+## 根因修复：中转目录不再永久累积
+
+那 1.3G 来自 `.github/workflows/build-desktop.yml` 的「Publish EXE to canonical download directory」：
+产物先 scp 到 `/tmp/flowcube-desktop-release/${tag}`（`release-desktop.js` 只读挂载它完成发布），
+**发布完成后从不删除**，于是一版留 108M。现改为在创建目录**之前**注册 `EXIT` trap：
+
+```bash
+cleanup_remote_tmp() {
+  ssh -p "$ssh_port" ... "rm -rf '$remote_tmp'" >/dev/null 2>&1 \
+    || echo "::warning::远端中转目录清理失败，请手工检查 $remote_tmp"
+}
+trap cleanup_remote_tmp EXIT
+```
+
+成功、scp 失败、发布失败三条路径都会清理；清理自身失败只告警，不会反过来把已完成的权威发布判成失败。
+`tests/deployment-resources.test.js` 新增第 20 项守住它（**反向验证三例全部成立**：去掉 trap、cleanup 不真的
+`rm`、把 trap 挪到 `mkdir` 之后，都必须失败）。
+
+**同类风险提示**：`/tmp` 与 `/opt/flowcube` 同处根分区，而上传前预检要 6144MB 余量——任何写在 `/tmp` 却
+不清理的服务器侧流程，最终都会以「部署莫名被拒」的形式暴露（本次只差 24MB）。新增此类中转目录时一律注册
+退出清理，或改写到 `versions/` 这类有归属的目录。

@@ -546,6 +546,18 @@ jobs:
           ssh_target="${{ steps.deploy_config.outputs.server_user }}@${{ steps.deploy_config.outputs.server_host }}"
           ssh_port="${{ steps.deploy_config.outputs.server_ssh_port }}"
 
+          # 远端中转目录只服务本次上传（release-desktop.js 以只读方式挂载它），因此在**任何退出路径**上
+          # 都必须删掉——包括 scp 或发布中途失败。2026-09-19 实测：此前从不清理，v0.9.13–v0.9.25 在
+          # 服务器 /tmp 累积到 1.3G，而 /tmp 与 /opt/flowcube 同处根分区，把上传前的 6144MB 余量门禁
+          # 一步步吃到只剩 24MB，连续 4 轮部署在上传任何字节之前被拒绝。清理失败只告警，不能反过来把
+          # 已经完成的权威发布判成失败。
+          cleanup_remote_tmp() {
+            ssh -p "$ssh_port" -o StrictHostKeyChecking=yes -o BatchMode=yes "$ssh_target" \
+              "rm -rf '$remote_tmp'" >/dev/null 2>&1 \
+              || echo "::warning::远端中转目录清理失败，请手工检查 $remote_tmp"
+          }
+          trap cleanup_remote_tmp EXIT
+
           echo "=== 创建远端临时目录: ${remote_tmp} ==="
           ssh -p "$ssh_port" -o StrictHostKeyChecking=yes -o BatchMode=yes "$ssh_target" "mkdir -p '$remote_tmp'"
 

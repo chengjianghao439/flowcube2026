@@ -176,6 +176,27 @@ test('部署磁盘预检失败必须自解释（打印实际余量，不得静�
   assert.ok(!/test \\?\$\(df -Pm/.test(run), '不得退回 `test "$(df -Pm …)" -ge 6144` 的静默形态')
 })
 
+// 2026-09-19 实测：桌面发布把中转目录建在服务器 `/tmp/flowcube-desktop-release/${tag}`，却从不清理，
+// v0.9.13–v0.9.25 累积到 1.3G；而 /tmp 与 /opt/flowcube 同处根分区，把上传前的 6144MB 余量门禁一点点
+// 吃到只剩 24MB（6120MB），连续 4 轮部署在上传任何字节之前被拒绝。中转目录只服务本次上传
+//（release-desktop.js 以只读方式挂载它），必须保证**任何退出路径**都清理——包括 scp 或发布中途失败。
+// 反向验证：去掉 `trap ... EXIT`、或让 cleanup 不真的 rm，本断言都必须失败。
+test('桌面发布必须清理服务器侧中转目录（防 /tmp 长期累积吃掉部署余量）', () => {
+  const yaml = require(path.resolve(root, 'frontend/node_modules/js-yaml'))
+  const workflow = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/build-desktop.yml'), 'utf8'))
+  const steps = Object.values(workflow.jobs).flatMap(j => j.steps || [])
+  const step = steps.find(s => s.name === 'Publish EXE to canonical download directory')
+  assert.ok(step && step.run, '找不到「Publish EXE to canonical download directory」步骤')
+  const run = step.run
+  assert.match(run, /remote_tmp="\/tmp\/flowcube-desktop-release\/\$\{tag\}"/, '中转目录路径变了，需同步本守卫与清理逻辑')
+  assert.match(run, /trap\s+cleanup_remote_tmp\s+EXIT/, '必须用 EXIT trap 保证失败路径也清理中转目录')
+  assert.match(run, /rm -rf '\$remote_tmp'/, 'cleanup_remote_tmp 必须真的删除远端中转目录')
+  assert.ok(
+    run.indexOf('trap cleanup_remote_tmp EXIT') < run.indexOf("mkdir -p '$remote_tmp'"),
+    'trap 必须在创建中转目录之前注册，否则创建之后的失败仍会留下残留',
+  )
+})
+
 // 2026-09-18 发 v0.9.24 实测：Deploy Browser App 只跑了 11.5 分钟就以 exit code 124 失败，
 // 线上仍是旧版。根因不是那 40 分钟的外层上限，而是**镜像归档上传仍是 600 秒**，而同一根因
 // （服务器慢盘）上的 docker load 早在 v0.9.17 就放宽到 1800 秒——典型「改了一个环节忘了另一个」，
