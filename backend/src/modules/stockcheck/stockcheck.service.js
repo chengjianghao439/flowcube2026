@@ -257,7 +257,7 @@ async function saveItemContainerScans(id, itemId, scans, operator, scopeWarehous
     const actualQty = rows.reduce((sum, r) => sum + r.countedQty, 0)
     // 「只能整数」的商品不得按小数盘盈/盘亏（迁移 254）。扫码累计值来自容器存量，
     // 故只校验整数约束。
-    await assertQtyPrecision(conn, [{ productId: item.product_id, qty: actualQty, label: '扫码实盘数量' }], { checkScale: false })
+    await assertQtyPrecision(conn, [{ productId: item.product_id, qty: actualQty, label: '扫码实盘数量' }])
     await conn.query(
       'UPDATE inventory_check_items SET actual_qty=?, diff_qty=? WHERE id=?',
       [actualQty, actualQty - Number(item.book_qty), itemId],

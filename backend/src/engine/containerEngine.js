@@ -976,7 +976,7 @@ async function splitContainer(conn, { containerId, qty, remark = null, targetCon
   if (!row) throw new AppError('库存条码不存在', 404)
   // 「只能整数」的商品不得按小数拆分（迁移 254）。拆分数量常取自容器余量，
   // 历史存量可能带多位小数，故只校验整数约束、不校验「两位小数」上限。
-  await assertQtyPrecision(conn, [{ productId: row.product_id, qty: q, label: '拆分数量' }], { checkScale: false })
+  await assertQtyPrecision(conn, [{ productId: row.product_id, qty: q, label: '拆分数量' }])
   if (Number(row.status) !== CONTAINER_STATUS.ACTIVE) {
     throw new AppError('来源库存条码须为「在库」状态', 400)
   }

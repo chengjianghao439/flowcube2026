@@ -1391,13 +1391,13 @@ async function reserveStock(id, operator, items = [], { confirmCreditOverride = 
       reserveItems.push({ ...row, reserveQty: qty, warehouseId: whId })
     }
     if (!reserveItems.length) throw new AppError('本次没有有效的占库数量', 400)
-    // 「只能整数」的商品不得按小数占库（迁移 254）。本次占库量常直接取自订单行余量，
-    // 因此只校验整数约束、不校验「两位小数」上限。
+    // 「只能整数」的商品不得按小数占库（迁移 254）。数量精度开关只约束整数性，
+    // 不限制小数位数——系统的最小库存精度是 0.0001。
     await assertQtyPrecision(conn, reserveItems.map((item, index) => ({
       productId: item.product_id,
       qty: item.reserveQty,
       label: `第 ${index + 1} 行占库数量`,
-    })), { checkScale: false })
+    })))
 
     const reserveWarehouseIds = [...new Set(reserveItems.map(item => Number(item.warehouseId)))]
     const [reserveWarehouses] = await conn.query(
@@ -1567,13 +1567,13 @@ async function ship(id, operator, { itemIds = null, items = null, scopeWarehouse
         quantity: shipQty,
       })
     }
-    // 「只能整数」的商品不得按小数出库（迁移 254）。执行类入口只校验整数约束、不校验
-    // 「两位小数」上限：本批数量常常等于存量占库，历史数据里可能带三位以上小数。
+    // 「只能整数」的商品不得按小数出库（迁移 254）。数量精度开关只约束整数性，
+    // 不限制小数位数——系统的最小库存精度是 0.0001。
     await assertQtyPrecision(conn, [...groups.values()].flatMap(g => g.items).map((it, index) => ({
       productId: it.productId,
       qty: it.quantity,
       label: `第 ${index + 1} 行发货数量`,
-    })), { checkScale: false })
+    })))
 
     const taskSvc = require('../warehouse-tasks/warehouse-tasks.service')
     const created = []

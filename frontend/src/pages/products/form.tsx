@@ -287,7 +287,7 @@ export default function ProductFormPage() {
             <label className="flex h-10 items-center gap-2 text-sm">
               <input type="checkbox" className="h-4 w-4" checked={form.allowDecimalQty}
                 onChange={e => set('allowDecimalQty', e.target.checked)} disabled={submitting} />
-              <span className="text-muted-foreground">{form.allowDecimalQty ? '可以带小数，最多两位（如 1.25 公斤）' : '只能整数（如 3 个、2 台）'}</span>
+              <span className="text-muted-foreground">{form.allowDecimalQty ? '可以带小数（如 1.25 公斤）' : '只能整数（如 3 个、2 台）'}</span>
             </label>
           </div>
           <div className="space-y-1.5">

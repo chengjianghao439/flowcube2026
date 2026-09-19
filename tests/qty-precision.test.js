@@ -36,16 +36,6 @@ test('只能整数的商品：整数放行、小数被拒', () => {
   assert.match(problem.message, /1\.5/)
 })
 
-test('允许小数的商品：最多两位，第三位被拒', () => {
-  assert.equal(qtyPrecisionProblem(DECIMAL_OK, 1.25), null)
-  assert.equal(qtyPrecisionProblem(DECIMAL_OK, 0.01), null)
-  assert.equal(qtyPrecisionProblem(DECIMAL_OK, 12), null)
-
-  const problem = qtyPrecisionProblem(DECIMAL_OK, 1.234)
-  assert.equal(problem.code, 'QTY_DECIMAL_SCALE_EXCEEDED')
-  assert.match(problem.message, /螺纹钢/)
-})
-
 test('浮点噪声不会被误判为小数', () => {
   // 0.1 + 0.2 === 0.30000000000000004，必须按两位小数放行
   assert.equal(qtyPrecisionProblem(DECIMAL_OK, 0.1 + 0.2), null)
@@ -53,13 +43,6 @@ test('浮点噪声不会被误判为小数', () => {
   assert.equal(qtyPrecisionProblem(DECIMAL_OK, Number('2.50')), null)
   // 只能整数的商品同样不能被噪声判成小数
   assert.equal(qtyPrecisionProblem(INTEGER_ONLY, Number('5.00000000001')), null)
-})
-
-test('容差不放过真正的小数', () => {
-  assert.equal(hasFraction(0.5), true)
-  assert.equal(hasFraction(1 - 1e-6), true)
-  assert.equal(hasTooManyDecimals(1.005), true)
-  assert.equal(hasTooManyDecimals(0.001), true)
 })
 
 test('商品查不到时放行（「商品不存在」由业务自己报错）', () => {
