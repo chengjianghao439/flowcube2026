@@ -198,6 +198,7 @@ npm run test:permissions
 `npm run test:sql-identifier`（SQL 标识符插值守卫：每个表名/列名/列清单/别名插值都要有白名单校验）同为纯离线断言，与上一条同批执行。
 `npm run test:eslint-disable-rationale`（lint 禁用理由守卫：逐行 `eslint-disable-next-line`/`-line` 上方 15 行内必须有一条说明性注释；整文件 `/* eslint-disable */` 只允许出现在机器产物白名单里，生成器输出该字符串不算指令）同为纯离线断言，与上两条同批执行。
 `npm run test:logger-args-order`（logger 参数顺序守卫：`logger.info/warn` 的第二个参数必须是对象，即 `(msg, meta, module_)`；只传 msg 合法，`logger.error` 因签名含 err 不参与）同为纯离线断言，与上三条同批执行。
+`npm run test:pda-scan-focus`（PDA 聚焦守卫：按「这个页面要不要输入」判断——除 `login.tsx` 外的 PDA 页面不得出现 `autoFocus`，`PdaScanner` 每处 `.focus()` 必须自身带 manual 语义）同为纯离线断言，与上四条同批执行。
 运维/迁移回归（static job 「运维回归」步骤）：`node --test tests/ops-monitor-restore.test.js tests/deployment-resources.test.js tests/restore-trigger-normalize.test.js tests/migration-trigger-bodies.test.js`。前两项验备份恢复判定与资源边界，后两项验触发器分号规范化与迁移逐条切分，均不连数据库。
 
 导出格式回归：`npm run test:export`（static job 与 `test:upload` 同一步执行）——校验 xlsx 导出的日期列写成日期单元格并带 `yyyy-mm-dd` / `yyyy-mm-dd hh:mm` 数字格式（2026-09-16 起），不连数据库。
@@ -359,7 +360,7 @@ npm run test:permissions
 - PDA 收货页没有扫码框：点选「待收商品」卡片，点「打印并登记」即提交；一个商品收完后自动切到下一个未收完的。scannedBarcode 不再发送。见 docs/pda-receive-remove-scan-2026-09-14.md。
 - 能否继续收货只看 task.status（<3 继续收货、=3 待上架），不得看 putawayStatus；后端只在全部明细收满时把任务 2→3（inbound-tasks.command.js），上架侧强制 putaway.from=[3]。见 docs/pda-receive-partial-lock-2026-09-16.md。
 - 原生绑定相机扫码使用 `useCameraScanner.ts` 的既定本地解码路径，注意预览时 WebView 背景透明、权限引导和关闭清理。浏览器预览不能证明 APK 相机功能正常。
-- PDA 作业页默认「扫码模式」：进页面、扫码结束都不得自动聚焦输入框；统一用 components/pda/PdaScanner.tsx，点「手动输入」才渲染手输框；该组件不再提供 autoFocus。见 docs/pda-scan-default-mode-2026-09-17.md。
+- **PDA 聚焦规则按「这个页面要不要输入」判断**（2026-09-19 用户明确该依据）：**登录页需要输入，自动聚焦账号框是对的**；**扫码作业页不需要输入，进页面与扫码结束都不得自动聚焦输入框**（软键盘会挡住扫码视野），只有用户点「手动输入」才渲染手输框并聚焦。统一用 components/pda/PdaScanner.tsx，该组件不再提供 autoFocus；判断新页面时套用同一条依据（需要键入的可聚焦，扫码/浏览类不得聚焦），不要按「统一体验」把两类页面拉平。`tests/pda-scan-focus-contract.test.js`（`npm run test:pda-scan-focus`）机械守住：除 `login.tsx`（需要输入，`autoFocus` 是正面实现）外的 PDA 页面不得出现 `autoFocus`，且 `PdaScanner` 里每处 `.focus()` 必须自身带 manual 语义——聚焦只能由点「手动输入」触发（反向验证：给作业页加 `autoFocus`、或在挂载 effect 里自动聚焦，都必须失败）。见 docs/pda-scan-default-mode-2026-09-17.md。
 - 错误提示保真：AppError 未显式带 code 时后端不再兜底 CONFLICT/BAD_REQUEST 通用码；前端 resolveApiErrorMessage() 对通用码一律以后端原文优先；新增 4xx 必须带 code 或给中文原因。见 docs/acceptance-issues-fix-2026-09-17.md。
 - **PDA 打包页必须显示箱贴打印状态**：`GET /api/packages?taskId=` 返回每箱 `printStatus`，打包页显示「箱贴：待派发/已打印/打印失败」并在完成打包按钮上方常驻告警（列出待处理箱与出路：重新入队打印、ERP「条码打印查询 → 出库条码」重打、启动绑定打印机的桌面端）。「箱贴未打印成功不得进入待出库」是**服务端强制规则，不放开**；放开的是「看不见原因」。调拨调出页同理显示「剩余可调量」，因为整容器调拨要求容器数量不超过剩余计划量。
 - **PDA 列表必须即时刷新**：拣货「商品列表/订单列表」的刷新按钮同时刷新两个查询，拣货动作后作废两个列表缓存；收货、打包、复核、调拨、盘点、退货列表统一 `refetchOnMount: 'always'`。keep-alive 下组件常驻，不这样做就会出现「订单列表已空、商品列表仍显示待拣 0/2」或「ERP 刚派发的单据看不到」。

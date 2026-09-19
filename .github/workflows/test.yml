@@ -191,6 +191,9 @@ jobs:
       - name: 契约测试 — logger 调用必须是 (msg, meta, module) 顺序（防日志错位读不出来）
         run: npm run test:logger-args-order
 
+      - name: 契约测试 — PDA 扫码页不得自动聚焦（防软键盘挡住扫码视野）
+        run: npm run test:pda-scan-focus
+
       - name: 契约测试 — 前端登出必须走统一封装（防漏清缓存/漏作废 refresh）
         run: npm run test:frontend-session-contract
 
