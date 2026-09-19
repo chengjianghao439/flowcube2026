@@ -17,7 +17,10 @@
  *   3. 中文之间不得混半角标点（`,;!?`）；
  *   4. 官网 `pages/landing` 与候选 `pages/landing-preview` 的关键文案必须双份一致
  *      （两者内容同源、仅 import 路径不同，改一处漏另一处是已经发生过的真实事故）；
- *   5. 金额一律走 `lib/format` 的 `money()`/`amount()`，不得手写 `¥` + `toFixed(2)`。
+ *   5. 金额一律走 `lib/format` 的 `money()`/`amount()`，不得手写 `¥` + `toFixed(2)`；
+ *   6. **后端的 `AppError` 消息同样算用户可见文案**——它们经 `toast.error(e.message)`
+ *      直接显示给用户，受同一套禁用词约束（2026-09-20 补：此前只扫前端，于是「容器不存在」
+ *      这类消息在后端积了 66 处没人管）。
  *
  * 第 5 条是 2026-09-19 金额收敛的守卫：`¥{x.toFixed(2)}` 没有千分位，`¥1234567.89` 在列表里
  * 读不出位数；空值还会显示成 `¥0.00`，让「没有数据」看起来像「金额为零」。打印管线原先
@@ -176,6 +179,35 @@ function main() {
     })
   }
 
+  // 后端的 AppError 消息会直接显示给用户，与界面文案同一套口径。
+  // 只扫消息字符串本身——注释与标识符里出现「容器」是允许的（它本来就是领域模型的名字）。
+  const backendFiles = []
+  ;(function walkBackend(dir) {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, e.name)
+      if (e.isDirectory()) walkBackend(p)
+      else if (e.name.endsWith('.js')) backendFiles.push(p)
+    }
+  })(path.join(ROOT, 'backend/src'))
+  assert.ok(backendFiles.length > 100, `后端源码文件数异常（${backendFiles.length}）`)
+
+  for (const f of backendFiles) {
+    const rel = `backend/src/${path.relative(path.join(ROOT, 'backend/src'), f)}`
+    const source = stripComments(fs.readFileSync(f, 'utf8'))
+    for (const m of source.matchAll(/new AppError\(\s*'((?:[^'\\]|\\.)*)'/g)) {
+      const text = m[1]
+      for (const [word, why] of BANNED_IN_UI_COPY) {
+        if (!text.includes(word)) continue
+        const key = `${rel}:${word}`
+        if (ALLOWLIST.has(key)) { usedAllow.add(key); continue }
+        problems.push(`${rel}:${lineOf(source, m.index)} 错误消息出现「${word}」——${why}\n        原文：${text.slice(0, 90)}`)
+      }
+      if (HALF_WIDTH_BETWEEN_CJK.test(text)) {
+        problems.push(`${rel}:${lineOf(source, m.index)} 中文之间用了半角标点——改为全角「，；！？」\n        原文：${text.slice(0, 90)}`)
+      }
+    }
+  }
+
   const staleAllow = [...ALLOWLIST.keys()].filter((k) => !usedAllow.has(k))
   assert.deepEqual(staleAllow, [],
     `这些豁免已不再命中（代码已改或已删除），必须从清单里删掉：${staleAllow.join(', ')}`)
@@ -199,7 +231,7 @@ function main() {
   assert.deepEqual(staleMoneyAllow, [],
     `这些金额格式化豁免已不再命中（写法已改或文件已删），必须从 MONEY_ALLOW 删掉：${staleMoneyAllow.join(', ')}`)
 
-  console.log(`扫描源码 ${files.length} 个（frontend/src 全量，去注释后只看用户可见文案）`)
+  console.log(`扫描源码 ${files.length} 个前端 + ${backendFiles.length} 个后端（去注释后只看用户可见文案与 AppError 消息）`)
   console.log(`禁用词 ${BANNED_IN_UI_COPY.size} 个、豁免 ${ALLOWLIST.size} 条、金额格式化豁免 ${MONEY_ALLOW.size} 条`)
 
   if (problems.length) {
