@@ -159,7 +159,7 @@ npm run test:permissions
 
 | 影响 | 相关命令 |
 |---|---|
-| 库存、状态、并发主链路 | `npm run smoke:mainline`、`npm run smoke:concurrency-guards`、`npm run smoke:p0-regression`、`npm run smoke:p1-regression`、`npm run test:integration` |
+| 库存、状态、并发主链路 | `npm run smoke:mainline`、`npm run smoke:concurrency-guards`、`npm run smoke:p0-regression`、`npm run smoke:p1-regression`、`npm run smoke:fulfillment-credit`、`npm run test:integration` |
 | 销售改单、预计库存 | `npm run smoke:sale-adjustment`、`npm run smoke:atp` |
 | 财务、会计 | `npm run smoke:finance`、`npm run smoke:accounting`、`npm run smoke:accounting-period`、`npm run test:accounting` |
 | 退款、处置、授信 | `npm run smoke:refund-orders`、`npm run smoke:disposal`、`npm run smoke:credit-outbound` |

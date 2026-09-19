@@ -309,6 +309,9 @@ jobs:
       - name: 冒烟测试 — 并发与回滚护栏（幂等 / 拆分 / 仓库任务取消）
         run: npm run smoke:concurrency-guards
 
+      - name: 冒烟测试 — 履约刷新与授信并发（同客户抢额度时只放行一单、另一单保持草稿）
+        run: npm run smoke:fulfillment-credit
+
       - name: 冒烟测试 — 销售单执行期改单（增减量 / PDA物理确认）
         run: npm run smoke:sale-adjustment
 
