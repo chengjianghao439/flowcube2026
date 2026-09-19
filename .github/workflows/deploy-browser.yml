@@ -144,9 +144,21 @@ jobs:
           IMAGE_ARCHIVE="/tmp/flowcube-images-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz"
           IMAGE_SHA256="$(sha256sum "$RUNNER_TEMP/flowcube-images.tar.gz" | cut -d' ' -f1)"
           # 上传前预检临时目录与应用目录，保留余量；不触发 Docker 全盘扫描。
-          timeout -k 5 30 ssh -o ConnectTimeout=20 -p "${{ steps.deploy_config.outputs.server_ssh_port }}" \
+          # **余量不足必须自解释**：原先写的是 `test "$(df -Pm ...)" -ge 6144`，余量不够时 ssh 只返回
+          # 1、一行输出都没有，与「SSH 连不上/密钥失效」在日志里长得完全一样。2026-09-19 11:04 起
+          # 连续 3 轮部署都以「##[endgroup] 之后 3~4 秒静默 exit 1」失败，日志里没有任何可诊断信息，
+          # 事后才推断出是服务器磁盘低于 6 GiB。现在先打印实际余量，再据此判定并给出可执行的处置提示。
+          DISK_USAGE="$(timeout -k 5 30 ssh -o ConnectTimeout=20 -p "${{ steps.deploy_config.outputs.server_ssh_port }}" \
             "${{ steps.deploy_config.outputs.server_user }}@${{ steps.deploy_config.outputs.server_host }}" \
-            "test \$(df -Pm /tmp | awk 'NR==2 {print \$4}') -ge 6144 && test \$(df -Pm '${{ steps.deploy_config.outputs.server_app_path }}' | awk 'NR==2 {print \$4}') -ge 6144"
+            "df -Pm /tmp '${{ steps.deploy_config.outputs.server_app_path }}' | awk 'NR>1 {print \$6, \$4 \"MB\"}'")" \
+            || { echo "::error::无法读取服务器磁盘余量（SSH 连接或认证失败），部署中止"; exit 1; }
+          echo "服务器可用空间（挂载点 可用）："
+          printf '%s\n' "$DISK_USAGE"
+          printf '%s\n' "$DISK_USAGE" | awk '
+            NF < 2 { print "::error::服务器磁盘预检没有拿到可用空间，部署中止"; bad = 1; next }
+            { mb = $NF; sub(/MB$/, "", mb)
+              if (mb + 0 < 6144) { printf "::error::%s 可用 %s，低于部署预检下限 6144MB：请先清理服务器磁盘再重跑（不得清除回退镜像）\n", $1, $NF; bad = 1 } }
+            END { exit bad ? 1 : 0 }'
           # 镜像归档上传的时限必须与 server-update.sh 里 docker load 的 1800 秒对齐：
           # 二者是同一个根因（服务器慢盘）上的两个环节。2026-09-18 发 v0.9.24 时这里仍是 600 秒，
           # 而 docker load 早已放宽到 1800 秒——结果是上传先被强杀，报 exit code 124，

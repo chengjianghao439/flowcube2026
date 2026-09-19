@@ -153,6 +153,29 @@ if(cmd==='sha256sum') console.log(crypto.createHash('sha256').update(fs.readFile
   })
 }
 
+// 2026-09-19 实测：服务器磁盘低于 6 GiB 时，Deploy 步骤的预检 `test "$(df -Pm …)" -ge 6144`
+// 只会让 ssh 返回 1、一行输出都没有——与「SSH 连不上/密钥失效」在日志里完全一样。11:04 起连续
+// 3 轮部署都以「##[endgroup] 之后 3~4 秒静默 exit 1」失败，只能靠事后逐轮推断才知道是磁盘不足，
+// 连「服务器还剩多少空间」都拿不到。所以预检必须先打印实际余量再判定，并让三种失败可区分
+//（磁盘不足 / SSH 取不到 / df 返回空）。反向验证：退回 `test … -ge 6144`、或把 awk 的
+// NF<2 分支改回 `exit 1`（会被 END 的 exit 覆盖成 0），本断言都必须失败。
+test('部署磁盘预检失败必须自解释（打印实际余量，不得静默 exit 1）', () => {
+  const yaml = require(path.resolve(root, 'frontend/node_modules/js-yaml'))
+  const workflow = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/deploy-browser.yml'), 'utf8'))
+  const step = workflow.jobs.deploy.steps.find(s => s.name === 'Deploy backend and frontend on server')
+  assert.ok(step && step.run, '找不到 Deploy 步骤的 run 脚本')
+  const run = step.run
+  assert.match(run, /DISK_USAGE="\$\(/, '预检必须把 df 结果存进变量，才能打印出来')
+  assert.match(run, /echo "服务器可用空间/, '预检必须先打印实际余量')
+  assert.match(run, /df -Pm \/tmp/, '预检必须同时检查 /tmp 与 APP_PATH')
+  assert.match(run, /低于部署预检下限 6144MB/, '余量不足必须给出指向磁盘的可执行提示')
+  assert.match(run, /无法读取服务器磁盘余量/, 'SSH 取不到余量时必须与「磁盘不足」区分开')
+  assert.match(run, /没有拿到可用空间/, 'df 返回空或格式异常也必须失败，不能静默放行')
+  assert.match(run, /bad = 1; next \}/, 'NF<2 分支必须置 bad 后 next：直接 exit 会被 END 的 exit 覆盖成 0')
+  assert.match(run, /END \{ exit bad \? 1 : 0 \}/, '最终退出码必须由统一判定给出')
+  assert.ok(!/test \\?\$\(df -Pm/.test(run), '不得退回 `test "$(df -Pm …)" -ge 6144` 的静默形态')
+})
+
 // 2026-09-18 发 v0.9.24 实测：Deploy Browser App 只跑了 11.5 分钟就以 exit code 124 失败，
 // 线上仍是旧版。根因不是那 40 分钟的外层上限，而是**镜像归档上传仍是 600 秒**，而同一根因
 // （服务器慢盘）上的 docker load 早在 v0.9.17 就放宽到 1800 秒——典型「改了一个环节忘了另一个」，
