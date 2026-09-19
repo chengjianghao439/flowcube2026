@@ -19,7 +19,7 @@ async function detect(conn, type, row) {
     for (const credit of credits) add(`credit:${credit.id}`, '授信申请待审批', `超额放行申请 #${credit.id} 尚未处理`, '/credit-overrides')
     const delivery = await saleDelivery(conn, row, { roleId: 1 })
     for (const item of delivery.items) {
-      if (item.shortage > 0) add(`shortage:${item.id}`, '销售供应未覆盖', `${item.productCode} · ${item.warehouseName} 尚缺 ${item.shortage} ${item.unit}；可查看采购建议或调整供应`, `${path}?focus=fulfillment`, item.promisedDate || today)
+      if (item.shortage > 0) add(`shortage:${item.id}`, '销售供应未覆盖', `${item.productCode} · ${item.warehouseName} 尚缺 ${item.shortage} ${item.unit}`, `${path}?focus=fulfillment`, item.promisedDate || today)
       if (item.delayed) add(`delay:${item.id}`, '承诺发货日期有风险', `${item.productCode} 承诺 ${item.promisedDate}，预计全部可发 ${item.allDate || '待确认'}`, `${path}?focus=fulfillment`, item.promisedDate)
       for (const s of item.sources.filter(s => s.bound && s.date && s.date < today)) add(`purchase-delay:${item.id}:${s.orderId}`, '关联采购已延期', `${item.productCode} 依赖的采购有 ${s.quantity} ${item.unit}，原预计 ${s.date}；需采购确认新交期`)
     }

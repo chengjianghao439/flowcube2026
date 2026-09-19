@@ -58,7 +58,7 @@ test('仍需发货时显示白话字段和缺少仓库备货天数的原因', as
   expect(host.textContent).not.toContain('检查订单问题')
   expect(host.textContent).not.toContain('添加问题')
   expect(host.textContent).not.toContain('显示已处理')
-  expect(host.textContent).toContain('暂无待处理问题')
+  expect(host.textContent).toContain('当前没有卡点')
   const headers = [...host.querySelectorAll('th')].map(node => node.textContent)
   expect(headers).not.toContain('最近发货日期')
   expect(headers).not.toContain('最早可发一批')
@@ -96,7 +96,7 @@ test('已有人工问题仍可跟进，已处理记录按需查看', async () =>
 test('检测到尚未入列的问题时保留立即更新入口', async () => {
   vi.mocked(runFulfillmentCommand).mockResolvedValue({})
   await renderSale([item()], true, { detectedCount: 1 })
-  const refresh = [...host.querySelectorAll('button')].find(b => b.textContent === '更新问题')!
+  const refresh = [...host.querySelectorAll('button')].find(b => b.textContent === '重新检测')!
   expect(refresh).toBeDefined()
   await act(async () => refresh.click())
   expect(runFulfillmentCommand).toHaveBeenCalledWith('sale', 1, { action: 'sync' }, expect.any(String))

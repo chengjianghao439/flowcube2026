@@ -29,6 +29,22 @@ const issueNames: Record<string, string> = {
   '关联采购已延期': '等待的采购已经延期', '改单等待仓库确认': '修改订单后，等待仓库确认',
   '取消等待实物归还': '取消订单后，等待仓库退回商品', '授信申请待审批': '超额放行申请还在审批',
 }
+/**
+ * 「前往处理」该叫什么、要不要显示。
+ *
+ * 原先前端一律写「前往处理」，但多数卡点的 action_path 就是本页的 `?focus=fulfillment`
+ * ——点它什么都不会发生，还和右边真正展开表单的「处理」按钮撞名。这里按跳转目标给出
+ * 具体去向；目标就是当前面板时不渲染该链接。
+ */
+function actionLabel(path: string): string | null {
+  if (path.startsWith('/credit-overrides')) return '去处理超额放行'
+  const focus = new URLSearchParams(path.split('?')[1] ?? '').get('focus')
+  if (focus === 'waiting-putaway') return '去扫码上架'
+  if (focus === 'print') return '去打印记录'
+  if (focus === 'fulfillment') return null
+  return '前往处理'
+}
+
 function estimatedDateText(item: DeliveryItem, date: string | null) {
   if (item.remaining <= 0) return '无需继续发货'
   if (date) return date
@@ -136,14 +152,14 @@ export function OrderFulfillmentPanel({ type, id }: { type: FulfillmentType; id:
         ]} data={data.impacts.map((r, i) => ({ ...r, id: i }))} rowKey="id" /> : <p className="text-sm text-muted-foreground">当前没有你可查看的销售订单关联这批采购。</p>}
       </div>}
     </SectionCard>}
-    {type === 'sale' && !data.issues.length && !data.detectedCount ? <p className="px-1 py-2 text-sm text-muted-foreground">暂无待处理问题</p> : <SectionCard title="待处理问题" compact actions={<div className="flex gap-2">{(showResolved || data.issues.some(issue => issue.status === 'resolved')) && <Button size="sm" variant="ghost" onClick={() => setShowResolved(v => !v)}>{showResolved ? '只看未处理' : '显示已处理'}</Button>}{data.canManage && <>{(type !== 'sale' || data.detectedCount > 0 || data.issues.some(issue => issue.status !== 'resolved')) && <Button size="sm" variant="outline" disabled={mutation.isPending} onClick={() => mutation.mutate({ action: 'sync' })}>更新问题</Button>}{type !== 'sale' && <Button size="sm" variant="outline" onClick={() => { setNewIssue(true); setTitle(''); setResult(''); setDue(''); setOwner('') }}>添加问题</Button>}</>}</div>}>
-      {!issues.length && <p className="text-sm text-muted-foreground">{data.detectedCount > 0 ? '发现订单问题，等待更新。' : showResolved ? '暂无问题记录' : '暂无待处理问题'}</p>}
+    {type === 'sale' && !data.issues.length && !data.detectedCount ? <p className="px-1 py-2 text-sm text-muted-foreground">当前没有卡点</p> : <SectionCard title={type === 'sale' ? '发货卡点' : '卡点与待办'} compact actions={<div className="flex gap-2">{(showResolved || data.issues.some(issue => issue.status === 'resolved')) && <Button size="sm" variant="ghost" onClick={() => setShowResolved(v => !v)}>{showResolved ? '只看未处理' : '显示已处理'}</Button>}{data.canManage && <>{(type !== 'sale' || data.detectedCount > 0 || data.issues.some(issue => issue.status !== 'resolved')) && <Button size="sm" variant="outline" disabled={mutation.isPending} onClick={() => mutation.mutate({ action: 'sync' })}>重新检测</Button>}{type !== 'sale' && <Button size="sm" variant="outline" onClick={() => { setNewIssue(true); setTitle(''); setResult(''); setDue(''); setOwner('') }}>添加卡点</Button>}</>}</div>}>
+      {!issues.length && <p className="text-sm text-muted-foreground">{data.detectedCount > 0 ? `检测到 ${data.detectedCount} 条卡点，点「重新检测」写入。` : showResolved ? '暂无记录' : '当前没有卡点'}</p>}
       <div className="divide-y">{issues.map(issue => <div key={issue.id} className="flex flex-wrap items-start justify-between gap-3 py-3 text-sm">
-        <div className="min-w-64 flex-1"><div className="flex flex-wrap items-center gap-2"><strong>{issue.source === 'auto' ? issueNames[issue.title] || issue.title : issue.title}</strong><SoftStatusLabel label={issue.overdue ? '已超时' : issue.dueSoon ? '即将到期' : statusNames[issue.status]} tone={issue.overdue ? 'danger' : issue.status === 'resolved' ? 'success' : 'warning'} /></div>
+        <div className="min-w-64 flex-1"><div className="flex flex-wrap items-center gap-2"><strong>{issue.source === 'auto' ? issueNames[issue.title] || issue.title : issue.title}</strong><SoftStatusLabel label={statusNames[issue.status]} tone={issue.status === 'resolved' ? 'success' : issue.status === 'processing' ? 'active' : 'warning'} />{(issue.overdue || issue.dueSoon) && <span className={issue.overdue ? 'text-xs font-medium text-destructive' : 'text-xs font-medium text-warning'}>{issue.overdue ? '已超时' : '即将到期'}</span>}</div>
           <p className="mt-1 whitespace-pre-wrap">{issue.reason}</p><p className="mt-1 text-xs text-muted-foreground">负责人：{issue.ownerName || '待认领'} · 期限：{issue.due_at ? formatDisplayDateTime(issue.due_at) : '未设置'} · {issue.source === 'auto' ? '系统检测' : '人工登记'}</p>
           {issue.result && <p className="mt-1">处理结果：{issue.result}</p>}
         </div>
-        <div className="flex flex-wrap items-center gap-2"><a className="text-primary underline" href={`#${issue.action_path}`}>前往处理</a>{data.canManage && <>{!issue.owner_id && issue.status !== 'resolved' && <Button size="sm" variant="outline" disabled={mutation.isPending} onClick={() => mutation.mutate({ action: 'issue', issueId: issue.id, version: issue.version, operation: 'claim' })}>认领</Button>}<Button size="sm" variant="outline" onClick={() => openIssue(issue)}>{issue.status === 'resolved' ? '重新跟进' : '处理'}</Button></>}</div>
+        <div className="flex flex-wrap items-center gap-2">{actionLabel(issue.action_path) && <a className="text-primary underline" href={`#${issue.action_path}`}>{actionLabel(issue.action_path)}</a>}{data.canManage && <>{!issue.owner_id && issue.status !== 'resolved' && <Button size="sm" variant="outline" disabled={mutation.isPending} onClick={() => mutation.mutate({ action: 'issue', issueId: issue.id, version: issue.version, operation: 'claim' })}>认领</Button>}<Button size="sm" variant="outline" onClick={() => openIssue(issue)}>{issue.status === 'resolved' ? '重新跟进' : '处理'}</Button></>}</div>
       </div>)}</div>
       {(newIssue || editing) && <form className="mt-3 space-y-3 border-t pt-3" onSubmit={e => { e.preventDefault();
         if (newIssue) mutation.mutate({ action: 'create', title, reason: result, ownerId: owner ? Number(owner) : undefined, dueDate: due || null })
