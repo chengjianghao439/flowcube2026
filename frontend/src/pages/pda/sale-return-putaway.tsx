@@ -63,7 +63,7 @@ export default function PdaSaleReturnPutawayPage() {
     const barcode = raw.trim()
     const parsed = parseBarcode(barcode)
     if (parsed.type !== (step === 'container' ? 'container' : 'location')) {
-      err(step === 'container' ? '请扫描待上架容器条码（I 或 CNT 开头）' : '请扫描库位条码（LOC- 或 R 开头）')
+      err(step === 'container' ? '请扫描待上架库存条码' : '请扫描库位条码')
       return
     }
     scanInFlight.current = true
@@ -74,14 +74,14 @@ export default function PdaSaleReturnPutawayPage() {
         const container = await getReturnPutawayContainerApi(taskId, barcode)
         if (generation !== scanGeneration.current) return
         if (!Number.isSafeInteger(container.containerId) || container.containerId <= 0 || container.taskId !== taskId || container.warehouseId !== task.warehouseId || container.status !== 4) {
-          throw new Error('容器不是当前退货任务的待上架容器')
+          throw new Error('该条码不是本退货单的待上架库存条码')
         }
         setContainerId(container.containerId)
         setContainerBarcode(container.barcode)
         setStep('location')
-        ok(`容器 ${container.barcode}`)
+        ok(`库存条码 ${container.barcode}`)
       } else {
-        if (containerId == null) throw new Error('请先扫描待上架容器')
+        if (containerId == null) throw new Error('请先扫描待上架库存条码')
         const location = await getReturnPutawayLocationApi(taskId, barcode)
         if (generation !== scanGeneration.current) return
         if (!Number.isSafeInteger(location.id) || location.id <= 0 || location.warehouseId !== task.warehouseId || location.status !== 1) {
@@ -122,7 +122,7 @@ export default function PdaSaleReturnPutawayPage() {
         )}
         <PdaCard active={step === 'container'} done={!!containerBarcode}>
           <div className="text-sm text-muted-foreground">步骤 1</div>
-          <div className="font-semibold">扫描容器条码</div>
+          <div className="font-semibold">扫描库存条码</div>
           {containerBarcode && <div className="mt-2 font-mono text-lg text-green-600">{containerBarcode}</div>}
         </PdaCard>
         <PdaCard active={step === 'location'}>
@@ -131,8 +131,8 @@ export default function PdaSaleReturnPutawayPage() {
         </PdaCard>
 
         {!!task.pendingPutawayContainers?.length && (
-          <section aria-label="待上架容器" className="space-y-2 text-sm">
-            <p className="font-medium">待上架容器</p>
+          <section aria-label="待上架库存条码" className="space-y-2 text-sm">
+            <p className="font-medium">待上架库存条码</p>
             <p className="text-muted-foreground">请核对质检后的条码和数量，贴好对应标签后扫描实物上架。</p>
             <ul className="divide-y rounded-md border px-3">
               {task.pendingPutawayContainers.map(container => (
@@ -156,7 +156,7 @@ export default function PdaSaleReturnPutawayPage() {
 
       <PdaBottomBar>
         <PdaScanner onScan={handleScan} allowManualEntry={false} disabled={scanning || putawayAction.submitBlocked || task.status !== 4}
-          placeholder={step === 'container' ? '扫描容器条码（I/CNT 开头）...' : '扫描库位条码（LOC-/R 开头）...'}
+          placeholder={step === 'container' ? '扫描库存条码…' : '扫描库位条码…'}
         />
       </PdaBottomBar>
     </div>

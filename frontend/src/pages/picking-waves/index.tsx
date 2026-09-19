@@ -40,7 +40,7 @@ function getWaveClosureCopy(wave: PickingWave | null) {
 
   const printSummary = wave.printSummary
   if (wave.status === 5) {
-    return { stageLabel: '已取消', description: '该批次已取消，不再进行出库打印。', nextAction: '如需恢复，请重新建批次' }
+    return { stageLabel: '已取消', description: '该批次已取消，不再进行出库打印。', nextAction: '如需恢复，请重新创建批次' }
   }
   if ((printSummary?.failedCount ?? 0) > 0 || (printSummary?.timeoutCount ?? 0) > 0) {
     return {
@@ -53,15 +53,15 @@ function getWaveClosureCopy(wave: PickingWave | null) {
     return { stageLabel: '待拣货', description: '批次已创建，等待仓库开始拣货。', nextAction: '安排仓库开始拣货' }
   }
   if (wave.status === 2) {
-    return { stageLabel: '拣货中', description: '批次正在按路线推进，优先确认进度和卡点。', nextAction: '跟进拣货推进与异常容器' }
+    return { stageLabel: '拣货中', description: '批次正在按路线推进，优先确认进度和卡点。', nextAction: '跟进拣货推进与异常情况' }
   }
   if (wave.status === 3) {
     return { stageLabel: '待分拣', description: '批次拣货已完成，等待后续分拣 / 复核 / 出库。', nextAction: '继续推进分拣与出库' }
   }
   if (wave.status === 4) {
-    return { stageLabel: '已完成', description: '该批次已完成，仍可复盘打印和任务执行情况。', nextAction: '可回看打印与执行记录' }
+    return { stageLabel: '已完成', description: '该批次已完成，仍可回看打印和任务执行情况。', nextAction: '可回看打印与执行记录' }
   }
-  return { stageLabel: wave.statusName, description: '当前批次可继续查看执行与打印信息。', nextAction: '检查主链处理状态' }
+  return { stageLabel: wave.statusName, description: '当前批次可继续查看执行与打印信息。', nextAction: '检查处理进度' }
 }
 
 export default function PickingWavesPage() {
@@ -160,7 +160,7 @@ export default function PickingWavesPage() {
   const columns = useMemo<TableColumn<PickingWave>[]>(() => [
     {
       key: 'waveNo',
-      title: '批次单号',
+      title: '批次号',
       width: 160,
       render: (_, row) => (
         <button type="button" className="text-left" onClick={() => openWaveDetail(row)}>
@@ -245,7 +245,7 @@ export default function PickingWavesPage() {
           {chips.map(c => (
             <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
               {c.label}
-              <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除筛选 ${c.label}`}>
+              <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${c.label}」`}>
                 <X className="h-3 w-3" />
               </button>
             </span>
@@ -272,7 +272,7 @@ export default function PickingWavesPage() {
             <section className="rounded-lg border border-primary/20 bg-primary/5 px-4 py-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <p className="text-sm font-semibold text-foreground">当前主链阶段：{detailCopy.stageLabel}</p>
+                  <p className="text-sm font-semibold text-foreground">当前进度：{detailCopy.stageLabel}</p>
                   <p className="mt-1 text-sm text-muted-foreground">{detailCopy.description}</p>
                 </div>
                 <div className="rounded-lg border border-border bg-white px-4 py-3 text-left">

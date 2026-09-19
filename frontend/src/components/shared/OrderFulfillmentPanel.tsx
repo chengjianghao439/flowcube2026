@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input'
 import type { TableColumn } from '@/types'
 
 const control = 'h-9 rounded-md border border-input bg-background px-3 text-sm'
-const statusNames = { open: '待处理', processing: '处理中', resolved: '已解决' }
+const statusNames = { open: '待处理', processing: '处理中', resolved: '已处理' }
 const supplyNames: Record<string, string> = {
   '已结束': '无需继续发货', '供应未覆盖': '还有商品没安排货源', '依赖采购': '需等采购到货或上架',
   '现货可安排': '现货可供本单', '有货待占库': '有现货，需先预留', '候选供应待确认': '采购安排还需确认',
@@ -68,7 +68,7 @@ export function OrderFulfillmentPanel({ type, id }: { type: FulfillmentType; id:
     },
     onError: (error: Error) => toast.error(error.message),
   })
-  if (query.isPending) return <p role="status" className="p-4 text-sm text-muted-foreground">正在读取订单进度和待处理问题…</p>
+  if (query.isPending) return <p role="status" className="p-4 text-sm text-muted-foreground">正在加载订单进度和待处理问题…</p>
   if (query.isError) return <div role="alert" className="p-4 text-sm"><p>{query.error.message}</p><Button variant="outline" onClick={() => query.refetch()}>重新加载订单进度</Button></div>
   const data = query.data
   const head = data.commitments.find(c => c.itemId === 0)
@@ -136,7 +136,7 @@ export function OrderFulfillmentPanel({ type, id }: { type: FulfillmentType; id:
         ]} data={data.impacts.map((r, i) => ({ ...r, id: i }))} rowKey="id" /> : <p className="text-sm text-muted-foreground">当前没有你可查看的销售订单关联这批采购。</p>}
       </div>}
     </SectionCard>}
-    {type === 'sale' && !data.issues.length && !data.detectedCount ? <p className="px-1 py-2 text-sm text-muted-foreground">暂无待处理问题</p> : <SectionCard title="待处理问题" compact actions={<div className="flex gap-2">{(showResolved || data.issues.some(issue => issue.status === 'resolved')) && <Button size="sm" variant="ghost" onClick={() => setShowResolved(v => !v)}>{showResolved ? '只看未解决' : '显示已解决'}</Button>}{data.canManage && <>{(type !== 'sale' || data.detectedCount > 0 || data.issues.some(issue => issue.status !== 'resolved')) && <Button size="sm" variant="outline" disabled={mutation.isPending} onClick={() => mutation.mutate({ action: 'sync' })}>更新问题</Button>}{type !== 'sale' && <Button size="sm" variant="outline" onClick={() => { setNewIssue(true); setTitle(''); setResult(''); setDue(''); setOwner('') }}>添加问题</Button>}</>}</div>}>
+    {type === 'sale' && !data.issues.length && !data.detectedCount ? <p className="px-1 py-2 text-sm text-muted-foreground">暂无待处理问题</p> : <SectionCard title="待处理问题" compact actions={<div className="flex gap-2">{(showResolved || data.issues.some(issue => issue.status === 'resolved')) && <Button size="sm" variant="ghost" onClick={() => setShowResolved(v => !v)}>{showResolved ? '只看未处理' : '显示已处理'}</Button>}{data.canManage && <>{(type !== 'sale' || data.detectedCount > 0 || data.issues.some(issue => issue.status !== 'resolved')) && <Button size="sm" variant="outline" disabled={mutation.isPending} onClick={() => mutation.mutate({ action: 'sync' })}>更新问题</Button>}{type !== 'sale' && <Button size="sm" variant="outline" onClick={() => { setNewIssue(true); setTitle(''); setResult(''); setDue(''); setOwner('') }}>添加问题</Button>}</>}</div>}>
       {!issues.length && <p className="text-sm text-muted-foreground">{data.detectedCount > 0 ? '发现订单问题，等待更新。' : showResolved ? '暂无问题记录' : '暂无待处理问题'}</p>}
       <div className="divide-y">{issues.map(issue => <div key={issue.id} className="flex flex-wrap items-start justify-between gap-3 py-3 text-sm">
         <div className="min-w-64 flex-1"><div className="flex flex-wrap items-center gap-2"><strong>{issue.source === 'auto' ? issueNames[issue.title] || issue.title : issue.title}</strong><SoftStatusLabel label={issue.overdue ? '已超时' : issue.dueSoon ? '即将到期' : statusNames[issue.status]} tone={issue.overdue ? 'danger' : issue.status === 'resolved' ? 'success' : 'warning'} /></div>
@@ -151,7 +151,7 @@ export function OrderFulfillmentPanel({ type, id }: { type: FulfillmentType; id:
       }}>
         <p className="text-sm font-medium">{newIssue ? '添加问题' : editing?.source === 'auto' ? issueNames[editing.title] || editing.title : editing?.title}</p>
         {newIssue ? <label className="block text-sm">问题名称<Input required maxLength={100} value={title} onChange={e => setTitle(e.target.value)} /></label> : <label className="block text-sm">如何处理 <select aria-label="如何处理" className={control} value={operation} onChange={e => setOperation(e.target.value as typeof operation)}>
-          {editing?.status === 'resolved' ? <option value="reopen">重新跟进</option> : <><option value="progress">记录进展 / 修改期限</option><option value="assign">更换负责人</option><option value="resolve" disabled={editing?.conditionActive}>标记为已解决{editing?.conditionActive ? '（问题仍存在，暂不能结束）' : ''}</option></>}
+          {editing?.status === 'resolved' ? <option value="reopen">重新跟进</option> : <><option value="progress">记录进展 / 修改期限</option><option value="assign">更换负责人</option><option value="resolve" disabled={editing?.conditionActive}>标记为已处理{editing?.conditionActive ? '（问题仍存在，暂不能结束）' : ''}</option></>}
         </select></label>}
         <div className="flex flex-wrap gap-3">{(newIssue || operation === 'assign') && <label className="text-sm">负责人 <select aria-label="负责人" className={control} value={owner} onChange={e => setOwner(e.target.value)}><option value="">{newIssue ? '默认交给订单负责人' : '待认领'}</option>{data.owners.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}</select></label>}
           <label className="text-sm">处理截止日期<Input type="date" value={due} onChange={e => setDue(e.target.value)} /></label></div>

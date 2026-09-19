@@ -49,7 +49,7 @@ export default function PdaConnectionGate({ children }: { children: React.ReactN
       <div className="flex h-[100dvh] flex-col items-center justify-center gap-4 bg-background px-6 text-center">
         <p className="text-base font-medium text-destructive">无法连接服务器</p>
         <p className="text-xs text-muted-foreground max-w-sm">
-          请确认 PDA 与服务器网络互通，后端已启动。应用会优先使用已保存的 API_BASE_URL；未保存时回退到安装包内置默认地址。
+          请确认 PDA 与服务器网络互通、服务器已启动。应用会优先使用上次保存的服务器地址，未保存时使用安装包内置的默认地址。
         </p>
         <Button type="button" onClick={() => window.location.reload()}>
           重试连接

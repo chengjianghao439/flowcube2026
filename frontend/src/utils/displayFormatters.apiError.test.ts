@@ -15,7 +15,7 @@ test('具体业务码仍按既有映射展示，缺失原因时退回兜底文�
   expect(resolveApiErrorMessage('PDA_WAREHOUSE_MISMATCH', '设备绑定仓库与调拨源仓不一致，无法扫出'))
     .toBe('设备绑定仓库与调拨源仓不一致，无法扫出')
   expect(resolveApiErrorMessage('CONTAINER_LOCK_CONFLICT', '这个货已被其它任务占用'))
-    .toBe('容器已被其它任务占用')
+    .toBe('该库存条码已被其它任务占用')
   expect(resolveApiErrorMessage('CONFLICT', '')).toMatch(/操作失败/)
 })
 

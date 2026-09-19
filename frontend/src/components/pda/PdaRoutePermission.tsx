@@ -49,7 +49,7 @@ export default function PdaRoutePermission({
         <PdaHeader title={title} onBack={() => navigate(backTo)} />
         <PdaEmptyState
           icon={<ShieldAlert className="h-12 w-12 text-amber-500" />}
-          title="PDA 权限未加载"
+          title="暂时无法确认权限"
           description="当前账号没有收到可用权限信息，系统已切换为受限模式。请重新登录；若问题仍然存在，请联系管理员检查账号权限。"
           actionText="返回工作台"
           onAction={() => navigate('/pda')}
@@ -66,7 +66,7 @@ export default function PdaRoutePermission({
         <PdaEmptyState
           icon={<Ban className="h-12 w-12 text-red-500" />}
           title="当前账号无权访问"
-          description="当前账号缺少本页面所需权限，请联系管理员分配。页面入口是否显示与实际权限校验无关。"
+          description="当前账号缺少本页面所需权限，请联系管理员分配。"
           actionText="返回工作台"
           onAction={() => navigate('/pda')}
         />

@@ -162,7 +162,7 @@ export default function ProductsPage() {
   // 当前生效筛选摘要（可逐项移除）
   const chips = [
     keyword && { key: 'keyword', label: `关键字：${keyword}`, onRemove: () => updateParams({ keyword: null, page: 1 }) },
-    catFilter && { key: 'category', label: `分类：${catFilter}`, onRemove: () => updateParams({ categoryId: null, page: 1 }) },
+    catFilter && { key: 'category', label: `分类：${categoryPathMap.get(catFilter) ?? catFilter}`, onRemove: () => updateParams({ categoryId: null, page: 1 }) },
     statusFilter === '1' && { key: 'status', label: '状态：启用', onRemove: () => updateParams({ status: null, page: 1 }) },
     statusFilter === '0' && { key: 'status', label: '状态：停用', onRemove: () => updateParams({ status: null, page: 1 }) },
     supplierId && { key: 'supplier', label: `供应商：${supplierName || supplierMap.get(supplierId) || supplierId}`, onRemove: () => updateParams({ supplierId: null, supplierName: null, page: 1 }) },
@@ -211,7 +211,7 @@ export default function ProductsPage() {
           {chips.map(c => (
             <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
               {c.label}
-              <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除筛选 ${c.label}`}>
+              <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${c.label}」`}>
                 <X className="h-3 w-3" />
               </button>
             </span>
@@ -263,7 +263,7 @@ export default function ProductsPage() {
       <ConfirmDialog
         open={!!confirmProduct}
         title="确认删除商品"
-        description={`删除商品「${confirmProduct?.name}」？仅未被单据、库存或任务引用的商品允许删除；若已被引用，请改为编辑后停用。`}
+        description={`删除商品「${confirmProduct?.name}」？商品被单据、库存或任务引用后不能删除；如需停用，请编辑并取消启用。`}
         variant="destructive"
         confirmText="删除"
         onConfirm={() => { del(confirmProduct!.id); setConfirmProduct(null) }}

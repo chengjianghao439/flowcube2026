@@ -159,7 +159,7 @@ export default function PdaCheckPage() {
         setStep('done')
         ok('✓ 复核完成')
       } else {
-        ok('✓ 已记录复核扫码')
+        ok('✓ 已复核，继续扫下一件')
       }
     },
     resolveServerState: async () => {
@@ -350,7 +350,7 @@ export default function PdaCheckPage() {
             onConfirm={() => {
               void checkAction.confirmPending().then((status) => {
                 if (!status) return
-                if (status.status === 'pending') warn(status.message || '服务端仍未确认结果，请稍后再查')
+                if (status.status === 'pending') warn(status.message || '系统还未确认结果，请稍后再查')
                 if (status.status === 'state_unconfirmed') warn(status.message)
                 if (status.status === 'not_found') warn(status.message || '未找到上次复核记录；请刷新任务后再决定是否重扫')
                 if (status.status === 'failed') err(status.message || '上次复核未成功，请检查后重试')

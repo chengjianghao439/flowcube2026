@@ -1,6 +1,6 @@
 /**
  * PDA 调拨 · 调入仓扫码入库 — 路由 /pda/transfer-in/:id
- * 两步：扫在途容器条码 → 扫目标库位 → POST /transfer/:id/scan-in（容器落库位、翻在库）。
+ * 两步：扫在途库存条码 → 扫目标库位 → POST /transfer/:id/scan-in（容器落库位、翻在库）。
  */
 import { useCallback, useState } from 'react'
 import { ArrowDownToLine, CircleCheck, Hourglass } from 'lucide-react'
@@ -65,9 +65,9 @@ export default function PdaTransferInPage() {
     const parsed = parseBarcode(b)
     if (!pendingContainer) {
       // 第一步：扫容器
-      if (parsed.type !== 'container') { err('请先扫描在途容器条码'); return }
+      if (parsed.type !== 'container') { err('请先扫描在途库存条码'); return }
       setPendingContainer(b)
-      ok('已扫容器，请扫目标库位')
+      ok('已扫条码，请扫目标库位')
       return
     }
     // 第二步：扫库位
@@ -76,7 +76,7 @@ export default function PdaTransferInPage() {
     //（2026-09-17 验收 ISSUE-018）；归属仓与状态仍由服务端校验。
     try {
       const loc = await getLocationByCodeApi(b)
-      if (!loc?.id) { err(`库位不存在：${b}`); return }
+      if (!loc?.id) { err(`库位不对：${b}，请重扫`); return }
       submitMut.mutate({ containerBarcode: pendingContainer, locationId: loc.id })
     } catch (e) {
       err((e as { message?: string })?.message ?? '库位查询失败')
@@ -132,7 +132,7 @@ export default function PdaTransferInPage() {
             onConfirm={() => {
               void scanAction.confirmPending().then((status) => {
                 if (!status) return
-                if (status.status === 'pending') warn(status.message || '服务端仍未确认结果，请稍后再查')
+                if (status.status === 'pending') warn(status.message || '系统还未确认结果，请稍后再查')
                 if (status.status === 'not_found') warn(status.message || '未找到上次入库记录；请刷新后再决定是否重扫')
                 if (status.status === 'failed') err(status.message || '上次入库未成功，请检查后重试')
               })
@@ -142,7 +142,7 @@ export default function PdaTransferInPage() {
           />
 
           <div className={`rounded-xl border px-3 py-2 text-sm ${pendingContainer ? 'border-primary/40 bg-primary/5 text-primary' : 'border-border bg-card text-muted-foreground'}`}>
-            {pendingContainer ? `已扫容器 ${pendingContainer}，请扫目标库位` : '第一步：扫描在途容器条码'}
+            {pendingContainer ? `已扫条码 ${pendingContainer}，请扫目标库位` : '第一步：扫描在途库存条码'}
             {pendingContainer && (
               <button type="button" className="ml-2 underline" onClick={() => setPendingContainer(null)}>重扫</button>
             )}
@@ -169,7 +169,7 @@ export default function PdaTransferInPage() {
       <PdaBottomBar>
         <PdaScanner
           onScan={handleScan}
-          placeholder={pendingContainer ? '扫描目标库位条码' : '扫描在途容器条码'}
+          placeholder={pendingContainer ? '扫描目标库位条码' : '扫描在途库存条码'}
           disabled={submitMut.isPending || scanAction.submitBlocked}
           allowManualEntry={false}
         />

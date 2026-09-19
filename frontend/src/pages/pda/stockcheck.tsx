@@ -121,7 +121,7 @@ function CheckWork({ checkId }: { checkId: number }) {
     try {
       const d = await getContainerByBarcodeApi(bc)
       if (d.productId !== activeItem.productId) { err(`条码 ${bc} 不是商品「${activeItem.productName}」的库存条码`); return }
-      if (d.containerStatus !== 'stored') { err(`条码 ${bc} 不是在库条码（待上架/已出库状态不可盘点）`); return }
+      if (d.containerStatus !== 'stored') { err(`${bc} 不可盘点，请先上架`); return }
       if (d.individual) {
         setScanned(prev => [...prev, { barcode: d.barcode, individual: true, bookQty: 1, countedQty: 1 }])
         ok(`单件 ${d.barcode} 计 1（已扫 ${scanned.length + 1} 个）`)
@@ -175,7 +175,7 @@ function CheckWork({ checkId }: { checkId: number }) {
                 </span>
               )}
             </p>
-            <p className="mt-1 text-xs text-muted-foreground">扫完该商品的全部实物后点「提交本商品」；<b>没扫到的条码会被判为盘亏</b>，请务必扫全。数量容器预填账面数，实物少了就改成实际数。</p>
+            <p className="mt-1 text-xs text-muted-foreground">扫完该商品的全部实物后点「提交本商品」；<b>没扫到的条码会被判为盘亏</b>，请务必扫全。数量框预填账面数，实物少了就改成实际数。</p>
             <div className="mt-2 flex gap-2">
               <Input
                 data-scanner-manual="true"

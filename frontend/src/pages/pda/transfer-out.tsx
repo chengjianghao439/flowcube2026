@@ -58,7 +58,7 @@ export default function PdaTransferOutPage() {
     const b = raw.trim()
     if (!b) return
     if (!order) { err('调拨单加载中，请稍后扫码'); return }
-    if (order.status !== 2 && order.status !== 3) { err(`当前状态「${order.statusName}」不能扫码出库`); return }
+    if (order.status !== 2 && order.status !== 3) { err('该单不在待出库，不能扫码'); return }
     scanMut.mutate(b)
   }, [order, scanMut, err])
 
@@ -111,7 +111,7 @@ export default function PdaTransferOutPage() {
             onConfirm={() => {
               void scanAction.confirmPending().then((status) => {
                 if (!status) return
-                if (status.status === 'pending') warn(status.message || '服务端仍未确认结果，请稍后再查')
+                if (status.status === 'pending') warn(status.message || '系统还未确认结果，请稍后再查')
                 if (status.status === 'not_found') warn(status.message || '未找到上次出库记录；请刷新后再决定是否重扫')
                 if (status.status === 'failed') err(status.message || '上次出库未成功，请检查后重试')
               })
@@ -121,11 +121,11 @@ export default function PdaTransferOutPage() {
           />
 
           {/*
-            整容器调拨要求「容器数量 ≤ 该商品剩余可调量」，扫到更大的容器会被服务端拒绝。
+            整容器调拨要求「容器数量 ≤ 该商品剩余可调量」，扫到更大的容器会被系统拒绝。
             页面直接把剩余可调量摆出来，避免现场拿 5 件/100 件的整箱去凑 1 件的计划
             （2026-09-17 验收 ISSUE-016）。
           */}
-          <p className="text-xs text-muted-foreground">扫描调出仓容器条码，整容器调拨出库（容器数量需不超过剩余可调量）</p>
+          <p className="text-xs text-muted-foreground">扫描调出仓库存条码，按整条码调拨出库（数量需不超过剩余可调量）</p>
           {(order.items ?? []).map(item => {
             const remaining = Math.max(0, Number(item.quantity || 0) - Number(item.deductedQty ?? 0))
             return (
@@ -148,7 +148,7 @@ export default function PdaTransferOutPage() {
       </div>
 
       <PdaBottomBar>
-        <PdaScanner onScan={handleScan} placeholder="扫描调出仓容器条码" disabled={scanMut.isPending || scanAction.submitBlocked} allowManualEntry={false} />
+        <PdaScanner onScan={handleScan} placeholder="扫描调出仓库存条码" disabled={scanMut.isPending || scanAction.submitBlocked} allowManualEntry={false} />
       </PdaBottomBar>
     </div>
   )

@@ -94,7 +94,7 @@ export default function PdaUpdateDialog({ version, onDismiss }: Props) {
         const digest = await crypto.subtle.digest('SHA-256', buf)
         const hex = [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('')
         if (hex !== version.sha256.toLowerCase()) {
-          throw new Error('更新包校验失败（sha256 不匹配），已中止下载')
+          throw new Error('更新包已损坏，请重新下载')
         }
       }
       const url  = URL.createObjectURL(blob)

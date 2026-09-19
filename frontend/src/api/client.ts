@@ -159,7 +159,7 @@ declare module 'axios' {
 
 function assertCurrentAuthSession(config?: AxiosRequestConfig): void {
   if (config?._authSessionGeneration != null && config._authSessionGeneration !== useAuthStore.getState().sessionGeneration) {
-    throw new axios.CanceledError('登录会话已变化，请重新操作')
+    throw new axios.CanceledError('登录状态已变化，请重新操作')
   }
 }
 
@@ -314,9 +314,9 @@ apiClient.interceptors.response.use(
           ? '无法连接服务器，请检查网络与内置服务器地址是否可达'
           : '无法连接服务器，请检查网络与后端服务是否正常'
         : null)
-      ?? (transportCode === 'ECONNABORTED' ? '请求超时，请稍后重试' : null)
+      ?? (transportCode === 'ECONNABORTED' ? '网络超时，请稍后重试' : null)
       ?? rawMsg
-      ?? '请求失败'
+      ?? '操作失败，请稍后重试'
     const payload = error.response?.data?.data
     const businessCode = error.response?.data?.code ?? null
     const normalizedCode =

@@ -118,7 +118,7 @@ export const LABEL_FIELD_DEFS_BY_TYPE: Record<number, PrintFieldDef[]> = {
   10: [
     { key: 'location_barcode', label: '库位条码', type: 'barcode', defaultW: 72, defaultH: 14 },
     { key: 'location_code', label: '库位编码', type: 'text', defaultW: 72, defaultH: 7 },
-    { key: 'zone', label: '区域', type: 'text', defaultW: 72, defaultH: 7 },
+    { key: 'zone', label: '库区', type: 'text', defaultW: 72, defaultH: 7 },
     { key: 'name', label: '名称', type: 'text', defaultW: 72, defaultH: 8 },
     { key: 'warehouse_name', label: '仓库名称', type: 'text', defaultW: 72, defaultH: 7 },
     { key: 'warehouse_code', label: '仓库编码', type: 'text', defaultW: 72, defaultH: 7 },
@@ -188,7 +188,7 @@ export const DEFAULT_LABEL_ELEMENTS: Record<number, TemplateElement[]> = {
   10: [
     { id: 'lb10_bc', type: 'barcode', fieldKey: 'location_barcode', label: '库位条码', x: 2, y: 2, width: 71, height: 12, fontSize: 10, fontWeight: 'normal', textAlign: 'left', border: false },
     { id: 'lb10_lc', type: 'text', fieldKey: 'location_code', label: '库位编码', x: 2, y: 16, width: 71, height: 6, fontSize: 9, fontWeight: 'normal', textAlign: 'left', border: false },
-    { id: 'lb10_z', type: 'text', fieldKey: 'zone', label: '区域', x: 2, y: 24, width: 71, height: 6, fontSize: 8, fontWeight: 'normal', textAlign: 'left', border: false },
+    { id: 'lb10_z', type: 'text', fieldKey: 'zone', label: '库区', x: 2, y: 24, width: 71, height: 6, fontSize: 8, fontWeight: 'normal', textAlign: 'left', border: false },
     { id: 'lb10_n', type: 'text', fieldKey: 'name', label: '名称', x: 2, y: 32, width: 71, height: 14, fontSize: 8, fontWeight: 'normal', textAlign: 'left', border: false },
   ],
 }

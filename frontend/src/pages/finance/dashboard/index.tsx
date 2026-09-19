@@ -191,7 +191,7 @@ export default function FinanceDashboardPage() {
     <div className="space-y-5">
       <PageHeader
         title="资金看板"
-        description="账户余额、区间现金流、应收应付账龄一屏总览。数据实时取自账户流水与账款，不做统计缓存。"
+        description="账户余额、区间现金流、应收应付账龄一屏总览。数据实时取自账户流水与账款。"
         actions={(
           <div className="flex gap-2">
             <Button variant="outline"

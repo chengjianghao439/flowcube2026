@@ -94,7 +94,7 @@ export default function CarrierAccountsPage() {
       <aside aria-label="快递账号列表" className="min-w-0 space-y-3">
         <Input aria-label="搜索快递账号" placeholder="搜索名称或月结号" value={keyword} onChange={e => setKeyword(e.target.value)} />
         <p className="text-sm text-muted-foreground">{available.length} 个承运商 · 选择后管理账号</p>
-        {carriers.isError ? <p role="alert">账号列表读取失败。<Button variant="link" onClick={() => void carriers.refetch()}>重新加载</Button></p> : carriers.isLoading ? <p role="status">正在读取账号…</p> : <div className="max-h-64 overflow-auto rounded-lg border lg:max-h-[65vh]">
+        {carriers.isError ? <p role="alert">账号列表读取失败。<Button variant="link" onClick={() => void carriers.refetch()}>重新加载</Button></p> : carriers.isLoading ? <p role="status">正在加载账号…</p> : <div className="max-h-64 overflow-auto rounded-lg border lg:max-h-[65vh]">
           {visible.map(c => <button key={c.id} type="button" aria-pressed={!creating && String(c.id) === carrierId} disabled={saving} onClick={() => select(String(c.id))} className={`block w-full border-b px-4 py-3 text-left last:border-b-0 hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:opacity-50 ${!creating && String(c.id) === carrierId ? 'bg-accent text-accent-foreground' : 'bg-card'}`}>
             <span className="block break-words font-medium">{c.name}</span><span className="mt-1 block break-all text-sm text-muted-foreground">{c.monthlyAccount || '未绑定月结账号'}</span><span className="mt-2 block text-xs text-muted-foreground">{c.platformCode === 'sf' ? '顺丰 · ' : c.platformCode === 'deppon' ? '德邦 · ' : ''}{!c.isActive ? '承运商已停用' : c.waybillEnabled ? '自动下单已启用' : '自动下单已暂停'}</span>
           </button>)}

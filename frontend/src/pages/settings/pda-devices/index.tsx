@@ -118,7 +118,7 @@ export default function PdaDevicesPage() {
       },
     },
     {
-      key: 'activeSessions', title: '在用会话', width: 10,
+      key: 'activeSessions', title: '在线登录', width: 10,
       render: v => Number(v) > 0 ? <span className="text-emerald-600">{v as number}</span> : <span className="text-muted-foreground">0</span>,
     },
     { key: 'lastSeenAt', title: '最后在线', width: 14, render: v => v ? formatDisplayDateTime(v as string) : '从未连接' },
@@ -138,7 +138,7 @@ export default function PdaDevicesPage() {
     <div className="space-y-4">
       <PageHeader
         title="PDA 设备"
-        description="登记 PDA 设备生成设备码与密钥，扫码绑定后即可现场作业；停用或重置密钥会立即吊销该机会话"
+        description="登记 PDA 设备并生成设备码与密钥，扫码绑定后即可现场作业；停用或重置密钥会让该设备立即退出登录"
         actions={<Button onClick={() => setCreateOpen(true)}>登记新设备</Button>}
       />
       <FilterCard>
@@ -152,7 +152,7 @@ export default function PdaDevicesPage() {
 
       <div className="rounded-xl border border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
         绑定仓库后，这台 PDA 只能作业本仓的单据；未绑定的设备可在任何仓作业。
-        停用设备或重置密钥会立即吊销该机在用的会话——设备丢失时请立即「停用」。
+        停用设备或重置密钥会让这台设备立即退出登录——设备丢失时请立即「停用」。
       </div>
 
       <DataTable
@@ -268,7 +268,7 @@ export default function PdaDevicesPage() {
                 正在编辑：<span className="font-medium text-foreground">{editing.deviceName || editing.deviceCode}</span>
               </p>
             )}
-            <DialogDescription>改绑仓库会吊销这台机器当前的会话，需要重新登录。</DialogDescription>
+            <DialogDescription>改绑仓库会让这台设备退出登录，需要重新登录。</DialogDescription>
           </DialogHeader>
           {editing && (
             <div className="space-y-3">
@@ -315,7 +315,7 @@ export default function PdaDevicesPage() {
       <ConfirmDialog
         open={!!resetTarget}
         title="重置设备密钥"
-        description={`「${resetTarget?.deviceName ?? ''}」的旧密钥将立即作废，这台机器当前会话会被吊销、必须重新扫码绑定才能继续作业。确定要重置吗？`}
+        description={`「${resetTarget?.deviceName ?? ''}」的旧密钥将立即作废，这台设备会退出登录、必须重新扫码绑定才能继续作业。确定要重置吗？`}
         confirmText="重置密钥"
         onConfirm={() => resetTarget && resetMut.mutate(resetTarget.id)}
         onCancel={() => setResetTarget(null)}

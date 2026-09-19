@@ -264,7 +264,7 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
         // 收货本身已成功记录，只是暂无可用打印机——不是失败，但要提醒现场后续记得补打。
         // 2026-09-14 起没有可用打印机也会留一条打印记录，所以这些容器会出现在「打印记录」页，
         // 绑定打印机后从那里补打即可（系统内唯一补打入口）。
-        warn(`${data.noPrinterCount} 个条码暂无打印机可用，收货已记录并留有打印记录；请先配置标签打印机，再到「打印记录」页补打`)
+        warn(`${data.noPrinterCount} 个条码未打印，请到「打印记录」补打`)
       }
     },
     // 网络波动导致提交结果不明时，用"目标商品的已收数量是否已经涨到本次提交后
@@ -440,9 +440,9 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
           onConfirm={() => {
             void receiveAction.confirmPending().then((status) => {
               if (!status) return
-              if (status.status === 'pending') warn(status.message || '服务端仍未确认结果，请稍后再查或刷新页面校验')
+              if (status.status === 'pending') warn(status.message || '系统还未确认结果，请稍后再查或刷新页面校验')
               if (status.status === 'state_unconfirmed') warn(status.message)
-              if (status.status === 'not_found') warn(status.message || '服务端未找到该次收货记录；请检查明细后再手动重试')
+              if (status.status === 'not_found') warn(status.message || '系统里没有找到这次收货记录；请检查明细后再手动重试')
               if (status.status === 'failed') err(status.message || '上次收货未成功，请检查后重试')
             })
           }}

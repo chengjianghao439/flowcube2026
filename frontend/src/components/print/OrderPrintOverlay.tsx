@@ -189,7 +189,7 @@ export function OrderPrintOverlay({ templateType, title, data, items, onClose }:
           {loading ? (
             <span style={{ fontSize: 12, color: '#999', display: 'flex', alignItems: 'center', gap: 4 }}>
               <Loader2 style={{ width: 14, height: 14, animation: 'spin 1s linear infinite' }} />
-              加载模板…
+              正在加载模板…
             </span>
           ) : selected ? (
             <button

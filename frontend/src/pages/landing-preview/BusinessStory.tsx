@@ -24,7 +24,7 @@ const steps = [
     icon: ScanLine,
     title: "货到了，按步骤接进来。",
     description:
-      "PDA 扫码收货，记录容器与来源。新到的 40 件仍需上架，收货完成不等于已经可以发走。",
+      "PDA 扫码收货，记录库存条码与来源。新到的 40 件仍需上架，收货完成不等于已经可以发走。",
     stock: 40,
     expected: 40,
     status: "等待上架完成",

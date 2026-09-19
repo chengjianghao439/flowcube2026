@@ -212,7 +212,7 @@ export default function DataTable<T extends object>({
                       type="button"
                       aria-label={`调整${col.title}列宽`}
                       onMouseDown={(event) => startResize(event, col)}
-                      title="拖动调整列宽，双击适应内容；方向键微调，Enter 适应内容"
+                      title="拖动调整列宽，双击或按 Enter 适应内容；方向键微调"
                       draggable={false}
                       onClick={event => { event.preventDefault(); event.stopPropagation() }}
                       onDoubleClick={event => { event.stopPropagation(); fitColumn(col) }}

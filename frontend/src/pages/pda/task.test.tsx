@@ -196,7 +196,7 @@ test('没有输入框时扫码枪键盘事件照样能提交，扫完不重新�
   await gunScan('I000123')
 
   expect(api.submitScan).toHaveBeenCalledWith(expect.objectContaining({ barcode: 'I000123', containerId: 917 }), 'stable-key')
-  expect(api.ok).toHaveBeenCalledWith('✓ 扫描成功')
+  expect(api.ok).toHaveBeenCalledWith('✓ 已拣 CLIP top BLUMOTION 铰链 ×3')
   expect(host.querySelector('input')).toBeNull()
   expect(document.activeElement?.tagName ?? '').not.toBe('INPUT')
 })

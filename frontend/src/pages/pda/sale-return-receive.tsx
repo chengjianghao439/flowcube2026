@@ -109,7 +109,7 @@ export default function PdaSaleReturnReceivePage() {
       || productList.find(p => parsed?.type === 'product' && p.productId === Number(parsed.id))
       || (/^\d+$/.test(trimmed) ? productList.find(p => p.productId === Number(trimmed)) : undefined)
     if (!product) {
-      err(parsed?.type === 'product' ? '该产品不在当前退货任务中' : '该商品不在当前退货任务中，请核对条码或直接点选商品')
+      err('这件货不在本退货单，请核对条码或点选商品')
       return
     }
     ok(`${product.productName} ${product.productCode}`)
@@ -128,7 +128,7 @@ export default function PdaSaleReturnReceivePage() {
   // Guard states
   if (isLoading) return <div className="flex min-h-screen flex-col bg-background"><PdaHeader title="退货收货" onBack={() => nav('/pda/sale-return')} /><PdaLoading /></div>
   if (!task) return <div className="flex min-h-screen flex-col bg-background"><PdaHeader title="退货收货" onBack={() => nav('/pda/sale-return')} /><div className="p-4 text-center text-muted-foreground">任务不存在</div></div>
-  if (!task.submittedAt) return <div className="flex min-h-screen flex-col bg-background"><PdaHeader title="退货收货" onBack={() => nav('/pda/sale-return')} /><div className="p-4 text-center text-muted-foreground">请先在 ERP 端提交到 PDA</div></div>
+  if (!task.submittedAt) return <div className="flex min-h-screen flex-col bg-background"><PdaHeader title="退货收货" onBack={() => nav('/pda/sale-return')} /><div className="p-4 text-center text-muted-foreground">请先在 ERP 提交退货单</div></div>
   if (task.status >= 4) {
     return <div className="flex min-h-screen flex-col bg-background"><PdaHeader title="退货质检" onBack={() => nav('/pda/sale-return')} /><div className="mx-auto w-full max-w-md space-y-3 p-4"><p className="text-center text-muted-foreground">{task.status === 4 ? '质检完成，请贴好对应标签后进入上架' : '退货任务已结束'}</p><ReturnLabelReceiptView receipt={labelReceipt} />{task.status === 4 && <Button className="w-full" onClick={() => nav(`/pda/sale-return/${taskId}/putaway`)}>前往退货上架</Button>}</div></div>
   }
@@ -268,8 +268,8 @@ export default function PdaSaleReturnReceivePage() {
 function ReturnLabelReceiptView({ receipt }: { receipt: Partial<ReturnTaskActionResult> | null }) {
   if (!receipt?.containers?.length) return null
   return (
-    <section aria-label="退货容器标签" className="space-y-2 rounded-md border p-3 text-sm">
-      <p className="font-medium">本次容器标签</p>
+    <section aria-label="退货条码标签" className="space-y-2 rounded-md border p-3 text-sm">
+      <p className="font-medium">本次条码标签</p>
       <p className="text-muted-foreground">请按数量分开放置并贴上对应标签；质检拆分后应更换旧标签。</p>
       {/* 2026-09-14 起没有可用打印机也会留一条打印记录，退货容器同样会出现在「打印记录」页，
           现场先解决打印机，再从那里补打（系统内唯一补打入口）。 */}

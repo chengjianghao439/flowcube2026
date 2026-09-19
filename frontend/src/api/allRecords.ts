@@ -28,7 +28,7 @@ export async function collectAllRecords<T>(
   signal?: { readonly aborted: boolean },
   maxRows: number = MAX_COLLECT_ROWS,
 ): Promise<T> {
-  const assertActive = () => { if (signal?.aborted) throw new DOMException('请求已取消', 'AbortError') }
+  const assertActive = () => { if (signal?.aborted) throw new DOMException('加载已取消', 'AbortError') }
   assertActive()
   const first = await fetchBatch(1)
   assertActive()
@@ -36,13 +36,13 @@ export async function collectAllRecords<T>(
   const total = Number(first.pagination.total)
   const size = Number(first.pagination.pageSize)
   if (!Number.isSafeInteger(total) || total < 0 || (!Number.isSafeInteger(size) || size < 1) && total > 0) {
-    throw new Error('列表数量信息无效，请刷新后重试')
+    throw new Error('数据没取全，请刷新后重试')
   }
   const rows = [...first.list]
   const signatures = new Set<string>()
   const remember = (list: unknown[]) => {
     const signature = JSON.stringify([list.length, list[0], list[list.length - 1]])
-    if (signatures.has(signature)) throw new Error('列表返回重复批次，请刷新后重试')
+    if (signatures.has(signature)) throw new Error('数据有重复，请刷新后重试')
     signatures.add(signature)
   }
   if (rows.length) remember(rows)

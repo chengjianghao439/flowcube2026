@@ -43,7 +43,7 @@ const deviceInfo = [
     icon: Smartphone,
     title: "走到货物面前，就能接着做。",
     text: "把任务带到仓库现场。扫码收货、上架、拣货与出库，按任务指引一步步完成。",
-    items: ["扫码识别商品与容器", "按任务执行仓库作业", "设备与仓库绑定"],
+    items: ["扫码识别商品与库存条码", "按任务执行仓库作业", "设备与仓库绑定"],
   },
   {
     label: "浏览器",
@@ -439,7 +439,7 @@ export default function LandingPage() {
                   <div className="lp-scan">
                     <ScanLine size={58} strokeWidth={1} />
                   </div>
-                  <h4>扫描容器条码</h4>
+                  <h4>扫描库存条码</h4>
                   <p>按任务指引继续作业</p>
                   <div className="lp-phone-task">
                     <span>缓冲铰链 · 全盖</span>

@@ -92,7 +92,7 @@ export default function InventoryAgingPage() {
     <div className="space-y-4">
       <PageHeader
         title="存放时长与滞销"
-        description="存放时长自本仓落库起算（调拨/拆分会重置）；金额按移动加权成本 avg_cost 估值，仅供参考不作账。滞销 = 仍有库存且超过阈值天数无出库。"
+        description="存放时长自入库本仓起算（调拨、拆分会重置）；金额按移动加权平均成本估值，仅供参考、不作账。滞销：仍有库存且超过设定天数没有出库。"
         actions={
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
@@ -106,7 +106,7 @@ export default function InventoryAgingPage() {
           {chips.map(c => (
             <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
               {c.label}
-              <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除筛选 ${c.label}`}>
+              <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${c.label}」`}>
                 <X className="h-3 w-3" />
               </button>
             </span>

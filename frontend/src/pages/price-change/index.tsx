@@ -22,7 +22,7 @@ import { formatDisplayDateTime } from '@/lib/dateTime'
 import type { TableColumn } from '@/types'
 
 const STATUS_TONE: Record<number, 'warning' | 'success' | 'danger' | 'info'> = { 1: 'warning', 2: 'success', 3: 'danger', 4: 'info' }
-const STATUS_LABEL: Record<number, string> = { 1: '待审批', 2: '已通过', 3: '已驳回', 4: '已取消' }
+const STATUS_LABEL: Record<number, string> = { 1: '待审批', 2: '已批准', 3: '已驳回', 4: '已取消' }
 const PRICE_TYPE_LABEL: Record<string, string> = { sale: '销售价', cost: '成本价', a: '等级A', b: '等级B', c: '等级C', d: '等级D' }
 
 interface PriceChangeRequest {
@@ -116,7 +116,7 @@ export default function PriceChangePage() {
 
   const approveMut = useMutation({
     mutationFn: (id: number) => payloadClient.post<ApproveResult>(`/price-change/${id}/approve`),
-    onSuccess: (d) => { qc.invalidateQueries({ queryKey: ['price-change'] }); toast.success(d?.finished ? '审批通过，价格已生效' : '审批已通过本步骤') },
+    onSuccess: (d) => { qc.invalidateQueries({ queryKey: ['price-change'] }); toast.success(d?.finished ? '审批通过，价格已生效' : '本步骤已批准') },
     onError: (e: unknown) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '审批失败'),
   })
 

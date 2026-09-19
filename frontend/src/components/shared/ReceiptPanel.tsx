@@ -104,9 +104,9 @@ export const ReceiptPanel = forwardRef<ReceiptPanelHandle, Props>(function Recei
     { key: 'status', title: '状态', width: 100, render: (v, row) => (
       <SoftStatusLabel label={(row as PaymentReceipt).statusName} tone={RECEIPT_TONE[v as number] ?? 'draft'} />
     )},
-    { key: 'paymentDate', title: '日期', width: 110, render: v => v ? formatDisplayDate(String(v)) : '-' },
-    { key: 'method', title: '方式', width: 80, render: v => (v as string) || '-' },
-    { key: 'operatorName', title: '经办人', width: 90, render: v => (v as string) || '-' },
+    { key: 'paymentDate', title: '日期', width: 110, render: v => v ? formatDisplayDate(String(v)) : '—' },
+    { key: 'method', title: '方式', width: 80, render: v => (v as string) || '—' },
+    { key: 'operatorName', title: '经办人', width: 90, render: v => (v as string) || '—' },
     { key: 'id', title: '操作', width: 180, render: (_, row) => {
       const r = row as PaymentReceipt
       // 与「按单登记」tab 一致：主按钮 + 下拉次操作（有余额→继续核销为主、明细进下拉；已核销完→只有明细）

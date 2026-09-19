@@ -57,7 +57,7 @@ test('仍需发货时显示白话字段和缺少仓库备货天数的原因', as
   expect(host.textContent).not.toContain('无需继续发货')
   expect(host.textContent).not.toContain('检查订单问题')
   expect(host.textContent).not.toContain('添加问题')
-  expect(host.textContent).not.toContain('显示已解决')
+  expect(host.textContent).not.toContain('显示已处理')
   expect(host.textContent).toContain('暂无待处理问题')
   const headers = [...host.querySelectorAll('th')].map(node => node.textContent)
   expect(headers).not.toContain('最近发货日期')
@@ -81,11 +81,11 @@ test('空订单明细不当作已经发完', async () => {
 
 const issue = { id: 3, document_type: 'sale' as const, document_id: 1, source: 'manual' as const, source_key: 'manual', title: '核对地址', reason: '客户地址变更', action_path: '/sale/1', owner_id: null, ownerName: null, status: 'open' as const, due_at: null, result: null, version: 1, overdue: 0, dueSoon: 0 }
 
-test('已有人工问题仍可跟进，已解决记录按需查看', async () => {
+test('已有人工问题仍可跟进，已处理记录按需查看', async () => {
   await renderSale([item()], true, { issues: [issue, { ...issue, id: 4, title: '旧问题', status: 'resolved' }] })
   expect(host.textContent).toContain('核对地址')
   expect(host.textContent).not.toContain('旧问题')
-  const history = [...host.querySelectorAll('button')].find(b => b.textContent === '显示已解决')!
+  const history = [...host.querySelectorAll('button')].find(b => b.textContent === '显示已处理')!
   await act(async () => history.click())
   expect(host.textContent).toContain('旧问题')
   const edit = [...host.querySelectorAll('button')].find(b => b.textContent === '处理')!

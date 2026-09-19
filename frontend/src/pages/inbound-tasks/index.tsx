@@ -333,7 +333,7 @@ export default function InboundTasksPage() {
               + (task.status === 4
                 ? '该收货订单已完成并自动结算过应付，撤回后会一并反冲已入库的库存、冲销已生成的应付记录，若关联采购单因此已自动完成，也会退回"已提交"状态。'
                 : '')
-              + '若容器已被后续拣货、拆分或调拨等动作动过，将无法撤回，请改用库存盘点处理差异。此操作请谨慎确认。',
+              + '若库存条码已被后续拣货、拆分或调拨等动作动过，将无法撤回，请改用库存盘点处理差异。此操作请谨慎确认。',
               () => voidReceiptMut.mutate(task.id, {
                 onSuccess: () => { toast.success('已撤回收货，恢复为待收货'); closeConfirm() },
                 onError: (error: unknown) => toast.error((error as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '撤回失败'),
@@ -378,7 +378,7 @@ export default function InboundTasksPage() {
     <div className="space-y-4">
       <PageHeader
         title="收货订单"
-        description="按供应商一次到货建单；收货生成容器，PDA 打印条码并上架后计入库存"
+        description="按供应商一次到货建单；收货生成库存条码，PDA 打印并上架后计入库存"
         actions={
           <>
             <Button
@@ -410,7 +410,7 @@ export default function InboundTasksPage() {
           {chips.map(c => (
             <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
               {c.label}
-              <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除筛选 ${c.label}`}>
+              <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${c.label}」`}>
                 <X className="h-3 w-3" />
               </button>
             </span>

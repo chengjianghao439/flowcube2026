@@ -144,7 +144,7 @@ export default function CarriersPage() {
             {isDirectCarrierPlatform(form.platformCode) ? (
               /* 顺丰/德邦：账号资料与取号开关由「快递账号绑定」页维护（后端会拒绝在此提交），这里只读 */
               <div className="rounded-md border border-border bg-muted/40 p-3 text-sm">
-                <p>顺丰/德邦的月结账号、常用服务与「电子面单取号」开关在「快递账号绑定」页维护，这里只读展示。</p>
+                <p>顺丰/德邦的月结账号、常用服务与「电子面单取号」开关在「快递账号绑定」页维护，这里仅供查看。</p>
                 <p className="mt-2 text-muted-foreground">当前：月结账号 {form.monthlyAccount || '未绑定'} · 取号 {form.waybillEnabled ? '已启用' : '未启用'}</p>
                 <Button type="button" variant="outline" size="sm" className="mt-3"
                   onClick={() => navigate(editing ? `/carrier-accounts?carrierId=${editing.id}` : '/carrier-accounts')}>

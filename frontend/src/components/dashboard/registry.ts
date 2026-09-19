@@ -85,8 +85,8 @@ export const WIDGETS: WidgetDef[] = [
   { id: 'list-low-stock',    title: '低库存预警',    description: '库存不足的商品清单',        icon: AlertTriangle, category: 'list', permission: PERMISSIONS.DASHBOARD_VIEW, defaultW: 2, size: 'lg', Component: List.ListLowStock },
   { id: 'board-incoming',    title: '到货看板',      description: '逾期 / 今日 / 本周待到货',  icon: Truck,         category: 'list', permission: PERMISSIONS.DASHBOARD_VIEW, defaultW: 2, size: 'lg', Component: List.BoardIncoming },
   { id: 'list-pda-perf',     title: '今日 PDA 作业', description: '今日扫码 / 拣货与操作员排行', icon: ScanLine,     category: 'list', permission: PERMISSIONS.REPORT_VIEW,    defaultW: 2, size: 'lg', Component: List.ListPdaPerf },
-  { id: 'list-collect-top',  title: '催收 Top',      description: '应收敞口最高的往来方',      icon: HandCoins,     category: 'list', permission: PERMISSIONS.PAYMENT_VIEW,   defaultW: 2, size: 'lg', Component: List.ListCollectTop },
-  { id: 'list-pay-top',      title: '催付 Top',      description: '应付敞口最高的往来方',      icon: Wallet,        category: 'list', permission: PERMISSIONS.PAYMENT_VIEW,   defaultW: 2, size: 'lg', Component: List.ListPayTop },
+  { id: 'list-collect-top',  title: '催收 Top',      description: '应收敞口最高的往来单位',      icon: HandCoins,     category: 'list', permission: PERMISSIONS.PAYMENT_VIEW,   defaultW: 2, size: 'lg', Component: List.ListCollectTop },
+  { id: 'list-pay-top',      title: '催付 Top',      description: '应付敞口最高的往来单位',      icon: Wallet,        category: 'list', permission: PERMISSIONS.PAYMENT_VIEW,   defaultW: 2, size: 'lg', Component: List.ListPayTop },
   { id: 'board-workbench',   title: '我的待办',    description: '按角色聚合的待处理事项',    icon: ListTodo,      category: 'list', permission: PERMISSIONS.REPORT_VIEW,    defaultW: 2, size: 'lg', Component: List.BoardWorkbench },
   { id: 'list-top-customer', title: 'Top 客户',      description: '销售额最高的客户',          icon: Users,         category: 'list', permission: PERMISSIONS.REPORT_VIEW,    defaultW: 2, size: 'lg', Component: List.ListTopCustomer },
   { id: 'list-top-supplier', title: 'Top 供应商',    description: '采购额最高的供应商',        icon: Building2,     category: 'list', permission: PERMISSIONS.REPORT_VIEW,    defaultW: 2, size: 'lg', Component: List.ListTopSupplier },
@@ -132,11 +132,11 @@ const DEFAULT_VISIBLE_ORDER = [...PRE_MERGE_VISIBLE_ORDER.slice(0, 4), 'board-wo
 
 /** 推荐排版的业务分类；仅生成推荐顺序，不重排用户保存的布局。 */
 export const DASHBOARD_SECTIONS = [
-  { id: 'focus', title: '今日重点', description: '待办、履约进度与需要优先处理的风险', widgetIds: [
+  { id: 'focus', title: '今日重点', description: '待办、作业进度与需要优先处理的风险', widgetIds: [
     'kpi-pending-sale', 'kpi-shipped-today', 'kpi-receivable', 'kpi-approval-count',
     'board-sales-actions', 'board-business-risk', 'board-workbench', 'list-pending-approvals',
   ] },
-  { id: 'trade', title: '采购与销售', description: '订单走势、到货安排与主要往来方', widgetIds: [
+  { id: 'trade', title: '采购与销售', description: '订单走势、到货安排与主要往来单位', widgetIds: [
     'kpi-pending-purchase', 'chart-sale-trend', 'chart-purchase-trend', 'board-incoming', 'list-top-customer', 'list-top-supplier',
   ] },
   { id: 'warehouse', title: '库存与仓储', description: '库存分布、实物预警与 PDA 作业情况', widgetIds: [

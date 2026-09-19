@@ -61,7 +61,7 @@ export function QueryErrorState({
   error,
   onRetry,
   title = '加载失败',
-  description = '数据加载时发生错误，请稍后重试',
+  description = '没能加载数据，请稍后重试',
   compact = false,
 }: QueryErrorStateProps) {
   const [showDetail, setShowDetail] = useState(false)
@@ -89,6 +89,7 @@ export function QueryErrorState({
           </div>
           {showDetail && hasDetail && (
             <div className="max-w-xl rounded-md border border-border bg-muted/30 px-3 py-2 text-left text-xs leading-5 text-muted-foreground">
+              <div className="mb-1 font-medium text-foreground">技术详情（反馈给管理员时提供）</div>
               {detail.code && <div>错误码：{detail.code}</div>}
               {detail.rawMessage && <div>原始信息：{detail.rawMessage}</div>}
               {detail.data && <div className="break-all">原始数据：{detail.data}</div>}

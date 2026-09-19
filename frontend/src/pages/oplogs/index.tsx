@@ -189,7 +189,7 @@ export default function OpLogsPage() {
           {chips.map(c => (
             <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
               {c.label}
-              <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除筛选 ${c.label}`}>
+              <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${c.label}」`}>
                 <X className="h-3 w-3" />
               </button>
             </span>
@@ -239,15 +239,14 @@ export default function OpLogsPage() {
               </div>
 
               <div className="grid gap-2">
-                <DetailRow label="原始 HTTP 方法" value={detail.method} />
-                <DetailRow label="原始接口路径" value={detail.path} />
-                <DetailRow label="原始状态码" value={detail.statusCode} />
-                <DetailRow label="原始模块名" value={detail.module} />
-                <DetailRow label="原始操作人" value={detail.userName} />
-                <DetailRow label="原始 IP" value={detail.ip} />
-                <DetailRow label="userId" value={detail.userId} />
+                <DetailRow label="请求方式" value={detail.method} />
+                <DetailRow label="访问地址" value={detail.path} />
+                <DetailRow label="状态码" value={detail.statusCode} />
+                <DetailRow label="业务模块" value={detail.module} />
+                <DetailRow label="操作人" value={detail.userName} />
+                <DetailRow label="来源 IP" value={detail.ip} />
+                <DetailRow label="用户 ID" value={detail.userId} />
                 <DetailRow label="时间" value={formatDisplayDateTime(detail.createdAt)} />
-                <DetailRow label="createdAt" value={formatDisplayDateTime(detail.createdAt)} />
                 <DetailRow label="日志 ID" value={detail.id} />
                 <DetailRow label="请求内容" value={detail.requestBody} />
               </div>

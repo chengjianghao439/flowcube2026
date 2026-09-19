@@ -37,7 +37,7 @@ function CancelReturnListPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <PdaHeader title="拣货退回" subtitle="逆向归还已拣容器" onBack={() => navigate('/pda')}
+      <PdaHeader title="拣货退回" subtitle="逆向归还已拣库存条码" onBack={() => navigate('/pda')}
         right={<PdaRefreshButton onRefresh={() => refetch()} />} />
       <div className="max-w-md mx-auto px-4 py-5 space-y-4">
         <p className="text-xs text-muted-foreground">{tasks.length} 个任务待归还</p>
@@ -96,7 +96,7 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
         return {
           effective: true,
           data: { id: 0, remaining: latest.containers.length, finalized: latest.containers.length === 0 },
-          message: '归还已生效，容器已不在待归还清单中。',
+          message: '归还已生效，条码已不在待归还清单中。',
         }
       }
       return { effective: false }
@@ -155,7 +155,7 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
         navigate('/pda/cancel-return')
         return
       }
-      ok(`✓ 已确认拆箱 ${found.barcode}，剩余 ${result.containersRemaining} 个容器 / ${result.packagesRemaining} 个箱子待处理`)
+      ok(`✓ 已确认拆箱 ${found.barcode}，剩余 ${result.containersRemaining} 个库存条码 / ${result.packagesRemaining} 个箱子待处理`)
       await refetch()
     } catch (error: unknown) {
       err(formatPdaErrorMessage((error as { message?: string })?.message, '拆箱确认失败，请重试'))
@@ -169,7 +169,7 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
     const code = raw.trim()
     if (!code || !detail) return
     const found = detail.containers.find(c => c.barcode.toUpperCase() === code.toUpperCase())
-    if (!found) { err('该容器不属于本任务的待归还清单，请确认条码'); return }
+    if (!found) { err('该条码不属于本任务的待归还清单'); return }
     setTarget(found)
     setStep('scan-location')
   }
@@ -181,7 +181,7 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
     setScanning(true)
     try {
       const loc = await getLocationByCodeApi(code)
-      if (!loc) { err('库位不存在'); return }
+      if (!loc) { err('库位不对，请重扫'); return }
       const submitted = await returnAction.run(
         (requestKey) => submitCancelReturnScanApi(taskId, target.containerId, target.barcode, loc.id, requestKey),
         { containerId: target.containerId },
@@ -197,7 +197,7 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
         navigate('/pda/cancel-return')
         return
       }
-      ok(`✓ 已归还到 ${loc.code}，剩余 ${result.remaining} 个容器待归还`)
+      ok(`✓ 已归还到 ${loc.code}，剩余 ${result.remaining} 个库存条码待归还`)
       await refetch()
     } catch (error: unknown) {
       err(formatPdaErrorMessage((error as { message?: string })?.message, '归还失败，请重试'))
@@ -248,7 +248,7 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
           onConfirm={() => {
             void returnAction.confirmPending().then((status) => {
               if (!status) return
-              if (status.status === 'pending') warn(formatPdaErrorMessage(status.message, '服务端仍未确认结果，请稍后再查'))
+              if (status.status === 'pending') warn(formatPdaErrorMessage(status.message, '系统还未确认结果，请稍后再查'))
               if (status.status === 'state_unconfirmed') warn(formatPdaErrorMessage(status.message, '归还状态还未确认，请稍后再查'))
               if (status.status === 'not_found') warn(formatPdaErrorMessage(status.message, '未找到上次归还记录；请先刷新确认是否已落账，再决定是否重扫'))
               if (status.status === 'failed') err(formatPdaErrorMessage(status.message, '归还失败，请刷新后重试'))
@@ -267,7 +267,7 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
           onConfirm={() => {
             void boxAction.confirmPending().then((status) => {
               if (!status) return
-              if (status.status === 'pending') warn(formatPdaErrorMessage(status.message, '服务端仍未确认结果，请稍后再查'))
+              if (status.status === 'pending') warn(formatPdaErrorMessage(status.message, '系统还未确认结果，请稍后再查'))
               if (status.status === 'state_unconfirmed') warn(formatPdaErrorMessage(status.message, '拆箱确认状态还未确认，请稍后再查'))
               if (status.status === 'not_found') warn(formatPdaErrorMessage(status.message, '未找到上次拆箱确认记录；请先刷新确认是否已落账，再决定是否重扫'))
               if (status.status === 'failed') err(formatPdaErrorMessage(status.message, '拆箱确认失败，请刷新后重试'))
@@ -283,7 +283,7 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
         }`}>
           <p className="text-sm font-semibold text-foreground">
             {scanning ? <span className="inline-flex items-center gap-1"><Loader2 className="h-3.5 w-3.5 animate-spin" />处理中…</span> :
-             step === 'scan-container' ? '扫描待归还容器条码，或待拆箱箱子条码' :
+             step === 'scan-container' ? '扫描待归还库存条码，或待拆箱箱子条码' :
              `扫描原库位条码确认放回：${target?.suggestedLocationCode ?? ''}`}
           </p>
         </div>
@@ -309,7 +309,7 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
               </div>
               <button className="text-xs text-muted-foreground hover:text-foreground"
                 onClick={() => { setStep('scan-container'); setTarget(null) }}
-              >← 取消，重新扫容器</button>
+              >← 取消，重新扫条码</button>
             </div>
           </PdaCard>
         )}

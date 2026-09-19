@@ -32,18 +32,18 @@ afterEach(() => act(() => root.unmount()))
 
 test('普通全量列表不把首条记录的收货单当成当前链路', () => {
   render()
-  expect(host.textContent).not.toContain('当前正在处理收货打印链路')
+  expect(host.textContent).not.toContain('当前正在处理收货打印任务')
   expect(host.textContent).not.toContain('返回收货详情')
 })
 
 test.each(['-1', '1.5', 'abc', '0'])('非法收货单参数 %s 不生成当前链路', id => {
   render(`?inboundTaskId=${id}`)
-  expect(host.textContent).not.toContain('当前正在处理收货打印链路')
+  expect(host.textContent).not.toContain('当前正在处理收货打印任务')
 })
 
 test('显式收货单上下文只统计该单，不能混入其他单失败和超时', () => {
   render('?inboundTaskId=1')
-  expect(host.textContent).toContain('当前正在处理收货打印链路')
+  expect(host.textContent).toContain('当前正在处理收货打印任务')
   expect(host.textContent).toContain('IT-1')
   const count = (label: string) => Array.from(host.querySelectorAll('p')).find(p => p.textContent === label)?.nextElementSibling?.textContent
   expect(count('打印失败')).toBe('1')

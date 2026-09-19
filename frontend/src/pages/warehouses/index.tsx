@@ -75,7 +75,7 @@ export default function WarehousesPage() {
       listQuery={() => getWarehousesApi({ page, pageSize: 20, keyword })}
       recordUnit="个"
       deleteApi={(id) => deleteWarehouseApi(id, { skipGlobalError: true })}
-      deleteMessage="仅未被库位、库存、任务或业务单据引用的仓库允许删除；若已被引用，请改为编辑后停用。"
+      deleteMessage="仓库被库位、库存、任务或业务单据引用后不能删除；如需停用，请编辑并取消启用。"
       createLabel="新增仓库"
       canCreate={can(PERMISSIONS.WAREHOUSE_CREATE)}
       saveSuccessMessage={(editing) => editing ? '仓库已保存' : '仓库已创建'}

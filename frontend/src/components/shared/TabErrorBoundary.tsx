@@ -43,10 +43,10 @@ export default class TabErrorBoundary extends Component<Props, State> {
             <AlertTriangle className="h-10 w-10 text-warning" />
             <div>
               <h3 className="text-lg font-semibold text-foreground mb-2">
-                {this.props.tabName ? `「${this.props.tabName}」页面出错` : '页面加载出错'}
+                {this.props.tabName ? `「${this.props.tabName}」页面出错` : '页面出错'}
               </h3>
               <p className="text-sm leading-6 text-muted-foreground">
-                此页面渲染时发生错误，已自动隔离。您可尝试重新加载此页面，其他页面不受影响。
+                这个页面出错了，其他页面不受影响。可以重新加载试试。
               </p>
             </div>
             <button

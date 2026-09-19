@@ -80,7 +80,7 @@ export default function RacksPage() {
   const chips = [
     keyword && { key: 'keyword', label: `关键字：${keyword}`, onRemove: () => setKeyword('') },
     warehouseFilter && { key: 'warehouse', label: `仓库：${warehouseName || (whData ?? []).find((w: { id: number; name: string }) => w.id === warehouseFilter)?.name || warehouseFilter}`, onRemove: () => { setWarehouseFilter(null); setWarehouseName('') } },
-    zoneFilter && { key: 'zone', label: `区域：${zoneFilter}`, onRemove: () => setZoneFilter('') },
+    zoneFilter && { key: 'zone', label: `库区：${zoneFilter}`, onRemove: () => setZoneFilter('') },
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   // 扫码校验（新建弹窗内选填）
@@ -158,7 +158,7 @@ export default function RacksPage() {
         }
         recordUnit="个"
         deleteApi={(id) => deleteRackApi(id, { skipGlobalError: true })}
-        deleteMessage="若库位或库存仍指向该货架编码，将禁止删除。"
+        deleteMessage="货架被库位或库存引用后不能删除。"
         createLabel="+ 新建货架"
         saveSuccessMessage={(editing) => editing ? '货架已保存' : '货架已创建'}
         formWidthClass="sm:max-w-2xl"
@@ -198,7 +198,7 @@ export default function RacksPage() {
                 {chips.map(c => (
                   <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
                     {c.label}
-                    <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除筛选 ${c.label}`}>
+                    <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${c.label}」`}>
                       <X className="h-3 w-3" />
                     </button>
                   </span>

@@ -65,7 +65,7 @@ export default function PdaCriticalActionNotice({
         <p className="text-sm font-semibold">{title}</p>
         <p className={`text-xs leading-5 ${bodyTone}`}>{body}</p>
         {pendingRecord ? (
-          <p className="text-[11px] text-amber-700">请求标识：{pendingRecord.requestKey}</p>
+          <p className="text-[11px] text-amber-700">记录号:{pendingRecord.requestKey.slice(0, 8)}（报修时提供）</p>
         ) : null}
       </div>
       {pendingRecord ? (
@@ -74,7 +74,7 @@ export default function PdaCriticalActionNotice({
             {confirming ? '确认中…' : '确认上次结果'}
           </Button>
           <Button type="button" size="sm" variant="outline" className="flex-1" onClick={onClear}>
-            确认未生效后清除
+            结果未生效，清除记录
           </Button>
         </div>
       ) : null}

@@ -25,7 +25,7 @@ export const useCreateSale = () => {
     mutationFn: (data: CreateSaleParams) => createSaleApi(data, keyRef.current),
     onSuccess: () => {
       invalidate('sale_create')
-      toast.success('销售单创建成功')
+      toast.success('销售单已创建')
       keyRef.current = createRequestKey('sale')
     },
   })
@@ -35,7 +35,7 @@ export const useUpdateSale = () => {
   const invalidate = useInvalidate()
   return useMutation({
     mutationFn: (data: UpdateSaleParams) => updateSaleApi(data),
-    onSuccess: () => { invalidate('sale_update'); toast.success('订单已保存') },
+    onSuccess: () => { invalidate('sale_update'); toast.success('销售单已保存') },
   })
 }
 
@@ -47,7 +47,7 @@ export const useAdjustSale = () => {
     onSuccess: (res) => {
       invalidate('sale_adjust')
       keyRef.current = createRequestKey('sale-adjust')
-      toast.success(res?.pending ? '改单已提交，等待仓库确认' : '修改成功')
+      toast.success(res?.pending ? '改单已提交，等待仓库确认' : '销售单已保存')
     },
   })
 }
@@ -125,6 +125,6 @@ export const useDeleteSale = () => {
   const keyRef = useRef(createRequestKey('sale-delete'))
   return useMutation({
     mutationFn: (id: number) => deleteSaleApi(id, keyRef.current),
-    onSuccess: () => { invalidate('sale_delete'); toast.success('订单删除成功'); keyRef.current = createRequestKey('sale-delete') },
+    onSuccess: () => { invalidate('sale_delete'); toast.success('销售单已删除'); keyRef.current = createRequestKey('sale-delete') },
   })
 }

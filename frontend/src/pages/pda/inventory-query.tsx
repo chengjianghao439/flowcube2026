@@ -76,9 +76,9 @@ export default function PdaInventoryQueryPage() {
       setResults(list)
       setLastBarcode(bc)
       if (list.length === 0) {
-        err('未找到该条码对应的库存容器')
+        err('未找到该条码对应的库存信息')
       } else {
-        ok(`找到 ${list.length} 个容器`)
+        ok(`找到 ${list.length} 个库存条码`)
       }
     } catch (e: unknown) {
       setResults(null)
@@ -115,7 +115,7 @@ export default function PdaInventoryQueryPage() {
         {results !== null && (
           <>
             <p className="px-1 text-xs text-muted-foreground">
-              {results.length > 0 ? `条码 ${lastBarcode}：${results.length} 个容器` : `条码 ${lastBarcode}：未找到`}
+              {results.length > 0 ? `条码 ${lastBarcode}：${results.length} 个库存条码` : `条码 ${lastBarcode}：未找到`}
             </p>
             {results.map(c => <ContainerRow key={c.containerId} c={c} />)}
             <button

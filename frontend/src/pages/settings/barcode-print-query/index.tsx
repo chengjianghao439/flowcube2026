@@ -22,10 +22,13 @@ import BarcodePrintQueryDialog, { type BarcodePrintQueryValues } from './Barcode
 import { BARCODE_PRINT_STATUS_OPTIONS } from './constants'
 
 const CATEGORY_OPTIONS: Array<{ value: BarcodePrintCategory; label: string; hint: string }> = [
-  { value: 'inbound', label: '入库条码', hint: '库存容器标签的打印记录与补打（从未打印过的不在此列）' },
+  { value: 'inbound', label: '入库条码', hint: '库存条码标签的打印记录与补打（从未打印过的不在此列）' },
   { value: 'outbound', label: '出库条码', hint: '出库箱贴 / L 条码的打印记录与补打' },
   { value: 'logistics', label: '物流条码', hint: '物流标签与面单的打印记录与补打' },
 ]
+
+/** 本页列表自动刷新间隔（毫秒）。页面文案直接引用它，避免文案与轮询周期再次对不上。 */
+const AUTO_REFRESH_MS = 15000
 
 function statusBadge(job: BarcodePrintRecord['latestJob']) {
   if (!job) return <SoftStatusLabel label="未生成打印任务" tone="draft" />
@@ -61,7 +64,8 @@ export default function BarcodePrintQueryPage() {
       page: 1,
       // 不要在这里指定 pageSize（2026-09-18 审计 P2）：列表走 payloadClient 的自动取齐，
       // 它会按 ceil(总数 / 批量) 串行请求。原先写死 pageSize: 20，相当于把批量从默认 200 缩到 20、
-      // 请求数放大 10 倍；再叠加下面 3 秒轮询，约 1000 条记录就是 50 次/3 秒 ≈ 1000 次/分，
+      // 请求数放大 10 倍；再叠加轮询（当时为 3 秒，现为 AUTO_REFRESH_MS），
+      // 约 1000 条记录就是 50 次/轮 ≈ 1000 次/分，
       // 恰好打满全局 IP 限流（app.js 默认 1000 次/60 秒）。限流按 IP，同一出口的整个办公室
       // （多台 PDA/桌面端）会一起被限流，所有业务接口开始返回「请求过于频繁」。
       // 省略后回到默认批量 200。
@@ -71,7 +75,7 @@ export default function BarcodePrintQueryPage() {
     enabled: isActiveTab,
     // 轮询间隔与其它记录类页面（PDA 10–30s）对齐：这是「查看打印记录」页，
     // 没有 3 秒级实时性要求，而这个间隔直接乘在每轮的串行请求数上。
-    refetchInterval: isActiveTab ? 15000 : false,
+    refetchInterval: isActiveTab ? AUTO_REFRESH_MS : false,
   })
   const total = query.data?.pagination?.total ?? 0
 
@@ -278,7 +282,7 @@ export default function BarcodePrintQueryPage() {
         <div className="rounded-lg border border-warning/30 bg-warning/5 px-4 py-4 space-y-3">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold text-foreground">当前正在处理收货打印链路</p>
+              <p className="text-sm font-semibold text-foreground">当前正在处理收货打印任务</p>
               <p className="mt-1 text-sm text-muted-foreground">
                 收货订单 <span className="text-doc-code">{inboundContext.taskNo}</span> 的库存条码都在这里追踪。先处理失败 / 超时的打印任务，再回到收货详情继续上架。
               </p>
@@ -314,7 +318,7 @@ export default function BarcodePrintQueryPage() {
         <div className="rounded-lg border border-primary/30 bg-primary/5 px-4 py-4 space-y-3">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold text-foreground">当前正在处理出库打印链路</p>
+              <p className="text-sm font-semibold text-foreground">当前正在处理出库打印任务</p>
               <p className="mt-1 text-sm text-muted-foreground">
                 批次 <span className="text-doc-code">{outboundContext.waveNo}</span> 的出库箱贴都在这里追踪。先处理失败 / 超时的打印任务，再回到批次详情继续拣货与分拣。
               </p>
@@ -350,7 +354,7 @@ export default function BarcodePrintQueryPage() {
         <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-4 space-y-3">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold text-foreground">当前正在处理物流标签链路</p>
+              <p className="text-sm font-semibold text-foreground">当前正在处理物流标签打印任务</p>
               <p className="mt-1 text-sm text-muted-foreground">
                 物流标签打印异常会直接影响现场出库确认。建议先处理失败 / 超时，再由现场继续扫描物流条码完成出库。
               </p>
@@ -407,7 +411,7 @@ export default function BarcodePrintQueryPage() {
           {chips.map(c => (
             <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
               {c.label}
-              <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除筛选 ${c.label}`}>
+              <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${c.label}」`}>
                 <X className="h-3 w-3" />
               </button>
             </span>
@@ -432,7 +436,7 @@ export default function BarcodePrintQueryPage() {
       />
       <ListSummary total={total} unit="条" />
 
-      {<div className="px-1 text-helper">状态每 3 秒自动刷新</div>}
+      {<div className="px-1 text-helper">状态每 {AUTO_REFRESH_MS / 1000} 秒自动刷新</div>}
 
       <BarcodePrintQueryDialog
         open={queryOpen}

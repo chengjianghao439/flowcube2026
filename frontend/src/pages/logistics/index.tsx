@@ -3,7 +3,7 @@ import { RecordIdentity } from '@/components/shared/RecordIdentity'
  * 物流运单列表页
  * 路由：/logistics
  */
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { X } from 'lucide-react'
@@ -21,6 +21,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { usePermission } from '@/hooks/usePermission'
+import { useCarriersActive } from '@/hooks/useCarriers'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { getWaybillsApi, setWaybillTrackingApi, retryWaybillApi, voidWaybillApi } from '@/api/logistics'
@@ -44,6 +45,10 @@ export default function LogisticsPage() {
   const [trackTarget, setTrackTarget] = useState<LogisticsWaybill | null>(null)
   const [trackingInput, setTrackingInput] = useState('')
   const [queryOpen, setQueryOpen] = useState(false)
+
+  // 筛选 chip 显示承运商名称而非主键 ID（与查询弹窗共用 carriers-active 缓存，不额外发请求）
+  const { data: carriers = [] } = useCarriersActive()
+  const carrierMap = useMemo(() => new Map(carriers.map(c => [c.id, c.name])), [carriers])
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['waybills', applied],
@@ -93,7 +98,7 @@ export default function LogisticsPage() {
   const chips = [
     applied.keyword && { key: 'keyword', label: `关键字：${applied.keyword}`, onRemove: () => setApplied({ ...applied, keyword: '' }) },
     applied.status !== 'all' && { key: 'status', label: `状态：${WAYBILL_STATUS_OPTIONS.find(o => o.value === applied.status)?.label ?? applied.status}`, onRemove: () => setApplied({ ...applied, status: 'all' }) },
-    applied.carrierId && { key: 'carrier', label: `承运商：${applied.carrierId}`, onRemove: () => setApplied({ ...applied, carrierId: null }) },
+    applied.carrierId && { key: 'carrier', label: `承运商：${carrierMap.get(applied.carrierId) ?? applied.carrierId}`, onRemove: () => setApplied({ ...applied, carrierId: null }) },
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   const columns: TableColumn<LogisticsWaybill>[] = [
@@ -151,7 +156,7 @@ export default function LogisticsPage() {
           {chips.map(c => (
             <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
               {c.label}
-              <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除筛选 ${c.label}`}>
+              <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${c.label}」`}>
                 <X className="h-3 w-3" />
               </button>
             </span>

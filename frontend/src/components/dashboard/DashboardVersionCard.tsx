@@ -56,7 +56,7 @@ export default function DashboardVersionCard() {
       } else if (freshVer) {
         toast.success(`已是最新版本 v${normalizeVersion(currentDisplay)}`)
       } else {
-        toast.warning('暂无法获取服务端版本，请稍后重试')
+        toast.warning('暂无法获取最新版本，请稍后重试')
       }
 
       const d = window.flowcubeDesktop
@@ -109,7 +109,7 @@ export default function DashboardVersionCard() {
         <p className="text-xs text-muted-foreground">与服务器发布信息同步</p>
         <dl className="grid grid-cols-2 gap-4 border-b border-border pb-4">
           <div><dt className="text-xs text-muted-foreground">当前版本</dt><dd className="mt-1 text-xl font-semibold tabular-nums">v{normalizeVersion(currentDisplay)}</dd></div>
-          <div><dt className="text-xs text-muted-foreground">服务端最新</dt><dd className="mt-1 text-xl font-semibold tabular-nums">{isLoading ? '加载中…' : isError || !latestVer ? '暂无法获取' : `v${normalizeVersion(latestVer)}`}</dd></div>
+          <div><dt className="text-xs text-muted-foreground">最新版本</dt><dd className="mt-1 text-xl font-semibold tabular-nums">{isLoading ? '加载中…' : isError || !latestVer ? '暂无法获取' : `v${normalizeVersion(latestVer)}`}</dd></div>
         </dl>
         {showNewAvailable && <div className="flex flex-wrap items-center gap-2">
           <Badge variant="outline" className={cn('gap-1 text-xs font-medium', STATUS_TONE_CLASS.warning)}><BellRing className="h-3 w-3" />有新版本可用</Badge>

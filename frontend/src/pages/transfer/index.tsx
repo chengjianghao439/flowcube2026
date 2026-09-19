@@ -247,7 +247,7 @@ export default function TransferPage() {
           {chips.map(c => (
             <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
               {c.label}
-              <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除筛选 ${c.label}`}>
+              <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${c.label}」`}>
                 <X className="h-3 w-3" />
               </button>
             </span>
@@ -301,11 +301,11 @@ export default function TransferPage() {
       >
         <div className="space-y-4 px-1 py-1 text-sm leading-6">
           <p className="text-muted-foreground">
-            仅用于运输途中货物丢失、长期无法送达等无法正常扫码入库的情况。确认后，该调拨单在途容器将作为运输损耗核销（不会回到调出仓，也不会计入调入仓库存），调拨单标记为已完成，此操作不可撤回。
+            仅用于运输途中货物丢失、长期无法送达等无法正常扫码入库的情况。确认后，在途库存条码按运输损耗核销：不退回调出仓，也不计入调入仓；调拨单直接标记为已完成，不能撤回。
           </p>
           <LimitedTextarea
             maxLength={200}
-            placeholder="请填写异常了结原因（必填，将计入操作留痕）"
+            placeholder="请填写异常了结原因（必填，会记入操作记录）"
             value={forceCloseReason}
             onChange={(e) => setForceCloseReason(e.target.value)}
           />

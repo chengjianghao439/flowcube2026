@@ -65,7 +65,7 @@ function TransactionsQueryDialog({ open, initial, accounts, onClose, onApply }: 
             </div>
             <div className="space-y-1">
               <Label>关键字</Label>
-              <Input className="h-9" placeholder="关联单号 / 往来方" value={v.keyword}
+              <Input className="h-9" placeholder="关联单号 / 往来单位" value={v.keyword}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => set({ keyword: e.target.value })} />
             </div>
           </div>
@@ -166,7 +166,7 @@ export default function FinanceTransactionsPage() {
     { key: 'bizNo', title: '关联单号', width: 160, render: v => v
       ? <span className="text-doc-code-muted">{String(v)}</span>
       : <span className="text-muted-foreground">—</span> },
-    { key: 'partyName', title: '往来方', width: 150, render: v => (v as string) || <span className="text-muted-foreground">—</span> },
+    { key: 'partyName', title: '往来单位', width: 150, render: v => (v as string) || <span className="text-muted-foreground">—</span> },
     { key: 'amount', title: '收入', width: 120, align: 'right', render: (_, row) => {
       const t = row as AccountTransaction
       return t.direction === 1 ? <span className="tabular-nums font-medium text-success">{money(t.amount)}</span> : <span className="text-muted-foreground">—</span>
@@ -189,7 +189,7 @@ export default function FinanceTransactionsPage() {
     <div className="space-y-4">
       <PageHeader
         title="资金流水"
-        description="所有资金账户的收支明细。流水是账户余额的唯一事实源，只读；要对平账实差异请到账户管理页做「余额调整」。"
+        description="所有资金账户的收支明细。账户余额以流水为准；如需对平账实差异，请到账户管理页做「余额调整」。"
         actions={(
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => downloadExport('/export/finance-transactions', {

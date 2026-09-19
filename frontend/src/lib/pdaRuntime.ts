@@ -192,7 +192,7 @@ export function installPdaGlobals(): void {
     }
     const pid = readStoredPdaPrinterId() ?? await syncPdaLabelPrinterBinding()
     if (!pid) {
-      toast.error('未找到容器标签打印机绑定，请先在后台打印机管理中配置')
+      toast.error('未找到库存条码标签打印机绑定，请先在后台打印机管理中配置')
       return
     }
     try {

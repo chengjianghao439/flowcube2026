@@ -19,7 +19,7 @@ export default function PdaNetworkBar() {
     return (
       <div className="w-full bg-red-600 px-4 py-2 flex items-center gap-2 text-white text-xs font-semibold">
         <span className="h-2 w-2 rounded-full bg-white animate-pulse shrink-0" />
-        <span>网络中断，关键业务已阻断。恢复网络前不可提交收货、上架、拣货、复核、打包和出库。</span>
+        <span>网络中断，作业已暂停。恢复网络后再提交。</span>
       </div>
     )
   }
@@ -28,7 +28,7 @@ export default function PdaNetworkBar() {
     return (
       <div className="w-full bg-yellow-500 px-4 py-2 flex items-center gap-2 text-white text-xs font-semibold">
         <span className="h-3 w-3 rounded-full border-2 border-white border-t-transparent animate-spin shrink-0" />
-        <span>有 {pendingCount} 个关键操作结果待确认。请先确认结果，避免重复提交。</span>
+        <span>有 {pendingCount} 个操作待确认，请先确认再继续。</span>
       </div>
     )
   }

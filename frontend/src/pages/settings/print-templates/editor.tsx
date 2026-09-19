@@ -1869,10 +1869,10 @@ export default function PrintTemplateEditor() {
   if (!isNew && (isLoading || hydrated === null)) {
     return (
       <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden px-4 pb-4 pt-2">
-        <PageHeader title="编辑打印模板" description="正在加载…" />
+        <PageHeader title="编辑打印模板" description="加载中…" />
         <div className="flex flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="size-4 animate-spin" />
-          加载模板…
+          正在加载模板…
         </div>
       </div>
     )

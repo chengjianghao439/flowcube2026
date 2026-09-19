@@ -97,7 +97,7 @@ export class GlobalErrorBoundary extends Component<Props, State> {
 
           {/* 标题 */}
           <h1 className="mb-2 text-center text-xl font-semibold text-foreground">
-            页面渲染出错
+            页面出错
           </h1>
           <p className="mb-6 text-center text-sm text-muted-foreground">
             系统遇到了一个意外错误，请刷新页面或联系管理员。

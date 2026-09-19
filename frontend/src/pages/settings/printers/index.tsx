@@ -387,7 +387,7 @@ export default function PrintersPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            {listLoading && <p className="text-muted-body">正在读取本机打印机…</p>}
+            {listLoading && <p className="text-muted-body">正在加载本机打印机…</p>}
             {listError && <p className="text-sm text-destructive">{listError}</p>}
             {!listLoading && !listError && systemList.length > 0 && (
               <>

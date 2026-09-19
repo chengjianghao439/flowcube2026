@@ -16,7 +16,7 @@ import { formatDisplayDateTime } from '@/lib/dateTime'
  */
 
 function ContainerBlock({ data }: { data: Awaited<ReturnType<typeof getContainerByBarcodeApi>> }) {
-  const containerKind = data.containerKind === 'plastic_box' ? '塑料盒' : '库存容器'
+  const containerKind = data.containerKind === 'plastic_box' ? '塑料盒' : '库存条码'
   return (
     <div className="rounded-lg border bg-card p-4">
       <div className="mb-3 flex items-center justify-between">
@@ -129,7 +129,7 @@ export default function TracePage() {
     <div className="space-y-4">
       <PageHeader
         title="批次追溯"
-        description="按库存条码或塑料盒条码，追踪单个容器从入库到出库的全部流水"
+        description="按库存条码或塑料盒条码，追踪单个库存条码从入库到出库的全部流水"
       />
 
       <FilterCard>
@@ -162,7 +162,7 @@ export default function TracePage() {
               <h3 className="text-sm font-medium">容器流水（{logs.length} 条）</h3>
             </div>
             {logs.length === 0 ? (
-              <div className="p-8 text-center text-muted-foreground">该容器暂无流水记录</div>
+              <div className="p-8 text-center text-muted-foreground">该条码暂无流水记录</div>
             ) : (
               <div className="divide-y">
                 {logs.map((item, idx) => (

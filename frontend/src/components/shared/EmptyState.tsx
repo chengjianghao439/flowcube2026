@@ -41,7 +41,7 @@ const VARIANT_MAP: Record<EmptyVariant, VariantConfig> = {
   'no-data': {
     icon:        <Inbox className="h-10 w-10" />,
     title:       '暂无数据',
-    description: '暂无记录',
+    description: '还没有任何记录',
   },
   'no-result': {
     icon:        <SearchX className="h-10 w-10" />,

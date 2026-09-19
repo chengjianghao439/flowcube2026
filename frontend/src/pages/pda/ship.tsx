@@ -47,11 +47,12 @@ function shipBlockedMessage(data: PackageShipInfo) {
   const statusName = warehouseStatusName(data)
   if (warehouseStatus(data) === WT_STATUS.PACKING) {
     const openPackages = data.packages.filter(pkg => pkg.status !== 2 && pkg.status !== 3).length
+    // 工人只需要知道「还差什么、去哪补」，状态名放括注，不做主句
     return openPackages > 0
-      ? `当前仓库任务仍为「${statusName}」，且还有 ${openPackages} 箱未完成打包，不能出库。`
-      : `当前仓库任务仍为「${statusName}」，请先完成打包并进入「待出库」。`
+      ? `还有 ${openPackages} 箱未打包，不能出库`
+      : `请先完成打包（当前「${statusName}」）`
   }
-  return `当前仓库任务状态为「${statusName}」，不能执行出库。`
+  return `当前「${statusName}」，不能出库`
 }
 
 export default function PdaShipPage() {
@@ -166,7 +167,7 @@ export default function PdaShipPage() {
             onConfirm={() => {
               void shipAction.confirmPending().then((status) => {
                 if (!status) return
-                if (status.status === 'pending') warn(formatPdaErrorMessage(status.message, '服务端仍未确认结果，请稍后再查'))
+                if (status.status === 'pending') warn(formatPdaErrorMessage(status.message, '系统还未确认结果，请稍后再查'))
                 if (status.status === 'state_unconfirmed') warn(formatPdaErrorMessage(status.message, '任务状态还未确认，请稍后再查'))
                 if (status.status === 'not_found') warn(formatPdaErrorMessage(status.message, '未找到上次出库记录；请先刷新任务状态再决定是否重扫'))
                 if (status.status === 'failed') err(formatPdaErrorMessage(status.message, '出库失败，请确认任务状态或联系管理员'))

@@ -158,7 +158,14 @@ export default function FixedAssetsPage() {
   })
   const { mutate: runDepr, isPending: deprPending } = useMutation({
     mutationFn: runDepreciationApi,
-    onSuccess: (r) => { toast.success(`计提完成：${r.ran} 张卡片，本期共计提折旧`); qc.invalidateQueries({ queryKey: ['fixed-assets'] }) },
+    onSuccess: (r) => {
+      // 金额取 vouchers 合计：后端只在未跳过的资产上 push，与 ran 一一对应
+      const total = r.vouchers.reduce((sum, v) => sum + v.monthly, 0)
+      toast.success(r.ran === 0
+        ? '本期没有需要计提折旧的卡片'
+        : `计提完成：${r.ran} 张卡片，本期共计提折旧 ${money(total)}`)
+      qc.invalidateQueries({ queryKey: ['fixed-assets'] })
+    },
     onError: (e: Error) => toast.error(e.message),
   })
 

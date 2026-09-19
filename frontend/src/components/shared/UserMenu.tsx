@@ -108,9 +108,9 @@ export default function UserMenu() {
                   ) {
                     void window.flowcubeDesktop.showMessageBox({
                       type: 'question',
-                      title: '退出系统',
-                      message: '确定要退出系统吗？未保存的数据可能会丢失。',
-                      buttons: ['确定退出', '取消'],
+                      title: '退出登录',
+                      message: '确定退出登录吗？未保存的数据可能会丢失。',
+                      buttons: ['退出登录', '取消'],
                       defaultId: 0,
                       cancelId: 1,
                       noLink: true,
@@ -173,9 +173,9 @@ export default function UserMenu() {
       <Dialog open={logoutOpen} onOpenChange={setLogoutOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>退出系统</DialogTitle>
+            <DialogTitle>退出登录</DialogTitle>
             <DialogDescription>
-              确定要退出系统吗？未保存的数据可能会丢失。
+              确定退出登录吗？未保存的数据可能会丢失。
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-0">
@@ -190,7 +190,7 @@ export default function UserMenu() {
                 performSessionLogout()
               }}
             >
-              确定退出
+              退出登录
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -201,7 +201,7 @@ export default function UserMenu() {
           <DialogHeader><DialogTitle>修改密码</DialogTitle></DialogHeader>
           <form onSubmit={handlePwdSubmit} className="space-y-4 py-2">
             <div className="space-y-1"><Label htmlFor="profile-old-password">当前密码 *</Label><Input id="profile-old-password" type="password" value={oldPwd} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setOldPwd(e.target.value)} required autoComplete="current-password" /></div>
-            <div className="space-y-1"><Label htmlFor="profile-new-password">新密码 *（至少6位）</Label><Input id="profile-new-password" type="password" value={newPwd} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewPwd(e.target.value)} required minLength={6} autoComplete="new-password" /></div>
+            <div className="space-y-1"><Label htmlFor="profile-new-password">新密码 *（至少 6 位）</Label><Input id="profile-new-password" type="password" value={newPwd} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewPwd(e.target.value)} required minLength={6} autoComplete="new-password" /></div>
             <div className="space-y-1"><Label htmlFor="profile-confirm-password">确认新密码 *</Label><Input id="profile-confirm-password" type="password" value={confirmPwd} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setConfirmPwd(e.target.value)} required autoComplete="new-password" /></div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setPwdOpen(false)}>取消</Button>

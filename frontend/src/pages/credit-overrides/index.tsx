@@ -234,7 +234,7 @@ export default function CreditOverridesPage() {
           {chips.map(c => (
             <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
               {c.label}
-              <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除筛选 ${c.label}`}>
+              <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${c.label}」`}>
                 <X className="h-3 w-3" />
               </button>
             </span>
@@ -245,7 +245,7 @@ export default function CreditOverridesPage() {
 
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
         <p>共 <span className="font-medium tabular-nums text-foreground">{total.toLocaleString()}</span> 条申请 · {status ? CREDIT_OVERRIDE_STATUS_LABEL[status] ?? status : '全部状态'}</p>
-        <span className="text-xs">金额为申请时的授信快照</span>
+        <span className="text-xs">金额为申请时的授信额度</span>
       </div>
       {isError && !data ? (
         <QueryErrorState error={error} onRetry={() => void refetch()} title="加载失败" compact />

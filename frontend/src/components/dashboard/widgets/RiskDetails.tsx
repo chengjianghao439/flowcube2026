@@ -68,7 +68,7 @@ export default function RiskDetails({
               onRetry={() => void query.refetch()}
             />
           ) : query.isLoading ? (
-            <p className="py-8 text-sm">正在加载…</p>
+            <p className="py-8 text-sm">加载中…</p>
           ) : (
             <>
               <p className="mb-3 text-xs text-muted-foreground">

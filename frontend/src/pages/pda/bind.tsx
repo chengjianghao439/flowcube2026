@@ -86,7 +86,7 @@ export default function PdaBindPage() {
         if (stillHas) {
           // 凭据还在 = 网络/基址问题（服务器不可达、baseURL 被误覆盖），
           // 凭据没有错，不要清——用户只需修好网络/地址后重试
-          err('无法连接服务器换取设备票据，请检查 PDA 网络与服务器地址后重试（凭据已保存，无需重新扫码）')
+          err('连不上服务器，无需重新扫码；请检查网络后重试')
         } else {
           // 凭据被清 = 密钥确实无效/设备被停用，引导重新生成
           setCredential(null)

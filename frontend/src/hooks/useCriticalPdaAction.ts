@@ -39,9 +39,9 @@ type ResolveServerState<T> = (ctx: {
 
 function stateUnconfirmedMessage(label: string, reason: 'receipt_missing' | 'state_not_advanced') {
   if (reason === 'receipt_missing') {
-    return `${label}的提交回执未找到；已重新拉取服务端状态，但尚未确认推进。请刷新任务状态或稍后再次确认，暂勿重复扫码。`
+    return `${label}还没确认成功，已重新查询任务状态。请刷新后再确认，暂勿重复扫码。`
   }
-  return `${label}未确认成功；已重新拉取服务端状态，但任务状态尚未推进。请检查当前状态后再决定是否重试。`
+  return `${label}还没确认成功，任务状态也没有推进。请核对当前状态后再决定是否重试。`
 }
 
 export function useCriticalPdaAction<T>({
@@ -127,14 +127,14 @@ export function useCriticalPdaAction<T>({
         removePending(action)
         setPhase('failed')
         setPhaseMessage(null)
-        setLastErrorMessage(status.message || `${pendingRecord.label}服务端明确返回失败；已重新拉取状态，任务状态未推进。请检查后重试。`)
+        setLastErrorMessage(status.message || `${pendingRecord.label}提交失败，任务状态没有推进。请检查后重试。`)
       }
       if (status.status === 'not_found') {
         const stateConfirmed = await confirmByServerState(pendingRecord, status)
         if (stateConfirmed) return stateConfirmed
         const message = resolveServerState
           ? stateUnconfirmedMessage(pendingRecord.label, 'receipt_missing')
-          : `${pendingRecord.label}的提交回执未找到，结果仍待确认。请稍后再次确认，暂勿重复扫码。`
+          : `${pendingRecord.label}结果还没确认。请稍后再次确认，暂勿重复扫码。`
         setPhase('pending')
         setPhaseMessage(message)
         setLastErrorMessage(null)
@@ -149,7 +149,7 @@ export function useCriticalPdaAction<T>({
         const stateConfirmed = await confirmByServerState(pendingRecord, status)
         if (stateConfirmed) return stateConfirmed
         setPhase('pending')
-        setPhaseMessage(status.message || `服务端仍未确认${pendingRecord.label}结果，请稍后重试确认，暂勿重复提交。`)
+        setPhaseMessage(status.message || `系统还未确认${pendingRecord.label}结果，请稍后重试确认，暂勿重复提交。`)
       }
       return status
     } catch (error) {

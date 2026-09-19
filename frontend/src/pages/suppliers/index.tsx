@@ -107,7 +107,7 @@ export default function SuppliersPage() {
       listQuery={() => getSuppliersApi({ page, pageSize: 20, keyword })}
       recordUnit="个"
       deleteApi={(id) => deleteSupplierApi(id, { skipGlobalError: true })}
-      deleteMessage="仅未被采购、退货或库存流水引用的供应商允许删除；若已被引用，请改为编辑后停用。"
+      deleteMessage="供应商被采购、退货或库存流水引用后不能删除；如需停用，请编辑并取消启用。"
       createLabel="新增供应商"
       headerActions={
         <>

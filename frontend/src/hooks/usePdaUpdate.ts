@@ -64,7 +64,7 @@ export function usePdaUpdate() {
   async function checkUpdate(options?: { manual?: boolean }) {
     const manual = options?.manual === true
     if (!nativeUpdateSupported) {
-      if (manual) toast.success('浏览器端已随服务器发布更新，无需安装 PDA APK')
+      if (manual) toast.success('已是最新版本，无需安装')
       setNewVersion(null)
       return
     }

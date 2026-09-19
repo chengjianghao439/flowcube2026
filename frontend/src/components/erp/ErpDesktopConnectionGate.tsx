@@ -73,7 +73,7 @@ export default function ErpDesktopConnectionGate({ children }: { children: React
         <p className="max-w-md text-sm leading-6 text-muted-foreground">
           {origin
             ? '请确认后端已启动、服务器网络可达；若长期无法连接，请联系管理员。'
-            : '当前安装包未注入服务器地址，请联系管理员重新构建安装包（注入生产 API 地址）。'}
+            : '当前安装包缺少服务器地址，请联系管理员处理。'}
         </p>
         <div className="flex flex-wrap justify-center gap-2">
           <Button type="button" variant="default" onClick={() => navigate('/login', { replace: true })}>

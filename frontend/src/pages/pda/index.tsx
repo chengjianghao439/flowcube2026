@@ -171,7 +171,7 @@ export default function PdaWorkbench() {
             onClick={() => navigate('/pda/bind')}
             className="mb-4 w-full rounded-2xl border border-amber-500/40 bg-amber-500/5 p-3 text-left active:scale-95 transition-all"
           >
-            <p className="text-sm font-medium text-amber-600">设备凭证需要刷新</p>
+            <p className="text-sm font-medium text-amber-600">设备授权将过期，请重新登录</p>
             <p className="mt-0.5 text-xs text-muted-foreground">重新登录即可自动恢复；若仍未恢复，点击此处检查绑定状态。</p>
           </button>
         ) : null}

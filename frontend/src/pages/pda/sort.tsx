@@ -80,7 +80,7 @@ export default function PdaSortPage() {
     try {
       const res = await scanProductForSortApi(code)
       const result = res
-      if (!result) { err('未找到备货中的商品，请确认条码正确'); return }
+      if (!result) { err('无拣货中订单，请核对条码'); return }
       if (!result.sortingBinCode) { err(`任务 ${result.taskNo} 未分配分拣格`); return }
       setHint({
         binCode: result.sortingBinCode, productName: result.productName,
@@ -97,7 +97,7 @@ export default function PdaSortPage() {
     const code = raw.trim()
     if (!code || !hint) return
     if (code.toUpperCase() !== hint.binCode.toUpperCase()) {
-      err(`错误！请放入 ${hint.binCode}，当前是 ${code}`)
+      err(`放错格：请放 ${hint.binCode}`)
       return
     }
     setScanning(true)
@@ -116,7 +116,7 @@ export default function PdaSortPage() {
       if (taskReachedStatus(latest, WT_STATUS.CHECKING)) {
         ok(stateConfirmedMessage(`任务 ${latest.taskNo} 分拣`, latest.statusName))
       } else if (result?.allSorted) {
-        warn(`分拣请求已返回完成，但服务端最新任务状态仍为「${latest.statusName ?? latest.status}」。请稍后刷新确认，暂勿重复扫码。`)
+        warn(`分拣请求已返回完成，但系统里的任务状态仍为「${latest.statusName ?? latest.status}」。请稍后刷新确认，暂勿重复扫码。`)
       } else if (result?.warning) {
         warn(`✓ 已放入 ${hint.binCode}（${result?.progress ?? '?'}）· ${result.warning}`)
       } else {
@@ -163,7 +163,7 @@ export default function PdaSortPage() {
           onConfirm={() => {
             void sortAction.confirmPending().then((status) => {
               if (!status) return
-              if (status.status === 'pending') warn(formatPdaErrorMessage(status.message, '服务端仍未确认结果，请稍后再查'))
+              if (status.status === 'pending') warn(formatPdaErrorMessage(status.message, '系统还未确认结果，请稍后再查'))
               if (status.status === 'state_unconfirmed') warn(formatPdaErrorMessage(status.message, '任务状态还未确认，请稍后再查'))
               if (status.status === 'not_found') warn(formatPdaErrorMessage(status.message, '未找到上次分拣确认记录；请先刷新任务状态后再决定是否重扫'))
               if (status.status === 'failed') err(formatPdaErrorMessage(status.message, '分拣失败，请刷新任务后重试'))

@@ -92,7 +92,7 @@ function AdjustmentDetailPage({ adjustmentId }: { adjustmentId: number }) {
       if (!latest) return { effective: false }
       const stillPending = latest.items.some(i => i.containerReturns.some(r => r.id === target?.id && r.status === 1))
       if (!stillPending) {
-        return { effective: true, data: { finalized: !latest.items.some(i => i.containerReturns.some(r => r.status === 1) || i.packageVoids.some(v => v.status === 1)) }, message: '归还已生效，容器已不在待归还清单中。' }
+        return { effective: true, data: { finalized: !latest.items.some(i => i.containerReturns.some(r => r.status === 1) || i.packageVoids.some(v => v.status === 1)) }, message: '归还已生效，条码已不在待归还清单中。' }
       }
       return { effective: false }
     },
@@ -155,7 +155,7 @@ function AdjustmentDetailPage({ adjustmentId }: { adjustmentId: number }) {
       return
     }
     const found = pendingReturns.find(r => r.barcode.toUpperCase() === code.toUpperCase())
-    if (!found) { err('该容器不属于本次改单的待归还清单，请确认条码'); return }
+    if (!found) { err('该条码不属于本次改单的待归还清单'); return }
     setTarget(found)
     setStep('scan-location')
   }
@@ -167,7 +167,7 @@ function AdjustmentDetailPage({ adjustmentId }: { adjustmentId: number }) {
     setScanning(true)
     try {
       const loc = await getLocationByCodeApi(code)
-      if (!loc) { err('库位不存在'); return }
+      if (!loc) { err('库位不对，请重扫'); return }
       const submitted = await returnAction.run(
         (requestKey) => confirmAdjustmentContainerReturnApi(target.id, loc.id, requestKey),
         { returnId: target.id },
@@ -230,7 +230,7 @@ function AdjustmentDetailPage({ adjustmentId }: { adjustmentId: number }) {
           onConfirm={() => {
             void returnAction.confirmPending().then((status) => {
               if (!status) return
-              if (status.status === 'pending') warn(formatPdaErrorMessage(status.message, '服务端仍未确认结果，请稍后再查'))
+              if (status.status === 'pending') warn(formatPdaErrorMessage(status.message, '系统还未确认结果，请稍后再查'))
               if (status.status === 'state_unconfirmed') warn(formatPdaErrorMessage(status.message, '归还状态还未确认，请稍后再查'))
               if (status.status === 'not_found') warn(formatPdaErrorMessage(status.message, '未找到上次归还记录；请先刷新确认是否已落账，再决定是否重扫'))
               if (status.status === 'failed') err(formatPdaErrorMessage(status.message, '归还失败，请刷新后重试'))
@@ -249,7 +249,7 @@ function AdjustmentDetailPage({ adjustmentId }: { adjustmentId: number }) {
           onConfirm={() => {
             void voidAction.confirmPending().then((status) => {
               if (!status) return
-              if (status.status === 'pending') warn(formatPdaErrorMessage(status.message, '服务端仍未确认结果，请稍后再查'))
+              if (status.status === 'pending') warn(formatPdaErrorMessage(status.message, '系统还未确认结果，请稍后再查'))
               if (status.status === 'state_unconfirmed') warn(formatPdaErrorMessage(status.message, '拆箱确认状态还未确认，请稍后再查'))
               if (status.status === 'not_found') warn(formatPdaErrorMessage(status.message, '未找到上次拆箱确认记录；请先刷新确认是否已落账，再决定是否重扫'))
               if (status.status === 'failed') err(formatPdaErrorMessage(status.message, '拆箱确认失败，请刷新后重试'))
@@ -265,7 +265,7 @@ function AdjustmentDetailPage({ adjustmentId }: { adjustmentId: number }) {
         }`}>
           <p className="text-sm font-semibold text-foreground">
             {scanning ? <span className="inline-flex items-center gap-1"><Loader2 className="h-3.5 w-3.5 animate-spin" />处理中…</span> :
-             step === 'scan' ? '扫描待拆箱的箱子条码，或待归还的容器条码' :
+             step === 'scan' ? '扫描待拆箱的箱子条码，或待归还的库存条码' :
              `扫描原库位条码确认放回：${target?.suggestedLocationCode ?? ''}`}
           </p>
         </div>
@@ -279,7 +279,7 @@ function AdjustmentDetailPage({ adjustmentId }: { adjustmentId: number }) {
                 <p className="text-xs text-muted-foreground mt-1">请放回此库位</p>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div><p className="text-xs text-muted-foreground">容器</p><p className="font-semibold truncate">{target.barcode}</p></div>
+                <div><p className="text-xs text-muted-foreground">条码</p><p className="font-semibold truncate">{target.barcode}</p></div>
                 <div><p className="text-xs text-muted-foreground">数量</p><p className="font-bold text-primary">{target.qty}</p></div>
               </div>
               <button className="text-xs text-muted-foreground hover:text-foreground"

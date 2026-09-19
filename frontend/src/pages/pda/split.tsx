@@ -33,22 +33,19 @@ export default function PdaSplitPage() {
     },
     onSuccess: (d) => {
       if (d.containerStatus === 'waiting_putaway') {
-        err('待上架容器不能拆分')
+        err('待上架库存条码不能拆分')
         return
       }
       // 拆分必须在拣货之前完成：容器一旦被拣货扫码锁定就拆不了（后端 splitContainer 409），
       // 而拣货扫码没有撤销路径，只能取消整个任务。所以在扫码这一刻就拦下并说清正确做法，
       // 不要让现场输完数量才被拒。
       if (d.lockedByTaskId) {
-        err(
-          `该容器已被拣货任务 ${d.lockedByTaskNo ?? `#${d.lockedByTaskId}`} 锁定，不可拆分。`
-          + `拆分须在拣货前完成；若塑料盒仅为搬运用途，则无需拆分，直接扫描该容器条码拣货即可`,
-        )
+        err(`该库存条码已被拣货任务 ${d.lockedByTaskNo ?? `#${d.lockedByTaskId}`} 锁定，不能拆分`)
         return
       }
       // 单件库存条码（一件一码）不可拆分：条码就是这件货的唯一身份（后端同样拦截，这里前置提示）
       if (d.individual) {
-        err(`条码 ${d.barcode} 是单件库存条码（一件一码），不可拆分；如需移动，请直接扫描该条码按整件操作`)
+        err(`${d.barcode} 是单件条码，不能拆分；直接扫描可按整件操作`)
         return
       }
       setContainerId(d.containerId)

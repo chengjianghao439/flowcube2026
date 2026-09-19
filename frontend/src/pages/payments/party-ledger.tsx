@@ -25,7 +25,7 @@ function exportLedger(data: PartyLedgerResult) {
     ['往来单位', data.party.name, '编码', data.party.code],
     ['记账启用时间', data.historyStartedAt, '历史说明', '启用前以净余额结转，不代表原始业务发生额'],
     ['期初余额', data.summary.openingBalance, '本期增加', data.summary.increase, '本期减少', data.summary.decrease, '期末余额', data.summary.closingBalance],
-    ['记账时间', '业务日期', '业务类型', '关联单号', '增加', '减少', '结余'],
+    ['记账时间', '业务日期', '业务类型', '关联单号', '增加', '减少', '余额'],
     ...data.list.map(r => [r.occurredAt, r.businessDate || '', r.eventName, r.documentNo, r.increase, r.decrease, r.balanceAfter]),
   ]
   const csv = rows.map(row => row.map(value => {
@@ -91,7 +91,7 @@ export default function PartyLedgerPage() {
     { key: 'documentNo', title: '关联单号', width: 180 },
     { key: 'increase', title: type === 2 ? '增加应收' : '增加应付', width: 120, align: 'right', render: v => Number(v) ? money(Number(v)) : '—' },
     { key: 'decrease', title: type === 2 ? '减少应收' : '减少应付', width: 120, align: 'right', render: v => Number(v) ? money(Number(v)) : '—' },
-    { key: 'balanceAfter', title: '结余', width: 130, align: 'right', render: v => <span className="font-medium tabular-nums">{money(Number(v))}</span> },
+    { key: 'balanceAfter', title: '余额', width: 130, align: 'right', render: v => <span className="font-medium tabular-nums">{money(Number(v))}</span> },
     { key: 'id', title: '操作', width: 180, render: (_, row) => <div className="flex gap-2">
       {row.orderId && can(type === 2 ? PERMISSIONS.SALE_ORDER_VIEW : PERMISSIONS.PURCHASE_ORDER_VIEW) && <Button size="sm" variant="outline" onClick={() => {
         const path = `/${type === 2 ? 'sale' : 'purchase'}/${row.orderId}`

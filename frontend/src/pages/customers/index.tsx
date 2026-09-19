@@ -162,7 +162,7 @@ export default function CustomersPage() {
       <ConfirmDialog
         open={!!confirmTarget}
         title="确认删除"
-        description={`删除客户「${confirmTarget?.name}」？仅未被销售、退货或任务引用的客户允许删除；若已被引用，请改为编辑后停用。`}
+        description={`删除客户「${confirmTarget?.name}」？客户被销售、退货或任务引用后不能删除；如需停用，请编辑并取消启用。`}
         variant="destructive"
         confirmText="删除"
         onConfirm={() => { del.mutate(confirmTarget!.id); setConfirmTarget(null) }}

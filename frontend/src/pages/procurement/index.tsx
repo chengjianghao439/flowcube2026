@@ -125,7 +125,7 @@ export default function ProcurementPlanListPage() {
               <Label>计划名称（可选）</Label>
               <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="默认按生成时间" className="h-10" />
             </div>
-            <p className="text-xs text-muted-foreground">使用 ACTIVE 实物与预计采购；未发销售包含未占库订单，销售先消耗预测。已有计划、申请和采购草稿会抵扣，避免重复采购。</p>
+            <p className="text-xs text-muted-foreground">只统计在库现货与在途采购；未发销售（含未占库订单）会优先消耗预测需求；已有计划、申请和采购草稿会先行抵扣，避免重复采购。</p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setGenOpen(false)} disabled={generate.isPending}>取消</Button>

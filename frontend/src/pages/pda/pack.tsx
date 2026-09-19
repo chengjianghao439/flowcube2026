@@ -148,7 +148,7 @@ function PackageCard({ pkg, active, onActivate, onFinish, finishing, onPrintLabe
             {printingLabel ? '打印中…' : '打印箱贴'}
           </Button>
           {/*
-            箱贴打印状态必须显示出来：完成打包要求箱贴打印成功（服务端强制），
+            箱贴打印状态必须显示出来：完成打包要求箱贴打印成功（系统强制），
             此前页面不显示打印状态，操作员只能反复点「完成打包并进入待出库」
             （2026-09-17 验收 ISSUE-003）。
           */}
@@ -541,7 +541,7 @@ export default function PdaPackPage() {
                   : finalizeAction
               void handler.confirmPending().then((status) => {
                 if (!status) return
-                if (status.status === 'pending') warn(status.message || '服务端仍未确认结果，请稍后再查')
+                if (status.status === 'pending') warn(status.message || '系统还未确认结果，请稍后再查')
                 if (status.status === 'state_unconfirmed') warn(status.message)
                 if (status.status === 'not_found') warn(status.message || '未找到上次提交记录；请先刷新箱子和任务状态后再重试')
                 if (status.status === 'failed') err(status.message || '上次操作未成功，请检查后重试')
@@ -588,7 +588,7 @@ export default function PdaPackPage() {
           {totalBoxes > 0 && activeBoxes.every((pkg) => pkg.status === 2) ? (
             <>
               {/*
-                箱贴未打印成功时，完成打包会被服务端拒绝（出库前置：箱贴必须有打印成功记录）。
+                箱贴未打印成功时，完成打包会被系统拒绝（出库前置：箱贴必须有打印成功记录）。
                 这里把原因与出路直接摆出来，避免操作员只看到通用错误后反复无效重试。
               */}
               {unprintedBoxes.length > 0 && (

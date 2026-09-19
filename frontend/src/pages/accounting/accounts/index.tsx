@@ -387,7 +387,7 @@ export default function AccountsPage() {
     <div>
       <PageHeader
         title="会计科目表"
-        description={`会计核算的科目地基（企业会计准则口径）· 共 ${totalCount} 个科目`}
+        description={`企业会计准则口径的会计科目 · 共 ${totalCount} 个科目`}
         actions={canManage && (
           <Button onClick={handleAddRoot}>
             <Plus className="mr-1.5 h-4 w-4" />

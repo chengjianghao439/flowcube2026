@@ -114,7 +114,7 @@ export default function LocationsPage() {
     keyword && { key: 'keyword', label: `关键字：${keyword}`, onRemove: () => setKeyword('') },
     warehouseFilter && { key: 'warehouse', label: `仓库：${(whData ?? []).find((w: { id: number; name: string }) => w.id === warehouseFilter)?.name ?? warehouseFilter}`, onRemove: () => setWarehouseFilter(null) },
     statusFilter && { key: 'status', label: `状态：${STATUS_LABEL[Number(statusFilter)] ?? statusFilter}`, onRemove: () => setStatusFilter('') },
-    zoneFilter && { key: 'zone', label: `区域：${zoneFilter}`, onRemove: () => setZoneFilter('') },
+    zoneFilter && { key: 'zone', label: `库区：${zoneFilter}`, onRemove: () => setZoneFilter('') },
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   const columns: TableColumn<Location>[] = [
@@ -122,13 +122,13 @@ export default function LocationsPage() {
       render: v => <span className="text-doc-code-strong">{v as string}</span> },
     { key: 'warehouseName', title: '仓库', width: 140,
       render: v => (v as string | null) ?? <span className="text-muted-foreground">—</span> },
-    { key: 'zone',    title: '区域', render: v => (v as string | null) ?? <span className="text-muted-foreground">—</span> },
+    { key: 'zone',    title: '库区', render: v => (v as string | null) ?? <span className="text-muted-foreground">—</span> },
     { key: 'aisle',   title: '通道', render: v => (v as string | null) ?? <span className="text-muted-foreground">—</span> },
     { key: 'rack',    title: '货架', render: v => (v as string | null) ?? <span className="text-muted-foreground">—</span> },
     { key: 'capacity', title: '容量', width: 80 },
     { key: 'status', title: '状态', width: 80,
       render: v => <SoftStatusLabel label={STATUS_LABEL[v as number]} tone={activeTone(Number(v) === 1)} /> },
-    { key: 'containerCount', title: '容器数', width: 80,
+    { key: 'containerCount', title: '条码数', width: 80,
       render: v => (v as number | null) ?? 0 },
   ]
 
@@ -149,7 +149,7 @@ export default function LocationsPage() {
         })}
         recordUnit="个"
         deleteApi={(id) => deleteLocationApi(id, { skipGlobalError: true })}
-        deleteMessage="仅未被库存容器引用的库位允许删除；若仍在使用，请改为编辑后停用。"
+        deleteMessage="库位被库存引用后不能删除；如需停用，请编辑并取消启用。"
         createLabel="+ 新建库位"
         saveSuccessMessage={(editing) => editing ? '库位已保存' : '库位已创建'}
         formWidthClass="max-w-2xl"
@@ -184,7 +184,7 @@ export default function LocationsPage() {
               {chips.map(c => (
                 <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
                   {c.label}
-                  <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除筛选 ${c.label}`}>
+                  <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${c.label}」`}>
                     <X className="h-3 w-3" />
                   </button>
                 </span>
@@ -208,7 +208,7 @@ export default function LocationsPage() {
             </div>
             <div className="grid grid-cols-3 gap-3">
               <div><Label htmlFor="location-zone">库区</Label><Input id="location-zone" className="mt-1" placeholder="如 A" value={form.zone ?? ''} onChange={e => set('zone', e.target.value)} /></div>
-              <div><Label htmlFor="location-aisle">巷道</Label><Input id="location-aisle" className="mt-1" placeholder="如 01" value={form.aisle ?? ''} onChange={e => set('aisle', e.target.value)} /></div>
+              <div><Label htmlFor="location-aisle">通道</Label><Input id="location-aisle" className="mt-1" placeholder="如 01" value={form.aisle ?? ''} onChange={e => set('aisle', e.target.value)} /></div>
               <div><Label htmlFor="location-rack">货架</Label><Input id="location-rack" className="mt-1" placeholder="如 01" value={form.rack ?? ''} onChange={e => set('rack', e.target.value)} /></div>
               <div><Label htmlFor="location-level">层</Label><Input id="location-level" className="mt-1" placeholder="如 01" value={form.level ?? ''} onChange={e => set('level', e.target.value)} /></div>
               <div><Label htmlFor="location-position">位</Label><Input id="location-position" className="mt-1" placeholder="如 01" value={form.position ?? ''} onChange={e => set('position', e.target.value)} /></div>
