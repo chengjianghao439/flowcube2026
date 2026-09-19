@@ -23,6 +23,7 @@ import { Label } from '@/components/ui/label'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { toast } from '@/lib/toast'
 import { useWorkspaceStore } from '@/store/workspaceStore'
+import { useWorkspaceTabTitle } from '@/hooks/useWorkspaceTabTitle'
 import { useDirtyGuard } from '@/hooks/useDirtyGuard'
 import { ActionBar } from '@/components/shared/ActionBar'
 import { StatusBadge } from '@/components/shared/StatusBadge'
@@ -392,6 +393,7 @@ function DetailView({ transferId, closeTab, tabPath }: { transferId: number; clo
     queryFn: () => getTransferDetailApi(transferId),
     enabled: !!transferId,
   })
+  useWorkspaceTabTitle(order?.orderNo)
   const [editing, setEditing] = useState(false)
 
   const confirmMutate = useMutation({ mutationFn: () => confirmTransferApi(transferId), onSuccess: () => qc.invalidateQueries({ queryKey: ['transfer'] }) })

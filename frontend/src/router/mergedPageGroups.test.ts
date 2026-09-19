@@ -24,17 +24,17 @@ test('切换报表视图只更新一个工作区标签', () => {
   expect(useWorkspaceStore.getState().tabs[1].path).toBe('/reports/profit-analysis')
 })
 
-test('旧快捷入口和已保存标签使用合并后的名称', async () => {
+test('旧快捷入口和已保存标签改用子页名（不再一律显示组合名）', async () => {
   useWorkspaceStore.setState({ tabs: [HOME_TAB], activeKey: HOME_TAB.key })
   useWorkspaceStore.getState().addTab({ key: '/reports/kpi', path: '/reports/kpi', title: '经营 KPI' })
-  expect(useWorkspaceStore.getState().tabs[1].title).toBe('报表中心')
+  expect(useWorkspaceStore.getState().tabs[1].title).toBe('经营概览')
   localStorage.setItem('flowcube-workspace', JSON.stringify({ version: 0, state: { tabs: [
     { key: '/reports', path: '/reports', title: '报表中心' },
     { key: '/reports/kpi', path: '/reports/kpi', title: '经营 KPI' },
     { key: '/reports/role-workbench', path: '/reports/role-workbench', title: '岗位工作台' },
   ] } }))
   await useWorkspaceStore.persist.rehydrate()
-  expect(useWorkspaceStore.getState().tabs.map(tab => tab.title)).toEqual(['仪表盘', '报表中心', '待办中心'])
+  expect(useWorkspaceStore.getState().tabs.map(tab => tab.title)).toEqual(['仪表盘', '经营概览', '待办中心'])
 })
 
 test('合并菜单先过滤权限，只有补货权限仍有采购建议入口', () => {

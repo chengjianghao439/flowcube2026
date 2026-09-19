@@ -37,3 +37,20 @@ export function getMergedPageGroup(path: string): MergedPageGroup | undefined {
   const pathname = path.split(/[?#]/)[0]
   return MERGED_PAGE_GROUPS.find(group => group.views.some(view => view.path === pathname))
 }
+
+/**
+ * 取某个子视图（用于工作区标签名）。
+ *
+ * 标签原先一律显示组合名（「报表中心」「仓库运营」），切到组内另一个子页后标签纹丝不动，
+ * 用户看不出自己当前在看哪个子页；而标签宽度上限 7rem（约 7 个汉字）也放不下
+ * 「组名 · 子页名」。故标签直接用子页名（「经营概览」「批次效率」…），
+ * 组名仍由页面标题与菜单承载。
+ */
+export function getMergedPageView(path: string): { group: MergedPageGroup; view: MergedPageGroup['views'][number] } | undefined {
+  const pathname = path.split(/[?#]/)[0]
+  for (const group of MERGED_PAGE_GROUPS) {
+    const view = group.views.find(v => v.path === pathname)
+    if (view) return { group, view }
+  }
+  return undefined
+}

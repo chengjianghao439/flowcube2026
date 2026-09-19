@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { PATH_TITLES } from '@/router/routeDefinitions'
-import { getMergedPageGroup } from '@/router/mergedPageGroups'
+import { PATH_TITLES, resolveRouteTitle } from '@/router/routeDefinitions'
+import { getMergedPageView } from '@/router/mergedPageGroups'
 import { buildWorkspaceTabRegistrationFromPath } from '@/router/workspaceRouteMeta'
 export { PATH_TITLES } from '@/router/routeDefinitions'
 
@@ -38,14 +38,22 @@ interface WorkspaceState {
   closeOthers: (key: string) => void
   closeAll: () => void
   syncFromLocation: (path: string, title?: string) => void
+  /**
+   * 只改标签标题，不改变激活态。
+   * 详情页数据到位后用它把路由兜底名（如「销售单 #3260」）换成真实业务单号；
+   * 不能改用 addTab —— 那会 setActive，数据晚到时会把用户从别的标签拽回来。
+   */
+  updateTabTitle: (path: string, title: string) => void
 }
 
 /** 旧快捷入口与持久化标题同步新名称，不改其他单据的自定义标题。 */
 function currentTabTitle(path: string, fallback: string): string {
   const base = path.split(/[?#]/)[0]
   if (['/payments/payable','/payments/receivable','/reports/reconciliation/payable','/reports/reconciliation/receivable'].includes(base)) return PATH_TITLES[base]
-  return getMergedPageGroup(path)?.title
-    ?? (path.split(/[?#]/)[0] === '/reports/role-workbench' ? '待办中心' : fallback)
+  // 合并页（采购建议 / 报表中心 / 仓库运营）用**子页名**做标签，而不是组合名：
+  // 组内切换虽只更新同一个标签，但标签一直叫「报表中心」会让用户看不出当前在看哪个子页。
+  return getMergedPageView(path)?.view.label
+    ?? (base === '/reports/role-workbench' ? '待办中心' : fallback)
 }
 
 function sanitizeTabs(rawTabs: unknown): WorkspaceTab[] {
@@ -158,7 +166,14 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           })
           return
         }
-        const nextTitle = currentTabTitle(normalized.path, title || existing.title)
+        const fallbackTitle = resolveRouteTitle(normalized.path) ?? normalized.path
+        // 详情页用业务单号调过 updateTabTitle 后，路由兜底名不得再覆盖回来：
+        // KeepAliveOutlet 每次路由变化都会拿「销售单 #3260」重设标题，而它的 effect 晚于
+        // 子组件执行——不挡一下，数据已缓存的场景（切走再切回）标签就又变回主键了。
+        // 地址变了（切到另一张单）时照旧用新兜底名，随后由页面再换成新单号。
+        const keepPageTitle = existing.path.split(/[?#]/)[0] === normalized.path.split(/[?#]/)[0]
+          && !!existing.title && existing.title !== fallbackTitle
+        const nextTitle = currentTabTitle(normalized.path, keepPageTitle ? existing.title : (title || existing.title))
         set({
           tabs: tabs.map((tab) => (
             tab.key === normalized.key
@@ -167,6 +182,14 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           )),
           activeKey: normalized.key,
         })
+      },
+
+      updateTabTitle: (path, title) => {
+        if (!isDesktopWorkspacePath(path) || !title) return
+        const normalized = buildWorkspaceTabRegistrationFromPath(path)
+        const { tabs } = get()
+        if (!tabs.some(t => t.key === normalized.key)) return
+        set({ tabs: tabs.map(t => (t.key === normalized.key ? { ...t, title } : t)) })
       },
     }),
     {

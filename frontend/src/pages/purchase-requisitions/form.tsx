@@ -26,6 +26,7 @@ import { useDirtyGuard } from '@/hooks/useDirtyGuard'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { useWorkspaceStore } from '@/store/workspaceStore'
+import { useWorkspaceTabTitle } from '@/hooks/useWorkspaceTabTitle'
 import {
   getRequisitionApi, createRequisitionApi, updateRequisitionApi, submitRequisitionApi,
   withdrawRequisitionApi, cancelRequisitionApi, approveRequisitionApi, rejectRequisitionApi, convertRequisitionApi,
@@ -52,13 +53,13 @@ function Section({ title, children, actions }: { title: string; children: React.
 function ApprovalProgress({ approval }: { approval: NonNullable<import('@/types/purchase-requisition').PurchaseRequisition['approval']> }) {
   const INSTANCE = {
     1: { label: '审批中', tone: 'warning' as const },
-    2: { label: '已通过', tone: 'success' as const },
+    2: { label: '已批准', tone: 'success' as const },
     3: { label: '已驳回', tone: 'danger' as const },
     4: { label: '已撤销', tone: 'draft' as const },
   }
   const TASK = {
     1: { label: '待审批', tone: 'warning' as const },
-    2: { label: '已通过', tone: 'success' as const },
+    2: { label: '已批准', tone: 'success' as const },
     3: { label: '已驳回', tone: 'danger' as const },
   }
   const meta = INSTANCE[approval.status as keyof typeof INSTANCE] ?? { label: '未知', tone: 'draft' as const }
@@ -103,6 +104,7 @@ export default function RequisitionFormPage() {
     queryFn: () => getRequisitionApi(editId as number),
     enabled: !!editId,
   })
+  useWorkspaceTabTitle(detail?.requisitionNo)
 
   const status = detail?.status ?? 1
   const editable = isNew || status === 1     // 新建或草稿态可编辑

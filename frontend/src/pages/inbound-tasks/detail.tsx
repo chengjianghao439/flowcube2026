@@ -12,6 +12,7 @@ import PageHeader from '@/components/shared/PageHeader'
 import { Button } from '@/components/ui/button'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { useWorkspaceStore } from '@/store/workspaceStore'
+import { useWorkspaceTabTitle } from '@/hooks/useWorkspaceTabTitle'
 import { toast } from '@/lib/toast'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
@@ -68,6 +69,7 @@ export default function InboundTaskDetailPage() {
   const isActiveTab = useActiveWorkspaceTab()
   // 收货现场变化频繁，标签页常驻挂载时若不轮询容易停留在打开时的陈旧进度
   const { data: task, isLoading, refetch: refetchTask } = useInboundTaskDetail(validId, { refetchInterval: isActiveTab ? 20_000 : false })
+  useWorkspaceTabTitle(task?.taskNo)
 
   const submitMut = useSubmitInboundTask()
   const cancelMut = useCancelInbound()
@@ -302,7 +304,7 @@ export default function InboundTaskDetailPage() {
           + (task.status === 4
             ? '该收货订单已完成并自动结算过应付，撤回后会一并反冲已入库的库存、冲销已生成的应付记录，若关联采购单因此已自动完成，也会退回"已提交"状态。'
             : '')
-          + '若容器已被后续拣货、拆分或调拨等动作动过，将无法撤回，请改用库存盘点处理差异。此操作请谨慎确认。'
+          + '若库存条码已被后续拣货、拆分或调拨等动作动过，将无法撤回，请改用库存盘点处理差异。此操作请谨慎确认。'
         }
         variant="destructive"
         confirmText="确定撤回"

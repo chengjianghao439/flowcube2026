@@ -29,6 +29,7 @@ import { SupplierFinder, ProductFinder, FinderTrigger } from '@/components/finde
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useWorkspaceStore } from '@/store/workspaceStore'
+import { useWorkspaceTabTitle } from '@/hooks/useWorkspaceTabTitle'
 import { useDirtyGuard } from '@/hooks/useDirtyGuard'
 import { toast } from '@/lib/toast'
 import { formatDisplayDateTime } from '@/lib/dateTime'
@@ -482,6 +483,7 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
     refetchInterval: 8000,
   })
   const ret = detailQuery.data
+  useWorkspaceTabTitle(ret?.returnNo)
   const isLoading = detailQuery.isLoading
 
   const [confirmOpen, setConfirmOpen] = useState(false)

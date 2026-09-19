@@ -108,7 +108,7 @@ export default function ConsolidationPage() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="合并报表 / 账套"
+        title="合并报表与账套"
         description="多账套管理：选择集团账套查看合并资产负债表与利润表（Σ子账套）。切换账套后会计各页随之过滤。"
         actions={
           <>

@@ -26,6 +26,7 @@ import { EditModeBadge, UnsavedBadge } from '@/components/shared/EditModeBadge'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { useWorkspaceStore } from '@/store/workspaceStore'
+import { useWorkspaceTabTitle } from '@/hooks/useWorkspaceTabTitle'
 import { ActionBar }      from '@/components/shared/ActionBar'
 import { ConfirmDialog }  from '@/components/shared/ConfirmDialog'
 import ShipSelectDialog from '@/pages/sale/components/ShipSelectDialog'
@@ -459,6 +460,9 @@ function isFulfillmentFocus(saleId: number) {
 
 function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: string; closeTab: () => void }) {
   const { data: order, isLoading } = useSaleDetail(saleId)
+  // 直接访问或刷新 /#/sale/3260 时，标签原本是路由兜底的「销售单 #3260」（数据库主键，
+  // 用户认不出是哪张单）；数据到位后换成真实单号，与「从列表点进来」保持一致。
+  useWorkspaceTabTitle(order?.orderNo)
   const shipMutate     = useShipSale()
   const deleteMutate   = useDeleteSale()
   const cancelMutate   = useCancelSale()
@@ -607,7 +611,7 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
           ['info', '订单信息', ClipboardList],
           ['fulfillment', '发货安排', CalendarClock],
           ['progress', '作业进度', Activity],
-          ['scan', '取货明细', ScanLine],
+          ['scan', '拣货明细', ScanLine],
           ['pack', '装箱进度', PackageCheck],
           ['log', '操作记录', History],
         ] as const).map(([key, label, Icon]) => (

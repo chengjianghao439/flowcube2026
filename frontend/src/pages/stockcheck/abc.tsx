@@ -61,7 +61,7 @@ export default function AbcClassPage() {
     onError: () => toast.error('重算失败'),
   })
 
-  // ── 分批盘规则（可编辑草稿）──
+  // ── 分批盘点规则（可编辑草稿）──
   const rulesQ = useQuery({
     queryKey: ['cycle-rules', warehouseId],
     queryFn: () => getCycleRulesApi(warehouseId || undefined),
@@ -171,7 +171,7 @@ export default function AbcClassPage() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="商品分档与分批盘点规则"
+        title="分档与盘点规则"
         description="按出库消耗金额分档（A 卖得多盘得频繁 / B 中等 / C 卖得少盘得少）；分批盘点规则决定各档位多久盘一次、单次盘多少。"
         actions={<Button variant="outline" onClick={() => downloadExport('/export/abc').catch(e => toast.error((e as Error).message))}>导出</Button>}
       />

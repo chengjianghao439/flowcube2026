@@ -152,7 +152,7 @@ export function WorkspaceTabs() {
                 <span className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full bg-primary" />
               )}
 
-              <span className="max-w-[7rem] truncate leading-none">{tab.title}</span>
+              <span className="max-w-[7rem] truncate leading-none" title={tab.title}>{tab.title}</span>
 
               {/* 未保存变更指示点 */}
               {isDirty && (

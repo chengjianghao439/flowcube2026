@@ -115,7 +115,7 @@ export default function AccountingPeriodsPage() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="会计期间 / 期末结转"
+        title="会计期间与结转"
         description="期间结账后该期间凭证锁定；结账前需先生成损益结转凭证（12 月含年度利润结转）。本系统是正式账，请按月结账。"
         actions={<Button variant="outline" onClick={() => downloadExport('/export/accounting-periods').catch(e => toast.error((e as Error).message))}>导出</Button>}
       />

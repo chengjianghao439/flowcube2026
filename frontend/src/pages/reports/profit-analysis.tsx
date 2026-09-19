@@ -127,7 +127,7 @@ export default function ProfitAnalysisPage() {
               }).catch(e => toast.error((e as Error).message))}>
               导出排行榜
             </Button>
-            <Button variant="outline" onClick={() => openPath('/sale', '销售管理')}>查看销售管理</Button>
+            <Button variant="outline" onClick={() => openPath('/sale', '销售订单')}>查看销售订单</Button>
             <Button variant="outline" onClick={() => openPath('/inventory/overview', '库存总览')}>查看库存总览</Button>
             <Button disabled={isFetching} onClick={() => void refetch()}>{isFetching ? '正在刷新…' : '立即刷新'}</Button>
           </div>
@@ -136,8 +136,8 @@ export default function ProfitAnalysisPage() {
 
       <div className="grid gap-3 sm:grid-cols-2 min-[960px]:grid-cols-4">
         <SummaryCard label="销售毛利" value={money(summary?.grossProfit)} hint={`销售净额 ${money(summary?.saleAmount)}`} negative={(summary?.grossProfit ?? 0) < 0} />
-        <SummaryCard label="销售成本" value={money(summary?.costAmount)} hint="优先使用销售明细成本快照" />
-        <SummaryCard label="库存金额" value={money(summary?.stockValue)} hint="当前授权仓库全部库存的估值" />
+        <SummaryCard label="销售成本" value={money(summary?.costAmount)} hint="按销售时的成本价计算" />
+        <SummaryCard label="库存金额" value={money(summary?.stockValue)} hint="当前账号可查看仓库的全部库存估值" />
         <SummaryCard label="滞销库存" value={summary ? `${summary.slowMovingCount} 种商品` : '—'} hint={`金额 ${money(summary?.slowMovingValue)} · 查看同口径明细`} onClick={() => setTab('slow')} />
       </div>
 

@@ -27,6 +27,7 @@ import { DatePicker } from '@/components/shared/DatePicker'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { toast } from '@/lib/toast'
 import { useWorkspaceStore } from '@/store/workspaceStore'
+import { useWorkspaceTabTitle } from '@/hooks/useWorkspaceTabTitle'
 import { useDirtyGuard } from '@/hooks/useDirtyGuard'
 import { dirtyItems } from '@/lib/editMode'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
@@ -509,6 +510,7 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
   const isActiveTab = useActiveWorkspaceTab()
   // 采购/收货是 PDA 现场高频变化的单据，标签页常驻挂载时若不轮询容易看到陈旧的收货进度
   const { data: order, isLoading } = usePurchaseDetail(purchaseId, { refetchInterval: isActiveTab ? 20_000 : false })
+  useWorkspaceTabTitle(order?.orderNo)
   const confirmMutate = useConfirmPurchase()
   const withdrawConfirmMutate = useWithdrawConfirmPurchase()
   const approveMutate = useApprovePurchase()

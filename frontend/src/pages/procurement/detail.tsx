@@ -1,6 +1,7 @@
 import { ProcurementArrivalStatus } from '@/components/shared/ProcurementSupplyExplanation'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { formatDisplayDateTime } from '@/lib/dateTime'
+import { useWorkspaceTabTitle } from '@/hooks/useWorkspaceTabTitle'
 import { createRequestKey, withRequestKeyHeaders } from '@/lib/requestKey'
 import ProcurementSupplyDetails from '@/components/shared/ProcurementSupplyDetails'
 import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
@@ -42,6 +43,7 @@ export default function ProcurementPlanDetailPage() {
 
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const { data: plan, isLoading, isError, error, refetch, isFetching, dataUpdatedAt } = useQuery({ queryKey: ['procurement-plan', planId], queryFn: () => getPlanApi(planId), enabled: planId > 0 })
+  useWorkspaceTabTitle(plan?.code)
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['procurement-plan', planId] })
   const updateItem = useMutation({

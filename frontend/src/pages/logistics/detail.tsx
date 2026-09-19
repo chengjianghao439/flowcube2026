@@ -10,6 +10,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { toast } from '@/lib/toast'
+import { useWorkspaceTabTitle } from '@/hooks/useWorkspaceTabTitle'
 import { confirmAction } from '@/lib/confirm'
 import PageHeader from '@/components/shared/PageHeader'
 import { SectionCard } from '@/components/shared/SectionCard'
@@ -53,6 +54,7 @@ export default function LogisticsDetailPage() {
     queryFn: () => getWaybillDetailApi(waybillId),
     enabled: Number.isFinite(waybillId) && waybillId > 0,
   })
+  useWorkspaceTabTitle(wb?.waybillNo)
 
   function invalidate() {
     qc.invalidateQueries({ queryKey: ['waybill', waybillId] })
