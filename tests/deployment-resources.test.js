@@ -252,3 +252,39 @@ test('PDA 工作流不得让「等浏览器部署」与「持有部署组」落�
   assert.notEqual(waiter[1].concurrency && waiter[1].concurrency.group, DEPLOY_GROUP,
     `等待浏览器部署的 job（${waiter[0]}）不得持有 ${DEPLOY_GROUP}`)
 })
+
+// 2026-09-19 发现：`scripts/check-deprecated-downloads.js` 早就存在，package.json 也声明了
+// `release:check-downloads`，但**没有任何 workflow 跑过它**——于是「backend/downloads/ 已废弃、
+// 不得提交发布文件」这条写在 AGENTS.md 里的规则，实际上没有任何一处会拦。
+//
+// 这条守卫最容易失效的地方不是脚本逻辑，而是「没人执行」：脚本本身是对的（反向验证过：
+// `git add -f` 一个安装包进去，脚本 exit 1），却因为 `.gitignore` 让 git status 看不见普通提交，
+// 只有真的跑起来才有意义。同类前车之鉴是那些"写了但没接线"的孤儿测试。故此断言把
+// 「脚本存在 + package.json 声明 + 至少一条 CI 步骤真的执行」三者钉在一起。
+test('废弃 downloads 守卫必须有 CI 执行入口（防「脚本写了但从没人跑」）', () => {
+  const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
+  const command = 'npm run release:check-downloads'
+  assert.ok(pkg.scripts && pkg.scripts['release:check-downloads'],
+    'package.json 必须保留 release:check-downloads 脚本')
+
+  const scriptPath = path.join(root, 'scripts/check-deprecated-downloads.js')
+  assert.ok(fs.existsSync(scriptPath), 'scripts/check-deprecated-downloads.js 必须存在')
+
+  const yaml = require(path.resolve(root, 'frontend/node_modules/js-yaml'))
+  const workflow = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/test.yml'), 'utf8'))
+  const runners = []
+  for (const [jobName, job] of Object.entries(workflow.jobs || {})) {
+    for (const step of job.steps || []) {
+      if (String(step.run || '').includes(command)) runners.push(`${jobName}/${step.name}`)
+    }
+  }
+  assert.ok(runners.length >= 1,
+    `没有任何 CI 步骤执行 \`${command}\`：backend/downloads 的废弃规则会变成无人执行的摆设（已接线位置：${runners.join(', ') || '无'}）`)
+
+  // 反向确认脚本不是空壳：它必须真的检查 git 视角下的该目录，否则接线也只是"跑了个寂寞"。
+  const source = fs.readFileSync(scriptPath, 'utf8')
+  assert.ok(/git\(\[\s*['"]ls-files['"]/.test(source),
+    '废弃 downloads 守卫必须检查 git ls-files（`git add -f` 是 .gitignore 拦不住的唯一危险路径）')
+  assert.ok(source.includes('backend/downloads'),
+    '废弃 downloads 守卫必须检查 backend/downloads 目录')
+})

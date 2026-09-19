@@ -70,6 +70,7 @@
 - **「等浏览器部署」与「持有部署组」不得同处一个 job**：`build-pda-apk.yml` 拆为 `build-pda`（`build-pda-ci` 组）/`wait-browser`（无组）/`publish-pda`（唯一持有 `flowcube-server-deploy`）；APK 经 artifact 从 build 传到 publish，故上传步骤不得 `continue-on-error`，`download-artifact` 与 `upload-artifact` 保持同一大版本线；`tests/deployment-resources.test.js` 机械守住（反向验证：加回 workflow 级部署组、把等待步骤挪进发布 job，都必须失败）
 - **前端容器必须删 `/docker-entrypoint.d/10-listen-on-ipv6-by-default.sh`**（`10-listen-on-ipv6-by-default.sh`）
 - **回退/还原逐个写全路径、不得 `||` 兜底猜路径**，改完立即 `git status --short`
+- **`backend/downloads/` 已废弃，只允许 `.gitignore`/`README.md`**：该目录的 `.gitignore` 只挡普通提交，`git add -f` 仍能把安装包塞进仓库，而守卫只看 git 视角——所以 `npm run release:check-downloads` 必须在 CI 静态 job 真跑（2026-09-19 前从未接线，等于规则无人执行）（`scripts/check-deprecated-downloads.js`）
 - **改共用函数或路由契约后跑全量套件**（调用点补 `X-Client-Id`）；本机单测 Node 26 假失败用 `NODE_OPTIONS='--localstorage-file=/tmp/fc-ls.json'` 复现（`src/components/shared/FulfillmentTodos.test.tsx`）
 
 ## 1. 协作与操作边界
@@ -201,6 +202,8 @@ npm run test:permissions
 `npm run test:pda-scan-focus`（PDA 聚焦守卫：按「这个页面要不要输入」判断——除 `login.tsx` 外的 PDA 页面不得出现 `autoFocus`，`PdaScanner` 每处 `.focus()` 必须自身带 manual 语义）同为纯离线断言，与上四条同批执行。
 `npm run test:api-route-contract`（前后端路由契约：把 `app.use('/api/x')` 前缀与各 routes 文件的平铺路由拼成完整路径，比对前端 `client.<method>('<path>')` 的静态调用——参数名与查询串归一化；不一致即运行期 404，构建/lint/类型检查都不会红）同为纯离线断言，与上五条同批执行。**改路由名、改前端调用路径或新增嵌套 `router.use` 后都要跑它**（嵌套 router 需先补守卫的展开逻辑，见该文件头「已知边界」）。
 运维/迁移回归（static job 「运维回归」步骤）：`node --test tests/ops-monitor-restore.test.js tests/deployment-resources.test.js tests/restore-trigger-normalize.test.js tests/migration-trigger-bodies.test.js`。前两项验备份恢复判定与资源边界，后两项验触发器分号规范化与迁移逐条切分，均不连数据库。
+
+废弃目录回归：`npm run release:check-downloads`（`backend/downloads/` 只允许 `.gitignore`/`README.md`）——`.gitignore` 挡得住普通提交、挡不住 `git add -f`，而守卫只看 git 视角，所以必须在 CI 静态 job 真跑，不连数据库。
 
 导出格式回归：`npm run test:export`（static job 与 `test:upload` 同一步执行）——校验 xlsx 导出的日期列写成日期单元格并带 `yyyy-mm-dd` / `yyyy-mm-dd hh:mm` 数字格式（2026-09-16 起），不连数据库。
 

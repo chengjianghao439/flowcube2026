@@ -87,6 +87,11 @@ jobs:
       - name: 发布工具回归 — Release 附件上传（超时/重试/落地校验）与发版后线上核对
         run: npm run test:release-tooling
 
+      # backend/downloads 已废弃：.gitignore 挡住普通提交，但 `git add -f` 仍能把安装包塞进仓库，
+      # 守卫只看 git 视角，所以必须在这里真的跑一次。
+      - name: 发布工具回归 — 废弃的 backend/downloads 不得提交发布文件
+        run: npm run release:check-downloads
+
       - name: 运维回归 — 备份恢复判定与数据库指标
         run: node --test tests/ops-monitor-restore.test.js tests/deployment-resources.test.js tests/restore-trigger-normalize.test.js tests/migration-trigger-bodies.test.js
 
