@@ -1,7 +1,7 @@
 {
-  "version": "0.10.1",
-  "versionCode": 136,
+  "version": "0.10.2",
+  "versionCode": 137,
   "filename": "app-release.apk",
-  "releaseNote": "修复 v0.10.0 的一个设计问题，并补齐上一次没有发出去的浏览器端与 PDA。",
-  "publishedAt": "2026-09-19T22:02:49.741Z"
+  "releaseNote": "把系统的最小数量精度统一为两位小数。",
+  "publishedAt": "2026-09-21T14:03:52.822Z"
 }
