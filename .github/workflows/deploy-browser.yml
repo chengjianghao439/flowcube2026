@@ -189,7 +189,11 @@ jobs:
           # server-update.sh 的归档摘要与 OCI revision 校验一律不变。
           UPLOAD_STREAMS=8
           PART_TIMEOUT=900
-          UPLOAD_BUDGET=1200
+          # 实测 runner→服务器 方向：单流 27 KB/s、8 流聚合约 97 KB/s（仅提升 3.6 倍）；
+          # 而反方向（服务器→GitHub）同样 8 流可达 8.4 MB/s——慢的是**跨境入站方向本身**，
+          # 不是 runner 不会并发。192MB 按 97 KB/s 需约 33 分钟，所以整批预算按 45 分钟给；
+          # 2026-09-21 第一次跑时用的是 1200 秒，实测传到 19% 就被杀。
+          UPLOAD_BUDGET=2700
           PARTS_DIR="/tmp/flowcube-image-parts-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           LOCAL_PARTS="$RUNNER_TEMP/image-parts"
           SSH_TARGET="${{ steps.deploy_config.outputs.server_user }}@${{ steps.deploy_config.outputs.server_host }}"
@@ -251,5 +255,7 @@ jobs:
         run: |
           timeout -k 5 60 ssh -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=10 -o ServerAliveCountMax=2 \
             -p "${{ steps.deploy_config.outputs.server_ssh_port }}" "${{ steps.deploy_config.outputs.server_user }}@${{ steps.deploy_config.outputs.server_host }}" \
-            "rm -f /tmp/flowcube-images-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz /tmp/flowcube-pda-bootstrap-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.sh" \
+            # 分片目录也必须清：上传中途失败时 PARTS_DIR 会留下 8 个半截分片（2026-09-21 实测 28MB），
+            # 而 /tmp 与 /opt/flowcube 同处根分区——2026-09-19 正是被中转目录一点点吃光了部署余量。
+            "rm -f /tmp/flowcube-images-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz /tmp/flowcube-pda-bootstrap-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.sh; rm -rf /tmp/flowcube-image-parts-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
             || echo '::warning::临时上传清理失败，请检查本次 run 对应的 /tmp 文件'
