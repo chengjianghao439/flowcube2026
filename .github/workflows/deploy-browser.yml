@@ -5,21 +5,6 @@ on:
     branches:
       - main
   workflow_dispatch:
-    inputs:
-      # 应急通道（2026-09-21）：runner 在 Azure eastus2，到阿里云生产机的跨境 scp 吞吐会塌陷。
-      # 实测 runner→服务器 27 KB/s（400MB 归档按 3600 秒上限最多传 97MB，必然 exit 137），
-      # 而同一天本机走代理→GitHub 3.66 MB/s、本机→服务器 7.7 MB/s。
-      # 填这两个输入即表示「归档已由快链路预先放到服务器」，本 workflow 跳过 runner 侧构建与 scp。
-      # 注意：镜像仍必须由 GitHub Actions 构建（scripts/build-deploy-images.sh 会拒绝非 Actions 环境），
-      # 且 server-update.sh 会继续校验归档 sha256 与镜像 revision == EXPECTED_COMMIT。
-      preloaded_image_archive:
-        description: '应急：服务器上已就位的镜像归档绝对路径（填写后跳过 runner 侧构建与上传）'
-        required: false
-        default: ''
-      preloaded_image_sha256:
-        description: '应急：上述归档的 sha256（必须与 preloaded_image_archive 同时提供）'
-        required: false
-        default: ''
 
 permissions:
   contents: read
@@ -62,8 +47,6 @@ jobs:
         run: node scripts/wait-release-checks.js
 
       - name: Build application images on GitHub runner
-        # 预置归档模式下不重复构建：镜像已由 build-images.yml 在 Actions 里产出并经快链路投递。
-        if: inputs.preloaded_image_archive == ''
         timeout-minutes: 20
         env:
           DEPLOY_IMAGE_OUTPUT: ${{ runner.temp }}/flowcube-images.tar.gz
@@ -161,7 +144,7 @@ jobs:
           chmod 644 ~/.ssh/known_hosts
 
       - name: Deploy backend and frontend on server
-        # 预算：上传归档 ≤3600s（跨境带宽）+ 预检/脚本 ≤90s + server-update ≤2400s，合计约 102 分钟，留余量。
+        # 预算：上传归档 ≤1200s（分片并行）+ 预检/脚本 ≤90s + server-update ≤2400s，合计约 62 分钟，留余量。
         timeout-minutes: 105
         shell: bash
         env:
@@ -178,17 +161,8 @@ jobs:
           : "${SMOKE_LIMITED_PASSWORD:?缺少 SMOKE_LIMITED_PASSWORD}"
           # 将新发布器带到旧 checkout，首次迁移清单必须早于 Git 更新。
           BOOTSTRAP_SCRIPT="/tmp/flowcube-pda-bootstrap-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.sh"
-          PRELOADED_ARCHIVE="${{ inputs.preloaded_image_archive }}"
-          if [ -n "$PRELOADED_ARCHIVE" ]; then
-            IMAGE_ARCHIVE="$PRELOADED_ARCHIVE"
-            IMAGE_SHA256="${{ inputs.preloaded_image_sha256 }}"
-            [ -n "$IMAGE_SHA256" ] || { echo "::error::preloaded_image_sha256 必须与 preloaded_image_archive 同时提供"; exit 1; }
-            echo "==> 应急通道：使用服务器上已就位的镜像归档，跳过 runner 侧构建与上传"
-            echo "    归档：$IMAGE_ARCHIVE"
-          else
-            IMAGE_ARCHIVE="/tmp/flowcube-images-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz"
-            IMAGE_SHA256="$(sha256sum "$RUNNER_TEMP/flowcube-images.tar.gz" | cut -d' ' -f1)"
-          fi
+          IMAGE_ARCHIVE="/tmp/flowcube-images-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz"
+          IMAGE_SHA256="$(sha256sum "$RUNNER_TEMP/flowcube-images.tar.gz" | cut -d' ' -f1)"
           # 上传前预检临时目录与应用目录，保留余量；不触发 Docker 全盘扫描。
           # **余量不足必须自解释**：原先写的是 `test "$(df -Pm ...)" -ge 6144`，余量不够时 ssh 只返回
           # 1、一行输出都没有，与「SSH 连不上/密钥失效」在日志里长得完全一样。2026-09-19 11:04 起
@@ -205,18 +179,37 @@ jobs:
             { mb = $NF; sub(/MB$/, "", mb)
               if (mb + 0 < 6144) { printf "::error::%s 可用 %s，低于部署预检下限 6144MB：请先清理服务器磁盘再重跑（不得清除回退镜像）\n", $1, $NF; bad = 1 } }
             END { exit bad ? 1 : 0 }'
-          # 上传时限 3600 秒（2026-09-21 从 1800 放宽）。原先要求与 server-update.sh 里
-          # docker load 的 1800 秒对齐，理由是「同一个根因（服务器慢盘）上的两个环节」——
-          # 那条理由对 load 成立，对上传不成立：上传慢是 **GitHub runner 到阿里云的跨境带宽**，
-          # 与服务器磁盘无关。实测本机到服务器 50MB 秒传，而 runner 传 400MB 镜像归档连续
-          # 三次都卡在 1800 秒被强杀（exit 137），线上仍是旧版。两者根因不同，因此分别设限：
-          # 上传 3600 秒，load 保持 1800 秒。若日后 runner 侧带宽稳定，可再收回。
-          if [ -z "$PRELOADED_ARCHIVE" ]; then
-            timeout -k 10 3600 scp -o ConnectTimeout=20 -P "${{ steps.deploy_config.outputs.server_ssh_port }}" "$RUNNER_TEMP/flowcube-images.tar.gz" \
-              "${{ steps.deploy_config.outputs.server_user }}@${{ steps.deploy_config.outputs.server_host }}:$IMAGE_ARCHIVE"
-          else
-            echo "==> 跳过镜像 scp（使用预置归档）；归档摘要与镜像 revision 仍由 server-update.sh 校验"
-          fi
+          # ── 镜像归档上传：分片并行（2026-09-21 根因修复）──────────────────────
+          # 实测同一条中美链路：**单条 TCP 66 KB/s，8 条并行合计 8.4 MB/s**（相差 126 倍）——
+          # 瓶颈是单连接在丢包链路上的拥塞窗口，不是可用带宽。单流下 192MB 要 53 分钟，
+          # 而 3600 秒上限只够传 97MB，所以 v0.10.2 连续多轮都卡在 timeout 到点被强杀
+          # （exit 137）；「继续放宽上传时限」在原理上不可能成功，只能提高并行度。
+          # 对照：09-19 同一链路单流还有约 4.6 MB/s（192MB 用了 42 秒），两天内劣化到 66 KB/s。
+          # 分片**不改变归档字节**：服务器端按序合并后 sha256 与 runner 侧完全一致，
+          # server-update.sh 的归档摘要与 OCI revision 校验一律不变。
+          UPLOAD_STREAMS=8
+          PART_TIMEOUT=900
+          UPLOAD_BUDGET=1200
+          PARTS_DIR="/tmp/flowcube-image-parts-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          LOCAL_PARTS="$RUNNER_TEMP/image-parts"
+          SSH_TARGET="${{ steps.deploy_config.outputs.server_user }}@${{ steps.deploy_config.outputs.server_host }}"
+          SSH_PORT="${{ steps.deploy_config.outputs.server_ssh_port }}"
+          SSH_COMMON=(-o ConnectTimeout=20 -o ServerAliveInterval=30 -o ServerAliveCountMax=10)
+          rm -rf "$LOCAL_PARTS"; mkdir -p "$LOCAL_PARTS"
+          ARCHIVE_BYTES=$(stat -c%s "$RUNNER_TEMP/flowcube-images.tar.gz")
+          PART_BYTES=$(( (ARCHIVE_BYTES + UPLOAD_STREAMS - 1) / UPLOAD_STREAMS ))
+          split -b "$PART_BYTES" -d -a 3 "$RUNNER_TEMP/flowcube-images.tar.gz" "$LOCAL_PARTS/part-"
+          echo "==> 分片并行上传：归档 ${ARCHIVE_BYTES} 字节，并行度 ${UPLOAD_STREAMS}"
+          timeout -k 5 60 ssh "${SSH_COMMON[@]}" -p "$SSH_PORT" -o BatchMode=yes "$SSH_TARGET" \
+            "rm -rf '$PARTS_DIR' && mkdir -p '$PARTS_DIR'"
+          ls "$LOCAL_PARTS" | timeout -k 20 "$UPLOAD_BUDGET" xargs -P "$UPLOAD_STREAMS" -I{} \
+            timeout -k 10 "$PART_TIMEOUT" scp "${SSH_COMMON[@]}" -P "$SSH_PORT" "$LOCAL_PARTS/{}" "$SSH_TARGET:$PARTS_DIR/{}"
+          echo "==> 服务器端按序合并分片并核对字节数"
+          MERGED_BYTES=$(timeout -k 10 600 ssh "${SSH_COMMON[@]}" -p "$SSH_PORT" -o BatchMode=yes "$SSH_TARGET" \
+            "cat '$PARTS_DIR'/part-* > '$IMAGE_ARCHIVE' && rm -rf '$PARTS_DIR' && stat -c%s '$IMAGE_ARCHIVE'")
+          [ "$MERGED_BYTES" = "$ARCHIVE_BYTES" ] \
+            || { echo "::error::服务器端合并后字节数不一致（${MERGED_BYTES} ≠ ${ARCHIVE_BYTES}），拒绝继续部署"; exit 1; }
+          echo "==> 合并校验通过：${MERGED_BYTES} 字节（sha256 由 server-update.sh 继续核对）"
           timeout -k 5 60 scp -o ConnectTimeout=20 -P "${{ steps.deploy_config.outputs.server_ssh_port }}" scripts/publish-pda.sh \
             "${{ steps.deploy_config.outputs.server_user }}@${{ steps.deploy_config.outputs.server_host }}:$BOOTSTRAP_SCRIPT"
           # %q 逐项转义远程环境，口令中的引号/美元符号不能改变远程脚本。

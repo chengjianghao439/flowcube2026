@@ -244,10 +244,18 @@ test('桌面发布必须清理服务器侧中转目录（防 /tmp 长期累积�
 
 // 2026-09-18 发 v0.9.24 实测：Deploy Browser App 只跑了 11.5 分钟就以 exit code 124 失败，
 // 线上仍是旧版。根因不是那 40 分钟的外层上限，而是**镜像归档上传仍是 600 秒**，而同一根因
-// （服务器慢盘）上的 docker load 早在 v0.9.17 就放宽到 1800 秒——典型「改了一个环节忘了另一个」，
-// 且失败信息（timeout 的 124）指向外层，与真正的内层罪魁对不上。此断言把两个环节钉在一起，
-// 并保证 Deploy 步骤与 job 的预算真的容得下它们（只放宽内层、外层先被强杀同样会白跑）。
-test('镜像上传时限必须大于 docker load 时限，且步骤/job 预算容得下', () => {
+// （服务器慢盘）上的 docker load 早在 v0.9.17 就放宽到 1800 秒——典型「改了一个环节忘了另一个」。
+//
+// 2026-09-21 二次修正（v0.10.2 发不出去的真实根因）：上传慢**不是**「需要更长时间」，
+// 而是**单条 TCP 在丢包链路上的拥塞窗口被压死**。实测同一条中美链路：
+//   单流 66 KB/s  →  8 条并行合计 8.4 MB/s（相差 126 倍）
+// 所以「把时限从 1800 放宽到 3600」在原理上不可能成功：192MB 归档按 66 KB/s 要 53 分钟，
+// 而 3600 秒只够传 97MB，于是连续多轮都卡在 timeout 到点被强杀（exit 137，与 OOM 无关）。
+// 判定标准因此从「时限够不够长」改成「并行度够不够高 + 分片是否按字节切」——后者保证
+// 服务器端合并后的**字节与 sha256 完全不变**，server-update.sh 的校验一律不动。
+// 反向验证：把 UPLOAD_STREAMS 改成 1、删掉 PART_TIMEOUT、把 split -b 换成不切分，
+// 或把 UPLOAD_BUDGET 设成小于 PART_TIMEOUT，本断言都必须失败。
+test('镜像上传必须分片并行（单连接跨境吞吐塌陷时加时限无用），且步骤/job 预算容得下', () => {
   const yaml = require(path.resolve(root, 'frontend/node_modules/js-yaml'))
   const workflow = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/deploy-browser.yml'), 'utf8'))
   const job = workflow.jobs.deploy
@@ -257,32 +265,44 @@ test('镜像上传时限必须大于 docker load 时限，且步骤/job 预算�
   assert.ok(step, '未找到「Deploy backend and frontend on server」步骤')
   const script = String(step.run)
 
-  const upload = script.match(/timeout\s+-k\s+\d+\s+(\d+)\s+scp[^\n]*flowcube-images\.tar\.gz/)
-  assert.ok(upload, '未找到镜像归档上传的 scp 超时配置')
   const outer = script.match(/timeout\s+-k\s+\d+\s+(\d+)\s+bash\s+scripts\/server-update\.sh/)
   assert.ok(outer, '未找到 server-update.sh 的外层超时配置')
+  const outerSeconds = Number(outer[1])
 
+  // docker load 仍是慢盘上的关键环节，保留一条下限守护（改动它要显式说明理由）。
   const update = fs.readFileSync(path.join(root, 'scripts/server-update.sh'), 'utf8')
   const load = update.match(/DOCKER_COMMAND_TIMEOUT=(\d+)\s+docker load/)
   assert.ok(load, '未找到 docker load 的 DOCKER_COMMAND_TIMEOUT')
+  assert.ok(Number(load[1]) >= 600,
+    `docker load 时限 ${load[1]}s 过低：慢盘首次加载新镜像可能超过 10 分钟`)
 
-  const uploadSeconds = Number(upload[1])
-  const outerSeconds = Number(outer[1])
-  const loadSeconds = Number(load[1])
-  // 2026-09-21 修正：原先要求两者**一致**（「同一慢盘根因的两个环节」），这条对 docker load
-  // 成立，对上传不成立——上传慢是 **runner 到阿里云的跨境带宽**，与服务器磁盘无关（本机同网段
-  // 实测 50MB 秒传）。v0.10.2 连续三次部署都卡在上传的 1800 秒被强杀（exit 137），而 load 那侧
-  // 从未成为瓶颈。两个环节根因不同，因此改为：上传时限必须**大于** load 时限，且不低于 3600 秒。
-  // 反向验证：把 3600 改回 1800（或改成 ≤ load），本断言必须失败。
-  assert.ok(uploadSeconds > loadSeconds,
-    `上传时限 ${uploadSeconds}s 必须大于 docker load 时限 ${loadSeconds}s：上传受跨境带宽约束，比 load 更慢`)
-  assert.ok(uploadSeconds >= 3600,
-    `上传时限不得低于 3600 秒（当前 ${uploadSeconds}s）：2026-09-21 实测 runner 跨境传 400MB 需超过 1800 秒`)
+  const streams = script.match(/UPLOAD_STREAMS=(\d+)/)
+  assert.ok(streams, '未找到 UPLOAD_STREAMS：镜像上传必须分片并行（单连接跨境吞吐已被压到 66 KB/s）')
+  const streamsCount = Number(streams[1])
+  assert.ok(streamsCount >= 4,
+    `并行度 ${streamsCount} 过低：实测单流 66 KB/s 而 8 流合计 8.4 MB/s，并行度不足会让 192MB 归档重新变成「传不完」`)
+
+  const partTimeout = script.match(/PART_TIMEOUT=(\d+)/)
+  assert.ok(partTimeout, '未找到 PART_TIMEOUT：必须给单个分片显式时限')
+  const partSeconds = Number(partTimeout[1])
+  assert.ok(partSeconds >= 600,
+    `单分片时限 ${partSeconds}s 过低：每个分片约「归档 ÷ 并行度」（当前归档约 192MB），按最差实测速率也要留足余量`)
+
+  const budget = script.match(/UPLOAD_BUDGET=(\d+)/)
+  assert.ok(budget, '未找到 UPLOAD_BUDGET：整批上传必须有墙钟上限')
+  const budgetSeconds = Number(budget[1])
+  assert.ok(budgetSeconds >= partSeconds,
+    `整批上限 ${budgetSeconds}s 不得小于单分片上限 ${partSeconds}s：否则批量 xargs 会先被杀，单分片时限形同虚设`)
+
+  const splitBytes = script.match(/split\s+-b\s+"\$PART_BYTES"/)
+  assert.ok(splitBytes, '未找到按字节切分（split -b "$PART_BYTES"）：分片不改变归档字节是 sha256 校验不变的前提')
+  const merge = script.match(/cat\s+'\$PARTS_DIR'\/part-\*\s*>/)
+  assert.ok(merge, '未找到服务器端按序合并（cat "$PARTS_DIR"/part-* > 归档）')
 
   const stepSeconds = Number(step['timeout-minutes']) * 60
   assert.ok(Number.isFinite(stepSeconds) && stepSeconds > 0, 'Deploy 步骤必须显式声明 timeout-minutes')
-  assert.ok(stepSeconds > uploadSeconds + outerSeconds,
-    `Deploy 步骤上限 ${stepSeconds}s 必须大于上传 ${uploadSeconds}s + server-update ${outerSeconds}s`)
+  assert.ok(stepSeconds > budgetSeconds + outerSeconds,
+    `Deploy 步骤上限 ${stepSeconds}s 必须大于上传批量 ${budgetSeconds}s + server-update ${outerSeconds}s`)
 
   const jobSeconds = Number(job['timeout-minutes']) * 60
   const declared = job.steps.reduce((sum, s) => sum + (Number(s['timeout-minutes']) || 0) * 60, 0)
