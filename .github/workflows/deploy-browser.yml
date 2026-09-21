@@ -144,7 +144,7 @@ jobs:
           chmod 644 ~/.ssh/known_hosts
 
       - name: Deploy backend and frontend on server
-        # 预算：上传归档 ≤1800s + 预检/脚本 ≤90s + server-update ≤2400s，合计约 72 分钟，留余量。
+        # 预算：上传归档 ≤3600s（跨境带宽）+ 预检/脚本 ≤90s + server-update ≤2400s，合计约 102 分钟，留余量。
         timeout-minutes: 105
         shell: bash
         env:
@@ -179,11 +179,13 @@ jobs:
             { mb = $NF; sub(/MB$/, "", mb)
               if (mb + 0 < 6144) { printf "::error::%s 可用 %s，低于部署预检下限 6144MB：请先清理服务器磁盘再重跑（不得清除回退镜像）\n", $1, $NF; bad = 1 } }
             END { exit bad ? 1 : 0 }'
-          # 镜像归档上传的时限必须与 server-update.sh 里 docker load 的 1800 秒对齐：
-          # 二者是同一个根因（服务器慢盘）上的两个环节。2026-09-18 发 v0.9.24 时这里仍是 600 秒，
-          # 而 docker load 早已放宽到 1800 秒——结果是上传先被强杀，报 exit code 124，
-          # 整个 Deploy 只跑了 11.5 分钟就失败（部署根本没走完，线上仍是旧版）。
-          timeout -k 10 1800 scp -o ConnectTimeout=20 -P "${{ steps.deploy_config.outputs.server_ssh_port }}" "$RUNNER_TEMP/flowcube-images.tar.gz" \
+          # 上传时限 3600 秒（2026-09-21 从 1800 放宽）。原先要求与 server-update.sh 里
+          # docker load 的 1800 秒对齐，理由是「同一个根因（服务器慢盘）上的两个环节」——
+          # 那条理由对 load 成立，对上传不成立：上传慢是 **GitHub runner 到阿里云的跨境带宽**，
+          # 与服务器磁盘无关。实测本机到服务器 50MB 秒传，而 runner 传 400MB 镜像归档连续
+          # 三次都卡在 1800 秒被强杀（exit 137），线上仍是旧版。两者根因不同，因此分别设限：
+          # 上传 3600 秒，load 保持 1800 秒。若日后 runner 侧带宽稳定，可再收回。
+          timeout -k 10 3600 scp -o ConnectTimeout=20 -P "${{ steps.deploy_config.outputs.server_ssh_port }}" "$RUNNER_TEMP/flowcube-images.tar.gz" \
             "${{ steps.deploy_config.outputs.server_user }}@${{ steps.deploy_config.outputs.server_host }}:$IMAGE_ARCHIVE"
           timeout -k 5 60 scp -o ConnectTimeout=20 -P "${{ steps.deploy_config.outputs.server_ssh_port }}" scripts/publish-pda.sh \
             "${{ steps.deploy_config.outputs.server_user }}@${{ steps.deploy_config.outputs.server_host }}:$BOOTSTRAP_SCRIPT"

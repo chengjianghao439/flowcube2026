@@ -247,7 +247,7 @@ test('桌面发布必须清理服务器侧中转目录（防 /tmp 长期累积�
 // （服务器慢盘）上的 docker load 早在 v0.9.17 就放宽到 1800 秒——典型「改了一个环节忘了另一个」，
 // 且失败信息（timeout 的 124）指向外层，与真正的内层罪魁对不上。此断言把两个环节钉在一起，
 // 并保证 Deploy 步骤与 job 的预算真的容得下它们（只放宽内层、外层先被强杀同样会白跑）。
-test('镜像上传时限必须与 docker load 一致，且步骤/job 预算容得下', () => {
+test('镜像上传时限必须大于 docker load 时限，且步骤/job 预算容得下', () => {
   const yaml = require(path.resolve(root, 'frontend/node_modules/js-yaml'))
   const workflow = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/deploy-browser.yml'), 'utf8'))
   const job = workflow.jobs.deploy
@@ -269,8 +269,15 @@ test('镜像上传时限必须与 docker load 一致，且步骤/job 预算容�
   const uploadSeconds = Number(upload[1])
   const outerSeconds = Number(outer[1])
   const loadSeconds = Number(load[1])
-  assert.equal(uploadSeconds, loadSeconds,
-    `镜像上传时限 ${uploadSeconds}s 与 docker load 时限 ${loadSeconds}s 必须一致：二者是同一慢盘根因的两个环节`)
+  // 2026-09-21 修正：原先要求两者**一致**（「同一慢盘根因的两个环节」），这条对 docker load
+  // 成立，对上传不成立——上传慢是 **runner 到阿里云的跨境带宽**，与服务器磁盘无关（本机同网段
+  // 实测 50MB 秒传）。v0.10.2 连续三次部署都卡在上传的 1800 秒被强杀（exit 137），而 load 那侧
+  // 从未成为瓶颈。两个环节根因不同，因此改为：上传时限必须**大于** load 时限，且不低于 3600 秒。
+  // 反向验证：把 3600 改回 1800（或改成 ≤ load），本断言必须失败。
+  assert.ok(uploadSeconds > loadSeconds,
+    `上传时限 ${uploadSeconds}s 必须大于 docker load 时限 ${loadSeconds}s：上传受跨境带宽约束，比 load 更慢`)
+  assert.ok(uploadSeconds >= 3600,
+    `上传时限不得低于 3600 秒（当前 ${uploadSeconds}s）：2026-09-21 实测 runner 跨境传 400MB 需超过 1800 秒`)
 
   const stepSeconds = Number(step['timeout-minutes']) * 60
   assert.ok(Number.isFinite(stepSeconds) && stepSeconds > 0, 'Deploy 步骤必须显式声明 timeout-minutes')
