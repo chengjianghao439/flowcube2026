@@ -130,14 +130,14 @@ test('duplicate equal lines finish after both boxes, including interleaved recei
 
 test('four-decimal duplicate rows preserve exact totals across whole boxes', async () => {
   const { order, item, next, scan, state } = ctx
-  const id = await order([item(0.0001), item(9.9999)]), a = next(), b = next()
+  const id = await order([item(0.01), item(9.99)]), a = next(), b = next()
   success(await scan(id, 'out', a, 'decimal-out1'))
   success(await scan(id, 'out', b, 'decimal-out2'))
   success(await scan(id, 'in', a, 'decimal-in1'))
   assert.equal(success(await scan(id, 'in', b, 'decimal-in2')).completed, true)
   assert.deepEqual(await state(id), [
-    { quantity: 0.0001, deducted_qty: 0.0001, received_qty: 0.0001 },
-    { quantity: 9.9999, deducted_qty: 9.9999, received_qty: 9.9999 },
+    { quantity: 0.01, deducted_qty: 0.01, received_qty: 0.01 },
+    { quantity: 9.99, deducted_qty: 9.99, received_qty: 9.99 },
   ])
 })
 
@@ -166,7 +166,7 @@ test('incoming legacy receipts remain replayable after completion and reject ano
 
 test('PDA list returns this authorized page of ordered duplicate-line quantities', async () => {
   const { order, item, next, scan, http, payload, wh } = ctx
-  const id = await order([item(0.0001), item(9.9999)])
+  const id = await order([item(0.01), item(9.99)])
   success(await scan(id, 'out', next(), 'list-partial-out'))
   const [[head]] = await q('SELECT order_no FROM transfer_orders WHERE id=?', [id])
   const listed = success(await http('partial-list', 'GET', `/api/transfer?page=1&pageSize=1&keyword=${encodeURIComponent(head.order_no)}`))
@@ -175,7 +175,7 @@ test('PDA list returns this authorized page of ordered duplicate-line quantities
   assert.equal(listed.list[0].id, id)
   assert.equal(listed.list[0].status, 3)
   assert.ok(Array.isArray(listed.list[0].items), '列表必须携带逐行数量')
-  assert.deepEqual(listed.list[0].items.map(i => [i.quantity, i.deductedQty, i.receivedQty]), [[0.0001, 0.0001, 0], [9.9999, 4.9999, 0]])
+  assert.deepEqual(listed.list[0].items.map(i => [i.quantity, i.deductedQty, i.receivedQty]), [[0.01, 0.01, 0], [9.99, 4.99, 0]])
   assert.ok(listed.list[0].items[0].id < listed.list[0].items[1].id)
   const hidden = await req('backend/src/modules/transfer/transfer.service').create({ ...payload(1, 2, [item(1)]), operator: { userId: ctx.uid, realName: '列表范围夹具' } })
   const hiddenPage = success(await http('hidden-list', 'GET', `/api/transfer?keyword=${encodeURIComponent(hidden.orderNo)}`))

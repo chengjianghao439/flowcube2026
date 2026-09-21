@@ -5,10 +5,15 @@ const { assertQtyPrecision } = require('./qtyPrecision')  // 商品级数量精�
  * 多计量单位折算（文档03 · 方案A）——采购/销售建单落库前把「录入单位口径」折算成「基本单位口径」。
  * 单一权威口径：库存事实层永远只用基本单位记数，换算只发生在这一步（进入库存/账款链路之前）。
  * 铁律：entry_* 三列（entry_unit/entry_qty/conversion_rate）只用于回显/打印/审计，**绝不参与库存/账款计算**。
+ *
+ * **数量的权威精度是两位小数（0.01）**：数量列统一 DECIMAL(*,2)，折算结果按 roundQty 取两位。
+ * 曾经是四位（0.0001），2026-09-20 按用户要求收到两位——按重量/长度计量的商品两位足够，
+ * 而四位精度会让「0.0001 件」这种数量在界面上根本读不出来。
  */
 
 const round2 = n => Math.round((Number(n) || 0) * 100) / 100
-const round4 = n => Math.round((Number(n) || 0) * 10000) / 10000
+/** 数量取整：系统最小库存精度 0.01（与数量列 DECIMAL(*,2) 一致） */
+const roundQty = round2
 const round8 = n => Math.round((Number(n) || 0) * 1e8) / 1e8
 
 /**
@@ -42,9 +47,9 @@ async function foldEntryItem(conn, item) {
   const rate = await resolveConversionRate(conn, item.productId, entryUnit, item.unit)
   const entryQty = Number(item.quantity) || 0
   const entryUnitPrice = Number(item.unitPrice) || 0
-  const quantity = round4(entryQty * rate)
+  const quantity = roundQty(entryQty * rate)
   if (!(quantity > 0)) {
-    throw new AppError('数量折算后小于库存最小精度 0.0001，请调整录入数量或单位换算率', 400, 'QUANTITY_BELOW_MIN_PRECISION')
+    throw new AppError('数量折算后小于库存最小精度 0.01，请调整录入数量或单位换算率', 400, 'QUANTITY_BELOW_MIN_PRECISION')
   }
   return {
     ...item,
@@ -72,4 +77,4 @@ async function foldEntryItems(conn, items) {
   return out
 }
 
-module.exports = { round2, round4, round8, resolveConversionRate, foldEntryItem, foldEntryItems }
+module.exports = { round2, roundQty, round8, resolveConversionRate, foldEntryItem, foldEntryItems }

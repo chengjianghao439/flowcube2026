@@ -73,7 +73,7 @@ export function SaleOrderItemsTable({
                 <Input
                   data-entry-input data-entry-field={`item-${item._key}-quantity`} aria-invalid={invalidItemKeys.has(item._key) && (!Number.isFinite(item.quantity) || item.quantity <= 0)}
                   aria-label={`${item.productName || '商品'}数量`}
-                  type="number" min="0.0001" step={qtyStep(allowDecimalOf(item.productId))} placeholder="数量"
+                  type="number" min="0.01" step={qtyStep(allowDecimalOf(item.productId))} placeholder="数量"
                   value={item.quantity}
                   ref={(el: HTMLInputElement | null) => { if (el) quantityRefs.current.set(item._key, el); else quantityRefs.current.delete(item._key) }}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'quantity', parsePositiveQuantity(e.target.value))}

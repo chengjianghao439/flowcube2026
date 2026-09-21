@@ -1,6 +1,6 @@
 const AppError = require('../../utils/AppError')
 const { beijingTodayYmd } = require('../../utils/backendTime')
-const quantity = value => Math.max(0, Math.round(Number(value || 0) * 10000) / 10000)
+const quantity = value => Math.max(0, Math.round(Number(value || 0) * 100) / 100)
 function dateOnly(value) {
   if (value == null || value === '') return null
   if (value instanceof Date) return beijingTodayYmd(value)

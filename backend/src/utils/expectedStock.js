@@ -3,7 +3,7 @@
  * available = ACTIVE 现货 + expected - 全部有效预占，绑定不能再扣第二次。
  * 绑定只记录未兑现的采购依赖：上架转为现货预占，出库/释放按量解除，均不额外扣 reserved。
  */
-const qty = value => Math.round(Number(value) * 10000) / 10000
+const qty = value => Math.round(Number(value) * 100) / 100
 
 function pairParams(pairs) {
   return [...new Map(pairs.map(p => [`${Number(p.productId)}:${Number(p.warehouseId)}`,

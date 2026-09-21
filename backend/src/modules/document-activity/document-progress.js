@@ -3,7 +3,7 @@ const { getInboundPrintDispatchReasonLabel } = require('../inbound-tasks/inbound
 const { deriveInboundBarcodeStatus } = require('../print-jobs/print-jobs.status')
 const { getInboundClosureThresholds } = require('../../utils/inboundThresholds')
 const { MOVE_TYPE } = require('../../engine/inventoryEngine')
-const difference = (a, b) => (Math.round(Number(a || 0) * 10000) - Math.round(Number(b || 0) * 10000)) / 10000
+const difference = (a, b) => (Math.round(Number(a || 0) * 100) - Math.round(Number(b || 0) * 100)) / 100
 const identity = [['productCode', '编码'], ['articleNumber', '供应商型号'], ['spec', '型号'], ['productName', '名称'], ['color', '颜色'], ['unit', '单位']]
 const productSql = 'i.product_code AS productCode,i.product_name AS productName,i.unit,p.article_number AS articleNumber,p.spec,p.color'
 function section(group, title, columns, rows, description) {

@@ -30,6 +30,7 @@
 - **范围校验还必须覆盖**：`GET /products/finder`、`GET /containers/overdue`、`GET /returns/{purchase,sale}/source-order`（逐行校验发货仓）、`GET /approvals/biz/:bizType/:bizId`（`BIZ_DOC_META` + `sys_role_permissions`，未知 400）、`print-jobs` 列表与条码补打
 - **`print-jobs` 三张条码子查询分别用 `c.` / `wt.` / `j.warehouse_id`**；SQL 文本替换必须带足上下文并真跑三种范围
 - **`complete-local` 同 `complete-client`/`fail-client` 做工作站校验**；写路由必须 `requirePermission`（`fulfillment.routes.js`）
+- **数量精度是两位小数（0.01）**：所有数量列 `DECIMAL(_,2)`，取整统一用 `unitConversion.roundQty`；**金额/单价/授信仍旧四位**，别一起改。改动精度要 grep 全仓 `10000`（乘与除都要改）（`docs/business-semantics.md`）
 - **库存唯一事实源是 ACTIVE 容器的 `inventory_containers.remaining_qty`**，`inventory_stock.quantity` 只是缓存；唯一合法缓存写入口是 `syncStockFromContainers()`，禁止业务代码直接 UPDATE quantity（详见 `docs/inventory-transaction-invariants.md`）
 - **写操作幂等**：前端发稳定 `X-Request-Key`，后端走 `beginOperationRequest`/`completeOperationRequest`；重放返回原回执，不得重复加库存、推进状态或入账（详见 `docs/inventory-transaction-invariants.md`）
 - **批量写入用 `VALUES ?`（mysql2 二维数组）且先判空**：空数组会 `ER_PARSE_ERROR`；禁止循环内逐行 INSERT/UPDATE（`procurement.service.js`、`hr.service.js`）

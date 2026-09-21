@@ -4,7 +4,7 @@ const { beijingYmdAddDays, beijingTodayYmd } = require('../../utils/backendTime'
 const { getExpectedStock } = require('../../utils/expectedStock')
 const { getStockProjections } = require('../../engine/containerEngine')
 const { calculateSupply, transferSurplus } = require('../procurement/procurement.planning')
-const { round4 } = require('../../utils/unitConversion')
+const { roundQty } = require('../../utils/unitConversion')
 
 // Every source contributes once: converted plan lines disappear; only unconverted PR
 // remainder remains; converted quantities are represented by live draft/expected POs.
@@ -117,19 +117,19 @@ async function getSupplyRows(options = {}, conn = pool) {
         id: `${r.product_id}-${r.warehouse_id}`, productId: Number(r.product_id), warehouseId: Number(r.warehouse_id), productCode: r.product_code, productName: r.product_name,
         unit: r.unit, articleNumber: r.article_number || null, spec: r.spec || null, color: r.color || null, warehouseName: r.warehouse_name,
         supplierId: r.supplier_id == null ? null : Number(r.supplier_id), supplierName: r.supplier_name || null, earliestDemandDate: demandDate, expectedArrivals,
-        arrivalUnconfirmedQty: round4(expectedArrivals.filter(a => !a.expectedDate).reduce((sum, a) => sum + a.quantity, 0)),
-        lateSupplyQty: demandDate ? round4(expectedArrivals.filter(a => a.expectedDate && a.expectedDate > demandDate).reduce((sum, a) => sum + a.quantity, 0)) : 0,
+        arrivalUnconfirmedQty: roundQty(expectedArrivals.filter(a => !a.expectedDate).reduce((sum, a) => sum + a.quantity, 0)),
+        lateSupplyQty: demandDate ? roundQty(expectedArrivals.filter(a => a.expectedDate && a.expectedDate > demandDate).reduce((sum, a) => sum + a.quantity, 0)) : 0,
         onHand: stock.quantity, reserved: stock.reserved, available: stock.available, inTransit: expected.byPair.get(key) || 0, expectedBound: expected.boundByPair.get(key) || 0,
-        safetyStock, reorderPoint: Number(r.reorder_point), targetStock: policyTarget, adu: round4(adu), leadTimeDays,
-        suggestReorderPoint: round4(adu * leadTimeDays + safetyStock), expectedArrival: beijingYmdAddDays(leadTimeDays), draftSalesDemand: Number(r.draft_demand),
-        packMultiple: round4(Number(r.pack_multiple) * conversionRate), minimumOrderQty: round4(Number(r.minimum_order_qty) * conversionRate), entryUnit, conversionRate,
+        safetyStock, reorderPoint: Number(r.reorder_point), targetStock: policyTarget, adu: roundQty(adu), leadTimeDays,
+        suggestReorderPoint: roundQty(adu * leadTimeDays + safetyStock), expectedArrival: beijingYmdAddDays(leadTimeDays), draftSalesDemand: Number(r.draft_demand),
+        packMultiple: roundQty(Number(r.pack_multiple) * conversionRate), minimumOrderQty: roundQty(Number(r.minimum_order_qty) * conversionRate), entryUnit, conversionRate,
         ...coverage.get(key),
       }
       // A replenishment target already includes safety stock: add target once, never target+safety.
       const calculation = calculateSupply({ ...data, forecastDemand, confirmedDemand: Number(r.confirmed_demand), safetyStock: mode === 'replenishment' ? policyTarget : safetyStock })
       const availableAfterDemand = stock.quantity + data.inTransit - Math.max(Number(r.confirmed_demand), stock.reserved)
       const triggered = mode !== 'replenishment' || availableAfterDemand < data.reorderPoint || availableAfterDemand < 0
-      list.push({ ...data, ...calculation, triggered, sourceForecastDemand: round4(adu * (leadTimeDays + P)) })
+      list.push({ ...data, ...calculation, triggered, sourceForecastDemand: roundQty(adu * (leadTimeDays + P)) })
     }
     if (rows.length < 500) break
   }

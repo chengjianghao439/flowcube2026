@@ -226,14 +226,14 @@ async function confirm(id, operator = null, scopeWarehouseIds = null) {
 }
 
 // 同一商品可以分多行；按明细 ID 分配本次整箱数量，兼容已有重复商品行。
-// 在单头锁内执行，以万分之一为整数单位，避免跨行浮点累加丢量。
+// 在单头锁内执行，以百分之一为整数单位（系统最小库存精度 0.01），避免跨行浮点累加丢量。
 async function allocateTransferQuantity(conn, orderId, productId, qty, direction) {
   const [items] = await conn.query(
     'SELECT id, quantity, deducted_qty, received_qty FROM transfer_order_items WHERE order_id=? AND product_id=? ORDER BY id FOR UPDATE',
     [orderId, productId],
   )
   if (!items.length) throw new AppError('该商品不在本调拨单明细内', 400)
-  const units = value => Math.round(Number(value) * 10000)
+  const units = value => Math.round(Number(value) * 100)
   let remaining = units(qty)
   if (!Number.isSafeInteger(remaining) || remaining <= 0) throw new AppError('库存条码的剩余数量无效，无法调拨', 409)
   const capacities = items.map(item => {
@@ -243,12 +243,12 @@ async function allocateTransferQuantity(conn, orderId, productId, qty, direction
   })
   const available = capacities.reduce((sum, item) => sum + item.units, 0)
   if (remaining > available) {
-    throw new AppError(`该容器 ${qty} 件超出调拨单剩余可${direction === 'out' ? '调' : '收'}量 ${available / 10000} 件，无法整箱扫码；请核对容器与单据`, 409)
+    throw new AppError(`该容器 ${qty} 件超出调拨单剩余可${direction === 'out' ? '调' : '收'}量 ${available / 100} 件，无法整箱扫码；请核对容器与单据`, 409)
   }
   const allocations = []
   for (const item of capacities) {
     const taken = Math.min(remaining, item.units)
-    if (taken > 0) allocations.push({ id: item.id, qty: taken / 10000 })
+    if (taken > 0) allocations.push({ id: item.id, qty: taken / 100 })
     remaining -= taken
     if (!remaining) break
   }

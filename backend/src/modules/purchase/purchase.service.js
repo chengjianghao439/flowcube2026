@@ -300,7 +300,7 @@ async function assertNoActiveSaleBinding(conn, purchaseOrderId, actionLabel) {
   for (const row of bindingRows) {
     const id = Number(row.sale_order_id)
     const current = totals.get(id) || { ...row, bound_qty: 0 }
-    current.bound_qty = Math.round((current.bound_qty + Number(row.bound_qty)) * 10000) / 10000
+    current.bound_qty = Math.round((current.bound_qty + Number(row.bound_qty)) * 100) / 100
     totals.set(id, current)
   }
   const binds = [...totals.values()]

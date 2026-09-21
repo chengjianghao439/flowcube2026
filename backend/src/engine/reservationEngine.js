@@ -96,7 +96,7 @@ async function reserve(conn, { productId, productName = '该商品', warehouseId
            VALUES (?,?,?,?,?,?,?)`,
           [refId, refItemId, it.purchase_order_id, it.purchase_item_id, productId, warehouseId, take],
         )
-        remaining = Math.round((remaining - take) * 10000) / 10000
+        remaining = Math.round((remaining - take) * 100) / 100
       }
       if (remaining > 1e-6) throw new AppError('采购预计可绑定量不足，请刷新后重试', 409)
     }
@@ -215,7 +215,7 @@ async function markFulfilled(conn, refType, refId, productId, warehouseId, qty =
         [take, r.id],
       )
     }
-    remaining = Math.round((remaining - take) * 10000) / 10000
+    remaining = Math.round((remaining - take) * 100) / 100
   }
 
   if (refType === 'sale_order') {
@@ -279,7 +279,7 @@ async function partialReleaseByProduct(conn, { refType, refId, productId, wareho
     } else {
       await conn.query('UPDATE stock_reservations SET qty = qty - ? WHERE id=?', [take, r.id])
     }
-    remaining = Math.round((remaining - take) * 10000) / 10000
+    remaining = Math.round((remaining - take) * 100) / 100
   }
 
   const released = Number(qty) - remaining

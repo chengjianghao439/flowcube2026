@@ -86,7 +86,8 @@ test('数量差额保留四位小数，不出现浮点尾数或混合单位合�
     '../../engine/inventoryEngine': { MOVE_TYPE: {} },
   })
   assert.equal(progress.difference(0.3, 0.2), 0.1)
-  assert.equal(progress.difference('1.0001', '1.0000'), 0.0001)
+  // 数量精度已统一为两位（0.01），差值也按两位计
+  assert.equal(progress.difference('1.01', '1.00'), 0.01)
   assert.equal(progress.difference(1, 2), -1)
 })
 

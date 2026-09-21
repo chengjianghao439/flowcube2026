@@ -1,6 +1,6 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
-const { resolveConversionRate, round4 } = require('../../utils/unitConversion')
+const { resolveConversionRate, roundQty } = require('../../utils/unitConversion')
 const { lockPlanning } = require('./procurement.planning')
 
 async function getPolicy(productId, supplierId, conn = pool) {
@@ -22,7 +22,7 @@ async function savePolicy({ productId, supplierId, entryUnit, packMultiple = 0, 
     const policy = await getPolicy(productId, supplierId, conn)
     const rate = await resolveConversionRate(conn, productId, entryUnit, policy.baseUnit)
     for (const q of [packMultiple, minimumOrderQty]) {
-      if (!Number.isFinite(Number(q)) || Number(q) < 0 || (Number(q) > 0 && round4(Number(q) * rate) <= 0)) throw new AppError('包装倍数或起订量无效', 400)
+      if (!Number.isFinite(Number(q)) || Number(q) < 0 || (Number(q) > 0 && roundQty(Number(q) * rate) <= 0)) throw new AppError('包装倍数或起订量无效', 400)
     }
     await conn.query(`INSERT INTO supplier_product_purchase_policies (product_id,supplier_id,entry_unit,pack_multiple,minimum_order_qty) VALUES (?,?,?,?,?) ON DUPLICATE KEY UPDATE entry_unit=VALUES(entry_unit),pack_multiple=VALUES(pack_multiple),minimum_order_qty=VALUES(minimum_order_qty)`, [productId, supplierId, entryUnit, packMultiple, minimumOrderQty])
     await conn.commit()

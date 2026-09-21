@@ -79,7 +79,7 @@ export default function ShipSelectDialog({ open, onClose, order, loading, onConf
                     <td className="px-3 py-3">{item.warehouseName || order.warehouseName}</td>
                     <td className="px-3 py-3 text-right tabular-nums">{limitFor(item.id)} {item.unit}</td>
                     <td className="px-3 py-3">
-                      <Input aria-label={`${item.productName}本次出库数量`} aria-invalid={invalidQty} type="number" min={0.0001} step={qtyStep(allowDecimalOf(item.productId))} max={limitFor(item.id)} value={state.qty} disabled={!state.checked}
+                      <Input aria-label={`${item.productName}本次出库数量`} aria-invalid={invalidQty} type="number" min={0.01} step={qtyStep(allowDecimalOf(item.productId))} max={limitFor(item.id)} value={state.qty} disabled={!state.checked}
                         onChange={e => setRow(item.id, { qty: Number(e.target.value) })}
                         className={cn('h-9 text-right tabular-nums', invalidQty && 'border-destructive')} />
                     </td>

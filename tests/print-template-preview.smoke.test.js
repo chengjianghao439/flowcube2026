@@ -132,10 +132,10 @@ async function main() {
         assert.equal(r.kind, 'label')
         const vars = {
           5: { rack_barcode: 'RCKNEW', rack_code: 'NEW', zone: 'A', name: '真实货架' },
-          6: { container_code: `I${code}NEW`, product_name: '真实商品', qty: '2.5000' },
-          7: { box_code: `BOXNEW${product}`, task_no: `${code}-TNEW`, customer_name: '真实客户', carrier_name: '', freight_type_name: '到付', piece_count: '2.5 件', item_list: '真实商品×2.5000', summary: '1 行 / 2.5 件' },
+          6: { container_code: `I${code}NEW`, product_name: '真实商品', qty: '2.50' },
+          7: { box_code: `BOXNEW${product}`, task_no: `${code}-TNEW`, customer_name: '真实客户', carrier_name: '', freight_type_name: '到付', piece_count: '2.5 件', item_list: '真实商品×2.50', summary: '1 行 / 2.5 件' },
           8: { product_code: code, product_name: '真实商品', spec: '规格A', unit: '件', price: '12.30' },
-          9: { container_code: `B${code}NEW`, product_name: '真实商品', qty: '2.5000' },
+          9: { container_code: `B${code}NEW`, product_name: '真实商品', qty: '2.50' },
           10: { location_barcode: 'RNEW', location_code: 'NEW', zone: 'A', name: '真实库位' },
         }
         const whVars = { warehouse_name: '预览可访问仓', warehouse_code: code }
@@ -180,10 +180,10 @@ async function main() {
     const jobIds = []
     const enqueue = {
       5: () => labels.enqueueRackLabelJob({ rackId: expected.rack }),
-      6: () => labels.enqueueContainerLabelJob({ warehouseId: w, containerId: expected.containers[0], data: { container_code: `I${code}NEW`, product_name: '真实商品', qty: '2.5000' } }),
+      6: () => labels.enqueueContainerLabelJob({ warehouseId: w, containerId: expected.containers[0], data: { container_code: `I${code}NEW`, product_name: '真实商品', qty: '2.50' } }),
       7: () => labels.enqueuePackageLabelJob({ packageId: expected.box }),
       8: () => labels.enqueueProductLabelJob({ productId: product }),
-      9: () => labels.enqueueContainerLabelJob({ warehouseId: w, containerId: expected.containers[1], data: { container_code: `B${code}NEW`, product_name: '真实商品', qty: '2.5000' } }),
+      9: () => labels.enqueueContainerLabelJob({ warehouseId: w, containerId: expected.containers[1], data: { container_code: `B${code}NEW`, product_name: '真实商品', qty: '2.50' } }),
       10: () => labels.enqueueLocationLabelJob({ locationId: expected.location }),
     }
     try {
@@ -237,7 +237,7 @@ async function main() {
         const job = await labels.enqueuePackageLabelJob({ conn: packConn, packageId: pack.insertId })
         packJobId = job.id
         const [[saved]] = await packConn.query('SELECT content FROM print_jobs WHERE id=?', [job.id])
-        for (const part of ['remark=未提交箱备注', `sale_order_no=${code}-SNEW`, 'item_list=真实商品×1.7500', 'piece_count=1.75 件', 'warehouse_name=预览可访问仓']) assert.ok(saved.content.includes(`^FD${part}^FS`), part)
+        for (const part of ['remark=未提交箱备注', `sale_order_no=${code}-SNEW`, 'item_list=真实商品×1.75', 'piece_count=1.75 件', 'warehouse_name=预览可访问仓']) assert.ok(saved.content.includes(`^FD${part}^FS`), part)
         assert.equal((await pool.query('SELECT id FROM print_jobs WHERE id=?', [job.id]))[0].length, 0)
       } finally { await packConn.rollback(); packConn.release() }
       assert.equal((await pool.query('SELECT id FROM print_jobs WHERE id=?', [packJobId]))[0].length, 0)
