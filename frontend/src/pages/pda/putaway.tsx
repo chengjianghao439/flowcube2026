@@ -13,6 +13,7 @@ import PdaScanner from '@/components/pda/PdaScanner'
 import PdaEmptyState, { PdaLoading } from '@/components/pda/PdaEmptyState'
 import { usePdaFlow } from '@/hooks/usePdaFlow'
 import PdaFlowSteps from '@/components/pda/PdaFlowSteps'
+import PdaFlash from '@/components/pda/PdaFlash'
 import { makePutawayFlow, type PutawayFlowContext } from '@/flows/putawayFlow'
 
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
@@ -22,7 +23,7 @@ import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
 function PutawayRunner({ taskId }: { taskId: number }) {
   const navigate = useNavigate()
   const qc = useQueryClient()
-  const { warn, err } = usePdaFeedback()
+  const { warn, err, flash } = usePdaFeedback()
   const putawayAction = useCriticalPdaAction<void>({
     action: `inbound.putaway.${taskId}`,
     label: `收货单 ${taskId} 上架`,
@@ -79,6 +80,9 @@ function PutawayRunner({ taskId }: { taskId: number }) {
         onBack={() => navigate('/pda/inbound')}
         right={<span className="text-xs text-muted-foreground">库存上架</span>}
       />
+
+      <PdaFlash flash={engine.flash} />
+      <PdaFlash flash={flash} />
 
       <div className="max-w-md mx-auto px-4 pt-3 w-full">
         <PdaCriticalActionNotice
