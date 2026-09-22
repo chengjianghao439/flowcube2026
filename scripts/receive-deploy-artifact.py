@@ -38,7 +38,11 @@ def unpack_archive(zip_path, destination, expected_sha, expected_bytes):
                 raise ValueError('artifact SHA256 mismatch')
         os.replace(partial, destination)
     finally:
-        partial.unlink(missing_ok=True)
+        # 生产仍使用 Python 3.6；Path.unlink(missing_ok=...) 从 3.8 才支持。
+        try:
+            partial.unlink()
+        except FileNotFoundError:
+            pass
 
 
 def main():
@@ -57,7 +61,7 @@ def main():
             'curl', '--config', '-', '--silent', '--fail', '--location',
             '--proto', '=https', '--proto-redir', '=https', '--connect-timeout', '15',
             '--max-time', '150', '--max-filesize', str(size + 1024 * 1024), '--output', str(archive),
-        ], input='url = "' + signed_url + '"\n', text=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=160)
+        ], input='url = "' + signed_url + '"\n', universal_newlines=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=160)
         if result.returncode:
             raise RuntimeError('HTTPS transfer failed')
         unpack_archive(archive, destination, expected_sha, size)

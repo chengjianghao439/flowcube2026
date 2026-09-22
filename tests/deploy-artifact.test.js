@@ -63,6 +63,34 @@ test('签名 URL 只从 stdin 进入 curl，不进入参数/日志，下载失�
   } finally { fs.rmSync(dir, { recursive: true, force: true }) }
 })
 
+test('接收器完整成功路径兼容生产 Python 3.6 的 subprocess 和 pathlib API', () => {
+  const source = path.join(root, 'scripts/receive-deploy-artifact.py')
+  const result = spawnSync('python3', ['-c', `
+import importlib.util, tempfile, pathlib, zipfile, hashlib, sys, io, types
+spec=importlib.util.spec_from_file_location('receiver', ${JSON.stringify(source)})
+m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+unlink=pathlib.Path.unlink
+def unlink36(self): return unlink(self)
+pathlib.Path.unlink=unlink36
+data=b'fixture-image'; digest=hashlib.sha256(data).hexdigest()
+def run36(args, input=None, universal_newlines=False, stdout=None, stderr=None, timeout=None):
+ assert universal_newlines is True
+ assert 'fixture-secret' in input and 'fixture-secret' not in repr(args)
+ with zipfile.ZipFile(args[args.index('--output')+1], 'w') as z:
+  z.writestr('flowcube-images.tar.gz', data)
+ return types.SimpleNamespace(returncode=0)
+m.subprocess.run=run36
+with tempfile.TemporaryDirectory() as d:
+ dest=pathlib.Path(d)/'out.tar.gz'
+ sys.argv=['receiver',str(dest),digest,str(len(data))]
+ sys.stdin=io.StringIO('https://fixture.example/file?sig=fixture-secret\\n')
+ m.main()
+ assert dest.read_bytes()==data
+ assert list(pathlib.Path(d).iterdir())==[dest]
+`], { encoding: 'utf8', timeout: 5000 })
+  assert.equal(result.status, 0, result.stderr)
+})
+
 // 直接运行 workflow 的传输分支；仅替换网络命令，不复制 if/else 实现。
 for (const scenario of ['https', 'fallback', 'fallback-failed']) {
   test(`workflow 传输分支：${scenario}`, () => {
