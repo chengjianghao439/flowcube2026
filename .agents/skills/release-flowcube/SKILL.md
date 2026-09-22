@@ -30,16 +30,18 @@ bump 三端版本 ──┐
 写 release-notes ─┤
                  ├─► git push main ──► CI: Tests + Security（同 SHA）──► Deploy Browser App
                  │
-                 └─► npm run release:tag-desktop（打 v<version> tag）
+                 └─► 等同 SHA 的 Tests / Security / Browser / PDA / 桌面验证成功
+                      └─► npm run release:tag-desktop（打 v<version> tag）
                         └─► CI: Build Desktop Installer（仅 tag 触发发布）
                               ├─ 构建 Windows exe（NSIS 3.0.4.1）
-                              ├─ 上传 GitHub Release
-                              └─ 服务器跑 release-desktop.js：
+                              ├─ 上传原始 EXE 到 Actions artifact（供恢复复用）
+                              ├─ 服务器跑 release-desktop.js：
                                    读 docs/release-notes/<version>.md 作为 notes
                                    写 /var/www/flowcube-downloads/latest.json
                                      { version, url, sha256, notes, publishedAt }
-                                        └─► 桌面端轮询 /api/app-update/latest
-                                              semver 比对 → 弹「发现新版本」+ 显示 notes
+                              └─ 上传并核对 GitHub Release 附件，转正草稿
+                                   └─ 线上完整核验；桌面轮询 /api/app-update/latest
+                                        semver 比对 → 弹「发现新版本」+ 显示 notes
 ```
 
 记住三个事实，发版就不会错：
@@ -57,7 +59,7 @@ bump 三端版本 ──┐
   ```bash
   git rev-parse --abbrev-ref HEAD   # 应为 main
   git status --short                # 应为空
-  git pull origin main
+  git pull --ff-only origin main
   ```
 - 确认要发布的代码改动已经合并进 main（发版是给「已经在 main 上的东西」打版本，不是顺便合特性）。
 
@@ -118,16 +120,16 @@ push 后 `Deploy Browser App` 等待实际发布 SHA 的 Tests 与 Security Scan
 
 ### 5. 等待浏览器和 PDA 完成，再打 tag（桌面发布）
 
-推荐在已授权正式发版、版本与说明均已提交到 main 后运行 `npm run release:prod`：它推送 main，等待同 SHA 的 Tests、Security、Browser、PDA 和桌面验证构建，再打 tag，等待该 tag 的桌面发布，最后执行线上三端版本核对。成功耗时目标 15 分钟；网络降级或排队超标会如实报告，不缩短回退窗口。代码修复本身不构成推送/发版授权。
+推荐在已授权正式发版、版本与说明均已提交到 main 后运行 `npm run release:prod`：它推送 main，等待同 SHA 的 Tests、Security、Browser、PDA 和桌面验证构建，再打 tag，等待该 tag 的桌面发布，最后执行线上三端版本核对。按用户最新要求，不再以 15 分钟限制选型或验收；优先保证可靠、可恢复、无人值守，耗时如实记录。保留有界超时与回退窗口。代码修复本身不构成推送/发版授权。
 
 若按下面手工分步执行，必须先确认 **Browser 和 PDA 整个工作流均 success**，再打 tag，避免 PDA 发布与桌面争用同一部署组的 pending 槽。
 ```bash
 npm run release:tag-desktop
 ```
-这会跑 `release-desktop-tag.sh`：校验工作区/HEAD、确认远程无同名 tag、用 `desktop/package.json` 的版本生成 `v<version>` 并推送。tag 一推，`Build Desktop Installer` 启动，构建 exe → 上传 Release → 服务器发布 `latest.json`（带上一步写的 notes）。
+这会跑 `release-desktop-tag.sh`：校验工作区/HEAD、确认远程无同名 tag、用 `desktop/package.json` 的版本生成 `v<version>` 并推送。tag 一推，`Build Desktop Installer` 启动，构建 EXE → 保存 Actions artifact → 服务器发布安装包及 `latest.json` → 上传核对 GitHub 附件并转正草稿。现行链路在 GitHub 收尾前已更新官网清单；因此官网可下载仍不等于完整发版成功。
 
 ### 6. 验证
-- CI：`gh run list --branch main --limit 6`，确认同一 SHA 的 `Deploy Browser App`、`Tests`、`Security Scan`、`Build PDA APK` 都 success；另查 **对应版本 tag** 的 `Build Desktop Installer` 成功，main 上的桌面验证构建不能代替 tag 发布。
+- CI：按完整发布 SHA 查询并按需翻页，确认 `Deploy Browser App`、`Tests`、`Security Scan`、`Build PDA APK` 都 success；另查 **对应版本 tag** 的 `Build Desktop Installer`，main 上的桌面验证构建不能代替 tag 发布。不要从最近几条运行的绿灯推断本次成功；补发布成功须关联原失败运行并单独报告。
 - **一条命令核对线上三端版本**（推荐，覆盖下面手写的 curl）：
   ```bash
   npm run release:verify -- --origin https://<生产域名>
@@ -137,6 +139,13 @@ npm run release:tag-desktop
   **PDA 落后必须当成发版未完成**：早期版本（v0.9.19）就出现过代码、镜像、桌面清单都已发布、
   唯独 PDA 一直停在上一版而无人发现。
 - 桌面端：在比新版本旧的客户端上启动，应弹「发现新版本 <version>」并显示更新内容。
+
+### 7. 记录结果与性能
+
+- 将完整应用 SHA、tag、PDA versionCode、各工作流 run ID、线上镜像 revision、清单及安装包摘要核验写入本版结果文档。工具修复提交与应用发布提交分别记录。
+- 分开报告「正常一次成功」「失败后恢复完成」「尚未完成」。原失败运行不删除、不当成成功；CI/线上下载验收与 Windows/PDA 真机安装、更新弹窗验收分别说明。
+- 用户已取消固定 15 分钟目标，旧记录中的该目标仅表示历史要求。记录首次启动到最终验收的总耗时；发生修复重试时另列最终应用提交到完成的耗时，包含排队、传输、门禁和恢复，不能通过换起点隐藏失败时间。不得为提速跳过门禁或压缩迁移、回退安全窗口。
+- 若使用操作端代理，明确记录该依赖；自动本地中转可证明本机在线期间无需人工搬运，不能算脱离个人电脑的托管链路验收。人工中转仍单列恢复措施。架构优化咨询按 `docs/release-pipeline-optimization-2026-09-22.md` 比较方案；其中待实施项目不是现行发布能力。
 
 #### push main 后 `Deploy Browser App` 长时间 pending（2026-09-18 已结构性修复）
 
@@ -167,7 +176,7 @@ GitHub 不报错，只是干等（旧 PDA 等待上限 25 分钟，期间线上�
 不要依赖当前 main HEAD（HEAD 可能已经是带 `[skip ci]` 的文档提交，那个提交永远不会有部署）：
 
 ```bash
-gh workflow run build-pda-apk.yml --ref main -f checkout_ref=<发布提交 SHA>
+gh workflow run build-pda-apk.yml --ref main -f checkout_ref=<完整的40位发布提交SHA>
 ```
 
 工作流会以 `checkout_ref` 检出的提交为准去等它的浏览器部署，并在 `resolve target commit`
@@ -195,9 +204,42 @@ gh workflow run build-pda-apk.yml --ref main -f checkout_ref=<发布提交 SHA>
    `scripts/publish-release-asset.cjs`（带超时 + 重试 + 落地校验），GitHub 附件存储偶发
    `HTTP 500 Error saving asset`，脚本会自动重试并在校验大小后才把 Release 转正；
    若最终仍失败，日志里会有明确原因，Release 会停在草稿状态（不会出现"看起来发布了却没有包"）。
-   补传：从服务器 `/versions/v<版本>/` 取回 CI 构建的同一份 exe（复算 sha256 与 latest.json 一致）
+   **先区分缺附件还是仅草稿未转正**。若官网包与 GitHub 附件已存在，优先用下面的原包恢复入口，不重传附件。
+   真正缺附件时：从服务器 `/versions/v<版本>/` 取回 CI 构建的同一份 exe（复算 sha256 与 latest.json 一致）
    后 `node scripts/publish-release-asset.cjs --tag v<版本> --version <版本> --file <exe>`；
    **不要在本机重新构建 exe**，重跑 tag 构建会让 latest.json 的新摘要与已传附件对不上。
+
+### 草稿收尾失败：复用原包恢复
+
+先核对原 tag 对应完整 SHA、原 tag 构建 run ID、正式 HTTPS 站点以及失败步骤。仅适用于原始 EXE 已构建、官网已发布、GitHub 附件已上传的情况：
+
+```bash
+gh workflow run recover-release-asset.yml --ref main \
+  -f release_tag=v<版本> \
+  -f source_run_id=<原tag构建runID> \
+  -f erp_origin=https://<已核验的生产域名>
+```
+
+工作流下载原 CI artifact，核对原构建身份、同 SHA 门禁、线上摘要和 GitHub 附件摘要，仅转正现有草稿并执行线上验收。草稿按 tag 查询可能返回 404，脚本通过 Release ID 核对；不得据此重复创建 Release。摘要不一致、原产物不可用或前置门禁失败时，停止这个恢复分支并调查原因，不能重新构建同版本包覆盖证据。观察恢复运行完成后再报告结果。
+
+### 传输慢：先定位再选择恢复路径
+
+分别记录 runner → 产物存储、产物存储 → 生产以及校验/加载耗时，核对字节数、实际吞吐、重试和磁盘 IO。不能仅凭超时归因为跨境网络，也不能把增加并发数当作带宽已改善。
+
+现行脚本包含 HTTPS 接收及 SCP 回退；受信中转须沿用接收器协议，验证原 artifact ZIP 摘要、唯一目标文件以及 runner 提供的原包大小/SHA256，通过临时文件原子改名交付。一次发布最多采用经核验的主路径和有界回退；持续失败时保留原产物与日志，先修复具体故障，避免重复触发整个发布。检查服务器运行时兼容性，不能因本机 Python 可运行就推断生产可运行。
+
+用户目前偏好不新增费用。可选择仓库内 `scripts/local-release-relay.py`，由正式入口管理完整生命周期：
+
+```bash
+FLOWCUBE_RELEASE_RELAY=1 \
+FLOWCUBE_RELAY_SSH_TARGET=<本机已配置SSH别名> \
+FLOWCUBE_RELAY_PROXY=<已有本地代理地址> \
+npm run release:prod
+```
+
+代理不是必填；只能复用已授权、可用的网络配置，不能擅自开通收费资源。本机 Python 3、Node、gh、curl、SSH 须可用；推送前预检 SSH，Mac 在本次命令期间阻止自动睡眠，仍需联网。本程序绑定完整 SHA、工作流、push/main 或版本 tag、run attempt 和 artifact 来源，短期 URL 每批刷新，验证 GitHub ZIP 摘要、唯一目标成员，交付原 CI 字节；接收端再核对原包摘要。输出每种产物下载/上传耗时与来源。ready 不代表接收完成，保留暂存文件直到工作流终止；退出清理本任务资源。原直连/SCP 路径保留，中转失败会单独报错，不能算该方案实测成功。
+
+这不是托管服务，不能承诺 Mac 离线后继续本地中转。SSH 复用连接，生产清理遵守项目磁盘 IO 预检约束。
 
 ## 回滚
 
