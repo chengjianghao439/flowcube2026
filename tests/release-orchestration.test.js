@@ -63,3 +63,13 @@ for (const failure of ['main', 'tag', 'desktop', 'verify']) {
     assert.deepEqual(calls, ['main', 'tag', 'desktop', 'verify'].slice(0, ['main', 'tag', 'desktop', 'verify'].indexOf(failure) + 1))
   })
 }
+
+test('取消十五分钟目标后仍记录真实耗时', async () => {
+  const { completeRelease } = require('../scripts/complete-release')
+  const logs = []
+  await completeRelease({ repository: 'fixture/repo', sha, token: 'fixture', tag: 'v1.2.3', origin: 'https://fixture.test',
+    wait: async () => {}, publishTag: async () => {}, verify: async () => ({ ok: true }), log: message => logs.push(message),
+  })
+  assert.match(logs[0], /用时 \d+ 秒/)
+  assert.doesNotMatch(logs[0], /15 分钟|未达成/)
+})

@@ -47,8 +47,42 @@ GITHUB_SHA="$(git rev-parse HEAD)"
 export GITHUB_REPOSITORY GITHUB_SHA
 export RELEASE_TAG="$TAG" FLOWCUBE_ERP_ORIGIN="$ERP_ORIGIN"
 
+# Optional local relay is task-scoped and never installs a persistent runner.
+RELAY_PID=""
+CAFFEINATE_PID=""
+cleanup_release() {
+  if [ -n "$RELAY_PID" ] && kill -0 "$RELAY_PID" 2>/dev/null; then
+    kill "$RELAY_PID" 2>/dev/null || true
+    wait "$RELAY_PID" 2>/dev/null || true
+  fi
+  if [ -n "$CAFFEINATE_PID" ]; then kill "$CAFFEINATE_PID" 2>/dev/null || true; fi
+}
+trap cleanup_release EXIT
+trap 'exit 130' INT TERM
+if [ "${FLOWCUBE_RELEASE_RELAY:-0}" = "1" ]; then
+  command -v python3 >/dev/null 2>&1 || { echo '!! 本地中转需要 python3'; exit 1; }
+  # Fail before pushing if the operator cannot reach the configured SSH target.
+  FLOWCUBE_RELAY_PREFLIGHT_ONLY=1 python3 scripts/local-release-relay.py
+  python3 scripts/local-release-relay.py &
+  RELAY_PID=$!
+  if command -v caffeinate >/dev/null 2>&1; then
+    caffeinate -i -w "$$" &
+    CAFFEINATE_PID=$!
+  fi
+fi
+
 echo "==> 推送 main（触发浏览器端/服务器自动部署）..."
 git push origin main
 
 echo "==> 等待同一提交的检查、浏览器及 PDA，再发布桌面端并核对线上版本..."
 node scripts/complete-release.js
+
+if [ -n "$RELAY_PID" ]; then
+  if wait "$RELAY_PID"; then
+    echo '==> 本地中转及接收工作流核对通过'
+  else
+    echo '!! 三端发布已验收，但本地中转未完整通过；必须记录实际回退路径'
+    exit 1
+  fi
+  RELAY_PID=""
+fi

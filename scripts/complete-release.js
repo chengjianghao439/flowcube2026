@@ -26,7 +26,7 @@ async function completeRelease({ repository, sha, token, tag, origin, wait = wai
   const result = await verify({ origin })
   if (!result.ok) throw new Error('三端线上版本核对未通过，不能宣布发版完成')
   const seconds = Math.round((Date.now() - started) / 1000)
-  log(`三端发布及线上版本核对通过，用时 ${seconds} 秒；15 分钟目标${seconds <= 900 ? '达成' : '未达成，请查看排队/传输/验收耗时'}`)
+  log(`三端发布及线上版本核对通过，用时 ${seconds} 秒（含检查、部署和下载验收）`)
   return result
 }
 
