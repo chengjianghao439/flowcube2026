@@ -33,7 +33,7 @@ export default function PdaFlowSteps({ steps, currentId }: Props) {
                 ? <Check className="h-3.5 w-3.5" strokeWidth={3} />
                 : idx + 1}
             </div>
-            <p className={`text-xs truncate ${
+            <p className={`text-xs min-w-0 whitespace-normal [overflow-wrap:anywhere] ${
               state === 'active' ? 'font-semibold text-foreground' : 'text-muted-foreground'
             }`}>{step.label}</p>
             {idx < steps.length - 1 && <div className="h-px flex-1 bg-border" />}

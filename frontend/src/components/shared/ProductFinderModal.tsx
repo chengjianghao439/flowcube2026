@@ -32,7 +32,7 @@ function CategoryTree({ nodes, selectedId, onSelect, depth = 0 }: {
       {node.children?.length ? <button type="button" aria-label={`${expanded.has(node.id) ? '收起' : '展开'}${node.name}`} aria-expanded={expanded.has(node.id)} className="shrink-0 rounded p-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => setExpanded(prev => { const next = new Set(prev); if (next.has(node.id)) next.delete(node.id); else next.add(node.id); return next })}>
         {expanded.has(node.id) ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
       </button> : <span className="w-[26px] shrink-0" />}
-      <button type="button" aria-pressed={selectedId === node.id} title={node.name} className="min-w-0 flex-1 truncate rounded py-2 text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => onSelect(node.id, node.name)}>{node.name}</button>
+      <button type="button" aria-pressed={selectedId === node.id} title={node.name} className="min-w-0 flex-1 whitespace-normal [overflow-wrap:anywhere] rounded py-2 text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => onSelect(node.id, node.name)}>{node.name}</button>
       {node.status === 0 && <span className="ml-1 text-[10px]">停用分类</span>}
     </div>
     {!!node.children?.length && expanded.has(node.id) && <CategoryTree nodes={node.children} selectedId={selectedId} onSelect={onSelect} depth={depth + 1} />}

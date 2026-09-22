@@ -209,7 +209,7 @@ export function useTableColumns<T extends object>({columns, fluid, columnStorage
     const index = orderedColumns.findIndex(item => item.key === col.key) + (isSelectEnabled ? 1 : 0)
     const snapshot = measureWidths()
     let width = 80
-    // 双击时才测量已加载内容；临时使用自然宽度，支持被 truncate 截断的文字和表单控件。
+    // 双击时才测量已加载内容；临时使用自然宽度，支持换行文字和表单控件。
     for (const row of Array.from(tableRef.current?.rows ?? [])) {
       const cell = row.cells[index]
       if (!cell || cell.colSpan > 1) continue

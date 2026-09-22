@@ -131,7 +131,7 @@ export default function DataTable<T extends object>({
               // 极窄操作列在格内滚动，保留所有按钮的可达性，避免越界覆盖相邻列。
               ? <div className={`min-w-0 overflow-x-auto ${alignClass}`}>{col.render ? (col.render(rawValue, row) as ReactNode) : textValue}</div>
               : (
-                <div className={`${col.render ? 'min-w-0 whitespace-normal break-words' : 'truncate'} ${alignClass}`} title={textValue}>
+                <div className={`min-w-0 whitespace-normal [overflow-wrap:anywhere] ${alignClass}`} title={textValue}>
                   {col.render ? (col.render(rawValue, row) as ReactNode) : textValue}
                 </div>
               )}
@@ -193,7 +193,7 @@ export default function DataTable<T extends object>({
                         type="button"
                         aria-label={`按${col.title}排序`}
                         onClick={() => onSortChange(String(col.key))}
-                        className={`min-w-0 flex-1 truncate transition-colors hover:text-foreground ${
+                        className={`min-w-0 flex-1 whitespace-normal [overflow-wrap:anywhere] transition-colors hover:text-foreground ${
                           col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left'
                         } ${sortKey === String(col.key) ? 'text-primary' : ''}`}
                         title={col.title}
@@ -202,7 +202,7 @@ export default function DataTable<T extends object>({
                       </button>
                     ) : (
                       <span
-                        className={`min-w-0 flex-1 truncate ${
+                        className={`min-w-0 flex-1 whitespace-normal [overflow-wrap:anywhere] ${
                           col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : ''
                         }`}
                         title={col.title}

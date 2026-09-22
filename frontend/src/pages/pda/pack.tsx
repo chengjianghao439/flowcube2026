@@ -119,7 +119,7 @@ function PackageCard({ pkg, active, onActivate, onFinish, finishing, onPrintLabe
           {pkg.items.map(item => (
             <div key={item.id} className="flex items-center justify-between text-sm py-1.5 border-b border-border/50 last:border-0">
               <div className="min-w-0">
-                <p className="font-medium text-foreground truncate">{item.productName}</p>
+                <p className="font-medium text-foreground min-w-0 whitespace-normal [overflow-wrap:anywhere]">{item.productName}</p>
                 <p className="text-xs font-mono text-muted-foreground">{item.productCode}</p>
               </div>
               <div className="flex items-center gap-2 shrink-0 ml-2">

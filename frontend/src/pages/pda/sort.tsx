@@ -207,10 +207,10 @@ export default function PdaSortPage() {
                 <p className="text-xs text-muted-foreground mt-1">分拣格编号</p>
               </div>
               <div className="grid grid-cols-2 gap-3 text-sm">
-                <div><p className="text-xs text-muted-foreground">商品</p><p className="font-semibold truncate">{hint.productName}</p></div>
+                <div><p className="text-xs text-muted-foreground">商品</p><p className="font-semibold min-w-0 whitespace-normal [overflow-wrap:anywhere]">{hint.productName}</p></div>
                 <div><p className="text-xs text-muted-foreground">数量</p><p className="font-bold text-primary">{hint.qty} {hint.unit}</p></div>
-                <div><p className="text-xs text-muted-foreground">任务号</p><p className="font-mono text-xs truncate">{hint.taskNo}</p></div>
-                <div><p className="text-xs text-muted-foreground">客户</p><p className="text-xs truncate">{hint.customerName}</p></div>
+                <div><p className="text-xs text-muted-foreground">任务号</p><p className="font-mono text-xs min-w-0 whitespace-normal [overflow-wrap:anywhere]">{hint.taskNo}</p></div>
+                <div><p className="text-xs text-muted-foreground">客户</p><p className="text-xs min-w-0 whitespace-normal [overflow-wrap:anywhere]">{hint.customerName}</p></div>
               </div>
               <button className="text-xs text-muted-foreground hover:text-foreground"
                 onClick={() => { setStep('scan-product'); setHint(null) }}
@@ -241,7 +241,7 @@ export default function PdaSortPage() {
                   <p className={`text-lg font-black tracking-wide ${
                     bin.status===2 ? 'text-orange-700' : 'text-muted-foreground'
                   }`}>{bin.code}</p>
-                  <p className="text-[10px] truncate mt-0.5 text-muted-foreground">
+                  <p className="text-[10px] min-w-0 whitespace-normal [overflow-wrap:anywhere] mt-0.5 text-muted-foreground">
                     {bin.status===2 ? (bin.customerName ?? bin.currentTaskNo ?? '占用中') : '空闲'}
                   </p>
                 </div>

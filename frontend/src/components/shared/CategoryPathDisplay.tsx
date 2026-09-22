@@ -26,7 +26,7 @@ export default function CategoryPathDisplay({ path, fallback = null, className }
           className,
         )}
       >
-        <span className="truncate">{normalized}</span>
+        <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere]">{normalized}</span>
       </span>
     )
   }
@@ -45,9 +45,9 @@ export default function CategoryPathDisplay({ path, fallback = null, className }
         onClick={() => setExpanded(v => !v)}
       >
         {expanded ? <ChevronDown className="h-3.5 w-3.5 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0" />}
-        <span className="truncate font-medium">{leaf}</span>
+        <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere] font-medium">{leaf}</span>
         {!expanded && parentPath && (
-          <span className="truncate text-xs text-muted-foreground">
+          <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere] text-xs text-muted-foreground">
             {parentPath}
           </span>
         )}
@@ -58,7 +58,7 @@ export default function CategoryPathDisplay({ path, fallback = null, className }
           {segments.map((segment, index) => (
             <div key={`${segment}-${index}`} className="flex items-center gap-2 py-0.5 text-xs text-muted-foreground">
               <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-border" />
-              <span className={cn('truncate', index === segments.length - 1 && 'font-medium text-foreground')}>
+              <span className={cn('min-w-0 whitespace-normal [overflow-wrap:anywhere]', index === segments.length - 1 && 'font-medium text-foreground')}>
                 {segment}
               </span>
             </div>

@@ -88,7 +88,7 @@ function ProductCard({
       <div className="space-y-2">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="font-semibold text-foreground truncate">{product.productName}</p>
+            <p className="font-semibold text-foreground min-w-0 whitespace-normal [overflow-wrap:anywhere]">{product.productName}</p>
             <p className="font-mono text-xs text-muted-foreground">{product.productCode ?? '—'}</p>
           </div>
           <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${product.remainingQty > 0 ? 'bg-primary/10 text-primary' : 'bg-emerald-500/10 text-emerald-600'}`}>

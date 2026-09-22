@@ -322,7 +322,7 @@ export default function VouchersPage() {
     { key: 'voucherNo', title: '凭证号', width: 150, render: (_v, r) => <span className="font-mono text-doc-code-muted">{r.voucherNo}</span> },
     { key: 'voucherDate', title: '日期', width: 110, render: (_v, r) => fmtDate(r.voucherDate) },
     { key: 'sourceTypeName', title: '来源', width: 100, render: (_v, r) => <SoftStatusLabel label={r.sourceTypeName} tone={r.sourceType === 'manual' ? 'draft' : 'info'} /> },
-    { key: 'summary', title: '摘要', render: (_v, r) => <span className="truncate">{r.summary || '—'}</span> },
+    { key: 'summary', title: '摘要', render: (_v, r) => <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere]">{r.summary || '—'}</span> },
     { key: 'totalDebit', title: '借方', width: 120, align: 'right', render: (_v, r) => <span className="tabular-nums">{amount(r.totalDebit)}</span> },
     { key: 'totalCredit', title: '贷方', width: 120, align: 'right', render: (_v, r) => <span className="tabular-nums">{amount(r.totalCredit)}</span> },
     { key: 'status', title: '状态', width: 100, render: (_v, r) => (

@@ -224,7 +224,7 @@ export default function PurchasePage() {
     {
       key: 'remark', title: '备注', width: 11,
       render: (v) => v
-        ? <span className="line-clamp-1 text-muted-foreground" title={String(v)}>{String(v)}</span>
+        ? <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere] text-muted-foreground" title={String(v)}>{String(v)}</span>
         : <span className="text-muted-foreground/50">—</span>
     },
     {

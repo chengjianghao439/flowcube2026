@@ -27,7 +27,7 @@ function TransferCard({ order, phase, onTap }: { order: TransferOrder; phase: 'o
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="font-mono text-xs text-muted-foreground">{order.orderNo}</p>
-            <p className="font-semibold text-foreground truncate">{order.fromWarehouseName} → {order.toWarehouseName}</p>
+            <p className="font-semibold text-foreground min-w-0 whitespace-normal [overflow-wrap:anywhere]">{order.fromWarehouseName} → {order.toWarehouseName}</p>
             <p className="text-sm text-muted-foreground mt-0.5">{lineCount} 种商品 · 计划 {planned}</p>
           </div>
           <SoftStatusLabel label={phase === 'out' ? '待出库' : '在途'} tone={phase === 'out' ? 'active' : 'warning'} />

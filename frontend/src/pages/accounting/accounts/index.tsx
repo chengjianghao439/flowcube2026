@@ -279,7 +279,7 @@ function AccountNode({ acct, canManage, onAddChild, onEdit, onDelete, onToggle, 
         </button>
 
         <span className="w-20 shrink-0 font-mono text-sm text-doc-code-muted">{acct.code}</span>
-        <span className="flex-1 truncate text-sm font-medium">{acct.name}</span>
+        <span className="flex-1 min-w-0 whitespace-normal [overflow-wrap:anywhere] text-sm font-medium">{acct.name}</span>
 
         <SoftStatusLabel label={ACCOUNT_CATEGORY_LABELS[acct.category]} tone="info" className="shrink-0" />
         <span className="shrink-0 text-xs text-muted-foreground">{BALANCE_DIR_LABELS[acct.balanceDir]}方</span>

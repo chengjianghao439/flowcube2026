@@ -101,7 +101,7 @@ function CheckItemRow({ item }: { item: CheckItem }) {
     }`}>
       <div className="flex items-start justify-between mb-2">
         <div className="flex-1 min-w-0">
-          <p className="font-medium text-foreground truncate">{item.productName}</p>
+          <p className="font-medium text-foreground min-w-0 whitespace-normal [overflow-wrap:anywhere]">{item.productName}</p>
           <p className="text-xs font-mono text-muted-foreground">{item.productCode}</p>
         </div>
         {done

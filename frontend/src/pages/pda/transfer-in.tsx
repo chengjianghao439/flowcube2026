@@ -152,7 +152,7 @@ export default function PdaTransferInPage() {
             <PdaCard key={item.id}>
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="font-medium text-foreground truncate">{item.productName}</p>
+                  <p className="font-medium text-foreground min-w-0 whitespace-normal [overflow-wrap:anywhere]">{item.productName}</p>
                   <p className="text-xs font-mono text-muted-foreground">{item.productCode}</p>
                 </div>
                 <div className="text-right shrink-0 text-xs">

@@ -208,7 +208,7 @@ export default function InboundTasksPage() {
       key: 'taskNo',
       title: '任务单号',
       width: 11.47,
-      render: v => <span className="block truncate whitespace-nowrap" title={String(v)}>{v as string}</span>,
+      render: v => <span className="block min-w-0 whitespace-normal [overflow-wrap:anywhere] " title={String(v)}>{v as string}</span>,
     },
     {
       key: 'supplierName',
@@ -217,7 +217,7 @@ export default function InboundTasksPage() {
       render: v => {
         const text = String(v ?? '')
         return text
-          ? <span className="block truncate whitespace-nowrap" title={text}>{text}</span>
+          ? <span className="block min-w-0 whitespace-normal [overflow-wrap:anywhere] " title={text}>{text}</span>
           : <span className="whitespace-nowrap text-muted-foreground">—</span>
       },
     },
@@ -228,7 +228,7 @@ export default function InboundTasksPage() {
       render: v => {
         const text = String(v ?? '')
         return text
-          ? <span className="block truncate whitespace-nowrap" title={text}>{text}</span>
+          ? <span className="block min-w-0 whitespace-normal [overflow-wrap:anywhere] " title={text}>{text}</span>
           : <span className="whitespace-nowrap text-muted-foreground">—</span>
       },
     },
@@ -259,7 +259,7 @@ export default function InboundTasksPage() {
       render: v => {
         const text = String(v ?? '')
         return text
-          ? <span className="block truncate whitespace-nowrap" title={text}>{text}</span>
+          ? <span className="block min-w-0 whitespace-normal [overflow-wrap:anywhere] " title={text}>{text}</span>
           : <span className="whitespace-nowrap text-muted-foreground">—</span>
       },
     },
@@ -277,7 +277,7 @@ export default function InboundTasksPage() {
       title: '备注',
       width: 26.95,
       render: v => v
-        ? <span className="line-clamp-1 text-muted-foreground" title={String(v)}>{v as string}</span>
+        ? <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere] text-muted-foreground" title={String(v)}>{v as string}</span>
         : <span className="text-muted-foreground/50">—</span>,
     },
     {

@@ -208,7 +208,7 @@ export default function PdaShipPage() {
                   : mergedItems.map(item => (
                       <div key={item.productCode} className="flex items-center justify-between py-2 border-b border-border/50 last:border-0">
                         <div className="min-w-0">
-                          <p className="font-medium text-foreground text-sm truncate">{item.productName}</p>
+                          <p className="font-medium text-foreground text-sm min-w-0 whitespace-normal [overflow-wrap:anywhere]">{item.productName}</p>
                           <p className="text-xs font-mono text-muted-foreground">{item.productCode}</p>
                         </div>
                         <p className="font-bold text-primary shrink-0 ml-3">{item.qty}<span className="text-xs font-normal text-muted-foreground ml-0.5">{item.unit}</span></p>

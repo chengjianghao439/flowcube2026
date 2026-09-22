@@ -6,8 +6,8 @@
  * 用户在销售单表头与销售查询弹窗里看到的东西不一样，会问「这里到底能不能打字」。
  *
  * 统一为：**输入框样式（点击弹出查找器）+ 已选时的清除 X**。
- * 高度交给调用方：查询弹窗传 `className="h-9"`（与同排的 Select / Input 一致），
- * 表单沿用默认 `h-10`；两边的视觉与合并前保持一致，改的只是「长得像不像同一个东西」。
+ * 默认最小高度 40px，长文本完整换行并自动增高；调用方可调整最小高度。
+ * 即使查询表单沿用 h-9，也不能把长选择结果压回固定高度。
  */
 import { X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -35,7 +35,7 @@ export function PickerField({ id, label, value, placeholder, onOpen, onClear, on
         onDoubleClick={onDoubleClick}
         disabled={disabled}
         className={cn(
-          'h-10 w-full truncate rounded-md border border-input bg-background px-3 py-2',
+          'min-h-10 !h-auto w-full min-w-0 whitespace-normal [overflow-wrap:anywhere] rounded-md border border-input bg-background px-3 py-2',
           'text-left text-sm transition-colors',
           'hover:border-primary hover:bg-muted/30',
           'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
@@ -44,7 +44,7 @@ export function PickerField({ id, label, value, placeholder, onOpen, onClear, on
         )}
       >
         {value
-          ? <span className="truncate text-foreground">{value}</span>
+          ? <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere] text-foreground">{value}</span>
           : <span className="text-muted-foreground">{placeholder}</span>}
       </button>
       {value && onClear ? (

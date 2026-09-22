@@ -234,7 +234,7 @@ export default function AddressBookDialog({ open, onOpenChange, customerId, cust
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="truncate font-medium">{a.receiverName || '未填收货人'}</span>
+                      <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere] font-medium">{a.receiverName || '未填收货人'}</span>
                       <span className="shrink-0 text-sm tabular-nums text-muted-foreground">{a.receiverPhone || '—'}</span>
                       {a.isDefault && <span className="shrink-0 text-xs font-medium text-primary">默认</span>}
                     </div>

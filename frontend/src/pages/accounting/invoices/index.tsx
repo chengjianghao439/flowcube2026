@@ -141,7 +141,7 @@ export default function InvoicesPage() {
 
   const columns: TableColumn<Invoice>[] = [
     { key: 'invoiceNo', title: '发票号码', width: 130, render: (_v, r) => <span className="font-mono text-doc-code-muted">{r.invoiceNo}</span> },
-    { key: 'partyName', title: invoiceType === 1 ? '供应商' : '客户', render: (_v, r) => <span className="truncate">{r.partyName}</span> },
+    { key: 'partyName', title: invoiceType === 1 ? '供应商' : '客户', render: (_v, r) => <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere]">{r.partyName}</span> },
     { key: 'amountNoTax', title: '不含税', width: 110, align: 'right', render: (_v, r) => <span className="tabular-nums">{m(r.amountNoTax)}</span> },
     { key: 'taxRate', title: '税率', width: 70, align: 'right', render: (_v, r) => `${(r.taxRate * 100).toFixed(0)}%` },
     { key: 'taxAmount', title: '税额', width: 100, align: 'right', render: (_v, r) => <span className="tabular-nums">{m(r.taxAmount)}</span> },

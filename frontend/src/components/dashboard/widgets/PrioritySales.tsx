@@ -61,7 +61,7 @@ function Queue() {
                   <span className="block break-words text-sm font-medium leading-4 tabular-nums text-primary">
                     {order.orderNo}
                   </span>
-                  <span className="block truncate text-xs text-muted-foreground" title={order.customerName}>
+                  <span className="block min-w-0 whitespace-normal [overflow-wrap:anywhere] text-xs text-muted-foreground" title={order.customerName}>
                     {order.customerName}
                   </span>
                 </span>

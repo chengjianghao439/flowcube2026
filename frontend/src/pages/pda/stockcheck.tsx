@@ -254,7 +254,7 @@ function CheckWork({ checkId }: { checkId: number }) {
               <PdaCard>
                 <div className="flex items-center justify-between">
                   <div className="min-w-0 text-left">
-                    <p className="truncate font-medium text-foreground">{it.productName}</p>
+                    <p className="min-w-0 whitespace-normal [overflow-wrap:anywhere] font-medium text-foreground">{it.productName}</p>
                     <p className="text-xs text-muted-foreground">{it.productCode} · 账面 {it.bookQty} {it.unit} · {it.bookContainerCount} 个在库条码</p>
                   </div>
                   <div className="shrink-0 text-right text-sm">

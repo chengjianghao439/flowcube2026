@@ -128,7 +128,7 @@ export default function PdaWorkbench() {
             <div className="flex min-w-0 items-center gap-2">
               {/* 系统品牌（极序，产品门面恒为系统 Logo，不受公司 Logo 影响） */}
               <SystemBrand boxClassName="h-7 w-7 rounded-lg" />
-              <p className="truncate text-xs font-mono text-muted-foreground tracking-wider uppercase">极序 Flow</p>
+              <p className="min-w-0 whitespace-normal [overflow-wrap:anywhere] text-xs font-mono text-muted-foreground tracking-wider uppercase">极序 Flow</p>
             </div>
             <button
               type="button"

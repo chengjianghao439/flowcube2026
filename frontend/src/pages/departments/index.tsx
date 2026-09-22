@@ -187,7 +187,7 @@ export default function DepartmentsPage() {
           ) : (
             <span className="h-5 w-5 shrink-0" />
           )}
-          <span className="truncate font-medium">{row.dept.name}</span>
+          <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere] font-medium">{row.dept.name}</span>
         </div>
       ),
     },

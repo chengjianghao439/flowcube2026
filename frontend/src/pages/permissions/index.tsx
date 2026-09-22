@@ -244,7 +244,7 @@ export default function PermissionsPage() {
                   <button
                     onClick={() => selectRole(r.id)}
                     aria-pressed={active}
-                    className="min-w-0 flex-1 truncate px-3 py-2 text-left text-sm font-medium transition-colors"
+                    className="min-w-0 flex-1 whitespace-normal [overflow-wrap:anywhere] px-3 py-2 text-left text-sm font-medium transition-colors"
                   >
                     <span className={active ? 'text-foreground' : 'text-muted-foreground'}>{r.name}</span>
                   </button>

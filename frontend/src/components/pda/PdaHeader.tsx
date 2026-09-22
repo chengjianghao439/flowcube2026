@@ -1,7 +1,7 @@
 /**
  * PdaHeader — PDA 页面顶部导航栏
  *
- * 规格：height 56px · bg-white · border-bottom · sticky top
+ * 规格：min-height 56px · bg-white · border-bottom · sticky top
  * 布局：[ ← 返回 ]  [ 页面标题 / 副标题 ]  [ right? ]
  */
 import type { ReactNode } from 'react'
@@ -42,7 +42,7 @@ export default function PdaHeader({
 
   return (
     <div className="sticky top-0 z-10 border-b border-border bg-white" style={{ minHeight: 56 }}>
-      <div className="max-w-md mx-auto px-4 flex items-center" style={{ height: 56 }}>
+      <div className="max-w-md mx-auto px-4 py-2 flex items-center" style={{ minHeight: 56 }}>
 
         {/* 左：返回按钮（固定宽度保证标题居中） */}
         <div className="w-16 shrink-0">
@@ -58,9 +58,9 @@ export default function PdaHeader({
 
         {/* 中：标题 + 副标题 */}
         <div className="flex-1 text-center min-w-0 px-1">
-          <p className="font-semibold text-foreground text-sm leading-tight truncate">{title}</p>
+          <p className="font-semibold text-foreground text-sm leading-tight min-w-0 whitespace-normal [overflow-wrap:anywhere]">{title}</p>
           {subtitle && (
-            <p className="text-xs text-muted-foreground mt-0.5 truncate">{subtitle}</p>
+            <p className="text-xs text-muted-foreground mt-0.5 min-w-0 whitespace-normal [overflow-wrap:anywhere]">{subtitle}</p>
           )}
         </div>
 

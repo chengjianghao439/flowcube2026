@@ -240,7 +240,7 @@ function PalettePanel({
                 className="flex cursor-grab items-center gap-2 rounded-md border border-border/60 bg-background px-2.5 py-2 text-sm hover:border-primary/50 hover:bg-primary/5 active:cursor-grabbing select-none"
               >
                 <span className="text-muted-foreground">{fieldIcon(f)}</span>
-                <span className="truncate">{f.label}</span>
+                <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere]">{f.label}</span>
               </div>
             ))}
           </div>
@@ -268,7 +268,7 @@ function PalettePanel({
                 >
                   <span className="w-5 shrink-0 text-center text-[10px] text-muted-foreground/70">{idx + 1}</span>
                   <span className="shrink-0">{fieldIcon({ key: el.fieldKey, label: el.label, type: el.type === 'image' ? 'image' : el.type === 'barcode' ? 'barcode' : el.type === 'table' ? 'table' : el.type === 'divider' ? 'divider' : 'text' })}</span>
-                  <span className="min-w-0 flex-1 truncate">{el.label || el.fieldKey}</span>
+                  <span className="min-w-0 flex-1 whitespace-normal [overflow-wrap:anywhere]">{el.label || el.fieldKey}</span>
                   <button
                     type="button"
                     className="rounded p-0.5 text-muted-foreground/60 hover:text-foreground disabled:opacity-30"
@@ -313,7 +313,7 @@ function PalettePanel({
               className="flex cursor-grab items-center gap-2 rounded-md border border-border/60 bg-background px-2.5 py-2 text-sm hover:border-primary/50 hover:bg-primary/5 active:cursor-grabbing select-none"
             >
               <span className="text-muted-foreground">{fieldIcon(f)}</span>
-              <span className="truncate">{f.label}</span>
+              <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere]">{f.label}</span>
             </div>
           ))}
         </div>
@@ -936,7 +936,7 @@ function PropertiesPanel({ el, multiCount, isLabel, canvasW, canvasH, onChange, 
                         }}
                         className="size-3"
                       />
-                      <span className="min-w-0 flex-1 truncate">{def.label}</span>
+                      <span className="min-w-0 flex-1 whitespace-normal [overflow-wrap:anywhere]">{def.label}</span>
                     </label>
                     <Input
                       type="number" min="0" step="1"

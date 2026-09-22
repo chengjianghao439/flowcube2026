@@ -86,7 +86,7 @@ function CategoryAccordionLevel({
                   ? <ChevronDown className="h-4 w-4 shrink-0" />
                   : <ChevronRight className="h-4 w-4 shrink-0" />
                 : <span className="h-4 w-4 shrink-0" />}
-              <span className={cn('truncate', selected && 'font-medium')}>{cat.name}</span>
+              <span className={cn('min-w-0 whitespace-normal [overflow-wrap:anywhere]', selected && 'font-medium')}>{cat.name}</span>
               {cat.status === 0 && <span className="ml-auto shrink-0 text-xs text-muted-foreground">停用</span>}
             </button>
 
@@ -139,12 +139,12 @@ export default function CategoryTreeSelect({
         <Button
           type="button"
           variant="outline"
-          className={cn('h-9 w-56 justify-between border-border/80 bg-background font-normal', className)}
+          className={cn('min-h-9 !h-auto w-56 py-2 justify-between border-border/80 bg-background font-normal', className)}
           disabled={disabled}
           // 按钮文字来自 placeholder/选中项（运行时才知道），给读屏一个稳定名字
           aria-label={placeholder}
         >
-          <span className={cn('truncate text-left', !selected && 'text-muted-foreground')}>
+          <span className={cn('min-w-0 whitespace-normal [overflow-wrap:anywhere] text-left', !selected && 'text-muted-foreground')}>
             {selected?.name ?? (value == null ? emptyLabel : placeholder)}
           </span>
           <FolderTree className="ml-2 h-4 w-4 shrink-0 text-muted-foreground" />

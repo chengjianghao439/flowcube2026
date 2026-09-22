@@ -187,8 +187,8 @@ export default function DashboardPage() {
                               <Icon className="h-4 w-4" />
                             </span>
                             <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm font-medium text-foreground">{def.title}</p>
-                              <p className="truncate text-xs text-muted-foreground">{def.description}</p>
+                              <p className="min-w-0 whitespace-normal [overflow-wrap:anywhere] text-sm font-medium text-foreground">{def.title}</p>
+                              <p className="min-w-0 whitespace-normal [overflow-wrap:anywhere] text-xs text-muted-foreground">{def.description}</p>
                             </div>
                             <Plus className="h-4 w-4 shrink-0 text-primary" />
                           </button>

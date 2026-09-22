@@ -49,7 +49,7 @@ function AdjustmentListPage() {
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="font-mono text-xs text-muted-foreground">{t.taskNo}</p>
-                <p className="font-semibold text-foreground truncate">{t.customerName ?? '未知客户'}</p>
+                <p className="font-semibold text-foreground min-w-0 whitespace-normal [overflow-wrap:anywhere]">{t.customerName ?? '未知客户'}</p>
                 <p className="text-sm text-muted-foreground mt-0.5">{t.warehouseName}</p>
               </div>
               <span className="shrink-0 rounded-full bg-orange-100 text-orange-700 text-xs font-bold px-2.5 py-1">
@@ -279,7 +279,7 @@ function AdjustmentDetailPage({ adjustmentId }: { adjustmentId: number }) {
                 <p className="text-xs text-muted-foreground mt-1">请放回此库位</p>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div><p className="text-xs text-muted-foreground">条码</p><p className="font-semibold truncate">{target.barcode}</p></div>
+                <div><p className="text-xs text-muted-foreground">条码</p><p className="font-semibold min-w-0 whitespace-normal [overflow-wrap:anywhere]">{target.barcode}</p></div>
                 <div><p className="text-xs text-muted-foreground">数量</p><p className="font-bold text-primary">{target.qty}</p></div>
               </div>
               <button className="text-xs text-muted-foreground hover:text-foreground"
@@ -297,7 +297,7 @@ function AdjustmentDetailPage({ adjustmentId }: { adjustmentId: number }) {
           <div className="space-y-2">
             {pendingReturns.map(r => (
               <div key={r.id} className="rounded-xl border border-border bg-card p-3 flex items-center justify-between">
-                <p className="font-mono text-xs text-muted-foreground truncate">{r.barcode}</p>
+                <p className="font-mono text-xs text-muted-foreground min-w-0 whitespace-normal [overflow-wrap:anywhere]">{r.barcode}</p>
                 <p className="text-sm font-bold text-primary shrink-0 ml-2">{r.qty}</p>
               </div>
             ))}
@@ -316,7 +316,7 @@ function AdjustmentDetailPage({ adjustmentId }: { adjustmentId: number }) {
                     <span className="text-xs text-muted-foreground">{v.otherProductsSnapshot.length > 0 ? `另有 ${v.otherProductsSnapshot.length} 种商品需重新装箱` : ''}</span>
                   </div>
                   {v.otherProductsSnapshot.length > 0 && (
-                    <p className="text-xs text-muted-foreground truncate mt-1">
+                    <p className="text-xs text-muted-foreground min-w-0 whitespace-normal [overflow-wrap:anywhere] mt-1">
                       {v.otherProductsSnapshot.map(i => `${i.productName}×${i.qty}`).join('、')}
                     </p>
                   )}

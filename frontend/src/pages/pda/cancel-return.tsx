@@ -49,14 +49,14 @@ function CancelReturnListPage() {
           <PdaCard key={t.id} className="w-full" onClick={() => navigate(`/pda/cancel-return/${t.id}`)}>
             <div className="space-y-2">
               <div className="flex items-start justify-between gap-3">
-                <p className="font-mono text-xs text-muted-foreground min-w-0 truncate">{t.taskNo}</p>
+                <p className="font-mono text-xs text-muted-foreground min-w-0 min-w-0 whitespace-normal [overflow-wrap:anywhere]">{t.taskNo}</p>
                 <SoftStatusLabel
                   label={`待归还 ${t.containersRemaining}${t.packagesRemaining > 0 ? ` · 待拆箱 ${t.packagesRemaining}` : ''}`}
                   tone="warning"
                   className="shrink-0"
                 />
               </div>
-              <p className="font-semibold text-foreground truncate">{t.customerName ?? '未知客户'}</p>
+              <p className="font-semibold text-foreground min-w-0 whitespace-normal [overflow-wrap:anywhere]">{t.customerName ?? '未知客户'}</p>
               <p className="text-sm text-muted-foreground">{t.warehouseName}</p>
             </div>
           </PdaCard>
@@ -299,8 +299,8 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-xs text-muted-foreground">商品</p>
-                  <p className="font-semibold truncate">{target.productName ?? '—'}</p>
-                  <p className="font-mono text-xs text-muted-foreground truncate mt-0.5">{target.barcode}</p>
+                  <p className="font-semibold min-w-0 whitespace-normal [overflow-wrap:anywhere]">{target.productName ?? '—'}</p>
+                  <p className="font-mono text-xs text-muted-foreground min-w-0 whitespace-normal [overflow-wrap:anywhere] mt-0.5">{target.barcode}</p>
                 </div>
                 <div className="shrink-0 text-right">
                   <p className="text-xs text-muted-foreground">数量</p>
@@ -323,8 +323,8 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
             {detail.containers.map(c => (
               <div key={c.containerId} className="rounded-xl border border-border bg-card p-3 flex items-center justify-between">
                 <div className="min-w-0">
-                  <p className="text-sm font-medium truncate">{c.productName ?? '—'}</p>
-                  <p className="font-mono text-xs text-muted-foreground truncate">{c.barcode}</p>
+                  <p className="text-sm font-medium min-w-0 whitespace-normal [overflow-wrap:anywhere]">{c.productName ?? '—'}</p>
+                  <p className="font-mono text-xs text-muted-foreground min-w-0 whitespace-normal [overflow-wrap:anywhere]">{c.barcode}</p>
                 </div>
                 <p className="text-sm font-bold text-primary shrink-0 ml-2">{c.qty}</p>
               </div>
@@ -343,7 +343,7 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
                     <p className="font-mono text-xs font-semibold text-foreground">{p.barcode}</p>
                     <span className="text-xs text-muted-foreground">{p.items.length} 种商品</span>
                   </div>
-                  <p className="text-xs text-muted-foreground truncate mt-1">
+                  <p className="text-xs text-muted-foreground min-w-0 whitespace-normal [overflow-wrap:anywhere] mt-1">
                     {p.items.map(i => `${i.productName ?? '—'} × ${i.qty}${i.unit ? ` ${i.unit}` : ''}`).join('、') || '（箱内无商品记录）'}
                   </p>
                 </div>

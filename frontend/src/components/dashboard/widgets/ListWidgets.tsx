@@ -68,10 +68,10 @@ export function BoardIncoming() {
                   {data[col.key].map(po => (
                     <div key={po.id} className="border-b border-border py-2.5 text-xs">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="truncate font-medium text-foreground">{po.orderNo}</span>
+                        <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere] font-medium text-foreground">{po.orderNo}</span>
                         <span className="shrink-0 text-muted-foreground">{formatDisplayDate(po.expectedDate)}</span>
                       </div>
-                      <p className="truncate text-muted-foreground">{po.supplierName}</p>
+                      <p className="min-w-0 whitespace-normal [overflow-wrap:anywhere] text-muted-foreground">{po.supplierName}</p>
                     </div>
                   ))}
                 </div>
@@ -106,7 +106,7 @@ export function ListPdaPerf() {
           {ops.slice(0, 5).map((op, i) => (
             <div key={op.operatorId} className="flex items-center gap-3 rounded-lg px-2 py-1.5 transition-colors hover:bg-muted/40">
               <span className={`w-4 text-center text-xs font-bold ${i === 0 ? 'text-warning' : i === 1 ? 'text-muted-foreground' : i === 2 ? 'text-orange-400' : 'text-muted-foreground'}`}>{i + 1}</span>
-              <p className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{op.operatorName}</p>
+              <p className="min-w-0 flex-1 whitespace-normal [overflow-wrap:anywhere] text-sm font-medium text-foreground">{op.operatorName}</p>
               <span className="text-xs text-muted-foreground"><span className="font-semibold text-foreground">{op.scanCount}</span> 次 · <span className="font-semibold text-foreground">{op.pickQty.toFixed(0)}</span> 件</span>
             </div>
           ))}
@@ -123,7 +123,7 @@ function PartyTable({ parties, empty }: { parties: AgingParty[]; empty: string }
     <div className="divide-y divide-border">
       {parties.map(p => <div key={p.partyName} className="py-3">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <p className="min-w-0 flex-1 truncate text-sm font-medium" title={p.partyName}>{p.partyName}</p>
+          <p className="min-w-0 flex-1 whitespace-normal [overflow-wrap:anywhere] text-sm font-medium" title={p.partyName}>{p.partyName}</p>
           <strong className="text-sm tabular-nums">{money(p.amount)}</strong>
         </div>
         <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
@@ -172,8 +172,8 @@ export function BoardWorkbench() {
               className="flex w-full items-center gap-3 dashboard-row-action border-b border-border px-2 py-3 text-left">
               <SoftStatusLabel label={String(c.count)} tone={c.accent === 'rose' ? 'danger' : c.accent === 'amber' ? 'warning' : c.accent === 'emerald' ? 'success' : 'info'} />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-foreground">{c.title}</p>
-                <p className="truncate text-xs text-muted-foreground">{c.description}</p>
+                <p className="min-w-0 whitespace-normal [overflow-wrap:anywhere] text-sm font-medium text-foreground">{c.title}</p>
+                <p className="min-w-0 whitespace-normal [overflow-wrap:anywhere] text-xs text-muted-foreground">{c.description}</p>
               </div>
               <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
             </button>
@@ -195,7 +195,7 @@ export function ListTopCustomer() {
           {rows.map((c, i) => (
             <div key={c.customerName} className="flex items-center gap-3 border-b border-border px-1 py-3 text-sm">
               <span className="w-4 text-center text-xs font-bold text-muted-foreground">{i + 1}</span>
-              <p className="min-w-0 flex-1 truncate font-medium text-foreground" title={c.customerName}>{c.customerName}</p>
+              <p className="min-w-0 flex-1 whitespace-normal [overflow-wrap:anywhere] font-medium text-foreground" title={c.customerName}>{c.customerName}</p>
               <span className="shrink-0 text-xs text-muted-foreground">{c.orderCount} 单</span>
               <span className="shrink-0 text-right tabular-nums font-semibold text-foreground">{money(c.totalAmount)}</span>
             </div>
@@ -215,7 +215,7 @@ export function ListTopSupplier() {
           {rows.map((s, i) => (
             <div key={s.supplierName} className="flex items-center gap-3 border-b border-border px-1 py-3 text-sm">
               <span className="w-4 text-center text-xs font-bold text-muted-foreground">{i + 1}</span>
-              <p className="min-w-0 flex-1 truncate font-medium text-foreground" title={s.supplierName}>{s.supplierName}</p>
+              <p className="min-w-0 flex-1 whitespace-normal [overflow-wrap:anywhere] font-medium text-foreground" title={s.supplierName}>{s.supplierName}</p>
               <span className="shrink-0 text-xs text-muted-foreground">{s.orderCount} 单</span>
               <span className="shrink-0 text-right tabular-nums font-semibold text-foreground">{money(s.totalAmount)}</span>
             </div>
@@ -269,8 +269,8 @@ export function ListPendingApprovals() {
             >
               <SoftStatusLabel label={BIZ_LABEL[item.bizType] ?? '审批'} tone="info" />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-foreground">{item.no || `#${item.bizId}`}</p>
-                <p className="truncate text-xs text-muted-foreground">
+                <p className="min-w-0 whitespace-normal [overflow-wrap:anywhere] text-sm font-medium text-foreground">{item.no || `#${item.bizId}`}</p>
+                <p className="min-w-0 whitespace-normal [overflow-wrap:anywhere] text-xs text-muted-foreground">
                   {item.title || '—'} · {item.applicantName} · {money(item.amount)}
                 </p>
               </div>
@@ -311,7 +311,7 @@ export function ListAnomaly() {  const { data, isLoading, error, refetch } = use
           <p className="mb-1 text-xs font-medium text-muted-foreground">异常原因分布</p>
           {reasons.slice(0, 5).map(r => (
             <div key={r.reason} className="flex items-center justify-between rounded-lg px-2 py-1 text-sm">
-              <span className="truncate text-foreground">{r.reason}</span>
+              <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere] text-foreground">{r.reason}</span>
               <SoftStatusLabel label={`${r.count} 次`} tone="danger" />
             </div>
           ))}

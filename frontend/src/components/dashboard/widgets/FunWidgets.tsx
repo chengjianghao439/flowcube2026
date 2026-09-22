@@ -308,7 +308,7 @@ export function HolidayCountdown() {
             {items.map(i => (
               <div key={i.id} className="flex items-center gap-2 rounded-md px-2 py-1 text-sm transition-colors hover:bg-muted/50">
                 <span>{i.emoji}</span>
-                <span className="flex-1 truncate text-foreground">{i.name}</span>
+                <span className="flex-1 min-w-0 whitespace-normal [overflow-wrap:anywhere] text-foreground">{i.name}</span>
                 <span className="text-xs tabular-nums text-muted-foreground">{i.date.replace(/-/g, '/')}</span>
                 <button type="button" onClick={() => persist(items.filter(x => x.id !== i.id))} title="删除"
                   className="flex h-6 w-6 items-center justify-center rounded text-destructive hover:bg-destructive/10">
@@ -579,7 +579,7 @@ export function TodoNote() {
                 <button type="button" onClick={() => persist(todos.map(x => x.id === t.id ? { ...x, done: !x.done } : x))} aria-label={t.done ? '标记未完成' : '标记完成'}>
                   {t.done ? <CheckCircle2 className="h-4 w-4 text-success" /> : <Circle className="h-4 w-4 text-muted-foreground" />}
                 </button>
-                <span className={cn('min-w-0 flex-1 truncate', t.done && 'text-muted-foreground line-through')}>{t.text}</span>
+                <span className={cn('min-w-0 flex-1 whitespace-normal [overflow-wrap:anywhere]', t.done && 'text-muted-foreground line-through')}>{t.text}</span>
                 <button type="button" onClick={() => persist(todos.filter(x => x.id !== t.id))} title="删除"
                   className="flex h-6 w-6 items-center justify-center rounded text-destructive opacity-70 transition-opacity hover:bg-destructive/10 focus-visible:opacity-100 group-hover:opacity-100">
                   <Trash2 className="h-3.5 w-3.5" />

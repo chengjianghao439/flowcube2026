@@ -179,7 +179,7 @@ export default function WarehouseOpsPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium text-foreground truncate">{op.operatorName}</p>
+                      <p className="text-sm font-medium text-foreground min-w-0 whitespace-normal [overflow-wrap:anywhere]">{op.operatorName}</p>
                       <p className="text-helper shrink-0">{op.pickQty} 件</p>
                     </div>
                     <div className="flex items-center gap-2 mt-0.5">
@@ -210,7 +210,7 @@ export default function WarehouseOpsPage() {
                 <div key={e.id} className="flex items-start gap-2 rounded-lg bg-red-50 border border-red-100 px-3 py-2">
                   <AlertTriangle className="size-4 text-red-400 shrink-0 mt-0.5" />
                   <div className="min-w-0">
-                    <p className="text-xs font-medium text-red-700 truncate">{e.reason}</p>
+                    <p className="text-xs font-medium text-red-700 min-w-0 whitespace-normal [overflow-wrap:anywhere]">{e.reason}</p>
                     <p className="text-xs text-red-500">{e.operatorName} · {e.barcode} · {formatDisplayDateTime(e.createdAt)}</p>
                   </div>
                 </div>

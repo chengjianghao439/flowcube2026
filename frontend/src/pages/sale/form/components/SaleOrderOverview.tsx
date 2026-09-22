@@ -19,7 +19,7 @@ export function SaleOrderOverview({ order }: { order: SaleOrder }) {
         {cells.map(({ label, value, icon: Icon }) => (
           <div key={label} className="flex min-w-0 items-center gap-2.5 px-4 py-2.5">
             <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary"><Icon className="h-3.5 w-3.5" /></span>
-            <div className="min-w-0"><p className="text-[11px] text-muted-foreground">{label}</p><p className="mt-0.5 truncate text-sm font-semibold text-foreground" title={value}>{value}</p></div>
+            <div className="min-w-0"><p className="text-[11px] text-muted-foreground">{label}</p><p className="mt-0.5 min-w-0 whitespace-normal [overflow-wrap:anywhere] text-sm font-semibold text-foreground" title={value}>{value}</p></div>
           </div>
         ))}
         <div className="flex min-w-0 items-center justify-between gap-3 px-4 py-2.5">

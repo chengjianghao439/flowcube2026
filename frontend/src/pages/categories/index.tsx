@@ -244,7 +244,7 @@ function CategoryNode({ cat, onAddChild, onEdit, onDelete, onToggleStatus, expan
           <span className="shrink-0 text-doc-code-muted">{cat.code}</span>
         )}
 
-        <span className="flex-1 truncate text-sm font-medium">{cat.name}</span>
+        <span className="flex-1 min-w-0 whitespace-normal [overflow-wrap:anywhere] text-sm font-medium">{cat.name}</span>
 
         <SoftStatusLabel
           label={cat.status ? '启用' : '停用'}

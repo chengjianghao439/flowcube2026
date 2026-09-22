@@ -62,7 +62,7 @@ function ShareBar({ label, amount, share, tone = 'primary' }: {
   return (
     <div className="space-y-1">
       <div className="flex items-baseline justify-between text-sm">
-        <span className="truncate text-foreground">{label}</span>
+        <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere] text-foreground">{label}</span>
         <span className="shrink-0 pl-2 tabular-nums text-muted-foreground">{money(amount)} · {pct(share)}</span>
       </div>
       <div className="h-2 overflow-hidden rounded bg-muted">
@@ -114,7 +114,7 @@ function PartyList({ title, parties, emptyText }: {
             <tbody>
               {parties.map(p => (
                 <tr key={p.partyName} className="border-t border-border">
-                  <td className="max-w-[10rem] truncate py-1.5" title={p.partyName}>{p.partyName}</td>
+                  <td className="max-w-[10rem] min-w-0 whitespace-normal [overflow-wrap:anywhere] py-1.5" title={p.partyName}>{p.partyName}</td>
                   <td className="py-1.5 text-right tabular-nums">{money(p.amount)}</td>
                   <td className="py-1.5 text-right tabular-nums">
                     {p.overdueAmount > 0

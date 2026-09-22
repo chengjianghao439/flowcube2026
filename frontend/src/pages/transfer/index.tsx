@@ -193,7 +193,7 @@ export default function TransferPage() {
     {
       key: 'remark', title: '备注', width: 200,
       render: (v) => v
-        ? <span className="line-clamp-1 text-xs text-muted-foreground" title={String(v)}>{String(v)}</span>
+        ? <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere] text-xs text-muted-foreground" title={String(v)}>{String(v)}</span>
         : <span className="text-xs text-muted-foreground/50">—</span>
     },
     { key: 'id', title: '操作', width: 120, render: (_, row) => {

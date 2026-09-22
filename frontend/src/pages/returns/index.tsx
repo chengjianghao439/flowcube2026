@@ -218,7 +218,7 @@ export default function ReturnsPage() {
     {
       key: 'remark', title: '备注', width: 200,
       render: (v) => v
-        ? <span className="line-clamp-1 text-muted-foreground" title={String(v)}>{String(v)}</span>
+        ? <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere] text-muted-foreground" title={String(v)}>{String(v)}</span>
         : <span className="text-muted-foreground/50">—</span>
     },
     { key: 'id', title: '操作', width: 140, render: (_, row) => {

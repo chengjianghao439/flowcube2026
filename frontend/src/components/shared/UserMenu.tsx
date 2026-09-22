@@ -77,9 +77,9 @@ export default function UserMenu() {
                   {initials}
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm font-medium truncate">{user?.realName || user?.username}</p>
-                  <p className="text-xs text-muted-foreground truncate">@{user?.username}</p>
-                  <p className="text-xs text-muted-foreground truncate">{user?.roleName}</p>
+                  <p className="text-sm font-medium min-w-0 whitespace-normal [overflow-wrap:anywhere]">{user?.realName || user?.username}</p>
+                  <p className="text-xs text-muted-foreground min-w-0 whitespace-normal [overflow-wrap:anywhere]">@{user?.username}</p>
+                  <p className="text-xs text-muted-foreground min-w-0 whitespace-normal [overflow-wrap:anywhere]">{user?.roleName}</p>
                 </div>
               </div>
             </div>

@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { WrappedCategoryTick } from './WrappedCategoryTick'
+import { categoryChartHeight } from './chartLabelLayout'
 import { formatDisplayDate } from '@/lib/dateTime'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import {
@@ -54,21 +56,21 @@ export function ChartIoTrend() {
 export function ChartTopStock() {
   const { data, isLoading, error, refetch } = useTopStock()
   const rows = (data ?? []).slice(0, 10).map(d => ({
-    name: d.name.length > 8 ? d.name.slice(0, 8) + '…' : d.name, fullName: d.name,
+    name: d.name, fullName: d.name,
     价值: Math.round(d.value),
   }))
   return (
-    <ChartWidgetShell loading={isLoading} error={error} onRetry={() => void refetch()} title="库存价值 Top 10" icon={BarChart3} tone="primary">
+    <ChartWidgetShell loading={isLoading} error={error} onRetry={() => void refetch()} title="库存价值 Top 10" icon={BarChart3} tone="primary" scrollBody>
       {rows.length === 0 ? <p className={EMPTY_HINT}>暂无库存数据</p> : (
-        <ResponsiveContainer width="100%" height="100%">
+        <div style={{ height: categoryChartHeight(rows.map(row => row.name)) }}><ResponsiveContainer width="100%" height="100%">
           <BarChart data={rows} layout="vertical" margin={{ top: 4, right: 12, left: 0, bottom: 4 }}>
             <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="hsl(var(--border))" />
             <XAxis axisLine={false} tickLine={false} type="number" tick={axisTick} tickFormatter={wan} />
-            <YAxis axisLine={false} tickLine={false} type="category" dataKey="name" tick={axisTick} width={100} />
+            <YAxis axisLine={false} tickLine={false} type="category" dataKey="name" tick={<WrappedCategoryTick />} width={112} interval={0} />
             <Tooltip labelFormatter={(label, payload) => payload?.[0]?.payload?.fullName || label} formatter={(v) => [money(Number(v ?? 0)), '库存价值']} contentStyle={chartTooltip} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4 }} />
             <Bar isAnimationActive={false} dataKey="价值" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} maxBarSize={36} />
           </BarChart>
-        </ResponsiveContainer>
+        </ResponsiveContainer></div>
       )}
     </ChartWidgetShell>
   )
@@ -90,11 +92,11 @@ export function ChartWarehouseStock() {
   return (
     <ChartWidgetShell loading={isLoading} error={error} onRetry={() => void refetch()} title="各仓库存价值分布" icon={Warehouse} tone="info" scrollBody>
       {rows.length === 0 ? <p className={EMPTY_HINT}>暂无仓库库存数据</p> : (
-        <div style={{ height: Math.max(240, rows.length * 30) }}><ResponsiveContainer width="100%" height="100%">
+        <div style={{ height: categoryChartHeight(rows.map(row => row.name)) }}><ResponsiveContainer width="100%" height="100%">
           <BarChart data={rows} layout="vertical" margin={{ top: 4, right: 16, left: 4, bottom: 4 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
             <XAxis axisLine={false} tickLine={false} type="number" tick={axisTick} tickFormatter={wan} />
-            <YAxis axisLine={false} tickLine={false} type="category" dataKey="name" tick={axisTick} width={112} interval={0} tickFormatter={v => String(v).length > 9 ? `${String(v).slice(0, 9)}…` : String(v)} />
+            <YAxis axisLine={false} tickLine={false} type="category" dataKey="name" tick={<WrappedCategoryTick />} width={112} interval={0} />
             <Tooltip formatter={(v) => [money(Number(v ?? 0)), '库存价值']} contentStyle={chartTooltip} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4 }} />
             <Bar isAnimationActive={false} dataKey="价值" fill="hsl(var(--info))" radius={[0, 4, 4, 0]} maxBarSize={22} />
           </BarChart>
@@ -219,11 +221,11 @@ export function ChartAccountBalance() {
       action={data ? <span className="text-xs tabular-nums text-muted-foreground">合计 {money(data.summary.totalBalance)}</span> : undefined}
     >
       {accounts.length === 0 ? <p className={EMPTY_HINT}>还没有启用的资金账户</p> : (
-        <div style={{ height: Math.max(240, accounts.length * 30) }}><ResponsiveContainer width="100%" height="100%">
+        <div style={{ height: categoryChartHeight(accounts.map(account => account.name)) }}><ResponsiveContainer width="100%" height="100%">
           <BarChart data={accounts} layout="vertical" margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
             <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="hsl(var(--border))" />
             <XAxis type="number" tick={axisTick} tickFormatter={wan} axisLine={false} tickLine={false} />
-            <YAxis type="category" dataKey="name" width={112} interval={0} tickFormatter={v => String(v).length > 10 ? `${String(v).slice(0, 10)}…` : String(v)} tick={axisTick} axisLine={false} tickLine={false} />
+            <YAxis type="category" dataKey="name" width={112} interval={0} tick={<WrappedCategoryTick />} axisLine={false} tickLine={false} />
             <Tooltip formatter={v => [money(Number(v ?? 0)), '账户余额']} contentStyle={chartTooltip} />
             <Bar dataKey="balance" maxBarSize={24} radius={[0, 4, 4, 0]} isAnimationActive={false}>
               {accounts.map((account, i) => <Cell key={account.id} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
