@@ -121,12 +121,23 @@ function releaseApi(options, tag, suffix = '') {
 }
 
 /** 确保 Release 存在；不存在时建**草稿**（附件上传并校验通过后才对外发布） */
-async function ensureRelease(fetchImpl, options, { sleep = () => Promise.resolve() } = {}) {
-  const existing = await callApi(fetchImpl, options, { method: 'GET', url: releaseApi(options, options.tag), allow404: true })
+async function ensureRelease(fetchImpl, options, { sleep = () => Promise.resolve(), createIfMissing = true } = {}) {
+  let existing = await callApi(fetchImpl, options, { method: 'GET', url: releaseApi(options, options.tag), allow404: true })
+  // 草稿可能无法通过 /tags/<tag> 查询；重试时不能因此重复创建草稿。
+  if (!existing) {
+    for (let page = 1; ; page += 1) {
+      const releases = await callApi(fetchImpl, options, { method: 'GET', url: `${releaseApi(options, null)}?per_page=100&page=${page}` })
+      const matches = releases.filter(item => item.tag_name === options.tag)
+      if (matches.length > 1) throw fail(`同一 tag 存在多个 Release，拒绝自动选择：${options.tag}`)
+      if (matches.length) { existing = matches[0]; break }
+      if (releases.length < 100) break
+    }
+  }
   if (existing) {
     log(`Release ${options.tag} 已存在（id=${existing.id}，draft=${existing.draft}，附件 ${existing.assets?.length ?? 0} 个）`)
     return existing
   }
+  if (!createIfMissing) throw fail(`找不到已上传附件的 Release：${options.tag}`)
   log(`Release ${options.tag} 不存在，创建草稿（发布延后到附件校验通过）`)
   let release = null
   for (let attempt = 1; attempt <= options.attempts; attempt += 1) {
@@ -187,9 +198,10 @@ async function uploadAssetOnce(fetchImpl, options, releaseId) {
 }
 
 /** 校验远端附件真的落地且大小一致（上传成功 ≠ 附件可用） */
-async function verifyAsset(fetchImpl, options, { sleep = () => Promise.resolve() } = {}) {
+async function verifyAsset(fetchImpl, options, { sleep = () => Promise.resolve(), releaseId } = {}) {
   for (let attempt = 1; attempt <= options.attempts; attempt += 1) {
-    const release = await callApi(fetchImpl, options, { method: 'GET', url: releaseApi(options, options.tag), allow404: true })
+    const url = releaseId ? `${releaseApi(options, null)}/${releaseId}` : releaseApi(options, options.tag)
+    const release = await callApi(fetchImpl, options, { method: 'GET', url, allow404: true })
     const asset = (release?.assets || []).find(item => item.name === options.fileName)
     if (asset && asset.state === 'uploaded' && Number(asset.size) === options.fileSize) {
       return asset
@@ -236,7 +248,7 @@ async function publishReleaseAsset({
       break
     } catch (error) {
       // 超时/网络中断后远端可能已有半成品附件，下一次尝试前先清掉同名项。
-      const current = await callApi(fetchImpl, options, { method: 'GET', url: releaseApi(options, options.tag), allow404: true })
+      const current = await callApi(fetchImpl, options, { method: 'GET', url: `${releaseApi(options, null)}/${release.id}`, allow404: true })
       if (current) await removeExistingAsset(fetchImpl, options, current)
       if (attempt === options.attempts) throw error
       logger(`上传第 ${attempt} 次失败（${error.message}），${options.retryDelayMs}ms 后重试`)
@@ -244,15 +256,39 @@ async function publishReleaseAsset({
     }
   }
 
-  const asset = await verifyAsset(fetchImpl, options, { sleep })
+  const asset = await verifyAsset(fetchImpl, options, { sleep, releaseId: release.id })
   logger(`附件校验通过：${asset.name}（${asset.size} 字节）`)
+  const published = await publishRelease(fetchImpl, options, release)
+  return { release: published, asset }
+}
+
+function validateRecoveryRun(run, { sha, tag }) {
+  if (run.head_sha !== sha || run.head_branch !== tag || run.event !== 'push' || run.path !== '.github/workflows/build-desktop.yml') {
+    throw fail('原构建运行与发布 tag / SHA / workflow 不匹配，拒绝补发布')
+  }
+}
+
+/** 只把已验证的同一原始附件转正；不删除、重传、重建或改服务器清单。 */
+async function completeExistingRelease({ fetchImpl = fetch, ...rawOptions }) {
+  const options = resolveOptions(rawOptions, rawOptions.env || process.env)
+  const origin = new URL(rawOptions.origin)
+  if (origin.protocol !== 'https:' || origin.username || origin.password) throw fail('补发布需要可信 HTTPS 更新清单')
+  const response = await fetchImpl(new URL('/latest.json', origin).href, { signal: AbortSignal.timeout(options.timeoutMs) })
+  if (!response.ok) throw fail('无法读取线上桌面更新清单')
+  const manifest = await response.json()
+  const sha = require('node:crypto').createHash('sha256').update(fs.readFileSync(options.file)).digest('hex')
+  if (manifest.version !== options.version || manifest.sha256 !== sha || options.tag !== `v${options.version}`) throw fail('原始安装包与线上版本或 SHA256 不一致')
+  const release = await ensureRelease(fetchImpl, options, { createIfMissing: false })
+  const asset = await verifyAsset(fetchImpl, options, { releaseId: release.id })
+  if (asset.digest !== `sha256:${sha}`) throw fail('GitHub 附件摘要与原始安装包不一致')
   const published = await publishRelease(fetchImpl, options, release)
   return { release: published, asset }
 }
 
 if (require.main === module) {
   const args = parseArgs(process.argv.slice(2))
-  publishReleaseAsset(args)
+  const publish = args['complete-existing'] === '1' ? completeExistingRelease : publishReleaseAsset
+  publish(args)
     .then(({ asset }) => {
       log(`完成：${asset.browser_download_url || asset.name}`)
     })
@@ -263,4 +299,4 @@ if (require.main === module) {
     })
 }
 
-module.exports = { parseArgs, resolveOptions, ensureRelease, removeExistingAsset, uploadAssetOnce, verifyAsset, publishRelease, publishReleaseAsset }
+module.exports = { parseArgs, resolveOptions, ensureRelease, removeExistingAsset, uploadAssetOnce, verifyAsset, publishRelease, publishReleaseAsset, completeExistingRelease, validateRecoveryRun }

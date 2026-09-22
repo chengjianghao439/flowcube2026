@@ -1,0 +1,77 @@
+name: Recover Release Asset
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: '已部署版本的 tag，例如 v0.10.3'
+        required: true
+        type: string
+      source_run_id:
+        description: '构建并上传原始 EXE artifact 的 tag 工作流 run ID'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  actions: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Verify original tag build and same-commit release gates
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$SOURCE_RUN_ID" =~ ^[0-9]+$ ]]
+          RELEASE_SHA="$(git rev-parse --verify "${RELEASE_TAG}^{commit}")"
+          export RELEASE_SHA
+          node <<'JS'
+          const { validateRecoveryRun } = require('./scripts/publish-release-asset.cjs')
+          const { waitForChecks } = require('./scripts/wait-release-checks')
+          ;(async () => {
+            const { GITHUB_REPOSITORY: repository, GITHUB_TOKEN: token, RELEASE_SHA: sha, RELEASE_TAG: tag, SOURCE_RUN_ID: id } = process.env
+            const response = await fetch(`https://api.github.com/repos/${repository}/actions/runs/${id}`, {
+              headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' }, signal: AbortSignal.timeout(20000),
+            })
+            if (!response.ok) throw Error(`原构建查询失败：HTTP ${response.status}`)
+            validateRecoveryRun(await response.json(), { sha, tag })
+            await waitForChecks({ repository, sha, token, timeoutMs: 300000,
+              requiredWorkflows: ['test.yml', 'security-scan.yml', 'deploy-browser.yml', 'build-pda-apk.yml'] })
+          })().catch(error => { console.error(error.message); process.exitCode = 1 })
+          JS
+      - name: Download original Windows CI artifact
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: FlowCube-Desktop-Setup
+          path: recovered-release
+          run-id: ${{ inputs.source_run_id }}
+          github-token: ${{ github.token }}
+      - name: Verify identical package and publish existing draft
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          GH_TOKEN: ${{ github.token }}
+          ERP_ORIGIN: ${{ secrets.ERP_ORIGIN }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(recovered-release/*.exe)
+          [ "${#files[@]}" -eq 1 ]
+          node scripts/publish-release-asset.cjs --tag "$RELEASE_TAG" --version "${RELEASE_TAG#v}" \
+            --file "${files[0]}" --complete-existing 1 --origin "$ERP_ORIGIN"
+          node scripts/verify-live-release.cjs --origin "$ERP_ORIGIN"

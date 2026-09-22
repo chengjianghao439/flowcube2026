@@ -19,7 +19,7 @@ const os = require('node:os')
 const path = require('node:path')
 const { test } = require('node:test')
 
-const { publishReleaseAsset } = require('../scripts/publish-release-asset.cjs')
+const { publishReleaseAsset, completeExistingRelease, validateRecoveryRun } = require('../scripts/publish-release-asset.cjs')
 
 const REPO = 'owner/repo'
 const API = 'https://api.github.com'
@@ -56,8 +56,14 @@ function makeGitHub({ release = null, assets = [], uploadPlan = ['ok'], assetSiz
     const method = init.method || 'GET'
     calls.push({ method, url: String(url), body: init.body })
     if (method === 'GET' && String(url) === RELEASE_URL) {
-      if (!currentRelease) return jsonResponse(404, { message: 'Not Found' })
+      if (!currentRelease || currentRelease.draft) return jsonResponse(404, { message: 'Not Found' })
       return jsonResponse(200, { ...currentRelease, assets: currentAssets })
+    }
+    if (method === 'GET' && String(url) === `${API}/repos/${REPO}/releases/42`) {
+      return jsonResponse(200, { ...currentRelease, assets: currentAssets })
+    }
+    if (method === 'GET' && String(url).startsWith(`${API}/repos/${REPO}/releases?`)) {
+      return jsonResponse(200, currentRelease ? [{ ...currentRelease, assets: currentAssets }] : [])
     }
     if (method === 'POST' && String(url) === `${API}/repos/${REPO}/releases`) {
       currentRelease = { id: 42, tag_name: TAG, draft: true, published_at: null, ...JSON.parse(init.body) }
@@ -118,9 +124,10 @@ test('Release 不存在时先建草稿，校验附件落地后才对外发布', 
   // 顺序：建草稿 → 上传 → 校验 → 发布
   const order = gh.calls.map(c => `${c.method} ${c.url.replace(API, '').replace(UPLOADS, '')}`)
   assert.ok(order[0].startsWith('GET /repos/'), `先查 Release 是否存在，实际：${order[0]}`)
-  assert.ok(order[1].startsWith('POST /repos/'), `再建草稿，实际：${order[1]}`)
-  assert.ok(order[2].startsWith('POST /repos/'), `再上传附件，实际：${order[2]}`)
-  assert.ok(order[3].startsWith('GET /repos/'), `上传后先校验，实际：${order[3]}`)
+  const createIndex = gh.calls.indexOf(createCall)
+  const uploadIndex = gh.calls.findIndex(c => c.method === 'POST' && c.url.startsWith(UPLOADS))
+  const verifyIndex = gh.calls.findIndex((c, i) => i > uploadIndex && c.method === 'GET' && c.url.endsWith('/releases/42'))
+  assert.ok(createIndex >= 0 && createIndex < uploadIndex && uploadIndex < verifyIndex, '草稿按 ID 校验，不依赖 tag 查询')
   assert.ok(order.at(-1).startsWith('PATCH /repos/'), `最后才发布，实际：${order.at(-1)}`)
 
   const patchCall = gh.calls.at(-1)
@@ -184,4 +191,30 @@ test('缺少仓库/凭证/文件时提前失败，不发起任何请求', async 
   await assert.rejects(() => publishReleaseAsset({ ...baseOptions(file), token: undefined, env: {}, fetchImpl, sleep: async () => {}, logger: () => {} }), /缺少 GitHub token/)
   await assert.rejects(() => publishReleaseAsset({ ...baseOptions(file), file: path.join(os.tmpdir(), 'not-exist-flowcube.exe'), fetchImpl, sleep: async () => {}, logger: () => {} }), /ENOENT|no such file/)
   assert.equal(called, 0)
+})
+
+for (const mismatch of [null, 'manifest', 'asset']) {
+  test(`原包补发布只允许三方摘要一致，不能重传或重建：${mismatch || '一致'}`, async () => {
+    const { file, fileSize } = makeFile()
+    const hash = require('node:crypto').createHash('sha256').update(fs.readFileSync(file)).digest('hex')
+    const gh = makeGitHub({ release: { id: 42, tag_name: TAG, draft: true }, fileSize,
+      assets: [{ id: 7, name: path.basename(file), state: 'uploaded', size: fileSize, digest: `sha256:${mismatch === 'asset' ? '0'.repeat(64) : hash}` }] })
+    const fetchImpl = (url, init) => String(url) === 'https://fixture.example/latest.json'
+      ? Promise.resolve({ ok: true, json: async () => ({ version: VERSION, sha256: mismatch === 'manifest' ? '0'.repeat(64) : hash }) })
+      : gh.fetchImpl(url, init)
+    const action = () => completeExistingRelease({ ...baseOptions(file), origin: 'https://fixture.example', fetchImpl })
+    if (mismatch) await assert.rejects(action, /不一致/)
+    else assert.equal((await action()).release.draft, false)
+    assert.equal(gh.calls.filter(c => c.method === 'POST' || c.method === 'DELETE').length, 0)
+    assert.equal(gh.calls.filter(c => c.method === 'PATCH').length, mismatch ? 0 : 1)
+  })
+}
+
+test('补发布原构建必须绑定同一 tag、提交和桌面工作流', () => {
+  const run = { head_sha: 'a'.repeat(40), head_branch: TAG, event: 'push', path: '.github/workflows/build-desktop.yml' }
+  const expected = { sha: run.head_sha, tag: TAG }
+  validateRecoveryRun(run, expected)
+  for (const changed of [{ head_sha: 'b'.repeat(40) }, { head_branch: 'main' }, { event: 'workflow_dispatch' }, { path: '.github/workflows/other.yml' }]) {
+    assert.throws(() => validateRecoveryRun({ ...run, ...changed }, expected), /不匹配/)
+  }
 })
