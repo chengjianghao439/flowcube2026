@@ -110,6 +110,7 @@ jobs:
       sha: ${{ steps.target.outputs.sha }}
       version: ${{ steps.target.outputs.version }}
       version_code: ${{ steps.target.outputs.version_code }}
+      artifact_id: ${{ steps.apk_artifact.outputs.artifact-id }}
 
     steps:
       - name: Checkout code
@@ -262,6 +263,7 @@ jobs:
       # publish-pda 在独立 job 里下载它并上传到服务器。因此必须成功，
       # 不能再 continue-on-error（那会让发布阶段拿不到包，或更糟：拿到旧包）。
       - name: Upload APK artifact
+        id: apk_artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: flowcube-pda-apk
@@ -434,6 +436,8 @@ jobs:
         shell: bash
         env:
           TARGET_SHA: ${{ steps.target.outputs.sha }}
+          GITHUB_TOKEN: ${{ github.token }}
+          DEPLOY_ARTIFACT_ID: ${{ needs.build-pda.outputs.artifact_id }}
         run: |
           set -euo pipefail
           APK_PATH="${APK_PATH}"
@@ -444,7 +448,8 @@ jobs:
           # 每次运行使用独立上传路径；只发布挂载目录的产物，不重建应用或修改服务器 Git。
           SSHO="-o ServerAliveInterval=30 -o ServerAliveCountMax=6"
           UPLOAD_PREFIX="/tmp/flowcube-pda-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          scp $SSHO -P "$PORT" "$APK_PATH" "$REMOTE:${UPLOAD_PREFIX}.apk"
+          trap 'ssh $SSHO -p "$PORT" "$REMOTE" "rm -f ${UPLOAD_PREFIX}.apk ${UPLOAD_PREFIX}.json" >/dev/null 2>&1 || true' EXIT
+          bash scripts/transfer-release-asset.sh "$APK_PATH" "$REMOTE" "$PORT" "${UPLOAD_PREFIX}.apk"
           scp $SSHO -P "$PORT" "$VERSION_JSON" "$REMOTE:${UPLOAD_PREFIX}.json"
           ssh $SSHO -p "$PORT" "$REMOTE" <<EOF
           set -euo pipefail

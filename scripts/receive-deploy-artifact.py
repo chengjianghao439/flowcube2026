@@ -43,13 +43,13 @@ def wait_for_relay(destination, expected_sha, expected_bytes, timeout=300):
     raise RuntimeError('relay timed out')
 
 
-def unpack_archive(zip_path, destination, expected_sha, expected_bytes):
+def unpack_archive(zip_path, destination, expected_sha, expected_bytes, expected_entry='flowcube-images.tar.gz'):
     destination = Path(destination)
     partial = destination.with_suffix(destination.suffix + '.partial')
     try:
         with zipfile.ZipFile(zip_path) as archive:
             entries = archive.infolist()
-            if len(entries) != 1 or entries[0].filename != 'flowcube-images.tar.gz':
+            if len(entries) != 1 or entries[0].filename != expected_entry:
                 raise ValueError('unexpected artifact entry')
             if entries[0].file_size != expected_bytes:
                 raise ValueError('artifact size mismatch')
@@ -77,7 +77,10 @@ def unpack_archive(zip_path, destination, expected_sha, expected_bytes):
 
 
 def main():
-    destination, expected_sha, size_text = sys.argv[1:]
+    destination, expected_sha, size_text = sys.argv[1:4]
+    expected_entry = sys.argv[4] if len(sys.argv) == 5 else 'flowcube-images.tar.gz'
+    if len(sys.argv) not in (4, 5) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]*', expected_entry):
+        raise ValueError('invalid artifact entry')
     size = int(size_text)
     if not Path(destination).is_absolute() or not re.fullmatch('[a-f0-9]{64}', expected_sha) or not 0 < size <= 2 * 1024**3:
         raise ValueError('invalid artifact arguments')
@@ -99,7 +102,7 @@ def main():
             if accept_relay_archive(destination, expected_sha, size) or wait_for_relay(destination, expected_sha, size):
                 return
             raise RuntimeError('HTTPS transfer failed')
-        unpack_archive(archive, destination, expected_sha, size)
+        unpack_archive(archive, destination, expected_sha, size, expected_entry)
     print('==> HTTPS 镜像下载与 SHA256 校验通过')
 
 

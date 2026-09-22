@@ -469,6 +469,18 @@ jobs:
             echo "enabled=false" >> "$GITHUB_OUTPUT"
           fi
 
+      # 提前上传同一 EXE，供服务器 HTTPS 拉取或受信操作端中转；失败仍可 SCP。
+      - name: Upload artifacts
+        id: exe_artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        continue-on-error: true
+        with:
+          name: FlowCube-Desktop-Setup
+          path: desktop/release/*.exe
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
       - name: Checkout trusted release gate
         if: ${{ github.ref_type == 'tag' || github.event_name == 'workflow_dispatch' }}
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
@@ -537,6 +549,9 @@ jobs:
       - name: Publish EXE to canonical download directory
         if: ${{ (github.ref_type == 'tag' || github.event_name == 'workflow_dispatch') && steps.ssh_deploy.outputs.enabled == 'true' && steps.deploy_config.outputs.server_deploy_configured == 'true' }}
         shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          DEPLOY_ARTIFACT_ID: ${{ steps.exe_artifact.outputs.artifact-id }}
         run: |
           set -euo pipefail
           shopt -s nullglob
@@ -582,7 +597,7 @@ jobs:
           ssh -p "$ssh_port" -o StrictHostKeyChecking=yes -o BatchMode=yes "$ssh_target" "mkdir -p '$remote_tmp'"
 
           echo "=== 上传构建产物到远端临时目录 ==="
-          scp -P "$ssh_port" -o StrictHostKeyChecking=yes -o BatchMode=yes "${files[0]}" "${ssh_target}:${remote_artifact}"
+          bash scripts/transfer-release-asset.sh "${files[0]}" "$ssh_target" "$ssh_port" "$remote_artifact"
 
           echo "=== 通过 scripts/release-desktop.js 发布到 ${downloads_path} ==="
           ssh -p "$ssh_port" -o StrictHostKeyChecking=yes -o BatchMode=yes "$ssh_target" \
@@ -670,18 +685,6 @@ jobs:
           echo "=== DEBUG checkpoint: before Upload Windows Setup EXE artifact ==="
           pwd
           ls -la desktop/release
-
-      # 这个 Actions 构件只是「从 run 页面下载 exe」的冗余备份——正式分发走 GitHub Release
-      # + 服务器 latest.json（前面步骤已完成）。所以 continue-on-error：即使 Actions 存储
-      # 配额满导致上传失败，也不拖垮整个发版 job（exe/latest.json 早已发布到位）。
-      - name: Upload artifacts
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        continue-on-error: true
-        with:
-          name: FlowCube-Desktop-Setup
-          path: desktop/release/*.exe
-          if-no-files-found: error
-          retention-days: 7
 
       # 当前 win 目标多为 NSIS 仅 .exe；只有实际生成 zip 时才上传 portable artifact。
       - name: Upload portable ZIP artifact (optional)

@@ -43,6 +43,13 @@ with tempfile.TemporaryDirectory() as d:
  except ValueError: pass
  else: raise AssertionError('unexpected entry accepted')
  assert not list(p.glob('*.partial'))
+ for name in ['FlowCubePDA-0.10.3.apk','FlowCube-Setup-0.10.3.exe']:
+  with zipfile.ZipFile(z,'w') as f: f.writestr(name,data)
+  m.unpack_archive(z,dest,digest,len(data),name)
+  assert dest.read_bytes()==data
+  try: m.unpack_archive(z,dest,digest,len(data),'other.exe')
+  except ValueError: pass
+  else: raise AssertionError('wrong package name accepted')
 `], { encoding: 'utf8', timeout: 5000 })
   assert.equal(result.status, 0, result.stderr)
 })
@@ -135,6 +142,54 @@ with tempfile.TemporaryDirectory() as d:
 })
 
 // 直接运行 workflow 的传输分支；仅替换网络命令，不复制 if/else 实现。
+for (const scenario of ['https', 'fallback', 'fallback-failed', 'bad-checksum']) {
+  test(`APK/EXE 共用传输器：${scenario}，摘要与清理不省略`, () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'flowcube-package-transfer-'))
+    const artifact = path.join(dir, 'fixture.exe')
+    fs.writeFileSync(artifact, 'fixture-package')
+    const put = (name, code) => fs.writeFileSync(path.join(dir, name), '#!/usr/bin/env bash\n' + code, { mode: 0o755 })
+    put('timeout', 'shift 3; exec "$@"\n')
+    put('node', `if [[ "$1" == scripts/deploy-artifact-url.js ]]; then printf '%s\\n' 'https://fixture/?sig=private-signed-url'; else exec ${JSON.stringify(process.execPath)} "$@"; fi\n`)
+    put('ssh', `printf '%s\\n' "$*" >> "$EVENT_LOG"
+if [[ "$*" == *python3* ]]; then
+ IFS= read -r signed; [[ "$signed" == *private-signed-url ]] || exit 8
+ [[ "$SCENARIO" == https ]] && exit 0; exit 1
+fi
+if [[ "$*" == *sha256sum* && "$SCENARIO" == bad-checksum ]]; then exit 1; fi
+exit 0\n`)
+    put('scp', `printf '%s\\n' "$*" >> "$EVENT_LOG"
+if [[ "$*" == *fixture.exe* && "$SCENARIO" == fallback-failed ]]; then exit 23; fi
+exit 0\n`)
+    try {
+      const r = spawnSync('bash', ['scripts/transfer-release-asset.sh', artifact, 'fixture', '22', '/tmp/fixture.exe'], {
+        cwd: root, encoding: 'utf8', timeout: 5000, env: { ...process.env, PATH: dir + ':' + process.env.PATH,
+          SCENARIO: scenario, EVENT_LOG: path.join(dir, 'events'), GITHUB_RUN_ID: '123', GITHUB_RUN_ATTEMPT: '1', DEPLOY_ARTIFACT_ID: '456' },
+      })
+      assert.equal(r.status, scenario === 'fallback-failed' ? 23 : scenario === 'bad-checksum' ? 1 : 0, r.stdout + r.stderr)
+      const events = fs.readFileSync(path.join(dir, 'events'), 'utf8')
+      assert.match(events, /rm -f.*relay\.pending.*relay\.partial/)
+      if (scenario === 'fallback' || scenario === 'bad-checksum') assert.match(events, /sha256sum/)
+      assert.doesNotMatch(r.stdout + r.stderr + events, /private-signed-url/)
+    } finally { fs.rmSync(dir, { recursive: true, force: true }) }
+  })
+}
+
+test('两端使用本轮 artifact，中转源必须在正式发布前就可下载', () => {
+  const yaml = require(path.join(root, 'frontend/node_modules/js-yaml'))
+  const desktop = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/build-desktop.yml'), 'utf8'))
+  const steps = Object.values(desktop.jobs).flatMap(job => job.steps || [])
+  const stage = steps.findIndex(s => s.id === 'exe_artifact')
+  const publish = steps.findIndex(s => s.name === 'Publish EXE to canonical download directory')
+  assert.ok(stage >= 0 && stage < publish)
+  assert.match(steps[publish].run, /bash scripts\/transfer-release-asset\.sh/)
+  assert.match(steps[publish].env.DEPLOY_ARTIFACT_ID, /steps\.exe_artifact\.outputs\.artifact-id/)
+  const pda = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/build-pda-apk.yml'), 'utf8'))
+  assert.match(pda.jobs['build-pda'].outputs.artifact_id, /steps\.apk_artifact\.outputs\.artifact-id/)
+  const pdaPublish = pda.jobs['publish-pda'].steps.find(s => s.name === 'Publish PDA APK to server')
+  assert.match(pdaPublish.run, /bash scripts\/transfer-release-asset\.sh/)
+  assert.match(pdaPublish.env.DEPLOY_ARTIFACT_ID, /needs\.build-pda\.outputs\.artifact_id/)
+})
+
 for (const scenario of ['https', 'fallback', 'fallback-failed']) {
   test(`workflow 传输分支：${scenario}`, () => {
     const yaml = require(path.join(root, 'frontend/node_modules/js-yaml'))
