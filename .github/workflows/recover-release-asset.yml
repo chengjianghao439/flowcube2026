@@ -11,6 +11,11 @@ on:
         description: '构建并上传原始 EXE artifact 的 tag 工作流 run ID'
         required: true
         type: string
+      erp_origin:
+        description: '已核验的正式 HTTPS 站点，用于绑定线上安装包摘要'
+        required: true
+        default: 'https://jixuflow.com'
+        type: string
 
 permissions:
   contents: write
@@ -66,7 +71,7 @@ jobs:
         env:
           RELEASE_TAG: ${{ inputs.release_tag }}
           GH_TOKEN: ${{ github.token }}
-          ERP_ORIGIN: ${{ secrets.ERP_ORIGIN }}
+          ERP_ORIGIN: ${{ inputs.erp_origin }}
         run: |
           set -euo pipefail
           shopt -s nullglob
