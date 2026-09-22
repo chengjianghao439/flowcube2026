@@ -73,9 +73,13 @@ unlink=pathlib.Path.unlink
 def unlink36(self): return unlink(self)
 pathlib.Path.unlink=unlink36
 data=b'fixture-image'; digest=hashlib.sha256(data).hexdigest()
+curl_fails=False
 def run36(args, input=None, universal_newlines=False, stdout=None, stderr=None, timeout=None):
  assert universal_newlines is True
  assert 'fixture-secret' in input and 'fixture-secret' not in repr(args)
+ if curl_fails:
+  pathlib.Path(sys.argv[1]+'.relay').write_bytes(data)
+  return types.SimpleNamespace(returncode=28)
  with zipfile.ZipFile(args[args.index('--output')+1], 'w') as z:
   z.writestr('flowcube-images.tar.gz', data)
  return types.SimpleNamespace(returncode=0)
@@ -87,6 +91,45 @@ with tempfile.TemporaryDirectory() as d:
  m.main()
  assert dest.read_bytes()==data
  assert list(pathlib.Path(d).iterdir())==[dest]
+ curl_fails=True
+ sys.stdin=io.StringIO('https://fixture.example/file?sig=fixture-secret\\n')
+ m.main()
+ assert dest.read_bytes()==data
+ assert list(pathlib.Path(d).iterdir())==[dest]
+`], { encoding: 'utf8', timeout: 5000 })
+  assert.equal(result.status, 0, result.stderr)
+})
+
+test('中转归档必须匹配 CI 字节数和摘要，拒绝损坏包与符号链接且保留原归档', () => {
+  const source = path.join(root, 'scripts/receive-deploy-artifact.py')
+  const result = spawnSync('python3', ['-c', `
+import importlib.util, tempfile, pathlib, hashlib
+spec=importlib.util.spec_from_file_location('receiver', ${JSON.stringify(source)})
+m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+with tempfile.TemporaryDirectory() as d:
+ p=pathlib.Path(d); dest=p/'images.tar.gz'; relay=p/'images.tar.gz.relay'; data=b'valid-image'
+ digest=hashlib.sha256(data).hexdigest(); dest.write_bytes(b'original')
+ assert m.accept_relay_archive(dest,digest,len(data)) is False
+ for payload in [b'wrong-size',b'x'*len(data)]:
+  relay.write_bytes(payload)
+  try: m.accept_relay_archive(dest,digest,len(data))
+  except ValueError: pass
+  else: raise AssertionError('corrupt relay accepted')
+  assert dest.read_bytes()==b'original'
+ relay.unlink(); target=p/'target'; target.write_bytes(data); relay.symlink_to(target)
+ try: m.accept_relay_archive(dest,digest,len(data))
+ except ValueError: pass
+ else: raise AssertionError('symlink accepted')
+ relay.unlink(); relay.write_bytes(data)
+ assert m.accept_relay_archive(dest,digest,len(data)) is True
+ assert dest.read_bytes()==data and not relay.exists()
+ assert m.wait_for_relay(dest,digest,len(data),timeout=0) is False
+ (p/'images.tar.gz.relay.pending').touch()
+ try: m.wait_for_relay(dest,digest,len(data),timeout=0)
+ except RuntimeError: pass
+ else: raise AssertionError('unbounded relay wait')
+ relay.write_bytes(data)
+ assert m.wait_for_relay(dest,digest,len(data),timeout=1) is True
 `], { encoding: 'utf8', timeout: 5000 })
   assert.equal(result.status, 0, result.stderr)
 })

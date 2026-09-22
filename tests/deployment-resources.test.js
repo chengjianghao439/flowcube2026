@@ -298,7 +298,7 @@ test('镜像上传必须分片并行，且步骤/job 预算覆盖完整部署与
   const mergeTiming = script.match(/MERGED_BYTES=\$\(timeout -k (\d+) (\d+) ssh/)
   const rollbackGrace = Number(script.match(/timeout -k (\d+) \d+ bash scripts\/server-update\.sh/)[1])
   const mergeSeconds = Number(mergeTiming[1]) + Number(mergeTiming[2])
-  const requiredSeconds = budgetSeconds + outerSeconds + rollbackGrace + lockSeconds + mergeSeconds + 300 + 235
+  const requiredSeconds = budgetSeconds + outerSeconds + rollbackGrace + lockSeconds + mergeSeconds + 300 + 545
   assert.ok(stepSeconds > requiredSeconds,
     `Deploy 步骤须覆盖上传、合并、等锁、部署及回退宽限和预检，至少 ${requiredSeconds}s，当前 ${stepSeconds}s`)
 

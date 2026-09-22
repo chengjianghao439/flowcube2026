@@ -8,8 +8,39 @@ import signal
 import subprocess
 import sys
 import tempfile
+import time
 from urllib.parse import urlsplit
 import zipfile
+
+
+def accept_relay_archive(destination, expected_sha, expected_bytes):
+    """受信操作端可中转同一 CI 归档；仍以 runner 计算的字节数和摘要验收。"""
+    relay = Path(str(destination) + '.relay')
+    if not relay.exists():
+        return False
+    if relay.is_symlink() or not relay.is_file() or relay.stat().st_size != expected_bytes:
+        raise ValueError('invalid relay archive')
+    digest = hashlib.sha256()
+    with relay.open('rb') as src:
+        for chunk in iter(lambda: src.read(1024 * 1024), b''):
+            digest.update(chunk)
+    if digest.hexdigest() != expected_sha:
+        raise ValueError('relay SHA256 mismatch')
+    os.replace(relay, destination)
+    print('==> 中转归档字节数与 SHA256 校验通过')
+    return True
+
+
+def wait_for_relay(destination, expected_sha, expected_bytes, timeout=300):
+    # marker 只申请有界等待，绝不替代归档摘要校验；路径绑定本轮 run/attempt。
+    if not Path(str(destination) + '.relay.pending').is_file():
+        return False
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if accept_relay_archive(destination, expected_sha, expected_bytes):
+            return True
+        time.sleep(1)
+    raise RuntimeError('relay timed out')
 
 
 def unpack_archive(zip_path, destination, expected_sha, expected_bytes):
@@ -54,6 +85,8 @@ def main():
     parsed = urlsplit(signed_url)
     if parsed.scheme != 'https' or not parsed.hostname or parsed.username or parsed.password or re.search(r'[\s"\\]', signed_url):
         raise ValueError('invalid signed URL')
+    if accept_relay_archive(destination, expected_sha, size) or wait_for_relay(destination, expected_sha, size):
+        return
     # 不将签名地址放进 ps 可见的命令参数、磁盘文件或 curl 错误日志。
     with tempfile.TemporaryDirectory(prefix=Path(destination).name + '.https-', dir=str(Path(destination).parent)) as temp:
         archive = Path(temp) / 'artifact.zip'
@@ -63,6 +96,8 @@ def main():
             '--max-time', '150', '--max-filesize', str(size + 1024 * 1024), '--output', str(archive),
         ], input='url = "' + signed_url + '"\n', universal_newlines=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=160)
         if result.returncode:
+            if accept_relay_archive(destination, expected_sha, size) or wait_for_relay(destination, expected_sha, size):
+                return
             raise RuntimeError('HTTPS transfer failed')
         unpack_archive(archive, destination, expected_sha, size)
     print('==> HTTPS 镜像下载与 SHA256 校验通过')

@@ -165,8 +165,8 @@ jobs:
           chmod 644 ~/.ssh/known_hosts
 
       - name: Deploy backend and frontend on server
-        # 故障预算：HTTPS 尝试 235s + 上传 2700s + 合并 610s + 等锁 1800s + 部署/回退 3000s + 预检等 300s。
-        # 总计 8645s（约 145 分钟）；正常成功目标 15 分钟，不能以强杀回退来实现。
+        # 故障预算：HTTPS/中转尝试 545s + 上传 2700s + 合并 610s + 等锁 1800s + 部署/回退 3000s + 预检等 300s。
+        # 总计 8955s（约 150 分钟）；正常成功目标 15 分钟，不能以强杀回退来实现。
         timeout-minutes: 150
         shell: bash
         env:
@@ -213,7 +213,7 @@ jobs:
           HTTPS_OK=0
           if [ -n "$DEPLOY_ARTIFACT_ID" ] && timeout -k 5 30 scp "${SSH_COMMON[@]}" -P "$SSH_PORT" \
             scripts/receive-deploy-artifact.py "$SSH_TARGET:$RECEIVER_SCRIPT"; then
-            if node scripts/deploy-artifact-url.js | timeout -k 10 190 ssh "${SSH_COMMON[@]}" -p "$SSH_PORT" "$SSH_TARGET" \
+            if node scripts/deploy-artifact-url.js | timeout -k 10 500 ssh "${SSH_COMMON[@]}" -p "$SSH_PORT" "$SSH_TARGET" \
               "python3 '$RECEIVER_SCRIPT' '$IMAGE_ARCHIVE' '$IMAGE_SHA256' '$ARCHIVE_BYTES'"; then
               HTTPS_OK=1
             fi
@@ -241,7 +241,7 @@ jobs:
             timeout -k 5 60 ssh "${SSH_COMMON[@]}" -p "$SSH_PORT" -o BatchMode=yes "$SSH_TARGET" \
               "rm -rf '$PARTS_DIR' && mkdir -p '$PARTS_DIR'"
             # 控制命令共用主连接；数据流各用独立控制连接，避免八片复用同一 TCP 后失去跨境并行效果。
-            ls "$LOCAL_PARTS" | timeout -k 20 "$UPLOAD_BUDGET" xargs -P "$UPLOAD_STREAMS" -I{} \
+            (cd "$LOCAL_PARTS" && printf '%s\n' part-*) | timeout -k 20 "$UPLOAD_BUDGET" xargs -P "$UPLOAD_STREAMS" -I{} \
               timeout -k 10 "$PART_TIMEOUT" scp "${SSH_COMMON[@]}" -o ControlPath="$RUNNER_TEMP/scp-{}-%C" -P "$SSH_PORT" "$LOCAL_PARTS/{}" "$SSH_TARGET:$PARTS_DIR/{}"
             echo "==> 服务器端按序合并分片并核对字节数"
             MERGED_BYTES=$(timeout -k 10 600 ssh "${SSH_COMMON[@]}" -p "$SSH_PORT" -o BatchMode=yes "$SSH_TARGET" \
@@ -292,7 +292,7 @@ jobs:
           # 分片目录也必须清；注释必须放在命令前，不能插在反斜杠续行中截断 SSH 参数。
           timeout -k 5 60 ssh -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=10 -o ServerAliveCountMax=2 \
             -p "${{ steps.deploy_config.outputs.server_ssh_port }}" "${{ steps.deploy_config.outputs.server_user }}@${{ steps.deploy_config.outputs.server_host }}" \
-            "rm -f /tmp/flowcube-images-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz /tmp/flowcube-images-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz.partial /tmp/flowcube-receive-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.py /tmp/flowcube-pda-bootstrap-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.sh; rm -rf /tmp/flowcube-image-parts-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT} /tmp/flowcube-images-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz.https-*" \
+            "rm -f /tmp/flowcube-images-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz.relay.pending /tmp/flowcube-images-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz.relay /tmp/flowcube-images-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz.relay.partial /tmp/flowcube-images-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz /tmp/flowcube-images-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz.partial /tmp/flowcube-receive-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.py /tmp/flowcube-pda-bootstrap-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.sh; rm -rf /tmp/flowcube-image-parts-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT} /tmp/flowcube-images-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz.https-*" \
             || echo '::warning::临时上传清理失败，请检查本次 run 对应的 /tmp 文件'
 
       - name: Remove this run's temporary image artifact

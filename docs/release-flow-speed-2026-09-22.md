@@ -44,3 +44,7 @@
 4. 桌面与 PDA 真机更新安装体验仍需独立验收，不能从 CI 成功推断。
 
 接口依据：[GitHub Actions artifact REST API](https://docs.github.com/en/rest/actions/artifacts)、[upload-artifact](https://github.com/actions/upload-artifact)、[Playwright Docker 依赖与版本说明](https://playwright.dev/docs/docker)。
+
+## 本轮跨境降级与受控中转
+
+第二轮 Python 兼容后确实发起 HTTPS 下载，但直连速度仍只有每秒几 KB，8 路 SCP 聚合采样约 35 KB/s。操作端到服务器 2 MiB 测试耗时 0.35 秒，因此增加仅用于受信操作端中转的 `.relay` 接入口，必须与本次 runner 计算的归档字节数、SHA256 一致才能原子采用，后续镜像 revision 和全部发布门禁不变。`.relay.pending` 仅申请最多 300 秒等待，超时仍降级；不为等待标记放宽校验。临时文件纳入本轮 CI 清理。全链路 15 分钟暂未达成，不把重试时间排除后宣称首次成功。
