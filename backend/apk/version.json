@@ -1,7 +1,7 @@
 {
-  "version": "0.10.3",
-  "versionCode": 138,
+  "version": "0.10.4",
+  "versionCode": 139,
   "filename": "app-release.apk",
-  "releaseNote": "数量最多保留两位小数，修复商品数量设置、仓库作业与版本更新中的多处问题。",
-  "publishedAt": "2026-09-22T00:45:15.494Z"
+  "releaseNote": "改进版本发布与更新包交付，降低网络波动导致更新延迟的影响。",
+  "publishedAt": "2026-09-22T03:27:30.365Z"
 }
