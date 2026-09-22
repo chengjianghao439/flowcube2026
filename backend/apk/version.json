@@ -1,7 +1,7 @@
 {
-  "version": "0.10.4",
-  "versionCode": 139,
+  "version": "0.10.5",
+  "versionCode": 140,
   "filename": "app-release.apk",
-  "releaseNote": "改进版本发布与更新包交付，降低网络波动导致更新延迟的影响。",
-  "publishedAt": "2026-09-22T03:27:30.365Z"
+  "releaseNote": "改进权限与账务一致性，优化 ERP/PDA 长文本显示，并补齐收货扫码上架的操作反馈。",
+  "publishedAt": "2026-09-22T07:49:01.501Z"
 }
