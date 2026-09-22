@@ -1,3 +1,4 @@
+import PdaProductIdentity from '@/components/pda/PdaProductIdentity'
 /**
  * PDA 调拨 · 调入仓扫码入库 — 路由 /pda/transfer-in/:id
  * 两步：扫在途库存条码 → 扫目标库位 → POST /transfer/:id/scan-in（容器落库位、翻在库）。
@@ -152,8 +153,7 @@ export default function PdaTransferInPage() {
             <PdaCard key={item.id}>
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="font-medium text-foreground min-w-0 whitespace-normal [overflow-wrap:anywhere]">{item.productName}</p>
-                  <p className="text-xs font-mono text-muted-foreground">{item.productCode}</p>
+                  <PdaProductIdentity code={item.productCode} name={item.productName} view="detail" />
                 </div>
                 <div className="text-right shrink-0 text-xs">
                   <p className="text-muted-foreground">计划 {item.quantity}</p>

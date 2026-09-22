@@ -1,3 +1,5 @@
+import PdaOverviewText from '@/components/pda/PdaOverviewText'
+import PdaProductIdentity from '@/components/pda/PdaProductIdentity'
 /**
  * PDA 复核作业
  * 路由：/pda/check  或  /pda/check?taskId=X
@@ -73,7 +75,7 @@ function TaskSelectStep({
                   <p className="font-mono text-sm font-semibold text-foreground">{task.taskNo}</p>
                   <SoftStatusLabel label={task.priorityName} tone={WT_PRIORITY_TONE[task.priority] ?? 'draft'} />
                 </div>
-                <p className="text-sm text-foreground">{task.customerName}</p>
+                <PdaOverviewText>{task.customerName || '未知客户'}</PdaOverviewText>
                 <p className="text-xs text-muted-foreground">{task.warehouseName}</p>
                 {pct > 0 && (
                   <div>
@@ -101,8 +103,7 @@ function CheckItemRow({ item }: { item: CheckItem }) {
     }`}>
       <div className="flex items-start justify-between mb-2">
         <div className="flex-1 min-w-0">
-          <p className="font-medium text-foreground min-w-0 whitespace-normal [overflow-wrap:anywhere]">{item.productName}</p>
-          <p className="text-xs font-mono text-muted-foreground">{item.productCode}</p>
+          <PdaProductIdentity code={item.productCode} name={item.productName} view="detail" />
         </div>
         {done
           ? <SoftStatusLabel label="✓ 已核齐" tone="success" className="ml-2 shrink-0" />

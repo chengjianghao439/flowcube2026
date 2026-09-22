@@ -19,19 +19,29 @@ function truncationStyles(source: string): string[] {
   return hits
 }
 
-test('ERP/PDA 渲染源码没有省略号或行数截断样式', () => {
+test('ERP/PDA 详情禁止截断，仅 PDA 总览辅助文字允许省略号', () => {
   const root = fileURLToPath(new URL('../', import.meta.url))
   const failures: string[] = []
+  let overviewRuleChecked = false
   function walk(dir: string) {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       const file = path.join(dir, entry.name)
       if (entry.isDirectory()) walk(file)
       else if (/\.tsx?$/.test(file) && !/\.test\.tsx?$/.test(file)) {
-        for (const hit of truncationStyles(readFileSync(file, 'utf8'))) failures.push(`${path.relative(root, file)}: ${hit}`)
+        const relative = path.relative(root, file)
+        const hits = truncationStyles(readFileSync(file, 'utf8'))
+        if (relative === 'components/pda/PdaOverviewText.tsx') {
+          // 精确限定这一种辅助文字样式；不是整个 PDA 目录豁免。
+          expect(hits).toEqual(['block min-w-0 truncate text-xs text-muted-foreground'])
+          overviewRuleChecked = true
+        } else {
+          for (const hit of hits) failures.push(`${relative}: ${hit}`)
+        }
       } else if (file.endsWith('.css') && /text-overflow\s*:\s*ellipsis|-webkit-line-clamp\s*:\s*\d/.test(readFileSync(file, 'utf8'))) failures.push(file)
     }
   }
   walk(root)
+  expect(overviewRuleChecked).toBe(true)
   expect(failures).toEqual([])
 })
 

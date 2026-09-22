@@ -1,3 +1,5 @@
+import PdaOverviewText from '@/components/pda/PdaOverviewText'
+import PdaProductIdentity from '@/components/pda/PdaProductIdentity'
 /**
  * PDA 拣货任务列表
  * 路由：/pda/picking
@@ -34,7 +36,7 @@ function TaskCard({ task, onStart, starting }: { task: MyTask; onStart: () => vo
         <div className="flex items-start justify-between">
           <div className="min-w-0 flex-1">
             <p className="font-mono text-sm font-semibold text-foreground">{task.taskNo}</p>
-            <p className="font-semibold text-foreground mt-0.5">{task.customerName}</p>
+            <PdaOverviewText>{task.customerName || '未知客户'}</PdaOverviewText>
             <p className="text-sm text-muted-foreground">{task.warehouseName} · {task.itemCount} 种商品</p>
           </div>
           <div className="flex flex-col items-end gap-1 shrink-0 ml-2">
@@ -74,8 +76,7 @@ function SkuCard({ sku, onTap }: { sku: PdaTaskSkuSummary; onTap: () => void }) 
     <PdaCard done={done} onClick={onTap} className="text-left">
       <div className="space-y-2">
         <div className="min-w-0">
-          <p className="font-semibold text-foreground whitespace-normal break-words">{sku.productName}</p>
-          <p className="text-xs font-mono text-muted-foreground whitespace-normal break-words">{sku.productCode}</p>
+          <PdaProductIdentity code={sku.productCode} name={sku.productName} view="overview" />
         </div>
         <div className="flex items-center justify-between text-sm">
           <div>

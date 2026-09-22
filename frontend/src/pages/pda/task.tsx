@@ -1,3 +1,4 @@
+import PdaProductIdentity from '@/components/pda/PdaProductIdentity'
 /**
  * PDA 扫码执行页 — 商品视角拣货
  * 路由：/pda/task/:id  (独立全屏，不走 AppLayout)
@@ -70,8 +71,7 @@ function ProductCard({ item, onScan, scanning }: {
       <div className="space-y-2">
         <div className="flex items-start justify-between">
           <div className="min-w-0 flex-1">
-            <p className="font-semibold text-foreground whitespace-normal break-words">{item.productName}</p>
-            <p className="text-xs font-mono text-muted-foreground whitespace-normal break-words">{item.productCode}</p>
+            <PdaProductIdentity code={item.productCode} name={item.productName} view="detail" />
             {(item.articleNumber || item.spec || item.color) && (
               <p className="text-xs text-muted-foreground whitespace-normal break-words">
                 {[item.articleNumber, item.spec, item.color].filter(Boolean).join(' / ')}

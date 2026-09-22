@@ -1,3 +1,4 @@
+import PdaProductIdentity from '@/components/pda/PdaProductIdentity'
 /**
  * PDA 扫码盘点（文档13 §4.3）
  * 路由：/pda/stockcheck（进行中的盘点单）、/pda/stockcheck/:id（逐商品扫容器码）
@@ -167,10 +168,11 @@ function CheckWork({ checkId }: { checkId: number }) {
   if (activeItem) {
     return (
       <div className="flex min-h-screen flex-col bg-background">
-        <PdaHeader title={activeItem.productName} subtitle={`账面 ${activeItem.bookQty} ${activeItem.unit} · ${activeItem.bookContainerCount} 个在库条码`}
+        <PdaHeader title={activeItem.productCode || '盘点作业'} subtitle={`账面 ${activeItem.bookQty} ${activeItem.unit} · ${activeItem.bookContainerCount} 个在库条码`}
           backLabel="← 商品列表" onBack={() => { setActiveItem(null); setScanned([]) }} />
         <div className="max-w-md mx-auto flex-1 space-y-3 overflow-y-auto p-3 w-full">
           <PdaCard>
+            <div className="mb-3"><PdaProductIdentity code={activeItem.productCode} name={activeItem.productName} view="detail" /></div>
             <p className="text-sm">
               扫描<b>在架的每一个库存条码</b>：已扫 <b className="tabular-nums text-primary">{scanned.length}</b> 个 · 实盘 <b className="tabular-nums text-primary">{totalCounted}</b>
               {diffPreview !== null && diffPreview !== 0 && (
@@ -254,8 +256,8 @@ function CheckWork({ checkId }: { checkId: number }) {
               <PdaCard>
                 <div className="flex items-center justify-between">
                   <div className="min-w-0 text-left">
-                    <p className="min-w-0 whitespace-normal [overflow-wrap:anywhere] font-medium text-foreground">{it.productName}</p>
-                    <p className="text-xs text-muted-foreground">{it.productCode} · 账面 {it.bookQty} {it.unit} · {it.bookContainerCount} 个在库条码</p>
+                    <PdaProductIdentity code={it.productCode} name={it.productName} view="overview" />
+                    <p className="text-xs text-muted-foreground">账面 {it.bookQty} {it.unit} · {it.bookContainerCount} 个在库条码</p>
                   </div>
                   <div className="shrink-0 text-right text-sm">
                     {done

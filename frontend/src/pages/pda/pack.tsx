@@ -1,3 +1,5 @@
+import PdaOverviewText from '@/components/pda/PdaOverviewText'
+import PdaProductIdentity from '@/components/pda/PdaProductIdentity'
 /**
  * PDA 打包作业
  * 路由：/pda/pack
@@ -67,7 +69,7 @@ function TaskSelectStep({ onSelect }: { onSelect: (t: WarehouseTask) => void }) 
                 <p className="font-mono text-sm font-semibold text-foreground">{task.taskNo}</p>
                 <SoftStatusLabel label={task.priorityName} tone={WT_PRIORITY_TONE[task.priority] ?? 'draft'} />
               </div>
-              <p className="text-sm text-foreground">{task.customerName}</p>
+              <PdaOverviewText>{task.customerName || '未知客户'}</PdaOverviewText>
               <p className="text-xs text-muted-foreground">{task.warehouseName}</p>
             </PdaCard>
           ))}
@@ -119,8 +121,7 @@ function PackageCard({ pkg, active, onActivate, onFinish, finishing, onPrintLabe
           {pkg.items.map(item => (
             <div key={item.id} className="flex items-center justify-between text-sm py-1.5 border-b border-border/50 last:border-0">
               <div className="min-w-0">
-                <p className="font-medium text-foreground min-w-0 whitespace-normal [overflow-wrap:anywhere]">{item.productName}</p>
-                <p className="text-xs font-mono text-muted-foreground">{item.productCode}</p>
+                <PdaProductIdentity code={item.productCode} name={item.productName} view="detail" />
               </div>
               <div className="flex items-center gap-2 shrink-0 ml-2">
                 <p className="font-bold text-primary">{item.qty} <span className="text-xs font-normal text-muted-foreground">{item.unit}</span></p>

@@ -1,3 +1,4 @@
+import PdaProductIdentity from '@/components/pda/PdaProductIdentity'
 import { useState, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -182,11 +183,10 @@ export default function PdaSaleReturnReceivePage() {
             setStep(task.status === 3 ? 'check' : 'qty')
           }}>
             <div className="flex justify-between items-center">
-              <div>
-                <div className="font-semibold">{p.productName}</div>
-                <div className="text-sm text-muted-foreground font-mono">{p.productCode}</div>
+              <div className="min-w-0 flex-1 text-left">
+                <PdaProductIdentity code={p.productCode} name={p.productName} view="overview" />
               </div>
-              <div className="text-right text-sm text-muted-foreground">
+              <div className="shrink-0 ml-2 text-right text-sm text-muted-foreground">
                 应退 {p.totalExpected} / 已收 {p.totalReceived}
               </div>
             </div>
@@ -201,7 +201,7 @@ export default function PdaSaleReturnReceivePage() {
         {/* 数量录入 */}
         {step === 'qty' && selectedProduct && (
           <PdaCard>
-            <div className="font-semibold mb-3">{selectedProduct.name} ({selectedProduct.code})</div>
+            <div className="mb-3"><PdaProductIdentity code={selectedProduct.code} name={selectedProduct.name} view="detail" /></div>
             <div className="text-sm text-muted-foreground mb-3">可收数量：{selectedProduct.remaining} {selectedProduct.unit}</div>
             {boxes.map((qty, i) => (
               <div key={i} className="flex items-center gap-2 mb-2">
@@ -227,7 +227,7 @@ export default function PdaSaleReturnReceivePage() {
         {/* 质检确认 */}
         {step === 'check' && selectedProduct && (
           <PdaCard>
-            <div className="font-semibold mb-3">{selectedProduct.name} ({selectedProduct.code})</div>
+            <div className="mb-3"><PdaProductIdentity code={selectedProduct.code} name={selectedProduct.name} view="detail" /></div>
             <div className="text-sm text-muted-foreground mb-3">已收货：{selectedProduct.remaining + (task?.items?.reduce((s, i) => i.productId === selectedProduct.id ? s + i.receivedQty : s, 0) || 0)} {selectedProduct.unit}</div>
             <div className="mb-3">
               <span className="text-sm">质检通过数量：</span>

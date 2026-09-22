@@ -1,3 +1,5 @@
+import PdaProductIdentity from '@/components/pda/PdaProductIdentity'
+import PdaOverviewText from '@/components/pda/PdaOverviewText'
 /**
  * PDA 拣货退回 — 销售单在拣货中/待分拣被取消后，已拣容器的逆向归还
  * 路由：/pda/cancel-return（任务池列表）、/pda/cancel-return/:id（逐容器扫码归还）
@@ -49,14 +51,14 @@ function CancelReturnListPage() {
           <PdaCard key={t.id} className="w-full" onClick={() => navigate(`/pda/cancel-return/${t.id}`)}>
             <div className="space-y-2">
               <div className="flex items-start justify-between gap-3">
-                <p className="font-mono text-xs text-muted-foreground min-w-0 min-w-0 whitespace-normal [overflow-wrap:anywhere]">{t.taskNo}</p>
+                <p className="font-mono font-semibold text-foreground whitespace-normal [overflow-wrap:anywhere]">{t.taskNo}</p>
                 <SoftStatusLabel
                   label={`待归还 ${t.containersRemaining}${t.packagesRemaining > 0 ? ` · 待拆箱 ${t.packagesRemaining}` : ''}`}
                   tone="warning"
                   className="shrink-0"
                 />
               </div>
-              <p className="font-semibold text-foreground min-w-0 whitespace-normal [overflow-wrap:anywhere]">{t.customerName ?? '未知客户'}</p>
+              <PdaOverviewText>{t.customerName ?? '未知客户'}</PdaOverviewText>
               <p className="text-sm text-muted-foreground">{t.warehouseName}</p>
             </div>
           </PdaCard>
@@ -299,8 +301,7 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-xs text-muted-foreground">商品</p>
-                  <p className="font-semibold min-w-0 whitespace-normal [overflow-wrap:anywhere]">{target.productName ?? '—'}</p>
-                  <p className="font-mono text-xs text-muted-foreground min-w-0 whitespace-normal [overflow-wrap:anywhere] mt-0.5">{target.barcode}</p>
+                  <PdaProductIdentity code={target.barcode} name={target.productName} view="detail" />
                 </div>
                 <div className="shrink-0 text-right">
                   <p className="text-xs text-muted-foreground">数量</p>
@@ -323,8 +324,7 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
             {detail.containers.map(c => (
               <div key={c.containerId} className="rounded-xl border border-border bg-card p-3 flex items-center justify-between">
                 <div className="min-w-0">
-                  <p className="text-sm font-medium min-w-0 whitespace-normal [overflow-wrap:anywhere]">{c.productName ?? '—'}</p>
-                  <p className="font-mono text-xs text-muted-foreground min-w-0 whitespace-normal [overflow-wrap:anywhere]">{c.barcode}</p>
+                  <PdaProductIdentity code={c.barcode} name={c.productName} view="detail" />
                 </div>
                 <p className="text-sm font-bold text-primary shrink-0 ml-2">{c.qty}</p>
               </div>

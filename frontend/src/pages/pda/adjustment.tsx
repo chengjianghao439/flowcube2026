@@ -1,3 +1,4 @@
+import PdaOverviewText from '@/components/pda/PdaOverviewText'
 /**
  * PDA 改单确认 — 销售单执行期改单，减量命中已拣/已打包实物时需要仓库物理确认
  * 路由：/pda/adjustments（任务池列表）、/pda/adjustments/:id（逐项扫码确认，:id 为改单记录ID）
@@ -48,8 +49,8 @@ function AdjustmentListPage() {
           <PdaCard key={t.adjustmentId} className="w-full" onClick={() => navigate(`/pda/adjustments/${t.adjustmentId}`)}>
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="font-mono text-xs text-muted-foreground">{t.taskNo}</p>
-                <p className="font-semibold text-foreground min-w-0 whitespace-normal [overflow-wrap:anywhere]">{t.customerName ?? '未知客户'}</p>
+                <p className="font-mono font-semibold text-foreground whitespace-normal [overflow-wrap:anywhere]">{t.taskNo}</p>
+                <PdaOverviewText>{t.customerName ?? '未知客户'}</PdaOverviewText>
                 <p className="text-sm text-muted-foreground mt-0.5">{t.warehouseName}</p>
               </div>
               <span className="shrink-0 rounded-full bg-orange-100 text-orange-700 text-xs font-bold px-2.5 py-1">

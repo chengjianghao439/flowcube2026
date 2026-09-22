@@ -1,3 +1,4 @@
+import PdaOverviewText from '@/components/pda/PdaOverviewText'
 /**
  * PDA 收货任务列表
  * 路由：/pda/inbound
@@ -32,8 +33,8 @@ function InboundCard({ task, onTap }: { task:InboundTask; onTap:()=>void }) {
       <div className="space-y-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="font-mono text-xs text-muted-foreground">{task.taskNo}</p>
-            <p className="font-semibold text-foreground min-w-0 whitespace-normal [overflow-wrap:anywhere]">{task.supplierName ?? '未知供应商'}</p>
+            <p className="font-mono font-semibold text-foreground whitespace-normal [overflow-wrap:anywhere]">{task.taskNo}</p>
+            <PdaOverviewText>{task.supplierName ?? '未知供应商'}</PdaOverviewText>
             {/* 2026-09-17 验收修复（G-11）：列表接口为省流量不返回 items 明细，
                 商品种类数要取后端聚合字段 lineCount，否则整列恒显示"0 种商品"
                 （实测：IN20260917001 有 1 条明细却显示 0 种商品）。 */}

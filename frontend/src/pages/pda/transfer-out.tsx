@@ -1,3 +1,4 @@
+import PdaProductIdentity from '@/components/pda/PdaProductIdentity'
 /**
  * PDA 调拨 · 调出仓扫码出库 — 路由 /pda/transfer-out/:id
  * 扫调出仓容器条码 → POST /transfer/:id/scan-out（整容器移到调入仓，标记在途）。
@@ -132,8 +133,7 @@ export default function PdaTransferOutPage() {
             <PdaCard key={item.id}>
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="font-medium text-foreground min-w-0 whitespace-normal [overflow-wrap:anywhere]">{item.productName}</p>
-                  <p className="text-xs font-mono text-muted-foreground">{item.productCode}</p>
+                  <PdaProductIdentity code={item.productCode} name={item.productName} view="detail" />
                 </div>
                 <div className="text-right shrink-0">
                   <p className="text-xs text-muted-foreground">计划 {item.quantity}</p>

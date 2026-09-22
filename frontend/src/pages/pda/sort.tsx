@@ -1,3 +1,5 @@
+import PdaProductIdentity from '@/components/pda/PdaProductIdentity'
+import PdaOverviewText from '@/components/pda/PdaOverviewText'
 /**
  * PDA 分拣作业 — Put Wall
  * 路由：/pda/sort
@@ -29,6 +31,7 @@ type Step = 'scan-product' | 'confirm-bin'
 
 interface BinHint {
   binCode: string
+  productCode: string
   productName: string
   qty: number
   unit: string
@@ -83,7 +86,7 @@ export default function PdaSortPage() {
       if (!result) { err('无拣货中订单，请核对条码'); return }
       if (!result.sortingBinCode) { err(`任务 ${result.taskNo} 未分配分拣格`); return }
       setHint({
-        binCode: result.sortingBinCode, productName: result.productName,
+        binCode: result.sortingBinCode, productCode: result.productCode, productName: result.productName,
         qty: result.pickedQty, unit: result.unit, taskNo: result.taskNo,
         customerName: result.customerName, taskId: result.taskId, itemId: result.itemId,
       })
@@ -207,7 +210,7 @@ export default function PdaSortPage() {
                 <p className="text-xs text-muted-foreground mt-1">分拣格编号</p>
               </div>
               <div className="grid grid-cols-2 gap-3 text-sm">
-                <div><p className="text-xs text-muted-foreground">商品</p><p className="font-semibold min-w-0 whitespace-normal [overflow-wrap:anywhere]">{hint.productName}</p></div>
+                <div className="min-w-0"><p className="text-xs text-muted-foreground">商品</p><PdaProductIdentity code={hint.productCode} name={hint.productName} view="detail" /></div>
                 <div><p className="text-xs text-muted-foreground">数量</p><p className="font-bold text-primary">{hint.qty} {hint.unit}</p></div>
                 <div><p className="text-xs text-muted-foreground">任务号</p><p className="font-mono text-xs min-w-0 whitespace-normal [overflow-wrap:anywhere]">{hint.taskNo}</p></div>
                 <div><p className="text-xs text-muted-foreground">客户</p><p className="text-xs min-w-0 whitespace-normal [overflow-wrap:anywhere]">{hint.customerName}</p></div>
@@ -241,9 +244,9 @@ export default function PdaSortPage() {
                   <p className={`text-lg font-black tracking-wide ${
                     bin.status===2 ? 'text-orange-700' : 'text-muted-foreground'
                   }`}>{bin.code}</p>
-                  <p className="text-[10px] min-w-0 whitespace-normal [overflow-wrap:anywhere] mt-0.5 text-muted-foreground">
+                  <PdaOverviewText className="mt-0.5">
                     {bin.status===2 ? (bin.customerName ?? bin.currentTaskNo ?? '占用中') : '空闲'}
-                  </p>
+                  </PdaOverviewText>
                 </div>
               ))}
             </div>

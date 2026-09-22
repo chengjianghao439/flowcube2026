@@ -1,3 +1,4 @@
+import PdaProductIdentity from '@/components/pda/PdaProductIdentity'
 /**
  * PDA 收货 — 支持按产品逐箱录入并批量打印库存条码
  */
@@ -88,8 +89,7 @@ function ProductCard({
       <div className="space-y-2">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="font-semibold text-foreground min-w-0 whitespace-normal [overflow-wrap:anywhere]">{product.productName}</p>
-            <p className="font-mono text-xs text-muted-foreground">{product.productCode ?? '—'}</p>
+            <PdaProductIdentity code={product.productCode} name={product.productName} view="overview" />
           </div>
           <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${product.remainingQty > 0 ? 'bg-primary/10 text-primary' : 'bg-emerald-500/10 text-emerald-600'}`}>
             剩余 {product.remainingQty}
@@ -132,8 +132,7 @@ function ReceiveEditor({
   return (
     <PdaCard active className="space-y-4">
       <div>
-        <p className="text-lg font-semibold text-foreground">{product.productName}</p>
-        <p className="font-mono text-xs text-muted-foreground mt-1">{product.productCode ?? '—'}</p>
+        <PdaProductIdentity code={product.productCode} name={product.productName} view="detail" />
         <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
           <span>应到 {product.orderedQty}</span>
           <span>已收 {product.receivedQty}</span>
