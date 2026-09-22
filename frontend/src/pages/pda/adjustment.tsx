@@ -290,7 +290,7 @@ function AdjustmentDetailPage({ adjustmentId }: { adjustmentId: number }) {
         )}
 
         <div>
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">待归还容器（{pendingReturns.length}）</p>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">待归还库存条码（{pendingReturns.length}）</p>
           {pendingReturns.length === 0 && pendingVoids.length === 0 && (
             <PdaEmptyCard icon={<CircleCheck className="h-12 w-12 text-green-600" />} title="已全部处理完成" description="系统将自动应用本次改单" />
           )}

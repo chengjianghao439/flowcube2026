@@ -30,7 +30,7 @@
 - **范围校验还必须覆盖**：`GET /products/finder`、`GET /containers/overdue`、`GET /returns/{purchase,sale}/source-order`（逐行校验发货仓）、`GET /approvals/biz/:bizType/:bizId`（`BIZ_DOC_META` + `sys_role_permissions`，未知 400）、`print-jobs` 列表与条码补打
 - **`print-jobs` 三张条码子查询分别用 `c.` / `wt.` / `j.warehouse_id`**；SQL 文本替换必须带足上下文并真跑三种范围
 - **`complete-local` 同 `complete-client`/`fail-client` 做工作站校验**；写路由必须 `requirePermission`（`fulfillment.routes.js`）
-- **数量精度是两位小数（0.01）**：所有数量列 `DECIMAL(_,2)`，取整统一用 `unitConversion.roundQty`；**金额/单价/授信仍旧四位**，别一起改。改动精度要 grep 全仓 `10000`（乘与除都要改）（`docs/business-semantics.md`）
+- **数量精度是两位小数（0.01）**：所有数量列 `DECIMAL(_,2)`，用户原量及未取整换算结果超过两位先拒绝，合法值再用 `unitConversion.roundQty`；**金额/单价/授信仍旧四位**，别一起改。改动精度要 grep 全仓 `10000`（乘与除都要改）（`docs/business-semantics.md`）
 - **库存唯一事实源是 ACTIVE 容器的 `inventory_containers.remaining_qty`**，`inventory_stock.quantity` 只是缓存；唯一合法缓存写入口是 `syncStockFromContainers()`，禁止业务代码直接 UPDATE quantity（详见 `docs/inventory-transaction-invariants.md`）
 - **写操作幂等**：前端发稳定 `X-Request-Key`，后端走 `beginOperationRequest`/`completeOperationRequest`；重放返回原回执，不得重复加库存、推进状态或入账（详见 `docs/inventory-transaction-invariants.md`）
 - **批量写入用 `VALUES ?`（mysql2 二维数组）且先判空**：空数组会 `ER_PARSE_ERROR`；禁止循环内逐行 INSERT/UPDATE（`procurement.service.js`、`hr.service.js`）
@@ -77,7 +77,7 @@
 - 写路由必须挂 `requirePermission`（例外须登记理由且可验证）→ `npm run test:route-permission-contract`
 - 发版必须同步三端 + PDA 版本、本版说明与官网 `landing/updates.ts` → `npm run test:landing-updates`
 - `backend/downloads/` 已废弃，只允许 `.gitignore`/`README.md`（须在 CI 静态 job 真跑）→ `npm run release:check-downloads`
-- `smoke:*`/`test:*` 脚本必须 CI 可达；smoke 测试服务须 `app.listen(0, '127.0.0.1')`；部署 upload/load 同为 1800s 且预算容得下；PDA 工作流「等部署」与「持组」不同 job；桌面发布清理服务器中转目录（`EXIT` trap）；部署磁盘预检失败必须打印余量；SSH `known_hosts` 建立必须带重试；只读诊断 workflow 必须只读 → `node --test tests/deployment-resources.test.js`
+- `smoke:*`/`test:*` 脚本必须 CI 可达；smoke 测试服务须 `app.listen(0, '127.0.0.1')`；部署预算须覆盖上传/合并/等锁/回退，PDA 等待不得提前超时；PDA 工作流「等部署」与「持组」不同 job；桌面发布清理服务器中转目录（`EXIT` trap）；部署磁盘预检失败必须打印余量；SSH `known_hosts` 建立必须带重试；只读诊断 workflow 必须只读 → `node --test tests/deployment-resources.test.js`
 - 恢复演练临时卷必须具名 + 启动前幂等清理；`dingtalk_send` 失败必须非 0 → `node --test tests/ops-monitor-restore.test.js`
 - 备份导入前只把触发器残留分号移出可执行注释 → `node --test tests/restore-trigger-normalize.test.js`
 - 迁移逐条执行、触发器函数体不得残留结尾分号 → `node --test tests/migration-trigger-bodies.test.js`

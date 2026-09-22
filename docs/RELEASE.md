@@ -118,18 +118,18 @@ Electron 使用 `file://` 打开页面时没有浏览器域名，旧逻辑会默
    git commit -m "release: bump version"
    git push origin main
    ```
-5. 打 tag 并推送（会触发正式构建与 Release；脚本会校验 `main`、工作区干净、远程是否已有同名 tag）：
+5. 等待同 SHA 的浏览器部署与 PDA 发布均成功后，再打 tag 并推送（会触发正式构建与 Release；脚本会校验 `main`、工作区干净、远程是否已有同名 tag）：
    ```bash
    npm run release:tag-desktop
    ```
 
-已完成版本同步、更新说明和本地验证，并将所有待发布改动提交到 main 后，可运行 `npm run release:prod` 一次完成推送 main 与新 tag。脚本返回仅代表提交发布请求；还须等待对应 SHA 的检查、浏览器部署及桌面/PDA 发布成功，再核对线上版本：
+已完成版本同步、更新说明和本地验证，并将所有待发布改动提交到 main 后，可运行 `npm run release:prod` 完成推送 main、等待同 SHA 检查/浏览器/PDA、推送新 tag、等待对应 tag 桌面发布和线上核对。仅全部通过才返回成功。也可单独重复只读验收：
 
 ```bash
 npm run release:verify -- --origin https://<生产域名>
 ```
 
-逐项核对 `/latest.json`、`/api/app-update/latest`、`/api/pda/version`（版本 + versionCode + 可下载）与 `/api/health`；**PDA 落后即视为发版未完成**（v0.9.19 曾出现浏览器/桌面已发布、PDA 停在上一版而无人发现）。PDA 补跑见 `.agents/skills/release-flowcube/SKILL.md` 的「PDA 没跟上时」。
+逐项核对 `/latest.json`、`/api/app-update/latest`、`/api/pda/version`（版本 + versionCode + 可下载）与 `/api/health`，随后实际下载 EXE/APK 并核对 SHA256；**PDA 落后或包摘要不符即视为发版未完成**（v0.9.19 曾出现浏览器/桌面已发布、PDA 停在上一版而无人发现）。PDA 补跑见 `.agents/skills/release-flowcube/SKILL.md` 的「PDA 没跟上时」。
 
 ## 获取 EXE
 

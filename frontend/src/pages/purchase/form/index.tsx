@@ -1,4 +1,5 @@
 import { money } from '@/lib/format'
+import { roundQuantity } from '@/lib/qtyStep'
 import { OrderEntryIssues } from '@/components/shared/OrderEntryIssues'
 import { collectOrderIssues } from '@/lib/orderEntry'
 import { handleEntryKeyDown } from '@/lib/orderEntryNavigation'
@@ -71,7 +72,7 @@ interface DraftItem extends Omit<PurchaseOrderItem, 'id' | 'amount'> {
 function baseQtyOf(item: DraftItem): number {
   const u = (item.units || []).find(x => x.unitName === (item.entryUnit || item.unit))
   const rate = u ? Number(u.conversionRate) : 1
-  return Math.round((Number(item.quantity) || 0) * rate * 10000) / 10000
+  return roundQuantity((Number(item.quantity) || 0) * rate)
 }
 
 /**
@@ -189,8 +190,8 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
 
   const parsePositiveInteger = (value: string) => {
     if (!value.trim()) return 0
-    const num = Number.parseInt(value, 10)
-    return Number.isFinite(num) ? num : 0
+    const num = Number(value)
+    return Number.isSafeInteger(num) ? num : 0
   }
 
   function handleFinderConfirm(product: ProductFinderResult) {
@@ -420,7 +421,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
                     </td>
 
                     <td className="py-2.5 pr-2">
-                      <Input
+                      <Input quantity
                         type="number"
                         min="1"
                         step="1"

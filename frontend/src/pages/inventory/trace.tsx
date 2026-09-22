@@ -159,7 +159,7 @@ export default function TracePage() {
           <div className="rounded-lg border bg-card">
             <div className="flex items-center gap-2 border-b px-4 py-2">
               <History className="h-4 w-4 text-muted-foreground" />
-              <h3 className="text-sm font-medium">容器流水（{logs.length} 条）</h3>
+              <h3 className="text-sm font-medium">条码流水（{logs.length} 条）</h3>
             </div>
             {logs.length === 0 ? (
               <div className="p-8 text-center text-muted-foreground">该条码暂无流水记录</div>

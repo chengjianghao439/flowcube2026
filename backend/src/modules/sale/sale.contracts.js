@@ -1,15 +1,11 @@
 const { z } = require('zod')
 const AppError = require('../../utils/AppError')
 
-function hasAtMostFourDecimals(value) {
-  const [coefficient, exponentText = '0'] = String(value).toLowerCase().split('e')
-  const fractionLength = (coefficient.split('.')[1] || '').length
-  return Math.max(0, fractionLength - Number(exponentText)) <= 4
-}
+const { hasTooManyDecimals } = require('../../utils/qtyPrecision')
 
 const positiveQty = z.number()
   .positive('数量必须大于0')
-  .refine(hasAtMostFourDecimals, '数量最多保留 4 位小数')
+  .refine(value => !hasTooManyDecimals(value), '数量最多保留 2 位小数')
 
 const saleItemSchema = z.object({
   productId: z.number().int().positive(),

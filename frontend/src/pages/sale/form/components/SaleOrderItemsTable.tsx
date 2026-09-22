@@ -70,7 +70,7 @@ export function SaleOrderItemsTable({
               </td>
 
               <td className="px-3 py-3 align-top">
-                <Input
+                <Input quantity
                   data-entry-input data-entry-field={`item-${item._key}-quantity`} aria-invalid={invalidItemKeys.has(item._key) && (!Number.isFinite(item.quantity) || item.quantity <= 0)}
                   aria-label={`${item.productName || '商品'}数量`}
                   type="number" min="0.01" step={qtyStep(allowDecimalOf(item.productId))} placeholder="数量"

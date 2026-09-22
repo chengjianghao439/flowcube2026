@@ -2,6 +2,9 @@ import { describe, it, expect } from 'vitest'
 import { summarizeSaleQuantities, getSaleAttention } from './salePresentation'
 import type { SaleOrder } from '@/types/sale'
 describe('销售展示语义', () => {
+  it('数量汇总按当前两位库存精度展示', () => {
+    expect(summarizeSaleQuantities([{ unit: '件', quantity: 1.234 }])[0].ordered).toBe(1.23)
+  })
   it('按单位汇总并消除小数误差', () => {
     const rows = [
       { unit: '件', quantity: 0.1, reservedQty: 0.1 },

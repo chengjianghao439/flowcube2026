@@ -1,27 +1,8 @@
 'use strict'
 
-/**
- * 商品级数量精度校验（迁移 254 的 `product_items.allow_decimal_qty`）。
- *
- * 开关语义：
- *   - `allow_decimal_qty = 1`（默认）：该商品数量可以带小数；
- *   - `allow_decimal_qty = 0`：数量必须是整数——「个 / 台 / 箱」这类不可拆分的商品。
- *
- * **不限制小数位数，但系统精度本身就是两位**：数量列统一 `DECIMAL(*,2)`，最小库存
- * 精度 0.01（`unitConversion` 的 `roundQty`）。换算是先折算再按两位取整，所以这里
- * 只需要管「整数还是可以小数」这一件事。
- *
- * 演进记录：最初把「允许小数」实现成「最多两位」，而当时系统精度是四位（0.0001），
- * 于是调拨审计用例的 `0.0001` 被拦、整条上线审计专项失败——那是设计错了。随后一度
- * 改成完全不限位数，最终按用户要求把**系统精度统一收到两位**，两边才真正对齐。
- *
- * 为什么必须在服务端拦：前端只能管住自己页面上的输入框，PDA、桌面端、批量导入、
- * Excel 导入与直接调接口都绕得过去，而这些入口最后都会改库存与账款事实。
- *
- * 只校验**用户提交的数量**，不回改存量：历史数据里的多位小数照旧读得出、算得对。
- *
- * 容差 1e-9：`Number('1.10')` 与 DECIMAL(14,4) 往返会有 <1e-10 的浮点噪声，
- * 但不能因此放过真正的 0.5 个。
+/** 数量落库前统一校验：最多两位有效小数；整数商品另外拒绝非整数。
+ * 只接受 IEEE-754 运算产生的舍入噪声，不允许先 roundQty 再校验原始输入。
+ * 金额、单价与单位换算率不使用此校验。商品不存在由业务报错，但精度限制始终生效。
  */
 
 const AppError = require('./AppError')
@@ -30,6 +11,29 @@ const QTY_EPSILON = 1e-9
 
 const CODE_INTEGER_REQUIRED = 'QTY_INTEGER_REQUIRED'
 const CODE_INVALID = 'QTY_INVALID'
+const CODE_DECIMALS_EXCEEDED = 'QTY_DECIMALS_EXCEEDED'
+
+function hasTooManyDecimals(value) {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return true
+  const scaled = n * 100
+  const nearest = Math.round(scaled)
+  if (nearest === 0 && n !== 0) return true
+  return Math.abs(scaled - nearest) > Number.EPSILON * Math.max(1, Math.abs(scaled)) * 2
+}
+
+function qtyScaleProblem(qty, label = '数量') {
+  if (qty == null || String(qty).trim() === '' || !Number.isFinite(Number(qty))) {
+    return { code: CODE_INVALID, message: `${label}不是有效数字` }
+  }
+  if (hasTooManyDecimals(qty)) return { code: CODE_DECIMALS_EXCEEDED, message: `${label}最多保留 2 位小数，请修改后重试` }
+  return null
+}
+
+function assertQtyScale(qty, label = '数量') {
+  const problem = qtyScaleProblem(qty, label)
+  if (problem) throw new AppError(problem.message, 400, problem.code)
+}
 
 /** 是否带小数部分（用于「只能整数」的商品） */
 function hasFraction(value) {
@@ -38,15 +42,15 @@ function hasFraction(value) {
 
 /**
  * 单个数量是否满足商品策略。
- * 商品查不到（policy 为空）时**放行**——「商品不存在」由各业务自己的校验报错，
- * 这里再报一次只会把真实原因盖掉。
+ * 商品查不到时仍检查两位尺度；商品是否存在与其余业务条件由调用方报错。
  *
  * @returns {null|{ code: string, message: string }}
  */
 function qtyPrecisionProblem(policy, qty, label = '数量') {
+  const scaleProblem = qtyScaleProblem(qty, label)
+  if (scaleProblem) return scaleProblem
   if (!policy) return null
   const n = Number(qty)
-  if (!Number.isFinite(n)) return { code: CODE_INVALID, message: `${label}不是有效数字` }
   if (policy.allowDecimal === false && hasFraction(n)) {
     const who = policy.name ? `商品「${policy.name}」` : '该商品'
     return { code: CODE_INTEGER_REQUIRED, message: `${who}只能按整数出入库，${label}不能填 ${qty}` }
@@ -100,6 +104,7 @@ async function loadQtyPolicies(conn, productIds) {
 async function assertQtyPrecision(conn, rows) {
   const list = (rows || []).filter((r) => r && r.productId != null && r.qty !== undefined && r.qty !== null)
   if (!list.length) return
+  for (const row of list) assertQtyScale(row.qty, row.label || '数量')
   const policies = await loadQtyPolicies(conn, list.map((r) => r.productId))
   for (const row of list) {
     assertQtyPrecisionWith(policies.get(Number(row.productId)), row.qty, row.label || '数量')
@@ -108,6 +113,10 @@ async function assertQtyPrecision(conn, rows) {
 
 module.exports = {
   QTY_EPSILON,
+  CODE_DECIMALS_EXCEEDED,
+  hasTooManyDecimals,
+  qtyScaleProblem,
+  assertQtyScale,
   CODE_INTEGER_REQUIRED,
   hasFraction,
   qtyPrecisionProblem,

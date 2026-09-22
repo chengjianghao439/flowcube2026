@@ -92,6 +92,37 @@ test('发布检查轮询真实 API 契约，两个工作流成功后才放行', 
   assert.ok(calls.some(url => url.includes('security-scan.yml')))
 })
 
+test('PDA 默认等待覆盖浏览器部署预算，普通检查仍保持短超时', async () => {
+  const { waitForChecks } = require('../scripts/wait-release-checks')
+  const yaml = require(path.resolve(__dirname, '../frontend/node_modules/js-yaml'))
+  const browser = yaml.load(fs.readFileSync(path.resolve(__dirname, '../.github/workflows/deploy-browser.yml'), 'utf8'))
+  const pda = yaml.load(fs.readFileSync(path.resolve(__dirname, '../.github/workflows/build-pda-apk.yml'), 'utf8'))
+  const deployMs = browser.jobs.deploy['timeout-minutes'] * 60 * 1000
+  const stepMs = pda.jobs['wait-browser'].steps.find(s => /wait-release-checks/.test(s.run || ''))['timeout-minutes'] * 60 * 1000
+  const sha = 'a'.repeat(40)
+  let tick = 0
+  const options = {
+    repository: 'fixture/repo', sha, token: 'fixture',
+    now: () => tick, sleep: async ms => { tick += ms }, intervalMs: 60000, log: () => {},
+    fetchImpl: async () => ({ ok: true, json: async () => ({ workflow_runs: [{
+      id: 1, head_sha: sha, head_branch: 'main', event: 'push',
+      status: tick >= deployMs ? 'completed' : 'in_progress', conclusion: tick >= deployMs ? 'success' : null,
+    }] }) }),
+  }
+  await waitForChecks({ ...options, requiredWorkflows: ['test.yml', 'security-scan.yml', 'deploy-browser.yml'] })
+  assert.ok(tick >= deployMs)
+  tick = 0
+  await assert.rejects(waitForChecks(options), /等待同一提交检查超时/)
+  assert.equal(tick, 25 * 60 * 1000)
+  tick = 0
+  await assert.rejects(waitForChecks({ ...options, requiredWorkflows: ['deploy-browser.yml'],
+    fetchImpl: async () => ({ ok: true, json: async () => ({ workflow_runs: [{
+      id: 1, head_sha: sha, head_branch: 'main', event: 'push', status: 'in_progress', conclusion: null,
+    }] }) }),
+  }), /等待同一提交检查超时/)
+  assert.ok(tick > deployMs && tick < stepMs, '脚本必须在浏览器预算之后、PDA 步骤硬杀之前自行超时')
+})
+
 test('提交上缺少某个工作流运行时要快速失败，不空等总超时', async () => {
   // 2026-09-18 发 v0.9.20：PDA 手动补跑差点跑在只改文档、带 [skip ci] 的提交上——
   // 那个提交永远不会有 Deploy Browser App 运行，旧逻辑会白等 30 分钟才超时。

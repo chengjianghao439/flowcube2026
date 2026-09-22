@@ -62,3 +62,9 @@ test('列表页标题不受影响，仍用路由定义名', () => {
   syncLikeRouter('/sale')
   expect(useWorkspaceStore.getState().tabs[1].title).toBe('销售订单')
 })
+
+test('已保存的旧列表标题应随路由改名，不能当业务单号保留', () => {
+  useWorkspaceStore.setState({ tabs: [HOME_TAB, { key: '/sale', path: '/sale', title: '销售管理', closable: true }], activeKey: '/sale' })
+  syncLikeRouter('/sale')
+  expect(useWorkspaceStore.getState().tabs[1].title).toBe('销售订单')
+})

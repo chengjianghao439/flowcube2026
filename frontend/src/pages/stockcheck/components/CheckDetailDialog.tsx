@@ -222,7 +222,7 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
                         </div>
                       ) : check.status===1 ? (
                         <div className="space-y-1">
-                          <Input
+                          <Input quantity
                             type="number"
                             min="0"
                             step={qtyStep(allowDecimalOf(item.productId))}

@@ -90,27 +90,8 @@ function lineOf(source, index) {
   return source.slice(0, index).split('\n').length
 }
 
-/** 剥离注释后再扫描：注释里引述旧写法（如"以前叫容器"）不是违规。等长空白替换，行号保持准确。 */
-function stripComments(src) {
-  return src
-    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
-    .replace(/\/\/[^\n]*/g, (m) => ' '.repeat(m.length))
-}
-
+const { stripComments, uiCopySpans, appErrorSpans } = require('../scripts/lib/copy-conventions-parser')
 const CJK = /[\u4e00-\u9fff]/
-
-/** 抽取用户可见文案：字符串字面量 + JSX 文本节点。 */
-function uiCopySpans(source) {
-  const spans = []
-  const strRe = /(['"`])((?:\\.|(?!\1)[^\\])*?)\1/g
-  let m
-  while ((m = strRe.exec(source)) !== null) {
-    if (CJK.test(m[2])) spans.push({ text: m[2], index: m.index })
-  }
-  const jsxRe = />([^<>{}]*[\u4e00-\u9fff][^<>{}]*)</g
-  while ((m = jsxRe.exec(source)) !== null) spans.push({ text: m[1], index: m.index })
-  return spans
-}
 
 /** 中文之间夹半角标点（排除数字千分位、小数等）。 */
 const HALF_WIDTH_BETWEEN_CJK = /[\u4e00-\u9fff][,;!?][\u4e00-\u9fff]/
@@ -135,9 +116,9 @@ function main() {
 
   for (const f of files) {
     const rel = `frontend/src/${path.relative(SRC, f)}`
-    const source = stripComments(fs.readFileSync(f, 'utf8'))
+    const source = stripComments(fs.readFileSync(f, 'utf8'), f)
 
-    for (const span of uiCopySpans(source)) {
+    for (const span of uiCopySpans(source, f)) {
       for (const [word, why] of BANNED_IN_UI_COPY) {
         if (!span.text.includes(word)) continue
         const key = `${rel}:${word}`
@@ -156,7 +137,7 @@ function main() {
     const b = path.join(SRC, 'pages/landing-preview', name)
     if (!fs.existsSync(a) || !fs.existsSync(b)) continue
     const copyOf = (file) => new Set(
-      uiCopySpans(stripComments(fs.readFileSync(file, 'utf8')))
+      uiCopySpans(fs.readFileSync(file, 'utf8'), file)
         .map((s) => s.text.trim())
         .filter((t) => t.length >= 4 && CJK.test(t)),
     )
@@ -171,7 +152,7 @@ function main() {
   // 金额格式化：手写 `¥` + toFixed(2) 会丢掉千分位，空值还会被写成 ¥0.00
   for (const f of files) {
     const rel = `frontend/src/${path.relative(SRC, f)}`
-    const lines = stripComments(fs.readFileSync(f, 'utf8')).split('\n')
+    const lines = stripComments(fs.readFileSync(f, 'utf8'), f).split('\n')
     lines.forEach((line, i) => {
       if (!line.includes('¥') || !/toFixed\(2\)/.test(line)) return
       if (MONEY_ALLOW.has(rel)) { usedMoneyAllow.add(rel); return }
@@ -193,9 +174,9 @@ function main() {
 
   for (const f of backendFiles) {
     const rel = `backend/src/${path.relative(path.join(ROOT, 'backend/src'), f)}`
-    const source = stripComments(fs.readFileSync(f, 'utf8'))
-    for (const m of source.matchAll(/new AppError\(\s*'((?:[^'\\]|\\.)*)'/g)) {
-      const text = m[1]
+    const source = stripComments(fs.readFileSync(f, 'utf8'), f)
+    for (const m of appErrorSpans(source, f)) {
+      const text = m.text
       for (const [word, why] of BANNED_IN_UI_COPY) {
         if (!text.includes(word)) continue
         const key = `${rel}:${word}`
@@ -220,7 +201,7 @@ function main() {
   for (const f of files) {
     const rel = `frontend/src/${path.relative(SRC, f)}`
     if (rel === FORMAT_ENTRY) continue
-    const lines = stripComments(fs.readFileSync(f, 'utf8')).split('\n')
+    const lines = stripComments(fs.readFileSync(f, 'utf8'), f).split('\n')
     lines.forEach((line, i) => {
       if (!/(minimumFractionDigits|maximumFractionDigits)/.test(line)) return
       problems.push(`${rel}:${i + 1} 自己配了小数位——金额用 lib/format 的 money()/amount()，数量用 qty()\n        原文：${line.trim().slice(0, 90)}`)

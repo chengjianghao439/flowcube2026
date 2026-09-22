@@ -157,7 +157,7 @@ function ReceiveEditor({
           {boxes.map((value, index) => (
             <div key={index} className="flex items-center gap-2">
               <div className="w-14 shrink-0 text-xs text-muted-foreground">箱 {index + 1}</div>
-              <Input
+              <Input quantity
                 type="number"
                 inputMode="decimal"
                 min="0"

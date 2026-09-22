@@ -360,7 +360,7 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
                         ) : ((item.entryUnit && item.entryUnit !== item.unit) ? item.entryUnit : (item.unit || '—'))}
                       </td>
                       <td className="py-2.5 pr-2">
-                        <Input
+                        <Input quantity
                           type="number" min="0.01" step={qtyStep(allowDecimalOf(item.productId))} placeholder="数量"
                           value={item.quantity}
                           disabled={!!boundSource}

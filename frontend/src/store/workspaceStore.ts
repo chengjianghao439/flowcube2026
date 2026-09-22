@@ -53,7 +53,7 @@ function currentTabTitle(path: string, fallback: string): string {
   // 合并页（采购建议 / 报表中心 / 仓库运营）用**子页名**做标签，而不是组合名：
   // 组内切换虽只更新同一个标签，但标签一直叫「报表中心」会让用户看不出当前在看哪个子页。
   return getMergedPageView(path)?.view.label
-    ?? (base === '/reports/role-workbench' ? '待办中心' : fallback)
+    ?? (base === '/reports/role-workbench' ? '待办中心' : PATH_TITLES[base] ?? fallback)
 }
 
 function sanitizeTabs(rawTabs: unknown): WorkspaceTab[] {

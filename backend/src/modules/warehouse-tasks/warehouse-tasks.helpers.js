@@ -144,7 +144,7 @@ async function assertTaskPackagingClosure(conn, taskId) {
   }
   // 装箱总量必须逐商品等于复核量：只校验「有箱有明细」挡不住「复核 10 只装 3」就发货、
   // 客户少收货（业务决策 2026-07-28）。用整数单位比较避免 DECIMAL 浮点误差。
-  const SCALE = 10000
+  const SCALE = 100
   const [packedRows] = await conn.query(
     `SELECT pi.product_id, COALESCE(SUM(pi.qty), 0) AS packed
      FROM package_items pi INNER JOIN packages p ON p.id = pi.package_id

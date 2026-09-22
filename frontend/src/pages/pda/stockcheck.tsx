@@ -125,7 +125,7 @@ function CheckWork({ checkId }: { checkId: number }) {
     try {
       const d = await getContainerByBarcodeApi(bc)
       if (d.productId !== activeItem.productId) { err(`条码 ${bc} 不是商品「${activeItem.productName}」的库存条码`); return }
-      if (d.containerStatus !== 'stored') { err(`${bc} 不可盘点，请先上架`); return }
+      if (d.containerStatus !== 'stored') { err(`${bc} 不是在库条码，不能盘点`); return }
       if (d.individual) {
         setScanned(prev => [...prev, { barcode: d.barcode, individual: true, bookQty: 1, countedQty: 1 }])
         ok(`单件 ${d.barcode} 计 1（已扫 ${scanned.length + 1} 个）`)
@@ -205,7 +205,7 @@ function CheckWork({ checkId }: { checkId: number }) {
                   ) : (
                     <span className="flex items-center gap-1 text-xs text-muted-foreground">
                       实盘
-                      <Input
+                      <Input quantity
                         type="number" min={0} max={s.bookQty} step={qtyStep(allowDecimalOf(activeItem?.productId))}
                         data-scanner-manual="true"
                         className="h-7 w-20 text-right tabular-nums"

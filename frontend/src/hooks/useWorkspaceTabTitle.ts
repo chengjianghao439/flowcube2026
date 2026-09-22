@@ -2,6 +2,7 @@ import { useContext, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { useWorkspaceStore } from '@/store/workspaceStore'
+import { buildWorkspaceTabRegistrationFromPath } from '@/router/workspaceRouteMeta'
 
 /**
  * 把当前工作区标签的标题换成**业务单号**。
@@ -19,9 +20,12 @@ import { useWorkspaceStore } from '@/store/workspaceStore'
 export function useWorkspaceTabTitle(title?: string | null) {
   const tabPath = useContext(TabPathContext)
   const location = useLocation()
+  const path = tabPath || location.pathname + location.search
+  const key = buildWorkspaceTabRegistrationFromPath(path).key
+  // 首帧可能由 KeepAliveOutlet 临时渲染，父级 effect 此时还没注册标签。
+  const registered = useWorkspaceStore(state => state.tabs.some(tab => tab.key === key))
   useEffect(() => {
-    if (!title) return
-    const path = tabPath || location.pathname + location.search
+    if (!title || !registered) return
     useWorkspaceStore.getState().updateTabTitle(path, title)
-  }, [title, tabPath, location.pathname, location.search])
+  }, [title, path, registered])
 }

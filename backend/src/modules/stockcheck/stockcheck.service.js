@@ -210,7 +210,7 @@ async function saveItemContainerScans(id, itemId, scans, operator, scopeWarehous
     const containerByBarcode = new Map()
     if (normalized.length) {
       const [rows] = await conn.query(
-        `SELECT id, barcode, remaining_qty, container_type, initial_qty
+        `SELECT id, barcode, remaining_qty, container_type, initial_qty, product_id, warehouse_id, status
            FROM inventory_containers
           WHERE barcode IN (${normalized.map(() => '?').join(',')}) AND deleted_at IS NULL`,
         normalized.map(n => n.barcode),
@@ -222,10 +222,7 @@ async function saveItemContainerScans(id, itemId, scans, operator, scopeWarehous
     for (const n of normalized) {
       const c = containerByBarcode.get(n.barcode.toUpperCase())
       if (!c) throw new AppError(`条码 ${n.barcode} 不存在或已失效，请核实实物`, 400, 'SCAN_CONTAINER_INVALID')
-      const [[full]] = await conn.query(
-        'SELECT product_id, warehouse_id, status FROM inventory_containers WHERE id = ?',
-        [c.id],
-      )
+      const full = c
       if (Number(full.product_id) !== Number(item.product_id)) {
         throw new AppError(`条码 ${n.barcode} 不是商品「${item.product_name}」的库存条码，请核实实物归属`, 400, 'SCAN_PRODUCT_MISMATCH')
       }
@@ -238,7 +235,7 @@ async function saveItemContainerScans(id, itemId, scans, operator, scopeWarehous
         counted = 1   // 个体扫到即计 1，不接受填数
       } else {
         counted = Number(n.countedQty)
-        if (!Number.isFinite(counted) || counted < 0) throw new AppError(`条码 ${n.barcode} 请填写该容器实盘数量`, 400, 'SCAN_COUNT_REQUIRED')
+        if (!Number.isFinite(counted) || counted < 0) throw new AppError(`条码 ${n.barcode} 请填写该库存条码实盘数量`, 400, 'SCAN_COUNT_REQUIRED')
         if (counted > Number(c.remaining_qty) + 1e-9) {
           throw new AppError(`条码 ${n.barcode} 实盘 ${counted} 多于账面 ${Number(c.remaining_qty)}，请核实是否扫错；盘盈请走 ERP 手工调整`, 409, 'SCAN_OVER_COUNT')
         }
@@ -246,18 +243,14 @@ async function saveItemContainerScans(id, itemId, scans, operator, scopeWarehous
       rows.push({ containerId: Number(c.id), barcode: n.barcode, countedQty: counted })
     }
 
+    await assertQtyPrecision(conn, rows.map(r => ({ productId: item.product_id, qty: r.countedQty, label: `条码 ${r.barcode} 实盘数量` })))
     await conn.query('DELETE FROM inventory_check_item_containers WHERE check_item_id=?', [itemId])
-    for (const r of rows) {
-      await conn.query(
-        'INSERT INTO inventory_check_item_containers (check_item_id, container_id, barcode, counted_qty, scanned_by, scanned_by_name) VALUES (?,?,?,?,?,?)',
-        [itemId, r.containerId, r.barcode, r.countedQty, operator?.userId ?? null, operator?.realName ?? null],
-      )
-    }
+    if (rows.length) await conn.query(
+      'INSERT INTO inventory_check_item_containers (check_item_id, container_id, barcode, counted_qty, scanned_by, scanned_by_name) VALUES ?',
+      [rows.map(r => [itemId, r.containerId, r.barcode, r.countedQty, operator?.userId ?? null, operator?.realName ?? null])],
+    )
     // 实盘数 = 各容器实盘之和（派生）；一个都没扫 = 0（全行盘亏），与序列号盘点同语义
     const actualQty = rows.reduce((sum, r) => sum + r.countedQty, 0)
-    // 「只能整数」的商品不得按小数盘盈/盘亏（迁移 254）。扫码累计值来自容器存量，
-    // 故只校验整数约束。
-    await assertQtyPrecision(conn, [{ productId: item.product_id, qty: actualQty, label: '扫码实盘数量' }])
     await conn.query(
       'UPDATE inventory_check_items SET actual_qty=?, diff_qty=? WHERE id=?',
       [actualQty, actualQty - Number(item.book_qty), itemId],

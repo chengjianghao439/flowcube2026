@@ -1,3 +1,5 @@
+const { assertQtyPrecision, assertQtyScale } = require('../../utils/qtyPrecision')
+const { roundQty } = require('../../utils/unitConversion')
 const { commitFulfillment } = require('../fulfillment/fulfillment.refresh')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
@@ -116,7 +118,10 @@ async function createScanLog({
       throw new AppError('商品与任务明细不一致', 400)
     }
 
-    const needRemain = Number(itemRow.required_qty) - Number(itemRow.picked_qty)
+    await assertQtyPrecision(conn, [{ productId: itemRow.product_id, qty, label: '拣货数量' }])
+    // 原值通过精度校验后再归一化，避免合法的 0.3 - 0.1 / 0.1 + 0.2 被浮点尾差误拒。
+    qty = roundQty(qty)
+    const needRemain = roundQty(Number(itemRow.required_qty) - Number(itemRow.picked_qty))
     if (qty > needRemain) {
       throw new AppError(`扫码数量超过待拣数量（剩余 ${needRemain}）`, 400)
     }
@@ -146,7 +151,7 @@ async function createScanLog({
       throw new AppError('库存不足', 400)
     }
     if (qty > remainingQty) {
-      throw new AppError(`扫码数量超过容器可用数量（剩余 ${remainingQty}）`, 400)
+      throw new AppError(`扫码数量超过库存条码可用数量（剩余 ${remainingQty}）`, 400)
     }
     // 累计校验：散件模式允许对同一容器分次扫码，单次校验挡不住「多次累加超过容器实存」。
     // lockContainer 只锁定不递减 remaining_qty，真实扣减要到出库；若 picked_qty 虚高于容器
@@ -156,9 +161,9 @@ async function createScanLog({
        WHERE task_id = ? AND container_id = ? AND COALESCE(scan_purpose, ${SCAN_PURPOSE.PICK}) = ${SCAN_PURPOSE.PICK}`,
       [taskId, containerId],
     )
-    if (Number(scanned) + qty > remainingQty) {
+    if (roundQty(Number(scanned) + qty) > remainingQty) {
       throw new AppError(
-        `该容器累计拣货 ${scanned} + 本次 ${qty} 将超过容器实存 ${remainingQty}`,
+        `该库存条码累计拣货 ${scanned} + 本次 ${qty} 将超过库存条码实存 ${remainingQty}`,
         400,
       )
     }
@@ -303,7 +308,7 @@ async function createCheckScanLog({
          WHERE task_id = ? AND container_id = ? AND item_id = ? AND scan_purpose = ?`,
         [taskId, c.id, g.item_id, SCAN_PURPOSE.CHECK],
       )
-      const remain = Number(g.pick_sum) - Number(chk.s)
+      const remain = roundQty(Number(g.pick_sum) - Number(chk.s))
       if (remain > 0) {
         targetItemId = g.item_id
         addQty = remain
@@ -322,7 +327,7 @@ async function createCheckScanLog({
     if (Number(itemRow.product_id) !== Number(c.product_id)) {
       throw new AppError('库存条码上的商品与任务明细不一致', 400)
     }
-    const nextChecked = Number(itemRow.checked_qty) + addQty
+    const nextChecked = roundQty(Number(itemRow.checked_qty) + addQty)
     if (nextChecked > Number(itemRow.picked_qty)) {
       throw new AppError('复核累计将超过拣货数量', 400)
     }
@@ -658,6 +663,9 @@ async function logScanError({ taskId, barcode, reason, operatorId, operatorName 
  * 记录撤销操作
  */
 async function logUndo({ taskId, itemId, barcode, prevQty, newQty, operatorId, operatorName }) {
+  // 用户输入错误应返回 400，不能被下方可选审计日志的失败降级吞掉。
+  assertQtyScale(prevQty, '撤销前数量')
+  assertQtyScale(newQty, '撤销后数量')
   try {
     await pool.query(
       `CREATE TABLE IF NOT EXISTS pda_undo_logs (

@@ -1,9 +1,24 @@
 import * as React from "react"
 
 import { cn } from "@/lib/utils"
+import { quantityInputError } from "@/lib/qtyStep"
+import { toast } from "@/lib/toast"
 
-const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
-  ({ className, type, ...props }, ref) => {
+type InputProps = React.ComponentProps<"input"> & {
+  /** 仅数量字段启用；金额、单价、换算率不要设置。step=1 时同时限制整数。 */
+  quantity?: boolean
+}
+
+const Input = React.forwardRef<HTMLInputElement, InputProps>(
+  ({ className, type, quantity = false, onChange, onPaste, onBlur, ...props }, ref) => {
+    const accepted = React.useRef(String(props.defaultValue ?? ''))
+    const rejected = React.useRef(false)
+    const integerOnly = String(props.step) === '1'
+    const reject = (input: HTMLInputElement, message: string) => {
+      input.value = props.value === undefined ? accepted.current : String(props.value ?? '')
+      rejected.current = true
+      toast.error(message)
+    }
     return (
       <input
         type={type}
@@ -13,6 +28,26 @@ const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
         )}
         ref={ref}
         {...props}
+        step={quantity ? props.step ?? '0.01' : props.step}
+        onChange={event => {
+          const error = quantity ? quantityInputError(event.currentTarget.value, integerOnly) : null
+          if (error) { reject(event.currentTarget, error); return }
+          accepted.current = event.currentTarget.value
+          rejected.current = false
+          onChange?.(event)
+        }}
+        onPaste={event => {
+          const error = quantity ? quantityInputError(event.clipboardData.getData('text'), integerOnly) : null
+          if (error) { event.preventDefault(); rejected.current = true; toast.error(error); return }
+          onPaste?.(event)
+        }}
+        onBlur={event => {
+          const error = quantity ? quantityInputError(event.currentTarget.value, integerOnly) : null
+          if (error) { reject(event.currentTarget, error); return }
+          // 采购建议在失焦时直接写 API；拒绝的输入不能触发该写入。
+          if (quantity && rejected.current) { rejected.current = false; return }
+          onBlur?.(event)
+        }}
       />
     )
   }

@@ -8,7 +8,7 @@ on:
 
 permissions:
   contents: read
-  actions: read
+  actions: write # 删除本次临时镜像 artifact，避免长期占用 Actions 存储配额。
 
 # 并发保护（2026-08-11 生产事故修复）：main 上连续多次 push 会触发多个 Deploy 并发在服务器
 # 跑 docker compose up --build 互相抢容器。concurrency 让同一时间只跑一个 Deploy——
@@ -28,8 +28,8 @@ jobs:
   deploy:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    # 步骤预算：等检查 30 + 构建镜像 20 + 部署 105 = 155 分钟，留余量避免 job 级先被强杀。
-    timeout-minutes: 165
+    # 故障预算：检查 30 + 构建 20 + artifact 3 + 部署 150 + 清理 3；job 另留 4 分钟。
+    timeout-minutes: 210
 
     steps:
       - name: Checkout code
@@ -51,6 +51,19 @@ jobs:
         env:
           DEPLOY_IMAGE_OUTPUT: ${{ runner.temp }}/flowcube-images.tar.gz
         run: bash scripts/build-deploy-images.sh
+
+      - name: Stage image archive for HTTPS transfer
+        id: image_artifact
+        # HTTPS 是可选快路径；配额/服务异常时保留原 SCP 传输。
+        continue-on-error: true
+        timeout-minutes: 3
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: deploy-images-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/flowcube-images.tar.gz
+          compression-level: 0
+          retention-days: 1
+          if-no-files-found: error
 
       - name: Resolve deploy config
         id: deploy_config
@@ -113,6 +126,14 @@ jobs:
           echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
           echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
           ssh-add "$KEY_FILE"
+          # 同一台服务器的预检、上传和执行复用 SSH，避免短连接触发 sshd 限流。
+          cat >> ~/.ssh/config <<EOF
+          Host ${{ steps.deploy_config.outputs.server_host }}
+            ControlMaster auto
+            ControlPath ~/.ssh/flowcube-%C
+            ControlPersist 300
+          EOF
+          chmod 600 ~/.ssh/config
 
       - name: Add SSH known_hosts
         shell: bash
@@ -144,10 +165,13 @@ jobs:
           chmod 644 ~/.ssh/known_hosts
 
       - name: Deploy backend and frontend on server
-        # 预算：上传归档 ≤1200s（分片并行）+ 预检/脚本 ≤90s + server-update ≤2400s，合计约 62 分钟，留余量。
-        timeout-minutes: 105
+        # 故障预算：HTTPS 尝试 235s + 上传 2700s + 合并 610s + 等锁 1800s + 部署/回退 3000s + 预检等 300s。
+        # 总计 8645s（约 145 分钟）；正常成功目标 15 分钟，不能以强杀回退来实现。
+        timeout-minutes: 150
         shell: bash
         env:
+          GITHUB_TOKEN: ${{ github.token }}
+          DEPLOY_ARTIFACT_ID: ${{ steps.image_artifact.outputs.artifact-id }}
           SMOKE_USERNAME: ${{ secrets.SMOKE_USERNAME }}
           SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
           SMOKE_LIMITED_USERNAME: ${{ secrets.SMOKE_LIMITED_USERNAME }}
@@ -163,6 +187,10 @@ jobs:
           BOOTSTRAP_SCRIPT="/tmp/flowcube-pda-bootstrap-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.sh"
           IMAGE_ARCHIVE="/tmp/flowcube-images-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz"
           IMAGE_SHA256="$(sha256sum "$RUNNER_TEMP/flowcube-images.tar.gz" | cut -d' ' -f1)"
+          ARCHIVE_BYTES=$(stat -c%s "$RUNNER_TEMP/flowcube-images.tar.gz")
+          SSH_TARGET="${{ steps.deploy_config.outputs.server_user }}@${{ steps.deploy_config.outputs.server_host }}"
+          SSH_PORT="${{ steps.deploy_config.outputs.server_ssh_port }}"
+          SSH_COMMON=(-o ConnectTimeout=20 -o ServerAliveInterval=30 -o ServerAliveCountMax=10)
           # 上传前预检临时目录与应用目录，保留余量；不触发 Docker 全盘扫描。
           # **余量不足必须自解释**：原先写的是 `test "$(df -Pm ...)" -ge 6144`，余量不够时 ssh 只返回
           # 1、一行输出都没有，与「SSH 连不上/密钥失效」在日志里长得完全一样。2026-09-19 11:04 起
@@ -179,41 +207,49 @@ jobs:
             { mb = $NF; sub(/MB$/, "", mb)
               if (mb + 0 < 6144) { printf "::error::%s 可用 %s，低于部署预检下限 6144MB：请先清理服务器磁盘再重跑（不得清除回退镜像）\n", $1, $NF; bad = 1 } }
             END { exit bad ? 1 : 0 }'
-          # ── 镜像归档上传：分片并行（2026-09-21 根因修复）──────────────────────
-          # 实测同一条中美链路：**单条 TCP 66 KB/s，8 条并行合计 8.4 MB/s**（相差 126 倍）——
-          # 瓶颈是单连接在丢包链路上的拥塞窗口，不是可用带宽。单流下 192MB 要 53 分钟，
-          # 而 3600 秒上限只够传 97MB，所以 v0.10.2 连续多轮都卡在 timeout 到点被强杀
-          # （exit 137）；「继续放宽上传时限」在原理上不可能成功，只能提高并行度。
-          # 对照：09-19 同一链路单流还有约 4.6 MB/s（192MB 用了 42 秒），两天内劣化到 66 KB/s。
-          # 分片**不改变归档字节**：服务器端按序合并后 sha256 与 runner 侧完全一致，
-          # server-update.sh 的归档摘要与 OCI revision 校验一律不变。
-          UPLOAD_STREAMS=8
-          PART_TIMEOUT=900
-          # 实测 runner→服务器 方向：单流 27 KB/s、8 流聚合约 97 KB/s（仅提升 3.6 倍）；
-          # 而反方向（服务器→GitHub）同样 8 流可达 8.4 MB/s——慢的是**跨境入站方向本身**，
-          # 不是 runner 不会并发。192MB 按 97 KB/s 需约 33 分钟，所以整批预算按 45 分钟给；
-          # 2026-09-21 第一次跑时用的是 1200 秒，实测传到 19% 就被杀。
-          UPLOAD_BUDGET=2700
-          PARTS_DIR="/tmp/flowcube-image-parts-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          LOCAL_PARTS="$RUNNER_TEMP/image-parts"
-          SSH_TARGET="${{ steps.deploy_config.outputs.server_user }}@${{ steps.deploy_config.outputs.server_host }}"
-          SSH_PORT="${{ steps.deploy_config.outputs.server_ssh_port }}"
-          SSH_COMMON=(-o ConnectTimeout=20 -o ServerAliveInterval=30 -o ServerAliveCountMax=10)
-          rm -rf "$LOCAL_PARTS"; mkdir -p "$LOCAL_PARTS"
-          ARCHIVE_BYTES=$(stat -c%s "$RUNNER_TEMP/flowcube-images.tar.gz")
-          PART_BYTES=$(( (ARCHIVE_BYTES + UPLOAD_STREAMS - 1) / UPLOAD_STREAMS ))
-          split -b "$PART_BYTES" -d -a 3 "$RUNNER_TEMP/flowcube-images.tar.gz" "$LOCAL_PARTS/part-"
-          echo "==> 分片并行上传：归档 ${ARCHIVE_BYTES} 字节，并行度 ${UPLOAD_STREAMS}"
-          timeout -k 5 60 ssh "${SSH_COMMON[@]}" -p "$SSH_PORT" -o BatchMode=yes "$SSH_TARGET" \
-            "rm -rf '$PARTS_DIR' && mkdir -p '$PARTS_DIR'"
-          ls "$LOCAL_PARTS" | timeout -k 20 "$UPLOAD_BUDGET" xargs -P "$UPLOAD_STREAMS" -I{} \
-            timeout -k 10 "$PART_TIMEOUT" scp "${SSH_COMMON[@]}" -P "$SSH_PORT" "$LOCAL_PARTS/{}" "$SSH_TARGET:$PARTS_DIR/{}"
-          echo "==> 服务器端按序合并分片并核对字节数"
-          MERGED_BYTES=$(timeout -k 10 600 ssh "${SSH_COMMON[@]}" -p "$SSH_PORT" -o BatchMode=yes "$SSH_TARGET" \
-            "cat '$PARTS_DIR'/part-* > '$IMAGE_ARCHIVE' && rm -rf '$PARTS_DIR' && stat -c%s '$IMAGE_ARCHIVE'")
-          [ "$MERGED_BYTES" = "$ARCHIVE_BYTES" ] \
-            || { echo "::error::服务器端合并后字节数不一致（${MERGED_BYTES} ≠ ${ARCHIVE_BYTES}），拒绝继续部署"; exit 1; }
-          echo "==> 合并校验通过：${MERGED_BYTES} 字节（sha256 由 server-update.sh 继续核对）"
+          # 先尝试服务器拉取 HTTPS artifact；签名 URL 仅走 stdin，不写日志/进程参数。
+          # token 留在 runner。快路径失败时只有传输降级，部署门禁不会降级。
+          RECEIVER_SCRIPT="/tmp/flowcube-receive-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.py"
+          HTTPS_OK=0
+          if [ -n "$DEPLOY_ARTIFACT_ID" ] && timeout -k 5 30 scp "${SSH_COMMON[@]}" -P "$SSH_PORT" \
+            scripts/receive-deploy-artifact.py "$SSH_TARGET:$RECEIVER_SCRIPT"; then
+            if node scripts/deploy-artifact-url.js | timeout -k 10 190 ssh "${SSH_COMMON[@]}" -p "$SSH_PORT" "$SSH_TARGET" \
+              "python3 '$RECEIVER_SCRIPT' '$IMAGE_ARCHIVE' '$IMAGE_SHA256' '$ARCHIVE_BYTES'"; then
+              HTTPS_OK=1
+            fi
+          fi
+          if [ "$HTTPS_OK" != 1 ]; then
+            echo '::warning::HTTPS 快路径不可用，回退分片 SCP；本轮可能超过 15 分钟目标'
+            # ── 镜像归档上传：分片并行 ──────────────────────────────────────
+            # 跨境链路有方向差异；服务器向外下载的速率不能作为 runner 向服务器上传的预算依据。
+            # 分片**不改变归档字节**：服务器端按序合并后 sha256 与 runner 侧完全一致，
+            # server-update.sh 的归档摘要与 OCI revision 校验一律不变。
+            UPLOAD_STREAMS=8
+            PART_TIMEOUT=2700
+            # 实测 runner→服务器 方向：单流 27 KB/s、8 流聚合约 97 KB/s（仅提升 3.6 倍）；
+            # 而反方向（服务器→GitHub）同样 8 流可达 8.4 MB/s——慢的是**跨境入站方向本身**，
+            # 不是 runner 不会并发。192MB 按 97 KB/s 需约 33 分钟，所以整批预算按 45 分钟给；
+            # 2026-09-21 第一次跑时用的是 1200 秒，实测传到 19% 就被杀。
+            UPLOAD_BUDGET=2700
+            # 八片同时上传且不重试，每片需有同样的 45 分钟；900 秒会先杀掉全部慢分片。
+            PARTS_DIR="/tmp/flowcube-image-parts-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+            LOCAL_PARTS="$RUNNER_TEMP/image-parts"
+            rm -rf "$LOCAL_PARTS"; mkdir -p "$LOCAL_PARTS"
+            PART_BYTES=$(( (ARCHIVE_BYTES + UPLOAD_STREAMS - 1) / UPLOAD_STREAMS ))
+            split -b "$PART_BYTES" -d -a 3 "$RUNNER_TEMP/flowcube-images.tar.gz" "$LOCAL_PARTS/part-"
+            echo "==> 分片并行上传：归档 ${ARCHIVE_BYTES} 字节，并行度 ${UPLOAD_STREAMS}"
+            timeout -k 5 60 ssh "${SSH_COMMON[@]}" -p "$SSH_PORT" -o BatchMode=yes "$SSH_TARGET" \
+              "rm -rf '$PARTS_DIR' && mkdir -p '$PARTS_DIR'"
+            # 控制命令共用主连接；数据流各用独立控制连接，避免八片复用同一 TCP 后失去跨境并行效果。
+            ls "$LOCAL_PARTS" | timeout -k 20 "$UPLOAD_BUDGET" xargs -P "$UPLOAD_STREAMS" -I{} \
+              timeout -k 10 "$PART_TIMEOUT" scp "${SSH_COMMON[@]}" -o ControlPath="$RUNNER_TEMP/scp-{}-%C" -P "$SSH_PORT" "$LOCAL_PARTS/{}" "$SSH_TARGET:$PARTS_DIR/{}"
+            echo "==> 服务器端按序合并分片并核对字节数"
+            MERGED_BYTES=$(timeout -k 10 600 ssh "${SSH_COMMON[@]}" -p "$SSH_PORT" -o BatchMode=yes "$SSH_TARGET" \
+              "cat '$PARTS_DIR'/part-* > '$IMAGE_ARCHIVE' && rm -rf '$PARTS_DIR' && stat -c%s '$IMAGE_ARCHIVE'")
+            [ "$MERGED_BYTES" = "$ARCHIVE_BYTES" ] \
+              || { echo "::error::服务器端合并后字节数不一致（${MERGED_BYTES} ≠ ${ARCHIVE_BYTES}），拒绝继续部署"; exit 1; }
+            echo "==> 合并校验通过：${MERGED_BYTES} 字节（sha256 由 server-update.sh 继续核对）"
+          fi
           timeout -k 5 60 scp -o ConnectTimeout=20 -P "${{ steps.deploy_config.outputs.server_ssh_port }}" scripts/publish-pda.sh \
             "${{ steps.deploy_config.outputs.server_user }}@${{ steps.deploy_config.outputs.server_host }}:$BOOTSTRAP_SCRIPT"
           # %q 逐项转义远程环境，口令中的引号/美元符号不能改变远程脚本。
@@ -253,9 +289,16 @@ jobs:
         timeout-minutes: 2
         shell: bash
         run: |
+          # 分片目录也必须清；注释必须放在命令前，不能插在反斜杠续行中截断 SSH 参数。
           timeout -k 5 60 ssh -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=10 -o ServerAliveCountMax=2 \
             -p "${{ steps.deploy_config.outputs.server_ssh_port }}" "${{ steps.deploy_config.outputs.server_user }}@${{ steps.deploy_config.outputs.server_host }}" \
-            # 分片目录也必须清：上传中途失败时 PARTS_DIR 会留下 8 个半截分片（2026-09-21 实测 28MB），
-            # 而 /tmp 与 /opt/flowcube 同处根分区——2026-09-19 正是被中转目录一点点吃光了部署余量。
-            "rm -f /tmp/flowcube-images-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz /tmp/flowcube-pda-bootstrap-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.sh; rm -rf /tmp/flowcube-image-parts-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            "rm -f /tmp/flowcube-images-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz /tmp/flowcube-images-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz.partial /tmp/flowcube-receive-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.py /tmp/flowcube-pda-bootstrap-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.sh; rm -rf /tmp/flowcube-image-parts-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT} /tmp/flowcube-images-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz.https-*" \
             || echo '::warning::临时上传清理失败，请检查本次 run 对应的 /tmp 文件'
+
+      - name: Remove this run's temporary image artifact
+        if: always() && steps.image_artifact.outputs.artifact-id != ''
+        timeout-minutes: 1
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_ID: ${{ steps.image_artifact.outputs.artifact-id }}
+        run: timeout 30 gh api --method DELETE "repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID"

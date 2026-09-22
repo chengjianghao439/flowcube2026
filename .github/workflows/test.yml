@@ -39,6 +39,21 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
+  browser-smoke-runtime:
+    name: 页面验收脚本（本地夹具真浏览器）
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: scripts/browser-smoke/package-lock.json
+      - run: npm ci --prefix scripts/browser-smoke --ignore-scripts
+      - run: node scripts/browser-smoke/node_modules/playwright-core/cli.js install --with-deps chromium
+      - run: npm run test:browser-smoke
+
   static:
     name: 静态检查（lint + 类型）
     runs-on: ubuntu-latest
@@ -66,6 +81,12 @@ jobs:
 
       - name: 安装前端依赖
         run: npm --prefix frontend ci
+
+      - name: 契约测试 — 界面文案口径（禁用实现词/半角标点/官网双份一致/金额格式化）
+        run: npm run test:copy-conventions
+
+      - name: 契约测试 — 数量精度开关的接入覆盖（新入口漏接即失败）
+        run: npm run test:qty-precision-coverage
 
       - name: 安装桌面更新模块运行依赖（不下载 Electron）
         run: npm --prefix desktop ci --ignore-scripts --omit=dev
@@ -191,14 +212,8 @@ jobs:
       - name: 契约测试 — 补打唯一入口且销售侧无条码打印（防订单页长出补打按钮）
         run: npm run test:print-entry
 
-      - name: 契约测试 — 界面文案口径（禁用实现词/半角标点/官网双份一致/金额格式化）
-        run: npm run test:copy-conventions
-
       - name: 契约测试 — 商品数量精度开关（只允许整数的商品不得按小数出入库）
         run: npm run test:qty-precision
-
-      - name: 契约测试 — 数量精度开关的接入覆盖（新入口漏接即失败）
-        run: npm run test:qty-precision-coverage
 
       - name: 契约测试 — 前端命名与呈现结构（菜单/标签/页面标题同名、标签长度、重置口径、图标按钮可读）
         run: npm run test:frontend-conventions
@@ -307,6 +322,9 @@ jobs:
 
       - name: 数据库迁移 — smoke 库
         run: npm --prefix backend run migrate
+
+      - name: 数量两位精度 — 实际拆分守恒与迁移重放
+        run: npm run smoke:qty-precision
 
       - name: 往来明细 — 单位归属、预收核销、退款和余额回归
         run: npm run smoke:party-ledger

@@ -1391,8 +1391,8 @@ async function reserveStock(id, operator, items = [], { confirmCreditOverride = 
       reserveItems.push({ ...row, reserveQty: qty, warehouseId: whId })
     }
     if (!reserveItems.length) throw new AppError('本次没有有效的占库数量', 400)
-    // 「只能整数」的商品不得按小数占库（迁移 254）。数量精度开关只约束整数性，
-    // 不限制小数位数——系统的最小库存精度是 0.0001。
+    // 「只能整数」的商品不得按小数占库（迁移 254）。先校验两位精度，
+    // 再检查商品整数策略；不依赖数据库舍入。
     await assertQtyPrecision(conn, reserveItems.map((item, index) => ({
       productId: item.product_id,
       qty: item.reserveQty,
@@ -1567,8 +1567,8 @@ async function ship(id, operator, { itemIds = null, items = null, scopeWarehouse
         quantity: shipQty,
       })
     }
-    // 「只能整数」的商品不得按小数出库（迁移 254）。数量精度开关只约束整数性，
-    // 不限制小数位数——系统的最小库存精度是 0.0001。
+    // 「只能整数」的商品不得按小数出库（迁移 254）。先校验两位精度，
+    // 再检查商品整数策略；不依赖数据库舍入。
     await assertQtyPrecision(conn, [...groups.values()].flatMap(g => g.items).map((it, index) => ({
       productId: it.productId,
       qty: it.quantity,
@@ -1664,6 +1664,10 @@ async function releaseStock(id, operator, items = null, scopeWarehouseIds = null
         assertInScope(scopeWarehouseIds, row.warehouse_id ?? orderRow.warehouse_id, '销售单')
       }
       const itemById = new Map(itemRows.map(r => [Number(r.id), r]))
+      await assertQtyPrecision(conn, items.map(it => ({
+        productId: itemById.get(Number(it.id))?.product_id,
+        qty: it.qty, label: '释放占库数量',
+      })))
       // 同一明细行在 items 里出现多次时，逐项累计已释放量，防止重复 id 绕过「释放量≤已占量」校验超释
       const processedById = new Map()
       for (const it of items) {

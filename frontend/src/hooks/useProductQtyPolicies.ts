@@ -20,13 +20,20 @@ import { getProductQtyPoliciesApi } from '@/api/products'
 export function useProductQtyPolicies(productIds: Array<number | null | undefined>) {
   // 去重 + 排序后再拼 key：明细行增删顺序变化不该产生新请求
   const key = useMemo(
-    () => [...new Set(productIds.map(Number).filter(Number.isInteger))].sort((a, b) => a - b).join(','),
+    () => [...new Set(productIds.filter((id): id is number => Number.isSafeInteger(id) && Number(id) > 0))].sort((a, b) => a - b).join(','),
     [productIds],
   )
 
   const { data } = useQuery({
-    queryKey: ['product-qty-policies', key],
-    queryFn: () => getProductQtyPoliciesApi(key.split(',').map(Number)),
+    queryKey: ['products', 'qty-policies', key],
+    queryFn: async () => {
+      const ids = key.split(',').map(Number)
+      const batches = []
+      for (let offset = 0; offset < ids.length; offset += 500) {
+        batches.push(await getProductQtyPoliciesApi(ids.slice(offset, offset + 500)))
+      }
+      return batches.flat()
+    },
     enabled: key.length > 0,
     staleTime: 5 * 60 * 1000,
   })

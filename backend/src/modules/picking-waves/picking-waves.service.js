@@ -302,7 +302,7 @@ async function create({ taskIds, remark, priority = 2 }, scopeWarehouseIds = nul
     if (activeWaveRows.length) {
       const task = tasks.find(t => Number(t.id) === Number(activeWaveRows[0].task_id))
       throw new AppError(
-        `任务 ${task?.task_no || activeWaveRows[0].task_id} 已在波次 ${activeWaveRows[0].wave_no} 中，不能重复创建波次`,
+        `任务 ${task?.task_no || activeWaveRows[0].task_id} 已在批次 ${activeWaveRows[0].wave_no} 中，不能重复创建批次`,
         409,
       )
     }
@@ -310,7 +310,7 @@ async function create({ taskIds, remark, priority = 2 }, scopeWarehouseIds = nul
     // 校验：所有任务状态必须为 2（备货中）
     const invalid = tasks.find(t => Number(t.status) !== WT_STATUS.PICKING)
     if (invalid) {
-      throw new AppError(`任务 ${invalid.task_no} 状态不是"备货中"，无法创建波次`, 400)
+      throw new AppError(`任务 ${invalid.task_no} 状态不是"备货中"，无法创建批次`, 400)
     }
 
     // 校验：所有任务必须同一仓库

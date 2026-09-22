@@ -61,7 +61,7 @@ const inboundButtons = () => Array.from(host.querySelectorAll('button')).filter(
 test.each([
   ['普通部分出库', [[10, 5]]],
   ['同款多行有未完成行', [[3, 3], [7, 2]]],
-  ['四位小数剩余最小单位', [[0.3, 0.3], [0.2001, 0.2]]],
+  ['两位小数剩余最小单位', [[0.3, 0.3], [0.21, 0.2]]],
   ['逐行余量不被其他行历史超出抵消', [[3, 4], [7, 6]]],
 ] as Array<[string, Array<[number, number]>]>)('在途%s 保留源仓出库入口和原入库分组', async (_label, quantities) => {
   await renderList(listOrder(3, quantities))

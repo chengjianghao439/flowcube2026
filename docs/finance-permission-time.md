@@ -44,3 +44,8 @@
 - `/health`、`/api/health` 为存活/网络检查；公开 `/api/ready` 用应用连接池执行只读探测，整体最多2秒，短缓存合并并发，仅返回就绪状态。新版本部署与服务监控使用 ready，回退尚无该接口的旧镜像才允许原存活检查。连接池获取默认最多5秒（`DB_ACQUIRE_TIMEOUT_MS`），超期返回503且不派发排队 SQL，迟到连接归还；不把已开始的事务用响应超时伪装成取消。
 - **业务日期唯一时区为北京时间**：前端复用 `lib/dateTime.ts`，后端复用 `utils/backendTime.js`，数据库/容器配置保持一致。禁止用 `toISOString().slice(0,10)` 充当北京业务日期。
 - DATETIME 查询按既有半开区间处理，DATE 列按日期语义处理；不可机械统一为同一种边界。到期日等于北京今天时不算逾期。
+
+
+## 数量策略的最小只读权限（2026-09-22）
+
+`GET /api/products/qty-policies` 只返回所查商品的 `id/allowDecimal`，允许商品查看权限或该规则实际消费页面的数量作业权限任一访问（收货、退货执行、盘点、销售建改/占释/发、采购/请购、调拨、处置、库存调整/拆分）。仍经 `loadRolePermissions` 与 `requirePermission`，无相关权限返回 403；商品列表、finder、详情的完整主档/价格权限不放宽。对应白名单以 `products.routes.js` 为准，测试 `product-qty-policy-route.test.js` 同时检查合法作业账号、无权限账号及完整商品记录仍受限。

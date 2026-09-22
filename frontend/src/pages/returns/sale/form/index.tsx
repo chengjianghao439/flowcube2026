@@ -361,7 +361,7 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
                         ) : ((item.entryUnit && item.entryUnit !== item.unit) ? item.entryUnit : (item.unit || '—'))}
                       </td>
                       <td className="py-2.5 pr-2">
-                        <Input
+                        <Input quantity
                           aria-label="退货数量" type="number" min="0.01" step={qtyStep(allowDecimalOf(item.productId))} placeholder="数量"
                           value={item.quantity}
                           disabled={!!boundSource}
@@ -481,7 +481,7 @@ function TaskProgressCard({ task }: { task: SaleReturn['task'] }) {
       )}
       {!!task.rejectedQty && (
         <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive space-y-1">
-          <p className="font-medium">质检发现不合格 {task.rejectedQty} 件，已隔离为待报废容器（不计入可用库存）</p>
+          <p className="font-medium">质检发现不合格 {task.rejectedQty} 件，已隔离为待报废库存（不计入可用库存）</p>
           {(task.rejectedContainers || []).map(c => (
             <p key={c.id} className="text-muted-foreground">
               {c.barcode} · {c.productName} · {c.qty} 件

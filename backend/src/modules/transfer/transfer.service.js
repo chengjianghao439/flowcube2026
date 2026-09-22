@@ -243,7 +243,7 @@ async function allocateTransferQuantity(conn, orderId, productId, qty, direction
   })
   const available = capacities.reduce((sum, item) => sum + item.units, 0)
   if (remaining > available) {
-    throw new AppError(`该容器 ${qty} 件超出调拨单剩余可${direction === 'out' ? '调' : '收'}量 ${available / 100} 件，无法整箱扫码；请核对容器与单据`, 409)
+    throw new AppError(`该库存条码 ${qty} 件超出调拨单剩余可${direction === 'out' ? '调' : '收'}量 ${available / 100} 件，无法整箱扫码；请核对库存条码与单据`, 409)
   }
   const allocations = []
   for (const item of capacities) {
@@ -306,7 +306,7 @@ async function scanOut(id, { containerBarcode }, operator, requestKey, scopeWare
     })
     if (available < qty) {
       throw new AppError(
-        `该容器 ${qty} 件中有货已被销售占用，源仓当前可用仅 ${available}，无法整箱调出；请先处理占用或改调其他容器`,
+        `该库存条码 ${qty} 件中有货已被销售占用，源仓当前可用仅 ${available}，无法整箱调出；请先处理占用或改调其他库存条码`,
         409,
       )
     }

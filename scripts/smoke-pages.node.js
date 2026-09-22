@@ -1,10 +1,7 @@
 #!/usr/bin/env node
-const { spawnSync } = require('child_process')
 const fs = require('fs')
-const os = require('os')
 const path = require('path')
 const ROOT = process.cwd()
-const SESSION = process.env.PLAYWRIGHT_CLI_SESSION || `fps-${process.pid}-${Math.floor(Math.random() * 1e6)}`
 const BASE_URL = process.env.PAGE_SMOKE_BASE_URL || 'http://127.0.0.1:8080'
 const SMOKE_USERNAME = String(process.env.SMOKE_USERNAME || '').trim()
 const SMOKE_PASSWORD = String(process.env.SMOKE_PASSWORD || '').trim()
@@ -29,114 +26,10 @@ function requireSmokeCredentials() {
 // 两组凭据必须在探测命令、创建浏览器配置或运行浏览器前完整提供。
 requireSmokeCredentials()
 
-function pickRunner() {
-  if (cmdExists('npm')) {
-    return ['npm', ['exec', '--yes', '--package', '@playwright/cli', '--', 'playwright-cli']]
-  }
-  if (cmdExists('npx')) {
-    return ['npx', ['--yes', '--package', '@playwright/cli', 'playwright-cli']]
-  }
-  throw new Error('缺少 npm / npx，无法运行页面烟雾检查')
-}
-
-function cmdExists(cmd) {
-  const res = spawnSync('sh', ['-lc', `command -v ${cmd} >/dev/null 2>&1`], {
-    cwd: ROOT,
-    stdio: 'ignore',
-  })
-  return res.status === 0
-}
-
-const [runnerBin, runnerArgs] = pickRunner()
-const BROWSER_NAME = process.env.PLAYWRIGHT_BROWSER_NAME || 'chrome'
-const SKIP_BROWSER_INSTALL = process.env.PLAYWRIGHT_SKIP_BROWSER_INSTALL === '1'
-const CLI_CONFIG_ARGS = createCliConfigArgs()
-
-function createCliConfigArgs() {
-  const executablePath = resolveChromiumExecutablePath()
-  if (!executablePath) {
-    return []
-  }
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'flowcube-playwright-'))
-  const configPath = path.join(tempDir, 'cli.config.json')
-  fs.writeFileSync(
-    configPath,
-    JSON.stringify(
-      {
-        browser: {
-          browserName: 'chromium',
-          launchOptions: {
-            executablePath,
-            chromiumSandbox: false,
-          },
-        },
-      },
-      null,
-      2,
-    ),
-  )
-  return ['--config', configPath]
-}
-
-function resolveChromiumExecutablePath() {
-  if (process.env.PLAYWRIGHT_BROWSER_EXECUTABLE_PATH) {
-    return process.env.PLAYWRIGHT_BROWSER_EXECUTABLE_PATH
-  }
-  const root = '/ms-playwright'
-  if (!fs.existsSync(root)) {
-    return ''
-  }
-  const candidates = fs
-    .readdirSync(root)
-    .filter((name) => /^chromium-\d+$/.test(name))
-    .sort((a, b) => Number(b.split('-')[1]) - Number(a.split('-')[1]))
-  for (const candidate of candidates) {
-    const executablePath = path.join(root, candidate, 'chrome-linux', 'chrome')
-    if (fs.existsSync(executablePath)) {
-      return executablePath
-    }
-  }
-  return ''
-}
-
-function runPw(args) {
-  const res = spawnSync(runnerBin, [...runnerArgs, '--session', SESSION, ...args], {
-    cwd: ROOT,
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe'],
-  })
-  if (res.status !== 0) {
-    const detail = (res.stderr || res.stdout || '').trim()
-    throw new Error(detail || `playwright-cli ${args[0]} failed`)
-  }
-  return (res.stdout || '').trim()
-}
-
-function runPwOpen(args) {
-  const res = spawnSync(runnerBin, [...runnerArgs, ...CLI_CONFIG_ARGS, '--session', SESSION, ...args], {
-    cwd: ROOT,
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe'],
-  })
-  if (res.status !== 0) {
-    const detail = (res.stderr || res.stdout || '').trim()
-    throw new Error(detail || `playwright-cli ${args[0]} failed`)
-  }
-  return (res.stdout || '').trim()
-}
-
-function ensureBrowser() {
-  if (SKIP_BROWSER_INSTALL) {
-    return
-  }
-  const res = spawnSync(runnerBin, [...runnerArgs, 'install-browser', BROWSER_NAME], {
-    cwd: ROOT,
-    stdio: 'inherit',
-  })
-  if (res.status !== 0) {
-    throw new Error(`安装浏览器 ${BROWSER_NAME} 失败`)
-  }
-}
+const { createRuntime } = require('./lib/browser-smoke-runtime')
+const runtime = createRuntime()
+const runPw = args => runtime.run(args)
+const runPwOpen = runPw
 
 function jsQuote(value) {
   return JSON.stringify(value)
@@ -155,15 +48,14 @@ async function waitFor(expr, { timeout = PAGE_SMOKE_TIMEOUT_MS, interval = PAGE_
   while (Date.now() < deadline) {
     // 导航切换瞬间 page context 可能短暂不可用，eval 抛错按「未就绪」继续轮询
     try {
-      if (runPw(['eval', expr]).includes('true')) return true
+      if ((await runPw(['eval', expr])) === 'true') return true
     } catch {
       // 忽略单次 eval 失败，等下一轮
     }
     await sleep(interval)
   }
-  // 超时兜底：再取一次页面文本，把「当时到底长什么样」带进报错，便于定位
-  const bodyText = runPw(['eval', '(document.body.innerText || "").slice(0, 500)'])
-  throw new Error(`等待超时（${timeout / 1000}s）：${label} 未就绪。页面文本片段：${bodyText.replace(/\s+/g, ' ').trim().slice(0, 300) || '(空)'}`)
+  // 只记录检查标签，避免把业务明细或登录态写入 CI 日志。
+  throw new Error(`等待超时（${timeout / 1000}s）：${label} 未就绪`)
 }
 
 const ERROR_MARKERS = "'渲染错误','未注册','服务器内部错误','Minified React error'"
@@ -181,7 +73,7 @@ function assertExpr(expected, forbidden) {
 }
 
 function assertText(expected, forbidden = '') {
-  // 用轮询等待替代单次断言；超时错误已含页面文本，能直接看出是渲染错误还是未加载完
+  // 轮询期望文本；超时只记录标签，避免打印业务明细
   return waitFor(assertExpr(expected, forbidden), {
     label: forbidden ? `期望包含 ${expected} 且不应包含 ${forbidden}` : `期望包含 ${expected}`,
   })
@@ -205,6 +97,7 @@ let AUTH_STORAGE_JSON = ''
 async function loginAs(username, password, { expectedText = '仪表盘', expectedTexts = null, fallbackHash = '/dashboard' } = {}) {
   const res = await fetch(`${BASE_URL}/api/auth/login`, {
     method: 'POST',
+    signal: AbortSignal.timeout(20000),
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password }),
   })
@@ -219,12 +112,12 @@ async function loginAs(username, password, { expectedText = '仪表盘', expecte
     version: 0,
   })
 
-  runPwOpen(['open', `${BASE_URL}/#/login`])
-  runPw(['eval', `(sessionStorage.setItem('flowcube-auth-v3', ${jsQuote(AUTH_STORAGE_JSON)}), true)`])
+  await runPwOpen(['open', `${BASE_URL}/#/login`])
+  await runPw(['eval', `(sessionStorage.setItem('flowcube-auth-v3', ${jsQuote(AUTH_STORAGE_JSON)}), true)`])
   // 清掉上次会话的 workspace tabs（localStorage 持久化）：受限账号登录后若恢复出
   // 无权限的 tab，KeepAliveOutlet 权限拦截会把它弹到 403，导致「等待进入系统」超时
-  runPw(['eval', '(localStorage.removeItem(\'flowcube-workspace\'), true)'])
-  runPw(['eval', '(location.reload(), true)'])
+  await runPw(['eval', '(localStorage.removeItem(\'flowcube-workspace\'), true)'])
+  await runtime.reload()
   const texts = expectedTexts || [expectedText]
   const textCond = texts.map(t => `(document.body.innerText || '').includes(${jsQuote(t)})`).join(' || ')
   await waitFor(
@@ -248,9 +141,9 @@ async function login() {
 // 能等到 = 403 生效；等不到 = 权限拦截坏了（或页面没拦）。
 async function assertForbidden(path, expected = '无访问权限') {
   console.log(`==> 页面烟雾（403 场景）：${path} 应显示 ${expected}`)
-  runPw(['eval', `(location.hash = ${jsQuote(`#${path}`)}, true)`])
+  await runPw(['eval', `(location.hash = ${jsQuote(`#${path}`)}, true)`])
   await waitFor(
-    `(document.body.innerText || '').includes(${jsQuote(expected)})`,
+    `location.hash === '#/403' && (document.body.innerText || '').includes(${jsQuote(expected)})`,
     { label: `${path} 显示 ${expected}` },
   )
 }
@@ -262,20 +155,14 @@ async function openAndCheck(path, expected = '', forbidden = '') {
   return expected ? assertText(expected, forbidden) : assertNoErrorText()
 }
 
-// 设置 hash 并确认已生效。playwright-cli 每次 eval 都是独立进程调用，
-// 偶发存在「hash 赋值执行成功但路由未切换」的情况（CI 两次部署失败，
-// 页面文本都停留在上一页——那是 hash 变更被吞掉，而非渲染慢）。
-// 因此先轮询确认 hash 变成目标路径，未就位则重设一次。
-// （PDA 内部导航也走这里：PDA→PDA 不被 CrossClientNavigationGuard 拦截，
-//  hash 应能确认成功；ERP→PDA 的守卫弹回场景由 openPdaAndCheck 的
-//  新标签页方案绕开，不再出现。）
+// 设置 hash 后确认目标路径；保留重试以容纳路由重定向。
 async function setHashAndConfirm(path) {
   const target = `#${path}`
   const pathPrefix = target.split('?')[0]
   for (let attempt = 0; attempt < 2; attempt++) {
-    runPw(['eval', `(location.hash = ${jsQuote(target)}, true)`])
+    await runPw(['eval', `(location.hash = ${jsQuote(target)}, true)`])
     const ok = await waitFor(
-      `location.hash.startsWith(${jsQuote(pathPrefix)})`,
+      `location.hash.split('?')[0] === ${jsQuote(pathPrefix)}`,
       { timeout: PAGE_SMOKE_NAV_TIMEOUT_MS, interval: PAGE_SMOKE_INTERVAL_MS, label: `导航到 ${pathPrefix}` },
     ).catch(() => false)
     if (ok) return
@@ -299,11 +186,11 @@ async function setHashAndConfirm(path) {
 async function openPdaAndCheck(path, expected) {
   console.log(`==> 页面烟雾（PDA 新标签页）：${path}`)
   const url = `${BASE_URL}/#/pda/login`
-  runPw(['tab-new', url])
+  await runPw(['tab-new', url])
   try {
     // 新标签页无登录态，注入后 reload 让 zustand persist 重新水合
-    runPw(['eval', `(sessionStorage.setItem('flowcube-auth-v3', ${jsQuote(AUTH_STORAGE_JSON)}), true)`])
-    runPw(['eval', '(location.reload(), true)'])
+    await runPw(['eval', `(sessionStorage.setItem('flowcube-auth-v3', ${jsQuote(AUTH_STORAGE_JSON)}), true)`])
+    await runtime.reload()
     // 等待水合完成并落到 PDA 首页（/pda/login → /pda）。
     // 超时用 PAGE_SMOKE_TIMEOUT_MS（默认 20s）：CI Playwright 容器连续开新标签页
     // 时偶发初始化慢，10s 的 NAV_TIMEOUT*2 不够（2026-08-21 连续两次 CI 失败点）
@@ -318,12 +205,11 @@ async function openPdaAndCheck(path, expected) {
       { label: `PDA ${path} 渲染 ${expected}` },
     )
   } finally {
-    runPw(['tab-close'])
+    await runPw(['tab-close'])
   }
 }
 
 async function main() {
-  ensureBrowser()
   await login()
   await openAndCheck('/reports/role-workbench', '待办中心')
   await openAndCheck('/reports/reconciliation', '月结供应商对账')
@@ -390,7 +276,7 @@ async function main() {
   console.log('页面烟雾检查通过')
 }
 
-main().catch((error) => {
+main().finally(() => runtime.close()).catch((error) => {
   console.error(error instanceof Error ? error.stack || error.message : String(error))
-  process.exit(1)
+  process.exitCode = 1
 })

@@ -91,7 +91,7 @@ function CreateDialog({ open, onClose }: { open: boolean; onClose: () => void })
           {pickedSale && (
             <div className="rounded-md border border-warning/30 bg-warning/5 px-3 py-2 text-sm">
               选中 <span className="font-medium">{pickedSale.orderNo}</span>（{pickedSale.customerName}，{money(pickedSale.totalAmount)}）。
-              提交后系统会校验该客户授信是否超限并快照额度/已用/超量。
+              提交后系统会校验该客户授信是否超限，并保存当时的额度、已用额度与超出金额。
             </div>
           )}
           <div className="space-y-2">

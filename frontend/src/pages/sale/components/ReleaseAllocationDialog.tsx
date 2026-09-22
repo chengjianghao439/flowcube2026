@@ -114,7 +114,7 @@ export default function ReleaseAllocationDialog({ open, orderId, items, onClose 
                     <td className="px-2 py-2 text-muted-foreground">{item.warehouseName || '—'}</td>
                     <td className="px-2 py-2 text-right tabular-nums">{item.reservedQty} {item.unit}</td>
                     <td className="px-2 py-2">
-                      <Input
+                      <Input quantity
                         type="number"
                         step={qtyStep(allowDecimalOf(item.productId))}
                         aria-label={`${item.productName}释放数量`}

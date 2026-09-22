@@ -1,0 +1,3989 @@
+{
+  "range": "v0.9.26..b1fd2ed",
+  "reviewedFiles": 268,
+  "frontendFiles": 195,
+  "backendFiles": 41,
+  "otherFiles": 32,
+  "recordType": "historical_diff_review_with_local_fixes",
+  "scopeNote": "覆盖此比较范围全部变更文件；历史行号与发现保留在下方。不是全仓每个既有文件审计，也不等同线上或真机验收。",
+  "completion": "全部已记录的代码缺陷已在本地修复；发现详情是审查时证据，当前结论与验证汇总见同名.md。",
+  "reviews": [
+    {
+      "domain": "frontend",
+      "files": [
+        {
+          "path": "frontend/android/app/build.gradle",
+          "status": "reviewed",
+          "summary": "Android版本从134/0.9.26到137/0.10.2；未改变SDK、签名或资源打包配置。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -15,2 +15,2 @@ android {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/package-lock.json",
+          "status": "reviewed",
+          "summary": "lockfile顶层与根包版本同步0.10.2，依赖解析条目未改变。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -3 +3 @@",
+              "@@ -9 +9 @@"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/package.json",
+          "status": "reviewed",
+          "summary": "前端package版本同步0.10.2，scripts与依赖保持原值。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -4 +4 @@"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/api/allRecords.ts",
+          "status": "reviewed",
+          "summary": "取消、分页总量异常与重复页错误文案调整；校验和重复批次拒绝分支仍在。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -31 +31 @@ export async function collectAllRecords<T>(",
+              "@@ -39 +39 @@ export async function collectAllRecords<T>(",
+              "@@ -45 +45 @@ export async function collectAllRecords<T>("
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/api/client.ts",
+          "status": "reviewed",
+          "summary": "认证代次取消与网络超时兜底措辞变化；取消条件、重试边界、业务错误码未变。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -162 +162 @@ function assertCurrentAuthSession(config?: AxiosRequestConfig): void {",
+              "@@ -317 +317 @@ apiClient.interceptors.response.use(",
+              "@@ -319 +319 @@ apiClient.interceptors.response.use("
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/api/portal.ts",
+          "status": "reviewed",
+          "summary": "删除供应商到货查询API类型/调用；全前端已无PortalPurchaseStatus引用，客户对账API仍保留。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -28,20 +27,0 @@ export interface PortalStatementResult {",
+              "@@ -51,2 +30,0 @@ export const getPortalStatementsApi = (params: { customerId: number; page?: numb"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/api/products.ts",
+          "status": "reviewed",
+          "summary": "增加商品数量策略批量接口；追踪到策略hook与服务端500条限制，前端补分批取齐。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -4 +4 @@ import type { PaginatedData, QueryParams } from '@/types'",
+              "@@ -8,0 +9,4 @@ export const getProductsForFinderApi = async (p: ProductFinderParams) =>"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/components/GlobalErrorBoundary.tsx",
+          "status": "reviewed",
+          "summary": "全局ErrorBoundary标题简化，错误隔离、刷新入口和上报机制没有变更。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -100 +100 @@ export class GlobalErrorBoundary extends Component<Props, State> {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/components/dashboard/DashboardVersionCard.tsx",
+          "status": "reviewed",
+          "summary": "版本卡服务端最新改最新版本；仍读取发布版本信息，未拿包版本冒充最新版本。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -59 +59 @@ export default function DashboardVersionCard() {",
+              "@@ -112 +112 @@ export default function DashboardVersionCard() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/components/dashboard/chartTheme.ts",
+          "status": "reviewed",
+          "summary": "仪表盘money改为lib/format再导出；wan与pct单位换算独立保留。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -22 +22,2 @@ export const CHART_COLORS = ["
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/components/dashboard/registry.ts",
+          "status": "reviewed",
+          "summary": "小组件说明中的往来单位与作业进度用词变化，widget ID、权限、布局默认值未改。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -88,2 +88,2 @@ export const WIDGETS: WidgetDef[] = [",
+              "@@ -135 +135 @@ export const DASHBOARD_SECTIONS = [",
+              "@@ -139 +139 @@ export const DASHBOARD_SECTIONS = ["
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/components/dashboard/widgets/ListWidgets.tsx",
+          "status": "reviewed",
+          "summary": "待审批列表金额改money，条目导航与审批权限不变，空值/负数由统一格式器处理。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -274 +274 @@ export function ListPendingApprovals() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/components/dashboard/widgets/RiskDetails.tsx",
+          "status": "reviewed",
+          "summary": "风险明细加载中文改为加载中；查询失败重试和明细显示分支保持。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -71 +71 @@ export default function RiskDetails({"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/components/erp/ErpDesktopConnectionGate.tsx",
+          "status": "reviewed",
+          "summary": "桌面缺服务器地址提示简化，连接检查和登录跳转仍保留。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -76 +76 @@ export default function ErpDesktopConnectionGate({ children }: { children: React"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/components/finder/FinderModal.tsx",
+          "status": "reviewed",
+          "summary": "移除FinderTrigger实现；所有调用已迁移PickerField，FinderModal的搜索、选择和关闭行为保留。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -4 +3,0 @@ import { Button } from '@/components/ui/button'",
+              "@@ -105,41 +103,0 @@ export function FinderModal<T extends Record<string, unknown>>({"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/components/finder/index.ts",
+          "status": "reviewed",
+          "summary": "finder桶导出移除FinderTrigger，代码搜索确认没有残留运行时import。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -13 +13 @@ export type { ProductFinderProps } from './ProductFinder'"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/components/layout/KeepAliveOutlet.tsx",
+          "status": "reviewed",
+          "summary": "未注册ERP路径提示从技术用语改下线/不存在，未知路由仍不挂载业务组件。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -94 +94 @@ function TabPanel({ tabKey, path, isActive }: TabPanelProps) {",
+              "@@ -199 +199 @@ export function KeepAliveOutlet() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/components/layout/WorkspaceTabs.tsx",
+          "status": "reviewed",
+          "summary": "工作区标签增加完整title供悬停，关闭/排序/激活逻辑未变。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -155 +155 @@ export function WorkspaceTabs() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/components/pda/PdaConnectionGate.tsx",
+          "status": "reviewed",
+          "summary": "PDA网络门禁说明改白话，优先保存地址再回退包内默认地址的实现未变。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -52 +52 @@ export default function PdaConnectionGate({ children }: { children: React.ReactN"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/components/pda/PdaCriticalActionNotice.tsx",
+          "status": "reviewed",
+          "summary": "待确认操作仅展示请求键前8位，实际pending记录仍保留完整键；清除按钮更名未改变操作。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -68 +68 @@ export default function PdaCriticalActionNotice({",
+              "@@ -77 +77 @@ export default function PdaCriticalActionNotice({"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/components/pda/PdaErrorBoundary.tsx",
+          "status": "reviewed",
+          "summary": "PDA错误边界标题统一，返回工作台和页面错误隔离保持。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -57 +57 @@ export default class PdaErrorBoundary extends Component<Props, State> {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/components/pda/PdaNetworkBar.tsx",
+          "status": "reviewed",
+          "summary": "离线及待确认横条缩短文案，离线submitBlocked与pendingCount门禁仍由原逻辑提供。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -22 +22 @@ export default function PdaNetworkBar() {",
+              "@@ -31 +31 @@ export default function PdaNetworkBar() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/components/pda/PdaRoutePermission.tsx",
+          "status": "reviewed",
+          "summary": "PDA权限未加载说明简化；无权限/未收到权限继续受限，没有放开fail-closed分支。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -52 +52 @@ export default function PdaRoutePermission({",
+              "@@ -69 +69 @@ export default function PdaRoutePermission({"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/components/pda/PdaUpdateDialog.tsx",
+          "status": "reviewed",
+          "summary": "更新包SHA256不匹配报错改损坏文案；校验仍在安装前中止下载流程。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -97 +97 @@ export default function PdaUpdateDialog({ version, onDismiss }: Props) {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/components/print/OrderPrintOverlay.tsx",
+          "status": "reviewed",
+          "summary": "打印覆盖层加载模板措辞统一；图像解码、窗口打印和清理监听不变。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -192 +192 @@ export function OrderPrintOverlay({ templateType, title, data, items, onClose }:"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/components/print/TemplateRenderer.tsx",
+          "status": "reviewed",
+          "summary": "打印模板明细价、金额和合计改money；字段映射与求和未变，空值改显示横线。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -11,0 +12 @@ import BarcodePreview from '@/components/print/BarcodePreview'",
+              "@@ -78,2 +79,2 @@ function colValue(col: string, item: PrintItem): string {",
+              "@@ -387 +388 @@ function FlowTable({ el, items, scale }: { el: TemplateElement; items: PrintItem"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/components/shared/CategoryTreeSelect.tsx",
+          "status": "reviewed",
+          "summary": "分类选择主按钮新增aria-label；现有树层级、禁用和选择事件保留。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -143,0 +144,2 @@ export default function CategoryTreeSelect({"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/components/shared/ContainerDrawer.tsx",
+          "status": "reviewed",
+          "summary": "库存条码抽屉改共用qty并用EmptyState，容器详情/流水查询及日期判断不变。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -0,0 +1 @@",
+              "@@ -1,0 +3 @@ import { ProductIdentityDetails } from '@/components/shared/ProductIdentityCells",
+              "@@ -55 +57 @@ export default function ContainerDrawer({ open, onClose, item }: ContainerDrawer",
+              "@@ -205 +207 @@ function ContainerTimeline({ containerId }: { containerId: number }) {",
+              "@@ -258,5 +259,0 @@ function Field({ label, value, mono, valueClass, className }: FieldProps) {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/components/shared/DataTable.tsx",
+          "status": "reviewed",
+          "summary": "DataTable列宽操作title调整，不涉及拖动、键盘、虚拟列表与sticky逻辑。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -215 +215 @@ export default function DataTable<T extends object>({"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/components/shared/DocumentActivityPanel.tsx",
+          "status": "reviewed",
+          "summary": "单据作业记录空态改EmptyState；query enabled、轮询和事件/分节数据映射保持。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -1,0 +2 @@ import { OrderFulfillmentPanel } from './OrderFulfillmentPanel'",
+              "@@ -15 +16 @@ export function DocumentActivityPanel({ type, id, view, extra }: { type: Documen",
+              "@@ -28 +29 @@ export function DocumentActivityPanel({ type, id, view, extra }: { type: Documen",
+              "@@ -32,2 +33,2 @@ export function DocumentActivityPanel({ type, id, view, extra }: { type: Documen"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/components/shared/EmptyState.tsx",
+          "status": "reviewed",
+          "summary": "默认空态副文案从暂无记录改还没有任何记录，variant样式和动作入口不变。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -44 +44 @@ const VARIANT_MAP: Record<EmptyVariant, VariantConfig> = {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/components/shared/FulfillmentTodos.tsx",
+          "status": "reviewed",
+          "summary": "履约待办把状态与逾期提示拆开、使用ListSummary；链接和查询筛选仍保留。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -7,0 +8 @@ import { SectionCard } from './SectionCard'",
+              "@@ -22 +23 @@ export function FulfillmentTodos({ summary = false }: { summary?: boolean }) {",
+              "@@ -27 +28 @@ export function FulfillmentTodos({ summary = false }: { summary?: boolean }) {",
+              "@@ -31 +32 @@ export function FulfillmentTodos({ summary = false }: { summary?: boolean }) {",
+              "@@ -41 +42 @@ export function FulfillmentTodos({ summary = false }: { summary?: boolean }) {",
+              "@@ -46 +47,2 @@ export function FulfillmentTodos({ summary = false }: { summary?: boolean }) {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/components/shared/GlobalConfirmDialog.tsx",
+          "status": "reviewed",
+          "summary": "全局确认框统一解析默认destructive后决定按钮文字；确认Promise及取消链未改。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -45,0 +46,5 @@ export function GlobalConfirmDialog() {",
+              "@@ -51 +56 @@ export function GlobalConfirmDialog() {",
+              "@@ -53 +58 @@ export function GlobalConfirmDialog() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/components/shared/GlobalSearch.tsx",
+          "status": "reviewed",
+          "summary": "全局搜索无结果状态改EmptyState并禁用多余description；分页、错误及防抖未变。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -4,0 +5 @@ import { searchGlobalApi, type GlobalSearchItem } from '@/api/search'",
+              "@@ -135 +136 @@ export default function GlobalSearch() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/components/shared/OrderDetailSections.test.tsx",
+          "status": "reviewed",
+          "summary": "单据信息tab测试同步收货信息/库存条码新名称，仍验证切单重置与保留草稿。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -23 +23 @@ test('默认订单信息，切换进度保留未保存内容，操作记录单",
+              "@@ -26 +26 @@ test('收货保留条码明细但不展示打印记录，无装箱环节，切",
+              "@@ -31 +31 @@ test('收货保留条码明细但不展示打印记录，无装箱环节，切"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/components/shared/OrderDetailSections.tsx",
+          "status": "reviewed",
+          "summary": "INFO_LABEL与进度/扫码名称按业务单据区分；tab key、KeepAliveSection与详情重置不变。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -6,0 +7,13 @@ interface Props { type: DocumentType; id: number; children: ReactNode; progress?",
+              "@@ -21,4 +34,13 @@ function DetailSections({ type, id, children, progress, printProgress, initialVi",
+              "@@ -26 +48 @@ function DetailSections({ type, id, children, progress, printProgress, initialVi"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/components/shared/OrderFulfillmentPanel.test.tsx",
+          "status": "reviewed",
+          "summary": "履约面板测试同步状态/按钮文案及DatePicker定位；权限与问题重新检测测试仍在。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -60,2 +60,2 @@ test('仍需发货时显示白话字段和缺少仓库备货天数的原因', as",
+              "@@ -84 +84 @@ const issue = { id: 3, document_type: 'sale' as const, document_id: 1, source: '",
+              "@@ -88 +88 @@ test('已有人工问题仍可跟进，已解决记录按需查看', async () =>",
+              "@@ -99 +99 @@ test('检测到尚未入列的问题时保留立即更新入口', async () => {",
+              "@@ -113 +113 @@ test('商品详情保留采购跳转和明细日期编辑，读取权限不暴"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/components/shared/OrderFulfillmentPanel.tsx",
+          "status": "reviewed",
+          "summary": "履约问题同页链接隐藏、状态与期限分开；追踪detect默认action_path，默认同页路径匹配；写入权限不变。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -0,0 +1,14 @@",
+              "@@ -1,0 +16 @@ import { useRef, useState } from 'react'",
+              "@@ -17 +32 @@ const control = 'h-9 rounded-md border border-input bg-background px-3 text-sm'",
+              "@@ -31,0 +47,16 @@ const issueNames: Record<string, string> = {",
+              "@@ -71 +102 @@ export function OrderFulfillmentPanel({ type, id }: { type: FulfillmentType; id:",
+              "@@ -118 +149 @@ export function OrderFulfillmentPanel({ type, id }: { type: FulfillmentType; id:",
+              "@@ -139,2 +170,2 @@ export function OrderFulfillmentPanel({ type, id }: { type: FulfillmentType; id:",
+              "@@ -142 +173 @@ export function OrderFulfillmentPanel({ type, id }: { type: FulfillmentType; id:",
+              "@@ -146 +177 @@ export function OrderFulfillmentPanel({ type, id }: { type: FulfillmentType; id:",
+              "@@ -154 +185 @@ export function OrderFulfillmentPanel({ type, id }: { type: FulfillmentType; id:",
+              "@@ -157 +188 @@ export function OrderFulfillmentPanel({ type, id }: { type: FulfillmentType; id:"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/components/shared/PickerField.tsx",
+          "status": "reviewed",
+          "summary": "PickerField合并两类选择器；发现disabled漏到清除按钮并以点击回归修复。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -0,0 +1,64 @@"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/components/shared/ProcurementSupplyDetails.tsx",
+          "status": "reviewed",
+          "summary": "包装规则step从四位改两位原先无硬校验；补quantity和商品策略，换算率展示保留原值。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -0,0 +1 @@",
+              "@@ -16 +16,0 @@ import { getPurchasePolicyApi, savePurchasePolicyApi, prepareProcurementTransfer",
+              "@@ -44 +44 @@ function PolicyForm({ policy }: { policy: PurchasePolicy }) {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/components/shared/ProcurementSupplyExplanation.test.tsx",
+          "status": "reviewed",
+          "summary": "采购供应说明测试只更新缺快照提示文本，仍断言没有历史数据时不合成表格。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -55 +55 @@ test('无历史快照时明确缺少依据，不合成生成时数值', () => {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/components/shared/ProcurementSupplyExplanation.tsx",
+          "status": "reviewed",
+          "summary": "采购供应数量统一qty；本轮将换算率从数量格式器中分离，防止两位展示截断率。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -0,0 +1 @@",
+              "@@ -4 +5,5 @@ import type { ProcurementSupply } from '@/api/procurement-supply'",
+              "@@ -47 +52 @@ export function ProcurementSupplyExplanation({ supply: r, snapshot, mode = 'plan"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/components/shared/ProductFinderModal.tsx",
+          "status": "reviewed",
+          "summary": "商品选择器显示只能整数徽章、共用money；确认和键盘流程不变，仓库未知时提示不冒用ID。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -0,0 +1 @@",
+              "@@ -69 +70 @@ function ProductFinderContent({ warehouseId, warehouseName, mode = 'lookup', onC",
+              "@@ -75 +76 @@ function ProductFinderContent({ warehouseId, warehouseName, mode = 'lookup', onC",
+              "@@ -83 +84 @@ function ProductFinderContent({ warehouseId, warehouseName, mode = 'lookup', onC",
+              "@@ -86,2 +87,2 @@ function ProductFinderContent({ warehouseId, warehouseName, mode = 'lookup', onC"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/components/shared/QueryChips.tsx",
+          "status": "reviewed",
+          "summary": "QueryChips清除改重置，逐项移除可读名更明确；onClearAll和onClear调用保持。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -27 +27 @@ export function QueryChips({ chips, onClearAll }: { chips: QueryChip[]; onClearA",
+              "@@ -32 +32 @@ export function QueryChips({ chips, onClearAll }: { chips: QueryChip[]; onClearA"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/components/shared/QueryErrorState.tsx",
+          "status": "reviewed",
+          "summary": "查询失败描述更清楚，详情区域明确管理员用途；重试动作与详情收起机制不变。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -64 +64 @@ export function QueryErrorState({",
+              "@@ -91,0 +92 @@ export function QueryErrorState({"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/components/shared/QueryPickerField.tsx",
+          "status": "reviewed",
+          "summary": "QueryPickerField删除后全部查询弹窗改PickerField；清除与placeholder语义已逐个核对。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -1,33 +0,0 @@"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/components/shared/ReceiptPanel.tsx",
+          "status": "reviewed",
+          "summary": "收付款单money同源，缺失日期/方式/经办人改横线；核销操作及权限未改。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -1,0 +2 @@ import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'",
+              "@@ -20 +20,0 @@ const RECEIPT_TONE: Record<number, StatusTone> = { 1: 'warning', 2: 'active', 3:",
+              "@@ -107,3 +107,3 @@ export const ReceiptPanel = forwardRef<ReceiptPanelHandle, Props>(function Recei"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/components/shared/StatementPanel.tsx",
+          "status": "reviewed",
+          "summary": "对账单列表money同源；状态、分页、合并对账和核销入口保持。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -1,0 +2 @@ import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'",
+              "@@ -23 +23,0 @@ const ST_TONE: Record<number, StatusTone> = { 1: 'draft', 2: 'active', 3: 'succe"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/components/shared/TabErrorBoundary.tsx",
+          "status": "reviewed",
+          "summary": "标签错误边界文案简化，页面独立隔离与重新加载回调不变。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -46 +46 @@ export default class TabErrorBoundary extends Component<Props, State> {",
+              "@@ -49 +49 @@ export default class TabErrorBoundary extends Component<Props, State> {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/components/shared/UserMenu.tsx",
+          "status": "reviewed",
+          "summary": "用户菜单退出系统更名退出登录，原生确认和网页确认均同步；密码长度仍6位。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -111,3 +111,3 @@ export default function UserMenu() {",
+              "@@ -176 +176 @@ export default function UserMenu() {",
+              "@@ -178 +178 @@ export default function UserMenu() {",
+              "@@ -193 +193 @@ export default function UserMenu() {",
+              "@@ -204 +204 @@ export default function UserMenu() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/components/shared/payments/CreateStatementDialog.tsx",
+          "status": "reviewed",
+          "summary": "创建对账单金额显示改money；分配筛选和提交数据没有变化。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -1,0 +2 @@ import { useEffect, useMemo, useState } from 'react'",
+              "@@ -14 +14,0 @@ import { formatDisplayDate } from '@/lib/dateTime'"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/components/shared/payments/ReceiptDetailDialog.tsx",
+          "status": "reviewed",
+          "summary": "收付款详情金额显示改money；详情只读和请求参数不变。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -1,0 +2 @@ import { useQuery } from '@tanstack/react-query'",
+              "@@ -8 +8,0 @@ import { getReceiptDetailApi } from '@/api/payments'"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/components/shared/payments/RegisterPaymentDialog.tsx",
+          "status": "reviewed",
+          "summary": "收付款登记余额/账户下拉/负余额确认改money；账户选择和确认闸门仍保留。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -0,0 +1 @@",
+              "@@ -76 +77 @@ export function RegisterPaymentDialog({ open, onClose, type, record }: Props) {",
+              "@@ -107 +108 @@ export function RegisterPaymentDialog({ open, onClose, type, record }: Props) {",
+              "@@ -116 +117 @@ export function RegisterPaymentDialog({ open, onClose, type, record }: Props) {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/components/shared/payments/SettleReceiptDialog.tsx",
+          "status": "reviewed",
+          "summary": "继续核销详情及负余额确认改money；同次付款金额计算与分配明细未改。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -1,0 +2 @@ import { useEffect, useMemo, useRef, useState } from 'react'",
+              "@@ -40 +40,0 @@ const isPayableType = (t: 1 | 2) => t === 1",
+              "@@ -197 +197 @@ export function SettleReceiptDialog({ open, onClose, type, settlementTypes, rece"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/components/shared/payments/SettlementConfirmDialog.tsx",
+          "status": "reviewed",
+          "summary": "结算确认单价、明细、退款与应付合计改money；无record合计显示横线，审批动作无变化。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -0,0 +1 @@",
+              "@@ -73,2 +74,2 @@ export function SettlementConfirmDialog({ open, onClose, record }: Props) {",
+              "@@ -82 +83 @@ export function SettlementConfirmDialog({ open, onClose, record }: Props) {",
+              "@@ -91 +92 @@ export function SettlementConfirmDialog({ open, onClose, record }: Props) {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/components/shared/payments/StatementDetailDialog.tsx",
+          "status": "reviewed",
+          "summary": "对账单详情共用money；结算操作、记录和请求幂等不变。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -1,0 +2 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'",
+              "@@ -15 +15,0 @@ const ST_TONE: Record<number, StatusTone> = { 1: 'draft', 2: 'active', 3: 'succe"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/components/shared/usePaymentActions.tsx",
+          "status": "reviewed",
+          "summary": "账款流水空态统一且金额千分位；查询ID和收付方向未改。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -0,0 +1 @@",
+              "@@ -1,0 +3 @@ import { useState } from 'react'",
+              "@@ -86 +88 @@ export function usePaymentActions(type: 1 | 2) {",
+              "@@ -90 +92 @@ export function usePaymentActions(type: 1 | 2) {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/constants/printFieldDefs.ts",
+          "status": "reviewed",
+          "summary": "打印字段区域更名库区，DOC_PREVIEW_ITEMS金额加货币符号与真实模板一致；尺寸未改。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -121 +121 @@ export const LABEL_FIELD_DEFS_BY_TYPE: Record<number, PrintFieldDef[]> = {",
+              "@@ -191 +191 @@ export const DEFAULT_LABEL_ELEMENTS: Record<number, TemplateElement[]> = {",
+              "@@ -226,3 +226,3 @@ export const DOC_PREVIEW_ITEMS = ["
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/hooks/useCriticalPdaAction.ts",
+          "status": "reviewed",
+          "summary": "PDA关键操作待确认文案简化；receipt_missing/state_not_advanced及重放判断分支未改。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -42 +42 @@ function stateUnconfirmedMessage(label: string, reason: 'receipt_missing' | 'sta",
+              "@@ -44 +44 @@ function stateUnconfirmedMessage(label: string, reason: 'receipt_missing' | 'sta",
+              "@@ -130 +130 @@ export function useCriticalPdaAction<T>({",
+              "@@ -137 +137 @@ export function useCriticalPdaAction<T>({",
+              "@@ -152 +152 @@ export function useCriticalPdaAction<T>({"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/hooks/usePdaUpdate.ts",
+          "status": "reviewed",
+          "summary": "浏览器端手动检查更新提示简化；仍在非原生分支直接返回，没有触发APK下载。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -67 +67 @@ export function usePdaUpdate() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/hooks/useProductQtyPolicies.ts",
+          "status": "reviewed",
+          "summary": "数量策略hook原先空ID混入0、最多只取500且保存缓存不失效；补正整数过滤/分批/共享products键测试。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -0,0 +1,44 @@"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/hooks/useSale.ts",
+          "status": "reviewed",
+          "summary": "销售创建、保存、改单、删除成功提示统一；相关mutation、失效key及请求键轮转未改。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -28 +28 @@ export const useCreateSale = () => {",
+              "@@ -38 +38 @@ export const useUpdateSale = () => {",
+              "@@ -50 +50 @@ export const useAdjustSale = () => {",
+              "@@ -128 +128 @@ export const useDeleteSale = () => {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/hooks/useWorkspaceTabTitle.ts",
+          "status": "reviewed",
+          "summary": "单号hook原先缓存命中先于父级注册时丢标题；新增真实父子effect回归并等待标签注册后写入。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -0,0 +1,27 @@"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/lib/format.test.ts",
+          "status": "reviewed",
+          "summary": "money/amount空值、千分位、负数测试完整；qty四位预期改当前两位显示并独立保留输入精度测试。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -0,0 +1,44 @@"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/lib/format.ts",
+          "status": "reviewed",
+          "summary": "统一格式器金额两位显示与数量有效位分离；发现qty遗留四位，已同步两位，输入不依赖该格式器。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -0,0 +1,50 @@"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/lib/orderPrintData.ts",
+          "status": "reviewed",
+          "summary": "销售/采购/退货打印单头合计改money；返回单空合计仍为空字符串，映射结构不变。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -6,0 +7 @@ import { formatDisplayDateTime, formatDisplayDate } from '@/lib/dateTime'",
+              "@@ -27 +28 @@ export function mapSaleOrderToPrint(order: SaleOrder): { data: Record<string, st",
+              "@@ -62 +63 @@ export function mapPurchaseOrderToPrint(order: PurchaseOrder): { data: Record<st",
+              "@@ -158 +159 @@ export function mapReturnOrderToPrint(order: ReturnOrderLike): { data: Record<st"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/lib/pdaRuntime.ts",
+          "status": "reviewed",
+          "summary": "PDA无打印机绑定错误对象更明确；查找打印机及打印请求链不变。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -195 +195 @@ export function installPdaGlobals(): void {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/lib/permission-codes.ts",
+          "status": "reviewed",
+          "summary": "盘点权限中文label展开全称；权限code常量和值未变化。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -333,2 +333,2 @@ export const PERMISSION_GROUPS: Array<{ group: string; items: Array<{ code: Perm"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/lib/printTemplatePreview.ts",
+          "status": "reviewed",
+          "summary": "真实模板预览明细价金额改money，和TemplateRenderer/默认样例一致；数量映射原样。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -0,0 +1 @@",
+              "@@ -32 +33 @@ export function adaptTemplatePreview(source: PrintTemplatePreview): { data: Reco"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/lib/qtyStep.test.ts",
+          "status": "reviewed",
+          "summary": "qtyStep布尔开关默认允许测试保留；新增尾零/科学计数法/浮点噪声与两位精度测试。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -0,0 +1,18 @@"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/lib/qtyStep.ts",
+          "status": "reviewed",
+          "summary": "qtyStep原先只提示步长；加入严格原始输入校验、派生数量roundQuantity及数字精度检查。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -0,0 +1,15 @@"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/accounting/accounts/index.tsx",
+          "status": "reviewed",
+          "summary": "会计科目说明去地基术语、空态统一；树结构、科目数量和权限操作不变。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -10,0 +11 @@ import { useEffect, useMemo, useState } from 'react'",
+              "@@ -390 +391 @@ export default function AccountsPage() {",
+              "@@ -418 +419 @@ export default function AccountsPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/accounting/consolidation/index.tsx",
+          "status": "reviewed",
+          "summary": "合并报表与账套标题同步路由，金额改money；账套过滤和汇总不变。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -1,0 +2 @@ import { useDirtyGuardStore } from '@/store/dirtyGuardStore'",
+              "@@ -22 +22,0 @@ import { beijingPeriod } from '@/lib/dateTime'",
+              "@@ -111 +111 @@ export default function ConsolidationPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/accounting/invoices/index.tsx",
+          "status": "reviewed",
+          "summary": "发票金额共用amount、开票日期改DatePicker；字段仍写f.invoiceDate，保留pending禁用。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -0,0 +1 @@",
+              "@@ -1,0 +3 @@ import ListSummary from '@/components/shared/ListSummary'",
+              "@@ -29 +31,2 @@ const PAGE_SIZE = 20",
+              "@@ -105 +108 @@ function InvoiceDialog({ open, invoiceType, edit, onClose }: { open: boolean; in"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/accounting/ledger/index.tsx",
+          "status": "reviewed",
+          "summary": "总账与试算平衡标题统一，金额amount保持无币种符号；余额/借贷方向未变。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -0,0 +1 @@",
+              "@@ -19 +20,2 @@ import { beijingPeriod } from '@/lib/dateTime'",
+              "@@ -78 +80 @@ export default function LedgerPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/accounting/periods/index.tsx",
+          "status": "reviewed",
+          "summary": "会计期间与结转标题缩短，与路由名称一致；结转/反结转操作不变。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -118 +118 @@ export default function AccountingPeriodsPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/accounting/reports/index.tsx",
+          "status": "reviewed",
+          "summary": "会计报表数值走amount；收入/余额/现金流tab与账套查询不变。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -0,0 +1 @@",
+              "@@ -20 +21,2 @@ type Tab = 'income' | 'balance' | 'cashflow'"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/accounting/tax/index.tsx",
+          "status": "reviewed",
+          "summary": "税务money同源，计算和按税种保留草稿逻辑没有变更。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -1,0 +2 @@ import KeepAliveSection from '@/components/shared/KeepAliveSection'",
+              "@@ -23 +23,0 @@ import { beijingPeriod } from '@/lib/dateTime'"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/accounting/vouchers/index.tsx",
+          "status": "reviewed",
+          "summary": "凭证借贷列/汇总走amount，手工日期改DatePicker，删除按钮补名称；会计分录数据不变。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -1,0 +2,2 @@ import ListSummary from '@/components/shared/ListSummary'",
+              "@@ -43,2 +44,0 @@ const PAGE_SIZE = 20",
+              "@@ -67,3 +67,3 @@ function ReconciliationCard() {",
+              "@@ -159,2 +159,2 @@ function DetailDialog({ id, onClose }: { id: number | null; onClose: () => void",
+              "@@ -165,2 +165,2 @@ function DetailDialog({ id, onClose }: { id: number | null; onClose: () => void",
+              "@@ -216 +216 @@ function ManualDialog({ open, onClose }: { open: boolean; onClose: () => void })",
+              "@@ -241 +241 @@ function ManualDialog({ open, onClose }: { open: boolean; onClose: () => void })",
+              "@@ -253,2 +253,2 @@ function ManualDialog({ open, onClose }: { open: boolean; onClose: () => void })",
+              "@@ -326,2 +326,2 @@ export default function VouchersPage() {",
+              "@@ -345 +345 @@ export default function VouchersPage() {",
+              "@@ -386 +386 @@ export default function VouchersPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/approvals/pending.tsx",
+          "status": "reviewed",
+          "summary": "待审批金额用money替代toFixed，待办列表及审批入口未改。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -0,0 +1 @@",
+              "@@ -55 +56 @@ export default function ApprovalPendingPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/carrier-accounts/index.tsx",
+          "status": "reviewed",
+          "summary": "快递账号列表加载措辞变化，读取错误和重试路径保持。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -97 +97 @@ export default function CarrierAccountsPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/carriers/index.tsx",
+          "status": "reviewed",
+          "summary": "承运商只读字段说明更口语，月结账号仍交快递账号绑定维护，没有新增写入口。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -147 +147 @@ export default function CarriersPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/categories/index.tsx",
+          "status": "reviewed",
+          "summary": "商品分类页面标题与路由一致，空态保留新增引导；新增一级分类动作不变。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -11,0 +12 @@ import { useEffect, useMemo, useState } from 'react'",
+              "@@ -387 +388 @@ export default function CategoriesPage() {",
+              "@@ -418 +419 @@ export default function CategoriesPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/credit-overrides/index.tsx",
+          "status": "reviewed",
+          "summary": "超额放行共用money/空态，发现JSX续行残留快照术语，已改提交时保存授信数据。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -1,0 +2,2 @@ import { OrderActivityDialog } from '@/components/shared/OrderActivityDialog'",
+              "@@ -32 +33,0 @@ import type { TableColumn } from '@/types'",
+              "@@ -88 +89 @@ function CreateDialog({ open, onClose }: { open: boolean; onClose: () => void })",
+              "@@ -237 +238 @@ export default function CreditOverridesPage() {",
+              "@@ -248 +249 @@ export default function CreditOverridesPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/customers/index.tsx",
+          "status": "reviewed",
+          "summary": "客户授信额度格式化统一，删除引用提示更清楚；删除前引用校验仍由API处理。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -0,0 +1 @@",
+              "@@ -98 +99 @@ export default function CustomersPage() {",
+              "@@ -165 +166 @@ export default function CustomersPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/disposal/components/CreateDisposalDialog.tsx",
+          "status": "reviewed",
+          "summary": "处置数量增加商品step原先不能拦键入；补quantity硬拒绝，金额计算和处置总价值不变。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -0,0 +1 @@",
+              "@@ -11,0 +13,2 @@ import type { DisposalSuggestion, DisposeType } from '@/types/disposal'",
+              "@@ -33,0 +37,2 @@ export default function CreateDisposalDialog({ open, onClose }: Props) {",
+              "@@ -145 +150 @@ export default function CreateDisposalDialog({ open, onClose }: Props) {",
+              "@@ -182 +187 @@ export default function CreateDisposalDialog({ open, onClose }: Props) {",
+              "@@ -212 +217 @@ export default function CreateDisposalDialog({ open, onClose }: Props) {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/disposal/components/DisposalDetailDialog.tsx",
+          "status": "reviewed",
+          "summary": "处置详情总价值、单价和行价值money同源，只读明细无写入改动。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -0,0 +1 @@",
+              "@@ -70 +71 @@ export default function DisposalDetailDialog({ open, onClose, id }: Props) {",
+              "@@ -93,2 +94,2 @@ export default function DisposalDetailDialog({ open, onClose, id }: Props) {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/disposal/index.tsx",
+          "status": "reviewed",
+          "summary": "处置列表价值格式化及筛选按钮名称统一，操作权限和数据范围未改。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -0,0 +1 @@",
+              "@@ -88 +89 @@ export default function DisposalPage() {",
+              "@@ -123 +124 @@ export default function DisposalPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/finance/accounts/index.tsx",
+          "status": "reviewed",
+          "summary": "资金账户金额显示money同源；余额调整输入仍为普通Input，保留原金额精度。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -1,0 +2 @@ import { ReportTable } from '@/components/shared/ReportTable'",
+              "@@ -29 +29,0 @@ import type { TableColumn } from '@/types'"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/finance/dashboard/index.tsx",
+          "status": "reviewed",
+          "summary": "资金看板money同源且删技术缓存说明，TOP_SERIES_LIMIT分布限制保留。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -1,0 +2 @@ import { useState } from 'react'",
+              "@@ -27 +27,0 @@ import { limitTopSeries } from '@/lib/topSeries'",
+              "@@ -194 +194 @@ export default function FinanceDashboardPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/finance/expenses/index.tsx",
+          "status": "reviewed",
+          "summary": "报销money同源，费用行金额输入未附加数量限制。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -1,0 +2 @@ import { OrderDetailSections } from '@/components/shared/OrderDetailSections'",
+              "@@ -37 +37,0 @@ import type { TableColumn } from '@/types'"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/finance/transactions/index.tsx",
+          "status": "reviewed",
+          "summary": "账户流水金额同源及往来单位命名，余额唯一流水说明保留；调整入口仍到账户管理。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -1,0 +2 @@ import { SummaryStrip } from '@/components/shared/SummaryStrip'",
+              "@@ -21 +21,0 @@ import type { TableColumn } from '@/types'",
+              "@@ -68 +68 @@ function TransactionsQueryDialog({ open, initial, accounts, onClose, onApply }:",
+              "@@ -169 +169 @@ export default function FinanceTransactionsPage() {",
+              "@@ -192 +192 @@ export default function FinanceTransactionsPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/fixed-assets/index.tsx",
+          "status": "reviewed",
+          "summary": "固定资产日期改DatePicker、折旧完成提示累加返回vouchers.monthly；空计提反馈独立处理。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -1,0 +2,2 @@ import { useCompanyQueryKey } from '@/hooks/useCompanyQueryKey'",
+              "@@ -25 +26,0 @@ import { todayYmd } from '@/lib/dateTime'",
+              "@@ -63 +64 @@ function CreateDialog({ open, onClose, onSaved }: { open: boolean; onClose: () =",
+              "@@ -124 +125 @@ function DisposeDialog({ asset, onClose }: { asset: FixedAsset | null; onClose:",
+              "@@ -161 +162,8 @@ export default function FixedAssetsPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/inbound-tasks/InboundTaskQueryDialog.tsx",
+          "status": "reviewed",
+          "summary": "收货查询的供应商/仓库选择器迁移PickerField，h-9和清除回调均保留。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -10 +10 @@ import { DatePicker } from '@/components/shared/DatePicker'",
+              "@@ -98 +98 @@ export default function InboundTaskQueryDialog({ open, initial, resetValues, onC",
+              "@@ -131 +131 @@ export default function InboundTaskQueryDialog({ open, initial, resetValues, onC"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/inbound-tasks/create.tsx",
+          "status": "reviewed",
+          "summary": "收货建单供应商触发器改onOpen，禁用与Finder选择回填逻辑保持。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -12 +12,2 @@ import { useDirtyGuard } from '@/hooks/useDirtyGuard'",
+              "@@ -152 +153 @@ export default function InboundTaskCreatePage() {",
+              "@@ -155 +156 @@ export default function InboundTaskCreatePage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/inbound-tasks/detail.tsx",
+          "status": "reviewed",
+          "summary": "收货详情更新工作区单号，明细和汇总金额同源；撤回收货提示保留后续作业约束。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -0,0 +1 @@",
+              "@@ -14,0 +16 @@ import { useWorkspaceStore } from '@/store/workspaceStore'",
+              "@@ -70,0 +73 @@ export default function InboundTaskDetailPage() {",
+              "@@ -249,2 +252,2 @@ export default function InboundTaskDetailPage() {",
+              "@@ -268 +271 @@ export default function InboundTaskDetailPage() {",
+              "@@ -305 +308 @@ export default function InboundTaskDetailPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/inbound-tasks/index.tsx",
+          "status": "reviewed",
+          "summary": "收货列表库存条码表述/筛选名称统一，撤回风险描述仍明确需盘点处理差异。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -336 +336 @@ export default function InboundTasksPage() {",
+              "@@ -381 +381 @@ export default function InboundTasksPage() {",
+              "@@ -413 +413 @@ export default function InboundTasksPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/inventory/InventoryLogsQueryDialog.tsx",
+          "status": "reviewed",
+          "summary": "库存流水查询选择器迁移PickerField，已选商品和清除条件不变。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -7 +7 @@ import { ProductFinder } from '@/components/finder'",
+              "@@ -94 +94 @@ export default function InventoryLogsQueryDialog({ open, initial, resetValues, o"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/inventory/index.tsx",
+          "status": "reviewed",
+          "summary": "库存数量显示qty、商品策略step和PickerField接入；本轮补手工调整数量硬校验。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -0,0 +1 @@",
+              "@@ -5,0 +7,2 @@ import { productIdentityColumns } from '@/components/shared/productIdentityColum",
+              "@@ -24 +27,2 @@ import { useWarehousesActive } from '@/hooks/useWarehouses'",
+              "@@ -66,5 +69,0 @@ function StatCard({ icon, label, value, sub, accent = 'text-foreground' }: {",
+              "@@ -135,0 +135,2 @@ export default function InventoryPage() {",
+              "@@ -319 +320 @@ export default function InventoryPage() {",
+              "@@ -393 +394 @@ export default function InventoryPage() {",
+              "@@ -404 +405 @@ export default function InventoryPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/inventory/trace.tsx",
+          "status": "reviewed",
+          "summary": "库存追溯仍按库存/塑料盒类型区分；发现流水标题旧容器词并修为条码流水。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -19 +19 @@ function ContainerBlock({ data }: { data: Awaited<ReturnType<typeof getContainer",
+              "@@ -132 +132 @@ export default function TracePage() {",
+              "@@ -165 +165 @@ export default function TracePage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/landing-preview/BusinessStory.tsx",
+          "status": "reviewed",
+          "summary": "官网预览业务故事库存条码措辞统一，收货未上架不得发货的说明保留。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -27 +27 @@ const steps = ["
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/landing-preview/index.tsx",
+          "status": "reviewed",
+          "summary": "官网预览PDA介绍与扫描小标题改库存条码，页面布局和下载入口未动。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -46 +46 @@ const deviceInfo = [",
+              "@@ -442 +442 @@ export default function LandingPreview() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/landing/BusinessStory.tsx",
+          "status": "reviewed",
+          "summary": "官网业务故事与预览同步库存条码名称，场景数量例子未改变。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -27 +27 @@ const steps = ["
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/landing/index.tsx",
+          "status": "reviewed",
+          "summary": "官网PDA介绍扫描名称同步，能力清单与设备绑定说明保持。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -46 +46 @@ const deviceInfo = [",
+              "@@ -442 +442 @@ export default function LandingPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/landing/product-content.ts",
+          "status": "reviewed",
+          "summary": "官网说明把快照/容器翻成生成依据/库存条码；仍保留按任务锁定实物的语义。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -18 +18 @@ export const productScenes = [",
+              "@@ -46 +46 @@ export const productScenes = [",
+              "@@ -96 +96 @@ export const capabilityGroups = ["
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/landing/updates.ts",
+          "status": "reviewed",
+          "summary": "追加0.10.0~0.10.2历史发布说明；其中生产核对声明仅为历史记录，未当作本次验证证据。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -6,0 +7,35 @@ export const landingUpdates = ["
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/locations/index.tsx",
+          "status": "reviewed",
+          "summary": "库位筛选、字段区域更名库区/通道、容器数改条码数；库位结构/删除引用不变。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -117 +117 @@ export default function LocationsPage() {",
+              "@@ -125 +125 @@ export default function LocationsPage() {",
+              "@@ -131 +131 @@ export default function LocationsPage() {",
+              "@@ -152 +152 @@ export default function LocationsPage() {",
+              "@@ -187 +187 @@ export default function LocationsPage() {",
+              "@@ -211 +211 @@ export default function LocationsPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/logistics/detail.tsx",
+          "status": "reviewed",
+          "summary": "物流详情接入useWorkspaceTabTitle(wb.waybillNo)，随共用hook修复缓存首帧问题。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -12,0 +13 @@ import { toast } from '@/lib/toast'",
+              "@@ -55,0 +57 @@ export default function LogisticsDetailPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/logistics/index.tsx",
+          "status": "reviewed",
+          "summary": "物流承运商chip从ID显示名称，复用carriers-active数据；未命中仍显示ID且不丢筛选。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -6 +6 @@ import { RecordIdentity } from '@/components/shared/RecordIdentity'",
+              "@@ -23,0 +24 @@ import { usePermission } from '@/hooks/usePermission'",
+              "@@ -47,0 +49,4 @@ export default function LogisticsPage() {",
+              "@@ -96 +101 @@ export default function LogisticsPage() {",
+              "@@ -154 +159 @@ export default function LogisticsPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/oplogs/index.tsx",
+          "status": "reviewed",
+          "summary": "操作日志详情技术字段label中文化、删重复createdAt行；上方格式化时间与底层记录仍可追溯。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -192 +192 @@ export default function OpLogsPage() {",
+              "@@ -242,7 +242,7 @@ export default function OpLogsPage() {",
+              "@@ -250 +249,0 @@ export default function OpLogsPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/payments/PaymentsView.tsx",
+          "status": "reviewed",
+          "summary": "四类账款列表金额共用money，balance大于零着色与各视图结算筛选未变。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -0,0 +1 @@",
+              "@@ -103,3 +104,3 @@ export default function PaymentsView({ type }: { type: PaymentType }) {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/payments/party-ledger.tsx",
+          "status": "reviewed",
+          "summary": "往来台账余额列更名，显示金额两位带币种；导出仍保留原始数据字段，没有修改账款值。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -1,0 +2 @@ import { useState, useContext, useId } from 'react'",
+              "@@ -22 +22,0 @@ import type { TableColumn } from '@/types'",
+              "@@ -28 +28 @@ function exportLedger(data: PartyLedgerResult) {",
+              "@@ -94 +94 @@ export default function PartyLedgerPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/pda/adjustment.tsx",
+          "status": "reviewed",
+          "summary": "PDA改单归还措辞统一且余留待归还容器标题补修；确认结果与剩余归还判定不变。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -95 +95 @@ function AdjustmentDetailPage({ adjustmentId }: { adjustmentId: number }) {",
+              "@@ -158 +158 @@ function AdjustmentDetailPage({ adjustmentId }: { adjustmentId: number }) {",
+              "@@ -170 +170 @@ function AdjustmentDetailPage({ adjustmentId }: { adjustmentId: number }) {",
+              "@@ -233 +233 @@ function AdjustmentDetailPage({ adjustmentId }: { adjustmentId: number }) {",
+              "@@ -252 +252 @@ function AdjustmentDetailPage({ adjustmentId }: { adjustmentId: number }) {",
+              "@@ -268 +268 @@ function AdjustmentDetailPage({ adjustmentId }: { adjustmentId: number }) {",
+              "@@ -282 +282 @@ function AdjustmentDetailPage({ adjustmentId }: { adjustmentId: number }) {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/pda/bind.tsx",
+          "status": "reviewed",
+          "summary": "PDA绑定换票失败提示更清楚，已保存凭据和重试逻辑未改。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -89 +89 @@ export default function PdaBindPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/pda/cancel-return.tsx",
+          "status": "reviewed",
+          "summary": "PDA取消退回条码措辞及待归还标题同步；拆箱/归还两类动作及结果确认仍独立。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -40 +40 @@ function CancelReturnListPage() {",
+              "@@ -99 +99 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {",
+              "@@ -158 +158 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {",
+              "@@ -172 +172 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {",
+              "@@ -184 +184 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {",
+              "@@ -200 +200 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {",
+              "@@ -251 +251 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {",
+              "@@ -270 +270 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {",
+              "@@ -286 +286 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {",
+              "@@ -312 +312 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/pda/check.tsx",
+          "status": "reviewed",
+          "summary": "PDA复核成功提示接续扫描，待确认文案统一；扫码计数与仓库任务校验未改。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -162 +162 @@ export default function PdaCheckPage() {",
+              "@@ -353 +353 @@ export default function PdaCheckPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/pda/index.tsx",
+          "status": "reviewed",
+          "summary": "设备授权需刷新文案改重新登录，凭据检查及工作台权限入口不变。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -174 +174 @@ export default function PdaWorkbench() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/pda/inventory-query.tsx",
+          "status": "reviewed",
+          "summary": "PDA库存查询数量显示qty、容器文案改库存条码；无数据与成功数不改变查询结果。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -8,0 +9 @@",
+              "@@ -22,4 +22,0 @@ import { formatDisplayDate } from '@/lib/dateTime'",
+              "@@ -79 +76 @@ export default function PdaInventoryQueryPage() {",
+              "@@ -81 +78 @@ export default function PdaInventoryQueryPage() {",
+              "@@ -118 +115 @@ export default function PdaInventoryQueryPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/pda/pack.tsx",
+          "status": "reviewed",
+          "summary": "PDA打包箱贴说明用系统替代服务端，打印成功方可完成打包的阻断规则仍明确。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -151 +151 @@ function PackageCard({ pkg, active, onActivate, onFinish, finishing, onPrintLabe",
+              "@@ -544 +544 @@ export default function PdaPackPage() {",
+              "@@ -591 +591 @@ export default function PdaPackPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/pda/putaway.tsx",
+          "status": "reviewed",
+          "summary": "PDA上架成功及待确认措辞变化，状态核验和库位成功回执不变。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -45 +45 @@ function PutawayRunner({ taskId }: { taskId: number }) {",
+              "@@ -94 +94 @@ function PutawayRunner({ taskId }: { taskId: number }) {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/pda/receive.tsx",
+          "status": "reviewed",
+          "summary": "PDA收货step由商品策略决定；本轮quantity同时拦逐箱键入/粘贴，打印失败警告仍保留。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -16,0 +17,2 @@ import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'",
+              "@@ -123,0 +126,2 @@ function ReceiveEditor({",
+              "@@ -160 +164 @@ function ReceiveEditor({",
+              "@@ -267 +271 @@ function ReceiveRunner({ task }: { task: InboundTask }) {",
+              "@@ -443 +447 @@ function ReceiveRunner({ task }: { task: InboundTask }) {",
+              "@@ -445 +449 @@ function ReceiveRunner({ task }: { task: InboundTask }) {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/pda/sale-return-putaway.test.tsx",
+          "status": "reviewed",
+          "summary": "退货上架测试更新错误对象措辞，仍覆盖非本单条码和失败不推进步骤。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -56 +56 @@ test('invalid task container shows error and stays at container step', async ()",
+              "@@ -58 +58 @@ test('invalid task container shows error and stays at container step', async ()",
+              "@@ -75 +75 @@ test('failed putaway is caught and shown, rather than an unhandled rejection', a",
+              "@@ -78 +78 @@ test('failed putaway is caught and shown, rather than an unhandled rejection', a"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/pda/sale-return-putaway.tsx",
+          "status": "reviewed",
+          "summary": "退货上架库存条码文案统一；条码解析、taskId校验及必须先扫码门禁仍在。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -66 +66 @@ export default function PdaSaleReturnPutawayPage() {",
+              "@@ -77 +77 @@ export default function PdaSaleReturnPutawayPage() {",
+              "@@ -82 +82 @@ export default function PdaSaleReturnPutawayPage() {",
+              "@@ -84 +84 @@ export default function PdaSaleReturnPutawayPage() {",
+              "@@ -125 +125 @@ export default function PdaSaleReturnPutawayPage() {",
+              "@@ -134,2 +134,2 @@ export default function PdaSaleReturnPutawayPage() {",
+              "@@ -159 +159 @@ export default function PdaSaleReturnPutawayPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/pda/sale-return-receive.tsx",
+          "status": "reviewed",
+          "summary": "退货收货与质检三处Input策略联动，补quantity校验；扫码来源和隔离不合格数量不变。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -15,0 +16,2 @@ import { parseBarcode } from '@/utils/barcode'",
+              "@@ -22,0 +25,2 @@ export default function PdaSaleReturnReceivePage() {",
+              "@@ -112 +116 @@ export default function PdaSaleReturnReceivePage() {",
+              "@@ -131 +135 @@ export default function PdaSaleReturnReceivePage() {",
+              "@@ -205 +209 @@ export default function PdaSaleReturnReceivePage() {",
+              "@@ -230 +234 @@ export default function PdaSaleReturnReceivePage() {",
+              "@@ -236 +240 @@ export default function PdaSaleReturnReceivePage() {",
+              "@@ -271,2 +275,2 @@ function ReturnLabelReceiptView({ receipt }: { receipt: Partial<ReturnTaskAction"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/pda/ship.tsx",
+          "status": "reviewed",
+          "summary": "PDA出库阻断用剩余箱数/任务状态表达，打包前置与待确认重查没有放开。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -49,0 +50 @@ function shipBlockedMessage(data: PackageShipInfo) {",
+              "@@ -51,2 +52,2 @@ function shipBlockedMessage(data: PackageShipInfo) {",
+              "@@ -54 +55 @@ function shipBlockedMessage(data: PackageShipInfo) {",
+              "@@ -169 +170 @@ export default function PdaShipPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/pda/sort.tsx",
+          "status": "reviewed",
+          "summary": "PDA分拣缺任务/错误格口提示缩短，binCode目标与分拣提交/回执状态不变。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -83 +83 @@ export default function PdaSortPage() {",
+              "@@ -100 +100 @@ export default function PdaSortPage() {",
+              "@@ -119 +119 @@ export default function PdaSortPage() {",
+              "@@ -166 +166 @@ export default function PdaSortPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/pda/split.tsx",
+          "status": "reviewed",
+          "summary": "PDA拆分锁定/单件禁止提示保留原因；本轮Input quantity+step1阻止整数规则被键入绕过。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -36 +36 @@ export default function PdaSplitPage() {",
+              "@@ -43,4 +43 @@ export default function PdaSplitPage() {",
+              "@@ -51 +48 @@ export default function PdaSplitPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/pda/stockcheck.tsx",
+          "status": "reviewed",
+          "summary": "PDA实盘商品策略step接入，补quantity；扫描明细bookQty上限及盘亏提醒保留。 另把非在库状态统一说明不能盘点，避免已出库条码也提示先上架。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -29,0 +30,2 @@ import { formatPdaErrorMessage } from '@/utils/displayFormatters'",
+              "@@ -81,0 +84,2 @@ function CheckWork({ checkId }: { checkId: number }) {",
+              "@@ -124 +128 @@ function CheckWork({ checkId }: { checkId: number }) {",
+              "@@ -178 +182 @@ function CheckWork({ checkId }: { checkId: number }) {",
+              "@@ -205 +209 @@ function CheckWork({ checkId }: { checkId: number }) {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/pda/task.test.tsx",
+          "status": "reviewed",
+          "summary": "拣货页测试同步回显商品名×3的新成功提示，原扫码业务断言不变。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -199 +199 @@ test('没有输入框时扫码枪键盘事件照样能提交，扫完不重新"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/pda/task.tsx",
+          "status": "reviewed",
+          "summary": "拣货回显从商品或容器匹配项取名称和本次量，跨商品拒绝仍先于提交；请求状态核验未改。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -199 +199 @@ export default function PdaTaskPage() {",
+              "@@ -211,0 +212,3 @@ export default function PdaTaskPage() {",
+              "@@ -221 +224 @@ export default function PdaTaskPage() {",
+              "@@ -223,0 +227,2 @@ export default function PdaTaskPage() {",
+              "@@ -234,0 +240,2 @@ export default function PdaTaskPage() {",
+              "@@ -244 +251 @@ export default function PdaTaskPage() {",
+              "@@ -308 +315 @@ export default function PdaTaskPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/pda/transfer-in.tsx",
+          "status": "reviewed",
+          "summary": "调拨调入两步提示改库存条码，仍先扫描在途条码再扫库位且保持pending确认。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -3 +3 @@",
+              "@@ -68 +68 @@ export default function PdaTransferInPage() {",
+              "@@ -70 +70 @@ export default function PdaTransferInPage() {",
+              "@@ -79 +79 @@ export default function PdaTransferInPage() {",
+              "@@ -135 +135 @@ export default function PdaTransferInPage() {",
+              "@@ -145 +145 @@ export default function PdaTransferInPage() {",
+              "@@ -172 +172 @@ export default function PdaTransferInPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/pda/transfer-out.tsx",
+          "status": "reviewed",
+          "summary": "调拨调出说明改库存条码，状态2/3门禁、整条码剩余量和禁手动录入保持。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -61 +61 @@ export default function PdaTransferOutPage() {",
+              "@@ -114 +114 @@ export default function PdaTransferOutPage() {",
+              "@@ -124 +124 @@ export default function PdaTransferOutPage() {",
+              "@@ -128 +128 @@ export default function PdaTransferOutPage() {",
+              "@@ -151 +151 @@ export default function PdaTransferOutPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/picking-waves/index.tsx",
+          "status": "reviewed",
+          "summary": "拣货批次页面批次号与进度词统一，状态区分和取消单不打印的行为未改。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -43 +43 @@ function getWaveClosureCopy(wave: PickingWave | null) {",
+              "@@ -56 +56 @@ function getWaveClosureCopy(wave: PickingWave | null) {",
+              "@@ -62 +62 @@ function getWaveClosureCopy(wave: PickingWave | null) {",
+              "@@ -64 +64 @@ function getWaveClosureCopy(wave: PickingWave | null) {",
+              "@@ -163 +163 @@ export default function PickingWavesPage() {",
+              "@@ -248 +248 @@ export default function PickingWavesPage() {",
+              "@@ -275 +275 @@ export default function PickingWavesPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/plastic-boxes/index.test.tsx",
+          "status": "reviewed",
+          "summary": "塑料盒测试移除FinderTrigger mock并使用真实PickerField按钮，仍验证新建重置选项。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -10 +10 @@ vi.mock('@/hooks/usePlasticBoxes', async (original) => ({ ...await original<type",
+              "@@ -20 +20 @@ test('新建必须选择商品和仓库，重新新建清空上次选择', async"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/plastic-boxes/index.tsx",
+          "status": "reviewed",
+          "summary": "塑料盒商品选择器迁移PickerField与空流水EmptyState；商品/仓库绑定参数保留。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -7 +7,3 @@ import { SoftStatusLabel } from '@/components/shared/StatusBadge'",
+              "@@ -56 +58 @@ export default function PlasticBoxesPage() {",
+              "@@ -114 +116 @@ export default function PlasticBoxesPage() {",
+              "@@ -169 +171 @@ function DetailDialog({ box, onClose }: { box: PlasticBox | null; onClose: () =>"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/portal/purchase-status.tsx",
+          "status": "reviewed",
+          "summary": "供应商到货页面被完整删除；路由、lazy组件和API调用一起清理，无死import；业务删除决策需由主审结合原指令核实。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -1,86 +0,0 @@"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/portal/statements.tsx",
+          "status": "reviewed",
+          "summary": "客户对账查询名称、结算术语、money与Picker统一；仍使用原客户选择和对账查询权限。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -0,0 +1 @@",
+              "@@ -10 +11 @@ import { Button } from '@/components/ui/button'",
+              "@@ -40,3 +41,3 @@ export default function PortalStatementsPage() {",
+              "@@ -54,2 +55,2 @@ export default function PortalStatementsPage() {",
+              "@@ -60 +61 @@ export default function PortalStatementsPage() {",
+              "@@ -87 +88 @@ export default function PortalStatementsPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/price-change/index.tsx",
+          "status": "reviewed",
+          "summary": "调价批准文案与money统一，审批步骤/价格生效分支未改；单价输入精度未加入数量规则。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -0,0 +1 @@",
+              "@@ -25 +26 @@ const STATUS_TONE: Record<number, 'warning' | 'success' | 'danger' | 'info'> = {",
+              "@@ -119 +120 @@ export default function PriceChangePage() {",
+              "@@ -139,2 +140,2 @@ export default function PriceChangePage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/procurement/detail.tsx",
+          "status": "reviewed",
+          "summary": "采购计划详情数量统一qty与工作区业务编号；本轮补调整数量失焦写入校验和商品整数策略。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -0,0 +1 @@",
+              "@@ -3,0 +5 @@ import { formatDisplayDateTime } from '@/lib/dateTime'",
+              "@@ -28 +29,0 @@ const ITEM_TONE: Record<number, StatusTone> = { 1: 'draft', 2: 'success', 3: 'wa",
+              "@@ -44,0 +46 @@ export default function ProcurementPlanDetailPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/procurement/index.tsx",
+          "status": "reviewed",
+          "summary": "采购建议说明改现货/在途与抵扣白话；预测参数、建议计算和提交载荷没有变化。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -128 +128 @@ export default function ProcurementPlanListPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/products/ProductQueryDialog.tsx",
+          "status": "reviewed",
+          "summary": "商品查询供应商选择器迁移PickerField，价格范围仍为普通金额输入。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -9 +9 @@ import { SupplierFinder } from '@/components/finder'",
+              "@@ -98 +98 @@ export default function ProductQueryDialog({ open, initial, onClose, onApply }:"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/products/form.tsx",
+          "status": "reviewed",
+          "summary": "商品档案新增allowDecimalQty载入/保存/开关与安全库存步长；本轮安全量/补货点拒绝超精度，换算率输入不变。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -17,0 +18 @@ import { toast } from '@/lib/toast'",
+              "@@ -25 +26,2 @@ import { getSettingsApi } from '@/api/settings'",
+              "@@ -30 +32 @@ type AuxUnit = { unitName: string; conversionRate: string }",
+              "@@ -80,0 +83 @@ export default function ProductFormPage() {",
+              "@@ -157,0 +161 @@ export default function ProductFormPage() {",
+              "@@ -233 +237 @@ export default function ProductFormPage() {",
+              "@@ -236 +240 @@ export default function ProductFormPage() {",
+              "@@ -249 +253 @@ export default function ProductFormPage() {",
+              "@@ -252 +256 @@ export default function ProductFormPage() {",
+              "@@ -280,0 +285,8 @@ export default function ProductFormPage() {",
+              "@@ -353 +365 @@ export default function ProductFormPage() {",
+              "@@ -359 +371 @@ export default function ProductFormPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/products/index.tsx",
+          "status": "reviewed",
+          "summary": "商品列表分类chip用完整路径、整数商品显示徽章；活跃/删除操作约束未改。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -165 +165 @@ export default function ProductsPage() {",
+              "@@ -178 +178,3 @@ export default function ProductsPage() {",
+              "@@ -214 +216 @@ export default function ProductsPage() {",
+              "@@ -266 +268 @@ export default function ProductsPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/purchase-requisitions/form.tsx",
+          "status": "reviewed",
+          "summary": "采购申请及转采购行携带productId供策略、日期统一；两处数量补硬校验，预估价仍独立。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -1,0 +2 @@ import { OrderDetailSections } from '@/components/shared/OrderDetailSections'",
+              "@@ -20 +21,2 @@ import { SoftStatusLabel } from '@/components/shared/StatusBadge'",
+              "@@ -28,0 +31 @@ import { useWorkspaceStore } from '@/store/workspaceStore'",
+              "@@ -33,0 +37,2 @@ import type { FinderResult } from '@/types/finder'",
+              "@@ -43 +48 @@ interface ConvertRow {",
+              "@@ -55 +60 @@ function ApprovalProgress({ approval }: { approval: NonNullable<import('@/types/",
+              "@@ -61 +66 @@ function ApprovalProgress({ approval }: { approval: NonNullable<import('@/types/",
+              "@@ -105,0 +111 @@ export default function RequisitionFormPage() {",
+              "@@ -123,0 +130,2 @@ export default function RequisitionFormPage() {",
+              "@@ -242 +250 @@ export default function RequisitionFormPage() {",
+              "@@ -319 +327 @@ export default function RequisitionFormPage() {",
+              "@@ -350 +358 @@ export default function RequisitionFormPage() {",
+              "@@ -358 +366 @@ export default function RequisitionFormPage() {",
+              "@@ -362 +370 @@ export default function RequisitionFormPage() {",
+              "@@ -411,2 +419,2 @@ export default function RequisitionFormPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/purchase-requisitions/index.tsx",
+          "status": "reviewed",
+          "summary": "采购申请列表金额和筛选名称统一，审批/转采购入口未改。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -0,0 +1 @@",
+              "@@ -105 +106 @@ export default function RequisitionsPage() {",
+              "@@ -131 +132 @@ export default function RequisitionsPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/purchase/PurchaseQueryDialog.tsx",
+          "status": "reviewed",
+          "summary": "采购查询供应商/仓库选择器统一PickerField，resetValues日期默认和回调保持。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -11 +11 @@ import { WarehouseSelect } from '@/components/shared/WarehouseSelect'",
+              "@@ -111 +111 @@ export default function PurchaseQueryDialog({ open, initial, resetValues, onClos",
+              "@@ -131 +131 @@ export default function PurchaseQueryDialog({ open, initial, resetValues, onClos"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/purchase/form/index.tsx",
+          "status": "reviewed",
+          "summary": "采购表单Picker/金额/详情单号统一；本轮整数数量拒绝截断式输入，折算展示改两位但单价精度保留。 原parseInt还会把科学计数法1e2误读为1，已复现并改完整Number整数解析。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -0,0 +1 @@",
+              "@@ -29,0 +31 @@ import { useWorkspaceStore } from '@/store/workspaceStore'",
+              "@@ -38 +40,2 @@ import { SectionCard } from '@/components/shared/SectionCard'",
+              "@@ -304 +307 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {",
+              "@@ -308 +311 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {",
+              "@@ -450 +453 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {",
+              "@@ -477 +480 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {",
+              "@@ -511,0 +515 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo",
+              "@@ -717,2 +721,2 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo",
+              "@@ -721 +725 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo",
+              "@@ -734 +738 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/purchase/index.tsx",
+          "status": "reviewed",
+          "summary": "采购列表金额money及筛选删除名称统一，状态、汇总与翻页未改。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -0,0 +1 @@",
+              "@@ -216 +217 @@ export default function PurchasePage() {",
+              "@@ -339 +340 @@ export default function PurchasePage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/racks/index.tsx",
+          "status": "reviewed",
+          "summary": "货架筛选库区名称与删除引用提示调整，层数/格口数输入不涉及数量小数策略。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -83 +83 @@ export default function RacksPage() {",
+              "@@ -161 +161 @@ export default function RacksPage() {",
+              "@@ -201 +201 @@ export default function RacksPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/refunds/components/RefundDetailDialog.tsx",
+          "status": "reviewed",
+          "summary": "退款详情金额与执行确认改money；退款冲减原销售已收款与不可撤销提示仍在。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -0,0 +1 @@",
+              "@@ -20 +20,0 @@ const STATUS_TONE: Record<number, StatusTone> = {",
+              "@@ -66 +66 @@ export default function RefundDetailDialog({ open, onClose, id }: Props) {",
+              "@@ -87 +87 @@ export default function RefundDetailDialog({ open, onClose, id }: Props) {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/refunds/index.tsx",
+          "status": "reviewed",
+          "summary": "退款创建日期改DatePicker、金额同源；退回金额输入仍普通Input，申请payload不变。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -0,0 +1 @@",
+              "@@ -1,0 +3 @@ import { useState } from 'react'",
+              "@@ -33 +34,0 @@ const STATUS_TONE: Record<number, StatusTone> = {",
+              "@@ -80 +81 @@ export default function RefundsPage() {",
+              "@@ -116 +117 @@ export default function RefundsPage() {",
+              "@@ -206 +207 @@ function CreateRefundDialog({ open, onClose }: { open: boolean; onClose: () => v"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/reports/ReconciliationView.tsx",
+          "status": "reviewed",
+          "summary": "月结对账列表总金额/已结算/余额money同源，各视图结算方向不变。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -0,0 +1 @@",
+              "@@ -138,3 +139,3 @@ export default function ReconciliationView({ type }: { type: StatementType }) {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/reports/avg-cost-reconciliation.tsx",
+          "status": "reviewed",
+          "summary": "均价对账缓存术语改账面差异，仍需inventory.adjust才能执行resync，容器/缓存对比字段未换。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -0,0 +1 @@",
+              "@@ -1,0 +3 @@ import { productIdentityColumns } from '@/components/shared/productIdentityColum",
+              "@@ -16,2 +18 @@ import type { TableColumn } from '@/types'",
+              "@@ -22 +23 @@ export default function AvgCostReconciliationPage() {",
+              "@@ -31 +32 @@ export default function AvgCostReconciliationPage() {",
+              "@@ -33 +34 @@ export default function AvgCostReconciliationPage() {",
+              "@@ -38 +39 @@ export default function AvgCostReconciliationPage() {",
+              "@@ -43,3 +44,3 @@ export default function AvgCostReconciliationPage() {",
+              "@@ -53,2 +54,2 @@ export default function AvgCostReconciliationPage() {",
+              "@@ -61 +62 @@ export default function AvgCostReconciliationPage() {",
+              "@@ -69 +70 @@ export default function AvgCostReconciliationPage() {",
+              "@@ -74 +75 @@ export default function AvgCostReconciliationPage() {",
+              "@@ -80 +81 @@ export default function AvgCostReconciliationPage() {",
+              "@@ -90,2 +91,2 @@ export default function AvgCostReconciliationPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/reports/index.tsx",
+          "status": "reviewed",
+          "summary": "业务统计列表金额统一money、月度无数据EmptyState；查询与图表数据分组不变。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -1,0 +2 @@ import KeepAliveSection from '@/components/shared/KeepAliveSection'",
+              "@@ -192 +193 @@ export default function ReportsPage() {",
+              "@@ -213 +214 @@ export default function ReportsPage() {",
+              "@@ -228 +229 @@ export default function ReportsPage() {",
+              "@@ -287 +288 @@ export default function ReportsPage() {",
+              "@@ -308 +309 @@ export default function ReportsPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/reports/inventory-aging.tsx",
+          "status": "reviewed",
+          "summary": "库存账龄数量qty、金额money，库存估值只供参考说明保留；阈值查询与桶分组不变。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -0,0 +1 @@",
+              "@@ -1,0 +3 @@ import { ReportQueryFeedback } from './ReportQueryFeedback'",
+              "@@ -17,6 +19,2 @@ import type { TableColumn } from '@/types'",
+              "@@ -76 +74 @@ export default function InventoryAgingPage() {",
+              "@@ -95 +93 @@ export default function InventoryAgingPage() {",
+              "@@ -109 +107 @@ export default function InventoryAgingPage() {",
+              "@@ -123 +121 @@ export default function InventoryAgingPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/reports/profit-analysis.tsx",
+          "status": "reviewed",
+          "summary": "利润库存报表money与销售订单跳转标题统一，毛利负数着色、成本数据字段未变。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -1,0 +2 @@ import KeepAliveSection from '@/components/shared/KeepAliveSection'",
+              "@@ -59 +59,0 @@ export default function ProfitAnalysisPage() {",
+              "@@ -80,3 +80,3 @@ export default function ProfitAnalysisPage() {",
+              "@@ -91,3 +91,3 @@ export default function ProfitAnalysisPage() {",
+              "@@ -103 +103 @@ export default function ProfitAnalysisPage() {",
+              "@@ -130 +130 @@ export default function ProfitAnalysisPage() {",
+              "@@ -139,2 +139,2 @@ export default function ProfitAnalysisPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/reports/replenishment.tsx",
+          "status": "reviewed",
+          "summary": "补货建议fmtQty改统一qty；筛选chip可读名更新，建议来源与默认查询不变。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -0,0 +1 @@",
+              "@@ -27,5 +28,2 @@ import type { Category } from '@/types/categories'",
+              "@@ -209 +207 @@ export default function ReplenishmentPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/reports/warehouse-ops.tsx",
+          "status": "reviewed",
+          "summary": "仓库运营异常日志说明删快照术语，仍最近10条且限定今日。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -202 +202 @@ export default function WarehouseOpsPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/returns/ReturnQueryDialog.tsx",
+          "status": "reviewed",
+          "summary": "退货查询供应商/客户和仓库选择器迁移PickerField，退货类型分支保留。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -10 +10 @@ import { DatePicker } from '@/components/shared/DatePicker'",
+              "@@ -113 +113 @@ export default function ReturnQueryDialog({ open, type, initial, resetValues, on",
+              "@@ -133 +133 @@ export default function ReturnQueryDialog({ open, type, initial, resetValues, on"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/returns/index.tsx",
+          "status": "reviewed",
+          "summary": "退货列表金额同源，筛选移除名称统一，销售退货/采购退货权限不变。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -0,0 +1 @@",
+              "@@ -209 +210 @@ export default function ReturnsPage() {",
+              "@@ -272 +273 @@ export default function ReturnsPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/returns/purchase/form/index.tsx",
+          "status": "reviewed",
+          "summary": "采购退货数量策略、供应商Picker、单号/金额显示统一；quantity补硬校验，绑定来源只读仍保留。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -0,0 +1 @@",
+              "@@ -28 +29,2 @@ import { StatusBadge } from '@/components/shared/StatusBadge'",
+              "@@ -31,0 +34 @@ import { useWorkspaceStore } from '@/store/workspaceStore'",
+              "@@ -44,0 +48,2 @@ import { getProductApi } from '@/api/products'",
+              "@@ -103,0 +109,2 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string",
+              "@@ -246 +253 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string",
+              "@@ -249 +256 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string",
+              "@@ -357 +364 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string",
+              "@@ -377 +384 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string",
+              "@@ -398 +405 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string",
+              "@@ -484,0 +492 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP",
+              "@@ -574,3 +582,3 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP",
+              "@@ -586 +594 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/returns/sale/form/index.tsx",
+          "status": "reviewed",
+          "summary": "销售退货数量策略、客户Picker、业务单号/金额统一；quantity拒绝超精度，不合格隔离提示去旧术语。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -0,0 +1 @@",
+              "@@ -28 +29,2 @@ import { StatusBadge } from '@/components/shared/StatusBadge'",
+              "@@ -31,0 +34 @@ import { useWorkspaceStore } from '@/store/workspaceStore'",
+              "@@ -46,0 +50,2 @@ import { getProductApi } from '@/api/products'",
+              "@@ -103,0 +109,2 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string",
+              "@@ -246 +253 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string",
+              "@@ -249 +256 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string",
+              "@@ -358 +365 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string",
+              "@@ -378 +385 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string",
+              "@@ -399 +406 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string",
+              "@@ -497,0 +505 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP",
+              "@@ -582,3 +590,3 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP",
+              "@@ -594 +602 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/sale/SaleQueryDialog.tsx",
+          "status": "reviewed",
+          "summary": "销售查询客户/仓库Picker迁移，名称高度和清除动作保留。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -9 +9 @@ import { DatePicker } from '@/components/shared/DatePicker'",
+              "@@ -115 +115 @@ export default function SaleQueryDialog({ open, initial, resetValues, onClose, o",
+              "@@ -135 +135 @@ export default function SaleQueryDialog({ open, initial, resetValues, onClose, o"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/sale/components/ReleaseAllocationDialog.tsx",
+          "status": "reviewed",
+          "summary": "释放预占step策略接入；quantity与saleAllocation两位验证联动，不能提交三位数量。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -9,0 +10,2 @@ import { isAllocationQtyValid } from './saleAllocation'",
+              "@@ -28,0 +31,2 @@ export default function ReleaseAllocationDialog({ open, orderId, items, onClose",
+              "@@ -115 +119 @@ export default function ReleaseAllocationDialog({ open, orderId, items, onClose"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/sale/components/ReserveAllocationDialog.tsx",
+          "status": "reviewed",
+          "summary": "占库预览money同源、数量策略step接入；quantity拒绝超精度且业务分配上限仍有效。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -1,0 +2 @@ import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/share",
+              "@@ -11,0 +13,2 @@ import { useSaleReservePreview, useReserveSale } from '@/hooks/useSale'",
+              "@@ -25 +27,0 @@ type RowState = { checked: boolean; warehouseId: number; warehouseName: string;",
+              "@@ -50,0 +53,2 @@ export default function ReserveAllocationDialog({ open, orderId, onClose, onShor",
+              "@@ -211 +215 @@ export default function ReserveAllocationDialog({ open, orderId, onClose, onShor"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/sale/components/ShipSelectDialog.tsx",
+          "status": "reviewed",
+          "summary": "出库选择最小量从0.0001到0.01、商品step联动；补quantity与两位分配校验，已选行/上限仍在。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -8,0 +9,2 @@ import { isAllocationQtyValid, clampAllocationQty } from './saleAllocation'",
+              "@@ -20,0 +23,2 @@ export default function ShipSelectDialog({ open, onClose, order, loading, onConf",
+              "@@ -78 +82 @@ export default function ShipSelectDialog({ open, onClose, order, loading, onConf"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/sale/form/components/SaleOrderHeaderFields.tsx",
+          "status": "reviewed",
+          "summary": "销售单表头客户FinderTrigger迁移PickerField；双击跳客户资料和清空弹窗仍保留。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -10 +10 @@ import { toast } from '@/lib/toast'",
+              "@@ -56 +56 @@ export function SaleOrderHeaderFields({"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/sale/form/components/SaleOrderItemsTable.tsx",
+          "status": "reviewed",
+          "summary": "销售明细数量商品step与money合计；quantity拦第三位，价格Input仍可四位，不用格式器截断输入。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -0,0 +1 @@",
+              "@@ -7,0 +9,2 @@ import { baseQtyOf, parsePositiveQuantity, parsePrice, type DraftItem } from '..",
+              "@@ -23,0 +27,2 @@ export function SaleOrderItemsTable({",
+              "@@ -71 +76 @@ export function SaleOrderItemsTable({",
+              "@@ -97 +102 @@ export function SaleOrderItemsTable({"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/sale/form/components/SaleOrderOverview.tsx",
+          "status": "reviewed",
+          "summary": "销售订单概览应付合计money同源；净额运算及图标不变。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -0,0 +1 @@",
+              "@@ -13 +14 @@ export function SaleOrderOverview({ order }: { order: SaleOrder }) {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/sale/form/components/SaleOrderSummaryCard.tsx",
+          "status": "reviewed",
+          "summary": "销售汇总卡总额/折扣/净额money统一，折扣用负数money；输入折扣和改单保留规则未改。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -0,0 +1 @@",
+              "@@ -37 +38 @@ export function SaleOrderSummaryCard({",
+              "@@ -44 +45 @@ export function SaleOrderSummaryCard({",
+              "@@ -50 +51 @@ export function SaleOrderSummaryCard({"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/sale/form/index.tsx",
+          "status": "reviewed",
+          "summary": "销售详情真实单号更新、拣货明细tab更名、金额/装箱空态统一；扫描记录和成本tooltip仍保留。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -0,0 +1 @@",
+              "@@ -1,0 +3 @@ import { OrderEntryIssues } from '@/components/shared/OrderEntryIssues'",
+              "@@ -28,0 +31 @@ import { useWorkspaceStore } from '@/store/workspaceStore'",
+              "@@ -461,0 +465,3 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st",
+              "@@ -610 +616 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st",
+              "@@ -699,2 +705,2 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st",
+              "@@ -705 +711 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st",
+              "@@ -711 +717 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st",
+              "@@ -723,3 +729,3 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st",
+              "@@ -848 +854 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/sale/index.tsx",
+          "status": "reviewed",
+          "summary": "销售列表折后金额money统一，仍先扣discount并夹零；筛选动作未改。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -0,0 +1 @@",
+              "@@ -234 +235 @@ export default function SalePage() {",
+              "@@ -274 +275 @@ export default function SalePage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/settings/barcode-print-query/index.test.tsx",
+          "status": "reviewed",
+          "summary": "条码打印测试同步收货打印任务名称，仍覆盖非法taskId与不混其他单。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -35 +35 @@ test('普通全量列表不把首条记录的收货单当成当前链路', () =>",
+              "@@ -41 +41 @@ test.each(['-1', '1.5', 'abc', '0'])('非法收货单参数 %s 不生成当前",
+              "@@ -46 +46 @@ test('显式收货单上下文只统计该单，不能混入其他单失败和"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/settings/barcode-print-query/index.tsx",
+          "status": "reviewed",
+          "summary": "条码打印轮询常量统一15000ms并用于提示，未缩短轮询或缩小分页；按任务失败统计保留。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -25 +25 @@ const CATEGORY_OPTIONS: Array<{ value: BarcodePrintCategory; label: string; hint",
+              "@@ -29,0 +30,3 @@ const CATEGORY_OPTIONS: Array<{ value: BarcodePrintCategory; label: string; hint",
+              "@@ -64 +67,2 @@ export default function BarcodePrintQueryPage() {",
+              "@@ -74 +78 @@ export default function BarcodePrintQueryPage() {",
+              "@@ -281 +285 @@ export default function BarcodePrintQueryPage() {",
+              "@@ -317 +321 @@ export default function BarcodePrintQueryPage() {",
+              "@@ -353 +357 @@ export default function BarcodePrintQueryPage() {",
+              "@@ -410 +414 @@ export default function BarcodePrintQueryPage() {",
+              "@@ -435 +439 @@ export default function BarcodePrintQueryPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/settings/pda-devices/index.tsx",
+          "status": "reviewed",
+          "summary": "PDA设备吊销会话用退出登录表述；旧密钥作废/重新绑定、换仓提示仍在，本轮补余留会话词。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -121 +121 @@ export default function PdaDevicesPage() {",
+              "@@ -141 +141 @@ export default function PdaDevicesPage() {",
+              "@@ -155 +155 @@ export default function PdaDevicesPage() {",
+              "@@ -271 +271 @@ export default function PdaDevicesPage() {",
+              "@@ -318 +318 @@ export default function PdaDevicesPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/settings/print-templates/editor.tsx",
+          "status": "reviewed",
+          "summary": "模板编辑删除、加粗、对齐按钮补aria属性；字体/几何编辑范围校验及预览未改。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -644 +644 @@ function PropertiesPanel({ el, multiCount, isLabel, canvasW, canvasH, onChange,",
+              "@@ -775,0 +776,2 @@ function PropertiesPanel({ el, multiCount, isLabel, canvasW, canvasH, onChange,",
+              "@@ -809,0 +812,2 @@ function PropertiesPanel({ el, multiCount, isLabel, canvasW, canvasH, onChange,",
+              "@@ -1872 +1876 @@ export default function PrintTemplateEditor() {",
+              "@@ -1875 +1879 @@ export default function PrintTemplateEditor() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/settings/printers/index.tsx",
+          "status": "reviewed",
+          "summary": "打印机列表加载措辞统一，本机打印机枚举与重试流程未动。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -390 +390 @@ export default function PrintersPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/sorting-bins/index.tsx",
+          "status": "reviewed",
+          "summary": "分拣格口筛选移除按钮名称明确，格口编码/容量编辑无变化。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -194 +194 @@ export default function SortingBinsPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/stockcheck/abc.tsx",
+          "status": "reviewed",
+          "summary": "ABC盘点规则金额amount同源、标题缩短，与路由一致；规则草稿和重新计算不变。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -0,0 +1 @@",
+              "@@ -64 +65 @@ export default function AbcClassPage() {",
+              "@@ -146 +147 @@ export default function AbcClassPage() {",
+              "@@ -174 +175 @@ export default function AbcClassPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/stockcheck/components/CheckDetailDialog.tsx",
+          "status": "reviewed",
+          "summary": "PC盘点实盘框加入商品step，本轮quantity硬拒绝；按行错误和disabled边界不变。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -10,0 +11,2 @@ import { useCheckDetail, useUpdateCheckItems, useSubmitCheck, useRefreshCheckIte",
+              "@@ -22,0 +25,2 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {",
+              "@@ -224 +228 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/suppliers/index.tsx",
+          "status": "reviewed",
+          "summary": "供应商删除文案说明被引用需停用，服务端引用检查与编辑入口未改。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -110 +110 @@ export default function SuppliersPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/transfer/TransferQueryDialog.tsx",
+          "status": "reviewed",
+          "summary": "调拨查询选择器迁移PickerField，源/目标仓筛选和resetValues继续使用原值。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -10 +10 @@ import { DatePicker } from '@/components/shared/DatePicker'",
+              "@@ -120 +120 @@ export default function TransferQueryDialog({ open, initial, resetValues, onClos"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/transfer/form/index.tsx",
+          "status": "reviewed",
+          "summary": "调拨明细step依商品策略，详情标签业务单号；本轮quantity拒绝第三位且不变仓库选择/载荷。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -25,0 +26 @@ import { useWorkspaceStore } from '@/store/workspaceStore'",
+              "@@ -45,0 +47,2 @@ import type { ProductFinderResult } from '@/types/products'",
+              "@@ -106,0 +110,2 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {",
+              "@@ -342 +347 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {",
+              "@@ -394,0 +400 @@ function DetailView({ transferId, closeTab, tabPath }: { transferId: number; clo"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/transfer/index.tsx",
+          "status": "reviewed",
+          "summary": "调拨异常了结提示保留丢货、两仓均不入账及不可撤回后果，仅操作留痕换成记录。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -250 +250 @@ export default function TransferPage() {",
+              "@@ -304 +304 @@ export default function TransferPage() {",
+              "@@ -308 +308 @@ export default function TransferPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/pages/warehouses/index.tsx",
+          "status": "reviewed",
+          "summary": "仓库删除提示明确被引用不能删除，停用引导和操作权限保留。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -78 +78 @@ export default function WarehousesPage() {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/router/mergedPageGroups.test.ts",
+          "status": "reviewed",
+          "summary": "合并页标签测试从组名更新子页名，仍覆盖旧入口和持久化标签归一。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -27 +27 @@ test('切换报表视图只更新一个工作区标签', () => {",
+              "@@ -30 +30 @@ test('旧快捷入口和已保存标签使用合并后的名称', async () => {",
+              "@@ -37 +37 @@ test('旧快捷入口和已保存标签使用合并后的名称', async () => {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/router/mergedPageGroups.ts",
+          "status": "reviewed",
+          "summary": "getMergedPageView按pathname匹配子页，不把query/hash当视图；组定义权限与组件集合未变。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -39,0 +40,17 @@ export function getMergedPageGroup(path: string): MergedPageGroup | undefined {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/router/routeDefinitions.ts",
+          "status": "reviewed",
+          "summary": "路由名称缩短并删除供应商到货入口，permission常量未更改；静态名称迁移在workspaceStore补齐。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -10 +10 @@ export type RouteTabIdentity =",
+              "@@ -149 +149 @@ export const routeRegistry: RouteRegistryEntry[] = [",
+              "@@ -195 +195 @@ export const routeRegistry: RouteRegistryEntry[] = [",
+              "@@ -200,10 +200 @@ export const routeRegistry: RouteRegistryEntry[] = [",
+              "@@ -271 +262 @@ export const routeRegistry: RouteRegistryEntry[] = [",
+              "@@ -483 +474 @@ export const routeRegistry: RouteRegistryEntry[] = [",
+              "@@ -521 +512 @@ export const routeRegistry: RouteRegistryEntry[] = [",
+              "@@ -539 +530 @@ export const routeRegistry: RouteRegistryEntry[] = ["
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/router/routeRegistry.ts",
+          "status": "reviewed",
+          "summary": "lazy注册移除PortalPurchaseStatusPage，和RouteComponentKey、页面删除对应，无残留引用。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -93 +92,0 @@ const components: Record<definitions.RouteComponentKey, RouteComponent> = {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/store/workspaceStore.test.ts",
+          "status": "reviewed",
+          "summary": "工作区store新增单号/切换不抢焦点测试；本轮追加旧列表标题迁移回归，真实父子hook另测。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -0,0 +1,64 @@"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/store/workspaceStore.ts",
+          "status": "reviewed",
+          "summary": "updateTabTitle只改指定key标题；发现旧列表名被keepPageTitle错误保留，补静态PATH_TITLES优先。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -3,2 +3,2 @@ import { persist } from 'zustand/middleware'",
+              "@@ -40,0 +41,6 @@ interface WorkspaceState {",
+              "@@ -47,2 +53,4 @@ function currentTabTitle(path: string, fallback: string): string {",
+              "@@ -161 +169,8 @@ export const useWorkspaceStore = create<WorkspaceState>()(",
+              "@@ -170,0 +186,8 @@ export const useWorkspaceStore = create<WorkspaceState>()("
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/types/products.ts",
+          "status": "reviewed",
+          "summary": "Product/Create/Update/Finder类型加入allowDecimalQty，策略响应id/allowDecimal明确；无金额类型变动。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -5,0 +6,2 @@ export interface Product {",
+              "@@ -23 +25 @@ export interface CreateProductParams {",
+              "@@ -33 +35 @@ export interface UpdateProductParams {",
+              "@@ -39,0 +42,3 @@ export interface UpdateProductParams {",
+              "@@ -51,0 +57,2 @@ export interface ProductFinderResult {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/utils/displayFormatters.apiError.test.ts",
+          "status": "reviewed",
+          "summary": "业务错误显示测试改库存条码名称，仍覆盖通用错误保留具体原因与有码兜底。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -9 +9 @@ test('通用码不覆盖后端中文原因', () => {",
+              "@@ -18 +18 @@ test('具体业务码仍按既有映射展示，缺失原因时退回兜底文"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/utils/displayFormatters.ts",
+          "status": "reviewed",
+          "summary": "设备登录失效、条码占用和无权限文案统一；业务码映射键和原始消息fallback保持。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -6 +6 @@ const BACKEND_CODE_LABELS: Record<string, string> = {",
+              "@@ -8 +8 @@ const BACKEND_CODE_LABELS: Record<string, string> = {",
+              "@@ -10,2 +10,2 @@ const BACKEND_CODE_LABELS: Record<string, string> = {"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        },
+        {
+          "path": "frontend/src/utils/operationLogFormatters.ts",
+          "status": "reviewed",
+          "summary": "日志模块名和PDA设备登录名称替换，不改变路径正则、方法或状态分类。",
+          "evidence": {
+            "comparison": "v0.9.26..b1fd2ed",
+            "hunks": [
+              "@@ -159 +159 @@ const BUSINESS_ENDPOINT_LABELS: Array<[RegExp, string]> = [",
+              "@@ -226 +226 @@ export function formatApiPath(path: unknown, method?: unknown, statusCode?: unkn"
+            ],
+            "method": "逐文件读取完整变更；行为变更追踪共用组件、hook、路由或业务调用上下文。"
+          }
+        }
+      ],
+      "findings": [
+        {
+          "id": "FE-01",
+          "severity": "P1",
+          "path": "frontend/src/components/ui/input.tsx",
+          "line": 32,
+          "problem": "只有step=0.01时可键入/粘贴三位及更多小数，旧前端数量入口没有输入精度门禁。",
+          "fix": "24个数量输入显式quantity；严格原文有效小数校验，保留尾零、拒绝第三位并toast，不传业务onChange；非受控失焦拒绝写API。销售草稿和分配提交补两位校验。",
+          "validation": "input.quantity 13例先7失败后全通过；orderEntry与saleAllocation新增3位数量失败回归；frontend-red.log/frontend-red-2.log。",
+          "finalStatus": "fixed_locally_verified",
+          "finalEvidence": "docs/harness-changes-audit-2026-09-22.md 与对应本轮测试；历史证据和原建议保留。"
+        },
+        {
+          "id": "FE-02",
+          "severity": "P2",
+          "path": "frontend/src/hooks/useProductQtyPolicies.ts",
+          "line": 22,
+          "problem": "null会转ID0；单次请求超过500个商品静默漏末尾；key不属于products导致保存开关后5分钟内策略陈旧。",
+          "fix": "过滤正整数、去重、500条分批，并挂products key使商品保存失效同步更新。服务端仅PRODUCT_VIEW权限问题已交由backend代理修。",
+          "validation": "useProductQtyPolicies 3例分别复现空ID、失效、501条列表，先红后绿。",
+          "finalStatus": "fixed_locally_verified",
+          "finalEvidence": "docs/harness-changes-audit-2026-09-22.md 与对应本轮测试；历史证据和原建议保留。"
+        },
+        {
+          "id": "FE-03",
+          "severity": "P2",
+          "path": "frontend/src/hooks/useWorkspaceTabTitle.ts",
+          "line": 26,
+          "problem": "缓存命中时详情子effect先执行，父effect尚未注册tab，单号更新被丢弃且无依赖变化重试。",
+          "fix": "订阅目标tab是否注册，注册后重跑单号更新；仍按TabPathContext且不改activeKey。",
+          "validation": "真实父子effect顺序useWorkspaceTabTitle测试先红后绿；workspaceStore跨tab与query变化回归保持通过。",
+          "finalStatus": "fixed_locally_verified",
+          "finalEvidence": "docs/harness-changes-audit-2026-09-22.md 与对应本轮测试；历史证据和原建议保留。"
+        },
+        {
+          "id": "FE-04",
+          "severity": "P2",
+          "path": "frontend/src/store/workspaceStore.ts",
+          "line": 55,
+          "problem": "新keepPageTitle把旧列表名销售管理当自定义单号保留，路由改名后已有标签不更新。",
+          "fix": "静态路由优先当前PATH_TITLES，动态详情仍保留业务单号，合并页仍取子页名。",
+          "validation": "workspaceStore新增旧销售管理标签回归先红后绿。",
+          "finalStatus": "fixed_locally_verified",
+          "finalEvidence": "docs/harness-changes-audit-2026-09-22.md 与对应本轮测试；历史证据和原建议保留。"
+        },
+        {
+          "id": "FE-05",
+          "severity": "P2",
+          "path": "frontend/src/components/shared/PickerField.tsx",
+          "line": 51,
+          "problem": "选择器禁用只覆盖主按钮，清除按钮仍可执行，可能在保存期间改变选择。",
+          "fix": "清除按钮同步disabled。",
+          "validation": "PickerField真实button.click测试先红后绿。",
+          "finalStatus": "fixed_locally_verified",
+          "finalEvidence": "docs/harness-changes-audit-2026-09-22.md 与对应本轮测试；历史证据和原建议保留。"
+        },
+        {
+          "id": "FE-06",
+          "severity": "P2",
+          "path": "frontend/src/lib/format.ts",
+          "line": 22,
+          "problem": "数量输入step改两位后qty显示、销售分配和若干前端数量运算仍保留4位/10000，前后端精度口径不一致。",
+          "fix": "qty显示两位，派生数量统一roundQuantity；销售分配严格校验；换算率从qty格式器分离以保持精度；PDA调拨最小单位夹具同步0.01。",
+          "validation": "format/qtyStep/salePresentation/saleAllocation测试；rg确认剩余10000仅货币万元、毛利百分比及缓存时间，四位tooltip仅单价。",
+          "finalStatus": "fixed_locally_verified",
+          "finalEvidence": "docs/harness-changes-audit-2026-09-22.md 与对应本轮测试；历史证据和原建议保留。"
+        },
+        {
+          "id": "FE-07",
+          "severity": "P3",
+          "path": "frontend/src/pages/pda/stockcheck.tsx",
+          "line": 128,
+          "problem": "所有非在库状态被提示请先上架，已出库条码也给出不适用的操作建议。",
+          "fix": "改明确不是在库条码不能盘点，不改变扫码拒绝条件。",
+          "validation": "逐分支核对containerStatus与原stored门禁；完整frontend单测。",
+          "finalStatus": "fixed_locally_verified",
+          "finalEvidence": "docs/harness-changes-audit-2026-09-22.md 与对应本轮测试；历史证据和原建议保留。"
+        },
+        {
+          "id": "FE-08",
+          "severity": "P3",
+          "path": "frontend/src/pages/credit-overrides/index.tsx",
+          "line": 94,
+          "problem": "旧文本守卫漏JSX续行文案，六处仍暴露快照/容器/会话术语。",
+          "fix": "按新AST守卫逐处修前端六处用户文案，保留内部标识符。",
+          "validation": "other-copy-current.log记录原失败路径；最终由主代理统一运行copy guard。",
+          "finalStatus": "fixed_locally_verified",
+          "finalEvidence": "docs/harness-changes-audit-2026-09-22.md 与对应本轮测试；历史证据和原建议保留。"
+        },
+        {
+          "id": "FE-09",
+          "severity": "P2",
+          "path": "frontend/src/pages/purchase/form/index.tsx",
+          "line": 193,
+          "problem": "采购数量parseInt把原生number允许的科学计数法1e2静默解析成1，超精度拒绝以后该合法整数表达仍存在误算。",
+          "fix": "改Number完整解析且Number.isSafeInteger验证，禁止parseInt截断。",
+          "validation": "从实际源码隔离运行原parsePositiveInteger，1e2断言100先失败(实值1)；修复后1e2/3.00/3.2/空值4用例通过。",
+          "finalStatus": "fixed_locally_verified",
+          "finalEvidence": "docs/harness-changes-audit-2026-09-22.md 与对应本轮测试；历史证据和原建议保留。"
+        }
+      ],
+      "tests": [
+        {
+          "command": "npm --prefix frontend run test:unit",
+          "result": "exit 0; 90 files, 452 tests passed (Node 22)",
+          "log": "output/harness-audit-2026-09-22/frontend-unit-final.log"
+        },
+        {
+          "command": "npm --prefix frontend run lint",
+          "result": "exit 0; 0 errors, 30 existing warnings",
+          "log": "output/harness-audit-2026-09-22/frontend-lint-final.log"
+        },
+        {
+          "command": "cd frontend && npx tsc --noEmit -p tsconfig.app.json",
+          "result": "exit 0; no errors",
+          "log": "output/harness-audit-2026-09-22/frontend-tsc-final.log"
+        },
+        {
+          "command": "npm run test:frontend-conventions",
+          "result": "5 tests pass",
+          "log": "output/harness-audit-2026-09-22/frontend-conventions.log"
+        },
+        {
+          "command": "git diff --check -- frontend docs/frontend-pda-conventions.md",
+          "result": "exit 0"
+        },
+        {
+          "command": "历史测试夹具精度同步",
+          "result": "PDA调拨夹具原剩余0.0001不再属于两位数量契约，已改剩余0.01；保留部分出库可进入原分组行为断言"
+        },
+        {
+          "command": "提取实际采购parsePositiveInteger函数运行断言",
+          "result": "1e2 => 100, 3.00 => 3, 3.2 => 0, empty => 0; all 4 pass after expected red"
+        }
+      ],
+      "limitations": [
+        "未开展真实浏览器视觉回归、Android真机键盘/扫描验收；DOM交互由jsdom回归覆盖。",
+        "仅审查指定195份frontend历史改动及修复所需调用链；不宣称全仓所有历史问题已清零。",
+        "portal供应商页面删除已验证引用清理完整；原始产品删除授权须由主代理结合完整用户会话核对。",
+        "unit测试中的jsdom未mock网络AggregateError及Radix Description警告另记，不代表真实后端联调通过。"
+      ],
+      "additionalFiles": [
+        {
+          "path": "docs/frontend-pda-conventions.md",
+          "purpose": "共享组件及hook回归或前端约定同步"
+        },
+        {
+          "path": "frontend/src/components/ui/input.tsx",
+          "purpose": "数量校验与派生数量口径修复及行为回归"
+        },
+        {
+          "path": "frontend/src/lib/orderEntry.test.ts",
+          "purpose": "数量校验与派生数量口径修复及行为回归"
+        },
+        {
+          "path": "frontend/src/lib/orderEntry.ts",
+          "purpose": "数量校验与派生数量口径修复及行为回归"
+        },
+        {
+          "path": "frontend/src/lib/salePresentation.test.ts",
+          "purpose": "数量校验与派生数量口径修复及行为回归"
+        },
+        {
+          "path": "frontend/src/lib/salePresentation.ts",
+          "purpose": "数量校验与派生数量口径修复及行为回归"
+        },
+        {
+          "path": "frontend/src/pages/pda/transfer.test.tsx",
+          "purpose": "数量校验与派生数量口径修复及行为回归"
+        },
+        {
+          "path": "frontend/src/pages/pda/transfer.tsx",
+          "purpose": "数量校验与派生数量口径修复及行为回归"
+        },
+        {
+          "path": "frontend/src/pages/sale/components/saleAllocation.test.ts",
+          "purpose": "数量校验与派生数量口径修复及行为回归"
+        },
+        {
+          "path": "frontend/src/pages/sale/components/saleAllocation.ts",
+          "purpose": "数量校验与派生数量口径修复及行为回归"
+        },
+        {
+          "path": "frontend/src/pages/sale/form/validate.ts",
+          "purpose": "数量校验与派生数量口径修复及行为回归"
+        },
+        {
+          "path": "frontend/src/components/shared/PickerField.test.tsx",
+          "purpose": "共享组件及hook回归或前端约定同步"
+        },
+        {
+          "path": "frontend/src/components/ui/input.quantity.test.tsx",
+          "purpose": "数量校验与派生数量口径修复及行为回归"
+        },
+        {
+          "path": "frontend/src/hooks/useProductQtyPolicies.test.tsx",
+          "purpose": "数量校验与派生数量口径修复及行为回归"
+        },
+        {
+          "path": "frontend/src/hooks/useWorkspaceTabTitle.test.tsx",
+          "purpose": "共享组件及hook回归或前端约定同步"
+        }
+      ],
+      "modifiedFiles": [
+        "docs/frontend-pda-conventions.md",
+        "frontend/src/components/shared/PickerField.tsx",
+        "frontend/src/components/shared/ProcurementSupplyDetails.tsx",
+        "frontend/src/components/shared/ProcurementSupplyExplanation.tsx",
+        "frontend/src/components/ui/input.tsx",
+        "frontend/src/hooks/useProductQtyPolicies.ts",
+        "frontend/src/hooks/useWorkspaceTabTitle.ts",
+        "frontend/src/lib/format.test.ts",
+        "frontend/src/lib/format.ts",
+        "frontend/src/lib/orderEntry.test.ts",
+        "frontend/src/lib/orderEntry.ts",
+        "frontend/src/lib/qtyStep.test.ts",
+        "frontend/src/lib/qtyStep.ts",
+        "frontend/src/lib/salePresentation.test.ts",
+        "frontend/src/lib/salePresentation.ts",
+        "frontend/src/pages/credit-overrides/index.tsx",
+        "frontend/src/pages/disposal/components/CreateDisposalDialog.tsx",
+        "frontend/src/pages/inventory/index.tsx",
+        "frontend/src/pages/inventory/trace.tsx",
+        "frontend/src/pages/pda/adjustment.tsx",
+        "frontend/src/pages/pda/cancel-return.tsx",
+        "frontend/src/pages/pda/receive.tsx",
+        "frontend/src/pages/pda/sale-return-receive.tsx",
+        "frontend/src/pages/pda/split.tsx",
+        "frontend/src/pages/pda/stockcheck.tsx",
+        "frontend/src/pages/pda/transfer.test.tsx",
+        "frontend/src/pages/pda/transfer.tsx",
+        "frontend/src/pages/procurement/detail.tsx",
+        "frontend/src/pages/products/form.tsx",
+        "frontend/src/pages/purchase-requisitions/form.tsx",
+        "frontend/src/pages/purchase/form/index.tsx",
+        "frontend/src/pages/returns/purchase/form/index.tsx",
+        "frontend/src/pages/returns/sale/form/index.tsx",
+        "frontend/src/pages/sale/components/ReleaseAllocationDialog.tsx",
+        "frontend/src/pages/sale/components/ReserveAllocationDialog.tsx",
+        "frontend/src/pages/sale/components/ShipSelectDialog.tsx",
+        "frontend/src/pages/sale/components/saleAllocation.test.ts",
+        "frontend/src/pages/sale/components/saleAllocation.ts",
+        "frontend/src/pages/sale/form/components/SaleOrderItemsTable.tsx",
+        "frontend/src/pages/sale/form/validate.ts",
+        "frontend/src/pages/settings/pda-devices/index.tsx",
+        "frontend/src/pages/stockcheck/components/CheckDetailDialog.tsx",
+        "frontend/src/pages/transfer/form/index.tsx",
+        "frontend/src/store/workspaceStore.test.ts",
+        "frontend/src/store/workspaceStore.ts",
+        "frontend/src/components/shared/PickerField.test.tsx",
+        "frontend/src/components/ui/input.quantity.test.tsx",
+        "frontend/src/hooks/useProductQtyPolicies.test.tsx",
+        "frontend/src/hooks/useWorkspaceTabTitle.test.tsx"
+      ],
+      "reviewContext": [
+        "frontend/src/components/ui/input.tsx",
+        "frontend/src/components/shared/DatePicker.tsx",
+        "frontend/src/components/layout/KeepAliveOutlet.tsx",
+        "frontend/src/router/workspaceRouteMeta.ts",
+        "frontend/src/hooks/useProducts.ts",
+        "frontend/src/lib/orderEntry.ts",
+        "frontend/src/pages/sale/form/validate.ts",
+        "frontend/src/pages/sale/components/saleAllocation.ts",
+        "backend/src/modules/products/products.controller.js",
+        "backend/src/modules/products/products.routes.js",
+        "backend/src/modules/fulfillment/fulfillment.detect.js"
+      ],
+      "quantityInputCount": 24
+    },
+    {
+      "domain": "backend",
+      "range": "v0.9.26..b1fd2ed",
+      "files": [
+        {
+          "path": "backend/src/engine/containerEngine.js",
+          "status": "reviewed",
+          "summary": "splitContainer新增整数校验但允许多位小数；拆分源减量/新箱入量分别落DECIMAL2可不守恒。其它改动为错误文案，状态与锁序未改。",
+          "evidence": [
+            "审查范围 v0.9.26..b1fd2ed；splitContainer:951-1080；.005拆分缺少原值精度拦截，见BE-02。"
+          ]
+        },
+        {
+          "path": "backend/src/engine/reservationEngine.js",
+          "status": "reviewed",
+          "summary": "三个循环余量由万分位改为百分位，均用于数量而非金额；partialRelease调用链仍允许超精度用户值，造成预计绑定与预占量取整不一致。",
+          "evidence": [
+            "审查范围 v0.9.26..b1fd2ed；reserve:99、markFulfilled:218、partialReleaseByProduct:282；sale.releaseStock见BE-06。"
+          ]
+        },
+        {
+          "path": "backend/src/middleware/pdaSession.js",
+          "status": "reviewed",
+          "summary": "仅503设备会话校验失败文案变更；状态码、错误码、设备有效性和仓库绑定检查未改变。数据库瞬时失败仍是503，重新登录不是恢复证明。",
+          "evidence": [
+            "审查范围 v0.9.26..b1fd2ed；diff仅90行catch中的AppError文字。"
+          ]
+        },
+        {
+          "path": "backend/src/modules/disposal/disposal.service.js",
+          "status": "reviewed",
+          "summary": "create/update读取商品整数策略并在原事务写处置明细前校验；成本仍按unit_value×quantity计算。允许小数商品超精度值仍放行，依赖共享工具修复。",
+          "evidence": [
+            "审查范围 v0.9.26..b1fd2ed；create:214-252；update:278-310；BE-02。"
+          ]
+        },
+        {
+          "path": "backend/src/modules/document-activity/document-progress.js",
+          "status": "reviewed",
+          "summary": "difference所有调用均为采购、入库、退货和调拨数量差；改成百分位未误改对账金额。关联查询与权限入口未变。",
+          "evidence": [
+            "审查范围 v0.9.26..b1fd2ed；difference:6，调用85/90/102/121；document-activity纯测试通过。"
+          ]
+        },
+        {
+          "path": "backend/src/modules/fulfillment/fulfillment.detect.js",
+          "status": "reviewed",
+          "summary": "销售供应不足提示删去行动建议，shortage判断、待办key、跳转地址与到期日期保持一致。",
+          "evidence": [
+            "审查范围 v0.9.26..b1fd2ed；detect销售shortage分支22行。"
+          ]
+        },
+        {
+          "path": "backend/src/modules/fulfillment/fulfillment.rules.js",
+          "status": "reviewed",
+          "summary": "quantity用于交期覆盖的剩余量、现货量和供应批量，改两位只影响数量；日期规则无变化。",
+          "evidence": [
+            "审查范围 v0.9.26..b1fd2ed；delivery计算14-26行；fulfillment纯规则测试通过。"
+          ]
+        },
+        {
+          "path": "backend/src/modules/inbound-tasks/inbound-tasks.command.js",
+          "status": "reviewed",
+          "summary": "receive只对totalQty校验，0.5+0.5可绕过整数商品逐箱限制；.005+.005可使箱合计与明细增量不同。手工创建收货计划同样需校验用户qty。",
+          "evidence": [
+            "审查范围 v0.9.26..b1fd2ed；receive:348-377，normalizedPackages→totalQty→assertQtyPrecisionWith；BE-03。"
+          ]
+        },
+        {
+          "path": "backend/src/modules/inbound-tasks/inbound-tasks.putaway.js",
+          "status": "reviewed",
+          "summary": "只修改容器用语；仍先锁库存维度再锁待上架容器、验证任务归属及目标库位同仓，并保留avg_cost四位精度。",
+          "evidence": [
+            "审查范围 v0.9.26..b1fd2ed；putaway:125-166；newAvg.toFixed(4)未被数量替换误改。"
+          ]
+        },
+        {
+          "path": "backend/src/modules/inbound-tasks/inbound-tasks.suggestion.js",
+          "status": "reviewed",
+          "summary": "仅建议接口容器无效/归属错误文案变更；排序、建议数量上限与任务归属校验未变化。",
+          "evidence": [
+            "审查范围 v0.9.26..b1fd2ed；getPutawaySuggestion:20-31。"
+          ]
+        },
+        {
+          "path": "backend/src/modules/inventory/inventory.procurement.js",
+          "status": "reviewed",
+          "summary": "round4替换覆盖采购供需数量、ADU和包装倍数；金额和价格不参与这些字段。共享计算接受原始forecastDemand后输出两位。",
+          "evidence": [
+            "审查范围 v0.9.26..b1fd2ed；getSupplyRows:117-132，calculateSupply调用；无round4残留导入。"
+          ]
+        },
+        {
+          "path": "backend/src/modules/inventory/inventory.service.js",
+          "status": "reviewed",
+          "summary": "手工出库changeStock增加整数商品检查；禁用手工入库/调整保持403，拆分/移库的仓范围与同仓限制保持。允许小数策略仍未拦超两位原值。",
+          "evidence": [
+            "审查范围 v0.9.26..b1fd2ed；changeStock:222-252；assignContainerLocation:1075-1093；splitContainerOp:1128；BE-02。"
+          ]
+        },
+        {
+          "path": "backend/src/modules/locations/locations.service.js",
+          "status": "reviewed",
+          "summary": "仅库位被库存引用时错误文案变更；引用检查仍在删除前运行，未放宽有库存库位删除。",
+          "evidence": [
+            "审查范围 v0.9.26..b1fd2ed；assertLocationDeletable:42-46。"
+          ]
+        },
+        {
+          "path": "backend/src/modules/logistics/logistics.shipment.js",
+          "status": "reviewed",
+          "summary": "仅缺少打包快照的错误文案改为打包记录；直连运单已提交保护、范围校验和联系人验证不变。",
+          "evidence": [
+            "审查范围 v0.9.26..b1fd2ed；updateShipment:15-20。"
+          ]
+        },
+        {
+          "path": "backend/src/modules/payments/party-ledger.service.js",
+          "status": "reviewed",
+          "summary": "只把快照参数错误改为对账数据参数错误；snapshotId/snapshotCount安全整数限制、分页和业务日期判断保持。",
+          "evidence": [
+            "审查范围 v0.9.26..b1fd2ed；parseQuery:16-23；无金额计算变化。"
+          ]
+        },
+        {
+          "path": "backend/src/modules/pda/pda.sessions.service.js",
+          "status": "reviewed",
+          "summary": "仅renewSession缺票据、无效、吊销、过期文字变化；HTTP状态、机器错误码、active状态校验和令牌轮换未变化。",
+          "evidence": [
+            "审查范围 v0.9.26..b1fd2ed；renewSession:115-140。"
+          ]
+        },
+        {
+          "path": "backend/src/modules/picking-waves/picking-waves.service.js",
+          "status": "reviewed",
+          "summary": "仅波次更名批次；任务数量/重复ID、同仓范围、状态行锁和取消联动逻辑未改。",
+          "evidence": [
+            "审查范围 v0.9.26..b1fd2ed；lockWaveForTransition/casWaveStatus/findById/create/finish/cancel差异。"
+          ]
+        },
+        {
+          "path": "backend/src/modules/portal/portal.controller.js",
+          "status": "reviewed",
+          "summary": "移除purchaseStatus控制器及导出；客户statements保留。全仓源码已无旧purchase-status调用，未发现前端404残留。",
+          "evidence": [
+            "审查范围 v0.9.26..b1fd2ed；删除12-27；rg purchase-status/listPurchaseStatus在frontend/src/backend/src/tests无结果。"
+          ]
+        },
+        {
+          "path": "backend/src/modules/portal/portal.routes.js",
+          "status": "reviewed",
+          "summary": "移除供应商到货GET路由，客户对账仍经过authMiddleware和PAYMENT_VIEW；功能删除在三层与前端同步。",
+          "evidence": [
+            "审查范围 v0.9.26..b1fd2ed；/statements与router.use(authMiddleware)保持；旧/purchase-status删除。"
+          ]
+        },
+        {
+          "path": "backend/src/modules/portal/portal.service.js",
+          "status": "reviewed",
+          "summary": "删除供应商到货查询及对应分页/仓范围导入，客户对账仍通过customerId和既有statementsService读取；未引入新写操作。",
+          "evidence": [
+            "审查范围 v0.9.26..b1fd2ed；listPurchaseStatus完整删除，listStatements保留；旧主题文档仍描述供应商门户，需同步。"
+          ]
+        },
+        {
+          "path": "backend/src/modules/print-jobs/print-jobs.label-command.js",
+          "status": "reviewed",
+          "summary": "仅无打印记录拒绝补打文案更新；has_print_job闸门、错误码与标签入队调用不变。",
+          "evidence": [
+            "审查范围 v0.9.26..b1fd2ed；reprintInboundBarcode:527-534。"
+          ]
+        },
+        {
+          "path": "backend/src/modules/procurement/procurement.planning.js",
+          "status": "reviewed",
+          "summary": "roundPurchase的乘除尺度成对改100，MOQ/包装取整仍先MOQ再包装倍数；净需求/盈余输出两位。无金额混入。",
+          "evidence": [
+            "审查范围 v0.9.26..b1fd2ed；roundPurchase:7-13、calculateSupply:25-27；procurement-planning纯规则测试通过。"
+          ]
+        },
+        {
+          "path": "backend/src/modules/procurement/procurement.policies.js",
+          "status": "reviewed",
+          "summary": "改roundQty仅检查折算后大于0，未校验录入packMultiple/minimumOrderQty位数；route仍允许.0001，落库已为DECIMAL2，会静默改变采购策略。",
+          "evidence": [
+            "审查范围 v0.9.26..b1fd2ed；savePolicy:22-27；procurement.routes:31；BE-07。"
+          ]
+        },
+        {
+          "path": "backend/src/modules/products/products.controller.js",
+          "status": "reviewed",
+          "summary": "新增批量策略解析将ID列表截为500并返回精简策略；ID值SQL参数化，没有带出价格/客户数据。权限适配见routes发现。",
+          "evidence": [
+            "审查范围 v0.9.26..b1fd2ed；qtyPolicies:20-28；String→split→Number→整数→slice(0,500)。"
+          ]
+        },
+        {
+          "path": "backend/src/modules/products/products.routes.js",
+          "status": "reviewed",
+          "summary": "发现并修复productBase缺少allowDecimalQty导致Zod剥字段；发现并修复精简策略端点错误依赖PRODUCT_VIEW，现作业权限可读策略但不可读完整商品。",
+          "evidence": [
+            "审查范围 v0.9.26..b1fd2ed；BE-01/BE-08；本代理仅修改此业务文件；新测试11/11。"
+          ]
+        },
+        {
+          "path": "backend/src/modules/products/products.service.js",
+          "status": "reviewed",
+          "summary": "新增策略读出和create/update持久化字段，INSERT列与参数数匹配；旧客户端省略保持旧值。正常HTTP原先在路由被剥离，已修；安全库存/补货点未校验原值位数。",
+          "evidence": [
+            "审查范围 v0.9.26..b1fd2ed；fmtProduct:217-229、findQtyPolicies:234-247、create:368-375、update:403-410；BE-01/BE-07。"
+          ]
+        },
+        {
+          "path": "backend/src/modules/purchase-requisitions/purchase-requisitions.service.js",
+          "status": "reviewed",
+          "summary": "replaceItems按商品校验整数；convert在生成采购前批量检查转换量；事务回滚边界不变。共享工具原先允许超两位，所以请购可静默舍入。",
+          "evidence": [
+            "审查范围 v0.9.26..b1fd2ed；replaceItems:70-84；convert:362-370；BE-02。"
+          ]
+        },
+        {
+          "path": "backend/src/modules/purchase/purchase.service.js",
+          "status": "reviewed",
+          "summary": "createWithinTransaction/update从单行fold改批量fold，接上商品策略；金额合计round2保持。采购绑定聚合只改数量尺度。折算前原数量仍可被roundQty掩盖。",
+          "evidence": [
+            "审查范围 v0.9.26..b1fd2ed；create:201-207、update:258-264、assertNoActiveSaleBinding:300-304；BE-04。"
+          ]
+        },
+        {
+          "path": "backend/src/modules/return-tasks/return-tasks.service.js",
+          "status": "reviewed",
+          "summary": "diff只改文案，但新增整数/两位契约完全未覆盖receive和check；逐箱收货、合格/拒收数量可超精度，allocateQaContainers还沿用四位残量。",
+          "evidence": [
+            "审查范围 v0.9.26..b1fd2ed；receive:154、allocateQaContainers:257/281/312-313、check:354；BE-05。"
+          ]
+        },
+        {
+          "path": "backend/src/modules/sale/sale.service.js",
+          "status": "reviewed",
+          "summary": "reserveStock/ship新增整数策略校验，未改变授信/仓范围；releaseStock部分释放未接校验，与改两位的预计绑定形成不一致；fold原值漏洞影响建单/改单。",
+          "evidence": [
+            "审查范围 v0.9.26..b1fd2ed；reserveStock:1391-1401；ship:1567-1578；releaseStock:1667-1688；BE-04/BE-06。"
+          ]
+        },
+        {
+          "path": "backend/src/modules/scan-logs/scan-logs.service.js",
+          "status": "reviewed",
+          "summary": "diff只改库存条码文案；createScanLog直接接受qty写scan_logs和picked_qty，未接新整数/两位约束。任务范围、改单挂起与累积上限仍保留。",
+          "evidence": [
+            "审查范围 v0.9.26..b1fd2ed；createScanLog:66-225；scan-logs.routes createSchema qty仅positive；BE-05。"
+          ]
+        },
+        {
+          "path": "backend/src/modules/stockcheck/stockcheck.service.js",
+          "status": "reviewed",
+          "summary": "手填updateItems接商品策略；saveItemContainerScans只检查各箱求和，0.5+0.5绕过整数要求，.005+.005在容器明细与总数上舍入不一致。",
+          "evidence": [
+            "审查范围 v0.9.26..b1fd2ed；saveItemContainerScans:236-265；updateItems:312-330；BE-03。"
+          ]
+        },
+        {
+          "path": "backend/src/modules/transfer/transfer-requests.js",
+          "status": "reviewed",
+          "summary": "仅旧请求键冲突文案把回执改操作记录；legacy状态与transferId匹配检查仍在，资源绑定语义未变。",
+          "evidence": [
+            "审查范围 v0.9.26..b1fd2ed；beginTransferRequest:22-29。"
+          ]
+        },
+        {
+          "path": "backend/src/modules/transfer/transfer.service.js",
+          "status": "reviewed",
+          "summary": "create/update校验商品整数；整箱分配尺度乘除同时改100，容量关系及SafeInteger检查保持。用户计划数量需共享超两位拒绝。",
+          "evidence": [
+            "审查范围 v0.9.26..b1fd2ed；create:109-116、update:156-163、allocateTransferQuantity:226-252；BE-02。"
+          ]
+        },
+        {
+          "path": "backend/src/modules/warehouse-tasks/warehouse-tasks.adjust.js",
+          "status": "reviewed",
+          "summary": "仅归还容器不存在错误改文案；锁维度→锁容器顺序、源容器任务锁和原库位校验未改。",
+          "evidence": [
+            "审查范围 v0.9.26..b1fd2ed；confirmContainerReturn:438-465。"
+          ]
+        },
+        {
+          "path": "backend/src/modules/warehouse-tasks/warehouse-tasks.check.js",
+          "status": "reviewed",
+          "summary": "只改手动复核已禁用提示；checkItems仍无条件拒绝，PDA扫码闭合路线未被绕过。",
+          "evidence": [
+            "审查范围 v0.9.26..b1fd2ed；checkItems:73-79。"
+          ]
+        },
+        {
+          "path": "backend/src/modules/warehouse-tasks/warehouse-tasks.helpers.js",
+          "status": "reviewed",
+          "summary": "只变更锁定集合/扫码集合不一致错误文案，集合比对逻辑保持；打包闭合仍万分位整数比较，对两位存量有效但未替代入口校验。",
+          "evidence": [
+            "审查范围 v0.9.26..b1fd2ed；assertTaskPickScanClosure:83-96；assertTaskPackClosure SCALE:147；BE-05跨文件。"
+          ]
+        },
+        {
+          "path": "backend/src/utils/expectedStock.js",
+          "status": "reviewed",
+          "summary": "qty由四位改两位，影响采购未上架量、绑定累积和释放。合法两位数量下保持语义；调用方传.005时reduceExpectedBindings先变.01，应由入口严格拒绝。",
+          "evidence": [
+            "审查范围 v0.9.26..b1fd2ed；qty:6；getExpectedStock:48-67、reduceExpectedBindings:89；BE-06。"
+          ]
+        },
+        {
+          "path": "backend/src/utils/operationRequest.js",
+          "status": "reviewed",
+          "summary": "仅legacy成功请求键冲突文案；资源ID匹配、409冲突、成功回放和请求键绑定逻辑未变。",
+          "evidence": [
+            "审查范围 v0.9.26..b1fd2ed；beginResourceOperationRequest:173-182。"
+          ]
+        },
+        {
+          "path": "backend/src/utils/qtyPrecision.js",
+          "status": "reviewed",
+          "summary": "新工具仅拦非有限值和整数策略，允许小数商品任意位数；不满足用户拒绝两位以上数量要求且向DECIMAL2多表写入放行。null策略也直接放行。",
+          "evidence": [
+            "审查范围 v0.9.26..b1fd2ed；qtyPrecisionProblem:46-55；assertQtyPrecision:99-107；BE-02。"
+          ]
+        },
+        {
+          "path": "backend/src/utils/unitConversion.js",
+          "status": "reviewed",
+          "summary": "round4改roundQty且导出更新，无遗留round4运行时调用；fold先将原数量折算舍入再检查策略，超精度原值被隐藏，金额仍按原entryQty计算。",
+          "evidence": [
+            "审查范围 v0.9.26..b1fd2ed；foldEntryItem:46-64、foldEntryItems:66-78；BE-04。"
+          ]
+        }
+      ],
+      "findings": [
+        {
+          "id": "BE-01",
+          "severity": "P1",
+          "path": "backend/src/modules/products/products.routes.js",
+          "line": 28,
+          "problem": "productBase缺少allowDecimalQty；Zod默认剥未知字段，创建总默认允许小数、更新无法切换策略。",
+          "suggestedFix": "添加z.boolean().optional，保留旧客户端省略语义。本代理已修复。",
+          "validation": "真实路由+validateBody无DB回归：修复前6失败2通过，修复后8通过；见product-qty-policy-red.txt。",
+          "resolution": "已在本轮共享工作区修复；尚未提交/发布",
+          "finalStatus": "fixed_locally_verified",
+          "finalEvidence": "docs/harness-changes-audit-2026-09-22.md 与对应本轮测试；历史证据和原建议保留。"
+        },
+        {
+          "id": "BE-02",
+          "severity": "P1",
+          "path": "backend/src/utils/qtyPrecision.js",
+          "line": 46,
+          "problem": "允许小数商品没有两位上限；splitContainer .005可因源减/新箱增分别舍入破坏守恒；直接写数量的处置/请购/调拨/占库等同受影响。",
+          "suggestedFix": "在共享工具对所有原始数量先检查有限性及两位精度；所有写入口接入，保留浮点噪声容差。",
+          "validation": "源码调用链证据；主代理负责共享工具和拆分独立本地数据库验证，本代理未运行DB。",
+          "finalStatus": "fixed_locally_verified",
+          "finalEvidence": "docs/harness-changes-audit-2026-09-22.md 与对应本轮测试；历史证据和原建议保留。"
+        },
+        {
+          "id": "BE-03",
+          "severity": "P1",
+          "path": "backend/src/modules/inbound-tasks/inbound-tasks.command.js",
+          "line": 372,
+          "problem": "receive和stockcheck.saveItemContainerScans只验证总和；整数商品两箱.5+.5被接受；两箱.005使逐箱DECIMAL2合计.02而总和.01。",
+          "suggestedFix": "在逐箱/逐容器写入前对每个原始值校验整数和两位约束，再聚合。",
+          "validation": "对照normalizedPackages和rows循环→sum→assert的源码路径；主代理负责复现。",
+          "finalStatus": "fixed_locally_verified",
+          "finalEvidence": "docs/harness-changes-audit-2026-09-22.md 与对应本轮测试；历史证据和原建议保留。"
+        },
+        {
+          "id": "BE-04",
+          "severity": "P1",
+          "path": "backend/src/utils/unitConversion.js",
+          "line": 50,
+          "problem": "foldEntryItem先roundQty原始entryQty，foldEntryItems只校验round后的quantity；例如1.004基本单位变1并通过，但金额仍以1.004计算。",
+          "suggestedFix": "在round前分别验证录入数量和未舍入基础数量，拒绝超两位；整数策略检查未舍入基础数量。",
+          "validation": "原foldEntryItem与foldEntryItems完整读取；采购create/update调用链已核对。",
+          "finalStatus": "fixed_locally_verified",
+          "finalEvidence": "docs/harness-changes-audit-2026-09-22.md 与对应本轮测试；历史证据和原建议保留。"
+        },
+        {
+          "id": "BE-05",
+          "severity": "P1",
+          "path": "backend/src/modules/scan-logs/scan-logs.service.js",
+          "line": 66,
+          "problem": "新精度契约漏接拣货扫码、退货收货/质检；相邻packages.addItem/removeItem继续接受四位数量并以QTY_SCALE=10000计算，返回数量可与DECIMAL2存量不一致。",
+          "suggestedFix": "在createScanLog、return-tasks.receive/check、packages.addItem/removeItem对原值逐项校验，打包尺度同步两位。",
+          "validation": "routes中qty仅positive，service直接写；package_items/scan_logs/return_task_items迁移255为两位。",
+          "finalStatus": "fixed_locally_verified",
+          "finalEvidence": "docs/harness-changes-audit-2026-09-22.md 与对应本轮测试；历史证据和原建议保留。"
+        },
+        {
+          "id": "BE-06",
+          "severity": "P1",
+          "path": "backend/src/modules/sale/sale.service.js",
+          "line": 1676,
+          "problem": "releaseStock部分释放未验证原qty，.005通过partialReleaseByProduct后reduceExpectedBindings先舍为.01，其它DECIMAL2的1-.005可保留1.00，预计绑定与预占账分离。",
+          "suggestedFix": "部分释放前批量或逐行校验原qty；保持整单释放读取存量路径。",
+          "validation": "releaseStock→partialReleaseByProduct→reduceExpectedBindings调用链核对；已报告主代理。",
+          "finalStatus": "fixed_locally_verified",
+          "finalEvidence": "docs/harness-changes-audit-2026-09-22.md 与对应本轮测试；历史证据和原建议保留。"
+        },
+        {
+          "id": "BE-07",
+          "severity": "P2",
+          "path": "backend/src/modules/procurement/procurement.policies.js",
+          "line": 24,
+          "problem": "采购包装倍数/MOQ仍允许四位且原值落库；产品安全库存/补货点与采购计划adjustedQty同样缺两位校验，保存后值被DB静默改写。",
+          "suggestedFix": "已在savePolicy、updatePlanItem、upsertDefaultStockPolicy、inventory.saveStockPolicies补原值两位及基本单位整数策略；产品与采购路由补两位校验。",
+          "validation": "tests/qty-policy-settings.test.js 13/13通过；采购配置原先7失败、仓库配置原先2失败均已验证转绿；多行错误在任何INSERT/DELETE之前拒绝。",
+          "resolution": "已在本轮共享工作区修复；尚未提交/发布",
+          "finalStatus": "fixed_locally_verified",
+          "finalEvidence": "docs/harness-changes-audit-2026-09-22.md 与对应本轮测试；历史证据和原建议保留。"
+        },
+        {
+          "id": "BE-08",
+          "severity": "P2",
+          "path": "backend/src/modules/products/products.routes.js",
+          "line": 48,
+          "problem": "qty-policies只允许PRODUCT_VIEW，只有收货/退货/盘点等作业权限的合法用户403，前端默认允许小数会令输入规则失效。",
+          "suggestedFix": "仅精简策略端点允许实际数量页面业务权限任一，复用现有鉴权和拒绝审计，不开放完整商品记录。本代理已修复。",
+          "validation": "先观测inbound.receive.execute被403的新测试失败；修复后11/11，含无权限拒绝、完整商品路径拒绝。",
+          "resolution": "已在本轮共享工作区修复；尚未提交/发布",
+          "finalStatus": "fixed_locally_verified",
+          "finalEvidence": "docs/harness-changes-audit-2026-09-22.md 与对应本轮测试；历史证据和原建议保留。"
+        },
+        {
+          "id": "BE-09",
+          "severity": "P2",
+          "path": "backend/src/modules/scan-logs/scan-logs.service.js",
+          "line": 121,
+          "problem": "相关既有问题：needRemain=.3-.1得到.19999999999999998，合法qty=.2会被大于比较拒绝；scanned=.1加qty=.2也可能被误判超过剩余.3。check复核nextChecked同类。",
+          "suggestedFix": "已在原始qty校验后归一化qty，并使用roundQty规范待拣差额、累计拣货、复核剩余与复核累计；undo原始prevQty/newQty也在可选日志catch外校验。",
+          "validation": "tests/scan-qty-comparison.test.js真实service+mock SQL：原先5失败4通过→9/9通过，覆盖合法差额/累加、浮点噪声、真实超量与超精度、复核自动完成、撤销日志。",
+          "resolution": "已在本轮共享工作区修复；尚未提交/发布",
+          "finalStatus": "fixed_locally_verified",
+          "finalEvidence": "docs/harness-changes-audit-2026-09-22.md 与对应本轮测试；历史证据和原建议保留。"
+        },
+        {
+          "id": "BE-10",
+          "severity": "P1",
+          "path": "backend/src/engine/containerEngine.js",
+          "line": 316,
+          "problem": "扣减0.3跨0.1/0.2容器时，原始减法产生2.775e-17余量，数据库舍为0但状态仍ACTIVE；归还分配同类尾差把整箱误判成拆箱并改变条码身份，或误报库存不足。",
+          "suggestedFix": "已在两个deduct函数及splitTaskLockedContainerForReturn/reserveTaskLockedContainersForReturn中，原始数量assertQtyScale后用roundQty规范总可用、每次分配/扣减和剩余量。普通splitContainer由主代理维护。",
+          "validation": "tests/container-qty-allocation.test.js共14项通过；扣减修复先6失败4通过、归还扩展先3失败11通过。migration_ops_audit独立真实engine探针确认扣减写入从[[0,2,1],[2.775e-17,1,2]]变[[0,2,1],[0,2,2]]。",
+          "resolution": "已在本轮共享工作区修复，尚未提交/发布",
+          "finalStatus": "fixed_locally_verified",
+          "finalEvidence": "docs/harness-changes-audit-2026-09-22.md 与对应本轮测试；历史证据和原建议保留。"
+        }
+      ],
+      "tests": [
+        {
+          "command": "Node22 node --test tests/product-qty-policy-route.test.js",
+          "result": "11 passed, 0 failed；字段修复有6失败→8通过证据，权限修复有1失败→11通过证据"
+        },
+        {
+          "command": "Node22 node --test tests/product-qty-policy-route.test.js tests/fulfillment.test.js tests/procurement-planning.test.js tests/document-activity.test.js",
+          "result": "29 passed, 0 failed",
+          "evidence": "output/harness-audit-2026-09-22/backend-pure-tests.txt"
+        },
+        {
+          "command": "对scope.partitions.backend逐个git show b1fd2ed:<file>并new vm.Script编译",
+          "result": "41/41 JavaScript syntax passed"
+        },
+        {
+          "command": "git diff --check -- backend/src/modules/products/products.routes.js tests/product-qty-policy-route.test.js",
+          "result": "passed"
+        },
+        {
+          "command": "Node22 node --test tests/qty-policy-settings.test.js tests/product-qty-policy-route.test.js tests/fulfillment.test.js tests/procurement-planning.test.js tests/document-activity.test.js",
+          "result": "42 passed, 0 failed",
+          "evidence": "output/harness-audit-2026-09-22/backend-pure-tests.txt"
+        },
+        {
+          "command": "eslint对本代理修改的6个后端文件与git diff --check",
+          "result": "passed"
+        },
+        {
+          "command": "Node22 node --test tests/scan-qty-comparison.test.js tests/qty-policy-settings.test.js tests/product-qty-policy-route.test.js tests/fulfillment.test.js tests/procurement-planning.test.js tests/document-activity.test.js",
+          "result": "51 passed, 0 failed",
+          "evidence": "output/harness-audit-2026-09-22/backend-pure-tests.txt"
+        },
+        {
+          "command": "eslint对本代理修改的7个后端文件与git diff --check",
+          "result": "passed"
+        },
+        {
+          "command": "Node22 node --test tests/container-qty-allocation.test.js tests/scan-qty-comparison.test.js tests/qty-policy-settings.test.js tests/product-qty-policy-route.test.js tests/fulfillment.test.js tests/procurement-planning.test.js tests/document-activity.test.js",
+          "result": "65 passed, 0 failed",
+          "evidence": "output/harness-audit-2026-09-22/backend-pure-tests.txt"
+        },
+        {
+          "command": "eslint对8个后端修改文件及git diff --check",
+          "result": "passed"
+        }
+      ],
+      "limitations": [
+        "审查及行号以b1fd2ed原始变更为基准；主代理并行修复数量链路，本报告不冒称这些缺陷当前仍未修复。",
+        "本代理实际修改products.routes/service、procurement.routes/policies/service（service仅updatePlanItem）、inventory.service（仅saveStockPolicies）、scan-logs.service（浮点比较及undo精度）、containerEngine（仅两条deduct及两条任务归还函数），新增4份测试；package/CI/主题文档由主代理接入。",
+        "没有连接生产或测试数据库；事务一致性发现基于完整相关调用链与DECIMAL2规则，真实数据库复现由主代理负责。",
+        "新增权限测试隔离auth/database依赖，验证路由权限选择与输入schema；不替代真实JWT、角色表、PDA设备会话集成验收。",
+        "portal删除源码无残留调用，但docs/finance-permission-time.md仍描述供应商门户；docs/inventory-transaction-invariants.md第9条仍写四位，应随本轮文档同步。",
+        "全量业务回归及生产部署未由本代理执行。"
+      ],
+      "followupReview": {
+        "packages": "复核主代理当前修改：QTY_SCALE=100、fromQtyUnits.toFixed(2)同步；add原值在整数化前校验，remove显式数量在写入前校验，整行移除读存量语义保留。",
+        "scanLogs": "主代理原值校验位置正确；本代理继续修复合法两位数浮点比较误拒BE-09并补undo精度，9项行为测试通过。"
+      }
+    },
+    {
+      "domain": "other",
+      "files": [
+        {
+          "path": ".github/workflows/deploy-browser.yml",
+          "status": "reviewed",
+          "summary": "历史分片上传存在900秒单片先超时及SSH续行插注释截断清理；当前工作区已改2700秒、独立数据流、HTTPS降级及有效清理，未发现新增阻断。",
+          "evidence": "historical diff other-diff-00.txt; current deploy-browser.yml:182-328; actionlint通过; deployment-resources回归通过"
+        },
+        {
+          "path": ".github/workflows/test.yml",
+          "status": "reviewed",
+          "summary": "新增文案、数量精度、覆盖与前端结构四条契约均调用真实package脚本；当前CI保留这些接线。",
+          "evidence": "other-diff-01.txt; package.json scripts; actionlint通过"
+        },
+        {
+          "path": "AGENTS.md",
+          "status": "reviewed",
+          "summary": "新增数量两位与两条守卫指针可解析；执行约束未削弱。守卫覆盖不足单独列出。",
+          "evidence": "other-diff-02.txt; tests/qty-precision-coverage.test.js"
+        },
+        {
+          "path": "backend/apk/version.json",
+          "status": "reviewed",
+          "summary": "目标升级为0.10.2/versionCode137，与三端package/lock及Android源码一致；不是已发布状态证明。",
+          "evidence": "backend/apk/version.json; frontend/android/app/build.gradle; test:landing-updates通过"
+        },
+        {
+          "path": "backend/package-lock.json",
+          "status": "reviewed",
+          "summary": "仅根与packages[empty]版本从0.9.26到0.10.2，依赖图未变。",
+          "evidence": "other-diff-04.txt; JSON解析验证根包版本一致"
+        },
+        {
+          "path": "backend/package.json",
+          "status": "reviewed",
+          "summary": "仅version变为0.10.2，无脚本或依赖行为改动。",
+          "evidence": "other-diff-05.txt; package-lock.json一致"
+        },
+        {
+          "path": "backend/src/database/254_product_allow_decimal_qty.sql",
+          "status": "reviewed",
+          "summary": "新增allow_decimal_qty默认1，先查表与列再ADD，重跑跳过；不带AFTER避免依赖列顺序。旧四位注释属历史描述，不应改已执行迁移。",
+          "evidence": "other-diff-06.txt; current SQL:20-37; coverage默认值回归通过"
+        },
+        {
+          "path": "backend/src/database/255_qty_precision_two_decimals.sql",
+          "status": "reviewed",
+          "summary": "70个唯一数量列均以对应表/列NUMERIC_SCALE=4守卫MODIFY到2；未误改金额、单价、税率、换算率。原QA列与旧container.quantity在017/210已删除，不构成遗漏。DDL缩精度不可逆，实际库与存量无DB证明。",
+          "evidence": "完整445行已读；70个WHERE/ALTER表列逐一匹配；decimal-columns.txt与017/210核对；migration-trigger-bodies回归通过"
+        },
+        {
+          "path": "desktop/package-lock.json",
+          "status": "reviewed",
+          "summary": "仅两处包版本同步到0.10.2，依赖未改。",
+          "evidence": "other-diff-08.txt; JSON解析根包版本一致"
+        },
+        {
+          "path": "desktop/package.json",
+          "status": "reviewed",
+          "summary": "仅version变为0.10.2，打包设置未改。",
+          "evidence": "other-diff-09.txt"
+        },
+        {
+          "path": "docs/business-semantics.md",
+          "status": "reviewed",
+          "summary": "新增两位库存数量、整数商品后端校验及foldEntryItems入口约定，与设计一致；实际超两位校验缺陷由主代理处理。",
+          "evidence": "other-diff-10.txt; qtyPrecision与unitConversion消费者核对"
+        },
+        {
+          "path": "docs/frontend-pda-conventions.md",
+          "status": "reviewed",
+          "summary": "术语、标题、PickerField、格式化及输入规则已明确；数量显示仍写4位，与format.ts两位实现冲突。",
+          "evidence": "other-diff-11.txt; current line106; finding OTHER-003"
+        },
+        {
+          "path": "docs/print-deploy-ops.md",
+          "status": "reviewed",
+          "summary": "历史上传说明误把反方向测速当入站、预算错误；当前工作区已改方向区分、超时预算与清理规则，不重复算未修缺陷。",
+          "evidence": "other-diff-12.txt; 当前部署主题文档与workflow核对"
+        },
+        {
+          "path": "docs/release-notes/0.10.0.md",
+          "status": "reviewed",
+          "summary": "0.10.0记录数量开关、格式化及术语更改；历史版本说明保留当时两位限制，不当成当前行为。",
+          "evidence": "全文25行; other-diff-13.txt"
+        },
+        {
+          "path": "docs/release-notes/0.10.1.md",
+          "status": "reviewed",
+          "summary": "0.10.1记录临时放开位数及上版未完整部署事实；由0.10.2再次变更，不应覆盖历史。",
+          "evidence": "全文13行; other-diff-14.txt"
+        },
+        {
+          "path": "docs/release-notes/0.10.2.md",
+          "status": "reviewed",
+          "summary": "0.10.2说明总体对应迁移，但列数写69而迁移实际70；生产无三位值属历史声称，本审查未验证。 本地已订正为70列。",
+          "evidence": "other-diff-15.txt; migration25570个唯一目标; finding OTHER-003"
+        },
+        {
+          "path": "docs/release-v0.9.26-result.md",
+          "status": "reviewed",
+          "summary": "新增历史发布结果包含SHA、tag、CI、三端清单；未把历史10/10当成本轮实时验证。",
+          "evidence": "全文39行; other-diff-16.txt"
+        },
+        {
+          "path": "package.json",
+          "status": "reviewed",
+          "summary": "四个新test脚本路径存在，均CI可达；当前并行发布工具改动保留。",
+          "evidence": "other-diff-17.txt; test.yml新增四条调用；实际运行通过"
+        },
+        {
+          "path": "scripts/gen-qty-precision-migration.cjs",
+          "status": "reviewed",
+          "summary": "从information_schema白名单生成数量列，保留精度总长/null/default/comment并双层转义引号；只查scale4，金额/率未入白名单。一次性工具会覆盖255，严禁作为后续迁移入口重跑；未执行以免读取/改写本机库配置。",
+          "evidence": "全文134行; QTY_COLUMNS与70条SQL核对; line125-126固定输出路径"
+        },
+        {
+          "path": "tests/audit-inventory.smoke.test.js",
+          "status": "reviewed",
+          "summary": "仅软删库存条码拒绝错误文案更新；404和库存/状态不变断言保留。",
+          "evidence": "other-diff-19.txt; main第205行上下文；DB回归未执行"
+        },
+        {
+          "path": "tests/audit-return-putaway.test.js",
+          "status": "reviewed",
+          "summary": "更新库存条码错误文案，归属/仓库/设备/软删拒绝与无写入断言保留。",
+          "evidence": "other-diff-20.txt; 本次离线回归通过"
+        },
+        {
+          "path": "tests/copy-conventions.test.js",
+          "status": "reviewed",
+          "summary": "覆盖UI术语、金额、官网双份及后端AppError；发现URL错误去注释及双引号/模板AppError漏扫，反向复现。 本地修复：改用TypeScript AST解析；新增25处真实违规已通知主代理。",
+          "evidence": "全文250行; other-reverse-probe.json; finding OTHER-002"
+        },
+        {
+          "path": "tests/deployment-resources.test.js",
+          "status": "reviewed",
+          "summary": "历史测试预算未拦900秒单片和注释断行；当前工作区已补预算计算、SSH清理及PDA等待执行断言，本次通过。",
+          "evidence": "other-diff-22.txt; 当前tests/deployment-resources.test.js; other-tests.log"
+        },
+        {
+          "path": "tests/document-activity.test.js",
+          "status": "reviewed",
+          "summary": "difference边界改为0.01，保留浮点噪声与负差额检查；测试名称“四位”过时但不影响断言。",
+          "evidence": "other-diff-23.txt; 本次离线回归通过"
+        },
+        {
+          "path": "tests/frontend-conventions.test.js",
+          "status": "reviewed",
+          "summary": "新增路由标题、菜单、PageHeader、日期reset调用方、图标名称守卫，当前通过；基于文本解析，动态标题/超长组件表达式不代表被覆盖。",
+          "evidence": "全文147行; other-diff-24.txt; 本次离线回归通过"
+        },
+        {
+          "path": "tests/frontend-polling-contract.test.js",
+          "status": "reviewed",
+          "summary": "增加同文件具名轮询常量解析，覆盖当前AUTO_REFRESH_MS；28轮询点通过。继承的去注释函数也存在URL误剔边界。",
+          "evidence": "other-diff-25.txt; 本次polling输出28处; copy同类stripComments"
+        },
+        {
+          "path": "tests/prelaunch-scope-export.smoke.test.js",
+          "status": "reviewed",
+          "summary": "删除已下线采购查询门户范围回归；当前后端和前端均无purchase-status路由，非移除仍存在接口的权限保护测试。",
+          "evidence": "other-diff-26.txt; rg purchase-status无相关路由/消费者"
+        },
+        {
+          "path": "tests/print-template-preview.smoke.test.js",
+          "status": "reviewed",
+          "summary": "打印真实数据与事务快照断言由四位字符串改两位；仍检查仓范围、未提交内容、回滚后无任务，未降低事务断言。",
+          "evidence": "other-diff-27.txt全部变更；DB回归未执行"
+        },
+        {
+          "path": "tests/qty-precision-coverage.test.js",
+          "status": "reviewed",
+          "summary": "覆盖守卫只验require且不去注释，实际调拨两次校验全部改名后5项仍过，与注释承诺相反。 本地修复：按业务函数AST检查实际调用并有三类反向验证。",
+          "evidence": "全文105行; other-reverse-probe.json qtyGuard; finding OTHER-001"
+        },
+        {
+          "path": "tests/qty-precision.test.js",
+          "status": "reviewed",
+          "summary": "整数策略、浮点噪声、无缓存和400验证有效；没有任何3+位小数拒绝用例，hasTooManyDecimals导入未使用，主代理修复中。",
+          "evidence": "全文119行; other-tests.log; 已通知主代理"
+        },
+        {
+          "path": "tests/round2-transfer.smoke.test.js",
+          "status": "reviewed",
+          "summary": "重复调拨行从0.0001/9.9999改0.01/9.99，保留按行数量、分批扫码、列表仓范围与最终闭合断言。测试名称四位仅过时。",
+          "evidence": "other-diff-30.txt; 完整差异35行; DB回归未执行"
+        },
+        {
+          "path": "tests/warehouse-scan-closure.test.js",
+          "status": "reviewed",
+          "summary": "仅两条错误文案对齐库存条码；容器数量不同及成员不同的拒绝检查保留。",
+          "evidence": "other-diff-31.txt; 本次离线回归通过"
+        }
+      ],
+      "findings": [
+        {
+          "id": "OTHER-001",
+          "severity": "P2",
+          "path": "tests/qty-precision-coverage.test.js",
+          "line": 78,
+          "problem": "直接写数量入口只检查require(qtyPrecision)，没有验证业务函数调用；隔离删除调拨服务两处assertQtyPrecision调用后5条契约全部通过。文中承诺的新入口漏接/删除调用即失败不成立，且源码未去注释也能被注释满足。",
+          "suggestedFix": "对每个重要执行入口验证实际调用并剔除注释，优先用入口运行回归断言非法数量被拒；加入删除调用的隔离反向用例。",
+          "validation": "other-reverse-probe.json: qtyGuard.removedCalls=2, stillPassingTests=5",
+          "status": "fixed_local",
+          "resolution": "采用TypeScript AST按DIRECT_ENTRY_POINTS业务函数检查真实调用；对调拨每个登记入口执行删除全部调用、改名、注释伪装三种反向验证。不固定调用总数。",
+          "finalStatus": "fixed_locally_verified",
+          "finalEvidence": "docs/harness-changes-audit-2026-09-22.md 与对应本轮测试；历史证据和原建议保留。"
+        },
+        {
+          "id": "OTHER-002",
+          "severity": "P3",
+          "path": "tests/copy-conventions.test.js",
+          "line": 97,
+          "problem": "去注释正则把字符串https://后的本行当注释删除，用户文案漏扫；197行AppError正则仅接受单引号，双引号和模板字面量都漏检。",
+          "suggestedFix": "使用词法/AST识别真实注释与AppError首参，至少保留URL字面量并覆盖三类字符串；增加带URL及双引号/模板的反向用例。",
+          "validation": "other-reverse-probe.json: url.spans为空、doubleQuote/template.backendMatched=0",
+          "status": "fixed_local",
+          "resolution": "新增scripts/lib/copy-conventions-parser.js，AST采集三类字符串/JSX/AppError消息、按语法trivia剔除注释并保留位置；新集成/解析测试通过，真实扫描新发现25处旧漏网文案已交主代理修。",
+          "finalStatus": "fixed_locally_verified",
+          "finalEvidence": "docs/harness-changes-audit-2026-09-22.md 与对应本轮测试；历史证据和原建议保留。"
+        },
+        {
+          "id": "OTHER-003",
+          "severity": "P3",
+          "path": "docs/frontend-pda-conventions.md",
+          "line": 106,
+          "problem": "现行数量显示规范仍称上限4位与DECIMAL(14,4)，已与两位实现相悖；docs/release-notes/0.10.2.md:13称69列，实际迁移含70个唯一数量目标。",
+          "suggestedFix": "现行主题文档改为2位/DECIMAL(_,2)，发布说明列数核实为70；已执行254/255迁移文件保持不变。",
+          "validation": "format.ts qty最大2位；255中70个WHERE/ALTER目标逐一匹配且唯一",
+          "status": "partially_fixed_local",
+          "resolution": "本代理仅把0.10.2说明69列改70列；现行前端两位文档交主代理同步。",
+          "finalStatus": "fixed_locally_verified",
+          "finalEvidence": "docs/harness-changes-audit-2026-09-22.md 与对应本轮测试；历史证据和原建议保留。"
+        }
+      ],
+      "tests": [
+        {
+          "command": "node --test tests/qty-precision.test.js tests/qty-precision-coverage.test.js tests/audit-return-putaway.test.js tests/document-activity.test.js tests/warehouse-scan-closure.test.js tests/frontend-conventions.test.js tests/deployment-resources.test.js tests/migration-trigger-bodies.test.js",
+          "result": "75/75通过，Node22，未连接数据库",
+          "evidence": "output/harness-audit-2026-09-22/other-tests.log"
+        },
+        {
+          "command": "node tests/copy-conventions.test.js",
+          "result": "531前端+351后端文件，通过"
+        },
+        {
+          "command": "node tests/frontend-polling-contract.test.js",
+          "result": "28轮询点，通过"
+        },
+        {
+          "command": "npm run test:landing-updates",
+          "result": "25条发布记录，最新0.10.2，0失败"
+        },
+        {
+          "command": "actionlint -shellcheck='' .github/workflows/deploy-browser.yml .github/workflows/test.yml",
+          "result": "退出0",
+          "evidence": "output/harness-audit-2026-09-22/other-actionlint.log"
+        },
+        {
+          "command": "node output/harness-audit-2026-09-22/other-reverse-probe.cjs",
+          "result": "确认数量覆盖及文案扫描漏检；仅读取虚拟替换，未编辑共享源码",
+          "evidence": "output/harness-audit-2026-09-22/other-reverse-probe.json"
+        },
+        {
+          "command": "离线SQL目标与版本JSON校验",
+          "result": "70唯一表列目标的WHERE与ALTER完全对应；三端package/lock0.10.2，PDA137"
+        },
+        {
+          "command": "node --test tests/qty-precision-coverage.test.js tests/copy-conventions-parser.test.js (修复前)",
+          "result": "11项中4项按预期失败：URL、双引号、模板、数量校验缺失",
+          "evidence": "output/harness-audit-2026-09-22/other-fix-red.log"
+        },
+        {
+          "command": "node --test tests/qty-precision-coverage.test.js tests/copy-conventions-parser.test.js (修复后)",
+          "result": "12/12通过，包含真实守卫夹具与AST/注释反向用例",
+          "evidence": "output/harness-audit-2026-09-22/other-fix-green.log"
+        },
+        {
+          "command": "node tests/copy-conventions.test.js (AST接入后)",
+          "result": "检出25处原先漏网的真实文案违规，已交主代理修复；未加豁免",
+          "evidence": "output/harness-audit-2026-09-22/other-copy-current.log"
+        },
+        {
+          "command": "git diff --check -- tests/qty-precision-coverage.test.js tests/copy-conventions.test.js docs/release-notes/0.10.2.md",
+          "result": "通过"
+        },
+        {
+          "command": "node --test tests/qty-precision.test.js tests/qty-execution-boundaries.test.js tests/qty-precision-coverage.test.js",
+          "result": "38/38通过（root追加合法边界用例之前快照）",
+          "evidence": "output/harness-audit-2026-09-22/qty-root-review-tests.log"
+        },
+        {
+          "command": "node --test tests/copy-conventions-parser.test.js tests/qty-precision-coverage.test.js (新增入口后)",
+          "result": "12/12通过，fixture断言绑定注入行号避免被全仓其他违规伪通过",
+          "evidence": "output/harness-audit-2026-09-22/other-fix-green.log"
+        },
+        {
+          "command": "node --test tests/qty-precision.test.js tests/qty-execution-boundaries.test.js tests/qty-precision-coverage.test.js tests/container-qty-allocation.test.js",
+          "result": "最新50/50通过；container独立探针确认数量0且EMPTY状态",
+          "evidence": "output/harness-audit-2026-09-22/qty-root-review-tests.log"
+        }
+      ],
+      "limitations": [
+        "首轮只读审查后主代理另授权修复tests/qty-precision-coverage.test.js、tests/copy-conventions.test.js、docs/release-notes/0.10.2.md，并新增parser与测试两文件；未修改其他共享源码、未提交/推送/tag。",
+        "未读取真实backend/.env、deploy/production*.json及客户/账款数据，未连接或修改任何数据库。",
+        "未执行MySQL迁移、幂等重放及真实information_schema对账；静态核对不能证明部署目标库无漂移。",
+        "255逐列DDL不可回滚；如果目标库有三四位数量，独立四舍五入可能影响跨行汇总关系，必须靠执行前数据预检证明适用性。历史生产零值声称未现场验证。",
+        "生成器绑定单次255输出文件，后续变更必须新增编号迁移；本审查没有运行生成器。",
+        "数据库smoke（audit-inventory、prelaunch-scope-export、print-template-preview、round2-transfer）仅审diff与上下文，未运行。",
+        "未查询GitHub/生产实时发布状态，历史release结果不视作当前部署证明。",
+        "scope其他32条已全部记录；业务数量校验修改和最终全量回归由主代理统一负责。",
+        "新增tests/copy-conventions-parser.test.js需主代理接入package脚本或CI；新检出的25处业务文案由主代理处理。"
+      ],
+      "coreQuantityReview": {
+        "scope": [
+          "backend/src/utils/qtyPrecision.js",
+          "backend/src/utils/unitConversion.js",
+          "backend/src/modules/inbound-tasks/inbound-tasks.command.js",
+          "backend/src/modules/return-tasks/return-tasks.service.js",
+          "backend/src/modules/stockcheck/stockcheck.service.js",
+          "backend/src/modules/sale/sale.service.js",
+          "backend/src/modules/sale/sale.contracts.js",
+          "backend/src/modules/scan-logs/scan-logs.service.js",
+          "backend/src/modules/packages/packages.service.js",
+          "backend/src/engine/containerEngine.js",
+          "tests/qty-precision.test.js",
+          "tests/qty-execution-boundaries.test.js"
+        ],
+        "conclusions": [
+          "qtyScale在商品策略之前检查原始数量，不允许roundQty掩盖3+位输入；qtyPrecision商品缺失时也保留尺度校验。",
+          "foldEntryItem原始录入及乘换算率后均检查尺度；单价未参与数量舍入，单价1.2345保真有单测。",
+          "inbound.receive逐箱、return.receive逐箱、return.check合格/拒收分别、stockcheck.scan逐条校验，0.5+0.5合计整数不再绕过整数策略。",
+          "manual inbound、sale.release、packages.add/remove、scan.create保护位于业务数量写入之前；幂等begin及锁读取可先发生，事务仍由原调用方管理。",
+          "return.receive首次status1曾在校验前推进状态，已通知root且当前代码已把推进放在校验后。",
+          "packages改百分位整数计算，先检查原始qty避免0.005先变成0.01；缺省remove全部取既有记录，不接受新数量。",
+          "新增AST覆盖登记上述业务入口；engine尺度helper明确允许assertQtyScale，其余业务入口仍要求商品策略校验。",
+          "helper浮点用例覆盖0.1+0.2与1.1*3，但业务链合法小数累加也需要测试；独立探针找出return.receive、scan.create及engine扣减三处残量问题。"
+        ],
+        "findings": [
+          {
+            "id": "CORE-REVIEW-001",
+            "severity": "P2",
+            "path": "backend/src/modules/return-tasks/return-tasks.service.js",
+            "problem": "合法0.1+0.2收货对应应退0.3，原remaining残差5.55e-17触发409超出0。",
+            "status": "fixed_by_root_observed",
+            "validation": "最初实际service探针返回409超出0；最新重跑已越过分配并到后续汇总查询，root已新增合法合计回归。"
+          },
+          {
+            "id": "CORE-REVIEW-002",
+            "severity": "P2",
+            "path": "backend/src/modules/scan-logs/scan-logs.service.js",
+            "problem": "合法qty0.2对应required0.3-picked0.1，原比较以余量0.19999999999999998报400；scanned+qty及复核累计同类。",
+            "status": "fixed_by_root_observed",
+            "validation": "实际service探针曾400；最新源码roundQty规范差值与累计，探针已越过原错误分支。"
+          },
+          {
+            "id": "CORE-REVIEW-003",
+            "severity": "P2",
+            "path": "backend/src/engine/containerEngine.js",
+            "problem": "扣0.3自0.1/0.2两容器，第二写remaining_qty=2.7755575615628914e-17且status=ACTIVE，数据库存0.00而状态错误；task locked版本同构。",
+            "status": "fixed_by_backend_agent_independently_verified",
+            "validation": "独立探针最新UPDATE参数为[[0,2,1],[0,2,2]]，taken分别0.1/0.2，remainingAfter均0；4套数量回归50/50通过。"
+          }
+        ],
+        "testQuality": "负例通过真实service与fail-closed SQL替身验证错误码、合计绕过和无数量写入，比静态require检查强；仍需各业务合法小数路径及真实MySQL事务/幂等回放验证。",
+        "evidence": [
+          "output/harness-audit-2026-09-22/qty-root-review-probe.cjs",
+          "output/harness-audit-2026-09-22/qty-root-review-probe.jsonl",
+          "output/harness-audit-2026-09-22/qty-root-review-tests.log"
+        ],
+        "limitations": [
+          "本次没有修改root业务核心代码，只有追加授权的coverage入口；其他root变更仍在并行进行，最终完整套件以root统一验证为准。",
+          "helper tolerates IEEE-754 noise but long internal accumulation must round after validated input; do not widen user-input tolerance to mask derived arithmetic."
+        ]
+      }
+    }
+  ]
+}

@@ -4,7 +4,7 @@
 /**
  * 数量精度校验契约（迁移 254 的 `product_items.allow_decimal_qty`）。
  *
- * 反向验证：把 qtyPrecision.js 的 QTY_EPSILON 调大到 1e-2 会让「1.005 被拒」的用例失败；
+ * 反向验证：删除 qtyScaleProblem 中的小数位拒绝分支，会让「1.001 被拒」等用例失败；
  * 把 allowDecimal === false 分支删掉会让整数用例失败——即守卫真的在拦东西。
  *
  * 运行：node --test tests/qty-precision.test.js
@@ -18,7 +18,6 @@ const {
   assertQtyPrecisionWith,
   assertQtyPrecision,
   loadQtyPolicies,
-  hasFraction,
   hasTooManyDecimals,
 } = require('../backend/src/utils/qtyPrecision')
 
@@ -42,12 +41,12 @@ test('浮点噪声不会被误判为小数', () => {
   assert.equal(qtyPrecisionProblem(DECIMAL_OK, 1.1 * 1), null)
   assert.equal(qtyPrecisionProblem(DECIMAL_OK, Number('2.50')), null)
   // 只能整数的商品同样不能被噪声判成小数
-  assert.equal(qtyPrecisionProblem(INTEGER_ONLY, Number('5.00000000001')), null)
+  assert.equal(qtyPrecisionProblem(INTEGER_ONLY, 5 + Number.EPSILON * 5), null)
 })
 
 test('商品查不到时放行（「商品不存在」由业务自己报错）', () => {
   assert.equal(qtyPrecisionProblem(null, 1.5), null)
-  assert.equal(qtyPrecisionProblem(undefined, 1.234), null)
+  assert.equal(qtyPrecisionProblem(undefined, 1.234).code, 'QTY_DECIMALS_EXCEEDED')
 })
 
 test('非有限数被拦下', () => {
@@ -116,4 +115,33 @@ test('allow_decimal_qty 为 NULL 时视作允许（与商品接口出参同口�
   const policies = await loadQtyPolicies(conn, [3])
   assert.equal(policies.get(3).allowDecimal, true)
   assert.doesNotThrow(() => assertQtyPrecisionWith(policies.get(3), 1.5))
+})
+
+for (const value of [1.001, 0.005, 1.2345, 1e-10, -0.005, '1.2301', 1000000.001]) {
+  test(`超过两位的原始数量被拒：${value}`, () => {
+    assert.equal(hasTooManyDecimals(value), true)
+    assert.equal(qtyPrecisionProblem(DECIMAL_OK, value).code, 'QTY_DECIMALS_EXCEEDED')
+  })
+}
+for (const value of [0, 0.01, 1.23, '1.2300', 0.1 + 0.2, 1.1 * 3, 999999999999.99]) {
+  test(`两位数量及浮点运算噪声放行：${value}`, () => {
+    assert.equal(hasTooManyDecimals(value), false)
+    assert.equal(qtyPrecisionProblem(DECIMAL_OK, value), null)
+  })
+}
+test('超过两位在读取商品策略前拒绝，不能先四舍五入', async () => {
+  const conn = { query() { throw new Error('不得查询') } }
+  await assert.rejects(assertQtyPrecision(conn, [{ productId: 2, qty: 0.005 }]), { code: 'QTY_DECIMALS_EXCEEDED' })
+})
+test('录入和折算后的原始数量都不得被静默取整', async () => {
+  const { foldEntryItem, foldEntryItems } = require('../backend/src/utils/unitConversion')
+  const conn = { async query(sql) {
+    if (sql.includes('product_units')) return [[{ unit_name: '箱', conversion_rate: 0.5 }]]
+    return [[{ id: 2, allow_decimal_qty: 1 }]]
+  } }
+  await assert.rejects(foldEntryItem(conn, { productId: 2, unit: '件', quantity: 1.005, unitPrice: 1.2345 }), { code: 'QTY_DECIMALS_EXCEEDED' })
+  await assert.rejects(foldEntryItem(conn, { productId: 2, unit: '件', entryUnit: '箱', quantity: 0.01 }), { code: 'QTY_DECIMALS_EXCEEDED' })
+  const [item] = await foldEntryItems(conn, [{ productId: 2, unit: '件', quantity: 1.23, unitPrice: 1.2345 }])
+  assert.equal(item.quantity, 1.23)
+  assert.equal(item.unitPrice, 1.2345, '单价不能随数量收窄精度')
 })

@@ -282,7 +282,8 @@ jobs:
           ref: ${{ github.event.inputs.checkout_ref || github.sha }}
 
       - name: Wait for verified browser deployment on this commit
-        timeout-minutes: 30
+        # 浏览器 job 最多 210 分钟；脚本 215 分钟自行超时，再留 5 分钟给步骤退出。
+        timeout-minutes: 220
         env:
           GITHUB_TOKEN: ${{ github.token }}
           REQUIRE_BROWSER_DEPLOY: '1'

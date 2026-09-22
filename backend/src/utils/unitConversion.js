@@ -1,5 +1,5 @@
 const AppError = require('./AppError')
-const { assertQtyPrecision } = require('./qtyPrecision')  // 商品级数量精度开关（迁移 254）
+const { assertQtyPrecision, assertQtyScale } = require('./qtyPrecision')  // 商品级数量精度开关（迁移 254）
 
 /**
  * 多计量单位折算（文档03 · 方案A）——采购/销售建单落库前把「录入单位口径」折算成「基本单位口径」。
@@ -43,10 +43,12 @@ async function resolveConversionRate(conn, productId, entryUnit, baseUnit) {
  * @returns 原 item 上补齐 { quantity, unitPrice(基本单位), amount, entryUnit, entryQty, conversionRate }
  */
 async function foldEntryItem(conn, item) {
+  assertQtyScale(item.quantity, '录入数量')
   const entryUnit = item.entryUnit || item.unit || null
   const rate = await resolveConversionRate(conn, item.productId, entryUnit, item.unit)
   const entryQty = Number(item.quantity) || 0
   const entryUnitPrice = Number(item.unitPrice) || 0
+  assertQtyScale(entryQty * rate, '折算后的基本单位数量')
   const quantity = roundQty(entryQty * rate)
   if (!(quantity > 0)) {
     throw new AppError('数量折算后小于库存最小精度 0.01，请调整录入数量或单位换算率', 400, 'QUANTITY_BELOW_MIN_PRECISION')

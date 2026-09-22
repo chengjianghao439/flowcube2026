@@ -4,8 +4,10 @@ const ctrl = require('./procurement.controller')
 const { authMiddleware, requirePermission } = require('../../middleware/auth')
 const { PERMISSIONS } = require('../../constants/permissions')
 const { validateBody } = require('../../utils/route')
+const { hasTooManyDecimals } = require('../../utils/qtyPrecision')
 
 const router = Router()
+const qtySetting = z.number().nonnegative().refine(value => !hasTooManyDecimals(value), '数量最多保留 2 位小数')
 
 const generateSchema = z.object({
   window: z.number().int().positive().max(365).optional(),
@@ -17,7 +19,7 @@ const generateSchema = z.object({
   remark: z.string().max(500).optional().nullable(),
 })
 const updateItemSchema = z.object({
-  adjustedQty: z.number().nonnegative().optional(),
+  adjustedQty: qtySetting.optional(),
   supplierId: z.number().int().positive().nullable().optional(),
   ignore: z.boolean().optional(),
 })
@@ -28,7 +30,7 @@ const convertSchema = z.object({
 
 router.use(authMiddleware)
 router.get('/purchase-policy', requirePermission(PERMISSIONS.PROCUREMENT_PLAN_MANAGE), ctrl.purchasePolicy)
-router.put('/purchase-policy', requirePermission(PERMISSIONS.PROCUREMENT_PLAN_MANAGE), validateBody(z.object({ productId: z.number().int().positive(), supplierId: z.number().int().positive(), entryUnit: z.string().min(1).max(32), packMultiple: z.number().nonnegative().max(100000000).multipleOf(0.0001), minimumOrderQty: z.number().nonnegative().max(100000000).multipleOf(0.0001) })), ctrl.savePurchasePolicy)
+router.put('/purchase-policy', requirePermission(PERMISSIONS.PROCUREMENT_PLAN_MANAGE), validateBody(z.object({ productId: z.number().int().positive(), supplierId: z.number().int().positive(), entryUnit: z.string().min(1).max(32), packMultiple: qtySetting.refine(value => value <= 100000000, '包装倍数超出上限'), minimumOrderQty: qtySetting.refine(value => value <= 100000000, '起订量超出上限') })), ctrl.savePurchasePolicy)
 router.get('/plans', requirePermission(PERMISSIONS.PROCUREMENT_PLAN_VIEW), ctrl.list)
 router.post('/plans', requirePermission(PERMISSIONS.PROCUREMENT_PLAN_MANAGE), validateBody(generateSchema), ctrl.generate)
 router.get('/plans/:id', requirePermission(PERMISSIONS.PROCUREMENT_PLAN_VIEW), ctrl.detail)

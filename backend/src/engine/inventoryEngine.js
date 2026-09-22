@@ -132,7 +132,7 @@ async function moveStock(conn, {
   if (MIGRATED_TYPES.has(moveType)) {
     const guide = MIGRATED_GUIDE[moveType] ?? '对应的 service 方法'
     throw new AppError(
-      `moveType=${moveType}（${MOVE_TYPE_LABEL[moveType]}）已迁移至容器路径，` +
+      `moveType=${moveType}（${MOVE_TYPE_LABEL[moveType]}）已迁移至库存条码路径，` +
       `请通过 ${guide} 处理，禁止直接调用 moveStock()`,
       500
     )

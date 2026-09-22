@@ -5,6 +5,7 @@ const { loadPriceRates, computeTierPrices } = require('../../utils/priceLevels')
 const { getInventoryDisplayProjectionSql } = require('../inventory/inventoryProjection')
 const { normalizePagination } = require('../../utils/pagination')
 const { assertInScope } = require('../../utils/warehouseScope')
+const { assertQtyScale, assertQtyPrecision } = require('../../utils/qtyPrecision')
 
 async function ensureCategoryExists(categoryId) {
   if (!categoryId) throw new AppError('请选择商品分类', 400)
@@ -24,11 +25,20 @@ async function ensureBarcodeUnique(barcode, currentId = null) {
 
 /** upsert 商品的「通用默认」补货策略（product_stock_policies.warehouse_id=0）；都为 0/空则删除该默认行。db 可传事务连接。 */
 async function upsertDefaultStockPolicy(db, productId, { safetyStock, reorderPoint }) {
+  for (const [qty, label] of [[safetyStock, '安全库存'], [reorderPoint, '补货点']]) {
+    if (qty == null || qty === '') continue
+    assertQtyScale(qty, label)
+    if (Number(qty) < 0) throw new AppError(`${label}不能为负`, 400)
+  }
   const safety  = safetyStock  == null || safetyStock  === '' ? null : Number(safetyStock)
   const reorder = reorderPoint == null || reorderPoint === '' ? null : Number(reorderPoint)
   if (safety == null && reorder == null) return   // 未提交这两个字段：不动策略
   const s = Number.isFinite(safety)  && safety  > 0 ? safety  : 0
   const r = Number.isFinite(reorder) && reorder > 0 ? reorder : 0
+  await assertQtyPrecision(db, [
+    { productId, qty: s, label: '安全库存' },
+    { productId, qty: r, label: '补货点' },
+  ])
   if (s === 0 && r === 0) {
     await db.query('DELETE FROM product_stock_policies WHERE product_id=? AND warehouse_id=0', [productId])
     return

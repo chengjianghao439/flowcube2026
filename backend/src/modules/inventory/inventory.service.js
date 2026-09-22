@@ -1161,7 +1161,7 @@ async function splitContainerOp(containerId, { qty, remark, printLabel, targetCo
         jobUniqueKey: `split_cnt_${result.newContainerId}`,
       })
       if (!job?.id) {
-        throw new AppError(`容器 ${row.barcode} 的打印任务创建失败`, 500)
+        throw new AppError(`库存条码 ${row.barcode} 的打印任务创建失败`, 500)
       }
       // unprintable：没有可用打印机，只留下打印记录（打印记录页可见、之后可补打），
       // 不算「已提交打印」，避免现场以为标签已经在打。
@@ -1226,21 +1226,33 @@ async function getStockPolicies({ productId }) {
  */
 async function saveStockPolicies(items) {
   if (!Array.isArray(items) || !items.length) return { saved: 0, deleted: 0 }
+  const { assertQtyScale, assertQtyPrecision } = require('../../utils/qtyPrecision')
   let saved = 0, deleted = 0
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    for (const it of items) {
+    const normalized = items.map(it => {
       const productId = Number(it.productId)
       const warehouseId = Number(it.warehouseId ?? 0)
       if (!Number.isInteger(productId) || productId <= 0) throw new AppError('productId 无效', 400)
       if (!Number.isInteger(warehouseId) || warehouseId < 0) throw new AppError('warehouseId 无效', 400)
+      assertQtyScale(it.safetyStock ?? 0, '安全库存')
+      assertQtyScale(it.reorderPoint ?? 0, '补货点')
+      if (it.targetStock != null && it.targetStock !== '') assertQtyScale(it.targetStock, '目标库存')
       const safety = Number(it.safetyStock ?? 0)
       const reorder = Number(it.reorderPoint ?? 0)
       const target = it.targetStock == null || it.targetStock === '' ? null : Number(it.targetStock)
       if ([safety, reorder].some(v => !Number.isFinite(v) || v < 0) || (target != null && (!Number.isFinite(target) || target < 0))) {
         throw new AppError('安全库存/补货点/目标库存必须为非负数', 400)
       }
+      return { productId, warehouseId, safety, reorder, target }
+    })
+    await assertQtyPrecision(conn, normalized.flatMap(row => [
+      { productId: row.productId, qty: row.safety, label: '安全库存' },
+      { productId: row.productId, qty: row.reorder, label: '补货点' },
+      ...(row.target == null ? [] : [{ productId: row.productId, qty: row.target, label: '目标库存' }]),
+    ]))
+    for (const { productId, warehouseId, safety, reorder, target } of normalized) {
       if (safety === 0 && reorder === 0 && target == null) {
         const [r] = await conn.query('DELETE FROM product_stock_policies WHERE product_id=? AND warehouse_id=?', [productId, warehouseId])
         deleted += r.affectedRows

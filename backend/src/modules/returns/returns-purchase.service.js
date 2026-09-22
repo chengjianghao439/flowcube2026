@@ -72,7 +72,7 @@ async function loadPurchaseSourceOrderByNo(orderNo, scopeWarehouseIds = null) {
         quantity: Number(row.quantity || 0),
         receivedQty,
         returnedQty,
-        remainingQty: Number(Math.max(0, receivedQty - returnedQty).toFixed(4)),
+        remainingQty: Number(Math.max(0, receivedQty - returnedQty).toFixed(2)),
         unitPrice: Number(row.unit_price || 0),
         amount: Number(row.amount || 0),
       }
@@ -128,7 +128,7 @@ async function validatePurchaseReturnItems(conn, purchaseOrderId, items) {
       Number((requestedQtyBySource.get(Number(item.sourceItemId)) || 0) + Number(item.quantity || 0)),
     )
     const remainingQty = Number(source.received_qty || 0) - Number(source.returned_qty || 0)
-    if (Number(requestedQtyBySource.get(Number(item.sourceItemId)).toFixed(4)) > Number(remainingQty.toFixed(4))) {
+    if (Number(requestedQtyBySource.get(Number(item.sourceItemId)).toFixed(2)) > Number(remainingQty.toFixed(2))) {
       throw new AppError(`商品 ${item.productName} 退货数量超出实际收货数量`, 409)
     }
   }

@@ -11,6 +11,7 @@
 
 const assert = require('node:assert')
 const { test } = require('node:test')
+const { createHash } = require('node:crypto')
 
 const { assessLiveRelease, resolveOrigin, verifyLiveRelease } = require('../scripts/verify-live-release.cjs')
 
@@ -93,3 +94,25 @@ test('origin 解析：--origin、环境变量、deploy 配置依次生效', () =
   assert.equal(resolveOrigin([], {}, () => 'https://c.test\n'), 'https://c.test')
   assert.throws(() => resolveOrigin([], {}, () => { throw new Error('missing') }), /缺少站点的 origin/)
 })
+
+for (const scenario of ['ok', 'corrupt', 'unavailable', 'missing-hash']) {
+  test(`线上验收必须实际读取桌面和 PDA 包并核对 SHA256：${scenario}`, async () => {
+    const binary = Buffer.from('fixture-installation-package')
+    const hash = createHash('sha256').update(binary).digest('hex')
+    const downloads = []
+    const result = await verifyLiveRelease({ origin: 'https://fixture.test', expected: EXPECTED, logger: () => {},
+      fetchImpl: async url => {
+        if (url.endsWith('/latest.json')) return { ok: true, json: async () => ({ ...goodPayloads.latestJson, sha256: hash }) }
+        if (url.endsWith('/api/app-update/latest')) return { ok: true, json: async () => goodPayloads.appUpdate }
+        if (url.endsWith('/api/pda/version')) return { ok: true, json: async () => ({ success: true, data: { ...goodPayloads.pdaVersion.data,
+          downloadUrl: '/api/pda/download?code=128', sha256: scenario === 'missing-hash' ? '' : hash } }) }
+        if (url.endsWith('/api/health')) return { ok: true, json: async () => goodPayloads.health }
+        downloads.push(url)
+        return new Response(scenario === 'corrupt' ? 'wrong bytes' : binary, { status: scenario === 'unavailable' ? 404 : 200 })
+      },
+    })
+    assert.equal(result.ok, scenario === 'ok')
+    if (scenario === 'ok') assert.equal(downloads.length, 2, '不能只检查 manifest 的摘要格式')
+    else assert.ok(result.checks.some(c => !c.ok && /下载完整性/.test(c.name)))
+  })
+}

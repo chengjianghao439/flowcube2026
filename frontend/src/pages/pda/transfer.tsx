@@ -54,7 +54,7 @@ export default function PdaTransferPage() {
   })
   const list = (data ?? []) as TransferOrder[]
   const outbound = list.filter(o => o.status === 2 || (o.status === 3 && o.items?.some(item =>
-    Math.round(item.quantity * 10000) > Math.round((item.deductedQty ?? 0) * 10000),
+    Math.round(item.quantity * 100) > Math.round((item.deductedQty ?? 0) * 100),
   )))
   const inbound  = list.filter(o => o.status === 3)
 

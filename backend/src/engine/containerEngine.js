@@ -17,7 +17,7 @@ const AppError = require('../utils/AppError')
 const logger   = require('../utils/logger')
 const { generateContainerCode } = require('../utils/codeGenerator')
 const { getExpectedForPair, lockExpectedPurchaseOrders } = require('../utils/expectedStock')
-const { assertQtyPrecision } = require('../utils/qtyPrecision')  // 商品级数量精度开关（迁移 254）
+const { assertQtyPrecision, assertQtyScale } = require('../utils/qtyPrecision')  // 商品级数量精度开关（迁移 254）
 
 /** 与 inventory_containers.status 一致 */
 const CONTAINER_STATUS = {
@@ -131,10 +131,11 @@ async function createContainer(conn, {
   containerStatus = CONTAINER_STATUS.ACTIVE,
   putawayDeadlineAt = null,
 }) {
+  assertQtyScale(initialQty, '库存条码数量')
   assertNonNegativeQty(initialQty, `createContainer productId=${productId} warehouseId=${warehouseId}`)
 
   if (!sourceType || typeof sourceType !== 'string' || !ALLOWED_SOURCE_TYPES.has(sourceType)) {
-    throw new AppError(`容器 sourceType 无效或未传：${sourceType}`, 400)
+    throw new AppError(`库存条码 sourceType 无效或未传：${sourceType}`, 400)
   }
   // 空壳容器（initialQty=0）：散件库位上的空塑料盒，建出来只是个绑定了商品的空盒子，等着后续
   // 由拆分并货装东西进去。它**不产生任何库存**，所以下面两条为"防止凭空产生库存"而设的校验对它
@@ -262,7 +263,9 @@ async function deductFromContainers(conn, {
   warehouseId,
   qty,
 }) {
-  const absQty = Math.abs(qty)
+  const { roundQty } = require('../utils/unitConversion')
+  assertQtyScale(qty, '扣减数量')
+  const absQty = roundQty(Math.abs(qty))
 
   // 加行锁读取可动用的 ACTIVE 容器，FEFO 优先（有效期的先到期先出，无效期回退 FIFO），
   // 同时读取批次信息供调拨保留使用。
@@ -283,7 +286,7 @@ async function deductFromContainers(conn, {
     [productId, warehouseId]
   )
 
-  const totalAvailable = containers.reduce((s, c) => s + Number(c.remaining_qty), 0)
+  const totalAvailable = roundQty(containers.reduce((s, c) => s + Number(c.remaining_qty), 0))
   if (totalAvailable < absQty) {
     // 被任务占用的量要单独说明，否则用户在库存页明明看到有货、这里却报库存不足，无从判断
     const [[lockedRow]] = await conn.query(
@@ -295,7 +298,7 @@ async function deductFromContainers(conn, {
     )
     const lockedQty = Number(lockedRow?.lockedQty || 0)
     throw new AppError(
-      `商品「${productName}」可动用容器库存不足，当前可用 ${totalAvailable}，需要 ${absQty}` +
+      `商品「${productName}」可动用库存条码库存不足，当前可用 ${totalAvailable}，需要 ${absQty}` +
       (lockedQty > 0
         ? `（另有 ${lockedQty} 正被拣货任务占用，需等该任务出库或取消后才会释放）`
         : ''),
@@ -308,9 +311,9 @@ async function deductFromContainers(conn, {
 
   for (const container of containers) {
     if (remaining <= 0) break
-    const containerQty = Number(container.remaining_qty)
-    const take         = Math.min(containerQty, remaining)
-    const newQty       = containerQty - take
+    const containerQty = roundQty(container.remaining_qty)
+    const take         = roundQty(Math.min(containerQty, remaining))
+    const newQty       = roundQty(containerQty - take)
     const newStatus    = newQty === 0 ? 2 : 1  // 2=EMPTY, 1=ACTIVE
 
     // 守卫：扣减结果不允许为负（正常情况下不会触发，属于逻辑防御）
@@ -332,7 +335,7 @@ async function deductFromContainers(conn, {
       mfgDate: container.mfg_date,
       expDate: container.exp_date,
     })
-    remaining -= take
+    remaining = roundQty(remaining - take)
   }
 
   return deducted
@@ -351,7 +354,9 @@ async function deductFromTaskLockedContainers(conn, {
   qty,
   taskId,
 }) {
-  const absQty = Math.abs(qty)
+  const { roundQty } = require('../utils/unitConversion')
+  assertQtyScale(qty, '扣减数量')
+  const absQty = roundQty(Math.abs(qty))
   const tid = Number(taskId)
   if (!Number.isFinite(tid) || tid <= 0) {
     throw new AppError('deductFromTaskLockedContainers 需要有效的 taskId', 500)
@@ -367,10 +372,10 @@ async function deductFromTaskLockedContainers(conn, {
     [productId, warehouseId, tid],
   )
 
-  const totalAvailable = containers.reduce((s, c) => s + Number(c.remaining_qty), 0)
+  const totalAvailable = roundQty(containers.reduce((s, c) => s + Number(c.remaining_qty), 0))
   if (totalAvailable < absQty) {
     throw new AppError(
-      `商品「${productName}」本任务锁定容器可用量不足，当前 ${totalAvailable}，需要 ${absQty}`,
+      `商品「${productName}」本任务锁定库存条码可用量不足，当前 ${totalAvailable}，需要 ${absQty}`,
       400,
     )
   }
@@ -380,9 +385,9 @@ async function deductFromTaskLockedContainers(conn, {
 
   for (const container of containers) {
     if (remaining <= 0) break
-    const containerQty = Number(container.remaining_qty)
-    const take = Math.min(containerQty, remaining)
-    const newQty = containerQty - take
+    const containerQty = roundQty(container.remaining_qty)
+    const take = roundQty(Math.min(containerQty, remaining))
+    const newQty = roundQty(containerQty - take)
     const newStatus = newQty === 0 ? 2 : 1
 
     assertNonNegativeQty(newQty, `containerId=${container.id} barcode=${container.barcode}`)
@@ -402,7 +407,7 @@ async function deductFromTaskLockedContainers(conn, {
       mfgDate: container.mfg_date,
       expDate: container.exp_date,
     })
-    remaining -= take
+    remaining = roundQty(remaining - take)
   }
 
   return deducted
@@ -948,8 +953,10 @@ async function logContainerSplit(conn, {
  * @returns {Promise<{ sourceContainerId: number, sourceBarcode: string, sourceRemainingAfter: number, newContainerId: number, newBarcode: string, newContainerKind: 'plastic_box', productId: number, warehouseId: number }>}
  */
 async function splitContainer(conn, { containerId, qty, remark = null, targetContainerId = null, operatorId = null, operatorName = null }) {
+  const { roundQty } = require('../utils/unitConversion')
+  assertQtyScale(qty, '拆分数量')
   const cid = Number(containerId)
-  const q = Number(qty)
+  const q = roundQty(qty)
   const tid = targetContainerId != null ? Number(targetContainerId) : null
   if (!Number.isFinite(cid) || cid <= 0) throw new AppError('库存条码无效', 400)
   if (!Number.isFinite(q) || q <= 0) throw new AppError('拆分数量须为正数', 400)
@@ -974,8 +981,7 @@ async function splitContainer(conn, { containerId, qty, remark = null, targetCon
     [cid],
   )
   if (!row) throw new AppError('库存条码不存在', 404)
-  // 「只能整数」的商品不得按小数拆分（迁移 254）。拆分数量常取自容器余量，
-  // 历史存量可能带多位小数，故只校验整数约束、不校验「两位小数」上限。
+  // 原始精度已在入口校验；再按商品策略拒绝小数拆分。
   await assertQtyPrecision(conn, [{ productId: row.product_id, qty: q, label: '拆分数量' }])
   if (Number(row.status) !== CONTAINER_STATUS.ACTIVE) {
     throw new AppError('来源库存条码须为「在库」状态', 400)
@@ -1002,9 +1008,9 @@ async function splitContainer(conn, { containerId, qty, remark = null, targetCon
     )
     const taskLabel = lockTask?.task_no ? `拣货任务 ${lockTask.task_no} ` : `拣货任务 #${row.locked_by_task_id} `
     throw new AppError(
-      `该容器已被${taskLabel}锁定，不可拆分。拆分必须在拣货之前完成：`
+      `该库存条码已被${taskLabel}锁定，不可拆分。拆分必须在拣货之前完成：`
       + `拆出的货若要放回货架单独存放，请先拆分建塑料盒、再拣货；`
-      + `若塑料盒只是拣货搬运用（货要送出仓库），无需拆分，直接扫本容器条码填数量即可`,
+      + `若塑料盒只是拣货搬运用（货要送出仓库），无需拆分，直接扫本库存条码条码填数量即可`,
       409,
     )
   }
@@ -1053,14 +1059,14 @@ async function splitContainer(conn, { containerId, qty, remark = null, targetCon
       )
     }
 
-    const newRem = rem - q
+    const newRem = roundQty(rem - q)
     const newStatus = newRem === 0 ? CONTAINER_STATUS.EMPTY : CONTAINER_STATUS.ACTIVE
     await conn.query(
       'UPDATE inventory_containers SET remaining_qty = ?, status = ? WHERE id = ?',
       [newRem, newStatus, cid],
     )
 
-    const targetNewQty = Number(target.remaining_qty) + q
+    const targetNewQty = roundQty(Number(target.remaining_qty) + q)
     if (targetEmpty) {
       // 空盒继承源批次与效期，否则盒子会带着上一批货留下的旧批次继续用
       await conn.query(
@@ -1098,7 +1104,7 @@ async function splitContainer(conn, { containerId, qty, remark = null, targetCon
   }
 
   // 创建新塑料盒（原有逻辑）
-  const newRem = rem - q
+  const newRem = roundQty(rem - q)
   const newStatus = newRem === 0 ? CONTAINER_STATUS.EMPTY : CONTAINER_STATUS.ACTIVE
   await conn.query(
     'UPDATE inventory_containers SET remaining_qty = ?, status = ? WHERE id = ?',
@@ -1163,6 +1169,8 @@ async function splitContainer(conn, { containerId, qty, remark = null, targetCon
  * @returns {{ containerId: number, barcode: string, qty: number, wholeContainer: boolean }}
  */
 async function splitTaskLockedContainerForReturn(conn, { taskId, containerId, qty, operatorId = null, operatorName = null }) {
+  const { roundQty } = require('../utils/unitConversion')
+  assertQtyScale(qty, '拆分归还数量')
   const [[row]] = await conn.query(
     `SELECT id, barcode, product_id, warehouse_id, location_id, remaining_qty, status,
             locked_by_task_id, batch_no, mfg_date, exp_date, unit
@@ -1175,15 +1183,15 @@ async function splitTaskLockedContainerForReturn(conn, { taskId, containerId, qt
   if (Number(row.locked_by_task_id) !== Number(taskId)) {
     throw new AppError('库存条码未锁定于该任务，无法拆分归还', 409)
   }
-  const rem = Number(row.remaining_qty)
-  const q = Number(qty)
+  const rem = roundQty(row.remaining_qty)
+  const q = roundQty(qty)
   if (!Number.isFinite(q) || q <= 0 || q > rem) throw new AppError('拆分归还数量无效', 400)
 
   if (q === rem) {
     return { containerId: row.id, barcode: row.barcode, qty: rem, wholeContainer: true }
   }
 
-  const newRem = rem - q
+  const newRem = roundQty(rem - q)
   const newStatus = newRem === 0 ? CONTAINER_STATUS.EMPTY : CONTAINER_STATUS.ACTIVE
   await conn.query(
     'UPDATE inventory_containers SET remaining_qty = ?, status = ? WHERE id = ?',
@@ -1244,7 +1252,9 @@ async function splitTaskLockedContainerForReturn(conn, { taskId, containerId, qt
  * @returns {Array<{ containerId: number, barcode: string, qty: number, wholeContainer: boolean, originalContainerId: number }>}
  */
 async function reserveTaskLockedContainersForReturn(conn, { taskId, productId, qty }) {
-  let remaining = Number(qty)
+  const { roundQty } = require('../utils/unitConversion')
+  assertQtyScale(qty, '待归还数量')
+  let remaining = roundQty(qty)
   if (!(remaining > 0)) return []
   const [containers] = await conn.query(
     `SELECT id FROM inventory_containers
@@ -1259,12 +1269,12 @@ async function reserveTaskLockedContainersForReturn(conn, { taskId, productId, q
       'SELECT barcode, remaining_qty FROM inventory_containers WHERE id = ? FOR UPDATE',
       [c.id],
     )
-    const avail = Number(fresh.remaining_qty)
+    const avail = roundQty(fresh.remaining_qty)
     if (avail <= 0) continue
-    const take = Math.min(avail, remaining)
+    const take = roundQty(Math.min(avail, remaining))
     const split = await splitTaskLockedContainerForReturn(conn, { taskId, containerId: c.id, qty: take })
     picks.push({ ...split, originalContainerId: Number(c.id) })
-    remaining -= take
+    remaining = roundQty(remaining - take)
   }
   if (remaining > 0) {
     throw new AppError('任务锁定的库存条码数量不足，无法拆出待归还数量，请核实拣货记录', 409)

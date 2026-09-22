@@ -19,6 +19,7 @@
 const fs = require('node:fs')
 const path = require('node:path')
 const { execFileSync } = require('node:child_process')
+const { createHash } = require('node:crypto')
 
 const root = path.resolve(__dirname, '..')
 
@@ -78,6 +79,23 @@ async function fetchJson(fetchImpl, origin, endpoint, timeoutMs = 15000) {
   return response.json()
 }
 
+async function verifyDownload(fetchImpl, origin, downloadPath, expectedHash) {
+  if (!/^[a-f0-9]{64}$/i.test(expectedHash || '')) throw new Error('缺少有效 SHA256')
+  const url = new URL(downloadPath, origin)
+  if (url.origin !== new URL(origin).origin || url.protocol !== 'https:') throw new Error('安装包必须使用本站 HTTPS 地址')
+  const response = await fetchImpl(url.href, { redirect: 'error', signal: AbortSignal.timeout(120000) })
+  if (!response.ok || !response.body) throw new Error(`下载返回 HTTP ${response.status}`)
+  const digest = createHash('sha256')
+  let size = 0
+  for await (const chunk of response.body) {
+    size += chunk.length
+    if (size > 1024 ** 3) throw new Error('安装包超过 1 GiB 验收上限')
+    digest.update(chunk)
+  }
+  if (!size || digest.digest('hex') !== expectedHash.toLowerCase()) throw new Error('安装包内容与清单 SHA256 不一致')
+  return `${size} 字节，SHA256 一致`
+}
+
 async function verifyLiveRelease({ origin, fetchImpl = fetch, logger = console.log, expected = {} }) {
   const desktop = readJson('desktop/package.json')
   const pdaManifest = readJson('backend/apk/version.json')
@@ -93,6 +111,14 @@ async function verifyLiveRelease({ origin, fetchImpl = fetch, logger = console.l
     fetchJson(fetchImpl, origin, '/api/health'),
   ])
   const checks = assessLiveRelease({ latestJson, appUpdate, pdaVersion, health }, expectation)
+  // 版本不一致时先停止，避免下载旧包；逐包流式校验，不落盘、不同时压服务器磁盘。
+  if (checks.every(check => check.ok)) {
+    const pda = pdaVersion?.data ?? {}
+    for (const [name, url, hash] of [['桌面下载完整性', latestJson.url, latestJson.sha256], ['PDA 下载完整性', pda.downloadUrl, pda.sha256]]) {
+      try { checks.push({ name, ok: true, detail: await verifyDownload(fetchImpl, origin, url, hash) }) }
+      catch (error) { checks.push({ name, ok: false, detail: error.message }) }
+    }
+  }
   const failed = checks.filter(check => !check.ok)
   checks.forEach(check => logger(`${check.ok ? '✅' : '❌'} ${check.name}：${check.detail}`))
   logger(`\n核对 ${origin}：${checks.length - failed.length}/${checks.length} 项一致（期望桌面 ${expectation.desktopVersion}、PDA ${expectation.pdaVersion}/${expectation.pdaVersionCode}）`)

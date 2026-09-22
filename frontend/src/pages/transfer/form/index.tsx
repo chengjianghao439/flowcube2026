@@ -341,7 +341,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
                     <td className="py-2.5 text-center text-muted-body">{item.unit || '—'}</td>
 
                     <td className="py-2.5">
-                      <Input
+                      <Input quantity
                         type="number"
                         min="0"
                         step={qtyStep(allowDecimalOf(item.productId))}

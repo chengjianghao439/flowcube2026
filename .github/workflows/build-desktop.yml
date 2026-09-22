@@ -601,16 +601,9 @@ jobs:
       # gh CLI 没有超时、中断会留下**没有附件的草稿 Release**、也不校验附件是否真的落地
       # （2026-09-18 发 v0.9.20 时在 Windows runner 上连续两次卡死 15 分钟以上）。
       # 脚本行为：确保 Release 存在（缺则建草稿）→ 删同名 → 带超时重试上传 → 校验大小 → 才发布。
-      # continue-on-error（2026-09-18 v0.9.22 发版后补）：GitHub 附件存储偶发「上传已 accepted、
-      # 但随后几轮校验都读不到附件」的一致性延迟（本次 5 轮都读到「尚未出现」），脚本按设计报错、
-      # Release 停在草稿。而**权威发布早已完成**——上一步「Publish EXE to canonical download
-      # directory」已写 latest.json 与 current 指针，桌面端更新完全不受影响。不设这一项会让
-      # 每次发版都留下一个红 job，掩盖真正的失败。附件真要转正按技能文档补传：
-      # 从服务器 /versions/v<版本>/ 取同一份 exe 复算 sha256 后本地跑 publish-release-asset.cjs，
-      # 不要在本机重新构建 exe。
+      # Release 附件是完整发版的一部分；失败必须报红，不能以官网已发布掩盖。
       - name: Upload EXE to Release
         if: ${{ github.ref_type == 'tag' }}
-        continue-on-error: true
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}

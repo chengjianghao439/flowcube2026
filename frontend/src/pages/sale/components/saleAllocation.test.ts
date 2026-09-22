@@ -6,6 +6,9 @@ describe('sales allocation quantities', () => {
     expect(isAllocationQtyValid(1.25, 2)).toBe(true)
     expect(isAllocationQtyValid(2.01, 2)).toBe(false)
     expect(isAllocationQtyValid(0, 2)).toBe(false)
+    expect(isAllocationQtyValid(1.234, 2)).toBe(false)
+    expect(isAllocationQtyValid(1.0001, 2)).toBe(false)
+    expect(isAllocationQtyValid(0.1 + 0.2, 2)).toBe(true)
   })
 
   it('normalizes computed decimal remainder', () => {

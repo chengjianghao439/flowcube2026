@@ -48,7 +48,7 @@ export function PickerField({ id, label, value, placeholder, onOpen, onClear, on
           : <span className="text-muted-foreground">{placeholder}</span>}
       </button>
       {value && onClear ? (
-        <Button type="button" variant="ghost" size="icon" className="shrink-0" onClick={onClear} aria-label={`清除${label ?? '选择'}`}>
+        <Button type="button" variant="ghost" size="icon" className="shrink-0" onClick={onClear} disabled={disabled} aria-label={`清除${label ?? '选择'}`}>
           <X className="h-4 w-4" />
         </Button>
       ) : null}

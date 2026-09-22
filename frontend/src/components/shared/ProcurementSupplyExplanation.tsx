@@ -41,7 +41,7 @@ export function ProcurementSupplyExplanation({ supply: r, snapshot, mode = 'plan
     <div className="rounded-md bg-muted px-4 py-3">
       <p className="flex flex-wrap gap-x-6 gap-y-1 font-medium"><span>净需求 {qty(r.netRequirement, r.unit)}</span><span>建议采购 {qty(r.suggestedQty, r.unit)}</span></p>
       <p className="mt-2 text-xs leading-5">{r.packMultiple === 0 ? '包装倍数不限' : `包装倍数 ${qty(r.packMultiple, r.unit)}`} · {r.minimumOrderQty === 0 ? '最低起订不限' : `最低起订 ${qty(r.minimumOrderQty, r.unit)}`} · 多购 {qty(r.excessQty, r.unit)}</p>
-      {r.entryUnit && r.entryUnit !== r.unit && <p className="mt-1 text-xs text-muted-foreground">1 {r.entryUnit} = {qty(r.conversionRate, r.unit)}；上方数量均按{r.unit}展示。</p>}
+      {r.entryUnit && r.entryUnit !== r.unit && <p className="mt-1 text-xs text-muted-foreground">1 {r.entryUnit} = {r.conversionRate} {r.unit}；上方数量均按{r.unit}展示。</p>}
     </div>
     <section aria-label="到货条件" className="space-y-2">
       <h3 className="font-medium">到货条件</h3>

@@ -206,7 +206,7 @@ export default function PdaSaleReturnReceivePage() {
             {boxes.map((qty, i) => (
               <div key={i} className="flex items-center gap-2 mb-2">
                 <span className="text-sm w-10">箱{i + 1}</span>
-                <Input type="number" min={0} step={qtyStep(allowDecimalOf(selectedProduct?.id))} value={qty || ''} className="h-10 text-lg"
+                <Input quantity type="number" min={0} step={qtyStep(allowDecimalOf(selectedProduct?.id))} value={qty || ''} className="h-10 text-lg"
                   onChange={e => {
                     const next = [...boxes]
                     next[i] = Number(e.target.value) || 0
@@ -231,13 +231,13 @@ export default function PdaSaleReturnReceivePage() {
             <div className="text-sm text-muted-foreground mb-3">已收货：{selectedProduct.remaining + (task?.items?.reduce((s, i) => i.productId === selectedProduct.id ? s + i.receivedQty : s, 0) || 0)} {selectedProduct.unit}</div>
             <div className="mb-3">
               <span className="text-sm">质检通过数量：</span>
-              <Input type="number" min={0} step={qtyStep(allowDecimalOf(selectedProduct?.id))} value={boxes[0] || ''} className="h-10 text-lg mt-1"
+              <Input quantity type="number" min={0} step={qtyStep(allowDecimalOf(selectedProduct?.id))} value={boxes[0] || ''} className="h-10 text-lg mt-1"
                 onChange={e => setBoxes([Number(e.target.value) || 0])}
               />
             </div>
             <div className="mb-1">
               <span className="text-sm text-destructive">不合格数量：</span>
-              <Input type="number" min={0} step={qtyStep(allowDecimalOf(selectedProduct?.id))} value={rejectedQty || ''} className="h-10 text-lg mt-1"
+              <Input quantity type="number" min={0} step={qtyStep(allowDecimalOf(selectedProduct?.id))} value={rejectedQty || ''} className="h-10 text-lg mt-1"
                 onChange={e => setRejectedQty(Number(e.target.value) || 0)}
               />
             </div>

@@ -15,10 +15,12 @@ export SMOKE_LIMITED_USERNAME="${SMOKE_LIMITED_USERNAME:-}" SMOKE_LIMITED_PASSWO
 exec 8>"${RELEASE_GATE_LOCK_FILE:-/tmp/flowcube-release-gate.lock}"
 flock -n 8 || { echo '!! 已有发布门禁运行，拒绝重叠执行' >&2; exit 1; }
 gate_name="flowcube-gate-$$-$(date +%s)"
+gate_runtime=''
 cleanup_gate() {
   local status=$?
   trap - EXIT
   DOCKER_COMMAND_TIMEOUT=15 docker rm -f "$gate_name" >/dev/null 2>&1 || true
+  if [ -n "$gate_runtime" ]; then rm -rf "$gate_runtime"; fi
   exit "$status"
 }
 trap cleanup_gate EXIT
@@ -36,6 +38,10 @@ if command -v node >/dev/null 2>&1; then bounded 30 node scripts/check-deprecate
 echo '==> 运行报表烟雾检查...'
 DOCKER_COMMAND_TIMEOUT=120 docker compose exec -T backend npm run smoke:reports
 
+# 从已校验 SHA 的运行镜像取出锁定依赖，不触发生产 npm 安装。
+gate_runtime=$(mktemp -d /tmp/flowcube-browser-smoke.XXXXXX)
+DOCKER_COMMAND_TIMEOUT=60 docker compose cp backend:/opt/flowcube-browser-smoke/. "$gate_runtime/"
+
 for script in smoke-pages.node.js smoke-reconciliation-jumps.node.js; do
   echo "==> 运行 ${script}（最多 1 CPU / 1 GiB / 14 分钟）..."
   # 容器内 timeout 真正结束浏览器进程；客户端超时/中断由 EXIT 清理兜底。
@@ -45,6 +51,8 @@ for script in smoke-pages.node.js smoke-reconciliation-jumps.node.js; do
     -e PAGE_SMOKE_BASE_URL -e SMOKE_USERNAME -e SMOKE_PASSWORD \
     -e SMOKE_LIMITED_USERNAME -e SMOKE_LIMITED_PASSWORD \
     -e PLAYWRIGHT_BROWSER_NAME=chromium -e PLAYWRIGHT_SKIP_BROWSER_INSTALL=1 \
+    -e PLAYWRIGHT_RUNTIME_DIR=/opt/flowcube-browser-smoke \
+    -v "$gate_runtime":/opt/flowcube-browser-smoke:ro \
     -v "$ROOT":"$ROOT" -w "$ROOT" "$PLAYWRIGHT_IMAGE" \
     timeout -k 10 840 node "scripts/$script"
 done

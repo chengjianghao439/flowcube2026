@@ -1,6 +1,6 @@
 const { commitFulfillment } = require('../fulfillment/fulfillment.refresh')
 const { pool } = require('../../config/db')
-const { assertQtyPrecisionWith } = require('../../utils/qtyPrecision')  // 商品级数量精度开关（迁移 254）
+const { assertQtyPrecisionWith, assertQtyPrecision } = require('../../utils/qtyPrecision')  // 商品级数量精度开关（迁移 254）
 const AppError = require('../../utils/AppError')
 const { createContainer, CONTAINER_STATUS, SOURCE_TYPE } = require('../../engine/containerEngine')
 const { enqueueContainerLabelJob } = require('../print-jobs/print-jobs.service')
@@ -140,6 +140,7 @@ async function createManualTask({ supplierId, supplierName, remark, items }, sco
 
     if (warehouseIds.size !== 1) throw new AppError('同一张收货单仅支持同仓到货，请按仓库分别建单', 400)
 
+    await assertQtyPrecision(conn, taskItems.map(item => ({ productId: item.productId, qty: item.qty, label: '应收数量' })))
     const warehouseId = taskItems[0].warehouseId
     const warehouseName = taskItems[0].warehouseName
     // 跨仓校验：限仓用户只能给本仓建收货任务
@@ -367,13 +368,8 @@ async function receive(taskId, payload, { userId, requestKey, pdaWarehouseId, sc
     [productIdN],
   )
   if (!productRow) throw new AppError('商品不存在', 404)
-  // 「只能整数」的商品不得按小数收货（迁移 254）。收货是执行类入口，数量常与在途单据的
-  // 应到量对齐，故只校验整数约束、不校验「两位小数」上限。
-  assertQtyPrecisionWith(
-    { name: productRow.name, allowDecimal: productRow.allow_decimal_qty == null ? true : Number(productRow.allow_decimal_qty) === 1 },
-    totalQty,
-    '本次收货数量',
-  )
+  const qtyPolicy = { name: productRow.name, allowDecimal: productRow.allow_decimal_qty == null ? true : Number(productRow.allow_decimal_qty) === 1 }
+  for (const pkg of normalizedPackages) assertQtyPrecisionWith(qtyPolicy, pkg.qty, `第 ${pkg.lineNo} 箱收货数量`)
 
   // 错货防护：PDA 端做过商品条码核对时会带上 scannedBarcode，后端兜底再验一次
   // （防止绕过前端直接调 API 用错误条码入账）。扫码值匹配商品条码或商品编码任一即可；

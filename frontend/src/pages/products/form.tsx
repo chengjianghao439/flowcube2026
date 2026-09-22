@@ -287,7 +287,7 @@ export default function ProductFormPage() {
             <label className="flex h-10 items-center gap-2 text-sm">
               <input type="checkbox" className="h-4 w-4" checked={form.allowDecimalQty}
                 onChange={e => set('allowDecimalQty', e.target.checked)} disabled={submitting} />
-              <span className="text-muted-foreground">{form.allowDecimalQty ? '可以带小数（如 1.25 公斤）' : '只能整数（如 3 个、2 台）'}</span>
+              <span className="text-muted-foreground">{form.allowDecimalQty ? '最多两位小数（如 1.25 公斤）' : '只能整数（如 3 个、2 台）'}</span>
             </label>
           </div>
           <div className="space-y-1.5">
@@ -362,13 +362,13 @@ export default function ProductFormPage() {
         <div className="grid grid-cols-2 gap-x-6 gap-y-4">
           <div className="space-y-1.5">
             <Label>安全库存</Label>
-            <Input type="number" step={qtyStep(form.allowDecimalQty)} min="0" value={form.safetyStock}
+            <Input quantity type="number" step={qtyStep(form.allowDecimalQty)} min="0" value={form.safetyStock}
               onChange={e => set('safetyStock', e.target.value)} disabled={submitting}
               placeholder="低于此为紧急缺货风险" />
           </div>
           <div className="space-y-1.5">
             <Label>补货点</Label>
-            <Input type="number" step={qtyStep(form.allowDecimalQty)} min="0" value={form.reorderPoint}
+            <Input quantity type="number" step={qtyStep(form.allowDecimalQty)} min="0" value={form.reorderPoint}
               onChange={e => set('reorderPoint', e.target.value)} disabled={submitting}
               placeholder="可用+在途 低于此即出现在补货建议" />
           </div>

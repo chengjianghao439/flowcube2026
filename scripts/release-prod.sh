@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # 统一正式发布入口：
 # 1. push main -> 触发浏览器端/服务器自动部署
-# 2. push desktop tag -> 触发桌面端 EXE 构建与 Release
+# 2. 同 SHA 的检查、浏览器及 PDA 完成后 push desktop tag
+# 3. 等待桌面 tag 发布并核对线上三端版本
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -36,12 +37,18 @@ echo "==> 服务器目录：$DEPLOY_APP_PATH"
 echo "==> 浏览器地址：$ERP_ORIGIN"
 echo "==> 发布版本：$VERSION ($TAG)"
 
+# 推送前验证 GitHub API 访问能力；token 只在环境中传递，不打印。
+command -v gh >/dev/null 2>&1 || { echo '!! 缺少 gh，无法等待完整发布结果'; exit 1; }
+GITHUB_TOKEN="${GITHUB_TOKEN:-$(gh auth token)}"
+export GITHUB_TOKEN
+[ -n "$GITHUB_TOKEN" ] || { echo '!! 缺少 GitHub 登录态'; exit 1; }
+GITHUB_REPOSITORY="$(gh repo view --json nameWithOwner --jq .nameWithOwner)"
+GITHUB_SHA="$(git rev-parse HEAD)"
+export GITHUB_REPOSITORY GITHUB_SHA
+export RELEASE_TAG="$TAG" FLOWCUBE_ERP_ORIGIN="$ERP_ORIGIN"
+
 echo "==> 推送 main（触发浏览器端/服务器自动部署）..."
 git push origin main
 
-echo "==> 推送桌面端 tag（触发 Windows EXE 构建与 Release）..."
-bash scripts/release-desktop-tag.sh
-
-echo "==> 发布请求已提交到 GitHub Actions"
-echo "    - 浏览器 / 服务器：Deploy Browser App"
-echo "    - 桌面端安装包：Build Desktop Installer"
+echo "==> 等待同一提交的检查、浏览器及 PDA，再发布桌面端并核对线上版本..."
+node scripts/complete-release.js

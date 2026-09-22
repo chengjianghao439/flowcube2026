@@ -93,3 +93,15 @@ npm run test:permissions
 废弃目录回归：`npm run release:check-downloads`（`backend/downloads/` 只允许 `.gitignore`/`README.md`）——`.gitignore` 挡得住普通提交、挡不住 `git add -f`，而守卫只看 git 视角，所以必须在 CI 静态 job 真跑，不连数据库。
 
 导出格式回归：`npm run test:export`（static job 与 `test:upload` 同一步执行）——校验 xlsx 导出的日期列写成日期单元格并带 `yyyy-mm-dd` / `yyyy-mm-dd hh:mm` 数字格式（2026-09-16 起），不连数据库。
+
+
+发布页面脚本回归：`npm ci --prefix scripts/browser-smoke --ignore-scripts` 安装锁定依赖，`node scripts/browser-smoke/node_modules/playwright-core/cli.js install chromium` 安装匹配浏览器，再运行 `npm run test:browser-smoke`。该测试使用真实 Chromium 和随机回环端口夹具，覆盖 ERP/PDA、受限权限、错页/渲染错误、对账重定向失败及进程退出，不连接数据库或生产。Tests CI 的独立 `browser-smoke-runtime` job 执行它；生产依赖从 CI 构建镜像复制，不运行安装命令。
+
+发布工具离线回归：`npm run test:audit-tooling` 包含页面运行时、HTTPS 归档验证/回退和 main→PDA→桌面 tag 编排；`npm run test:release-tooling` 覆盖真实下载流的 SHA256、404、损坏包和缺摘要。工作流语法可用 `actionlint -shellcheck=''` 核对。`npm run release:verify -- --origin https://<生产域名>` 是线上只读核对，默认实际下载两种安装包，每包最多 120 秒，不启动安装程序。
+
+
+数量精度回归（2026-09-22）：`npm run test:qty-precision` 包含原值/换算、逐箱、商品开关 schema 与最小权限、数量配置、拣货复核浮点边界、容器扣空/整箱归还行为测试；`test:qty-precision-coverage` 用 AST 验证实际业务入口调用，包含删除、改名和注释伪装的反向验证。`npm run smoke:qty-precision` 必须运行在已迁移的独立 MySQL 8 测试库，真实验证 `.005` 拆分不写库存、`.01` 拆分守恒、合法浮点噪声扣空，以及迁移 255 的 70 个目标列和原 SQL 重放幂等；安装包或生产数据均不参与。该 smoke 已接入 Tests 的数据库迁移后步骤。
+
+文案守卫 `test:copy-conventions` 使用 TypeScript AST 分析字符串、模板、JSX 和 AppError，解析回归防止 `https://` 被误当注释及单双引号/续行漏扫。前端数量输入行为、详情标签和策略缓存回归进入现有 `npm --prefix frontend run test:unit`。
+
+AST 文案和数量覆盖守卫依赖 frontend 的 TypeScript，必须在安装前端依赖之后执行；CI 放在 static job，不能移回仅安装后端依赖的 regression job。`deployment-resources.test.js` 验证依赖接线与删除安装步骤的反向失败。

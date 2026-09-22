@@ -20,7 +20,7 @@ interface Props {
 type RowState = { checked: boolean; qty: number }
 
 export default function ShipSelectDialog({ open, onClose, order, loading, onConfirm }: Props) {
-  // 整数商品的数量框给出 step=1 的提示（迁移 254）；执行类只按服务端口径提示，不做前端硬拦
+  // 数量框拒绝超过两位小数，商品策略已加载时同时限制整数；服务端独立校验
   const allowDecimalOf = useProductQtyPolicies((order.items ?? []).map(i => i.productId))
   const undispatched = useMemo(
     () => (order.items ?? []).filter(i => (i.dispatchedQty ?? 0) < (i.reservedQty ?? 0)),
@@ -79,7 +79,7 @@ export default function ShipSelectDialog({ open, onClose, order, loading, onConf
                     <td className="px-3 py-3">{item.warehouseName || order.warehouseName}</td>
                     <td className="px-3 py-3 text-right tabular-nums">{limitFor(item.id)} {item.unit}</td>
                     <td className="px-3 py-3">
-                      <Input aria-label={`${item.productName}本次出库数量`} aria-invalid={invalidQty} type="number" min={0.01} step={qtyStep(allowDecimalOf(item.productId))} max={limitFor(item.id)} value={state.qty} disabled={!state.checked}
+                      <Input quantity aria-label={`${item.productName}本次出库数量`} aria-invalid={invalidQty} type="number" min={0.01} step={qtyStep(allowDecimalOf(item.productId))} max={limitFor(item.id)} value={state.qty} disabled={!state.checked}
                         onChange={e => setRow(item.id, { qty: Number(e.target.value) })}
                         className={cn('h-9 text-right tabular-nums', invalidQty && 'border-destructive')} />
                     </td>

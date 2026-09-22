@@ -4,7 +4,7 @@ import type {
   SaleQuantitySummary,
 } from '@/types/sale'
 import type { StatusTone } from '@/lib/statusTone'
-const roundQty = (n: number) => Math.round(n * 10000) / 10000
+import { roundQuantity as roundQty } from './qtyStep'
 export function summarizeSaleQuantities(
   items: Pick<
     SaleOrderItem,

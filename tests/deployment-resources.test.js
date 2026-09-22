@@ -242,20 +242,10 @@ test('桌面发布必须清理服务器侧中转目录（防 /tmp 长期累积�
   )
 })
 
-// 2026-09-18 发 v0.9.24 实测：Deploy Browser App 只跑了 11.5 分钟就以 exit code 124 失败，
-// 线上仍是旧版。根因不是那 40 分钟的外层上限，而是**镜像归档上传仍是 600 秒**，而同一根因
-// （服务器慢盘）上的 docker load 早在 v0.9.17 就放宽到 1800 秒——典型「改了一个环节忘了另一个」。
-//
-// 2026-09-21 二次修正（v0.10.2 发不出去的真实根因）：上传慢**不是**「需要更长时间」，
-// 而是**单条 TCP 在丢包链路上的拥塞窗口被压死**。实测同一条中美链路：
-//   单流 66 KB/s  →  8 条并行合计 8.4 MB/s（相差 126 倍）
-// 所以「把时限从 1800 放宽到 3600」在原理上不可能成功：192MB 归档按 66 KB/s 要 53 分钟，
-// 而 3600 秒只够传 97MB，于是连续多轮都卡在 timeout 到点被强杀（exit 137，与 OOM 无关）。
-// 判定标准因此从「时限够不够长」改成「并行度够不够高 + 分片是否按字节切」——后者保证
-// 服务器端合并后的**字节与 sha256 完全不变**，server-update.sh 的校验一律不动。
-// 反向验证：把 UPLOAD_STREAMS 改成 1、删掉 PART_TIMEOUT、把 split -b 换成不切分，
-// 或把 UPLOAD_BUDGET 设成小于 PART_TIMEOUT，本断言都必须失败。
-test('镜像上传必须分片并行（单连接跨境吞吐塌陷时加时限无用），且步骤/job 预算容得下', () => {
+// 2026-09-22：上传是八片同时开始，不能只放宽整批预算却让每片先在 900 秒被杀。
+// 部署外层还必须容纳合并、等锁与回退宽限；仅相加上传与 server-update 会漏算。
+// 反向验证：PART_TIMEOUT 退回 900、删掉分片/合并、降低步骤或 job 预算，均必须失败。
+test('镜像上传必须分片并行，且步骤/job 预算覆盖完整部署与回退', () => {
   const yaml = require(path.resolve(root, 'frontend/node_modules/js-yaml'))
   const workflow = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/deploy-browser.yml'), 'utf8'))
   const job = workflow.jobs.deploy
@@ -280,7 +270,7 @@ test('镜像上传必须分片并行（单连接跨境吞吐塌陷时加时限�
   assert.ok(streams, '未找到 UPLOAD_STREAMS：镜像上传必须分片并行（单连接跨境吞吐已被压到 66 KB/s）')
   const streamsCount = Number(streams[1])
   assert.ok(streamsCount >= 4,
-    `并行度 ${streamsCount} 过低：实测单流 66 KB/s 而 8 流合计 8.4 MB/s，并行度不足会让 192MB 归档重新变成「传不完」`)
+    `并行度 ${streamsCount} 过低：慢速跨境 SCP 的兜底路径必须保留并行传输，不能用反向下载速率推算上传预算`)
 
   const partTimeout = script.match(/PART_TIMEOUT=(\d+)/)
   assert.ok(partTimeout, '未找到 PART_TIMEOUT：必须给单个分片显式时限')
@@ -293,6 +283,9 @@ test('镜像上传必须分片并行（单连接跨境吞吐塌陷时加时限�
   const budgetSeconds = Number(budget[1])
   assert.ok(budgetSeconds >= partSeconds,
     `整批上限 ${budgetSeconds}s 不得小于单分片上限 ${partSeconds}s：否则批量 xargs 会先被杀，单分片时限形同虚设`)
+  // 八片同时开始、没有分片重试；单片必须能使用整批的预算。
+  // 反向验证：PART_TIMEOUT 退回 900、UPLOAD_BUDGET 保持 2700 时必须失败。
+  assert.equal(partSeconds, budgetSeconds, '单片先超时会让整批预算失效；并发上传的单片与整批须使用相同预算')
 
   const splitBytes = script.match(/split\s+-b\s+"\$PART_BYTES"/)
   assert.ok(splitBytes, '未找到按字节切分（split -b "$PART_BYTES"）：分片不改变归档字节是 sha256 校验不变的前提')
@@ -301,13 +294,51 @@ test('镜像上传必须分片并行（单连接跨境吞吐塌陷时加时限�
 
   const stepSeconds = Number(step['timeout-minutes']) * 60
   assert.ok(Number.isFinite(stepSeconds) && stepSeconds > 0, 'Deploy 步骤必须显式声明 timeout-minutes')
-  assert.ok(stepSeconds > budgetSeconds + outerSeconds,
-    `Deploy 步骤上限 ${stepSeconds}s 必须大于上传批量 ${budgetSeconds}s + server-update ${outerSeconds}s`)
+  const lockSeconds = Number(script.match(/flock -w (\d+) 9/)[1])
+  const mergeTiming = script.match(/MERGED_BYTES=\$\(timeout -k (\d+) (\d+) ssh/)
+  const rollbackGrace = Number(script.match(/timeout -k (\d+) \d+ bash scripts\/server-update\.sh/)[1])
+  const mergeSeconds = Number(mergeTiming[1]) + Number(mergeTiming[2])
+  const requiredSeconds = budgetSeconds + outerSeconds + rollbackGrace + lockSeconds + mergeSeconds + 300 + 235
+  assert.ok(stepSeconds > requiredSeconds,
+    `Deploy 步骤须覆盖上传、合并、等锁、部署及回退宽限和预检，至少 ${requiredSeconds}s，当前 ${stepSeconds}s`)
 
   const jobSeconds = Number(job['timeout-minutes']) * 60
   const declared = job.steps.reduce((sum, s) => sum + (Number(s['timeout-minutes']) || 0) * 60, 0)
   assert.ok(jobSeconds > declared,
     `job 上限 ${jobSeconds}s 必须大于各步骤声明上限之和 ${declared}s，否则 job 级会先被强杀`)
+})
+
+// 执行 workflow 原始 Bash，只替换网络边界：bash -n 无法发现续行中插入注释的问题。
+// 反向验证：把注释放回 ssh 的反斜杠续行中，远程命令将缺失，本测试必须失败。
+test('浏览器部署清理必须把本次归档和分片目录作为远程命令传给 SSH', () => {
+  const yaml = require(path.resolve(root, 'frontend/node_modules/js-yaml'))
+  const workflow = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/deploy-browser.yml'), 'utf8'))
+  const step = workflow.jobs.deploy.steps.find(s => s.name === "Remove this run's temporary upload")
+  assert.match(step.if, /always\(\)/)
+  const script = step.run.replace(/\$\{\{[^}]+\}\}/g, 'fixture')
+  const stub = `timeout() { shift 3; "$@"; }
+ssh() { printf 'REMOTE_COMMAND=%s\\n' "\${@: -1}"; }
+`
+  const result = spawnSync('bash', ['--noprofile', '--norc', '-e', '-o', 'pipefail', '-c', stub + script], {
+    encoding: 'utf8', timeout: 5000,
+    env: { PATH: process.env.PATH, GITHUB_RUN_ID: '12345', GITHUB_RUN_ATTEMPT: '2' },
+  })
+  assert.equal(result.status, 0, result.stderr)
+  assert.equal(result.stderr, '')
+  assert.doesNotMatch(result.stdout, /::warning::/)
+  assert.match(result.stdout, /REMOTE_COMMAND=.*rm -f \/tmp\/flowcube-images-12345-2\.tar\.gz/)
+  assert.match(result.stdout, /flowcube-pda-bootstrap-12345-2\.sh/)
+  assert.match(result.stdout, /rm -rf \/tmp\/flowcube-image-parts-12345-2/)
+})
+
+test('PDA 等待步骤必须容得下浏览器部署 job，且不占服务器部署组', () => {
+  const yaml = require(path.resolve(root, 'frontend/node_modules/js-yaml'))
+  const browser = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/deploy-browser.yml'), 'utf8'))
+  const pda = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/build-pda-apk.yml'), 'utf8'))
+  const waiter = pda.jobs['wait-browser']
+  const step = waiter.steps.find(s => /wait-release-checks/.test(s.run || ''))
+  assert.ok(step['timeout-minutes'] > browser.jobs.deploy['timeout-minutes'], 'PDA 不能在允许的浏览器部署时间内提前超时')
+  assert.equal(waiter.concurrency, undefined)
 })
 
 // 2026-09-18 实测：`smokeTestKit` 用 `3100 + Math.random()*1000` 自选测试服务端口，而该范围
@@ -461,4 +492,25 @@ test('每个 smoke/test 脚本必须在 CI 里跑得到（未接线须显式豁�
     + '请接进 CI，或在豁免表里写明理由')
   assert.deepEqual(staleExemptions, [],
     `这些脚本已经接进 CI，豁免条目必须删除（否则豁免表会腐烂成"什么都豁免"）：${staleExemptions.join(', ')}`)
+})
+
+test('AST 文案与数量覆盖守卫须在已安装 TypeScript 的 job 中执行', () => {
+  const yaml = require(path.resolve(root, 'frontend/node_modules/js-yaml'))
+  const workflow = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/test.yml'), 'utf8'))
+  function verify(jobs) {
+    for (const [name, job] of Object.entries(jobs)) {
+      let installed = false
+      for (const step of job.steps || []) {
+        const run = String(step.run || '')
+        if (/npm --prefix frontend ci/.test(run)) installed = true
+        if (/npm run test:(copy-conventions|qty-precision-coverage)/.test(run)) {
+          assert.ok(installed, `${name}: AST 守卫前必须安装 frontend 的 TypeScript 依赖`)
+        }
+      }
+    }
+  }
+  verify(workflow.jobs)
+  const broken = structuredClone(workflow.jobs)
+  for (const job of Object.values(broken)) job.steps = (job.steps || []).filter(step => !/npm --prefix frontend ci/.test(String(step.run || '')))
+  assert.throws(() => verify(broken), /TypeScript/, '反向验证：删安装步骤必须失败')
 })

@@ -1,3 +1,5 @@
+const { roundQty } = require('../../utils/unitConversion')
+const { assertQtyPrecision } = require('../../utils/qtyPrecision')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { createContainer, syncStockFromContainers, lockStockDimension, SOURCE_TYPE, CONTAINER_STATUS } = require('../../engine/containerEngine')
@@ -169,12 +171,7 @@ async function receive(conn, taskId, { productId, packages, requestKey, userId, 
   if (![1, 2].includes(Number(taskRow.status))) {
     throw new AppError('当前状态不允许收货', 400)
   }
-  if (Number(taskRow.status) === 1) {
-    await compareAndSetStatus(conn, {
-      table: 'return_tasks', id: taskId,
-      fromStatus: 1, toStatus: 2, entityName: '退货任务',
-    })
-  }
+
 
   const [taskItems] = await conn.query(
     'SELECT * FROM return_task_items WHERE task_id = ? AND product_id = ? ORDER BY id FOR UPDATE',
@@ -182,22 +179,29 @@ async function receive(conn, taskId, { productId, packages, requestKey, userId, 
   )
   if (!taskItems.length) throw new AppError('该商品不在退货任务中', 400)
 
-  const totalQty = packages.reduce((s, p) => s + Number(p.qty || 0), 0)
+  await assertQtyPrecision(conn, packages.map((pkg, i) => ({ productId, qty: pkg.qty, label: `第 ${i + 1} 箱退货收货数量` })))
+  if (Number(taskRow.status) === 1) {
+    await compareAndSetStatus(conn, {
+      table: 'return_tasks', id: taskId,
+      fromStatus: 1, toStatus: 2, entityName: '退货任务',
+    })
+  }
+  const totalQty = packages.reduce((s, p) => roundQty(s + Number(p.qty)), 0)
   let remaining = totalQty
   const containers = []
 
   for (const item of taskItems) {
     if (remaining <= 0) break
-    const cap = Number(item.expected_qty) - Number(item.received_qty)
+    const cap = roundQty(Number(item.expected_qty) - Number(item.received_qty))
     if (cap <= 0) continue
     const take = Math.min(remaining, cap)
     await conn.query(
       'UPDATE return_task_items SET received_qty = received_qty + ? WHERE id = ?',
       [take, item.id],
     )
-    remaining -= take
+    remaining = roundQty(remaining - take)
   }
-  if (remaining > 0) throw new AppError(`收货数量超出应退数量，超出 ${Number(remaining.toFixed(4))}`, 409)
+  if (remaining > 0) throw new AppError(`收货数量超出应退数量，超出 ${Number(remaining.toFixed(2))}`, 409)
 
   // 创建容器（状态=PENDING_QA）
   const [[product]] = await conn.query(
@@ -278,7 +282,7 @@ async function allocateQaContainers(conn, { taskId, taskNo, productId, passedQty
     const rejTake = Math.min(rejRemaining, rem - passTake)
 
     // 每次只处理本次质检量。未检量保留原条码；合格/拒收各自独立容器，三者总和不变。
-    const unchecked = Number((rem - passTake - rejTake).toFixed(4))
+    const unchecked = Number((rem - passTake - rejTake).toFixed(2))
     const parts = [
       { qty: unchecked, status: PENDING_QA, label: '待质检' },
       { qty: passTake, status: CONTAINER_STATUS.PENDING_PUTAWAY, label: '合格' },
@@ -309,8 +313,8 @@ async function allocateQaContainers(conn, { taskId, taskNo, productId, passedQty
       })
       changed.push({ containerId: Number(created.containerId), barcode: created.barcode, qty: part.qty, status: part.status })
     }
-    passRemaining = Number((passRemaining - passTake).toFixed(4))
-    rejRemaining = Number((rejRemaining - rejTake).toFixed(4))
+    passRemaining = Number((passRemaining - passTake).toFixed(2))
+    rejRemaining = Number((rejRemaining - rejTake).toFixed(2))
   }
   if (passRemaining > 0 || rejRemaining > 0) {
     throw new AppError('质检数量超出待质检库存条码的可用数量', 409)
@@ -373,6 +377,10 @@ async function check(conn, taskId, { productId, passedQty, rejectedQty = 0, requ
     throw new AppError('只有待质检状态可以质检确认', 400)
   }
 
+  await assertQtyPrecision(conn, [
+    { productId, qty: passedQty, label: '合格数量' },
+    { productId, qty: rejectedQty, label: '不合格数量' },
+  ])
   const passed = Number(passedQty) || 0
   const rejected = Number(rejectedQty) || 0
   if (passed < 0 || rejected < 0) throw new AppError('质检数量不能为负数', 400)
@@ -395,8 +403,8 @@ async function check(conn, taskId, { productId, passedQty, rejectedQty = 0, requ
       'UPDATE return_task_items SET checked_qty = checked_qty + ?, rejected_qty = rejected_qty + ? WHERE id = ?',
       [take, rejTake, item.id],
     )
-    remaining = Number((remaining - take).toFixed(4))
-    rejRemaining = Number((rejRemaining - rejTake).toFixed(4))
+    remaining = Number((remaining - take).toFixed(2))
+    rejRemaining = Number((rejRemaining - rejTake).toFixed(2))
   }
   if (remaining > 0) throw new AppError('质检数量超出已收货数量', 409)
 
@@ -517,7 +525,7 @@ async function putaway(conn, taskId, { containerId, locationId, requestKey, user
       'UPDATE return_task_items SET putaway_qty = putaway_qty + ? WHERE id = ?',
       [take, item.id],
     )
-    remaining -= take
+    remaining = roundQty(remaining - take)
   }
 
   // 全部上架完成 → 退货入仓完成（不合格部分不计入待上架量，否则任务永远无法完成）

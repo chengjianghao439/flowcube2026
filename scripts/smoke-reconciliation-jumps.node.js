@@ -1,10 +1,4 @@
 #!/usr/bin/env node
-const { spawnSync } = require('child_process')
-const fs = require('fs')
-const os = require('os')
-const path = require('path')
-const ROOT = process.cwd()
-const SESSION = process.env.PLAYWRIGHT_CLI_SESSION || `rj-${process.pid}-${Math.floor(Math.random() * 1e6)}`
 const BASE_URL = process.env.PAGE_SMOKE_BASE_URL || 'http://127.0.0.1:8080'
 const SMOKE_USERNAME = String(process.env.SMOKE_USERNAME || '').trim()
 const SMOKE_PASSWORD = String(process.env.SMOKE_PASSWORD || '').trim()
@@ -15,124 +9,27 @@ function requireSmokeCredentials() {
   }
 }
 
-function cmdExists(cmd) {
-  const res = spawnSync('sh', ['-lc', `command -v ${cmd} >/dev/null 2>&1`], {
-    cwd: ROOT,
-    stdio: 'ignore',
-  })
-  return res.status === 0
-}
+requireSmokeCredentials()
 
-function pickRunner() {
-  if (cmdExists('npm')) return ['npm', ['exec', '--yes', '--package', '@playwright/cli', '--', 'playwright-cli']]
-  if (cmdExists('npx')) return ['npx', ['--yes', '--package', '@playwright/cli', 'playwright-cli']]
-  throw new Error('缺少 npm / npx，无法运行对账回跳烟雾检查')
-}
-
-const [runnerBin, runnerArgs] = pickRunner()
-const BROWSER_NAME = process.env.PLAYWRIGHT_BROWSER_NAME || 'chrome'
-const SKIP_BROWSER_INSTALL = process.env.PLAYWRIGHT_SKIP_BROWSER_INSTALL === '1'
-const CLI_CONFIG_ARGS = createCliConfigArgs()
-
-function createCliConfigArgs() {
-  const executablePath = resolveChromiumExecutablePath()
-  if (!executablePath) {
-    return []
-  }
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'flowcube-playwright-'))
-  const configPath = path.join(tempDir, 'cli.config.json')
-  fs.writeFileSync(
-    configPath,
-    JSON.stringify(
-      {
-        browser: {
-          browserName: 'chromium',
-          launchOptions: {
-            executablePath,
-            chromiumSandbox: false,
-          },
-        },
-      },
-      null,
-      2,
-    ),
-  )
-  return ['--config', configPath]
-}
-
-function resolveChromiumExecutablePath() {
-  if (process.env.PLAYWRIGHT_BROWSER_EXECUTABLE_PATH) {
-    return process.env.PLAYWRIGHT_BROWSER_EXECUTABLE_PATH
-  }
-  const root = '/ms-playwright'
-  if (!fs.existsSync(root)) {
-    return ''
-  }
-  const candidates = fs
-    .readdirSync(root)
-    .filter((name) => /^chromium-\d+$/.test(name))
-    .sort((a, b) => Number(b.split('-')[1]) - Number(a.split('-')[1]))
-  for (const candidate of candidates) {
-    const executablePath = path.join(root, candidate, 'chrome-linux', 'chrome')
-    if (fs.existsSync(executablePath)) {
-      return executablePath
-    }
-  }
-  return ''
-}
-
-function runPw(args) {
-  const res = spawnSync(runnerBin, [...runnerArgs, '--session', SESSION, ...args], {
-    cwd: ROOT,
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe'],
-  })
-  if (res.status !== 0) {
-    const detail = (res.stderr || res.stdout || '').trim()
-    throw new Error(detail || `playwright-cli ${args[0]} failed`)
-  }
-  return (res.stdout || '').trim()
-}
-
-function runPwOpen(args) {
-  const res = spawnSync(runnerBin, [...runnerArgs, ...CLI_CONFIG_ARGS, '--session', SESSION, ...args], {
-    cwd: ROOT,
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe'],
-  })
-  if (res.status !== 0) {
-    const detail = (res.stderr || res.stdout || '').trim()
-    throw new Error(detail || `playwright-cli ${args[0]} failed`)
-  }
-  return (res.stdout || '').trim()
-}
-
-function ensureBrowser() {
-  if (SKIP_BROWSER_INSTALL) {
-    return
-  }
-  const res = spawnSync(runnerBin, [...runnerArgs, 'install-browser', BROWSER_NAME], {
-    cwd: ROOT,
-    stdio: 'inherit',
-  })
-  if (res.status !== 0) {
-    throw new Error(`安装浏览器 ${BROWSER_NAME} 失败`)
-  }
-}
+const { createRuntime } = require('./lib/browser-smoke-runtime')
+const runtime = createRuntime()
+const runPw = args => runtime.run(args)
+const runPwOpen = runPw
+const PAGE_TIMEOUT = Number(process.env.PAGE_SMOKE_TIMEOUT_MS || 20000)
 
 function jsQuote(value) {
   return JSON.stringify(value)
 }
 
-function assertNoErrorText() {
-  const out = runPw([
+async function assertNoErrorText() {
+  const out = await runPw([
     'eval',
     `(() => {
       const text = document.body.innerText || '';
       return !text.includes('渲染错误') && !text.includes('未注册') && !text.includes('服务器内部错误') && !text.includes('Minified React error');
     })()`,
   ])
-  if (!out.includes('true')) {
+  if (out !== 'true') {
     throw new Error('页面检查失败：发现渲染错误或未注册提示')
   }
 }
@@ -141,6 +38,7 @@ async function login() {
   console.log('==> 对账回跳：登录测试账号...')
   const res = await fetch(`${BASE_URL}/api/auth/login`, {
     method: 'POST',
+    signal: AbortSignal.timeout(20000),
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username: SMOKE_USERNAME, password: SMOKE_PASSWORD }),
   })
@@ -154,27 +52,27 @@ async function login() {
     state: { token, user, isAuthenticated: true },
     version: 0,
   })
-  runPwOpen(['open', `${BASE_URL}/#/login`])
-  runPw(['eval', `(sessionStorage.setItem('flowcube-auth-v3', ${jsQuote(authStorage)}), true)`])
-  runPw(['eval', '(location.reload(), true)'])
-  await new Promise((resolve) => setTimeout(resolve, 3000))
-  const ok = runPw(['eval', "location.hash.includes('/dashboard')"])
-  if (!ok.includes('true')) {
-    throw new Error('登录失败，未进入仪表盘')
-  }
+  await runPwOpen(['open', `${BASE_URL}/#/login`])
+  await runPw(['eval', `(sessionStorage.setItem('flowcube-auth-v3', ${jsQuote(authStorage)}), true)`])
+  await runtime.reload()
+  await runtime.waitFor("location.hash.includes('/dashboard')", { timeout: PAGE_TIMEOUT })
 }
 
-function openPath(path, label) {
+async function openPath(path, label) {
   console.log(`==> 对账回跳：${label} -> ${path}`)
-  runPw(['eval', `(location.hash = ${jsQuote(`#${path}`)}, true)`])
-  return new Promise((resolve) => setTimeout(resolve, 3000)).then(() => {
-    assertNoErrorText()
-  })
+  await runPw(['eval', `(location.hash = ${jsQuote(`#${path}`)}, true)`])
+  const target = `#${path}`.split('?')[0]
+  await runtime.waitFor(`location.hash.split('?')[0] === ${jsQuote(target)}`, { timeout: PAGE_TIMEOUT })
+  // 保留加载窗口，并在渲染后再次核对路由，不能把延迟跳到 403 的页面判为成功。
+  await new Promise((resolve) => setTimeout(resolve, 3000))
+  await runtime.waitFor(`location.hash.split('?')[0] === ${jsQuote(target)}`, { timeout: PAGE_TIMEOUT })
+  await assertNoErrorText()
 }
 
 async function fetchJumpPaths() {
   const res = await fetch(`${BASE_URL}/api/auth/login`, {
     method: 'POST',
+    signal: AbortSignal.timeout(20000),
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username: SMOKE_USERNAME, password: SMOKE_PASSWORD }),
   })
@@ -185,6 +83,7 @@ async function fetchJumpPaths() {
 
   async function fetchType(type) {
     const r = await fetch(`${BASE_URL}/api/reports/reconciliation?type=${type}&page=1&pageSize=20`, {
+      signal: AbortSignal.timeout(20000),
       headers: { Authorization: `Bearer ${token}` },
     })
     if (!r.ok) throw new Error(`reconciliation ${type} failed: ${r.status}`)
@@ -204,7 +103,6 @@ async function fetchJumpPaths() {
 
 async function main() {
   requireSmokeCredentials()
-  ensureBrowser()
   await login()
   await openPath('/reports/reconciliation', '对账基础版')
 
@@ -224,7 +122,7 @@ async function main() {
   console.log('对账回跳烟雾检查通过')
 }
 
-main().catch((error) => {
+main().finally(() => runtime.close()).catch((error) => {
   console.error(error instanceof Error ? error.stack || error.message : String(error))
-  process.exit(1)
+  process.exitCode = 1
 })

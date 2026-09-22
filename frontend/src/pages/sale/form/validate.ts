@@ -1,4 +1,5 @@
 import { collectOrderIssues } from '@/lib/orderEntry'
+import { roundQuantity } from '@/lib/qtyStep'
 import type { SaleOrderItem } from '@/types/sale'
 import type { ProductUnit } from '@/types/products'
 
@@ -28,7 +29,7 @@ export interface DraftItem extends Omit<SaleOrderItem, 'id' | 'amount'> {
 export function baseQtyOf(item: DraftItem): number {
   const u = (item.units || []).find(x => x.unitName === (item.entryUnit || item.unit))
   const rate = u ? Number(u.conversionRate) : 1
-  return Math.round((Number(item.quantity) || 0) * rate * 10000) / 10000
+  return roundQuantity((Number(item.quantity) || 0) * rate)
 }
 
 export interface ScanRow {

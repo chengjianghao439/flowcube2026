@@ -8,7 +8,7 @@
 #
 # 扫描内容：
 #   - gitleaks: 敏感信息泄露检测
-#   - npm audit: 依赖漏洞扫描（三端）
+#   - npm audit: 依赖漏洞扫描（三端及页面验收运行时）
 # ============================================================
 name: Security Scan
 
@@ -95,7 +95,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        target: [backend, frontend, desktop]
+        target: [backend, frontend, desktop, scripts/browser-smoke]
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
 
@@ -112,10 +112,10 @@ jobs:
         run: |
           set -uo pipefail
           set +e
-          npm --prefix ${{ matrix.target }} audit --json --fetch-timeout=30000 --fetch-retries=1 > audit-${{ matrix.target }}.json
+          npm --prefix ${{ matrix.target }} audit --json --fetch-timeout=30000 --fetch-retries=1 > audit-report.json
           AUDIT_EXIT=$?
           set -e
-          node scripts/check-npm-audit.js audit-${{ matrix.target }}.json "$AUDIT_EXIT"
+          node scripts/check-npm-audit.js audit-report.json "$AUDIT_EXIT"
 
   # ── 3. 检查已跟踪的敏感文件 ───────────────────────────────
   sensitive-files:

@@ -1,3 +1,4 @@
+const { assertQtyPrecision, assertQtyScale } = require('../../utils/qtyPrecision')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const printJobs = require('../print-jobs/print-jobs.service')
@@ -115,7 +116,7 @@ async function createPackage(taskId, remark = null, scopeWarehouseIds = null) {
   }
 }
 
-const QTY_SCALE = 10000
+const QTY_SCALE = 100
 
 function toQtyUnits(value) {
   const n = Number(value)
@@ -124,7 +125,7 @@ function toQtyUnits(value) {
 }
 
 function fromQtyUnits(units) {
-  return Number((Number(units) / QTY_SCALE).toFixed(4))
+  return Number((Number(units) / QTY_SCALE).toFixed(2))
 }
 
 function throwOverpacked({ taskId, product, requestedUnits, packedUnits, limitUnits, requiredUnits, checkedUnits }) {
@@ -149,6 +150,7 @@ function throwOverpacked({ taskId, product, requestedUnits, packedUnits, limitUn
 
 // ─── 向箱子添加商品 ───────────────────────────────────────────────────────────
 async function addItem(packageId, { productCode, qty }, scopeWarehouseIds = null) {
+  assertQtyScale(qty, '装箱数量')
   const qtyUnits = toQtyUnits(qty)
   if (!Number.isFinite(qtyUnits) || qtyUnits <= 0) throw new AppError('数量必须大于 0', 400)
 
@@ -183,6 +185,7 @@ async function addItem(packageId, { productCode, qty }, scopeWarehouseIds = null
       [productCode],
     )
     if (!product) throw new AppError(`商品 ${productCode} 不存在`, 404)
+    await assertQtyPrecision(conn, [{ productId: product.id, qty, label: '装箱数量' }])
 
     // 用任务明细行作为同任务同商品的并发闸门；无论装入哪个箱子，同商品装箱都必须串行校验。
     const [taskItems] = await conn.query(
@@ -297,6 +300,7 @@ async function removeItem(packageId, { itemId, qty }, scopeWarehouseIds = null) 
     )
     if (!item) throw new AppError('该商品明细不存在', 404)
 
+    if (qty != null) await assertQtyPrecision(conn, [{ productId: item.product_id, qty, label: '移除数量' }])
     const currentUnits = toQtyUnits(item.qty)
     const removeUnits = qty == null ? currentUnits : toQtyUnits(qty)
     if (!Number.isFinite(removeUnits) || removeUnits <= 0) throw new AppError('移除数量必须大于 0', 400)

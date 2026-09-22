@@ -13,15 +13,15 @@ const credentials = {
   SMOKE_LIMITED_USERNAME: 'fixture-limited', SMOKE_LIMITED_PASSWORD: 'fixture-limited-password',
 }
 
-// Run the real entry point, but stop at the first child process boundary. No
+// Run the real entry point, but stop at the first browser runtime boundary. No
 // browser, dependency install, network, or local credentials can be touched.
 function start(env) {
   let childCalls = 0
   const boundary = new Error('child-process-boundary')
   const context = vm.createContext({
     process: { env, pid: 123, cwd: () => root },
-    require: name => name === 'child_process'
-      ? { spawnSync: () => { childCalls++; throw boundary } }
+    require: name => name === './lib/browser-smoke-runtime'
+      ? { createRuntime: () => { childCalls++; throw boundary } }
       : require(name),
   })
   let error

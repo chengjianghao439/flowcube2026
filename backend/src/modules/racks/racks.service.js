@@ -173,7 +173,7 @@ async function assertRackSafeToDelete(rack) {
   const cnt = Number(cntRow.c)
   if (cnt > 0) {
     throw new AppError(
-      `无法删除：该货架相关库位上仍有 ${cnt} 个在库容器（含商品库存），请先移库或出库后再删`,
+      `无法删除：该货架相关库位上仍有 ${cnt} 个在库库存条码（含商品库存），请先移库或出库后再删`,
       400,
     )
   }

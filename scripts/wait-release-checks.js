@@ -3,16 +3,19 @@
 
 const REQUIRED_WORKFLOWS = ['test.yml', 'security-scan.yml']
 
-function assessRuns(runs, sha) {
+function assessRuns(runs, sha, { branch = 'main', events = ['push', 'workflow_dispatch'] } = {}) {
   if (!Array.isArray(runs)) throw new Error('GitHub 检查结果格式无效')
-  const run = runs.filter(r => r.head_sha === sha && r.head_branch === 'main' && ['push', 'workflow_dispatch'].includes(r.event))
+  const run = runs.filter(r => r.head_sha === sha && r.head_branch === branch && events.includes(r.event))
     .sort((a, b) => b.id - a.id || (b.run_attempt || 1) - (a.run_attempt || 1))[0]
   if (!run || run.status !== 'completed') return { state: 'pending', run }
   return { state: run.conclusion === 'success' ? 'success' : 'failed', run }
 }
 
-async function waitForChecks({ repository, sha, token, apiUrl = 'https://api.github.com', timeoutMs = 25 * 60 * 1000, intervalMs = 15000,
-  requiredWorkflows = REQUIRED_WORKFLOWS, fetchImpl = fetch, now = Date.now, sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), log = console.log,
+async function waitForChecks({ repository, sha, token, apiUrl = 'https://api.github.com', requiredWorkflows = REQUIRED_WORKFLOWS,
+  branch = 'main', events = ['push', 'workflow_dispatch'],
+  // PDA 等待含上传、迁移及页面验收的整个浏览器部署；普通 Tests/Security 门禁仍只等 25 分钟。
+  timeoutMs = (requiredWorkflows.includes('deploy-browser.yml') ? 215 : 25) * 60 * 1000, intervalMs = 15000,
+  fetchImpl = fetch, now = Date.now, sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), log = console.log,
   // 「这个提交根本没有对应工作流运行」与「运行还在跑」是两回事：
   // 2026-09-18 发 v0.9.20 时，PDA 补跑差点被触发在只改了测试/文档的提交上——该提交带
   // [skip ci] 不会产生任何部署运行，按原逻辑会白等 30 分钟才超时。缺运行的等待上限
@@ -29,7 +32,7 @@ async function waitForChecks({ repository, sha, token, apiUrl = 'https://api.git
       const response = await fetchImpl(url, { headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2026-03-10' }, signal: AbortSignal.timeout(20000) })
       if (!response.ok) throw new Error(`${workflow} 检查查询失败：HTTP ${response.status}`)
       const data = await response.json()
-      const state = assessRuns(data.workflow_runs, sha)
+      const state = assessRuns(data.workflow_runs, sha, { branch, events })
       if (state.state === 'failed') throw new Error(`${workflow} 在 ${sha} 的检查未通过：${state.run.conclusion}`)
       return { workflow, ...state }
     }))

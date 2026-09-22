@@ -72,19 +72,19 @@ test('发货契约支持按明细数量并兼容旧 itemIds', () => {
   assert.deepEqual(shipSaleSchema.parse({ itemIds: [3, 4] }).itemIds, [3, 4])
 })
 
-test('数量契约拒绝超过四位小数，避免数据库舍入成零', () => {
+test('数量契约拒绝超过两位小数，避免数据库舍入成零', () => {
   assert.throws(() => createSaleSchema.parse({
     customerId: 1,
     customerName: '客户',
     warehouseId: 2,
     warehouseName: '默认仓',
-    items: [{ ...baseItem, quantity: 0.00001 }],
-  }), /4 位小数/)
+    items: [{ ...baseItem, quantity: 0.001 }],
+  }), /2 位小数/)
   assert.throws(() => reserveSaleSchema.parse({
-    items: [{ id: 3, warehouseId: 9, warehouseName: '分仓', qty: 1.00001 }],
-  }), /4 位小数/)
-  assert.throws(() => shipSaleSchema.parse({ items: [{ id: 3, qty: 0.00001 }] }), /4 位小数/)
-  assert.equal(shipSaleSchema.parse({ items: [{ id: 3, qty: 9999999999.9999 }] }).items[0].qty, 9999999999.9999)
+    items: [{ id: 3, warehouseId: 9, warehouseName: '分仓', qty: 1.001 }],
+  }), /2 位小数/)
+  assert.throws(() => shipSaleSchema.parse({ items: [{ id: 3, qty: 0.001 }] }), /2 位小数/)
+  assert.equal(shipSaleSchema.parse({ items: [{ id: 3, qty: 9999999999.99 }] }).items[0].qty, 9999999999.99)
 })
 
 test('单位折算后不足最小库存精度时拒绝落库', async () => {
@@ -92,8 +92,8 @@ test('单位折算后不足最小库存精度时拒绝落库', async () => {
     query: async () => [[{ unit_name: '盒', conversion_rate: 0.01 }]],
   }
   await assert.rejects(
-    foldEntryItem(conn, { productId: 7, unit: '件', entryUnit: '盒', quantity: 0.0001, unitPrice: 10 }),
-    /折算后小于库存最小精度/,
+    foldEntryItem(conn, { productId: 7, unit: '件', entryUnit: '盒', quantity: 0.01, unitPrice: 10 }),
+    /最多保留 2 位小数/,
   )
 })
 

@@ -186,7 +186,7 @@ async function markFulfilled(conn, refType, refId, productId, warehouseId, qty =
        WHERE ref_type=? AND ref_id=? AND product_id=? AND warehouse_id=? AND status=1`,
       [refType, refId, productId, warehouseId],
     )
-    if (refType === 'sale_order') await reduceExpectedBindings(conn, { saleOrderId: refId, productId, warehouseId }, Number.MAX_SAFE_INTEGER / 10000)
+    if (refType === 'sale_order') await reduceExpectedBindings(conn, { saleOrderId: refId, productId, warehouseId }, Number.MAX_SAFE_INTEGER / 100)
     return
   }
 

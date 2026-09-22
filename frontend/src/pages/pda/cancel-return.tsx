@@ -315,7 +315,7 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
         )}
 
         <div>
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">待归还容器（{detail.containers.length}）</p>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">待归还库存条码（{detail.containers.length}）</p>
           {detail.containers.length === 0 && detail.packages.length === 0 && (
             <PdaEmptyCard icon={<CircleCheck className="h-12 w-12 text-green-600" />} title="已全部归还" description="任务即将自动取消" />
           )}

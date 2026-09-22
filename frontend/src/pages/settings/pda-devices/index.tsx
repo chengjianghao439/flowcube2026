@@ -244,7 +244,7 @@ export default function PdaDevicesPage() {
               </div>
               {typeof secretView.revokedSessions === 'number' && secretView.revokedSessions > 0 && (
                 <p className="text-xs text-destructive">
-                  已吊销该设备原有的 {secretView.revokedSessions} 个会话，这台机器需要重新绑定才能继续作业。
+                  已退出该设备原有的 {secretView.revokedSessions} 个登录，这台机器需要重新绑定才能继续作业。
                 </p>
               )}
             </div>

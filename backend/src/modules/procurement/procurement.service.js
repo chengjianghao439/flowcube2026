@@ -11,6 +11,7 @@ const { lockPlanning, roundPurchase } = require('./procurement.planning')
 const { beijingTodayYmd } = require('../../utils/backendTime')
 const { getPolicy } = require('./procurement.policies')
 const { normalizePagination } = require('../../utils/pagination')
+const { assertQtyScale, assertQtyPrecision } = require('../../utils/qtyPrecision')
 
 const PLAN_STATUS = { DRAFT: 1, PARTIAL: 2, DONE: 3, VOID: 4 }
 const PLAN_STATUS_NAME = { 1: '草稿', 2: '部分转采购', 3: '已完成', 4: '已作废' }
@@ -140,7 +141,7 @@ async function getPlan(id, scopeWarehouseIds = null) {
     const current = liveMap.get(`${r.product_id}-${r.warehouse_id}`)
     const packMultiple = Number(r.policy_pack) * Number(r.policy_rate), minimumOrderQty = Number(r.policy_minimum) * Number(r.policy_rate)
     const suggestedQty = roundPurchase(current?.netRequirement || 0, packMultiple, minimumOrderQty)
-    return { ...fmtItem(r), currentSupply: current ? { ...current, supplierId: r.supplier_id, supplierName: r.supplier_name, entryUnit: r.policy_entry_unit || r.unit, conversionRate: Number(r.policy_rate), packMultiple, minimumOrderQty, suggestedQty, excessQty: Math.round((suggestedQty - current.netRequirement) * 10000) / 10000 } : null }
+    return { ...fmtItem(r), currentSupply: current ? { ...current, supplierId: r.supplier_id, supplierName: r.supplier_name, entryUnit: r.policy_entry_unit || r.unit, conversionRate: Number(r.policy_rate), packMultiple, minimumOrderQty, suggestedQty, excessQty: Math.round((suggestedQty - current.netRequirement) * 100) / 100 } : null }
   }) }
 }
 
@@ -160,8 +161,10 @@ async function updatePlanItem(planId, itemId, { adjustedQty, supplierId, ignore 
     const sets = []
     const params = []
     if (adjustedQty != null) {
+      assertQtyScale(adjustedQty, '调整数量')
       const q = Number(adjustedQty)
       if (!Number.isFinite(q) || q < 0) throw new AppError('调整数量不能为负', 400)
+      await assertQtyPrecision(conn, [{ productId: item.product_id, qty: q, label: '调整数量' }])
       sets.push('adjusted_qty = ?'); params.push(q)
     }
     if (supplierId !== undefined) {

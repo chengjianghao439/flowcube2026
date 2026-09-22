@@ -402,7 +402,7 @@ export default function InventoryPage() {
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2"><Label>数量 *</Label><Input type="number" step={qtyStep(allowDecimalOf(Number(form.productId) || 0))} min="0" value={form.quantity} onChange={e => setF('quantity', e.target.value)} disabled={isPending} /></div>
+              <div className="space-y-2"><Label>数量 *</Label><Input quantity type="number" step={qtyStep(allowDecimalOf(Number(form.productId) || 0))} min="0" value={form.quantity} onChange={e => setF('quantity', e.target.value)} disabled={isPending} /></div>
               <div className="space-y-2"><Label>单价</Label><Input type="number" step="0.01" min="0" value={form.unitPrice} onChange={e => setF('unitPrice', e.target.value)} disabled={isPending} placeholder="选填" /></div>
             </div>
             <div className="space-y-2"><Label>备注</Label><Input value={form.remark} onChange={e => setF('remark', e.target.value)} disabled={isPending} placeholder="选填" /></div>

@@ -16,6 +16,9 @@ RUN mkdir -p /app && chown -R node:node /app
 WORKDIR /app
 COPY backend/package*.json ./
 RUN npm ci --omit=dev
+# 页面验收依赖在 CI 安装并随镜像交付；生产不再访问 npm registry。
+COPY scripts/browser-smoke/package*.json /opt/flowcube-browser-smoke/
+RUN npm ci --prefix /opt/flowcube-browser-smoke --omit=dev --ignore-scripts
 COPY --chown=node:node backend/ .
 # Fail the image build if the native renderer or bundled Chinese font is missing.
 RUN node scripts/check-label-renderer.cjs

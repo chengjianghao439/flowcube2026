@@ -24,3 +24,8 @@ test('查价未结束或失败时必须确认，空占位行的旧查价状态�
  expect(collectOrderIssues({ ...valid, priceErrors: { 7: '请手动确认单价' } })[0].message).toContain('请手动确认单价')
  expect(collectOrderIssues({ ...valid, priceErrors: { 8: '失败' } })).toEqual([])
 })
+
+test('销售提交拒绝三位以上数量，四位单价仍然合法', () => {
+ expect(collectOrderIssues({ ...valid, items: [{ ...row, quantity: 1.234, unitPrice: 1.2345 }] }).map(x => x.target)).toEqual(['item-7-quantity'])
+ expect(collectOrderIssues({ ...valid, items: [{ ...row, quantity: 1.23, unitPrice: 1.2345 }] })).toEqual([])
+})

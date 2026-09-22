@@ -183,7 +183,7 @@ export default function CreateDisposalDialog({ open, onClose }: Props) {
                     <ProductIdentityGridCells product={r.suggestion} />
                     <div className="">
                       <div className="flex items-center gap-1">
-                        <Input
+                        <Input quantity
                           type="number" min="0" step={qtyStep(allowDecimalOf(r.suggestion.productId))} className="h-8 text-sm"
                           title={`在库 ${r.suggestion.totalQty} ${r.suggestion.unit}，成本 ¥${r.suggestion.unitValue}`}
                           value={r.quantity}

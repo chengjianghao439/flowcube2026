@@ -1,3 +1,4 @@
+import { hasQuantityPrecision } from './qtyStep'
 export interface EntryIssue { target: string; message: string; itemKey?: number }
 interface EntryItem { _key: number; productId: number; productName?: string; quantity: number; unitPrice: number }
 interface EntryInput {
@@ -18,6 +19,7 @@ export function collectOrderIssues(input: EntryInput): EntryIssue[] {
     const add = (field: string, message: string) => issues.push({ target: `item-${item._key}-${field}`, itemKey: item._key, message: `第 ${index + 1} 行${item.productName ? `（${item.productName}）` : ''}：${message}` })
     if (!(item.productId > 0)) { if (!sale) add('product', '请选择商品'); return }
     if (!Number.isFinite(item.quantity) || item.quantity <= 0 || (!sale && !Number.isInteger(item.quantity))) add('quantity', sale ? '数量必须大于 0' : '数量必须为大于 0 的整数')
+    else if (!hasQuantityPrecision(item.quantity)) add('quantity', '数量最多保留两位小数')
     if (!Number.isFinite(item.unitPrice) || (sale ? item.unitPrice <= 0 : item.unitPrice < 0)) add('price', sale ? '单价必须大于 0' : '单价必须为不小于 0 的有效数字')
     else if (input.priceLoading?.[item._key]) add('price', '正在查询价格，请稍候')
     else if (input.priceErrors?.[item._key]) add('price', input.priceErrors[item._key])

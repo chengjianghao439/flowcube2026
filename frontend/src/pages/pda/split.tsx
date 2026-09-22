@@ -123,7 +123,7 @@ export default function PdaSplitPage() {
             <p className="text-xs text-muted-foreground">剩余可拆：<span className="font-semibold text-foreground">{remaining}</span></p>
             <div className="space-y-1">
               <label className="text-xs text-muted-foreground">拆分数量</label>
-              <Input
+              <Input quantity step="1"
                 type="number"
                 inputMode="decimal"
                 min={1}

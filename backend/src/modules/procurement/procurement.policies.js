@@ -1,6 +1,7 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
-const { resolveConversionRate, roundQty } = require('../../utils/unitConversion')
+const { resolveConversionRate } = require('../../utils/unitConversion')
+const { assertQtyScale, assertQtyPrecision } = require('../../utils/qtyPrecision')
 const { lockPlanning } = require('./procurement.planning')
 
 async function getPolicy(productId, supplierId, conn = pool) {
@@ -21,9 +22,15 @@ async function savePolicy({ productId, supplierId, entryUnit, packMultiple = 0, 
     if (!supplier) throw new AppError('供应商不存在或已停用', 400)
     const policy = await getPolicy(productId, supplierId, conn)
     const rate = await resolveConversionRate(conn, productId, entryUnit, policy.baseUnit)
-    for (const q of [packMultiple, minimumOrderQty]) {
-      if (!Number.isFinite(Number(q)) || Number(q) < 0 || (Number(q) > 0 && roundQty(Number(q) * rate) <= 0)) throw new AppError('包装倍数或起订量无效', 400)
+    const quantities = []
+    for (const [q, label] of [[packMultiple, '包装倍数'], [minimumOrderQty, '起订量']]) {
+      assertQtyScale(q, label)
+      if (Number(q) < 0) throw new AppError('包装倍数或起订量无效', 400)
+      const baseQty = Number(q) * rate
+      assertQtyScale(baseQty, `${label}折算数量`)
+      quantities.push({ productId, qty: baseQty, label: `${label}折算数量` })
     }
+    await assertQtyPrecision(conn, quantities)
     await conn.query(`INSERT INTO supplier_product_purchase_policies (product_id,supplier_id,entry_unit,pack_multiple,minimum_order_qty) VALUES (?,?,?,?,?) ON DUPLICATE KEY UPDATE entry_unit=VALUES(entry_unit),pack_multiple=VALUES(pack_multiple),minimum_order_qty=VALUES(minimum_order_qty)`, [productId, supplierId, entryUnit, packMultiple, minimumOrderQty])
     await conn.commit()
     return getPolicy(productId, supplierId)

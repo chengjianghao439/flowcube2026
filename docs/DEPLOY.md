@@ -56,16 +56,16 @@
 npm run release:prod
 ```
 
-这个入口推送 main 并打桌面 tag，分别进入以下发布链：
+这个入口推送 main，等待同 SHA 的检查、浏览器部署、PDA 发布和桌面验证构建全部成功，再打桌面 tag 并等待实际发布；最后执行线上版本与安装包 SHA256 核对。正常成功目标 15 分钟，异常网络与回退保留独立预算，详见 `docs/release-flow-speed-2026-09-22.md`。以下各链的关系为：
 
 1. `git push origin main`
    - 触发 `Deploy Browser App`
    - 等待同一 SHA、main 可信事件的 `Tests` 与 `Security Scan` 最新运行成功，失败/取消/超时不得部署
    - GitHub Actions 解析部署配置后 SSH 到服务器，在重置代码前获取部署锁，固定实际 SHA
-   - GitHub runner 通过 `scripts/build-deploy-images.sh` 构建 Linux amd64 镜像、写 OCI revision 标签并打包；`server-update.sh` 保存旧运行镜像 ID，验证归档 SHA-256 / 镜像 revision，加载镜像、等 MySQL 健康、一次性容器迁移，再切换应用并执行本地/公网健康与页面门禁。生产不再编译
+   - GitHub runner 通过 `scripts/build-deploy-images.sh` 构建 Linux amd64 镜像、写 OCI revision 标签并打包；优先让服务器 HTTPS 拉取临时 artifact，失败明确回退并行 SCP；`server-update.sh` 保存旧运行镜像 ID，验证归档 SHA-256 / 镜像 revision，加载镜像、等 MySQL 健康、一次性容器迁移，再切换应用并执行本地/公网健康与页面门禁。生产不再编译
    - 迁移前失败或数据库兼容的应用失败恢复旧镜像；迁移未完整成功、首次引入 240 记账契约后的本次失败均保持后端停写，核实迁移并启动兼容新后端。DDL 不自动回滚。
 
-2. `npm run release:tag-desktop`
+2. 同 SHA 浏览器和 PDA 工作流均已成功后，`npm run release:tag-desktop`
    - 自动读取 `desktop/package.json` 的 `version`
    - 推送对应 `v<version>` tag
    - 触发 `Build Desktop Installer`

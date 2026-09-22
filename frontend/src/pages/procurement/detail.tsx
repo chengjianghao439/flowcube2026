@@ -1,4 +1,6 @@
 import { qty as num } from '@/lib/format'
+import { useProductQtyPolicies } from '@/hooks/useProductQtyPolicies'
+import { qtyStep } from '@/lib/qtyStep'
 import { ProcurementArrivalStatus } from '@/components/shared/ProcurementSupplyExplanation'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { formatDisplayDateTime } from '@/lib/dateTime'
@@ -63,6 +65,7 @@ export default function ProcurementPlanDetailPage() {
   })
 
   const items = useMemo(() => plan?.items ?? [], [plan])
+  const allowDecimalOf = useProductQtyPolicies(items.map(item => item.productId))
   const pendingIds = useMemo(() => items.filter(i => i.status === 1).map(i => i.id), [items])
   const editable = canManage && plan && (plan.status === 1 || plan.status === 2)
 
@@ -136,7 +139,7 @@ export default function ProcurementPlanDetailPage() {
                   <td className="px-3 py-2 text-right tabular-nums">{it.currentSupply ? `${num(it.currentSupply.netRequirement)} / ${num(it.currentSupply.suggestedQty)}` : '当前需求暂不可用'}</td>
                   <td className="px-3 py-2 text-right">
                     {editable && pending
-                      ? <Input type="number" defaultValue={it.adjustedQty} key={`${it.id}-${it.adjustedQty}`} className="ml-auto h-8 w-24 text-right tabular-nums"
+                      ? <Input quantity type="number" step={qtyStep(allowDecimalOf(it.productId))} defaultValue={it.adjustedQty} key={`${it.id}-${it.adjustedQty}`} className="ml-auto h-8 w-24 text-right tabular-nums"
                           onBlur={(e) => { const v = Number(e.target.value); if (Number.isFinite(v) && v >= 0 && v !== it.adjustedQty) updateItem.mutate({ itemId: it.id, patch: { adjustedQty: v } }) }} />
                       : <span className="tabular-nums">{num(it.adjustedQty)} {it.unit}</span>}
                   </td>

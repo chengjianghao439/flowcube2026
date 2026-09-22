@@ -54,8 +54,8 @@
     "test:pda-scan-focus": "node tests/pda-scan-focus-contract.test.js",
     "test:pda-list-refresh": "node tests/pda-list-refresh-contract.test.js",
     "test:api-route-contract": "node tests/api-route-contract.test.js",
-    "test:copy-conventions": "node tests/copy-conventions.test.js",
-    "test:qty-precision": "node --test tests/qty-precision.test.js",
+    "test:copy-conventions": "node tests/copy-conventions.test.js && node --test tests/copy-conventions-parser.test.js",
+    "test:qty-precision": "node --test tests/qty-precision.test.js tests/qty-execution-boundaries.test.js tests/product-qty-policy-route.test.js tests/qty-policy-settings.test.js tests/scan-qty-comparison.test.js tests/container-qty-allocation.test.js",
     "test:query-loop": "node tests/query-loop-contract.test.js",
     "test:warehouse-scan-closure": "node --test tests/warehouse-scan-closure.test.js",
     "test:chart-series-limit": "node --test tests/chart-series-limit-contract.test.js",
@@ -70,7 +70,8 @@
     "smoke:operation-request-concurrency": "node tests/operation-request-concurrency.smoke.test.js",
     "test:accounting": "node tests/accounting-voucher-mapping.test.js",
     "test:sale-revenue-discount": "node tests/sale-revenue-discount.test.js",
-    "test:audit-tooling": "node --test tests/audit-tooling.test.js tests/audit-deployment.test.js tests/smoke-credentials.test.js",
+    "test:audit-tooling": "node --test tests/audit-tooling.test.js tests/audit-deployment.test.js tests/smoke-credentials.test.js tests/browser-smoke-runtime.test.js tests/deploy-artifact.test.js tests/release-orchestration.test.js",
+    "test:browser-smoke": "node --test tests/browser-smoke-live.test.js",
     "test:release-tooling": "node --test tests/release-asset-publish.test.js tests/release-live-verify.test.js",
     "release:verify": "node scripts/verify-live-release.cjs",
     "test:audit-client": "node --test tests/audit-desktop.test.js tests/audit-return-putaway.test.js tests/audit-pda-publish.test.js",
@@ -123,6 +124,7 @@
     "test:procurement-planning": "node --test tests/procurement-planning.test.js",
     "smoke:procurement-planning": "node --test tests/procurement-planning.smoke.test.js",
     "test:qty-precision-coverage": "node --test tests/qty-precision-coverage.test.js",
-    "test:frontend-conventions": "node --test tests/frontend-conventions.test.js"
+    "test:frontend-conventions": "node --test tests/frontend-conventions.test.js",
+    "smoke:qty-precision": "node --test tests/qty-precision.smoke.test.js"
   }
 }
