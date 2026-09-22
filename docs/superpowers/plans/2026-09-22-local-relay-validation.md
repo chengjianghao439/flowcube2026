@@ -7,8 +7,8 @@
 - [x] 正式入口支持显式启用、推前预检、Mac 防睡眠与退出清理；ready 后等待接收完成。
 - [x] 完成本地发布工具、部署资源、技能/文档守卫与反向测试；核对实际 SSH/API 前置条件。
 - [x] 更新 v0.10.4 说明、三端/PDA 版本和官网摘要，逐路径提交。
-- [ ] 正式入口发版，跟踪同 SHA CI、三类中转、tag、GitHub Release 和线上下载摘要。
-- [ ] 记录首次启动至完成耗时、各阶段耗时、失败/回退、资源收尾与未覆盖真机验收。
+- [x] 正式入口发版，跟踪同 SHA CI、三类中转、tag、GitHub Release 和线上下载摘要。
+- [x] 记录首次启动至完成耗时、各阶段耗时、失败/回退、资源收尾与未覆盖真机验收。
 
 测试：`npm run test:release-tooling`、`npm run test:audit-tooling`、`node --test tests/deployment-resources.test.js`、`npm run test:agents-md-guard`、`npm run test:landing-updates`、`bash -n scripts/release-prod.sh`、`git diff --check`。
 
@@ -21,3 +21,5 @@
 应用提交 `48ee3d406300a3f78bf4abbab773ec9e8cabb965` 于 03:28:54 UTC 开始。Tests、Security、桌面 main 验证通过，APK 已构建。镜像下载使用分批屏障，少数慢分片阻塞下一批；205 MB 原始 ZIP 未能在旧接收窗口内就绪。主动取消浏览器运行 `35683308441` 和等待中的 PDA `35683308399`，未推 tag；首轮不能记为全绿。
 
 新增慢分片不阻塞后续工作的行为回归，已证实旧实现失败。改为固定 worker 持续补位，URL 缓存最多 30 秒及失败刷新，接收窗口 900 秒、远程接收 1100 秒，部署步骤/job 和 PDA 等待预算联动调整并由守卫从源码计算。首轮耗时和取消记录必须计入最终总时长。
+
+最终第二轮全绿，线上 12/12 核验，详情见 [发布实测结果](../../release-v0.10.4-result.md)。包含修复的首次入口至完成 31 分 08 秒，第二轮入口 17 分 42 秒。
