@@ -1,4 +1,5 @@
 const svc = require('./print-jobs.service')
+const AppError = require('../../utils/AppError')
 const { successResponse } = require('../../utils/response')
 
 async function list(req, res, next) {
@@ -25,8 +26,13 @@ async function detail(req, res, next) {
 
 async function create(req, res, next) {
   try {
+    // 业务引用必须由对应业务打印入口读取真实来源，不能由原始打印载荷伪造。
+    if (['refType', 'refId', 'refCode'].some(key => req.body?.[key] != null)) {
+      throw new AppError('业务标签请使用对应业务打印入口', 400, 'PRINT_BUSINESS_REFERENCE_FORBIDDEN')
+    }
     const job = await svc.create({
       ...req.body,
+      scopeWarehouseIds: req.user?.warehouseIds ?? null,
       createdBy: req.user?.userId ?? req.user?.id,
     })
     return successResponse(res, job, '创建成功', 201)
@@ -39,6 +45,7 @@ async function claimClientJobs(req, res, next) {
     const clientId = String(body.clientId || '').trim()
     return successResponse(res, await svc.claimClientJobs({
       clientId,
+      scopeWarehouseIds: req.user?.warehouseIds ?? null,
       limit: Number(body.limit) || 3,
     }))
   } catch (e) { next(e) }
@@ -76,6 +83,7 @@ async function reprintBarcode(req, res, next) {
     const job = await svc.reprintBarcodeRecord({
       category: body.category,
       recordId: body.recordId,
+      scopeWarehouseIds: req.user?.warehouseIds ?? null,
       createdBy: req.user?.userId ?? req.user?.id ?? null,
     })
     if (!job) {
@@ -110,7 +118,7 @@ async function printerHealth(req, res, next) {
 
 async function complete(req, res, next) {
   try {
-    return successResponse(res, await svc.complete(+req.params.id, req.body || {}))
+    return successResponse(res, await svc.complete(+req.params.id, req.body || {}, req.user?.warehouseIds ?? null))
   } catch (e) {
     next(e)
   }
@@ -119,7 +127,7 @@ async function complete(req, res, next) {
 /** 桌面端本机打印后核销队列（需具备打印客户端消费权限） */
 async function completeLocal(req, res, next) {
   try {
-    return successResponse(res, await svc.completeLocalDesktop(+req.params.id))
+    return successResponse(res, await svc.completeLocalDesktop(+req.params.id, req.user?.warehouseIds ?? null))
   } catch (e) {
     next(e)
   }
@@ -127,7 +135,7 @@ async function completeLocal(req, res, next) {
 
 async function fail(req, res, next) {
   try {
-    return successResponse(res, await svc.fail(+req.params.id, req.body))
+    return successResponse(res, await svc.fail(+req.params.id, req.body, req.user?.warehouseIds ?? null))
   } catch (e) {
     next(e)
   }
@@ -135,7 +143,7 @@ async function fail(req, res, next) {
 
 async function retry(req, res, next) {
   try {
-    return successResponse(res, await svc.retry(+req.params.id))
+    return successResponse(res, await svc.retry(+req.params.id, req.user?.warehouseIds ?? null))
   } catch (e) {
     next(e)
   }

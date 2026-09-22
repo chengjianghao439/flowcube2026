@@ -63,6 +63,14 @@ function assertInScope(warehouseIds, targetWarehouseId, entityName = '该单据'
   }
 }
 
+/** 全局设备/打印任务没有混单明细兜底：无仓资源只允许不限仓用户。 */
+function assertBoundWarehouseInScope(warehouseIds, targetWarehouseId, entityName) {
+  if (Array.isArray(warehouseIds) && targetWarehouseId == null) {
+    throw new AppError(`无权访问不限仓的${entityName}`, 403, 'WAREHOUSE_SCOPE_DENIED')
+  }
+  assertInScope(warehouseIds, targetWarehouseId, entityName)
+}
+
 /**
  * 调拨的 scope 判定：源仓或目标仓任一在范围内即可见。
  * 调拨天然跨仓，若要求两端都在 scope 内，发货方就看不见自己发出的单子。
@@ -90,6 +98,7 @@ module.exports = {
   clearScopeCache,
   scopeFilter,
   assertInScope,
+  assertBoundWarehouseInScope,
   transferScopeFilter,
   assertTransferInScope,
 }

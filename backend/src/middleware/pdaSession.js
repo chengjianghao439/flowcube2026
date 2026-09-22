@@ -106,6 +106,10 @@ function pdaSessionRequired() {
       return denySession(req, next, 'device_not_active', '该 PDA 设备已被停用，请联系管理员')
     }
 
+    if (Number(row.session_warehouse_id || 0) !== Number(row.device_warehouse_id || 0)) {
+      return denySession(req, next, 'warehouse_changed', '该设备仓库已变更，请重新绑定')
+    }
+
     req.pda = buildPdaContext(row)
     try {
       await pool.query('UPDATE pda_device_sessions SET last_seen_at = NOW() WHERE id = ?', [req.pda.sessionId])

@@ -1,7 +1,10 @@
 import { payloadClient as client } from './client'
+import { recordIdentityByFields } from './allRecords'
 
 import type { BarcodePrintCategory, BarcodePrintRecordPage } from '@/types/print-jobs'
 import type { PrintQueueDispatchHint } from '@/lib/printQueue'
+
+const barcodeRecordIdentity = recordIdentityByFields('category', 'recordId')
 
 export const getBarcodePrintRecordsApi = (params: {
   category: BarcodePrintCategory
@@ -12,7 +15,7 @@ export const getBarcodePrintRecordsApi = (params: {
   inboundTaskId?: number
   inboundTaskItemId?: number
 }) =>
-  client.get<BarcodePrintRecordPage>('/print-jobs/barcodes', { params })
+  client.get<BarcodePrintRecordPage>('/print-jobs/barcodes', { params }, barcodeRecordIdentity)
 
 export const reprintBarcodeRecordApi = (data: {
   category: BarcodePrintCategory

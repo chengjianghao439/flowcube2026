@@ -1,4 +1,5 @@
 const { pool } = require('../../config/db')
+const { assertBoundWarehouseInScope } = require('../../utils/warehouseScope')
 const AppError = require('../../utils/AppError')
 
 const SAFE_PRINTER_CODE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,49}$/
@@ -10,9 +11,10 @@ const SAFE_STATION_CLIENT_ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$/
 async function validateJobPrinterHeader(req, res, next) {
   try {
     const jobId = +req.params.id
-    const [[job]] = await pool.query('SELECT printer_id FROM print_jobs WHERE id=?', [jobId])
+    const [[job]] = await pool.query('SELECT printer_id, warehouse_id FROM print_jobs WHERE id=?', [jobId])
     if (!job) return next(new AppError('打印任务不存在', 404))
 
+    assertBoundWarehouseInScope(req.user?.warehouseIds ?? null, job.warehouse_id, '打印任务')
     const stationHeader = String(req.headers['x-client-id'] || '').trim()
     if (stationHeader) {
       if (!SAFE_STATION_CLIENT_ID.test(stationHeader)) {

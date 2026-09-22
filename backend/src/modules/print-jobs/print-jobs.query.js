@@ -1,7 +1,7 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { getInboundClosureThresholds } = require('../../utils/inboundThresholds')
-const { assertInScope } = require('../../utils/warehouseScope')
+const { assertBoundWarehouseInScope } = require('../../utils/warehouseScope')
 const { fmt } = require('./print-jobs.helpers')
 const {
   STATUS,
@@ -63,7 +63,7 @@ async function findAll({ printerId, status, page = 1, pageSize = 50, scopeWareho
 
 async function findById(id, scopeWarehouseIds = null) {
   const job = await findByIdWithExecutor(pool, id)
-  assertInScope(scopeWarehouseIds, job.warehouseId, '打印任务')
+  assertBoundWarehouseInScope(scopeWarehouseIds, job.warehouseId, '打印任务')
   return job
 }
 

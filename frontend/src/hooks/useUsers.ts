@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   getUsersApi,
+  getAssignableRolesApi,
   createUserApi,
   updateUserApi,
   resetPasswordApi,
@@ -48,4 +49,8 @@ export function useDeleteUser() {
     mutationFn: (id: number) => deleteUserApi(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: [QUERY_KEY] }),
   })
+}
+
+export function useAssignableRoles(enabled = true) {
+  return useQuery({ queryKey: ['assignable-roles'], queryFn: getAssignableRolesApi, enabled })
 }

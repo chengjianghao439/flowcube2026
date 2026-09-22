@@ -7,6 +7,7 @@ import { API_BASE_STORAGE_KEY, isHealthyApiPayload, normalizeApiBase } from '@/c
 import { ERP_PRODUCTION_ORIGIN, PDA_FALLBACK_API_ORIGIN } from '@/config/env'
 import { useAuthStore } from '@/store/authStore'
 import { toast } from '@/lib/toast'
+import { getDeviceSession } from '@/lib/pdaDeviceBinding'
 import { getHashRouterWindowLocation } from '@/router/hashLocation'
 
 /** 标签打印机 ID（数字），供 window.printLabel 提交 print-jobs */
@@ -200,6 +201,7 @@ export function installPdaGlobals(): void {
         '/print-jobs',
         {
           printerId: pid,
+          warehouseId: getDeviceSession()?.warehouseId ?? null,
           title: 'PDA 标签',
           content: body,
           contentType: 'zpl',

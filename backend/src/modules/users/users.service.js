@@ -6,10 +6,37 @@ const { normalizePagination } = require('../../utils/pagination')
 // roleId=1 是超管，跳过全部权限校验（前后端都是）。允许创建/改到超管的唯一入口是
 // 调用方自己就是超管——否则任何一个有 user.create / user.update 权限的普通角色
 // 都能把自己的账号（或同伙的）提到超管，等于绕开整个权限体系。
-function assertCanAssignRole(operator, targetRoleId) {
-  if (Number(targetRoleId) !== 1) return
+async function assertCanAssignRole(operator, targetRoleId, db = pool) {
+  if (targetRoleId === undefined) return
+  const [[role]] = await db.query('SELECT id FROM sys_roles WHERE id=? FOR UPDATE', [targetRoleId])
+  if (!role) throw new AppError('角色不存在，请刷新后重试', 400, 'ROLE_NOT_FOUND')
   if (Number(operator?.roleId) === 1) return
-  throw new AppError('只有超级管理员可以授予或变更为超级管理员角色', 403, 'ROLE_ASSIGN_DENIED')
+  if (Number(targetRoleId) === 1) throw new AppError('只有超级管理员可以授予管理员角色', 403, 'ROLE_ASSIGN_DENIED')
+  const [missing] = await db.query(
+    `SELECT permission FROM sys_role_permissions
+     WHERE role_id=? AND permission NOT IN (SELECT permission FROM sys_role_permissions WHERE role_id=?) LIMIT 1`,
+    [targetRoleId, Number(operator?.roleId) || 0],
+  )
+  if (missing.length) throw new AppError('不能授予超出自身权限的角色，请联系超级管理员', 403, 'ROLE_ASSIGN_DENIED')
+}
+
+async function listAssignableRoles(operator) {
+  if (Number(operator?.roleId) === 1) {
+    const [rows] = await pool.query('SELECT id,name FROM sys_roles WHERE id<>1 ORDER BY id')
+    return rows
+  }
+  const [allowed] = await pool.query(
+    "SELECT permission FROM sys_role_permissions WHERE role_id=? AND permission IN ('user.create','user.update') LIMIT 1", [operator?.roleId],
+  )
+  if (!allowed.length) throw new AppError('无用户管理权限', 403, 'PERMISSION_DENIED')
+  const [rows] = await pool.query(
+    `SELECT r.id,r.name FROM sys_roles r WHERE r.id<>1 AND NOT EXISTS (
+      SELECT 1 FROM sys_role_permissions target WHERE target.role_id=r.id AND NOT EXISTS (
+        SELECT 1 FROM sys_role_permissions actor WHERE actor.role_id=? AND actor.permission=target.permission
+      )
+    ) ORDER BY r.id`, [operator.roleId],
+  )
+  return rows
 }
 
 // 「允许自行审批」豁免的是全站审批内控（申请人不得批自己的单），与角色授予同属提权动作：
@@ -98,44 +125,35 @@ async function findById(id) {
 }
 
 async function resolveRoleName(roleId, db = pool) {
-  try {
-    const [[role]] = await db.query(
-      'SELECT name FROM sys_roles WHERE id=? LIMIT 1',
-      [roleId],
-    )
-    if (role?.name) return role.name
-  } catch (error) {
-    if (!error || error.code !== 'ER_NO_SUCH_TABLE') throw error
-  }
-
-  const ROLE_NAMES = {
-    1: '管理员',
-    2: '仓库管理员',
-    3: '采购员',
-    4: '销售员',
-    5: '只读用户',
-  }
-  return ROLE_NAMES[roleId] ?? '普通用户'
+  const [[role]] = await db.query('SELECT name FROM sys_roles WHERE id=?', [roleId])
+  if (!role) throw new AppError('角色不存在，请刷新后重试', 400, 'ROLE_NOT_FOUND')
+  return role.name
 }
 
 async function create({ username, password, realName, roleId, departmentId = null }, operator = null) {
-  assertCanAssignRole(operator, roleId)
-  const [exists] = await pool.query(
-    'SELECT id FROM sys_users WHERE username = ? AND deleted_at IS NULL',
-    [username],
-  )
-  if (exists.length > 0) throw new AppError('账号已存在', 400)
-
-  const roleName = await resolveRoleName(roleId)
   const hashed = await bcrypt.hash(password, 10)
-  if (departmentId) await assertDepartmentExists(departmentId)
-
-  const [result] = await pool.query(
-    `INSERT INTO sys_users (username, password, real_name, role_id, role_name, department_id)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [username, hashed, realName, roleId, roleName, departmentId || null],
-  )
-  return { id: result.insertId }
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const [[actor]] = await conn.query('SELECT role_id,is_active,deleted_at FROM sys_users WHERE id=? FOR UPDATE', [operator?.userId])
+    if (!actor || !actor.is_active || actor.deleted_at) throw new AppError('操作人账号不可用', 403, 'USER_OPERATOR_INACTIVE')
+    await assertCanAssignRole({ ...operator, roleId: Number(actor.role_id) }, roleId, conn)
+    const [exists] = await conn.query('SELECT id FROM sys_users WHERE username=? AND deleted_at IS NULL', [username])
+    if (exists.length) throw new AppError('账号已存在', 400)
+    const roleName = await resolveRoleName(roleId, conn)
+    if (departmentId) await assertDepartmentExists(departmentId, conn)
+    const [result] = await conn.query(
+      'INSERT INTO sys_users (username,password,real_name,role_id,role_name,department_id) VALUES (?,?,?,?,?,?)',
+      [username, hashed, realName, roleId, roleName, departmentId || null],
+    )
+    // 范围无行代表不限仓：限仓操作人新建账号必须继承范围，不能借新账号绕过限仓。
+    if (Number(actor.role_id) !== 1) {
+      await conn.query(`INSERT INTO user_warehouse_scope (user_id, warehouse_id)
+        SELECT ?, warehouse_id FROM user_warehouse_scope WHERE user_id=?`, [result.insertId, operator.userId])
+    }
+    await conn.commit()
+    return { id: result.insertId }
+  } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
 }
 
 // 锁定操作人和目标账号后读取真实角色；顺序一致避免双方互相编辑时 ABBA 死锁。
@@ -164,7 +182,11 @@ async function withLockedTarget(id, operator, action) {
 
 async function update(id, { realName, roleId, isActive, departmentId, allowSelfApprove }, operator = null) {
   return withLockedTarget(id, operator, async (conn, user, actor) => {
-    assertCanAssignRole(actor, roleId)
+    const changingRole = roleId !== undefined && Number(roleId) !== Number(user.role_id)
+    if (changingRole && Number(actor.roleId) !== 1 && Number(actor.userId) === Number(user.id)) {
+      throw new AppError('不能修改自己的角色，请联系超级管理员', 403, 'USER_ROLE_SELF_FORBIDDEN')
+    }
+    if (changingRole) await assertCanAssignRole(actor, roleId, conn)
     assertCanGrantSelfApprove(actor, allowSelfApprove)
     // roleId 可省略（编辑超管账号时不传）；省略则保持锁定读取的原角色。
     const finalRoleId = roleId !== undefined ? roleId : user.role_id
@@ -227,10 +249,15 @@ async function setWarehouseScope(userId, warehouseIds, operator = null) {
     if (Number(actor.roleId) !== 1 && Number(target.id) === Number(actor.userId)) {
       throw new AppError('不能修改自己的仓库数据权限，请联系超级管理员', 403, 'USER_SCOPE_SELF_FORBIDDEN')
     }
-    await conn.query('DELETE FROM user_warehouse_scope WHERE user_id = ?', [target.id])
-    for (const wid of ids) {
-      await conn.query('INSERT INTO user_warehouse_scope (user_id, warehouse_id) VALUES (?, ?)', [target.id, wid])
+    if (Number(actor.roleId) !== 1) {
+      const [scope] = await conn.query('SELECT warehouse_id FROM user_warehouse_scope WHERE user_id=?', [actor.userId])
+      const allowed = new Set(scope.map(row => Number(row.warehouse_id)))
+      if (allowed.size && (!ids.length || ids.some(id => !allowed.has(id)))) {
+        throw new AppError('不能授予超出自身仓库范围的数据权限', 403, 'USER_SCOPE_GRANT_DENIED')
+      }
     }
+    await conn.query('DELETE FROM user_warehouse_scope WHERE user_id = ?', [target.id])
+    if (ids.length) await conn.query('INSERT INTO user_warehouse_scope (user_id, warehouse_id) VALUES ?', [ids.map(wid => [target.id, wid])])
     return { userId: Number(target.id), warehouseIds: ids }
   }).then((result) => {
     require('../../utils/warehouseScope').clearScopeCache(userId)
@@ -238,4 +265,4 @@ async function setWarehouseScope(userId, warehouseIds, operator = null) {
   })
 }
 
-module.exports = { findAll, listOptions, findById, create, update, resetPassword, softDelete, getWarehouseScope, setWarehouseScope }
+module.exports = { listAssignableRoles, findAll, listOptions, findById, create, update, resetPassword, softDelete, getWarehouseScope, setWarehouseScope }

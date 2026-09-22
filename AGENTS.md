@@ -25,7 +25,7 @@
 - **销售收入凭证**按已发原值占比净额化折扣、税额夹到折后净额；退货冲回成本用 `COALESCE(soi.cost_snapshot,0)` 且去掉 `product_items` JOIN，兜底留给 `reports.query.js`（`voucher-engine.js`）
 - **采购结算毛额子查询必须按 `(order_id, product_id)` 关联并先跑来源断言**，脏单抛 `INBOUND_PURCHASE_SOURCE_INVALID` / `PURCHASE_LEGACY_RECEIPT_UNRECONCILED`（`voucher-engine.js`）
 - **移库/拆分必须 `assertInScope`**（移库还须目标库位同仓）；`resync-stock` 是写操作，走 `inventory.adjust`（`inventory.controller.js`、`inventory.service.js`）
-- **仓库范围写路由必须行锁、禁止自我提权**：`USER_SCOPE_SELF_FORBIDDEN`（`PUT /users/:id/warehouse-scope`）
+- **仓库范围写路由必须行锁、禁止自我提权，限仓创建账号继承范围、代授权不得超出自身范围**：`USER_SCOPE_SELF_FORBIDDEN`（`PUT /users/:id/warehouse-scope`）
 - **范围校验必须覆盖读写路径**：`scan-logs` 四条写路径、`POST /admin/putaway`、`findMyTasks`/`findMyTaskSkuSummary`/`getTaskStats`（空范围返回空）
 - **范围校验还必须覆盖**：`GET /products/finder`、`GET /containers/overdue`、`GET /returns/{purchase,sale}/source-order`（逐行校验发货仓）、`GET /approvals/biz/:bizType/:bizId`（`BIZ_DOC_META` + `sys_role_permissions`，未知 400）、`print-jobs` 列表与条码补打
 - **`print-jobs` 三张条码子查询分别用 `c.` / `wt.` / `j.warehouse_id`**；SQL 文本替换必须带足上下文并真跑三种范围

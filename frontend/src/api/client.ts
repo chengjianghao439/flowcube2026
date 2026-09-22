@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { collectAllRecords } from './allRecords'
+import { collectAllRecords, type RecordIdentityResolver } from './allRecords'
 import type { AxiosError, AxiosRequestConfig, AxiosResponse, InternalAxiosRequestConfig } from 'axios'
 import { Capacitor } from '@capacitor/core'
 import { IS_CAPACITOR_PDA } from '@/lib/platform'
@@ -397,7 +397,8 @@ async function payloadRequest<T>(request: Promise<AxiosResponse<T>>): Promise<Pa
 }
 
 export const payloadClient = {
-  get<T = unknown>(url: string, config?: AxiosRequestConfig) {
+  // 身份策略只属于列表汇总层，作为独立参数，不进入 Axios 配置或网络载荷。
+  get<T = unknown>(url: string, config?: AxiosRequestConfig, identityOf?: RecordIdentityResolver) {
     if (config?.listMode === 'summary' || config?.responseType === 'blob' || config?.responseType === 'arraybuffer') {
       return payloadRequest(apiClient.get<T>(url, config))
     }
@@ -418,7 +419,7 @@ export const payloadClient = {
     return collectAllRecords((page, pageSize) => payloadRequest(apiClient.get<T>(requestUrl, {
       ...fixedConfig,
       params: { ...params, ...(hasBatchParams || page > 1 ? { page, pageSize: pageSize ?? 200 } : {}) },
-    })), config?.signal).catch((error: unknown) => {
+    })), config?.signal, undefined, identityOf).catch((error: unknown) => {
       // 传输错误已由拦截器提示；这里只补完整性校验失败，不能静默显示残缺/空列表。
       if (!config?.skipGlobalError && !(error instanceof ApiClientError) && !axios.isCancel(error)
         && !(error instanceof DOMException && error.name === 'AbortError')) {

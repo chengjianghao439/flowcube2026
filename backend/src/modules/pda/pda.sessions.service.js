@@ -56,56 +56,61 @@ async function createSession({ deviceCode, deviceSecret, userId }) {
   if (!code) throw new AppError('device_code 必填', 400, 'PDA_DEVICE_CODE_REQUIRED')
   if (!secret) throw new AppError('device_secret 必填', 400, 'PDA_DEVICE_SECRET_REQUIRED')
 
-  const [[device]] = await pool.query(
-    `SELECT d.id, d.device_code, d.warehouse_id, d.status, d.secret_hash,
-            w.name AS warehouse_name
-       FROM pda_devices d
-       LEFT JOIN inventory_warehouses w ON w.id = d.warehouse_id
-      WHERE d.device_code = ?`,
-    [code],
-  )
-  if (!device) throw new AppError('PDA 设备不存在或未登记', 404, 'PDA_DEVICE_NOT_FOUND')
-  if (String(device.status) !== 'active') {
-    throw new AppError('PDA 设备未启用', 403, 'PDA_DEVICE_NOT_ACTIVE')
-  }
-  if (!await compareDeviceSecret(secret, device.secret_hash)) {
-    throw new AppError('PDA 设备密钥错误', 401, 'PDA_DEVICE_SECRET_INVALID')
-  }
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const [[device]] = await conn.query(
+      `SELECT d.id, d.device_code, d.warehouse_id, d.status, d.secret_hash,
+              w.name AS warehouse_name
+         FROM pda_devices d
+         LEFT JOIN inventory_warehouses w ON w.id = d.warehouse_id
+        WHERE d.device_code = ? FOR UPDATE`,
+      [code],
+    )
+    if (!device) throw new AppError('PDA 设备不存在或未登记', 404, 'PDA_DEVICE_NOT_FOUND')
+    if (String(device.status) !== 'active') {
+      throw new AppError('PDA 设备未启用', 403, 'PDA_DEVICE_NOT_ACTIVE')
+    }
+    if (!await compareDeviceSecret(secret, device.secret_hash)) {
+      throw new AppError('PDA 设备密钥错误', 401, 'PDA_DEVICE_SECRET_INVALID')
+    }
 
-  const token = crypto.randomBytes(32).toString('hex')
-  const tokenHash = hashToken(token)
-  const ttlHours = sessionTtlHours()
-  const scopes = [...DEFAULT_PDA_SCOPES]
+    const token = crypto.randomBytes(32).toString('hex')
+    const tokenHash = hashToken(token)
+    const ttlHours = sessionTtlHours()
+    const scopes = [...DEFAULT_PDA_SCOPES]
 
-  const [result] = await pool.query(
-    `INSERT INTO pda_device_sessions
-       (device_id, user_id, session_token_hash, scopes, warehouse_id, expires_at, last_seen_at)
-     VALUES (?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL ? HOUR), NOW())`,
-    [
-      device.id,
-      userId,
-      tokenHash,
-      JSON.stringify(scopes),
-      device.warehouse_id ?? null,
-      ttlHours,
-    ],
-  )
-  await pool.query('UPDATE pda_devices SET last_seen_at = NOW() WHERE id = ?', [device.id])
+    const [result] = await conn.query(
+      `INSERT INTO pda_device_sessions
+         (device_id, user_id, session_token_hash, scopes, warehouse_id, expires_at, last_seen_at)
+       VALUES (?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL ? HOUR), NOW())`,
+      [
+        device.id,
+        userId,
+        tokenHash,
+        JSON.stringify(scopes),
+        device.warehouse_id ?? null,
+        ttlHours,
+      ],
+    )
+    await conn.query('UPDATE pda_devices SET last_seen_at = NOW() WHERE id = ?', [device.id])
 
-  const [[session]] = await pool.query(
-    'SELECT expires_at FROM pda_device_sessions WHERE id = ?',
-    [result.insertId],
-  )
+    const [[session]] = await conn.query(
+      'SELECT expires_at FROM pda_device_sessions WHERE id = ?',
+      [result.insertId],
+    )
 
-  return {
-    sessionToken: token,
-    scopes,
-    expiresAt: session?.expires_at || null,
-    warehouseId: device.warehouse_id ?? null,
-    // 2026-09-17 验收修复：绑定页此前只显示「所属仓库 #1」，用户无法核对绑到哪个仓。
-    // 与 warehouseId 成对返回名称，前端优先显示名称、回退 #id。
-    warehouseName: device.warehouse_name || null,
-  }
+    await conn.commit()
+    return {
+      sessionToken: token,
+      scopes,
+      expiresAt: session?.expires_at || null,
+      warehouseId: device.warehouse_id ?? null,
+      // 2026-09-17 验收修复：绑定页此前只显示「所属仓库 #1」，用户无法核对绑到哪个仓。
+      // 与 warehouseId 成对返回名称，前端优先显示名称、回退 #id。
+      warehouseName: device.warehouse_name || null,
+    }
+  } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
 }
 
 /**
@@ -117,43 +122,52 @@ async function renewSession({ sessionToken }) {
   const token = String(sessionToken || '')
   if (!token) throw new AppError('缺少设备登录凭证', 400, 'PDA_SESSION_REQUIRED')
   const tokenHash = hashToken(token)
-  const [[row]] = await pool.query(
-    `SELECT s.id AS session_id, s.device_id, s.user_id, s.scopes,
-            s.warehouse_id AS session_warehouse_id, s.expires_at, s.revoked_at,
-            d.warehouse_id AS device_warehouse_id, d.status AS device_status,
-            w.name AS warehouse_name
-       FROM pda_device_sessions s
-       INNER JOIN pda_devices d ON d.id = s.device_id
-       LEFT JOIN inventory_warehouses w ON w.id = COALESCE(s.warehouse_id, d.warehouse_id)
-      WHERE s.session_token_hash = ?
-      LIMIT 1`,
-    [tokenHash],
-  )
-  if (!row) throw new AppError('设备登录已失效，请重新登录', 401, 'PDA_SESSION_INVALID')
-  if (row.revoked_at) throw new AppError('设备登录已被停用', 401, 'PDA_SESSION_REVOKED')
-  if (String(row.device_status) !== 'active') throw new AppError('PDA 设备未启用', 403, 'PDA_DEVICE_NOT_ACTIVE')
-  if (row.expires_at && new Date(row.expires_at).getTime() <= Date.now()) {
-    throw new AppError('设备登录已过期，请重新登录', 401, 'PDA_SESSION_EXPIRED')
-  }
+  const [[identity]] = await pool.query('SELECT device_id FROM pda_device_sessions WHERE session_token_hash=?', [tokenHash])
+  if (!identity) throw new AppError('设备登录已失效，请重新登录', 401, 'PDA_SESSION_INVALID')
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    await conn.query('SELECT id FROM pda_devices WHERE id=? FOR UPDATE', [identity.device_id])
+    const [[row]] = await conn.query(
+      `SELECT s.id AS session_id, s.device_id, s.user_id, s.scopes,
+              s.warehouse_id AS session_warehouse_id, s.expires_at, s.revoked_at,
+              d.warehouse_id AS device_warehouse_id, d.status AS device_status,
+              w.name AS warehouse_name
+         FROM pda_device_sessions s
+         INNER JOIN pda_devices d ON d.id = s.device_id
+         LEFT JOIN inventory_warehouses w ON w.id = COALESCE(s.warehouse_id, d.warehouse_id)
+        WHERE s.session_token_hash = ?
+        LIMIT 1 FOR UPDATE`,
+      [tokenHash],
+    )
+    if (!row) throw new AppError('设备登录已失效，请重新登录', 401, 'PDA_SESSION_INVALID')
+    if (Number(row.session_warehouse_id || 0) !== Number(row.device_warehouse_id || 0)) throw new AppError('设备仓库已变更，请重新绑定', 403, 'PDA_SESSION_WAREHOUSE_CHANGED')
+    if (row.revoked_at) throw new AppError('设备登录已被停用', 401, 'PDA_SESSION_REVOKED')
+    if (String(row.device_status) !== 'active') throw new AppError('PDA 设备未启用', 403, 'PDA_DEVICE_NOT_ACTIVE')
+    if (row.expires_at && new Date(row.expires_at).getTime() <= Date.now()) {
+      throw new AppError('设备登录已过期，请重新登录', 401, 'PDA_SESSION_EXPIRED')
+    }
 
-  const newToken = crypto.randomBytes(32).toString('hex')
-  const newHash = hashToken(newToken)
-  const ttlHours = sessionTtlHours()
-  await pool.query(
-    `UPDATE pda_device_sessions
-        SET session_token_hash = ?, expires_at = DATE_ADD(NOW(), INTERVAL ? HOUR), last_seen_at = NOW()
-      WHERE id = ?`,
-    [newHash, ttlHours, row.session_id],
-  )
-  await pool.query('UPDATE pda_devices SET last_seen_at = NOW() WHERE id = ?', [row.device_id])
+    const newToken = crypto.randomBytes(32).toString('hex')
+    const newHash = hashToken(newToken)
+    const ttlHours = sessionTtlHours()
+    await conn.query(
+      `UPDATE pda_device_sessions
+          SET session_token_hash = ?, expires_at = DATE_ADD(NOW(), INTERVAL ? HOUR), last_seen_at = NOW()
+        WHERE id = ?`,
+      [newHash, ttlHours, row.session_id],
+    )
+    await conn.query('UPDATE pda_devices SET last_seen_at = NOW() WHERE id = ?', [row.device_id])
 
-  return {
-    sessionToken: newToken,
-    scopes: normalizeScopes(row.scopes),
-    expiresAt: new Date(Date.now() + ttlHours * 3600 * 1000).toISOString(),
-    warehouseId: row.session_warehouse_id ?? row.device_warehouse_id ?? null,
-    warehouseName: row.warehouse_name || null,
-  }
+    await conn.commit()
+    return {
+      sessionToken: newToken,
+      scopes: normalizeScopes(row.scopes),
+      expiresAt: new Date(Date.now() + ttlHours * 3600 * 1000).toISOString(),
+      warehouseId: row.session_warehouse_id ?? row.device_warehouse_id ?? null,
+      warehouseName: row.warehouse_name || null,
+    }
+  } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
 }
 
 module.exports = {

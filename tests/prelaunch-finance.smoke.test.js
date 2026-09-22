@@ -187,13 +187,16 @@ async function main() {
       const conn = await pool.getConnection()
       let containerId
       try {
+        // 共享测试库可重复运行；新提交的旧条码必须高于本轮已有最大值。
+        const [[existing]] = await q("SELECT COALESCE(MAX(CAST(SUBSTRING(barcode,2) AS UNSIGNED)),0) maxNum FROM inventory_containers WHERE barcode REGEXP '^B[0-9]+$'")
+        const legacyNumber = Math.max(900000, Number(existing.maxNum) + 1000)
         await q("DELETE FROM daily_sequences WHERE seq_key='inventory_containers:barcode:B'")
         await conn.beginTransaction()
         await conn.query('SELECT value FROM sys_settings LIMIT 1')
-        const [created] = await q("INSERT INTO inventory_containers(barcode,product_id,warehouse_id,status) VALUES('B900000',?,?,4)", [ctx.product.id, ctx.warehouse.id])
+        const [created] = await q("INSERT INTO inventory_containers(barcode,product_id,warehouse_id,status) VALUES(?,?,?,4)", [`B${legacyNumber}`, ctx.product.id, ctx.warehouse.id])
         containerId = created.insertId
         const code = await generateContainerCode(conn, 'B')
-        assert.equal(code, 'B900001')
+        assert.equal(code, `B${legacyNumber + 1}`)
       } finally {
         await conn.rollback(); conn.release()
         if (containerId) await q('DELETE FROM inventory_containers WHERE id=?', [containerId])

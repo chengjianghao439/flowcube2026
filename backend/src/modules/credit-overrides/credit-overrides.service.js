@@ -110,6 +110,7 @@ async function submit(id, operator) {
       applicantId: Number(row.applicant_id),
       applicantName: operator.operatorName,
     })
+    if (!inst) throw new AppError('未匹配授信放行审批流程，请联系管理员配置后重新提交', 409, 'CREDIT_APPROVAL_FLOW_REQUIRED')
     await conn.commit()
     return { id: Number(id), status: rule.to, overrideNo: row.override_no, multiLevel: !!inst, instanceId: inst?.instanceId ?? null }
   } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
@@ -136,11 +137,7 @@ async function approve(id, operator) {
       await conn.commit()
       return { id: Number(id), status: Number(r.status) === approvalEngine.INSTANCE_STATUS.APPROVED ? rule.to : row.status, multiLevel: true, approvalStatus: r.status }
     }
-    // 无引擎实例 → 单级直接批（兼容未配流程的情况）
-    await compareAndSetStatus(conn, { table: 'sale_credit_overrides', id, fromStatus: rule.from, toStatus: rule.to, entityName: '放行申请单' })
-    await conn.query('UPDATE sale_credit_overrides SET reject_reason=NULL WHERE id=?', [id])
-    await conn.commit()
-    return { id: Number(id), status: rule.to, multiLevel: false }
+    throw new AppError('该放行申请缺少审批流程，请取消后重新提交', 409, 'CREDIT_APPROVAL_FLOW_REQUIRED')
   } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
 }
 
@@ -157,7 +154,8 @@ async function reject(id, { reason }, operator) {
     const rule = assertStatusAction('creditOverride', 'reject', row.status)
 
     const active = await approvalEngine.getActiveInstanceByBiz(conn, { bizType: 'sale_credit_override', bizId: id })
-    if (active) await approvalEngine.rejectStep(conn, { instanceId: active.instance.id, operator, comment: reason })
+    if (!active) throw new AppError('该放行申请缺少审批流程，请取消后重新提交', 409, 'CREDIT_APPROVAL_FLOW_REQUIRED')
+    await approvalEngine.rejectStep(conn, { instanceId: active.instance.id, operator, comment: reason })
     await compareAndSetStatus(conn, { table: 'sale_credit_overrides', id, fromStatus: rule.from, toStatus: rule.to, entityName: '放行申请单' })
     await conn.query('UPDATE sale_credit_overrides SET reject_reason=? WHERE id=?', [String(reason).trim(), id])
     await conn.commit()

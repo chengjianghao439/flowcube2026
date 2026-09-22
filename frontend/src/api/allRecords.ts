@@ -8,6 +8,34 @@ function isListBatch(value: unknown): value is ListBatch {
   return Array.isArray(candidate.list) && !!candidate.pagination
 }
 
+export type RecordIdentityResolver = (row: unknown) => string | undefined
+
+/** 聚合/任务列表由 API 调用方声明身份字段；缺少契约字段时拒绝返回不可靠列表。 */
+export function recordIdentityByFields(...fields: string[]): RecordIdentityResolver {
+  return (value: unknown) => {
+    if (!value || typeof value !== 'object') throw new Error('列表数据不完整，请刷新后重试')
+    const row = value as Record<string, unknown>
+    const values = fields.map(field => row[field])
+    if (values.some(value => (typeof value !== 'string' && typeof value !== 'number') || value === '')) {
+      throw new Error('列表数据不完整，请刷新后重试')
+    }
+    return JSON.stringify(values.map(String))
+  }
+}
+
+/** 优先使用记录 ID；无 ID 的库存聚合行使用商品/仓库/库位维度，文本不是身份。 */
+function recordIdentity(row: unknown): string | undefined {
+  if (!row || typeof row !== 'object') return undefined
+  const record = row as Record<string, unknown>
+  if (typeof record.id === 'number' || typeof record.id === 'string') {
+    return JSON.stringify(['id', String(record.id)])
+  }
+  if (record.productId != null && record.warehouseId != null) {
+    return JSON.stringify(['stock', String(record.productId), String(record.warehouseId), record.locationId == null ? null : String(record.locationId)])
+  }
+  return undefined
+}
+
 /**
  * 单个列表自动取齐的默认行数上限。
  *
@@ -27,6 +55,7 @@ export async function collectAllRecords<T>(
   fetchBatch: (page: number, pageSize?: number) => Promise<T>,
   signal?: { readonly aborted: boolean },
   maxRows: number = MAX_COLLECT_ROWS,
+  identityOf: RecordIdentityResolver = recordIdentity,
 ): Promise<T> {
   const assertActive = () => { if (signal?.aborted) throw new DOMException('加载已取消', 'AbortError') }
   assertActive()
@@ -39,13 +68,17 @@ export async function collectAllRecords<T>(
     throw new Error('数据没取全，请刷新后重试')
   }
   const rows = [...first.list]
-  const signatures = new Set<string>()
+  const identities = new Set<string>()
   const remember = (list: unknown[]) => {
-    const signature = JSON.stringify([list.length, list[0], list[list.length - 1]])
-    if (signatures.has(signature)) throw new Error('数据有重复，请刷新后重试')
-    signatures.add(signature)
+    for (const row of list) {
+      const identity = identityOf(row)
+      // 无稳定身份的报表行可能文本完全相同，不能把内容签名当作唯一键。
+      if (identity === undefined) continue
+      if (identities.has(identity)) throw new Error('数据有重复，请刷新后重试')
+      identities.add(identity)
+    }
   }
-  if (rows.length) remember(rows)
+  remember(rows)
   // 取到上限即停（不是取满 total）：超出部分由页面提示用户用筛选缩小范围
   const target = Math.min(total, Number.isSafeInteger(maxRows) && maxRows > 0 ? maxRows : MAX_COLLECT_ROWS)
   for (let page = 2; rows.length < target; page++) {

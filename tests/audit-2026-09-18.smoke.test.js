@@ -350,11 +350,15 @@ async function main() {
     const [[kept]] = await conn.query('SELECT COUNT(*) n FROM user_warehouse_scope WHERE user_id=?', [attackerId])
     assert.equal(Number(kept.n), 1, '失败调用必须回滚，原范围行保留')
 
-    // 非超管改别人是允许的（不能把守卫做成"谁都不能改"）
+    // 非超管只能授予自己的范围子集；范围内修改仍然允许。
     const otherId = await insert(`INSERT INTO sys_users (username,password,real_name,role_id,role_name,is_active)
       VALUES (?, 'x', '审计被改者', 3, '仓管员', 1)`, [unique('U')])
-    const r = await usersSvc.setWarehouseScope(otherId, [f.wh2], { userId: attackerId })
-    assert.deepEqual(r.warehouseIds, [f.wh2])
+    await assert.rejects(
+      () => usersSvc.setWarehouseScope(otherId, [f.wh2], { userId: attackerId }),
+      (e) => { assert.equal(e.statusCode, 403); assert.equal(e.code, 'USER_SCOPE_GRANT_DENIED'); return true },
+    )
+    const r = await usersSvc.setWarehouseScope(otherId, [f.wh], { userId: attackerId })
+    assert.deepEqual(r.warehouseIds, [f.wh])
   })
 
   // ── 同形态 P1：仓库范围缺口 ──────────────────────────────────────────────
@@ -804,7 +808,13 @@ async function main() {
         (order_id,warehouse_id,warehouse_name,product_id,product_code,product_name,unit,quantity,shipped_qty,unit_price,amount,cost_snapshot)
         VALUES (?,?,'审计回归仓',?,?,'审计退货商品','个',?,?,20,?,?)`,
         [saleId, f.wh, productId, pcode, shipped, shipped, shipped * 20, snapshot])
-      // buildSaleCogs 以「已落库的应收(payment_records.type=2)」为出库凭证的来源表
+      const taskId = await insert(`INSERT INTO warehouse_tasks
+        (task_no,sale_order_id,customer_name,warehouse_id,warehouse_name,status,shipped_at)
+        VALUES (?,?,'审计退货客户',?,'审计回归仓',7,NOW())`, [unique('WT'), saleId, f.wh])
+      await insert(`INSERT INTO warehouse_task_items
+        (task_id,product_id,product_code,product_name,unit,required_qty,picked_qty)
+        VALUES (?,?,?,'审计退货商品','个',?,?)`, [taskId, productId, pcode, shipped, shipped])
+      // 出库凭证依据上述完成任务，不能使用应收创建日期代替出库日期。
       await insert(`INSERT INTO payment_records
         (type,order_id,order_no,party_name,total_amount,paid_amount,balance,status,confirm_status)
         VALUES (2,?,?,'审计退货客户',?,0,?,1,1)`, [saleId, orderNo, shipped * 20, shipped * 20])

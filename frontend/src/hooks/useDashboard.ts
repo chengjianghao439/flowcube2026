@@ -22,20 +22,27 @@ const RANGE_180 = getRelativeDateRange(180)
 const RANGE_30 = getRelativeDateRange(30)
 
 // ── 基础库存/单据数据（原有） ──────────────────────────────────────────────────
-// 2026-08-22 优化：带轮询的 hook 全部加 document.hidden 守卫——仪表盘 tab 切后台时
-// 暂停轮询（keepAlive 隐藏标签页 30 个 × 每 60s 轮询是明显空转），回来自动恢复。
-const isVisible = () => typeof document === 'undefined' || !document.hidden
-export const useDashboardSummary = () => useQuery({ queryKey:['dashboard-summary'], queryFn:()=>getDashboardSummaryApi().then(r=>r!), refetchInterval:isVisible()?60000:false })
+// 文档可见不等于工作区可见；KeepAlive 隐藏页必须关闭查询与定时器。
+export function useDashboardSummary() {
+  const active = useActiveWorkspaceTab()
+  return useQuery({ queryKey: ['dashboard-summary'], queryFn: () => getDashboardSummaryApi().then(r => r!), enabled: active, refetchInterval: active ? 60000 : false })
+}
 export const useLowStock         = (threshold=10) => useQuery({ queryKey:['low-stock',threshold], queryFn:()=>getLowStockApi(threshold).then(r=>r||[]) })
 export const useTrend            = (days=7) => useQuery({ queryKey:['trend',days], queryFn:()=>getTrendApi(days).then(r=>r||[]) })
 export const useTopStock         = () => useQuery({ queryKey:['top-stock'], queryFn:()=>getTopStockApi().then(r=>r||[]) })
-export const usePdaPerformance   = () => useQuery({ queryKey:['pda-performance'], queryFn:()=>getPdaPerformanceApi().then(r=>r!), refetchInterval:isVisible()?30000:false })
+export function usePdaPerformance() {
+  const active = useActiveWorkspaceTab()
+  return useQuery({ queryKey: ['pda-performance'], queryFn: () => getPdaPerformanceApi().then(r => r!), enabled: active, refetchInterval: active ? 30000 : false })
+}
 export const useIncomingPurchases = () => useQuery({ queryKey:['incoming-purchases'], queryFn:()=>getIncomingPurchasesApi().then(r=>r ?? { dueToday:[], dueThisWeek:[], overdue:[] }) })
 
 // ── 扩展数据源（复用 reports / finance / payments 接口）─────────────────────────
 // 这些 hook 只在对应小组件被渲染时调用，而小组件仅在用户有相应权限时才挂载，
 // 因此无权限用户不会触发这些请求；相同 queryKey 在多个小组件间自动去重共享缓存。
-export const useWarehouseOps    = () => useQuery({ queryKey:['dash-warehouse-ops'], queryFn:()=>getWarehouseOpsApi().then(r=>r!), refetchInterval:isVisible()?60000:false })
+export function useWarehouseOps() {
+  const active = useActiveWorkspaceTab()
+  return useQuery({ queryKey: ['dash-warehouse-ops'], queryFn: () => getWarehouseOpsApi().then(r => r!), enabled: active, refetchInterval: active ? 60000 : false })
+}
 export const useFinanceDashboard = () => useQuery({ queryKey:['dash-finance',RANGE_180], queryFn:()=>getFinanceDashboardApi(RANGE_180).then(r=>r!), staleTime:300000 })
 export const useAging           = () => useQuery({ queryKey:['dash-aging'], queryFn:()=>getAgingApi(8).then(r=>r!), staleTime:300000 })
 export const useCreditWarning    = () => useQuery({ queryKey:['dash-credit-warning'], queryFn:()=>getCreditWarningApi().then(r=>r!), staleTime:300000 })
@@ -49,7 +56,10 @@ export const usePurchaseStats   = () => useQuery({ queryKey:['dash-purchase-stat
 export const useInventoryStats  = () => useQuery({ queryKey:['dash-inventory-stats'], queryFn:()=>getInventoryStatsApi({}).then(r=>r!), staleTime:300000 })
 export const usePdaAnomaly      = () => useQuery({ queryKey:['dash-anomaly',RANGE_30], queryFn:()=>getPdaAnomalyApi(RANGE_30).then(r=>r!), staleTime:300000 })
 /** 待我审批（approval.task.view）——首页 widget 每 60s 与通知中心同步刷新 */
-export const usePendingApprovalsBrief = () => useQuery({ queryKey:['dash-pending-approvals'], queryFn:()=>listPendingApprovalsApi({ page: 1, pageSize: 5 }, true).then(r=>r!), refetchInterval:isVisible()?60000:false })
+export function usePendingApprovalsBrief() {
+  const active = useActiveWorkspaceTab()
+  return useQuery({ queryKey: ['dash-pending-approvals'], queryFn: () => listPendingApprovalsApi({ page: 1, pageSize: 5 }, true).then(r => r!), enabled: active, refetchInterval: active ? 60000 : false })
+}
 
 // ── 个性化布局存取 ─────────────────────────────────────────────────────────────
 export const useDashboardLayout = () => useQuery({

@@ -65,3 +65,5 @@ export async function resetPasswordApi(id: number, newPassword: string): Promise
 export async function deleteUserApi(id: number): Promise<void> {
   await apiClient.delete(`/users/${id}`)
 }
+
+export const getAssignableRolesApi = () => apiClient.get<{ id: number; name: string }[]>('/users/assignable-roles')

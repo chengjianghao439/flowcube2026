@@ -234,7 +234,7 @@ async function reverseVoucher(id, userId, companyId = 1) {
          (company_id, voucher_no, voucher_date, period, source_type, source_id, source_no, summary, total_debit, total_credit, status, is_reversal, reversed_id, created_by)
        VALUES (?, ?, ?, ?, 'manual', NULL, ?, ?, ?, ?, 1, 1, ?, ?)`,
       [companyId, voucherNo, v.voucher_date, v.period, v.source_no || null, `冲销 ${v.voucher_no}`,
-       Number(v.total_credit), Number(v.total_debit), Number(id), userId || null],
+       v.total_credit, v.total_debit, Number(id), userId || null],
     )
     let lineNo = 0
     for (const e of entries) {
@@ -270,11 +270,16 @@ async function reverseVoucher(id, userId, companyId = 1) {
  * 资金流水（finance_account_transactions）和账款（payment_records）是公司级表，
  * 目前不支持按账套过滤——如果资金账户和账款需要账套隔离，需要后续迁移添加对应字段。
  */
+// 人工红字仅沿同账套 reversed_id 直接关联业务来源；无关手工凭证及手工凭证的红字不混入业务勾稽。
 async function reconciliation(companyId = 1) {
   const [[fundV]] = await pool.query(
-    `SELECT COALESCE(SUM(e.amount),0) s FROM acct_voucher_entries e
+    `SELECT COALESCE(SUM(IF(v.is_reversal=1,-e.amount,e.amount)),0) s FROM acct_voucher_entries e
        JOIN acct_vouchers v ON v.id = e.voucher_id
-      WHERE v.company_id = ? AND v.source_type IN ('receipt_in','payment_out','expense_pay') AND e.account_code IN ('1001','1002')`,
+      WHERE v.company_id = ? AND e.account_code IN ('1001','1002')
+        AND (v.source_type IN ('receipt_in','payment_out','expense_pay')
+          OR (v.source_type='manual' AND v.is_reversal=1 AND EXISTS (
+            SELECT 1 FROM acct_vouchers origin WHERE origin.id=v.reversed_id AND origin.company_id=v.company_id
+              AND origin.is_reversal=0 AND origin.source_type IN ('receipt_in','payment_out','expense_pay'))))`,
     [companyId],
   )
   // 资金流水合计：这里刻意不加 fa.company_id 过滤（不用 a90348b 的按账套过滤）——
@@ -289,7 +294,11 @@ async function reconciliation(companyId = 1) {
   const [[payableV]] = await pool.query(
     `SELECT COALESCE(SUM(CASE WHEN direction=2 THEN amount ELSE -amount END),0) s
        FROM acct_voucher_entries e JOIN acct_vouchers v ON v.id=e.voucher_id
-      WHERE v.company_id = ? AND e.account_code='2202' AND v.source_type IN ('purchase_settle','purchase_return')`,
+      WHERE v.company_id = ? AND e.account_code='2202'
+        AND (v.source_type IN ('purchase_settle','purchase_return')
+          OR (v.source_type='manual' AND v.is_reversal=1 AND EXISTS (
+            SELECT 1 FROM acct_vouchers origin WHERE origin.id=v.reversed_id AND origin.company_id=v.company_id
+              AND origin.is_reversal=0 AND origin.source_type IN ('purchase_settle','purchase_return'))))`,
     [companyId],
   )
   // 应付账款余额：公司级数据，payment_records 目前不支持账套过滤
@@ -298,7 +307,11 @@ async function reconciliation(companyId = 1) {
   const [[recvV]] = await pool.query(
     `SELECT COALESCE(SUM(CASE WHEN direction=1 THEN amount ELSE -amount END),0) s
        FROM acct_voucher_entries e JOIN acct_vouchers v ON v.id=e.voucher_id
-      WHERE v.company_id = ? AND e.account_code='1122' AND v.source_type IN ('sale_revenue','sale_return')`,
+      WHERE v.company_id = ? AND e.account_code='1122'
+        AND (v.source_type IN ('sale_revenue','sale_return')
+          OR (v.source_type='manual' AND v.is_reversal=1 AND EXISTS (
+            SELECT 1 FROM acct_vouchers origin WHERE origin.id=v.reversed_id AND origin.company_id=v.company_id
+              AND origin.is_reversal=0 AND origin.source_type IN ('sale_revenue','sale_return'))))`,
     [companyId],
   )
   // 应收账款余额：公司级数据，payment_records 目前不支持账套过滤

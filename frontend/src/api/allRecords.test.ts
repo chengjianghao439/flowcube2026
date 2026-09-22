@@ -50,3 +50,46 @@ test('未达上限时标记为非截断', async () => {
   expect(result.list).toHaveLength(1205)
   expect(result.truncated).toBe(false)
 })
+
+test('部分跨页重叠即失败，即使总数和整页签名不同', async () => {
+  await expect(collectAllRecords(async page => ({
+    list: (page === 1 ? [1, 2] : [2, 3]).map(id => ({ id, name: `page ${page}` })),
+    pagination: { page, pageSize: 2, total: 4 },
+  }))).rejects.toThrow('重复')
+})
+
+test('库存复合身份不同可以同商品出现，复合身份相同跨页即失败', async () => {
+  const fetch = (overlap: boolean) => async (page: number) => ({
+    list: [{ productId: 1, warehouseId: overlap ? 1 : page, quantity: page }],
+    pagination: { page, pageSize: 1, total: 2 },
+  })
+  expect((await collectAllRecords(fetch(false))).list).toHaveLength(2)
+  await expect(collectAllRecords(fetch(true))).rejects.toThrow('重复')
+})
+
+test('相同文本不等于相同记录，没有稳定身份时不凭内容拒绝合法行', async () => {
+  const result = await collectAllRecords(async page => ({
+    list: [{ text: '同名事项' }], pagination: { page, pageSize: 1, total: 2 },
+  }))
+  expect(result.list).toEqual([{ text: '同名事项' }, { text: '同名事项' }])
+})
+
+test('同一批次的重复身份也不能伪装成完整列表', async () => {
+  await expect(collectAllRecords(async page => ({
+    list: [{ id: 1 }, { id: 1 }], pagination: { page, pageSize: 2, total: 2 },
+  }))).rejects.toThrow('重复')
+})
+
+
+test('显式行身份覆盖默认 id，保留合法复合行并拒绝字段变化后的重复身份', async () => {
+  const identity = (value: unknown) => {
+    const row = value as { id: number; warehouseId: number }
+    return JSON.stringify([row.id, row.warehouseId])
+  }
+  const fetch = (overlap: boolean) => async (page: number) => ({
+    list: [{ id: 9, warehouseId: overlap ? 1 : page, quantity: page }],
+    pagination: { page, pageSize: 1, total: 2 },
+  })
+  expect((await collectAllRecords(fetch(false), undefined, undefined, identity)).list).toHaveLength(2)
+  await expect(collectAllRecords(fetch(true), undefined, undefined, identity)).rejects.toThrow('重复')
+})

@@ -4,9 +4,9 @@
  * 架构原则（硬约束，见 §5.1/§11）：
  *  - 凭证是业务事实的**投影**：本引擎**只读业务事实表、只写 acct_***，绝不 UPDATE payment_records /
  *    inventory_stock / finance_accounts / 采购销售单等任何业务表。
- *  - **全量重算 + 幂等**：按 UNIQUE(source_type, source_id) upsert。同一业务事件反复生成不新增；
- *    采购结算金额变化追加反冲/新版本，归零或来源消失也显式反冲；其它来源沿用 upsert。
- *    source_hash 未变则跳过；采购来源人工冲销后停止自动恢复。
+ *  - **全量重算 + 幂等**：按 UNIQUE(company_id, source_type, source_id, source_period) upsert。同一业务事件反复生成不新增；
+ *    采购结算和销售期间金额变化追加反冲/新版本，归零或来源消失也显式反冲；其它来源沿用 upsert。
+ *    source_hash 未变则跳过；采购/销售来源人工冲销后停止自动恢复。
  *  - **借贷平衡**：每张凭证入库前 assert（借合计 === 贷合计），不平抛错不入库。
  *  - 不塞进任何结算事务；由用户在凭证页点「生成本期凭证」或（将来）定时任务触发，走独立事务。
  *
@@ -22,9 +22,10 @@ const crypto = require('crypto')
 const AppError = require('../../utils/AppError')
 const logger = require('../../utils/logger')
 const { SOURCE_TYPES, DIR } = require('../../constants/voucherSource')
-const { calculateDiscountApplied } = require('../sale/sale.contracts')
+const { SALE_TYPES, loadSaleShipmentFacts, projectSaleShipments, reconcileSalePeriods } = require('./voucher-sale-periods')
 const { lockAccountingCompany } = require('./accounting.period-lock')
-const { revisePurchaseVoucher } = require('./voucher-source-revisions')
+const { reviseSourceVoucher } = require('./voucher-source-revisions')
+const { normalizeSaleLegs, saleBalance } = require('./voucher-sale-money')
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100
 
@@ -122,11 +123,12 @@ async function insertEntries(conn, voucherId, legs, accountMap) {
 
 async function upsertVoucher(conn, spec, accountMap, allocSeq, createdBy, companyId = 1) {
   const cid = Number(companyId) || 1
-  const legs = spec.legs
+  const isSale = SALE_TYPES.includes(spec.sourceType)
+  const legs = isSale ? normalizeSaleLegs(spec.legs) : spec.legs
     .map(l => ({ ...l, amount: round2(l.amount) }))
     .filter(l => l.amount > 0)
-  if (!legs.length && spec.sourceType !== SOURCE_TYPES.PURCHASE_SETTLE) return { skipped: true, reason: 'empty' }
-  const { debit, credit } = assertBalanced(legs)
+  if (!legs.length && spec.sourceType !== SOURCE_TYPES.PURCHASE_SETTLE && !SALE_TYPES.includes(spec.sourceType)) return { skipped: true, reason: 'empty' }
+  const { debit, credit } = isSale ? saleBalance(legs) : assertBalanced(legs)
   const voucherDate = toDateStr(spec.voucherDate)
   const period = periodOf(voucherDate)
   const hash = hashSpec(voucherDate, legs)
@@ -135,12 +137,12 @@ async function upsertVoucher(conn, spec, accountMap, allocSeq, createdBy, compan
   await assertPeriodOpen(conn, period, cid)
 
   const [[existing]] = await conn.query(
-    'SELECT id, voucher_no, source_hash, status, period FROM acct_vouchers WHERE company_id = ? AND source_type = ? AND source_id = ? FOR UPDATE',
-    [cid, spec.sourceType, spec.sourceId],
+    'SELECT id, voucher_no, source_hash, status, period FROM acct_vouchers WHERE company_id = ? AND source_type = ? AND source_id = ? AND source_period = ? FOR UPDATE',
+    [cid, spec.sourceType, spec.sourceId, spec.sourcePeriod || ''],
   )
 
-  if (existing && spec.sourceType === SOURCE_TYPES.PURCHASE_SETTLE) {
-    return revisePurchaseVoucher(conn, { root: existing, spec, legs, voucherDate, period, hash, debit, credit,
+  if (existing && (spec.sourceType === SOURCE_TYPES.PURCHASE_SETTLE || SALE_TYPES.includes(spec.sourceType))) {
+    return reviseSourceVoucher(conn, { root: existing, spec, legs, voucherDate, period, hash, debit, credit,
       accountMap, allocSeq, createdBy, companyId: cid, insertEntries })
   }
   if (legs.length === 0) return { skipped: true, reason: 'empty' }
@@ -166,10 +168,10 @@ async function upsertVoucher(conn, spec, accountMap, allocSeq, createdBy, compan
   const voucherNo = `记-${period}-${String(seq).padStart(4, '0')}`
   const [r] = await conn.query(
     `INSERT INTO acct_vouchers
-       (company_id, voucher_no, voucher_date, period, source_type, source_id, source_no, summary,
+       (company_id, voucher_no, voucher_date, period, source_type, source_id, source_period, source_no, summary,
         total_debit, total_credit, status, source_hash, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
-    [cid, voucherNo, voucherDate, period, spec.sourceType, spec.sourceId, spec.sourceNo || null,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+    [cid, voucherNo, voucherDate, period, spec.sourceType, spec.sourceId, spec.sourcePeriod || '', spec.sourceNo || null,
      spec.summary || null, debit, credit, hash, createdBy || null],
   )
   await insertEntries(conn, r.insertId, legs, accountMap)
@@ -224,67 +226,15 @@ async function buildPurchaseSettle(conn, taxByPO) {
 /**
  * 事件2：销售出库确认收入。无发票：借 应收账款1122〔客户〕 / 贷 主营业务收入6001，毛额=SUM(shipped×售价)。
  * 有销项发票（§5.3）：借 应收账款(毛额含税) / 贷 主营业务收入(不含税) + 贷 销项税额222102(发票税额)。
- * 应收方(1122)恒为毛额 → 勾稽口径不变；税额从收入里拆出。taxBySO: Map<soId, 销项税额合计>（不含已红冲）。
+ * 应收方(1122)为已发原值扣分摊折扣后的净额，退货独立冲回；税额从收入里拆出。taxBySO: Map<soId, 销项税额合计>（不含已红冲）。
  */
-async function buildSaleRevenue(conn, taxBySO) {
-  const [rows] = await conn.query(`
-    SELECT pr.order_id AS soId, pr.order_no, pr.created_at AS vdate,
-           so.customer_id, so.customer_name,
-           COALESCE(so.discount_amount, 0) AS discount,
-           COALESCE(so.total_amount, 0) AS orderGross,
-           COALESCE((SELECT SUM(shipped_qty * unit_price) FROM sale_order_items WHERE order_id = pr.order_id), 0) AS gross
-      FROM payment_records pr
-      JOIN sale_orders so ON so.id = pr.order_id
-     WHERE pr.type = 2 AND pr.order_id IS NOT NULL`)
-  const out = []
-  for (const r of rows) {
-    const gross = round2(r.gross)
-    if (gross <= 0) continue
-    // 整单折扣必须在这里净额化（2026-09-18 审计 P0-3）。
-    // 本文件头声明的口径是「销售收入用毛额，销售退货单独冲 → 净额 = payment_records(type=2)」，
-    // 而 sale.service 的应收口径是「已发毛额 − 退货 − 折扣分摊」。退货有独立的销售退货凭证(8)
-    // 去冲，**折扣没有独立单据、也就没有单独的冲销凭证**：这里若仍按毛额记 1122，则总账 1122
-    // 永远比子账应收多出 Σ折扣，勾稽对不上，收入与利润同步虚增。故折扣按销售侧同一函数
-    // （按「已发原值/订单原值」比例分摊）在收入凭证内直接净额化。
-    const discountApplied = calculateDiscountApplied({
-      discount: r.discount,
-      shippedGross: gross,
-      orderGross: r.orderGross,
-    })
-    const net = round2(gross - discountApplied)
-    if (net <= 0) continue
-    const tax = Math.min(round2(taxBySO.get(Number(r.soId)) || 0), net)
-    const noTax = round2(net - tax)
-    const legs = [
-      { code: '1122', direction: DIR.DEBIT, amount: net, auxType: 1, auxId: r.customer_id || null, auxName: r.customer_name || null, summary: '应收账款' },
-      { code: '6001', direction: DIR.CREDIT, amount: noTax, summary: '主营业务收入' },
-    ]
-    if (tax > 0) legs.push({ code: '222102', direction: DIR.CREDIT, amount: tax, summary: '销项税额' })
-    out.push({ sourceType: SOURCE_TYPES.SALE_REVENUE, sourceId: r.soId, sourceNo: r.order_no, voucherDate: r.vdate,
-      summary: `销售出库确认收入 ${r.order_no || ''}`.trim(), legs })
-  }
-  return out
+async function buildSaleRevenue(conn, taxBySO = new Map()) {
+  return projectSaleShipments(await loadSaleShipmentFacts(conn), taxBySO).filter(s => s.sourceType === SOURCE_TYPES.SALE_REVENUE)
 }
 
-/** 事件3：销售出库结转成本。借 主营业务成本6401 / 贷 库存商品1405，毛额=SUM(shipped×cost_snapshot) */
+/** 按实际出库期间结转首次固化的销售行成本快照。 */
 async function buildSaleCogs(conn) {
-  const [rows] = await conn.query(`
-    SELECT pr.order_id AS soId, pr.order_no, pr.created_at AS vdate,
-           COALESCE((SELECT SUM(shipped_qty * COALESCE(cost_snapshot, 0)) FROM sale_order_items WHERE order_id = pr.order_id), 0) AS cogs
-      FROM payment_records pr
-      JOIN sale_orders so ON so.id = pr.order_id
-     WHERE pr.type = 2 AND pr.order_id IS NOT NULL`)
-  return rows.filter(r => round2(r.cogs) > 0).map(r => ({
-    sourceType: SOURCE_TYPES.SALE_COGS,
-    sourceId: r.soId,
-    sourceNo: r.order_no,
-    voucherDate: r.vdate,
-    summary: `销售出库结转成本 ${r.order_no || ''}`.trim(),
-    legs: [
-      { code: '6401', direction: DIR.DEBIT, amount: r.cogs, summary: '主营业务成本' },
-      { code: '1405', direction: DIR.CREDIT, amount: r.cogs, summary: '库存商品' },
-    ],
-  }))
+  return projectSaleShipments(await loadSaleShipmentFacts(conn)).filter(s => s.sourceType === SOURCE_TYPES.SALE_COGS)
 }
 
 /**
@@ -492,12 +442,22 @@ async function loadTaxMaps(conn, companyId = 1) {
     )
     return {
       taxByPO: new Map(poRows.map(r => [Number(r.id), Number(r.tax)])),
-      taxBySO: new Map(soRows.map(r => [Number(r.id), Number(r.tax)])),
+      taxBySO: new Map(soRows.map(r => [Number(r.id), r.tax])),
     }
   } catch (e) {
     if (e && e.code === 'ER_NO_SUCH_TABLE') return empty
     throw e
   }
+}
+
+/** 结账只读校验销售投影完整性；业务出库未使用账套锁，不能声称阻止检查后的并发出库。 */
+async function assertSalePeriodCurrent(conn, period, companyId = 1) {
+  await lockAccountingCompany(conn, companyId)
+  const { taxBySO } = await loadTaxMaps(conn, companyId)
+  const facts = await loadSaleShipmentFacts(conn)
+  await reconcileSalePeriods(conn, projectSaleShipments(facts, taxBySO), {
+    companyId, requireCurrentPeriod: period, orderIds: new Set(facts.orders.map(o => Number(o.soId))),
+  })
 }
 
 async function generateVouchers(conn, { period = null, createdBy = null, closedPeriods = null, companyId = 1 } = {}) {
@@ -506,10 +466,13 @@ async function generateVouchers(conn, { period = null, createdBy = null, closedP
   const accountMap = await loadAccountMap(conn, cid)
   const allocSeq = await makeSeqAllocator(conn, cid)
   const { taxByPO, taxBySO } = await loadTaxMaps(conn, cid)
+  const saleFacts = await loadSaleShipmentFacts(conn)
+  const saleSpecs = await reconcileSalePeriods(conn, projectSaleShipments(saleFacts, taxBySO), {
+    companyId: cid, closedPeriods: closedPeriods || new Set(), orderIds: new Set(saleFacts.orders.map(o => Number(o.soId))),
+  })
   const specs = [
     ...await buildPurchaseSettle(conn, taxByPO),
-    ...await buildSaleRevenue(conn, taxBySO),
-    ...await buildSaleCogs(conn),
+    ...saleSpecs,
     ...await buildFundVouchers(conn),
     ...await buildPurchaseReturn(conn),
     ...await buildSaleReturn(conn),
@@ -525,6 +488,8 @@ async function generateVouchers(conn, { period = null, createdBy = null, closedP
     if (!purchaseIds.has(Number(root.source_id))) specs.push({ sourceType: SOURCE_TYPES.PURCHASE_SETTLE,
       sourceId: root.source_id, sourceNo: root.source_no, voucherDate: root.voucher_date, legs: [] })
   }
+  const [closedRows] = await conn.query('SELECT period FROM acct_periods WHERE company_id=? AND status=2 FOR UPDATE', [cid])
+  const allClosed = new Set([...(closedPeriods || []), ...closedRows.map(r => r.period)])
   const stats = { created: 0, updated: 0, unchanged: 0, reversed: 0, empty: 0, skippedClosed: 0, skippedNoDate: 0, total: 0 }
   for (const spec of specs) {
     let dateStr
@@ -542,7 +507,8 @@ async function generateVouchers(conn, { period = null, createdBy = null, closedP
     }
     if (period && periodOf(dateStr) !== period) continue
     stats.total += 1
-    if (closedPeriods && closedPeriods.has(periodOf(dateStr))) { stats.skippedClosed += 1; continue }
+    if ((closedPeriods && closedPeriods.has(periodOf(dateStr)))
+      || (SALE_TYPES.includes(spec.sourceType) && allClosed.has(periodOf(dateStr)))) { stats.skippedClosed += 1; continue }
     let res
     try {
       res = await upsertVoucher(conn, spec, accountMap, allocSeq, createdBy, cid)
@@ -562,6 +528,7 @@ async function generateVouchers(conn, { period = null, createdBy = null, closedP
 
 module.exports = {
   generateVouchers,
+  assertSalePeriodCurrent,
   // 导出内部件供测试、对账与期末结转复用
   loadAccountMap,
   assertBalanced,

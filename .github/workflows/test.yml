@@ -53,6 +53,10 @@ jobs:
       - run: npm ci --prefix scripts/browser-smoke --ignore-scripts
       - run: node scripts/browser-smoke/node_modules/playwright-core/cli.js install --with-deps chromium
       - run: npm run test:browser-smoke
+      - run: npm ci --prefix frontend
+      - run: npm install --global agent-browser@0.36.0
+      - run: agent-browser install --with-deps
+      - run: npm run test:dirty-navigation
 
   static:
     name: 静态检查（lint + 类型）
@@ -126,6 +130,9 @@ jobs:
 
       - name: "PDA 契约回归 — pdaOnly 路由必须带 X-Client 头"
         run: node --test tests/pda-only-client-header.test.js
+
+      - name: Nginx 安全头和缓存策略真实响应
+        run: npm run smoke:nginx-headers
 
       - name: ESLint — 后端
         run: npm --prefix backend run lint
@@ -360,6 +367,12 @@ jobs:
 
       - name: 审计回归 — 报表/来源修订/冲销/超管保护
         run: npm run smoke:audit-finance-security
+
+      - name: 审计权限、打印与设备并发回归
+        run: npm run smoke:audit-remediation
+
+      - name: 销售跨期凭证与历史来源回归
+        run: npm run smoke:accounting-sale-period
 
       - name: 冒烟测试 — 主链路（采购入库 / 打印 / 报表 / 导入导出 / 权限）
         run: npm run smoke:mainline

@@ -231,6 +231,7 @@ async function closePeriod(period, operator, companyId = 1) {
     await lockAccountingCompany(conn, companyId)
     const [[existing]] = await conn.query('SELECT status FROM acct_periods WHERE period = ? AND company_id = ? FOR UPDATE', [p, companyId])
     if (existing && Number(existing.status) === 2) throw new AppError(`会计期间 ${p} 已是结账状态`, 409)
+    await engine.assertSalePeriodCurrent(conn, p, companyId)
     const st = await closingStatus(conn, p, companyId)
     const bad = []
     if (st.pl === 'missing') bad.push('损益结转凭证未生成')

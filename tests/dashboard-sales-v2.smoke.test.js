@@ -11,13 +11,13 @@ const {
 async function main() {
   const ctx = await prepareSmokeContext()
   const { pool, http, customer, warehouse, product } = ctx
+  const ids = []
   try {
     const { token } = await login(http, 'smoke_admin', 'SmokeAdmin123!')
     assert.ok(token, '隔离测试账号登录成功')
     const marker = randomRef('v2')
     const dashboard = require('../backend/src/modules/dashboard/dashboard.service')
     const before = await dashboard.getSummary()
-    const ids = []
     for (const status of [1, 6, 2]) {
       const response = await http.post('/api/sale', {
         token,
@@ -224,6 +224,13 @@ async function main() {
       'PASS: 销售状态计数、仓库范围、混合单位、小数、待办优先级、风险分页、应收到期边界与总额守恒',
     )
   } finally {
+    // 本测试直接构造展示投影，不能把无出库事实的 shipped_qty 留给后续会计回归。
+    if (ids.length) {
+      await pool.query('DELETE FROM sale_credit_overrides WHERE sale_order_id IN (?)', [ids])
+      await pool.query('DELETE FROM sale_order_events WHERE sale_order_id IN (?)', [ids])
+      await pool.query('DELETE FROM sale_order_items WHERE order_id IN (?)', [ids])
+      await pool.query('DELETE FROM sale_orders WHERE id IN (?)', [ids])
+    }
     await ctx.close()
   }
 }

@@ -18,16 +18,15 @@
  * - 工作区切换标签、顶栏导航不拦截（KeepAlive 保留草稿）
  */
 
-import { Suspense, useEffect, useRef } from 'react'
+import { Suspense, useEffect, useLayoutEffect, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useWorkspaceStore, HOME_TAB } from '@/store/workspaceStore'
-import { useDirtyGuardStore } from '@/store/dirtyGuardStore'
+import { initializeWorkspaceHistoryGuard } from '@/router/workspaceHistoryGuard'
 import { usePermission } from '@/hooks/usePermission'
 import {
   normalizeWorkspacePath as normalizePath,
   getWorkspaceFullPath as getFullPath,
   buildWorkspaceTabRegistration,
-  buildWorkspaceTabRegistrationFromPath,
 } from '@/router/workspaceRouteMeta'
 import {
   PATH_TITLES,
@@ -36,7 +35,6 @@ import {
   resolveRoutePermission,
   resolveRouteTitle,
 } from '@/router/routeRegistry'
-import { getHashRouterWindowLocation } from '@/router/hashLocation'
 import { TabPathContext } from './TabPathContext'
 import { useCompanyStore } from '@/store/companyStore'
 import { SectionVisibilityContext } from './SectionVisibilityContext'
@@ -110,49 +108,14 @@ export function KeepAliveOutlet() {
   const locationRegistration = buildWorkspaceTabRegistration(location.pathname, location.search)
   const activeKey = locationRegistration.key
 
-  /**
-   * Dirty Guard — Layer 2：兜底拦截浏览器前进/后退
-   *
-   * 注意：useBlocker 仅支持 Data Router；项目使用 HashRouter + popstate 实现离开确认。
-   *
-   * 工作流程：
-   * 1. popstate 触发时 URL 已变，用 replaceState 恢复原 URL
-   * 2. 检查当前激活 tab 是否 dirty
-   * 3. dirty → 弹确认框 → 确认后 navigate(targetPath)
-   * 4. 非 dirty → 直接放行（replaceState 到 targetPath）
-   */
-  const locationPathRef = useRef(getFullPath(location.pathname, location.search))
-  useEffect(() => {
-    locationPathRef.current = getFullPath(location.pathname, location.search)
-  }, [location.pathname, location.search])
-
-  useEffect(() => {
-    const handlePopState = () => {
-      const targetLocation = getHashRouterWindowLocation()
-      const targetPathname = getFullPath(targetLocation.pathname, targetLocation.search)
-      const currentPathname = locationPathRef.current
-
-      if (targetPathname === currentPathname) return
-
-      const store     = useDirtyGuardStore.getState()
-      const activeKey = buildWorkspaceTabRegistrationFromPath(currentPathname).key
-
-      if (!store.isTabDirty(activeKey)) return
-
-      // 恢复原 URL，让用户感知到"被拦截了"
-      window.history.replaceState(null, '', currentPathname)
-
-      store.showConfirm(
-        '当前内容尚未保存，确定离开吗？',
-        () => navigate(targetPathname),
-      )
-    }
-
-    window.addEventListener('popstate', handlePopState)
-    return () => window.removeEventListener('popstate', handlePopState)
-  // 仅挂载一次；pathnameRef / navigate 通过引用访问，始终最新
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  useLayoutEffect(() => {
+    initializeWorkspaceHistoryGuard().update({
+      url: window.location.href,
+      state: window.history.state,
+      path: getFullPath(location.pathname, location.search),
+    })
+  }, [location.pathname, location.search, location.key])
+  useLayoutEffect(() => () => initializeWorkspaceHistoryGuard().deactivate(), [])
 
   /**
    * URL → workspace 同步 + 权限拦截

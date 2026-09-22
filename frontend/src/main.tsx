@@ -100,6 +100,10 @@ void (async () => {
     })
   }
 
+  if (!IS_CAPACITOR_PDA) {
+    const { initializeWorkspaceHistoryGuard } = await import('@/router/workspaceHistoryGuard')
+    initializeWorkspaceHistoryGuard()
+  }
   createRoot(rootEl).render(
     <StrictMode>
       <GlobalErrorBoundary>

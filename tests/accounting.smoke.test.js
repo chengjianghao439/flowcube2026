@@ -109,8 +109,8 @@ async function main() {
     log.assert('资金侧凭证合计 === 资金流水合计', r2(fundV.s) === r2(fundT.s), `凭证${r2(fundV.s)} vs 流水${r2(fundT.s)}`)
 
     // ── 无重复来源 ────────────────────────────────────────────────────
-    const [dup] = await conn.query(`SELECT source_type,source_id,COUNT(*) n FROM acct_vouchers GROUP BY source_type,source_id HAVING n>1`)
-    log.assert('无重复 (source_type,source_id)', dup.length === 0, JSON.stringify(dup.slice(0, 3)))
+    const [dup] = await conn.query(`SELECT company_id,source_type,source_id,source_period,COUNT(*) n FROM acct_vouchers WHERE source_id IS NOT NULL GROUP BY company_id,source_type,source_id,source_period HAVING n>1`)
+    log.assert('无重复 (company_id,source_type,source_id,source_period)', dup.length === 0, JSON.stringify(dup.slice(0, 3)))
 
     // ── 幂等 ──────────────────────────────────────────────────────────
     const stats2 = await engine.generateVouchers(conn, { createdBy: 1 })

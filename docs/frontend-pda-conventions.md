@@ -66,6 +66,12 @@
 - **列表页不再常驻展示日期筛选提示条**（2026-09-16）：主列表页的日期筛选与销售、采购一致——只在查询弹窗中查看（弹窗初始值即当前生效范围），页面上只保留可逐项移除的筛选 chips；已删除退货单（销售退货）与物流运单两处历史遗留的「创建日期：X 至 Y」横条，后者取代 `docs/sales-group-ui-2026-09-05.md` 中"明确日期"的展示约定。列表计数统一用 `ListSummary`（表格下方）；物流运单沿用其"当前显示数量"口径（自动取齐上限 500，不代表业务总量）。
 - **查询弹窗「重置」＝回到该页面的默认窗口**（2026-09-17）：各 `*QueryDialog` 新增可选 `resetValues`，重置把日期恢复成该页面的默认口径（单据类与操作日志/库存流水 = 最近 7 天、物流运单 = 当天、退款单/处置/放行/采购申请 = 不限），不再一律跳成"今天起"。页面要传与自身 `effectiveStartDate/EndDate` 兜底一致的值（如 `resetValues={{ startDate: defaultRange.start, endDate: defaultRange.end }}`），**新增列表页时两处必须同步**，否则「重置」和「打开弹窗看到的范围」会对不上。`PaymentQueryDialog` 早已用 `clearValue` 表达同一语义（账款页默认跨日期看未结清），沿用不改。
 
+## 前端审计修复的行为约束（2026-09-22）
+
+- **未保存页面的浏览器前进/后退**：`main.tsx` 在 `createRoot` 前初始化 `workspaceHistoryGuard` 单例，保证登录后才挂载工作区也先于 Router 监听；`KeepAliveOutlet` 只同步位置快照并在卸载时停用。单例拦截 `popstate`，先恢复当前历史条目，再询问是否离开；确认前 Router 与页面不切换，取消后仍可再次后退。恢复必须保留完整文档 URL、hash 内查询参数、文档查询参数及 `history.state`。HashRouter 有 `idx` 的历史使用 `history.go` 恢复与继续，保留前进栈；外部无 `idx` 写入使用完整 URL/state 恢复当前条目，确认后通知 Router，不保证外部未知历史的遍历位置。HTTPS 行为由 `KeepAliveOutlet.test.tsx` 覆盖；`node scripts/browser-smoke/dirty-navigation.cjs` 用独立命名浏览器验证真实 Chromium 的 `file://`、确认/取消及前进历史，并在结束时关闭并核验会话。该验证不等于真实 Electron 壳验收。
+- **跨页自动取齐**：`collectAllRecords` 对稳定记录身份做跨页及批内重复检测，发现重复整体失败，不去重后伪装为完整结果。默认记录使用 `id`，无 ID 的库存聚合行保留商品、仓库及库位复合维度；聚合或非 `id` 主键接口必须由调用方显式声明：低库存是商品 `id` + `warehouseId`，授信预警是 `customerId`，待审批是任务 `taskId`（同一审批实例可以有多个任务），条码查询是 `category` + `recordId`。策略经 `payloadClient.get` 第三个参数传给 `collectAllRecords` 第四个参数，不进入 Axios 配置、参数或请求载荷；显式策略缺关键字段时整体失败。往来台账事件和承运商直接汇总仍沿用记录 `id`。无稳定身份的文本行不以内容相同判断重复。总数/页码变化、空续页、中止与有界截断保持既有规则；仅凭分页响应不能证明读取期间未发生同总数的缺失或无身份行变化。
+- **仪表盘工作区轮询**：摘要、PDA 绩效、仓库运营、待审批查询使用 `useActiveWorkspaceTab` 同时控制 `enabled` 和 `refetchInterval`，隐藏的工作区及页内 section 不轮询、不响应后台失效刷新，显示后恢复；queryKey 保持共享，文档后台暂停继续由 React Query 默认焦点机制处理。`useDashboard.polling.test.tsx` 覆盖四类查询的隐藏、恢复与共享键。
+
 ## 界面术语口径（2026-09-19 全量文案审计后固化）
 
 > 这些词原本散落在 `docs/proposals/13-条码与序列号融合.md`、`docs/release-notes/0.4.57.md`、`0.3.87/0.3.88` 等历史记录里，**因为没有写进本文件、也没有守卫，执行力度不均**——「序列号」清理干净了，「容器」「履约」却大量残留。现汇总至此，由 `npm run test:copy-conventions` 机械守住。

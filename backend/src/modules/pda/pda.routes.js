@@ -7,6 +7,7 @@ const { pdaSessionRequired } = require('../../middleware/pdaSession')
 const { pdaOnly } = require('../../middleware/pdaOnly')
 const pdaSessions = require('./pda.sessions.service')
 const todoCounts = require('./todo-counts.service')
+const { loadRolePermissions } = require('../../middleware/loadRolePermissions')
 const ctrl = require('./pda.controller')
 const router = Router()
 
@@ -68,10 +69,12 @@ router.get('/download', asyncRoute(ctrl.download))
  * 需要有效 PDA 设备会话；仅 PDA 客户端可调。
  */
 router.get('/todo-counts',
+  authMiddleware,
+  loadRolePermissions,
   pdaSessionRequired(),
   pdaOnly,
   asyncRoute(async (req, res) => {
-    const counts = await todoCounts.getTodoCounts(req.pda?.warehouseId ?? null)
+    const counts = await todoCounts.getTodoCounts(req.pda?.warehouseId ?? null, req.user?.warehouseIds ?? null, req.user)
     return successResponse(res, counts, '操作成功')
   }),
 )

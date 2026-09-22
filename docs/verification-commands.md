@@ -105,3 +105,11 @@ npm run test:permissions
 文案守卫 `test:copy-conventions` 使用 TypeScript AST 分析字符串、模板、JSX 和 AppError，解析回归防止 `https://` 被误当注释及单双引号/续行漏扫。前端数量输入行为、详情标签和策略缓存回归进入现有 `npm --prefix frontend run test:unit`。
 
 AST 文案和数量覆盖守卫依赖 frontend 的 TypeScript，必须在安装前端依赖之后执行；CI 放在 static job，不能移回仅安装后端依赖的 regression job。`deployment-resources.test.js` 验证依赖接线与删除安装步骤的反向失败。
+
+### 2026-09-22 全仓审计新增回归
+
+- `npm run smoke:audit-remediation`：独立测试库上的授信、角色、仓库授权、打印动作与 PDA 设备事务/待办/分页验证。
+- `npm run smoke:accounting-sale-period`：销售实际出库期间、旧累计根、闭期冲突、人工红冲、自动修订及来源完整性。
+- `npm run test:dirty-navigation`：真实 Chromium 的 file URL、延迟挂载工作区、确认/取消和重复历史遍历；需 `agent-browser@0.36.0` 与其 Chromium，命名会话由脚本 finally 关闭并验证退出。CI 安装依赖并运行。
+- `npm run smoke:nginx-headers`：需要 Docker，可通过 `DOCKER_CONTEXT` 选择本机环境；使用独立命名容器，不连接业务数据库。
+- `test:audit-client` 同时检查实际启动入口先初始化历史拦截器再渲染 Router，并包含移除/后移初始化的反向验证。

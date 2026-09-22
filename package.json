@@ -68,13 +68,13 @@
     "test:product-finder": "node tests/product-finder.test.js",
     "smoke:dashboard-sales-v2": "node tests/dashboard-sales-v2.smoke.test.js",
     "smoke:operation-request-concurrency": "node tests/operation-request-concurrency.smoke.test.js",
-    "test:accounting": "node tests/accounting-voucher-mapping.test.js",
+    "test:accounting": "node --test tests/accounting-voucher-mapping.test.js tests/accounting-sale-money.test.js",
     "test:sale-revenue-discount": "node tests/sale-revenue-discount.test.js",
     "test:audit-tooling": "node --test tests/audit-tooling.test.js tests/audit-deployment.test.js tests/smoke-credentials.test.js tests/browser-smoke-runtime.test.js tests/deploy-artifact.test.js tests/release-orchestration.test.js",
     "test:browser-smoke": "node --test tests/browser-smoke-live.test.js",
     "test:release-tooling": "node --test tests/release-asset-publish.test.js tests/release-live-verify.test.js tests/local-release-relay.test.js",
     "release:verify": "node scripts/verify-live-release.cjs",
-    "test:audit-client": "node --test tests/audit-desktop.test.js tests/audit-return-putaway.test.js tests/audit-pda-publish.test.js",
+    "test:audit-client": "node --test tests/audit-desktop.test.js tests/audit-return-putaway.test.js tests/audit-pda-publish.test.js tests/workspace-history-bootstrap.test.js",
     "smoke:audit-inventory": "node tests/audit-inventory.smoke.test.js",
     "smoke:audit-2026-09-18": "node tests/audit-2026-09-18.smoke.test.js",
     "smoke:label-render-degrade": "node tests/label-render-degrade.smoke.test.js",
@@ -125,6 +125,10 @@
     "smoke:procurement-planning": "node --test tests/procurement-planning.smoke.test.js",
     "test:qty-precision-coverage": "node --test tests/qty-precision-coverage.test.js",
     "test:frontend-conventions": "node --test tests/frontend-conventions.test.js",
-    "smoke:qty-precision": "node --test tests/qty-precision.smoke.test.js"
+    "smoke:qty-precision": "node --test tests/qty-precision.smoke.test.js",
+    "smoke:audit-remediation": "node --test --test-concurrency=1 tests/audit-remediation-security.smoke.test.js tests/audit-remediation-pda.smoke.test.js",
+    "smoke:accounting-sale-period": "node --test tests/accounting-sale-period.smoke.test.js",
+    "smoke:nginx-headers": "node --test tests/nginx-security-headers.smoke.test.js",
+    "test:dirty-navigation": "node scripts/browser-smoke/dirty-navigation.cjs"
   }
 }

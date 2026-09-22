@@ -1,4 +1,5 @@
 const { pool } = require('../../config/db')
+const { assertBoundWarehouseInScope, assertInScope } = require('../../utils/warehouseScope')
 const AppError = require('../../utils/AppError')
 const logger = require('../../utils/logger')
 const { resolvePrinterForJob, normalizeJobType } = require('./print-dispatch')
@@ -61,6 +62,7 @@ async function createRecord(exec, {
   copies = 1,
   createdBy,
   reloadAfterCreate = false,
+  scopeWarehouseIds = null,
   // 2026-09-14：没有可用打印机时也要留一条打印记录（用户规则：「只要发出打印任务都要记录」）。
   // 这类记录不绑定打印机、直接置为失败并标注原因，对象因此出现在打印记录页，打印机就绪后补打。
   unprintableReason = null,
@@ -95,6 +97,8 @@ async function createRecord(exec, {
     warehouseIdIn != null && warehouseIdIn !== '' && Number.isFinite(Number(warehouseIdIn))
       ? Number(warehouseIdIn)
       : null
+
+  assertBoundWarehouseInScope(scopeWarehouseIds, warehouseId, '打印任务')
 
   if (jobUniqueKey) {
     const existing = await findExistingActiveJob(exec, {
@@ -133,8 +137,9 @@ async function createRecord(exec, {
   }
 
   if (!unprintableReason) {
-    const [[printer]] = await exec.query('SELECT id, code, status FROM printers WHERE id=?', [resolvedId])
+    const [[printer]] = await exec.query('SELECT id, code, status, warehouse_id FROM printers WHERE id=?', [resolvedId])
     if (!printer) throw new AppError('打印机不存在', 404, 'PRINT_PRINTER_NOT_FOUND')
+    assertInScope(scopeWarehouseIds, printer.warehouse_id, '打印机')
   }
   const jobStatus = unprintableReason ? 3 : 0
   const jobError = unprintableReason ? String(unprintableReason).slice(0, 500) : null
@@ -262,8 +267,8 @@ async function assertQueueReady({
   }
 }
 
-async function complete(id, { ackToken } = {}) {
-  const job = await findById(id)
+async function complete(id, { ackToken } = {}, scopeWarehouseIds = null) {
+  const job = await findById(id, scopeWarehouseIds)
   const token = String(ackToken || '').trim()
   if (!token) {
     throw new AppError('打印确认令牌无效或缺失', 400, 'PRINT_ACK_TOKEN_INVALID')
@@ -306,8 +311,8 @@ async function complete(id, { ackToken } = {}) {
   return findById(id)
 }
 
-async function completeLocalDesktop(id) {
-  const job = await findById(id)
+async function completeLocalDesktop(id, scopeWarehouseIds = null) {
+  const job = await findById(id, scopeWarehouseIds)
   if (job.status === STATUS.DONE) return job
   const [[sec]] = await pool.query('SELECT ack_token FROM print_jobs WHERE id=?', [id])
   assertCanCompleteLocalDesktop(job, !!sec?.ack_token)
@@ -328,11 +333,11 @@ async function completeLocalDesktop(id) {
   return findById(id)
 }
 
-async function fail(id, { ackToken, errorMessage } = {}) {
+async function fail(id, { ackToken, errorMessage } = {}, scopeWarehouseIds = null) {
+  const job = await findById(id, scopeWarehouseIds)
   if (typeof ackToken !== 'string' || !ackToken.trim()) {
     throw new AppError('缺少本次领取令牌，无法标记打印失败', 400, 'PRINT_ACK_TOKEN_REQUIRED')
   }
-  const job = await findById(id)
   const retryCount = Math.min(Number(job.retryCount || 0) + 1, MAX_RETRY)
 
   const msg = errorMessage || '未知错误'
@@ -360,8 +365,8 @@ async function fail(id, { ackToken, errorMessage } = {}) {
   return findById(id)
 }
 
-async function retry(id) {
-  await findById(id)
+async function retry(id, scopeWarehouseIds = null) {
+  await findById(id, scopeWarehouseIds)
   const [ur] = await pool.query(
     `UPDATE print_jobs
      SET status=?, retry_count=0, error_message=NULL, ack_token=NULL, dispatched_at=NULL, expires_at=DATE_ADD(NOW(), INTERVAL ? MINUTE)

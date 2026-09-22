@@ -71,7 +71,7 @@ function main() {
   // 自动取齐，所以不会按 ceil(总数/批量) 放大请求数。守卫只做文本匹配，看不到这个分支，
   // 故逐条登记；未命中的登记条目会让测试失败，避免清单僵化。
   const BOUNDED_SUMMARY_ALLOWLIST = new Map([
-    ['frontend/src/hooks/useDashboard.ts:52',
+    ['frontend/src/hooks/useDashboard.ts:61',
       '首页「待我审批」只展示前 5 条摘要：listPendingApprovalsApi(..., true) → listMode: summary 单页直返'],
   ])
   const usedAllowlist = new Set()

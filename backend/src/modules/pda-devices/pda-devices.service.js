@@ -1,9 +1,10 @@
+const { normalizePagination } = require('../../utils/pagination')
 const bcrypt = require('bcryptjs')
 const crypto = require('crypto')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { beijingTodayYmd } = require('../../utils/backendTime')
-const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
+const { scopeFilter, assertBoundWarehouseInScope } = require('../../utils/warehouseScope')
 
 const STATUS = Object.freeze(['active', 'disabled', 'retired'])
 
@@ -43,7 +44,11 @@ const fmt = row => ({
 })
 
 async function findAll({ page = 1, pageSize = 20, keyword = '', status = null, warehouseId = null, scopeWarehouseIds = null }) {
-  const offset = (page - 1) * pageSize
+  const finiteInt = (value, fallback) => Number.isSafeInteger(Math.trunc(Number(value))) ? Math.trunc(Number(value)) : fallback
+  const normalized = normalizePagination({ page: finiteInt(page, 1), pageSize: finiteInt(pageSize, 20) })
+  page = normalized.page
+  pageSize = normalized.pageSize
+  const { offset } = normalized
   const params = []
   let where = '1=1'
   if (keyword) {
@@ -74,8 +79,8 @@ async function findAll({ page = 1, pageSize = 20, keyword = '', status = null, w
   return { list: rows.map(fmt), pagination: { page, pageSize, total } }
 }
 
-async function findById(id, scopeWarehouseIds = null) {
-  const [[row]] = await pool.query(
+async function findById(id, scopeWarehouseIds = null, db = pool) {
+  const [[row]] = await db.query(
     `SELECT d.*, w.name AS warehouse_name,
             (SELECT COUNT(*) FROM pda_device_sessions s
               WHERE s.device_id = d.id AND s.revoked_at IS NULL AND s.expires_at > NOW()) AS active_sessions
@@ -85,7 +90,7 @@ async function findById(id, scopeWarehouseIds = null) {
     [id],
   )
   if (!row) throw new AppError('PDA 设备不存在', 404)
-  assertInScope(scopeWarehouseIds, row.warehouse_id, 'PDA 设备')
+  assertBoundWarehouseInScope(scopeWarehouseIds, row.warehouse_id, 'PDA 设备')
   return fmt(row)
 }
 
@@ -106,7 +111,7 @@ async function create({ deviceName, warehouseId = null, scopeWarehouseIds = null
   const name = String(deviceName || '').trim()
   if (!name) throw new AppError('设备名称不能为空', 400)
   const whId = warehouseId != null ? Number(warehouseId) : null
-  assertInScope(scopeWarehouseIds, whId, 'PDA 设备')
+  assertBoundWarehouseInScope(scopeWarehouseIds, whId, 'PDA 设备')
   await assertWarehouseExists(whId)
 
   const deviceCode = await generateDeviceCode()
@@ -133,7 +138,7 @@ async function update(id, { deviceName, warehouseId, scopeWarehouseIds = null })
       [id],
     )
     if (!row) throw new AppError('PDA 设备不存在', 404)
-    assertInScope(scopeWarehouseIds, row.warehouse_id, 'PDA 设备')
+    assertBoundWarehouseInScope(scopeWarehouseIds, row.warehouse_id, 'PDA 设备')
 
     const name = deviceName !== undefined ? String(deviceName || '').trim() : row.device_name
     if (!name) throw new AppError('设备名称不能为空', 400)
@@ -141,7 +146,7 @@ async function update(id, { deviceName, warehouseId, scopeWarehouseIds = null })
       ? (warehouseId != null ? Number(warehouseId) : null)
       : (row.warehouse_id != null ? Number(row.warehouse_id) : null)
     // 改绑仓库同样受限：不能把设备挪到自己管不着的仓
-    assertInScope(scopeWarehouseIds, whId, 'PDA 设备')
+    assertBoundWarehouseInScope(scopeWarehouseIds, whId, 'PDA 设备')
     await assertWarehouseExists(whId, conn)
 
     await conn.query(
@@ -191,11 +196,12 @@ async function setStatus(id, status, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const [locked] = await conn.query('SELECT id FROM pda_devices WHERE id = ? FOR UPDATE', [id])
+    const [locked] = await conn.query('SELECT id, warehouse_id FROM pda_devices WHERE id = ? FOR UPDATE', [id])
     // 行锁即存在性校验（findById 之后被删掉时这里就是空集）。
     // 这里**不能**改成校验 UPDATE 的 affectedRows：mysql2 没开 CLIENT_FOUND_ROWS，
     // 把状态设成与当前相同的值（重复点「停用」）affectedRows 就是 0，会被误判成 404。
     if (!locked.length) throw new AppError('PDA 设备不存在', 404)
+    assertBoundWarehouseInScope(scopeWarehouseIds, locked[0].warehouse_id, 'PDA 设备')
     await conn.query('UPDATE pda_devices SET status = ? WHERE id = ?', [status, id])
     let revoked = 0
     // 非 active 一律吊销（不管状态值有没有变化）：接口说「已停用」，就不允许还存在可用票据
@@ -212,11 +218,20 @@ async function setStatus(id, status, scopeWarehouseIds = null) {
 
 /** 重置密钥：旧密钥立即作废，同时吊销全部票据，现场必须拿新二维码重新绑定 */
 async function resetSecret(id, scopeWarehouseIds = null) {
-  await findById(id, scopeWarehouseIds)
   const secret = generateSecret()
-  await pool.query('UPDATE pda_devices SET secret_hash = ? WHERE id = ?', [bcrypt.hashSync(secret, 10), id])
-  const revoked = await revokeSessions(id, '重置密钥')
-  return { ...await findById(id, scopeWarehouseIds), deviceSecret: secret, revokedSessions: revoked }
+  const hash = await bcrypt.hash(secret, 10)
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const [[row]] = await conn.query('SELECT id, warehouse_id FROM pda_devices WHERE id=? FOR UPDATE', [id])
+    if (!row) throw new AppError('PDA 设备不存在', 404)
+    assertBoundWarehouseInScope(scopeWarehouseIds, row.warehouse_id, 'PDA 设备')
+    await conn.query('UPDATE pda_devices SET secret_hash=? WHERE id=?', [hash, id])
+    const revoked = await revokeSessions(id, '重置密钥', conn)
+    const device = await findById(id, scopeWarehouseIds, conn)
+    await conn.commit()
+    return { ...device, deviceSecret: secret, revokedSessions: revoked }
+  } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
 }
 
 module.exports = {

@@ -1,3 +1,4 @@
+import { recordIdentityByFields } from './allRecords'
 import { payloadClient as apiClient } from './client'
 import type { PaginatedData } from '@/types'
 import type { ApprovalFlow, ApprovalFlowStep, PendingApproval } from '@/types/approval'
@@ -26,5 +27,6 @@ export const updateApprovalFlowApi = (id: number, d: Partial<{
 
 export const deleteApprovalFlowApi = (id: number) => apiClient.delete<null>(`/approvals/flows/${id}`)
 
+const pendingTaskIdentity = recordIdentityByFields('taskId')
 export const listPendingApprovalsApi = (p: { page?: number; pageSize?: number } = {}, summary = false) =>
-  apiClient.get<PaginatedData<PendingApproval>>('/approvals/pending', { params: p, ...(summary ? {listMode: 'summary' as const} : {}) })
+  apiClient.get<PaginatedData<PendingApproval>>('/approvals/pending', { params: p, ...(summary ? {listMode: 'summary' as const} : {}) }, pendingTaskIdentity)

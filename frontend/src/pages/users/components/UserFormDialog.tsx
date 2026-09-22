@@ -11,21 +11,14 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { useCreateUser, useUpdateUser } from '@/hooks/useUsers'
+import { useCreateUser, useUpdateUser, useAssignableRoles } from '@/hooks/useUsers'
 import { useDepartmentOptions } from '@/hooks/useDepartments'
+import { useAuthStore } from '@/store/authStore'
 import { usePermission } from '@/hooks/usePermission'
 import { toast } from '@/lib/toast'
 import type { SysUser } from '@/types/users'
 
-// 角色 1（管理员/超管）不能经此表单创建或改派：后端 users.routes schema 只放行 2-5，
-// service 层还有 assertCanAssignRole 纵深防御。编辑已有超管时 roleId=1 但禁用选项，
-// 避免提交一个必然 400 的表单，同时让用户看到该账号确实是超管。
-const ROLES = [
-  { value: 2, label: '仓库管理员' },
-  { value: 3, label: '采购员' },
-  { value: 4, label: '销售员' },
-  { value: 5, label: '只读用户' },
-]
+// 动态角色由后端返回可分配集合，管理员角色仍不可经表单改派。
 const isSuperAdmin = (roleId: number | undefined) => roleId === 1
 
 interface UserFormDialogProps {
@@ -40,7 +33,7 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [realName, setRealName] = useState('')
-  const [roleId, setRoleId] = useState(2)
+  const [roleId, setRoleId] = useState(0)
   const [departmentId, setDepartmentId] = useState<number | null>(null)
   const [isActive, setIsActive] = useState(true)
   const [allowSelfApprove, setAllowSelfApprove] = useState(false)
@@ -48,6 +41,12 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
   // 当前登录者是否超管——决定「允许自行审批」开关是否出现（后端另有权威校验）
   const { roleId: operatorRoleId } = usePermission()
   const isOperatorSuperAdmin = operatorRoleId === 1
+  const operatorId = useAuthStore(s => s.user?.id)
+  const ownRoleLocked = !isOperatorSuperAdmin && editUser?.id === operatorId
+  const { data: assignableRoles = [] } = useAssignableRoles(open)
+  const roles = editUser && !isSuperAdmin(editUser.roleId) && !assignableRoles.some(r => r.id === editUser.roleId)
+    ? [...assignableRoles, { id: editUser.roleId, name: editUser.roleName }]
+    : assignableRoles
 
   const { mutate: createUser, isPending: creating, error: createError } = useCreateUser()
   const { mutate: updateUser, isPending: updating, error: updateError } = useUpdateUser()
@@ -67,16 +66,21 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
       setUsername('')
       setPassword('')
       setRealName('')
-      setRoleId(2)
+      setRoleId(0)
       setDepartmentId(null)
       setIsActive(true)
       setAllowSelfApprove(false)
     }
   }, [editUser, open])
 
+  useEffect(() => {
+    if (!isEdit && !assignableRoles.some(role => role.id === roleId)) setRoleId(assignableRoles[0]?.id ?? 0)
+  }, [isEdit, assignableRoles, roleId])
+
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (!isEdit) {
+      if (!assignableRoles.some(role => role.id === roleId)) return toast.error('请选择可分配的角色')
       if (username.trim().length < 2) return toast.error('账号至少 2 个字符')
       if (password.length < 6) return toast.error('密码至少 6 位')
       if (!realName.trim()) return toast.error('姓名不能为空')
@@ -183,18 +187,18 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
                   <span className="text-sm">管理员（系统内置）</span>
                 </label>
               )}
-              {ROLES.map((r) => (
-                <label key={r.value} className="flex items-center gap-2 cursor-pointer">
+              {roles.map((r) => (
+                <label key={r.id} className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="radio"
                     name="roleId"
-                    value={r.value}
-                    checked={roleId === r.value}
-                    onChange={() => setRoleId(r.value)}
-                    disabled={isPending}
+                    value={r.id}
+                    checked={roleId === r.id}
+                    onChange={() => setRoleId(r.id)}
+                    disabled={isPending || ownRoleLocked || isSuperAdmin(editUser?.roleId) || !assignableRoles.some(role => role.id === r.id)}
                     className="accent-primary"
                   />
-                  <span className="text-sm">{r.label}</span>
+                  <span className="text-sm">{r.name}</span>
                 </label>
               ))}
             </div>
@@ -249,7 +253,7 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
             <Button type="button" variant="outline" onClick={onClose} disabled={isPending}>
               取消
             </Button>
-            <Button type="submit" disabled={isPending}>
+            <Button type="submit" disabled={isPending || (!isEdit && !assignableRoles.some(role => role.id === roleId))}>
               {isPending ? '保存中…' : (isEdit ? '保存修改' : '保存')}
             </Button>
           </DialogFooter>

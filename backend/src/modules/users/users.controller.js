@@ -1,6 +1,10 @@
 const usersService = require('./users.service')
 const { successResponse } = require('../../utils/response')
 
+async function assignableRoles(req, res, next) {
+  try { return successResponse(res, await usersService.listAssignableRoles(req.user)) } catch (err) { next(err) }
+}
+
 async function list(req, res, next) {
   try {
     const { page, pageSize, keyword } = req.query
@@ -72,4 +76,4 @@ async function remove(req, res, next) {
 const warehouseScope = async(req,res,next)=>{ try{return successResponse(res,await usersService.getWarehouseScope(+req.params.id),'查询成功')}catch(e){next(e)} }
 const setWarehouseScope = async(req,res,next)=>{ try{return successResponse(res,await usersService.setWarehouseScope(+req.params.id,req.body.warehouseIds,req.user),'仓库数据权限已更新')}catch(e){next(e)} }
 
-module.exports = { list, options, detail, create, update, resetPassword, remove, warehouseScope, setWarehouseScope }
+module.exports = { assignableRoles, list, options, detail, create, update, resetPassword, remove, warehouseScope, setWarehouseScope }

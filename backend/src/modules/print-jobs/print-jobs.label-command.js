@@ -1,3 +1,4 @@
+const { assertBoundWarehouseInScope } = require('../../utils/warehouseScope')
 const { pool } = require('../../config/db')
 const { readLabelVariables, containerLabelVariables } = require('./labelVariables')
 const AppError = require('../../utils/AppError')
@@ -505,7 +506,7 @@ async function enqueueProductLabelJob(payload) {
   }
 }
 
-async function reprintInboundBarcode(recordId, { createdBy = null } = {}) {
+async function reprintInboundBarcode(recordId, { createdBy = null, scopeWarehouseIds = null } = {}) {
   const id = Number(recordId)
   if (!Number.isFinite(id) || id <= 0) throw new AppError('入库条码不存在', 404, 'PRINT_BARCODE_RECORD_NOT_FOUND')
   const [[row]] = await pool.query(
@@ -518,6 +519,7 @@ async function reprintInboundBarcode(recordId, { createdBy = null } = {}) {
     [id],
   )
   if (!row) throw new AppError('入库条码不存在', 404, 'PRINT_BARCODE_RECORD_NOT_FOUND')
+  assertBoundWarehouseInScope(scopeWarehouseIds, row.warehouse_id, '入库条码')
   // 非唯一码不进打印记录：塑料盒自身的码是可复用的固定码（同一个盒子反复装不同货），
   // 它不该在打印历史里，也不该从这里补打——请在「塑料盒」页面重复打印。
   if (String(row.source_ref_type || '') === 'plastic_box_create') {
@@ -542,7 +544,7 @@ async function reprintInboundBarcode(recordId, { createdBy = null } = {}) {
   })
 }
 
-async function reprintOutboundBarcode(recordId, { createdBy = null } = {}) {
+async function reprintOutboundBarcode(recordId, { createdBy = null, scopeWarehouseIds = null } = {}) {
   const id = Number(recordId)
   if (!Number.isFinite(id) || id <= 0) throw new AppError('条码记录不存在', 404, 'PRINT_BARCODE_RECORD_NOT_FOUND')
   // 与补打中心列表同一口径：只对已经有过打印记录的箱贴补打（见 reprintInboundBarcode 注释）。
@@ -551,6 +553,11 @@ async function reprintOutboundBarcode(recordId, { createdBy = null } = {}) {
     [id],
   )
   if (!existing) throw new AppError('该箱贴没有打印记录，无法补打', 400, 'PRINT_BARCODE_NO_PRINT_RECORD')
+  const [[source]] = await pool.query(
+    'SELECT wt.warehouse_id FROM packages p JOIN warehouse_tasks wt ON wt.id=p.warehouse_task_id WHERE p.id=?', [id],
+  )
+  if (!source) throw new AppError('箱贴来源不存在', 404, 'PRINT_BARCODE_RECORD_NOT_FOUND')
+  assertBoundWarehouseInScope(scopeWarehouseIds, source.warehouse_id, '出库条码')
   return enqueuePackageLabelJob({
     packageId: id,
     createdBy,
@@ -558,10 +565,10 @@ async function reprintOutboundBarcode(recordId, { createdBy = null } = {}) {
   })
 }
 
-async function reprintLogisticsBarcode(recordId, { createdBy = null } = {}) {
+async function reprintLogisticsBarcode(recordId, { createdBy = null, scopeWarehouseIds = null } = {}) {
   const id = Number(recordId)
   if (!Number.isFinite(id) || id <= 0) throw new AppError('条码记录不存在', 404, 'PRINT_BARCODE_RECORD_NOT_FOUND')
-  const job = await findById(id)
+  const job = await findById(id, scopeWarehouseIds)
   if (job.jobType !== 'waybill' && job.refType !== 'waybill') {
     throw new AppError('该记录不是物流条码打印任务', 400, 'PRINT_BARCODE_CATEGORY_INVALID')
   }
@@ -582,11 +589,11 @@ async function reprintLogisticsBarcode(recordId, { createdBy = null } = {}) {
   })
 }
 
-async function reprintBarcodeRecord({ category, recordId, createdBy = null } = {}) {
+async function reprintBarcodeRecord({ category, recordId, createdBy = null, scopeWarehouseIds = null } = {}) {
   const type = String(category || '').trim().toLowerCase()
-  if (type === 'inbound') return reprintInboundBarcode(recordId, { createdBy })
-  if (type === 'outbound') return reprintOutboundBarcode(recordId, { createdBy })
-  if (type === 'logistics') return reprintLogisticsBarcode(recordId, { createdBy })
+  if (type === 'inbound') return reprintInboundBarcode(recordId, { createdBy, scopeWarehouseIds })
+  if (type === 'outbound') return reprintOutboundBarcode(recordId, { createdBy, scopeWarehouseIds })
+  if (type === 'logistics') return reprintLogisticsBarcode(recordId, { createdBy, scopeWarehouseIds })
   throw new AppError('条码分类无效', 400, 'PRINT_BARCODE_CATEGORY_INVALID')
 }
 

@@ -1,3 +1,4 @@
+const { scopeFilter } = require('../../utils/warehouseScope')
 const crypto = require('crypto')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
@@ -13,11 +14,12 @@ const {
 
 // 打印调度当前为客户端轮询模式：桌面客户端通过 claimClientJobs() 领取 PENDING 任务。
 // 本模块不提供实时推送通道，避免创建/重试路径误以为存在 push dispatch。
-async function claimClientJobs({ clientId, limit = 3 } = {}) {
+async function claimClientJobs({ clientId, limit = 3, scopeWarehouseIds = null } = {}) {
   const cid = String(clientId || '').trim()
   if (!cid) throw new AppError('clientId 必填', 400, 'PRINT_CLIENT_ID_REQUIRED')
   const n = Math.min(10, Math.max(1, Number(limit) || 3))
 
+  const scope = scopeFilter(scopeWarehouseIds, 'j.warehouse_id')
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
@@ -35,11 +37,11 @@ async function claimClientJobs({ clientId, limit = 3 } = {}) {
        WHERE j.status = ?
          AND (j.expires_at IS NULL OR j.expires_at > NOW())
          AND p.status = 1
-         AND p.client_id = ?
+         AND p.client_id = ? ${scope.sql}
        ORDER BY j.priority DESC, j.id ASC
        LIMIT ?
        FOR UPDATE`,
-      [STATUS.PENDING, cid, n],
+      [STATUS.PENDING, cid, ...scope.params, n],
     )
     const ids = rows.map((r) => Number(r.id)).filter(Boolean)
     if (!ids.length) {

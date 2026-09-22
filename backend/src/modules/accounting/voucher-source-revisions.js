@@ -1,11 +1,11 @@
 const { lockAccountingCompany } = require('./accounting.period-lock')
 
 /**
- * 已有采购结算来源的修订：旧分录不可变，先反冲旧版本再追加新版本。
+ * 已有采购结算/销售期间来源的修订：旧分录不可变，先反冲旧版本再追加新版本。
  * 根的 source_id 唯一锚点永不释放；空来源不造零分录，恢复来源也不复活旧分录。
  * 自动反冲显式 source_root_id；人工红字为空，人工冲销任何最新正向版本后停止重算。
  */
-async function revisePurchaseVoucher(conn, { root, spec, legs, voucherDate, period, hash, debit, credit,
+async function reviseSourceVoucher(conn, { root, spec, legs, voucherDate, period, hash, debit, credit,
   accountMap, allocSeq, createdBy, companyId, insertEntries }) {
   await lockAccountingCompany(conn, companyId)
   const [[current]] = await conn.query(
@@ -35,10 +35,10 @@ async function revisePurchaseVoucher(conn, { root, spec, legs, voucherDate, peri
     const voucherNo = `记-${current.period}-${String(seq).padStart(4, '0')}`
     const [r] = await conn.query(
       `INSERT INTO acct_vouchers
-        (company_id,voucher_no,voucher_date,period,source_type,source_id,source_no,summary,
+        (company_id,voucher_no,voucher_date,period,source_type,source_id,source_period,source_no,summary,
          total_debit,total_credit,status,is_reversal,reversed_id,source_root_id,created_by)
-       VALUES (?,?,?,?,?,NULL,?,?,?,?,1,1,?,?,?)`,
-      [companyId, voucherNo, current.voucher_date, current.period, current.source_type, current.source_no,
+       VALUES (?,?,?,?,?,NULL,?,?,?,?,?,1,1,?,?,?)`,
+      [companyId, voucherNo, current.voucher_date, current.period, current.source_type, current.source_period || '', current.source_no,
         `来源重算冲销 ${current.voucher_no}`, current.total_credit, current.total_debit, current.id, root.id, createdBy || null],
     )
     changedId = r.insertId
@@ -57,10 +57,10 @@ async function revisePurchaseVoucher(conn, { root, spec, legs, voucherDate, peri
     const voucherNo = `记-${period}-${String(seq).padStart(4, '0')}`
     const [r] = await conn.query(
       `INSERT INTO acct_vouchers
-        (company_id,voucher_no,voucher_date,period,source_type,source_id,source_no,summary,
+        (company_id,voucher_no,voucher_date,period,source_type,source_id,source_period,source_no,summary,
          total_debit,total_credit,status,source_hash,source_root_id,created_by)
-       VALUES (?,?,?,?,?,NULL,?,?,?,?,1,?,?,?)`,
-      [companyId, voucherNo, voucherDate, period, spec.sourceType, spec.sourceNo || null, spec.summary || null,
+       VALUES (?,?,?,?,?,NULL,?,?,?,?,?,1,?,?,?)`,
+      [companyId, voucherNo, voucherDate, period, spec.sourceType, spec.sourcePeriod || '', spec.sourceNo || null, spec.summary || null,
         debit, credit, hash, root.id, createdBy || null],
     )
     changedId = r.insertId
@@ -69,4 +69,4 @@ async function revisePurchaseVoucher(conn, { root, spec, legs, voucherDate, peri
   return { updated: true, id: changedId }
 }
 
-module.exports = { revisePurchaseVoucher }
+module.exports = { reviseSourceVoucher }

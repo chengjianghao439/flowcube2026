@@ -544,14 +544,14 @@ async function scenarioPrivilegeEscalationBlocked(ctx, log, adminToken, scopedTo
   const [check] = await dbQuery(ctx.pool, 'SELECT role_id FROM sys_users WHERE id=?', [targetId])
   log.assert('★ 目标账号角色未被改动（仍是 4）', Number(check.role_id) === 4, `role_id=${check.role_id}`)
 
-  // 正常改 roleId=4 → 5 应该放行（证明不是把所有角色修改都禁了）
+  // roleId=5 含操作人不具备的权限；普通角色之间改派也不能越权。
   const ok = await http.put(`/api/users/${targetId}`, {
     token: scopedToken,
     json: { realName: '提权目标', roleId: 5, isActive: true },
   })
-  log.assert('非超管把普通角色改到另一普通角色仍然放行', ok.ok, `status=${ok.status} ${JSON.stringify(ok.data).slice(0, 120)}`)
+  log.assert('非超管不得分配超出自身权限的普通角色', ok.status === 403, `status=${ok.status} ${JSON.stringify(ok.data).slice(0, 120)}`)
   const [check2] = await dbQuery(ctx.pool, 'SELECT role_id FROM sys_users WHERE id=?', [targetId])
-  log.assert('目标账号角色已改为 5', Number(check2.role_id) === 5, `role_id=${check2.role_id}`)
+  log.assert('被拒绝后目标角色保持为 4', Number(check2.role_id) === 4, `role_id=${check2.role_id}`)
 
   // 清理目标账号
   await pool.query('UPDATE sys_users SET deleted_at = NOW() WHERE id=?', [targetId])

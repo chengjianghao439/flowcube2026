@@ -1,6 +1,11 @@
 import { payloadClient as client } from './client'
-
+import { recordIdentityByFields } from './allRecords'
 import type { DashboardSummary, LowStockItem, TrendPoint, TopStockItem, IncomingPurchases, DashboardLayout, CreditWarning } from '@/types/dashboard'
+
+// low-stock.id 是商品 ID，不能当作跨仓汇总行的唯一键。
+const lowStockIdentity = recordIdentityByFields('id', 'warehouseId')
+const creditRiskIdentity = recordIdentityByFields('customerId')
+
 export const getDashboardSummaryApi = () => client.get<DashboardSummary>('/dashboard/summary')
 export const getLowStockApi         = (threshold?: number) => client.get<LowStockItem[]>('/dashboard/low-stock', { params: { threshold } })
 export const getTrendApi            = (days?: number) => client.get<TrendPoint[]>('/dashboard/trend', { params: { days } })
@@ -13,5 +18,5 @@ export const getDashboardLayoutApi  = () => client.get<DashboardLayout | null>('
 export const saveDashboardLayoutApi = (layout: DashboardLayout) => client.put<DashboardLayout>('/dashboard/layout', layout)
 
 /** 概览仅取首批及总数；明细默认继续读取完整列表。 */
-export const getLowStockPageApi = (page = 1, listMode?: 'summary') => client.get<import('@/types').PaginatedData<LowStockItem>>('/dashboard/low-stock', {params:{page,pageSize:10}, listMode})
-export const getCreditRiskPageApi = (page = 1) => client.get<import('@/types').PaginatedData<CreditWarning['top'][number]>>('/dashboard/credit-warning', {params:{page,pageSize:10}})
+export const getLowStockPageApi = (page = 1, listMode?: 'summary') => client.get<import('@/types').PaginatedData<LowStockItem>>('/dashboard/low-stock', {params:{page,pageSize:10}, listMode}, lowStockIdentity)
+export const getCreditRiskPageApi = (page = 1) => client.get<import('@/types').PaginatedData<CreditWarning['top'][number]>>('/dashboard/credit-warning', {params:{page,pageSize:10}}, creditRiskIdentity)

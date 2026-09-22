@@ -32,6 +32,8 @@ async function replacePermissions(roleId, permissions) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    const [[role]] = await conn.query('SELECT id FROM sys_roles WHERE id=? FOR UPDATE', [roleId])
+    if (!role) throw new AppError('角色不存在', 404)
     await conn.query('DELETE FROM sys_role_permissions WHERE role_id=?', [roleId])
     if (list.length) {
       // 传空数组是合法操作（把角色权限清空），此时只执行上面的 DELETE
@@ -72,15 +74,14 @@ async function duplicate(sourceRoleId, { code, name, remark = null } = {}) {
   if (!roleCode) throw new AppError('角色编码不能为空', 400)
   if (!roleName) throw new AppError('角色名称不能为空', 400)
 
-  const [[source]] = await pool.query(
-    'SELECT id, code, name FROM sys_roles WHERE id = ?',
-    [sid],
-  )
-  if (!source) throw new AppError('源角色不存在', 404)
-
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    const [[source]] = await conn.query(
+      'SELECT id, code, name FROM sys_roles WHERE id = ? FOR UPDATE',
+      [sid],
+    )
+    if (!source) throw new AppError('源角色不存在', 404)
 
     const [dup] = await conn.query(
       'SELECT id FROM sys_roles WHERE code = ?',
@@ -138,16 +139,15 @@ async function remove(roleId) {
   const rid = Number(roleId)
   if (!Number.isFinite(rid) || rid <= 0) throw new AppError('roleId 无效', 400)
 
-  const [[role]] = await pool.query('SELECT id, is_system FROM sys_roles WHERE id = ?', [rid])
-  if (!role) throw new AppError('角色不存在', 404)
-  if (Number(role.is_system) === 1) throw new AppError('系统内置角色不可删除', 400)
-
-  const [[{ count }]] = await pool.query('SELECT COUNT(*) AS count FROM sys_users WHERE role_id = ?', [rid])
-  if (Number(count) > 0) throw new AppError(`有 ${count} 个用户使用该角色，无法删除`, 409)
-
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    const [[role]] = await conn.query('SELECT id, is_system FROM sys_roles WHERE id = ? FOR UPDATE', [rid])
+    if (!role) throw new AppError('角色不存在', 404)
+    if (Number(role.is_system) === 1) throw new AppError('系统内置角色不可删除', 400)
+
+    const [[{ count }]] = await conn.query('SELECT COUNT(*) AS count FROM sys_users WHERE role_id = ?', [rid])
+    if (Number(count) > 0) throw new AppError(`有 ${count} 个用户使用该角色，无法删除`, 409)
     await conn.query('DELETE FROM sys_role_permissions WHERE role_id = ?', [rid])
     await conn.query('DELETE FROM sys_roles WHERE id = ?', [rid])
     await conn.commit()
