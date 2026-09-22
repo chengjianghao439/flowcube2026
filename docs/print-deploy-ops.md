@@ -62,3 +62,5 @@
 - 原始 `POST /print-jobs` 不接受业务来源引用；业务标签使用对应业务入口读取真实来源。显式打印机同时检查打印机仓库范围，全局共享打印机沿用既有共享语义。PDA 原始打印携带当前设备会话仓库。
 - `docker/nginx-security-headers.conf` 由 Dockerfile 复制到 `/etc/nginx/snippets/security-headers.conf`。Nginx 每个自设 `add_header` 的 location 都显式包含安全头片段，防缓存头覆盖继承。`npm run smoke:nginx-headers` 用独立 Docker 容器检查真实 200/404/502 响应及缓存策略，完成后删除本测试容器。
 - 前端 Vitest 升至 4.1.11，修复开发测试服务相关依赖公告；锁文件与 Node 22 的 `npm ci`、完整前端验证一起验收。此修改不代表生产部署或真机验收。
+
+- 发布等待中的 GitHub 状态读取最多尝试 3 次：网络/超时及 HTTP 429/502/503/504 以 1 秒、2 秒间隔重试，仍受总等待预算限制；401/403/404、损坏结果及 CI 失败立即拒绝，不输出原始网络异常中的地址或凭据。行为回归位于 `tests/release-orchestration.test.js`。

@@ -29,8 +29,26 @@ async function waitForChecks({ repository, sha, token, apiUrl = 'https://api.git
       const url = new URL(`/repos/${repository}/actions/workflows/${workflow}/runs`, apiUrl)
       url.searchParams.set('head_sha', sha)
       url.searchParams.set('per_page', '100')
-      const response = await fetchImpl(url, { headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2026-03-10' }, signal: AbortSignal.timeout(20000) })
-      if (!response.ok) throw new Error(`${workflow} 检查查询失败：HTTP ${response.status}`)
+      // 只重试读取 GitHub 状态的网络故障及暂时 HTTP 错误，不重试检查失败或鉴权错误。
+      let response
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const remaining = deadline - now()
+        if (remaining <= 0) throw new Error(`等待同一提交检查超时：${sha}`)
+        try {
+          response = await fetchImpl(url, { headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2026-03-10' }, signal: AbortSignal.timeout(Math.min(20000, remaining)) })
+        } catch {
+          // 网络异常可能包含请求地址或凭据，不能将原始异常写入发布日志。
+          response = null
+        }
+        if (response?.ok) break
+        if (response && ![429, 502, 503, 504].includes(response.status)) {
+          throw new Error(`${workflow} 检查查询失败：HTTP ${response.status}`)
+        }
+        if (now() >= deadline) throw new Error(`等待同一提交检查超时：${sha}`)
+        if (attempt === 2) throw new Error(`${workflow} 检查查询暂时失败，重试耗尽`)
+        log(`${workflow} 检查查询暂时失败，准备第 ${attempt + 2}/3 次尝试`)
+        await sleep(Math.min(1000 * (attempt + 1), Math.max(0, deadline - now())))
+      }
       const data = await response.json()
       const state = assessRuns(data.workflow_runs, sha, { branch, events })
       if (state.state === 'failed') throw new Error(`${workflow} 在 ${sha} 的检查未通过：${state.run.conclusion}`)
