@@ -1,7 +1,7 @@
 {
-  "version": "0.10.2",
-  "versionCode": 137,
+  "version": "0.10.3",
+  "versionCode": 138,
   "filename": "app-release.apk",
-  "releaseNote": "把系统的最小数量精度统一为两位小数。",
-  "publishedAt": "2026-09-21T14:03:52.822Z"
+  "releaseNote": "数量最多保留两位小数，修复商品数量设置、仓库作业与版本更新中的多处问题。",
+  "publishedAt": "2026-09-22T00:45:15.494Z"
 }
