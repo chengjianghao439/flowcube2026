@@ -74,8 +74,8 @@ function SkuCard({ sku, onTap }: { sku: PdaTaskSkuSummary; onTap: () => void }) 
     <PdaCard done={done} onClick={onTap} className="text-left">
       <div className="space-y-2">
         <div className="min-w-0">
-          <p className="font-semibold text-foreground truncate">{sku.productName}</p>
-          <p className="text-xs font-mono text-muted-foreground truncate">{sku.productCode}</p>
+          <p className="font-semibold text-foreground whitespace-normal break-words">{sku.productName}</p>
+          <p className="text-xs font-mono text-muted-foreground whitespace-normal break-words">{sku.productCode}</p>
         </div>
         <div className="flex items-center justify-between text-sm">
           <div>
@@ -193,7 +193,7 @@ export default function PdaPickingPage() {
         {viewMode === 'sku' && !isLoading && !skuLoading && !isError && (
           skuList.length === 0
             ? <PdaEmptyCard icon={<Package className="h-12 w-12 text-muted-foreground" />} title="暂无待拣商品" description="订单确认后会自动显示在这里" />
-            : <div className="grid grid-cols-2 gap-3">
+            : <div className="flex flex-col gap-3">
                 {skuList.map(sku => (
                   <SkuCard
                     key={sku.productId}

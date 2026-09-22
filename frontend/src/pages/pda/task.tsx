@@ -70,10 +70,10 @@ function ProductCard({ item, onScan, scanning }: {
       <div className="space-y-2">
         <div className="flex items-start justify-between">
           <div className="min-w-0 flex-1">
-            <p className="font-semibold text-foreground truncate">{item.productName}</p>
-            <p className="text-xs font-mono text-muted-foreground">{item.productCode}</p>
+            <p className="font-semibold text-foreground whitespace-normal break-words">{item.productName}</p>
+            <p className="text-xs font-mono text-muted-foreground whitespace-normal break-words">{item.productCode}</p>
             {(item.articleNumber || item.spec || item.color) && (
-              <p className="text-xs text-muted-foreground truncate">
+              <p className="text-xs text-muted-foreground whitespace-normal break-words">
                 {[item.articleNumber, item.spec, item.color].filter(Boolean).join(' / ')}
               </p>
             )}
