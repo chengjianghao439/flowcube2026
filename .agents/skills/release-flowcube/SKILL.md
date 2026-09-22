@@ -116,20 +116,24 @@ git push origin main
 ```
 push 后 `Deploy Browser App` 等待实际发布 SHA 的 Tests 与 Security Scan 成功，由 GitHub runner 构建 Linux amd64 镜像，再在生产部署锁内核对归档摘要/镜像 SHA、加载、迁移、切换和验证。禁止在生产机重新编译。检查失败/取消/超时不能发布；健康或页面门禁失败统一回退旧应用镜像，数据库迁移不回滚。
 
-### 5. 打 tag（触发桌面构建 + 发布 latest.json）
+### 5. 等待浏览器和 PDA 完成，再打 tag（桌面发布）
+
+推荐在已授权正式发版、版本与说明均已提交到 main 后运行 `npm run release:prod`：它推送 main，等待同 SHA 的 Tests、Security、Browser、PDA 和桌面验证构建，再打 tag，等待该 tag 的桌面发布，最后执行线上三端版本核对。成功耗时目标 15 分钟；网络降级或排队超标会如实报告，不缩短回退窗口。代码修复本身不构成推送/发版授权。
+
+若按下面手工分步执行，必须先确认 **Browser 和 PDA 整个工作流均 success**，再打 tag，避免 PDA 发布与桌面争用同一部署组的 pending 槽。
 ```bash
 npm run release:tag-desktop
 ```
 这会跑 `release-desktop-tag.sh`：校验工作区/HEAD、确认远程无同名 tag、用 `desktop/package.json` 的版本生成 `v<version>` 并推送。tag 一推，`Build Desktop Installer` 启动，构建 exe → 上传 Release → 服务器发布 `latest.json`（带上一步写的 notes）。
 
 ### 6. 验证
-- CI：`gh run list --branch main --limit 6`，确认同一 SHA 的 `Deploy Browser App`、`Tests`、`Security Scan`、`Build Desktop Installer` 都 success。PDA 还需同 SHA 浏览器部署成功后才上传已验证 APK。
+- CI：`gh run list --branch main --limit 6`，确认同一 SHA 的 `Deploy Browser App`、`Tests`、`Security Scan`、`Build PDA APK` 都 success；另查 **对应版本 tag** 的 `Build Desktop Installer` 成功，main 上的桌面验证构建不能代替 tag 发布。
 - **一条命令核对线上三端版本**（推荐，覆盖下面手写的 curl）：
   ```bash
   npm run release:verify -- --origin https://<生产域名>
   ```
   它会逐项核对 `/latest.json`（版本 / 包路径 / sha256 / notes）、`/api/app-update/latest`、
-  `/api/pda/version`（版本 / versionCode / 是否可下载）与 `/api/health`，任何一项不一致就退出 1。
+  `/api/pda/version`（版本 / versionCode / 是否可下载）与 `/api/health`，随后实际下载 EXE/APK 并核对 SHA256，任何一项不一致就退出 1。
   **PDA 落后必须当成发版未完成**：早期版本（v0.9.19）就出现过代码、镜像、桌面清单都已发布、
   唯独 PDA 一直停在上一版而无人发现。
 - 桌面端：在比新版本旧的客户端上启动，应弹「发现新版本 <version>」并显示更新内容。
@@ -143,7 +147,7 @@ npm run release:tag-desktop
 **旧结构为何会自锁**：整个 `Build PDA APK` workflow 关在 `flowcube-server-deploy` 组里，而它的
 build job 内含「等本提交浏览器部署成功」——浏览器部署要同一个组，于是 PDA 等浏览器部署、
 浏览器部署等 PDA 释放组。表现为 `Deploy Browser App = pending` 而 `Build PDA APK = in_progress`；
-GitHub 不报错，只是干等（PDA 等待上限 25 分钟，期间线上不更新）。
+GitHub 不报错，只是干等（旧 PDA 等待上限 25 分钟，期间线上不更新；现行含浏览器的等待上限为 215 分钟）。
 
 **现行三段结构（等待与持锁分离）**：
 
