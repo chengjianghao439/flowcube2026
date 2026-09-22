@@ -4,11 +4,18 @@ const assert = require('node:assert/strict')
 const http = require('node:http')
 const { spawn } = require('node:child_process')
 const path = require('node:path')
+const fs = require('node:fs')
 const root = path.resolve(__dirname, '..')
+// 使用实际 HashRouter 的别名跳转，避免夹具接受生产必定会重定向的旧地址。
+const router = fs.readFileSync(path.join(root, 'frontend/src/router/index.tsx'), 'utf8')
+const redirects = Object.fromEntries([...router.matchAll(/<Route path="([^"]+)" element=\{<Navigate to="([^"]+)"/g)].map(m => [m[1], m[2]]))
+assert.equal(redirects['/reports/reconciliation'], '/reports/reconciliation/payable')
+assert.equal(redirects['/payments'], '/payments/payable')
 
 // 真实 Chromium + 仅回环夹具；不使用开发/生产账号或数据库。
 const titles = {
-  '/dashboard': '仪表盘', '/reports/role-workbench': '待办中心', '/reports/reconciliation': '月结供应商对账',
+  '/dashboard': '仪表盘', '/reports/role-workbench': '待办中心', '/reports/reconciliation/payable': '月结供应商对账',
+  '/reports/reconciliation/receivable': '月结客户对账', '/payments/payable': '现结供应商账款', '/payments/receivable': '现结客户账款',
   '/reports/profit-analysis': '利润与库存', '/procurement': '采购建议', '/reports/wave-performance': '批次效率',
   '/reports/warehouse-ops': '作业概况', '/reports/pda-anomaly': 'PDA 异常', '/reports/inventory-aging': '存放时长与滞销',
   '/warehouses': '仓库管理', '/picking-waves': '批次拣货', '/inbound-tasks/new': '新建收货订单',
@@ -32,7 +39,7 @@ async function runFixture(script, scenario = 'success') {
     if (req.url.startsWith('/seen?')) { seen.push(new URL(req.url, 'http://fixture').searchParams.get('path')); return res.end('ok') }
     res.setHeader('Content-Type', 'text/html; charset=utf-8')
     res.end(`<!doctype html><body><script>
-      const titles=${JSON.stringify(titles)}, scenario=${JSON.stringify(scenario)};
+      const titles=${JSON.stringify(titles)}, scenario=${JSON.stringify(scenario)}, redirects=${JSON.stringify(redirects)};
       const pda=location.hash.startsWith('#/pda');
       function render(){
         const auth=JSON.parse(sessionStorage.getItem('flowcube-auth-v3')||'null');
@@ -40,6 +47,7 @@ async function runFixture(script, scenario = 'success') {
         if(!auth){ document.body.innerText='登录'; return }
         if(route==='/login'||route==='/pda/login'){location.hash=pda?'/pda':'/dashboard';return}
         if(route.startsWith('/pda')!==pda){location.hash=pda?'/pda':'/dashboard';return}
+        if(redirects[route]){location.hash=redirects[route];return}
         if(scenario==='blocked-reconciliation'&&route==='/purchase/1'){location.hash='/403';return}
         if(route==='/picking-waves'&&auth.state.user.username==='fixture-limited'&&scenario!=='broken-permission'){location.hash='/403';return}
         document.body.innerText=(scenario==='broken-pda'&&route==='/pda/split')?'错误的 PDA 页面':(scenario==='render-error'&&route==='/purchase/1')?'渲染错误':titles[route]||'夹具页面';

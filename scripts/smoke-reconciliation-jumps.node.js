@@ -104,7 +104,8 @@ async function fetchJumpPaths() {
 async function main() {
   requireSmokeCredentials()
   await login()
-  await openPath('/reports/reconciliation', '对账基础版')
+  await openPath('/reports/reconciliation/payable', '供应商对账')
+  await openPath('/reports/reconciliation/receivable', '客户对账')
 
   const jumps = await fetchJumpPaths()
   for (const jump of jumps) {
