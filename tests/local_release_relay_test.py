@@ -112,13 +112,24 @@ class RelayTests(unittest.TestCase):
         def url(): urls.append(len(urls)); return str(len(urls))
         def fetch(address, lo, hi, dest):
             calls.append((address,lo,hi))
-            if len(calls)==1: raise RuntimeError('expired signed URL')
+            if address=='1' and lo==0: raise RuntimeError('expired signed URL')
             dest.write_bytes(payload[lo:hi+1])
         with tempfile.TemporaryDirectory() as directory:
             result=relay.download_ranges(len(payload), pathlib.Path(directory), url, fetch, chunk=3, workers=2)
             self.assertEqual(result.read_bytes(),payload)
-        self.assertGreaterEqual(len(urls),3)
+        self.assertGreaterEqual(len(urls),2)
         self.assertIn(('2',0,2),calls)
+
+    def test_slow_range_does_not_block_next_work(self):
+        import threading
+        third_started=threading.Event()
+        def fetch(address,lo,hi,dest):
+            if lo==0 and not third_started.wait(1): raise RuntimeError('batch barrier blocks remaining ranges')
+            if lo==6: third_started.set()
+            dest.write_bytes(b'x'*(hi-lo+1))
+        with tempfile.TemporaryDirectory() as directory:
+            result=relay.download_ranges(12,pathlib.Path(directory),lambda:'signed',fetch,chunk=3,workers=2)
+            self.assertEqual(result.read_bytes(),b'x'*12)
 
     def test_short_range_rejected(self):
         def fetch(address,lo,hi,dest): dest.write_bytes(b'x')

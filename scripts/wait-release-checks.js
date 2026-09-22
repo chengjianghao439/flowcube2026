@@ -14,7 +14,7 @@ function assessRuns(runs, sha, { branch = 'main', events = ['push', 'workflow_di
 async function waitForChecks({ repository, sha, token, apiUrl = 'https://api.github.com', requiredWorkflows = REQUIRED_WORKFLOWS,
   branch = 'main', events = ['push', 'workflow_dispatch'],
   // PDA 等待含上传、迁移及页面验收的整个浏览器部署；普通 Tests/Security 门禁仍只等 25 分钟。
-  timeoutMs = (requiredWorkflows.includes('deploy-browser.yml') ? 215 : 25) * 60 * 1000, intervalMs = 15000,
+  timeoutMs = (requiredWorkflows.includes('deploy-browser.yml') ? 225 : 25) * 60 * 1000, intervalMs = 15000,
   fetchImpl = fetch, now = Date.now, sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), log = console.log,
   // 「这个提交根本没有对应工作流运行」与「运行还在跑」是两回事：
   // 2026-09-18 发 v0.9.20 时，PDA 补跑差点被触发在只改了测试/文档的提交上——该提交带

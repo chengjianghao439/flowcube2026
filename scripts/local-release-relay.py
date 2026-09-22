@@ -17,6 +17,7 @@ import stat
 import subprocess
 import tempfile
 import time
+import threading
 import zipfile
 
 WORKFLOWS = {'image': 'deploy-browser.yml', 'pda': 'build-pda-apk.yml', 'desktop': 'build-desktop.yml'}
@@ -86,25 +87,36 @@ def download_ranges(size, directory, url_provider, fetch_range, chunk=2*1024*102
     if not 0 < size <= MAX_ZIP:
         raise ValueError('Invalid ZIP size')
     count = (size + chunk - 1) // chunk
-    # Acquire a fresh short-lived URL for every bounded batch and every retry.
-    for start in range(0, count, workers):
-        pending = list(range(start, min(start + workers, count)))
+    # Keep workers occupied when a range is slow. Cache signed URLs for at most
+    # 30s (GitHub redirects expire after 60s), refresh once across concurrent retries.
+    lock = threading.Lock()
+    cache = {'url': None, 'at': 0}
+    def signed_url(previous=None):
+        with lock:
+            if not cache['url'] or time.monotonic() - cache['at'] >= 30 or previous == cache['url']:
+                cache['url'] = url_provider()
+                cache['at'] = time.monotonic()
+            return cache['url']
+    def fetch(index):
+        lo, hi = index * chunk, min(size - 1, (index + 1) * chunk - 1)
+        part = directory / ('range-' + str(index))
+        previous = None
         for attempt in range(3):
-            url = url_provider()
-            def fetch(index):
-                lo, hi = index * chunk, min(size - 1, (index + 1) * chunk - 1)
-                part = directory / ('range-' + str(index))
-                try:
-                    fetch_range(url, lo, hi, part)
-                    return index if part.stat().st_size != hi - lo + 1 else None
-                except (RuntimeError, OSError, subprocess.SubprocessError):
+            url = signed_url(previous)
+            try:
+                fetch_range(url, lo, hi, part)
+                if part.stat().st_size == hi - lo + 1:
                     return index
-            with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
-                pending = [i for i in pool.map(fetch, pending) if i is not None]
-            if not pending:
-                break
-        if pending:
-            raise RuntimeError('Artifact range download failed after bounded retries')
+            except (RuntimeError, OSError, subprocess.SubprocessError):
+                pass
+            previous = url
+        raise RuntimeError('Artifact range download failed after bounded retries')
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = [pool.submit(fetch, index) for index in range(count)]
+        for completed, future in enumerate(concurrent.futures.as_completed(futures), 1):
+            future.result()
+            if completed % 16 == 0 or completed == count:
+                print('relay: ranges ' + str(completed) + '/' + str(count), flush=True)
     archive = directory / 'artifact.zip'
     with archive.open('xb') as dest:
         for index in range(count):
@@ -208,7 +220,7 @@ class Relay:
         return 'relay'
 
     def watch(self):
-        done = {}; sources = {}; failures = {}; deadline = time.monotonic() + 270*60
+        done = {}; sources = {}; failures = {}; deadline = time.monotonic() + 330*60
         while time.monotonic() < deadline and len(done) < 3:
             for kind in WORKFLOWS:
                 if kind in done:

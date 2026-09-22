@@ -17,7 +17,7 @@ cleanup() {
 trap cleanup EXIT
 printf -v receive_command '%q ' python3 "$helper" "$destination" "$sha" "$bytes" "$base"
 if [ -n "${DEPLOY_ARTIFACT_ID:-}" ] && timeout -k 5 30 scp "${opts[@]}" -P "$port" scripts/receive-deploy-artifact.py "$target:$helper"; then
-  if node scripts/deploy-artifact-url.js | timeout -k 10 500 ssh "${opts[@]}" -p "$port" "$target" "$receive_command"; then
+  if node scripts/deploy-artifact-url.js | timeout -k 10 1100 ssh "${opts[@]}" -p "$port" "$target" "$receive_command"; then
     exit 0
   fi
 fi

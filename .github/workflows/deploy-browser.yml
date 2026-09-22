@@ -28,8 +28,8 @@ jobs:
   deploy:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    # 故障预算：检查 30 + 构建 20 + artifact 3 + 部署 150 + 清理 3；job 另留 4 分钟。
-    timeout-minutes: 210
+    # 故障预算：检查 30 + 构建 20 + artifact 3 + 部署 160 + 清理 3；job 另留 4 分钟。
+    timeout-minutes: 220
 
     steps:
       - name: Checkout code
@@ -165,9 +165,9 @@ jobs:
           chmod 644 ~/.ssh/known_hosts
 
       - name: Deploy backend and frontend on server
-        # 故障预算：HTTPS/中转尝试 545s + 上传 2700s + 合并 610s + 等锁 1800s + 部署/回退 3000s + 预检等 300s。
-        # 总计 8955s（约 150 分钟）；正常成功目标 15 分钟，不能以强杀回退来实现。
-        timeout-minutes: 150
+        # 故障预算：HTTPS/中转尝试 1145s + 上传 2700s + 合并 610s + 等锁 1800s + 部署/回退 3000s + 预检等 300s。
+        # 总计 9555s（约 160 分钟）；故障上限覆盖安全回退，不是正常耗时目标。
+        timeout-minutes: 160
         shell: bash
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -213,13 +213,13 @@ jobs:
           HTTPS_OK=0
           if [ -n "$DEPLOY_ARTIFACT_ID" ] && timeout -k 5 30 scp "${SSH_COMMON[@]}" -P "$SSH_PORT" \
             scripts/receive-deploy-artifact.py "$SSH_TARGET:$RECEIVER_SCRIPT"; then
-            if node scripts/deploy-artifact-url.js | timeout -k 10 500 ssh "${SSH_COMMON[@]}" -p "$SSH_PORT" "$SSH_TARGET" \
+            if node scripts/deploy-artifact-url.js | timeout -k 10 1100 ssh "${SSH_COMMON[@]}" -p "$SSH_PORT" "$SSH_TARGET" \
               "python3 '$RECEIVER_SCRIPT' '$IMAGE_ARCHIVE' '$IMAGE_SHA256' '$ARCHIVE_BYTES'"; then
               HTTPS_OK=1
             fi
           fi
           if [ "$HTTPS_OK" != 1 ]; then
-            echo '::warning::HTTPS 快路径不可用，回退分片 SCP；本轮可能超过 15 分钟目标'
+            echo '::warning::HTTPS 快路径不可用，回退分片 SCP；请记录实际传输路径与耗时'
             # ── 镜像归档上传：分片并行 ──────────────────────────────────────
             # 跨境链路有方向差异；服务器向外下载的速率不能作为 runner 向服务器上传的预算依据。
             # 分片**不改变归档字节**：服务器端按序合并后 sha256 与 runner 侧完全一致，

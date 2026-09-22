@@ -31,7 +31,7 @@ def accept_relay_archive(destination, expected_sha, expected_bytes):
     return True
 
 
-def wait_for_relay(destination, expected_sha, expected_bytes, timeout=300):
+def wait_for_relay(destination, expected_sha, expected_bytes, timeout=900):
     # marker 只申请有界等待，绝不替代归档摘要校验；路径绑定本轮 run/attempt。
     if not Path(str(destination) + '.relay.pending').is_file():
         return False

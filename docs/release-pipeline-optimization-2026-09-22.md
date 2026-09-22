@@ -16,7 +16,7 @@ GitHub Actions 构建 → 本机既有代理下载原始 Actions artifact → �
 
 - `scripts/local-release-relay.py` 随 `release:prod` 显式启用，推送前预检，结束自动清理；Mac 在线期间无需人工下载上传。中断时仍保留原有直连和有界 SCP 回退。
 - 来源固定完整 SHA、push 事件、指定工作流、main/tag、run attempt、artifact ID/digest；镜像、APK、EXE 均使用 GitHub 原始字节。
-- 每批并发下载最多 32 个 2 MiB 分片，每批及重试重新获取短期 URL；API token 不发给生产机，签名地址不打印到日志。
+- 最多并发下载 32 个 2 MiB 分片，完成即补位；短期 URL 缓存最多 30 秒，重试时刷新；API token 不发给生产机，签名地址不打印到日志。
 - 服务器收到 ready 后还要独立核对 runner 提供的摘要，接收工作流完成前不清理暂存文件。记录下载、上传与端到端时间，区分实际 relay/direct 路径。
 - 代价是操作端必须在线；这不是无需本机的托管方案。若以后明确要求电脑离线也能稳定跨境发布，再重新比较有真实免费额度的托管路径和付费路径，不能假定当前账号享有未验证的免费资源。
 
