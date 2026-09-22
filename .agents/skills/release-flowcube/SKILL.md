@@ -156,7 +156,7 @@ npm run release:tag-desktop
 **旧结构为何会自锁**：整个 `Build PDA APK` workflow 关在 `flowcube-server-deploy` 组里，而它的
 build job 内含「等本提交浏览器部署成功」——浏览器部署要同一个组，于是 PDA 等浏览器部署、
 浏览器部署等 PDA 释放组。表现为 `Deploy Browser App = pending` 而 `Build PDA APK = in_progress`；
-GitHub 不报错，只是干等（旧 PDA 等待上限 25 分钟，期间线上不更新；现行含浏览器的等待上限为 215 分钟）。
+GitHub 不报错，只是干等（旧 PDA 等待上限 25 分钟，期间线上不更新；现行含浏览器的等待上限为 225 分钟）。
 
 **现行三段结构（等待与持锁分离）**：
 
@@ -237,7 +237,7 @@ FLOWCUBE_RELAY_PROXY=<已有本地代理地址> \
 npm run release:prod
 ```
 
-代理不是必填；只能复用已授权、可用的网络配置，不能擅自开通收费资源。本机 Python 3、Node、gh、curl、SSH 须可用；推送前预检 SSH，Mac 在本次命令期间阻止自动睡眠，仍需联网。本程序绑定完整 SHA、工作流、push/main 或版本 tag、run attempt 和 artifact 来源，短期 URL 每批刷新，验证 GitHub ZIP 摘要、唯一目标成员，交付原 CI 字节；接收端再核对原包摘要。输出每种产物下载/上传耗时与来源。ready 不代表接收完成，保留暂存文件直到工作流终止；退出清理本任务资源。原直连/SCP 路径保留，中转失败会单独报错，不能算该方案实测成功。
+代理不是必填；只能复用已授权、可用的网络配置，不能擅自开通收费资源。本机 Python 3、Node、gh、curl、SSH 须可用；推送前预检 SSH，Mac 在本次命令期间阻止自动睡眠，仍需联网。本程序绑定完整 SHA、工作流、push/main 或版本 tag、run attempt 和 artifact 来源，短期 URL 缓存最多 30 秒，失败时刷新，验证 GitHub ZIP 摘要、唯一目标成员，交付原 CI 字节；接收端再核对原包摘要。输出每种产物下载/上传耗时与来源。ready 不代表接收完成，保留暂存文件直到工作流终止；退出清理本任务资源。原直连/SCP 路径保留，中转失败会单独报错，不能算该方案实测成功。
 
 这不是托管服务，不能承诺 Mac 离线后继续本地中转。SSH 复用连接，生产清理遵守项目磁盘 IO 预检约束。
 
