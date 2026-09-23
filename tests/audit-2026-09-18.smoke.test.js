@@ -385,6 +385,24 @@ async function main() {
     assert.ok(skuMine.some(r => Number(r.productId) === Number(f.productId)), '本仓 SKU 汇总应包含')
     assert.ok(!(await wtSvc.findMyTaskSkuSummary([otherWh])).some(r => Number(r.productId) === Number(f.productId)),
       '他仓 SKU 汇总不得包含本仓商品')
+
+    const { saleId } = await f.saleOrder()
+    const saleTaskIds = []
+    for (let i = 0; i < 2; i++) {
+      const saleTaskId = await insert(`INSERT INTO warehouse_tasks
+        (task_no,task_type,sale_order_id,customer_name,warehouse_id,warehouse_name,status)
+        VALUES (?, 'sale_out', ?, '审计客户', ?, '审计回归仓', 2)`, [unique('WT'), saleId, f.wh])
+      saleTaskIds.push(saleTaskId)
+      await insert(`INSERT INTO warehouse_task_items
+        (task_id,product_id,product_code,product_name,unit,required_qty,picked_qty)
+        VALUES (?,?,?,'审计回归','个',1,0)`, [saleTaskId, f.productId, f.code])
+    }
+    const grouped = (await wtSvc.findMyTaskSkuSummary([f.wh])).find(r => Number(r.productId) === Number(f.productId))
+    assert.equal(grouped.orderCount, 2, '同一销售单的两张任务应只算一单，加上无单据任务共两单')
+    assert.deepEqual(grouped.taskIds, [taskId, ...saleTaskIds].sort((a, b) => a - b), '任务选择仍要保留全部任务')
+    assert.deepEqual(grouped.taskOptions.map(option => option.id), grouped.taskIds, '每张任务都要有可辨认的选择信息')
+    assert.ok(grouped.taskOptions.every(option => option.taskNo && option.customerName && option.warehouseName && option.statusName),
+      '选择信息应包含任务号、客户、仓库与状态')
   })
 
   test('★P1 scan-logs 四条写路径都必须做仓库范围校验', async f => {

@@ -154,8 +154,12 @@ async function findMyTaskSkuSummary(scopeWarehouseIds = null) {
       wti.color AS color,
       COALESCE(SUM(wti.required_qty),0) AS total_required,
       COALESCE(SUM(wti.picked_qty),0) AS total_picked,
-      COUNT(DISTINCT wt.id) AS order_count,
-      GROUP_CONCAT(DISTINCT wt.id ORDER BY wt.id ASC) AS task_ids
+      COUNT(DISTINCT COALESCE(
+        CONCAT('sale:', NULLIF(wt.sale_order_id, 0)),
+        CONCAT('return:', wt.task_type, ':', NULLIF(wt.return_id, 0)),
+        CONCAT('task:', wt.id)
+      )) AS order_count,
+      JSON_ARRAYAGG(wt.id) AS task_ids
     FROM warehouse_tasks wt
     INNER JOIN warehouse_task_items wti ON wti.task_id = wt.id
     WHERE wt.status IN (${WT_STATUS_PICK_POOL.join(',')})
@@ -167,7 +171,7 @@ async function findMyTaskSkuSummary(scopeWarehouseIds = null) {
       wti.product_name ASC,
       wti.product_code ASC
   `, params)
-  return rows.map((row) => ({
+  const summaries = rows.map((row) => ({
     productId: Number(row.product_id),
     productCode: row.product_code,
     productName: row.product_name,
@@ -178,10 +182,31 @@ async function findMyTaskSkuSummary(scopeWarehouseIds = null) {
     totalRequired: Number(row.total_required),
     totalPicked: Number(row.total_picked),
     orderCount: Number(row.order_count),
-    taskIds: String(row.task_ids || '')
-      .split(',')
+    taskIds: [...new Set((Array.isArray(row.task_ids) ? row.task_ids : JSON.parse(row.task_ids || '[]'))
       .map((v) => Number(v))
-      .filter((v) => Number.isFinite(v) && v > 0),
+      .filter((v) => Number.isSafeInteger(v) && v > 0))].sort((a, b) => a - b),
+  }))
+  const taskIds = [...new Set(summaries.flatMap((summary) => summary.taskIds))]
+  if (!taskIds.length) return summaries.map((summary) => ({ ...summary, taskOptions: [] }))
+  const [taskRows] = await pool.query(`
+    SELECT wt.id, wt.task_no, wt.sale_order_no, wt.customer_name, wt.warehouse_name, wt.status
+    FROM warehouse_tasks wt
+    WHERE wt.id IN (?) AND wt.deleted_at IS NULL
+      AND wt.status IN (${WT_STATUS_PICK_POOL.join(',')})
+      AND wt.cancel_requested_at IS NULL${scopeSql}
+  `, [taskIds, ...params])
+  const optionsById = new Map(taskRows.map((task) => [Number(task.id), {
+    id: Number(task.id),
+    taskNo: task.task_no,
+    saleOrderNo: task.sale_order_no,
+    customerName: task.customer_name,
+    warehouseName: task.warehouse_name,
+    status: Number(task.status),
+    statusName: WT_STATUS_NAME[task.status] ?? String(task.status),
+  }]))
+  return summaries.map((summary) => ({
+    ...summary,
+    taskOptions: summary.taskIds.map((id) => optionsById.get(id)).filter(Boolean),
   }))
 }
 

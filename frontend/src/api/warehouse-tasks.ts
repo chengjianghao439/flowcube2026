@@ -62,6 +62,7 @@ export interface WarehouseTask {
 export interface MyTask {
   id: number
   taskNo: string
+  saleOrderNo?: string | null
   customerName: string
   warehouseName: string
   status: TaskStatus
@@ -80,11 +81,15 @@ export interface PdaTaskSkuSummary {
   productId: number
   productCode: string
   productName: string
+  articleNumber?: string | null
+  spec?: string | null
+  color?: string | null
   unit: string
   totalRequired: number
   totalPicked: number
   orderCount: number
   taskIds: number[]
+  taskOptions: Pick<MyTask, 'id' | 'taskNo' | 'saleOrderNo' | 'customerName' | 'warehouseName' | 'status' | 'statusName'>[]
 }
 
 export const getMyTasksApi = () =>

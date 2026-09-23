@@ -12,7 +12,7 @@ import { Package, ClipboardList } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getMyTasksApi, getMyTaskSkuSummaryApi, startPickingApi } from '@/api/warehouse-tasks'
+import { getMyTasksApi, getMyTaskSkuSummaryApi, getTaskByIdApi, startPickingApi } from '@/api/warehouse-tasks'
 import type { MyTask, PdaTaskSkuSummary } from '@/api/warehouse-tasks'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/lib/toast'
@@ -21,6 +21,7 @@ import { WT_PRIORITY_TONE, WT_STATUS_TONE } from '@/constants/warehouseTaskStatu
 import PdaHeader, { PdaRefreshButton } from '@/components/pda/PdaHeader'
 import PdaCard from '@/components/pda/PdaCard'
 import { PdaEmptyCard, PdaLoading } from '@/components/pda/PdaEmptyState'
+import { qty as formatQty } from '@/lib/format'
 
 // ─── 常量 ─────────────────────────────────────────────────────────────────────
 
@@ -50,7 +51,7 @@ function TaskCard({ task, onStart, starting }: { task: MyTask; onStart: () => vo
         <div>
           <div className="flex justify-between text-xs text-muted-foreground mb-1">
             <span>拣货进度</span>
-            <span>{task.totalPicked.toFixed(0)} / {task.totalRequired.toFixed(0)} ({pct}%)</span>
+            <span>{formatQty(task.totalPicked)} / {formatQty(task.totalRequired)} ({pct}%)</span>
           </div>
           <div className="h-1.5 rounded-full bg-muted">
             <div className="h-1.5 rounded-full transition-all"
@@ -65,39 +66,84 @@ function TaskCard({ task, onStart, starting }: { task: MyTask; onStart: () => vo
   )
 }
 
-// ─── SKU 汇总行类型 ───────────────────────────────────────────────────────────
-
 // ─── SKU 卡片 ─────────────────────────────────────────────────────────────────
 
-function SkuCard({ sku, onTap }: { sku: PdaTaskSkuSummary; onTap: () => void }) {
+function SkuCard({ sku, tasksById, onTaskSelect, startingId }: {
+  sku: PdaTaskSkuSummary
+  tasksById: Map<number, MyTask>
+  onTaskSelect: (taskId: number) => void
+  startingId: number | null
+}) {
+  const [expanded, setExpanded] = useState(false)
   const pct = sku.totalRequired > 0 ? Math.min(100, Math.round(sku.totalPicked / sku.totalRequired * 100)) : 0
-  const done = pct >= 100
+  const remaining = Math.max(0, Math.round((sku.totalRequired - sku.totalPicked) * 100) / 100)
+  const done = remaining === 0
+  const multipleTasks = sku.taskIds.length > 1
+  const taskOptionsById = new Map(sku.taskOptions?.map(task => [task.id, task]) ?? [])
   return (
-    <PdaCard done={done} onClick={onTap} className="text-left">
-      <div className="space-y-2">
-        <div className="min-w-0">
-          <PdaProductIdentity code={sku.productCode} name={sku.productName} view="overview" />
-        </div>
-        <div className="flex items-center justify-between text-sm">
-          <div>
-            <p className="text-xs text-muted-foreground">已拣/总需</p>
-            <p className="font-bold text-foreground">
-              <span className="text-primary">{sku.totalPicked.toFixed(0)}</span>
-              <span className="text-muted-foreground">/{sku.totalRequired.toFixed(0)}</span>
-            </p>
+    <PdaCard done={done} className="text-left">
+      <button
+        type="button"
+        className="block w-full text-left active:opacity-80"
+        aria-label={multipleTasks ? `选择 ${sku.productCode} 的拣货任务` : `进入 ${sku.productCode} 的拣货任务`}
+        aria-expanded={multipleTasks ? expanded : undefined}
+        disabled={sku.taskIds.length === 0}
+        onClick={() => {
+          if (multipleTasks) setExpanded(value => !value)
+          else if (sku.taskIds[0]) onTaskSelect(sku.taskIds[0])
+        }}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <PdaProductIdentity code={sku.productCode} name={sku.productName} view="overview" />
           </div>
-          {done
-            ? <SoftStatusLabel label="✓ 已拣" tone="success" />
-            : <SoftStatusLabel label="待拣" tone="draft" />
-          }
+          <span className={`shrink-0 rounded-lg px-2 py-1 text-right text-xs font-semibold ${done ? 'bg-green-100 text-green-800' : 'bg-primary/10 text-primary'}`}>
+            {done ? '已拣齐' : <>还需拣 {formatQty(remaining)} {sku.unit}</>}
+          </span>
         </div>
-        <div>
-          <div className="h-1.5 rounded-full bg-muted">
-            <div className="h-1.5 rounded-full transition-all"
-              style={{ width: `${pct}%`, background: done ? 'hsl(var(--success))' : 'hsl(var(--primary))' }} />
+        {(sku.spec || sku.color || sku.articleNumber) && (
+          <div className="mt-2 space-y-0.5 text-xs leading-5 text-muted-foreground">
+            {sku.spec && <p className="whitespace-normal [overflow-wrap:anywhere]">型号：{sku.spec}</p>}
+            {sku.color && <p className="whitespace-normal [overflow-wrap:anywhere]">颜色：{sku.color}</p>}
+            {sku.articleNumber && <p className="whitespace-normal [overflow-wrap:anywhere]">供应商型号：{sku.articleNumber}</p>}
           </div>
+        )}
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-xs">
+          <span className="text-foreground">已拣 {formatQty(sku.totalPicked)} / 共需 {formatQty(sku.totalRequired)} {sku.unit}</span>
+          <span className="shrink-0 text-muted-foreground">涉及 {sku.orderCount} 单</span>
         </div>
-      </div>
+        <div className="mt-2 h-1.5 rounded-full bg-muted">
+          <div className="h-1.5 rounded-full transition-all"
+            style={{ width: `${pct}%`, background: done ? 'hsl(var(--success))' : 'hsl(var(--primary))' }} />
+        </div>
+        <p className="mt-2 text-right text-xs font-medium text-primary">
+          {sku.taskIds.length === 0 ? '暂无关联任务' : multipleTasks ? (expanded ? '收起任务' : '选择任务') : '进入拣货'}
+        </p>
+      </button>
+      {expanded && multipleTasks && (
+        <div className="mt-3 max-h-64 space-y-2 overflow-y-auto border-t border-border pt-3">
+          {sku.taskIds.map(taskId => {
+            const task = taskOptionsById.get(taskId) ?? tasksById.get(taskId)
+            return <button
+              key={taskId}
+              type="button"
+              className="flex w-full items-center justify-between gap-2 rounded-xl border border-border bg-background px-3 py-2.5 text-left active:bg-muted"
+              disabled={startingId === taskId}
+              onClick={() => onTaskSelect(taskId)}
+            >
+              <span className="min-w-0">
+                <span className="block font-mono text-sm font-semibold text-foreground whitespace-normal [overflow-wrap:anywhere]">
+                  {task?.saleOrderNo ? `销售单 ${task.saleOrderNo}` : `任务 #${taskId}`}
+                </span>
+                <span className="block text-xs text-muted-foreground whitespace-normal [overflow-wrap:anywhere]">
+                  {task ? `${task.taskNo} · ${task.customerName} · ${task.warehouseName}` : '点此读取任务信息'}
+                </span>
+              </span>
+              {task && <SoftStatusLabel label={task.statusName} tone={WT_STATUS_TONE[String(task.status) as keyof typeof WT_STATUS_TONE] ?? 'draft'} className="shrink-0" />}
+            </button>
+          })}
+        </div>
+      )}
     </PdaCard>
   )
 }
@@ -122,6 +168,7 @@ export default function PdaPickingPage() {
     retry: 1,
   })
   const tasks = data ?? []
+  const tasksById = new Map(tasks.map(task => [task.id, task]))
 
   const { data: skuData, isLoading: skuLoading } = useQuery({
     queryKey: ['pda-my-task-sku-summary'],
@@ -152,12 +199,32 @@ export default function PdaPickingPage() {
     onError: () => { toast.error('操作失败'); setStartingId(null) },
   })
 
-  function handleTaskStart(t: MyTask) {
+  function handleTaskStart(t: Pick<MyTask, 'id' | 'status'>) {
+    if (t.status !== 1 && t.status !== 2) {
+      toast.error('任务状态已变化，请刷新后重试')
+      void refreshAll()
+      return
+    }
     setStartingId(t.id)
     // status=1（待分配）自动调用 startPicking 切换到备货中
     // status=2（备货中）直接跳转
     if (t.status === 2) navigate(`/pda/task/${t.id}`)
     else startMut.mutate(t.id)
+  }
+
+  async function handleTaskStartById(taskId: number) {
+    if (startMut.isPending) return
+    const knownTask = tasksById.get(taskId)
+    if (knownTask) { handleTaskStart(knownTask); return }
+    setStartingId(taskId)
+    try {
+      const detail = await getTaskByIdApi(taskId)
+      handleTaskStart(detail)
+    } catch {
+      toast.error('任务已更新，请刷新后重试')
+      setStartingId(null)
+      await refreshAll()
+    }
   }
 
   // ── 渲染 ──────────────────────────────────────────────────────────────────
@@ -197,13 +264,11 @@ export default function PdaPickingPage() {
             : <div className="flex flex-col gap-3">
                 {skuList.map(sku => (
                   <SkuCard
-                    key={sku.productId}
+                    key={`${sku.productId}|${sku.productCode}|${sku.productName}|${sku.unit}|${sku.articleNumber ?? ''}|${sku.spec ?? ''}|${sku.color ?? ''}`}
                     sku={sku}
-                    onTap={() => {
-                      // 跳转到第一个关联任务
-                      const firstTaskId = sku.taskIds[0]
-                      if (firstTaskId) navigate(`/pda/task/${firstTaskId}`)
-                    }}
+                    tasksById={tasksById}
+                    onTaskSelect={(taskId) => { void handleTaskStartById(taskId) }}
+                    startingId={startingId}
                   />
                 ))}
               </div>
