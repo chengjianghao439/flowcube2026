@@ -136,7 +136,6 @@ function PutawayRunner({ taskId }: { taskId: number }) {
           }}
           placeholder={engine.currentStep.placeholder}
           disabled={engine.scanning || putawayAction.submitBlocked}
-          tapToManualEntry
         />
       </PdaBottomBar>
     </div>

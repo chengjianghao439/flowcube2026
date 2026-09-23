@@ -149,7 +149,7 @@ async function gunScan(code: string) {
 
 test('进页面默认扫码模式：不渲染输入框，也不把焦点放到输入框（不弹软键盘）', () => {
   expect(host.querySelector('input')).toBeNull()
-  expect(host.textContent).toContain('扫描库存条码')
+  expect(host.textContent?.match(/扫描库存条码/g)).toHaveLength(1)
   expect(document.activeElement?.tagName ?? '').not.toBe('INPUT')
 })
 

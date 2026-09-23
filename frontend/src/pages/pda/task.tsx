@@ -21,7 +21,6 @@ import PdaBottomBar from '@/components/pda/PdaBottomBar'
 import PdaScanner from '@/components/pda/PdaScanner'
 import PdaFlash from '@/components/pda/PdaFlash'
 import { PdaLoading } from '@/components/pda/PdaEmptyState'
-import PdaStepHint from '@/components/pda/PdaStepHint'
 import { useOfflineScan } from '@/hooks/useOfflineScan'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
@@ -336,16 +335,6 @@ export default function PdaTaskPage() {
             <div className="py-10 text-center"><p className="text-muted-foreground text-sm">任务状态：{task?.statusName??'…'}</p></div>
           )}
         </div>
-      </div>
-
-      {/* 步骤提示 */}
-      <div className="max-w-md mx-auto px-4 pt-3">
-        <PdaStepHint
-          step="扫描库存条码"
-          nextStep="扫描库存条码"
-          errorHint="扫描库存条码"
-          hasError={false}
-        />
       </div>
 
       {/*

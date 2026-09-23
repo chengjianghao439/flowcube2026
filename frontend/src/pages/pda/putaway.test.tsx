@@ -108,14 +108,18 @@ async function scan(code: string) {
   })
 }
 
-test('上架页默认等硬件扫码，点扫码区域才打开手动输入并沿用条码校验', async () => {
+test('上架页与拣货页统一：默认等硬件扫码，只有点手动输入按钮才弹键盘', async () => {
   await mountPage({ ...TASK, status: 3 })
   expect(host.querySelector('[data-scanner-manual="true"]')).toBeNull()
   expect(document.activeElement?.tagName).not.toBe('INPUT')
 
-  const scanArea = host.querySelector<HTMLElement>('[role="button"][aria-label="手动输入条码"]')
+  const scanArea = host.querySelector<HTMLElement>('[data-testid="pda-scan-area"]')
   expect(scanArea).not.toBeNull()
   await act(async () => { scanArea!.click() })
+  expect(host.querySelector('[data-scanner-manual="true"]')).toBeNull()
+  const manualButton = [...host.querySelectorAll('button')].find(button => button.textContent === '手动输入')
+  expect(manualButton).not.toBeUndefined()
+  await act(async () => { manualButton!.click() })
   const input = host.querySelector<HTMLInputElement>('[data-scanner-manual="true"]')
   expect(input).not.toBeNull()
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 100)) })
@@ -131,7 +135,7 @@ test('上架页默认等硬件扫码，点扫码区域才打开手动输入并�
   expect(host.textContent).toContain('测试商品')
   expect(api.putaway).not.toHaveBeenCalled()
 
-  await act(async () => { host.querySelector<HTMLElement>('[role="button"][aria-label="手动输入条码"]')!.click() })
+  await act(async () => { [...host.querySelectorAll('button')].find(button => button.textContent === '手动输入')!.click() })
   const locationInput = host.querySelector<HTMLInputElement>('[data-scanner-manual="true"]')!
   await act(async () => {
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!

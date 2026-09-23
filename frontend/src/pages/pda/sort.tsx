@@ -9,7 +9,7 @@ import PdaOverviewText from '@/components/pda/PdaOverviewText'
  *  2. 扫分拣格码 → 自动确认，无需点击按钮
  */
 import { useState } from 'react'
-import {ClipboardList, Loader2} from 'lucide-react'
+import { ClipboardList } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { getSortingBinsApi, scanProductForSortApi } from '@/api/sorting-bins'
@@ -17,9 +17,10 @@ import type { SortingBin } from '@/api/sorting-bins'
 import { getTaskByIdApi, sortDoneApi } from '@/api/warehouse-tasks'
 import PdaHeader, { PdaRefreshButton } from '@/components/pda/PdaHeader'
 import PdaCard from '@/components/pda/PdaCard'
+import PdaBottomBar from '@/components/pda/PdaBottomBar'
+import PdaScanner from '@/components/pda/PdaScanner'
 import PdaFlash from '@/components/pda/PdaFlash'
 import { PdaEmptyCard, PdaLoading } from '@/components/pda/PdaEmptyState'
-import { usePdaScanner } from '@/hooks/usePdaScanner'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
 import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
@@ -133,28 +134,17 @@ export default function PdaSortPage() {
     setHint(null)
   }
 
-  // 全局扫码枪监听，无需点击输入框
-  usePdaScanner({
-    onScan: (code) => {
-      if (scanning) return
-      if (step === 'scan-product') handleProductScan(code)
-      else handleBinScan(code)
-    },
-    enabled: !scanning && !sortAction.submitBlocked,
-    onDuplicate: () => err('重复扫码，请稍候'),
-  })
-
   const occupiedBins = (bins ?? []).filter(b => b.status === 2)
   const freeBins     = (bins ?? []).filter(b => b.status === 1)
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="flex min-h-screen flex-col bg-background">
       <PdaHeader title="分拣作业" subtitle="Put Wall"
         onBack={() => nav('/pda')}
         right={<PdaRefreshButton onRefresh={() => refetch()} />}
       />
 
-      <div className="max-w-md mx-auto px-4 pb-32 space-y-4 py-4">
+      <div className="max-w-md mx-auto flex-1 px-4 pb-8 space-y-4 py-4 w-full">
         <PdaFlash flash={flash} />
         <PdaCriticalActionNotice
           blockedReason={sortAction.blockedReason}
@@ -187,17 +177,6 @@ export default function PdaSortPage() {
             step==='confirm-bin' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
           }`}>2</div>
           <p className={`text-sm ${step==='confirm-bin' ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>扫分拣格确认</p>
-        </div>
-
-        {/* 当前操作提示 */}
-        <div className={`rounded-2xl border-2 px-4 py-3 text-center transition-all ${
-          scanning ? 'border-yellow-400 bg-yellow-50' :
-          step === 'scan-product' ? 'border-primary/30 bg-primary/5' : 'border-green-400/30 bg-green-50'
-        }`}>
-          <p className="text-sm font-semibold text-foreground">
-            {scanning ? <span className="inline-flex items-center gap-1"><Loader2 className="h-3.5 w-3.5 animate-spin" />处理中…</span> :
-             step === 'scan-product' ? '扫描商品条码' : '扫描分拣格条码'}
-          </p>
         </div>
 
         {/* 分拣提示卡 */}
@@ -253,6 +232,14 @@ export default function PdaSortPage() {
           </>
         )}
       </div>
+      <PdaBottomBar>
+        <PdaScanner
+          onScan={(code) => { if (step === 'scan-product') void handleProductScan(code); else void handleBinScan(code) }}
+          placeholder={step === 'scan-product' ? '扫描商品条码' : '扫描分拣格条码'}
+          disabled={scanning || sortAction.submitBlocked}
+          onDuplicate={() => err('重复扫码，请稍候')}
+        />
+      </PdaBottomBar>
     </div>
   )
 }

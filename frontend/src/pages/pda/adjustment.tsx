@@ -19,9 +19,10 @@ import {
 import { getLocationByCodeApi } from '@/api/locations'
 import PdaHeader, { PdaRefreshButton } from '@/components/pda/PdaHeader'
 import PdaCard from '@/components/pda/PdaCard'
+import PdaBottomBar from '@/components/pda/PdaBottomBar'
+import PdaScanner from '@/components/pda/PdaScanner'
 import PdaFlash from '@/components/pda/PdaFlash'
 import { PdaEmptyCard, PdaLoading } from '@/components/pda/PdaEmptyState'
-import { usePdaScanner } from '@/hooks/usePdaScanner'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
 import { usePdaPendingAdjustments, usePdaAdjustmentDetail } from '@/hooks/usePdaAdjustment'
@@ -194,15 +195,10 @@ function AdjustmentDetailPage({ adjustmentId }: { adjustmentId: number }) {
     }
   }
 
-  usePdaScanner({
-    onScan: (code) => {
-      if (scanning) return
-      if (step === 'scan-location') { void handleLocationScan(code); return }
-      handleScan(code)
-    },
-    enabled: !scanning && !returnAction.submitBlocked && !voidAction.submitBlocked && !isLoading,
-    onDuplicate: () => err('重复扫码，请稍候'),
-  })
+  function handleScannerInput(code: string) {
+    if (step === 'scan-location') { void handleLocationScan(code); return }
+    handleScan(code)
+  }
 
   if (isLoading || !detail) {
     return (
@@ -214,12 +210,12 @@ function AdjustmentDetailPage({ adjustmentId }: { adjustmentId: number }) {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="flex min-h-screen flex-col bg-background">
       <PdaHeader title="改单确认" subtitle={detail.taskNo}
         backLabel="← 改单确认" onBack={() => navigate('/pda/adjustments')}
         right={<PdaRefreshButton onRefresh={() => refetch()} />} />
 
-      <div className="max-w-md mx-auto px-4 pb-32 space-y-4 py-4">
+      <div className="max-w-md mx-auto flex-1 px-4 pb-8 space-y-4 py-4 w-full">
         <PdaFlash flash={flash} />
         <PdaCriticalActionNotice
           blockedReason={returnAction.blockedReason}
@@ -327,6 +323,14 @@ function AdjustmentDetailPage({ adjustmentId }: { adjustmentId: number }) {
           </div>
         )}
       </div>
+      <PdaBottomBar>
+        <PdaScanner
+          onScan={handleScannerInput}
+          placeholder={step === 'scan-location' ? `扫描原库位条码确认放回：${target?.suggestedLocationCode ?? ''}` : '扫描待拆箱箱子条码或待归还库存条码'}
+          disabled={scanning || returnAction.submitBlocked || voidAction.submitBlocked}
+          onDuplicate={() => err('重复扫码，请稍候')}
+        />
+      </PdaBottomBar>
     </div>
   )
 }

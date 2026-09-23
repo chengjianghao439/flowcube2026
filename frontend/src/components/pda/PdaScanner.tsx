@@ -3,7 +3,7 @@
  *
  * 两种输入模式：
  *  1. 扫码模式（默认）：接收原生广播或全局 keydown，软键盘不弹出，扫码枪直接触发 onScan
- *  2. 手动模式：用户点击「手动输入」按钮（或明确允许点击的扫码区域）后激活，
+ *  2. 手动模式：用户点击「手动输入」按钮后激活，
  *     此时弹出软键盘，输入后回车提交
  *
  * 键盘模拟识别特征：字符间隔 < 50ms + 末尾 Enter（或超时自动 flush）；广播直接给完整条码。
@@ -23,8 +23,6 @@ interface PdaScannerProps {
   showTypeHint?: boolean
   /** false：仅扫码枪，隐藏手输入口（调拨等强制扫码场景） */
   allowManualEntry?: boolean
-  /** 允许点扫码提示区进入手动输入；默认仍保持原有独立按钮交互。 */
-  tapToManualEntry?: boolean
   /** 同一条码 1 秒内重复扫描时触发（可选，比如弹提示告诉用户"重复扫码"）；不传则静默丢弃 */
   onDuplicate?: (barcode: string) => void
 }
@@ -35,7 +33,6 @@ export default function PdaScanner({
   disabled = false,
   showTypeHint = true,
   allowManualEntry = true,
-  tapToManualEntry = false,
   onDuplicate,
 }: PdaScannerProps) {
   const manualInputRef = useRef<HTMLInputElement>(null)
@@ -87,21 +84,10 @@ export default function PdaScanner({
     handleScan(code)
   }
 
-  const scanAreaIsManualTrigger = allowManualEntry && tapToManualEntry && !manualMode && !disabled
-
   return (
     <div>
       <div
-        role={scanAreaIsManualTrigger ? 'button' : undefined}
-        aria-label={scanAreaIsManualTrigger ? '手动输入条码' : undefined}
-        tabIndex={scanAreaIsManualTrigger ? 0 : undefined}
-        onClick={scanAreaIsManualTrigger ? enterManualMode : undefined}
-        onKeyDown={scanAreaIsManualTrigger ? e => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault()
-            enterManualMode()
-          }
-        } : undefined}
+        data-testid="pda-scan-area"
         className={`flex items-center gap-3 rounded-2xl border px-4 py-3 shadow-sm transition-all ${
         flash
           ? 'border-emerald-300 bg-emerald-50'
@@ -159,7 +145,7 @@ export default function PdaScanner({
                 className="rounded-xl border border-border bg-background px-3 py-2 text-xs text-muted-foreground active:scale-95"
               >取消</button>
             </>
-          ) : allowManualEntry && !tapToManualEntry ? (
+          ) : allowManualEntry ? (
             <button
               onClick={enterManualMode}
               disabled={disabled}

@@ -17,11 +17,11 @@ import { useQuery } from '@tanstack/react-query'
 import PdaHeader from '@/components/pda/PdaHeader'
 import PdaCard from '@/components/pda/PdaCard'
 import PdaBottomBar from '@/components/pda/PdaBottomBar'
+import PdaScanner from '@/components/pda/PdaScanner'
 import PdaFlash from '@/components/pda/PdaFlash'
 import { PdaLoading } from '@/components/pda/PdaEmptyState'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
-import { usePdaScanner } from '@/hooks/usePdaScanner'
 import { getPendingScanChecksApi, getScanCheckItemsApi, saveCheckItemScansApi } from '@/api/stockcheck'
 import { getContainerByBarcodeApi } from '@/api/inventory'
 import type { PendingScanCheck, ScanCheckItem } from '@/types/stockcheck'
@@ -85,7 +85,6 @@ function CheckWork({ checkId }: { checkId: number }) {
   // 「只能整数」的商品把实盘数量框的 step 切成 1（迁移 254）
   const allowDecimalOf = useProductQtyPolicies([activeItem?.productId])
   const [scanned, setScanned] = useState<ScannedContainer[]>([])
-  const [manual, setManual] = useState('')
   const [checking, setChecking] = useState(false)
 
   const { data: detail, isLoading, refetch } = useQuery({
@@ -141,8 +140,6 @@ function CheckWork({ checkId }: { checkId: number }) {
     }
   }, [activeItem, checking, scanned, err, ok])
 
-  usePdaScanner({ onScan: (code) => { void addContainer(code) }, enabled: !!activeItem && !saveAction.submitBlocked })
-
   const submit = useCallback(() => {
     if (!activeItem) return
     if (saveAction.submitBlocked) { err(saveAction.blockedReason || '当前不可提交'); return }
@@ -182,17 +179,6 @@ function CheckWork({ checkId }: { checkId: number }) {
               )}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">扫完该商品的全部实物后点「提交本商品」；<b>没扫到的条码会被判为盘亏</b>，请务必扫全。数量框预填账面数，实物少了就改成实际数。</p>
-            <div className="mt-2 flex gap-2">
-              <Input
-                data-scanner-manual="true"
-                value={manual}
-                onChange={e => setManual(e.target.value)}
-                placeholder="手动输入条码"
-                className="h-10 flex-1"
-                onKeyDown={e => { if (e.key === 'Enter') { void addContainer(manual); setManual('') } }}
-              />
-              <Button className="h-10" disabled={checking} onClick={() => { void addContainer(manual); setManual('') }}>加入</Button>
-            </div>
           </PdaCard>
 
           <PdaCard>
@@ -229,6 +215,7 @@ function CheckWork({ checkId }: { checkId: number }) {
           </PdaCard>
         </div>
         <PdaBottomBar>
+          <PdaScanner onScan={(code) => { void addContainer(code) }} placeholder="扫描在架库存条码" disabled={checking || saveAction.submitBlocked} />
           <Button className="w-full" disabled={saveAction.phase === 'submitting' || checking} onClick={submit}>
             {saveAction.phase === 'submitting' ? '提交中…' : `提交本商品（${scanned.length} 个条码 / 实盘 ${totalCounted}）`}
           </Button>

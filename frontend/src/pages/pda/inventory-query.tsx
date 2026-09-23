@@ -7,20 +7,17 @@
  * 数据权限由后端 scopeFilter 按用户仓库范围过滤。
  */
 import { qty as formatQty } from '@/lib/format'
-import { useState, useCallback, useEffect } from 'react'
-import { Capacitor } from '@capacitor/core'
+import { useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import PdaHeader from '@/components/pda/PdaHeader'
 import PdaCard from '@/components/pda/PdaCard'
+import PdaBottomBar from '@/components/pda/PdaBottomBar'
+import PdaScanner from '@/components/pda/PdaScanner'
 import PdaFlash from '@/components/pda/PdaFlash'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
-import { usePdaScanner } from '@/hooks/usePdaScanner'
 import { queryInventoryByBarcodeApi, type InventoryQueryContainer } from '@/api/inventory'
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
 import { formatPdaErrorMessage } from '@/utils/displayFormatters'
 import { formatDisplayDate } from '@/lib/dateTime'
-import { PdaScanBridge } from '@/lib/pdaScanBridge'
 
 function formatDate(v: string | null): string {
   if (!v) return '—'
@@ -61,38 +58,9 @@ function ContainerRow({ c }: { c: InventoryQueryContainer }) {
 export default function PdaInventoryQueryPage() {
   const navigate = useNavigate()
   const { flash, err, ok } = usePdaFeedback()
-  const [manual, setManual] = useState('')
   const [results, setResults] = useState<InventoryQueryContainer[] | null>(null)
   const [lastBarcode, setLastBarcode] = useState('')
   const [querying, setQuerying] = useState(false)
-  const [broadcastEnabled, setBroadcastEnabled] = useState(false)
-  const [broadcastAvailable, setBroadcastAvailable] = useState(false)
-  const [switchingMode, setSwitchingMode] = useState(false)
-
-  useEffect(() => {
-    if (!Capacitor.isNativePlatform()) return
-    let disposed = false
-    void PdaScanBridge.getStatus().then(status => {
-      if (disposed) return
-      setBroadcastAvailable(status.available)
-      setBroadcastEnabled(status.enabled)
-    }).catch(() => {})
-    return () => { disposed = true }
-  }, [])
-
-  async function toggleBroadcastMode() {
-    setSwitchingMode(true)
-    try {
-      const status = await PdaScanBridge.setEnabled({ enabled: !broadcastEnabled })
-      setBroadcastEnabled(status.enabled)
-      ok(status.enabled ? '无焦点扫码已开启' : '已恢复输入框扫码方式')
-    } catch {
-      err('切换扫码方式失败，请退出并重新打开应用')
-    } finally {
-      setSwitchingMode(false)
-    }
-  }
-
   const doQuery = useCallback(async (raw: string) => {
     const bc = raw.trim()
     if (!bc || querying) return
@@ -115,39 +83,10 @@ export default function PdaInventoryQueryPage() {
     }
   }, [querying, err, ok])
 
-  usePdaScanner({ onScan: (code) => { setManual(''); void doQuery(code) } })
-
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <PdaHeader title="库存查询" subtitle="扫描库存条码查看在库信息" onBack={() => navigate('/pda')} />
       <div className="max-w-md mx-auto flex-1 space-y-3 overflow-y-auto p-3 w-full">
-        <PdaCard>
-          <p className="mb-2 text-sm text-foreground">扫描库存条码（I…/B…）或输入后回车</p>
-          <div className="flex gap-2">
-            <Input
-              data-scanner-manual="true"
-              value={manual}
-              onChange={e => setManual(e.target.value)}
-              placeholder="扫描或输入库存条码"
-              className="h-10 flex-1 font-mono"
-              onKeyDown={e => { if (e.key === 'Enter') { void doQuery(manual); setManual('') } }}
-            />
-            <Button className="h-10" disabled={querying} onClick={() => { void doQuery(manual); setManual('') }}>
-              {querying ? '查询中…' : '查询'}
-            </Button>
-          </div>
-          {broadcastAvailable && (
-            <div className="mt-3 border-t border-border/60 pt-3">
-              <Button type="button" variant="outline" className="h-10 w-full" disabled={switchingMode} onClick={() => { void toggleBroadcastMode() }}>
-                {broadcastEnabled ? '关闭无焦点扫码' : '开启无焦点扫码'}
-              </Button>
-              <p className="mt-1.5 text-xs text-muted-foreground">
-                {broadcastEnabled ? '直接按 PDA 扫码键即可；点上方输入框仍可手动输入。' : '已恢复设备原有的键盘输出；再次开启后可无焦点扫码。'}
-              </p>
-            </div>
-          )}
-        </PdaCard>
-
         {results !== null && (
           <>
             <p className="px-1 text-xs text-muted-foreground">
@@ -165,6 +104,9 @@ export default function PdaInventoryQueryPage() {
         )}
       </div>
       <PdaFlash flash={flash} />
+      <PdaBottomBar>
+        <PdaScanner onScan={(code) => { void doQuery(code) }} placeholder="扫描库存条码（I…/B…）" disabled={querying} />
+      </PdaBottomBar>
     </div>
   )
 }

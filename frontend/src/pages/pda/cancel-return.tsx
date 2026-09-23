@@ -21,9 +21,10 @@ import {
 import { getLocationByCodeApi } from '@/api/locations'
 import PdaHeader, { PdaRefreshButton } from '@/components/pda/PdaHeader'
 import PdaCard from '@/components/pda/PdaCard'
+import PdaBottomBar from '@/components/pda/PdaBottomBar'
+import PdaScanner from '@/components/pda/PdaScanner'
 import PdaFlash from '@/components/pda/PdaFlash'
 import { PdaEmptyCard, PdaLoading } from '@/components/pda/PdaEmptyState'
-import { usePdaScanner } from '@/hooks/usePdaScanner'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
 import { usePdaPendingCancelReturns, usePdaCancelReturnDetail } from '@/hooks/usePdaCancelReturn'
@@ -210,18 +211,12 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
     }
   }
 
-  usePdaScanner({
-    onScan: (code) => {
-      if (scanning) return
-      if (step === 'scan-location') { void handleLocationScan(code); return }
-      // 待归还容器和待拆箱箱子共用同一个扫码入口，按条码类型自动分流：
-      // 箱子条码（L/BOX 前缀）直接确认拆箱，其它一律当容器条码处理。
-      if (parseBarcode(code).type === 'box') { void handleBoxScan(code); return }
-      handleContainerScan(code)
-    },
-    enabled: !scanning && !returnAction.submitBlocked && !boxAction.submitBlocked && !isLoading,
-    onDuplicate: () => err('重复扫码，请稍候'),
-  })
+  function handleScan(code: string) {
+    if (step === 'scan-location') { void handleLocationScan(code); return }
+    // 待归还容器和待拆箱箱子共用同一个扫码入口，按条码类型自动分流。
+    if (parseBarcode(code).type === 'box') { void handleBoxScan(code); return }
+    handleContainerScan(code)
+  }
 
   if (isLoading || !detail) {
     return (
@@ -233,12 +228,12 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="flex min-h-screen flex-col bg-background">
       <PdaHeader title="拣货退回确认" subtitle={detail.taskNo}
         backLabel="← 拣货退回" onBack={() => navigate('/pda/cancel-return')}
         right={<PdaRefreshButton onRefresh={() => refetch()} />} />
 
-      <div className="max-w-md mx-auto px-4 pb-32 space-y-4 py-4">
+      <div className="max-w-md mx-auto flex-1 px-4 pb-8 space-y-4 py-4 w-full">
         <PdaFlash flash={flash} />
         <PdaCriticalActionNotice
           blockedReason={returnAction.blockedReason}
@@ -352,6 +347,14 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
           </div>
         )}
       </div>
+      <PdaBottomBar>
+        <PdaScanner
+          onScan={handleScan}
+          placeholder={step === 'scan-location' ? `扫描原库位条码确认放回：${target?.suggestedLocationCode ?? ''}` : '扫描待归还库存条码或待拆箱箱子条码'}
+          disabled={scanning || returnAction.submitBlocked || boxAction.submitBlocked}
+          onDuplicate={() => err('重复扫码，请稍候')}
+        />
+      </PdaBottomBar>
     </div>
   )
 }
