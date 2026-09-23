@@ -3,12 +3,13 @@
  *
  * 两种输入模式：
  *  1. 扫码模式（默认）：接收原生广播或全局 keydown，软键盘不弹出，扫码枪直接触发 onScan
- *  2. 手动模式：用户点击「手动输入」按钮后激活，此时弹出软键盘，输入后回车提交
+ *  2. 手动模式：用户点击「手动输入」按钮（或明确允许点击的扫码区域）后激活，
+ *     此时弹出软键盘，输入后回车提交
  *
  * 键盘模拟识别特征：字符间隔 < 50ms + 末尾 Enter（或超时自动 flush）；广播直接给完整条码。
  *
  * 重要：扫码模式**永不聚焦输入框**，进页面/扫码结束都不弹软键盘；
- * 软键盘只在用户点「手动输入」后才出现（2026-09-17 用户要求，不要再加 autoFocus 之类的入参）。
+ * 软键盘只在用户主动请求手输后才出现（2026-09-17 用户要求，不要再加 autoFocus 之类的入参）。
  */
 import { useRef, useState, useCallback } from 'react'
 import { Loader2, Keyboard, CheckCircle2, ScanLine } from 'lucide-react'
@@ -20,8 +21,10 @@ interface PdaScannerProps {
   placeholder?: string
   disabled?: boolean
   showTypeHint?: boolean
-  /** false：仅扫码枪，隐藏「手动输入」（上架等强制扫码场景） */
+  /** false：仅扫码枪，隐藏手输入口（调拨等强制扫码场景） */
   allowManualEntry?: boolean
+  /** 允许点扫码提示区进入手动输入；默认仍保持原有独立按钮交互。 */
+  tapToManualEntry?: boolean
   /** 同一条码 1 秒内重复扫描时触发（可选，比如弹提示告诉用户"重复扫码"）；不传则静默丢弃 */
   onDuplicate?: (barcode: string) => void
 }
@@ -32,6 +35,7 @@ export default function PdaScanner({
   disabled = false,
   showTypeHint = true,
   allowManualEntry = true,
+  tapToManualEntry = false,
   onDuplicate,
 }: PdaScannerProps) {
   const manualInputRef = useRef<HTMLInputElement>(null)
@@ -83,9 +87,22 @@ export default function PdaScanner({
     handleScan(code)
   }
 
+  const scanAreaIsManualTrigger = allowManualEntry && tapToManualEntry && !manualMode && !disabled
+
   return (
     <div>
-      <div className={`flex items-center gap-3 rounded-2xl border px-4 py-3 shadow-sm transition-all ${
+      <div
+        role={scanAreaIsManualTrigger ? 'button' : undefined}
+        aria-label={scanAreaIsManualTrigger ? '手动输入条码' : undefined}
+        tabIndex={scanAreaIsManualTrigger ? 0 : undefined}
+        onClick={scanAreaIsManualTrigger ? enterManualMode : undefined}
+        onKeyDown={scanAreaIsManualTrigger ? e => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            enterManualMode()
+          }
+        } : undefined}
+        className={`flex items-center gap-3 rounded-2xl border px-4 py-3 shadow-sm transition-all ${
         flash
           ? 'border-emerald-300 bg-emerald-50'
           : disabled
@@ -142,7 +159,7 @@ export default function PdaScanner({
                 className="rounded-xl border border-border bg-background px-3 py-2 text-xs text-muted-foreground active:scale-95"
               >取消</button>
             </>
-          ) : allowManualEntry ? (
+          ) : allowManualEntry && !tapToManualEntry ? (
             <button
               onClick={enterManualMode}
               disabled={disabled}

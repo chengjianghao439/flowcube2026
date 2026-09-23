@@ -108,6 +108,40 @@ async function scan(code: string) {
   })
 }
 
+test('上架页默认等硬件扫码，点扫码区域才打开手动输入并沿用条码校验', async () => {
+  await mountPage({ ...TASK, status: 3 })
+  expect(host.querySelector('[data-scanner-manual="true"]')).toBeNull()
+  expect(document.activeElement?.tagName).not.toBe('INPUT')
+
+  const scanArea = host.querySelector<HTMLElement>('[role="button"][aria-label="手动输入条码"]')
+  expect(scanArea).not.toBeNull()
+  await act(async () => { scanArea!.click() })
+  const input = host.querySelector<HTMLInputElement>('[data-scanner-manual="true"]')
+  expect(input).not.toBeNull()
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 100)) })
+  expect(document.activeElement).toBe(input)
+
+  await act(async () => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+    setter.call(input, 'I000917')
+    input!.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  await act(async () => { input!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })) })
+  expect(api.container).toHaveBeenCalledWith('I000917')
+  expect(host.textContent).toContain('测试商品')
+  expect(api.putaway).not.toHaveBeenCalled()
+
+  await act(async () => { host.querySelector<HTMLElement>('[role="button"][aria-label="手动输入条码"]')!.click() })
+  const locationInput = host.querySelector<HTMLInputElement>('[data-scanner-manual="true"]')!
+  await act(async () => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+    setter.call(locationInput, 'R000804')
+    locationInput.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  await act(async () => { locationInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })) })
+  expect(api.putaway).toHaveBeenCalledWith(1979, { containerId: 917, locationId: 804, deviatedFromSuggestion: undefined, suggestedLocationCode: undefined }, 'scan-test-key')
+})
+
 test.each(['库存条码不存在或已失效', '没有库存查询权限', '请求超时，请重试'])(
   '库存扫码接口失败必须在页面显示原因：%s', async message => {
     api.container.mockRejectedValueOnce({ response: { data: { message } } })

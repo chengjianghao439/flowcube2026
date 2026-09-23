@@ -85,7 +85,7 @@ export default function PdaInventoryQueryPage() {
     try {
       const status = await PdaScanBridge.setEnabled({ enabled: !broadcastEnabled })
       setBroadcastEnabled(status.enabled)
-      ok(status.enabled ? '无焦点扫码测试已开启' : '已恢复原扫码方式')
+      ok(status.enabled ? '无焦点扫码已开启' : '已恢复输入框扫码方式')
     } catch {
       err('切换扫码方式失败，请退出并重新打开应用')
     } finally {
@@ -139,10 +139,10 @@ export default function PdaInventoryQueryPage() {
           {broadcastAvailable && (
             <div className="mt-3 border-t border-border/60 pt-3">
               <Button type="button" variant="outline" className="h-10 w-full" disabled={switchingMode} onClick={() => { void toggleBroadcastMode() }}>
-                {broadcastEnabled ? '关闭无焦点扫码测试' : '开启无焦点扫码测试'}
+                {broadcastEnabled ? '关闭无焦点扫码' : '开启无焦点扫码'}
               </Button>
               <p className="mt-1.5 text-xs text-muted-foreground">
-                {broadcastEnabled ? '请直接按 PDA 扫码键测试；若无反应，点上方按钮恢复原扫码方式。' : '仅本次打开应用有效；开启后可返回工作台测试上架等扫码页面。'}
+                {broadcastEnabled ? '直接按 PDA 扫码键即可；点上方输入框仍可手动输入。' : '已恢复设备原有的键盘输出；再次开启后可无焦点扫码。'}
               </p>
             </div>
           )}

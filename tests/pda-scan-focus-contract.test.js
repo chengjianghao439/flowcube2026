@@ -30,6 +30,7 @@ const path = require('node:path')
 const ROOT = path.resolve(__dirname, '..')
 const PDA_DIR = path.join(ROOT, 'frontend/src/pages/pda')
 const SCANNER = path.join(ROOT, 'frontend/src/components/pda/PdaScanner.tsx')
+const NATIVE_BRIDGE = path.join(ROOT, 'frontend/android/app/src/main/java/com/flowcube/pda/PdaScanBridgePlugin.java')
 
 /**
  * **需要输入的页面**：允许自动聚焦。登录页是唯一一个——用户 2026-09-19 明确
@@ -100,6 +101,14 @@ function main() {
   assert.ok(focusCalls > 0, 'PdaScanner 里找不到任何 .focus()，扫描逻辑可能失效（手动输入分支应有一处）')
 
   assert.ok(scanned > 10, `只扫描到 ${scanned} 个 PDA 文件，扫描逻辑可能失效`)
+
+  // i6310pro 真机已确认受保护的原生广播可无焦点扫码。正式启用仍须使用非导出接收器；
+  // 加载插件时自动开启，手动关闭后本次运行不得因页面切换重新开启。
+  const nativeSrc = fs.readFileSync(NATIVE_BRIDGE, 'utf8')
+  const loadBody = nativeSrc.match(/@Override public void load\(\)\s*\{([\s\S]*?)\n    \}/)?.[1] ?? ''
+  assert.match(loadBody, /if\s*\(startReceiving\(\)\)\s*enabled\s*=\s*true/, '原生扫码桥应在首次加载时默认开启')
+  assert.match(nativeSrc, /ContextCompat\.RECEIVER_NOT_EXPORTED/, '扫码广播接收器必须保持非导出')
+  assert.doesNotMatch(nativeSrc, /ContextCompat\.RECEIVER_EXPORTED/, '扫码广播不得开放给其他应用伪造')
 
   for (const p of problems) console.log(`  [FAIL] ${p}`)
   console.log(

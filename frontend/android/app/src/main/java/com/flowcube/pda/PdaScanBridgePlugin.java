@@ -63,8 +63,10 @@ public class PdaScanBridgePlugin extends Plugin {
                     return prefs.edit().putBoolean(RESTORE_KEYBOARD, value).commit();
                 }
             });
-            // 试验模式每次启动默认关闭；若上次进程异常退出，先恢复原键盘输出。
-            if (!modeLease.release()) Log.w(TAG, "启动时未能恢复设备键盘扫码模式");
+            // 先处理上次进程异常退出留下的设备模式，再启用已在 i6310pro 真机验证的广播接收。
+            if (!modeLease.release()) {
+                Log.w(TAG, "启动时未能恢复设备键盘扫码模式");
+            } else if (startReceiving()) enabled = true;
         } catch (Throwable error) {
             // 非该厂商设备仍可使用既有键盘扫码；广播名沿用文档默认值。
             Log.w(TAG, "厂商扫码接口不可用，保留键盘扫码", error);

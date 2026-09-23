@@ -25,7 +25,7 @@ let root: Root
 
 beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
-  scanner.getStatus.mockReset().mockResolvedValue({ enabled: false, available: true })
+  scanner.getStatus.mockReset().mockResolvedValue({ enabled: true, available: true })
   scanner.setEnabled.mockReset().mockImplementation(async ({ enabled }) => ({ enabled }))
   host = document.createElement('div')
   document.body.append(host)
@@ -37,17 +37,18 @@ afterEach(async () => {
   host.remove()
 })
 
-test('无焦点扫码测试默认关闭，用户可在库存查询开启并关闭', async () => {
+test('原生无焦点扫码默认开启，用户可在库存查询关闭并重新开启', async () => {
   await act(async () => { root.render(<MemoryRouter><PdaInventoryQueryPage /></MemoryRouter>) })
-  const button = () => [...host.querySelectorAll('button')].find(item => item.textContent?.includes('无焦点扫码测试'))
-  expect(button()?.textContent).toContain('开启')
+  const button = () => [...host.querySelectorAll('button')].find(item => item.textContent?.includes('无焦点扫码'))
+  expect(button()?.textContent).toContain('关闭')
+  expect(host.textContent).not.toContain('测试')
   expect(scanner.setEnabled).not.toHaveBeenCalled()
 
   await act(async () => { button()?.click() })
-  expect(scanner.setEnabled).toHaveBeenCalledWith({ enabled: true })
-  expect(button()?.textContent).toContain('关闭')
+  expect(scanner.setEnabled).toHaveBeenCalledWith({ enabled: false })
+  expect(button()?.textContent).toContain('开启')
 
   await act(async () => { button()?.click() })
-  expect(scanner.setEnabled).toHaveBeenLastCalledWith({ enabled: false })
-  expect(button()?.textContent).toContain('开启')
+  expect(scanner.setEnabled).toHaveBeenLastCalledWith({ enabled: true })
+  expect(button()?.textContent).toContain('关闭')
 })

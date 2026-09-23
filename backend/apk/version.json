@@ -1,7 +1,7 @@
 {
-  "version": "0.10.6",
-  "versionCode": 141,
+  "version": "0.10.7",
+  "versionCode": 142,
   "filename": "app-release.apk",
-  "releaseNote": "PDA 新增 i6310pro 无焦点扫码测试入口，默认保持原扫码方式。",
-  "publishedAt": "2026-09-23T02:49:05.055Z"
+  "releaseNote": "PDA i6310pro 默认无焦点扫码，收货上架可点扫码区域手动输入条码。",
+  "publishedAt": "2026-09-23T04:22:11.899Z"
 }
