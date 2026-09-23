@@ -1,7 +1,7 @@
 -- 常用岗位预置角色。只插入新编码，不覆盖管理员已修改的角色或权限。
 -- 授予权限前核对系统预置标记；已有同编码自定义角色不会被追加权限。
 START TRANSACTION;
-CREATE TEMPORARY TABLE new_job_role_presets (code VARCHAR(50) PRIMARY KEY) ENGINE=MEMORY;
+CREATE TEMPORARY TABLE new_job_role_presets (code VARCHAR(50) PRIMARY KEY) ENGINE=MEMORY DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 INSERT INTO new_job_role_presets (code)
 SELECT preset.code FROM (
   SELECT 'preset_warehouse_operator' AS code UNION ALL

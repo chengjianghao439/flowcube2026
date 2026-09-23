@@ -21,3 +21,8 @@ test('job role presets only grant known permissions and keep reserved powers una
   assert.deepEqual(grants.filter(permission => reserved.has(permission)
     || /^(user|role|settings|approval\.flow)\./.test(permission)), [], 'reserved power')
 })
+
+test('job role preset staging table uses the role code collation', () => {
+  const sql = fs.readFileSync(path.join(__dirname, '../backend/src/database/257_seed_job_role_presets.sql'), 'utf8')
+  assert.match(sql, /CREATE TEMPORARY TABLE new_job_role_presets\s*\(code VARCHAR\(50\) PRIMARY KEY\)\s*ENGINE=MEMORY\s*DEFAULT CHARSET=utf8mb4\s*COLLATE=utf8mb4_unicode_ci/i)
+})
