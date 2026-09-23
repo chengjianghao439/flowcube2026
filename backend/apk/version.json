@@ -1,7 +1,7 @@
 {
-  "version": "0.10.7",
-  "versionCode": 142,
+  "version": "0.10.8",
+  "versionCode": 143,
   "filename": "app-release.apk",
-  "releaseNote": "PDA i6310pro 默认无焦点扫码，收货上架可点扫码区域手动输入条码。",
-  "publishedAt": "2026-09-23T04:22:11.899Z"
+  "releaseNote": "PDA 扫码作业统一为直接扫码、按需手动输入；拣货信息更完整，操作反馈和设备操作更顺手。",
+  "publishedAt": "2026-09-23T07:17:57.179Z"
 }
