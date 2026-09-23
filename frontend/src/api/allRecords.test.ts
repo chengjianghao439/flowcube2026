@@ -93,3 +93,12 @@ test('显式行身份覆盖默认 id，保留合法复合行并拒绝字段变�
   expect((await collectAllRecords(fetch(false), undefined, undefined, identity)).list).toHaveLength(2)
   await expect(collectAllRecords(fetch(true), undefined, undefined, identity)).rejects.toThrow('重复')
 })
+
+test('采购预览续页传递并核对首批 snapshotId，禁止混合不同计算结果', async () => {
+  const fetch = vi.fn(async (page: number, pageSize?: number, snapshotId?: string) => {
+    if (page > 1) expect(snapshotId).toBe('preview-1')
+    return { ...batch(page, 3, pageSize ?? 2), snapshotId: 'preview-1' }
+  })
+  expect((await collectAllRecords(fetch)).list).toHaveLength(3)
+  await expect(collectAllRecords(async page => ({ ...batch(page, 3, 2), snapshotId: page === 1 ? 'preview-1' : 'preview-2' }))).rejects.toThrow('变化')
+})

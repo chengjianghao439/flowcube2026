@@ -1,7 +1,7 @@
 {
-  "version": "0.10.8",
-  "versionCode": 143,
+  "version": "0.11.0",
+  "versionCode": 144,
   "filename": "app-release.apk",
-  "releaseNote": "PDA 扫码作业统一为直接扫码、按需手动输入；拣货信息更完整，操作反馈和设备操作更顺手。",
-  "publishedAt": "2026-09-23T07:17:57.179Z"
+  "releaseNote": "新增常用岗位角色，完善用户与部门管理；优化 PDA 作业，并修复库存、账款和权限相关问题。",
+  "publishedAt": "2026-09-23T13:04:35.510Z"
 }

@@ -5,6 +5,12 @@ const { getExpectedStock } = require('../../utils/expectedStock')
 const { getStockProjections } = require('../../engine/containerEngine')
 const { calculateSupply, transferSurplus } = require('../procurement/procurement.planning')
 const { roundQty } = require('../../utils/unitConversion')
+const { normalizePagination } = require('../../utils/pagination')
+const AppError = require('../../utils/AppError')
+const { createProcurementSnapshots, restart } = require('./procurement.snapshots')
+const snapshots = createProcurementSnapshots()
+const snapshotCleanup = setInterval(() => snapshots.prune(), 30000)
+snapshotCleanup.unref()
 
 // Every source contributes once: converted plan lines disappear; only unconverted PR
 // remainder remains; converted quantities are represented by live draft/expected POs.
@@ -91,6 +97,9 @@ async function getSupplyRows(options = {}, conn = pool) {
     LEFT JOIN product_units pu ON pu.product_id=p.id AND pu.unit_name=pol.entry_unit
     WHERE ${where.join(' AND ')}${scope.sql} ORDER BY d.product_id,d.warehouse_id LIMIT 500 OFFSET ?`, [N, half, N, ...filterParams, ...scope.params, offset])
     if (!rows.length) break
+    if (options.maxSourceRows && list.length + rows.length > options.maxSourceRows) {
+      throw new AppError('结果过多，请缩小筛选范围后重试', 413, 'PROCUREMENT_PREVIEW_TOO_LARGE')
+    }
     const pairs = rows.map(r => ({ productId: Number(r.product_id), warehouseId: Number(r.warehouse_id) }))
     const projections = await getStockProjections(conn, pairs)
     const expected = await getExpectedStock(conn, pairs)
@@ -148,4 +157,31 @@ async function getSupplyRows(options = {}, conn = pool) {
 }
 
 async function getProcurementPlan(options = {}, conn = pool) { return getSupplyRows({ ...options, mode: 'plan' }, conn) }
-module.exports = { getProcurementPlan, getSupplyRows, getCoverage }
+
+/** 只读 HTTP 预览才使用分页结果；计划生成/校验仍走实时 getProcurementPlan(conn)。 */
+async function getProcurementPlanPage(options = {}, conn = pool) {
+  const { userId, snapshotId } = options
+  if (!Number.isSafeInteger(Number(userId)) || Number(userId) <= 0) throw new AppError('请先登录后重试', 401)
+  const { page, pageSize, offset } = normalizePagination(options)
+  if (!Number.isSafeInteger(page) || !Number.isSafeInteger(pageSize)) throw new AppError('分页参数无效', 400)
+  const filters = {
+    window: options.window ?? 30, horizon: options.horizon ?? 30,
+    defaultLeadTime: options.defaultLeadTime ?? 7, keyword: options.keyword || '',
+    warehouseId: options.warehouseId ?? null, categoryId: options.categoryId ?? null,
+    forecastMethod: options.forecastMethod || 'sma',
+    scopeWarehouseIds: Array.isArray(options.scopeWarehouseIds)
+      ? [...new Set(options.scopeWarehouseIds.map(Number))].sort((a, b) => a - b) : null,
+  }
+  const binding = JSON.stringify({ userId: Number(userId), pageSize, filters })
+  let result, id = snapshotId, expiresAt
+  if (snapshotId) {
+    if (typeof snapshotId !== 'string') throw restart()
+    ;({ result, expiresAt } = snapshots.read(snapshotId, binding))
+  } else {
+    if (page !== 1) throw restart()
+    result = await getProcurementPlan({ ...filters, maxSourceRows: 20000 }, conn)
+    ;({ snapshotId: id, expiresAt } = snapshots.save(binding, result))
+  }
+  return { ...result, list: result.list.slice(offset, offset + pageSize), snapshotId: id, snapshotExpiresAt: expiresAt, pagination: { page, pageSize, total: result.list.length } }
+}
+module.exports = { getProcurementPlan, getProcurementPlanPage, getSupplyRows, getCoverage }

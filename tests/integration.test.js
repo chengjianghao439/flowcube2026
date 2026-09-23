@@ -228,7 +228,7 @@ async function main() {
     const wh2Session = await createPdaSession({
       deviceCode: wh2DeviceCode,
       deviceSecret: 'smoke-pda-key-2',
-      userId: 1,
+      userId: Number(adminLogin.user.id),
     })
     await expectOk(
       log,

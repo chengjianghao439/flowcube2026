@@ -33,9 +33,10 @@ export const useCreateSale = () => {
 
 export const useUpdateSale = () => {
   const invalidate = useInvalidate()
+  const keyRef = useRef(createRequestKey('sale-update'))
   return useMutation({
-    mutationFn: (data: UpdateSaleParams) => updateSaleApi(data),
-    onSuccess: () => { invalidate('sale_update'); toast.success('销售单已保存') },
+    mutationFn: (data: UpdateSaleParams) => updateSaleApi(data, keyRef.current),
+    onSuccess: () => { invalidate('sale_update'); toast.success('销售单已保存'); keyRef.current = createRequestKey('sale-update') },
   })
 }
 

@@ -134,6 +134,9 @@ jobs:
       - name: Nginx 安全头和缓存策略真实响应
         run: npm run smoke:nginx-headers
 
+      - name: 已确认审计问题回归
+        run: npm run test:confirmed-audit
+
       - name: ESLint — 后端
         run: npm --prefix backend run lint
 
@@ -400,6 +403,9 @@ jobs:
 
       - name: PDA 设备会话回归（设备未绑定即拒绝作业）
         run: npm run smoke:pda-device-session
+
+      - name: 已确认审计问题实库回归
+        run: npm run smoke:confirmed-audit
 
       - name: 冒烟测试 — 财务（收款核销 / 对账单 / 资金账户 / 费用报销）
         run: npm run smoke:finance

@@ -136,33 +136,13 @@ jobs:
           chmod 600 ~/.ssh/config
 
       - name: Add SSH known_hosts
+        id: ssh_trust
         shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          # 服务器 SSH 层存在**间歇性**不可用：2026-09-19 实测同一分钟内 ssh-keyscan 可能先失败、随后成功
-          # （12:06 部署失败 → 12:2x rerun 成功 → 12:49 诊断又失败）。keyscan 默认 5 秒超时且不重试，单次失败
-          # 就让整条部署/诊断链终止，表现为「Add SSH known_hosts: failure」——与网络不通无法区分、也无法自愈。
-          # 现改为最多 5 次尝试（每次 -T 10 + timeout 20，只有拿到非空输出才算成功），全失败才终止并打印 stderr。
-          HOST="${{ steps.deploy_config.outputs.server_host }}"
-          PORT="${{ steps.deploy_config.outputs.server_ssh_port }}"
-          keyscan_ok=0
-          for attempt in 1 2 3 4 5; do
-            if timeout 20 ssh-keyscan -T 10 -H -p "$PORT" "$HOST" > /tmp/keyscan.out 2>/tmp/keyscan.err && [ -s /tmp/keyscan.out ]; then
-              cat /tmp/keyscan.out >> ~/.ssh/known_hosts
-              keyscan_ok=1
-              break
-            fi
-            echo "::warning::ssh-keyscan 第 ${attempt} 次失败（服务器 SSH 间歇不可用？），5 秒后重试"
-            sleep 5
-          done
-          if [ "$keyscan_ok" != '1' ]; then
-            echo "::error::ssh-keyscan 连续 5 次失败，无法建立 ~/.ssh/known_hosts"
-            tail -5 /tmp/keyscan.err 2>/dev/null || true
-            exit 1
-          fi
-          chmod 644 ~/.ssh/known_hosts
+        env:
+          FLOWCUBE_SSH_HOST: ${{ steps.deploy_config.outputs.server_host }}
+          FLOWCUBE_SSH_PORT: ${{ steps.deploy_config.outputs.server_ssh_port }}
+          FLOWCUBE_SSH_KNOWN_HOSTS: ${{ vars.FLOWCUBE_SSH_KNOWN_HOSTS }}
+        run: bash scripts/setup-ci-ssh-trust.sh
 
       - name: Deploy backend and frontend on server
         # 故障预算：HTTPS/中转尝试 1145s + 上传 2700s + 合并 610s + 等锁 1800s + 部署/回退 3000s + 预检等 300s。
@@ -252,15 +232,14 @@ jobs:
           fi
           timeout -k 5 60 scp -o ConnectTimeout=20 -P "${{ steps.deploy_config.outputs.server_ssh_port }}" scripts/publish-pda.sh \
             "${{ steps.deploy_config.outputs.server_user }}@${{ steps.deploy_config.outputs.server_host }}:$BOOTSTRAP_SCRIPT"
-          # %q 逐项转义远程环境，口令中的引号/美元符号不能改变远程脚本。
+          # %q 只转义非敏感配置；验收口令通过 stdin 传给远程 shell 内建 read。
           printf -v REMOTE_COMMAND '%q ' env \
             "SERVER_APP_PATH=${{ steps.deploy_config.outputs.server_app_path }}" \
             "EXPECTED_COMMIT=$GITHUB_SHA" "BOOTSTRAP_SCRIPT=$BOOTSTRAP_SCRIPT" \
             "DEPLOY_IMAGE_ARCHIVE=$IMAGE_ARCHIVE" "DEPLOY_IMAGE_SHA256=$IMAGE_SHA256" \
             "DEPLOY_PUBLIC_ORIGIN=${{ steps.deploy_config.outputs.erp_origin }}" \
-            "SMOKE_USERNAME=$SMOKE_USERNAME" "SMOKE_PASSWORD=$SMOKE_PASSWORD" \
-            "SMOKE_LIMITED_USERNAME=$SMOKE_LIMITED_USERNAME" "SMOKE_LIMITED_PASSWORD=$SMOKE_LIMITED_PASSWORD" bash -s
-          ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=10 -o ConnectTimeout=20 \
+            bash -s
+          bash scripts/ssh-smoke-stdin.sh -o ServerAliveInterval=30 -o ServerAliveCountMax=10 -o ConnectTimeout=20 \
             -p "${{ steps.deploy_config.outputs.server_ssh_port }}" "${{ steps.deploy_config.outputs.server_user }}@${{ steps.deploy_config.outputs.server_host }}" "$REMOTE_COMMAND" <<'EOF'
           set -euo pipefail
           cd "$SERVER_APP_PATH"
@@ -285,7 +264,7 @@ jobs:
           EOF
 
       - name: Remove this run's temporary upload
-        if: always() && steps.deploy_config.outputs.server_host != ''
+        if: always() && steps.ssh_trust.outcome == 'success' && steps.deploy_config.outputs.server_host != ''
         timeout-minutes: 2
         shell: bash
         run: |

@@ -26,61 +26,108 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { BarcodeScanner, BarcodeFormat } from '@capacitor-mlkit/barcode-scanning'
 
+interface ScanSession {
+  cancelled: boolean
+  starting: boolean
+  startIssued: boolean
+  listener?: { remove: () => Promise<void> }
+  onResult: (raw: string) => void
+  cleanup: Promise<void>[]
+}
+
+// 插件相机是进程单例，跨 hook 卸载/重挂也必须等待旧原生操作结束。
+let nativeOwner: ScanSession | null = null
+
+function removeListener(session: ScanSession) {
+  const listener = session.listener
+  session.listener = undefined
+  if (listener) session.cleanup.push(listener.remove().catch(() => { /* 原生资源清理失败不产生未处理拒绝。 */ }))
+}
+
+async function stopNativeScan() {
+  try { await BarcodeScanner.stopScan() } catch { /* 页面关闭仍需完成其余资源清理。 */ }
+}
+
 export function useCameraScanner() {
   const [scanning, setScanning] = useState(false)
   const [open, setOpen] = useState(false)
-  const onResultRef = useRef<((raw: string) => void) | null>(null)
+  const sessionRef = useRef<ScanSession | null>(null)
+  const mountedRef = useRef(true)
 
-  // —— 扫描期间把页面根背景变透明，让插件塞进 WebView 底层的原生取景透出来 ——
-  // 插件 hideWebViewBackground 只把 WebView 置透明；不透明的是页面 body/布局根。
-  // 这里的作用域是全局根节点：PDA 入口根是 html>body 下的 pda-root 容器。
+  const releaseSession = useCallback(async (session: ScanSession) => {
+    await Promise.all(session.cleanup)
+    if (nativeOwner === session) nativeOwner = null
+    if (sessionRef.current === session) sessionRef.current = null
+  }, [])
+
+  const cancelSession = useCallback(() => {
+    const session = sessionRef.current
+    if (!session || session.cancelled) return
+    session.cancelled = true
+    removeListener(session)
+    if (session.startIssued) session.cleanup.push(stopNativeScan())
+    // 启动中的代次由 finally 补做 stop 后等待全部清理；不能只等最后一次 stop。
+    if (!session.starting) void releaseSession(session)
+  }, [releaseSession])
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false; cancelSession() }
+  }, [cancelSession])
+
   useEffect(() => {
     document.body.classList.toggle('barcode-scanner-active', open)
     return () => document.body.classList.remove('barcode-scanner-active')
   }, [open])
 
-  useEffect(() => {
-    if (!open) return
-    const handle = BarcodeScanner.addListener('barcodesScanned', ev => {
-      const raw = ev?.barcodes?.[0]?.rawValue
-      if (raw) onResultRef.current?.(raw)
-    })
-    void handle
-    return () => {
-      void handle.then(h => h.remove())
-    }
-  }, [open])
-
   const scan = useCallback(async (onResult: (raw: string) => void, onFail?: () => void) => {
-    // 与 secureStorage/pdaRuntime 同判据：仅原生 APK 有 ML Kit，浏览器/桌面直接不可用
-    if (!Capacitor.isNativePlatform()) return
-    onResultRef.current = onResult
+    if (!Capacitor.isNativePlatform() || !mountedRef.current || sessionRef.current || nativeOwner) return
+    const session: ScanSession = { cancelled: false, starting: true, startIssued: false, onResult, cleanup: [] }
+    sessionRef.current = session
+    nativeOwner = session
     setOpen(true)
     setScanning(true)
     try {
+      session.listener = await BarcodeScanner.addListener('barcodesScanned', ev => {
+        if (session.cancelled || !mountedRef.current) return
+        const raw = ev?.barcodes?.[0]?.rawValue
+        if (raw) session.onResult(raw)
+      })
+      if (session.cancelled) return
       const { supported } = await BarcodeScanner.isSupported()
+      if (session.cancelled) return
       if (!supported) {
+        cancelSession()
         onFail?.()
-        setOpen(false)
         return
       }
-      // 连续扫描（一次扫码成功即回调，扫描框保持打开直到调用方关闭）：
-      // 一方面补扫其它码不用重开相机，另一方面不给「扫到即关」的竞态留窗口——
-      // 回调发生在插件原生线程，此时 stop 会重插一段 previewView。
+      session.startIssued = true
       await BarcodeScanner.startScan({ formats: [BarcodeFormat.QrCode] })
     } catch {
-      onFail?.()
-      setOpen(false)
+      if (!session.cancelled && mountedRef.current) {
+        cancelSession()
+        onFail?.()
+      }
     } finally {
-      setScanning(false)
+      if (session.cancelled) {
+        removeListener(session)
+        // close/unmount 可能先于原生 startScan 完成，完成后再次停止。
+        if (session.startIssued) session.cleanup.push(stopNativeScan())
+        await releaseSession(session)
+      }
+      session.starting = false
+      if (mountedRef.current) {
+        setScanning(false)
+        if (session.cancelled) setOpen(false)
+      }
     }
-  }, [])
+  }, [cancelSession, releaseSession])
 
   const close = useCallback(() => {
+    cancelSession()
     setOpen(false)
-    onResultRef.current = null
-    void BarcodeScanner.stopScan().catch(() => {})
-  }, [])
+    setScanning(false)
+  }, [cancelSession])
 
   return { scan, close, scanning, open }
 }

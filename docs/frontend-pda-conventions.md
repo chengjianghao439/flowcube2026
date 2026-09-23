@@ -156,3 +156,14 @@
 - 人称——全站统一用「你」，不混用「您」。
 
 **改文案的验证要求**：跑 `npm run test:copy-conventions`、`./frontend/node_modules/.bin/tsc -p frontend/tsconfig.app.json --noEmit` 与 `npx vitest run`；**文案若被测试断言（`frontend/src` 与 `tests` 里有 200+ 处 `toContain('中文')`），必须同批改测试**。`pages/landing` 与 `pages/landing-preview` 的 index/BusinessStory/ProductContent 是双份同源，改一处必须两处同改。
+
+## PDA 持久化与原生扫码生命周期（2026-09-23）
+
+- `usePendingRequests` 使用页面进程共享的 external store；多个 hook 实例添加、替换、移除同一集合，卸载重挂保持未确认记录。关键写入先通过共享快照的同步 claim 检查并占位，成功后才进入提交状态和执行器；同一事件 tick 的同 hook 或两个同 action hook 只能一个占位成功。持久化采用版本 2、登录用户 ID 与记录的封装；旧数组没有用户归属，只提取 action/requestKey 及必要 requestAction 到独立隔离存储，使用固定文案，不显示原 label/metadata，也不归给当前账号；匹配 action 仍阻断。只有当前账号的成功/失败回执才能自动解除，查无记录或异常不得用业务状态认领；保留用户明确核对未生效后的主动清理入口。用户切换或退出只清除有归属记录，不删除隔离记录；迁移持久化失败时保留原 key。旧会话的异步回调由 `sessionGeneration` 拦截。存储读取失败回退内存；写入失败保留内存 pending，不能解除关键操作阻断。持久化不可用期间不能承诺整页刷新后恢复记录；存储删除失败时，本进程禁止再次恢复旧内容。
+- `usePdaFlow` 的 sessionStorage 读、写、删除均只捕获存储异常。读取失败使用初始状态；删除失败不跳过完成回调、不阻断重置；完成后不再把草稿写回。步骤业务错误仍按原流程显示。
+- `useCameraScanner` 关闭与卸载都撤销当前扫描、移除监听器并停止已经请求的原生相机。异步监听器注册和支持检测每次返回后核对取消状态；晚到的 `startScan` 完成后补做 `stopScan`，模块级原生所有权跨 hook 卸载重挂共享，等待全部 stop 与监听器清理完成后才允许下一轮启动，不能只等最后一次 stop。关闭后的原生事件不得触发业务回调。原生 mock 只证明调用时序，硬件释放仍须 Android 真机验收。
+- 未配置 Sentry 的 `unhandledrejection` 通过已认证的 `/system/error-report` 兜底；只发送固定错误分类与 origin，不发送任意 `reason`、业务对象、原始消息/堆栈或完整 URL。匿名状态不上报，上报失败不产生递归异常；配置 Sentry 时使用其默认 Promise 捕获，不重复 capture 或后端上报。
+
+上述行为由 `usePendingRequests.test.tsx`、`usePdaFlow.test.tsx`、`useCameraScanner.test.tsx` 和 `unhandledRejection.test.ts` 覆盖，纳入既有前端 `test:unit`。
+
+采购预测等返回 `snapshotId` 的分页结果，`collectAllRecords` 必须把首批 ID 传入所有续批，`payloadClient` 将其置入查询参数，并要求续批响应 ID 与首批一致。仍保留总数、页码、条数及记录身份验证；失效错误整体失败，提示刷新，不能显示部分列表。未提供 ID 的既有接口保持原自动分页行为。

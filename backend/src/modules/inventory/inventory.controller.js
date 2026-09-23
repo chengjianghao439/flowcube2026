@@ -91,6 +91,7 @@ async function outbound(req, res, next) {
       type: 2, ...req.body,
       operator: getOperatorFromRequest(req),
       requestKey: extractRequestKey(req),
+      scopeWarehouseIds: req.user?.warehouseIds ?? null,
     })
     return successResponse(res, result, '出库成功')
   } catch(e){next(e)}
@@ -139,7 +140,7 @@ async function overview(req, res, next) {
 
 async function containerByBarcode(req, res, next) {
   try {
-    const result = await svc.getContainerByBarcode(req.params.bc)
+    const result = await svc.getContainerByBarcode(req.params.bc, req.user?.warehouseIds ?? null)
     return successResponse(res, result, '查询成功')
   } catch (e) { next(e) }
 }
@@ -252,7 +253,11 @@ async function expiryAlerts(req, res, next) {
 
 async function procurementPlan(req, res, next) {
   try {
-    const result = await procurement.getProcurementPlan({
+    const result = await procurement.getProcurementPlanPage({
+      userId: req.user?.userId,
+      snapshotId: req.query.snapshotId,
+      page: req.query.page,
+      pageSize: req.query.pageSize,
       window: req.query.window ? +req.query.window : 30,
       horizon: req.query.horizon ? +req.query.horizon : 30,
       keyword: req.query.keyword || '',
@@ -260,8 +265,7 @@ async function procurementPlan(req, res, next) {
       defaultLeadTime: req.query.defaultLeadTime ? +req.query.defaultLeadTime : 7,
       scopeWarehouseIds: req.user?.warehouseIds ?? null,
     })
-    const { page, pageSize, offset } = require('../../utils/pagination').normalizePagination(req.query)
-    return successResponse(res, { ...result, list: result.list.slice(offset, offset + pageSize), pagination: { page, pageSize, total: result.list.length } }, '查询成功')
+    return successResponse(res, result, '查询成功')
   } catch (e) { next(e) }
 }
 

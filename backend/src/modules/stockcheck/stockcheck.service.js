@@ -1,7 +1,7 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { MOVE_TYPE, writeInventoryLog } = require('../../engine/inventoryEngine')
-const { adjustContainersForStockcheck, SOURCE_TYPE, CONTAINER_STATUS, lockStockDimension, syncStockFromContainers } = require('../../engine/containerEngine')
+const { assertStockcheckLossSupported, adjustContainersForStockcheck, SOURCE_TYPE, CONTAINER_STATUS, lockStockDimension, syncStockFromContainers } = require('../../engine/containerEngine')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { beginResourceOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
@@ -440,6 +440,7 @@ async function submit(id, operator, scopeWarehouseIds = null, requestKey = null)
         409,
       )
     }
+    const scanLosses = new Map()
     for (const item of check.items) {
       // PDA 扫码盘点行（文档13 §4.3）：按容器精确对账——账面 ACTIVE 而现场没扫到的容器即盘亏
       // （精确扣这些容器，不走 FIFO：FIFO 会扣最早的容器，与"丢的是哪几只"对不上）；扫到但实盘
@@ -495,8 +496,22 @@ async function submit(id, operator, scopeWarehouseIds = null, requestKey = null)
           }
           if (remaining - counted > 1e-9) losses.push({ id: Number(bc.id), barcode: bc.barcode, lose: remaining - counted, left: counted })
         }
+        scanLosses.set(item.id, losses)
+        const lossQty = losses.reduce((sum, loss) => sum + loss.lose, 0)
+        if (lossQty > 0) await assertStockcheckLossSupported(conn, {
+          productId: item.productId, warehouseId: check.warehouseId, lossQty, productName: item.productName,
+        })
+      } else if (item.diffQty < 0) {
+        await assertStockcheckLossSupported(conn, {
+          productId: item.productId, warehouseId: check.warehouseId, lossQty: -item.diffQty, productName: item.productName,
+        })
+      }
+    }
+    // 全部行预检通过后才写库存；扫码盘亏以未锁容器实际损失计量，不扣拣货中的货。
+    for (const item of check.items) {
+      if (scanLosses.has(item.id)) {
+        const losses = scanLosses.get(item.id)
         if (!losses.length) continue
-
         const before = item.bookQty
         // 批量 UPDATE（2026-08-22 性能）：逐容器 UPDATE 改 CASE WHEN 一条语句，
         // 语义等价（remaining_qty 更新 + 0 时置 EMPTY）

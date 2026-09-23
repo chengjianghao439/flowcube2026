@@ -117,3 +117,7 @@ AST 文案和数量覆盖守卫依赖 frontend 的 TypeScript，必须在安装�
 - `npm run test:dirty-navigation`：真实 Chromium 的 file URL、延迟挂载工作区、确认/取消和重复历史遍历；需 `agent-browser@0.36.0` 与其 Chromium，命名会话由脚本 finally 关闭并验证退出。CI 安装依赖并运行。
 - `npm run smoke:nginx-headers`：需要 Docker，可通过 `DOCKER_CONTEXT` 选择本机环境；使用独立命名容器，不连接业务数据库。
 - `test:audit-client` 同时检查实际启动入口先初始化历史拦截器再渲染 Router，并包含移除/后移初始化的反向验证。
+
+### 已确认审计问题回归（2026-09-23）
+
+`npm run test:confirmed-audit` 覆盖 PDA 用户绑定、权限即时读取、条码范围、盘亏预占、扣减符号、跨仓手动出库幂等、四位金额、SSH 信任/凭据传输及采购分页快照。`npm run smoke:confirmed-audit` 在独立回环测试库验证真实事务及 HTTP 拒绝；新增两命令已接 Tests CI。相机插件 mock 测试不代表 Android 真机验收。

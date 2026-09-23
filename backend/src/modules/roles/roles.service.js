@@ -45,7 +45,7 @@ async function replacePermissions(roleId, permissions) {
       )
     }
     await conn.commit()
-    // 权限缓存失效：60s TTL 之外，改完立即让下一个请求看到新权限
+    // 兼容清理调用；权限只在单个请求内复用，下一请求直接读取已提交权限
     clearRolePermissionsCache(roleId)
   } catch (e) {
     await conn.rollback()

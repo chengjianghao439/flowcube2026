@@ -61,9 +61,11 @@ test('部署工作流从 Secrets 注入并无损转义、转发两组烟雾凭�
     assert.ok(workflow.includes(name + ': ${{ secrets.' + name + ' }}'), `${name} 未从 Secrets 注入`)
     env[name] = `fixture ' \" $() \` ; spaces ${name}`
   }
-  // Replace workflow expression placeholders only; execute the actual shell
-  // forwarding block with inert fixture values and a local remote-shell stand-in.
-  const shell = block.replace(/\$\{\{[^}]+\}\}/g, 'fixture') + '\neval "env -i $REMOTE_COMMAND" <<\'REMOTE_PROBE\'\n' +
+  assert.match(workflow, /bash scripts\/ssh-smoke-stdin\.sh/)
+  assert.doesNotMatch(block, /SMOKE_(?:LIMITED_)?(?:USERNAME|PASSWORD)=/)
+  // 执行真实转发脚本；ssh 替身先清远程环境，只有 stdin 传送的凭据可以被探针读到。
+  const shell = 'ssh() { env -i PATH="$PATH" bash -c "${@: -1}"; }; export -f ssh\n' +
+    block.replace(/\$\{\{[^}]+\}\}/g, 'fixture') + '\nbash scripts/ssh-smoke-stdin.sh fixture "$REMOTE_COMMAND" <<\'REMOTE_PROBE\'\n' +
     JSON.stringify(process.execPath) + ' -e \'process.stdout.write(JSON.stringify(Object.fromEntries(' +
     JSON.stringify(Object.keys(credentials)) + '.map(k => [k, process.env[k]]))))\'\nREMOTE_PROBE\n'
   const result = spawnSync('bash', ['-c', shell], { env, encoding: 'utf8', timeout: 5000 })

@@ -1,3 +1,4 @@
+const { moneyUnits, moneyText, moneyNumber } = require('../../utils/decimalMoney')
 const { assertAllocationParty, resolveReceiptParty } = require('./party-identity')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
@@ -64,8 +65,9 @@ async function expandStatementAllocation(conn, statementId, amount, receipt) {
   if (Number(st.status) === statementSvc.ST.DRAFT) {
     throw new AppError(`${st.statement_no} 还是草稿，请先确认后再核销`, 409)
   }
-  if (Number(st.balance) <= 1e-6) throw new AppError(`${st.statement_no} 已核销完毕`, 400)
-  if (amount > Number(st.balance) + 1e-6) {
+  const amountUnits = moneyUnits(amount)
+  if (moneyUnits(st.balance) <= 0n) throw new AppError(`${st.statement_no} 已核销完毕`, 400)
+  if (amountUnits > moneyUnits(st.balance)) {
     throw new AppError(`核销 ¥${amount.toFixed(2)} 超出 ${st.statement_no} 未核销余额 ¥${Number(st.balance).toFixed(2)}`, 400)
   }
 
@@ -78,19 +80,20 @@ async function expandStatementAllocation(conn, statementId, amount, receipt) {
     [statementId],
   )
   const parts = []
-  let left = amount
+  let left = amountUnits
   for (const it of items) {
-    if (left <= 1e-6) break
-    const take = Math.min(left, Number(it.balance))
-    if (take > 1e-6) {
+    if (left <= 0n) break
+    const balance = moneyUnits(it.balance)
+    const take = left < balance ? left : balance
+    if (take > 0n) {
       // 精度对齐账款列 DECIMAL(14,4)：舍到 2 位会让 ¥12.3456 这类 3-4 位小数账款的分配额
       // 大于其余额而在 applyAllocations 处被拒，或残留分厘无法结清（unit_price 可含 4 位小数）。
-      parts.push({ recordId: Number(it.id), amount: Number(take.toFixed(4)), statementId: Number(statementId) })
+      parts.push({ recordId: Number(it.id), amount: moneyNumber(take), statementId: Number(statementId) })
       left -= take
     }
   }
-  if (left > 1e-6) {
-    throw new AppError(`${st.statement_no} 下属账款可核销额不足，尚余 ¥${left.toFixed(2)} 无法分配`, 400)
+  if (left > 0n) {
+    throw new AppError(`${st.statement_no} 下属账款可核销额不足，尚余 ¥${moneyNumber(left).toFixed(2)} 无法分配`, 400)
   }
   return parts
 }
@@ -144,13 +147,14 @@ async function applyAllocations(conn, receipt, allocations, operator) {
   }
   const sorted = flattened.sort((a, b) => a.recordId - b.recordId)
 
-  let allocatedTotal = 0
+  let allocatedUnits = 0n
   const applied = []
 
   for (const alloc of sorted) {
     if (!Number.isFinite(alloc.amount) || alloc.amount <= 0) {
       throw new AppError('核销金额必须大于 0', 400)
     }
+    const allocUnits = moneyUnits(alloc.amount)
     const [[record]] = await conn.query('SELECT * FROM payment_records WHERE id=? FOR UPDATE', [alloc.recordId])
     if (!record) throw new AppError(`账款记录 ${alloc.recordId} 不存在`, 404)
     if (Number(record.type) !== Number(receipt.type)) {
@@ -166,24 +170,24 @@ async function applyAllocations(conn, receipt, allocations, operator) {
     if (Number(record.type) === 1 && Number(record.confirm_status) !== 1) {
       throw new AppError(`${record.order_no} 尚未财务确认，请先确认结算金额`, 409)
     }
-    const recordBalance = Number(record.balance)
-    if (alloc.amount > recordBalance + 1e-6) {
-      throw new AppError(`${record.order_no} 核销 ¥${alloc.amount.toFixed(2)} 超出其余额 ¥${recordBalance.toFixed(2)}`, 400)
+    const recordBalance = moneyUnits(record.balance)
+    if (allocUnits > recordBalance) {
+      throw new AppError(`${record.order_no} 核销 ¥${alloc.amount.toFixed(2)} 超出其余额 ¥${moneyNumber(recordBalance).toFixed(2)}`, 400)
     }
 
     await assertAllocationParty(conn, record.id, receipt)
-    const newPaid = Number(record.paid_amount) + alloc.amount
-    const newBalance = Number(record.total_amount) - newPaid
-    const newStatus = newBalance <= 1e-6 ? 3 : 2
+    const newPaid = moneyUnits(record.paid_amount) + allocUnits
+    const newBalance = moneyUnits(record.total_amount) - newPaid
+    const newStatus = newBalance <= 0n ? 3 : 2
     await conn.query(
       'UPDATE payment_records SET paid_amount=?,balance=?,status=? WHERE id=?',
-      [newPaid, Math.max(0, newBalance), newStatus, alloc.recordId],
+      [moneyText(newPaid), moneyText(newBalance > 0n ? newBalance : 0n), newStatus, alloc.recordId],
     )
     await conn.query(
       `INSERT INTO payment_entries (record_id,receipt_id,statement_id,amount,payment_date,method,remark,operator_id,operator_name)
        VALUES (?,?,?,?,?,?,?,?,?)`,
       [
-        alloc.recordId, receipt.id, alloc.statementId || null, alloc.amount, receipt.payment_date,
+        alloc.recordId, receipt.id, alloc.statementId || null, moneyText(allocUnits), receipt.payment_date,
         receipt.method || null, `核销自 ${receipt.receipt_no}`,
         operator.operatorId, operator.operatorName,
       ],
@@ -197,24 +201,24 @@ async function applyAllocations(conn, receipt, allocations, operator) {
       operatorId: operator.operatorId,
       operatorName: operator.operatorName,
       requestId: getRequestId(),
-      payload: { receiptId: receipt.id, receiptNo: receipt.receipt_no, amount: alloc.amount, balanceAfter: Math.max(0, newBalance) },
+      payload: { receiptId: receipt.id, receiptNo: receipt.receipt_no, amount: alloc.amount, balanceAfter: moneyNumber(newBalance > 0n ? newBalance : 0n) },
     })
 
-    allocatedTotal += alloc.amount
+    allocatedUnits += allocUnits
     applied.push({ recordId: alloc.recordId, orderNo: record.order_no, amount: alloc.amount, settled: newStatus === 3 })
   }
 
-  const newSettled = Number(receipt.settled_amount) + allocatedTotal
-  if (newSettled > Number(receipt.amount) + 1e-6) {
+  const newSettled = moneyUnits(receipt.settled_amount) + allocatedUnits
+  if (newSettled > moneyUnits(receipt.amount)) {
     throw new AppError(
-      `核销合计 ¥${newSettled.toFixed(2)} 超出汇款金额 ¥${Number(receipt.amount).toFixed(2)}`,
+      `核销合计 ¥${moneyNumber(newSettled).toFixed(2)} 超出汇款金额 ¥${Number(receipt.amount).toFixed(2)}`,
       400,
     )
   }
-  const newReceiptBalance = Number(receipt.amount) - newSettled
+  const newReceiptBalance = moneyUnits(receipt.amount) - newSettled
   await conn.query(
     'UPDATE payment_receipts SET settled_amount=?,balance=?,status=? WHERE id=?',
-    [newSettled, Math.max(0, newReceiptBalance), resolveReceiptStatus(Number(receipt.amount), newSettled), receipt.id],
+    [moneyText(newSettled), moneyText(newReceiptBalance), resolveReceiptStatus(moneyUnits(receipt.amount), newSettled), receipt.id],
   )
 
   // 账款动过之后重算对账单汇总（投影，不独立累加，避免两处漂移）。
@@ -224,7 +228,7 @@ async function applyAllocations(conn, receipt, allocations, operator) {
     await statementSvc.refreshSettlement(conn, sid)
   }
 
-  return { allocatedTotal, applied, receiptBalance: Math.max(0, newReceiptBalance) }
+  return { allocatedTotal: moneyNumber(allocatedUnits), settledAmount: moneyNumber(newSettled), applied, receiptBalance: moneyNumber(newReceiptBalance) }
 }
 
 /**
@@ -247,7 +251,7 @@ async function create({ type, partyId, partyName, amount, paymentDate, method, a
       return reqState.responseData ?? { replayed: true }
     }
 
-    const total = Number(amount)
+    const total = moneyNumber(moneyUnits(amount))
     if (!Number.isFinite(total) || total <= 0) throw new AppError('汇款金额必须大于 0', 400)
 
     const resolvedPartyId = await resolveReceiptParty(conn, { type, partyId, partyName, allocations })
@@ -338,7 +342,7 @@ async function settle(receiptId, { allocations = [] }, operator, requestKey) {
     const data = {
       id: Number(receiptId),
       receiptNo: receipt.receipt_no,
-      settledAmount: Number(receipt.settled_amount) + result.allocatedTotal,
+      settledAmount: result.settledAmount,
       balance: result.receiptBalance,
       applied: result.applied,
     }

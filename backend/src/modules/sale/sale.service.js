@@ -805,12 +805,17 @@ async function create({ customerId, warehouseId, remark,
 
 // 编辑草稿：仅在 status=1（草稿）时允许，整体替换明细行
 async function update(id, { customerId, warehouseId, remark,
-  carrierId, carrier, freightType, shippingProduct, receiverName, receiverPhone, receiverAddress, items, operator, scopeWarehouseIds = null, discountAmount }) {
+  carrierId, carrier, freightType, shippingProduct, receiverName, receiverPhone, receiverAddress, items, operator, scopeWarehouseIds = null, discountAmount, requestKey = null }) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
     const orderRow = await lockStatusRow(conn, { table: 'sale_orders', id, columns: 'id, status, warehouse_id', entityName: '销售单' })
     assertInScope(scopeWarehouseIds, orderRow.warehouse_id, '销售单')
+    const requestState = await beginCreationOperationRequest(conn, {
+      requestKey, action: saleOperationAction('update', id), userId: operator?.userId ?? null,
+      payload: { customerId, warehouseId, remark, carrierId, carrier, freightType, shippingProduct, receiverName, receiverPhone, receiverAddress, items, discountAmount },
+    })
+    if (requestState.replay) { await conn.rollback(); return requestState.responseData }
     const previousDimensions = await captureDimensions(conn, 'sale', id)
     assertStatusAction('sale', 'edit', orderRow.status)
     if (!items || !items.length) throw new AppError('至少需要一条商品明细', 400)
@@ -842,6 +847,7 @@ async function update(id, { customerId, warehouseId, remark,
     await restoreItemCommitments(conn, id, deliverySnapshot)
     await appendSaleEvent(conn, id, 'updated', '编辑订单', `现有 ${items.length} 条明细`, operator)
     await buildPricingEvents(conn, id, folded, operator)
+    await completeOperationRequest(conn, requestState, { data: null, message: '保存成功', resourceType: 'sale_order', resourceId: id })
     await commitFulfillment(conn, 'sale', id, previousDimensions)
   } catch (e) { await conn.rollback(); throw e }
   finally { conn.release() }
@@ -1797,7 +1803,7 @@ async function cancel(id, operator, scopeWarehouseIds = null, requestKey = null)
           } else if (shipped < qty) {
             await conn.query(
               'UPDATE sale_order_items SET quantity = ?, amount = ?, reserved_qty = ?, dispatched_qty = ? WHERE id = ?',
-              [shipped, shipped * Number(item.unit_price), shipped, shipped, item.id],
+              [shipped, round2(shipped * Number(item.unit_price)), shipped, shipped, item.id],
             )
             trimmed.push({ productId: item.product_id, productName: item.product_name, fromQuantity: qty, toQuantity: shipped })
           }

@@ -16,7 +16,7 @@ const state = vi.hoisted(() => ({
 vi.mock('@/api/operation-requests', () => ({ getOperationRequestStatusApi: state.receipt }))
 vi.mock('@/api/inventory', () => ({ getContainerByBarcodeApi: state.container }))
 vi.mock('@/hooks/useNetworkStatus', () => ({ useNetworkStatus: () => 'online' }))
-vi.mock('@/hooks/usePendingRequests', () => ({ usePendingRequests: () => ({ records: [state.record], addPending: vi.fn(), removePending: state.remove }) }))
+vi.mock('@/hooks/usePendingRequests', () => ({ usePendingRequests: () => ({ records: [state.record], addPending: vi.fn(), claimPending: vi.fn(() => true), removePending: state.remove }) }))
 vi.mock('@/hooks/usePdaTransferIn', () => ({ usePdaTransferInDetail: () => ({ data: state.order, isLoading: false }) }))
 vi.mock('@/api/transfer', () => ({ getTransferListApi: async () => { if (state.listError) throw new Error('网络错误'); return { list: state.list } }, getTransferDetailApi: async () => state.order, scanInTransferApi: vi.fn(), scanOutTransferApi: vi.fn() }))
 vi.mock('@/hooks/usePdaFeedback', () => ({ usePdaFeedback: () => ({ flash: null, ok: vi.fn(), err: vi.fn(), warn: vi.fn() }) }))

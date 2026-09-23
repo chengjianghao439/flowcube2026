@@ -47,7 +47,7 @@ async function authMiddleware(req, res, next) {
       realName: user.real_name,
       roleName: user.role_name,
       tokenVersion: currentTokenVersion,
-      // 仓库数据权限：null=不限仓，number[]=只能访问这些仓库（超管恒 null，60s 缓存）
+      // 仓库数据权限：null=不限仓，number[]=只能访问这些仓库（超管恒 null，请求级权限读取）
       warehouseIds: await require('../utils/warehouseScope').loadUserWarehouseScope(user.id, user.role_id),
     }
     updateRequestContext({ userId: user.id, username: user.username })

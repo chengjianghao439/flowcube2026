@@ -228,3 +228,9 @@ node backend/scripts/check-error-tracking.js --send-test # 显式发送无业务
 ## 受限权限门禁凭据（v0.9.11）
 
 正式页面验收同时要求主账号 `SMOKE_USERNAME` / `SMOKE_PASSWORD` 和受限账号 `SMOKE_LIMITED_USERNAME` / `SMOKE_LIMITED_PASSWORD`；配置到 GitHub Secrets，由部署步骤透传到远端 gate 容器，不打入镜像、不写日志或源码。手动运行 release:gate 同样需要显式安全注入四项。缺少配置即失败，不跳过 403 对照。受限账号按用户 2026-09-09 明确授权长期保留，发布后不删除；只能保留 dashboard.view / inbound.order.view。
+
+### SSH 信任材料前置条件（2026-09-23）
+
+浏览器、桌面、PDA 发布及服务器诊断工作流现在要求仓库 Actions 变量 `FLOWCUBE_SSH_KNOWN_HOSTS`，内容是通过既有可信连接或服务器控制台等独立渠道核对的 known_hosts 公钥行（非22端口使用 `[host]:port`）。不自动采信 ssh-keyscan，也不提供 accept-new 回退；未配置时任务在联网部署前失败。v0.11.0 发布准备中，已通过 2026-09-19 保存的本机主机键建立严格校验连接，并与服务器本地 ED25519 公钥指纹一致后设置仓库变量；主机键轮换仍须重新核对。
+
+生产 CORS 必须在启动前迁移到明确来源列表，禁用 `CORS_REFLECT`、移除 `*`，Electron 仅通过 `CORS_ALLOW_NULL_ORIGIN` 单独放行。v0.11.0 发布准备中已只读核查布尔状态，并在服务器保留仅服务器可读的原配置备份后设置 Web `https://jixuflow.com`、当前内置 PDA `https://localhost`、桌面 `null` 来源；未回显其他生产配置。实际 Android 设备来源和联网能力仍需安装验收。
