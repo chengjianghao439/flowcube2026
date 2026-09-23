@@ -107,8 +107,8 @@ export default function PdaLayout() {
         style={{
           WebkitTapHighlightColor: 'transparent',
           touchAction: 'manipulation',
-          paddingTop: 'max(env(safe-area-inset-top), 12px)',
-          paddingBottom: 'max(env(safe-area-inset-bottom), 12px)',
+          paddingTop: 'var(--pda-padding-top)',
+          paddingBottom: 'var(--pda-padding-bottom)',
           paddingLeft: 'env(safe-area-inset-left)',
           paddingRight: 'env(safe-area-inset-right)',
         }}

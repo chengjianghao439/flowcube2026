@@ -198,6 +198,17 @@
 
 /* ── PDA 工业终端全局适配 ────────────────────────────────────────────────── */
 
+.pda-root {
+  --pda-padding-top: max(env(safe-area-inset-top), 12px);
+  --pda-padding-bottom: max(env(safe-area-inset-bottom), 12px);
+}
+
+/* 页面自己的 min-h-screen 要扣除外层安全边距，否则空页面也会多滚动一截。 */
+.pda-root .min-h-screen {
+  min-height: calc(100vh - var(--pda-padding-top) - var(--pda-padding-bottom));
+  min-height: calc(100dvh - var(--pda-padding-top) - var(--pda-padding-bottom));
+}
+
 /* 禁止长按弹出系统菜单（复制/粘贴等），避免误触 */
 .pda-root, .pda-root * {
   -webkit-user-select: none;
