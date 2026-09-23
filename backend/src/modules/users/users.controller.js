@@ -7,11 +7,12 @@ async function assignableRoles(req, res, next) {
 
 async function list(req, res, next) {
   try {
-    const { page, pageSize, keyword } = req.query
+    const { page, pageSize, keyword, hideDevelopment } = req.query
     const result = await usersService.findAll({
       page: parseInt(page) || 1,
       pageSize: parseInt(pageSize) || 20,
       keyword: keyword || '',
+      hideDevelopment: hideDevelopment === '1',
     })
     return successResponse(res, result, '查询成功')
   } catch (err) {
@@ -21,7 +22,7 @@ async function list(req, res, next) {
 
 async function options(req, res, next) {
   try {
-    const result = await usersService.listOptions(req.user?.userId ?? null)
+    const result = await usersService.listOptions(req.user?.userId ?? null, req.query.hideDevelopment === '1')
     return successResponse(res, result, '查询成功')
   } catch (err) {
     next(err)
@@ -35,6 +36,14 @@ async function detail(req, res, next) {
   } catch (err) {
     next(err)
   }
+}
+
+async function myDetail(req, res, next) {
+  try { return successResponse(res, await usersService.findById(req.user.userId), '查询成功') } catch (err) { next(err) }
+}
+
+async function myWarehouseScope(req, res, next) {
+  try { return successResponse(res, await usersService.getWarehouseScope(req.user.userId), '查询成功') } catch (err) { next(err) }
 }
 
 async function create(req, res, next) {
@@ -76,4 +85,4 @@ async function remove(req, res, next) {
 const warehouseScope = async(req,res,next)=>{ try{return successResponse(res,await usersService.getWarehouseScope(+req.params.id),'查询成功')}catch(e){next(e)} }
 const setWarehouseScope = async(req,res,next)=>{ try{return successResponse(res,await usersService.setWarehouseScope(+req.params.id,req.body.warehouseIds,req.user),'仓库数据权限已更新')}catch(e){next(e)} }
 
-module.exports = { assignableRoles, list, options, detail, create, update, resetPassword, remove, warehouseScope, setWarehouseScope }
+module.exports = { assignableRoles, list, options, detail, myDetail, myWarehouseScope, create, update, resetPassword, remove, warehouseScope, setWarehouseScope }

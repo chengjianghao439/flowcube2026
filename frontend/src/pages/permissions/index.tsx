@@ -16,6 +16,7 @@ import {
   type Role,
 } from '@/hooks/usePermissions'
 import { PERMISSIONS, PERMISSION_GROUPS } from '@/lib/permission-codes'
+import { visibleRoles } from '@/lib/visibleRoles'
 
 /** 复制角色弹窗：输入新角色编码/名称/备注，成功后角色列表自动刷新 */
 function DuplicateRoleDialog({ role, onClose }: { role: Role | null; onClose: () => void }) {
@@ -193,7 +194,7 @@ export default function PermissionsPage() {
     },
   })
 
-  const roleList = roles ?? []
+  const roleList = visibleRoles(roles ?? [])
 
   return (
     <div className="space-y-6">

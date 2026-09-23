@@ -26,8 +26,8 @@ export default function PdaNetworkBar() {
 
   if (pendingCount > 0) {
     return (
-      <div className="w-full bg-yellow-500 px-4 py-2 flex items-center gap-2 text-white text-xs font-semibold">
-        <span className="h-3 w-3 rounded-full border-2 border-white border-t-transparent animate-spin shrink-0" />
+      <div className="w-full bg-yellow-500 px-4 py-2 flex items-center gap-2 text-amber-950 text-xs font-semibold">
+        <span className="h-3 w-3 rounded-full border-2 border-amber-950 border-t-transparent animate-spin shrink-0" />
         <span>有 {pendingCount} 个操作待确认，请先确认再继续。</span>
       </div>
     )

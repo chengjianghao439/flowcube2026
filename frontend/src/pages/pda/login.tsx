@@ -24,7 +24,7 @@ export default function PdaLoginPage() {
       <div className="mb-8 flex flex-col items-center gap-2">
         <SystemBrand boxClassName="h-14 w-14 rounded-2xl shadow-lg shadow-primary/20" />
         <h1 className="text-2xl font-bold tracking-tight text-foreground">极序 Flow</h1>
-        <p className="text-sm text-muted-foreground">仓库作业终端</p>
+        <p className="text-sm text-slate-600">仓库作业终端</p>
       </div>
 
       {/* Card */}
@@ -86,8 +86,9 @@ export default function PdaLoginPage() {
               />
               <button
                 type="button"
-                tabIndex={-1}
-                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
+                aria-label={showPassword ? '隐藏密码' : '显示密码'}
+                aria-pressed={showPassword}
+                className="absolute right-1 top-1/2 flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:text-foreground"
                 onClick={() => setShowPassword((v) => !v)}
               >
                 {showPassword ? <EyeOff className="size-5" /> : <Eye className="size-5" />}

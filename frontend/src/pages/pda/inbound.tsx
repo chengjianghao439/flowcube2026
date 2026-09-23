@@ -13,7 +13,7 @@ import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import type { StatusTone } from '@/lib/statusTone'
 import PdaHeader, { PdaRefreshButton } from '@/components/pda/PdaHeader'
 import PdaCard from '@/components/pda/PdaCard'
-import { PdaEmptyCard, PdaLoading } from '@/components/pda/PdaEmptyState'
+import { PdaEmptyCard, PdaLoading, PdaQueryError } from '@/components/pda/PdaEmptyState'
 /** 1待收货 2收货中 3待上架 4已完成 5已取消 */
 const STATUS_TONE: Record<number, StatusTone> = {
   1:'draft', 2:'active', 3:'active', 4:'success', 5:'danger'
@@ -63,7 +63,7 @@ function InboundCard({ task, onTap }: { task:InboundTask; onTap:()=>void }) {
 
 export default function PdaInboundPage() {
   const navigate = useNavigate()
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['pda-inbound-tasks'],
     // 重进列表必须立刻取最新数据（2026-09-17 验收 ISSUE-017：新派发单据长时间看不到）
     refetchOnMount: 'always',
@@ -77,12 +77,13 @@ export default function PdaInboundPage() {
     <div className="min-h-screen bg-background">
       <PdaHeader title="收货订单" onBack={() => navigate('/pda')} right={<PdaRefreshButton onRefresh={() => refetch()} />} />
       <div className="max-w-md mx-auto px-4 py-5 space-y-4">
-        <p className="text-xs text-muted-foreground">{tasks.length} 个待处理任务</p>
+        {!isError && <p className="text-xs text-muted-foreground">{tasks.length} 个待处理任务</p>}
         {isLoading && <PdaLoading className="h-32" />}
-        {!isLoading && tasks.length===0 && (
+        {isError && <PdaQueryError onRetry={() => { void refetch() }} />}
+        {!isLoading && !isError && tasks.length===0 && (
           <PdaEmptyCard icon={<Inbox className="h-12 w-12 text-muted-foreground" />} title="暂无收货任务" />
         )}
-        {tasks.map((t:InboundTask) => (
+        {!isError && tasks.map((t:InboundTask) => (
           <InboundCard key={t.id} task={t}
             onTap={() => navigate(t.status === 3 ? `/pda/putaway/${t.id}` : `/pda/receive/${t.id}`)} />
         ))}

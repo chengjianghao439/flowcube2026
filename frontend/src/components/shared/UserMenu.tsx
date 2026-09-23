@@ -11,6 +11,7 @@ import { getMyInfoApi, getMyWarehouseScopeApi } from '@/api/users'
 import { toast } from '@/lib/toast'
 import { performSessionLogout } from '@/lib/authSession'
 import { IS_ELECTRON_DESKTOP } from '@/lib/platform'
+import { visibleAccountIdentity } from '@/lib/visibleAccountIdentity'
 
 export default function UserMenu() {
   const { user } = useAuthStore()
@@ -31,16 +32,16 @@ export default function UserMenu() {
     },
   })
 
-  // 我的信息（当前用户 id 从 authStore 拿；仓库权限调 /users/:id/warehouse-scope）
+  // 自助资料只查登录者本人，不需要用户管理查看权限。
   const myId = user?.id ?? 0
-  const { data: myInfo } = useQuery({
+  const { data: myInfo, isError: myInfoError, refetch: refetchMyInfo } = useQuery({
     queryKey: ['my-info', myId],
-    queryFn: () => getMyInfoApi(myId),
+    queryFn: getMyInfoApi,
     enabled: infoOpen && myId > 0,
   })
-  const { data: myWarehouses, isLoading: whLoading } = useQuery({
+  const { data: myWarehouses, isLoading: whLoading, isError: whError, refetch: refetchMyWarehouses } = useQuery({
     queryKey: ['my-warehouses', myId],
-    queryFn: () => getMyWarehouseScopeApi(myId),
+    queryFn: getMyWarehouseScopeApi,
     enabled: infoOpen && myId > 0,
   })
 
@@ -50,7 +51,9 @@ export default function UserMenu() {
     changePwd.mutate()
   }
 
-  const initials = (user?.realName || user?.username || 'U').slice(0, 2).toUpperCase()
+  const identity = visibleAccountIdentity(user ?? {})
+  const profileIdentity = visibleAccountIdentity(myInfo ?? user ?? {})
+  const initials = identity.name.slice(0, 2).toUpperCase()
   const isUnrestricted = myWarehouses?.length === 0 // 空 = 不限仓
 
   return (
@@ -60,8 +63,8 @@ export default function UserMenu() {
           {initials}
         </div>
         <div className="hidden sm:block text-left">
-          <p className="text-xs font-medium leading-tight">{user?.realName || user?.username}</p>
-          <p className="text-xs text-muted-foreground">{user?.roleName || '管理员'}</p>
+          <p className="text-xs font-medium leading-tight">{identity.name}</p>
+          <p className="text-xs text-muted-foreground">{identity.role}</p>
         </div>
         <ChevronDown className="size-3 text-muted-foreground" />
       </button>
@@ -77,9 +80,9 @@ export default function UserMenu() {
                   {initials}
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm font-medium min-w-0 whitespace-normal [overflow-wrap:anywhere]">{user?.realName || user?.username}</p>
-                  <p className="text-xs text-muted-foreground min-w-0 whitespace-normal [overflow-wrap:anywhere]">@{user?.username}</p>
-                  <p className="text-xs text-muted-foreground min-w-0 whitespace-normal [overflow-wrap:anywhere]">{user?.roleName}</p>
+                  <p className="text-sm font-medium min-w-0 whitespace-normal [overflow-wrap:anywhere]">{identity.name}</p>
+                  <p className="text-xs text-muted-foreground min-w-0 whitespace-normal [overflow-wrap:anywhere]">{identity.account === '—' ? '—' : `@${identity.account}`}</p>
+                  <p className="text-xs text-muted-foreground min-w-0 whitespace-normal [overflow-wrap:anywhere]">{identity.role}</p>
                 </div>
               </div>
             </div>
@@ -135,12 +138,13 @@ export default function UserMenu() {
         <DialogContent className="max-w-2xl">
           <DialogHeader><DialogTitle>我的信息</DialogTitle></DialogHeader>
           <div className="space-y-3 py-2">
+            {myInfoError && <p role="alert" className="text-sm text-destructive">个人资料加载失败。<button type="button" className="underline" onClick={() => void refetchMyInfo()}>重试</button></p>}
             <div className="rounded-lg border border-border">
               <div className="border-b border-border bg-muted/30 px-4 py-2 text-xs font-semibold text-muted-foreground">账号信息</div>
               <dl className="divide-y divide-border/60 text-sm">
-                <div className="grid grid-cols-[110px_minmax(0,1fr)] gap-4 px-4 py-3 [&_dd]:break-words"><dt className="text-muted-foreground">姓名</dt><dd className="font-medium">{myInfo?.realName || user?.realName || '—'}</dd></div>
-                <div className="grid grid-cols-[110px_minmax(0,1fr)] gap-4 px-4 py-3 [&_dd]:break-words"><dt className="text-muted-foreground">登录账号</dt><dd className="font-medium">{myInfo?.username || user?.username || '—'}</dd></div>
-                <div className="grid grid-cols-[110px_minmax(0,1fr)] gap-4 px-4 py-3 [&_dd]:break-words"><dt className="text-muted-foreground">角色</dt><dd className="flex items-center gap-1.5"><ShieldCheck className="size-3.5 text-muted-foreground" />{myInfo?.roleName || user?.roleName || '—'}</dd></div>
+                <div className="grid grid-cols-[110px_minmax(0,1fr)] gap-4 px-4 py-3 [&_dd]:break-words"><dt className="text-muted-foreground">姓名</dt><dd className="font-medium">{profileIdentity.name}</dd></div>
+                <div className="grid grid-cols-[110px_minmax(0,1fr)] gap-4 px-4 py-3 [&_dd]:break-words"><dt className="text-muted-foreground">登录账号</dt><dd className="font-medium">{profileIdentity.account}</dd></div>
+                <div className="grid grid-cols-[110px_minmax(0,1fr)] gap-4 px-4 py-3 [&_dd]:break-words"><dt className="text-muted-foreground">角色</dt><dd className="flex items-center gap-1.5"><ShieldCheck className="size-3.5 text-muted-foreground" />{profileIdentity.role}</dd></div>
                 <div className="grid grid-cols-[110px_minmax(0,1fr)] gap-4 px-4 py-3 [&_dd]:break-words"><dt className="text-muted-foreground">部门</dt><dd className="flex items-center gap-1.5"><Building2 className="size-3.5 text-muted-foreground" />{myInfo?.departmentName || '—'}</dd></div>
               </dl>
             </div>
@@ -149,7 +153,9 @@ export default function UserMenu() {
                 <Warehouse className="size-3.5" /> 我的仓库权限
               </div>
               <div className="px-4 py-2 text-sm">
-                {whLoading ? (
+                {whError ? (
+                  <p role="alert" className="text-destructive">仓库权限加载失败。<button type="button" className="underline" onClick={() => void refetchMyWarehouses()}>重试</button></p>
+                ) : whLoading ? (
                   <div className="flex items-center gap-2 text-muted-foreground py-1"><Loader2 className="size-3.5 animate-spin" /> 加载中…</div>
                 ) : isUnrestricted ? (
                   <p className="text-success font-medium">不限仓库（可访问全部仓库）</p>

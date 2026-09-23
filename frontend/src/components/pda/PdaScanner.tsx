@@ -23,6 +23,8 @@ interface PdaScannerProps {
   allowManualEntry?: boolean
   /** 同一条码 1 秒内重复扫描时触发（可选，比如弹提示告诉用户"重复扫码"）；不传则静默丢弃 */
   onDuplicate?: (barcode: string) => void
+  /** 仅偏离库位二次确认时允许短时间内的第二次同源实扫 */
+  allowIntentionalRepeat?: boolean
 }
 
 export default function PdaScanner({
@@ -31,6 +33,7 @@ export default function PdaScanner({
   disabled = false,
   allowManualEntry = true,
   onDuplicate,
+  allowIntentionalRepeat = false,
 }: PdaScannerProps) {
   const manualInputRef = useRef<HTMLInputElement>(null)
   const [manualMode, setManualMode] = useState(false)
@@ -46,7 +49,7 @@ export default function PdaScanner({
   }, [disabled, onScan])
 
   // 手输框中的键盘事件由 hook 忽略；原生广播仍可完成扫码并退出手输模式。
-  usePdaScanner({ onScan: handleScan, enabled: !disabled, onDuplicate })
+  usePdaScanner({ onScan: handleScan, enabled: !disabled, onDuplicate, allowIntentionalRepeat })
 
   // ── 进入手动输入模式 ──────────────────────────────────────────────────────
   function enterManualMode() {
@@ -117,19 +120,19 @@ export default function PdaScanner({
               {manualValue.trim() && (
                 <button
                   onClick={commitManual}
-                  className="rounded-xl bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground active:scale-95"
+                  className="min-h-11 min-w-11 rounded-xl bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground active:scale-95"
                 >确认</button>
               )}
               <button
                 onClick={exitManualMode}
-                className="rounded-xl border border-border bg-background px-3 py-2 text-xs text-muted-foreground active:scale-95"
+                className="min-h-11 min-w-11 rounded-xl border border-border bg-background px-3 py-2 text-xs text-muted-foreground active:scale-95"
               >取消</button>
             </>
           ) : allowManualEntry ? (
             <button
               onClick={enterManualMode}
               disabled={disabled}
-              className="rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-muted-foreground active:scale-95 disabled:opacity-40 whitespace-nowrap"
+              className="min-h-11 rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-muted-foreground active:scale-95 disabled:opacity-40 whitespace-nowrap"
             >手动输入</button>
           ) : null}
         </div>

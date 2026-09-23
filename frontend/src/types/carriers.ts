@@ -20,15 +20,13 @@ export const WAYBILL_PLATFORM_ALL: { value: string; label: string }[] = [
   { value: 'kdniao',  label: '快递鸟' },
   { value: 'deppon', label: '德邦开放平台' },
   { value: 'sf',      label: '顺丰丰桥' },
-  { value: 'mock',    label: '本地演示(mock)（仅开发环境）' },
+  { value: 'mock',    label: '不可用平台' },
 ]
 
-/** 下拉可选平台：生产构建不提供 mock（2026-09-18 审计 P2）。
+/** 下拉可选平台：前端始终不提供 mock，测试仍可通过后端接口配置。
  *  mock 适配器无凭据即可签出假单号并推进运单状态；后端 `carriers.service.js` 的
  *  `CARRIER_MOCK_NOT_ALLOWED` 是硬闸门，这里只是别让运维在正常下拉里误选。 */
-export const WAYBILL_PLATFORM_OPTIONS = WAYBILL_PLATFORM_ALL.filter(
-  (o) => o.value !== 'mock' || !import.meta.env.PROD,
-)
+export const WAYBILL_PLATFORM_OPTIONS = WAYBILL_PLATFORM_ALL.filter((o) => o.value !== 'mock')
 
 /** 直接对接（顺丰/德邦）的账号资料与取号开关**只能**在「快递账号绑定」页维护：
  *  那条路径有 revision CAS、暂停前置、待处理运单与 canEnable 闸门，后端 `carriers.service.js`

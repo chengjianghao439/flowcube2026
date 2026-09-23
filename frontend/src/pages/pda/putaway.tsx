@@ -128,6 +128,7 @@ function PutawayRunner({ taskId }: { taskId: number }) {
 
       <PdaBottomBar>
         <PdaScanner
+          allowIntentionalRepeat={engine.stepId === 'scan-location' && !!engine.context.deviationArmedCode}
           onScan={async (code) => {
             // 扫容器只是校验步骤、无服务端副作用；真正的上架落库发生在扫库位
             // 那一步，查询失效已经在 onAfterPutaway 里做了，这里不用重复触发。
@@ -146,7 +147,7 @@ export default function PdaPutawayPage() {
   const { id } = useParams<{ id?: string }>()
   const taskId = id ? Number(id) : 0
 
-  const { data: task, isLoading } = useQuery({
+  const { data: task, isLoading, isError, refetch } = useQuery({
     queryKey: ['pda-inbound-task', taskId],
     queryFn: () => getInboundTaskByIdApi(taskId),
     enabled: taskId > 0,
@@ -165,6 +166,13 @@ export default function PdaPutawayPage() {
         />
       </div>
     )
+  }
+
+  if (isError || (!isLoading && !task)) {
+    return <div className="min-h-screen bg-background">
+      <PdaHeader title="扫码上架" onBack={() => navigate('/pda/inbound')} />
+      <PdaEmptyState title="加载失败" description="上架任务暂时无法读取，请检查网络后重试" actionText="重试" onAction={() => { void refetch() }} />
+    </div>
   }
 
   if (isLoading || !task) {

@@ -15,6 +15,7 @@ import { PdaScanBridge } from '@/lib/pdaScanBridge'
 const SCAN_INTERVAL_MS = 50  // 扫码枪相邻字符最大间隔（毫秒）
 const MIN_SCAN_LENGTH  = 3   // 最短有效条码长度
 const DUPLICATE_WINDOW_MS = 1000  // 同一条码在这段时间内的重复上报会被丢弃
+const INTENTIONAL_REPEAT_MIN_MS = 300 // 偏离库位确认时，挡住硬件抖动但接受明确的第二次实扫
 
 interface Options {
   onScan: (barcode: string) => void
@@ -22,9 +23,10 @@ interface Options {
   enabled?: boolean
   /** 命中防重复窗口时触发（可选，用于页面自定义提示）；不传则静默丢弃 */
   onDuplicate?: (barcode: string) => void
+  allowIntentionalRepeat?: boolean
 }
 
-export function usePdaScanner({ onScan, enabled = true, onDuplicate }: Options) {
+export function usePdaScanner({ onScan, enabled = true, onDuplicate, allowIntentionalRepeat = false }: Options) {
   const bufferRef   = useRef<string>('')
   const lastTimeRef = useRef<number>(0)
   const timerRef    = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -40,6 +42,8 @@ export function usePdaScanner({ onScan, enabled = true, onDuplicate }: Options) 
 
   const enabledRef = useRef(enabled)
   useEffect(() => { enabledRef.current = enabled }, [enabled])
+  const allowIntentionalRepeatRef = useRef(allowIntentionalRepeat)
+  useEffect(() => { allowIntentionalRepeatRef.current = allowIntentionalRepeat }, [allowIntentionalRepeat])
 
   useEffect(() => {
     function acceptCode(raw: string, source: 'keyboard' | 'native') {
@@ -49,8 +53,11 @@ export function usePdaScanner({ onScan, enabled = true, onDuplicate }: Options) 
       const now = Date.now()
       if (lastScanRef.current?.barcode === code && now - lastScanRef.current.time < DUPLICATE_WINDOW_MS) {
         // 同一次硬件扫描可能同时走广播和键盘，跨来源重复不提示用户。
-        if (lastScanRef.current.source === source) onDuplicateRef.current?.(code)
-        return
+        if (lastScanRef.current.source !== source) return
+        if (!allowIntentionalRepeatRef.current || now - lastScanRef.current.time < INTENTIONAL_REPEAT_MIN_MS) {
+          onDuplicateRef.current?.(code)
+          return
+        }
       }
       lastScanRef.current = { barcode: code, time: now, source }
       onScanRef.current(code)

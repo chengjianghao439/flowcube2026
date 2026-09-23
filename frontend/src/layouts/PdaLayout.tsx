@@ -24,7 +24,7 @@ export default function PdaLayout() {
   const navigate  = useNavigate()
   const { newVersion, dismiss, checkUpdate } = usePdaUpdate()
 
-  // ── viewport meta 动态修正（禁止缩放，防止扫码后页面跳动）────────────
+  // ── viewport meta 动态修正，保留用户放大页面的能力 ────────────
   useEffect(() => {
     const meta = document.querySelector('meta[name="viewport"]') as HTMLMetaElement
       || (() => {
@@ -36,9 +36,6 @@ export default function PdaLayout() {
     meta.content = [
       'width=device-width',
       'initial-scale=1.0',
-      'maximum-scale=1.0',
-      'minimum-scale=1.0',
-      'user-scalable=no',
       'viewport-fit=cover',   // 覆盖刘海屏 / 打孔屏安全区
     ].join(', ')
   }, [])

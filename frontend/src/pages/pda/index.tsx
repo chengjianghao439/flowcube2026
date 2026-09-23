@@ -27,6 +27,7 @@ import { PERMISSIONS } from '@/lib/permission-codes'
 import { performSessionLogout } from '@/lib/authSession'
 import { formatDisplayDateTime, beijingHour } from '@/lib/dateTime'
 import { getDeviceCredential, getDeviceSession } from '@/lib/pdaDeviceBinding'
+import { visibleAccountIdentity } from '@/lib/visibleAccountIdentity'
 
 type OpTone = 'blue' | 'green' | 'orange' | 'purple' | 'teal' | 'red' | 'indigo' | 'cyan'
 
@@ -60,11 +61,11 @@ const ALL_OPS: OpEntry[] = [
   // 按作业链路流程排序：入库（收货→上架）→ 出库（拣货→分拣→复核→打包→出库）
   // → 调拨/退货/盘点 等辅助与异常收尾
   { icon: Inbox,           label: '收货订单', path: '/pda/inbound',       perm: PERMISSIONS.INBOUND_ORDER_VIEW, tone: 'blue' },
-  { icon: ArrowUpFromLine, label: '扫码上架', path: '/pda/putaway',       perm: PERMISSIONS.INBOUND_PUTAWAY_EXECUTE, tone: 'teal' },
-  { icon: ClipboardList,   label: '拣货任务', path: '/pda/picking',       perm: PERMISSIONS.WAREHOUSE_TASK_PICK, tone: 'indigo' },
+  { icon: ArrowUpFromLine, label: '扫码上架', path: '/pda/putaway',       perm: PERMISSIONS.INBOUND_PUTAWAY_EXECUTE, perms: [PERMISSIONS.INBOUND_ORDER_VIEW, PERMISSIONS.INBOUND_PUTAWAY_EXECUTE], tone: 'teal' },
+  { icon: ClipboardList,   label: '拣货任务', path: '/pda/picking',       perm: PERMISSIONS.WAREHOUSE_TASK_PICK, perms: [PERMISSIONS.WAREHOUSE_TASK_VIEW, PERMISSIONS.WAREHOUSE_TASK_PICK], tone: 'indigo' },
   { icon: Shuffle,         label: '订单分拣', path: '/pda/sort',          perm: PERMISSIONS.SORTING_BIN_VIEW, perms: [PERMISSIONS.SORTING_BIN_VIEW, PERMISSIONS.WAREHOUSE_TASK_SORT], tone: 'orange' },
-  { icon: ClipboardCheck,  label: '复核任务', path: '/pda/check',         perm: PERMISSIONS.WAREHOUSE_TASK_CHECK, tone: 'green' },
-  { icon: Package,         label: '打包作业', path: '/pda/pack',          perm: PERMISSIONS.WAREHOUSE_TASK_PACK, tone: 'blue' },
+  { icon: ClipboardCheck,  label: '复核任务', path: '/pda/check',         perm: PERMISSIONS.WAREHOUSE_TASK_CHECK, perms: [PERMISSIONS.WAREHOUSE_TASK_VIEW, PERMISSIONS.WAREHOUSE_TASK_CHECK], tone: 'green' },
+  { icon: Package,         label: '打包作业', path: '/pda/pack',          perm: PERMISSIONS.WAREHOUSE_TASK_PACK, perms: [PERMISSIONS.WAREHOUSE_TASK_VIEW, PERMISSIONS.WAREHOUSE_TASK_PACK], tone: 'blue' },
   { icon: Truck,           label: '出库确认', path: '/pda/ship',          perm: PERMISSIONS.WAREHOUSE_TASK_SHIP, tone: 'orange' },
   { icon: ArrowLeftRight,  label: '调拨执行', path: '/pda/transfer',      perm: PERMISSIONS.TRANSFER_ORDER_VIEW, tone: 'purple' },
   { icon: PackageX,        label: '销售退货', path: '/pda/sale-return',   perm: PERMISSIONS.RETURN_ORDER_VIEW, tone: 'teal' },
@@ -133,16 +134,16 @@ export default function PdaWorkbench() {
             <button
               type="button"
               onClick={() => window.dispatchEvent(new Event('pda:check-update'))}
-              className="rounded-full border border-border px-2.5 py-1 text-[11px] font-medium text-muted-foreground active:scale-95"
+              className="min-h-11 rounded-full border border-border px-3 py-1 text-[11px] font-medium text-muted-foreground active:scale-95"
             >
               检查更新
             </button>
           </div>
           <div className="mt-1 flex items-center justify-between">
-            <h1 className="text-xl font-semibold text-foreground">{greeting}，{user?.username ?? '操作员'}</h1>
+            <h1 className="text-xl font-semibold text-foreground">{greeting}，{visibleAccountIdentity(user ?? {}).name}</h1>
             <span className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${roleColor}`}>{roleLabel}</span>
           </div>
-          <p className="mt-0.5 text-sm text-muted-foreground">
+          <p className="mt-0.5 text-sm text-slate-600">
             {formatDisplayDateTime(new Date())}
           </p>
         </div>
@@ -200,7 +201,7 @@ export default function PdaWorkbench() {
         )}
 
         <div>
-          <p className="text-xs text-muted-foreground mb-3">{roleLabel} 可用作业（{allowedOps.length} 项）</p>
+          <p className="text-xs text-slate-600 mb-3">{roleLabel} 可用作业（{allowedOps.length} 项）</p>
           {!deviceBound ? (
             <PdaEmptyCard
               icon={<Smartphone className="h-12 w-12 text-amber-500" />}

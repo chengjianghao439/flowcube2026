@@ -12,6 +12,7 @@ import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { toast } from '@/lib/toast'
 import { getRolesApi } from '@/api/settings'
+import { visibleRoles } from '@/lib/visibleRoles'
 import { useDepartments } from '@/hooks/useDepartments'
 import { useUsers } from '@/hooks/useUsers'
 import {
@@ -56,6 +57,7 @@ export default function ApprovalFlowsPage() {
   const { mutate: updateFlow } = useUpdateApprovalFlow()
   const { mutate: deleteFlow } = useDeleteApprovalFlow()
   const { data: roles = [] } = useQuery({ queryKey: ['roles'], queryFn: () => getRolesApi().then(r => r || []) })
+  const selectableRoles = visibleRoles(roles)
   const { data: departments = [] } = useDepartments()
   const { data: usersData } = useUsers({ pageSize: 500, keyword: '' })
   const users = usersData?.list ?? []
@@ -259,7 +261,9 @@ export default function ApprovalFlowsPage() {
                         <Label>角色</Label>
                         <select value={s.roleId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setStep(i, { roleId: e.target.value })} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
                           <option value="">选择角色</option>
-                          {roles.map((r: { id: number; name: string }) => <option key={r.id} value={r.id}>{r.name}</option>)}                        </select>
+                          {selectableRoles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                          {s.roleId && !selectableRoles.some(r => String(r.id) === s.roleId) && <option value={s.roleId}>当前隐藏角色（保留原设置）</option>}
+                        </select>
                       </div>
                     )}
                     {s.approverType === APPROVER_TYPE.DEPT_MANAGER && (
@@ -277,6 +281,7 @@ export default function ApprovalFlowsPage() {
                         <select value={s.userId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setStep(i, { userId: e.target.value })} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
                           <option value="">选择用户</option>
                           {users.map((u) => <option key={u.id} value={u.id}>{u.realName}</option>)}
+                          {s.userId && !users.some(u => String(u.id) === s.userId) && <option value={s.userId}>当前不可用用户（保留原设置）</option>}
                         </select>
                       </div>
                     )}

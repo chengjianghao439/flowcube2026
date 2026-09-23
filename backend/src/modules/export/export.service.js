@@ -1188,7 +1188,7 @@ async function getPickingWavesExportPayload(query = {}) {
 
 /** 用户 */
 async function getUsersExportPayload(query = {}) {
-  const { list } = await collectExportRows(usersService.findAll, { keyword: query.keyword || '' })
+  const { list } = await collectExportRows(usersService.findAll, { keyword: query.keyword || '', hideDevelopment: query.hideDevelopment === '1' })
   const rows = list.map(u => ({
     username: u.username,
     real_name: u.realName || '—',
@@ -1219,6 +1219,8 @@ async function getOplogsExportPayload(query = {}) {
     module: query.module || '',
     startDate: query.startDate || '',
     endDate: query.endDate || '',
+    hideDevelopment: query.hideDevelopment === '1',
+    hidePrintPolling: query.hidePrintPolling === '1',
   })
   const rows = list.map(o => ({
     user_name: o.userName || '—',

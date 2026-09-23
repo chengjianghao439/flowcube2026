@@ -24,7 +24,7 @@ import PdaCard from '@/components/pda/PdaCard'
 import PdaBottomBar from '@/components/pda/PdaBottomBar'
 import PdaScanner from '@/components/pda/PdaScanner'
 import PdaFlash from '@/components/pda/PdaFlash'
-import { PdaEmptyCard, PdaLoading } from '@/components/pda/PdaEmptyState'
+import { PdaEmptyCard, PdaLoading, PdaQueryError } from '@/components/pda/PdaEmptyState'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
 import { usePdaPendingCancelReturns, usePdaCancelReturnDetail } from '@/hooks/usePdaCancelReturn'
@@ -35,7 +35,7 @@ import { parseBarcode } from '@/utils/barcode'
 // ── 列表：待处理的拣货退回任务池 ──────────────────────────────────────────────
 function CancelReturnListPage() {
   const navigate = useNavigate()
-  const { data, isLoading, refetch } = usePdaPendingCancelReturns()
+  const { data, isLoading, isError, refetch } = usePdaPendingCancelReturns()
   const tasks = data ?? []
 
   return (
@@ -43,12 +43,13 @@ function CancelReturnListPage() {
       <PdaHeader title="拣货退回" subtitle="逆向归还已拣库存条码" onBack={() => navigate('/pda')}
         right={<PdaRefreshButton onRefresh={() => refetch()} />} />
       <div className="max-w-md mx-auto px-4 py-5 space-y-4">
-        <p className="text-xs text-muted-foreground">{tasks.length} 个任务待归还</p>
+        {!isError && <p className="text-xs text-muted-foreground">{tasks.length} 个任务待归还</p>}
         {isLoading && <PdaLoading className="h-32" />}
-        {!isLoading && tasks.length === 0 && (
+        {isError && <PdaQueryError onRetry={() => { void refetch() }} />}
+        {!isLoading && !isError && tasks.length === 0 && (
           <PdaEmptyCard icon={<PackageX className="h-12 w-12 text-muted-foreground" />} title="暂无待归还任务" description="没有因订单取消而需要归还货物的任务" />
         )}
-        {tasks.map(t => (
+        {!isError && tasks.map(t => (
           <PdaCard key={t.id} className="w-full" onClick={() => navigate(`/pda/cancel-return/${t.id}`)}>
             <div className="space-y-2">
               <div className="flex items-start justify-between gap-3">
@@ -81,7 +82,7 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
   const [scanning, setScanning] = useState(false)
   const { flash, ok, err, warn } = usePdaFeedback()
 
-  const { data: detail, isLoading, refetch } = usePdaCancelReturnDetail(taskId)
+  const { data: detail, isLoading, isError, refetch } = usePdaCancelReturnDetail(taskId)
 
   const returnAction = useCriticalPdaAction<{ id: number; remaining: number; finalized: boolean }>({
     action: `warehouse.cancel-return.${taskId}`,
@@ -216,6 +217,13 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
     // 待归还容器和待拆箱箱子共用同一个扫码入口，按条码类型自动分流。
     if (parseBarcode(code).type === 'box') { void handleBoxScan(code); return }
     handleContainerScan(code)
+  }
+
+  if (isError || (!isLoading && !detail)) {
+    return <div className="min-h-screen bg-background">
+      <PdaHeader title="拣货退回确认" onBack={() => navigate('/pda/cancel-return')} />
+      <div className="max-w-md mx-auto px-4 pt-6"><PdaQueryError onRetry={() => { void refetch() }} /></div>
+    </div>
   }
 
   if (isLoading || !detail) {

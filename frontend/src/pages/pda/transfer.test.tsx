@@ -10,7 +10,7 @@ import TransferList from './transfer'
 import type { TransferOrder } from '@/api/transfer'
 
 const state = vi.hoisted(() => ({
-  list: [] as TransferOrder[], receipt: vi.fn(), container: vi.fn(), remove: vi.fn(), record: {} as Record<string, unknown>,
+  list: [] as TransferOrder[], listError: false, receipt: vi.fn(), container: vi.fn(), remove: vi.fn(), record: {} as Record<string, unknown>,
   order: { id: 31, orderNo: 'TR31', status: 3, statusName: '在途', fromWarehouseId: 1, toWarehouseId: 2, items: [{ id: 1, productName: '商品', quantity: 10, deductedQty: 5, receivedQty: 5 }] },
 }))
 vi.mock('@/api/operation-requests', () => ({ getOperationRequestStatusApi: state.receipt }))
@@ -18,7 +18,7 @@ vi.mock('@/api/inventory', () => ({ getContainerByBarcodeApi: state.container })
 vi.mock('@/hooks/useNetworkStatus', () => ({ useNetworkStatus: () => 'online' }))
 vi.mock('@/hooks/usePendingRequests', () => ({ usePendingRequests: () => ({ records: [state.record], addPending: vi.fn(), removePending: state.remove }) }))
 vi.mock('@/hooks/usePdaTransferIn', () => ({ usePdaTransferInDetail: () => ({ data: state.order, isLoading: false }) }))
-vi.mock('@/api/transfer', () => ({ getTransferListApi: async () => ({ list: state.list }), getTransferDetailApi: async () => state.order, scanInTransferApi: vi.fn(), scanOutTransferApi: vi.fn() }))
+vi.mock('@/api/transfer', () => ({ getTransferListApi: async () => { if (state.listError) throw new Error('网络错误'); return { list: state.list } }, getTransferDetailApi: async () => state.order, scanInTransferApi: vi.fn(), scanOutTransferApi: vi.fn() }))
 vi.mock('@/hooks/usePdaFeedback', () => ({ usePdaFeedback: () => ({ flash: null, ok: vi.fn(), err: vi.fn(), warn: vi.fn() }) }))
 vi.mock('@/components/pda/PdaScanner', () => ({ default: () => null }))
 let root: Root, host: HTMLDivElement, qc: QueryClient
@@ -26,12 +26,23 @@ beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
   vi.clearAllMocks()
   state.list = []
+  state.listError = false
   state.receipt.mockResolvedValue({ status: 'not_found', data: null, message: '未找到回执' })
   // 该容器已在目标仓且已上架，但没有证据证明属于当前调拨单。
   state.container.mockResolvedValue({ warehouseId: 2, containerStatus: 'stored', locationId: 88 })
   qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0, staleTime: Infinity } } })
   qc.setQueryData(['pda-transfer', 31], state.order)
   host = document.createElement('div'); document.body.appendChild(host); root = createRoot(host)
+})
+
+test('调拨列表读取失败时不把错误显示成两个空列表', async () => {
+  state.listError = true
+  await act(async () => root.render(<QueryClientProvider client={qc}><MemoryRouter><TransferList /></MemoryRouter></QueryClientProvider>))
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)) })
+  expect(host.textContent).toContain('加载失败')
+  expect(host.textContent).toContain('重试')
+  expect(host.textContent).not.toContain('暂无待出库调拨')
+  expect(host.textContent).not.toContain('暂无待入库调拨')
 })
 afterEach(async () => { await act(async () => { root.unmount(); qc.clear() }); host.remove() })
 

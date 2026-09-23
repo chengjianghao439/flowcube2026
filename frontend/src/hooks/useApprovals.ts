@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import {
   listApprovalFlowsApi,
   createApprovalFlowApi,
@@ -10,6 +10,13 @@ import type { ApprovalFlowStep } from '@/types/approval'
 
 const FLOW_KEY = 'approval-flows'
 const PENDING_KEY = 'approval-pending'
+
+function invalidateFlowAndDepartments(qc: QueryClient) {
+  return Promise.all([
+    qc.invalidateQueries({ queryKey: [FLOW_KEY] }),
+    qc.invalidateQueries({ queryKey: ['departments'] }),
+  ])
+}
 
 export function useApprovalFlows() {
   return useQuery({
@@ -30,7 +37,7 @@ export function useCreateApprovalFlow() {
       remark?: string
       steps: ApprovalFlowStep[]
     }) => createApprovalFlowApi(d),
-    onSuccess: () => qc.invalidateQueries({ queryKey: [FLOW_KEY] }),
+    onSuccess: () => invalidateFlowAndDepartments(qc),
   })
 }
 
@@ -39,7 +46,7 @@ export function useUpdateApprovalFlow() {
   return useMutation({
     mutationFn: ({ id, data }: { id: number; data: Parameters<typeof updateApprovalFlowApi>[1] }) =>
       updateApprovalFlowApi(id, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: [FLOW_KEY] }),
+    onSuccess: () => invalidateFlowAndDepartments(qc),
   })
 }
 
@@ -47,7 +54,7 @@ export function useDeleteApprovalFlow() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id: number) => deleteApprovalFlowApi(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: [FLOW_KEY] }),
+    onSuccess: () => invalidateFlowAndDepartments(qc),
   })
 }
 

@@ -54,7 +54,7 @@ export default function PdaEmptyState({
       {actionText && onAction && (
         <Button
           variant="outline"
-          className="mt-6 w-full max-w-[200px]"
+          className="mt-6 min-h-11 w-full max-w-[200px]"
           onClick={onAction}
         >
           {actionText}
@@ -80,6 +80,11 @@ export function PdaEmptyCard({ dashed = true, ...rest }: PdaEmptyCardProps) {
       <PdaEmptyState {...rest} className="min-h-[240px]" />
     </div>
   )
+}
+
+/** 查询失败须与「确实没有任务」区分，保留当前页重试入口。 */
+export function PdaQueryError({ onRetry }: { onRetry: () => void }) {
+  return <PdaEmptyCard dashed={false} title="加载失败" description="任务暂时无法读取，请检查网络后重试" actionText="重试" onAction={onRetry} />
 }
 
 // ─── 加载 Spinner ─────────────────────────────────────────────────────────────

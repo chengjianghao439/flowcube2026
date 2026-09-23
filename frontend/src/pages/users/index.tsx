@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAuthStore } from '@/store/authStore'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
@@ -22,10 +22,11 @@ import type { TableColumn } from '@/types'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { downloadExport } from '@/lib/exportDownload'
 import { toast } from '@/lib/toast'
+import { isElectronRuntime } from '@/lib/platform'
 
 export default function UsersPage() {
   const currentUser = useAuthStore((s) => s.user)
-  const { can } = usePermission()
+  const { can, roleId: operatorRoleId } = usePermission()
 
   const canCreate = can(PERMISSIONS.USER_CREATE)
   const canUpdate = can(PERMISSIONS.USER_UPDATE)
@@ -33,6 +34,7 @@ export default function UsersPage() {
   const canDelete = can(PERMISSIONS.USER_DELETE)
 
   const [keyword, setKeyword] = useState('')
+  const [page, setPage] = useState(1)
   const [scopeTarget, setScopeTarget] = useState<{ id: number; name: string } | null>(null)
   const [search, setSearch] = useState('')
 
@@ -43,12 +45,16 @@ export default function UsersPage() {
   const [resetTarget, setResetTarget] = useState<SysUser | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<SysUser | null>(null)
 
-  const { data, isLoading, isError, error, refetch } = useUsers({ page: 1, pageSize: 20, keyword })
+  const desktop = isElectronRuntime()
+  const { data, isLoading, isError, error, refetch } = useUsers({ page, pageSize: 20, keyword })
   const total = data?.pagination?.total ?? 0
-  const { mutate: deleteUser } = useDeleteUser()
+  const pageCount = Math.max(1, Math.ceil(total / 20))
+  useEffect(() => { if (data && page > pageCount) setPage(pageCount) }, [data, page, pageCount])
+  const { mutate: deleteUser, isPending: deleting } = useDeleteUser()
 
   function handleSearch() {
-    setKeyword(search);
+    setPage(1)
+    setKeyword(search)
   }
 
   function handleEdit(user: SysUser) {
@@ -105,17 +111,18 @@ export default function UsersPage() {
       title: '操作',
       width: 200,
       render: (_, row) => {
+        const targetProtected = row.roleId === 1 && operatorRoleId !== 1
         const items: TableActionItem[] = []
-        if (canResetPwd) items.push({ label: '重置密码', onClick: () => handleResetPassword(row) })
-        if (canUpdate) items.push({ label: '仓库访问范围', onClick: () => setScopeTarget({ id: row.id, name: row.realName || row.username }) })
-        if (canDelete && row.id !== currentUser?.id) items.push({ label: '删除', destructive: true, separatorBefore: true, onClick: () => handleDelete(row) })
-        if (!canUpdate && items.length === 0) return null
+        if (canResetPwd && !targetProtected) items.push({ label: '重置密码', onClick: () => handleResetPassword(row) })
+        if (canUpdate && !targetProtected) items.push({ label: '仓库访问范围', onClick: () => setScopeTarget({ id: row.id, name: row.realName || row.username }) })
+        if (canDelete && !targetProtected && row.id !== currentUser?.id) items.push({ label: '删除', destructive: true, separatorBefore: true, onClick: () => handleDelete(row) })
+        if ((!canUpdate || targetProtected) && items.length === 0) return null
         return (
           <TableActionsMenu
-            primaryLabel={canUpdate ? '编辑' : items[0].label}
+            primaryLabel={canUpdate && !targetProtected ? '编辑' : items[0].label}
             primaryVariant="outline"
-            onPrimaryClick={() => (canUpdate ? handleEdit(row) : items[0].onClick())}
-            items={canUpdate ? items : items.slice(1)}
+            onPrimaryClick={() => (canUpdate && !targetProtected ? handleEdit(row) : items[0].onClick())}
+            items={canUpdate && !targetProtected ? items : items.slice(1)}
           />
         )
       },
@@ -129,7 +136,7 @@ export default function UsersPage() {
         description="管理系统登录账号与角色权限"
         actions={
           <>
-            <Button variant="outline" onClick={() => downloadExport('/export/users').catch(e => toast.error((e as Error).message))}>导出</Button>
+            <Button variant="outline" onClick={() => downloadExport('/export/users', { keyword, hideDevelopment: '1' }).catch(e => toast.error((e as Error).message))}>导出</Button>
             {canCreate && (
               <Button onClick={() => { setEditUser(null); setFormOpen(true) }}>
                 新增用户
@@ -149,7 +156,7 @@ export default function UsersPage() {
         />
         <Button size="sm" variant="outline" onClick={handleSearch}>搜索</Button>
         {keyword && (
-          <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword(''); }}>
+          <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword(''); setPage(1) }}>
             重置
           </Button>
         )}
@@ -166,6 +173,13 @@ export default function UsersPage() {
             rowKey="id"
           />
           <ListSummary total={total} unit="个" />
+          {pageCount > 1 && (
+            <div className="flex items-center justify-end gap-2 text-sm">
+              <Button size="sm" variant="outline" disabled={isLoading || page <= 1} onClick={() => setPage(p => p - 1)}>上一页</Button>
+              <span aria-live="polite">第 {page} / {pageCount} 页</span>
+              <Button size="sm" variant="outline" disabled={isLoading || page >= pageCount} onClick={() => setPage(p => p + 1)}>下一页</Button>
+            </div>
+          )}
         </>
       )}
 
@@ -189,8 +203,13 @@ export default function UsersPage() {
         description={`确定删除用户「${deleteTarget?.realName}」吗？此操作不可恢复。`}
         variant="destructive"
         confirmText="删除"
-        onConfirm={() => { deleteUser(deleteTarget!.id); setDeleteTarget(null) }}
-        onCancel={() => setDeleteTarget(null)}
+        loading={deleting}
+        onConfirm={() => { if (deleteTarget && !deleting) deleteUser(deleteTarget.id, {
+          onSuccess: () => setDeleteTarget(null),
+          // 桌面原生确认框在点击后已关闭，失败时释放目标，允许从列表重新发起。
+          onError: () => { if (desktop) setDeleteTarget(null) },
+        }) }}
+        onCancel={() => { if (!deleting) setDeleteTarget(null) }}
       />
       <WarehouseScopeDialog
         open={!!scopeTarget}

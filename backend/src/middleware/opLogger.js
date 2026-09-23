@@ -68,12 +68,22 @@ function getModule(path) {
   return 'system'
 }
 
+function shouldRecordOperation(method, path, statusCode, body) {
+  // 桌面端周期性轮询不是用户操作；异常和实际领取仍留痕。
+  const success = statusCode >= 200 && statusCode < 300 && body?.success === true
+  if (!success || method !== 'POST') return true
+  if (path === '/api/printers/client-heartbeat') return false
+  if (path === '/api/print-jobs/claim-client' && Array.isArray(body.data) && body.data.length === 0) return false
+  return true
+}
+
 function opLogger(req, res, next) {
   if (req.method === 'GET') return next()
 
   const originalJson = res.json.bind(res)
   res.json = function (body) {
     const requestPath = (req.originalUrl || req.path).split('?')[0]
+    if (!shouldRecordOperation(req.method, requestPath, res.statusCode, body)) return originalJson(body)
     const operation = resolveOperation(req.method, requestPath, res.statusCode, body)
     setImmediate(async () => {
       try {
@@ -111,3 +121,4 @@ module.exports = opLogger
 module.exports.sanitizeBody = sanitizeBody
 module.exports.isSensitiveKey = isSensitiveKey
 module.exports.SENSITIVE_FIELDS = SENSITIVE_FIELDS
+module.exports.shouldRecordOperation = shouldRecordOperation

@@ -22,7 +22,7 @@ async function assertCanAssignRole(operator, targetRoleId, db = pool) {
 
 async function listAssignableRoles(operator) {
   if (Number(operator?.roleId) === 1) {
-    const [rows] = await pool.query('SELECT id,name FROM sys_roles WHERE id<>1 ORDER BY id')
+    const [rows] = await pool.query('SELECT id,code,name FROM sys_roles WHERE id<>1 ORDER BY id')
     return rows
   }
   const [allowed] = await pool.query(
@@ -30,7 +30,7 @@ async function listAssignableRoles(operator) {
   )
   if (!allowed.length) throw new AppError('无用户管理权限', 403, 'PERMISSION_DENIED')
   const [rows] = await pool.query(
-    `SELECT r.id,r.name FROM sys_roles r WHERE r.id<>1 AND NOT EXISTS (
+    `SELECT r.id,r.code,r.name FROM sys_roles r WHERE r.id<>1 AND NOT EXISTS (
       SELECT 1 FROM sys_role_permissions target WHERE target.role_id=r.id AND NOT EXISTS (
         SELECT 1 FROM sys_role_permissions actor WHERE actor.role_id=? AND actor.permission=target.permission
       )
@@ -48,26 +48,26 @@ function assertCanGrantSelfApprove(operator, value) {
   throw new AppError('只有超级管理员可以设置「允许自行审批」', 403, 'SELF_APPROVE_GRANT_DENIED')
 }
 
-async function findAll({ page = 1, pageSize = 20, keyword = '' }) {
+async function findAll({ page = 1, pageSize = 20, keyword = '', hideDevelopment = false }) {
   // clamp：防止 pageSize=99999 全表拉取（此前手写 offset 无上限）
   const { pageSize: ps, offset } = normalizePagination({ page, pageSize })
   const like = `%${keyword}%`
+  const where = `u.deleted_at IS NULL AND (u.username LIKE ? OR u.real_name LIKE ?)
+    ${hideDevelopment ? "AND u.username NOT REGEXP '^(codex_|smoke_|esc_|pc_)' AND LOWER(u.username) <> 'cua_pda_test'" : ''}`
 
   const [rows] = await pool.query(
     `SELECT u.id, u.username, u.real_name, u.role_id, u.role_name, u.is_active, u.allow_self_approve,
             u.department_id, d.name AS department_name, u.created_at
      FROM sys_users u
      LEFT JOIN sys_departments d ON d.id = u.department_id AND d.deleted_at IS NULL
-     WHERE u.deleted_at IS NULL
-       AND (u.username LIKE ? OR u.real_name LIKE ?)
+     WHERE ${where}
      ORDER BY u.created_at DESC, u.id DESC
      LIMIT ? OFFSET ?`,
     [like, like, ps, offset],
   )
 
   const [[{ total }]] = await pool.query(
-    `SELECT COUNT(*) AS total FROM sys_users
-     WHERE deleted_at IS NULL AND (username LIKE ? OR real_name LIKE ?)`,
+    `SELECT COUNT(*) AS total FROM sys_users u WHERE ${where}`,
     [like, like],
   )
 
@@ -90,10 +90,11 @@ async function findAll({ page = 1, pageSize = 20, keyword = '' }) {
 
 /** 精简用户列表：仅供下拉选择（如采购单"经办人"筛选），不受 user.view 权限限制
  *  包含已禁用用户（历史单据仍需按其筛选），当前登录用户排最前，其余按姓名排序 */
-async function listOptions(currentUserId = null) {
+async function listOptions(currentUserId = null, hideDevelopment = false) {
   const [rows] = await pool.query(
     `SELECT id, real_name, is_active FROM sys_users
      WHERE deleted_at IS NULL
+     ${hideDevelopment ? "AND username NOT REGEXP '^(codex_|smoke_|esc_|pc_)' AND LOWER(username) <> 'cua_pda_test'" : ''}
      ORDER BY (id = ?) DESC, is_active DESC, real_name ASC`,
     [currentUserId],
   )

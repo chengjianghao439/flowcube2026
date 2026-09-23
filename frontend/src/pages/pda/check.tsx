@@ -16,7 +16,7 @@ import PdaHeader from '@/components/pda/PdaHeader'
 import PdaCard from '@/components/pda/PdaCard'
 import PdaBottomBar from '@/components/pda/PdaBottomBar'
 import PdaFlash from '@/components/pda/PdaFlash'
-import { PdaEmptyCard, PdaLoading } from '@/components/pda/PdaEmptyState'
+import { PdaEmptyCard, PdaLoading, PdaQueryError } from '@/components/pda/PdaEmptyState'
 import { Button } from '@/components/ui/button'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { getTasksApi, getTaskByIdApi, submitCheckScanApi } from '@/api/warehouse-tasks'
@@ -45,7 +45,7 @@ function TaskSelectStep({
   onSelect: (task: WarehouseTask) => void
 }) {
   const navigate = useNavigate()
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['pda-check-tasks'],
     // 重进列表必须立刻取最新数据（2026-09-17 验收 ISSUE-017：新派发单据长时间看不到）
     refetchOnMount: 'always',
@@ -61,11 +61,12 @@ function TaskSelectStep({
         <div className="max-w-md mx-auto px-4 py-4 space-y-3">
 
           {isLoading && <PdaLoading className="h-40" />}
-          {!isLoading && tasks.length === 0 && (
+          {isError && <PdaQueryError onRetry={() => { void refetch() }} />}
+          {!isLoading && !isError && tasks.length === 0 && (
             <PdaEmptyCard icon={<CircleCheck className="h-12 w-12 text-muted-foreground" />} title="暂无待复核任务" description="分拣完成后自动出现在这里" />
           )}
 
-          {tasks.map(task => {
+          {!isError && tasks.map(task => {
             const total   = task.items?.reduce((s, i) => s + i.requiredQty, 0) ?? 0
             const checked = task.items?.reduce((s, i) => s + ((i as CheckItem).checkedQty ?? 0), 0) ?? 0
             const pct = total > 0 ? Math.round(checked / total * 100) : 0

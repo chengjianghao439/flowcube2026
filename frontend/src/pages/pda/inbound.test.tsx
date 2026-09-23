@@ -39,8 +39,8 @@ const TASK = {
 let host: HTMLDivElement
 let root: Root | null = null
 
-async function mountPage(task: Record<string, unknown> = TASK) {
-  api.list.mockResolvedValue({ list: [task], pagination: { page: 1, pageSize: 500, total: 1 } })
+async function mountPage(task: Record<string, unknown> | null = TASK) {
+  if (task) api.list.mockResolvedValue({ list: [task], pagination: { page: 1, pageSize: 500, total: 1 } })
   host = document.createElement('div')
   document.body.appendChild(host)
   root = createRoot(host)
@@ -60,6 +60,14 @@ async function mountPage(task: Record<string, unknown> = TASK) {
   })
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)) })
 }
+
+test('收货列表读取失败时提供重试，不显示暂无任务', async () => {
+  api.list.mockRejectedValue(new Error('网络错误'))
+  await mountPage(null)
+  expect(host.textContent).toContain('加载失败')
+  expect(host.textContent).toContain('重试')
+  expect(host.textContent).not.toContain('暂无收货任务')
+})
 
 function buttonByText(text: string): HTMLButtonElement {
   const found = [...host.querySelectorAll('button')].find(b => b.textContent?.includes(text))

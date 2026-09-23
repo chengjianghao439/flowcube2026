@@ -120,6 +120,8 @@ export default function OpLogsPage() {
 
   // 导出参数（与列表当前筛选保持一致，含默认窗口）
   const exportParams = {
+    hideDevelopment: '1',
+    hidePrintPolling: '1',
     ...(keyword ? { keyword } : {}),
     ...(module ? { module } : {}),
     ...(effectiveStartDate ? { startDate: effectiveStartDate } : {}),

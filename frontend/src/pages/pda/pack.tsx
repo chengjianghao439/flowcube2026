@@ -14,7 +14,7 @@ import PdaHeader from '@/components/pda/PdaHeader'
 import PdaCard from '@/components/pda/PdaCard'
 import PdaBottomBar from '@/components/pda/PdaBottomBar'
 import PdaFlash from '@/components/pda/PdaFlash'
-import { PdaEmptyCard, PdaLoading } from '@/components/pda/PdaEmptyState'
+import { PdaEmptyCard, PdaLoading, PdaQueryError } from '@/components/pda/PdaEmptyState'
 import PdaStat, { PdaStatGrid } from '@/components/pda/PdaStat'
 import { Button } from '@/components/ui/button'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
@@ -47,7 +47,7 @@ function packageLabelTraceMessage(job?: PackagePrintJob | null): string {
 
 function TaskSelectStep({ onSelect }: { onSelect: (t: WarehouseTask) => void }) {
   const navigate = useNavigate()
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['pda-pack-tasks'],
     // 重进列表必须立刻取最新数据（2026-09-17 验收 ISSUE-017：新派发单据长时间看不到）
     refetchOnMount: 'always',
@@ -60,10 +60,11 @@ function TaskSelectStep({ onSelect }: { onSelect: (t: WarehouseTask) => void }) 
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-md mx-auto px-4 py-4 space-y-3">
           {isLoading && <PdaLoading className="h-40" />}
-          {!isLoading && tasks.length === 0 && (
+          {isError && <PdaQueryError onRetry={() => { void refetch() }} />}
+          {!isLoading && !isError && tasks.length === 0 && (
             <PdaEmptyCard icon={<PackageIcon className="h-12 w-12 text-muted-foreground" />} title="暂无待打包任务" />
           )}
-          {tasks.map(task => (
+          {!isError && tasks.map(task => (
             <PdaCard key={task.id} onClick={() => onSelect(task)} className="w-full text-left space-y-1.5">
               <div className="flex items-center justify-between">
                 <p className="font-mono text-sm font-semibold text-foreground">{task.taskNo}</p>

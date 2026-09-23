@@ -16,6 +16,9 @@
 - **批量写入用 `VALUES ?`（mysql2 展开二维数组），禁止在循环里逐行 INSERT/UPDATE**：一次生成可能有上百行的路径（采购计划、工资单等）逐行走一次往返会明显变慢。**`VALUES ?` 传空数组会 `ER_PARSE_ERROR`，必须先判 `length`**；表名与列名固定、值走批量参数。2026-09-18 已在 `procurement.service.generatePlan`（每行 3 次往返 → 2 次，快照并入 INSERT）与 `hr.service.createPayroll`（N → 1）落地，实测 MySQL 8.0.46 可用。
 - SQL 参数化；API 小写、连字符、复数名词。页面不分页，但传输与 SQL 保留有界批次；批次查询按主排序追加唯一 ID（库存按商品/仓库组合）保持稳定，防止相同时间或名称在不同批次重复/遗漏。后台批次复用 `normalizePagination`，导出遵循既有上限与截断告警，不能用无限大 pageSize 绕过分页。
 - **`role_id` 列必须与 `sys_roles.id` 同量级**：`sys_users.role_id` 与 `sys_role_permissions.role_id` 原为 TINYINT UNSIGNED（上限 255）且**无外键**，角色数超过 255 后给新角色分配权限/挂用户会 `ER_WARN_DATA_OUT_OF_RANGE`；迁移 `253_widen_role_id_columns.sql` 已对齐为 BIGINT UNSIGNED（本机测试库曾因此自毒化，表现为 round2-transfer fixture 大面积失败、看起来像代码回归）。
+- `GET /api/users?hideDevelopment=1` 与 `GET /api/users/options?hideDevelopment=1` 供所有前端过滤开发账号，列表按账号编码在 SQL 分页与总数统计前过滤；`GET /api/export/users?hideDevelopment=1` 与页面列表保持一致。缺省后端请求仍返回全部用户供测试使用。部门列表对开发账号负责人隐藏姓名但保留原 ID，避免改写审批关联。`GET /api/users/assignable-roles` 返回 `id/code/name`，`code` 供前端隐藏开发角色，实际角色授予仍由服务端权限子集校验。
+- 操作日志页面和导出都传 `hideDevelopment=1`，服务端在列表与总数统计前按操作人账号编码排除开发账号；匿名访问仍保留。缺省后端接口保持完整审计数据供排障使用。
+- 操作日志页面和导出还传 `hidePrintPolling=1`，在列表与总数统计中排除历史成功打印机心跳和任务领取请求。失败请求继续显示，原始日志不删除；后端缺省查询仍可用于排障。`opLogger` 对新请求跳过成功心跳与空领取，实际领取、完成和失败回执仍按原规则记录。
 - 新迁移按当前最大编号新增，**不得修改已执行的迁移**，不得未经明确授权删除字段、兼容代码或迁移文件。编号冲突、幂等执行、回填与消费者兼容要一起考虑。
 - **迁移必须逐条执行**：`backend/src/database/migrate.js` 经 `sqlStatements.js` 切分后逐条 `query`。整文件当一条多语句发送时，非末条 `CREATE TRIGGER ... <单语句>;` 的函数体会把结尾分号一起写进 `ACTION_STATEMENT`，mysqldump 导出成 `... ); */;;`，导入必然 1064 且备份不可恢复（2026-09-14 事故，见 `docs/backup-restore-trigger-terminator-2026-09-14.md`）。新增触发器迁移后要确认函数体不残留结尾分号；`sqlStatements.js` 不支持 `DELIMITER`，需要时先扩展再写迁移。
 - 后端启动不自动迁移；本地显式 migrate。生产由部署脚本执行，不能把两者混为一谈。
@@ -24,6 +27,7 @@
 ### 2026-09-22 审计整改：角色与授权写入
 
 - 用户角色从 `GET /users/assignable-roles` 读取，不再限于内置 2–5。服务端核对角色存在，普通操作人不得改自己的角色，也不得分配超出本人权限集合的角色；超管角色仍不经普通表单授予。
+- 用户创建/编辑的账号与姓名在请求校验时去首尾空格，再检查长度；密码保留原始输入，不做隐式去空格。前端校验只改善提示，直接调用 API 也必须拒绝空白姓名和空白账号。
 - 用户创建/修改先按用户 ID 顺序锁操作人和目标，再锁待分配角色。角色删除、权限覆盖、角色复制读取源角色也先锁角色行；删除在同事务内重查用户引用，避免“检查时无人使用，删除时刚被分配”。
 - 限仓操作人创建的账号在同事务内继承其实际仓库范围；给他人改仓库范围只能授予自身范围的非空子集。空数组代表不限仓，不能作为限仓操作人的清空捷径。
 - 专项入口：`npm run smoke:audit-remediation`；角色与范围的判断同时覆盖 HTTP 权限与服务层事务。

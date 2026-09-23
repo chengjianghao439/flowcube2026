@@ -72,3 +72,33 @@ test('扫码监听停用后不处理原生结果，卸载时移除原生监听',
   expect(native.remove).toHaveBeenCalledTimes(1)
   root = createRoot(host)
 })
+
+test('偏离推荐库位待确认时允许第二次同源实扫，但仍丢弃抖动和双通道回放', async () => {
+  const onScan = vi.fn()
+  const clock = vi.spyOn(Date, 'now')
+  let now = 1000
+  clock.mockImplementation(() => now)
+  function Harness({ armed }: { armed: boolean }) {
+    usePdaScanner({ onScan, allowIntentionalRepeat: armed })
+    return null
+  }
+  try {
+    await act(async () => { root.render(<Harness armed={false} />) })
+    await act(async () => { native.listener?.({ barcode: 'R000804' }) })
+    await act(async () => { root.render(<Harness armed />) })
+
+    now += 100
+    await act(async () => { native.listener?.({ barcode: 'R000804' }) })
+    expect(onScan).toHaveBeenCalledTimes(1)
+
+    now += 350
+    await act(async () => { native.listener?.({ barcode: 'R000804' }) })
+    expect(onScan).toHaveBeenCalledTimes(2)
+
+    for (const key of 'R000804') document.body.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }))
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    expect(onScan).toHaveBeenCalledTimes(2)
+  } finally {
+    clock.mockRestore()
+  }
+})

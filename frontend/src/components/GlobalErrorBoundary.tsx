@@ -82,9 +82,6 @@ export class GlobalErrorBoundary extends Component<Props, State> {
       return this.props.children
     }
 
-    const isDev = import.meta.env.DEV
-    const { error, errorInfo } = this.state
-
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-background p-8">
         <div className="w-full max-w-lg rounded-lg border border-destructive/20 bg-card p-8 shadow-lg">
@@ -102,20 +99,6 @@ export class GlobalErrorBoundary extends Component<Props, State> {
           <p className="mb-6 text-center text-sm text-muted-foreground">
             系统遇到了一个意外错误，请刷新页面或联系管理员。
           </p>
-
-          {/* 错误信息（开发环境） */}
-          {isDev && error && (
-            <div className="mb-6 overflow-auto rounded-lg bg-muted p-4 text-left">
-              <p className="mb-1 text-xs font-semibold text-destructive">
-                {error.name}: {error.message}
-              </p>
-              {errorInfo?.componentStack && (
-                <pre className="mt-2 whitespace-pre-wrap text-xs leading-5 text-muted-foreground">
-                  {errorInfo.componentStack.trim().slice(0, 800)}
-                </pre>
-              )}
-            </div>
-          )}
 
           {/* 操作按钮 */}
           <div className="flex justify-center gap-3">

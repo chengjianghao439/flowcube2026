@@ -19,7 +19,7 @@ import PdaCard from '@/components/pda/PdaCard'
 import PdaBottomBar from '@/components/pda/PdaBottomBar'
 import PdaScanner from '@/components/pda/PdaScanner'
 import PdaFlash from '@/components/pda/PdaFlash'
-import { PdaLoading } from '@/components/pda/PdaEmptyState'
+import { PdaLoading, PdaQueryError } from '@/components/pda/PdaEmptyState'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
 import { getPendingScanChecksApi, getScanCheckItemsApi, saveCheckItemScansApi } from '@/api/stockcheck'
@@ -41,7 +41,7 @@ interface ScannedContainer {
 // ── 待盘点单列表 ──
 function CheckList() {
   const navigate = useNavigate()
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['pda-stockcheck-pending'],
     // 重进列表必须立刻取最新数据（2026-09-17 验收 ISSUE-017：新派发单据长时间看不到）
     refetchOnMount: 'always',
@@ -54,8 +54,9 @@ function CheckList() {
     <div className="flex min-h-screen flex-col bg-background">
       <PdaHeader title="扫码盘点" subtitle="逐商品扫描在架库存条码" onBack={() => navigate('/pda')} />
       <div className="max-w-md mx-auto flex-1 space-y-2 overflow-y-auto p-3 w-full">
-        {list.length === 0 && <PdaCard><p className="py-8 text-center text-sm text-muted-foreground">暂无进行中的盘点单</p></PdaCard>}
-        {list.map(c => (
+        {isError && <PdaQueryError onRetry={() => { void refetch() }} />}
+        {!isError && list.length === 0 && <PdaCard><p className="py-8 text-center text-sm text-muted-foreground">暂无进行中的盘点单</p></PdaCard>}
+        {!isError && list.map(c => (
           <button key={c.id} className="w-full" onClick={() => navigate(`/pda/stockcheck/${c.id}`)}>
             <PdaCard>
               <div className="flex items-center justify-between">
@@ -206,7 +207,7 @@ function CheckWork({ checkId }: { checkId: number }) {
                       <span className={s.countedQty !== s.bookQty ? 'text-amber-600' : ''}>/ 账面 {s.bookQty}</span>
                     </span>
                   )}
-                  <button type="button" className="text-xs text-destructive shrink-0"
+                  <button type="button" className="min-h-11 min-w-11 px-2 text-xs text-destructive shrink-0"
                     onClick={() => setScanned(prev => prev.filter(x => x.barcode !== s.barcode))}
                   >移除</button>
                 </div>

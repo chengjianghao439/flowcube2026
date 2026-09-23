@@ -1,10 +1,12 @@
 const { pool } = require('../../config/db')
 const { normalizePagination } = require('../../utils/pagination')
 
-const findAll = async ({ page, pageSize, keyword, module: mod, startDate = '', endDate = '' }) => {
+const findAll = async ({ page, pageSize, keyword, module: mod, startDate = '', endDate = '', hideDevelopment = false, hidePrintPolling = false }) => {
   const { pageSize: ps, offset } = normalizePagination({ page, pageSize })
   const like = `%${keyword}%`
   const conds = ['(user_name LIKE ? OR path LIKE ?)']
+  if (hideDevelopment) conds.push("(user_name IS NULL OR (user_name NOT REGEXP '^(codex_|smoke_|esc_|pc_)' AND LOWER(user_name) <> 'cua_pda_test'))")
+  if (hidePrintPolling) conds.push("NOT (COALESCE(method, '') = 'POST' AND COALESCE(path, '') IN ('/api/printers/client-heartbeat', '/api/print-jobs/claim-client') AND COALESCE(status_code, 0) >= 200 AND COALESCE(status_code, 0) < 300)")
   const params = [like, like]
   const cntParams = [like, like]
   if (mod) {

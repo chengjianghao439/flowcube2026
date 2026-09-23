@@ -45,11 +45,11 @@ export default function PdaHeader({
       <div className="max-w-md mx-auto px-4 py-2 flex items-center" style={{ minHeight: 56 }}>
 
         {/* 左：返回按钮（固定宽度保证标题居中） */}
-        <div className="w-16 shrink-0">
+        <div className="w-20 shrink-0">
           {onBack && (
             <button
               onClick={onBack}
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
+              className="flex min-h-11 min-w-11 items-center text-sm text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
             >
               {backLabel}
             </button>
@@ -65,7 +65,7 @@ export default function PdaHeader({
         </div>
 
         {/* 右：插槽（固定宽度，右对齐） */}
-        <div className="w-16 shrink-0 flex justify-end">
+        <div className="w-20 shrink-0 flex justify-end">
           {right}
         </div>
 
@@ -97,5 +97,5 @@ export default function PdaHeader({
 
 /** 刷新按钮快捷帮助器（常用 right 插槽） */
 export function PdaRefreshButton({ onRefresh }: { onRefresh: () => void }) {
-  return <Button variant="outline" size="sm" onClick={onRefresh}>刷新</Button>
+  return <Button variant="outline" size="sm" className="min-h-11 min-w-11 px-2" onClick={onRefresh}>刷新</Button>
 }

@@ -22,7 +22,7 @@ import PdaCard from '@/components/pda/PdaCard'
 import PdaBottomBar from '@/components/pda/PdaBottomBar'
 import PdaScanner from '@/components/pda/PdaScanner'
 import PdaFlash from '@/components/pda/PdaFlash'
-import { PdaEmptyCard, PdaLoading } from '@/components/pda/PdaEmptyState'
+import { PdaEmptyCard, PdaLoading, PdaQueryError } from '@/components/pda/PdaEmptyState'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
 import { usePdaPendingAdjustments, usePdaAdjustmentDetail } from '@/hooks/usePdaAdjustment'
@@ -33,7 +33,7 @@ import { parseBarcode } from '@/utils/barcode'
 // ── 列表：待处理的改单确认任务池 ──────────────────────────────────────────────
 function AdjustmentListPage() {
   const navigate = useNavigate()
-  const { data, isLoading, refetch } = usePdaPendingAdjustments()
+  const { data, isLoading, isError, refetch } = usePdaPendingAdjustments()
   const tasks = data ?? []
 
   return (
@@ -41,12 +41,13 @@ function AdjustmentListPage() {
       <PdaHeader title="改单确认" subtitle="拆箱 / 归还库位确认" onBack={() => navigate('/pda')}
         right={<PdaRefreshButton onRefresh={() => refetch()} />} />
       <div className="max-w-md mx-auto px-4 py-5 space-y-4">
-        <p className="text-xs text-muted-foreground">{tasks.length} 个任务待处理</p>
+        {!isError && <p className="text-xs text-muted-foreground">{tasks.length} 个任务待处理</p>}
         {isLoading && <PdaLoading className="h-32" />}
-        {!isLoading && tasks.length === 0 && (
+        {isError && <PdaQueryError onRetry={() => { void refetch() }} />}
+        {!isLoading && !isError && tasks.length === 0 && (
           <PdaEmptyCard icon={<PencilLine className="h-12 w-12 text-muted-foreground" />} title="暂无待确认改单" description="没有因订单修改而需要归还/拆箱的任务" />
         )}
-        {tasks.map(t => (
+        {!isError && tasks.map(t => (
           <PdaCard key={t.adjustmentId} className="w-full" onClick={() => navigate(`/pda/adjustments/${t.adjustmentId}`)}>
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -77,7 +78,7 @@ function AdjustmentDetailPage({ adjustmentId }: { adjustmentId: number }) {
   const [scanning, setScanning] = useState(false)
   const { flash, ok, err, warn } = usePdaFeedback()
 
-  const { data: detail, isLoading, refetch } = usePdaAdjustmentDetail(adjustmentId)
+  const { data: detail, isLoading, isError, refetch } = usePdaAdjustmentDetail(adjustmentId)
 
   const pendingReturns = (detail?.items ?? []).flatMap(i => i.containerReturns.filter(r => r.status === 1))
   const pendingVoids = (detail?.items ?? []).flatMap(i => i.packageVoids.filter(v => v.status === 1))
@@ -198,6 +199,13 @@ function AdjustmentDetailPage({ adjustmentId }: { adjustmentId: number }) {
   function handleScannerInput(code: string) {
     if (step === 'scan-location') { void handleLocationScan(code); return }
     handleScan(code)
+  }
+
+  if (isError || (!isLoading && !detail)) {
+    return <div className="min-h-screen bg-background">
+      <PdaHeader title="改单确认" onBack={() => navigate('/pda/adjustments')} />
+      <div className="max-w-md mx-auto px-4 pt-6"><PdaQueryError onRetry={() => { void refetch() }} /></div>
+    </div>
   }
 
   if (isLoading || !detail) {

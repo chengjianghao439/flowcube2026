@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import PdaHeader, { PdaRefreshButton } from '@/components/pda/PdaHeader'
 import PdaCard from '@/components/pda/PdaCard'
-import { PdaEmptyCard, PdaLoading } from '@/components/pda/PdaEmptyState'
+import { PdaEmptyCard, PdaLoading, PdaQueryError } from '@/components/pda/PdaEmptyState'
 
 function TransferCard({ order, phase, onTap }: { order: TransferOrder; phase: 'out' | 'in'; onTap: () => void }) {
   const lineCount = order.items?.length ?? 0
@@ -46,7 +46,7 @@ function TransferCard({ order, phase, onTap }: { order: TransferOrder; phase: 'o
 
 export default function PdaTransferPage() {
   const navigate = useNavigate()
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['pda-transfers'],
     // 重进列表必须立刻取最新数据（2026-09-17 验收 ISSUE-017：新派发单据长时间看不到）
     refetchOnMount: 'always',
@@ -64,8 +64,9 @@ export default function PdaTransferPage() {
       <PdaHeader title="调拨执行" onBack={() => navigate('/pda')} right={<PdaRefreshButton onRefresh={() => refetch()} />} />
       <div className="max-w-md mx-auto px-4 py-5 space-y-5">
         {isLoading && <PdaLoading className="h-32" />}
+        {isError && <PdaQueryError onRetry={() => { void refetch() }} />}
 
-        {!isLoading && (
+        {!isLoading && !isError && (
           <section className="space-y-3">
             <p className="text-xs font-medium text-muted-foreground">待出库（调出仓扫码）· {outbound.length}</p>
             {outbound.length === 0
@@ -74,7 +75,7 @@ export default function PdaTransferPage() {
           </section>
         )}
 
-        {!isLoading && (
+        {!isLoading && !isError && (
           <section className="space-y-3">
             <p className="text-xs font-medium text-muted-foreground">待入库（调入仓扫码）· {inbound.length}</p>
             {inbound.length === 0

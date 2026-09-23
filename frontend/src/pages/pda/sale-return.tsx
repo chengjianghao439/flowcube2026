@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import PdaHeader from '@/components/pda/PdaHeader'
 import PdaCard from '@/components/pda/PdaCard'
-import { PdaLoading, PdaEmptyCard } from '@/components/pda/PdaEmptyState'
+import { PdaLoading, PdaEmptyCard, PdaQueryError } from '@/components/pda/PdaEmptyState'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import type { StatusTone } from '@/lib/statusTone'
 import { getPdaReturnTasksApi, type ReturnTask } from '@/api/returns'
@@ -38,7 +38,7 @@ function TaskCard({ task }: { task: ReturnTask }) {
 
 export default function PdaSaleReturnListPage() {
   const nav = useNavigate()
-  const { data: tasks, isLoading } = useQuery({
+  const { data: tasks, isLoading, isError, refetch } = useQuery({
     queryKey: ['pda-return-tasks'],
     // 重进列表必须立刻取最新数据（2026-09-17 验收 ISSUE-017）
     refetchOnMount: 'always',
@@ -51,10 +51,11 @@ export default function PdaSaleReturnListPage() {
       <PdaHeader title="销售退货" subtitle="退货收货/质检/上架" onBack={() => nav('/pda')} />
       <div className="flex-1 overflow-y-auto px-4 py-4 max-w-md mx-auto w-full space-y-3">
         {isLoading && <PdaLoading />}
-        {!isLoading && (!tasks || tasks.length === 0) && (
+        {isError && <PdaQueryError onRetry={() => { void refetch() }} />}
+        {!isLoading && !isError && (!tasks || tasks.length === 0) && (
           <PdaEmptyCard icon={<ArrowDownToLine className="h-12 w-12 text-muted-foreground" />} title="暂无退货任务" description="请在 ERP 端确认退货单并提交到 PDA" />
         )}
-        {tasks?.map(t => <TaskCard key={t.id} task={t} />)}
+        {!isError && tasks?.map(t => <TaskCard key={t.id} task={t} />)}
       </div>
     </div>
   )

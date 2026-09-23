@@ -38,7 +38,7 @@
     "smoke:purchase-repair": "node --test tests/legacy-purchase-repair.smoke.test.js",
     "smoke:legacy-receivable-repair": "node --test --test-concurrency=1 tests/legacy-receivable-repair.smoke.test.js tests/audit-business-consistency.smoke.test.js",
     "audit:business-consistency": "node backend/scripts/audit-business-consistency.cjs",
-    "test:permissions": "node tests/permission-codes.test.js",
+    "test:permissions": "node tests/permission-codes.test.js && node --test tests/users-self-controller.test.js tests/role-preset-permissions.test.js tests/departments-safety.test.js",
     "test:route-permission-contract": "node tests/route-permission-contract.test.js",
     "test:finance-lock-order": "node tests/finance-lock-order-contract.test.js",
     "test:inventory-lock-order": "node tests/inventory-lock-order-contract.test.js",

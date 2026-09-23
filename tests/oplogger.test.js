@@ -19,6 +19,7 @@ const {
   sanitizeBody,
   isSensitiveKey,
   SENSITIVE_FIELDS,
+  shouldRecordOperation,
 } = require(path.resolve(__dirname, '../backend/src/middleware/opLogger'))
 
 const results = []
@@ -27,6 +28,15 @@ function check(desc, fn) {
   try { fn(); results.push(`  ✓ ${desc}`) }
   catch (e) { failures += 1; results.push(`  ✗ ${desc}\n      ${e.message}`) }
 }
+
+check('成功心跳和空领取不记成操作，失败与实际领取仍记录', () => {
+  assert.strictEqual(shouldRecordOperation('POST', '/api/printers/client-heartbeat', 200, { success: true }), false)
+  assert.strictEqual(shouldRecordOperation('POST', '/api/printers/client-heartbeat', 403, { success: false }), true)
+  assert.strictEqual(shouldRecordOperation('POST', '/api/print-jobs/claim-client', 200, { success: true, data: [] }), false)
+  assert.strictEqual(shouldRecordOperation('POST', '/api/print-jobs/claim-client', 200, { success: true, data: [{ id: 12 }] }), true)
+  assert.strictEqual(shouldRecordOperation('POST', '/api/print-jobs/claim-client', 500, { success: false }), true)
+  assert.strictEqual(shouldRecordOperation('POST', '/api/print-jobs', 201, { success: true, data: { id: 12 } }), true)
+})
 
 // ── snake_case / camelCase 双命名统一清洗 ─────────────────────────────────────
 check('PDA 设备密钥 snake_case 与 camelCase 均被清洗', () => {

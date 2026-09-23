@@ -22,7 +22,7 @@ export interface CreateUserParams {
 
 export interface UpdateUserParams {
   realName: string
-  /** 省略 = 保持原角色（编辑超管账号时不传，后端 schema 只放行 2-5） */
+  /** 省略 = 保持原角色（编辑超管账号时不传；其余角色由后端动态校验） */
   roleId?: number
   isActive: boolean
   /** 省略 = 保持原部门；null = 清空部门 */

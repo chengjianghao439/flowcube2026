@@ -173,7 +173,7 @@ export default function PdaPickingPage() {
   const tasks = data ?? []
   const tasksById = new Map(tasks.map(task => [task.id, task]))
 
-  const { data: skuData, isLoading: skuLoading } = useQuery({
+  const { data: skuData, isLoading: skuLoading, isError: skuError, refetch: refetchSku } = useQuery({
     queryKey: ['pda-my-task-sku-summary'],
     queryFn: () => getMyTaskSkuSummaryApi().then(r => r ?? []),
     enabled: viewMode === 'sku',
@@ -254,15 +254,15 @@ export default function PdaPickingPage() {
         {(isLoading || (viewMode === 'sku' && skuLoading)) && <PdaLoading className="h-32" />}
 
         {/* 加载失败 */}
-        {isError && (
+        {(isError || (viewMode === 'sku' && skuError)) && (
           <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-center">
             <p className="text-sm text-destructive">加载失败</p>
-            <Button variant="outline" size="sm" className="mt-2" onClick={() => refetch()}>重试</Button>
+            <Button variant="outline" size="pda" className="mt-2" onClick={() => { void (viewMode === 'sku' && skuError ? refetchSku() : refetch()) }}>重试</Button>
           </div>
         )}
 
         {/* SKU 视图 */}
-        {viewMode === 'sku' && !isLoading && !skuLoading && !isError && (
+        {viewMode === 'sku' && !isLoading && !skuLoading && !isError && !skuError && (
           skuList.length === 0
             ? <PdaEmptyCard icon={<Package className="h-12 w-12 text-muted-foreground" />} title="暂无待拣商品" description="订单确认后会自动显示在这里" />
             : <div className="flex flex-col gap-3">

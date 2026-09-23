@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { toast } from '@/lib/toast'
 import { useDepartments, useCreateDepartment, useUpdateDepartment, useDeleteDepartment } from '@/hooks/useDepartments'
@@ -18,6 +18,7 @@ import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { EditModeBadge } from '@/components/shared/EditModeBadge'
+import { isElectronRuntime } from '@/lib/platform'
 import type { Department } from '@/types/department'
 import type { TableColumn } from '@/types'
 
@@ -34,7 +35,8 @@ const emptyForm = (): DeptFormState => ({ name: '', parentId: 0, managerId: null
 type DeptNode = Department & { children: DeptNode[] }
 
 /** DataTable 行：拍平后的可见节点 + 层级深度 */
-type Row = { id: number; dept: DeptNode; depth: number }
+type Row = { id: number; dept: DeptNode; depth: number; path: string }
+type FormErrors = Partial<Record<'name' | 'managerId' | 'sortOrder' | 'remark', string>>
 
 /** 在树中按 id 找到节点（供防环统计子孙） */
 function findNode(nodes: DeptNode[], id: number): DeptNode | null {
@@ -55,13 +57,17 @@ export default function DepartmentsPage() {
   const { data: departments = [], isLoading, isError, error, refetch } = useDepartments()
   const { options: userOptions, currentUserId } = useUserOptions()
   const { can } = usePermission()
-  const { mutate: createDept } = useCreateDepartment()
-  const { mutate: updateDept } = useUpdateDepartment()
-  const { mutate: deleteDept } = useDeleteDepartment()
+  const { mutate: createDept, isPending: createPending } = useCreateDepartment()
+  const { mutate: updateDept, isPending: updatePending } = useUpdateDepartment()
+  const { mutate: deleteDept, isPending: deletePending } = useDeleteDepartment()
 
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Department | null>(null)
   const [form, setForm] = useState<DeptFormState>(emptyForm())
+  const [errors, setErrors] = useState<FormErrors>({})
+  const [saving, setSaving] = useState(false)
+  const savingRef = useRef(false)
+  const deletingRef = useRef(false)
   const [deleteTarget, setDeleteTarget] = useState<Department | null>(null)
   const [search, setSearch] = useState('')
   const [keyword, setKeyword] = useState('')
@@ -96,12 +102,13 @@ export default function DepartmentsPage() {
     const out: Row[] = []
     // 节点自身或其子孙名称含 kw
     const hit = (n: DeptNode): boolean => kw !== '' && (n.name.includes(kw) || n.children.some(hit))
-    const walk = (nodes: DeptNode[], depth: number) => {
+    const walk = (nodes: DeptNode[], depth: number, parentPath = '') => {
       for (const n of nodes) {
         if (kw !== '' && !hit(n)) continue
-        out.push({ id: n.id, dept: n, depth })
+        const path = parentPath ? `${parentPath} / ${n.name}` : n.name
+        out.push({ id: n.id, dept: n, depth, path })
         const open = kw !== '' || expanded.has(n.id)
-        if (open && n.children.length) walk(n.children, depth + 1)
+        if (open && n.children.length) walk(n.children, depth + 1, path)
       }
     }
     walk(tree, 0)
@@ -119,15 +126,25 @@ export default function DepartmentsPage() {
   const canCreate = can(PERMISSIONS.DEPARTMENT_CREATE)
   const canUpdate = can(PERMISSIONS.DEPARTMENT_UPDATE)
   const canDelete = can(PERMISSIONS.DEPARTMENT_DELETE)
+  const canManageFlows = can(PERMISSIONS.APPROVAL_FLOW_MANAGE)
+  const savePending = saving || createPending || updatePending
+  const selectedManager = userOptions.find((u) => u.id === form.managerId)
+  const managerInvalid = form.managerId != null && (
+    editing?.managerId === form.managerId
+      ? editing.managerIsActive === false || editing.managerIsDevelopment
+      : !selectedManager?.isActive
+  )
 
   function openCreate(parentId = 0) {
     setEditing(null)
     setForm({ ...emptyForm(), parentId })
+    setErrors({})
     setFormOpen(true)
   }
   function openEdit(d: Department) {
     setEditing(d)
     setForm({ name: d.name, parentId: d.parentId, managerId: d.managerId, sortOrder: d.sortOrder, remark: d.remark ?? '' })
+    setErrors({})
     setFormOpen(true)
   }
 
@@ -145,26 +162,41 @@ export default function DepartmentsPage() {
   }
 
   function handleSave() {
-    if (!form.name.trim()) return toast.error('请填写部门名称')
-    const payload = { ...form, managerId: form.managerId || null }
+    if (savingRef.current || savePending) return
+    const nextErrors: FormErrors = {}
+    const name = form.name.trim()
+    if (!name) nextErrors.name = '请填写部门名称'
+    else if (name.length > 50) nextErrors.name = '部门名称最多 50 字'
+    if (managerInvalid) nextErrors.managerId = '请更换为启用中的负责人，或清空负责人'
+    if (!Number.isInteger(form.sortOrder) || form.sortOrder < 0) nextErrors.sortOrder = '排序须为非负整数'
+    if (form.remark.length > 200) nextErrors.remark = '备注最多 200 字'
+    setErrors(nextErrors)
+    if (Object.keys(nextErrors).length) return
+    const payload = { ...form, name, managerId: form.managerId || null }
+    savingRef.current = true
+    setSaving(true)
+    const done = (message: string) => { setFormOpen(false); toast.success(message) }
+    const fail = (e: Error) => toast.error(e.message)
+    const settled = () => { savingRef.current = false; setSaving(false) }
     if (editing) {
       updateDept({ id: editing.id, data: payload }, {
-        onSuccess: () => { setFormOpen(false); toast.success('已保存') },
-        onError: (e: Error) => toast.error(e.message),
+        onSuccess: () => done('部门已保存'), onError: fail, onSettled: settled,
       })
     } else {
       createDept(payload, {
-        onSuccess: () => { setFormOpen(false); toast.success('已创建') },
-        onError: (e: Error) => toast.error(e.message),
+        onSuccess: () => done('部门已创建'), onError: fail, onSettled: settled,
       })
     }
   }
 
   function handleDelete() {
-    if (!deleteTarget) return
+    if (!deleteTarget || deletingRef.current || deletePending) return
+    if (deleteTarget.approvalFlowCount > 0) { setDeleteTarget(null); return }
+    deletingRef.current = true
     deleteDept(deleteTarget.id, {
-      onSuccess: () => { setDeleteTarget(null); toast.success('已删除') },
-      onError: (e: Error) => toast.error(e.message),
+      onSuccess: () => { setDeleteTarget(null); toast.success('部门已删除') },
+      onError: (e: Error) => { if (isElectronRuntime()) setDeleteTarget(null); toast.error(e.message) },
+      onSettled: () => { deletingRef.current = false },
     })
   }
 
@@ -178,16 +210,29 @@ export default function DepartmentsPage() {
           {row.dept.children.length > 0 ? (
             <button
               type="button"
-              aria-label={expanded.has(row.id) ? '收起子部门' : '展开子部门'}
+              aria-label={kw ? '搜索时子部门已展开' : expanded.has(row.id) ? '收起子部门' : '展开子部门'}
+              aria-expanded={!!kw || expanded.has(row.id)}
+              disabled={!!kw}
+              title={kw ? '搜索结果自动展开匹配路径' : undefined}
               onClick={() => toggleExpand(row.id)}
+              onKeyDown={(e) => {
+                if (e.key === 'ArrowRight' && !expanded.has(row.id)) { e.preventDefault(); toggleExpand(row.id) }
+                if (e.key === 'ArrowLeft' && expanded.has(row.id)) { e.preventDefault(); toggleExpand(row.id) }
+              }}
               className="flex h-5 w-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground"
             >
-              {expanded.has(row.id) ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+              {kw || expanded.has(row.id) ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
             </button>
           ) : (
             <span className="h-5 w-5 shrink-0" />
           )}
-          <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere] font-medium">{row.dept.name}</span>
+          <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere]">
+            <span className="block font-medium">{row.dept.name}</span>
+            {kw && row.depth > 0 && <span className="block text-xs text-muted-foreground">{row.path}</span>}
+            {row.dept.approvalFlowCount > 0 && (canManageFlows
+              ? <a href="#/approvals/flows" className="block text-xs text-primary underline-offset-2 hover:underline">{row.dept.approvalFlowCount} 条审批流引用</a>
+              : <span className="block text-xs text-muted-foreground">{row.dept.approvalFlowCount} 条审批流引用</span>)}
+          </span>
         </div>
       ),
     },
@@ -195,11 +240,16 @@ export default function DepartmentsPage() {
       key: 'managerName',
       title: '负责人',
       width: 140,
-      render: (v) => (v ? String(v) : <span className="text-muted-foreground">—</span>),
+      render: (_v, row) => (
+        <span>
+          <span className="block">{row.dept.managerName || <span className="text-muted-foreground">—</span>}</span>
+          {row.dept.managerIsActive === false && !row.dept.managerIsDevelopment && <span className="block text-xs text-destructive">{row.dept.managerName ? '负责人已禁用' : '负责人已删除'}</span>}
+        </span>
+      ),
     },
     {
       key: 'memberCount',
-      title: '成员数',
+      title: '直属成员',
       width: 100,
       align: 'right',
       render: (_v, row) => `${row.dept.memberCount} 人`,
@@ -211,22 +261,25 @@ export default function DepartmentsPage() {
       align: 'right',
       render: (_v, row) => row.dept.sortOrder,
     },
-    { key: 'createdAt', title: '创建时间', render: (v) => formatDisplayDateTime(String(v)) },
+    { key: 'createdAt', title: '创建时间', render: (_v, row) => formatDisplayDateTime(row.dept.createdAt) },
     {
       key: 'actions',
       title: '操作',
-      width: 180,
+      width: 260,
       render: (_v, row) => {
-        if (!canUpdate && !canDelete) return null
+        if (!canCreate && !canUpdate && !canDelete) return null
         return (
-          <TableActionsMenu
-            primaryLabel={canUpdate ? '编辑' : '删除'}
-            primaryVariant="outline"
-            onPrimaryClick={() => (canUpdate ? openEdit(row.dept) : setDeleteTarget(row.dept))}
-            items={canDelete
-              ? [{ label: '删除', destructive: true, separatorBefore: canUpdate, onClick: () => setDeleteTarget(row.dept) }]
-              : []}
-          />
+          <div className="flex items-center gap-2">
+            {canCreate && <Button size="sm" variant="outline" onClick={() => openCreate(row.id)}>新增子部门</Button>}
+            {(canUpdate || canDelete) && <TableActionsMenu
+              primaryLabel={canUpdate ? '编辑' : '删除'}
+              primaryVariant="outline"
+              onPrimaryClick={() => (canUpdate ? openEdit(row.dept) : setDeleteTarget(row.dept))}
+              items={canDelete
+                ? [{ label: '删除', destructive: true, separatorBefore: canUpdate, onClick: () => setDeleteTarget(row.dept) }]
+                : []}
+            />}
+          </div>
         )
       },
     },
@@ -254,6 +307,8 @@ export default function DepartmentsPage() {
             重置
           </Button>
         )}
+        <Button size="sm" variant="ghost" onClick={() => setExpanded(new Set(departments.map((d) => d.id)))} disabled={!!kw}>全部展开</Button>
+        <Button size="sm" variant="ghost" onClick={() => setExpanded(new Set())} disabled={!!kw}>全部收起</Button>
       </FilterCard>
 
       {isError ? (
@@ -268,7 +323,7 @@ export default function DepartmentsPage() {
         />
       )}
 
-      <Dialog open={formOpen} onOpenChange={(v) => !v && setFormOpen(false)}>
+      <Dialog open={formOpen} onOpenChange={(v) => !v && !savePending && setFormOpen(false)}>
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             {/* 编辑态与默认（新增）态一眼可分 */}
@@ -282,10 +337,12 @@ export default function DepartmentsPage() {
               </p>
             )}
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-x-5 gap-y-4 py-2">
+          <DialogDescription className="sr-only">设置部门名称、上级部门、负责人及排序</DialogDescription>
+          <div className="grid grid-cols-1 gap-x-5 gap-y-4 py-2 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="department-name">部门名称</Label>
-              <Input id="department-name" value={form.name} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, name: e.target.value })} placeholder="如：采购部" />
+              <Input id="department-name" value={form.name} aria-invalid={!!errors.name} aria-describedby={errors.name ? 'department-name-error' : undefined} onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setForm({ ...form, name: e.target.value }); setErrors(prev => ({ ...prev, name: undefined })) }} placeholder="如：采购部" />
+              {errors.name && <p id="department-name-error" className="text-xs text-destructive">{errors.name}</p>}
             </div>
             <div className="space-y-2">
               <Label htmlFor="department-parentId">上级部门</Label>
@@ -303,30 +360,35 @@ export default function DepartmentsPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="department-managerId">部门负责人</Label>
-              <Select value={form.managerId ? String(form.managerId) : '0'} onValueChange={(v) => setForm({ ...form, managerId: v === '0' ? null : Number(v) })}>
-                <SelectTrigger id="department-managerId" className="w-full">
+              <Select value={form.managerId ? String(form.managerId) : '0'} onValueChange={(v) => { setForm({ ...form, managerId: v === '0' ? null : Number(v) }); setErrors(prev => ({ ...prev, managerId: undefined })) }}>
+                <SelectTrigger id="department-managerId" className="w-full" aria-invalid={!!errors.managerId} aria-describedby={errors.managerId ? 'department-managerId-error' : undefined}>
                   <SelectValue placeholder="未设置" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="0">未设置</SelectItem>
                   {userOptions.map((u) => (
-                    <SelectItem key={u.id} value={String(u.id)}>{userOptionLabel(u, currentUserId)}</SelectItem>
+                    <SelectItem key={u.id} value={String(u.id)} disabled={!u.isActive}>{userOptionLabel(u, currentUserId)}</SelectItem>
                   ))}
+                  {form.managerId && !selectedManager && <SelectItem value={String(form.managerId)} disabled>{editing?.managerIsDevelopment ? '负责人不可用' : `${editing?.managerName || '原负责人'}（已删除）`}</SelectItem>}
                 </SelectContent>
               </Select>
+              {managerInvalid && <p className="text-xs text-destructive">{editing?.managerIsDevelopment && editing.managerId === form.managerId ? '负责人不可用，请更换或清空' : editing?.managerId === form.managerId && !editing.managerName ? '原负责人已删除，请更换或清空' : '当前负责人已禁用，请更换或清空'}</p>}
+              {errors.managerId && <p id="department-managerId-error" className="text-xs text-destructive">{errors.managerId}</p>}
             </div>
             <div className="space-y-2">
               <Label htmlFor="department-sortOrder">排序</Label>
-              <Input type="number" min={0} id="department-sortOrder" value={form.sortOrder} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, sortOrder: Number(e.target.value) || 0 })} />
+              <Input type="number" min={0} step={1} id="department-sortOrder" value={form.sortOrder} aria-invalid={!!errors.sortOrder} aria-describedby={errors.sortOrder ? 'department-sortOrder-error' : undefined} onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setForm({ ...form, sortOrder: Number(e.target.value) }); setErrors(prev => ({ ...prev, sortOrder: undefined })) }} />
+              {errors.sortOrder && <p id="department-sortOrder-error" className="text-xs text-destructive">{errors.sortOrder}</p>}
             </div>
-            <div className="col-span-2 space-y-2">
+            <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="department-remark">备注</Label>
-              <Input id="department-remark" value={form.remark} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, remark: e.target.value })} />
+              <Input id="department-remark" value={form.remark} aria-invalid={!!errors.remark} aria-describedby={errors.remark ? 'department-remark-error' : undefined} onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setForm({ ...form, remark: e.target.value }); setErrors(prev => ({ ...prev, remark: undefined })) }} />
+              {errors.remark && <p id="department-remark-error" className="text-xs text-destructive">{errors.remark}</p>}
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setFormOpen(false)}>取消</Button>
-            <Button onClick={handleSave}>{editing ? '保存修改' : '保存'}</Button>
+            <Button variant="outline" onClick={() => setFormOpen(false)} disabled={savePending}>取消</Button>
+            <Button onClick={handleSave} disabled={savePending}>{savePending ? '保存中…' : editing ? '保存修改' : '保存'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -334,9 +396,12 @@ export default function DepartmentsPage() {
       <ConfirmDialog
         open={!!deleteTarget}
         title="确认删除"
-        description={`确定删除部门「${deleteTarget?.name}」吗？部门下有子部门或用户时无法删除。`}
+        description={deleteTarget?.approvalFlowCount
+          ? `部门「${deleteTarget.name}」被 ${deleteTarget.approvalFlowCount} 条审批流引用，请先到「审批流配置」调整后再删除。`
+          : `确定删除部门「${deleteTarget?.name}」吗？部门下有子部门或用户时无法删除。`}
         variant="destructive"
-        confirmText="删除"
+        confirmText={deleteTarget?.approvalFlowCount ? '知道了' : '删除'}
+        loading={deletePending}
         onConfirm={handleDelete}
         onCancel={() => setDeleteTarget(null)}
       />

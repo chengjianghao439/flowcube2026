@@ -3,8 +3,8 @@ const AppError = require('../../utils/AppError')
 
 /**
  * 部门组织（P2-7）。树形结构（parent_id），可挂部门负责人（审批流按部门负责人寻人）。
- * 删除护栏：部门下有用户或子部门时不允许删除（只能停用语义——这里用删除检查替代停用，
- * 部门是组织主数据，历史单据不引用部门，删除不破坏数据）。
+ * 删除护栏：部门下有用户、子部门或审批流节点显式引用时不允许删除。
+ * 历史审批实例使用已生成的审批人快照，不依赖部门当前状态。
  */
 
 function fmt(r) {
@@ -13,7 +13,9 @@ function fmt(r) {
     name: r.name,
     parentId: Number(r.parent_id),
     managerId: r.manager_id != null ? Number(r.manager_id) : null,
-    managerName: r.manager_name || null,
+    managerName: Number(r.manager_is_development) === 1 ? null : (r.manager_name || null),
+    managerIsActive: r.manager_id == null ? null : Number(r.manager_is_active) === 1,
+    managerIsDevelopment: Number(r.manager_is_development) === 1,
     sortOrder: Number(r.sort_order),
     remark: r.remark,
     createdAt: r.created_at,
@@ -22,15 +24,24 @@ function fmt(r) {
 
 /** 部门树（含每部门成员数、负责人姓名）。列表一次性拉全部，前端按 parentId 组树。 */
 async function findAll() {
-  const [rows] = await pool.query(
+  const [[rows], [referenceRows]] = await Promise.all([pool.query(
     `SELECT d.*, u.real_name AS manager_name,
-            (SELECT COUNT(*) FROM sys_users su WHERE su.department_id=d.id AND su.deleted_at IS NULL) AS member_count
+            CASE WHEN u.username REGEXP '^(codex_|smoke_|esc_|pc_)' OR LOWER(u.username) = 'cua_pda_test' THEN 1 ELSE 0 END AS manager_is_development,
+            CASE WHEN d.manager_id IS NULL THEN NULL WHEN u.id IS NOT NULL AND u.is_active=1 THEN 1 ELSE 0 END AS manager_is_active,
+            (SELECT COUNT(*) FROM sys_users su WHERE su.department_id=d.id AND su.deleted_at IS NULL
+               AND su.username NOT REGEXP '^(codex_|smoke_|esc_|pc_)' AND LOWER(su.username) <> 'cua_pda_test') AS member_count
        FROM sys_departments d
        LEFT JOIN sys_users u ON u.id=d.manager_id AND u.deleted_at IS NULL
       WHERE d.deleted_at IS NULL
       ORDER BY d.sort_order ASC, d.id ASC`,
-  )
-  return rows.map(r => ({ ...fmt(r), memberCount: Number(r.member_count) }))
+  ), pool.query(
+    `SELECT s.department_id, COUNT(DISTINCT s.flow_id) AS flow_count
+       FROM approval_flow_steps s JOIN approval_flows f ON f.id=s.flow_id
+      WHERE s.approver_type=2 AND s.department_id>0
+      GROUP BY s.department_id`,
+  )])
+  const flowCounts = new Map(referenceRows.map(r => [Number(r.department_id), Number(r.flow_count)]))
+  return rows.map(r => ({ ...fmt(r), memberCount: Number(r.member_count), approvalFlowCount: flowCounts.get(Number(r.id)) || 0 }))
 }
 
 /** 精简列表（下拉用，含启用校验），不受 department.view 权限限制。 */
@@ -49,8 +60,9 @@ async function create({ name, parentId = 0, managerId = null, sortOrder = 0, rem
     if (!p) throw new AppError('上级部门不存在', 400)
   }
   if (managerId) {
-    const [[u]] = await pool.query('SELECT id FROM sys_users WHERE id=? AND deleted_at IS NULL', [Number(managerId)])
+    const [[u]] = await pool.query('SELECT id,is_active FROM sys_users WHERE id=? AND deleted_at IS NULL', [Number(managerId)])
     if (!u) throw new AppError('部门负责人不存在', 400)
+    if (!u.is_active) throw new AppError('部门负责人未启用，请更换负责人', 400)
   }
   const [r] = await pool.query(
     'INSERT INTO sys_departments (name,parent_id,manager_id,sort_order,remark) VALUES (?,?,?,?,?)',
@@ -79,8 +91,9 @@ async function update(id, { name, parentId, managerId, sortOrder, remark }) {
     }
   }
   if (managerId) {
-    const [[u]] = await pool.query('SELECT id FROM sys_users WHERE id=? AND deleted_at IS NULL', [Number(managerId)])
+    const [[u]] = await pool.query('SELECT id,is_active FROM sys_users WHERE id=? AND deleted_at IS NULL', [Number(managerId)])
     if (!u) throw new AppError('部门负责人不存在', 400)
+    if (!u.is_active) throw new AppError('部门负责人未启用，请更换负责人', 400)
   }
   await pool.query(
     'UPDATE sys_departments SET name=?,parent_id=?,manager_id=?,sort_order=?,remark=? WHERE id=?',
@@ -103,6 +116,13 @@ async function remove(id) {
   if (Number(sub) > 0) throw new AppError('该部门下有子部门，请先移动或删除子部门', 409)
   const [[{ members }]] = await pool.query('SELECT COUNT(*) AS members FROM sys_users WHERE department_id=? AND deleted_at IS NULL', [Number(id)])
   if (Number(members) > 0) throw new AppError('该部门下还有用户，请先调整用户所属部门', 409)
+  const [[{ flow_count: flowCount }]] = await pool.query(
+    `SELECT COUNT(DISTINCT s.flow_id) AS flow_count FROM approval_flow_steps s
+       JOIN approval_flows f ON f.id=s.flow_id
+      WHERE s.approver_type=2 AND s.department_id=?`,
+    [Number(id)],
+  )
+  if (Number(flowCount) > 0) throw new AppError(`该部门被 ${flowCount} 条审批流引用，请先调整审批流配置`, 409)
   await pool.query('UPDATE sys_departments SET deleted_at=NOW() WHERE id=?', [Number(id)])
   return { id: Number(id) }
 }

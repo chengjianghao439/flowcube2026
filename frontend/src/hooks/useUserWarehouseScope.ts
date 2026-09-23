@@ -12,7 +12,7 @@ export function getUserWarehouseScopeApi(userId: number) {
   return client.get<UserWarehouseScopeRow[]>(`/users/${userId}/warehouse-scope`)
 }
 export function saveUserWarehouseScopeApi(userId: number, warehouseIds: number[]) {
-  return client.put(`/users/${userId}/warehouse-scope`, { warehouseIds })
+  return client.put(`/users/${userId}/warehouse-scope`, { warehouseIds }, { skipGlobalError: true })
 }
 
 export function useUserWarehouseScope(userId: number | null, enabled: boolean) {

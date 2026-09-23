@@ -22,9 +22,9 @@ function validateBody(schema) {
 const NON_ADMIN_ROLE = z.number().int().min(2).max(Number.MAX_SAFE_INTEGER)
 
 const createSchema = z.object({
-  username: z.string().min(2, '账号至少 2 个字符').max(50),
+  username: z.string().trim().min(2, '账号至少 2 个字符').max(50),
   password: z.string().min(6, '密码至少 6 位').max(100),
-  realName: z.string().min(1, '姓名不能为空').max(50),
+  realName: z.string().trim().min(1, '姓名不能为空').max(50),
   roleId: NON_ADMIN_ROLE,
   departmentId: z.number().int().positive().nullable().optional(),
 })
@@ -32,7 +32,7 @@ const createSchema = z.object({
 // allowSelfApprove 是提权类字段（豁免「申请人不得批自己的单」内控），schema 放行但
 // service 层 assertCanGrantSelfApprove 限定只有超管能设；不传 = 保持原值。
 const updateSchema = z.object({
-  realName: z.string().min(1, '姓名不能为空').max(50),
+  realName: z.string().trim().min(1, '姓名不能为空').max(50),
   roleId: NON_ADMIN_ROLE.optional(),
   isActive: z.boolean(),
   departmentId: z.number().int().positive().nullable().optional(),
@@ -48,6 +48,9 @@ router.use(authMiddleware)
 router.get('/',              requirePermission(PERMISSIONS.USER_VIEW), usersController.list)
 router.get('/assignable-roles', usersController.assignableRoles)
 router.get('/options',       usersController.options)
+// 登录者查看自己的信息与仓库授权，不要求其拥有管理其他用户的 user.view。
+router.get('/me',            usersController.myDetail)
+router.get('/me/warehouse-scope', usersController.myWarehouseScope)
 router.get('/:id',           requirePermission(PERMISSIONS.USER_VIEW), usersController.detail)
 router.post('/',             requirePermission(PERMISSIONS.USER_CREATE), validateBody(createSchema),        usersController.create)
 router.put('/:id',           requirePermission(PERMISSIONS.USER_UPDATE), validateBody(updateSchema),        usersController.update)
