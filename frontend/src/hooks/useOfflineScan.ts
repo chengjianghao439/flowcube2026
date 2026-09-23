@@ -41,13 +41,14 @@ export function useOfflineScan() {
 
   const submitScan = useCallback(async (payload: ScanPayload, requestKey: string): Promise<void> => {
     await client.post('/scan-logs', payload, {
+      skipGlobalError: true,
       headers: withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' }),
     })
   }, [])
 
   // 记录错误扫码（静默，不影响流程）
   const logError = useCallback((payload: ErrorPayload): void => {
-    client.post('/scan-logs/error', payload).catch(() => { /* 静默失败 */ })
+    client.post('/scan-logs/error', payload, { skipGlobalError: true }).catch(() => { /* 静默失败 */ })
   }, [])
 
   // 记录撤销操作
@@ -58,7 +59,7 @@ export function useOfflineScan() {
       barcode: payload.barcode,
       prevQty: payload.prevQty,
       newQty:  payload.newQty,
-    }).catch(() => { /* 静默失败 */ })
+    }, { skipGlobalError: true }).catch(() => { /* 静默失败 */ })
   }, [])
 
   return { submitScan, logError, logUndo, currentUser: user }

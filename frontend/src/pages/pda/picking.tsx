@@ -15,7 +15,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getMyTasksApi, getMyTaskSkuSummaryApi, getTaskByIdApi, startPickingApi } from '@/api/warehouse-tasks'
 import type { MyTask, PdaTaskSkuSummary } from '@/api/warehouse-tasks'
 import { Button } from '@/components/ui/button'
-import { toast } from '@/lib/toast'
+import PdaFlash from '@/components/pda/PdaFlash'
+import { usePdaFeedback } from '@/hooks/usePdaFeedback'
+import { formatPdaActionError } from '@/utils/displayFormatters'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { WT_PRIORITY_TONE, WT_STATUS_TONE } from '@/constants/warehouseTaskStatus'
 import PdaHeader, { PdaRefreshButton } from '@/components/pda/PdaHeader'
@@ -155,6 +157,7 @@ export default function PdaPickingPage() {
   const qc = useQueryClient()
   const [startingId, setStartingId] = useState<number | null>(null)
   const [viewMode, setViewMode] = useState<'sku' | 'order'>('sku')
+  const { flash, err } = usePdaFeedback()
 
   // ── 任务列表 ────────────────────────────────────────────────────────────────
   const { data, isLoading, isError, refetch } = useQuery({
@@ -196,12 +199,12 @@ export default function PdaPickingPage() {
       qc.invalidateQueries({ queryKey: ['pda-my-tasks'] })
       navigate(`/pda/task/${id}`)
     },
-    onError: () => { toast.error('操作失败'); setStartingId(null) },
+    onError: (error) => { err(formatPdaActionError(error, '启动拣货失败，请重试')); setStartingId(null) },
   })
 
   function handleTaskStart(t: Pick<MyTask, 'id' | 'status'>) {
     if (t.status !== 1 && t.status !== 2) {
-      toast.error('任务状态已变化，请刷新后重试')
+      err('任务状态已变化，请刷新后重试')
       void refreshAll()
       return
     }
@@ -218,10 +221,10 @@ export default function PdaPickingPage() {
     if (knownTask) { handleTaskStart(knownTask); return }
     setStartingId(taskId)
     try {
-      const detail = await getTaskByIdApi(taskId)
+      const detail = await getTaskByIdApi(taskId, { skipGlobalError: true })
       handleTaskStart(detail)
-    } catch {
-      toast.error('任务已更新，请刷新后重试')
+    } catch (error) {
+      err(formatPdaActionError(error, '任务已更新，请刷新后重试'))
       setStartingId(null)
       await refreshAll()
     }
@@ -234,6 +237,7 @@ export default function PdaPickingPage() {
         onBack={() => navigate('/pda')}
         right={<PdaRefreshButton onRefresh={() => { void refreshAll() }} />}
       />
+      <PdaFlash flash={flash} />
 
       {/* 视图切换 */}
       <div className="flex gap-2 px-4 py-2 max-w-md mx-auto">

@@ -58,7 +58,7 @@ export default function PdaSortPage() {
     resolveServerState: async ({ record }) => {
       const taskId = Number(record.metadata?.taskId ?? hint?.taskId ?? 0)
       if (!taskId) return { effective: false }
-      const latest = await getTaskByIdApi(taskId)
+      const latest = await getTaskByIdApi(taskId, { skipGlobalError: true })
       if (taskReachedStatus(latest, WT_STATUS.CHECKING)) {
         return {
           effective: true,
@@ -116,7 +116,7 @@ export default function PdaSortPage() {
         return
       }
       const result = submitted.data
-      const latest = await getTaskByIdApi(hint.taskId)
+      const latest = await getTaskByIdApi(hint.taskId, { skipGlobalError: true })
       if (taskReachedStatus(latest, WT_STATUS.CHECKING)) {
         ok(stateConfirmedMessage(`任务 ${latest.taskNo} 分拣`, latest.statusName))
       } else if (result?.allSorted) {

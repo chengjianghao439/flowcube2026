@@ -65,6 +65,6 @@ test('盘点条码入口与拣货一致，选商品后点手动输入才出现�
     input.dispatchEvent(new Event('input', { bubbles: true }))
   })
   await act(async () => { input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })) })
-  expect(inventory.container).toHaveBeenCalledWith('I000007')
+  expect(inventory.container).toHaveBeenCalledWith('I000007', { skipGlobalError: true })
   expect(host.textContent).toContain('已扫条码（1）')
 })

@@ -227,7 +227,7 @@ export default function PdaPackPage() {
       const packageId = Number(record.metadata?.packageId ?? 0)
       const recordTaskId = Number(record.metadata?.taskId ?? taskId)
       if (!packageId || !recordTaskId) return { effective: false }
-      const latestPackages = await getPackagesApi(recordTaskId)
+      const latestPackages = await getPackagesApi(recordTaskId, { skipGlobalError: true })
       const latestPackage = latestPackages.find(pkg => Number(pkg.id) === packageId)
       if (latestPackage?.status === 2) {
         const allPackagesDone = latestPackages.length > 0 && latestPackages.every(pkg => pkg.status === 2)
@@ -256,7 +256,7 @@ export default function PdaPackPage() {
       setAllDone(true)
     },
     resolveServerState: async () => {
-      const latest = await getTaskByIdApi(taskId)
+      const latest = await getTaskByIdApi(taskId, { skipGlobalError: true })
       if (taskReachedStatus(latest, WT_STATUS.SHIPPING)) {
         return { effective: true, data: { taskId }, message: stateConfirmedMessage('完成打包', latest.statusName) }
       }

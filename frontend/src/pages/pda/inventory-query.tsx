@@ -16,7 +16,7 @@ import PdaScanner from '@/components/pda/PdaScanner'
 import PdaFlash from '@/components/pda/PdaFlash'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { queryInventoryByBarcodeApi, type InventoryQueryContainer } from '@/api/inventory'
-import { formatPdaErrorMessage } from '@/utils/displayFormatters'
+import { formatPdaActionError } from '@/utils/displayFormatters'
 import { formatDisplayDate } from '@/lib/dateTime'
 
 function formatDate(v: string | null): string {
@@ -77,7 +77,7 @@ export default function PdaInventoryQueryPage() {
     } catch (e: unknown) {
       setResults(null)
       setLastBarcode(bc)
-      err(formatPdaErrorMessage((e as { response?: { data?: { message?: string } } })?.response?.data?.message, '条码查询失败'))
+      err(formatPdaActionError(e, '条码查询失败'))
     } finally {
       setQuerying(false)
     }

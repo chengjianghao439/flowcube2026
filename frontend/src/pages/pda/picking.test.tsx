@@ -124,7 +124,7 @@ test('超过任务池列表上限的关联任务仍可按任务 ID 进入', asyn
   const missingTask = [...host.querySelectorAll('button')].find(button => button.textContent?.includes('SO051'))
   expect(missingTask).toBeDefined()
   await act(async () => { missingTask!.click(); await Promise.resolve() })
-  expect(api.detail).toHaveBeenCalledWith(51)
+  expect(api.detail).toHaveBeenCalledWith(51, { skipGlobalError: true })
   expect(host.textContent).toContain('当前路径：/pda/task/51')
 })
 
@@ -132,4 +132,13 @@ test('订单列表的数量保留两位以内有效小数', async () => {
   await mount()
   await act(async () => { [...host.querySelectorAll('button')].find(button => button.textContent === '订单列表')!.click() })
   expect(host.textContent).toContain('1.25 / 3.5')
+})
+
+test('启动拣货失败只在页面显示具体原因', async () => {
+  api.skus.mockResolvedValue([sku({ orderCount: 1, taskIds: [1] })])
+  api.start.mockRejectedValue(new Error('任务状态已变化，请刷新后重试'))
+  await mount()
+  const enter = host.querySelector<HTMLButtonElement>('button[aria-label="进入 P1001 的拣货任务"]')!
+  await act(async () => { enter.click(); await new Promise(resolve => setTimeout(resolve, 10)) })
+  expect(host.textContent).toContain('任务状态已变化，请刷新后重试')
 })

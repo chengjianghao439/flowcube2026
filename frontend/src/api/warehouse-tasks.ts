@@ -105,14 +105,15 @@ export type TaskListParams = {
 export const getTasksApi = (params: TaskListParams) =>
   client.get<PaginatedData<WarehouseTask>>('/warehouse-tasks', { params })
 
-export const getTaskByIdApi = (id: number) =>
-  client.get<WarehouseTask>(`/warehouse-tasks/${id}`)
+export const getTaskByIdApi = (id: number, config?: Parameters<typeof client.get>[1]) =>
+  client.get<WarehouseTask>(`/warehouse-tasks/${id}`, config)
 
 export const startPickingApi = (id: number) =>
-  client.put(`/warehouse-tasks/${id}/start-picking`, {}, { headers: { 'X-Client': 'pda' } })
+  client.put(`/warehouse-tasks/${id}/start-picking`, {}, { headers: { 'X-Client': 'pda' }, skipGlobalError: true })
 
 export const readyToShipApi = (id: number, requestKey?: string) =>
   client.put(`/warehouse-tasks/${id}/ready`, {}, {
+    skipGlobalError: true,
     headers: requestKey
       ? withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' })
       : { 'X-Client': 'pda' },
@@ -120,6 +121,7 @@ export const readyToShipApi = (id: number, requestKey?: string) =>
 
 export const sortDoneApi = (id: number, items?: { itemId: number; sortedQty: number }[], requestKey?: string) =>
   client.put<{ allSorted: boolean; progress?: string; warning?: string | null }>(`/warehouse-tasks/${id}/sort-done`, { items: items ?? null }, {
+    skipGlobalError: true,
     headers: requestKey
       ? withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' })
       : { 'X-Client': 'pda' },
@@ -127,6 +129,7 @@ export const sortDoneApi = (id: number, items?: { itemId: number; sortedQty: num
 
 export const packDoneApi = (id: number, requestKey?: string) =>
   client.put(`/warehouse-tasks/${id}/pack-done`, {}, {
+    skipGlobalError: true,
     headers: requestKey
       ? withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' })
       : { 'X-Client': 'pda' },
@@ -139,6 +142,7 @@ export const shipTaskApi = (
   client.put(`/warehouse-tasks/${id}/ship`,
     {},
     {
+      skipGlobalError: true,
       headers: requestKey
         ? withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' })
         : { 'X-Client': 'pda' },
@@ -179,6 +183,7 @@ export const submitCheckScanApi = (taskId: number, barcode: string, requestKey?:
     '/scan-logs/check',
     { taskId, barcode },
     {
+      skipGlobalError: true,
       headers: requestKey
         ? withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' })
         : { 'X-Client': 'pda' },
@@ -252,6 +257,7 @@ export const submitCancelReturnScanApi = (
     '/scan-logs/cancel-return',
     { taskId, containerId, barcode, locationId },
     {
+      skipGlobalError: true,
       headers: requestKey
         ? withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' })
         : { 'X-Client': 'pda' },
@@ -266,6 +272,7 @@ export const submitCancelReturnBoxScanApi = (
     '/scan-logs/cancel-return/box',
     { taskId, packageId, barcode },
     {
+      skipGlobalError: true,
       headers: requestKey
         ? withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' })
         : { 'X-Client': 'pda' },
@@ -345,6 +352,7 @@ export const confirmAdjustmentPackageVoidApi = (voidId: number, requestKey?: str
     `/warehouse-tasks/adjustments/package-voids/${voidId}/confirm`,
     {},
     {
+      skipGlobalError: true,
       headers: requestKey
         ? withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' })
         : { 'X-Client': 'pda' },
@@ -359,9 +367,9 @@ export const confirmAdjustmentContainerReturnApi = (returnId: number, targetLoca
     `/warehouse-tasks/adjustments/container-returns/${returnId}/confirm`,
     { targetLocationId },
     {
+      skipGlobalError: true,
       headers: requestKey
         ? withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' })
         : { 'X-Client': 'pda' },
     },
   )
-

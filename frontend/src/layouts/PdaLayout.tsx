@@ -118,7 +118,7 @@ export default function PdaLayout() {
           <Outlet />
         </PdaErrorBoundary>
       </div>
-      <AppToast />
+      <AppToast placement="pda" />
       {newVersion && <PdaUpdateDialog version={newVersion} onDismiss={dismiss} />}
     </>
   )

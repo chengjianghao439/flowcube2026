@@ -31,7 +31,7 @@ export const scanProductForSortApi = (code: string) =>
     sortingBinId: number | null
     sortingBinCode: string | null
     taskItemCount: number
-  } | null>('/sorting-bins/scan', { params: { code } })
+  } | null>('/sorting-bins/scan', { params: { code }, skipGlobalError: true })
 
 export const getSortingBinsApi = (params?: { keyword?: string; status?: number; warehouseId?: number }) =>
   client.get<SortingBin[]>('/sorting-bins', { params })

@@ -276,7 +276,7 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
       const productId = Number(record.metadata?.productId ?? 0)
       const expectedReceivedQty = Number(record.metadata?.expectedReceivedQty ?? NaN)
       if (!productId || !Number.isFinite(expectedReceivedQty)) return { effective: false }
-      const latest = await getInboundTaskByIdApi(task.id)
+      const latest = await getInboundTaskByIdApi(task.id, { skipGlobalError: true })
       const line = groupProducts(latest).find(p => p.productId === productId)
       if (!line || line.receivedQty < expectedReceivedQty) return { effective: false }
       return {

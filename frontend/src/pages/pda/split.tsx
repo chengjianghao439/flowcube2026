@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { getContainerByBarcodeApi, splitContainerApi } from '@/api/inventory'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
+import { formatPdaActionError } from '@/utils/displayFormatters'
 
 export default function PdaSplitPage() {
   const navigate = useNavigate()
@@ -28,7 +29,7 @@ export default function PdaSplitPage() {
 
   const loadMut = useMutation({
     mutationFn: async (bc: string) => {
-      const res = await getContainerByBarcodeApi(bc)
+      const res = await getContainerByBarcodeApi(bc, { skipGlobalError: true })
       return res!
     },
     onSuccess: (d) => {
@@ -57,8 +58,7 @@ export default function PdaSplitPage() {
       setStep('qty')
       ok(`已识别 ${d.barcode}`)
     },
-    onError: (e: unknown) =>
-      err((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '查询失败'),
+    onError: (e: unknown) => err(formatPdaActionError(e, '查询失败')),
   })
 
   const splitMut = useMutation({
@@ -78,8 +78,7 @@ export default function PdaSplitPage() {
       setRemaining(0)
       setQtyStr('1')
     },
-    onError: (e: unknown) =>
-      err((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '拆分失败'),
+    onError: (e: unknown) => err(formatPdaActionError(e, '拆分失败')),
   })
 
   const handleScan = useCallback((raw: string) => {

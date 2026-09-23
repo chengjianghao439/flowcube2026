@@ -28,7 +28,7 @@ import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
 import PdaDoneView from '@/components/pda/PdaDoneView'
 import { WT_STATUS } from '@/constants/warehouseTaskStatus'
 import { stateConfirmedMessage, taskReachedStatus } from '@/lib/pdaCriticalState'
-import { formatPdaErrorMessage } from '@/utils/displayFormatters'
+import { formatPdaActionError, formatPdaErrorMessage } from '@/utils/displayFormatters'
 
 // ─── 子组件：商品拣货卡片 ──────────────────────────────────────────────────────
 function SuggestionRow({ c, onTap, disabled }: {
@@ -129,7 +129,7 @@ export default function PdaTaskPage() {
       await qc.invalidateQueries({ queryKey: ['pda-my-task-sku-summary'] })
       const latest = await qc.fetchQuery({
         queryKey: ['pda-task', taskId],
-        queryFn: () => getTaskByIdApi(taskId),
+        queryFn: () => getTaskByIdApi(taskId, { skipGlobalError: true }),
       })
       if (taskReachedStatus(latest, WT_STATUS.SORTING)) {
         setFinished('completed')
@@ -137,7 +137,7 @@ export default function PdaTaskPage() {
       }
     },
     resolveServerState: async () => {
-      const latest = await getTaskByIdApi(taskId)
+      const latest = await getTaskByIdApi(taskId, { skipGlobalError: true })
       if (taskReachedStatus(latest, WT_STATUS.SORTING)) {
         return { effective: true, message: stateConfirmedMessage(`拣货任务 ${taskId}`, latest.statusName) }
       }
@@ -156,7 +156,7 @@ export default function PdaTaskPage() {
       await qc.invalidateQueries({ queryKey: ['pda-my-task-sku-summary'] })
     },
     resolveServerState: async () => {
-      const latest = await getTaskByIdApi(taskId)
+      const latest = await getTaskByIdApi(taskId, { skipGlobalError: true })
       if (taskReachedStatus(latest, WT_STATUS.SORTING)) {
         return { effective: true, data: { taskId }, message: stateConfirmedMessage(`完成拣货任务 ${taskId}`, latest.statusName) }
       }
@@ -218,7 +218,7 @@ export default function PdaTaskPage() {
       const container = match?.suggestions.find(s => s.barcode === b)
       if (!match || !container) {
         // 容器不在推荐里，尝试直接查
-        const c = await getContainerByBarcodeApi(b)
+        const c = await getContainerByBarcodeApi(b, { skipGlobalError: true })
         const item = task.items.find(i => i.productId === c.productId)
         if (!item) { err(formatPdaErrorMessage('该商品不属于当前任务')); return }
         if (item.pickedQty >= item.requiredQty) { err('该商品已全部拣完'); return }
@@ -263,8 +263,8 @@ export default function PdaTaskPage() {
         }
       }
     } catch (e: unknown) {
-      const rawMsg = (e as {response?:{data?:{message?:string}}})?.response?.data?.message ?? '扫码失败，请重试'
-      err(formatPdaErrorMessage(rawMsg, '扫码失败，请检查条码或任务状态'))
+      const rawMsg = formatPdaActionError(e, '扫码失败，请检查条码或任务状态')
+      err(rawMsg)
       logError({ taskId, barcode: b, reason: rawMsg })
     } finally { setScanning(false) }
   }

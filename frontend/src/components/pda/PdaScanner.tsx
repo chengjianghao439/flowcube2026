@@ -12,15 +12,13 @@
  * 软键盘只在用户主动请求手输后才出现（2026-09-17 用户要求，不要再加 autoFocus 之类的入参）。
  */
 import { useRef, useState, useCallback } from 'react'
-import { Loader2, Keyboard, CheckCircle2, ScanLine } from 'lucide-react'
+import { Loader2, Keyboard, ScanLine } from 'lucide-react'
 import { usePdaScanner } from '@/hooks/usePdaScanner'
-import { parseBarcode } from '@/utils/barcode'
 
 interface PdaScannerProps {
   onScan: (barcode: string) => void
   placeholder?: string
   disabled?: boolean
-  showTypeHint?: boolean
   /** false：仅扫码枪，隐藏手输入口（调拨等强制扫码场景） */
   allowManualEntry?: boolean
   /** 同一条码 1 秒内重复扫描时触发（可选，比如弹提示告诉用户"重复扫码"）；不传则静默丢弃 */
@@ -31,33 +29,21 @@ export default function PdaScanner({
   onScan,
   placeholder = '等待扫码…',
   disabled = false,
-  showTypeHint = true,
   allowManualEntry = true,
   onDuplicate,
 }: PdaScannerProps) {
   const manualInputRef = useRef<HTMLInputElement>(null)
   const [manualMode, setManualMode] = useState(false)
   const [manualValue, setManualValue] = useState('')
-  const [lastCode, setLastCode] = useState<string | null>(null)
-  const [flash, setFlash] = useState(false)
 
   // ── 扫码完成回调（扫码枪 + 手动提交共用）────────────────────────────────
   const handleScan = useCallback((code: string) => {
     if (!code || disabled) return
-    if (showTypeHint) {
-      const parsed = parseBarcode(code)
-      // 条码前缀识别不出类型时（商品编码 SKU0001、自定义编码等）直接回显原文，
-      // 不要显示「未知条码」——扫描其实已经成功，这句负面措辞会让现场以为扫错了
-      //（2026-09-17 验收 ISSUE-008）。
-      setLastCode(parsed.type === 'unknown' ? code : (parsed.label ?? code))
-      setFlash(true)
-      setTimeout(() => setFlash(false), 800)
-    }
     // 扫码完成后退出手动模式，等待下一次扫码
     setManualMode(false)
     setManualValue('')
     onScan(code)
-  }, [disabled, showTypeHint, onScan])
+  }, [disabled, onScan])
 
   // 手输框中的键盘事件由 hook 忽略；原生广播仍可完成扫码并退出手输模式。
   usePdaScanner({ onScan: handleScan, enabled: !disabled, onDuplicate })
@@ -89,9 +75,7 @@ export default function PdaScanner({
       <div
         data-testid="pda-scan-area"
         className={`flex items-center gap-3 rounded-2xl border px-4 py-3 shadow-sm transition-all ${
-        flash
-          ? 'border-emerald-300 bg-emerald-50'
-          : disabled
+        disabled
           ? 'border-slate-200 bg-slate-100'
           : manualMode
           ? 'border-amber-300 bg-amber-50'
@@ -102,9 +86,7 @@ export default function PdaScanner({
             ? <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
             : manualMode
               ? <Keyboard className="h-5 w-5 text-amber-500" />
-              : flash
-                ? <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                : <ScanLine className="h-5 w-5 text-muted-foreground" />}
+              : <ScanLine className="h-5 w-5 text-muted-foreground" />}
         </span>
 
         <div className="min-w-0 flex-1">
@@ -123,10 +105,8 @@ export default function PdaScanner({
               autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false}
             />
           ) : (
-            <p className={`break-words text-sm leading-6 ${
-              flash ? 'font-medium text-emerald-700' : disabled ? 'text-slate-500' : 'text-foreground'
-            }`}>
-              {flash && lastCode ? `已识别：${lastCode}` : disabled ? '正在处理扫码结果…' : placeholder}
+            <p className={`break-words text-sm leading-6 ${disabled ? 'text-slate-500' : 'text-foreground'}`}>
+              {disabled ? '正在处理扫码结果…' : placeholder}
             </p>
           )}
         </div>

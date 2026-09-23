@@ -36,7 +36,7 @@ function PutawayRunner({ taskId }: { taskId: number }) {
     resolveServerState: async ({ record }) => {
       const containerId = Number(record.metadata?.containerId ?? 0)
       if (!containerId) return { effective: false }
-      const containers = await getInboundTaskContainersApi(taskId)
+      const containers = await getInboundTaskContainersApi(taskId, { skipGlobalError: true })
       if (containers.waiting.some((c) => c.id === containerId)) return { effective: false }
       const stored = containers.stored.find((c) => c.id === containerId)
       if (!stored) return { effective: false }
@@ -81,8 +81,7 @@ function PutawayRunner({ taskId }: { taskId: number }) {
         right={<span className="text-xs text-muted-foreground">库存上架</span>}
       />
 
-      <PdaFlash flash={engine.flash} />
-      <PdaFlash flash={flash} />
+      <PdaFlash flash={flash ?? engine.flash} />
 
       <div className="max-w-md mx-auto px-4 pt-3 w-full">
         <PdaCriticalActionNotice

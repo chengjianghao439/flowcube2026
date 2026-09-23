@@ -164,7 +164,7 @@ export default function PdaCheckPage() {
       }
     },
     resolveServerState: async () => {
-      const latest = await getTaskByIdApi(taskId)
+      const latest = await getTaskByIdApi(taskId, { skipGlobalError: true })
       if (taskReachedStatus(latest, WT_STATUS.PACKING)) {
         return {
           effective: true,

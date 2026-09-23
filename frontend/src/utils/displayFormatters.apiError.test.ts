@@ -1,5 +1,13 @@
 import { expect, test } from 'vitest'
-import { resolveApiErrorMessage } from './displayFormatters'
+import { formatPdaActionError, resolveApiErrorMessage } from './displayFormatters'
+
+test('PDA 页面接管错误提示后仍显示服务端具体原因', () => {
+  expect(formatPdaActionError({ message: '该库存条码不是待上架状态', response: { message: '该库存条码不是待上架状态' } }, '扫码失败'))
+    .toBe('该库存条码不是待上架状态')
+  expect(formatPdaActionError({ response: { data: { message: '这个货不在当前任务仓库' } } }, '扫码失败'))
+    .toBe('这个货不在当前任务仓库')
+  expect(formatPdaActionError({}, '扫码失败')).toBe('扫码失败')
+})
 
 // 2026-09-17 验收 ISSUE-003 / ISSUE-016：后端通用码曾把可操作的中文原因覆盖成
 // 「状态已变化，请刷新后重试」，现场无法判断该去处理打印任务还是改调拨数量。

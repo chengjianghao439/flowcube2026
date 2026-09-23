@@ -37,7 +37,7 @@ export interface ContainerLogItem {
 export const getContainerLogsApi = async (containerId: number) =>
   apiClient.get<ContainerLogItem[]>(`/inventory/containers/${containerId}/logs`)
 
-export const getContainerByBarcodeApi = async (barcode: string) =>
+export const getContainerByBarcodeApi = async (barcode: string, config?: Parameters<typeof apiClient.get>[1]) =>
   apiClient.get<{
     containerId: number; barcode: string; productId: number; productCode: string
     productName: string; warehouseId: number; warehouseName: string
@@ -49,7 +49,7 @@ export const getContainerByBarcodeApi = async (barcode: string) =>
     lockedByTaskNo?: string | null
     individual?: boolean             // 单件库存条码（一件一码）：不可拆分/并货
     inboundTaskId?: number | null
-  }>(`/inventory/containers/barcode/${encodeURIComponent(barcode)}`)
+  }>(`/inventory/containers/barcode/${encodeURIComponent(barcode)}`, config)
 
 // ─── PDA 只读库存查询（无副作用）──────────────────────────────────────────
 
@@ -80,6 +80,7 @@ export interface InventoryQueryContainer {
 export const queryInventoryByBarcodeApi = async (barcode: string) =>
   apiClient.get<InventoryQueryContainer[]>(`/inventory/query-by-barcode`, {
     params: { barcode },
+    skipGlobalError: true,
   })
 
 export interface InventoryQueryByProductResult {
@@ -124,7 +125,7 @@ export const splitContainerApi = async (
   containerId: number,
   body: { qty: number; remark?: string; printLabel?: boolean; targetContainerId?: number },
 ) =>
-  apiClient.post<SplitContainerResult>(`/inventory/containers/${containerId}/split`, body)
+  apiClient.post<SplitContainerResult>(`/inventory/containers/${containerId}/split`, body, { skipGlobalError: true })
 
 // ─── 补货建议与补货策略（文档 01）──────────────────────────────────────────────
 

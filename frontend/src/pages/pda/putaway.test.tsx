@@ -131,7 +131,7 @@ test('上架页与拣货页统一：默认等硬件扫码，只有点手动输�
     input!.dispatchEvent(new Event('input', { bubbles: true }))
   })
   await act(async () => { input!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })) })
-  expect(api.container).toHaveBeenCalledWith('I000917')
+  expect(api.container).toHaveBeenCalledWith('I000917', { skipGlobalError: true })
   expect(host.textContent).toContain('测试商品')
   expect(api.putaway).not.toHaveBeenCalled()
 
@@ -151,7 +151,7 @@ test.each(['库存条码不存在或已失效', '没有库存查询权限', '请
     api.container.mockRejectedValueOnce({ response: { data: { message } } })
     await mountPage({ ...TASK, status: 3 })
     await scan('I000917')
-    expect(api.container).toHaveBeenCalledWith('I000917')
+    expect(api.container).toHaveBeenCalledWith('I000917', { skipGlobalError: true })
     expect(host.textContent).toContain(message)
     expect(api.putaway).not.toHaveBeenCalled()
   },

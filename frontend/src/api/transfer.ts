@@ -17,9 +17,11 @@ export const forceCloseTransferApi = (id:number, reason:string) => client.post<n
 export interface TransferScanResult { transferId:number; containerBarcode:string; productId:number; productName?:string; qty:number; completed?:boolean }
 export const scanOutTransferApi = (id:number, containerBarcode:string, requestKey?:string) =>
   client.post<TransferScanResult>(`/transfer/${id}/scan-out`, { containerBarcode }, {
+    skipGlobalError: true,
     headers: requestKey ? withRequestKeyHeaders(requestKey, { 'X-Client':'pda' }) : { 'X-Client':'pda' },
   })
 export const scanInTransferApi = (id:number, containerBarcode:string, locationId:number, requestKey?:string) =>
   client.post<TransferScanResult>(`/transfer/${id}/scan-in`, { containerBarcode, locationId }, {
+    skipGlobalError: true,
     headers: requestKey ? withRequestKeyHeaders(requestKey, { 'X-Client':'pda' }) : { 'X-Client':'pda' },
   })

@@ -149,7 +149,7 @@ const ToastInstance = memo(function ToastInstance({
 
 // ─── 组件 ──────────────────────────────────────────────────────────────────────
 
-export function AppToast() {
+export function AppToast({ placement = 'desktop' }: { placement?: 'desktop' | 'pda' }) {
   const [toasts, setToasts] = useState<ToastItem[]>([])
 
   const addToast = useCallback((type: ToastType, message: string, duration = 3000) => {
@@ -171,9 +171,10 @@ export function AppToast() {
         return [...rest, { ...dup, duration: Math.max(dup.duration, duration) }]
       }
       const next = [...prev, { id, type, message, duration, open: true }]
+      if (placement === 'pda') return next.slice(-1)
       return next.length > MAX_TOASTS ? next.slice(next.length - MAX_TOASTS) : next
     })
-  }, [])
+  }, [placement])
 
   useEffect(() => {
     _registerToastFn(addToast)
@@ -190,7 +191,10 @@ export function AppToast() {
         <ToastInstance key={t.id} t={t} onRequestClose={handleRemove} />
       ))}
 
-      <Toast.Viewport className="fixed right-4 top-4 z-[9999] flex flex-col gap-2 outline-none" />
+      <Toast.Viewport className={cn(
+        'fixed top-4 z-[9999] flex flex-col gap-2 outline-none',
+        placement === 'pda' ? 'left-1/2 w-[calc(100vw-2rem)] max-w-[320px] -translate-x-1/2 [&_.fc-toast]:w-full' : 'right-4',
+      )} />
     </Toast.Provider>
   )
 }

@@ -61,7 +61,7 @@ export function makePutawayFlow(
           }
           const parsed = parseBarcode(trimmed)
           if (parsed.type !== 'container') return { ok: false, message: '扫描库存条码' }
-          const d = await getContainerByBarcodeApi(trimmed)
+          const d = await getContainerByBarcodeApi(trimmed, { skipGlobalError: true })
           if (d.containerStatus !== 'waiting_putaway') {
             return { ok: false, message: '该库存条码不是待上架状态' }
           }
@@ -73,7 +73,7 @@ export function makePutawayFlow(
           try {
             const sug = await apiClient.get<PutawaySuggestion>(
               `/inbound-tasks/${ctx.taskId}/putaway-suggestion`,
-              { params: { containerId: d.containerId } },
+              { params: { containerId: d.containerId }, skipGlobalError: true },
             )
             if (sug.suggestions.length) {
               suggested = sug.suggestions.map(s => ({ locationId: s.locationId, locationCode: s.locationCode }))

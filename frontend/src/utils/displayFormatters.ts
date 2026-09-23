@@ -85,6 +85,12 @@ export function formatPdaErrorMessage(message: unknown, fallback = '扫码失败
   return raw
 }
 
+/** PDA 已接管视觉反馈时，从统一 API 错误或原始网络错误中保留可操作的中文原因。 */
+export function formatPdaActionError(error: unknown, fallback = '操作失败，请重试'): string {
+  const e = error as { message?: unknown; response?: { message?: unknown; data?: { message?: unknown } } } | null
+  return formatPdaErrorMessage(e?.response?.data?.message ?? e?.response?.message ?? e?.message, fallback)
+}
+
 export function formatErrorMessage(messageOrCode: unknown, fallback = '操作失败，请检查网络或联系管理员'): string {
   const raw = asTrimmedString(messageOrCode)
   if (!raw) return fallback

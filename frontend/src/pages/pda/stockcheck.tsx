@@ -27,7 +27,7 @@ import { getContainerByBarcodeApi } from '@/api/inventory'
 import type { PendingScanCheck, ScanCheckItem } from '@/types/stockcheck'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { formatPdaErrorMessage } from '@/utils/displayFormatters'
+import { formatPdaActionError, formatPdaErrorMessage } from '@/utils/displayFormatters'
 import { useProductQtyPolicies } from '@/hooks/useProductQtyPolicies'
 import { qtyStep } from '@/lib/qtyStep'
 
@@ -123,7 +123,7 @@ function CheckWork({ checkId }: { checkId: number }) {
     if (scanned.some(s => s.barcode.toUpperCase() === bc.toUpperCase())) { err(`条码 ${bc} 已扫过`); return }
     setChecking(true)
     try {
-      const d = await getContainerByBarcodeApi(bc)
+      const d = await getContainerByBarcodeApi(bc, { skipGlobalError: true })
       if (d.productId !== activeItem.productId) { err(`条码 ${bc} 不是商品「${activeItem.productName}」的库存条码`); return }
       if (d.containerStatus !== 'stored') { err(`${bc} 不是在库条码，不能盘点`); return }
       if (d.individual) {
@@ -134,7 +134,7 @@ function CheckWork({ checkId }: { checkId: number }) {
         ok(`已扫 ${d.barcode}（账面 ${d.remainingQty}，请核对实物数量）`)
       }
     } catch (e: unknown) {
-      err(formatPdaErrorMessage((e as { response?: { data?: { message?: string } } })?.response?.data?.message, '条码查询失败'))
+      err(formatPdaActionError(e, '条码查询失败'))
     } finally {
       setChecking(false)
     }

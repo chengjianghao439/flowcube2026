@@ -20,7 +20,7 @@ export const saveCheckItemScansApi = (id: number, itemId: number, scans: { barco
   client.post<{ itemId: number; scannedContainers: number; actualQty: number; bookQty: number; diffQty: number }>(
     `/stockcheck/${id}/items/${itemId}/scan`,
     { scans },
-    { headers: requestKey ? withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' }) : { 'X-Client': 'pda' } },
+    { skipGlobalError: true, headers: requestKey ? withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' }) : { 'X-Client': 'pda' } },
   )
 
 // 分批盘点 ABC / 候选（文档 08）

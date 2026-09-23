@@ -26,7 +26,7 @@ import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
 import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
 import { stateConfirmedMessage, taskReachedStatus } from '@/lib/pdaCriticalState'
-import { formatPdaErrorMessage } from '@/utils/displayFormatters'
+import { formatPdaActionError, formatPdaErrorMessage } from '@/utils/displayFormatters'
 
 // 这四个是只读参数的纯函数，原先定义在组件体内，于是每次渲染都是新引用，
 // handleScan（useCallback）没法把它们写进依赖。提到模块级后既不再是依赖，
@@ -73,7 +73,7 @@ export default function PdaShipPage() {
     resolveServerState: async ({ record }) => {
       const taskId = Number(record.metadata?.taskId ?? info?.warehouseTaskId ?? 0)
       if (!taskId) return { effective: false }
-      const latest = await getTaskByIdApi(taskId)
+      const latest = await getTaskByIdApi(taskId, { skipGlobalError: true })
       if (taskReachedStatus(latest, WT_STATUS.SHIPPED)) {
         return { effective: true, data: { taskId }, message: stateConfirmedMessage('出库确认', latest.statusName) }
       }
@@ -115,7 +115,7 @@ export default function PdaShipPage() {
       }
       shipMut.mutate({ taskId: data.warehouseTaskId })
     } catch (e: unknown) {
-      err(formatPdaErrorMessage((e as { response?: { data?: { message?: string } } })?.response?.data?.message, '出库失败，请确认任务状态或联系管理员'))
+      err(formatPdaActionError(e, '出库失败，请确认任务状态或联系管理员'))
     } finally { setLoading(false) }
   }, [err, shipMut])
 

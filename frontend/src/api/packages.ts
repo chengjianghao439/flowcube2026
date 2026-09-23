@@ -25,11 +25,11 @@ export interface Package {
   printStatus?: { key: string; label: string; errorMessage?: string | null }
 }
 
-export const getPackagesApi = (taskId: number) =>
-  client.get<Package[]>('/packages', { params: { taskId } })
+export const getPackagesApi = (taskId: number, config?: Parameters<typeof client.get>[1]) =>
+  client.get<Package[]>('/packages', { params: { taskId }, ...config })
 
 export const createPackageApi = (warehouseTaskId: number, remark?: string) =>
-  client.post<Package>('/packages', { warehouseTaskId, remark }, { headers: { 'X-Client': 'pda' } })
+  client.post<Package>('/packages', { warehouseTaskId, remark }, { headers: { 'X-Client': 'pda' }, skipGlobalError: true })
 
 export const addPackageItemApi = (
   packageId: number,
@@ -39,7 +39,7 @@ export const addPackageItemApi = (
   client.post<PackageItem>(`/packages/${packageId}/add-item`, {
     productCode,
     qty,
-  }, { headers: { 'X-Client': 'pda' } })
+  }, { headers: { 'X-Client': 'pda' }, skipGlobalError: true })
 
 export const removePackageItemApi = (
   packageId: number,
@@ -49,14 +49,14 @@ export const removePackageItemApi = (
   client.post<{ itemId: number; productId: number; productCode: string; productName: string; unit: string; removed: boolean; qty: number }>(
     `/packages/${packageId}/remove-item`,
     { itemId, qty },
-    { headers: { 'X-Client': 'pda' } },
+    { headers: { 'X-Client': 'pda' }, skipGlobalError: true },
   )
 
 export const voidPackageApi = (packageId: number) =>
   client.post<{ id: number; warehouseTaskId: number; status: number; statusName: string }>(
     `/packages/${packageId}/void`,
     undefined,
-    { headers: { 'X-Client': 'pda' } },
+    { headers: { 'X-Client': 'pda' }, skipGlobalError: true },
   )
 
 export interface PackagePrintDispatchHint {
@@ -99,7 +99,7 @@ export const finishPackageApi = (packageId: number, requestKey?: string) =>
   }>(
     `/packages/${packageId}/finish`,
     undefined,
-    { headers: requestKey ? withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' }) : { 'X-Client': 'pda' } },
+    { headers: requestKey ? withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' }) : { 'X-Client': 'pda' }, skipGlobalError: true },
   )
 
 export const printPackageLabelApi = (packageId: number, requestKey?: string) =>
@@ -107,6 +107,7 @@ export const printPackageLabelApi = (packageId: number, requestKey?: string) =>
     queued: boolean
     job: PackagePrintJob | unknown
   }>(`/packages/${packageId}/print-label`, undefined, {
+    skipGlobalError: true,
     headers: requestKey
       ? withRequestKeyHeaders(requestKey, desktopLocalPrintRequestHeaders())
       : desktopLocalPrintRequestHeaders(),
@@ -142,4 +143,4 @@ export interface PackageShipInfo {
 }
 
 export const getPackageByBarcodeApi = (barcode: string) =>
-  client.get<PackageShipInfo>(`/packages/barcode/${encodeURIComponent(barcode)}`)
+  client.get<PackageShipInfo>(`/packages/barcode/${encodeURIComponent(barcode)}`, { skipGlobalError: true })
