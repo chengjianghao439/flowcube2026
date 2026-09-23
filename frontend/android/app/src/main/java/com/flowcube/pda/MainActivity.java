@@ -20,21 +20,18 @@ public class MainActivity extends BridgeActivity {
 
         Window window = getWindow();
 
-        // ── 1. 屏幕常亮（仓库作业不锁屏）─────────────────────────────────
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-
-        // ── 2. 显示系统状态栏与底部导航栏（普通 App 模式）────────────────
+        // ── 1. 显示系统状态栏与底部导航栏（普通 App 模式）────────────────
         // 不隐藏系统 UI，让页面布局自动适配安全区域
         View decorView = window.getDecorView();
         decorView.setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE);
 
-        // ── 3. 键盘弹出时自动上移内容，避免遮挡输入框 ────────────────────
+        // ── 2. 键盘弹出时自动上移内容，避免遮挡输入框 ────────────────────
         window.setSoftInputMode(
             WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
             | WindowManager.LayoutParams.SOFT_INPUT_STATE_HIDDEN
         );
 
-        // ── 4. WebView 性能优化 ───────────────────────────────────────────
+        // ── 3. WebView 性能优化 ───────────────────────────────────────────
         if (getBridge() != null) {
             WebView webView = getBridge().getWebView();
             WebSettings settings = webView.getSettings();
@@ -62,15 +59,5 @@ public class MainActivity extends BridgeActivity {
             // 混合内容（HTTP + HTTPS 共存，局域网内网需要）
             settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         }
-    }
-
-    @Override
-    public void onBackPressed() {
-        // 物理返回键：优先让 WebView 返回历史页面
-        // 若已是 /pda 根页面则不退出 App（防止误操作）
-        if (getBridge() != null && getBridge().getWebView().canGoBack()) {
-            getBridge().getWebView().goBack();
-        }
-        // 不调用 super，防止退出 App
     }
 }

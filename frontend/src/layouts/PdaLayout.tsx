@@ -2,14 +2,15 @@
  * PdaLayout — PDA 独立子系统布局
  * 继承 极序 Flow 设计系统（bg-background / text-foreground）
  *
- * 路由锁定：防止浏览器「返回」跳出 /pda/* 到 ERP 后台页面。
+ * 浏览器共用路由时锁定：防止「返回」跳出 /pda/* 到 ERP 后台页面。
+ * 独立 Android 应用由 PdaHardwareBack 接管实体返回键，不插入占位历史。
  * 逻辑：
  *   1. 进入 PDA 时 pushState 占位，使浏览器回退栈不为空
  *   2. 监听 popstate；若目标路径不在 /pda，强制 replace 到 /pda
  *   3. PDA 内部页面之间的 navigate() 不受影响
  */
 import { useEffect } from 'react'
-import { App as CapacitorApp } from '@capacitor/app'
+import { Capacitor } from '@capacitor/core'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { AppToast } from '@/components/shared/AppToast'
 import { usePdaUpdate } from '@/hooks/usePdaUpdate'
@@ -22,7 +23,6 @@ export default function PdaLayout() {
   const location = useLocation()
   const navigate  = useNavigate()
   const { newVersion, dismiss, checkUpdate } = usePdaUpdate()
-  const isPdaRoot = location.pathname === '/pda' || location.pathname === '/pda/'
 
   // ── viewport meta 动态修正（禁止缩放，防止扫码后页面跳动）────────────
   useEffect(() => {
@@ -45,6 +45,7 @@ export default function PdaLayout() {
 
   // ── 路由锁定（返回键不跳出 PDA）──────────────────────────────────────
   useEffect(() => {
+    if (Capacitor.isNativePlatform()) return
     window.history.pushState(null, '', window.location.href)
 
     const handleBack = () => {
@@ -65,34 +66,6 @@ export default function PdaLayout() {
     window.addEventListener('pda:check-update', onManualCheck as EventListener)
     return () => window.removeEventListener('pda:check-update', onManualCheck as EventListener)
   }, [checkUpdate])
-
-  useEffect(() => {
-    let disposed = false
-    let removeListener: (() => void) | undefined
-
-    void CapacitorApp.addListener('backButton', async ({ canGoBack }) => {
-      if (disposed) return
-      if (!location.pathname.startsWith('/pda')) {
-        navigate('/pda', { replace: true })
-        return
-      }
-      if (!isPdaRoot) {
-        if (canGoBack) navigate(-1)
-        else navigate('/pda', { replace: true })
-        return
-      }
-      await CapacitorApp.minimizeApp()
-    }).then(handle => {
-      removeListener = () => {
-        void handle.remove()
-      }
-    })
-
-    return () => {
-      disposed = true
-      removeListener?.()
-    }
-  }, [isPdaRoot, location.pathname, navigate])
 
   return (
     <>
