@@ -404,6 +404,15 @@ test('PDA 工作流不得让「等浏览器部署」与「持有部署组」落�
     `等待浏览器部署的 job（${waiter[0]}）不得持有 ${DEPLOY_GROUP}`)
 })
 
+test('PDA 原生扫码单元测试必须在正式 APK 构建前运行', () => {
+  const yaml = require(path.resolve(root, 'frontend/node_modules/js-yaml'))
+  const workflow = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/build-pda-apk.yml'), 'utf8'))
+  const steps = workflow.jobs['build-pda'].steps || []
+  const testIndex = steps.findIndex(step => String(step.run || '').includes(':app:testDebugUnitTest'))
+  const buildIndex = steps.findIndex(step => String(step.run || '').includes('assembleRelease'))
+  assert.ok(testIndex >= 0 && testIndex < buildIndex, 'Android 单元测试必须在正式 APK 构建前通过')
+})
+
 // 2026-09-19 发现：`scripts/check-deprecated-downloads.js` 早就存在，package.json 也声明了
 // `release:check-downloads`，但**没有任何 workflow 跑过它**——于是「backend/downloads/ 已废弃、
 // 不得提交发布文件」这条写在 AGENTS.md 里的规则，实际上没有任何一处会拦。

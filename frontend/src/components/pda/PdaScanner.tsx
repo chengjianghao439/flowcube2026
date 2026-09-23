@@ -2,10 +2,10 @@
  * PdaScanner — 工业级 PDA 扫码输入组件
  *
  * 两种输入模式：
- *  1. 扫码模式（默认）：全局监听 keydown，软键盘不弹出，扫码枪直接触发 onScan
+ *  1. 扫码模式（默认）：接收原生广播或全局 keydown，软键盘不弹出，扫码枪直接触发 onScan
  *  2. 手动模式：用户点击「手动输入」按钮后激活，此时弹出软键盘，输入后回车提交
  *
- * 扫码枪识别特征：字符间隔 < 50ms + 末尾 Enter（或超时自动 flush）
+ * 键盘模拟识别特征：字符间隔 < 50ms + 末尾 Enter（或超时自动 flush）；广播直接给完整条码。
  *
  * 重要：扫码模式**永不聚焦输入框**，进页面/扫码结束都不弹软键盘；
  * 软键盘只在用户点「手动输入」后才出现（2026-09-17 用户要求，不要再加 autoFocus 之类的入参）。
@@ -58,8 +58,8 @@ export default function PdaScanner({
     onScan(code)
   }, [disabled, showTypeHint, onScan])
 
-  // ── 全局扫码枪监听（手动模式时暂停，避免冲突）───────────────────────────
-  usePdaScanner({ onScan: handleScan, enabled: !disabled && !manualMode, onDuplicate })
+  // 手输框中的键盘事件由 hook 忽略；原生广播仍可完成扫码并退出手输模式。
+  usePdaScanner({ onScan: handleScan, enabled: !disabled, onDuplicate })
 
   // ── 进入手动输入模式 ──────────────────────────────────────────────────────
   function enterManualMode() {

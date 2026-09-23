@@ -56,6 +56,10 @@
 - CORS 规则集中在 `backend/src/config/cors.js`：`CORS_ORIGIN` 支持逗号分隔的精确来源，Electron 的字符串 `null` 由 `CORS_ALLOW_NULL_ORIGIN` 单独控制；内置 Android PDA 当前源码默认来源为 `https://localhost`。不要为兼容客户端而打开任意来源反射。v0.9.3 新后端已部署，当前生产保留既有反射兼容配置，须完成实际客户端验证后再收窄来源；测试见 `tests/cors-policy.test.js`，部署说明见 `docs/DEPLOY.md`。
 - 2026-09-04～05 生产环境核查与恢复见 `docs/production-environment-check-2026-09-04.md`：用户授权普通重启后，9 月 5 日 00:12 网站/SSH 恢复。已完成现有 50 GiB 云盘的系统分区扩展（使用率约 66%）、.env 0600、SSH 密钥登录、宿主 Node 22.23.2，以及停用仅支持单队列网卡上不适用的 ecs_mq 优化；配置/数据库/分区表已备份至服务器和 Mac。生产 MySQL 实测 8.0.45，135 表，232 份 SQL 无缺失，另有 1 条历史迁移记录。备份误报、连接数探针和 CORS 配置能力修复已随 v0.9.3 部署（CORS 实际来源配置未收窄）；自动异地备份目的地尚未配置。云盘读写受限已由云平台确认，具体占用进程根因仍不明，避免重跑无时限的整盘 Docker 统计。
 
+### 2026-09-23 PDA 原生扫码构建门禁
+
+- PDA 构建工作流在 Capacitor 同步后、正式 APK 签名前运行 `:app:testDebugUnitTest`，覆盖厂商扫码模式恢复和广播条码校验；`tests/deployment-resources.test.js` 守住执行顺序。此门禁证明 JVM 逻辑与 Android 工程可构建，现场设备扫码仍须独立验收。实现与边界见 `docs/pda-scanner-broadcast-2026-09-23.md`。
+
 ### 2026-09-22 打印授权与静态响应头整改
 
 - 打印任务详情、三类条码补打、领取、完成、失败、重试都检查用户仓库范围；领取在候选 SQL 内过滤，不能先领取再隐藏。无仓任务对限仓用户拒绝访问，完成仍须通过原工作站与 ackToken 校验。

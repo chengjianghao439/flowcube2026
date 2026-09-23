@@ -1,13 +1,16 @@
 /**
  * usePdaScanner — 工业 PDA 扫码枪输入 Hook
  *
- * Android 套壳：扫码枪一般为「键盘模式」，按键事件进入 document，本 Hook 即可接收，无需额外原生插件。
+ * Android PDA：厂商广播由 PdaScanBridge 原生插件转发；键盘事件保留给浏览器预览和其他设备。
+ * 两路输入共用去重窗口，不依赖任何输入框焦点。
  *
  * 稳定性优化：
  *  - onScan 通过 ref 调用，避免 useEffect 依赖变化导致反复注册/销毁事件监听
  *  - 高频扫码（每秒多次）不丢码，不重复注册
  */
 import { useEffect, useRef } from 'react'
+import { Capacitor } from '@capacitor/core'
+import { PdaScanBridge } from '@/lib/pdaScanBridge'
 
 const SCAN_INTERVAL_MS = 50  // 扫码枪相邻字符最大间隔（毫秒）
 const MIN_SCAN_LENGTH  = 3   // 最短有效条码长度
@@ -28,7 +31,7 @@ export function usePdaScanner({ onScan, enabled = true, onDuplicate }: Options) 
   // 防重复扫码：扫码枪硬件常见"回车键抖动/重复上报"，同一条码短时间内只处理一次；
   // 这个保护原本只有 task.tsx 自己实现，现在下沉到这里，所有走 usePdaScanner/PdaScanner 的
   // 页面（check.tsx、pack.tsx 等）默认就有，不用每个页面各自记一份 lastScanRef。
-  const lastScanRef = useRef<{ barcode: string; time: number } | null>(null)
+  const lastScanRef = useRef<{ barcode: string; time: number; source: 'keyboard' | 'native' } | null>(null)
   // ── 关键：用 ref 存 onScan，避免事件监听因回调引用变化而反复注册/销毁
   const onScanRef   = useRef(onScan)
   useEffect(() => { onScanRef.current = onScan }, [onScan])
@@ -39,18 +42,41 @@ export function usePdaScanner({ onScan, enabled = true, onDuplicate }: Options) 
   useEffect(() => { enabledRef.current = enabled }, [enabled])
 
   useEffect(() => {
-    function flush() {
-      const code = bufferRef.current.trim()
-      bufferRef.current = ''
+    function acceptCode(raw: string, source: 'keyboard' | 'native') {
+      const code = raw.trim()
       if (code.length < MIN_SCAN_LENGTH) return
 
       const now = Date.now()
       if (lastScanRef.current?.barcode === code && now - lastScanRef.current.time < DUPLICATE_WINDOW_MS) {
-        onDuplicateRef.current?.(code)
+        // 同一次硬件扫描可能同时走广播和键盘，跨来源重复不提示用户。
+        if (lastScanRef.current.source === source) onDuplicateRef.current?.(code)
         return
       }
-      lastScanRef.current = { barcode: code, time: now }
+      lastScanRef.current = { barcode: code, time: now, source }
       onScanRef.current(code)
+    }
+
+    function flush() {
+      const code = bufferRef.current
+      bufferRef.current = ''
+      acceptCode(code, 'keyboard')
+    }
+
+    let nativeListener: { remove: () => Promise<void> } | null = null
+    let disposed = false
+    if (Capacitor.isNativePlatform()) {
+      void PdaScanBridge.addListener('scan', ({ barcode }) => {
+        if (!enabledRef.current || typeof barcode !== 'string') return
+        // 双输出设备可能先发键盘字符、后发广播；丢弃未结束的键盘缓冲。
+        bufferRef.current = ''
+        if (timerRef.current) clearTimeout(timerRef.current)
+        acceptCode(barcode, 'native')
+      }).then((listener) => {
+        if (disposed) void listener.remove()
+        else nativeListener = listener
+      }).catch(() => {
+        // 非厂商设备或桥接不可用时，保留原有键盘扫码路径。
+      })
     }
 
     function handleKeyDown(e: KeyboardEvent) {
@@ -88,6 +114,8 @@ export function usePdaScanner({ onScan, enabled = true, onDuplicate }: Options) 
 
     document.addEventListener('keydown', handleKeyDown)
     return () => {
+      disposed = true
+      if (nativeListener) void nativeListener.remove()
       document.removeEventListener('keydown', handleKeyDown)
       if (timerRef.current) clearTimeout(timerRef.current)
     }

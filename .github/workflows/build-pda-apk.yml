@@ -194,6 +194,10 @@ jobs:
           VITE_ERP_PRODUCTION_ORIGIN: ${{ steps.deploy_config.outputs.erp_origin }}
         run: npm run pda:sync
 
+      - name: Test Android native scanner
+        working-directory: ./frontend/android
+        run: ./gradlew :app:testDebugUnitTest
+
       - name: Prepare Android signing keystore
         working-directory: ./frontend/android/app
         env:

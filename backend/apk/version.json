@@ -1,7 +1,7 @@
 {
-  "version": "0.10.5",
-  "versionCode": 140,
+  "version": "0.10.6",
+  "versionCode": 141,
   "filename": "app-release.apk",
-  "releaseNote": "改进权限与账务一致性，优化 ERP/PDA 长文本显示，并补齐收货扫码上架的操作反馈。",
-  "publishedAt": "2026-09-22T07:49:01.501Z"
+  "releaseNote": "PDA 新增 i6310pro 无焦点扫码测试入口，默认保持原扫码方式。",
+  "publishedAt": "2026-09-23T02:49:05.055Z"
 }
