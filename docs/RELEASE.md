@@ -16,7 +16,7 @@
 - 权限：`contents: write`（`GITHUB_TOKEN` 创建 Release）、`actions: read`（读取待发布实际 SHA 的 Tests 与 Security Scan 结果）。
 - Tag 推送时 CI 会校验：**`Git tag` 去掉 `v` 后**必须与 **`desktop/package.json` 的 `version`** 一致，否则失败（避免 exe / Release / 仓库版本错乱）。
 
-发版请严格使用下面「推荐发布流程」，执行 `npm run release:tag-desktop` 推送 tag 后即可在仓库 **Releases** 下载安装包；服务器 canonical 发布目录中的正式文件名统一为 `FlowCube-Setup-<version>.exe`。
+发版请严格使用下面「正式发布流程（唯一入口）」；`npm run release:prod` 会依次完成同提交门禁、三端发布和线上核对。正式发布后可在仓库 **Releases** 下载安装包；服务器 canonical 发布目录中的正式文件名统一为 `FlowCube-Setup-<version>.exe`。
 
 ### 桌面安装器约束（本次问题后的固定规则）
 
@@ -100,30 +100,29 @@ Electron 使用 `file://` 打开页面时没有浏览器域名，旧逻辑会默
 - 如果缺少 `SSH_PRIVATE_KEY`，浏览器自动部署不会生效；此时即使 `main` 已更新，线上页面也仍会停在旧版本
 - 建议同时阅读 [docs/DEPLOY.md](/Users/chengjianghao/flowcube/docs/DEPLOY.md)，后续统一从 `npm run release:prod` 发版
 
-## 推荐发布流程（须按顺序）
+## 正式发布流程（唯一入口）
 
 以下以仓库克隆在 `~/flowcube` 为例，将 `origin` 换成你的远端即可。
 
 1. 进入项目根目录：`cd ~/flowcube`
-2. 同步主分支：`git pull origin main`
+2. 同步主分支：`git pull --ff-only origin main`
 3. 先编写 `docs/release-notes/<version>.md`，再同步三端 package/lock 和 PDA 版本（同版本重跑不重复增加 versionCode）：
    ```bash
    bash .agents/skills/release-flowcube/scripts/bump-version.sh <version>
    ```
-4. 提交并推送：
+4. 提交待发布代码：
    ```bash
    # 根据已核对的提交范围，用 git add -- 逐路径暂存；不要夹带不明旧改动。
    git diff --cached --stat
    git diff --cached --check
    git commit -m "release: bump version"
-   git push origin main
    ```
-5. 等待同 SHA 的浏览器部署与 PDA 发布均成功后，再打 tag 并推送（会触发正式构建与 Release；脚本会校验 `main`、工作区干净、远程是否已有同名 tag）：
+5. 运行唯一正式入口：
    ```bash
-   npm run release:tag-desktop
+   npm run release:prod
    ```
 
-已完成版本同步、更新说明和本地验证，并将所有待发布改动提交到 main 后，可运行 `npm run release:prod` 完成推送 main、等待同 SHA 检查/浏览器/PDA、推送新 tag、等待对应 tag 桌面发布和线上核对。仅全部通过才返回成功。也可单独重复只读验收：
+`release:prod` 在 push 前预检本机现有代理（`HTTPS_PROXY`）与 `flowcube-prod` SSH 别名，启动原 CI artifact 自动中转并保持 Mac 在线；缺配置就停下。入口随后推送 main、等待同 SHA 检查/浏览器/PDA、推送新 tag、等待对应 tag 桌面发布和线上核对。CI 内的 HTTPS/SCP 只作故障回退，不是另一套人工发布命令。仅全部通过才返回成功。发布后可重复只读验收：
 
 ```bash
 npm run release:verify -- --origin https://<生产域名>

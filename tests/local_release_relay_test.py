@@ -67,6 +67,15 @@ class RelayTests(unittest.TestCase):
             self.assertEqual(instance.api('actions/runs'),{'ok':True})
         self.assertEqual(len(calls),3)
 
+    def test_preflight_rejects_unavailable_proxy(self):
+        from unittest.mock import patch
+        instance = object.__new__(relay.Relay)
+        instance.proxy = 'http://127.0.0.1:7897'
+        instance.ssh = lambda command: self.fail('SSH must not run after proxy failure')
+        with patch.object(relay.socket, 'create_connection', side_effect=OSError('offline')):
+            with self.assertRaisesRegex(RuntimeError, 'Local relay proxy unavailable'):
+                instance.preflight()
+
     def test_latest_run(self):
         self.assertEqual(relay.select_run([self.run_fixture(), self.run_fixture(id=124)], SHA, 'image', '1.2.3')['id'], 124)
 
@@ -156,6 +165,45 @@ class RelayTests(unittest.TestCase):
         with patch.object(relay.time, 'sleep', lambda seconds: None): instance.watch()
         self.assertEqual(events[:3], ['ready:image','ready:pda','ready:desktop'])
         self.assertEqual(polls, {'image':2,'pda':2,'desktop':2})
+
+    def test_rerun_waits_for_new_attempt_artifact(self):
+        from unittest.mock import patch
+        instance = object.__new__(relay.Relay)
+        instance.sha = SHA; instance.version = '1.2.3'
+        desktop = self.run_fixture(path='.github/workflows/build-desktop.yml', head_branch='v1.2.3',
+                                   run_attempt=2, run_started_at='2026-09-23T08:34:15Z')
+        polls = []; delivered = []
+        def api(path):
+            if '/artifacts?' in path:
+                polls.append(path)
+                artifacts = [dict(name='FlowCube-Desktop-Setup', created_at='2026-09-23T07:59:36Z')]
+                if len(polls) >= 4:
+                    artifacts.append(dict(name='FlowCube-Desktop-Setup', created_at='2026-09-23T08:37:00Z'))
+                return {'artifacts': artifacts}
+            workflow = path.split('/')[2].split('?')[0]
+            if workflow == 'build-desktop.yml': return {'workflow_runs': [desktop]}
+            return {'workflow_runs': [self.run_fixture(path='.github/workflows/'+workflow, status='completed', conclusion='success')]}
+        instance.api = api
+        instance.deliver = lambda kind, run, artifact: delivered.append(artifact['created_at']) or 'relay'
+        instance.current_run = lambda run, kind: None
+        with patch.object(relay.time, 'sleep', lambda seconds: None): instance.watch()
+        self.assertEqual(len(polls), 4)
+        self.assertEqual(delivered, ['2026-09-23T08:37:00Z'])
+
+    def test_rerun_without_start_time_rejects_artifact_selection(self):
+        from unittest.mock import patch
+        instance = object.__new__(relay.Relay)
+        instance.sha = SHA; instance.version = '1.2.3'
+        desktop = self.run_fixture(path='.github/workflows/build-desktop.yml', head_branch='v1.2.3', run_attempt=2)
+        def api(path):
+            workflow = path.split('/')[2].split('?')[0]
+            if workflow == 'build-desktop.yml': return {'workflow_runs': [desktop]}
+            return {'workflow_runs': [self.run_fixture(path='.github/workflows/'+workflow, status='completed', conclusion='success')]}
+        instance.api = api
+        instance.deliver = lambda kind, run, artifact: self.fail('No artifact may be delivered')
+        with patch.object(relay.time, 'sleep', lambda seconds: None):
+            with self.assertRaisesRegex(RuntimeError, 'Rerun start time unavailable'):
+                instance.watch()
 
     def test_artifact_identity(self):
         run=self.run_fixture()

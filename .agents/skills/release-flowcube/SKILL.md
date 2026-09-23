@@ -26,22 +26,14 @@ description: >-
 ## 发版链路速览（建立心智模型）
 
 ```
-bump 三端版本 ──┐
-写 release-notes ─┤
-                 ├─► git push main ──► CI: Tests + Security（同 SHA）──► Deploy Browser App
-                 │
-                 └─► 等同 SHA 的 Tests / Security / Browser / PDA / 桌面验证成功
-                      └─► npm run release:tag-desktop（打 v<version> tag）
-                        └─► CI: Build Desktop Installer（仅 tag 触发发布）
-                              ├─ 构建 Windows exe（NSIS 3.0.4.1）
-                              ├─ 上传原始 EXE 到 Actions artifact（供恢复复用）
-                              ├─ 服务器跑 release-desktop.js：
-                                   读 docs/release-notes/<version>.md 作为 notes
-                                   写 /var/www/flowcube-downloads/latest.json
-                                     { version, url, sha256, notes, publishedAt }
-                              └─ 上传并核对 GitHub Release 附件，转正草稿
-                                   └─ 线上完整核验；桌面轮询 /api/app-update/latest
-                                        semver 比对 → 弹「发现新版本」+ 显示 notes
+写 release-notes ──► bump 三端版本 ──► 提交 ──► npm run release:prod
+  ├─ 本机代理与 SSH 预检，自动中转原 CI 产物
+  ├─ push main，等同 SHA 的 Tests / Security / Browser / PDA / 桌面验证成功
+  └─ 推送 v<version> tag → CI: Build Desktop Installer（仅 tag 触发发布）
+       ├─ 构建 Windows exe（NSIS 3.0.4.1）并保存原始 Actions artifact
+       ├─ 服务器生成 latest.json，记录版本、地址、摘要和更新内容
+       └─ 核对 GitHub Release 附件并转正草稿 → 线上完整核验
+            └─ 桌面轮询 /api/app-update/latest，发现更高版本后提示更新
 ```
 
 记住三个事实，发版就不会错：
@@ -71,15 +63,7 @@ bump 三端版本 ──┐
   - **major**：不兼容的大改（本项目目前都在 0.x，谨慎）。
 - 默认建议 patch，除非这一版有明显的新功能。
 
-### 2. 三端版本号同步递增
-用本技能自带脚本一次性把 backend / frontend / desktop 三端 `package.json` + `package-lock.json` 设成同一个版本（手改三个文件极易漏 lock 或漏某一端）：
-```bash
-bash .agents/skills/release-flowcube/scripts/bump-version.sh <version>
-```
-> 为什么三端一起升：版本号是系统整体标识，后端 `/health`、桌面关于页、桌面更新都各读各自 package.json；三端不一致会让「线上到底是哪一版」难以排查。root `package.json` 没有 version 字段，无需改。
-> **脚本是幂等的**（2026-08-26 修复）：真换版本（versionName 变化）才递增 PDA `versionCode`；同一版本重跑（如写 notes 后想补 PDA 更新说明）不会重复 +1、不会虚刷新 `publishedAt`。**推荐顺序：先写第 3 步的 notes 再跑本脚本**，PDA 更新说明第一次就写入；顺序颠倒也没关系，写完 notes 后重跑是安全的。
-
-### 3. 写本版更新内容
+### 2. 写本版更新内容
 创建 `docs/release-notes/<version>.md`（文件名是纯版本号，**不带 v**）。这就是桌面端更新弹窗里用户看到的「更新内容」。沿用现有风格：`# v<version>` 标题 + 分类小节。
 
 **模板：**
@@ -106,7 +90,14 @@ bash .agents/skills/release-flowcube/scripts/bump-version.sh <version>
 > 官网上展示的还是 0.9.15 / 0.9.14 / 0.9.13。现已由 `npm run test:landing-updates` 机械守住：
 > 列表缺当前版本、顺序不是从新到旧、或某条字段不全，CI 直接失败。
 
-### 4. 提交并推送 main（触发浏览器部署）
+### 3. 三端版本号同步递增
+写完更新内容后，用本技能自带脚本一次性把 backend / frontend / desktop 三端 `package.json` + `package-lock.json` 设成同一个版本（手改三个文件极易漏 lock 或漏某一端）：
+```bash
+bash .agents/skills/release-flowcube/scripts/bump-version.sh <version>
+```
+> 版本号是系统整体标识，后端 `/health`、桌面关于页、桌面更新都各读各自 package.json；三端不一致会让线上版本难以核对。root `package.json` 没有 version 字段，无需改。脚本仅在 versionName 变化时递增 PDA `versionCode`；同一版本重跑不会重复递增或刷新 `publishedAt`。
+
+### 4. 提交待发布代码
 ```bash
 # 先核对本次任务的所有改动，再逐路径暂存。不能把不明来源的旧改动一并纳入。
 git status --short
@@ -114,23 +105,22 @@ git status --short
 git diff --cached --stat
 git diff --cached --check
 git commit -m "release: 发布 v<version> — <一句话主题>"
-git push origin main
 ```
-push 后 `Deploy Browser App` 等待实际发布 SHA 的 Tests 与 Security Scan 成功，由 GitHub runner 构建 Linux amd64 镜像，再在生产部署锁内核对归档摘要/镜像 SHA、加载、迁移、切换和验证。禁止在生产机重新编译。检查失败/取消/超时不能发布；健康或页面门禁失败统一回退旧应用镜像，数据库迁移不回滚。
+下一步的唯一入口负责 push main。`Deploy Browser App` 等待实际发布 SHA 的 Tests 与 Security Scan 成功，由 GitHub runner 构建 Linux amd64 镜像，再在生产部署锁内核对归档摘要/镜像 SHA、加载、迁移、切换和验证。禁止在生产机重新编译。检查失败/取消/超时不能发布；健康或页面门禁失败统一回退旧应用镜像，数据库迁移不回滚。
 
 ### 5. 等待浏览器和 PDA 完成，再打 tag（桌面发布）
 
-推荐在已授权正式发版、版本与说明均已提交到 main 后运行 `npm run release:prod`：它推送 main，等待同 SHA 的 Tests、Security、Browser、PDA 和桌面验证构建，再打 tag，等待该 tag 的桌面发布，最后执行线上三端版本核对。按用户最新要求，不再以 15 分钟限制选型或验收；优先保证可靠、可恢复、无人值守，耗时如实记录。保留有界超时与回退窗口。代码修复本身不构成推送/发版授权。
-
-若按下面手工分步执行，必须先确认 **Browser 和 PDA 整个工作流均 success**，再打 tag，避免 PDA 发布与桌面争用同一部署组的 pending 槽。
+已授权正式发版、版本与说明提交后，**只运行这个入口**：
 ```bash
-npm run release:tag-desktop
+npm run release:prod
 ```
-这会跑 `release-desktop-tag.sh`：校验工作区/HEAD、确认远程无同名 tag、用 `desktop/package.json` 的版本生成 `v<version>` 并推送。tag 一推，`Build Desktop Installer` 启动，构建 EXE → 保存 Actions artifact → 服务器发布安装包及 `latest.json` → 上传核对 GitHub 附件并转正草稿。现行链路在 GitHub 收尾前已更新官网清单；因此官网可下载仍不等于完整发版成功。
+入口在 push 前强制预检本机代理和 `flowcube-prod` SSH 别名，启动自动中转并保持 Mac 在线；缺少代理或 SSH 不通就停止，不悄悄改走已多次超时的服务器直连。它推送 main，等待同 SHA 的 Tests、Security、Browser、PDA 和桌面验证构建，再打 tag、等待桌面正式发布并核对线上三端。中转下载 GitHub 原 artifact ZIP，检查摘要与唯一文件，SSH 交付后由服务器再次核对 runner 的原包大小/SHA-256；CI 的 HTTPS/SCP 仅作有界故障回退，不是操作者要选择的发布方式。代码修复本身不构成推送/发版授权。
+
+Mac 的现有 HTTP 代理应由 `HTTPS_PROXY` 提供；SSH 别名默认 `flowcube-prod`。只有本机配置变化时才更新本机环境或 `FLOWCUBE_RELAY_SSH_TARGET` / `FLOWCUBE_RELAY_PROXY`，先做预检再发布。入口负责中转进程、SSH 控制连接与临时文件的收尾。保留完整门禁和回退窗口，不设固定 15 分钟目标。
 
 ### 6. 验证
 - CI：按完整发布 SHA 查询并按需翻页，确认 `Deploy Browser App`、`Tests`、`Security Scan`、`Build PDA APK` 都 success；另查 **对应版本 tag** 的 `Build Desktop Installer`，main 上的桌面验证构建不能代替 tag 发布。不要从最近几条运行的绿灯推断本次成功；补发布成功须关联原失败运行并单独报告。
-- **一条命令核对线上三端版本**（推荐，覆盖下面手写的 curl）：
+- **一条命令核对线上三端版本**（必做）：
   ```bash
   npm run release:verify -- --origin https://<生产域名>
   ```
@@ -222,24 +212,13 @@ gh workflow run recover-release-asset.yml --ref main \
 
 工作流下载原 CI artifact，核对原构建身份、同 SHA 门禁、线上摘要和 GitHub 附件摘要，仅转正现有草稿并执行线上验收。草稿按 tag 查询可能返回 404，脚本通过 Release ID 核对；不得据此重复创建 Release。摘要不一致、原产物不可用或前置门禁失败时，停止这个恢复分支并调查原因，不能重新构建同版本包覆盖证据。观察恢复运行完成后再报告结果。
 
-### 传输慢：先定位再选择恢复路径
+### 传输故障：先定位，再恢复本次发布
 
 分别记录 runner → 产物存储、产物存储 → 生产以及校验/加载耗时，核对字节数、实际吞吐、重试和磁盘 IO。不能仅凭超时归因为跨境网络，也不能把增加并发数当作带宽已改善。
 
-现行脚本包含 HTTPS 接收及 SCP 回退；受信中转须沿用接收器协议，验证原 artifact ZIP 摘要、唯一目标文件以及 runner 提供的原包大小/SHA256，通过临时文件原子改名交付。一次发布最多采用经核验的主路径和有界回退；持续失败时保留原产物与日志，先修复具体故障，避免重复触发整个发布。检查服务器运行时兼容性，不能因本机 Python 可运行就推断生产可运行。
+v0.10.8 的原始桌面 tag 运行中，服务器 HTTPS 接收约 150 秒后失败，随后 CI→服务器 SCP 满 1800 秒退出 124；Windows 构建与同 SHA 门禁均成功。接收器刻意隐藏签名地址和 curl 错误细节，因此只能确定两条直传路径都失败，不能把某个具体网络节点说成已查明。第 2 次 attempt 用本机代理中转原 CI artifact，下载/校验 184 秒、SSH 交付 17 秒，服务器采用同摘要原包，桌面工作流和线上 12/12 校验成功。详见 `docs/release-v0.10.8-result.md`。
 
-用户目前偏好不新增费用。可选择仓库内 `scripts/local-release-relay.py`，由正式入口管理完整生命周期：
-
-```bash
-FLOWCUBE_RELEASE_RELAY=1 \
-FLOWCUBE_RELAY_SSH_TARGET=<本机已配置SSH别名> \
-FLOWCUBE_RELAY_PROXY=<已有本地代理地址> \
-npm run release:prod
-```
-
-代理不是必填；只能复用已授权、可用的网络配置，不能擅自开通收费资源。本机 Python 3、Node、gh、curl、SSH 须可用；推送前预检 SSH，Mac 在本次命令期间阻止自动睡眠，仍需联网。本程序绑定完整 SHA、工作流、push/main 或版本 tag、run attempt 和 artifact 来源，短期 URL 缓存最多 30 秒，失败时刷新，验证 GitHub ZIP 摘要、唯一目标成员，交付原 CI 字节；接收端再核对原包摘要。输出每种产物下载/上传耗时与来源。ready 不代表接收完成，保留暂存文件直到工作流终止；退出清理本任务资源。原直连/SCP 路径保留，中转失败会单独报错，不能算该方案实测成功。
-
-这不是托管服务，不能承诺 Mac 离线后继续本地中转。SSH 复用连接，生产清理遵守项目磁盘 IO 预检约束。
+同一工作流重跑时 GitHub 会暂留上次 attempt 的同名 artifact；`local-release-relay.py` 必须按本次 `run_started_at` 过滤旧 artifact，等新产物出现，不能把等待当作失败重试耗尽。中转的 `ready` 不等于接收成功；等目标工作流结束后确认实走路径、在线清单和 EXE/APK 实际下载摘要。若中转或工作流失败，先保留原运行和产物、读取失败步骤日志，再针对失败的运行恢复；不要改写同版本线上包或跳过门禁。生产清理遵守磁盘 IO 预检约束。
 
 ## 回滚
 

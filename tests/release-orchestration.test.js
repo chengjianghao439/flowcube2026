@@ -3,6 +3,28 @@ const { test } = require('node:test')
 const assert = require('node:assert/strict')
 const sha = 'a'.repeat(40)
 
+test('正式入口缺少本机代理时在 push main 前拒绝发布', () => {
+  const fs = require('node:fs'), os = require('node:os'), path = require('node:path')
+  const { spawnSync } = require('node:child_process')
+  const root = path.resolve(__dirname, '..')
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'flowcube-release-entry-'))
+  const bin = path.join(temp, 'bin'), sentinel = path.join(temp, 'pushed')
+  fs.mkdirSync(bin)
+  const stub = (name, body) => fs.writeFileSync(path.join(bin, name), '#!/bin/sh\n' + body, { mode: 0o755 })
+  stub('git', `if [ "$1" = rev-parse ] && [ "$2" = --abbrev-ref ]; then echo main; elif [ "$1" = rev-parse ]; then echo ${sha}; elif [ "$1" = push ]; then touch "$RELEASE_TEST_SENTINEL"; fi\n`)
+  stub('node', 'if [ "$1" = -p ]; then echo 1.2.3; else echo fixture; fi\n')
+  stub('gh', 'if [ "$1" = auth ]; then echo fixture-token; else echo fixture/repo; fi\n')
+  try {
+    const result = spawnSync('bash', ['scripts/release-prod.sh'], {
+      cwd: root, encoding: 'utf8', timeout: 5000,
+      env: { ...process.env, PATH: bin + ':' + process.env.PATH, HTTPS_PROXY: '', https_proxy: '', FLOWCUBE_RELAY_PROXY: '', RELEASE_TEST_SENTINEL: sentinel },
+    })
+    assert.equal(result.status, 1, result.stdout + result.stderr)
+    assert.match(result.stdout + result.stderr, /缺少本机代理地址/)
+    assert.equal(fs.existsSync(sentinel), false)
+  } finally { fs.rmSync(temp, { recursive: true, force: true }) }
+})
+
 for (const scenario of ['changed-head', 'changed-version', 'same']) {
   test(`等待期间源码变化不能导致给另一提交打 tag：${scenario}`, () => {
     const { publishTagForCommit } = require('../scripts/complete-release')

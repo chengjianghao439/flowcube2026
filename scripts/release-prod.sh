@@ -47,7 +47,7 @@ GITHUB_SHA="$(git rev-parse HEAD)"
 export GITHUB_REPOSITORY GITHUB_SHA
 export RELEASE_TAG="$TAG" FLOWCUBE_ERP_ORIGIN="$ERP_ORIGIN"
 
-# Optional local relay is task-scoped and never installs a persistent runner.
+# 本机中转只在本次发版期间运行，不安装常驻 runner。
 RELAY_PID=""
 CAFFEINATE_PID=""
 cleanup_release() {
@@ -59,16 +59,18 @@ cleanup_release() {
 }
 trap cleanup_release EXIT
 trap 'exit 130' INT TERM
-if [ "${FLOWCUBE_RELEASE_RELAY:-0}" = "1" ]; then
-  command -v python3 >/dev/null 2>&1 || { echo '!! 本地中转需要 python3'; exit 1; }
-  # Fail before pushing if the operator cannot reach the configured SSH target.
-  FLOWCUBE_RELAY_PREFLIGHT_ONLY=1 python3 scripts/local-release-relay.py
-  python3 scripts/local-release-relay.py &
-  RELAY_PID=$!
-  if command -v caffeinate >/dev/null 2>&1; then
-    caffeinate -i -w "$$" &
-    CAFFEINATE_PID=$!
-  fi
+# 本机代理中转是正式发版的固定交付路径。预检失败应在 push 前停下，
+# 不能静默退回已多次超时的服务器直连 / runner SCP。
+export FLOWCUBE_RELAY_SSH_TARGET="${FLOWCUBE_RELAY_SSH_TARGET:-flowcube-prod}"
+export FLOWCUBE_RELAY_PROXY="${FLOWCUBE_RELAY_PROXY:-${HTTPS_PROXY:-${https_proxy:-}}}"
+[ -n "$FLOWCUBE_RELAY_PROXY" ] || { echo '!! 缺少本机代理地址 FLOWCUBE_RELAY_PROXY / HTTPS_PROXY，拒绝发布'; exit 1; }
+command -v python3 >/dev/null 2>&1 || { echo '!! 本地中转需要 python3'; exit 1; }
+FLOWCUBE_RELAY_PREFLIGHT_ONLY=1 python3 scripts/local-release-relay.py
+python3 scripts/local-release-relay.py &
+RELAY_PID=$!
+if command -v caffeinate >/dev/null 2>&1; then
+  caffeinate -i -w "$$" &
+  CAFFEINATE_PID=$!
 fi
 
 echo "==> 推送 main（触发浏览器端/服务器自动部署）..."

@@ -13,12 +13,14 @@ import re
 import shlex
 import shutil
 import signal
+import socket
 import stat
 import subprocess
 import tempfile
 import time
 import threading
 import zipfile
+from urllib.parse import urlsplit
 
 WORKFLOWS = {'image': 'deploy-browser.yml', 'pda': 'build-pda-apk.yml', 'desktop': 'build-desktop.yml'}
 MAX_ZIP = 2 * 1024**3
@@ -167,6 +169,14 @@ class Relay:
         for binary in ['gh', 'node', 'curl', 'ssh', 'scp']:
             if not shutil.which(binary):
                 raise RuntimeError('Missing relay tool: ' + binary)
+        parsed = urlsplit(self.proxy)
+        if parsed.scheme not in ('http', 'https', 'socks5', 'socks5h') or not parsed.hostname or not parsed.port:
+            raise RuntimeError('Missing/invalid local relay proxy')
+        try:
+            with socket.create_connection((parsed.hostname, parsed.port), timeout=5):
+                pass
+        except OSError:
+            raise RuntimeError('Local relay proxy unavailable') from None
         self.ssh('true')
         print('relay: preflight passed; target SHA ' + self.sha, flush=True)
 
@@ -236,7 +246,13 @@ class Relay:
                     print('relay: workflow already succeeded without this relay: ' + kind, flush=True)
                     continue
                 wanted, _, remote = artifact_spec(kind, run, self.version)
-                matches = [a for a in self.api('actions/runs/' + str(run['id']) + '/artifacts?per_page=100')['artifacts'] if a['name'] == wanted]
+                # GitHub keeps artifacts from a failed attempt during a rerun. Wait for
+                # the new attempt's artifact instead of spending all retries on the old one.
+                started_at = run.get('run_started_at') or ''
+                if run.get('run_attempt', 1) > 1 and not started_at:
+                    raise RuntimeError('Rerun start time unavailable; cannot identify current artifact')
+                matches = [a for a in self.api('actions/runs/' + str(run['id']) + '/artifacts?per_page=100')['artifacts']
+                           if a['name'] == wanted and (not started_at or (a.get('created_at') or '') >= started_at)]
                 if not matches:
                     continue
                 try:

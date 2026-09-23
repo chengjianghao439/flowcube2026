@@ -93,12 +93,17 @@ def main():
     # 不将签名地址放进 ps 可见的命令参数、磁盘文件或 curl 错误日志。
     with tempfile.TemporaryDirectory(prefix=Path(destination).name + '.https-', dir=str(Path(destination).parent)) as temp:
         archive = Path(temp) / 'artifact.zip'
+        started = time.monotonic()
         result = subprocess.run([
             'curl', '--config', '-', '--silent', '--fail', '--location',
             '--proto', '=https', '--proto-redir', '=https', '--connect-timeout', '15',
             '--max-time', '150', '--max-filesize', str(size + 1024 * 1024), '--output', str(archive),
         ], input='url = "' + signed_url + '"\n', universal_newlines=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=160)
         if result.returncode:
+            # curl 的退出码与耗时可用于区分超时、HTTP 拒绝和连接失败；
+            # 不打印异常对象、签名 URL 或 curl stderr。
+            print('HTTPS artifact receive failed: curl_exit={} elapsed={:.1f}s'.format(
+                result.returncode, time.monotonic() - started), file=sys.stderr)
             if accept_relay_archive(destination, expected_sha, size) or wait_for_relay(destination, expected_sha, size):
                 return
             raise RuntimeError('HTTPS transfer failed')

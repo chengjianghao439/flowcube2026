@@ -65,6 +65,7 @@ test('签名 URL 只从 stdin 进入 curl，不进入参数/日志，下载失�
       input: secret + '\n', encoding: 'utf8', timeout: 5000, env: { ...process.env, PATH: dir + ':' + process.env.PATH },
     })
     assert.notEqual(r.status, 0)
+    assert.match(r.stderr, /curl_exit=28/)
     assert.doesNotMatch(r.stdout + r.stderr, /never-log-this/)
     assert.deepEqual(fs.readdirSync(dir), ['curl'])
   } finally { fs.rmSync(dir, { recursive: true, force: true }) }
