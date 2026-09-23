@@ -1,5 +1,8 @@
 function buildCorsOptions(env) {
   const corsOriginEnv = env.CORS_ORIGIN
+  if (env.IS_PROD && (env.CORS_REFLECT || String(corsOriginEnv || '').split(',').some(origin => origin.trim() === '*'))) {
+    throw new Error('生产 CORS 必须配置明确来源，禁止 CORS_REFLECT 和通配符')
+  }
   const corsReflect = env.CORS_REFLECT || corsOriginEnv === '*'
   const allowNullOrigin = corsReflect || env.CORS_ALLOW_NULL_ORIGIN
   const staticAllowed = new Set(

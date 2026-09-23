@@ -28,7 +28,7 @@ vi.mock('@/hooks/usePdaFeedback', () => ({
 }))
 // 隔离 localStorage 依赖：本测试只关心页面交互，不关心待确认记录的持久化。
 vi.mock('@/hooks/usePendingRequests', () => ({
-  usePendingRequests: () => ({ records: [], addPending: vi.fn(), removePending: vi.fn() }),
+  usePendingRequests: () => ({ records: [], addPending: vi.fn(), claimPending: vi.fn(() => true), removePending: vi.fn() }),
 }))
 
 const TASK = {

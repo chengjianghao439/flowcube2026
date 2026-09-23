@@ -67,9 +67,15 @@ test('development localhost default remains available', async t => {
   assert.equal(res.headers.get('access-control-allow-origin'), 'http://localhost:5173')
 })
 
-test('explicit legacy reflection remains opt-in for staged configuration changes', async t => {
+test('development reflection stays opt-in', async t => {
   for (const config of [{ CORS_REFLECT: true }, { CORS_ORIGIN: '*' }]) {
-    const res = await request(t, config, 'https://legacy.example')
+    const res = await request(t, { ...config, IS_PROD: false }, 'https://legacy.example')
     assert.equal(res.headers.get('access-control-allow-origin'), 'https://legacy.example')
+  }
+})
+
+test('production refuses wildcard and reflected credentialed CORS', () => {
+  for (const config of [{ CORS_REFLECT: true }, { CORS_ORIGIN: '*' }, { CORS_ORIGIN: 'https://erp.example, *' }]) {
+    assert.throws(() => buildCorsOptions({ ...config, IS_PROD: true }), /CORS/)
   }
 })

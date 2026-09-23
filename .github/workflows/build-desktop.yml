@@ -517,34 +517,14 @@ jobs:
           ssh-add "$KEY_FILE"
 
       - name: Add SSH known_hosts
+        id: ssh_trust
         if: ${{ (github.ref_type == 'tag' || github.event_name == 'workflow_dispatch') && steps.ssh_deploy.outputs.enabled == 'true' && steps.deploy_config.outputs.server_deploy_configured == 'true' }}
         shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          # 服务器 SSH 层存在**间歇性**不可用：2026-09-19 实测同一分钟内 ssh-keyscan 可能先失败、随后成功
-          # （12:06 部署失败 → 12:2x rerun 成功 → 12:49 诊断又失败）。keyscan 默认 5 秒超时且不重试，单次失败
-          # 就让整条部署/诊断链终止，表现为「Add SSH known_hosts: failure」——与网络不通无法区分、也无法自愈。
-          # 现改为最多 5 次尝试（每次 -T 10 + timeout 20，只有拿到非空输出才算成功），全失败才终止并打印 stderr。
-          HOST="${{ steps.deploy_config.outputs.server_host }}"
-          PORT="${{ steps.deploy_config.outputs.server_ssh_port }}"
-          keyscan_ok=0
-          for attempt in 1 2 3 4 5; do
-            if timeout 20 ssh-keyscan -T 10 -H -p "$PORT" "$HOST" > /tmp/keyscan.out 2>/tmp/keyscan.err && [ -s /tmp/keyscan.out ]; then
-              cat /tmp/keyscan.out >> ~/.ssh/known_hosts
-              keyscan_ok=1
-              break
-            fi
-            echo "::warning::ssh-keyscan 第 ${attempt} 次失败（服务器 SSH 间歇不可用？），5 秒后重试"
-            sleep 5
-          done
-          if [ "$keyscan_ok" != '1' ]; then
-            echo "::error::ssh-keyscan 连续 5 次失败，无法建立 ~/.ssh/known_hosts"
-            tail -5 /tmp/keyscan.err 2>/dev/null || true
-            exit 1
-          fi
-          chmod 644 ~/.ssh/known_hosts
+        env:
+          FLOWCUBE_SSH_HOST: ${{ steps.deploy_config.outputs.server_host }}
+          FLOWCUBE_SSH_PORT: ${{ steps.deploy_config.outputs.server_ssh_port }}
+          FLOWCUBE_SSH_KNOWN_HOSTS: ${{ vars.FLOWCUBE_SSH_KNOWN_HOSTS }}
+        run: bash scripts/setup-ci-ssh-trust.sh
 
       - name: Publish EXE to canonical download directory
         if: ${{ (github.ref_type == 'tag' || github.event_name == 'workflow_dispatch') && steps.ssh_deploy.outputs.enabled == 'true' && steps.deploy_config.outputs.server_deploy_configured == 'true' }}

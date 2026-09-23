@@ -5,6 +5,7 @@ import { useAuthStore } from '@/store/authStore'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { queryClient } from '@/lib/queryClient'
 import { logoutApi } from '@/api/auth'
+import { clearPendingSessionStorage } from './pendingRequestStorage'
 
 function routeLooksLikePda(): boolean {
   const h = (window.location.hash.replace(/^#/, '').split('?')[0] || '/').trim()
@@ -37,7 +38,7 @@ export function performSessionLogout(): void {
   // 组件不卸载 + staleTime 5min，不清缓存会让切换账号短暂看到上一账号的销售/账款/审批数据
   queryClient.clear()
   // 清 PDA 待确认请求（2026-08-30 审计）：跨会话残留会命中上一账号的 pending 误报「结果待确认」
-  try { localStorage.removeItem('pda_pending_request_confirmations') } catch { /* ignore */ }
+  clearPendingSessionStorage()
   // fire-and-forget：不阻塞本地登出跳转
   void logoutApi(refreshToken)
   redirectReplaceToLogin()

@@ -1,4 +1,5 @@
 interface ListBatch {
+  snapshotId?: string
   list: unknown[]
   pagination: { page: number; pageSize: number; total: number }
 }
@@ -52,7 +53,7 @@ const MAX_COLLECT_ROWS = 5000
 
 /** 页面拿到完整列表；后端仍以有界批次读取，失败不返回残缺的成功结果。 */
 export async function collectAllRecords<T>(
-  fetchBatch: (page: number, pageSize?: number) => Promise<T>,
+  fetchBatch: (page: number, pageSize?: number, snapshotId?: string) => Promise<T>,
   signal?: { readonly aborted: boolean },
   maxRows: number = MAX_COLLECT_ROWS,
   identityOf: RecordIdentityResolver = recordIdentity,
@@ -62,6 +63,8 @@ export async function collectAllRecords<T>(
   const first = await fetchBatch(1)
   assertActive()
   if (!isListBatch(first)) return first
+  const snapshotId = first.snapshotId
+  if (snapshotId !== undefined && (typeof snapshotId !== 'string' || !snapshotId)) throw new Error('列表数据不完整，请刷新后重试')
   const total = Number(first.pagination.total)
   const size = Number(first.pagination.pageSize)
   if (!Number.isSafeInteger(total) || total < 0 || (!Number.isSafeInteger(size) || size < 1) && total > 0) {
@@ -84,9 +87,9 @@ export async function collectAllRecords<T>(
   for (let page = 2; rows.length < target; page++) {
     if (!rows.length) throw new Error('列表数据不完整，请刷新后重试')
     assertActive()
-    const next = await fetchBatch(page, size)
+    const next = await fetchBatch(page, size, snapshotId)
     assertActive()
-    if (!isListBatch(next) || Number(next.pagination.total) !== total || Number(next.pagination.pageSize) !== size || Number(next.pagination.page) !== page) {
+    if (!isListBatch(next) || next.snapshotId !== snapshotId || Number(next.pagination.total) !== total || Number(next.pagination.pageSize) !== size || Number(next.pagination.page) !== page) {
       throw new Error('列表数据已变化，请刷新后重试')
     }
     if (!next.list.length) throw new Error('列表数据不完整，请刷新后重试')

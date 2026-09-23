@@ -7,7 +7,7 @@ export const getSaleDetailApi  = (id: number) => client.get<SaleOrder>(`/sale/${
 export const getSaleReservePreviewApi = (id: number) => client.get<ReservePreview>(`/sale/${id}/reserve-preview`)
 export const createSaleApi     = (data: CreateSaleParams, requestKey?: string) =>
   client.post<{ id: number; orderNo: string }>('/sale', data, requestKey ? { headers: withRequestKeyHeaders(requestKey) } : undefined)
-export const updateSaleApi     = ({ id, ...data }: UpdateSaleParams) => client.put<null>(`/sale/${id}`, data)
+export const updateSaleApi     = ({ id, ...data }: UpdateSaleParams, requestKey?: string) => client.put<null>(`/sale/${id}`, data, requestKey ? { headers: withRequestKeyHeaders(requestKey) } : undefined)
 export const adjustSaleApi     = ({ id, ...data }: UpdateSaleParams, requestKey?: string) => client.put<AdjustSaleResult>(`/sale/${id}/adjust`, data, requestKey ? { headers: withRequestKeyHeaders(requestKey) } : undefined)
 export const reserveSaleApi    = (id: number, items?: ReserveItemOverride[], confirmCreditOverride?: boolean, requestKey?: string) =>
   client.post<null>(`/sale/${id}/reserve`, { ...(items?.length ? { items } : {}), ...(confirmCreditOverride ? { confirmCreditOverride: true } : {}) }, { skipGlobalError: true, ...(requestKey ? { headers: withRequestKeyHeaders(requestKey) } : {}) })

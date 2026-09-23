@@ -1,5 +1,6 @@
 const { Router } = require('express')
 const multer = require('multer')
+const AppError = require('../../utils/AppError')
 const { authMiddleware, requirePermission } = require('../../middleware/auth')
 const { PERMISSIONS } = require('../../constants/permissions')
 const controller = require('./import.controller')
@@ -18,7 +19,7 @@ const upload = multer({
     if (allowed.includes(file.mimetype)) {
       cb(null, true)
     } else {
-      cb(new Error('仅支持 Excel (.xlsx/.xls) 或 CSV 文件'))
+      cb(new AppError('仅支持 Excel (.xlsx/.xls) 或 CSV 文件', 400, 'IMPORT_FILE_TYPE_INVALID'))
     }
   },
 })

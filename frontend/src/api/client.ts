@@ -416,9 +416,9 @@ export const payloadClient = {
     queryParams.delete('page'); queryParams.delete('pageSize')
     const encodedQuery = queryParams.toString()
     const requestUrl = encodedQuery ? `${path}?${encodedQuery}` : path
-    return collectAllRecords((page, pageSize) => payloadRequest(apiClient.get<T>(requestUrl, {
+    return collectAllRecords((page, pageSize, snapshotId) => payloadRequest(apiClient.get<T>(requestUrl, {
       ...fixedConfig,
-      params: { ...params, ...(hasBatchParams || page > 1 ? { page, pageSize: pageSize ?? 200 } : {}) },
+      params: { ...params, ...(snapshotId ? { snapshotId } : {}), ...(hasBatchParams || page > 1 ? { page, pageSize: pageSize ?? 200 } : {}) },
     })), config?.signal, undefined, identityOf).catch((error: unknown) => {
       // 传输错误已由拦截器提示；这里只补完整性校验失败，不能静默显示残缺/空列表。
       if (!config?.skipGlobalError && !(error instanceof ApiClientError) && !axios.isCancel(error)

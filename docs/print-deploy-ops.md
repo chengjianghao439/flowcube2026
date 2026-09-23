@@ -68,3 +68,10 @@
 - 前端 Vitest 升至 4.1.11，修复开发测试服务相关依赖公告；锁文件与 Node 22 的 `npm ci`、完整前端验证一起验收。此修改不代表生产部署或真机验收。
 
 - 发布等待中的 GitHub 状态读取最多尝试 3 次：网络/超时及 HTTP 429/502/503/504 以 1 秒、2 秒间隔重试，仍受总等待预算限制；401/403/404、损坏结果及 CI 失败立即拒绝，不输出原始网络异常中的地址或凭据。行为回归位于 `tests/release-orchestration.test.js`。
+
+### 2026-09-23 CI SSH 与跨域加固
+
+- 四个 SSH 工作流只使用 GitHub Actions 变量 `FLOWCUBE_SSH_KNOWN_HOSTS` 中独立核对的服务器公钥材料；`scripts/setup-ci-ssh-trust.sh` 离线验证目标主机/端口，开启 StrictHostKeyChecking，不使用网络扫描兜底。缺失或不匹配即阻断，上传清理也须可信配置成功后执行。服务器轮换主机键时先经服务器控制台等独立渠道核验再更新变量。
+- 变量内容为标准 known_hosts 公钥行；非 22 端口主机字段用 `[host]:port`。本次只改仓库代码，未配置远程变量、未核实生产密钥，也未部署。合并发布前必须补可信材料。
+- smoke 凭据由 `ssh-smoke-stdin.sh` 经 NUL 分隔 stdin 传输，远端 shell 内建 read 后导出，不再出现在 SSH 命令参数。仍属于远程进程环境，不能将此描述为消除了所有凭据可见性。
+- 生产 CORS 启动时拒绝反射与 `*`，部署前须明确 Web/PDA 来源及独立 Electron null 开关。没有读取或改变真实生产配置。

@@ -1,3 +1,4 @@
+const { beginManualStockRequest } = require('./manual-stock-request')
 const { pool } = require('../../config/db')
 const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
 const AppError = require('../../utils/AppError')
@@ -6,7 +7,7 @@ const { adjustContainerStock, SOURCE_TYPE, splitContainer, syncStockFromContaine
 const { getInventoryDisplayProjectionSql } = require('./inventoryProjection')
 const { normalizePagination } = require('../../utils/pagination')
 const { getExpectedStock } = require('../../utils/expectedStock')
-const { beginResourceOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
+const { completeOperationRequest } = require('../../utils/operationRequest')
 const { assertQtyPrecisionWith } = require('../../utils/qtyPrecision')  // 商品级数量精度开关（迁移 254）
 
 // ─── 库存查询 ─────────────────────────────────────────────────────────────────
@@ -205,16 +206,16 @@ async function getLogs({ page=1, pageSize=20, type=null, productId=null, warehou
 //
 // 所有路径均通过 containerEngine 完成，inventory_stock 仅作缓存写入
 
-async function changeStock({ type, productId, warehouseId, supplierId, quantity, unitPrice, remark, operator, requestKey = null }) {
+async function changeStock({ type, productId, warehouseId, supplierId, quantity, unitPrice, remark, operator, requestKey = null, scopeWarehouseIds = null }) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const requestState = await beginResourceOperationRequest(conn, {
-      requestKey,
-      action: 'inventory.manual-out',
-      userId: operator?.userId ?? null,
-      resourceType: 'inventory',
-      resourceId: productId,
+    if (type !== 2) throw new AppError(type === 1 ? '手动入库已关闭：请通过入库任务收货上架' : '库存调整已关闭：请通过盘点单处理', 403)
+    assertInScope(scopeWarehouseIds, warehouseId, '出库仓库')
+    const requestState = await beginManualStockRequest(conn, {
+      requestKey, userId: operator?.userId ?? null,
+      productId: Number(productId), warehouseId: Number(warehouseId), quantity: Number(quantity),
+      supplierId: supplierId || null, unitPrice: unitPrice || null, remark: remark || null,
     })
     if (requestState.replay) {
       await conn.rollback()
@@ -236,18 +237,6 @@ async function changeStock({ type, productId, warehouseId, supplierId, quantity,
       'SELECT id FROM inventory_warehouses WHERE id=? AND deleted_at IS NULL AND is_active=1', [warehouseId],
     )
     if (!warehouse) throw new AppError('仓库不存在或已停用', 404)
-
-    if (type === 1) {
-      throw new AppError('手动入库已关闭：请通过「入库任务」收货生成库存条码并上架后计入库存', 403)
-    }
-
-    if (type === 3) {
-      throw new AppError('库存调整已关闭：请创建并提交「盘点单」，差异由盘点结果落账', 403)
-    }
-
-    if (type !== 2) {
-      throw new AppError('不支持的库存操作类型', 400)
-    }
 
     // 手动出库：FIFO 扣减容器（不足则抛出）
     const moveType = MOVE_TYPE.MANUAL_OUT
@@ -890,7 +879,7 @@ async function resyncStock({ scopeWarehouseIds = null } = {}) {
   }
 }
 
-async function getContainerByBarcode(barcode) {
+async function getContainerByBarcode(barcode, scopeWarehouseIds = null) {
   const [[row]] = await pool.query(
     `SELECT c.id, c.barcode, c.container_type, c.product_id, c.warehouse_id, c.location_id,
             c.remaining_qty, c.initial_qty, c.unit, c.status, c.inbound_task_id,
@@ -909,6 +898,7 @@ async function getContainerByBarcode(barcode) {
     [barcode],
   )
   if (!row) throw new AppError('库存条码不存在或已失效', 404)
+  assertInScope(scopeWarehouseIds, row.warehouse_id, '库存条码')
   return {
     containerId:   row.id,
     barcode:       row.barcode,

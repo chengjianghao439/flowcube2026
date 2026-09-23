@@ -1,4 +1,5 @@
 import { StrictMode } from 'react'
+import { installUnhandledRejectionReporting } from '@/lib/unhandledRejection'
 import './index.css'
 import { Capacitor } from '@capacitor/core'
 import { applyPdaApiBaseFromStorage, installPdaGlobals } from '@/lib/pdaRuntime'
@@ -42,16 +43,7 @@ async function boot(): Promise<void> {
 }
 
 // ── 全局未捕获 Promise 错误监听 ──────────────────────────────────────────────
-window.addEventListener('unhandledrejection', (event) => {
-  const reason = event.reason
-  console.error(
-    '[UnhandledRejection] 未捕获的 Promise 错误:',
-    reason instanceof Error ? reason.message : reason,
-    reason
-  )
-  // 防止某些场景下浏览器控制台输出重复
-  event.preventDefault()
-})
+installUnhandledRejectionReporting(Boolean(import.meta.env.VITE_SENTRY_DSN))
 
 // ── 渲染入口（PDA 先加载 polyfill；ERP 先静默探测 API，再挂载）──────────────
 const rootEl = document.getElementById('root')!

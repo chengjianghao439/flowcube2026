@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNetworkStatus } from './useNetworkStatus'
 import { usePendingRequests, type PendingRequestRecord } from './usePendingRequests'
 import { createRequestKey } from '@/lib/requestKey'
+import { useAuthStore } from '@/store/authStore'
 import { getOperationRequestStatusApi, type OperationRequestStatus } from '@/api/operation-requests'
 
 function isTransientFailure(message: string) {
@@ -58,7 +59,7 @@ export function useCriticalPdaAction<T>({
   resolveServerState?: ResolveServerState<T>
 }) {
   const networkStatus = useNetworkStatus()
-  const { records, addPending, removePending } = usePendingRequests()
+  const { records, claimPending, removePending, discardUnclaimed } = usePendingRequests()
   const pendingRecord = useMemo(
     () => records.find((item) => item.action === action) ?? null,
     [records, action],
@@ -75,7 +76,7 @@ export function useCriticalPdaAction<T>({
     operationStatus?: OperationRequestStatus | null,
     error?: unknown,
   ): Promise<CriticalPdaConfirmResult | null> => {
-    if (!resolveServerState) return null
+    if (record.unverifiedOwner || !resolveServerState) return null
     const serverState = await resolveServerState({ record, operationStatus, error })
     if (!serverState?.effective) return null
     const data = (serverState.data ?? operationStatus?.data ?? null) as T
@@ -98,6 +99,8 @@ export function useCriticalPdaAction<T>({
 
   const confirmPending = useCallback(async (): Promise<CriticalPdaConfirmResult | null> => {
     if (!pendingRecord || networkStatus !== 'online' || confirming || phase === 'submitting') return null
+    const generation = useAuthStore.getState().sessionGeneration
+    const isCurrentSession = () => useAuthStore.getState().sessionGeneration === generation
     setConfirming(true)
     setPhase('confirming')
     setPhaseMessage(`正在确认${pendingRecord.label}的结果，请勿重复提交。`)
@@ -108,9 +111,11 @@ export function useCriticalPdaAction<T>({
         // 老版本调拨 pending 保存固定 action；用当前单据 action 查询兼容回执，防止跨单误确认。
         /^transfer\.scan(?:Out|In)\.[1-9]\d*$/.test(statusAction)
           ? statusAction
-          : pendingRecord.requestAction || statusAction,
+          : pendingRecord.unverifiedOwner ? requestAction || pendingRecord.requestAction || statusAction : pendingRecord.requestAction || statusAction,
       )
+      if (!isCurrentSession()) return null
       if (status.status === 'success') {
+        if (pendingRecord.unverifiedOwner) discardUnclaimed(action, pendingRecord.requestKey)
         removePending(action)
         setPhase('idle')
         setPhaseMessage(null)
@@ -122,6 +127,7 @@ export function useCriticalPdaAction<T>({
         }
       }
       if (status.status === 'failed') {
+        if (pendingRecord.unverifiedOwner) discardUnclaimed(action, pendingRecord.requestKey)
         const stateConfirmed = await confirmByServerState(pendingRecord, status)
         if (stateConfirmed) return stateConfirmed
         removePending(action)
@@ -132,7 +138,9 @@ export function useCriticalPdaAction<T>({
       if (status.status === 'not_found') {
         const stateConfirmed = await confirmByServerState(pendingRecord, status)
         if (stateConfirmed) return stateConfirmed
-        const message = resolveServerState
+        const message = pendingRecord.unverifiedOwner
+          ? '历史操作的归属与结果仍无法确认，请人工核对；确认未生效后可清除记录。'
+          : resolveServerState
           ? stateUnconfirmedMessage(pendingRecord.label, 'receipt_missing')
           : `${pendingRecord.label}结果还没确认。请稍后再次确认，暂勿重复扫码。`
         setPhase('pending')
@@ -153,6 +161,7 @@ export function useCriticalPdaAction<T>({
       }
       return status
     } catch (error) {
+      if (!isCurrentSession()) return null
       const message = error instanceof Error ? error.message : String(error ?? '')
       if (isTransientFailure(message)) {
         setPhase('pending')
@@ -168,7 +177,7 @@ export function useCriticalPdaAction<T>({
     } finally {
       setConfirming(false)
     }
-  }, [action, confirmByServerState, confirming, networkStatus, onConfirmed, pendingRecord, phase, removePending, resolveServerState, statusAction])
+  }, [action, confirmByServerState, confirming, discardUnclaimed, networkStatus, onConfirmed, pendingRecord, phase, removePending, requestAction, resolveServerState, statusAction])
 
   useEffect(() => {
     if (networkStatus !== 'online' || !pendingRecord) return
@@ -200,9 +209,6 @@ export function useCriticalPdaAction<T>({
     }
 
     const requestKey = createRequestKey(action.replace(/[^a-z0-9]+/gi, '-'))
-    setPhase('submitting')
-    setPhaseMessage(`${label}提交中，请保持当前页面并等待结果。`)
-    setLastErrorMessage(null)
     const record: PendingRequestRecord = {
       requestKey,
       action,
@@ -211,7 +217,10 @@ export function useCriticalPdaAction<T>({
       createdAt: new Date().toISOString(),
       metadata,
     }
-    addPending(record)
+    if (!claimPending(record)) throw new Error(`${label} 结果待确认，请先确认后再重试`)
+    setPhase('submitting')
+    setPhaseMessage(`${label}提交中，请保持当前页面并等待结果。`)
+    setLastErrorMessage(null)
 
     try {
       const data = await executor(requestKey)
@@ -239,7 +248,7 @@ export function useCriticalPdaAction<T>({
       setLastErrorMessage(message || `${label}未提交成功，任务状态未能确认已推进。请检查后重试。`)
       throw error
     }
-  }, [action, addPending, confirmByServerState, label, networkStatus, onConfirmed, pendingRecord, removePending, statusAction])
+  }, [action, claimPending, confirmByServerState, label, networkStatus, onConfirmed, pendingRecord, removePending, statusAction])
 
   return {
     networkStatus,
@@ -252,7 +261,10 @@ export function useCriticalPdaAction<T>({
     submitBlocked: Boolean(blockedReason),
     run,
     confirmPending,
-    clearPending: () => removePending(action),
+    clearPending: () => {
+      if (pendingRecord?.unverifiedOwner) discardUnclaimed(action, pendingRecord.requestKey)
+      removePending(action)
+    },
     clearError: () => {
       setLastErrorMessage(null)
       if (phase === 'failed') setPhase('idle')

@@ -21,6 +21,14 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import { usePdaFeedback } from './usePdaFeedback'
 import { safeJsonParse } from '@/lib/safeJsonParse'
 
+function readFlowDraft(key: string): string | null {
+  try { return sessionStorage.getItem(`pda_flow_${key}`) } catch { return null }
+}
+
+function removeFlowDraft(key: string): void {
+  try { sessionStorage.removeItem(`pda_flow_${key}`) } catch { /* 缓存异常不影响业务完成或重置。 */ }
+}
+
 // ── 条码类型 ──────────────────────────────────────────────────────────────────
 export type BarcodeType = 'product' | 'container' | 'box' | 'bin' | 'any'
 
@@ -60,7 +68,7 @@ export function usePdaFlow<C extends Record<string, unknown>>(
   const { ok, err, warn, flash } = usePdaFeedback()
   const [stepId, setStepId]     = useState<string>(() => {
     if (storageKey) {
-      const saved = sessionStorage.getItem(`pda_flow_${storageKey}`)
+      const saved = readFlowDraft(storageKey)
       if (saved) {
         const doc = safeJsonParse<{ stepId?: string; context?: Partial<C> }>(saved, `pda_flow_${storageKey}`, true)
         if (doc && typeof doc.stepId === 'string') return doc.stepId
@@ -70,7 +78,7 @@ export function usePdaFlow<C extends Record<string, unknown>>(
   })
   const [context, setContext]   = useState<C>(() => {
     if (storageKey) {
-      const saved = sessionStorage.getItem(`pda_flow_${storageKey}`)
+      const saved = readFlowDraft(storageKey)
       if (saved) {
         const doc = safeJsonParse<{ stepId?: string; context?: Partial<C> }>(saved, `pda_flow_${storageKey}`, true)
         if (doc?.context && typeof doc.context === 'object') return { ...initialContext, ...doc.context }
@@ -85,11 +93,11 @@ export function usePdaFlow<C extends Record<string, unknown>>(
 
   // 持久化
   useEffect(() => {
-    if (!storageKey) return
+    if (!storageKey || done) return
     try {
       sessionStorage.setItem(`pda_flow_${storageKey}`, JSON.stringify({ stepId, context }))
     } catch { /* ignore */ }
-  }, [stepId, context, storageKey])
+  }, [stepId, context, storageKey, done])
 
   const currentStep = flow.steps.find(s => s.id === stepId) ?? flow.steps[0]
 
@@ -108,7 +116,7 @@ export function usePdaFlow<C extends Record<string, unknown>>(
         ok(result.message)
         if (result.nextStep === '__done__') {
           setDone(true)
-          if (storageKey) sessionStorage.removeItem(`pda_flow_${storageKey}`)
+          if (storageKey) removeFlowDraft(storageKey)
           onCompleteRef.current?.(result.context ? { ...context, ...result.context } : context)
         } else if (result.nextStep) {
           setStepId(result.nextStep)
@@ -135,7 +143,7 @@ export function usePdaFlow<C extends Record<string, unknown>>(
     setStepId(flow.initialStep)
     setContext(initialContext)
     setDone(false)
-    if (storageKey) sessionStorage.removeItem(`pda_flow_${storageKey}`)
+    if (storageKey) removeFlowDraft(storageKey)
   }, [flow.initialStep, initialContext, storageKey])
 
   // ── 步骤进度（用于 UI 渲染步骤条）────────────────────────────────────────

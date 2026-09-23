@@ -265,7 +265,8 @@ async function deductFromContainers(conn, {
 }) {
   const { roundQty } = require('../utils/unitConversion')
   assertQtyScale(qty, '扣减数量')
-  const absQty = roundQty(Math.abs(qty))
+  if (!(Number(qty) > 0)) throw new AppError('扣减数量必须大于零', 400, 'INVALID_DEDUCTION_QTY')
+  const absQty = roundQty(Number(qty))
 
   // 加行锁读取可动用的 ACTIVE 容器，FEFO 优先（有效期的先到期先出，无效期回退 FIFO），
   // 同时读取批次信息供调拨保留使用。
@@ -625,6 +626,23 @@ async function transferContainers(conn, {
   return { fromBefore, fromAfter, toBefore, toAfter, deducted, firstNewContainerId }
 }
 
+/** 库存维度锁内检查盘亏后仍能支撑现货预占；预计绑定不占用当前实物。 */
+async function assertStockcheckLossSupported(conn, { productId, warehouseId, lossQty, productName = '该商品' }) {
+  const { roundQty } = require('../utils/unitConversion')
+  const { quantity, reserved } = await getStockProjection(conn, { productId, warehouseId, lock: true })
+  // 已持库存维度锁；上架兑现、占库和释放绑定也遵循库存→绑定顺序。
+  const [bindings] = await conn.query(
+    `SELECT qty FROM sale_order_expected_bindings
+     WHERE product_id=? AND warehouse_id=? AND released_at IS NULL ORDER BY id FOR UPDATE`,
+    [productId, warehouseId],
+  )
+  const expectedReserved = roundQty(bindings.reduce((sum, row) => sum + Number(row.qty), 0))
+  const physicalReserved = Math.max(0, roundQty(reserved - expectedReserved))
+  if (roundQty(quantity - lossQty) < physicalReserved) {
+    throw new AppError(`商品「${productName}」盘亏后库存不足以保留已占用的现货，请先调整或释放相关销售单占库，再提交盘点`, 409, 'STOCKCHECK_RESERVED_SHORTAGE')
+  }
+}
+
 /**
  * 盘点容器调整
  *
@@ -685,6 +703,7 @@ async function adjustContainersForStockcheck(conn, {
     await promotePendingContainerToActive(conn, r.containerId, productId, warehouseId)
     createdContainerId = r.containerId
   } else if (diffQty < 0) {
+    await assertStockcheckLossSupported(conn, { productId, warehouseId, lossQty: -diffQty, productName })
     const ded = await deductFromContainers(conn, {
       productId,
       productName,
@@ -1318,6 +1337,7 @@ module.exports = {
   getAvailableStockForDecision,
   transferContainers,
   adjustContainersForStockcheck,
+  assertStockcheckLossSupported,
   adjustContainerStock,
   genBarcode,
   lockContainer,

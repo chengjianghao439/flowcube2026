@@ -63,6 +63,7 @@ async function loadPdaSession(token) {
 
 function buildPdaContext(row) {
   return {
+    userId: Number(row.user_id),
     deviceId: Number(row.device_id),
     deviceCode: row.device_code,
     warehouseId: row.session_warehouse_id ?? row.device_warehouse_id ?? null,
@@ -95,6 +96,10 @@ function pdaSessionRequired() {
 
     if (!row) {
       return denySession(req, next, 'session_not_found', '设备会话无效，请重新登录以重建设备会话')
+    }
+    if (!Number.isSafeInteger(Number(req.user?.userId)) || Number(req.user.userId) <= 0 ||
+        Number(row.user_id) !== Number(req.user.userId)) {
+      return denySession(req, next, 'user_mismatch', '设备登录信息与当前账号不一致，请重新登录')
     }
     if (row.revoked_at) {
       return denySession(req, next, 'session_revoked', '该设备会话已被管理员吊销，请联系管理员')

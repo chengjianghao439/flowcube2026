@@ -129,6 +129,8 @@
     "smoke:audit-remediation": "node --test --test-concurrency=1 tests/audit-remediation-security.smoke.test.js tests/audit-remediation-pda.smoke.test.js",
     "smoke:accounting-sale-period": "node --test tests/accounting-sale-period.smoke.test.js",
     "smoke:nginx-headers": "node --test tests/nginx-security-headers.smoke.test.js",
-    "test:dirty-navigation": "node scripts/browser-smoke/dirty-navigation.cjs"
+    "test:dirty-navigation": "node scripts/browser-smoke/dirty-navigation.cjs",
+    "test:confirmed-audit": "node --test tests/confirmed-audit.test.js tests/confirmed-inventory.test.js tests/confirmed-manual-request.test.js tests/confirmed-audit-money.test.js tests/ci-ssh-security.test.js tests/procurement-pagination.test.js",
+    "smoke:confirmed-audit": "node --test tests/confirmed-audit.smoke.test.js"
   }
 }

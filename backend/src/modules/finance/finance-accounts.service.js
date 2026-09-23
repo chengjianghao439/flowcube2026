@@ -1,3 +1,4 @@
+const { moneyUnits, moneyText } = require('../../utils/decimalMoney')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { beijingTodayYmd } = require('../../utils/backendTime')
@@ -67,7 +68,7 @@ function fmtTransaction(row) {
  * 这是 current_balance 的**唯一**合法写入口。流水聚合必须当前读：调用方可能已由
  * 单号前缀等普通 SELECT 建立 RR 快照，仅锁账户行无法刷新那份旧快照。
  */
-async function refreshBalance(conn, accountId) {
+async function refreshBalance(conn, accountId, { asText = false } = {}) {
   const [[acc]] = await conn.query('SELECT opening_balance FROM finance_accounts WHERE id=? FOR UPDATE', [accountId])
   if (!acc) throw new AppError('账户不存在', 404)
   const [[agg]] = await conn.query(
@@ -75,9 +76,9 @@ async function refreshBalance(conn, accountId) {
        FROM finance_account_transactions WHERE account_id = ? FOR UPDATE`,
     [accountId],
   )
-  const balance = Number(acc.opening_balance) + Number(agg.delta)
+  const balance = moneyText(moneyUnits(acc.opening_balance) + moneyUnits(agg.delta))
   await conn.query('UPDATE finance_accounts SET current_balance=? WHERE id=?', [balance, accountId])
-  return balance
+  return asText ? balance : Number(balance)
 }
 
 /**
@@ -105,9 +106,9 @@ async function recordTransaction(conn, {
     [id, Number(direction), value, Number(bizType), bizId, bizNo, partyName,
      happenedAt, remark, operator.operatorId ?? null, operator.operatorName ?? null],
   )
-  const balance = await refreshBalance(conn, id)
+  const balance = await refreshBalance(conn, id, { asText: true })
   await conn.query('UPDATE finance_account_transactions SET balance_after=? WHERE id=?', [balance, r.insertId])
-  return { id: r.insertId, balanceAfter: balance }
+  return { id: r.insertId, balanceAfter: Number(balance) }
 }
 
 async function findAll({ keyword = '', type = '', isActive = '' } = {}) {
