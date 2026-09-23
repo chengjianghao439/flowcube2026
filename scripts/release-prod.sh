@@ -64,6 +64,8 @@ trap 'exit 130' INT TERM
 export FLOWCUBE_RELAY_SSH_TARGET="${FLOWCUBE_RELAY_SSH_TARGET:-flowcube-prod}"
 export FLOWCUBE_RELAY_PROXY="${FLOWCUBE_RELAY_PROXY:-${HTTPS_PROXY:-${https_proxy:-}}}"
 [ -n "$FLOWCUBE_RELAY_PROXY" ] || { echo '!! 缺少本机代理地址 FLOWCUBE_RELAY_PROXY / HTTPS_PROXY，拒绝发布'; exit 1; }
+# 本机别名可连通不代表 Actions 使用的域名也在仓库可信主机键中。
+bash scripts/check-release-ssh-trust.sh
 command -v python3 >/dev/null 2>&1 || { echo '!! 本地中转需要 python3'; exit 1; }
 FLOWCUBE_RELAY_PREFLIGHT_ONLY=1 python3 scripts/local-release-relay.py
 python3 scripts/local-release-relay.py &

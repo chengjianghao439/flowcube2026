@@ -122,7 +122,7 @@ Electron 使用 `file://` 打开页面时没有浏览器域名，旧逻辑会默
    npm run release:prod
    ```
 
-`release:prod` 在 push 前预检本机现有代理（`HTTPS_PROXY`）与 `flowcube-prod` SSH 别名，启动原 CI artifact 自动中转并保持 Mac 在线；缺配置就停下。入口随后推送 main、等待同 SHA 检查/浏览器/PDA、推送新 tag、等待对应 tag 桌面发布和线上核对。CI 内的 HTTPS/SCP 只作故障回退，不是另一套人工发布命令。仅全部通过才返回成功。发布后可重复只读验收：
+`release:prod` 在 push 前离线校验 GitHub Actions 的可信主机键是否包含部署域名和端口，再预检本机现有代理（`HTTPS_PROXY`）与 `flowcube-prod` SSH 别名，启动原 CI artifact 自动中转并保持 Mac 在线；缺配置就停下。入口随后推送 main、等待同 SHA 检查/浏览器/PDA、推送新 tag、等待对应 tag 桌面发布和线上核对。PDA 对每次 main push 都建立运行，同版由前置门跳过构建。中转的大分段断流会缩小失败区间重试，保留已完成分段。CI 内的 HTTPS/SCP 只作故障回退，不是另一套人工发布命令。仅全部通过才返回成功。发布后可重复只读验收：
 
 ```bash
 npm run release:verify -- --origin https://<生产域名>
@@ -159,7 +159,7 @@ npm run release:verify -- --origin https://<生产域名>
    ```bash
    node scripts/publish-release-asset.cjs --tag v<版本> --version <版本> --file <exe>
    ```
-   该脚本会在附件校验通过后才把 Release 从草稿转正。不要在本机重新构建 exe，也不要重跑 tag 构建——重跑会用新摘要覆盖 `latest.json`，与已传附件对不上。
+   该脚本会在附件校验通过后才把 Release 从草稿转正。不要在本机重新构建 exe；**正式包、清单或附件已写入后**不要重跑 tag 构建，重构建可能生成不同字节并使摘要对不上。若 tag 首次运行在这些写入之前就因传输失败，可核对 tag 与原发布 SHA 后重跑同一工作流 attempt，详见发布技能的「传输故障」。
 
 ## 本地跳过检查（仅应急）
 

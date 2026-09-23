@@ -145,6 +145,23 @@ class RelayTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             with self.assertRaises(RuntimeError): relay.download_ranges(10,pathlib.Path(directory),lambda:'signed',fetch,chunk=10,workers=1)
 
+    def test_failed_large_range_uses_small_ranges_without_redownloading_good_ranges(self):
+        chunk = 1024 * 1024
+        payload = bytes(range(256)) * (2 * chunk // 256)
+        requests = []
+        def fetch(address, lo, hi, dest):
+            requests.append((lo, hi))
+            if lo == chunk and hi == 2 * chunk - 1:
+                raise RuntimeError('large range stalls')
+            dest.write_bytes(payload[lo:hi+1])
+        with tempfile.TemporaryDirectory() as directory:
+            result = relay.download_ranges(len(payload), pathlib.Path(directory), lambda: 'signed', fetch,
+                                           chunk=chunk, workers=2)
+            self.assertEqual(result.read_bytes(), payload)
+        self.assertEqual(requests.count((0, chunk - 1)), 1)
+        self.assertEqual(requests.count((chunk, 2 * chunk - 1)), 3)
+        self.assertTrue(any(lo >= chunk and hi - lo + 1 <= 256 * 1024 for lo, hi in requests))
+
     def test_ready_is_retained_until_workflow_completes(self):
         from unittest.mock import patch
         instance = object.__new__(relay.Relay)

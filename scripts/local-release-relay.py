@@ -102,17 +102,40 @@ def download_ranges(size, directory, url_provider, fetch_range, chunk=2*1024*102
     def fetch(index):
         lo, hi = index * chunk, min(size - 1, (index + 1) * chunk - 1)
         part = directory / ('range-' + str(index))
-        previous = None
-        for attempt in range(3):
-            url = signed_url(previous)
-            try:
-                fetch_range(url, lo, hi, part)
-                if part.stat().st_size == hi - lo + 1:
-                    return index
-            except (RuntimeError, OSError, subprocess.SubprocessError):
-                pass
-            previous = url
-        raise RuntimeError('Artifact range download failed after bounded retries')
+        def fetch_piece(start, end, target):
+            previous = None
+            for attempt in range(3):
+                url = signed_url(previous)
+                try:
+                    fetch_range(url, start, end, target)
+                    if target.stat().st_size == end - start + 1:
+                        return True
+                except (RuntimeError, OSError, subprocess.SubprocessError):
+                    pass
+                previous = url
+            return False
+        if fetch_piece(lo, hi, part):
+            return index
+        # Some routes consistently stall on a 2 MiB request. Keep completed
+        # ranges, then retry only this range in bounded 256 KiB pieces.
+        if hi - lo + 1 <= 256 * 1024:
+            raise RuntimeError('Artifact range download failed after bounded retries')
+        pieces = []
+        try:
+            for offset in range(lo, hi + 1, 256 * 1024):
+                end = min(hi, offset + 256 * 1024 - 1)
+                piece = directory / ('range-' + str(index) + '-sub-' + str(len(pieces)))
+                pieces.append(piece)
+                if not fetch_piece(offset, end, piece):
+                    raise RuntimeError('Artifact subrange download failed after bounded retries')
+            with part.open('wb') as dest:
+                for piece in pieces:
+                    with piece.open('rb') as src:
+                        shutil.copyfileobj(src, dest)
+            return index
+        finally:
+            for piece in pieces:
+                piece.unlink(missing_ok=True)
     with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
         futures = [pool.submit(fetch, index) for index in range(count)]
         for completed, future in enumerate(concurrent.futures.as_completed(futures), 1):

@@ -54,6 +54,8 @@ description: >-
   git pull --ff-only origin main
   ```
 - 确认要发布的代码改动已经合并进 main（发版是给「已经在 main 上的东西」打版本，不是顺便合特性）。
+- `release:prod` 会在 push 前从 GitHub 仓库变量读取 `FLOWCUBE_SSH_KNOWN_HOSTS`，按 CI 部署配置中的**域名与端口**离线校验。只含本机 SSH 别名或服务器 IP 的记录不能通过；修正前先用独立渠道核实公钥，不能以 `ssh-keyscan` 现场结果代替核验。
+- 若本版新增迁移，先按 `docs/verification-commands.md` 在独立 MySQL 8 测试库完整迁移，并覆盖 CI 默认排序规则 `utf8mb4_0900_ai_ci`；临时表字符列与被比较的业务列需显式对齐。v0.11.0 的角色迁移曾因本地库与 CI 库排序规则不同，在推送后才暴露失败。
 
 ### 1. 决定新版本号
 - 看当前版本：`node -p "require('./desktop/package.json').version"`
@@ -114,7 +116,7 @@ git commit -m "release: 发布 v<version> — <一句话主题>"
 ```bash
 npm run release:prod
 ```
-入口在 push 前强制预检本机代理和 `flowcube-prod` SSH 别名，启动自动中转并保持 Mac 在线；缺少代理或 SSH 不通就停止，不悄悄改走已多次超时的服务器直连。它推送 main，等待同 SHA 的 Tests、Security、Browser、PDA 和桌面验证构建，再打 tag、等待桌面正式发布并核对线上三端。中转下载 GitHub 原 artifact ZIP，检查摘要与唯一文件，SSH 交付后由服务器再次核对 runner 的原包大小/SHA-256；CI 的 HTTPS/SCP 仅作有界故障回退，不是操作者要选择的发布方式。代码修复本身不构成推送/发版授权。
+入口在 push 前强制预检 CI SSH 可信主机键、本机代理和 `flowcube-prod` SSH 别名，启动自动中转并保持 Mac 在线；预检失败就停止，不悄悄改走已多次超时的服务器直连。它推送 main，等待同 SHA 的 Tests、Security、Browser、PDA 和桌面验证构建，再打 tag、等待桌面正式发布并核对线上三端。中转下载 GitHub 原 artifact ZIP；大分段连续失败后仅把该分段缩为 256 KiB 子区间，保留其他已成功分段，最后检查归档摘要与唯一文件。SSH 交付后由服务器再次核对 runner 的原包大小/SHA-256；CI 的 HTTPS/SCP 仅作有界故障回退。代码修复本身不构成推送/发版授权。
 
 Mac 的现有 HTTP 代理应由 `HTTPS_PROXY` 提供；SSH 别名默认 `flowcube-prod`。只有本机配置变化时才更新本机环境或 `FLOWCUBE_RELAY_SSH_TARGET` / `FLOWCUBE_RELAY_PROXY`，先做预检再发布。入口负责中转进程、SSH 控制连接与临时文件的收尾。保留完整门禁和回退窗口，不设固定 15 分钟目标。
 
@@ -161,9 +163,7 @@ GitHub 不报错，只是干等（旧 PDA 等待上限 25 分钟，期间线上�
 
 #### PDA 没跟上时（`Build PDA APK` 失败 / 被取消 / 根本没触发）
 
-`Build PDA APK` 的 push 触发带路径过滤（`frontend/**`、`backend/apk/version.json` 等）：**只改
-测试或文档的后续提交不会触发它**，所以补跑要在**已部署的发布提交**上做，并显式指定提交，
-不要依赖当前 main HEAD（HEAD 可能已经是带 `[skip ci]` 的文档提交，那个提交永远不会有部署）：
+`Build PDA APK` 现对每次 `main` push 建立运行，避免后端迁移等路径外修复提交漏掉 PDA；已发布同版由 `preflight` 跳过构建。工作流失败、取消或被 `[skip ci]` 跳过时，补跑仍须在**已部署的发布提交**上做，并显式指定提交，不依赖当前 main HEAD：
 
 ```bash
 gh workflow run build-pda-apk.yml --ref main -f checkout_ref=<完整的40位发布提交SHA>
@@ -178,7 +178,7 @@ gh workflow run build-pda-apk.yml --ref main -f checkout_ref=<完整的40位发�
   （通常是把三端与 PDA 版本分开提交造成的，用 `bump-version.sh` 一次性同步再发）；
 - 目标版本**已经发布**（线上 `/api/pda/version` 的版本号与 versionCode 都是这一版）→ 整条构建
   跳过并记为成功。原因：`publish-pda.sh` 拒绝「同一 versionCode 换成不同字节的安装包」，客户端也
-  不会因此更新；发版后再改 `frontend/**`（或改本工作流文件）会触发构建，旧行为是白构建再变红。
+  不会因此更新；后续 main 提交无需重建相同版本。
   **要发新安装包必须提升版本号**，不要试图覆盖同 versionCode 的包。
 
 ## 排查：桌面端检测不到更新
@@ -220,6 +220,8 @@ v0.10.8 的原始桌面 tag 运行中，服务器 HTTPS 接收约 150 秒后失�
 
 同一工作流重跑时 GitHub 会暂留上次 attempt 的同名 artifact；`local-release-relay.py` 必须按本次 `run_started_at` 过滤旧 artifact，等新产物出现，不能把等待当作失败重试耗尽。中转的 `ready` 不等于接收成功；等目标工作流结束后确认实走路径、在线清单和 EXE/APK 实际下载摘要。若中转或工作流失败，先保留原运行和产物、读取失败步骤日志，再针对失败的运行恢复；不要改写同版本线上包或跳过门禁。生产清理遵守磁盘 IO 预检约束。
 
+若桌面 tag 运行在**正式包、清单与 Release 附件写入前**因传输失败而取消或失败，可以核对 tag 仍指向原发布 SHA，重跑**同一工作流**的下一 attempt，并让本机中转跟随新 attempt；无需升版本或新建 tag。`release:prod` 不能在 tag 已存在时重新从头执行。若任何同版本包、清单或附件已写入，先比较原包摘要并选用上面的原包恢复入口，不能让重构建覆盖已发布字节。v0.11.0 的首次桌面运行属前一种情形，第二次 attempt 才是成功证据。
+
 ## 回滚
 
 发完发现这一版有问题、要把桌面更新指回上一版：
@@ -238,6 +240,6 @@ node scripts/release-desktop.js <旧version> --rollback
 - **发版必须同步官网更新摘要** `frontend/src/pages/landing/updates.ts`（官网只读它，不读 package 版本）；`npm run test:landing-updates` 会拦住「bump 了却没同步」。
 - **桌面正式包只能由 GitHub Actions 的 Windows runner 构建**。本机 Mac 的 `makensis` 可能被污染，打出的 exe 在部分 Windows 上「双击无反应」。本机只用于开发调试。
 - **不要手工复制 exe 到发布目录**。必须经 `release-desktop.js`，它负责生成 `metadata.json` / `latest.json` / `current/version.txt` 并强制 `latest.json` 指向 `/versions/`。
-- **tag 不可复用**：同一版本号的 tag 已存在就不能再发，必须升版本。`release-desktop-tag.sh` 会拦截重复 tag。
+- **tag 不可改指向另一个提交**：新一版不能复用已有版本号或覆盖已有正式包；`release-desktop-tag.sh` 会拦截重复创建。原 tag 工作流在尚未写入正式包时，可按上文核对后重跑同一 tag 的工作流 attempt。
 
 完整背景见 `docs/RELEASE.md`。

@@ -25,6 +25,32 @@ test('正式入口缺少本机代理时在 push main 前拒绝发布', () => {
   } finally { fs.rmSync(temp, { recursive: true, force: true }) }
 })
 
+test('发布前用 CI 实际域名校验可信主机键，只有 IP 时拒绝', () => {
+  const fs = require('node:fs'), os = require('node:os'), path = require('node:path')
+  const { spawnSync } = require('node:child_process')
+  const root = path.resolve(__dirname, '..')
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'flowcube-ssh-preflight-'))
+  const bin = path.join(temp, 'bin'), hosts = path.join(temp, 'hosts'), key = path.join(temp, 'hostkey')
+  fs.mkdirSync(bin)
+  const generated = spawnSync('ssh-keygen', ['-q', '-t', 'ed25519', '-N', '', '-f', key], { encoding: 'utf8' })
+  assert.equal(generated.status, 0, generated.stderr)
+  fs.writeFileSync(path.join(bin, 'node'), '#!/bin/sh\ncase "$2" in server.host) echo deploy.example.test;; server.sshPort) echo 22;; esac\n', { mode: 0o755 })
+  fs.writeFileSync(path.join(bin, 'gh'), '#!/bin/sh\n[ "$1" = variable ] && [ "$2" = get ] && [ "$3" = FLOWCUBE_SSH_KNOWN_HOSTS ] || exit 1\ncat "$RELEASE_TEST_HOSTS"\n', { mode: 0o755 })
+  const pubkey = fs.readFileSync(key + '.pub', 'utf8').trim().split(' ').slice(0, 2).join(' ')
+  const run = () => spawnSync('bash', ['scripts/check-release-ssh-trust.sh'], { cwd: root, encoding: 'utf8', timeout: 5000,
+    env: { ...process.env, PATH: bin + ':' + process.env.PATH, GITHUB_REPOSITORY: 'fixture/repo', RELEASE_TEST_HOSTS: hosts } })
+  try {
+    fs.writeFileSync(hosts, `192.0.2.10 ${pubkey}\n`)
+    const mismatch = run()
+    assert.notEqual(mismatch.status, 0, mismatch.stdout + mismatch.stderr)
+    assert.match(mismatch.stdout + mismatch.stderr, /可信主机键|目标主机/)
+    fs.writeFileSync(hosts, `deploy.example.test,192.0.2.10 ${pubkey}\n`)
+    const matched = run()
+    assert.equal(matched.status, 0, matched.stdout + matched.stderr)
+    assert.doesNotMatch(matched.stdout + matched.stderr, new RegExp(pubkey.split(' ')[1]))
+  } finally { fs.rmSync(temp, { recursive: true, force: true }) }
+})
+
 for (const scenario of ['changed-head', 'changed-version', 'same']) {
   test(`等待期间源码变化不能导致给另一提交打 tag：${scenario}`, () => {
     const { publishTagForCommit } = require('../scripts/complete-release')
@@ -49,6 +75,16 @@ test('桌面 Release 附件失败不能被 continue-on-error 伪装为完整发�
   const step = wf.jobs.build.steps.find(s => s.name === 'Upload EXE to Release')
   assert.ok(step)
   assert.notEqual(step['continue-on-error'], true)
+})
+
+test('PDA 发布检查覆盖每次 main 推送，不能被源码路径过滤漏掉', () => {
+  const fs = require('node:fs'), path = require('node:path')
+  const root = path.resolve(__dirname, '..')
+  const yaml = require(path.join(root, 'frontend/node_modules/js-yaml'))
+  const wf = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/build-pda-apk.yml'), 'utf8'))
+  assert.deepEqual(wf.on.push.branches, ['main'])
+  assert.equal(wf.on.push.paths, undefined)
+  assert.match(wf.jobs['build-pda'].concurrency.group, /github\.sha/)
 })
 
 test('桌面发布等待对应 tag，不能把 main 验证构建当成发布成功', () => {
