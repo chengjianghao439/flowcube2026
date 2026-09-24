@@ -47,7 +47,7 @@ export default function AssignSortingBinDialog({ open, onClose, warehouseId, onA
     <DialogContent className="max-w-2xl">
       <DialogHeader><DialogTitle>补分配分拣格</DialogTitle></DialogHeader>
       <p className="text-sm text-muted-foreground">仅列出拣货中或待分拣、尚未占格且无取消或改单挂起的任务。系统从任务所属仓库选择空闲格。</p>
-      {query.isPending && <p role="status" className="text-sm">正在读取待分配任务…</p>}
+      {query.isPending && <p role="status" className="text-sm">正在加载待分配任务…</p>}
       {query.isError && <div role="alert" className="text-sm">读取失败：{query.error.message}<Button variant="outline" size="sm" onClick={() => void query.refetch()}>重试</Button></div>}
       {pending && pending.list.length === 0 && <p className="text-sm text-muted-foreground">当前筛选范围内没有待分配任务。</p>}
       {pending && pending.list.length > 0 && <div className="max-h-96 divide-y overflow-y-auto rounded-md border">

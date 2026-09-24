@@ -222,7 +222,7 @@ export default function ReserveAllocationDialog({ open, orderId, onClose, onShor
                           <div className="mt-1 text-[11px] text-muted-foreground">可承诺量（ATP）</div>
                           <div className="mt-2 space-y-0.5 text-[11px] text-muted-foreground">
                             <div>现货 {physical} · 已占 {warehouseReserved}</div>
-                            <div>当前未锁容器现货 {pickable}（可拣参考）</div>
+                            <div>当前可拣现货 {pickable}（作业参考）</div>
                             <div>预计到货 {expected}</div>
                           </div>
                           {available > pickable && <div className="mt-1 text-[11px] text-warning">可承诺量包含在途或暂被其他任务锁定的库存，当前可能无法立即拣货</div>}

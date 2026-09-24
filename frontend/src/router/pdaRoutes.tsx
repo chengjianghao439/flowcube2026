@@ -14,9 +14,9 @@ function PdaBindingHydrationGate() {
     void initDeviceBinding().then(ok => { if (active) setStatus(ok ? 'ready' : 'failed') })
     return () => { active = false }
   }, [])
-  if (status === 'loading') return <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">正在读取本机设备缓存…</div>
+  if (status === 'loading') return <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">正在加载设备信息…</div>
   if (status === 'failed') return <div role="alert" className="flex min-h-screen flex-col items-center justify-center gap-3 p-6 text-center text-sm">
-    <p>本机设备缓存读取失败，请重新绑定设备。</p>
+    <p>设备信息加载失败，请重新绑定设备。</p>
     <button type="button" className="rounded-md bg-primary px-4 py-2 text-primary-foreground" onClick={() => setStatus('ready')}>继续重新绑定</button>
   </div>
   return <Outlet />

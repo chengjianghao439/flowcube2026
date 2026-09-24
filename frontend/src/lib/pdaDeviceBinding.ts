@@ -64,7 +64,7 @@ export function initDeviceBinding(): Promise<boolean> {
       ])
       const credential = parse<PdaDeviceCredential>(credRaw)
       const session = parse<PdaDeviceSession>(sessRaw)
-      if ((credRaw && !credential) || (sessRaw && !session)) throw new Error('设备缓存内容损坏')
+      if ((credRaw && !credential) || (sessRaw && !session)) throw new Error('设备信息损坏')
       cachedCredential = credential
       cachedSession = session
       hydrationFailed = false
