@@ -3,14 +3,13 @@ import { useQuery, useMutation } from '@tanstack/react-query'
 import { AppDialog } from '@/components/shared/AppDialog'
 import { Button } from '@/components/ui/button'
 import { confirmPaymentApi, getSettlementDetailApi } from '@/api/payments'
-import type { PaymentRecord } from '@/api/payments'
 import { toast } from '@/lib/toast'
 import { usePaymentViewInvalidation } from './usePaymentViewInvalidation'
 
 interface Props {
   open: boolean
   onClose: () => void
-  record: PaymentRecord | null
+  record: Pick<import('@/api/payments').PaymentRecord, 'id' | 'orderNo' | 'totalAmount'> | null
 }
 
 /**

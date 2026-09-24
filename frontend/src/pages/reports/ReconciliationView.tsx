@@ -19,6 +19,9 @@ import { ReceiptPanel, type ReceiptPanelHandle } from '@/components/shared/Recei
 import { StatementPanel, type StatementPanelHandle } from '@/components/shared/StatementPanel'
 import { PaymentQueryDialog, PaymentQueryBar, EMPTY_PAYMENT_QUERY, type PaymentQueryValues } from '@/components/shared/PaymentQueryDialog'
 import { SETTLEMENT_TYPE } from '@/generated/status'
+import { PERMISSIONS } from '@/lib/permission-codes'
+import { usePermission } from '@/hooks/usePermission'
+import { SettlementConfirmDialog } from '@/components/shared/payments/SettlementConfirmDialog'
 import type { TableColumn } from '@/types'
 
 export type StatementType = 1 | 2
@@ -67,6 +70,8 @@ export default function ReconciliationView({ type }: { type: StatementType }) {
   const copy = COPY[type]
   // 第一期：对账明细 + 收款核销。第二期会把「对账明细」换成汇总对账单。
   const active = useActiveWorkspaceTab()
+  const { can } = usePermission()
+  const [confirmRecord, setConfirmRecord] = useState<ReconciliationRecord | null>(null)
   const [tab, setTab] = useState<'statements' | 'receipts' | 'records'>('statements')
   // 查询条件统一收在弹窗里；不设默认日期，进来即全量（可在查询弹窗里自行按日期筛）
   const [query, setQuery] = useState<PaymentQueryValues>(EMPTY_PAYMENT_QUERY)
@@ -154,22 +159,25 @@ export default function ReconciliationView({ type }: { type: StatementType }) {
             />
           )}
           {overdue && <SoftStatusLabel label="逾期" tone="danger" />}
+          {type === 1 && record.confirmStatus === 0 && <SoftStatusLabel label="待确认" tone="warning" />}
         </div>
       )
     } },
-    { key: 'dueDate', title: '到期日', width: 120, render: v => v ? String(v) : <span className="text-muted-foreground">-</span> },
+    { key: 'dueDate', title: '到期日', width: 120, render: v => v ? formatDisplayDate(String(v)) : <span className="text-muted-foreground">-</span> },
     { key: 'createdAt', title: '创建时间', width: 160, render: v => formatDisplayDateTime(String(v)) },
     { key: 'id', title: '操作', width: 120, render: (_, row) => {
       const r = row as ReconciliationRecord
-      // 与其他页面一致：主按钮 + 下拉次操作。月结不做单笔登记，这里只有单据跳转
+      // 月结账款只能通过对账单核销；待确认应付先由财务核对上架结算。
+      const pendingConfirmation = type === 1 && r.confirmStatus === 0 && can(PERMISSIONS.PAYMENT_CONFIRM)
       const items: TableActionItem[] = []
+      if (pendingConfirmation && r.sourcePath) items.push({ label: '原单', onClick: () => openPath(r.sourcePath, `原单 ${r.sourceOrderNo}`) })
       if (r.receiptPath) items.push({ label: '收货单', onClick: () => openPath(r.receiptPath, `收货单 ${r.receiptTaskNo}`) })
       return (
         <TableActionsMenu
-          primaryLabel="原单"
-          primaryVariant="outline"
-          primaryDisabled={!r.sourcePath}
-          onPrimaryClick={() => openPath(r.sourcePath, `原单 ${r.sourceOrderNo}`)}
+          primaryLabel={pendingConfirmation ? '确认结算' : '原单'}
+          primaryVariant={pendingConfirmation ? 'default' : 'outline'}
+          primaryDisabled={!pendingConfirmation && !r.sourcePath}
+          onPrimaryClick={() => pendingConfirmation ? setConfirmRecord(r) : openPath(r.sourcePath, `原单 ${r.sourceOrderNo}`)}
           items={items}
         />
       )
@@ -261,6 +269,12 @@ export default function ReconciliationView({ type }: { type: StatementType }) {
         />
       )}
       </KeepAliveSection>
+
+      <SettlementConfirmDialog
+        open={!!confirmRecord}
+        record={confirmRecord}
+        onClose={() => setConfirmRecord(null)}
+      />
 
     </div>
   )
