@@ -1,4 +1,4 @@
-type PrintStatusKey = 'no_job' | 'queued' | 'printing' | 'success' | 'failed' | 'timeout' | 'cancelled' | 'unknown' | string
+type PrintStatusKey = 'no_job' | 'unassigned' | 'queued' | 'printing' | 'success' | 'failed' | 'timeout' | 'cancelled' | 'unknown' | string
 
 const BACKEND_CODE_LABELS: Record<string, string> = {
   PRINT_JOB_STATE_CONFLICT: '打印任务状态已变化，请刷新后重试',
@@ -16,6 +16,7 @@ const BACKEND_CODE_LABELS: Record<string, string> = {
 
 const PRINT_STATUS_LABELS: Record<string, string> = {
   no_job: '尚未生成打印任务',
+  unassigned: '未配置打印机，绑定打印机后到打印记录补打',
   queued: '打印任务已生成，等待打印客户端领取',
   printing: '打印中',
   success: '已打印',

@@ -69,10 +69,15 @@ function normalizeBarcodeQueryKeyword(raw) {
 function normalizeBarcodeRecordStatus(raw) {
   if (raw === undefined || raw === null || raw === '') return undefined
   const value = String(raw).trim().toLowerCase()
-  if (['no_job', 'pending', 'queued', 'printing', 'success', 'failed', 'timeout', 'cancelled'].includes(value)) {
+  if (['no_job', 'unassigned', 'pending', 'queued', 'printing', 'success', 'failed', 'timeout', 'cancelled'].includes(value)) {
     return value === 'pending' ? 'queued' : value
   }
   return undefined
+}
+
+// 无设备留档与 TTL 回收沿用同一错误文本，须结合设备归属区分；渲染失败不可误归为缺设备。
+function isUnassignedBarcodeJob(row, rawStatus) {
+  return rawStatus === STATUS.FAILED && row.printer_id === null && row.error_message === EXPIRE_MESSAGE
 }
 
 function deriveInboundBarcodeStatus(row, thresholds = DEFAULT_INBOUND_THRESHOLDS) {
@@ -85,6 +90,7 @@ function deriveInboundBarcodeStatus(row, thresholds = DEFAULT_INBOUND_THRESHOLDS
   const timeoutByError = rawStatus === STATUS.FAILED && isStalledErrorMessage(row.error_message)
 
   if (Number(row.inbound_task_status) === 5) return { statusKey: 'cancelled', printStateLabel: '已取消' }
+  if (isUnassignedBarcodeJob(row, rawStatus)) return { statusKey: 'unassigned', printStateLabel: '未配置打印机' }
   if (timeoutByAge || timeoutByError) return { statusKey: 'timeout', printStateLabel: '超时待确认' }
   if (rawStatus === STATUS.DONE) return { statusKey: 'success', printStateLabel: '已打印' }
   if (rawStatus === STATUS.FAILED) return { statusKey: 'failed', printStateLabel: '打印失败' }
@@ -98,6 +104,7 @@ function deriveGenericBarcodeStatus(row) {
   // 两者都为空必须落到 no_job —— 不能让 Number(null)===0 把「没有打印任务」误显示为「待派发」。
   const source = row.print_status != null ? row.print_status : row.status
   const rawStatus = source != null ? Number(source) : NaN
+  if (isUnassignedBarcodeJob(row, rawStatus)) return { statusKey: 'unassigned', printStateLabel: '未配置打印机' }
   if (rawStatus === STATUS.FAILED && isStalledErrorMessage(row.error_message)) {
     return { statusKey: 'timeout', printStateLabel: '超时待确认' }
   }

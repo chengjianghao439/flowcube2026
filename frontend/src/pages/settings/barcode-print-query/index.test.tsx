@@ -4,13 +4,15 @@ import { createRoot } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, expect, test, vi } from 'vitest'
 import BarcodePrintQueryPage from './index'
+import { BARCODE_PRINT_STATUS_OPTIONS } from './constants'
 
 const rows = vi.hoisted(() => [
   { recordId: 1, category: 'inbound', inboundTaskId: 1, bizNo: 'IT-1', latestJob: { statusKey: 'failed' } },
   { recordId: 2, category: 'inbound', inboundTaskId: 2, bizNo: 'IT-2', latestJob: { statusKey: 'failed' } },
   { recordId: 3, category: 'inbound', inboundTaskId: 2, bizNo: 'IT-2', latestJob: { statusKey: 'timeout' } },
   { recordId: 4, category: 'inbound', inboundTaskId: 1, bizNo: 'IT-1', latestJob: { statusKey: 'queued' } },
-])
+  { recordId: 5, category: 'inbound', inboundTaskId: 1, bizNo: 'IT-1', latestJob: { statusKey: 'unassigned' } },
+].map(row => ({ ...row, waveId: 11, waveNo: 'WAVE-11' })))
 vi.mock('@tanstack/react-query', () => ({
   useQuery: () => ({ data: { list: rows, pagination: { total: rows.length } }, isLoading: false }),
   useMutation: () => ({ mutate: vi.fn(), isPending: false }),
@@ -19,7 +21,16 @@ vi.mock('@tanstack/react-query', () => ({
 vi.mock('@/api/print-jobs', () => ({ getBarcodePrintRecordsApi: vi.fn(), reprintBarcodeRecordApi: vi.fn() }))
 vi.mock('@/store/workspaceStore', () => ({ useWorkspaceStore: () => vi.fn() }))
 vi.mock('@/hooks/useActiveWorkspaceTab', () => ({ useActiveWorkspaceTab: () => true }))
-vi.mock('@/components/shared/DataTable', () => ({ default: () => null }))
+vi.mock('@/components/shared/DataTable', () => ({
+  default: ({ columns, data }: {
+    columns: Array<{ key: string; render?: (value: unknown, row: unknown) => React.ReactNode }>
+    data: unknown[]
+  }) => <div>{data.map((row, index) => (
+    <div key={index}>{columns.filter(column => ['latestJob', 'printer'].includes(column.key)).map(column => (
+      <div key={column.key}>{column.render?.(undefined, row)}</div>
+    ))}</div>
+  ))}</div>,
+}))
 vi.mock('./BarcodePrintQueryDialog', () => ({ default: () => null }))
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 const host = document.createElement('div')
@@ -48,5 +59,22 @@ test('显式收货单上下文只统计该单，不能混入其他单失败和�
   const count = (label: string) => Array.from(host.querySelectorAll('p')).find(p => p.textContent === label)?.nextElementSibling?.textContent
   expect(count('打印失败')).toBe('1')
   expect(count('超时待确认')).toBe('0')
+  expect(count('仍在排队 / 打印中')).toBe('1')
+  expect(count('未配置打印机')).toBe('1')
+})
+
+test('未配置打印机有独立筛选、状态标签和补打引导', () => {
+  render('?inboundTaskId=1')
+  expect(BARCODE_PRINT_STATUS_OPTIONS).toContainEqual({ value: 'unassigned', label: '未配置打印机' })
+  expect(host.textContent).toContain('未配置打印机')
+  expect(host.textContent).toContain('绑定打印机后到打印记录补打')
+})
+
+test.each(['outbound', 'logistics'])('%s 的未配置计数不混入真正超时和普通失败', category => {
+  render(`?category=${category}`)
+  const count = (label: string) => Array.from(host.querySelectorAll('p')).find(p => p.textContent === label)?.nextElementSibling?.textContent
+  expect(count('未配置打印机')).toBe('1')
+  expect(count('超时待确认')).toBe('1')
+  expect(count('打印失败')).toBe('2')
   expect(count('仍在排队 / 打印中')).toBe('1')
 })

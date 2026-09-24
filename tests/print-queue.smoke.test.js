@@ -251,6 +251,54 @@ async function main() {
         (e) => e.code === 'PRINT_BARCODE_NO_PRINT_RECORD',
       )
     })
+    await check('三类打印记录 HTTP 筛选与计数区分未配置、TTL、失联和普通失败', async () => {
+      const [task] = await pool.query(
+        'INSERT INTO warehouse_tasks (task_no,sale_order_id,sale_order_no,customer_id,customer_name,warehouse_id,warehouse_name) VALUES (?,0,?,?,?,?,?)',
+        [`STAT${code}`, `SO${code}`, ctx.customer.id, ctx.customer.name, ctx.warehouse.id, ctx.warehouse.name],
+      )
+      let containerId, packageId
+      const jobIds = []
+      try {
+        const barcode = `STAT${code}`
+        containerId = await addContainer(barcode, 1)
+        const [pkg] = await pool.query('INSERT INTO packages (barcode,warehouse_task_id,status) VALUES (?,?,1)', [barcode, task.insertId])
+        packageId = pkg.insertId
+        for (const [category, refType, refId] of [['inbound', 'inventory_container', containerId], ['outbound', 'package', packageId], ['logistics', 'waybill', task.insertId]]) {
+          const [job] = await pool.query(
+            "INSERT INTO print_jobs (printer_id,warehouse_id,title,content_type,content,job_type,ref_type,ref_id,ref_code,status,error_message) VALUES (NULL,?,?,'zpl','^XA^XZ',?,?,?, ?,3,'no printer available')",
+            [ctx.warehouse.id, barcode, category === 'logistics' ? 'waybill' : 'container_label', refType, refId, barcode],
+          )
+          jobIds.push(job.insertId)
+          const samples = [
+            { printerId: null, error: 'no printer available', status: 'unassigned' },
+            { printerId: p.insertId, error: 'no printer available', status: 'timeout' },
+            { printerId: p.insertId, error: 'print client went offline', status: 'timeout' },
+            { printerId: null, error: 'label render failed: LABEL_RENDER_INVALID', status: 'failed' },
+          ]
+          for (const sample of samples) {
+            await pool.query('UPDATE print_jobs SET printer_id=?,error_message=? WHERE id=?', [sample.printerId, sample.error, job.insertId])
+            for (const status of ['unassigned', 'timeout', 'failed']) {
+              const response = await http.get(`/api/print-jobs/barcodes?category=${category}&keyword=${encodeURIComponent(barcode)}&status=${status}`, { token })
+              assert.equal(response.status, 200)
+              const result = response.data.data
+              const expectedCount = sample.status === status ? 1 : 0
+              assert.equal(result.list.length, expectedCount, `${category}/${sample.error}/${status}: list`)
+              assert.equal(Number(result.pagination.total), expectedCount, `${category}/${sample.error}/${status}: count`)
+              if (expectedCount) assert.equal(result.list[0].latestJob.statusKey, status, `${category}: derived state agrees with SQL`)
+            }
+          }
+        }
+      } finally {
+        if (jobIds.length) {
+          await pool.query('DELETE FROM print_jobs WHERE id IN (?)', [jobIds])
+          const [[{ remaining }]] = await pool.query('SELECT COUNT(*) AS remaining FROM print_jobs WHERE id IN (?)', [jobIds])
+          assert.equal(Number(remaining), 0)
+        }
+        if (containerId) await pool.query('DELETE FROM inventory_containers WHERE id=?', [containerId])
+        if (packageId) await pool.query('DELETE FROM packages WHERE id=?', [packageId])
+        await pool.query('DELETE FROM warehouse_tasks WHERE id=?', [task.insertId])
+      }
+    })
     await pool.query('DELETE FROM print_jobs WHERE ref_type=? AND ref_id IN (?)', ['inventory_container', fixtureIds])
     await pool.query('DELETE FROM inventory_containers WHERE id IN (?)', [fixtureIds])
     if (packageIds.length) {
