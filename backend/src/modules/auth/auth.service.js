@@ -236,23 +236,63 @@ async function refreshAccessToken(rawRefreshToken) {
 }
 
 /**
- * 登出：原子作废当前 refresh token 的 jti（迁移 221）。
- * 无 jti（老客户端）时静默成功——access 过期后自然失效。
+ * 登出：仅有效、未作废且与当前启用用户版本匹配的 refresh token 能返回可信身份。
+ * 无效/已用过的 token 静默成功并返回 null，不允许用请求体账号回填操作日志。
  */
 async function logout(rawRefreshToken) {
   const tokenStr = String(rawRefreshToken || '')
-  if (!tokenStr) return
+  if (!tokenStr) return null
   let decoded
   try {
-    decoded = jwt.verify(tokenStr, env.JWT_SECRET)
+    try {
+      decoded = jwt.verify(tokenStr, env.JWT_SECRET)
+    } catch (firstErr) {
+      if (!env.JWT_SECRET_PREVIOUS) throw firstErr
+      decoded = jwt.verify(tokenStr, env.JWT_SECRET_PREVIOUS)
+    }
   } catch {
-    return
+    return null
   }
-  if (!decoded.jti) return
-  await pool.query(
-    'UPDATE refresh_token_sessions SET revoked_at = NOW() WHERE jti = ? AND revoked_at IS NULL',
-    [decoded.jti],
-  )
+  if (decoded.tokenType !== 'refresh' || typeof decoded.jti !== 'string' || !decoded.jti) return null
+  const userId = Number(decoded.userId)
+  const tokenVersion = Number(decoded.tokenVersion)
+  if (!Number.isSafeInteger(userId) || userId <= 0 || !Number.isSafeInteger(tokenVersion)) return null
+
+  const conn = await pool.getConnection()
+  let actor = null
+  try {
+    await conn.beginTransaction()
+    const [[user]] = await conn.query(
+      `SELECT u.id, u.username, u.real_name, u.token_version, u.is_active
+         FROM refresh_token_sessions s
+         JOIN sys_users u ON u.id = s.user_id
+        WHERE s.jti = ? AND s.user_id = ? AND s.revoked_at IS NULL AND s.expires_at > NOW()
+          AND u.deleted_at IS NULL
+        FOR UPDATE`,
+      [decoded.jti, userId],
+    )
+    if (user?.is_active && tokenVersion === Number(user.token_version || 0)) {
+      if (await revokeJti(conn, decoded.jti)) {
+        actor = { userId: user.id, username: user.username, realName: user.real_name }
+      }
+    }
+    await conn.commit()
+  } catch (error) {
+    await conn.rollback()
+    throw error
+  } finally {
+    conn.release()
+  }
+  if (actor) {
+    await recordAuthAudit({
+      eventType: AUTH_AUDIT_EVENT.LOGOUT_SUCCESS,
+      title: '退出登录',
+      description: '有效会话已退出登录',
+      userId: actor.userId,
+      username: actor.username,
+    })
+  }
+  return actor
 }
 
 async function changePassword(userId, oldPassword, newPassword) {

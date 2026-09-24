@@ -87,8 +87,10 @@ function opLogger(req, res, next) {
     const operation = resolveOperation(req.method, requestPath, res.statusCode, body)
     setImmediate(async () => {
       try {
-        const userId = req.user?.userId || null
-        const userName = req.user?.username || req.user?.realName || null
+        // operationActor 只由认证控制器根据已验证的结果设置；公开登录/退出无 req.user。
+        const actor = req.operationActor || req.user
+        const userId = actor?.userId ?? null
+        const userName = actor?.username || actor?.realName || null
         const safe = sanitizeBody(req.body)
         const bodyStr = safe && Object.keys(safe).length
           ? JSON.stringify(safe).substring(0, 500)
@@ -105,7 +107,7 @@ function opLogger(req, res, next) {
             `INSERT INTO document_operation_events
              (document_type,document_id,operation_log_id,title,description,created_by,created_by_name)
              VALUES (?,?,?,?,?,?,?)`,
-            [operation.type, operation.id, logged.insertId, operation.title, reason, userId, req.user?.realName || userName],
+            [operation.type, operation.id, logged.insertId, operation.title, reason, userId, actor?.realName || userName],
           )
         }
       } catch (error) {

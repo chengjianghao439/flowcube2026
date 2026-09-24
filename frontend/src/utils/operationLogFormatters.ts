@@ -214,6 +214,11 @@ export function formatApiPath(path: unknown, method?: unknown, statusCode?: unkn
 
   if (!lower) return '未识别访问'
   if (isSensitivePath(lower)) return '外部探测敏感路径'
+  if (lower === '/api/auth/login') {
+    const code = Number(statusCode)
+    return code >= 200 && code < 300 ? '登录成功' : '登录失败'
+  }
+  if (lower === '/api/auth/logout') return '退出登录'
   if (lower === '/api/test' || lower.startsWith('/api/test?')) return '外部测试访问'
   if (lower === '/claim-client' || lower.endsWith('/claim-client')) return '打印客户端领取打印任务'
   if (lower === '/api/print-jobs/claim-client' || lower.includes('/print-jobs/claim-client')) return '打印客户端领取打印任务'
