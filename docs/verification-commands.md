@@ -74,6 +74,8 @@ npm run test:permissions
 
 `npm run smoke:warehouse-masterdata` 验证仓库、库位、货架和分拣格的真实 HTTP 管理接口、权限、仓库范围和引用保护；沿用本节独立测试库并按自有 ID 清理，已接入 Tests CI 专项矩阵。仓库详情/更新/删除及库位、货架、分拣格的创建/下拉/扫码读取均传入当前用户仓库范围；库位更新校验原仓及目标仓，分拣格商品扫码先限任务仓再取结果。货架更新查重按本仓执行，允许跨仓同码。详见 `docs/warehouse-masterdata-regression-2026-09-13.md`。
 
+`npm run smoke:sorting-bin-recovery` 在独立测试库用真实 HTTP 与 MySQL 验证主管补分配：权限/仓库范围、任务状态与挂起守卫、同键重放、无空格、强制释放及两个任务争同一空格的双向绑定；fixture 只按本次 ID 清理。见 `docs/warehouse-masterdata-regression-2026-09-13.md` 的 2026-09-24 补充记录。
+
 `npm run smoke:masterdata` 验证客户、供应商、部门和分类的真实 HTTP 管理接口、权限、引用保护与层级边界，使用本节独立测试环境，已接入 Tests CI 专项矩阵。夹具按本次ID清理，不全表删除，不重置共享编码序列。部门更新沿父链验证有效父级，省略 `managerId` 保留负责人，显式 `null` 清空；不能把局部字段更新当作负责人清空。细节见 `docs/masterdata-regression-2026-09-12.md`。
 
 运行涉及数据库的测试前确认连接目标与测试数据清理行为，**不得连接生产库跑测试**。公共 `tests/helpers/testEnvironment.js` 要求 `NODE_ENV=test`、显式回环 `DB_HOST`、合法 `DB_PORT`、`DB_USER`/`DB_PASSWORD`、`flowcube_test` 或 `flowcube_<用途>_test` 库名；测试不再加载真实 `backend/.env`。可用 `FLOWCUBE_TEST_ENV_FILE=/绝对路径/.env.test` 显式加载测试专用配置，命令行环境优先，配置错误及迁移失败立即终止。新数据库测试必须复用此校验。**本机实操（2026-09-17 验证）**：测试库凭据在 `~/.config/flowcube/operations20260912-test.env`，文件名不是 `.env.test` 因而走不了 `FLOWCUBE_TEST_ENV_FILE`，改为 `set -a; source ~/.config/flowcube/operations20260912-test.env; set +a` 注入；还必须 `export APP_UPDATE_DOWNLOADS_DIR=/tmp/<可写目录>`，否则 `backend/src/app.js` 启动时就因默认 `/var/www/flowcube-downloads` 无写权限抛 EACCES——**这个报错与业务代码无关，别当成回归失败**。本机 Node 为 v26，前端单测因此有 9 个文件 56 个用例失败（`localStorage is not available`），属既有环境问题；对照基线时不看绝对数，看是否新增失败。没有运行或环境不具备时明确说明；不能据此声称全部通过。纯文档修改核对内容、路径和 diff 即可，不必启动数据库或全量业务回归。

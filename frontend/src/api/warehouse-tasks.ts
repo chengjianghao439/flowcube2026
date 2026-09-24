@@ -108,6 +108,26 @@ export const getTasksApi = (params: TaskListParams) =>
 export const getTaskByIdApi = (id: number, config?: Parameters<typeof client.get>[1]) =>
   client.get<WarehouseTask>(`/warehouse-tasks/${id}`, config)
 
+export interface PendingSortingBinTask {
+  id: number
+  taskNo: string
+  warehouseId: number
+  warehouseName: string
+  customerName: string
+  status: TaskStatus
+  statusName: string
+  createdAt: string
+}
+
+export const getPendingSortingBinTasksApi = (params: { warehouseId?: number; page?: number; pageSize?: number } = {}) =>
+  client.get<PaginatedData<PendingSortingBinTask>>('/warehouse-tasks/sorting-bin-pending', { params })
+
+export const assignSortingBinApi = (taskId: number, requestKey: string) =>
+  client.post<{ taskId: number; binId: number; binCode: string }>(`/warehouse-tasks/${taskId}/assign-sorting-bin`, {}, {
+    skipGlobalError: true,
+    headers: withRequestKeyHeaders(requestKey),
+  })
+
 export const startPickingApi = (id: number) =>
   client.put(`/warehouse-tasks/${id}/start-picking`, {}, { headers: { 'X-Client': 'pda' }, skipGlobalError: true })
 

@@ -469,7 +469,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [prelaunch-finance, prelaunch-scope-export, prelaunch-hr, round2-transfer, round2-payroll, round2-runtime, fulfillment, procurement-planning, masterdata, masterdata-import, warehouse-masterdata, warehouse-assets-waves]
+        suite: [prelaunch-finance, prelaunch-scope-export, prelaunch-hr, round2-transfer, round2-payroll, round2-runtime, fulfillment, procurement-planning, masterdata, masterdata-import, sorting-bin-recovery, warehouse-masterdata, warehouse-assets-waves]
     services:
       mysql:
         image: mysql:8.0

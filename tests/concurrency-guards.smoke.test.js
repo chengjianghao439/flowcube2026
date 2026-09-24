@@ -708,6 +708,15 @@ async function scenarioCancelReverseReturnConcurrency(log, ctx, adminToken) {
 async function advanceTaskToStage(ctx, token, { taskId, itemId, container }, stage) {
   const ready = await ctx.http.put(`/api/warehouse-tasks/${taskId}/ready`, { token, headers: ctx.pdaHeaders() })
   if (!ready.ok) throw new Error(`advanceTaskToStage: ready failed: ${JSON.stringify(ready.data)}`)
+  const [[task]] = await ctx.pool.query('SELECT warehouse_id,sorting_bin_id FROM warehouse_tasks WHERE id=?', [taskId])
+  if (!task.sorting_bin_id) {
+    // 旧场景在无分拣格时直调 sort-done；现在由主管先补格，作业仍从 PDA 继续。
+    await ctx.pool.query('INSERT INTO sorting_bins (code,warehouse_id) VALUES (?,?)', [randomRef('SORT-BIN').slice(0, 40), task.warehouse_id])
+    const assigned = await ctx.http.post(`/api/warehouse-tasks/${taskId}/assign-sorting-bin`, {
+      token, headers: { 'X-Request-Key': randomRef('assign-sort-bin') }, json: {},
+    })
+    if (!assigned.ok) throw new Error(`advanceTaskToStage: assign-sorting-bin failed: ${JSON.stringify(assigned.data)}`)
+  }
   const sortDone = await ctx.http.put(`/api/warehouse-tasks/${taskId}/sort-done`, { token, headers: ctx.pdaHeaders(), json: {} })
   if (!sortDone.ok) throw new Error(`advanceTaskToStage: sort-done failed: ${JSON.stringify(sortDone.data)}`)
   if (stage === 'checking') return
@@ -880,6 +889,7 @@ async function scenarioCancelReverseReturnForwardGuards(log, ctx, adminToken) {
 async function main() {
   const log = createLogger()
   const ctx = await prepareSmokeContext()
+  let caughtError = null
   try {
     try {
       await require('./operation-request-concurrency.smoke.test').runOperationRequestConcurrencyChecks(ctx.pool)
@@ -923,11 +933,14 @@ async function main() {
     await scenarioCancelReverseReturnPacking(log, ctx, adminToken)
     await scenarioCancelReverseReturnShipping(log, ctx, adminToken)
     await scenarioCancelReverseReturnForwardGuards(log, ctx, adminToken)
+  } catch (error) {
+    caughtError = error
+    process.stderr.write(`${error?.stack || error?.message || String(error)}\n`)
   } finally {
     const summary = log.summary()
     await ctx.close()
     // 强制退出：避免残留句柄导致进程挂住 CI（process.exitCode 不强制退出）
-    process.exit(summary.failed > 0 ? 1 : 0)
+    process.exit(summary.failed > 0 || caughtError ? 1 : 0)
   }
 }
 

@@ -227,14 +227,15 @@ async function remove(id, scopeWarehouseIds = null) {
  */
 async function assignToTask(conn, { warehouseId, taskId }) {
   const [[bin]] = await conn.query(
-    'SELECT id, code FROM sorting_bins WHERE warehouse_id=? AND status=1 LIMIT 1 FOR UPDATE',
+    'SELECT id, code FROM sorting_bins WHERE warehouse_id=? AND status=1 AND current_task_id IS NULL ORDER BY id ASC LIMIT 1 FOR UPDATE',
     [warehouseId],
   )
   if (!bin) return null  // 无空闲格，不强制（允许无分拣格运作）
-  await conn.query(
-    'UPDATE sorting_bins SET status=2, current_task_id=? WHERE id=?',
+  const [updated] = await conn.query(
+    'UPDATE sorting_bins SET status=2, current_task_id=? WHERE id=? AND status=1 AND current_task_id IS NULL',
     [taskId, bin.id],
   )
+  if (updated.affectedRows !== 1) return null
   return { binId: bin.id, binCode: bin.code }
 }
 
@@ -283,25 +284,38 @@ async function releaseByTask(conn, taskId) {
  * 强制释放（管理员手动释放）
  */
 async function forceRelease(id, scopeWarehouseIds = null) {
-  const [[bin]] = await pool.query('SELECT * FROM sorting_bins WHERE id=?', [id])
-  if (!bin) throw new AppError('分拣格不存在', 404)
-  assertInScope(scopeWarehouseIds, bin.warehouse_id, '分拣格')
-  const conn = await pool.getConnection()
-  try {
-    await conn.beginTransaction()
-    if (bin.current_task_id) {
-      await conn.query(
-        'UPDATE warehouse_tasks SET sorting_bin_id=NULL, sorting_bin_code=NULL WHERE id=?',
-        [bin.current_task_id],
-      )
-    }
-    await conn.query(
-      'UPDATE sorting_bins SET status=1, current_task_id=NULL WHERE id=?',
-      [id],
-    )
-    await conn.commit()
-  } catch (e) { await conn.rollback(); throw e }
-  finally { conn.release() }
+  // 先读取任务 ID，再依照任务→分拣格的统一锁序获取行锁；锁后复查绑定，
+  // 避免读取期间旧任务释放、别的任务占用同一格时把新绑定误清空。
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const [[snapshot]] = await pool.query('SELECT warehouse_id,current_task_id FROM sorting_bins WHERE id=?', [id])
+    if (!snapshot) throw new AppError('分拣格不存在', 404)
+    assertInScope(scopeWarehouseIds, snapshot.warehouse_id, '分拣格')
+    const conn = await pool.getConnection()
+    try {
+      await conn.beginTransaction()
+      if (snapshot.current_task_id) {
+        await conn.query('SELECT id FROM warehouse_tasks WHERE id=? FOR UPDATE', [snapshot.current_task_id])
+      }
+      const [[bin]] = await conn.query('SELECT warehouse_id,current_task_id FROM sorting_bins WHERE id=? FOR UPDATE', [id])
+      if (!bin) throw new AppError('分拣格不存在', 404)
+      assertInScope(scopeWarehouseIds, bin.warehouse_id, '分拣格')
+      if (Number(bin.current_task_id || 0) !== Number(snapshot.current_task_id || 0)) {
+        await conn.rollback()
+        continue
+      }
+      if (bin.current_task_id) {
+        await conn.query(
+          'UPDATE warehouse_tasks SET sorting_bin_id=NULL, sorting_bin_code=NULL WHERE id=? AND sorting_bin_id=?',
+          [bin.current_task_id, id],
+        )
+      }
+      await conn.query('UPDATE sorting_bins SET status=1,current_task_id=NULL WHERE id=?', [id])
+      await conn.commit()
+      return
+    } catch (error) { await conn.rollback(); throw error }
+    finally { conn.release() }
+  }
+  throw new AppError('分拣格占用状态已变化，请刷新后重试', 409, 'SORTING_BIN_RELEASE_CONFLICT')
 }
 
 module.exports = {

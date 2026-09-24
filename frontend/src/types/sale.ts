@@ -48,6 +48,8 @@ export interface SaleOrderTask {
   warehouseName: string | null
   status: number
   statusName: string | null
+  sortingBinId?: number | null
+  sortingBinCode?: string | null
   cancelRequestedAt?: string | null
   adjustmentRequestedAt?: string | null
   shippedAt?: string | null

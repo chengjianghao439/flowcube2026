@@ -21,6 +21,9 @@ router.get('/my-sku-summary', requirePermission(PERMISSIONS.WAREHOUSE_TASK_VIEW)
 
 router.get('/stats', requirePermission(PERMISSIONS.WAREHOUSE_TASK_VIEW), ctrl.stats)
 
+// GET /api/warehouse-tasks/sorting-bin-pending — 主管查看可补分配的本仓任务
+router.get('/sorting-bin-pending', requirePermission(PERMISSIONS.WAREHOUSE_TASK_ASSIGN), ctrl.listAwaitingSortingBin)
+
 // GET /api/warehouse-tasks/cancel-returns/pending — PDA「拣货退回」任务池（必须在 /:id 之前注册）
 router.get('/cancel-returns/pending', requirePermission(PERMISSIONS.WAREHOUSE_TASK_CANCEL_RETURN_VIEW), ctrl.pendingCancelReturns)
 
@@ -50,6 +53,9 @@ router.get('/:id', requirePermission(PERMISSIONS.WAREHOUSE_TASK_VIEW), ctrl.deta
 
 // PUT /api/warehouse-tasks/:id/assign — 分配操作员
 router.put('/:id/assign', requirePermission(PERMISSIONS.WAREHOUSE_TASK_ASSIGN), validateBody(z.object({ userId: z.number().int().positive(), userName: z.string().min(1) })), ctrl.assign)
+
+// POST /api/warehouse-tasks/:id/assign-sorting-bin — 主管受控补分配，不代替 PDA 扫码作业
+router.post('/:id/assign-sorting-bin', requirePermission(PERMISSIONS.WAREHOUSE_TASK_ASSIGN), ctrl.assignSortingBin)
 
 // PUT /api/warehouse-tasks/:id/start-picking — 开始备货（1→2）
 router.put('/:id/start-picking', requirePermission(PERMISSIONS.WAREHOUSE_TASK_PICK), pdaOnly, pdaSessionRequired(), ctrl.startPicking)

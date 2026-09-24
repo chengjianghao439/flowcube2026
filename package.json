@@ -100,6 +100,7 @@
     "smoke:warehouse-ops": "node tests/warehouse-ops.smoke.test.js",
     "smoke:masterdata": "node tests/masterdata.smoke.test.js",
     "smoke:masterdata-import": "node tests/masterdata-import.smoke.test.js",
+    "smoke:sorting-bin-recovery": "node tests/sorting-bin-recovery.smoke.test.js",
     "smoke:warehouse-masterdata": "node tests/warehouse-masterdata.smoke.test.js",
     "smoke:warehouse-assets-waves": "node tests/warehouse-assets-waves.smoke.test.js",
     "smoke:credit-outbound": "node tests/credit-outbound.smoke.test.js",

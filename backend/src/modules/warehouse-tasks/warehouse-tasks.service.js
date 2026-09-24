@@ -8,6 +8,7 @@ const ship = require('./warehouse-tasks.ship')
 const closures = require('./warehouse-tasks.helpers')
 const cancelReturn = require('./warehouse-tasks.cancel-return')
 const adjust = require('./warehouse-tasks.adjust')
+const sortingBin = require('./warehouse-tasks.sorting-bin')
 
 module.exports = {
   findAll: query.findAll,
@@ -17,10 +18,12 @@ module.exports = {
   findMyTasks: query.findMyTasks,
   findMyTaskSkuSummary: query.findMyTaskSkuSummary,
   getTaskStats: query.getTaskStats,
+  listAwaitingSortingBin: sortingBin.listAwaitingSortingBin,
 
   createForSaleOrder: command.createForSaleOrder,
   createForPurchaseReturn: command.createForPurchaseReturn,
   assign: command.assign,
+  assignSortingBin: sortingBin.assignSortingBin,
   updatePriority: command.updatePriority,
   cancel: command.cancel,
 
