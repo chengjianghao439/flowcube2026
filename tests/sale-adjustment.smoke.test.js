@@ -107,6 +107,30 @@ function itemsFrom(product, quantity) {
   }]
 }
 
+// 销售出库会自动占用分拣格。此套件连续创建多张任务，须提供足量真实分拣格，
+// 否则新版分拣守卫会正确拒绝 sort-done，使后续改单断言失去前置状态。
+async function seedSortingBins(pool, warehouseId) {
+  const ids = []
+  const marker = randomRef('ADJ-BIN')
+  for (let i = 0; i < 12; i++) {
+    const [result] = await pool.query(
+      'INSERT INTO sorting_bins (warehouse_id, code) VALUES (?, ?)',
+      [Number(warehouseId), `${marker}-${i + 1}`],
+    )
+    ids.push(Number(result.insertId))
+  }
+  return ids
+}
+
+async function cleanupSortingBins(pool, ids) {
+  if (!ids.length) return
+  await pool.query(
+    'UPDATE warehouse_tasks SET sorting_bin_id=NULL, sorting_bin_code=NULL WHERE sorting_bin_id IN (?)',
+    [ids],
+  )
+  await pool.query('DELETE FROM sorting_bins WHERE id IN (?)', [ids])
+}
+
 // ── 场景①：增量——task 已推进到待复核(4)后加数量，应回退到拣货中(2)让 PDA 补拣 ──
 async function scenarioIncrease(log, ctx, token) {
   log.section('Scenario: 改单增量 — 待复核阶段加数量，回退拣货中补拣')
@@ -508,6 +532,7 @@ async function scenarioIntegrity(log, ctx, token) {
 async function main() {
   const log = createLogger()
   const ctx = await prepareSmokeContext()
+  let sortingBinIds = []
   try {
     const adminLogin = await login(ctx.http, 'smoke_admin', 'SmokeAdmin123!')
     const token = adminLogin.token
@@ -518,6 +543,7 @@ async function main() {
        ON DUPLICATE KEY UPDATE printer_id=VALUES(printer_id), printer_code=VALUES(printer_code)`,
       [Number(ctx.warehouse.id), Number(ctx.printer.id), ctx.printer.code],
     )
+    sortingBinIds = await seedSortingBins(ctx.pool, ctx.warehouse.id)
 
     await scenarioIncrease(log, ctx, token)
     await scenarioDecreaseImmediate(log, ctx, token)
@@ -531,6 +557,11 @@ async function main() {
   } catch (error) {
     log.assert('销售改单烟雾测试无未捕获异常', false, error?.stack || error?.message || String(error))
   } finally {
+    try {
+      await cleanupSortingBins(ctx.pool, sortingBinIds)
+    } catch (error) {
+      log.assert('本次分拣格夹具已清理', false, error?.message || String(error))
+    }
     const summary = log.summary()
     await ctx.close()
     process.exit(summary.failed > 0 ? 1 : 0)

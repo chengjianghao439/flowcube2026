@@ -57,6 +57,8 @@ npm run test:permissions
 | 打印、标签 | `npm run test:label`、`npm run test:print`、`npm run test:print-purge`、`npm run smoke:print-queue`、`npm run smoke:print-template-preview` |
 | 报表、开票 | `npm run smoke:reports`、`npm run smoke:reports-values`、`npm run smoke:warehouse-ops`、`npm run smoke:invoice-quota` |
 
+`smoke:sale-adjustment` 会为连续创建的销售任务建立本轮专用分拣格，并在结束时按 ID 清理；分拣完成必须先有已分配的分拣格。
+
 `npm run test:fulfillment`、`test:procurement-planning` 为履约与采购净额纯规则回归；`smoke:fulfillment`、`smoke:procurement-planning` 必须使用本节独立测试库，已加入 Tests CI 专项矩阵。
 `npm run test:fulfillment-refresh` 检查履约提交后合并通知、有界队列、失败退避与执行中再变更；`smoke:fulfillment` 同时验证业务单号筛选、仓库权限及提交后供应依赖刷新，仍仅允许独立测试库。
 
