@@ -23,6 +23,38 @@ async function loadOperations(type, id) {
     }),
   ]
 }
+
+async function loadRelatedOperations(related) {
+  const events = []
+  const byType = new Map()
+  for (const [type, id] of related) {
+    if (!byType.has(type)) byType.set(type, new Set())
+    byType.get(type).add(Number(id))
+  }
+  for (const [type, idSet] of byType) {
+    const ids = [...idSet]
+    for (let start = 0; start < ids.length; start += 100) {
+      const chunk = ids.slice(start, start + 100)
+      const [saved] = await pool.query(
+        `SELECT id,title,description,created_by_name AS createdByName,created_at AS createdAt
+         FROM document_operation_events WHERE document_type=? AND document_id IN (?) ORDER BY id DESC`, [type, chunk])
+      events.push(...saved.map(e => ({ ...e, id: `operation-${e.id}`, source: '操作记录' })))
+      const paths = chunk.map(id => `${DOCUMENT_PATHS[type]}/${id}`)
+      const conditions = paths.map(() => '(l.path=? OR l.path LIKE ?)').join(' OR ')
+      const [legacy] = await pool.query(
+        `SELECT l.id,l.method,l.path,l.status_code,l.user_name,l.created_at
+         FROM operation_logs l LEFT JOIN document_operation_events e ON e.operation_log_id=l.id
+         WHERE (${conditions}) AND l.status_code >= 200 AND l.status_code < 300
+           AND e.id IS NULL ORDER BY l.id DESC`, paths.flatMap(path => [path, `${path}/%`]))
+      events.push(...legacy.flatMap(e => {
+        const op = resolveOperation(e.method, e.path, e.status_code, { success: true })
+        return op && op.type === type && idSet.has(Number(op.id))
+          ? [{ id: `legacy-${e.id}`, title: op.title, description: null, createdByName: e.user_name, createdAt: e.created_at, source: '历史请求记录' }] : []
+      }))
+    }
+  }
+  return events
+}
 async function loadBusinessEvents(type, id, doc) {
   if (type === 'sale' || type === 'inbound') return (doc.timeline || []).map(e => ({ ...e, id: `business-${e.id}`, source: '业务事件' }))
   let rows = []
@@ -47,9 +79,12 @@ async function getActivity(type, id, user) {
     const [tasks] = await pool.query("SELECT id FROM warehouse_tasks WHERE task_type='purchase_return' AND return_id=?", [id])
     related = tasks.map(t => ['warehouse-task', t.id])
   } else if (type === 'sale' || type === 'wave') related = (doc.tasks || []).map(t => ['warehouse-task', t.taskId])
-  const relatedEvents = []
-  for (const [relatedType, relatedId] of related) relatedEvents.push(...await loadOperations(relatedType, relatedId))
-  const events = [...businessEvents, ...operations, ...relatedEvents, ...(progress.events || [])]
+  const relatedEvents = await loadRelatedOperations(related)
+  const hasBusinessCreation = businessEvents.some(e => /创建|新建/.test(e.title))
+  const uniqueOperations = hasBusinessCreation
+    ? operations.filter(e => e.title !== '创建单据')
+    : operations
+  const events = [...businessEvents, ...uniqueOperations, ...relatedEvents, ...(progress.events || [])]
   if (doc.createdAt && !events.some(e => /创建|新建/.test(e.title))) {
     events.push({ id: 'created', title: '创建单据', createdAt: doc.createdAt, createdByName: doc.operatorName || doc.applicantName || null, description: null, source: '单据创建信息' })
   }

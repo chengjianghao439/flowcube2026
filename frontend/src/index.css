@@ -88,6 +88,11 @@
 @tailwind components;
 @tailwind utilities;
 
+/* 表头和固定操作列表头共用不透明的同色底，横向滚动时内容不会透出。 */
+.data-table-header-surface {
+  background-color: color-mix(in srgb, hsl(var(--muted)) 30%, hsl(var(--card)) 70%);
+}
+
 @layer base {
   * {
     @apply border-border;

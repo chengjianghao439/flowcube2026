@@ -181,8 +181,19 @@ async function withLockedTarget(id, operator, action) {
   } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
 }
 
-async function update(id, { realName, roleId, isActive, departmentId, allowSelfApprove }, operator = null) {
+async function update(id, { username, realName, roleId, isActive, departmentId, allowSelfApprove }, operator = null) {
   return withLockedTarget(id, operator, async (conn, user, actor) => {
+    const changingUsername = username !== undefined && username !== user.username
+    if (changingUsername && Number(actor.roleId) !== 1) {
+      throw new AppError('只有超级管理员可以修改登录账号', 403, 'USER_ACCOUNT_RENAME_DENIED')
+    }
+    if (changingUsername) {
+      const [existing] = await conn.query(
+        'SELECT id FROM sys_users WHERE username=? AND deleted_at IS NULL AND id<>? LIMIT 1',
+        [username, id],
+      )
+      if (existing.length) throw new AppError('账号已存在', 400, 'USER_ACCOUNT_EXISTS')
+    }
     const changingRole = roleId !== undefined && Number(roleId) !== Number(user.role_id)
     if (changingRole && Number(actor.roleId) !== 1 && Number(actor.userId) === Number(user.id)) {
       throw new AppError('不能修改自己的角色，请联系超级管理员', 403, 'USER_ROLE_SELF_FORBIDDEN')
@@ -195,11 +206,18 @@ async function update(id, { realName, roleId, isActive, departmentId, allowSelfA
     const finalDeptId = departmentId !== undefined ? departmentId : (user.department_id ?? null)
     const finalSelfApprove = allowSelfApprove !== undefined ? (allowSelfApprove ? 1 : 0) : (user.allow_self_approve ? 1 : 0)
     if (finalDeptId) await assertDepartmentExists(finalDeptId, conn)
-    await conn.query(
-      `UPDATE sys_users SET real_name = ?, role_id = ?, role_name = ?, is_active = ?, department_id = ?, allow_self_approve = ?
-       WHERE id = ? AND deleted_at IS NULL`,
-      [realName, finalRoleId, roleName, isActive ? 1 : 0, finalDeptId || null, finalSelfApprove, id],
-    )
+    try {
+      await conn.query(
+        `UPDATE sys_users SET username = ?, real_name = ?, role_id = ?, role_name = ?, is_active = ?, department_id = ?, allow_self_approve = ?
+         WHERE id = ? AND deleted_at IS NULL`,
+        [username ?? user.username, realName, finalRoleId, roleName, isActive ? 1 : 0, finalDeptId || null, finalSelfApprove, id],
+      )
+    } catch (error) {
+      if (changingUsername && error.code === 'ER_DUP_ENTRY') {
+        throw new AppError('账号已存在', 400, 'USER_ACCOUNT_EXISTS')
+      }
+      throw error
+    }
   })
 }
 

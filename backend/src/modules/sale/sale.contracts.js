@@ -47,7 +47,7 @@ const createSaleSchema = z.object({
   receiverName: z.string().max(30, '收货人最多 30 个字符').optional(),
   receiverPhone: salePhoneRule,
   receiverAddress: z.string().max(200, '收货地址最多 200 个字符').optional(),
-  items: z.array(saleItemSchema).min(1, '至少添加一条明细'),
+  items: z.array(saleItemSchema).min(1, '至少添加一条明细').max(200, '销售单最多 200 条明细'),
 })
 
 const reserveSaleSchema = z.object({

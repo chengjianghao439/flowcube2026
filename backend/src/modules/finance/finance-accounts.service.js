@@ -90,9 +90,9 @@ async function recordTransaction(conn, {
   partyName = null, happenedAt, remark = null,
 }, operator = {}) {
   const id = Number(accountId)
-  const value = Number(amount)
+  const amountUnits = moneyUnits(amount)
   if (!Number.isFinite(id) || id <= 0) throw new AppError('请选择资金账户', 400)
-  if (!Number.isFinite(value) || value <= 0) throw new AppError('流水金额必须大于 0', 400)
+  if (amountUnits <= 0n) throw new AppError('流水金额必须大于 0', 400)
 
   const [[acc]] = await conn.query('SELECT * FROM finance_accounts WHERE id=? AND deleted_at IS NULL FOR UPDATE', [id])
   if (!acc) throw new AppError('资金账户不存在', 404)
@@ -103,7 +103,7 @@ async function recordTransaction(conn, {
     `INSERT INTO finance_account_transactions
        (account_id,direction,amount,biz_type,biz_id,biz_no,party_name,balance_after,happened_at,remark,operator_id,operator_name)
      VALUES (?,?,?,?,?,?,?,0,?,?,?,?)`,
-    [id, Number(direction), value, Number(bizType), bizId, bizNo, partyName,
+    [id, Number(direction), moneyText(amountUnits), Number(bizType), bizId, bizNo, partyName,
      happenedAt, remark, operator.operatorId ?? null, operator.operatorName ?? null],
   )
   const balance = await refreshBalance(conn, id, { asText: true })
@@ -154,7 +154,7 @@ async function create({ name, type, accountNo, bankName, holder, openingBalance 
   try {
     await conn.beginTransaction()
     const code = await generateMasterCode(conn, 'ACC', 'finance_accounts')
-    const opening = Number(openingBalance) || 0
+    const opening = moneyText(moneyUnits(openingBalance))
     const [r] = await conn.query(
       `INSERT INTO finance_accounts
          (code,name,type,account_no,bank_name,holder,opening_balance,current_balance,sort_order,remark,operator_id,operator_name)
@@ -184,8 +184,8 @@ async function update(id, { name, type, accountNo, bankName, holder, openingBala
     const [[acc]] = await conn.query('SELECT * FROM finance_accounts WHERE id=? AND deleted_at IS NULL FOR UPDATE', [id])
     if (!acc) throw new AppError('资金账户不存在', 404)
 
-    const nextOpening = openingBalance != null ? Number(openingBalance) : Number(acc.opening_balance)
-    if (nextOpening !== Number(acc.opening_balance)) {
+    const nextOpening = moneyText(moneyUnits(openingBalance != null ? openingBalance : acc.opening_balance))
+    if (moneyUnits(nextOpening) !== moneyUnits(acc.opening_balance)) {
       const [[{ n }]] = await conn.query(
         'SELECT COUNT(*) AS n FROM finance_account_transactions WHERE account_id=? FOR UPDATE', [id],
       )
@@ -223,21 +223,20 @@ async function adjust(id, { targetBalance, happenedAt, remark }, operator) {
     const [[acc]] = await conn.query('SELECT * FROM finance_accounts WHERE id=? AND deleted_at IS NULL FOR UPDATE', [id])
     if (!acc) throw new AppError('资金账户不存在', 404)
 
-    const target = Number(targetBalance)
-    if (!Number.isFinite(target)) throw new AppError('请填写调整后的账户余额', 400)
-    const diff = Number((target - Number(acc.current_balance)).toFixed(4))
-    if (Math.abs(diff) < 1e-6) throw new AppError('调整后余额与当前余额相同，无需调整', 400)
+    const targetUnits = moneyUnits(targetBalance)
+    const diffUnits = targetUnits - moneyUnits(acc.current_balance)
+    if (diffUnits === 0n) throw new AppError('调整后余额与当前余额相同，无需调整', 400)
 
     const res = await recordTransaction(conn, {
       accountId: id,
-      direction: diff > 0 ? DIRECTION.IN : DIRECTION.OUT,
-      amount: Math.abs(diff),
+      direction: diffUnits > 0n ? DIRECTION.IN : DIRECTION.OUT,
+      amount: moneyText(diffUnits > 0n ? diffUnits : -diffUnits),
       bizType: BIZ_TYPE.ADJUST,
       happenedAt: happenedAt || beijingTodayYmd(),
-      remark: remark || `余额调整：${Number(acc.current_balance).toFixed(2)} → ${target.toFixed(2)}`,
+      remark: remark || `余额调整：${acc.current_balance} → ${moneyText(targetUnits)}`,
     }, operator)
     await conn.commit()
-    return { id: Number(id), balance: res.balanceAfter, diff }
+    return { id: Number(id), balance: res.balanceAfter, diff: Number(moneyText(diffUnits)) }
   } catch (error) {
     await conn.rollback()
     throw error

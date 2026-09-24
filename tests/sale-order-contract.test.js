@@ -58,6 +58,19 @@ test('销售建单拒绝过短联系电话和超过订单语义的负折扣', ()
   assert.throws(() => createSaleSchema.parse({ ...payload, discountAmount: -1 }))
 })
 
+test('销售明细有服务端上限，批量写入保持行顺序且每批不超过 100 行', async () => {
+  const payload = { customerId: 1, customerName: '客户', warehouseId: 2, warehouseName: '仓库' }
+  assert.throws(() => createSaleSchema.parse({ ...payload, items: Array.from({ length: 201 }, () => baseItem) }), /最多 200 条/)
+  const { insertSaleItems } = require('../backend/src/modules/sale/sale.items')
+  const queries = []
+  const conn = { query: async (sql, params) => { queries.push([sql, params]); return [{}] } }
+  const items = Array.from({ length: 201 }, (_, index) => ({ ...baseItem, productId: index + 1 }))
+  await insertSaleItems(conn, 8, 2, '仓库', items)
+  assert.equal(queries.length, 3)
+  assert.ok(queries.every(([sql, params]) => sql.includes('VALUES ?') && params[0].length <= 100))
+  assert.deepEqual(queries.flatMap(([, params]) => params[0].map(row => row[3])), items.map(item => item.productId))
+})
+
 test('占库契约保留一次性授信放行确认', () => {
   const parsed = reserveSaleSchema.parse({
     confirmCreditOverride: true,

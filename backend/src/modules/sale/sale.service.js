@@ -2,6 +2,7 @@ const { commitFulfillment, captureDimensions } = require('../fulfillment/fulfill
 const { normalizeProduct } = require('../logistics/shipping-products')
 const { snapshotItemCommitments, restoreItemCommitments } = require('../fulfillment/fulfillment.sale-items')
 const { loadSalePresentation } = require('./sale.presentation')
+const { insertSaleItems } = require('./sale.items')
 const { pool } = require('../../config/db')
 const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
 const { normalizePagination } = require('../../utils/pagination')
@@ -782,12 +783,7 @@ async function create({ customerId, warehouseId, remark,
       [orderNo,customerId,customerName,warehouseId,warehouseName,total,discount,remark||null,carrierId||null,carrier||null,freightType||null,receiverName||null,receiverPhone||null,receiverAddress||null,shippingProduct,operator.userId,operator.realName]
     )
     const orderId = r.insertId
-    for(const item of folded) {
-      // 行级发货仓库：缺省继承订单头仓库（老客户端不传 warehouseId 时即单仓订单）
-      const itemWhId = item.warehouseId ? Number(item.warehouseId) : Number(warehouseId)
-      const itemWhName = item.warehouseName || warehouseName
-      await conn.query(`INSERT INTO sale_order_items (order_id,warehouse_id,warehouse_name,product_id,product_code,product_name,unit,entry_unit,article_number,spec,color,quantity,entry_qty,conversion_rate,unit_price,amount,remark) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,[orderId,itemWhId,itemWhName,item.productId,item.productCode,item.productName,item.unit,item.entryUnit,item.articleNumber||null,item.spec||null,item.color||null,item.quantity,item.entryQty,item.conversionRate,item.unitPrice,item.amount,item.remark||null])
-    }
+    await insertSaleItems(conn, orderId, warehouseId, warehouseName, folded)
     await appendSaleEvent(conn, orderId, 'created', '创建订单', `共 ${items.length} 条明细`, operator)
     await buildPricingEvents(conn, orderId, folded, operator)   // folded：单价已折成每基本单位价，与基本单位进价可比
     const result = { id:orderId, orderNo }
@@ -836,14 +832,7 @@ async function update(id, { customerId, warehouseId, remark,
       [customerId, customerName, warehouseId, warehouseName, total, discount, remark||null, carrierId||null, carrier||null, freightType||null, receiverName||null, receiverPhone||null, receiverAddress||null, shippingProduct, id]
     )
     await conn.query('DELETE FROM sale_order_items WHERE order_id=?', [id])
-    for (const item of folded) {
-      const itemWhId = item.warehouseId ? Number(item.warehouseId) : Number(warehouseId)
-      const itemWhName = item.warehouseName || warehouseName
-      await conn.query(
-        `INSERT INTO sale_order_items (order_id,warehouse_id,warehouse_name,product_id,product_code,product_name,unit,entry_unit,article_number,spec,color,quantity,entry_qty,conversion_rate,unit_price,amount,remark) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [id, itemWhId, itemWhName, item.productId, item.productCode, item.productName, item.unit, item.entryUnit, item.articleNumber||null, item.spec||null, item.color||null, item.quantity, item.entryQty, item.conversionRate, item.unitPrice, item.amount, item.remark||null]
-      )
-    }
+    await insertSaleItems(conn, id, warehouseId, warehouseName, folded)
     await restoreItemCommitments(conn, id, deliverySnapshot)
     await appendSaleEvent(conn, id, 'updated', '编辑订单', `现有 ${items.length} 条明细`, operator)
     await buildPricingEvents(conn, id, folded, operator)

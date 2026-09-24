@@ -83,7 +83,7 @@ async function main() {
 
   // 实际库中的表
   const [tables] = await conn.query(
-    "SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE()",
+    "SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE'",
   )
   const actualTables = new Set(tables.map(r => (r.table_name || r.TABLE_NAME || '').toLowerCase()))
 

@@ -24,6 +24,15 @@ function issueRefreshToken(user) {
   return { jti, refreshToken, expiresAt: Number(decoded.exp) }
 }
 
+function verifySignedToken(tokenStr) {
+  try {
+    return jwt.verify(tokenStr, env.JWT_SECRET)
+  } catch (firstErr) {
+    if (!env.JWT_SECRET_PREVIOUS) throw firstErr
+    return jwt.verify(tokenStr, env.JWT_SECRET_PREVIOUS)
+  }
+}
+
 /**
  * 原子作废一个 jti：仅当该 jti 尚未作废且未过期时才成功（affectedRows=1）。
  * 这是「一次性轮换」的核心——同一 refresh token 重放时第二次调用 affectedRows=0，被拒。
@@ -170,19 +179,16 @@ async function refreshAccessToken(rawRefreshToken) {
 
   let decoded
   try {
-    // 密钥轮换兜底（对齐 middleware/auth.js）：优先新密钥，失败试 JWT_SECRET_PREVIOUS，
-    // 保证轮换过渡期旧密钥签发的 refresh 仍能续期，用户不被迫重登。
-    try {
-      decoded = jwt.verify(tokenStr, env.JWT_SECRET)
-    } catch (firstErr) {
-      if (!env.JWT_SECRET_PREVIOUS) throw firstErr
-      decoded = jwt.verify(tokenStr, env.JWT_SECRET_PREVIOUS)
-    }
+    decoded = verifySignedToken(tokenStr)
   } catch {
     throw new AppError('refresh token 无效或已过期，请重新登录', 401, 'AUTH_REFRESH_INVALID')
   }
   if (decoded.tokenType !== 'refresh') {
     throw new AppError('该令牌不是 refresh token', 401, 'AUTH_REFRESH_INVALID')
+  }
+  // 迁移前的无 jti 令牌无法被一次性作废。必须重登，不能允许它在有效期内无限换票。
+  if (!decoded.jti) {
+    throw new AppError('登录状态已升级，请重新登录', 401, 'AUTH_REFRESH_INVALID')
   }
 
   const user = await getCurrentAuthUser(decoded.userId)
@@ -191,19 +197,14 @@ async function refreshAccessToken(rawRefreshToken) {
     throw new AppError('登录状态已失效，请重新登录', 401, 'AUTH_REFRESH_INVALID')
   }
 
-  // 一次性轮换：事务内先原子作废旧 jti。若旧 token 从未落库（如迁移前签发的存量 token），
-  // 兜底放行一次并补录会话，保证升级无感；但已落库的 jti 一旦被用过即拒绝重放。
+  // 一次性轮换：事务内先原子作废旧 jti；无 jti 的旧令牌在上面已拒绝。
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    if (decoded.jti) {
-      const revoked = await revokeJti(conn, decoded.jti)
-      if (!revoked) {
-        // 作废失败有两种可能：已被用过（重放攻击）或已过期/已被登出。
-        // 统一按「重放被拒」处理——真正的重放必须阻断；过期场景 token 校验本就会拦。
-        await conn.rollback()
-        throw new AppError('该 refresh token 已被使用，请重新登录', 401, 'AUTH_REFRESH_REPLAY')
-      }
+    const revoked = await revokeJti(conn, decoded.jti)
+    if (!revoked) {
+      // 作废失败有两种可能：已被用过（重放攻击）或已过期/已被登出。
+      throw new AppError('该 refresh token 已被使用，请重新登录', 401, 'AUTH_REFRESH_REPLAY')
     }
 
     const payload = buildAccessTokenPayload(user)
@@ -244,11 +245,11 @@ async function logout(rawRefreshToken) {
   if (!tokenStr) return
   let decoded
   try {
-    decoded = jwt.verify(tokenStr, env.JWT_SECRET)
+    decoded = verifySignedToken(tokenStr)
   } catch {
     return
   }
-  if (!decoded.jti) return
+  if (decoded.tokenType !== 'refresh' || !decoded.jti) return
   await pool.query(
     'UPDATE refresh_token_sessions SET revoked_at = NOW() WHERE jti = ? AND revoked_at IS NULL',
     [decoded.jti],
@@ -256,27 +257,31 @@ async function logout(rawRefreshToken) {
 }
 
 async function changePassword(userId, oldPassword, newPassword) {
-  const [[user]] = await pool.query(
-    'SELECT id, password, token_version FROM sys_users WHERE id=? AND deleted_at IS NULL',
-    [userId],
-  )
-  if (!user) {
-    throw new AppError('用户不存在', 404, 'USER_NOT_FOUND')
-  }
-
-  const ok = await bcrypt.compare(oldPassword, user.password)
-  if (!ok) {
-    throw new AppError('旧密码错误', 400, 'AUTH_OLD_PASSWORD_INVALID')
-  }
-
   const hash = await bcrypt.hash(newPassword, 10)
-  await pool.query(
-    `UPDATE sys_users
-        SET password = ?,
-            token_version = COALESCE(token_version, 0) + 1
-      WHERE id = ? AND deleted_at IS NULL`,
-    [hash, userId],
-  )
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const [[user]] = await conn.query(
+      'SELECT id, password FROM sys_users WHERE id=? AND deleted_at IS NULL FOR UPDATE',
+      [userId],
+    )
+    if (!user) throw new AppError('用户不存在', 404, 'USER_NOT_FOUND')
+    if (!await bcrypt.compare(oldPassword, user.password)) {
+      throw new AppError('旧密码错误', 400, 'AUTH_OLD_PASSWORD_INVALID')
+    }
+    await conn.query(
+      `UPDATE sys_users
+          SET password = ?, token_version = COALESCE(token_version, 0) + 1
+        WHERE id = ? AND deleted_at IS NULL`,
+      [hash, userId],
+    )
+    await conn.commit()
+  } catch (error) {
+    await conn.rollback()
+    throw error
+  } finally {
+    conn.release()
+  }
 }
 
 /** 修改个人资料（真实姓名）——原 auth.routes 路由层直写 SQL，收编进 service（2026-08-22） */

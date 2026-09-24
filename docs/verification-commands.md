@@ -113,6 +113,7 @@ AST 文案和数量覆盖守卫依赖 frontend 的 TypeScript，必须在安装�
 ### 2026-09-22 全仓审计新增回归
 
 - `npm run smoke:audit-remediation`：独立测试库上的授信、角色、仓库授权、打印动作与 PDA 设备事务/待办/分页验证。
+- `npm run smoke:user-account-management`：独立测试库上的真实 HTTP/MySQL 账号改名权限、重名拒绝及新旧账号登录回归；已接入 Tests CI。
 - `npm run smoke:accounting-sale-period`：销售实际出库期间、旧累计根、闭期冲突、人工红冲、自动修订及来源完整性。
 - `npm run test:dirty-navigation`：真实 Chromium 的 file URL、延迟挂载工作区、确认/取消和重复历史遍历；需 `agent-browser@0.36.0` 与其 Chromium，命名会话由脚本 finally 关闭并验证退出。CI 安装依赖并运行。
 - `npm run smoke:nginx-headers`：需要 Docker，可通过 `DOCKER_CONTEXT` 选择本机环境；使用独立命名容器，不连接业务数据库。
@@ -121,3 +122,7 @@ AST 文案和数量覆盖守卫依赖 frontend 的 TypeScript，必须在安装�
 ### 已确认审计问题回归（2026-09-23）
 
 `npm run test:confirmed-audit` 覆盖 PDA 用户绑定、权限即时读取、条码范围、盘亏预占、扣减符号、跨仓手动出库幂等、四位金额、SSH 信任/凭据传输及采购分页快照。`npm run smoke:confirmed-audit` 在独立回环测试库验证真实事务及 HTTP 拒绝；新增两命令已接 Tests CI。相机插件 mock 测试不代表 Android 真机验收。
+
+### 2026-09-24 整改专项
+
+独立测试库运行 `node --test tests/auth-token-remediation.smoke.test.js tests/finance-account-precision.smoke.test.js tests/schema-reconcile.smoke.test.js`；纯代码回归运行 `node --test tests/document-activity.test.js tests/sale-order-contract.test.js` 与 `npm run test:query-loop`。前端操作记录 API 用例在 `frontend/src/api/oplogs.test.ts`。schema 严格对账只统计物理表，视图不当作多余表。

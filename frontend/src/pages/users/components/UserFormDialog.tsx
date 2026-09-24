@@ -45,6 +45,7 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
   const { roleId: operatorRoleId } = usePermission()
   const isOperatorSuperAdmin = operatorRoleId === 1
   const operatorId = useAuthStore(s => s.user?.id)
+  const updateCurrentUser = useAuthStore(s => s.updateUser)
   const ownRoleLocked = !isOperatorSuperAdmin && editUser?.id === operatorId
   const { data: assignableRoles = [], isLoading: rolesLoading, isError: rolesError, refetch: refetchRoles } = useAssignableRoles(open)
   const visibleAssignableRoles = visibleRoles(assignableRoles)
@@ -61,6 +62,7 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
 
   useEffect(() => {
     if (editUser) {
+      setUsername(editUser.username)
       setRealName(editUser.realName)
       setRoleId(editUser.roleId)
       setDepartmentId(editUser.departmentId ?? null)
@@ -92,9 +94,11 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
     const account = username.trim()
     if (!name) errors.realName = '请输入姓名'
     else if (name.length > 50) errors.realName = '姓名不能超过 50 个字符'
-    if (!isEdit) {
+    if (!isEdit || isOperatorSuperAdmin) {
       if (account.length < 2) errors.username = '账号至少 2 个字符'
       else if (account.length > 50) errors.username = '账号不能超过 50 个字符'
+    }
+    if (!isEdit) {
       if (password.length < 6) errors.password = '密码至少 6 位'
       else if (password.length > 100) errors.password = '密码不能超过 100 个字符'
       if (!visibleAssignableRoles.some(role => role.id === roleId)) errors.roleId = '请选择可分配的角色'
@@ -110,10 +114,13 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
       const base = isSuperAdmin(editUser.roleId)
         ? { realName: name, isActive, departmentId }
         : { realName: name, roleId, isActive, departmentId }
-      const payload = isOperatorSuperAdmin ? { ...base, allowSelfApprove } : base
+      const payload = isOperatorSuperAdmin ? { ...base, username: account, allowSelfApprove } : base
       updateUser(
         { id: editUser.id, data: payload },
-        { onSuccess: onClose, onError },
+        { onSuccess: () => {
+          if (isOperatorSuperAdmin && editUser.id === operatorId) updateCurrentUser({ username: account })
+          onClose()
+        }, onError },
       )
     } else {
       createUser({ username: account, password, realName: name, roleId, departmentId }, { onSuccess: onClose, onError })
@@ -131,7 +138,7 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
           </DialogTitle>
           <DialogDescription className="text-foreground/80">
             {isEdit && editUser
-              ? <>正在编辑账号 <span className="font-medium text-foreground">{editUser.username}</span>。账号不能在此修改。</>
+              ? <>正在编辑账号 <span className="font-medium text-foreground">{editUser.username}</span>。{isOperatorSuperAdmin ? '修改账号后，下次登录需使用新账号。' : '只有超级管理员可以修改登录账号。'}原密码无法查看，可在用户列表中重置。</>
               : '填写登录信息并选择角色；新账号创建后默认启用。'}
           </DialogDescription>
         </DialogHeader>
@@ -139,23 +146,23 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
         <form onSubmit={handleSubmit} noValidate className="flex min-h-0 flex-col overflow-hidden">
           <div className="grid min-h-0 grid-cols-1 gap-x-5 gap-y-4 overflow-y-auto px-6 py-4 sm:grid-cols-2">
           <h3 className="border-b pb-2 text-sm font-semibold sm:col-span-2">账号信息</h3>
+          <div className="space-y-2">
+            <Label htmlFor="form-username">账号 <span className="text-destructive">*</span></Label>
+            <Input
+              id="form-username"
+              value={username}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setUsername(e.target.value); clearError('username') }}
+              placeholder="用于登录，至少 2 个字符"
+              maxLength={50}
+              autoComplete="off"
+              aria-invalid={!!fieldErrors.username}
+              aria-describedby={fieldErrors.username ? 'form-username-error' : undefined}
+              disabled={isPending || (isEdit && !isOperatorSuperAdmin)}
+            />
+            {fieldErrors.username && <p id="form-username-error" className="text-sm text-destructive">{fieldErrors.username}</p>}
+          </div>
           {!isEdit && (
             <>
-              <div className="space-y-2">
-                <Label htmlFor="form-username">账号 <span className="text-destructive">*</span></Label>
-                <Input
-                  id="form-username"
-                  value={username}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setUsername(e.target.value); clearError('username') }}
-                  placeholder="用于登录，至少 2 个字符"
-                  maxLength={50}
-                  autoComplete="off"
-                  aria-invalid={!!fieldErrors.username}
-                  aria-describedby={fieldErrors.username ? 'form-username-error' : undefined}
-                  disabled={isPending}
-                />
-                {fieldErrors.username && <p id="form-username-error" className="text-sm text-destructive">{fieldErrors.username}</p>}
-              </div>
               <div className="space-y-2">
                 <Label htmlFor="form-password">初始密码 <span className="text-destructive">*</span></Label>
                 <Input

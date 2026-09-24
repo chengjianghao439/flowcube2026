@@ -348,6 +348,9 @@ jobs:
       - name: Schema 对账（迁移建表后：已执行迁移声明的表 + 活跃期唯一键 vs 实际库，文档12 / 审计 [16]④）
         run: node backend/scripts/schema-reconcile.js --strict
 
+      - name: 2026-09-24 认证、资金精度与视图对账回归
+        run: npm run smoke:audit-remediation-20260924
+
       - name: 数据库迁移 — 集成库
         run: npm --prefix backend run migrate
         env:
@@ -373,6 +376,9 @@ jobs:
 
       - name: 审计权限、打印与设备并发回归
         run: npm run smoke:audit-remediation
+
+      - name: 用户账号修改权限与登录回归
+        run: npm run smoke:user-account-management
 
       - name: 销售跨期凭证与历史来源回归
         run: npm run smoke:accounting-sale-period

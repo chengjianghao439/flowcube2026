@@ -64,6 +64,7 @@ export default function OpLogsPage() {
   const [queryOpen, setQueryOpen] = useState(false)
   const [clearConfirm, setClearConfirm] = useState(false)
   const [detail, setDetail] = useState<OpLog | null>(null)
+  const [page, setPage] = useState(1)
 
   // ── 当前生效的筛选（全部存于 URL 参数，刷新/分享可保留） ──
   const keyword   = readStringParam(searchParams, 'keyword')
@@ -81,13 +82,16 @@ export default function OpLogsPage() {
   const effectiveEndDate = endDate || (rangeAll ? '' : defaultRange.end)
 
   const { data, isLoading } = useQuery({
-    queryKey: ['oplogs', { keyword, module, effectiveStartDate, effectiveEndDate }],
-    queryFn: () => getOpLogsApi({ page: 1, pageSize: PAGE_SIZE, keyword, module, startDate: effectiveStartDate, endDate: effectiveEndDate }),
+    queryKey: ['oplogs', { page, keyword, module, effectiveStartDate, effectiveEndDate }],
+    queryFn: () => getOpLogsApi({ page, pageSize: PAGE_SIZE, keyword, module, startDate: effectiveStartDate, endDate: effectiveEndDate }),
   })
   const total = data?.pagination?.total ?? 0
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  useEffect(() => { if (data && page > pageCount) setPage(pageCount) }, [data, page, pageCount])
   const clear = useMutation({ mutationFn: clearLogsApi, onSuccess: () => qc.invalidateQueries({ queryKey: ['oplogs'] }) })
 
   function updateParams(updates: Record<string, string | number | null | undefined>) {
+    setPage(1)
     setSearchParams(upsertSearchParams(searchParams, updates))
   }
 
@@ -202,11 +206,12 @@ export default function OpLogsPage() {
       <DataTable virtualized columns={columns} data={data?.list || []} loading={isLoading} />
 
       <ListSummary total={total} unit="条" />
-      {/* 操作日志是全站增长最快的表：自动取齐到上限即停，这里如实说明，避免"看起来只有这么多" */}
-      {data?.truncated && (
-        <p className="mt-1 text-xs text-muted-foreground">
-          仅加载最近 {data.list.length.toLocaleString()} 条（已达取数上限），请缩小时间范围或加筛选条件查看更早的日志。
-        </p>
+      {pageCount > 1 && (
+        <div className="flex items-center justify-end gap-3 text-sm text-muted-foreground">
+          <Button size="sm" variant="outline" disabled={isLoading || page <= 1} onClick={() => setPage(p => p - 1)}>上一页</Button>
+          <span aria-live="polite">第 {page} / {pageCount} 页</span>
+          <Button size="sm" variant="outline" disabled={isLoading || page >= pageCount} onClick={() => setPage(p => p + 1)}>下一页</Button>
+        </div>
       )}
       <ConfirmDialog
         open={clearConfirm}
@@ -243,7 +248,7 @@ export default function OpLogsPage() {
               <div className="grid gap-2">
                 <DetailRow label="请求方式" value={detail.method} />
                 <DetailRow label="访问地址" value={detail.path} />
-                <DetailRow label="状态码" value={detail.statusCode} />
+                <DetailRow label="状态码" value={detail.statusCode ?? '待确认'} />
                 <DetailRow label="业务模块" value={detail.module} />
                 <DetailRow label="操作人" value={detail.userName} />
                 <DetailRow label="来源 IP" value={detail.ip} />

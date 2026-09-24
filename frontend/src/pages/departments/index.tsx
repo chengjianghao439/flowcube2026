@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Plus } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import { FilterCard } from '@/components/shared/FilterCard'
@@ -270,7 +270,17 @@ export default function DepartmentsPage() {
         if (!canCreate && !canUpdate && !canDelete) return null
         return (
           <div className="flex items-center gap-2">
-            {canCreate && <Button size="sm" variant="outline" onClick={() => openCreate(row.id)}>新增子部门</Button>}
+            {canCreate && (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-8 px-2 text-xs text-primary hover:text-primary"
+                onClick={() => openCreate(row.id)}
+              >
+                <Plus />新增子部门
+              </Button>
+            )}
             {(canUpdate || canDelete) && <TableActionsMenu
               primaryLabel={canUpdate ? '编辑' : '删除'}
               primaryVariant="outline"
@@ -307,8 +317,20 @@ export default function DepartmentsPage() {
             重置
           </Button>
         )}
-        <Button size="sm" variant="ghost" onClick={() => setExpanded(new Set(departments.map((d) => d.id)))} disabled={!!kw}>全部展开</Button>
-        <Button size="sm" variant="ghost" onClick={() => setExpanded(new Set())} disabled={!!kw}>全部收起</Button>
+        <div role="group" aria-label="部门层级显示" className="ml-auto flex items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => setExpanded(new Set(departments.map((d) => d.id)))}
+            disabled={!!kw}
+          >
+            <ChevronsUpDown />全部展开
+          </Button>
+          <Button type="button" size="sm" variant="outline" onClick={() => setExpanded(new Set())} disabled={!!kw}>
+            <ChevronsDownUp />全部收起
+          </Button>
+        </div>
       </FilterCard>
 
       {isError ? (

@@ -42,22 +42,142 @@ test('原详情拒绝访问时不读取任何活动数据', async () => {
   assert.equal(queries, 0)
 })
 
+test('业务创建事件存在时不重复展示通用创建记录', async () => {
+  const service = load('backend/src/modules/document-activity/document-activity.service.js', {
+    '../../config/db': { pool: { query: async sql => [sql.includes('document_operation_events') ? [{ id: 1, title: '创建单据', created_at: '2026-09-24 10:00:00' }] : []] } },
+    './document-registry': { loadDocument: async () => ({ timeline: [{ id: 2, title: '创建订单', createdAt: '2026-09-24 10:00:00' }], tasks: [] }) },
+    './document-operation': require('../backend/src/modules/document-activity/document-operation'),
+    './document-progress': { buildProgress: async () => ({ sections: [], events: [] }) },
+    '../fulfillment/fulfillment.service': { events: async () => [] },
+  })
+  const activity = await service.getActivity('sale', 1, {})
+  assert.equal(activity.events.filter(e => /创建/.test(e.title)).length, 1)
+  assert.equal(activity.events[0].source, '业务事件')
+})
+
+test('关联仓库任务活动按批读取，查询次数不随任务数增长', async () => {
+  const queries = []
+  const service = load('backend/src/modules/document-activity/document-activity.service.js', {
+    '../../config/db': { pool: { query: async (sql, params) => { queries.push([sql, params]); return [[]] } } },
+    './document-registry': { loadDocument: async () => ({ timeline: [], tasks: Array.from({ length: 12 }, (_, i) => ({ taskId: i + 1 })) }) },
+    './document-operation': require('../backend/src/modules/document-activity/document-operation'),
+    './document-progress': { buildProgress: async () => ({ sections: [], events: [] }) },
+    '../fulfillment/fulfillment.service': { events: async () => [] },
+  })
+  await service.getActivity('sale', 1, {})
+  assert.equal(queries.length, 4)
+})
+
 test('订单事件独立保存，只存动作和原因，不复制请求正文', async () => {
   const queries = []
+  const conn = { beginTransaction: async () => {}, commit: async () => {}, rollback: async () => {}, release: () => {}, query: async (sql, params) => { queries.push({ sql, params }); return [{ insertId: 99 }] } }
   const middleware = load('backend/src/middleware/opLogger.js', {
-    '../config/db': { pool: { query: async (sql, params) => { queries.push({ sql, params }); return [{ insertId: 99 }] } } },
+    '../config/db': { pool: { query: conn.query, getConnection: async () => conn } },
     '../utils/logger': { error: () => {} },
     '../modules/document-activity/document-operation': require('../backend/src/modules/document-activity/document-operation'),
   })
   const req = { method: 'POST', originalUrl: '/api/purchase/12/reject', path: '/12/reject', body: { reason: '金额需核对', token: 'DO-NOT-STORE' }, user: { userId: 7, realName: '测试经办人' }, headers: {} }
   const res = { statusCode: 200, json: body => body }
-  middleware(req, res, () => {})
+  await new Promise(resolve => middleware(req, res, resolve))
+  assert.match(queries[0].sql, /INSERT INTO operation_logs/)
   res.json({ success: true, data: null })
   await new Promise(resolve => setImmediate(resolve))
-  assert.equal(queries.length, 2)
-  assert.match(queries[1].sql, /document_operation_events/)
-  assert.deepEqual(Array.from(queries[1].params), ['purchase', 12, 99, '驳回申请', '金额需核对', 7, '测试经办人'])
+  assert.equal(queries.length, 3)
+  assert.match(queries[1].sql, /UPDATE operation_logs/)
+  assert.match(queries[2].sql, /document_operation_events/)
+  assert.deepEqual(Array.from(queries[2].params), ['purchase', 12, 99, '驳回申请', '金额需核对', 7, '测试经办人'])
   assert.equal(JSON.stringify(queries).includes('DO-NOT-STORE'), false)
+})
+
+test('操作日志预写失败阻止业务执行；结束写失败保留待确认记录', async () => {
+  const deps = (pool, errors) => ({
+    '../config/db': { pool },
+    '../utils/logger': { error: (...args) => errors.push(args) },
+    '../modules/document-activity/document-operation': require('../backend/src/modules/document-activity/document-operation'),
+  })
+  const req = { method: 'POST', originalUrl: '/api/sale', path: '/api/sale', body: {}, headers: {} }
+  let routed = false
+  const initialFailure = new Error('DB unavailable')
+  const errors = []
+  const middleware = load('backend/src/middleware/opLogger.js', deps({ query: async () => { throw initialFailure } }, errors))
+  await new Promise(resolve => middleware(req, { json: () => {} }, error => {
+    assert.equal(error, initialFailure)
+    routed = true
+    resolve()
+  }))
+  assert.equal(routed, true)
+
+  let sent = false
+  const conn = { beginTransaction: async () => {}, query: async () => { throw Error('finalize failed') }, rollback: async () => {}, release: () => {} }
+  const finalMiddleware = load('backend/src/middleware/opLogger.js', deps({ query: async () => [{ insertId: 10 }], getConnection: async () => conn }, errors))
+  const res = { statusCode: 200, json: () => { sent = true } }
+  await new Promise(resolve => finalMiddleware(req, res, resolve))
+  res.json({ success: true })
+  assert.equal(sent, false)
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(sent, true)
+  assert.equal(errors.length, 1)
+})
+
+test('二进制 send 响应也在补全日志后发送', async () => {
+  const sql = []
+  const conn = { beginTransaction: async () => {}, query: async query => { sql.push(query) }, commit: async () => {}, rollback: async () => {}, release: () => {} }
+  const middleware = load('backend/src/middleware/opLogger.js', {
+    '../config/db': { pool: { query: async query => { sql.push(query); return [{ insertId: 3 }] }, getConnection: async () => conn } },
+    '../utils/logger': { error: () => {} },
+    '../modules/document-activity/document-operation': require('../backend/src/modules/document-activity/document-operation'),
+  })
+  const req = { method: 'POST', originalUrl: '/api/settings/logo', path: '/api/settings/logo', body: {}, headers: {} }
+  let sent = false
+  const res = { statusCode: 200, json: () => {}, send: () => { sent = true } }
+  await new Promise(resolve => middleware(req, res, resolve))
+  res.send(Buffer.from('logo'))
+  assert.equal(sent, false)
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(sent, true)
+  assert.match(sql[1], /UPDATE operation_logs/)
+})
+
+test('打印轮询只有需留痕的结果才先写日志再响应', async () => {
+  let releaseLog
+  const logDone = new Promise(resolve => { releaseLog = resolve })
+  let inserts = 0, sent = 0
+  const middleware = load('backend/src/middleware/opLogger.js', {
+    '../config/db': { pool: { query: async () => { inserts++; await logDone } } },
+    '../utils/logger': { error: () => {} },
+    '../modules/document-activity/document-operation': require('../backend/src/modules/document-activity/document-operation'),
+  })
+  const req = { method: 'POST', originalUrl: '/api/print-jobs/claim-client', path: '/api/print-jobs/claim-client', body: {}, headers: {} }
+  const res = { statusCode: 200, json: () => { sent++ } }
+  middleware(req, res, () => {})
+  res.json({ success: true, data: [] })
+  assert.equal(inserts, 0)
+  assert.equal(sent, 1)
+  res.json({ success: true, data: [{ id: 1 }] })
+  assert.equal(inserts, 1)
+  assert.equal(sent, 1)
+  releaseLog()
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(sent, 2)
+})
+
+test('日志补全后 JSON 序列化失败仍进入 Express 错误处理', async () => {
+  const conn = { beginTransaction: async () => {}, query: async () => {}, commit: async () => {}, rollback: async () => {}, release: () => {} }
+  const middleware = load('backend/src/middleware/opLogger.js', {
+    '../config/db': { pool: { query: async () => [{ insertId: 5 }], getConnection: async () => conn } },
+    '../utils/logger': { error: () => {} },
+    '../modules/document-activity/document-operation': require('../backend/src/modules/document-activity/document-operation'),
+  })
+  const failure = Error('JSON serialize')
+  const res = { statusCode: 200, json: () => { throw failure } }
+  const errors = []
+  await new Promise(resolve => middleware({ method: 'POST', originalUrl: '/api/products', path: '/api/products', body: {}, headers: {} }, res, error => {
+    if (error) errors.push(error)
+    else resolve()
+  }))
+  res.json({ success: true })
+  await new Promise(resolve => setImmediate(resolve))
+  assert.deepEqual(errors, [failure])
 })
 
 test('记录接口沿用报销本人范围与物流仓库范围', async () => {

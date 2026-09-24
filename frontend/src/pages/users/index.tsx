@@ -37,6 +37,7 @@ export default function UsersPage() {
   const [page, setPage] = useState(1)
   const [scopeTarget, setScopeTarget] = useState<{ id: number; name: string } | null>(null)
   const [search, setSearch] = useState('')
+  const [showDevelopment, setShowDevelopment] = useState(false)
 
   const [formOpen, setFormOpen] = useState(false)
   const [editUser, setEditUser] = useState<SysUser | null>(null)
@@ -46,7 +47,8 @@ export default function UsersPage() {
   const [deleteTarget, setDeleteTarget] = useState<SysUser | null>(null)
 
   const desktop = isElectronRuntime()
-  const { data, isLoading, isError, error, refetch } = useUsers({ page, pageSize: 20, keyword })
+  const hideDevelopment = showDevelopment && operatorRoleId === 1 ? '0' : '1'
+  const { data, isLoading, isError, error, refetch } = useUsers({ page, pageSize: 20, keyword, hideDevelopment })
   const total = data?.pagination?.total ?? 0
   const pageCount = Math.max(1, Math.ceil(total / 20))
   useEffect(() => { if (data && page > pageCount) setPage(pageCount) }, [data, page, pageCount])
@@ -133,10 +135,10 @@ export default function UsersPage() {
     <div className="space-y-4">
       <PageHeader
         title="用户管理"
-        description="管理系统登录账号与角色权限"
+        description={operatorRoleId === 1 ? '可编辑登录账号；原密码无法查看，需要更换时请使用“重置密码”' : '管理系统登录账号与角色权限'}
         actions={
           <>
-            <Button variant="outline" onClick={() => downloadExport('/export/users', { keyword, hideDevelopment: '1' }).catch(e => toast.error((e as Error).message))}>导出</Button>
+            <Button variant="outline" onClick={() => downloadExport('/export/users', { keyword, hideDevelopment }).catch(e => toast.error((e as Error).message))}>导出</Button>
             {canCreate && (
               <Button onClick={() => { setEditUser(null); setFormOpen(true) }}>
                 新增用户
@@ -159,6 +161,17 @@ export default function UsersPage() {
           <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword(''); setPage(1) }}>
             重置
           </Button>
+        )}
+        {operatorRoleId === 1 && (
+          <label className="ml-auto flex items-center gap-2 text-sm text-foreground">
+            <input
+              type="checkbox"
+              checked={showDevelopment}
+              onChange={event => { setShowDevelopment(event.target.checked); setPage(1) }}
+              className="size-4 accent-primary"
+            />
+            显示开发账号
+          </label>
         )}
       </FilterCard>
 

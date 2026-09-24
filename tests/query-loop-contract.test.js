@@ -51,6 +51,10 @@ const ALLOWLIST = new Map([
     '逐行导入：每行都要独立校验+建档，属批量写入路径而非只读列表'],
   ['backend/src/modules/inventory/inventory.service.js::for (const [sourceType, ids] of byType) {',
     '按维度分组后每组一次查询——这正是 N+1 的修法本身'],
+  ['backend/src/modules/document-activity/document-activity.service.js::for (const [type, idSet] of byType) {',
+    '仅按关联任务类型分组；每组以 IN (?) 批量读取，不随任务行数逐条查询'],
+  ['backend/src/modules/document-activity/document-activity.service.js::for (let start = 0; start < ids.length; start += 100) {',
+    '每次最多 100 个任务 ID 的有界批次，单次批量查询而非逐任务查询'],
 ])
 
 /** 判定一个函数上下文窗口是否包含写操作或行锁。 */

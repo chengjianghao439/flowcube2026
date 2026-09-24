@@ -89,6 +89,7 @@ export function formatHttpMethod(method: unknown): string {
 }
 
 function formatStatusCode(statusCode: unknown): string {
+  if (statusCode == null) return '待确认'
   const code = Number(statusCode)
   if (!Number.isFinite(code)) return '未知结果'
 

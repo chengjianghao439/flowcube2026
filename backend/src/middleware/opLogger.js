@@ -80,41 +80,88 @@ function shouldRecordOperation(method, path, statusCode, body) {
 function opLogger(req, res, next) {
   if (req.method === 'GET') return next()
 
+  const requestPath = (req.originalUrl || req.path).split('?')[0]
+  const userId = () => req.user?.userId || null
+  const userName = () => req.user?.username || req.user?.realName || null
+  const safe = sanitizeBody(req.body)
+  const bodyStr = safe && Object.keys(safe).length
+    ? JSON.stringify(safe).substring(0, 500)
+    : null
+  const ip = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || null
   const originalJson = res.json.bind(res)
-  res.json = function (body) {
-    const requestPath = (req.originalUrl || req.path).split('?')[0]
-    if (!shouldRecordOperation(req.method, requestPath, res.statusCode, body)) return originalJson(body)
+  const originalSend = res.send?.bind(res)
+  const deliver = send => {
+    try { send() } catch (error) {
+      res.json = originalJson
+      if (originalSend) res.send = originalSend
+      next(error)
+    }
+  }
+  // 高频打印客户端轮询保持原有免记录语义；实际领取结果由打印任务自身留痕。
+  if (requestPath === '/api/printers/client-heartbeat' || requestPath === '/api/print-jobs/claim-client') {
+    res.json = function (body) {
+      if (!shouldRecordOperation(req.method, requestPath, res.statusCode, body)) return originalJson(body)
+      pool.query(
+        `INSERT INTO operation_logs (user_id,user_name,action,method,path,module,request_body,status_code,ip) VALUES (?,?,?,?,?,?,?,?,?)`,
+        [userId(), userName(), `${req.method} ${requestPath}`, req.method, requestPath, getModule(requestPath), bodyStr, res.statusCode, ip],
+      ).catch(error => logger.error('写入打印轮询日志失败', error, { path: requestPath }, 'OPLOG'))
+        .finally(() => deliver(() => originalJson(body)))
+      return res
+    }
+    return next()
+  }
+
+  // 请求进入业务路由前先持久化意图。业务提交后即使进程退出，待确认记录仍可追查。
+  pool.query(
+    `INSERT INTO operation_logs (user_id,user_name,action,method,path,module,request_body,status_code,ip) VALUES (?,?,?,?,?,?,?,?,?)`,
+    [userId(), userName(), `${req.method} ${requestPath}`, req.method, requestPath, getModule(requestPath), bodyStr, null, ip],
+  ).then(([logged]) => {
+  let jsonDispatch = false
+  const finalize = (body, send) => {
     const operation = resolveOperation(req.method, requestPath, res.statusCode, body)
-    setImmediate(async () => {
+    const statusCode = res.statusCode
+    ;(async () => {
+      const conn = await pool.getConnection()
       try {
-        const userId = req.user?.userId || null
-        const userName = req.user?.username || req.user?.realName || null
-        const safe = sanitizeBody(req.body)
-        const bodyStr = safe && Object.keys(safe).length
-          ? JSON.stringify(safe).substring(0, 500)
-          : null
-        const ip = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || null
-        const [logged] = await pool.query(
-          `INSERT INTO operation_logs (user_id,user_name,action,method,path,module,request_body,status_code,ip) VALUES (?,?,?,?,?,?,?,?,?)`,
-          [userId, userName, `${req.method} ${requestPath}`, req.method, requestPath, getModule(requestPath), bodyStr, res.statusCode, ip]
-        )
+        await conn.beginTransaction()
+        await conn.query('UPDATE operation_logs SET user_id=?,user_name=?,status_code=? WHERE id=?',
+          [userId(), userName(), statusCode, logged.insertId])
         if (operation) {
           // 仅保存明确的操作说明，不复制请求体或认证、付款等字段。
           const reason = typeof req.body?.reason === 'string' ? req.body.reason.slice(0, 500) : null
-          await pool.query(
+          await conn.query(
             `INSERT INTO document_operation_events
              (document_type,document_id,operation_log_id,title,description,created_by,created_by_name)
              VALUES (?,?,?,?,?,?,?)`,
-            [operation.type, operation.id, logged.insertId, operation.title, reason, userId, req.user?.realName || userName],
+            [operation.type, operation.id, logged.insertId, operation.title, reason, userId(), req.user?.realName || userName()],
           )
         }
+        await conn.commit()
       } catch (error) {
-        logger.error('写入操作日志失败', error, { path: req.path, method: req.method }, 'OPLOG')
+        await conn.rollback()
+        throw error
+      } finally {
+        conn.release()
       }
+    })().catch(error => {
+      logger.error('完成操作日志失败，保留待确认记录', error, { path: req.path, method: req.method }, 'OPLOG')
+    }).finally(() => deliver(send))
+    return res
+  }
+  res.json = function (body) {
+    return finalize(body, () => {
+      jsonDispatch = true
+      try { return originalJson(body) } finally { jsonDispatch = false }
     })
-    return originalJson(body)
+  }
+  if (originalSend) {
+    res.send = function (body) {
+      if (jsonDispatch) return originalSend(body)
+      return finalize(null, () => originalSend(body))
+    }
   }
   next()
+  }).catch(next)
 }
 
 module.exports = opLogger

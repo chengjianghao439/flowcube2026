@@ -155,7 +155,7 @@ export default function DataTable<T extends object>({
             ))}
           </colgroup>
           <thead>
-            <tr className="border-b border-border bg-muted/30">
+            <tr className="data-table-header-surface border-b border-border">
               {isSelectEnabled && (
                 <th scope="col" className="w-10 px-4 py-2.5">
                   <input
@@ -184,7 +184,7 @@ export default function DataTable<T extends object>({
                   }}
                   onDragEnd={() => setDraggingKey(null)}
                   className={`relative cursor-move select-none px-4 py-2.5 text-left text-table-head ${
-                    stickyActionKey === String(col.key) ? 'sticky right-0 z-20 border-l border-border bg-muted' : ''
+                    stickyActionKey === String(col.key) ? 'data-table-header-surface sticky right-0 z-20 border-l border-border' : ''
                   }`}
                 >
                   <div className="group flex items-center gap-2">

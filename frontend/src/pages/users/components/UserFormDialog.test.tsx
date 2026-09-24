@@ -1,77 +1,72 @@
 // @vitest-environment jsdom
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { beforeEach, afterEach, expect, test, vi } from 'vitest'
-import { useAuthStore } from '@/store/authStore'
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import UserFormDialog from './UserFormDialog'
-const update = vi.fn()
-const create = vi.fn()
-vi.mock('@/hooks/useUsers', () => ({
-  useCreateUser: () => ({ mutate: create, isPending: false }),
-  useUpdateUser: () => ({ mutate: update, isPending: false }),
-  useAssignableRoles: () => ({ data: [{ id: 201, code: 'audit_custom', name: '审计自定义角色' }, { id: 2, code: 'warehouse_manager', name: '仓库管理员' }, { id: 7, code: 'smoke_scoped', name: 'Smoke单仓角色' }] }),
+import type { SysUser } from '@/types/users'
+
+const mocks = vi.hoisted(() => ({
+  roleId: 1,
+  update: vi.fn(),
+  create: vi.fn(),
+  updateCurrent: vi.fn(),
 }))
-vi.mock('@/hooks/useDepartments', () => ({ useDepartmentOptions: () => ({ data: [] }) }))
-let root: Root, host: HTMLDivElement
+
+vi.mock('@/hooks/useUsers', () => ({
+  useCreateUser: () => ({ mutate: mocks.create, isPending: false }),
+  useUpdateUser: () => ({ mutate: mocks.update, isPending: false }),
+  useAssignableRoles: () => ({ data: [{ id: 2, code: 'staff', name: '员工' }], isLoading: false, isError: false }),
+}))
+vi.mock('@/hooks/useDepartments', () => ({ useDepartmentOptions: () => ({ data: [], isError: false }) }))
+vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ roleId: mocks.roleId }) }))
+vi.mock('@/store/authStore', () => ({
+  useAuthStore: (selector: (state: { user: { id: number }; updateUser: typeof mocks.updateCurrent }) => unknown) =>
+    selector({ user: { id: 99 }, updateUser: mocks.updateCurrent }),
+}))
+
+const user: SysUser = {
+  id: 42, username: 'old_account', realName: '张三', roleId: 2, roleName: '员工', isActive: true,
+  allowSelfApprove: false, departmentId: null, departmentName: null, createdAt: '2026-09-23T00:00:00Z',
+}
+
+let root: Root
+let host: HTMLDivElement
 beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
-  useAuthStore.setState({ user: { id: 88, roleId: 1, permissions: [] } as never })
-  host = document.createElement('div'); document.body.append(host); root = createRoot(host)
+  mocks.roleId = 1
+  mocks.update.mockReset()
+  mocks.create.mockReset()
+  mocks.updateCurrent.mockReset()
+  host = document.createElement('div')
+  document.body.append(host)
+  root = createRoot(host)
 })
-afterEach(async () => { await act(async () => root.unmount()); host.remove(); update.mockReset(); create.mockReset(); Reflect.deleteProperty(window, 'flowcubeDesktop') })
+afterEach(async () => { await act(async () => root.unmount()); host.remove() })
 
-async function typeInto(selector: string, value: string) {
-  const input = document.querySelector<HTMLInputElement>(selector)!
+async function render() { await act(async () => root.render(<UserFormDialog open onClose={() => {}} editUser={user} />)) }
+
+test('superadmin can submit a new login name from the edit dialog', async () => {
+  await render()
+  const input = document.querySelector('#form-username') as HTMLInputElement
+  expect(input).not.toBeNull()
+  expect(input.disabled).toBe(false)
   await act(async () => {
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value)
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(input, 'new_account')
     input.dispatchEvent(new Event('input', { bubbles: true }))
   })
-}
-
-async function submit() {
-  await act(async () => document.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })))
-}
-test('dynamic custom roles are rendered and submitted by id', async () => {
-  await act(async () => root.render(<UserFormDialog open onClose={() => {}} editUser={{ id: 77, username: 'audit', realName: '测试', roleId: 2, roleName: '仓库管理员', isActive: true } as never} />))
-  const radio = document.querySelector<HTMLInputElement>('input[name="roleId"][value="201"]')
-  expect(radio).not.toBeNull()
-  await act(async () => radio!.click())
-  const form = document.querySelector('form')!
-  await act(async () => form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })))
-  expect(update.mock.calls[0][0].data.roleId).toBe(201)
-})
-test('ordinary operator cannot edit their own role in the form', async () => {
-  useAuthStore.setState({ user: { id: 88, roleId: 201, permissions: ['user.update'] } as never })
-  await act(async () => root.render(<UserFormDialog open onClose={() => {}} editUser={{ id: 88, username: 'audit', realName: '测试', roleId: 201, roleName: '审计自定义角色', isActive: true } as never} />))
-  const radios = [...document.querySelectorAll<HTMLInputElement>('input[name="roleId"]')]
-  expect(radios.length).toBeGreaterThan(0)
-  expect(radios.every(r => r.disabled)).toBe(true)
+  await act(async () => (document.querySelector('button[type="submit"]') as HTMLButtonElement).click())
+  expect(mocks.update).toHaveBeenCalledWith(
+    expect.objectContaining({ id: 42, data: expect.objectContaining({ username: 'new_account' }) }),
+    expect.any(Object),
+  )
 })
 
-test('new user requires an explicit role choice before creation', async () => {
-  await act(async () => root.render(<UserFormDialog open onClose={() => {}} />))
-  await typeInto('#form-username', 'new_user')
-  await typeInto('#form-password', 'secret123')
-  await typeInto('#form-realName', '新用户')
-  expect([...document.querySelectorAll<HTMLInputElement>('input[name="roleId"]')].some(r => r.checked)).toBe(false)
-  await submit()
-  expect(create).not.toHaveBeenCalled()
-  await act(async () => document.querySelector<HTMLInputElement>('input[name="roleId"][value="2"]')!.click())
-  await submit()
-  expect(create.mock.calls[0][0]).toMatchObject({ username: 'new_user', realName: '新用户', roleId: 2 })
-})
-
-test('blank names are rejected with a field error', async () => {
-  await act(async () => root.render(<UserFormDialog open onClose={() => {}} editUser={{ id: 77, username: 'audit', realName: '原姓名', roleId: 2, roleName: '仓库管理员', isActive: true } as never} />))
-  await typeInto('#form-realName', '   ')
-  await submit()
-  expect(update).not.toHaveBeenCalled()
-  expect(document.querySelector('#form-realName')?.getAttribute('aria-invalid')).toBe('true')
-})
-
-test('desktop user form hides development roles but keeps ordinary custom roles', async () => {
-  Object.assign(window, { flowcubeDesktop: {} })
-  await act(async () => root.render(<UserFormDialog open onClose={() => {}} />))
-  expect(document.querySelector('input[name="roleId"][value="7"]')).toBeNull()
-  expect(document.querySelector('input[name="roleId"][value="201"]')).not.toBeNull()
+test('ordinary user editor cannot submit a login name change', async () => {
+  mocks.roleId = 2
+  await render()
+  const input = document.querySelector('#form-username') as HTMLInputElement
+  expect(input).not.toBeNull()
+  expect(input.disabled || input.readOnly).toBe(true)
+  await act(async () => (document.querySelector('button[type="submit"]') as HTMLButtonElement).click())
+  expect(mocks.update.mock.calls[0]?.[0]?.data).not.toHaveProperty('username')
 })

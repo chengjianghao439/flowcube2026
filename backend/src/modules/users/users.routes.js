@@ -32,6 +32,7 @@ const createSchema = z.object({
 // allowSelfApprove 是提权类字段（豁免「申请人不得批自己的单」内控），schema 放行但
 // service 层 assertCanGrantSelfApprove 限定只有超管能设；不传 = 保持原值。
 const updateSchema = z.object({
+  username: z.string().trim().min(2, '账号至少 2 个字符').max(50).optional(),
   realName: z.string().trim().min(1, '姓名不能为空').max(50),
   roleId: NON_ADMIN_ROLE.optional(),
   isActive: z.boolean(),

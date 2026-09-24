@@ -40,7 +40,10 @@ export function useUpdateUser() {
   return useMutation({
     mutationFn: ({ id, data }: { id: number; data: UpdateUserParams }) =>
       updateUserApi(id, data),
-    onSuccess: () => invalidateOrganizationUsers(qc),
+    onSuccess: () => Promise.all([
+      invalidateOrganizationUsers(qc),
+      qc.invalidateQueries({ queryKey: ['my-info'] }),
+    ]),
   })
 }
 

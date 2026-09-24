@@ -4,7 +4,8 @@ import type { SysUser, CreateUserParams, UpdateUserParams } from '@/types/users'
 
 export async function getUsersApi(params: QueryParams): Promise<PaginatedData<SysUser>> {
   // 用户管理有显式翻页；跳过通用客户端的“取齐全部页”行为，保留服务端分页与总数。
-  const res = await apiClient.get<PaginatedData<SysUser>>('/users', { params: { ...params, hideDevelopment: '1' }, listMode: 'summary' })
+  const hideDevelopment = params.hideDevelopment === '0' ? '0' : '1'
+  const res = await apiClient.get<PaginatedData<SysUser>>('/users', { params: { ...params, hideDevelopment }, listMode: 'summary' })
   return res
 }
 
