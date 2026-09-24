@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import ReconciliationView from './ReconciliationView'
 import { useAuthStore } from '@/store/authStore'
+import { PERMISSIONS } from '@/lib/permission-codes'
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 const fixture = vi.hoisted(() => ({
@@ -69,4 +70,14 @@ it('没有财务确认权限时，供应商仍能看到待确认状态但不能�
   expect(host.textContent).toContain('待确认')
   expect(host.textContent).not.toContain('确认结算')
   expect(host.textContent).toContain('原单')
+})
+
+it('普通财务具备确认权限可以操作，已确认应付不再显示入口', async () => {
+  useAuthStore.setState({ user: { roleId: 5, permissions: [PERMISSIONS.PAYMENT_CONFIRM] } as never })
+  await render(1)
+  expect(host.textContent).toContain('确认结算')
+  fixture.list = fixture.list.map(r => ({ ...r, confirmStatus: 1 }))
+  client.invalidateQueries({ queryKey: ['reconciliation'] })
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)) })
+  expect(host.textContent).not.toContain('确认结算')
 })

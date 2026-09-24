@@ -21,7 +21,7 @@ interface Props {
 export function SettlementConfirmDialog({ open, onClose, record }: Props) {
   const invalidatePaymentViews = usePaymentViewInvalidation()
 
-  const { data: settlement } = useQuery({
+  const { data: settlement, isPending, isError, error, refetch } = useQuery({
     queryKey: ['payment-settlement', record?.id],
     queryFn: () => getSettlementDetailApi(record!.id),
     enabled: open && !!record,
@@ -31,7 +31,7 @@ export function SettlementConfirmDialog({ open, onClose, record }: Props) {
     onSuccess: () => {
       invalidatePaymentViews()
       onClose()
-      toast.success('应付结算已确认，可登记付款')
+      toast.success('应付结算已确认')
     },
   })
 
@@ -48,7 +48,7 @@ export function SettlementConfirmDialog({ open, onClose, record }: Props) {
       footer={
         <div className="flex justify-end gap-2">
           <Button variant="outline" onClick={onClose}>取消</Button>
-          <Button disabled={confirmMut.isPending} onClick={() => { if (record) confirmMut.mutate(record.id) }}>
+          <Button disabled={confirmMut.isPending || isPending || isError || !settlement} onClick={() => { if (record) confirmMut.mutate(record.id) }}>
             {confirmMut.isPending ? '确认中…' : '确认结算金额'}
           </Button>
         </div>
@@ -59,6 +59,10 @@ export function SettlementConfirmDialog({ open, onClose, record }: Props) {
           该应付由收货上架自动结算生成。请核对以下明细（实际上架量 × 采购单价）后确认；确认后才可登记付款。
           若结算金额后续被重算改变（补收货/退货/撤回收货），会自动打回待确认。
         </p>
+        {isError && <div role="alert" className="flex items-center justify-between gap-3 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+          <span>结算明细加载失败：{error instanceof Error ? error.message : '请检查网络后重试'}</span>
+          <Button variant="outline" size="sm" onClick={() => void refetch()}>重试</Button>
+        </div>}
         <div className="min-h-0 flex-1 overflow-y-auto rounded-md border">
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-xs text-muted-foreground">

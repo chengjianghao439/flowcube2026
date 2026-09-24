@@ -20,7 +20,7 @@ export const payApi          = (id:number, d:object, requestKey:string) =>
 export const getEntriesApi   = (id:number) => client.get<PaymentEntry[]>(`/payments/${id}/entries`)
 /** 财务确认应付结算金额（确认后才可登记付款） */
 export const confirmPaymentApi = (id:number) => client.post<{id:number;confirmStatus:1}>(`/payments/${id}/confirm`)
-export const getSettlementDetailApi = (id:number) => client.get<SettlementDetail>(`/payments/${id}/settlement-detail`)
+export const getSettlementDetailApi = (id:number) => client.get<SettlementDetail>(`/payments/${id}/settlement-detail`, { skipGlobalError: true })
 
 // ── 账龄分析 ──────────────────────────────────────────────────────────────────
 

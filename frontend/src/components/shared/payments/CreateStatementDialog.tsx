@@ -49,7 +49,7 @@ export function CreateStatementDialog({ open, onClose, type, onCreated }: Props)
   }, [open])
 
   const { data: candidates, isFetching } = useQuery({
-    queryKey: ['statement-candidates', applied],
+    queryKey: ['statement-candidates', type, applied],
     queryFn: () => getStatementCandidatesApi({ type, partyName: applied!.partyName, startDate: applied!.startDate, endDate: applied!.endDate }),
     enabled: active && open && !!applied,
   })
@@ -89,7 +89,7 @@ export function CreateStatementDialog({ open, onClose, type, onCreated }: Props)
         <div className="flex justify-end gap-2">
           <Button variant="outline" onClick={onClose}>取消</Button>
           <Button disabled={!validPicked.length || mut.isPending} onClick={() => mut.mutate()}>
-            {mut.isPending ? '生成中…' : `生成对账单（${picked.size} 笔 / ${money(pickedTotal)}）`}
+            {mut.isPending ? '生成中…' : `生成对账单（${validPicked.length} 笔 / ${money(pickedTotal)}）`}
           </Button>
         </div>
       }
@@ -116,10 +116,10 @@ export function CreateStatementDialog({ open, onClose, type, onCreated }: Props)
           <div className="flex items-center justify-between border-b bg-muted/40 px-3 py-2 text-sm">
             <span className="font-medium">待对账账款{applied ? `（${list.length} 笔）` : ''}</span>
             <div className="flex items-center gap-3 text-xs">
-              <span className="text-muted-foreground">已选 {picked.size} 笔 · 合计 <span className="tabular-nums font-medium text-foreground">{money(pickedTotal)}</span></span>
+              <span className="text-muted-foreground">已选 {validPicked.length} 笔 · 合计 <span className="tabular-nums font-medium text-foreground">{money(pickedTotal)}</span></span>
               <Button size="sm" variant="outline" disabled={!list.length}
-                onClick={() => setPicked(picked.size === list.length ? new Set() : new Set(list.map(x => x.id)))}>
-                {picked.size === list.length && list.length > 0 ? '取消全选' : '全选'}
+                onClick={() => setPicked(validPicked.length === list.length ? new Set() : new Set(list.map(x => x.id)))}>
+                {validPicked.length === list.length && list.length > 0 ? '取消全选' : '全选'}
               </Button>
             </div>
           </div>
