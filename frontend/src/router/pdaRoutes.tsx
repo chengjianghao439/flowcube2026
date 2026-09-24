@@ -1,9 +1,26 @@
-import { lazy } from 'react'
-import { Route } from 'react-router-dom'
+import { lazy, useEffect, useState } from 'react'
+import { Outlet, Route } from 'react-router-dom'
 import { PdaProtectedRoute, PdaGuestRoute } from './PdaAuthRoutes'
 import PdaLayout from '@/layouts/PdaLayout'
 import PdaRoutePermission from '@/components/pda/PdaRoutePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
+import { initDeviceBinding } from '@/lib/pdaDeviceBinding'
+
+/** ERP 直达 PDA 路由时也必须先水合设备缓存；独立 PDA 启动已水合时这里直接复用。 */
+function PdaBindingHydrationGate() {
+  const [status, setStatus] = useState<'loading' | 'ready' | 'failed'>('loading')
+  useEffect(() => {
+    let active = true
+    void initDeviceBinding().then(ok => { if (active) setStatus(ok ? 'ready' : 'failed') })
+    return () => { active = false }
+  }, [])
+  if (status === 'loading') return <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">正在读取本机设备缓存…</div>
+  if (status === 'failed') return <div role="alert" className="flex min-h-screen flex-col items-center justify-center gap-3 p-6 text-center text-sm">
+    <p>本机设备缓存读取失败，请重新绑定设备。</p>
+    <button type="button" className="rounded-md bg-primary px-4 py-2 text-primary-foreground" onClick={() => setStatus('ready')}>继续重新绑定</button>
+  </div>
+  return <Outlet />
+}
 
 // ── PDA 子系统页面 ────────────────────────────────────────────────────────────
 const PdaLoginPage   = lazy(() => import('@/pages/pda/login'))
@@ -33,6 +50,7 @@ const PdaInventoryQueryPage = lazy(() => import('@/pages/pda/inventory-query'))
 // ERP 浏览器与独立 PDA 构建共用同一份路由、认证及权限定义。
 export function pdaRoutes() {
   return <>
+          <Route element={<PdaBindingHydrationGate />}>
           {/* ── PDA 游客路由 ── */}
           <Route element={<PdaGuestRoute />}>
             <Route path="/pda/login" element={<PdaLoginPage />} />
@@ -77,6 +95,8 @@ export function pdaRoutes() {
               <Route path="sale-return/:id/receive" element={<PdaRoutePermission title="退货收货" required={[PERMISSIONS.RETURN_ORDER_VIEW, PERMISSIONS.RETURN_ORDER_EXECUTE]}><PdaSaleReturnReceivePage /></PdaRoutePermission>} />
               <Route path="sale-return/:id/putaway" element={<PdaRoutePermission title="退货上架" required={[PERMISSIONS.RETURN_ORDER_VIEW, PERMISSIONS.RETURN_ORDER_EXECUTE]}><PdaSaleReturnPutawayPage /></PdaRoutePermission>} />
             </Route>
+          </Route>
+
           </Route>
 
   </>

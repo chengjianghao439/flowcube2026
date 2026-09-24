@@ -1238,12 +1238,29 @@ async function getReservePreview(id, scopeWarehouseIds = null) {
 
   const productIds = [...new Set(itemRows.map(r => r.product_id))]
   const availability = await getAvailabilityByProducts({ productIds, scopeWarehouseIds, includeExpected: true })
+  const warehouseIds = [...new Set(availability.map(a => a.warehouseId))]
+  const pickableByDimension = new Map()
+  if (warehouseIds.length) {
+    const [pickableRows] = await pool.query(
+      `SELECT product_id, warehouse_id, SUM(remaining_qty) AS pickable_quantity
+         FROM inventory_containers
+        WHERE product_id IN (?) AND warehouse_id IN (?)
+          AND status = 1 AND deleted_at IS NULL AND remaining_qty > 0
+          AND locked_by_task_id IS NULL
+        GROUP BY product_id, warehouse_id`,
+      [productIds, warehouseIds],
+    )
+    for (const row of pickableRows) {
+      pickableByDimension.set(`${row.product_id}:${row.warehouse_id}`, Number(row.pickable_quantity))
+    }
+  }
   const availByProduct = new Map()
   for (const a of availability) {
     if (!availByProduct.has(a.productId)) availByProduct.set(a.productId, [])
     availByProduct.get(a.productId).push({
       warehouseId: a.warehouseId, warehouseName: a.warehouseName,
       available: a.available, expected: a.expected, quantity: a.quantity, reserved: a.reserved,
+      pickableQuantity: pickableByDimension.get(`${a.productId}:${a.warehouseId}`) || 0,
     })
   }
 

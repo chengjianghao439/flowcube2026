@@ -404,6 +404,9 @@ jobs:
       - name: PDA 设备会话回归（设备未绑定即拒绝作业）
         run: npm run smoke:pda-device-session
 
+      - name: 认证操作日志可信身份与脱敏回归
+        run: npm run smoke:auth-session-remediation
+
       - name: 已确认审计问题实库回归
         run: npm run smoke:confirmed-audit
 

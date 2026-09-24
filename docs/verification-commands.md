@@ -53,7 +53,7 @@ npm run test:permissions
 | 销售改单、预计库存 | `npm run smoke:sale-adjustment`、`npm run smoke:atp` |
 | 财务、会计 | `npm run smoke:finance`、`npm run smoke:accounting`、`npm run smoke:accounting-period`、`npm run test:accounting` |
 | 退款、处置、授信 | `npm run smoke:refund-orders`、`npm run smoke:disposal`、`npm run smoke:credit-outbound` |
-| 权限、设备 | `npm run test:permissions`、`npm run smoke:warehouse-scope`、`npm run smoke:pda-device-session` |
+| 权限、设备与认证审计 | `npm run test:permissions`、`npm run smoke:warehouse-scope`、`npm run smoke:pda-device-session`、`npm run smoke:auth-session-remediation` |
 | 打印、标签 | `npm run test:label`、`npm run test:print`、`npm run test:print-purge`、`npm run smoke:print-queue`、`npm run smoke:print-template-preview` |
 | 报表、开票 | `npm run smoke:reports`、`npm run smoke:reports-values`、`npm run smoke:warehouse-ops`、`npm run smoke:invoice-quota` |
 

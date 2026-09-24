@@ -207,3 +207,15 @@ test('推荐库位行点击仍可拣货（扫码之外的人工兜底没有被�
 
   expect(api.submitScan).toHaveBeenCalledWith(expect.objectContaining({ barcode: 'I000123' }), 'stable-key')
 })
+
+test('其他任务独占容器时显示任务号和释放指引，不提示直接扫码', async () => {
+  api.sug.mockResolvedValue({ items: [{
+    ...SUGGESTIONS.items[0], suggestions: [],
+    blockedByTasks: [{ taskId: 73, taskNo: 'WT-LOCK-73', containerCount: 1, quantity: 5 }],
+  }] })
+  await act(async () => { await qc.invalidateQueries({ queryKey: ['pda-suggestions', 42] }) })
+  await settle()
+  expect(host.textContent).toContain('WT-LOCK-73')
+  expect(host.textContent).toContain('任务完成或逆向归还')
+  expect(host.textContent).not.toContain('请直接扫码')
+})

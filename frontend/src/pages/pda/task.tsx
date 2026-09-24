@@ -95,7 +95,12 @@ function ProductCard({ item, onScan, scanning }: {
         )}
         {open && !done && (
           item.suggestions.length===0
-            ? <p className="text-xs text-muted-foreground">暂无推荐库存单元，请直接扫码</p>
+            ? (item.blockedByTasks?.length
+              ? <div role="status" className="rounded-md border border-warning/40 bg-warning/5 px-3 py-2 text-xs text-foreground">
+                  <p className="font-medium">当前无可拣容器：同仓库存正由 {item.blockedByTasks.map(task => task.taskNo).join('、')} 独占。</p>
+                  <p className="mt-1">请等待对应任务完成或逆向归还后刷新推荐，勿重复扫码同箱。</p>
+                </div>
+              : <p className="text-xs text-muted-foreground">暂无推荐库存单元，请核对库位和库存状态后刷新</p>)
             : item.suggestions.map(c => (
                 <SuggestionRow key={c.containerId} c={c} disabled={scanning} onTap={()=>onScan(c.barcode,c)} />
               ))

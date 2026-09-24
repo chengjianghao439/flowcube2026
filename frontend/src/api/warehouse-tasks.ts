@@ -184,6 +184,7 @@ export interface PickSuggestionContainer {
 export interface PickSuggestionItem extends WarehouseTaskItem {
   remaining: number
   suggestions: PickSuggestionContainer[]
+  blockedByTasks?: Array<{ taskId: number; taskNo: string; containerCount: number; quantity: number }>
 }
 
 export interface PickSuggestionsData {

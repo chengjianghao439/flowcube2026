@@ -5,10 +5,11 @@ import { withRequestKeyHeaders } from '@/lib/requestKey'
 export const getCheckListApi   = (params: object) => client.get<PaginatedData<StockCheck>>('/stockcheck', { params })
 export const getCheckDetailApi = (id: number) => client.get<StockCheck>(`/stockcheck/${id}`)
 export const createCheckApi    = (data: CreateCheckParams) => client.post<{ id: number }>('/stockcheck', data)
-export const updateCheckItemsApi = (id: number, items: { id: number; actualQty: number }[]) => client.put<null>(`/stockcheck/${id}/items`, { items })
-export const submitCheckApi    = (id: number) => client.post<null>(`/stockcheck/${id}/submit`)
-export const refreshCheckItemApi = (id: number, itemId: number) => client.post<{ itemId: number; productName: string; bookQty: number }>(`/stockcheck/${id}/items/${itemId}/refresh`)
-export const cancelCheckApi    = (id: number) => client.post<null>(`/stockcheck/${id}/cancel`)
+// ERP 盘点详情自行展示失败原因并保留草稿，避免全局与页面重复提示。
+export const updateCheckItemsApi = (id: number, items: { id: number; actualQty: number }[]) => client.put<null>(`/stockcheck/${id}/items`, { items }, { skipGlobalError: true })
+export const submitCheckApi    = (id: number) => client.post<null>(`/stockcheck/${id}/submit`, undefined, { skipGlobalError: true })
+export const refreshCheckItemApi = (id: number, itemId: number) => client.post<{ itemId: number; productName: string; bookQty: number }>(`/stockcheck/${id}/items/${itemId}/refresh`, undefined, { skipGlobalError: true })
+export const cancelCheckApi    = (id: number) => client.post<null>(`/stockcheck/${id}/cancel`, undefined, { skipGlobalError: true })
 
 // PDA 扫码盘点（文档13 §4.3）：一律扫容器码——个体扫到即计 1，数量容器扫码后填实盘数
 /** PDA 任务池：进行中的盘点单 */

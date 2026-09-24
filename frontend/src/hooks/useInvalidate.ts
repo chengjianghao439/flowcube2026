@@ -334,6 +334,13 @@ const INVALIDATION_MAP = {
 
 export type InvalidationEvent = keyof typeof INVALIDATION_MAP
 
+/** ACTIVE 容器数量或预占改变时，所有已打开的商品查找器都要重取可用量。 */
+const FINDER_STOCK_EVENTS = new Set<InvalidationEvent>([
+  'sale_reserve', 'sale_cancel', 'sale_delete', 'sale_adjust', 'sale_ship', 'task_ship',
+  'inbound_putaway', 'inbound_void_receipt', 'stockcheck_submit', 'transfer_complete',
+  'return_complete', 'disposal_execute', 'inventory_change',
+])
+
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
 /**
@@ -355,6 +362,9 @@ export function useInvalidate() {
   return (event: InvalidationEvent) => {
     for (const key of INVALIDATION_MAP[event]) {
       qc.invalidateQueries({ queryKey: key as readonly string[] })
+    }
+    if (FINDER_STOCK_EVENTS.has(event)) {
+      qc.invalidateQueries({ queryKey: ['products', 'finder'] })
     }
   }
 }

@@ -206,6 +206,33 @@ async function _fetchContainersForProducts(productIds, warehouseId, taskId) {
   return grouped
 }
 
+/** 当前任务没有可拣容器时，说明同仓哪些任务独占了相关 ACTIVE 容器。 */
+async function _fetchBlockingTasks(productIds, warehouseId, taskId) {
+  if (!productIds.length) return {}
+  const [rows] = await pool.query(
+    `SELECT c.product_id AS productId, wt.id AS taskId, wt.task_no AS taskNo,
+            COUNT(*) AS containerCount, SUM(c.remaining_qty) AS quantity
+       FROM inventory_containers c
+       JOIN warehouse_tasks wt ON wt.id = c.locked_by_task_id
+      WHERE c.product_id IN (?) AND c.warehouse_id = ? AND wt.warehouse_id = ?
+        AND c.locked_by_task_id <> ? AND c.status = 1 AND c.deleted_at IS NULL
+        AND c.remaining_qty > 0 AND wt.deleted_at IS NULL AND wt.status NOT IN (?, ?)
+      GROUP BY c.product_id, wt.id, wt.task_no
+      ORDER BY c.product_id, wt.id
+      LIMIT 200`,
+    [productIds, warehouseId, warehouseId, taskId, WT_STATUS.SHIPPED, WT_STATUS.CANCELLED],
+  )
+  const grouped = {}
+  for (const row of rows) {
+    const entries = grouped[row.productId] || (grouped[row.productId] = [])
+    if (entries.length < 3) entries.push({
+      taskId: Number(row.taskId), taskNo: row.taskNo,
+      containerCount: Number(row.containerCount), quantity: Number(row.quantity),
+    })
+  }
+  return grouped
+}
+
 /**
  * 自动推荐拣货容器（N+1 已优化：批量查询后 JS 分组）
  */
@@ -219,14 +246,17 @@ async function getPickSuggestions(taskId, scopeWarehouseIds = null) {
   const pendingItems = task.items.filter(i => i.requiredQty - i.pickedQty > 0)
   const productIds   = pendingItems.map(i => i.productId)
   const grouped      = await _fetchContainersForProducts(productIds, task.warehouseId, taskId)
+  const blockedProductIds = [...new Set(productIds.filter(productId => !(grouped[productId] || []).length))]
+  const blockedByProduct = await _fetchBlockingTasks(blockedProductIds, task.warehouseId, taskId)
 
   const items = task.items.map(item => {
     const remaining = item.requiredQty - item.pickedQty
-    if (remaining <= 0) return { ...item, remaining: 0, suggestions: [] }
+    if (remaining <= 0) return { ...item, remaining: 0, suggestions: [], blockedByTasks: [] }
     const containers = (grouped[item.productId] || []).slice(0, 10)
     return {
       ...item,
       remaining,
+      blockedByTasks: blockedByProduct[item.productId] || [],
       suggestions: containers.map(c => ({
         containerId:  c.containerId,
         barcode:      c.barcode,

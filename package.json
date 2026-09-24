@@ -89,6 +89,7 @@
     "smoke:p1-regression": "node tests/p1-regression.smoke.test.js",
     "smoke:warehouse-scope": "node tests/warehouse-scope.smoke.test.js",
     "smoke:pda-device-session": "node tests/pda-device-session.smoke.test.js",
+    "smoke:auth-session-remediation": "node tests/auth-session-remediation.smoke.test.js",
     "smoke:finance": "node tests/finance.smoke.test.js",
     "smoke:invoice-quota": "node tests/invoice-quota.smoke.test.js",
     "smoke:refund-orders": "node tests/refund-orders.smoke.test.js",

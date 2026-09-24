@@ -528,6 +528,94 @@ async function setupTaskWithLockedContainer(ctx, token) {
   return { taskId, itemId: itemRow.id, container, saleId }
 }
 
+async function scenarioLockedContainerPickVisibility(log, ctx, token) {
+  log.section('Scenario: 可承诺量与整容器锁定后的当前可拣量分离')
+  const code = randomRef('PICK-LOCK').slice(0, 50)
+  const [productResult] = await ctx.pool.query(
+    'INSERT INTO product_items (code, name, unit, sale_price_a) VALUES (?, ?, ?, ?)',
+    [code, '整容器锁定验收商品', '个', 10],
+  )
+  const product = { id: productResult.insertId, code, name: '整容器锁定验收商品', unit: '个' }
+  const container = await seedActiveContainer(ctx.pool, {
+    product, warehouse: ctx.warehouse, qty: 5, locationId: ctx.location.id,
+  })
+  const create = async quantity => {
+    const response = await createSaleOrder(ctx.http, token, {
+      customer: ctx.customer, warehouse: ctx.warehouse, product, quantity,
+    })
+    if (!response.ok) throw new Error(`锁定场景销售建单失败: ${JSON.stringify(response.data)}`)
+    return Number(response.data.data.id)
+  }
+  const saleA = await create(3)
+  const saleB = await create(2)
+  const reservedA = await ctx.http.post(`/api/sale/${saleA}/reserve`, { token })
+  log.assert('A 占库 3 件成功', reservedA.ok, `status=${reservedA.status}`)
+  const dispatchedA = await ctx.http.post(`/api/sale/${saleA}/ship`, { token })
+  log.assert('A 派发拣货任务成功', dispatchedA.ok, `status=${dispatchedA.status}`)
+  const [[a]] = await ctx.pool.query('SELECT task_id FROM sale_orders WHERE id=?', [saleA])
+  const [[itemA]] = await ctx.pool.query('SELECT id FROM warehouse_task_items WHERE task_id=?', [a.task_id])
+  const scanA = await ctx.http.post('/api/scan-logs', {
+    token, headers: ctx.pdaHeaders({ 'X-Request-Key': randomRef('pick-lock-a') }),
+    json: {
+      taskId: Number(a.task_id), itemId: Number(itemA.id), containerId: container.containerId,
+      barcode: container.barcode, productId: Number(product.id), qty: 3, scanMode: '散件',
+    },
+  })
+  log.assert('A 实际扫码 3 件并独占 5 件容器', scanA.ok, `status=${scanA.status}`)
+  const previewB = await ctx.http.get(`/api/sale/${saleB}/reserve-preview`, { token })
+  const warehouseRow = previewB.data?.data?.items?.[0]?.warehouses?.find(
+    w => Number(w.warehouseId) === Number(ctx.warehouse.id),
+  )
+  log.assert('B 仍可承诺 2 件，但当前未锁容器现货为 0',
+    previewB.ok && Number(warehouseRow?.available) === 2 && Number(warehouseRow?.pickableQuantity) === 0,
+    JSON.stringify(warehouseRow))
+  const reservedB = await ctx.http.post(`/api/sale/${saleB}/reserve`, { token })
+  log.assert('B 占库 2 件仍合法', reservedB.ok, `status=${reservedB.status}`)
+  const dispatchedB = await ctx.http.post(`/api/sale/${saleB}/ship`, { token })
+  log.assert('B 派发任务成功', dispatchedB.ok, `status=${dispatchedB.status}`)
+  const [[b]] = await ctx.pool.query('SELECT task_id FROM sale_orders WHERE id=?', [saleB])
+  const suggestions = await ctx.http.get(`/api/warehouse-tasks/${b.task_id}/pick-suggestions`, { token })
+  const pickItem = suggestions.data?.data?.items?.[0]
+  log.assert('B 无可拣推荐，返回同仓锁定任务号而不泄露容器扫码入口',
+    suggestions.ok && pickItem?.suggestions?.length === 0
+      && pickItem?.blockedByTasks?.length === 1
+      && Number(pickItem.blockedByTasks[0].taskId) === Number(a.task_id),
+    JSON.stringify(pickItem?.blockedByTasks))
+  const [[stock]] = await ctx.pool.query(
+    'SELECT quantity, reserved FROM inventory_stock WHERE product_id=? AND warehouse_id=?',
+    [product.id, ctx.warehouse.id],
+  )
+  log.assert('提示口径不修改库存或预占账', Number(stock.quantity) === 5 && Number(stock.reserved) === 5,
+    JSON.stringify(stock))
+
+  const cancelA = await ctx.http.post(`/api/sale/${saleA}/cancel`, { token })
+  log.assert('A 取消后等待逐箱逆向归还', cancelA.ok, `status=${cancelA.status}`)
+  const returnA = await ctx.http.post('/api/scan-logs/cancel-return', {
+    token, headers: ctx.pdaHeaders({ 'X-Request-Key': randomRef('pick-lock-return') }),
+    json: {
+      taskId: Number(a.task_id), containerId: container.containerId,
+      barcode: container.barcode, locationId: Number(ctx.location.id),
+    },
+  })
+  log.assert('A 扫回原库位后容器解锁', returnA.ok && returnA.data?.data?.finalized === true,
+    JSON.stringify(returnA.data?.data))
+  const suggestionsAfterReturn = await ctx.http.get(`/api/warehouse-tasks/${b.task_id}/pick-suggestions`, { token })
+  const pickAfterReturn = suggestionsAfterReturn.data?.data?.items?.[0]
+  log.assert('B 刷新推荐后可拣到原容器', suggestionsAfterReturn.ok
+    && pickAfterReturn?.suggestions?.some(s => Number(s.containerId) === Number(container.containerId))
+    && (pickAfterReturn.blockedByTasks || []).length === 0,
+  JSON.stringify(pickAfterReturn))
+  const [[itemB]] = await ctx.pool.query('SELECT id FROM warehouse_task_items WHERE task_id=?', [b.task_id])
+  const scanB = await ctx.http.post('/api/scan-logs', {
+    token, headers: ctx.pdaHeaders({ 'X-Request-Key': randomRef('pick-lock-b') }),
+    json: {
+      taskId: Number(b.task_id), itemId: Number(itemB.id), containerId: container.containerId,
+      barcode: container.barcode, productId: Number(product.id), qty: 2, scanMode: '散件',
+    },
+  })
+  log.assert('B 在 A 释放后实际可拣 2 件', scanB.ok, `status=${scanB.status}`)
+}
+
 // 取消逆向归还：新分支基本行为 + 正向拦截。
 // 覆盖：容器已拣的任务被取消时，不批量解锁，而是立即释放预占/推进销售单状态，
 // 但保留容器锁定等待逐容器扫码归还；此时继续拣货/ready/pick-suggestions 均应被拒绝。
@@ -925,6 +1013,7 @@ async function main() {
     await scenarioSplitRollback(log, ctx)
     await scenarioWarehouseCancel(log, ctx, adminToken)
     await scenarioSaleOperationIdempotencyIsolation(log, ctx, adminToken)
+    await scenarioLockedContainerPickVisibility(log, ctx, adminToken)
     await scenarioInboundReceiveCrossTaskKeyReuse(log, ctx, adminToken)
     await scenarioScanLogCheckReplaySameTask(log, ctx, adminToken)
     await scenarioCancelReverseReturnBasics(log, ctx, adminToken)
