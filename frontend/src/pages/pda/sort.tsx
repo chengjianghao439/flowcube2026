@@ -85,7 +85,7 @@ export default function PdaSortPage() {
       const res = await scanProductForSortApi(code)
       const result = res
       if (!result) { err('无拣货中订单，请核对条码'); return }
-      if (!result.sortingBinCode) { err(`任务 ${result.taskNo} 未分配分拣格`); return }
+      if (!result.sortingBinCode) { err(`任务 ${result.taskNo} 待分配分拣格，请联系主管补分配，刷新后重新扫商品`); return }
       setHint({
         binCode: result.sortingBinCode, productCode: result.productCode, productName: result.productName,
         qty: result.pickedQty, unit: result.unit, taskNo: result.taskNo,

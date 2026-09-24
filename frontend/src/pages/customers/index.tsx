@@ -131,7 +131,7 @@ export default function CustomersPage() {
       {importOpen && (
         <div className="rounded-lg border border-border bg-card p-4 space-y-3">
           <h3 className="text-sm font-medium">批量导入客户</h3>
-          <p className="max-w-4xl text-sm leading-6 text-muted-foreground">请先下载模板，按照格式填写后上传。列：客户编码（可空，留空自动生成）、客户名称、联系人、电话、结算方式（现结/月结/预付定金/货到付款）、授信额度（可空）。名称重复或编码重复的行会跳过并留痕。</p>
+          <p className="max-w-4xl text-sm leading-6 text-muted-foreground">请先下载模板，按照格式填写后上传。列：客户编码（可空，留空自动生成）、客户名称、联系人、电话、结算方式（现结或 1、月结或 2；留空默认月结）、授信额度（可空）。结算方式无效、名称重复或编码重复的行会跳过并显示行号和原因。</p>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={() => downloadExport('/import/customers/template').catch(e => toast.error((e as Error).message))}>下载导入模板</Button>
             <div className="flex items-center gap-2">

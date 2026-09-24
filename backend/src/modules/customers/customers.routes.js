@@ -39,7 +39,7 @@ router.get('/active', requirePermission(PERMISSIONS.CUSTOMER_VIEW), ctrl.listAct
 router.get('/',       requirePermission(PERMISSIONS.CUSTOMER_VIEW), ctrl.list)
 router.get('/:id',    requirePermission(PERMISSIONS.CUSTOMER_VIEW), ctrl.detail)
 router.get('/:id/credit', requirePermission(PERMISSIONS.SALE_CREDIT_VIEW), ctrl.credit)
-router.post('/',      requirePermission(PERMISSIONS.CUSTOMER_CREATE), validateBody(base), ctrl.create)
+router.post('/',      requirePermission(PERMISSIONS.CUSTOMER_CREATE), validateBody(base.omit({ code: true })), ctrl.create)
 router.put('/:id',    requirePermission(PERMISSIONS.CUSTOMER_UPDATE), validateBody(base.omit({ code:true }).extend({ isActive:z.boolean() })), ctrl.update)
 router.delete('/:id', requirePermission(PERMISSIONS.CUSTOMER_DELETE), ctrl.remove)
 module.exports = router

@@ -48,6 +48,8 @@ export interface SaleOrderTask {
   warehouseName: string | null
   status: number
   statusName: string | null
+  sortingBinId?: number | null
+  sortingBinCode?: string | null
   cancelRequestedAt?: string | null
   adjustmentRequestedAt?: string | null
   shippedAt?: string | null
@@ -178,6 +180,8 @@ export interface ReserveWarehouseOption {
   available: number
   /** ACTIVE 容器现货。 */
   quantity?: number
+  /** 当前没有被其他任务整容器独占的 ACTIVE 容器现货；仅供拣货可执行性参考。 */
+  pickableQuantity?: number
   /** 所有有效订单已预占数量。 */
   reserved?: number
   expected?: number

@@ -5,6 +5,7 @@
  */
 export const BARCODE_PRINT_STATUS_OPTIONS = [
   { value: '__all__', label: '全部状态' },
+  { value: 'unassigned', label: '未配置打印机' },
   { value: 'queued', label: '待派发' },
   { value: 'printing', label: '打印中' },
   { value: 'success', label: '已打印' },

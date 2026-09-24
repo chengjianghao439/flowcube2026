@@ -39,6 +39,9 @@ async function sortTaskWithinTransaction(conn, id, sortedItems = null, { request
   if (requestState.replay) {
     return requestState.responseData
   }
+  if (!taskRow.sorting_bin_id) {
+    throw new AppError('该任务尚未分配分拣格，请联系主管补分配，刷新后重新扫码', 409, 'SORTING_BIN_REQUIRED')
+  }
 
   await assertTaskPickScanClosure(conn, id)
 

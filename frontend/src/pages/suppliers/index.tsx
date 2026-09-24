@@ -44,7 +44,7 @@ export default function SuppliersPage() {
   const [importResult, setImportResult] = useState<{ success: number; errors: string[] } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  // 供应商批量导入：模板列 = 编码/名称/联系人/电话/结算方式(1现结/2月结)/账期/提前期/地址
+  // 供应商批量导入：模板列 = 编码/名称/联系人/电话/结算方式(现结或1/月结或2)/账期/提前期/地址
   // 后端逐行返回回执；编码、结算方式等与 suppliers.service.create 口径一致。
   async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -124,7 +124,7 @@ export default function SuppliersPage() {
           {importOpen && (
             <div className="space-y-3 rounded-lg border border-border bg-card p-4">
               <p className="text-sm text-muted-foreground">
-                请先下载模板，按格式填写后上传。列：供应商编码（可空，留空自动生成）、供应商名称*、联系人、电话、结算方式（填 1=现结 / 2=月结）、账期（天，仅月结有效）、采购提前期（天）、地址。名称或编码重复的行会跳过并留痕。
+                请先下载模板，按格式填写后上传。列：供应商编码（可空，留空自动生成）、供应商名称*、联系人、电话、结算方式（现结或 1、月结或 2；留空默认月结）、账期（天，仅月结有效）、采购提前期（天）、地址。结算方式无效、名称或编码重复的行会跳过并显示行号和原因。
               </p>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={() => downloadExport('/import/suppliers/template').catch(e => toast.error((e as Error).message))}>下载导入模板</Button>

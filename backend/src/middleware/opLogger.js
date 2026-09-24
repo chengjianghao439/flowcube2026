@@ -81,8 +81,10 @@ function opLogger(req, res, next) {
   if (req.method === 'GET') return next()
 
   const requestPath = (req.originalUrl || req.path).split('?')[0]
-  const userId = () => req.user?.userId || null
-  const userName = () => req.user?.username || req.user?.realName || null
+  // 登录和退出由认证控制器在验证后设置 operationActor；其他路由使用认证中间件身份。
+  const actor = () => req.operationActor || req.user
+  const userId = () => actor()?.userId ?? null
+  const userName = () => actor()?.username || actor()?.realName || null
   const safe = sanitizeBody(req.body)
   const bodyStr = safe && Object.keys(safe).length
     ? JSON.stringify(safe).substring(0, 500)
@@ -133,7 +135,7 @@ function opLogger(req, res, next) {
             `INSERT INTO document_operation_events
              (document_type,document_id,operation_log_id,title,description,created_by,created_by_name)
              VALUES (?,?,?,?,?,?,?)`,
-            [operation.type, operation.id, logged.insertId, operation.title, reason, userId(), req.user?.realName || userName()],
+            [operation.type, operation.id, logged.insertId, operation.title, reason, userId(), actor()?.realName || userName()],
           )
         }
         await conn.commit()

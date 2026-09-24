@@ -20,7 +20,7 @@ export const payApi          = (id:number, d:object, requestKey:string) =>
 export const getEntriesApi   = (id:number) => client.get<PaymentEntry[]>(`/payments/${id}/entries`)
 /** 财务确认应付结算金额（确认后才可登记付款） */
 export const confirmPaymentApi = (id:number) => client.post<{id:number;confirmStatus:1}>(`/payments/${id}/confirm`)
-export const getSettlementDetailApi = (id:number) => client.get<SettlementDetail>(`/payments/${id}/settlement-detail`)
+export const getSettlementDetailApi = (id:number) => client.get<SettlementDetail>(`/payments/${id}/settlement-detail`, { skipGlobalError: true })
 
 // ── 账龄分析 ──────────────────────────────────────────────────────────────────
 
@@ -135,12 +135,24 @@ export interface StatementItem {
   createdAt: string
 }
 
+/** 待建对账单的原始账款；与已建对账单明细的 recordId 分开。 */
+export interface StatementCandidate {
+  id: number
+  orderNo: string
+  totalAmount: number
+  paidAmount: number
+  balance: number
+  status: 1 | 2 | 3
+  dueDate?: string | null
+  createdAt: string
+}
+
 export const getStatementsApi = (p: object) =>
   client.get<{ list: ReconciliationStatement[]; pagination: unknown }>('/payments/statements', { params: p })
 
 /** 某往来方在期间内、尚未进过任何对账单的月结账款 */
 export const getStatementCandidatesApi = (p: { type:number; partyName:string; startDate?:string; endDate?:string }) =>
-  client.get<StatementItem[]>('/payments/statements/candidates', { params: p })
+  client.get<StatementCandidate[]>('/payments/statements/candidates', { params: p })
 
 export const getStatementDetailApi = (id: number) =>
   client.get<ReconciliationStatement & { items: StatementItem[] }>(`/payments/statements/${id}`)

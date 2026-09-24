@@ -637,7 +637,7 @@ async function findById(id, scopeWarehouseIds = null) {
 
   // 分仓：一个订单可能有多个仓库任务，详情页返回任务列表（前端展示各仓进度）
   const [taskRows] = await pool.query(
-    `SELECT id, task_no, warehouse_id, warehouse_name, status,
+    `SELECT id, task_no, warehouse_id, warehouse_name, status, sorting_bin_id, sorting_bin_code,
             cancel_requested_at, adjustment_requested_at, shipped_at
      FROM warehouse_tasks WHERE sale_order_id = ? AND deleted_at IS NULL ORDER BY id`,
     [id],
@@ -649,6 +649,8 @@ async function findById(id, scopeWarehouseIds = null) {
     warehouseName: t.warehouse_name,
     status: Number(t.status),
     statusName: WT_STATUS_NAME[Number(t.status)] || null,
+    sortingBinId: t.sorting_bin_id != null ? Number(t.sorting_bin_id) : null,
+    sortingBinCode: t.sorting_bin_code || null,
     cancelRequestedAt: t.cancel_requested_at || null,
     adjustmentRequestedAt: t.adjustment_requested_at || null,
     shippedAt: t.shipped_at || null,
@@ -1225,12 +1227,29 @@ async function getReservePreview(id, scopeWarehouseIds = null) {
 
   const productIds = [...new Set(itemRows.map(r => r.product_id))]
   const availability = await getAvailabilityByProducts({ productIds, scopeWarehouseIds, includeExpected: true })
+  const warehouseIds = [...new Set(availability.map(a => a.warehouseId))]
+  const pickableByDimension = new Map()
+  if (warehouseIds.length) {
+    const [pickableRows] = await pool.query(
+      `SELECT product_id, warehouse_id, SUM(remaining_qty) AS pickable_quantity
+         FROM inventory_containers
+        WHERE product_id IN (?) AND warehouse_id IN (?)
+          AND status = 1 AND deleted_at IS NULL AND remaining_qty > 0
+          AND locked_by_task_id IS NULL
+        GROUP BY product_id, warehouse_id`,
+      [productIds, warehouseIds],
+    )
+    for (const row of pickableRows) {
+      pickableByDimension.set(`${row.product_id}:${row.warehouse_id}`, Number(row.pickable_quantity))
+    }
+  }
   const availByProduct = new Map()
   for (const a of availability) {
     if (!availByProduct.has(a.productId)) availByProduct.set(a.productId, [])
     availByProduct.get(a.productId).push({
       warehouseId: a.warehouseId, warehouseName: a.warehouseName,
       available: a.available, expected: a.expected, quantity: a.quantity, reserved: a.reserved,
+      pickableQuantity: pickableByDimension.get(`${a.productId}:${a.warehouseId}`) || 0,
     })
   }
 

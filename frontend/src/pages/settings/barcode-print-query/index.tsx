@@ -32,6 +32,7 @@ const AUTO_REFRESH_MS = 15000
 
 function statusBadge(job: BarcodePrintRecord['latestJob']) {
   if (!job) return <SoftStatusLabel label="未生成打印任务" tone="draft" />
+  if (job.statusKey === 'unassigned') return <SoftStatusLabel label="未配置打印机" tone="warning" />
   if (job.statusKey === 'success')   return <SoftStatusLabel label="已打印"     tone="success" />
   if (job.statusKey === 'timeout')   return <SoftStatusLabel label="超时待确认" tone="warning" />
   if (job.statusKey === 'failed')    return <SoftStatusLabel label="打印失败"   tone="danger" />
@@ -235,6 +236,7 @@ export default function BarcodePrintQueryPage() {
     if (category !== 'inbound' || !initialInboundTaskId) return null
     const taskId = initialInboundTaskId
     const taskRows = rows.filter(row => row.inboundTaskId === taskId)
+    const unassignedCount = taskRows.filter(row => row.latestJob?.statusKey === 'unassigned').length
     const failedCount = taskRows.filter(row => row.latestJob?.statusKey === 'failed').length
     const timeoutCount = taskRows.filter(row => row.latestJob?.statusKey === 'timeout').length
     const printingCount = taskRows.filter(row => row.latestJob?.statusKey === 'printing' || row.latestJob?.statusKey === 'queued').length
@@ -242,6 +244,7 @@ export default function BarcodePrintQueryPage() {
     return {
       taskId,
       taskNo,
+      unassignedCount,
       failedCount,
       timeoutCount,
       printingCount,
@@ -252,17 +255,20 @@ export default function BarcodePrintQueryPage() {
     const waveId = rows.find(row => row.waveId)?.waveId
     if (!waveId) return null
     const waveNo = rows.find(row => row.waveId === waveId)?.waveNo ?? `#${waveId}`
+    const unassignedCount = rows.filter(row => row.waveId === waveId && row.latestJob?.statusKey === 'unassigned').length
     const failedCount = rows.filter(row => row.waveId === waveId && row.latestJob?.statusKey === 'failed').length
     const timeoutCount = rows.filter(row => row.waveId === waveId && row.latestJob?.statusKey === 'timeout').length
     const printingCount = rows.filter(row => row.waveId === waveId && (row.latestJob?.statusKey === 'printing' || row.latestJob?.statusKey === 'queued')).length
-    return { waveId, waveNo, failedCount, timeoutCount, printingCount }
+    return { waveId, waveNo, unassignedCount, failedCount, timeoutCount, printingCount }
   }, [category, rows])
   const logisticsContext = useMemo(() => {
     if (category !== 'logistics') return null
+    const unassignedCount = rows.filter(row => row.latestJob?.statusKey === 'unassigned').length
     const failedCount = rows.filter(row => row.latestJob?.statusKey === 'failed').length
     const timeoutCount = rows.filter(row => row.latestJob?.statusKey === 'timeout').length
     const printingCount = rows.filter(row => row.latestJob?.statusKey === 'printing' || row.latestJob?.statusKey === 'queued').length
     return {
+      unassignedCount,
       failedCount,
       timeoutCount,
       printingCount,
@@ -284,7 +290,7 @@ export default function BarcodePrintQueryPage() {
             <div>
               <p className="text-sm font-semibold text-foreground">当前正在处理收货打印任务</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                收货订单 <span className="text-doc-code">{inboundContext.taskNo}</span> 的库存条码都在这里追踪。先处理失败 / 超时的打印任务，再回到收货详情继续上架。
+                收货订单 <span className="text-doc-code">{inboundContext.taskNo}</span> 的库存条码都在这里追踪。先绑定缺失的打印机，再处理失败 / 超时的打印任务，再回到收货详情继续上架。
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -297,7 +303,11 @@ export default function BarcodePrintQueryPage() {
               </Button>
             </div>
           </div>
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-4">
+            <div className="rounded-lg border border-warning/20 bg-background px-4 py-3">
+              <p className="text-helper">未配置打印机</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">{inboundContext.unassignedCount}</p>
+            </div>
             <div className="rounded-lg border border-destructive/20 bg-background px-4 py-3">
               <p className="text-helper">打印失败</p>
               <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">{inboundContext.failedCount}</p>
@@ -320,7 +330,7 @@ export default function BarcodePrintQueryPage() {
             <div>
               <p className="text-sm font-semibold text-foreground">当前正在处理出库打印任务</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                批次 <span className="text-doc-code">{outboundContext.waveNo}</span> 的出库箱贴都在这里追踪。先处理失败 / 超时的打印任务，再回到批次详情继续拣货与分拣。
+                批次 <span className="text-doc-code">{outboundContext.waveNo}</span> 的出库箱贴都在这里追踪。先绑定缺失的打印机，再处理失败 / 超时的打印任务，再回到批次详情继续拣货与分拣。
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -333,7 +343,11 @@ export default function BarcodePrintQueryPage() {
               </Button>
             </div>
           </div>
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-4">
+            <div className="rounded-lg border border-warning/20 bg-background px-4 py-3">
+              <p className="text-helper">未配置打印机</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">{outboundContext.unassignedCount}</p>
+            </div>
             <div className="rounded-lg border border-destructive/20 bg-background px-4 py-3">
               <p className="text-helper">打印失败</p>
               <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">{outboundContext.failedCount}</p>
@@ -356,7 +370,7 @@ export default function BarcodePrintQueryPage() {
             <div>
               <p className="text-sm font-semibold text-foreground">当前正在处理物流标签打印任务</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                物流标签打印异常会直接影响现场出库确认。建议先处理失败 / 超时，再由现场继续扫描物流条码完成出库。
+                物流标签打印异常会直接影响现场出库确认。建议先绑定缺失的打印机，再处理失败 / 超时，再由现场继续扫描物流条码完成出库。
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -365,7 +379,11 @@ export default function BarcodePrintQueryPage() {
               </Button>
             </div>
           </div>
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-4">
+            <div className="rounded-lg border border-warning/20 bg-background px-4 py-3">
+              <p className="text-helper">未配置打印机</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">{logisticsContext.unassignedCount}</p>
+            </div>
             <div className="rounded-lg border border-destructive/20 bg-background px-4 py-3">
               <p className="text-helper">打印失败</p>
               <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">{logisticsContext.failedCount}</p>

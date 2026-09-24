@@ -410,6 +410,9 @@ jobs:
       - name: PDA 设备会话回归（设备未绑定即拒绝作业）
         run: npm run smoke:pda-device-session
 
+      - name: 认证操作日志可信身份与脱敏回归
+        run: npm run smoke:auth-session-remediation
+
       - name: 已确认审计问题实库回归
         run: npm run smoke:confirmed-audit
 
@@ -475,7 +478,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [prelaunch-finance, prelaunch-scope-export, prelaunch-hr, round2-transfer, round2-payroll, round2-runtime, fulfillment, procurement-planning, masterdata, warehouse-masterdata, warehouse-assets-waves]
+        suite: [prelaunch-finance, prelaunch-scope-export, prelaunch-hr, round2-transfer, round2-payroll, round2-runtime, fulfillment, procurement-planning, masterdata, masterdata-import, sorting-bin-recovery, warehouse-masterdata, warehouse-assets-waves]
     services:
       mysql:
         image: mysql:8.0

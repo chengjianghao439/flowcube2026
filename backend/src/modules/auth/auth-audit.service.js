@@ -5,6 +5,7 @@ const { getRequestContext, getRequestId } = require('../../utils/requestContext'
 const AUTH_AUDIT_EVENT = Object.freeze({
   LOGIN_SUCCESS: 'login_success',
   LOGIN_FAILED: 'login_failed',
+  LOGOUT_SUCCESS: 'logout_success',
   TOKEN_REFRESHED: 'token_refreshed',
   PERMISSION_DENIED: 'permission_denied',
   INACTIVE_USER_DENIED: 'inactive_user_denied',

@@ -37,6 +37,8 @@ export interface PdaDeviceSession {
 let cachedCredential: PdaDeviceCredential | null = null
 let cachedSession: PdaDeviceSession | null = null
 let hydrated = false
+let hydrationFailed = false
+let hydrationPromise: Promise<boolean> | null = null
 
 function parse<T>(raw: string | null): T | null {
   if (!raw) return null
@@ -51,20 +53,33 @@ function parse<T>(raw: string | null): T | null {
  * 启动时从加密存储水合内存缓存（2026-08-21 权衡修复）。
  * 必须在任何 getter 使用前调用（App 启动入口）；失败按未绑定处理。
  */
-export async function initDeviceBinding(): Promise<void> {
-  try {
-    const [credRaw, sessRaw] = await Promise.all([
-      secureStorage.getItem(CREDENTIAL_KEY),
-      secureStorage.getItem(SESSION_KEY),
-    ])
-    cachedCredential = parse<PdaDeviceCredential>(credRaw)
-    cachedSession = parse<PdaDeviceSession>(sessRaw)
-  } catch {
-    cachedCredential = null
-    cachedSession = null
-  } finally {
-    hydrated = true
-  }
+export function initDeviceBinding(): Promise<boolean> {
+  if (hydrated) return Promise.resolve(!hydrationFailed)
+  if (hydrationPromise) return hydrationPromise
+  hydrationPromise = (async () => {
+    try {
+      const [credRaw, sessRaw] = await Promise.all([
+        secureStorage.getItem(CREDENTIAL_KEY),
+        secureStorage.getItem(SESSION_KEY),
+      ])
+      const credential = parse<PdaDeviceCredential>(credRaw)
+      const session = parse<PdaDeviceSession>(sessRaw)
+      if ((credRaw && !credential) || (sessRaw && !session)) throw new Error('设备缓存内容损坏')
+      cachedCredential = credential
+      cachedSession = session
+      hydrationFailed = false
+      return true
+    } catch {
+      cachedCredential = null
+      cachedSession = null
+      hydrationFailed = true
+      return false
+    } finally {
+      hydrated = true
+      hydrationPromise = null
+    }
+  })()
+  return hydrationPromise
 }
 
 export function getDeviceCredential(): PdaDeviceCredential | null {

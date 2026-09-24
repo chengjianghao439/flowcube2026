@@ -53,7 +53,7 @@ npm run test:permissions
 | 销售改单、预计库存 | `npm run smoke:sale-adjustment`、`npm run smoke:atp` |
 | 财务、会计 | `npm run smoke:finance`、`npm run smoke:accounting`、`npm run smoke:accounting-period`、`npm run test:accounting` |
 | 退款、处置、授信 | `npm run smoke:refund-orders`、`npm run smoke:disposal`、`npm run smoke:credit-outbound` |
-| 权限、设备 | `npm run test:permissions`、`npm run smoke:warehouse-scope`、`npm run smoke:pda-device-session` |
+| 权限、设备与认证审计 | `npm run test:permissions`、`npm run smoke:warehouse-scope`、`npm run smoke:pda-device-session`、`npm run smoke:auth-session-remediation` |
 | 打印、标签 | `npm run test:label`、`npm run test:print`、`npm run test:print-purge`、`npm run smoke:print-queue`、`npm run smoke:print-template-preview` |
 | 报表、开票 | `npm run smoke:reports`、`npm run smoke:reports-values`、`npm run smoke:warehouse-ops`、`npm run smoke:invoice-quota` |
 
@@ -73,6 +73,8 @@ npm run test:permissions
 `npm run smoke:warehouse-assets-waves` 验证塑料盒和批次拣货的真实 HTTP 权限、仓范围、管理接口与状态流转，使用本节独立测试库，加载模块前禁用打印清理定时器并核验既有打印任务未变化，已接入 Tests CI 专项矩阵。空盒创建只接受正整数主档 ID 与文本备注，不增加库存；波次按商品合计并保留最早成员明细的显示快照，先限仓再返回绑定信息，完成时锁定成员，所有活动成员先检查待归还/待改单阻断，再保留已进入分拣及后续阶段的状态。销售任务取消仍必须从销售订单发起。活动波次 GET 详情会刷新已拣数量投影，不能当纯只读。详见 `docs/warehouse-assets-waves-regression-2026-09-13.md`。
 
 `npm run smoke:warehouse-masterdata` 验证仓库、库位、货架和分拣格的真实 HTTP 管理接口、权限、仓库范围和引用保护；沿用本节独立测试库并按自有 ID 清理，已接入 Tests CI 专项矩阵。仓库详情/更新/删除及库位、货架、分拣格的创建/下拉/扫码读取均传入当前用户仓库范围；库位更新校验原仓及目标仓，分拣格商品扫码先限任务仓再取结果。货架更新查重按本仓执行，允许跨仓同码。详见 `docs/warehouse-masterdata-regression-2026-09-13.md`。
+
+`npm run smoke:sorting-bin-recovery` 在独立测试库用真实 HTTP 与 MySQL 验证主管补分配：权限/仓库范围、任务状态与挂起守卫、同键重放、无空格、强制释放及两个任务争同一空格的双向绑定；fixture 只按本次 ID 清理。见 `docs/warehouse-masterdata-regression-2026-09-13.md` 的 2026-09-24 补充记录。
 
 `npm run smoke:masterdata` 验证客户、供应商、部门和分类的真实 HTTP 管理接口、权限、引用保护与层级边界，使用本节独立测试环境，已接入 Tests CI 专项矩阵。夹具按本次ID清理，不全表删除，不重置共享编码序列。部门更新沿父链验证有效父级，省略 `managerId` 保留负责人，显式 `null` 清空；不能把局部字段更新当作负责人清空。细节见 `docs/masterdata-regression-2026-09-12.md`。
 

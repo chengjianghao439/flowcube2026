@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { DatePicker } from '@/components/shared/DatePicker'
-import { createStatementApi, getStatementCandidatesApi, type StatementItem } from '@/api/payments'
+import { createStatementApi, getStatementCandidatesApi } from '@/api/payments'
 import { getRelativeDateRange } from '@/lib/dateRange'
 import { toast } from '@/lib/toast'
 import { formatDisplayDate } from '@/lib/dateTime'
@@ -49,23 +49,28 @@ export function CreateStatementDialog({ open, onClose, type, onCreated }: Props)
   }, [open])
 
   const { data: candidates, isFetching } = useQuery({
-    queryKey: ['statement-candidates', applied],
+    queryKey: ['statement-candidates', type, applied],
     queryFn: () => getStatementCandidatesApi({ type, partyName: applied!.partyName, startDate: applied!.startDate, endDate: applied!.endDate }),
     enabled: active && open && !!applied,
   })
 
   // 必须 useMemo：`candidates ?? []` 每次渲染都是新数组引用，会让下面依赖 list 的
   // useMemo 每次都重算（等于没缓存）
-  const list = useMemo(() => (candidates ?? []) as StatementItem[], [candidates])
+  const list = useMemo(() => candidates ?? [], [candidates])
   const pickedTotal = useMemo(
-    () => list.filter(x => picked.has(x.recordId)).reduce((s, x) => s + x.totalAmount, 0),
+    () => list.filter(x => picked.has(x.id)).reduce((s, x) => s + x.totalAmount, 0),
     [list, picked],
+  )
+
+  const validPicked = useMemo(() =>
+    [...picked].filter(id => Number.isSafeInteger(id) && id > 0 && list.some(item => item.id === id)),
+    [picked, list],
   )
 
   const mut = useMutation({
     mutationFn: () => createStatementApi({
       type, partyName: applied!.partyName, periodStart: applied!.startDate, periodEnd: applied!.endDate,
-      recordIds: [...picked], remark: remark || undefined,
+      recordIds: validPicked, remark: remark || undefined,
     }),
     onSuccess: (res) => { toast.success(`对账单 ${res.statementNo} 已生成`); onCreated() },
   })
@@ -83,8 +88,8 @@ export function CreateStatementDialog({ open, onClose, type, onCreated }: Props)
       footer={
         <div className="flex justify-end gap-2">
           <Button variant="outline" onClick={onClose}>取消</Button>
-          <Button disabled={!picked.size || mut.isPending} onClick={() => mut.mutate()}>
-            {mut.isPending ? '生成中…' : `生成对账单（${picked.size} 笔 / ${money(pickedTotal)}）`}
+          <Button disabled={!validPicked.length || mut.isPending} onClick={() => mut.mutate()}>
+            {mut.isPending ? '生成中…' : `生成对账单（${validPicked.length} 笔 / ${money(pickedTotal)}）`}
           </Button>
         </div>
       }
@@ -111,10 +116,10 @@ export function CreateStatementDialog({ open, onClose, type, onCreated }: Props)
           <div className="flex items-center justify-between border-b bg-muted/40 px-3 py-2 text-sm">
             <span className="font-medium">待对账账款{applied ? `（${list.length} 笔）` : ''}</span>
             <div className="flex items-center gap-3 text-xs">
-              <span className="text-muted-foreground">已选 {picked.size} 笔 · 合计 <span className="tabular-nums font-medium text-foreground">{money(pickedTotal)}</span></span>
+              <span className="text-muted-foreground">已选 {validPicked.length} 笔 · 合计 <span className="tabular-nums font-medium text-foreground">{money(pickedTotal)}</span></span>
               <Button size="sm" variant="outline" disabled={!list.length}
-                onClick={() => setPicked(picked.size === list.length ? new Set() : new Set(list.map(x => x.recordId)))}>
-                {picked.size === list.length && list.length > 0 ? '取消全选' : '全选'}
+                onClick={() => setPicked(validPicked.length === list.length ? new Set() : new Set(list.map(x => x.id)))}>
+                {validPicked.length === list.length && list.length > 0 ? '取消全选' : '全选'}
               </Button>
             </div>
           </div>
@@ -125,13 +130,13 @@ export function CreateStatementDialog({ open, onClose, type, onCreated }: Props)
               <p className="px-3 py-6 text-center text-sm text-muted-foreground">该期间内没有未对账的月结账款</p>
             )}
             {list.map(it => (
-              <label key={it.recordId} className="flex cursor-pointer items-center gap-3 border-b px-3 py-2 last:border-b-0 hover:bg-muted/30">
+              <label key={it.id} className="flex cursor-pointer items-center gap-3 border-b px-3 py-2 last:border-b-0 hover:bg-muted/30">
                 <input
                   type="checkbox" className="accent-primary"
-                  checked={picked.has(it.recordId)}
+                  checked={picked.has(it.id)}
                   onChange={e => setPicked(prev => {
                     const next = new Set(prev)
-                    if (e.target.checked) next.add(it.recordId); else next.delete(it.recordId)
+                    if (e.target.checked) next.add(it.id); else next.delete(it.id)
                     return next
                   })}
                 />

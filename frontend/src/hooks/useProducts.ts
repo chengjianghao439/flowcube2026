@@ -9,7 +9,7 @@ const K = 'products'
 export const useProduct         = (id: number) => useQuery({ queryKey:[K,id], queryFn:()=>getProductApi(id), enabled:!!id })
 export const useProducts        = (p: QueryParams) => useVisibleQuery({ queryKey:[K,p], queryFn:({ signal })=>getProductsApi(p, signal) })
 export const useProductFinder   = (p: ProductFinderParams, enabled=true) =>
-  useQuery({ queryKey:[K,'finder',p], queryFn:()=>getProductsForFinderApi(p), enabled, placeholderData:(prev) => prev })
+  useQuery({ queryKey:[K,'finder',p], queryFn:()=>getProductsForFinderApi(p), enabled })
 export function useCreateProduct() { const qc=useQueryClient(); return useMutation({ mutationFn:(d:CreateProductParams)=>createProductApi(d), onSuccess:()=>qc.invalidateQueries({queryKey:[K]}) }) }
 export function useUpdateProduct() { const qc=useQueryClient(); return useMutation({ mutationFn:({id,data}:{id:number;data:UpdateProductParams})=>updateProductApi(id,data), onSuccess:()=>qc.invalidateQueries({queryKey:[K]}) }) }
 export function useDeleteProduct() {

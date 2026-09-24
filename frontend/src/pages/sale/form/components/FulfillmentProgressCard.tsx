@@ -2,6 +2,10 @@ import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import type { StatusTone } from '@/lib/statusTone'
 import type { SaleOrder } from '@/types/sale'
 
+const awaitingBin = (task: NonNullable<SaleOrder['tasks']>[number]) =>
+  [2, 3].includes(task.status) && task.sortingBinId == null
+  && !task.cancelRequestedAt && !task.adjustmentRequestedAt
+
 export function FulfillmentProgressCard({ order }: { order: SaleOrder }) {
   const steps = [
     { status: 2, label: '拣货中' },
@@ -38,7 +42,10 @@ export function FulfillmentProgressCard({ order }: { order: SaleOrder }) {
                 <span className="font-medium">{t.warehouseName || `仓库#${t.warehouseId}`}</span>
                 <span className="ml-2 text-xs text-muted-foreground">{t.taskNo}</span>
               </div>
-              <SoftStatusLabel label={t.statusName || `阶段 ${t.status}`} tone={wtTone(t.status)} />
+              <div className="text-right">
+                <SoftStatusLabel label={t.statusName || `阶段 ${t.status}`} tone={wtTone(t.status)} />
+                {awaitingBin(t) && <p className="mt-1 text-xs text-warning">待分配分拣格，请联系主管</p>}
+              </div>
             </div>
           ))}
         </div>
@@ -61,6 +68,12 @@ export function FulfillmentProgressCard({ order }: { order: SaleOrder }) {
           <SoftStatusLabel label={order.warehouseTaskStatusName || `阶段 ${current}`} tone={current === 7 ? 'success' : 'active'} />
         ) : null}
       </div>
+
+      {tasks[0] && awaitingBin(tasks[0]) && (
+        <p className="rounded-md border border-warning/35 bg-warning/[0.07] px-3 py-2 text-sm text-foreground">
+          待分配分拣格，请联系主管在分拣格管理页补分配，完成后刷新任务。
+        </p>
+      )}
 
       {isPicking && !isCancelled && (
         <div className="flex items-center gap-1 overflow-x-auto pb-1">

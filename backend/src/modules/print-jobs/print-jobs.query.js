@@ -5,6 +5,8 @@ const { assertBoundWarehouseInScope } = require('../../utils/warehouseScope')
 const { fmt } = require('./print-jobs.helpers')
 const {
   STATUS,
+  EXPIRE_MESSAGE,
+  CLIENT_OFFLINE_MESSAGE,
   normalizeBarcodeQueryKeyword,
   normalizeBarcodeRecordStatus,
   deriveInboundBarcodeStatus,
@@ -143,21 +145,24 @@ function inboundStatusClause(status, thresholdMinutes) {
   if (status === 'no_job') {
     return { sql: 'AND IFNULL(t.status, 0) <> 5 AND pj.id IS NULL', params: [] }
   }
+  if (status === 'unassigned') {
+    return { sql: "AND IFNULL(t.status, 0) <> 5 AND pj.status = ? AND pj.printer_id IS NULL AND IFNULL(pj.error_message, '') = ?", params: [STATUS.FAILED, EXPIRE_MESSAGE] }
+  }
   if (status === 'timeout') {
     return {
       sql: `AND IFNULL(t.status, 0) <> 5
             AND (
               (pj.status IN (?, ?) AND pj.updated_at IS NOT NULL AND pj.updated_at <= DATE_SUB(NOW(), INTERVAL ? MINUTE))
-              OR (pj.status = ? AND IFNULL(pj.error_message, '') = ?)
+              OR (pj.status = ? AND ((pj.printer_id IS NOT NULL AND IFNULL(pj.error_message, '') = ?) OR IFNULL(pj.error_message, '') = ?))
             )`,
-      params: [STATUS.PENDING, STATUS.PRINTING, thresholdMinutes, STATUS.FAILED, 'no printer available'],
+      params: [STATUS.PENDING, STATUS.PRINTING, thresholdMinutes, STATUS.FAILED, EXPIRE_MESSAGE, CLIENT_OFFLINE_MESSAGE],
     }
   }
   if (status === 'success') return { sql: 'AND IFNULL(t.status, 0) <> 5 AND pj.status = ?', params: [STATUS.DONE] }
   if (status === 'failed') {
     return {
-      sql: "AND IFNULL(t.status, 0) <> 5 AND pj.status = ? AND IFNULL(pj.error_message, '') <> ?",
-      params: [STATUS.FAILED, 'no printer available'],
+      sql: "AND IFNULL(t.status, 0) <> 5 AND pj.status = ? AND IFNULL(pj.error_message, '') NOT IN (?, ?)",
+      params: [STATUS.FAILED, EXPIRE_MESSAGE, CLIENT_OFFLINE_MESSAGE],
     }
   }
   if (status === 'printing') {
@@ -183,9 +188,10 @@ function inboundStatusClause(status, thresholdMinutes) {
 function genericStatusClause(status, alias = 'j') {
   if (!status) return { sql: '', params: [] }
   if (status === 'no_job') return { sql: `AND ${alias}.id IS NULL`, params: [] }
-  if (status === 'timeout') return { sql: `AND ${alias}.status = ? AND IFNULL(${alias}.error_message, '') = ?`, params: [STATUS.FAILED, 'no printer available'] }
+  if (status === 'unassigned') return { sql: `AND ${alias}.status = ? AND ${alias}.printer_id IS NULL AND IFNULL(${alias}.error_message, '') = ?`, params: [STATUS.FAILED, EXPIRE_MESSAGE] }
+  if (status === 'timeout') return { sql: `AND ${alias}.status = ? AND ((${alias}.printer_id IS NOT NULL AND IFNULL(${alias}.error_message, '') = ?) OR IFNULL(${alias}.error_message, '') = ?)`, params: [STATUS.FAILED, EXPIRE_MESSAGE, CLIENT_OFFLINE_MESSAGE] }
   if (status === 'success') return { sql: `AND ${alias}.status = ?`, params: [STATUS.DONE] }
-  if (status === 'failed') return { sql: `AND ${alias}.status = ? AND IFNULL(${alias}.error_message, '') <> ?`, params: [STATUS.FAILED, 'no printer available'] }
+  if (status === 'failed') return { sql: `AND ${alias}.status = ? AND IFNULL(${alias}.error_message, '') NOT IN (?, ?)`, params: [STATUS.FAILED, EXPIRE_MESSAGE, CLIENT_OFFLINE_MESSAGE] }
   if (status === 'printing') return { sql: `AND ${alias}.status = ?`, params: [STATUS.PRINTING] }
   if (status === 'queued') return { sql: `AND ${alias}.id IS NOT NULL AND ${alias}.status = ?`, params: [STATUS.PENDING] }
   if (status === 'cancelled') return { sql: 'AND 1=0', params: [] }

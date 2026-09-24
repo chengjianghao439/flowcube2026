@@ -294,6 +294,27 @@ async function scenarioAllocationGuards(ctx, log, token, accountId) {
     `paid=${after.paid_amount} status=${after.status}`)
 }
 
+async function scenarioMonthlyPayableConfirmation(ctx, log, adminToken) {
+  log.section('月结应付财务确认：后端权限与重复确认')
+  const { http, pool } = ctx
+  const recordId = await seedRecord(http, adminToken, pool, {
+    type: 1, partyName: randomRef('月结供应商'), amount: 50,
+    settlementType: 2, confirmStatus: 0,
+  })
+  const { token: limitedToken } = await login(http, 'smoke_limited', 'SmokeLimited123!')
+  log.assert('受限账号登录成功', !!limitedToken)
+  const denied = await http.post(`/api/payments/${recordId}/confirm`, { token: limitedToken })
+  log.assert('★ 无 payment.confirm 的账号直调确认接口返回 403', denied.status === 403, `status=${denied.status}`)
+  const [before] = await dbQuery(pool, 'SELECT confirm_status FROM payment_records WHERE id=?', [recordId])
+  log.assert('越权尝试不改变确认状态', Number(before.confirm_status) === 0)
+  const confirmed = await http.post(`/api/payments/${recordId}/confirm`, { token: adminToken })
+  log.assert('有权账号可确认月结应付', confirmed.ok, `status=${confirmed.status}`)
+  const repeated = await http.post(`/api/payments/${recordId}/confirm`, { token: adminToken })
+  log.assert('★ 重复确认返回 409', repeated.status === 409, `status=${repeated.status}`)
+  const [[after]] = await pool.query('SELECT confirm_status, COUNT(*) AS n FROM payment_records WHERE id=?', [recordId])
+  log.assert('确认后状态唯一且无重复账款', Number(after.confirm_status) === 1 && Number(after.n) === 1)
+}
+
 // ── 3. 幂等重放 ───────────────────────────────────────────────────────────────
 
 async function scenarioIdempotency(ctx, log, token, accountId) {
@@ -831,6 +852,7 @@ async function main() {
     const { accountId } = await scenarioAccountProjection(ctx, log, token)
     await scenarioReceiptAllocation(ctx, log, token, accountId)
     await scenarioAllocationGuards(ctx, log, token, accountId)
+    await scenarioMonthlyPayableConfirmation(ctx, log, token)
     await scenarioIdempotency(ctx, log, token, accountId)
     await scenarioStatement(ctx, log, token, accountId)
     await scenarioStatementProjection(ctx, log, token)

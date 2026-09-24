@@ -25,6 +25,9 @@ import SortingBinQueryDialog, { type SortingBinQueryValues } from './SortingBinQ
 import { SORTING_BIN_STATUS_TONE, SORTING_BIN_STATUS_LABEL } from './constants'
 import BaseCrudPage from '@/components/shared/BaseCrudPage'
 import { downloadExport } from '@/lib/exportDownload'
+import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
+import AssignSortingBinDialog from './AssignSortingBinDialog'
 
 // ─── 批量创建弹窗 ─────────────────────────────────────────────────────────────
 function BatchDialog({ open, onClose, onSuccess }: { open: boolean; onClose: () => void; onSuccess: () => void }) {
@@ -91,9 +94,11 @@ export default function SortingBinsPage() {
   const [queryOpen, setQueryOpen] = useState(false)
   const [batchOpen, setBatchOpen] = useState(false)
   const [releaseTarget, setReleaseTarget] = useState<SortingBin | null>(null)
+  const [assignOpen, setAssignOpen] = useState(false)
   const [form, setForm] = useState({ code: '', warehouseId: '', remark: '', capacity: '' })
 
   const qc = useQueryClient()
+  const { can } = usePermission()
 
   const { data: whData } = useQuery({
     queryKey: ['warehouses-simple'],
@@ -182,6 +187,7 @@ export default function SortingBinsPage() {
           <>
             <Button variant="outline" onClick={() => downloadExport('/export/sorting-bins').catch(e => toast.error((e as Error).message))}>导出</Button>
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
+            {can(PERMISSIONS.WAREHOUSE_TASK_ASSIGN) && <Button variant="outline" onClick={() => setAssignOpen(true)}>补分配分拣格</Button>}
             <Button variant="outline" onClick={() => setBatchOpen(true)}>批量创建</Button>
           </>
         }
@@ -256,6 +262,13 @@ export default function SortingBinsPage() {
       />
 
       <BatchDialog open={batchOpen} onClose={() => setBatchOpen(false)} onSuccess={invalidate} />
+
+      {can(PERMISSIONS.WAREHOUSE_TASK_ASSIGN) && <AssignSortingBinDialog
+        open={assignOpen}
+        warehouseId={warehouseFilter}
+        onClose={() => setAssignOpen(false)}
+        onAssigned={invalidate}
+      />}
 
       <SortingBinQueryDialog
         open={queryOpen}

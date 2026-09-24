@@ -15,6 +15,11 @@ import type { CheckItem } from '@/types/stockcheck'
 
 interface Props { open: boolean; onClose: () => void; checkId: number | null }
 
+function showActionError(error: unknown) {
+  const message = error instanceof Error ? error.message : ''
+  toast.error(/[\u3400-\u9fff]/u.test(message) ? message : '操作失败，请检查网络后重试')
+}
+
 export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
   const { data: check, isLoading } = useCheckDetail(checkId||0)
   const updateItems = useUpdateCheckItems()
@@ -130,6 +135,8 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
       setSaveLocked(true)
       await updateItems.mutateAsync({ id:check.id, items: validation.items })
       toast.success('保存成功')
+    } catch (error) {
+      showActionError(error)
     } finally {
       setSaveLocked(false)
     }
@@ -146,6 +153,8 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
       setSubmitLocked(true)
       await submit.mutateAsync(check.id)
       onClose()
+    } catch (error) {
+      showActionError(error)
     } finally {
       setSubmitLocked(false)
     }
@@ -154,9 +163,13 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
   // 盘点期间该商品发生过出入库时（提交会被后端 409 拦截），刷新该行账面数并要求重盘
   const handleRefreshItem = async (itemId: number) => {
     if (!check || refreshItem.isPending) return
-    const data = await refreshItem.mutateAsync({ id: check.id, itemId })
-    setActuals(prev => ({ ...prev, [itemId]: '' }))
-    toast.success(`「${data.productName}」账面已刷新为 ${data.bookQty}，请重新盘点该商品`)
+    try {
+      const data = await refreshItem.mutateAsync({ id: check.id, itemId })
+      setActuals(prev => ({ ...prev, [itemId]: '' }))
+      toast.success(`「${data.productName}」账面已刷新为 ${data.bookQty}，请重新盘点该商品`)
+    } catch (error) {
+      showActionError(error)
+    }
   }
 
   const handleCancel = async () => {
@@ -165,6 +178,8 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
       setCancelLocked(true)
       await cancel.mutateAsync(check.id)
       onClose()
+    } catch (error) {
+      showActionError(error)
     } finally {
       setCancelLocked(false)
     }
@@ -282,7 +297,7 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
       description="将批量调整库存至实盘数量，此操作不可撤销。"
       confirmText="确认提交"
       loading={submit.isPending || submitLocked}
-      onConfirm={() => { setSubmitConfirm(false); handleSubmit() }}
+      onConfirm={() => { setSubmitConfirm(false); void handleSubmit() }}
       onCancel={() => setSubmitConfirm(false)}
     />
     <ConfirmDialog
@@ -292,7 +307,7 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
       variant="destructive"
       confirmText="确认取消"
       loading={cancel.isPending || cancelLocked}
-      onConfirm={() => { setCancelConfirm(false); handleCancel() }}
+      onConfirm={() => { setCancelConfirm(false); void handleCancel() }}
       onCancel={() => setCancelConfirm(false)}
     />
     </>

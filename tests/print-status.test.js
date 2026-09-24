@@ -23,6 +23,8 @@ const {
   parseListStatus,
   parsePriority,
   deriveGenericBarcodeStatus,
+  deriveInboundBarcodeStatus,
+  normalizeBarcodeRecordStatus,
   assertCanCompleteLocalDesktop,
   clientOfflineReclaimSeconds,
 } = require(path.resolve(__dirname, '../backend/src/modules/print-jobs/print-jobs.status'))
@@ -56,12 +58,29 @@ check('客户端失联回收的任务 → 超时待确认（而非打印失败�
   assert.strictEqual(d.printStateLabel, '超时待确认')
 })
 check('TTL 到期的任务 → 超时待确认', () => {
-  const d = deriveGenericBarcodeStatus({ status: STATUS.FAILED, error_message: EXPIRE_MESSAGE })
+  const d = deriveGenericBarcodeStatus({ status: STATUS.FAILED, printer_id: 1, error_message: EXPIRE_MESSAGE })
   assert.strictEqual(d.statusKey, 'timeout')
 })
 check('普通失败仍为打印失败', () => {
   const d = deriveGenericBarcodeStatus({ status: STATUS.FAILED, error_message: '打印机缺纸' })
   assert.strictEqual(d.statusKey, 'failed')
+})
+check('未配置打印机与真正超时分开，入库/出库/物流采用相同派生', () => {
+  for (const derive of [deriveInboundBarcodeStatus, deriveGenericBarcodeStatus]) {
+    const base = { status: STATUS.FAILED, print_status: STATUS.FAILED, printer_id: null, error_message: EXPIRE_MESSAGE }
+    assert.deepStrictEqual(derive(base), { statusKey: 'unassigned', printStateLabel: '未配置打印机' })
+    assert.strictEqual(derive({ ...base, printer_id: 1 }).statusKey, 'timeout')
+    assert.strictEqual(derive({ ...base, printer_id: undefined }).statusKey, 'timeout', '旧调用方未查询设备归属时不得反推为无设备')
+    assert.strictEqual(derive({ ...base, error_message: CLIENT_OFFLINE_MESSAGE }).statusKey, 'timeout')
+    assert.strictEqual(derive({ ...base, error_message: 'label render failed: LABEL_RENDER_INVALID' }).statusKey, 'failed')
+  }
+  assert.strictEqual(normalizeBarcodeRecordStatus('unassigned'), 'unassigned')
+})
+check('入库取消优先，真正排队/打印超时仍待人工确认', () => {
+  assert.strictEqual(deriveInboundBarcodeStatus({ print_status: STATUS.FAILED, printer_id: null, error_message: EXPIRE_MESSAGE, inbound_task_status: 5 }).statusKey, 'cancelled')
+  for (const print_status of [STATUS.PENDING, STATUS.PRINTING]) {
+    assert.strictEqual(deriveInboundBarcodeStatus({ print_status, printer_id: 1, print_updated_at: new Date(Date.now() - 31 * 60000) }, { printTimeoutMinutes: 30 }).statusKey, 'timeout')
+  }
 })
 check('完成 / 打印中 / 排队 各自映射正确', () => {
   assert.strictEqual(deriveGenericBarcodeStatus({ status: STATUS.DONE }).statusKey, 'success')
