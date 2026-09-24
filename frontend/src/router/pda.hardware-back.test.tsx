@@ -24,6 +24,15 @@ vi.mock('@capacitor/core', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@capacitor/core')>()
   return { ...actual, Capacitor: { ...actual.Capacitor, isNativePlatform: () => true } }
 })
+// 实体返回键测试只模拟原生 App 事件；设备绑定水合由独立测试覆盖。
+vi.mock('@/lib/secureStorage', () => ({
+  secureStorage: {
+    getItem: vi.fn(async () => null),
+    setItem: vi.fn(async () => {}),
+    removeItem: vi.fn(async () => {}),
+    clear: vi.fn(async () => {}),
+  },
+}))
 vi.mock('@/store/authStore', () => ({ useAuthStore: (select: (value: { isAuthenticated: boolean }) => unknown) => select({ isAuthenticated: state.authenticated }) }))
 vi.mock('@/components/pda/PdaConnectionGate', () => ({ default: ({ children }: { children: ReactNode }) => children }))
 vi.mock('@/components/pda/PdaRoutePermission', () => ({ default: ({ children }: { children: ReactNode }) => children }))
