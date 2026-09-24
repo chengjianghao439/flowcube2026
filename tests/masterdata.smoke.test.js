@@ -91,14 +91,29 @@ async function main() {
       const customer = module === 'customers'
       const table = customer ? 'sale_customers' : 'supply_suppliers'
       const name = `${mark}${customer ? 'C' : 'S'}`
-      const body = { code: 'client-code-ignored', name, contact: '测试', phone: '13800000000', email: 'fixture@example.invalid', address: '测试地址', remark: mark, settlementType: SETTLEMENT_TYPE.MONTHLY, paymentTermsDays: 60, ...(customer ? { creditLimit: 1000 } : { leadTimeDays: 12 }) }
+      // 与 GUI 新增表单一致：客户端不提供编号，由服务端生成。
+      const body = { name, contact: '测试', phone: '13800000000', email: 'fixture@example.invalid', address: '测试地址', remark: mark, settlementType: SETTLEMENT_TYPE.MONTHLY, paymentTermsDays: 60, ...(customer ? { creditLimit: 1000 } : { leadTimeDays: 12 }) }
       const first = await create(module, table, body)
       const second = await create(module, table, { ...body, name: `${name}B` })
-      check(module, '编码由服务端生成', first.code.startsWith(customer ? 'CUS' : 'SUP') && first.code !== body.code)
+      const firstEdit = customer ? body : { ...body, code: first.code }
+      const secondEdit = customer ? body : { ...body, code: second.code }
+      check(module, '编码由服务端生成且两次创建唯一',
+        [first.code.startsWith(customer ? 'CUS' : 'SUP'), second.code.startsWith(customer ? 'CUS' : 'SUP'), first.code !== second.code],
+        [true, true, true])
+      const suppliedCode = await create(module, table, { ...body, name: `${name}CODE`, code: 'CLIENT-OVERRIDE' })
+      check(module, '创建时客户端编码不覆盖服务端编号', suppliedCode.code !== 'CLIENT-OVERRIDE')
+      await expectStatus(module, '清理客户端编码试探记录', `/${suppliedCode.id}`, 'DELETE', undefined, 200)
       const detail = await expectStatus(module, '详情', `/${first.id}`, 'GET', undefined, 200)
       check(module, '持久化联络/结算/专属字段', [detail.name, detail.contact, detail.phone, detail.email, detail.paymentTermsDays, customer ? detail.creditLimit : detail.leadTimeDays], [name, '测试', '13800000000', 'fixture@example.invalid', 60, customer ? 1000 : 12])
+      await expectStatus(module, 'GUI 同形编辑省略编号', `/${first.id}`, 'PUT', { ...body, isActive: true }, 200)
+      check(module, 'GUI 编辑后编号保持不变', (await request(module, `/${first.id}`)).body.data.code, first.code)
+      if (!customer) {
+        await expectStatus(module, '编辑传入空编号仍被校验', `/${first.id}`, 'PUT', { ...body, code: '', isActive: true }, 400)
+        await expectStatus(module, '编辑传入不同有效编号不改码', `/${first.id}`, 'PUT', { ...body, code: 'CLIENT-EDIT', isActive: true }, 200)
+        check(module, '编辑后持久化编号不变', (await request(module, `/${first.id}`)).body.data.code, first.code)
+      }
       await expectStatus(module, '重复名称创建', '', 'POST', { ...body, name: ` ${name} ` }, 400)
-      await expectStatus(module, '重复名称更新', `/${second.id}`, 'PUT', { ...body, isActive: true }, 400)
+      await expectStatus(module, '重复名称更新', `/${second.id}`, 'PUT', { ...secondEdit, isActive: true }, 400)
       for (const invalid of [{ name: '' }, { name: '   ' }, { name: '长'.repeat(21) }, { phone: '123' }, { email: 'bad' }, { settlementType: 9 }, { paymentTermsDays: 45 }, customer ? { creditLimit: -1 } : { leadTimeDays: 366 }]) {
         await expectStatus(module, `无效输入 ${Object.keys(invalid)[0]}=${JSON.stringify(Object.values(invalid)[0])}`, '', 'POST', { ...body, name: `${name}X`, ...invalid }, 400)
       }
@@ -109,11 +124,12 @@ async function main() {
       check(module, '稳定分页及精确总数', [page1.pagination.total, page1.list[0].id, page2.list[0].id], [2, second.id, first.id])
       const byCode = await request(module, `?keyword=${first.code}`)
       check(module, '编码筛选', byCode.body.data.list.map(r => r.id), [first.id])
+      check(module, 'GUI 列表刷新后可见自动编号', byCode.body.data.list[0].code, first.code)
       const injection = await request(module, `?keyword=${encodeURIComponent("' OR 1=1 --")}`)
       check(module, '筛选参数化', injection.body.data.pagination.total, 0)
       const bounded = await request(module, `?keyword=${name}&pageSize=999999`)
       check(module, '分页上限有界', bounded.body.data.pagination.pageSize, 500)
-      await expectStatus(module, '更新及停用', `/${first.id}`, 'PUT', { ...body, code: first.code, isActive: false, settlementType: SETTLEMENT_TYPE.CASH, paymentTermsDays: 90, ...(customer ? { creditLimit: 0 } : { leadTimeDays: 365 }) }, 200)
+      await expectStatus(module, '更新及停用', `/${first.id}`, 'PUT', { ...firstEdit, isActive: false, settlementType: SETTLEMENT_TYPE.CASH, paymentTermsDays: 90, ...(customer ? { creditLimit: 0 } : { leadTimeDays: 365 }) }, 200)
       const updated = (await request(module, `/${first.id}`)).body.data
       check(module, '现金账期归零且编码保持', [updated.code, updated.isActive, updated.paymentTermsDays, customer ? updated.creditLimit : updated.leadTimeDays], [first.code, false, 0, customer ? 0 : 365])
       const active = (await request(module, '/active')).body.data
@@ -143,14 +159,14 @@ async function main() {
         const refId = await insert(reference, data)
         await expectStatus(module, `${reference} 引用禁止删除`, `/${first.id}`, 'DELETE', undefined, 409)
         check(module, `${reference} 拒绝后仍可读取`, (await request(module, `/${first.id}`)).status, 200)
-        await expectStatus(module, `${reference} 引用保留时可停用`, `/${first.id}`, 'PUT', { ...body, isActive: false }, 200)
+        await expectStatus(module, `${reference} 引用保留时可停用`, `/${first.id}`, 'PUT', { ...firstEdit, isActive: false }, 200)
         check(module, `${reference} 引用保留时停用已持久化`, (await request(module, `/${first.id}`)).body.data.isActive, false)
         await pool.query(`DELETE FROM ${reference} WHERE id=?`, [refId])
       }
       await expectStatus(module, '无引用软删除', `/${first.id}`, 'DELETE', undefined, 200)
       await expectStatus(module, '已删除详情', `/${first.id}`, 'GET', undefined, 404)
       await expectStatus(module, '重复删除', `/${first.id}`, 'DELETE', undefined, 404)
-      await expectStatus(module, '已删除更新', `/${first.id}`, 'PUT', { ...body, isActive: true }, 404)
+      await expectStatus(module, '已删除更新', `/${first.id}`, 'PUT', { ...firstEdit, isActive: true }, 404)
       const remaining = (await request(module, `?keyword=${name}`)).body.data
       check(module, '列表排除软删除', remaining.list.map(r => r.id), [second.id])
     }

@@ -42,8 +42,8 @@ router.get('/next-code', async (req, res, next) => {
 router.get('/active', requirePermission(PERMISSIONS.SUPPLIER_VIEW), ctrl.listActive)
 router.get('/',       requirePermission(PERMISSIONS.SUPPLIER_VIEW), ctrl.list)
 router.get('/:id',    requirePermission(PERMISSIONS.SUPPLIER_VIEW), ctrl.detail)
-router.post('/',      requirePermission(PERMISSIONS.SUPPLIER_CREATE), validateBody(base), ctrl.create)
-router.put('/:id',    requirePermission(PERMISSIONS.SUPPLIER_UPDATE), validateBody(base.extend({ isActive: z.boolean() })), ctrl.update)
+router.post('/',      requirePermission(PERMISSIONS.SUPPLIER_CREATE), validateBody(base.omit({ code: true })), ctrl.create)
+router.put('/:id',    requirePermission(PERMISSIONS.SUPPLIER_UPDATE), validateBody(base.extend({ code: base.shape.code.optional(), isActive: z.boolean() })), ctrl.update)
 router.delete('/:id', requirePermission(PERMISSIONS.SUPPLIER_DELETE), ctrl.remove)
 
 module.exports = router
