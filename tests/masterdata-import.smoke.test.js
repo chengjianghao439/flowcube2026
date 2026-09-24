@@ -34,6 +34,12 @@ async function main() {
     { value: '预付定金' },
     { value: '货到付款' },
     { value: '未知' },
+    // CSV 的 ExcelJS 默认 map 会把这些字面值转成 number 1/2；导入必须按原文拒绝。
+    { value: '01' },
+    { value: '1.0' },
+    { value: '1e0' },
+    { value: '0x1' },
+    { value: '2.0' },
   ]
   try {
     const [[target]] = await pool.query('SELECT DATABASE() AS db')
@@ -67,20 +73,39 @@ async function main() {
       const body = await response.json()
       assert.equal(response.status, 200, `${module.path} HTTP import`)
       assert.equal(body.success, true, `${module.path} response envelope`)
-      const [rows] = await pool.query(`SELECT name,settlement_type FROM ${module.table} WHERE name LIKE ?`, [`${mark}${module.path[0].toUpperCase()}N%`])
-      const actual = new Map(rows.map(row => [row.name, Number(row.settlement_type)]))
-      const expected = new Map(cases.filter(entry => entry.expected !== undefined).map((entry, index) => [`${mark}${module.path[0].toUpperCase()}N${index}`, entry.expected]))
+      const [rows] = await pool.query(`SELECT name,settlement_type,payment_terms_days FROM ${module.table} WHERE name LIKE ?`, [`${mark}${module.path[0].toUpperCase()}N%`])
+      const actual = new Map(rows.map(row => [row.name, [Number(row.settlement_type), Number(row.payment_terms_days)]]))
+      const expected = new Map(cases.filter(entry => entry.expected !== undefined).map((entry, index) => [`${mark}${module.path[0].toUpperCase()}N${index}`, [entry.expected, entry.expected === SETTLEMENT_TYPE.CASH ? 0 : 30]]))
       const invalidLines = cases.map((entry, index) => entry.expected === undefined ? index + 2 : null).filter(Boolean)
       const errors = body.data?.errors || []
       console.log(`[masterdata-import] ${module.path} HTTP 200, reported success=${body.data?.success}, persisted=${rows.length}, row errors=${JSON.stringify(errors)}`)
-      results.push({ module: module.path, success: body.data?.success, actual, expected, errors, invalidLines })
+
+      const workbook = new ExcelJS.Workbook()
+      const sheet = workbook.addWorksheet('导入')
+      sheet.addRow(module.header.split(','))
+      const validName = `${mark}${module.path[0].toUpperCase()}N${cases.length}`
+      const errorName = `${mark}${module.path[0].toUpperCase()}N${cases.length + 1}`
+      sheet.addRow([`${mark}X1`, validName, '测试', '13800000000', 1, ...module.tail.split(',')])
+      const errorRow = sheet.addRow([`${mark}X2`, errorName, '测试', '13800000000', null, ...module.tail.split(',')])
+      errorRow.getCell(5).value = { error: '#N/A' }
+      const xlsxForm = new FormData()
+      xlsxForm.append('file', new Blob([Buffer.from(await workbook.xlsx.writeBuffer())], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `${module.path}.xlsx`)
+      const xlsxResponse = await fetch(`${endpoint}/${module.path}`, { method: 'POST', headers: { Authorization: authorization }, body: xlsxForm, signal: AbortSignal.timeout(10000) })
+      const xlsxBody = await xlsxResponse.json()
+      assert.equal(xlsxResponse.status, 200, `${module.path} HTTP XLSX import`)
+      const [xlsxRows] = await pool.query(`SELECT name,settlement_type,payment_terms_days FROM ${module.table} WHERE name IN (?,?)`, [validName, errorName])
+      console.log(`[masterdata-import] ${module.path} XLSX HTTP 200, reported success=${xlsxBody.data?.success}, persisted=${xlsxRows.length}, row errors=${JSON.stringify(xlsxBody.data?.errors)}`)
+      results.push({ module: module.path, success: body.data?.success, actual, expected, errors, invalidLines, xlsx: { success: xlsxBody.data?.success, errors: xlsxBody.data?.errors || [], rows: xlsxRows, validName } })
     }
 
     for (const result of results) {
       assert.equal(result.success, 5, `${result.module}: only supported settlement values import`)
       assert.deepEqual(result.actual, result.expected, `${result.module}: persisted settlement types and invalid row absence`)
-      assert.equal(result.errors.length, 5, `${result.module}: one error per invalid row`)
+      assert.equal(result.errors.length, 10, `${result.module}: one error per invalid row`)
       for (const line of result.invalidLines) assert.ok(result.errors.some(error => error.includes(`第${line}行`) && error.includes('结算方式')), `${result.module}: line ${line} explains invalid settlement`)
+      assert.equal(result.xlsx.success, 1, `${result.module}: XLSX error cell cannot default to monthly`)
+      assert.deepEqual(result.xlsx.rows.map(row => [row.name, Number(row.settlement_type), Number(row.payment_terms_days)]), [[result.xlsx.validName, SETTLEMENT_TYPE.CASH, 0]], `${result.module}: XLSX only valid cash row persists with zero terms`)
+      assert.ok(result.xlsx.errors.some(error => error.includes('第3行') && error.includes('结算方式')), `${result.module}: XLSX error cell gets line-specific feedback`)
     }
 
     for (const module of modules) {
