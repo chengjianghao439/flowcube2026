@@ -14,6 +14,7 @@ import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { useState, type ReactNode } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from '@/lib/toast'
+import { ApiClientError } from '@/api/client'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import ListSummary from '@/components/shared/ListSummary'
@@ -104,7 +105,8 @@ export default function BaseCrudPage<T extends RowLike>(props: Props<T>) {
       toast.success(saveSuccessMessage ? saveSuccessMessage(editing) : (editing ? '已保存' : '已创建'))
     },
     onError: (e: unknown) =>
-      toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '保存失败'),
+      toast.error(e instanceof ApiClientError ? e.message
+        : (e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '保存失败'),
   })
 
   const deleteMut = useMutation({

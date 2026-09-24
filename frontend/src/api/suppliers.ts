@@ -4,6 +4,6 @@ import type { Supplier, SupplierOption, CreateSupplierParams, UpdateSupplierPara
 
 export const getSuppliersApi   = async (p: QueryParams) => apiClient.get<PaginatedData<Supplier>>('/suppliers', { params: p })
 export const getSuppliersActiveApi = async () => apiClient.get<SupplierOption[]>('/suppliers/active')
-export const createSupplierApi = async (d: CreateSupplierParams) => apiClient.post<{id:number}>('/suppliers', d)
-export const updateSupplierApi = async (id: number, d: UpdateSupplierParams) => { await apiClient.put(`/suppliers/${id}`, d) }
+export const createSupplierApi = async (d: CreateSupplierParams) => apiClient.post<{id:number}>('/suppliers', d, { skipGlobalError: true })
+export const updateSupplierApi = async (id: number, d: UpdateSupplierParams) => { await apiClient.put(`/suppliers/${id}`, d, { skipGlobalError: true }) }
 export const deleteSupplierApi = async (id: number, config?: Parameters<typeof apiClient.delete>[1]) => { await apiClient.delete(`/suppliers/${id}`, config) }
