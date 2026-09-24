@@ -54,3 +54,9 @@ CUA使用当前已登录 localhost:5175 的独立任务标签，未保存开发�
 本机证据在忽略目录 `output/masterdata-regression-20260912/`：`backend-red1.log`、`backend-red2.log`、`backend-red3.log`、`backend-green-final.log`、`backend-parent-final.log`、`customer-form-red.log`、`customer-form-green.log`、`frontend-final-tests.log`、`frontend-tsc.log`、`frontend-lint.log`、`erp-build.log`。最终父任务复跑仍302/302，定向清理通过；重复运行不重复计为新增场景。
 
 本轮规格审查和质量审查均通过；质量审查另行复跑客户组件3项通过。本机已核实并重启本工作树后端加载修复，健康接口成功，客户页面刷新后仍为74条且无浏览器错误。四个任务工作区标签及临时浏览器标签已关闭，最终仅保留用户原采购建议页面；开发服务保留。未创建 agent-browser 隐藏会话。
+
+## 2026-09-24 导入结算方式深度验收（ACCEPT-003）
+
+`tests/masterdata-import.smoke.test.js` 用非超管角色与真实 multipart HTTP，分别对客户、供应商导入 `现结`、`1`、`月结`、`2`、空及 `3`、`4`、`预付定金`、`货到付款`、`未知`。红测在原独立基线测试库 `flowcube_operations20260912_test` 上观察到两路各成功并落库 10 行、零错误，随后清理本轮行。绿测改用专用 `flowcube_masterdata_import_test`（本机完成 257 个迁移）：两路各持久化 5 个合法值，其余 5 行逐行报错且不入库；同时下载真实 Excel 模板，确认其结算方式列写明合法值和空值默认。测试结束按本轮标记逐 ID 清理，检查零残留。CI 通过 `smoke:masterdata-import` 独立矩阵运行；本地结果不代表 GitHub CI 或生产已验证。
+
+历史审计清单限定为证据核查，不自动修库：① 在独立测试库复核时，以脱敏原始导入行、当次行级回执和按编码/名称查询的落库值逐行对照；② 对生产历史若需追查，先取得可核实的原始文件、回执或导入来源记录，并区分后续人工编辑；③ 现有 `settlement_type=2` 只能证明当前值为月结，不能反推曾输入 `现结` 或判定为误导入。本任务没有读取或修改生产数据，也不将测试库的误导入行保留下来作“生产影响数量”。

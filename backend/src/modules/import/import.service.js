@@ -5,7 +5,22 @@ const AppError = require('../../utils/AppError')
 const { generateMasterCode } = require('../../utils/codeGenerator')
 const { MOVE_TYPE, writeInventoryLog } = require('../../engine/inventoryEngine')
 const { adjustContainerStock, SOURCE_TYPE, getStockProjection } = require('../../engine/containerEngine')
-const { normalizeSettlementType, normalizeTermsDays } = require('../../constants/settlementType')
+const { SETTLEMENT_TYPE, normalizeTermsDays } = require('../../constants/settlementType')
+
+// 仅导入入口使用严格枚举；历史记录读取仍由 settlementType.normalizeSettlementType 兼容旧值。
+function parseImportedSettlementType(value) {
+  switch (String(value ?? '').trim()) {
+    case '现结':
+    case '1':
+      return SETTLEMENT_TYPE.CASH
+    case '':
+    case '月结':
+    case '2':
+      return SETTLEMENT_TYPE.MONTHLY
+    default:
+      throw new AppError('结算方式仅支持现结/1或月结/2，留空默认为月结', 400)
+  }
+}
 
 
 async function buildWorkbookBuffer(sheets) {
@@ -325,14 +340,14 @@ async function importStock({ fileBuffer, originalName, operator, scopeWarehouseI
 
 // ── 客户导入 ──────────────────────────────────────────────────────────────────
 // 列：code/name/contact/phone/settlement_type/credit_limit
-// 与 customers.service.create 口径一致：名称查重、结算方式归一、账期归零、授信额度可空。
+// 与 customers.service.create 口径一致：名称查重、结算方式严格校验、账期归零、授信额度可空。
 
 async function buildCustomerTemplate() {
   const rows = [
-    ['客户编码', '客户名称*', '联系人', '电话', '结算方式', '授信额度'],
+    ['客户编码', '客户名称*', '联系人', '电话', '结算方式(现结/1/月结/2；空=月结)', '授信额度'],
     ['C0001', '示例客户', '张三', '13800000000', '现结', '50000'],
   ]
-  const widths = [14, 24, 12, 16, 12, 14]
+  const widths = [14, 24, 12, 16, 36, 14]
   return {
     filename: '客户导入模板.xlsx',
     buffer: await buildWorkbookBuffer([{ name: '客户导入', rows, widths }]),
@@ -359,6 +374,7 @@ async function importCustomers({ fileBuffer }) {
       continue
     }
     try {
+      const settle = parseImportedSettlementType(settlementType)
       // 名称唯一（与 customers.service.ensureCustomerNameUnique 同口径）
       const [dup] = await pool.query(
         'SELECT id FROM sale_customers WHERE name=? AND deleted_at IS NULL LIMIT 1',
@@ -384,7 +400,6 @@ async function importCustomers({ fileBuffer }) {
         }
       }
 
-      const settle = normalizeSettlementType(settlementType)
       const terms = normalizeTermsDays(settle, null)
       const limit = creditLimit === '' || creditLimit === null || creditLimit === undefined
         ? null
@@ -419,24 +434,20 @@ async function importCustomers({ fileBuffer }) {
 
 // ── 供应商导入 ──────────────────────────────────────────────────────────────────
 // 列：code/name/contact/phone/settlement_type/payment_terms_days/lead_time_days/address
-// 与 suppliers.service.create 口径一致：名称查重、结算方式归一、账期归零、提前期可空。
+// 与 suppliers.service.create 口径一致：名称查重、结算方式严格校验、账期归零、提前期可空。
 //
 // 注意两处必须与 suppliers.service 对齐：
 //   1. 编码前缀用 'SUP'（与 create 的 generateMasterCode(pool,'SUP',...) 一致），
 //      不能用 'S'——前缀不一致会导致 S000001 与 SUP000001 两套编码并存，且 generateMasterCode
 //      按前缀 REGEXP 查最大值时互不匹配，编号会重复。
-//   2. 结算方式列接受数字（1现结/2月结），与前端 SettlementTypeField 提交值一致；
-//      也兼容中文（现结/月结）——normalizeSettlementType 只认数字，中文会落回月结，
-//      所以这里先做一次中文→数字映射再交给它。
-
-const SETTLEMENT_TYPE_BY_NAME = { 现结: 1, 月结: 2 }
+//   2. 导入结算方式仅接受现结/1/月结/2或空，其他非空值逐行拒绝。
 
 async function buildSupplierTemplate() {
   const rows = [
-    ['供应商编码', '供应商名称*', '联系人', '电话', '结算方式(1现结/2月结)', '账期（天）', '采购提前期（天）', '地址'],
+    ['供应商编码', '供应商名称*', '联系人', '电话', '结算方式(现结/1/月结/2；空=月结)', '账期（天）', '采购提前期（天）', '地址'],
     ['S0001', '示例供应商', '李四', '13900000000', '2', '30', '7', '北京市朝阳区'],
   ]
-  const widths = [14, 24, 12, 14, 22, 14, 16, 30]
+  const widths = [14, 24, 12, 14, 36, 14, 16, 30]
   return {
     filename: '供应商导入模板.xlsx',
     buffer: await buildWorkbookBuffer([{ name: '供应商导入', rows, widths }]),
@@ -470,6 +481,7 @@ async function importSuppliers({ fileBuffer }) {
       continue
     }
     try {
+      const settle = parseImportedSettlementType(settlementType)
       // 名称唯一（与 suppliers.service.ensureSupplierNameUnique 同口径）
       const [dup] = await pool.query(
         'SELECT id FROM supply_suppliers WHERE name=? AND deleted_at IS NULL LIMIT 1',
@@ -495,14 +507,7 @@ async function importSuppliers({ fileBuffer }) {
         }
       }
 
-      // 结算方式：优先数字，兼容中文（normalizeSettlementType 只认数字，中文需先映射）
-      const settleRaw = String(settlementType ?? '').trim()
-      let settle = Number(settleRaw)
-      if (!Number.isFinite(settle) && SETTLEMENT_TYPE_BY_NAME[settleRaw] != null) {
-        settle = SETTLEMENT_TYPE_BY_NAME[settleRaw]
-      }
-      const settleNormalized = normalizeSettlementType(settle)
-      const terms = normalizeTermsDays(settleNormalized, paymentTermsDays)
+      const terms = normalizeTermsDays(settle, paymentTermsDays)
       const leadTime = leadTimeDays === '' || leadTimeDays == null || leadTimeDays === undefined
         ? 0
         : Math.max(0, Number(leadTimeDays))
@@ -518,7 +523,7 @@ async function importSuppliers({ fileBuffer }) {
           normPhone || null,
           null, // email 不在模板里
           cut(address, 30),
-          settleNormalized,
+          settle,
           terms,
           leadTime,
         ],
