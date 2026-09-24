@@ -6,6 +6,13 @@
 
 ---
 
+## 历史工作树与发布取证的长期保留
+
+清理已并入主线的工作树前，先确认提交可从 `origin/main` 找回、工作树无未提交改动且没有进程占用。逐项检查被 Git 忽略的验收输出与本机配置；需要留存的内容放入固定的私有归档目录，记录原分支、提交、逐文件 SHA-256 和归档 SHA-256，实际从归档读回逐文件校验后才移除工作树。`node_modules`、构建目录等可重建文件无需长期保留。归档不设置自动到期；恢复时先建立独立工作树，不覆盖当前 `main`。
+
+公开仓库不得存放含本机凭据、生产取证或真实业务数据的归档、Git bundle 与清单。单机归档只防误删，不等于异地备份；在有授权的加密备份目标之前，必须明确记录这个限制。2026-09-25 的逐分支结果、归档位置与恢复方式见 `docs/worktree-retention-2026-09-25.md`。
+
+## 现行业务与发布约束
 
 - 标签队列只接受 ZPL；单据走浏览器打印/导出。入队复用 `enqueue*LabelJob` / reprint 入口、job_unique_key 与活跃期唯一约束。
 - 打印记录页与补打口径（2026-09-14 用户规则）：**补打只有一个入口——打印记录页**，其它页面（含收货/销售订单详情）不得提供补打；订单类页面只用于看进度，**销售订单不显示条码打印**（出货侧不打条码），**收货订单只保留任务进度、不展示打印记录**。记录页只列**唯一码**：入库/出库分别要求容器/箱贴最近一条 `print_jobs` 存在，且入库额外排除 `source_ref_type='plastic_box_create'`（可复用空盒即使打过标签也不进，直接调接口返回 `PRINT_BARCODE_NOT_UNIQUE`，请在塑料盒页新增的「打印条码」`POST /api/plastic-boxes/:id/print-label` 重复打印——那是重复打印不是补打）；物流取自 `print_jobs`；货架/库位标签本就不在取数范围，各页有自己的打印入口。**注意两个 `B` 码不同**：拆分散货（`container_split` / `sale_order_adjustment_return`）每次新建、指向唯一一批货，照常记录；只有空盒是复用码。无可用打印机时也要留记录（用户选方案 A）：容器标签/箱贴/面单落一条 `printer_id=NULL`、状态失败、`no printer available` 的记录，迁移 `242_print_jobs_allow_no_printer.sql` 允许 printer_id 为空；对象因此可见可补打，物理打印不受影响（claim 按 printer_id 过滤，NULL 行不会被领取）；返回值带 `unprintable`，收货/拆分的 `noPrinterCount` 与提示文案据此区分「已排到打印机」与「只留了记录」，回执统一引导到「打印记录」页补打。另修：出库计数查询把最新任务子查询别名写成 `j` 而状态条件按 `pj` 拼，一带状态筛选就报 `Unknown column 'pj.status'`，已统一为 `pj`。回归见 `tests/print-queue.smoke.test.js`；**入口归属**由 `npm run test:print-entry` 机械守住（逐个找出 URL 含 `/print-label` 或 `/reprint` 的前端端点，再定位调用页）：补打端点 `/print-jobs/barcodes/reprint` 的调用页必须且只能是打印记录页；其余 5 个入口（商品/库位/货架/塑料盒/打包页箱贴）必须在白名单里逐条写明理由且不被命中即失败；销售侧页面（`pages/sale/**` 与 `Sale*` 组件）不得引用任何打印端点；记录页的塑料盒排除必须同时出现在列表与计数两处查询。细节与未做项见 `docs/barcode-reprint-scope-2026-09-14.md`。

@@ -175,4 +175,5 @@
 | 抽出的日记全文（原 §11–§18） | `docs/agents-md-archive-2026-09-18.md` |
 | 2026-09-18 深审计 | `docs/audit-2026-09-18.md`、`output/audit-2026-09-18/findings/*.json` |
 | 发布说明与结果 | `docs/release-notes/*.md`、`docs/release-v0.9.*-result.md` |
+| 历史分支与工作树长期归档（2026-09-25） | `docs/worktree-retention-2026-09-25.md` |
 | 本机环境与本地库切换 | `docs/local-tooling-2026-09-04.md`、`docs/local-mysql8-cutover-2026-09-04.md` |
