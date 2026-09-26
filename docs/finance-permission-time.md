@@ -85,3 +85,10 @@
 
 - 个人改密码在同一事务内锁定用户、验证旧密码并更新口令；管理员并发重置后，个人请求不能凭旧快照覆盖新密码。refresh token 必须带一次性 jti；迁移前没有 jti 的令牌要求重新登录。密钥轮换期间，登出与续期均尝试当前及上一把密钥，并只撤销 refresh token 的 jti。
 - 资金账户期初、调整目标与流水金额在 service 写入边界调用 `moneyUnits` 校验；超过四位小数返回 `MONEY_PRECISION_INVALID`，合法值作为十进制文本写库。余额差额按固定点计算，避免先转 Number 再被数据库静默舍入。
+
+### 2026-09-27 列表导出必须与页面同口径
+
+- **规则**：列表导出必须透传对应列表接口 `findAll` 支持的**全部**筛选。页面筛了、导出却不过滤，会让用户把**其他往来方**的账款一并交出——这是对外的信息泄露，不只是「数字对不上」。
+- **边界**：`getStatementsExportPayload`（对账单）与 `getPaymentReceiptsExportPayload`（收付款单）此前只透传 `type/status/keyword`，丢弃往来方/单号/日期/金额区间；同文件的 `getPaymentsExportPayload` 在 2026-09-18 审计已修过同类问题，属同根因的漏网实例。
+- **可选 ID 的空值语义**：`customerId`/`partyId` 传给 `findAll` 前必须把空串规范为 `null`——`findAll` 判 `!= null` 后 `Number('')` 得 `0`，会抛 400「编号无效」，而清除筛选后前端常发出 `customerId=`。分页（`page`/`pageSize`）由 `collectExportRows` 注入，不属于筛选。超过 `EXPORT_MAX_ROWS` 一律明确拒绝，不静默截断。
+- **回归**：`npm run test:export-filters`（纯离线，从 `findAll` 签名解析筛选键）与 `smoke:prelaunch-scope-export`（真实服务 + 真实库）。两者都做过反向验证：摘掉任一透传即精准报红对应的那一条。

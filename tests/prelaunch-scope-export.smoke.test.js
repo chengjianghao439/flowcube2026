@@ -4,6 +4,17 @@ const assert = require('node:assert/strict')
 const { prepareSmokeContext, login, createLogger, PERMISSIONS } = require('./helpers/smokeTestKit')
 const log = createLogger()
 
+/**
+ * 从 findAll 的解构签名解析出它支持的筛选键（分页由 collectExportRows 注入，不算筛选）。
+ * 断言依据是「列表接口支持什么」，不是「导出实现里写了什么」——避免测试与实现一起错。
+ */
+function parseFilterKeys(fn) {
+  const matched = fn.toString().match(/findAll\s*\(\s*\{([\s\S]*?)\}\s*=\s*\{\s*\}\s*\)/)
+  if (!matched) throw new Error('无法解析 findAll 解构签名，导出透传断言的判定口径失效')
+  return matched[1].split(',').map(piece => piece.split('=')[0].trim())
+    .filter(Boolean).filter(key => key !== 'page' && key !== 'pageSize')
+}
+
 async function main() {
   const ctx = await prepareSmokeContext()
   const q = ctx.pool.query.bind(ctx.pool)
@@ -121,6 +132,9 @@ async function main() {
     log.assert('删除等待容器锁后重新检查库存', (await pending).status === 400)
   } finally { await conn.rollback(); conn.release(); if (pending) await pending }
   // 三个财务导出曾以 pageSize=10000 绕过公共分页限制，实际仍只有500。
+  // 2026-09-27 补：此处 stub 原先只断言 `keyword`，而 keyword 恰是当时唯一被正确透传的参数，
+  // 于是「导出丢弃其余筛选（页面筛了、导出却是全量）」长期无人发现。现在逐服务解析
+  // findAll 支持的筛选键，断言导出把它们全部透传。
   for (const [servicePath, exportMethod] of [
     ['payments', 'getPaymentsExportPayload'],
     ['payment-receipts', 'getPaymentReceiptsExportPayload'],
@@ -128,16 +142,23 @@ async function main() {
   ]) {
     const service = require(`../backend/src/modules/payments/${servicePath}.service`)
     const findAll = service.findAll
+    const filterKeys = parseFilterKeys(findAll)
     let readTotal = 503
-    service.findAll = async ({ page = 1, pageSize = 20, keyword }) => {
-      assert.equal(keyword, '保留筛选')
+    let received = null
+    service.findAll = async (query) => {
+      received = query
+      const { page = 1, pageSize = 20 } = query
       const size = Math.min(500, pageSize)
       return { list: Array.from({ length: Math.max(0, Math.min(size, readTotal - (page - 1) * size)) }, (_, n) => ({ id: (page - 1) * size + n, statementNo: 'ST', startDate: '2026-01-01', endDate: '2026-02-01' })), pagination: { total: readTotal } }
     }
+    const probe = { keyword: '保留筛选', type: '2' }
+    for (const key of filterKeys) if (!(key in probe)) probe[key] = 'PROBE'
     try {
-      log.assert(`${servicePath} 导出503条完整`, (await exports[exportMethod]({ keyword: '保留筛选' })).rows.length === 503)
+      log.assert(`${servicePath} 导出503条完整`, (await exports[exportMethod]({ ...probe })).rows.length === 503)
+      const dropped = filterKeys.filter(key => !(key in received))
+      log.assert(`${servicePath} 导出透传全部筛选${dropped.length ? `（丢弃 ${dropped.join(',')}）` : ''}`, dropped.length === 0, dropped)
       readTotal = 10001
-      await assert.rejects(exports[exportMethod]({ keyword: '保留筛选' }), { code: 'EXPORT_ROW_LIMIT_EXCEEDED' })
+      await assert.rejects(exports[exportMethod]({ ...probe }), { code: 'EXPORT_ROW_LIMIT_EXCEEDED' })
       log.assert(`${servicePath} 超限明确拒绝`, true)
     } finally { service.findAll = findAll }
   }

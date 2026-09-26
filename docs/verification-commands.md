@@ -105,6 +105,8 @@ npm run test:permissions
 
 导出格式回归：`npm run test:export`（static job 与 `test:upload` 同一步执行）——校验 xlsx 导出的日期列写成日期单元格并带 `yyyy-mm-dd` / `yyyy-mm-dd hh:mm` 数字格式（2026-09-16 起），不连数据库。
 
+列表导出筛选透传回归：`npm run test:export-filters`（static job，2026-09-27 新增）——从每个列表接口 `findAll` 的函数签名解析出它支持的筛选键，断言对应的导出函数把其中**每一个**都原样透传，纯离线（stub `findAll`，不连数据库）。判定依据是「列表接口支持什么」而非「导出实现里写了什么」。同时 `smoke:prelaunch-scope-export` 的导出循环补了同一断言（真实服务 + 真实库）。背景：对账单与收付款单导出曾只透传 `type/status/keyword`，页面筛了往来方/单号/日期/金额却拿到全量；旧循环恰好只断言了 `keyword`（当时唯一被正确透传的参数），故缺陷长期不可见。
+
 
 发布页面脚本回归：`npm ci --prefix scripts/browser-smoke --ignore-scripts` 安装锁定依赖，`node scripts/browser-smoke/node_modules/playwright-core/cli.js install chromium` 安装匹配浏览器，再运行 `npm run test:browser-smoke`。该测试使用真实 Chromium 和随机回环端口夹具，覆盖 ERP/PDA、受限权限、错页/渲染错误、对账重定向失败及进程退出，不连接数据库或生产。Tests CI 的独立 `browser-smoke-runtime` job 执行它；生产依赖从 CI 构建镜像复制，不运行安装命令。
 

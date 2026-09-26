@@ -103,6 +103,12 @@ jobs:
       - name: 上传单文件与字段限制回归
         run: npm run test:upload && npm run test:export
 
+      # 列表导出必须与页面同口径：解析各列表接口 findAll 的筛选签名，断言导出把它们全部透传。
+      # 纯离线（stub findAll，不连库）——2026-09-27 修「对账单/收付款单导出丢弃筛选」时补齐；
+      # 这类缺陷在页面、接口、原守卫全绿时完全不可见（原 stub 恰好只断言了 keyword）。
+      - name: 契约测试 — 列表导出透传列表接口支持的每一个筛选
+        run: npm run test:export-filters
+
       - name: "验收修复回归 — 请求体解析错误码、废弃设置键、取消单明细投影、审计覆盖"
         run: npm run test:acceptance-fixes
 

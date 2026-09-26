@@ -503,10 +503,18 @@ async function getPaymentsExportPayload(query) {
 
 /** 收付款单（汇款）列表 */
 async function getPaymentReceiptsExportPayload(query) {
+  // 导出必须与页面同口径：透明传导 findAll 支持的每一个筛选（2026-09-27 修复）。此前只传
+  // type/status/keyword，页面上按单号/往来方/日期/金额区间筛选后导出会拿到未过滤的全量。
   const data = await collectExportRows(receiptsService.findAll, {
     type: query.type || '',
     status: query.status || '',
     keyword: query.keyword || '',
+    receiptNo: query.receiptNo || '',
+    partyName: query.partyName || '',
+    startDate: query.startDate || '',
+    endDate: query.endDate || '',
+    minAmount: query.minAmount ?? '',
+    maxAmount: query.maxAmount ?? '',
   })
   const isPayable = Number(query.type) === 1
   const sheetName = isPayable ? '付款单' : '收款单'
@@ -540,12 +548,33 @@ async function getPaymentReceiptsExportPayload(query) {
   }
 }
 
+/**
+ * 可选 ID 筛选的规范化：空串/null/undefined 一律视为「未传」。
+ * findAll 对 customerId/partyId 判 `!= null` 后 Number()，空串会变成 0 并抛
+ * 400「编号无效」——清除筛选后前端常发出 `customerId=`，透传前必须规范掉。
+ */
+function optionalFilterId(value) {
+  return value === '' || value == null ? null : value
+}
+
 /** 对账单列表（不含明细，明细走单张导出） */
 async function getStatementsExportPayload(query) {
+  // 导出必须与页面同口径：透传 findAll 支持的全部筛选（2026-09-27 修复）。此前只传
+  // type/status/keyword，页面上按往来方/单号/日期/金额区间筛选后导出会拿到未过滤的全量，
+  // 把其他往来方的账款一并交出——同一文件里的 getPaymentsExportPayload 在 2026-09-18 审计
+  // 已修过同类问题，本案是同根因的漏网实例。
   const data = await collectExportRows(statementsService.findAll, {
     type: query.type || '',
     status: query.status || '',
     keyword: query.keyword || '',
+    statementNo: query.statementNo || '',
+    partyName: query.partyName || '',
+    customerId: optionalFilterId(query.customerId),
+    partyId: optionalFilterId(query.partyId),
+    startDate: query.startDate || '',
+    endDate: query.endDate || '',
+    minAmount: query.minAmount ?? '',
+    maxAmount: query.maxAmount ?? '',
   })
   const isPayable = Number(query.type) === 1
   const sheetName = isPayable ? '供应商对账单' : '客户对账单'
