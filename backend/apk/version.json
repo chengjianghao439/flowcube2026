@@ -1,7 +1,7 @@
 {
-  "version": "0.11.1",
-  "versionCode": 145,
+  "version": "0.11.2",
+  "versionCode": 146,
   "filename": "app-release.apk",
-  "releaseNote": "本版修复深度验收中发现的业务串联问题，并完善用户、部门、操作记录与 PDA 作业体验。",
-  "publishedAt": "2026-09-24T11:10:05.821Z"
+  "releaseNote": "本版完善退货返货、跨期补录和应付入账流程，修复采购收货撤回及仓库权限问题。",
+  "publishedAt": "2026-09-26T16:33:17.756Z"
 }
