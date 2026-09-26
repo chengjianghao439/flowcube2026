@@ -742,7 +742,12 @@ async function fetchProfitAnalysisRows({ startDate = null, endDate = null, scope
        COALESCE(SUM(soi.quantity), 0) AS total_qty,
        ${productRevenue} AS revenue_amount,
        ${productCost} AS cost_amount,
-       ${productRevenue} - ${productCost} AS gross_profit
+       ${productRevenue} - ${productCost} AS gross_profit,
+       /* 行级成本来源（2026-09-27）：与销售榜同口径，沿用本次聚合、不额外查询。
+          缺失成本的商品会顶着 100% 毛利排在榜首，必须能在**这一行**看出它不可靠。 */
+       COALESCE(SUM(CASE WHEN soi.cost_snapshot IS NULL AND COALESCE(p.cost_price,0) <> 0
+                         THEN soi.quantity * p.cost_price ELSE 0 END), 0) AS estimated_cost_amount,
+       COALESCE(SUM(CASE WHEN soi.cost_snapshot IS NULL AND COALESCE(p.cost_price,0) = 0 THEN 1 ELSE 0 END), 0) AS missing_cost_line_count
      FROM (${saleOrderSql}) so
      INNER JOIN sale_order_items soi ON soi.order_id = so.id
      INNER JOIN product_items p ON p.id = soi.product_id

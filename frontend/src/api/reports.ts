@@ -235,6 +235,9 @@ export interface ReconciliationReport {
 export const getReconciliationApi = (params: { type?: number | string; startDate?: string; endDate?: string; keyword?: string; status?: number | string; pageSize?: number; settlementTypes?: string; minAmount?: string; maxAmount?: string; dueStart?: string; dueEnd?: string; orderNo?: string; partyName?: string } = {}) =>
   client.get<ReconciliationReport>('/reports/reconciliation', { params })
 
+/** 行级成本来源（2026-09-27 P2）：让榜单每一行都能定位毛利是否可信 */
+export type ProfitCostBasis = 'snapshot' | 'estimated' | 'missing' | 'mixed'
+
 export interface ProfitSaleOrderRow {
   id: number
   orderNo: string
@@ -244,6 +247,12 @@ export interface ProfitSaleOrderRow {
   costAmount: number
   grossProfit: number
   marginRate: number
+  /** 该行按当前进价估算的成本金额（元） */
+  estimatedCostAmount?: number
+  /** 该行完全无成本的明细行数 */
+  missingCostLineCount?: number
+  /** 行级来源：快照 / 按当前进价估算 / 成本缺失 / 两者混合 */
+  costBasis?: ProfitCostBasis
   path: string
 }
 
@@ -260,6 +269,10 @@ export interface ProfitProductRow {
   costAmount: number
   grossProfit: number
   marginRate: number
+  /** 同上：行级成本来源三件套 */
+  estimatedCostAmount?: number
+  missingCostLineCount?: number
+  costBasis?: ProfitCostBasis
   path: string
 }
 

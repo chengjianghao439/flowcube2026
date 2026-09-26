@@ -35,3 +35,5 @@
 **报表成本口径（2026-09-27 P2）**：利润分析与经营 KPI 的**成本**表达式去掉 `COALESCE(..., p.sale_price, 0)` 这一级回退——快照为空且 `cost_price=0` 时拿**售价**当成本会把毛利系统性压低。保留迁移 119 已定的「非零现价进价」估算，并把两种非快照情形分开暴露：`estimatedCostAmount`（按当前进价估算的金额）与 `missingCostLineCount`（完全无成本的明细行数）。页面与导出据此提示：**这是经营估算口径，可能偏高，与凭证侧的会计成本（快照记账）口径不同**。库存估值 `total_value` 不在"成本 SQL"范围，仍沿用原口径。回归 `npm run smoke:report-cost-basis`（含真实生成 xlsx 的读回断言）。
 
 **导出渲染订正（2026-09-27）**：`fillSheet` 原先用 `ws.columns = [{ header, ... }]`，ExcelJS 会据此把**整行表头钉在第 1 行**——当 sheet 顶部有汇总块时，A/B 之外的列会留下"幽灵表头"（实测 C1 是「仓库」而真表头在 A4）。现改为只给 `key/width`，表头统一由 `headerRow.values` 在 `startRow` 写。
+
+**行级成本来源（2026-09-27 P2 续）**：只有全局汇总提示**定位不到**问题行——缺失成本的订单会顶着 100% 毛利排在榜首。故**销售订单榜与商品榜的每一行**都给出成本来源：`costBasis ∈ snapshot / estimated / missing / mixed`，并附 `estimatedCostAmount`（按当前进价估算的金额）与 `missingCostLineCount`（无成本的明细行数）；混合行两个量同时非零。判定在**后端**（`costBasisOf`），由**同一个聚合 SQL** 推出、**不额外查询**；页面「成本」列下方给出简洁中文小字（**未知态显示「成本来源待核实」，不得默认成"出库成本快照"**），导出**表内新增「成本来源」列**（中文文案由 `costBasisText` 生成，与页面同一未知态语义）。导出映射需一并透出这三个字段，否则会退成未知态——回归 `smoke:report-cost-basis` 的导出逐行断言会精准红。

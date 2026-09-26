@@ -630,6 +630,22 @@ async function getStatementDetailExportPayload(id) {
 }
 
 /**
+ * 行级成本来源的中文说明（2026-09-27 P2）。Excel 里渲染不了组件，故在导出时转成文案，
+ * 让「销售毛利 / 商品毛利」两页都能**逐行**定位不可靠的毛利（缺失成本的订单会顶着 100% 毛利排榜首）。
+ */
+function costBasisText(row) {
+  const miss = Number(row.missingCostLineCount || 0)
+  const est = Number(row.estimatedCostAmount || 0)
+  if (row.costBasis === 'mixed') return `混合：${miss} 行成本缺失、约 ${est.toFixed(2)} 按当前进价估算`
+  if (row.costBasis === 'missing') return `成本缺失（${miss} 行按 0 计，毛利偏高）`
+  if (row.costBasis === 'estimated') return '按当前进价估算'
+  // 与页面 `costBasisNote` 保持同一未知态语义：**只有显式 snapshot 才写「出库成本快照」**。
+  // 否则将来导出映射漏带该字段时，会把"没查到来源"重新伪报成"全部可信"。
+  if (row.costBasis === 'snapshot') return '出库成本快照'
+  return '成本来源待核实'
+}
+
+/**
  * 利润/库存分析导出：复用 reports.metrics.profitAnalysis 的查询逻辑与毛利口径
  * （扣除整单折扣、商品按明细金额比例分摊，cost_snapshot 优先）。
  * 四个区块（销售毛利/商品毛利/库存金额/滞销库存）各一页，保留页面 Top 20/30 范围；
@@ -650,6 +666,11 @@ async function getProfitAnalysisExportPayload(query) {
     costAmount: round2(r.costAmount),
     grossProfit: round2(r.grossProfit),
     marginRate: `${(Number(r.marginRate) || 0).toFixed(1)}%`,
+    // 仅供 costBasisText 判定行级来源用（不占展示列）。缺了它会退成**未知态**「成本来源待核实」——
+    // 宁可标「待核实」也不能默认成「出库成本快照」，否则等于把"没查到来源"说成"全部可信"。
+    costBasis: r.costBasis,
+    estimatedCostAmount: r.estimatedCostAmount,
+    missingCostLineCount: r.missingCostLineCount,
   }))
   const productRows = data.products.map(r => ({
     code: r.code,
@@ -660,6 +681,10 @@ async function getProfitAnalysisExportPayload(query) {
     costAmount: round2(r.costAmount),
     grossProfit: round2(r.grossProfit),
     marginRate: `${(Number(r.marginRate) || 0).toFixed(1)}%`,
+    // 同上：供 costBasisText 判定行级来源
+    costBasis: r.costBasis,
+    estimatedCostAmount: r.estimatedCostAmount,
+    missingCostLineCount: r.missingCostLineCount,
   }))
   const stockRows = data.stockValue.map(r => ({
     code: r.code,
@@ -717,8 +742,9 @@ async function getProfitAnalysisExportPayload(query) {
           { header: '成本', key: 'costAmount', width: 14 },
           { header: '毛利', key: 'grossProfit', width: 14 },
           { header: '毛利率', key: 'marginRate', width: 10 },
+          { header: '成本来源', key: 'costBasisText', width: 30 },
         ],
-        rows: saleRows,
+        rows: saleRows.map(r => ({ ...r, costBasisText: costBasisText(r) })),
       },
       {
         sheetName: '商品毛利',
@@ -731,8 +757,9 @@ async function getProfitAnalysisExportPayload(query) {
           { header: '成本', key: 'costAmount', width: 14 },
           { header: '毛利', key: 'grossProfit', width: 14 },
           { header: '毛利率', key: 'marginRate', width: 10 },
+          { header: '成本来源', key: 'costBasisText', width: 30 },
         ],
-        rows: productRows,
+        rows: productRows.map(r => ({ ...r, costBasisText: costBasisText(r) })),
       },
       {
         sheetName: '库存金额',
@@ -1644,5 +1671,7 @@ module.exports = {
   getTaxAdjustmentsExportPayload,
   getCompaniesExportPayload,
   getProfitAnalysisExportPayload,
+  // 导出仅供契约测试断言「未知态不得伪报快照」（tests/report-cost-basis.smoke.test.js）
+  costBasisText,
   getAgingExportPayload,
 }

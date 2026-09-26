@@ -294,6 +294,23 @@ async function reconciliationReport(params = {}) {
   }
 }
 
+/**
+ * 行级成本来源标签（2026-09-27 P2）。由**同一个聚合**里的两个量推出，不额外查询：
+ *  - `snapshot`  全部走出库成本快照（精确）
+ *  - `estimated` 有明细缺快照，但能用当前进价估算
+ *  - `missing`   有明细完全没有成本（按 0 计）——毛利不可信，必须能在该行看到
+ *  - `mixed`     估算与缺失同时存在（同时给出估算额与缺失行数）
+ * 放在后端是为了让页面与导出共用同一判定，避免两端各算一套。
+ */
+function costBasisOf(row) {
+  const estimated = safeNum(row.estimated_cost_amount)
+  const missing = Number(row.missing_cost_line_count || 0)
+  if (missing > 0 && estimated > 0) return 'mixed'
+  if (missing > 0) return 'missing'
+  if (estimated > 0) return 'estimated'
+  return 'snapshot'
+}
+
 async function profitAnalysis(params = {}) {
   const { summaryRow, stockSummaryRow, slowSummaryRow, saleRows, productRows, stockRows, slowRows } = await fetchProfitAnalysisRows(params)
   const saleAmount = safeNum(summaryRow.saleAmount)
@@ -322,6 +339,11 @@ async function profitAnalysis(params = {}) {
       costAmount: safeNum(row.cost_amount),
       grossProfit: safeNum(row.gross_profit),
       marginRate: safeNum(row.total_amount) > 0 ? ((safeNum(row.gross_profit) / safeNum(row.total_amount)) * 100) : 0,
+      // 行级成本来源（2026-09-27 P2）：让用户能在**这一行**就看出毛利可不可信——
+      // 缺失成本的订单会顶着 100% 毛利排在榜首，只有全局汇总提示是不够的。
+      estimatedCostAmount: safeNum(row.estimated_cost_amount),
+      missingCostLineCount: Number(row.missing_cost_line_count || 0),
+      costBasis: costBasisOf(row),
       path: `/sale/${row.id}`,
     })),
     products: productRows.map(row => ({
@@ -337,6 +359,10 @@ async function profitAnalysis(params = {}) {
       costAmount: safeNum(row.cost_amount),
       grossProfit: safeNum(row.gross_profit),
       marginRate: safeNum(row.revenue_amount) > 0 ? ((safeNum(row.gross_profit) / safeNum(row.revenue_amount)) * 100) : 0,
+      // 行级成本来源：与销售榜同口径
+      estimatedCostAmount: safeNum(row.estimated_cost_amount),
+      missingCostLineCount: Number(row.missing_cost_line_count || 0),
+      costBasis: costBasisOf(row),
       path: '/products',
     })),
     stockValue: stockRows.map(row => ({

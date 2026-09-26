@@ -21,6 +21,28 @@ import type { TableColumn } from '@/types'
 
 type ProfitTab = 'sale' | 'product' | 'stock' | 'slow'
 
+/**
+ * 行内成本来源（2026-09-27 P2）：让用户在**榜单每一行**就能看出这行毛利可不可信。
+ * 缺失成本的订单会顶着 100% 毛利排在榜首，只有全局汇总提示定位不到它。
+ *
+ * 关键分支：**只有明确 `snapshot` 才敢说「出库成本快照」**。前后端滚动更新或 API 缺字段时
+ * 拿到的是 `undefined`，若默认成"快照"就等于把"没查到来源"说成"全部可信"，因此退回"待核实"。
+ * 导出供单测覆盖该分支（属纯展示逻辑，没有可替代的真实返回路径）。
+ */
+export function costBasisNote(row: {
+  costBasis?: string | null
+  estimatedCostAmount?: number
+  missingCostLineCount?: number
+}): { text: string; warn: boolean } {
+  const miss = Number(row.missingCostLineCount || 0)
+  const est = Number(row.estimatedCostAmount || 0)
+  if (row.costBasis === 'mixed') return { text: `混合：${miss} 行缺失、约 ${money(est)} 按进价估算`, warn: true }
+  if (row.costBasis === 'missing') return { text: `成本缺失（${miss} 行按 0 计，毛利偏高）`, warn: true }
+  if (row.costBasis === 'estimated') return { text: '按当前进价估算', warn: false }
+  if (row.costBasis === 'snapshot') return { text: '出库成本快照', warn: false }
+  return { text: '成本来源待核实', warn: true }
+}
+
 function SummaryCard({ label, value, hint, negative, onClick }: { label: string; value: number | string; hint: string; negative?: boolean; onClick?: () => void }) {
   const content = <>
     <p className="text-xs text-muted-foreground">{label}</p>
@@ -87,12 +109,23 @@ export default function ProfitAnalysisPage() {
     { label: '本月', ...monthRange },
   ]
 
+  /** 成本单元格：金额 + 来源小字（来源是行级提示，不能只靠汇总） */
+  function costCell(v: unknown, row: unknown) {
+    const note = costBasisNote(row as Parameters<typeof costBasisNote>[0])
+    return (
+      <div className="space-y-0.5">
+        <div className="text-muted-foreground">{money(Number(v))}</div>
+        <div className={`text-[11px] leading-4 ${note.warn ? 'text-warning' : 'text-muted-foreground'}`}>{note.text}</div>
+      </div>
+    )
+  }
+
   const saleColumns: TableColumn<ProfitSaleOrderRow>[] = [
     { key: 'orderNo', title: '销售单号', width: 160, render: v => <span className="text-doc-code">{String(v)}</span> },
     { key: 'customerName', title: '客户' },
     { key: 'warehouseName', title: '仓库', width: 120 },
     { key: 'totalAmount', title: '销售额', width: 110, align: 'right', render: v => <span className="font-medium">{money(Number(v))}</span> },
-    { key: 'costAmount', title: '成本', width: 110, align: 'right', render: v => <span className="text-muted-foreground">{money(Number(v))}</span> },
+    { key: 'costAmount', title: '成本', width: 150, align: 'right', render: costCell },
     { key: 'grossProfit', title: '毛利', width: 110, align: 'right', render: v => <span className={`font-semibold ${Number(v) < 0 ? 'text-destructive' : 'text-success'}`}>{money(Number(v))}</span> },
     { key: 'marginRate', title: '毛利率', width: 100, align: 'right', render: v => <Badge variant="outline">{Number(v).toFixed(1)}%</Badge> },
     { key: 'path', title: '操作', width: 120, render: v => <Button size="sm" variant="outline" onClick={() => openPath(String(v), '销售单详情')}>打开原单</Button> },
@@ -103,7 +136,7 @@ export default function ProfitAnalysisPage() {
     { key: 'unit', title: '单位', width: 70 },
     { key: 'totalQty', title: '销售量', width: 90, align: 'right', render: v => <span>{Number(v).toFixed(2)}</span> },
     { key: 'revenueAmount', title: '销售额', width: 110, align: 'right', render: v => <span>{money(Number(v))}</span> },
-    { key: 'costAmount', title: '成本', width: 110, align: 'right', render: v => <span className="text-muted-foreground">{money(Number(v))}</span> },
+    { key: 'costAmount', title: '成本', width: 150, align: 'right', render: costCell },
     { key: 'grossProfit', title: '毛利', width: 110, align: 'right', render: v => <span className={`font-semibold ${Number(v) < 0 ? 'text-destructive' : 'text-success'}`}>{money(Number(v))}</span> },
     { key: 'marginRate', title: '毛利率', width: 100, align: 'right', render: v => <Badge variant="outline">{Number(v).toFixed(1)}%</Badge> },
     { key: 'path', title: '操作', width: 120, render: v => <Button size="sm" variant="outline" onClick={() => openPath(String(v), '商品管理')}>查看商品</Button> },

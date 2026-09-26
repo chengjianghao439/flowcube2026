@@ -166,10 +166,179 @@ test('利润导出：汇总值与成本口径提示确实写进 xlsx 单元格�
   assert.ok(cells.has('成本口径'), '「成本口径」说明必须在单元格里')
   assert.ok(cells.has('无成本明细行数'), '「无成本明细行数」必须在单元格里')
   assert.ok(cells.has('按当前进价估算的金额'), '「按当前进价估算的金额」必须在单元格里')
+  // 导出表内也要能**逐行**定位成本来源：销售毛利 / 商品毛利两页都应有「成本来源」列。
+  // （数据行的具体文案由行级用例覆盖 costBasis 判定；这里断言列真的进了工作簿。）
+  for (const sheetName of ['销售毛利', '商品毛利']) {
+    const sheet = wb.getWorksheet(sheetName)
+    assert.ok(sheet, `应有工作表「${sheetName}」`)
+    let found = false
+    for (let r = 1; r <= sheet.rowCount && !found; r++) {
+      for (let c = 1; c <= sheet.columnCount; c++) {
+        if (String(sheet.getRow(r).getCell(c).value || '') === '成本来源') { found = true; break }
+      }
+    }
+    assert.ok(found, `「${sheetName}」页应有「成本来源」列，用户要能在导出行上定位不可靠的毛利`)
+  }
+
   const tip = String(cells.get('提示') || '')
   assert.match(tip, /经营估算/, '提示要写明这是经营估算口径')
   assert.match(tip, /凭证/, '提示要说明与凭证侧会计成本口径不同')
   // 注意：不要在这里 pool.end()——下一个用例还要用同一个单例池
+})
+
+test('利润榜行级成本来源：快照/估算/缺失/混合四种都能在该行定位', async () => {
+  // 单独一个远期月 2031-05：与上面那个用例的 2031-03 完全隔离，
+  // 这样混合单不会污染「汇总=1100」这类期望（否则会出现与行级实现无关的红）。
+  const { pool } = require(path.join(ROOT, 'backend/src/config/db'))
+  const created = { products: [], orders: [] }
+  const START = '2031-05-01'
+  const END = '2031-06-01'
+  const STAMP = '2031-05-15 10:00:00'
+  const mkProd = async (label, costPrice) => {
+    const [r] = await pool.query(
+      `INSERT INTO product_items (code,name,unit,cost_price,avg_cost,sale_price,sale_price_a,created_at)
+       VALUES (?,?,?,?,NULL,100,100,?)`,
+      [`${TAG}-M${label}`, `P2行级${label}${TAG}`, '件', costPrice, STAMP],
+    )
+    const p = { id: r.insertId, code: `${TAG}-M${label}` }
+    created.products.push(p)
+    return p
+  }
+  /** 建一张**自洽**的单：单头净额 = 明细金额合计 */
+  const mkOrder = async (no, lines) => {
+    const total = lines.reduce((s, l) => s + l.qty * l.unitPrice, 0)
+    const [so] = await pool.query(
+      `INSERT INTO sale_orders (order_no,customer_id,customer_name,warehouse_id,warehouse_name,
+                                operator_id,operator_name,total_amount,discount_amount,status,created_at,sale_date)
+       VALUES (?,?,?,?,?,?,?,?,0,4,?,?)`,
+      [no, 999802, `P2行级客户${TAG}`, 1, 'P2行级仓', 1, 'probe', total, STAMP, '2031-05-15'],
+    )
+    created.orders.push(so.insertId)
+    for (const l of lines) {
+      await pool.query(
+        `INSERT INTO sale_order_items
+           (order_id,product_id,product_code,product_name,unit,quantity,shipped_qty,unit_price,amount,cost_snapshot,warehouse_id,created_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,1,?)`,
+        [so.insertId, l.product.id, l.product.code, `P2行级${TAG}`, '件',
+          l.qty, l.qty, l.unitPrice, l.qty * l.unitPrice, l.snapshot, STAMP],
+      )
+    }
+    return { id: so.insertId, no }
+  }
+
+  try {
+    const pSnap = await mkProd('SNAP', 0)
+    const pEst = await mkProd('EST', 60)
+    const pMiss = await mkProd('MISS', 0)
+    const pMixEst = await mkProd('MIXE', 60)
+    const pMixMiss = await mkProd('MIXM', 0)
+
+    const oSnap = await mkOrder(`${TAG}-O-SNAP`, [{ product: pSnap, qty: 10, unitPrice: 100, snapshot: 50 }])
+    const oEst = await mkOrder(`${TAG}-O-EST`, [{ product: pEst, qty: 10, unitPrice: 100, snapshot: null }])
+    const oMiss = await mkOrder(`${TAG}-O-MISS`, [{ product: pMiss, qty: 10, unitPrice: 100, snapshot: null }])
+    // 混合单：单头 1000 = 明细 500 + 500（自洽）
+    const oMix = await mkOrder(`${TAG}-O-MIX`, [
+      { product: pMixEst, qty: 5, unitPrice: 100, snapshot: null },
+      { product: pMixMiss, qty: 5, unitPrice: 100, snapshot: null },
+    ])
+
+    // 走 **metrics 层**：`saleOrders` / `products` / `costBasis` 是页面与导出真正消费的形状
+    // （query 层的 `fetchProfitAnalysisRows` 返回的是 `saleRows`，且不含 costBasis 判定）。
+    const metrics = require(path.join(ROOT, 'backend/src/modules/reports/reports.metrics'))
+    const profit = await metrics.profitAnalysis({ startDate: START, endDate: END })
+    const byNo = new Map(profit.saleOrders.map(r => [r.orderNo, r]))
+    const expect = (no, basis, est, miss) => {
+      const r = byNo.get(no)
+      assert.ok(r, `榜单应含 ${no}`)
+      assert.equal(r.costBasis, basis, `${no} 的成本来源应为 ${basis}，实际 ${r.costBasis}`)
+      assert.equal(Number(r.estimatedCostAmount ?? 0), est, `${no} 估算额`)
+      assert.equal(Number(r.missingCostLineCount ?? 0), miss, `${no} 缺失行数`)
+    }
+    expect(oSnap.no, 'snapshot', 0, 0)
+    expect(oEst.no, 'estimated', 600, 0)
+    expect(oMiss.no, 'missing', 0, 1)
+    expect(oMix.no, 'mixed', 300, 1)
+
+    // 商品榜同样逐行可定位
+    const byCode = new Map(profit.products.map(r => [r.code, r]))
+    assert.equal(byCode.get(pEst.code)?.costBasis, 'estimated', '商品榜估算来源')
+    assert.equal(byCode.get(pMiss.code)?.costBasis, 'missing', '商品榜缺失来源')
+    assert.equal(Number(byCode.get(pMixEst.code)?.estimatedCostAmount ?? 0), 300, '商品榜混合-估算额')
+    assert.equal(Number(byCode.get(pMixMiss.code)?.missingCostLineCount ?? 0), 1, '商品榜混合-缺失行数')
+
+    // 导出表内也要能**逐行定位**（不是只查表头）：趁 2031-05 夹具还在，生成真实利润 xlsx，
+    // 按订单号 / 商品编码找到那一行，断言**同一行**的「成本来源」中文文案——
+    // 这样单独删掉 export.service 的 costBasisText 映射会精准红。
+    const ExcelJS = require(path.join(ROOT, 'backend/node_modules/exceljs'))
+    const { PassThrough } = require('stream')
+    const exportService = require(path.join(ROOT, 'backend/src/modules/export/export.service'))
+    const { exportMultiSheetXlsx } = require(path.join(ROOT, 'backend/src/utils/excelExport'))
+    const payload = await exportService.getProfitAnalysisExportPayload({ startDate: START, endDate: END })
+    const res2 = new PassThrough()
+    res2.setHeader = () => {}
+    const chunks2 = []
+    res2.on('data', (c) => chunks2.push(c))
+    await exportMultiSheetXlsx(res2, 'rows.xlsx', payload.sheets)
+    const wb2 = new ExcelJS.Workbook()
+    await wb2.xlsx.load(Buffer.concat(chunks2))
+
+    const grid = (sheetName) => {
+      const ws = wb2.getWorksheet(sheetName)
+      assert.ok(ws, `导出应有工作表「${sheetName}」`)
+      // 用 actualColumnCount：fillSheet 现在只给 key/width（不再经 ws.columns 写表头），
+      // ws.columnCount 可能为空，按它遍历会一个单元格都取不到。
+      // actualRowCount/actualColumnCount 在「只给 key/width、不经 ws.columns 写表头」的 sheet 上
+      // 会偏小（实测只覆盖汇总块），故与 rowCount/columnCount 取较大值。
+      const lastCol = Math.max(ws.actualColumnCount || 0, ws.columnCount || 0)
+      const lastRow = Math.max(ws.actualRowCount || 0, ws.rowCount || 0)
+      const rows = []
+      for (let r = 1; r <= lastRow; r++) {
+        const cells = []
+        for (let c = 1; c <= lastCol; c++) cells.push(ws.getRow(r).getCell(c).value)
+        rows.push(cells)
+      }
+      return rows
+    }
+    /** 在指定 sheet 里按 keyHeader=keyValue 定位数据行，返回同行「成本来源」单元格文本 */
+    const basisFor = (sheetName, keyHeader, keyValue) => {
+      const rows = grid(sheetName)
+      const headerIdx = rows.findIndex((r) => r.includes('成本来源'))
+      assert.ok(headerIdx >= 0, `「${sheetName}」应有「成本来源」列`)
+      const header = rows[headerIdx]
+      const keyIdx = header.indexOf(keyHeader)
+      assert.ok(keyIdx >= 0, `「${sheetName}」应有「${keyHeader}」列`)
+      const hit = rows.slice(headerIdx + 1).find((r) => String(r[keyIdx] ?? '') === keyValue)
+      assert.ok(hit, `「${sheetName}」应含 ${keyValue} 的数据行`)
+      return String(hit[header.indexOf('成本来源')] ?? '')
+    }
+
+    assert.match(basisFor('销售毛利', '销售单号', oSnap.no), /出库成本快照/, '快照单的导出行应标「出库成本快照」')
+    assert.match(basisFor('销售毛利', '销售单号', oEst.no), /按当前进价估算/, '估算单的导出行应标「按当前进价估算」')
+    assert.match(basisFor('销售毛利', '销售单号', oMiss.no), /成本缺失/, '缺失单的导出行应标「成本缺失」')
+    assert.match(basisFor('销售毛利', '销售单号', oMix.no), /混合/, '混合单的导出行应标「混合」')
+    assert.match(basisFor('商品毛利', '商品编码', pEst.code), /按当前进价估算/, '商品页估算行')
+    assert.match(basisFor('商品毛利', '商品编码', pMiss.code), /成本缺失/, '商品页缺失行')
+
+    // 未知态语义与页面一致：**只有显式 snapshot 才写「出库成本快照」**。
+    // 否则将来导出映射漏带该字段，会重新把"没查到来源"伪报成"全部可信"。
+    const { costBasisText } = exportService
+    assert.equal(costBasisText({ costBasis: 'snapshot' }), '出库成本快照')
+    assert.equal(costBasisText({}), '成本来源待核实', '缺字段不得默认成快照')
+    assert.equal(costBasisText({ costBasis: 'brand_new_value' }), '成本来源待核实', '未知取值不得默认成快照')
+  } finally {
+    for (const soId of created.orders) {
+      await pool.query('DELETE FROM sale_order_items WHERE order_id=?', [soId])
+      await pool.query('DELETE FROM sale_orders WHERE id=?', [soId])
+    }
+    for (const p of created.products) {
+      await pool.query('DELETE FROM inventory_stock WHERE product_id=?', [p.id])
+      await pool.query('DELETE FROM product_items WHERE id=?', [p.id])
+    }
+    const [[left]] = await pool.query('SELECT COUNT(*) n FROM product_items WHERE code LIKE ?', [`${TAG}-M%`])
+    console.log(`行级用例自洁：残留 ${left.n}`)
+    // 不在这里 pool.end()：后面还有用例复用同一个 db 单例池；
+    // 池只在**整个文件的最后一个用例**收尾（见文件末尾）。
+  }
 })
 
 test('利润分析与 KPI 的成本不再拿售价当成本，并区分估算与缺失', async () => {
@@ -222,6 +391,9 @@ test('利润分析与 KPI 的成本不再拿售价当成本，并区分估算与
     // 但它们的外层 SQL 没有聚合这两列。此时必须**不出现**该键——不能伪报 0，
     // 否则页面会显示"0 元估算 / 0 行缺失"，把"没查过"说成"没问题"。
     // 用**真实返回**测这两条公开路径（而不是直接调内部 mapKpiValues）。
+    // 行级可定位性由上面那个独立用例覆盖（它走 metrics 层，含 saleOrders/costBasis）；
+    // 本用例只验证**汇总与 KPI** 的成本口径，避免两层混用。
+
     const trend = await reports.fetchKpiTrendRows({ period: PERIOD, months: 2 })
     assert.ok(Array.isArray(trend) && trend.length === 2, `trend 应为按月数组，实际 ${JSON.stringify(trend).slice(0, 120)}`)
     for (const item of trend) {
