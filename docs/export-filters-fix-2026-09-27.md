@@ -91,7 +91,7 @@
 | P5 | 数据新鲜度：`queryClient.ts:15` `refetchOnWindowFocus:false` + 5min `staleTime` | 机会项，**未动** |
 | P6 | 权限码"选得对不对"无机械守卫（`route-permission-contract.test.js:15` 自陈只判"有没有"） | **本轮已扫**（294 条写路由）：7 处挂只读类权限码，**逐一核对后 7 处均为设计选择、未发现越权**；守卫的盲区仍在（它不判"选得对不对"），但本轮抽样没有因选错码而失守；见 §9 |
 | P7 | 测试夹具自洁缺口未逐个排查（`warehouse-scope` 等） | 盲区，**未动** |
-| P8 | ~~审批流未纳入一致性调查~~ → **业务后果侧已查三条链**（授信/采购申请/改价），本轮**未发现真实缺陷**；发票 / 薪资 / HR / 固定资产**仍未覆盖** | **部分已查，见 §9.3** |
+| P8 | ~~审批流未纳入一致性调查~~ → **业务后果侧已查三条链**（授信/采购申请/改价）。**发现 1 条真实缺陷**：改价审批写入 `product_price_history.old_price` 用的是**申请时刻**的值，注释却称"审批瞬间读取当前价"；手工改价或同商品并存申请时历史旧值会失真（**仅影响审计追溯**，不影响当前价/库存/账款）。发票 / 薪资 / HR / 固定资产**仍未覆盖** | **部分已查；1 条真实缺陷待复核，见 §9.3** |
 
 ## 4. 在途分支（不属于本轮，未触碰）
 
@@ -291,7 +291,15 @@
 1. **重复提交的语义是"失败"而非"重放"**：客户端若把 409/400 当网络错误**重试**，用户会看到"操作失败"而实际**已成功**。**这不是数据不一致**（状态机确实挡住了重复副作用），但与本项目其它走 `beginOperationRequest` 的写路径**契约不一致**；审批类动作是否也需要幂等键，属**待业务/产品判断**。
 2. **`applyApprovedPrice` 缺"已应用"标记，且注释与代码不符**：其跳过条件是 `if (!req || Number(req.status) !== 2) return`，注释写「**已应用过**或非通过态，跳过」——但**状态为 2（已应用）时并不会跳过**，代码实际只挡"非通过态"。它**只有 1 个调用点**（`approve` 内、`compareAndSetStatus(toStatus:2)` 之后），且第二次 `approve` 会被 `assertStatusAction('approve', 2)`（`from [1]`）拒绝 ⇒ **当前不可达**。但若将来引入**重试 / 修数据入口**，会**重复改价并重复写 `product_price_history`**。**属待验收风险，非当前缺陷**。
 
-**本轮未发现真实缺陷**。**未覆盖**（未实测，属推测或盲区）：同意与驳回**并发**到达；`allow_self_approve` 的授予边界；各链**发起时无匹配审批流**的行为（文档称返回明确业务错误，本轮未逐链实测）；发票 / 薪资 / HR / 固定资产。
+3. **改价审批的历史 `old_price` 可达失真 —— 真实缺陷（2026-09-27 复核）**：
+   - `price-change.service.create()` 在**申请时刻**读 `product_items` 当前价写入 `price_change_requests.old_price`；
+   - `applyApprovedPrice()` 的注释声称「审批通过**瞬间读取当前价**做 `old_price` 快照」，**但代码并不重读**：`UPDATE product_items SET <col>=? WHERE id=?` 只用 `req.new_price`，`INSERT product_price_history` 的 `old_price` 直接用 **`req.old_price`** ⇒ **注释与实现不符**；
+   - **可达性已核**：① `create()` **不阻止**同商品并存申请（无 `EXISTS`/状态检查）；② `products.service.update()` **能直接改** `sale_price_a/b/c/d` 与 `cost_price`——**不经审批**（前端只把「申请改价」引导到审批页，接口本身未拦），且它写 history 时用的是**真实当前值**（那侧是对的）。
+   ⇒ 两条路径都会让该审批写入的历史 `old_price` 与**真实变更前价格**不符。**后果限于审计追溯**（`product_price_history` 的旧值失真）；**不影响**当前售价（`new_price` 照写，最终价正确）、库存或账款。
+   - **建议修复边界**（**未实施，待复核**）：在 `applyApprovedPrice` 里**以审批瞬间的当前价**作 `old_price`（与注释一致）；或若"以申请时刻为准"才是本意，则**改注释**并补一条口径说明。**不要顺手改状态机或并存申请规则**——那是产品决策。
+   - **附带**：产品删除**已**受 `price_change_requests` 引用保护（`products.service.js:271`），**正常删除路径不可达**，不构成本条的前提。
+
+**本轮未发现其他真实缺陷**。**未覆盖**（未实测，属推测或盲区）：同意与驳回**并发**到达；`allow_self_approve` 的授予边界；各链**发起时无匹配审批流**的行为（文档称返回明确业务错误，本轮未逐链实测）；发票 / 薪资 / HR / 固定资产。
 
 **证据索引**：`credit-overrides.service.js:118-190`、`purchase-requisitions.service.js:203-245`、`price-change.service.js:139-200`、`engine/approvalEngine.js:205-220`（`cancelInstance`）、`constants/documentStatusRules.js`（`priceChangeRequest` 状态机）。
 
