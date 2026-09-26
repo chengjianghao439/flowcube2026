@@ -136,6 +136,80 @@ async function findMyTasks(scopeWarehouseIds = null) {
   }))
 }
 
+/**
+ * 待出库的退货任务（采购退货 / 销售退货返货）。
+ *
+ * 这两类任务跳过分拣/复核/打包，因而**没有包裹、没有物流箱码**，PDA 出库页原来的入口是
+ * 「扫物流条码 → 反查包裹 → 出库」，对它们无从下手：货拣完了却出不了库，退货单永远收不了口。
+ * 所以另给一个列表入口，让仓库能直接对着任务点出库。
+ *
+ * 只列状态=待出库(6) 的：拣货完成(2→6)由 readyToShip 推进，未完成拣货的不该出现在出库页。
+ *
+ * 必须按设备仓过滤：本列表在「不限仓」账号登录的**绑定单仓 PDA** 上，若只套用户仓库范围，
+ * 会把别的仓的返货单也列出来；点了出库又被 ship 的设备仓校验拒掉——看得到、做不了。
+ *
+ * 返回 { list, total, page, pageSize }，不是裸数组：原先是写死 LIMIT 50 的裸数组，前端 15 秒轮询
+ * 全量替换、无分页。待出库单排队超过 50 张时，后面的单在列表里根本不存在，操作员无从得知也点不到。
+ * 必须真分页（page/offset）而不是「加长 limit」——排队量没有上界，靠抬高上限只是把截断点往后推，
+ * 第 N+1 张之后照样够不着。分页下任意排队长都能逐页翻到并出库，total 只作提示。
+ */
+// 默认 100 与前端一致：AGENTS.md §0.2 要求轮询页面的分页批量不得小于 100
+const RETURN_OUT_PAGE_SIZE = 100
+const RETURN_OUT_PAGE_SIZE_MAX = 200
+
+async function listReturnOutPending({ scopeWarehouseIds = null, warehouseId = null, page = 1, pageSize = RETURN_OUT_PAGE_SIZE } = {}) {
+  const params = []
+  let whereSql = ''
+  if (Array.isArray(scopeWarehouseIds)) {
+    if (scopeWarehouseIds.length) { whereSql += ' AND wt.warehouse_id IN (?)'; params.push(scopeWarehouseIds) }
+    else whereSql += ' AND 1=0'
+  }
+  const deviceWarehouseId = warehouseId ? Number(warehouseId) : null
+  if (deviceWarehouseId) { whereSql += ' AND wt.warehouse_id = ?'; params.push(deviceWarehouseId) }
+  const size = Math.min(Math.max(Number(pageSize) || RETURN_OUT_PAGE_SIZE, 1), RETURN_OUT_PAGE_SIZE_MAX)
+  const current = Math.max(Number(page) || 1, 1)
+
+  const [rows] = await pool.query(`
+    SELECT wt.id, wt.task_no, wt.task_type, wt.return_id,
+           wt.customer_name, wt.warehouse_id, wt.warehouse_name,
+           wt.priority, wt.created_at,
+           COUNT(wti.id)                     AS item_count,
+           COALESCE(SUM(wti.required_qty),0) AS total_required
+      FROM warehouse_tasks wt
+      LEFT JOIN warehouse_task_items wti ON wti.task_id = wt.id
+     WHERE wt.task_type IN ('purchase_return','sale_return_out')
+       AND wt.status = ? AND wt.deleted_at IS NULL
+       AND wt.cancel_requested_at IS NULL${whereSql}
+     GROUP BY wt.id
+     ORDER BY wt.priority ASC, wt.created_at ASC, wt.id ASC
+     LIMIT ? OFFSET ?
+  `, [WT_STATUS.SHIPPING, ...params, size, (current - 1) * size])
+
+  const [[{ total }]] = await pool.query(`
+    SELECT COUNT(*) AS total
+      FROM warehouse_tasks wt
+     WHERE wt.task_type IN ('purchase_return','sale_return_out')
+       AND wt.status = ? AND wt.deleted_at IS NULL
+       AND wt.cancel_requested_at IS NULL${whereSql}
+  `, [WT_STATUS.SHIPPING, ...params])
+
+  const list = rows.map(r => ({
+    id: Number(r.id),
+    taskNo: r.task_no,
+    taskType: r.task_type,
+    returnId: r.return_id != null ? Number(r.return_id) : null,
+    // 返货任务落的是退货单上的客户名；采购退货无客户名，前端据此显示"供应商"占位
+    partyName: r.customer_name || null,
+    warehouseId: Number(r.warehouse_id),
+    warehouseName: r.warehouse_name || '',
+    priority: Number(r.priority),
+    itemCount: Number(r.item_count),
+    totalRequired: Number(r.total_required),
+    createdAt: r.created_at,
+  }))
+  return { list, total: Number(total), page: current, pageSize: size }
+}
+
 async function findMyTaskSkuSummary(scopeWarehouseIds = null) {
   const params = []
   let scopeSql = ''
@@ -415,5 +489,6 @@ module.exports = {
   getDebugSnapshot,
   findMyTasks,
   findMyTaskSkuSummary,
+  listReturnOutPending,
   getTaskStats,
 }

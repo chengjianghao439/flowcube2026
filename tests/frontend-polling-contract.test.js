@@ -11,7 +11,7 @@
  *
  * 单独看「3 秒轮询」或「批量 20」都不算离谱，**乘起来才出事**，所以机械契约同时管两头：
  *   1. 任何 `refetchInterval` 都不得小于 5 秒（表格/记录类页面没有秒级实时性要求）；
- *   2. 既轮询又显式传 `pageSize` 的页面，批量不得小于 100（自动取齐按 ceil(总数/批量) 串行请求）。
+ *   2. 既轮询又显式传 `pageSize` 的页面，批量不得小于 100（已核实不生效的豁免逐条登记在 allowlist）。
  *
  * 运行：node tests/frontend-polling-contract.test.js
  */
@@ -66,13 +66,20 @@ function main() {
   const files = walk(SRC)
   assert.ok(files.length > 100, `前端源码文件数异常（${files.length}），目录结构可能变了`)
 
-  // 已核对的有界摘要调用：pageSize 小是**故意**的，因为请求走 `listMode: 'summary'`——
-  // `payloadClient.get`（client.ts:401）遇到 summary 直接单页返回，不进入 `collectAllRecords`
-  // 自动取齐，所以不会按 ceil(总数/批量) 放大请求数。守卫只做文本匹配，看不到这个分支，
-  // 故逐条登记；未命中的登记条目会让测试失败，避免清单僵化。
+  // 已核对的「pageSize 写小了、但不会放大请求」的调用。这类豁免有共同的根因：
+  // **外部 pageSize 根本没被采用**。守卫只做文本匹配，看不到 client 里的分支，故逐条登记并写明证据；
+  // 未命中的登记条目会让测试失败，避免清单僵化。
+  //   1. `listMode: 'summary'`（client.ts:402 分支）单页直返，不进 `collectAllRecords` 取齐，
+  //      不按 ceil(总数/批量) 放大；
+  //   2. 默认取齐路径会先把 pageSize 传出去，但 client.ts:415 先**无条件 delete** 掉它，
+  //      实际批量由 `pageSize ?? 200` 决定——已用 HTTP 拦截测试实测，见
+  //      frontend/src/api/warehouse-tasks.return-out-paging.test.ts。
   const BOUNDED_SUMMARY_ALLOWLIST = new Map([
     ['frontend/src/hooks/useDashboard.ts:61',
       '首页「待我审批」只展示前 5 条摘要：listPendingApprovalsApi(..., true) → listMode: summary 单页直返'],
+    ['frontend/src/pages/inbound-tasks/index.tsx:104',
+      '入库任务列表走默认取齐路径：client.ts:415 已 delete 外部 pageSize，首请实际 pageSize=200'
+      + '（后端 normalizePagination clamp 到 [1,500]，200 原样通过），写的 20 不生效、不放大请求'],
   ])
   const usedAllowlist = new Set()
 
@@ -108,11 +115,37 @@ function main() {
     }
 
     // 2) 既轮询又显式指定 pageSize 时，批量不能太小
+    //
+    // 2026-09-26 订正：本节开头写「自动取齐会把批量从默认 200 缩到 20」，这句**已不成立**。
+    // 现在的 `payloadClient.get`（client.ts:415）**无条件 delete 掉外部 page/pageSize**，再改由
+    // `collectAllRecords` 从第 1 页重算，所以默认列表路径下**外部 pageSize 根本不生效**——
+    // 写 20 和写 200 发出的是同一个请求（首请 `pageSize ?? 200`，后端 clamp 到 [1,500]）。
+    // 已用 HTTP 层拦截测试实测（frontend/src/api/warehouse-tasks.return-out-paging.test.ts：
+    // 传 page=2 实测发出的是 page=1&pageSize=200）。
+    //
+    // 真正让外部 pageSize 生效的只有两种 listMode：`summary`（单页直返）与 `paged`（原样透传）。
+    // 但**本测试看不出某个 pageSize 属于哪种调用**：summary 往往写在被调的 API 文件里
+    // （如 useDashboard → listPendingApprovalsApi → approvals.ts），页面文件里没有任何 listMode 字面。
+    // 所以这里**不按 listMode 收窄范围**（那会漏掉整类真实场景）；仍然检查所有轮询文件的 pageSize，
+    // 把「已核实外部 pageSize 被丢弃、因而无放大」的调用逐条登记进 allowlist——保守，且不会漏。
     if (/refetchInterval/.test(source)) {
-      const pageSizeRe = /pageSize\s*:\s*(\d[\d_]*)/g
+      // 与上面 refetchInterval 同款陷阱：正则原先只认数字字面量，`pageSize: SOME_CONST`
+      // 就静默脱离守卫。2026-09-26 实测：把轮询页的 `pageSize: 20` 提成具名常量
+      // `RETURN_OUT_PAGE_SIZE = 20`，本测试照样 PASS——「守卫覆盖小于它声明的规则」。
+      // 故这里也回溯同文件常量定义；表达式含多个数字时取最小（保守）。
+      const pageSizeRe = /pageSize\s*:\s*([^,}\n]+)/g
       let ps
       while ((ps = pageSizeRe.exec(source)) !== null) {
-        const size = Number(ps[1].replace(/_/g, ''))
+        const expr = ps[1]
+        const nums = (expr.match(/\d[\d_]*/g) || []).map(s => Number(s.replace(/_/g, '')))
+        if (!nums.length) {
+          for (const ident of expr.match(/[A-Za-z_][A-Za-z0-9_]*/g) || []) {
+            const dm = source.match(new RegExp(`(?:const|let|var)\\s+${ident}\\s*=\\s*(\\d[\\d_]*)`))
+            if (dm) nums.push(Number(dm[1].replace(/_/g, '')))
+          }
+        }
+        if (!nums.length) continue
+        const size = Math.min(...nums)
         if (size >= MIN_POLLED_PAGE_SIZE) continue
         const key = `${rel}:${lineOf(source, ps.index)}`
         if (BOUNDED_SUMMARY_ALLOWLIST.has(key)) { usedAllowlist.add(key); continue }

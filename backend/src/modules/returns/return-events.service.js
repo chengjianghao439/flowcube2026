@@ -5,6 +5,8 @@ const RETURN_EVENT = Object.freeze({
   CONFIRMED: 'RETURN_CONFIRMED',
   EXECUTED: 'RETURN_EXECUTED',
   CANCELLED: 'RETURN_CANCELLED',
+  /** 已入库的货需要退回客户：退货单进入待返货出库（任务 1 第二期） */
+  REVERSE_REQUESTED: 'RETURN_REVERSE_REQUESTED',
 })
 
 async function record(conn, {

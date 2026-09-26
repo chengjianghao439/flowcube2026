@@ -1,5 +1,6 @@
 import type { ProcurementSupply } from './procurement-supply'
 import { payloadClient as apiClient } from './client'
+import { withRequestKeyHeaders } from '@/lib/requestKey'
 import type { PaginatedData, QueryParams } from '@/types'
 import type { StockItem, InventoryLog, StockChangeParams, InventoryOverviewParams, InventoryOverviewResult, InventoryContainer } from '@/types/inventory'
 
@@ -8,9 +9,11 @@ export const getLogsApi     = async (p: QueryParams, signal?: AbortSignal) => ap
 
 /** 修复缓存漂移（成本对账页按钮）：仅重算存在漂移的 SKU+仓库,返回修复明细 */
 export const resyncStockApi = async () => apiClient.post<{ ok: boolean; fixed: number; total: number; rows: Array<{ productId: number; warehouseId: number; before: number; after: number }> }>('/inventory/resync-stock')
-export const inboundApi     = async (d: StockChangeParams) => apiClient.post<unknown>('/inventory/inbound', d)
-export const outboundApi    = async (d: StockChangeParams) => apiClient.post<unknown>('/inventory/outbound', d)
-export const adjustApi      = async (d: Omit<StockChangeParams,'supplierId'|'unitPrice'>) => apiClient.post<unknown>('/inventory/adjust', d)
+// 手动出库是 changeStock 唯一还活着的分支（inbound/adjust 后端已 403 关闭，见
+// inventory.service.js 的 type !== 2 分支），其幂等键由后端 extractRequestKey 消费，
+// 故此处必须带 X-Request-Key，否则网络重试会重复扣减容器库存（2026-09-26 一致性审查 · 任务 4）。
+export const outboundApi    = async (d: StockChangeParams, requestKey?: string) =>
+  apiClient.post<unknown>('/inventory/outbound', d, requestKey ? { headers: withRequestKeyHeaders(requestKey) } : undefined)
 
 export const getInventoryOverviewApi = async (p: InventoryOverviewParams, signal?: AbortSignal) =>
   apiClient.get<InventoryOverviewResult>('/inventory/overview', { params: p, signal })

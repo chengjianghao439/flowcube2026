@@ -58,6 +58,10 @@
 - **生产机上批量删除/清理前先确认云盘 IO，并分批执行**：该机云盘有已知读写受限。动手前看 `iostat -x 1 2`（`%util`/`await`/`aqu-sz`）与 `vmstat`（`wa`）；分批删除（每批 ≤200MB、间隔数秒）并用 `ionice -c3 nice -n19`；避开 MySQL 写入高峰与部署进行中。2026-09-19 一次删除 1.9G 后系统极端缓慢、只能靠控制台重启恢复（`docs/deploy-disk-precheck-2026-09-19.md`）
 - **服务器 SSH 访问必须复用连接**（`-o ControlMaster=auto -o ControlPath=… -o ControlPersist=…`），并把多条只读查询合并进一次会话；反复新建短连接会被 sshd 限流（2026-09-19 实测：本机 IP 被限流数十分钟，同期 HTTPS 仍正常）
 - **改共用函数或路由契约后，发版前统一跑全量套件**（调用点补 `X-Client-Id`）；调试故障所需的最小验证可提前跑
+- **普通资金登记用共享锁、补录与结账用排他锁**：`lockAccountingCompanyShared`（`FOR SHARE`）vs `lockAccountingCompany`（`FOR UPDATE`）；**全排他就会让并发登记排队、全共享就会让结账挡不住写入**——两侧别"顺手统一"。加锁顺序固定「账套→账户→对账单→账款」。`acct_periods` 主键是 `(company_id, period)`、**没有 `id` 列**（`accounting.period-lock.js`；回归 `tests/finance-period-lock-order.smoke.test.js`，已接 CI）
+- **资金期间闸门与跨期补录**：业务日期落在已结账期间的收付款登记/核销/退款出账默认 409 `FINANCE_PERIOD_CLOSED`；特权补录 `finance.period.backfill` 落痕 `finance_period_backfills`，补录凭证落**审批当天所属期间**（资金流水 `happened_at` 保持业务日期），生成是「业务提交后**立即** + 逐笔核对」，核对不过才留 `voucher_generate_error`（`finance-period.guard.js`、`finance-backfills.service.js`；详见 `docs/finance-permission-time.md`）
+- **返货出库全程不动会计**：`sale_return_out` 跳过复核/打包、走独立待出库列表、重复取消**幂等不 409**；状态 1/2 的退货应收**从未冲减**，故**既不冲减也不加回**（加回＝多收客户、再冲减＝少收客户）（详见 `docs/business-semantics.md`）
+- **非单据应付只认有借方科目的行**：`buildUnbilledPayable` 按 `payment_records.debit_account_code` 取科目，**NULL = 历史未分类，跳过不猜科目**（`voucher-engine.js`、迁移 `259`）
 
 ## 0.2 有守卫的规则（一行一条 → 守卫命令）
 
@@ -161,7 +165,7 @@
 | `docs/print-deploy-ops.md` | 改标签与单据打印、发布与部署链路、CI 门禁、备份恢复与服务器运维动作时 |
 | `docs/local-preview-acceptance.md` | 启动本地开发服务、做浏览器/页面验收、判断某个账号能验收哪些页面时 |
 
-**专题记录（按需查）**：`docs/DEPLOY.md`、`docs/runbooks/failure-recovery.md`（故障处置先读它）、`docs/audit-2026-09-18.md`（深审计）、`docs/ci-wiring-gaps-2026-09-19.md`（CI 接线缺口）、`docs/deploy-disk-precheck-2026-09-19.md`（磁盘与服务器运维事故链）、`docs/chart-series-limit-2026-09-19.md`。
+**专题记录（按需查）**：`docs/DEPLOY.md`、`docs/runbooks/failure-recovery.md`（故障处置先读它）、`docs/audit-2026-09-18.md`（深审计）、`docs/ci-wiring-gaps-2026-09-19.md`（CI 接线缺口）、`docs/deploy-disk-precheck-2026-09-19.md`（磁盘与服务器运维事故链）、`docs/chart-series-limit-2026-09-19.md`、`docs/toolchain-acceptance-2026-09-26.md`（开发工具链配置与验收、测试库 EPERM 结论）。
 
 ## 5. 历史、审计与发布结果索引
 
@@ -174,6 +178,8 @@
 | 2026-09-19 文档体系重构说明 | `docs/agents-md-refactor-2026-09-19.md` |
 | 抽出的日记全文（原 §11–§18） | `docs/agents-md-archive-2026-09-18.md` |
 | 2026-09-18 深审计 | `docs/audit-2026-09-18.md`、`output/audit-2026-09-18/findings/*.json` |
+| 2026-09-26 一致性审查（报告 / 任务卡 / 返货设计） | `docs/system-consistency-audit-2026-09-26.md`、`docs/system-consistency-tasks-2026-09-26.md`、`docs/sale-return-reverse-flow-2026-09-26.md` |
+| 2026-09-26 开发库误迁移偏差（只读核对，保持原状） | `docs/dev8-migration-drift-2026-09-26.md` |
 | 发布说明与结果 | `docs/release-notes/*.md`、`docs/release-v0.9.*-result.md` |
 | 历史分支与工作树长期归档（2026-09-25） | `docs/worktree-retention-2026-09-25.md` |
 | 本机环境与本地库切换 | `docs/local-tooling-2026-09-04.md`、`docs/local-mysql8-cutover-2026-09-04.md` |

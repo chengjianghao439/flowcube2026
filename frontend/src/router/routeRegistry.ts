@@ -72,6 +72,7 @@ const components: Record<definitions.RouteComponentKey, RouteComponent> = {
   RefundsPage: lazy(() => import('@/pages/refunds')),
   CreditOverridesPage: lazy(() => import('@/pages/credit-overrides')),
   AcctPeriodsPage: lazy(() => import('@/pages/accounting/periods')),
+  AcctBackfillsPage: lazy(() => import('@/pages/accounting/backfills')),
   AcctConsolidationPage: lazy(() => import('@/pages/accounting/consolidation')),
   AcctTaxPage: lazy(() => import('@/pages/accounting/tax')),
   FixedAssetsPage: lazy(() => import('@/pages/fixed-assets')),

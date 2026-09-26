@@ -507,3 +507,36 @@ jobs:
       - name: 迁移独立专项测试库
         run: npm --prefix backend run migrate
       - run: npm run smoke:${{ matrix.suite }}
+
+  consistency-audit-20260926:
+    name: 一致性审计修复回归（独占数据库）
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: flowcube_payable_test
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 --silent"
+          --health-interval=10s --health-timeout=5s --health-retries=15
+    env:
+      NODE_ENV: test
+      DB_HOST: 127.0.0.1
+      DB_PORT: "3306"
+      DB_USER: root
+      DB_PASSWORD: root
+      DB_NAME: flowcube_payable_test
+      JWT_SECRET: flowcube_ci_test_jwt_secret_0123456789_abcdef
+      APP_UPDATE_DOWNLOADS_DIR: /tmp/flowcube-downloads
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+      - run: npm --prefix backend ci
+      - name: 迁移独占审计测试库
+        run: npm --prefix backend run migrate
+      - name: 退货、跨期补录、应付、权限与幂等闭环
+        run: npm run smoke:audit-20260926

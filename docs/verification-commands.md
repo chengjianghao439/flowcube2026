@@ -88,6 +88,8 @@ npm run test:permissions
 
 正式 Tests CI 的独立数据库专项矩阵包含两轮审计 finance、scope-export、hr、round2-transfer、round2-payroll、round2-runtime，每项先迁移专用测试库；static job 同时执行第二轮运行时/恢复/错误追踪回归。
 
+2026-09-26 一致性审计修复统一由 `npm run smoke:audit-20260926` 回归：独占 `flowcube_payable_test` 测试库，先跑会全量重算凭证的应付入账测试，再串行验证返货出库、跨期补录与锁序、采购应付撤回、借方科目接口、打印机绑定权限和请求幂等。Tests CI 的 `consistency-audit-20260926` job 使用独立 MySQL 8 service 与 Node 22，完整迁移后执行该命令；本机只允许回环 3307，CI service 使用回环 3306。该套件不连接生产库。
+
 审计回归入口：`npm run smoke:audit-inventory`、`npm run smoke:audit-finance-security`、`npm run test:audit-client`、`npm run test:audit-tooling`。2026-09-17 验收修复守卫 `npm run test:acceptance-fixes`（请求体解析错误码、废弃设置键、取消单明细投影、审计脚本覆盖、迁移存在性）为纯离线断言，已接入 Tests CI static job。标签镜像检查使用前端已安装的 TypeScript 在 Node 22 编译并运行，`test:label` 需要前端依赖，不再按 Node 版本跳过；CI 在安装两端依赖后的 static job 执行。`npm run test:agents-md-guard`（AGENTS.md 注入守卫：禁 `CLAUDE.md` 候选、体积不超 32 KiB、关键章节与红线仍在、`docs/*.md` 与 `npm run` 脚本引用都有效）为纯离线断言，与其它机械契约测试同组执行（Tests CI 的 regression job「契约测试」段）。
 `npm run test:sql-identifier`（SQL 标识符插值守卫：每个表名/列名/列清单/别名插值都要有白名单校验）同为纯离线断言，与上一条同批执行。
 `npm run test:eslint-disable-rationale`（lint 禁用理由守卫：逐行 `eslint-disable-next-line`/`-line` 上方 15 行内必须有一条说明性注释；整文件 `/* eslint-disable */` 只允许出现在机器产物白名单里，生成器输出该字符串不算指令）同为纯离线断言，与上两条同批执行。

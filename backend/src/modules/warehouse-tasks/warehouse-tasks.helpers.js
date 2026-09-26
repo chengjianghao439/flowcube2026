@@ -94,6 +94,52 @@ async function assertTaskPickScanClosure(conn, taskId) {
 }
 
 /**
+ * 返货出库前置闭合（2026-09-26 一致性审查 · 任务 1 第二期）：
+ * 扫描的容器必须与「本任务预锁的返货容器」逐个数量吻合。
+ *
+ * assertTaskPickScanClosure 已经保证「锁定集合 == 扫码集合」与「明细 picked_qty == required_qty」，
+ * 但它不要求「容器里有多少就扫多少」。返货的语义是**整批退回客户**：退货入库时那个容器里剩下多少
+ * 合格品，就应该全部退出去。少了这层核对，一处数量偏差要等到 deductFromTaskLockedContainers
+ * 按明细数量扣减时才会以「本任务锁定库存条码可用量不足」的形式暴露出来——那时已无法判断是哪一批、
+ * 差多少。这里提前逐容器核对：预锁集合与扫码集合必须完全相同，且每个容器的扫码合计等于其实存。
+ *
+ * 扫码本身不递减 remaining_qty（lockContainer 只锁不扣），所以此处 remaining_qty 仍是入库量。
+ */
+async function assertSaleReturnReverseClosure(conn, taskId) {
+  const [locked] = await conn.query(
+    `SELECT id, barcode, remaining_qty FROM inventory_containers
+      WHERE locked_by_task_id = ? AND deleted_at IS NULL
+      ORDER BY id`,
+    [taskId],
+  )
+  if (locked.length === 0) {
+    throw new AppError('返货出库任务的预锁库存条码已全部丢失，无法出库，请联系管理员核查', 409)
+  }
+  const [scanned] = await conn.query(
+    `SELECT container_id, COALESCE(SUM(qty),0) AS sq FROM scan_logs
+      WHERE task_id = ? AND COALESCE(scan_purpose,1)=1
+      GROUP BY container_id`,
+    [taskId],
+  )
+  const scanByContainer = new Map(scanned.map(r => [Number(r.container_id), Number(r.sq)]))
+  for (const c of locked) {
+    const took = scanByContainer.get(Number(c.id))
+    if (took == null) {
+      throw new AppError(`库存条码 ${c.barcode} 属于本批返货但尚未扫码，返货必须整批退回客户`, 400)
+    }
+    if (Math.abs(took - Number(c.remaining_qty)) > 1e-6) {
+      throw new AppError(
+        `库存条码 ${c.barcode} 扫码数量 ${took} 与该条码实存 ${Number(c.remaining_qty)} 不符，返货必须整批退回客户`,
+        400,
+      )
+    }
+  }
+  if (scanByContainer.size !== locked.length) {
+    throw new AppError('返货扫码的库存条码与预锁的返货条码不一致，无法出库', 400)
+  }
+}
+
+/**
  * 复核闭环：checked_qty === picked_qty，且复核扫码合计与 checked_qty 一致
  */
 async function assertTaskCheckScanClosure(conn, taskId) {
@@ -248,6 +294,7 @@ module.exports = {
   logSideEffectFailure,
   optionalTaskDetailQuery,
   assertTaskPickScanClosure,
+  assertSaleReturnReverseClosure,
   assertTaskCheckScanClosure,
   assertTaskPackagingClosure,
   assertTaskPackagePrintClosure,

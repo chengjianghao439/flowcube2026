@@ -32,9 +32,19 @@ function createLogger() {
   }
 }
 
-function createHttpClient(baseUrl) {
+/**
+ * 单个 HTTP 请求的超时（毫秒）。后端若在等行锁、连不上库或死循环，请求会一直不返回；
+ * 没有这个上限，套件会静静地挂住，看日志只看到「最后一条日志之后什么都没有」。
+ *
+ * 默认 **不启用**（退出码/句柄问题修好后，正常套件不需要它）：这是可选能力，由套件在
+ * prepareSmokeContext({ requestTimeoutMs }) 里显式要求。不要反过来在这里设全局默认值——
+ * 那会一次性改变所有既有套件的等待语义，某个本来只是慢一点的请求会突然变成
+ * AbortError 失败，把「测试变严格」和「代码有缺陷」混在一起。
+ */
+function createHttpClient(baseUrl, options = {}) {
   const fetch = globalThis.fetch
   if (!fetch) throw new Error('Node 18+ with global fetch is required')
+  const timeoutMs = Number(options.timeoutMs) || 0
 
   async function request(method, p, opts = {}) {
     const url = `${baseUrl}${p}`
@@ -49,7 +59,15 @@ function createHttpClient(baseUrl) {
       body = opts.formData
     }
 
-    const res = await fetch(url, { method, headers, body, redirect: 'manual' })
+    // 单请求超时（可选）：某一步挂住时（后端等锁、连不上库）要明确失败并指出是哪个请求，
+    // 而不是让整个套件无限等待、把「等待」误当成「通过」。
+    const res = await fetch(url, {
+      method,
+      headers,
+      body,
+      redirect: 'manual',
+      signal: timeoutMs > 0 ? AbortSignal.timeout(timeoutMs) : undefined,
+    })
 
     let data
     if (opts.expectBinary) {
@@ -126,7 +144,7 @@ function randomRef(prefix) {
   return `${prefix || 'SMOKE'}-${hex}`
 }
 
-async function prepareSmokeContext() {
+async function prepareSmokeContext(options = {}) {
   validateTestEnvironment()
   // 1. 跑迁移（runMigrations 自行管理数据库连接）
   const { runMigrations } = require('../../backend/src/database/migrate')
@@ -272,10 +290,21 @@ async function prepareSmokeContext() {
     s.once('error', reject)
   })
   const baseUrl = `http://127.0.0.1:${server.address().port}`
-  const http = createHttpClient(baseUrl)
+  const http = createHttpClient(baseUrl, { timeoutMs: options.requestTimeoutMs })
 
   // 6. 返回上下文
+  // closeAllConnections 必须在 close 之前：Node 18+ 的 fetch（undici）默认 keep-alive，
+  // 连接会空闲地留着，server.close() 会一直等它们断开。
+  //
+  // close() 只管本函数自建的 pool。app/service 共用的 backend/src/config/db 全局单例 pool
+  // **不在这里关**——它同样是 mysql2 连接、socket 不 unref，不关进程会吊着不退，
+  // 但收尾由需要它的套件在自己的 finally 里显式写：
+  //     await require('../backend/src/config/db').pool.end()
+  // 这是既有套件的惯例（多数套件已经这么写了）。放进共享 helper 会让只关自建池的旧套件
+  // 变成关两次、把断言全绿拖成退出码 1；改写 pool.end 成 no-op 更糟——那会污染导出的
+  // 单例对象，并让后续真正该失败的生命周期错误静默通过。
   const close = async () => {
+    if (typeof server.closeAllConnections === 'function') server.closeAllConnections()
     await new Promise((resolve) => server.close(resolve))
     await pool.end()
   }

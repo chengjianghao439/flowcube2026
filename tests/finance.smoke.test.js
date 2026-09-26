@@ -60,6 +60,9 @@ async function seedRecord(http, token, pool, { type, partyName, amount, settleme
       orderNo: randomRef(type === 1 ? 'AP' : 'AR'),
       partyName,
       totalAmount: amount,
+      // 任务 3b 起手工应付必须指定借方科目（缺科目这笔负债入不了账，只能挂在勾稽里当待处理差异）。
+      // 夹具统一给管理费用 6602：本文件测的是收付款与财务确认流程，科目只影响凭证归属，不影响被测路径。
+      debitAccountCode: type === 1 ? '6602' : undefined,
       remark: 'finance smoke',
     },
   })

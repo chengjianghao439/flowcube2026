@@ -12,8 +12,8 @@ const { queueReturnLabels } = require('./return-tasks.labels')
 const PENDING_QA = 5
 const REJECTED = CONTAINER_STATUS.REJECTED
 
-const RT_STATUS = { PENDING_RECEIVE: 1, RECEIVING: 2, PENDING_CHECK: 3, PENDING_PUTAWAY: 4, COMPLETED: 5, CANCELLED: 6 }
-const RT_STATUS_NAME = { 1: '待收货', 2: '收货中', 3: '待质检', 4: '待上架', 5: '已完成', 6: '已取消' }
+const RT_STATUS = { PENDING_RECEIVE: 1, RECEIVING: 2, PENDING_CHECK: 3, PENDING_PUTAWAY: 4, COMPLETED: 5, CANCELLED: 6, REVERSING: 7 }
+const RT_STATUS_NAME = { 1: '待收货', 2: '收货中', 3: '待质检', 4: '待上架', 5: '已完成', 6: '已取消', 7: '反向处理中' }
 
 /**
  * PDA 设备绑定仓库与退货任务仓库一致性校验（与收货上架 inbound putaway 同口径）：
@@ -34,9 +34,11 @@ const RT_TRANSITIONS = {
   [RT_STATUS.PENDING_RECEIVE]: [RT_STATUS.RECEIVING, RT_STATUS.CANCELLED],
   [RT_STATUS.RECEIVING]: [RT_STATUS.PENDING_CHECK, RT_STATUS.CANCELLED],
   [RT_STATUS.PENDING_CHECK]: [RT_STATUS.PENDING_PUTAWAY, RT_STATUS.CANCELLED],
-  [RT_STATUS.PENDING_PUTAWAY]: [RT_STATUS.COMPLETED, RT_STATUS.CANCELLED],
+  [RT_STATUS.PENDING_PUTAWAY]: [RT_STATUS.COMPLETED, RT_STATUS.CANCELLED, RT_STATUS.REVERSING],
   [RT_STATUS.COMPLETED]: [],
   [RT_STATUS.CANCELLED]: [],
+  // 反向处理中只能走向已取消：货已被返货出库单取走，任务不可能再"正常完成"
+  [RT_STATUS.REVERSING]: [RT_STATUS.CANCELLED],
 }
 
 function isValidTransition(from, to) {

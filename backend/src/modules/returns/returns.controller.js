@@ -18,6 +18,16 @@ const loadSRSsourceOrder = async(req,res,next)=>{ try{return successResponse(res
 const detailSR = async(req,res,next)=>{ try{return successResponse(res,await svcSR.findByIdSR(req.params.id,req.user?.warehouseIds??null),'查询成功')}catch(e){next(e)} }
 const createSR = async(req,res,next)=>{ try{const op=getOperatorFromRequest(req);return successResponse(res,await svcSR.createSR({...req.body,operator:op,requestKey:extractRequestKey(req),scopeWarehouseIds:req.user?.warehouseIds??null}),'创建成功',201)}catch(e){next(e)} }
 const confirmSR = async(req,res,next)=>{ try{await svcSR.confirmSR(req.params.id,getOperatorFromRequest(req),req.user?.warehouseIds??null);return successResponse(res,null,'已确认')}catch(e){next(e)} }
-const cancelSR = async(req,res,next)=>{ try{await svcSR.cancelSR(req.params.id,getOperatorFromRequest(req),req.user?.warehouseIds??null);return successResponse(res,null,'已取消')}catch(e){next(e)} }
+const cancelSR = async(req,res,next)=>{ try{
+  const r = await svcSR.cancelSR(req.params.id,getOperatorFromRequest(req),req.user?.warehouseIds??null)
+  // 已入库的货要先退回客户：这次取消没有真的取消退货单，而是生成了返货出库单（202 = 已受理、待仓库出库）。
+  // 前端据此提示任务单号并引导去仓库任务页，不能按"已取消"提示——退货单此刻仍是已确认。
+  if(r&&r.pendingReverse){
+    return successResponse(res,r,r.alreadyRequested
+      ?`该退货单已有进行中的返货出库单 ${r.taskNo}，无需重复申请`
+      :`退货单已有合格品入库，需先返货出库：已生成返货出库单 ${r.taskNo}，出库完成后退货单自动取消`,202)
+  }
+  return successResponse(res,null,'已取消')
+}catch(e){next(e)} }
 
 module.exports = { listPR, loadPRSourceOrder, detailPR, createPR, confirmPR, cancelPR, listSR, loadSRSsourceOrder, detailSR, createSR, confirmSR, cancelSR }

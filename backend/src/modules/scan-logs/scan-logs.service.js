@@ -5,7 +5,7 @@ const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
 const { assertSqlIdentifier } = require('../../utils/sqlIdentifier')
-const { lockContainer, CONTAINER_STATUS } = require('../../engine/containerEngine')
+const { lockContainer, lockStockDimension, CONTAINER_STATUS } = require('../../engine/containerEngine')
 const { WT_STATUS } = require('../../constants/warehouseTaskStatus')
 const { checkDoneWithinTransaction, checkCancelReturnClearedAndFinalize } = require('../warehouse-tasks/warehouse-tasks.service')
 const { WT_EVENT, record: recordEvent } = require('../warehouse-tasks/warehouse-task-events.service')
@@ -88,7 +88,7 @@ async function createScanLog({
     }
 
     const [[taskRow]] = await conn.query(
-      'SELECT id, warehouse_id, status, cancel_requested_at, adjustment_requested_at FROM warehouse_tasks WHERE id = ? AND deleted_at IS NULL FOR UPDATE',
+      'SELECT id, warehouse_id, task_type, return_id, status, cancel_requested_at, adjustment_requested_at FROM warehouse_tasks WHERE id = ? AND deleted_at IS NULL FOR UPDATE',
       [taskId],
     )
     if (!taskRow) throw new AppError('仓库任务不存在', 404)
@@ -126,6 +126,13 @@ async function createScanLog({
       throw new AppError(`扫码数量超过待拣数量（剩余 ${needRemain}）`, 400)
     }
 
+    // 返货出库任务：先取「商品+仓库」维度锁，再锁容器行——顺序不能反，与上架/出库侧一致
+    // （反了会在并发时成环死锁，理由见 containerEngine.lockStockDimension 注释）。
+    const isSaleReturnReverse = taskRow.task_type === 'sale_return_out'
+    if (isSaleReturnReverse) {
+      await lockStockDimension(conn, itemRow.product_id, taskRow.warehouse_id)
+    }
+
     const [[containerRow]] = await conn.query(
       `SELECT id, barcode, product_id, warehouse_id, status, remaining_qty, locked_by_task_id
        FROM inventory_containers
@@ -145,6 +152,38 @@ async function createScanLog({
     }
     if (Number(containerRow.status) !== CONTAINER_STATUS.ACTIVE) {
       throw new AppError('该库存条码当前状态不可拣货', 400)
+    }
+    // 返货出库任务的容器白名单（2026-09-26 一致性审查 · 任务 1 第二期）：
+    // 只允许扫「这张退货单已入库的那批容器」，且必须已被建单时预锁给本任务。
+    //
+    // 少了这一层，同商品另一批（别的退货单的、或采购入库的）容器也能扫进来——lockContainer
+    // 只校验商品/仓库/状态，扫进来就把别批锁给本任务，出库时按 locked_by_task_id 扣走的正是
+    // 那别批实物：库存总数对得上，退回给客户的却是另一批货，原批次还留在库里。
+    // 归属只认 source_ref（建容器时写死，扫码改不了）；锁定字段只能证明"已被预定"，不能证明
+    // "来自这张退货单"，所以两个条件都要。
+    if (isSaleReturnReverse) {
+      const [[owned]] = await conn.query(
+        `SELECT 1 AS ok FROM inventory_containers c
+           JOIN return_tasks rt ON rt.id = c.source_ref_id AND rt.return_type = 'sale'
+          WHERE c.id = ? AND c.source_ref_type = 'sale_return'
+            AND rt.return_id = ? AND rt.deleted_at IS NULL
+          LIMIT 1`,
+        [containerId, taskRow.return_id],
+      )
+      if (!owned) {
+        throw new AppError(
+          '该库存条码不是这张退货单退回来的货，不能用于返货出库；返货只能退回原退货单已入库的那批货',
+          409,
+          'SALE_RETURN_REVERSE_CONTAINER_NOT_OWNED',
+        )
+      }
+      if (containerRow.locked_by_task_id == null || Number(containerRow.locked_by_task_id) !== Number(taskId)) {
+        throw new AppError(
+          '该库存条码不在本返货出库单预定的返货范围内（未随返货任务一起锁定），无法扫码；若确信有误请联系管理员核查',
+          409,
+          'SALE_RETURN_REVERSE_CONTAINER_NOT_RESERVED',
+        )
+      }
     }
     const remainingQty = Number(containerRow.remaining_qty)
     if (remainingQty <= 0) {

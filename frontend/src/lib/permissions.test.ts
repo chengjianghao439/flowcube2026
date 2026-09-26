@@ -22,6 +22,22 @@ describe('hasPermission', () => {
     expect(hasPermission(perms, 'sale.order.ship' as PermissionCode)).toBe(false)
   })
 
+  it('传数组 = 任一权限即可（给「同一页面服务两类角色」用）', () => {
+    const either = [PERMISSIONS.FINANCE_PERIOD_BACKFILL, PERMISSIONS.FINANCE_PERIOD_BACKFILL_APPROVE]
+    // 只持其中一档就放行——这正是审批人只被授予「审批跨期补录」时的处境
+    expect(hasPermission([PERMISSIONS.FINANCE_PERIOD_BACKFILL], either)).toBe(true)
+    expect(hasPermission([PERMISSIONS.FINANCE_PERIOD_BACKFILL_APPROVE], either)).toBe(true)
+    expect(hasPermission([...either], either)).toBe(true)
+    // 一档都没有才不放行：数组是「任一」，不是「全部」
+    expect(hasPermission([PERMISSIONS.ACCOUNTING_VOUCHER_VIEW], either)).toBe(false)
+    expect(hasPermission([], either)).toBe(false)
+    expect(hasPermission(undefined, either)).toBe(false)
+  })
+
+  it('超管对数组同样恒放行', () => {
+    expect(hasPermission([], [PERMISSIONS.FINANCE_PERIOD_BACKFILL, PERMISSIONS.FINANCE_PERIOD_BACKFILL_APPROVE], 1)).toBe(true)
+  })
+
   it('undefined 权限集合 = 空集（不放行）', () => {
     expect(hasPermission(undefined, PERMISSIONS.SALE_ORDER_VIEW)).toBe(false)
   })

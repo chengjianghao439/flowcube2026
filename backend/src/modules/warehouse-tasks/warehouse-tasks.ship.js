@@ -12,6 +12,7 @@ const { getNetOrderAmount, getOutstandingOrderAmount } = require('../sale/sale.c
 const {
   logSideEffectFailure,
   assertTaskPickScanClosure,
+  assertSaleReturnReverseClosure,
   assertTaskCheckScanClosure,
   assertTaskPackagingClosure,
   assertTaskPackagePrintClosure,
@@ -78,7 +79,10 @@ async function shipWithinTransaction(conn, id, operator, saleData, { requestKey,
   const taskRow = await lockStatusRow(conn, {
     table: 'warehouse_tasks',
     id,
-    columns: 'id, task_no, task_type, status, return_id, cancel_requested_at, adjustment_requested_at, warehouse_id',
+    // sale_order_id 必须取出来：下面的返货出库守卫靠它判断"任务是否被挂上了销售单"。
+    // 少了这一列时值是 undefined，而 `undefined != null` 为 false，守卫会**静默失效**——
+    // 一旦有人手改了数据，返货就会掉进销售出库分支重算应收（客户被多收一次钱）。
+    columns: 'id, task_no, task_type, status, return_id, sale_order_id, cancel_requested_at, adjustment_requested_at, warehouse_id',
     entityName: '仓库任务',
   })
   // 出库是最重的库存动作：限仓用户只能出本仓任务；PDA 设备绑定仓库必须与任务仓库一致
@@ -103,9 +107,29 @@ async function shipWithinTransaction(conn, id, operator, saleData, { requestKey,
   }
 
   const isPurchaseReturn = taskRow.task_type === 'purchase_return'
+  // 销售退货返货出库（任务 1 第二期）：把已入库的那批退货货品退回客户。
+  // 与销售出库的本质差异是**会计上什么都不做**——这批货所属的退货单此刻还是状态 2，
+  // 应收从未冲减、退货凭证从未生成（凭证引擎取数条件是 sr.status = 3），所以返货不能去
+  // 重算应收、更不能写 payment_records。能取消的退货单只到状态 2，这是硬事实。
+  const isSaleReturnReverse = taskRow.task_type === 'sale_return_out'
+  if (isSaleReturnReverse && taskRow.sale_order_id != null) {
+    // 带了销售单就会走进应收重算：那是把「从未冲减过的应收」凭空重算出来，客户被多收一次钱。
+    // 建单侧恒为 NULL，这里出现非空说明有人手改了数据或程序错了，直接暴露而不是静默按销售出库处理。
+    throw new AppError(
+      '返货出库任务不应关联销售单（销售退货返货不涉及销售单与应收账款），请联系管理员核查',
+      500,
+      'SALE_RETURN_REVERSE_SALE_ORDER_FORBIDDEN',
+    )
+  }
+  // 两类「退货出库」的共同口径：都不经过分拣/复核/打包/打印，也不携带销售预占
+  const isReturnOut = isPurchaseReturn || isSaleReturnReverse
 
   await assertTaskPickScanClosure(conn, id)
-  if (!isPurchaseReturn) {
+  // 返货要求「整批退回客户」：预锁容器里有多少就必须扫多少（见 assertSaleReturnReverseClosure）
+  if (isSaleReturnReverse) {
+    await assertSaleReturnReverseClosure(conn, id)
+  }
+  if (!isReturnOut) {
     await assertTaskCheckScanClosure(conn, id)
     await assertTaskPackagingClosure(conn, id)
     await assertTaskPackagePrintClosure(conn, id)
@@ -151,15 +175,17 @@ async function shipWithinTransaction(conn, id, operator, saleData, { requestKey,
       refType: 'warehouse_task',
       refId: taskRow.id,
       refNo: taskRow.task_no,
-      reservationRefType: isPurchaseReturn ? null : 'sale_order',
-      reservationRefId: isPurchaseReturn ? null : saleOrderId,
+      // 两类退货出库都不携带销售预占：返货的货来自退货入库，从未占用过任何销售单的预占。
+      // 若在这里带上 reservationRefType，moveStock 会去核销别的销售单的预占（审计 P0-1 同因）。
+      reservationRefType: isReturnOut ? null : 'sale_order',
+      reservationRefId: isReturnOut ? null : saleOrderId,
       operatorId: operator.userId,
       operatorName: operator.realName,
       lockedByTaskId: id,
     })
   }
 
-  if (!isPurchaseReturn && saleOrderId) {
+  if (!isReturnOut && saleOrderId) {
     const saleSvc = require('../sale/sale.service')
     await saleSvc.syncShippedByWarehouseTaskWithinTransaction(conn, saleOrderId, {
       taskId: Number(id),
@@ -177,6 +203,16 @@ async function shipWithinTransaction(conn, id, operator, saleData, { requestKey,
     })
   }
 
+  // 销售退货返货出库完成：把退货任务收口、必要时把退货单转为已取消。
+  // 注意这里**不动任何账款**——见函数头注释与设计文档 §一。
+  if (isSaleReturnReverse && taskRow.return_id) {
+    const saleReturnSvc = require('../returns/returns-sale.service')
+    await saleReturnSvc.syncSaleReturnReversedWithinTransaction(conn, Number(taskRow.return_id), {
+      taskId: Number(id),
+      taskNo: taskRow.task_no,
+    })
+  }
+
   const shippedAt = new Date()
   await compareAndSetStatus(conn, {
     table: 'warehouse_tasks',
@@ -191,7 +227,7 @@ async function shipWithinTransaction(conn, id, operator, saleData, { requestKey,
 
   await unlockContainersByTask(conn, id)
 
-  if (!isPurchaseReturn) {
+  if (!isReturnOut) {
     // COGS 成本快照：只对本任务实发的商品固化出库时点均价（分仓/分批下各任务
     // 独立快照，不再一次性刷全订单）。利润分析用快照口径，避免改进价导致历史毛利漂移。
     for (const item of items) {
@@ -215,7 +251,7 @@ async function shipWithinTransaction(conn, id, operator, saleData, { requestKey,
       toStatus: rule.toStatus,
       operatorId: operator.userId,
       operatorName: operator.realName,
-      detail: { saleOrderId, totalAmount, itemCount: items.length, isPurchaseReturn },
+      detail: { saleOrderId, totalAmount, itemCount: items.length, isPurchaseReturn, isSaleReturnReverse },
     })
   } catch (eventErr) {
     logSideEffectFailure('仓库任务事件写入失败：出库完成事件', eventErr, {
@@ -310,6 +346,47 @@ async function getShipContext(taskId) {
       saleOrderId: null,
       warehouseId: task.warehouseId,
       totalAmount: wmsItems.reduce((sum, i) => sum + Number(i.picked_qty) * Number(i.unit_price || 0), 0),
+      customerName: null,
+      items: wmsItems.map(i => ({
+        productId: i.product_id,
+        productName: i.product_name,
+        quantity: Number(i.picked_qty),
+        unitPrice: i.unit_price != null ? Number(i.unit_price) : null,
+      })),
+    }
+  }
+
+  if (task.taskType === 'sale_return_out') {
+    // 返货出库（任务 1 第二期）：sale_order_id 恒为 NULL，不能走下面的销售单分支
+    // （那会以「关联销售单不存在」404 把返货卡死），也不能碰任何应收。
+    //
+    // 单价按行级关联（迁移 262 的 sale_return_item_id）从 sale_return_items 取，理由同采购退货：
+    // 按 (return_id, product_id) 关联时同一退货单内同商品多行会 JOIN 放大，assertNoShipItemFanout
+    // 抛 409 把出库永久卡死。该类型是本次新增，不存在"迁移前的历史任务"，故没有 legacy 回退分支；
+    // 缺关联只可能是数据被改过，直接拒绝并要求人工核查，绝不"随便挑一行"蒙过去。
+    const [wmsItems] = await pool.query(
+      `SELECT wti.product_id, wti.product_name, wti.picked_qty,
+              sri.unit_price,
+              (wti.sale_return_item_id IS NULL AND wti.picked_qty <> 0) AS link_missing
+         FROM warehouse_task_items wti
+         LEFT JOIN sale_return_items sri ON sri.id = wti.sale_return_item_id
+        WHERE wti.task_id = ?`,
+      [taskId],
+    )
+    if (!wmsItems.length) throw new AppError('任务无出库明细', 400)
+    await assertNoShipItemFanout(taskId, wmsItems.length)
+    if (wmsItems.some(i => Number(i.link_missing) === 1)) {
+      throw new AppError(
+        '返货出库任务缺少退货明细行关联，无法确定退货单价，请联系管理员核查后重建任务',
+        409,
+        'SALE_RETURN_ITEM_LINK_MISSING',
+      )
+    }
+    return {
+      saleOrderId: null,
+      warehouseId: task.warehouseId,
+      totalAmount: wmsItems.reduce((sum, i) => sum + Number(i.picked_qty) * Number(i.unit_price || 0), 0),
+      // 返货的对手方是退货单上的客户，但出库不写任何单据/账款，ship 不需要客户名
       customerName: null,
       items: wmsItems.map(i => ({
         productId: i.product_id,

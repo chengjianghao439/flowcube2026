@@ -29,6 +29,8 @@ import { todayYmd, beijingPeriod } from '@/lib/dateTime'
 import { downloadExport } from '@/lib/exportDownload'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
+import { useNavigate } from 'react-router-dom'
+import { useWorkspaceStore } from '@/store/workspaceStore'
 import {
   useVouchers, useVoucher, useReconciliation,
   useGenerateVouchers, useCreateManualVoucher, useReverseVoucher, useDeleteVoucher,
@@ -48,28 +50,83 @@ const statusTone = (s: number) => (s === 3 ? 'danger' : s === 2 ? 'active' : 'su
 // ─── 勾稽对账卡片 ─────────────────────────────────────────────────────────────
 function ReconciliationCard() {
   const { data } = useReconciliation()
+  const { can } = usePermission()
+  const navigate = useNavigate()
+  const addTab = useWorkspaceStore(s => s.addTab)
+  // 勾稽报出的未入账应付，入口在账款侧（现结）与对账侧（月结）——从凭证页直接过去核对
+  const openPayables = (path: string, title: string) => { addTab({ key: path, title, path }); navigate(path) }
   const items = data?.items ?? []
+  const unposted = data?.unpostedLedger
   if (!items.length) return null
+  // 三项都平 ≠ 账就对了：非单据应付（运费/手工）在没有凭证来源时会同时从凭证侧和业务侧消失，
+  // 三项因此显示为平。所以「未入账应付 > 0」必须独立于三项结果单独提示——否则页面给出的是
+  // 全绿的假安心，而漏掉的正是这笔负债。
+  const unpostedTotal = Number(unposted?.total ?? 0)
+  const unclassified = Number(unposted?.unclassified ?? 0)
+  const unclassifiedCount = Number(unposted?.unclassifiedCount ?? 0)
+  const uncovered = Number(unposted?.uncovered ?? 0)
+  const uncoveredCount = Number(unposted?.uncoveredCount ?? 0)
   return (
-    <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-      {items.map(it => (
-        <div key={it.name} className={cn('card-base p-3', !it.matched && 'border-warning/40')}>
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground">{it.name}</span>
-            {it.matched
-              ? <SoftStatusLabel label="勾稽一致" tone="success" />
-              : <SoftStatusLabel label="有差异" tone="warning" />}
+    <div className="mb-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {items.map(it => (
+          <div key={it.name} className={cn('card-base p-3', !it.matched && 'border-warning/40')}>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">{it.name}</span>
+              {it.matched
+                ? <SoftStatusLabel label="勾稽一致" tone="success" />
+                : <SoftStatusLabel label="有差异" tone="warning" />}
+            </div>
+            <div className="mt-2 flex items-center gap-2 text-sm">
+              {it.matched
+                ? <CheckCircle2 className="h-4 w-4 text-success" />
+                : <AlertTriangle className="h-4 w-4 text-warning" />}
+              <span className="tabular-nums">凭证 {amount(it.voucher)}</span>
+              <span className="text-muted-foreground">/ 业务 {amount(it.business)}</span>
+              {!it.matched && <span className="text-warning tabular-nums">差 {amount(it.diff)}</span>}
+            </div>
           </div>
-          <div className="mt-2 flex items-center gap-2 text-sm">
-            {it.matched
-              ? <CheckCircle2 className="h-4 w-4 text-success" />
-              : <AlertTriangle className="h-4 w-4 text-warning" />}
-            <span className="tabular-nums">凭证 {amount(it.voucher)}</span>
-            <span className="text-muted-foreground">/ 业务 {amount(it.business)}</span>
-            {!it.matched && <span className="text-warning tabular-nums">差 {amount(it.diff)}</span>}
+        ))}
+      </div>
+      {unpostedTotal > 0 && (
+        <div className="mt-3 card-base border-warning/40 p-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-muted-foreground">未入账应付（运费结算 / 手工录入）</span>
+            <SoftStatusLabel label="待处理" tone="warning" />
+          </div>
+          <div className="mt-2 flex items-start gap-2 text-sm">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+            <div className="space-y-1">
+              <div className="text-warning tabular-nums">尚有 {amount(unpostedTotal)} 应付未入账</div>
+              {unclassified > 0 && (
+                <div className="text-muted-foreground">
+                  其中 {amount(unclassified)}（{unclassifiedCount} 笔）是历史记录未分类：缺借方科目，
+                  系统不猜科目，需财务确认科目后走补录通道
+                </div>
+              )}
+              {uncovered > 0 && (
+                <div className="text-muted-foreground">
+                  其中 {amount(uncovered)}（{uncoveredCount} 笔）已有借方科目、但凭证净额没盖住：
+                  若还没生成过凭证，点上方「生成本期凭证」即入账（重复生成不会重复记账）；
+                  若已生成过，则可能是被红字冲销或只记了一部分，需查凭证后补记
+                </div>
+              )}
+              {/* 报出来的是「哪一笔」查不到，就得指到能查的地方去：现结在账款页、月结在对账页 */}
+              {can(PERMISSIONS.PAYMENT_VIEW) && (
+                <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                  <span className="text-muted-foreground">去核对：</span>
+                  <Button size="sm" variant="outline" onClick={() => openPayables('/payments/payable', '现结供应商账款')}>
+                    现结供应商账款
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => openPayables('/reports/reconciliation/payable', '月结供应商对账')}>
+                    月结供应商对账
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      ))}
+      )}
     </div>
   )
 }
@@ -93,7 +150,7 @@ function GenerateDialog({ open, onClose }: { open: boolean; onClose: () => void 
         <DialogHeader><DialogTitle>生成本期凭证</DialogTitle></DialogHeader>
         <div className="space-y-4 py-1">
           <p className="text-xs text-muted-foreground">
-            从采购结算/销售收入成本/收付款/费用报销/退货/盘点等业务事实全量重算生成凭证。可反复执行，重复生成不会产生多余凭证。
+            从采购结算/销售收入成本/收付款/费用报销/退货/盘点/运费结算/手工应付等业务事实全量重算生成凭证。可反复执行，重复生成不会产生多余凭证。
           </p>
           <div className="space-y-1.5">
             <Label>会计期间（YYYYMM）</Label>

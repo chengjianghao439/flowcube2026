@@ -9,6 +9,7 @@ const { PAYMENT_EVENT, record: recordPaymentEvent } = require('./payment-events.
 const statementSvc = require('./reconciliation-statements.service')
 const accountSvc = require('../finance/finance-accounts.service')
 const { normalizePagination } = require('../../utils/pagination')
+const { assertFinancePeriodOpen, tryRecordBackfillApplication } = require('../accounting/finance-period.guard')
 
 /**
  * 收付款单（汇款）与核销。
@@ -106,12 +107,86 @@ function resolveReceiptStatus(amount, settled) {
 }
 
 /**
+ * 申请跨期补录前的**只读**可执行性预检（2026-09-26 一致性审查 · 任务 7）。
+ *
+ * 为什么必须有：审批是异步的。申请时不看这笔业务此刻做不做得成，一张明摆着核销不成的单子
+ * （账款已结清、对账单还是草稿、金额超余额）也会一路走到审批，批准后执行失败停在
+ * 「已批准 · 待执行」——审批人批了个注定执行不了的动作，还得人工作废。
+ * 这里与下面 applyAllocations 的校验用同一套判定，但那边的判定带行锁、才是权威；
+ * 这里只读不锁、**不做任何承诺**：审批期间账款被别的单子先结清仍然可能发生，那种漂移由
+ * 「作废 / 重新申请」兜底（finance-backfills.service.cancel），不靠这里假装能保证。
+ */
+async function precheckAllocations(allocations, { type, partyId = null, partyName = null } = {}) {
+  const label = Number(type) === 1 ? '付款单' : '收款单'
+  for (const alloc of allocations) {
+    if (alloc.statementId) {
+      const [[st]] = await pool.query(
+        'SELECT statement_no, type, party_name, status, balance FROM reconciliation_statements WHERE id = ? AND deleted_at IS NULL',
+        [alloc.statementId],
+      )
+      if (!st) throw new AppError(`对账单 ${alloc.statementId} 不存在`, 404)
+      if (Number(st.type) !== Number(type)) {
+        throw new AppError(`${st.statement_no} 与本${label}类型不符`, 400, 'FINANCE_BACKFILL_NOT_APPLICABLE')
+      }
+      if (partyId == null && partyName != null && st.party_name !== partyName) {
+        throw new AppError(
+          `${st.statement_no} 属于「${st.party_name}」，与本单往来方「${partyName}」不一致`,
+          400, 'FINANCE_BACKFILL_NOT_APPLICABLE',
+        )
+      }
+      if (Number(st.status) === statementSvc.ST.DRAFT) {
+        throw new AppError(`${st.statement_no} 还是草稿，请先确认后再申请补录核销`, 409, 'FINANCE_BACKFILL_NOT_APPLICABLE')
+      }
+      if (moneyUnits(st.balance) <= 0n) {
+        throw new AppError(`${st.statement_no} 已核销完毕，无需再申请补录`, 400, 'FINANCE_BACKFILL_NOT_APPLICABLE')
+      }
+      if (moneyUnits(alloc.amount) > moneyUnits(st.balance)) {
+        throw new AppError(
+          `核销 ¥${Number(alloc.amount).toFixed(2)} 超出 ${st.statement_no} 未核销余额 ¥${Number(st.balance).toFixed(2)}`,
+          400, 'FINANCE_BACKFILL_NOT_APPLICABLE',
+        )
+      }
+      continue
+    }
+    const [[record]] = await pool.query(
+      'SELECT order_no, type, party_name, status, confirm_status, balance FROM payment_records WHERE id = ?',
+      [alloc.recordId],
+    )
+    if (!record) throw new AppError(`账款记录 ${alloc.recordId} 不存在`, 404)
+    if (Number(record.type) !== Number(type)) {
+      throw new AppError(`${record.order_no} 与本${label}类型不符`, 400, 'FINANCE_BACKFILL_NOT_APPLICABLE')
+    }
+    if (partyId == null && partyName != null && record.party_name !== partyName) {
+      throw new AppError(
+        `${record.order_no} 属于「${record.party_name}」，与本单往来方「${partyName}」不一致`,
+        400, 'FINANCE_BACKFILL_NOT_APPLICABLE',
+      )
+    }
+    if (Number(record.status) === 3) {
+      throw new AppError(`${record.order_no} 已结清，无需再申请补录核销`, 400, 'FINANCE_BACKFILL_NOT_APPLICABLE')
+    }
+    if (Number(record.type) === 1 && Number(record.confirm_status) !== 1) {
+      throw new AppError(`${record.order_no} 尚未财务确认，请先确认结算金额再申请补录`, 409, 'FINANCE_BACKFILL_NOT_APPLICABLE')
+    }
+    if (moneyUnits(alloc.amount) > moneyUnits(record.balance)) {
+      throw new AppError(
+        `${record.order_no} 核销 ¥${Number(alloc.amount).toFixed(2)} 超出其余额 ¥${Number(record.balance).toFixed(2)}`,
+        400, 'FINANCE_BACKFILL_NOT_APPLICABLE',
+      )
+    }
+  }
+}
+
+/**
  * 把一笔汇款分配核销到若干账款。调用方已开启事务并锁好 receipt 行。
  *
  * 加锁顺序：账款按 id 升序逐行 FOR UPDATE，与 payments.service.recordPayment 的单行锁
  * 共存时不会形成环路（见 docs/claude-md-archive-2026-09-04.md 第 11 节「加锁顺序统一」）。
  */
 async function applyAllocations(conn, receipt, allocations, operator) {
+  // 跨期闸门（2026-09-26 一致性审查 · 任务 7）由调用方在核销前完成：本函数被调用时，create 路径
+  // 已持有 finance_accounts 锁，若在此处再取账套锁，就与直付路径（recordPayment：账套锁 → 账户锁）
+  // 形成 ABBA 环。这里只做分配本身——补录留痕不在这里，申请单在执行入口就落了。
   // 统一加锁顺序 statement→record，且 statement 之间也按 id 全局升序：先把本次会触及的所有对账单行
   // （显式核销的 + 直核账款所属的）去重、升序、一次性 FOR UPDATE，再展开、再按 record id 升序锁账款。
   // 原实现里显式对账单在 expandStatementAllocation 内按 allocations 数组顺序逐个加锁、extra 对账单
@@ -235,10 +310,53 @@ async function applyAllocations(conn, receipt, allocations, operator) {
  * 新建收付款单，并可同时核销若干账款（allocations 可为空 = 先挂账，之后再核销）。
  * 接 requestKey 幂等：核销直接改钱，连点两次或断网重试都不能重复扣。
  */
-async function create({ type, partyId, partyName, amount, paymentDate, method, accountId, remark, allocations = [] }, operator, requestKey) {
-  const conn = await pool.getConnection()
+async function create({ type, partyId, partyName, amount, paymentDate, method, accountId, remark, allocations = [] }, operator, requestKey, { backfill = null, conn: sharedConn = null } = {}) {
+  // 跨期补录的**申请**分支（2026-09-26 一致性审查 · 任务 7）：只落一张待审批申请单，业务数据
+  // 一行不写。放在业务事务**之前**——申请单必须独立提交，业务回滚不能把它一起抹掉。
+  if (backfill?.mode === 'apply') {
+    // 没有资金账户就没有资金流水，也就没有凭证来源：批准执行后会留下一个永远补不出调整凭证的
+    // 差异。路由层 accountId 是必填，这里是防御（旧客户端/重放数据）。
+    if (!accountId) {
+      throw new AppError(
+        '本次登记没有指定资金账户，不会产生资金流水，跨期补录也就生成不了调整凭证。'
+        + '请先选择资金账户再申请补录。',
+        400, 'FINANCE_BACKFILL_NO_FUND_ACCOUNT',
+      )
+    }
+    // 申请期的只读可执行性预检（新建单只有 allocations 有漂移风险：账款可能在审批期间被别人结清）
+    if (allocations.length) await precheckAllocations(allocations, { type, partyId, partyName })
+    const applied = await tryRecordBackfillApplication({
+      businessDate: paymentDate,
+      bizType: 'receipt',
+      amount,
+      reason: backfill.reason,
+      requestKey,
+      applicantId: backfill.applicantId,
+      applicantName: backfill.applicantName,
+      // 快照 = 批准后重放这次调用所需的入参（形状见 finance-backfills.replay）
+      requestSnapshot: {
+        kind: 'receipt',
+        body: {
+          type, partyId: partyId ?? null, partyName, amount, paymentDate,
+          method: method || null, accountId: accountId || null, remark: remark || null, allocations,
+        },
+      },
+      fingerprintPayload: {
+        type, partyName, amount, paymentDate, method: method || null, accountId: accountId || null,
+        allocations: allocations.map(a => ({
+          recordId: a.recordId ?? null, statementId: a.statementId ?? null, amount: a.amount,
+        })),
+      },
+    })
+    if (applied) return { backfillApplication: applied }
+  }
+
+  // sharedConn：补录执行要在**一个事务**里做完「重放业务 + 回填申请单执行痕迹」，
+  // 此时事务边界归调用方，本函数只是这条事务里的一段（详见 payments.service.recordPayment 同段注释）。
+  const own = !sharedConn
+  const conn = sharedConn || await pool.getConnection()
   try {
-    await conn.beginTransaction()
+    if (own) await conn.beginTransaction()
     const reqState = await beginCreationOperationRequest(conn, {
       requestKey,
       action: 'payment.receipt.create',
@@ -247,12 +365,34 @@ async function create({ type, partyId, partyName, amount, paymentDate, method, a
     })
     if (reqState.replay) {
       // 重放命中已成功的请求：直接返回原响应，绝不重复核销
-      await conn.commit()
+      if (own) await conn.commit()
       return reqState.responseData ?? { replayed: true }
     }
 
     const total = moneyNumber(moneyUnits(amount))
     if (!Number.isFinite(total) || total <= 0) throw new AppError('汇款金额必须大于 0', 400)
+
+    // 跨期闸门（2026-09-26 一致性审查 · 任务 7）：本单落库必写资金账户流水（accountId 必填），
+    // 流水会生成 receipt_in / payment_out 凭证；业务日期落在已结账期间时凭证引擎会跳过它——
+    // 钱进了账户、会计账上却没有。所以**无条件**过闸门，不按「本次是否核销」分叉：按
+    // allocations.length 分叉会漏掉「只挂账不核销」（预收/预付）那一类，它同样写流水。
+    // 业务日期取 paymentDate（钱实际发生的那天）而非今天——单子可能是上月建的、今天才提交，
+    // 凭证仍按 paymentDate 落在上月。
+    // 位置必须在下面 recordTransaction（取 finance_accounts 锁）之前：全局加锁顺序统一为
+    // 「账套锁 → 账户锁 → 对账单锁 → 账款锁」，否则与直付路径（recordPayment 同序）成 ABBA 环。
+    const periodState = await assertFinancePeriodOpen(conn, paymentDate, {
+      bizLabel: '本次登记',
+      backfill: backfill?.mode === 'execute' ? backfill : null,
+    })
+
+    // 补录执行必须有资金账户：没有账户就没有资金流水、没有凭证来源，执行完只会留下一个永远
+    // 补不出调整凭证的差异。路由层 accountId 必填，这里是防御（旧单子/快照来自检查之前）。
+    if (backfill?.mode === 'execute' && !accountId) {
+      throw new AppError(
+        '本次补录登记没有资金账户，不会产生资金流水与调整凭证，不能执行。请驳回后重新申请并选择资金账户。',
+        409, 'FINANCE_BACKFILL_NO_FUND_ACCOUNT',
+      )
+    }
 
     const resolvedPartyId = await resolveReceiptParty(conn, { type, partyId, partyName, allocations })
     if (resolvedPartyId != null) {
@@ -283,6 +423,10 @@ async function create({ type, partyId, partyName, amount, paymentDate, method, a
         partyName,
         happenedAt: paymentDate,
         remark: remark || null,
+        // 补录执行：资金流水仍按业务日期 happenedAt 记账（银行对账依据它，不能改成今天），
+        // 只有凭证归属日期改用补录当期，并把申请单挂上供自动核对反查
+        voucherDateOverride: periodState.voucherDateOverride,
+        backfillId: backfill?.mode === 'execute' ? backfill.approvedId : null,
       }, operator)
     }
     const receipt = {
@@ -302,22 +446,71 @@ async function create({ type, partyId, partyName, amount, paymentDate, method, a
       applied: result.applied,
     }
     await completeOperationRequest(conn, reqState, { data, resourceType: 'payment_receipt', resourceId: r.insertId })
-    await conn.commit()
+    if (own) await conn.commit()
     return data
   } catch (error) {
-    await conn.rollback()
+    if (own) await conn.rollback()
     throw error
   } finally {
-    conn.release()
+    if (own) conn.release()
   }
 }
 
 /** 用某张收付款单的剩余余额继续核销（预收款后续冲抵订单走这里） */
-async function settle(receiptId, { allocations = [] }, operator, requestKey) {
+async function settle(receiptId, { allocations = [] }, operator, requestKey, { backfill = null, conn: sharedConn = null } = {}) {
   if (!allocations.length) throw new AppError('请至少选择一笔账款进行核销', 400)
-  const conn = await pool.getConnection()
+  // 跨期补录的**申请**分支（2026-09-26 一致性审查 · 任务 7）：只落待审批申请单，不进业务事务。
+  // 金额是本次核销的合计（各分配额之和），不是整张单的余额。
+  if (backfill?.mode === 'apply') {
+    const [[target]] = await pool.query(
+      'SELECT receipt_no, payment_date, type, party_id, party_name, amount, settled_amount, balance FROM payment_receipts WHERE id = ? AND deleted_at IS NULL',
+      [receiptId],
+    )
+    if (!target) throw new AppError('收付款单不存在', 404)
+    // 申请期的只读可执行性预检：这张单本身可能已被别人核销掉一部分，逐笔账款也可能已结清。
+    // 两处都查——单子余额不够与某笔账款余额不够是两种不同的拒绝理由，合并成一句申请人看不懂。
+    const allocTotalUnits = allocations.reduce((sum, a) => sum + moneyUnits(a.amount), 0n)
+    if (allocTotalUnits > moneyUnits(target.balance)) {
+      throw new AppError(
+        `本次核销合计 ¥${moneyNumber(allocTotalUnits).toFixed(2)} 超出该单剩余可核销金额 ¥${Number(target.balance).toFixed(2)}`,
+        400, 'FINANCE_BACKFILL_NOT_APPLICABLE',
+      )
+    }
+    await precheckAllocations(allocations, {
+      type: target.type, partyId: target.party_id, partyName: target.party_name,
+    })
+    const applied = await tryRecordBackfillApplication({
+      businessDate: target.payment_date,
+      bizType: 'receipt_settle',
+      bizId: Number(receiptId),
+      bizNo: target.receipt_no,
+      amount: allocations.reduce((sum, a) => sum + Number(a.amount || 0), 0),
+      reason: backfill.reason,
+      requestKey,
+      applicantId: backfill.applicantId,
+      applicantName: backfill.applicantName,
+      // 核销不产生资金流水，因此没有会计凭证要生成（凭证在收付款单登记时就已生成）——
+      // 见 finance-backfills.service 的 NO_FUND_TXN_BIZ_TYPES。
+      requestSnapshot: {
+        kind: 'receipt_settle',
+        receiptId: Number(receiptId),
+        body: { allocations },
+      },
+      fingerprintPayload: {
+        receiptId: Number(receiptId),
+        allocations: allocations.map(a => ({
+          recordId: a.recordId ?? null, statementId: a.statementId ?? null, amount: a.amount,
+        })),
+      },
+    })
+    if (applied) return { backfillApplication: applied }
+  }
+
+  // sharedConn：补录执行要在一个事务里做完「重放业务 + 回填申请单执行痕迹」（同 create）。
+  const own = !sharedConn
+  const conn = sharedConn || await pool.getConnection()
   try {
-    await conn.beginTransaction()
+    if (own) await conn.beginTransaction()
     const reqState = await beginResourceOperationRequest(conn, {
       requestKey,
       action: 'payment.receipt.settle',
@@ -327,9 +520,25 @@ async function settle(receiptId, { allocations = [] }, operator, requestKey) {
     })
     if (reqState.replay) {
       // 重放命中已成功的请求：直接返回原响应，绝不重复核销
-      await conn.commit()
+      if (own) await conn.commit()
       return reqState.responseData ?? { replayed: true }
     }
+
+    // 跨期闸门（2026-09-26 一致性审查 · 任务 7）：业务日期取单子的 payment_date（钱实际发生的
+    // 那天），不是今天。这里先用非锁读取日期，好让账套锁排在 receipt 行锁之前——与 create
+    // 路径保持同一全局加锁顺序（账套锁 → 收付款单 → 对账单 → 账款），避免与直付路径成 ABBA 环。
+    // 非锁读不会读到中途改动的值：payment_date 在单据建好之后没有更新入口。
+    // 核销本身不写资金流水（钱在 create 时已进账户），所以这里只拦不留痕：已结账期间不该再改
+    // 往来清账进度（会与已封存的账龄/对账口径不一致）。只有 mode='execute' 才把补录授权交给闸门。
+    const [[dateRow]] = await conn.query(
+      'SELECT payment_date FROM payment_receipts WHERE id=? AND deleted_at IS NULL',
+      [receiptId],
+    )
+    if (!dateRow) throw new AppError('收付款单不存在', 404)
+    await assertFinancePeriodOpen(conn, dateRow.payment_date, {
+      bizLabel: '本次核销',
+      backfill: backfill?.mode === 'execute' ? backfill : null,
+    })
 
     const [[receipt]] = await conn.query(
       'SELECT * FROM payment_receipts WHERE id=? AND deleted_at IS NULL FOR UPDATE',
@@ -347,13 +556,13 @@ async function settle(receiptId, { allocations = [] }, operator, requestKey) {
       applied: result.applied,
     }
     await completeOperationRequest(conn, reqState, { data, resourceType: 'payment_receipt', resourceId: Number(receiptId) })
-    await conn.commit()
+    if (own) await conn.commit()
     return data
   } catch (error) {
-    await conn.rollback()
+    if (own) await conn.rollback()
     throw error
   } finally {
-    conn.release()
+    if (own) conn.release()
   }
 }
 

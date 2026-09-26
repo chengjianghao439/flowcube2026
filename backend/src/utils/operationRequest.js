@@ -365,6 +365,9 @@ module.exports = {
   completeOperationRequest,
   failOperationRequest,
   getOperationRequestStatus,
+  // 跨期补录申请的幂等作用域要用它：同一笔业务的重复提交必须算出同一个指纹
+  stableStringify,
+  creationFingerprint,
   getScopedOperationRequestStatus,
   cleanupExpiredRequests,
   startCleanupSweeper,

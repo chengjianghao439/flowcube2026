@@ -1,5 +1,5 @@
 import { getMergedPageGroup } from './mergedPageGroups'
-import type { PermCode } from '@/lib/permissions'
+import type { PermissionRequirement } from '@/lib/permissions'
 import { PERMISSIONS } from '@/lib/permission-codes'
 
 export type RouteTabIdentity =
@@ -7,7 +7,7 @@ export type RouteTabIdentity =
   | { kind: 'full-url' }
   | { kind: 'query-keys'; keys: string[] }
 
-export type RouteComponentKey = 'PartyLedgerPage' | 'DashboardPage' | 'SalePage' | 'SaleFormPage' | 'PurchasePage' | 'PurchaseFormPage' | 'RequisitionsPage' | 'RequisitionFormPage' | 'ProductPage' | 'PriceChangePage' | 'ProductFormPage' | 'CategoryPage' | 'WarehouseStructurePage' | 'InventoryPage' | 'InventoryTracePage' | 'PlasticBoxesPage' | 'StockcheckPage' | 'AbcClassPage' | 'DisposalPage' | 'ProcurementPlanListPage' | 'ProcurementPlanDetailPage' | 'TransferPage' | 'TransferFormPage' | 'InboundTasksPage' | 'InboundTaskCreatePage' | 'InboundTaskDetailPage' | 'PickingWavesPage' | 'CustomersPage' | 'CarriersPage' | 'CarrierAccountsPage' | 'LogisticsPage' | 'LogisticsDetailPage' | 'FreightReconciliationPage' | 'SuppliersPage' | 'ReturnsPage' | 'PurchaseReturnFormPage' | 'SaleReturnFormPage' | 'PayablePage' | 'ReceivablePage' | 'UsersPage' | 'DepartmentsPage' | 'ApprovalFlowsPage' | 'ApprovalPendingPage' | 'PermissionsPage' | 'SettingsPage' | 'BarcodePrintQueryPage' | 'OplogsPage' | 'ReportsPage' | 'RoleWorkbenchPage' | 'FinanceDashboardPage' | 'FinanceAccountsPage' | 'FinanceTransactionsPage' | 'ExpenseClaimsPage' | 'ExpenseCategoriesPage' | 'AcctAccountsPage' | 'AcctVouchersPage' | 'AcctLedgerPage' | 'AcctReportsPage' | 'AcctInvoicesPage' | 'RefundsPage' | 'CreditOverridesPage' | 'AcctPeriodsPage' | 'AcctConsolidationPage' | 'AcctTaxPage' | 'FixedAssetsPage' | 'AvgCostReconciliationPage' | 'ReconciliationPayablePage' | 'ReconciliationReceivablePage' | 'ProfitAnalysisPage' | 'KpiPage' | 'ReplenishmentPage' | 'InventoryAgingPage' | 'WavePerformancePage' | 'PdaAnomalyPage' | 'WarehouseOpsPage' | 'PrintTemplatesPage' | 'PrintTemplateEditorPage' | 'PrintersPage' | 'PdaDevicesPage' | 'PortalStatementsPage'
+export type RouteComponentKey = 'PartyLedgerPage' | 'DashboardPage' | 'SalePage' | 'SaleFormPage' | 'PurchasePage' | 'PurchaseFormPage' | 'RequisitionsPage' | 'RequisitionFormPage' | 'ProductPage' | 'PriceChangePage' | 'ProductFormPage' | 'CategoryPage' | 'WarehouseStructurePage' | 'InventoryPage' | 'InventoryTracePage' | 'PlasticBoxesPage' | 'StockcheckPage' | 'AbcClassPage' | 'DisposalPage' | 'ProcurementPlanListPage' | 'ProcurementPlanDetailPage' | 'TransferPage' | 'TransferFormPage' | 'InboundTasksPage' | 'InboundTaskCreatePage' | 'InboundTaskDetailPage' | 'PickingWavesPage' | 'CustomersPage' | 'CarriersPage' | 'CarrierAccountsPage' | 'LogisticsPage' | 'LogisticsDetailPage' | 'FreightReconciliationPage' | 'SuppliersPage' | 'ReturnsPage' | 'PurchaseReturnFormPage' | 'SaleReturnFormPage' | 'PayablePage' | 'ReceivablePage' | 'UsersPage' | 'DepartmentsPage' | 'ApprovalFlowsPage' | 'ApprovalPendingPage' | 'PermissionsPage' | 'SettingsPage' | 'BarcodePrintQueryPage' | 'OplogsPage' | 'ReportsPage' | 'RoleWorkbenchPage' | 'FinanceDashboardPage' | 'FinanceAccountsPage' | 'FinanceTransactionsPage' | 'ExpenseClaimsPage' | 'ExpenseCategoriesPage' | 'AcctAccountsPage' | 'AcctVouchersPage' | 'AcctLedgerPage' | 'AcctReportsPage' | 'AcctInvoicesPage' | 'RefundsPage' | 'CreditOverridesPage' | 'AcctPeriodsPage' | 'AcctBackfillsPage' | 'AcctConsolidationPage' | 'AcctTaxPage' | 'FixedAssetsPage' | 'AvgCostReconciliationPage' | 'ReconciliationPayablePage' | 'ReconciliationReceivablePage' | 'ProfitAnalysisPage' | 'KpiPage' | 'ReplenishmentPage' | 'InventoryAgingPage' | 'WavePerformancePage' | 'PdaAnomalyPage' | 'WarehouseOpsPage' | 'PrintTemplatesPage' | 'PrintTemplateEditorPage' | 'PrintersPage' | 'PdaDevicesPage' | 'PortalStatementsPage'
 
 type RouteNavMeta =
   | { kind: 'link'; label: string; order: number; iconKey?: string }
@@ -22,7 +22,7 @@ type RouteNavMeta =
 export interface RouteRegistryEntry {
   path: string
   title: string
-  permission: PermCode
+  permission: PermissionRequirement
   componentKey: RouteComponentKey
   keepAlive: boolean
   tabIdentity: RouteTabIdentity
@@ -33,7 +33,7 @@ export interface RouteRegistryEntry {
 export interface RoutePatternEntry {
   pattern: RegExp
   title: (path: string) => string
-  permission: PermCode
+  permission: PermissionRequirement
   componentKey: RouteComponentKey
   keepAlive: boolean
   tabIdentity: RouteTabIdentity
@@ -41,13 +41,13 @@ export interface RoutePatternEntry {
   listPath?: string
 }
 
-export type NavChildItem = { label: string; path: string; perm: PermCode; iconKey?: string }
+export type NavChildItem = { label: string; path: string; perm: PermissionRequirement; iconKey?: string }
 
 /** 下拉菜单内的二级分段；label 为空表示无标题段（渲染在最上方） */
 export type NavMenuSection = { label?: string; items: NavChildItem[] }
 
 export type TopNavSection =
-  | { kind: 'link'; label: string; path: string; perm: PermCode; iconKey?: string }
+  | { kind: 'link'; label: string; path: string; perm: PermissionRequirement; iconKey?: string }
   /** children 是 sections 拍平后的全量子项，供路径匹配用；渲染走 sections */
   | { kind: 'menu'; label: string; children: NavChildItem[]; sections: NavMenuSection[] }
 
@@ -543,6 +543,18 @@ export const routeRegistry: RouteRegistryEntry[] = [
     tabIdentity: pathnameIdentity,
     nav: { kind: 'menu', group: '会计', section: '发票税务', order: 90 },
   },
+  {
+    path: '/accounting/backfills',
+    title: '跨期补录审批',
+    // 两档权限任一即可：不持审批权限的出纳要能进来回查自己提交的单子批了没有、
+    // 待审批时把它撤回；只持审批档的审批人也要能进来（他的工作只能在这个页面做）。
+    // 权限位写成数组就是「任一」，与后端列表接口的 requireAnyPermission 同一口径。
+    permission: [PERMISSIONS.FINANCE_PERIOD_BACKFILL, PERMISSIONS.FINANCE_PERIOD_BACKFILL_APPROVE],
+    componentKey: 'AcctBackfillsPage',
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '会计', section: '结账', order: 100 },
+  },
 
   // ── 报表 ──────────────────────────────────────────────
   {
@@ -945,7 +957,7 @@ export function resolveRouteTitle(path: string): string | undefined {
   return getRouteByPath(path)?.title ?? getRoutePatternByPath(path)?.title(path)
 }
 
-export function resolveRoutePermission(path: string): PermCode | undefined {
+export function resolveRoutePermission(path: string): PermissionRequirement | undefined {
   return getRouteByPath(path)?.permission ?? getRoutePatternByPath(path)?.permission
 }
 
@@ -968,12 +980,12 @@ export const PATH_TITLES: Record<string, string> = routeRegistry.reduce<Record<s
   return acc
 }, {})
 
-export const PATH_PERMS: Record<string, PermCode> = routeRegistry.reduce<Record<string, PermCode>>((acc, route) => {
+export const PATH_PERMS: Record<string, PermissionRequirement> = routeRegistry.reduce<Record<string, PermissionRequirement>>((acc, route) => {
   acc[route.path] = route.permission
   return acc
 }, {})
 
-export function buildTopNavSections(can: (permission: PermCode) => boolean = () => true): TopNavSection[] {
+export function buildTopNavSections(can: (permission: PermissionRequirement) => boolean = () => true): TopNavSection[] {
   const seenGroups = new Set<string>()
   const links: Array<TopNavSection & { order: number }> = []
   /** group → section 标题（'' 表示无标题段）→ 子项 */

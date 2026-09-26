@@ -101,6 +101,29 @@ export interface ReconciliationItem {
   matched: boolean
 }
 
+/**
+ * 未入账应付（任务 3b）。三项勾稽只覆盖「已进凭证体系」的业务，非单据应付（运费/手工）
+ * 若没有凭证来源，会同时从凭证侧和业务侧消失、显示为平——这份数据就是用来把它显式报出来的。
+ * total = unclassified + pendingVoucher。
+ */
+export interface UnpostedLedger {
+  /** 未入账合计（2202 凭证净额尚未覆盖的应付金额） */
+  total: number
+  /** 其中因缺借方科目而无法入账的金额（历史记录，凭证引擎有意跳过不猜科目，需财务确认后补录） */
+  unclassified: number
+  /** unclassified 对应的笔数 */
+  unclassifiedCount: number
+  /** 其中有借方科目、但凭证净额没盖住的金额（少记或被红字冲销，需查凭证补记） */
+  uncovered: number
+  /** uncovered 对应的笔数 */
+  uncoveredCount: number
+}
+
+export interface ReconciliationResult {
+  items: ReconciliationItem[]
+  unpostedLedger: UnpostedLedger
+}
+
 export interface ManualEntryInput {
   accountId: number
   direction: number
@@ -256,4 +279,90 @@ export const VOUCHER_SOURCE_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'period_close', label: '期末损益结转' },
   { value: 'period_close_year', label: '年度利润结转' },
   { value: 'manual', label: '手工凭证' },
+]
+
+// ── 跨期补录申请（任务 7 第二期） ────────────────────────────────────────
+// 字段与后端 finance-backfills.service.fmt 一一对应。**按钮该不该出现由后端给**（voidable /
+// voteableByApplicant / pendingExecution / voucherPending …），前端只再叠加自己的权限判断：
+// 状态机的含义只写在后端一处，前端自己推一遍就会两边漂移。
+export interface BackfillApplication {
+  id: number
+  /** 对外的申请单号（BF-YYYYMMDD-NNNN），列表与详情都显示这个而不是 id */
+  applicationNo: string
+  /** 业务发生期间（YYYYMM），即当初被闸门拦下的那个已结账期间 */
+  period: string
+  /** 真实业务日期：补录不该把它改成今天 */
+  businessDate: string
+  bizType: string
+  bizTypeName: string
+  bizId: number | null
+  /** 原业务单号（如账款单号），审批人要据此核对 */
+  bizNo: string | null
+  amount: number | null
+  reason: string
+  /** 0 待审批 / 1 已批准 / 2 已驳回 / 3 历史遗留 / 4 已作废 */
+  status: number
+  statusName: string
+  applicantId: number | null
+  applicantName: string | null
+  approverId: number | null
+  approverName: string | null
+  approvedAt: string | null
+  approveRemark: string | null
+  executedAt: string | null
+  executedBizId: number | null
+  /** 调整凭证的落期 = 补录当期（执行审批日所在期间），与业务期间不同 */
+  postingPeriod: string | null
+  voucherGeneratedAt: string | null
+  voucherGenerateError: string | null
+  voidReason: string | null
+  voidedBy: number | null
+  voidedByName: string | null
+  voidedAt: string | null
+  createdAt: string
+  /** 已批准但还没执行成功：可重试执行，也可作废重报 */
+  pendingExecution: boolean
+  /** 待审批时申请人自己可以撤回 */
+  voidableByApplicant: boolean
+  /** 状态上允许作废（待审批，或已批准但执行不下去） */
+  voidable: boolean
+  /** 已批准但没执行成功（与 pendingExecution 同义，页面处置相同） */
+  replayFailed: boolean
+  /** 业务已记账、调整凭证没生成出来，需要点「重试生成凭证」 */
+  voucherPending: boolean
+  /** 核销类补录本就不产生凭证，页面要显示「不涉及凭证」而不是「待生成」 */
+  voucherNotRequired: boolean
+  /** 仅详情接口返回：批准后重放原请求用的快照 */
+  requestSnapshot?: unknown
+}
+
+export interface BackfillListQuery {
+  status?: number | ''
+  bizType?: string
+  page?: number
+  pageSize?: number
+}
+
+export interface BackfillListResult {
+  list: BackfillApplication[]
+  /** 顶部计数：待审批 / 已批准待执行 / 调整凭证待生成，与列表用同一套口径 */
+  summary: { total: number; pending: number; pendingExecution: number; voucherPending: number }
+  pagination: { page: number; pageSize: number; total: number }
+}
+
+/** 补录业务类型（筛选下拉；展示直接用后端 bizTypeName） */
+export const BACKFILL_BIZ_TYPE_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: 'payment', label: '付款登记' },
+  { value: 'receipt', label: '收付款单登记' },
+  { value: 'receipt_settle', label: '收付款核销' },
+  { value: 'refund', label: '退款出账' },
+]
+
+/** 补录状态（筛选下拉；展示直接用后端 statusName） */
+export const BACKFILL_STATUS_OPTIONS: Array<{ value: number; label: string }> = [
+  { value: 0, label: '待审批' },
+  { value: 1, label: '已批准' },
+  { value: 2, label: '已驳回' },
+  { value: 3, label: '历史遗留' },
+  { value: 4, label: '已作废' },
 ]

@@ -144,6 +144,12 @@ export const PERMISSIONS = {
   FINANCE_EXPENSE_CATEGORY_MANAGE: 'finance.expense.category.manage',
   FINANCE_EXPENSE_VIEW_ALL: 'finance.expense.view.all',
 
+  // 跨期补录（任务 7 第二期）：业务日期落在已结账期间时的两档权限。
+  //   · BACKFILL —— 申请：只落一张待审批单，一分钱不动账；也用于撤回自己的申请；
+  //   · BACKFILL_APPROVE —— 批准 / 驳回 / 作废 / 执行他人的申请（批准人不能是申请人）。
+  FINANCE_PERIOD_BACKFILL: 'finance.period.backfill',
+  FINANCE_PERIOD_BACKFILL_APPROVE: 'finance.period.backfill.approve',
+
   REFUND_ORDER_VIEW: 'refund.order.view',
   REFUND_ORDER_CREATE: 'refund.order.create',
   REFUND_ORDER_EXECUTE: 'refund.order.execute',
@@ -396,6 +402,8 @@ export const PERMISSION_GROUPS: Array<{ group: string; items: Array<{ code: Perm
       { code: PERMISSIONS.FINANCE_EXPENSE_PAY, label: '报销付款' },
       { code: PERMISSIONS.FINANCE_EXPENSE_CATEGORY_MANAGE, label: '管理报销分类' },
       { code: PERMISSIONS.FINANCE_EXPENSE_VIEW_ALL, label: '查看全部报销' },
+      { code: PERMISSIONS.FINANCE_PERIOD_BACKFILL, label: '申请跨期补录' },
+      { code: PERMISSIONS.FINANCE_PERIOD_BACKFILL_APPROVE, label: '审批跨期补录' },
     ],
   },
   {

@@ -3,6 +3,11 @@ const AppError = require('../../utils/AppError')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const { SETTLEMENT_TYPE, buildDueDateSql } = require('../../constants/settlementType')
 
+// 运费应付的借方科目（业务方 2026-09-26 确认：销售费用-运费）。
+// 写进账款行而非留给凭证引擎按来源推断，是为了让财务在账款页直接看到这笔应付记在哪个科目，
+// 也让勾稽的「未入账应付」能凭 debit_account_code 一眼分出「已分类待生成凭证」与「历史未分类需人工处理」。
+const FREIGHT_DEBIT_ACCOUNT = '6601'
+
 /**
  * 运费对账（文档 06 · Phase 4）。
  *
@@ -196,6 +201,9 @@ async function generateSettlement({ carrierId, billPeriod }, { createdBy = null 
     //    见 payments.service.js:130 与迁移 145），幂等改由 settlement.payment_record_id 承接（按 id 定位重算）。
     const due = buildDueDateSql(SETTLEMENT_TYPE.MONTHLY, 30, null)
     let paymentRecordId = settlement.payment_record_id || null
+    // 重算既有账款时**不动** debit_account_code：任务 3b 上线前的历史记录本列是 NULL，
+    // 这里顺手补 6601 就等于替财务把「历史未分类」判成了「运费」——属于被明令禁止的自动回填。
+    // 历史行保持 NULL → 勾稽按待处理差异报出，待人工确认后再走补录通道。
     if (paymentRecordId) {
       const [[old]] = await conn.query('SELECT total_amount FROM payment_records WHERE id = ? FOR UPDATE', [paymentRecordId])
       if (old) {
@@ -215,9 +223,9 @@ async function generateSettlement({ carrierId, billPeriod }, { createdBy = null 
     if (!paymentRecordId) {
       const [ins] = await conn.query(
         `INSERT INTO payment_records
-           (type, order_id, order_no, party_name, total_amount, paid_amount, balance, status, confirm_status, settlement_type, due_date)
-         VALUES (1, NULL, ?, ?, ?, 0, ?, 1, 0, ?, ${due.expr})`,
-        [settlement.settlement_no, carrier.name, total, total, SETTLEMENT_TYPE.MONTHLY, ...due.params],
+           (type, order_id, order_no, party_name, total_amount, paid_amount, balance, status, confirm_status, settlement_type, due_date, debit_account_code)
+         VALUES (1, NULL, ?, ?, ?, 0, ?, 1, 0, ?, ${due.expr}, ?)`,
+        [settlement.settlement_no, carrier.name, total, total, SETTLEMENT_TYPE.MONTHLY, ...due.params, FREIGHT_DEBIT_ACCOUNT],
       )
       paymentRecordId = ins.insertId
     }

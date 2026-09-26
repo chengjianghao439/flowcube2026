@@ -98,6 +98,40 @@ export const getMyTasksApi = () =>
 export const getMyTaskSkuSummaryApi = () =>
   client.get<PdaTaskSkuSummary[]>('/warehouse-tasks/my-sku-summary')
 
+/** 待出库的退货任务（采购退货 / 销售退货返货）：跳过打包、没有包裹与物流箱码，
+ *  PDA 出库页扫不到它们，只能从这个列表点着出库。 */
+export interface ReturnOutPendingTask {
+  id: number
+  taskNo: string
+  taskType: 'purchase_return' | 'sale_return_out'
+  returnId: number | null
+  partyName: string | null
+  warehouseId: number
+  warehouseName: string
+  priority: number
+  itemCount: number
+  totalRequired: number
+  createdAt: string
+}
+
+/** 真分页：原来写死 50 条、前端 15 秒全量替换，排队超过 50 张时后面的单在界面上不存在。
+ *  用 page/pageSize 而不是「加大 limit」——排队长没有上界，抬上限只是把截断点往后推。
+ *  total 用于提示总量与判断是否还有下一页。 */
+export interface ReturnOutPendingList {
+  list: ReturnOutPendingTask[]
+  total: number
+  page: number
+  pageSize: number
+}
+
+/** `listMode: 'paged'` 必须带：默认的自动取齐会丢掉这里的 page/pageSize，改从第 1 页重算，
+ *  点「加载更多」只会再拉一次第 1 页。本接口是**自己翻页**的，不是拉全量的。 */
+export const getReturnOutPendingApi = (params?: { page?: number; pageSize?: number }) =>
+  client.get<ReturnOutPendingList>('/warehouse-tasks/return-out-pending', {
+    ...(params ? { params } : {}),
+    listMode: 'paged',
+  })
+
 export type TaskListParams = {
   page?: number; pageSize?: number; keyword?: string; status?: number; warehouseId?: number
 }

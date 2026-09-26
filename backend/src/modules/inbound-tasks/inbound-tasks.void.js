@@ -32,6 +32,39 @@ async function voidReceipt(taskId, operator, scopeWarehouseIds = null) {
     const rule = assertStatusAction('inboundTask', 'voidReceipt', Number(taskRow.status))
     await assertPurchaseOrdersOpen(conn, taskId, '撤回收货')
 
+    // 已登记付款的收货单不得撤回（2026-09-26 一致性审查 · 任务 2 层 2）。
+    // 本函数末尾会调 recomputePurchasePayable 按「剩余收货」全量重算该采购单应付（此处归零），
+    // 但已登记的付款（payment_records.paid_amount 与 payment_entries 资金流水）不会回滚：
+    // 账面会留下「已付 ¥X、应付 ¥0」的无主差额，而这笔钱在系统里没有任何撤销付款登记的入口，
+    // 一旦放过就再也对不平。故在动容器之前显式拒绝，并指向真实可用的替代路径。
+    // 只拦 paid_amount > 0：仅财务已确认(confirm_status>0)而尚未付款的，重算会自动打回待确认
+    // （见 inbound-tasks.settle.js 的 confirm_status CASE），那是既有的、可恢复的设计，
+    // 拦下来反而会锁死——因为同样没有「取消确认」的入口。
+    const [paidRows] = await conn.query(
+      `SELECT DISTINCT pr.order_no, pr.paid_amount
+         FROM inbound_task_items iti
+         JOIN payment_records pr ON pr.type = 1 AND pr.order_id = iti.purchase_order_id
+        WHERE iti.task_id = ? AND pr.paid_amount > 0`,
+      [taskId],
+    )
+    if (paidRows.length) {
+      const paidTotal = paidRows.reduce((sum, r) => sum + Number(r.paid_amount), 0)
+      const detail = paidRows
+        .map(r => `${r.order_no} 已付 ¥${Number(r.paid_amount).toFixed(2)}`)
+        .join('、')
+      throw new AppError(
+        `该收货单对应的应付已登记付款（${detail}），不能撤回收货：`
+        + '撤回会把应付金额反冲，已付出的钱在账面上将失去对应的应付，而付款登记无法撤销。'
+        + '如确需把货退回供应商，请改用采购退货单（冲减应付，多付部分与供应商对账）。',
+        409,
+        'INBOUND_TASK_PAYABLE_PAID',
+        {
+          paidTotal,
+          orders: paidRows.map(r => ({ orderNo: r.order_no, paidAmount: Number(r.paid_amount) })),
+        },
+      )
+    }
+
     // 统一加锁顺序：先按 (product_id, warehouse_id) 升序对涉及维度取 inventory_stock 单行锁，
     // 再锁容器。撤回收货本质是「反向上架」（改容器状态后 syncStockFromContainers 汇总该维度
     // 全部 ACTIVE 容器），必须与 putaway 一样先取维度锁，否则两者对同一商品+仓库 ABBA 死锁

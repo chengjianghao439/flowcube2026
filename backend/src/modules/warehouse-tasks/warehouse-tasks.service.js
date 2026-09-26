@@ -16,6 +16,7 @@ module.exports = {
   findEvents: query.findEvents,
   getDebugSnapshot: query.getDebugSnapshot,
   findMyTasks: query.findMyTasks,
+  listReturnOutPending: query.listReturnOutPending,
   findMyTaskSkuSummary: query.findMyTaskSkuSummary,
   getTaskStats: query.getTaskStats,
   listAwaitingSortingBin: sortingBin.listAwaitingSortingBin,

@@ -67,30 +67,39 @@ async function authMiddleware(req, res, next) {
 }
 
 /**
+ * 判定请求是否具备某权限：超管角色（默认 role 1）恒真，其余看 req.user.permissions
+ * （由 loadRolePermissions 填充）。
+ *
+ * 抽成独立函数是为了让**条件性权限校验**与路由中间件共用同一份超管豁免规则：
+ * 跨期补录只在显式请求补录时才要求 finance.period.backfill（做成路由中间件会让没有补录
+ * 权限的出纳连正常付款都做不了），若那里自己再写一遍 `roleId === 1` 判定，两处规则会漂移。
+ */
+function hasPermission(req, permissionCode, options = {}) {
+  const superAdminRoleIds = options.superAdminRoleIds ?? [1]
+  if (superAdminRoleIds.includes(req.user?.roleId)) return true
+  return (req.user?.permissions ?? []).includes(permissionCode)
+}
+
+/**
  * 权限校验中间件工厂。
  * @param {string} permissionCode 格式：module.resource.action，如 inventory.container.move
  * @param {{ superAdminRoleIds?: number[] }} [options] superAdminRoleIds 默认 [1]，拥有任一角色则跳过权限表校验
  */
 function permissionMiddleware(permissionCode, options = {}) {
-  const superAdminRoleIds = options.superAdminRoleIds ?? [1]
   return (req, res, next) => {
-    if (superAdminRoleIds.includes(req.user?.roleId)) return next()
-    const userPermissions = req.user?.permissions ?? []
-    if (!userPermissions.includes(permissionCode)) {
-      void recordAuthAudit({
-        eventType: AUTH_AUDIT_EVENT.PERMISSION_DENIED,
-        title: '权限校验拒绝',
-        description: `请求缺少权限 ${permissionCode}`,
-        userId: req.user?.userId ?? null,
-        username: req.user?.username ?? null,
-        payload: {
-          permission: permissionCode,
-          roleId: req.user?.roleId ?? null,
-        },
-      })
-      return next(new AppError('无操作权限', 403, 'PERMISSION_DENIED', { permission: permissionCode }))
-    }
-    next()
+    if (hasPermission(req, permissionCode, options)) return next()
+    void recordAuthAudit({
+      eventType: AUTH_AUDIT_EVENT.PERMISSION_DENIED,
+      title: '权限校验拒绝',
+      description: `请求缺少权限 ${permissionCode}`,
+      userId: req.user?.userId ?? null,
+      username: req.user?.username ?? null,
+      payload: {
+        permission: permissionCode,
+        roleId: req.user?.roleId ?? null,
+      },
+    })
+    return next(new AppError('无操作权限', 403, 'PERMISSION_DENIED', { permission: permissionCode }))
   }
 }
 
@@ -104,4 +113,36 @@ function requirePermission(permissionCode, options = {}) {
   }
 }
 
-module.exports = { authMiddleware, permissionMiddleware, requirePermission }
+/**
+ * 任一权限点通过即放行（OR 语义）。
+ *
+ * 用于「同一份数据、两类不同角色都要看/都要动」的接口：跨期补录审批页既要有审批权限的人
+ * 看全量队列，也要让只持申请权限的出纳回查自己提交的单子、撤回待审批的申请。
+ * 若卡死单个码，持另一码的人会被挡在门外——审批人看不到队列、申请人撤不回自己的申请。
+ *
+ * 超管豁免与失败时的审计记录都与 permissionMiddleware 同一套（复用 hasPermission 与
+ * recordAuthAudit），不另写判定，避免两处规则漂移。
+ */
+function requireAnyPermission(permissionCodes = [], options = {}) {
+  const codes = permissionCodes.filter(Boolean)
+  return (req, res, next) => {
+    loadRolePermissions(req, res, (error) => {
+      if (error) return next(error)
+      if (codes.some((code) => hasPermission(req, code, options))) return next()
+      const listed = codes.join(' | ')
+      void recordAuthAudit({
+        eventType: AUTH_AUDIT_EVENT.PERMISSION_DENIED,
+        title: '权限校验拒绝',
+        description: `请求缺少权限 ${listed}`,
+        userId: req.user?.userId ?? null,
+        username: req.user?.username ?? null,
+        payload: { permission: listed, roleId: req.user?.roleId ?? null },
+      })
+      return next(new AppError('无操作权限', 403, 'PERMISSION_DENIED', { permission: listed }))
+    })
+  }
+}
+
+module.exports = {
+  authMiddleware, permissionMiddleware, requirePermission, requireAnyPermission, hasPermission,
+}

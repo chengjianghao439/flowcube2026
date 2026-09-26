@@ -250,6 +250,7 @@ async function buildSaleCogs(conn) {
 async function buildFundVouchers(conn) {
   const [rows] = await conn.query(`
     SELECT t.id AS txnId, t.biz_type, t.biz_no, t.amount, t.party_name, t.happened_at AS vdate,
+           t.voucher_date_override AS vdate_override,
            fa.type AS acctType
       FROM finance_account_transactions t
       JOIN finance_accounts fa ON fa.id = t.account_id
@@ -259,10 +260,16 @@ async function buildFundVouchers(conn) {
     const amount = round2(r.amount)
     if (amount <= 0) continue
     const fundCode = fundAccountCode(r.acctType)
+    // 跨期补录（2026-09-26 一致性审查 · 任务 7）：业务日期落在已结账期间时不可能在原期间出凭证
+    // （上面 skippedClosed 会跳过），故由 voucher_date_override 把凭证落**补录当期**——
+    // 会计上标准的「前期差错在当期调整」。happened_at 不动：钱确实是那天动的，银行对账要看它。
+    // 摘要标注「（跨期补录）」，让会计在凭证列表一眼认出这是调整分录而不是当期新业务。
+    const voucherDate = r.vdate_override || r.vdate
+    const backfillTag = r.vdate_override ? '（跨期补录）' : ''
     if (r.biz_type === 1) {
       specs.push({
-        sourceType: SOURCE_TYPES.RECEIPT_IN, sourceId: r.txnId, sourceNo: r.biz_no, voucherDate: r.vdate,
-        summary: `收款核销 ${r.party_name || ''}`.trim(),
+        sourceType: SOURCE_TYPES.RECEIPT_IN, sourceId: r.txnId, sourceNo: r.biz_no, voucherDate,
+        summary: `收款核销 ${r.party_name || ''}`.trim() + backfillTag,
         legs: [
           { code: fundCode, direction: DIR.DEBIT, amount, summary: '收款' },
           { code: '1122', direction: DIR.CREDIT, amount, auxType: 1, auxName: r.party_name || null, summary: '应收账款' },
@@ -270,8 +277,8 @@ async function buildFundVouchers(conn) {
       })
     } else if (r.biz_type === 2) {
       specs.push({
-        sourceType: SOURCE_TYPES.PAYMENT_OUT, sourceId: r.txnId, sourceNo: r.biz_no, voucherDate: r.vdate,
-        summary: `付款核销 ${r.party_name || ''}`.trim(),
+        sourceType: SOURCE_TYPES.PAYMENT_OUT, sourceId: r.txnId, sourceNo: r.biz_no, voucherDate,
+        summary: `付款核销 ${r.party_name || ''}`.trim() + backfillTag,
         legs: [
           { code: '2202', direction: DIR.DEBIT, amount, auxType: 1, auxName: r.party_name || null, summary: '应付账款' },
           { code: fundCode, direction: DIR.CREDIT, amount, summary: '付款' },
@@ -279,8 +286,8 @@ async function buildFundVouchers(conn) {
       })
     } else if (r.biz_type === 3) {
       specs.push({
-        sourceType: SOURCE_TYPES.EXPENSE_PAY, sourceId: r.txnId, sourceNo: r.biz_no, voucherDate: r.vdate,
-        summary: `费用报销付款 ${r.party_name || ''}`.trim(),
+        sourceType: SOURCE_TYPES.EXPENSE_PAY, sourceId: r.txnId, sourceNo: r.biz_no, voucherDate,
+        summary: `费用报销付款 ${r.party_name || ''}`.trim() + backfillTag,
         legs: [
           { code: '6602', direction: DIR.DEBIT, amount, summary: '管理费用' },
           { code: fundCode, direction: DIR.CREDIT, amount, summary: '付款' },
@@ -289,8 +296,8 @@ async function buildFundVouchers(conn) {
     } else if (r.biz_type === 5) {
       // 退款出账（2026-08-21 审计修复）：钱退回客户，冲减应收账款——与收款凭证对称
       specs.push({
-        sourceType: SOURCE_TYPES.REFUND_PAY, sourceId: r.txnId, sourceNo: r.biz_no, voucherDate: r.vdate,
-        summary: `退款 ${r.party_name || ''}`.trim(),
+        sourceType: SOURCE_TYPES.REFUND_PAY, sourceId: r.txnId, sourceNo: r.biz_no, voucherDate,
+        summary: `退款 ${r.party_name || ''}`.trim() + backfillTag,
         legs: [
           { code: '1122', direction: DIR.DEBIT, amount, auxType: 1, auxName: r.party_name || null, summary: '应收账款' },
           { code: fundCode, direction: DIR.CREDIT, amount, summary: '退款' },
@@ -460,6 +467,43 @@ async function assertSalePeriodCurrent(conn, period, companyId = 1) {
   })
 }
 
+/**
+ * 事件：非单据应付（承运商运费结算 / 手工录入应付）。source_id = payment_records.id。
+ *
+ * 借方科目取自记录上的 debit_account_code：
+ *   · 运费结算在物流对账时写入 6601 销售费用（业务方 2026-09-26 确认口径）；
+ *   · 手工应付由财务录入时逐笔选择（录入侧已校验为启用的明细科目）。
+ * 贷方恒为 2202 应付账款〔往来单位〕。金额取毛额，运费暂无税额拆分。
+ *
+ * 本列为 NULL 的记录（任务 3b 上线前的历史数据）**一律跳过：不猜科目、不产凭证**。
+ * 「不知道记哪个科目」不能用默认值抹平——猜错会把漏账变成假账，比缺账更难发现。
+ * 它们由勾稽的「未入账应付」按待处理差异报出，人工确认后走补录通道（任务 7）。
+ */
+async function buildUnbilledPayable(conn) {
+  const [rows] = await conn.query(`
+    SELECT pr.id, pr.order_no, pr.party_name, pr.total_amount, pr.created_at AS vdate,
+           pr.debit_account_code,
+           EXISTS (SELECT 1 FROM logistics_freight_settlements fs WHERE fs.payment_record_id = pr.id) AS is_freight
+      FROM payment_records pr
+     WHERE pr.type = 1 AND pr.order_id IS NULL AND pr.debit_account_code IS NOT NULL`)
+  return rows.map(r => {
+    const amount = round2(r.total_amount)
+    if (amount <= 0) return null // 0/负额应付不产凭证：借贷为 0 的凭证无意义，负额应由红字冲销表达
+    const isFreight = Number(r.is_freight) === 1
+    return {
+      sourceType: isFreight ? SOURCE_TYPES.FREIGHT_SETTLE : SOURCE_TYPES.MANUAL_PAYABLE,
+      sourceId: Number(r.id),
+      sourceNo: r.order_no || null,
+      voucherDate: r.vdate,
+      summary: `${isFreight ? '运费结算应付' : '手工应付'} ${r.party_name || ''}`.trim(),
+      legs: [
+        { code: String(r.debit_account_code), direction: DIR.DEBIT, amount, summary: isFreight ? '销售费用-运费' : '费用' },
+        { code: '2202', direction: DIR.CREDIT, amount, auxType: 1, auxName: r.party_name || null, summary: '应付账款' },
+      ],
+    }
+  }).filter(Boolean)
+}
+
 async function generateVouchers(conn, { period = null, createdBy = null, closedPeriods = null, companyId = 1 } = {}) {
   const cid = Number(companyId) || 1
   await lockAccountingCompany(conn, cid)
@@ -477,6 +521,7 @@ async function generateVouchers(conn, { period = null, createdBy = null, closedP
     ...await buildPurchaseReturn(conn),
     ...await buildSaleReturn(conn),
     ...await buildStockCheck(conn),
+    ...await buildUnbilledPayable(conn),
   ]
   // 消失的采购来源也要进入重算。根保留唯一业务锚点，后续修订 source_id 为空。
   const purchaseIds = new Set(specs.filter(s => s.sourceType === SOURCE_TYPES.PURCHASE_SETTLE).map(s => Number(s.sourceId)))
@@ -508,12 +553,29 @@ async function generateVouchers(conn, { period = null, createdBy = null, closedP
     if (period && periodOf(dateStr) !== period) continue
     stats.total += 1
     if ((closedPeriods && closedPeriods.has(periodOf(dateStr)))
-      || (SALE_TYPES.includes(spec.sourceType) && allClosed.has(periodOf(dateStr)))) { stats.skippedClosed += 1; continue }
+      || (SALE_TYPES.includes(spec.sourceType) && allClosed.has(periodOf(dateStr)))) {
+      stats.skippedClosed += 1
+      // 跳过已结账期间是**有意的**（账面已封），但不能静默——与上面「缺业务日期」那处同理：
+      // 静默跳过会让「钱动了/货动了、凭证没有」只在 stats 里留一个数字，日志里毫无线索，
+      // 事后查账时无法判断某一笔到底是漏生成还是本就无需生成。
+      // 资金侧三个入口（付款登记/核销/退款）已在 2026-09-26 一致性审查任务 7 加了期间闸门，
+      // 正常不再走到这里；一旦命中，说明存在绕过闸门的写入路径或结账与写入的竞态。
+      logger.warn(`跳过已结账期间的凭证：sourceType=${spec.sourceType} sourceId=${spec.sourceId} sourceNo=${spec.sourceNo || '-'} bizPeriod=${periodOf(dateStr)}`,
+        { scanPeriod: period || 'ALL', companyId: cid }, 'accounting')
+      continue
+    }
     let res
     try {
       res = await upsertVoucher(conn, spec, accountMap, allocSeq, createdBy, cid)
     } catch (e) {
-      if (!period && e.code === 'ACCT_PERIOD_CLOSED') { stats.skippedClosed += 1; continue }
+      if (!period && e.code === 'ACCT_PERIOD_CLOSED') {
+        stats.skippedClosed += 1
+        // 与上面的分支同一理由：这条是在写凭证时才发现期间已封（预读的 closedPeriods 没盖到），
+        // 恰恰是「检查与写入之间被结账」的竞态信号，更需要留下痕迹。
+        logger.warn(`写凭证时发现期间已结账，跳过：sourceType=${spec.sourceType} sourceId=${spec.sourceId} sourceNo=${spec.sourceNo || '-'} bizPeriod=${periodOf(dateStr)}`,
+          { companyId: cid }, 'accounting')
+        continue
+      }
       throw e
     }
     if (res.created) stats.created += 1
@@ -543,4 +605,6 @@ module.exports = {
   buildSaleReturn,
   // [35] 采购结算凭证的来源完整性闸门，导出供回归直接断言
   buildPurchaseSettle,
+  // [任务3b] 非单据应付（运费/手工）凭证来源，导出供勾稽回归直接断言
+  buildUnbilledPayable,
 }

@@ -84,10 +84,15 @@ async function refreshBalance(conn, accountId, { asText = false } = {}) {
 /**
  * 写一条账户流水并刷新余额。收付款核销、报销付款都走这里。
  * @param conn 调用方的事务连接——资金流水必须与业务动作同生共死，不能各写各的
+ * @param {string|null} voucherDateOverride 跨期补录专用：凭证归属日期（凭证落补录当期）。
+ *   happened_at 仍是资金真实发生日（银行对账要看它），只有凭证的日期/期间用本列覆盖。
+ *   NULL = 正常业务，按 happened_at 归属。见 finance-period.guard 与 voucher-engine。
+ * @param {number|null} backfillId 本次流水来自哪张补录申请单（可追溯「这条流水是补录进来的」）
  */
 async function recordTransaction(conn, {
   accountId, direction, amount, bizType, bizId = null, bizNo = null,
   partyName = null, happenedAt, remark = null,
+  voucherDateOverride = null, backfillId = null,
 }, operator = {}) {
   const id = Number(accountId)
   const amountUnits = moneyUnits(amount)
@@ -101,10 +106,11 @@ async function recordTransaction(conn, {
   // 先落流水，再由 refreshBalance 从全量流水重算，balance_after 取重算结果
   const [r] = await conn.query(
     `INSERT INTO finance_account_transactions
-       (account_id,direction,amount,biz_type,biz_id,biz_no,party_name,balance_after,happened_at,remark,operator_id,operator_name)
-     VALUES (?,?,?,?,?,?,?,0,?,?,?,?)`,
+       (account_id,direction,amount,biz_type,biz_id,biz_no,party_name,balance_after,happened_at,remark,operator_id,operator_name,voucher_date_override,backfill_id)
+     VALUES (?,?,?,?,?,?,?,0,?,?,?,?,?,?)`,
     [id, Number(direction), moneyText(amountUnits), Number(bizType), bizId, bizNo, partyName,
-     happenedAt, remark, operator.operatorId ?? null, operator.operatorName ?? null],
+     happenedAt, remark, operator.operatorId ?? null, operator.operatorName ?? null,
+     voucherDateOverride, backfillId],
   )
   const balance = await refreshBalance(conn, id, { asText: true })
   await conn.query('UPDATE finance_account_transactions SET balance_after=? WHERE id=?', [balance, r.insertId])

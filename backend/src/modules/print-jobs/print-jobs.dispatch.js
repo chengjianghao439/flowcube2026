@@ -253,7 +253,14 @@ function startPrintJobSweeper() {
       })
   }
   tick()
-  setInterval(tick, ms)
+  // unref：这是常驻的后台清扫循环，没有请求时不该拖住进程退出。项目里另外三处定时器
+  // （scheduler.startWorker / operationRequest.startCleanupSweeper / procurement 快照清理）
+  // 都已 unref，唯独这里漏了，于是任何加载过 app 的进程都会被它吊住事件循环。
+  // 2026-09-26 实测：smoke 套件断言全部跑完、退出码已定，进程仍存活约 2 分钟直到被外部
+  // 信号杀掉（此时 lsof 已无残留 MySQL/HTTP 连接，纯是这个 interval 撑着）。
+  // unref 不影响常驻服务：server 有 listen socket 保持进程存活。
+  const timer = setInterval(tick, ms)
+  if (timer.unref) timer.unref()
 }
 
 // 已完成/失败的历史打印任务，超过保留窗口（默认 30 天）后物理删除，防 print_jobs 无界增长。

@@ -295,15 +295,20 @@ async function reconciliation(companyId = 1) {
     `SELECT COALESCE(SUM(CASE WHEN direction=2 THEN amount ELSE -amount END),0) s
        FROM acct_voucher_entries e JOIN acct_vouchers v ON v.id=e.voucher_id
       WHERE v.company_id = ? AND e.account_code='2202'
-        AND (v.source_type IN ('purchase_settle','purchase_return')
+        AND (v.source_type IN ('purchase_settle','purchase_return','freight_settle','manual_payable')
           OR (v.source_type='manual' AND v.is_reversal=1 AND EXISTS (
             SELECT 1 FROM acct_vouchers origin WHERE origin.id=v.reversed_id AND origin.company_id=v.company_id
-              AND origin.is_reversal=0 AND origin.source_type IN ('purchase_settle','purchase_return'))))`,
+              AND origin.is_reversal=0 AND origin.source_type IN ('purchase_settle','purchase_return','freight_settle','manual_payable'))))`,
     [companyId],
   )
-  // 应付账款余额：公司级数据，payment_records 目前不支持账套过滤
+  // 应付账款余额：公司级数据，payment_records 目前不支持账套过滤。
+  // 任务 3b：去掉 order_id IS NOT NULL —— 非单据应付（承运商运费/手工录入）同样是真实负债，
+  // 必须纳入。凭证侧同步加入了 freight_settle/manual_payable 来源，两侧同进；这是当年漏掉的
+  // 那半步——只加一侧会让勾稽凭空出现差异，只加业务侧则让差异永远无人知晓。
+  // 未分类的历史记录（debit_account_code IS NULL）在业务侧有、凭证侧无，如实显示为差异，
+  // 成因由下方 unpostedLedger 说明，不在这里偷偷排除。
   const [[payableB]] = await pool.query(
-    `SELECT COALESCE(SUM(total_amount),0) s FROM payment_records WHERE type=1 AND order_id IS NOT NULL`)
+    `SELECT COALESCE(SUM(total_amount),0) s FROM payment_records WHERE type=1`)
   const [[recvV]] = await pool.query(
     `SELECT COALESCE(SUM(CASE WHEN direction=1 THEN amount ELSE -amount END),0) s
        FROM acct_voucher_entries e JOIN acct_vouchers v ON v.id=e.voucher_id
@@ -321,12 +326,66 @@ async function reconciliation(companyId = 1) {
     name, voucher: round2(voucher), business: round2(business),
     diff: round2(voucher - business), matched: round2(voucher - business) === 0,
   })
+
+  // ── 未入账应付（2026-09-26 一致性审查 · 任务 3b 修订） ──────────────────────
+  // 语义：type=1 且无单据的应付里，**2202 凭证净额尚未覆盖**的那部分金额。
+  //
+  // 判定必须比净额，不能只问「有没有 2202 分录」：
+  //   · 红字冲销后原凭证仍留在表里（status=3，分录照旧非零），仅看存在性会把已冲掉的应付
+  //     判成已入账——实际上是彻底没入账；
+  //   · 只记了部分金额（净额 50 / 应付 100）同样是漏账，存在性判定会一并放过。
+  // 故此处按来源汇总 2202 净额（贷方记正、借方记负，与上方 payableV 同一表达式：红字凭证
+  // 靠方向反转相抵，不再按 is_reversal 二次取符号），再与 total_amount 逐笔比对，只报差额。
+  //
+  // 来源与 payableV 白名单对齐，且必须含人工红字那条支路：红字凭证自身 source_type='manual'
+  // 且 source_id 为 NULL，靠 reversed_id 指回业务来源凭证，漏了它冲销就白冲。
+  //
+  // 拆两段，因为处置方式不同：
+  //   unclassified        无借方科目 → 凭证引擎有意跳过（不猜科目），须财务确认科目后走补录通道
+  //   uncovered/uncoveredCount 有科目但凭证净额没盖住 → 少记或已被冲销，需查凭证并补记
+  // total = 两者之和，即这笔负债此刻真的没进账的部分。
+  //
+  // 相关子查询而非 JOIN：账款与凭证是 1:N（可能含红字），JOIN 复制行会让 SUM 翻倍。
+  const payableCovered = `COALESCE((
+      SELECT SUM(CASE WHEN e.direction = 2 THEN e.amount ELSE -e.amount END)
+        FROM acct_voucher_entries e JOIN acct_vouchers v ON v.id = e.voucher_id
+       WHERE v.company_id = ? AND e.account_code = '2202'
+         AND ((v.source_type IN ('freight_settle','manual_payable') AND v.source_id = pr.id)
+           OR (v.source_type = 'manual' AND v.is_reversal = 1 AND EXISTS (
+                 SELECT 1 FROM acct_vouchers origin
+                  WHERE origin.id = v.reversed_id AND origin.company_id = v.company_id
+                    AND origin.is_reversal = 0
+                    AND origin.source_type IN ('freight_settle','manual_payable')
+                    AND origin.source_id = pr.id)))
+    ), 0)`
+  // 0.005 = 分位容差：金额列是 DECIMAL，逐笔相减后仍可能有浮点尾数，避免 1e-13 的差额报成漏账
+  const uncoveredAmt = `GREATEST(pr.total_amount - ${payableCovered}, 0)`
+  const [[unposted]] = await pool.query(
+    `SELECT
+       COALESCE(SUM(CASE WHEN pr.debit_account_code IS NULL THEN pr.total_amount ELSE ${uncoveredAmt} END), 0) AS total,
+       COALESCE(SUM(CASE WHEN pr.debit_account_code IS NULL THEN pr.total_amount ELSE 0 END), 0) AS unclassified,
+       COALESCE(SUM(CASE WHEN pr.debit_account_code IS NULL THEN 1 ELSE 0 END), 0) AS unclassified_count,
+       COALESCE(SUM(CASE WHEN pr.debit_account_code IS NOT NULL THEN ${uncoveredAmt} ELSE 0 END), 0) AS uncovered,
+       COALESCE(SUM(CASE WHEN pr.debit_account_code IS NOT NULL AND ${uncoveredAmt} > 0.005 THEN 1 ELSE 0 END), 0) AS uncovered_count
+     FROM payment_records pr
+    WHERE pr.type = 1 AND pr.order_id IS NULL`,
+    // 三个 ? 全在 ${payableCovered} 里（total / uncovered / uncovered_count 各展开一次）
+    [companyId, companyId, companyId],
+  )
+
   return {
     items: [
       item('资金（收付款/报销 vs 资金流水）', fundV.s, fundT.s),
       item('应付账款（凭证净额 vs 应付余额）', payableV.s, payableB.s),
       item('应收账款（凭证净额 vs 应收余额）', recvV.s, recvB.s),
     ],
+    unpostedLedger: {
+      total: round2(unposted.total),
+      unclassified: round2(unposted.unclassified),
+      unclassifiedCount: Number(unposted.unclassified_count),
+      uncovered: round2(unposted.uncovered),
+      uncoveredCount: Number(unposted.uncovered_count),
+    },
   }
 }
 

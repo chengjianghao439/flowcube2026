@@ -19,6 +19,9 @@ import { downloadExport } from '@/lib/exportDownload'
 import { toast } from '@/lib/toast'
 import KeepAliveSection from '@/components/shared/KeepAliveSection'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
+import { CreateManualPayableDialog } from '@/components/shared/payments/CreateManualPayableDialog'
+import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
 
 /** 账款页只管现结；月结走对账页，两边合起来才是全量 */
 const IMMEDIATE_SCOPE = IMMEDIATE_SETTLEMENT_TYPES.join(',')
@@ -65,6 +68,9 @@ export default function PaymentsView({ type }: { type: PaymentType }) {
   // query 是「已生效」的完整查询条件，筛选栏与高级查询弹窗都写它，导出也复用同一份
   const [query, setQuery] = useState<PaymentQueryValues>(DEFAULT_RECORD_QUERY)
   const [queryOpen, setQueryOpen] = useState(false)
+  // 手工应付（无单据应付）的录入弹窗，仅应付页有
+  const [createOpen, setCreateOpen] = useState(false)
+  const { can } = usePermission()
   // 核销 tab 的动作按钮挪到本页 PageHeader（与「按单登记」tab 对齐），通过 ref 触发面板内部动作
   const receiptRef = useRef<ReceiptPanelHandle>(null)
   const { renderActions, dialogs } = usePaymentActions(type)
@@ -133,8 +139,11 @@ export default function PaymentsView({ type }: { type: PaymentType }) {
         title={copy.title}
         description={copy.description}
         actions={tab === 'records' ? (
-          // 按单登记：查询 + 导出（导出参数键为 orderNo，与本 tab 列表一致）
+          // 按单登记：新建手工应付 + 查询 + 导出（导出参数键为 orderNo，与本 tab 列表一致）
           <div className="flex gap-2">
+            {isPayable && can(PERMISSIONS.PAYMENT_CREATE) && (
+              <Button onClick={() => setCreateOpen(true)}>新建应付账款</Button>
+            )}
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
             <Button
               variant="outline"
@@ -196,6 +205,10 @@ export default function PaymentsView({ type }: { type: PaymentType }) {
       </KeepAliveSection>
 
       {dialogs}
+
+      {isPayable && (
+        <CreateManualPayableDialog open={createOpen} onClose={() => setCreateOpen(false)} />
+      )}
     </div>
   )
 }

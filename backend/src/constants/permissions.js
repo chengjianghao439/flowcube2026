@@ -161,6 +161,17 @@ const PERMISSIONS = {
   REFUND_ORDER_CREATE: 'refund.order.create',
   REFUND_ORDER_EXECUTE: 'refund.order.execute',
 
+  // 跨期补录（2026-09-26 一致性审查 · 任务 7）。已结账会计期间内的收付款/退款默认一律 409 拒绝。
+  // 业务口径是**先审批、后动账**，所以拆成两个权限码：
+  //   · BACKFILL —— 申请：提交一张待审批单（finance_period_backfills.status=0），此时一分钱不动账；
+  //   · BACKFILL_APPROVE —— 批准 / 驳回 / 执行他人的申请。执行也算审批侧：批准人不能是申请人
+  //     本人（finance-period.guard 之外由 finance-backfills.service 强制），执行已批准的单子
+  //     等于放行这笔跨期业务，与批准同等敏感。
+  // 两者都与 PAYMENT_CONFIRM 同先例：刻意不 seed 给任何角色（超管 roleId=1 硬编码豁免），
+  // 由产品在权限管理页手动开放。表结构见迁移 260。
+  FINANCE_PERIOD_BACKFILL: 'finance.period.backfill',
+  FINANCE_PERIOD_BACKFILL_APPROVE: 'finance.period.backfill.approve',
+
   WAREHOUSE_TASK_VIEW: 'warehouse.task.view',
   WAREHOUSE_TASK_ASSIGN: 'warehouse.task.assign',
   WAREHOUSE_TASK_PICK: 'warehouse.task.pick',

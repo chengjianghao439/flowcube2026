@@ -74,6 +74,10 @@ async function recomputePurchasePayable(conn, purchaseOrderId) {
   // 不该把这批老账追溯改写成月结（迁移 136）。补收货/退货只重算金额。
   const settlementSnapshot = normalizeSettlementType(po.settlement_type)
   const due = buildDueDateSql(settlementSnapshot, po.payment_terms_days, po.created_at)
+  // 「已付清(3)」必须带 total_amount > 0 前置：total 被重算为 0 时（撤回收货全部反冲、
+  // 或整单退货冲减后归零），`paid_amount >= 0` 恒真，会把未付款与已付款的记录一律标成
+  // 已付清(3)，账面出现「总额 0、已付 5000、余额 0、已付清」这种自相矛盾、
+  // 并把「多付出去的钱」彻底掩盖的记录（2026-09-26 一致性审查 · 任务 2 层 1）。
   await conn.query(
     `INSERT INTO payment_records
        (type, order_id, order_no, party_name, total_amount, paid_amount, balance, status, confirm_status, settlement_type, due_date)
@@ -82,7 +86,7 @@ async function recomputePurchasePayable(conn, purchaseOrderId) {
        confirm_status = CASE WHEN total_amount <> VALUES(total_amount) THEN 0 ELSE confirm_status END,
        total_amount = VALUES(total_amount),
        balance = GREATEST(0, VALUES(total_amount) - paid_amount),
-       status = CASE WHEN paid_amount >= VALUES(total_amount) THEN 3
+       status = CASE WHEN VALUES(total_amount) > 0 AND paid_amount >= VALUES(total_amount) THEN 3
                      WHEN paid_amount > 0 THEN 2 ELSE 1 END`,
     [poId, po.order_no, po.supplier_name, total, total, settlementSnapshot, ...due.params],
   )

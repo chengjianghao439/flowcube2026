@@ -20,6 +20,10 @@ const SOURCE_TYPES = {
   PURCHASE_RETURN: 'purchase_return', // 采购退货出库
   SALE_RETURN:     'sale_return',     // 销售退货入库
   STOCK_CHECK:     'stock_check',     // 盘盈/盘亏
+  // 非单据应付（2026-09-26 一致性审查 · 任务 3b）：type=1 且 order_id IS NULL，
+  // source_id = payment_records.id（结算单/手工账款都是一对一，故用账款 id 而非单据 id）
+  FREIGHT_SETTLE:  'freight_settle',  // 承运商运费结算应付 → 借 6601 销售费用
+  MANUAL_PAYABLE:  'manual_payable',  // 手工录入应付 → 借方由财务逐笔选择
   PERIOD_CLOSE:    'period_close',    // 期末损益结转（source_id = 期间 YYYYMM 数字）
   PERIOD_CLOSE_Y:  'period_close_year', // 年末本年利润转利润分配（source_id = 年份 YYYY 数字）
   MANUAL:          'manual',          // 手工凭证
@@ -146,6 +150,17 @@ const ACCOUNT_MAPPING = {
       { code: '1901', dir: DIR.CREDIT, aux: null }, // 待处理财产损溢
     ],
   },
+  [SOURCE_TYPES.FREIGHT_SETTLE]: {
+    summary: '承运商运费结算应付',
+    legs: [
+      { code: '6601', dir: DIR.DEBIT,  aux: null },       // 借 销售费用（运费）
+      { code: '2202', dir: DIR.CREDIT, aux: 'supplier' }, // 贷 应付账款〔承运商〕
+    ],
+  },
+  // MANUAL_PAYABLE 刻意不在本表：它的借方科目运行期由 payment_records.debit_account_code 决定
+  // （财务逐笔挑选，可落在费用/成本/资产任意明细科目），静态映射无法表达。
+  // 动态科目由录入侧校验 acct_accounts（须为启用明细科目），故上面「映射引用的科目必须已预置」
+  // 这条守护依然成立——它管的是静态声明，管不到也不该管运行期科目。
 }
 
 /** 映射规则引用到的全部科目编码（含候选 altCodes），用于校验它们都在预置科目中存在 */

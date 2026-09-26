@@ -6,7 +6,7 @@ import PdaProductIdentity from '@/components/pda/PdaProductIdentity'
 import { useState, useCallback } from 'react'
 import { Truck, CircleCheck, Package } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
 import { parseBarcode } from '@/utils/barcode'
 import PdaScanner from '@/components/pda/PdaScanner'
 import PdaHeader from '@/components/pda/PdaHeader'
@@ -19,7 +19,7 @@ import PdaStat, { PdaStatGrid } from '@/components/pda/PdaStat'
 import { Button } from '@/components/ui/button'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { getPackageByBarcodeApi } from '@/api/packages'
-import { getTaskByIdApi, shipTaskApi } from '@/api/warehouse-tasks'
+import { getTaskByIdApi, shipTaskApi, getReturnOutPendingApi } from '@/api/warehouse-tasks'
 import { WT_STATUS, WT_STATUS_NAME, WT_STATUS_TONE } from '@/constants/warehouseTaskStatus'
 import type { PackageShipInfo } from '@/api/packages'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
@@ -27,6 +27,10 @@ import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
 import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
 import { stateConfirmedMessage, taskReachedStatus } from '@/lib/pdaCriticalState'
 import { formatPdaActionError, formatPdaErrorMessage } from '@/utils/displayFormatters'
+
+/** 待出库退货任务每页条数。AGENTS.md §0.2：轮询页面的分页批量不得小于 100
+ *  （批量越小，自动取齐按 ceil(总数/批量) 串行请求越多）。本页 15 秒轮询，故取 100。 */
+const RETURN_OUT_PAGE_SIZE = 100
 
 // 这四个是只读参数的纯函数，原先定义在组件体内，于是每次渲染都是新引用，
 // handleScan（useCallback）没法把它们写进依赖。提到模块级后既不再是依赖，
@@ -58,10 +62,29 @@ function shipBlockedMessage(data: PackageShipInfo) {
 
 export default function PdaShipPage() {
   const navigate = useNavigate()
+  const qc = useQueryClient()
   const { flash, ok, err, warn } = usePdaFeedback()
   const [info, setInfo]       = useState<PackageShipInfo | null>(null)
   const [loading, setLoading] = useState(false)
   const [done, setDone]       = useState(false)
+  // 待出库的退货任务（采购退货 / 销售退货返货）：这两类跳过了打包，**没有包裹也没有物流箱码**，
+  // 上面那条「扫箱码 → 反查包裹」的路径对它们无从下手。没有这个列表，货拣完了也出不了库，
+  // 退货单就永远收不了口。列表常驻，扫到箱码时让位给单据详情。
+  //
+  // 分页：后端按 page/pageSize 返回，逐页翻。不能用「一次多拉一点」——排队量没有上界，
+  // 抬上限只是把看不见的那张往后挪。已加载的页累积在前，任意排队长都能翻到底并出库。
+  const returnOutQuery = useInfiniteQuery({
+    queryKey: ['return-out-pending'],
+    queryFn: ({ pageParam }) => getReturnOutPendingApi({ page: pageParam, pageSize: RETURN_OUT_PAGE_SIZE }),
+    initialPageParam: 1,
+    getNextPageParam: (_last, allPages) => {
+      const loaded = allPages.reduce((n, p) => n + p.list.length, 0)
+      return loaded < (allPages[0]?.total ?? 0) ? allPages.length + 1 : undefined
+    },
+    refetchInterval: 15000,
+  })
+  const returnOutTasks = returnOutQuery.data?.pages.flatMap(p => p.list) ?? []
+  const returnOutTotal = returnOutQuery.data?.pages[0]?.total ?? 0
   const shipAction = useCriticalPdaAction<{ taskId: number }>({
     action: `warehouse.ship.confirm`,
     requestAction: 'warehouse.ship',
@@ -82,14 +105,20 @@ export default function PdaShipPage() {
   })
 
   const shipMut = useMutation({
-    mutationFn: async ({ taskId }: { taskId: number }) => {
+    mutationFn: async ({ taskId }: { taskId: number; fromList?: boolean }) => {
       const result = await shipAction.run((requestKey) =>
         shipTaskApi(taskId, requestKey).then((res) => res as { taskId: number }),
         { taskId },
       )
       return result
     },
-    onSuccess: (result) => {
+    onSuccess: (result, vars) => {
+      // 列表出库也要刷新：任务出库后应从待出库列表消失，否则操作员会对着已完成的单重复点。
+      // 列表路径不切"出库完成"整页（那是扫箱码流程的落地页），清掉 done 留在列表继续作业。
+      if (vars.fromList) {
+        setDone(false)
+        void qc.invalidateQueries({ queryKey: ['return-out-pending'] })
+      }
       if (result.kind === 'pending') {
         warn('网络中断，出库结果待确认。请先确认结果，避免重复扫码出库。')
       }
@@ -179,6 +208,56 @@ export default function PdaShipPage() {
           />
           {/* 扫码区移至底栏，此处保留加载状态 */}
           {loading && <div className="flex items-center justify-center gap-2 py-1"><PdaLoading size={16} /><span className="text-xs text-muted-foreground">查询中…</span></div>}
+
+          {/* 待出库的退货任务：没有包裹/物流箱码，只能从这里出库。扫到箱码后让位给单据详情。 */}
+          {!info && returnOutTasks.length > 0 && (
+            <PdaSection title={`待出库的退货任务（${returnOutTotal}）`}>
+              <p className="mb-3 text-xs leading-5 text-muted-foreground">
+                退货出库没有物流箱码，请直接点单据出库。
+              </p>
+              <div className="space-y-2">
+                {returnOutTasks.map(t => (
+                  <div key={t.id} className="rounded-xl border border-border bg-card px-3 py-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-sm font-semibold text-foreground">{t.taskNo}</span>
+                          <SoftStatusLabel
+                            label={t.taskType === 'sale_return_out' ? '返货出库' : '采购退货'}
+                            tone={t.taskType === 'sale_return_out' ? 'active' : 'draft'}
+                          />
+                        </div>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {t.partyName || t.warehouseName} · {t.itemCount} 种商品 · 共 {t.totalRequired} 件
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      size="pda"
+                      className="mt-3 w-full"
+                      disabled={shipMut.isPending || shipAction.submitBlocked}
+                      onClick={() => shipMut.mutate({ taskId: t.id, fromList: true })}
+                    >
+                      {shipMut.isPending ? '出库中…' : '确认出库'}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+              {returnOutQuery.hasNextPage && (
+                <Button
+                  variant="outline"
+                  size="pda"
+                  className="mt-3 w-full"
+                  disabled={returnOutQuery.isFetchingNextPage}
+                  onClick={() => void returnOutQuery.fetchNextPage()}
+                >
+                  {returnOutQuery.isFetchingNextPage
+                    ? '加载中…'
+                    : `加载更多（已显示 ${returnOutTasks.length} / 共 ${returnOutTotal}）`}
+                </Button>
+              )}
+            </PdaSection>
+          )}
 
           {info && (
             <>

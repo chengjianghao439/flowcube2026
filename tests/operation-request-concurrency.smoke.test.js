@@ -169,6 +169,37 @@ async function runOperationRequestConcurrencyChecks(pool) {
         assert.equal(status.resourceId, i + 101)
       }
     })
+    // 前端「结果未确认」时必须保留请求键，判据就在这里：查不到（not_found）不表示没做成。
+    // PENDING 行写在业务事务里，事务提交前**另一个连接**读不到；而前端查回执正是走另一条连接
+    // （getOperationRequestStatus → pool）。若把 not_found 当「确定没做成」而换键重提，
+    // 就会把同一笔付款/核销再做一遍。这条用例把「未提交期间=not_found，提交后=success，
+    // 同键重提只回放」钉死，前端 receiptDecision 的判定才有依据。
+    await test('未提交事务的幂等记录对回执查询不可见，提交后同键重提只回放不重复执行', async () => {
+      const request = context(key())
+      let executions = 0
+      const conn = await pool.getConnection()
+      try {
+        await conn.beginTransaction()
+        const state = await operations.beginOperationRequest(conn, request)
+        executions++
+        assert.equal((await operations.getOperationRequestStatus(request)).status, 'not_found',
+          '事务提交前，另一个连接查回执必须是 not_found——「查不到不等于没做成」的成因')
+        await operations.completeOperationRequest(conn, state, { data: { executions: 1 } })
+        assert.equal((await operations.getOperationRequestStatus(request)).status, 'not_found',
+          '事务内已完成但未提交，对另一个连接仍不可见')
+        await conn.commit()
+
+        const after = await operations.getOperationRequestStatus(request)
+        assert.equal(after.status, 'success')
+        assert.deepEqual(after.data, { executions: 1 })
+
+        // 客户端拿同一个请求键重提：回放上次结果，不再执行一次
+        const replay = await transaction(c => operations.beginOperationRequest(c, request))
+        assert.equal(replay.replay, true)
+        assert.deepEqual(replay.responseData, { executions: 1 })
+        assert.equal(executions, 1, '同键重提不得重复执行业务')
+      } finally { conn.release() }
+    })
     await test('回滚不保存幂等回执，成功回执不被失败通知覆盖', async () => {
       const request = context(key())
       await assert.rejects(transaction(async conn => {

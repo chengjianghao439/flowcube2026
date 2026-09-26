@@ -1,9 +1,9 @@
 import type { RoleWorkbenchData } from '@/api/reports'
-import type { PermCode } from './permissions'
+import type { PermissionRequirement } from './permissions'
 import { isRegisteredErpRoute, resolveRoutePermission } from '@/router/routeDefinitions'
 import { normalizeWorkspacePath } from '@/router/workspaceRouteMeta'
 
-type Can = (permission: PermCode) => boolean
+type Can = (permission: PermissionRequirement) => boolean
 // 兼容旧服务/缓存：已取消的巡检与收货审核不能重新出现。
 const retired = new Set(['sale-anomaly', 'management-anomaly-task', 'management-stock', 'management-high-risk', 'warehouse-audit', 'management-audit'])
 

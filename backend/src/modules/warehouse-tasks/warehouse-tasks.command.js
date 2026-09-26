@@ -3,7 +3,7 @@ const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { assertInScope } = require('../../utils/warehouseScope')
 const { releaseByRef } = require('../../engine/reservationEngine')
-const { unlockContainersByTask } = require('../../engine/containerEngine')
+const { unlockContainersByTask, lockStockDimension, CONTAINER_STATUS } = require('../../engine/containerEngine')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const sortingBinSvc = require('../sorting-bins/sorting-bins.service')
 const {
@@ -129,6 +129,126 @@ async function createForPurchaseReturn({ returnId, returnNo, supplierName, wareh
   return { taskId, taskNo }
 }
 
+/** 返货出库任务锁定的容器来源类型（与 return-tasks.service 上架建容器时写入的一致） */
+const SALE_RETURN_CONTAINER_SOURCE = 'sale_return'
+
+/**
+ * 为销售退货「返货出库」创建任务：退货单被取消时，把已经入库的那批货退回客户。
+ *
+ * 与采购退货出库同构（以 PICKING 创建 → 拣货扫码 → 直接待出库）；差异有两点，都是硬约束：
+ *
+ * 1. `sale_order_id` 恒为 NULL。能取消的销售退货单只到状态 2（已确认），此时应收从未冲减、
+ *    退货凭证从未生成（凭证引擎取数条件是 `sr.status = 3`，见
+ *    docs/sale-return-reverse-flow-2026-09-26.md §一）——所以返货出库在会计上必须"什么都不做"：
+ *    不碰 payment_records、不生成收入/成本。ship.js 里有显式守卫，sale_order_id 非空即 500，
+ *    不依赖「NULL 天然不进应收分支」这种隐式安全。
+ *
+ * 2. 必须精确锁定「这批已入库的容器」，出库只能扣这批。否则出库走 FIFO 会把仓库里别的
+ *    同商品批次发出去——库存数量对得上、批次全错，客户收到的不是退回来的那批货。
+ *    容器的归属只认 `source_ref_type/source_ref_id`（建容器时写死，扫码改不了），
+ *    不能只认 `locked_by_task_id`（那个字段扫码就能写，当白名单用等于没有白名单）。
+ */
+async function createForSaleReturnReverse({ returnId, returnNo, customerName, warehouseId, warehouseName, items, conn }) {
+  // 没有明细就没有可返的货：宁可不建任务，也不要建一张空任务让仓库在 PDA 上打不开。
+  if (!items || items.length === 0) {
+    throw new AppError('返货出库任务必须有至少一条明细，未创建任务', 500, 'SALE_RETURN_REVERSE_NO_ITEMS')
+  }
+  const taskNo = await genTaskNo(conn)
+  const [r] = await conn.query(
+    `INSERT INTO warehouse_tasks
+       (task_no, task_type, return_id, sale_order_id, sale_order_no,
+        customer_id, customer_name, warehouse_id, warehouse_name, status, priority)
+     VALUES (?, 'sale_return_out', ?, NULL, NULL, NULL, ?, ?, ?, ${WT_STATUS.PICKING}, 2)`,
+    [taskNo, returnId, customerName, warehouseId, warehouseName],
+  )
+  const taskId = r.insertId
+  // 批量写入（AGENTS.md 红线：明细类写入禁止循环内逐行 INSERT）
+  await conn.query(
+    `INSERT INTO warehouse_task_items
+       (task_id, product_id, product_code, product_name, unit, article_number, spec, color, required_qty, picked_qty, sale_return_item_id)
+     VALUES ?`,
+    [items.map(item => [
+      taskId, item.productId, item.productCode, item.productName, item.unit,
+      item.articleNumber || null, item.spec || null, item.color || null, item.quantity, 0,
+      // 行级关联：出库按这一行取退货单价，避免同一退货单内同商品多行被 JOIN 放大（同迁移 247）
+      item.returnItemId != null ? Number(item.returnItemId) : null,
+    ])],
+  )
+
+  await lockContainersForSaleReturnReverse(conn, { taskId, returnId })
+
+  try {
+    await recordEvent(conn, {
+      taskId, taskNo,
+      eventType: WT_EVENT.TASK_CREATED,
+      toStatus: WT_STATUS.PICKING,
+      detail: { itemCount: items.length, taskType: 'sale_return_out', returnId, returnNo },
+    })
+  } catch (eventErr) {
+    logSideEffectFailure('仓库任务事件写入失败：返货出库任务创建事件', eventErr, {
+      taskId, taskNo, eventType: WT_EVENT.TASK_CREATED,
+    })
+  }
+  return { taskId, taskNo }
+}
+
+/**
+ * 把某退货单已入库（ACTIVE）的容器全部预锁给返货任务。
+ *
+ * 锁序必须与上架/出库侧一致：**先 lockStockDimension（inventory_stock 单行）再锁容器行**，
+ * 且容器行按 id 升序。反过来或按容器行先锁，会与并发的上架事务成环死锁
+ * （理由见 containerEngine.lockStockDimension 的注释）。
+ *
+ * 调用方须已把该退货单的 return_tasks 置为 REVERSING——冷冻容器集合，避免锁容器过程中
+ * 又有新容器被上架进来（putaway 要求任务状态=4，置 REVERSING 后即被堵住）。
+ */
+async function lockContainersForSaleReturnReverse(conn, { taskId, returnId }) {
+  const [dimensions] = await conn.query(
+    `SELECT DISTINCT c.product_id, c.warehouse_id
+       FROM inventory_containers c
+       JOIN return_tasks rt ON rt.id = c.source_ref_id AND rt.return_type = 'sale'
+      WHERE rt.return_id = ? AND c.source_ref_type = ?
+        AND c.status = ? AND c.deleted_at IS NULL AND c.remaining_qty > 0
+      ORDER BY c.product_id, c.warehouse_id`,
+    [returnId, SALE_RETURN_CONTAINER_SOURCE, CONTAINER_STATUS.ACTIVE],
+  )
+  for (const dim of dimensions) {
+    await lockStockDimension(conn, Number(dim.product_id), Number(dim.warehouse_id))
+  }
+
+  // remaining_qty > 0 与「建单前的可返量核对」同一口径：0 量的容器扫不动（扫码侧会以
+  // 「库存不足」拒绝），锁进来就是给自己埋一个永远拣不完的任务。口径不一致时两道关会打架。
+  const [containers] = await conn.query(
+    `SELECT c.id, c.locked_by_task_id
+       FROM inventory_containers c
+       JOIN return_tasks rt ON rt.id = c.source_ref_id AND rt.return_type = 'sale'
+      WHERE rt.return_id = ? AND c.source_ref_type = ?
+        AND c.status = ? AND c.deleted_at IS NULL AND c.remaining_qty > 0
+      ORDER BY c.id
+      FOR UPDATE`,
+    [returnId, SALE_RETURN_CONTAINER_SOURCE, CONTAINER_STATUS.ACTIVE],
+  )
+  // 已被别的任务锁走的容器不让返货任务假装拥有：若照锁不误，出库时本任务锁定容器不足会
+  // 卡在待出库，而现场那批货其实在别人手里，仓库无从判断该找谁。这里直接拒绝并说明原因。
+  const busy = containers.filter(c => c.locked_by_task_id != null)
+  if (busy.length > 0) {
+    throw new AppError(
+      `该退货单有 ${busy.length} 个已入库库存条码正被其它任务占用（如待出库/备货任务），`
+      + '现在返货出库会与那个任务争同一批货，请先处理完该任务再取消退货单',
+      409,
+      'SALE_RETURN_REVERSE_CONTAINER_BUSY',
+      { containerIds: busy.map(c => Number(c.id)), count: busy.length },
+    )
+  }
+  if (containers.length === 0) return []
+  const ids = containers.map(c => Number(c.id))
+  await conn.query(
+    'UPDATE inventory_containers SET locked_by_task_id = ?, locked_at = NOW() WHERE id IN (?)',
+    [taskId, ids],
+  )
+  return ids
+}
+
 /**
  * 分配操作员
  */
@@ -170,11 +290,36 @@ async function cancel(id, options = {}) {
     const taskRow = await lockStatusRow(conn, {
       table: 'warehouse_tasks',
       id,
-      columns: 'id, task_no, status, sale_order_id, sorting_bin_id, sorting_bin_code, cancel_requested_at, warehouse_id',
+      columns: 'id, task_no, task_type, status, sale_order_id, sorting_bin_id, sorting_bin_code, cancel_requested_at, warehouse_id',
       entityName: '仓库任务',
     })
     // 单据级数据权限（2026-08-21 审计高危）：限仓用户不能取消他人仓库的任务
     assertInScope(options.scopeWarehouseIds, taskRow.warehouse_id, '仓库任务')
+    // ── 返货出库单不可单独取消（2026-09-26 一致性审查 · 任务 1 第二期）──────────────
+    // 返货出库单不是独立业务单，它是「取消退货单」这一动作的组成部分：取消退货单时，
+    // 退货单保持在已确认(2)、其退货任务被置为反向处理中(7)，正是等这张单把货退回客户后
+    // 收口（见 returns-sale.service.enterSaleReturnReverse）。
+    //
+    // 让它走通用取消会留下一个死结，且**通用路径看不出问题在哪**：
+    //  - 它没有 sale_order_id，销售单分支不会兜底；
+    //  - 它预锁着容器，于是被判为「需要逆向归还」，要求仓库逐个扫码把货放回货架——
+    //    可这些货压根没离开过货架（预锁只是数据库字段），扫码归还是纯粹的无效劳动；
+    //  - 归还完成后任务变已取消(8)，但**退货单仍是 2、退货任务仍停在 7**：退货任务 7 既不能
+    //    再上架（上架要求 4），也不能被收口（7 只有 →6 一条出边），退货单从此既完成不了、
+    //    也取消不了；此时再点「取消退货单」还会因为查不到进行中的返货单而**重复建单**。
+    //
+    // 回滚这条路同样不通：申请时把 4 置 7、把未上架的容器置 VOID（不可逆）、把 1/2/3 的任务
+    // 取消（终态无出边）——三处都缺可逆边，硬回滚比禁止更容易把数据撕碎。
+    // 所以这里明确禁止，并把唯一通行的出路讲清楚。
+    if (taskRow.task_type === 'sale_return_out') {
+      throw new AppError(
+        '返货出库单不能单独取消：它是「取消退货单」流程的一部分，取消它会让退货单卡在既不能完成、'
+        + '也不能取消的状态。如果这批货不再需要退回客户，请先按正常流程完成本单出库（出库完成后退货单会自动取消），'
+        + '再按业务需要重新开退货单；其余情况请联系管理员核查',
+        409,
+        'SALE_RETURN_REVERSE_CANCEL_FORBIDDEN',
+      )
+    }
     if (taskRow.cancel_requested_at) {
       throw new AppError('任务已在拣货退回中，请等待逆向归还完成', 409)
     }
@@ -364,6 +509,9 @@ async function cancel(id, options = {}) {
 module.exports = {
   createForSaleOrder,
   createForPurchaseReturn,
+  createForSaleReturnReverse,
+  lockContainersForSaleReturnReverse,
+  SALE_RETURN_CONTAINER_SOURCE,
   assign,
   updatePriority,
   cancel,

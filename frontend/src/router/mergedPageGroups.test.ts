@@ -2,6 +2,7 @@
 import { expect, test } from 'vitest'
 import { buildWorkspaceTabRegistrationFromPath } from './workspaceRouteMeta'
 import { buildTopNavSections, resolveRoutePermission } from './routeDefinitions'
+import { hasPermission } from '@/lib/permissions'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { HOME_TAB, useWorkspaceStore } from '@/store/workspaceStore'
 
@@ -38,7 +39,9 @@ test('旧快捷入口和已保存标签改用子页名（不再一律显示组�
 })
 
 test('合并菜单先过滤权限，只有补货权限仍有采购建议入口', () => {
-  const nav = buildTopNavSections(perm => perm === PERMISSIONS.REPORT_VIEW)
+  // 只持「报表查看」的用户看菜单：can 走真实的 hasPermission（权限位可能是单个码、
+  // 也可能是「任一」的数组），别在这里手写 === 比较——那会把数组形态判成不通过。
+  const nav = buildTopNavSections((perm) => hasPermission([PERMISSIONS.REPORT_VIEW], perm))
   const purchase = nav.find(section => section.label === '采购')
   expect(purchase?.kind).toBe('menu')
   if (purchase?.kind !== 'menu') throw new Error('采购菜单缺失')

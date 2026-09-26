@@ -80,13 +80,15 @@ async function readyToShipWithinTransaction(conn, id, { requestKey, userId, scop
   if (taskRow.adjustment_requested_at) {
     throw new AppError('该任务有改单正在等待仓库确认，请先处理完成', 409)
   }
-  const isPurchaseReturn = taskRow.task_type === 'purchase_return'
+  // 两类退货出库（采购退货、销售退货返货）都不走分拣/复核/打包：货要退回给供应商/客户，
+  // 不是销售发货，装箱打印那套在这里没有对应物
+  const isReturnOut = taskRow.task_type === 'purchase_return' || taskRow.task_type === 'sale_return_out'
 
-  // 采购退货：拣货完成后直接跳到待出库（跳过排序/复核/打包）
-  const targetStatus = isPurchaseReturn ? WT_STATUS.SHIPPING : WT_STATUS.SORTING
-  const action = isPurchaseReturn ? 'readyToShip' : 'readyToShip'
+  // 退货出库：拣货完成后直接跳到待出库（跳过排序/复核/打包）
+  const targetStatus = isReturnOut ? WT_STATUS.SHIPPING : WT_STATUS.SORTING
+  const action = isReturnOut ? 'readyToShip' : 'readyToShip'
 
-  if (!isPurchaseReturn) {
+  if (!isReturnOut) {
     const rule = assertWarehouseTaskAction(action, taskRow.status)
     if (!isValidTransition(taskRow.status, rule.toStatus)) {
       throw new AppError(`非法状态迁移：${taskRow.status} → ${rule.toStatus}`, 400)
@@ -115,7 +117,7 @@ async function readyToShipWithinTransaction(conn, id, { requestKey, userId, scop
     toStatus: targetStatus,
     entityName: '仓库任务',
   })
-  if (!isPurchaseReturn && taskRow.sale_order_id) {
+  if (!isReturnOut && taskRow.sale_order_id) {
     const saleSvc = require('../sale/sale.service')
     await saleSvc.syncPickingByWarehouseTaskWithinTransaction(conn, Number(taskRow.sale_order_id), {
       taskId: Number(taskRow.id),
@@ -143,7 +145,7 @@ async function readyToShipWithinTransaction(conn, id, { requestKey, userId, scop
   if (requestState.enabled) {
     await completeOperationRequest(conn, requestState, {
       data: payload,
-      message: isPurchaseReturn ? '已标记为待出库' : '已标记为待分拣',
+      message: isReturnOut ? '已标记为待出库' : '已标记为待分拣',
       resourceType: 'warehouse_task',
       resourceId: id,
     })
@@ -173,10 +175,19 @@ async function readyToShip(id, { requestKey, userId, scopeWarehouseIds = null, p
  * @param {number[]} productIds
  * @param {number}   warehouseId
  * @param {number}   taskId       - 当前任务ID（排除其他任务锁定的容器）
+ * @param {object}  [opts]
+ * @param {boolean} [opts.onlyLockedByTask] - 只取「本任务已锁定」的容器。
+ *   返货出库（sale_return_out）建单时就把这张退货单的原批次容器整批预锁给本任务，
+ *   对它是「分配给我的待拣目标」而非「已占用」。若沿用默认口径，会把同商品**别的批**
+ *   （未预锁）也一起推荐出来，操作员点了必被 scan-logs 的返货白名单拒掉（409），
+ *   而真正该拣的原批次反而因为带锁定标记被前端禁用。
  * @returns {Record<number, Array>}  key = productId
  */
-async function _fetchContainersForProducts(productIds, warehouseId, taskId) {
+async function _fetchContainersForProducts(productIds, warehouseId, taskId, opts = {}) {
   if (!productIds.length) return {}
+  const lockClause = opts.onlyLockedByTask
+    ? 'AND c.locked_by_task_id = ?'
+    : 'AND (c.locked_by_task_id IS NULL OR c.locked_by_task_id = ?)'
   const [containers] = await pool.query(
     `SELECT c.id AS containerId, c.barcode, c.container_type AS containerType, c.remaining_qty AS remainingQty,
             c.product_id AS productId,
@@ -191,7 +202,7 @@ async function _fetchContainersForProducts(productIds, warehouseId, taskId) {
        AND c.remaining_qty > 0
        AND c.status = 1
        AND c.deleted_at IS NULL
-       AND (c.locked_by_task_id IS NULL OR c.locked_by_task_id = ?)
+       ${lockClause}
      ORDER BY
        (c.exp_date IS NULL) ASC, c.exp_date ASC,
        loc.zone ASC, loc.aisle ASC, loc.rack ASC, loc.level ASC, loc.position ASC,
@@ -243,16 +254,20 @@ async function getPickSuggestions(taskId, scopeWarehouseIds = null) {
   }
   assertWarehouseTaskAction('viewPickWork', task.status)
 
+  const isSaleReturnReverse = task.taskType === 'sale_return_out'
   const pendingItems = task.items.filter(i => i.requiredQty - i.pickedQty > 0)
   const productIds   = pendingItems.map(i => i.productId)
-  const grouped      = await _fetchContainersForProducts(productIds, task.warehouseId, taskId)
+  const grouped      = await _fetchContainersForProducts(productIds, task.warehouseId, taskId,
+    { onlyLockedByTask: isSaleReturnReverse })
   const blockedProductIds = [...new Set(productIds.filter(productId => !(grouped[productId] || []).length))]
   const blockedByProduct = await _fetchBlockingTasks(blockedProductIds, task.warehouseId, taskId)
 
   const items = task.items.map(item => {
     const remaining = item.requiredQty - item.pickedQty
     if (remaining <= 0) return { ...item, remaining: 0, suggestions: [], blockedByTasks: [] }
-    const containers = (grouped[item.productId] || []).slice(0, 10)
+    // 返货出库的预锁容器是**整批白名单**（出库要逐个容器数量闭合），不能只给前 10 个：
+    // 少显示的那几个操作员在推荐里点不到，只能去手工翻库位扫码。
+    const containers = isSaleReturnReverse ? (grouped[item.productId] || []) : (grouped[item.productId] || []).slice(0, 10)
     return {
       ...item,
       remaining,
@@ -265,7 +280,10 @@ async function getPickSuggestions(taskId, scopeWarehouseIds = null) {
         remainingQty: Number(c.remainingQty),
         batchNo:      c.batchNo || null,
         expDate:      c.expDate || null,
-        locked:       c.lockedByTaskId === taskId,
+        // 前端 SuggestionRow 把 locked 当作「不可点」。对普通任务，本任务已锁的容器代表
+        // 「这次拣货已经扫过它」，禁用是对的；但返货出库的预锁容器恰恰是分配给本任务的
+        // 待拣目标，标成锁定会让正确批次全部点不了（2026-09-26 PDA 实测）。
+        locked:       isSaleReturnReverse ? false : c.lockedByTaskId === taskId,
       })),
     }
   })
@@ -283,9 +301,11 @@ async function getPickRoute(taskId, scopeWarehouseIds = null) {
   }
   assertWarehouseTaskAction('viewPickWork', task.status)
 
+  const isSaleReturnReverse = task.taskType === 'sale_return_out'
   const pendingItems = task.items.filter(i => i.requiredQty - i.pickedQty > 0)
   const productIds   = pendingItems.map(i => i.productId)
-  const grouped      = await _fetchContainersForProducts(productIds, task.warehouseId, taskId)
+  const grouped      = await _fetchContainersForProducts(productIds, task.warehouseId, taskId,
+    { onlyLockedByTask: isSaleReturnReverse })
 
   const allSteps = []
   for (const item of pendingItems) {
@@ -308,7 +328,8 @@ async function getPickRoute(taskId, scopeWarehouseIds = null) {
         level:    c.level    || '',
         position: c.position || '',
         qty,
-        locked: c.lockedByTaskId === taskId,
+        // 同 getPickSuggestions：返货出库的预锁容器是待拣目标，不是「已占用」，不标锁定
+        locked: isSaleReturnReverse ? false : c.lockedByTaskId === taskId,
       })
       need -= qty
     }

@@ -27,6 +27,11 @@ router.get('/sorting-bin-pending', requirePermission(PERMISSIONS.WAREHOUSE_TASK_
 // GET /api/warehouse-tasks/cancel-returns/pending — PDA「拣货退回」任务池（必须在 /:id 之前注册）
 router.get('/cancel-returns/pending', requirePermission(PERMISSIONS.WAREHOUSE_TASK_CANCEL_RETURN_VIEW), ctrl.pendingCancelReturns)
 
+// GET /api/warehouse-tasks/return-out-pending — PDA 出库页「待出库的退货任务」列表
+// （采购退货 / 销售退货返货没有包裹与物流箱码，扫箱码找不到它们，必须另给列表入口。
+//   必须在 /:id 之前注册，否则被 /:id 吃掉。）
+router.get('/return-out-pending', requirePermission(PERMISSIONS.WAREHOUSE_TASK_SHIP), ctrl.returnOutPending)
+
 // GET /api/warehouse-tasks/adjustments/pending — PDA「改单确认」任务池（必须在 /:id 之前注册）
 router.get('/adjustments/pending', requirePermission(PERMISSIONS.WAREHOUSE_TASK_ADJUST_VIEW), ctrl.pendingAdjustments)
 

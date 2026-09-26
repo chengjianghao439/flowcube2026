@@ -10,11 +10,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { payApi } from '@/api/payments'
 import type { PaymentRecord } from '@/api/payments'
 import { getActiveAccountsApi } from '@/api/finance'
-import { createRequestKey } from '@/lib/requestKey'
 import { todayYmd } from '@/lib/dateTime'
 import { toast } from '@/lib/toast'
 import { confirmAction } from '@/lib/confirm'
 import { usePaymentViewInvalidation } from './usePaymentViewInvalidation'
+import { BackfillRequestDialog } from './BackfillRequestDialog'
+import { UncertainSubmitNotice } from './UncertainSubmitNotice'
+import { useIdempotentSubmit } from './useIdempotentSubmit'
+import { isBackfillApplication, useBackfillPrompt } from './backfillFlow'
 
 const FORM_ID = 'payment-register-form'
 
@@ -52,12 +55,51 @@ export function RegisterPaymentDialog({ open, onClose, type, record }: Props) {
     queryFn: () => getActiveAccountsApi().then(r => r || []),
     enabled: open,
   })
+  const { prompt, ask, close: closePrompt } = useBackfillPrompt()
+  // 请求键的轮换时机交给守卫：成功与「明确被拒」才换键，超时/断网与期间已结账一律保留——
+  // 早先是「打开就换键」，响应超时后用户关窗重开再提交会重复付款。
+  const guard = useIdempotentSubmit({ action: 'payment.record.pay', prefix: 'payment-pay' })
+
+  const buildBody = () => ({
+    amount: +payAmount, paymentDate: payDate, method: payMethod,
+    accountId: +payAccountId, remark: payRemark || undefined,
+  })
+
   const payMut = useMutation({
-    mutationFn: ({ id, d }: { id: number; d: object }) => payApi(id, d, createRequestKey()),
-    onSuccess: () => {
-      invalidatePaymentViews()
+    mutationFn: ({ id, d, backfillReason }: { id: number; d: object; backfillReason?: string }) => {
+      guard.remember(`${actionLabel} ${money(+payAmount)} · ${payDate} · ${record?.orderNo ?? ''}`)
+      return payApi(id, backfillReason ? { ...d, backfillRequest: true, backfillReason } : d, guard.keyRef.current, { skipGlobalError: true })
+    },
+    onSuccess: (res) => {
+      guard.settle()
+      closePrompt()
       onClose()
       setPayAmount(''); setPayRemark(''); setPayAccountId('')
+      // 202 申请单不是「登记成功」：业务一行未写、钱还没动。必须把单号和去哪看进度一起说清楚，
+      // 否则一句「已提交」很容易被当成钱已经付了。
+      if (isBackfillApplication(res)) {
+        toast.success(`已提交补录申请 ${res.applicationNo}，审批通过后才会记账；进度见「财务 › 跨期补录审批」`)
+        return
+      }
+      invalidatePaymentViews()
+      toast.success(`${actionLabel}成功`)
+    },
+    onError: (e) => {
+      const kind = guard.classify(e)
+      // 期间已结账：不改业务日期（那是事实），改走补录申请；确认后用**同一个请求键**重发
+      if (kind === 'period-closed' && record) {
+        const rid = record.id
+        ask((e as Error).message, (
+          <>
+            付款 {money(Number(payAmount))} · {payDate} · 账户「{(activeAccounts || []).find(a => String(a.id) === payAccountId)?.name ?? '—'}」
+            <br />账款 <span className="text-doc-code">{record.orderNo}</span> · {record.partyName}
+          </>
+        ), reason => payMut.mutate({ id: rid, d: buildBody(), backfillReason: reason }))
+        return
+      }
+      // 未确认：提示条已经说清「可能已成功、先查回执」，再弹一句「登记失败」会把人推向重复提交
+      if (kind === 'uncertain') return
+      toast.error(e instanceof Error ? e.message : '登记失败')
     },
   })
 
@@ -65,10 +107,7 @@ export function RegisterPaymentDialog({ open, onClose, type, record }: Props) {
     e.preventDefault()
     if (!record || !payAmount) return
     if (!payAccountId) { toast.error('请选择资金账户'); return }
-    const doPay = () => payMut.mutate({
-      id: record.id,
-      d: { amount: +payAmount, paymentDate: payDate, method: payMethod, accountId: +payAccountId, remark: payRemark || undefined },
-    })
+    const doPay = () => payMut.mutate({ id: record.id, d: buildBody() })
     // 付款(应付)从账户支出，透支前二次确认——后端仍允许「先记账后到账」，此处只做软性提示
     const acc = (activeAccounts || []).find(a => String(a.id) === payAccountId)
     if (isPayable && acc && +payAmount > acc.currentBalance + 1e-6) {
@@ -85,9 +124,10 @@ export function RegisterPaymentDialog({ open, onClose, type, record }: Props) {
   }
 
   return (
+    <>
     <AppDialog
       open={open}
-      onOpenChange={v => { if (!v) onClose() }}
+      onOpenChange={v => { if (!v) { onClose(); closePrompt() } }}
       dialogId="payment-register"
       title={actionLabel}
       defaultWidth={640}
@@ -102,6 +142,16 @@ export function RegisterPaymentDialog({ open, onClose, type, record }: Props) {
       }
     >
       <form id={FORM_ID} onSubmit={handlePay} className="h-full overflow-y-auto p-5">
+        <UncertainSubmitNotice
+          visible={guard.uncertain}
+          pending={guard.checkMut.isPending}
+          what={guard.lastLabelRef.current ?? undefined}
+          onCheck={() => guard.checkLastResult(() => {
+            invalidatePaymentViews()
+            toast.success('上次提交的付款已成功，无需重复登记')
+            onClose()
+          })}
+        />
         {record && (
           <div className="mb-4 space-y-1 text-sm text-muted-foreground">
             <p>关联单号：<span className="text-doc-code-strong">{record.orderNo}</span> &nbsp;·&nbsp; {partyLabel}：{record.partyName}</p>
@@ -137,5 +187,14 @@ export function RegisterPaymentDialog({ open, onClose, type, record }: Props) {
         </div>
       </form>
     </AppDialog>
+    <BackfillRequestDialog
+      open={!!prompt}
+      onClose={closePrompt}
+      message={prompt?.message ?? ''}
+      summary={prompt?.summary}
+      pending={payMut.isPending}
+      onConfirm={reason => prompt?.onConfirm(reason)}
+    />
+    </>
   )
 }

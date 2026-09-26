@@ -120,9 +120,19 @@ async function finalizeCancelWithinTransaction(conn, taskId) {
   const taskRow = await lockStatusRow(conn, {
     table: 'warehouse_tasks',
     id: taskId,
-    columns: 'id, task_no, status, sorting_bin_id, sorting_bin_code',
+    columns: 'id, task_no, task_type, status, sorting_bin_id, sorting_bin_code',
     entityName: '仓库任务',
   })
+  // 返货出库单不该走到这里：它的取消已在 warehouse-tasks.command.cancel() 源头禁止
+  // （货从未离架，也没有独立的取消语义），到这一步说明上游被改动过或数据被手改。
+  // 静默终态会把退货单留在「既完成不了也取消不了」的死结上，所以显式暴露。
+  if (taskRow.task_type === 'sale_return_out') {
+    throw new AppError(
+      '返货出库单不能通过拣货退回取消，请联系管理员核查',
+      409,
+      'SALE_RETURN_REVERSE_CANCEL_FORBIDDEN',
+    )
+  }
 
   if (taskRow.sorting_bin_id) {
     await sortingBinSvc.releaseByTask(conn, taskId)

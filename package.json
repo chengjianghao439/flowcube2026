@@ -136,6 +136,7 @@
     "test:dirty-navigation": "node scripts/browser-smoke/dirty-navigation.cjs",
     "test:confirmed-audit": "node --test tests/confirmed-audit.test.js tests/confirmed-inventory.test.js tests/confirmed-manual-request.test.js tests/confirmed-audit-money.test.js tests/ci-ssh-security.test.js tests/procurement-pagination.test.js",
     "smoke:confirmed-audit": "node --test tests/confirmed-audit.smoke.test.js",
-    "smoke:audit-remediation-20260924": "node --test --test-concurrency=1 tests/auth-token-remediation.smoke.test.js tests/finance-account-precision.smoke.test.js tests/schema-reconcile.smoke.test.js"
+    "smoke:audit-remediation-20260924": "node --test --test-concurrency=1 tests/auth-token-remediation.smoke.test.js tests/finance-account-precision.smoke.test.js tests/schema-reconcile.smoke.test.js",
+    "smoke:audit-20260926": "node tests/payable-posting.smoke.test.js && node --test --test-concurrency=1 tests/sale-return-cancel-guard.smoke.test.js tests/finance-backfill-approval.smoke.test.js tests/finance-period-guard.smoke.test.js tests/finance-period-lock-order.smoke.test.js tests/payable-void-guard.smoke.test.js tests/payment-debit-account-options.smoke.test.js tests/printer-binding-scope.smoke.test.js tests/idempotency-request-key.smoke.test.js"
   }
 }

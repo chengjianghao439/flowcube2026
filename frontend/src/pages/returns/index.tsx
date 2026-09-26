@@ -20,7 +20,7 @@ import { useWorkspaceStore } from '@/store/workspaceStore'
 import { formatDisplayDateTime, defaultRangeYmds } from '@/lib/dateTime'
 import { readStringParam, upsertSearchParams } from '@/lib/urlSearchParams'
 import ReturnQueryDialog, { type ReturnQueryValues } from './ReturnQueryDialog'
-import type { PurchaseReturn, SaleReturn } from '@/api/returns'
+import type { PurchaseReturn, SaleReturn, SaleReturnCancelResult } from '@/api/returns'
 import type { TableColumn } from '@/types'
 
 type RowType = PurchaseReturn | SaleReturn
@@ -108,6 +108,30 @@ export default function ReturnsPage() {
       .then(inv)
       .catch(() => { /* 失败已由全局拦截器弹 toast，这里吞掉避免 unhandledrejection */ })
       .finally(() => { if (id) setPendingId(null) })
+  }
+
+  // 取消销售退货：已有合格品入库时后端不会直接取消，而是生成返货出库单（202），
+  // 货要等仓库按出库流程退回客户后这张退货单才真正取消。必须把单号告诉用户，
+  // 否则用户以为已经取消、仓库那边却还挂着一张待出库任务。
+  const cancelReturn = (row: RowType) => {
+    setPendingId(row.id)
+    cancelFn(row.id)
+      .then((res) => {
+        const reverse = res as SaleReturnCancelResult | null
+        if (reverse?.pendingReverse) {
+          toast.success(
+            reverse.alreadyRequested
+              ? `该退货单已有进行中的返货出库单 ${reverse.taskNo}，无需重复申请`
+              : `退货单已有合格品入库，已生成返货出库单 ${reverse.taskNo}；请到仓库任务中完成返货出库，出库后退货单自动取消`,
+            8000,
+          )
+        } else {
+          toast.success('已取消')
+        }
+        return inv()
+      })
+      .catch(() => { /* 失败已由全局拦截器弹 toast */ })
+      .finally(() => setPendingId(null))
   }
 
   function updateParams(updates: Record<string, string | number | null | undefined>) {
@@ -237,7 +261,13 @@ export default function ReturnsPage() {
             { label: '打印', onClick: () => setPrintTarget(r) },
             ...((r.status === 1 || r.status === 2) ? [{
               label: pendingId === r.id ? '处理中…' : '取消',
-              onClick: () => openConfirm('取消退货单', '确认取消此退货单？', () => mut(() => cancelFn(r.id), r.id)),
+              onClick: () => openConfirm(
+                '取消退货单',
+                type === 'sale'
+                  ? '确认取消此退货单？若该退货单已有合格品入库，系统不会直接取消，而是生成一张返货出库单，等仓库把这批货退回客户后自动取消。'
+                  : '确认取消此退货单？',
+                () => cancelReturn(r),
+              ),
               disabled: pendingId === r.id,
               destructive: true,
               separatorBefore: true,

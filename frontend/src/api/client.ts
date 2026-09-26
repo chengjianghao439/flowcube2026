@@ -145,8 +145,11 @@ function formatPrintQuotaToast(message: string, p: PrintQuotaErrorPayload) {
  */
 declare module 'axios' {
   interface AxiosRequestConfig {
-    /** 首页摘要显式使用单批；所有业务列表默认自动取齐。 */
-    listMode?: 'summary'
+    /**
+     * 首页摘要显式使用单批；所有业务列表默认自动取齐。
+     * `paged`：调用方自己按 page/offset 翻页，要求原样透传 page/pageSize（不取齐）。
+     */
+    listMode?: 'summary' | 'paged'
     skipGlobalError?: boolean
     /** ERP API fallback 已尝试过，避免循环重试 */
     _erpApiFallbackTried?: boolean
@@ -399,7 +402,10 @@ async function payloadRequest<T>(request: Promise<AxiosResponse<T>>): Promise<Pa
 export const payloadClient = {
   // 身份策略只属于列表汇总层，作为独立参数，不进入 Axios 配置或网络载荷。
   get<T = unknown>(url: string, config?: AxiosRequestConfig, identityOf?: RecordIdentityResolver) {
-    if (config?.listMode === 'summary' || config?.responseType === 'blob' || config?.responseType === 'arraybuffer') {
+    // `paged` 与 `summary` 都不进取齐分支：下面那段会 delete 掉外部 page/pageSize、
+    // 改由 collectAllRecords 从第 1 页重算，于是**调用方传的 page=2 永远发不出去**
+    // （点「加载更多」只会又请求一次第 1 页）。分页接口必须原样透传。
+    if (config?.listMode === 'summary' || config?.listMode === 'paged' || config?.responseType === 'blob' || config?.responseType === 'arraybuffer') {
       return payloadRequest(apiClient.get<T>(url, config))
     }
     // 在整次列表读取开始时绑定会话/账套，避免续批随用户切换而混入另一范围。

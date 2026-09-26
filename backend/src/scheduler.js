@@ -52,6 +52,20 @@ function startScheduler() {
   // 每 6 小时清理超过 7 天的 operation_requests 记录
   startCleanupSweeper({ intervalMs: 6 * 60 * 60 * 1000, ttlDays: 7 })
 
+  // 跨期补录的调整凭证自动补齐（2026-09-26 一致性审查 · 任务 7）。
+  // 补录执行分两步：业务写入在业务事务内，调整凭证要全期间重算、只能在其后单独做。凭证这一步
+  // 失败会留下「钱已动、会计账上没有」的申请单——只靠审批页的重试按钮等人来点，这个状态会一直
+  // 挂着（出纳以为走完了、审批人以为批完了，没人回头看）。这里定期扫一遍让它自己收敛。
+  // 注意：期间已结账这类原因不会自愈，会持续停在错误上等人工——那是刻意的，系统不该自己
+  // 替会计决定去动一个已封的期间。间隔可用 BACKFILL_VOUCHER_RETRY_INTERVAL_MS 调整。
+  const { retryPendingVoucherGeneration } = require('./modules/accounting/finance-backfills.service')
+  startWorker('backfill-voucher-retry', async () => {
+    const r = await retryPendingVoucherGeneration()
+    if (r.succeeded || r.failed) {
+      logger.info(`[scheduler] 补录凭证自动补齐：成功 ${r.succeeded}、仍失败 ${r.failed}`, r, 'Scheduler')
+    }
+  }, num('BACKFILL_VOUCHER_RETRY_INTERVAL_MS', 10 * 60 * 1000))
+
   // 操作日志（operation_logs）无界增长修复：每 6 小时清理 30 天前的记录。
   // 此前 clearOld 只有手动触发（OPLOGS_CLEAR_TTL_DAYS 可调），日志表会无限膨胀。
   const { clearOld: clearOpLogs } = require('./modules/oplogs/oplogs.service')

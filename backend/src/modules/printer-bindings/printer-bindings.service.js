@@ -1,11 +1,24 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 
-const findAll = async () => {
+const findAll = async (scopeWarehouseIds = null) => {
+  // 限仓用户只应看到自己仓库的绑定；公司级(warehouse_id=0)绑定对所有仓库生效，
+  // 必须保留——defaultBindings 完全来自它，滤掉会让 PDA/桌面端打印静默失效
+  // （2026-09-26 一致性审查 · 任务 6）。
+  let whereSql = ''
+  let whereParams = []
+  if (Array.isArray(scopeWarehouseIds)) {
+    whereSql = scopeWarehouseIds.length
+      ? 'WHERE (b.warehouse_id IN (?) OR b.warehouse_id = 0)'
+      : 'WHERE b.warehouse_id = 0'
+    if (scopeWarehouseIds.length) whereParams = [scopeWarehouseIds]
+  }
   const [rows] = await pool.query(
     `SELECT b.*, p.name AS printer_name, p.type AS printer_type FROM printer_bindings b
        LEFT JOIN printers p ON p.id = b.printer_id
-       ORDER BY b.warehouse_id, b.print_type`)
+       ${whereSql}
+       ORDER BY b.warehouse_id, b.print_type`,
+    whereParams)
   const map = {}
   for (const r of rows) {
     if (Number(r.warehouse_id) !== 0) continue

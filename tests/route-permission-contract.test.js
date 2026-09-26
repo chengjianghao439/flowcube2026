@@ -70,7 +70,12 @@ function readRegistration(source, startIndex) {
 function scanFile(file) {
   const source = fs.readFileSync(file, 'utf8')
   const findings = []
-  const re = /router\.(post|put|patch|delete)\s*\(/g
+  // 匹配任意 Router 变量名，不是只匹配 `router`：accounting.routes.js 用 9 个别名
+  // Router（accounts/vouchers/ledger/reports/invoices/companies/consolidation/tax/periods），
+  // 原先只认 `router` 时这些文件里的写路由完全不被扫描（2026-09-26 一致性审查 · 任务 5）。
+  // 放宽后仍只匹配 `X.post(` 这种调用形态，且当前所有路由文件的前导标识符都是 Router 实例，
+  // 无误报；万一将来命中非路由对象，方向也是「报出来给人看」而非静默漏检。
+  const re = /[A-Za-z_$][\w$]*\.(post|put|patch|delete)\s*\(/g
   let m
   while ((m = re.exec(source)) !== null) {
     const chunk = readRegistration(source, m.index)
@@ -78,7 +83,12 @@ function scanFile(file) {
     findings.push({
       method: m[1].toUpperCase(),
       line: source.slice(0, m.index).split('\n').length,
-      guarded: /requirePermission\s*\(/.test(chunk),
+      // requirePermission 与 requireAnyPermission 是同一族的鉴权中间件：都由 middleware/auth.js
+      // 导出、都走 hasPermission 判定 + 同一套拒绝审计，差别只在「单码 / 多码 OR」——不降低
+      // 「必须携带权限码」这一要求。原先只认前者，2026-09-26 新增的 finance-backfills.routes.js
+      // 里唯一那条写路由（cancel 刻意对两档权限 OR 开放，好让没审批权限的出纳也能撤回自己的
+      // 申请）就被误报成「未鉴权」——方向报反了：它鉴权了，只是不肯卡死单码。
+      guarded: /require(?:Any)?Permission\s*\(/.test(chunk),
       snippet: chunk.replace(/\s+/g, ' ').slice(0, 110),
     })
   }

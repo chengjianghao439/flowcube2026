@@ -145,6 +145,11 @@ tax.post('/adjustments',       requirePermission(PERMISSIONS.ACCOUNTING_PERIOD_M
 tax.delete('/adjustments/:id', requirePermission(PERMISSIONS.ACCOUNTING_PERIOD_MANAGE), ctrl.taxAdjustmentRemove)
 router.use('/tax', tax)
 
+// ── 跨期补录审批 /api/accounting/backfills ────────────────────────────
+// 先审批、后动账：付款/核销/退款撞上已结账期间时只落一张待审批申请单，他人批准后才写业务，
+// 并按补录当期生成调整凭证。权限与判据见 finance-backfills.routes 与 service 头部注释。
+router.use('/backfills', require('./finance-backfills.routes'))
+
 // ── 期末结转 / 期间锁定 /api/accounting/periods ────────────────────────
 const periods = Router()
 periods.get('/',                    requirePermission(PERMISSIONS.ACCOUNTING_LEDGER_VIEW),   ctrl.periodList)

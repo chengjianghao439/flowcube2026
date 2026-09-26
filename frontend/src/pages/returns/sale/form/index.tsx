@@ -41,7 +41,7 @@ import {
   createSaleReturnApi, confirmSaleReturnApi, cancelSaleReturnApi,
   getSaleReturnSourceOrderApi, getSaleReturnDetailApi,
 } from '@/api/returns'
-import type { SaleReturn, SaleReturnSourceOrder, ReturnItem } from '@/api/returns'
+import type { SaleReturn, SaleReturnSourceOrder, ReturnItem, SaleReturnReverseTask } from '@/api/returns'
 import DataTable from '@/components/shared/DataTable'
 import type { TableColumn } from '@/types'
 import type { FinderResult } from '@/types/finder'
@@ -493,6 +493,71 @@ function TaskProgressCard({ task }: { task: SaleReturn['task'] }) {
   )
 }
 
+const REVERSE_PROGRESS_STEPS = [
+  { status: 2, label: '拣货中' },
+  { status: 6, label: '待出库' },
+  { status: 7, label: '已出库' },
+]
+
+/**
+ * 返货出库卡片（任务 1 第二期）：退货单已有合格品入库、取消时不会直接取消，
+ * 而是挂着这张出库单等仓库把货退回客户。没有这张卡片，用户点完取消只看到
+ * 「退货单还是已确认」，无从知道货还在仓库里等着出、也不知道该催谁。
+ */
+function ReverseTaskCard({ reverse }: { reverse: SaleReturnReverseTask }) {
+  const currentIdx = REVERSE_PROGRESS_STEPS.findIndex(s => s.status === reverse.status)
+  return (
+    <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-5 space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold text-foreground">返货出库（把已入库的货退回客户）</h3>
+          <p className="mt-0.5 text-xs text-muted-foreground">返货出库单：{reverse.taskNo}</p>
+        </div>
+        <SoftStatusLabel label={reverse.statusName} tone={reverse.status === 7 ? 'success' : 'active'} />
+      </div>
+      <p className="text-xs text-muted-foreground">
+        该退货单已有合格品入库，不能直接取消。请仓库按 PDA 出库流程把这批货退回客户，
+        出库完成后退货单自动取消；在此之前退货单保持「已确认」。
+      </p>
+      {reverse.status !== 7 && (
+        <div className="flex items-center gap-1">
+          {REVERSE_PROGRESS_STEPS.map((step, idx) => {
+            const isDone = currentIdx >= 0 && idx < currentIdx
+            const isCurrent = idx === currentIdx
+            return (
+              <div key={step.status} className="flex items-center gap-1 flex-1 last:flex-none">
+                <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${
+                  isDone ? 'bg-primary/10 text-primary'
+                    : isCurrent ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                    : 'bg-muted/30 text-muted-foreground'
+                }`}>
+                  <span>{isDone ? '✓' : isCurrent ? '●' : '○'}</span>
+                  <span>{step.label}</span>
+                </div>
+                {idx < REVERSE_PROGRESS_STEPS.length - 1 && (
+                  <div className={`h-px flex-1 min-w-[8px] ${isDone ? 'bg-primary/30' : 'bg-border'}`} />
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+      {reverse.containers.length > 0 && (
+        <div className="rounded-md border border-amber-200 bg-card p-3 text-xs space-y-1">
+          <p className="font-medium text-foreground">
+            待退回客户的库存条码（{reverse.containers.length} 个）
+          </p>
+          {reverse.containers.map(c => (
+            <p key={c.id} className="text-muted-foreground">
+              {c.barcode} · {c.productName} · {c.qty} 件
+            </p>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabPath: string }) {
   const qc = useQueryClient()
   const detailQuery = useQuery({
@@ -521,10 +586,20 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
   async function handleCancel() {
     try {
       setPending(true)
-      await cancelSaleReturnApi(returnId)
+      const res = await cancelSaleReturnApi(returnId)
       await qc.invalidateQueries({ queryKey: ['return-sale-detail', returnId] })
       await qc.invalidateQueries({ queryKey: ['returns'] })
-      toast.success('已取消')
+      // 已有合格品入库时后端生成返货出库单（202）而非直接取消，退货单此刻仍是已确认
+      if (res?.pendingReverse) {
+        toast.success(
+          res.alreadyRequested
+            ? `该退货单已有进行中的返货出库单 ${res.taskNo}，无需重复申请`
+            : `退货单已有合格品入库，已生成返货出库单 ${res.taskNo}；请到仓库任务中完成返货出库，出库后退货单自动取消`,
+          8000,
+        )
+      } else {
+        toast.success('已取消')
+      }
     } finally { setPending(false); setCancelOpen(false) }
   }
 
@@ -555,6 +630,7 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
       />
 
       <OrderDetailSections type="sale-return" id={ret.id} progress={ret.task ? <TaskProgressCard task={ret.task} /> : undefined}>
+      {ret.reverseTask && <ReverseTaskCard reverse={ret.reverseTask} />}
       <SectionCard title="基础信息" compact>
         <dl className="grid grid-cols-3 gap-x-6 gap-y-3 text-sm">
           {[
@@ -620,7 +696,7 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
       <ConfirmDialog
         open={cancelOpen}
         title="取消销售退货单"
-        description="取消后此退货单将无法恢复，请确认操作。"
+        description="取消后此退货单将无法恢复，请确认操作。若该退货单已有合格品入库，系统不会直接取消，而是生成一张返货出库单，等仓库把这批货退回客户后自动取消。"
         variant="destructive"
         confirmText="确认取消"
         loading={pending}

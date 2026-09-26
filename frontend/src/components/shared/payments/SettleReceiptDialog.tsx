@@ -16,10 +16,13 @@ import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { getPaymentsApi, getStatementsApi, createReceiptApi, settleReceiptApi,
   type PaymentRecord, type PaymentReceipt, type ReconciliationStatement } from '@/api/payments'
 import { getActiveAccountsApi } from '@/api/finance'
-import { createRequestKey } from '@/lib/requestKey'
 import { toast } from '@/lib/toast'
 import { confirmAction } from '@/lib/confirm'
 import { formatDisplayDate, todayYmd } from '@/lib/dateTime'
+import { BackfillRequestDialog } from './BackfillRequestDialog'
+import { UncertainSubmitNotice } from './UncertainSubmitNotice'
+import { useIdempotentSubmit } from './useIdempotentSubmit'
+import { isBackfillApplication, useBackfillPrompt } from './backfillFlow'
 
 interface Props {
   open: boolean
@@ -69,8 +72,26 @@ export function SettleReceiptDialog({ open, onClose, type, settlementTypes, rece
   /** recordId → 分配金额（字符串，便于处理输入中间态） */
   const [alloc, setAlloc] = useState<Record<number, string>>({})
 
+  // 请求键轮换时机交给守卫（见 useIdempotentSubmit）：成功与明确被拒才换，超时/断网与期间已结账保留
+  const guard = useIdempotentSubmit({
+    action: isContinue ? 'payment.receipt.settle' : 'payment.receipt.create',
+    prefix: 'receipt',
+  })
+
+  // 上一次填的是哪一张汇款单（null＝「新建」）。用来区分「重新打开同一笔」与「换了另一笔」：
+  // 后者是另一笔业务，表单必须按新的业务对象重建，不能沿用上一张的往来方与金额。
+  const lastReceiptIdRef = useRef<number | null | undefined>(undefined)
+  // 取成局部常量：稳定引用，且能直接进下面 effect 的依赖数组
+  const isUncertain = guard.isUncertain
+
   useEffect(() => {
     if (!open) return
+    const targetId = receipt?.id ?? null
+    const sameTarget = lastReceiptIdRef.current === targetId
+    lastReceiptIdRef.current = targetId
+    // 同一笔业务、且上次提交的结果还没确认时不重置：表单与请求键一并保留，用户可原样重试
+    // （后端按同一个请求键认定同一笔）。换掉请求键再录一遍，可能把同一笔收付款登记两次。
+    if (sameTarget && isUncertain()) return
     setPartyName(receipt?.partyName ?? '')
     setPartyId(receipt?.partyId ?? null)
     setFinderOpen(false)
@@ -80,7 +101,8 @@ export function SettleReceiptDialog({ open, onClose, type, settlementTypes, rece
     setAccountId(receipt?.accountId ? String(receipt.accountId) : '')
     setRemark('')
     setAlloc({})
-  }, [open, receipt])
+    // isUncertain 是稳定引用（见 useIdempotentSubmit），放进依赖不会让这个 effect 重跑
+  }, [open, receipt, isUncertain])
 
   // 往来方确定后才拉候选；status!==3 由前端过滤（接口的 status 只能传单值）
   const { data, isFetching } = useQuery({
@@ -139,23 +161,35 @@ export function SettleReceiptDialog({ open, onClose, type, settlementTypes, rece
     if (left > 0) toast.warning(`账款已全部分配完，仍有 ${money(left)} 未分配，将留作预${actionLabel}`)
   }
 
+  const { prompt, ask, close: closePrompt } = useBackfillPrompt()
+
   const mut = useMutation({
-    mutationFn: async () => {
+    mutationFn: async ({ backfillReason }: { backfillReason?: string } = {}) => {
+      guard.remember(`${actionLabel} ${money(totalAmount)} · ${payDate} · ${partyName.trim()}`)
       const allocations = Object.entries(alloc)
         .map(([id, v]) => ({
           ...(byStatement ? { statementId: Number(id) } : { recordId: Number(id) }),
           amount: Number(v) || 0,
         }))
         .filter(a => a.amount > 0)
-      const key = createRequestKey('receipt')
-      if (isContinue && receipt) return settleReceiptApi(receipt.id, allocations, key)
+      const cfg = { skipGlobalError: true }
+      if (isContinue && receipt) return settleReceiptApi(receipt.id, allocations, guard.keyRef.current, backfillReason, cfg)
       return createReceiptApi({
         type, ...(partyId ? { partyId } : {}), partyName: partyName.trim(), amount: totalAmount,
         paymentDate: payDate, method, accountId: Number(accountId),
         remark: remark || undefined, allocations,
-      }, key)
+      }, guard.keyRef.current, backfillReason, cfg)
     },
     onSuccess: (res) => {
+      guard.settle()
+      // 202 申请单：业务一行未写、账户没动，只有审批通过后才会记账，所以这些视图都不必失效；
+      // 必须把单号与查看进度的地方说清楚，否则「已提交」很容易被当成钱已经收/付了
+      if (isBackfillApplication(res)) {
+        closePrompt()
+        onClose()
+        toast.success(`已提交补录申请 ${res.applicationNo}，审批通过后才会记账；进度见「财务 › 跨期补录审批」`)
+        return
+      }
       qc.invalidateQueries({ queryKey: ['payments'] })
       qc.invalidateQueries({ queryKey: ['reconciliation'] })
       qc.invalidateQueries({ queryKey: ['payment-receipts'] })
@@ -167,6 +201,23 @@ export function SettleReceiptDialog({ open, onClose, type, settlementTypes, rece
       toast.success(left > 0 ? `${actionLabel}登记成功，还有 ${money(left)} 未核销` : `${actionLabel}登记并核销完成`)
       onClose()
     },
+    onError: (e) => {
+      const kind = guard.classify(e)
+      // 业务日期落在已结账期间：日期是事实不能改，改走补录申请（确认后复用同一个请求键重发）
+      if (kind === 'period-closed') {
+        ask((e as Error).message, (
+          <>
+            {actionLabel} {money(totalAmount)} · {payDate}
+            {!isContinue && <> · 账户「{(accounts ?? []).find(a => String(a.id) === accountId)?.name ?? '—'}」</>}
+            <br />{partyLabel}：{partyName.trim()}{isContinue && receipt ? ` · 汇款单 ${receipt.receiptNo}` : ''}
+          </>
+        ), reason => mut.mutate({ backfillReason: reason }))
+        return
+      }
+      // 未确认：提示条已说清「可能已成功、先查回执」，不再弹「提交失败」把人推向重复提交
+      if (kind === 'uncertain') return
+      toast.error(e instanceof Error ? e.message : '提交失败')
+    },
   })
 
   const canSubmit = partyName.trim() && totalAmount > 0 && unallocated >= -1e-6 && !mut.isPending
@@ -176,7 +227,7 @@ export function SettleReceiptDialog({ open, onClose, type, settlementTypes, rece
     <>
       <AppDialog
         open={open}
-        onOpenChange={v => { if (!v) onClose() }}
+        onOpenChange={v => { if (!v) { onClose(); closePrompt() } }}
         dialogId="payment-receipt-settle"
         title={isContinue ? `继续核销 — ${receipt?.receiptNo}` : `登记${actionLabel}并核销`}
         defaultWidth={1120}
@@ -197,11 +248,11 @@ export function SettleReceiptDialog({ open, onClose, type, settlementTypes, rece
                   description: `账户「${acc.name}」当前余额 ${money(acc.currentBalance)}，本次付款 ${money(totalAmount)} 将形成负余额。确认继续？`,
                   variant: 'destructive',
                   confirmText: '仍然付款',
-                  onConfirm: () => mut.mutate(),
+                  onConfirm: () => mut.mutate({}),
                 })
                 return
               }
-              mut.mutate()
+              mut.mutate({})
             }}>
               {mut.isPending ? '提交中…' : (allocatedTotal > 0 ? `确认核销 ${money(allocatedTotal)}` : '仅登记不核销')}
             </Button>
@@ -209,6 +260,18 @@ export function SettleReceiptDialog({ open, onClose, type, settlementTypes, rece
         }
       >
         <div ref={bodyRef} tabIndex={-1} className="flex h-full flex-col gap-4 overflow-y-auto p-5 focus:outline-none">
+          <UncertainSubmitNotice
+            visible={guard.uncertain}
+            pending={guard.checkMut.isPending}
+            what={guard.lastLabelRef.current ?? undefined}
+            onCheck={() => guard.checkLastResult(() => {
+              qc.invalidateQueries({ queryKey: ['payments'] })
+              qc.invalidateQueries({ queryKey: ['payment-receipts'] })
+              qc.invalidateQueries({ queryKey: ['finance-accounts'] })
+              toast.success(`上次提交的${actionLabel}已成功，无需重复登记`)
+              onClose()
+            })}
+          />
           <div className="grid grid-cols-[minmax(160px,1fr)_minmax(220px,1.4fr)_1fr_1fr] gap-4">
             <div className="space-y-1 col-span-2">
               <Label>{partyLabel} *</Label>
@@ -328,6 +391,15 @@ export function SettleReceiptDialog({ open, onClose, type, settlementTypes, rece
       {type === 2
         ? <CustomerFinder open={finderOpen} onClose={() => setFinderOpen(false)} onConfirm={party => { setPartyId(party.id); setPartyName(party.name); setAlloc({}); setFinderOpen(false) }} />
         : <SupplierFinder open={finderOpen} onClose={() => setFinderOpen(false)} onConfirm={party => { setPartyId(party.id); setPartyName(party.name); setAlloc({}); setFinderOpen(false) }} />}
+
+      <BackfillRequestDialog
+        open={!!prompt}
+        onClose={closePrompt}
+        message={prompt?.message ?? ''}
+        summary={prompt?.summary}
+        pending={mut.isPending}
+        onConfirm={reason => prompt?.onConfirm(reason)}
+      />
     </>
   )
 }

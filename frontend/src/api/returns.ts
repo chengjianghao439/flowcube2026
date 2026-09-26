@@ -5,7 +5,12 @@ import { withRequestKeyHeaders } from '@/lib/requestKey'
 export interface ReturnItem { id:number; sourceItemId?:number|null; productId:number; productCode:string; productName:string; articleNumber?:string|null; spec?:string|null; color?:string|null; unit:string; entryUnit?:string; quantity:number; entryQty?:number; conversionRate?:number; unitPrice:number; amount:number }
 export interface ReturnLinkedTask { id:number; taskNo:string; status:number; statusName:string; rejectedQty?:number; rejectedContainers?:RejectedContainer[] }
 export interface PurchaseReturn { id:number; returnNo:string; supplierId:number; supplierName:string; warehouseId:number; warehouseName:string; purchaseOrderId?:number|null; purchaseOrderNo?:string; status:1|2|3|4; statusName:string; totalAmount:number; remark?:string; operatorName:string; createdAt:string; items?:ReturnItem[]; task?:ReturnLinkedTask|null }
-export interface SaleReturn { id:number; returnNo:string; customerId:number; customerName:string; warehouseId:number; warehouseName:string; saleOrderId?:number|null; saleOrderNo?:string; status:1|2|3|4; statusName:string; totalAmount:number; remark?:string; operatorName:string; createdAt:string; items?:ReturnItem[]; task?:ReturnLinkedTask|null }
+export interface ReverseTaskContainer { id:number; barcode:string; qty:number; productId:number; productName:string }
+export interface SaleReturnReverseTask {
+  id:number; taskNo:string; status:number; statusName:string
+  shippedAt?:string|null; createdAt:string; containers:ReverseTaskContainer[]
+}
+export interface SaleReturn { id:number; returnNo:string; customerId:number; customerName:string; warehouseId:number; warehouseName:string; saleOrderId?:number|null; saleOrderNo?:string; status:1|2|3|4; statusName:string; totalAmount:number; remark?:string; operatorName:string; createdAt:string; items?:ReturnItem[]; task?:ReturnLinkedTask|null; reverseTask?:SaleReturnReverseTask|null }
 export interface ReturnSourceOrderItem { sourceItemId:number; productId:number; productCode:string; productName:string; articleNumber?:string|null; spec?:string|null; color?:string|null; unit:string; quantity:number; returnedQty:number; remainingQty:number; unitPrice:number; amount:number }
 export interface PurchaseReturnSourceOrder { id:number; orderNo:string; supplierId:number; supplierName:string; warehouseId:number; warehouseName:string; items:ReturnSourceOrderItem[] }
 export interface SaleReturnSourceOrder { id:number; orderNo:string; customerId:number; customerName:string; warehouseId:number; warehouseName:string; items:ReturnSourceOrderItem[] }
@@ -38,7 +43,9 @@ export const getSaleReturnSourceOrderApi = (orderNo:string) => client.get<SaleRe
 export const createSaleReturnApi     = (d:object, requestKey?: string) =>
   client.post<{id:number; returnNo:string}>('/returns/sale', d, requestKey ? { headers: withRequestKeyHeaders(requestKey) } : undefined)
 export const confirmSaleReturnApi    = (id:number) => client.post<null>(`/returns/sale/${id}/confirm`)
-export const cancelSaleReturnApi     = (id:number) => client.post<null>(`/returns/sale/${id}/cancel`)
+/** 已有合格品入库时不能直接取消：后端返回 202 并生成返货出库单，取消动作要等仓库出库完成。 */
+export interface SaleReturnCancelResult { pendingReverse: true; taskId: number; taskNo: string; alreadyRequested: boolean }
+export const cancelSaleReturnApi     = (id:number) => client.post<SaleReturnCancelResult | null>(`/returns/sale/${id}/cancel`)
 
 // ─── PDA 退货任务 API ──────────────────────────────────────────────
 export const getPdaReturnTasksApi = () =>
