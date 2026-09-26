@@ -295,6 +295,17 @@ async function scanOut(id, { containerBarcode }, operator, requestKey, scopeWare
     if (c.locked_by_task_id) throw new AppError('该库存条码已被其他任务锁定', 409)
     if (c.transfer_order_id) throw new AppError('该库存条码已在其他调拨在途中', 409)
 
+    // 商品名取自主档 product_items.name。容器表没有这一列，此前 `SELECT *` 下的 c.product_name
+    // 恒为 undefined，事件描述与 scan-out 回执里的商品名一直是空的（PDA 提示显示成「✓ 已出库  ×1」）。
+    // 也不用 transfer_order_items.product_name：那是建单请求体直接写入的显示名，服务端没有归一化，
+    // 不可信。这里用普通读、不并入上面的 FOR UPDATE —— 并入会让 product_items 行也进入锁定范围，
+    // 破坏本文件多处死锁事故注释所依据的「只锁维度行 + 容器行」锁序；名称是展示信息，快照读足够。
+    const [[prod]] = await conn.query(
+      'SELECT name FROM product_items WHERE id = ? AND deleted_at IS NULL',
+      [c.product_id],
+    )
+    const productName = prod?.name ?? null
+
     const qty = Number(c.remaining_qty)
     const allocations = await allocateTransferQuantity(conn, id, c.product_id, qty, 'out')
     // 复检源仓可用量（available = ACTIVE 容器合计 − reserved）≥ 本容器搬出量。
@@ -345,12 +356,12 @@ async function scanOut(id, { containerBarcode }, operator, requestKey, scopeWare
     }
     await recordTransferEvent(conn, {
       transferOrderId: id, orderNo: orderRow.order_no, eventType: TRANSFER_EVENT.SCAN_OUT,
-      title: '调出仓扫码出库', description: `容器#${c.barcode} ${c.product_name || ''} ×${qty}`,
+      title: '调出仓扫码出库', description: `容器#${c.barcode} ${productName || ''} ×${qty}`,
       operatorId: operator?.userId ?? null, operatorName: operator?.realName ?? null,
       requestId: getRequestId(), payload: { containerId: c.id, barcode: c.barcode, productId: c.product_id, qty },
     })
 
-    const result = { transferId: Number(id), containerBarcode: c.barcode, productId: c.product_id, productName: c.product_name, qty }
+    const result = { transferId: Number(id), containerBarcode: c.barcode, productId: c.product_id, productName, qty }
     await completeOperationRequest(conn, requestState, { data: result, message: '出库成功', resourceType: 'transfer_order', resourceId: Number(id) })
     await commitFulfillment(conn, 'transfer', id)
     return result
@@ -401,6 +412,14 @@ async function scanIn(id, { containerBarcode, locationId }, operator, requestKey
     if (!loc) throw new AppError('库位不存在或已停用', 404)
     if (Number(loc.warehouse_id) !== toWh) throw new AppError('库位与调入仓库不一致', 400)
 
+    // 同 scanOut：商品名取自主档 product_items.name（容器表无此列，`SELECT *` 下恒为 undefined），
+    // 普通读、不并入上面的 FOR UPDATE，避免把 product_items 行拉进锁定范围。
+    const [[prod]] = await conn.query(
+      'SELECT name FROM product_items WHERE id = ? AND deleted_at IS NULL',
+      [c.product_id],
+    )
+    const productName = prod?.name ?? null
+
     const qty = Number(c.remaining_qty)
     const allocations = await allocateTransferQuantity(conn, id, c.product_id, qty, 'in')
     await conn.query(
@@ -434,7 +453,7 @@ async function scanIn(id, { containerBarcode, locationId }, operator, requestKey
 
     await recordTransferEvent(conn, {
       transferOrderId: id, orderNo: orderRow.order_no, eventType: TRANSFER_EVENT.SCAN_IN,
-      title: '调入仓扫码入库', description: `容器#${c.barcode} ${c.product_name || ''} ×${qty} → 库位#${loc.id}`,
+      title: '调入仓扫码入库', description: `容器#${c.barcode} ${productName || ''} ×${qty} → 库位#${loc.id}`,
       operatorId: operator?.userId ?? null, operatorName: operator?.realName ?? null,
       requestId: getRequestId(), payload: { containerId: c.id, barcode: c.barcode, productId: c.product_id, qty, locationId: Number(locationId) },
     })
@@ -460,7 +479,7 @@ async function scanIn(id, { containerBarcode, locationId }, operator, requestKey
       })
     }
 
-    const result = { transferId: Number(id), containerBarcode: c.barcode, productId: c.product_id, productName: c.product_name, qty, completed }
+    const result = { transferId: Number(id), containerBarcode: c.barcode, productId: c.product_id, productName, qty, completed }
     await completeOperationRequest(conn, requestState, { data: result, message: completed ? '调拨完成' : '入库成功', resourceType: 'transfer_order', resourceId: Number(id) })
     await commitFulfillment(conn, 'transfer', id)
     return result
@@ -525,7 +544,7 @@ async function forceCloseInTransit(id, operator, { reason } = {}, scopeWarehouse
       throw new AppError('只有"在途"状态的调拨单才能异常了结', 409)
     }
     const [containers] = await conn.query(
-      'SELECT id, barcode, product_id, product_name, remaining_qty FROM inventory_containers WHERE transfer_order_id=? AND status=? AND deleted_at IS NULL FOR UPDATE',
+      'SELECT id, barcode, product_id, remaining_qty FROM inventory_containers WHERE transfer_order_id=? AND status=? AND deleted_at IS NULL FOR UPDATE',
       [id, CONTAINER_STATUS.PENDING_PUTAWAY],
     )
     if (!containers.length) {

@@ -1,7 +1,7 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { getInboundClosureThresholds } = require('../../utils/inboundThresholds')
-const { assertBoundWarehouseInScope } = require('../../utils/warehouseScope')
+const { assertBoundWarehouseInScope, scopeFilter } = require('../../utils/warehouseScope')
 const { fmt } = require('./print-jobs.helpers')
 const {
   STATUS,
@@ -83,19 +83,30 @@ async function findByIdWithExecutor(exec, id) {
   })
 }
 
-async function getStatsCounts() {
-  const [[p]] = await pool.query('SELECT COUNT(*) AS c FROM print_jobs WHERE status=?', [STATUS.PENDING])
-  const [[f]] = await pool.query('SELECT COUNT(*) AS c FROM print_jobs WHERE status=?', [STATUS.FAILED])
+async function getStatsCounts(scopeWarehouseIds = null) {
+  // 仓库数据权限（2026-09-26 一致性审查）：与 findAll 同口径。此前统计不传范围，
+  // 限仓用户能看到全公司待打/失败任务数，泄漏其它仓的打印负载。
+  const scope = scopeFilter(scopeWarehouseIds, 'warehouse_id')
+  const [[p]] = await pool.query(
+    `SELECT COUNT(*) AS c FROM print_jobs WHERE status=? ${scope.sql}`, [STATUS.PENDING, ...scope.params],
+  )
+  const [[f]] = await pool.query(
+    `SELECT COUNT(*) AS c FROM print_jobs WHERE status=? ${scope.sql}`, [STATUS.FAILED, ...scope.params],
+  )
   return { pending: Number(p.c), failed: Number(f.c) }
 }
 
-async function listPrinterHealth() {
+async function listPrinterHealth(scopeWarehouseIds = null) {
+  // 同上：打印机健康按打印机绑仓过滤，限仓用户不得看到其它仓打印机的错误率/延迟。
+  const scope = scopeFilter(scopeWarehouseIds, 'p.warehouse_id')
   const [rows] = await pool.query(
     `SELECT h.printer_id, h.error_rate, h.avg_latency_ms, h.sample_count, h.updated_at,
             p.code AS printer_code, p.name AS printer_name
      FROM printer_health_stats h
      LEFT JOIN printers p ON p.id = h.printer_id
+     WHERE 1=1 ${scope.sql}
      ORDER BY h.printer_id ASC`,
+    scope.params,
   )
   return rows.map((r) => ({
     printerId: Number(r.printer_id),

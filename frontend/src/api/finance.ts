@@ -1,4 +1,5 @@
 import { payloadClient as client } from './client'
+import { withRequestKeyHeaders } from '@/lib/requestKey'
 import type { Pagination } from '@/types'
 
 /** 资金账户。currentBalance 是流水投影，服务端重算，前端只读 */
@@ -128,8 +129,27 @@ export const cancelExpenseClaimApi   = (id: number) => client.post<unknown>(`/fi
 export const approveExpenseClaimApi  = (id: number) => client.post<unknown>(`/finance/expense-claims/${id}/approve`)
 export const rejectExpenseClaimApi   = (id: number, reason: string) =>
   client.post<unknown>(`/finance/expense-claims/${id}/reject`, { reason })
-export const payExpenseClaimApi = (id: number, d: { accountId: number; happenedAt?: string; remark?: string }) =>
-  client.post<unknown>(`/finance/expense-claims/${id}/pay`, d)
+/**
+ * 报销付款。带 requestKey 幂等（后端 beginResourceOperationRequest，action=expense.pay.<id>）：
+ * 连点/断网重试不会重复出账；缺请求键时后端放行老客户端。
+ *
+ * backfillReason 有值＝这次不是「付款」，而是把它**提交成一张跨期补录申请**：付款日期落在
+ * 已结账期间时后端 409，业务入口据此改走审批流，用**同一个 requestKey** 重发并带上原因。
+ * 此时返回体是申请单 `{ applicationNo }`（HTTP 202），不是付款结果——调用方按 applicationNo
+ * 是否存在区分，不能因为 HTTP 状态拿不到就当成功。
+ */
+export const payExpenseClaimApi = (
+  id: number,
+  d: { accountId: number; happenedAt?: string; remark?: string },
+  requestKey?: string,
+  backfillReason?: string,
+  config?: { skipGlobalError?: boolean },
+) =>
+  client.post<{ id: number; status: number; amount: number; applicationNo?: string }>(
+    `/finance/expense-claims/${id}/pay`,
+    backfillReason ? { ...d, backfillRequest: true, backfillReason } : d,
+    requestKey ? { ...config, headers: withRequestKeyHeaders(requestKey) } : config,
+  )
 
 // ── 资金看板 ──────────────────────────────────────────────────────────────────
 

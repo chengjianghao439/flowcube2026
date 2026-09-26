@@ -84,15 +84,18 @@ interface SnapshotBody {
   accountId?: number | null
   remark?: string | null
   allocations?: AllocationItem[]
+  // 报销付款专用：业务日期（后端快照写 happenedAt，与收付款的 paymentDate 不是同一个键）
+  happenedAt?: string | null
   // 退款专用：申请当时的出款账户/金额/日期/客户，执行时会拿它们核对单据有没有被改过
   refundDate?: string | null
   saleOrderNo?: string | null
   customerName?: string | null
 }
 interface Snapshot {
-  kind: 'payment' | 'receipt' | 'receipt_settle' | 'refund'
+  kind: 'payment' | 'receipt' | 'receipt_settle' | 'expense_pay' | 'refund'
   recordId?: number
   receiptId?: number
+  claimId?: number
   orderId?: number
   warehouseIds?: number[] | null
   body?: SnapshotBody
@@ -101,7 +104,8 @@ interface Snapshot {
 function readSnapshot(raw: unknown): Snapshot | null {
   if (!raw || typeof raw !== 'object') return null
   const kind = (raw as { kind?: unknown }).kind
-  return kind === 'payment' || kind === 'receipt' || kind === 'receipt_settle' || kind === 'refund'
+  return kind === 'payment' || kind === 'receipt' || kind === 'receipt_settle'
+    || kind === 'expense_pay' || kind === 'refund'
     ? raw as Snapshot
     : null
 }
@@ -173,6 +177,14 @@ function SnapshotFields({ raw, accountName, warehouseName }: {
             <span className="text-xs text-muted-foreground">核销明细</span>
             <AllocationLines items={b.allocations} />
           </div>
+        </>
+      )}
+      {snap.kind === 'expense_pay' && (
+        <>
+          <Field label="付款账户" value={accountName(b.accountId)} />
+          <Field label="报销单" value={snap.claimId ? `#${snap.claimId}` : dash} mono />
+          <Field label="付款日期" value={b.happenedAt ? formatDisplayDate(b.happenedAt) : dash} />
+          <div className="col-span-2"><Field label="备注" value={b.remark || dash} /></div>
         </>
       )}
       {snap.kind === 'refund' && (

@@ -33,6 +33,10 @@ import {
   approveExpenseClaimApi, rejectExpenseClaimApi, payExpenseClaimApi,
   getExpenseCategoriesApi, type ExpenseClaim, type ExpenseClaimItem,
 } from '@/api/finance'
+import { BackfillRequestDialog } from '@/components/shared/payments/BackfillRequestDialog'
+import { UncertainSubmitNotice } from '@/components/shared/payments/UncertainSubmitNotice'
+import { useIdempotentSubmit } from '@/components/shared/payments/useIdempotentSubmit'
+import { isBackfillApplication, useBackfillPrompt } from '@/components/shared/payments/backfillFlow'
 import type { TableColumn } from '@/types'
 
 const STATUS_OPTIONS = [
@@ -124,6 +128,11 @@ export default function ExpenseClaimsPage() {
   const [rejectTarget, setRejectTarget] = useState<ExpenseClaim | null>(null)
   const [rejectReason, setRejectReason] = useState('')
 
+  const { prompt, ask, close: closePrompt } = useBackfillPrompt()
+  // 请求键轮换时机交给守卫：成功与明确被拒才换键，超时/断网与期间已结账一律保留——
+  // 补录申请必须用**同一个键**重发，换了键后端会把同一笔付款记两遍。
+  const guard = useIdempotentSubmit({ action: 'expense.pay', prefix: 'expense-pay' })
+
   const PAGE_SIZE = 20
   const { data, isLoading } = useQuery({
     queryKey: ['expense-claims', query],
@@ -196,8 +205,43 @@ export default function ExpenseClaimsPage() {
     onSuccess: () => { invalidate(); setFormOpen(false); toast.success(editingId ? '报销单已保存' : '报销单已创建') },
   })
   const payMut = useMutation({
-    mutationFn: () => payExpenseClaimApi(payTarget!.id, { accountId: Number(payAccount) }),
-    onSuccess: () => { invalidate(); setPayTarget(null); toast.success('付款完成，已记入账户流水') },
+    // id 从调用参数取而不是读 payTarget 闭包：补录弹窗的确认回调是旧渲染里存下的函数，
+    // 读闭包会拿到过期的单据。请求键同理由 guard 持有。
+    mutationFn: ({ id, backfillReason }: { id: number; backfillReason?: string }) => {
+      guard.remember(`报销付款 ${money(payTarget?.totalAmount ?? 0)} · ${payTarget?.claimNo ?? ''}`)
+      return payExpenseClaimApi(id, { accountId: Number(payAccount) }, guard.keyRef.current, backfillReason, { skipGlobalError: true })
+    },
+    onSuccess: (res) => {
+      guard.settle()
+      closePrompt()
+      setPayTarget(null)
+      // 202 申请单不是「付款成功」：业务一行未写、钱还没动。单号与去哪看进度必须一起说清楚，
+      // 否则一句「已提交」很容易被当成钱已经付了。
+      if (isBackfillApplication(res)) {
+        toast.success(`已提交补录申请 ${res.applicationNo}，审批通过后才会记账；进度见「财务 › 跨期补录审批」`)
+        return
+      }
+      invalidate()
+      toast.success('付款完成，已记入账户流水')
+    },
+    onError: (e) => {
+      const kind = guard.classify(e)
+      // 期间已结账：不改业务日期（那是事实），改走补录申请；确认后用**同一个请求键**重发
+      if (kind === 'period-closed' && payTarget) {
+        const id = payTarget.id
+        const accName = (accounts ?? []).find(a => String(a.id) === payAccount)?.name ?? '—'
+        ask((e as Error).message, (
+          <>
+            报销付款 {money(payTarget.totalAmount)} · 账户「{accName}」
+            <br />报销单 <span className="text-doc-code">{payTarget.claimNo}</span> · {payTarget.applicantName}
+          </>
+        ), reason => payMut.mutate({ id, backfillReason: reason }))
+        return
+      }
+      // 未确认：提示条已说清「可能已成功、先查回执」，再弹一句「付款失败」会把人推向重复付款
+      if (kind === 'uncertain') return
+      toast.error(e instanceof Error ? e.message : '付款失败')
+    },
   })
   const rejectMut = useMutation({
     mutationFn: () => rejectExpenseClaimApi(rejectTarget!.id, rejectReason.trim()),
@@ -439,17 +483,39 @@ export default function ExpenseClaimsPage() {
                   description: `账户「${acc.name}」当前余额 ${money(acc.currentBalance)}，本次付款 ${money(payTarget.totalAmount)} 将形成负余额。确认继续？`,
                   variant: 'destructive',
                   confirmText: '仍然付款',
-                  onConfirm: () => payMut.mutate(),
+                  onConfirm: () => payMut.mutate({ id: payTarget.id }),
                 })
                 return
               }
-              payMut.mutate()
+              if (payTarget) payMut.mutate({ id: payTarget.id })
             }}>
               {payMut.isPending ? '付款中…' : '确认付款'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* 「结果未确认」提示条：提交超时/断网时钱可能已经出账，唯一能确定成没成的办法是查回执 */}
+      <UncertainSubmitNotice
+        visible={guard.uncertain}
+        pending={guard.checkMut.isPending}
+        what={guard.lastLabelRef.current ?? undefined}
+        onCheck={() => guard.checkLastResult(() => {
+          invalidate()
+          toast.success('上次提交的报销付款已成功，无需重复付款')
+          setPayTarget(null)
+        })}
+      />
+
+      {/* 跨期补录申请：付款日期落在已结账期间时由后端 409 触发，确认后用同一个请求键重发 */}
+      <BackfillRequestDialog
+        open={!!prompt}
+        onClose={closePrompt}
+        message={prompt?.message ?? ''}
+        summary={prompt?.summary}
+        pending={payMut.isPending}
+        onConfirm={reason => prompt?.onConfirm(reason)}
+      />
 
       {/* 驳回 */}
       <Dialog open={!!rejectTarget} onOpenChange={v => !v && setRejectTarget(null)}>

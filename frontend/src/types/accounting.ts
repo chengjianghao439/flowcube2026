@@ -356,6 +356,7 @@ export const BACKFILL_BIZ_TYPE_OPTIONS: Array<{ value: string; label: string }> 
   { value: 'receipt', label: '收付款单登记' },
   { value: 'receipt_settle', label: '收付款核销' },
   { value: 'refund', label: '退款出账' },
+  { value: 'expense_pay', label: '报销付款' },
 ]
 
 /** 补录状态（筛选下拉；展示直接用后端 statusName） */

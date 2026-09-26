@@ -28,6 +28,7 @@ const { APPLICATION_NO_SQL, resolvePostingPeriod, markBackfillExecuted, STATUS }
 const paymentsSvc = require('../payments/payments.service')
 const receiptsSvc = require('../payments/payment-receipts.service')
 const refundSvc = require('../refunds/refund-orders.service')
+const expenseSvc = require('../finance/expense-claims.service')
 const voucherSvc = require('./accounting.voucher.service')
 
 const STATUS_NAME = { 0: '待审批', 1: '已批准', 2: '已驳回', 3: '历史遗留', 4: '已作废' }
@@ -37,6 +38,7 @@ const BIZ_TYPE_NAME = {
   receipt: '收付款单登记',
   receipt_settle: '收付款核销',
   refund: '退款出账',
+  expense_pay: '报销付款',
 }
 
 const SELECT_FIELDS = `
@@ -367,6 +369,7 @@ async function cancel(id, operator, { reason, canApprove = false } = {}, company
  *   · payment        { recordId, body }          → recordPayment(recordId, body, …)
  *   · receipt        { body }                    → receipts.create(body, …)
  *   · receipt_settle { receiptId, body }         → receipts.settle(receiptId, body, …)
+ *   · expense_pay    { claimId, body }           → expenseClaims.pay(claimId, body, …)
  *   · refund         { orderId, warehouseIds, body } → refunds.execute(orderId, …, warehouseIds, …)
  *     （refund 的 body 不是重放入参——退款的执行参数取自退款单本身——而是**核对基准**：
  *      execute 拿它比对锁行后的现值，不一致就拒绝执行。理由见那边的 SOURCE_DRIFT 注释。）
@@ -396,6 +399,8 @@ async function replay(conn, row, snapshot, postingPeriod) {
       return refundSvc.execute(snapshot.orderId, applicant, snapshot.warehouseIds ?? null, requestKey, {
         backfill, conn, expectedRefund: snapshot.body ?? null,
       })
+    case 'expense_pay':
+      return expenseSvc.pay(snapshot.claimId, snapshot.body, applicant, requestKey, { backfill, conn })
     default:
       throw new AppError(`未知的补录业务类型「${row.biz_type}」，无法自动补写，请人工处理`, 409, 'FINANCE_BACKFILL_UNKNOWN_BIZ')
   }

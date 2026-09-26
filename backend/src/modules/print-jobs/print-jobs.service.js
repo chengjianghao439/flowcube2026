@@ -22,8 +22,12 @@ async function findAll(params) {
   return query.findAll(params)
 }
 
-async function getStatsCounts() {
-  return query.getStatsCounts()
+async function getStatsCounts(scopeWarehouseIds = null) {
+  return query.getStatsCounts(scopeWarehouseIds)
+}
+
+async function listPrinterHealth(scopeWarehouseIds = null) {
+  return query.listPrinterHealth(scopeWarehouseIds)
 }
 
 module.exports = {
@@ -38,7 +42,7 @@ module.exports = {
   claimClientJobs: dispatch.claimClientJobs,
   expireStaleJobs: dispatch.expireStaleJobs,
   getStatsCounts,
-  listPrinterHealth: query.listPrinterHealth,
+  listPrinterHealth,
   findBarcodeRecords: query.findBarcodeRecords,
   reprintBarcodeRecord: labelCommand.reprintBarcodeRecord,
   STATUS,

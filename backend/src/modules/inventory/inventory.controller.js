@@ -191,6 +191,7 @@ async function splitContainer(req, res, next) {
       targetContainerId: targetContainerId != null ? Number(targetContainerId) : null,
       userId:     req.user.userId,
       userName:   req.user.realName || req.user.username || null,
+      requestKey: extractRequestKey(req),
     }, req.user?.warehouseIds ?? null)
     return successResponse(res, result, '拆分成功')
   } catch (e) { next(e) }

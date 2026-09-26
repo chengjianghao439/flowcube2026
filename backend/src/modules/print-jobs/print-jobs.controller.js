@@ -53,7 +53,7 @@ async function claimClientJobs(req, res, next) {
 
 async function stats(req, res, next) {
   try {
-    return successResponse(res, await svc.getStatsCounts())
+    return successResponse(res, await svc.getStatsCounts(req.user?.warehouseIds ?? null))
   } catch (e) {
     next(e)
   }
@@ -110,7 +110,7 @@ async function reprintBarcode(req, res, next) {
 
 async function printerHealth(req, res, next) {
   try {
-    return successResponse(res, await svc.listPrinterHealth())
+    return successResponse(res, await svc.listPrinterHealth(req.user?.warehouseIds ?? null))
   } catch (e) {
     next(e)
   }

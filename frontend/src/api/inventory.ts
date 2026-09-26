@@ -124,11 +124,15 @@ export interface SplitContainerResult {
   warehouseId: number
 }
 
+// 拆分层同样是「扣减源容器余量 + 新建容器 + 写流水」的真实库存写操作，网络重试不得重复拆分；
+// 稳定 X-Request-Key 由后端 extractRequestKey 消费，重放返回原回执（2026-09-26 一致性审查 · 任务 4 续）。
 export const splitContainerApi = async (
   containerId: number,
   body: { qty: number; remark?: string; printLabel?: boolean; targetContainerId?: number },
+  requestKey?: string,
 ) =>
-  apiClient.post<SplitContainerResult>(`/inventory/containers/${containerId}/split`, body, { skipGlobalError: true })
+  apiClient.post<SplitContainerResult>(`/inventory/containers/${containerId}/split`, body,
+    requestKey ? { skipGlobalError: true, headers: withRequestKeyHeaders(requestKey) } : { skipGlobalError: true })
 
 // ─── 补货建议与补货策略（文档 01）──────────────────────────────────────────────
 

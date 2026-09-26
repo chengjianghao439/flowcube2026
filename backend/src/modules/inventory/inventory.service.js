@@ -7,7 +7,7 @@ const { adjustContainerStock, SOURCE_TYPE, splitContainer, syncStockFromContaine
 const { getInventoryDisplayProjectionSql } = require('./inventoryProjection')
 const { normalizePagination } = require('../../utils/pagination')
 const { getExpectedStock } = require('../../utils/expectedStock')
-const { completeOperationRequest } = require('../../utils/operationRequest')
+const { beginResourceOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { assertQtyPrecisionWith } = require('../../utils/qtyPrecision')  // 商品级数量精度开关（迁移 254）
 
 // ─── 库存查询 ─────────────────────────────────────────────────────────────────
@@ -1106,7 +1106,7 @@ async function assignContainerLocation(containerId, locationId, scopeWarehouseId
 /**
  * 同仓容器拆分（散件）：单容器扣减并生成新塑料盒条码（B），可选打印新标签
  */
-async function splitContainerOp(containerId, { qty, remark, printLabel, targetContainerId, userId, userName = null }, scopeWarehouseIds = null) {
+async function splitContainerOp(containerId, { qty, remark, printLabel, targetContainerId, userId, userName = null, requestKey = null }, scopeWarehouseIds = null) {
   const { enqueueContainerLabelJob } = require('../print-jobs/print-jobs.service')
   const conn = await pool.getConnection()
   let result
@@ -1114,12 +1114,28 @@ async function splitContainerOp(containerId, { qty, remark, printLabel, targetCo
     await conn.beginTransaction()
     // 拆分前先做仓库数据权限校验（2026-09-18 审计 P0-2）：拆分 = 扣减源容器余量 + 新建容器
     // + 写库存流水，属于真实库存写操作，必须先确认调用方有权访问该容器所在仓库。
+    // **必须排在幂等回执之前**（2026-09-27 二轮独立审阅 · 任务 4 补修）：回执里带着新盒条码、
+    // 新容器 ID 与仓库，是真实的库存信息。若先返回回执再校验范围，操作者的仓库范围之后被撤销，
+    // 仍能用旧请求键重放读到这些信息——幂等只应免掉「重复执行」的副作用，不免掉「现在还有没有权读」。
+    // 这条查询不加锁（普通读），提前不改变锁顺序。
     const [[scopeRow]] = await conn.query(
       'SELECT warehouse_id FROM inventory_containers WHERE id=? AND deleted_at IS NULL',
       [containerId],
     )
     if (!scopeRow) throw new AppError('库存条码不存在', 404)
     assertInScope(scopeWarehouseIds, scopeRow.warehouse_id, '库存容器')
+
+    // 幂等（2026-09-26 一致性审查 · 任务 4 续）：拆分 = 扣减源容器余量 + 新建容器 + 写库存流水，
+    // 与手动出库同为真实库存写。连点/断网重试不得重复扣减、重复建容器，否则一次拆分扣两次。
+    // 资源级 action 绑定源容器 ID（container.split.<id>），与移库/出库同范式；缺请求键时放行老客户端。
+    const requestState = await beginResourceOperationRequest(conn, {
+      requestKey, action: 'container.split', userId: userId ?? null,
+      resourceType: 'inventory_container', resourceId: Number(containerId),
+    })
+    if (requestState.replay) {
+      await conn.rollback()
+      return requestState.responseData ?? null
+    }
     result = await splitContainer(conn, {
       containerId, qty, remark, targetContainerId,
       operatorId: userId ?? null, operatorName: userName,
@@ -1163,6 +1179,9 @@ async function splitContainerOp(containerId, { qty, remark, printLabel, targetCo
         result.printJobIds.push(Number(job.id))
       }
     }
+    await completeOperationRequest(conn, requestState, {
+      data: result, message: '拆分成功', resourceType: 'inventory_container', resourceId: Number(containerId),
+    })
     await conn.commit()
   } catch (e) {
     await conn.rollback()

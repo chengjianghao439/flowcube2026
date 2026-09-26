@@ -86,4 +86,10 @@
 - `Build PDA APK` 对每次 main push 运行前置门；同版已发布时跳过构建，发布提交只改后端迁移也不会缺 PDA 运行。构建并发组绑定目标 SHA，后续提交不能取消仍在构建的发布提交；`[skip ci]` 提交仍不作发布目标。路径过滤漏触发与并发绑定由 `tests/release-orchestration.test.js` 守住。
 - 本机中转对失败的大分段先有界重试，再只把该分段拆成 256 KiB 子区间；其余已完成分段保留在本轮下载中。完整 ZIP 和原文件仍按 GitHub 摘要、大小、唯一成员及接收端 runner 预期摘要核对，不能以分段完成数代替验收；见 `tests/local_release_relay_test.py`。
 - smoke 凭据由 `ssh-smoke-stdin.sh` 经 NUL 分隔 stdin 传输，远端 shell 内建 read 后导出，不再出现在 SSH 命令参数。仍属于远程进程环境，不能将此描述为消除了所有凭据可见性。
+
+### 2026-09-26 打印统计与打印机健康的仓库范围
+
+- 打印任务列表 `findAll` 与详情 `findById` 早已按 `req.user.warehouseIds` 过滤，但 **`/stats`（`getStatsCounts`）与 `/printer-health`（`listPrinterHealth`）原是无参数调用**：限仓用户打开打印中心，统计照样报出全公司的待打/失败任务数，健康页列出全部仓库打印机的错误率与延迟。同一份数据、两个出口、两套口径——列表看不见的，统计照样看得见。
+- 现两处都接 `scopeWarehouseIds`（controller 传 `req.user?.warehouseIds ?? null`）：**统计按 `print_jobs.warehouse_id`**、**健康按打印机 `printers.warehouse_id`**，与列表同口径——`/stats` 的 `pending` 必须等于 `/api/print-jobs?status=pending` 的 `pagination.total`。不限仓（`roleId=1`，`warehouseIds` 为 null）保持全量；限仓时 `scopeFilter` 生成 `IN (...)`，绑 null 仓的全局共享打印机与「无打印机」`print_jobs` 行不出现在限仓结果里，那是给不限仓账号看的。
+- 回归 `tests/print-jobs-warehouse-scope.smoke.test.js`：§A 用增量断言对历史残留免疫、§B 统计与列表同口径且列表无他仓单据、§C 健康过滤并逐台回库核对打印机绑仓。
 - 生产 CORS 启动时拒绝反射与 `*`，部署前须明确 Web/PDA 来源及独立 Electron null 开关。v0.11.0 发布准备中已保留服务器本地原配置备份并设置 Web、当前内置 PDA 及 Electron 所需来源；更改在应用重启后生效，实际客户端仍须验收。

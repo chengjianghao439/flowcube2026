@@ -1,7 +1,7 @@
 /**
  * PDA 同仓库存拆分 /pda/split
  */
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { parseBarcode } from '@/utils/barcode'
@@ -12,12 +12,16 @@ import PdaBottomBar from '@/components/pda/PdaBottomBar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { getContainerByBarcodeApi, splitContainerApi } from '@/api/inventory'
+import { createRequestKey } from '@/lib/requestKey'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { formatPdaActionError } from '@/utils/displayFormatters'
 
 export default function PdaSplitPage() {
   const navigate = useNavigate()
   const { flash, ok, err } = usePdaFeedback()
+  // 稳定幂等键：一次拆分复用同一 key，断网重试不重复扣减源容器/新建容器；
+  // 成功后轮换供下一次拆分（2026-09-26 一致性审查 · 任务 4 续）。
+  const keyRef = useRef(createRequestKey('container-split'))
   const [step, setStep] = useState<'scan' | 'qty'>('scan')
   const [containerId, setContainerId] = useState<number | null>(null)
   const [barcode, setBarcode] = useState<string | null>(null)
@@ -66,9 +70,10 @@ export default function PdaSplitPage() {
       if (!containerId) throw new Error('no container')
       const q = Number(qtyStr)
       if (!Number.isFinite(q) || q <= 0) throw new Error('数量无效')
-      return splitContainerApi(containerId, { qty: q, printLabel })
+      return splitContainerApi(containerId, { qty: q, printLabel }, keyRef.current)
     },
     onSuccess: (res) => {
+      keyRef.current = createRequestKey('container-split')
       ok(`拆分成功：新塑料盒条码 ${res.newBarcode}`)
       setStep('scan')
       setContainerId(null)

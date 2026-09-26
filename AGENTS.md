@@ -19,15 +19,15 @@
 
 > 这些**没有 CI 拦截**，全靠动手前对照；每条都指向实现位置，详细背景见对应主题文档（§4）。
 
-- **撤回收货拒绝在途调拨容器**：`transfer_order_id` 非空即 409（`inbound-tasks.void.js`）
+- **撤回收货拒绝「已不属于本仓」的容器**，三道守卫都要在：① `transfer_order_id` 非空（调拨在途）；② 容器 `warehouse_id` 已不在任务所属仓（整箱调拨已完成，409 `INBOUND_TASK_CONTAINER_MOVED_AWAY`）；③ 容器**曾参与过调拨**——`inventory_logs` 里有 `ref_type='transfer'` 的调出/调入流水（409 `INBOUND_TASK_CONTAINER_TRANSFERRED`）。②③ 不能只认容器当前仓库，③ 还**不能只查撤回候选容器**：候选集只有 ACTIVE/待上架/EMPTY，而在途异常了结（`forceCloseInTransit`）把在途容器置 **VOID** 并清空 `transfer_order_id`，容器同时脱离候选集、摘掉在途标记，四道守卫会全落空——故 ③ 按**该收货单名下全部未删除容器**是否有调拨流水判定（覆盖 A→B→A 往返与异常了结两种形态，但不误伤无调拨流水的普通作废）。回归 `tests/inbound-void-transferred-container.smoke.test.js`（§D 往返 / §E 异常了结 / §F 普通作废仍放行）（`inbound-tasks.void.js`、`transfer.service.js`）
 - **盘点扫码账面查询必须带 `locked_by_task_id IS NULL`**，action 用 `stockcheck.scan.<盘点单ID>` + 幂等回执（`stockcheck.service.js`、PDA `stockcheck.tsx`）
 - **行已有预占时禁止更换发货仓库**：400 `RESERVE_WAREHOUSE_CHANGE_NOT_ALLOWED`（`sale.service.js`）
 - **销售收入凭证**按已发原值占比净额化折扣、税额夹到折后净额；退货冲回成本用 `COALESCE(soi.cost_snapshot,0)` 且去掉 `product_items` JOIN，兜底留给 `reports.query.js`（`voucher-engine.js`）
 - **采购结算毛额子查询必须按 `(order_id, product_id)` 关联并先跑来源断言**，脏单抛 `INBOUND_PURCHASE_SOURCE_INVALID` / `PURCHASE_LEGACY_RECEIPT_UNRECONCILED`（`voucher-engine.js`）
-- **移库/拆分必须 `assertInScope`**（移库还须目标库位同仓）；`resync-stock` 是写操作，走 `inventory.adjust`（`inventory.controller.js`、`inventory.service.js`）
+- **移库/拆分必须 `assertInScope`**（移库还须目标库位同仓），且**幂等回放前必须先复核当前范围**（回执带着新盒条码等真实库存信息，范围被撤销后同键重放也要 403 `WAREHOUSE_SCOPE_DENIED`）；`resync-stock` 是写操作，走 `inventory.adjust`（`inventory.controller.js`、`inventory.service.js`）
 - **仓库范围写路由必须行锁、禁止自我提权，限仓创建账号继承范围、代授权不得超出自身范围**：`USER_SCOPE_SELF_FORBIDDEN`（`PUT /users/:id/warehouse-scope`）
 - **范围校验必须覆盖读写路径**：`scan-logs` 四条写路径、`POST /admin/putaway`、`findMyTasks`/`findMyTaskSkuSummary`/`getTaskStats`（空范围返回空）
-- **范围校验还必须覆盖**：`GET /products/finder`、`GET /containers/overdue`、`GET /returns/{purchase,sale}/source-order`（逐行校验发货仓）、`GET /approvals/biz/:bizType/:bizId`（`BIZ_DOC_META` + `sys_role_permissions`，未知 400）、`print-jobs` 列表与条码补打
+- **范围校验还必须覆盖**：`GET /products/finder`、`GET /containers/overdue`、`GET /returns/{purchase,sale}/source-order`（逐行校验发货仓）、`GET /approvals/biz/:bizType/:bizId`（`BIZ_DOC_META` + `sys_role_permissions`，未知 400）、`print-jobs` 列表 / **统计 `/stats`** / **打印机健康 `/printer-health`** / 条码补打（统计与健康分别按 `print_jobs.warehouse_id` 与打印机 `printers.warehouse_id` 过滤；回归 `tests/print-jobs-warehouse-scope.smoke.test.js`）
 - **`print-jobs` 三张条码子查询分别用 `c.` / `wt.` / `j.warehouse_id`**；SQL 文本替换必须带足上下文并真跑三种范围
 - **`complete-local` 同 `complete-client`/`fail-client` 做工作站校验**；写路由必须 `requirePermission`（`fulfillment.routes.js`）
 - **数量精度是两位小数（0.01）**：所有数量列 `DECIMAL(_,2)`，用户原量及未取整换算结果超过两位先拒绝，合法值再用 `unitConversion.roundQty`；**金额/单价/授信仍旧四位**，别一起改。改动精度要 grep 全仓 `10000`（乘与除都要改）（`docs/business-semantics.md`）
@@ -59,7 +59,7 @@
 - **服务器 SSH 访问必须复用连接**（`-o ControlMaster=auto -o ControlPath=… -o ControlPersist=…`），并把多条只读查询合并进一次会话；反复新建短连接会被 sshd 限流（2026-09-19 实测：本机 IP 被限流数十分钟，同期 HTTPS 仍正常）
 - **改共用函数或路由契约后，发版前统一跑全量套件**（调用点补 `X-Client-Id`）；调试故障所需的最小验证可提前跑
 - **普通资金登记用共享锁、补录与结账用排他锁**：`lockAccountingCompanyShared`（`FOR SHARE`）vs `lockAccountingCompany`（`FOR UPDATE`）；**全排他就会让并发登记排队、全共享就会让结账挡不住写入**——两侧别"顺手统一"。加锁顺序固定「账套→账户→对账单→账款」。`acct_periods` 主键是 `(company_id, period)`、**没有 `id` 列**（`accounting.period-lock.js`；回归 `tests/finance-period-lock-order.smoke.test.js`，已接 CI）
-- **资金期间闸门与跨期补录**：业务日期落在已结账期间的收付款登记/核销/退款出账默认 409 `FINANCE_PERIOD_CLOSED`；特权补录 `finance.period.backfill` 落痕 `finance_period_backfills`，补录凭证落**审批当天所属期间**（资金流水 `happened_at` 保持业务日期），生成是「业务提交后**立即** + 逐笔核对」，核对不过才留 `voucher_generate_error`（`finance-period.guard.js`、`finance-backfills.service.js`；详见 `docs/finance-permission-time.md`）
+- **资金期间闸门与跨期补录**：业务日期落在已结账期间的收付款登记/核销/退款出账/报销付款默认 409 `FINANCE_PERIOD_CLOSED`；特权补录 `finance.period.backfill` 落痕 `finance_period_backfills`，补录凭证落**审批当天所属期间**（资金流水 `happened_at` 保持业务日期），生成是「业务提交后**立即** + 逐笔核对」，核对不过才留 `voucher_generate_error`（`finance-period.guard.js`、`finance-backfills.service.js`；回归 `tests/expense-pay-period-guard.smoke.test.js`；详见 `docs/finance-permission-time.md`）
 - **返货出库全程不动会计**：`sale_return_out` 跳过复核/打包、走独立待出库列表、重复取消**幂等不 409**；状态 1/2 的退货应收**从未冲减**，故**既不冲减也不加回**（加回＝多收客户、再冲减＝少收客户）（详见 `docs/business-semantics.md`）
 - **非单据应付只认有借方科目的行**：`buildUnbilledPayable` 按 `payment_records.debit_account_code` 取科目，**NULL = 历史未分类，跳过不猜科目**（`voucher-engine.js`、迁移 `259`）
 

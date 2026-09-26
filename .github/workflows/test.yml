@@ -540,3 +540,12 @@ jobs:
         run: npm --prefix backend run migrate
       - name: 退货、跨期补录、应付、权限与幂等闭环
         run: npm run smoke:audit-20260926
+      # 2026-09-26 一致性审查确认修复的四项，同一独占库内串行执行（每项自建夹具、自洁）
+      - name: 撤回收货拒绝「货已不在本仓」的容器（整箱调拨已完成）
+        run: npm run smoke:inbound-void-transferred-container
+      - name: 报销付款受已结账期间闸门约束（含特权补录落期）
+        run: npm run smoke:expense-pay-period-guard
+      - name: 打印统计与打印机健康遵守仓库数据权限
+        run: npm run smoke:print-jobs-warehouse-scope
+      - name: 容器拆分按稳定请求键幂等（同键重放回原回执）
+        run: npm run smoke:container-split-idempotency
