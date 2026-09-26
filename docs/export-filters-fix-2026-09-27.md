@@ -75,7 +75,7 @@
 | 库存引擎 / 缓存 | 已读实现 + 守卫对照 |
 | 权限 / 仓库范围 | 已读实现 + 红线标识符批量扫描（23 项中 22 项命中；唯一"缺"实为 SQL 生成列 `active_unique_guard`，非漂移） |
 | 定时任务 / 恢复重试 | 仅定位（`scheduler.js` 13 个 worker） |
-| 审批流 / 发票 / 薪资 / HR / 固定资产 | **仍为盲区**（本轮只做了 P6 的**权限码**扫描，未查审批流的审批人判定与业务规则；见 §9） |
+| 审批流（业务后果侧） | **部分已查**：三条链的发起/审批/拒绝/撤回/待办（见 §9.3）；发票 / 薪资 / HR / 固定资产**仍为盲区** |
 | PDA 真机 / 物理打印 | **仍为盲区**（未做） |
 | 浏览器实操 | **已做**：P1 的导出页与 P3 的补打中心均由 **Codex** 在真实浏览器实操（见 §1.3、§7.4） |
 | 权限码语义（P6） | **已扫**：294 条写路由全量扫描，见 §9 |
@@ -91,7 +91,7 @@
 | P5 | 数据新鲜度：`queryClient.ts:15` `refetchOnWindowFocus:false` + 5min `staleTime` | 机会项，**未动** |
 | P6 | 权限码"选得对不对"无机械守卫（`route-permission-contract.test.js:15` 自陈只判"有没有"） | **本轮已扫**（294 条写路由）：7 处挂只读类权限码，**逐一核对后 7 处均为设计选择、未发现越权**；守卫的盲区仍在（它不判"选得对不对"），但本轮抽样没有因选错码而失守；见 §9 |
 | P7 | 测试夹具自洁缺口未逐个排查（`warehouse-scope` 等） | 盲区，**未动** |
-| P8 | 审批流/发票/薪资/HR/固定资产未纳入一致性调查 | 盲区，**未动** |
+| P8 | ~~审批流未纳入一致性调查~~ → **业务后果侧已查三条链**（授信/采购申请/改价），本轮**未发现真实缺陷**；发票 / 薪资 / HR / 固定资产**仍未覆盖** | **部分已查，见 §9.3** |
 
 ## 4. 在途分支（不属于本轮，未触碰）
 
@@ -267,6 +267,25 @@
 `route-permission-contract.test.js:15` 自陈「只做『有没有』的机械判定，不试图判断权限码选得对不对」——**这个盲区确实存在**（否则不会需要人工逐一核对这 7 处）。但**本轮抽样没有因选错码而失守**。若要机械化治理，方向是「建立权限码语义分类（读/写/管理）+ 断言写路由不得挂只读类码」，**仍需为每条例外写明理由**——本次这 7 处的注释正是范例。
 
 **证据索引**：`/tmp/p6-scan.js`（扫描）、`/tmp/p6-approval-probe.js`（反例）；代码 `price-change.routes.js:24-25`、`price-change.service.js:157-190`、`engine/approvalEngine.js:142-189`、`constants/permissions.js:233-235`、`tests/route-permission-contract.test.js`。
+
+### 9.3 审批链的业务后果侧（2026-09-27，只读）
+
+挑三条**有业务后果**的链，追发起 → 指派/代办 → 同意/拒绝 → 撤回 → 重复提交 → 事务失败与状态回写。
+
+| 链 | 审批通过的实际副作用 | 拒绝 / 撤回后 | 判定 |
+|---|---|---|---|
+| 授信超额放行 `credit-overrides` | **无持久副作用**——放行不是"改额度"，申请单只作为凭据，**出库时按客户/额度/本单净额快照核对** | 引擎 `rejectStep` + 状态→已驳回（记 `reject_reason`）/ `cancelInstance` + 已取消；同一事务 | **设计选择，自洽** |
+| 采购申请 `purchase-requisitions` | 实例**最终**通过才 2→3 已批准；**不碰库存/账款** | `cancelInstance`（同事务）+ `submitted_at=NULL` | **设计选择，自洽** |
+| 改价 `price-change` | **唯一有业务后果**：`applyApprovedPrice` 改 `product_items` 对应价格列 + 写 `product_price_history` | 状态机 `cancel: from [1]`（未生效）⇒ **已生效改价不可能被撤销** | **设计选择，自洽** |
+
+**三链共性**：
+- **待办不遗留**：`approvalEngine.cancelInstance` 把 `approval_instance_tasks` 中 `status=1` 的置 3（`comment='申请人撤销'`），而 `listPendingTasks` 只取 `status=1` ⇒ 撤销后不会留下悬挂待办；
+- **权限两层**：业务侧 `assertOwner`/`assertInScope` + 引擎侧 `assertCanApproveTask`（按 `approval_instance_task_approvers` 当前节点快照，超管豁免）；
+- **幂等**：均走 `beginOperationRequest`；`applyApprovedPrice` 另有 `status !== 2 → return` 的重复保护。
+
+**本轮未发现真实缺陷**。**未覆盖**（未实测，属推测或盲区）：同意与驳回**并发**到达；`allow_self_approve` 的授予边界；各链**发起时无匹配审批流**的行为（文档称返回明确业务错误，本轮未逐链实测）；发票 / 薪资 / HR / 固定资产。
+
+**证据索引**：`credit-overrides.service.js:118-190`、`purchase-requisitions.service.js:203-245`、`price-change.service.js:139-200`、`engine/approvalEngine.js:205-220`（`cancelInstance`）、`constants/documentStatusRules.js`（`priceChangeRequest` 状态机）。
 
 ---
 
