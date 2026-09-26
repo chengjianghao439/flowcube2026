@@ -51,15 +51,16 @@ const LIMITED_PW = 'SmokeLimited123!'
 
 /**
  * 把 mysql2 返回的 DATE 列（JS Date，按服务器/驱动时区还原）归一化成 YYYY-MM-DD。
- * 必须用本地 getter：驱动把 '1990-01-15' 的 DATE 还原为本地 1990-01-15 00:00，
- * 其 UTC 表示是 1990-01-14T16:00:00Z（东八区），直接 toISOString 比字符串会差一天。
+ * 驱动按 +08:00 把 DATE 还原为 1990-01-15 00:00，UTC 时间轴是前一天 16:00；
+ * 无论测试宿主处于北京时间还是 UTC，都必须按北京时间取年月日。
  * 与 finance-period.guard.toYmd / voucher-engine.toDateStr 同规则。
  */
 function ymdLocal(v) {
   if (v instanceof Date) {
-    const y = v.getFullYear()
-    const m = String(v.getMonth() + 1).padStart(2, '0')
-    const d = String(v.getDate()).padStart(2, '0')
+    const bj = new Date(v.getTime() + 8 * 3600 * 1000)
+    const y = bj.getUTCFullYear()
+    const m = String(bj.getUTCMonth() + 1).padStart(2, '0')
+    const d = String(bj.getUTCDate()).padStart(2, '0')
     return `${y}-${m}-${d}`
   }
   return String(v || '').slice(0, 10)

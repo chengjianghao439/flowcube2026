@@ -134,7 +134,7 @@ function SnapshotFields({ raw, accountName, warehouseName }: {
   if (!snap) {
     return (
       <div className="rounded-md bg-muted/40 p-2 text-xs text-muted-foreground">
-        这笔申请没有留下原请求快照（历史单子或更早版本写入）。请以原始业务单据为准核对后再批。
+        这笔申请没有留下申请时的业务信息（历史单子或更早版本写入）。请以原始业务单据为准核对后再批。
       </div>
     )
   }
@@ -505,7 +505,7 @@ export default function BackfillsPage() {
         title={`批准并记账「${approveTarget?.applicationNo ?? ''}」`}
         description={
           <>
-            <p>批准后<strong>立即</strong>按申请快照把业务记上：业务单据与资金流水（钱从哪个账户走）一起落库，凭证落期是「补录当期」——执行审批日所在的会计期间。</p>
+            <p>批准后<strong>立即</strong>按申请时记录的信息执行：业务单据与资金流水（钱从哪个账户走）一起保存，凭证记入「补录当期」——执行审批日所在的会计期间。</p>
             <p className="mt-1.5">
               随后系统再为这笔业务<strong>单独生成</strong>落在补录当期的调整凭证。这一步独立进行、<strong>可能失败</strong>：
               失败会停在「凭证待生成」，可在列表里重试，已经记上的业务不受影响。
@@ -564,7 +564,7 @@ export default function BackfillsPage() {
       <ConfirmDialog
         open={!!executeTarget}
         title={`重试记账「${executeTarget?.applicationNo ?? ''}」`}
-        description="按申请时的业务快照重新执行一次这笔业务。若原业务已被改动或作废，会再次失败——那时请作废这张单子重新申请。"
+        description="按申请时保存的业务信息重新执行一次这笔业务。若原业务已被改动或作废，会再次失败——那时请作废这张单子重新申请。"
         confirmText="确认重试"
         loading={executing}
         onConfirm={() => executeTarget && execute(executeTarget.id, {

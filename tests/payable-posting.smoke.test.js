@@ -97,17 +97,13 @@ async function main() {
       })
       return res
     }
-    const ymdOf = (v) => {
-      if (v instanceof Date) {
-        return `${v.getFullYear()}-${String(v.getMonth() + 1).padStart(2, '0')}-${String(v.getDate()).padStart(2, '0')}`
-      }
-      return String(v || '').slice(0, 10)
+    // mysql2 按 +08:00 解析 DATE；CI 主机为 UTC，必须按业务时区取年月日。
+    const beijingYmd = (value) => {
+      const d = new Date(value.getTime() + 8 * 60 * 60 * 1000)
+      return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
     }
-    const shiftToday = (days) => {
-      const d = new Date()
-      d.setDate(d.getDate() + days)
-      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-    }
+    const ymdOf = (v) => v instanceof Date ? beijingYmd(v) : String(v || '').slice(0, 10)
+    const shiftToday = (days) => beijingYmd(new Date(Date.now() + days * 24 * 60 * 60 * 1000))
     // 真实生成入口：会计在凭证页点「生成本期凭证」走的就是它（POST /api/accounting/vouchers/generate）。
     // 顺带做副作用校验：生成是只读业务表的推导，不允许改动 payment_records 的任何列。
     const businessSnapshot = async () => JSON.stringify(

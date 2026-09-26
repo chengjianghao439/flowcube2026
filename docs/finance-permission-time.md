@@ -58,7 +58,7 @@
 - refresh 请求复用运行时 API 基址和超时配置（含原生自定义服务器地址），并发 401 共用一次续期，失败统一清会话；不能从 Electron/file 或 Capacitor origin 请求相对 `/api`。
 - 公开登录/更新/健康检查与公司 Logo 等是现有明确例外，新增接口不得据此省略鉴权。Logo `<img>` 场景不能携带 Bearer；更改公开资源策略需核对桌面跨源加载。
 - `/health`、`/api/health` 为存活/网络检查；公开 `/api/ready` 用应用连接池执行只读探测，整体最多2秒，短缓存合并并发，仅返回就绪状态。新版本部署与服务监控使用 ready，回退尚无该接口的旧镜像才允许原存活检查。连接池获取默认最多5秒（`DB_ACQUIRE_TIMEOUT_MS`），超期返回503且不派发排队 SQL，迟到连接归还；不把已开始的事务用响应超时伪装成取消。
-- **业务日期唯一时区为北京时间**：前端复用 `lib/dateTime.ts`，后端复用 `utils/backendTime.js`，数据库/容器配置保持一致。禁止用 `toISOString().slice(0,10)` 充当北京业务日期。
+- **业务日期唯一时区为北京时间**：前端复用 `lib/dateTime.ts`，后端复用 `utils/backendTime.js`，数据库/容器配置保持一致。mysql2 从 `DATE` / `DATETIME` 读出的 `Date` 对象也须显式按北京时间取年月日，不依赖运行主机的本地时区。禁止用 `toISOString().slice(0,10)` 充当北京业务日期。
 - DATETIME 查询按既有半开区间处理，DATE 列按日期语义处理；不可机械统一为同一种边界。到期日等于北京今天时不算逾期。
 
 

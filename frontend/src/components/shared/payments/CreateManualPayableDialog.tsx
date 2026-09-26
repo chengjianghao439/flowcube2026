@@ -162,7 +162,7 @@ export function CreateManualPayableDialog({ open, onClose }: Props) {
         // （backend/src/utils/operationRequest.js），事务提交前另一个连接读不到。
         // 保持「未确认」与原请求键，两种情况都安全（判定依据见 receiptDecision）。
         markUncertain(true)
-        setError('当前还查不到这次提交：可能仍在处理中（服务端事务未提交时查不到回执记录），也可能没有送达。请勿改动内容重录——用同一份内容再点一次「创建」即可，同一个请求键会被认作同一笔，不会重复入账；想改内容请先点「查询上次结果」确认。')
+        setError('当前还查不到这次提交：可能仍在处理中，也可能没有送达。请保留已填内容，稍后查询上次结果；如需重试，请用相同内容再次点击「创建」，系统会识别为同一笔，不会重复入账。确认结果前请勿修改内容后重新录入。')
         return
       }
       // failed：服务端明确写下了失败行，这时才换键重试

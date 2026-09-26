@@ -73,13 +73,13 @@ function expectedPostingPeriod() {
 }
 
 /**
- * 把 mysql2 返回的 DATE 列归一化成 YYYY-MM-DD。必须用本地 getter：驱动把 '1990-01-15'
- * 还原为本地 1990-01-15 00:00，其 UTC 表示是 1990-01-14T16:00:00Z（东八区），
- * 直接 toISOString 比字符串会差一天。与 finance-period.guard.toYmd 同规则。
+ * 把 mysql2 返回的 DATE 列归一化成 YYYY-MM-DD。驱动按 +08:00 解析，
+ * 测试宿主即使处于 UTC 也须按北京时间取年月日。
  */
 function ymdLocal(v) {
   if (v instanceof Date) {
-    return `${v.getFullYear()}-${String(v.getMonth() + 1).padStart(2, '0')}-${String(v.getDate()).padStart(2, '0')}`
+    const bj = new Date(v.getTime() + 8 * 3600 * 1000)
+    return `${bj.getUTCFullYear()}-${String(bj.getUTCMonth() + 1).padStart(2, '0')}-${String(bj.getUTCDate()).padStart(2, '0')}`
   }
   return String(v || '').slice(0, 10)
 }

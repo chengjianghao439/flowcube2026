@@ -26,6 +26,7 @@ const { SALE_TYPES, loadSaleShipmentFacts, projectSaleShipments, reconcileSalePe
 const { lockAccountingCompany } = require('./accounting.period-lock')
 const { reviseSourceVoucher } = require('./voucher-source-revisions')
 const { normalizeSaleLegs, saleBalance } = require('./voucher-sale-money')
+const { beijingTodayYmd } = require('../../utils/backendTime')
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100
 
@@ -34,17 +35,12 @@ function fundAccountCode(accountType) {
   return Number(accountType) === 2 ? '1001' : '1002'
 }
 
-/** mysql2 的 DATE/DATETIME 返回 Date 对象或字符串，统一成 'YYYY-MM-DD'（本地时区，连接池 +08:00） */
+/** mysql2 的 DATE/DATETIME 返回 Date 对象或字符串，按北京时间统一成 'YYYY-MM-DD' */
 function toDateStr(v) {
   if (!v) {
     throw new AppError('凭证缺少业务发生日期', 500, 'ACCT_VOUCHER_NO_DATE')
   }
-  if (v instanceof Date) {
-    const y = v.getFullYear()
-    const m = String(v.getMonth() + 1).padStart(2, '0')
-    const d = String(v.getDate()).padStart(2, '0')
-    return `${y}-${m}-${d}`
-  }
+  if (v instanceof Date) return beijingTodayYmd(v)
   return String(v).slice(0, 10)
 }
 const periodOf = (dateStr) => dateStr.slice(0, 4) + dateStr.slice(5, 7)

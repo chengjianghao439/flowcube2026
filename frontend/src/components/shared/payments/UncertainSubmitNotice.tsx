@@ -22,9 +22,9 @@ export function UncertainSubmitNotice({ visible, pending, onCheck, what }: {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs">
       <span className="text-muted-foreground">
-        上次提交没有收到确定答复，服务端可能已经记账{what ? `（${what}）` : ''}。
+        上次提交没有收到确定答复，系统可能已经记账{what ? `（${what}）` : ''}。
         请先点「查询上次结果」；查清之前请勿关掉重开重新录入，也不要改动内容后再提交——
-        同一次提交服务端会沿用上次的内容，重复提交不会重复记账，但改了金额再提交也不会按新金额记账。
+        同一次提交系统会沿用上次的内容，重复提交不会重复记账，但改了金额再提交也不会按新金额记账。
       </span>
       <Button type="button" size="sm" variant="outline" onClick={onCheck} disabled={pending}>
         {pending ? '查询中…' : '查询上次结果'}

@@ -116,7 +116,7 @@ export function useIdempotentSubmit({ action, prefix }: { action: string; prefix
           toast.warning('上次提交仍在服务器处理中，请稍后再点「查询上次结果」')
           return
         }
-        toast.warning('服务器暂时查不到这次提交：可能仍在处理中，也可能没有送达。不要换内容重录——用同一份内容再提交一次即可（服务端会认作同一笔，不会重复记账）')
+        toast.warning('系统暂时查不到这次提交：可能仍在处理中，也可能没有送达。不要换内容重录——用同一份内容再提交一次即可（系统会识别为同一笔，不会重复记账）')
       },
       onError: () => toast.error('查询上次结果失败，请稍后再试。确认之前请不要关掉重开重新录入，以免重复提交'),
     })

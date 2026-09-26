@@ -436,7 +436,7 @@ async function execute(id, operator, companyId = 1) {
       ? (typeof row.request_snapshot === 'string' ? JSON.parse(row.request_snapshot) : row.request_snapshot)
       : null
     if (!snapshot) {
-      throw new AppError('该申请缺少原始请求快照，无法自动补写业务。请人工按申请内容登记后，另行生成凭证。', 409, 'FINANCE_BACKFILL_NO_SNAPSHOT')
+      throw new AppError('该申请缺少原始请求资料，无法自动补写业务。请人工按申请内容登记后，另行生成凭证。', 409, 'FINANCE_BACKFILL_NO_SNAPSHOT')
     }
 
     // 执行前复核「补录当期」：从申请到批准之间会计可能把当期也结了，此时凭证无处可落。

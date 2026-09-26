@@ -46,16 +46,11 @@ const STATUS = {
 
 /**
  * 业务日期归一化为 YYYY-MM-DD。
- * 与 voucher-engine.toDateStr 同规则（Date 用本地 getter，字符串取前 10 位）——
+ * 与 voucher-engine.toDateStr 同规则（Date 按北京时间取字段，字符串取前 10 位）——
  * 两处必须一致，否则「凭证落在哪个期间」与「闸门拦哪个期间」会错位。
  */
 function toYmd(v) {
-  if (v instanceof Date) {
-    const y = v.getFullYear()
-    const m = String(v.getMonth() + 1).padStart(2, '0')
-    const d = String(v.getDate()).padStart(2, '0')
-    return `${y}-${m}-${d}`
-  }
+  if (v instanceof Date) return beijingTodayYmd(v)
   return String(v || '').slice(0, 10)
 }
 
