@@ -1,5 +1,6 @@
 const { pool } = require('../../config/db')
 const { scopeFilter } = require('../../utils/warehouseScope')
+const { CONTAINER_STATUS } = require('../../engine/containerEngine')
 
 const WAREHOUSE_SELECT = 'w.name AS warehouse_name, w.code AS warehouse_code'
 const WAREHOUSE_JOIN = 'LEFT JOIN inventory_warehouses w ON w.id=d.warehouse_id'
@@ -64,11 +65,18 @@ async function readLabelVariables(type, { id = null, scopeWarehouseIds = null, c
     if (type === 6 || type === 9) {
       where.push('d.barcode LIKE ?')
       params.push(type === 6 ? 'I%' : 'B%')
+      // latest 取样同样排除作废容器：这条分支供打印模板预览挑「一条样例数据」
+      // （print-templates.preview.js 的 latestLabel），不排除就会拿已作废容器（qty=0）
+      // 当样例。与下面 by-id 分支保持同口径。
+      where.push(`d.status <> ${CONTAINER_STATUS.VOID}`)
     }
     if (type === 7) where.push('wt.deleted_at IS NULL', 'd.status<>3')
   } else {
     where.push('d.id=?')
     params.push(id)
+    // 作废容器不参与取变量：与箱贴分支（type=7）排除 `d.status<>3` 同口径，作为「补打入口
+    // 已单独拒绝 VOID」之外的第三道防线——任何走这条路的调用方都取不到已作废容器的数据。
+    if (type === 6 || type === 9) where.push(`d.status <> ${CONTAINER_STATUS.VOID}`)
   }
   const scope = type === 8 ? { sql: '', params: [] }
     : scopeFilter(scopeWarehouseIds, type === 7 ? 'wt.warehouse_id' : 'd.warehouse_id')

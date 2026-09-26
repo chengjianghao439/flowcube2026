@@ -1,4 +1,4 @@
-type PrintStatusKey = 'no_job' | 'unassigned' | 'queued' | 'printing' | 'success' | 'failed' | 'timeout' | 'cancelled' | 'unknown' | string
+type PrintStatusKey = 'no_job' | 'unassigned' | 'queued' | 'printing' | 'success' | 'failed' | 'timeout' | 'cancelled' | 'voided' | 'voided_job' | 'unknown' | string
 
 const BACKEND_CODE_LABELS: Record<string, string> = {
   PRINT_JOB_STATE_CONFLICT: '打印任务状态已变化，请刷新后重试',
@@ -23,6 +23,10 @@ const PRINT_STATUS_LABELS: Record<string, string> = {
   failed: '打印失败，可尝试补打',
   timeout: '打印超时，请确认打印机状态',
   cancelled: '打印任务已取消',
+  voided: '条码已作废，不能再补打',
+  // 打印任务因容器作废被撤回终结：**不是打印失败，是从未出纸**。刻意不沿用
+  // 「打印失败，可尝试补打」——补打入口对作废容器是明确拒绝的。
+  voided_job: '未出纸（容器已作废）',
   unknown: '打印状态未知',
 }
 

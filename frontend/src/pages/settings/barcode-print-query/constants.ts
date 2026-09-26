@@ -12,4 +12,6 @@ export const BARCODE_PRINT_STATUS_OPTIONS = [
   { value: 'failed', label: '打印失败' },
   { value: 'timeout', label: '超时待确认' },
   { value: 'cancelled', label: '已取消' },
+  // 容器作废（撤回收货等）：只对 VOID 收紧，其余容器状态照旧参与上方各筛选。
+  { value: 'voided', label: '条码已作废' },
 ] as const

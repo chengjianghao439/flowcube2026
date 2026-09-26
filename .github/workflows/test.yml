@@ -210,6 +210,12 @@ jobs:
       - name: 单元测试 — 打印调度策略/任务状态（纯函数，无需 DB）
         run: npm run test:print
 
+      # 作废容器（撤回收货等）不得补打：显示、筛选、计数必须同口径。
+      # 纯离线断言——显示按容器状态派生、筛选历来只看打印状态，两者不同源会让
+      # 「筛已打印」收进显示为「已作废」的行，这条守卫逐分支锁死。
+      - name: 契约测试 — 作废容器条码不得补打（显示/筛选/计数同口径）
+        run: npm run test:print-barcode-void
+
       - name: 单元测试 — 前后端权限码一致性（纯静态，无需 DB）
         run: npm run test:permissions
 
@@ -445,6 +451,17 @@ jobs:
 
       - name: 冒烟测试 — 打印领取令牌、过期、路由及份数
         run: npm run smoke:print-queue
+
+      # 真实库：① 补打接口拒绝已作废容器且不新增任务；② 撤回须一并终结「未领取」的
+      # PENDING 任务（领取端不校验业务对象，只堵补打入口挡不住已入队的那些）；③ 锁序与
+      # 两种并发顺序。必须跑在独立回环测试库。
+      - name: 冒烟测试 — 撤回后作废容器不得补打、未领取任务须终结（并发/锁序）
+        run: npm run smoke:print-barcode-void
+
+      # 真实业务路径：造可撤回收货单后走真正的 voidReceipt，验证撤回事务的完整副作用
+      # （容器 VOID、单据回退、未领取任务终结且不可领取），以及撤回被拒时不得误终结。
+      - name: 冒烟测试 — 撤回收货走真实 service 须终结未领取任务、被拒时不误终结
+        run: npm run smoke:print-barcode-void-receipt
 
       - name: 冒烟测试 — 打印任务过期/回收清理（队列防卡死）
         run: npm run test:print-purge

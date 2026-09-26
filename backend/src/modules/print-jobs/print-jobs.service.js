@@ -57,6 +57,7 @@ module.exports = {
   EXPIRE_MESSAGE,
   isStalledErrorMessage,
   reclaimJobsFromOfflineClients: dispatch.reclaimJobsFromOfflineClients,
+  voidPendingPrintJobsForContainers: dispatch.voidPendingPrintJobsForContainers,
   normalizeJobType: printDispatch.normalizeJobType,
   resolvePrinterForJob: printDispatch.resolvePrinterForJob,
 }

@@ -30,15 +30,32 @@ const CATEGORY_OPTIONS: Array<{ value: BarcodePrintCategory; label: string; hint
 /** 本页列表自动刷新间隔（毫秒）。页面文案直接引用它，避免文案与轮询周期再次对不上。 */
 const AUTO_REFRESH_MS = 15000
 
-function statusBadge(job: BarcodePrintRecord['latestJob']) {
+/** 「最近一次打印任务自身的结果」。注意它**不包含**条码的业务状态（见 barcodeStatusBadge）。 */
+function jobStatusBadge(job: BarcodePrintRecord['latestJob']) {
   if (!job) return <SoftStatusLabel label="未生成打印任务" tone="draft" />
   if (job.statusKey === 'unassigned') return <SoftStatusLabel label="未配置打印机" tone="warning" />
-  if (job.statusKey === 'success')   return <SoftStatusLabel label="已打印"     tone="success" />
-  if (job.statusKey === 'timeout')   return <SoftStatusLabel label="超时待确认" tone="warning" />
-  if (job.statusKey === 'failed')    return <SoftStatusLabel label="打印失败"   tone="danger" />
-  if (job.statusKey === 'cancelled') return <SoftStatusLabel label="已取消"     tone="danger" />
-  if (job.statusKey === 'printing')  return <SoftStatusLabel label="打印中"     tone="active" />
+  if (job.statusKey === 'success')    return <SoftStatusLabel label="已打印"     tone="success" />
+  if (job.statusKey === 'timeout')    return <SoftStatusLabel label="超时待确认" tone="warning" />
+  if (job.statusKey === 'failed')     return <SoftStatusLabel label="打印失败"   tone="danger" />
+  // 因容器作废被撤回终结：不是「打印失败」，而是从未出纸。
+  if (job.statusKey === 'voided_job') return <SoftStatusLabel label="未出纸"     tone="danger" />
+  if (job.statusKey === 'cancelled')  return <SoftStatusLabel label="已取消"     tone="danger" />
+  if (job.statusKey === 'printing')   return <SoftStatusLabel label="打印中"     tone="active" />
   return <SoftStatusLabel label="待派发" tone="draft" />
+}
+
+/**
+ * 状态列：条码的**业务状态**（入库条码由后端给 `barcodeStatusKey`）。
+ * 作废与「最近任务结果」是两件事——作废容器既有的任务可能仍显示「已打印」，
+ * 所以这里只画业务状态，任务结果留在「打印机 / 最近任务」列里单独展示。
+ * 出库/物流条码没有行级业务状态，退回任务结果，行为与改动前一致。
+ */
+function barcodeStatusBadge(record: BarcodePrintRecord) {
+  const key = record.barcodeStatusKey
+  // 容器作废：打印历史保留并照常显示，但不能再补打（后端补打接口另有独立拒绝，按钮禁用只是提前告知）
+  if (key === 'voided') return <SoftStatusLabel label="条码已作废" tone="danger" />
+  if (key === 'cancelled') return <SoftStatusLabel label="已取消" tone="danger" />
+  return jobStatusBadge(record.latestJob)
 }
 
 export default function BarcodePrintQueryPage() {
@@ -178,19 +195,30 @@ export default function BarcodePrintQueryPage() {
       },
       {
         key: 'latestJob',
-        title: '打印状态',
-        width: 120,
-        render: (_, row) => statusBadge(row.latestJob),
+        title: '条码状态',
+        width: 130,
+        render: (_, row) => (
+          <div className="space-y-1">
+            {barcodeStatusBadge(row)}
+            {/* 作废原因跟着**业务状态**走（解释为什么这张条码不能再补打），不跟任务结果混在一起 */}
+            {row.voidReason && (
+              <div className="text-[11px] leading-4 text-muted-foreground">原因：{row.voidReason}</div>
+            )}
+          </div>
+        ),
       },
       {
         key: 'printer',
-        title: '打印机 / 结果',
+        title: '打印机 / 最近任务',
         width: 220,
         render: (_, row) => (
           <div className="space-y-1 text-sm">
             <div>{row.latestJob?.printerName ?? (row.latestJob?.printerCode ? '已绑定打印机' : '—')}</div>
             <div className="text-xs leading-5 text-muted-foreground break-words" title={row.latestJob?.errorMessage ?? row.latestJob?.printStateLabel ?? undefined}>
-              {formatPrintStatus(row.latestJob?.statusKey, row.latestJob?.printStateLabel, row.latestJob?.errorMessage)}
+              {/* 明确标注是「任务」结果：与左侧的条码业务状态并列而非互相覆盖 */}
+              {row.latestJob
+                ? `最近任务：${formatPrintStatus(row.latestJob.statusKey, row.latestJob.printStateLabel, row.latestJob.errorMessage)}`
+                : '无打印任务'}
             </div>
             {row.latestJob?.printerCode && (
               <div className="text-[11px] text-muted-foreground">打印机编号：{row.latestJob.printerCode}</div>

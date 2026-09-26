@@ -9,6 +9,7 @@ const { assertInScope } = require('../../utils/warehouseScope')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { recomputePurchasePayable } = require('./inbound-tasks.settle')
 const { findById } = require('./inbound-tasks.query')
+const { voidPendingPrintJobsForContainers } = require('../print-jobs/print-jobs.service')
 
 /**
  * 撤回收货：把已收货（含已上架、已完成自动结算）的收货订单整单打回「待收货(1)」，
@@ -170,6 +171,11 @@ async function voidReceipt(taskId, operator, scopeWarehouseIds = null) {
         })
       }
     }
+
+    // 容器作废后，终结其**尚未被领取**的打印任务：这些已入队的 PENDING 任务会被打印客户端
+    // 照常领取（领取端 claimClientJobs 不校验业务对象状态），打出指向已作废容器（qty=0）的标签。
+    // 只动 PENDING；PRINTING 不宣称可撤销——标签可能已经出纸，放回可领取只会造成重复打印。
+    await voidPendingPrintJobsForContainers(conn, containers.map(c => c.id))
 
     await conn.query(
       'UPDATE inbound_task_items SET received_qty = 0, putaway_qty = 0 WHERE task_id = ?',

@@ -8,6 +8,7 @@ const {
   STATUS,
   EXPIRE_MESSAGE,
   CLIENT_OFFLINE_MESSAGE,
+  CONTAINER_VOID_MESSAGE,
   ttlMinutes,
   clientOfflineReclaimSeconds,
 } = require('./print-jobs.status')
@@ -181,6 +182,33 @@ async function expireStaleJobs() {
 }
 
 /**
+ * 容器被作废后（撤回收货等），终结其**尚未被领取**的打印任务。
+ *
+ * 为什么必须在撤回的同一事务里做：领取端 `claimClientJobs` 只看 print_jobs 自身状态与打印机
+ * 归属，**不校验业务对象**。所以已入队的 PENDING 任务在容器作废后仍会被照常领取，打出指向
+ * 已作废容器（qty=0）的标签——只堵「补打」入口挡不住这一半。
+ *
+ * 边界：
+ * - **只动 PENDING**。PRINTING 的任务可能已经把标签打出来了，放回可领取只会造成重复出纸；
+ *   与 `reclaimJobsFromOfflineClients` 的取舍一致（那里同样统一回收为 FAILED 而非 PENDING）。
+ * - 复用 FAILED + `CONTAINER_VOID_MESSAGE`，**不新增终态**。
+ * - 必须传调用方的事务连接：作废与终结要么一起生效，要么一起不发生。
+ */
+async function voidPendingPrintJobsForContainers(conn, containerIds) {
+  const ids = [...new Set((containerIds || []).map(Number).filter(n => Number.isFinite(n) && n > 0))]
+  if (!ids.length) return 0
+  const [result] = await conn.query(
+    `UPDATE print_jobs
+     SET status = ?, error_message = ?, ack_token = NULL
+     WHERE ref_type = 'inventory_container'
+       AND ref_id IN (?)
+       AND status = ?`,
+    [STATUS.FAILED, CONTAINER_VOID_MESSAGE, ids, STATUS.PENDING],
+  )
+  return result.affectedRows ?? 0
+}
+
+/**
  * 回收「已被领取但客户端已失联」的打印中任务。
  *
  * 领取任务的桌面客户端断网 / 崩溃后，任务会一直挂在 PRINTING，原先要等满 TTL（默认 30 分钟）
@@ -282,6 +310,7 @@ module.exports = {
   getDispatchHintForJob,
   expireStaleJobs,
   reclaimJobsFromOfflineClients,
+  voidPendingPrintJobsForContainers,
   purgeFinishedJobs,
   startPrintJobSweeper,
 }

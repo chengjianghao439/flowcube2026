@@ -54,7 +54,7 @@ npm run test:permissions
 | 财务、会计 | `npm run smoke:finance`、`npm run smoke:accounting`、`npm run smoke:accounting-period`、`npm run test:accounting` |
 | 退款、处置、授信 | `npm run smoke:refund-orders`、`npm run smoke:disposal`、`npm run smoke:credit-outbound` |
 | 权限、设备与认证审计 | `npm run test:permissions`、`npm run smoke:warehouse-scope`、`npm run smoke:pda-device-session`、`npm run smoke:auth-session-remediation` |
-| 打印、标签 | `npm run test:label`、`npm run test:print`、`npm run test:print-purge`、`npm run smoke:print-queue`、`npm run smoke:print-template-preview` |
+| 打印、标签 | `npm run test:label`、`npm run test:print`、`npm run test:print-purge`、`npm run test:print-barcode-void`、`npm run smoke:print-queue`、`npm run smoke:print-template-preview`、`npm run smoke:print-barcode-void`、`npm run smoke:print-barcode-void-receipt` |
 | 报表、开票 | `npm run smoke:reports`、`npm run smoke:reports-values`、`npm run smoke:warehouse-ops`、`npm run smoke:invoice-quota` |
 
 `smoke:sale-adjustment` 会为连续创建的销售任务建立本轮专用分拣格，并在结束时按 ID 清理；分拣完成必须先有已分配的分拣格。
@@ -135,3 +135,14 @@ AST 文案和数量覆盖守卫依赖 frontend 的 TypeScript，必须在安装�
 ### 2026-09-24 整改专项
 
 独立测试库运行 `node --test tests/auth-token-remediation.smoke.test.js tests/finance-account-precision.smoke.test.js tests/schema-reconcile.smoke.test.js`；纯代码回归运行 `node --test tests/document-activity.test.js tests/sale-order-contract.test.js` 与 `npm run test:query-loop`。前端操作记录 API 用例在 `frontend/src/api/oplogs.test.ts`。schema 严格对账只统计物理表，视图不当作多余表。
+
+### 2026-09-27 作废容器不得补打专项
+
+`npm run test:print-barcode-void`（纯离线，static job）：从各入口断言作废容器（撤回收货等）的**状态派生、状态归一化、逐分支筛选**——显示按容器状态派生 `voided`，则 `inboundStatusClause` 除新增 `voided` 分支外**其余每个分支都必须排除 VOID**，否则「筛已打印」会把显示为「已作废」的行收进来；同时锁住「只收紧 VOID」的业务边界（`EMPTY`/待上架/待质检/拒收不得被判为作废）。
+
+两个冒烟套件必须跑在独立回环测试库，覆盖两条互相独立的路径，缺一不可：
+
+- `npm run smoke:print-barcode-void`：直接造容器与打印记录夹具——补打接口拒绝 VOID 且**不新增任务**、撤回终结「未领取」（PENDING）任务而 **PRINTING 不动**、两种并发顺序、**补打接口确实在容器行锁内执行**、列表 `voided`/`success`/`total` 三者一致、`readLabelVariables` 的 latest 取样分支同样排除 VOID（该分支供打印模板预览挑样例数据）。
+- `npm run smoke:print-barcode-void-receipt`：从采购单→收货→上架造出**真实收货单**排一条 PENDING 打印任务，再走真正的 `voidReceipt` service——断言容器 VOID、单据回退「待收货(1)」、该任务变 FAILED 且**不能再被 `claimClientJobs` 领取**；再用「容器已被后续动作改动」触发 409，断言**不得误终结**（任务仍 PENDING 且仍可被领取）。
+
+两者都做过反向破坏验证：去掉任一处排除/拒绝/终结，对应断言精准红。业务规则见 `docs/print-deploy-ops.md`「作废容器不得补打」条。

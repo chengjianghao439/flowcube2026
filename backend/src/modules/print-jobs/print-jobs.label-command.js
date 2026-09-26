@@ -1,5 +1,6 @@
 const { assertBoundWarehouseInScope } = require('../../utils/warehouseScope')
 const { pool } = require('../../config/db')
+const { CONTAINER_STATUS } = require('../../engine/containerEngine')
 const { readLabelVariables, containerLabelVariables } = require('./labelVariables')
 const AppError = require('../../utils/AppError')
 const logger = require('../../utils/logger')
@@ -509,39 +510,63 @@ async function enqueueProductLabelJob(payload) {
 async function reprintInboundBarcode(recordId, { createdBy = null, scopeWarehouseIds = null } = {}) {
   const id = Number(recordId)
   if (!Number.isFinite(id) || id <= 0) throw new AppError('入库条码不存在', 404, 'PRINT_BARCODE_RECORD_NOT_FOUND')
-  const [[row]] = await pool.query(
-    `SELECT c.id, c.barcode, c.remaining_qty, c.warehouse_id, c.container_type, c.source_ref_type,
-            p.name AS product_name,
-            EXISTS(SELECT 1 FROM print_jobs j WHERE j.ref_type = 'inventory_container' AND j.ref_id = c.id) AS has_print_job
-     FROM inventory_containers c
-     LEFT JOIN product_items p ON p.id = c.product_id
-     WHERE c.id = ? AND c.deleted_at IS NULL`,
-    [id],
-  )
-  if (!row) throw new AppError('入库条码不存在', 404, 'PRINT_BARCODE_RECORD_NOT_FOUND')
-  assertBoundWarehouseInScope(scopeWarehouseIds, row.warehouse_id, '入库条码')
-  // 非唯一码不进打印记录：塑料盒自身的码是可复用的固定码（同一个盒子反复装不同货），
-  // 它不该在打印历史里，也不该从这里补打——请在「塑料盒」页面重复打印。
-  if (String(row.source_ref_type || '') === 'plastic_box_create') {
-    throw new AppError('塑料盒条码不是唯一码，不在打印记录中；请在「塑料盒」页面重复打印', 400, 'PRINT_BARCODE_NOT_UNIQUE')
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    // 状态校验与入队必须原子：否则会出现「读到时 ACTIVE → 撤回收货提交 → 这里才入队」，
+    // 为已作废容器建出打印任务，而任务一旦入队就会被客户端照常领取、打出 qty=0 的作废标签。
+    // 锁序：本函数**只取 inventory_containers 单行锁**；voidReceipt 走
+    // 「inbound_tasks → 库存维度 → 容器」，补打不取前两者，不构成环。
+    // 刻意**不加库存维度锁**：单资源锁比多资源锁安全，加了反而开始与 putaway/void 争锁序。
+    const [[row]] = await conn.query(
+      `SELECT c.id, c.barcode, c.remaining_qty, c.warehouse_id, c.product_id,
+              c.status AS container_status, c.container_type, c.source_ref_type,
+              EXISTS(SELECT 1 FROM print_jobs j WHERE j.ref_type = 'inventory_container' AND j.ref_id = c.id) AS has_print_job
+       FROM inventory_containers c
+       WHERE c.id = ? AND c.deleted_at IS NULL
+       FOR UPDATE`,
+      [id],
+    )
+    if (!row) throw new AppError('入库条码不存在', 404, 'PRINT_BARCODE_RECORD_NOT_FOUND')
+    assertBoundWarehouseInScope(scopeWarehouseIds, row.warehouse_id, '入库条码')
+    // 非唯一码不进打印记录：塑料盒自身的码是可复用的固定码（同一个盒子反复装不同货），
+    // 它不该在打印历史里，也不该从这里补打——请在「塑料盒」页面重复打印。
+    if (String(row.source_ref_type || '') === 'plastic_box_create') {
+      throw new AppError('塑料盒条码不是唯一码，不在打印记录中；请在「塑料盒」页面重复打印', 400, 'PRINT_BARCODE_NOT_UNIQUE')
+    }
+    // 与补打中心列表同一口径：补打=重打，只对**有打印记录**的对象成立。从未打印过的容器
+    // 不会被列表列出（2026-09-14 用户决定），也不能靠直接调接口凭空造任务；那种情况请从
+    // 收货订单详情发起「整单 / 明细 / 条码补打」。
+    if (!Number(row.has_print_job)) {
+      throw new AppError('该条码没有打印记录，无法补打；从未打印过的库存条码请到收货订单详情发起补打', 400, 'PRINT_BARCODE_NO_PRINT_RECORD')
+    }
+    // 容器已作废（撤回收货等）不得补打：打出来的是 qty=0、指向已作废容器的无效标签，
+    // 而该收货单通常会重新收货并生成新条码，两张码并存会互相混淆。
+    // 业务边界（2026-09-27）：**只收紧 VOID**；EMPTY/待上架/待质检/拒收仍有实物，补打是正当需求。
+    if (Number(row.container_status) === CONTAINER_STATUS.VOID) {
+      throw new AppError('该条码所属容器已作废，不能再补打（货已撤回，重新收货会生成新条码）', 400, 'PRINT_BARCODE_CONTAINER_VOID')
+    }
+    const [[product]] = await conn.query('SELECT name FROM product_items WHERE id = ?', [row.product_id])
+    const job = await enqueueContainerLabelJob({
+      conn,
+      containerId: id,
+      warehouseId: row.warehouse_id != null ? Number(row.warehouse_id) : null,
+      data: {
+        container_code: row.barcode,
+        product_name: product?.name ?? null,
+        qty: row.remaining_qty,
+      },
+      createdBy,
+      jobUniqueKey: `reprint_container:${id}:${Date.now()}`,
+    })
+    await conn.commit()
+    return job
+  } catch (error) {
+    await conn.rollback()
+    throw error
+  } finally {
+    conn.release()
   }
-  // 与补打中心列表同一口径：补打=重打，只对**有打印记录**的对象成立。从未打印过的容器
-  // 不会被列表列出（2026-09-14 用户决定），也不能靠直接调接口凭空造任务；那种情况请从
-  // 收货订单详情发起「整单 / 明细 / 条码补打」。
-  if (!Number(row.has_print_job)) {
-    throw new AppError('该条码没有打印记录，无法补打；从未打印过的库存条码请到收货订单详情发起补打', 400, 'PRINT_BARCODE_NO_PRINT_RECORD')
-  }
-  return enqueueContainerLabelJob({
-    containerId: id,
-    warehouseId: row.warehouse_id != null ? Number(row.warehouse_id) : null,
-    data: {
-      container_code: row.barcode,
-      product_name: row.product_name,
-      qty: row.remaining_qty,
-    },
-    createdBy,
-    jobUniqueKey: `reprint_container:${id}:${Date.now()}`,
-  })
 }
 
 async function reprintOutboundBarcode(recordId, { createdBy = null, scopeWarehouseIds = null } = {}) {

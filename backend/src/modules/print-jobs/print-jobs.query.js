@@ -2,6 +2,8 @@ const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { getInboundClosureThresholds } = require('../../utils/inboundThresholds')
 const { assertBoundWarehouseInScope } = require('../../utils/warehouseScope')
+const { CONTAINER_STATUS } = require('../../engine/containerEngine')
+const { MOVE_TYPE } = require('../../engine/inventoryEngine')
 const { fmt } = require('./print-jobs.helpers')
 const {
   STATUS,
@@ -10,6 +12,7 @@ const {
   normalizeBarcodeQueryKeyword,
   normalizeBarcodeRecordStatus,
   deriveInboundBarcodeStatus,
+  deriveInboundPrintJobResult,
   deriveGenericBarcodeStatus,
   statusKey,
   printStateLabel,
@@ -137,20 +140,32 @@ async function findBarcodeRecords({ category, keyword = '', status, page = 1, pa
  * 这样「补打」才真的等于重打：点下去为该对象新建一条任务，而不是给一个从没打过标签的
  * 对象凭空造任务（2026-09-14 生产误操作：从未打印过的塑料盒 B000001 被从补打中心打了出去）。
  */
+/**
+ * 作废容器（撤回收货等）在列表里单独成「已作废」一类，**不能混进任何一种打印状态筛选**：
+ * 该容器的 print_jobs 仍是 DONE，只按打印状态筛就会把显示为「已作废」的行收进「已打印」。
+ * 业务边界（2026-09-27）：**只收紧 VOID**；EMPTY / 待上架 / 待质检 / 拒收仍有实物，照旧参与筛选。
+ */
+const INBOUND_NON_VOID_SQL = `IFNULL(c.status, 1) <> ${CONTAINER_STATUS.VOID}`
+
 function inboundStatusClause(status, thresholdMinutes) {
   if (!status) return { sql: '', params: [] }
+  if (status === 'voided') {
+    return { sql: `AND c.status = ${CONTAINER_STATUS.VOID}`, params: [] }
+  }
+  const nv = `AND ${INBOUND_NON_VOID_SQL}`
   if (status === 'cancelled') {
-    return { sql: 'AND t.status = 5', params: [] }
+    return { sql: `AND t.status = 5 ${nv}`, params: [] }
   }
   if (status === 'no_job') {
-    return { sql: 'AND IFNULL(t.status, 0) <> 5 AND pj.id IS NULL', params: [] }
+    return { sql: `${nv} AND IFNULL(t.status, 0) <> 5 AND pj.id IS NULL`, params: [] }
   }
   if (status === 'unassigned') {
-    return { sql: "AND IFNULL(t.status, 0) <> 5 AND pj.status = ? AND pj.printer_id IS NULL AND IFNULL(pj.error_message, '') = ?", params: [STATUS.FAILED, EXPIRE_MESSAGE] }
+    return { sql: `${nv} AND IFNULL(t.status, 0) <> 5 AND pj.status = ? AND pj.printer_id IS NULL AND IFNULL(pj.error_message, '') = ?`, params: [STATUS.FAILED, EXPIRE_MESSAGE] }
   }
   if (status === 'timeout') {
     return {
-      sql: `AND IFNULL(t.status, 0) <> 5
+      sql: `${nv}
+            AND IFNULL(t.status, 0) <> 5
             AND (
               (pj.status IN (?, ?) AND pj.updated_at IS NOT NULL AND pj.updated_at <= DATE_SUB(NOW(), INTERVAL ? MINUTE))
               OR (pj.status = ? AND ((pj.printer_id IS NOT NULL AND IFNULL(pj.error_message, '') = ?) OR IFNULL(pj.error_message, '') = ?))
@@ -158,16 +173,17 @@ function inboundStatusClause(status, thresholdMinutes) {
       params: [STATUS.PENDING, STATUS.PRINTING, thresholdMinutes, STATUS.FAILED, EXPIRE_MESSAGE, CLIENT_OFFLINE_MESSAGE],
     }
   }
-  if (status === 'success') return { sql: 'AND IFNULL(t.status, 0) <> 5 AND pj.status = ?', params: [STATUS.DONE] }
+  if (status === 'success') return { sql: `${nv} AND IFNULL(t.status, 0) <> 5 AND pj.status = ?`, params: [STATUS.DONE] }
   if (status === 'failed') {
     return {
-      sql: "AND IFNULL(t.status, 0) <> 5 AND pj.status = ? AND IFNULL(pj.error_message, '') NOT IN (?, ?)",
+      sql: `${nv} AND IFNULL(t.status, 0) <> 5 AND pj.status = ? AND IFNULL(pj.error_message, '') NOT IN (?, ?)`,
       params: [STATUS.FAILED, EXPIRE_MESSAGE, CLIENT_OFFLINE_MESSAGE],
     }
   }
   if (status === 'printing') {
     return {
-      sql: `AND IFNULL(t.status, 0) <> 5
+      sql: `${nv}
+            AND IFNULL(t.status, 0) <> 5
             AND pj.status = ?
             AND (pj.updated_at IS NULL OR pj.updated_at > DATE_SUB(NOW(), INTERVAL ? MINUTE))`,
       params: [STATUS.PRINTING, thresholdMinutes],
@@ -175,7 +191,8 @@ function inboundStatusClause(status, thresholdMinutes) {
   }
   if (status === 'queued') {
     return {
-      sql: `AND IFNULL(t.status, 0) <> 5
+      sql: `${nv}
+            AND IFNULL(t.status, 0) <> 5
             AND pj.id IS NOT NULL
             AND pj.status = ?
             AND (pj.updated_at IS NULL OR pj.updated_at > DATE_SUB(NOW(), INTERVAL ? MINUTE))`,
@@ -242,6 +259,9 @@ async function findInboundBarcodeRecords({ keyword = '', status, page = 1, pageS
         CASE WHEN c.container_type = 2 OR c.barcode LIKE 'B%' THEN 'plastic_box' ELSE 'inventory' END AS container_kind,
         c.status AS container_status,
         c.remaining_qty,
+        /* 作废原因：目前只有撤回收货写 move_type=11 的库存流水（销售退货/调拨置 VOID 不写），
+           取不到就不猜原因。inventory_logs.container_id 有单列索引，标量子查询成本可控。 */
+        EXISTS(SELECT 1 FROM inventory_logs l WHERE l.container_id = c.id AND l.move_type = ${MOVE_TYPE.RECEIPT_VOID}) AS void_by_receipt_void,
         c.created_at AS barcode_created_at,
         p.id AS product_id,
         p.code AS product_code,
@@ -302,7 +322,8 @@ async function findInboundBarcodeRecords({ keyword = '', status, page = 1, pageS
   )
 
   const mapped = rows.map((row) => {
-    const derived = deriveInboundBarcodeStatus(row, thresholds)
+    const derived = deriveInboundBarcodeStatus(row, thresholds)    // 行级业务状态（作废/取消/正常）
+    const jobResult = deriveInboundPrintJobResult(row, thresholds) // 最近打印任务**自身**的结果
     return {
       category: 'inbound',
       recordId: Number(row.record_id),
@@ -323,8 +344,10 @@ async function findInboundBarcodeRecords({ keyword = '', status, page = 1, pageS
         ? {
             id: Number(row.print_job_id),
             status: Number(row.print_status),
-            statusKey: derived.statusKey,
-            printStateLabel: derived.printStateLabel,
+            // 任务**自身**的结果。这里刻意不用 derived.statusKey：作废会把行级状态变成 voided，
+            // 若共用一个字段，「最近任务：已打印」就没了（2026-09-27 GUI 验收发现）。
+            statusKey: jobResult.statusKey,
+            printStateLabel: jobResult.printStateLabel,
             printerId: row.printer_id != null ? Number(row.printer_id) : null,
             printerCode: row.printer_code ?? null,
             printerName: row.printer_name ?? null,
@@ -334,7 +357,14 @@ async function findInboundBarcodeRecords({ keyword = '', status, page = 1, pageS
             updatedAt: row.print_updated_at,
           }
         : null,
-      canReprint: true,
+      // 行级业务状态：与上面的「最近任务结果」并存，两列各说清一件事
+      barcodeStatusKey: derived.statusKey,
+      barcodeStatusLabel: derived.printStateLabel,
+      // 作废原因（取不到为 null）：保留打印历史的同时说明为什么不能再打。
+      voidReason: derived.voidReasonLabel ?? null,
+      // 作废容器不能再补打（业务边界 2026-09-27：只收紧 VOID）。前端按钮读这个字段禁用，
+      // 但**后端接口另有独立校验**——UI 禁用挡不住直接调接口。
+      canReprint: Number(row.container_status) !== CONTAINER_STATUS.VOID,
     }
   })
   const [[{ total }]] = await pool.query(
@@ -576,4 +606,6 @@ module.exports = {
   listPrinterHealth,
   findBarcodeRecords,
   findByIdWithExecutor,
+  // 导出仅为契约测试能逐一断言「每个状态筛选都排除作废容器」（tests/print-barcode-void-guard.test.js）。
+  inboundStatusClause,
 }

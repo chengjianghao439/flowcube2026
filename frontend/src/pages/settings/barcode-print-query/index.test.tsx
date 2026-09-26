@@ -12,6 +12,10 @@ const rows = vi.hoisted(() => [
   { recordId: 3, category: 'inbound', inboundTaskId: 2, bizNo: 'IT-2', latestJob: { statusKey: 'timeout' } },
   { recordId: 4, category: 'inbound', inboundTaskId: 1, bizNo: 'IT-1', latestJob: { statusKey: 'queued' } },
   { recordId: 5, category: 'inbound', inboundTaskId: 1, bizNo: 'IT-1', latestJob: { statusKey: 'unassigned' } },
+  // 作废容器：行级业务状态 voided，但最近任务结果仍是「已打印」——两者必须同一条里都看得到
+  { recordId: 6, category: 'inbound', inboundTaskId: 9, bizNo: 'IT-9', barcodeStatusKey: 'voided', voidReason: '入库撤回', latestJob: { statusKey: 'success', printStateLabel: '已打印' } },
+  // 因作废被撤回终结的任务：结果要说「未出纸」，不能说成「打印失败」
+  { recordId: 7, category: 'inbound', inboundTaskId: 9, bizNo: 'IT-9', barcodeStatusKey: 'voided', latestJob: { statusKey: 'voided_job', printStateLabel: '未出纸（容器已作废）' } },
 ].map(row => ({ ...row, waveId: 11, waveNo: 'WAVE-11' })))
 vi.mock('@tanstack/react-query', () => ({
   useQuery: () => ({ data: { list: rows, pagination: { total: rows.length } }, isLoading: false }),
@@ -77,4 +81,19 @@ test.each(['outbound', 'logistics'])('%s 的未配置计数不混入真正超时
   expect(count('超时待确认')).toBe('1')
   expect(count('打印失败')).toBe('2')
   expect(count('仍在排队 / 打印中')).toBe('1')
+})
+
+// 2026-09-27 GUI 验收：作废把「最近任务结果」整个覆盖掉，同一行只剩「条码已作废」。
+test('作废行同时显示「条码状态」与「最近任务结果」，互不覆盖', () => {
+  render()
+  // 行级业务状态（连同原因）
+  expect(host.textContent).toContain('条码已作废')
+  expect(host.textContent).toContain('原因：入库撤回')
+  // 最近任务自身的结果——修复前这一条会被「条码已作废」吞掉
+  expect(host.textContent).toContain('最近任务：已打印')
+})
+
+test('因作废被撤回终结的任务显示「未出纸」，不复用「打印失败」文案', () => {
+  render()
+  expect(host.textContent).toContain('未出纸')
 })
