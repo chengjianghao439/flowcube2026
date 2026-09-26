@@ -48,6 +48,7 @@ const MONTHLY_TERMS_OPTIONS = [30, 60, 90]
 
 /** 到期日从「单据创建日」起算的结算方式；其余从结算发生时刻起算 */
 const DUE_FROM_ORDER_CREATED = [SETTLEMENT_TYPE.CASH]
+const { beijingTodayYmd } = require('../utils/backendTime')
 
 const VALID_TYPES = Object.values(SETTLEMENT_TYPE)
 
@@ -90,7 +91,8 @@ function buildDueDateSql(settlementType, termsDays, orderCreatedAt) {
   if (DUE_FROM_ORDER_CREATED.includes(type) && orderCreatedAt) {
     return { expr: 'DATE_ADD(DATE(?), INTERVAL ? DAY)', params: [orderCreatedAt, days] }
   }
-  return { expr: 'DATE_ADD(NOW(), INTERVAL ? DAY)', params: [days] }
+  // 月结从结算发生的北京业务日开始；MySQL 服务会话可能运行在 UTC。
+  return { expr: 'DATE_ADD(DATE(?), INTERVAL ? DAY)', params: [beijingTodayYmd(), days] }
 }
 
 /**

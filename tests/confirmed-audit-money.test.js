@@ -25,6 +25,7 @@ test('receipt allocations settle exactly and reject amounts finer than four deci
   for (const bad of [false, true]) {
     let receiptWrite, recordWrites = []
     const conn = { beginTransaction: async () => {}, commit: async () => {}, rollback: async () => {}, release() {}, query: async (sql, args) => {
+      if (sql.includes('SELECT payment_date FROM payment_receipts')) return [[{ payment_date: '2026-09-27' }]]
       if (sql.includes('FROM payment_receipts')) return [[{ id: 1, receipt_no: 'RC', amount: '0.3', settled_amount: '0', status: 1, type: 2, party_name: 'test' }]]
       if (sql.includes('SELECT DISTINCT statement_id')) return [[]]
       if (sql.includes('FROM payment_records')) return [[{ id: args[0], order_no: 'SO', balance: args[0] === 1 ? '0.1' : '0.2', total_amount: args[0] === 1 ? '0.1' : '0.2', paid_amount: '0', type: 2, party_name: 'test', status: 1 }]]
@@ -37,6 +38,7 @@ test('receipt allocations settle exactly and reject amounts finer than four deci
       '../../utils/operationRequest': { beginResourceOperationRequest: async () => ({}), completeOperationRequest: async () => {} },
       './party-identity': { assertAllocationParty: async () => {} }, './payment-events.service': { PAYMENT_EVENT: {}, record: async () => {} },
       './reconciliation-statements.service': {}, '../finance/finance-accounts.service': {},
+      '../accounting/finance-period.guard': { assertFinancePeriodOpen: async () => ({}) },
     })
     const run = () => svc.settle(1, { allocations: [{ recordId: 1, amount: bad ? 0.1000001 : 0.1 }, { recordId: 2, amount: 0.2 }] }, {}, 'key')
     if (bad) await assert.rejects(run(), e => e.code === 'MONEY_PRECISION_INVALID')
