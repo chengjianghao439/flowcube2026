@@ -279,9 +279,17 @@
 | 改价 `price-change` | **唯一有业务后果**：`applyApprovedPrice` 改 `product_items` 对应价格列 + 写 `product_price_history` | 状态机 `cancel: from [1]`（未生效）⇒ **已生效改价不可能被撤销** | **设计选择，自洽** |
 
 **三链共性**：
-- **待办不遗留**：`approvalEngine.cancelInstance` 把 `approval_instance_tasks` 中 `status=1` 的置 3（`comment='申请人撤销'`），而 `listPendingTasks` 只取 `status=1` ⇒ 撤销后不会留下悬挂待办；
-- **权限两层**：业务侧 `assertOwner`/`assertInScope` + 引擎侧 `assertCanApproveTask`（按 `approval_instance_task_approvers` 当前节点快照，超管豁免）；
-- **幂等**：均走 `beginOperationRequest`；`applyApprovedPrice` 另有 `status !== 2 → return` 的重复保护。
+
+- **待办不遗留**：`approvalEngine.cancelInstance` 把 `approval_instance_tasks` 中 `status=1` 的置 3（`comment='申请人撤销'`），而 `listPendingTasks` 只取 `status=1` ⇒ 撤销后不会留下悬挂待办。
+- **权限两层**：业务侧 `assertOwner`/`assertInScope` + 引擎侧 `assertCanApproveTask`（按 `approval_instance_task_approvers` 当前节点快照，超管豁免）。
+- **并发保护是「行锁 + 状态机 + CAS」，不是幂等重放**（**订正**：本节初版写"三链均走 `beginOperationRequest`"**有误**）。`rg` 实测：`credit-overrides.service.js` **0 处**、`price-change.service.js` **0 处**、`purchase-requisitions.service.js` **3 处但全在 `convert`（创建类）**——**submit / approve / reject / cancel / withdraw 一个都没有**，路由层也没有 `X-Request-Key` 中间件。
+  真实保护是：每个动作先进事务 → `lockStatusRow`（业务单据行锁）→ `assertStatusAction`（状态机）→ `compareAndSetStatus`（CAS）；引擎侧再加 `lockActiveInstance`（`approval_instances FOR UPDATE`）与 `lockCurrentTask`（`task.status=1 FOR UPDATE`，节点已被处理时 **409 `APPROVAL_CONFLICT`**）。
+  ⇒ 必须区分：这是「**状态机 / 行锁拒绝**」——第二次请求返回 400/409 且**不产生重复副作用**；**不是**「同一 `X-Request-Key` 返回原回执」的**幂等重放**。两者都"防重复"，但**对调用方的语义完全不同**，不可混称。
+
+**待验收风险（本轮只读，未实测）**：
+
+1. **重复提交的语义是"失败"而非"重放"**：客户端若把 409/400 当网络错误**重试**，用户会看到"操作失败"而实际**已成功**。**这不是数据不一致**（状态机确实挡住了重复副作用），但与本项目其它走 `beginOperationRequest` 的写路径**契约不一致**；审批类动作是否也需要幂等键，属**待业务/产品判断**。
+2. **`applyApprovedPrice` 缺"已应用"标记，且注释与代码不符**：其跳过条件是 `if (!req || Number(req.status) !== 2) return`，注释写「**已应用过**或非通过态，跳过」——但**状态为 2（已应用）时并不会跳过**，代码实际只挡"非通过态"。它**只有 1 个调用点**（`approve` 内、`compareAndSetStatus(toStatus:2)` 之后），且第二次 `approve` 会被 `assertStatusAction('approve', 2)`（`from [1]`）拒绝 ⇒ **当前不可达**。但若将来引入**重试 / 修数据入口**，会**重复改价并重复写 `product_price_history`**。**属待验收风险，非当前缺陷**。
 
 **本轮未发现真实缺陷**。**未覆盖**（未实测，属推测或盲区）：同意与驳回**并发**到达；`allow_self_approve` 的授予边界；各链**发起时无匹配审批流**的行为（文档称返回明确业务错误，本轮未逐链实测）；发票 / 薪资 / HR / 固定资产。
 
