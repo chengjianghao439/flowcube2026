@@ -26,20 +26,14 @@ description: >-
 ## 发版链路速览（建立心智模型）
 
 ```
-bump 三端版本 ──┐
-写 release-notes ─┤
-                 ├─► git push main ──► CI: Deploy Browser App ──► 浏览器端立即更新
-                 │
-                 └─► npm run release:tag-desktop（打 v<version> tag）
-                        └─► CI: Build Desktop Installer（仅 tag 触发发布）
-                              ├─ 构建 Windows exe（NSIS 3.0.4.1）
-                              ├─ 上传 GitHub Release
-                              └─ 服务器跑 release-desktop.js：
-                                   读 docs/release-notes/<version>.md 作为 notes
-                                   写 /var/www/flowcube-downloads/latest.json
-                                     { version, url, sha256, notes, publishedAt }
-                                        └─► 桌面端轮询 /api/app-update/latest
-                                              semver 比对 → 弹「发现新版本」+ 显示 notes
+写 release-notes ──► bump 三端版本 ──► 提交 ──► npm run release:prod
+  ├─ 本机代理与 SSH 预检，自动中转原 CI 产物
+  ├─ push main，等同 SHA 的 Tests / Security / Browser / PDA / 桌面验证成功
+  └─ 推送 v<version> tag → CI: Build Desktop Installer（仅 tag 触发发布）
+       ├─ 构建 Windows exe（NSIS 3.0.4.1）并保存原始 Actions artifact
+       ├─ 服务器生成 latest.json，记录版本、地址、摘要和更新内容
+       └─ 核对 GitHub Release 附件并转正草稿 → 线上完整核验
+            └─ 桌面轮询 /api/app-update/latest，发现更高版本后提示更新
 ```
 
 记住三个事实，发版就不会错：
@@ -49,34 +43,29 @@ bump 三端版本 ──┐
 
 ## 发版步骤
 
-按顺序执行。每一步都先向用户确认关键决策（新版本号、更新内容），发版是对外动作，不要替用户臆断。
+按顺序执行。用户明确要求发版后，可沿用本次任务已确认的范围，自行选择常规 patch 版本并整理更新内容，先向用户说明再执行；不要逐步重复索要同一授权。重大兼容性变化、范围不明或用户未授权的生产操作仍需澄清。仅咨询发版流程不构成发布授权。
 
 ### 0. 前置检查
+- 生产页面门禁须配置主账号 `SMOKE_USERNAME` / `SMOKE_PASSWORD` 与受限账号 `SMOKE_LIMITED_USERNAME` / `SMOKE_LIMITED_PASSWORD` 四项 Secrets。受限账号按用户 2026-09-09 授权长期保留、发布后不删除，使用随机口令及仅仪表盘/收货查看权限；不恢复源码固定测试口令，不自动恢复其他已删除账号，不跳过权限门禁。
 - 确认在项目根目录、当前在 `main`、工作区干净、本地 main 与 `origin/main` 一致。
   ```bash
   git rev-parse --abbrev-ref HEAD   # 应为 main
   git status --short                # 应为空
-  git pull origin main
+  git pull --ff-only origin main
   ```
 - 确认要发布的代码改动已经合并进 main（发版是给「已经在 main 上的东西」打版本，不是顺便合特性）。
+- `release:prod` 会在 push 前从 GitHub 仓库变量读取 `FLOWCUBE_SSH_KNOWN_HOSTS`，按 CI 部署配置中的**域名与端口**离线校验。只含本机 SSH 别名或服务器 IP 的记录不能通过；修正前先用独立渠道核实公钥，不能以 `ssh-keyscan` 现场结果代替核验。
+- 若本版新增迁移，先按 `docs/verification-commands.md` 在独立 MySQL 8 测试库完整迁移，并覆盖 CI 默认排序规则 `utf8mb4_0900_ai_ci`；临时表字符列与被比较的业务列需显式对齐。v0.11.0 的角色迁移曾因本地库与 CI 库排序规则不同，在推送后才暴露失败。
 
 ### 1. 决定新版本号
 - 看当前版本：`node -p "require('./desktop/package.json').version"`
-- 与用户确认升哪一位（语义化版本）：
-  - **patch**（0.4.7 → 0.4.8）：bug 修复、小改动、不影响用法。
+- 根据已确认改动选择语义化版本；涉及兼容性或产品决策时与用户确认：
+  - **patch**（0.4.7 → 0.4.8）：bug 修复、小改动、不影响用法；用户已授权发布修复时可直接选用，并告知版本号。
   - **minor**（0.4.7 → 0.5.0）：新增功能、向后兼容。
   - **major**：不兼容的大改（本项目目前都在 0.x，谨慎）。
 - 默认建议 patch，除非这一版有明显的新功能。
 
-### 2. 三端版本号同步递增
-用本技能自带脚本一次性把 backend / frontend / desktop 三端 `package.json` + `package-lock.json` 设成同一个版本（手改三个文件极易漏 lock 或漏某一端）：
-```bash
-bash .claude/skills/release-flowcube/scripts/bump-version.sh <version>
-```
-> 为什么三端一起升：版本号是系统整体标识，后端 `/health`、桌面关于页、桌面更新都各读各自 package.json；三端不一致会让「线上到底是哪一版」难以排查。root `package.json` 没有 version 字段，无需改。
-> **脚本是幂等的**（2026-08-26 修复）：真换版本（versionName 变化）才递增 PDA `versionCode`；同一版本重跑（如写 notes 后想补 PDA 更新说明）不会重复 +1、不会虚刷新 `publishedAt`。**推荐顺序：先写第 3 步的 notes 再跑本脚本**，PDA 更新说明第一次就写入；顺序颠倒也没关系，写完 notes 后重跑是安全的。
-
-### 3. 写本版更新内容
+### 2. 写本版更新内容
 创建 `docs/release-notes/<version>.md`（文件名是纯版本号，**不带 v**）。这就是桌面端更新弹窗里用户看到的「更新内容」。沿用现有风格：`# v<version>` 标题 + 分类小节。
 
 **模板：**
@@ -94,29 +83,103 @@ bash .claude/skills/release-flowcube/scripts/bump-version.sh <version>
 ```
 写给**最终用户**看，讲「他们能感知到的变化」，不要堆砌内部重构术语。
 
-### 4. 提交并推送 main（触发浏览器部署）
-```bash
-git add .
-git commit -m "release: 发布 v<version> — <一句话主题>"
-git push origin main
-```
-push 后 `Deploy Browser App` 会自动把浏览器端部署到生产。
+**同一版还要同步官网更新摘要** `frontend/src/pages/landing/updates.ts`：官网「版本更新」区
+只读这个列表，**不读 package 版本**。把本版按现有格式补到数组最前（`version` / `category` /
+`title` / `description` / `details`），保持整体从新到旧，文案同样写给最终用户看。
 
-### 5. 打 tag（触发桌面构建 + 发布 latest.json）
+> 为什么必须写进流程：该文件注释一直声明「发布时按 release-flowcube 流程同步此列表」，
+> 但本技能与 `docs/RELEASE.md` 都**没有**这一步，于是 0.9.16–0.9.22 **连续 7 个版本都没同步**，
+> 官网上展示的还是 0.9.15 / 0.9.14 / 0.9.13。现已由 `npm run test:landing-updates` 机械守住：
+> 列表缺当前版本、顺序不是从新到旧、或某条字段不全，CI 直接失败。
+
+### 3. 三端版本号同步递增
+写完更新内容后，用本技能自带脚本一次性把 backend / frontend / desktop 三端 `package.json` + `package-lock.json` 设成同一个版本（手改三个文件极易漏 lock 或漏某一端）：
 ```bash
-npm run release:tag-desktop
+bash .claude/skills/release-flowcube/scripts/bump-version.sh <version>
 ```
-这会跑 `release-desktop-tag.sh`：校验工作区/HEAD、确认远程无同名 tag、用 `desktop/package.json` 的版本生成 `v<version>` 并推送。tag 一推，`Build Desktop Installer` 启动，构建 exe → 上传 Release → 服务器发布 `latest.json`（带上一步写的 notes）。
+> 版本号是系统整体标识，后端 `/health`、桌面关于页、桌面更新都各读各自 package.json；三端不一致会让线上版本难以核对。root `package.json` 没有 version 字段，无需改。脚本仅在 versionName 变化时递增 PDA `versionCode`；同一版本重跑不会重复递增或刷新 `publishedAt`。
+
+### 4. 提交待发布代码
+```bash
+# 先核对本次任务的所有改动，再逐路径暂存。不能把不明来源的旧改动一并纳入。
+git status --short
+# git add -- 已核对的具体文件路径（业务改动与对应文档一起；通用技能另行提交）
+git diff --cached --stat
+git diff --cached --check
+git commit -m "release: 发布 v<version> — <一句话主题>"
+```
+下一步的唯一入口负责 push main。`Deploy Browser App` 等待实际发布 SHA 的 Tests 与 Security Scan 成功，由 GitHub runner 构建 Linux amd64 镜像，再在生产部署锁内核对归档摘要/镜像 SHA、加载、迁移、切换和验证。禁止在生产机重新编译。检查失败/取消/超时不能发布；健康或页面门禁失败统一回退旧应用镜像，数据库迁移不回滚。
+
+### 5. 等待浏览器和 PDA 完成，再打 tag（桌面发布）
+
+已授权正式发版、版本与说明提交后，**只运行这个入口**：
+```bash
+npm run release:prod
+```
+入口在 push 前强制预检 CI SSH 可信主机键、本机代理和 `flowcube-prod` SSH 别名，启动自动中转并保持 Mac 在线；预检失败就停止，不悄悄改走已多次超时的服务器直连。它推送 main，等待同 SHA 的 Tests、Security、Browser、PDA 和桌面验证构建，再打 tag、等待桌面正式发布并核对线上三端。中转下载 GitHub 原 artifact ZIP；大分段连续失败后仅把该分段缩为 256 KiB 子区间，保留其他已成功分段，最后检查归档摘要与唯一文件。SSH 交付后由服务器再次核对 runner 的原包大小/SHA-256；CI 的 HTTPS/SCP 仅作有界故障回退。代码修复本身不构成推送/发版授权。
+
+Mac 的现有 HTTP 代理应由 `HTTPS_PROXY` 提供；SSH 别名默认 `flowcube-prod`。只有本机配置变化时才更新本机环境或 `FLOWCUBE_RELAY_SSH_TARGET` / `FLOWCUBE_RELAY_PROXY`，先做预检再发布。入口负责中转进程、SSH 控制连接与临时文件的收尾。保留完整门禁和回退窗口，不设固定 15 分钟目标。
 
 ### 6. 验证
-- CI：`gh run list --branch main --limit 6`，确认 `Deploy Browser App`、`Tests`、`Build Desktop Installer` 都 success。
-- latest.json 已更新到新版本：
+- CI：按完整发布 SHA 查询并按需翻页，确认 `Deploy Browser App`、`Tests`、`Security Scan`、`Build PDA APK` 都 success；另查 **对应版本 tag** 的 `Build Desktop Installer`，main 上的桌面验证构建不能代替 tag 发布。不要从最近几条运行的绿灯推断本次成功；补发布成功须关联原失败运行并单独报告。
+- **一条命令核对线上三端版本**（必做）：
   ```bash
-  curl -s https://<生产域名>/latest.json
-  curl -s https://<生产域名>/api/app-update/latest
+  npm run release:verify -- --origin https://<生产域名>
   ```
-  应看到 `version` = 新版本、`notes` = 你写的更新内容、`url` 指向 `/versions/v<version>/...`。
+  它会逐项核对 `/latest.json`（版本 / 包路径 / sha256 / notes）、`/api/app-update/latest`、
+  `/api/pda/version`（版本 / versionCode / 是否可下载）与 `/api/health`，随后实际下载 EXE/APK 并核对 SHA256，任何一项不一致就退出 1。
+  **PDA 落后必须当成发版未完成**：早期版本（v0.9.19）就出现过代码、镜像、桌面清单都已发布、
+  唯独 PDA 一直停在上一版而无人发现。
 - 桌面端：在比新版本旧的客户端上启动，应弹「发现新版本 <version>」并显示更新内容。
+
+### 7. 记录结果与性能
+
+- 将完整应用 SHA、tag、PDA versionCode、各工作流 run ID、线上镜像 revision、清单及安装包摘要核验写入本版结果文档。工具修复提交与应用发布提交分别记录。
+- 分开报告「正常一次成功」「失败后恢复完成」「尚未完成」。原失败运行不删除、不当成成功；CI/线上下载验收与 Windows/PDA 真机安装、更新弹窗验收分别说明。
+- 用户已取消固定 15 分钟目标，旧记录中的该目标仅表示历史要求。记录首次启动到最终验收的总耗时；发生修复重试时另列最终应用提交到完成的耗时，包含排队、传输、门禁和恢复，不能通过换起点隐藏失败时间。不得为提速跳过门禁或压缩迁移、回退安全窗口。
+- 若使用操作端代理，明确记录该依赖；自动本地中转可证明本机在线期间无需人工搬运，不能算脱离个人电脑的托管链路验收。人工中转仍单列恢复措施。架构优化咨询按 `docs/release-pipeline-optimization-2026-09-22.md` 比较方案；其中待实施项目不是现行发布能力。
+
+#### push main 后 `Deploy Browser App` 长时间 pending（2026-09-18 已结构性修复）
+
+> **该形态自 2026-09-18 起已消除。** 保留本节仅供故障识别：若再次看到 pending，先按下面的
+> 「三段结构」核对 `build-pda-apk.yml` 的 job 划分是否被改动过——`tests/deployment-resources.test.js`
+> 里的「PDA 工作流不得让『等浏览器部署』与『持有部署组』落在同一个 job」会直接判失败。
+
+**旧结构为何会自锁**：整个 `Build PDA APK` workflow 关在 `flowcube-server-deploy` 组里，而它的
+build job 内含「等本提交浏览器部署成功」——浏览器部署要同一个组，于是 PDA 等浏览器部署、
+浏览器部署等 PDA 释放组。表现为 `Deploy Browser App = pending` 而 `Build PDA APK = in_progress`；
+GitHub 不报错，只是干等（旧 PDA 等待上限 25 分钟，期间线上不更新；现行含浏览器的等待上限为 225 分钟）。
+
+**现行三段结构（等待与持锁分离）**：
+
+| job | 并发组 | 职责 |
+|---|---|---|
+| `build-pda` | `build-pda-ci` | 只构建并上传 APK artifact；新提交可取消旧构建，不碰服务器锁 |
+| `wait-browser` | 无 | 只等本提交的浏览器部署；**不占任何部署组** |
+| `publish-pda` | `flowcube-server-deploy` | **唯一**持锁者（真正的发布临界区）；进入时浏览器部署已确认成功 |
+
+因此**不再需要**「`gh run cancel` 让路 → 等部署 → 打 tag → `checkout_ref` 补跑」这套人工处置。
+`deploy-browser.yml` 服务器端 `flock` 仍保持 1800 秒，与 PDA/桌面一致，作为兜底。
+
+#### PDA 没跟上时（`Build PDA APK` 失败 / 被取消 / 根本没触发）
+
+`Build PDA APK` 现对每次 `main` push 建立运行，避免后端迁移等路径外修复提交漏掉 PDA；已发布同版由 `preflight` 跳过构建。工作流失败、取消或被 `[skip ci]` 跳过时，补跑仍须在**已部署的发布提交**上做，并显式指定提交，不依赖当前 main HEAD：
+
+```bash
+gh workflow run build-pda-apk.yml --ref main -f checkout_ref=<完整的40位发布提交SHA>
+```
+
+工作流会以 `checkout_ref` 检出的提交为准去等它的浏览器部署，并在 `resolve target commit`
+步骤打印实际目标；若这个提交上根本没有部署运行，会在约 5 分钟内快速失败并提示，而不是空等 30 分钟。
+
+工作流还有一个 `preflight` 前置门，两种情况会**在构建前**就结束（不再白跑 4 分钟）：
+
+- `backend/apk/version.json` 与 `frontend/android/app/build.gradle` 的版本号/versionCode 不一致
+  （通常是把三端与 PDA 版本分开提交造成的，用 `bump-version.sh` 一次性同步再发）；
+- 目标版本**已经发布**（线上 `/api/pda/version` 的版本号与 versionCode 都是这一版）→ 整条构建
+  跳过并记为成功。原因：`publish-pda.sh` 拒绝「同一 versionCode 换成不同字节的安装包」，客户端也
+  不会因此更新；后续 main 提交无需重建相同版本。
+  **要发新安装包必须提升版本号**，不要试图覆盖同 versionCode 的包。
 
 ## 排查：桌面端检测不到更新
 
@@ -127,6 +190,37 @@ npm run release:tag-desktop
 3. **CI 构建失败**：`gh run list` 看 `Build Desktop Installer` 是否 success；失败常见于 tag 与 `desktop/package.json` 不一致、或 NSIS 校验失败。
 4. **latest.json 没更新**：`curl /latest.json` 看 version 是否真的变了。没变说明服务器发布步骤没跑（多半是 SSH/部署配置缺失，看该 run 日志）。
 5. **桌面端侧诊断**：在桌面端设 `FLOWCUBE_UPDATE_DIAG=1` 启动，会强制走一次检查并把接口返回、解析出的下载地址全部打日志 + 弹窗，用于定位是「没拿到 manifest」还是「版本判断没过」还是「下载地址无效」。调试还可用 `FORCE_UPDATE=1` 跳过版本比较强制弹窗。
+6. **GitHub Release 里没有安装包**：看 run 的 `Upload EXE to Release` 日志。该步骤走
+   `scripts/publish-release-asset.cjs`（带超时 + 重试 + 落地校验），GitHub 附件存储偶发
+   `HTTP 500 Error saving asset`，脚本会自动重试并在校验大小后才把 Release 转正；
+   若最终仍失败，日志里会有明确原因，Release 会停在草稿状态（不会出现"看起来发布了却没有包"）。
+   **先区分缺附件还是仅草稿未转正**。若官网包与 GitHub 附件已存在，优先用下面的原包恢复入口，不重传附件。
+   真正缺附件时：从服务器 `/versions/v<版本>/` 取回 CI 构建的同一份 exe（复算 sha256 与 latest.json 一致）
+   后 `node scripts/publish-release-asset.cjs --tag v<版本> --version <版本> --file <exe>`；
+   **不要在本机重新构建 exe**，重跑 tag 构建会让 latest.json 的新摘要与已传附件对不上。
+
+### 草稿收尾失败：复用原包恢复
+
+先核对原 tag 对应完整 SHA、原 tag 构建 run ID、正式 HTTPS 站点以及失败步骤。仅适用于原始 EXE 已构建、官网已发布、GitHub 附件已上传的情况：
+
+```bash
+gh workflow run recover-release-asset.yml --ref main \
+  -f release_tag=v<版本> \
+  -f source_run_id=<原tag构建runID> \
+  -f erp_origin=https://<已核验的生产域名>
+```
+
+工作流下载原 CI artifact，核对原构建身份、同 SHA 门禁、线上摘要和 GitHub 附件摘要，仅转正现有草稿并执行线上验收。草稿按 tag 查询可能返回 404，脚本通过 Release ID 核对；不得据此重复创建 Release。摘要不一致、原产物不可用或前置门禁失败时，停止这个恢复分支并调查原因，不能重新构建同版本包覆盖证据。观察恢复运行完成后再报告结果。
+
+### 传输故障：先定位，再恢复本次发布
+
+分别记录 runner → 产物存储、产物存储 → 生产以及校验/加载耗时，核对字节数、实际吞吐、重试和磁盘 IO。不能仅凭超时归因为跨境网络，也不能把增加并发数当作带宽已改善。
+
+v0.10.8 的原始桌面 tag 运行中，服务器 HTTPS 接收约 150 秒后失败，随后 CI→服务器 SCP 满 1800 秒退出 124；Windows 构建与同 SHA 门禁均成功。接收器刻意隐藏签名地址和 curl 错误细节，因此只能确定两条直传路径都失败，不能把某个具体网络节点说成已查明。第 2 次 attempt 用本机代理中转原 CI artifact，下载/校验 184 秒、SSH 交付 17 秒，服务器采用同摘要原包，桌面工作流和线上 12/12 校验成功。详见 `docs/release-v0.10.8-result.md`。
+
+同一工作流重跑时 GitHub 会暂留上次 attempt 的同名 artifact；`local-release-relay.py` 必须按本次 `run_started_at` 过滤旧 artifact，等新产物出现，不能把等待当作失败重试耗尽。中转的 `ready` 不等于接收成功；等目标工作流结束后确认实走路径、在线清单和 EXE/APK 实际下载摘要。若中转或工作流失败，先保留原运行和产物、读取失败步骤日志，再针对失败的运行恢复；不要改写同版本线上包或跳过门禁。生产清理遵守磁盘 IO 预检约束。
+
+若桌面 tag 运行在**正式包、清单与 Release 附件写入前**因传输失败而取消或失败，可以核对 tag 仍指向原发布 SHA，重跑**同一工作流**的下一 attempt，并让本机中转跟随新 attempt；无需升版本或新建 tag。`release:prod` 不能在 tag 已存在时重新从头执行。若任何同版本包、清单或附件已写入，先比较原包摘要并选用上面的原包恢复入口，不能让重构建覆盖已发布字节。v0.11.0 的首次桌面运行属前一种情形，第二次 attempt 才是成功证据。
 
 ## 回滚
 
@@ -139,8 +233,13 @@ node scripts/release-desktop.js <旧version> --rollback
 
 ## 关键约束（别违反）
 
+- 桌面手动 `checkout_ref` 发布以实际 `git rev-parse HEAD` 验证同 SHA 检查，输入版本必须匹配检出 package；不能借用运行界面的 main SHA 绿灯。
+- PDA 发布通过 `scripts/publish-pda.sh` 写唯一 APK 后原子切换 `backend/apk/published-version.json`；源码 version.json 只表示目标版本，不能先改生产清单再上传包。发布只更新挂载目录，不重置 Git 或重建后端。
+- 客户端需要可信 HTTPS 清单和 sha256，下载后及安装前均验摘要；移除了按 IP 放行任意证书的旧逻辑。无摘要/证书错误需修正发布源后再更新。
+
+- **发版必须同步官网更新摘要** `frontend/src/pages/landing/updates.ts`（官网只读它，不读 package 版本）；`npm run test:landing-updates` 会拦住「bump 了却没同步」。
 - **桌面正式包只能由 GitHub Actions 的 Windows runner 构建**。本机 Mac 的 `makensis` 可能被污染，打出的 exe 在部分 Windows 上「双击无反应」。本机只用于开发调试。
 - **不要手工复制 exe 到发布目录**。必须经 `release-desktop.js`，它负责生成 `metadata.json` / `latest.json` / `current/version.txt` 并强制 `latest.json` 指向 `/versions/`。
-- **tag 不可复用**：同一版本号的 tag 已存在就不能再发，必须升版本。`release-desktop-tag.sh` 会拦截重复 tag。
+- **tag 不可改指向另一个提交**：新一版不能复用已有版本号或覆盖已有正式包；`release-desktop-tag.sh` 会拦截重复创建。原 tag 工作流在尚未写入正式包时，可按上文核对后重跑同一 tag 的工作流 attempt。
 
 完整背景见 `docs/RELEASE.md`。
