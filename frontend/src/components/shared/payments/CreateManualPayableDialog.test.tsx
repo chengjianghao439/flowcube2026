@@ -142,7 +142,7 @@ it('★ 回执查不到（not_found）视为仍未确认：不换请求键，也
 
   // 文案必须说清「仍未确认」，不能给「服务器没收到，可以放心重试」这种确定性结论
   expect(host.textContent).toContain('还查不到')
-  expect(host.textContent).toContain('同一个请求键会被认作同一笔')
+  expect(host.textContent).toContain('系统会识别为同一笔，不会重复入账')
   expect(host.textContent).not.toContain('可以放心重试')
   // 「查询上次结果」仍在：未确认状态没被清掉，用户可继续查
   expect(button(host, '查询上次结果')).toBeTruthy()
