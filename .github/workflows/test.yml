@@ -480,6 +480,11 @@ jobs:
       - name: 冒烟测试 — 报表成本口径与导出汇总块（含 xlsx 读回）
         run: npm run smoke:report-cost-basis
 
+      # 改价审批：历史 old_price 必须是审批瞬间的真实当前价（不是申请时快照）；
+      # 商品缺失/软删时 fail-loud 回滚，不得留下「已批准却未改价」。
+      - name: 冒烟测试 — 改价审批历史旧价与商品缺失回滚
+        run: npm run smoke:price-change-history
+
       - name: 冒烟测试 — 仓库运营与 PDA 异常指标、日期和仓库范围
         run: npm run smoke:warehouse-ops
 

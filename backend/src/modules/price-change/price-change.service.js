@@ -133,22 +133,43 @@ async function submit(id, operator) {
 }
 
 /**
- * 审批动作（applied 由审批通过的实例触发时调用）：通过 → 更新商品价格 + 写历史。
- * 审批通过瞬间读取当前价做 old_price 快照（与申请时可能已变化，以审批时刻为准）。
+ * 审批动作（由审批通过的实例触发时调用）：通过 → 更新商品价格 + 写历史。
+ *
+ * **历史旧价取「审批瞬间的真实当前价」**（2026-09-27 P8 修复）：本函数在**同一事务内**
+ * 对商品行加 `FOR UPDATE` 后读当前值。申请创建时写入 `price_change_requests.old_price`
+ * 只是**申请时的展示快照**——期间主档可能被手工改价（`products.update`）或另一张申请先通过，
+ * 拿它当历史旧价会与真实变更前价格不符。
+ *
+ * 锁顺序：本函数在 `price_change_requests` 行锁与审批实例/任务锁**之后**才取商品行锁；
+ * `products.update` 只锁商品行、不锁申请单，**不构成环**。
  */
 async function applyApprovedPrice(conn, { requestId }) {
   const [[req]] = await conn.query('SELECT * FROM price_change_requests WHERE id=?', [requestId])
-  if (!req || Number(req.status) !== 2) return // 已应用过或非通过态，跳过
+  if (!req || Number(req.status) !== 2) return // 非通过态，跳过
   const column = PRICE_COLUMN[req.price_type]
   // create 入口在 :83 已挡非法 price_type；审批通过路径读的是库里的历史值，
   // 不能依赖「当初写入时校验过」，这里独立再挡一次（2026-09-18 收口）。
   assertSqlIdentifier(column, 'column')
+
+  const [[current]] = await conn.query(
+    `SELECT \`${column}\` AS current_price FROM product_items WHERE id=? AND deleted_at IS NULL FOR UPDATE`,
+    [req.product_id],
+  )
+  // 商品不存在或已软删：**必须 fail-loud 并回滚整个审批事务**。
+  // 不能在这里 `return`——调用方 approve() 已经把审批实例与申请单置为「已通过」，
+  // 静默返回会 commit 出「已批准却未改价、也无历史」的不一致状态。
+  // （正常软删有 price_change_requests 引用保护，但异常/历史数据仍可能落到这里。）
+  if (!current) {
+    throw new AppError('改价目标商品不存在或已删除，本次改价未生效，审批已回滚', 409, 'PRICE_CHANGE_PRODUCT_MISSING')
+  }
+  const actualOldPrice = current.current_price == null ? null : Number(current.current_price)
+
   await conn.query(`UPDATE product_items SET \`${column}\`=? WHERE id=? AND deleted_at IS NULL`, [Number(req.new_price), req.product_id])
   await conn.query(
     `INSERT INTO product_price_history
        (product_id, product_code, product_name, price_type, old_price, new_price, change_source, approval_id, operator_id, operator_name, remark)
      VALUES (?,?,?,?,?,?, 'approval', ?, ?, ?, ?)`,
-    [req.product_id, req.product_code, req.product_name, req.price_type, Number(req.old_price), Number(req.new_price),
+    [req.product_id, req.product_code, req.product_name, req.price_type, actualOldPrice, Number(req.new_price),
      req.approval_id || null, req.applicant_id || null, req.applicant_name || null, req.reason || '改价审批通过'],
   )
 }
