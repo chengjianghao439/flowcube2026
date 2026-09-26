@@ -146,3 +146,12 @@ AST 文案和数量覆盖守卫依赖 frontend 的 TypeScript，必须在安装�
 - `npm run smoke:print-barcode-void-receipt`：从采购单→收货→上架造出**真实收货单**排一条 PENDING 打印任务，再走真正的 `voidReceipt` service——断言容器 VOID、单据回退「待收货(1)」、该任务变 FAILED 且**不能再被 `claimClientJobs` 领取**；再用「容器已被后续动作改动」触发 409，断言**不得误终结**（任务仍 PENDING 且仍可被领取）。
 
 两者都做过反向破坏验证：去掉任一处排除/拒绝/终结，对应断言精准红。业务规则见 `docs/print-deploy-ops.md`「作废容器不得补打」条。
+
+### 2026-09-27 报表成本口径专项
+
+`npm run smoke:report-cost-basis`（独立回环测试库，Tests CI 的报表冒烟段）：三段——
+① **导出读回**：真实生成 xlsx 再解析单元格，断言利润导出的汇总角标（销售额/销售成本/销售毛利/库存金额/滞销库存金额）与成本口径提示**确实在单元格里**（`payload` 顶层同名数组曾是从未生效的死字段，仅断言 payload 不够）；
+② **多 sheet 渲染**：有汇总块时**汇总行 C..末列必须为空**（`fillSheet` 的 `ws.columns.header` 会把整行表头钉在第 1 行，留下"幽灵表头"），且真表头落在 `summaryRows.length + 2` 行；无汇总时表头仍在首行（回归）；
+③ **成本口径**：利润分析与 KPI 不得拿 `p.sale_price` 当成本，快照为空时区分「按当前进价估算」与「成本缺失」；并断言 `trend` / `byWarehouse` **不伪报**这两个量（`0` 不等于"没有"）。
+
+夹具显式落在远期专属月份 `2031-03`（`created_at` 与 `sale_date` 都指定），因此**不依赖共享库恰好为空**；每个 INSERT 成功后立即登记待清理 ID。

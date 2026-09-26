@@ -72,6 +72,22 @@ export default function KpiPage() {
 
   const trendRows = data?.trend ?? []
   const chartRows = trendRows.map(r => ({ month: r.month, 销售净额: r.gmv, 毛利: r.grossProfit, 回款: r.received }))
+  // 成本口径提示（2026-09-27 P2）：这是**经营估算口径**（快照优先，缺快照用当前进价估算），
+  // 与凭证侧的**快照记账口径**不是一回事。**两期都要看**——卡片展示"当期 vs 上期 + 环比"，
+  // 任一期含估算/缺失都会让环比不再可靠，只提示当期会漏掉"上期有问题"的情形。
+  const costBasisNote = (() => {
+    const basis = data?.costBasis
+    if (!basis) return ''
+    const describe = (label: string, b?: { missingCostLineCount?: number; estimatedCostAmount?: number }) => {
+      const bits: string[] = []
+      if (Number(b?.missingCostLineCount) > 0) bits.push(`${b?.missingCostLineCount} 行无成本按 0 计`)
+      if (Number(b?.estimatedCostAmount) > 0) bits.push(`${money(b?.estimatedCostAmount)} 按当前进价估算`)
+      return bits.length ? `${label}：${bits.join('，')}` : ''
+    }
+    const notes = [describe('当期', basis.current), describe('上期', basis.previous)].filter(Boolean)
+    const head = ' 毛利为经营估算口径（出库快照优先），不等同会计成本'
+    return notes.length ? `${head}；${notes.join('；')}。` : `${head}。`
+  })()
   const totalGmv = (data?.byWarehouse ?? []).reduce((sum, row) => sum + row.gmv, 0)
 
   const warehouseColumns: TableColumn<KpiByWarehouseRow>[] = [
@@ -103,7 +119,7 @@ export default function KpiPage() {
         }
       />
 
-      <p className="text-xs leading-5 text-muted-foreground">销售按已出库订单的业务日期统计，净额扣除整单折扣；回款按到账日期统计。受限仓库账号仅统计可归属且有权查看的销售单回款。分仓以订单头仓库归属，环比遇负值上期按其绝对值计算。</p>
+      <p className="text-xs leading-5 text-muted-foreground">销售按已出库订单的业务日期统计，净额扣除整单折扣；回款按到账日期统计。受限仓库账号仅统计可归属且有权查看的销售单回款。分仓以订单头仓库归属，环比遇负值上期按其绝对值计算。{costBasisNote}</p>
       <ReportQueryFeedback title="经营 KPI" hasData={!!data} isError={isError} isFetching={isFetching} error={error} onRetry={() => void refetch()} />
       {(!isError || !!data) && (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">

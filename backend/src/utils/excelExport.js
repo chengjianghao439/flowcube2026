@@ -35,7 +35,11 @@ async function exportXlsx(res, filename, sheetName, columns, data) {
  * @param {number} startRow - 表头所在行（1 起）；startRow>1 时其上方的行留给汇总块
  */
 function fillSheet(ws, columns, data, startRow = 1) {
-  ws.columns = columns.map(c => ({ header: c.header, key: c.key, width: c.width || 18 }))
+  // 只给 key/width，**不给 header**：ExcelJS 会据 header 把整行表头钉在第 1 行；
+  // 当调用方在顶部写了汇总块（summaryRows）时，A/B 之外的列会留下"幽灵表头"
+  // （2026-09-27 用 3 列 + 2 行汇总的真实工作簿读回：C1 竟是「仓库」，而真表头在 A4）。
+  // 表头统一由下面 headerRow.values 在 startRow 写，不受汇总块影响。
+  ws.columns = columns.map(c => ({ key: c.key, width: c.width || 18 }))
 
   // 表头样式
   const headerRow = ws.getRow(startRow)
@@ -87,10 +91,14 @@ async function exportMultiSheetXlsx(res, filename, sheets) {
   const wb = new ExcelJS.Workbook()
   for (const sheet of sheets) {
     const ws = wb.addWorksheet(sheet.sheetName)
-    ws.columns = sheet.columns.map(c => ({ header: c.header, key: c.key, width: c.width || 18 }))
-    let startRow = 1
-    if (Array.isArray(sheet.summaryRows) && sheet.summaryRows.length) {
-      sheet.summaryRows.forEach(([label, value], i) => {
+    const summary = Array.isArray(sheet.summaryRows) ? sheet.summaryRows : []
+    // 汇总块末尾空一行，表头从 summary.length + 2 行开始
+    const startRow = summary.length ? summary.length + 2 : 1
+    // 先铺表头与数据（表头由 fillSheet 在 startRow 写，不会再写第 1 行）
+    fillSheet(ws, sheet.columns, sheet.rows || [], startRow)
+    if (summary.length) {
+      // 汇总块占第 1..n 行；fillSheet 已不再往第 1 行写表头，故不会互相覆盖
+      summary.forEach(([label, value], i) => {
         const r = i + 1
         const labelCell = ws.getCell(`A${r}`)
         labelCell.value = label
@@ -100,10 +108,7 @@ async function exportMultiSheetXlsx(res, filename, sheets) {
         valueCell.font = { bold: true }
         ws.getRow(r).height = 20
       })
-      // 汇总块末尾空一行，表头从 summaryRows.length + 2 行开始
-      startRow = sheet.summaryRows.length + 2
     }
-    fillSheet(ws, sheet.columns, sheet.rows || [], startRow)
   }
   await writeWorkbook(res, wb, filename)
 }

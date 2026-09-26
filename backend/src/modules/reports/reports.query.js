@@ -702,7 +702,13 @@ async function fetchProfitAnalysisRows({ startDate = null, endDate = null, scope
        so.id, so.order_no, so.customer_name, so.warehouse_name, so.created_at,
        GREATEST(0, GREATEST(0, so.total_amount) - GREATEST(0, COALESCE(so.discount_amount, 0))) AS total_amount,
        COALESCE(SUM(soi.amount), 0) AS items_amount,
-       COALESCE(SUM(soi.quantity * COALESCE(soi.cost_snapshot, NULLIF(p.cost_price, 0), p.sale_price, 0)), 0) AS cost_amount
+       COALESCE(SUM(soi.quantity * COALESCE(soi.cost_snapshot, NULLIF(p.cost_price, 0), 0)), 0) AS cost_amount,
+       /* 成本基准（2026-09-27 P2 修复）：不再拿 p.sale_price 当成本——用售价当成本会让毛利失真。
+          回退只保留迁移 119 已定的「非零现价进价」，并把两种非快照情形分开暴露，供页面与导出提示：
+          estimated = 快照为空但进价 > 0（按当前进价估算）；missing = 快照为空且无进价（成本缺失，记 0）。 */
+       COALESCE(SUM(CASE WHEN soi.cost_snapshot IS NULL AND COALESCE(p.cost_price, 0) <> 0
+                         THEN soi.quantity * p.cost_price ELSE 0 END), 0) AS estimated_cost_amount,
+       COALESCE(SUM(CASE WHEN soi.cost_snapshot IS NULL AND COALESCE(p.cost_price, 0) = 0 THEN 1 ELSE 0 END), 0) AS missing_cost_line_count
      FROM sale_orders so
      INNER JOIN sale_order_items soi ON soi.order_id = so.id
      INNER JOIN product_items p ON p.id = soi.product_id
@@ -711,7 +717,9 @@ async function fetchProfitAnalysisRows({ startDate = null, endDate = null, scope
 
   const summaryRow = await fetchOne(
     `SELECT COALESCE(SUM(s.total_amount), 0) AS saleAmount,
-            COALESCE(SUM(s.cost_amount), 0) AS costAmount
+            COALESCE(SUM(s.cost_amount), 0) AS costAmount,
+            COALESCE(SUM(s.estimated_cost_amount), 0) AS estimatedCostAmount,
+            COALESCE(SUM(s.missing_cost_line_count), 0) AS missingCostLineCount
      FROM (${saleOrderSql}) s`,
     saleParams,
   )
@@ -727,7 +735,7 @@ async function fetchProfitAnalysisRows({ startDate = null, endDate = null, scope
   // 商品收入按明细金额占整单明细总额的比例分摊净销售额；零金额单不除零。
   // 中间值不按分截断，避免多行分摊反复舍入；展示/导出各自格式化金额。
   const productRevenue = 'COALESCE(SUM(so.total_amount * soi.amount / NULLIF(so.items_amount, 0)), 0)'
-  const productCost = 'COALESCE(SUM(soi.quantity * COALESCE(soi.cost_snapshot, NULLIF(p.cost_price, 0), p.sale_price, 0)), 0)'
+  const productCost = 'COALESCE(SUM(soi.quantity * COALESCE(soi.cost_snapshot, NULLIF(p.cost_price, 0), 0)), 0)'
   const productRows = await fetchMany(
     `SELECT
        p.id, p.code, p.name, p.unit, p.article_number, p.spec, p.color,
@@ -850,7 +858,11 @@ function kpiSalesQuery(start, end, scopeWarehouseIds) {
   return {
     sql: `SELECT so.id, so.sale_date, so.warehouse_id, so.warehouse_name,
             GREATEST(0, GREATEST(0, so.total_amount) - GREATEST(0, COALESCE(so.discount_amount, 0))) AS gmv,
-            COALESCE(SUM(soi.quantity * COALESCE(soi.cost_snapshot, NULLIF(p.cost_price, 0), p.sale_price, 0)), 0) AS cost
+            COALESCE(SUM(soi.quantity * COALESCE(soi.cost_snapshot, NULLIF(p.cost_price, 0), 0)), 0) AS cost,
+            /* 与利润分析同口径（2026-09-27 P2 修复）：不再用售价当成本，并把估算与缺失分开暴露 */
+            COALESCE(SUM(CASE WHEN soi.cost_snapshot IS NULL AND COALESCE(p.cost_price,0) <> 0
+                              THEN soi.quantity * p.cost_price ELSE 0 END), 0) AS estimated_cost_amount,
+            COALESCE(SUM(CASE WHEN soi.cost_snapshot IS NULL AND COALESCE(p.cost_price,0) = 0 THEN 1 ELSE 0 END), 0) AS missing_cost_line_count
           FROM sale_orders so
           INNER JOIN sale_order_items soi ON soi.order_id = so.id
           INNER JOIN product_items p ON p.id = soi.product_id
@@ -885,6 +897,13 @@ function mapKpiValues(sale = {}, received = 0) {
     orderCount,
     received: Math.round(Number(received || 0) * 100) / 100,
     avgOrderValue: orderCount > 0 ? Math.round((gmv / orderCount) * 100) / 100 : 0,
+    // 成本基准提示（2026-09-27 P2）：只有当期/对比期的外层查询聚合了这两列才输出。
+    // `fetchKpiTrendRows` / `fetchKpiByWarehouseRows` 的外层 SQL 没有这两列，且它们同样调用本函数——
+    // 若在这里无条件输出，就会**伪报 0**，让调用方误以为"没有估算、也没有缺失"。故以键是否存在为准。
+    ...(sale.estimatedCostAmount === undefined ? {} : {
+      estimatedCostAmount: Math.round(Number(sale.estimatedCostAmount || 0) * 100) / 100,
+      missingCostLineCount: Number(sale.missingCostLineCount || 0),
+    }),
   }
 }
 
@@ -898,7 +917,9 @@ async function fetchKpiRows(params = {}) {
     const saleQuery = kpiSalesQuery(start, end, scopeWarehouseIds)
     const receiptQuery = kpiReceiptsQuery(start, end, scopeWarehouseIds)
     const sale = await fetchOne(
-      `SELECT COALESCE(SUM(s.gmv), 0) AS gmv, COALESCE(SUM(s.cost), 0) AS cost, COUNT(*) AS orderCount
+      `SELECT COALESCE(SUM(s.gmv), 0) AS gmv, COALESCE(SUM(s.cost), 0) AS cost, COUNT(*) AS orderCount,
+              COALESCE(SUM(s.estimated_cost_amount), 0) AS estimatedCostAmount,
+              COALESCE(SUM(s.missing_cost_line_count), 0) AS missingCostLineCount
        FROM (${saleQuery.sql}) s`, saleQuery.params,
     )
     const receipt = await fetchOne(`SELECT COALESCE(SUM(pe.amount), 0) AS received ${receiptQuery.sql}`, receiptQuery.params)

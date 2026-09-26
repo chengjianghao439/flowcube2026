@@ -680,10 +680,35 @@ async function getProfitAnalysisExportPayload(query) {
   }))
 
   return {
-    filename: `利润库存分析_${buildDateStamp()}`,
+    // 成本口径提示（2026-09-27 P2）：毛利是**经营估算口径**（快照优先，缺快照时用当前进价估算、
+    // 完全无成本的行记 0），与凭证侧的会计成本口径不是一回事。有估算/缺失时在文件名上带标记，
+    // 提醒拿到文件的人别把它当成精确利润。
+    filename: (() => {
+      const s = data.summary || {}
+      const bits = []
+      if (Number(s.missingCostLineCount) > 0) bits.push(`含${s.missingCostLineCount}行无成本`)
+      if (Number(s.estimatedCostAmount) > 0) bits.push('含进价估算')
+      return `利润库存分析${bits.length ? `（${bits.join('·')}）` : ''}_${buildDateStamp()}`
+    })(),
     sheets: [
       {
         sheetName: '销售毛利',
+        // 口径必须写进**表内**——文件名一改就没了。这里明确成本来源、缺失规模与估算金额，
+        // 并说明它与凭证侧会计成本口径不同，避免拿到文件的人把估算毛利当成精确利润。
+        // 汇总角标必须挂在**sheet 上**：controller 只把 payload.sheets 交给 exportMultiSheetXlsx，
+        // 而它只渲染 sheet.summaryRows——原先写在 payload 顶层的同名数组是死字段（注释说"第一页顶部
+        // 附加合计行"，实际从未进过工作簿）。2026-09-27 合并到这里，并加上成本口径提示。
+        summaryRows: [
+          ['销售额', round2(data.summary.saleAmount)],
+          ['销售成本', round2(data.summary.costAmount)],
+          ['销售毛利', round2(data.summary.grossProfit)],
+          ['库存金额', round2(data.summary.stockValue)],
+          ['滞销库存金额', round2(data.summary.slowMovingValue)],
+          ['成本口径', '经营估算：出库快照优先；缺快照时按当前进价估算，完全无成本的行按 0 计'],
+          ['无成本明细行数', String(Number(data.summary?.missingCostLineCount || 0))],
+          ['按当前进价估算的金额', `¥${Number(data.summary?.estimatedCostAmount || 0).toFixed(2)}`],
+          ['提示', '毛利为经营估算口径，存在估算/缺失时可能偏高；与凭证侧的会计成本（快照记账）口径不同，不可直接与总账对账'],
+        ],
         columns: [
           { header: '销售单号', key: 'orderNo', width: 22 },
           { header: '客户', key: 'customerName', width: 20 },
@@ -734,14 +759,6 @@ async function getProfitAnalysisExportPayload(query) {
         ],
         rows: slowRows,
       },
-    ],
-    // 汇总角标：第一页顶部附加合计行
-    summaryRows: [
-      ['销售额', round2(data.summary.saleAmount)],
-      ['销售成本', round2(data.summary.costAmount)],
-      ['销售毛利', round2(data.summary.grossProfit)],
-      ['库存金额', round2(data.summary.stockValue)],
-      ['滞销库存金额', round2(data.summary.slowMovingValue)],
     ],
   }
 }

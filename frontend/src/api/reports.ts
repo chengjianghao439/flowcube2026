@@ -297,6 +297,10 @@ export interface ProfitAnalysisSummary {
   saleAmount: number
   costAmount: number
   grossProfit: number
+  /** 快照为空、按当前进价估算的成本（元）；>0 表示毛利含估算成分。 */
+  estimatedCostAmount?: number
+  /** 完全无成本的明细行数；>0 表示这些行成本记 0，毛利可能偏高。 */
+  missingCostLineCount?: number
   stockValue: number
   slowMovingValue: number
   slowMovingCount: number
@@ -346,6 +350,15 @@ export interface KpiReport {
   metrics: KpiMetric[]
   trend: KpiTrendRow[]
   byWarehouse: KpiByWarehouseRow[]
+  /**
+   * 成本基准提示（只读补充，不进 metrics）：**两期**的按当前进价估算金额与无成本明细行数。
+   * 两期都给是因为卡片展示"当期 vs 上期 + 环比"，任一期不可靠都会使环比失真。
+   * trend / byWarehouse 的聚合里没有这两列，故它们不含此口径。
+   */
+  costBasis?: {
+    current: { estimatedCostAmount: number; missingCostLineCount: number }
+    previous: { estimatedCostAmount: number; missingCostLineCount: number }
+  }
 }
 export const getKpiApi = (params: { period?: string; offset?: number; months?: number } = {}) =>
   client.get<KpiReport>(`/reports/kpi?${q(params)}`)

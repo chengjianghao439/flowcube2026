@@ -56,6 +56,20 @@ export default function ProfitAnalysisPage() {
 
   const { data, isLoading, isFetching, isError, error, refetch } = profitQ
   const summary = data?.summary
+  // 成本口径提示（2026-09-27 P2）：这里的毛利是**经营估算口径**（出库快照优先，缺快照时用当前进价估算，
+  // 完全无成本的行记 0），**与凭证侧的快照记账口径（成本未知即记 0）不是一回事**；
+  // 有估算/缺失时必须说明，否则用户会把估算毛利当成精确利润。
+  const costBasisHint = (() => {
+    if (!summary) return '经营估算口径（出库快照优先）'
+    const parts = ['经营估算口径（出库快照优先）']
+    if (Number(summary.missingCostLineCount) > 0) {
+      parts.push(`${summary.missingCostLineCount} 行无成本数据按 0 计，毛利可能偏高`)
+    }
+    if (Number(summary.estimatedCostAmount) > 0) {
+      parts.push(`其中 ${money(summary.estimatedCostAmount)} 按当前进价估算`)
+    }
+    return parts.join('；')
+  })()
   const stockRows = useMemo(() => (data?.stockValue ?? []).map(row => ({ ...row, rowId: `${row.id}-${row.warehouseId}` })), [data?.stockValue])
 
   function openPath(path: string, title: string) {
@@ -136,7 +150,7 @@ export default function ProfitAnalysisPage() {
 
       <div className="grid gap-3 sm:grid-cols-2 min-[960px]:grid-cols-4">
         <SummaryCard label="销售毛利" value={money(summary?.grossProfit)} hint={`销售净额 ${money(summary?.saleAmount)}`} negative={(summary?.grossProfit ?? 0) < 0} />
-        <SummaryCard label="销售成本" value={money(summary?.costAmount)} hint="按销售时的成本价计算" />
+        <SummaryCard label="销售成本" value={money(summary?.costAmount)} hint={costBasisHint} />
         <SummaryCard label="库存金额" value={money(summary?.stockValue)} hint="当前账号可查看仓库的全部库存估值" />
         <SummaryCard label="滞销库存" value={summary ? `${summary.slowMovingCount} 种商品` : '—'} hint={`金额 ${money(summary?.slowMovingValue)} · 查看同口径明细`} onClick={() => setTab('slow')} />
       </div>

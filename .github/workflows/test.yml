@@ -475,6 +475,11 @@ jobs:
       - name: 冒烟测试 — 报表数值正确性（与底层表核对，审计 4.6）
         run: npm run smoke:reports-values
 
+      # 报表成本口径（2026-09-27 P2）：利润分析与 KPI 不得拿售价当成本；快照为空时区分
+      # 「按当前进价估算」与「成本缺失」。含真实生成 xlsx 的读回断言（汇总块与幽灵表头）。
+      - name: 冒烟测试 — 报表成本口径与导出汇总块（含 xlsx 读回）
+        run: npm run smoke:report-cost-basis
+
       - name: 冒烟测试 — 仓库运营与 PDA 异常指标、日期和仓库范围
         run: npm run smoke:warehouse-ops
 

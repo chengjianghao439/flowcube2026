@@ -25,3 +25,7 @@
 日志位于本地 `output/operations-optimization/kpi-*.log`，不随代码提交。未发布，未做生产/真机业务验收，也未宣称大规模生产查询性能已验收。
 
 窄屏仅用 CSS 改变菜单视觉位置，键盘仍沿既有 DOM 顺序先经过导航再到工具区，未改变焦点及权限逻辑。
+
+**成本口径（2026-09-27 P2）**：`kpiSalesQuery` 的成本表达式去掉 `p.sale_price` 这一级回退（快照为空且进价为 0 时拿售价当成本会把毛利系统性压低），保留迁移 119 已定的「非零现价进价」估算。新增只读补充字段 `costBasis`，**两期都给**（`current` / `previous`）——卡片展示"当期 vs 上期 + 环比"，只给当期会漏掉"上期含估算/缺失"的情形，使环比看起来比实际可靠。`costBasis` **刻意不进 `metrics` 数组**（否则会多出第 6 张指标卡、改变页面结构）。
+
+**接口一致性**：`fetchKpiTrendRows` / `fetchKpiByWarehouseRows` 与 `fetchKpiRows` **共用 `mapKpiValues`**，但前两者的外层 SQL 没有聚合这两列——故 `mapKpiValues` 只在传入对象**真的带该键**时才输出，避免把"没查"伪报成 `0`（否则页面会显示"0 元估算、0 行缺失"）。回归 `npm run smoke:report-cost-basis`。

@@ -304,6 +304,11 @@ async function profitAnalysis(params = {}) {
       saleAmount,
       costAmount,
       grossProfit: saleAmount - costAmount,
+      /* 成本基准（2026-09-27 P2）：这是**经营估算口径**——快照优先，缺快照时用「当前进价」估算，
+         完全无成本的行记 0；与凭证侧的**快照记账口径**（成本未知即记 0）不是一回事，勿混称。
+         两个量供页面/导出提示，避免把估算毛利当成精确利润。 */
+      estimatedCostAmount: safeNum(summaryRow.estimatedCostAmount),
+      missingCostLineCount: Number(summaryRow.missingCostLineCount || 0),
       stockValue: safeNum(stockSummaryRow.stockValue),
       slowMovingValue: safeNum(slowSummaryRow.slowMovingValue),
       slowMovingCount: Number(slowSummaryRow.slowMovingCount || 0),
@@ -383,6 +388,21 @@ async function kpiMetrics(params = {}) {
     prevPeriod,
     trend,
     byWarehouse,
+    /* 成本基准（2026-09-27 P2）：这是**经营估算口径**——快照优先，缺快照时用「当前进价」估算；
+       它与凭证侧的**快照记账口径**（成本未知即记 0）是两回事，不要混称"成本记账口径"。
+       **两期都要给**：KPI 卡片展示"当期 vs 上期 + 环比"，只给当期的话，上期存在缺失/估算时
+       环比会被无提示地当成可靠。**只读补充字段**，刻意不放进 metrics 数组（避免多出指标卡）；
+       trend / byWarehouse 的外层聚合没有这两列，故它们不含此口径——见 mapKpiValues。 */
+    costBasis: {
+      current: {
+        estimatedCostAmount: Number(current.estimatedCostAmount ?? 0),
+        missingCostLineCount: Number(current.missingCostLineCount ?? 0),
+      },
+      previous: {
+        estimatedCostAmount: Number(previous.estimatedCostAmount ?? 0),
+        missingCostLineCount: Number(previous.missingCostLineCount ?? 0),
+      },
+    },
     metrics: [
       { key: 'gmv', label: '销售净额', current: current.gmv, previous: previous.gmv, changePct: pct(current.gmv, previous.gmv) },
       { key: 'grossProfit', label: '毛利', current: current.grossProfit, previous: previous.grossProfit, changePct: pct(current.grossProfit, previous.grossProfit) },
