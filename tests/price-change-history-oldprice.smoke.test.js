@@ -168,6 +168,15 @@ async function main() {
       try { await price.approve(req5.id, admin) } catch (e) { codeB = e.code }
       assert.equal(codeB, 'SELF_APPROVAL_DENIED', `提交人 B 自批应被拒（只挡 A 不够），实际 ${codeB ?? '被放行'}`)
       // 状态未被破坏：申请仍待审批、实例仍进行中、商品价与历史未变
+      // reject 路径同样必须收口（与 approve 同一安全单元）：两个身份各自驳回都要被挡
+      let rejA = null
+      try { await price.reject(req5.id, { reason: '测试', operator: applicantA }) } catch (e) { rejA = e.code }
+      assert.equal(rejA, 'SELF_APPROVAL_DENIED', `创建人 A 自驳回应被拒，实际 ${rejA ?? '被放行'}`)
+      let rejB = null
+      try { await price.reject(req5.id, { reason: '测试', operator: admin }) } catch (e) { rejB = e.code }
+      assert.equal(rejB, 'SELF_APPROVAL_DENIED', `提交人 B 自驳回应被拒（只挡 A 不够），实际 ${rejB ?? '被放行'}`)
+      const [[inst5c]] = await pool.query('SELECT status FROM approval_instances WHERE id=?', [inst5.id])
+      assert.equal(Number(inst5c.status), 1, 'reject 被拒后审批实例必须仍是进行中')
       const [[r5]] = await pool.query('SELECT status FROM price_change_requests WHERE id=?', [req5.id])
       assert.equal(Number(r5.status), 1, '两次被拒后申请必须仍是待审批')
       const [[inst5b]] = await pool.query('SELECT status FROM approval_instances WHERE id=?', [inst5.id])

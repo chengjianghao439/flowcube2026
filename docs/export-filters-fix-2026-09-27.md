@@ -452,7 +452,7 @@
 
 **"本人"必须按两个身份收口（2026-09-27 复核补正）**：只查 `request.applicant_id`（创建人）**仍有绕行**——A 创建/B 提交时，B 是提交人且被纳入节点快照，**B 撤权后可自批**、**B 为超管时被 `assertCanApproveTask` 的 `roleId===1` 恒放行**。故 `approve`/`reject` 现对 **`row.applicant_id`（创建人）与 `active.instance.applicant_id`（提交人）两个身份都做当前授权断言**（相同 ID 去重）；`active` 查询提到断言之前。
 
-**回归 `tests/price-change-history-oldprice.smoke.test.js` 8/0**：P8 旧价、软删回滚、超管自提 403、撤权后自批 403、**A≠B 两身份各自自批均 403**（并断言申请/实例/商品/历史均未变）。**反向破坏**：把身份集合收回只查创建人 → **A≠B 那条精准红（"提交人 B 自批…实际 被放行"）**，其余 7 条不受影响。共享夹具 `smoke_limited.allow_self_approve` 的**原值已读取并在 finally 按原值恢复**，超管用例前置断言其授权确为 0。
+**回归 `tests/price-change-history-oldprice.smoke.test.js` 8/0**：P8 旧价、软删回滚、超管自提 403、撤权后自批 403、**A≠B 两身份各自自批均 403**——**approve 与 reject 两条路径都覆盖**（两个身份各自驳回同样断言 `SELF_APPROVAL_DENIED`，实例仍进行中），并断言申请/实例/商品/历史均未变。**反向破坏**：把身份集合收回只查创建人 → **A≠B 那条精准红（"提交人 B 自批…实际 被放行"）**，其余 7 条不受影响。共享夹具 `smoke_limited.allow_self_approve` 的**原值已读取并在 finally 按原值恢复**，超管用例前置断言其授权确为 0。
 
 **新旧待办快照与即时撤销的关系（明确）**：`allow_self_approve` **撤销后**，
 - **新提交**：`startApproval` 重查 ⇒ 申请人不再进快照 ⇒ 引擎直接挡；
