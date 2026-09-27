@@ -631,9 +631,9 @@ SELECT f.company_id, f.invoice_type, COUNT(*) FROM fin_invoices f
 
 **安全边界核对（本轮中途发现并已收口，重要）**：
 - `backend/index.js` 无条件 `startScheduler()`；`scheduler.js` 的物流 worker 条件是 **`bool('LOGISTICS_WORKER_ENABLED', true)`——默认开启**，且启动时**不检查是否有运单**。
-- 首次启动（未显式关闭）时日志**确实**出现「物流取号/轨迹 worker 已启动」。但**未产生任何外呼**：该库 `carriers`/`logistics_waybills`/`logistics_freight_bills`/`logistics_freight_settlements`/`logistics_tracking_events` **全部 0 行**，日志中**无**运单处理或 HTTP 记录；钉钉 webhook 在 `backend/.env` 与两个 env 文件中**均未设置**（只统计键出现次数，未读值），代码标注「未配置则静默」。
+- 首次启动（未显式关闭）时日志**确实**出现「物流取号/轨迹 worker 已启动」。但**未观察到外呼证据**：该库 `carriers`/`logistics_waybills`/`logistics_freight_bills`/`logistics_freight_settlements`/`logistics_tracking_events` **全部 0 行**，日志中**无**运单处理或 HTTP 记录；钉钉 webhook 在 `backend/.env` 与两个 env 文件中**均未设置**（只统计键出现次数，未读值），代码标注「未配置则静默」。
 - **已停服务并用安全配置重启**：显式 `LOGISTICS_WORKER_ENABLED=0` + `DINGTALK_ALERT_WEBHOOK=`（空值覆盖；dotenv 不 override 已有 env）⇒ 重启日志中「物流取号/轨迹 worker 已启动」**为 0 行**。
-- ⇒ 结论：**本轮未触发任何真实物流调用或客户消息**；后续同场景验收应**默认**带上这两个开关。
+- ⇒ 结论：**未观察到本轮触发真实物流调用或客户消息的证据**（该库物流表为空、日志无处理记录、webhook 未配置）。**本轮未做网络抓包**，所以这是「**未观察到外呼证据**」，不等于「已证明没有外呼」——不要把未做的观测当成负面证明。后续同场景验收应**默认**带上这两个开关。
 
 **落盘证据（不以命令输出为准，全部独立核验）**：
 | 项 | 实测值 |
