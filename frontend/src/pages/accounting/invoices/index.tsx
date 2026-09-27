@@ -69,7 +69,8 @@ function InvoiceDialog({ open, invoiceType, edit, onClose }: { open: boolean; in
       invoiceType, invoiceCode: f.invoiceCode || null, invoiceNo: f.invoiceNo.trim(), partyName: f.partyName.trim(), partyTaxNo: f.partyTaxNo || null,
       amountNoTax: noTax, taxRate: rate, taxAmount, amountWithTax: withTax, invoiceDate: f.invoiceDate, sourceNo: f.sourceNo || null, remark: f.remark || null,
       // 编辑乐观锁（迁移 263）：把打开弹窗时那份的 revision 原样回传；后端发现已被他人改动即 409，
-      // 避免两次并发编辑互相静默覆盖（金额与关联单号都会丢）。
+      // 避免两次并发编辑互相静默覆盖（**实测**是金额/备注会被覆盖；来源关联走同一条 UPDATE
+      // 路径、存在同样风险，但未单独实测）。
       ...(edit ? { revision: edit.revision } : {}),
     }
     if (edit) update({ id: edit.id, d }, {
