@@ -93,31 +93,71 @@ async function getInvoice(id, companyId = 1) {
  * 不得超过该单的应收/应付基准（payment_records.total_amount——出库/收货后按实发/实收
  * 量重算的权威口径，而非订单原始总额）。
  *
- * 只对「能反查到单据、且该单已产生账款基准」的发票做硬校验；查不到单据或该单尚无
- * 账款基准（未结算/未出库，属「先开票后发货」的合法场景）不拦截，保留发票池弱关联的
- * 灵活性。已红冲（销项 status=2）的发票是冲销，不计入已开票合计。
+ * **两件事必须分开**（2026-09-27）：本函数既反查**订单身份**、又做**配额硬校验**，二者不同步：
+ *   · **配额硬校验** 只在「该单已产生账款基准（`payment_records.total_amount > 0`）」时做；
+ *     无基准（未出库/未结算）时跳过校验（`quotaChecked=false`）。
+ *   · **订单身份** 只要单号能查到单据就回报（`sourceId`），**不受有无基准影响**——
+ *     「先开票后发货」是合法场景，此时身份已确定；若因无基准而返回 null，调用方会把这
+ *     类发票的 `source_id`/`source_type` 置空，之后也不会自动回连，税额永远进不了凭证。
+ * 查不到单据（期初/无单发票）时返回 null。已红冲（销项 status=2）的发票是冲销，不计入已开票合计。
  *
  * @param {object} d        - 本次录入/编辑的发票载荷
  * @param {number} d.invoiceType - 1进项 2销项
  * @param {number} d.amountWithTax - 本次价税合计
  * @param {string} [d.sourceNo]    - 关联单号（弱关联，可空）
  * @param {number} [excludeId]     - 编辑时排除自身，避免自算
- * @returns {Promise<{base: number, issued: number, sourceId: number|null}|null>}
+ * @returns {Promise<{base: number, issued: number, sourceId: number, quotaChecked: boolean}|null>}
+ *   `null` = 按该单号查不到业务单；与「查到但无基准」（`base=0, quotaChecked=false`）不同。
  */
 async function assertInvoiceQuota(d, excludeId = null, conn = pool) {
   const sourceNo = String(d.sourceNo ?? '').trim()
-  if (!sourceNo) return null
+  const sourceId = d.sourceId != null && Number(d.sourceId) > 0 ? Number(d.sourceId) : null
+  if (!sourceNo && !sourceId) return null
   const type = Number(d.invoiceType)
   const table = type === 2 ? 'sale_orders' : 'purchase_orders'
   const recType = type === 2 ? 2 : 1
+  const label = type === 2 ? '销售' : '采购'
 
-  // 1. 按单号反查单据 id（弱关联只存单号字符串，这里补查）。
-  //    并发防超开票：FOR UPDATE 锁单据行，让同单并发开票串行化（审计 E.4 修复）
-  const [[order]] = await conn.query(
-    `SELECT id FROM ${table} WHERE order_no = ? AND deleted_at IS NULL FOR UPDATE`,
-    [sourceNo],
-  )
-  if (!order) return null   // 查不到单据：不校验（可能是期初/无单发票）
+  // 1. 反查订单行并加锁（并发防超开票：FOR UPDATE 让同单并发开票串行化，审计 E.4 修复）。
+  //    **两条入口都支持**，且都走同一套配额校验：
+  //      · 按单号（事实源）——弱关联只存单号字符串，这里补查；
+  //      · 按显式 id（`invoiceSchema` 既有用法）——按发票类型限定表、同样加锁与校验，
+  //        避免历史上「只给 id 不给单号」直接绕过额度校验的缺口。
+  //    同时给两者时必须互相匹配。单号查不到且也没有 id 时返回 null（保留既有「期初/无单
+  //    发票可留单号快照」的行为）。
+  let order = null
+  if (sourceNo) {
+    const [[byNo]] = await conn.query(
+      `SELECT id, order_no FROM ${table} WHERE order_no = ? AND deleted_at IS NULL FOR UPDATE`,
+      [sourceNo],
+    )
+    // 单号与 id 同时给出时，二者必须**互相印证**：单号查不到也算冲突，不能「按 id 兜底」
+    // 再把落库单号悄悄换成真实单号——那样会把用户打错的单号吞掉。
+    if (!byNo && sourceId != null) {
+      throw new AppError(
+        `关联单号 ${sourceNo} 未查到对应${label}单，与传入的关联单据 id=${sourceId} 不匹配`,
+        400, 'INVOICE_SOURCE_ID_CONFLICT',
+      )
+    }
+    if (byNo && sourceId != null && Number(byNo.id) !== sourceId) {
+      throw new AppError(
+        `传入的关联单据（${sourceId}）与单号 ${sourceNo} 反查到的单据（${byNo.id}）不一致`,
+        400, 'INVOICE_SOURCE_ID_CONFLICT',
+      )
+    }
+    order = byNo || null
+  }
+  if (!order && sourceId != null) {
+    const [[byId]] = await conn.query(
+      `SELECT id, order_no FROM ${table} WHERE id = ? AND deleted_at IS NULL FOR UPDATE`,
+      [sourceId],
+    )
+    if (!byId) {
+      throw new AppError(`关联单据不存在（${label}单 id=${sourceId}）`, 400, 'INVOICE_SOURCE_NOT_FOUND')
+    }
+    order = byId
+  }
+  if (!order) return null
 
   // 2. 该单的权威应收/应付基准（payment_records 是出库/收货后重算的唯一事实源；此表无 deleted_at）
   const [[pr]] = await conn.query(
@@ -125,7 +165,10 @@ async function assertInvoiceQuota(d, excludeId = null, conn = pool) {
     [recType, order.id],
   )
   const base = pr ? Number(pr.total_amount) : 0
-  if (!(base > 0)) return null   // 该单尚无账款基准：不拦截（先开票后发货）
+  // 尚无账款基准（未出库/未结算）⇒ **只跳过配额校验，不丢订单身份**：
+  // 调用方要据此建立 source_id/source_type 关联，「先开票后发货」是合法场景，
+  // 身份此时已确定；返回 null 会让这类发票的关联被置空且之后不会自动回连。
+  if (!(base > 0)) return { base: 0, issued: 0, sourceId: order.id, sourceNo: order.order_no, quotaChecked: false }
 
   // 3. 已开票合计（销项剔除红冲 status=2；编辑时排除自身；进项剔除删除）。
   //    同时按 source_id 与 source_no 匹配：旧数据可能只有 source_no 没 source_id。
@@ -148,7 +191,76 @@ async function assertInvoiceQuota(d, excludeId = null, conn = pool) {
       400, 'INVOICE_OVER_QUOTA',
     )
   }
-  return { base, issued, sourceId: order.id }
+  return { base, issued, sourceId: order.id, sourceNo: order.order_no, quotaChecked: true }
+}
+
+/** 发票类型 → 关联业务的 `source_type`（迁移 182 的约定值） */
+const SOURCE_TYPE_OF = { 1: 'purchase_order', 2: 'sale_order' }
+
+/**
+ * 显式 `sourceType` 与发票类型的一致性（纯输入校验，不需要反查）。
+ * **单独提出来是为了能放在配额校验之前**：否则「类型传错了」会被「超配额」抢先掩盖，
+ * 用户看到的原因不是真实原因。
+ */
+function assertExplicitTypeMatches(invoiceType, explicitType) {
+  if (explicitType == null) return
+  const expected = SOURCE_TYPE_OF[Number(invoiceType)]
+  if (!expected) throw new AppError('发票类型非法（1进项 2销项）', 400)
+  if (explicitType !== expected) {
+    throw new AppError(
+      `关联业务类型与发票类型不符：${Number(invoiceType) === 2 ? '销项' : '进项'}发票只能关联 ${expected}`,
+      400, 'INVOICE_SOURCE_TYPE_MISMATCH',
+    )
+  }
+}
+
+/**
+ * 关联业务单的解析（2026-09-27 收口）。
+ *
+ * `source_type`/`source_id` 是**派生值**，权威输入只有两种：本次的「关联单号」或本次的「显式关联 id」。
+ * 两者都由 `assertInvoiceQuota` 按发票类型限定表、加行锁反查为**同一份订单身份**
+ * （可只给其一；两者同给时必须互相相符）。口径以迁移 `182_fin_invoices.sql` 的列注释为准
+ * （`purchase_order`/`sale_order`，可空＝允许无单发票）。
+ *
+ * 显式 `sourceType`/`sourceId` 是 `invoiceSchema` 一直接受的字段，**不做无提示忽略**：
+ *   · 与反查结果一致 → 通过（取值以后端反查为准，二者等价）；
+ *   · 类型与发票类型不符、id 与单号不符、或显式 id 不存在 → 明确 400。
+ * 落库的单号一律取**反查到的真实单号**（仅给 id 时也能得到一个可读的快照）；未反查到订单时
+ * 保留单号快照，但 `source_id`/`source_type` 置 NULL。
+ */
+function resolveSource(invoiceType, { quota, fallbackSourceNo = null, explicitType = null, explicitId = null }) {
+  const expectedType = SOURCE_TYPE_OF[Number(invoiceType)]
+  if (!expectedType) throw new AppError('发票类型非法（1进项 2销项）', 400)
+  assertExplicitTypeMatches(invoiceType, explicitType)
+  const reversedId = quota && Number.isFinite(Number(quota.sourceId)) ? Number(quota.sourceId) : null
+
+  if (reversedId) {
+    // id 与单号的一致性、以及「显式 id 是否存在」已在 assertInvoiceQuota 内校验；这里再核一次
+    // explicitId，保证本函数的契约自洽（可被单独复用）。
+    if (explicitId != null && Number(explicitId) !== reversedId) {
+      throw new AppError(
+        `传入的关联单据（${explicitId}）与反查到的单据（${reversedId}）不一致`,
+        400, 'INVOICE_SOURCE_ID_CONFLICT',
+      )
+    }
+    // 落库的单号以**反查到的真实单号**为准：仅给 id 的路径也能落出一个可读的单号快照。
+    return { sourceType: expectedType, sourceId: reversedId, sourceNo: quota.sourceNo || fallbackSourceNo }
+  }
+
+  // 只给了 sourceType、既无单号也无 id：schema 接受但语义无效（建立不了任何关联）。
+  // 明确拒绝，而不是静默返回空关联——否则客户端会以为已经关联上了。
+  // （explicitId 非空却走到这里是不可能的：按 id 反查不到时 assertInvoiceQuota 已 400。）
+  if (explicitType != null) {
+    throw new AppError(
+      '只提供了关联业务类型，但既没有「关联单号」也没有关联单据 id，无法建立关联；请补充单号或 id',
+      400, 'INVOICE_SOURCE_INCOMPLETE',
+    )
+  }
+
+  // 未反查到订单：属「无单发票」（未填单号）或「填了查不到的单号」——保留既有的**单号快照**
+  // 语义照旧落库，但 source_id/source_type 保持 NULL（迁移 182 明确允许），
+  // 因而不影响 loadTaxMaps（它要求 source_id IS NOT NULL）。
+  return { sourceType: null, sourceId: null, sourceNo: fallbackSourceNo }
 }
 
 function validatePayload(d) {
@@ -176,7 +288,16 @@ async function createInvoice(d, operator, companyId = 1) {
     // 并发防超开票（2026-08-21 审计 E.4 修复）：锁单据行 FOR UPDATE 让并发
     // 开票串行化——否则两个请求同时读到 issued=100 各自放行，累计突破上限。
     // assertInvoiceQuota 内先锁目标单据行再读累计，与 INSERT 同一事务。
+    // 先挡「显式 sourceType 与发票类型不符」——纯输入错误，须在配额校验之前报出，
+    // 否则会被「超配额」抢先掩盖成另一个原因（见 assertExplicitTypeMatches 注释）。
+    assertExplicitTypeMatches(v.type, d.sourceType ?? null)
     const quota = await assertInvoiceQuota({ ...d, invoiceType: v.type, amountWithTax: v.withTax }, null, conn)
+    const source = resolveSource(v.type, {
+      quota,
+      fallbackSourceNo: d.sourceNo || null,
+      explicitType: d.sourceType ?? null,
+      explicitId: d.sourceId ?? null,
+    })
     // 发票归属记账账套（迁移 223 的 company_id）：发票是「先到、归属后定」，
     // 录入时按当前账套落 company_id，配合 loadTaxMaps 的按账套过滤，实现报税按账套隔离。
     // 若 invoiceCreate 不传 companyId（旧调用），这里 cid=1 主账套兜底。
@@ -188,7 +309,7 @@ async function createInvoice(d, operator, companyId = 1) {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?)`,
       [v.type, d.invoiceCode || null, v.no, v.party, d.partyTaxNo || null,
        v.noTax, round2(d.taxRate), v.tax, v.withTax, fmtDate(d.invoiceDate),
-       d.sourceType || (quota ? 'invoice_order' : null), quota ? quota.sourceId : (d.sourceId || null), d.sourceNo || null, d.remark || null,
+       source.sourceType, source.sourceId, source.sourceNo, d.remark || null,
        operator?.userId || null, operator?.username || null, cid])
     await conn.commit()
     logger.info(`录入${v.type === 1 ? '进项' : '销项'}发票 ${v.no} 价税${v.withTax} 账套${cid}`, { id: r.insertId, operatorId: operator?.userId }, 'accounting')
@@ -210,16 +331,49 @@ async function updateInvoice(id, d, operator, companyId = 1) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    // 发票类型不可修改（UPDATE 语句也不含 invoice_type 列）：若客户端传了不同的类型，
+    // 明确拒绝。否则会按**另一类**去反查订单（销项查 purchase_orders / 反之），把关联写错，
+    // 而单据上的 invoice_type 仍是原值——正是最难查的那类错账。
+    if (d.invoiceType != null && Number(d.invoiceType) !== Number(cur.invoiceType)) {
+      throw new AppError('发票类型不可修改', 400, 'INVOICE_TYPE_IMMUTABLE')
+    }
+    // 关联语义（2026-09-27）：source_type/source_id 是**派生值**，权威输入只有两种——
+    // 本次的「关联单号」或本次的「显式关联 id」。
+    // · 本次**未提供** sourceNo（部分更新，如只改备注）→ 单号与 id 都沿用旧值；
+    // · 本次**显式给出** sourceNo（含清空为 null/''）→ **只能用本次的 d.sourceId**。
+    //   旧 `cur.sourceId` 必须丢弃，否则两种错法：① 改成新单号时会与旧 id 冲突而误报"不一致"；
+    //   ② 清空单号时旧 id 仍会按 id 反查，把刚清掉的关联又建回来。
+    const sourceNoProvided = d.sourceNo !== undefined
+    const nextSourceNo = sourceNoProvided
+      ? (String(d.sourceNo || '').trim() || null)
+      : cur.sourceNo
+    const nextSourceId = sourceNoProvided ? (d.sourceId ?? null) : (d.sourceId ?? cur.sourceId)
     // P2-5：编辑时排除自身，防止「改大本次开票金额被自己挡住」。
     // 必须把 conn 传进去（2026-09-18 审计 P1）：此前漏传会落到连接池的另一条连接上，
     // assertInvoiceQuota 的 FOR UPDATE 在自动提交下取到即释放，等于没有并发保护，
     // 同单并发编辑/开票仍可超出配额；CAS 只能挡住状态变化，挡不住配额竞争。
+    // 反查与校验都用 **cur.invoiceType**（库内真值），不用 v.type：见上面的不可变校验。
     const quota = await assertInvoiceQuota(
-      { ...cur, ...d, invoiceType: v.type, amountWithTax: v.withTax, sourceNo: d.sourceNo ?? cur.sourceNo },
+      {
+        ...cur, ...d,
+        invoiceType: cur.invoiceType,
+        amountWithTax: v.withTax,
+        // 必须用构造好的 effective 单号/ id：直接 spread `cur` 会把旧 sourceId 带进去
+        // （见上面 nextSourceId 的两条错法）。
+        sourceNo: nextSourceNo,
+        sourceId: nextSourceId,
+      },
       id,
       conn,
     )
-    const sourceId = quota ? quota.sourceId : (d.sourceId ?? cur.sourceId)
+    // 派生值由本次单号 + 反查结果**重算**（不沿用 cur）：这同时修掉历史 `invoice_order`
+    // 在「仍关联订单」时的自愈——编辑一次即回到 182 约定值，无需改写存量数据的迁移。
+    const source = resolveSource(cur.invoiceType, {
+      quota,
+      fallbackSourceNo: nextSourceNo,
+      explicitType: d.sourceType ?? null,
+      explicitId: d.sourceId ?? null,
+    })
     // 状态 CAS（2026-08-21 审计修复）：UPDATE 带 status=1 条件 + affectedRows 校验，
     // 防止「读到 status=1 → 并发红冲为 2 → 仍执行更新」的 TOCTOU（已红冲发票被改金额）
     const [r] = await conn.query(
@@ -229,7 +383,7 @@ async function updateInvoice(id, d, operator, companyId = 1) {
        WHERE id=? AND status=1 AND company_id=? AND deleted_at IS NULL`,
       [d.invoiceCode ?? cur.invoiceCode, v.no, v.party, d.partyTaxNo ?? cur.partyTaxNo,
        v.noTax, round2(d.taxRate ?? cur.taxRate), v.tax, v.withTax, fmtDate(d.invoiceDate ?? cur.invoiceDate),
-       d.sourceType ?? cur.sourceType, sourceId, d.sourceNo ?? cur.sourceNo, d.remark ?? cur.remark, Number(id), cid])
+       source.sourceType, source.sourceId, source.sourceNo, d.remark ?? cur.remark, Number(id), cid])
     if (r.affectedRows !== 1) throw new AppError('发票状态已变化（可能已红冲/删除），请刷新重试', 409, 'INVOICE_STATUS_CHANGED')
     await conn.commit()
     logger.info(`更新发票 [id=${id}]`, { operatorId: operator?.userId }, 'accounting')

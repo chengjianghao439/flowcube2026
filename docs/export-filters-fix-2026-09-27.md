@@ -479,7 +479,7 @@
 
 **A — 已确认且值得立即处理**：本批（§14）新增一条——**费用报销付款缺跨期闸门**（第四条出钱路径，闭期付款会「钱出账户、凭证被跳过、界面无提示」）。已实测红例、已窄修复、已反向破坏验证。除此之外目前没有新的、证据充分而尚未处理的 A 项。不要为填清单制造缺陷。
 
-**B — 继续调查或待决策**：① `price-change.submit` 允许 B 提交 A 创建的申请，是否允许代提交属流程归属策略（§12.3），自批已对两人收口；② `products.update` 事务外读旧价再于事务内写历史的并发漂移仍只属静态风险（§11）；③ 发票侧（**§15 已核实并订正初判**）：初版写「对已结账期间则静默无效」是**错的**——已结账期间的税额差异是 **fail-loud 409**（销售 `ACCT_SALE_CLOSED_PERIOD_CONFLICT`／采购 `ACCT_PERIOD_CLOSED`，均提示反结账）。**实测 A（§15.2，待复核后实施）**：界面路径录票时 `createInvoice` 把 `source_type` 写成 **`'invoice_order'`**（既不在迁移 182 的约定 `purchase_order`/`sale_order` 内，也不被 `loadTaxMaps` 识别）⇒ **即使 `source_id` 正确关联订单，税额也不进任何凭证**。`source_id` 为 NULL（先开票后发货）与「无单发票」是**另两条不同因果**，后者可能是既定设计，不判缺陷。§15.3 只记录「`invoice_date` 不参与凭证归属」这一**代码事实**，不对税法口径下判断。详见 §15；④ **费用报销的跨期补录通道**——`finance-backfills.service` 无 expense 分支，故报销付款闭期**缺少合规出路，需财务负责人人工决策处理方式**（**不能拿「改日期」当出路**——那是改事实）；§14 已据此把拒绝措辞改为「请联系财务负责人核实处理方式；请勿改动真实付款日期」，是否补齐属**产品待决项**；⑤ P5 多端数据新鲜度仍是机会项，未证实为缺陷。不要重做 P1/P2/P3/P8。
+**B — 继续调查或待决策**：① `price-change.submit` 允许 B 提交 A 创建的申请，是否允许代提交属流程归属策略（§12.3），自批已对两人收口；② `products.update` 事务外读旧价再于事务内写历史的并发漂移仍只属静态风险（§11）；③ 发票侧（**§15 已核实、订正初判并已修**）：初版「对已结账期间则静默无效」是**错的**——已结账期间的税额差异是 **fail-loud 409**（销售 `ACCT_SALE_CLOSED_PERIOD_CONFLICT`／采购 `ACCT_PERIOD_CLOSED`，提示反结账）。**实测 A 已修**：界面路径录票时 `createInvoice` 把 `source_type` 写成 **`'invoice_order'`**（不在迁移 182 的约定内）⇒ **即使 `source_id` 正确关联订单，税额也不进任何凭证**；现按类型写约定值、身份与配额解耦、支持「单号」与「显式 id」两种输入（仅给 id 也过配额）、编辑按库内 `cur.invoiceType` 重算。**仍待办**：存量 `'invoice_order'` 的**生产只读评估**（规模未知；修正归属可能触发已结账期间的税额差异/反结账）——评估 SQL 见 §15.6，且**不新增自动改写存量的迁移**；`source_id` 为 NULL（先开票后发货）与「无单发票」是**另两条不同因果**（后者可能属既定设计）。§15.3 只记录「`invoice_date` 不参与凭证归属」这一**代码事实**，不对税法口径下判断。详见 §15；④ **费用报销的跨期补录通道**——`finance-backfills.service` 无 expense 分支，故报销付款闭期**缺少合规出路，需财务负责人人工决策处理方式**（**不能拿「改日期」当出路**——那是改事实）；§14 已据此把拒绝措辞改为「请联系财务负责人核实处理方式；请勿改动真实付款日期」，是否补齐属**产品待决项**；⑤ P5 多端数据新鲜度仍是机会项，未证实为缺陷。不要重做 P1/P2/P3/P8。
 
 **C — 已调查且不应重复当 bug**：ATP 与当前可拣量是不同既定口径；`approval.task.view` 只作入口粗筛，节点快照再裁决审批人；「行锁/状态机防重」不是请求键幂等重放；§12.2 的「只挡创建人、提交人由快照保证」已被反例推翻，双身份动作校验已落地；**资金账户余额调整（`finance_account_transactions` 的 `biz_type=4`）本来就不生成凭证**（`voucher-engine.js` 的 `buildFundVouchers` 只读 `IN (1,2,3,5)`），故无「钱动了账不记」；**HR 工资发放与固定资产计提/处置已有期间保护**——工资经 `upsertVoucher` 内部的 `assertPeriodOpen` 抛错回滚，固定资产在 `fixed-assets.service.js` 显式调 `assertPeriodOpen`，二者均非缺陷。
 
@@ -571,16 +571,38 @@
 
 **证据强度**：本条为**隔离库实测**（真实 API + 真实库读回）；2 为代码审阅，未实测。
 
+**已修（2026-09-27，本地提交）**：详见主题文档 `docs/finance-permission-time.md` 的「2026-09-27 发票 `source_type` 与关联口径收口（A）」。要点：① 按发票类型写约定值（`sale_order`/`purchase_order`），`updateInvoice` 以**库内 `cur.invoiceType`** 重算，客户端改类型明确 400；② **订单身份与配额校验解耦**——只要单号/id 反查到订单就回报身份（「先开票后发货」保留稳定关联），配额仅在存在账面基准时校验；③ 支持「单号」与「显式 id」两种权威输入（**同给必须互相印证**：id 不符**或单号查不到**都算冲突，不得按 id 兜底吞掉打错的单号），**仅给 id 也过同一套配额校验**，补上绕过额度的历史缺口；④ 编辑时显式给出 `sourceNo`（含清空）只用本次 `d.sourceId`，不沿用旧 `cur.sourceId`；⑤ 只给 `sourceType` 而既无单号也无 id ⇒ 400 `INVOICE_SOURCE_INCOMPLETE`（不静默返回空关联）。
+**不新增改写存量 `invoice_order` 的迁移**（转入下方 §15.6）。
+
 ### 15.3 代码事实：税额归期与开票日期解耦（本批不含税法判断）
 
 `fin_invoices.invoice_date` **完全不参与凭证**——后端仅用于列表展示、排序、非空校验与写入（全仓 grep 无凭证侧引用）。凭证的税额归属期取**业务单（出库/收货）所属期间**：`projectSaleShipments` 的 `voucherDate` 来自 `shipped_at`，其余来源同理按业务锚点。因此「8 月发货、9 月开票」的销项税会被要求记在 **8 月**；叠加 §15.1 的 fail-loud，补开发票会**要求反结账 8 月**才能入账。
 
 **本批不对「税额应归属开票月还是业务月」下判断**：仓库内未找到定义该口径的权威依据（迁移 182 与设计说明只说「税额只在凭证映射时按本表 `tax_amount` 拆分」）。是否需设计决策由业务方判断。
 
-### 15.4 本批未做
+### 15.4 本批边界
 
-**未改任何业务代码**（仅新增一个测试场景并修正本文档）；未实测 §15.1 的 fail-loud 路径；未评估生产规模。§15.2 的 A 为隔离库实测，**业务修复待复核后再实施**。本轮未推送、未打 tag、未部署。
+§15.1 的 fail-loud 路径**未实测**；生产规模**未评估**。§15.2 的 A 已按独立复核意见实施并做反向破坏（两次：`source_type` 修复、`effective sourceId` 修复、以及「单号查不到+id 必须冲突 / 只给 type 必须拒绝」两条，均精准红）。**证据强度**：业务侧（API + DB 读回）为端到端；「税额是否落在 `loadTaxMaps` 谓词内」为**按该函数 SQL 复刻的谓词级验证**——**真实凭证生成（`generateVouchers`）本轮未跑**，故不宣称端到端入账。本轮未推送、未打 tag、未部署。
 
 ### 15.5 同批发现（测试侧）：`invoice-quota.smoke.test.js` 原无清理逻辑
 
-本批为该文件新增场景时发现：该文件**四个既有场景都没有收尾清理**，在隔离库累积残留（实测：`fin_invoices` 54 张测试票、`sale_orders` 36 张测试单、`payment_records` 27 条应收）。本轮新增场景自洁为 0（按精确 ID 清理），**既有场景未动**——是否补清理待定。
+本批为该文件新增场景时发现：该文件**四个既有场景都没有收尾清理**，在隔离库累积残留（实测：`fin_invoices` 54 张测试票、`sale_orders` 36 张测试单、`payment_records` 27 条应收）。本轮新增场景自洁为 0（按精确 ID 清理），**既有场景未动**——是否补清理待定（独立批次）。
+
+### 15.6 B 项：存量 `'invoice_order'` 的生产只读评估需求（**未做**）
+
+`createInvoice` 修复前的存量行（含早期只给 `d.sourceType`/`d.sourceId` 的用法）可能已把 `source_type` 写成 `'invoice_order'`。**本批不新增改写它们的迁移**，原因：① 旧值规模未知；② 修正归属后会改变 `loadTaxMaps` 的税额结果，若对应业务单据所属期间**已结账**，会触发 `ACCT_SALE_CLOSED_PERIOD_CONFLICT` / `ACCT_PERIOD_CLOSED`，可能需要反结账——这是**业务决策**，不能由迁移静默完成。
+
+**需要的生产只读评估**（本轮无授权、未执行）：
+
+```sql
+-- 1) 规模
+SELECT source_type, COUNT(*) FROM fin_invoices WHERE deleted_at IS NULL GROUP BY source_type;
+-- 2) 其中可自愈的（仍有单号或 id，编辑一次即回到约定值）
+SELECT COUNT(*) FROM fin_invoices WHERE source_type = 'invoice_order' AND (source_no IS NOT NULL OR source_id IS NOT NULL);
+-- 3) 涉及期间是否已结账（决定是否需要反结账）
+SELECT f.company_id, COUNT(*) FROM fin_invoices f JOIN payment_records pr
+  ON pr.order_id = f.source_id AND pr.type = IF(f.invoice_type = 2, 2, 1)
+ WHERE f.source_type = 'invoice_order' AND f.source_id IS NOT NULL GROUP BY f.company_id;
+```
+
+**已具备的自愈通道**（无需迁移）：`updateInvoice` 现在按 `cur.invoiceType` 重算派生值，故**任何一次编辑都会把该行修正**（见 §15.2 的「编辑自愈」用例）；只有从未被再编辑过的存量行才需要人工/批量处理。
