@@ -411,3 +411,33 @@
 3. **P5 数据新鲜度**（`queryClient.ts` 的 5min `staleTime` + `refetchOnWindowFocus:false`；多端协作时看到旧数据，属机会项）。
 
 **环境事实**：验证用测试库 `flowcube_printvoid_test`（回环 **3307**）；夹具按 ID 自洁、残留 0。**主工作树与在途分支 `codex/fix-audit-f1-f2-f5-f6`（`5d04014`）全程未触碰**。
+
+---
+
+## 12. §11 第一优先级调查：`allow_self_approve`（2026-09-27，只读，有界）
+
+**机制（已核实）**：统一入口 `utils/selfApprove.js`——`canSelfApprove(userId)` 直查 `sys_users.allow_self_approve`，**不做缓存**（注释明言：内控收紧必须立即生效）⇒ **撤销即时生效**（对该用户的下一次判定）；授予侧 `users.service.assertCanGrantSelfApprove` **只放行 `roleId===1`**，否则 403 `SELF_APPROVE_GRANT_DENIED`。`approvalEngine.startApproval` 在**提交时**用 `canSelfApprove(applicantId)` 决定是否把申请人保留在审批人快照里。
+
+### A. 已确认值得处理：`price-change` 缺少「审批动作处」的第二层自批断言（**规则漂移**）
+
+`assertNotSelfApproval` 在**五个**模块的 approve/reject 各出现 2 次（共 **10 处**）：`disposal`、`purchase-requisitions`、`credit-overrides`、`purchase`、`finance/expense-claims`。
+**`price-change.service.js` 的 `approve`/`reject` 没有它**——它**只依赖**引擎在提交时把申请人剔出快照（**单层**），而其余五模块是**双层**（提交时剔除 **+** 审批动作时重查）。
+
+**可定位行为差异（推断，未实测）**：用户 X 被授予自批 → X 提交改价申请（快照含 X）→ **撤销** X 的授予 →
+- 其余五模块：审批动作处 `assertNotSelfApproval` → `canSelfApprove` **重查**（不缓存）⇒ **立即挡住 X** ✓
+- `price-change`：无第二层，快照已固化 ⇒ **X 仍能批自己的单** ✗
+
+**共同根因**：`selfApprove.js` 建了统一入口，但 `price-change` 未接入 → 与 §9.3「同一防护只装一半」同源。
+
+### B. 风险未证实（需隔离库反例）
+
+上述差异**本项目只做了静态调用链核对，未复现**。拟验证方式（**未执行**）：在独立回环库造「授予 → 提交 → 撤销 → 审批」四步，断言 `price-change` 的 approve 是否**仍被放行**，并对照 `credit-overrides`（应被 403 `SELF_APPROVAL_FORBIDDEN` 或同义码）——**两侧差异即为证据**。
+
+### C. 既定设计 / 需区分
+
+- **快照不回溯**：`finance-permission-time.md:72`「**运行中的审批实例按既有快照处理**」是**部门负责人**寻人场景的既定设计；**它与自批豁免是两件事**，不能直接套用——自批豁免若也"只认快照"，撤销就永远对既有单无效，而 `selfApprove.js` 的注释明确要求"内收紧紧急立即生效"。
+- **两层豁免一致**：`assertNotSelfApproval` 内部**同样**走 `canSelfApprove` ⇒ 授予时两层都放行，行为一致；差异**只出现在"撤销之后"**。
+
+**未做**：全量发版验证、生产统计、隔离库反例（容量受限）。**未改任何代码**。
+
+**建议修复边界（待复核）**：只在 `price-change.service.approve/reject` 补 `assertNotSelfApproval`（与其余五模块同范式），**不动**引擎快照语义、不动授予规则。
