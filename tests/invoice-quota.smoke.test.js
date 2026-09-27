@@ -115,16 +115,14 @@ async function scenarioEditExcludesSelf(ctx, log, token, cleanup) {
   const invId = ok.data?.data?.id
 
   // 编辑把本次金额改成 900（自己 500 应被排除，但 900 ≤ 基准 1000 → 成功）
-  const edit = await http.put(`/api/accounting/invoices/${invId}`, {
-    token,
-    json: { amountWithTax: 900, amountNoTax: round2(900 / 1.13), taxAmount: round2(900 - 900 / 1.13) },
+  const edit = await putInvoice(http, pool, token, invId, {
+    amountWithTax: 900, amountNoTax: round2(900 / 1.13), taxAmount: round2(900 - 900 / 1.13),
   })
   log.assert('编辑放大到 900（排除自身后 ≤1000）成功', edit.status === 200, `status=${edit.status} msg=${edit.message}`)
 
   // 再编辑放大到 1100 → 超过基准 1000 → 拦截
-  const over = await http.put(`/api/accounting/invoices/${invId}`, {
-    token,
-    json: { amountWithTax: 1100, amountNoTax: round2(1100 / 1.13), taxAmount: round2(1100 - 1100 / 1.13) },
+  const over = await putInvoice(http, pool, token, invId, {
+    amountWithTax: 1100, amountNoTax: round2(1100 / 1.13), taxAmount: round2(1100 - 1100 / 1.13),
   })
   log.assert('编辑放大到 1100（>应收1000）被拒', over.status === 400, `status=${over.status} msg=${over.message}`)
 }
@@ -304,7 +302,7 @@ async function scenarioEditSelfHealsSourceType(ctx, log, token, cleanup) {
   log.assert('前置：样本已置为历史值 invoice_order', before?.source_type === 'invoice_order', String(before?.source_type))
 
   // 编辑**不重新输入单号**（只改备注）——自愈应来自「派生值重算」，而非用户重填
-  const edit = await http.put(`/api/accounting/invoices/${invId}`, { token, json: { remark: '自愈验证' } })
+  const edit = await putInvoice(http, pool, token, invId, { remark: '自愈验证' })
   log.assert('编辑成功', edit.status === 200, `status=${edit.status}`)
   const [after] = await dbQuery(pool, 'SELECT source_type, source_id FROM fin_invoices WHERE id=?', [invId])
   console.log(`[§T-自愈] 编辑后 source_type=${after?.source_type} source_id=${after?.source_id}`)
@@ -331,7 +329,7 @@ async function scenarioClearingSourceNoClearsLink(ctx, log, token, cleanup) {
   const invId = Number(ok.data?.data?.id)
   cleanup.invoiceIds.push(invId)
 
-  const clear = await http.put(`/api/accounting/invoices/${invId}`, { token, json: { sourceNo: null } })
+  const clear = await putInvoice(http, pool, token, invId, { sourceNo: null })
   log.assert('清空关联单号成功', clear.status === 200, `status=${clear.status}`)
   const [row] = await dbQuery(pool, 'SELECT source_type, source_id, source_no FROM fin_invoices WHERE id=?', [invId])
   console.log(`[§T-清空] source_type=${row?.source_type} source_id=${row?.source_id} source_no=${row?.source_no}`)
@@ -342,6 +340,18 @@ async function scenarioClearingSourceNoClearsLink(ctx, log, token, cleanup) {
     row?.source_type === null,
     String(row?.source_type),
   )
+}
+
+/**
+ * 编辑发票（迁移 263 起必须回传乐观锁版本）。
+ * 先读当前 `revision` 再提交——这不是「绕过防护」，而是模拟真实前端：打开弹窗时拿到版本、
+ * 保存时原样回传。并发场景的回归在 `tests/invoice-edit-concurrency.smoke.test.js`。
+ */
+async function putInvoice(http, pool, token, id, json) {
+  const [r] = await dbQuery(pool, 'SELECT revision FROM fin_invoices WHERE id=?', [id])
+  return http.put(`/api/accounting/invoices/${id}`, {
+    token, json: { ...json, revision: Number(r?.revision ?? 1) },
+  })
 }
 
 /** 通用建票（可传 sourceType/sourceId 等覆盖项，用于验证显式输入契约） */
@@ -508,7 +518,7 @@ async function scenarioExplicitSourceInputContract(ctx, log, token, cleanup) {
   )
 
   // 8) invoice_type 不可修改：编辑时传不同类型必须拒绝（不能照另一类去反查订单）
-  const typeChange = await http.put(`/api/accounting/invoices/${invId}`, { token, json: { invoiceType: 1 } })
+  const typeChange = await putInvoice(http, pool, token, invId, { invoiceType: 1 })
   log.assert(
     '★ 编辑时改发票类型被明确拒绝（invoice_type 不可修改）',
     typeChange.status === 400 && typeChange.data?.code === 'INVOICE_TYPE_IMMUTABLE',
@@ -542,7 +552,7 @@ async function scenarioUpdateSourceIntent(ctx, log, token, cleanup) {
   log.assert('建票关联到 A 成功', created.status === 201, `status=${created.status}`)
 
   // ① 改关联 A → B（旧 cur.sourceId 不得与新单号冲突而误报）
-  const re = await http.put(`/api/accounting/invoices/${invId}`, { token, json: { sourceNo: b.orderNo } })
+  const re = await putInvoice(http, pool, token, invId, { sourceNo: b.orderNo })
   log.assert('★ 改关联（A→B）成功，旧 id 不误报冲突', re.status === 200, `status=${re.status} msg=${re.message}`)
   const [rowB] = await dbQuery(pool, 'SELECT source_type, source_id, source_no FROM fin_invoices WHERE id=?', [invId])
   log.assert(
@@ -552,7 +562,7 @@ async function scenarioUpdateSourceIntent(ctx, log, token, cleanup) {
   )
 
   // ② 部分更新：只改备注、不涉及关联 → 原关联保持
-  const partial = await http.put(`/api/accounting/invoices/${invId}`, { token, json: { remark: '只改备注' } })
+  const partial = await putInvoice(http, pool, token, invId, { remark: '只改备注' })
   log.assert('部分更新成功', partial.status === 200, `status=${partial.status}`)
   const [rowKeep] = await dbQuery(pool, 'SELECT source_id, source_no FROM fin_invoices WHERE id=?', [invId])
   log.assert(
@@ -562,7 +572,7 @@ async function scenarioUpdateSourceIntent(ctx, log, token, cleanup) {
   )
 
   // ③ 清关联：显式传 null → 必须真清空（旧 id 不得复活）
-  const cleared = await http.put(`/api/accounting/invoices/${invId}`, { token, json: { sourceNo: null } })
+  const cleared = await putInvoice(http, pool, token, invId, { sourceNo: null })
   log.assert('清空关联成功', cleared.status === 200, `status=${cleared.status}`)
   const [rowNull] = await dbQuery(pool, 'SELECT source_type, source_id, source_no FROM fin_invoices WHERE id=?', [invId])
   log.assert(
@@ -576,7 +586,7 @@ async function scenarioUpdateSourceIntent(ctx, log, token, cleanup) {
   const onlyIdInv = Number(onlyId.data?.data?.id)
   if (Number.isInteger(onlyIdInv)) cleanup.invoiceIds.push(onlyIdInv)
   log.assert('仅给 id 建票成功', onlyId.status === 201, `status=${onlyId.status}`)
-  const again = await http.put(`/api/accounting/invoices/${onlyIdInv}`, { token, json: { remark: '再次编辑' } })
+  const again = await putInvoice(http, pool, token, onlyIdInv, { remark: '再次编辑' })
   log.assert('★ 仅给 id（单号已回填）的行可再次编辑', again.status === 200, `status=${again.status}`)
   const [rowAgain] = await dbQuery(pool, 'SELECT source_type, source_id, source_no FROM fin_invoices WHERE id=?', [onlyIdInv])
   log.assert(

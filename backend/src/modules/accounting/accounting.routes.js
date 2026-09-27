@@ -109,6 +109,8 @@ const invoiceSchema = z.object({
   sourceId:       z.number().int().positive().optional().nullable(),
   sourceNo:       z.string().max(40).optional().nullable(),
   remark:         z.string().max(300).optional().nullable(),
+  // 编辑乐观锁（迁移 263）：编辑时必须回传详情读到的 revision；创建不需要（可选）
+  revision:       z.number().int().positive().optional().nullable(),
 })
 invoices.get('/',           requirePermission(PERMISSIONS.INVOICE_VIEW), ctrl.invoiceList)
 invoices.get('/:id',        requirePermission(PERMISSIONS.INVOICE_VIEW), ctrl.invoiceDetail)

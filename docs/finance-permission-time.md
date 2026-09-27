@@ -122,3 +122,13 @@
 - **编辑时的关联意图**：本次显式给出 `sourceNo`（含清空为 null/''）时**只能用本次的 `d.sourceId`**，不得沿用旧 `cur.sourceId`——否则改单号会与旧 id 冲突而误报，清空单号会被旧 id 反查「复活」。未提供 `sourceNo` 的部分更新才沿用旧值。
 - **未做（重要）**：**不新增自动改写存量 `invoice_order` 的迁移**——旧值规模未知，且改正归属后可能触发**已结账期间的税额差异/反结账**。存量评估见 `docs/export-filters-fix-2026-09-27.md` §15 的 B 项，需生产只读统计后再决策。
 - **回归**：`tests/invoice-quota.smoke.test.js`（**51/0**）覆盖销项/进项两类、编辑自愈、清空关联、先开票后发货、显式输入契约（一致通过 / 类型冲突 / id 冲突 / id 不存在 / 单号查不到却给 id / 只给 `sourceType` / 仅 id 受配额约束）、以及编辑三类意图（改关联 / 清关联 / 部分更新）。**证据强度**：业务侧 API+DB 端到端；「税额是否落在 `loadTaxMaps` 谓词内」为**按该函数 SQL 复刻的谓词级验证**，**真实凭证生成（`generateVouchers`）未跑**。
+
+### 2026-09-27 发票编辑的乐观锁（并发编辑不得静默覆盖）
+
+- **规则**：`updateInvoice` 除了**状态 CAS**（`status = 1`）之外还必须有**版本校验**——这是**两件事**，不要混称：状态只说明「这张票当前可编辑」，`revision` 才说明「你手里那份是不是最新的」。客户端**必须**回传详情/列表读到的 `revision`；**缺失 400 `INVOICE_REVISION_REQUIRED`**（注意 `Number(null) === 0`，必须先判 null 再判整数），**过期 409 `INVOICE_CONCURRENT_MODIFIED`**。
+- **为什么**：修复前只有状态 CAS ⇒ 两个并发编辑同一张发票会互相**静默覆盖**——隔离库真实 HTTP 实测 **8/8 轮**「两次都 200、最终只留其一」，丢的是金额与 `source_no`/`source_id`，后者还会改变 `loadTaxMaps` 的税额归属。
+- **实现**：迁移 **263** 给 `fin_invoices` 加 `revision INT NOT NULL DEFAULT 1`（幂等 DDL）。**不能拿 `updated_at` 当版本**：它是 **datetime（秒精度）**，同秒并发取不到变化（本反例正是同秒）。`updateInvoice` 改为**事务内 `SELECT ... FOR UPDATE` 锁发票行** → 比对 `revision` → `UPDATE ... SET revision = revision + 1 WHERE ... AND revision = ?`。**SQL 的 `AND revision = ?` 才是真正的防线**，JS 预检只是给出更友好的 409。
+- **锁顺序（有调用链依据，不是直觉）**：写 `fin_invoices` 只有 4 处——`createInvoice` 的 INSERT（在后、且是新行）、`updateInvoice`、`changeStatus`、`removeInvoice`；锁订单行的只有 `assertInvoiceQuota`（`sale_orders`/`purchase_orders`）。`updateInvoice` 是**先锁发票行、再调它**，另两处是单语句无锁 ⇒ **不存在「订单行 → 发票行」的路径**，不成环。
+- **`cur` 的定位**：它仍在**事务外**读，只用于「未提供字段」的合并与载荷校验，**不承担并发安全**；安全前提是「**客户端回传的 revision 与锁内 revision 相等**」。
+- **前端**：编辑弹窗带 `revision`；409 时**刷新列表并关闭弹窗**（`INVOICE_CONCURRENT_MODIFIED`），让用户重开时拿到新版本——否则弹窗会一直用打开时的旧版本反复 409、**无法恢复**。
+- **回归**：`tests/invoice-edit-concurrency.smoke.test.js`（并发一个 200/一个 409、冲突码、最终值=成功者、`revision` +1、缺版本 400、**GET 详情/列表返回 revision 的读契约**、顺序编辑不受影响）；既有 `tests/invoice-quota.smoke.test.js` 的编辑点已带版本（55/0）。

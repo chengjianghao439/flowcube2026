@@ -7,6 +7,7 @@ import { DatePicker } from '@/components/shared/DatePicker'
  * 前端不算会计（税额拆分/凭证一律后端）；本页仅按税率给录入做价税辅助计算。
  */
 import { useMemo, useState, useEffect } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Plus, Pencil, Trash2, BadgeCheck, Undo2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -38,6 +39,7 @@ const statusTone = (type: number, status: number) => {
 
 // ─── 录入/编辑弹窗 ─────────────────────────────────────────────────────────────
 function InvoiceDialog({ open, invoiceType, edit, onClose }: { open: boolean; invoiceType: number; edit: Invoice | null; onClose: () => void }) {
+  const qc = useQueryClient()
   const { mutate: create, isPending: creating } = useCreateInvoice()
   const { mutate: update, isPending: updating } = useUpdateInvoice()
   const isPending = creating || updating
@@ -66,8 +68,24 @@ function InvoiceDialog({ open, invoiceType, edit, onClose }: { open: boolean; in
     const d: CreateInvoiceParams = {
       invoiceType, invoiceCode: f.invoiceCode || null, invoiceNo: f.invoiceNo.trim(), partyName: f.partyName.trim(), partyTaxNo: f.partyTaxNo || null,
       amountNoTax: noTax, taxRate: rate, taxAmount, amountWithTax: withTax, invoiceDate: f.invoiceDate, sourceNo: f.sourceNo || null, remark: f.remark || null,
+      // 编辑乐观锁（迁移 263）：把打开弹窗时那份的 revision 原样回传；后端发现已被他人改动即 409，
+      // 避免两次并发编辑互相静默覆盖（金额与关联单号都会丢）。
+      ...(edit ? { revision: edit.revision } : {}),
     }
-    if (edit) update({ id: edit.id, d }, { onSuccess: () => { toast.success('已保存'); onClose() } })
+    if (edit) update({ id: edit.id, d }, {
+      onSuccess: () => { toast.success('已保存'); onClose() },
+      // 并发编辑冲突（迁移 263）：这张票已被他人改过。**必须**让用户能拿到新版本——
+      // 刷新列表后关闭弹窗，重新打开时 editTarget 来自刷新后的行（带新 revision）。
+      // 否则弹窗会一直用打开时的旧 revision 反复 409，永远保存不了，且用户不知道怎么办。
+      onError: (e: unknown) => {
+        const code = (e as { code?: string } | null)?.code
+        if (code === 'INVOICE_CONCURRENT_MODIFIED') {
+          qc.invalidateQueries({ queryKey: ['acct-invoices'] })
+          toast.error('这张发票已被其他人修改，已刷新列表，请重新打开后再编辑')
+          onClose()
+        }
+      },
+    })
     else create(d, { onSuccess: () => { toast.success('发票已录入'); onClose() } })
   }
 

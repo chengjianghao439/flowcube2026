@@ -228,6 +228,8 @@ export interface Invoice {
   remark: string | null
   operatorName: string | null
   createdAt: string
+  /** 编辑乐观锁（迁移 263）：编辑时必须原样回传，过期即 409，避免并发编辑静默覆盖 */
+  revision: number
 }
 export interface CreateInvoiceParams {
   invoiceType: number
@@ -244,6 +246,8 @@ export interface CreateInvoiceParams {
   sourceId?: number | null
   sourceNo?: string | null
   remark?: string | null
+  /** 编辑时的乐观锁版本（创建不需要）；缺失会被后端 400 拒绝 */
+  revision?: number | null
 }
 // 状态标签按 invoiceType 分：进项 1待认证2已认证3已抵扣；销项 1已开具2已红冲
 export const INVOICE_STATUS_LABELS: Record<number, Record<number, string>> = {

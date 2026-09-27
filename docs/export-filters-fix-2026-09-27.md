@@ -824,3 +824,36 @@ cost链=[[100,150],[100,200]]  最终cost=200   ← 两条历史的旧价都是 
 **未验证边界**：物理打印、PDA 真机、生产影响规模、发版前全量检查均**未做**；发票存量规模与两列不一致规模**未在生产核对**；「手工改价 × 审批通过」的并发用例**未构造**；本文件多数结论为**隔离库 + 本地栈**证据，**不得当作生产结论**。
 
 **下一步优先候选**：① 由业务方定「价格权威」口径（定了才动审批侧与 A 的同步）；② 发票存量 `'invoice_order'` 的生产只读评估（需授权）；③ `invoice-quota` 历史残留的清理决策（需先确认归属）。**不要重做 P1/P2/P3/P8。**
+
+---
+
+## 20. 发票编辑的并发静默覆盖（2026-09-27，仅本地）
+
+### 20.1 判定为 A：并发编辑同一发票会互相静默覆盖
+
+**核查**：`fin_invoices` **无版本列**、前端 `updateInvoiceApi` **不带版本**、`UPDATE` 的 WHERE 只有 `status = 1` —— 那是**状态 CAS**（"这张票还是不是可编辑状态"），**不是并发编辑的版本校验**。项目在 `carriers.binding.js:98` 已有 **`revision` CAS 拒绝过期覆盖**的先例（「账号资料已被其他人修改，请刷新后重新操作」），故**不能算作既定 last-write-wins**。
+
+**可重复反例**（隔离库、真实 HTTP、`/tmp` 探针，未入库）：两个并发 `PUT /api/accounting/invoices/:id`（金额与备注都不同）⇒ **8/8 轮**「两次都 200、最终只留其一」。观察到的形态是**整条 UPDATE 原子覆盖**（金额与备注成对来自同一请求），**没有**字段级撕裂——这点如实记录，不夸大。
+
+### 20.2 窄修复（按现有锁顺序与事务约束）
+
+- **迁移 263**：`fin_invoices` 加 `revision INT NOT NULL DEFAULT 1`（幂等 DDL；AGENTS 要求编号最大 +1，原最大 262）。**不用 `updated_at`**：它是 `datetime`（**秒精度**），同秒并发取不到变化，做 CAS 会整体失效（反例正是同秒）。
+- **`updateInvoice`**：事务内先 **`SELECT ... FOR UPDATE`** 锁发票行拿权威 `status`/`revision` → 校验（缺版本 **400 `INVOICE_REVISION_REQUIRED`**；过期 **409 `INVOICE_CONCURRENT_MODIFIED`**）→ `UPDATE ... SET revision = revision + 1 WHERE ... AND revision = ?`。**SQL CAS 是真正防线**，JS 预检只提供更友好的 409。
+- **`Number(null) === 0` 的坑**：缺版本必须先判 `== null` 再判整数，否则"没传"会被当成 0 而误报 409（独立复核指出）。
+- **`cur` 的定位（措辞更正）**：它仍在**事务外**读，只用于「未提供字段」的合并与载荷校验，**不承担并发安全**；安全前提是「**客户端 revision 与锁内 revision 匹配**」——先前"锁内读顺带修掉陈旧快照"的说法不准确。
+- **锁顺序依据（调用链，非直觉）**：写 `fin_invoices` 仅 4 处（`createInvoice` INSERT / `updateInvoice` / `changeStatus` / `removeInvoice`），锁订单行的仅 `assertInvoiceQuota`；`updateInvoice` **先锁发票行再调它**，另两处单语句无锁 ⇒ **不存在「订单行 → 发票行」路径**，不成环。
+- **前端**：编辑弹窗带 `revision`；**409 时刷新列表并关闭弹窗**（原代码只处理 `onSuccess`，`editTarget` 是点击时的快照 state，列表刷新也不会更新 ⇒ 会一直用旧版本反复 409、**无法恢复**）。全局 toast 取 `error.response.data.message`，故后端的"已被他人修改"文案对用户可见。
+- **既有测试兼容**：`invoice-quota` 的 9 处编辑调用改走 `putInvoice`（先读 `revision` 再提交，模拟真实前端），**55/0** 保持。
+
+### 20.3 证据
+
+| 层 | 结果 |
+|---|---|
+| 新专项 `tests/invoice-edit-concurrency.smoke.test.js` | **13/0**：并发恰一个 200 / 一个 409（冲突码正确）· 最终值 = 成功者 · `revision` 恰好 +1 · 缺版本 400 · **GET 详情/列表返回 `revision` 的读契约** · 用过期版本再提交 409 · 顺序编辑两次成功且 `revision` 累加 · 按 ID 自洁为 0 |
+| 既有 `invoice-quota` | **55/0**（编辑调用已带版本） |
+| 反向验证 | **同时**摘掉行锁与 SQL CAS ⇒ **恰好 4 条红**（回到 `200/200`、后者覆盖、`revision=3`）；单摘任一层则另一层兜住（说明**行锁负责串行、CAS 负责判定**）。新增的读契约断言不受影响 |
+| 前端 | `tsc -p tsconfig.app.json --noEmit` 通过；`eslint` 通过 |
+
+### 20.4 未验证边界
+
+未在生产核对并发编辑的实际频率与受影响单据数；未构造"编辑 × 认证/红冲"的并发用例（`changeStatus` 是单语句 CAS，属另一条路径）；**迁移 263 仅在隔离库应用，未进生产**；未做发版前全量。

@@ -57,6 +57,8 @@ function fmt(row) {
     remark: row.remark ?? null,
     operatorName: row.operator_name ?? null,
     createdAt: row.created_at,
+    // 编辑乐观锁：客户端必须原样回传它读取时看到的这个值（迁移 263）
+    revision: Number(row.revision ?? 1),
   }
 }
 
@@ -325,12 +327,37 @@ async function createInvoice(d, operator, companyId = 1) {
 
 async function updateInvoice(id, d, operator, companyId = 1) {
   const cid = Number(companyId) || 1
+  // 事务外读只用于「未提供字段」的合并与载荷校验；**状态与版本一律以锁内读到的为准**（见下）。
   const cur = await getInvoice(id, cid)
-  if (cur.status !== 1) throw new AppError('仅待认证/已开具状态的发票可编辑', 400, 'INVOICE_LOCKED')
   const v = validatePayload({ ...cur, ...d })
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    // **锁内**读当前行，拿权威的 `status` 与 `revision`，用于判定。
+    // 说明（避免夸大）：事务外的 `cur` **仍然**参与「未提供字段」的合并与载荷校验，它**不**承担
+    // 并发安全——**真正的安全前提是「客户端回传的 revision 与锁内 revision 相等」**，
+    // 由下面的比对 + UPDATE 的 `AND revision=?` 保证。锁只是让这个比对能串行、不被交错。
+    // 锁顺序依据（见 §20.1 的调用链核对）：本函数在**持发票行锁之后**才进入 `assertInvoiceQuota`，
+    // 后者只锁订单行；全仓未见「先锁订单行、再锁发票行」的路径，故不成环。
+    const [[locked]] = await conn.query(
+      `SELECT status, revision FROM fin_invoices
+        WHERE id=? AND company_id=? AND deleted_at IS NULL FOR UPDATE`,
+      [Number(id), cid],
+    )
+    if (!locked) throw new AppError('发票不存在', 404)
+    if (Number(locked.status) !== 1) throw new AppError('仅待认证/已开具状态的发票可编辑', 400, 'INVOICE_LOCKED')
+    // **乐观锁**（2026-09-27）：客户端必须回传它读取时看到的 `revision`。
+    // 注意这与 status 是**两件事**，不要混称——status 只说明「这张票当前可编辑」，
+    // `revision` 才说明「你手里那份是不是最新的」；没有它，两个并发编辑会互相**静默覆盖**
+    // （隔离库实测 8/8 轮两次都 200、最终只留其一）。
+    // 注意 `Number(null) === 0`：必须先判 null/undefined 再判整数，否则「没传」会被当成 0 ⇒ 误报 409。
+    if (d.revision == null || !Number.isInteger(Number(d.revision))) {
+      throw new AppError('缺少版本号，请刷新后重试', 400, 'INVOICE_REVISION_REQUIRED')
+    }
+    const clientRev = Number(d.revision)
+    if (clientRev !== Number(locked.revision)) {
+      throw new AppError('这张发票已被其他人修改，请刷新后重新编辑', 409, 'INVOICE_CONCURRENT_MODIFIED')
+    }
     // 发票类型不可修改（UPDATE 语句也不含 invoice_type 列）：若客户端传了不同的类型，
     // 明确拒绝。否则会按**另一类**去反查订单（销项查 purchase_orders / 反之），把关联写错，
     // 而单据上的 invoice_type 仍是原值——正是最难查的那类错账。
@@ -379,12 +406,17 @@ async function updateInvoice(id, d, operator, companyId = 1) {
     const [r] = await conn.query(
       `UPDATE fin_invoices SET invoice_code=?, invoice_no=?, party_name=?, party_tax_no=?,
          amount_no_tax=?, tax_rate=?, tax_amount=?, amount_with_tax=?, invoice_date=?,
-         source_type=?, source_id=?, source_no=?, remark=?
-       WHERE id=? AND status=1 AND company_id=? AND deleted_at IS NULL`,
+         source_type=?, source_id=?, source_no=?, remark=?, revision = revision + 1
+       WHERE id=? AND status=1 AND revision=? AND company_id=? AND deleted_at IS NULL`,
       [d.invoiceCode ?? cur.invoiceCode, v.no, v.party, d.partyTaxNo ?? cur.partyTaxNo,
        v.noTax, round2(d.taxRate ?? cur.taxRate), v.tax, v.withTax, fmtDate(d.invoiceDate ?? cur.invoiceDate),
-       source.sourceType, source.sourceId, source.sourceNo, d.remark ?? cur.remark, Number(id), cid])
-    if (r.affectedRows !== 1) throw new AppError('发票状态已变化（可能已红冲/删除），请刷新重试', 409, 'INVOICE_STATUS_CHANGED')
+       source.sourceType, source.sourceId, source.sourceNo, d.remark ?? cur.remark,
+       Number(id), clientRev, cid])
+    if (r.affectedRows !== 1) {
+      // 已持 `FOR UPDATE` 且比对过 revision，这一步理论不可达；留作兜底（与 products.update 同思路）：
+      // 宁可 fail-loud，也不要留下「以为改了、其实没改」。
+      throw new AppError('这张发票已被其他人修改，请刷新后重新编辑', 409, 'INVOICE_CONCURRENT_MODIFIED')
+    }
     await conn.commit()
     logger.info(`更新发票 [id=${id}]`, { operatorId: operator?.userId }, 'accounting')
   } catch (e) {
