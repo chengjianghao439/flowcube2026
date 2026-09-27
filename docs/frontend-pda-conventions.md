@@ -191,3 +191,4 @@
 - **审批真正完成后必须失效商品缓存**：`price-change` 审批成功后调 `invalidateAfterPriceChange`（由 `useProducts` 导出），**仅在**后端返回 `finished`（价格已由 `applyApprovedPrice` 落库）时失效 `['products']` 前缀缓存（一并覆盖详情 `[products,id]`、列表与 Finder）。否则商品编辑页会在全局 **5min `staleTime`** 内继续显示旧的 `labelSalePrice`。未 finished 的多级中间步骤不改价格、不刷新；**不使用轮询**。
 - **本项只是可见性修复**：**未判定**"`sale_price` 与 `sale_price_a` 谁是权威售价"，也**未**让 A 价审批同步标签价——口径决策仍待业务方明确（见 `docs/export-filters-fix-2026-09-27.md` §18）。
 - **回归**：`useProducts.priceChange.test.tsx`（**行为测试**：真实 `QueryClient` + 生产同口径 5min `staleTime`，审批完成后 `useProduct` 取到新价；摘掉失效逻辑即精准变红）。
+- **编辑页的草稿与版本基线（2026-09-27，迁移 264 的续项）**：商品编辑页保存时回传的 `revision` 必须与**表单初始值同源**（不要取 render 时最新的 `product.revision`，否则"新版本 + 旧草稿"会绕过服务端 CAS）；**同一商品的后台 query 刷新不再重置表单**（按商品 id 判断是否重建，避免抹掉未保存草稿）；保存遇 **409 版本冲突**时**保留草稿**且**不自动刷新详情**，只提示员工「复制需要保留的内容 → 关闭本页重新打开 → 核对最新价格后再编辑」；冲突提示**只由全局拦截器发一次**，页面内不重复 `toast.error`。
