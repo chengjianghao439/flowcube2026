@@ -16,6 +16,7 @@ const { generateDailyCode } = require('../../utils/codeGenerator')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
 const approvalEngine = require('../../engine/approvalEngine')
+const { assertNotSelfApproval } = require('../../utils/selfApprove')
 const { normalizePagination } = require('../../utils/pagination')
 
 const STATUS = { 1: '待审批', 2: '已通过', 3: '已驳回', 4: '已取消' }
@@ -179,8 +180,11 @@ async function approve(id, operator) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const row = await lockStatusRow(conn, { table: 'price_change_requests', id, columns: 'id, status', entityName: '改价申请', deletedAt: false })
+    const row = await lockStatusRow(conn, { table: 'price_change_requests', id, columns: 'id, status, applicant_id', entityName: '改价申请', deletedAt: false })
     assertStatusAction('priceChangeRequest', 'approve', row.status)
+    // 自批内控：与其余五个审批模块同范式（2026-09-27）。缺这一层时，超管自提的改价会被
+    // 引擎的 "roleId===1 恒放行" 直接批过，且 allow_self_approve 被撤销后也挡不住既有单。
+    await assertNotSelfApproval(row.applicant_id, operator?.operatorId ?? operator?.userId, '不能审批自己提交的改价申请')
     const active = await approvalEngine.getActiveInstanceByBiz(conn, { bizType: 'product_price', bizId: Number(id) })
     if (!active) throw new AppError('改价申请无进行中的审批实例', 409)
     const r = await approvalEngine.approveStep(conn, { instanceId: active.instance.id, operator, comment: null })
@@ -198,8 +202,9 @@ async function reject(id, { reason, operator }) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const row = await lockStatusRow(conn, { table: 'price_change_requests', id, columns: 'id, status', entityName: '改价申请', deletedAt: false })
+    const row = await lockStatusRow(conn, { table: 'price_change_requests', id, columns: 'id, status, applicant_id', entityName: '改价申请', deletedAt: false })
     assertStatusAction('priceChangeRequest', 'reject', row.status)
+    await assertNotSelfApproval(row.applicant_id, operator?.operatorId ?? operator?.userId, '不能驳回自己提交的改价申请')
     const active = await approvalEngine.getActiveInstanceByBiz(conn, { bizType: 'product_price', bizId: Number(id) })
     if (!active) throw new AppError('改价申请无进行中的审批实例', 409)
     await approvalEngine.rejectStep(conn, { instanceId: active.instance.id, operator, comment: reason || null })

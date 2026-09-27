@@ -44,6 +44,9 @@ async function main() {
   const [[approverRow]] = await pool.query("SELECT id FROM sys_users WHERE username='smoke_limited' LIMIT 1")
   assert.ok(approverRow?.id, '需要 smoke_limited 作为审批人（engine 会排除申请人本人）')
   const admin = { roleId: 1, userId: adminRow.id, operatorId: adminRow.id, realName: 'smoke_admin' }
+  // 流程节点实际指定的是 smoke_limited：审批动作必须由**它**执行，不能拿超管自批
+  // （那会在补上自批内控后被挡，属测试误护旧行为）。
+  const approver = { roleId: 5, userId: approverRow.id, operatorId: approverRow.id, realName: 'smoke_limited' }
 
   let productSeq = 0
   const mkProduct = async (saleA) => {
@@ -92,7 +95,7 @@ async function main() {
     await pool.query('UPDATE product_items SET sale_price_a=120 WHERE id=?', [pid])
 
     await check('审批通过：商品价按 new_price 覆盖为 110', async () => {
-      const r = await price.approve(reqId, admin)
+      const r = await price.approve(reqId, approver)
       assert.ok(r, '审批应成功')
       const [[p]] = await pool.query('SELECT sale_price_a FROM product_items WHERE id=?', [pid])
       assert.equal(Number(p.sale_price_a), 110, '审批覆盖价格语义应保留')
@@ -111,6 +114,35 @@ async function main() {
       )
     })
 
+    await check('★ 超管未授予自批时自批改价必须 403', async () => {
+      const pid3 = await mkProduct(100)
+      const req3 = await price.create({ productId: pid3, priceType: 'a', newPrice: 110 }, admin)
+      created.requestIds.push(req3.id)
+      await price.submit(req3.id, admin)
+      let code = null
+      try { await price.approve(req3.id, admin) } catch (e) { code = e.code }
+      assert.equal(code, 'SELF_APPROVAL_DENIED', `超管自批应被拒，实际 ${code ?? '被放行'}`)
+    })
+
+    await check('★ 授予→提交→撤销后自批必须 403，且申请/实例保持待审批', async () => {
+      await pool.query('UPDATE sys_users SET allow_self_approve=1 WHERE id=?', [approverRow.id])
+      try {
+        const pid4 = await mkProduct(100)
+        const applicant = { roleId: 5, userId: approverRow.id, operatorId: approverRow.id, realName: 'smoke_limited' }
+        const req4 = await price.create({ productId: pid4, priceType: 'a', newPrice: 110 }, applicant)
+        created.requestIds.push(req4.id)
+        await price.submit(req4.id, applicant) // 授予期内提交 ⇒ 快照含本人
+        await pool.query('UPDATE sys_users SET allow_self_approve=0 WHERE id=?', [approverRow.id]) // 撤销
+        let code = null
+        try { await price.approve(req4.id, applicant) } catch (e) { code = e.code }
+        assert.equal(code, 'SELF_APPROVAL_DENIED', `撤销后自批应被拒，实际 ${code ?? '被放行'}`)
+        const [[r4]] = await pool.query('SELECT status FROM price_change_requests WHERE id=?', [req4.id])
+        assert.equal(Number(r4.status), 1, '被拒后申请必须仍是待审批')
+      } finally {
+        await pool.query('UPDATE sys_users SET allow_self_approve=0 WHERE id=?', [approverRow.id])
+      }
+    })
+
     await check('★ 商品在审批期间被软删：必须 409 回滚，不得留下「已批准却未改价」', async () => {
       const pid2 = await mkProduct(100)
       const req2 = await price.create({ productId: pid2, priceType: 'a', newPrice: 110 }, admin)
@@ -120,7 +152,7 @@ async function main() {
       await pool.query('UPDATE product_items SET deleted_at=NOW() WHERE id=?', [pid2])
 
       let code = null
-      try { await price.approve(req2.id, admin) } catch (e) { code = e.code }
+      try { await price.approve(req2.id, approver) } catch (e) { code = e.code }
       assert.equal(code, 'PRICE_CHANGE_PRODUCT_MISSING', `应 fail-loud 抛业务错误，实际 ${code}`)
 
       const [[r2]] = await pool.query('SELECT status FROM price_change_requests WHERE id=?', [req2.id])
