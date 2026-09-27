@@ -346,6 +346,10 @@ async function findById(id) {
   )
   if (!rows[0]) throw new AppError('商品不存在',404)
   const product = fmtProduct(rows[0])
+  // §18 可见性修复（2026-09-27）：**只读**暴露标签使用的原始 `product_items.sale_price`。
+  // 与既有 `salePrice`（= 价格A）**并存**且不改变后者含义；**不提供任何写入入口**——
+  // 该列由改价审批维护。仅详情返回，列表/Finder 契约不变。
+  product.labelSalePrice = rows[0].sale_price != null ? Number(rows[0].sale_price) : null
   product.units = await loadProductUnits(id)   // 计量单位列表（基本单位在前），供表单回显与前端换算展示
   return product
 }

@@ -16,6 +16,13 @@ export interface Product {
   unit: string; spec: string | null; color: string | null; barcode: string | null
   costPrice: number | null; salePrice: number | null
   salePriceA?: number | null; salePriceB?: number | null; salePriceC?: number | null; salePriceD?: number | null
+  /**
+   * 标签使用的原始 `product_items.sale_price`（**只读**，由改价审批维护）。
+   * 与 `salePrice`（= 价格A）是两个不同的存储契约，别混用：`salePrice` 供详情/Finder/订单报价口径，
+   * 本字段只在商品编辑页**只读展示**给员工看「标签上会印的价」。详见
+   * `docs/export-filters-fix-2026-09-27.md` §18。
+   */
+  labelSalePrice?: number | null
   remark: string | null; isActive: boolean; createdAt: string
 }
 export interface CreateProductParams {

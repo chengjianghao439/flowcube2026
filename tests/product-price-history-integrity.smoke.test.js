@@ -187,6 +187,15 @@ async function main() {
       Number(saleHist.n) === 0,
       `${saleHist.n} 条`,
     )
+
+    // 真实详情 API：两个契约字段必须**同时**可读，且各自保持自己的值
+    const detail = await http.get(`/api/products/${pSale.id}`, { token })
+    const d = detail.data?.data
+    log.assert(
+      '★ 详情 API 同时返回 salePrice=130（价格A）与 labelSalePrice=200（标签销售价），互不覆盖',
+      detail.status === 200 && Number(d?.salePrice) === 130 && Number(d?.labelSalePrice) === 200,
+      `status=${detail.status} salePrice=${d?.salePrice} labelSalePrice=${d?.labelSalePrice}`,
+    )
   } finally {
     // 按精确 ID 自洁（依赖顺序：历史/单位/策略 → 商品）
     for (const id of created) {

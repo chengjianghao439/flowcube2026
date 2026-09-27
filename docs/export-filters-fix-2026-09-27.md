@@ -787,3 +787,22 @@ cost链=[[100,150],[100,200]]  最终cost=200   ← 两条历史的旧价都是 
 ### 18.5 未验证边界
 
 并发反例只覆盖"两次手工改价"；**未**构造"手工改价 × 审批通过"的并发用例（两者锁同一商品行，理论上已串行化，但未实测）；未跑全量商品模块回归；未评估生产上受影响的商品数量。
+
+### 18.6 员工可见性修复与审批后的缓存新鲜度（2026-09-27；**仍不改口径**）
+
+**背景**：§18.4 的 B 项之一（商品编辑页看不到与 A 不同的标签销售价）已做**可见性修复**。
+
+- **后端**：详情（`findById`）新增**只读**字段 `labelSalePrice` = 原始 `product_items.sale_price`；`salePrice`（= 价格A）等既有契约、**列表与 Finder 均不变**。
+- **前端**：商品编辑页的「销售价格」区（**现有区块**，未新建卡片/弹窗）加一行**只读**展示，标注「销售价（标签使用，改价审批维护）」，并说明"订单报价按客户等级价（上方「价格A~D」）或该客户的专属价目表，**与这里的标签销售价无关**"。**未新增**经 `PRODUCT_UPDATE` 直接写该列的字段或入口。
+- **权限核对（未扩权）**：`GET /api/products/:id` 一直只要求 `PRODUCT_VIEW`，而该响应**本就**包含 `costPrice`（比标签售价更敏感）；本次只是同一张表上多返回一个**只读**列，**未新增权限、未放宽鉴权**。
+- **配套修好的新鲜度缺陷（独立复核发现）**：`price-change` 的 `approveMut` 原先只失效 `['price-change']`，而 `useProduct` 走全局 **5min `staleTime`** ⇒ 审批通过后切回已缓存的编辑页会**继续显示旧 `labelSalePrice`**，正好削弱本次修复。现抽出 `invalidateAfterPriceChange(qc, result)`（由 `useProducts` 导出），**仅在** `finished` 时失效 `['products']` 前缀（详情/列表/Finder）；中间步骤不刷新，**不用轮询**。全仓核对：改价审批的**前端入口只有 `price-change/index.tsx` 一处**（通用审批待办页不调该接口）。
+
+**验证**：
+
+| 层 | 证据 |
+|---|---|
+| 后端 | `tests/product-price-history-integrity.smoke.test.js` **17/0**：新增断言——**真实详情 API 同时返回** `salePrice=130` 与 `labelSalePrice=200` |
+| 前端**行为测试** | `src/hooks/useProducts.priceChange.test.tsx`（真实 `QueryClient` + 生产同口径 5min `staleTime`）：审批完成后 `useProduct` 取到新价；`finished=false` 不刷新。**反向破坏**：摘掉失效 ⇒ 第一条**精准变红**（`expected '110 / 110' to be '110 / 200'`）——即真的保护了"审批后页面取新价" |
+| 浏览器实测 | 隔离库 `flowcube_operations20260912_test`；后端以 `LOGISTICS_WORKER_ENABLED=0` + 空 `DINGTALK_ALERT_WEBHOOK=` 启动（日志确认物流 worker 未启动）；独立会话 `product-label-visibility`。商品编辑页同时显示 **价格A=130**（输入框）与 **销售价（标签使用，改价审批维护）200.00**（只读行）。收尾：会话 `close` ⇒ `session list --json` = `{"sessions":[]}`；服务按 PID 停止、`:3000`/`:5173` 已释放；样例商品已删除 |
+
+**仍未做**：**未判定**"谁是权威售价"、**未**让 A 价审批同步标签价、未在生产核对两列不一致的规模——口径决策仍待业务方（同 §18.4 B）。

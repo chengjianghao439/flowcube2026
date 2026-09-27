@@ -1,4 +1,5 @@
 import { money } from '@/lib/format'
+import { invalidateAfterPriceChange } from '@/hooks/useProducts'
 import { OrderActivityDialog } from '@/components/shared/OrderActivityDialog'
 import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
 import { useEffect, useState } from 'react'
@@ -117,7 +118,13 @@ export default function PriceChangePage() {
 
   const approveMut = useMutation({
     mutationFn: (id: number) => payloadClient.post<ApproveResult>(`/price-change/${id}/approve`),
-    onSuccess: (d) => { qc.invalidateQueries({ queryKey: ['price-change'] }); toast.success(d?.finished ? '审批通过，价格已生效' : '本步骤已批准') },
+    onSuccess: (d) => {
+      qc.invalidateQueries({ queryKey: ['price-change'] })
+      // 审批真正完成时价格才落库 ⇒ 连带失效商品缓存（详情/列表/Finder），否则编辑页会在
+      // 5min staleTime 内继续显示旧的 labelSalePrice。具体与理由见 useProducts 的同名函数。
+      invalidateAfterPriceChange(qc, d)
+      toast.success(d?.finished ? '审批通过，价格已生效' : '本步骤已批准')
+    },
     onError: (e: unknown) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '审批失败'),
   })
 

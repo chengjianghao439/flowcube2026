@@ -355,6 +355,22 @@ export default function ProductFormPage() {
             )
           })}
         </div>
+        {isEdit && (
+          // §18 可见性修复（2026-09-27）：只读展示标签使用的原始 sale_price（labelSalePrice）。
+          // 不提供任何写入入口——该列由改价审批维护；此处只让员工看到「标签上会印的价」
+          // 可能与「价格A」不同。订单报价按下单客户的等级价/价目表。
+          <div className="mt-4 border-t pt-3">
+            <div className="flex items-baseline gap-2 text-sm">
+              <span className="text-muted-foreground">销售价（标签使用，改价审批维护）</span>
+              <span className="font-medium tabular-nums">
+                {product?.labelSalePrice != null ? Number(product.labelSalePrice).toFixed(2) : '—'}
+              </span>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              只读：该价印在商品标签上，由改价审批维护，不在此处修改。订单报价按客户等级价（上方「价格A~D」）或该客户的专属价目表，与这里的标签销售价无关。
+            </p>
+          </div>
+        )}
       </Section>
 
       <Section title="库存策略">
