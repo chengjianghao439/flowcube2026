@@ -31,9 +31,8 @@ function Probe({ id }: { id: number }) {
 async function render(id: number) {
   await act(async () => {
     root.render(<QueryClientProvider client={client}><Probe id={id} /></QueryClientProvider>)
-    await new Promise(r => setTimeout(r, 20))
   })
-  await act(async () => { await new Promise(r => setTimeout(r, 20)) })
+  await vi.waitFor(() => expect(host.textContent).not.toBe('-'))
 }
 
 test('★ 审批完成（finished）后，商品页面取到新的 labelSalePrice，而不是 5min 内的旧缓存', async () => {
@@ -43,14 +42,20 @@ test('★ 审批完成（finished）后，商品页面取到新的 labelSalePric
 
   // 审批改价已在服务端生效：标签销售价 200、价格A 仍 110
   vi.mocked(getProductApi).mockResolvedValue({ id: 9, salePrice: 110, labelSalePrice: 200 } as never)
-  await act(async () => { invalidateAfterPriceChange(client, { finished: true }); await new Promise(r => setTimeout(r, 20)) })
-  expect(host.textContent).toBe('110 / 200')
+  await act(async () => { invalidateAfterPriceChange(client, { finished: true }) })
+  await vi.waitFor(() => expect(host.textContent).toBe('110 / 200'))
 })
 
 test('多级审批的中间步骤（finished=false）不改价格，也不刷新商品缓存', async () => {
   vi.mocked(getProductApi).mockResolvedValue({ id: 9, salePrice: 110, labelSalePrice: 110 } as never)
   await render(9)
+  const callsAfterRender = vi.mocked(getProductApi).mock.calls.length
+
   vi.mocked(getProductApi).mockResolvedValue({ id: 9, salePrice: 110, labelSalePrice: 200 } as never)
-  await act(async () => { invalidateAfterPriceChange(client, { finished: false }); await new Promise(r => setTimeout(r, 20)) })
+  await act(async () => { invalidateAfterPriceChange(client, { finished: false }) })
+  // 本条要证明「**没有**发生刷新」，所以不能用 waitFor 等状态变化（那会立刻通过、毫无意义）；
+  // 改为断言**未被再次取数**，并留一个短窗口让可能的（错误）刷新有机会暴露。
+  await act(async () => { await new Promise(r => setTimeout(r, 20)) })
+  expect(vi.mocked(getProductApi).mock.calls.length).toBe(callsAfterRender)
   expect(host.textContent).toBe('110 / 110')
 })

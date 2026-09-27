@@ -357,8 +357,9 @@ export default function ProductFormPage() {
         </div>
         {isEdit && (
           // §18 可见性修复（2026-09-27）：只读展示标签使用的原始 sale_price（labelSalePrice）。
-          // 不提供任何写入入口——该列由改价审批维护；此处只让员工看到「标签上会印的价」
-          // 可能与「价格A」不同。订单报价按下单客户的等级价/价目表。
+          // 不提供任何写入入口。写入面的准确表述（勿简写成「只由审批写」）：
+          //   **新建时按价格A初始化 → 普通商品编辑不写它 → 改价审批可把它调成与 A 不同的值**。
+          // 订单报价按客户等级价或该客户的专属价目表，与本值无关。
           <div className="mt-4 border-t pt-3">
             <div className="flex items-baseline gap-2 text-sm">
               <span className="text-muted-foreground">销售价（标签使用，改价审批维护）</span>
