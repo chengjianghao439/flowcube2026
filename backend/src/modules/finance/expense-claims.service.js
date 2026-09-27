@@ -6,6 +6,7 @@ const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { assertNotSelfApproval } = require('../../utils/selfApprove')
 const accountSvc = require('./finance-accounts.service')
+const { assertFinancePeriodOpen } = require('../accounting/finance-period.guard')
 
 /**
  * 日常费用报销。
@@ -199,11 +200,29 @@ async function cancel(id, operator) {
 /**
  * 付款：从指定资金账户出账，同事务写账户流水。
  * 钱出去和单据状态必须同生共死，不能只改状态不动账。
+ *
+ * **跨期闸门（2026-09-27）**：这是第四条真实出钱路径，与直付/核销/退款一样会写
+ * `finance_account_transactions`、并被 voucher-engine 的 buildFundVouchers 读去生成
+ * 凭证（biz_type=3 → EXPENSE_PAY）。缺这道闸门时，付款日期落在已结账期间会让凭证
+ * 被 generateVouchers 跳过（期间已封）——钱从账户出去了、会计账上却没有这笔费用，
+ * 界面无任何提示。界面上付款弹窗只传 accountId，故付款日期恒为今天；真实触发场景是
+ * 「当月已结账后又在本月付款」（提前结账）。
  */
 async function pay(id, { accountId, happenedAt, remark }, operator) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    // 有效业务日期只算一次：闸门判定与实际落库必须用同一个日期，否则「判的期间」与
+    // 「写的期间」可能错位。闸门放在行锁之前——它取的账套锁是全链最外层（与直付登记、
+    // 固定资产计提/处置同序：账套 → 单据 → 账户），期间已封就不必再锁报销单与资金账户。
+    const bizDate = happenedAt || beijingTodayYmd()
+    await assertFinancePeriodOpen(conn, bizDate, {
+      bizLabel: '本次费用报销付款',
+      // 报销目前没有跨期补录通道（finance-backfills 无 expense 分支），
+      // 不能引导用户去走一条走不通的路
+      backfillHint: false,
+    })
+
     const row = await lockStatusRow(conn, {
       table: 'expense_claims', id, columns: 'id, claim_no, status, total_amount, applicant_name', entityName: '费用报销单',
     })
@@ -226,7 +245,7 @@ async function pay(id, { accountId, happenedAt, remark }, operator) {
       bizId: Number(id),
       bizNo: row.claim_no,
       partyName: row.applicant_name,
-      happenedAt: happenedAt || beijingTodayYmd(),
+      happenedAt: bizDate,
       remark: remark || `费用报销 ${row.claim_no}`,
     }, operator)
     await conn.commit()

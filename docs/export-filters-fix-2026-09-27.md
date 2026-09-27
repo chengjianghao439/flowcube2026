@@ -473,14 +473,58 @@
 
 ## 13. 本轮累计验收与续接基线（2026-09-27）
 
-**基线**：工作树 `claude/happy-mahavira-0a2b4b`，本轮提交链末端 `7bf34e4`；主工作树仍单独保留。§11 的 P1/P2/P3/P8 修复和本轮自批修复均为**本地提交**，未推送、未打 tag、未部署。没有执行生产迁移或修改生产数据。
+**基线**：工作树 `claude/happy-mahavira-0a2b4b`；§11 的 P1/P2/P3/P8 修复、本轮自批修复（该段末端 `7bf34e4`）与 **§14 的费用报销跨期闸门修复**均为**本地提交**，未推送、未打 tag、未部署。没有执行生产迁移或修改生产数据。主工作树仍单独保留。
 
 **Codex 独立复核**：检查了用户更新路由与 service 的超管授予边界、`selfApprove` 实时查询、审批实例快照与改价动作调用链；发现并推动修正「只挡创建人」遗漏提交人自批，以及无活跃实例时 409 被 403 抢先覆盖。最终代码在 Node 22、`127.0.0.1:3307/flowcube_printvoid_test` 上重跑 `smoke:price-change-history` **8/0**（夹具残留 **0**）、`smoke:audit-finance-security` **17/0**；后端 lint 通过。改价专项同时覆盖了上一轮的价格历史旧价与软删回滚、超管未授权自批、撤权后的既有待办，以及 A≠B 的同意/驳回双身份拦截。新旧改动在这条已验证链上未出现语义冲突；其余累计范围仍待发版前统一验证。
 
-**A — 已确认且值得立即处理**：本批发现的改价自批绕行已修并做反向验证，目前没有新的、证据充分而尚未处理的 A 项。不要为填清单制造缺陷。
+**A — 已确认且值得立即处理**：本批（§14）新增一条——**费用报销付款缺跨期闸门**（第四条出钱路径，闭期付款会「钱出账户、凭证被跳过、界面无提示」）。已实测红例、已窄修复、已反向破坏验证。除此之外目前没有新的、证据充分而尚未处理的 A 项。不要为填清单制造缺陷。
 
-**B — 继续调查或待决策**：① `price-change.submit` 允许 B 提交 A 创建的申请，是否允许代提交属流程归属策略（§12.3），自批已对两人收口；② `products.update` 事务外读旧价再于事务内写历史的并发漂移仍只属静态风险（§11）；③ 发票、薪资、HR、固定资产的审批与财务后果尚未按 §9.3 的深度追过；④ P5 多端数据新鲜度仍是机会项，未证实为缺陷。下一批先对③做有界只读调查并寻找跨模块共同规则，再按证据决定是否实施；不要重做 P1/P2/P3/P8。
+**B — 继续调查或待决策**：① `price-change.submit` 允许 B 提交 A 创建的申请，是否允许代提交属流程归属策略（§12.3），自批已对两人收口；② `products.update` 事务外读旧价再于事务内写历史的并发漂移仍只属静态风险（§11）；③ 发票侧的**期间语义**：发票的认证/抵扣/红冲与金额修改不区分会计期间，而 `loadTaxMaps` 按业务单 `source_id` 合计、**不按开票日期**——改票会静默改写未结账期间的凭证税额、对已结账期间则静默无效（用户以为改好了、账上没变）。它**不产生**「钱动了账不记」（发票不动钱、不独立出凭证），**未实测**，属口径/提示一致性问题（§14）；④ **费用报销的跨期补录通道**——`finance-backfills.service` 无 expense 分支，故报销付款闭期只能改日期（§14 已据此把拒绝措辞改为不提补录），是否补齐属**产品待决项**；⑤ P5 多端数据新鲜度仍是机会项，未证实为缺陷。不要重做 P1/P2/P3/P8。
 
-**C — 已调查且不应重复当 bug**：ATP 与当前可拣量是不同既定口径；`approval.task.view` 只作入口粗筛，节点快照再裁决审批人；「行锁/状态机防重」不是请求键幂等重放；§12.2 的「只挡创建人、提交人由快照保证」已被反例推翻，双身份动作校验已落地。
+**C — 已调查且不应重复当 bug**：ATP 与当前可拣量是不同既定口径；`approval.task.view` 只作入口粗筛，节点快照再裁决审批人；「行锁/状态机防重」不是请求键幂等重放；§12.2 的「只挡创建人、提交人由快照保证」已被反例推翻，双身份动作校验已落地；**资金账户余额调整（`finance_account_transactions` 的 `biz_type=4`）本来就不生成凭证**（`voucher-engine.js` 的 `buildFundVouchers` 只读 `IN (1,2,3,5)`），故无「钱动了账不记」；**HR 工资发放与固定资产计提/处置已有期间保护**——工资经 `upsertVoucher` 内部的 `assertPeriodOpen` 抛错回滚，固定资产在 `fixed-assets.service.js` 显式调 `assertPeriodOpen`，二者均非缺陷。
 
 **仍未验收**：浏览器下载文件真正落盘、物理打印、PDA 真机、生产影响规模、发版前全量检查；不得把本地回归或 HTTP 200 写成这些事项的完成证据。本轮未保留浏览器会话或本地服务。Claude Code 当前 Code 会话上下文约 95%，按用户的容量边界停止接新实施任务；工作树干净后可按本节直接接续。
+
+---
+
+## 14. 跨模块调查：发票 / HR·薪资 / 固定资产 → 共同根因「闸门范围按错集合界定」（2026-09-27；调查只读，其后已窄修复）
+
+**调查范围（有界）**：按 §13 B③ 只追**「资金/凭证写入是否都过会计期间闸门」**这一条跨模块主线，不穷举三模块全文。
+
+### A. 已确认并已修：费用报销付款缺跨期闸门（第四条出钱路径）
+
+**共同根因（规则漂移）**：`finance-period.guard.js` 的落点按「**谁写 `payment_entries`**」界定（列了三个入口），而 `voucher-engine.buildFundVouchers` 实际按「**读 `finance_account_transactions` 的 `biz_type IN (1,2,3,5)`**」驱动 receipt_in / payment_out / expense_pay / refund_pay 四类凭证。两个集合**不等价**：费用报销付款**只写资金流水、不写 `payment_entries`**，被整条漏掉。（`voucher-engine.js:557` 的注释本身已预言此漏洞：「一旦命中，说明存在绕过闸门的写入路径」——而它列举的「三个入口」同样漏了报销。）
+
+| 出钱路径 | 资金流水 | 驱动凭证 | 期间闸门（修复前） |
+|---|---|---|---|
+| 应付付款（直付）`payments.service.js` | ✓ biz 2 | PAYMENT_OUT | ✓ |
+| 收付款单核销 `payment-receipts.service.js` | ✓ biz 1 | RECEIPT_IN | ✓ |
+| 退货退款出账 `refund-orders.service.js` | ✓ biz 5 | REFUND_PAY | ✓ |
+| **费用报销付款 `finance/expense-claims.service.js:pay`** | **✓ biz 3** | **EXPENSE_PAY** | **✗ 缺** |
+
+**证据链（每环可定位）**：入口 `finance.routes.js` 的 `happenedAt` 可选且不限日期、controller 原样透传 → 状态规则 `documentStatusRules.js` 的 `pay` 只查「已批准」、无期间限制 → `pay()` 无闸门、`happenedAt || beijingTodayYmd()` 直接落库 → `buildFundVouchers` 会为 `biz_type=3` 产 `EXPENSE_PAY`（凭证日期 = `happened_at`）→ 落已结账期间即被 `generateVouchers` 跳过（`skippedClosed`）→ `closePeriod` 只校验结转凭证新鲜度、`checkConsistency` 只比对账户余额与流水，**界面无兜底**，仅 `logger.warn`。
+
+**可达场景**：界面付款弹窗只传 `accountId`、不传 `happenedAt`（`frontend/src/pages/finance/expenses/index.tsx`），付款日期**恒为今天** ⇒ 真实触发是「**当月已结账后又在本月付款**」（提前结账）；API 侧可传任意历史期间。
+
+**实测红例（修复前，`127.0.0.1:3307/flowcube_printvoid_test`）**：先置 199001 已结账 → 对**已批准未付款**的报销单用 `happenedAt=1990-01-15` 付款 ⇒ **HTTP 200 放行**、单据 `3→4`、新增 1 条 `biz_type=3` 流水、账户余额 `¥0 → ¥-300`。（按业务方要求，红例是「**先结账、再付款**」，不是「先付款后结账」。）
+
+**修复（窄）**：仅在 `expense-claims.service.pay` 的事务内、变更状态/写流水**之前**接入 `assertFinancePeriodOpen`（与其余三条同范式），**不动引擎、不动结账**。闸门置于行锁之前（账套锁为全链最外层，与直付登记、固定资产计提/处置同序「账套 → 单据 → 账户」）；有效业务日期只算一次并与落库共用（避免「判的期间」与「写的期间」错位）。闭期默认 **409 `FINANCE_PERIOD_CLOSED`**、整事务回滚。
+
+**措辞同步**：`assertFinancePeriodOpen` 新增 `backfillHint`（默认 true，既有入口行为不变）；报销付款传 `false`，拒绝消息只提示「改用未结账的日期登记」——**因为 `finance-backfills` 没有 expense 分支，引导补录是走不通的路**。同时订正 `finance-period.guard.js` 头部过时的「三个入口」说明为「四个入口（写 `finance_account_transactions`）」。
+
+**验证**：`tests/finance-period-guard.smoke.test.js` 新增 **§G**（套件 39 条断言，**39/0**），覆盖「闭期被拦（状态/流水/余额三不动）」与「开放期照常放行」；**反向破坏**：摘掉闸门 → **仅 §G 的 8 条精准红、前六节 31 条不受影响**。另跑 `smoke:finance` **118/0**。共享夹具 `smoke_limited` 的 `finance.expense.approve` 授权**按原值判断**（原本有则不插、收尾也不删）。
+
+### B. 未证实 / 待决策
+
+- **发票的期间语义漂移**（§13 B③）：发票的认证/抵扣/红冲（`accounting.invoice.service.js` 的 `changeStatus`，连事务都未开）与金额修改都不区分会计期间，而 `loadTaxMaps` 按业务单 `source_id` 合计、**不按开票日期**。后果：改票会**静默改写未结账期间**的凭证税额、对**已结账期间则静默无效**（用户以为改好了、账上没变、无提示）。**不产生「钱动了账不记」**（发票不动钱、不独立出凭证）。**未实测**，属口径与提示一致性问题。
+- **费用报销的跨期补录通道**：`finance-backfills.service` 无 expense 分支，报销闭期只能改日期。是否补齐属**产品待决项**（本次据此只改措辞、不扩流程）。
+
+### C. 已排除（不应重复当 bug）
+
+- **资金账户余额调整**（`biz_type=4`）**本来就不生成凭证**（`buildFundVouchers` 只读 `IN (1,2,3,5)`，注释亦明示），无「钱动了账不记」。
+- **HR 工资发放**：`payPayroll` 取排他账套锁，且四条凭证均经 `upsertVoucher` 内部的 `assertPeriodOpen`（排他锁）⇒ 闭期**抛错回滚**、工资单停在「已核算」，非缺陷。
+- **固定资产计提/处置**：`fixed-assets.service.js` 在 `runDepreciation`/`disposeAsset` **显式**调 `assertPeriodOpen`，双保险。
+
+### 未做 / 未验证
+
+生产影响规模统计、全量发版验证、浏览器与真机验收均**未做**。发票侧的静默无效/生效**未构造隔离库反例**（列 B，勿当已证实缺陷）。本轮未推送、未打 tag、未部署。

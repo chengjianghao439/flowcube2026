@@ -2,7 +2,7 @@
 'use strict'
 
 /**
- * 资金侧跨期闸门回归测试（2026-09-26 一致性审查 · 任务 7）——29 条断言
+ * 资金侧跨期闸门回归测试（2026-09-26 一致性审查 · 任务 7）——39 条断言
  *
  * 命题：会计期间结账（acct_periods.status=2）后，收付款/退款的核销若仍把 payment_entries
  *       写进该期间，voucher-engine 会因期间已封而跳过生凭证，于是「钱动了、账面没记」，
@@ -11,6 +11,14 @@
  *         层2 申请补录 —— 持 finance.period.backfill 者填原因后可提交**待审批申请**（HTTP 202），
  *              业务数据一行未写、钱一分未动；批准（须他人）与执行是另一条链
  *         层3 不再静默 —— 凭证引擎跳过已结账期间时逐条 logger.warn（见文末「层3的证据」）
+ *
+ * 【§G 2026-09-27 补：费用报销付款是第四条出钱路径】
+ *   闸门的范围必须按「凭证引擎实际读什么」定，而不是按「谁写 payment_entries」：
+ *   buildFundVouchers 读的是 finance_account_transactions 的 biz_type IN (1,2,3,5)，
+ *   而费用报销付款只写资金流水、不写 payment_entries，早期按后者界定落点时整条漏掉。
+ *   漏掉的后果与 §A 同构：闭期付款 ⇒ 钱出账户、流水写了，凭证被跳过（钱动了账不记）。
+ *   §G 用它自建的账户与两张已批准报销单（明细发生日 ≠ 付款日期，说明只有付款日期进凭证）
+ *   同时覆盖「闭期必须被拦」与「开放期照常放行」，并做过反向破坏（摘掉闸门 → 只有 §G 红）。
  *
  * 【补录的凭证落哪一期：已拍板为「补录当期」】
  *   2026-09-26 业务口径确认：前期差错在**执行审批日所在期间**调整，不写回业务期间——业务期间
@@ -45,6 +53,7 @@ const QTY = 10
 const PRICE = 500           // 10 × 500 = 5000
 const PAY1 = 1000
 const PAY2 = 1000
+const EXP_AMOUNT = 300      // §G 费用报销付款金额
 const BACKFILL_REASON = '跨期补录回归测试：模拟上月已结账后有笔付款漏登，需补进该期间'
 
 const LIMITED_PW = 'SmokeLimited123!'
@@ -151,6 +160,12 @@ const backfillsOf = async (pool, recordsWhere, params) => dbQuery(
 
 const money = v => `¥${Number(v ?? 0).toFixed(2)}`
 
+/** 资金账户当前余额（§G 用：断言闭期不扣、开放期按额扣） */
+async function balanceOf(pool, accountId) {
+  const [row] = await dbQuery(pool, 'SELECT current_balance FROM finance_accounts WHERE id=?', [accountId])
+  return Number(row?.current_balance ?? 0)
+}
+
 async function main() {
   const log = createLogger()
   const ctx = await prepareSmokeContext()
@@ -164,6 +179,13 @@ async function main() {
     // §B 自建的资金账户（独占库无现成账户可取）。§F 若真的落库（变异验证、或将来闸门被改坏），
     // 收付款单会连带写它的流水；收尾按 account_id 全清并删掉账户本身。
     accountId: null,
+    // §G 费用报销付款自建的专属账户与单据（同上：闸门一旦失效就会真出账，收尾按 ID 全清）
+    expenseAccountId: null,
+    expenseClaimIds: [],
+    expenseLimitedRoleId: null,
+    // §G 审批人权限：**只在本轮原本没有该权限时**才插入，收尾也只删本轮插入的那一条。
+    // 无条件 DELETE 会把共享夹具原有的授权删掉（历史踩过这个坑）。
+    expenseApproveGranted: false,
   }
   let step = 'init'
 
@@ -454,6 +476,170 @@ async function main() {
         `${Number(fReceipts.c)} 张`,
       )
     }
+
+    // ══════════════════════════════════════════════════════════════════
+    // §G 费用报销付款是**第四条出钱路径**：与直付/核销/退款一样，它把真实资金从账户
+    //    支出、写 finance_account_transactions，并且同样**驱动生成凭证**
+    //    （voucher-engine.js:253 的 biz_type IN (1,2,3,5)，:283 为 biz_type=3 构造
+    //    EXPENSE_PAY，凭证日期 = happened_at）。缺闸门时的后果与 §A 完全相同：
+    //    结账后付款 ⇒ 钱从账户出去了、流水写了，凭证却因期间已封被 generateVouchers
+    //    跳过（voucher-engine.js:551）⇒ 会计账上无这笔费用，界面无任何提示，
+    //    只有一条 logger.warn（:559）——账实不符。
+    //
+    //    可达性说明：界面付款弹窗**只传 accountId、不传 happenedAt**
+    //    （frontend/src/pages/finance/expenses/index.tsx:199），故界面路径的付款日期
+    //    恒为「今天」。因此真实触发场景是「当月已结账后又在本月付款」（提前结账），
+    //    与直付路径受闸门保护的场景同构；API 侧 happenedAt 为可选自由字符串
+    //    （finance.routes.js:97），可传任意历史期间。
+    //
+    //    【证据强度】业务侧（状态/流水/余额）为端到端断言；而「凭证确实缺失」是
+    //    **代码审阅级证据**——与文首「层3的证据」同级：本套件不跑 generateVouchers
+    //    （它是唯一生成入口且会写销售凭证，污染共享库）。改为断言「流水已写入且
+    //    biz_type=3、业务日期落在已结账期间」，再由上面引用的跳过分支推出凭证缺失。
+    // ══════════════════════════════════════════════════════════════════
+    log.section('§G 费用报销付款同样必须被拦（第四条出钱路径）')
+    step = 'G:category'
+    const [catRow] = await dbQuery(
+      pool,
+      'SELECT id, name FROM expense_categories WHERE is_active=1 AND deleted_at IS NULL ORDER BY sort_order LIMIT 1',
+    )
+    if (!catRow) throw new Error('§G 需要至少一个启用中的费用类别（迁移 143 应已预置）')
+
+    step = 'G:account'
+    const gAcctResp = await http.post('/api/finance/accounts', {
+      token,
+      json: { name: `跨期报销闸门用例账户-${randomRef('G')}`, type: 1, openingBalance: 0 },
+    })
+    const gAcctId = Number(gAcctResp.data?.data?.id)
+    if (!Number.isFinite(gAcctId) || gAcctId <= 0) {
+      throw new Error(`§G 建资金账户失败: ${JSON.stringify(gAcctResp.data)}`)
+    }
+    cleanup.expenseAccountId = gAcctId
+    const gBalance0 = await balanceOf(pool, gAcctId)
+
+    // 审批人（非申请人）临时授予报销审批权。原本已有则**不动**，收尾也不删——
+    // 共享夹具的既有授权不能被本套件改写。
+    step = 'G:grant'
+    const [gRoleRow] = await dbQuery(
+      pool,
+      `SELECT r.id AS role_id FROM sys_roles r JOIN sys_users u ON u.role_id=r.id
+        WHERE u.username='smoke_limited' LIMIT 1`,
+    )
+    if (!gRoleRow) throw new Error('§G 未找到 smoke_limited 的角色')
+    cleanup.expenseLimitedRoleId = Number(gRoleRow.role_id)
+    const [gHasPerm] = await dbQuery(
+      pool, 'SELECT 1 AS x FROM sys_role_permissions WHERE role_id=? AND permission=?',
+      [cleanup.expenseLimitedRoleId, 'finance.expense.approve'],
+    )
+    cleanup.expenseApproveGranted = !gHasPerm
+    if (cleanup.expenseApproveGranted) {
+      await pool.query(
+        'INSERT IGNORE INTO sys_role_permissions (role_id, permission) VALUES (?, ?)',
+        [cleanup.expenseLimitedRoleId, 'finance.expense.approve'],
+      )
+    }
+    const gLimitedLogin = await login(http, 'smoke_limited', LIMITED_PW)
+    if (!gLimitedLogin.token) throw new Error('§G smoke_limited 登录失败')
+    const gLimitedToken = gLimitedLogin.token
+
+    step = 'G:seed-claims'
+    // 全链路建单：申请(admin) → 提交 → 审批(smoke_limited)。审批人与申请人不同人
+    // （expense-claims.approve 的 assertNotSelfApproval 会挡自批）。
+    // 明细的 happened_at 是「费用实际发生日」，**不参与凭证归属**——决定凭证期间的是
+    // 付款动作传入的 happenedAt（finance-accounts.recordTransaction 写 happened_at）。
+    const mkApprovedClaim = async (tag, itemDate) => {
+      const created = await http.post('/api/finance/expense-claims', {
+        token,
+        json: {
+          title: `跨期闸门用例-${tag}`,
+          items: [{ categoryId: Number(catRow.id), amount: EXP_AMOUNT, happenedAt: itemDate, description: tag }],
+        },
+      })
+      const claimId = Number(created.data?.data?.id)
+      if (!Number.isFinite(claimId) || claimId <= 0) {
+        throw new Error(`§G 建报销单失败(${tag}): ${JSON.stringify(created.data)}`)
+      }
+      cleanup.expenseClaimIds.push(claimId)
+      const sub = await http.post(`/api/finance/expense-claims/${claimId}/submit`, { token })
+      if (!sub.ok) throw new Error(`§G 提交报销单失败(${tag}): ${JSON.stringify(sub.data)}`)
+      const appr = await http.post(`/api/finance/expense-claims/${claimId}/approve`, { token: gLimitedToken })
+      if (!appr.ok) throw new Error(`§G 审批报销单失败(${tag}): ${JSON.stringify(appr.data)}`)
+      const [row] = await dbQuery(pool, 'SELECT status, total_amount FROM expense_claims WHERE id=?', [claimId])
+      if (Number(row?.status) !== 3) throw new Error(`§G(${tag}) 预期停在已批准 3，实际 ${row?.status}`)
+      return claimId
+    }
+    const claimClosed = await mkApprovedClaim('闭期', CLOSED_DATE)
+    const claimOpen = await mkApprovedClaim('开放期', OPEN_DATE)
+
+    // ── G1 闭期：必须 409，且状态/流水/余额三不动 ────────────────────────
+    step = 'G:pay-closed'
+    const g1 = await http.post(`/api/finance/expense-claims/${claimClosed}/pay`, {
+      token,
+      json: { accountId: gAcctId, happenedAt: CLOSED_DATE, remark: '跨期报销付款用例' },
+    })
+    console.log(`\n[§G 闭期] HTTP ${g1.status} ${JSON.stringify(g1.data).slice(0, 240)}`)
+    log.assert('★ 已结账期间的报销付款被拒（HTTP 409）', g1.status === 409, `HTTP ${g1.status}`)
+    log.assert(
+      '★ 错误码为 FINANCE_PERIOD_CLOSED',
+      g1.data?.code === 'FINANCE_PERIOD_CLOSED',
+      String(g1.data?.code),
+    )
+
+    const [g1Claim] = await dbQuery(pool, 'SELECT status FROM expense_claims WHERE id=?', [claimClosed])
+    log.assert(
+      '★ 报销单状态未被改动（仍为「已批准」3）',
+      Number(g1Claim?.status) === 3,
+      `status=${g1Claim?.status}`,
+    )
+
+    const g1Txns = await dbQuery(
+      pool,
+      'SELECT id, biz_type, amount FROM finance_account_transactions WHERE account_id=?',
+      [gAcctId],
+    )
+    log.assert('★ 未写任何资金流水', g1Txns.length === 0, `${g1Txns.length} 条`)
+
+    const gBalanceClosed = await balanceOf(pool, gAcctId)
+    log.assert(
+      '★ 账户余额未被扣减',
+      Math.abs(gBalanceClosed - gBalance0) < 0.01,
+      `余额 ${money(gBalance0)} → ${money(gBalanceClosed)}`,
+    )
+
+    // ── G2 开放期间：正常路径必须照常放行（闸门不能拦错人）────────────────
+    step = 'G:pay-open'
+    const g2 = await http.post(`/api/finance/expense-claims/${claimOpen}/pay`, {
+      token,
+      json: { accountId: gAcctId, happenedAt: OPEN_DATE, remark: '开放期间报销付款用例' },
+    })
+    console.log(`\n[§G 开放期] HTTP ${g2.status} ${JSON.stringify(g2.data).slice(0, 240)}`)
+    log.assert('★ 开放期间的报销付款成功（HTTP 200）', g2.status === 200, `HTTP ${g2.status}`)
+
+    const [g2Claim] = await dbQuery(pool, 'SELECT status FROM expense_claims WHERE id=?', [claimOpen])
+    log.assert('★ 报销单已流转为「已付款」4', Number(g2Claim?.status) === 4, `status=${g2Claim?.status}`)
+
+    const g2Txns = await dbQuery(
+      pool,
+      'SELECT id, biz_type, amount, happened_at FROM finance_account_transactions WHERE account_id=? ORDER BY id',
+      [gAcctId],
+    )
+    log.assert(
+      '★ 写入 1 条资金流水且 biz_type=3（费用报销 ⇒ 凭证来源 EXPENSE_PAY）',
+      g2Txns.length === 1 && Number(g2Txns[0].biz_type) === 3,
+      JSON.stringify(g2Txns.map(t => ({ biz: Number(t.biz_type), amount: Number(t.amount) }))),
+    )
+    log.assert(
+      '★ 流水的业务日期就是付款日期 1995-01-15（未结账期间，与明细发生日无关）',
+      ymdLocal(g2Txns[0]?.happened_at) === OPEN_DATE,
+      String(g2Txns[0]?.happened_at),
+    )
+
+    const gBalanceOpen = await balanceOf(pool, gAcctId)
+    log.assert(
+      '★ 账户余额按付款金额减少',
+      Math.abs((gBalance0 - gBalanceOpen) - EXP_AMOUNT) < 0.01,
+      `余额 ${money(gBalance0)} → ${money(gBalanceOpen)}，减少 ${money(gBalance0 - gBalanceOpen)}`,
+    )
   } catch (e) {
     console.error(`\n[中止于 step=${step}] ${e.message}`)
     console.error(e.stack)
@@ -494,6 +680,23 @@ async function main() {
       await safe('finance_account_transactions',
         'DELETE FROM finance_account_transactions WHERE account_id=?', [cleanup.accountId])
       await safe('finance_accounts', 'DELETE FROM finance_accounts WHERE id=?', [cleanup.accountId])
+    }
+    // §G 费用报销：先删明细/单据（它们无外键，但按依赖顺序删更稳），再清专属账户的流水与账户。
+    // 同 §F：期望闭期被拒、什么都不写，闸门一旦失效就会真出账——按 account_id 全清兜底。
+    for (const claimId of cleanup.expenseClaimIds) {
+      await safe('expense_claim_items', 'DELETE FROM expense_claim_items WHERE claim_id=?', [claimId])
+      await safe('expense_claims', 'DELETE FROM expense_claims WHERE id=?', [claimId])
+    }
+    if (cleanup.expenseAccountId != null) {
+      await safe('finance_account_transactions(expense)',
+        'DELETE FROM finance_account_transactions WHERE account_id=?', [cleanup.expenseAccountId])
+      await safe('finance_accounts(expense)', 'DELETE FROM finance_accounts WHERE id=?', [cleanup.expenseAccountId])
+    }
+    // 只删本轮自己插入的那一条授权（原本已有则 cleanup.expenseApproveGranted 为 false，不动）
+    if (cleanup.expenseApproveGranted && cleanup.expenseLimitedRoleId != null) {
+      await safe('sys_role_permissions(expense.approve)',
+        'DELETE FROM sys_role_permissions WHERE role_id=? AND permission=?',
+        [cleanup.expenseLimitedRoleId, 'finance.expense.approve'])
     }
     for (const poId of cleanup.poIds) {
       const tasks = await dbQuery(pool, 'SELECT id FROM inbound_tasks WHERE purchase_order_id=?', [poId])

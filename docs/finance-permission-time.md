@@ -100,3 +100,13 @@
 - **`price-change` 必须与其余五个审批模块同范式**：`approve`/`reject` 在动作处调 `assertNotSelfApproval`。缺这一层时有两条绕行：① `assertCanApproveTask` 对 `roleId===1` **恒放行** ⇒ 超管自提的改价即使 `allow_self_approve=0` 也能自批；② 快照已含本人 ⇒ 撤权后仍可批既有单。
 - **"本人"是两个身份**：申请单 `applicant_id` 是**创建人**，引擎实例 `applicant_id` 是**提交人**（`create` 与 `submit` 可不同一人，且 `submit` 目前无归属校验）。动作处必须**对两个身份都做当前授权断言**（相同 ID 去重）——只查创建人会漏掉提交人自批（含提交人为超管的情形）。回归 `tests/price-change-history-oldprice.smoke.test.js`（含 A≠B、超管自提、撤权后自批三条反例）。
 - **归属校验（是否阻止 B 提交他创建的单）单列待定**，不并入本次改动。
+
+### 2026-09-27 费用报销付款的跨期闸门（第四条出钱路径）
+
+- **规则**：写 `finance_account_transactions` 的**四条**出钱路径——直付登记、收付款单核销、**费用报销付款**、退款出账——在写入前都必须过 `assertFinancePeriodOpen`（`accounting/finance-period.guard.js`）；业务日期落在已结账期间默认 409 `FINANCE_PERIOD_CLOSED`，整事务回滚、分文不写。
+- **范围按「凭证引擎实际读什么」定，不按「谁写 `payment_entries`」**：`voucher-engine.buildFundVouchers` 是读资金流水 `biz_type IN (1,2,3,5)` 来生成 receipt_in / payment_out / **expense_pay** / refund_pay 四类凭证的。早期按后者界定落点（三个入口），而**费用报销付款只写资金流水、不写 `payment_entries`**，被整条漏掉：闭期付款 ⇒ 钱从账户出去、流水写了，凭证却因期间已封被 `generateVouchers` 跳过（`skippedClosed`）⇒ **会计账上无这笔费用，界面无任何提示，仅一条 `logger.warn`**。
+- **可达场景**：界面付款弹窗只传 `accountId`、不传 `happenedAt`（`frontend/src/pages/finance/expenses/index.tsx`），故界面路径的付款日期**恒为今天** ⇒ 真实触发是「**当月已结账后又在本月付款**」（提前结账），与直付路径受闸门保护的场景同构；API 侧 `happenedAt` 为可选自由字符串，可传任意历史期间。
+- **锁顺序**：闸门放在行锁**之前**（`pay` 事务内先于 `lockStatusRow`），账套锁是全链最外层，与直付登记、固定资产计提/处置同序「账套 → 单据 → 账户」。有效业务日期只算一次（`happenedAt || beijingTodayYmd()`），闸门判定与落库共用同一值，避免「判的期间」与「写的期间」错位。
+- **拒绝措辞按 `backfillHint` 区分**：有补录出路的入口（直付/核销/退款）保留「可走跨期补录」；费用报销付款传 `backfillHint:false`，只提示「改用未结账的日期登记」——**`finance-backfills` 目前没有 expense 类型分支，给出补录指引是一条走不通的路**。
+- **未做**：费用报销自身的跨期补录通道（需 `finance-backfills.service` 增 expense 分支及其审批），单列**产品待决项**，不并入本次窄修复。
+- **回归**：`tests/finance-period-guard.smoke.test.js` **§G**（套件整体 39/0）——闭期被拦（状态/流水/余额三不动）+ 开放期照常放行；**反向破坏**：摘掉闸门 → 仅 §G 的 8 条精准红、前六节 31 条不受影响。

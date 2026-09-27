@@ -12,11 +12,16 @@
  *   （见 voucher-engine.js 的 stats.skippedClosed）。结果是钱动了、资金账户流水动了，
  *   会计账上却没有这笔，且无人知晓——账实不符。
  *
- * 落点（写 payment_entries 的三个入口，也就是 receipt_in / payment_out / refund_pay
- * 三个凭证来源的产生点）：
- *   · payments.service.js          recordPayment   —— 直付登记
- *   · payment-receipts.service.js  applyAllocations—— 收付款单核销
- *   · refund-orders.service.js     execute         —— 退款出账
+ * 落点（**写 finance_account_transactions 的四个入口**）：
+ *   范围必须按「凭证引擎实际读什么」来定，而不是按「谁写 payment_entries」。
+ *   voucher-engine.buildFundVouchers 是按 `biz_type IN (1,2,3,5)` 读资金流水来生成
+ *   receipt_in / payment_out / expense_pay / refund_pay 四类凭证的；而费用报销付款
+ *   **只写资金流水、不写 payment_entries**，按后者界定范围会把它整条漏掉
+ *   （2026-09-27 实测：闭期报销付款被放行，钱出账户、凭证因期间已封被跳过）。
+ *   · payments.service.js             recordPayment    —— 直付登记
+ *   · payment-receipts.service.js     applyAllocations —— 收付款单核销
+ *   · finance/expense-claims.service.js  pay           —— 费用报销付款
+ *   · refund-orders.service.js        execute          —— 退款出账
  */
 
 const AppError = require('../../utils/AppError')
@@ -77,12 +82,15 @@ const periodOfDate = (ymd) => `${ymd.slice(0, 4)}${ymd.slice(5, 7)}`
  *
  * @param {*} conn 事务连接（调用方已开启事务）
  * @param {string|Date} businessDate 业务发生日期
- * @param {{companyId?: number, bizLabel?: string, backfill?: {mode?: string, postingPeriod?: string, reason?: string}|null}} opts
+ * @param {{companyId?: number, bizLabel?: string, backfill?: {mode?: string, postingPeriod?: string, reason?: string}|null, backfillHint?: boolean}} opts
+ *   backfillHint=false 表示该业务**没有**补录出路（如费用报销付款：finance-backfills
+ *   目前没有 expense 类型分支），此时拒绝消息不再引导用户去申请补录——那是一条走不通的路，
+ *   只会让人以为找财务主管就能补上。默认 true，既有入口行为不变。
  * @returns {Promise<{ymd: string, period: string, closed: boolean, voucherDateOverride: string|null}>}
  *   closed=true 表示这是一次已授权的补录；voucherDateOverride 是该补录凭证应落的日期
  */
 async function assertFinancePeriodOpen(conn, businessDate, opts = {}) {
-  const { companyId = 1, bizLabel = '该笔业务', backfill = null } = opts
+  const { companyId = 1, bizLabel = '该笔业务', backfill = null, backfillHint = true } = opts
   const ymd = toYmd(businessDate)
   if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) {
     throw new AppError(`${bizLabel}缺少有效的业务发生日期，无法判断所属会计期间`, 400, 'FINANCE_PERIOD_NO_DATE')
@@ -117,8 +125,10 @@ async function assertFinancePeriodOpen(conn, businessDate, opts = {}) {
   throw new AppError(
     `会计期间 ${period} 已结账，${bizLabel}的日期（${ymd}）落在该期间内，不能登记：`
     + '账已封存，此时登记会让这笔钱进入已结账期间的凭证之外（钱动了账不记）。'
-    + '请改用未结账的日期登记；若这笔业务确实发生在该期间，'
-    + '需由持「跨期补录」权限的财务主管填写原因后补录。',
+    + (backfillHint
+      ? '请改用未结账的日期登记；若这笔业务确实发生在该期间，'
+        + '需由持「跨期补录」权限的财务主管填写原因后补录。'
+      : '请改用未结账的日期登记。'),
     409,
     'FINANCE_PERIOD_CLOSED',
     { period, businessDate: ymd },
