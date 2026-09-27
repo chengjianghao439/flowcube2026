@@ -819,7 +819,7 @@ cost链=[[100,150],[100,200]]  最终cost=200   ← 两条历史的旧价都是 
 
 **C — 已调查且不应重复当 bug**：ATP 与当前可拣量是**不同既定口径**；`approval.task.view` 只作入口粗筛；「行锁/状态机防重」不是请求键幂等重放；余额调整 `biz_type=4` **本就不生成凭证**；HR 工资与固定资产**已有**期间保护；发票对已结账期间是 **fail-loud** 而非静默；`sale_orders.id` 与 `purchase_orders.id` **序列独立**（复查须带 `type`）；旧 `NoQuotaBypass` 的无用订单已删。
 
-**本轮累计验收范围（**仅限实际跑过的**）**：后端 `product-price-history-integrity` **17/0**、`price-change-history-oldprice` **9/0**、`invoice-quota` **55/0**、`finance-period-guard` **39/0**、`smoke:finance` **118/0**；前端 `tsc -p tsconfig.app.json --noEmit` 通过、`useProducts.priceChange.test.tsx` **2/2**；浏览器侧完成过**一次导出真实落盘**验收（§16）与**一次商品编辑页可见性实测**（§18.6）。**以上均为本轮专项，不等于发版前全量**——按 AGENTS §3，受影响端的 lint / 类型检查 / 构建与全量回归统一留到发版前执行。
+**本轮累计验收范围（**仅限实际跑过的**；更完整的一轮累计验收见 §21）**：后端 `product-price-history-integrity` **17/0**、`price-change-history-oldprice` **9/0**、`invoice-quota` **55/0**、`finance-period-guard` **39/0**、`smoke:finance` **118/0**；前端 `tsc -p tsconfig.app.json --noEmit` 通过、`useProducts.priceChange.test.tsx` **2/2**；浏览器侧完成过**一次导出真实落盘**验收（§16）与**一次商品编辑页可见性实测**（§18.6）。**以上均为本轮专项，不等于发版前全量**——按 AGENTS §3，受影响端的 lint / 类型检查 / 构建与全量回归统一留到发版前执行。
 
 **未验证边界**：物理打印、PDA 真机、生产影响规模、发版前全量检查均**未做**；发票存量规模与两列不一致规模**未在生产核对**；「手工改价 × 审批通过」的并发用例**未构造**；本文件多数结论为**隔离库 + 本地栈**证据，**不得当作生产结论**。
 
@@ -864,5 +864,64 @@ cost链=[[100,150],[100,200]]  最终cost=200   ← 两条历史的旧价都是 
 - `npm run smoke:invoice-edit-concurrency` 实跑 **13/0**；改动的 `test.yml` 经 YAML 解析校验通过。
 
 ### 20.5 未验证边界
+
+未在生产核对并发编辑的实际频率与受影响单据数；未构造"编辑 × 认证/红冲"的并发用例（`changeStatus` 是单语句 CAS，属另一条路径）；**迁移 263 仅在隔离库应用，未进生产**；未做发版前全量。
+
+---
+
+## 21. 累计验收（2026-09-27，§11–20 一起验）
+
+**基线**：`a252e55`（clean）。**未开展新 bug 扫描**；未推送/打 tag/部署/碰生产。
+
+### 21.1 环境（任务专属空库，绝不复用有未知数据的库）
+
+- 目标（非密）：`NODE_ENV=test` · `DB_HOST=127.0.0.1` · `DB_PORT=3307` · `DB_NAME=flowcube_acceptance20260927_test` · Node **v22.23.2** · `APP_UPDATE_DOWNLOADS_DIR` 可写。
+- **建库前不存在** ⇒ 全新专属库；迁移前 **0 表**；迁移退出码 0、共 **263** 个迁移（**含 `263_fin_invoices_revision.sql`**）。日志 `/tmp/fc-accept-migrate.log`。
+- 未复用也未清理任何既有库（本机另有 50+ 个 `flowcube*` 库，全部未动）。
+
+### 21.2 静态检查与构建（全部退出码 0）
+
+| 项 | 结果 | 日志 |
+|---|---|---|
+| backend lint | rc=0（无输出） | `/tmp/fc-accept-be-lint.log` |
+| frontend lint | rc=0；**0 errors / 32 warnings**（按文件归属确认为**既有**，无本轮新增） | `/tmp/fc-accept-fe-lint.log` |
+| `tsc -p tsconfig.app.json --noEmit` | rc=0 | `/tmp/fc-accept-tsc.log` |
+| ERP 构建（VITE_ELECTRON=1） | rc=0（4.89s） | `/tmp/fc-accept-erp-build.log` |
+| PDA 构建（VITE_CAPACITOR=1） | rc=0（10.90s） | `/tmp/fc-accept-pda-build.log` |
+
+### 21.3 受影响回归（按 §11–20 累计改动选取，全部在新库执行）
+
+| 覆盖项 | 命令 | rc | 通过 | 日志 |
+|---|---|---|---|---|
+| 导出筛选（离线） | `test:export-filters` | 0 | 4/0 | `/tmp/fc-accept-exp-filters.log` |
+| 导出筛选（真实服务+库） | `smoke:prelaunch-scope-export` | 0 | 34/0 | `/tmp/fc-accept-prelaunch-export.log` |
+| 作废补打守卫（离线） | `test:print-barcode-void` | 0 | 8/0 | `/tmp/fc-accept-print-void-guard.log` |
+| 作废补打 / 收货撤回 | `smoke:print-barcode-void` · `smoke:print-barcode-void-receipt` | 0 / 0 | 11/0 · 12/0 | `/tmp/fc-accept-print-void{,-rcpt}.log` |
+| 打印队列 | `smoke:print-queue` | 0 | 14/0 | `/tmp/fc-accept-print-queue.log` |
+| 报表成本口径 | `smoke:report-cost-basis` | 0 | 4/0 | `/tmp/fc-accept-cost-basis.log` |
+| 改价双身份自批/历史/软删 | `smoke:price-change-history` | 0 | **9/0** | `/tmp/fc-accept-price-history.log` |
+| 商品手工改价/小数开关/并发链 | `tests/product-price-history-integrity...` | 0 | **17/0** | `/tmp/fc-accept-pph-integrity.log` |
+| 发票来源配额（含编辑自愈/清空/契约） | `smoke:invoice-quota` | 0 | **55/0** | `/tmp/fc-accept-invoice-quota.log` |
+| 发票编辑并发乐观锁 | `smoke:invoice-edit-concurrency` | 0 | **13/0** | `/tmp/fc-accept-invoice-concur.log` |
+| 费用报销 / 闭期付款 | `smoke:finance` | 0 | 118/0 | `/tmp/fc-accept-finance.log` |
+| 资金期间闸门 | `tests/finance-period-guard.smoke.test.js` | 0 | **39/0** | `/tmp/fc-accept-fin-period-guard.log` |
+| 账款会计主链 | `smoke:mainline` | 0 | 49/0 | `/tmp/fc-accept-mainline.log` |
+| 会计 / 期间 | `smoke:accounting` · `smoke:accounting-period` | 0 / 0 | 11/0 · 20/0 | `/tmp/fc-accept-accounting{,-period}.log` |
+
+### 21.4 过程中判定的一处**环境问题**（非本轮回归，未改门禁）
+
+首轮 `smoke:price-change-history` **rc=1、8 passed**，失败信息为「需要至少一个商品分类」。查明：新库 `product_categories` **为 0**（`smoke_*` 用户在、分类 seed 不在），而该用例的场景 ⑤ 需要至少一个分类。**判定为环境缺 seed**——该用例在既有库能过正因那边有分类。
+**处置**：给新库补**最小 seed**（1 个分类，仅满足"至少一个"），**未改测试、未调门禁**；重跑 **9/0** 通过。同时补跑了我漏掉的 `product-price-history-integrity` ⇒ **17/0**。
+
+### 21.5 夹具与资源收尾
+
+- **新库残留全 0**：`fin_invoices`(INV-CODE\*/EDIT-C/RACE-C) / `product_items`(PPH-/VIS-/RACE-) / `payment_records`(两类测试往来方) / `expense_claims`(用例标题) / `acct_periods`(199001、199501) —— **各 0**。
+- `:3000` / `:5173` **空闲**；`agent-browser session list --json` = `{"sessions":[]}`；`git status --short` **空**（`dist/` 已被 `.gitignore` 忽略，构建产物未污染仓库）。
+
+### 21.6 边界（如实保留）
+
+- **未做发版前真正的全量 CI**：本节只覆盖**按 §11–20 改动选取**的受影响专项，不等于全量回归；受影响端的 lint/类型检查/构建与全量回归仍按 AGENTS §3 留到发版前统一执行。
+- **物理打印、PDA 真机未验**；**生产影响规模未评估**；迁移 263 只在隔离库应用。
+- 本节的通过数均为**隔离库 + 本地栈**证据，不得当作生产结论。
 
 未在生产核对并发编辑的实际频率与受影响单据数；未构造"编辑 × 认证/红冲"的并发用例（`changeStatus` 是单语句 CAS，属另一条路径）；**迁移 263 仅在隔离库应用，未进生产**；未做发版前全量。
