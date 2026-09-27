@@ -198,10 +198,10 @@ async function approve(id, operator) {
     // 且提交人会被纳入节点快照。只查创建人会留下两条绕行：提交人撤权后仍可自批、
     // 提交人为超管时被 assertCanApproveTask 的 roleId===1 恒放行批过。
     const active = await approvalEngine.getActiveInstanceByBiz(conn, { bizType: 'product_price', bizId: Number(id) })
+    if (!active) throw new AppError('改价申请无进行中的审批实例', 409)
     for (const applicantId of selfApprovalIdentities(row, active)) {
       await assertNotSelfApproval(applicantId, operator?.operatorId ?? operator?.userId, '不能审批自己提交的改价申请')
     }
-    if (!active) throw new AppError('改价申请无进行中的审批实例', 409)
     const r = await approvalEngine.approveStep(conn, { instanceId: active.instance.id, operator, comment: null })
     // approveStep 返回 { status }：2=实例已全部通过（此时才生效改价）
     if (r.status === 2) {
@@ -220,10 +220,10 @@ async function reject(id, { reason, operator }) {
     const row = await lockStatusRow(conn, { table: 'price_change_requests', id, columns: 'id, status, applicant_id', entityName: '改价申请', deletedAt: false })
     assertStatusAction('priceChangeRequest', 'reject', row.status)
     const active = await approvalEngine.getActiveInstanceByBiz(conn, { bizType: 'product_price', bizId: Number(id) })
+    if (!active) throw new AppError('改价申请无进行中的审批实例', 409)
     for (const applicantId of selfApprovalIdentities(row, active)) {
       await assertNotSelfApproval(applicantId, operator?.operatorId ?? operator?.userId, '不能驳回自己提交的改价申请')
     }
-    if (!active) throw new AppError('改价申请无进行中的审批实例', 409)
     await approvalEngine.rejectStep(conn, { instanceId: active.instance.id, operator, comment: reason || null })
     await compareAndSetStatus(conn, { table: 'price_change_requests', id, fromStatus: 1, toStatus: 3, entityName: '改价申请' })
     await conn.commit()

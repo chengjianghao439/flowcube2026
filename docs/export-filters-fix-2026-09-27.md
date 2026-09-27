@@ -414,7 +414,7 @@
 
 ---
 
-## 12. §11 第一优先级调查：`allow_self_approve`（2026-09-27，只读，有界）
+## 12. §11 第一优先级调查与修复：`allow_self_approve`（2026-09-27；**调查为只读，其后已实施，见 §12.1**）
 
 **机制（已核实）**：统一入口 `utils/selfApprove.js`——`canSelfApprove(userId)` 直查 `sys_users.allow_self_approve`，**不做缓存**（注释明言：内控收紧必须立即生效）⇒ **撤销即时生效**（对该用户的下一次判定）；授予侧 `users.service.assertCanGrantSelfApprove` **只放行 `roleId===1`**，否则 403 `SELF_APPROVE_GRANT_DENIED`。`approvalEngine.startApproval` 在**提交时**用 `canSelfApprove(applicantId)` 决定是否把申请人保留在审批人快照里。
 
@@ -459,12 +459,11 @@
 - **既有未完结实例**：快照**不回溯**，但**动作层的 `assertNotSelfApproval` 每次审批都重查**（不缓存）⇒ **撤销对既有单同样立即生效**。
 这两句合起来才是完整语义：**"快照不回溯"针对的是选人名单，不代表"撤销对既有单无效"**。
 
-### 12.2 B 类（证据不足，保留不改）
+### 12.2 【已纠正的中间误判 → C】身份语义：只挡「创建人」是错的
 
-**身份语义不一致**：`price-change.create` 把**创建人**写进 `price_change_requests.applicant_id`，而 `submit` 调 `startApproval({ applicantId: operator.userId })` 传的是**本次提交人**，且 `submit` **未见申请人归属校验**。若 **A 创建、B 提交**：
-- 申请单的"申请人"= A，引擎实例的申请人 = B；
-- 本次修复用 `row.applicant_id`（**创建人**）作"本人"，因此**挡 A 但不挡 B**；B 自批由**引擎**按快照处理（B 有豁免或进快照才放行）。
-⇒ 两者**互补而非重复**，但"**本人**"的定义**需业务明确**（创建人 / 提交人 / 两者都要）。**本轮不扩大改动**，留 B 待定；拟验证：造 A 创建 / B 提交，分别用 A、B 自批，记录两边实际结果再定语义。
+**（中间误判，已纠正，属 C）** 本节初版判断"用 `row.applicant_id`（创建人）定义本人即可，B 自批交给引擎按快照处理，故留 B 待定"——**该判断是错的**：A 创建 / B 提交时，B 是**提交人**且被纳入节点快照 ⇒ **B 撤权后仍可自批**；**B 为超管时**被 `assertCanApproveTask` 的 `roleId===1` **恒放行**，即使 `allow_self_approve=0`。已在 **§12.1 纠正为两个身份都收口**（`row.applicant_id` + `active.instance.applicant_id`），并有 **A≠B 回归 + 反向验证**（只查创建人时该条精准红）。
+
+**剩余的唯一待定（归属策略，与自批内控无关）**：`submit` 是否应**禁止 B 提交他人创建的申请**。两个身份的**自批**已经收口；这纯属流程归属策略，单列 **§12.3**。
 
 **本轮未做**：全量发版验证、生产统计。**未推送/未部署**。
 
