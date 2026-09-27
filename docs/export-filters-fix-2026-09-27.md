@@ -905,7 +905,7 @@ cost链=[[100,150],[100,200]]  最终cost=200   ← 两条历史的旧价都是 
 | 发票编辑并发乐观锁 | `smoke:invoice-edit-concurrency` | 0 | **13/0** | `/tmp/fc-accept-invoice-concur.log` |
 | 费用报销 / 闭期付款 | `smoke:finance` | 0 | 118/0 | `/tmp/fc-accept-finance.log` |
 | 资金期间闸门 | `tests/finance-period-guard.smoke.test.js` | 0 | **39/0** | `/tmp/fc-accept-fin-period-guard.log` |
-| 账款会计主链 | `smoke:mainline` | 0 | 49/0 | `/tmp/fc-accept-mainline.log` |
+| 跨模块主链 | `smoke:mainline` | 0 | 49/0 | `/tmp/fc-accept-mainline.log` |
 | 会计 / 期间 | `smoke:accounting` · `smoke:accounting-period` | 0 / 0 | 11/0 · 20/0 | `/tmp/fc-accept-accounting{,-period}.log` |
 
 ### 21.4 过程中判定的一处**环境问题**（非本轮回归，未改门禁）
@@ -915,13 +915,12 @@ cost链=[[100,150],[100,200]]  最终cost=200   ← 两条历史的旧价都是 
 
 ### 21.5 夹具与资源收尾
 
-- **新库残留全 0**：`fin_invoices`(INV-CODE\*/EDIT-C/RACE-C) / `product_items`(PPH-/VIS-/RACE-) / `payment_records`(两类测试往来方) / `expense_claims`(用例标题) / `acct_periods`(199001、199501) —— **各 0**。
+- **所列业务夹具按模式核对为 0**：`fin_invoices`(INV-CODE\*/EDIT-C/RACE-C) / `product_items`(PPH-/VIS-/RACE-) / `payment_records`(两类测试往来方) / `expense_claims`(用例标题) / `acct_periods`(199001、199501) —— **各 0**。
+  **注**：§21.4 为 `smoke:price-change-history` 补入的 **1 条商品分类 seed 仍留在该独立测试库**（它是该库的 seed，不是用例残留，本就不该清）⇒ 上句是「所列模式核对为 0」，**不是**「该库全空」。
 - `:3000` / `:5173` **空闲**；`agent-browser session list --json` = `{"sessions":[]}`；`git status --short` **空**（`dist/` 已被 `.gitignore` 忽略，构建产物未污染仓库）。
 
 ### 21.6 边界（如实保留）
 
-- **未做发版前真正的全量 CI**：本节只覆盖**按 §11–20 改动选取**的受影响专项，不等于全量回归；受影响端的 lint/类型检查/构建与全量回归仍按 AGENTS §3 留到发版前统一执行。
+- **本节只覆盖「按 §11–20 改动选取」的受影响专项，不等于全量回归**。受影响端的 lint / 类型检查 / 构建**本轮已在 `a252e55` 执行过**（见 §21.2，均 rc=0）；但**最终发版代码仍需重跑一遍**（此后只要再有改动），并按 AGENTS §3 做**发版前全量回归**。
 - **物理打印、PDA 真机未验**；**生产影响规模未评估**；迁移 263 只在隔离库应用。
 - 本节的通过数均为**隔离库 + 本地栈**证据，不得当作生产结论。
-
-未在生产核对并发编辑的实际频率与受影响单据数；未构造"编辑 × 认证/红冲"的并发用例（`changeStatus` 是单语句 CAS，属另一条路径）；**迁移 263 仅在隔离库应用，未进生产**；未做发版前全量。
