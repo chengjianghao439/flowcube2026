@@ -483,7 +483,7 @@
 
 **C — 已调查且不应重复当 bug**：ATP 与当前可拣量是不同既定口径；`approval.task.view` 只作入口粗筛，节点快照再裁决审批人；「行锁/状态机防重」不是请求键幂等重放；§12.2 的「只挡创建人、提交人由快照保证」已被反例推翻，双身份动作校验已落地；**资金账户余额调整（`finance_account_transactions` 的 `biz_type=4`）本来就不生成凭证**（`voucher-engine.js` 的 `buildFundVouchers` 只读 `IN (1,2,3,5)`），故无「钱动了账不记」；**HR 工资发放与固定资产计提/处置已有期间保护**——工资经 `upsertVoucher` 内部的 `assertPeriodOpen` 抛错回滚，固定资产在 `fixed-assets.service.js` 显式调 `assertPeriodOpen`，二者均非缺陷。
 
-**仍未验收**：浏览器下载文件真正落盘、物理打印、PDA 真机、生产影响规模、发版前全量检查；不得把本地回归或 HTTP 200 写成这些事项的完成证据。本轮未保留浏览器会话或本地服务。Claude Code 当前 Code 会话上下文约 95%，按用户的容量边界停止接新实施任务；工作树干净后可按本节直接接续。
+**仍未验收**：物理打印、PDA 真机、生产影响规模、发版前全量检查；不得把本地回归或 HTTP 200 写成这些事项的完成证据。（**浏览器下载文件真正落盘**已于 **§16** 在隔离库 + 本地栈验收通过；仍未验的是其它导出入口与生产环境。）本轮未保留浏览器会话或本地服务。
 
 ---
 
@@ -620,3 +620,40 @@ SELECT f.company_id, f.invoice_type, COUNT(*) FROM fin_invoices f
 - **`source_id` 与 `source_no` 都没有（或单号查不到且又没给 id）的行**：反查不到订单，重算结果仍是 NULL——与真正的「无单发票」同形，**无法区分**。
 
 ⇒ 这两类只能人工核对后处理（或由业务决定是否清理），**不能依赖编辑自愈**。
+
+---
+
+## 16. 浏览器导出**真正落盘**验收（2026-09-27，只读；隔离库 + 本地栈）
+
+**验收命题**：§13「仍未验收」里的「浏览器下载文件真正落盘」——**不重做**已验过的筛选透传 / HTTP 200 / 工作簿读回正确性，只回答「浏览器点击导出后，文件是否真的写到磁盘上」。
+
+**环境（全部隔离）**：前端 `:5173`（`VITE_ELECTRON=1 vite`）+ 后端 `:3000`（`node index.js`，`NODE_ENV=test`），数据库 **`flowcube_ui_export_test`** @ 127.0.0.1:3307（专用隔离库，142 表；`reconciliation_statements` 2 行，其余业务表为空）。账号取自本机 `~/.config/flowcube/ui-export-acceptance-45014.env`（**只读财务专员**角色，权限含 `report.view`/`invoice.view`；口令全程未回显）。
+
+**安全边界核对（本轮中途发现并已收口，重要）**：
+- `backend/index.js` 无条件 `startScheduler()`；`scheduler.js` 的物流 worker 条件是 **`bool('LOGISTICS_WORKER_ENABLED', true)`——默认开启**，且启动时**不检查是否有运单**。
+- 首次启动（未显式关闭）时日志**确实**出现「物流取号/轨迹 worker 已启动」。但**未产生任何外呼**：该库 `carriers`/`logistics_waybills`/`logistics_freight_bills`/`logistics_freight_settlements`/`logistics_tracking_events` **全部 0 行**，日志中**无**运单处理或 HTTP 记录；钉钉 webhook 在 `backend/.env` 与两个 env 文件中**均未设置**（只统计键出现次数，未读值），代码标注「未配置则静默」。
+- **已停服务并用安全配置重启**：显式 `LOGISTICS_WORKER_ENABLED=0` + `DINGTALK_ALERT_WEBHOOK=`（空值覆盖；dotenv 不 override 已有 env）⇒ 重启日志中「物流取号/轨迹 worker 已启动」**为 0 行**。
+- ⇒ 结论：**本轮未触发任何真实物流调用或客户消息**；后续同场景验收应**默认**带上这两个开关。
+
+**落盘证据（不以命令输出为准，全部独立核验）**：
+| 项 | 实测值 |
+|---|---|
+| 下载前目录 | 空（`total 0`，排除残留文件被误当成本次产物） |
+| 路径 | `/tmp/fc-ui-downloads/recon-summary.xlsx` |
+| 大小 | **7133 字节**（非空） |
+| 类型 | `file` ⇒ **Microsoft Excel 2007+**；魔数 `50 4b 03 04`（PK ZIP） |
+| 可读性 | 可读；ExcelJS 成功解析 |
+| 内容读回 | 1 个工作表「**客户对账单**」，3 行 × 10 列：表头（对账单号/客户/对账期间/笔数/汇总金额/已核销/未核销/状态/确认人/创建时间）+ 2 条数据 |
+| 请求相关性 | 数据行 `SC-UIA-45014 / 验收甲方A-45014`、`SC-UIB-45014 / 验收乙方B-45014`，均「2026-09-01 ~ 2026-09-30 / 草稿」——与该隔离库 `reconciliation_statements` 的 **2 行完全对应**（单号含本任务标识 `45014`） |
+
+⇒ **结论：浏览器点击「导出汇总」产生的文件确实落到了磁盘**，且是内容正确的真 xlsx。操作路径：落地页 → 进入系统 → 登录 → 财务 → 月结客户对账 → `#/reports/reconciliation/receivable` → 「导出汇总」；工具用 `agent-browser download <ref> <path>`（真实点击 + 指定落盘路径）。
+
+**会话与进程收尾（按 `docs/local-preview-acceptance.md:22`）**：会话固定命名 `ui-export-acceptance` 并复用同一标签；结束后 `agent-browser close` ⇒ `agent-browser session list --json` 返回 `{"sessions":[]}`（已消失）。本轮自起的后端/前端进程按 PID 停止，`:3000`/`:5173` 均已释放；**未触碰其它任务的进程或浏览器**。
+
+**未验证边界**：
+- 只验了**一个**导出入口（客户对账单「导出汇总」）；收付款单、利润分析、发票等其它导出未在浏览器侧验落盘。
+- 未验浏览器下载安全策略/磁盘配额等环境性拦截；仅 Chromium（agent-browser）。
+- 未验**生产**环境落盘（本轮全程隔离库 + 本地栈）。
+- 落盘文件留存在 `/tmp/fc-ui-downloads/` 供复核（非仓库文件，不入库）。
+
+**下一批候选（本批未改）**：`tests/invoice-quota.smoke.test.js` 的**四个旧场景无收尾清理**，在共享测试库持续累积夹具（§15.5 已记实测数量）；补其自洁可作为独立批次。
