@@ -130,5 +130,5 @@
 - **实现**：迁移 **263** 给 `fin_invoices` 加 `revision INT NOT NULL DEFAULT 1`（幂等 DDL）。**不能拿 `updated_at` 当版本**：它是 **datetime（秒精度）**，同秒并发取不到变化（本反例正是同秒）。`updateInvoice` 改为**事务内 `SELECT ... FOR UPDATE` 锁发票行** → 比对 `revision` → `UPDATE ... SET revision = revision + 1 WHERE ... AND revision = ?`。**SQL 的 `AND revision = ?` 才是真正的防线**，JS 预检只是给出更友好的 409。
 - **锁顺序（有调用链依据，不是直觉）**：写 `fin_invoices` 只有 4 处——`createInvoice` 的 INSERT（在后、且是新行）、`updateInvoice`、`changeStatus`、`removeInvoice`；锁订单行的只有 `assertInvoiceQuota`（`sale_orders`/`purchase_orders`）。`updateInvoice` 是**先锁发票行、再调它**，另两处是单语句无锁 ⇒ **不存在「订单行 → 发票行」的路径**，不成环。
 - **`cur` 的定位**：它仍在**事务外**读，只用于「未提供字段」的合并与载荷校验，**不承担并发安全**；安全前提是「**客户端回传的 revision 与锁内 revision 相等**」。
-- **前端**：编辑弹窗带 `revision`；409 时**刷新列表并关闭弹窗**（`INVOICE_CONCURRENT_MODIFIED`），让用户重开时拿到新版本——否则弹窗会一直用打开时的旧版本反复 409、**无法恢复**。
+- **前端**：编辑弹窗带 `revision`；409 时**提示由全局拦截器统一给出**（它已对 409 `toast.error(后端 message)`，弹窗侧**不再重复 toast**，否则双重报错）；弹窗侧只做两件事——**失效列表（异步）+ 关闭弹窗**。准确说法是「**列表刷新完成后**再重开弹窗」才拿到新 `revision`；否则弹窗会一直用打开时的旧版本反复 409、**无法恢复**。
 - **回归**：`tests/invoice-edit-concurrency.smoke.test.js`（并发一个 200/一个 409、冲突码、最终值=成功者、`revision` +1、缺版本 400、**GET 详情/列表返回 revision 的读契约**、顺序编辑不受影响）；既有 `tests/invoice-quota.smoke.test.js` 的编辑点已带版本（55/0）。

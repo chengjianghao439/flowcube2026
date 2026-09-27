@@ -842,7 +842,7 @@ cost链=[[100,150],[100,200]]  最终cost=200   ← 两条历史的旧价都是 
 - **`Number(null) === 0` 的坑**：缺版本必须先判 `== null` 再判整数，否则"没传"会被当成 0 而误报 409（独立复核指出）。
 - **`cur` 的定位（措辞更正）**：它仍在**事务外**读，只用于「未提供字段」的合并与载荷校验，**不承担并发安全**；安全前提是「**客户端 revision 与锁内 revision 匹配**」——先前"锁内读顺带修掉陈旧快照"的说法不准确。
 - **锁顺序依据（调用链，非直觉）**：写 `fin_invoices` 仅 4 处（`createInvoice` INSERT / `updateInvoice` / `changeStatus` / `removeInvoice`），锁订单行的仅 `assertInvoiceQuota`；`updateInvoice` **先锁发票行再调它**，另两处单语句无锁 ⇒ **不存在「订单行 → 发票行」路径**，不成环。
-- **前端**：编辑弹窗带 `revision`；**409 时刷新列表并关闭弹窗**（原代码只处理 `onSuccess`，`editTarget` 是点击时的快照 state，列表刷新也不会更新 ⇒ 会一直用旧版本反复 409、**无法恢复**）。全局 toast 取 `error.response.data.message`，故后端的"已被他人修改"文案对用户可见。
+- **前端**：编辑弹窗带 `revision`；409 时**提示由全局拦截器统一给出**（它已对 409 `toast.error(后端 message)` ⇒ 弹窗侧**不再重复 toast**，避免双重报错）；弹窗侧只做**失效列表（异步）+ 关闭弹窗**。原代码只处理 `onSuccess`、且 `editTarget` 是点击时的快照 state（列表刷新也不更新）⇒ 会一直用旧版本反复 409、**无法恢复**。准确表述：**列表刷新完成后**再重开才拿到新 `revision`（不是"关闭瞬间就有新版本"）。
 - **既有测试兼容**：`invoice-quota` 的 9 处编辑调用改走 `putInvoice`（先读 `revision` 再提交，模拟真实前端），**55/0** 保持。
 
 ### 20.3 证据

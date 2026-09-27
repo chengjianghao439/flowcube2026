@@ -74,14 +74,15 @@ function InvoiceDialog({ open, invoiceType, edit, onClose }: { open: boolean; in
     }
     if (edit) update({ id: edit.id, d }, {
       onSuccess: () => { toast.success('已保存'); onClose() },
-      // 并发编辑冲突（迁移 263）：这张票已被他人改过。**必须**让用户能拿到新版本——
-      // 刷新列表后关闭弹窗，重新打开时 editTarget 来自刷新后的行（带新 revision）。
-      // 否则弹窗会一直用打开时的旧 revision 反复 409，永远保存不了，且用户不知道怎么办。
+      // 并发编辑冲突（迁移 263）：这张票已被他人改过。**必须**让用户能拿到新版本，否则弹窗会
+      // 一直用打开时的旧 revision 反复 409、永远保存不了。
+      // **提示不在这里发**：全局拦截器已对 409 统一 `toast.error(后端 message)`，本地再 toast 会双重报错。
+      // 这里只做两件事——失效列表（**异步**，不是立刻就有新数据）+ 关闭弹窗；
+      // 因此准确说法是「**列表刷新完成后**再重开弹窗」，那时 editTarget 才是带新 revision 的行。
       onError: (e: unknown) => {
         const code = (e as { code?: string } | null)?.code
         if (code === 'INVOICE_CONCURRENT_MODIFIED') {
           qc.invalidateQueries({ queryKey: ['acct-invoices'] })
-          toast.error('这张发票已被其他人修改，已刷新列表，请重新打开后再编辑')
           onClose()
         }
       },
