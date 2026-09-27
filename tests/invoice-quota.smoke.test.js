@@ -136,9 +136,72 @@ async function scenarioNoQuotaBypass(ctx, log, token) {
   log.assert('查不到单据的开票不拦截', unknown.status === 201 || unknown.status === 200, `status=${unknown.status}`)
 }
 
+/**
+ * 发票 source_type 必须按仓库设计约定取值（2026-09-27）。
+ *
+ * 权威依据（仓库内）：迁移 `182_fin_invoices.sql` 的列注释写明
+ *   `source_type ... COMMENT '关联业务：purchase_order/sale_order（可空，允许无单发票）'`
+ * 而 `voucher-engine.loadTaxMaps` 正是按这两个值把发票税额归到对应业务单
+ * （进项 `invoice_type=1 AND source_type='purchase_order' AND status IN (2,3)`；
+ *  销项 `invoice_type=2 AND source_type='sale_order' AND status<>2`；两者都要求 `source_id IS NOT NULL`）。
+ *
+ * 界面路径（frontend/src/pages/accounting/invoices/index.tsx 的 submit）只发 sourceNo、不发 sourceType；
+ * `createInvoice` 在 `assertInvoiceQuota` 反查成功时写的是字面量 `'invoice_order'`——既不在 182 的约定内，
+ * 也不被 loadTaxMaps 识别。本条用例即验证：**界面路径录入且已正确关联订单的发票，其 source_type 是否合规、
+ * 税额是否真的被计入。** 与「发票未关联单号（source_id 为 NULL）」是**不同因果**，不混为一谈。
+ */
+async function scenarioSourceTypeRecognized(ctx, log, token, cleanup) {
+  const { http, pool } = ctx
+  const { orderId, orderNo } = await seedSaleWithReceivable(pool, 1000)
+  cleanup.orderIds.push(orderId)
+
+  const amountWithTax = 565
+  const taxAmount = round2(amountWithTax - amountWithTax / 1.13) // 65.00
+  const invNo = `Q${randomRef('T').slice(0, 10)}`
+  const ok = await issueInvoice(http, token, { sourceNo: orderNo, amountWithTax, invoiceNo: invNo })
+  const invId = Number(ok.data?.data?.id)
+  if (!Number.isInteger(invId)) throw new Error(`建票失败: ${JSON.stringify(ok.data)}`)
+  cleanup.invoiceIds.push(invId)
+
+  const [row] = await dbQuery(
+    pool, 'SELECT source_type, source_id, tax_amount FROM fin_invoices WHERE id=?', [invId],
+  )
+  console.log(`\n[§T] 发票 source_type=${row?.source_type} source_id=${row?.source_id} tax=${row?.tax_amount}（订单 id=${orderId}）`)
+
+  log.assert(
+    '★ 关联成功的发票 source_type 必须是 sale_order（迁移 182 的列约定）',
+    row?.source_type === 'sale_order',
+    `实际 ${row?.source_type}`,
+  )
+  log.assert(
+    '★ source_id 必须指向被关联的销售单',
+    Number(row?.source_id) === Number(orderId),
+    `实际 ${row?.source_id}，期望 ${orderId}`,
+  )
+
+  // 复刻 loadTaxMaps 销项分支的原文条件（该函数未导出，故按其 SQL 逐字复刻），
+  // 断言这张票的税额确实能进入该销售单的税额合计。
+  const [agg] = await dbQuery(
+    pool,
+    `SELECT COALESCE(SUM(tax_amount),0) tax FROM fin_invoices
+      WHERE invoice_type=2 AND source_type='sale_order' AND source_id IS NOT NULL
+        AND status<>2 AND deleted_at IS NULL AND source_id=?`,
+    [orderId],
+  )
+  console.log(`[§T] 按 loadTaxMaps 同条件汇总该单税额 = ${agg?.tax}（期望 ${taxAmount}）`)
+  log.assert(
+    '★ 该销售单的销项发票税额必须被 loadTaxMaps 计入',
+    Math.abs(Number(agg?.tax) - taxAmount) < 0.01,
+    `实际 ${agg?.tax}，期望 ${taxAmount}`,
+  )
+}
+
 async function main() {
   const log = createLogger()
   const ctx = await prepareSmokeContext()
+  const { pool } = ctx
+  // 本场景自建夹具的精确 ID，收尾自洁（本文件此前无清理，新场景不依赖也不改变既有场景的行为）
+  const cleanup = { orderIds: [], invoiceIds: [] }
   try {
     const { token } = await login(ctx.http, 'smoke_admin', 'SmokeAdmin123!')
     if (!token) throw new Error('登录失败，无法执行开票量校验回归')
@@ -147,7 +210,15 @@ async function main() {
     await scenarioRedFlushRestoresQuota(ctx, log, token)
     await scenarioEditExcludesSelf(ctx, log, token)
     await scenarioNoQuotaBypass(ctx, log, token)
+    await scenarioSourceTypeRecognized(ctx, log, token, cleanup)
   } finally {
+    // 按精确 ID 清理本轮自建夹具（共享库自洁）
+    const safe = async (sql, params) => { try { await pool.query(sql, params) } catch (e) { console.error(`[清理告警] ${e.message}`) } }
+    for (const id of cleanup.invoiceIds) await safe('DELETE FROM fin_invoices WHERE id=?', [id])
+    for (const id of cleanup.orderIds) {
+      await safe('DELETE FROM payment_records WHERE type=2 AND order_id=?', [id])
+      await safe('DELETE FROM sale_orders WHERE id=?', [id])
+    }
     await ctx.close()
   }
   const counts = log.summary()
