@@ -397,7 +397,7 @@ async function create({ name, categoryId, supplierId, unit, spec, color, barcode
 }
 
 async function update(id, { name, categoryId, supplierId, unit, spec, color, barcode, costPrice, remark, isActive, articleNumber, salePriceA, salePriceB, salePriceC, salePriceD, batchManaged, shelfLifeDays, safetyStock, reorderPoint, units, allowDecimalQty }, operator = null) {
-  const current = await findById(id)
+  // 事务外的校验与派生（不依赖商品当前行的价格快照，放在事务外以缩短持锁时间）
   const { normalizedBarcode, normalizedCost } = await validateProductPayload({ name, categoryId, barcode, costPrice, currentId: id })
   const normalizedUnits = validateUnits(unit, units)
   const rates = await loadPriceRates(pool)
@@ -410,25 +410,45 @@ async function update(id, { name, categoryId, supplierId, unit, spec, color, bar
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    // 老客户端不带这个字段时保持原值，不能把「没传」当成「关闭小数」
+    // **当前值必须在事务内、加行锁读**（2026-09-27 收口，与审批侧 applyApprovedPrice 同范式）：
+    // 旧价与「未传字段的继承」都要基于**写入瞬间**的真实值。此前用事务外的 findById 快照，
+    // 并发两次手工改价会各自以同一个旧价写历史（旧价链断裂），继承字段也会沿用陈旧值；
+    // 行锁同时把「手工改价」与「审批通过改价」串行化（两者锁同一商品行）。
+    const [[current]] = await conn.query(
+      `SELECT id, code, name, cost_price, sale_price, sale_price_a, sale_price_b, sale_price_c, sale_price_d, allow_decimal_qty
+         FROM product_items WHERE id=? AND deleted_at IS NULL FOR UPDATE`, [id],
+    )
+    if (!current) throw new AppError('商品不存在', 404)
+    // 老客户端不带这个字段时保持原值（取**锁内**值），不能把「没传」当成「关闭小数」。
+    // 注意 NULL 的既定语义是**默认允许小数**（迁移 254）——这里读的是裸列，
+    // 不能写成 `Number(col) ? 1 : 0`（NULL 会被当成 0 而关掉小数，属回归）。
     const allowDecimalFlag = allowDecimalQty === undefined
-      ? (current.allowDecimalQty ? 1 : 0)
+      ? (current.allow_decimal_qty == null || Number(current.allow_decimal_qty) === 1 ? 1 : 0)
       : (allowDecimalQty ? 1 : 0)
-    await conn.query(
+    const [upd] = await conn.query(
       `UPDATE product_items SET name=?,category_id=?,supplier_id=?,unit=?,spec=?,color=?,barcode=?,cost_price=?,sale_price=?,sale_price_a=?,sale_price_b=?,sale_price_c=?,sale_price_d=?,remark=?,is_active=?,article_number=?,batch_managed=?,shelf_life_days=?,allow_decimal_qty=?
        WHERE id=? AND deleted_at IS NULL`,
       [String(name).trim(), categoryId||null, supplierId, unit, spec, color, normalizedBarcode, normalizedCost, sp, spA, spB, spC, spD, remark||null, isActive?1:0, articleNumber||null, batchManaged?1:0, shelfLifeDays||null, allowDecimalFlag, id],
     )
+    // **兜底**校验（不是主要防线）：本事务已对该商品行持有 `FOR UPDATE` 行锁，并发的 softDelete
+    // 只有两种可能——要么先于本次锁读完成，那样上面的 SELECT 读不到、直接 404；要么等本事务提交后
+    // 才生效。所以「锁读成功之后、本 UPDATE 之前被软删」这种交错**不可达**，不要把它写成实测现象。
+    // 保留 affectedRows 检查，是为将来新增写入路径时仍能 fail-loud：否则会在商品根本没改的情况下
+    // 继续写单位/库存策略/价格历史，留下「商品没改、却多出一批脏数据」的不一致。
+    if (upd.affectedRows !== 1) {
+      throw new AppError('商品不存在或已被删除，本次修改未生效', 409, 'PRODUCT_NOT_FOUND_OR_DELETED')
+    }
     await replaceProductUnits(conn, id, normalizedUnits)
     await upsertDefaultStockPolicy(conn, id, { safetyStock, reorderPoint })
-    // 价格变更历史（2026-08-22 功能：价格体系落地）——凡有价格列变化的写历史，可追溯
+    // 价格变更历史（2026-08-22 功能：价格体系落地）——凡有价格列变化的写历史，可追溯。
+    // 旧价一律取上面**锁内**读到的当前值，保证同一 price_type 的历史是连贯的（old = 上一条 new）。
     const priceFields = [
-      ['sale', current.salePrice, sp],
-      ['a', current.salePriceA, spA],
-      ['b', current.salePriceB, spB],
-      ['c', current.salePriceC, spC],
-      ['d', current.salePriceD, spD],
-      ['cost', current.costPrice, normalizedCost],
+      ['sale', current.sale_price, sp],
+      ['a', current.sale_price_a, spA],
+      ['b', current.sale_price_b, spB],
+      ['c', current.sale_price_c, spC],
+      ['d', current.sale_price_d, spD],
+      ['cost', current.cost_price, normalizedCost],
     ]
     for (const [type, oldP, newP] of priceFields) {
       const oldV = oldP != null ? Number(oldP) : null
