@@ -854,6 +854,13 @@ cost链=[[100,150],[100,200]]  最终cost=200   ← 两条历史的旧价都是 
 | 反向验证 | **同时**摘掉行锁与 SQL CAS ⇒ **恰好 4 条红**（回到 `200/200`、后者覆盖、`revision=3`）；单摘任一层则另一层兜住（说明**行锁负责串行、CAS 负责判定**）。新增的读契约断言不受影响 |
 | 前端 | `tsc -p tsconfig.app.json --noEmit` 通过；`eslint` 通过 |
 
-### 20.4 未验证边界
+### 20.4 CI 接线与守卫（AGENTS §0 / §0.2：守卫必须 CI 可达）
+
+- **脚本与接线**：新增 `smoke:invoice-edit-concurrency`，并接进 `.github/workflows/test.yml` 的 regression job——**紧跟 `smoke:invoice-quota` 之后**。该 job 的 step 是**串行**的，且**先跑 `npm --prefix backend run migrate`**（:346）⇒ **迁移 263 会先于本测试应用**，也不会与其它 smoke **抢同一测试库**（无并发夹具相撞）。
+- **守卫与反向验证**：`tests/deployment-resources.test.js`（「每个 `smoke:*` / `test:*` 必须能在 CI 里被跑到」）**26/0**；**临时摘掉 CI 调用 ⇒ 恰好 1 条红**，消息为「`smoke:invoice-edit-concurrency` 没有任何 workflow 会执行，等于只在手工跑时才有意义…请接进 CI」，恢复后复绿。⇒ 这不是"只在本机手跑的守卫"。
+- **迁移 263 幂等**：连跑两次 ⇒ `revision` 列仍为 1、无 NULL、无副作用。
+- `npm run smoke:invoice-edit-concurrency` 实跑 **13/0**；改动的 `test.yml` 经 YAML 解析校验通过。
+
+### 20.5 未验证边界
 
 未在生产核对并发编辑的实际频率与受影响单据数；未构造"编辑 × 认证/红冲"的并发用例（`changeStatus` 是单语句 CAS，属另一条路径）；**迁移 263 仅在隔离库应用，未进生产**；未做发版前全量。

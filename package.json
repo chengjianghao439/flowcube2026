@@ -98,6 +98,7 @@
     "smoke:auth-session-remediation": "node tests/auth-session-remediation.smoke.test.js",
     "smoke:finance": "node tests/finance.smoke.test.js",
     "smoke:invoice-quota": "node tests/invoice-quota.smoke.test.js",
+    "smoke:invoice-edit-concurrency": "node tests/invoice-edit-concurrency.smoke.test.js",
     "smoke:refund-orders": "node tests/refund-orders.smoke.test.js",
     "smoke:disposal": "node tests/disposal.smoke.test.js",
     "smoke:mainline": "node tests/mainline.smoke.test.js",
