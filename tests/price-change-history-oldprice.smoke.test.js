@@ -218,6 +218,54 @@ async function main() {
       assert.equal(Number(req.status), 2, '审批通过后应为已批准')
       assert.equal(Number(req.old_price), 100, '申请时展示快照保持 100（语义不变）')
     })
+
+    // ★ ⑤ 真实【审批 sale】→ 普通商品编辑：跨模块回归（2026-09-27 §18 方案三）
+    // 与 product-price-history-integrity 里那条「模拟审批列效果」不同：这里走的是**真实审批链路**
+    // （price.create → submit → approve ⇒ applyApprovedPrice 写 sale_price），再叠加一次普通商品编辑。
+    await check('★ 真实审批 sale → 普通商品编辑：销售价与标签价保持批准值、A 独立、且无虚假 sale 历史', async () => {
+      const [[cat]] = await pool.query('SELECT id FROM product_categories LIMIT 1')
+      assert.ok(cat?.id, '需要至少一个商品分类')
+      const [ins] = await pool.query(
+        `INSERT INTO product_items (code,name,unit,sale_price,sale_price_a,cost_price,category_id)
+         VALUES (?,?,?,?,?,?,?)`,
+        [`${suffix}-PSALE`, `审批销售价商品${suffix}`, '件', 100, 100, 50, cat.id],
+      )
+      const pid = ins.insertId
+      created.productIds.push(pid)
+
+      // 真实审批：申请改「销售价」（priceType='sale' ⇒ PRICE_COLUMN.sale = sale_price）
+      const reqSale = await price.create({ productId: pid, priceType: 'sale', newPrice: 200 }, admin)
+      created.requestIds.push(reqSale.id)
+      await price.submit(reqSale.id, admin)
+      await price.approve(reqSale.id, approver)
+
+      const [[afterApproval]] = await pool.query(
+        'SELECT sale_price, sale_price_a FROM product_items WHERE id=?', [pid])
+      assert.equal(Number(afterApproval.sale_price), 200, '真实审批通过后 sale_price 应为批准值 200')
+      assert.equal(Number(afterApproval.sale_price_a), 100, '审批 sale 不应改动 A 价')
+
+      // 普通商品编辑（直接调 service：改 A 为 130；不应触及 sale_price）
+      const productsSvc = require(path.join(ROOT, 'backend/src/modules/products/products.service'))
+      await productsSvc.update(pid, {
+        name: `审批销售价商品${suffix}`, categoryId: cat.id, costPrice: 50, unit: '件',
+        salePriceA: 130, salePriceB: 130, salePriceC: 130, salePriceD: 130, isActive: true,
+      }, admin)
+
+      const [[afterEdit]] = await pool.query(
+        'SELECT sale_price, sale_price_a FROM product_items WHERE id=?', [pid])
+      assert.equal(Number(afterEdit.sale_price), 200, '普通编辑**不得**把已批准的销售价覆写回 A')
+      assert.equal(Number(afterEdit.sale_price_a), 130, 'A 应按本次编辑值生效')
+
+      const [[saleHist]] = await pool.query(
+        `SELECT COUNT(*) n FROM product_price_history
+          WHERE product_id=? AND change_source='manual' AND price_type='sale'`, [pid])
+      assert.equal(Number(saleHist.n), 0, '普通编辑未改销售价，不得写手工 sale 历史（虚假变更）')
+
+      // 标签价：调真实消费者（type=8 商品标签，price 取 sale_price）
+      const { readLabelVariables } = require(path.join(ROOT, 'backend/src/modules/print-jobs/labelVariables'))
+      const { vars } = await readLabelVariables(8, { id: pid })
+      assert.equal(vars.price, '200.00', '标签价应保持批准值 200.00')
+    })
   } finally {
     for (const id of created.requestIds) {
       const [insts] = await pool.query("SELECT id FROM approval_instances WHERE biz_type='product_price' AND biz_id=?", [id])
@@ -234,7 +282,10 @@ async function main() {
       await pool.query('DELETE FROM approval_flows WHERE id=?', [id])
     }
     for (const id of created.productIds) {
+      // 依赖顺序：附属行 → 商品。场景 ⑤ 走了 products.update，它还会写单位与库存策略，必须一并清
       await pool.query('DELETE FROM product_price_history WHERE product_id=?', [id])
+      await pool.query('DELETE FROM product_units WHERE product_id=?', [id])
+      await pool.query('DELETE FROM product_stock_policies WHERE product_id=?', [id])
       await pool.query('DELETE FROM product_items WHERE id=?', [id])
     }
     const [[left]] = await pool.query('SELECT COUNT(*) n FROM product_items WHERE code LIKE ?', [`${suffix}%`])

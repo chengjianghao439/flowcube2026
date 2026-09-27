@@ -406,7 +406,11 @@ async function update(id, { name, categoryId, supplierId, unit, spec, color, bar
   const spB = salePriceB != null ? Number(salePriceB) : auto.salePriceB
   const spC = salePriceC != null ? Number(salePriceC) : auto.salePriceC
   const spD = salePriceD != null ? Number(salePriceD) : auto.salePriceD
-  const sp = spA
+  // 注意：这里**不再**把 `sale_price` 同步为 A（2026-09-27 §18 方案三 · 受控止血）。
+  // `sale_price`（“销售价”，被标签变量 price 与库存估值回退使用）与 `sale_price_a`（等级 A）
+  // 是两套存储契约；而改价审批的 `sale` 类型写的正是 `sale_price`。此前无条件 `sale_price = spA`，
+  // 会让**任意一次普通商品编辑把已批准的销售价静默抹回 A**（已复现的数据丢失）。
+  // 新建时仍按 A 初始化（见 create）——本处只保证编辑不再覆写它。
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
@@ -426,9 +430,9 @@ async function update(id, { name, categoryId, supplierId, unit, spec, color, bar
       ? (current.allow_decimal_qty == null || Number(current.allow_decimal_qty) === 1 ? 1 : 0)
       : (allowDecimalQty ? 1 : 0)
     const [upd] = await conn.query(
-      `UPDATE product_items SET name=?,category_id=?,supplier_id=?,unit=?,spec=?,color=?,barcode=?,cost_price=?,sale_price=?,sale_price_a=?,sale_price_b=?,sale_price_c=?,sale_price_d=?,remark=?,is_active=?,article_number=?,batch_managed=?,shelf_life_days=?,allow_decimal_qty=?
+      `UPDATE product_items SET name=?,category_id=?,supplier_id=?,unit=?,spec=?,color=?,barcode=?,cost_price=?,sale_price_a=?,sale_price_b=?,sale_price_c=?,sale_price_d=?,remark=?,is_active=?,article_number=?,batch_managed=?,shelf_life_days=?,allow_decimal_qty=?
        WHERE id=? AND deleted_at IS NULL`,
-      [String(name).trim(), categoryId||null, supplierId, unit, spec, color, normalizedBarcode, normalizedCost, sp, spA, spB, spC, spD, remark||null, isActive?1:0, articleNumber||null, batchManaged?1:0, shelfLifeDays||null, allowDecimalFlag, id],
+      [String(name).trim(), categoryId||null, supplierId, unit, spec, color, normalizedBarcode, normalizedCost, spA, spB, spC, spD, remark||null, isActive?1:0, articleNumber||null, batchManaged?1:0, shelfLifeDays||null, allowDecimalFlag, id],
     )
     // **兜底**校验（不是主要防线）：本事务已对该商品行持有 `FOR UPDATE` 行锁，并发的 softDelete
     // 只有两种可能——要么先于本次锁读完成，那样上面的 SELECT 读不到、直接 404；要么等本事务提交后
@@ -442,8 +446,10 @@ async function update(id, { name, categoryId, supplierId, unit, spec, color, bar
     await upsertDefaultStockPolicy(conn, id, { safetyStock, reorderPoint })
     // 价格变更历史（2026-08-22 功能：价格体系落地）——凡有价格列变化的写历史，可追溯。
     // 旧价一律取上面**锁内**读到的当前值，保证同一 price_type 的历史是连贯的（old = 上一条 new）。
+    // **不再包含 `sale`**：本函数已不修改 `sale_price`（方案三 · 止血管住覆写），
+    // 若仍按 `[current.sale_price, spA]` 写历史，在两者不同值时就会记一条“sale 变成 A”的
+    // **虚假变更**（实际分文未动）。`sale_price` 的变更由改价审批（change_source='approval'）记录。
     const priceFields = [
-      ['sale', current.sale_price, sp],
       ['a', current.sale_price_a, spA],
       ['b', current.sale_price_b, spB],
       ['c', current.sale_price_c, spC],

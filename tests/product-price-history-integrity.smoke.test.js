@@ -19,6 +19,9 @@
  */
 
 const { createLogger, prepareSmokeContext, dbQuery, login, randomRef } = require('./helpers/smokeTestKit')
+// 标签变量的真实取值函数（type=8 商品标签的 `price` 取 product_items.sale_price）——
+// 用它来断言「标签价」而不是自己复刻 SQL，避免只测了实现、没测到消费者。
+const { readLabelVariables } = require('../backend/src/modules/print-jobs/labelVariables')
 
 const ROUNDS = Number(process.env.PPH_ROUNDS || 6)
 
@@ -137,6 +140,53 @@ async function main() {
     )
     const [stillDel] = await dbQuery(pool, 'SELECT cost_price FROM product_items WHERE id=?', [pDel.id])
     log.assert('★ 被拒后商品价格未被改动', Number(stillDel.cost_price) === 100, `cost_price=${stillDel.cost_price}`)
+
+    // ── ④ 【**模拟**审批列效果】→ 普通商品编辑：销售价与标签价必须保持该值（§18 方案三）──
+    // **这不是「真实审批 → 编辑」的端到端**：真实审批走 `price-change.approve` →
+    // `applyApprovedPrice`，本用例只是直接写 `sale_price` 列来**模拟其列效果**（A 不动）。
+    // 真正的跨模块回归在 `price-change-history-oldprice.smoke.test.js` 的场景 ⑤（真实审批后编辑）。
+    // 这里要证明的是：一旦 `sale_price` 与 A 不同值，**普通编辑不得把它覆写回 A**。
+    const pSale = await newProduct('审批销售价')
+    await pool.query('UPDATE product_items SET sale_price=200 WHERE id=?', [pSale.id])
+    const labelPriceOf = async (id) => {
+      // readLabelVariables 返回 { row, vars }——标签变量在 vars 里
+      const { vars } = await readLabelVariables(8, { id })
+      return vars?.price ?? null
+    }
+    const priceBeforeEdit = await labelPriceOf(pSale.id)
+    log.assert('前置：模拟审批列效果后，标签价 = 200.00', priceBeforeEdit === '200.00', String(priceBeforeEdit))
+
+    const putSale = await http.put(`/api/products/${pSale.id}`, {
+      token, json: { ...editPayload(pSale, 120), salePriceA: 130, remark: '普通编辑（不应动销售价）' },
+    })
+    log.assert('普通商品编辑成功', putSale.status === 200, `status=${putSale.status} msg=${putSale.message}`)
+    const [afterSale] = await dbQuery(
+      pool, 'SELECT sale_price, sale_price_a FROM product_items WHERE id=?', [pSale.id])
+    log.assert(
+      '★ 编辑后 sale_price 仍为 200（不再被无条件覆写为 A）',
+      Number(afterSale.sale_price) === 200,
+      `sale_price=${afterSale.sale_price}（A=${afterSale.sale_price_a}）`,
+    )
+    const priceAfterEdit = await labelPriceOf(pSale.id)
+    log.assert(
+      '★ 编辑后标签价仍为 200.00（标签变量 price 取 sale_price）',
+      priceAfterEdit === '200.00',
+      String(priceAfterEdit),
+    )
+    log.assert(
+      '★ A 价按本次编辑值生效（130），与销售价各自独立',
+      Number(afterSale.sale_price_a) === 130,
+      `sale_price_a=${afterSale.sale_price_a}`,
+    )
+    const [saleHist] = await dbQuery(
+      pool,
+      `SELECT COUNT(*) n FROM product_price_history
+        WHERE product_id=? AND change_source='manual' AND price_type='sale'`, [pSale.id])
+    log.assert(
+      '★ 没有为 sale 写任何手工历史（编辑并未改动销售价，不得记虚假变更）',
+      Number(saleHist.n) === 0,
+      `${saleHist.n} 条`,
+    )
   } finally {
     // 按精确 ID 自洁（依赖顺序：历史/单位/策略 → 商品）
     for (const id of created) {
@@ -161,6 +211,9 @@ async function main() {
       log.assert('★ 清理复查本身未抛错', false, e.message)
     }
     await ctx.close()
+    // labelVariables 走的是后端单例池（backend/src/config/db），它不会自行退出；
+    // 显式收尾，否则断言全绿后进程仍会挂着不退（smokeTestKit.close 只管它自己的池）。
+    try { await require('../backend/src/config/db').pool.end() } catch { /* 未加载则忽略 */ }
   }
 
   const counts = log.summary()
