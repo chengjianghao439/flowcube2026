@@ -16,7 +16,8 @@
  *   闸门的范围必须按「凭证引擎实际读什么」定，而不是按「谁写 payment_entries」：
  *   buildFundVouchers 读的是 finance_account_transactions 的 biz_type IN (1,2,3,5)，
  *   而费用报销付款只写资金流水、不写 payment_entries，早期按后者界定落点时整条漏掉。
- *   漏掉的后果与 §A 同构：闭期付款 ⇒ 钱出账户、流水写了，凭证被跳过（钱动了账不记）。
+ *   漏掉的后果与 §A 同构：闭期付款 ⇒ 钱出账户、流水写了、余额扣了（**§G 实测**）；
+ *   「EXPENSE_PAY 凭证随后被跳过、会计账上缺此分录」为**代码审阅推断**（见 §G 内注释）。
  *   §G 用它自建的账户与两张已批准报销单（明细发生日 ≠ 付款日期，说明只有付款日期进凭证）
  *   同时覆盖「闭期必须被拦」与「开放期照常放行」，并做过反向破坏（摘掉闸门 → 只有 §G 红）。
  *
@@ -482,9 +483,11 @@ async function main() {
     //    支出、写 finance_account_transactions，并且同样**驱动生成凭证**
     //    （voucher-engine.js:253 的 biz_type IN (1,2,3,5)，:283 为 biz_type=3 构造
     //    EXPENSE_PAY，凭证日期 = happened_at）。缺闸门时的后果与 §A 完全相同：
-    //    结账后付款 ⇒ 钱从账户出去了、流水写了，凭证却因期间已封被 generateVouchers
-    //    跳过（voucher-engine.js:551）⇒ 会计账上无这笔费用，界面无任何提示，
-    //    只有一条 logger.warn（:559）——账实不符。
+    //    结账后付款 ⇒ 钱从账户出去、流水写了、余额扣了（**这三项由本用例实测**）；
+    //    而「这笔流水的 EXPENSE_PAY 凭证会在后续 generateVouchers 时因期间已封被跳过
+    //    （voucher-engine.js:551），会计账上因此缺此分录」是**代码审阅推断**——本套件
+    //    不跑 generateVouchers。若真发生，跳过那一步会落一条 logger.warn（:559），
+    //    但界面无任何提示，即用户看不到异常。
     //
     //    可达性说明：界面付款弹窗**只传 accountId、不传 happenedAt**
     //    （frontend/src/pages/finance/expenses/index.tsx:199），故界面路径的付款日期

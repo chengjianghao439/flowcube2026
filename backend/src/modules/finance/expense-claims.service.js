@@ -203,9 +203,12 @@ async function cancel(id, operator) {
  *
  * **跨期闸门（2026-09-27）**：这是第四条真实出钱路径，与直付/核销/退款一样会写
  * `finance_account_transactions`、并被 voucher-engine 的 buildFundVouchers 读去生成
- * 凭证（biz_type=3 → EXPENSE_PAY）。缺这道闸门时，付款日期落在已结账期间会让凭证
- * 被 generateVouchers 跳过（期间已封）——钱从账户出去了、会计账上却没有这笔费用，
- * 界面无任何提示。界面上付款弹窗只传 accountId，故付款日期恒为今天；真实触发场景是
+ * 凭证（biz_type=3 → EXPENSE_PAY）。缺这道闸门时，付款日期落在已结账期间会让这笔钱
+ * 进到已结账期间的凭证之外。**实测已证实**的是业务侧三项事实——报销单状态流转、
+ * 资金流水照写、账户余额照扣；而「这笔流水的 EXPENSE_PAY 凭证会在后续 generateVouchers
+ * 时因期间已封被跳过、会计账上因此缺此分录」是**代码审阅推断**（本轮未端到端跑过
+ * generateVouchers）。若真发生，跳过那一步会落一条 logger.warn，但界面无任何提示。
+ * 界面上付款弹窗只传 accountId，故付款日期恒为今天；真实触发场景是
  * 「当月已结账后又在本月付款」（提前结账）。
  */
 async function pay(id, { accountId, happenedAt, remark }, operator) {

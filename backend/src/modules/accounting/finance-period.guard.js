@@ -85,7 +85,9 @@ const periodOfDate = (ymd) => `${ymd.slice(0, 4)}${ymd.slice(5, 7)}`
  * @param {{companyId?: number, bizLabel?: string, backfill?: {mode?: string, postingPeriod?: string, reason?: string}|null, backfillHint?: boolean}} opts
  *   backfillHint=false 表示该业务**没有**补录出路（如费用报销付款：finance-backfills
  *   目前没有 expense 类型分支），此时拒绝消息不再引导用户去申请补录——那是一条走不通的路，
- *   只会让人以为找财务主管就能补上。默认 true，既有入口行为不变。
+ *   只会让人以为找财务主管就能补上；**同时也不再提示「改用未结账的日期」**，因为那等于
+ *   诱导操作人把真实发生的付款日期填成假的（事实失真比账实不符更难查），改为请其联系
+ *   财务负责人核实处理方式。默认 true，既有入口行为不变。
  * @returns {Promise<{ymd: string, period: string, closed: boolean, voucherDateOverride: string|null}>}
  *   closed=true 表示这是一次已授权的补录；voucherDateOverride 是该补录凭证应落的日期
  */
@@ -128,7 +130,9 @@ async function assertFinancePeriodOpen(conn, businessDate, opts = {}) {
     + (backfillHint
       ? '请改用未结账的日期登记；若这笔业务确实发生在该期间，'
         + '需由持「跨期补录」权限的财务主管填写原因后补录。'
-      : '请改用未结账的日期登记。'),
+      // 没有补录出路时**也不能**提示「改用别的日期」——那等于诱导操作人把真实发生的
+      // 付款日期填成假的（事实失真比账实不符更难查）。改为请其找财务处理。
+      : '请联系财务负责人核实处理方式；请勿为了让系统接受而改动真实付款日期。'),
     409,
     'FINANCE_PERIOD_CLOSED',
     { period, businessDate: ymd },
