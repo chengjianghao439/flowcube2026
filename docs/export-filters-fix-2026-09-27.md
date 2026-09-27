@@ -667,7 +667,8 @@ SELECT f.company_id, f.invoice_type, COUNT(*) FROM fin_invoices f
 ### 改动（只清本轮，绝不碰历史）
 
 - `seedSaleWithReceivable` / `seedPurchaseWithPayable` 接受可选 `cleanup`，并**在单据插入后立刻登记 id**——不是等 helper 正常返回才登记；否则紧随其后的 `payment_records` 插入一旦失败，就会留下一张**没人认领**的订单（本轮独立复核指出）。
-- `issueInvoice` / `postInvoice` 同样接受可选 `cleanup`，登记 API 返回的发票 id（被拒的请求没有 id，自动跳过）。
+- `issueInvoice` 接受可选 `cleanup`，登记 API 返回的发票 id（被拒的请求没有 id，自动跳过）。
+- **`postInvoice` 未接 `cleanup` 参数**——源码仍是 `async function postInvoice(http, token, overrides = {})`：它只被 §T 场景使用，而那些调用点本就持有返回对象、**就近手动登记** id。这是本批**如实记录的一处不一致**：统一它要牵动十余处调用点，本批**不扩大改动**，留作后续可选整理（记录在此以免被误当成"已统一"）。
 - 四个旧场景改为接收 `cleanup`，在 `finally` 中按**依赖顺序**清理：**发票 → 账款 → 单据**（`fin_invoices` / `payment_records`(type 2、1) / `sale_orders` / `purchase_orders`）。失败路径同样经过 `finally` ⇒ 断言失败或中途抛错都能清。
 - **删掉误导性无用夹具**：旧 `scenarioNoQuotaBypass` 插了一张「无账款基准的销售单」却**从未用它开票**（开的是不存在的单号），既没测到想测的东西、又留下垃圾。真正那条语义已由 §T 的 `scenarioInvoiceBeforeShipmentKeepsLink` 覆盖。
 - **清理失败不再只打印告警**：收尾后**逐个 ID 复查**四张表，任何残留 ⇒ **失败断言**，避免套件假绿。
