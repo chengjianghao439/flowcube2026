@@ -479,7 +479,7 @@
 
 **A — 已确认且值得立即处理**：本批（§14）新增一条——**费用报销付款缺跨期闸门**（第四条出钱路径，闭期付款会「钱出账户、凭证被跳过、界面无提示」）。已实测红例、已窄修复、已反向破坏验证。除此之外目前没有新的、证据充分而尚未处理的 A 项。不要为填清单制造缺陷。
 
-**B — 继续调查或待决策**：① `price-change.submit` 允许 B 提交 A 创建的申请，是否允许代提交属流程归属策略（§12.3），自批已对两人收口；② `products.update` 事务外读旧价再于事务内写历史的并发漂移仍只属静态风险（§11）；③ 发票侧（**§15 已核实、订正初判并已修**）：初版「对已结账期间则静默无效」是**错的**——已结账期间的税额差异是 **fail-loud 409**（销售 `ACCT_SALE_CLOSED_PERIOD_CONFLICT`／采购 `ACCT_PERIOD_CLOSED`，提示反结账）。**实测 A 已修**：界面路径录票时 `createInvoice` 把 `source_type` 写成 **`'invoice_order'`**（不在迁移 182 的约定内）⇒ **即使 `source_id` 正确关联订单，税额也不进任何凭证**；现按类型写约定值、身份与配额解耦、支持「单号」与「显式 id」两种输入（仅给 id 也过配额）、编辑按库内 `cur.invoiceType` 重算。**仍待办**：存量 `'invoice_order'` 的**生产只读评估**（规模未知；修正归属可能触发已结账期间的税额差异/反结账）——评估 SQL 见 §15.6，且**不新增自动改写存量的迁移**；`source_id` 为 NULL（先开票后发货）与「无单发票」是**另两条不同因果**（后者可能属既定设计）。§15.3 只记录「`invoice_date` 不参与凭证归属」这一**代码事实**，不对税法口径下判断。详见 §15；④ **费用报销的跨期补录通道**——`finance-backfills.service` 无 expense 分支，故报销付款闭期**缺少合规出路，需财务负责人人工决策处理方式**（**不能拿「改日期」当出路**——那是改事实）；§14 已据此把拒绝措辞改为「请联系财务负责人核实处理方式；请勿改动真实付款日期」，是否补齐属**产品待决项**；⑤ P5 多端数据新鲜度仍是机会项，未证实为缺陷。不要重做 P1/P2/P3/P8。
+**B — 继续调查或待决策**：① `price-change.submit` 允许 B 提交 A 创建的申请，是否允许代提交属流程归属策略（§12.3），自批已对两人收口；② `products.update` 事务外读旧价再于事务内写历史的并发漂移仍只属静态风险（§11）；③ 发票侧（**§15 已核实、订正初判并已修**）：初版「对已结账期间则静默无效」是**错的**——已结账期间的税额差异是 **fail-loud 409**（销售 `ACCT_SALE_CLOSED_PERIOD_CONFLICT`／采购 `ACCT_PERIOD_CLOSED`，提示反结账）。**实测 A 已修**：界面路径录票时 `createInvoice` 把 `source_type` 写成 **`'invoice_order'`**（不在迁移 182 的约定内）⇒ **即使 `source_id` 正确关联订单，税额也不进任何凭证**；现按类型写约定值、身份与配额解耦、支持「单号」与「显式 id」两种输入（仅给 id 也过配额）、编辑按库内 `cur.invoiceType` 重算。**仍待办**：存量 `'invoice_order'` 的**生产只读评估**（规模未知；修正归属可能触发已结账期间的税额差异/反结账）——评估 SQL 见 §15.6，且**不新增自动改写存量的迁移**；`source_id` 为 NULL 的「先开票后发货」行是**旧写入**的可能遗留状态（**新写入已修**：身份与配额解耦后这类票仍会写入稳定关联）；它与「无单发票」是**另两条不同因果**（后者可能属既定设计）。§15.3 只记录「`invoice_date` 不参与凭证归属」这一**代码事实**，不对税法口径下判断。详见 §15；④ **费用报销的跨期补录通道**——`finance-backfills.service` 无 expense 分支，故报销付款闭期**缺少合规出路，需财务负责人人工决策处理方式**（**不能拿「改日期」当出路**——那是改事实）；§14 已据此把拒绝措辞改为「请联系财务负责人核实处理方式；请勿改动真实付款日期」，是否补齐属**产品待决项**；⑤ P5 多端数据新鲜度仍是机会项，未证实为缺陷。不要重做 P1/P2/P3/P8。
 
 **C — 已调查且不应重复当 bug**：ATP 与当前可拣量是不同既定口径；`approval.task.view` 只作入口粗筛，节点快照再裁决审批人；「行锁/状态机防重」不是请求键幂等重放；§12.2 的「只挡创建人、提交人由快照保证」已被反例推翻，双身份动作校验已落地；**资金账户余额调整（`finance_account_transactions` 的 `biz_type=4`）本来就不生成凭证**（`voucher-engine.js` 的 `buildFundVouchers` 只读 `IN (1,2,3,5)`），故无「钱动了账不记」；**HR 工资发放与固定资产计提/处置已有期间保护**——工资经 `upsertVoucher` 内部的 `assertPeriodOpen` 抛错回滚，固定资产在 `fixed-assets.service.js` 显式调 `assertPeriodOpen`，二者均非缺陷。
 
@@ -566,7 +566,7 @@
 
 **因果分离（三件事，勿混）**：
 1. **本条（实测）**：`source_type='invoice_order'` ⇒ 被排除，**与是否关联无关**。
-2. **另一条（待核实）**：`source_id IS NULL`（如「先开票后发货」——反查到单据但该单尚无 `payment_records` 账款基准 ⇒ `base=0` ⇒ 返回 null）⇒ 亦被排除，但原因不同（不满足 `IS NOT NULL`）。
+2. **另一条（**旧写入**的可能状态；**新写入已修**，见下方 15.2「已修」的 ②）**：`source_id IS NULL`。修复前 `assertInvoiceQuota` 在「反查到单据但该单尚无 `payment_records` 账款基准」时返回 null（如「先开票后发货」），派生逻辑随之把 `source_id` 置空 ⇒ 亦被 `IS NOT NULL` 排除，但**原因与第 1 条不同**。新写入不再如此（身份与配额解耦，无基准也回报身份）。
 3. **可能属既定设计、不判为 bug**：**无单发票**（用户不填「关联单号」，该字段界面标注「选填」）⇒ `source_type`/`source_id` 均为 NULL。迁移 182 明说「可空，**允许无单发票**」，故这是**设计内的合法状态**，本批不据此判缺陷。
 
 **证据强度**：本条为**隔离库实测**（真实 API + 真实库读回）；2 为代码审阅，未实测。
@@ -597,12 +597,26 @@
 ```sql
 -- 1) 规模
 SELECT source_type, COUNT(*) FROM fin_invoices WHERE deleted_at IS NULL GROUP BY source_type;
--- 2) 其中可自愈的（仍有单号或 id，编辑一次即回到约定值）
+-- 2) 「编辑可自愈」的规模**上限**：仍有单号或 id 且 status=1
+--    （已认证/已抵扣的进项不可编辑、永远不自愈；此计数只是上限，实际还需能反查到订单）
 SELECT COUNT(*) FROM fin_invoices WHERE source_type = 'invoice_order' AND (source_no IS NOT NULL OR source_id IS NOT NULL);
--- 3) 涉及期间是否已结账（决定是否需要反结账）
-SELECT f.company_id, COUNT(*) FROM fin_invoices f JOIN payment_records pr
-  ON pr.order_id = f.source_id AND pr.type = IF(f.invoice_type = 2, 2, 1)
- WHERE f.source_type = 'invoice_order' AND f.source_id IS NOT NULL GROUP BY f.company_id;
+-- 3) 按账套/票种统计「已关联来源」的旧票数量（**本查询不判断期间归属**，只是规模分解）
+SELECT f.company_id, f.invoice_type, COUNT(*) FROM fin_invoices f
+ WHERE f.source_type = 'invoice_order' AND f.deleted_at IS NULL AND f.source_id IS NOT NULL
+ GROUP BY f.company_id, f.invoice_type;
 ```
 
-**已具备的自愈通道**（无需迁移）：`updateInvoice` 现在按 `cur.invoiceType` 重算派生值，故**任何一次编辑都会把该行修正**（见 §15.2 的「编辑自愈」用例）；只有从未被再编辑过的存量行才需要人工/批量处理。
+**闭期归属是另一件事，必须分两侧单独评估**（本轮**未做**——上面的计数**不能**当作"已判断期间是否已结账"）：
+
+- **销项**：税额归属期取**销售出库月**（`projectSaleShipments` 的 `voucherDate` 来自 `wt.shipped_at`）。要判断某张旧票会不会撞已结账期间，需按 `source_id` 追到该销售单的**出库任务 `shipped_at`**（`warehouse_tasks`，`status=7` 且未删除）折成 `YYYYMM` 后与 `acct_periods.status=2` 比对。
+- **进项**：走采购结算 / 来源修订链（`voucher-source-revisions`），期间取自该采购凭证/结算的**来源期间**，同样要按来源锚点折期间再与 `acct_periods` 比对。
+- 两侧都需**先确认来源单据未软删、且有真实出库/收货事实**，否则归期本身不成立（会先撞 `ACCT_SALE_SOURCE_INVALID` 一类来源断言）。
+
+⇒ **是否需要反结账，只能在生产只读里按上述口径另行统计**，不能由本轮任何结论替代。
+
+**自愈通道是有限的，不要当作「迟早会好」**：`updateInvoice` 现在按 `cur.invoiceType` 重算派生值，但**仅在该行同时满足**① `status = 1`（待认证/已开具）**且**② 仍能按单号或 id 反查到订单时才修正。因此以下存量**不会自愈**：
+
+- **已认证 / 已抵扣的进项票**：`updateInvoice` 直接 400 `INVOICE_LOCKED`，永远走不到重算；
+- **`source_id` 与 `source_no` 都没有（或单号查不到且又没给 id）的行**：反查不到订单，重算结果仍是 NULL——与真正的「无单发票」同形，**无法区分**。
+
+⇒ 这两类只能人工核对后处理（或由业务决定是否清理），**不能依赖编辑自愈**。

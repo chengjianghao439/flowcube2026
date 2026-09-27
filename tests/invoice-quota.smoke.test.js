@@ -457,8 +457,8 @@ async function scenarioExplicitSourceInputContract(ctx, log, token, cleanup) {
     `status=${typeOnly.status} code=${typeOnly.data?.code}`,
   )
 
-  // 6) 单号查不到且给了 id → 按 id 路径继续（不丢关联），但单号与 id 不匹配时已在上一条挡掉；
-  //    这里验证「单号查不到、也没给 id」仍是既有行为：保留单号快照、不建立关联。
+  // 6) 单号查不到、也**没给 id** → 仍是既有行为：保留单号快照、不建立关联。
+  //    （「单号查不到又给了 id」已在 5b 明确报冲突，**不会**按 id 兜底继续。）
   const noSuchNo = await postInvoice(http, token, { sourceNo: 'NO-SUCH-ORDER-777' })
   const noSuchInv = Number(noSuchNo.data?.data?.id)
   if (Number.isInteger(noSuchInv)) cleanup.invoiceIds.push(noSuchInv)
