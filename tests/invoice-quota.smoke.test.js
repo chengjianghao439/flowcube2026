@@ -21,8 +21,9 @@ const { createLogger, prepareSmokeContext, dbQuery, login, randomRef } = require
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100
 
-/** 造一张有应收基准的销售单（直接插 payment_records type=2，模拟出库后的权威应收） */
-async function seedSaleWithReceivable(pool, baseAmount) {
+/** 造一张有应收基准的销售单（直接插 payment_records type=2，模拟出库后的权威应收）。
+ *  传 cleanup 时登记本轮自建对象的 id，供收尾按依赖顺序自洁（只删本轮创建的，不碰历史数据）。 */
+async function seedSaleWithReceivable(pool, baseAmount, cleanup = null) {
   const orderNo = `SO-${randomRef('Q').slice(0, 14)}`
   const [r] = await pool.query(
     `INSERT INTO sale_orders (order_no, customer_id, customer_name, warehouse_id, warehouse_name, status, total_amount, operator_id, operator_name)
@@ -30,6 +31,9 @@ async function seedSaleWithReceivable(pool, baseAmount) {
     [orderNo, baseAmount],
   )
   const orderId = r.insertId
+  // **插入后立刻登记**：若紧接着的 payment_records 插入失败，这条订单也必须能被收尾清掉，
+  // 不能等 helper 正常返回才登记（那会留下无人认领的残留）。
+  if (cleanup) cleanup.orderIds.push(orderId)
   await pool.query(
     `INSERT INTO payment_records (type, order_id, order_no, party_name, total_amount, paid_amount, balance, status, confirm_status)
      VALUES (2, ?, ?, '开票量测试客户', ?, 0, ?, 1, 1)`,
@@ -38,9 +42,9 @@ async function seedSaleWithReceivable(pool, baseAmount) {
   return { orderId, orderNo }
 }
 
-/** 录一张销项发票（通过真实 API） */
-async function issueInvoice(http, token, { sourceNo, amountWithTax, invoiceNo }) {
-  return http.post('/api/accounting/invoices', {
+/** 录一张销项发票（通过真实 API）。传 cleanup 时登记返回的发票 id */
+async function issueInvoice(http, token, { sourceNo, amountWithTax, invoiceNo }, cleanup = null) {
+  const resp = await http.post('/api/accounting/invoices', {
     token,
     json: {
       invoiceType: 2,
@@ -56,37 +60,40 @@ async function issueInvoice(http, token, { sourceNo, amountWithTax, invoiceNo })
       sourceNo,
     },
   })
+  const id = Number(resp.data?.data?.id)
+  if (cleanup && Number.isInteger(id)) cleanup.invoiceIds.push(id)
+  return resp
 }
 
-async function scenarioOverQuotaBlocked(ctx, log, token) {
+async function scenarioOverQuotaBlocked(ctx, log, token, cleanup) {
   const { http, pool } = ctx
-  const { orderNo } = await seedSaleWithReceivable(pool, 1000)
+  const { orderNo } = await seedSaleWithReceivable(pool, 1000, cleanup)
 
   // 1. 开票 600 ≤ 应收 1000 → 成功
-  const ok1 = await issueInvoice(http, token, { sourceNo: orderNo, amountWithTax: 600, invoiceNo: `Q${randomRef('A').slice(0, 10)}` })
+  const ok1 = await issueInvoice(http, token, { sourceNo: orderNo, amountWithTax: 600, invoiceNo: `Q${randomRef('A').slice(0, 10)}` }, cleanup)
   log.assert('开票 600（≤应收1000）成功', ok1.status === 201 || ok1.status === 200, `status=${ok1.status} msg=${ok1.message}`)
 
   // 2. 再开 500 → 600+500 > 1000 → 拦截
-  const over = await issueInvoice(http, token, { sourceNo: orderNo, amountWithTax: 500, invoiceNo: `Q${randomRef('B').slice(0, 10)}` })
+  const over = await issueInvoice(http, token, { sourceNo: orderNo, amountWithTax: 500, invoiceNo: `Q${randomRef('B').slice(0, 10)}` }, cleanup)
   log.assert('累计超应收被拒（600+500>1000）', over.status === 400 && over.data?.code === 'INVOICE_OVER_QUOTA',
     `status=${over.status} code=${over.data?.code} msg=${over.message}`)
 
   // 3. 恰好补足 400 → 1000 = 应收 → 成功
-  const ok2 = await issueInvoice(http, token, { sourceNo: orderNo, amountWithTax: 400, invoiceNo: `Q${randomRef('C').slice(0, 10)}` })
+  const ok2 = await issueInvoice(http, token, { sourceNo: orderNo, amountWithTax: 400, invoiceNo: `Q${randomRef('C').slice(0, 10)}` }, cleanup)
   log.assert('补足到应收上限（600+400=1000）成功', ok2.status === 201 || ok2.status === 200, `status=${ok2.status} msg=${ok2.message}`)
 }
 
-async function scenarioRedFlushRestoresQuota(ctx, log, token) {
+async function scenarioRedFlushRestoresQuota(ctx, log, token, cleanup) {
   const { http, pool } = ctx
-  const { orderNo } = await seedSaleWithReceivable(pool, 1000)
+  const { orderNo } = await seedSaleWithReceivable(pool, 1000, cleanup)
 
   const invNo = `Q${randomRef('R').slice(0, 10)}`
-  const ok = await issueInvoice(http, token, { sourceNo: orderNo, amountWithTax: 800, invoiceNo: invNo })
+  const ok = await issueInvoice(http, token, { sourceNo: orderNo, amountWithTax: 800, invoiceNo: invNo }, cleanup)
   const invId = ok.data?.data?.id
   log.assert('开票 800 成功', ok.status === 201 && Number.isInteger(invId), `status=${ok.status}`)
 
   // 再开 300 → 800+300 > 1000 → 拦截
-  const over = await issueInvoice(http, token, { sourceNo: orderNo, amountWithTax: 300, invoiceNo: `Q${randomRef('R2').slice(0, 10)}` })
+  const over = await issueInvoice(http, token, { sourceNo: orderNo, amountWithTax: 300, invoiceNo: `Q${randomRef('R2').slice(0, 10)}` }, cleanup)
   log.assert('800+300 超限被拒', over.status === 400, `status=${over.status}`)
 
   // 红冲 800 的发票 → 额度恢复
@@ -94,17 +101,17 @@ async function scenarioRedFlushRestoresQuota(ctx, log, token) {
   log.assert('红冲成功', red.status === 200, `status=${red.status}`)
 
   // 红冲后可再开 800 → 不超过应收（红冲不计入已开票）
-  const afterRed = await issueInvoice(http, token, { sourceNo: orderNo, amountWithTax: 800, invoiceNo: `Q${randomRef('R3').slice(0, 10)}` })
+  const afterRed = await issueInvoice(http, token, { sourceNo: orderNo, amountWithTax: 800, invoiceNo: `Q${randomRef('R3').slice(0, 10)}` }, cleanup)
   log.assert('红冲后额度恢复，可再开 800', afterRed.status === 201 || afterRed.status === 200,
     `status=${afterRed.status} msg=${afterRed.message}`)
 }
 
-async function scenarioEditExcludesSelf(ctx, log, token) {
+async function scenarioEditExcludesSelf(ctx, log, token, cleanup) {
   const { http, pool } = ctx
-  const { orderNo } = await seedSaleWithReceivable(pool, 1000)
+  const { orderNo } = await seedSaleWithReceivable(pool, 1000, cleanup)
 
   const invNo = `Q${randomRef('E').slice(0, 10)}`
-  const ok = await issueInvoice(http, token, { sourceNo: orderNo, amountWithTax: 500, invoiceNo: invNo })
+  const ok = await issueInvoice(http, token, { sourceNo: orderNo, amountWithTax: 500, invoiceNo: invNo }, cleanup)
   const invId = ok.data?.data?.id
 
   // 编辑把本次金额改成 900（自己 500 应被排除，但 900 ≤ 基准 1000 → 成功）
@@ -122,22 +129,38 @@ async function scenarioEditExcludesSelf(ctx, log, token) {
   log.assert('编辑放大到 1100（>应收1000）被拒', over.status === 400, `status=${over.status} msg=${over.message}`)
 }
 
-async function scenarioNoQuotaBypass(ctx, log, token) {
+/**
+ * 「单号查不到」不拦截（期初/无单发票的既有语义）。
+ *
+ * **本场景只证明这一件事**，不证明「已知订单、发货前允许开票」——后者由
+ * `scenarioInvoiceBeforeShipmentKeepsLink` 覆盖。原先这里额外插了一张「无账款基准的销售单」
+ * 却从未用它开票（开的是不存在的单号），既没测到想测的东西、又在库里留下误导性夹具，已删除。
+ */
+async function scenarioNoQuotaBypass(ctx, log, token, cleanup) {
   const { http, pool } = ctx
-  // 无账款基准的销售单（未结算）→ 不拦截（先开票后发货合法）
-  const orderNo = `SO-${randomRef('N').slice(0, 14)}`
-  await pool.query(
-    `INSERT INTO sale_orders (order_no, customer_id, customer_name, warehouse_id, warehouse_name, status, total_amount, operator_id, operator_name)
-     VALUES (?, 1, '未结算客户', 1, '测试仓', 2, 500, 1, '开票量测试')`,
-    [orderNo],
-  )
   // 单号乱填但查不到单据 → 不拦截
-  const unknown = await issueInvoice(http, token, { sourceNo: 'NO-SUCH-ORDER-999', amountWithTax: 99999, invoiceNo: `Q${randomRef('U').slice(0, 10)}` })
+  const unknown = await issueInvoice(http, token, {
+    sourceNo: 'NO-SUCH-ORDER-999', amountWithTax: 99999, invoiceNo: `Q${randomRef('U').slice(0, 10)}`,
+  }, cleanup)
   log.assert('查不到单据的开票不拦截', unknown.status === 201 || unknown.status === 200, `status=${unknown.status}`)
+  // 补业务语义断言：不只是「没报错」，而是「落库为无单发票」——单号快照保留、派生值全空，
+  // 这样它不会进入任何税额合计（loadTaxMaps 要求 source_id IS NOT NULL）。
+  const invId = Number(unknown.data?.data?.id)
+  // **先显式断言拿到了 id**：若状态码是 201 却没返回 id，语义断言会被 if 跳过而假绿。
+  log.assert('★ 查不到单据的开票必须真的落库并返回 id', Number.isInteger(invId), `id=${unknown.data?.data?.id}`)
+  if (Number.isInteger(invId)) {
+    const [row] = await dbQuery(pool, 'SELECT source_type, source_id, source_no FROM fin_invoices WHERE id=?', [invId])
+    log.assert(
+      '★ 该票落库为「无单发票」：保留单号快照，但 source_id/source_type 均为 NULL',
+      row?.source_no === 'NO-SUCH-ORDER-999' && row?.source_id === null && row?.source_type === null,
+      JSON.stringify(row),
+    )
+  }
 }
 
-/** 造一张有应付基准的采购单（直接插 payment_records type=1，模拟收货后的权威应付） */
-async function seedPurchaseWithPayable(pool, baseAmount) {
+/** 造一张有应付基准的采购单（直接插 payment_records type=1，模拟收货后的权威应付）。
+ *  同样**插入后立刻登记** id，供收尾按依赖顺序自洁。 */
+async function seedPurchaseWithPayable(pool, baseAmount, cleanup = null) {
   const orderNo = `PO-${randomRef('P').slice(0, 14)}`
   const [r] = await pool.query(
     `INSERT INTO purchase_orders (order_no, supplier_id, supplier_name, warehouse_id, warehouse_name, status, total_amount, need_approval, operator_id, operator_name)
@@ -145,6 +168,7 @@ async function seedPurchaseWithPayable(pool, baseAmount) {
     [orderNo, baseAmount],
   )
   const orderId = r.insertId
+  if (cleanup) cleanup.poIds.push(orderId)
   await pool.query(
     `INSERT INTO payment_records (type, order_id, order_no, party_name, total_amount, paid_amount, balance, status, confirm_status)
      VALUES (1, ?, ?, '发票归属测试供应商', ?, 0, ?, 1, 1)`,
@@ -566,35 +590,91 @@ async function main() {
   const log = createLogger()
   const ctx = await prepareSmokeContext()
   const { pool } = ctx
-  // 本场景自建夹具的精确 ID，收尾自洁（本文件既有四个场景原无清理，此处不依赖也不改变其行为）
+  // 本轮自建夹具的精确 ID；收尾按依赖顺序自洁（**只删本轮创建的**，历史遗留一律不动）
   const cleanup = { orderIds: [], poIds: [], invoiceIds: [] }
-  try {
-    const { token } = await login(ctx.http, 'smoke_admin', 'SmokeAdmin123!')
-    if (!token) throw new Error('登录失败，无法执行开票量校验回归')
 
-    await scenarioOverQuotaBlocked(ctx, log, token)
-    await scenarioRedFlushRestoresQuota(ctx, log, token)
-    await scenarioEditExcludesSelf(ctx, log, token)
-    await scenarioNoQuotaBypass(ctx, log, token)
-    await scenarioSourceTypeSale(ctx, log, token, cleanup)
-    await scenarioSourceTypePurchase(ctx, log, token, cleanup)
-    await scenarioEditSelfHealsSourceType(ctx, log, token, cleanup)
-    await scenarioClearingSourceNoClearsLink(ctx, log, token, cleanup)
-    await scenarioInvoiceBeforeShipmentKeepsLink(ctx, log, token, cleanup)
-    await scenarioExplicitSourceInputContract(ctx, log, token, cleanup)
-    await scenarioUpdateSourceIntent(ctx, log, token, cleanup)
+  // 运行前快照：用于证明**本轮没有净新增残留**。本文件历史遗留的行本来就存在，
+  // 本批不清、也不把它们当成本批缺陷——只要求「前后一致」。
+  const residual = async () => {
+    const one = async (sql) => { const [r] = await dbQuery(pool, sql); return Number(r?.n ?? 0) }
+    return {
+      invoices: await one("SELECT COUNT(*) n FROM fin_invoices WHERE invoice_code IN ('INV-CODE','INV-CODE-P')"),
+      saleOrders: await one("SELECT COUNT(*) n FROM sale_orders WHERE operator_name='开票量测试'"),
+      purchaseOrders: await one("SELECT COUNT(*) n FROM purchase_orders WHERE operator_name='发票归属测试'"),
+      receivables: await one("SELECT COUNT(*) n FROM payment_records WHERE party_name IN ('开票量测试客户','发票归属测试供应商')"),
+    }
+  }
+  // **外层 try/finally 的唯一职责是保证 ctx.close()**：快照查询、业务、清理、复查里
+  // 任何一步抛错都不能让连接池泄漏（泄漏会占住库连接、并让进程挂着不退）。
+  try {
+    let before = null
+    try {
+      before = await residual()
+      console.log('运行前残留快照（历史遗留，本批不清理）:', JSON.stringify(before))
+
+      const { token } = await login(ctx.http, 'smoke_admin', 'SmokeAdmin123!')
+      if (!token) throw new Error('登录失败，无法执行开票量校验回归')
+
+      await scenarioOverQuotaBlocked(ctx, log, token, cleanup)
+      await scenarioRedFlushRestoresQuota(ctx, log, token, cleanup)
+      await scenarioEditExcludesSelf(ctx, log, token, cleanup)
+      await scenarioNoQuotaBypass(ctx, log, token, cleanup)
+      await scenarioSourceTypeSale(ctx, log, token, cleanup)
+      await scenarioSourceTypePurchase(ctx, log, token, cleanup)
+      await scenarioEditSelfHealsSourceType(ctx, log, token, cleanup)
+      await scenarioClearingSourceNoClearsLink(ctx, log, token, cleanup)
+      await scenarioInvoiceBeforeShipmentKeepsLink(ctx, log, token, cleanup)
+      await scenarioExplicitSourceInputContract(ctx, log, token, cleanup)
+      await scenarioUpdateSourceIntent(ctx, log, token, cleanup)
+    } finally {
+      // 1) 按精确 ID 清理本轮自建夹具（共享库自洁）。依赖顺序：发票 → 账款 → 单据
+      const safe = async (sql, params) => { try { await pool.query(sql, params) } catch (e) { console.error(`[清理告警] ${e.message}`) } }
+      for (const id of cleanup.invoiceIds) await safe('DELETE FROM fin_invoices WHERE id=?', [id])
+      for (const id of cleanup.orderIds) {
+        await safe('DELETE FROM payment_records WHERE type=2 AND order_id=?', [id])
+        await safe('DELETE FROM sale_orders WHERE id=?', [id])
+      }
+      for (const id of cleanup.poIds) {
+        await safe('DELETE FROM payment_records WHERE type=1 AND order_id=?', [id])
+        await safe('DELETE FROM purchase_orders WHERE id=?', [id])
+      }
+
+      // 2) 清理失败**不能只留告警**：逐个 ID 复查，任何残留都记为失败断言，否则套件会假绿。
+      //    复查本身也兜底——它抛错时记一条失败，而不是让异常冒出去（那会丢断言）。
+      //    必须在 ctx.close() 之前查（池关了就查不了）。
+      try {
+        const countIn = async (table, ids, col = 'id', extra = '') => {
+          if (!ids.length) return 0
+          const [r] = await dbQuery(pool, `SELECT COUNT(*) n FROM ${table} WHERE ${col} IN (?) ${extra}`, [ids])
+          return Number(r?.n ?? 0)
+        }
+        const invLeft = await countIn('fin_invoices', cleanup.invoiceIds)
+        const soLeft = await countIn('sale_orders', cleanup.orderIds)
+        const poLeft = await countIn('purchase_orders', cleanup.poIds)
+        // 应收/应付**分开复查**：`sale_orders.id` 与 `purchase_orders.id` 是两条独立自增序列，
+        // 同一数字可同时存在于两表；不带 `type` 的 order_id 查询会串到另一类（含历史）账款上而误报。
+        const prSaleLeft = await countIn('payment_records', cleanup.orderIds, 'order_id', 'AND type=2')
+        const prPoLeft = await countIn('payment_records', cleanup.poIds, 'order_id', 'AND type=1')
+        log.assert(
+          '★ 本轮自建夹具已全部清除（按 ID 复查为 0）',
+          invLeft + soLeft + poLeft + prSaleLeft + prPoLeft === 0,
+          `发票=${invLeft} 销售单=${soLeft} 采购单=${poLeft} 应收(type2)=${prSaleLeft} 应付(type1)=${prPoLeft}`
+          + `（本轮自建 ${cleanup.invoiceIds.length} 票 / ${cleanup.orderIds.length} 销售单 / ${cleanup.poIds.length} 采购单）`,
+        )
+
+        // 3) 净新增必须为 0：与运行前快照逐项比对（`before` 为 null = 首次快照就失败，同样记红）
+        const after = await residual()
+        console.log('运行后残留快照:', JSON.stringify(after))
+        log.assert(
+          '★ 本轮没有留下净新增残留（前后快照逐项一致）',
+          before !== null && JSON.stringify(after) === JSON.stringify(before),
+          `前=${JSON.stringify(before)} 后=${JSON.stringify(after)}`,
+        )
+      } catch (e) {
+        log.assert('★ 清理复查本身未抛错', false, e.message)
+      }
+    }
   } finally {
-    // 按精确 ID 清理本轮自建夹具（共享库自洁）
-    const safe = async (sql, params) => { try { await pool.query(sql, params) } catch (e) { console.error(`[清理告警] ${e.message}`) } }
-    for (const id of cleanup.invoiceIds) await safe('DELETE FROM fin_invoices WHERE id=?', [id])
-    for (const id of cleanup.orderIds) {
-      await safe('DELETE FROM payment_records WHERE type=2 AND order_id=?', [id])
-      await safe('DELETE FROM sale_orders WHERE id=?', [id])
-    }
-    for (const id of cleanup.poIds) {
-      await safe('DELETE FROM payment_records WHERE type=1 AND order_id=?', [id])
-      await safe('DELETE FROM purchase_orders WHERE id=?', [id])
-    }
     await ctx.close()
   }
   const counts = log.summary()
