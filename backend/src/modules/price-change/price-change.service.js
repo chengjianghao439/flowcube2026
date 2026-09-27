@@ -144,6 +144,17 @@ async function submit(id, operator) {
  * 锁顺序：本函数在 `price_change_requests` 行锁与审批实例/任务锁**之后**才取商品行锁；
  * `products.update` 只锁商品行、不锁申请单，**不构成环**。
  */
+
+/**
+ * 「本人」的两个可能身份（去重）：申请单上的**创建人**与审批实例上的**提交人**。
+ * 二者在 create/submit 不同人时不一致，任一身份自批都要按**当前**授权状态收口。
+ */
+function selfApprovalIdentities(row, active) {
+  const ids = [row?.applicant_id, active?.instance?.applicant_id]
+    .map(v => Number(v)).filter(v => Number.isFinite(v) && v > 0)
+  return [...new Set(ids)]
+}
+
 async function applyApprovedPrice(conn, { requestId }) {
   const [[req]] = await conn.query('SELECT * FROM price_change_requests WHERE id=?', [requestId])
   if (!req || Number(req.status) !== 2) return // 非通过态，跳过
@@ -182,10 +193,14 @@ async function approve(id, operator) {
     await conn.beginTransaction()
     const row = await lockStatusRow(conn, { table: 'price_change_requests', id, columns: 'id, status, applicant_id', entityName: '改价申请', deletedAt: false })
     assertStatusAction('priceChangeRequest', 'approve', row.status)
-    // 自批内控：与其余五个审批模块同范式（2026-09-27）。缺这一层时，超管自提的改价会被
-    // 引擎的 "roleId===1 恒放行" 直接批过，且 allow_self_approve 被撤销后也挡不住既有单。
-    await assertNotSelfApproval(row.applicant_id, operator?.operatorId ?? operator?.userId, '不能审批自己提交的改价申请')
+    // 自批内控（2026-09-27）：**两个身份都要收口**。申请单的 applicant_id 是**创建人**，
+    // 而引擎实例的 applicant_id 是**提交人**（create 与 submit 可不同一人，见 §12.2），
+    // 且提交人会被纳入节点快照。只查创建人会留下两条绕行：提交人撤权后仍可自批、
+    // 提交人为超管时被 assertCanApproveTask 的 roleId===1 恒放行批过。
     const active = await approvalEngine.getActiveInstanceByBiz(conn, { bizType: 'product_price', bizId: Number(id) })
+    for (const applicantId of selfApprovalIdentities(row, active)) {
+      await assertNotSelfApproval(applicantId, operator?.operatorId ?? operator?.userId, '不能审批自己提交的改价申请')
+    }
     if (!active) throw new AppError('改价申请无进行中的审批实例', 409)
     const r = await approvalEngine.approveStep(conn, { instanceId: active.instance.id, operator, comment: null })
     // approveStep 返回 { status }：2=实例已全部通过（此时才生效改价）
@@ -204,8 +219,10 @@ async function reject(id, { reason, operator }) {
     await conn.beginTransaction()
     const row = await lockStatusRow(conn, { table: 'price_change_requests', id, columns: 'id, status, applicant_id', entityName: '改价申请', deletedAt: false })
     assertStatusAction('priceChangeRequest', 'reject', row.status)
-    await assertNotSelfApproval(row.applicant_id, operator?.operatorId ?? operator?.userId, '不能驳回自己提交的改价申请')
     const active = await approvalEngine.getActiveInstanceByBiz(conn, { bizType: 'product_price', bizId: Number(id) })
+    for (const applicantId of selfApprovalIdentities(row, active)) {
+      await assertNotSelfApproval(applicantId, operator?.operatorId ?? operator?.userId, '不能驳回自己提交的改价申请')
+    }
     if (!active) throw new AppError('改价申请无进行中的审批实例', 409)
     await approvalEngine.rejectStep(conn, { instanceId: active.instance.id, operator, comment: reason || null })
     await compareAndSetStatus(conn, { table: 'price_change_requests', id, fromStatus: 1, toStatus: 3, entityName: '改价申请' })

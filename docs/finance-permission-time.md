@@ -92,3 +92,11 @@
 - **边界**：`getStatementsExportPayload`（对账单）与 `getPaymentReceiptsExportPayload`（收付款单）此前只透传 `type/status/keyword`，丢弃往来方/单号/日期/金额区间；同文件的 `getPaymentsExportPayload` 在 2026-09-18 审计已修过同类问题，属同根因的漏网实例。
 - **可选 ID 的空值语义**：`customerId`/`partyId` 传给 `findAll` 前必须把空串规范为 `null`——`findAll` 判 `!= null` 后 `Number('')` 得 `0`，会抛 400「编号无效」，而清除筛选后前端常发出 `customerId=`。分页（`page`/`pageSize`）由 `collectExportRows` 注入，不属于筛选。超过 `EXPORT_MAX_ROWS` 一律明确拒绝，不静默截断。
 - **回归**：`npm run test:export-filters`（纯离线，从 `findAll` 签名解析筛选键）与 `smoke:prelaunch-scope-export`（真实服务 + 真实库）。两者都做过反向验证：摘掉任一透传即精准报红对应的那一条。
+
+### 2026-09-27 改价审批的自批内控（P8）
+
+- **自批豁免** `sys_users.allow_self_approve` **只有超管**能改（`users.service.assertCanGrantSelfApprove`，否则 403 `SELF_APPROVE_GRANT_DENIED`）；`utils/selfApprove.canSelfApprove` **不做缓存** ⇒ **撤销对该用户的下一次判定即时生效**。
+- **撤销与既有单的关系**：新提交由 `approvalEngine.startApproval` 重查挡；**既有未完结实例**由**动作层的 `assertNotSelfApproval` 每次重查**挡——**"运行中的实例按既有快照处理"针对的是选人名单，不等于"撤销对既有单无效"**。
+- **`price-change` 必须与其余五个审批模块同范式**：`approve`/`reject` 在动作处调 `assertNotSelfApproval`。缺这一层时有两条绕行：① `assertCanApproveTask` 对 `roleId===1` **恒放行** ⇒ 超管自提的改价即使 `allow_self_approve=0` 也能自批；② 快照已含本人 ⇒ 撤权后仍可批既有单。
+- **"本人"是两个身份**：申请单 `applicant_id` 是**创建人**，引擎实例 `applicant_id` 是**提交人**（`create` 与 `submit` 可不同一人，且 `submit` 目前无归属校验）。动作处必须**对两个身份都做当前授权断言**（相同 ID 去重）——只查创建人会漏掉提交人自批（含提交人为超管的情形）。回归 `tests/price-change-history-oldprice.smoke.test.js`（含 A≠B、超管自提、撤权后自批三条反例）。
+- **归属校验（是否阻止 B 提交他创建的单）单列待定**，不并入本次改动。
