@@ -77,10 +77,15 @@ async function main() {
       ])
       const codes = [ra.status, rb.status].sort((x, y) => x - y)
       const asExpected = codes[0] === 200 && codes[1] === 409
-      // 冲突者**重读详情**（最新 revision + 当前价）后明确重做第二次改价
+      // 冲突者**通过真实详情接口重读**（最新 revision 与当前价）后明确重做第二次改价——
+      // 用 `GET /api/products/:id` 而不是直读 DB，顺带守住「详情必须返回 revision」的读契约。
       const loserCost = ra.status === 200 ? 200 : 150
-      const [fresh] = await dbQuery(pool, 'SELECT revision FROM product_items WHERE id=?', [p.id])
-      const redo = await http.put(`/api/products/${p.id}`, { token, json: editPayload(p, loserCost, Number(fresh.revision)) })
+      const winnerCost = ra.status === 200 ? 150 : 200
+      const det = await http.get(`/api/products/${p.id}`, { token })
+      const freshRev = Number(det.data?.data?.revision)
+      const freshCost = Number(det.data?.data?.costPrice)
+      const contractOk = det.status === 200 && Number.isInteger(freshRev) && freshCost === winnerCost
+      const redo = await http.put(`/api/products/${p.id}`, { token, json: editPayload(p, loserCost, freshRev) })
 
       const h = await dbQuery(
         pool,
@@ -88,7 +93,7 @@ async function main() {
           WHERE product_id=? AND change_source='manual' AND price_type='cost' ORDER BY id`,
         [p.id],
       )
-      let bad = !asExpected || redo.status !== 200 || h.length < 2
+      let bad = !asExpected || !contractOk || redo.status !== 200 || h.length < 2
       for (let k = 1; k < h.length; k++) {
         if (Number(h[k].old_price) !== Number(h[k - 1].new_price)) bad = true
       }
