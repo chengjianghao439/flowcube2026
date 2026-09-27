@@ -924,3 +924,39 @@ cost链=[[100,150],[100,200]]  最终cost=200   ← 两条历史的旧价都是 
 - **本节只覆盖「按 §11–20 改动选取」的受影响专项，不等于全量回归**。受影响端的 lint / 类型检查 / 构建**本轮已在 `a252e55` 执行过**（见 §21.2，均 rc=0）；但**最终发版代码仍需重跑一遍**（此后只要再有改动），并按 AGENTS §3 做**发版前全量回归**。
 - **物理打印、PDA 真机未验**；**生产影响规模未评估**；迁移 263 只在隔离库应用。
 - 本节的通过数均为**隔离库 + 本地栈**证据，不得当作生产结论。
+
+---
+
+## 22. 商品价格列的版本保护（2026-09-27，仅本地）
+
+### 22.1 判定为 A：旧编辑页保存会静默回退已审批的等级价/成本价
+
+`products.update` 无差别写 `cost_price` 与 `sale_price_a/b/c/d`，而 `form.tsx` **全量回传**打开时读到的旧值 ⇒ 别处刚生效的价格变更（含改价审批 `cost`/`a`/`b`/`c`/`d`）会被一次普通编辑**静默回退**。
+
+**隔离库实测**（仅自建夹具、按 ID 自洁、残留 0）：审批后 `cost_price` **150→100**、`sale_price_a` **200→100** 均被回退；`sale_price` 未被改 ⇒ 证明 §18.4 当时只护住一半。调用链：`useProduct`（缓存）→ `form.tsx` 表单 → payload 带旧 A–D/cost → `products.update` 写这些列。
+
+### 22.2 窄修复（与发票 §20 同范式）
+
+- **迁移 264**（幂等）：`product_items` 加 `revision INT NOT NULL DEFAULT 1`。
+- `fmtProduct` 返回 `revision`；`products.update` **同事务 `FOR UPDATE` 锁行后比对**：缺 **400 `PRODUCT_REVISION_REQUIRED`**、过期 **409 `PRODUCT_VERSION_CONFLICT`**；UPDATE 带 `revision = revision + 1 AND revision = ?` + `affectedRows` 检查（**SQL 是真正防线**，JS 预检只给更友好的 409）。
+- `price-change.applyApprovedPrice` 写价格列时**同事务递增** revision，否则「审批前打开、审批后保存」的旧草稿仍能通过商品侧校验。
+- **不递增**：`inbound-tasks.putaway` 只写 `avg_cost`，与编辑页提交的列不重叠（避免收货导致编辑页频繁冲突）。
+- **前端**：基线 revision 与表单初始值**同源**（`formRevisionRef`）；`useEffect` 只在**首次 / id 变**时重建表单与基线（后台 refetch 不再抹未保存草稿）；冲突时**保留草稿**、**不自动刷新详情**（刷新会抹草稿）、提示**只由全局拦截器发一次**；类型把 `UpdateProductParams.revision` / `Product.revision` 声明为**必填**，守住将来新增调用点。
+
+### 22.3 证据
+
+| 层 | 结果 |
+|---|---|
+| 新专项 `tests/product-price-version-guard.smoke.test.js` | **20/0**：旧版本 409 且**不改价、不写历史**；`cost`/`B` 同路径；连续编辑（用最新 revision）成功且 revision 累加；缺 revision 400；`sale` 列既有保护不变；**详情返回 revision 的读契约**；审批递增后旧页 409；用**刷新后新价**重试成功；自洁复查 0 |
+| `product-price-history-integrity` | **17/0**：并发语义按新契约更新为 **1×200 + 1×409**，并让冲突者**重读详情后重做** ⇒ **保留**了历史链完整性断言 |
+| `price-change-history-oldprice` | **10/0**：原 9 条 + 新增 ⑥ **真实审批**递增 revision 契约（非模拟 SQL） |
+| **反向验证** | **同时**摘掉 JS 预检与 SQL CAS ⇒ **10 条红**（A/cost 被回退、缺版本放行）⇒ 复现原缺陷；恢复后回绿 |
+| 守卫 | `deployment-resources` **26/0**；摘掉 CI 调用 ⇒ **1 条红**点名 `smoke:product-price-version-guard` ⇒ 接线有效 |
+| 静态 | 前端 `tsc -p tsconfig.app.json` rc=0；前端 lint 32 既有 warnings / 0 errors（无本轮新增）；后端 eslint（改动文件）rc=0 |
+
+### 22.4 未验证边界（如实）
+
+- **前端未做行为验收**：曾写过一个"**镜像实现**"的模式级测试（自造 Probe），按仓库原则**已删除**——它不渲染真实 `ProductFormPage`，只会提供虚假覆盖。冲突提示条、草稿保留、基线一致性目前**只有代码审阅 + 类型检查**，**未做组件/浏览器层验收**。
+- 未做发版前全量回归；未验生产影响规模；**迁移 264 只在隔离库应用**。
+- **发布顺序**见 `docs/finance-permission-time.md`（迁移 → 后端 → 前端；前端先上会**静默失效**）。
+- **发布兼容性边界（安全取舍，**不是**"无影响兼容"）**：新后端会**拒绝**未带 `revision` 的**旧桌面 / 浏览器客户端**的商品编辑（**400 `PRODUCT_REVISION_REQUIRED`**）——这是为堵住"旧表单静默回退已审批价"而**有意**付出的兼容代价，**不是**无影响变更。后续发版必须确认**浏览器与 Electron 的更新顺序**并准备**旧客户端提示**；**不得**把「旧客户端仍可编辑」写成已验证事实（本批**未**验证旧客户端的实际行为）。当前**禁止发布**，本批不涉及发布流程改动。

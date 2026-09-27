@@ -46,47 +46,63 @@ async function main() {
   }
 
   // PUT 的 zod 要求 supplierId / spec / color 必填（缺任一项都会被 400 挡下）
-  const editPayload = (p, cost) => ({
+  const editPayload = (p, cost, revision) => ({
     name: `价格历史回归-${p.id}`, categoryId: p.categoryId, supplierId: 1,
     spec: '标准', color: '常规', unit: '件', costPrice: cost,
     salePriceA: cost, salePriceB: cost, salePriceC: cost, salePriceD: cost, isActive: true,
+    // 迁移 264：普通更新必须回传「读取时看到的」revision（模拟编辑页拿到详情后提交）
+    ...(revision === undefined ? {} : { revision }),
   })
+  const revOf = async (id) => {
+    const [r] = await dbQuery(pool, 'SELECT revision FROM product_items WHERE id=?', [id])
+    return Number(r.revision)
+  }
 
   try {
     const loginRes = await login(http, 'smoke_admin', 'SmokeAdmin123!')
     token = loginRes.token
     if (!token) throw new Error('登录失败')
 
-    // ── ① 并发两次改价：历史必须是连贯链 ──────────────────────────────────
+    // ── ① 并发两次改价（**同一旧版本**）：1×200 + 1×409；冲突者重读后重做 ⇒ 链仍完整 ──
+    // 迁移 264 起，同一 revision 的并发写不再"两次都成功再互相覆盖"：**恰好一个成功、一个 409**。
+    // 但**链完整性断言必须保留**——冲突者重新读取详情（拿最新 revision 与当前价）后**明确重做**
+    // 第二次改价即可，链仍应连贯（old = 上一条 new，当前值 = 末条 new）。
     let broken = 0
     for (let i = 0; i < ROUNDS; i++) {
       const p = await newProduct(`并发${i}`)
+      const rev0 = await revOf(p.id)
       const [ra, rb] = await Promise.all([
-        http.put(`/api/products/${p.id}`, { token, json: editPayload(p, 150) }),
-        http.put(`/api/products/${p.id}`, { token, json: editPayload(p, 200) }),
+        http.put(`/api/products/${p.id}`, { token, json: editPayload(p, 150, rev0) }),
+        http.put(`/api/products/${p.id}`, { token, json: editPayload(p, 200, rev0) }),
       ])
+      const codes = [ra.status, rb.status].sort((x, y) => x - y)
+      const asExpected = codes[0] === 200 && codes[1] === 409
+      // 冲突者**重读详情**（最新 revision + 当前价）后明确重做第二次改价
+      const loserCost = ra.status === 200 ? 200 : 150
+      const [fresh] = await dbQuery(pool, 'SELECT revision FROM product_items WHERE id=?', [p.id])
+      const redo = await http.put(`/api/products/${p.id}`, { token, json: editPayload(p, loserCost, Number(fresh.revision)) })
+
       const h = await dbQuery(
         pool,
         `SELECT old_price, new_price FROM product_price_history
           WHERE product_id=? AND change_source='manual' AND price_type='cost' ORDER BY id`,
         [p.id],
       )
-      // 先确认两次改价**都成功**：否则「链为空/不成链」会被误读成并发缺陷
-      // （实测踩过：payload 缺必填字段被 400 挡下，两次都没生效）
-      const putOk = ra.status === 200 && rb.status === 200
-      if (!putOk) console.log(`  #${i} PUT 状态 a=${ra.status}(${ra.message}) b=${rb.status}(${rb.message})`)
-      let bad = !putOk || h.length < 2
+      let bad = !asExpected || redo.status !== 200 || h.length < 2
       for (let k = 1; k < h.length; k++) {
         if (Number(h[k].old_price) !== Number(h[k - 1].new_price)) bad = true
       }
       const [cur] = await dbQuery(pool, 'SELECT cost_price FROM product_items WHERE id=?', [p.id])
       if (h.length && Number(cur.cost_price) !== Number(h[h.length - 1].new_price)) bad = true
-      if (bad) { broken += 1; console.log(`  #${i} 链=${JSON.stringify(h.map(x => [Number(x.old_price), Number(x.new_price)]))} 当前=${cur?.cost_price} PUT成功=${putOk}`) }
+      if (bad) {
+        broken += 1
+        console.log(`  #${i} 状态=${codes.join('/')} 重做=${redo.status} 链=${JSON.stringify(h.map(x => [Number(x.old_price), Number(x.new_price)]))} 当前=${cur?.cost_price}`)
+      }
     }
     log.assert(
-      `★ 并发两次改价：${ROUNDS} 轮的历史旧价链全部连贯（每轮 old = 上一条 new，且当前值 = 末条 new）`,
+      `★ 并发同一旧版本：${ROUNDS} 轮都是「1×200 + 1×409」，且冲突者重读后重做使历史链完整（old = 上一条 new、当前值 = 末条 new）`,
       broken === 0,
-      `${broken}/${ROUNDS} 轮断裂`,
+      `${broken}/${ROUNDS} 轮不符`,
     )
 
     // ── ② allowDecimalQty 未传 ⇒ 保持「锁内」原值 ────────────────────────
@@ -101,7 +117,7 @@ async function main() {
       `实际 ${created1.allow_decimal_qty}`,
     )
     const putDefault = await http.put(`/api/products/${pDefault.id}`, {
-      token, json: { ...editPayload(pDefault, 100), remark: '不带 allowDecimalQty' },
+      token, json: { ...editPayload(pDefault, 100, await revOf(pDefault.id)), remark: '不带 allowDecimalQty' },
     })
     log.assert('未传 allowDecimalQty 的编辑成功', putDefault.status === 200, `status=${putDefault.status} msg=${putDefault.message}`)
     const [afterDefault] = await dbQuery(pool, 'SELECT allow_decimal_qty FROM product_items WHERE id=?', [pDefault.id])
@@ -114,7 +130,7 @@ async function main() {
     const pOff = await newProduct('关闭小数')
     await pool.query('UPDATE product_items SET allow_decimal_qty=0 WHERE id=?', [pOff.id])
     const putOff = await http.put(`/api/products/${pOff.id}`, {
-      token, json: { ...editPayload(pOff, 100), remark: '不带 allowDecimalQty' },
+      token, json: { ...editPayload(pOff, 100, await revOf(pOff.id)), remark: '不带 allowDecimalQty' },
     })
     log.assert('未传 allowDecimalQty 的编辑成功（关闭小数场景）', putOff.status === 200, `status=${putOff.status} msg=${putOff.message}`)
     const [afterOff] = await dbQuery(pool, 'SELECT allow_decimal_qty FROM product_items WHERE id=?', [pOff.id])
@@ -127,7 +143,7 @@ async function main() {
     // ── ③ 已软删商品：改价必须失败，且不留任何脏写 ────────────────────────
     const pDel = await newProduct('已软删')
     await pool.query('UPDATE product_items SET deleted_at=NOW() WHERE id=?', [pDel.id])
-    const del = await http.put(`/api/products/${pDel.id}`, { token, json: editPayload(pDel, 999) })
+    const del = await http.put(`/api/products/${pDel.id}`, { token, json: editPayload(pDel, 999, await revOf(pDel.id)) })
     log.assert('★ 对已软删商品改价被拒（不静默成功）', del.status >= 400, `status=${del.status}`)
     const [histAfterDel] = await dbQuery(
       pool, 'SELECT COUNT(*) n FROM product_price_history WHERE product_id=?', [pDel.id])
@@ -157,7 +173,7 @@ async function main() {
     log.assert('前置：模拟审批列效果后，标签价 = 200.00', priceBeforeEdit === '200.00', String(priceBeforeEdit))
 
     const putSale = await http.put(`/api/products/${pSale.id}`, {
-      token, json: { ...editPayload(pSale, 120), salePriceA: 130, remark: '普通编辑（不应动销售价）' },
+      token, json: { ...editPayload(pSale, 120, await revOf(pSale.id)), salePriceA: 130, remark: '普通编辑（不应动销售价）' },
     })
     log.assert('普通商品编辑成功', putSale.status === 200, `status=${putSale.status} msg=${putSale.message}`)
     const [afterSale] = await dbQuery(

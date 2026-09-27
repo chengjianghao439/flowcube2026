@@ -51,6 +51,9 @@ const productBase = z.object({
   remark:         z.string().max(30,'备注最多 30 个字符').optional(),
   batchManaged:   z.boolean().optional(),
   allowDecimalQty: z.boolean().optional(),
+  // 编辑乐观锁（迁移 264）：编辑时**必须**回传详情读到的 revision（缺失由 service 拒绝）；
+  // 创建不需要。见 docs/export-filters-fix-2026-09-27.md §22。
+  revision:       z.number().int().positive().optional().nullable(),
   shelfLifeDays:  z.number().int().min(1,'保质期天数必须大于 0').max(3650).nullable().optional(),
   safetyStock:    z.number().nonnegative('安全库存不能为负').refine(value => !hasTooManyDecimals(value), '安全库存最多保留 2 位小数').nullable().optional(),
   reorderPoint:   z.number().nonnegative('补货点不能为负').refine(value => !hasTooManyDecimals(value), '补货点最多保留 2 位小数').nullable().optional(),

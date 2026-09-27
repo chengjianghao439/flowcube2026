@@ -213,6 +213,39 @@ async function main() {
       assert.equal(Number(ph.n), 0, '不得写入任何伪历史')
     })
 
+    // ★ ⑥ 真实审批改价必须递增商品版本（迁移 264 契约）——不是"模拟 SQL"，走的是真实 service 链路
+    await check('★ 真实审批改价递增 product_items.revision，且旧版本编辑被商品侧 CAS 拦下', async () => {
+      const [[cat]] = await pool.query('SELECT id FROM product_categories LIMIT 1')
+      assert.ok(cat?.id, '需要至少一个商品分类')
+      const pidR = await mkProduct(100)
+      const reqR = await price.create({ productId: pidR, priceType: 'a', newPrice: 130 }, admin)
+      created.requestIds.push(reqR.id)
+      await price.submit(reqR.id, admin)
+
+      const [[before]] = await pool.query('SELECT revision FROM product_items WHERE id=?', [pidR])
+      await price.approve(reqR.id, approver)          // ← 真实审批 → applyApprovedPrice
+      const [[after]] = await pool.query('SELECT revision FROM product_items WHERE id=?', [pidR])
+      assert.equal(
+        Number(after.revision), Number(before.revision) + 1,
+        `真实审批必须让商品版本前进（${before.revision} → ${after.revision}）`,
+      )
+
+      // 用**审批前**的版本号做一次普通编辑 ⇒ 商品侧 CAS 必须拦下（否则旧草稿能回退审批价）
+      const productsSvc = require(path.join(ROOT, 'backend/src/modules/products/products.service'))
+      let code = null
+      try {
+        await productsSvc.update(pidR, {
+          name: `审批版本对照-${suffix}`, categoryId: cat.id, costPrice: 50, unit: '件',
+          salePriceA: 100, salePriceB: 100, salePriceC: 100, salePriceD: 100, isActive: true,
+          revision: Number(before.revision),
+        }, admin)
+      } catch (e) { code = e.code }
+      assert.equal(code, 'PRODUCT_VERSION_CONFLICT', '审批后用过旧版本编辑必须 409')
+
+      const [[kept]] = await pool.query('SELECT sale_price_a FROM product_items WHERE id=?', [pidR])
+      assert.equal(Number(kept.sale_price_a), 130, 'A 仍是审批值 130，未被旧草稿回退')
+    })
+
     await check('审批单状态与申请快照未被破坏', async () => {
       const [[req]] = await pool.query('SELECT status, old_price FROM price_change_requests WHERE id=?', [reqId])
       assert.equal(Number(req.status), 2, '审批通过后应为已批准')
@@ -245,10 +278,13 @@ async function main() {
       assert.equal(Number(afterApproval.sale_price_a), 100, '审批 sale 不应改动 A 价')
 
       // 普通商品编辑（直接调 service：改 A 为 130；不应触及 sale_price）
+      // 迁移 264 起必须回传「读取时看到的」revision——这里即审批后的当前版本（模拟编辑页重新打开）。
+      const [[revRow]] = await pool.query('SELECT revision FROM product_items WHERE id=?', [pid])
       const productsSvc = require(path.join(ROOT, 'backend/src/modules/products/products.service'))
       await productsSvc.update(pid, {
         name: `审批销售价商品${suffix}`, categoryId: cat.id, costPrice: 50, unit: '件',
         salePriceA: 130, salePriceB: 130, salePriceC: 130, salePriceD: 130, isActive: true,
+        revision: Number(revRow.revision),
       }, admin)
 
       const [[afterEdit]] = await pool.query(

@@ -28,6 +28,8 @@ export interface Product {
    */
   labelSalePrice?: number | null
   remark: string | null; isActive: boolean; createdAt: string
+  /** 编辑乐观锁（迁移 264）：详情必返；编辑保存时必须原样回传，过期即 409 */
+  revision: number
 }
 export interface CreateProductParams {
   name: string; categoryId?: number | null; supplierId: number
@@ -48,6 +50,12 @@ export interface UpdateProductParams {
   units?: { unitName: string; conversionRate: number }[]
   articleNumber?: string
   salePriceA?: number | null; salePriceB?: number | null; salePriceC?: number | null; salePriceD?: number | null
+  /**
+   * 编辑乐观锁（迁移 264）：服务端**要求必填**（缺失即 400 `PRODUCT_REVISION_REQUIRED`），
+   * 故这里也声明为**必填**——让类型检查守住将来新增的调用点，而不是等运行时 400。
+   * 回传的应是「读取详情时拿到的」版本；不符即 409 `PRODUCT_VERSION_CONFLICT`。
+   */
+  revision: number
 }
 
 /** 数量小数策略（迁移 254）：商品级开关，供数量输入框联动 step */

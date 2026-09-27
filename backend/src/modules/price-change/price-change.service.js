@@ -176,7 +176,13 @@ async function applyApprovedPrice(conn, { requestId }) {
   }
   const actualOldPrice = current.current_price == null ? null : Number(current.current_price)
 
-  await conn.query(`UPDATE product_items SET \`${column}\`=? WHERE id=? AND deleted_at IS NULL`, [Number(req.new_price), req.product_id])
+  // **同一事务内**递增 revision（迁移 264）：审批真正写商品价时必须让版本前进，
+  // 否则「编辑页在审批前打开、审批后保存」的旧草稿仍能通过商品侧的版本校验，
+  // 把刚批准的价（cost/a/b/c/d）回退。与 products.update 的 CAS 成对。
+  await conn.query(
+    `UPDATE product_items SET \`${column}\`=?, revision = revision + 1 WHERE id=? AND deleted_at IS NULL`,
+    [Number(req.new_price), req.product_id],
+  )
   await conn.query(
     `INSERT INTO product_price_history
        (product_id, product_code, product_name, price_type, old_price, new_price, change_source, approval_id, operator_id, operator_name, remark)

@@ -440,6 +440,9 @@ jobs:
       - name: 冒烟测试 — 发票编辑乐观锁（并发编辑不得静默覆盖；依赖迁移 263 的 revision）
         run: npm run smoke:invoice-edit-concurrency
 
+      - name: 冒烟测试 — 商品价格列版本保护（旧表单不得回退已审批的等级价/成本价；依赖迁移 264）
+        run: npm run smoke:product-price-version-guard
+
       - name: 冒烟测试 — 已收款退货退款（红冲已收+账户出账+退货守卫联动）
         run: npm run smoke:refund-orders
 

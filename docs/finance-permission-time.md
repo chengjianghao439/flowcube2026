@@ -110,6 +110,15 @@
 - **可达场景**：界面付款弹窗只传 `accountId`、不传 `happenedAt`（`frontend/src/pages/finance/expenses/index.tsx`），故界面路径的付款日期**恒为今天** ⇒ 真实触发是「**当月已结账后又在本月付款**」（提前结账），与直付路径受闸门保护的场景同构；API 侧 `happenedAt` 为可选自由字符串，可传任意历史期间。
 - **锁顺序**：闸门放在行锁**之前**（`pay` 事务内先于 `lockStatusRow`），账套锁是全链最外层，与直付登记、固定资产计提/处置同序「账套 → 单据 → 账户」。有效业务日期只算一次（`happenedAt || beijingTodayYmd()`），闸门判定与落库共用同一值，避免「判的期间」与「写的期间」错位。
 - **拒绝措辞按 `backfillHint` 区分**：有补录出路的入口（直付/核销/退款）默认保留「改用未结账的日期登记；确实发生在该期间的可走跨期补录」。费用报销付款传 `backfillHint:false`，改为「**请联系财务负责人核实处理方式；请勿为了让系统接受而改动真实付款日期**」——`finance-backfills` 没有 expense 分支，引导补录是走不通的路；而**提示「改用别的日期」更糟**：那等于诱导操作人把真实发生的付款日期填成假的，事实失真比账实不符更难查。
+### 2026-09-27 商品价格列的版本保护（旧表单不得回退已审批的价）
+
+- **规则**：`products.update` 无差别写 `cost_price` 与 `sale_price_a/b/c/d`，而商品编辑页**全量回传**它打开时读到的旧值 ⇒ 别处刚生效的价格变更（含改价审批的 `cost`/`a`/`b`/`c`/`d`）会被一次普通编辑**静默回退**（隔离库实测：审批后 `cost_price` 150→100、`sale_price_a` 200→100；`sale_price` 因 §18.4 方案三未被写，说明当时只护住一半）。故商品侧需**版本校验**（与发票 §20 同范式）：迁移 **264** 加 `product_items.revision`；详情（`fmtProduct`）返回；编辑页回传；`products.update` **同一事务内先 `FOR UPDATE` 锁行**再比对，过期 **409 `PRODUCT_VERSION_CONFLICT`**、缺失 **400 `PRODUCT_REVISION_REQUIRED`**，UPDATE 带 `revision = revision + 1 AND revision = ?`（**SQL 是真正防线**，JS 预检只提供更友好的 409）。
+- **审批侧成对**：`price-change.applyApprovedPrice` 写价格列时**同事务递增** `revision`，否则「审批前打开、审批后保存」的旧草稿仍能通过商品侧校验。
+- **前端**：编辑页回传**与表单初始值同源的基线 revision**（不是 render 时的实时 `product.revision`——那会让"新版本 + 旧草稿"绕过 CAS）；冲突时**保留草稿**且**不自动刷新详情**（刷新会抹掉未保存输入），仅提示"复制后关闭重开核对最新价格"；提示**只由全局拦截器发一次**（不重复 toast）。
+- **不递增的路径**：`inbound-tasks.putaway` 只写 `avg_cost`，与编辑页提交的列**不重叠**，故不递增（否则收货会让编辑页频繁冲突）。
+- **回归**：`tests/product-price-version-guard.smoke.test.js`（并发同版本 1×200 + 1×409、旧版本 409 且不改价/不写历史、连续编辑、缺版本 400、`sale` 列既有保护、详情 revision 读契约、审批递增 revision），已接 CI。
+- **发布顺序（重要）**：① 先执行迁移 **264**（列不存在会让后端 SELECT 直接失败）；② 再部署**后端**（含 CAS）；③ 最后发**前端**。若前端先上而旧后端不认识 `revision`，zod 会**静默剥离**该字段 ⇒ **不报错但保护失效**（旧后端照旧无条件写价格列）。回退按相反顺序：前端 → 后端（**迁移不回退**，多一列无害）。前端类型已把 `UpdateProductParams.revision` 与 `Product.revision` 声明为**必填**，由类型检查守住将来新增的调用点。
+
 - **未做 / 待决策**：费用报销**当前缺少合规的跨期补录路径**（`finance-backfills.service` 无 expense 分支），闭期报销付款只能由**财务负责人人工决策处理方式**；是否补齐补录通道（需增 expense 分支及其审批）属**产品待决项**，不并入本次窄修复。
 - **回归**：`tests/finance-period-guard.smoke.test.js` **§G**（套件整体 39/0）——闭期被拦（状态/流水/余额三不动）+ 开放期照常放行；**反向破坏**：摘掉闸门 → 仅 §G 的 8 条精准红、前六节 31 条不受影响。
 

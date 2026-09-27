@@ -101,11 +101,18 @@ export default function ProductFormPage() {
   const formRef = useRef(form)
   formRef.current = form
 
+  // **仅在「首次加载 / 换了一条商品（id 变）」时**用服务端数据重建表单与版本基线。
+  // `product` 是 React Query 的对象引用，后台 refetch / 失效重取都会换引用；若随它重置，
+  // 会把**未保存的草稿**抹掉（也会让 dirty guard 误报"已保存"）。故以商品 id 为界，
+  // 保证「表单初始值 · 版本基线 · 草稿基线」三者同源，且后台刷新不动用户正在编辑的内容。
+  const initedProductIdRef = useRef<number | null>(null)
   useEffect(() => {
-    if (product && isEdit) {
+    if (product && isEdit && initedProductIdRef.current !== product.id) {
       setForm(initialForm)
+      formRevisionRef.current = product.revision   // 与表单初始值同源（见 formRevisionRef 注释）
       setCategoryName(product.categoryName || '')
       setSupplierName(product.supplierName || '')
+      initedProductIdRef.current = product.id
     }
   }, [product, isEdit, initialForm])
 
@@ -129,6 +136,13 @@ export default function ProductFormPage() {
 
   const { mutateAsync: create } = useCreateProduct()
   const { mutateAsync: update } = useUpdateProduct()
+  // 版本冲突（迁移 264）：只标记状态，提示条 + 保留草稿；**不**自动刷新详情（会抹草稿）
+  const [conflict, setConflict] = useState(false)
+  // 编辑基线（迁移 264）：提交用的 revision 必须与 `form` 的初始值**同源**。
+  // 若直接用 render 时最新的 `product?.revision`，会出现「query 已后台更新（新 revision）但
+  // useEffect 尚未重置表单」的窗口 ⇒ 用**新 revision + 旧草稿值**提交，绕过 CAS。
+  // 故把它与 `setForm(initialForm)` 放在同一处设置，提交时读基线而非实时数据。
+  const formRevisionRef = useRef<number | undefined>(undefined)
 
   // 是否改过：与进入页面时的基线比较（新建态基线是空表单）
   const isDirty = JSON.stringify(formRef.current) !== JSON.stringify(initialForm)
@@ -170,10 +184,18 @@ export default function ProductFormPage() {
       articleNumber: form.articleNumber || undefined,
       units: form.units.filter(u => u.unitName.trim() !== '').map(u => ({ unitName: u.unitName.trim(), conversionRate: Number(u.conversionRate) })),
     }
+    // 编辑乐观锁（迁移 264）：基线未就绪（详情尚未加载完）时**不允许提交**——
+    // 类型上 `revision` 必填，运行时若拿到 undefined 会发出错误版本。
+    if (editId && !Number.isInteger(formRevisionRef.current)) {
+      toast.warning('商品数据尚未加载完成，请稍候再保存')
+      return
+    }
     setSubmitting(true)
     try {
       if (editId) {
-        await update({ id: editId, data: { ...d, isActive: form.isActive } })
+        // 用**基线 revision**（与表单初始值同源），而不是 render 时的 `product.revision`——
+        // 否则「query 后台更新但表单还没重置」时会用新版本提交旧草稿而绕过 CAS。
+        await update({ id: editId, data: { ...d, isActive: form.isActive, revision: formRevisionRef.current as number } })
         toast.success('商品已更新')
       } else {
         await create(d)
@@ -181,7 +203,18 @@ export default function ProductFormPage() {
       }
       closeTab()
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : '保存失败')
+      // 提示**只由一个入口发**：全局拦截器已按后端 message 统一 `toast.error`
+      // （含 409 `PRODUCT_VERSION_CONFLICT` 的「该商品已被他人修改，请刷新后重新编辑」），
+      // 这里**不再重复 toast**，否则会双重报错。
+      const code = (e as { code?: string } | null)?.code
+      if (code === 'PRODUCT_VERSION_CONFLICT') {
+        // 版本冲突：**保留草稿**——不关闭页面、**不** invalidate 详情。
+        // （刷新详情会让下面的 useEffect 用 initialForm 覆盖未保存的输入。）
+        // 只把冲突显式呈现给用户，由他决定复制内容后关闭重开。
+        setConflict(true)
+        return
+      }
+      // 其它错误同样交给全局提示，避免双重报错
     } finally {
       setSubmitting(false)
     }
@@ -203,6 +236,15 @@ export default function ProductFormPage() {
 
   return (
     <div className="flex flex-col gap-4">
+      {conflict && (
+        // 冲突提示：**保留草稿**（不自动刷新详情，否则 useEffect 会用 initialForm 覆盖未保存输入）
+        <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm">
+          <p className="font-medium text-destructive">该商品已被他人修改，本次修改未保存</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            当前填写内容仍在。请先复制需要保留的内容，关闭本页重新打开，核对最新价格后再编辑。
+          </p>
+        </div>
+      )}
       <ActionBar
         title={isNew ? '新增商品' : '编辑商品'}
         subtitle={isEdit || isDirty ? (
