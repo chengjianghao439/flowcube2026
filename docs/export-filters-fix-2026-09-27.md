@@ -1410,6 +1410,21 @@ cost链=[[100,150],[100,200]]  最终cost=200   ← 两条历史的旧价都是 
 
 **预期残留（如实预告）**：软删记录**物理行仍在**（`deleted_at` 非空）；`sale_order_items`、`purchase_order_items`、`purchase_requisition_items`、`purchase_requisition_conversions`、`sale_order_events`、`inventory_logs` 等**无软删列或随主表保留**的表**物理残留仍在**——清理**不等于全零**（与 §33/§35 同口径）。
 
+---
+
+## 40. 只读追查：未确认状态下「关页 / 刷新后重试」的恢复机制（2026-09-29，**静态阅读，未复现**）
+
+**追查问题**：§38 的修复把请求键稳定在**同一次提交意图内**，但键与「未确认」状态都只在内存——那么用户**关闭整个工作区页 / 刷新浏览器**后再重试，会发生什么？既有恢复机制是什么？
+
+**静态结论（只读代码，未运行）**：
+
+- **ERP 侧（付款登记 / 核销 / 应付补录 / 退款 / 转采购）没有持久化**：`useIdempotentSubmit` 的 `keyRef`（`useRef`）与 `uncertain` 都只在内存，`form.tsx` 的载荷指纹同理。**刷新或关页 ⇒ 两者一并丢失** ⇒ 重试会带**新键**，后端视为新请求 ⇒ **存在重复执行的静态风险**（是否真的重复取决于用户是否原样重试、后端闸门是否拦住——**本轮未复现，不外推**）。
+- **PDA 侧已有持久化恢复机制**：`frontend/src/lib/pendingRequestStorage.ts`（`localStorage` 键 `pda_pending_request_confirmations` / `pda_unclaimed_request_confirmations`，v2 记录按 `userId` 归属）＋ `frontend/src/hooks/usePendingRequests.ts`（`unverifiedOwner` 未认领隔离、**组件卸载不清内存**、存储不可用时仍保留阻断），由 `useCriticalPdaAction` / `useOfflineQueue` / `PdaCriticalActionNotice` 使用。**该机制是 PDA 专用，ERP 侧未接入。**
+- **服务端不能替代**：`operation_requests` 虽留有记录，但查询按 `requestKey`（`/api/system/request-status/:key`）——**键丢了就查不到**，无法承担"刷新后恢复"。
+- **既有正向（仅提示层）**：`UncertainSubmitNotice` 的文案明确要求"不要关掉重开重新提交、不要改动内容后再提交"，属**行为约束提示**，不是技术兜底。
+
+**边界（如实）**：本节为**静态阅读**；「未确认 → 刷新页面 → 原样重试」的**真实后果未构造、未复现**。下一步需**经授权起服务**后，用 §38 的丢弃响应代理复现该链路并核对是否重复建单/重复登记；**先复现再决定是否改**，不凭"缺持久化"直接改框架（也**不**把「模态关窗重开保键」推广为「页面重挂保键」——后者静态上已判定**不成立**）。
+
 **未触碰发布边界**：未推送 / 打 tag / 部署 / 生产迁移 / 生产数据 / 真实发货消息。
 
 **未触碰发布边界**：未推送 / 打 tag / 部署 / 生产迁移 / 生产数据 / 真实发货消息。
