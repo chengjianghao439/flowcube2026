@@ -1008,6 +1008,7 @@ cost链=[[100,150],[100,200]]  最终cost=200   ← 两条历史的旧价都是 
 ### 23.5 开发库误迁移（如实记录，**保持原状**）
 
 - **事实**：本次为取得 3307 实例而执行了 `npm run dev:mysql8`（`scripts/mysql8-dev.sh start`）。该脚本**除启动 colima 容器外，后半段还会对固定开发库 `flowcube_dev8` 执行结构迁移**——脚本回显确认本次对 **`flowcube_dev8` 执行了 `263_fin_invoices_revision.sql` 与 `264_product_items_revision.sql`**（`dev8.db_migrations` 已记录两条）。此为本脚本**既有行为**，但**越过了"只迁移独立测试库"的边界**。
+- **与 2026-09-26 那次的区别（不要混为一谈）**：`docs/dev8-migration-drift-2026-09-26.md` 记的 258/259 误入 dev8，根因是**一次性命令里 `source` 指向了不存在的文件**，导致 `migrate.js` 的 dotenv **回退到 `backend/.env`**（其 `DB_NAME=flowcube_dev8`）——**不是** `mysql8-dev.sh` 造成的。本次则源于**启动脚本 `start` 顺带迁移**。两次**机制不同**，但属**同一类**问题：**「迁移目标库的边界失效」**（本该只作用于独立测试库或显式目标，却落到了开发库）。**不得**表述为"同一脚本二次触发"。
 - **处置**：**不回滚结构、不清理库、不猜路径**；`flowcube_dev8` 的 263/264 **保持现状**。此后**不再**运行该脚本，容器仅以已有实例复用，业务验证**全部**显式指向 `flowcube_acceptance20260927_test`。
 - **更正**：§22.5 / §22.4 中"迁移 264 仅隔离库"的表述**不再准确**；**准确表述为**：迁移 264（及 263）**同时在 `flowcube_dev8` 与 `flowcube_acceptance20260927_test` 生效**，其中 dev8 的生效**源于本次启动脚本的附带迁移**，非经独立测试库流程。
 - **候选（下一批，暂不实施）**：该启动脚本**默认附带 schema 修改**的风险——需先调查其**调用方**（谁在何时会跑 `dev:mysql8`）与该行为的**最小可验证边界**，再决定是否拆分"起容器"与"迁移"；**不与商品验收混改**。
@@ -1043,9 +1044,9 @@ cost链=[[100,150],[100,200]]  最终cost=200   ← 两条历史的旧价都是 
   2. **最终版本（7 用例）反向运行**：把 `form.tsx` / `useProducts.ts` 取回**修复前提交**（`30d8c68^`）后在**独立副本**中运行 ⇒ **4 失败 / 3 通过**（多出的 1 个失败为新增用例「已初始化后后台刷新失败保草稿」；通过的是草稿保留、409 保草稿、新建 —— 这三项修复前本已正确）。恢复修复后同文件 **7 通过**。
   - 说明：反向运行**未修改主工作树**（副本位于 `/tmp`，因主仓库源码在本次修复已提交，`git checkout` 只能取回修复版，故改用副本 + `git show <rev>:<path>` 导出）。
 - **CI 可达**：`.github/workflows/test.yml` 已跑 `npm --prefix frontend run test:unit`（vitest 自动纳入该文件，**无需改 CI**）。
-- **全量单测基线对比**（同一命令 `npx vitest run`，先还原源码再恢复）：基线 **85 failed / 553 passed（638）**；本批修复后 **81 failed / 557 passed（638）**。差值 4 **全部**落在本批新文件（基线 4 红 → 修复后 0 红）。
-  - **本批结论仅为「未新增失败」，不等于「全量通过」**：另有 **14 个基线已有失败文件（81 个既有失败用例）**，本批**未定位根因、未解决**（不称其为"假失败"——只证明它们在基线同样失败）。文件名单：`api/client.session`、`components/layout/KeepAliveOutlet`、`components/shared/AppDialog`、`components/shared/DataTable`、`components/shared/FulfillmentTodos`、`hooks/usePendingRequests`、`hooks/useWorkspaceTabTitle`、`lib/pendingRequestStorage`、`lib/prelaunch-client`、`pages/login/index`、`pages/reports/kpi`、`pages/reports/report-states`、`router/mergedPageGroups`、`store/workspaceStore`（均为 `src/**` 下 `.test.tsx`/`.test.ts`）。
-  - 日志：基线 `/tmp/fc-base.txt`、修复后 `/tmp/fc-fixed.txt`（临时文件，`FAIL` 行 + `Tests` 汇总行）。
+- **全量单测（项目要求的 Node 22）**：**单条命令内** `source ~/.config/flowcube/dev-env.sh` + `node --version` + `npm --prefix frontend run test:unit` ⇒ **`node=v22.23.2`、139 个测试文件 / 638 个用例全部通过、rc=0**（完整日志 `/tmp/fc-node22-full.log`）。
+- **旧日志的环境更正（重要，勿再引用）**：本节初版曾记录基线 **85 failed / 553 passed** 与"修复后 81 failed / 557 passed"，并据此写过"14 个基线已有失败文件 / 81 个既有失败用例"。该组数字是在**默认 shell 的 Node v26.8.1**（`/opt/homebrew/bin/node`）下跑出的——**每个 shell 调用相互独立**，先前的 `source dev-env` 不会延续到后续命令，故当时并未使用项目要求的 Node 22。该组失败与 `AGENTS.md` §3 记载的「本机 Node 26 下前端单测既有 `localStorage is not available` 假失败」一致，**不是真实基线缺陷、也不是本批引入**。**更正后的结论**：Node 22 下全量**全绿**，本批**无新增失败、亦无既有失败遗留**；上述 81/14 的说法**作废**。
+- 反向验证（7 用例）的行为断言在 Node 26 与 Node 22 下均成立（该文件不依赖 `localStorage`）。
 - `tsc -p frontend/tsconfig.app.json --noEmit` rc=0；改动文件 eslint rc=0。
 
 ### 24.3 真实浏览器原反例复验（隔离库 + 本地栈）
