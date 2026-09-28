@@ -641,7 +641,7 @@ function costBasisText(row) {
   if (row.costBasis === 'estimated') return '按当前进价估算'
   // 与页面 `costBasisNote` 保持同一未知态语义：**只有显式 snapshot 才写「出库成本快照」**。
   // 否则将来导出映射漏带该字段时，会把"没查到来源"重新伪报成"全部可信"。
-  if (row.costBasis === 'snapshot') return '出库成本快照'
+  if (row.costBasis === 'snapshot') return '出库时记录的成本'
   return '成本来源待核实'
 }
 
@@ -729,10 +729,10 @@ async function getProfitAnalysisExportPayload(query) {
           ['销售毛利', round2(data.summary.grossProfit)],
           ['库存金额', round2(data.summary.stockValue)],
           ['滞销库存金额', round2(data.summary.slowMovingValue)],
-          ['成本口径', '经营估算：出库快照优先；缺快照时按当前进价估算，完全无成本的行按 0 计'],
+          ['成本口径', '经营估算：出库时记录的成本优先；缺该项时按当前进价估算，完全无成本的行按 0 计'],
           ['无成本明细行数', String(Number(data.summary?.missingCostLineCount || 0))],
           ['按当前进价估算的金额', `¥${Number(data.summary?.estimatedCostAmount || 0).toFixed(2)}`],
-          ['提示', '毛利为经营估算口径，存在估算/缺失时可能偏高；与凭证侧的会计成本（快照记账）口径不同，不可直接与总账对账'],
+          ['提示', '毛利为经营估算口径，存在估算/缺失时可能偏高；与凭证侧的会计成本（按出库时记录的成本记账）口径不同，不可直接与总账对账'],
         ],
         columns: [
           { header: '销售单号', key: 'orderNo', width: 22 },

@@ -110,7 +110,7 @@ function deriveInboundPrintJobResult(row, thresholds = DEFAULT_INBOUND_THRESHOLD
   // 因容器作废被撤回终结的任务：**不是「打印失败」，而是根本没出纸**，措辞必须说清；
   // 也不能沿用「可尝试补打」的失败文案——补打入口对作废容器是明确拒绝的。
   if (rawStatus === STATUS.FAILED && String(row.error_message || '') === CONTAINER_VOID_MESSAGE) {
-    return { statusKey: 'voided_job', printStateLabel: '未出纸（容器已作废）' }
+    return { statusKey: 'voided_job', printStateLabel: '未出纸（库存条码已作废）' }
   }
   if (isUnassignedBarcodeJob(row, rawStatus)) return { statusKey: 'unassigned', printStateLabel: '未配置打印机' }
   if (timeoutByAge || timeoutByError) return { statusKey: 'timeout', printStateLabel: '超时待确认' }

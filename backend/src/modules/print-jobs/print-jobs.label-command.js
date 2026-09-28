@@ -544,7 +544,7 @@ async function reprintInboundBarcode(recordId, { createdBy = null, scopeWarehous
     // 而该收货单通常会重新收货并生成新条码，两张码并存会互相混淆。
     // 业务边界（2026-09-27）：**只收紧 VOID**；EMPTY/待上架/待质检/拒收仍有实物，补打是正当需求。
     if (Number(row.container_status) === CONTAINER_STATUS.VOID) {
-      throw new AppError('该条码所属容器已作废，不能再补打（货已撤回，重新收货会生成新条码）', 400, 'PRINT_BARCODE_CONTAINER_VOID')
+      throw new AppError('该库存条码已作废，不能再补打（货已撤回，重新收货会生成新条码）', 400, 'PRINT_BARCODE_CONTAINER_VOID')
     }
     const [[product]] = await conn.query('SELECT name FROM product_items WHERE id = ?', [row.product_id])
     const job = await enqueueContainerLabelJob({

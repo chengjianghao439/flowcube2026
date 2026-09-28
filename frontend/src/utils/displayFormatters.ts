@@ -26,7 +26,7 @@ const PRINT_STATUS_LABELS: Record<string, string> = {
   voided: '条码已作废，不能再补打',
   // 打印任务因容器作废被撤回终结：**不是打印失败，是从未出纸**。刻意不沿用
   // 「打印失败，可尝试补打」——补打入口对作废容器是明确拒绝的。
-  voided_job: '未出纸（容器已作废）',
+  voided_job: '未出纸（库存条码已作废）',
   unknown: '打印状态未知',
 }
 

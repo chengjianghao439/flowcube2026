@@ -85,7 +85,7 @@ export default function KpiPage() {
       return bits.length ? `${label}：${bits.join('，')}` : ''
     }
     const notes = [describe('当期', basis.current), describe('上期', basis.previous)].filter(Boolean)
-    const head = ' 毛利为经营估算口径（出库快照优先），不等同会计成本'
+    const head = ' 毛利为经营估算口径（出库时记录的成本优先），不等同会计成本'
     return notes.length ? `${head}；${notes.join('；')}。` : `${head}。`
   })()
   const totalGmv = (data?.byWarehouse ?? []).reduce((sum, row) => sum + row.gmv, 0)

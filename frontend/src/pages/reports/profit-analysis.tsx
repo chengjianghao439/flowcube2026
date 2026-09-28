@@ -39,7 +39,7 @@ export function costBasisNote(row: {
   if (row.costBasis === 'mixed') return { text: `混合：${miss} 行缺失、约 ${money(est)} 按进价估算`, warn: true }
   if (row.costBasis === 'missing') return { text: `成本缺失（${miss} 行按 0 计，毛利偏高）`, warn: true }
   if (row.costBasis === 'estimated') return { text: '按当前进价估算', warn: false }
-  if (row.costBasis === 'snapshot') return { text: '出库成本快照', warn: false }
+  if (row.costBasis === 'snapshot') return { text: '出库时记录的成本', warn: false }
   return { text: '成本来源待核实', warn: true }
 }
 
@@ -82,8 +82,8 @@ export default function ProfitAnalysisPage() {
   // 完全无成本的行记 0），**与凭证侧的快照记账口径（成本未知即记 0）不是一回事**；
   // 有估算/缺失时必须说明，否则用户会把估算毛利当成精确利润。
   const costBasisHint = (() => {
-    if (!summary) return '经营估算口径（出库快照优先）'
-    const parts = ['经营估算口径（出库快照优先）']
+    if (!summary) return '经营估算口径（出库时记录的成本优先）'
+    const parts = ['经营估算口径（出库时记录的成本优先）']
     if (Number(summary.missingCostLineCount) > 0) {
       parts.push(`${summary.missingCostLineCount} 行无成本数据按 0 计，毛利可能偏高`)
     }

@@ -15,7 +15,7 @@ const rows = vi.hoisted(() => [
   // 作废容器：行级业务状态 voided，但最近任务结果仍是「已打印」——两者必须同一条里都看得到
   { recordId: 6, category: 'inbound', inboundTaskId: 9, bizNo: 'IT-9', barcodeStatusKey: 'voided', voidReason: '入库撤回', latestJob: { statusKey: 'success', printStateLabel: '已打印' } },
   // 因作废被撤回终结的任务：结果要说「未出纸」，不能说成「打印失败」
-  { recordId: 7, category: 'inbound', inboundTaskId: 9, bizNo: 'IT-9', barcodeStatusKey: 'voided', latestJob: { statusKey: 'voided_job', printStateLabel: '未出纸（容器已作废）' } },
+  { recordId: 7, category: 'inbound', inboundTaskId: 9, bizNo: 'IT-9', barcodeStatusKey: 'voided', latestJob: { statusKey: 'voided_job', printStateLabel: '未出纸（库存条码已作废）' } },
 ].map(row => ({ ...row, waveId: 11, waveNo: 'WAVE-11' })))
 vi.mock('@tanstack/react-query', () => ({
   useQuery: () => ({ data: { list: rows, pagination: { total: rows.length } }, isLoading: false }),

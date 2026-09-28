@@ -312,17 +312,17 @@ test('利润榜行级成本来源：快照/估算/缺失/混合四种都能在�
       return String(hit[header.indexOf('成本来源')] ?? '')
     }
 
-    assert.match(basisFor('销售毛利', '销售单号', oSnap.no), /出库成本快照/, '快照单的导出行应标「出库成本快照」')
+    assert.match(basisFor('销售毛利', '销售单号', oSnap.no), /出库时记录的成本/, '快照单的导出行应标「出库时记录的成本」')
     assert.match(basisFor('销售毛利', '销售单号', oEst.no), /按当前进价估算/, '估算单的导出行应标「按当前进价估算」')
     assert.match(basisFor('销售毛利', '销售单号', oMiss.no), /成本缺失/, '缺失单的导出行应标「成本缺失」')
     assert.match(basisFor('销售毛利', '销售单号', oMix.no), /混合/, '混合单的导出行应标「混合」')
     assert.match(basisFor('商品毛利', '商品编码', pEst.code), /按当前进价估算/, '商品页估算行')
     assert.match(basisFor('商品毛利', '商品编码', pMiss.code), /成本缺失/, '商品页缺失行')
 
-    // 未知态语义与页面一致：**只有显式 snapshot 才写「出库成本快照」**。
+    // 未知态语义与页面一致：**只有显式 snapshot 才写「出库时记录的成本」**。
     // 否则将来导出映射漏带该字段，会重新把"没查到来源"伪报成"全部可信"。
     const { costBasisText } = exportService
-    assert.equal(costBasisText({ costBasis: 'snapshot' }), '出库成本快照')
+    assert.equal(costBasisText({ costBasis: 'snapshot' }), '出库时记录的成本')
     assert.equal(costBasisText({}), '成本来源待核实', '缺字段不得默认成快照')
     assert.equal(costBasisText({ costBasis: 'brand_new_value' }), '成本来源待核实', '未知取值不得默认成快照')
   } finally {
