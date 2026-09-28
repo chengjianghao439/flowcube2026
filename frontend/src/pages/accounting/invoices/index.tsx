@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { cn } from '@/lib/utils'
@@ -47,10 +48,15 @@ function InvoiceDialog({ open, invoiceType, edit, onClose }: { open: boolean; in
     invoiceCode: '', invoiceNo: '', partyName: '', partyTaxNo: '',
     withTax: '', taxRate: '0.13', invoiceDate: todayYmd(), sourceNo: '', remark: '',
   })
+  // 版本冲突（迁移 263）：**保留弹窗与草稿**，只做提示，由用户复制后关闭重开核对。
+  const [conflict, setConflict] = useState(false)
   // 依赖刻意只认 open 与 edit?.id：edit 是 React Query 每次 refetch 都重建的对象引用，
   // 整体入依赖会让后台刷新在用户填写途中重置表单；只有换了一条发票（id 变）才该重填。
   useEffect(() => {
     if (!open) return
+    // 每次**真正重建表单**（打开 / 换编辑对象 / 转录入）都清掉上一次的冲突提示，
+    // 否则手动关闭重开或转"录入"会带着旧冲突条。
+    setConflict(false)
     if (edit) setF({
       invoiceCode: edit.invoiceCode ?? '', invoiceNo: edit.invoiceNo ?? '', partyName: edit.partyName, partyTaxNo: edit.partyTaxNo ?? '',
       withTax: String(edit.amountWithTax), taxRate: String(edit.taxRate), invoiceDate: String(edit.invoiceDate).slice(0, 10), sourceNo: edit.sourceNo ?? '', remark: edit.remark ?? '',
@@ -75,16 +81,17 @@ function InvoiceDialog({ open, invoiceType, edit, onClose }: { open: boolean; in
     }
     if (edit) update({ id: edit.id, d }, {
       onSuccess: () => { toast.success('已保存'); onClose() },
-      // 并发编辑冲突（迁移 263）：这张票已被他人改过。**必须**让用户能拿到新版本，否则弹窗会
-      // 一直用打开时的旧 revision 反复 409、永远保存不了。
+      // 并发编辑冲突（迁移 263）：这张票已被他人改过。**保留弹窗与草稿**，只做两件事——
+      // 失效列表（**异步**，不是立刻就有新数据）+ 置冲突提示（提示用户先复制、关闭、等刷新完成后再重开核对）；
+      // **不**自动关闭弹窗、**不**自动重试、**不**把新版本 merge 进旧草稿（避免"新版本 + 旧草稿"）。
       // **提示不在这里发**：全局拦截器已对 409 统一 `toast.error(后端 message)`，本地再 toast 会双重报错。
-      // 这里只做两件事——失效列表（**异步**，不是立刻就有新数据）+ 关闭弹窗；
-      // 因此准确说法是「**列表刷新完成后**再重开弹窗」，那时 editTarget 才是带新 revision 的行。
       onError: (e: unknown) => {
         const code = (e as { code?: string } | null)?.code
         if (code === 'INVOICE_CONCURRENT_MODIFIED') {
+          // **保留弹窗与草稿**：只失效列表并给内联提示；由用户先复制、关闭、等刷新完成后重开核对。
+          // 不自动关闭弹窗、不自动重试、不把新版本 merge 进旧草稿（避免"新版本 + 旧草稿"）。
           qc.invalidateQueries({ queryKey: ['acct-invoices'] })
-          onClose()
+          setConflict(true)
         }
       },
     })
@@ -107,6 +114,16 @@ function InvoiceDialog({ open, invoiceType, edit, onClose }: { open: boolean; in
             </p>
           )}
         </DialogHeader>
+        {conflict && (
+          // 版本冲突（迁移 263）：**保留弹窗与草稿**，提示"先复制再关闭重开核对"。
+          // 不自动关闭、不自动重试、不把新版本 merge 进旧草稿；toast 仍由全局拦截器统一给出。
+          <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm">
+            <p className="font-medium text-destructive">本次修改未保存（该发票已被他人修改）</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              当前填写内容仍在。请先复制需要保留的内容，再关闭本弹窗、等列表刷新完成后重新打开，核对最新内容后再提交。
+            </p>
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-4 py-1">
           <div className="space-y-1.5"><Label>发票代码</Label><Input value={f.invoiceCode} onChange={e => setF(s => ({ ...s, invoiceCode: e.target.value }))} disabled={isPending} className="font-mono" /></div>
           <div className="space-y-1.5"><Label>发票号码 *</Label><Input value={f.invoiceNo} onChange={e => setF(s => ({ ...s, invoiceNo: e.target.value }))} disabled={isPending} className="font-mono" /></div>
@@ -145,7 +162,8 @@ export default function InvoicesPage() {
   const [invoiceType, setInvoiceType] = useState(1)
   const [keyword, setKeyword] = useState('')
   const query = useMemo(() => ({ invoiceType, keyword: keyword || undefined, page: 1, pageSize: PAGE_SIZE }), [invoiceType, keyword])
-  const { data, isLoading } = useInvoices(query)
+  // `isFetching`（而非 `isLoading`）：已有数据时后台刷新 isLoading 不成立，但仍在"刷新中"。
+  const { data, isLoading, isFetching, isError, refetch } = useInvoices(query)
   const list = data?.list ?? []
   const total = data?.pagination?.total ?? 0
 
@@ -172,7 +190,7 @@ export default function InvoicesPage() {
     { key: 'actions', title: '操作', width: 190, render: (_v, r) => canManage && (
       <div className="flex items-center gap-1">
         {r.status === 1 && (
-          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground" title="编辑" onClick={() => { setEditTarget(r); setDialogOpen(true) }}><Pencil className="h-3.5 w-3.5" /></Button>
+          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground" title={isError ? '列表加载失败，请先重试再编辑' : isFetching ? '列表刷新中，请稍候再编辑' : '编辑'} disabled={isFetching || isError} onClick={() => { setEditTarget(r); setDialogOpen(true) }}><Pencil className="h-3.5 w-3.5" /></Button>
         )}
         {r.invoiceType === 1 && r.status === 1 && <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground hover:text-primary" onClick={() => doStatus(r, 'certify', '认证')}><BadgeCheck className="mr-1 h-3.5 w-3.5" />认证</Button>}
         {r.invoiceType === 1 && r.status === 2 && <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground hover:text-success" onClick={() => doStatus(r, 'deduct', '抵扣')}>抵扣</Button>}
@@ -202,7 +220,11 @@ export default function InvoicesPage() {
       </div>
 
       <div className="card-base p-2">
-        <DataTable columns={columns} data={list} loading={isLoading} emptyText="暂无发票，点击右上角录入" columnStorageKey={`acct-invoices-${invoiceType}`} />
+        {isError ? (
+          <QueryErrorState error={undefined} onRetry={() => void refetch()} title="发票列表加载失败" compact />
+        ) : (
+          <DataTable columns={columns} data={list} loading={isLoading} emptyText="暂无发票，点击右上角录入" columnStorageKey={`acct-invoices-${invoiceType}`} />
+        )}
       </div>
 
       <ListSummary total={total} />
