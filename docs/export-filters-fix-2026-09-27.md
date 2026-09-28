@@ -969,4 +969,51 @@ cost链=[[100,150],[100,200]]  最终cost=200   ← 两条历史的旧价都是 
   - **下单价（不要无条件说"不影响报价"）**：**正常取价成功时**，订单单价由 `getCustomerPriceApi`（实时）覆盖；但**取价失败 / 该客户未设有效价**时页面会**提示人工确认单价** ⇒ **旧 Finder 参考价可能影响操作人的判断**。该**人工确认分支尚未做双会话行为验收**。
   - **最小方案（未实施，已收窄）**：`refetchOnMount:'always'` **只对 Finder 有效**（弹窗每次重开都会重新挂载）；对**已挂载的 keep-alive 商品编辑页无效**（组件不卸载 ⇒ 不触发挂载刷新）。编辑页若要取新，需**另有明确入口且必须保留草稿**（如显式"刷新最新数据"并保留未保存输入）。**不能**把它算作已解决「列表 / 编辑 / Finder 全部陈旧」。
 - **C**：**审批 `sale` 与 Finder / 订单参考价不是同一列**——`sale` 改 `sale_price`（下游是标签与库存估值，均**后端实时**），只有 `a/b/c/d` 才改 `sale_price_a…`（下游是 Finder / 价目表）；**不要把两者混为一谈**。
-- **边界**：**前端未做行为验收**（冲突提示条 / 草稿保留 / 基线一致性仅代码审阅 + 类型检查）；**迁移 264 仅隔离库**；**物理打印 / PDA 真机未验**；**未做发版前全量**；**新后端会拒绝旧客户端编辑（400）**，属**待发版协调项**（见 `docs/finance-permission-time.md`）。
+- **边界**：**前端未做行为验收**（冲突提示条 / 草稿保留 / 基线一致性仅代码审阅 + 类型检查）；**迁移 264 仅隔离库**（**此句已被 §23.5 更正**——2026-09-28 实测发现 `flowcube_dev8` 亦已被迁移，见 §23.5）；**物理打印 / PDA 真机未验**；**未做发版前全量**；**新后端会拒绝旧客户端编辑（400）**，属**待发版协调项**（见 `docs/finance-permission-time.md`）。
+
+---
+
+## 23. §22 前端行为验收（2026-09-28，仅本地）与开发库误迁移记录
+
+**范围**：只验 §22 的**前端行为**（真实 `ProductFormPage`），不改业务代码、不实施 §22.5 的 B 方案。**基线**：`d724f8b`（工作树 clean）；未推送 / 打 tag / 部署 / 碰生产。
+
+### 23.1 环境与隔离（均非密）
+
+- 目标：Node **v22.23.2** · `NODE_ENV=test` · 回环 **3307** · 库 **`flowcube_acceptance20260927_test`**（该库 `product_items.revision` 已存在、`db_migrations` 记 263/264，均 2026-09-27 执行，属上一批）。
+- 后端 `:3000`（`env=test`，`LOGISTICS_WORKER_ENABLED=0`、`DINGTALK_ALERT_WEBHOOK=` 空 ⇒ 启动日志**无物流取号 worker**、钉钉静默；`APP_UPDATE_DOWNLOADS_DIR` 用 `/tmp` 可写目录）；前端 `:5173`（`VITE_ELECTRON=1`）。两进程 cwd 均属**当前工作树**。
+- 浏览器：独立命名会话 `flow-autonomy-20260928`，阶段收尾已 `close` 并 `session list --json` 确认空；未 `close --all`。
+- **未自造 Probe**：被测端是真实页面（含工作区标签 keep-alive）；"另一会话"用**真实 HTTP**（`smoke_admin` 登录后调 `PUT /api/products/:id`）驱动。口令只用于本次会话、未落仓库 / 文档 / 日志，临时文件已删。
+- **夹具按 ID 自洁**：商品 `147/148/149/150`、供应商 `62`、相关 `product_price_history` 删除后复查**全 0**；未动该库 seed（分类 `1`「验收用分类」、商品 `SMOKE-P001`）。
+
+### 23.2 验收结果（逐项，证据分级）
+
+| # | 项 | 结果 | 证据 |
+|---|---|---|---|
+| ① | 另一会话改价后旧页提交 **409**，**不回退价格**、**不写历史** | **通过** | 旧页 `form` 持 A=150/B=200（revision=1）；HTTP 侧改 A→300/B→250（revision→2）后旧页点保存得 409；DB 仍 **A=300/B=250**（未被回退为 150/200）；`product_price_history` 仅 2 条，均为 **21:54:39** 的 HTTP 改价所写，**409 零写入** |
+| ② | 409 **单次 toast** 且**保留未保存草稿** | **通过** | 真 toast 容器 `[aria-label*="Notifications"] ol` 内**恰好 1 条**「该商品已被他人修改，请刷新后重新编辑」；内联冲突条在；备注草稿「草稿A-验收」保留 |
+| ③ | 同商品**后台 refetch 不抹草稿**、`formRevision` 仍取**原始基线** | **通过** | 由另一商品保存成功触发 `invalidate [K]`；网络记录确认发过 `GET /api/products/147`（200）；147 备注草稿保留、`form` 价格**未被新数据覆盖**（仍 150）、再次提交**仍 409**（证明基线未被 refetch 更新） |
+| ③′ | **无本地编辑**时后台 refetch 是否**误报 `isDirty`** | **不通过（缺陷）** | 149 从未编辑任何字段；被外部改价（A 20→99，revision→2）并经 `invalidate [K]` refetch 后，**149 标签出现未保存圆点、页面显示「未保存」徽标**（可见元素计数 1，见截图 `/tmp/fc-149-false-dirty.png`）；关闭该**未编辑**页时**误弹**「离开确认／当前内容尚未保存」（截图 `/tmp/fc-149-leave-confirm.png`） |
+| ④ | 关闭重开（**5 min fresh 窗口内**）是否取到最新价 / revision 并**恢复编辑** | **不通过（缺陷）** | 干净场景（未触发任何 invalidate）：页面初载 revision=1 → HTTP 改 A→300（revision→2）→ 旧页 409 → **真正关闭标签并重开**（重开后 `GET /api/products/147` **未发生**，仅 notifications/categories/settings）；重开后表单仍 **A=150**（DB 为 300）、**无「未保存」也无任何"数据可能过期"提示**、点保存**仍 409** ⇒ **无法恢复** |
+
+### 23.3 两个补充审查点的证据
+
+1. **`useProduct` 无 `refetchOnMount:'always'` + 409 不失效缓存** ⇒ 5 min fresh 窗口内关闭重开**不重新取数**。已实测（④：重开零 `GET /api/products/147`）。全局默认见 `frontend/src/lib/queryClient.ts`（`staleTime 5min`、**未设** `refetchOnMount`、`refetchOnWindowFocus:false`）；`useProduct` 见 `frontend/src/hooks/useProducts.ts`；409 分支见 `frontend/src/pages/products/form.tsx`（`setConflict(true); return`，**不** invalidate）。
+2. **`isDirty` 用随 `product` 重算的 `initialForm` 比较，而非入页快照**：`form.tsx` 中 `isDirty = JSON.stringify(formRef.current) !== JSON.stringify(initialForm)`，而 `initialForm` 是 `useMemo([product, isEdit])` ⇒ 后台 refetch 换 `product` 引用后 `initialForm` 即变为**新服务端值**，而 `form` 按**商品 id** 不重置（`initedProductIdRef` 机制）⇒ **未编辑即被判为"已改"**。已实测（③′）。
+
+### 23.4 对 §22.5「B 最小方案」的**未实测**推断（**非结论**）
+
+- **代码层推断**：若仅给 `useProduct` 加 `refetchOnMount:'always'`，重挂载时 React Query 会**先返回缓存旧值**，`useEffect` 按**商品 id** 完成 `setForm(initialForm)` 与 `formRevisionRef` 初始化；随后 refetch 到达的新数据因 **id 相同**被同一 `useEffect` 判定**跳过重置** ⇒ **表单与基线仍停在旧 revision**。故**"请求已发生"不等于"已恢复"**——需实测（含**缓存重挂载 + 延迟响应**）方可判定，本批**未实施该改动**（按指令暂不修改），因此**不将此推断写成已验证事实**。
+- 另外两条**已实测**的限制：编辑页是**工作区标签 keep-alive**，"关闭重开"须**真正关闭标签**（有草稿时会弹「离开确认」）；仅切换标签**不卸载组件**、不会重挂载（本批先用过期 ref 点击时观察到该现象，故改用真实关闭流程）。
+
+### 23.5 开发库误迁移（如实记录，**保持原状**）
+
+- **事实**：本次为取得 3307 实例而执行了 `npm run dev:mysql8`（`scripts/mysql8-dev.sh start`）。该脚本**除启动 colima 容器外，后半段还会对固定开发库 `flowcube_dev8` 执行结构迁移**——脚本回显确认本次对 **`flowcube_dev8` 执行了 `263_fin_invoices_revision.sql` 与 `264_product_items_revision.sql`**（`dev8.db_migrations` 已记录两条）。此为本脚本**既有行为**，但**越过了"只迁移独立测试库"的边界**。
+- **处置**：**不回滚结构、不清理库、不猜路径**；`flowcube_dev8` 的 263/264 **保持现状**。此后**不再**运行该脚本，容器仅以已有实例复用，业务验证**全部**显式指向 `flowcube_acceptance20260927_test`。
+- **更正**：§22.5 / §22.4 中"迁移 264 仅隔离库"的表述**不再准确**；**准确表述为**：迁移 264（及 263）**同时在 `flowcube_dev8` 与 `flowcube_acceptance20260927_test` 生效**，其中 dev8 的生效**源于本次启动脚本的附带迁移**，非经独立测试库流程。
+- **候选（下一批，暂不实施）**：该启动脚本**默认附带 schema 修改**的风险——需先调查其**调用方**（谁在何时会跑 `dev:mysql8`）与该行为的**最小可验证边界**，再决定是否拆分"起容器"与"迁移"；**不与商品验收混改**。
+
+### 23.6 边界与未验证（如实）
+
+- 本节仅覆盖 §22 **前端行为**的上述四项 + 两个补充点；**未**做发版前全量回归；**未**验生产影响规模；**未**验证旧客户端（无 `revision`）的实际表现。
+- ③′ / ④ 为**证据充分的缺陷**，按指令**先报反例与影响，暂不修改**，待 Codex 独立审查后再定方案。
+- 物理打印 / PDA 真机未验。
