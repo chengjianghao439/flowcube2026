@@ -1173,7 +1173,7 @@ cost链=[[100,150],[100,200]]  最终cost=200   ← 两条历史的旧价都是 
 
 **范围**：`<CustomerFinder>` 9 + `<SupplierFinder>` 11 = **20 实例 / 15 文件**。方法：真实 GUI 打开各自入口 → 搜索 → 选中 → 确认 → 读**回填**；关键项另抓**业务请求**（与 Finder 自身 `keyword` 搜索请求**分层记录**）。
 
-**已验（17/20，逐页真实 GUI；夹具为**隔离测试库**按 ID 登记，非生产）**：
+**已验（18/20，逐页真实 GUI；夹具为**隔离测试库**按 ID 登记，非生产）**：
 
 | 载体 | Finder | 观察 |
 |---|---|---|
@@ -1194,11 +1194,14 @@ cost链=[[100,150],[100,200]]  最终cost=200   ← 两条历史的旧价都是 
 | `products/form` | Supplier | 回填正确 |
 | `inbound-tasks/new`（`InboundTaskCreatePage`） | Supplier | 回填正确（**路由是 `/new`，非 `/create`**） |
 | `portal/statements`（菜单「销售 → 对外查询 → 客户对账单查询」） | Customer | 回填正确（**必须从菜单进**，直连 URL 不触发渲染） |
+| `sale/form` **EditView**（既有 `status=1` 单进入） | Customer | 回填正确 —— 入口是 `[data-entry-field="party"]` 内的 **PickerField button**（**非 combobox**），点击即开 `CustomerFinder`；**取回填后取消编辑，未保存** |
 
-**未达（3/20，附阻碍与已试路径）**：
+**未达（2/20，附证据与已试路径）**：
 
-- `sale/form` 的**编辑分支**（2 处）：用隔离库既有 `status=1` 测试单（`FIX-SO-4`）进入 **EditView** 后，客户字段是 **combobox（"请选择"）**，**未见 `CustomerFinder` 入口** ⇒ 未达。`AdjustView`（要求 `status 2/3/6` + 单仓 + 未发货 + 无挂起）**本轮未遇到合格单**，未达。**仅在隔离测试库内查看，未提交任何改动**。
-- `purchase-requisitions/form`（`SupplierFinder`）：入口在**明细行**的 PickerField（"选填，可转单时定"）⇒ **须先加入一条商品行**才可见；**本轮未覆盖**。另该 JSX 还有 **`scope=convert`（转单）**路径 ⇒ **细分未验**。
+- **`sale/form` 的 `AdjustView`**：要求 `status 2/3/6`（+ 单仓 / 未发货 / 无挂起）。**隔离库实测只有 `status=1` 共 2 张**（`SELECT status,COUNT(*) … GROUP BY status`）⇒ **无合格单**，本轮未达（未手工改状态；**建最小单并占库属多步，超出本短轮范围**）。
+- **`purchase-requisitions/new` 的明细行供应商**：已按路径先加入一条商品行（商品夹具 157），随后**商品 Finder 为空态**（"启用商品"，`[role=row]` 0 行）——但网络侧 `GET /api/products/finder?keyword=短轮商品&page=1&pageSize=200` **返回 200**，且**同参数直接 curl 后端有 1 条数据** ⇒ **前端 0 行**，**原因待查**（**未擅自修改**）。另该 JSX 的 **`scope=convert`（转单）**路径 ⇒ **细分未验**。
+
+> **更正**：先前把 EditView 的客户入口记为"combobox / 未见 `CustomerFinder`"是**选择器判断失误** —— 实际是 `[data-entry-field="party"]` 内的 **PickerField button**，点击即可开 `CustomerFinder`（已补验）。EditView 内该组件共 2 处，本批验的是**客户主入口**那处，**另一处未单独验**。
 
 **口径（按独立审查更正）**：
 - ① PaymentQuery 的**业务载荷必须与 Finder 类型对应**：客户侧 `GET /payments?**type=2**&partyName=<客户>`、供应商侧 `type=1&partyName=<供应商>`（**不能**拿 `type=1` 的请求归给客户）；Finder 自身的 `keyword` 请求**只证明搜索**，不等于业务查询载荷。
