@@ -7,7 +7,11 @@
 
 - 起始：本轮发版准备自 **2026-09-29 01:16** 前后开始（基线 `main`/`origin main` = `29f223e`，工作树 `claude/happy-mahavira-0a2b4b`）。
 - 版本：**0.11.3**（三端 `package.json`/`package-lock.json` 同步；PDA `versionName 0.11.3`、**`versionCode 146 → 147`**、`backend/apk/version.json` 同步）。
-- 发布范围：`main...HEAD` 共 **89 提交 / 91 文件**（**24 fix + 2 feat** + docs/test），含迁移 **263**（`fin_invoices.revision`）与 **264**（`product_items.revision`）——**不只最近 3 处修复**。
+- 发布范围（口径说明，避免混淆两组数字）：
+  - **发版准备起始基线**（当时工作树 HEAD `dba7693`）相对 `main`：**89 提交 / 91 文件**（**24 fix + 2 feat** + docs/test）—— 这是**开始发版准备时**的统计。
+  - **当前候选**相对 `29f223e`：**93 提交 / 102 文件**（`git diff --stat` = 102 files, +8760/−360）。
+  - 含迁移 **263**（`fin_invoices.revision`）与 **264**（`product_items.revision`）——**不只最近 3 处修复**。
+  - **最终发布 SHA 与范围在正式发布后**按发布提交重新记录（本节不预设）。
 - 候选演进（本工作树分支）：
   1. `17e1a0c` — 版本与说明（release notes + 官网摘要 + 三端/PDA 版本）
   2. `72c6604` — CI 接线（孤儿套件 `smoke:product-price-history-integrity`）+ 转采购文案末句收紧
@@ -29,7 +33,8 @@
 
 - **fixture 确实执行过**：`agent-browser console` 中可见注入的阶段标记 **`[FIXTURE_STAGE] bundle-start`**，且伴随 React DevTools 提示（React 已加载）⇒ 先前"fixture 从未运行"的判断**被推翻**。
 - **采样时页面不在 fixture 页**：`agent-browser tab list` 与 `location.href` 均为 **`about:blank`**（**只有 t1 一个标签**，故**不是 CLI 选错 tab**）；`errors` 为空。
-- **与本批改动无关**：**基线 `29f223e` 的 fixture 在同机同法下表现完全相同**（同样 `about:blank`、同样有 `bundle-start` 标记）⇒ 该现象**不是本版回归**。
+- **与本批改动无关（真实基线验证）**：在主工作区 `/Users/chengjianghao/flowcube`（**干净 `main` = `29f223e`、frontend 依赖齐备、未迁移/未连 DB/未改 git/未装 root 依赖**）以 Node 22 直接执行 `npm run test:dirty-navigation` ⇒ **同样 `exit 1`、同样 `Wait timed out after 25000ms`**，脚本自身在 `finally` 关闭浏览器（`session list = []`）。
+  > 说明：早前"基线对照"用例曾用 `29f223e` 的 **fixture 文件** + **当前 frontend** symlink，**不足以代表旧版本完整代码**；**上面这次主工作区完整基线才是有效证据**，结论相同 ⇒ 该超时**不是本版回归**。**不再继续分散诊断**，本地保留为待查项，由同 SHA 的 CI 门槛决定后续。
 - **仍不能确认的部分**：是 `file://` 下 HashRouter/`history` 操作把当前条目退到 `about:blank`，还是 agent-browser 的 `file://` 打开语义所致——**根因待查**，本轮**不据此改任何生产导航逻辑**。CI 有独立 job，**同 SHA 仍须通过**。
 
 ## 3. 已验证（本轮真实执行，非引用旧数字）
@@ -41,7 +46,11 @@
 **prelaunch 矩阵（13 个 suite，按 **smoke** 语义执行）**：`prelaunch-finance` 15/0、`prelaunch-scope-export` 34/0、`prelaunch-hr`、`round2-transfer`、`round2-payroll`、`round2-runtime`、`fulfillment`、`procurement-planning`、`masterdata`（smoke，先前已过）、`masterdata-import`、`sorting-bin-recovery`、`warehouse-masterdata`、`warehouse-assets-waves` —— **13/13 覆盖**。
 > 更正记录：首次 loop 误用 `test:round2-runtime` / `test:fulfillment` / `test:procurement-planning`（**与 smoke 是不同的文件/规模**）；已补跑三者的 **smoke** 版本，均 exit 0。**不得写成「test 版本已覆盖矩阵」。**
 
-**prelaunch 专项**：`smoke:audit-20260926`（`payable-posting` + 8 个 `node --test` 专项）exit 0、12s。`flowcube_payable_test` 只读核对：142 表 / 262 迁移，业务表仅测试种子（`payment_records` 0、`sale_orders` 0、`product_items` 1、`sys_users` 3）⇒ **无他人数据**，未清理该库。
+**prelaunch 专项**：`smoke:audit-20260926`（`payable-posting` + 8 个 `node --test` 专项）exit 0、12s。
+关于其独占库 `flowcube_payable_test`（口径如实）：
+- **本轮未手工 `DROP` 或清空整个库**；该套件脚本自身在运行中会**准备并清理自己的测试夹具**（`resetFixtureData` + `finally`），因此**不能说"未清理该库"**；
+- 预检仅执行了**若干张表的 `COUNT`**（`payment_records` / `sale_orders` / `purchase_orders` / `inventory_containers` 为 0 行，`product_items` 1、`sys_users` 3 属测试种子），**不能由这几张计数断言"全库不含任何他人数据"**；
+- 该库迁移记录为 **262**（**本轮未把它补迁到 264**）。
 
 **其它**：`test:integration` **96 passed / 0 failed**（另建独立库 `flowcube_integration_release20260929_test`，264 迁移）｜`test:browser-smoke` exit 0（32s，按 CI 锁文件装依赖 + 官方 Chromium）。
 
@@ -51,7 +60,6 @@
 
 - **`test:dirty-navigation`**：本机 **未通过**（超时）。已确认：fixture **执行过**（console 有 `bundle-start`）、采样页为 `about:blank`（单标签，非选错 tab）、**基线 `29f223e` 同表现**；**根因待查**，见 §2。CI 同 SHA 仍须通过。
 - `smoke:nginx-headers`：仅在 `DOCKER_CONTEXT=colima-flowcube` 下通过；默认 docker socket 不可达（本机）。
-- 未逐条执行的少数组件（如 `smoke:audit-remediation` 之外的个别 prelaunch matrix 变体）**由 CI 在正式候选同 SHA 完整验证**。
 
 ## 5. 独立未验（不可用本轮结果替代）
 
