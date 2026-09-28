@@ -438,7 +438,9 @@ async function update(id, { name, categoryId, supplierId, unit, spec, color, bar
     // 注意 `Number(null) === 0`：先判 null/undefined，再判整数，否则"没传"会被当成 0。
     // 注意：本函数第二参**已解构**，作用域里没有 `d`——必须用解构出来的 `revision` 本身。
     if (revision == null || !Number.isInteger(Number(revision))) {
-      throw new AppError('缺少版本号，请刷新后重试', 400, 'PRODUCT_REVISION_REQUIRED')
+      // 文案要点：**先复制草稿再刷新/更新**（刷新会重新加载页面，未复制的输入会丢）。
+      // 只说明"缺少编辑版本信息"，不武断断言"版本过旧"——也可能是调用方漏传字段。
+      throw new AppError('缺少编辑版本信息，本次修改未保存。请先复制需要保留的内容；浏览器请刷新加载新版，桌面端请更新后重新编辑。', 400, 'PRODUCT_REVISION_REQUIRED')
     }
     const clientRev = Number(revision)
     if (clientRev !== Number(current.revision)) {

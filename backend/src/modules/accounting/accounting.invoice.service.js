@@ -352,7 +352,8 @@ async function updateInvoice(id, d, operator, companyId = 1) {
     // （隔离库实测 8/8 轮两次都 200、最终只留其一）。
     // 注意 `Number(null) === 0`：必须先判 null/undefined 再判整数，否则「没传」会被当成 0 ⇒ 误报 409。
     if (d.revision == null || !Number.isInteger(Number(d.revision))) {
-      throw new AppError('缺少版本号，请刷新后重试', 400, 'INVOICE_REVISION_REQUIRED')
+      // 与商品侧同根因对齐（文案一致）：**先复制草稿再刷新/更新**；不武断断言"版本过旧"。
+      throw new AppError('缺少编辑版本信息，本次修改未保存。请先复制需要保留的内容；浏览器请刷新加载新版，桌面端请更新后重新编辑。', 400, 'INVOICE_REVISION_REQUIRED')
     }
     const clientRev = Number(d.revision)
     if (clientRev !== Number(locked.revision)) {
