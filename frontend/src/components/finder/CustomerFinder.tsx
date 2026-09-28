@@ -23,31 +23,46 @@ const COLUMNS: FinderColumn<Row>[] = [
 export function CustomerFinder({ open, onClose, onConfirm }: CustomerFinderProps) {
   const [keyword,    setKeyword]    = useState('')
   const [searchText, setSearchText] = useState('')
-  const [selected,   setSelected]   = useState<Row | null>(null)
+  // 只存 id：选中行一律从**当前启用列表**派生 ⇒ 后台刷新后拿到的是最新值，
+  // 行被移除/停用则派生为 null，页脚自动禁用（不会回传列表之外的过期对象）。
+  const [selectedId, setSelectedId] = useState<number | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout>>()
 
-  // Reset state when dialog closes
+  // Reset state when dialog closes；**同时清掉未落定的 debounce**，否则旧 timer 会在重开后
+  // 把 searchText 改回上一个词，而 keyword 已被清空 ⇒ 两者永久不相等、永远 pending。
+  // 返回的 cleanup 在**卸载/依赖变化**时同样清 timer，避免离开页面后还残留本组件的定时器。
   useEffect(() => {
-    if (!open) { setKeyword(''); setSearchText(''); setSelected(null) }
+    if (!open) {
+      clearTimeout(debounceRef.current)
+      setKeyword(''); setSearchText(''); setSelectedId(null)
+    }
+    return () => clearTimeout(debounceRef.current)
   }, [open])
 
-  // Reset page when search changes
-  const { data, isFetching } = useCustomers({ pageSize: 500, keyword: searchText })
+  const { data, isFetching, isError, error, refetch } = useCustomers({ pageSize: 500, keyword: searchText })
 
   function handleKeywordChange(v: string) {
     setKeyword(v)
+    setSelectedId(null)   // 搜索立刻清选择：避免"选了一条又搜成别的，却确认了原来那条"
     clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => { setSearchText(v) }, 300)
   }
 
-  function handleConfirm() {
-    if (!selected) return
+  const rows = ((data?.list ?? []) as Row[]).filter(r => r.isActive !== false)
+  const selected = selectedId != null ? rows.find(r => r.id === selectedId) ?? null : null
+  // debounce 还没落到 searchText 时也算"数据未就绪"，期间禁止一切确认入口。
+  // 比较用**原始值**（不 trim）：定时器提交的就是未 trim 的原文，两侧语义必须一致，
+  // 否则输入带首尾空格时会判定为"一直没落定"而永久 pending。
+  const debouncing = keyword !== searchText
+
+  // 页脚「确认选择」与行双击/空格共用这一个回调，映射只写一次。
+  function handleConfirm(row: Row) {
     onConfirm({
-      id: selected.id,
-      name: selected.name,
-      code: selected.code,
-      contact: selected.contact ?? undefined,
-      phone: selected.phone ?? undefined,
+      id: row.id,
+      name: row.name,
+      code: row.code,
+      contact: row.contact ?? undefined,
+      phone: row.phone ?? undefined,
     })
     onClose()
   }
@@ -59,16 +74,15 @@ export function CustomerFinder({ open, onClose, onConfirm }: CustomerFinderProps
       title={<span className="flex items-center gap-2"><Users className="h-4 w-4 text-primary" />选择客户</span>}
       dialogId="customer-finder"
       columns={COLUMNS}
-      data={((data?.list ?? []) as Row[]).filter(r => r.isActive !== false)}
+      data={rows}
       selected={selected}
-      onSelect={setSelected}
+      onSelect={row => setSelectedId(row.id)}
       onConfirm={handleConfirm}
-      onConfirmRow={row => {
-        onConfirm({ id: row.id, name: row.name, code: row.code, contact: row.contact ?? undefined, phone: row.phone ?? undefined })
-        onClose()
-      }}
       getRowKey={r => r.id}
-      isLoading={isFetching}
+      isLoading={isFetching || debouncing}
+      isError={isError}
+      error={error}
+      onRetry={() => void refetch()}
       keyword={keyword}
       onKeywordChange={handleKeywordChange}
       searchPlaceholder="搜索客户名称、编码…"

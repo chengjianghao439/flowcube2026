@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { AppDialog } from '@/components/shared/AppDialog'
 import { Button } from '@/components/ui/button'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { FinderSearch } from './FinderSearch'
 import { FinderTable } from './FinderTable'
 import type { FinderColumn } from '@/types/finder'
@@ -13,13 +14,18 @@ interface FinderModalProps<T extends Record<string, unknown>> {
 
   columns: FinderColumn<T>[]
   data: T[]
+  /** 选中行：**由调用方从当前列表派生**——行已不在列表 ⇒ 传 null，页脚自动禁用。 */
   selected: T | null
   onSelect: (row: T) => void
-  onConfirm: () => void
-  /** 双击行时直接以该行数据确认，绕过 selected 状态 */
-  onConfirmRow?: (row: T) => void
+  /** 确认（页脚「确认选择」与行双击共用）：**始终传当前行**，映射只由调用方做一次。 */
+  onConfirm: (row: T) => void
   getRowKey: (row: T) => number
+  /** 数据未就绪（搜索 debounce 中 / 请求进行中）：此时**禁止一切确认入口**。 */
   isLoading?: boolean
+  /** 查询出错：禁止确认，并显示可重试错误（不拿旧 data 确认）。 */
+  isError?: boolean
+  error?: unknown
+  onRetry?: () => void
 
   keyword: string
   onKeywordChange: (v: string) => void
@@ -30,11 +36,15 @@ interface FinderModalProps<T extends Record<string, unknown>> {
 
 export function FinderModal<T extends Record<string, unknown>>({
   open, onClose, title, dialogId,
-  columns, data, selected, onSelect, onConfirm, onConfirmRow,
-  getRowKey, isLoading,
+  columns, data, selected, onSelect, onConfirm,
+  getRowKey, isLoading = false, isError = false, error, onRetry,
   keyword, onKeywordChange, searchPlaceholder,
   selectedLabel,
 }: FinderModalProps<T>) {
+  // 唯一判据：数据未加载/未出错，且选中行仍在当前列表（由调用方派生保证）。
+  // 页脚、行双击、Space 键三个确认入口共用它，避免各写一套守卫。
+  const canConfirm = selected != null && !isLoading && !isError
+  const canConfirmRow = !isLoading && !isError
 
   return (
     <AppDialog
@@ -47,10 +57,6 @@ export function FinderModal<T extends Record<string, unknown>>({
       minHeight={420}
       title={title}
     >
-      {/*
-        Full-height flex column — owns the layout of all three zones.
-        AppDialog body: min-h-0 flex-1 overflow-hidden, so this div fills it completely.
-      */}
       <div className="flex h-full flex-col overflow-hidden">
 
         {/* ── Search ──────────────────────────────────────────────── */}
@@ -65,15 +71,19 @@ export function FinderModal<T extends Record<string, unknown>>({
 
         {/* ── Table body (scrollable) ──────────────────────────────── */}
         <div className="min-h-0 flex-1 overflow-auto">
-          <FinderTable
-            columns={columns}
-            data={data}
-            selected={selected}
-            onSelect={onSelect}
-            onDoubleClickRow={onConfirmRow}
-            getRowKey={getRowKey}
-            isLoading={isLoading}
-          />
+          {isError ? (
+            <QueryErrorState error={error} onRetry={() => onRetry?.()} title="加载失败" compact />
+          ) : (
+            <FinderTable
+              columns={columns}
+              data={data}
+              selected={selected}
+              onSelect={row => { if (canConfirmRow) onSelect(row) }}
+              onDoubleClickRow={row => { if (canConfirmRow) onConfirm(row) }}
+              getRowKey={getRowKey}
+              isLoading={isLoading}
+            />
+          )}
         </div>
 
         {/* ── Footer ──────────────────────────────────────────────── */}
@@ -91,7 +101,7 @@ export function FinderModal<T extends Record<string, unknown>>({
             </div>
             <div className="flex shrink-0 gap-2">
               <Button variant="outline" onClick={onClose}>取消</Button>
-              <Button disabled={!selected} onClick={onConfirm}>确认选择</Button>
+              <Button disabled={!canConfirm} onClick={() => { if (canConfirm && selected) onConfirm(selected) }}>确认选择</Button>
             </div>
           </div>
         </div>
@@ -100,4 +110,3 @@ export function FinderModal<T extends Record<string, unknown>>({
     </AppDialog>
   )
 }
-

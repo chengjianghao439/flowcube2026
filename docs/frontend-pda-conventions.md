@@ -42,6 +42,7 @@
 
 - 全局商品查找统一复用 ProductFinderModal：默认只展示身份/规格/单位/分类，仅传仓库时显示该仓可用库存；搜索覆盖名称/编码/条码/供应商型号/型号/颜色。见 docs/product-finder-redesign-2026-09-05.md。
 - **商品 Finder 的新鲜度与选中一致性（2026-09-28）**：`useProductFinder` **局部 `staleTime: 0`**（全仓仅 `ProductFinderContent` 一个调用点；**全局默认不动**），使**每次参数激活**（挂载 / 关键词·分类·仓库变化）都取新值——`refetchOnMount:'always'` **只作用于挂载**，覆盖不到"重开后重复搜索原关键词""同次 A→B→A"。选中态**只存 `selectedId`**，选中对象一律**从当前列表派生**，页脚「确认选择」/双击/Enter 都回传**当前展示行**（不再回传"选中那一刻"的旧对象）；`pending`（含延迟响应）/`isError`/选中行已不在列表时**不得确认**。回归 `ProductFinderModal.stale-cache.test.tsx`；取证、反向验证与 A/B/C 见 `docs/finder-stale-cache-investigation-2026-09-28.md`。
+- **客户/供应商 Finder 的选中一致性（2026-09-28）**：`CustomerFinder` / `SupplierFinder`（及通用 `FinderModal`）**只存 `selectedId`**，选中行从**当前启用列表**派生（行被移除/停用 ⇒ 派生 null ⇒ 页脚自动禁用，不回传列表之外的对象）；**搜索立刻清选择**；**debounce 期间与请求进行中、以及查询出错时，页脚 / 双击 / Space 三个确认入口都不得回调**（`Enter` 仍只是"选择"，不改既定键盘语义）；出错时显示**可重试**错误，不拿旧 data 确认。页脚与行确认**共用一个 `onConfirm(row)`**，映射只写一次。**搜索值用原始值比较**（与定时器提交语义一致）、**关闭与卸载都清 debounce timer**——否则带首尾空格或"输入后立刻关闭"会永久 pending。回归 `CustomerFinder.test.tsx` / `SupplierFinder.test.tsx`（各 9 例）；取证与 A/B/C 见 `docs/finder-selection-parity-2026-09-28.md`。
 
 - 采购建议两视图共用 ACTIVE 实物、未发销售、有效预占与未上架采购净额；包装倍数/MOQ 按权威单位换算；调拨候选先保护来源仓需求与安全库存。见 docs/procurement-planning-2026-09-06.md。
 - 业务入口合并：采购计划+补货建议=「采购建议」，报表中心/经营 KPI/利润分析=「报表中心」，仓库运营看板/批次效率/PDA 异常分析=「仓库运营」；保留原路由、参数、接口与权限。见 docs/business-centers-2026-09-05.md。

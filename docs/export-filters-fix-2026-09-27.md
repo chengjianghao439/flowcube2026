@@ -1083,3 +1083,16 @@ cost链=[[100,150],[100,200]]  最终cost=200   ← 两条历史的旧价都是 
 - **口径纠正**：全局 `refetchOnWindowFocus:false` ⇒ `staleTime:0` **不会**开启"窗口重新聚焦取数"；客户取价**抛错**分支目前只有代码/组件证据（GUI 实到的是**无有效价**分支），两者分开。
 - **边界**：**未保存任何真实销售单**（只验到 Finder 选中与草稿行单价）；夹具仅隔离测试库且已按 ID 自洁；未评估生产影响规模。取证全文见 **`docs/finder-stale-cache-investigation-2026-09-28.md`**。
 - **客户/供应商 Finder 的同类问题**（`selected` 亦为整行对象、搜索变化不 reset、页脚仅 `disabled={!selected}`、加载中也可确认）**已完成很窄对照取证**（真实组件 4/4；**未批准修改其业务代码**，最小方案待批）：见 **`docs/finder-selection-parity-2026-09-28.md`**。
+
+---
+
+## 28. 客户/供应商 Finder 的选中一致性（2026-09-28；取证 → 已修）
+
+`CustomerFinder` / `SupplierFinder`（+ 通用 `FinderModal`）与商品 Finder **同根因、守卫更弱**：页脚确认可回传**过期或列表之外**的对象；加载中 / 出错 / debounce 期间也可确认；搜索不清空选中。经 Codex 全仓核对（`FinderModal` 仅这两个调用方、`FinderTable` 仅其使用）后，**在通用组件统一守卫**修复：
+
+- 两个 Finder **只存 `selectedId`**、从当前启用列表派生；**搜索立刻清选择**；`isLoading = isFetching || debouncing`；页脚/双击/空格共用 **`onConfirm(row)`**；出错显示**可重试**错误（`isError`/`error`/`onRetry`）；`onSelect` 同受守卫；**`Enter` 仍只是"选择"**。
+- **独立审查后补的边界（各有反向验证）**：搜索值用**原始值**比较（`.trim()` 会让带首尾空格的输入**永久 pending**）；**关闭与卸载都清 debounce timer**（否则"输入后立刻关闭"重开后永久 pending）。
+- **回归**：两个 Finder **各 9 例、共 18/18**；TDD（6 例版）原实现各 **5 红 / 1 绿**；最终版三项反向验证**各精准变红**。本批**只补跑受影响项**（未再跑全量；先前 656 是加强版之前的数字）。
+- **未做**：真实浏览器取证（纯组件层 + 真实 `QueryClient`）；**未改**全局缓存 / 客户取价 / 后端。
+
+**环境事实（交接用，只核对可执行文件 / cwd / 监听，未读取 argv 或环境）**：GUI 预览栈后端（:3000）实际运行在 **Node v26.8.1**（`/opt/homebrew/Cellar/node/26.8.1/bin/node`），cwd 属本工作树；**本批与既往前端自动化专项均在 Node v22.23.2 下运行**。两者运行时应予区分：**自动化结论以 Node 22 为准**；发版前业务套件仍在 Node 22 统一验证。
