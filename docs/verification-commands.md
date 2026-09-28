@@ -159,3 +159,5 @@ AST 文案和数量覆盖守卫依赖 frontend 的 TypeScript，必须在安装�
 `npm run smoke:price-change-history`（独立回环测试库，Tests CI 报表冒烟段）：改价审批的**历史旧价**必须是**审批瞬间的真实当前价**——申请 old=100 → 期间主档改到 120 → 审批 110 ⇒ `product_items=110`（审批覆盖语义不变），而本次审批写入的 `product_price_history` 行必须是 **120→110**（用申请时快照即失真）。另覆盖**商品在审批期间被软删**：必须 409 `PRICE_CHANGE_PRODUCT_MISSING` 并回滚整个审批事务，申请与审批实例保持待审批、无伪历史。
 
 `npm run smoke:product-price-history-integrity`（独立回环测试库，Tests CI 报表冒烟段，**紧邻上条**）：**商品手工改价的一致性**——① **并发**两次手工改同一商品 ⇒ `product_price_history` 必须是**连贯链**（同一 `price_type` 上每条的 `old_price` = 上一条的 `new_price`），且商品当前值 = 链尾 `new_price`（根因是 `products.update` 曾在事务外读快照）；② `allowDecimalQty` **未传**时保持原值，其中 `allow_decimal_qty IS NULL` 的既定语义是**默认允许小数**（迁移 254），不得在读裸列时当成 0；③ 对**已软删**商品改价必须**明确失败**，且**不写**单位 / 库存策略 / 价格历史等任何脏数据。运行需显式隔离库 + 回环（同本文件测试库约定），命令见本文件开头的环境要求。
+
+**上述三条商品价格相关套件（`smoke:product-price-version-guard`、`smoke:price-change-history`、`smoke:product-price-history-integrity`）自备分类种子**：在**零分类**的全新隔离库上直接可跑——优先复用库中已有分类，**没有则自建一条**并在 `finally` 按 ID 删除（保留他人数据），跑完复查**自建分类残留为 0**。它们**不依赖**「库里预先存在商品分类」这一环境前提（2026-09-29 修复：此前依赖首条分类，CI 新库无分类即失败）。

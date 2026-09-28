@@ -69,7 +69,19 @@
 
 `:3000` / `:3100` / `:5173` **无监听**；浏览器会话 `session list` **为空**（仅收尾自己创建的会话）；**共享 MySQL `127.0.0.1:3307` 保留**。本轮新建两个验收库保留（`flowcube_release20260929_test`、`flowcube_integration_release20260929_test`）。未触碰开发库 `flowcube_dev8`、`backend/.env` 真实口令、`deploy/production*.json`、真实客户账款。
 
-## 7. 正式发布字段（**未执行**）
+## 7. CI 阻断与夹具修复（2026-09-29，正式入口首次尝试）
+
+- **首次执行 `release:prod`**：preflight 通过、**main 已推送**（`29f223e..846c707`）；随后 `test.yml` 在同 SHA **failure** ⇒ 入口**自动 exit 1 并收尾**（EXIT 清 relay/caffeinate，已核实无残留）；**未推送 tag、无安装包字节**（远端 `v0.11.3` 不存在）。
+- **失败 run / job / 步骤（保留原记录，未取消、未 rerun）**：Tests run **`36460483357`**（SHA `846c707`）→ 回归门禁 job **`109057476294`** → 步骤「**冒烟测试 — 商品价格列版本保护（依赖迁移 264）**」。
+- **失败原因（CI 日志）**：`tests/product-price-version-guard.smoke.test.js:74` 抛 **「隔离库无商品分类」**；该套件只通过清理断言 1 项，**未跑到价格保护主断言**。
+- **本地为何没暴露（如实）**：本批本地验证时，我**手工向库中插入了一条商品分类**补足种子，使该套件本地 20/0 —— **掩盖了「新库无分类」这一环境前提**。
+- **性质**：测试夹具的环境依赖问题，**非生产逻辑缺陷**（三套均为 fixture 改动，**未改任何生产源码**）。
+- **同类依赖**：`product-price-history-integrity` 的 `newProduct` 取首条分类；`price-change-history-oldprice` 两处「需要至少一个商品分类」。
+- **修复**：三套改为**优先复用库中已有分类；零分类时自建一条并登记**，`finally` **按 ID 删除**（保留他人数据），并**断言自建分类残留为 0**（三套均纳入 passed/failed 统计；第三套原仅 `console.log`，已补断言，残留 >0 时进程非 0 退出）。
+- **验证（新库 `flowcube_pricefix_20260929_test`，`utf8mb4_0900_ai_ci`、264 迁移、**迁移后 `product_categories = 0`**）**：按 CI 顺序 —— `smoke:product-price-version-guard` **21/0**、`smoke:price-change-history` **11/0**、`smoke:product-price-history-integrity` **18/0**；三套跑完**分类残留 0**。
+- **不再有**「依赖库中已存在分类」的前提；正式入口将在本轮修复经审查后重新执行（同 SHA 的 CI 仍须自然通过）。
+
+## 8. 正式发布字段（**未执行**）
 
 | 字段 | 值 |
 |---|---|

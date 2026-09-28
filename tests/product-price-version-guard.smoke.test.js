@@ -70,9 +70,18 @@ async function main() {
     const loginRes = await login(http, 'smoke_admin', 'SmokeAdmin123!')
     token = loginRes.token
     if (!token) throw new Error('登录失败')
+    // 分类：优先复用库中已有；**零分类的新隔离库**则自建一个并登记，finally 按 ID 删除（保留他人数据）
     const [cat] = await dbQuery(pool, 'SELECT id FROM product_categories ORDER BY id LIMIT 1')
-    if (!cat) throw new Error('隔离库无商品分类')
-    categoryId = cat.id
+    if (cat) {
+      categoryId = cat.id
+    } else {
+      const [ins] = await pool.query(
+        'INSERT INTO product_categories (code, name, level, path, status) VALUES (?,?,1,?,1)',
+        [`CAT-${randomRef('C')}`, '价格版本保护-自建分类', ''],
+      )
+      categoryId = ins.insertId
+      created.push({ kind: 'category', id: ins.insertId })
+    }
 
     // ① 审批 a 生效后，旧编辑页（旧 revision）保存 ⇒ 409 且**价格与历史都不被写**
     {
@@ -189,12 +198,20 @@ async function main() {
     for (const c of created.filter(x => x.kind === 'supplier')) {
       try { await pool.query('DELETE FROM supply_suppliers WHERE id=?', [c.id]) } catch (e) { console.error(`[清理告警] supplier: ${e.message}`) }
     }
+    for (const c of created.filter(x => x.kind === 'category')) {
+      try { await pool.query('DELETE FROM product_categories WHERE id=?', [c.id]) } catch (e) { console.error(`[清理告警] category: ${e.message}`) }
+    }
     try {
       const pids = created.filter(x => x.kind === 'product').map(x => x.id)
+      const cids = created.filter(x => x.kind === 'category').map(x => x.id)
       const [left] = pids.length
         ? await dbQuery(pool, 'SELECT COUNT(*) n FROM product_items WHERE id IN (?)', [pids])
         : [{ n: 0 }]
+      const [cleft] = cids.length
+        ? await dbQuery(pool, 'SELECT COUNT(*) n FROM product_categories WHERE id IN (?)', [cids])
+        : [{ n: 0 }]
       log.assert('★ 本轮自建商品已全部清除（按 ID 复查为 0）', Number(left.n) === 0, `残留=${left.n}`)
+      log.assert('★ 本轮自建分类已清除（按 ID 复查为 0）', Number(cleft.n) === 0, `残留=${cleft.n}`)
     } catch (e) { log.assert('★ 清理复查本身未抛错', false, e.message) }
     await ctx.close()
   }

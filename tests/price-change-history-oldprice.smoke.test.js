@@ -30,7 +30,7 @@ async function main() {
   const price = require(path.join(ROOT, 'backend/src/modules/price-change/price-change.service'))
   const suffix = randomRef('PCX')
 
-  const created = { flowIds: [], requestIds: [], productIds: [] }
+  const created = { flowIds: [], requestIds: [], productIds: [], categoryIds: [] }
   let passed = 0
   let failed = 0
   const check = async (title, fn) => {
@@ -50,6 +50,19 @@ async function main() {
   // 流程节点实际指定的是 smoke_limited：审批动作必须由**它**执行，不能拿超管自批
   // （那会在补上自批内控后被挡，属测试误护旧行为）。
   const approver = { roleId: 5, userId: approverRow.id, operatorId: approverRow.id, realName: 'smoke_limited' }
+
+  // 分类：优先复用库中已有；**零分类的新隔离库**则自建一个（只建一次，登记并在 finally 按 ID 删除）
+  const ensureCategory = async () => {
+    const [[cat]] = await pool.query('SELECT id FROM product_categories ORDER BY id LIMIT 1')
+    if (cat?.id) return cat.id
+    if (created.categoryIds.length) return created.categoryIds[0]
+    const [ins] = await pool.query(
+      'INSERT INTO product_categories (code, name, level, path, status) VALUES (?,?,1,?,1)',
+      [`CAT-${suffix}`, '改价历史-自建分类', ''],
+    )
+    created.categoryIds.push(ins.insertId)
+    return ins.insertId
+  }
 
   let productSeq = 0
   const mkProduct = async (saleA) => {
@@ -215,8 +228,7 @@ async function main() {
 
     // ★ ⑥ 真实审批改价必须递增商品版本（迁移 264 契约）——不是"模拟 SQL"，走的是真实 service 链路
     await check('★ 真实审批改价递增 product_items.revision，且旧版本编辑被商品侧 CAS 拦下', async () => {
-      const [[cat]] = await pool.query('SELECT id FROM product_categories LIMIT 1')
-      assert.ok(cat?.id, '需要至少一个商品分类')
+      const catId = await ensureCategory()
       const pidR = await mkProduct(100)
       const reqR = await price.create({ productId: pidR, priceType: 'a', newPrice: 130 }, admin)
       created.requestIds.push(reqR.id)
@@ -235,7 +247,7 @@ async function main() {
       let code = null
       try {
         await productsSvc.update(pidR, {
-          name: `审批版本对照-${suffix}`, categoryId: cat.id, costPrice: 50, unit: '件',
+          name: `审批版本对照-${suffix}`, categoryId: catId, costPrice: 50, unit: '件',
           salePriceA: 100, salePriceB: 100, salePriceC: 100, salePriceD: 100, isActive: true,
           revision: Number(before.revision),
         }, admin)
@@ -256,12 +268,11 @@ async function main() {
     // 与 product-price-history-integrity 里那条「模拟审批列效果」不同：这里走的是**真实审批链路**
     // （price.create → submit → approve ⇒ applyApprovedPrice 写 sale_price），再叠加一次普通商品编辑。
     await check('★ 真实审批 sale → 普通商品编辑：销售价与标签价保持批准值、A 独立、且无虚假 sale 历史', async () => {
-      const [[cat]] = await pool.query('SELECT id FROM product_categories LIMIT 1')
-      assert.ok(cat?.id, '需要至少一个商品分类')
+      const catId = await ensureCategory()
       const [ins] = await pool.query(
         `INSERT INTO product_items (code,name,unit,sale_price,sale_price_a,cost_price,category_id)
          VALUES (?,?,?,?,?,?,?)`,
-        [`${suffix}-PSALE`, `审批销售价商品${suffix}`, '件', 100, 100, 50, cat.id],
+        [`${suffix}-PSALE`, `审批销售价商品${suffix}`, '件', 100, 100, 50, catId],
       )
       const pid = ins.insertId
       created.productIds.push(pid)
@@ -282,7 +293,7 @@ async function main() {
       const [[revRow]] = await pool.query('SELECT revision FROM product_items WHERE id=?', [pid])
       const productsSvc = require(path.join(ROOT, 'backend/src/modules/products/products.service'))
       await productsSvc.update(pid, {
-        name: `审批销售价商品${suffix}`, categoryId: cat.id, costPrice: 50, unit: '件',
+        name: `审批销售价商品${suffix}`, categoryId: catId, costPrice: 50, unit: '件',
         salePriceA: 130, salePriceB: 130, salePriceC: 130, salePriceD: 130, isActive: true,
         revision: Number(revRow.revision),
       }, admin)
@@ -324,8 +335,21 @@ async function main() {
       await pool.query('DELETE FROM product_stock_policies WHERE product_id=?', [id])
       await pool.query('DELETE FROM product_items WHERE id=?', [id])
     }
+    for (const id of created.categoryIds) {
+      await pool.query('DELETE FROM product_categories WHERE id=?', [id])
+    }
     const [[left]] = await pool.query('SELECT COUNT(*) n FROM product_items WHERE code LIKE ?', [`${suffix}%`])
-    console.log(`\n自洁核对：夹具残留 ${left.n}`)
+    let cleft = 0
+    if (created.categoryIds.length) {
+      const [cr] = await pool.query('SELECT COUNT(*) n FROM product_categories WHERE id IN (?)', [created.categoryIds])
+      cleft = Number(cr[0]?.n ?? 0)
+    }
+    // 自洁必须**断言**（纳入 passed/failed 统计），不能只打日志：残留 >0 时进程必须非 0 退出
+    await check('★ 自洁核对：本轮自建夹具已全部清除（商品按 suffix、自建分类按 ID 复查为 0）', async () => {
+      assert.equal(Number(left.n), 0, `商品残留 ${left.n}`)
+      assert.equal(cleft, 0, `自建分类残留 ${cleft}`)
+    })
+    console.log(`\n自洁核对：夹具残留 ${left.n}（自建分类残留 ${cleft}）`)
     await ctx.close()
     await require(path.join(ROOT, 'backend/src/config/db')).pool.end()
     console.log(`\n${passed} passed, ${failed} failed\n`)

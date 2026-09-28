@@ -32,9 +32,24 @@ async function main() {
   const created = []          // 本轮自建商品（含软删的），收尾按 ID 全清
   let token = null
 
-  const newProduct = async (label) => {
+  // 分类：优先复用库中已有；**零分类的新隔离库**则自建一个（只建一次）并记录，finally 按 ID 删除
+  let createdCategoryId = null
+  const categoryId = async () => {
     const [cat] = await dbQuery(pool, 'SELECT id FROM product_categories ORDER BY id LIMIT 1')
-    if (!cat) throw new Error('隔离库无商品分类，无法建商品')
+    if (cat) return cat.id
+    if (createdCategoryId == null) {
+      const [ins] = await pool.query(
+        'INSERT INTO product_categories (code, name, level, path, status) VALUES (?,?,1,?,1)',
+        [`CAT-${randomRef('C')}`, '价格历史一致性-自建分类', ''],
+      )
+      createdCategoryId = ins.insertId
+    }
+    return createdCategoryId
+  }
+
+  const newProduct = async (label) => {
+    const catId = await categoryId()
+    const cat = { id: catId }
     const code = `PPH-${randomRef('X')}`.slice(0, 40)
     const [r] = await pool.query(
       `INSERT INTO product_items (code,name,unit,sale_price,sale_price_a,cost_price,category_id)
@@ -225,6 +240,9 @@ async function main() {
       }
       try { await pool.query('DELETE FROM product_items WHERE id=?', [id]) } catch (e) { console.error(`[清理告警] product_items: ${e.message}`) }
     }
+    if (createdCategoryId != null) {
+      try { await pool.query('DELETE FROM product_categories WHERE id=?', [createdCategoryId]) } catch (e) { console.error(`[清理告警] category: ${e.message}`) }
+    }
     // 清理复查：本轮 ID 必须全部为 0，否则记失败（不能只留告警）
     try {
       const left = async (table, col = 'id') => {
@@ -237,6 +255,10 @@ async function main() {
         + (await left('product_units', 'product_id'))
         + (await left('product_stock_policies', 'product_id'))
       log.assert('★ 本轮自建商品及其附属行已全部清除（按 ID 复查为 0）', total === 0, `残留=${total}（本轮建 ${created.length} 个）`)
+      if (createdCategoryId != null) {
+        const [cr] = await dbQuery(pool, 'SELECT COUNT(*) n FROM product_categories WHERE id=?', [createdCategoryId])
+        log.assert('★ 本轮自建分类已清除（按 ID 复查为 0）', Number(cr?.n ?? 0) === 0, `残留=${cr?.n}`)
+      }
     } catch (e) {
       log.assert('★ 清理复查本身未抛错', false, e.message)
     }
