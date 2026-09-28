@@ -1450,6 +1450,26 @@ cost链=[[100,150],[100,200]]  最终cost=200   ← 两条历史的旧价都是 
 
 **夹具（登记，待授权清理）**：请购单 **5**（`PR20260929005`，status 3）、采购单 **14**（`PC20260929008`，草稿 50 元）。
 
+---
+
+## 42. 只读跨模块核对：手工应付创建的「未确认 → 关闭 / 刷新」恢复（2026-09-29，**只读，未复现**）
+
+**链路**：`PaymentsView` 常驻渲染 `<CreateManualPayableDialog open={createOpen} …/>` → 弹窗内 `createPaymentApi(payload, requestKey)` → `POST /api/payments` → `payments.service.createManual` → `INSERT INTO payment_records (order_id=NULL, …)` → 成功后 `invalidatePaymentViews()` 刷新「现结/月结供应商账款」列表；另有 `getOperationRequestStatusApi(requestKey, CREATE_ACTION)` 回执查询。
+
+**独立核对到的事实**：
+1. **后端无业务唯一约束兜底**：`payment_records` 的唯一索引只有 `PRIMARY(id)` 与 `uq_payment_records_type_order(type, order_id)`；**`order_no` 仅普通索引**（`idx_payment_records_order_no`，非唯一）。手工应付 `order_id` **恒 NULL** ⇒ 该唯一键对多条 NULL **不生效**；`createManual` **也没有按 `order_no` 的应用层查重**。⇒ 防重复**完全依赖 `requestKey`**（`beginCreationOperationRequest` + 载荷指纹），代码注释亦自述这是"全财务域唯一无防护的改钱路径"。
+2. **同一页面会话内是安全的**：弹窗**常驻渲染**（`open={createOpen}`，不是条件挂载）⇒ **关闭弹窗不卸载组件** ⇒ `requestKey` 与 `uncertainRef` 保留；`reset()` 在未确认时**早退**（键与表单一并保留），用户原样重试即同键 ⇒ 后端认作同一笔。
+3. **跨页面重载会丢键**：刷新整页 / 关闭工作区页 ⇒ `PaymentsView` 卸载 ⇒ `requestKey`、`uncertainRef` 归零 ⇒ 重开弹窗时 `reset()` 正常执行 ⇒ **新键 + 新随机单号**（`defaultOrderNo()`）。此时若上一次其实已成功，**理论上会再落一条同金额应付**。
+
+**分类：待查（未证实为缺陷）**
+- 支持"可能重复"的静态事实：上列 1、3；
+- **但尚未复现**，且存在可能构成兜底的**可见性**：成功后 `invalidatePaymentViews()` 会刷新账款列表，用户**重挂后应在列表看到已建的那笔**（单号/金额/往来方可辨）——**是否足以避免误判尚未验证**；
+- 依 §41 的教训，**不据静态缺口直接判定缺陷**。
+
+**复现方案（下一步，需起服务）**：把丢弃响应的目标从 convert 扩到 `POST /api/payments`（同一代理加一条规则），走「录入 → 丢响应 → **刷新整页** → 重开录入同金额 → 核对是否落两条」，并同时核对**刷新后列表是否已显示第一笔**。
+
+**边界**：不因"缺持久化"改框架；若复现证实重复，最小方向仍是**复用既有 `pendingRequestStorage` 语义**，并先明确 ERP/PDA 的存储键与归属语义可否共用。
+
 **未触碰发布边界**：未推送 / 打 tag / 部署 / 生产迁移 / 生产数据 / 真实发货消息。
 
 **未触碰发布边界**：未推送 / 打 tag / 部署 / 生产迁移 / 生产数据 / 真实发货消息。
