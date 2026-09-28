@@ -21,9 +21,9 @@
 
 `dev:setup` 用于新工作树，按三端 lockfile 执行 npm ci，不复制真实 `.env`；不要在用户正在使用的开发服务目录中为验证脚本而重装依赖。旧 `.codex/hooks.json` 的 EnterWorktree 匹配器已移除，应用保存的 `.codex/environments/environment.toml` 已配置 `npm run dev:setup` 设置脚本与后端、ERP、PDA、检查代码四个操作；新工作树自动触发仍需实际验证，不能仅凭配置文件认定成功。2026-09-04 临时空目录验证中，前后端安装成功，桌面端 Electron 安装阶段超过 240 秒测试时限，完整三端初始化尚待验证；不能以已有 node_modules 目录判断安装成功。
 
-`npm run dev:mysql8` 使用本机 `colima-flowcube` context 启动 `flowcube-dev-mysql8`，监听 127.0.0.1:3307，库名 flowcube_dev8；随机凭据位于用户目录 `~/.config/flowcube/mysql8.env`（600），此命令只执行增量结构迁移，不自动导入业务数据或修改 backend/.env。`dev:mysql8:stop` 停服务并保留数据卷。
+`npm run dev:mysql8` 使用本机 `colima-flowcube` context 启动 `flowcube-dev-mysql8`，监听 127.0.0.1:3307；随机凭据位于用户目录 `~/.config/flowcube/mysql8.env`（600，**已存在则原样保留、绝不覆盖**）。**该命令只启动实例，不改动任何库结构**（容器复用 + 数据卷保留）；`dev:mysql8:stop` 停容器并保留数据卷。**把结构迁移到开发库 `flowcube_dev8` 必须显式运行 `npm run dev:mysql8:migrate`**——迁移目标**硬编码为本机回环 `127.0.0.1:3307` / `flowcube_dev8`**，不受外部 `DB_*` 影响、也不接受额外库名参数；容器或环境失败即非 0 且不继续（不隐式串联）。行为由 `npm run test:mysql8-dev-script` 以 stub（colima/docker/npm）契约锁定，**不连库、不起容器**。不自动导入业务数据，也不修改 `backend/.env`。
 
-**本机开发后端已于 2026-09-04 按用户授权切换至上述 MySQL 8.0.46**：旧 flowcube 库的 134 张表、215,843 行数据完整迁入，逐表内容摘要及结构一致，保留 233 条迁移记录（232 份 SQL 均已执行，另含历史记录）、56 个用户及原密码哈希/JWT。backend/.env 仅修改五个 DB 连接项，当前后端已重启并实测连接 3307；时区 +08:00。旧 MySQL 9.6 / 3306 和原库保留用于回退，不能继续向旧库写开发数据。电脑重启后先运行 `npm run dev:mysql8` 再启动后端。备份、校验与回退说明见 `docs/local-mysql8-cutover-2026-09-04.md`；切换后的新写入不可被直接回退丢弃。
+**本机开发后端已于 2026-09-04 按用户授权切换至上述 MySQL 8.0.46**：旧 flowcube 库的 134 张表、215,843 行数据完整迁入，逐表内容摘要及结构一致，保留 233 条迁移记录（232 份 SQL 均已执行，另含历史记录）、56 个用户及原密码哈希/JWT。backend/.env 仅修改五个 DB 连接项，当前后端已重启并实测连接 3307；时区 +08:00。旧 MySQL 9.6 / 3306 和原库保留用于回退，不能继续向旧库写开发数据。电脑重启后先运行 `npm run dev:mysql8` 启动实例（若开发库结构落后，再显式运行 `npm run dev:mysql8:migrate`）再启动后端。备份、校验与回退说明见 `docs/local-mysql8-cutover-2026-09-04.md`；切换后的新写入不可被直接回退丢弃。
 
 ```bash
 npm --prefix backend run dev

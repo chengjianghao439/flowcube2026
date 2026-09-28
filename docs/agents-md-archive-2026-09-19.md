@@ -142,6 +142,8 @@
 
 `npm run dev:mysql8` 使用本机 `colima-flowcube` context 启动 `flowcube-dev-mysql8`，监听 127.0.0.1:3307，库名 flowcube_dev8；随机凭据位于用户目录 `~/.config/flowcube/mysql8.env`（600），此命令只执行增量结构迁移，不自动导入业务数据或修改 backend/.env。`dev:mysql8:stop` 停服务并保留数据卷。
 
+> **2026-09-28 更新（本段原文保留）**：`dev:mysql8` 已拆为「只启动实例」与「显式迁移」两个动作，迁移目标固定为本机 `127.0.0.1:3307` / `flowcube_dev8`，并由 `npm run test:mysql8-dev-script` 契约锁定。**当前口径以 `docs/verification-commands.md` 为准**。
+
 **本机开发后端已于 2026-09-04 按用户授权切换至上述 MySQL 8.0.46**：旧 flowcube 库的 134 张表、215,843 行数据完整迁入，逐表内容摘要及结构一致，保留 233 条迁移记录（232 份 SQL 均已执行，另含历史记录）、56 个用户及原密码哈希/JWT。backend/.env 仅修改五个 DB 连接项，当前后端已重启并实测连接 3307；时区 +08:00。旧 MySQL 9.6 / 3306 和原库保留用于回退，不能继续向旧库写开发数据。电脑重启后先运行 `npm run dev:mysql8` 再启动后端。备份、校验与回退说明见 `docs/local-mysql8-cutover-2026-09-04.md`；切换后的新写入不可被直接回退丢弃。
 
 ```bash

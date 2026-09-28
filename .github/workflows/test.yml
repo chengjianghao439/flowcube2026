@@ -126,6 +126,12 @@ jobs:
       - name: 运维回归 — 备份恢复判定与数据库指标
         run: node --test tests/ops-monitor-restore.test.js tests/deployment-resources.test.js tests/restore-trigger-normalize.test.js tests/migration-trigger-bodies.test.js
 
+      # 本地实例脚本：`start` 只能启动实例、迁移必须由显式 `migrate` 触发且目标固定。
+      # 否则"只想借 3307 实例做隔离测试"会顺带把迁移写进开发库（同类边界失效已发生过两次，
+      # 机制不同）。测试全程 stub colima/docker/npm，不连库、不起容器。
+      - name: 本地实例脚本 — start 不改库结构、migrate 显式且目标固定
+        run: npm run test:mysql8-dev-script
+
       # 出库前置扫码闭环是纯离线断言（stub conn，不连数据库）：明细存在但一条扫码记录都没有时
       # 必须拒绝——批量 GROUP BY 后这类明细在结果里不出现，改写成"缺失就跳过"会让闸门 fail-open。
       - name: 出库前置扫码闭环 — 无扫码行必须拒绝（防批量改写 fail-open）
