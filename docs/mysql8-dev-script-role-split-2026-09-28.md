@@ -38,8 +38,22 @@ Codex 批准**方案 A**：`start` 默认只起实例，迁移必须由**命名�
 - **现行主题文档**：`docs/verification-commands.md` 已更新 `dev:mysql8` / `dev:mysql8:migrate` 口径（只启动、目标固定、不覆盖凭据、不隐式串联）。
 - **历史归档保留原文 + 指向当前说明**（不改历史内容）：`docs/agents-md-archive-2026-09-19.md`、`docs/codex-local-setup-2026-09-04.md`、`docs/local-mysql8-cutover-2026-09-04.md` 各加一段「2026-09-28 更新（本段原文保留）」，指向 `verification-commands.md`。
 
-## 五、边界（如实）
+## 五、实际运行（已验 / 未验，如实）
+
+**已实际执行并核对**（Node v22.23.2）：`npm run dev:mysql8`（**仅 start**）一次 ——
+
+- 容器**被复用**（`Up 28 minutes`，未重启、仍 Healthy），**未影响共享容器**；
+- 输出：`MySQL 8 已就绪：127.0.0.1:3307（仅启动实例，未改动任何库结构）。如需把结构迁移到开发库 flowcube_dev8，请显式运行：npm run dev:mysql8:migrate`；
+- **`flowcube_dev8` 迁移水位跑前跑后均为 265**，最新一条仍是 `264_product_items_revision.sql`（2026-09-28 21:51:18，即那次误迁移），**无新增** ⇒ 实测确认 **start 不改 dev8 结构**。
+
+**未执行（明确未验）**：
+
+- **`npm run dev:mysql8:migrate` 未实际运行**（按要求禁止写 dev8）；其"目标固定 / 不隐式启动 / 未就绪即非 0"目前**只由 stub 契约测试证明**，未经真实环境验证。
+- 未验证**真实 colima 冷启动**（profile 从停止到起来的完整路径）；"先起 profile 后验 context"的顺序保护由 stub 证明。
+- `stop` 未实际执行（不擅自停共享容器）。
+
+## 六、边界（如实）
 
 - **未连接 `flowcube_dev8` 跑任何写测试**；本轮**未再迁移 dev8**；该库保持 263/264 已存在的现状，**不回滚**。
-- 契约测试是 **stub 行为测试**，只证明脚本的**调用契约与退出码**，**不**证明真实 colima/docker 的运行时表现；真实启动与真实迁移**本批未执行**。
+- 契约测试是 **stub 行为测试**，只证明脚本的**调用契约与退出码**，**不**证明真实 colima/docker 的运行时表现。
 - `stop` 现在也要求 profile/凭据就绪（缺失即非 0）——相对改造前"colima 未启动时行为未定义"是**收紧**，属有意为之。
