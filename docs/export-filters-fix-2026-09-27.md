@@ -1038,9 +1038,14 @@ cost链=[[100,150],[100,200]]  最终cost=200   ← 两条历史的旧价都是 
 
 - 新增 `frontend/src/pages/products/form.version-guard.test.tsx`：**渲染真实 `ProductFormPage` + 真实 `QueryClient`**（与生产同 `staleTime`），只 mock 边界（商品/设置接口、finder 弹窗、路由、toast）。**未自造镜像 Probe、未扫源码文本**。
 - 覆盖 7 例：fresh 缓存 + **延迟响应**重挂载（断言**此时无保存按钮、零 API 调用**）→ 新价/新 revision 初始化 → 提交成功；首次刷新失败不可用缓存保存 + 可重试；**无编辑后台 refetch 不误报**；有草稿 refetch 保草稿且**仍发原 revision**（并断言 payload 的 `remark`/`name`）；409 保草稿；**已初始化后后台失败仍保草稿**；新建。
-- **TDD 证据**：修复前 **3 失败 / 3 通过**（失败即 ①缓存抢先初始化 ②失败不降级 ③无编辑误报）；修复后 **7 通过**。**反向验证**：把 `form.tsx` / `useProducts.ts` 还原为改动前 ⇒ 该文件**复现 3 红**（或 4 红，含新增用例），恢复后回绿。
+- **TDD 证据（两阶段，数字均为实测）**：
+  1. **首次基线（6 用例版本）**：修复前 **3 失败 / 3 通过** —— 失败即 ①缓存抢先初始化 ②失败不降级 ③无编辑误报「未保存」。
+  2. **最终版本（7 用例）反向运行**：把 `form.tsx` / `useProducts.ts` 取回**修复前提交**（`30d8c68^`）后在**独立副本**中运行 ⇒ **4 失败 / 3 通过**（多出的 1 个失败为新增用例「已初始化后后台刷新失败保草稿」；通过的是草稿保留、409 保草稿、新建 —— 这三项修复前本已正确）。恢复修复后同文件 **7 通过**。
+  - 说明：反向运行**未修改主工作树**（副本位于 `/tmp`，因主仓库源码在本次修复已提交，`git checkout` 只能取回修复版，故改用副本 + `git show <rev>:<path>` 导出）。
 - **CI 可达**：`.github/workflows/test.yml` 已跑 `npm --prefix frontend run test:unit`（vitest 自动纳入该文件，**无需改 CI**）。
-- **全量单测基线对比**（同一命令，先还原源码再恢复）：失败**文件**集合差异**仅为该新文件**（基线红、修复后绿）⇒ **无新增失败**（其余 14 个失败文件为本机既有假失败，与本批无关）。
+- **全量单测基线对比**（同一命令 `npx vitest run`，先还原源码再恢复）：基线 **85 failed / 553 passed（638）**；本批修复后 **81 failed / 557 passed（638）**。差值 4 **全部**落在本批新文件（基线 4 红 → 修复后 0 红）。
+  - **本批结论仅为「未新增失败」，不等于「全量通过」**：另有 **14 个基线已有失败文件（81 个既有失败用例）**，本批**未定位根因、未解决**（不称其为"假失败"——只证明它们在基线同样失败）。文件名单：`api/client.session`、`components/layout/KeepAliveOutlet`、`components/shared/AppDialog`、`components/shared/DataTable`、`components/shared/FulfillmentTodos`、`hooks/usePendingRequests`、`hooks/useWorkspaceTabTitle`、`lib/pendingRequestStorage`、`lib/prelaunch-client`、`pages/login/index`、`pages/reports/kpi`、`pages/reports/report-states`、`router/mergedPageGroups`、`store/workspaceStore`（均为 `src/**` 下 `.test.tsx`/`.test.ts`）。
+  - 日志：基线 `/tmp/fc-base.txt`、修复后 `/tmp/fc-fixed.txt`（临时文件，`FAIL` 行 + `Tests` 汇总行）。
 - `tsc -p frontend/tsconfig.app.json --noEmit` rc=0；改动文件 eslint rc=0。
 
 ### 24.3 真实浏览器原反例复验（隔离库 + 本地栈）
@@ -1051,7 +1056,7 @@ cost链=[[100,150],[100,200]]  最终cost=200   ← 两条历史的旧价都是 
 |---|---|
 | ④ 关闭重开（5 min fresh 内）能否恢复 | **通过（已修）**：重开**发起了** `GET /api/products/:id`（原来零请求）；表单初始化为**最新价 + 新 revision**（原为旧值）；随后提交**成功**（`商品已更新`，`revision` 1→2→3） |
 | ③′ 无编辑 + 后台 refetch 是否误报 | **通过（已修）**：真实失效重取（另一商品保存成功触发，网络记录确认发过该商品 `GET`）后，可见「未保存」徽标数 **0**（原为 1）、无冲突条；关闭该未编辑页**不再误弹**「离开确认」 |
-| ③ 正向（有草稿 + refetch） | **保持**：草稿保留、表单不被后台新值覆盖、仍以原基线提交 |
+| ③ 正向（有草稿 + refetch） | **本批仅组件专项通过**（未再跑浏览器）；**真实浏览器证据见 §23.2 ③**（上一阶段已验） |
 
 ### 24.4 未验证边界（如实）
 
