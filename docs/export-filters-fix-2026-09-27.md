@@ -1173,33 +1173,39 @@ cost链=[[100,150],[100,200]]  最终cost=200   ← 两条历史的旧价都是 
 
 **范围**：`<CustomerFinder>` 9 + `<SupplierFinder>` 11 = **20 实例 / 15 文件**。方法：真实 GUI 打开各自入口 → 搜索 → 选中 → 确认 → 读**回填**；关键项另抓**业务请求**（与 Finder 自身 `keyword` 搜索请求**分层记录**）。
 
-**已验（14/20，逐页真实 GUI）**：
+**已验（17/20，逐页真实 GUI；夹具为**隔离测试库**按 ID 登记，非生产）**：
 
 | 载体 | Finder | 观察 |
 |---|---|---|
-| `PaymentQueryDialog` | Customer | 回填正确；**业务载荷 `GET /payments?type=1&partyName=兼容批夹具供应商&status=unsettled…`** |
-| `PaymentQueryDialog` | Supplier | 回填正确（`partyName` 业务载荷同） |
+| `PaymentQueryDialog`（应收页） | Customer | 回填正确；**业务载荷 `GET /payments?type=2&partyName=验收批5客户&status=unsettled…`** |
+| `PaymentQueryDialog`（应付页） | Supplier | 回填正确；**业务载荷 `GET /payments?type=1&partyName=<供应商名>&status=unsettled…`** |
 | `SettleReceiptDialog` | Customer | 回填正确 |
-| `SettleReceiptDialog` | Supplier | 回填正确；**候选载荷 `GET /payments?type=1&partyId=66&…`** |
+| `SettleReceiptDialog` | Supplier | 回填正确；**候选载荷 `GET /payments?type=1&partyId=<新建夹具 id>&…`** |
 | `sale/form`（新建主入口） | Customer | 回填正确 |
 | `purchase/form` | Supplier | 回填正确 |
 | `returns/sale/form` | Customer | 回填正确 |
 | `returns/purchase/form` | Supplier | 回填正确 |
-| `returns/ReturnQueryDialog` | Supplier | 回填正确 |
+| `returns/ReturnQueryDialog`（**`/returns/sale`**） | Customer | 回填正确（该范围**只渲染客户** Finder） |
+| `returns/ReturnQueryDialog`（**`/returns/purchase`**） | Supplier | 回填正确（该范围**只渲染供应商** Finder） |
 | `SaleQueryDialog` | Customer | 回填正确 |
 | `PurchaseQueryDialog` | Supplier | 回填正确 |
 | `ProductQueryDialog` | Supplier | 回填正确 |
 | `InboundTaskQueryDialog` | Supplier | 回填正确 |
 | `products/form` | Supplier | 回填正确 |
+| `inbound-tasks/new`（`InboundTaskCreatePage`） | Supplier | 回填正确（**路由是 `/new`，非 `/create`**） |
+| `portal/statements`（菜单「销售 → 对外查询 → 客户对账单查询」） | Customer | 回填正确（**必须从菜单进**，直连 URL 不触发渲染） |
 
-**未达（6/20，附阻碍与已试路径）**：
+**未达（3/20，附阻碍与已试路径）**：
 
-- `sale/form` 的**编辑分支**（2 处）：本轮只走新建主入口；编辑态需已存在销售单（本批**未建单**，避免副作用）。
-- `returns/ReturnQueryDialog` 的 **CustomerFinder**：搜索后**无匹配行**（该查询范围下无启用客户）⇒ 未能完成选中（供应商侧已验）。
-- `inbound-tasks/create`：打开 `/#/inbound-tasks/create` 后**页面未渲染表单**（仅剩菜单），未找到「选择供应商」入口 ⇒ 未达。
-- `purchase-requisitions/form`：本批轮次未覆盖。
-- `portal/statements`：导航到 `/#/portal/statements` **未生效**（页面停留在上一个标签）⇒ **路由待查**。
+- `sale/form` 的**编辑分支**（2 处）：用隔离库既有 `status=1` 测试单（`FIX-SO-4`）进入 **EditView** 后，客户字段是 **combobox（"请选择"）**，**未见 `CustomerFinder` 入口** ⇒ 未达。`AdjustView`（要求 `status 2/3/6` + 单仓 + 未发货 + 无挂起）**本轮未遇到合格单**，未达。**仅在隔离测试库内查看，未提交任何改动**。
+- `purchase-requisitions/form`（`SupplierFinder`）：入口在**明细行**的 PickerField（"选填，可转单时定"）⇒ **须先加入一条商品行**才可见；**本轮未覆盖**。另该 JSX 还有 **`scope=convert`（转单）**路径 ⇒ **细分未验**。
 
-**口径**：上表是**逐页 GUI 的基本回填 / 关键载荷**；**共享边界**（debounce / 挂起 / 错误 / 409 等）由**共享组件测试**覆盖（`CustomerFinder.test.tsx` 与 `SupplierFinder.test.tsx` 各 9 例、`ProductFinderModal.stale-cache.test.tsx` 6 例），**不冒充逐页 GUI**。**未发现新缺陷** ⇒ 未做任何"为过测试"的补丁。夹具按 ID 自洁：清理后**物理与 active 残留均为 0**（未把软删当无残留）。
+**口径（按独立审查更正）**：
+- ① PaymentQuery 的**业务载荷必须与 Finder 类型对应**：客户侧 `GET /payments?**type=2**&partyName=<客户>`、供应商侧 `type=1&partyName=<供应商>`（**不能**拿 `type=1` 的请求归给客户）；Finder 自身的 `keyword` 请求**只证明搜索**，不等于业务查询载荷。
+- ② SettleReceipt 的**候选载荷**：客户侧实测 `GET /payments?**type=2&partyId=510**&settlementTypes=1…`、供应商侧 `type=1&partyId=<夹具 id>` ⇒ **按 id 查**（非仅靠回填名字）。
+- ③ `ReturnQueryDialog` 按 `type === sale / purchase` **条件渲染**，**不是同页同时存在**两个 Finder。
+- ④ `portal/statements` **从菜单「销售 → 对外查询 → 客户对账单查询」进入即正常渲染**；先前"直连 URL 未渲染"只说明**该页面的进入方式**，**不足以**判定导航失败根因（未做进一步定位）。
+- ⑤ 上表是**逐页 GUI 的基本回填 / 关键载荷**；**共享边界**（debounce / 挂起 / 错误 / 409）由**共享组件测试**覆盖（`CustomerFinder.test.tsx`、`SupplierFinder.test.tsx` 各 9 例 + `ProductFinderModal.stale-cache.test.tsx` 6 例），**不冒充逐页 GUI**。**20 实例的基本验收 ≠ 覆盖所有业务模式**（如请购的 `scope=convert` 转单细分、销售单 `AdjustView` 条件路径）。
+- **未发现新缺陷** ⇒ 未做任何"为过测试"的补丁。夹具为**隔离测试库**内按 ID 登记并自洁；清理后**物理与 active 残留均为 0**（未把软删当无残留）。
 
 未触碰发布边界（未推送 / 打 tag / 部署 / 生产迁移）。
