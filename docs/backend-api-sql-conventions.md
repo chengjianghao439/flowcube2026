@@ -38,3 +38,4 @@
 - 专项入口：`npm run smoke:audit-remediation`；角色与范围的判断同时覆盖 HTTP 权限与服务层事务。
 
 - 导入 MIME 白名单不匹配返回 400 `IMPORT_FILE_TYPE_INVALID`，不作为服务器异常上报；MIME 仅用于前置筛选，文件内容仍由既有解析和业务字段校验决定是否接收。
+- **具名子路由必须注册在同 method 的 `/:id` 之前**：Express 按**注册顺序**匹配，形如 `PUT /xxx/yyy` 的具名路由若排在 `PUT /:id` 之后，会被当作 `:id='yyy'` 命中通用处理器——**静默返回 200 而业务完全不生效**，调用方看不出失败。2026-09-29 实例：`PUT /api/price-lists/bind-customer` 曾排在 `PUT /:id` 之后 ⇒ 返回 200「更新成功」、客户 `price_level` 未变（修复是把该路由移到 `/:id` 之前并加顺序注释）。回归 `npm run smoke:price-list-bind-customer`（真实 HTTP + 真实副作用，非源码字符串比对；已入 Tests CI）。

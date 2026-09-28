@@ -10,7 +10,8 @@
  *   ① 占库改单：点客户按钮 ⇒ 不打开选择器、不发起异客户取价；
  *   ② 占库改单：改明细仍能提交，且提交载荷归属原客户；
  *   ③ 草稿编辑（正向对照）：客户按钮仍可打开选择器（该路径本就支持改客户）。
- * 去掉 `headerReadOnly` 会让 ①② 失败（旧实现即如此）。
+ * 变异验证：去掉 `AdjustView` 的 `headerReadOnly` 只让用例 ① 失败——② 只改数量、
+ * 与表头是否只读无关，③ 是草稿编辑的正向对照，二者在旧实现下同样通过（不据此扩大证据）。
  */
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -52,7 +53,9 @@ vi.mock('@/api/warehouses', () => ({
   getWarehousesActiveApi: vi.fn().mockResolvedValue([{ id: 1, name: '示例仓库' }]),
   getWarehousesApi: vi.fn(), createWarehouseApi: vi.fn(), updateWarehouseApi: vi.fn(), deleteWarehouseApi: vi.fn(),
 }))
-vi.mock('@/components/shared/OrderFulfillmentPanel', () => ({ OrderFulfillmentPanel: () => null }))
+// 不 mock「发货安排」等未访问 tab 的组件：默认 detailTab='info'，KeepAliveSection 未访问不挂载，
+// 保持真实渲染面；只 mock 会发网络请求的 api 层。
+
 
 let host: HTMLDivElement, root: Root, client: QueryClient
 

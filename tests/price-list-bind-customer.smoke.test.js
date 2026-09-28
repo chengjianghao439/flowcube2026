@@ -15,6 +15,12 @@
  *
  * 变异验证（人工，一次性）：把 bind-customer 行移回 `/:id` 之后 ⇒ ①② 必红。
  *
+ * 夹具策略（**不污染共享测试库**）：本套件复用的是 `prepareSmokeContext` 的共享
+ * customer / product，因此**写前快照**会被改动的字段，`finally` 用**测试 SQL 精确还原**
+ * （不依赖绑定路由——路由被临时改坏时也要能恢复），逐项独立兜底并断言还原值；
+ * 本轮自建的临时价格表按 ID **物理清理**并复查。资源：关闭 ctx 自建 pool 与 backend
+ * 全局 pool，用 `process.exitCode` 让进程自然退出（不用 `process.exit(0)` 掩盖未关闭资源）。
+ *
  * 运行：node tests/price-list-bind-customer.smoke.test.js（需独立测试库）
  */
 
@@ -25,8 +31,18 @@ const log = createLogger('price-list-bind-customer')
 async function main() {
   const ctx = await prepareSmokeContext({})
   const { http, pool, customer, product } = ctx
+
+  // ── 写前快照：只快照本套件确实会动的字段 ────────────────────────────────────
+  const [custRows] = await pool.query(
+    'SELECT price_level, price_list_id, price_list_name FROM sale_customers WHERE id=?', [customer.id],
+  )
+  const [prodRows] = await pool.query('SELECT sale_price_a, sale_price_b FROM product_items WHERE id=?', [product.id])
+  const custBefore = custRows[0]
+  const prodBefore = prodRows[0]
+
+  const cleanupListIds = []
   let token = null
-  let createdListId = null
+
   try {
     const loginResult = await login(http, 'smoke_admin', 'SmokeAdmin123!')
     token = loginResult.token
@@ -63,35 +79,70 @@ async function main() {
 
     // ③ 通用 PUT /:id 正向仍可用（顺序调整未挤掉通用更新）
     const created = await http.post('/api/price-lists', { token, json: { name: `bind-regression-${Date.now()}` } })
-    createdListId = created.data?.data?.id
-    log.assert('价格表创建成功', !!createdListId, JSON.stringify(created.data))
+    const listId = created.data?.data?.id
+    if (listId) cleanupListIds.push(listId)   // 拿到即登记，后续失败也能清
+    log.assert('价格表创建成功', !!listId, JSON.stringify(created.data))
     const renamed = `bind-regression-updated-${Date.now()}`
-    const upd = await http.put(`/api/price-lists/${createdListId}`, { token, json: { name: renamed } })
+    const upd = await http.put(`/api/price-lists/${listId}`, { token, json: { name: renamed } })
     log.assert(
       '通用 PUT /:id 更新正向仍可用（文案「更新成功」）',
       upd.ok && /更新成功/.test(String(upd.data?.message || '')),
       `status=${upd.status} message=${upd.data?.message}`,
     )
-    const [chk] = await pool.query('SELECT name FROM price_lists WHERE id=?', [createdListId])
+    const [chk] = await pool.query('SELECT name FROM price_lists WHERE id=?', [listId])
     log.assert('通用更新真实落库', chk?.[0]?.name === renamed, `实际=${chk?.[0]?.name}`)
   } catch (e) {
     log.assert('套件未抛错', false, e.message)
   } finally {
-    // 自洁：只还原本套件动过的对象（客户等级、商品等级价、临时价格表）
+    // ── 清理：各清理项独立兜底并断言还原值 ──────────────────────────────────
+    // 1) 客户价格字段：用测试 SQL 精确还原（不依赖绑定路由——它正是被临时改坏的对象）
     try {
-      if (token) await http.put('/api/price-lists/bind-customer', { token, json: { customerId: customer.id, priceLevel: 'A' } })
-      await pool.query('UPDATE product_items SET sale_price_b=NULL WHERE id=?', [product.id])
-      if (createdListId) await http.delete(`/api/price-lists/${createdListId}`, { token })
-    } catch (e) {
-      log.assert('自洁未抛错', false, e.message)
+      await pool.query(
+        'UPDATE sale_customers SET price_level=?, price_list_id=?, price_list_name=? WHERE id=?',
+        [custBefore.price_level, custBefore.price_list_id, custBefore.price_list_name, customer.id],
+      )
+      const [after] = await pool.query('SELECT price_level, price_list_id, price_list_name FROM sale_customers WHERE id=?', [customer.id])
+      log.assert(
+        '客户价格字段精确还原（price_level/price_list_id/price_list_name）',
+        JSON.stringify(after?.[0]) === JSON.stringify(custBefore),
+        `前=${JSON.stringify(custBefore)} 后=${JSON.stringify(after?.[0])}`,
+      )
+    } catch (e) { log.assert('客户字段还原未抛错', false, e.message) }
+
+    // 2) 商品等级价：精确还原（含 sale_price_a，不能只把 b 置 NULL）
+    try {
+      await pool.query(
+        'UPDATE product_items SET sale_price_a=?, sale_price_b=? WHERE id=?',
+        [prodBefore.sale_price_a, prodBefore.sale_price_b, product.id],
+      )
+      const [after] = await pool.query('SELECT sale_price_a, sale_price_b FROM product_items WHERE id=?', [product.id])
+      const same = String(after?.[0]?.sale_price_a) === String(prodBefore.sale_price_a)
+        && String(after?.[0]?.sale_price_b) === String(prodBefore.sale_price_b)
+      log.assert('商品等级价精确还原（sale_price_a / sale_price_b）', same, `前=${JSON.stringify(prodBefore)} 后=${JSON.stringify(after?.[0])}`)
+    } catch (e) { log.assert('商品等级价还原未抛错', false, e.message) }
+
+    // 3) 本轮自建价格表：按 ID **物理清理**并复查（不把软删当清理干净）
+    for (const id of cleanupListIds) {
+      try {
+        await pool.query('DELETE FROM price_list_items WHERE list_id=?', [id])
+        await pool.query('DELETE FROM price_lists WHERE id=?', [id])
+        const [left] = await pool.query('SELECT COUNT(*) AS n FROM price_lists WHERE id=?', [id])
+        log.assert(`临时价格表 ${id} 物理清理并复查为 0`, Number(left?.[0]?.n) === 0, `剩余=${left?.[0]?.n}`)
+      } catch (e) { log.assert(`临时价格表 ${id} 清理未抛错`, false, e.message) }
     }
-    await ctx.close()
+
+    // 4) 资源：关 ctx 自建 pool/server + backend 全局 pool，交给自然退出
+    try {
+      await ctx.close()
+      await require('../backend/src/config/db').pool.end()
+    } catch (e) { log.assert('关闭连接池未抛错', false, e.message) }
   }
+
   const counts = log.summary()
-  process.exit(counts.failed > 0 ? 1 : 0)
+  process.exitCode = counts.failed > 0 ? 1 : 0   // 不用 process.exit()：避免掩盖未关闭资源
 }
 
 main().catch((e) => {
   console.error('[BIND-CUSTOMER] 未捕获异常：', e)
-  process.exit(1)
+  process.exitCode = 1
 })

@@ -1303,7 +1303,9 @@ cost链=[[100,150],[100,200]]  最终cost=200   ← 两条历史的旧价都是 
 
 **为什么改从「草稿编辑/新建」验**：§33 的修复把改单视图客户字段设为只读，**改单里切客户已不可达**；真实可达路径是**新建/编辑销售单**（`CreateView`/`EditView` 的客户 Finder 可点）。
 
-**组件证据（受控注入，既有）**：`frontend/src/pages/sale/form/useSaleOrderForm.test.tsx` **16 例**已覆盖本条主问——较旧响应不覆盖当前客户价（`customer(1)→selectProduct→customer(2)`，先回 22 后回 11，单价保持 22）、旧请求不清新请求 loading、迟到响应不覆盖手工价、明确切客户对已有手工价**仍按现行规则重新定价**、**查价失败/未配置价格 ⇒ `priceErrors`「请手动确认单价」且不静默继承原价**、无效响应值（0/-1/NaN/∞）留待手动确认、删行/卸载失效、StrictMode 不重复请求。
+**本节范围（如实）**：本节当时只验证了「**无有效价格 → 人工确认 → 保存**」这一条，**没有做真实的客户 A→B 切换**，也没有覆盖**抛错/HTTP 失败**分支。**真实 A→B 切换 + 失败注入 + 恢复**已在 **§36** 补齐（并同时暴露了 §37 的路由缺陷），本节不据此声称「客户切换失败已验」。
+
+**组件证据（受控注入，既有）**：`frontend/src/pages/sale/form/useSaleOrderForm.test.tsx` **20 例**已覆盖本条主问——较旧响应不覆盖当前客户价（`customer(1)→selectProduct→customer(2)`，先回 22 后回 11，单价保持 22）、旧请求不清新请求 loading、迟到响应不覆盖手工价、明确切客户对已有手工价**仍按现行规则重新定价**、**查价失败/未配置价格 ⇒ `priceErrors`「请手动确认单价」且不静默继承原价**、无效响应值（0/-1/NaN/∞）留待手动确认、删行/卸载失效、StrictMode 不重复请求。
 
 **真实 GUI + 受控注入（本轮新增，隔离库 :5173）**：新建销售单 → 选 `Smoke客户` → 选 `Smoke仓库` → **拦截 `GET /api/price-lists/customer-price*` 返回 `data:null`**（模拟「当前客户未设置有效价格」）→ 从商品 Finder 选 `SMOKE-P001` ⇒ 行显示**「默认价格」**并出现 **「当前客户未设置有效价格，请手动确认单价」** + **「确认当前单价」** 入口；点「确认当前单价」⇒ 提示消失；填数量 3 ⇒ **保存草稿成功**（新单 `SL20260929002`，`total_amount=30`）⇒ **恢复完成**。**正向对照（真实 GUI）**：同库草稿编辑下 `[data-entry-field="party"] button` **`disabled=false` 且点击后选择器真实打开**（`input[placeholder="搜索客户名称、编码…"]` 出现），与改单视图的 `disabled=true`、不打开形成对照。
 
@@ -1323,7 +1325,43 @@ cost链=[[100,150],[100,200]]  最终cost=200   ← 两条历史的旧价都是 
 
 **真实载荷与实际结果**：`POST /api/purchase-requisitions/1/convert` → `{"lines":[{"requisitionItemId":1,"quantity":5,"supplierId":1,"supplierName":"Smoke供应商","unitPrice":10}]}`、**200**，toast「已生成 1 张采购单，采购申请单已结案」。DB 实测：`purchase_orders` **id=7 / PC20260929001**、`supplier_id=1`/`supplier_name=Smoke供应商`、`warehouse_id=1`、`total_amount=50`、`status=1`（草稿）、**`source_requisition_id=1`**、备注「由请购单 PR20260929001 转入」；`purchase_order_items` 商品 9 / 数量 5 / 单价 10 / 金额 50；`purchase_requisition_conversions`（req 1、item 1、po 7、qty 5）；`purchase_requisition_items.converted_qty=5`；`purchase_requisitions.status` **3→6**。⇒ **买到的不是「组件回填」而是真实转单落库结果**。
 
-**清理与残留（本轮 ID，如实）**：采购单 **7** 走业务入口「取消」⇒ `status 1→4`；随后按与销售单同构的**软删**（`deleted_at`）清 `purchase_orders 7` 与 `purchase_requisitions 1` ⇒ `live req=0`、采购单列表**不再出现 `PC20260929001`**（余 `PC20260927004/003` 为 9-27 既有单，**非本轮**）。**两点如实说明**：① `purchase_orders` / `purchase_requisitions` **没有删除 API**，请购单 `cancel` 的 `from=[1,2,4]` 且 **`blocked[6]='已转采购的请购单不能取消'`（前后端一致）** ⇒ 已结案请购单在业务上**本就不可逆**，本轮以软删收尾；② 明细/关联表（`purchase_order_items`、`purchase_requisition_items`、`purchase_requisition_conversions`）**无 `deleted_at`**，随主表保留 ⇒ **物理行仍在**，与 §33「软删 ≠ 无残留」口径一致。
+**清理与残留（本轮 ID，如实）**：采购单 **7** 走**业务 API**「取消」（`POST /api/purchase/:id/cancel`，GUI 按钮触发）⇒ `status 1→4`。此后 `purchase_orders` / `purchase_requisitions` **都没有删除 API**（请购单 `cancel` 的 `from=[1,2,4]` 且 **`blocked[6]='已转采购的请购单不能取消'`，前后端一致** ⇒ 已结案请购单在业务上**本就不可逆**），故本轮按 ID 用**测试清理 SQL** 软删（`UPDATE … SET deleted_at=NOW()`，`purchase_orders 7` + `purchase_requisitions 1`）——**这是测试清理手段，不是产品删除能力**，不得据此认为系统具备单据删除功能。清理后 `live req=0`、采购单列表不再出现 `PC20260929001`（余 `PC20260927004/003` 为 9-27 既有单，**非本轮**）。**清理不等于全零**：主表软删行仍在，且明细/关联表（`purchase_order_items`、`purchase_requisition_items`、`purchase_requisition_conversions`）**无 `deleted_at`**、随主表保留 ⇒ **物理残留仍在**（与 §33「软删 ≠ 无残留」同口径）。
+
+---
+
+## 36. 客户 A→B 切换的真实 GUI 验证（含失败注入与恢复）（2026-09-29，仅本地）
+
+**夹具（全部业务 API，未手改库/未提权）**：临时客户 A = `sale_customers 512`（`切换A-161624`，等级 A）、客户 B = `513`（`切换B-161624`，等级 B，经 `PUT /api/price-lists/bind-customer` 合法设置）；临时商品 `product_items 159`（`P000001`，`salePriceA=10` / `salePriceB=20`，`POST /api/products`）。取价实测：A → `salePrice 10 / priceLevel A`；B → `20 / B`。
+
+### 36.1 A 成功取价 → 切 B 成功取价（真实 GUI，无注入）
+
+新建销售单 → 选仓库 → 选客户 A → 加商品 159 ⇒ 请求 `GET /api/price-lists/customer-price?customerId=512&productId=159`、单价 **10**；点客户按钮 → Finder 搜「切换B-161624」→ 确认 ⇒ 请求 `…customerId=513…`、单价 **10 → 20**（提示「价格表定价」）。填数量 4 → 保存草稿 ⇒ 载荷 `customerId:513`、`customerName:"切换B-161624"`；落库 `sale_orders` **24 / SL20260929003**：`customer_id=513`、`unit_price=20`、`total_amount=80` ⇒ **归属 B**。
+
+### 36.2 B 取价的受控失败注入与恢复
+
+**注入**（`agent-browser network route "**/price-lists/customer-price*" --abort`，模拟网络/HTTP 失败）：在客户 A 已有价 10 的前提下切到客户 B ⇒ 客户字段回填 B，但**单价仍显示旧值 10**，同时出现 **「默认价格」**（`priceSource='default'`、`resolvedPrice=null`）与 **「价格查询失败，请手动确认单价」**；点保存 ⇒ 提示升级为「第 1 行（切换验证商品-161624）：价格查询失败，请手动确认单价」，且**没有发出任何 `POST /api/sale`（计数 0）** ⇒ **旧价没有以自动定价凭据保存、保存被阻止**。
+
+**恢复**：`network unroute` 清除注入 → 重开客户 Finder 并**重选客户 B** ⇒ 请求 `customerId=513` 成功、单价回到 **20**（「价格表定价」）⇒ 保存 ⇒ 载荷 `customerId:513`、落库 `sale_orders` **25 / SL20260929004**：`customer_id=513`、`unit_price=20`、`total=80` ⇒ **归属 B**。
+
+**证据分级**：① A→B 成功取价与两次落库为**真实 GUI + 真实业务 API**（无注入）；② 失败分支为**受控注入（abort）+ 真实 GUI**（只改接口响应，前端逻辑未改）；③ **慢返回/乱序竞态**仍无真实 GUI 证据（本机 `network route` 无延迟参数），**仅组件级证据**（`useSaleOrderForm.test.tsx` 20 例）。
+
+---
+
+## 37. `PUT /price-lists/bind-customer` 路由遮蔽（缺陷 · 已修 · 已入 CI）（2026-09-29，仅本地）
+
+**缺陷（A 类，真实 HTTP 复现）**：`backend/src/modules/price-lists/price-lists.routes.js` 中 `router.put('/bind-customer', …)` 注册在 `router.put('/:id', …)` **之后** ⇒ Express 顺序匹配把 `bind-customer` 当成 `:id`，请求落到 `ctrl.update`：返回 **200「更新成功」**（而非「绑定成功」），客户 `price_level` **完全未变** —— 前端调用方看不出失败（**静默 no-op**）。
+
+**证据**：修复前 `PUT /api/price-lists/bind-customer {customerId:513, priceLevel:'B'}` → `200 {"message":"更新成功"}`；DB `sale_customers 513.price_level` 仍 `A`；取价仍返回 A 级 10。对照 `PUT /api/price-lists/999999`（不存在的 id）同样「更新成功」—— 确认两者命中同一条 `/:id` 路由。
+
+**修复（最小）**：把 `bind-customer` 注册**移到 `/:id` 之前**并加顺序注释；**未改** controller/service。修复后：`200 {"message":"绑定成功"}`、`513.price_level='B'`、取价 `20/B`；对照 `PUT /:id`（改名）仍「更新成功」且真实落库。
+
+**回归（真实 HTTP，非源码字符串比对）**：新增 `tests/price-list-bind-customer.smoke.test.js`（独立测试库），锁死三件事：① bind-customer 文案「绑定成功」且客户等级**真的变化**；② 取价据此返回 B 级价；③ 通用 `PUT /:id` 正向仍可用并真实落库。**接入 CI**：`package.json` 新增 `smoke:price-list-bind-customer`，`.github/workflows/test.yml` 增加对应步骤。
+
+**收尾策略（审查反馈后加固）**：本套件复用 `prepareSmokeContext` 的**共享** customer/product，因此**写前快照**将被改动的字段（客户 `price_level`/`price_list_id`/`price_list_name`、商品 `sale_price_a`/`sale_price_b`），`finally` 用**测试 SQL 精确还原**（**不依赖绑定路由**——它正是可能被临时改坏的对象），逐项独立兜底并**断言还原值**；本轮自建临时价格表按 ID **物理清理**（`DELETE` 而非软删）并复查为 0。资源上关闭 ctx 自建 pool/server **与 backend 全局 pool**，以 `process.exitCode` 让进程**自然退出**（不用 `process.exit()` 掩盖未关闭资源）。**未改**共享 helper。
+
+**结果**：修复后 **10 passed / 0 failed**、**退出码 0、约 1 秒自然退出**；**变异验证**（用本批起点 `78b9828` 的旧顺序）⇒ **3 项失败**（文案「更新成功」、`price_level` 未变、取价仍 A 级）而**还原/清理断言仍通过**，退出码 1；恢复后重新 10/10。变异跑完后**独立查库核对**：`sale_customers 1`（`A`/NULL/NULL）、`product_items 9`（`sale_price_a=10`、`sale_price_b=NULL`）、`live price_lists=0` 与基线**逐项一致** ⇒ 即使路由被改坏，还原与物理清理仍生效、不污染共享测试库。
+
+**横向排查（如实限定）**：脚本扫描 `backend/src/modules/**/*.routes.js`，规则仅为**「同 method、单段字面量路径排在单段动态段（`/:x`）之后」**；该脚本对修复前的 price-lists 能正确检出（已验证），对当前代码库**未发现同类**。**此结论只覆盖这一种冲突形态**，**不能**据此断言「所有路由都无冲突」——未覆盖多段动态段、正则路径、`router.use()` 中间件顺序、跨 router 挂载前缀等。
 
 **未触碰发布边界**：未推送 / 打 tag / 部署 / 生产迁移 / 生产数据 / 真实发货消息。
 
