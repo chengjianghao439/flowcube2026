@@ -22,13 +22,15 @@ router.post('/', requirePermission(PERMISSIONS.PRICE_LIST_CREATE), validateBody(
 // 批量更新价格表明细（覆盖写入）
 router.put('/:id/items', requirePermission(PERMISSIONS.PRICE_LIST_UPDATE), ctrl.updateItems)
 
+// 更新客户关联的价格表
+// **必须注册在 `/:id` 之前**：Express 按注册顺序匹配，`/:id` 会先命中 `bind-customer`
+// （id='bind-customer'）而静默走 update（曾返回 200「更新成功」但绑定不生效）。
+router.put('/bind-customer', requirePermission(PERMISSIONS.PRICE_LIST_UPDATE), ctrl.bindCustomer)
+
 // 更新价格表基本信息
 router.put('/:id', requirePermission(PERMISSIONS.PRICE_LIST_UPDATE), validateBody(z.object({ name:z.string().min(1).optional(), remark:z.string().optional(), isActive:z.boolean().optional() })), ctrl.update)
 
 // 删除价格表
 router.delete('/:id', requirePermission(PERMISSIONS.PRICE_LIST_DELETE), ctrl.remove)
-
-// 更新客户关联的价格表
-router.put('/bind-customer', requirePermission(PERMISSIONS.PRICE_LIST_UPDATE), ctrl.bindCustomer)
 
 module.exports = router

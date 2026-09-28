@@ -369,6 +369,9 @@ jobs:
       - name: 2026-09-24 认证、资金精度与视图对账回归
         run: npm run smoke:audit-remediation-20260924
 
+      - name: 价目表绑定客户路由可达性（真实 HTTP：绑定生效 + 取价采用 + 通用 /:id 仍可用）
+        run: npm run smoke:price-list-bind-customer
+
       - name: 数据库迁移 — 集成库
         run: npm --prefix backend run migrate
         env:
