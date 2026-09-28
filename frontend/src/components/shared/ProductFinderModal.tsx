@@ -47,15 +47,18 @@ function ProductFinderContent({ warehouseId, warehouseName, mode = 'lookup', onC
   const [keyword, setKeyword] = useState('')
   const [searchText, setSearchText] = useState('')
   const [category, setCategory] = useState<{ id: number; name: string } | null>(null)
-  const [selected, setSelected] = useState<ProductFinderResult | null>(null)
+  // 只存 id，选中对象一律**从当前列表派生**：后台 refetch 后行已更新时，摘要/高亮/确认都跟着当前值，
+  // 不会把"选中那一刻"的旧对象回传出去（原缺陷：页脚确认回传过期行）。
+  const [selectedId, setSelectedId] = useState<number | null>(null)
   const categories = useCategoryTree()
   const query = useProductFinder({ page: 1, pageSize: PAGE_SIZE, keyword: searchText, categoryId: category?.id ?? null, warehouseId: warehouseId ?? null })
   useEffect(() => { const timer = setTimeout(() => setSearchText(keyword.trim()), 300); return () => clearTimeout(timer) }, [keyword])
   const pending = keyword.trim() !== searchText || query.isFetching || query.isPlaceholderData
   const products = query.data?.list ?? []
   const total = query.data?.pagination.total ?? 0
-  const canConfirm = selected && !pending && !query.isError && products.some(p => p.id === selected.id)
-  const resetSelection = () => { setSelected(null) }
+  const selected = selectedId != null ? products.find(p => p.id === selectedId) ?? null : null
+  const canConfirm = selected != null && !pending && !query.isError
+  const resetSelection = () => { setSelectedId(null) }
   const chooseCategory = (id: number, name: string) => { setCategory({ id, name }); resetSelection() }
   const confirm = (product: ProductFinderResult) => { if (pending || query.isError) return; onConfirm(product); onClose() }
   const hasStock = warehouseId != null && warehouseId > 0
@@ -81,8 +84,8 @@ function ProductFinderContent({ warehouseId, warehouseName, mode = 'lookup', onC
           <div className="min-h-0 flex-1 overflow-auto" aria-busy={!!pending}>
             {query.isError ? <QueryErrorState error={query.error} onRetry={() => void query.refetch()} title="商品加载失败" compact /> : <table className="w-full min-w-[1200px] text-sm">
               <thead className="sticky top-0 z-10 bg-muted text-left text-xs text-muted-foreground"><tr><th className="w-9 py-3"><span className="sr-only">选择</span></th><ProductIdentityHeaders /><th className="w-16 px-2 py-3 font-medium">单位</th><th className="px-3 py-3 font-medium">{mode === 'purchase' ? '供应商' : '分类'}</th>{hasStock && <th className="w-24 px-3 py-3 text-right font-medium">可用库存</th>}{mode === 'sale' && <th className="w-28 px-3 py-3 text-right font-medium">参考售价</th>}</tr></thead>
-              <tbody className="divide-y divide-border">{query.isLoading ? <tr><td colSpan={columnCount} className="py-20 text-center text-muted-foreground">正在加载商品…</td></tr> : !products.length ? <tr><td colSpan={columnCount} className="py-16 text-center"><PackageSearch className="mx-auto mb-3 h-7 w-7 text-muted-foreground/50" /><p className="font-medium">没有匹配的商品</p><p className="mt-1 text-xs text-muted-foreground">试试其他关键词，或切换到全部分类。</p></td></tr> : products.map(product => <tr key={product.id} aria-selected={selected?.id === product.id} tabIndex={pending ? -1 : 0} onClick={() => { if (!pending) setSelected(product) }} onDoubleClick={() => confirm(product)} onKeyDown={e => { if (e.key === ' ') { e.preventDefault(); if (!pending) setSelected(product) } if (e.key === 'Enter') { e.preventDefault(); if (selected?.id === product.id) confirm(product); else if (!pending) setSelected(product) } }} className={cn('cursor-pointer align-top outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring', pending ? 'opacity-50' : selected?.id === product.id ? 'bg-primary/[0.07]' : 'hover:bg-muted/50')}>
-                <td className="py-4 pl-3 text-primary">{selected?.id === product.id && <Check className="h-4 w-4" />}</td>
+              <tbody className="divide-y divide-border">{query.isLoading ? <tr><td colSpan={columnCount} className="py-20 text-center text-muted-foreground">正在加载商品…</td></tr> : !products.length ? <tr><td colSpan={columnCount} className="py-16 text-center"><PackageSearch className="mx-auto mb-3 h-7 w-7 text-muted-foreground/50" /><p className="font-medium">没有匹配的商品</p><p className="mt-1 text-xs text-muted-foreground">试试其他关键词，或切换到全部分类。</p></td></tr> : products.map(product => <tr key={product.id} aria-selected={selectedId === product.id} tabIndex={pending ? -1 : 0} onClick={() => { if (!pending) setSelectedId(product.id) }} onDoubleClick={() => confirm(product)} onKeyDown={e => { if (e.key === ' ') { e.preventDefault(); if (!pending) setSelectedId(product.id) } if (e.key === 'Enter') { e.preventDefault(); if (selectedId === product.id) confirm(product); else if (!pending) setSelectedId(product.id) } }} className={cn('cursor-pointer align-top outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring', pending ? 'opacity-50' : selectedId === product.id ? 'bg-primary/[0.07]' : 'hover:bg-muted/50')}>
+                <td className="py-4 pl-3 text-primary">{selectedId === product.id && <Check className="h-4 w-4" />}</td>
                 <ProductIdentityCells product={product} />
                 <td className="px-2 py-3 text-muted-foreground"><span>{product.unit || '—'}</span>{product.allowDecimalQty === false && <span className="ml-1 rounded bg-warning/10 px-1 text-xs text-warning">只能整数</span>}</td><td className="break-words px-3 py-3 text-xs leading-5 text-muted-foreground">{mode === 'purchase' ? product.supplierName || '—' : product.categoryName || '未分类'}</td>
                 {hasStock && <td className="px-3 py-3 text-right tabular-nums">{product.stock}</td>}{mode === 'sale' && <td className="px-3 py-3 text-right tabular-nums">{product.salePrice == null ? '—' : money(product.salePrice)}</td>}

@@ -41,6 +41,7 @@
 - 销售分组桌面样式：客户管理列表编码/名称/联系人/电话/邮箱各自独立列、窄窗口横向滚动；其他列表复用 RecordIdentity；超额驳回用统一原因弹窗。见 docs/sales-group-ui-2026-09-05.md。
 
 - 全局商品查找统一复用 ProductFinderModal：默认只展示身份/规格/单位/分类，仅传仓库时显示该仓可用库存；搜索覆盖名称/编码/条码/供应商型号/型号/颜色。见 docs/product-finder-redesign-2026-09-05.md。
+- **商品 Finder 的新鲜度与选中一致性（2026-09-28）**：`useProductFinder` **局部 `staleTime: 0`**（全仓仅 `ProductFinderContent` 一个调用点；**全局默认不动**），使**每次参数激活**（挂载 / 关键词·分类·仓库变化）都取新值——`refetchOnMount:'always'` **只作用于挂载**，覆盖不到"重开后重复搜索原关键词""同次 A→B→A"。选中态**只存 `selectedId`**，选中对象一律**从当前列表派生**，页脚「确认选择」/双击/Enter 都回传**当前展示行**（不再回传"选中那一刻"的旧对象）；`pending`（含延迟响应）/`isError`/选中行已不在列表时**不得确认**。回归 `ProductFinderModal.stale-cache.test.tsx`；取证、反向验证与 A/B/C 见 `docs/finder-stale-cache-investigation-2026-09-28.md`。
 
 - 采购建议两视图共用 ACTIVE 实物、未发销售、有效预占与未上架采购净额；包装倍数/MOQ 按权威单位换算；调拨候选先保护来源仓需求与安全库存。见 docs/procurement-planning-2026-09-06.md。
 - 业务入口合并：采购计划+补货建议=「采购建议」，报表中心/经营 KPI/利润分析=「报表中心」，仓库运营看板/批次效率/PDA 异常分析=「仓库运营」；保留原路由、参数、接口与权限。见 docs/business-centers-2026-09-05.md。
