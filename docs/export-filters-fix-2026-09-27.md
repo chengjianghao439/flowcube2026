@@ -1275,7 +1275,21 @@ cost链=[[100,150],[100,200]]  最终cost=200   ← 两条历史的旧价都是 
 
 **回归与复验**：`tsc -p frontend/tsconfig.app.json --noEmit` **rc=0**；eslint **仅改动 2 文件** rc=0；`vitest run src/pages/sale/form` **4 文件 / 25 例全绿**。真实 GUI 复验（夹具 22）：改单视图实测 `客户按钮.disabled=true`、备注/收货人 `disabled`、地址簿按钮不再渲染、明细数量仍可编辑；改数量 5→3 提交 ⇒ `quantity=3`、`reserved_qty=3`、`status=2`、`total=300`，而 **`customer_id`/`warehouse_id`/`remark` 全部保持不变**。
 
-**夹具清理与残留复查（本轮 ID）**：21、22 均走**合法路径**（取消占库 → 取消订单 → 删除订单），软删后 `sale_orders` live 仅剩 2 条既有草稿（`FIX-SO-3/4`）；`inventory_stock` wh1 `quantity=5 / reserved=0`、ACTIVE 容器 wh1 **4 个 / 11.00** 与本批开始时一致 ⇒ **本轮无残留**。
+**交互回归（审查反馈后补，2026-09-29）**：新增 `frontend/src/pages/sale/form/adjust-header.test.tsx` —— 渲染**真实 `SaleFormPage`**（真实 `SaleOrderHeaderFields`/`CustomerFinder`，只 mock api 层），**实际点击**验证：① 占库改单点客户按钮 ⇒ 选择器**不打开**、`getCustomerPriceApi` **未被调用**；② 占库改单改数量 5→4 提交 ⇒ `adjustSaleApi` 载荷 `customerId=1`（归属原客户）、`quantity=4`；③ 草稿编辑（**正向对照**）点客户按钮 ⇒ 选择器**能打开**（该路径本就支持改客户）。**不只断言 `disabled`**。**变异验证**：临时移除 `AdjustView` 的 `headerReadOnly` ⇒ 用例 ① 失败，恢复后 3/3 通过（临时变体只改本任务自己的文件并在同一会话内恢复，`git diff` 复核无残留）。**证据边界**：这是组件级（真实页面组件 + 真实交互，api 层 mock）证据，**不代替** :5173 的真实后端 GUI 复验（后者见上）；其中「选择器是否打开」按 `FinderModal`（经 `AppDialog`）可能 portal 到 `document.body` 的事实，在 `document` 上断言。`sale/form` 目录 **5 文件 / 28 例**通过；`tsc -p tsconfig.app.json` rc=0、改动/新增文件 eslint rc=0、`test:frontend-date-source`、`test:frontend-conventions`（5/5）通过。CI 入口为既有 `npm --prefix frontend run test:unit`（`.github/workflows/test.yml:166`），新文件随目录自动纳入。
+
+**夹具清理与残留复查（本轮 ID，仅按 ID 核对、未清历史）**：21、22 均走**合法路径**（取消占库 → 取消订单 → 删除订单）到达终态。**软删 ≠ 无残留**——按 ID 实测：
+
+| 对象 | 现状（按本轮 ID） |
+|---|---|
+| `sale_orders` 21/22 | **物理行仍在**（`deleted_at` 已设、`status=5`）；live 单仅剩 2 条既有草稿 `FIX-SO-3/4` |
+| `sale_order_items` | 21→1 行、22→1 行，**物理仍在**（软删不级联） |
+| `stock_reservations` | 各 1 条 **`status=3`（已释放）**；全库 `status=1` 计数为 **0** ⇒ **无未释放预占** |
+| `sale_order_events` | 21→7 条、22→5 条（`created`/`reserved`/`adjusted`/`released`/`cancelled`）⇒ **活动日志仍在**；本轮**未产生价差日志**（无 `pricing_override`/`below_cost`：`cost_price=0` 且无手工改价） |
+| `sale_order_adjustments`、`warehouse_tasks` | 均 **0** |
+
+⇒ 准确表述：**本轮无有效订单、无未释放预占；软删记录与活动日志仍在**（历史保留，未清理）。
+
+**库存事实的既有偏差（不声称一致，本轮不修）**：起点（造单前首次查询）与复查均为 `inventory_stock` wh1 `quantity=5.00 / reserved=0.00`、ACTIVE 容器 wh1 **4 个 / 11.00**、wh6 1 个 / 1.00 ⇒ **本轮未改变这两个数**；但 `inventory_stock.quantity(5)` 与 ACTIVE 容器合计(11) **在本批之前就已不同**，属**既有缓存偏差**，非本轮产生。按 AGENTS 红线，`inventory_stock.quantity` 的唯一合法写入口是 `syncStockFromContainers()`，**本轮不 `resync`、不擅自修复**。
 
 **验收方法学记录（环境性问题，非产品缺陷）**：浏览器预览下 `ConfirmDialog` 走 `AppDialog`（`window.flowcubeDesktop` 不存在 ⇒ `native=false`），**当有 Radix 浮层（如通知中心 `div#radix-*`）覆盖右上角时，`agent-browser click` 会被遮挡**（工具会明确报「covered by …」），此时点击表现为「成功但无反应」；处置：先 `press Escape` 清浮层再点。另：`agent-browser find role button click "…"` 匹配不可靠，**用 snapshot 的 `@ref` 点击才稳定**；按钮文本含「取消」时需要精确 ref（确认框「确认取消」 vs 「返回订单」）。
 
