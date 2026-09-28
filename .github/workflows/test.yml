@@ -500,6 +500,11 @@ jobs:
       - name: 冒烟测试 — 改价审批历史旧价与商品缺失回滚
         run: npm run smoke:price-change-history
 
+      # 同属商品改价历史：并发两次手工改价的历史链连贯、allowDecimalQty 未传保持原值、
+      # 已软删商品改价明确失败且不写脏数据。
+      - name: 冒烟测试 — 商品手工改价历史一致性与软删商品改价拒绝
+        run: npm run smoke:product-price-history-integrity
+
       - name: 冒烟测试 — 仓库运营与 PDA 异常指标、日期和仓库范围
         run: npm run smoke:warehouse-ops
 

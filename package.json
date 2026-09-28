@@ -29,6 +29,7 @@
     "smoke:print-barcode-void": "node tests/print-barcode-void.smoke.test.js",
     "smoke:report-cost-basis": "node --test tests/report-cost-basis.smoke.test.js",
     "smoke:price-change-history": "node tests/price-change-history-oldprice.smoke.test.js",
+    "smoke:product-price-history-integrity": "node tests/product-price-history-integrity.smoke.test.js",
     "smoke:price-list-bind-customer": "node tests/price-list-bind-customer.smoke.test.js",
     "smoke:print-barcode-void-receipt": "node tests/print-barcode-void-receipt.smoke.test.js",
     "smoke:print-template-preview": "node tests/print-template-preview.smoke.test.js",

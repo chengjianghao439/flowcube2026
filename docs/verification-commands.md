@@ -157,3 +157,5 @@ AST 文案和数量覆盖守卫依赖 frontend 的 TypeScript，必须在安装�
 夹具显式落在远期专属月份 `2031-03`（`created_at` 与 `sale_date` 都指定），因此**不依赖共享库恰好为空**；每个 INSERT 成功后立即登记待清理 ID。另有一个用例落在 `2031-05`，专门验证**行级可定位性**：造快照/估算/缺失/混合四类订单与商品，断言榜单每行的 `costBasis` 与两个量，并**生成真实利润 xlsx、按订单号/商品编码定位那一行**核对「成本来源」中文文案（只查表头不算覆盖——单独删掉导出映射会精准红）。
 
 `npm run smoke:price-change-history`（独立回环测试库，Tests CI 报表冒烟段）：改价审批的**历史旧价**必须是**审批瞬间的真实当前价**——申请 old=100 → 期间主档改到 120 → 审批 110 ⇒ `product_items=110`（审批覆盖语义不变），而本次审批写入的 `product_price_history` 行必须是 **120→110**（用申请时快照即失真）。另覆盖**商品在审批期间被软删**：必须 409 `PRICE_CHANGE_PRODUCT_MISSING` 并回滚整个审批事务，申请与审批实例保持待审批、无伪历史。
+
+`npm run smoke:product-price-history-integrity`（独立回环测试库，Tests CI 报表冒烟段，**紧邻上条**）：**商品手工改价的一致性**——① **并发**两次手工改同一商品 ⇒ `product_price_history` 必须是**连贯链**（同一 `price_type` 上每条的 `old_price` = 上一条的 `new_price`），且商品当前值 = 链尾 `new_price`（根因是 `products.update` 曾在事务外读快照）；② `allowDecimalQty` **未传**时保持原值，其中 `allow_decimal_qty IS NULL` 的既定语义是**默认允许小数**（迁移 254），不得在读裸列时当成 0；③ 对**已软删**商品改价必须**明确失败**，且**不写**单位 / 库存策略 / 价格历史等任何脏数据。运行需显式隔离库 + 回环（同本文件测试库约定），命令见本文件开头的环境要求。
