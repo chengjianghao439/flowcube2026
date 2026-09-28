@@ -11,7 +11,7 @@
   - **发版准备起始基线**（当时工作树 HEAD `dba7693`）相对 `main`：**89 提交 / 91 文件**（**24 fix + 2 feat** + docs/test）—— 这是**开始发版准备时**的统计。
   - **当前候选**相对 `29f223e`：**93 提交 / 102 文件**（`git diff --stat` = 102 files, +8760/−360）。
   - 含迁移 **263**（`fin_invoices.revision`）与 **264**（`product_items.revision`）——**不只最近 3 处修复**。
-  - **最终发布 SHA 与范围在正式发布后**按发布提交重新记录（本节不预设）。
+  - **最终发布 SHA：`b5280a42bce92ad51eff3fa5caa04fe4b84b4351`**（发版准备期间另有 `846c707` 被 CI 阻断，已由 `b5280a4` 取代；详见 §7/§8）。
 - 候选演进（本工作树分支）：
   1. `17e1a0c` — 版本与说明（release notes + 官网摘要 + 三端/PDA 版本）
   2. `72c6604` — CI 接线（孤儿套件 `smoke:product-price-history-integrity`）+ 转采购文案末句收紧
@@ -71,7 +71,7 @@
 
 ## 7. CI 阻断与夹具修复（2026-09-29，正式入口首次尝试）
 
-- **首次执行 `release:prod`**：preflight 通过、**main 已推送**（`29f223e..846c707`）；随后 `test.yml` 在同 SHA **failure** ⇒ 入口**自动 exit 1 并收尾**（EXIT 清 relay/caffeinate，已核实无残留）；**未推送 tag、无安装包字节**（远端 `v0.11.3` 不存在）。
+- **首次执行 `release:prod`**：preflight 通过、**main 已推送**（`29f223e..846c707`）；随后 `test.yml` 在同 SHA **failure** ⇒ 入口**自动 exit 1 并收尾**（EXIT 清 relay/caffeinate，已核实无残留）；**未推送 tag、未公开发布新安装包**（远端 `v0.11.3` 不存在；CI 侧可能已构建过 artifact，但**未对外发布**）。
 - **失败 run / job / 步骤（保留原记录，未取消、未 rerun）**：Tests run **`36460483357`**（SHA `846c707`）→ 回归门禁 job **`109057476294`** → 步骤「**冒烟测试 — 商品价格列版本保护（依赖迁移 264）**」。
 - **失败原因（CI 日志）**：`tests/product-price-version-guard.smoke.test.js:74` 抛 **「隔离库无商品分类」**；该套件只通过清理断言 1 项，**未跑到价格保护主断言**。
 - **本地为何没暴露（如实）**：本批本地验证时，我**手工向库中插入了一条商品分类**补足种子，使该套件本地 20/0 —— **掩盖了「新库无分类」这一环境前提**。
@@ -81,13 +81,29 @@
 - **验证（新库 `flowcube_pricefix_20260929_test`，`utf8mb4_0900_ai_ci`、264 迁移、**迁移后 `product_categories = 0`**）**：按 CI 顺序 —— `smoke:product-price-version-guard` **21/0**、`smoke:price-change-history` **11/0**、`smoke:product-price-history-integrity` **18/0**；三套跑完**分类残留 0**。
 - **不再有**「依赖库中已存在分类」的前提；正式入口将在本轮修复经审查后重新执行（同 SHA 的 CI 仍须自然通过）。
 
-## 8. 正式发布字段（**未执行**）
+## 8. 正式发布结果（**已执行**，2026-09-29）
 
-| 字段 | 值 |
-|---|---|
-| push main | **未执行** |
-| tag `v0.11.3` | **未执行** |
-| 桌面安装包构建 | **未执行** |
-| PDA 发布 | **未执行** |
-| 线上三端核验（`release:verify`） | **未执行** |
-| 完整应用 SHA | 见提交后 `git rev-parse HEAD` |
+**发布应用 SHA（固定）：`b5280a42bce92ad51eff3fa5caa04fe4b84b4351`**（本结果文档自身的 SHA 另计，见文末）。
+
+| 步骤 | 状态 | 证据 |
+|---|---|---|
+| push main | **已执行** | 首次 `29f223e..846c707`（后被 CI 阻断）；修复后 `846c707..b5280a4` |
+| tag `v0.11.3` | **已推送** | 指向 `b5280a4` |
+| Windows 正式包 | **已构建并发布** | tag run **`36462769682`**；产物 `Jixu-Flow-Setup-0.11.3.exe`（112,401,506 字节） |
+| GitHub Release | **已转正**（非草稿/非预发布） | 附件 `Jixu-Flow-Setup-0.11.3.exe` = 112,401,506 字节 |
+| PDA 发布 | **已发布** | 线上 `/api/pda/version` = **0.11.3 / versionCode 147**、可下载 |
+| 线上三端核验 | **12/12 一致** | 桌面 0.11.3、PDA 0.11.3/147、`/api/health=ok`；**实下载** 桌面 112,401,506 字节、PDA 15,088,641 字节，**SHA256 均一致** |
+| 镜像 revision | **= `b5280a4`** | 生产 `flowcube-backend` 镜像 label `org.opencontainers.image.revision` |
+| 生产迁移 | **263/264 已执行** | Deploy Browser 日志：`✓ 263_…`、`✓ 264_…`，「共执行 2 个迁移文件」，其后幂等跳过 |
+| 总耗时 | **893 秒** | 入口自报（含检查、部署与下载验收）；自 01:16 发版准备起计 |
+
+**同 SHA 的门禁 run（全部 success）**：Tests `36461598648`（17 jobs）、Security `36461598413`、Deploy Browser `36461598451`、Build PDA APK `36461598493`、main 桌面验证 `36461598445`。
+**首次阻断 run（保留，未取消、未 rerun）**：Tests `36460483357`、失败 job `109057476294`（商品价格列版本保护）。
+**修复轮**：工作树 `8eefff4`→`846c707`→**`b5280a4`**；期间发现并修复三套夹具的分类依赖（含**首轮修复漏改 `cat` 变量导致的 1 项失败**，复验后 21/0、11/0、18/0）。
+
+**未验（明确限制，不用本地替代生产）**：
+- **生产 `information_schema` 的 `revision` 列元数据**（`fin_invoices`/`product_items` 的列名 / `int` / `NOT NULL` / `default 1`）与**生产 `db_migrations` 的 263/264 记录**：本机 **auto 权限分类器两次拒绝**生产库 SQL 读取（`Containment Escape`、`Production Reads`）⇒ **未取得**。**迁移已执行**这一事实由部署日志证实；**未验的只是生产库现状的直接读取**。
+- **`test:dirty-navigation` 本地未通过**（同机基线 `29f223e` 同样超时；根因待查）；**同 SHA 的 CI `browser-smoke-runtime` 通过**。
+- **Windows 真机安装/更新弹窗、PDA 真机、物理打印**：独立未验。
+
+**资源收尾**：入口 relay/caffeinate **已随 EXIT 收尾**（复核无残留）；主工作区停在 **`codex/release-v0.11.3`**（HEAD `b5280a4`、clean，**main 已释放**）；Claude 工作树仍在 `claude/happy-mahavira-0a2b4b`；`/private/tmp/fc-head`（prunable）与共享 MySQL **非本任务资源、未动**。
