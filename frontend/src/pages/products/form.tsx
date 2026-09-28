@@ -7,7 +7,7 @@ import { SectionCard } from '@/components/shared/SectionCard'
  *   /products/:id    → 编辑模式
  */
 
-import { useState, useContext, useEffect, useMemo, useRef } from 'react'
+import { useState, useContext, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Loader2, Save } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -49,7 +49,10 @@ export default function ProductFormPage() {
   const navigate = useNavigate()
   const [submitting, setSubmitting] = useState(false)
 
-  const { data: product, isLoading } = useProduct(editId || 0)
+  // 编辑页每次真正打开都取一次服务端最新数据（不靠 5min 内的 fresh 缓存，否则关闭重开拿旧 revision）。
+  // `isFetchedAfterMount` 用于判断「本次挂载后的取数是否已完成」：在它之前不得用缓存旧值初始化表单。
+  const { data: product, isError, refetch, isFetchedAfterMount } =
+    useProduct(editId || 0, { refetchOnMount: 'always' })
 
   const [categoryFinderOpen, setCategoryFinderOpen] = useState(false)
   const [categoryName, setCategoryName] = useState('')
@@ -69,52 +72,52 @@ export default function ProductFormPage() {
     }).catch(() => {})
   }, [])
 
-  const initialForm = useMemo(() => {
-    if (product && isEdit) {
-      return {
-        name: product.name,
-        categoryId: product.categoryId,
-        supplierId: product.supplierId,
-        unit: product.unit,
-        spec: product.spec ?? '',
-        color: product.color ?? '',
-        costPrice: product.costPrice != null ? String(product.costPrice) : '',
-        batchManaged: !!product.batchManaged,
-        allowDecimalQty: product.allowDecimalQty !== false,
-        shelfLifeDays: product.shelfLifeDays != null ? String(product.shelfLifeDays) : '',
-        safetyStock: product.safetyStock != null ? String(product.safetyStock) : '',
-        reorderPoint: product.reorderPoint != null ? String(product.reorderPoint) : '',
-        salePriceA: product.salePriceA != null ? String(product.salePriceA) : '',
-        salePriceB: product.salePriceB != null ? String(product.salePriceB) : '',
-        salePriceC: product.salePriceC != null ? String(product.salePriceC) : '',
-        salePriceD: product.salePriceD != null ? String(product.salePriceD) : '',
-        remark: product.remark ?? '',
-        articleNumber: product.articleNumber ?? '',
-        isActive: product.isActive,
-        units: (product.units ?? []).filter(u => !u.isBase).map(u => ({ unitName: u.unitName, conversionRate: String(u.conversionRate) })),
-      }
-    }
-    return EMPTY_FORM
-  }, [product, isEdit])
-
-  const [form, setForm] = useState(initialForm)
+  // 表单初始值 =「本次打开（挂载后首次取数**成功**返回）时的服务端数据」快照。
+  // 它与提交基线 revision 同源，并且**不随后台 refetch 变化**：
+  //  - 后台刷新不会抹掉未保存草稿；
+  //  - 也不会把「服务端数据变了」误判成「用户改过」（原缺陷：拿随 product 重算的初始值比较 isDirty）。
+  type FormState = typeof EMPTY_FORM
+  const [form, setForm] = useState<FormState>(() => (isEdit ? { ...EMPTY_FORM } : EMPTY_FORM))
+  const [baseline, setBaseline] = useState<FormState | null>(isEdit ? null : EMPTY_FORM)
   const formRef = useRef(form)
   formRef.current = form
 
-  // **仅在「首次加载 / 换了一条商品（id 变）」时**用服务端数据重建表单与版本基线。
-  // `product` 是 React Query 的对象引用，后台 refetch / 失效重取都会换引用；若随它重置，
-  // 会把**未保存的草稿**抹掉（也会让 dirty guard 误报"已保存"）。故以商品 id 为界，
-  // 保证「表单初始值 · 版本基线 · 草稿基线」三者同源，且后台刷新不动用户正在编辑的内容。
+  // 以「商品 id + 本次取数完成」为界初始化一次。后台 refetch（同一 id）不再进入 ⇒ 草稿与 dirty 基线都保住。
+  // 编辑页必须等本次新数据返回后才初始化：不能用 fresh 缓存旧值抢先渲染（否则会拿旧 revision 提交）。
   const initedProductIdRef = useRef<number | null>(null)
   useEffect(() => {
-    if (product && isEdit && initedProductIdRef.current !== product.id) {
-      setForm(initialForm)
-      formRevisionRef.current = product.revision   // 与表单初始值同源（见 formRevisionRef 注释）
-      setCategoryName(product.categoryName || '')
-      setSupplierName(product.supplierName || '')
-      initedProductIdRef.current = product.id
+    if (!isEdit) return
+    if (!product || isError || !isFetchedAfterMount) return
+    if (initedProductIdRef.current === product.id) return
+    const snapshot: FormState = {
+      name: product.name,
+      categoryId: product.categoryId,
+      supplierId: product.supplierId,
+      unit: product.unit,
+      spec: product.spec ?? '',
+      color: product.color ?? '',
+      costPrice: product.costPrice != null ? String(product.costPrice) : '',
+      batchManaged: !!product.batchManaged,
+      allowDecimalQty: product.allowDecimalQty !== false,
+      shelfLifeDays: product.shelfLifeDays != null ? String(product.shelfLifeDays) : '',
+      safetyStock: product.safetyStock != null ? String(product.safetyStock) : '',
+      reorderPoint: product.reorderPoint != null ? String(product.reorderPoint) : '',
+      salePriceA: product.salePriceA != null ? String(product.salePriceA) : '',
+      salePriceB: product.salePriceB != null ? String(product.salePriceB) : '',
+      salePriceC: product.salePriceC != null ? String(product.salePriceC) : '',
+      salePriceD: product.salePriceD != null ? String(product.salePriceD) : '',
+      remark: product.remark ?? '',
+      articleNumber: product.articleNumber ?? '',
+      isActive: product.isActive,
+      units: (product.units ?? []).filter(u => !u.isBase).map(u => ({ unitName: u.unitName, conversionRate: String(u.conversionRate) })),
     }
-  }, [product, isEdit, initialForm])
+    setForm(snapshot)
+    setBaseline(snapshot)
+    formRevisionRef.current = product.revision   // 与表单初始值同源（见 formRevisionRef 注释）
+    setCategoryName(product.categoryName || '')
+    setSupplierName(product.supplierName || '')
+    initedProductIdRef.current = product.id
+  }, [product, isEdit, isError, isFetchedAfterMount])
 
   const set = (k: string, v: unknown) => setForm(f => ({ ...f, [k]: v }))
 
@@ -144,8 +147,8 @@ export default function ProductFormPage() {
   // 故把它与 `setForm(initialForm)` 放在同一处设置，提交时读基线而非实时数据。
   const formRevisionRef = useRef<number | undefined>(undefined)
 
-  // 是否改过：与进入页面时的基线比较（新建态基线是空表单）
-  const isDirty = JSON.stringify(formRef.current) !== JSON.stringify(initialForm)
+  // 是否改过：与**本次打开时的快照基线**比较；后台 refetch 不改基线，故不会误报「未保存」
+  const isDirty = baseline ? JSON.stringify(formRef.current) !== JSON.stringify(baseline) : false
   useDirtyGuard(tabPath, isDirty)
 
   const priceLevels = [
@@ -184,9 +187,9 @@ export default function ProductFormPage() {
       articleNumber: form.articleNumber || undefined,
       units: form.units.filter(u => u.unitName.trim() !== '').map(u => ({ unitName: u.unitName.trim(), conversionRate: Number(u.conversionRate) })),
     }
-    // 编辑乐观锁（迁移 264）：基线未就绪（详情尚未加载完）时**不允许提交**——
-    // 类型上 `revision` 必填，运行时若拿到 undefined 会发出错误版本。
-    if (editId && !Number.isInteger(formRevisionRef.current)) {
+    // 编辑乐观锁（迁移 264）：基线未就绪（本次取数尚未成功返回）时**不允许提交**——
+    // 类型上 `revision` 必填，运行时若拿到 undefined 会发出错误版本；也不能拿缓存旧值提交。
+    if (editId && (!Number.isInteger(formRevisionRef.current) || baseline === null)) {
       toast.warning('商品数据尚未加载完成，请稍候再保存')
       return
     }
@@ -226,10 +229,30 @@ export default function ProductFormPage() {
     navigate('/products')
   }
 
-  if (isEdit && !product && !isLoading) {
+  // 编辑页：**本次取数成功返回前**不渲染表单——不用 fresh 缓存旧值冒充"最新数据"，
+  // 否则用户会以为看到的就是最新价，直接保存又反复 409、无从恢复。
+  // 注意 `isFetchedAfterMount` 在**失败后也会变 true**，故必须叠加 `isError` 才拦住错误快照初始化；
+  // 且整页错误态只在**尚未拿到基线**时使用——已初始化后后台刷新失败要保持草稿（见下方提示条）。
+  if (isEdit && isError && baseline === null) {
+    return (
+      <div className="flex h-64 flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
+        <p>最新商品信息加载失败，请重试。</p>
+        <Button variant="outline" onClick={() => { void refetch() }}>重试</Button>
+      </div>
+    )
+  }
+  // 本次取数已完成但仍无数据（接口成功返回空）⇒ 商品不存在；否则视为仍在加载
+  if (isEdit && isFetchedAfterMount && !product) {
     return (
       <div className="flex h-64 items-center justify-center text-sm text-muted-foreground">
         商品不存在
+      </div>
+    )
+  }
+  if (isEdit && (!product || !isFetchedAfterMount)) {
+    return (
+      <div className="flex h-64 items-center justify-center gap-2 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" />正在加载最新商品数据…
       </div>
     )
   }
@@ -237,12 +260,22 @@ export default function ProductFormPage() {
   return (
     <div className="flex flex-col gap-4">
       {conflict && (
-        // 冲突提示：**保留草稿**（不自动刷新详情，否则 useEffect 会用 initialForm 覆盖未保存输入）
+        // 冲突提示：**保留草稿**（不自动刷新详情，否则会抹掉未保存输入）
         <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm">
           <p className="font-medium text-destructive">该商品已被他人修改，本次修改未保存</p>
           <p className="mt-1 text-xs text-muted-foreground">
             当前填写内容仍在。请先复制需要保留的内容，关闭本页重新打开，核对最新价格后再编辑。
           </p>
+        </div>
+      )}
+      {isEdit && isError && baseline !== null && (
+        // 已初始化后的后台刷新失败：**保留当前表单与草稿**，只提示"看到的可能不是最新"，并提供重试。
+        <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm">
+          <p className="font-medium text-destructive">最新数据刷新失败</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            当前填写内容仍在。保存时若提示已被修改，请复制需要保留的内容后关闭重开核对。
+          </p>
+          <Button variant="outline" size="sm" className="mt-2" onClick={() => { void refetch() }}>重试</Button>
         </div>
       )}
       <ActionBar

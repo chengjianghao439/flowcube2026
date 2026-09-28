@@ -6,7 +6,20 @@ import type { CreateProductParams, UpdateProductParams, ProductFinderParams } fr
 import { toast } from '@/lib/toast'
 
 const K = 'products'
-export const useProduct         = (id: number) => useQuery({ queryKey:[K,id], queryFn:()=>getProductApi(id), enabled:!!id })
+/**
+ * 商品详情。
+ *
+ * `refetchOnMount:'always'` 供**编辑页**使用：确保每次真正打开都向服务端取一次，而不是在全局
+ * 5min `staleTime` 内直接吃缓存旧值——否则「关闭重开」会拿旧 revision，保存反复 409、无法恢复。
+ * 调用方必须配合 `isFetchedAfterMount` 判断「本次取数是否已完成」，在它之前**不得**用缓存初始化表单。
+ */
+export const useProduct = (id: number, opts?: { refetchOnMount?: boolean | 'always' }) =>
+  useQuery({
+    queryKey: [K, id],
+    queryFn: () => getProductApi(id),
+    enabled: !!id,
+    ...(opts?.refetchOnMount !== undefined ? { refetchOnMount: opts.refetchOnMount } : {}),
+  })
 
 /**
  * 改价审批完成后的商品缓存失效（key 与上面的 `K` 同源）。
