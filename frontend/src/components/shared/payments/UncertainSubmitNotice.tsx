@@ -11,20 +11,27 @@ import { Button } from '@/components/ui/button'
  *   · 提示用户不要关掉重开重新录入，**也不要改了内容再录**——同键重提服务端会沿用上次的内容，
  *     用户若已经把金额改成别的数，会以为改后的金额付了，实际执行的是上一次的内容。
  */
-export function UncertainSubmitNotice({ visible, pending, onCheck, what }: {
+export function UncertainSubmitNotice({ visible, pending, onCheck, what, message }: {
   visible: boolean
   pending: boolean
   onCheck: () => void
   /** 在确认的是哪一笔（金额 / 单号），让用户不必靠记忆判断 */
   what?: string
+  /**
+   * 覆盖默认文案（默认文案是付款/核销语境的「记账」措辞）。**不传即保持旧行为**。
+   * 用于不入会计的提交入口（如转采购单只建采购草稿），避免声称「已记账」。
+   */
+  message?: string
 }) {
   if (!visible) return null
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs">
       <span className="text-muted-foreground">
-        上次提交没有收到确定答复，系统可能已经记账{what ? `（${what}）` : ''}。
-        请先点「查询上次结果」；查清之前请勿关掉重开重新录入，也不要改动内容后再提交——
-        同一次提交系统会沿用上次的内容，重复提交不会重复记账，但改了金额再提交也不会按新金额记账。
+        {message ?? (
+          <>上次提交没有收到确定答复，系统可能已经记账{what ? `（${what}）` : ''}。
+          请先点「查询上次结果」；查清之前请勿关掉重开重新录入，也不要改动内容后再提交——
+          同一次提交系统会沿用上次的内容，重复提交不会重复记账，但改了金额再提交也不会按新金额记账。</>
+        )}
       </span>
       <Button type="button" size="sm" variant="outline" onClick={onCheck} disabled={pending}>
         {pending ? '查询中…' : '查询上次结果'}

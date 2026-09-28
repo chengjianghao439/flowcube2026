@@ -201,3 +201,11 @@
   - **`isFetchedAfterMount` 在失败后也会变 true**，故必须**叠加 `isError`** 才能拦住"错误快照"初始化。**首次**刷新失败 ⇒ 整页失败态 + 重试入口，**不显示**缓存旧值；**已初始化之后**的后台刷新失败 ⇒ **保留草稿**（只提示并给重试，不整页替换）。
   - **仅切换 keep-alive 标签**不卸载组件 ⇒ 草稿自然保留；**新建**不请求详情、基线为空表单。
   - **回归**：`frontend/src/pages/products/form.version-guard.test.tsx`（渲染真实 `ProductFormPage` + 真实 `QueryClient`，7 例；摘掉修复即变红）。
+
+### 写操作的请求键（2026-09-29）
+
+- **请求键由「提交动作」持有并在意图内保持稳定**：用 `useRef(createRequestKey(...))`（或既有的 `useIdempotentSubmit`），**成功**或**明确 4xx 业务拒绝**后才轮换；**超时 / 断网 / 服务器 5xx 一律保留**。**禁止**在 api 函数体内每次 `createRequestKey()` —— 那会让「后台已成功、响应丢失」后的重试带新键，后端当成新请求，**同一次意图被执行两遍**（2026-09-29 转采购单实例：同键重放返回原回执、换键则再建一张采购单）。
+- **载荷变化即新意图**：同一次提交内若用户**改了内容**再提交，要么换新键（上一笔已确定），要么在**上一笔结果未确认**时**阻止提交**并引导先查回执（`/api/system/request-status/:key`）——不能拿旧键提交新内容（后端会沿用上次内容，用户会以为新内容生效）。转采购单用载荷指纹实现该判定。
+- **所有 5xx 视为「结果未确认」**：网关/代理中断、上游异常等**不能证明提交没做成**；`isUncertainError` 把 **500–599 一律**归为未确认（**只看状态码区间、不区分有无业务码**，见 `docs/finance-permission-time.md` 本次补充）。
+- **弹窗保留 ≠ 页面重挂保留**：本轮只验证了**模态关窗重开**（组件未卸载、`keyRef` 在内存中保留）；**整页关闭 / 刷新后的键恢复尚未覆盖**，不得据此推广。
+- **回归**：`frontend/src/pages/purchase-requisitions/form.convert-key.test.tsx`（9 例，渲染真实请购页 + 真实 Portal 弹窗）、`frontend/src/api/purchase-requisitions.test.ts`（3 例，请求头层）、`frontend/src/components/shared/payments/useIdempotentSubmit.test.ts`（含 5xx/4xx 判定）。

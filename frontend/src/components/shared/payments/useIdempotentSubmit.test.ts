@@ -36,10 +36,21 @@ describe('receiptDecision：只有服务端明确写下失败行才允许换键'
   })
 })
 
-describe('isUncertainError：只认传输层失败', () => {
+describe('isUncertainError：传输层失败与服务器 5xx 都算未确认（只有确定的业务拒绝才换键）', () => {
   test('超时与断网属于未确认', () => {
     expect(isUncertainError(new ApiClientError({ message: '请求超时', code: 'REQUEST_TIMEOUT' }))).toBe(true)
     expect(isUncertainError(new ApiClientError({ message: '网络错误', code: 'NETWORK_ERROR' }))).toBe(true)
+  })
+
+  test('服务器 5xx / 网关中断也属于未确认（不能证明提交没做成）', () => {
+    expect(isUncertainError(new ApiClientError({ message: '服务器错误', status: 500, code: null }))).toBe(true)
+    expect(isUncertainError(new ApiClientError({ message: '网关错误', status: 502, code: null }))).toBe(true)
+    expect(isUncertainError(new ApiClientError({ message: '网关超时', status: 504, code: null }))).toBe(true)
+  })
+
+  test('确定 4xx 业务拒绝仍不算未确认（可换键重提）', () => {
+    expect(isUncertainError(new ApiClientError({ message: '参数不合法', status: 400, code: 'VALIDATION_ERROR' }))).toBe(false)
+    expect(isUncertainError(new ApiClientError({ message: '数量超过可转余量', status: 400, code: null }))).toBe(false)
   })
 
   test('业务错误是确定的失败，不是未确认', () => {

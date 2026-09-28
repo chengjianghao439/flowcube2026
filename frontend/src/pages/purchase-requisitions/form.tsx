@@ -7,7 +7,7 @@ import { SectionCard } from '@/components/shared/SectionCard'
  *   /purchase-requisitions/new   → 新建
  *   /purchase-requisitions/:id   → 草稿可编辑；其余状态只读 + 按状态显示操作
  */
-import { useContext, useEffect, useMemo, useState } from 'react'
+import { useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { Loader2, Plus, Trash2 } from 'lucide-react'
@@ -20,6 +20,9 @@ import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { ProductFinder, SupplierFinder } from '@/components/finder'
 import { PickerField } from '@/components/shared/PickerField'
+import { useIdempotentSubmit } from '@/components/shared/payments/useIdempotentSubmit'
+import { UncertainSubmitNotice } from '@/components/shared/payments/UncertainSubmitNotice'
+import { createRequestKey } from '@/lib/requestKey'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { toast } from '@/lib/toast'
 import { confirmAction } from '@/lib/confirm'
@@ -127,6 +130,12 @@ export default function RequisitionFormPage() {
   const [rejectReason, setRejectReason] = useState('')
   const [convertOpen, setConvertOpen] = useState(false)
   const [convertRows, setConvertRows] = useState<ConvertRow[]>([])
+  // 转单提交的幂等守卫：请求键在「同一次转单意图」内稳定，只有拿到**确定结果**才轮换
+  // （成功 / 明确 4xx 拒绝）。「没收到答复」时保留键——服务器可能已经建了采购单。
+  // 载荷指纹用于识别「用户改了转采购数量」：那是新意图，上一笔已确定时换新键；
+  // 上一笔**结果未确认**时必须先用原内容查回执，改内容重提会被后端沿用上次内容。
+  const convertGuard = useIdempotentSubmit({ action: `purchase.requisition.convert.${editId ?? 0}`, prefix: 'req-convert' })
+  const convertPayloadRef = useRef<string | null>(null)
   // 「只能整数」的商品把请购/转采购数量框的 step 切成 1（迁移 254）
   const allowDecimalOf = useProductQtyPolicies([...items.map(i => i.productId), ...convertRows.map(r => r.productId)])
 
@@ -265,13 +274,36 @@ export default function RequisitionFormPage() {
       if (Number(r.quantity) > 0 && !r.supplierId) { toast.warning(`商品「${r.productName}」必须指定供应商`); return }
       if (Number(r.quantity) > r.remaining + 1e-9) { toast.warning(`商品「${r.productName}」转采购数量超过可转余量`); return }
     }
+
+    // 载荷（转采购内容）指纹：变化即「新的转单意图」。
+    // · 上一笔已确定 ⇒ 换新键，正常提交新的转单；
+    // · 上一笔**结果未确认** ⇒ 阻止：服务器可能已经按上次内容建过采购单，
+    //   同键重提会沿用上次内容（改了数量也不会按新数量执行），必须先查回执。
+    const fingerprint = JSON.stringify(lines)
+    const payloadChanged = convertPayloadRef.current !== null && convertPayloadRef.current !== fingerprint
+    if (payloadChanged && convertGuard.isUncertain()) {
+      toast.warning('上次转单没有收到确定答复，系统可能已经建过采购单：请先点「查询上次结果」确认，再修改内容重新提交')
+      return
+    }
+    if (payloadChanged) convertGuard.keyRef.current = createRequestKey('req-convert')
+    convertPayloadRef.current = fingerprint
+
     setBusy(true)
+    // remember 必须在**发请求之前**：断网/超时路径拿不到 res，若等到成功再记，
+    // 未确认期间 lastLabel/lastAction 仍是上一次（或空），组件复用/资源变化后用错 action 查回执。
+    convertGuard.remember(`请购单 ${detail?.requisitionNo ?? ''} · 转采购 ${lines.length} 行`)
     try {
-      const res = await convertRequisitionApi(editId as number, lines)
+      const res = await convertRequisitionApi(editId as number, lines, convertGuard.keyRef.current)
+      convertGuard.settle()   // 拿到确定结果：这一笔已结束，下一次用新键
       toast.success(`已生成 ${res!.createdOrders.length} 张采购单${res!.completed ? '，采购申请单已结案' : ''}`)
       setConvertOpen(false)
       await refetch()
-    } catch (e) { toast.error(e instanceof Error ? e.message : '转采购单失败') }
+    } catch (e) {
+      // 分类决定是否换键：超时/断网 ⇒ 保留键（服务器可能已建成），弹窗保留并显示「未确认」提示条；
+      // 明确 4xx ⇒ 已换键，下次是全新一笔。
+      convertGuard.classify(e)
+      toast.error(e instanceof Error ? e.message : '转采购单失败')
+    }
     finally { setBusy(false) }
   }
 
@@ -424,6 +456,14 @@ export default function RequisitionFormPage() {
               </tbody>
             </table>
           </div>
+          <UncertainSubmitNotice
+            visible={convertGuard.uncertain}
+            pending={convertGuard.checkMut.isPending}
+            what={convertGuard.lastLabelRef.current ?? undefined}
+            // 转采购只生成采购单草稿、**不入会计**：用业务文案，不沿用付款的「记账」措辞
+            message={`上次转单没有收到确定答复，系统可能已经建过采购单${convertGuard.lastLabelRef.current ? `（${convertGuard.lastLabelRef.current}）` : ''}。请先点「查询上次结果」；查清之前请勿关掉重开重新提交，也不要改动转单内容后再提交——同一次提交系统会沿用上次的内容，重复提交不会重复建单，但改了内容再提交也不会按新内容建单。`}
+            onCheck={() => convertGuard.checkLastResult(() => { setConvertOpen(false); void refetch() })}
+          />
           <DialogFooter>
             <Button variant="outline" onClick={() => setConvertOpen(false)} disabled={busy}>取消</Button>
             <Button disabled={busy} onClick={submitConvert}>{busy ? '生成中…' : '生成采购单'}</Button>

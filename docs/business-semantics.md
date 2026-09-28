@@ -38,3 +38,10 @@
 - 销售部分发货结案按已发量乘基本单价并逐行 `round2`，再汇总，与建单/改单行金额口径一致；不改变折扣比例或已收款记录。
 - 草稿保存通过稳定请求键及单据 ID、载荷指纹防重；相同保存重试不重建明细、不重复写事件。后续内容不同的编辑仍可保存。
 - 盘亏提交不得侵占现货预占；扫码账面中的拣货锁定容器不会作为实际盘亏扣减。实盘记录可保留，阻断只发生在落账提交。
+
+### 请购转采购（2026-09-29）
+
+- **转单只生成采购单草稿**：`POST /purchase-requisitions/:id/convert`（`convert.from=[3]`，需 `purchase.requisition.convert`）按 `supplierId` **分组各建一张 PO 草稿**（`source_requisition_id` 回指请购单），写 `purchase_requisition_conversions` 并累加 `purchase_requisition_items.converted_qty`；**全部明细转完**才 `3→6` 结案。**只建草稿、不入会计**（不生成凭证、不记账）。
+- **可转余量是硬闸门**：每行 `转采购数量 ≤ (quantity − converted_qty)`；重复执行同一意图**不会**突破该闸门，但会在余量足够时**多建一张采购单**（这是重复执行的后果，**不是**超量）。
+- **幂等靠请求键，不靠载荷比对**：`beginOperationRequest` 以 `action = purchase.requisition.convert.<id>` + `X-Request-Key` 判定重放；**同键重放返回原回执**（不再次建单、不再次累加），**换键即视为新请求**。因此前端必须在**同一次转单意图内保持同一个键**，只有拿到**确定结果**（成功 / 明确 4xx）才轮换；超时、断网、**服务器 5xx** 一律保留（见 `docs/frontend-pda-conventions.md`）。用户**改了转单内容**再提交属新意图，但若上一次**结果未确认**，必须先查回执（`/api/system/request-status/:key`）再改，否则后端会沿用上次内容、用户误以为新内容已生效。
+- **真实证据（2026-09-29，隔离库）**：受控代理实现「后端 200 后丢弃响应」⇒ 前端出现「未确认」提示条、原样重试后**只有 1 张 PO、`converted_qty=5`**；随后**主动**再转剩余 5 ⇒ 正常建第 2 张 PO、`converted_qty=10`、请购单结案（**未因幂等挡掉合法后续转单**）。修复前同场景实测**重复建 2 张 PO**。

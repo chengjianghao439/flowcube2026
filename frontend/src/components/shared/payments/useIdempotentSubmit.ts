@@ -13,8 +13,17 @@ import { periodClosedError } from './backfillFlow'
  * 再做一次——重复付款、重复核销。所以下面只在能确定「这次没成功」时才动请求键。
  */
 export function isUncertainError(e: unknown) {
-  const code = (e as { code?: string | null } | null)?.code ?? null
-  return code === 'REQUEST_TIMEOUT' || code === 'NETWORK_ERROR'
+  const err = e as { code?: string | null; status?: number | null } | null
+  const code = err?.code ?? null
+  if (code === 'REQUEST_TIMEOUT' || code === 'NETWORK_ERROR') return true
+  // 服务器 5xx（网关/代理中断、上游异常、连接被重置后由网关兜成 502/504 等）：
+  // 请求**可能已经到达并执行**，只是响应没能回来。5xx 一律按「未确认」处理——
+  // **不区分有没有业务码**（实现上只看状态码区间），因为服务端异常本身就不能证明提交没做成。
+  // 若判成「确定失败」就会换掉请求键，把可能已经做成的那一笔当成新的一笔再做一次。
+  // 2026-09-29 实测：转采购单在「后端已建单、连接被中断」时前端收到 500 → 被判确定失败
+  // → 重试换了新键 → **又建了一张采购单**。宁多查一次回执，也不重复提交。
+  const status = err?.status ?? null
+  return typeof status === 'number' && status >= 500 && status <= 599
 }
 
 export type SubmitFailure = 'period-closed' | 'uncertain' | 'rejected'
