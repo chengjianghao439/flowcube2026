@@ -1254,3 +1254,31 @@ cost链=[[100,150],[100,200]]  最终cost=200   ← 两条历史的旧价都是 
 **资源收尾（Codex 独立核实 + 本任务复核）**：`:3000` / `:5173` / `:5174` **无监听**；`agent-browser session list` = **`[]`**；共享 `colima-flowcube` 的 `flowcube-dev-mysql8` **healthy、3307 保留**。**严格目标** `127.0.0.1:3307 / flowcube_acceptance20260927_test` **只读 COUNT**：`product_items` id **156/157/158 = 0**、`product_price_history` 对应 product **= 0**、`supply_suppliers` id **66–69 = 0**、`sale_customers` id **509–511 = 0**、`fin_invoices` id **21 = 0**（**物理为 0 即可推出 active 为 0**）。**说明**：以上仅覆盖**本轮按 ID 登记**的夹具，**不声称任意历史夹具全清**。
 
 **未触碰发布边界**：未推送 / 打 tag / 部署 / 生产迁移 / 生产数据 / 真实发货消息。
+
+---
+
+## 33. 销售改单（AdjustView）跨模块闭环验收与「改单只改明细」修复（2026-09-29，仅本地）
+
+**环境**：工作树 `claude/happy-mahavira-0a2b4b`（HEAD `78b9828` 起，clean）；后端 `:3000`（`node index.js`，`NODE_ENV=test`、回环 `3307`、库 **`flowcube_acceptance20260927_test`**，进程内硬断言目标；`LOGISTICS_WORKER_ENABLED=0` + 空 `DINGTALK_ALERT_WEBHOOK=` + 可写 `APP_UPDATE_DOWNLOADS_DIR`）；前端 `:5173`（`VITE_ELECTRON=1 vite`）；浏览器会话固定命名 `flow-business-closure-20260928`。账号 `smoke_admin`（测试库公开测试口令，未回显）。
+
+**调用链**：`sale/form` 详情 → `canAdjust`（`status∈{2,3,6}` 且无任务取消/改单挂起、`!executionAdjustmentBlocked`、非多仓、`shippedTotalQty=0`）→ `AdjustView`（`useSaleOrderForm(tabPath, order)`）→ `PUT /api/sale/:id/adjust`（`SALE_ORDER_UPDATE`）→ `sale.service.requestAdjustment` → **无 `task_id` 走 `adjustReservedWithinTransaction`（占库期改单）**，有 `task_id` 走执行期分支。
+
+**场景准备（真实业务 API，未手改 status/库存）**：`POST /api/auth/login` → `POST /api/sale`（客户 1 + 商品 9 + 数量 5）→ `POST /api/sale/:id/reserve` ⇒ **status 2（已占库）**；`reserve-preview` 显示仓库 1 可用 11。共两轮夹具：`sale_orders` **21 / SL20260928001**、**22 / SL20260929001**（均按 ID 登记）。
+
+**A 类缺陷（已确认，本轮修复）**：改单视图复用**完整订单头表单**，但服务端改单**只写明细与 `total_amount`**（占库期/执行期两支均不 UPDATE `sale_orders` 的客户/仓库/备注/收货字段）。
+
+- **证据（夹具 21）**：GUI 客户 Finder 搜索「切换客户」→ `Space` 确认 ⇒ 回填「切换客户-f47da00f」；真实载荷 `PUT /api/sale/21/adjust` 带 `customerId:2`、`customerName:"切换客户-f47da00f"`、`items[0].unitPrice:10`（`priceSource:"list"`、`resolvedPriceLevel:"A"`）⇒ 响应 **200**；DB 实测 **`customer_id` 仍为 1、`customer_name` 仍「Smoke客户」**，而 **`total_amount` 500→50**、明细 `unit_price` 100→10 ⇒ 按新客户价格重算了金额，订单却仍归属旧客户。
+- **同组字段同测**：改单里把出库仓库选为「修复范围外仓」并改备注 ⇒ 提交 200，DB `warehouse_id` 仍 1、`remark` 未变 ⇒ **整组头部字段均被静默丢弃**。
+- **对照（同一支功能正常）**：改数量 5→8 ⇒ `quantity=8`、`reserved_qty=5`（`min(旧占,新量)`）、`status 2→6`、`total=80`、`stock_reservations` 未新增；取消改单不发写请求；「取消占库」释放后 `status 6→1`、`reserved 0`。**缺陷独立于数量联动**。
+
+**修复（前端，最小）**：`SaleOrderHeaderFields` 新增 `headerReadOnly`，改单视图 `AdjustView` 传该开关 ⇒ 客户/仓库/承运商/运费方式/收货人/电话/地址/备注全部只读、隐藏「从地址簿选择」；提示条改为「改单仅修改商品明细：订单客户、出库仓库与收货信息保持不变。…」（原「订单已发往仓库执行」对 status 2 不成立，一并更正）。**不放宽后端、不新增后端写路径**；`update()`（草稿编辑）仍照旧更新客户/仓库等（该路径本就支持，未改）。
+
+**回归与复验**：`tsc -p frontend/tsconfig.app.json --noEmit` **rc=0**；eslint **仅改动 2 文件** rc=0；`vitest run src/pages/sale/form` **4 文件 / 25 例全绿**。真实 GUI 复验（夹具 22）：改单视图实测 `客户按钮.disabled=true`、备注/收货人 `disabled`、地址簿按钮不再渲染、明细数量仍可编辑；改数量 5→3 提交 ⇒ `quantity=3`、`reserved_qty=3`、`status=2`、`total=300`，而 **`customer_id`/`warehouse_id`/`remark` 全部保持不变**。
+
+**夹具清理与残留复查（本轮 ID）**：21、22 均走**合法路径**（取消占库 → 取消订单 → 删除订单），软删后 `sale_orders` live 仅剩 2 条既有草稿（`FIX-SO-3/4`）；`inventory_stock` wh1 `quantity=5 / reserved=0`、ACTIVE 容器 wh1 **4 个 / 11.00** 与本批开始时一致 ⇒ **本轮无残留**。
+
+**验收方法学记录（环境性问题，非产品缺陷）**：浏览器预览下 `ConfirmDialog` 走 `AppDialog`（`window.flowcubeDesktop` 不存在 ⇒ `native=false`），**当有 Radix 浮层（如通知中心 `div#radix-*`）覆盖右上角时，`agent-browser click` 会被遮挡**（工具会明确报「covered by …」），此时点击表现为「成功但无反应」；处置：先 `press Escape` 清浮层再点。另：`agent-browser find role button click "…"` 匹配不可靠，**用 snapshot 的 `@ref` 点击才稳定**；按钮文本含「取消」时需要精确 ref（确认框「确认取消」 vs 「返回订单」）。
+
+**边界（如实）**：执行期改单（`status=3`，有 `task_id`）本轮**未单独构造**（同一函数与同一视图，`headerReadOnly` 对该状态一并生效，但**未实测**）；「改客户/仓库在改单中应否被后端支持」属**新增功能**，本轮不动。发版前后端全量 / 三端构建 / PDA 真机 / 物理打印仍未验。
+
+**未触碰发布边界**：未推送 / 打 tag / 部署 / 生产迁移 / 生产数据 / 真实发货消息。

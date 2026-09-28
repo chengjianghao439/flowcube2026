@@ -24,7 +24,7 @@ export function SaleOrderHeaderFields({
   receiverName, setReceiverName,
   receiverPhone, setReceiverPhone,
   receiverAddress, setReceiverAddress,
-  remark, setRemark,
+  remark, setRemark, headerReadOnly = false,
 }: {
   customerId: string
   customerName: string; customerError: boolean; setCustomerFinderOpen: (v: boolean) => void
@@ -37,6 +37,8 @@ export function SaleOrderHeaderFields({
   receiverPhone: string; setReceiverPhone: (v: string) => void
   receiverAddress: string; setReceiverAddress: (v: string) => void
   remark: string; setRemark: (v: string) => void
+  /** 改单（占库期/执行期）只修改商品明细：表头字段全部只读，避免「看起来能改、提交后被丢弃」 */
+  headerReadOnly?: boolean
 }) {
   const selectedCarrier = carrierOptions.find(c => String(c.id) === carrierId)
   const navigate = useNavigate()
@@ -53,7 +55,7 @@ export function SaleOrderHeaderFields({
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
         <div data-entry-field="party" className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground">
           <Label>客户 *</Label>
-          <PickerField value={customerName} placeholder="点击选择客户…" onOpen={() => setCustomerFinderOpen(true)} onDoubleClick={() => { setCustomerFinderOpen(false); navigate('/customers') }} className={cn('h-9', customerError && 'border-destructive/60 bg-destructive/5')} />
+          <PickerField value={customerName} placeholder="点击选择客户…" onOpen={() => setCustomerFinderOpen(true)} onDoubleClick={() => { setCustomerFinderOpen(false); navigate('/customers') }} disabled={headerReadOnly} className={cn('h-9', customerError && 'border-destructive/60 bg-destructive/5')} />
         </div>
         <div data-entry-field="warehouse" className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground">
           <Label>出库仓库 *</Label>
@@ -61,12 +63,13 @@ export function SaleOrderHeaderFields({
             value={warehouseId ? +warehouseId : null}
             onChange={(id, name) => { setWarehouseId(id ? String(id) : ''); setWarehouseName(name); setWarehouseError(false) }}
             placeholder="选择仓库"
+            disabled={headerReadOnly}
             className={cn('h-9', warehouseError && 'border-destructive/60 bg-destructive/5')}
           />
         </div>
         <div className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground">
           <Label>承运商</Label>
-          <Select value={carrierId || '__none__'} onValueChange={v => { setCarrierId(v === '__none__' ? '' : v); setShippingProduct('') }}>
+          <Select value={carrierId || '__none__'} onValueChange={v => { setCarrierId(v === '__none__' ? '' : v); setShippingProduct('') }} disabled={headerReadOnly}>
             <SelectTrigger className="h-9 w-full">
               <SelectValue placeholder={carrierOptions.length === 0 ? '暂无承运商，请先创建' : '请选择承运商'} />
             </SelectTrigger>
@@ -80,7 +83,7 @@ export function SaleOrderHeaderFields({
         </div>
         <div className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground">
           <Label>运费方式</Label>
-          <Select value={freightType || '__none__'} onValueChange={v => setFreightType(v === '__none__' ? '' : v)}>
+          <Select value={freightType || '__none__'} onValueChange={v => setFreightType(v === '__none__' ? '' : v)} disabled={headerReadOnly}>
             <SelectTrigger className="h-9 w-full">
               <SelectValue placeholder="请选择" />
             </SelectTrigger>
@@ -101,24 +104,24 @@ export function SaleOrderHeaderFields({
       <div className="my-4 border-t border-border" />
       <div className="mb-2 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground"><MapPin className="h-3.5 w-3.5 text-primary" />收货信息</div>
-        <button type="button" onClick={openAddrBook} className="text-xs font-medium text-primary hover:underline">从地址簿选择</button>
+        {!headerReadOnly && <button type="button" onClick={openAddrBook} className="text-xs font-medium text-primary hover:underline">从地址簿选择</button>}
       </div>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-12">
         <div className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground xl:col-span-2">
           <Label>收货人</Label>
-          <LimitedInput maxLength={30} value={receiverName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setReceiverName(e.target.value)} placeholder="请输入收货人或部门" className="h-9" />
+          <LimitedInput maxLength={30} value={receiverName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setReceiverName(e.target.value)} placeholder="请输入收货人或部门" disabled={headerReadOnly} className="h-9" />
         </div>
         <div className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground xl:col-span-2">
           <Label>联系电话</Label>
-          <LimitedInput data-entry-field="phone" aria-label="联系电话" maxLength={30} value={receiverPhone} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setReceiverPhone(e.target.value)} placeholder="手机、座机或国际号码" inputMode="tel" className="h-9" />
+          <LimitedInput data-entry-field="phone" aria-label="联系电话" maxLength={30} value={receiverPhone} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setReceiverPhone(e.target.value)} placeholder="手机、座机或国际号码" inputMode="tel" disabled={headerReadOnly} className="h-9" />
         </div>
         <div className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground xl:col-span-5">
           <Label className="inline-flex items-center gap-1.5"><Truck className="h-3.5 w-3.5 text-muted-foreground" />收货地址</Label>
-          <LimitedTextarea maxLength={200} value={receiverAddress} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setReceiverAddress(e.target.value)} placeholder="请输入详细收货地址" rows={1} className="h-9 min-h-0 py-1.5" singleLine />
+          <LimitedTextarea maxLength={200} value={receiverAddress} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setReceiverAddress(e.target.value)} placeholder="请输入详细收货地址" rows={1} disabled={headerReadOnly} className="h-9 min-h-0 py-1.5" singleLine />
         </div>
         <div className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground xl:col-span-3">
           <Label className="inline-flex items-center gap-1.5"><MessageSquareText className="h-3.5 w-3.5 text-muted-foreground" />备注</Label>
-          <Input maxLength={50} value={remark} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRemark(e.target.value)} placeholder="选填" className="h-9" />
+          <Input maxLength={50} value={remark} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRemark(e.target.value)} placeholder="选填" disabled={headerReadOnly} className="h-9" />
         </div>
       </div>
       {customerId && (

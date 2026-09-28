@@ -39,6 +39,7 @@
 - **先 `lockStockDimension` 再锁容器**：`splitContainer` 与 `confirmContainerReturn` 都按此序（`warehouse-tasks.adjust.js`）
 - **月结对账导出透传全部筛选并取 `EXPORT_MAX_ROWS`、超限即拒**；年结排除自身凭证（`export.service.js`）
 - **占库期与执行期改单共用 `assertNoDuplicateSaleItemLines`**（在 `hydrateSaleInput` 之后）；改单挂起期间拣货/复核扫码补 `adjustment_requested_at` 并 409（措辞同 `check.js`）
+- **改单只写商品明细与订单金额**（状态机 `adjust.from=[2,3,6]`）：订单客户/出库仓库/承运商/运费/收货信息**不被更新**，前端改单视图必须给 `SaleOrderHeaderFields` 传 `headerReadOnly`——否则界面可编辑、`PUT /sale/:id/adjust` 返回 200 却**静默丢弃**，其中改客户还会按新客户价格重算单价并写回金额（`docs/business-semantics.md`）
 - **采购退货出库按 `pri.id = wti.purchase_return_item_id` 关联**，仅商品在本单内唯一才回退 `product_id`，否则 `PURCHASE_RETURN_ITEM_LINK_MISSING`（`warehouse-tasks.ship.js`、迁移 `247`）
 - **对账单 `findAll`/`findById` 共用金额整形、状态推导与 `refreshSettlement`**
 - **标签渲染失败不得回滚业务事务**：降级 `status=3` unprintable + `label render failed: <CODE>`

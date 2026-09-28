@@ -403,7 +403,7 @@ function AdjustView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<
 
       <div className="flex gap-2 rounded-lg border border-warning/25 bg-warning/[0.06] px-4 py-3 text-sm leading-6 text-foreground">
         <AlertTriangle className="mt-1 h-4 w-4 shrink-0 text-warning" />
-        <span>订单已发往仓库执行。增加数量将触发重新拣货；减少数量若涉及已拣或已打包的商品，需经仓库扫码确认放回库位 / 拆箱后方可生效。</span>
+        <span>改单仅修改商品明细：订单客户、出库仓库与收货信息保持不变。增加数量将触发重新拣货；减少数量若涉及已拣或已打包的商品，需经仓库扫码确认放回库位 / 拆箱后方可生效。</span>
       </div>
 
       <OrderEntryIssues issues={issues} />
@@ -418,6 +418,7 @@ function AdjustView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<
         receiverPhone={receiverPhone} setReceiverPhone={setReceiverPhone}
         receiverAddress={receiverAddress} setReceiverAddress={setReceiverAddress}
         remark={remark} setRemark={setRemark}
+        headerReadOnly
       />
 
       <SaleOrderItemsSection hasItems={items.length > 0} onAdd={addItem}>
