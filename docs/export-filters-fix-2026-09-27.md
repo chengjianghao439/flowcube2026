@@ -1311,4 +1311,20 @@ cost链=[[100,150],[100,200]]  最终cost=200   ← 两条历史的旧价都是 
 
 **夹具与残留（本轮 ID）**：`sale_orders` **23 / SL20260929002** 走合法路径（取消订单 → 删除订单）到终态；`live(21,22,23)=0`、`stock_reservations.status=1` 计数 **0**（无有效预占）、`inventory_stock` wh1 未变（`quantity=5.00 / reserved=0.00`）。**软删行与活动日志仍在**（同 §33 口径，未清历史）。注入已于同一会话 `network unroute` 清除。
 
+---
+
+## 35. 请购 `scope=convert` 转采购闭环（2026-09-29，仅本地；真实 GUI + 业务 API）
+
+**调用链**：请购详情（`status===3` 才渲染「转采购单」）→ `openConvert()` 取「剩余可转量 > 0」的行并带入 `suggestedSupplier` → 弹窗内每行 `PickerField`（`supplierTarget.scope='convert'`）→ `onPickSupplier` 的 **convert 分支**写回 `convertRows[i].{supplierId,supplierName}`（`form.tsx:190`）→ `submitConvert()` 校验「每行必填供应商 / 数量 ≤ 余量」→ `convertRequisitionApi(id, lines)` → `POST /api/purchase-requisitions/:id/convert`（`PURCHASE_REQUISITION_CONVERT`）→ `service.convert`：锁单 + `assertStatusAction('purchaseRequisition','convert')`（from[3]）→ 逐行锁明细校验 → **按 `supplierId` 分组，每组建一张 PO 草稿**（`purchase_orders.source_requisition_id`）→ 写 `purchase_requisition_conversions` + 累加 `converted_qty` → 全部转完 `compareAndSetStatus` **3→6 结案**。
+
+**场景准备（业务 API）**：`POST /api/purchase-requisitions`（商品 9、数量 5、`estimatedPrice=10`，**不填 `suggestedSupplierId`**，留给转单时定）⇒ `status=1`；`POST /:id/submit` ⇒ `status=2`；`POST /:id/approve` ⇒ **403 `SELF_APPROVAL_DENIED`**（「不能审批自己提交的请购单」——内控生效，**不是缺陷**）⇒ 改用**另一账号** `smoke_finance_approver` 审批 ⇒ `status=3`。
+
+**真实 GUI 验收（:5173 + 隔离库）**：请购单页 → 「转采购单」⇒ 弹窗列「可转余量 5 / 转采购 5 / 供应商 / 单价」；点该行 **「选择供应商」** ⇒ 打开 `SupplierFinder`（候选 `Smoke供应商/SMOKE-SUP`）⇒ 选中 + 「确认选择」⇒ **弹窗行供应商列回填「Smoke供应商」**（即 convert 上下文的真实回填，而非仅组件层）；填单价 10 ⇒ 提交。
+
+**真实载荷与实际结果**：`POST /api/purchase-requisitions/1/convert` → `{"lines":[{"requisitionItemId":1,"quantity":5,"supplierId":1,"supplierName":"Smoke供应商","unitPrice":10}]}`、**200**，toast「已生成 1 张采购单，采购申请单已结案」。DB 实测：`purchase_orders` **id=7 / PC20260929001**、`supplier_id=1`/`supplier_name=Smoke供应商`、`warehouse_id=1`、`total_amount=50`、`status=1`（草稿）、**`source_requisition_id=1`**、备注「由请购单 PR20260929001 转入」；`purchase_order_items` 商品 9 / 数量 5 / 单价 10 / 金额 50；`purchase_requisition_conversions`（req 1、item 1、po 7、qty 5）；`purchase_requisition_items.converted_qty=5`；`purchase_requisitions.status` **3→6**。⇒ **买到的不是「组件回填」而是真实转单落库结果**。
+
+**清理与残留（本轮 ID，如实）**：采购单 **7** 走业务入口「取消」⇒ `status 1→4`；随后按与销售单同构的**软删**（`deleted_at`）清 `purchase_orders 7` 与 `purchase_requisitions 1` ⇒ `live req=0`、采购单列表**不再出现 `PC20260929001`**（余 `PC20260927004/003` 为 9-27 既有单，**非本轮**）。**两点如实说明**：① `purchase_orders` / `purchase_requisitions` **没有删除 API**，请购单 `cancel` 的 `from=[1,2,4]` 且 **`blocked[6]='已转采购的请购单不能取消'`（前后端一致）** ⇒ 已结案请购单在业务上**本就不可逆**，本轮以软删收尾；② 明细/关联表（`purchase_order_items`、`purchase_requisition_items`、`purchase_requisition_conversions`）**无 `deleted_at`**，随主表保留 ⇒ **物理行仍在**，与 §33「软删 ≠ 无残留」口径一致。
+
+**未触碰发布边界**：未推送 / 打 tag / 部署 / 生产迁移 / 生产数据 / 真实发货消息。
+
 **未触碰发布边界**：未推送 / 打 tag / 部署 / 生产迁移 / 生产数据 / 真实发货消息。
