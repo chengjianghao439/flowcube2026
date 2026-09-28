@@ -7,7 +7,7 @@
 ## 一、被测链路（代码事实）
 
 - `frontend/src/components/shared/ProductFinderModal.tsx`：`open ? <ProductFinderContent key={`${mode}-${warehouseId}`} /> : null` ⇒ **关闭即卸载**；**没有** `refetchOnMount:'always'`。
-- `frontend/src/hooks/useProducts.ts`（`useProductFinder`）：`useQuery({ queryKey:['products','finder',p], enabled })` ⇒ **无 `staleTime` 覆盖** ⇒ 用全局 **5min**；**全仓仅 `ProductFinderContent` 一个调用点**。
+- `frontend/src/hooks/useProducts.ts`（`useProductFinder`）：**修复前** `useQuery({ queryKey:['products','finder',p], enabled })` —— **无 `staleTime` 覆盖** ⇒ 用全局 **5min**（修复后为局部 `staleTime: 0`）；**全仓仅 `ProductFinderContent` 一个调用点**。
 - 参考售价列显示 `product.salePrice`；后端 `findForFinder`（`backend/src/modules/products/products.service.js`）把它映射为 **`sale_price_a` 优先、无 A 才回退 `sale_price`**。
 - 选中态（修复前）：`selected` 存**整行对象**；`canConfirm = selected && !pending && !query.isError && products.some(p => p.id === selected.id)`；页脚 `onClick={() => confirm(selected)}`，行 `onDoubleClick={() => confirm(product)}`。
 - 销售单侧（`frontend/src/pages/sale/form/useSaleOrderForm.ts`）：`handleFinderConfirm` 先置 `unitPrice = product.salePrice ?? 0`，随后 `if (cid) lookupPrice(...)` **实时取价**；取到 `salePrice > 0` ⇒ **覆盖**并记 `priceSource:'list'`；否则 ⇒ `'当前客户未设置有效价格，请手动确认单价'`；**请求抛错** ⇒ `'价格查询失败，请手动确认单价'`。
@@ -24,14 +24,14 @@
 | 填客户（实时取价 `GET /api/price-lists/customer-price` 200） | **单价被覆盖为最新价**、来源「价格表定价」⇒ **取价成功时不沿用旧参考价** |
 | 无有效价夹具（价格全 0，接口返回 `salePrice:0`） | **提示「当前客户未设置有效价格，请手动确认单价」+「确认当前单价」按钮**（不静默沿用旧价） |
 
-> **注**：`CustomerFinder` 双击对照属组件层证据（见下节），**不在**本表内 —— 本表的真实浏览器动作只有上述几条。
+> **注**：`ProductFinderModal` 的双击对照属组件层证据（见下节），**不在**本表内 —— 本表的真实浏览器动作只有上述几条。
 
 ## 三、组件层证据（真实 `ProductFinderModal` + 真实 `QueryClient`）
 
 回归：`frontend/src/components/shared/ProductFinderModal.stale-cache.test.tsx`（6 例，与生产同 `staleTime 5min`，只 mock 边界接口）。
 
 **原实现（修复前）跑：3 红 / 3 绿** ——
-- 红：**重开后重复搜索同一关键词**（该关键词只请求 1 次）、**A→B→A**（回到 A 不重取）、**refetch 后页脚「确认选择」回传旧对象**（100）；双击与 Enter 同因。
+- 红：**重开后重复搜索同一关键词**（该关键词只请求 1 次）、**A→B→A**（回到 A 不重取）、**refetch 后页脚「确认选择」回传旧对象**（100）。**仅页脚这一处红**——**双击与 Enter 原本就以当前行确认**（`onDoubleClick={() => confirm(product)}`、Enter 同理），属**正向对照证据**，不是缺陷。
 - 绿：延迟响应期间禁确认、选中行被移除后禁确认、查询出错禁确认 —— 这三条**原实现已正确**。
 
 > **口径声明**：本回归**早期**曾出现 5 红，其中两条源于**测试自身夹具误点**（用 `tbody tr` 行数等待，命中了加载/空态那一行）。**该早期结果不作为业务反证**；最终正确版本为上述 **3 红 3 绿**。
