@@ -1096,3 +1096,28 @@ cost链=[[100,150],[100,200]]  最终cost=200   ← 两条历史的旧价都是 
 - **未做**：真实浏览器取证（纯组件层 + 真实 `QueryClient`）；**未改**全局缓存 / 客户取价 / 后端。
 
 **环境事实（交接用，只核对可执行文件 / cwd / 监听，未读取 argv 或环境）**：GUI 预览栈后端（:3000）实际运行在 **Node v26.8.1**（`/opt/homebrew/Cellar/node/26.8.1/bin/node`），cwd 属本工作树；**本批与既往前端自动化专项均在 Node v22.23.2 下运行**。两者运行时应予区分：**自动化结论以 Node 22 为准**；发版前业务套件仍在 Node 22 统一验证。
+
+### 28.1 最终累计专项（2026-09-28，Codex 独立复跑）
+
+**同一条命令内 `source ~/.config/flowcube/dev-env.sh`（`node v22.23.2`）跑 8 个文件 ⇒ 61/0、自然 exit 0**：
+
+| 测试文件 | 用例 |
+|---|---|
+| `CustomerFinder.test` | 9 |
+| `SupplierFinder.test` | 9 |
+| `ProductFinderModal.stale-cache.test` | 6 |
+| `ProductFinderModal.test`（既有） | 3 |
+| `form.version-guard.test`（商品编辑页） | 7 |
+| `useSaleOrderForm.test`（销售取价 / 校验） | 20 |
+| orderEntry 校验 | 5 |
+| 改价失效 | 2 |
+| **合计** | **61 / 0** |
+
+**口径（重要）**：这 **61** 是**当前最终实现**的专项证据；此前记录的 Node 22 全量 **142 文件 / 656 用例**只对应**加强版之前**的版本（其后又补了 debounce / 清 timer / 首尾空格三处守卫及其用例），**不得**用它代表最终实现。
+
+### 28.2 下一步（优先级，**未启动**）
+
+1. **旧客户端 `revision` 兼容与发版前跨端累计验收**（新后端会拒绝未带 `revision` 的商品编辑，400 `PRODUCT_REVISION_REQUIRED`）。
+2. 客户/供应商自身的 **fresh 缓存策略仍列 B**（**目前无实际业务影响证据**）——**避免机械复制**局部 `staleTime:0`。
+
+未触碰发布边界（未推送 / 打 tag / 部署 / 生产迁移）。
