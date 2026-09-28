@@ -1151,7 +1151,7 @@ cost链=[[100,150],[100,200]]  最终cost=200   ← 两条历史的旧价都是 
 
 **验收环境偏差（如实记录，非业务失败）**：首次新版前端出现「页面出错 / Invalid hook call / more than one copy of React」—— 根因是旧前端副本 **symlink 了同一 `node_modules`**，两套 Vite **共享 `.vite` 依赖缓存**互相污染。清理缓存并**分时运行**后恢复正常。**这是验收环境偏差，不是业务回归失败**；若将来需同时跑两套，旧副本必须使用**独立 `cacheDir` / 独立依赖目录**。
 
-**仍待办（需反例证据）**：发票编辑遇 409 时前端 `onError` 执行 `invalidateQueries + onClose()` ⇒ **弹窗直接关闭、草稿丢失**（与商品页"保留草稿 + 内联冲突条"不一致）。**是否调整须先拿到真实反例证据**。
+**已修（见 §30）**：发票编辑遇 409 原为 `invalidateQueries + onClose()` ⇒ 弹窗关闭、草稿丢失；**§30 已完成取证（真实页面组件 6 例 + 真实 GUI）并改为「保留弹窗与草稿 + 内联提示」**。此处原"仍待办"**已关闭**。
 
 ---
 
@@ -1161,10 +1161,45 @@ cost链=[[100,150],[100,200]]  最终cost=200   ← 两条历史的旧价都是 
 
 **修复**：409 ⇒ **保留弹窗与草稿** + 内联提示「先复制 → 关闭 → 等列表刷新完成后重开核对」；**不自动关闭 / 不自动重试 / 不 merge 新版本**；toast 仍由全局拦截器统一给出。列表 **`isFetching`/`isError` 期间阻止重新编辑**（按钮 disabled，标题分开），列表出错给**可重试错误区**（`QueryErrorState` + `refetch`）；冲突提示在**重建表单**（打开/换 id/转录入）的同一 effect 清除。
 
-**证据**：`frontend/src/pages/accounting/invoices/index.409-recovery.test.tsx` **6 例** —— 修复前 **2 红 / 3 绿**（红=409 后弹窗已关草稿消失、刷新 pending 未阻止重编辑），修复后 **6/6**；覆盖 409 保留草稿、重开/转录入不带旧提示、后台刷新不换基线（**既有正向/C**）、刷新期间阻止重新编辑（**实际点击**禁用按钮 ⇒ 无 dialog、无额外请求）、失败时**点重试**真实恢复、正常成功与其它错误不误报。**未验**：早期"移除 `onClose`"反向变体执行被本机工具策略拦截（已如实标注）；**旧发票客户端 GUI 未验**。
+**证据**：`frontend/src/pages/accounting/invoices/index.409-recovery.test.tsx` —— **早期 5 例阶段**曾得"**2 红 / 3 绿**"（红=409 后弹窗已关草稿消失、刷新 pending 未阻止重编辑；当时另有 2 例因测试自身设计问题被修正，**不作业务反证**）；**最终 6 例**（补齐"重开/转录入不带旧提示""失败时可重试"等后）⇒ 修复后 **6/6**。覆盖 409 保留草稿、重开/转录入不带旧提示、后台刷新不换基线（**既有正向/C**）、刷新期间阻止重新编辑（**实际点击**禁用按钮 ⇒ 无 dialog、无额外请求）、失败时**点重试**真实恢复、正常成功与其它错误不误报。**未验**：早期"移除 `onClose`"反向变体执行被本机工具策略拦截（已如实标注）；**旧发票客户端 GUI 未验**。
 
 **真实 GUI 复验（新版前端 :5173 + 隔离库，夹具按 ID 自洁）**：新建发票 21 ⇒ 编辑弹窗改备注「GUI草稿」⇒ 先用 HTTP 让他人改（`remark`=他人改过、`revision` 1→2）⇒ UI 保存 ⇒ **409**，实测**弹窗仍在、草稿仍在、内联冲突提示出现**；**手动取消关闭 → 重开** ⇒ 备注为**最新值「他人改过」**、**无残留冲突提示** ⇒ 保存 ⇒ **200**、toast「已保存」、弹窗关闭。**网络边界不在 GUI 重复**，GUI 只验这条主路径（组件 6 例覆盖其余边界）。
 
 **边界**：发版前后端全量 / 物理打印 / PDA 真机仍未验；20 实例验收见后续记录。
+
+---
+
+## 31. Customer/Supplier Finder 20 实例验收（2026-09-28）
+
+**范围**：`<CustomerFinder>` 9 + `<SupplierFinder>` 11 = **20 实例 / 15 文件**。方法：真实 GUI 打开各自入口 → 搜索 → 选中 → 确认 → 读**回填**；关键项另抓**业务请求**（与 Finder 自身 `keyword` 搜索请求**分层记录**）。
+
+**已验（14/20，逐页真实 GUI）**：
+
+| 载体 | Finder | 观察 |
+|---|---|---|
+| `PaymentQueryDialog` | Customer | 回填正确；**业务载荷 `GET /payments?type=1&partyName=兼容批夹具供应商&status=unsettled…`** |
+| `PaymentQueryDialog` | Supplier | 回填正确（`partyName` 业务载荷同） |
+| `SettleReceiptDialog` | Customer | 回填正确 |
+| `SettleReceiptDialog` | Supplier | 回填正确；**候选载荷 `GET /payments?type=1&partyId=66&…`** |
+| `sale/form`（新建主入口） | Customer | 回填正确 |
+| `purchase/form` | Supplier | 回填正确 |
+| `returns/sale/form` | Customer | 回填正确 |
+| `returns/purchase/form` | Supplier | 回填正确 |
+| `returns/ReturnQueryDialog` | Supplier | 回填正确 |
+| `SaleQueryDialog` | Customer | 回填正确 |
+| `PurchaseQueryDialog` | Supplier | 回填正确 |
+| `ProductQueryDialog` | Supplier | 回填正确 |
+| `InboundTaskQueryDialog` | Supplier | 回填正确 |
+| `products/form` | Supplier | 回填正确 |
+
+**未达（6/20，附阻碍与已试路径）**：
+
+- `sale/form` 的**编辑分支**（2 处）：本轮只走新建主入口；编辑态需已存在销售单（本批**未建单**，避免副作用）。
+- `returns/ReturnQueryDialog` 的 **CustomerFinder**：搜索后**无匹配行**（该查询范围下无启用客户）⇒ 未能完成选中（供应商侧已验）。
+- `inbound-tasks/create`：打开 `/#/inbound-tasks/create` 后**页面未渲染表单**（仅剩菜单），未找到「选择供应商」入口 ⇒ 未达。
+- `purchase-requisitions/form`：本批轮次未覆盖。
+- `portal/statements`：导航到 `/#/portal/statements` **未生效**（页面停留在上一个标签）⇒ **路由待查**。
+
+**口径**：上表是**逐页 GUI 的基本回填 / 关键载荷**；**共享边界**（debounce / 挂起 / 错误 / 409 等）由**共享组件测试**覆盖（`CustomerFinder.test.tsx` 与 `SupplierFinder.test.tsx` 各 9 例、`ProductFinderModal.stale-cache.test.tsx` 6 例），**不冒充逐页 GUI**。**未发现新缺陷** ⇒ 未做任何"为过测试"的补丁。夹具按 ID 自洁：清理后**物理与 active 残留均为 0**（未把软删当无残留）。
 
 未触碰发布边界（未推送 / 打 tag / 部署 / 生产迁移）。
