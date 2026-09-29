@@ -30,8 +30,6 @@ async function packDoneWithinTransaction(conn, id, { requestKey, userId, scopeWa
   if (taskRow.adjustment_requested_at) {
     throw new AppError('该任务有改单正在等待仓库确认，请先处理完成', 409)
   }
-  const rule = assertWarehouseTaskAction('packDone', taskRow.status)
-  if (!isValidTransition(taskRow.status, rule.toStatus)) throw new AppError(`非法状态迁移：${taskRow.status} → ${rule.toStatus}`, 400)
   const requestState = await beginResourceOperationRequest(conn, {
     requestKey,
     action: 'warehouse.pack-done',
@@ -42,6 +40,11 @@ async function packDoneWithinTransaction(conn, id, { requestKey, userId, scopeWa
   if (requestState.replay) {
     return requestState.responseData
   }
+  // 状态规则必须排在 begin/replay **之后**：状态一旦推进到 6，原 key 重放会被这里挡成 400，
+  // 拿不回原回执——现场「网络断了一下再点一次」就永远收不到结果。范围 / 设备仓校验仍在其前
+  // （见上），新 key 对旧状态照样走到这里被拒，既有语义不变。
+  const rule = assertWarehouseTaskAction('packDone', taskRow.status)
+  if (!isValidTransition(taskRow.status, rule.toStatus)) throw new AppError(`非法状态迁移：${taskRow.status} → ${rule.toStatus}`, 400)
   await assertTaskCheckScanClosure(conn, id)
   await assertTaskPackagingClosure(conn, id)
   await assertTaskPackagePrintClosure(conn, id)

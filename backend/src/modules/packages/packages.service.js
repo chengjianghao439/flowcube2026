@@ -6,6 +6,7 @@ const AppError = require('../../utils/AppError')
 const printJobs = require('../print-jobs/print-jobs.service')
 const { assertInScope } = require('../../utils/warehouseScope')
 const { assertTaskScope } = require('../warehouse-tasks/warehouse-tasks.helpers')
+const { assertPrintLabelReceiptConsistent } = require('./packages.receipt-guard')
 
 const { WT_STATUS, WT_STATUS_NAME } = require('../../constants/warehouseTaskStatus')
 const { WT_EVENT, record: recordEvent } = require('../warehouse-tasks/warehouse-task-events.service')
@@ -981,6 +982,104 @@ async function cancelByTaskId(conn, taskId) {
   return result.affectedRows
 }
 
+/**
+ * 补打箱贴（`package.print-label`）。
+ *
+ * 与 `finishPackage` 同口径，压在一处：
+ *   · **范围 / 设备仓校验先于**幂等 begin/replay（否则越权重放能拿回原回执）；
+ *   · 锁序 task → package，并在 begin 前**复核箱归属**（peek 无锁读期间箱可能被挪走）；
+ *   · 幂等回执、入队、dispatchHint、complete **同一 conn 同一事务**，失败整体 rollback ——
+ *     既不留下「队列已提交、回执未落」的半成功窗口，也不会用一条 PENDING 把原 key 永久挡住；
+ *   · 缺箱在 begin **之前**明确 404：不留回执行、不留队列行，原 key 在故障消除后可直接重试。
+ */
+async function printPackageLabel(packageId, { requestKey, userId, scopeWarehouseIds = null, pdaWarehouseId = null } = {}) {
+  if (!Number.isInteger(packageId) || packageId <= 0) throw new AppError('箱子 ID 非法', 400)
+
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+
+    const [[peek]] = await conn.query('SELECT warehouse_task_id FROM packages WHERE id=?', [packageId])
+    if (!peek) throw new AppError('箱子不存在', 404, 'PACKAGE_NOT_FOUND')
+
+    const [[taskRow]] = await conn.query(
+      'SELECT id, status, warehouse_id FROM warehouse_tasks WHERE id=? AND deleted_at IS NULL FOR UPDATE',
+      [peek.warehouse_task_id],
+    )
+    if (!taskRow) throw new AppError('箱子所属任务不存在', 404, 'PACKAGE_TASK_NOT_FOUND')
+    assertTaskScope(taskRow, { scopeWarehouseIds, pdaWarehouseId })
+
+    const [[pkgRow]] = await conn.query('SELECT warehouse_task_id FROM packages WHERE id=? FOR UPDATE', [packageId])
+    if (!pkgRow) throw new AppError('箱子不存在', 404, 'PACKAGE_NOT_FOUND')
+    if (Number(pkgRow.warehouse_task_id) !== Number(taskRow.id)) {
+      throw new AppError('箱子所属任务已变化，请刷新后重试', 409, 'PACKAGE_TASK_CHANGED')
+    }
+
+    const requestState = await beginResourceOperationRequest(conn, {
+      requestKey,
+      // base action：helper 会**无条件**再拼 `.resourceId`，传 scoped 会拼成两截
+      action: 'package.print-label',
+      userId: userId || null,
+      resourceType: 'package',
+      resourceId: packageId,
+    })
+    if (requestState.replay) {
+      // 回放**之前**先做回执自洽校验（与查询入口共用同一个纯函数）：修复「同一 requestKey 跨箱」
+      // 之前落库的成功回执，可能是「B 箱的资源 id + A 箱的 job」——照旧回放等于让 B 箱拿 A 的箱贴。
+      assertPrintLabelReceiptConsistent('package.print-label', {
+        status: 'success',
+        data: requestState.responseData,
+        resourceId: packageId,
+      })
+      await conn.rollback()
+      return { replay: true, data: requestState.responseData, message: requestState.responseMessage }
+    }
+
+    const job = await printJobs.enqueuePackageLabelJob({
+      conn,
+      packageId,
+      createdBy: userId ?? null,
+      // 幂等键绑「资源 ID + **完整** requestKey」：只带 key 时，同一 key 用到另一只箱上会命中
+      // 前一只箱的活跃 job（createRecord 见同 key + 同仓 + 同 jobType 即原样返回），
+      // 后一只箱根本没进队、调用方却拿到「已加入打印队列」和**别人的** job。
+      // 不做截断——截断会引入隐式碰撞；确实超长时由 createRecord 明确 400 拒绝，事务整体回滚。
+      jobUniqueKey: requestKey ? `package_label:${packageId}:${requestKey}` : null,
+    })
+    if (!job) throw new AppError('箱贴未进入打印链，请检查打印配置后重试', 409, 'PACKAGE_LABEL_NOT_ENQUEUED')
+
+    if (job.unprintable) {
+      // 没有可用打印机时后端仍留一条打印记录（箱贴始终有迹可查、之后可补打），
+      // 但这不等于「已加入打印队列」——必须明确提示先去绑定打印机。
+      const payload = { queued: false, job: null, noPrinter: true }
+      await completeOperationRequest(conn, requestState, {
+        data: payload,
+        message: '未绑定可用打印机，已记录本次打印',
+        resourceType: 'package',
+        resourceId: packageId,
+      })
+      await conn.commit()
+      return { data: payload, message: '未绑定可用打印机，已记录本次打印；请先绑定打印机，再到打印记录页补打' }
+    }
+
+    // dispatchHint 必须用**同一 conn**：否则读不到本事务刚插入的 job（findById 抛 404）
+    const dispatchHint = await printJobs.getDispatchHintForJob(job.printerCode, job.id, conn)
+    const payload = { queued: true, job: { ...job, dispatchHint } }
+    await completeOperationRequest(conn, requestState, {
+      data: payload,
+      message: '已加入打印队列',
+      resourceType: 'package',
+      resourceId: packageId,
+    })
+    await conn.commit()
+    return { data: payload, message: '已加入打印队列' }
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
+  }
+}
+
 module.exports = {
   listByTask,
   createPackage,
@@ -989,6 +1088,7 @@ module.exports = {
   voidPackage,
   voidCompletedPackage,
   finishPackage,
+  printPackageLabel,
   getByBarcode,
   cancelByTaskId,
 }

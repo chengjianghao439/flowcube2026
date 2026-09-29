@@ -255,6 +255,11 @@ jobs:
       - name: 批 C2 — 完成箱子回执事务与故障注入（9 项断言）
         run: npm run smoke:pack-finish-receipt-tx
 
+      # 批 C4 — 打包末尾两入口（8 项断言：pack-done 原键重放/新键状态拒绝、箱贴同 key 跨箱不串 job、
+      # 缺箱 404 不留回执、设备仓与限仓范围、历史错误回执经写重放与查询入口双拦、回执写入故障整体回滚）
+      - name: 批 C4 — 打包完成与箱贴补打的幂等 / 范围 / 回执（8 项断言）
+        run: npm run smoke:pack-done-replay
+
   regression:
     name: 回归门禁（smoke + 集成）
     runs-on: ubuntu-latest

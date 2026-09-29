@@ -27,6 +27,10 @@ const st = vi.hoisted(() => ({
   finishOnConfirmed: null as null | ((d: unknown, c: { recovered: boolean }) => Promise<void>),
   /** 该箱在**列表**里的状态：C3 要用「列表已完成」与「原键回执」不一致来验证不许猜 */
   pkgStatus: 1,
+  /** 该箱的箱贴打印状态（C4：置 success + status=2 才会渲染「完成打包」按钮） */
+  pkgPrintKey: 'no_job',
+  /** C4：捕获 finalizeAction.run 收到的 metadata（验证 taskNo 一并冻结） */
+  finalizeMeta: null as Record<string, unknown> | null,
   /** `getOperationRequestStatusApi` 的返回：null 表示 not_found */
   opStatus: null as Record<string, unknown> | null,
   finishResolve: null as null | ((c: unknown) => Promise<{ effective: boolean; data?: unknown } | null | undefined>),
@@ -38,6 +42,18 @@ const st = vi.hoisted(() => ({
   scannerDisabled: false,
   scannerOnScan: null as null | ((code: string) => void),
   onConfirmed: null as null | ((d: unknown, c: { recovered: boolean }) => Promise<void>),
+  /** 任务状态：C4 要证明页面**不拿它**判「本次完成打包」 */
+  taskStatus: 5,
+  /** 箱贴打印 / 完成打包的 hook 回调（C4） */
+  printSubmitting: false,
+  printOnConfirmed: null as null | ((d: unknown, c: { recovered: boolean }) => Promise<void>),
+  printResolve: null as null | ((c: unknown) => Promise<{ effective: boolean; data?: unknown } | null | undefined>),
+  /** `getOperationRequestStatusApi` 每次查询用的 action（断言恢复用的是 scoped 箱维 action） */
+  opActions: [] as string[],
+  finalizeSubmitBlocked: false,
+  finalizeSubmitting: false,
+  finalizeResolve: null as null | ((c: unknown) => Promise<{ effective: boolean; data?: unknown } | null | undefined>),
+  finalizeOnConfirmed: null as null | ((d: unknown, c: { recovered: boolean }) => Promise<void>),
 }))
 
 vi.mock('@/hooks/useCriticalPdaAction', () => ({
@@ -86,6 +102,37 @@ vi.mock('@/hooks/useCriticalPdaAction', () => ({
         clearPending: () => { st.finishClearCalls += 1 },
       }
     }
+    // 箱贴打印（C4）：action 是 base `package.print-label`（旧版为 `package.print.<taskId>`，按前缀匹配）
+    if (String(opts.action).startsWith('package.print')) {
+      st.printOnConfirmed = opts.onConfirmed ?? null
+      st.printResolve = (opts as { resolveServerState?: typeof st.printResolve }).resolveServerState ?? null
+      const matched = st.pendingRecords.find(r => r.action === opts.action) ?? null
+      return {
+        ...base,
+        submitBlocked: Boolean(matched) || st.printSubmitting,
+        blockedReason: matched ? '箱贴打印 结果待确认。请先确认结果，避免重复提交。' : null,
+        pendingRecord: matched,
+        phase: st.printSubmitting ? 'submitting' : 'idle',
+      }
+    }
+    // 完成打包（C4）：action 是 base `warehouse.pack-done`（旧版为 `warehouse.pack-done.<taskId>`）
+    if (String(opts.action).startsWith('warehouse.pack-done')) {
+      st.finalizeResolve = (opts as { resolveServerState?: typeof st.finalizeResolve }).resolveServerState ?? null
+      st.finalizeOnConfirmed = opts.onConfirmed ?? null
+      const matched = st.pendingRecords.find(r => r.action === opts.action) ?? null
+      return {
+        ...base,
+        // 捕获提交时冻结的 metadata（C4：要带上原任务号）
+        run: (_executor: (k: string) => Promise<unknown>, metadata?: Record<string, unknown>) => {
+          st.finalizeMeta = metadata ?? null
+          return Promise.resolve({ kind: 'success' as const, data: { taskId: 42 } })
+        },
+        submitBlocked: Boolean(matched) || st.finalizeSubmitBlocked || st.finalizeSubmitting,
+        blockedReason: matched ? '完成打包 结果待确认。请先确认结果，避免重复提交。' : null,
+        pendingRecord: matched,
+        phase: st.finalizeSubmitting ? 'submitting' : 'idle',
+      }
+    }
     if (opts.action === 'package.add') {
       st.onConfirmed = opts.onConfirmed ?? null
       return {
@@ -125,7 +172,7 @@ vi.mock('@/api/packages', () => ({
   // 有一个打包中的箱子：页面会自动把它设为 activePackageId，扫码条才会渲染出来
   getPackagesApi: async () => ([{
     id: 8, barcode: 'L000008', status: st.pkgStatus, statusName: '打包中', createdAt: '2026-09-29T00:00:00Z',
-    items: [], printStatus: { key: 'no_job', label: '未生成箱贴' },
+    items: [], printStatus: { key: st.pkgPrintKey, label: st.pkgPrintKey === 'success' ? '已打印' : '未生成箱贴' },
   }]),
   createPackageApi: async () => ({ id: 1, barcode: 'L000001' }),
   addPackageItemApi: async () => ({ id: 1, addedQty: 20, qty: 60, unit: '个', productName: '测试商品' }),
@@ -135,12 +182,18 @@ vi.mock('@/api/packages', () => ({
   printPackageLabelApi: async () => ({}),
 }))
 vi.mock('@/api/warehouse-tasks', () => ({
-  getTaskByIdApi: async () => ({ id: 42, taskNo: 'WT042', status: 5, statusName: '待打包', warehouseId: 1, warehouseName: '主仓' }),
+  getTaskByIdApi: async () => ({
+    id: 42, taskNo: 'WT042', status: st.taskStatus,
+    statusName: st.taskStatus === 5 ? '待打包' : '待出库',
+    warehouseId: 1, warehouseName: '主仓',
+  }),
 }))
 vi.mock('@/api/operation-requests', () => ({
   // 默认 success（保持既有用例行为）；C3 的用例会把它改成 not_found 来验证「不许猜」
-  getOperationRequestStatusApi: async () => st.opStatus
-    ?? { status: 'success', data: { addedQty: 20, qty: 60, unit: '个' }, resourceId: 8 },
+  getOperationRequestStatusApi: async (_key: string, action: string) => {
+    st.opActions.push(action)
+    return st.opStatus ?? { status: 'success', data: { addedQty: 20, qty: 60, unit: '个' }, resourceId: 8 }
+  },
 }))
 vi.mock('@/components/pda/PdaScanner', () => ({
   default: (props: { disabled?: boolean; onScan?: (code: string) => void }) => {
@@ -184,6 +237,8 @@ beforeEach(() => {
   st.finishSubmitBlocked = false
   st.finishOnConfirmed = null
   st.pkgStatus = 1
+  st.pkgPrintKey = 'no_job'
+  st.finalizeMeta = null
   st.opStatus = null
   st.finishResolve = null
   st.seenActions = []
@@ -192,6 +247,15 @@ beforeEach(() => {
   st.scannerDisabled = false
   st.scannerOnScan = null
   st.onConfirmed = null
+  st.taskStatus = 5
+  st.printSubmitting = false
+  st.printOnConfirmed = null
+  st.printResolve = null
+  st.opActions = []
+  st.finalizeSubmitBlocked = false
+  st.finalizeSubmitting = false
+  st.finalizeResolve = null
+  st.finalizeOnConfirmed = null
 })
 
 afterEach(() => {
@@ -465,4 +529,224 @@ test('C3 成功提示：回执就是当前任务时才说「本任务全部完�
   })
   const texts = st.feedback.map(f => f.text).join(' | ')
   expect(texts).toContain('本任务所有箱子已完成')
+})
+
+// ── C4：打包末尾两入口（箱贴打印 / 完成打包）────────────────────────────────
+const flush = async () => {
+  await act(async () => { await new Promise(r => setTimeout(r, 50)) })
+  await act(async () => { await new Promise(r => setTimeout(r, 50)) })
+}
+
+test('C4 箱贴打印与完成打包注册的 action 不绑 taskId（换任务重挂仍能找到原记录）', async () => {
+  mount()
+  await flush()
+  expect(st.seenActions).toContain('package.print-label')
+  expect(st.seenActions).toContain('warehouse.pack-done')
+  // 绑 taskId 的老写法一个都不该再出现——它正是「换任务后原 pending 匹配不上」的根因
+  expect(st.seenActions.filter(a => /^package\.print\.\d+$/.test(a))).toHaveLength(0)
+  expect(st.seenActions.filter(a => /^warehouse\.pack-done\.\d+$/.test(a))).toHaveLength(0)
+})
+
+test('C4 完成打包恢复只认原键回执：任务已是待出库、列表说完成，都不算本次成功', async () => {
+  mount()
+  await flush()
+  expect(st.finalizeResolve).toBeTruthy()
+  // 任务状态已被改成 6（待出库）——如果实现拿它当证据，下面第一条就会误判成功
+  st.taskStatus = 6
+  const rec = { action: 'warehouse.pack-done', requestKey: 'k-pl', label: '完成打包', metadata: { taskId: 42 } }
+
+  st.opStatus = { status: 'not_found' }
+  expect((await st.finalizeResolve!({ record: rec }))?.effective).toBe(false)
+
+  st.opStatus = { status: 'success', resourceId: 42, data: { taskId: 42 } }
+  expect((await st.finalizeResolve!({ record: rec }))?.effective).toBe(true)
+
+  // 回执绑的是**别的任务**（换任务后查回原任务回执的场景反过来）：不据以恢复
+  st.opStatus = { status: 'success', resourceId: 99, data: { taskId: 99 } }
+  expect((await st.finalizeResolve!({ record: rec }))?.effective).toBe(false)
+})
+
+test('C4 完成打包在别的任务页确认原任务回执：只说原任务，不改当前页为「打包完成」', async () => {
+  mount()
+  await flush()
+  await act(async () => {
+    await st.finalizeOnConfirmed!({ taskId: 41 }, { recovered: true })
+  })
+  const texts = st.feedback.map(f => f.text).join(' | ')
+  expect(texts).toContain('原任务 #41')
+  expect(texts).not.toContain('打包完成！')
+})
+
+test('C4 任务已推进到待出库但存在原键记录时，不得把恢复入口藏掉', async () => {
+  st.taskStatus = 6   // 「完成打包」后台已成功、响应丢失后重挂的真实形态
+  st.pendingRecords = [{
+    action: 'warehouse.pack-done', requestKey: 'k-pl', label: '完成打包',
+    createdAt: '2026-09-29T00:00:00Z', metadata: { taskId: 42, taskNo: 'WT042' },
+  }]
+  mount()
+  await flush()
+  const text = container.textContent ?? ''
+  // 未被提前 return 顶掉：既没有「当前任务不能打包」整页替换，也看得见待确认提示
+  expect(text).not.toContain('当前任务不能打包')
+  expect(text).toContain('结果待确认')
+})
+
+test('C4 箱贴提交中同样冻结本页扫码入口', async () => {
+  st.printSubmitting = true
+  mount()
+  await flush()
+  expect(st.scannerDisabled).toBe(true)
+})
+
+test('C4 完成打包提交中同样冻结本页扫码入口', async () => {
+  st.finalizeSubmitting = true
+  mount()
+  await flush()
+  expect(st.scannerDisabled).toBe(true)
+})
+
+test('C4 箱贴成功反馈用原快照并说明「只是排队」，不谎称已出纸', async () => {
+  mount()
+  await flush()
+  expect(st.printOnConfirmed).toBeTruthy()
+
+  await act(async () => {
+    await st.printOnConfirmed!({ queued: true, job: { id: 77, refCode: 'L000777' } }, { recovered: false })
+  })
+  const queuedMsg = st.feedback.find(f => f.kind === 'ok')?.text ?? ''
+  expect(queuedMsg).toContain('L000777')          // 原快照里的箱码，不是「当前箱」
+  expect(queuedMsg).toContain('仅表示已排队')
+  expect(queuedMsg).not.toContain('已出纸完成')
+
+  // `queued=false`（未绑定打印机）由 mutation 的**警告**表达「没排队、没出纸」，
+  // onConfirmed 不再重复发一条 ok —— 否则同一件事被说成成功 + 警告两条。
+  st.feedback = []
+  await act(async () => {
+    await st.printOnConfirmed!({ queued: false, job: null, noPrinter: true }, { recovered: false })
+  })
+  expect(st.feedback.filter(f => f.kind === 'ok')).toHaveLength(0)
+})
+
+test('C4 箱贴恢复只认原键回执：列表说打印成功也不能判本次成功', async () => {
+  mount()
+  await flush()
+  expect(st.printResolve).toBeTruthy()
+  const rec = {
+    action: 'package.print-label', requestKey: 'k-pr', label: '箱贴打印',
+    metadata: { taskId: 42, packageId: 8, packageBarcode: 'L000008' },
+  }
+  st.opStatus = { status: 'not_found' }
+  expect((await st.printResolve!({ record: rec }))?.effective).toBe(false)
+
+  st.opStatus = { status: 'success', resourceId: 8, data: { queued: true, job: { id: 9, refId: 8 } } }
+  expect((await st.printResolve!({ record: rec }))?.effective).toBe(true)
+
+  // 回执绑的是**别的箱**（历史跨箱错误回执的形态）：不据以恢复
+  st.opStatus = { status: 'success', resourceId: 7, data: { queued: true, job: { id: 9, refId: 7 } } }
+  expect((await st.printResolve!({ record: rec }))?.effective).toBe(false)
+})
+
+test('C4 旧 scoped 箱贴记录：后缀是 taskId，与 packageId 不同也能按箱维 scoped 恢复', async () => {
+  mount()
+  await flush()
+  // 旧实现是 `package.print.<taskId>` —— 后缀 41 是 **taskId**，箱 id 是 700，两者本就不同。
+  // 要求 suffix === packageId 会把这条**合法旧记录**判死（本批一度写错，此处钉住）。
+  const rec = {
+    action: 'package.print.41', requestKey: 'k-pr-old', label: '箱贴打印',
+    metadata: { taskId: 41, packageId: 700, taskNo: 'WT041', packageBarcode: 'L000700' },
+  }
+  st.opActions = []
+  st.opStatus = { status: 'success', resourceId: 700, data: { queued: true, job: { id: 9, refId: 700 } } }
+  expect((await st.printResolve!({ record: rec }))?.effective).toBe(true)
+  // 恢复查询必须落到**箱维** scoped action（print-label 的幂等作用域是箱，不是任务）
+  expect(st.opActions).toContain('package.print-label.700')
+})
+
+test('C4 旧 scoped 箱贴记录后缀与 metadata.taskId 不一致时只阻断、不据以恢复', async () => {
+  mount()
+  await flush()
+  const rec = {
+    action: 'package.print.42', requestKey: 'k-pr2', label: '箱贴打印',
+    metadata: { taskId: 41, packageId: 700 },   // 后缀 42 ≠ taskId 41
+  }
+  st.opStatus = { status: 'success', resourceId: 700, data: { queued: true, job: { id: 9, refId: 700 } } }
+  expect((await st.printResolve!({ record: rec }))?.effective).toBe(false)
+
+  // 残缺（没有 taskId）同样不恢复
+  const bare = { action: 'package.print.42', requestKey: 'k-pr3', label: '箱贴打印', metadata: { packageId: 700 } }
+  expect((await st.printResolve!({ record: bare }))?.effective).toBe(false)
+})
+
+test('C4 旧合法箱贴记录（taskId≠packageId）仍能展示原目标定位', async () => {
+  st.taskStatus = 6
+  st.pendingRecords = [{
+    action: 'package.print.41', requestKey: 'k-pr-old', label: '箱贴打印',
+    createdAt: '2026-09-29T00:00:00Z',
+    metadata: { taskId: 41, packageId: 700, taskNo: 'WTOLD041', packageBarcode: 'L000700' },
+  }]
+  mount()
+  await flush()
+  const text = container.textContent ?? ''
+  expect(text).toContain('WTOLD041')
+  expect(text).toContain('L000700')
+})
+
+test('C4 旧 scoped 完成打包记录缺 metadata.taskId 时只阻断、不据以恢复', async () => {
+  mount()
+  await flush()
+  expect(st.finalizeResolve).toBeTruthy()
+  // 残缺记录：有 scoped action、没有 metadata.taskId —— 不能靠 action 后缀猜原任务
+  const rec = { action: 'warehouse.pack-done.42', requestKey: 'k-fl', label: '完成打包', metadata: {} }
+  st.opStatus = { status: 'success', resourceId: 42, data: { taskId: 42 } }
+  expect((await st.finalizeResolve!({ record: rec }))?.effective).toBe(false)
+})
+
+test('C4 残缺旧记录仍阻断但不展示猜测的原目标内容', async () => {
+  st.taskStatus = 6
+  st.pendingRecords = [{
+    action: 'package.finish.41', requestKey: 'k-old', label: '完成箱子',
+    createdAt: '2026-09-29T00:00:00Z',
+    // 后缀 41 与 metadata.taskId 42 不一致 ⇒ 归属不明
+    // 用**不会出现在页面别处**的值：当前任务号是 WT042，拿它当断言会被页面标题误伤
+    metadata: { taskId: 42, packageId: 7, taskNo: 'WTORIG041', packageBarcode: 'L000007' },
+  }]
+  mount()
+  await flush()
+  const text = container.textContent ?? ''
+  // 仍然提示有待确认（不静默消失），但**不得**展示那条不可信的原目标内容
+  expect(text).toContain('结果待确认')
+  expect(text).toContain('不展示原内容')
+  expect(text).not.toContain('WTORIG041')
+  expect(text).not.toContain('L000007')
+})
+
+test('C4 完成打包提交时把原任务号一并冻结（换任务后能核对原 WT 号）', async () => {
+  st.pkgStatus = 2            // 箱已完成
+  st.pkgPrintKey = 'success'  // 箱贴已打印 → 渲染「完成打包」按钮
+  mount()
+  await flush()
+  const btn = Array.from(container.querySelectorAll('button'))
+    .find(b => /完成打包并进入待出库/.test(b.textContent || ''))
+  expect(btn).toBeTruthy()
+  await act(async () => { (btn as HTMLButtonElement).click() })
+  await act(async () => { await new Promise(r => setTimeout(r, 30)) })
+  // taskNo 来自当前任务详情（WT042），与 taskId 一起进冻结 metadata
+  expect(st.finalizeMeta?.taskId).toBe(42)
+  expect(st.finalizeMeta?.taskNo).toBe('WT042')
+})
+
+test('C4 任务已推进到待出库但存在原键记录时，仍按只读事实展示箱件（不得显示 0 箱）', async () => {
+  st.taskStatus = 6           // 「完成打包」后台已成功、响应丢失后重挂的真实形态
+  st.pkgStatus = 2
+  st.pkgPrintKey = 'success'
+  st.pendingRecords = [{
+    action: 'warehouse.pack-done', requestKey: 'k-fact', label: '完成打包',
+    createdAt: '2026-09-29T00:00:00Z', metadata: { taskId: 42, taskNo: 'WT042' },
+  }]
+  mount()
+  await flush()
+  const text = container.textContent ?? ''
+  // 箱件事实按**只读查询**呈现，不因为任务已经不是待打包就退化成 0
+  expect(text).toContain('1/1 箱')
+  expect(text).not.toContain('点击下方「新建箱子」开始打包')
 })

@@ -4,7 +4,7 @@ const ctrl       = require('./packages.controller')
 const { authMiddleware, requirePermission } = require('../../middleware/auth')
 const { PERMISSIONS } = require('../../constants/permissions')
 const { pdaOnly } = require('../../middleware/pdaOnly')
-const { pdaSessionRequired } = require('../../middleware/pdaSession')
+const { pdaSessionRequired, pdaSessionOptional } = require('../../middleware/pdaSession')
 const { validateBody } = require('../../utils/route')
 
 const router = Router()
@@ -72,6 +72,9 @@ router.post('/:id/void', pdaOnly, pdaSessionRequired(), requirePermission(PERMIS
 router.put('/:id/finish', pdaOnly, pdaSessionRequired(), requirePermission(PERMISSIONS.WAREHOUSE_TASK_PACK), ctrl.finish)
 
 // POST /api/packages/:id/print-label — 补打箱贴
-router.post('/:id/print-label', requirePermission(PERMISSIONS.PRINT_JOB_REPRINT), ctrl.printLabel)
+// 补打是打印动作，ERP 端也该能发起 → 用 pdaSessionOptional：纯 PC 请求（无 PDA 标记）走
+// 权限 + 仓库数据范围；**一旦带了** X-Client: pda 或 X-PDA-Session，就按 PDA 口径完整校验设备，
+// 并把设备仓交给 service 与箱所属仓比对。少了这层，拿着 A 仓的 PDA 能给 B 仓的箱补打箱贴。
+router.post('/:id/print-label', pdaSessionOptional(), requirePermission(PERMISSIONS.PRINT_JOB_REPRINT), ctrl.printLabel)
 
 module.exports = router

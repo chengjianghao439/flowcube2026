@@ -33,7 +33,6 @@ import { usePendingRequests } from '@/hooks/usePendingRequests'
 import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
 import { PdaTaskState } from '@/components/pda/PdaTaskState'
 import PdaDoneView from '@/components/pda/PdaDoneView'
-import { stateConfirmedMessage, taskReachedStatus } from '@/lib/pdaCriticalState'
 
 function readPositiveId(value: string | undefined | null): number {
   const n = Number(value)
@@ -231,6 +230,18 @@ export default function PdaPackPage() {
     () => pendingRecords.find((r) => /^package\.finish\.\d+$/.test(String(r.action || ''))) ?? null,
     [pendingRecords],
   )
+  // 箱贴打印 / 完成打包与 finish 同源：旧版 action 都绑了 taskId，换成 base 后旧记录会永久失联。
+  // 同样只**定位**，沿用原 action 让记录继续阻断；是否据以恢复另有严格校验（见各自 resolveServerState）。
+  // 后缀 `none` 是旧版在 taskId 缺失时写的（`package.print.${taskId || 'none'}`）：
+  // 同样**沿用原 action** 让它继续阻断（不静默消失）；后缀不是数字时 resolver 不据以恢复。
+  const legacyPrintRecord = useMemo(
+    () => pendingRecords.find((r) => /^package\.print\.(\d+|none)$/.test(String(r.action || ''))) ?? null,
+    [pendingRecords],
+  )
+  const legacyFinalizeRecord = useMemo(
+    () => pendingRecords.find((r) => /^warehouse\.pack-done\.(\d+|none)$/.test(String(r.action || ''))) ?? null,
+    [pendingRecords],
+  )
   // 「是否**据以恢复内容**」的严格校验在下面两处（都不满足就只阻断、不恢复）：
   //   · `frozenRecordTrusted` —— 决定冻结卡片**展不展示原内容**（归属不明时只提示人工核对）；
   //   · `resolveServerState` —— 决定能不能把查询结果判成「本次成功」。
@@ -303,30 +314,96 @@ export default function PdaPackPage() {
     queued: boolean
     job?: PackagePrintJob | unknown
   }>({
-    action: `package.print.${taskId || 'none'}`,
+    // 与 finish 同源的问题：action 绑 `taskId` 会让「换任务重挂」后原 pending 匹配不上。
+    // 有旧版 scoped 记录就沿用原 action（继续阻断、不静默消失），否则用 base。
+    action: legacyPrintRecord?.action ?? 'package.print-label',
     requestAction: 'package.print-label',
     label: '箱贴打印',
+    onConfirmed: async (data) => {
+      // **三种成功路径都走这里**（正常提交 / 恢复确认 / hook 兜底确认）——所以轮询唤醒、刷新、
+      // 离线提示、未绑定提示**全部放这一处**。只放 mutation 会让「查回执恢复」那条路静默：
+      // 恢复不走 `mutation.onSuccess`，用户确认完什么提示都看不到。
+      const job = (data?.job && typeof data.job === 'object' ? data.job : null) as
+        (PackagePrintJob & { id?: number; refCode?: string }) | null
+      if (data?.queued === true) {
+        // PDA 自身不打印，箱贴由仓库里的桌面打印客户端领取执行；此处唤醒仅在桌面端生效
+        triggerPrintPoll()
+        refetch()
+        const hint = job?.dispatchHint
+        if (hint?.clientOnline === false) warn(packageLabelTraceMessage(job), 5000)
+        // 回执带的是**原快照**（原箱条码），换任务后也不会说成「当前箱已打印」；
+        // 措辞点明「只是排队」——这张提示不代表现场已经出纸。
+        else ok(`箱贴已加入打印队列（打印任务 #${job?.id ?? '—'}${job?.refCode ? `，箱 ${job.refCode}` : ''}）——仅表示已排队，不代表已出纸`)
+      } else {
+        // 未绑定打印机：泛指「本次打印记录」，**不**拿当前界面上的箱去补旧 payload 里缺的信息
+        warn('本次打印记录已保留，但未排队、未出纸；请先绑定打印机，再到「打印记录」页补打', 5000)
+      }
+    },
+    resolveServerState: async ({ record }) => {
+      // 与 finish 同口径：**只认原键回执**，且回执必须绑**原箱**（含回执里 job 的归属）。
+      // 列表里的打印状态只说明「这只箱现在打印到哪一步了」，完全可能来自上一次，不能当本次证据。
+      const packageId = Number(record.metadata?.packageId ?? 0)
+      if (!Number.isInteger(packageId) || packageId <= 0) return { effective: false }
+      if (record.unverifiedOwner) return { effective: false }
+      // 旧版 scoped 记录的后缀是 **taskId**（原实现 `package.print.<taskId>`），
+      // 必须与 metadata.taskId **严格相等**才据以恢复；对不上/残缺一律只阻断不恢复。
+      const scoped = /^package\.print\.(\d+)$/.exec(String(record.action || ''))
+      if (scoped && Number(scoped[1]) !== Number(record.metadata?.taskId)) return { effective: false }
+      const st = await getOperationRequestStatusApi(record.requestKey, `package.print-label.${packageId}`)
+      if (st?.status !== 'success') return { effective: false }
+      if (st.resourceId != null && Number(st.resourceId) !== packageId) return { effective: false }
+      // 回执里的 job 也必须指向原箱（后端已在写重放/查询两处拦住跨箱历史行，这里再兜一道）
+      const job = (st.data as { job?: { refId?: number } } | null)?.job
+      if (job && job.refId != null && Number(job.refId) !== packageId) return { effective: false }
+      return {
+        effective: true,
+        data: st.data as { queued: boolean; job?: PackagePrintJob | unknown },
+        message: '本次箱贴打印已确认',
+      }
+    },
   })
   const finalizeAction = useCriticalPdaAction<{ taskId: number }>({
-    action: `warehouse.pack-done.${taskId || 'none'}`,
+    action: legacyFinalizeRecord?.action ?? 'warehouse.pack-done',
     requestAction: 'warehouse.pack-done',
     label: '完成打包',
-    onConfirmed: async () => {
-      setAllDone(true)
-    },
-    resolveServerState: async () => {
-      const latest = await getTaskByIdApi(taskId, { skipGlobalError: true })
-      if (taskReachedStatus(latest, WT_STATUS.SHIPPING)) {
-        return { effective: true, data: { taskId }, message: stateConfirmedMessage('完成打包', latest.statusName) }
+    onConfirmed: async (data) => {
+      // 「本任务已打包完成」只对**回执里那个任务**说：可能是在别的任务页面上确认回原任务的回执，
+      // 那时把当前页切成「打包完成！」就是在骗人。
+      const origTaskId = Number(data?.taskId)
+      if (Number.isInteger(origTaskId) && origTaskId === Number(taskId)) {
+        setAllDone(true)
+      } else if (Number.isInteger(origTaskId) && origTaskId > 0) {
+        warn(`原任务 #${origTaskId} 的「完成打包」已确认；当前任务以本页状态为准。`, 5000)
       }
-      return { effective: false }
+    },
+    resolveServerState: async ({ record }) => {
+      // **只认原键回执**，并校验它绑定的是**原任务**。
+      // 不能用「当前任务状态已是待出库(6)」当本次成功的证据 —— 那可能来自上一次、或别的操作。
+      const scoped = /^warehouse\.pack-done\.(\d+)$/.exec(String(record.action || ''))
+      const metaTaskId = Number(record.metadata?.taskId)
+      const origTaskId = scoped ? Number(scoped[1]) : metaTaskId
+      if (!Number.isInteger(origTaskId) || origTaskId <= 0) return { effective: false }
+      if (record.unverifiedOwner) return { effective: false }
+      // 旧版 scoped 记录**必须**与 metadata.taskId **严格相等**才敢用：只凭 action 后缀就恢复，
+      // 等于用「action 名叫什么」代替「这条记录是谁的」——残缺/被挪用的记录会指错原目标。
+      // 对不上就**只阻断不恢复**，由用户显式核对后清除。
+      if (scoped && (!Number.isInteger(metaTaskId) || metaTaskId !== origTaskId)) return { effective: false }
+      const st = await getOperationRequestStatusApi(record.requestKey, `warehouse.pack-done.${origTaskId}`)
+      if (st?.status !== 'success') return { effective: false }
+      if (st.resourceId != null && Number(st.resourceId) !== origTaskId) return { effective: false }
+      return { effective: true, data: { taskId: origTaskId }, message: '本次完成打包已确认' }
     },
   })
 
   const { data: packages = [], isLoading: pkgLoading } = useQuery({
     queryKey: ['pda-packages', taskId],
     queryFn:  () => getPackagesApi(taskId),
-    enabled:  taskId > 0 && !taskLoading && taskDetail?.status === WT_STATUS.PACKING,
+    // **只读事实的加载不绑状态**：任务被「完成打包」推进到 6 之后（尤其是后台成功、响应丢失后
+    // 重挂的那次），页面仍要显示这只箱装了什么。原先 `enabled` 带 `status === PACKING`，
+    // 状态一变查询就不发，`packages` 退化成 `[]`，页面把**没查**画成「0 箱 0 件」并劝人
+    // 「点击下方新建箱子开始打包」——现场会以为箱子没了。
+    // 放开这一点**不放开写**：建箱/装箱/移出/作废/完成/完成打包仍各自校验 `status === PACKING`。
+    enabled:  taskId > 0 && !taskLoading,
   })
 
   useEffect(() => {
@@ -335,7 +412,9 @@ export default function PdaPackPage() {
     if (open) setActivePackageId(open.id)
   }, [packages, activePackageId])
 
-  const refetch = () => qc.invalidateQueries({ queryKey: ['pda-packages', taskId] })
+  // 用**函数声明**而不是 const 箭头：`printAction.onConfirmed` 定义在它之前，
+  // 而「查回执恢复」那条路径同样要刷新箱子列表（不刷新就看不到打印状态变化）。
+  function refetch() { return qc.invalidateQueries({ queryKey: ['pda-packages', taskId] }) }
   const onlineBlocked = finishAction.networkStatus !== 'online'
 
   const createMut = useMutation({
@@ -455,19 +534,44 @@ export default function PdaPackPage() {
   const frozenRecordTrusted = useMemo(() => {
     if (!frozenRecord) return false
     if (frozenRecord.unverifiedOwner) return false
-    const scoped = /^package\.finish\.(\d+)$/.exec(String(frozenRecord.action || ''))
-    if (!scoped) return true
+    const action = String(frozenRecord.action || '')
     const meta = (frozenRecord.metadata ?? {}) as { taskId?: unknown; packageId?: unknown }
-    const pid = Number(meta.packageId)
-    if (!Number.isInteger(pid) || pid <= 0) return false
-    return Number(meta.taskId) === Number(scoped[1])
+
+    // 完成箱子：旧 scoped 记录要有 packageId 且后缀 === metadata.taskId
+    const finishScoped = /^package\.finish\.(\d+)$/.exec(action)
+    if (finishScoped) {
+      const pid = Number(meta.packageId)
+      if (!Number.isInteger(pid) || pid <= 0) return false
+      return Number(meta.taskId) === Number(finishScoped[1])
+    }
+    // 箱贴打印：旧版 scoped 记录的后缀是 **taskId**（原实现 `package.print.<taskId>`，不是 packageId），
+    // 因此要求 packageId 为正整数（恢复要用它去查 `package.print-label.<箱id>`）且后缀 === metadata.taskId
+    const printScoped = /^package\.print\.(\d+)$/.exec(action)
+    if (printScoped) {
+      const pid = Number(meta.packageId)
+      if (!Number.isInteger(pid) || pid <= 0) return false
+      return Number(meta.taskId) === Number(printScoped[1])
+    }
+    // 完成打包：旧 scoped 记录要有 taskId 且后缀 === metadata.taskId
+    const finalizeScoped = /^warehouse\.pack-done\.(\d+)$/.exec(action)
+    if (finalizeScoped) {
+      const tid = Number(meta.taskId)
+      if (!Number.isInteger(tid) || tid <= 0) return false
+      return Number(finalizeScoped[1]) === tid
+    }
+    // base action 的新记录：不再靠 action 名判归属，缺 packageId/taskId 时下面分支各自处理
+    return true
   }, [frozenRecord])
   // 未确认原箱结果期间，本页的**换箱 / 扫码 / 新建箱 / 移出 / 作废 / 完成箱子 / 完成打包**都要被冻结 ——
   // 否则「原目标恢复入口」虽然还在，工人却已经能在别的箱上继续动手，定位就失去了意义。
   // finish 的 `submitBlocked` 只覆盖「有待确认记录」，**提交中**（`phase === 'submitting'`）也要算进来。
-  // 本批只纳入 finish：打印 / 完成打包的设计另论，不在此扩。
+  // print / finalize 已随本批 C4 一并纳入（它们的待确认来源与 finish 同类）。
   const anySubmitBlocked = addAction.submitBlocked || removeAction.submitBlocked || voidAction.submitBlocked
     || finishAction.submitBlocked || finishAction.phase === 'submitting'
+    // 打印 / 完成打包同样纳入本页冻结：它们也是「未确认原目标结果」的来源，
+    // 只挡别的入口会让工人一边等着确认、一边在别的箱上继续动手，定位就失去意义。
+    || printAction.submitBlocked || printAction.phase === 'submitting'
+    || finalizeAction.submitBlocked || finalizeAction.phase === 'submitting'
   const anyBlockedReason = addAction.blockedReason || removeAction.blockedReason || voidAction.blockedReason
     || finishAction.blockedReason
 
@@ -525,30 +629,19 @@ export default function PdaPackPage() {
     mutationFn: async (pkgId: number) => {
       if (!taskDetail) throw new Error('任务数据仍在加载，请稍后重试')
       if (taskDetail.status !== WT_STATUS.PACKING) throw new Error('当前任务不是待打包状态，不能打印箱贴')
+      const pkg = (packages ?? []).find(p => Number(p.id) === pkgId)
       const result = await printAction.run((requestKey) =>
         printPackageLabelApi(pkgId, requestKey),
-        { taskId, packageId: pkgId },
+        // 冻结**原目标**：任务号 + 箱条码。只存 ID 时，换任务 / 重挂之后待确认卡片
+        // 说不清「上次要补打的是哪只箱」，认不出原货，也无法判断旧 scoped 记录是否自洽。
+        { taskId, taskNo: taskDetail.taskNo, packageId: pkgId, packageBarcode: pkg?.barcode ?? null },
       )
       return result
     },
     onSuccess: (d) => {
-      if (d.kind === 'pending') {
-        warn('网络中断，打印结果待确认')
-        return
-      }
-      const payload = d.data
-      if (payload.queued) {
-        // PDA 自身不打印，箱贴由仓库里的桌面打印客户端领取执行；此处唤醒仅在桌面端生效
-        triggerPrintPoll()
-        const job = payload.job && typeof payload.job === 'object' ? payload.job as PackagePrintJob : null
-        const hint = job?.dispatchHint
-        if (hint && hint.clientOnline === false) warn(packageLabelTraceMessage(job), 5000)
-        else ok(packageLabelTraceMessage(job), 4000)
-      } else {
-        // 2026-09-14：没有可用打印机时后端只留一条打印记录（不算已排队），
-        // 必须明确提示先绑定打印机，否则现场会以为箱贴已经在打。
-        warn('未绑定可用打印机，箱贴未出纸；记录已保留，请先绑定打印机再到「打印记录」页补打', 5000)
-      }
+      // **只**处理待确认。成功 / 未绑定的用户可见提示 + 轮询唤醒 + 刷新统一由
+      // `printAction.onConfirmed` 发出（正常、恢复、兜底三条路径共用），这里再发一次会重复。
+      if (d.kind === 'pending') warn('网络中断，打印结果待确认')
     },
     onError: (e: unknown) => err((e as { message?: string })?.message ?? '打印失败'),
   })
@@ -588,7 +681,9 @@ export default function PdaPackPage() {
       if (taskDetail.status !== WT_STATUS.PACKING) throw new Error('当前任务不是待打包状态，不能完成打包')
       const result = await finalizeAction.run((requestKey) =>
         packDoneApi(taskId, requestKey).then((res) => res as { taskId: number }),
-        { taskId },
+        // 冻结**原任务**：只存 taskId 时，换任务 / 重挂后待确认卡片只能说「任务 1207」，
+        // 现场认不出那是哪个作业单，也没法跟单据核对。补 taskNo。
+        { taskId, taskNo: taskDetail.taskNo },
       )
       return result
     },
@@ -688,7 +783,10 @@ export default function PdaPackPage() {
     )
   }
 
-  if (!allDone && taskDetail.status !== WT_STATUS.PACKING) {
+  // 有未确认的原键记录时**不能**提前 return：「完成打包」后台成功、响应丢失后任务已经推进到 6，
+  // 重挂时 `allDone`（本地 state）是 false、`taskDetail.status` 又不是 5 ⇒ 会直接落到这个分支，
+  // 把「确认上次结果 / 原目标定位」整个藏掉 —— 那正是本页最需要用户看见的东西。
+  if (!allDone && taskDetail.status !== WT_STATUS.PACKING && !noticePendingAction) {
     return (
       <PdaTaskState
         title="当前任务不能打包"

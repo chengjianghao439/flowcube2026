@@ -96,6 +96,7 @@
     "smoke:pick-label-reprint-lifecycle": "node tests/pick-label-reprint-lifecycle.smoke.test.js",
     "smoke:pack-remove-void-replay": "node tests/pack-remove-void-replay.smoke.test.js",
     "smoke:pack-finish-receipt-tx": "node tests/pack-finish-receipt-tx.smoke.test.js",
+    "smoke:pack-done-replay": "node tests/pack-done-replay.smoke.test.js",
     "smoke:audit-finance-security": "node tests/audit-finance-security.smoke.test.js",
     "smoke:accounting": "node tests/accounting.smoke.test.js",
     "smoke:accounting-period": "node tests/accounting-period.smoke.test.js",

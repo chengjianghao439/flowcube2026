@@ -90,3 +90,13 @@
 - **事务内读「本事务刚写的行」必须用同一个 conn**：`print-jobs.query.findById` / `dispatch.getDispatchHintForJob` 增加**可选** `exec`（旧调用默认 pool，行为不变）。`findByIdWithExecutor` **缺行是抛 404**，不是返回 null —— 事务内误用 pool 读未提交行的后果是**整笔回滚**。
 - **`remove-item` / `void` 的幂等边界**：范围 / 设备仓校验**先于** `begin`；**重放分支排在明细 / 状态检查之前**（整行已删、箱已作废都还能按原键取回原回执）；**新键仍是合法新操作**（第二次移出照常、新键对已作废箱仍 400）——**幂等只救「同一个操作」**。
 - 触发点：`tests/pack-remove-void-replay.smoke.test.js`（7 项）、`tests/pack-finish-receipt-tx.smoke.test.js`（9 项，含 commit / 回执写入 / 回执构建读三种故障注入各自全量回滚并原键可重试）。
+
+### 打包末尾两入口（2026-09-29 批 C4）
+
+- **箱贴补打 `print-label` 同样必须同事务**：controller 原用 **pool** 做 begin（自动提交）、业务在另一条连接、`complete` 又在 pool —— 既有「队列已提交、回执未落」的半成功窗口，又有「失败留 `PENDING` 把原 key 永久挡住」。现下沉到 `packages.service.printPackageLabel`：**范围 / 设备仓校验先于 begin/replay** → 锁 task → 锁 package 复查归属 → begin/replay → 入队（`conn`）→ `dispatchHint`（**同一 conn**）→ `complete`（`conn`）→ commit；任一环失败**整体回滚**。
+- **缺箱在 `begin` 之前明确 404**：不留回执行、不留队列行，**原 key 可直接重试**（不要为了「总是留痕」补一条 FAILED —— 那正是把重试永久挡死的写法）。
+- **资源级幂等键必须绑资源**：箱贴的打印幂等键由 `package_label:<requestKey>` 改为 **`package_label:<packageId>:<requestKey>`** —— 只带 requestKey 时，同一 key 用到另一只箱上会命中前一箱的**活跃 job**（`createRecord` 见同 key + 同仓 + 同 jobType 即原样返回），后一只箱**根本没进队**而调用方拿到「已入队」和**别人的** job。**不做截断**（截断引入隐式碰撞），超长由 `createRecord` 明确 400 并整体回滚。
+- **已确认回执在「写重放」与「查询回执」两个入口都要校验自洽**：`GET /api/system/request-status` 是前端恢复的实际入口，公共 hook 一看到 `status==='success'` 就清 pending 并当成功，之后再无校验点。`packages/packages.receipt-guard.js` 的 `assertPrintLabelReceiptConsistent` 对 `package.print-label` 的 `SUCCESS` 校验 `data.job` 的 `refType/refId` 与 `receipt.resourceId` 一致，不一致 **409 要求人工核对原打印**（**不自动补打**、**不改写历史行**）；`operationRequest` 的查询匹配语义不动。
+- **`pack-done` 的状态规则必须排在幂等 `begin/replay` 之后**：原顺序下任务推进到 6 后**原 key 重放会被状态规则挡成 400**（与新 key 对旧状态**同一条文案**，合法重放拿不回原回执）。顺序固定为
+  `锁任务 → 范围/设备仓 → 取消/改单闸 → begin/replay → 状态规则 → 打印闭环 → CAS`；**新 key 对已推进状态照旧 400**，两者必须**分别**断言。
+- 触发点：`tests/pack-done-replay.smoke.test.js`（8 项）。

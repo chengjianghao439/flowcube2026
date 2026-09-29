@@ -200,3 +200,18 @@ Tests CI 的 `regression-plastic-box` job 使用独立 MySQL 8 service（**映�
 **修复前后对照**：后两项在修复前实测为 `409 PICK_CODE_EXCEEDS_PICKED`（补拣被历史作业份额挤掉）与 `200 queued`（照旧出未归属的取货标签）；修复为「聚合取小者」与「按当前任务锁定位」后转绿。**未改动历史作业记录、未用 SQL 直接改库存/任务/打印状态。**
 **未验**：GUI、物理打印与**实际出纸**（第 4 项只证明入队结果）、`finish`/待出库链（第 5 项只走到**箱贴入队**，未要求客户端完成）、真实并发、`remove`/`void` 无幂等键（**后续批 C1 已覆盖**）、`finish` 的 scope-先于-replay 与历史回执事务（**后续批 C2 已覆盖**）、**取货标签容器已出库/已 `EMPTY` 后的「历史补打」**（**后续批 B4 补充项已覆盖**：可按唯一一条已出库任务的盒取货行补打原取货量）。
 **第 5 项的完整闭合断言**：非作废箱 `SUM(package_items.qty)=100`、旧箱 `status=3`、`PICK` 合计 100、**历史 `sbi` 保持 `[60,90]` 未被改写**、**ACTIVE 容器余量合计 == `inventory_stock` 缓存**（守恒）。
+
+### 2026-09-29 批 C4：打包末尾两入口（`pack-done` / 箱贴补打）
+
+`npm run smoke:pack-done-replay`（`tests/pack-done-replay.smoke.test.js`，**8 项断言**）：与前几批同一专库/回环约定（开头硬断言库名/回环/端口），在同一 CI job `regression-plastic-box`（**3307 service**）内**顺序执行**，不另造 job。
+**不使用 `prepareSmokeContext()`** —— 它会 upsert 共享 `SMOKE-PRN` 并 `DELETE` 该打印机下 `status=0` 的任务，与本批「不核销他人历史 job」的边界冲突；改为自建本批独立仓 / 库位 / 分类 / 供应商 / 客户 / 商品 / 分拣格 / 打印机 + 客户端绑定 / PDA 设备，收尾全走合法 API 并**断言终态**（失败计 `failed`，进程非 0）。
+覆盖：**`pack-done` 原 key 重放回原回执**（并断言 `PACK_DONE` 事件与直接运单数**不增**）、**新 key 对已推进状态仍 400 且无残留回执行**、**箱贴同 requestKey 跨箱不串 job**（同 key 重放回原 job 且数不增；新 key 恰增 1）、**缺箱在 begin 之前 404**（回执 0 行、原 key 可重试）、**设备仓不匹配 / PDA 缺票 / ERP 无标记合法路径**、**限仓用户范围外 403**（先证明范围内可成功，再改范围，原 key 与新 key 均 `WAREHOUSE_SCOPE_DENIED`）、**历史错误回执经写重放与 `GET request-status` 两个入口都被 409 拦下**、**故障注入**（`UPDATE operation_requests` 抛错 ⇒ 整体回滚、队列无残留、原 key 重试成功）。
+**红证据（先红后修）**：`pack-done` 原 key 重放与新 key 对旧状态**同为 400**；箱贴 B 箱拿到 **A 箱的 job**（`refId` 不符）；缺箱后回执行停在 `PENDING(0)`；`GET request-status` 对历史行返回 `success` 而 `resourceId` 与 `data.job.refId` 不符。
+**防回归已验（无前置红）**：设备仓 / 缺票 / ERP 路径、限仓范围、历史回执的**写重放** 409、故障注入——这四项与实现同批落地，未在旧实现上单独取红。
+**历史行查找**：`JOIN packages → warehouse_tasks → inventory_warehouses` 且 `w.name LIKE 'PB-C4-%'` + 当前 `user_id`（只读本批、本人）；找不到历史行时计 **SKIP**（独立计数，**不计入 PASS**），汇总打印 `N 通过 / N 失败 / N 跳过`。
+**真实 GUI（**Claude 实测**，分两轮，详见 `docs/plastic-box-batch-c4-handover-2026-09-29.md` §8.1 / §8.2）**：
+· **第一轮（共享仓，窄修之前）** ① 补打箱贴扣 2xx：同页冻结原 `WT202609291206 / L000468` → **切到任务 1207 仍显示原定位** → 放开确认后该箱 `print_jobs` **2 → 2 不增**；② 完成打包扣 2xx：任务 1207 后台已成 6 → **离页重挂仍见恢复入口**（未被「当前任务不能打包」顶掉）→ 切到仍为 5 的任务 1206 确认时，页面给出 **`原任务 #1207 的「完成打包」已确认；当前任务以本页状态为准`** 且**未把 1206 标成完成**。同轮那次**真 `reload`** 的读数（`navigate→reload`、`timeOrigin` 变化、localStorage 原 key 不变）**来自 Claude 当时的命令输出，root 未独立复核** —— **只作线索**。
+· **第二轮（自建仓，窄修之后）**：箱件按**只读事实**呈现（`1/1 箱 / 45 件`，Claude 实测）。
+· **未验**：新独立仓场景的**「刷新后原键保留」**与**「跨目标确认不误完成」**两项；**不得**据此宣称 GUI 闭环已验。
+**契约变更**：箱贴缺箱由「409 + 留 PENDING」改为 **404 且不留回执行**；`print-label` 路由加 `pdaSessionOptional()`；箱贴幂等键绑 `packageId`；`GET /api/system/request-status` 对 `package.print-label` 的成功回执增加**领域自洽校验**（不一致 409 `PACKAGE_LABEL_RECEIPT_MISMATCH`）。
+**未验**：真 PDA 真机、物理打印（用例与 GUI 的核销都是**真实 API 闭环**，**不代表实际出纸**）；`PF1` 只覆盖「回执写入失败」一种故障注入；本批相关**全量套件**（`smoke:mainline`、`smoke:print-queue`、`test:label`、`test:print` 等）留**发版前**统一跑。
