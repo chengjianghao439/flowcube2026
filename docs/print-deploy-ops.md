@@ -66,6 +66,7 @@
 - **部署磁盘预检必须自解释（2026-09-19）**：`deploy-browser.yml` 上传前的 `df -Pm /tmp APP_PATH ≥ 6144MB` 预检原为 `test "$(df …)" -ge 6144`，余量不足时 ssh 只返回 1、无任何输出，与「SSH 连不上」日志上完全一样；11:04 起连续 3 轮失败只能事后推断（`8a2a748`/`d7cb1cc`/`a654aac`，线上停在 `ea13046`）。现先打印各挂载点实际余量再判定，并区分「磁盘不足 / SSH 取不到 / df 返回空」；守卫见 `tests/deployment-resources.test.js`（反向验证：退回静默 `test`、把 awk `NF<2` 分支改回 `exit 1`（`exit` 会跳到 `END` 被覆盖成 0）、删掉 SSH 失败分支，都必须失败）。**低磁盘时人工清理后重跑，不得自动 prune 或清回退镜像**；经过、清理记录与根因修复见 `docs/deploy-disk-precheck-2026-09-19.md`（根因：桌面发布的中转目录 `/tmp/flowcube-desktop-release/${tag}` 从不清理，累积 1.3G；现已用 `EXIT` trap 自清并由守卫守住）
 - 运维容器解析复用 `scripts/lib/ops-common.sh` 的 `resolve_container()`，不硬编码 Docker 容器名。备份先写临时文件、验证后落正式文件；失败清残留并告警。
 - 恢复演练默认总时限900秒、768m内存、1 CPU、256进程，禁网络与额外swap；正常、超时或TERM退出清理自有容器及匿名卷，外层exec GNU timeout保证信号传递。新鲜度按备份文件修改时间判断，自动演练默认拒绝超过 48 小时的文件（`BACKUP_MAX_AGE_HOURS`）；显式指定历史备份只检查恢复能力并提示过期。没有新销售单不能判定备份损坏。MySQL 连接数探针在容器内认证，查询失败或无效值必须记录异常，不得回退为零；隔离回归见 `tests/ops-monitor-restore.test.js`。
+- 慢查询监控按慢日志的 UTC `# Time:` 只统计最近 24 小时，默认阈值 50 条；历史总数不再持续触发提醒。日志读取失败或时间格式不受支持时仍告警，历史日志不得为消警而清空。
 - 备份可恢复性口径（2026-09-14 事故后）：mysqldump 可能把触发器函数体残留的结尾分号导出成 `... ); */;;`，直接导入会 1064。`scripts/restore-check.sh` 导入前只把该分号移出可执行注释（不改写备份文件），并透出 MySQL 真实报错以区分「文件损坏」与「导入语法问题」；`docs/runbooks/failure-recovery.md` 的手工恢复用同一口径。备份是否可恢复以完整导入临时 MySQL 为准，不能只看文件存在或 `gzip -t`。隔离回归见 `tests/restore-trigger-normalize.test.js`。
 - 库存漂移巡检只报警，不自动修库存缓存掩盖根因。调度器与服务器 cron 是不同机制，改动时检查 scheduler、install-cron 和部署同步链路。
 - 故障处理先读 `docs/runbooks/failure-recovery.md`，确认现场与备份后执行已授权操作；测试与生产严格区分。

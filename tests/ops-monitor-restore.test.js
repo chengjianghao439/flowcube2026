@@ -11,7 +11,7 @@ const { spawnSync } = require('node:child_process')
 const root = path.resolve(__dirname, '..')
 
 // 只替换外部 Docker/网络进程；运行真实运维脚本、gzip、文件时间与状态逻辑。
-function runOps(script, scenario, { ageHours = 0, explicit = false, corrupt = false } = {}) {
+function runOps(script, scenario, { ageHours = 0, explicit = false, corrupt = false, slowHours = [], previousMonitorState } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'flowcube-ops-test-'))
   const bin = path.join(dir, 'bin')
   fs.mkdirSync(bin)
@@ -25,8 +25,11 @@ function runOps(script, scenario, { ageHours = 0, explicit = false, corrupt = fa
   fs.writeFileSync(backup, corrupt ? Buffer.from('broken gzip') : gzipSync('CREATE TABLE fixture (id INT);\n'))
   const modified = new Date(Date.now() - ageHours * 3600000)
   fs.utimesSync(backup, modified, modified)
+  const slowLog = path.join(dir, 'slow.log')
+  fs.writeFileSync(slowLog, slowHours.map(hours =>
+    `# Time: ${new Date(Date.now() - hours * 3600000).toISOString()}\n`).join(''))
   const mock = `#!${process.execPath}
-const fs = require('node:fs'), path = require('node:path');
+const fs = require('node:fs'), path = require('node:path'), { spawnSync } = require('node:child_process');
 const cmd = path.basename(process.argv[1]), args = process.argv.slice(2), s = process.env.OPS_TEST_SCENARIO;
 fs.appendFileSync(process.env.OPS_TEST_LOG, JSON.stringify([cmd, ...args]) + '\\n');
 if (cmd === 'flock') process.exit(s === 'busy' ? 1 : 0);
@@ -51,7 +54,17 @@ if (cmd === 'docker') {
    if (a.includes('Threads_connected')) {
      if (s === 'query-fails' || !a.includes('MYSQL_ROOT_PASSWORD')) { console.error('Access denied'); process.exit(1); }
      console.log(s === 'invalid-metric' ? 'NULL' : s === 'high-connections' ? '130' : '7');
-   } else if (a.includes('slow.log')) console.log('0');
+   } else if (a.includes('slow.log')) {
+     if (a.includes('echo present')) { console.log(fs.existsSync(process.env.OPS_TEST_SLOW_LOG) ? 'present' : 'absent'); process.exit(0); }
+     if (args.includes('awk')) {
+       const awkArgs = args.slice(args.indexOf('awk') + 1);
+       awkArgs[awkArgs.length - 1] = process.env.OPS_TEST_SLOW_LOG;
+       const result = spawnSync('awk', awkArgs, { encoding: 'utf8' });
+       process.stdout.write(result.stdout || ''); process.stderr.write(result.stderr || '');
+       process.exit(result.status ?? 1);
+     }
+     console.log((fs.readFileSync(process.env.OPS_TEST_SLOW_LOG, 'utf8').match(/^# Time:/gm) || []).length);
+   }
    else if (a.includes('TIMESTAMPDIFF')) console.log('668');
    else if (a.includes('information_schema.tables')) console.log(s === 'missing-tables' ? '2' : '135');
    else if (a.includes('COUNT(*)')) console.log('7');
@@ -67,8 +80,9 @@ process.exit(0);
   const state = path.join(dir, 'backups/.monitor.state')
   const env = { ...process.env, PATH: bin + ':' + process.env.PATH, PROJECT_DIR: dir,
     BACKUP_DIR: path.join(dir, 'backups'), STATE_FILE: state, DINGTALK_WEBHOOK: '',
-    MIN_TABLES: '130', MIN_ROWS: '1', BACKUP_MAX_AGE_HOURS: '48',
-    OPS_TEST_SCENARIO: scenario, OPS_TEST_LOG: log }
+    MIN_TABLES: '130', MIN_ROWS: '1', BACKUP_MAX_AGE_HOURS: '48', SLOW_QUERY_WARN: '50',
+    OPS_TEST_SCENARIO: scenario, OPS_TEST_LOG: log, OPS_TEST_SLOW_LOG: slowLog }
+  if (previousMonitorState) fs.writeFileSync(state, previousMonitorState)
   try {
     const result = spawnSync('bash', [path.join(dir, 'scripts', script), ...(explicit ? [backup] : [])],
       { cwd: dir, env, encoding: 'utf8', timeout: 15000 })
@@ -123,6 +137,23 @@ test('连接数正常时保留正常状态', () => {
   const r = runOps('monitor.sh', 'healthy')
   assert.equal(r.status, 0, r.stderr)
   assert.equal(r.state, 'ok 0\n', r.stdout + r.stderr)
+})
+
+test('多日前的慢查询不会持续告警，先前的异常状态应恢复', () => {
+  const r = runOps('monitor.sh', 'healthy', {
+    slowHours: Array(253).fill(11 * 24),
+    previousMonitorState: `bad ${Math.floor(Date.now() / 1000) - 86400}\n`,
+  })
+  assert.equal(r.status, 0, r.stderr)
+  assert.equal(r.state, 'ok 0\n', r.stdout + r.stderr)
+  assert.match(r.stdout, /服务已恢复正常/)
+})
+
+test('最近 24 小时内慢查询达到阈值仍告警', () => {
+  const r = runOps('monitor.sh', 'healthy', { slowHours: Array(50).fill(1) })
+  assert.equal(r.status, 0, r.stderr)
+  assert.match(r.state, /^bad /, r.stdout + r.stderr)
+  assert.match(r.stdout, /慢查询.*50 条/)
 })
 
 test('上一轮监控未退出时跳过新一轮，避免 cron 累积探针', () => {

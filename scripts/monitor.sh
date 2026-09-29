@@ -6,7 +6,7 @@
 #   1. 三个容器是否 running（mysql / backend / frontend）
 #   2. 磁盘使用率是否超阈值
 #   3. 后端 /api/ready 是否 200（使用应用连接池探测数据库）
-#   4. MySQL 深检：连接可用性 + 慢查询堆积 + 连接数
+#   4. MySQL 深检：连接可用性 + 最近 24 小时慢查询 + 连接数
 #   5. 公网 HTTPS 探测（走 Caddy 全链路）
 #   6. TLS 证书到期检查（剩余 <14 天告警）
 #   7. 容器重启计数（反复崩溃被拉起）
@@ -74,19 +74,38 @@ code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$HEALTH_URL" 2>/dev
 code=${code:-000}
 [ "$code" != "200" ] && problems="${problems}后端健康检查 HTTP ${code}；"
 
-# 4. MySQL 深检（P2-14）：连接可用性 + 慢查询堆积
+# 4. MySQL 深检（P2-14）：连接可用性 + 最近 24 小时慢查询
 SLOW_QUERY_WARN="${SLOW_QUERY_WARN:-50}"
 MYSQL_CONTAINER="${MYSQL_CONTAINER:-$(resolve_container mysql flowcube-mysql)}"
 if docker inspect "$MYSQL_CONTAINER" >/dev/null 2>&1; then
   if ! docker exec "$MYSQL_CONTAINER" mysqladmin ping --silent >/dev/null 2>&1; then
     problems="${problems}MySQL 无法连接；"
   else
-    # 慢查询日志累积条数（配置开启后生效；日志不存在则跳过）。条数暴增说明有性能问题。
-    slow_total=$(docker exec "$MYSQL_CONTAINER" sh -c \
-      'test -f /var/log/mysql/slow.log && grep -c "^# Time:" /var/log/mysql/slow.log 2>/dev/null || echo 0' 2>/dev/null | tr -d ' ')
-    slow_total=${slow_total:-0}
-    if [ "${slow_total:-0}" -ge "$SLOW_QUERY_WARN" ]; then
-      problems="${problems}慢查询日志累积 ${slow_total} 条（阈值${SLOW_QUERY_WARN}）；"
+    # 慢日志是历史追加文件，不能用全文件累计条数代表当前故障：旧峰值会每天重报。
+    # MySQL 8 的 # Time 为 UTC ISO 时间；只数最近 24 小时，格式变化/读取失败要告警。
+    if ! slow_file_state=$(docker exec "$MYSQL_CONTAINER" sh -c \
+      'if test -f /var/log/mysql/slow.log; then echo present; else echo absent; fi' 2>/dev/null); then
+      problems="${problems}慢查询日志探测失败；"
+    elif [ "$slow_file_state" = present ]; then
+      if ! slow_cutoff=$(date -u -d '24 hours ago' '+%Y-%m-%dT%H:%M:%S' 2>/dev/null \
+        || date -u -v-24H '+%Y-%m-%dT%H:%M:%S' 2>/dev/null); then
+        problems="${problems}慢查询时间窗口计算失败；"
+      elif ! slow_recent=$(docker exec "$MYSQL_CONTAINER" awk -v "cutoff=$slow_cutoff" '
+        /^# Time:/ {
+          stamp = $3
+          if (stamp !~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9](\.[0-9]+)?Z$/) invalid = 1
+          else if (substr(stamp, 1, 19) >= cutoff) recent++
+        }
+        END { if (invalid) exit 2; print recent + 0 }
+      ' /var/log/mysql/slow.log 2>/dev/null); then
+        problems="${problems}慢查询日志读取或时间格式异常；"
+      elif [[ ! "$slow_recent" =~ ^[0-9]+$ ]]; then
+        problems="${problems}慢查询日志计数无效；"
+      elif [ "$slow_recent" -ge "$SLOW_QUERY_WARN" ]; then
+        problems="${problems}最近24小时慢查询 ${slow_recent} 条（阈值${SLOW_QUERY_WARN}）；"
+      fi
+    elif [ "$slow_file_state" != absent ]; then
+      problems="${problems}慢查询日志探测结果无效；"
     fi
     # 连接数告警（P2-14）：Threads_connected 接近 max_connections 说明连接池打满。
     # 默认阈值 120：与 my.cnf 的 max_connections=151 拉开检测余量（实际生产峰值
