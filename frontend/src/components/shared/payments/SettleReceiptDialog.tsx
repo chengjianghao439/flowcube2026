@@ -78,6 +78,15 @@ export function SettleReceiptDialog({ open, onClose, type, settlementTypes, rece
     prefix: 'receipt',
   })
 
+  // 本次提交指向哪张汇款单（继续核销才有；新建收付款单为 null）。
+  // 用来：① 把 receiptId 绑进「查询上次结果」的 action，使服务端能精确定位本笔；
+  //       ② 查询完成时判断「提交的那一张」是否仍是「当前正在看的这一张」，避免关掉另一张的草稿。
+  const submittedReceiptIdRef = useRef<number | null>(null)
+  const submittedReceiptNoRef = useRef<string | null>(null)
+  // 当前正在看的这一张（新建模式为 null）——每次 render 更新，查询完成时用它跟「查询发起时的快照」比
+  const currentReceiptIdRef = useRef<number | null>(null)
+  currentReceiptIdRef.current = receipt?.id ?? null
+
   // 上一次填的是哪一张汇款单（null＝「新建」）。用来区分「重新打开同一笔」与「换了另一笔」：
   // 后者是另一笔业务，表单必须按新的业务对象重建，不能沿用上一张的往来方与金额。
   const lastReceiptIdRef = useRef<number | null | undefined>(undefined)
@@ -165,7 +174,15 @@ export function SettleReceiptDialog({ open, onClose, type, settlementTypes, rece
 
   const mut = useMutation({
     mutationFn: async ({ backfillReason }: { backfillReason?: string } = {}) => {
-      guard.remember(`${actionLabel} ${money(totalAmount)} · ${payDate} · ${partyName.trim()}`)
+      // 继续核销：把本次的 receiptId 绑进查询 action（并在提示条上带单号，便于区分同名的两张单）
+      const settleTargetId = isContinue && receipt ? receipt.id : null
+      submittedReceiptIdRef.current = settleTargetId
+      submittedReceiptNoRef.current = settleTargetId != null && receipt ? receipt.receiptNo : null
+      guard.remember(
+        `${actionLabel} ${money(totalAmount)} · ${payDate} · ${partyName.trim()}`
+          + (settleTargetId != null && receipt ? ` · 汇款单 ${receipt.receiptNo}` : ''),
+        settleTargetId != null ? `payment.receipt.settle.${settleTargetId}` : undefined,
+      )
       const allocations = Object.entries(alloc)
         .map(([id, v]) => ({
           ...(byStatement ? { statementId: Number(id) } : { recordId: Number(id) }),
@@ -264,13 +281,24 @@ export function SettleReceiptDialog({ open, onClose, type, settlementTypes, rece
             visible={guard.uncertain}
             pending={guard.checkMut.isPending}
             what={guard.lastLabelRef.current ?? undefined}
-            onCheck={() => guard.checkLastResult(() => {
-              qc.invalidateQueries({ queryKey: ['payments'] })
-              qc.invalidateQueries({ queryKey: ['payment-receipts'] })
-              qc.invalidateQueries({ queryKey: ['finance-accounts'] })
-              toast.success(`上次提交的${actionLabel}已成功，无需重复登记`)
-              onClose()
-            })}
+            onCheck={() => {
+              // 点「查询上次结果」这一刻先给「这次在确认哪一次提交」拍快照：
+              // 继续核销 = 该 receipt 的 id/单号；新建收付款单 = null（新建也是一身份）。
+              // 不能等回调里现读 ref——查询期间若又发生一次提交，ref 已被换成新的目标。
+              const queriedId = submittedReceiptIdRef.current
+              const queriedNo = submittedReceiptNoRef.current
+              return guard.checkLastResult(() => {
+                qc.invalidateQueries({ queryKey: ['payments'] })
+                qc.invalidateQueries({ queryKey: ['payment-receipts'] })
+                qc.invalidateQueries({ queryKey: ['finance-accounts'] })
+                // 提示带上被确认的那张单号，避免在另一张单的界面上报一句不带身份的「已成功」
+                toast.success(`上次提交的${actionLabel}已成功，无需重复登记`
+                  + (queriedNo ? `（汇款单 ${queriedNo}）` : ''))
+                // 只有「查询指向的那一次提交」正是「现在正在看的这一张」时才关窗；
+                // 切到别的单、或切到新建模式，都保留当前未提交的草稿。
+                if (queriedId === currentReceiptIdRef.current) onClose()
+              })
+            }}
           />
           <div className="grid grid-cols-[minmax(160px,1fr)_minmax(220px,1.4fr)_1fr_1fr] gap-4">
             <div className="space-y-1 col-span-2">

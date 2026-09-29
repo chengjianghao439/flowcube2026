@@ -82,13 +82,25 @@ export function useIdempotentSubmit({ action, prefix }: { action: string; prefix
   }
 
   // 这次提交的是什么（金额/日期/单号），供未确认提示条说明「在确认哪一笔」；
-  // 以及提交时用的 action——**查回执必须按那一次的 action 查**，不能按当前 UI 的：
-  // 用户可能在「继续核销某张汇款单」提交超时后切去另一张（action 里的资源 id 就变了），
-  // 用现在的 action 去查会得到「没找到」，于是被误判成「没成功」而放心重提交。
+  // 以及**查回执要用的 action**。资源级入口（如「继续核销某张汇款单」）在提交时**已经知道**
+  // 本次资源 ID，必须把它传进来（actionOverride）——否则查询只能传 base action，服务端
+  // `getScopedOperationRequestStatus` 对同键多条只认「恰好一条」：
+  //   · 同键下两条（先后核销过两张单）⇒ 返回 not_found，两笔其实都已成功却报「查不到」；
+  //   · 同键下一条（切到另一张单但**没提交**）⇒ 直接返回**那一张**的回执，界面把它当成
+  //     「本次提交成功」，还会关窗丢掉当前这张单的草稿。
+  // 创建类入口拿不到载荷指纹，只能沿用 hook 的 base action（由服务端按前缀解析）。
   // 都用 ref：它们只在 mutationFn / remember 里写入，渲染由 uncertain 触发。
   const lastLabelRef = useRef<string | null>(null)
   const lastActionRef = useRef(action)
-  const remember = (label: string) => { lastLabelRef.current = label; lastActionRef.current = action }
+  // 提交代次：每提交一次 +1。回执查询在途期间若又提交过一次，代次就变了——
+  // 此时回来的回执对应的是**更早**的那一次：既不能据此清掉当前这一次的「未确认」，
+  // 更不能轮换它的请求键（否则当前这一笔会被当成新的一笔重做）。
+  const submitGenRef = useRef(0)
+  const remember = (label: string, actionOverride?: string) => {
+    lastLabelRef.current = label
+    lastActionRef.current = actionOverride ?? action
+    submitGenRef.current += 1
+  }
 
   /**
    * 读「当下」是否处于未确认（不触发渲染）。给「打开弹窗要不要重置表单」这类 effect 用：
@@ -107,9 +119,16 @@ export function useIdempotentSubmit({ action, prefix }: { action: string; prefix
    *
    * @param onDone 已确认那次提交**成功**时的收尾（刷新视图、提示、关窗）
    */
-  const checkLastResult = (onDone: () => void) =>
-    checkMut.mutate(undefined, {
+  const checkLastResult = (onDone: () => void) => {
+    // 记下发起查询时的提交代次：返回时若已变，说明期间又提交过，这条回执属于更早那一次
+    const genAtCheck = submitGenRef.current
+    return checkMut.mutate(undefined, {
       onSuccess: (r) => {
+        if (submitGenRef.current !== genAtCheck) {
+          // 陈旧回执：不动当前的未确认状态与请求键，避免抹掉「更晚那一次」的结果未确认
+          toast.warning('这次查到的是更早一次提交的结果；这期间你又提交过一次，请再点一次「查询上次结果」确认最新那一次')
+          return
+        }
         if (r.status === 'success') { settle(); onDone(); return }
         const d = receiptDecision(r.status)
         if (d.rotateKey) {
@@ -129,6 +148,7 @@ export function useIdempotentSubmit({ action, prefix }: { action: string; prefix
       },
       onError: () => toast.error('查询上次结果失败，请稍后再试。确认之前请不要关掉重开重新录入，以免重复提交'),
     })
+  }
 
   return { keyRef, uncertain, uncertainRef, isUncertain, classify, settle, checkMut, checkLastResult, remember, lastLabelRef }
 }
