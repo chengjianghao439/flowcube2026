@@ -1,0 +1,69 @@
+# v0.11.4 本地发布候选（准备记录）
+
+> 状态：**本地候选，未发布**。本记录说明候选范围与验证边界；**未 push / 未打 tag / 未部署 / 未连生产 / 未读生产配置**。
+
+## 1. 候选范围（相对 v0.11.3）
+
+窄范围修复，只涉及资金类入口「提交结果查询」的显示与恢复：
+
+- 手工应付：查询成功时不再把**当前输入框改动过的单号**显示成「已创建」的单号。
+- **收付款登记、继续核销已有收付款单、退款执行**：查询按**本次实际提交的那一张单据**定位。
+- 换到另一笔单据后再查上一笔：成功后**不关闭当前正在填写/查看的弹窗**。
+- 提交结果未确定期间又发起新提交：**晚返回的旧查询不清掉后一次提交的「未确认」状态**。
+
+**未改**：账务/库存/权限规则、结账期间闸门、账户余额与单据状态校验、公共 PDA 语义；**新建收付款单（创建类）的载荷指纹机制未改**——本版只调整**查询用哪个身份去核对**，不改变写入用的身份与后端回放。
+
+## 2. 已验证（上一轮，对应产品源码 `241c2b5`）
+
+均为**本地**结果，**不是**整套 GitHub CI / 生产部署 / 真实 GUI 的通过证据：
+
+- 两端 lint、`tsc -p frontend/tsconfig.app.json`、**全前端 149 文件 / 695 用例**、`test.yml` 静态/纯规则 **61 个命令** —— 全 exit 0。
+- **16 个相关 DB 回归** —— 全 exit 0，运行于三套独立新库（各 **264** 迁移，**未碰 GUI 库**）：
+  `flowcube_release_gate_20260929_test`、`flowcube_release_gate_integration_20260929_test`、`flowcube_release_gate_audit_20260929_test`。
+- **桌面 renderer build、PDA renderer build** exit 0。
+- 逐项记录：`output/local-gate-20260929/results.json`（79 项 exit 0 + 1 项「不适用构建的拒绝」）。
+
+## 3. 未验边界（集中记录，**不写进用户说明与官网文案**）
+
+- **资金时序的完整界面链路未验**：A「事务未提交时查回执」只完成**真实 HTTP + 受控行锁**的接口级验证；其**在途 GUI**、`pending`、B「旧查询晚于新提交返回」均**未构成完整界面证据**（组件层有测试，不等同界面验收）。
+- 核销 settle 的「改载荷后同键重提」反例未构造。
+- 物理打印未验；未构建 Windows installer、未构建原生 APK、未做真机验收。
+- **整套 GitHub CI 与生产发布未执行**。
+
+## 4. 既定设计（不算回归）
+
+- **纯 Web build** 尝试 exit 1 属既定设计：`frontend/vite.config.ts:99-103` 已有取消纯 Web ERP 的守卫，`8017df6` 基线同样存在；属验证计划选择错误。
+
+## 5. 验证分列（**两轮，勿混用**）
+
+**A. 上一轮：产品源码验证（对应 `241c2b5`）** —— 本地结果，非整套 GitHub CI / 生产 / 真实 GUI 证据：
+- 两端 lint、`tsc -p frontend/tsconfig.app.json`、**全前端 149 文件 / 695 用例**、`test.yml` 静态/纯规则 **61 个命令**，全 exit 0。
+- **16 个相关 DB 回归**，全 exit 0；运行于三套独立新库（各 **264** 迁移，未碰 GUI 库）：`flowcube_release_gate_20260929_test`、`flowcube_release_gate_integration_20260929_test`、`flowcube_release_gate_audit_20260929_test`。
+- 桌面 renderer build、PDA renderer build exit 0。
+- 逐项记录：`output/local-gate-20260929/results.json`（79 exit 0 + 1 项「不适用构建的拒绝」）。
+
+**B. 本候选：6 项受影响检查（Node 22.23.2，均自然 `exit 0`、`signal=null`）** —— 只覆盖本轮**版本 metadata 变化**：
+1. **版本 metadata 断言**：三端 `package.json` / `package-lock.json` 均为 0.11.4，**只变版本、无依赖漂移**；PDA **0.11.4 / versionCode 148**；`publishedAt` 仍 `2026-09-29T04:09:05.536Z`；`releaseNote` 等于 `docs/release-notes/0.11.4.md` 的新首段；**业务源码未变**。
+2. `test:landing-updates`：**36 条，最新 0.11.4**。
+3. `frontend/src/pages/landing/updates.ts` **eslint**。
+4. `tsc -p frontend/tsconfig.app.json --noEmit`。
+5. **桌面 renderer build**。
+6. **PDA renderer build**。
+
+逐项日志：`output/release-candidate-0.11.4/results.json`（**未纳入版本库**）。
+
+**仍未验**：**整套正式 CI / 安装包构建 / 生产发布**，以及 §3 列出的**资金时序 A/B 界面链路**、`pending`、settle 改载荷反例、物理打印、原生安装包/真机。
+
+**远端未刷新**：本机 `main` 与 `origin/main` 缓存均为 `b5280a4`（v0.11.3 应用 SHA）；本轮**未 fetch**。
+
+## 6. 正式发布（须**新的明确授权**，且走唯一入口）
+
+发布**只能**通过项目既有唯一入口 `npm run release:prod`（`release-flowcube` 技能流程）执行，**不得手工绕入口打 tag**。获明确授权后依次：
+
+1. **刷新 `origin/main` 与远端 tag**，核对版本冲突；把**已审候选**安全合入 `main`。
+2. 由 `npm run release:prod` 触发正式入口。
+3. **等待候选同 SHA 的门禁全部成功**：`Tests`（含本批未覆盖的 job）、`Security Scan`、桌面端验证、**实际 Deploy Browser App 与 PDA 构建/发布**；**数据库迁移在 `Deploy Browser App` 阶段完成并核对 `db_migrations` 记录**（不放在线上验收之后）。
+4. **tag 指向同一 `main` 应用 SHA**。
+5. 最终**实下载 EXE / APK 并比对摘要**，跑 `release:verify` 完成线上验收（三端版本一致、`/api/pda/version` 一致）。
+
+**边界**：**本次候选准备未执行任何生产动作**；正式发布须**新的明确授权**；**生产凭据与客户账款明细不得进入模型上下文**。
