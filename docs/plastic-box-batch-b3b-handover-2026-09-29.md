@@ -90,7 +90,7 @@ node tests/pack-quota.smoke.test.js
 - **3. 真实并发未验**：`uk`/锁序只在顺序场景验证；pkg 与 task 的交叉死锁**只做了锁序统一与代码核对**，无并发夹具。
 - **4. B4 未做**：取消 / 减量的归还闭环；`warehouse-tasks.adjust.js` 的减量路径只做了 **SUM 窄改**，**完整减量真实验收仍属 B4**，本批**不宣称通过**。
 - **5. 物理打印 / 待出库**：`finish` 与箱贴打印链本批**未走**（不强行推进凑验收）；打印客户端模拟**不代表实际出纸**。
-- **5.1 `finish` 的两处既有行为本批未覆盖（明确列出，未改）**：
+- **5.1 `finish` 的两处既有行为本批未覆盖（明确列出，未改）** —— **后续批 C2 已覆盖**（见 `docs/plastic-box-batch-c2-handover-2026-09-29.md`），本行为历史记录：
   - **历史回执事务**：`finish` 的幂等 `beginResourceOperationRequest` 在 **controller 层**用 `pool`（不是 pkg 事务连接）执行，replay 时直接返回 `requestState.responseData`；它与 `finishPackage` 的库存/打印/运单事务**不是同一个事务**。本批**未审计**该边界。
   - **scope-before-replay**：`finish` 的**范围 / 设备仓校验发生在 replay 之后**（replay 命中就直接返回回执，不再校验归属）。本批**只在 `addItem` 上做了「先于 begin」**，**未**改 `finish`。
 - **5.2 `remove` / `void` 无幂等键**：两者按请求体直接执行（无 `beginResourceOperationRequest`），所以「丢响应重放」对它们仍是**重复执行**语义——本批未引入幂等，**未验**。

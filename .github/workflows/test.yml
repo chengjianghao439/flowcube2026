@@ -251,6 +251,10 @@ jobs:
       - name: 批 C1 — 装箱移出 / 作废的稳定键与重放（7 项断言）
         run: npm run smoke:pack-remove-void-replay
 
+      # 批 C2 — 完成箱子 finish 的回执事务（9 项断言：范围先于 replay、三种故障注入全量回滚 + 原键可重试）
+      - name: 批 C2 — 完成箱子回执事务与故障注入（9 项断言）
+        run: npm run smoke:pack-finish-receipt-tx
+
   regression:
     name: 回归门禁（smoke + 集成）
     runs-on: ubuntu-latest

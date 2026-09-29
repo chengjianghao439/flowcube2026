@@ -84,7 +84,11 @@ async function claimClientJobs({ clientId, limit = 3, scopeWarehouseIds = null }
   }
 }
 
-async function getDispatchHintForJob(printerCode, jobId) {
+// `exec` 可选：默认 pool。事务内调用方**必须传 conn**，否则读不到本事务刚写的 job，
+// `findById` 会抛 `PRINT_JOB_NOT_FOUND` 404（下面的 `if (!job)` 兜不住抛错）并把业务回滚。
+// 打印机 / 打印客户端虽是参考数据，但**同一 conn 优先**：调用方已持事务连接时不再借 pool 的
+// 第二条连接，避免自阻塞与读到旧快照。不传 `exec` 的旧调用仍是 pool，行为不变。
+async function getDispatchHintForJob(printerCode, jobId, exec = pool) {
   const withClients = (code, message, onlineClients = 0, extra = {}) => ({
     code,
     message,
@@ -97,7 +101,7 @@ async function getDispatchHintForJob(printerCode, jobId) {
     return withClients('unknown', '', 0)
   }
   let code = String(printerCode || '').trim()
-  const job = await findById(jid)
+  const job = await findById(jid, null, exec)
   if (!job) return withClients('unknown', '任务不存在', 0)
   if (!code) code = String(job.printerCode || '').trim()
 
@@ -117,7 +121,8 @@ async function getDispatchHintForJob(printerCode, jobId) {
   }
   if (st !== STATUS.PENDING) return withClients('unknown', '', 0)
 
-  const [[printer]] = await pool.query(
+  // 同一 conn：调用方已经持着事务连接时不要再借 pool 的第二条连接，避免自阻塞与读到旧快照。
+  const [[printer]] = await exec.query(
     `SELECT
         p.id,
         p.code,

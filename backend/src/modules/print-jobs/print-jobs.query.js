@@ -66,8 +66,10 @@ async function findAll({ printerId, status, page = 1, pageSize = 50, scopeWareho
   }
 }
 
-async function findById(id, scopeWarehouseIds = null) {
-  const job = await findByIdWithExecutor(pool, id)
+// `exec` 可选：默认 pool（旧调用不变）。**调用方在同一事务内读刚写入的打印任务时必须传 conn** ——
+// 否则 pool 的另一条连接看不到未提交行，`findByIdWithExecutor` 会直接抛 `PRINT_JOB_NOT_FOUND` 404。
+async function findById(id, scopeWarehouseIds = null, exec = pool) {
+  const job = await findByIdWithExecutor(exec, id)
   assertBoundWarehouseInScope(scopeWarehouseIds, job.warehouseId, '打印任务')
   return job
 }

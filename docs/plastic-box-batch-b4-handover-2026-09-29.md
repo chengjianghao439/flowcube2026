@@ -130,7 +130,7 @@ node tests/pick-cancel-return.smoke.test.js
 - **2. `finish` 只走到「箱贴入队」**：第 5 项确实走了既有 `finish`（`printQueued:true`、`printJobId` 有值，`requireClientOnline:false` 故**未要求客户端完成**）；但**未推进出库 / 待出库**，也**未验证实际出纸**。不得据此称 `finish` 全链已验。
 - **3. 补打的「生命周期」边界（订正后）**：本批证实的是「**取消后 free ACTIVE 的取货码不得再被原任务认回**」（`PICK_LABEL_NOT_IN_TASK`），以及**补充项**证实的「**已出库（`EMPTY` + 余量 0、已解锁）后可依唯一一条已出库任务的盒取货行补打原取货量**」与「被下一任务当普通整件复用的码不得认回旧标签」（`smoke:pick-label-reprint-lifecycle` 3 项）。注意这与既有边界「**只收紧 VOID**、EMPTY 仍可补打」并不冲突：那条说的是**通用库存标**；本批的 guard 是**取货标签分支**的收紧（取货标签脱离「确定任务归属」即失去语义）；**并非**「普通标签规则整体改变」。**仍未验**：同一容器跨多任务候选（本批按「不猜」拒绝，未设计取舍）、并发补打、以及补偿性的历史留档标签需求。
 - **3.1 `remove` / `void` 无幂等键**：仍是「重放即重复执行」语义，**未改、未验**（B3b 遗留）。
-- **4. `finish` 的 scope-先于-replay 与历史回执事务**：仍**未覆盖**（B3b 遗留）。
+- **4. `finish` 的 scope-先于-replay 与历史回执事务**：**已由批 C2 覆盖**（见 `docs/plastic-box-batch-c2-handover-2026-09-29.md`）。本行为 B3b/B4 时的**历史状态**，保留原样以存痕迹。
 - **5. 真实并发未验**：减量 / 归还链只在顺序场景验证。
 - **6. 减量路径**：已实跑 **`packageVoids`（作废已完成箱腾容量）+ `containerReturns` 受控确认 + 重新复核 + 全 100 重新装箱**（第 5 项）。**未穷尽**的是：多箱、部分箱作废、`packageVoids` 与 `containerReturns` 并存的混合场景、以及多次连续改单。
 - **7. 5 项仅为本阶段证据**，不等于批 B 全部验收。
@@ -143,5 +143,5 @@ node tests/pick-cancel-return.smoke.test.js
 ## 6. 续接要点
 
 - **本批代码定稿，不重做**：`confirmedPickLabelQty` 的 `LEAST(...) + 按容器聚合`、补打的「当前任务锁 + 当前有效 PICK」定位。
-- **仍未关闭的既有事项**（沿用 B3b §4）：`finish` 的 scope-先于-replay 与历史回执事务、`remove`/`void` 无幂等键。
+- **仍未关闭的既有事项**（沿用 B3b §4）：`finish` 的 scope-先于-replay 与历史回执事务 —— **已由批 C2 覆盖**；`remove` / `void` 无幂等键 —— **已由批 C1 覆盖**。
 - **边界**：**仅本地**；禁止发布、禁止连接/迁移生产；不 push、不打 tag；共享 **3307** 与其它任务资源不得触碰。

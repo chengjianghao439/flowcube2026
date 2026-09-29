@@ -68,7 +68,7 @@
 - **旧 SKU 上限 = `checked − Σ标签的真实复核量`**：依据是标签**占住的份额**（尚未装的标签货也已占住），**不是**「已装的标签量」；超限拒绝（`PACKAGE_LEGACY_OVER_LIMIT`），**不用 `Math.min` 静默夹满**。合计仍守 `<= min(required, checked)`。
 - **标签准入链**：`container_type=1`（塑料盒条码明确拒绝）→ **当前任务锁定** → 仓库一致 → **真实盒取货 PICK**（`scan_purpose=1` 且 `source_container_id` 非空，**不认容器历史 `source_ref_type`**）→ 唯一明细 → 商品一致 → **真实 CHECK 量**。装箱**不改变**箱子/任务状态，因此「上次到底成没成」只能靠**原键回执**定位（服务端 `getScopedOperationRequestStatus` 支持 base action 匹配唯一 scoped 行；传 scoped 时按 `resource_id` 过滤 ⇒ **只接受原箱**），**不得**凭「列表里已有该标签行」推断本次成功。
 - **锁序统一（受影响路径）**：`add-item` / `remove-item` / `void` / `finish` 一律 **无锁 peek 所属任务 → 锁 task → 锁 pkg → 复查归属**。原因是取消流程走 `task → UPDATE packages`（锁箱行），先前 pkg→task 的写法与之交叉**会死锁**；`voidCompletedPackage`（既有改单受控流程）本批**未改**。
-- **范围与改单闸**：`remove` / `void` / `finish` 原先**未传 `pdaWarehouseId`**、也**没有 `adjustment_requested_at` 闸**，本批补齐（与 `addItem` 口径一致）。`finish` 的 **scope-先于-replay** 与「历史回执在 controller 层、与 pkg 事务不同事务」两点**仍未覆盖**，见 B3b 交接 §4。
+- **范围与改单闸**：`remove` / `void` / `finish` 原先**未传 `pdaWarehouseId`**、也**没有 `adjustment_requested_at` 闸**，本批补齐（与 `addItem` 口径一致）。`finish` 的 **scope-先于-replay** 与「历史回执在 controller 层、与 pkg 事务不同事务」两点**已由批 C2 覆盖**（同 conn 同事务 + 归属复查先于 begin/replay），见 `docs/plastic-box-batch-c2-handover-2026-09-29.md`。
 - **幂等**：`add-item` 的 `beginResourceOperationRequest` 必须传 **base action `package.add`**——helper 会**无条件**再拼 `.resourceId`，写成 `package.add.<id>` 会变成 `package.add.<id>.<id>`；范围/设备仓校验**先于 `begin`**。
 
 ## 2026-09-29 批 B4：取货码的取消 / 减量归还闭环
@@ -81,3 +81,12 @@
   - 取消归还后的码被**下一任务**当**普通整件**拣时，其 PICK 行 `source_container_id` 为**空** ⇒ 它**不是**任何任务的盒取货标签，**取货码形态分拣会被拒**；**不得**按容器历史 `source_ref_type` 认领。
   - **补打**同理：先看容器**当前** `locked_by_task_id`，为空 ⇒ 明确拒绝（`PICK_LABEL_NOT_IN_TASK`）；再在**该任务**下找 `source_container_id` 非空的 PICK 行。**实测缺陷（修复前）**：取消归还后仍按容器历史来源打出「取货标签」。
 - **同箱同 SKU 可多行**：两张标签装同一个箱是**两行**（`UNIQUE` 只在作业记录上，装箱行按 `label_container_id` 分行）；减量按 **FIFO** 从**最早**的拣货行扣减，所以「某张标签的剩余量」不一定是原值，任何断言都要取**当前实际值**。已完成箱在减量时进 `packageVoids` **受控拆箱**，归还进 `containerReturns`，两者都经 PDA 逐条确认后才生效。
+
+## 2026-09-29 批 C1 / C2：装箱异常恢复与完成箱的回执事务
+
+- **关键操作的「回执与业务」必须同一 conn、同一事务**。`package.finish` 修前是「**pool** 上 `beginResourceOperationRequest` + 业务在自己的事务提交 + 事后写回执」，且回执构建还在 **commit 之后**：于是 ① pool 上的 begin 让**重放先于**范围 / 设备仓校验命中；② 存在「业务已提交、回执未落」的窗口；③ 回执构建自身失败时业务已提交却拿不到结果。现统一为**同事务**：锁任务 → `assertTaskScope` **先于** begin → 锁箱复查归属 → begin/replay → 业务 → **同事务内**构建回执 → 落回执 → commit。
+- **失败即整体回滚，不另开事务补失败回执**：未通过范围 / 设备校验的请求不该留下任何回执行；瞬时故障（读 / 回执写入）之后**用原键重试必须能成功** —— 补一条 failed 行会把这次重试**永久挡成 409**。与 `add / remove / void` 一致：**回滚即无行**。
+- **幂等 `begin` 之前必须完成归属复查**：`peek` 是**无锁**读，锁箱后必须复查 `warehouse_task_id` 与本任务一致，否则会把**过时 / 越仓**的原回执回放出去。
+- **事务内读「本事务刚写的行」必须用同一个 conn**：`print-jobs.query.findById` / `dispatch.getDispatchHintForJob` 增加**可选** `exec`（旧调用默认 pool，行为不变）。`findByIdWithExecutor` **缺行是抛 404**，不是返回 null —— 事务内误用 pool 读未提交行的后果是**整笔回滚**。
+- **`remove-item` / `void` 的幂等边界**：范围 / 设备仓校验**先于** `begin`；**重放分支排在明细 / 状态检查之前**（整行已删、箱已作废都还能按原键取回原回执）；**新键仍是合法新操作**（第二次移出照常、新键对已作废箱仍 400）——**幂等只救「同一个操作」**。
+- 触发点：`tests/pack-remove-void-replay.smoke.test.js`（7 项）、`tests/pack-finish-receipt-tx.smoke.test.js`（9 项，含 commit / 回执写入 / 回执构建读三种故障注入各自全量回滚并原键可重试）。

@@ -95,6 +95,19 @@
 - smoke 凭据由 `ssh-smoke-stdin.sh` 经 NUL 分隔 stdin 传输，远端 shell 内建 read 后导出，不再出现在 SSH 命令参数。仍属于远程进程环境，不能将此描述为消除了所有凭据可见性。
 - 生产 CORS 启动时拒绝反射与 `*`，部署前须明确 Web/PDA 来源及独立 Electron null 开关。v0.11.0 发布准备中已保留服务器本地原配置备份并设置 Web、当前内置 PDA 及 Electron 所需来源；更改在应用重启后生效，实际客户端仍须验收。
 
+## 关键操作回执事务与「事务内读打印任务」（2026-09-29 批 C2）
+
+完成箱子（`finish`）的回执与业务现为**同一 conn、同一事务**。打印任务是本事务刚 INSERT 的行，回执构建必须用**同一个 conn** 读，因此：
+
+- `print-jobs.query.findById(id, scopeWarehouseIds = null, exec = pool)`
+- `print-jobs.dispatch.getDispatchHintForJob(printerCode, jobId, exec = pool)`
+
+两者新增**可选** `exec`（不传时仍是 pool，**旧调用行为不变**）；其中打印机 / 打印客户端读取**也走 exec** —— 调用方已持事务连接时不再借 pool 的第二条连接，避免自阻塞与读到旧快照。
+
+**注意**：`findByIdWithExecutor` 缺行是**直接抛 `PRINT_JOB_NOT_FOUND` 404**，`getDispatchHintForJob` 里的 `if (!job)` **兜不住**这个抛错。所以事务内若误用 pool 读未提交的 job，后果是 **404 导致整笔回滚**，**不是**"读到 unknown / 缺失值"。
+
+回归 `tests/pack-finish-receipt-tx.smoke.test.js`（9 项，含 commit / 回执写入 / 回执构建读三种故障注入各自全量回滚 + 原键可重试）。**本批改动了共用的打印任务查询，发版前全量门禁待跑。**
+
 ## 标签入队失败的两类降级计数（**仅批 A「还原整件」已分开；其它调用点尚未分开**）
 
 `buildLabelBody` 先取默认 ZPL 模板，取不到（例如模板解析失败会降级返回 `null`）再回退**本地光栅渲染 worker**。入队失败时只写 `status=3` 的失败记录供补打，**不回滚**调用方事务（收货 / 容器拆分 / 还原整件 / 完成装箱都是「货已经动了」的事实记录）。

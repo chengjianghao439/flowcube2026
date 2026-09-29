@@ -70,42 +70,20 @@ async function voidPackage(req, res, next) {
 }
 
 async function finish(req, res, next) {
-  const requestKey = extractRequestKey(req)
-  const action = 'package.finish'
   try {
     const id = +req.params.id
-    // 资源绑定用 package id：它在本单事务开始前就已存在，且 finishPackage 内部会校验归属。
-    const requestState = await beginResourceOperationRequest(pool, {
-      requestKey,
-      action,
-      userId: req.user?.userId ?? null,
-      resourceType: 'package',
-      resourceId: id,
-    })
-    if (requestState.replay) {
-      return successResponse(res, requestState.responseData, requestState.responseMessage || '箱子已完成并已进入打印链')
-    }
+    // 幂等回执与业务在 service 内**同一个 conn、同一个事务**里完成（范围 / 设备仓校验先于 replay），
+    // controller 不再自己 begin / complete —— 否则又会拆出「业务已提交、回执未落」的窗口，
+    // 而且 pool 上的 begin 会让重放**先于**范围 / 设备仓校验命中。
     const result = await svc.finishPackage(id, {
+      requestKey: extractRequestKey(req),
+      userId: req.user?.userId ?? null,
       createdBy: req.user.userId,
       scopeWarehouseIds: req.user?.warehouseIds ?? null,
       pdaWarehouseId: req.pda?.warehouseId ?? null,
     })
-    await completeOperationRequest(pool, requestState, {
-      data: result,
-      message: '箱子已完成并已进入打印链',
-      resourceType: 'package',
-      resourceId: id,
-    })
     return successResponse(res, result, '箱子已完成并已进入打印链')
-  } catch (e) {
-    await failOperationRequest({
-      requestKey,
-      action,
-      userId: req.user?.userId ?? null,
-      errorMessage: e?.message || '完成箱子失败',
-    }).catch(() => {})
-    next(e)
-  }
+  } catch (e) { next(e) }
 }
 
 async function printLabel(req, res, next) {

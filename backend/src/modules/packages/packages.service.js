@@ -696,7 +696,7 @@ async function buildFinishedPackagePrintResult(exec, packageId, warehouseTaskId,
   )
   // unprintable（无可用打印机，只留记录）不参与派发提示判断，否则会被说成「客户端未绑定」
   const dispatchHint = job?.id && !job.unprintable
-    ? await printJobs.getDispatchHintForJob(job.printerCode, Number(job.id))
+    ? await printJobs.getDispatchHintForJob(job.printerCode, Number(job.id), exec)
     : null
   return {
     id: Number(packageId),
@@ -788,34 +788,83 @@ async function markPackageFinishedWithinTransaction(conn, packageId) {
   }
 }
 
-async function finishPackage(packageId, { createdBy, scopeWarehouseIds = null, pdaWarehouseId = null } = {}) {
-  const [[pkg]] = await pool.query(
-    `SELECT p.id, p.barcode, p.status, p.warehouse_task_id, wt.warehouse_id
-     FROM packages p
-     INNER JOIN warehouse_tasks wt ON wt.id = p.warehouse_task_id
-     WHERE p.id = ?`,
-    [packageId],
-  )
-  if (!pkg) throw new AppError('箱子不存在', 404)
-  assertTaskScope({ warehouse_id: pkg.warehouse_id }, { scopeWarehouseIds, pdaWarehouseId })
-
-  if (Number(pkg.status) === 2) {
-    const existingJob = await findActivePackageLabelJob(pool, packageId)
-    if (existingJob) {
-      return buildFinishedPackagePrintResult(pool, packageId, pkg.warehouse_task_id, existingJob)
-    }
-  }
-
-  await printJobs.assertQueueReady({
-    warehouseId: Number(pkg.warehouse_id),
-    jobType: 'package_label',
-    contentType: 'zpl',
-    requireClientOnline: false,
-  })
-
+/**
+ * 完成箱子（finish）。**幂等回执与业务在同一个 conn、同一个事务内**。
+ *
+ * 修前是两段：controller 用 **pool** 做 `beginResourceOperationRequest`（先于范围 / 设备仓校验），
+ * service 的业务在**自己的事务**里 commit，controller 之后才 `completeOperationRequest` 写回执；
+ * 且回执构建 `buildFinishedPackagePrintResult(pool, ...)` 发生在 **commit 之后**。
+ * 这留下三处问题：① 重放绕过范围 / 设备仓校验；② 「业务已提交、回执未落」的窗口；
+ * ③ 回执构建自身失败时业务已提交、调用方却拿不到结果。
+ * 现在统一为：**锁任务 → 范围 / 设备仓校验 → 幂等 begin/replay → 业务 → 同事务内构建回执 → 落回执 → commit**。
+ *
+ * 锁序与 addItem/removeItem/voidPackage 一致：peek → 锁任务 → 锁箱 → 复查归属（task → package）。
+ */
+async function finishPackage(packageId, { requestKey, userId, createdBy, scopeWarehouseIds = null, pdaWarehouseId = null } = {}) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+
+    const [[peek]] = await conn.query('SELECT warehouse_task_id FROM packages WHERE id=?', [packageId])
+    if (!peek) throw new AppError('箱子不存在', 404)
+
+    const [[taskRow]] = await conn.query(
+      'SELECT id, status, warehouse_id FROM warehouse_tasks WHERE id=? AND deleted_at IS NULL FOR UPDATE',
+      [peek.warehouse_task_id],
+    )
+    if (!taskRow) throw new AppError('任务不存在', 404)
+    // 范围 / PDA 设备仓校验必须**先于**幂等 begin：否则重放会绕过越权校验拿到原回执
+    assertTaskScope(taskRow, { scopeWarehouseIds, pdaWarehouseId })
+
+    // peek 是**无锁**读：期间箱可能已被移到别的任务。在幂等 begin / replay **之前**锁箱并复查归属，
+    // 避免把**过时的、其实属于别的任务**的原回执（或原箱状态）当作本任务的完成结果回放出去。
+    const [[pkgPeek]] = await conn.query(
+      'SELECT warehouse_task_id FROM packages WHERE id=? FOR UPDATE',
+      [packageId],
+    )
+    if (!pkgPeek) throw new AppError('箱子不存在', 404)
+    if (Number(pkgPeek.warehouse_task_id) !== Number(taskRow.id)) {
+      throw new AppError('箱子所属任务已变化，请刷新后重试', 409, 'PACKAGE_TASK_CHANGED')
+    }
+
+    const requestState = await beginResourceOperationRequest(conn, {
+      requestKey,
+      // base action：helper 会**无条件**再拼 `.resourceId`，所以这里传 `package.finish`
+      action: 'package.finish',
+      userId: userId || null,
+      resourceType: 'package',
+      resourceId: packageId,
+    })
+    if (requestState.replay) {
+      await conn.rollback()
+      return requestState.responseData
+    }
+
+    // 已完成箱的「重复完成」捷径：保留既有语义 —— 无键（或新键）再次完成时返回既有结果，
+    // **不重复入队**打印任务。注意这发生在**成功重放之后**，不会顶替原回执。
+    const [[pkgNow]] = await conn.query('SELECT id, status FROM packages WHERE id=? FOR UPDATE', [packageId])
+    if (Number(pkgNow?.status) === 2) {
+      const existingJob = await findActivePackageLabelJob(conn, packageId)
+      if (existingJob) {
+        const shortcut = await buildFinishedPackagePrintResult(conn, packageId, peek.warehouse_task_id, existingJob)
+        await completeOperationRequest(conn, requestState, {
+          data: shortcut,
+          message: '箱子已完成并已进入打印链',
+          resourceType: 'package',
+          resourceId: packageId,
+        })
+        await conn.commit()
+        return shortcut
+      }
+    }
+
+    await printJobs.assertQueueReady({
+      warehouseId: Number(taskRow.warehouse_id),
+      jobType: 'package_label',
+      contentType: 'zpl',
+      requireClientOnline: false,
+    })
+
     const result = await markPackageFinishedWithinTransaction(conn, packageId)
 
     const job = await printJobs.enqueuePackageLabelJob({
@@ -837,10 +886,24 @@ async function finishPackage(packageId, { createdBy, scopeWarehouseIds = null, p
     // uk_package 幂等；未指定承运商则返回 null 不建单，对打包主流程零影响。
     await logisticsSvc.createPendingWaybillTx(conn, { packageId, createdBy: createdBy ?? null })
 
+    // 回执**在同一事务内**构建：打印任务是本事务刚 INSERT 的行，必须用同一个 conn 读，
+    // 用 pool 会因为读不到未提交行而抛 `PRINT_JOB_NOT_FOUND` 404，把整个完成动作回滚。
+    const payload = await buildFinishedPackagePrintResult(conn, packageId, result.warehouseTaskId, job)
+    await completeOperationRequest(conn, requestState, {
+      data: payload,
+      message: '箱子已完成并已进入打印链',
+      resourceType: 'package',
+      resourceId: packageId,
+    })
     await conn.commit()
-    return buildFinishedPackagePrintResult(pool, packageId, result.warehouseTaskId, job)
+    return payload
   } catch (e) {
     await conn.rollback()
+    // 失败即**整体回滚**：业务改动与 begin 写的 pending 行一并消失。**不**另开一条事务补失败回执：
+    //   · 未通过范围 / 设备校验的请求不该留下任何回执行（否则等于给越权请求留痕）；
+    //   · 瞬时故障（读 / 回执写入）之后，调用方**用原键重试必须能正常成功** ——
+    //     补一条 failed 行会把这次重试永久挡成 409；
+    //   · 与本模块其它关键操作（add / remove / void）一致：回滚即无行，不额外造回执。
     throw e
   } finally {
     conn.release()
