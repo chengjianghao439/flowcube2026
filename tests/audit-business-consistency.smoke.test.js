@@ -6,11 +6,18 @@ configureTestEnvironment()
 const config = validateTestEnvironment()
 assert.equal(config.database, 'flowcube_repair20260908_test')
 const mysql = require('../backend/node_modules/mysql2/promise')
+const { assertOwnedRepairInstance } = require('./helpers/repairInstanceOwnership')
 const { audit, checks } = require('../backend/scripts/audit-business-consistency.cjs')
 
 test('一致性扫描：状态口径、真实异常与完整计数', async t => {
   const c = await mysql.createConnection(config)
+  // 归属门：本套件在复合命令 smoke:legacy-receivable-repair 内与本批专属库共享连接并写入，
+  // 必须在任何写入（含下方 INSERT）之前证明目标库属本批新建的临时容器。
+  // 未通过即抛出；此时 `authorized` 仍为 false，finally 只关闭连接，**绝不执行定向删除**。
+  let authorized = false
   try {
+    await assertOwnedRepairInstance(c, { config })
+    authorized = true
     await t.test('所有检查在当前迁移结构上可执行', async () => {
       const r = await audit(c)
       assert.deepEqual(r.checks.filter(x => x.error), [])
@@ -35,9 +42,15 @@ test('一致性扫描：状态口径、真实异常与完整计数', async t => 
       assert.equal(Number(row.qty), 105)
     })
   } finally {
-    await c.query('DELETE FROM inbound_task_items WHERE id=9001')
-    await c.query('DELETE FROM inbound_tasks WHERE id=9001')
-    await c.query('DELETE FROM inventory_stock WHERE warehouse_id=9001 AND product_id BETWEEN 9100 AND 9204')
-    await c.end()
+    // 定向删除失败也必须关连接：嵌套 try/finally，仍尝试后续收尾，任一收尾失败保持非 0、不静默吞。
+    try {
+      if (authorized) {
+        await c.query('DELETE FROM inbound_task_items WHERE id=9001')
+        await c.query('DELETE FROM inbound_tasks WHERE id=9001')
+        await c.query('DELETE FROM inventory_stock WHERE warehouse_id=9001 AND product_id BETWEEN 9100 AND 9204')
+      }
+    } finally {
+      await c.end()
+    }
   }
 })

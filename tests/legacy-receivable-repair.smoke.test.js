@@ -10,6 +10,7 @@ const config = validateTestEnvironment()
 // 固定 ID 仅用于本专项全新测试库，不在其他共享测试库清理数据。
 assert.equal(config.database, 'flowcube_repair20260908_test')
 const mysql = require('../backend/node_modules/mysql2/promise')
+const { assertOwnedRepairInstance } = require('./helpers/repairInstanceOwnership')
 const { fixture } = require('./helpers/legacyReceivableFixture')
 const { runRepair, snapshot, digest, buildPlan } = require('../backend/scripts/repair-legacy-receivables-20260908.cjs')
 
@@ -31,7 +32,12 @@ test('真实 MySQL：预检、回滚、漂移拒绝、备份保护、应用与�
     for (const row of f.taskItems) await insert('warehouse_task_items', { ...row, product_code: `TEST${row.product_id}`, product_name: '模拟商品', unit: '个' })
     for (const row of f.payments) await insert('payment_records', { ...row, due_date: '2026-04-04' })
   }
+  // 归属门：本套件含全表清理，必须在任何写入（含下方 cleanup/seed）之前证明目标库属本批新建的临时容器。
+  // 未通过即抛出；此时 `authorized` 仍为 false，finally 只关闭连接，**绝不执行 cleanup**。
+  let authorized = false
   try {
+    await assertOwnedRepairInstance(conn, { config })
+    authorized = true
     await seed()
     await t.test('默认预检不改变数据', async () => {
       const before = digest(await snapshot(conn))
@@ -86,5 +92,17 @@ test('真实 MySQL：预检、回滚、漂移拒绝、备份保护、应用与�
       assert.equal(again.committed, false)
       assert.equal(digest(await snapshot(conn)), before)
     })
-  } finally { await cleanup(); await conn.end(); fs.rmSync(dir, { recursive: true, force: true }) }
+  } finally {
+    // cleanup 失败也必须关连接、清临时目录：嵌套 try/finally，仍尝试后续收尾，任一收尾失败保持非 0、不静默吞。
+    try {
+      if (authorized) await cleanup()
+    } finally {
+      // end 自己抛错也不能跳过本批临时目录清理：再嵌一层，让 rmSync 无条件尝试。
+      try {
+        await conn.end()
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true })
+      }
+    }
+  }
 })

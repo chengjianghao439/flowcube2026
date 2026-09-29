@@ -9,6 +9,7 @@ configureTestEnvironment()
 const config = validateTestEnvironment()
 assert.equal(config.database, 'flowcube_repair20260908_test')
 const mysql = require('../backend/node_modules/mysql2/promise')
+const { assertOwnedRepairInstance } = require('./helpers/repairInstanceOwnership')
 const { fixture } = require('./helpers/legacyPurchaseFixture')
 const repair = require('../backend/scripts/repair-legacy-purchases-20260908.cjs')
 const { assertPurchaseOrdersOpen, assertPurchaseSettlementSources } = require('../backend/src/modules/inbound-tasks/inbound-purchase-source')
@@ -21,7 +22,12 @@ test('采购修复与来源保护：真实MySQL回归', async t => {
     for (const table of ['payment_entries', 'payment_record_events', 'inbound_task_events', 'inventory_logs', 'inventory_containers',
       'inventory_stock', 'inbound_task_items', 'inbound_tasks', 'purchase_order_items', 'payment_records', 'purchase_orders']) await c.query(`DELETE FROM ${table}`)
   }
+  // 归属门：本套件含全表清理，必须在任何写入（含下方 cleanup）之前证明目标库属本批新建的临时容器。
+  // 未通过即抛出；此时 `authorized` 仍为 false，finally 只关闭连接，**绝不执行 cleanup**。
+  let authorized = false
   try {
+    await assertOwnedRepairInstance(c, { config })
+    authorized = true
     await cleanup()
     const f = fixture()
     const insert = async (table, row) => c.query(`INSERT INTO ${table} (${Object.keys(row).join(',')}) VALUES (${Object.keys(row).map(() => '?').join(',')})`, Object.values(row))
@@ -95,5 +101,17 @@ test('采购修复与来源保护：真实MySQL回归', async t => {
       assert.equal((await repair.runRepair(c, { apply: true })).alreadyApplied, true)
       assert.equal(repair.digest(await repair.snapshot(c)), before)
     })
-  } finally { await cleanup(); await c.end(); fs.rmSync(dir, { recursive: true, force: true }) }
+  } finally {
+    // cleanup 失败也必须关连接、清临时目录：嵌套 try/finally，仍尝试后续收尾，任一收尾失败保持非 0、不静默吞。
+    try {
+      if (authorized) await cleanup()
+    } finally {
+      // end 自己抛错也不能跳过本批临时目录清理：再嵌一层，让 rmSync 无条件尝试。
+      try {
+        await c.end()
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true })
+      }
+    }
+  }
 })

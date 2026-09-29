@@ -89,6 +89,7 @@
 - 前端命名与呈现结构：菜单名 = 工作区标签 = 页面标题、标签 ≤7 汉字、带日期的查询弹窗必须能重置回本页默认口径、纯图标按钮必须有可读名称 → `npm run test:frontend-conventions`
 - 只允许整数的商品（`allow_decimal_qty=0`）不得按小数下单/出入库/调拨/盘点；录入类模块须走 `foldEntryItems()` → `npm run test:qty-precision`、`npm run test:qty-precision-coverage`
 - 本地实例脚本 `start` 只启动实例（不改库结构）、迁移必须由显式 `dev:mysql8:migrate` 触发且目标固定、凭据只由 `start` 生成 → `npm run test:mysql8-dev-script`
+- 含全表清理的采购/应收修复 smoke 只允许落在**本批专属临时实例**（`npm run repair:smoke-ephemeral`），写入前必须过归属门：0600 归属文件 + 拒绝共享端口 3307/3306 + 容器/卷 `docker inspect` 本批 label 与实时端口映射 + 同运行时间窗 + **runner 进程存活** + 实例 `@@server_uuid`；不认库名后缀、`IF NOT EXISTS`、可自填 env、空表 → `npm run test:repair-smoke-instance-guard`
 - `AGENTS.md` 体积、关键章节与红线必须在默认预算内，`docs/*.md` 与 `npm run` 引用有效 → `npm run test:agents-md-guard`
 
 ## 1. 协作与操作边界

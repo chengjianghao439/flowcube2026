@@ -132,6 +132,9 @@ jobs:
       - name: 本地实例脚本 — start 不改库结构、migrate 显式且目标固定
         run: npm run test:mysql8-dev-script
 
+      - name: 修复专项归属门 — 含全表清理的 smoke 只允许落在本批专属临时实例
+        run: npm run test:repair-smoke-instance-guard
+
       # 出库前置扫码闭环是纯离线断言（stub conn，不连数据库）：明细存在但一条扫码记录都没有时
       # 必须拒绝——批量 GROUP BY 后这类明细在结果里不出现，改写成"缺失就跳过"会让闸门 fail-open。
       - name: 出库前置扫码闭环 — 无扫码行必须拒绝（防批量改写 fail-open）
