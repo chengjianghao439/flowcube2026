@@ -257,13 +257,13 @@
 > 以下为**本地门禁/本地库**结果，**不是**整套 GitHub CI、生产部署或真实 GUI 的通过证据。
 
 - **门禁（Node 22.23.2，本地全 exit 0）**：两端 lint、`tsc -p frontend/tsconfig.app.json`、**全前端 149 文件 / 695 用例**；按 `test.yml` 的静态/纯规则清单 **61 个命令全部 exit 0**。
-- **相关 DB 回归（16 个命令全 exit 0）**：`operation-request-concurrency`、`mainline`、`concurrency-guards`、`fulfillment-credit`、`sale-adjustment`、`atp`、`p0-regression`、`p1-regression`、`finance`、`invoice-quota`、`invoice-edit-concurrency`、`refund-orders`、`accounting`、`accounting-period`、`audit-20260926`、`integration`。运行于**三套独立新库**（`release_gate`、`release_gate_integration`、`release_gate_audit_20260929_test`，各 **264** 迁移），**未触碰本轮 GUI 库**。
+- **相关 DB 回归（16 个命令全 exit 0）**：`operation-request-concurrency`、`mainline`、`concurrency-guards`、`fulfillment-credit`、`sale-adjustment`、`atp`、`p0-regression`、`p1-regression`、`finance`、`invoice-quota`、`invoice-edit-concurrency`、`refund-orders`、`accounting`、`accounting-period`、`audit-20260926`、`integration`。运行于**三套独立新库**（`flowcube_release_gate_20260929_test`、`flowcube_release_gate_integration_20260929_test`、`flowcube_release_gate_audit_20260929_test`，各 **264** 迁移），**未触碰本轮 GUI 库**。
 - **构建**：桌面 renderer build、PDA renderer build 均 **exit 0**；**未构建 Windows installer、未构建原生 APK / 未做真机验收**。
 - **C 既定设计（不修、不算通过）**：**纯 Web build 的尝试 exit 1** 属既定设计——`frontend/vite.config.ts:99-103` 已有取消纯 Web ERP 的守卫，**`8017df6` 基线同样存在**；该 exit 1 是**验证计划选择错误**，不是回归。日志与逐项记录：`output/local-gate-20260929/results.json`（79 项 exit 0，1 项为上述「不适用构建的拒绝」）。
 - **夹具精确汇总（订正先前漏记；相对 `d64952f`）**：`payment_entries ≥ 37` 实际为 **37/#5/+4、38/#6/+4、39/#4/+4、40/#5/+2、41/#2/+2，合计 +16**（先前只记「#4 +4、#5 +2」**不全**）。当前：`payment_entries 41`、`fundflows 36`、账户 **-269.11**；`#3 paid 8`、`#4 paid 36`、`#5 paid 6`、`#10 paid 3`。**账户/账款/汇款核销三类聚合差异均为 `[]`**；测试库无其他连接。
 - **幂等回执核对**：`request_key timing-a-1790653669355` 下**只有 `action=payment.record.pay.5` 成功 1 行**，与 A 实验「只入账一次」一致。按**真实 ID** 记录自动化尝试的实际入账，**不猜关联、未用 SQL 反向删除**。
 - **已验 / 未验 / 既定设计（本批收口）**：
   - **已验**：手工应付回执提示不回显可变单号；核销 settle 查询按 receiptId 定位；付款/退款查询按实际资源 ID 定位且不误关当前目标（组件 4 例 + 反向验证 + 真实 GUI 两场景）；**A「事务未提交时查回执」的 API 版**（锁内 `not_found`、同键重试 replay、只入账一次）。
-  - **未验**：**A 的在途 GUI**、**`pending`**、**B「旧查询晚于新提交返回」**（两次尝试均未构成真实 GUI 时序，确切原因未定位）、核销 settle 的改载荷反例、物理打印、**整套 CI / 生产 / 真实 GUI 证据**。
+  - **未验**：**A 的在途 GUI**、**`pending`**、**B「旧查询晚于新提交返回」**（两次尝试均未构成真实 GUI 时序，确切原因未定位）、核销 settle 的改载荷反例、物理打印；**整套 GitHub CI 与生产发布未执行**（**上述 A/B 时序的 GUI 未验**；修复前后的**其它 GUI 两场景**已有明确证据，不整体标为未验）。
   - **既定设计**：纯 Web ERP 构建守卫（同上）；核销/付款/退款「创建类走载荷指纹、资源类走资源 ID」为现行机制。
-- **本地待发布状态**：以上改动**均在本地分支**（`claude/happy-mahavira-0a2b4b`），**未 push / 未打 tag / 未发版 / 未连生产**；前端全量与三端构建的**正式**验证仍按发布流程在发版前统一执行。
+- **本地待发布状态**：以上改动**均在本地分支**（`claude/happy-mahavira-0a2b4b`），**未 push / 未打 tag / 未发版 / 未连生产**；**本轮源码已完成上述本地统一验证**；后续源码变化只补跑受影响的检查。真正发布时仍须对**发布候选同 SHA** 执行 CI 门禁及安装包构建/发布验收，**须另有发布授权**。
