@@ -5,7 +5,7 @@ import PdaProductIdentity from '@/components/pda/PdaProductIdentity'
  * 路由：/pda/pack
  */
 import { Package as PackageIcon, CircleCheck, Ban, PartyPopper } from 'lucide-react'
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { parseBarcode } from '@/utils/barcode'
@@ -29,6 +29,7 @@ import type { WarehouseTask } from '@/api/warehouse-tasks'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { triggerPrintPoll } from '@/lib/printQueue'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
+import { usePendingRequests } from '@/hooks/usePendingRequests'
 import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
 import { PdaTaskState } from '@/components/pda/PdaTaskState'
 import PdaDoneView from '@/components/pda/PdaDoneView'
@@ -217,36 +218,85 @@ export default function PdaPackPage() {
     enabled: taskId > 0,
   })
 
+  // ── 兼容**旧版本已经落盘**的 finish pending ────────────────────────────────────
+  // 更早的版本把 finish 的 action 写成 `package.finish.<taskId>`。那些记录已经存进 localStorage，
+  // 若这里直接换成 base，它们就**再也匹配不上** —— 等于把原问题换了个形式（记录还在、人看不见，
+  // 也没有「确认上次结果」入口）。因此：**页面层**识别到旧记录就**继续沿用它的 action**
+  // （因而沿用原 key 与原 metadata），**新操作**才用 base。
+  // **不改公共 pending 框架、也不静默清除旧记录**；旧记录仍由用户显式「清除」或在确认成功时自然消失。
+  const { records: pendingRecords } = usePendingRequests()
+  // 只**定位**旧记录：只要有 `package.finish.<数字>` 的旧 action 就沿用它的 action ——
+  // 这样 hook 能匹配到它、**继续阻断**（旧记录不会因为换了 action 名而"消失"）。
+  const legacyFinishRecord = useMemo(
+    () => pendingRecords.find((r) => /^package\.finish\.\d+$/.test(String(r.action || ''))) ?? null,
+    [pendingRecords],
+  )
+  // 「是否**据以恢复内容**」的严格校验在下面两处（都不满足就只阻断、不恢复）：
+  //   · `frozenRecordTrusted` —— 决定冻结卡片**展不展示原内容**（归属不明时只提示人工核对）；
+  //   · `resolveServerState` —— 决定能不能把查询结果判成「本次成功」。
+  // 三道条件：① scoped action 后缀 === `metadata.taskId`；② `packageId` 为正整数；③ owner 可信。
+  // 任一条不满足 ⇒ **仍然沿用旧 action 让记录继续阻断**（不静默消失），但**不据其 metadata 恢复**，
+  // 由用户显式「清除记录」收场 —— **不静默抛弃**。
+
   const finishAction = useCriticalPdaAction<{
     id: number
     allPackagesDone?: boolean
     printJob?: PackagePrintJob
+    /** 回执自带原任务 id：用来判断「所有箱完成」是不是**当前任务**的结论 */
+    warehouseTaskId?: number
   }>({
-    action: `package.finish.${taskId || 'none'}`,
+    // 有旧版 scoped 记录 ⇒ 沿用原 action（不绑 taskId 的新写法见下）；
+    // 否则用 base：`usePendingRequests` 按 action 名存/找记录，带 taskId 会让「换任务重挂」
+    // 后匹配不上，冻结定位与「确认」入口一起消失。服务端幂等 action 仍是 scoped
+    // `package.finish.<箱id>`，具体绑定由 `resolveServerState` 里的 scoped 查询完成。
+    action: legacyFinishRecord?.action ?? 'package.finish',
     requestAction: 'package.finish',
     label: '完成箱子',
     onConfirmed: async (data) => {
       await refetch()
-      ok('当前箱已完成，箱贴已进入打印链')
-      if (data.allPackagesDone) {
-        ok('所有箱子已完成。请确认箱贴打印完成后，再结束打包进入待出库。')
+      // 文案**不**说「当前箱」：恢复 / 换目标之后「当前」可能已经不是原箱了，
+      // 成功与否是**回执里那个箱**的事（回执已绑定原箱：base 查唯一 scoped 行，
+      // 兜底用原箱的 scoped action 并校验 resourceId）。
+      ok(`箱子已完成（#${data?.id ?? '—'}），箱贴已进入打印链`)
+      // 「所有箱子都完成了」只对当前任务说：可能是在**别的任务**的页面上查回**原任务**的原箱回执，
+      // 直接说「所有箱完成」会被当成当前任务的结论。回执自带 `warehouseTaskId`，据此判断；
+      // 该字段缺失 / 非法时不能拼出 `#NaN`，退回一句中文说明。
+      const originalTaskId = Number(data?.warehouseTaskId)
+      const hasOriginalTaskId = Number.isInteger(originalTaskId) && originalTaskId > 0
+      const isCurrentTask = hasOriginalTaskId && originalTaskId === Number(taskId)
+      if (data.allPackagesDone && isCurrentTask) {
+        ok('本任务所有箱子已完成。请确认箱贴打印完成后，再结束打包进入待出库。')
+      } else if (data.allPackagesDone) {
+        warn(
+          hasOriginalTaskId
+            ? `这是原任务 #${originalTaskId} 的箱子，该任务箱子已全部完成；当前任务以本页列表为准。`
+            : '这是其它任务的箱子（回执里没有任务号），当前任务以本页列表为准。',
+          5000,
+        )
       }
     },
     resolveServerState: async ({ record }) => {
       const packageId = Number(record.metadata?.packageId ?? 0)
-      const recordTaskId = Number(record.metadata?.taskId ?? taskId)
-      if (!packageId || !recordTaskId) return { effective: false }
-      const latestPackages = await getPackagesApi(recordTaskId, { skipGlobalError: true })
-      const latestPackage = latestPackages.find(pkg => Number(pkg.id) === packageId)
-      if (latestPackage?.status === 2) {
-        const allPackagesDone = latestPackages.length > 0 && latestPackages.every(pkg => pkg.status === 2)
-        return {
-          effective: true,
-          data: { id: packageId, allPackagesDone },
-          message: `箱子 ${latestPackage.barcode} 已完成，箱贴任务已入链或可追踪。`,
-        }
+      if (!Number.isInteger(packageId) || packageId <= 0) return { effective: false }
+      // 旧版 scoped 记录：`package.finish.<taskId>` 的后缀必须与 metadata.taskId 一致，
+      // 否则这条记录可能被挪用 / 属于别的任务 ⇒ **不据以恢复**（仍保留记录继续阻断）。
+      const scoped = /^package\.finish\.(\d+)$/.exec(String(record.action || ''))
+      if (scoped && Number(record.metadata?.taskId) !== Number(scoped[1])) return { effective: false }
+      // owner 不可信的历史记录一律不据以恢复
+      if (record.unverifiedOwner) return { effective: false }
+      // **只认原键回执**。列表里 `status === 2` 只能说明「这个箱现在是已完成」——
+      // 它**完全可能来自上一次**（工人重复点、或该箱本来就早完成了），
+      // 所以拿列表状态当「本次完成成功」的证据是错的：那正是把「本次意图」猜成了别的操作的结果。
+      // 服务端回执行是按原键 + 原箱落库的（`package.finish.<箱id>`），只有它 success 才算本次成功。
+      const st = await getOperationRequestStatusApi(record.requestKey, `package.finish.${packageId}`)
+      if (st?.status !== 'success') return { effective: false }
+      // 回执必须绑定**原箱**
+      if (st.resourceId != null && Number(st.resourceId) !== packageId) return { effective: false }
+      return {
+        effective: true,
+        data: st.data as { id: number; allPackagesDone?: boolean },
+        message: '本次完成箱已确认',
       }
-      return { effective: false }
     },
   })
   const printAction = useCriticalPdaAction<{
@@ -399,9 +449,27 @@ export default function PdaPackPage() {
               : finalizeAction.pendingRecord ? finalizeAction
                 : null
   const frozenRecord = noticePendingAction?.pendingRecord ?? null
-  // 冻结范围只含**会改变箱内/箱子状态**的三个操作；打印与完成打包另有各自守卫
+  // 冻结卡片**能不能展示原内容**：归属不明（owner 不可信 / 缺 packageId / 旧 scoped 记录的后缀
+  // 与 metadata.taskId 不一致）时**不展示**原内容，只提示人工核对并保留阻断 ——
+  // 展示错的原目标比不展示更糟（工人会照着错的去核对实物）。
+  const frozenRecordTrusted = useMemo(() => {
+    if (!frozenRecord) return false
+    if (frozenRecord.unverifiedOwner) return false
+    const scoped = /^package\.finish\.(\d+)$/.exec(String(frozenRecord.action || ''))
+    if (!scoped) return true
+    const meta = (frozenRecord.metadata ?? {}) as { taskId?: unknown; packageId?: unknown }
+    const pid = Number(meta.packageId)
+    if (!Number.isInteger(pid) || pid <= 0) return false
+    return Number(meta.taskId) === Number(scoped[1])
+  }, [frozenRecord])
+  // 未确认原箱结果期间，本页的**换箱 / 扫码 / 新建箱 / 移出 / 作废 / 完成箱子 / 完成打包**都要被冻结 ——
+  // 否则「原目标恢复入口」虽然还在，工人却已经能在别的箱上继续动手，定位就失去了意义。
+  // finish 的 `submitBlocked` 只覆盖「有待确认记录」，**提交中**（`phase === 'submitting'`）也要算进来。
+  // 本批只纳入 finish：打印 / 完成打包的设计另论，不在此扩。
   const anySubmitBlocked = addAction.submitBlocked || removeAction.submitBlocked || voidAction.submitBlocked
+    || finishAction.submitBlocked || finishAction.phase === 'submitting'
   const anyBlockedReason = addAction.blockedReason || removeAction.blockedReason || voidAction.blockedReason
+    || finishAction.blockedReason
 
   // 提示卡片的 phase/lastErrorMessage 来源：优先未确认的 pendingRecord，
   // 其次正在提交/刚失败的。放在这些 action 之后定义，避免提前引用。
@@ -489,9 +557,15 @@ export default function PdaPackPage() {
     mutationFn: async (pkgId: number) => {
       if (!taskDetail) throw new Error('任务数据仍在加载，请稍后重试')
       if (taskDetail.status !== WT_STATUS.PACKING) throw new Error('当前任务不是待打包状态，不能完成箱子')
+      const pkg = (packages ?? []).find(p => Number(p.id) === pkgId)
       const result = await finishAction.run((requestKey) =>
         finishPackageApi(pkgId, requestKey).then((res) => res!),
-        { taskId, packageId: pkgId },
+        {
+          // 冻结**原目标**：任务号 + 箱条码。只存 taskId/pkgId 时，换目标 / 重挂之后
+          // 待确认卡片说不清「上次要完成的到底是哪个箱」，也认不出原货。
+          taskId, taskNo: taskDetail.taskNo,
+          packageId: pkgId, packageBarcode: pkg?.barcode ?? null,
+        },
       )
       return result
     },
@@ -707,26 +781,34 @@ export default function PdaPackPage() {
                       // 按各自的 label 区分，否则现场看不出待确认的到底是哪一步。
                       : `上次${frozenRecord.label}（结果待确认）`}
               </p>
-              <div className="mt-1 grid grid-cols-2 gap-2 text-xs text-amber-900 dark:text-amber-100">
-                <div>任务 <span className="font-mono">{String(frozenRecord.metadata?.taskNo ?? frozenRecord.metadata?.taskId ?? '—')}</span></div>
-                <div>箱子 <span className="font-mono">{String(frozenRecord.metadata?.packageBarcode ?? frozenRecord.metadata?.packageId ?? '—')}</span></div>
-                <div className="min-w-0">
-                  条码 <span className="font-mono break-all">
-                    {String(frozenRecord.metadata?.labelBarcode ?? frozenRecord.metadata?.productCode ?? '—')}
-                  </span>
-                </div>
-                {/* 原货名：整行移出后原明细行会被删掉，只有冻结快照还记得这是哪件货 */}
-                {frozenRecord.metadata?.productName != null && (
+              {frozenRecordTrusted ? (
+                <div className="mt-1 grid grid-cols-2 gap-2 text-xs text-amber-900 dark:text-amber-100">
+                  <div>任务 <span className="font-mono">{String(frozenRecord.metadata?.taskNo ?? frozenRecord.metadata?.taskId ?? '—')}</span></div>
+                  <div>箱子 <span className="font-mono">{String(frozenRecord.metadata?.packageBarcode ?? frozenRecord.metadata?.packageId ?? '—')}</span></div>
                   <div className="min-w-0">
-                    商品 <span className="font-mono break-all">{String(frozenRecord.metadata.productName)}</span>
+                    条码 <span className="font-mono break-all">
+                      {String(frozenRecord.metadata?.labelBarcode ?? frozenRecord.metadata?.productCode ?? '—')}
+                    </span>
                   </div>
-                )}
-                <div>数量 <span className="font-mono">{frozenRecord.metadata?.qty == null ? '整份' : String(frozenRecord.metadata.qty)}</span></div>
-                {/* 移出冻结的是**某一行明细**，光有箱码定位不到是哪一行，恢复时对不上账 */}
-                {frozenRecord.metadata?.itemId != null && (
-                  <div>明细 <span className="font-mono">#{String(frozenRecord.metadata.itemId)}</span></div>
-                )}
-              </div>
+                  {/* 原货名：整行移出后原明细行会被删掉，只有冻结快照还记得这是哪件货 */}
+                  {frozenRecord.metadata?.productName != null && (
+                    <div className="min-w-0">
+                      商品 <span className="font-mono break-all">{String(frozenRecord.metadata.productName)}</span>
+                    </div>
+                  )}
+                  <div>数量 <span className="font-mono">{frozenRecord.metadata?.qty == null ? '整份' : String(frozenRecord.metadata.qty)}</span></div>
+                  {/* 移出冻结的是**某一行明细**，光有箱码定位不到是哪一行，恢复时对不上账 */}
+                  {frozenRecord.metadata?.itemId != null && (
+                    <div>明细 <span className="font-mono">#{String(frozenRecord.metadata.itemId)}</span></div>
+                  )}
+                </div>
+              ) : (
+                <p className="mt-1 text-xs text-amber-900 dark:text-amber-100">
+                  这条待确认记录的<strong>归属无法确认</strong>（关键字段缺失或与任务不一致），
+                  因此不展示原内容，以免张冠李戴。已继续阻止重复提交：请人工核对实物后，
+                  用「结果未生效，清除记录」显式清除，或先点「确认上次结果」再查一次。
+                </p>
+              )}
             </div>
           )}
 

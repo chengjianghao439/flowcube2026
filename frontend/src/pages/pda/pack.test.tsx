@@ -20,9 +20,20 @@ const st = vi.hoisted(() => ({
   pending: null as Record<string, unknown> | null,
   removePending: null as Record<string, unknown> | null,
   voidPending: null as Record<string, unknown> | null,
-  finishPending: null as Record<string, unknown> | null,
   finishConfirmCalls: 0,
   finishClearCalls: 0,
+  /** 完成箱子是否处于「结果待确认」阻断（页面把它也纳入本页冻结） */
+  finishSubmitBlocked: false,
+  finishOnConfirmed: null as null | ((d: unknown, c: { recovered: boolean }) => Promise<void>),
+  /** 该箱在**列表**里的状态：C3 要用「列表已完成」与「原键回执」不一致来验证不许猜 */
+  pkgStatus: 1,
+  /** `getOperationRequestStatusApi` 的返回：null 表示 not_found */
+  opStatus: null as Record<string, unknown> | null,
+  finishResolve: null as null | ((c: unknown) => Promise<{ effective: boolean; data?: unknown } | null | undefined>),
+  /** 页面注册给各关键操作的 action 名（用于断言「不随 taskId 漂移」） */
+  seenActions: [] as string[],
+  /** `usePendingRequests` 暴露的既有记录（用于验证「旧版 scoped finish 记录仍可见」） */
+  pendingRecords: [] as Record<string, unknown>[],
   feedback: [] as { kind: string; text: string }[],
   scannerDisabled: false,
   scannerOnScan: null as null | ((code: string) => void),
@@ -34,6 +45,7 @@ vi.mock('@/hooks/useCriticalPdaAction', () => ({
     action?: string
     onConfirmed?: (d: unknown, c: { recovered: boolean }) => Promise<void>
   }) => {
+    if (opts.action) st.seenActions.push(opts.action)
     const base = {
       networkStatus: 'online', submitBlocked: false, blockedReason: null as string | null,
       pendingRecord: null as Record<string, unknown> | null,
@@ -59,11 +71,17 @@ vi.mock('@/hooks/useCriticalPdaAction', () => ({
     }
     // 完成箱子的 action 带 taskId 后缀（`package.finish.<taskId>`），按前缀匹配
     if (String(opts.action).startsWith('package.finish')) {
+      st.finishResolve = (opts as { resolveServerState?: typeof st.finishResolve }).resolveServerState ?? null
+      st.finishOnConfirmed = (opts as { onConfirmed?: typeof st.finishOnConfirmed }).onConfirmed ?? null
+      // 模拟真实 hook 的关键行为：**按 action 名**在既有记录里匹配 —— 这正是
+      // 「旧版 scoped 记录若沿用原 action 就仍能被找到」的机制所在。
+      const matched = st.pendingRecords.find(r => r.action === opts.action) ?? null
+      st.finishSubmitBlocked = Boolean(matched)
       return {
         ...base,
-        submitBlocked: Boolean(st.finishPending),
-        blockedReason: st.finishPending ? '完成箱子 结果待确认。请先确认结果，避免重复提交。' : null,
-        pendingRecord: st.finishPending,
+        submitBlocked: Boolean(matched),
+        blockedReason: matched ? `${String(matched.label ?? '完成箱子')} 结果待确认。请先确认结果，避免重复提交。` : null,
+        pendingRecord: matched,
         confirmPending: () => { st.finishConfirmCalls += 1; return Promise.resolve(null) },
         clearPending: () => { st.finishClearCalls += 1 },
       }
@@ -87,6 +105,13 @@ vi.mock('@/hooks/useCriticalPdaAction', () => ({
   },
 }))
 
+vi.mock('@/hooks/usePendingRequests', () => ({
+  usePendingRequests: () => ({
+    records: st.pendingRecords,
+    claimPending: vi.fn(), removePending: vi.fn(), discardUnclaimed: vi.fn(),
+  }),
+}))
+
 vi.mock('@/hooks/usePdaFeedback', () => ({
   usePdaFeedback: () => ({
     flash: null,
@@ -99,7 +124,7 @@ vi.mock('@/hooks/usePdaFeedback', () => ({
 vi.mock('@/api/packages', () => ({
   // 有一个打包中的箱子：页面会自动把它设为 activePackageId，扫码条才会渲染出来
   getPackagesApi: async () => ([{
-    id: 8, barcode: 'L000008', status: 1, statusName: '打包中', createdAt: '2026-09-29T00:00:00Z',
+    id: 8, barcode: 'L000008', status: st.pkgStatus, statusName: '打包中', createdAt: '2026-09-29T00:00:00Z',
     items: [], printStatus: { key: 'no_job', label: '未生成箱贴' },
   }]),
   createPackageApi: async () => ({ id: 1, barcode: 'L000001' }),
@@ -113,7 +138,9 @@ vi.mock('@/api/warehouse-tasks', () => ({
   getTaskByIdApi: async () => ({ id: 42, taskNo: 'WT042', status: 5, statusName: '待打包', warehouseId: 1, warehouseName: '主仓' }),
 }))
 vi.mock('@/api/operation-requests', () => ({
-  getOperationRequestStatusApi: async () => ({ status: 'success', data: { addedQty: 20, qty: 60, unit: '个' }, resourceId: 8 }),
+  // 默认 success（保持既有用例行为）；C3 的用例会把它改成 not_found 来验证「不许猜」
+  getOperationRequestStatusApi: async () => st.opStatus
+    ?? { status: 'success', data: { addedQty: 20, qty: 60, unit: '个' }, resourceId: 8 },
 }))
 vi.mock('@/components/pda/PdaScanner', () => ({
   default: (props: { disabled?: boolean; onScan?: (code: string) => void }) => {
@@ -152,9 +179,15 @@ beforeEach(() => {
   st.pending = null
   st.removePending = null
   st.voidPending = null
-  st.finishPending = null
   st.finishConfirmCalls = 0
   st.finishClearCalls = 0
+  st.finishSubmitBlocked = false
+  st.finishOnConfirmed = null
+  st.pkgStatus = 1
+  st.opStatus = null
+  st.finishResolve = null
+  st.seenActions = []
+  st.pendingRecords = []
   st.feedback = []
   st.scannerDisabled = false
   st.scannerOnScan = null
@@ -283,13 +316,13 @@ test('完成箱子待确认：定位显示该箱，且「确认/清除」落在�
   // 回归护栏：共用「当前待确认」位次的链里**必须保留 finishAction**。
   // 漏掉它会让 frozenRecord 变 null、查询/清除落到 finalizeAction —— 等于把既有的
   // 「完成箱子」恢复入口改回归了。
-  st.finishPending = {
-    action: 'package.finish.42',
+  st.pendingRecords = [{
+    action: 'package.finish',
     requestKey: 'k4',
     label: '完成箱子',
     createdAt: '2026-09-29T00:00:00Z',
     metadata: { taskId: 42, taskNo: 'WT042', packageId: 8, packageBarcode: 'L000008' },
-  }
+  }]
   mount()
   await act(async () => { await new Promise(r => setTimeout(r, 50)) })
   await act(async () => { await new Promise(r => setTimeout(r, 50)) })
@@ -310,4 +343,126 @@ test('完成箱子待确认：定位显示该箱，且「确认/清除」落在�
   expect(st.finishConfirmCalls).toBe(1)   // 查询走的是**完成箱子**
   await act(async () => { clearBtn!.click() })
   expect(st.finishClearCalls).toBe(1)     // 清除走的是**完成箱子**
+})
+
+test('C3 完成箱子恢复：列表 status=2 不能当本次成功，必须靠原键回执', async () => {
+  // 该箱在**列表**里是「已完成」，但**原键回执查不到** ⇒ 本次成功**尚不能确认**。
+  // 注意：查不到**不能反向断言"没生效"**（回执可能只是还没落 / 已过期清理），
+  // 它只说明**不能据此判本次成功** —— status=2 完全可能来自**上一次**完成。
+  st.pkgStatus = 2
+  st.opStatus = { status: 'not_found', data: null }
+  mount()
+  await act(async () => { await new Promise(r => setTimeout(r, 0)) })
+  expect(st.finishResolve).toBeTruthy()
+
+  const res = await st.finishResolve!({ record: { requestKey: 'k9', metadata: { taskId: 42, packageId: 8 } } })
+  expect(res?.effective).toBe(false)
+})
+
+test('C3 完成箱子恢复：原键回执 success 才判本次成功', async () => {
+  st.pkgStatus = 2
+  st.opStatus = { status: 'success', data: { id: 8, allPackagesDone: true }, resourceId: 8 }
+  mount()
+  await act(async () => { await new Promise(r => setTimeout(r, 0)) })
+  expect(st.finishResolve).toBeTruthy()
+
+  const res = await st.finishResolve!({ record: { requestKey: 'k9b', metadata: { taskId: 42, packageId: 8 } } })
+  expect(res?.effective).toBe(true)
+})
+
+test('C3 完成箱子恢复：注册的 action 不绑 taskId（否则换任务重挂就找不到原 pending）', async () => {
+  // `usePendingRequests` 按 **action 名**存 / 找 pending 记录。若 finish 的 action 带 taskId
+  // （`package.finish.<taskId>`），换到别的任务重挂后 action 名随之改变，
+  // 原 pending 就再也匹配不上 —— 既看不到冻结定位、也没有「确认」入口。
+  // 本用例只断言**页面注册的 action 名不含 taskId** 这一代码事实；
+  // 它**不等于**「真实持久化重挂已验」（那需要真实浏览器 + 真实断网，见 C3 交接）。
+  mount()
+  await act(async () => { await new Promise(r => setTimeout(r, 0)) })
+  expect(st.seenActions).toContain('package.finish')
+  expect(st.seenActions).not.toContain('package.finish.42')
+})
+
+test('C3 兼容旧版本 pending：旧 scoped 记录仍沿用原 action 阻断，归属一致时展示原内容', async () => {
+  // 旧版本把 action 写成 `package.finish.<taskId>`，记录**已落盘**。直接换 base 会让它们
+  // 再也匹配不上；这里必须沿用**原 action**（记录继续阻断不消失），归属一致才据以展示。
+  st.pendingRecords = [{
+    requestKey: 'legacy-k', action: 'package.finish.41', requestAction: 'package.finish',
+    label: '完成箱子', createdAt: '2026-09-29T00:00:00Z',
+    metadata: { taskId: 41, taskNo: 'WT041', packageId: 7, packageBarcode: 'L000007' },
+  }]
+  mount()
+  await act(async () => { await new Promise(r => setTimeout(r, 50)) })
+  await act(async () => { await new Promise(r => setTimeout(r, 50)) })
+  expect(st.seenActions).toContain('package.finish.41')   // 沿用旧 action ⇒ 旧记录仍可见
+  expect(st.seenActions).not.toContain('package.finish')  // 不再注册 base 把它盖掉
+  expect(st.finishSubmitBlocked).toBe(true)               // 仍然阻断（完成箱子按钮）
+  expect(st.scannerDisabled).toBe(true)                   // **本页扫码也冻结**：否则工人在别的箱上继续动手，定位就没意义
+  const text = container.textContent ?? ''
+  expect(text).toContain('上次完成箱子')
+  expect(text).toContain('L000007')                       // 归属一致 ⇒ 展示原内容
+})
+
+test('C3 兼容旧版本 pending：残缺记录仍阻断但不展示原内容', async () => {
+  // 缺 packageId ⇒ 无法核对是哪个箱：**仍然沿用旧 action 让它阻断**（不静默抛弃），
+  // 但**不展示**原内容（展示错的比不展示更糟）。
+  st.pendingRecords = [{
+    requestKey: 'legacy-bad', action: 'package.finish.43', requestAction: 'package.finish',
+    label: '完成箱子', createdAt: '2026-09-29T00:00:00Z',
+    metadata: { taskId: 43, taskNo: 'WT043', packageBarcode: 'L00000X' },
+  }]
+  mount()
+  await act(async () => { await new Promise(r => setTimeout(r, 50)) })
+  await act(async () => { await new Promise(r => setTimeout(r, 50)) })
+  expect(st.seenActions).toContain('package.finish.43')   // 旧 action 仍生效 ⇒ 阻断不消失
+  expect(st.finishSubmitBlocked).toBe(true)
+  expect(st.scannerDisabled).toBe(true)                   // 残缺记录同样**保留本页冻结**
+  const text = container.textContent ?? ''
+  expect(text).toContain('归属无法确认')
+  expect(text).not.toContain('L00000X')                   // 残缺记录的原箱码不外显
+})
+
+test('C3 兼容旧版本 pending：action 后缀与 metadata.taskId 不一致时不据以恢复', async () => {
+  st.pendingRecords = [{
+    requestKey: 'legacy-mismatch', action: 'package.finish.41', requestAction: 'package.finish',
+    label: '完成箱子', createdAt: '2026-09-29T00:00:00Z',
+    metadata: { taskId: 43, packageId: 7 },   // 后缀 41 ≠ taskId 43
+  }]
+  st.opStatus = { status: 'success', data: { id: 7 }, resourceId: 7 }
+  mount()
+  await act(async () => { await new Promise(r => setTimeout(r, 0)) })
+  const res = await st.finishResolve!({ record: st.pendingRecords[0] })
+  expect(res?.effective).toBe(false)
+})
+
+test('C3 完成箱子恢复：回执绑定的是别的资源时拒绝', async () => {
+  st.opStatus = { status: 'success', data: { id: 9 }, resourceId: 9 }   // resourceId ≠ 原箱 8
+  mount()
+  await act(async () => { await new Promise(r => setTimeout(r, 0)) })
+  const res = await st.finishResolve!({ record: { requestKey: 'k9c', metadata: { taskId: 42, packageId: 8 } } })
+  expect(res?.effective).toBe(false)
+})
+
+test('C3 成功提示：在别的任务页面查回原任务回执时，不把原任务的「全部完成」说成当前任务', async () => {
+  mount()
+  await act(async () => { await new Promise(r => setTimeout(r, 0)) })
+  expect(st.finishOnConfirmed).toBeTruthy()
+
+  // 回执自带的原任务是 #41，而当前页面 taskId=42 ⇒ 不得说「本任务所有箱子已完成」
+  await act(async () => {
+    await st.finishOnConfirmed!({ id: 8, warehouseTaskId: 41, allPackagesDone: true }, { recovered: true })
+  })
+
+  const texts = st.feedback.map(f => f.text).join(' | ')
+  expect(texts).toContain('原任务 #41')
+  expect(texts).not.toContain('本任务所有箱子已完成')
+})
+
+test('C3 成功提示：回执就是当前任务时才说「本任务全部完成」', async () => {
+  mount()
+  await act(async () => { await new Promise(r => setTimeout(r, 0)) })
+  await act(async () => {
+    await st.finishOnConfirmed!({ id: 8, warehouseTaskId: 42, allPackagesDone: true }, { recovered: true })
+  })
+  const texts = st.feedback.map(f => f.text).join(' | ')
+  expect(texts).toContain('本任务所有箱子已完成')
 })

@@ -240,3 +240,12 @@
 - **恢复定位**：`resolveServerState` 用**冻结记录里的原箱 id** 组成 scoped action（`package.remove-item.<箱>` / `package.void.<箱>`）再查，服务端按 `resource_id` 过滤；此外 hook 自身会先用 base action 查**唯一** scoped 行。「不接受别的箱」由**服务端资源级唯一性 + 冻结 metadata 兜底**两层保证。**不**凭「列表里该明细还在不在」判本次成功——部分移出、整行移出、明细已被整行删掉，都只有回执能说清。
 - 回归 `tests/pack-remove-void-replay.smoke.test.js`（7 例）与 `frontend/src/pages/pda/pack.test.tsx`（6 例：冻结定位、成功反馈收敛、恢复增量/累计、移出冻结、作废冻结、**完成箱子冻结且确认/清除落在 finish**）。
 - **未验**：组件用例只 **mock** 了 hook，证明的是**页面用法**；**真实持久化重挂 / 真实丢响应**未跑（GUI 未验）。`finish` 的稳定键与事务边界属**下一小批**，本批未动。
+
+### 2026-09-29 批 C3：完成箱子的恢复判定、旧记录兼容与整页刷新实测
+
+- **恢复只认原键回执**：`finishAction.resolveServerState` 不再用列表 `status===2` 猜「本次完成」（那可能来自**上一次**），改为按 `record.requestKey` + scoped `package.finish.<箱id>` 查回执并校验 `resourceId` = 原箱；旧版 scoped 记录还要求 action 后缀 === `metadata.taskId`，`unverifiedOwner` 一律不据以恢复。
+- **action 不绑 `taskId`**：`finishAction.action` 由 `package.finish.<taskId>` 改为 base `package.finish` —— `usePendingRequests` 按 **action 名**存 / 找记录，带 taskId 会让**换任务重挂后匹配不到原 pending**。**兼容旧记录**：页面层识别 `^package\.finish\.\d+$` 的旧记录并**沿用其 action**（记录继续阻断、**不静默清除**）；是否据以**恢复内容**另有三道严格校验；归属不明时**不展示原内容**，只提示人工核对。
+- **finish 纳入本页冻结**：`anySubmitBlocked` 现含 `finishAction.submitBlocked || finishAction.phase === 'submitting'`（**不扩** print / finalize）→ 未确认原箱结果时，换箱 / 扫码 / 新建箱 / 移出 / 作废 / 完成箱子 / 完成打包都被冻结。
+- **成功提示注明原任务 / 原箱**：用回执自带 `warehouseTaskId` 判断，**仅当等于当前 taskId** 才说「本任务所有箱子已完成」；该字段缺失时用中文兜底（不拼 `#NaN`）；文案里不写 literal `**`。
+- **实测（真实浏览器 + 真实代理，非组件 mock）**：代理扣住 `finish` 2xx 并挡住 `request-status` ⇒ 页面进待确认、卡片显示原任务 / 原箱；**换到另一任务页**仍显示原定位（本批修掉的失效场景）；**整页刷新**（`agent-browser reload`：`navigation.type` `navigate→reload`、`performance.timeOrigin` 变化、localStorage **原 key 不变**）后**需重新绑定设备** —— **凭据仅内存是既定设计，实测页面显示「当前 PDA 未绑定设备」**；重绑后**原 key / 原 task / 原箱仍在**，放开代理点确认即复位，`print_jobs` 仍为 **1**。
+  > 注意：`open` 到**仅 hash 不同**的 URL 属于**同文档导航**，不能当整页刷新；验证整页刷新必须用 `reload` 并记录 `navigation.type` 与 `timeOrigin`。
