@@ -306,7 +306,13 @@ GET request-status(base)   → 200 status=not_found（非 success）
   （查询直接返回 `status === 'success'`）**直接清 pending 并 `onConfirmed`**，不经 `resolveServerState` ⇒
   前端层的「旧 scoped 记录 / 残留 metadata 归属校验」**不覆盖**这条路径。是否需要在该路径上补校验、
   以及怎样补才不破坏公共 hook 语义，**尚未定**；因**无真实错目标缺陷证据**，本批**不改公共 hook**。
-  **全链路未验**：本批组件证据只证明 `frozenRecordTrusted` 与 `resolveServerState` 两条分支。
+  **此错配分支仍缺全链路证据**：本批组件证据只证明 `frozenRecordTrusted` 与 `resolveServerState` 两条分支
+  （§12 记录的合法成功路径 GUI 另有独立证据，**不因此项而被否定**）。
+  · **2026-09-30 独立复核**：旧版保存的 scoped action 为 `package.finish` / `package.print` /
+  `warehouse.pack-done`（`package.print-label` 是 `requestAction`），其**目标与提交 `metadata` 同源**；
+  现版在**存在旧 pending 记录时会阻断新提交**（`useCriticalPdaAction.run` 的 `pendingRecord` 守卫），
+  未归属记录又不保留 `metadata` ⇒ **本次未找到产品自身可达的错配记录**。因此**未做此分支的真实错配 GUI 证据**；
+  「`success` 不调用 resolver」**仍是防御性观察**，**本轮不改公共 hook**，也**不主张**该路径绝无风险。
 - **第二轮 GUI** 的「刷新后原 key 保留」与「切 task 5 不误完成」**未验**（见 §8.2 工具限制）。
   · **不得**据这两个未验项宣称 GUI 闭环已验；
   · 也**不得**用它们否定**第一轮**已实测的界面证据（丢响应、同页冻结原任务/原箱、切到另一任务仍显示原定位）；
