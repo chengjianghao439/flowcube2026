@@ -268,6 +268,7 @@ GET request-status(base)   → 200 status=not_found（非 success）
 - **未验（第二轮 GUI）**：
   - **「刷新后原 key / 原任务定位保留」**——上述 `location.reload()` 的读数来自当时的命令输出，但随后该标签被替换成 `about:blank`、`localStorage` 不可访问，**root 无法独立复核，故不记为已验**；
   - **「切到另一 status=5 的任务确认原回执、不误完成当前任务」**——GUI 未做（`1210` 的 pending 记录随上下文丢失）。该行为**在组件层已有用例覆盖**（`C4 完成打包在别的任务页确认原任务回执：只说原任务，不改当前页为「打包完成」`）。
+  - ⇒ **上面两条已于 2026-09-30 在本机真实 GUI 补验**（v0.11.4 发布之后的补验），证据见 §12。本节为历史记录，**原样保留、不因补验而改写**。
   - 已保留的真实证据：代理 `[DROP-HELD] … upstream=200` 日志、DB 事实（1208：1 箱 30 件；1210：1 箱 45 件）、修前截图、以及上述 `location.reload()` 的前后读数（**标注为「当时命令输出，现场不可复核」**）。
 
 ## 9. 隔离偏差与恢复（如实记录）
@@ -311,3 +312,47 @@ GET request-status(base)   → 200 status=not_found（非 success）
   · 也**不得**用它们否定**第一轮**已实测的界面证据（丢响应、同页冻结原任务/原箱、切到另一任务仍显示原定位）；
   · 反之，**第一轮的界面证据也不能充作窄修后的界面** —— 窄修后的箱件呈现只在 §8.1（第二轮）观察。
 - 第二轮 GUI 资源收尾（`/tmp/fc-pb-c4b-cleanup.cjs`，全部合法 API + 终态断言，无 `[FAIL]`）：任务 **1208 / 1209 / 1210 / 1211 → status=8 / 自锁 0**；设备 **225 / 226 → 解绑 + disabled + 票据 0**；打印机 **169 → 停用 + bindings 0**；仓 **81 → `is_active=0`**（残留容器 `s1:4 s2:8` 登记保留）；上一轮半成品仓 **80 / 设备 224 / 打印机 168** 独立只读复核：解绑 + disabled + 停用。共享 3307 保留。
+
+## 12. 2026-09-30 补验（v0.11.4 发布之后的真实 GUI）
+
+> 本节为**发布后补验**，补齐 §8.2 登记的两个未验项。§8 / §8.1 / §8.2 的历史记录（含当时的失败与工具限制）
+> **原样保留**，不因本节而改写。本轮**未改动任何产品代码**。
+
+**环境**：有效取证阶段固定参数、不变（首轮曾误用系统 Node 26 启动，随即用 Node 22.23.2 重启并保留更正记录，见文末）。`agent-browser` 0.36.0，会话 `flow-plastic-box-c4r2-20260930`；
+后端 `/tmp/fc-pb-server.cjs` 用 **Node 22.23.2** 起在 `127.0.0.1:3399`（`DB_HOST=127.0.0.1` / `DB_PORT=3307` /
+`DB_NAME=flowcube_plastic_box_20260929_test`）；PDA 前端 **5173**；代理 **3400→3399**；`NO_PROXY=localhost,127.0.0.1,::1,.local`。
+
+**本批夹具（全新自建仓 82，未复用 WH1）**：库位 27、分拣格 822–825、打印机 **170** + 自有 client（`package_label` 只绑仓 82）、
+PDA 设备 **227**（绑仓 82）；任务 **1212**（`WT20260930001`，箱 `L000474`）与 **1213**（`WT20260930002`，箱 `L000475`）。
+两箱贴均先 finish，再由本批 client 真实核销（`claim-client` → `ackToken` → `complete-client`）。
+
+**入口一 · 箱贴 `print-label` 丢响应**
+1. 代理（**只扣本批目标**：`POST /api/packages/474/print-label`、`PUT /api/warehouse-tasks/<1212|1213>/pack-done`；回执查询只扣**已被本批写入捕获的原 requestKey**）置 `drop` → 点「打印箱贴」→ `[DROP-HELD] POST /api/packages/474/print-label upstream=200`（后台真实成功）。
+2. pending 记录：原 key `package-print-label-1790697953107-yx6h9jh3`、`taskNo=WT20260930001`、`packageId=474` / `packageBarcode=L000474`。
+3. **完整 reload**（非 hash 导航）：`performance.timeOrigin 1790697780720.8 → 1790697970732.4`、`navigation.type navigate → reload`；localStorage 原 key **逐字不变**；页面显示「当前 PDA 未绑定设备」。
+4. **合法重绑设备**后：仍为同 key / 同 WT 单号 / 同箱；页面「有 1 个操作待确认」+ 冻结卡片 `任务 WT20260930001 / 箱子 L000474`。
+5. 放开代理 → GUI 确认 → pending 清空、页面复位；**按 `printer_id=170 + ref_type=package + job_type=package_label + ref_id=474` 核对：确认前 2 条（3894 status2 + 3898 status0）→ 确认后仍 2 条**（避免 `ref_id` 跨 `ref_type` 碰撞）。
+6. 用本批 client 真实核销 3898（`claim-client → complete-client` 200，status→2），任务 1212 恢复为可正常完成的 status=5。
+
+**入口二 · `pack-done` 丢响应**
+1. 代理置 `drop` → 在 1213 点「完成打包并进入待出库」→ `[DROP-HELD] PUT /api/warehouse-tasks/1213/pack-done upstream=200`；action 为 **`warehouse.pack-done`**（订正：代理首版误写 `warehouse_task.pack-done`）。
+2. **完整 reload**：`timeOrigin 1790697970732.4 → 1790698219769.5`、`navType=reload`；pending 原 key `warehouse-pack-done-1790698209181-rjbzr1fj`（`WT20260930002`）保留；重绑后仍保留。
+3. **切到当前任务 1212**：页头 `WT20260930001`，冻结卡片仍为 **`上次完成打包（结果待确认）／任务 WT20260930002`（原 1213）**，当前页仍是正常打包视图、**未被标成「打包完成」**。
+4. 放开代理 → 在 **1212 页面**真实点「确认上次结果」→ 页面提示 **`原任务 #1213 的「完成打包」已确认；当前任务以本页状态为准。`**；当前页 1212 仍为正常打包视图，`完成打包并进入待出库` 与 `＋ 新建箱子` 按钮均可用；pending 清空。
+
+**DB 独立读数（本轮结束时）**：任务 **1212 status=5**、**1213 status=6**；箱 474 的 package_label jobs **2 条均 status=2**；
+1213 `warehouse_task_events` 的 `PACK_DONE` **仍 1 条**；本批回执行 `package.print-label.474` 与 `warehouse.pack-done.1213` 各成功 1 条。
+
+**证据文件**：`/tmp/fc-pb-c4r2-printlabel-pending-reload-rebind.png`、`/tmp/fc-pb-c4r2-packdone-1212-with-1213-pending.png`、
+`/tmp/fc-pb-c4r2-cross-target-confirm-after.png`、代理日志 `/tmp/fc-pb-c4r2-proxy2.log`、夹具 ledger `/tmp/fc-pb-c4r2-ledger.json`。
+
+**方法订正与边界（如实记录）**
+- 代理首版误把 action 写成 `warehouse_task.pack-done`，**实际前后端均为 `warehouse.pack-done`**（`pack.tsx:366/367`、`warehouse-tasks.pack.js:35`）；回执扣留原先按 action 泛化，已改为**只扣本批写入捕获过的 requestKey**。属方法错误，**非产品缺陷**。
+- 服务首轮误用系统 Node 26 启动，已用 **Node 22.23.2** 重启并保持三个服务一致；属**环境问题**。
+- 两入口全程**未重造业务响应、未改产品代码**；打印核销为**真实 API 闭环**（`claim-client` + `ackToken` + `complete-client`），**仍不代表实际出纸**；真机与物理打印仍属未验（见 §11）。
+
+**收尾（全部合法 API + 终态断言；下面读数经 root 在同会话独立核对）**：任务 **1212 / 1213 → status=8 / 自锁 0**；
+设备 **227 / 228 → 解绑 + disabled + 票据 0**；打印机 **170 → status=0**，仓 **82 的 `package_label` 绑定数 0**；
+**仓 82 → 停用**（残留容器登记保留，**不物理删**）。两个原请求键（`package-print-label-…`、`warehouse-pack-done-…`）
+的**成功回执仍保留**。浏览器 `session list` 为空、本批三个端口（3399 / 3400 / 5173）已释放；
+共享 3307 与旧测试历史未动。
