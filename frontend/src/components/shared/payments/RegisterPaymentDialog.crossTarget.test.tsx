@@ -133,7 +133,8 @@ it('★ 付款「查询上次结果」要按本次账款 ID 定位；切到另�
 
 it('★ 余额不足确认挂起期间切到另一笔，执行原确认仍必须写原账款（id/金额/日期/单号取提交时快照）', async () => {
   // 这正是本次审查纠正的边界：写入用的是 mutation 参数 id，而「余额不足确认」的回调可能
-  // 在用户切到另一笔之后才被执行——若用当前 record 填身份，就会把 A 的付款记成 B。
+  // 在用户切到另一笔之后才被执行——真实写入本仍为 A，会被**误标成 B** 的是回执查询身份
+  // （以及从当前表单取的金额/日期快照）。
   fixture.balance = 0                                  // 触发余额不足二次确认
   const { root, rerender } = await mount(REC(1, 'AP-A-1'))
   await act(async () => {
@@ -150,11 +151,15 @@ it('★ 余额不足确认挂起期间切到另一笔，执行原确认仍必须
   expect(fixture.payCalls).toHaveLength(0)
 
   await rerender(REC(2, 'AP-B-2'))                      // 挂起期间切到另一笔
-  // 并在 B 上把金额/日期改成不同值——原确认若用当前表单值，就会把 A 的付款写成 B 的金额/日期
+  // 并在 B 上把金额/日期改成不同值。**注意**：真实写入目标始终是 A（mutation 参数 id 未被改动），
+  // 「钱记到 B」不会发生；这里要看住的是**回执查询身份**与**载荷快照**——若它们取当前表单/当前 record，
+  // 就会以 B 的身份去查 A 那次提交的回执、或把 A 的付款按 B 的金额/日期提交
   await setAmount('999')
   await act(async () => {
     const dateEl = document.querySelector<HTMLInputElement>('[data-testid="pay-date"]')!
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(dateEl, '2026-12-31')  // 与 B 不同日
+    // 选一个与**提交前原日期必然不同**的值（原日期恰好是 12-31 时，固定 12-31 就不构成改变）
+    const otherDate = originalDate === '2026-12-31' ? '2026-12-30' : '2026-12-31'
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(dateEl, otherDate)
     dateEl.dispatchEvent(new Event('input', { bubbles: true }))
   })
   await act(async () => { fixture.pendingConfirm?.(); await Promise.resolve() })
