@@ -148,7 +148,11 @@ export function CreateManualPayableDialog({ open, onClose }: Props) {
       if (r.status === 'success') {
         markUncertain(false)
         invalidatePaymentViews()
-        toast.success(`上次提交的应付账款已创建成功（单号 ${orderNo.trim()}），无需重复录入`)
+        // 不回显单号：回执对应的是**上一次实际提交**那一笔，而 orderNo 是「当前表单」的值——
+        // 未确认期间表单仍可编辑，用户改了单号再查询时，这里会把他从未提交过的单号说成「已创建」。
+        // 回执数据里也没有真实单号（后端只回 {id, settlementType}），所以只报「成功」这件事。
+        // 其余三个资金入口（付款登记/核销/退款）同样不回显可变字段。
+        toast.success('上次提交的应付账款已创建成功，无需重复录入')
         onClose()
         return
       }

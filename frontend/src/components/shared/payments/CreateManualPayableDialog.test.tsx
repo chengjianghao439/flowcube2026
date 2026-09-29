@@ -173,6 +173,32 @@ it('★ 回执明确 failed 才算确定失败：换新请求键再重试', asyn
   await act(async () => root.unmount())
 })
 
+it('★ 回执确认成功只报服务端事实：不得回显「当前表单」里已被改动的单号', async () => {
+  // 结果未确认期间表单仍可编辑。用户在等结果时改了单号，再点「查询上次结果」——
+  // 查到的回执对应的是**上一次实际提交**那一笔（单号取的是当时的载荷），
+  // 不是现在屏幕上这个。把当前 state 的单号写进「已创建成功」提示，
+  // 等于告诉用户「这个单号已经建好了」，而那个单号从未提交过。
+  const { host, root } = await mount()
+  await fillValid(host)
+  fixture.failWith = Object.assign(new Error('Network Error'), { code: 'NETWORK_ERROR' })
+  await act(async () => button(host, '创建').click())
+  expect(host.textContent).toContain('提交结果未确认')
+
+  // 用户改单号：这是「当前表单」，与上一次实际提交的内容不同
+  await setField(field(host, '如 AP-20260926-0001'), 'AP-CHANGED-9999')
+
+  fixture.receiptStatus = 'success'
+  await act(async () => button(host, '查询上次结果').click())
+  await act(async () => { await Promise.resolve() })
+
+  const done = fixture.toasts.find(t => t.includes('已创建成功'))
+  expect(done).toBeTruthy()
+  // 不得把当前表单的（从未提交过的）单号说成已创建，也不得露出取不到值的占位
+  expect(done).not.toContain('AP-CHANGED-9999')
+  expect(done).not.toContain('undefined')
+  await act(async () => root.unmount())
+})
+
 it('未选借方科目时拦住提交：不发请求并就地说明缺什么', async () => {
   const { host, root } = await mount()
   await setField(field(host, '输入供应商名称'), 'Smoke供应商')
