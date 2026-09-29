@@ -222,11 +222,13 @@ Tests CI 的 `regression-plastic-box` job 使用独立 MySQL 8 service（**映�
 `pick-cancel-return:511`、`pick-label-reprint-lifecycle:208`、`pack-finish-receipt-tx:188`、`pack-done-replay:269`。
 
 **前提**：C2 起 `finishPackage` 调 `printJobs.assertQueueReady({ jobType: 'package_label' })`，
-而 `print-jobs.command.js` 对该用途用 `requireBinding=true, allowBindingFallback=false` ⇒
-`resolvePrinterForJob` 在**绑定命中之前**就对 `requireBinding` 提前返回，**全局打印机**
-（`printers.warehouse_id IS NULL`，如 `prepareSmokeContext` 的 `SMOKE-PRN`）**不满足**；
-必须有 `printer_bindings(print_type='package_label', warehouse_id=<任务仓>)`，否则 `finish` 直接
-**409 `PRINT_BINDING_MISSING`**。
+而 `print-jobs.command.js` 对该用途用 `requireBinding=true, allowBindingFallback=false`：
+`resolvePrinterForJob` **先查用途绑定**（`print-dispatch.js` 的 `fetchBindingCandidates` 命中
+「**本仓** `b.warehouse_id = <任务仓>`」或「**公司级** `b.warehouse_id = 0`」的 `package_label` 绑定，本仓优先），
+**没有候选时**才**拒绝回退**到未绑定的默认打印机 ⇒ **409 `PRINT_BINDING_MISSING`**。
+换言之：**缺少有效 `package_label` 用途绑定时才会拒绝回退**；**公司级绑定（`warehouse_id=0`）是允许的**。
+（区分：**打印机自身**的 `printers.warehouse_id IS NULL` 与**绑定**的 `warehouse_id` 不是一回事。）
+`prepareSmokeContext` 只 upsert 全局 `SMOKE-PRN`（一台打印机）、**不建立任何用途绑定**，故需要本夹具。
 
 **做法**：前三个专项（C4 的 `pack-done-replay` 本就自建独立仓/打印机/绑定）通过
 `tests/helpers/ownedPrintFixture.js` 自备：

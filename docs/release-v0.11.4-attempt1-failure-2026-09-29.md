@@ -10,17 +10,14 @@
 
 | Workflow | Run ID | 结果 |
 |---|---|---|
-| Tests | `36579261090` | **failure**（2 个 job 失败） |
-| Security Scan | `36579261089` | 该轮其余 job 通过 |
+| Tests | `36579261090` | **failure**（2 个 job 失败：`static` `109442817654`、`regression-plastic-box` `109442817650`） |
+| Security Scan | `36579261089` | **success**（整体通过） |
 | Browser（`Deploy Browser App`） | `36579260872` | **因门禁失败退出** |
-| PDA | `36579261084` | 通过 |
+| PDA | `36579261084` | **failure**（`preflight` / `build-pda` 为 success，**`wait-browser` failure**，`publish-pda` **skipped**） |
 | Desktop（main 验证） | `36579261104` | 通过 |
 
-失败 job：
-- `static` → `109442817654`
-- `regression-plastic-box` → `109442817650`
-
-> 同轮其余 **16 个 job 通过**（由 root 独立用 `gh` 核实）。
+> 记法说明：**PDA 该轮整体为 failure、并未发布 APK**（`publish-pda` 被跳过）——**不得**写成「PDA 通过」。
+> 其余 job 的通过情况由 root 独立用 `gh` 核实。
 
 ## 2. 失败原因（两条，均非业务语义缺陷）
 
@@ -40,11 +37,14 @@
 该套件 **4 pass / 1 fail**（A/B2/B3a/B3b 均通过，失败**不是**数量/库存反例）。
 
 **根因**：C2 起 `finishPackage` 调 `printJobs.assertQueueReady({ jobType: 'package_label' })`，
-`print-jobs.command.js` 对该用途用 `requireBinding=true, allowBindingFallback=false` ⇒
-`resolvePrinterForJob` 在**绑定命中之前**即对 `requireBinding` 提前返回，**全局打印机**
-（`printers.warehouse_id IS NULL`，如 `prepareSmokeContext` 的 `SMOKE-PRN`）**不满足**；
-必须有 `printer_bindings(print_type='package_label', warehouse_id=<任务仓>)`。
-B4 未自备该前提。
+`print-jobs.command.js` 对该用途用 `requireBinding=true, allowBindingFallback=false`：
+`resolvePrinterForJob` **先查用途绑定**（`print-dispatch.js` 的 `fetchBindingCandidates` 命中
+「**本仓** `b.warehouse_id = <任务仓>`」或「**公司级** `b.warehouse_id = 0`」的 `package_label` 绑定，本仓优先），
+**没有候选时**才**拒绝回退**到未绑定的默认打印机。
+⇒ 准确说法是「**缺少有效 `package_label` 用途绑定时拒绝回退到未绑定的默认打印机**」，
+而**不是**「任何绑定命中之前就返回」或「全局打印机不满足」；**公司级有效绑定（`warehouse_id=0`）仍允许**。
+（区分：**打印机自身**的 `printers.warehouse_id IS NULL` 与**绑定**的 `warehouse_id` 是两回事。）
+B4 未自备该用途绑定，故 409。
 
 **已修**：新增 `tests/helpers/ownedPrintFixture.js`（自建打印机 + 工作站 + 绑到本套仓库；
 收尾按**当前 GET 归属**恢复原值/删除自身、**不覆盖他人指向**、停用后 GET 断言 `status=0`、

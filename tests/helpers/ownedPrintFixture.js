@@ -4,11 +4,15 @@
  * 自包含的「箱贴打印前提」夹具（批 C4 静态补齐，2026-09-29）。
  *
  * 为什么需要它：C2 起 `finishPackage` 会调 `printJobs.assertQueueReady({ jobType: 'package_label' })`，
- * 而 `print-jobs.command.js` 对 `package_label` 用 `requireBinding=true, allowBindingFallback=false`
- * —— `resolvePrinterForJob` 在**任何绑定命中之前**就对 `requireBinding` 提前返回，
- * 因此**全局打印机**（`printers.warehouse_id IS NULL`，如 smokeTestKit 的 SMOKE-PRN）**不满足**该用途。
- * 没有 `printer_bindings(print_type='package_label', warehouse_id=<任务仓>)` 时 `finish` 直接
+ * 而 `print-jobs.command.js` 对 `package_label` 用 `requireBinding=true, allowBindingFallback=false`：
+ * `resolvePrinterForJob` **先查用途绑定**（`print-dispatch.js` 的 `fetchBindingCandidates` 命中的是
+ * 「**本仓** `b.warehouse_id = <任务仓>`」或「**公司级** `b.warehouse_id = 0`」的 `package_label` 绑定，
+ * 且本仓优先）；**没有候选时**才按 `requireBinding` **拒绝回退**到未绑定的默认打印机 → 抛
  * 409 `PRINT_BINDING_MISSING`。
+ *
+ * 因此本夹具的用途是：在**没有任何有效 `package_label` 用途绑定的环境**里，为**本套**自包含地
+ * 在**本仓**建立一条用途绑定。（注意区分：**打印机自身**的 `printers.warehouse_id IS NULL` 与
+ * **绑定**的 `warehouse_id` 是两回事；公司级绑定 `warehouse_id=0` 是**允许**的。）
  *
  * 约定（**不改共享 smokeTestKit 的全局状态与清理语义**；`http` 一律来自 smokeTestKit，用 `http.delete`）：
  *   1. 进入前读取并记录本仓原有 package_label 绑定；**读失败即抛**，不静默当成"原本没有绑定"；
