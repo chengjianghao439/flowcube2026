@@ -41,6 +41,14 @@ export default function RefundDetailDialog({ open, onClose, id }: Props) {
   // 请求键轮换时机交给守卫：成功与明确被拒才换键，超时/断网与期间已结账保留
   const guard = useIdempotentSubmit({ action: 'refund.execute', prefix: 'refund-execute' })
 
+  // 本次提交指向哪一张退款单（切单会换 id）。用来：① 把退款单 id 绑进「查询上次结果」的 action，
+  // 使服务端能精确定位本笔（否则同键多条时前缀解析不唯一 ⇒ not_found）；
+  // ② 查询完成时判断「提交的那一张」是否仍是「当前正在看的这一张」，避免关掉另一张的详情。
+  const submittedTargetIdRef = useRef<number | null>(null)
+  const submittedRefundNoRef = useRef<string | null>(null)
+  const currentTargetIdRef = useRef<number | null>(null)
+  currentTargetIdRef.current = id ?? null
+
   /** 确认/取消这类动作：错误提示交给全局拦截器，这里吞掉异常以免留下未处理的 rejection */
   async function run(fn: () => Promise<unknown>, successMsg: string) {
     if (lockRef.current) return
@@ -65,7 +73,13 @@ export default function RefundDetailDialog({ open, onClose, id }: Props) {
     if (lockRef.current || !refund) return
     try {
       lock()
-      guard.remember(`退款 ${money(refund.amount)} · ${refund.refundDate ? String(refund.refundDate).slice(0, 10) : '—'} · ${refund.customerName}`)
+      // 绑本次退款单 id 到查询 action；label 补退款单号（同额同客户的两张单此前无法区分）
+      submittedTargetIdRef.current = refund.id
+      submittedRefundNoRef.current = refund.refundNo ?? null
+      guard.remember(
+        `退款 ${money(refund.amount)} · ${refund.refundDate ? String(refund.refundDate).slice(0, 10) : '—'} · ${refund.customerName} · ${refund.refundNo}`,
+        `refund.execute.${refund.id}`,
+      )
       const res = await execute.mutateAsync({ id: refund.id, requestKey: guard.keyRef.current, backfillReason })
       guard.settle()
       // 申请单不是「退款已完成」：业务一行未写、钱还没出账，只有审批通过后才会记账。
@@ -115,11 +129,18 @@ export default function RefundDetailDialog({ open, onClose, id }: Props) {
           visible={guard.uncertain}
           pending={guard.checkMut.isPending}
           what={guard.lastLabelRef.current ?? undefined}
-          onCheck={() => guard.checkLastResult(() => {
-            invalidateFinance(qc)
-            toast.success('上次提交的退款已执行成功，无需重复执行')
-            onClose()
-          })}
+          onCheck={() => {
+            // 点查询这一刻拍「在确认哪一张」的快照（同核销/付款范式），避免回调里现读被后来的提交覆盖
+            const queriedRefundId = submittedTargetIdRef.current
+            const queriedRefundNo = submittedRefundNoRef.current
+            return guard.checkLastResult(() => {
+              invalidateFinance(qc)
+              // 点出被确认的是哪一张，避免在另一张的详情里只报「已成功」被误读
+              toast.success(`上次提交的退款已执行成功，无需重复执行${queriedRefundNo ? `（${queriedRefundNo}）` : ''}`)
+              // 只有「查询指向的那一张」正是「现在打开的这张」时才关详情；已切到另一张则保留
+              if (queriedRefundId === currentTargetIdRef.current) onClose()
+            })
+          }}
         />
         <OrderDetailSections type="refund" id={id || 0}>
 

@@ -1,5 +1,5 @@
 import { money } from '@/lib/format'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { AppDialog } from '@/components/shared/AppDialog'
 import { Button } from '@/components/ui/button'
@@ -60,14 +60,34 @@ export function RegisterPaymentDialog({ open, onClose, type, record }: Props) {
   // 早先是「打开就换键」，响应超时后用户关窗重开再提交会重复付款。
   const guard = useIdempotentSubmit({ action: 'payment.record.pay', prefix: 'payment-pay' })
 
+  // 本次提交指向哪一笔账款（切行会换 record）。用来：① 把 recordId 绑进「查询上次结果」的
+  // action，使服务端能精确定位本笔（否则同键多条时前缀解析不唯一 ⇒ not_found）；
+  // ② 查询完成时判断「提交的那一笔」是否仍是「当前正在看的这一笔」，避免关掉另一笔的弹窗。
+  const submittedRecordIdRef = useRef<number | null>(null)
+  const submittedOrderNoRef = useRef<string | null>(null)
+  const currentRecordIdRef = useRef<number | null>(null)
+  currentRecordIdRef.current = record?.id ?? null
+
   const buildBody = () => ({
     amount: +payAmount, paymentDate: payDate, method: payMethod,
     accountId: +payAccountId, remark: payRemark || undefined,
   })
 
   const payMut = useMutation({
-    mutationFn: ({ id, d, backfillReason }: { id: number; d: object; backfillReason?: string }) => {
-      guard.remember(`${actionLabel} ${money(+payAmount)} · ${payDate} · ${record?.orderNo ?? ''}`)
+    mutationFn: ({ id, d, backfillReason, orderNo, amountText, dateText }: {
+      id: number; d: object; backfillReason?: string
+      /** 提交时快照：切到别的账款后这些不能再用当前表单值 */
+      orderNo?: string; amountText?: string; dateText?: string
+    }) => {
+      // 幂等身份必须绑定**本次实际写入的那一笔**（mutation 参数 id），不是当前 record：
+      // 「余额不足确认」与「跨期补录重发」的回调可能持有更早那次提交的 id，两者可能不同。
+      // 单号/金额/日期同样取提交时快照，避免切到 B 后把 A 的提交记成 B。
+      submittedRecordIdRef.current = id
+      submittedOrderNoRef.current = orderNo ?? null
+      guard.remember(
+        `${actionLabel} ${money(+(amountText ?? '0'))} · ${dateText ?? ''} · ${orderNo ?? ''}`,
+        `payment.record.pay.${id}`,
+      )
       return payApi(id, backfillReason ? { ...d, backfillRequest: true, backfillReason } : d, guard.keyRef.current, { skipGlobalError: true })
     },
     onSuccess: (res) => {
@@ -94,7 +114,10 @@ export function RegisterPaymentDialog({ open, onClose, type, record }: Props) {
             付款 {money(Number(payAmount))} · {payDate} · 账户「{(activeAccounts || []).find(a => String(a.id) === payAccountId)?.name ?? '—'}」
             <br />账款 <span className="text-doc-code">{record.orderNo}</span> · {record.partyName}
           </>
-        ), reason => payMut.mutate({ id: rid, d: buildBody(), backfillReason: reason }))
+        ), reason => payMut.mutate({
+          id: rid, d: buildBody(), backfillReason: reason,
+          orderNo: record.orderNo, amountText: payAmount, dateText: payDate,
+        }))
         return
       }
       // 未确认：提示条已经说清「可能已成功、先查回执」，再弹一句「登记失败」会把人推向重复提交
@@ -107,7 +130,10 @@ export function RegisterPaymentDialog({ open, onClose, type, record }: Props) {
     e.preventDefault()
     if (!record || !payAmount) return
     if (!payAccountId) { toast.error('请选择资金账户'); return }
-    const doPay = () => payMut.mutate({ id: record.id, d: buildBody() })
+    const doPay = () => payMut.mutate({
+      id: record.id, d: buildBody(),
+      orderNo: record.orderNo, amountText: payAmount, dateText: payDate,
+    })
     // 付款(应付)从账户支出，透支前二次确认——后端仍允许「先记账后到账」，此处只做软性提示
     const acc = (activeAccounts || []).find(a => String(a.id) === payAccountId)
     if (isPayable && acc && +payAmount > acc.currentBalance + 1e-6) {
@@ -146,11 +172,19 @@ export function RegisterPaymentDialog({ open, onClose, type, record }: Props) {
           visible={guard.uncertain}
           pending={guard.checkMut.isPending}
           what={guard.lastLabelRef.current ?? undefined}
-          onCheck={() => guard.checkLastResult(() => {
-            invalidatePaymentViews()
-            toast.success('上次提交的付款已成功，无需重复登记')
-            onClose()
-          })}
+          onCheck={() => {
+            // 点查询这一刻给「在确认哪一笔」拍快照（继续核销那处同范式）：回调里现读 ref 会被后来的提交覆盖
+            const queriedRecordId = submittedRecordIdRef.current
+            const queriedOrderNo = submittedOrderNoRef.current
+            return guard.checkLastResult(() => {
+              invalidatePaymentViews()
+              // 成功提示必须点出被确认的是哪一笔，否则在另一笔的界面上只报「已成功」会被误读
+              toast.success(`上次提交的付款已成功，无需重复登记${queriedOrderNo ? `（账款 ${queriedOrderNo}）` : ''}`)
+              // 只有「查询指向的那一笔」正是「现在正在看的这一笔」时才关窗；
+              // 用户已切到另一笔时保留当前弹窗（否则会把另一笔的界面一起关掉）。
+              if (queriedRecordId === currentRecordIdRef.current) onClose()
+            })
+          }}
         />
         {record && (
           <div className="mb-4 space-y-1 text-sm text-muted-foreground">
