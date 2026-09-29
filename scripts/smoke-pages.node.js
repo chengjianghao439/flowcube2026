@@ -14,6 +14,21 @@ const PAGE_SMOKE_INTERVAL_MS = Number(process.env.PAGE_SMOKE_INTERVAL_MS || 500)
 const PAGE_SMOKE_NAV_TIMEOUT_MS = Number(process.env.PAGE_SMOKE_NAV_TIMEOUT_MS || 5000) // hash 导航确认超时
 const PAGE_SMOKE_SETTLE_MS = Number(process.env.PAGE_SMOKE_SETTLE_MS || 2000) // 无期望文本页面加载稳定窗口
 
+/**
+ * 读取 PDA 页面的真实 `PdaHeader` 标题字面量，避免验收脚本写死后与产品标题漂移。
+ *
+ * 2026-09-29：`/pda/split` 的页面标题早已由「塑料盒拆分」改为「塑料盒作业」，
+ * 而本脚本仍期待旧名 ⇒ 真实页面 20s 超时、发布门禁失败。
+ * 动态读源后标题**自动跟随源代码**；本脚本与 `tests/browser-smoke-live.test.js` 因此**同源**，
+ * 共同要求是：**真实页面必须呈现与该源一致的标题**（服务端未随发布 SHA 更新时同样会失败）。
+ */
+function readPdaHeaderTitle(pageFile) {
+  const src = fs.readFileSync(path.join(ROOT, `frontend/src/pages/pda/${pageFile}.tsx`), 'utf8')
+  const m = /<PdaHeader\s+title="([^"]+)"/.exec(src)
+  if (!m) throw new Error(`未能从 frontend/src/pages/pda/${pageFile}.tsx 读到 PdaHeader.title`)
+  return m[1]
+}
+
 function requireSmokeCredentials() {
   if (!SMOKE_USERNAME || !SMOKE_PASSWORD) {
     throw new Error('缺少 SMOKE_USERNAME / SMOKE_PASSWORD，请通过环境变量显式注入测试账号凭据')
@@ -237,7 +252,7 @@ async function main() {
   // ── PDA 页面（新标签页真验证，见 openPdaAndCheck）──
   await openPdaAndCheck('/pda/inbound', '收货订单')
   await openPdaAndCheck('/pda/picking', '拣货任务')
-  await openPdaAndCheck('/pda/split', '塑料盒拆分')
+  await openPdaAndCheck('/pda/split', readPdaHeaderTitle('split'))
   await openPdaAndCheck('/pda/transfer', '调拨执行')
   await openAndCheck('/inventory')
   await openAndCheck('/stockcheck')

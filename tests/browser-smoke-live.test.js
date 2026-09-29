@@ -12,6 +12,18 @@ const redirects = Object.fromEntries([...router.matchAll(/<Route path="([^"]+)" 
 assert.equal(redirects['/reports/reconciliation'], '/reports/reconciliation/payable')
 assert.equal(redirects['/payments'], '/payments/payable')
 
+// PDA 页面标题**从真实页面读取**，避免夹具写死后与产品标题漂移：
+// 2026-09-29 的发布尝试就是因为本夹具沿用旧名「塑料盒拆分」、而页面已改为「塑料盒作业」，
+// 导致 fake 流程通过却在真实页面上 20s 超时。
+// 动态读源后标题会**自动跟随源代码**；本夹具与 `scripts/smoke-pages.node.js` 因此**同源**，
+// 二者共同的要求是：**真实页面必须呈现与该源一致的标题**（若服务端页面未随发布 SHA 更新，检查同样会失败）。
+const pdaSplitTitle = (() => {
+  const src = fs.readFileSync(path.join(root, 'frontend/src/pages/pda/split.tsx'), 'utf8')
+  const m = /<PdaHeader\s+title="([^"]+)"/.exec(src)
+  assert.ok(m, '未能从 frontend/src/pages/pda/split.tsx 读到 PdaHeader.title')
+  return m[1]
+})()
+
 // 真实 Chromium + 仅回环夹具；不使用开发/生产账号或数据库。
 const titles = {
   '/dashboard': '仪表盘', '/reports/role-workbench': '待办中心', '/reports/reconciliation/payable': '月结供应商对账',
@@ -20,7 +32,7 @@ const titles = {
   '/reports/warehouse-ops': '作业概况', '/reports/pda-anomaly': 'PDA 异常', '/reports/inventory-aging': '存放时长与滞销',
   '/warehouses': '仓库管理', '/picking-waves': '批次拣货', '/inbound-tasks/new': '新建收货订单',
   '/inbound-tasks/1': '收货订单', '/pda/inbound': '收货订单', '/pda/picking': '拣货任务',
-  '/pda/split': '塑料盒拆分', '/pda/transfer': '调拨执行', '/403': '无访问权限',
+  '/pda/split': pdaSplitTitle, '/pda/transfer': '调拨执行', '/403': '无访问权限',
 }
 
 async function runFixture(script, scenario = 'success') {

@@ -126,3 +126,25 @@
 **其它既有调用点尚未分开**，典型例子：收货 `backend/src/modules/inbound-tasks/inbound-tasks.command.js:659` 仍是
 `if (!job?.id || job.unprintable) noPrinterCount += 1`——**渲染失败也会被计入「无可用打印机」**。旧 `split` 等调用点同样未区分。
 **本轮不顺改**这些调用点；不得据本节推断「全系统两类降级已统一口径」。
+
+## 2026-09-29 · 发布门禁的「页面标题必须与产品同源」（attempt 2 事故）
+
+`Deploy Browser App` 在 v0.11.4 的第二次尝试中失败，**根因不是产品缺陷，而是验收脚本过期**：
+
+- 页面真实标题早已是 `frontend/src/pages/pda/split.tsx` 的 `PdaHeader title="塑料盒作业"`
+  （PDA 工作台菜单 `pda/index.tsx` 也是同名的「塑料盒作业」，**菜单与页面同源一致**）；
+- 而 `scripts/smoke-pages.node.js` 仍期待旧名「塑料盒拆分」⇒ **真实页面 20s 超时**；
+- `tests/browser-smoke-live.test.js` 的 fake 标题也硬编码旧名 ⇒ **fake 流程通过、真实页面失败**。
+
+**做法（已实施）**：两处均改为**读真实 `PdaHeader` 字面量**
+（`smoke-pages.node.js` 新增 `readPdaHeaderTitle()`；`browser-smoke-live.test.js` 顶部读源得到 `pdaSplitTitle`），
+使**验收夹具与产品同源**；**保留**负例（`broken-pda`）、权限断言与**原 20s 超时**；
+**不**跳过页面、**不**为迎合旧脚本改产品标题。服务端可行：`scripts/server-update.sh` 先
+`ROOT="$(cd "$(dirname "$0")/.." && pwd)"; cd "$ROOT"`，**cwd 为项目根**且含完整 `src`。
+
+**反向验证**：把期望临时写回旧名 ⇒ 该 happy 流程**失败**；恢复读源后 **6/6 通过**。
+
+**部署侧的准确表述（务必照此）**：该次 **265–268 四个迁移已执行并留存**，
+**应用镜像已回退到部署前并检查健康**（日志原话：「已恢复部署前应用镜像并检查健康；**数据库迁移未回滚**」），
+**版本未完整发布、未打 tag**。**不得**写成「未迁移」或「什么都没部署」。
+详见 `docs/release-v0.11.4-attempt2-failure-2026-09-29.md`。
