@@ -214,7 +214,8 @@
   - 财务：`payment_records` 10 笔（应付 id=1..7 为前批，应收 id=10 为本批出库生成）；`payment_receipts` 10 张（1–5/7/9 已核销完，**6/8/10 仍有余额**）；`refund_orders` **1 张**（RF20260929001，已退款 status=3）；资金账户 `验收R1账户`（余额已被本批合法出入账改变，非「金额未动」）。
   - 主数据：仓库 `退款验收仓`(2)、库位 `A01-01-0101`(1)、分类/供应商/客户各 1、商品 P000001–P000003。
   - 采购/入库：`purchase_orders` PC…001（已确认，其入库任务 IN…001 **未收货 status=1**）/002/003（已收完）；`inbound_tasks` IN…002/003 已上架。
-  - 销售/出库：`sale_orders` SL…001（**已取消 status=5**，其任务 WT…001 停在**待打包 status=5**，占用容器 I000002 与分拣格 B01）、SL…002/003（已占库，任务 WT…002/003 停在**拣货中 status=2**）、**SL…004（本批退款链，任务 WT…004 已出库 status=7）**。
-  - 库存/分拣：`inventory_containers` I000001(product2, 剩 8, ACTIVE, 未锁)、I000002(product3, 剩 10, ACTIVE, **被 WT…001 锁定**)；`sorting_bins` B01(占 WT1)/B02(占 WT2)/B769(空闲)。
-  - 箱与打印：`packages` L000001(WT1, 已完成)/L000002·3(WT1, 已作废)/**L000004(WT4, 已完成)**；`print_jobs` 箱贴 L000001（**status=1：已被首次 claim 领取，其 ackToken 未留存，无合法入口重置**）/箱贴 L000004（status=2，已完成）。
-  - **无可合法回退者（保留原状并说明原因，不改库、不作为「产品卡死」）**：WT…001（销售单已取消但任务已在途至待打包，箱子已完成、箱贴打印任务已被领取；`PUT /warehouse-tasks/:id/cancel` 对销售出库任务返回「请从销售订单执行取消」，而销售单已取消不再重复取消）——它因此继续占用容器 I000002 与分拣格 B01；本轮改由**新容器 I000001 + 新建销售单**完成退款链，未强改这些占用。
+  - 销售/出库：`sale_orders` SL…001（已取消 status=5）、SL…002/003（**已取消 status=5**）、**SL…004（本批退款链，任务 WT…004 已出库 status=7，保留）**。
+  - 库存/分拣：`inventory_containers` I000001(product2, 剩 8, ACTIVE, 未锁)、I000002(product3, 剩 10, ACTIVE, **未锁**)；`sorting_bins` B01/B02/B769 **全部空闲**。
+  - 箱与打印：`packages` L000001(WT1, 已完成)/L000002·3(WT1, 已作废)/L000004(WT4, 已完成)；`print_jobs` 箱贴 L000001（**status=3 已作废**）/箱贴 L000004（status=2，已完成）。
+  - **取消逆向收尾（已按真实业务 API 完成，取代此前「无可合法回退」的结论）**：卡在待打包的 `WT…001` **本来就有合法出路**——先 `GET /api/warehouse-tasks/1/cancel-return-detail` 核对任务/箱/容器/原库位（返回 `status=5`、`cancelRequestedAt` 非空、容器 I000002 建议原库位 `A01-01-0101`、箱 L000001），再经 **受权限 + 真实 PDA 会话**保护的 `POST /api/scan-logs/cancel-return/box {taskId, packageId, barcode}`（**会顺带作废未完成的 print_jobs，含 status=1**）与 `POST /api/scan-logs/cancel-return {taskId, containerId, barcode, locationId}`（各带**稳定且不同**的请求键）⇒ 返回 `finalized:true`，`WT…001` 推进 **status=8（已取消）**、`cancelRequestedAt` 清空、`containers/packages` 皆空。**复核**：容器 I000002 `locked_by_task_id=null`、print_job L000001 `status=3`、B01/B02/B769 空闲、`WT…002/003` 亦为 **status=8**（其销售单已取消）。**故先前「ackToken 丢失⇒无合法入口重置」与「任务卡死」的判断均被推翻**，此处如实更正。
+  - **保留（测试用，不称全库清空）**：ACTIVE 测试库存 I000001(剩 8)/I000002(剩 10)；`payment_receipts` 6/8/10 仍有未核销余额（30.00 / 2.00 / 24.00）；应付 id=1..7、应收 id=10、退款单 RF20260929001（已完成）、以及全部资金/库存事件历史**原样保留**。
