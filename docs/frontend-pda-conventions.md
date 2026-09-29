@@ -209,3 +209,24 @@
 - **所有 5xx 视为「结果未确认」**：网关/代理中断、上游异常等**不能证明提交没做成**；`isUncertainError` 把 **500–599 一律**归为未确认（**只看状态码区间、不区分有无业务码**，见 `docs/finance-permission-time.md` 本次补充）。
 - **弹窗保留 ≠ 页面重挂保留**：本轮只验证了**模态关窗重开**（组件未卸载、`keyRef` 在内存中保留）；**整页关闭 / 刷新后的键恢复尚未覆盖**，不得据此推广。
 - **回归**：`frontend/src/pages/purchase-requisitions/form.convert-key.test.tsx`（9 例，渲染真实请购页 + 真实 Portal 弹窗）、`frontend/src/api/purchase-requisitions.test.ts`（3 例，请求头层）、`frontend/src/components/shared/payments/useIdempotentSubmit.test.ts`（含 5xx/4xx 判定）。
+
+### 2026-09-29 塑料盒作业流（PDA 放货 + PC 还原整件）的恢复边界
+
+- **PDA**：放货 `/pda/fill`（扫整件来源 → 扫目标盒 → 按来源全部放入）与作业 `/pda/split`（扫 B → 逐箱数量或等量快捷 → 生成整件码）都走 `useCriticalPdaAction`：请求键随**持久化到 localStorage** 的 pending 记录一起保存，因此**关页重挂后可扫到本功能的待确认记录**，用**校验过的 metadata** 恢复原盒/原来源/原数量快照，再查回原回执。
+  - 恢复时**必须校验** `action` 里的资源 id 与 `metadata` 中的盒 id 一致、且各字段类型与取值合法——不信未知归属或残缺快照，否则会拿别人的记录去查回执。
+  - 未确认期间**不得**取消、改目标，也不得按当前界面数值猜成功；确定成功后的内部复位要与「用户主动取消」的 guard 分开，否则成功那一刻的 phase 会让界面永远回不到扫码态。
+  - 传输不确定判定要**优先看结构化 code**（`REQUEST_TIMEOUT` / `NETWORK_ERROR`），因为 `api/client.ts` 已把 message 规范成中文，只匹配中文会把超时误判为确定失败并清掉 pending。
+  - 设备票据（`secureStorage`）在**浏览器 dev 下是内存态、不持久化**，重挂后需重新绑定——这是设计取舍，不是缺陷。
+- **PC**：还原整件弹窗用 `useIdempotentSubmit` + **冻结的本次提交快照**（`frozenRef`：原 boxId / 原 body / 原 action）。
+  - `frozenRef` 与幂等状态**只在内存**：PC **只支持同页恢复**（页面不卸载即可「查询上次结果 / 按原内容重试」）；**整页重挂恢复尚未实现**，不得当成已支持。
+  - **提交中 / 未确认期间必须锁住关窗与换目标**（`busyOrUncertain`），否则原提交快照会失去可见的恢复入口。
+  - 回执查询要用**本次 mutation 的返回值**判定与展示，不能在回调里读渲染闭包里的旧 data。
+  - 成功路径除数量外，还要 invalidate **该盒的容器流水**（`['plastic-box-movements', boxId]`，用冻结的原 boxId），否则同一弹窗内看不到刚生成的流水。
+
+### 2026-09-29 批 B3a：PDA 分拣页扫取货码的冻结与恢复
+
+- 扫**取货码**（整件 `I`）与扫**商品码**走**同一个** `PUT /warehouse-tasks/:id/sort-done`，**不新增平行接口**；取货码按 `{ containerId, binCode }` 提交，商品码保持 `{ itemId, sortedQty }`。
+- **结果待确认期间冻结原目标**：扫码入口、`取消/重扫` 按钮都受 `submitBlocked` 约束；页面展示的是**冻结记录**里的定位（task / 原条码 / 分拣格 / 数量），**不**从新的 `hint` 取数——重挂后 `hint` 已丢失，拿当前 hint 会张冠李戴。
+- **恢复必须按 `data.allSorted` 区分部分进度与整任务完成**：`allSorted=false` 只能提示「本次已确认（x/y）」，**不得**说整个任务分拣完成；恢复成功要重置扫码态并刷新分拣格数据，避免照着旧提示重扫。
+- `resolveServerState` 只认**冻结记录**，并校验**正整数 task/item 与非空分拣格码**；残缺或本批之前的旧记录一律按「无法核对」处理，**不推断成功**。正常提交路径不在 `onConfirmed` 里重复提示（避免与扫码回调双发）。
+- 回归 `frontend/src/pages/pda/sort.test.tsx`（4 例：冻结定位、扫码与取消入口禁用、部分进度文案、非恢复路径不提示）。

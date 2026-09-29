@@ -39,11 +39,14 @@ interface UndoPayload {
 export function useOfflineScan() {
   const user          = useAuthStore(s => s.user)
 
-  const submitScan = useCallback(async (payload: ScanPayload, requestKey: string): Promise<void> => {
-    await client.post('/scan-logs', payload, {
+  // 返回后端回执本身：**扫码流程与语义不变**，只是把本来就拿到的响应交给调用方。
+  // 批 B1/B2 需要它回显「新取货码 + 取货量 + 打印状态」；旧调用方忽略返回值即可。
+  // 用泛型表达回执结构，调用方按需指定，**不需要在调用处做强制类型断言**。
+  const submitScan = useCallback(async <T = unknown,>(payload: ScanPayload, requestKey: string): Promise<T> => {
+    return client.post('/scan-logs', payload, {
       skipGlobalError: true,
       headers: withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' }),
-    })
+    }) as Promise<T>
   }, [])
 
   // 记录错误扫码（静默，不影响流程）

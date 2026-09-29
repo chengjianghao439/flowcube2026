@@ -15,7 +15,7 @@
 
 const AppError = require('../utils/AppError')
 const logger   = require('../utils/logger')
-const { generateContainerCode } = require('../utils/codeGenerator')
+const { generateContainerCode, generateContainerCodes } = require('../utils/codeGenerator')
 const { getExpectedForPair, lockExpectedPurchaseOrders } = require('../utils/expectedStock')
 const { assertQtyPrecision, assertQtyScale } = require('../utils/qtyPrecision')  // 商品级数量精度开关（迁移 254）
 
@@ -130,6 +130,9 @@ async function createContainer(conn, {
   inboundTaskItemId = null,
   containerStatus = CONTAINER_STATUS.ACTIVE,
   putawayDeadlineAt = null,
+  // 混合来源标识（批 A）：来源盒是混批时，还原/取货生成的新码也标为混合来源；
+  // 它再倒入别盒时别盒同样置 1（传递规则见 splitContainer）。
+  isMixedBatch = 0,
 }) {
   assertQtyScale(initialQty, '库存条码数量')
   assertNonNegativeQty(initialQty, `createContainer productId=${productId} warehouseId=${warehouseId}`)
@@ -176,14 +179,15 @@ async function createContainer(conn, {
         initial_qty, remaining_qty, status,
         source_ref_type, source_ref_id, source_ref_no, inbound_task_id, inbound_task_item_id, remark,
         source_type, source_audit_missing, putaway_flagged_overdue,
-        is_legacy, putaway_deadline_at, is_overdue)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,0,0,?,0)`,
+        is_legacy, putaway_deadline_at, is_overdue, is_mixed_batch)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,0,0,?,0,?)`,
     [bc, containerType, productId, warehouseId, locationId,
      batchNo, mfgDate || null, expDate || null, unit,
      initialQty, initialQty, containerStatus,
      detailRefType, Number.isFinite(sid) && sid > 0 ? sid : null, sourceRefNo, inboundTaskId, inboundTaskItemId ?? null, remark,
      sourceType,
-     deadline]
+     deadline,
+     Number(isMixedBatch) === 1 ? 1 : 0]
   )
   return { containerId: r.insertId, barcode: bc }
 }
@@ -932,6 +936,94 @@ function isIndividualContainer(c) {
  * @param {number|null} [p.operatorId]
  * @param {string|null} [p.operatorName]
  */
+/**
+ * 扫盒取货（批 B1）：把塑料盒 `B` 的 `qty` 转成**新生成的整件码 `I`**，并锁定给本任务。
+ *
+ * 锁序：调用方（scan-logs.service）已锁任务行；本函数**先取「商品+仓库」维度锁，再 FOR UPDATE 盒**
+ * （与全库约定一致，顺序反了会在并发时成环死锁）。
+ * **同一 conn**：本函数**不另开事务**，随调用方事务一起提交/回滚。
+ *
+ * 批次 / 日期继承（2026-09-29 修正）：盒为**混合** ⇒ 新码 `batch_no`/`mfg_date`/`exp_date` 全空
+ * （混合不含单批信息）；盒为**单批** ⇒ **继承真实的** `batch_no`/`mfg_date`/`exp_date`
+ * （空盒可以合法承接带真实到期日的单批来源，无需任何保质期管理）。
+ */
+async function extractFromPlasticBoxToTask(conn, {
+  taskId, boxContainerId, productId, warehouseId, qty,
+  operatorId = null, operatorName = null,
+}) {
+  // 与本文件其它入口一致：取整工具在函数内局部 require（避免顶层与 inventoryEngine 互相 require）
+  const { roundQty } = require('../utils/unitConversion')
+  await lockStockDimension(conn, productId, warehouseId)
+  const [[box]] = await conn.query(
+    `SELECT id, barcode, remaining_qty, status, unit, is_mixed_batch, batch_no, mfg_date, exp_date,
+            product_id, warehouse_id, locked_by_task_id
+       FROM inventory_containers
+      WHERE id = ? AND container_type = 2 AND deleted_at IS NULL
+      FOR UPDATE`,
+    [boxContainerId],
+  )
+  if (!box) throw new AppError('塑料盒不存在', 404)
+  if (Number(box.product_id) !== Number(productId)) throw new AppError('塑料盒绑定商品与任务明细不一致', 400)
+  if (Number(box.warehouse_id) !== Number(warehouseId)) throw new AppError('塑料盒与任务不在同一仓库', 400)
+  if (Number(box.status) !== CONTAINER_STATUS.ACTIVE) throw new AppError('该塑料盒当前状态不可取货', 400)
+  // 任何**非 null** 的锁定都拒绝——**包括历史上已锁给本任务**的盒：
+  // 那种盒仍留在本任务的锁定集合里，再拆走会让原盒继续进 `locked_by_task_id` 集合，
+  // 出库时按锁定集合扣减与实际不符。要复用得先走合法的解锁/归还路径。
+  if (box.locked_by_task_id != null) {
+    throw new AppError('该塑料盒已被任务锁定，不能再从中拆取', 409)
+  }
+  const take = roundQty(qty)
+  if (!(take > 0)) throw new AppError('取货数量必须大于 0', 400)
+  const boxRemain = Number(box.remaining_qty)
+  if (take > boxRemain) throw new AppError(`取货数量超过盒内实存（剩余 ${boxRemain}）`, 400)
+
+  const isMixed = Number(box.is_mixed_batch) === 1
+  const created = await createContainer(conn, {
+    productId,
+    warehouseId,
+    initialQty: take,
+    unit: box.unit,
+    batchNo: isMixed ? null : box.batch_no,
+    mfgDate: isMixed ? null : box.mfg_date,
+    expDate: isMixed ? null : box.exp_date,
+    sourceType: SOURCE_TYPE.CONTAINER_SPLIT,
+    sourceRefType: 'plastic_box_pick',
+    sourceRefId: box.id,
+    barcodePrefix: 'I',
+    containerStatus: CONTAINER_STATUS.ACTIVE,
+    isMixedBatch: isMixed ? 1 : 0,
+  })
+
+  const boxRemainingAfter = roundQty(boxRemain - take)
+  await conn.query(
+    'UPDATE inventory_containers SET remaining_qty = ?, status = ? WHERE id = ?',
+    [boxRemainingAfter, boxRemainingAfter === 0 ? CONTAINER_STATUS.EMPTY : CONTAINER_STATUS.ACTIVE, box.id],
+  )
+  await conn.query(
+    'UPDATE inventory_containers SET locked_by_task_id = ?, locked_at = NOW() WHERE id = ?',
+    [taskId, created.containerId],
+  )
+
+  // 库存日志写**真实库存快照**：取 syncStockFromContainers 的返回值（同时完成缓存刷新），
+  // 不写 0 或占位值。
+  const stockQtyAfter = await syncStockFromContainers(conn, productId, warehouseId)
+  await logContainerSplit(conn, {
+    productId, warehouseId, qty: take, stockQty: stockQtyAfter,
+    sourceContainerId: box.id, sourceBarcode: box.barcode,
+    targetContainerId: created.containerId, targetBarcode: created.barcode,
+    operatorId, operatorName,
+  })
+
+  return {
+    containerId: created.containerId,
+    barcode: created.barcode,
+    boxId: box.id,
+    boxBarcode: box.barcode,
+    boxRemainingAfter,
+    mixedBatch: isMixed,
+  }
+}
+
 async function logContainerSplit(conn, {
   productId, warehouseId, qty, stockQty,
   sourceContainerId, sourceBarcode, targetContainerId, targetBarcode,
@@ -965,6 +1057,112 @@ async function logContainerSplit(conn, {
 }
 
 /**
+ * 批量创建「同参数、仅数量不同」的容器（一次取号 + 一次 `INSERT ... VALUES ?`）。
+ *
+ * **只服务「同一来源一次生成多箱」这类场景**（例如塑料盒还原整件）：调用方必须满足
+ * `sourceType=CONTAINER_SPLIT`、`containerStatus=ACTIVE`、无入库任务关联；其余任何组合
+ * 一律**拒绝并让调用方走 `createContainer`**——保留 global `createContainer` 的完整语义与
+ * 来源校验，不在这里复制一套会漂移的规则。
+ */
+async function createContainersBatch(conn, { shared, qtys }) {
+  const list = (qtys || []).map((q) => Number(q))
+  if (!list.length) return []
+  const {
+    productId, warehouseId, unit = null, batchNo = null, mfgDate = null, expDate = null,
+    sourceType, sourceRefId, sourceRefType = null, sourceRefNo = null, remark = null,
+    barcodePrefix = 'I', containerType = 1, locationId = null,
+    containerStatus = CONTAINER_STATUS.ACTIVE, isMixedBatch = 0,
+  } = shared || {}
+
+  if (sourceType !== SOURCE_TYPE.CONTAINER_SPLIT
+      || Number(containerStatus) !== CONTAINER_STATUS.ACTIVE
+      || shared?.inboundTaskId != null) {
+    throw new AppError('批量建容器仅支持「同仓拆分 + 在库」场景，请改用 createContainer', 500)
+  }
+  const sid = Number(sourceRefId)
+  if (!Number.isFinite(sid) || sid <= 0) throw new AppError('批量建容器必须关联有效来源单据', 400)
+  for (const q of list) {
+    assertQtyScale(q, '库存条码数量')
+    assertNonNegativeQty(q, `createContainersBatch productId=${productId}`)
+  }
+
+  const codes = await generateContainerCodes(conn, barcodePrefix, list.length)
+  const detailRefType = sourceRefType || sourceType
+  const mixed = Number(isMixedBatch) === 1 ? 1 : 0
+  const rows = list.map((q, i) => [
+    codes[i], containerType, productId, warehouseId, locationId,
+    batchNo, mfgDate || null, expDate || null, unit,
+    q, q, containerStatus,
+    detailRefType, sid, sourceRefNo, null, null, remark,
+    sourceType, mixed,
+  ])
+  await conn.query(
+    `INSERT INTO inventory_containers
+       (barcode, container_type, product_id, warehouse_id, location_id,
+        batch_no, mfg_date, exp_date, unit,
+        initial_qty, remaining_qty, status,
+        source_ref_type, source_ref_id, source_ref_no, inbound_task_id, inbound_task_item_id, remark,
+        source_type, is_mixed_batch)
+     VALUES ?`,
+    [rows],
+  )
+  // 不假定 `insertId + i`（自增步长 / 实例自增配置都可能不同）：回查一次并按条码映射，
+  // 同时断言数量一致——批量仍只付一次回查。
+  const [found] = await conn.query(
+    'SELECT id, barcode FROM inventory_containers WHERE barcode IN (?) AND deleted_at IS NULL',
+    [codes],
+  )
+  const byCode = new Map(found.map((r) => [String(r.barcode), Number(r.id)]))
+  if (byCode.size !== codes.length) {
+    throw new AppError(`批量建容器回查数量不一致（预期 ${codes.length}，实际 ${byCode.size}）`, 500)
+  }
+  return list.map((q, i) => ({ containerId: byCode.get(String(codes[i])), barcode: codes[i], qty: q }))
+}
+
+/**
+ * 批量版容器转移留痕（一次 `VALUES ?` 写入，避免逐条 INSERT）。
+ *
+ * 用于「一盒还原成多箱」这类可变批量：sourceContainerId 视角写一条「拆出」，
+ * 每个 target 视角写一条「拆入」，`stockQty` 必须是**转移后的真实库存快照**
+ * （此前单条版在还原路径传 0，会让库存日志的前后库存列失真）。
+ */
+async function logContainerSplitBatch(conn, {
+  productId, warehouseId, stockQty,
+  sourceContainerId, sourceBarcode, targets = [],
+  operatorId = null, operatorName = null,
+}) {
+  if (!targets.length) return
+  const { MOVE_TYPE } = require('./inventoryEngine')
+  const { roundQty } = require('../utils/unitConversion')
+  const values = []
+  for (const t of targets) {
+    const q = roundQty(t.qty)
+    values.push([MOVE_TYPE.CONTAINER_SPLIT, 3, productId, warehouseId,
+      q, stockQty, stockQty,
+      'container_split', sourceContainerId,
+      sourceContainerId, SOURCE_TYPE.CONTAINER_SPLIT, sourceContainerId,
+      `拆出 ${q} 到 ${t.barcode}`,
+      operatorId ?? 0, operatorName ?? '系统'])
+    values.push([MOVE_TYPE.CONTAINER_SPLIT, 3, productId, warehouseId,
+      q, stockQty, stockQty,
+      'container_split', sourceContainerId,
+      t.containerId, SOURCE_TYPE.CONTAINER_SPLIT, sourceContainerId,
+      `自 ${sourceBarcode} 拆入 ${q}`,
+      operatorId ?? 0, operatorName ?? '系统'])
+  }
+  await conn.query(
+    `INSERT INTO inventory_logs
+       (move_type, type, product_id, warehouse_id,
+        quantity, before_qty, after_qty,
+        ref_type, ref_id,
+        container_id, log_source_type, log_source_ref_id,
+        remark, operator_id, operator_name)
+     VALUES ?`,
+    [values],
+  )
+}
+
+/**
  * 同仓容器拆分：从单一 ACTIVE 容器扣减数量，生成新塑料盒（B 条码，继承库位与批次）
  *
  * @param {object} conn
@@ -993,7 +1191,7 @@ async function splitContainer(conn, { containerId, qty, remark = null, targetCon
   const [[row]] = await conn.query(
     `SELECT id, barcode, product_id, warehouse_id, location_id, remaining_qty, status,
             locked_by_task_id, batch_no, mfg_date, exp_date, unit,
-            container_type, initial_qty
+            container_type, initial_qty, is_mixed_batch
      FROM inventory_containers
      WHERE id = ? AND deleted_at IS NULL
      FOR UPDATE`,
@@ -1040,7 +1238,7 @@ async function splitContainer(conn, { containerId, qty, remark = null, targetCon
   if (tid) {
     const [[target]] = await conn.query(
       `SELECT id, barcode, product_id, warehouse_id, remaining_qty, status, locked_by_task_id,
-              batch_no, mfg_date, exp_date
+              batch_no, mfg_date, exp_date, is_mixed_batch
        FROM inventory_containers
        WHERE id = ? AND barcode LIKE 'B%' AND deleted_at IS NULL
        FOR UPDATE`,
@@ -1063,14 +1261,21 @@ async function splitContainer(conn, { containerId, qty, remark = null, targetCon
       throw new AppError('目标塑料盒与来源库存条码不在同一仓库，不可合并', 400)
     }
 
-    // 批次一致性：此前并货只校验商品与仓库，不看批次，于是不同批次的货可以并进同一个盒，
-    // 而盒上只留着最早那批的 batch_no/exp_date——对 batch_managed 商品会直接让 FEFO 出错
-    // （按盒上那个假效期排序），且盘点/追溯都看不出盒里混了几批。
-    //   空盒（remaining_qty=0）并入 → 继承源容器批次，这是它获得批次的正常途径；
-    //   有货且批次不同 → 拒绝，让现场另选盒（NULL 与 NULL 视为一致，非批次商品不受影响）。
+    // 混批放行（批 A · 塑料盒作业流）：**同商品不同批次允许混放**，本范围**不管理保质期**。
+    // 放行闸只认「真正的到期事实 exp_date」——`batch_no` / `mfg_date` 不是保质期依据
+    // （`batch_managed` 是商品策略开关，同样不等于「本盒有到期事实」，故不参与判定）。
+    //   仅在「来源或目标任一侧带 exp_date」时维持原拒绝：盒上那个 exp_date 一旦不再代表整盒，
+    //   4 处既有逻辑会读错——`deductFromContainers` / `deductFromTaskLockedContainers` /
+    //   `warehouse-tasks.pick` 的 FEFO 排序，以及 `inventory.aging` 的效期告警。
     const targetEmpty = Number(target.remaining_qty) === 0
     const sameBatch = String(target.batch_no ?? '') === String(row.batch_no ?? '')
-    if (!targetEmpty && !sameBatch) {
+    const targetWasMixed = Number(target.is_mixed_batch) === 1
+    const sourceWasMixed = Number(row.is_mixed_batch) === 1
+    // 真混批必须包含「任一侧本就是混合来源」：两侧 batch_no 都是 NULL 时 sameBatch=true，
+    // 若只看 batch_no，会把「混合来源 vs 带 exp_date 的目标」误判成同批次、从而绕开效期保护。
+    const isRealMerge = !targetEmpty && (!sameBatch || sourceWasMixed || targetWasMixed)
+    const allowMixedBatch = row.exp_date == null && target.exp_date == null
+    if (isRealMerge && !allowMixedBatch) {
       throw new AppError(
         `目标塑料盒里已有批次「${target.batch_no || '无批次'}」的货，与本次拆出的批次「${row.batch_no || '无批次'}」不一致，不可并入，请另选空盒`,
         409,
@@ -1085,16 +1290,42 @@ async function splitContainer(conn, { containerId, qty, remark = null, targetCon
       [newRem, newStatus, cid],
     )
 
+    // 混合标识的完整传递（不丢、不误清）：
+    //   · 空盒 ← 混合来源 ⇒ 盒也是混合（继承 1）；空盒 ← 单批来源 ⇒ 盒单批（重置 0）
+    //   · 非空目标：本次真混批、或来源/目标任一侧本就混合 ⇒ 置 1，且**不得被清回 0**
+    //   · 盒为混合时清空盒上的 batch_no/mfg_date —— 那个批次已不代表整盒，
+    //     不得继续冒充单一批次；原批次来源由 inventory_logs 的 log_source_ref_id 追溯
     const targetNewQty = roundQty(Number(target.remaining_qty) + q)
+    const becomesMixed = isRealMerge || sourceWasMixed || targetWasMixed
+    const nextMixed = targetEmpty ? (sourceWasMixed ? 1 : 0) : (becomesMixed ? 1 : 0)
+
     if (targetEmpty) {
-      // 空盒继承源批次与效期，否则盒子会带着上一批货留下的旧批次继续用
+      // 空盒承接来源身份：**完整重置**盒上的批次与日期——旧值必须被覆盖，
+      // 否则「曾装过带 exp_date 的货的空盒」会残留旧效期（来源为混合时日期应为 NULL）。
       await conn.query(
-        'UPDATE inventory_containers SET remaining_qty = ?, status = 1, batch_no = ?, mfg_date = ?, exp_date = ? WHERE id = ?',
-        [targetNewQty, row.batch_no, fmtSqlDate(row.mfg_date), fmtSqlDate(row.exp_date), tid],
+        `UPDATE inventory_containers
+            SET remaining_qty = ?, status = 1,
+                batch_no = ?, mfg_date = ?, exp_date = ?, is_mixed_batch = ?
+          WHERE id = ?`,
+        [
+          targetNewQty,
+          sourceWasMixed ? null : row.batch_no,
+          sourceWasMixed ? null : fmtSqlDate(row.mfg_date),
+          sourceWasMixed ? null : fmtSqlDate(row.exp_date),
+          nextMixed,
+          tid,
+        ],
+      )
+    } else if (nextMixed === 1) {
+      // 混合来源：不得再挂单一批次，日期一并清空（避免残留不代表整盒的效期）
+      await conn.query(
+        'UPDATE inventory_containers SET remaining_qty = ?, status = 1, batch_no = NULL, mfg_date = NULL, exp_date = NULL, is_mixed_batch = 1 WHERE id = ?',
+        [targetNewQty, tid],
       )
     } else {
+      // 非空目标 + 同批次（双方均非混合）：保持原批次与日期
       await conn.query(
-        'UPDATE inventory_containers SET remaining_qty = ?, status = 1 WHERE id = ?',
+        'UPDATE inventory_containers SET remaining_qty = ?, status = 1, is_mixed_batch = 0 WHERE id = ?',
         [targetNewQty, tid],
       )
     }
@@ -1146,6 +1377,8 @@ async function splitContainer(conn, { containerId, qty, remark = null, targetCon
     containerType:   2,
     locationId:      row.location_id,
     containerStatus: CONTAINER_STATUS.ACTIVE,
+    // 混合来源传下去：从混合来源拆出的新容器同样标记为混合来源（它若再倒入别盒，别盒也置 1）
+    isMixedBatch:    Number(row.is_mixed_batch) === 1 ? 1 : 0,
   })
 
   await conn.query(
@@ -1192,7 +1425,7 @@ async function splitTaskLockedContainerForReturn(conn, { taskId, containerId, qt
   assertQtyScale(qty, '拆分归还数量')
   const [[row]] = await conn.query(
     `SELECT id, barcode, product_id, warehouse_id, location_id, remaining_qty, status,
-            locked_by_task_id, batch_no, mfg_date, exp_date, unit
+            locked_by_task_id, batch_no, mfg_date, exp_date, unit, is_mixed_batch
      FROM inventory_containers
      WHERE id = ? AND deleted_at IS NULL
      FOR UPDATE`,
@@ -1233,6 +1466,7 @@ async function splitTaskLockedContainerForReturn(conn, { taskId, containerId, qt
     containerType:   2,
     locationId:      row.location_id,
     containerStatus: CONTAINER_STATUS.ACTIVE,
+    isMixedBatch:    Number(row.is_mixed_batch) === 1 ? 1 : 0,
   })
   // 新容器继续锁定在原任务下，直到 PDA 确认归还库位才解锁，避免拆分瞬间"看起来"可用
   await conn.query(
@@ -1327,6 +1561,7 @@ async function unlockAndRelocateContainer(conn, { containerId, targetLocationId 
 
 module.exports = {
   createContainer,
+  createContainersBatch,
   lockStockDimension,
   promotePendingContainerToActive,
   deductFromContainers,
@@ -1347,6 +1582,9 @@ module.exports = {
   unlockContainersByTask,
   splitContainer,
   isIndividualContainer,
+  logContainerSplit,
+  extractFromPlasticBoxToTask,
+  logContainerSplitBatch,
   CONTAINER_STATUS,
   SOURCE_TYPE,
   DIRECT_ACTIVE_SOURCE_TYPES,

@@ -15,7 +15,7 @@ const {
 } = require('./labelZpl')
 
 /** 与 print_templates.type 一致：5 货架 6 库存容器 7 物流箱贴 8 商品 9 塑料盒 10 库位 */
-const LABEL_TEMPLATE_TYPES = [5, 6, 7, 8, 9, 10]
+const LABEL_TEMPLATE_TYPES = [5, 6, 7, 8, 9, 10, 11]
 
 /**
  * 读取默认模板并生成完整 ZPL（已替换变量）。无模板或无法生成时返回 null。

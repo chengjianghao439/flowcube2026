@@ -40,6 +40,11 @@ interface BinHint {
   customerName: string
   taskId: number
   itemId: number
+  /** 扫的是取货码（整件 I 码）时为 true —— 提交形态与服务端归属都不同 */
+  isPickCode?: boolean
+  containerId?: number
+  /** 最初扫到的那个码（商品码或取货码）——冻结记录要能还原「原目标是哪个码」 */
+  scannedCode?: string
 }
 
 export default function PdaSortPage() {
@@ -52,12 +57,32 @@ export default function PdaSortPage() {
     action: 'warehouse.sort',
     requestAction: 'warehouse.sort',
     label: '分拣确认',
-    onConfirmed: async (_data, ctx) => {
-      if (ctx.recovered) ok('分拣已成功，任务状态已更新')
+    onConfirmed: async (data, ctx) => {
+      // 只有「查回执」的恢复路径在这里提示；正常提交的提示由 handleBinScan 按任务真实状态给出，
+      // 否则会双发。恢复也必须**按回执区分部分进度与整任务完成**——查到回执 ≠ 任务分拣完成。
+      if (!ctx.recovered) return
+      if (data?.allSorted) {
+        ok('分拣已成功，任务已进入待复核')
+      } else {
+        warn(`本次分拣已确认（${data?.progress ?? '部分进度'}），任务尚未全部分拣完成，请继续扫其余商品`)
+      }
+      // 恢复成功后回到扫商品步骤并刷新分拣格数据，避免工人照着旧提示重扫
+      setStep('scan-product')
+      setHint(null)
+      void refetch()
     },
     resolveServerState: async ({ record }) => {
-      const taskId = Number(record.metadata?.taskId ?? hint?.taskId ?? 0)
-      if (!taskId) return { effective: false }
+      // 只认**冻结记录**里的定位：页面重挂后 hint 已丢失，拿当前 hint 取数会张冠李戴。
+      // 定位残缺或不合法的快照一律**不推断成功**——宁可让工人刷新核对，也不能凭半份记录
+      // 就说「已完成」。兼容边界：本批之前写入的旧记录没有 itemId/binCode（甚至没有 metadata），
+      // 一律按「无法核对」处理，落到人工核对分支，绝不当成功。
+      const meta = record.metadata ?? {}
+      const taskId = Number(meta.taskId)
+      const itemId = Number(meta.itemId)
+      const binCode = typeof meta.binCode === 'string' ? meta.binCode.trim() : ''
+      if (!Number.isInteger(taskId) || taskId <= 0) return { effective: false }
+      if (!Number.isInteger(itemId) || itemId <= 0) return { effective: false }
+      if (!binCode) return { effective: false }
       const latest = await getTaskByIdApi(taskId, { skipGlobalError: true })
       if (taskReachedStatus(latest, WT_STATUS.CHECKING)) {
         return {
@@ -77,6 +102,8 @@ export default function PdaSortPage() {
   })
 
   async function handleProductScan(raw: string) {
+    // 待确认期间冻结：不能再扫新的商品/取货码，否则会把「原目标」换掉、与冻结记录不一致
+    if (sortAction.submitBlocked) { err(sortAction.blockedReason || '上次分拣结果待确认，请先确认后再扫商品'); return }
     if (sortAction.networkStatus !== 'online') { err('网络已断开，分拣作业已阻断，请恢复网络后再继续'); return }
     const code = raw.trim()
     if (!code) return
@@ -86,10 +113,17 @@ export default function PdaSortPage() {
       const result = res
       if (!result) { err('无拣货中订单，请核对条码'); return }
       if (!result.sortingBinCode) { err(`任务 ${result.taskNo} 待分配分拣格，请联系主管补分配，刷新后重新扫商品`); return }
+      const isPickCode = Boolean(result.isPickCode)
       setHint({
         binCode: result.sortingBinCode, productCode: result.productCode, productName: result.productName,
-        qty: result.pickedQty, unit: result.unit, taskNo: result.taskNo,
+        // 取货码的量是「这张取货码的有效取货量」；商品码路径只能报**未被取货标签覆盖**的
+        // 剩余已拣量（sortableQty），否则会与标签份额重复计算
+        qty: isPickCode ? Number(result.qty ?? 0) : Number(result.sortableQty ?? result.pickedQty ?? 0),
+        unit: result.unit, taskNo: result.taskNo,
         customerName: result.customerName, taskId: result.taskId, itemId: result.itemId,
+        isPickCode,
+        containerId: isPickCode && result.containerId ? Number(result.containerId) : undefined,
+        scannedCode: code,
       })
       setStep('confirm-bin')
     } catch { err('查询失败，请重试') }
@@ -106,10 +140,24 @@ export default function PdaSortPage() {
     }
     setScanning(true)
     try {
+      // 取货码走 `{ containerId, binCode }`，由服务端在同一事务内解析归属与份额；
+      // 商品码保持原 `{ itemId, sortedQty }`。两条路都走同一个 sort-done，不新增平行接口。
+      const items = hint.isPickCode && hint.containerId
+        ? [{ containerId: hint.containerId, binCode: hint.binCode }]
+        : [{ itemId: hint.itemId, sortedQty: hint.qty }]
       const submitted = await sortAction.run((requestKey) =>
-        sortDoneApi(hint.taskId, [{ itemId: hint.itemId, sortedQty: hint.qty }], requestKey)
+        sortDoneApi(hint.taskId, items, requestKey)
           .then((res) => res as { allSorted: boolean; progress?: string; warning?: string | null }),
-        { taskId: hint.taskId, itemId: hint.itemId },
+        // 冻结记录持久化**原目标**（task/item/取货码容器/原条码/格/量）：页面重挂后 hint 已丢失，
+        // 只能靠这份记录还原「上次提交的到底是哪一件」，也才能核对恢复结果。
+        {
+          taskId: hint.taskId,
+          itemId: hint.itemId,
+          containerId: hint.containerId ?? null,
+          barcode: hint.scannedCode ?? null,
+          binCode: hint.binCode,
+          qty: hint.qty,
+        },
       )
       if (submitted.kind === 'pending') {
         warn('网络中断，分拣结果待确认。请先确认结果，再决定是否重扫。')
@@ -166,6 +214,22 @@ export default function PdaSortPage() {
           onDismissError={() => sortAction.clearError()}
         />
 
+        {/* 待确认期间的**原提交定位**：取自冻结记录而非当前 hint——页面重挂后 hint 已为 null，
+            只有这份记录还能说明「上次提交的是哪一件」，并据此核对恢复结果。 */}
+        {sortAction.pendingRecord && (
+          <PdaCard>
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">上次分拣提交（结果待确认）</p>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div><p className="text-xs text-muted-foreground">任务</p><p className="font-mono text-xs">{String(sortAction.pendingRecord.metadata?.taskId ?? '—')}</p></div>
+                <div><p className="text-xs text-muted-foreground">分拣格</p><p className="font-mono text-xs">{String(sortAction.pendingRecord.metadata?.binCode ?? '—')}</p></div>
+                <div className="min-w-0"><p className="text-xs text-muted-foreground">条码</p><p className="font-mono text-xs min-w-0 whitespace-normal [overflow-wrap:anywhere]">{String(sortAction.pendingRecord.metadata?.barcode ?? '—')}</p></div>
+                <div><p className="text-xs text-muted-foreground">数量</p><p className="font-bold text-primary">{String(sortAction.pendingRecord.metadata?.qty ?? '—')}</p></div>
+              </div>
+            </div>
+          </PdaCard>
+        )}
+
         {/* 步骤进度 */}
         <div className="flex items-center gap-3">
           <div className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${
@@ -194,8 +258,13 @@ export default function PdaSortPage() {
                 <div><p className="text-xs text-muted-foreground">任务号</p><p className="font-mono text-xs min-w-0 whitespace-normal [overflow-wrap:anywhere]">{hint.taskNo}</p></div>
                 <div><p className="text-xs text-muted-foreground">客户</p><p className="text-xs min-w-0 whitespace-normal [overflow-wrap:anywhere]">{hint.customerName}</p></div>
               </div>
-              <button className="text-xs text-muted-foreground hover:text-foreground"
-                onClick={() => { setStep('scan-product'); setHint(null) }}
+              <button className="text-xs text-muted-foreground hover:text-foreground disabled:opacity-40"
+                disabled={sortAction.submitBlocked}
+                onClick={() => {
+                  // 待确认期间冻结原目标：这时清掉提示会让工人误以为可以换一件重扫
+                  if (sortAction.submitBlocked) { err(sortAction.blockedReason || '上次分拣结果待确认，请先确认后再继续'); return }
+                  setStep('scan-product'); setHint(null)
+                }}
               >← 取消，重新扫商品</button>
             </div>
           </PdaCard>

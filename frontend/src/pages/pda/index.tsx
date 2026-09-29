@@ -12,7 +12,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Inbox, ArrowUpFromLine, ClipboardList, Shuffle,
-  ClipboardCheck, Package, Scissors, ScanSearch, Truck, ArrowLeftRight,
+  ClipboardCheck, Package, PackagePlus, Scissors, ScanSearch, Truck, ArrowLeftRight,
   Undo2, PackageX, PencilLine, Smartphone, ShieldAlert, Ban, MoreHorizontal, ChevronDown,
   Search, type LucideIcon,
 } from 'lucide-react'
@@ -73,7 +73,8 @@ const ALL_OPS: OpEntry[] = [
   { icon: Undo2,           label: '拣货退回', path: '/pda/cancel-return', perm: PERMISSIONS.WAREHOUSE_TASK_CANCEL_RETURN_VIEW, tone: 'red' },
   { icon: PencilLine,      label: '改单确认', path: '/pda/adjustments',   perm: PERMISSIONS.WAREHOUSE_TASK_ADJUST_VIEW, tone: 'indigo' },
   // ── 更多（自主操作，收进底部折叠区） ──
-  { icon: Scissors,        label: '塑料盒拆分', path: '/pda/split',        perm: PERMISSIONS.INVENTORY_CONTAINER_SPLIT, tone: 'cyan', more: true },
+  { icon: Scissors,        label: '塑料盒作业', path: '/pda/split',        perm: PERMISSIONS.INVENTORY_CONTAINER_SPLIT, tone: 'cyan', more: true },
+  { icon: PackagePlus,     label: '塑料盒放货', path: '/pda/fill',         perm: PERMISSIONS.INVENTORY_CONTAINER_SPLIT, tone: 'cyan', more: true },
   { icon: Search,          label: '库存查询',   path: '/pda/inventory-query', perm: PERMISSIONS.INVENTORY_VIEW, tone: 'teal', more: true },
 ]
 

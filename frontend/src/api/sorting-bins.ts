@@ -16,22 +16,31 @@ export interface SortingBin {
   updatedAt: string
 }
 
+export interface SortScanResult {
+  productCode: string
+  productName: string
+  unit: string
+  requiredQty: number
+  pickedQty: number
+  itemId: number
+  taskId: number
+  taskNo: string
+  customerName: string
+  warehouseId: number
+  sortingBinId: number | null
+  sortingBinCode: string | null
+  taskItemCount: number
+  /** 商品码路径：该明细全部盒取货量（含未分拣标签）与旧码可报份额 = pickedQty - labelTotalQty */
+  labelTotalQty?: number
+  sortableQty?: number
+  /** 扫的是取货码（整件 I 码）时才有的字段 */
+  isPickCode?: boolean
+  containerId?: number
+  qty?: number
+}
+
 export const scanProductForSortApi = (code: string) =>
-  client.get<{
-    productCode: string
-    productName: string
-    unit: string
-    requiredQty: number
-    pickedQty: number
-    itemId: number
-    taskId: number
-    taskNo: string
-    customerName: string
-    warehouseId: number
-    sortingBinId: number | null
-    sortingBinCode: string | null
-    taskItemCount: number
-  } | null>('/sorting-bins/scan', { params: { code }, skipGlobalError: true })
+  client.get<SortScanResult | null>('/sorting-bins/scan', { params: { code }, skipGlobalError: true })
 
 export const getSortingBinsApi = (params?: { keyword?: string; status?: number; warehouseId?: number }) =>
   client.get<SortingBin[]>('/sorting-bins', { params })

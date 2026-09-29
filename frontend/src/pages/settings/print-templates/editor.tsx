@@ -119,10 +119,11 @@ const TEMPLATE_TYPES: { value: TemplateType; label: string }[] = [
   { value: 8, label: '产品条码标签 (画布)' },
   { value: 9, label: '塑料盒标签 (画布)' },
   { value: 10, label: '库位条码标签 (画布)' },
+  { value: 11, label: '取货标签 (画布)' },
 ]
 
-function isZplLabelType(t: number): t is 5 | 6 | 7 | 8 | 9 | 10 {
-  return t >= 5 && t <= 10
+function isZplLabelType(t: number): t is 5 | 6 | 7 | 8 | 9 | 10 | 11 {
+  return t >= 5 && t <= 11
 }
 
 /** 字段类型 → 面板图标映射（字段元数据不混入 JSX，见 printFieldDefs.ts） */

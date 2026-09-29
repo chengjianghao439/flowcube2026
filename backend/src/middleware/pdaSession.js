@@ -136,6 +136,32 @@ function pdaSessionRequired() {
   }
 }
 
+/**
+ * 可选 PDA 设备会话（2026-09-29 · 塑料盒作业流新入口）。
+ *
+ * 新入口（放货 / 还原整件）**同时服务 PC 与 PDA**，不能像收货/上架那样强制 `pdaOnly`；
+ * 但只要请求**带了** `X-PDA-Session`，就必须按 PDA 口径完整校验设备（有效、未吊销、
+ * 未过期、设备未停用、未换仓、与当前账号一致），并把**设备仓**交给业务层与目标仓比对。
+ * 无票据时按 PC 路径（权限 + 仓库数据范围）。
+ *
+ * **不能**因为「历史 inventory 接口没挂设备校验」就认为新入口无需校验：设备仓不匹配
+ * 会让现场拿着 A 仓的 PDA 操作 B 仓的盒。
+ */
+function pdaSessionOptional() {
+  // 复用既有闸，避免在这里复制出第二套会话校验
+  const required = pdaSessionRequired()
+  return (req, res, next) => {
+    const hasPdaMarker = String(req.headers['x-client'] || '').toLowerCase() === 'pda'
+    const hasSessionToken = String(req.headers['x-pda-session'] || '').trim().length > 0
+    // **任一** PDA 标记成立就按 PDA 口径走完整校验：带 X-Client: pda 却缺票必须被拒，
+    // 不能因为「没票就当 PC」把设备身份放行。只有两者都没有才是纯 PC 路径。
+    if (hasPdaMarker || hasSessionToken) return required(req, res, next)
+    req.pda = null
+    return next()
+  }
+}
+
 module.exports = {
   pdaSessionRequired,
+  pdaSessionOptional,
 }

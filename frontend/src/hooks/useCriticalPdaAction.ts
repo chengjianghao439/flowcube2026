@@ -5,13 +5,31 @@ import { createRequestKey } from '@/lib/requestKey'
 import { useAuthStore } from '@/store/authStore'
 import { getOperationRequestStatusApi, type OperationRequestStatus } from '@/api/operation-requests'
 
-function isTransientFailure(message: string) {
+/**
+ * 传输层「结果不确定」判定。
+ *
+ * 优先看 **api/client.ts 规范化后的结构化 code**：超时 → `REQUEST_TIMEOUT`、
+ * 断网 → `NETWORK_ERROR`。这两个 code 才是当前调用链真正 catch 到的东西
+ * （message 已被规范成中文，如「网络超时，请稍后重试」/「无法连接服务器…」）。
+ * 同时兼容未规范化的原始形态（axios 英文 `timeout of …`、`ECONNABORTED` 等）。
+ *
+ * **只覆盖传输不确定**：4xx/5xx 等有明确服务端响应的情况不在此列，
+ * 交由 confirmByServerState 按业务回执判定，避免扩大「业务失败」的语义。
+ */
+function isTransientFailure(e: unknown) {
+  const err = e as { code?: string | null; message?: string | null } | null
+  const code = err?.code ?? null
+  if (code === 'REQUEST_TIMEOUT' || code === 'NETWORK_ERROR') return true
+  const message = String(err?.message ?? (e ?? ''))
   return [
     '无法连接服务器',
     '请求超时',
+    '网络超时',
     'Network Error',
     'ERR_NETWORK',
     'ECONNABORTED',
+    'timeout of',
+    'timed out',
   ].some((part) => message.includes(part))
 }
 
@@ -163,7 +181,7 @@ export function useCriticalPdaAction<T>({
     } catch (error) {
       if (!isCurrentSession()) return null
       const message = error instanceof Error ? error.message : String(error ?? '')
-      if (isTransientFailure(message)) {
+      if (isTransientFailure(error)) {
         setPhase('pending')
         setPhaseMessage(`网络波动，暂时无法确认${pendingRecord.label}结果。请恢复网络后再次确认。`)
         return null
@@ -233,7 +251,7 @@ export function useCriticalPdaAction<T>({
       return { kind: 'success', data }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error ?? '')
-      if (isTransientFailure(message)) {
+      if (isTransientFailure(error)) {
         setPhase('pending')
         setPhaseMessage(`网络波动，${label}结果待确认。请先确认结果，避免重复提交。`)
         return { kind: 'pending', requestKey }

@@ -44,6 +44,7 @@ module.exports = {
   STATUS,
   parseListStatus,
   enqueueContainerLabelJob: labelCommand.enqueueContainerLabelJob,
+  enqueuePickLabelJob: labelCommand.enqueuePickLabelJob,
   enqueueRackLabelJob: labelCommand.enqueueRackLabelJob,
   enqueueLocationLabelJob: labelCommand.enqueueLocationLabelJob,
   enqueueProductLabelJob: labelCommand.enqueueProductLabelJob,

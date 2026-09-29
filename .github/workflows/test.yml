@@ -168,6 +168,85 @@ jobs:
       - name: 履约与采购建议计算回归
         run: npm run test:fulfillment && npm run test:fulfillment-refresh && npm run test:procurement-planning
 
+  regression-plastic-box:
+    name: 批 A 塑料盒作业流（放货 / 混批 / 还原整件）
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: flowcube_plastic_box_20260929_test
+        # 本批 smoke **硬断言**回环 3307 + 确切专库名（本地隔离约束，防止误连共享库）。
+        # 因此独立映射 3307 并单开一个 job，不改动其它 job 的 3306。
+        ports:
+          - 3307:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
+
+    env:
+      NODE_ENV: test
+      DB_HOST: 127.0.0.1
+      DB_PORT: "3307"
+      DB_USER: root
+      DB_PASSWORD: root
+      DB_NAME: flowcube_plastic_box_20260929_test
+      JWT_SECRET: flowcube_ci_test_jwt_secret_0123456789_abcdef
+      PORT: "3000"
+      CORS_ORIGIN: http://localhost:5173
+      APP_UPDATE_DOWNLOADS_DIR: /tmp/flowcube-downloads
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+
+      - name: Setup Node 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: 安装后端依赖
+        run: npm --prefix backend ci
+
+      - name: 创建本批独立测试库
+        run: |
+          set -e
+          mysql -h 127.0.0.1 -P 3307 -uroot -proot -e "
+            CREATE DATABASE IF NOT EXISTS flowcube_plastic_box_20260929_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+
+      - name: 数据库迁移 — 本批专库
+        run: npm --prefix backend run migrate
+
+      - name: 批 A 塑料盒作业流 — 放货 / 混批 / 还原整件（27 项断言）
+        run: npm run smoke:plastic-box-batch-a
+
+      # 与批 A 同一专库、同一 3307 service 顺序执行（复用本 job，不再另造 job）
+      - name: 批 B（B1+B2）— 扫盒取货生成锁定新 I + 独立取货标签（17 项断言）
+        run: npm run smoke:plastic-box-pick
+
+      # B3a — 取货码下游链：分拣取货码接真实 sort-done + 复核真实 CHECK 闭合（19 项断言）
+      - name: 批 B3a — 取货码分拣 / 复核下游链（19 项断言）
+        run: npm run smoke:pick-code-downstream
+
+      # B3b — 装箱配额按来源取货标签分行 + remove/void 回收（8 项断言）
+      - name: 批 B3b — 装箱配额与回收（8 项断言）
+        run: npm run smoke:pack-quota
+
+      # B4 — 取货码的取消 / 减量归还闭环（5 项断言）
+      - name: 批 B4 — 取货码取消 / 减量归还（5 项断言）
+        run: npm run smoke:pick-cancel-return
+
+      # B4 补充 — 取货标签补打的生命周期边界（3 项断言）：已出库 EMPTY 后仍可按真实 PICK 补打、
+      # 已取消仍拒、普通整件复用不得认旧标签
+      - name: 批 B4 补充 — 取货标签补打生命周期（3 项断言）
+        run: npm run smoke:pick-label-reprint-lifecycle
+
   regression:
     name: 回归门禁（smoke + 集成）
     runs-on: ubuntu-latest

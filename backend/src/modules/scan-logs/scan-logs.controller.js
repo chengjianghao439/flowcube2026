@@ -12,6 +12,9 @@ const create = async (req, res, next) => {
       operatorName: operator.operatorName,
       requestKey: extractRequestKey(req),
       scopeWarehouseIds: req.user?.warehouseIds ?? null,
+      // 设备仓：票据校验只证明「这台机器身份有效」，**不等于**目标仓匹配——
+      // 服务层据此比对「PDA 设备仓 == 任务所属仓」（首次与重放都要过）。
+      pdaWarehouseId: req.pda?.warehouseId ?? null,
     })
     return successResponse(res, data, '扫描记录已保存', 201)
   } catch (e) { next(e) }
@@ -27,6 +30,8 @@ const createCheckScan = async (req, res, next) => {
       operatorName: operator.operatorName,
       requestKey: extractRequestKey(req),
       scopeWarehouseIds: req.user?.warehouseIds ?? null,
+      // 设备仓：票据有效 ≠ 目标仓匹配，服务层据此比对（首次与重放都要过）
+      pdaWarehouseId: req.pda?.warehouseId ?? null,
     })
     return successResponse(res, data, data.allChecked ? '复核完成，已进入待打包' : '复核扫码已记录', 201)
   } catch (e) { next(e) }

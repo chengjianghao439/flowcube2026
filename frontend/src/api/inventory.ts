@@ -130,6 +130,74 @@ export const splitContainerApi = async (
 ) =>
   apiClient.post<SplitContainerResult>(`/inventory/containers/${containerId}/split`, body, { skipGlobalError: true })
 
+// ─── 塑料盒作业流（批 A）：放货 / 还原整件 / 来源贡献 ─────────────────────────
+
+export interface PlasticBoxFillResult {
+  sourceContainerId: number
+  sourceBarcode: string
+  sourceRemainingAfter: number
+  targetContainerId: number
+  targetBarcode: string
+  targetQtyAfter: number
+  mixedBatch: boolean
+}
+
+/**
+ * 放货：把来源整件的**全部实存**倒入指定塑料盒（不设可选数量）。
+ *
+ * `client` 显式声明调用方：PDA 必须传 `'pda'`（后端按「带 X-Client: pda 或缺票即拒」
+ * 校验设备与设备仓）；PC 走默认，保持普通路径（权限 + 数据范围）。
+ */
+export const fillPlasticBoxApi = async (
+  boxId: number,
+  body: { sourceContainerId: number; expectedSourceQty?: number },
+  requestKey: string,
+  client?: 'pda',
+) =>
+  apiClient.post<PlasticBoxFillResult>(`/plastic-boxes/${boxId}/fill`, body, {
+    skipGlobalError: true,
+    headers: { 'X-Request-Key': requestKey, ...(client === 'pda' ? { 'X-Client': 'pda' } : {}) },
+  })
+
+export interface PlasticBoxRepackResult {
+  boxId: number
+  boxRemainingAfter: number
+  created: Array<{ containerId: number; barcode: string; qty: number }>
+  printJobIds: number[]
+  /** 未打印：没有可用打印机 */
+  noPrinterCount: number
+  /** 未打印：标签渲染失败（与「无打印机」是两种不同降级） */
+  renderFailedCount: number
+}
+
+/** 还原整件：人工逐箱 qty（等量时用 perBoxQty + boxCount 快捷），生成独立整件库存码 */
+export const repackPlasticBoxApi = async (
+  boxId: number,
+  body: { perBoxQty?: number; boxCount?: number; items?: number[] },
+  requestKey: string,
+  client?: 'pda',
+) =>
+  apiClient.post<PlasticBoxRepackResult>(`/plastic-boxes/${boxId}/repack`, body, {
+    skipGlobalError: true,
+    headers: { 'X-Request-Key': requestKey, ...(client === 'pda' ? { 'X-Client': 'pda' } : {}) },
+  })
+
+export interface PlasticBoxSourcesResult {
+  boxId: number
+  barcode: string
+  mixedBatch: boolean
+  sources: Array<{
+    sourceContainerId: number
+    sourceBarcode: string | null
+    sourceBatchNo: string | null
+    contributedQty: number
+  }>
+}
+
+/** 来源贡献：本盒各来源容器及其贡献量（历史贡献口径，不是当前余额，也不做逐批分摊） */
+export const getPlasticBoxSourcesApi = async (boxId: number) =>
+  apiClient.get<PlasticBoxSourcesResult>(`/plastic-boxes/${boxId}/sources`, { skipGlobalError: true })
+
 // ─── 补货建议与补货策略（文档 01）──────────────────────────────────────────────
 
 export interface ReplenishmentItem extends ProcurementSupply {

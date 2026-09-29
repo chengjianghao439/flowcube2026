@@ -128,6 +128,16 @@ export const LABEL_FIELD_DEFS_BY_TYPE: Record<number, PrintFieldDef[]> = {
     { key: 'position', label: '位置', type: 'text', defaultW: 72, defaultH: 7 },
     { key: 'remark', label: '备注', type: 'text', defaultW: 72, defaultH: 10 },
   ],
+  // 取货标签（批 B2 type 11）：条码即取货码自身；文字聚焦「本次取货多少、来自哪张单」
+  11: [
+    { key: 'container_code', label: '取货码（条码）', type: 'barcode', defaultW: 72, defaultH: 16 },
+    { key: 'product_name', label: '品名', type: 'text', defaultW: 72, defaultH: 12 },
+    { key: 'qty', label: '取货数量', type: 'text', defaultW: 72, defaultH: 7 },
+    { key: 'sale_order_no', label: '销售单号', type: 'text', defaultW: 72, defaultH: 7 },
+    { key: 'customer_name', label: '客户名称', type: 'text', defaultW: 72, defaultH: 7 },
+    { key: 'product_code', label: '商品编码', type: 'text', defaultW: 72, defaultH: 7 },
+    { key: 'unit', label: '单位', type: 'text', defaultW: 24, defaultH: 6 },
+  ],
 }
 
 /** 单据明细表格列选项（type 1–3），key 与后端商品行字段一致 */
@@ -191,6 +201,13 @@ export const DEFAULT_LABEL_ELEMENTS: Record<number, TemplateElement[]> = {
     { id: 'lb10_z', type: 'text', fieldKey: 'zone', label: '库区', x: 2, y: 24, width: 71, height: 6, fontSize: 8, fontWeight: 'normal', textAlign: 'left', border: false },
     { id: 'lb10_n', type: 'text', fieldKey: 'name', label: '名称', x: 2, y: 32, width: 71, height: 14, fontSize: 8, fontWeight: 'normal', textAlign: 'left', border: false },
   ],
+  // 取货标签（批 B2 type 11）默认画布
+  11: [
+    { id: 'lb11_bc', type: 'barcode', fieldKey: 'container_code', label: '取货码', x: 2, y: 2, width: 71, height: 12, fontSize: 10, fontWeight: 'normal', textAlign: 'left', border: false },
+    { id: 'lb11_pn', type: 'text', fieldKey: 'product_name', label: '品名', x: 2, y: 16, width: 71, height: 8, fontSize: 9, fontWeight: 'normal', textAlign: 'left', border: false },
+    { id: 'lb11_q', type: 'text', fieldKey: 'qty', label: '取货数量', x: 2, y: 26, width: 71, height: 6, fontSize: 9, fontWeight: 'normal', textAlign: 'left', border: false },
+    { id: 'lb11_so', type: 'text', fieldKey: 'sale_order_no', label: '销售单号', x: 2, y: 34, width: 71, height: 6, fontSize: 8, fontWeight: 'normal', textAlign: 'left', border: false },
+  ],
 }
 
 /** 标签画布预览示例数据（与打印变量一致，字段面板收敛后自动跟随） */
@@ -201,6 +218,7 @@ export const LABEL_PREVIEW_SAMPLE: Record<number, Record<string, string>> = {
   8: { product_code: 'SP0001', product_name: '示例 SKU', spec: '500g', unit: '件', price: '12.50', article_number: 'JH-1001', color: '蓝色' },
   9: { container_code: 'B000456', product_name: '零散商品', qty: '12', product_code: 'SP0001', article_number: 'JH-1001', spec: '500g', color: '蓝色', unit: '件', warehouse_name: '主仓库', warehouse_code: 'WH001', location_code: 'A01-01-0101', batch_no: 'BATCH-20260901', mfg_date: '2026-09-01', exp_date: '2027-09-01' },
   10: { location_barcode: 'R000001', location_code: 'A01-01-0101', zone: 'A区', name: '主通道货架-1', warehouse_name: '主仓库', warehouse_code: 'WH001', aisle: '01', rack: '01', level: '1', position: '1', remark: '靠近入口' },
+  11: { container_code: 'I000789', product_name: '零散商品', qty: '150', sale_order_no: 'SO202609010001', customer_name: '某某客户', product_code: 'SP0001', unit: '件' },
 }
 
 /** 单据画布预览示例数据（type 1–4） */

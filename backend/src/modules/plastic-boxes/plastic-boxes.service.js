@@ -1,6 +1,9 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
-const { createContainer } = require('../../engine/containerEngine')
+const { createContainer, CONTAINER_STATUS, SOURCE_TYPE } = require('../../engine/containerEngine')
+
+/** 一次还原整件最多生成的箱数（服务端上限，防无限数组造码） */
+const REPACK_MAX_BOXES = 100
 const { normalizePagination } = require('../../utils/pagination')
 const { assertInScope, scopeFilter } = require('../../utils/warehouseScope')
 
@@ -108,6 +111,288 @@ async function create({ productId, warehouseId, locationId, remark }, scopeWareh
   }
 }
 
+/**
+ * 放货（批 A · 塑料盒作业流）：把来源整件的**全部实存**倒入指定塑料盒。
+ *
+ * 只按来源全部放入，**不设可选数量**——「全量倒入」被做成部分拆分是现场最容易出现的误操作。
+ * `expectedSourceQty` 是并发快照守卫：与提交时读到的来源量不一致就要求重扫。
+ * 幂等按**目标盒**绑定（`plastic_box.fill.<盒id>`），稳定键重放直接返回原结果，
+ * 不会再去读来源（因此来源已空的场景重放仍成功）。
+ */
+async function fill(id, { sourceContainerId, expectedSourceQty, requestKey }, { userId = null, userName = null, pdaWarehouseId = null }, scopeWarehouseIds = null) {
+  const { splitContainer, lockStockDimension } = require('../../engine/containerEngine')
+  const { beginResourceOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
+
+  const boxId = Number(id)
+  if (!Number.isFinite(boxId) || boxId <= 0) throw new AppError('塑料盒不存在', 404)
+  const srcId = Number(sourceContainerId)
+  if (!Number.isFinite(srcId) || srcId <= 0) throw new AppError('来源库存条码无效', 400)
+
+  const conn = await pool.getConnection()
+  let result
+  try {
+    await conn.beginTransaction()
+    // 先做仓库范围校验、再判断幂等重放：命中重放同样不能跳过权限核对，
+    // 否则「用同一个请求键重放」会成为绕过仓库数据权限的通道。
+    const [[box]] = await conn.query(
+      "SELECT id, barcode, product_id, warehouse_id, status, locked_by_task_id FROM inventory_containers WHERE id = ? AND barcode LIKE 'B%' AND deleted_at IS NULL",
+      [boxId],
+    )
+    if (!box) throw new AppError('塑料盒不存在', 404)
+    // 仓库数据权限：放货会改库存与流水，必须先确认调用方有权访问该仓库。
+    assertInScope(scopeWarehouseIds, box.warehouse_id, '塑料盒')
+    // PDA 设备仓必须等于目标盒所在仓：带票据的 PDA 不得跨仓操作别仓的盒
+    if (pdaWarehouseId != null && Number(pdaWarehouseId) !== Number(box.warehouse_id)) {
+      throw new AppError('该 PDA 设备未绑定到目标仓库，不能在此仓库作业', 403, 'PDA_WAREHOUSE_MISMATCH')
+    }
+
+    const requestState = await beginResourceOperationRequest(conn, {
+      requestKey,
+      action: 'plastic_box.fill',
+      userId,
+      resourceType: 'inventory_container',
+      resourceId: boxId,
+    })
+    if (requestState.replay) {
+      await conn.rollback()
+      return requestState.responseData
+    }
+    if (box.locked_by_task_id != null) throw new AppError('塑料盒已被拣货任务锁定，不能放货', 409)
+
+    // 锁序（与引擎全局约定一致）：**先维度锁，再锁来源容器**，且全量数量必须在**锁下重读**——
+    // 不能在无锁快照上算 fullQty 再交给引擎转移，否则并发新增余量时只转走旧数量、留下余量，
+    // 违反「按来源整件全部放入」。
+    await lockStockDimension(conn, box.product_id, box.warehouse_id)
+    const [[src]] = await conn.query(
+      `SELECT id, barcode, product_id, warehouse_id, remaining_qty, status, locked_by_task_id,
+              container_type, initial_qty
+       FROM inventory_containers WHERE id = ? AND deleted_at IS NULL
+       FOR UPDATE`,
+      [srcId],
+    )
+    if (!src) throw new AppError('来源库存条码不存在', 404)
+    if (Number(src.container_type) !== 1) throw new AppError('来源必须是整件库存条码，塑料盒不能作为放货来源', 400)
+    if (Number(src.product_id) !== Number(box.product_id)) throw new AppError('来源与塑料盒的商品不一致，不能放入', 400)
+    if (Number(src.warehouse_id) !== Number(box.warehouse_id)) throw new AppError('来源与塑料盒不在同一仓库，不能放入', 400)
+    if (Number(src.status) !== CONTAINER_STATUS.ACTIVE) throw new AppError('来源库存条码须为「在库」状态', 400)
+    if (src.locked_by_task_id != null) throw new AppError('来源库存条码已被拣货任务锁定，不能放货', 409)
+
+    const fullQty = Number(src.remaining_qty)
+    if (!(fullQty > 0)) throw new AppError('来源库存条码已无余量，无法放货', 400)
+    if (expectedSourceQty != null && Number(expectedSourceQty) !== fullQty) {
+      throw new AppError(`来源实存已变化（当前 ${fullQty}），请重新扫码后再放货`, 409, 'SOURCE_QTY_CHANGED')
+    }
+
+    // 锁序由 splitContainer 内部保证：先 lockStockDimension(商品,仓库)，再锁来源、再锁目标盒。
+    result = await splitContainer(conn, {
+      containerId: srcId,
+      qty: fullQty,
+      targetContainerId: boxId,
+      operatorId: userId ?? null,
+      operatorName: userName,
+    })
+    const [[boxAfter]] = await conn.query('SELECT is_mixed_batch FROM inventory_containers WHERE id = ?', [boxId])
+    result.mixedBatch = Number(boxAfter?.is_mixed_batch) === 1
+
+    await completeOperationRequest(conn, requestState, {
+      data: result,
+      message: '放货成功',
+      resourceType: 'inventory_container',
+      resourceId: boxId,
+    })
+    await conn.commit()
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
+  }
+  return result
+}
+
+/**
+ * 还原整件（批 A · 塑料盒作业流）：人工逐箱填 `qty`（等量时用「每箱数量 + 箱数」快捷），
+ * 从盒里生成若干**独立整件库存码**（`I`），余量留在盒内。
+ *
+ * 锁序与放货一致：先 `lockStockDimension(商品,仓库)`，再 `FOR UPDATE` 盒——
+ * 绝不能先锁盒再锁维度，否则与上架/出库路径构成 ABBA 死锁面。
+ * 幂等按盒绑定（`plastic_box.repack.<盒id>`），稳定键重放返回**原生成的容器清单**，不重复建码。
+ */
+async function repack(id, { perBoxQty, boxCount, items, requestKey }, { userId = null, userName = null, pdaWarehouseId = null }, scopeWarehouseIds = null) {
+  const { lockStockDimension, createContainersBatch, logContainerSplitBatch, syncStockFromContainers } = require('../../engine/containerEngine')
+  const { beginResourceOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
+  const { roundQty } = require('../../utils/unitConversion')
+  const { assertQtyPrecision } = require('../../utils/qtyPrecision')
+
+  const boxId = Number(id)
+  if (!Number.isFinite(boxId) || boxId <= 0) throw new AppError('塑料盒不存在', 404)
+
+  // 互斥按「字段是否出现」判定：`items: []` 也是明确占位，不能被非空真假掩盖成走快捷分支
+  const hasItems = items !== undefined && items !== null
+  const hasQuick = (perBoxQty !== undefined && perBoxQty !== null) || (boxCount !== undefined && boxCount !== null)
+  if (hasItems && hasQuick) throw new AppError('「逐箱清单」与「每箱数量+箱数」只能填一种', 400)
+  if (!hasItems && !hasQuick) throw new AppError('请填写逐箱清单，或每箱数量与箱数', 400)
+
+  let itemsList = null
+  let quickQty = null
+  let boxTotal
+  if (hasItems) {
+    if (!Array.isArray(items)) throw new AppError('逐箱清单格式无效', 400)
+    itemsList = items
+    boxTotal = items.length
+  } else {
+    const n = Number(boxCount)
+    const q = Number(perBoxQty)
+    if (!Number.isInteger(n) || n <= 0) throw new AppError('箱数须为正整数', 400)
+    if (!Number.isFinite(q) || q <= 0) throw new AppError('每箱数量须大于 0', 400)
+    quickQty = q
+    boxTotal = n
+  }
+  // 上限必须在「展开数组 / 取整」之前判定：否则巨大 boxCount 会先造出大数组再被拒
+  if (boxTotal > REPACK_MAX_BOXES) {
+    throw new AppError(`一次最多还原 ${REPACK_MAX_BOXES} 箱，请分批操作`, 400)
+  }
+  if (boxTotal <= 0) throw new AppError('箱数须大于 0', 400)
+
+  const conn = await pool.getConnection()
+  let result
+  try {
+    await conn.beginTransaction()
+    // 先做仓库范围校验、再判断幂等重放：命中重放同样不能跳过仓库数据权限
+    const [[boxDim]] = await conn.query(
+      'SELECT product_id, warehouse_id FROM inventory_containers WHERE id = ? AND barcode LIKE \'B%\' AND deleted_at IS NULL',
+      [boxId],
+    )
+    if (!boxDim) throw new AppError('塑料盒不存在', 404)
+    assertInScope(scopeWarehouseIds, boxDim.warehouse_id, '塑料盒')
+    // PDA 设备仓必须等于目标盒所在仓：带票据的 PDA 不得跨仓操作别仓的盒
+    if (pdaWarehouseId != null && Number(pdaWarehouseId) !== Number(boxDim.warehouse_id)) {
+      throw new AppError('该 PDA 设备未绑定到目标仓库，不能在此仓库作业', 403, 'PDA_WAREHOUSE_MISMATCH')
+    }
+
+    const requestState = await beginResourceOperationRequest(conn, {
+      requestKey,
+      action: 'plastic_box.repack',
+      userId,
+      resourceType: 'inventory_container',
+      resourceId: boxId,
+    })
+    if (requestState.replay) {
+      await conn.rollback()
+      return requestState.responseData
+    }
+
+    // 精度：先用**原始输入**校验两位小数与商品小数策略，再 roundQty——不得先取整后校验
+    const rawList = hasItems ? itemsList : Array.from({ length: boxTotal }, () => quickQty)
+    await assertQtyPrecision(conn, rawList.map((q) => ({ productId: boxDim.product_id, qty: q, label: '每箱数量' })))
+    const qtys = rawList.map((q) => roundQty(Number(q)))
+    if (qtys.some((q) => !Number.isFinite(q) || q <= 0)) throw new AppError('每箱数量须大于 0', 400)
+
+    // 锁序：先维度锁，再锁盒
+    await lockStockDimension(conn, boxDim.product_id, boxDim.warehouse_id)
+
+    const [[box]] = await conn.query(
+      `SELECT id, barcode, product_id, warehouse_id, location_id, remaining_qty, status, unit,
+              batch_no, mfg_date, exp_date, is_mixed_batch, locked_by_task_id
+       FROM inventory_containers
+       WHERE id = ? AND barcode LIKE 'B%' AND deleted_at IS NULL
+       FOR UPDATE`,
+      [boxId],
+    )
+    if (!box) throw new AppError('塑料盒不存在', 404)
+    if (Number(box.status) !== CONTAINER_STATUS.ACTIVE) throw new AppError('塑料盒当前不可用（状态异常或已清空）', 400)
+    if (box.locked_by_task_id != null) throw new AppError('塑料盒已被拣货任务锁定，不能还原整件', 409)
+
+    const total = roundQty(qtys.reduce((s, q) => s + q, 0))
+    const boxRem = Number(box.remaining_qty)
+    if (total > boxRem) {
+      throw new AppError(`各箱合计 ${total} 超过盒内余量 ${boxRem}，请调整`, 400)
+    }
+
+    const boxMixed = Number(box.is_mixed_batch) === 1
+    const newRem = roundQty(boxRem - total)
+    await conn.query(
+      'UPDATE inventory_containers SET remaining_qty = ?, status = ? WHERE id = ?',
+      [newRem, newRem === 0 ? CONTAINER_STATUS.EMPTY : CONTAINER_STATUS.ACTIVE, boxId],
+    )
+
+    // 一次取号 + 一次 INSERT（避免逐箱 createContainer 往返）；语义与来源校验由
+    // createContainersBatch 显式限定为「同仓拆分 + 在库」，其余组合会直接拒绝
+    const created = await createContainersBatch(conn, {
+      shared: {
+        productId:       box.product_id,
+        warehouseId:     box.warehouse_id,
+        unit:            box.unit,
+        // 盒为混合来源时不挂单一批次（不冒充单批）；单批盒才继承
+        batchNo:         boxMixed ? null : box.batch_no,
+        mfgDate:         boxMixed ? null : box.mfg_date,
+        expDate:         boxMixed ? null : box.exp_date,
+        sourceType:      SOURCE_TYPE.CONTAINER_SPLIT,
+        sourceRefType:   'plastic_box_repack',
+        sourceRefId:     boxId,
+        remark:          `自塑料盒 ${box.barcode} 还原整件`,
+        barcodePrefix:   'I',
+        containerType:   1,
+        locationId:      box.location_id,
+        containerStatus: CONTAINER_STATUS.ACTIVE,
+        isMixedBatch:    boxMixed ? 1 : 0,
+      },
+      qtys,
+    })
+
+    // 库存快照：写流水之前先同步一次，用**真实值**记录前后库存
+    // （转移不改总量，但此前单条留痕传 0，会让库存日志的前后库存列失真）
+    const stockAfter = await syncStockFromContainers(conn, box.product_id, box.warehouse_id)
+    await logContainerSplitBatch(conn, {
+      productId: box.product_id,
+      warehouseId: box.warehouse_id,
+      stockQty: stockAfter,
+      sourceContainerId: boxId,
+      sourceBarcode: box.barcode,
+      targets: created,
+      operatorId: userId ?? null,
+      operatorName: userName,
+    })
+
+    result = { boxId, boxRemainingAfter: newRem, created, printJobIds: [], noPrinterCount: 0, renderFailedCount: 0 }
+
+    // 打印只入队、失败不回滚库存；**按真实原因分开计数**——「没有可用打印机」与
+    // 「标签渲染失败」是两种不同的降级，混成一个数字会让界面说错原因。
+    const { enqueueContainerLabelJob } = require('../print-jobs/print-jobs.service')
+    for (const c of created) {
+      const job = await enqueueContainerLabelJob({
+        conn,
+        containerId: c.containerId,
+        warehouseId: box.warehouse_id,
+        // 不传 product_name：让标签模板变量里的真实商品名生效（传 null 会把它覆盖成空名）
+        data: { container_code: c.barcode, qty: c.qty },
+        createdBy: userId ?? null,
+        jobUniqueKey: `repack_cnt_${c.containerId}`,
+      })
+      if (job?.id && !job.unprintable) {
+        result.printJobIds.push(Number(job.id))
+      } else if (job?.unprintable) {
+        if (/label render failed/.test(String(job.errorMessage || ''))) result.renderFailedCount += 1
+        else result.noPrinterCount += 1
+      }
+    }
+
+    await completeOperationRequest(conn, requestState, {
+      data: result,
+      message: '还原整件成功',
+      resourceType: 'inventory_container',
+      resourceId: boxId,
+    })
+    await conn.commit()
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
+  }
+  return result
+}
+
 async function remove(id, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
@@ -173,10 +458,51 @@ function fmt(row) {
     locationName: row.location_name || null,
     remainingQty: Number(row.remaining_qty),
     status: Number(row.status),
+    // 混合来源标识（批 A）：盒内混有多个来源批次时不再挂单一批次
+    mixedBatch: Number(row.is_mixed_batch) === 1,
+    batchLabel: Number(row.is_mixed_batch) === 1 ? '混合来源' : (row.batch_no || null),
     unit: row.unit || '',
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
 }
 
-module.exports = { findAll, findById, findMovements, create, remove, printLabel }
+/**
+ * 来源贡献：本盒各来源容器及贡献量。
+ *
+ * 口径固定为「来源贡献」——**不折算当前剩余、不做 FIFO 分摊、不声称逐批实物可追溯**。
+ * 数据来源是 inventory_logs 的 target 视角流水（log_source_ref_id = 来源容器 ID），
+ * 由 logContainerSplit 写入，无需额外表。
+ */
+async function findSources(id, scopeWarehouseIds = null) {
+  const box = await findById(id, scopeWarehouseIds)
+  const [rows] = await pool.query(
+    `SELECT il.log_source_ref_id AS source_container_id,
+            src.barcode          AS source_barcode,
+            src.batch_no         AS source_batch_no,
+            SUM(il.quantity)     AS contributed_qty
+     FROM inventory_logs il
+     LEFT JOIN inventory_containers src ON src.id = il.log_source_ref_id
+     WHERE il.container_id = ? AND il.log_source_type = ?
+       -- 排除「本容器自己的拆出视角」：那种流水 log_source_ref_id 指向自己，
+       -- 不是来源容器（来源贡献只取转入视角，保持历史贡献而非当前余额）
+       AND il.log_source_ref_id IS NOT NULL
+       AND il.log_source_ref_id <> il.container_id
+     GROUP BY il.log_source_ref_id, src.barcode, src.batch_no
+     ORDER BY MIN(il.id) ASC`,
+    [Number(box.id), SOURCE_TYPE.CONTAINER_SPLIT],
+  )
+  return {
+    boxId: Number(box.id),
+    barcode: box.barcode,
+    mixedBatch: box.mixedBatch === true,
+    sources: rows.map((r) => ({
+      sourceContainerId: Number(r.source_container_id),
+      sourceBarcode: r.source_barcode || null,
+      sourceBatchNo: r.source_batch_no || null,
+      contributedQty: Number(r.contributed_qty),
+    })),
+  }
+}
+
+module.exports = { findAll, findById, findMovements, findSources, create, remove, printLabel, fill, repack }

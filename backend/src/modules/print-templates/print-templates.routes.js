@@ -16,10 +16,12 @@ const previewPermissions = {
   5: PERMISSIONS.RACK_VIEW, 6: PERMISSIONS.INVENTORY_VIEW,
   7: PERMISSIONS.WAREHOUSE_TASK_VIEW, 8: PERMISSIONS.PRODUCT_VIEW,
   9: PERMISSIONS.INVENTORY_VIEW, 10: PERMISSIONS.LOCATION_VIEW,
+  // 取货标签（批 B2 type 11）：来源业务是拣货任务，预览需同时具备任务查看权限
+  11: PERMISSIONS.WAREHOUSE_TASK_VIEW,
 }
 router.get('/preview-data', requirePermission(PERMISSIONS.PRINT_TEMPLATE_VIEW), (req, res, next) => {
-  if (typeof req.query.type !== 'string' || !/^(?:[1-9]|10)$/.test(req.query.type)) {
-    return next(new AppError('模板类型必须为1至10的整数', 400, 'PRINT_TEMPLATE_TYPE_INVALID'))
+  if (typeof req.query.type !== 'string' || !/^(?:[1-9]|10|11)$/.test(req.query.type)) {
+    return next(new AppError('模板类型必须为1至11的整数', 400, 'PRINT_TEMPLATE_TYPE_INVALID'))
   }
   return requirePermission(previewPermissions[Number(req.query.type)])(req, res, next)
 }, ctrl.previewData)

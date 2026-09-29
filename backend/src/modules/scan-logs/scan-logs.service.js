@@ -5,11 +5,11 @@ const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
 const { assertSqlIdentifier } = require('../../utils/sqlIdentifier')
-const { lockContainer, lockStockDimension, CONTAINER_STATUS } = require('../../engine/containerEngine')
+const { lockContainer, lockStockDimension, extractFromPlasticBoxToTask, CONTAINER_STATUS } = require('../../engine/containerEngine')
 const { WT_STATUS } = require('../../constants/warehouseTaskStatus')
 const { checkDoneWithinTransaction, checkCancelReturnClearedAndFinalize } = require('../warehouse-tasks/warehouse-tasks.service')
 const { WT_EVENT, record: recordEvent } = require('../warehouse-tasks/warehouse-task-events.service')
-const { logSideEffectFailure: logWtSideEffectFailure } = require('../warehouse-tasks/warehouse-tasks.helpers')
+const { logSideEffectFailure: logWtSideEffectFailure, assertTaskScope } = require('../warehouse-tasks/warehouse-tasks.helpers')
 const { beginResourceOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const logger = require('../../utils/logger')
 
@@ -67,11 +67,24 @@ async function pdaOptionalQuery(metricName, promise, fallback) {
 async function createScanLog({
   taskId, itemId, containerId, barcode, productId,
   qty, scanMode, operatorId, operatorName, locationCode,
-  requestKey, scopeWarehouseIds = null,
+  requestKey, scopeWarehouseIds = null, pdaWarehouseId = null,
 }) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+
+    // 范围 / 设备仓校验必须放在**幂等 begin 之前**（与 A 的 plastic-boxes.fill 同口径）：
+    // 命中重放时下方会直接 `return` 原回执，若把校验放在 begin 之后，重放就能绕过
+    // 仓库数据权限与「PDA 设备仓 == 任务仓」的核对。
+    const [[scopeRow]] = await conn.query(
+      'SELECT id, warehouse_id FROM warehouse_tasks WHERE id = ? AND deleted_at IS NULL',
+      [taskId],
+    )
+    if (!scopeRow) throw new AppError('仓库任务不存在', 404)
+    assertInScope(scopeWarehouseIds, scopeRow.warehouse_id, '仓库任务')
+    if (pdaWarehouseId != null && Number(pdaWarehouseId) !== Number(scopeRow.warehouse_id)) {
+      throw new AppError('该 PDA 设备未绑定到任务所属仓库，不能在此仓库作业', 403, 'PDA_WAREHOUSE_MISMATCH')
+    }
     // 资源绑定用「仓库任务」而不是 scan_logs 自身的 insertId——扫码记录 ID 在 begin 时刻
     // 还不存在（审计 P2[6] 明确指出），而 taskId 才能唯一标识「这次扫码动作所属单据」。
     // 下方 completeOperationRequest 必须传同一组 resourceType/resourceId。
@@ -126,15 +139,28 @@ async function createScanLog({
       throw new AppError(`扫码数量超过待拣数量（剩余 ${needRemain}）`, 400)
     }
 
-    // 返货出库任务：先取「商品+仓库」维度锁，再锁容器行——顺序不能反，与上架/出库侧一致
-    // （反了会在并发时成环死锁，理由见 containerEngine.lockStockDimension 注释）。
     const isSaleReturnReverse = taskRow.task_type === 'sale_return_out'
-    if (isSaleReturnReverse) {
+    // 扫盒取货**只作用于普通销售出库任务**（`sale_out`，兼容历史记录里 task_type 为 NULL 的旧任务）；
+    // `sale_return_out` / `purchase_return` 等一律**保持原白名单与预锁路径**，不受本分支影响。
+    const isNormalSaleOut = taskRow.task_type === 'sale_out' || taskRow.task_type == null
+
+    // 锁序：**第一把容器锁之前**先按需取「商品+仓库」维度锁（任务 → 维度 → 容器）。
+    // 此处只能**无锁**探一次容器类型来决定是否需要维度锁；锁到容器行后会**再复查**真实类型，
+    // 以无锁探测结果为准做后续分支判断是不可接受的（探测与锁定之间类型可能被改）。
+    let peekContainerType = null
+    if (isNormalSaleOut) {
+      const [[peek]] = await conn.query(
+        'SELECT container_type FROM inventory_containers WHERE id = ? AND deleted_at IS NULL',
+        [containerId],
+      )
+      peekContainerType = peek ? Number(peek.container_type) : null
+    }
+    if (isSaleReturnReverse || (isNormalSaleOut && peekContainerType === 2)) {
       await lockStockDimension(conn, itemRow.product_id, taskRow.warehouse_id)
     }
 
     const [[containerRow]] = await conn.query(
-      `SELECT id, barcode, product_id, warehouse_id, status, remaining_qty, locked_by_task_id
+      `SELECT id, barcode, product_id, warehouse_id, status, remaining_qty, locked_by_task_id, container_type
        FROM inventory_containers
        WHERE id = ? AND deleted_at IS NULL
        FOR UPDATE`,
@@ -185,6 +211,85 @@ async function createScanLog({
         )
       }
     }
+    // ── 扫盒取货（批 B1）：**普通销售出库**任务扫到 `container_type=2` 的塑料盒 ──────
+    // 位置刻意放在「旧 I 的累计 SUM / 5 秒去重 / 整件去重 / lockContainer」**之前**：
+    // 盒不锁给任务、也不进 `scan_logs.container_id`，那几条旧规则对盒都不适用；
+    // 若排在它们之后，合法第二次取货会被历史 SUM 或 5 秒去重误挡。
+    // 类型以**锁定后复读**的 `containerRow.container_type` 为准（无锁探测只用于决定要不要先取维度锁）。
+    if (isNormalSaleOut && Number(containerRow.container_type) === 2) {
+      // 数量判据：**当前盒余量**（extract 内校验）+ **未拣需求**（上方 needRemain 已校验）。
+      // 盒取**任意合法正数**都支持——散件模式同属合法（GUI 取 1 个也走这里），不做整件限制。
+      const ex = await extractFromPlasticBoxToTask(conn, {
+        taskId,
+        boxContainerId: containerId,
+        productId: itemRow.product_id,
+        warehouseId: taskRow.warehouse_id,
+        qty,
+        operatorId,
+        operatorName,
+      })
+
+      const [ins] = await conn.query(
+        `INSERT INTO scan_logs
+           (task_id, item_id, container_id, barcode, product_id,
+            qty, scan_mode, scan_purpose, operator_id, operator_name, location_code, source_container_id)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [taskId, itemId, ex.containerId, ex.barcode, itemRow.product_id,
+          qty, scanMode, SCAN_PURPOSE.PICK, operatorId || null, operatorName || null, locationCode || null, ex.boxId],
+      )
+      const [updB] = await conn.query(
+        `UPDATE warehouse_task_items
+            SET picked_qty = picked_qty + ?
+          WHERE id = ? AND task_id = ? AND picked_qty + ? <= required_qty`,
+        [qty, itemId, taskId, qty],
+      )
+      if (updB.affectedRows !== 1) {
+        throw new AppError('更新已拣数量失败（可能超出需求或并发冲突）', 409)
+      }
+
+      // 取货标签（批 B2）：**不做 broad catch 兜底**。
+      // 预期内的问题（无可用打印机 / 取值缺失 / 渲染失败）由 `enqueuePickLabelJob` 内部落
+      // 真实 FAILED 记录，调用方照常提交；而「打印记录存储本身失败」是真错误——在此吞掉会
+      // 变成「没有标签记录、补打中心也查不到」的假成功（且日志里那句"业务已提交"此时甚至尚未 commit）。
+      // 因此让异常冒泡，由本事务整体回滚。
+      const { enqueuePickLabelJob } = require('../print-jobs/print-jobs.service')
+      const labelJob = await enqueuePickLabelJob({
+        conn,
+        scanLogId: ins.insertId,
+        containerId: ex.containerId,
+        warehouseId: taskRow.warehouse_id,
+        createdBy: operatorId || null,
+        data: { container_code: ex.barcode },
+      })
+      const printInfo = labelJob
+        ? (labelJob.unprintable
+          ? { queued: false, unprintable: true, jobId: Number(labelJob.id) || null, reason: labelJob.errorMessage || null }
+          : { queued: true, unprintable: false, jobId: Number(labelJob.id) || null, reason: null })
+        : { queued: false, unprintable: false, jobId: null, reason: null }
+
+      const payload = {
+        id: ins.insertId,
+        picked: {
+          source_container_id: ex.boxId,
+          source_barcode: ex.boxBarcode,
+          source_remaining_after: ex.boxRemainingAfter,
+          container_id: ex.containerId,
+          barcode: ex.barcode,
+          qty,
+          mixed_batch: ex.mixedBatch,
+          print: printInfo,
+        },
+      }
+      await completeOperationRequest(conn, requestState, {
+        data: payload,
+        message: '扫描记录已保存',
+        resourceType: 'warehouse_task',
+        resourceId: taskId,
+      })
+      await conn.commit()
+      return payload
+    }
+
     const remainingQty = Number(containerRow.remaining_qty)
     if (remainingQty <= 0) {
       throw new AppError('库存不足', 400)
@@ -279,11 +384,21 @@ async function createScanLog({
  */
 async function createCheckScanLog({
   taskId, barcode, operatorId, operatorName,
-  requestKey, scopeWarehouseIds = null,
+  requestKey, scopeWarehouseIds = null, pdaWarehouseId = null,
 }) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    // 范围 / PDA 设备仓校验必须**先于**幂等 begin：否则同键重放会绕过越权校验、
+    // 直接把原回执交还给一个越权调用方（批 B1 的 `createScanLog` 已用同一口径修过）。
+    // 无锁读只用于定位归属；随后 `FOR UPDATE` 的正式读取仍在 begin 之后。
+    const [[scopeRow]] = await conn.query(
+      'SELECT warehouse_id FROM warehouse_tasks WHERE id = ? AND deleted_at IS NULL',
+      [taskId],
+    )
+    if (!scopeRow) throw new AppError('仓库任务不存在', 404)
+    assertTaskScope(scopeRow, { scopeWarehouseIds, pdaWarehouseId })
+
     const requestState = await beginResourceOperationRequest(conn, {
       requestKey,
       action: 'scan-log.check',
@@ -301,7 +416,9 @@ async function createCheckScanLog({
       [taskId],
     )
     if (!taskRow) throw new AppError('仓库任务不存在', 404)
-    assertInScope(scopeWarehouseIds, taskRow.warehouse_id, '仓库任务')
+    // 正式行锁到手后**再复查一次**范围/设备仓：无锁 peek 只用于在 begin 之前拦下越权
+    //（含重放），不能替代锁后校验——抢锁期间任务归属可能变化，必须用锁定的数据重新判定。
+    assertTaskScope(taskRow, { scopeWarehouseIds, pdaWarehouseId })
     if (Number(taskRow.status) !== WT_STATUS.CHECKING) {
       throw new AppError('仅「待复核」任务允许复核扫码', 400)
     }

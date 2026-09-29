@@ -173,7 +173,12 @@ export const readyToShipApi = (id: number, requestKey?: string) =>
       : { 'X-Client': 'pda' },
   })
 
-export const sortDoneApi = (id: number, items?: { itemId: number; sortedQty: number }[], requestKey?: string) =>
+/** 分拣明细项：商品码路径给 `{ itemId, sortedQty }`；取货码路径给 `{ containerId, binCode }` */
+export type SortDoneItem =
+  | { itemId: number; sortedQty: number }
+  | { containerId: number; binCode: string }
+
+export const sortDoneApi = (id: number, items?: SortDoneItem[], requestKey?: string) =>
   client.put<{ allSorted: boolean; progress?: string; warning?: string | null }>(`/warehouse-tasks/${id}/sort-done`, { items: items ?? null }, {
     skipGlobalError: true,
     headers: requestKey

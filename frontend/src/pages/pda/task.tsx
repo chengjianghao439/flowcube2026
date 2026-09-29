@@ -30,6 +30,19 @@ import { WT_STATUS } from '@/constants/warehouseTaskStatus'
 import { stateConfirmedMessage, taskReachedStatus } from '@/lib/pdaCriticalState'
 import { formatPdaActionError, formatPdaErrorMessage } from '@/utils/displayFormatters'
 
+/**
+ * 拣货扫码回执（批 B1/B2）：`picked` 仅在「扫盒取货」分支出现——新取货码 + 数量 + 打印状态。
+ * 旧「扫整件 I」路径没有该字段，前端据此保持原提示不变（窄改，不改公共 PDA 语义）。
+ */
+interface PickScanResult {
+  id: number
+  picked?: {
+    barcode: string
+    qty: number
+    print: { queued: boolean; unprintable: boolean; reason: string | null } | null
+  }
+}
+
 // ─── 子组件：商品拣货卡片 ──────────────────────────────────────────────────────
 function SuggestionRow({ c, onTap, disabled }: {
   c: PickSuggestionContainer; onTap: () => void; disabled: boolean
@@ -121,11 +134,39 @@ export default function PdaTaskPage() {
   const { flash, ok, err, warn }  = usePdaFeedback()
   const [scanning, setScanning]   = useState(false)
   const [finished, setFinished] = useState<'completed'|null>(null)
-  const pickAction = useCriticalPdaAction<void>({
+  /**
+   * 取货结果统一提示（批 B1/B2）：正常提交与丢响应后「查回执」恢复**共用同一份文案**——
+   * 不能拿任务状态去推断某张取货标签是否已排队；缺设备与渲染失败按 **reason** 分开说。
+   */
+  function notifyPickResult(
+    picked: { barcode: string; qty: number; print: { queued: boolean; unprintable: boolean; reason: string | null } | null },
+    name?: string,
+    qty?: number,
+  ) {
+    const who = name ? `${name} ` : ''
+    const num = Number(qty)
+    const amount = Number.isFinite(num) && num > 0 ? num : picked.qty
+    let tip = ''
+    if (picked.print) {
+      if (picked.print.queued) {
+        tip = '，取货标签已排队'
+      } else if (picked.print.unprintable) {
+        // 按 **reason** 分流；**未知原因不得一律说成「无可用打印机」**
+        const rawReason = String(picked.print.reason || '')
+        const why = /label render failed/i.test(rawReason)
+          ? '标签渲染失败'
+          : (/pick_label source missing/i.test(rawReason) ? '取货记录缺失' : '无可用打印机')
+        tip = `；${why}，标签未打印（可在打印记录页补打）`
+      }
+    }
+    ok(`✓ 已取 ${who}×${amount}，取货码 ${picked.barcode}${tip}`)
+  }
+
+  const pickAction = useCriticalPdaAction<PickScanResult>({
     action: `warehouse.pick-scan.${taskId}`,
     requestAction: 'scan-log.pick',
     label: `拣货任务 ${taskId}`,
-    onConfirmed: async () => {
+    onConfirmed: async (data, ctx) => {
       await qc.invalidateQueries({ queryKey: ['pda-task', taskId] })
       // 拣货动作会改变任务状态，必须同时作废列表缓存：PDA 拣货列表（订单视图与
       // 商品汇总视图）在 keep-alive 下不会自动重取，曾出现「订单列表已空、商品
@@ -140,6 +181,9 @@ export default function PdaTaskPage() {
         setFinished('completed')
         ok('拣货已成功，任务状态已更新为「待分拣」')
       }
+      // 仅**恢复**路径（查回执）在此提示：正常提交由 handleScan 单点提示，避免双发。
+      // 数量用回执里的**原 picked.qty**，不拿当前界面值覆盖。
+      if (ctx.recovered && data?.picked) notifyPickResult(data.picked)
     },
     resolveServerState: async () => {
       const latest = await getTaskByIdApi(taskId, { skipGlobalError: true })
@@ -216,6 +260,9 @@ export default function PdaTaskPage() {
     // 成功提示要回显「商品 + 数量」，工人才能自查是否扫对（2026-09-19 文案审计）
     let pickedName = b
     let pickedQty = 0
+    // 扫盒取货（批 B1/B2）的额外回执：新取货码 + 数量 + 打印状态；
+    // 旧「扫整件 I」路径没有该字段（picked 为 undefined），保持原提示不变。
+    let pickedBox: { barcode: string; qty: number; print: { queued: boolean; unprintable: boolean; reason: string | null } | null } | null = null
     try {
       // 从推荐数据里找 item
       const items = sugData?.items ?? []
@@ -231,11 +278,15 @@ export default function PdaTaskPage() {
         pickedName = item.productName || b
         pickedQty = addQty
         const scanResult = await pickAction.run((requestKey) =>
-          submitScan({ taskId, itemId: item.id, containerId: c.containerId, barcode: b, productId: c.productId, qty: addQty, scanMode: addQty > 1 ? '整件' : '散件', locationCode: c.locationCode ?? undefined }, requestKey),
+          submitScan<PickScanResult>({ taskId, itemId: item.id, containerId: c.containerId, barcode: b, productId: c.productId, qty: addQty, scanMode: addQty > 1 ? '整件' : '散件', locationCode: c.locationCode ?? undefined }, requestKey),
         )
         if (scanResult.kind === 'pending') {
           warn('网络中断，拣货扫码结果待确认。请先确认结果，避免重复扫描。')
           return
+        }
+        if (scanResult.kind === 'success' && scanResult.data?.picked) {
+          const p = scanResult.data.picked
+          pickedBox = { barcode: p.barcode, qty: p.qty, print: p.print ?? null }
         }
         await qc.invalidateQueries({ queryKey: ['pda-task', taskId] })
       } else {
@@ -244,15 +295,23 @@ export default function PdaTaskPage() {
         pickedName = match.productName || b
         pickedQty = addQty
         const scanResult = await pickAction.run((requestKey) =>
-          submitScan({ taskId, itemId: match.id, containerId: container.containerId, barcode: b, productId: match.productId, qty: addQty, scanMode: addQty > 1 ? '整件' : '散件', locationCode: container.locationCode ?? undefined }, requestKey),
+          submitScan<PickScanResult>({ taskId, itemId: match.id, containerId: container.containerId, barcode: b, productId: match.productId, qty: addQty, scanMode: addQty > 1 ? '整件' : '散件', locationCode: container.locationCode ?? undefined }, requestKey),
         )
         if (scanResult.kind === 'pending') {
           warn('网络中断，拣货扫码结果待确认。请先确认结果，避免重复扫描。')
           return
         }
+        if (scanResult.kind === 'success' && scanResult.data?.picked) {
+          const p = scanResult.data.picked
+          pickedBox = { barcode: p.barcode, qty: p.qty, print: p.print ?? null }
+        }
         await qc.invalidateQueries({ queryKey: ['pda-task', taskId] })
       }
-      ok(pickedQty > 1 ? `✓ 已拣 ${pickedName} ×${pickedQty}` : `✓ 已拣 ${pickedName}`)
+      if (pickedBox) {
+        notifyPickResult(pickedBox, pickedName, pickedQty)
+      } else {
+        ok(pickedQty > 1 ? `✓ 已拣 ${pickedName} ×${pickedQty}` : `✓ 已拣 ${pickedName}`)
+      }
       // 用 refetch 返回的最新数据判断是否全部完成
       const refetchResult = await refetchSug()
       if (refetchResult.status === 'success') {

@@ -10,6 +10,11 @@ export interface PackageItem {
   productName: string
   unit: string
   qty: number
+  /** 来源取货标签：null 表示按商品码装的旧 SKU 份额。同一商品可能多行（旧 SKU + 各标签各一行） */
+  labelContainerId?: number | null
+  labelBarcode?: string | null
+  /** **本次增量**：`qty` 是该行累计量，提示要区分「本次装了多少」与「累计多少」 */
+  addedQty?: number
 }
 
 export interface Package {
@@ -31,15 +36,27 @@ export const getPackagesApi = (taskId: number, config?: Parameters<typeof client
 export const createPackageApi = (warehouseTaskId: number, remark?: string) =>
   client.post<Package>('/packages', { warehouseTaskId, remark }, { headers: { 'X-Client': 'pda' }, skipGlobalError: true })
 
+/**
+ * 两种形态互斥：
+ * · 商品码 `{ productCode, qty }`——旧 SKU 份额；
+ * · 取货标签 `{ labelBarcode }`——**省略数量即整份装入该标签的未装余量**（扫码作业的默认语义）。
+ * 传条码而不是容器 id：`I` 码的条码是独立序号，与容器 id 并不相等。
+ */
+export type AddPackageItemPayload =
+  | { productCode: string; qty: number }
+  | { labelBarcode: string; qty?: number }
+
 export const addPackageItemApi = (
   packageId: number,
-  productCode: string,
-  qty: number,
+  payload: AddPackageItemPayload,
+  requestKey?: string,
 ) =>
-  client.post<PackageItem>(`/packages/${packageId}/add-item`, {
-    productCode,
-    qty,
-  }, { headers: { 'X-Client': 'pda' }, skipGlobalError: true })
+  client.post<PackageItem>(`/packages/${packageId}/add-item`, payload, {
+    headers: requestKey
+      ? withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' })
+      : { 'X-Client': 'pda' },
+    skipGlobalError: true,
+  })
 
 export const removePackageItemApi = (
   packageId: number,

@@ -1,6 +1,7 @@
 const { assertBoundWarehouseInScope } = require('../../utils/warehouseScope')
 const { pool } = require('../../config/db')
 const { CONTAINER_STATUS } = require('../../engine/containerEngine')
+const { WT_STATUS } = require('../../constants/warehouseTaskStatus')
 const { readLabelVariables, containerLabelVariables } = require('./labelVariables')
 const AppError = require('../../utils/AppError')
 const logger = require('../../utils/logger')
@@ -186,9 +187,11 @@ async function enqueueContainerLabelJob(payload) {
   const vars = {
     ...(source?.vars || containerLabelVariables()),
     container_code: data.container_code,
-    product_name: data.product_name,
     qty: data.qty,
   }
+  // 只有调用方**显式带了商品名**才覆盖模板变量：否则会把 source.vars 里的真实商品名
+  // 清成 null，打出没有品名的标签（还原整件路径此前就是这样传 null 的）。
+  if (data.product_name != null) vars.product_name = data.product_name
   const jobFields = {
     warehouseId: Number.isFinite(wh) && wh > 0 ? wh : null,
     jobType: 'container_label',
@@ -214,6 +217,91 @@ async function enqueueContainerLabelJob(payload) {
     logger.warn('标签渲染失败，降级为无内容打印任务', {
       jobType: 'container_label',
       containerId,
+      code: e?.code || null,
+      message: e?.message || String(e),
+    }, 'LabelRenderDegraded')
+    return recordUnprintableJob(createJob, { ...jobFields, unprintableReason: renderFailureReason(e) })
+  }
+  return createJob({
+    ...jobFields,
+    printerId,
+    dispatchReason,
+    contentType: label.contentType,
+    content: label.content,
+    copies: 1,
+  })
+}
+
+/**
+ * 取货标签入队（批 B2）：为「扫盒取货」生成的独立取货码打一张标签。
+ *
+ * 与容器标签同构但有四处关键差别：
+ *  1. `jobType='pick_label'` / `templateType=11`——**不得用库存标签（type 6）假充**；
+ *  2. 变量取自**真实 PICK 扫码行**（`readLabelVariables(11, { id: scanLogId })`），
+ *     而非容器 `remaining_qty`：发货/减量后容器余量会归 0，按余量取会把标签补打成「0 个」；
+ *  3. `jobUniqueKey = pick_label:<scanLogId>`——同一次取货重放**不重复入队**；
+ *  4. 无可用打印机与渲染失败都降级为**可补打失败记录**，**不回滚业务事务**（与容器标签同口径）。
+ */
+async function enqueuePickLabelJob(payload) {
+  const data = payload?.data
+  const scanLogId = payload?.scanLogId != null ? Number(payload.scanLogId) : null
+  const containerId =
+    payload?.containerId != null && Number.isFinite(Number(payload.containerId)) ? Number(payload.containerId) : null
+  if (!Number.isFinite(scanLogId) || scanLogId <= 0) return null
+  const conn = payload?.conn || null
+  const wh = payload.warehouseId != null ? Number(payload.warehouseId) : null
+  const createJob = conn ? createWithinTransaction.bind(null, conn) : create
+
+  const { printerId, dispatchReason } = await resolveLabelPrinter({ warehouseId: wh, jobType: 'pick_label' })
+  const jobFields = {
+    warehouseId: Number.isFinite(wh) && wh > 0 ? wh : null,
+    jobType: 'pick_label',
+    title: `取货标签 ${data?.container_code ?? ''}`.trim(),
+    refType: containerId ? 'inventory_container' : null,
+    refId: containerId,
+    refCode: data?.container_code ?? null,
+    createdBy: payload.createdBy ?? null,
+    // 同一次取货（同一 PICK 行）重放不重复出纸
+    jobUniqueKey: payload.jobUniqueKey ?? `pick_label:${scanLogId}`,
+  }
+  if (!printerId) {
+    return recordUnprintableJob(createJob, { ...jobFields })
+  }
+
+  // 变量读取**单独定界**：
+  //  · **真实缺来源**（PICK 行查不到 ⇒ 返回 null）**算失败**：落一条可补打的失败记录（见下方分支）；
+  //  · **读取异常**（查询/DB 错误）与渲染失败同口径 —— 降级为可补打失败记录，**不回滚业务事务**。
+  let vars
+  try {
+    const source = await readLabelVariables(11, { id: scanLogId, conn: conn || pool })
+    if (!source) {
+      // 正常的新 PICK 行在**同一事务**内一定可读到；读不到属异常态（来源缺失）。
+      // **不得**拿调用方兜底值打一张「缺数量、缺单号」的简化标签冒充成功——
+      // 明确落一条可补打的失败记录，把问题暴露在打印记录页。
+      return recordUnprintableJob(createJob, {
+        ...jobFields,
+        unprintableReason: 'pick_label source missing: PICK row not readable',
+      })
+    }
+    vars = { ...source.vars }
+  } catch (e) {
+    logger.warn('取货标签变量读取失败，降级为无内容打印任务', {
+      jobType: 'pick_label',
+      scanLogId,
+      code: e?.code || null,
+      message: e?.message || String(e),
+    }, 'LabelRenderDegraded')
+    return recordUnprintableJob(createJob, { ...jobFields, unprintableReason: renderFailureReason(e) })
+  }
+  if (data?.container_code) vars.container_code = data.container_code
+
+  let label
+  try {
+    label = await buildLabelBody({ printerId, templateType: 11, vars })
+  } catch (e) {
+    logger.warn('取货标签渲染失败，降级为无内容打印任务', {
+      jobType: 'pick_label',
+      scanLogId,
       code: e?.code || null,
       message: e?.message || String(e),
     }, 'LabelRenderDegraded')
@@ -520,7 +608,7 @@ async function reprintInboundBarcode(recordId, { createdBy = null, scopeWarehous
     // 刻意**不加库存维度锁**：单资源锁比多资源锁安全，加了反而开始与 putaway/void 争锁序。
     const [[row]] = await conn.query(
       `SELECT c.id, c.barcode, c.remaining_qty, c.warehouse_id, c.product_id,
-              c.status AS container_status, c.container_type, c.source_ref_type,
+              c.status AS container_status, c.container_type, c.source_ref_type, c.locked_by_task_id,
               EXISTS(SELECT 1 FROM print_jobs j WHERE j.ref_type = 'inventory_container' AND j.ref_id = c.id) AS has_print_job
        FROM inventory_containers c
        WHERE c.id = ? AND c.deleted_at IS NULL
@@ -546,6 +634,81 @@ async function reprintInboundBarcode(recordId, { createdBy = null, scopeWarehous
     if (Number(row.container_status) === CONTAINER_STATUS.VOID) {
       throw new AppError('该库存条码已作废，不能再补打（货已撤回，重新收货会生成新条码）', 400, 'PRINT_BARCODE_CONTAINER_VOID')
     }
+    // 按**来源用途**分派：扫盒取货生成的取货码必须补打**取货标签（pick_label / type 11）**，
+    // 不能落回容器标签 `container_label`/type 6——那会把取货码打成库存标签，语义与版面都不对。
+    if (String(row.source_ref_type || '') === 'plastic_box_pick') {
+      // by-id 契约与入队**保持一致**：都按 **PICK 行 id** 取变量（数量取自真实 PICK 行，
+      // **不是**容器余量——出库/减量后余量归 0，按余量取会把标签打成「0 个」）。
+      //
+      // 归属判定分两条路，都必须落在**确定的盒取货归属**上，绝不从同一容器的其它任务猜：
+      //  ① **当前锁定于某任务**（`locked_by_task_id` 与上面同一条 `FOR UPDATE` 读出）：
+      //     只在**那个任务**下找盒取货 PICK —— 进行中任务的正常补打。
+      //  ② **未锁定**：必须同时满足「容器**已被扣空**（`EMPTY` 且余量 0）」+「该容器**唯一一条**
+      //     盒取货 PICK、且其任务为**已出库终态**」才放行。这是取货标签的设计场景：货随任务出库、
+      //     容器被扣空转 EMPTY 并解锁，但 PICK 行仍在，标签仍应按原取货量补打
+      //     （B4 补充项：新 guard 曾把这条既有能力一并挡掉）。容器不是 EMPTY / 余量不为 0，
+      //     说明它并非「已出库的取货码」，超出本分支的明确场景 ⇒ 拒绝，不靠它去覆盖其它状态。
+      //
+      // **不**只看容器历史的 `source_ref_type`——取消/归还后它仍是历史取货来源，但任务已取消，
+      // 此时打出「取货标签」没有意义 ⇒ 明确拒绝（批 B4）。取消 / 进行中 / 多条候选 / 任务缺失
+      // 一律拒绝：归属不确定时宁可不打。
+      //
+      // 与上方那条「**只收紧 VOID**、EMPTY 仍可补打」的既有边界的关系：那条说的是**通用库存标**
+      // （EMPTY/待上架仍有实物，补打正当）；本分支是**取货标签**专用，额外要求「确定的任务归属」，
+      // 是对取货标签的收紧，不扩大 VOID 边界。
+      const pickSql = `SELECT sl.id, sl.task_id, wt.status AS task_status, wt.cancel_requested_at
+           FROM scan_logs sl
+           LEFT JOIN warehouse_tasks wt ON wt.id = sl.task_id
+          WHERE sl.container_id = ?
+            AND COALESCE(sl.scan_purpose, 1) = 1
+            AND sl.source_container_id IS NOT NULL`
+      let pickRow = null
+      if (row.locked_by_task_id != null) {
+        const [rows] = await conn.query(
+          `${pickSql} AND sl.task_id = ? ORDER BY sl.id DESC`,
+          [id, Number(row.locked_by_task_id)],
+        )
+        if (!rows.length) {
+          throw new AppError(
+            '该取货码的取货记录已不存在，无法补打这张标签。请核对实物取货码与所属任务；如确需标签，请重新取货后再补打。',
+            409,
+            'PICK_LABEL_SOURCE_MISSING',
+          )
+        }
+        pickRow = rows[0]
+      } else {
+        // 未锁定：先要求「容器已被扣空」——`EMPTY(2)` 且余量 0。不满足说明这不是「已出库的取货码」，
+        // 直接拒绝，不拿它去覆盖别的状态。
+        const emptied = Number(row.container_status) === CONTAINER_STATUS.EMPTY && Number(row.remaining_qty) === 0
+        let only = null
+        if (emptied) {
+          const [rows] = await conn.query(`${pickSql} ORDER BY sl.id ASC`, [id])
+          // 多条候选 = 该容器跨越了多个任务，归属不确定 ⇒ 不猜
+          only = rows.length === 1 ? rows[0] : null
+        }
+        if (only && Number(only.task_status) === WT_STATUS.SHIPPED && !only.cancel_requested_at) {
+          pickRow = only
+        } else {
+          throw new AppError(
+            '该取货码当前不属于任何进行中的任务，也没有唯一一条已出库的取货记录可以对应，无法补打取货标签。请核对实物与任务归属。',
+            409,
+            'PICK_LABEL_NOT_IN_TASK',
+          )
+        }
+      }
+      const pickJob = await enqueuePickLabelJob({
+        conn,
+        scanLogId: pickRow.id,
+        containerId: id,
+        warehouseId: row.warehouse_id != null ? Number(row.warehouse_id) : null,
+        createdBy,
+        data: { container_code: row.barcode },
+        jobUniqueKey: `reprint_pick:${id}:${Date.now()}`,
+      })
+      await conn.commit()
+      return pickJob
+    }
+
     const [[product]] = await conn.query('SELECT name FROM product_items WHERE id = ?', [row.product_id])
     const job = await enqueueContainerLabelJob({
       conn,
@@ -624,6 +787,7 @@ async function reprintBarcodeRecord({ category, recordId, createdBy = null, scop
 
 module.exports = {
   enqueueContainerLabelJob,
+  enqueuePickLabelJob,
   enqueueRackLabelJob,
   enqueueLocationLabelJob,
   enqueuePackageLabelJob,

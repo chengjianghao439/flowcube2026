@@ -488,7 +488,8 @@ async function getContainerLogs(containerId) {
   if (!Number.isFinite(cid) || cid <= 0) throw new AppError('库存条码无效', 400)
   const [rows] = await pool.query(
     `SELECT il.quantity, il.move_type, il.type, il.created_at, il.remark,
-            il.operator_name, il.ref_type, il.ref_no, pi.name AS product_name
+            il.operator_name, il.ref_type, il.ref_no, pi.name AS product_name,
+            il.log_source_type, il.log_source_ref_id
      FROM inventory_logs il
      LEFT JOIN product_items pi ON pi.id = il.product_id
      WHERE il.container_id = ?
@@ -506,6 +507,14 @@ async function getContainerLogs(containerId) {
     operatorName: r.operator_name || null,
     productName: r.product_name,
     createdAt: r.created_at,
+    // 来源贡献（批 A）：这条流水挂在哪个容器视角（container_id）以及它来自哪个容器。
+    // **只有真实「容器转移」来源**（SOURCE_TYPE.CONTAINER_SPLIT = 'container_split'，
+    // 见 engine/containerEngine.js）才把 log_source_ref_id 当来源容器 ID——其它来源
+    // （如采购入库任务）的 log_source_ref_id 是单据 ID，不能冒充容器 ID。
+    sourceContainerId: r.log_source_type === 'container_split' && r.log_source_ref_id != null
+      ? Number(r.log_source_ref_id)
+      : null,
+    logSourceType: r.log_source_type || null,
   }))
 }
 

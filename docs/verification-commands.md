@@ -161,3 +161,42 @@ AST 文案和数量覆盖守卫依赖 frontend 的 TypeScript，必须在安装�
 `npm run smoke:product-price-history-integrity`（独立回环测试库，Tests CI 报表冒烟段，**紧邻上条**）：**商品手工改价的一致性**——① **并发**两次手工改同一商品 ⇒ `product_price_history` 必须是**连贯链**（同一 `price_type` 上每条的 `old_price` = 上一条的 `new_price`），且商品当前值 = 链尾 `new_price`（根因是 `products.update` 曾在事务外读快照）；② `allowDecimalQty` **未传**时保持原值，其中 `allow_decimal_qty IS NULL` 的既定语义是**默认允许小数**（迁移 254），不得在读裸列时当成 0；③ 对**已软删**商品改价必须**明确失败**，且**不写**单位 / 库存策略 / 价格历史等任何脏数据。运行需显式隔离库 + 回环（同本文件测试库约定），命令见本文件开头的环境要求。
 
 **上述三条商品价格相关套件（`smoke:product-price-version-guard`、`smoke:price-change-history`、`smoke:product-price-history-integrity`）自备分类种子**：在**零分类**的全新隔离库上直接可跑——优先复用库中已有分类，**没有则自建一条**并在 `finally` 按 ID 删除（保留他人数据），跑完复查**自建分类残留为 0**。它们**不依赖**「库里预先存在商品分类」这一环境前提（2026-09-29 修复：此前依赖首条分类，CI 新库无分类即失败）。
+
+### 2026-09-29 批 A 塑料盒作业流（放货 / 混批 / 还原整件）
+
+`npm run smoke:plastic-box-batch-a`（`tests/plastic-box-batch-a.smoke.test.js`，**27 项断言**，自然退出码即结论）：走真实业务链（采购→收货→上架）造夹具，断言 HTTP 状态码 + **数据库库存事实**（容器余量、`inventory_stock` 汇总、`inventory_logs` 快照、`print_jobs` 条数与失败态、混合标识两跳继承）。覆盖放货全量转移与同键重放、范围校验覆盖重放、同商品混批与混合标识完整传递、效期保护不可绕、数量精度与箱数上限、参数互斥、并发守恒、PDA 设备闸、**取满**与**超量零副作用**、**空盒残留旧效期清除**、以及**标签渲染失败降级**（业务已提交、只把标签降为 `status=3` 可补打记录）。
+
+隔离要求（比本文件通用约定更严，测试内**硬断言**后不符即直接失败）：`DB_NAME` 必须恰为 `flowcube_plastic_box_20260929_test`、`DB_HOST=127.0.0.1`、`DB_PORT=3307`——用于防止误连共享/生产库。
+Tests CI 的 `regression-plastic-box` job 使用独立 MySQL 8 service（**映射 3307**）与 Node 22，建库 → 迁移 → 执行该命令；其它 job 仍用 3306，互不影响。
+
+渲染失败那一条**不是**真实 worker 故障注入：真实故障源只有光栅 worker 的 `error`/`exit`（`LABEL_RENDER_FAILED`），而模板解析失败只会降级返回 `null` 并回退内置光栅渲染、不抛错。因此沿用 `tests/label-render-degrade.smoke.test.js` 的 `require.cache` 打桩范式（必须在 `label-command` 首次 require 之前），**默认透传真实实现**，仅该用例内打开 `globalThis.__PB_FORCE_RENDER_FAIL__`。边界见用例注释。
+
+### 2026-09-29 批 B（B1+B2）：扫盒取货 + 独立取货标签
+
+`npm run smoke:plastic-box-pick`（`tests/plastic-box-pick.smoke.test.js`，**17 项断言**）：与批 A 同一专库/回环约定，在同一 CI job `regression-plastic-box`（**3307 service**）内**顺序执行**，不另造 job。
+覆盖：扫盒取货生成**本任务锁定的新 `I`**（盒减量、PICK **只落新 I** 且 `source_container_id=盒`、库存守恒）、同键重放不重复、合法第二次取货、取 1 个（散件模式）、超盒存 / 超未拣量 4xx 零副作用、旧「扫整件 I」路径不回归、**范围与设备仓校验覆盖重放**、取货标签 `pick_label`/模板 type 11 入队与变量**取自 PICK 行**、批次日期继承（单批继承真实值 / 混合全空）、**补打实跑**（用途仍 `pick_label`、容器量与 scan 数不变）、**两类打印降级**（无可用打印机 / 渲染失败各留 `status=3` 且业务已提交）、type 11 模板保存即默认且**实际渲染生效**。
+套件**自建夹具逐笔登记**并在 `finally` 合法取消 + 归还，且**核对** `task.status=8` 与自身锁定容器为 0——任何失败计入 `failed` 并自然 `exit 1`。
+**未验**：GUI、物理打印、减量/归还后的补打恢复（留 B4）。
+
+### 2026-09-29 批 B3a：取货码分拣 / 复核下游链
+
+`npm run smoke:pick-code-downstream`（`tests/pick-code-downstream.smoke.test.js`，**19 项断言**）：与前两批同一专库/回环约定，在同一 CI job `regression-plastic-box`（**3307 service**）内**顺序执行**，不另造 job。
+覆盖：扫取货码**精确定位**自身任务/明细/格位与 PICK 有效量、**不回落他 SKU**；旧商品码路径原键重放与新取货码路径原键重放（**完成 3→4 后**与**进度中任务仍 3**两种）均返回原回执且不重复推进、不新增作业记录；取货码经真实 `sort-done` 推进 3→4 并落一条 `sorting_bin_items`；连续两张取货码 `sorted_qty` 为**两者之和**；**混合来源两种顺序**（旧50→标60→标90 / 标60→标90→旧50）逐步累加不覆盖且**未扫完标签不得完成**；**反向**（未扫标签时旧码上限为 `picked − A`）与**整任务完成（`items=null`）按份额写**；他任务取货码、放错格、**多张取货码**、**三位小数**均拒绝且零副作用；复核真实扫码闭合到 `checking→packing`、同键重放与新键重复的行为；**范围 / 设备仓校验覆盖重放**（分拣与复核各一组，**service 直调**，沿用批 A 口径）。
+**证据边界**：`scope`/设备仓的两组断言走 **service 直调**，不得统称「HTTP 全链」；**未被覆盖**：`uk_task_container` 的真实并发冲突、分拣格抢锁期间被改配、多张取货码的批量写入路径（本期显式拒绝）、GUI、物理打印。
+**未验**：GUI（分拣页取货码提示、待确认定位展示、恢复文案）、物理打印、取货码容器的「取消归还 → 再拣」生命周期（属 B4）。
+
+### 2026-09-29 批 B3b：装箱配额按来源取货标签分行 + 回收
+
+`npm run smoke:pack-quota`（`tests/pack-quota.smoke.test.js`，**8 项断言**）：与前几批同一专库/回环约定，在同一 CI job `regression-plastic-box`（**3307 service**）内**顺序执行**，不另造 job。
+覆盖：扫取货标签**不传数量即整份装入**（60 / 90 / 真 150 各一例）且**同商品各成一行**；**幂等 + 回执定位**（同键重放不二次加量；`request-status` 的 **base 与 scoped 两种定位都能查到**原回执、**问别的箱子必须 not_found**；换新键重复装被拒）；**同 SKU 混合两种顺序**（标签先装 / 旧 SKU 先装）且旧 SKU 上限确为 `checked − Σ标签真实复核量`（尚未装的标签货不被吞）；**部分装箱 + 移出后配额释放不串份额**；**作废后同一标签可在新箱重装**；他任务标签被拒（底层归属闸）与「任务未到待打包时**建箱即拒**」（阶段闸，**两者分开断言**）；**取消后不得装箱**。
+**前端组件**：`frontend/src/pages/pda/pack.test.tsx`（**4 例**）与 `sort.test.tsx`（**4 例**）验证待确认冻结、冻结定位展示、恢复文案区分「本次增量 / 累计量」、成功反馈收敛到单一回调。
+**证据边界**：组件用例**只 mock `useCriticalPdaAction`**，**不代表** localStorage 持久化重挂恢复或真实网络中断→恢复链路；红测证据只有**源码层面对比**（HEAD 的 `add-item` 只收 `productCode`+`qty`、`packages.service.js` 无 `label_container_id`），**未取得**干净的「实现前先跑套件」红灯。
+**未验**：GUI、物理打印、真实并发（锁序只做了顺序验证）、`PACK_LABEL_NOT_CHECKED` 在完整链下**不可达**（防御性兜底，未实跑）、`finish` 的 scope-先于-replay 与历史回执事务、`remove`/`void` 无幂等键。
+
+### 2026-09-29 批 B4：取货码取消 / 减量归还闭环
+
+`npm run smoke:pick-cancel-return`（`tests/pick-cancel-return.smoke.test.js`，**5 项断言**）：与前三批同一专库/回环约定，在同一 CI job `regression-plastic-box`（**3307 service**）内**顺序执行**，不另造 job。
+覆盖：**取消整份 150**（新 `I` 解锁、**货不回盒**、库存守恒、留痕、任务取消）；**减量 150→100 后增量回 150 + 补拣盒 50** 的**完整真实链**——改单 `PUT /sale/:id/adjust` → 改单确认 → `container-returns` 确认 → 增量 → 补拣 → `ready` → **真实 `sort-done`** → **真实复核闭合到待打包(5)** → **真实装箱**（补拣标签 50 + **旧码当前有效 100** = 150，旧 SKU 装 1 件被拒）→ **旧码补打**读出 `qty=100`；**取消归还后的码在下一任务按普通整件**（取货码形态被拒后，**继续走完**商品码分拣 → 复核 → 装箱 150）；**取消后补打被明确拒绝**（按当前任务锁 + 当前有效 PICK，不认历史 `source_ref_type`）；**同箱同 SKU 多标签（60+90）经 `finish` 打印链后合法减量**（`package-void` 受控拆箱 + 归还确认 → 箱作废、需求 100 → 重新复核 → 重新装箱）。
+**修复前后对照**：后两项在修复前实测为 `409 PICK_CODE_EXCEEDS_PICKED`（补拣被历史作业份额挤掉）与 `200 queued`（照旧出未归属的取货标签）；修复为「聚合取小者」与「按当前任务锁定位」后转绿。**未改动历史作业记录、未用 SQL 直接改库存/任务/打印状态。**
+**未验**：GUI、物理打印与**实际出纸**（第 4 项只证明入队结果）、`finish`/待出库链（第 5 项只走到**箱贴入队**，未要求客户端完成）、真实并发、`remove`/`void` 无幂等键、`finish` 的 scope-先于-replay 与历史回执事务、**取货标签容器已出库/已 `EMPTY` 后的「历史补打」**（未设计）。
+**第 5 项的完整闭合断言**：非作废箱 `SUM(package_items.qty)=100`、旧箱 `status=3`、`PICK` 合计 100、**历史 `sbi` 保持 `[60,90]` 未被改写**、**ACTIVE 容器余量合计 == `inventory_stock` 缓存**（守恒）。

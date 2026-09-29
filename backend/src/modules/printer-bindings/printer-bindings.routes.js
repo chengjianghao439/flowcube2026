@@ -16,6 +16,7 @@ const VALID_TYPES = [
   'waybill',
   'product_label',
   'inventory_label',
+  'pick_label',
   'rack_label',
   'container_label',
   'package_label',

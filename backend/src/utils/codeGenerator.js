@@ -197,4 +197,62 @@ async function generateContainerCode(conn, prefix = 'I') {
   }
 }
 
-module.exports = { generateMasterCode, generateDailyCode, generateContainerCode, resolvePrefix }
+/**
+ * 一次取 N 个连号容器条码（供「一批同参数容器」的批量建码使用）。
+ *
+ * `count <= 1` 时**完全走原 `generateContainerCode`**（零行为变化）；
+ * 批量时把序列一次性推进 N 个（`LAST_INSERT_ID(seq_value + N)`），再按同一编号格式展开，
+ * 与逐个取号得到的号段一致、且只付一次往返。
+ */
+async function generateContainerCodes(conn, prefix = 'I', count = 1) {
+  const n = Number(count)
+  if (!Number.isInteger(n) || n <= 0) throw new Error(`generateContainerCodes count 无效：${count}`)
+  if (n === 1) return [await generateContainerCode(conn, prefix)]
+
+  const upper = String(prefix || 'I').toUpperCase()
+  const seqKey = `inventory_containers:barcode:${upper}`
+  const isPool = typeof conn.getConnection === 'function'
+  let dedicated = null
+  const db = isPool ? (dedicated = await conn.getConnection()) : conn
+  try {
+    await db.query(
+      'INSERT INTO daily_sequences (seq_key, seq_value) VALUES (?, 0) ON DUPLICATE KEY UPDATE seq_key = seq_key',
+      [seqKey],
+    )
+    const [advanced] = await db.query(
+      'UPDATE daily_sequences SET seq_value = LAST_INSERT_ID(seq_value + ?) WHERE seq_key = ? AND seq_value > 0',
+      [n, seqKey],
+    )
+    if (!advanced.affectedRows) {
+      // 与单号版同样的播种口径：从容器表取当前最大号，再一次性推进 n
+      const [[{ maxNum: seedMax }]] = upper === 'B'
+        ? await db.query(
+            `SELECT COALESCE(MAX(CAST(SUBSTRING(barcode, 2) AS UNSIGNED)), 0) AS maxNum
+             FROM inventory_containers WHERE barcode LIKE 'B%' FOR UPDATE`,
+          )
+        : await db.query(
+            `SELECT COALESCE(MAX(CAST(
+                CASE
+                  WHEN barcode LIKE 'I%' THEN SUBSTRING(barcode, 2)
+                  WHEN barcode LIKE 'CNT%' THEN SUBSTRING(barcode, 4)
+                  ELSE NULL
+                END AS UNSIGNED)), 0) AS maxNum
+             FROM inventory_containers WHERE barcode LIKE 'I%' OR barcode LIKE 'CNT%' FOR UPDATE`,
+          )
+      await db.query(
+        'UPDATE daily_sequences SET seq_value = LAST_INSERT_ID(GREATEST(seq_value, ?) + ?) WHERE seq_key = ?',
+        [seedMax, n, seqKey],
+      )
+    }
+    const [[{ seq }]] = await db.query('SELECT LAST_INSERT_ID() AS seq')
+    const end = Number(seq)
+    const start = end - n + 1
+    const out = []
+    for (let i = start; i <= end; i++) out.push(`${upper}${String(i).padStart(6, '0')}`)
+    return out
+  } finally {
+    if (dedicated) dedicated.release()
+  }
+}
+
+module.exports = { generateMasterCode, generateDailyCode, generateContainerCode, generateContainerCodes, resolvePrefix }

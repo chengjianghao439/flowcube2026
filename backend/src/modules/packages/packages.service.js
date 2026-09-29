@@ -1,8 +1,11 @@
 const { assertQtyPrecision, assertQtyScale } = require('../../utils/qtyPrecision')
+const { roundQty } = require('../../utils/unitConversion')
+const { beginResourceOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const printJobs = require('../print-jobs/print-jobs.service')
 const { assertInScope } = require('../../utils/warehouseScope')
+const { assertTaskScope } = require('../warehouse-tasks/warehouse-tasks.helpers')
 
 const { WT_STATUS, WT_STATUS_NAME } = require('../../constants/warehouseTaskStatus')
 const { WT_EVENT, record: recordEvent } = require('../warehouse-tasks/warehouse-task-events.service')
@@ -24,8 +27,10 @@ async function listByTask(taskId) {
   const ids = pkgs.map(p => p.id)
   const [items] = await pool.query(
     `SELECT pi.package_id, pi.id, pi.product_id, pi.product_code,
-            pi.product_name, pi.unit, pi.qty
+            pi.product_name, pi.unit, pi.qty, pi.label_container_id,
+            lc.barcode AS label_barcode
      FROM package_items pi
+     LEFT JOIN inventory_containers lc ON lc.id = pi.label_container_id
      WHERE pi.package_id IN (${ids.map(() => '?').join(',')})`,
     ids,
   )
@@ -40,6 +45,10 @@ async function listByTask(taskId) {
       productName: i.product_name,
       unit:        i.unit,
       qty:         Number(i.qty),
+      // 来源取货标签：NULL 表示按商品码装的旧 SKU 份额。同一商品可能多行（旧 SKU 一行 +
+      // 各取货标签各一行），所以界面必须按行展示来源，不能按商品合并成"种"。
+      labelContainerId: i.label_container_id != null ? Number(i.label_container_id) : null,
+      labelBarcode:     i.label_barcode || null,
     })
   })
 
@@ -148,44 +157,169 @@ function throwOverpacked({ taskId, product, requestedUnits, packedUnits, limitUn
   )
 }
 
-// ─── 向箱子添加商品 ───────────────────────────────────────────────────────────
-async function addItem(packageId, { productCode, qty }, scopeWarehouseIds = null) {
-  assertQtyScale(qty, '装箱数量')
-  const qtyUnits = toQtyUnits(qty)
-  if (!Number.isFinite(qtyUnits) || qtyUnits <= 0) throw new AppError('数量必须大于 0', 400)
+// ─── 向箱子添加商品（商品码路径 / 取货标签路径）────────────────────────────────
+// 两条路径共用同一个 `package_items` 表与同一个 `(package_id, product_id, label_container_id)`
+// 粒度：`label_container_id IS NULL` 表示按**商品码**装的旧 SKU 份额，非空表示来自某张取货标签。
+// 统计一律**按该粒度分行**——只按商品累计会让旧 SKU 与标签互相吞掉份额。
+// 入参用 **`labelBarcode`**（条码字符串）而不是 id：`I` 码的条码是**独立序号**，
+// 与 `inventory_containers.id` 并不相等，PDA 端只能拿到扫到的字符串。
+async function addItem(packageId, { productCode, labelBarcode, qty }, { requestKey, userId, scopeWarehouseIds = null, pdaWarehouseId = null } = {}) {
+  const hasLabel = labelBarcode != null && String(labelBarcode).trim() !== ''
+  if (hasLabel && productCode) throw new AppError('取货标签与商品条码只能二选一', 400)
+  if (!hasLabel && !productCode) throw new AppError('必须提供商品条码或取货标签', 400)
+  if (qty != null) assertQtyScale(qty, '装箱数量')
 
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+
+    // 锁序：**无锁 peek 所属任务 → 锁任务 → 锁箱 → 复查归属**。
+    // 取消流程走的是 task → `UPDATE packages WHERE warehouse_task_id=?`（锁箱行）；
+    // 这里若反过来先锁箱再锁任务，两条链交叉即死锁。受影响路径统一为 task → pkg。
+    const [[peek]] = await conn.query('SELECT warehouse_task_id FROM packages WHERE id=?', [packageId])
+    if (!peek) throw new AppError('箱子不存在', 404)
+
+    const [[task]] = await conn.query(
+      'SELECT id, status, warehouse_id, cancel_requested_at, adjustment_requested_at FROM warehouse_tasks WHERE id=? AND deleted_at IS NULL FOR UPDATE',
+      [peek.warehouse_task_id],
+    )
+    if (!task) throw new AppError('任务不存在', 404)
+    // 范围 / PDA 设备仓校验必须**先于**幂等 begin：否则重放会绕过越权校验拿到原回执
+    assertTaskScope(task, { scopeWarehouseIds, pdaWarehouseId })
+
+    const requestState = await beginResourceOperationRequest(conn, {
+      requestKey,
+      // base action：helper 会**无条件**再拼 `.resourceId`（`scopedAction = base.resourceId`），
+      // 所以这里传 `package.add`，由 resourceId 绑定到具体箱子
+      action: 'package.add',
+      userId: userId || null,
+      resourceType: 'package',
+      resourceId: packageId,
+    })
+    if (requestState.replay) {
+      await conn.rollback()
+      return requestState.responseData
+    }
+
+    if (task.cancel_requested_at) {
+      throw new AppError('该任务正在拣货退回中，禁止继续打包操作', 409)
+    }
+    if (task.adjustment_requested_at) {
+      throw new AppError('该任务有改单正在等待仓库确认，请先处理完成', 409)
+    }
+    if (Number(task.status) !== WT_STATUS.PACKING) {
+      throw new AppError('任务不在待打包状态，禁止装箱', 400)
+    }
 
     const [[pkg]] = await conn.query(
       'SELECT id, status, warehouse_task_id FROM packages WHERE id=? FOR UPDATE',
       [packageId],
     )
     if (!pkg) throw new AppError('箱子不存在', 404)
+    // peek 只用来定锁序，锁到手后必须复查归属
+    if (Number(pkg.warehouse_task_id) !== Number(task.id)) {
+      throw new AppError('箱子所属任务已变化，请刷新后重试', 409, 'PACKAGE_TASK_CHANGED')
+    }
     if (Number(pkg.status) === 2) throw new AppError('该箱已完成，无法继续添加商品', 400)
     if (Number(pkg.status) === 3) throw new AppError('该箱已作废，无法继续添加商品', 400)
 
-    const [[task]] = await conn.query(
-      'SELECT id, status, warehouse_id, cancel_requested_at FROM warehouse_tasks WHERE id=? AND deleted_at IS NULL FOR UPDATE',
-      [pkg.warehouse_task_id],
-    )
-    if (!task) throw new AppError('任务不存在', 404)
-    assertInScope(scopeWarehouseIds, task.warehouse_id, '仓库任务')
-    if (task.cancel_requested_at) {
-      throw new AppError('该任务正在拣货退回中，禁止继续打包操作', 409)
-    }
-    if (Number(task.status) !== WT_STATUS.PACKING) {
-      throw new AppError('任务不在待打包状态，禁止装箱', 400)
-    }
+    let product
+    let targetLabelId = null
+    let labelBarcodeForResult = null
+    let qtyUnits
 
-    // 查找商品信息
-    const [[product]] = await conn.query(
-      'SELECT id, code, name, unit, article_number, spec, color FROM product_items WHERE code=? AND deleted_at IS NULL',
-      [productCode],
-    )
-    if (!product) throw new AppError(`商品 ${productCode} 不存在`, 404)
-    await assertQtyPrecision(conn, [{ productId: product.id, qty, label: '装箱数量' }])
+    if (hasLabel) {
+      const [[c]] = await conn.query(
+        'SELECT id, barcode, container_type, product_id, locked_by_task_id, warehouse_id FROM inventory_containers WHERE barcode=? AND deleted_at IS NULL',
+        [String(labelBarcode).trim()],
+      )
+      if (!c) throw new AppError('取货标签不存在', 404, 'PACK_LABEL_NOT_FOUND')
+      // 只有整件码（container_type=1）能当取货标签；塑料盒条码扫错了要明确拒绝
+      if (Number(c.container_type) !== 1) {
+        throw new AppError('该条码是塑料盒条码，不是取货码；请扫取货码或商品条码', 400, 'PACK_LABEL_NOT_INDIVIDUAL')
+      }
+      targetLabelId = Number(c.id)
+      if (Number(c.locked_by_task_id) !== Number(task.id)) {
+        throw new AppError('该取货标签未锁定于本任务，无法装箱', 409, 'PACK_LABEL_NOT_IN_TASK')
+      }
+      if (Number(c.warehouse_id) !== Number(task.warehouse_id)) {
+        throw new AppError('取货标签所属仓库与任务不一致，无法装箱', 409, 'PACK_LABEL_WAREHOUSE_MISMATCH')
+      }
+
+      // **真实盒取货记录**：`source_container_id` 非空才算「这张码是从塑料盒取出来的」。
+      // 不能只看容器历史上的 `source_ref_type`——容器被取消/归还后可合法作为普通整件
+      // 再给下一个任务拣，那时它仍是历史取货来源，却不是本任务的取货标签。
+      const [picks] = await conn.query(
+        `SELECT sl.item_id, wti.product_id
+         FROM scan_logs sl
+         JOIN warehouse_task_items wti ON wti.id = sl.item_id AND wti.task_id = sl.task_id
+         WHERE sl.task_id = ? AND sl.container_id = ?
+           AND COALESCE(sl.scan_purpose, 1) = 1 AND sl.source_container_id IS NOT NULL
+         GROUP BY sl.item_id, wti.product_id`,
+        [task.id, targetLabelId],
+      )
+      if (picks.length !== 1) {
+        throw new AppError('该取货标签在本任务下没有唯一的有效盒取货记录，无法装箱', 409, 'PACK_LABEL_NO_PICK')
+      }
+      if (Number(picks[0].product_id) !== Number(c.product_id)) {
+        throw new AppError('取货标签上的商品与该任务明细不一致', 409, 'PACK_LABEL_PRODUCT_MISMATCH')
+      }
+
+      const [[p]] = await conn.query(
+        'SELECT id, code, name, unit, article_number, spec, color FROM product_items WHERE id=? AND deleted_at IS NULL',
+        [picks[0].product_id],
+      )
+      if (!p) throw new AppError('取货标签对应商品不存在', 404)
+      product = p
+      labelBarcodeForResult = c.barcode
+
+      // **真实复核量**：该容器在本任务的 CHECK 合计（未复核不得装箱）
+      const [[chk]] = await conn.query(
+        'SELECT COALESCE(SUM(qty), 0) AS s FROM scan_logs WHERE task_id=? AND container_id=? AND scan_purpose=2',
+        [task.id, targetLabelId],
+      )
+      const checkedLabelQty = roundQty(Number(chk.s))
+      if (checkedLabelQty <= 0) {
+        throw new AppError('该取货标签尚未完成复核扫码，不能装箱', 409, 'PACK_LABEL_NOT_CHECKED')
+      }
+
+      // 该标签**已装箱**的量（作废箱不计）
+      const [[packedLabel]] = await conn.query(
+        `SELECT COALESCE(SUM(pi.qty), 0) AS s
+         FROM package_items pi INNER JOIN packages p ON p.id = pi.package_id
+         WHERE p.warehouse_task_id = ? AND pi.label_container_id = ? AND p.status != 3`,
+        [task.id, targetLabelId],
+      )
+      const labelRemaining = roundQty(checkedLabelQty - Number(packedLabel.s))
+
+      // 默认**整份**（该标签的未装余量），不是 1；显式给量则不得超
+      if (qty == null && labelRemaining <= 0) {
+        throw new AppError(
+          `该取货标签已无未装箱余量（已复核 ${checkedLabelQty}，已装 ${Number(packedLabel.s)}）`,
+          409, 'PACK_LABEL_NO_REMAINING',
+        )
+      }
+      qtyUnits = toQtyUnits(qty == null ? labelRemaining : qty)
+      if (!Number.isFinite(qtyUnits) || qtyUnits <= 0) throw new AppError('数量必须大于 0', 400)
+      // 精度校验要在**最终数量定下来之后**做（默认整份也走这里）：整数商品不能靠标签整份装进小数
+      await assertQtyPrecision(conn, [{ productId: product.id, qty: fromQtyUnits(qtyUnits), label: '装箱数量' }])
+      if (qtyUnits > toQtyUnits(labelRemaining)) {
+        throw new AppError(
+          `装箱数量超过该取货标签的未装余量（已复核 ${checkedLabelQty}，已装 ${Number(packedLabel.s)}，最多可装 ${labelRemaining}）`,
+          409, 'PACK_LABEL_OVER_REMAINING',
+        )
+      }
+    } else {
+      const [[p]] = await conn.query(
+        'SELECT id, code, name, unit, article_number, spec, color FROM product_items WHERE code=? AND deleted_at IS NULL',
+        [productCode],
+      )
+      if (!p) throw new AppError(`商品 ${productCode} 不存在`, 404)
+      product = p
+      await assertQtyPrecision(conn, [{ productId: product.id, qty, label: '装箱数量' }])
+      qtyUnits = toQtyUnits(qty)
+      if (!Number.isFinite(qtyUnits) || qtyUnits <= 0) throw new AppError('数量必须大于 0', 400)
+    }
 
     // 用任务明细行作为同任务同商品的并发闸门；无论装入哪个箱子，同商品装箱都必须串行校验。
     const [taskItems] = await conn.query(
@@ -193,7 +327,7 @@ async function addItem(packageId, { productCode, qty }, scopeWarehouseIds = null
        FROM warehouse_task_items
        WHERE task_id=? AND product_id=?
        FOR UPDATE`,
-      [pkg.warehouse_task_id, product.id],
+      [task.id, product.id],
     )
     if (!taskItems.length) throw new AppError(`商品 ${product.code} 不属于当前任务，禁止装箱`, 400)
 
@@ -201,18 +335,49 @@ async function addItem(packageId, { productCode, qty }, scopeWarehouseIds = null
     const checkedUnits = taskItems.reduce((sum, item) => sum + toQtyUnits(item.checked_qty ?? 0), 0)
     const limitUnits = Math.min(requiredUnits, checkedUnits)
 
+    // 旧商品码路径的**份额上限**：已复核量里**不属于任何取货标签**的那部分。
+    // 依据是标签的**真实复核量**（尚未装箱的标签货也已占住份额），不能用「已装箱的标签量」，
+    // 否则未装的标签货会被旧 SKU 吞掉。
+    if (!hasLabel) {
+      const [[labelChecked]] = await conn.query(
+        `SELECT COALESCE(SUM(sl.qty), 0) AS s
+         FROM scan_logs sl
+         INNER JOIN warehouse_task_items wti ON wti.id = sl.item_id AND wti.task_id = sl.task_id
+         WHERE sl.task_id = ? AND wti.product_id = ?
+           AND sl.scan_purpose = 2
+           AND sl.container_id IN (
+             SELECT DISTINCT container_id FROM scan_logs
+             WHERE task_id = ? AND COALESCE(scan_purpose,1) = 1 AND source_container_id IS NOT NULL
+           )`,
+        [task.id, product.id, task.id],
+      )
+      const legacyLimitUnits = Math.max(0, checkedUnits - toQtyUnits(labelChecked.s))
+      const [[packedLegacy]] = await conn.query(
+        `SELECT COALESCE(SUM(pi.qty), 0) AS s
+         FROM package_items pi INNER JOIN packages p ON p.id = pi.package_id
+         WHERE p.warehouse_task_id = ? AND pi.product_id = ? AND pi.label_container_id IS NULL AND p.status != 3`,
+        [task.id, product.id],
+      )
+      if (toQtyUnits(packedLegacy.s) + qtyUnits > legacyLimitUnits) {
+        throw new AppError(
+          `${product.name} 超出旧商品码可装箱份额（已复核 ${fromQtyUnits(checkedUnits)}，取货标签已占 ${fromQtyUnits(toQtyUnits(labelChecked.s))}，最多可装 ${fromQtyUnits(legacyLimitUnits)}）`,
+          409, 'PACKAGE_LEGACY_OVER_LIMIT',
+        )
+      }
+    }
+
     const [packedRows] = await conn.query(
       `SELECT pi.id, pi.qty
        FROM package_items pi
        INNER JOIN packages p ON p.id = pi.package_id
        WHERE p.warehouse_task_id=? AND pi.product_id=? AND p.status != 3
        FOR UPDATE`,
-      [pkg.warehouse_task_id, product.id],
+      [task.id, product.id],
     )
     const packedUnits = packedRows.reduce((sum, row) => sum + toQtyUnits(row.qty), 0)
     if (packedUnits + qtyUnits > limitUnits) {
       throwOverpacked({
-        taskId: pkg.warehouse_task_id,
+        taskId: task.id,
         product,
         requestedUnits: qtyUnits,
         packedUnits,
@@ -222,10 +387,12 @@ async function addItem(packageId, { productCode, qty }, scopeWarehouseIds = null
       })
     }
 
-    // 若箱中已有该商品，累加数量。目标箱已被锁定，避免同箱重复扫码并发写覆盖。
+    // 同箱同商品**同来源**才累加：旧 SKU 与各取货标签各自成行，互不覆盖。
+    const labelCond = targetLabelId == null ? 'label_container_id IS NULL' : 'label_container_id = ?'
+    const labelParams = targetLabelId == null ? [] : [targetLabelId]
     const [[existing]] = await conn.query(
-      'SELECT id, qty FROM package_items WHERE package_id=? AND product_id=? FOR UPDATE',
-      [packageId, product.id],
+      `SELECT id, qty FROM package_items WHERE package_id=? AND product_id=? AND ${labelCond} FOR UPDATE`,
+      [packageId, product.id, ...labelParams],
     )
 
     let result
@@ -240,13 +407,18 @@ async function addItem(packageId, { productCode, qty }, scopeWarehouseIds = null
         productName: product.name,
         unit:        product.unit,
         qty:         newQty,
+        // 本次**增量**：`qty` 是该行的累计量，界面提示要区分「本次装了多少」与「累计多少」
+        addedQty:    fromQtyUnits(qtyUnits),
+        labelContainerId: targetLabelId,
+        // 原条码也回给前端：它是**回执定位**用的稳定标识（列表/查询接口已有同名字段）
+        labelBarcode: labelBarcodeForResult,
       }
     } else {
       const [ins] = await conn.query(
         `INSERT INTO package_items
-           (package_id, product_id, product_code, product_name, unit, article_number, spec, color, qty)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [packageId, product.id, product.code, product.name, product.unit, product.article_number || null, product.spec || null, product.color || null, fromQtyUnits(qtyUnits)],
+           (package_id, label_container_id, product_id, product_code, product_name, unit, article_number, spec, color, qty)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [packageId, targetLabelId, product.id, product.code, product.name, product.unit, product.article_number || null, product.spec || null, product.color || null, fromQtyUnits(qtyUnits)],
       )
       result = {
         itemId:      ins.insertId,
@@ -255,9 +427,18 @@ async function addItem(packageId, { productCode, qty }, scopeWarehouseIds = null
         productName: product.name,
         unit:        product.unit,
         qty:         fromQtyUnits(qtyUnits),
+        addedQty:    fromQtyUnits(qtyUnits),
+        labelContainerId: targetLabelId,
+        labelBarcode: labelBarcodeForResult,
       }
     }
 
+    await completeOperationRequest(conn, requestState, {
+      data: result,
+      message: '商品已加入箱子',
+      resourceType: 'package',
+      resourceId: packageId,
+    })
     await conn.commit()
     return result
   } catch (e) {
@@ -269,33 +450,44 @@ async function addItem(packageId, { productCode, qty }, scopeWarehouseIds = null
 }
 
 // ─── 从箱子移出商品（扫错/多扫纠正）────────────────────────────────────────────
-async function removeItem(packageId, { itemId, qty }, scopeWarehouseIds = null) {
+async function removeItem(packageId, { itemId, qty }, { scopeWarehouseIds = null, pdaWarehouseId = null } = {}) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+
+    // 锁序与 addItem 统一：先 peek 定所属任务 → 锁任务 → 锁箱 → 复查归属。
+    // 反过来先锁箱会和取消流程的 task → packages 交叉死锁。
+    const [[peek]] = await conn.query('SELECT warehouse_task_id FROM packages WHERE id=?', [packageId])
+    if (!peek) throw new AppError('箱子不存在', 404)
+
+    const [[task]] = await conn.query(
+      'SELECT id, status, warehouse_id, cancel_requested_at, adjustment_requested_at FROM warehouse_tasks WHERE id=? AND deleted_at IS NULL FOR UPDATE',
+      [peek.warehouse_task_id],
+    )
+    if (!task) throw new AppError('任务不存在', 404)
+    assertTaskScope(task, { scopeWarehouseIds, pdaWarehouseId })
 
     const [[pkg]] = await conn.query(
       'SELECT id, status, warehouse_task_id FROM packages WHERE id=? FOR UPDATE',
       [packageId],
     )
     if (!pkg) throw new AppError('箱子不存在', 404)
+    if (Number(pkg.warehouse_task_id) !== Number(task.id)) {
+      throw new AppError('箱子所属任务已变化，请刷新后重试', 409, 'PACKAGE_TASK_CHANGED')
+    }
     if (Number(pkg.status) !== 1) throw new AppError('该箱已完成或已作废，无法移除商品', 400)
-
-    const [[task]] = await conn.query(
-      'SELECT id, status, warehouse_id, cancel_requested_at FROM warehouse_tasks WHERE id=? AND deleted_at IS NULL FOR UPDATE',
-      [pkg.warehouse_task_id],
-    )
-    if (!task) throw new AppError('任务不存在', 404)
-    assertInScope(scopeWarehouseIds, task.warehouse_id, '仓库任务')
     if (task.cancel_requested_at) {
       throw new AppError('该任务正在拣货退回中，禁止继续打包操作', 409)
+    }
+    if (task.adjustment_requested_at) {
+      throw new AppError('该任务有改单正在等待仓库确认，请先处理完成', 409)
     }
     if (Number(task.status) !== WT_STATUS.PACKING) {
       throw new AppError('任务不在待打包状态，禁止移除商品', 400)
     }
 
     const [[item]] = await conn.query(
-      'SELECT id, product_id, product_code, product_name, unit, qty FROM package_items WHERE id=? AND package_id=? FOR UPDATE',
+      'SELECT id, product_id, product_code, product_name, unit, qty, label_container_id FROM package_items WHERE id=? AND package_id=? FOR UPDATE',
       [itemId, packageId],
     )
     if (!item) throw new AppError('该商品明细不存在', 404)
@@ -312,6 +504,7 @@ async function removeItem(packageId, { itemId, qty }, scopeWarehouseIds = null) 
       result = {
         itemId: item.id, productId: item.product_id, productCode: item.product_code,
         productName: item.product_name, unit: item.unit, removed: true, qty: 0,
+        labelContainerId: item.label_container_id != null ? Number(item.label_container_id) : null,
       }
     } else {
       const newQty = fromQtyUnits(currentUnits - removeUnits)
@@ -319,6 +512,7 @@ async function removeItem(packageId, { itemId, qty }, scopeWarehouseIds = null) 
       result = {
         itemId: item.id, productId: item.product_id, productCode: item.product_code,
         productName: item.product_name, unit: item.unit, removed: false, qty: newQty,
+        labelContainerId: item.label_container_id != null ? Number(item.label_container_id) : null,
       }
     }
 
@@ -333,27 +527,37 @@ async function removeItem(packageId, { itemId, qty }, scopeWarehouseIds = null) 
 }
 
 // ─── 作废单箱（整箱装错重来，不影响任务下其它箱子）────────────────────────────────
-async function voidPackage(packageId, scopeWarehouseIds = null) {
+async function voidPackage(packageId, { scopeWarehouseIds = null, pdaWarehouseId = null } = {}) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+
+    // 锁序同 addItem/removeItem：peek → 锁任务 → 锁箱 → 复查归属
+    const [[peek]] = await conn.query('SELECT warehouse_task_id FROM packages WHERE id=?', [packageId])
+    if (!peek) throw new AppError('箱子不存在', 404)
+
+    const [[task]] = await conn.query(
+      'SELECT id, status, warehouse_id, cancel_requested_at, adjustment_requested_at FROM warehouse_tasks WHERE id=? AND deleted_at IS NULL FOR UPDATE',
+      [peek.warehouse_task_id],
+    )
+    if (!task) throw new AppError('任务不存在', 404)
+    assertTaskScope(task, { scopeWarehouseIds, pdaWarehouseId })
 
     const [[pkg]] = await conn.query(
       'SELECT id, status, warehouse_task_id FROM packages WHERE id=? FOR UPDATE',
       [packageId],
     )
     if (!pkg) throw new AppError('箱子不存在', 404)
+    if (Number(pkg.warehouse_task_id) !== Number(task.id)) {
+      throw new AppError('箱子所属任务已变化，请刷新后重试', 409, 'PACKAGE_TASK_CHANGED')
+    }
     if (Number(pkg.status) === 3) throw new AppError('该箱已作废，无需重复操作', 400)
     if (Number(pkg.status) === 2) throw new AppError('该箱已完成，无法作废', 400)
-
-    const [[task]] = await conn.query(
-      'SELECT id, status, warehouse_id, cancel_requested_at FROM warehouse_tasks WHERE id=? AND deleted_at IS NULL FOR UPDATE',
-      [pkg.warehouse_task_id],
-    )
-    if (!task) throw new AppError('任务不存在', 404)
-    assertInScope(scopeWarehouseIds, task.warehouse_id, '仓库任务')
     if (task.cancel_requested_at) {
       throw new AppError('该任务正在拣货退回中，请通过「拣货退回」流程处理该箱子', 409)
+    }
+    if (task.adjustment_requested_at) {
+      throw new AppError('该任务有改单正在等待仓库确认，请先处理完成', 409)
     }
     if (Number(task.status) !== WT_STATUS.PACKING) {
       throw new AppError('任务不在待打包状态，禁止作废箱子', 400)
@@ -474,17 +678,13 @@ async function buildFinishedPackagePrintResult(exec, packageId, warehouseTaskId,
 
 // ─── 完成箱子并保持打印链原子性 ────────────────────────────────────────────────
 async function markPackageFinishedWithinTransaction(conn, packageId) {
-  const [[pkg]] = await conn.query(
-    'SELECT id, status, warehouse_task_id FROM packages WHERE id=? FOR UPDATE',
-    [packageId],
-  )
-  if (!pkg) throw new AppError('箱子不存在', 404)
-  if (Number(pkg.status) === 3) throw new AppError('该箱已作废，无法完成打包', 400)
-  const alreadyFinished = Number(pkg.status) === 2
+  // 锁序同 addItem/removeItem/voidPackage：peek → 锁任务 → 锁箱 → 复查归属
+  const [[peek]] = await conn.query('SELECT warehouse_task_id FROM packages WHERE id=?', [packageId])
+  if (!peek) throw new AppError('箱子不存在', 404)
 
   const [[taskRow]] = await conn.query(
-    'SELECT id, status, task_no, cancel_requested_at FROM warehouse_tasks WHERE id=? FOR UPDATE',
-    [pkg.warehouse_task_id],
+    'SELECT id, status, task_no, cancel_requested_at, adjustment_requested_at FROM warehouse_tasks WHERE id=? FOR UPDATE',
+    [peek.warehouse_task_id],
   )
   if (!taskRow || Number(taskRow.status) !== WT_STATUS.PACKING) {
     throw new AppError('任务不在待打包状态，禁止完成装箱', 400)
@@ -492,6 +692,20 @@ async function markPackageFinishedWithinTransaction(conn, packageId) {
   if (taskRow.cancel_requested_at) {
     throw new AppError('该任务正在拣货退回中，禁止继续打包操作', 409)
   }
+  if (taskRow.adjustment_requested_at) {
+    throw new AppError('该任务有改单正在等待仓库确认，请先处理完成', 409)
+  }
+
+  const [[pkg]] = await conn.query(
+    'SELECT id, status, warehouse_task_id FROM packages WHERE id=? FOR UPDATE',
+    [packageId],
+  )
+  if (!pkg) throw new AppError('箱子不存在', 404)
+  if (Number(pkg.warehouse_task_id) !== Number(taskRow.id)) {
+    throw new AppError('箱子所属任务已变化，请刷新后重试', 409, 'PACKAGE_TASK_CHANGED')
+  }
+  if (Number(pkg.status) === 3) throw new AppError('该箱已作废，无法完成打包', 400)
+  const alreadyFinished = Number(pkg.status) === 2
 
   if (!alreadyFinished) {
     const [[{ cnt }]] = await conn.query(
@@ -529,7 +743,7 @@ async function markPackageFinishedWithinTransaction(conn, packageId) {
   }
 }
 
-async function finishPackage(packageId, { createdBy, scopeWarehouseIds = null } = {}) {
+async function finishPackage(packageId, { createdBy, scopeWarehouseIds = null, pdaWarehouseId = null } = {}) {
   const [[pkg]] = await pool.query(
     `SELECT p.id, p.barcode, p.status, p.warehouse_task_id, wt.warehouse_id
      FROM packages p
@@ -538,7 +752,7 @@ async function finishPackage(packageId, { createdBy, scopeWarehouseIds = null } 
     [packageId],
   )
   if (!pkg) throw new AppError('箱子不存在', 404)
-  assertInScope(scopeWarehouseIds, pkg.warehouse_id, '仓库任务')
+  assertTaskScope({ warehouse_id: pkg.warehouse_id }, { scopeWarehouseIds, pdaWarehouseId })
 
   if (Number(pkg.status) === 2) {
     const existingJob = await findActivePackageLabelJob(pool, packageId)

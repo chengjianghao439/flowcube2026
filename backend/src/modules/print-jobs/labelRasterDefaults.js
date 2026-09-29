@@ -1,10 +1,12 @@
 /** Fallback only when no stored template exists. Stored layouts always take precedence. */
 function defaultLabelLayout(type) {
-  const barcodeKey = { 5: 'rack_barcode', 6: 'container_code', 7: 'box_code', 8: 'product_code', 9: 'container_code', 10: 'location_barcode' }[type]
+  const barcodeKey = { 5: 'rack_barcode', 6: 'container_code', 7: 'box_code', 8: 'product_code', 9: 'container_code', 10: 'location_barcode', 11: 'container_code' }[type]
   const fields = {
     5: ['rack_code', 'zone', 'name'], 6: ['product_name', 'qty'],
     7: ['task_no', 'customer_name', 'carrier_name', 'freight_type_name', 'piece_count', 'item_list'],
     8: ['product_name', 'spec', 'unit', 'price'], 9: ['product_name'], 10: ['location_code', 'zone', 'name'],
+    // 取货标签（批 B2）：条码即取货码自身；文字含来源单据号、商品与本次取货数量
+    11: ['sale_order_no', 'product_name', 'qty'],
   }[type]
   if (!fields) throw new Error('未知标签类型')
   const compact = type === 7

@@ -34,6 +34,7 @@ const PdaCheckPage   = lazy(() => import('@/pages/pda/check'))
 const PdaPackPage    = lazy(() => import('@/pages/pda/pack'))
 const PdaStockcheckPage = lazy(() => import('@/pages/pda/stockcheck'))
 const PdaSplitPage   = lazy(() => import('@/pages/pda/split'))
+const PdaFillPage    = lazy(() => import('@/pages/pda/fill'))
 const PdaBindPage    = lazy(() => import('@/pages/pda/bind'))
 const PdaShipPage    = lazy(() => import('@/pages/pda/ship'))
 const PdaSortPage    = lazy(() => import('@/pages/pda/sort'))
@@ -73,7 +74,10 @@ export function pdaRoutes() {
               <Route path="check" element={<PdaRoutePermission title="复核作业" required={[PERMISSIONS.WAREHOUSE_TASK_VIEW, PERMISSIONS.WAREHOUSE_TASK_CHECK]}><PdaCheckPage /></PdaRoutePermission>} />
               <Route path="pack/:id" element={<PdaRoutePermission title="打包作业" required={[PERMISSIONS.WAREHOUSE_TASK_VIEW, PERMISSIONS.WAREHOUSE_TASK_PACK]}><PdaPackPage /></PdaRoutePermission>} />
               <Route path="pack" element={<PdaRoutePermission title="打包作业" required={[PERMISSIONS.WAREHOUSE_TASK_VIEW, PERMISSIONS.WAREHOUSE_TASK_PACK]}><PdaPackPage /></PdaRoutePermission>} />
-              <Route path="split" element={<PdaRoutePermission title="塑料盒拆分" required={[PERMISSIONS.INVENTORY_CONTAINER_SPLIT]}><PdaSplitPage /></PdaRoutePermission>} />
+              {/* 塑料盒作业：扫 B 还原整件（主语义）；旧 I→散件盒方向保留为同页另一分支 */}
+              <Route path="split" element={<PdaRoutePermission title="塑料盒作业" required={[PERMISSIONS.INVENTORY_CONTAINER_SPLIT]}><PdaSplitPage /></PdaRoutePermission>} />
+              {/* 放货：扫整件来源 → 扫目标盒 → 全部放入 */}
+              <Route path="fill" element={<PdaRoutePermission title="塑料盒放货" required={[PERMISSIONS.INVENTORY_CONTAINER_SPLIT]}><PdaFillPage /></PdaRoutePermission>} />
               <Route path="stockcheck/:id" element={<PdaRoutePermission title="扫码盘点" required={[PERMISSIONS.STOCKCHECK_VIEW]}><PdaStockcheckPage /></PdaRoutePermission>} />
               <Route path="stockcheck" element={<PdaRoutePermission title="扫码盘点" required={[PERMISSIONS.STOCKCHECK_VIEW]}><PdaStockcheckPage /></PdaRoutePermission>} />
               {/* 设备绑定不挂业务权限：任何能登录 PDA 的操作员都要能绑定，

@@ -26,10 +26,113 @@ const fmt = r => ({
 })
 
 /**
+ * 取货码（扫塑料盒取货生成的整件 `I` 码）精确解析。
+ *
+ * 与旧商品码路径**互斥**：一旦命中容器条码就按取货码处理，不合法直接拒绝，
+ * **绝不**下落到商品码的精确/模糊匹配——否则一张「本任务取货码」会被错配到
+ * 别的 SKU 的最早任务上，工人按提示放错格而不自知。
+ *
+ * 归属判定绑定**当前任务下的有效取货 PICK 行**（`scan_purpose=1` 且 `source_container_id`
+ * 非空）。不能只看容器上的 `source_ref_type='plastic_box_pick'`：容器被取消/归还后可
+ * 合法作为普通整件再给下一个任务拣，那时它仍是历史取货来源，但**不是**新任务的取货标签。
+ *
+ * @returns {Promise<object|null>} 命中容器则返回解析结果；未命中容器返回 null（交回商品码路径）
+ */
+async function resolvePickCode(code, scopeWarehouseIds = null) {
+  const [[c]] = await pool.query(
+    `SELECT id, barcode, container_type, product_id, locked_by_task_id, warehouse_id
+     FROM inventory_containers WHERE barcode = ? AND deleted_at IS NULL`,
+    [code],
+  )
+  if (!c) return null                    // 未命中容器：交回旧商品码路径
+  if (Number(c.container_type) !== 1) {
+    throw new AppError('该条码是塑料盒条码，不是取货码；请扫取货码或商品条码', 400, 'PICK_CODE_NOT_INDIVIDUAL')
+  }
+  if (c.locked_by_task_id == null) {
+    throw new AppError(
+      '该取货码未锁定给任何进行中的任务（可能已归还或已出库），请核对实物；如确需分拣请重新拣货',
+      409, 'PICK_CODE_NOT_LOCKED',
+    )
+  }
+
+  // scan_purpose=1 为取货扫码；source_container_id 非空 ⇒ 这条货是**从塑料盒取出来的**，
+  // 而不是该容器被当普通整件直接拣走（后者没有取货标签语义，不许按取货码分拣）。
+  const [picks] = await pool.query(
+    `SELECT item_id, COALESCE(SUM(qty), 0) AS pick_qty
+     FROM scan_logs
+     WHERE task_id = ? AND container_id = ?
+       AND COALESCE(scan_purpose, 1) = 1
+       AND source_container_id IS NOT NULL
+     GROUP BY item_id`,
+    [c.locked_by_task_id, c.id],
+  )
+  if (!picks.length) {
+    throw new AppError('该取货码在本任务下没有有效的盒取货记录，无法分拣', 409, 'PICK_CODE_NO_PICK_RECORD')
+  }
+  if (picks.length > 1) {
+    throw new AppError('该取货码在本任务下对应多条明细，无法确定分拣归属，请联系主管', 409, 'PICK_CODE_AMBIGUOUS')
+  }
+
+  const [rows] = await pool.query(
+    `SELECT wt.id AS task_id, wt.task_no, wt.customer_name, wt.warehouse_id, wt.status,
+            wt.sorting_bin_id, wt.sorting_bin_code,
+            wt.cancel_requested_at, wt.adjustment_requested_at,
+            wti.id AS item_id, wti.product_id, wti.product_code, wti.product_name, wti.unit,
+            wti.required_qty, wti.picked_qty
+     FROM warehouse_tasks wt
+     JOIN warehouse_task_items wti ON wti.id = ? AND wti.task_id = wt.id
+     WHERE wt.id = ? AND wt.deleted_at IS NULL`,
+    [Number(picks[0].item_id), c.locked_by_task_id],
+  )
+  const row = rows[0]
+  if (!row) throw new AppError('该取货码所属的任务明细已不存在', 409, 'PICK_CODE_SOURCE_MISSING')
+  if (Number(row.product_id) !== Number(c.product_id)) {
+    throw new AppError('取货码上的商品与该任务明细不一致，无法分拣', 409, 'PICK_CODE_PRODUCT_MISMATCH')
+  }
+  assertInScope(scopeWarehouseIds, row.warehouse_id, '仓库任务')
+  if (row.cancel_requested_at) {
+    throw new AppError('该取货码所属任务正在拣货退回中，不可继续分拣', 409, 'PICK_CODE_TASK_CANCELLING')
+  }
+  if (row.adjustment_requested_at) {
+    throw new AppError('该取货码所属任务有改单正在等待仓库确认，请先处理完成', 409, 'PICK_CODE_TASK_ADJUSTING')
+  }
+  if (![WT_STATUS.PICKING, WT_STATUS.SORTING].includes(Number(row.status))) {
+    throw new AppError('该取货码所属任务不在分拣阶段（仅拣货中/待分拣可扫取货码）', 409, 'PICK_CODE_TASK_NOT_SORTING')
+  }
+
+  const [[{ itemCount }]] = await pool.query(
+    'SELECT COUNT(*) AS itemCount FROM warehouse_task_items WHERE task_id = ?',
+    [row.task_id],
+  )
+  return {
+    productCode:    row.product_code,
+    productName:    row.product_name,
+    unit:           row.unit,
+    requiredQty:    row.required_qty,
+    pickedQty:      row.picked_qty,
+    itemId:         row.item_id,
+    taskId:         row.task_id,
+    taskNo:         row.task_no,
+    customerName:   row.customer_name,
+    warehouseId:    row.warehouse_id,
+    sortingBinId:   row.sorting_bin_id   || null,
+    sortingBinCode: row.sorting_bin_code || null,
+    taskItemCount:  Number(itemCount),
+    // ── 取货码专属 ──
+    isPickCode:     true,
+    containerId:    Number(c.id),
+    qty:            Number(picks[0].pick_qty),   // 该容器在本任务的**有效取货量**
+  }
+}
+
+/**
  * PDA 扫商品条码 → 查找对应任务的分拣格
  * 逻辑：在备货中（status=2）的任务明细里查找匹配 product_code 的条目
  */
 async function scanProduct(code, scopeWarehouseIds = null) {
+  // 取货码优先且**互斥**：命中容器就不会再走下面的商品码匹配
+  const pickHit = await resolvePickCode(code, scopeWarehouseIds)
+  if (pickHit) return pickHit
   const scope = scopeFilter(scopeWarehouseIds, 'wt.warehouse_id')
   // 1. 在备货中（status=2）任务的明细里找匹配商品
   // 不限制 picked_qty，分拣操作面向整个任务，只要商品属于备货中任务即可
@@ -75,6 +178,22 @@ async function scanProduct(code, scopeWarehouseIds = null) {
     [item.task_id],
   )
 
+  // A —— 该明细**全部有效盒取货量**（含尚未扫标签分拣的那部分），口径同 warehouse-tasks.sort.js。
+  // 旧商品码路径可选份额的上限依据是 **A**，不是「已确认标签量 C」：标签份额在拣货那一刻
+  // 就已归属，未扫任何标签时旧码也只能报 picked - A（否则会把标签份额静默标掉）。
+  // 无盒取货时 A=0 ⇒ sortableQty === pickedQty，与既有行为完全一致。
+  const [[{ labelTotal }]] = await pool.query(
+    `SELECT COALESCE(SUM(sl.qty), 0) AS labelTotal
+     FROM scan_logs sl
+     JOIN warehouse_task_items wti ON wti.id = sl.item_id AND wti.task_id = sl.task_id
+     WHERE sl.task_id = ? AND wti.product_id = ?
+       AND COALESCE(sl.scan_purpose, 1) = 1
+       AND sl.source_container_id IS NOT NULL`,
+    [item.task_id, item.product_id],
+  )
+  const pickedQty = Number(item.picked_qty)
+  const labelTotalQty = Number(labelTotal)
+
   return {
     productCode:    item.product_code,
     productName:    item.product_name,
@@ -89,6 +208,9 @@ async function scanProduct(code, scopeWarehouseIds = null) {
     sortingBinId:   item.sorting_bin_id   || null,
     sortingBinCode: item.sorting_bin_code || null,
     taskItemCount:  Number(itemCount),
+    // ── 商品码路径的可报份额（被盒取货标签占走的部分之外）──
+    labelTotalQty,
+    sortableQty:    Math.max(0, pickedQty - labelTotalQty),
   }
 }
 
@@ -320,6 +442,7 @@ async function forceRelease(id, scopeWarehouseIds = null) {
 
 module.exports = {
   scanProduct,
+  resolvePickCode,
   findAll, findAllWarehouses, create, batchCreate, update, remove,
   assignToTask, releaseByTask, forceRelease, checkCapacityWarning,
 }

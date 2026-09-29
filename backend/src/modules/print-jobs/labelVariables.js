@@ -36,6 +36,21 @@ const SOURCES = {
     select: `d.id, d.barcode, d.code, d.zone, d.name, d.warehouse_id, d.aisle, d.rack, d.level, d.position, d.remark, ${WAREHOUSE_SELECT}`,
     from: `warehouse_locations d ${WAREHOUSE_JOIN}`,
   },
+  // 取货标签（批 B2 type 11）：变量取自**真实 PICK 扫码行**（数量、任务、销售单），
+  // **不是**容器的 `remaining_qty`——发货/减量后余量会归 0，按余量取会把标签补打成「0 个」。
+  11: {
+    // `d.barcode` 保留原名：latest 取样分支的 `sourceLabel` 读的是 `row.barcode`，
+    // 只别名成 container_code 会让它在预览里变空。
+    select: `d.id, d.barcode, d.barcode AS container_code, sl.qty AS qty, sl.task_id,
+      wt.sale_order_no, wt.customer_name, wt.warehouse_id,
+      p.name AS product_name, p.code AS product_code,
+      COALESCE(NULLIF(d.unit, ''), p.unit) AS unit, ${WAREHOUSE_SELECT}`,
+    from: `scan_logs sl
+      JOIN inventory_containers d ON d.id = sl.container_id
+      LEFT JOIN warehouse_tasks wt ON wt.id = sl.task_id
+      LEFT JOIN product_items p ON p.id = d.product_id
+      ${WAREHOUSE_JOIN}`,
+  },
 }
 
 function pick(row, keys) {
@@ -72,16 +87,30 @@ async function readLabelVariables(type, { id = null, scopeWarehouseIds = null, c
     }
     if (type === 7) where.push('wt.deleted_at IS NULL', 'd.status<>3')
   } else {
-    where.push('d.id=?')
+    // 取货标签（type 11）按 **PICK 扫码行 id** 定位（它承载本次取货数量与来源任务），
+    // 其余类型仍按容器/单据 id。
+    where.push(type === 11 ? 'sl.id=?' : 'd.id=?')
     params.push(id)
     // 作废容器不参与取变量：与箱贴分支（type=7）排除 `d.status<>3` 同口径，作为「补打入口
     // 已单独拒绝 VOID」之外的第三道防线——任何走这条路的调用方都取不到已作废容器的数据。
     if (type === 6 || type === 9) where.push(`d.status <> ${CONTAINER_STATUS.VOID}`)
   }
+  // 取货标签（type 11）只认「扫盒取货」写下的 PICK 行：
+  //   · `scan_purpose` 为 PICK（值 1；历史行可能为 NULL，与 scan-logs 同口径用 COALESCE 兜底）
+  //   · 来源必须是本功能写入的 `plastic_box_pick` 容器——**排除普通整件 I 的拣货扫码**
+  //   · 排除 VOID 容器
+  // 少了这层筛选，latest 取样会拿 CHECK 扫码 / 普通 I 扫码当「取货标签」样例。
+  if (type === 11) {
+    where.push(
+      'COALESCE(sl.scan_purpose, 1) = 1',
+      "d.source_ref_type = 'plastic_box_pick'",
+      `d.status <> ${CONTAINER_STATUS.VOID}`,
+    )
+  }
   const scope = type === 8 ? { sql: '', params: [] }
     : scopeFilter(scopeWarehouseIds, type === 7 ? 'wt.warehouse_id' : 'd.warehouse_id')
   const [[row]] = await conn.query(
-    `SELECT ${source.select} FROM ${source.from} WHERE ${where.join(' AND ')}${scope.sql} ORDER BY d.id DESC LIMIT 1`,
+    `SELECT ${source.select} FROM ${source.from} WHERE ${where.join(' AND ')}${scope.sql} ORDER BY ${type === 11 ? 'sl.id' : 'd.id'} DESC LIMIT 1`,
     [...params, ...scope.params],
   )
   if (!row) return null
@@ -98,6 +127,14 @@ async function readLabelVariables(type, { id = null, scopeWarehouseIds = null, c
     vars = { product_code: row.code, product_name: row.name,
       ...pick(row, ['spec', 'unit', 'article_number', 'color']),
       price: row.sale_price != null ? Number(row.sale_price).toFixed(2) : '' }
+  } else if (type === 11) {
+    // 取货标签（批 B2）：条码即取货码；数量取**本次 PICK 行的 qty**（不用容器余量）
+    vars = {
+      container_code: row.container_code,
+      qty: row.qty != null ? String(row.qty) : '',
+      ...pick(row, ['product_name', 'product_code', 'unit', 'sale_order_no', 'customer_name']),
+      ...warehouse,
+    }
   } else {
     const [items] = await conn.query(
       `SELECT pi.qty, p.name AS product_name FROM package_items pi

@@ -35,13 +35,20 @@ router.post('/',
 )
 
 // POST /api/packages/:id/add-item    — 向箱子添加商品
+// 两种形态二选一：
+//   · 商品码：`{ productCode, qty }`（旧 SKU 份额，行为不变）
+//   · 取货标签：`{ labelContainerId, qty? }`——**qty 省略即整份装入该标签的未装余量**
+//     （扫码作业的默认语义：扫一张标签就把这张标签的货全放进去，不是 1 件）
 router.post('/:id/add-item',
   pdaOnly,
   pdaSessionRequired(),
   requirePermission(PERMISSIONS.WAREHOUSE_TASK_PACK),
   validateBody(z.object({
-    productCode: z.string().min(1, '商品条码必填'),
-    qty:         z.number().positive('数量必须大于 0'),
+    productCode:      z.string().min(1).optional(),
+    labelBarcode:     z.string().min(1).optional(),
+    qty:              z.number().positive('数量必须大于 0').optional(),
+  }).refine(v => Boolean(v.productCode) !== Boolean(v.labelBarcode), {
+    message: '商品条码与取货标签必须且只能提供一个',
   })),
   ctrl.addItem,
 )

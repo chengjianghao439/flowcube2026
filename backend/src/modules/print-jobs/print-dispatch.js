@@ -19,8 +19,10 @@ function normalizeJobType(jobType, contentType) {
   if (j === 'location_label') return 'location_label'
   if (j === 'package_label') return 'package_label'
   if (j === 'pda_label' || j === 'label') return 'product_label'
+  // 取货标签（批 B2）：扫盒取货生成的独立取货码，**不得用库存标签假充**
+  if (j === 'pick_label') return 'pick_label'
   if (
-    ['waybill', 'product_label', 'inventory_label', 'rack_label', 'container_label', 'package_label', 'location_label'].includes(j)
+    ['waybill', 'product_label', 'inventory_label', 'pick_label', 'rack_label', 'container_label', 'package_label', 'location_label'].includes(j)
   ) {
     return j
   }
@@ -36,6 +38,8 @@ function bindingFallbackChain(primary) {
     container_label: ['container_label', 'inventory_label'],
     location_label: ['location_label', 'inventory_label'],
     package_label: ['package_label'],
+    // 取货标签：优先专用绑定，未配置时回退「库存标签机」——与收货标签同一约定
+    pick_label: ['pick_label', 'inventory_label'],
     waybill: ['waybill'],
     product_label: ['product_label'],
     inventory_label: ['inventory_label'],

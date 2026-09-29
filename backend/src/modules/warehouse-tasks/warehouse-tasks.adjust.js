@@ -39,6 +39,8 @@ async function reducePickScanLogForContainer(conn, { taskId, itemId, containerId
     }
     remaining -= take
   }
+  // **不动 `sorting_bin_items`**：那是历史作业记录，减量不改写它（改的是「有效量」的读法，
+  // 见 warehouse-tasks.sort.js 的 confirmedPickLabelQty）。
 }
 
 /**
@@ -147,7 +149,9 @@ async function applyProductDeltaWithinTransaction(conn, {
     let needFromPacked = reduceQty - freePickedNotPacked
     const [candidatePackages] = await conn.query(
       `SELECT p.id AS package_id, p.barcode,
-              (SELECT qty FROM package_items WHERE package_id=p.id AND product_id=?) AS target_qty
+              -- 必须 SUM：装箱行按来源取货标签分行后，同一箱同一商品可能有多行
+              -- （旧 SKU 一行 + 各取货标签各一行），标量子查询会因多行直接报错
+              (SELECT COALESCE(SUM(qty), 0) FROM package_items WHERE package_id=p.id AND product_id=?) AS target_qty
        FROM packages p
        WHERE p.warehouse_task_id=? AND p.status=2
          AND EXISTS (SELECT 1 FROM package_items WHERE package_id=p.id AND product_id=?)

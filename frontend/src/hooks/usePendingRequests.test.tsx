@@ -164,3 +164,32 @@ test.each(['same-hook', 'two-hooks'])('同一事件 tick 同 action 同步占位
   expect((await second as Error).message).toContain('结果待确认')
   await act(async () => { release(); await first })
 })
+
+test('传输不确定保留未确认记录；400/409 仍按失败处理', async () => {
+  // 覆盖**当前调用链真正 catch 到的形状**：api/client.ts 已把传输错误规范成中文 message + 结构化 code。
+  // 反向验证：修复前 isTransientFailure 只认「请求超时」（不含「网络超时」）且不看 code，
+  // 因此下面 REQUEST_TIMEOUT / 中文「网络超时」/ 英文 axios timeout 三例会落到 failed → 本测试必失败。
+  const cases: Array<{ name: string; err: unknown; expect: 'pending' | 'failed' }> = [
+    { name: 'REQUEST_TIMEOUT(code)+中文', err: Object.assign(new Error('网络超时，请稍后重试'), { code: 'REQUEST_TIMEOUT' }), expect: 'pending' },
+    { name: '仅中文「网络超时」无 code', err: new Error('网络超时，请稍后重试'), expect: 'pending' },
+    { name: '原始 axios 英文超时', err: new Error('timeout of 15000ms exceeded'), expect: 'pending' },
+    { name: 'NETWORK_ERROR(code) 断网', err: Object.assign(new Error('无法连接服务器，请检查网络与后端服务是否正常'), { code: 'NETWORK_ERROR' }), expect: 'pending' },
+    { name: '400 业务拒绝', err: Object.assign(new Error('参数不合法'), { code: 'BUSINESS_ERROR', status: 400 }), expect: 'failed' },
+    { name: '409 冲突', err: Object.assign(new Error('来源库存条码已被拣货任务锁定，不能放货'), { code: 'CONFLICT', status: 409 }), expect: 'failed' },
+  ]
+  for (const c of cases) {
+    localStorage.clear()
+    login(1)
+    const criticals: ReturnType<typeof useCriticalPdaAction<unknown>>[] = []
+    let r: Root | undefined
+    function P() { criticals[0] = useCriticalPdaAction<unknown>({ action: `t-${c.name}`, label: '测试操作' }); return null }
+    await act(async () => { r = createRoot(document.createElement('div')); r.render(<P />) })
+    const executor = vi.fn().mockRejectedValue(c.err)
+    let kind: string
+    try { kind = (await criticals[0].run(executor)).kind } catch { kind = 'failed' }
+    expect(kind, c.name).toBe(c.expect)
+    // 传输不确定必须留下未确认记录（可恢复）；业务拒绝不应留阻断
+    expect(criticals[0].submitBlocked, c.name).toBe(c.expect === 'pending')
+    await act(async () => r?.unmount())
+  }
+})
