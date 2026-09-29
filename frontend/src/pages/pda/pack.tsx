@@ -281,7 +281,7 @@ export default function PdaPackPage() {
         warn(
           hasOriginalTaskId
             ? `这是原任务 #${originalTaskId} 的箱子，该任务箱子已全部完成；当前任务以本页列表为准。`
-            : '这是其它任务的箱子（回执里没有任务号），当前任务以本页列表为准。',
+            : '这是其它任务的箱子（结果里没有任务号），当前任务以本页列表为准。',
           5000,
         )
       }

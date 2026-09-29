@@ -101,7 +101,15 @@
 
 ### 7.4 本轮门禁（当前工作区，日志与自然退出码）
 
-- **offline 第一批 39 项** + **第二批 16 项**：全 `exit 0`；逐项日志 `/tmp/rel-log/*.log`。
+- **offline 第一批 + 第二批**：逐项日志 `/tmp/rel-log/*.log`。
+  > ⚠️ **撤回旧断言**：本节初稿写的「**39 项全 exit 0**」**系误报** —— 当时只看了批次输出的 `tail -25`，
+  > 前段结果**未逐一取证**。经复核，第一批**至少 `copy-conventions` 原为 `rc=1`**（11 处用户文案用了内部术语，
+  > 见 `docs/release-v0.11.4-attempt1-failure-2026-09-29.md` §2.1）；`qty-precision` 当时**已发现**失败并修好夹具
+  > （`scan-qty-comparison.test.js` 补 helpers mock，现 81 pass）。
+  > 事后按现行配置**逐项重跑 21 项**（`/tmp/rel-prod/static-rc.txt`）全 `rc=0`，但这**只是部分重验**，
+  > **不代表 39 项全绿**，**不用于凑数**；其余项以**同 SHA 的 CI 日志**为准。
+  > 另：`/tmp/rel-prod/eslint-fixture.log` 是 **ESLint 10 找不到根配置**（检查方法失败），**不能据此称 lint 通过**；
+  > 实际 lint 按各 package 已有配置跑（`npm --prefix backend run lint` / `npm --prefix frontend run lint`，均 rc=0）。
 - **direct-node guards**：`ops-monitor-restore`/`restore-trigger-normalize`/`migration-trigger-bodies`/`cors-policy`/`pda-only-client-header` **39 pass / 0 fail**（`/tmp/rel-log/static-guards-extra.log`）；`deployment-resources` **26/26**（`/tmp/rel-deploy-guard.log`，**真实重验**，非 C4 旧轮 25/26）。
 - **前端**：lint 0、`tsc -p tsconfig.app.json` 0、**全单测 151 文件 / 730 用例**（`/tmp/rel-fe-lint.log`、`rel-fe-tsc.log`、`rel-fe-test2.log`）；**后端 lint** 0（`be-lint.log`）。
 - **构建**：frontend / PDA / desktop renderer 三者 `exit 0`（`build-fe.log`、`build-pda.log`、`build-desktop2.log`）。

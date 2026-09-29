@@ -277,7 +277,7 @@ function DetailDialog({
   const busyOrUncertain = repackMut.isPending || idem.uncertain
 
   return (
-    <Dialog open={!!box} onOpenChange={(v) => { if (!v && busyOrUncertain) { toast.warning('有还原提交待确认，请先核对原回执再关闭'); return } if (!v) onClose() }}>
+    <Dialog open={!!box} onOpenChange={(v) => { if (!v && busyOrUncertain) { toast.warning('有还原提交待确认，请先核对原提交结果再关闭'); return } if (!v) onClose() }}>
       <DialogContent className="max-w-5xl">
         <DialogHeader>
           <DialogTitle>塑料盒详情 · {box?.barcode}</DialogTitle>
@@ -344,7 +344,7 @@ function DetailDialog({
           </div>
         )}
 
-        <div className="text-xs font-medium text-muted-foreground">容器流水</div>
+        <div className="text-xs font-medium text-muted-foreground">塑料盒流水</div>
         <div className="max-h-[420px] overflow-y-auto">
           {isError ? (
             <QueryErrorState error={error} onRetry={() => { void refetch() }} title="塑料盒流水加载失败" compact />
@@ -385,7 +385,7 @@ function DetailDialog({
           open={repackOpen}
           box={box}
           pending={repackMut.isPending}
-          onClose={() => { if (busyOrUncertain) { toast.warning('有还原提交待确认，请先核对原回执'); return } setRepackOpen(false) }}
+          onClose={() => { if (busyOrUncertain) { toast.warning('有还原提交待确认，请先核对原提交结果'); return } setRepackOpen(false) }}
           onSubmit={submitRepack}
           locked={busyOrUncertain}
           uncertain={idem.uncertain}

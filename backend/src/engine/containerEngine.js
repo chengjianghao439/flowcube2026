@@ -1077,10 +1077,10 @@ async function createContainersBatch(conn, { shared, qtys }) {
   if (sourceType !== SOURCE_TYPE.CONTAINER_SPLIT
       || Number(containerStatus) !== CONTAINER_STATUS.ACTIVE
       || shared?.inboundTaskId != null) {
-    throw new AppError('批量建容器仅支持「同仓拆分 + 在库」场景，请改用 createContainer', 500)
+    throw new AppError('批量生成库存条码仅支持「同仓拆分 + 在库」场景', 500)
   }
   const sid = Number(sourceRefId)
-  if (!Number.isFinite(sid) || sid <= 0) throw new AppError('批量建容器必须关联有效来源单据', 400)
+  if (!Number.isFinite(sid) || sid <= 0) throw new AppError('批量生成库存条码必须关联有效来源单据', 400)
   for (const q of list) {
     assertQtyScale(q, '库存条码数量')
     assertNonNegativeQty(q, `createContainersBatch productId=${productId}`)
@@ -1114,7 +1114,7 @@ async function createContainersBatch(conn, { shared, qtys }) {
   )
   const byCode = new Map(found.map((r) => [String(r.barcode), Number(r.id)]))
   if (byCode.size !== codes.length) {
-    throw new AppError(`批量建容器回查数量不一致（预期 ${codes.length}，实际 ${byCode.size}）`, 500)
+    throw new AppError(`批量生成库存条码回查数量不一致（预期 ${codes.length}，实际 ${byCode.size}）`, 500)
   }
   return list.map((q, i) => ({ containerId: byCode.get(String(codes[i])), barcode: codes[i], qty: q }))
 }

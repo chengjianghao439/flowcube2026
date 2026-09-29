@@ -260,7 +260,7 @@ export default function PdaSplitPage() {
               作业方向：<span className="font-semibold text-foreground">{mode === 'repack' ? '还原整件（盒 → 整件码）' : '拆出散件盒（整件 → 盒）'}</span>
             </p>
             <p className="text-xs text-muted-foreground">
-              {restoredSnapshot ? '盒内余量（原提交时快照）' : '当前余量'}：<span className="font-semibold text-foreground">{remaining}</span>
+              {restoredSnapshot ? '盒内余量（原提交时数据）' : '当前余量'}：<span className="font-semibold text-foreground">{remaining}</span>
             </p>
 
             {mode === 'repack' ? (

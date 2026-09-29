@@ -26,6 +26,7 @@ const {
   prepareSmokeContext, login, dbQuery, randomRef,
   createPurchaseOrder, confirmPurchaseOrder, createInboundTaskFromPurchase,
 } = require('./helpers/smokeTestKit')
+const { acquireOwnPackageLabelPrinter, releaseOwnPackageLabelPrinter } = require('./helpers/ownedPrintFixture')
 
 async function main() {
   let ctx
@@ -35,13 +36,19 @@ async function main() {
     try { await require('../backend/src/config/db').pool.end() } catch (e2) { console.error(`[FAIL] 初始化失败后关池出错：${e2.message}`) }
     throw e
   }
-  const { pool, http, warehouse, location, product, supplier, customer, pdaHeaders, printer, close } = ctx
+  const { pool, http, warehouse, location, product, supplier, customer, pdaHeaders, close } = ctx
 
   let token
+  // 本套自建的「箱贴打印前提」（C2 起 finish 需要 package_label 的真实绑定）
+  let ownPrint = null
   try {
     const authed = await login(http, 'smoke_admin', 'SmokeAdmin123!')
     token = authed.token
     assert.ok(token, '管理员应登录成功')
+    // C2 起 finishPackage 走 assertQueueReady(package_label, requireBinding=true)：
+    // 全局 SMOKE-PRN 不满足该用途，必须有本仓的 package_label 绑定。本套自建打印机 +
+    // 工作站并绑到本套仓库；收尾按原值恢复、只停用自建打印机（不留绑定给后续套件）。
+    ownPrint = await acquireOwnPackageLabelPrinter({ http, token, warehouseId: warehouse.id, assert, randomRef })
   } catch (e) {
     try { await close() } catch (e2) { console.error(`[FAIL] 登录失败后释放出错：${e2.message}`) }
     try { await require('../backend/src/config/db').pool.end() } catch (e2) { console.error(`[FAIL] 登录失败后关池出错：${e2.message}`) }
@@ -212,17 +219,18 @@ async function main() {
       const printJobId = Number(fin.data?.data?.printJobId)
       assert.ok(printJobId > 0, '前置：finish 应产生箱贴打印任务')
 
-      // ② 收口箱贴打印任务：**真实** `claim-client` → `complete-client`，用本轮 fixture 的打印机
-      //    与工作站，且**只结算本轮 `finish` 产出的那个 job**（按 id 匹配；smokeTestKit 准备阶段已
-      //    清掉该打印机的 pending 任务，不会领到别人的 job）。**只证明 API 闭环，不代表实际出纸。**
+      // ② 收口箱贴打印任务：**真实** `claim-client` → `complete-client`，用**本套自建**的打印机与
+      //    工作站（`ownPrint.clientId`）—— 不用 smokeTestKit 的 SMOKE-PRN，避免领取/结算到别的套件
+      //    或历史任务；且**只结算本轮 `finish` 产出的那个 job**（按 id 匹配）。
+      //    **只证明 API 闭环，不代表实际出纸。**
       const claim = await http.post('/api/print-jobs/claim-client', {
-        token, json: { clientId: printer.clientId, limit: 50 },
+        token, json: { clientId: ownPrint.clientId, limit: 50 },
       })
       assert.ok(claim.ok, `前置：claim-client 失败：${claim.status} ${JSON.stringify(claim.data).slice(0, 220)}`)
       const claimed = (claim.data?.data || []).find(j => Number(j.id) === printJobId)
       assert.ok(claimed?.ackToken, `前置：claim 应返回本任务的 job 与其 ackToken：${JSON.stringify(claim.data).slice(0, 300)}`)
       const done = await http.post(`/api/print-jobs/${printJobId}/complete-client`, {
-        token, headers: { 'X-Client-Id': printer.clientId }, json: { ackToken: claimed.ackToken },
+        token, headers: { 'X-Client-Id': ownPrint.clientId }, json: { ackToken: claimed.ackToken },
       })
       assert.ok(done.ok, `前置：complete-client 收口失败：${done.status} ${JSON.stringify(done.data).slice(0, 220)}`)
 
@@ -369,6 +377,10 @@ async function main() {
       }
     }
 
+    if (ownPrint) {
+      try { await releaseOwnPackageLabelPrinter(ownPrint, { http, token, assert }) }
+      catch (e) { failed++; console.error(`[FAIL] 收尾释放自建打印前提失败：${e.message}`) }
+    }
     try { await close() } catch (e) { failed++; console.error(`[FAIL] 关闭测试服务/连接池失败：${e.message}`) }
     try { await require('../backend/src/config/db').pool.end() } catch (e) { failed++; console.error(`[FAIL] 关闭全局连接池失败：${e.message}`) }
   }

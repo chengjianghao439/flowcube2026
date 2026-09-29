@@ -215,3 +215,32 @@ Tests CI 的 `regression-plastic-box` job 使用独立 MySQL 8 service（**映�
 · **未验**：新独立仓场景的**「刷新后原键保留」**与**「跨目标确认不误完成」**两项；**不得**据此宣称 GUI 闭环已验。
 **契约变更**：箱贴缺箱由「409 + 留 PENDING」改为 **404 且不留回执行**；`print-label` 路由加 `pdaSessionOptional()`；箱贴幂等键绑 `packageId`；`GET /api/system/request-status` 对 `package.print-label` 的成功回执增加**领域自洽校验**（不一致 409 `PACKAGE_LABEL_RECEIPT_MISMATCH`）。
 **未验**：真 PDA 真机、物理打印（用例与 GUI 的核销都是**真实 API 闭环**，**不代表实际出纸**）；`PF1` 只覆盖「回执写入失败」一种故障注入；本批相关**全量套件**（`smoke:mainline`、`smoke:print-queue`、`test:label`、`test:print` 等）留**发版前**统一跑。
+
+### 2026-09-29 · 塑料盒专项的「箱贴打印前提」与自洁（批 C4 静态补齐）
+
+`regression-plastic-box` job 里 9 个专项中**只有 4 处会调 `finish`**：
+`pick-cancel-return:511`、`pick-label-reprint-lifecycle:208`、`pack-finish-receipt-tx:188`、`pack-done-replay:269`。
+
+**前提**：C2 起 `finishPackage` 调 `printJobs.assertQueueReady({ jobType: 'package_label' })`，
+而 `print-jobs.command.js` 对该用途用 `requireBinding=true, allowBindingFallback=false` ⇒
+`resolvePrinterForJob` 在**绑定命中之前**就对 `requireBinding` 提前返回，**全局打印机**
+（`printers.warehouse_id IS NULL`，如 `prepareSmokeContext` 的 `SMOKE-PRN`）**不满足**；
+必须有 `printer_bindings(print_type='package_label', warehouse_id=<任务仓>)`，否则 `finish` 直接
+**409 `PRINT_BINDING_MISSING`**。
+
+**做法**：前三个专项（C4 的 `pack-done-replay` 本就自建独立仓/打印机/绑定）通过
+`tests/helpers/ownedPrintFixture.js` 自备：
+
+- `acquireOwnPackageLabelPrinter({ http, token, warehouseId, assert, randomRef })`：进入前**读取并记录**
+  本仓原有 `package_label` 绑定（读不到即抛，不当作"无绑定"）→ 自建打印机（含工作站 `clientId`）→ 绑定到本套仓库；
+- `releaseOwnPackageLabelPrinter(own, { http, token, assert })`：按**当前 GET 到的归属**收尾 ——
+  本套自建则**恢复原值/删除自身**；**他人的指向一律保留**并记为失败（绝不覆盖）；
+  停用自建打印机后 **GET 断言 `status=0`**；最终态断言到**原值或无绑定**；
+  **逐项尽力执行并聚合失败**，任一项未净即 `assert` 真失败。
+
+**为什么要自洁**：`smokeTestKit` 只 upsert 全局 `SMOKE-PRN`、**不建箱贴绑定**；若套件自己不清理，
+就会**留下绑定让后续套件靠执行顺序侥幸通过**。本夹具不改 `smokeTestKit` 的全局状态与清理语义，
+也不物理删除任何打印历史（job / 回执保留）。
+
+**边界**：夹具的异常收尾另有**无 DB 的 mock 微验**（`/tmp/rel-prod/owned-print-fixture.test.cjs`，5 条路径），
+它**只证明夹具逻辑**，不代表真实业务 API / 真实打印 / 物理出纸；专项的真实结论以**同 SHA 的 CI**为准。

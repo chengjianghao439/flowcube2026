@@ -28,7 +28,7 @@ function assertPrintLabelReceiptConsistent(action, receipt) {
     // `queued=true` 却没有 job 信息 ⇒ 无法判定这批箱贴是不是本箱的，只提示人工核对，不猜成新打印
     if (receipt.data?.queued === true) {
       throw new AppError(
-        '箱贴打印回执缺少可核对的打印任务信息，请人工核对打印记录后再操作',
+        '箱贴打印结果缺少可核对的打印任务信息，请人工核对打印记录后再操作',
         409,
         'PACKAGE_LABEL_RECEIPT_UNVERIFIED',
       )
@@ -39,7 +39,7 @@ function assertPrintLabelReceiptConsistent(action, receipt) {
   const resourceId = receipt.resourceId
   if (resourceId != null && (job.refType !== 'package' || Number(job.refId) !== Number(resourceId))) {
     throw new AppError(
-      `上次箱贴打印的回执指向的是其它箱子（打印任务 #${job.id ?? '未知'} → 箱 ${job.refId ?? '未知'}），`
+      `上次箱贴打印的结果指向的是其它箱子（打印任务 #${job.id ?? '未知'} → 箱 ${job.refId ?? '未知'}），`
       + '请先在打印记录页核对原打印，再决定是否重打',
       409,
       'PACKAGE_LABEL_RECEIPT_MISMATCH',

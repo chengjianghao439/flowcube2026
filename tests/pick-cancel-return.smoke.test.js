@@ -19,6 +19,7 @@ const {
   prepareSmokeContext, login, dbQuery, randomRef,
   createPurchaseOrder, confirmPurchaseOrder, createInboundTaskFromPurchase,
 } = require('./helpers/smokeTestKit')
+const { acquireOwnPackageLabelPrinter, releaseOwnPackageLabelPrinter } = require('./helpers/ownedPrintFixture')
 
 async function main() {
   let ctx
@@ -31,10 +32,16 @@ async function main() {
   const { pool, http, warehouse, location, product, supplier, customer, pdaHeaders, close } = ctx
 
   let token
+  // 本套自建的「箱贴打印前提」（C2 起 finish 需要 package_label 的真实绑定）
+  let ownPrint = null
   try {
     const authed = await login(http, 'smoke_admin', 'SmokeAdmin123!')
     token = authed.token
     assert.ok(token, '管理员应登录成功')
+    // C2 起 finishPackage 走 assertQueueReady(package_label, requireBinding=true)：
+    // 全局 SMOKE-PRN 不满足该用途，必须有本仓的 package_label 绑定。本套自建打印机 +
+    // 工作站并绑到本套仓库；收尾按原值恢复、只停用自建打印机（不留绑定给后续套件）。
+    ownPrint = await acquireOwnPackageLabelPrinter({ http, token, warehouseId: warehouse.id, assert, randomRef })
   } catch (e) {
     try { await close() } catch (e2) { console.error(`[FAIL] 登录失败后释放出错：${e2.message}`) }
     try { await require('../backend/src/config/db').pool.end() } catch (e2) { console.error(`[FAIL] 登录失败后关池出错：${e2.message}`) }
@@ -688,6 +695,10 @@ async function main() {
       }
     }
 
+    if (ownPrint) {
+      try { await releaseOwnPackageLabelPrinter(ownPrint, { http, token, assert }) }
+      catch (e) { failed++; console.error(`[FAIL] 收尾释放自建打印前提失败：${e.message}`) }
+    }
     try { await close() } catch (e) { failed++; console.error(`[FAIL] 关闭测试服务/连接池失败：${e.message}`) }
     try { await require('../backend/src/config/db').pool.end() } catch (e) { failed++; console.error(`[FAIL] 关闭全局连接池失败：${e.message}`) }
   }

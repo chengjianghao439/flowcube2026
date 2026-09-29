@@ -91,7 +91,7 @@ export default function PdaFillPage() {
     setSource({
       containerId: Number(m.sourceContainerId),
       barcode: m.sourceBarcode ?? `#${m.sourceContainerId}`,
-      productHint: '（来自待确认快照，未按当前库存猜测）',
+      productHint: '（来自原提交数据，未按当前库存猜测）',
       remainingQty: Number(m.expectedSourceQty),
     })
     setStep('confirm')
