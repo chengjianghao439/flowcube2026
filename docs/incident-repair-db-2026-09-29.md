@@ -6,12 +6,16 @@
 
 在 v0.11.4 发布前回归时，我在**本机回环 3307 的既有库 `flowcube_repair20260908_test`**（非新建）上直接执行了两条命令：
 
-| 命令 | 脚本 | 时间（本地，2026-09-29） |
-|---|---|---|
-| `npm run smoke:purchase-repair` | `tests/legacy-purchase-repair.smoke.test.js` | **21:49**（依据：其输出日志 `/tmp/rel-log/smoke-purchase-repair.log` 的 mtime） |
-| `npm run smoke:legacy-receivable-repair` | `tests/legacy-receivable-repair.smoke.test.js` + `tests/audit-business-consistency.smoke.test.js` | **21:49**（依据：`/tmp/rel-log/smoke-legacy-receivable-repair.log` 的 mtime） |
+| 命令 | 脚本 | 时间（本地，2026-09-29） | 实证日志 |
+|---|---|---|---|
+| `npm run smoke:purchase-repair` | `tests/legacy-purchase-repair.smoke.test.js` | 约 **21:49** | `/tmp/rel-log/smoke-purchase-repair-fix.log` |
+| `npm run smoke:legacy-receivable-repair` | `tests/legacy-receivable-repair.smoke.test.js` + `tests/audit-business-consistency.smoke.test.js` | 约 **21:49** | `/tmp/rel-log/smoke-legacy-receivable-repair-fix.log` |
 
-> 时间写法说明：仅采用**日志文件 mtime** 这一实证来源；原稿中的「约 21:47 / 21:48」是估计，已按实证值更正为 **21:49**。
+> **日志选取说明**：上表只引用**实际误跑成功**的那两条 `-fix.log`（即真正落在旧库上执行的那一轮，mtime 均约 **21:49**）。
+> 同名的**无 `-fix`** 日志是**更早一轮**在**新建 regress 库**上被**库名硬断言拒绝**的记录（并未执行到旧库），**不作为本事故的实证**。
+> 时间来源**仅**采用上述 `-fix.log` 的 mtime。
+>
+> **本轮未查执行前数据**：我在运行**前、后都没有**读取这些表的历史行数（仅在事后做了一次只读 COUNT，见 §2）。
 
 此外，在同一库上：
 - 用 `CREATE DATABASE IF NOT EXISTS` 建库（库**已存在**，因此**未改**其排序规则 `utf8mb4_unicode_ci`）；
