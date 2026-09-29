@@ -1,7 +1,7 @@
 {
-  "version": "0.11.4",
-  "versionCode": 148,
+  "version": "0.11.5",
+  "versionCode": 149,
   "filename": "app-release.apk",
-  "releaseNote": "本版新增塑料盒作业（放货、取货、分拣复核到装箱），并修复「提交结果查询」与打包重复提交相关的几处问题。",
-  "publishedAt": "2026-09-29T04:09:05.536Z"
+  "releaseNote": "本版修复慢查询监控的历史累计误报，并加强测试环境的隔离保护。",
+  "publishedAt": "2026-09-29T18:34:00.210Z"
 }
