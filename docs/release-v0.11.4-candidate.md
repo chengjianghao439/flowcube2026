@@ -67,3 +67,54 @@
 5. 最终**实下载 EXE / APK 并比对摘要**，跑 `release:verify` 完成线上验收（三端版本一致、`/api/pda/version` 一致）。
 
 **边界**：**本次候选准备未执行任何生产动作**；正式发布须**新的明确授权**；**生产凭据与客户账款明细不得进入模型上下文**。
+
+---
+
+## 7. 本轮准备（**v0.11.4 完整范围**；上文 §1–§6 为**历史分节**，勿与本轮结果混用）
+
+> 本节取代「窄资金范围」的写法：v0.11.4 的**实际发布范围**是本轮全量审阅过的改动，见下。**§5A 的「79 项」与三套 `flowcube_release_gate_*` 库属旧轮，不作为本轮证据。**
+
+### 7.1 基线与远端事实（本轮实测）
+
+- **应用基线（本轮起点）**：`71313ee`（`fix(pack): guard completion replay and label receipts`）。
+- **相对 `origin/main` `b5280a4`**：领先 **24** 提交、落后 **0** ⇒ 可 fast-forward。
+- **远端最新正式 tag**：**v0.11.3**（PDA versionCode 147）⇒ 本版 **v0.11.4 / versionCode 148**，**无版本冲突**。
+- 三端 `package.json` 均为 **0.11.4**；`bump-version.sh 0.11.4` 同版本重跑**未重复增号**（148 → 148）。
+
+### 7.2 本轮发布范围（相对 `b5280a4` / v0.11.3）
+
+- **塑料盒作业流（A / B / C1–C4）**：放货与混批、扫盒取货与独立取货标签、分拣复核、装箱配额、取消归还，以及 **C1**（移出/作废稳定键）、**C2**（完成箱子回执事务）、**C3**（换任务恢复只认原键回执）、**C4**（打包完成重放与箱贴补打的幂等/范围/领域回执校验）。
+- **资金恢复**：手工应付、收付款登记/核销、退款执行与手工应付复制的回执查询定位（即 §1 的窄资金范围，**仍在本版内**）。
+- 用户说明与官网摘要已按此范围改写（措辞不夸大未验项）。
+
+### 7.3 本轮 4 个新增迁移（265–268）
+
+| 文件 | 目标（`information_schema` 实测） |
+|---|---|
+| `265_inventory_containers_mixed_batch` | `inventory_containers.is_mixed_batch` `tinyint(1)` NOT NULL DEFAULT 0 |
+| `266_scan_logs_source_container_id` | `scan_logs.source_container_id` `bigint unsigned` NULL + 索引 `idx_scan_logs_source_container(source_container_id)` |
+| `267_sorting_bin_items` | 新表 `sorting_bin_items` + `uk_task_container(task_id,container_id)` **唯一** + `idx_bin(bin_id)` |
+| `268_package_items_label_container_id` | `package_items.label_container_id` `bigint unsigned` NULL + 索引 `idx_pi_label(label_container_id)` |
+
+- **新独立库**：`flowcube_regress_20260929_test`（**`utf8mb4_0900_ai_ci`**，建库时硬断言 `NODE_ENV=test` / `127.0.0.1:3307` / `flowcube_*_test`）。完整迁移 **268 文件**；**幂等重跑**输出「所有迁移均已执行，无需更新」。
+- **4 个原 SQL 的真幂等证据**（按项目 `splitSqlStatements` 分句后**逐句重跑**，**未动 `db_migrations`**）：265 **5/5**、266 **10/10**、267 **11/11**、268 **10/10**，全成功 0 失败。
+
+### 7.4 本轮门禁（当前工作区，日志与自然退出码）
+
+- **offline 第一批 39 项** + **第二批 16 项**：全 `exit 0`；逐项日志 `/tmp/rel-log/*.log`。
+- **direct-node guards**：`ops-monitor-restore`/`restore-trigger-normalize`/`migration-trigger-bodies`/`cors-policy`/`pda-only-client-header` **39 pass / 0 fail**（`/tmp/rel-log/static-guards-extra.log`）；`deployment-resources` **26/26**（`/tmp/rel-deploy-guard.log`，**真实重验**，非 C4 旧轮 25/26）。
+- **前端**：lint 0、`tsc -p tsconfig.app.json` 0、**全单测 151 文件 / 730 用例**（`/tmp/rel-fe-lint.log`、`rel-fe-tsc.log`、`rel-fe-test2.log`）；**后端 lint** 0（`be-lint.log`）。
+- **构建**：frontend / PDA / desktop renderer 三者 `exit 0`（`build-fe.log`、`build-pda.log`、`build-desktop2.log`）。
+- **DB 回归（新独立库）**：通用业务 8 项、打印/财务/报表 13 项、资金/价格/直营 7 项**全 exit 0**；`print-purge`、`integration` 亦 `exit 0`（`/tmp/rel-log/test-*.log`）。
+- 本轮修复 3 处**过期夹具/断言**（均保留原失败记录）：`plastic-boxes/index.test.tsx` 补 `QueryClientProvider`；`scan-qty-comparison.test.js` 补 helpers mock；`print-template-preview.smoke.test.js` type 上界 10→11（越界值改 `12`）。
+
+### 7.5 尚未执行的（留给**同 SHA 正式 CI**）
+
+- `browser-smoke-runtime` / `dirty-navigation`（需真实浏览器）、`smoke:nginx-headers`（需 Docker daemon）。
+- **塑料盒 9 专项**（CI `regression-plastic-box` 的全新 MySQL service）。
+- **两个 repair DB smoke（`smoke:purchase-repair` / `smoke:legacy-receivable-repair`）不在当前 `test.yml` 的 job 清单内**（现清单只有纯逻辑 `test:purchase-repair`）⇒ 本批记 **不适用**；**不承诺**正式 CI 会运行它们。若将来需要验证，须**新建专属临时 MySQL 实例**，**不复用任何既有旧库**（见 `docs/incident-repair-db-2026-09-29.md`）。
+- **整套正式 CI、安装包构建、生产部署、真实 GUI/真机/物理打印**均未执行。
+
+### 7.6 授权状态
+
+用户已**明确授权**本次 v0.11.4 的版本同步、合入 main、push、tag 与生产部署，并要求**唯一入口** `npm run release:prod`（禁止手工绕入口打 tag / 在生产编译）。**本轮准备阶段未执行任何生产动作。**

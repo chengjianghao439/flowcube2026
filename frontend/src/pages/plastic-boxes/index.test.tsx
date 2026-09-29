@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act, type ReactNode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import PlasticBoxesPage from './index'
 import type { PlasticBox } from '@/hooks/usePlasticBoxes'
@@ -11,7 +12,7 @@ vi.mock('@/components/finder', () => ({ ProductFinder: ({ open, onConfirm }: { o
 vi.mock('@/components/shared/WarehouseSelect', () => ({ WarehouseSelect: ({ value, onChange }: { value: number | null; onChange: (id: number, name: string) => void }) => <button onClick={() => onChange(3, '选中仓库')}>{value ? '选中仓库' : '选择仓库'}</button> }))
 vi.mock('@/components/shared/BaseCrudPage', () => ({ default: (p: { onOpen?: () => void; renderForm: () => ReactNode; canSubmit?: () => boolean; renderActions: (b: PlasticBox, h: object) => ReactNode }) => <><button onClick={() => p.onOpen?.()}>新建</button>{p.renderForm()}<button id="create" disabled={p.canSubmit ? !p.canSubmit() : false}>创建</button>{p.renderActions({ id: 1, barcode: 'B1', remainingQty: 0 } as PlasticBox, {})}</> }))
 let host: HTMLDivElement, root: ReturnType<typeof createRoot>
-beforeEach(async () => { Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true }); mocks.failed = false; mocks.retry.mockClear(); host = document.createElement('div'); document.body.append(host); root = createRoot(host); await act(async () => root.render(<PlasticBoxesPage />)) })
+beforeEach(async () => { Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true }); mocks.failed = false; mocks.retry.mockClear(); host = document.createElement('div'); document.body.append(host); root = createRoot(host); await act(async () => root.render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><PlasticBoxesPage /></QueryClientProvider>)) })
 afterEach(async () => { await act(async () => root.unmount()); host.remove() })
 async function click(label: string) { const b = [...document.querySelectorAll('button')].find(b => b.textContent === label); expect(b,label).toBeTruthy(); await act(async () => b!.click()) }
 test('新建必须选择商品和仓库，重新新建清空上次选择', async () => {

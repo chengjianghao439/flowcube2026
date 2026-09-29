@@ -37,6 +37,10 @@ function fixture({ mode = 'pick', required = 0.3, picked = 0.1, checked = 0, rem
     '../../utils/unitConversion': unitConversion,
     '../../utils/AppError': AppError,
     '../../utils/warehouseScope': { assertInScope: noop },
+    // 本批给复核/取货链路加了「范围 / 设备仓校验先于幂等 begin」，service 因此从
+    // warehouse-tasks.helpers 引入 `assertTaskScope`（另有副作用日志函数）。夹具同步补上，
+    // 否则 require 返回 {} 会让 `assertTaskScope is not a function` 直接打断用例。
+    '../warehouse-tasks/warehouse-tasks.helpers': { assertTaskScope: noop, logSideEffectFailure: noop },
     '../../engine/containerEngine': { lockContainer: async () => {}, CONTAINER_STATUS: { ACTIVE: 1 } },
     '../../constants/warehouseTaskStatus': { WT_STATUS },
     '../../utils/operationRequest': { beginResourceOperationRequest: async () => ({}), completeOperationRequest: async () => {} },

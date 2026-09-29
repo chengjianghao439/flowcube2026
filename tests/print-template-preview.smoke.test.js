@@ -48,7 +48,9 @@ async function main() {
     console.log('[PASS] 未登录访问返回401'); passed++
     // CI shares a test database across suites; empty-data assertions below use
     // this suite's new warehouse scope, independent of existing sale orders.
-    for (const type of ['', '0', '11', '1.5', 'abc', '1&type=2']) assert.equal((await get(type)).status, 400)
+    // 合法上界已由 10 扩到 11（批 B2 新增「取货标签」ZPL 模板，见 print-templates.routes.js），
+    // 故越界值改用 12；非法集合仍是 6 项，未放宽任何既有校验。
+    for (const type of ['', '0', '12', '1.5', 'abc', '1&type=2']) assert.equal((await get(type)).status, 400)
     console.log('[PASS] 非法与重复 type 返回400'); passed++
 
     const w = await insert('inventory_warehouses', { name: '预览可访问仓', code })
