@@ -216,6 +216,6 @@
   - 采购/入库：`purchase_orders` PC…001（已确认，其入库任务 IN…001 **未收货 status=1**）/002/003（已收完）；`inbound_tasks` IN…002/003 已上架。
   - 销售/出库：`sale_orders` SL…001（已取消 status=5）、SL…002/003（**已取消 status=5**）、**SL…004（本批退款链，任务 WT…004 已出库 status=7，保留）**。
   - 库存/分拣：`inventory_containers` I000001(product2, 剩 8, ACTIVE, 未锁)、I000002(product3, 剩 10, ACTIVE, **未锁**)；`sorting_bins` B01/B02/B769 **全部空闲**。
-  - 箱与打印：`packages` L000001(WT1, 已完成)/L000002·3(WT1, 已作废)/L000004(WT4, 已完成)；`print_jobs` 箱贴 L000001（**status=3 已作废**）/箱贴 L000004（status=2，已完成）。
+  - 箱与打印：`packages` **L000001/2/3(WT1) 均已作废**、**L000004(WT4, 已完成) 保留**；`print_jobs` 箱贴 L000001（**status=3 已作废**）/箱贴 L000004（status=2，已完成）。
   - **取消逆向收尾（已按真实业务 API 完成，取代此前「无可合法回退」的结论）**：卡在待打包的 `WT…001` **本来就有合法出路**——先 `GET /api/warehouse-tasks/1/cancel-return-detail` 核对任务/箱/容器/原库位（返回 `status=5`、`cancelRequestedAt` 非空、容器 I000002 建议原库位 `A01-01-0101`、箱 L000001），再经 **受权限 + 真实 PDA 会话**保护的 `POST /api/scan-logs/cancel-return/box {taskId, packageId, barcode}`（**会顺带作废未完成的 print_jobs，含 status=1**）与 `POST /api/scan-logs/cancel-return {taskId, containerId, barcode, locationId}`（各带**稳定且不同**的请求键）⇒ 返回 `finalized:true`，`WT…001` 推进 **status=8（已取消）**、`cancelRequestedAt` 清空、`containers/packages` 皆空。**复核**：容器 I000002 `locked_by_task_id=null`、print_job L000001 `status=3`、B01/B02/B769 空闲、`WT…002/003` 亦为 **status=8**（其销售单已取消）。**故先前「ackToken 丢失⇒无合法入口重置」与「任务卡死」的判断均被推翻**，此处如实更正。
   - **保留（测试用，不称全库清空）**：ACTIVE 测试库存 I000001(剩 8)/I000002(剩 10)；`payment_receipts` 6/8/10 仍有未核销余额（30.00 / 2.00 / 24.00）；应付 id=1..7、应收 id=10、退款单 RF20260929001（已完成）、以及全部资金/库存事件历史**原样保留**。
