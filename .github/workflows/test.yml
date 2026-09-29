@@ -247,6 +247,10 @@ jobs:
       - name: 批 B4 补充 — 取货标签补打生命周期（3 项断言）
         run: npm run smoke:pick-label-reprint-lifecycle
 
+      # 批 C1 — 装箱异常恢复：remove-item / void 的稳定键与原目标回执（7 项断言）
+      - name: 批 C1 — 装箱移出 / 作废的稳定键与重放（7 项断言）
+        run: npm run smoke:pack-remove-void-replay
+
   regression:
     name: 回归门禁（smoke + 集成）
     runs-on: ubuntu-latest

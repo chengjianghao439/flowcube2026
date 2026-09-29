@@ -58,22 +58,45 @@ export const addPackageItemApi = (
     skipGlobalError: true,
   })
 
+export interface RemovePackageItemResult {
+  itemId: number
+  productId: number
+  productCode: string
+  productName: string
+  unit: string
+  /** 整行移出为 true（`qty` 归 0）；部分移出为 false（`qty` 是剩余量） */
+  removed: boolean
+  qty: number
+  labelContainerId?: number | null
+}
+
 export const removePackageItemApi = (
   packageId: number,
   itemId: number,
   qty?: number,
+  requestKey?: string,
 ) =>
-  client.post<{ itemId: number; productId: number; productCode: string; productName: string; unit: string; removed: boolean; qty: number }>(
+  client.post<RemovePackageItemResult>(
     `/packages/${packageId}/remove-item`,
     { itemId, qty },
-    { headers: { 'X-Client': 'pda' }, skipGlobalError: true },
+    {
+      headers: requestKey
+        ? withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' })
+        : { 'X-Client': 'pda' },
+      skipGlobalError: true,
+    },
   )
 
-export const voidPackageApi = (packageId: number) =>
+export const voidPackageApi = (packageId: number, requestKey?: string) =>
   client.post<{ id: number; warehouseTaskId: number; status: number; statusName: string }>(
     `/packages/${packageId}/void`,
     undefined,
-    { headers: { 'X-Client': 'pda' }, skipGlobalError: true },
+    {
+      headers: requestKey
+        ? withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' })
+        : { 'X-Client': 'pda' },
+      skipGlobalError: true,
+    },
   )
 
 export interface PackagePrintDispatchHint {

@@ -46,6 +46,9 @@ async function removeItem(req, res, next) {
     const packageId = +req.params.id
     const { itemId, qty } = req.body
     const result = await svc.removeItem(packageId, { itemId, qty }, {
+      // 稳定键：同一次移出重放**只生效一次**，并按原键取回原回执（明细已被整行删掉也一样）
+      requestKey: extractRequestKey(req),
+      userId: req.user?.userId ?? null,
       scopeWarehouseIds: req.user?.warehouseIds ?? null,
       pdaWarehouseId: req.pda?.warehouseId ?? null,
     })
@@ -57,6 +60,8 @@ async function voidPackage(req, res, next) {
   try {
     const packageId = +req.params.id
     const result = await svc.voidPackage(packageId, {
+      requestKey: extractRequestKey(req),
+      userId: req.user?.userId ?? null,
       scopeWarehouseIds: req.user?.warehouseIds ?? null,
       pdaWarehouseId: req.pda?.warehouseId ?? null,
     })

@@ -230,3 +230,13 @@
 - **恢复必须按 `data.allSorted` 区分部分进度与整任务完成**：`allSorted=false` 只能提示「本次已确认（x/y）」，**不得**说整个任务分拣完成；恢复成功要重置扫码态并刷新分拣格数据，避免照着旧提示重扫。
 - `resolveServerState` 只认**冻结记录**，并校验**正整数 task/item 与非空分拣格码**；残缺或本批之前的旧记录一律按「无法核对」处理，**不推断成功**。正常提交路径不在 `onConfirmed` 里重复提示（避免与扫码回调双发）。
 - 回归 `frontend/src/pages/pda/sort.test.tsx`（4 例：冻结定位、扫码与取消入口禁用、部分进度文案、非恢复路径不提示）。
+
+### 2026-09-29 批 C1：PDA 打包页移出 / 作废的冻结与恢复，及后端稳定键
+
+- **后端**：`remove-item` / `void` 接受 `X-Request-Key`（与 `add-item` 同构），动作 `package.remove-item` / `package.void` **资源级绑箱**；范围 / 设备仓校验**先于**幂等 begin；**重放分支排在明细 / 状态检查之前**（整行已删、箱已作废也能按原键取回原回执）；回执与原操作**同一事务**。**空键行为完全不变**（helper 直接 `{enabled:false}`），不带键的老调用点零影响。**新键是合法新操作**：第二次移出照常生效、新键对已作废箱仍按现有 400 拒绝——**幂等只救同一个操作**。
+- **前端**：`remove-item` / `void` 改走 `useCriticalPdaAction`（原先是不带键的普通 mutation）。未确认期间**冻结原目标**：换箱、扫码、新建箱、移出、作废、完成箱子、完成整单都受聚合 `anySubmitBlocked` 约束——**handler 自身也要挡**（不能只靠按钮 `disabled`，否则冻结会被绕过）；冻结卡片显示**原任务 / 原箱 / 原明细行 / 数量**——**不**用当前 `activePackageId` 或列表状态替代原目标。
+- **共用「当前待确认」位次必须保留既有成员**：链为 `add → remove-item → void → **finish** → print → finalize`。改动时漏掉 `finishAction` 会让「完成箱子」待确认时 `frozenRecord` 变 null、确认/清除落到 `finalizeAction`，**等于把既有恢复入口改回归**——本批引入该 bug 后已由组件用例钉住。
+- **冻结卡片文案按 action 分派**：装箱 / 移出 / 作废各有专名，其余（完成箱子、箱贴打印、完成打包）用记录自身 `label` 组合（`上次<label>（结果待确认）`）；**不得**一律写成「装箱提交」。
+- **恢复定位**：`resolveServerState` 用**冻结记录里的原箱 id** 组成 scoped action（`package.remove-item.<箱>` / `package.void.<箱>`）再查，服务端按 `resource_id` 过滤；此外 hook 自身会先用 base action 查**唯一** scoped 行。「不接受别的箱」由**服务端资源级唯一性 + 冻结 metadata 兜底**两层保证。**不**凭「列表里该明细还在不在」判本次成功——部分移出、整行移出、明细已被整行删掉，都只有回执能说清。
+- 回归 `tests/pack-remove-void-replay.smoke.test.js`（7 例）与 `frontend/src/pages/pda/pack.test.tsx`（6 例：冻结定位、成功反馈收敛、恢复增量/累计、移出冻结、作废冻结、**完成箱子冻结且确认/清除落在 finish**）。
+- **未验**：组件用例只 **mock** 了 hook，证明的是**页面用法**；**真实持久化重挂 / 真实丢响应**未跑（GUI 未验）。`finish` 的稳定键与事务边界属**下一小批**，本批未动。

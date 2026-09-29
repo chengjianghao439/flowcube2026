@@ -450,7 +450,7 @@ async function addItem(packageId, { productCode, labelBarcode, qty }, { requestK
 }
 
 // ─── 从箱子移出商品（扫错/多扫纠正）────────────────────────────────────────────
-async function removeItem(packageId, { itemId, qty }, { scopeWarehouseIds = null, pdaWarehouseId = null } = {}) {
+async function removeItem(packageId, { itemId, qty }, { requestKey, userId, scopeWarehouseIds = null, pdaWarehouseId = null } = {}) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
@@ -465,7 +465,23 @@ async function removeItem(packageId, { itemId, qty }, { scopeWarehouseIds = null
       [peek.warehouse_task_id],
     )
     if (!task) throw new AppError('任务不存在', 404)
+    // 范围 / PDA 设备仓校验必须**先于**幂等 begin：否则重放会绕过越权校验拿到原回执（同 addItem）
     assertTaskScope(task, { scopeWarehouseIds, pdaWarehouseId })
+
+    const requestState = await beginResourceOperationRequest(conn, {
+      requestKey,
+      // base action：helper 会**无条件**再拼 `.resourceId`，所以这里传 `package.remove-item`
+      action: 'package.remove-item',
+      userId: userId || null,
+      resourceType: 'package',
+      resourceId: packageId,
+    })
+    if (requestState.replay) {
+      // **重放分支排在查明细之前**：整行移出会把 `package_items` 行删掉，之后再重放若还去查明细，
+      // 就会用「该商品明细不存在」404 把**已经成功过**的操作挡回去，前端永远确认不了结果。
+      await conn.rollback()
+      return requestState.responseData
+    }
 
     const [[pkg]] = await conn.query(
       'SELECT id, status, warehouse_task_id FROM packages WHERE id=? FOR UPDATE',
@@ -516,6 +532,12 @@ async function removeItem(packageId, { itemId, qty }, { scopeWarehouseIds = null
       }
     }
 
+    await completeOperationRequest(conn, requestState, {
+      data: result,
+      message: result.removed ? '商品已移出箱子' : '数量已调整',
+      resourceType: 'package',
+      resourceId: packageId,
+    })
     await conn.commit()
     return result
   } catch (e) {
@@ -527,7 +549,7 @@ async function removeItem(packageId, { itemId, qty }, { scopeWarehouseIds = null
 }
 
 // ─── 作废单箱（整箱装错重来，不影响任务下其它箱子）────────────────────────────────
-async function voidPackage(packageId, { scopeWarehouseIds = null, pdaWarehouseId = null } = {}) {
+async function voidPackage(packageId, { requestKey, userId, scopeWarehouseIds = null, pdaWarehouseId = null } = {}) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
@@ -542,6 +564,22 @@ async function voidPackage(packageId, { scopeWarehouseIds = null, pdaWarehouseId
     )
     if (!task) throw new AppError('任务不存在', 404)
     assertTaskScope(task, { scopeWarehouseIds, pdaWarehouseId })
+
+    const requestState = await beginResourceOperationRequest(conn, {
+      requestKey,
+      // base action：helper 会**无条件**再拼 `.resourceId`，所以这里传 `package.void`
+      action: 'package.void',
+      userId: userId || null,
+      resourceType: 'package',
+      resourceId: packageId,
+    })
+    if (requestState.replay) {
+      // **重放分支排在状态检查之前**：作废是终态，重放时箱已经是「已作废」，
+      // 若先跑状态检查就会用「无需重复操作」400 把**已经成功过**的作废挡回去。
+      // 新键（非重放）对已作废箱仍然走下面的 400 拒绝——幂等只救**同一个操作**。
+      await conn.rollback()
+      return requestState.responseData
+    }
 
     const [[pkg]] = await conn.query(
       'SELECT id, status, warehouse_task_id FROM packages WHERE id=? FOR UPDATE',
@@ -565,8 +603,15 @@ async function voidPackage(packageId, { scopeWarehouseIds = null, pdaWarehouseId
 
     await conn.query('UPDATE packages SET status=3 WHERE id=?', [packageId])
 
+    const result = { id: packageId, warehouseTaskId: Number(pkg.warehouse_task_id), status: 3, statusName: '已取消' }
+    await completeOperationRequest(conn, requestState, {
+      data: result,
+      message: '箱子已作废',
+      resourceType: 'package',
+      resourceId: packageId,
+    })
     await conn.commit()
-    return { id: packageId, warehouseTaskId: Number(pkg.warehouse_task_id), status: 3, statusName: '已取消' }
+    return result
   } catch (e) {
     await conn.rollback()
     throw e

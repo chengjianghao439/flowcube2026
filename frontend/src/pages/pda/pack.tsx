@@ -22,7 +22,7 @@ import { WT_PRIORITY_TONE } from '@/constants/warehouseTaskStatus'
 import { getTaskByIdApi, getTasksApi, packDoneApi } from '@/api/warehouse-tasks'
 import { WT_STATUS } from '@/constants/warehouseTaskStatus'
 import { getPackagesApi, createPackageApi, addPackageItemApi, removePackageItemApi, voidPackageApi, finishPackageApi, printPackageLabelApi } from '@/api/packages'
-import type { AddPackageItemPayload, PackageItem } from '@/api/packages'
+import type { AddPackageItemPayload, PackageItem, RemovePackageItemResult } from '@/api/packages'
 import { getOperationRequestStatusApi } from '@/api/operation-requests'
 import type { Package, PackagePrintJob } from '@/api/packages'
 import type { WarehouseTask } from '@/api/warehouse-tasks'
@@ -338,47 +338,120 @@ export default function PdaPackPage() {
     },
   })
 
-  // 四个并行 action 里挑一个作为提示卡片的 phase/lastErrorMessage 来源：优先未确认的 pendingRecord，
-  // 其次正在提交/刚失败的。放在 addAction 之后定义，避免提前引用。
-  const packNoticeAction =
+  // 移出也走关键操作：未确认期间冻结**原目标**（箱 / 明细），恢复只认**原键回执**
+  const removeAction = useCriticalPdaAction<RemovePackageItemResult>({
+    // 与服务端幂等 action 对齐：服务端落库的 scopedAction 是 `package.remove-item.<箱id>`
+    action: 'package.remove-item',
+    requestAction: 'package.remove-item',
+    label: '移出确认',
+    onConfirmed: async (data) => {
+      if (data) ok(data.removed ? `已移出 ${data.productName}` : `${data.productName} 数量已调整为 ${data.qty}`)
+      refetch()
+    },
+    resolveServerState: async ({ record }) => {
+      // 移出会**真的删行或改数量**，所以只能靠**原键回执**定位本次提交；
+      // **不能**凭列表里该明细还在不在判本次成功——部分移出与整行移出的行状态不同，
+      // 而且原明细可能已被整行删掉（那正是必须靠回执才能确认的场景）。
+      const meta = record.metadata ?? {}
+      const packageId = Number(meta.packageId)
+      if (!Number.isInteger(packageId) || packageId <= 0) return { effective: false }
+      const st = await getOperationRequestStatusApi(record.requestKey, `package.remove-item.${packageId}`)
+      if (st?.status !== 'success') return { effective: false }
+      // 回执必须绑定**原箱**
+      if (st.resourceId != null && Number(st.resourceId) !== packageId) return { effective: false }
+      return { effective: true, data: st.data as RemovePackageItemResult, message: '本次移出已确认' }
+    },
+  })
+
+  // 作废同样走关键操作：作废是终态，同键重放必须回**首次回执**，而不是再报「已作废」
+  const voidAction = useCriticalPdaAction<{ id: number }>({
+    action: 'package.void',
+    requestAction: 'package.void',
+    label: '作废确认',
+    onConfirmed: async (data) => {
+      if (data) {
+        ok(`箱子 ${data.id} 已作废`)
+        setActivePackageId(prev => (prev === Number(data.id) ? null : prev))
+      }
+      refetch()
+    },
+    resolveServerState: async ({ record }) => {
+      const meta = record.metadata ?? {}
+      const packageId = Number(meta.packageId)
+      if (!Number.isInteger(packageId) || packageId <= 0) return { effective: false }
+      const st = await getOperationRequestStatusApi(record.requestKey, `package.void.${packageId}`)
+      if (st?.status !== 'success') return { effective: false }
+      if (st.resourceId != null && Number(st.resourceId) !== packageId) return { effective: false }
+      return { effective: true, data: st.data as { id: number }, message: '本次作废已确认' }
+    },
+  })
+
+  // 关键操作共用一个「当前待确认」位次：装箱 → 移出 → 作废 → **完成箱子** → 打印机 → 完成打包。
+  // **完成箱子（finishAction）必须保留在位**：旧版链里就有它，漏掉会让「完成箱」待确认时
+  // frozenRecord 变 null、查询/清除落到 finalizeAction，等于把既有的恢复入口改回归了。
+  // 任一未确认都冻结换箱 / 换目标 / 新增等操作，别让原目标的恢复入口消失。
+  const noticePendingAction =
     addAction.pendingRecord ? addAction
-      : finishAction.pendingRecord ? finishAction
-        : printAction.pendingRecord ? printAction
-          : finalizeAction.pendingRecord ? finalizeAction
-            : addAction.phase !== 'idle' || addAction.lastErrorMessage ? addAction
-              : finishAction.phase !== 'idle' || finishAction.lastErrorMessage ? finishAction
-                : printAction.phase !== 'idle' || printAction.lastErrorMessage ? printAction
-                  : finalizeAction.phase !== 'idle' || finalizeAction.lastErrorMessage ? finalizeAction
-                    : null
+      : removeAction.pendingRecord ? removeAction
+        : voidAction.pendingRecord ? voidAction
+          : finishAction.pendingRecord ? finishAction
+            : printAction.pendingRecord ? printAction
+              : finalizeAction.pendingRecord ? finalizeAction
+                : null
+  const frozenRecord = noticePendingAction?.pendingRecord ?? null
+  // 冻结范围只含**会改变箱内/箱子状态**的三个操作；打印与完成打包另有各自守卫
+  const anySubmitBlocked = addAction.submitBlocked || removeAction.submitBlocked || voidAction.submitBlocked
+  const anyBlockedReason = addAction.blockedReason || removeAction.blockedReason || voidAction.blockedReason
 
-  const removeItemMut = useMutation({
-    mutationFn: ({ packageId, itemId }: { packageId: number; itemId: number }) => {
-      if (!taskDetail) throw new Error('任务数据仍在加载，请稍后重试')
-      if (taskDetail.status !== WT_STATUS.PACKING) throw new Error('当前任务不是待打包状态，不能移出商品')
-      return removePackageItemApi(packageId, itemId)
-    },
-    onSuccess: (res) => {
-      const item = res!
-      ok(item.removed ? `已移出 ${item.productName}` : `${item.productName} 数量已调整为 ${item.qty}`)
-      refetch()
-    },
-    onError: (e: unknown) => err((e as { message?: string; response?: { data?: { message?: string } } })?.response?.data?.message ?? (e as { message?: string })?.message ?? '移出失败'),
-  })
+  // 提示卡片的 phase/lastErrorMessage 来源：优先未确认的 pendingRecord，
+  // 其次正在提交/刚失败的。放在这些 action 之后定义，避免提前引用。
+  const packNoticeAction =
+    noticePendingAction
+      ?? (addAction.phase !== 'idle' || addAction.lastErrorMessage ? addAction
+        : removeAction.phase !== 'idle' || removeAction.lastErrorMessage ? removeAction
+          : voidAction.phase !== 'idle' || voidAction.lastErrorMessage ? voidAction
+            : finishAction.phase !== 'idle' || finishAction.lastErrorMessage ? finishAction
+              : printAction.phase !== 'idle' || printAction.lastErrorMessage ? printAction
+                : finalizeAction.phase !== 'idle' || finalizeAction.lastErrorMessage ? finalizeAction
+                  : null)
 
-  const voidMut = useMutation({
-    mutationFn: (packageId: number) => {
-      if (!taskDetail) throw new Error('任务数据仍在加载，请稍后重试')
-      if (taskDetail.status !== WT_STATUS.PACKING) throw new Error('当前任务不是待打包状态，不能作废箱子')
-      return voidPackageApi(packageId)
-    },
-    onSuccess: (res) => {
-      const pkg = res!
-      ok(`箱子 ${pkg.id} 已作废`)
-      setActivePackageId(prev => (prev === pkg.id ? null : prev))
-      refetch()
-    },
-    onError: (e: unknown) => err((e as { message?: string; response?: { data?: { message?: string } } })?.response?.data?.message ?? (e as { message?: string })?.message ?? '作废失败'),
-  })
+  // 移出走关键操作：未确认期间冻结**原目标**（箱 / 明细），恢复只认**原键回执**
+  const runRemoveItem = async (pkg: Package, item: PackageItem) => {
+    if (!taskDetail) { err('任务数据仍在加载，请稍后重试'); return }
+    if (taskDetail.status !== WT_STATUS.PACKING) { err('当前任务不是待打包状态，不能移出商品'); return }
+    try {
+      await removeAction.run(
+        (requestKey) => removePackageItemApi(pkg.id, item.id, undefined, requestKey),
+        {
+          // 冻结**原目标与原货**：恢复定位与展示只用这份快照，不读当前 activePackageId 或列表状态。
+          // 只留 itemId 认不出是哪件货——**整行移出后原明细行会被删掉**，
+          // 待确认卡片必须能显示原条码 / 原商品名，否则工人对不上账。
+          taskId, taskNo: taskDetail.taskNo, packageId: pkg.id, packageBarcode: pkg.barcode,
+          itemId: item.id,
+          labelBarcode: item.labelBarcode ?? null,
+          productCode: item.productCode ?? null,
+          productName: item.productName ?? null,
+          // 本批前端只走**整份移出**（不传 qty）；卡片据此显示「整份」而不是某个数字
+          qty: null,
+        },
+      )
+    } catch (e) {
+      err((e as { message?: string })?.message ?? '移出失败')
+    }
+  }
+
+  const runVoid = async (pkg: Package) => {
+    if (!taskDetail) { err('任务数据仍在加载，请稍后重试'); return }
+    if (taskDetail.status !== WT_STATUS.PACKING) { err('当前任务不是待打包状态，不能作废箱子'); return }
+    try {
+      await voidAction.run(
+        (requestKey) => voidPackageApi(pkg.id, requestKey),
+        { taskId, taskNo: taskDetail.taskNo, packageId: pkg.id, packageBarcode: pkg.barcode },
+      )
+    } catch (e) {
+      err((e as { message?: string })?.message ?? '作废失败')
+    }
+  }
 
   const printLabelMut = useMutation({
     mutationFn: async (pkgId: number) => {
@@ -488,7 +561,7 @@ export default function PdaPackPage() {
     if (taskDetail.status !== WT_STATUS.PACKING) { err(`当前任务状态为「${taskDetail.statusName}」，不能打包`); return }
     if (!activePackageId) { err('请先创建或选择一个箱子'); return }
     // 待确认期间冻结：不能再扫新的商品/标签，否则会把「原目标」换掉、与冻结记录不一致
-    if (addAction.submitBlocked) { err(addAction.blockedReason || '上次装箱结果待确认，请先确认后再扫'); return }
+    if (anySubmitBlocked) { err(anyBlockedReason || '上次操作结果待确认，请先确认后再扫'); return }
     const parsed = parseBarcode(raw)
     // 取货标签（整件 I 码）：整份装入该标签的未装余量，数量由服务端在锁内决定，
     // 这里**不传 qty**——工人扫一张标签就该把这张标签的货全放进去，不是 1 件。
@@ -496,7 +569,7 @@ export default function PdaPackPage() {
     if (parsed.type !== 'product' && parsed.type !== 'unknown') { err('扫描商品条码或取货标签'); return }
     // 商品码路径保持原语义：扫码即直接装箱（默认数量 1），无需额外确认
     void submitAdd({ productCode: raw, qty: 1 })
-  }, [activePackageId, err, addAction, onlineBlocked, taskDetail, taskLoading, submitAdd])
+  }, [activePackageId, err, anyBlockedReason, anySubmitBlocked, onlineBlocked, taskDetail, taskLoading, submitAdd])
 
   // ── 任务未选 ────────────────────────────────────────────────────────────
   if (!task && !routeTaskId) return <TaskSelectStep onSelect={t => { setTask(t); setActivePackageId(null) }} />
@@ -590,25 +663,19 @@ export default function PdaPackPage() {
         <div className="max-w-md mx-auto px-4 py-4 space-y-3">
           <PdaCriticalActionNotice
             blockedReason={
-              addAction.blockedReason
+              anyBlockedReason
               || finishAction.blockedReason
               || printAction.blockedReason
               || finalizeAction.blockedReason
               || (onlineBlocked ? '网络已断开，打包、打印和完成待出库都已阻断。' : null)
             }
-            pendingRecord={addAction.pendingRecord ?? finishAction.pendingRecord ?? printAction.pendingRecord ?? finalizeAction.pendingRecord}
-            confirming={addAction.confirming || finishAction.confirming || printAction.confirming || finalizeAction.confirming}
+            pendingRecord={frozenRecord}
+            confirming={addAction.confirming || removeAction.confirming || voidAction.confirming || finishAction.confirming || printAction.confirming || finalizeAction.confirming}
             phase={packNoticeAction?.phase}
             phaseMessage={packNoticeAction?.phaseMessage}
             lastErrorMessage={packNoticeAction?.lastErrorMessage}
             onConfirm={() => {
-              const handler = addAction.pendingRecord
-                ? addAction
-                : finishAction.pendingRecord
-                  ? finishAction
-                  : printAction.pendingRecord
-                    ? printAction
-                    : finalizeAction
+              const handler = noticePendingAction ?? finalizeAction
               void handler.confirmPending().then((status) => {
                 if (!status) return
                 if (status.status === 'pending') warn(status.message || '系统还未确认结果，请稍后再查')
@@ -618,33 +685,47 @@ export default function PdaPackPage() {
               })
             }}
             onClear={() => {
-              // 人工明确清除：只清**当前待确认**的那一个 action（装箱优先），绝不自动清 pending
-              const handler = addAction.pendingRecord
-                ? addAction
-                : finishAction.pendingRecord
-                  ? finishAction
-                  : printAction.pendingRecord
-                    ? printAction
-                    : finalizeAction
-              handler.clearPending()
+              // 人工明确清除：只清**当前待确认**的那一个 action，绝不自动清 pending
+              ;(noticePendingAction ?? finalizeAction).clearPending()
             }}
             onDismissError={() => packNoticeAction?.clearError()}
           />
 
           {/* 待确认期间的**原提交定位**：取自冻结记录而不是当前界面状态——重挂后 activePackageId
-              可能已指向别的箱子，任务列表也可能换了人，不能让它们替代原目标。 */}
-          {addAction.pendingRecord && (
+              可能已指向别的箱子，任务列表也可能换了人，不能让它们替代原目标。
+              移出/作废同样冻结**原箱与原明细**，否则恢复时无法确认「上次动的到底是哪一行」。 */}
+          {frozenRecord && (
             <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 dark:border-amber-700 dark:bg-amber-950/40">
-              <p className="text-xs font-semibold text-amber-800 dark:text-amber-200">上次装箱提交（结果待确认）</p>
+              <p className="text-xs font-semibold text-amber-800 dark:text-amber-200">
+                {frozenRecord.action === 'package.add'
+                  ? '上次装箱提交（结果待确认）'
+                  : frozenRecord.action === 'package.remove-item'
+                    ? '上次移出提交（结果待确认）'
+                    : frozenRecord.action === 'package.void'
+                      ? '上次作废提交（结果待确认）'
+                      // 其余（完成箱子 / 箱贴打印 / 完成打包）**不得**一律写成「装箱提交」，
+                      // 按各自的 label 区分，否则现场看不出待确认的到底是哪一步。
+                      : `上次${frozenRecord.label}（结果待确认）`}
+              </p>
               <div className="mt-1 grid grid-cols-2 gap-2 text-xs text-amber-900 dark:text-amber-100">
-                <div>任务 <span className="font-mono">{String(addAction.pendingRecord.metadata?.taskNo ?? addAction.pendingRecord.metadata?.taskId ?? '—')}</span></div>
-                <div>箱子 <span className="font-mono">{String(addAction.pendingRecord.metadata?.packageBarcode ?? addAction.pendingRecord.metadata?.packageId ?? '—')}</span></div>
+                <div>任务 <span className="font-mono">{String(frozenRecord.metadata?.taskNo ?? frozenRecord.metadata?.taskId ?? '—')}</span></div>
+                <div>箱子 <span className="font-mono">{String(frozenRecord.metadata?.packageBarcode ?? frozenRecord.metadata?.packageId ?? '—')}</span></div>
                 <div className="min-w-0">
                   条码 <span className="font-mono break-all">
-                    {String(addAction.pendingRecord.metadata?.labelBarcode ?? addAction.pendingRecord.metadata?.productCode ?? '—')}
+                    {String(frozenRecord.metadata?.labelBarcode ?? frozenRecord.metadata?.productCode ?? '—')}
                   </span>
                 </div>
-                <div>数量 <span className="font-mono">{addAction.pendingRecord.metadata?.qty == null ? '整份' : String(addAction.pendingRecord.metadata.qty)}</span></div>
+                {/* 原货名：整行移出后原明细行会被删掉，只有冻结快照还记得这是哪件货 */}
+                {frozenRecord.metadata?.productName != null && (
+                  <div className="min-w-0">
+                    商品 <span className="font-mono break-all">{String(frozenRecord.metadata.productName)}</span>
+                  </div>
+                )}
+                <div>数量 <span className="font-mono">{frozenRecord.metadata?.qty == null ? '整份' : String(frozenRecord.metadata.qty)}</span></div>
+                {/* 移出冻结的是**某一行明细**，光有箱码定位不到是哪一行，恢复时对不上账 */}
+                {frozenRecord.metadata?.itemId != null && (
+                  <div>明细 <span className="font-mono">#{String(frozenRecord.metadata.itemId)}</span></div>
+                )}
               </div>
             </div>
           )}
@@ -665,24 +746,30 @@ export default function PdaPackPage() {
               active={activePackageId === pkg.id}
               onActivate={() => {
                 // 待确认期间冻结原目标：换箱会让「上次装箱到底装进哪只箱」失去可见的恢复入口
-                if (addAction.submitBlocked) { err(addAction.blockedReason || '上次装箱结果待确认，请先确认'); return }
+                if (anySubmitBlocked) { err(anyBlockedReason || '上次操作结果待确认，请先确认'); return }
                 setActivePackageId(pkg.id)
               }}
-              onFinish={() => finishMut.mutate(pkg.id)}
-              finishing={finishMut.isPending || finishAction.submitBlocked || addAction.submitBlocked || onlineBlocked}
+              onFinish={() => {
+                // 不能只靠按钮 disabled：handler 自身也要挡住，否则冻结状态被绕过
+                if (anySubmitBlocked) { err(anyBlockedReason || '上次操作结果待确认，请先确认'); return }
+                finishMut.mutate(pkg.id)
+              }}
+              finishing={finishMut.isPending || finishAction.submitBlocked || anySubmitBlocked || onlineBlocked}
               onPrintLabel={() => printLabelMut.mutate(pkg.id)}
               printingLabel={(printLabelMut.isPending && printLabelMut.variables === pkg.id) || printAction.submitBlocked || onlineBlocked}
               onRemoveItem={(itemId) => {
                 // 待确认期间不得移出：会改变冻结记录对应的箱内状态
-                if (addAction.submitBlocked) { err(addAction.blockedReason || '上次装箱结果待确认，请先确认'); return }
-                removeItemMut.mutate({ packageId: pkg.id, itemId })
+                if (anySubmitBlocked) { err(anyBlockedReason || '上次操作结果待确认，请先确认'); return }
+                const item = (pkg.items ?? []).find(i => i.id === itemId)
+                if (!item) { err('该明细已不存在，请刷新后重试'); return }
+                void runRemoveItem(pkg, item)
               }}
-              removingItemId={removeItemMut.isPending ? removeItemMut.variables?.itemId ?? null : null}
+              removingItemId={removeAction.phase === 'submitting' ? Number(removeAction.pendingRecord?.metadata?.itemId ?? 0) || null : null}
               onVoid={() => {
-                if (addAction.submitBlocked) { err(addAction.blockedReason || '上次装箱结果待确认，请先确认'); return }
-                voidMut.mutate(pkg.id)
+                if (anySubmitBlocked) { err(anyBlockedReason || '上次操作结果待确认，请先确认'); return }
+                void runVoid(pkg)
               }}
-              voiding={(voidMut.isPending && voidMut.variables === pkg.id) || addAction.submitBlocked}
+              voiding={voidAction.phase === 'submitting' || anySubmitBlocked}
             />
           ))}
           {packages.length === 0 && !pkgLoading && (
@@ -711,8 +798,14 @@ export default function PdaPackPage() {
               <Button
                 type="button"
                 className="w-full"
-                onClick={() => finalizeMut.mutate()}
-                disabled={finalizeMut.isPending || finalizeAction.submitBlocked || addAction.submitBlocked}
+                onClick={() => {
+                  if (anySubmitBlocked || finalizeAction.submitBlocked) {
+                    err(anyBlockedReason || finalizeAction.blockedReason || '上次操作结果待确认，请先确认')
+                    return
+                  }
+                  finalizeMut.mutate()
+                }}
+                disabled={finalizeMut.isPending || finalizeAction.submitBlocked || anySubmitBlocked}
               >
                 {finalizeMut.isPending ? '处理中…' : '完成打包并进入待出库'}
               </Button>
@@ -722,8 +815,11 @@ export default function PdaPackPage() {
       </div>
 
       <PdaBottomBar>
-          {activePackageId && <PdaScanner onScan={handleScan} placeholder="扫描商品条码或取货标签" disabled={addAction.submitBlocked || onlineBlocked} onDuplicate={() => err('重复扫码，请稍候')} />}
-          <Button variant={activePackageId ? 'outline' : 'default'} className="w-full" onClick={() => createMut.mutate()} disabled={createMut.isPending || addAction.submitBlocked || onlineBlocked}>
+          {activePackageId && <PdaScanner onScan={handleScan} placeholder="扫描商品条码或取货标签" disabled={anySubmitBlocked || onlineBlocked} onDuplicate={() => err('重复扫码，请稍候')} />}
+          <Button variant={activePackageId ? 'outline' : 'default'} className="w-full" onClick={() => {
+            if (anySubmitBlocked) { err(anyBlockedReason || '上次操作结果待确认，请先确认'); return }
+            createMut.mutate()
+          }} disabled={createMut.isPending || anySubmitBlocked || onlineBlocked}>
             {createMut.isPending ? '创建中…' : '＋ 新建箱子'}
           </Button>
       </PdaBottomBar>

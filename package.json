@@ -94,6 +94,7 @@
     "smoke:pack-quota": "node tests/pack-quota.smoke.test.js",
     "smoke:pick-cancel-return": "node tests/pick-cancel-return.smoke.test.js",
     "smoke:pick-label-reprint-lifecycle": "node tests/pick-label-reprint-lifecycle.smoke.test.js",
+    "smoke:pack-remove-void-replay": "node tests/pack-remove-void-replay.smoke.test.js",
     "smoke:audit-finance-security": "node tests/audit-finance-security.smoke.test.js",
     "smoke:accounting": "node tests/accounting.smoke.test.js",
     "smoke:accounting-period": "node tests/accounting-period.smoke.test.js",
