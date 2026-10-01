@@ -1,4 +1,5 @@
-import { useEffect, useId, useState, type ReactNode } from 'react'
+import { TabPathContext } from '@/components/layout/TabPathContext'
+import { useContext, useEffect, useId, useState, type ReactNode } from 'react'
 import { Activity, ClipboardList, History, PackageCheck, Printer, ScanLine } from 'lucide-react'
 import type { ActivityView, DocumentType } from '@/api/document-activity'
 import { DocumentActivityPanel } from './DocumentActivityPanel'
@@ -17,12 +18,26 @@ const INFO_LABEL: Partial<Record<DocumentType, string>> = {
   requisition: '申请信息', credit: '申请信息', price: '申请信息', plan: '计划信息',
   expense: '报销信息', refund: '退款信息', disposal: '处置信息', logistics: '运单信息',
 }
+function receiveView(type: DocumentType, id: number, path: string): 'progress' | undefined {
+  const [pathname, search = ''] = path.split('?')
+  const ownPath = type === 'inbound' ? `/inbound-tasks/${id}` : `/purchase/${id}`
+  const focus = new URLSearchParams(search).getAll('focus')
+  return pathname === ownPath && focus.length === 1 && ['fulfillment', 'waiting-putaway', 'print'].includes(focus[0]) ? 'progress' : undefined
+}
 export function OrderDetailSections(props: Props) { return props.id > 0 ? <DetailSections key={`${props.type}-${props.id}`} {...props} /> : <>{props.children}</> }
 function DetailSections({ type, id, children, progress, printProgress, initialView }: Props) {
   const prefix = useId()
-  const [selected, setSelected] = useState<'info' | ActivityView>(initialView || (typeof window !== 'undefined' && /[?&]focus=/.test(window.location.hash) ? (/[?&]focus=print(?:&|$)/.test(window.location.hash) ? 'print' : 'progress') : 'info'))
+  const tabPath = useContext(TabPathContext)
+  const scoped = type === 'purchase' || type === 'inbound'
+  const [selected, setSelected] = useState<'info' | ActivityView>(initialView || (scoped ? receiveView(type, id, tabPath || window.location.hash.slice(1)) || 'info' : (typeof window !== 'undefined' && /[?&]focus=/.test(window.location.hash) ? (/[?&]focus=print(?:&|$)/.test(window.location.hash) ? 'print' : 'progress') : 'info')))
   useEffect(() => { if (initialView) setSelected(initialView) }, [initialView])
   useEffect(() => {
+    if (!scoped || !tabPath) return
+    const view = receiveView(type, id, tabPath)
+    if (view) setSelected(view)
+  }, [type, id, tabPath, scoped])
+  useEffect(() => {
+    if (scoped && tabPath) return
     const path = type === 'inbound' ? '/inbound-tasks' : `/${type}`
     const focus = () => {
       const [pathname, search = ''] = window.location.hash.slice(1).split('?')
@@ -30,7 +45,7 @@ function DetailSections({ type, id, children, progress, printProgress, initialVi
     }
     window.addEventListener('hashchange', focus)
     return () => window.removeEventListener('hashchange', focus)
-  }, [type, id])
+  }, [type, id, scoped, tabPath])
   const progressLabel = type === 'purchase' || type === 'inbound' ? '收货进度'
     : ['requisition', 'credit', 'price', 'expense'].includes(type) ? '审批进度'
     : type === 'logistics' ? '物流进度'

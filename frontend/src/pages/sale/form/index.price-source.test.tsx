@@ -133,3 +133,22 @@ test.each([
   expect(payload.discountAmount).toBe(0)
   expect(payload.items[0].quantity * payload.items[0].unitPrice).toBe(240.2468)
 })
+
+test('本标签逆向交接和全局另单hash均不关闭已有编辑草稿', async () => {
+  client.setQueryData(['sale', 12], makeOrder(1))
+  render()
+  await act(async () => button('编辑').click())
+  const remark = host.querySelector<HTMLTextAreaElement>('textarea')
+  expect(remark).not.toBeNull()
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(remark, '本次尚未保存的备注')
+    remark!.dispatchEvent(new Event('input', { bubbles: true }))
+    window.history.replaceState({}, '', '/#/sale/99?focus=progress&taskId=91')
+    window.dispatchEvent(new HashChangeEvent('hashchange'))
+  })
+  render('/sale/12?focus=progress&taskId=91')
+  expect(button('保存修改')).toBeTruthy()
+  expect(host.querySelector('textarea')!.value).toBe('本次尚未保存的备注')
+  expect(mocks.updateSaleApi).not.toHaveBeenCalled()
+  expect(mocks.adjustSaleApi).not.toHaveBeenCalled()
+})

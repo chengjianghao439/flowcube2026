@@ -1,3 +1,5 @@
+import { readSaleHandoff } from './handoff'
+import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { money } from '@/lib/format'
 import { OrderEntryIssues } from '@/components/shared/OrderEntryIssues'
 import { EmptyState } from '@/components/shared/EmptyState'
@@ -456,13 +458,20 @@ function AdjustView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<
 // 查看视图（已有销售单详情 + 状态操作）
 // ════════════════════════════════════════════════════════════════════════════
 
-function isFulfillmentFocus(saleId: number) {
-  const [pathname, search = ''] = window.location.hash.slice(1).split('?')
-  return pathname === `/sale/${saleId}` && new URLSearchParams(search).get('focus') === 'fulfillment'
-}
-
 function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: string; closeTab: () => void }) {
-  const { data: order, isLoading } = useSaleDetail(saleId)
+  const { data: order, isLoading, isFetching, isPaused, isError, refetch } = useSaleDetail(saleId)
+  const active = useActiveWorkspaceTab()
+  const handoff = readSaleHandoff(tabPath, saleId)
+  const hasHandoff = handoff !== null && handoff !== 'invalid'
+  const [checkedPath, setCheckedPath] = useState('')
+  useEffect(() => {
+    setCheckedPath('')
+    if (!active || !hasHandoff) return
+    let current = true
+    void refetch({ cancelRefetch: false }).then(result => { if (current && !result.isError) setCheckedPath(tabPath) })
+    return () => { current = false }
+  }, [active, hasHandoff, tabPath, refetch])
+  const handoffReady = !hasHandoff || (active && checkedPath === tabPath && !isFetching && !isPaused && !isError)
   // 直接访问或刷新 /#/sale/3260 时，标签原本是路由兜底的「销售单 #3260」（数据库主键，
   // 用户认不出是哪张单）；数据到位后换成真实单号，与「从列表点进来」保持一致。
   useWorkspaceTabTitle(order?.orderNo)
@@ -471,14 +480,12 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
   const cancelMutate   = useCancelSale()
 
   const [printOpen, setPrintOpen] = useState(false)
-  const [detailTab, setDetailTab] = useState<'info'|'fulfillment'|'progress'|'scan'|'pack'|'log'>(() => isFulfillmentFocus(saleId) ? 'fulfillment' : 'info')
+  const [detailTab, setDetailTab] = useState<'info'|'fulfillment'|'progress'|'scan'|'pack'|'log'>(() => hasHandoff ? handoff.focus : 'info')
   useEffect(() => {
-    const focus = () => {
-      if (isFulfillmentFocus(saleId)) setDetailTab('fulfillment')
-    }
-    window.addEventListener('hashchange', focus)
-    return () => window.removeEventListener('hashchange', focus)
-  }, [saleId])
+    const context = readSaleHandoff(tabPath, saleId)
+    if (context === 'invalid') setDetailTab('info')
+    else if (context) setDetailTab(context.focus)
+  }, [saleId, tabPath])
   const [adjustMode, setAdjustMode] = useState(false)
   const [editing, setEditing] = useState(false)
   const [shipDialogOpen, setShipDialogOpen] = useState(false)
@@ -497,6 +504,8 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
       </div>
     )
   }
+
+  if (!order && isError) return <div role="alert" className="space-y-3 p-4 text-sm"><p>原单读取失败，请重新读取后查看任务。</p><Button variant="outline" onClick={() => void refetch()}>重新读取原单</Button></div>
 
   if (!order) {
     return (
@@ -526,6 +535,7 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
 
   return (
     <div className="flex flex-col gap-2.5">
+      {handoff === 'invalid' && <p role="alert" className="text-sm text-destructive">交接参数无效，请从原事项重新打开；当前只显示本单信息。</p>}
       <ActionBar
         title={order.orderNo}
         subtitle={
@@ -740,10 +750,10 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
       </KeepAliveSection>
 
       <KeepAliveSection active={detailTab === 'progress'} className="space-y-3"><div className="card-base space-y-4 p-4">
-          {order.taskNo ? (
+          {!handoffReady || isError ? <div className="space-y-2 text-sm" role={isError ? 'alert' : 'status'}><p>{isError ? '原单读取失败，无法核对最新任务；请重新读取后交接。' : isPaused ? '网络已暂停，等待恢复后重新读取原单任务。' : '正在重新读取原单任务…'}</p>{isError && <Button variant="outline" onClick={() => { setCheckedPath(''); void refetch().then(result => { if (!result.isError) setCheckedPath(tabPath) }) }}>重新读取原单</Button>}</div> : (
             <div className="space-y-4">
-              <FulfillmentProgressCard order={order} />
-              <DataTable
+              <FulfillmentProgressCard order={order} targetTaskId={handoff && handoff !== 'invalid' ? handoff.taskId : undefined} />
+              {order.taskNo && <DataTable
                 columns={[
                   { key: 'productCode', title: '编码', width: 130 },
                   { key: 'articleNumber', title: '供应商型号', width: 110, render: v => (v as string) || '-' },
@@ -757,11 +767,10 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
                 data={(order.items ?? []).map(item => ({ ...item, picked: (item.scans ?? []).reduce((s, sc) => s + sc.qty, 0) }))}
                 rowKey="id"
                 emptyText="暂无商品明细"
-              />
+              />}
             </div>
-          ) : (
-            <p className="py-8 text-center text-sm text-muted-foreground">尚未创建仓库任务，订单状态为 {getSaleWorkflowStatus(order).label}</p>
           )}
+          {!order.taskNo && !hasHandoff && <p className="py-8 text-center text-sm text-muted-foreground">尚未创建仓库任务，订单状态为 {getSaleWorkflowStatus(order).label}</p>}
         </div></KeepAliveSection>
 
       <KeepAliveSection active={detailTab === 'scan'} className="space-y-3"><div className="card-base p-4">

@@ -1,3 +1,5 @@
+import { explainFulfillmentAction, fulfillmentDocumentPath } from '@/lib/fulfillmentAction'
+import { usePermission } from '@/hooks/usePermission'
 import { useFulfillmentView } from '@/hooks/useFulfillmentView'
 import { useVisibleQuery } from '@/hooks/useVisibleQuery'
 import { Input } from '@/components/ui/input'
@@ -12,8 +14,8 @@ import { Button } from '@/components/ui/button'
 import type { TableColumn } from '@/types'
 
 const names = { sale: '销售订单', purchase: '采购订单', inbound: '收货订单', transfer: '调拨订单' }
-const paths = { sale: '/sale', purchase: '/purchase', inbound: '/inbound-tasks', transfer: '/transfer' }
 export function FulfillmentTodos({ summary = false }: { summary?: boolean }) {
+  const { can } = usePermission()
   const { view, update, userId } = useFulfillmentView()
   const { filter, documentType, keyword, draft } = view
   const active = useActiveWorkspaceTab()
@@ -24,14 +26,17 @@ export function FulfillmentTodos({ summary = false }: { summary?: boolean }) {
   </a>
   const columns: TableColumn<FulfillmentIssue>[] = [
     { key: 'title', title: '事项', width: 180 },
-    { key: 'document_id', title: '关联单据', width: 180, render: (_, r) => <a href={`#${paths[r.document_type]}/${r.document_id}?focus=fulfillment`} className="text-primary underline">{r.documentNo || `${names[r.document_type]} #${r.document_id}`}</a> },
+    { key: 'document_id', title: '关联单据', width: 180, render: (_, r) => <a href={fulfillmentDocumentPath(r) ? `#${fulfillmentDocumentPath(r)}` : undefined} className="text-primary underline">{r.documentNo || `${names[r.document_type]} #${r.document_id}`}</a> },
     { key: 'partyName', title: '往来单位', width: 160, render: v => v ? String(v) : '—' },
     { key: 'warehouseName', title: '仓库', width: 160, render: v => v ? String(v) : '—' },
     { key: 'reason', title: '阻塞原因', width: 340 }, { key: 'ownerName', title: '负责人', width: 110, render: v => v ? String(v) : '待认领' },
     { key: 'due_at', title: '处理期限', width: 170, render: v => v ? formatDisplayDateTime(String(v)) : '未设置' },
     { key: 'status', title: '状态', width: 120, render: (_, r) => <span className="flex flex-wrap items-center gap-1"><SoftStatusLabel label={r.status === 'resolved' ? '已处理' : r.status === 'processing' ? '处理中' : '待处理'} tone={r.status === 'resolved' ? 'success' : r.status === 'processing' ? 'active' : 'warning'} />{r.overdue ? <span className="text-xs font-medium text-destructive">已超时</span> : r.dueSoon ? <span className="text-xs font-medium text-warning">即将到期</span> : null}</span> },
     { key: 'result', title: '处理结果', width: 260 },
-    { key: 'action', title: '操作', width: 100, render: (_, r) => <a href={`#${paths[r.document_type]}/${r.document_id}?focus=fulfillment`} className="text-primary underline">跟进处理</a> },
+    { key: 'action', title: '操作', width: 190, render: (_, r) => {
+      const action = explainFulfillmentAction(r, can)
+      return <div>{action.path && <a href={`#${action.path}`} className="text-primary underline">{action.label}</a>}{action.note && <p className="mt-1 text-xs text-muted-foreground">{action.note}</p>}</div>
+    } },
   ]
   return <SectionCard title="订单履约待办" compact actions={<Button variant="outline" size="sm" onClick={() => query.refetch()} disabled={query.isFetching}>刷新事项</Button>}>
     <div className="mb-3 flex flex-wrap gap-2">{[['open', '全部未处理'], ['mine', '我负责'], ['unassigned', '待认领'], ['overdue', '已超时'], ['resolved', '已处理']].map(([value, label]) => <Button key={value} size="sm" variant={filter === value ? 'default' : 'outline'} onClick={() => update({ filter: value })}>{label}</Button>)}</div>

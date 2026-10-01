@@ -1,17 +1,6 @@
-/**
- * 履约卡点面板（订单详情 →「发货安排」标签）。
- *
- * 2026-09-19 只做了**可读性修复，未动机制**：修掉了「前往处理」与「处理」两个按钮撞名
- * （且前者对多数卡点指向本页、等于死按钮）、状态与期限挤在同一个徽章、区块名与按钮名
- * 对不上实际含义，以及后端 reason 里夹带操作建议这几处。
- *
- * 有意留下的待定项（先让现场用一段时间再看真实反馈，不凭猜测重构）：
- *  - 是否改成「卡点 + 一个下一步动作」：每条只留结论、影响与一个主按钮，
- *    认领/转派/记录进展收进「更多」。
- *  - 是否去掉认领 / 转派 / 负责人 / 处理期限这套任务分派机制——销售单上自动检测出的卡点
- *    多是「货源不足、采购延期」这类跨部门问题，认领一条记录本身并不解决货源。
- *  - 是否整体下线该区块，把卡点提示并入「作业进度」标签。
- */
+/** 订单详情的发货安排、来源解释与事项跟进；交接只导航或展开只读事实。 */
+import { explainFulfillmentAction, fulfillmentDocumentPath } from '@/lib/fulfillmentAction'
+import { usePermission } from '@/hooks/usePermission'
 import { useRef, useState } from 'react'
 import { DatePicker } from './DatePicker'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -44,22 +33,6 @@ const issueNames: Record<string, string> = {
   '关联采购已延期': '等待的采购已经延期', '改单等待仓库确认': '修改订单后，等待仓库确认',
   '取消等待实物归还': '取消订单后，等待仓库退回商品', '授信申请待审批': '超额放行申请还在审批',
 }
-/**
- * 「前往处理」该叫什么、要不要显示。
- *
- * 原先前端一律写「前往处理」，但多数卡点的 action_path 就是本页的 `?focus=fulfillment`
- * ——点它什么都不会发生，还和右边真正展开表单的「处理」按钮撞名。这里按跳转目标给出
- * 具体去向；目标就是当前面板时不渲染该链接。
- */
-function actionLabel(path: string): string | null {
-  if (path.startsWith('/credit-overrides')) return '去处理超额放行'
-  const focus = new URLSearchParams(path.split('?')[1] ?? '').get('focus')
-  if (focus === 'waiting-putaway') return '去扫码上架'
-  if (focus === 'print') return '去打印记录'
-  if (focus === 'fulfillment') return null
-  return '前往处理'
-}
-
 function estimatedDateText(item: DeliveryItem, date: string | null) {
   if (item.remaining <= 0) return '无需继续发货'
   if (date) return date
@@ -69,8 +42,12 @@ function estimatedDateText(item: DeliveryItem, date: string | null) {
 }
 export function OrderFulfillmentPanel({ type, id }: { type: FulfillmentType; id: number }) {
   const active = useActiveWorkspaceTab()
+  const { can } = usePermission()
+  const details = useRef(new Map<number, HTMLDetailsElement>())
+  const panel = useRef<HTMLDivElement>(null)
+  const [locationNote, setLocationNote] = useState('')
   const qc = useQueryClient()
-  const query = useQuery({ queryKey: ['fulfillment', type, id], queryFn: ({ signal }) => getFulfillment(type, id, signal), enabled: active, refetchInterval: active ? 30_000 : false })
+  const query = useQuery({ queryKey: ['fulfillment', type, id], queryFn: ({ signal }) => getFulfillment(type, id, signal), enabled: active, staleTime: 0, refetchOnMount: 'always', refetchInterval: active ? 30_000 : false })
   const request = useRef({ signature: '', key: '' })
   const [editing, setEditing] = useState<FulfillmentIssue | null>(null)
   const [operation, setOperation] = useState<'assign' | 'progress' | 'resolve' | 'reopen'>('progress')
@@ -100,7 +77,7 @@ export function OrderFulfillmentPanel({ type, id }: { type: FulfillmentType; id:
     onError: (error: Error) => toast.error(error.message),
   })
   if (query.isPending) return <p role="status" className="p-4 text-sm text-muted-foreground">正在加载订单进度和待处理问题…</p>
-  if (query.isError) return <div role="alert" className="p-4 text-sm"><p>{query.error.message}</p><Button variant="outline" onClick={() => query.refetch()}>重新加载订单进度</Button></div>
+  if (query.isError) return <div role="alert" className="p-4 text-sm"><p>{query.error.message}</p><p className="mt-1 text-muted-foreground">已填写的进展和日期保留；重新读取后继续。</p><Button variant="outline" onClick={() => query.refetch()}>重新加载订单进度</Button></div>
   const data = query.data
   const head = data.commitments.find(c => c.itemId === 0)
   const pendingItems = data.delivery?.items.filter(item => item.remaining > 0) || []
@@ -120,7 +97,7 @@ export function OrderFulfillmentPanel({ type, id }: { type: FulfillmentType; id:
     { key: 'unit', title: '单位', width: 55 }, { key: 'warehouseName', title: '仓库', width: 95 },
     { key: 'remaining', title: '还需发货', width: 90 }, { key: 'physical', title: '现货可供本单', width: 120 },
     { key: 'boundQty', title: '已安排采购', width: 100 }, { key: 'shortage', title: '还缺货源', width: 95 },
-    { key: 'details', title: '详情', width: 160, render: (_, item) => <details>
+    { key: 'details', title: '详情', width: 160, render: (_, item) => <details ref={node => { if (node) details.current.set(item.id, node); else details.current.delete(item.id) }}>
       <summary className="cursor-pointer text-primary">{item.delayed ? <span className="text-destructive">可能延期 · 查看</span> : '查看'}</summary>
       <div className="mt-2 space-y-2 text-sm">
         <p>{supplyNames[item.state] || item.state}</p>
@@ -134,7 +111,24 @@ export function OrderFulfillmentPanel({ type, id }: { type: FulfillmentType; id:
       </div>
     </details> },
   ]
-  return <div className="space-y-3" id="order-fulfillment">
+  async function locateIssue(issue: FulfillmentIssue) {
+    const latest = await query.refetch()
+    if (latest.isError || !latest.data) return
+    const current = latest.data.issues.find(row => row.id === issue.id)
+    if (!current || current.status === 'resolved') { setLocationNote('已重新读取，原事项已不再待处理。请查看最新安排。'); return }
+    const action = explainFulfillmentAction(current, can)
+    const currentItem = action.itemId && latest.data.delivery?.items.some(item => item.id === action.itemId)
+    const detail = currentItem && action.itemId ? details.current.get(action.itemId) : null
+    if (detail) {
+      const history = detail.parentElement?.closest('details')
+      if (history) history.open = true
+      detail.open = true
+      detail.scrollIntoView?.({ block: 'nearest' })
+    } else panel.current?.scrollIntoView?.({ block: 'start' })
+    setLocationNote(action.itemId && !detail ? '已重新读取，该商品明细已不在当前安排中，请查看最新结果。' : '已重新读取并定位当前安排；请核对明细和已有来源。')
+  }
+  return <div ref={panel} className="space-y-3" id="order-fulfillment">
+    {locationNote && <p role="status" className="text-sm text-muted-foreground">{locationNote}</p>}
     {(type === 'sale' || type === 'purchase') && <SectionCard title={type === 'sale' ? '备货情况' : '采购到货时间与相关销售订单'} compact actions={data.canManage && <Button size="sm" variant="outline" onClick={() => openDate()}>{type === 'sale' ? '修改安排' : '修改到货日期'}</Button>}>
       <div className="flex flex-wrap gap-x-8 gap-y-2 text-sm">
         <span>{type === 'sale' ? '约定发货' : '预计到货日期'}：<strong>{type === 'sale' ? head?.promisedDate || '未填写' : data.expectedDate || '待确认'}</strong></span>
@@ -174,7 +168,16 @@ export function OrderFulfillmentPanel({ type, id }: { type: FulfillmentType; id:
           <p className="mt-1 whitespace-pre-wrap">{issue.reason}</p><p className="mt-1 text-xs text-muted-foreground">负责人：{issue.ownerName || '待认领'} · 期限：{issue.due_at ? formatDisplayDateTime(issue.due_at) : '未设置'} · {issue.source === 'auto' ? '系统检测' : '人工登记'}</p>
           {issue.result && <p className="mt-1">处理结果：{issue.result}</p>}
         </div>
-        <div className="flex flex-wrap items-center gap-2">{actionLabel(issue.action_path) && <a className="text-primary underline" href={`#${issue.action_path}`}>{actionLabel(issue.action_path)}</a>}{data.canManage && <>{!issue.owner_id && issue.status !== 'resolved' && <Button size="sm" variant="outline" disabled={mutation.isPending} onClick={() => mutation.mutate({ action: 'issue', issueId: issue.id, version: issue.version, operation: 'claim' })}>认领</Button>}<Button size="sm" variant="outline" onClick={() => openIssue(issue)}>{issue.status === 'resolved' ? '重新跟进' : '处理'}</Button></>}</div>
+        <div className="flex flex-wrap items-center gap-2">{(() => {
+          if (issue.document_type !== type || issue.document_id !== id) return null
+          const action = explainFulfillmentAction(issue, can)
+          return <div>{action.path === fulfillmentDocumentPath(issue)
+            ? <Button size="sm" variant="outline" disabled={query.isFetching || query.isPaused} onClick={() => void locateIssue(issue)}>{action.label}</Button>
+            : action.path && (query.isFetching || query.isPaused
+              ? <span role="status" className="text-muted-foreground">{action.label}：{query.isPaused ? '网络已暂停，等待恢复后重新读取事项。' : '正在重新读取事项，稍后再交接。'}</span>
+              : <a className="text-primary underline" href={`#${action.path}`}>{action.label}</a>)}
+            {action.note && <p className="mt-1 text-xs text-muted-foreground">{action.note}</p>}</div>
+        })()}{data.canManage && <>{!issue.owner_id && issue.status !== 'resolved' && <Button size="sm" variant="outline" disabled={mutation.isPending} onClick={() => mutation.mutate({ action: 'issue', issueId: issue.id, version: issue.version, operation: 'claim' })}>认领</Button>}<Button size="sm" variant="outline" onClick={() => openIssue(issue)}>{issue.status === 'resolved' ? '重新跟进' : '处理'}</Button></>}</div>
       </div>)}</div>
       {(newIssue || editing) && <form className="mt-3 space-y-3 border-t pt-3" onSubmit={e => { e.preventDefault();
         if (newIssue) mutation.mutate({ action: 'create', title, reason: result, ownerId: owner ? Number(owner) : undefined, dueDate: due || null })

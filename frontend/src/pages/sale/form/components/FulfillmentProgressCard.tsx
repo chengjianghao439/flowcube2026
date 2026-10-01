@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { usePermission } from '@/hooks/usePermission'
@@ -11,8 +12,22 @@ const awaitingBin = (task: NonNullable<SaleOrder['tasks']>[number]) =>
   [2, 3].includes(task.status) && task.sortingBinId == null
   && !task.cancelRequestedAt && !task.adjustmentRequestedAt
 
-export function FulfillmentProgressCard({ order }: { order: SaleOrder }) {
+export function FulfillmentProgressCard({ order, targetTaskId }: { order: SaleOrder; targetTaskId?: number }) {
   const navigate = useNavigate()
+  const target = useRef<HTMLDivElement>(null)
+  const tasks = order.tasks ?? []
+  const reverseActive = (task: NonNullable<SaleOrder['tasks']>[number]) => task.status >= 2 && task.status < 7 && !!(task.cancelRequestedAt || task.adjustmentRequestedAt)
+  const targetTask = tasks.find(task => task.taskId === targetTaskId && reverseActive(task))
+  useEffect(() => { if (targetTaskId && targetTask) target.current?.scrollIntoView?.({ block: 'nearest' }) }, [targetTaskId, targetTask])
+  const reverseNotice = <>
+    {targetTaskId && !targetTask && <p role="status" className="text-sm text-muted-foreground">已重新读取，原任务已不在本单待处理范围内；可能已完成、已解除等待或不属于本单，请查看最新任务。</p>}
+    {tasks.filter(reverseActive).map(task => <div key={task.taskId} ref={task.taskId === targetTaskId ? target : undefined} data-reverse-task={task.taskId} data-handoff-target={task.taskId === targetTaskId ? 'true' : 'false'} className="rounded-md border border-warning/35 bg-warning/[0.07] px-3 py-2 text-sm">
+      <p className="font-medium">{task.warehouseName || `仓库#${task.warehouseId}`} · {task.taskNo}</p>
+      {task.cancelRequestedAt && <p>等待实物归还：仓库需在 PDA → 拣货退回 核对任务 {task.taskNo} 并逐项扫码，完成后刷新。</p>}
+      {task.adjustmentRequestedAt && <p>等待改单确认：仓库需在 PDA → 改单确认 核对任务 {task.taskNo} 并逐项扫码，完成后刷新。</p>}
+      <p className="mt-1 text-xs text-muted-foreground">本页只查看交接进度；事项处理记录不能代替仓库实物确认。</p>
+    </div>)}
+  </>
   const { can } = usePermission()
   const binHandoff = (task: NonNullable<SaleOrder['tasks']>[number]) => {
     const path = sortingBinHandoffPath(task.taskId, task.warehouseId)
@@ -35,11 +50,11 @@ export function FulfillmentProgressCard({ order }: { order: SaleOrder }) {
 
   // 分仓：一个订单有多个仓库任务时，改为逐仓列出各任务的仓库/状态（各仓进度可能不同），
   // 而不是只展示单个任务的步骤条。单仓订单（tasks<=1）走下面的原单任务展示。
-  const tasks = order.tasks ?? []
   if (tasks.length > 1) {
     const wtTone = (s: number): StatusTone => s === 7 ? 'success' : s === 8 ? 'danger' : 'active'
     return (
       <div className="space-y-3">
+        {reverseNotice}
         <div className="flex items-center justify-between gap-3">
           <div>
             <h3 className="text-sm font-semibold text-foreground">仓库任务进度</h3>
@@ -66,10 +81,11 @@ export function FulfillmentProgressCard({ order }: { order: SaleOrder }) {
     )
   }
 
-  if (!order.taskNo) return null
+  if (!order.taskNo) return reverseNotice
 
   return (
     <div className="space-y-4">
+      {reverseNotice}
       <div className="flex items-center justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold text-foreground">作业进度</h3>

@@ -8,6 +8,7 @@ import { TabPathContext } from '@/components/layout/TabPathContext'
 import { useSectionActive } from '@/components/layout/SectionVisibilityContext'
 import type { SaleOrder } from '@/types/sale'
 import SaleFormPage from './index'
+import { buildWorkspaceTabRegistration } from '@/router/workspaceRouteMeta'
 
 vi.mock('@/components/shared/OrderFulfillmentPanel', () => ({ OrderFulfillmentPanel: () => {
   const active = useSectionActive()
@@ -24,8 +25,8 @@ beforeEach(() => {
   client.setQueryData(['sale', 12], order)
 })
 afterEach(() => { act(() => root.unmount()); client.clear(); host.remove(); window.history.replaceState({}, '', '/') })
-function render() {
-  act(() => root.render(<MemoryRouter><QueryClientProvider client={client}><TabPathContext.Provider value="/sale/12"><SaleFormPage /></TabPathContext.Provider></QueryClientProvider></MemoryRouter>))
+function render(path = '/sale/12') {
+  act(() => root.render(<MemoryRouter><QueryClientProvider client={client}><TabPathContext.Provider value={path}><SaleFormPage /></TabPathContext.Provider></QueryClientProvider></MemoryRouter>))
 }
 function tab(label: string) { return [...host.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')].find(button => button.textContent === label)! }
 function navigate(id: number) {
@@ -52,7 +53,7 @@ test('发货安排独立于作业进度，切换后保留输入并暂停隐藏�
 
 test('首次从待办进入打开本单发货安排', () => {
   window.history.replaceState({}, '', '/#/sale/12?focus=fulfillment')
-  render()
+  render(buildWorkspaceTabRegistration('/sale/12', '?focus=fulfillment').path)
   expect(tab('发货安排')?.getAttribute('aria-pressed')).toBe('true')
   expect(host.querySelector('[data-testid="arrangements"]')).not.toBeNull()
 })
@@ -64,5 +65,22 @@ test('已打开订单从待办返回定位发货安排，其他订单的链接�
   navigate(13)
   expect(tab('订单信息').getAttribute('aria-pressed')).toBe('true')
   navigate(12)
+  expect(tab('订单信息').getAttribute('aria-pressed')).toBe('true')
+  render(buildWorkspaceTabRegistration('/sale/12', '?focus=fulfillment').path)
   expect(tab('发货安排')?.getAttribute('aria-pressed')).toBe('true')
+})
+
+test('隐藏另一单的全局hash不改变本标签已经选择的区域', () => {
+  render()
+  act(() => tab('作业进度').click())
+  navigate(12)
+  expect(tab('作业进度').getAttribute('aria-pressed')).toBe('true')
+  expect(host.querySelector('[data-testid="arrangements"]')).toBeNull()
+})
+test('已经打开的交接收到重复参数后拒绝任务定位并回本单信息', () => {
+  render(buildWorkspaceTabRegistration('/sale/12', '?focus=progress&taskId=91').path)
+  expect(tab('作业进度').getAttribute('aria-pressed')).toBe('true')
+  render(buildWorkspaceTabRegistration('/sale/12', '?focus=progress&taskId=91&taskId=').path)
+  expect(host.textContent).toContain('交接参数无效')
+  expect(tab('订单信息').getAttribute('aria-pressed')).toBe('true')
 })

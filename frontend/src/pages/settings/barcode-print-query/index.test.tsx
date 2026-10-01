@@ -3,6 +3,7 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, expect, test, vi } from 'vitest'
+import { TabPathContext } from '@/components/layout/TabPathContext'
 import BarcodePrintQueryPage from './index'
 import { BARCODE_PRINT_STATUS_OPTIONS } from './constants'
 
@@ -96,4 +97,16 @@ test('作废行同时显示「条码状态」与「最近任务结果」，互�
 test('因作废被撤回终结的任务显示「未出纸」，不复用「打印失败」文案', () => {
   render()
   expect(host.textContent).toContain('未出纸')
+})
+
+test('两个打印查询缓存标签各自保留原收货上下文，不能读取全局另一单参数', () => {
+  root = createRoot(host)
+  const renderTabs = (globalId: number) => act(() => root.render(<MemoryRouter initialEntries={[`/settings/barcode-print-query?category=inbound&inboundTaskId=${globalId}`]}><div data-tab="A"><TabPathContext.Provider value="/settings/barcode-print-query?category=inbound&inboundTaskId=1"><BarcodePrintQueryPage /></TabPathContext.Provider></div><div data-tab="B"><TabPathContext.Provider value="/settings/barcode-print-query?category=inbound&inboundTaskId=2"><BarcodePrintQueryPage /></TabPathContext.Provider></div></MemoryRouter>))
+  renderTabs(2)
+  expect(host.querySelector('[data-tab="A"]')!.textContent).toContain('IT-1')
+  const count = (selector: string, label: string) => [...host.querySelector(selector)!.querySelectorAll('p')].find(p => p.textContent === label)?.nextElementSibling?.textContent
+  expect(count('[data-tab="A"]', '打印失败')).toBe('1')
+  expect(count('[data-tab="B"]', '打印失败')).toBe('1')
+  expect(count('[data-tab="A"]', '超时待确认')).toBe('0')
+  expect(count('[data-tab="B"]', '超时待确认')).toBe('1')
 })

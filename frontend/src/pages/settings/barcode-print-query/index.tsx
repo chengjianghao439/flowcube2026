@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useState } from 'react'
+import { TabPathContext } from '@/components/layout/TabPathContext'
+import { useContext, useCallback, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { X } from 'lucide-react'
@@ -62,7 +63,9 @@ export default function BarcodePrintQueryPage() {
   const navigate = useNavigate()
   const addTab = useWorkspaceStore(s => s.addTab)
   const qc = useQueryClient()
-  const [searchParams] = useSearchParams()
+  const [locationParams] = useSearchParams()
+  const tabPath = useContext(TabPathContext)
+  const searchParams = tabPath ? new URLSearchParams(tabPath.split('?')[1] ?? '') : locationParams
   const initialCategory = (searchParams.get('category') as BarcodePrintCategory | null) || 'inbound'
   const initialInboundTaskId = readNullableIntParam(searchParams, 'inboundTaskId') ?? undefined
   const initialInboundTaskItemId = readNullableIntParam(searchParams, 'inboundTaskItemId') ?? undefined
@@ -72,6 +75,7 @@ export default function BarcodePrintQueryPage() {
   const [status, setStatus] = useState('__all__')
   const [queryOpen, setQueryOpen] = useState(false)
   const isActiveTab = useActiveWorkspaceTab()
+  const hasInboundHandoff = category === 'inbound' && !!(initialInboundTaskId || initialInboundTaskItemId)
 
   const query = useQuery({
     queryKey: ['barcode-print-records', category, keyword, status, initialInboundTaskId, initialInboundTaskItemId],
@@ -91,6 +95,8 @@ export default function BarcodePrintQueryPage() {
       inboundTaskItemId: category === 'inbound' ? initialInboundTaskItemId : undefined,
     }),
     enabled: isActiveTab,
+    staleTime: hasInboundHandoff ? 0 : undefined,
+    refetchOnMount: hasInboundHandoff ? 'always' : true,
     // 轮询间隔与其它记录类页面（PDA 10–30s）对齐：这是「查看打印记录」页，
     // 没有 3 秒级实时性要求，而这个间隔直接乘在每轮的串行请求数上。
     refetchInterval: isActiveTab ? AUTO_REFRESH_MS : false,
@@ -259,9 +265,10 @@ export default function BarcodePrintQueryPage() {
     ]
   }, [category, reprinting, reprintingRow, reprint, openPath])
 
-  const rows = useMemo(() => query.data?.list ?? [], [query.data])
+  const handoffReading = hasInboundHandoff && (query.isFetching || query.isPaused || query.isError)
+  const rows = useMemo(() => handoffReading ? [] : query.data?.list ?? [], [query.data, handoffReading])
   const inboundContext = useMemo(() => {
-    if (category !== 'inbound' || !initialInboundTaskId) return null
+    if (category !== 'inbound' || !initialInboundTaskId || handoffReading) return null
     const taskId = initialInboundTaskId
     const taskRows = rows.filter(row => row.inboundTaskId === taskId)
     const unassignedCount = taskRows.filter(row => row.latestJob?.statusKey === 'unassigned').length
@@ -277,7 +284,7 @@ export default function BarcodePrintQueryPage() {
       timeoutCount,
       printingCount,
     }
-  }, [category, initialInboundTaskId, rows])
+  }, [category, initialInboundTaskId, rows, handoffReading])
   const outboundContext = useMemo(() => {
     if (category !== 'outbound') return null
     const waveId = rows.find(row => row.waveId)?.waveId
@@ -312,6 +319,10 @@ export default function BarcodePrintQueryPage() {
         actions={<Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>}
       />
 
+      {handoffReading && <div className="space-y-2 rounded-md border p-3 text-sm" role={query.isError ? 'alert' : 'status'}>
+        <p>{query.isError ? '打印记录读取失败，无法核对最新状态；旧记录暂不提供操作。' : query.isPaused ? '网络已暂停，等待恢复后重新读取打印记录。' : '正在重新读取原收货单的打印记录…'}</p>
+        {query.isError && <Button variant="outline" onClick={() => void query.refetch()}>重新读取打印记录</Button>}
+      </div>}
       {inboundContext && (
         <div className="rounded-lg border border-warning/30 bg-warning/5 px-4 py-4 space-y-3">
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -477,7 +488,7 @@ export default function BarcodePrintQueryPage() {
         virtualized
         columns={columns}
         data={rows}
-        loading={query.isLoading}
+        loading={query.isLoading || (handoffReading && (query.isFetching || query.isPaused))}
         rowKey="recordId"
       />
       <ListSummary total={total} unit="条" />

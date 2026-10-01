@@ -2,6 +2,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
+import { TabPathContext } from '@/components/layout/TabPathContext'
 import { OrderDetailSections } from './OrderDetailSections'
 vi.mock('./DocumentActivityPanel', () => ({ DocumentActivityPanel: ({ view, id }: { view: string; id: number }) => <div>记录 {id} {view}</div> }))
 let host: HTMLDivElement
@@ -38,4 +39,20 @@ test('待办链接唤回已打开的原单进度，其他单据不改变当前�
   navigate(12)
   expect(tab('收货进度')!.getAttribute('aria-selected')).toBe('true')
   expect(host.querySelector('input')!.value).toBe('草稿')
+})
+
+test('采购接收本标签路径并保留原输入，全局另单hash不改选择', () => {
+  const render = (path: string) => act(() => root.render(<TabPathContext.Provider value={path}><OrderDetailSections type="purchase" id={12}><input defaultValue="草稿" /></OrderDetailSections></TabPathContext.Provider>))
+  render('/purchase/12')
+  host.querySelector('input')!.value = '等待供应商答复'
+  act(() => { window.history.replaceState({}, '', '/#/purchase/12?focus=fulfillment'); window.dispatchEvent(new HashChangeEvent('hashchange')) })
+  expect(tab('订单信息')!.getAttribute('aria-selected')).toBe('true')
+  render('/purchase/12?focus=fulfillment')
+  expect(tab('收货进度')!.getAttribute('aria-selected')).toBe('true')
+  expect(host.querySelector('input')!.value).toBe('等待供应商答复')
+})
+test('收货旧打印focus安全进入现有收货进度，避免选择不存在页签', () => {
+  act(() => root.render(<TabPathContext.Provider value="/inbound-tasks/12?focus=print"><OrderDetailSections type="inbound" id={12}>本单</OrderDetailSections></TabPathContext.Provider>))
+  expect(tab('收货进度')!.getAttribute('aria-selected')).toBe('true')
+  expect(host.textContent).toContain('记录 12 progress')
 })

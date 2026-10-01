@@ -65,7 +65,8 @@ export function buildCanonicalWorkspaceSearch(search = '', preserveEmptyKeys: re
 export function buildCanonicalWorkspacePath(pathname: string, search = ''): string {
   const normalizedPath = normalizeWorkspacePath(pathname)
   // 交接上下文的空值/重复值必须留给接收页拒绝，不能规范化成有效任务。
-  const preserveEmptyKeys = normalizedPath === '/sorting-bins' ? ['taskId', 'warehouseId'] : []
+  const preserveEmptyKeys = normalizedPath === '/sorting-bins' ? ['taskId', 'warehouseId']
+    : /^\/sale\/[1-9]\d*$/.test(normalizedPath) ? ['focus', 'taskId'] : []
   return `${normalizedPath}${buildCanonicalWorkspaceSearch(search, preserveEmptyKeys)}`
 }
 
