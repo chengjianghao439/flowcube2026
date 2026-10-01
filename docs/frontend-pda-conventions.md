@@ -221,11 +221,13 @@
   - 未确认期间**不得**取消、改目标，也不得按当前界面数值猜成功；确定成功后的内部复位要与「用户主动取消」的 guard 分开，否则成功那一刻的 phase 会让界面永远回不到扫码态。
   - 传输不确定判定要**优先看结构化 code**（`REQUEST_TIMEOUT` / `NETWORK_ERROR`），因为 `api/client.ts` 已把 message 规范成中文，只匹配中文会把超时误判为确定失败并清掉 pending。
   - 设备票据（`secureStorage`）在**浏览器 dev 下是内存态、不持久化**，重挂后需重新绑定——这是设计取舍，不是缺陷。
-- **PC**：还原整件弹窗用 `useIdempotentSubmit` + **冻结的本次提交快照**（`frozenRef`：原 boxId / 原 body / 原 action）。
-  - `frozenRef` 与幂等状态**只在内存**：PC **只支持同页恢复**（页面不卸载即可「查询上次结果 / 按原内容重试」）；**整页重挂恢复尚未实现**，不得当成已支持。
-  - **提交中 / 未确认期间必须锁住关窗与换目标**（`busyOrUncertain`），否则原提交快照会失去可见的恢复入口。
-  - 回执查询要用**本次 mutation 的返回值**判定与展示，不能在回调里读渲染闭包里的旧 data。
-  - 成功路径除数量外，还要 invalidate **该盒的容器流水**（`['plastic-box-movements', boxId]`，用冻结的原 boxId），否则同一弹窗内看不到刚生成的流水。
+- **PC（2026-10-01 A3 本地实现）**：仅 `plastic_box.repack.<盒ID>` 改用 `useCriticalOperationRecovery`；付款和 PDA hooks 不变。提交前同步占位并写入 `flowcube_pc_repack_v1:<accountId>`，记录只有版本、账号 ID、原盒 ID、完整 action、原请求键、时间、实际 API 端点和合法数字数量参数。未知版本/非法结构/读失败不删除原记录、不放行自动写；保存失败不发送 POST。
+  - 页面详情外显示当前账号所有原记录；详情与还原弹窗也能查询所有原记录，避免 B 的草稿挡住 A 的恢复入口。同盒未确认禁止覆盖；不同盒独立保留。确认 A 只更新 A 的数量、含 A 的列表缓存与 A 的详情/来源/流水，不关闭 B 或改变 B 输入。查看原盒使用现有单盒 GET，仍由服务端校验仓库范围与查看权限；异步读取还须核对详情选择代次，迟到的 A 详情不能覆盖后选的 B。
+  - 刷新/重开只恢复线索，**不自动 POST、不自动补打**。`pending/not_found` 保留原键和原内容；显式重试只发送校验过的原参数。首发明确 4xx 可确认拒绝；未知原请求的重试 4xx 仍待回执。`success/failed` 只在安全清理原身份后解除阻断；清理失败显示已确认结果及“记录尚未清理”，允许再次查询/清理，禁止再次 POST。
+  - 记录绑定提交时 `apiClient.defaults.baseURL` 的规范化实际端点；浏览器相对 `/api` 使用当时 origin，桌面绝对地址兼容 `file` origin。试点相关 API 传原 `baseURL` + `_erpApiFallbackTried:true`，不改全局候选地址回退。当前端点不同保留记录、提示回原服务器，不向新服务器查询或重放。普通调用/PDA 第四参数行为不变。
+  - 每次发/查捕获账号、`sessionGeneration`、端点及完整原记录身份；旧账号、旧会话、旧端点或被替换记录的响应不清记录、不触发当前草稿回调。正常 token 续期不改变代次。执行权限限制新提交和重试；本人原回执查询沿用服务端现有权限规则，撤权后仍能确认已成功/失败的原操作。
+  - 成功载荷运行时核对原盒和数量/条码/打印字段；明确错盒继续待确认，残缺数据只说明原状态成功并重读原盒，不能 patch 当前盒。标签降级单独提示，队列/业务成功不代表物理已出纸。
+  - 实际 hook/Portal 页面/API adapter 回归：`useCriticalOperationRecovery.test.tsx`、`pages/plastic-boxes/index.recovery.test.tsx`、`api/plastic-boxes.recovery.test.ts`，以及原页面创建/流水错误用例。**本地组件/API 通过不代表真实丢响应 GUI、真机或物理打印已验**，独立浏览器验证另记。
 
 ### 2026-09-29 批 B3a：PDA 分拣页扫取货码的冻结与恢复
 

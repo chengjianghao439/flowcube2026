@@ -1,3 +1,4 @@
+import type { AxiosRequestConfig } from 'axios'
 import type { ProcurementSupply } from './procurement-supply'
 import { payloadClient as apiClient } from './client'
 import { withRequestKeyHeaders } from '@/lib/requestKey'
@@ -176,10 +177,12 @@ export const repackPlasticBoxApi = async (
   body: { perBoxQty?: number; boxCount?: number; items?: number[] },
   requestKey: string,
   client?: 'pda',
+  config?: AxiosRequestConfig,
 ) =>
   apiClient.post<PlasticBoxRepackResult>(`/plastic-boxes/${boxId}/repack`, body, {
+    ...config,
     skipGlobalError: true,
-    headers: { 'X-Request-Key': requestKey, ...(client === 'pda' ? { 'X-Client': 'pda' } : {}) },
+    headers: { ...config?.headers, 'X-Request-Key': requestKey, ...(client === 'pda' ? { 'X-Client': 'pda' } : {}) },
   })
 
 export interface PlasticBoxSourcesResult {

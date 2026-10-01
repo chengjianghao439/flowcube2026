@@ -26,6 +26,9 @@ export interface PlasticBox {
 export function getPlasticBoxesApi(params?: Record<string, string | number>) {
   return payloadClient.get<{ list: PlasticBox[]; pagination: { page: number; pageSize: number; total: number } }>('/plastic-boxes', { params })
 }
+export function getPlasticBoxApi(id: number, config?: Parameters<typeof payloadClient.get>[1]) {
+  return payloadClient.get<PlasticBox>(`/plastic-boxes/${id}`, config)
+}
 export function createPlasticBoxApi(data: Record<string, unknown>, config?: Parameters<typeof payloadClient.post>[2]) {
   return payloadClient.post<{ id: number; barcode: string }>('/plastic-boxes', data, config)
 }

@@ -1,3 +1,4 @@
+import type { AxiosRequestConfig } from 'axios'
 import { payloadClient as client } from './client'
 
 export interface OperationRequestStatus {
@@ -8,8 +9,9 @@ export interface OperationRequestStatus {
   resourceId?: number | null
 }
 
-export const getOperationRequestStatusApi = (requestKey: string, action: string) =>
+export const getOperationRequestStatusApi = (requestKey: string, action: string, config?: AxiosRequestConfig) =>
   client.get<OperationRequestStatus>(`/system/request-status/${encodeURIComponent(requestKey)}`, {
-    params: { action },
+    ...config,
+    params: { ...config?.params, action },
     skipGlobalError: true,
   })

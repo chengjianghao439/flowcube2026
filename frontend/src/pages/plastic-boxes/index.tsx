@@ -1,5 +1,5 @@
 import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
-import { useState } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
@@ -10,13 +10,13 @@ import { EmptyState } from '@/components/shared/EmptyState'
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
 import { toast } from '@/lib/toast'
 import { formatDisplayDateTime } from '@/lib/dateTime'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useRef } from 'react'
-import { getPlasticBoxSourcesApi, repackPlasticBoxApi } from '@/api/inventory'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { getPlasticBoxSourcesApi } from '@/api/inventory'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
-import { useIdempotentSubmit, receiptDecision } from '@/components/shared/payments/useIdempotentSubmit'
-import { getOperationRequestStatusApi } from '@/api/operation-requests'
+import { useCriticalOperationRecovery, isRecoveryEndpointCurrent, recoveryRequestConfig } from '@/hooks/useCriticalOperationRecovery'
+import { ownsRecovery, ownsStoredRecovery, type RepackBody, type RepackRecoveryRecord } from '@/lib/criticalOperationRecovery'
+import { useAuthStore } from '@/store/authStore'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
@@ -27,6 +27,7 @@ import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { downloadExport } from '@/lib/exportDownload'
 import {
   getPlasticBoxesApi,
+  getPlasticBoxApi,
   createPlasticBoxApi,
   deletePlasticBoxApi,
   printPlasticBoxLabelApi,
@@ -39,10 +40,88 @@ export default function PlasticBoxesPage() {
   const [search, setSearch] = useState('')
   const page = 1
   const [detailTarget, setDetailTarget] = useState<PlasticBox | null>(null)
+  const detailSelectionGeneration = useRef(0)
+  const boxOperationGenerations = useRef(new Map<number, number>())
+  const advanceBoxOperation = (boxId: number) => {
+    const generation = (boxOperationGenerations.current.get(boxId) ?? 0) + 1
+    boxOperationGenerations.current.set(boxId, generation)
+    return generation
+  }
+  const selectDetail = (box: PlasticBox | null) => {
+    detailSelectionGeneration.current += 1
+    setDetailTarget(box)
+  }
   // 新建表单状态（塑料盒不支持编辑，弹窗固定是创建态）
   const [product, setProduct] = useState<FinderResult | null>(null)
   const [warehouse, setWarehouse] = useState<FinderResult | null>(null)
   const [productFinderOpen, setProductFinderOpen] = useState(false)
+  const qc = useQueryClient()
+  const { can } = usePermission()
+  const canRepack = can(PERMISSIONS.INVENTORY_CONTAINER_SPLIT)
+  const recoveryState = useCriticalOperationRecovery({
+    canExecute: canRepack,
+    onFailed: record => {
+      advanceBoxOperation(record.boxId)
+      toast.error(`盒 #${record.boxId} 原提交已确认失败，可以重新提交`)
+    },
+    onConfirmed: (record, result) => {
+      const operationAtConfirmation = advanceBoxOperation(record.boxId)
+      if (result) {
+        setDetailTarget(prev => prev?.id === record.boxId ? { ...prev, remainingQty: result.boxRemainingAfter } : prev)
+        toast.success(`盒 #${record.boxId} 原提交成功：${result.created.map(c => `${c.barcode}(${c.qty})`).join('、') || '已生成整件码'}；盒内余 ${result.boxRemainingAfter}`)
+        const failed = result.noPrinterCount + result.renderFailedCount
+        if (failed > 0) toast.warning(`${failed} 个标签未打印，可在打印记录页补打`)
+      } else {
+        toast.success(`已确认盒 #${record.boxId} 原提交成功；正在重读原盒，打印状态以打印记录为准`)
+        const auth = useAuthStore.getState()
+        const selectionAtRead = detailSelectionGeneration.current
+        const readStillCurrent = () => {
+          const current = useAuthStore.getState()
+          return detailSelectionGeneration.current === selectionAtRead
+            && boxOperationGenerations.current.get(record.boxId) === operationAtConfirmation
+            && current.user?.id === record.accountId && current.sessionGeneration === auth.sessionGeneration
+            && isRecoveryEndpointCurrent(record)
+        }
+        void getPlasticBoxApi(record.boxId, recoveryRequestConfig(record, auth.sessionGeneration)).then(latest => {
+          if (!readStillCurrent() || latest.id !== record.boxId) return
+          setDetailTarget(prev => prev?.id === record.boxId ? latest : prev)
+        }).catch(() => {
+          if (readStillCurrent()) toast.warning('原提交已确认成功，原盒最新详情暂时无法读取，请稍后重试')
+        })
+      }
+      // 只失效含原盒的列表和原盒独立缓存，不刷新 B 的来源/流水。
+      void qc.invalidateQueries({ predicate: query => query.queryKey[0] === 'plastic-boxes' && !!(query.state.data as { list?: PlasticBox[] } | undefined)?.list?.some(box => box.id === record.boxId) })
+      for (const key of ['plastic-box', 'plastic-box-sources', 'plastic-box-movements']) void qc.invalidateQueries({ queryKey: [key, record.boxId] })
+    },
+  })
+  const recovery = {
+    ...recoveryState,
+    run: (boxId: number, body: RepackBody) => {
+      advanceBoxOperation(boxId)
+      return recoveryState.run(boxId, body)
+    },
+    retry: (record: RepackRecoveryRecord) => {
+      advanceBoxOperation(record.boxId)
+      return recoveryState.retry(record)
+    },
+  }
+  const openOriginal = async (record: RepackRecoveryRecord) => {
+    const auth = useAuthStore.getState()
+    if (auth.user?.id !== record.accountId || !isRecoveryEndpointCurrent(record)) { toast.warning('请回到原服务器和账号确认原操作'); return }
+    const identityCurrent = () => ownsRecovery(record) && ownsStoredRecovery(record)
+    if (!identityCurrent()) return
+    const selectionAtRequest = ++detailSelectionGeneration.current
+    try {
+      const latest = await getPlasticBoxApi(record.boxId, recoveryRequestConfig(record, auth.sessionGeneration))
+      const current = useAuthStore.getState()
+      if (!identityCurrent() || detailSelectionGeneration.current !== selectionAtRequest || current.user?.id !== record.accountId || current.sessionGeneration !== auth.sessionGeneration || !isRecoveryEndpointCurrent(record) || latest.id !== record.boxId) return
+      setDetailTarget(latest)
+    } catch {
+      const current = useAuthStore.getState()
+      if (identityCurrent() && detailSelectionGeneration.current === selectionAtRequest && current.user?.id === record.accountId && current.sessionGeneration === auth.sessionGeneration && isRecoveryEndpointCurrent(record)) toast.error('原盒详情加载失败，请稍后重试；恢复记录已保留')
+    }
+  }
+
 
   const columns: TableColumn<PlasticBox>[] = [
     { key: 'barcode', title: '条码', width: 140, render: v => <span className="text-doc-code">{String(v)}</span> },
@@ -60,6 +139,8 @@ export default function PlasticBoxesPage() {
 
   return (
     <>
+      {recovery.error && <div role="alert" className="mb-3 rounded-md border border-amber-300 p-3 text-sm">{recovery.error}<Button size="sm" variant="outline" onClick={recovery.reload}>重新读取恢复记录</Button></div>}
+      {recovery.records.map(record => <RecoveryNoticeView key={record.requestKey} record={record} recovery={recovery} canRepack={canRepack} onOpen={() => { void openOriginal(record) }} />)}
       <BaseCrudPage<PlasticBox>
         title="塑料盒管理"
         description="管理塑料盒（B 条码），每个塑料盒固定存放一个商品，用于零散出货"
@@ -94,7 +175,7 @@ export default function PlasticBoxesPage() {
           <TableActionsMenu
             primaryLabel="详情"
             primaryVariant="outline"
-            onPrimaryClick={() => setDetailTarget(row)}
+            onPrimaryClick={() => selectDetail(row)}
             items={[
               {
                 label: '打印条码',
@@ -149,27 +230,27 @@ export default function PlasticBoxesPage() {
         formTitle={() => '新建塑料盒'}
       />
       <DetailDialog
+        key={detailTarget?.id ?? 'none'}
+        recovery={recovery}
         box={detailTarget}
-        onClose={() => setDetailTarget(null)}
-        onBoxPatched={(boxId, patch) => setDetailTarget((prev) => (prev && prev.id === boxId ? { ...prev, ...patch } : prev))}
+        onClose={() => selectDetail(null)}
       />
     </>
   )
 }
 
 function DetailDialog({
-  box, onClose, onBoxPatched,
+  box, onClose, recovery,
 }: {
   box: PlasticBox | null
   onClose: () => void
-  onBoxPatched: (boxId: number, patch: Partial<PlasticBox>) => void
+  recovery: ReturnType<typeof useCriticalOperationRecovery>
 }) {
   const { can } = usePermission()
   const canRepack = can(PERMISSIONS.INVENTORY_CONTAINER_SPLIT)
   const { data, isLoading, isError, error, refetch } = usePlasticBoxMovements(box?.id ?? null)
   const TYPE_NAMES: Record<number, string> = { 1: '入库', 2: '出库', 3: '调整' }
   const TYPE_TONE: Record<number, 'success' | 'danger' | 'info'> = { 1: 'success', 2: 'danger', 3: 'info' }
-  const qc = useQueryClient()
   const [repackOpen, setRepackOpen] = useState(false)
   // 来源贡献：**累计贡献口径**（每次放货/复装记一笔来源），不是各批次当前余量
   const sourcesQuery = useQuery({
@@ -177,108 +258,18 @@ function DetailDialog({
     queryFn: () => getPlasticBoxSourcesApi(box!.id),
     enabled: !!box?.id,
   })
-  // PC 侧用既有幂等守卫（与付款/核销同一套）：请求键在**确定结果**前不轮换，
-  // 未确认时用同一份内容重试或点「查询上次结果」核对原回执，而不是每次都换新键。
-  const idem = useIdempotentSubmit({ action: `plastic_box.repack.${box?.id ?? 'none'}`, prefix: 'pc-repack' })
-  // 冻结「这次提交」的快照：重试与查询都用它定位，而不是用「当前界面上的盒/当前输入」
-  const frozenRef = useRef<{ boxId: number; body: { perBoxQty?: number; boxCount?: number; items?: number[] }; action: string } | null>(null)
-
-  const repackMut = useMutation({
-    mutationFn: () => {
-      const f = frozenRef.current
-      if (!f) throw new Error('没有待重试的原提交')
-      // remember 在**提交时**调用（每次提交让代次 +1）；渲染期调用会让代次每次都变
-      idem.remember('还原整件', f.action)
-      // 重试发送的是**原内容**，不随界面当前值变化
-      return repackPlasticBoxApi(f.boxId, f.body, idem.keyRef.current)
-    },
-    onSuccess: (res) => {
-      const f = frozenRef.current
-      idem.settle()
-      toast.success(`已生成 ${res.created.length} 个整件码；盒内余 ${res.boxRemainingAfter}`)
-      const failed = Number(res.noPrinterCount || 0) + Number(res.renderFailedCount || 0)
-      if (failed > 0) toast.warning(`${failed} 个标签未打印，可在打印记录页补打`)
-      setRepackOpen(false)
-      // 只 patch **原提交那只盒**（按快照定位），绝不给当前可能已切换的别的盒打补丁
-      if (f) onBoxPatched(f.boxId, { remainingQty: res.boxRemainingAfter })
-      void qc.invalidateQueries({ queryKey: ['plastic-boxes'] })
-      if (f) void qc.invalidateQueries({ queryKey: ['plastic-box-sources', f.boxId] })
-      // 容器流水同属该盒的拆分事实，成功路径也要刷新，否则同弹窗内看不到刚生成的流水
-      if (f) void qc.invalidateQueries({ queryKey: ['plastic-box-movements', f.boxId] })
-      frozenRef.current = null
-    },
-    onError: (e: unknown) => {
-      const kind = idem.classify(e)
-      if (kind === 'uncertain') toast.warning('结果未确认，请点「查询上次结果」核对原提交后再决定是否重试')
-      else toast.error('还原整件失败，请重试')
-    },
-  })
-
-  const submitRepack = (body: { perBoxQty?: number; boxCount?: number; items?: number[] }) => {
+  const record = recovery.records.find(r => r.boxId === box?.id) ?? null
+  const notice = record ? recovery.notices[record.requestKey] : null
+  const pending = !!notice?.busy
+  const locked = box ? recovery.blocked(box.id) : false
+  const submitRepack = (body: RepackBody) => {
     if (!box) return
-    frozenRef.current = { boxId: box.id, body, action: `plastic_box.repack.${box.id}` }
-    repackMut.mutate()
+    void recovery.run(box.id, body).then(result => { if (result?.status === 'success' && result.cleared) setRepackOpen(false) }).catch(error => toast.error((error as Error).message))
   }
-
-  /**
-   * 回执查询用**独立 mutation**，拿**本次返回值**判定与展示——
-   * `idem.checkLastResult` 的 onDone 无参，若在回调里读 `idem.checkMut.data` 会读到
-   * 旧渲染闭包（可能 undefined 或上一次的数据），不能当作本次响应。
-   * 判定规则沿用既有 `receiptDecision`：只有 failed 才解除/轮换键。
-   */
-  const checkMut = useMutation({
-    mutationFn: () => {
-      const f = frozenRef.current
-      const action = f?.action ?? `plastic_box.repack.${box?.id ?? 'none'}`
-      return getOperationRequestStatusApi(idem.keyRef.current, action)
-    },
-  })
-
-  const doCheck = async () => {
-    let r
-    try { r = await checkMut.mutateAsync() } catch { toast.error('查询上次结果失败，请稍后再试'); return }
-    const fid = frozenRef.current?.boxId
-
-    if (r.status === 'success') {
-      idem.settle()
-      const d = r.data as { boxId?: number; boxRemainingAfter?: number; created?: Array<{ barcode: string; qty: number }> } | null
-      if (d && typeof d.boxRemainingAfter === 'number') {
-        const targetId = Number(d.boxId ?? fid)
-        if (Number.isFinite(targetId)) onBoxPatched(targetId, { remainingQty: d.boxRemainingAfter })
-        const codes = (d.created ?? []).map((c) => `${c.barcode}(${c.qty})`).join('、')
-        toast.success(`已确认原提交成功：${codes || `${d.created?.length ?? 0} 个整件码`}；盒内余 ${d.boxRemainingAfter}`)
-      } else {
-        toast.success('已确认原提交成功')
-      }
-      setRepackOpen(false)
-      frozenRef.current = null
-      void qc.invalidateQueries({ queryKey: ['plastic-boxes'] })
-      if (fid) void qc.invalidateQueries({ queryKey: ['plastic-box-sources', fid] })
-      void refetch()
-      return
-    }
-
-    const dec = receiptDecision(r.status)
-    if (dec.rotateKey) {
-      // failed：服务端明确写了失败行，确定没做成 → 解除未确认并轮换键
-      idem.settle()
-      toast.success('已确认上次提交失败，可按原内容重试')
-    } else {
-      // pending / not_found：保留原 key 与原快照，不猜失败
-      toast.warning(
-        r.status === 'pending'
-          ? '原提交仍在服务器处理中，请稍后再点「查询上次结果」'
-          : '系统暂时查不到这次提交：可能仍在处理中，也可能未送达。请按原内容重试（系统会识别为同一笔）',
-      )
-    }
-  }
-
-  // 提交中 / 未确认期间：不允许关详情或换盒（否则原提交快照会失去可见的恢复入口）
-  const busyOrUncertain = repackMut.isPending || idem.uncertain
 
   return (
-    <Dialog open={!!box} onOpenChange={(v) => { if (!v && busyOrUncertain) { toast.warning('有还原提交待确认，请先核对原提交结果再关闭'); return } if (!v) onClose() }}>
-      <DialogContent className="max-w-5xl">
+    <Dialog open={!!box} onOpenChange={(v) => { if (!v) onClose() }}>
+      <DialogContent className="max-w-5xl" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle>塑料盒详情 · {box?.barcode}</DialogTitle>
         </DialogHeader>
@@ -329,20 +320,7 @@ function DetailDialog({
           )}
         </div>
 
-        {/* 结果未确认：用同一份内容重试或查询原回执（请求键在确定结果前不轮换） */}
-        {idem.uncertain && (
-          <div className="flex items-center gap-2 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
-            还原整件结果未确认，请核对原提交后再继续。
-            <Button size="sm" variant="outline" disabled={checkMut.isPending || repackMut.isPending}
-              onClick={() => { void doCheck() }}>
-              {checkMut.isPending ? '查询中…' : '查询上次结果'}
-            </Button>
-            <Button size="sm" variant="outline" disabled={checkMut.isPending || repackMut.isPending}
-              onClick={() => repackMut.mutate()}>
-              按原内容重试
-            </Button>
-          </div>
-        )}
+        {recovery.records.map(original => <RecoveryNoticeView key={original.requestKey} record={original} recovery={recovery} canRepack={canRepack} />)}
 
         <div className="text-xs font-medium text-muted-foreground">塑料盒流水</div>
         <div className="max-h-[420px] overflow-y-auto">
@@ -384,15 +362,11 @@ function DetailDialog({
         <RepackDialog
           open={repackOpen}
           box={box}
-          pending={repackMut.isPending}
-          onClose={() => { if (busyOrUncertain) { toast.warning('有还原提交待确认，请先核对原提交结果'); return } setRepackOpen(false) }}
+          pending={pending}
+          onClose={() => setRepackOpen(false)}
           onSubmit={submitRepack}
-          locked={busyOrUncertain}
-          uncertain={idem.uncertain}
-          frozen={frozenRef.current}
-          onCheck={() => { void doCheck() }}
-          checking={checkMut.isPending}
-          onRetryOriginal={() => repackMut.mutate()}
+          locked={locked}
+          recoveryNotice={recovery.records.map(original => <RecoveryNoticeView key={original.requestKey} record={original} recovery={recovery} canRepack={canRepack} />)}
         />
       )}
     </Dialog>
@@ -402,19 +376,15 @@ function DetailDialog({
 /** 还原整件（批 A · PC 入口）：等量快捷 或 逐箱清单，两种输入 */
 function RepackDialog({
   open, box, pending, onClose, onSubmit, locked,
-  uncertain, frozen, onCheck, checking, onRetryOriginal,
+  recoveryNotice,
 }: {
   open: boolean
   box: PlasticBox
   pending: boolean
   onClose: () => void
-  onSubmit: (body: { perBoxQty?: number; boxCount?: number; items?: number[] }) => void
+  onSubmit: (body: RepackBody) => void
   locked: boolean
-  uncertain: boolean
-  frozen: { boxId: number; body: { perBoxQty?: number; boxCount?: number; items?: number[] }; action: string } | null
-  onCheck: () => void
-  checking: boolean
-  onRetryOriginal: () => void
+  recoveryNotice: ReactNode
 }) {
   const [mode, setMode] = useState<'quick' | 'list'>('quick')
   const [perBoxQty, setPerBoxQty] = useState('1')
@@ -442,33 +412,10 @@ function RepackDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose() }}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md" aria-describedby={undefined}>
         <DialogHeader><DialogTitle>还原整件 · {box.barcode}</DialogTitle></DialogHeader>
         <div className="space-y-3">
-          {/* 结果未确认时，恢复入口必须落在**当前可操作的弹窗内**——
-              父详情的按钮会被这个 modal 挡住，形成恢复死路 */}
-          {uncertain && (
-            <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
-              <p>
-                上次还原结果未确认。
-                {frozen && (
-                  <>原提交：盒 #{frozen.boxId}，
-                    {Array.isArray(frozen.body.items)
-                      ? `逐箱 ${frozen.body.items.join(' / ')}`
-                      : `每箱 ${frozen.body.perBoxQty} × ${frozen.body.boxCount} 箱`}
-                  </>
-                )}
-              </p>
-              <div className="flex gap-2">
-                <Button size="sm" variant="outline" disabled={checking || pending} onClick={onCheck}>
-                  {checking ? '查询中…' : '查询上次结果'}
-                </Button>
-                <Button size="sm" variant="outline" disabled={checking || pending} onClick={onRetryOriginal}>
-                  按原内容重试
-                </Button>
-              </div>
-            </div>
-          )}
+          {recoveryNotice}
 
           <p className="text-xs text-muted-foreground">盒内余量 {remaining}，将按填写数量生成独立整件码，余量留在盒内。</p>
           <div className="flex gap-2">
@@ -499,7 +446,7 @@ function RepackDialog({
           <p className="text-xs text-muted-foreground">将生成 <span className="font-semibold text-foreground">{boxTotal}</span> 个整件码，合计 <span className="font-semibold text-foreground">{sum}</span>，盒内留 <span className="font-semibold text-foreground">{Math.max(0, remaining - sum)}</span></p>
           {error && <p className="text-xs text-destructive">{error}</p>}
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={onClose} disabled={locked}>取消</Button>
+            <Button variant="outline" onClick={onClose}>取消</Button>
             <Button
               disabled={pending || !!error || locked}
               onClick={() => onSubmit(mode === 'list' ? { items: listQtys } : { perBoxQty: perNum, boxCount: cntNum })}
@@ -511,4 +458,24 @@ function RepackDialog({
       </DialogContent>
     </Dialog>
   )
+}
+
+function RecoveryNoticeView({ record, recovery, canRepack, onOpen }: {
+  record: RepackRecoveryRecord
+  recovery: ReturnType<typeof useCriticalOperationRecovery>
+  canRepack: boolean
+  onOpen?: () => void
+}) {
+  const notice = recovery.notices[record.requestKey]
+  const wrongEndpoint = !isRecoveryEndpointCurrent(record)
+  const invoke = (fn: () => Promise<unknown> | unknown) => { void Promise.resolve().then(fn).catch(error => toast.error((error as Error).message)) }
+  return <div role="status" className="mb-3 space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+    <p>盒 #{record.boxId} 的原还原操作{notice?.confirmed ? '结果已确认' : '待确认'}：{'items' in record.body ? `逐箱 ${record.body.items!.join(' / ')}` : `每箱 ${record.body.perBoxQty} × ${record.body.boxCount} 箱`}</p>
+    <p>{wrongEndpoint ? '当前服务器已改变，请回到原服务器确认；原操作记录已保留' : notice?.message ?? (canRepack ? '请查询上次结果，或明确按原内容重试。恢复不会自动提交，也不会自动补打。' : '请查询上次结果；当前无还原整件权限。恢复不会自动提交，也不会自动补打。')}</p>
+    <div className="flex flex-wrap gap-2">
+      {onOpen && <Button size="sm" variant="outline" disabled={wrongEndpoint || notice?.busy} onClick={onOpen}>查看原盒</Button>}
+      <Button size="sm" variant="outline" disabled={wrongEndpoint || notice?.busy || !!recovery.error} onClick={() => invoke(() => recovery.query(record))}>{notice?.busy ? '处理中…' : '查询上次结果'}</Button>
+      {notice?.cleanupPending ? <Button size="sm" variant="outline" disabled={wrongEndpoint || notice?.busy} onClick={() => invoke(() => recovery.clearConfirmed(record))}>清理已确认记录</Button> : canRepack && !notice?.confirmed ? <Button size="sm" variant="outline" disabled={wrongEndpoint || notice?.busy || !!recovery.error} onClick={() => invoke(() => recovery.retry(record))}>按原内容重试</Button> : null}
+    </div>
+  </div>
 }
