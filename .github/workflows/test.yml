@@ -98,6 +98,9 @@ jobs:
       - name: 单元测试 — 成套配件组成与整数分摊
         run: npm run test:kits-composition
 
+      - name: 单元测试 — 商业行分批金额与来源组件退款纯规则
+        run: npm run test:sale-commercial-money
+
       - name: 单元测试 — 标签几何及前端镜像（Node 22 实际执行）
         run: npm run test:label
       - name: 契约测试 — 官网版本摘要必须与发版版本同步（防 bump 后漏同步）
