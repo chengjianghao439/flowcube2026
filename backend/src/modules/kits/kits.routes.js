@@ -1,0 +1,17 @@
+'use strict'
+const { Router } = require('express')
+const { authMiddleware, requirePermission } = require('../../middleware/auth')
+const { PERMISSIONS } = require('../../constants/permissions')
+const { validateBody, validateQuery, validateParams } = require('../../utils/route')
+const schemas = require('./kits.contracts')
+const ctrl = require('./kits.controller')
+const router = Router()
+router.use(authMiddleware)
+router.get('/finder', requirePermission(PERMISSIONS.PRODUCT_VIEW), validateQuery(schemas.finderQuery), ctrl.finder)
+router.post('/preview', requirePermission(PERMISSIONS.SALE_ORDER_CREATE), requirePermission(PERMISSIONS.PRODUCT_VIEW), validateBody(schemas.preview), ctrl.preview)
+router.get('/', requirePermission(PERMISSIONS.PRODUCT_VIEW), validateQuery(schemas.listQuery), ctrl.list)
+router.post('/', requirePermission(PERMISSIONS.PRODUCT_CREATE), validateBody(schemas.definition), ctrl.create)
+router.get('/:id', requirePermission(PERMISSIONS.PRODUCT_VIEW), validateParams(schemas.params), validateQuery(schemas.detailQuery), ctrl.detail)
+router.put('/:id', requirePermission(PERMISSIONS.PRODUCT_UPDATE), validateParams(schemas.params), validateBody(schemas.edit), ctrl.update)
+router.delete('/:id', requirePermission(PERMISSIONS.PRODUCT_DELETE), validateParams(schemas.params), validateBody(schemas.remove), ctrl.remove)
+module.exports = router

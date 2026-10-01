@@ -39,3 +39,17 @@
 
 - 导入 MIME 白名单不匹配返回 400 `IMPORT_FILE_TYPE_INVALID`，不作为服务器异常上报；MIME 仅用于前置筛选，文件内容仍由既有解析和业务字段校验决定是否接收。
 - **具名子路由必须注册在同 method 的 `/:id` 之前**：Express 按**注册顺序**匹配，形如 `PUT /xxx/yyy` 的具名路由若排在 `PUT /:id` 之后，会被当作 `:id='yyy'` 命中通用处理器——**静默返回 200 而业务完全不生效**，调用方看不出失败。2026-09-29 实例：`PUT /api/price-lists/bind-customer` 曾排在 `PUT /:id` 之后 ⇒ 返回 200「更新成功」、客户 `price_level` 未变（修复是把该路由移到 `/:id` 之前并加顺序注释）。回归 `npm run smoke:price-list-bind-customer`（真实 HTTP + 真实副作用，非源码字符串比对；已入 Tests CI）。
+
+### 成套配件基础接口（C2b-1，2026-10-01）
+
+独立 `/api/kits` 模块按 routes → controller → service 分层，当前只提供主档维护与只读预览，**尚未接入销售订单保存、占库、履约、退货或会计**。列表、详情、`finder` 使用 `product.view`；创建、编辑、软删分别复用 `product.create/update/delete`。`POST /api/kits/preview` 同时要求 `sale.order.create` 与 `product.view`，在数据库 READ ONLY 事务中运行。具名 finder/preview 路由在 `/:id` 前注册。列表与 finder 入口页码须为 1–100000 的有限整数、pageSize 为 1–100，offset 最大 9999900；超界返回400，不能把 Infinity 交给 MySQL。
+
+迁移 `269_kit_definitions.sql` 增加主档、不可变组成版本、版本组件三张表；索引/外键在 CREATE IF NOT EXISTS 后单独幂等补齐，并按 information_schema 的名字与列序核对，已存在但形状不一致即失败。主档当前版本用 `(id,current_version_id) → (kit_id,id)` 复合外键防串套。主档 code 可维护，未软删编码唯一；停用不释放编码，软删后可以同码新建。
+
+写入必须有稳定 `X-Request-Key`。创建使用载荷指纹 action，编辑/删除使用资源 ID action；锁主档 → begin/replay → 核 revision → 业务/同 conn 回执 → commit。重放先于旧 revision 拒绝，以便本次成功后原键仍可取回原结果。新键携带过期 revision 返回 `409 KIT_REVISION_CONFLICT`，不写版本或主档；改组成/每套参考价创建新版本，改名/编码/启停仅递增主档 revision，历史版本可通过 `GET /api/kits/:id?versionId=...` 读取，停用/软删仍可解释历史。
+
+组件只引用真实 `product_items`，不支持嵌套、替代或制造；每套 1–50 个不重复商品。原始基本量先校验两位数量尺度、再校验当前整数商品策略。组件 A 价快照与每套价为四位，显式权重输入最多四位；派生权重 = 明确提交组成时 A 价 × 每套基本量，采用整数微单位计算，`DECIMAL(20,6)` 及六位字符串往返保存，以保留 `0.0001×0.01=0.000001`。全套默认 A 价权重或全套显式非负权重二选一，混用、全零权重拒绝，不自动均分。版本详情返回 `weightSource/createdAt` 与参考依据解释；未提交组成而仅修改套报价时沿用原版本参考依据，只有明确重新提交组成才采当前A价生成默认权重。原始采样时刻未单独保存，`referenceSnapshotAt=null`；`createdAt`只表示该版本创建时间。以后商品 A 价变化不改旧版本的依据。
+
+预览请求有客户、仓库与至多 200 个独立商业组：套组 `kind=kit,kitVersionId,quantity,priceSource=kit_default|manual`；普通组 `kind=ordinary,productId,quantity,priceSource=default|manual`；手工价必须传 `unitPrice`。套数为正整数；套默认价只取所选当前版本，旧版本返回 `409 KIT_VERSION_CHANGED`。普通默认价按现客户价格表优先、等级价兜底，读取使用有界批量 SQL。客户/仓库/组件须当前启用且未删，finder/preview 必须核仓库范围。
+
+`commercialGroups` 保留每个商业组及组件金额，新预览父行金额按原四位单价×原两位数量的整数单位运算 half-up 到分（如 `1.005×1=1.01`），普通销售既有 `round2` 未改；组件金额按整数分、固定 sort/id 顺序分配尾差（零权重不分尾差），组件总额等于父行。`physicalItems` 仅按真实商品+仓库聚合，至多 200 行，普通商业归属仍独立，不造虚拟商品、容器或库存；新预览商业行/物理行/总额均不超过现订单金额 DECIMAL(14,4) 可保存的两位金额 `9999999999.99`，超限400 `KIT_AMOUNT_OVERFLOW`，避免Number回构丢分；物理单价八位仅作展示，不代替保存的商业金额。库存复用 `containerEngine.getStockProjections`，依据明确为“当前现货可用”（ACTIVE 容器余量减现有预占），并按本次整个需求向量计算缺量；finder 的独立可成套数不能相加承诺。未计预计到货、整容器独占或交期，返回 `expected/readyDate=null` 与解释。
