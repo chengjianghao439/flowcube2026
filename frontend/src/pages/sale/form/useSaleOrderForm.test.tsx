@@ -51,6 +51,7 @@ test('快速切换客户：较旧响应不能覆盖当前客户价格', async ()
   customer(1); await selectProduct(10); customer(2)
   await resolve(requests.length - 1, price(22)); await resolve(0, price(11))
   expect(form.customerId).toBe('2'); expect(form.items[0].unitPrice).toBe(22)
+  expect(form.items[0].priceExplanation).toEqual({ kind: 'unknown' })
 })
 test('快速切换商品：旧响应不能覆盖新商品或提前结束 loading', async () => {
   customer(1); const key = await selectProduct(10); await selectProduct(20, key)
@@ -64,6 +65,7 @@ test('请求途中手动定价优先，迟到响应不能覆盖手工价', async
   act(() => form.updateItem(key, 'unitPrice', 33))
   await resolve(0, price(11)); expect(form.items[0].unitPrice).toBe(33); expect(form.items[0].priceSource).toBe('manual')
   expect(form.priceLoading[key]).toBe(false)
+  expect(form.items[0].priceExplanation).toEqual({ kind: 'manual' })
 })
 test('明确再次切换客户仍会对已有手工价重新定价', async () => {
   customer(1); const key = await selectProduct(10); act(() => form.updateItem(key, 'unitPrice', 33)); customer(2)
@@ -177,4 +179,61 @@ test('空白新建通过真实 ProductFinder 单击后确认，关闭弹窗仍�
   expect(form.finderOpen).toBe(false)
   expect(form.finderItemKey).toBeNull()
   expect(form.items[0]).toMatchObject({ productId: 10, quantity: 0, unitPrice: 12 })
+})
+
+
+test.each([
+  [{ salePrice: 22, priceLevel: null, priceLevelName: '门店专价', source: 'price_list', priceListId: 7 }, { kind: 'price_list', name: '门店专价' }],
+  [{ salePrice: 22, priceLevel: 'B', priceLevelName: '价格B', source: 'price_level' }, { kind: 'price_level', name: '价格B', level: 'B' }],
+  [{ salePrice: 22, priceLevel: 'B', priceLevelName: '价格B' }, { kind: 'unknown' }],
+  [{ salePrice: 22, priceLevel: null, priceLevelName: '价格表' }, { kind: 'unknown' }],
+])('只用本次响应的实际来源解释客户价格 %#', async (response, explanation) => {
+  customer(1); await selectProduct(10)
+  await resolve(0, response as CustomerResolvedPrice)
+  expect(form.items[0].priceExplanation).toEqual(explanation)
+  expect(form.items[0]).toMatchObject({ unitPrice: 22, priceSource: 'list', resolvedPrice: 22, resolvedPriceLevel: response.priceLevel })
+})
+
+test('无客户选品用默认价；客户无有效报价时保留数值但不冒称默认来源', async () => {
+  await selectProduct(10)
+  expect(form.items[0].priceExplanation).toEqual({ kind: 'default' })
+  customer(1); await resolve(0, null)
+  expect(form.items[0].unitPrice).toBe(12)
+  expect(form.items[0].priceExplanation).toEqual({ kind: 'unknown' })
+})
+
+test('快速切换商品不让迟到价格表来源标记新商品', async () => {
+  customer(1); const key = await selectProduct(10); await selectProduct(20, key)
+  await resolve(1, { salePrice: 22, priceLevel: 'C', priceLevelName: '价格C', source: 'price_level' } as CustomerResolvedPrice)
+  await resolve(0, { salePrice: 11, priceLevel: null, priceLevelName: '旧客户专价', source: 'price_list' } as CustomerResolvedPrice)
+  expect(form.items[0].priceExplanation).toEqual({ kind: 'price_level', name: '价格C', level: 'C' })
+  expect(form.items[0].unitPrice).toBe(22)
+})
+
+test('已保存订单保持原价格解释，不请求今天的客户价格；单位补全不变脏', async () => {
+  const order = { customerId: 1, warehouseId: 1,
+    items: [{ productId: 10, productCode: 'P10', productName: '商品10', unit: '个', entryUnit: '箱', entryQty: 2, quantity: 24, unitPrice: 10, amount: 240 }],
+  } as NonNullable<Parameters<typeof useSaleOrderForm>[1]>
+  vi.mocked(getProductApi).mockResolvedValue({ units: [{ unitName: '箱', conversionRate: 12 }] } as Awaited<ReturnType<typeof getProductApi>>)
+  function SavedHarness() { form = useSaleOrderForm('/sale/1', order); return null }
+  await act(async () => root.render(<StrictMode><SavedHarness /></StrictMode>))
+  expect(form.items[0].priceExplanation).toEqual({ kind: 'saved' })
+  expect(form.items[0]).toMatchObject({ quantity: 2, unitPrice: 120, priceSource: 'default' })
+  expect(getCustomerPriceApi).not.toHaveBeenCalled()
+  expect(form.isDirty).toBe(false)
+  // 模拟仅更新界面解释投影；重新 render 才让真实脏检查读取该变化。
+  form.items[0].priceExplanation = { kind: 'unknown' }
+  act(() => root.render(<StrictMode><SavedHarness /></StrictMode>))
+  expect(form.items[0].priceExplanation).toEqual({ kind: 'unknown' })
+  expect(form.isDirty).toBe(false)
+})
+
+
+test('切换录入单位沿用现有量价政策，基本数量只用于说明', async () => {
+  vi.mocked(getProductApi).mockResolvedValue({ units: [{ unitName: '个', conversionRate: 1, isBase: true }, { unitName: '箱', conversionRate: 12, isBase: false }] } as Awaited<ReturnType<typeof getProductApi>>)
+  const key = await selectProduct(10)
+  act(() => form.updateItem(key, 'quantity', 2))
+  act(() => form.updateItem(key, 'entryUnit', '箱'))
+  expect(form.items[0]).toMatchObject({ quantity: 2, unitPrice: 12, entryUnit: '箱', priceSource: 'default', priceExplanation: { kind: 'default' } })
+  expect(form.total).toBe(24)
 })

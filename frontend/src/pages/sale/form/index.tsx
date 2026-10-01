@@ -49,7 +49,7 @@ import { SaleOrderHeaderFields } from './components/SaleOrderHeaderFields'
 import { SaleOrderItemsTable } from './components/SaleOrderItemsTable'
 import { SaleOrderSummaryCard } from './components/SaleOrderSummaryCard'
 import { SaleOrderOverview } from './components/SaleOrderOverview'
-import { validateSaleForm, type ScanRow } from './validate'
+import { validateSaleForm, serializeSaleItems, type ScanRow } from './validate'
 import { useSaleOrderForm } from './useSaleOrderForm'
 
 // ─── 主页面 ───────────────────────────────────────────────────────────────────
@@ -130,7 +130,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
         receiverName: receiverName || undefined,
         receiverPhone: receiverPhone || undefined,
         receiverAddress: receiverAddress || undefined,
-        items: filledItems.map(({ _key, units, ...r }) => r),
+        items: serializeSaleItems(filledItems),
       })
       closeTab()
     } catch (_) {}
@@ -251,7 +251,7 @@ function EditView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<ty
         receiverName: receiverName || undefined,
         receiverPhone: receiverPhone || undefined,
         receiverAddress: receiverAddress || undefined,
-        items: filledItems.map(({ _key, units, ...r }) => r),
+        items: serializeSaleItems(filledItems),
       })
       onDone()
     } catch (_) {}
@@ -376,7 +376,7 @@ function AdjustView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<
         receiverName: receiverName || undefined,
         receiverPhone: receiverPhone || undefined,
         receiverAddress: receiverAddress || undefined,
-        items: filledItems.map(({ _key, units, ...r }) => r),
+        items: serializeSaleItems(filledItems),
       })
       onDone()
     } catch (_) {}

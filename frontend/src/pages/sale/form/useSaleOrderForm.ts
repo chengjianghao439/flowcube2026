@@ -25,7 +25,7 @@ export function useSaleOrderForm(tabPath: string, order?: NonNullable<ReturnType
   const [discountAmount,  setDiscountAmount]  = useState(order?.discountAmount ? String(order.discountAmount) : '')
   const counterRef    = useRef((order?.items ?? []).length)
   const quantityRefs  = useRef<Map<number, HTMLInputElement>>(new Map())
-  const mkEmpty = (): DraftItem => ({ _key: ++counterRef.current, productId: 0, productCode: '', productName: '', articleNumber: null, spec: null, color: null, unit: '', entryUnit: '', units: [], quantity: 1, unitPrice: 0, remark: '', priceSource: 'default', resolvedPrice: null, resolvedPriceLevel: null, costPrice: null })
+  const mkEmpty = (): DraftItem => ({ _key: ++counterRef.current, productId: 0, productCode: '', productName: '', articleNumber: null, spec: null, color: null, unit: '', entryUnit: '', units: [], quantity: 1, unitPrice: 0, remark: '', priceSource: 'default', priceExplanation: { kind: 'default' }, resolvedPrice: null, resolvedPriceLevel: null, costPrice: null })
 
   const { data: carrierOptions = [] } = useCarriersActive()
 
@@ -38,7 +38,7 @@ export function useSaleOrderForm(tabPath: string, order?: NonNullable<ReturnType
       quantity: item.entryQty ?? item.quantity,
       warehouseId: item.warehouseId ?? null, warehouseName: item.warehouseName ?? null,
       unitPrice: item.entryQty && item.entryQty > 0 ? Math.round((item.amount / item.entryQty) * 100) / 100 : item.unitPrice,
-      remark: item.remark ?? '', priceSource: 'default' as const, costPrice: item.costPrice ?? null, resolvedPrice: null, resolvedPriceLevel: null,
+      remark: item.remark ?? '', priceSource: 'default' as const, priceExplanation: { kind: 'saved' }, costPrice: item.costPrice ?? null, resolvedPrice: null, resolvedPriceLevel: null,
     })),
   )
   // 同步保存事件后的身份，防止同一次批处理中的后续事件读到旧 render 快照。
@@ -105,10 +105,10 @@ export function useSaleOrderForm(tabPath: string, order?: NonNullable<ReturnType
 
   // 编辑态初始值本就非空，"是否非空"不能代表"是否改过"，改成和进入编辑时的快照比较；
   // 新建态没有快照可比，沿用"任意字段非空即算改过"。
-  // 明细行只比对用户可改字段：units（多计量单位）由接口异步回填，见 dirtyItems。
+  // 明细行只比对用户可改字段：units（多计量单位）由接口异步回填，见 dirtyItems；价格解释也不是用户可改字段。
   const dirtyComparable = () => JSON.stringify({
     customerId, warehouseId, remark, carrierId, shippingProduct, freightType,
-    receiverName, receiverPhone, receiverAddress, discountAmount, items: dirtyItems(items),
+    receiverName, receiverPhone, receiverAddress, discountAmount, items: dirtyItems(items.map(({ priceExplanation: _priceExplanation, ...item }) => item)),
   })
   const editSnapshotRef = useRef(order ? dirtyComparable() : null)
   const isDirty = order
@@ -143,14 +143,17 @@ export function useSaleOrderForm(tabPath: string, order?: NonNullable<ReturnType
     clearPriceError(k)
     // 旧的客户定价凭据在新请求开始时失效；保存须等待请求结束或手动确认。
     setItems(prev => prev.map(i => i._key === k
-      ? { ...i, priceSource: 'default', resolvedPrice: null, resolvedPriceLevel: null }
+      ? { ...i, priceSource: 'default', priceExplanation: { kind: 'unknown' }, resolvedPrice: null, resolvedPriceLevel: null }
       : i))
     try {
       const r = await getCustomerPriceApi(+cid, productId)
       if (!isCurrent()) return
       if (r && Number.isFinite(r.salePrice) && r.salePrice > 0) {
         setItems(prev => prev.map(i => i._key === k
-          ? { ...i, unitPrice: r.salePrice, priceSource: 'list', resolvedPrice: r.salePrice, resolvedPriceLevel: r.priceLevel }
+          ? { ...i, unitPrice: r.salePrice, priceSource: 'list', resolvedPrice: r.salePrice, resolvedPriceLevel: r.priceLevel,
+            priceExplanation: r.source === 'price_list' ? { kind: 'price_list', name: r.priceLevelName }
+              : r.source === 'price_level' ? { kind: 'price_level', name: r.priceLevelName, level: r.priceLevel }
+                : { kind: 'unknown' } }
           : i))
       } else {
         setPriceErrors(prev => ({ ...prev, [k]: '当前客户未设置有效价格，请手动确认单价' }))
@@ -196,7 +199,8 @@ export function useSaleOrderForm(tabPath: string, order?: NonNullable<ReturnType
       setPriceLoading(prev => ({ ...prev, [k]: false }))
     }
     setItems(prev => prev.map(i => i._key === k
-      ? { ...i, [field]: val, priceSource: field === 'unitPrice' ? 'manual' : i.priceSource }
+      ? { ...i, [field]: val, priceSource: field === 'unitPrice' ? 'manual' : i.priceSource,
+          priceExplanation: field === 'unitPrice' ? { kind: 'manual' } : i.priceExplanation }
       : i))
   }
 
@@ -213,7 +217,7 @@ export function useSaleOrderForm(tabPath: string, order?: NonNullable<ReturnType
       && productRequests.current.get(k) === selection
       && itemsRef.current.some(i => i._key === k && i.productId === product.id)
     setItems(prev => prev.map(i => i._key === k
-      ? { ...i, productId: product.id, productCode: product.code, productName: product.name, articleNumber: product.articleNumber ?? null, spec: product.spec ?? null, color: product.color ?? null, unit: product.unit, entryUnit: product.unit, units: [], quantity: 0, unitPrice: product.salePrice ?? 0, priceSource: 'default', costPrice: product.costPrice ?? null, resolvedPrice: null, resolvedPriceLevel: null }
+      ? { ...i, productId: product.id, productCode: product.code, productName: product.name, articleNumber: product.articleNumber ?? null, spec: product.spec ?? null, color: product.color ?? null, unit: product.unit, entryUnit: product.unit, units: [], quantity: 0, unitPrice: product.salePrice ?? 0, priceSource: 'default', priceExplanation: { kind: 'default' }, costPrice: product.costPrice ?? null, resolvedPrice: null, resolvedPriceLevel: null }
       : i
     ))
     const timer = setTimeout(() => {

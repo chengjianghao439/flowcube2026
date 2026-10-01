@@ -9,6 +9,25 @@ import { baseQtyOf, parsePositiveQuantity, parsePrice, type DraftItem } from '..
 import { useProductQtyPolicies } from '@/hooks/useProductQtyPolicies'
 import { qtyStep } from '@/lib/qtyStep'
 
+function priceExplanationLabel(item: DraftItem): string {
+  const source = item.priceExplanation
+  switch (source?.kind) {
+    case 'price_list': return `客户价格表：${source.name || '价格表'}`
+    case 'price_level': return `客户等级价：${source.name || source.level || '等级名称未提供'}`
+    case 'default': return '默认价格'
+    case 'manual': return '手动定价'
+    case 'saved': return '原订单价（历史来源未留存）'
+    default: return '价格来源未提供'
+  }
+}
+
+function canExplainBaseQty(item: DraftItem): boolean {
+  const entryUnit = item.entryUnit || item.unit
+  if (entryUnit === item.unit) return true
+  const rate = Number(item.units?.find(unit => unit.unitName === entryUnit)?.conversionRate)
+  return Number.isFinite(rate) && rate > 0
+}
+
 export function SaleOrderItemsTable({
   items, invalidItemKeys, quantityRefs, priceLoading, priceErrors = {},
   setFinderItemKey, setFinderOpen, updateItem, removeItem,
@@ -65,7 +84,7 @@ export function SaleOrderItemsTable({
                     {(item.units || []).map(u => <option key={u.unitName} value={u.unitName}>{u.unitName}</option>)}
                   </select>
                 ) : (
-                  <span className="text-muted-body">{item.unit || '—'}</span>
+                  <span className="text-muted-body">{item.entryUnit || item.unit || '—'}</span>
                 )}
               </td>
 
@@ -79,8 +98,8 @@ export function SaleOrderItemsTable({
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'quantity', parsePositiveQuantity(e.target.value))}
                   className="h-9 text-right text-sm tabular-nums"
                 />
-                {item.entryUnit && item.entryUnit !== item.unit && (
-                  <div className="mt-0.5 text-right text-[11px] text-muted-foreground tabular-nums">= {baseQtyOf(item)} {item.unit}</div>
+                {item.productId > 0 && (
+                  <div className="mt-0.5 text-right text-[11px] text-muted-foreground tabular-nums">基本数量：{canExplainBaseQty(item) ? `${baseQtyOf(item)} ${item.unit}` : '待确认换算'}</div>
                 )}
               </td>
 
@@ -94,7 +113,8 @@ export function SaleOrderItemsTable({
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'unitPrice', parsePrice(e.target.value))}
                   className={cn('h-9 text-right text-sm tabular-nums', item.priceSource === 'list' && 'border-primary/35 bg-primary/[0.04]', item.priceSource === 'manual' && 'border-warning/40 bg-warning/[0.05]')}
                 />
-                <p className="mt-1 text-right text-[11px] text-muted-foreground">{priceLoading[item._key] ? '正在获取价格…' : item.priceSource === 'list' ? '价格表定价' : item.priceSource === 'manual' ? '手动定价' : item.priceSource === 'default' ? '默认价格' : '订单价格'}</p>
+                {item.productId > 0 && <p className="mt-0.5 text-right text-[11px] text-muted-foreground">每{item.entryUnit || item.unit || '录入单位'}</p>}
+                <p className="mt-1 text-right text-[11px] text-muted-foreground">{priceLoading[item._key] ? '正在获取价格…' : priceExplanationLabel(item)}</p>
                 {priceErrors[item._key] && <div className="mt-1 text-xs text-destructive"><p>{priceErrors[item._key]}</p><button type="button" className="mt-1 underline" onClick={() => updateItem(item._key, 'unitPrice', item.unitPrice)}>确认当前单价</button></div>}
               </td>
 
