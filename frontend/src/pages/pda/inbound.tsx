@@ -19,13 +19,10 @@ const STATUS_TONE: Record<number, StatusTone> = {
   1:'draft', 2:'active', 3:'active', 4:'success', 5:'danger'
 }
 
-function InboundCard({ task, onTap }: { task:InboundTask; onTap:()=>void }) {
+function InboundCard({ task, onTap, onPutaway }: { task:InboundTask; onTap:()=>void; onPutaway:()=>void }) {
   const totalOrdered  = task.orderedQty ?? task.items?.reduce((s,i)=>s+i.orderedQty,0) ?? 0
   const totalReceived = task.receivedQty ?? task.items?.reduce((s,i)=>s+i.receivedQty,0) ?? 0
   const pct = totalOrdered > 0 ? Math.min(100, Math.round(totalReceived/totalOrdered*100)) : 0
-  // 是否已进入上架阶段只看任务状态 3（后端全部明细收满才推进），不看 putawayStatus：
-  // 每收一箱就有一个待上架容器，多商品单收到一半会被误判成"已经收完了"，
-  // 卡片按钮直接变成「扫码上架」，剩下没收到货的商品连入口都没有（2026-09-15 生产 IN20260914001）。
   const isReady = task.status === 3
 
   return (
@@ -44,8 +41,9 @@ function InboundCard({ task, onTap }: { task:InboundTask; onTap:()=>void }) {
           <SoftStatusLabel label={task.receiptStatus?.label ?? task.statusName} tone={STATUS_TONE[task.status] ?? 'draft'} />
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">应到 {totalOrdered}，已收 {totalReceived}</p>
-          <p className="text-xs text-muted-foreground mt-1">打印 {task.printStatus?.label ?? '—'} · 上架 {task.putawayStatus?.label ?? '—'}</p>
+          <p className="text-xs text-muted-foreground">应到 {totalOrdered}，已收 {totalReceived}，未收 {Math.max(0, totalOrdered - totalReceived)}</p>
+          <p className="text-xs text-muted-foreground mt-1">打印 {task.printStatus?.label ?? '—'} · 上架 {task.putawayStatus?.label ?? '—'} · 待上架 {task.putawaySummary?.waitingQty ?? 0}</p>
+          {task.exceptionFlags?.hasException && <p className="text-xs text-destructive">有打印或上架异常，请查看详情；收货阶段不变</p>}
         </div>
         {task.status !== 1 && (
           <div>
@@ -54,8 +52,11 @@ function InboundCard({ task, onTap }: { task:InboundTask; onTap:()=>void }) {
           </div>
         )}
         <Button size="pda" className="w-full" variant={isReady ? 'outline' : 'default'} onClick={onTap}>
-          {isReady ? '扫码上架' : '开始收货'}
+          {isReady ? '扫码上架' : task.status === 2 ? '继续收货' : '开始收货'}
         </Button>
+        {task.status === 2 && (task.putawaySummary?.waitingContainers ?? 0) > 0 && (
+          <Button size="pda" className="w-full" variant="outline" onClick={onPutaway}>扫码上架</Button>
+        )}
       </div>
     </PdaCard>
   )
@@ -85,6 +86,7 @@ export default function PdaInboundPage() {
         )}
         {!isError && tasks.map((t:InboundTask) => (
           <InboundCard key={t.id} task={t}
+            onPutaway={() => navigate(`/pda/putaway/${t.id}`)}
             onTap={() => navigate(t.status === 3 ? `/pda/putaway/${t.id}` : `/pda/receive/${t.id}`)} />
         ))}
       </div>

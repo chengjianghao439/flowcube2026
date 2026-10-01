@@ -124,8 +124,8 @@ const voidReceipt = async (req, res, next) => {
 const closeReceiving = async (req, res, next) => {
   try {
     const operator = getOperatorFromRequest(req)
-    await svc.closeReceiving(+req.params.id, operator, req.user?.warehouseIds ?? null)
-    return successResponse(res, null, '已结束收货，进入待上架')
+    const data = await svc.closeReceiving(+req.params.id, operator, req.user?.warehouseIds ?? null, { requestKey: req.get('X-Request-Key') })
+    return successResponse(res, data, data.status === 4 ? '已结束收货，实收已全部上架并完成结算' : '已结束收货，待实收全部上架后结算')
   } catch (e) { next(e) }
 }
 

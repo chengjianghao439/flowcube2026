@@ -196,9 +196,13 @@ const INVALIDATION_MAP = {
     ['purchase'],
   ],
 
-  /** 结束收货：仅任务状态从收货中推进到待上架，不涉及库存/应付变化 */
+  /** 结束收货：已全部上架时同事务完成并结算，刷新原单/采购/应付 */
   inbound_close_receiving: [
     ['inbound-tasks'],
+    ['purchase'],
+    ['payments'],
+    ['dashboard-summary'],
+    ['pda-inbound-tasks'],
   ],
 
   /** 撤回收货：反冲容器/库存/应付，可能把采购单退回已提交，与上架的影响面对称 */

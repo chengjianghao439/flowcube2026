@@ -13,7 +13,11 @@ const { reduceExpectedBindings } = require('../../utils/expectedStock')
 const { assertInScope } = require('../../utils/warehouseScope')
 
 async function tryFinishTask(conn, taskId) {
-  const finishRule = assertStatusAction('inboundTask', 'finish', 3)
+  // 调用方持有任务行锁；阶段用当前读，不能沿用等待任务锁前的 RR 快照。
+  // 收货开放时不能因当前实收已全上架而结算。
+  const [[taskMeta]] = await conn.query('SELECT status, closed_reason FROM inbound_tasks WHERE id = ? FOR UPDATE', [taskId])
+  if (Number(taskMeta?.status) !== 3) return
+  const finishRule = assertStatusAction('inboundTask', 'finish', taskMeta.status)
   // 待上架(4) 容器只要还有一个未处理，任务就不能完结
   const [[{ n }]] = await conn.query(
     `SELECT COUNT(*) AS n FROM inventory_containers
@@ -27,10 +31,6 @@ async function tryFinishTask(conn, taskId) {
   // audit_status 永远停在 0，应付账款永不生成，连带 purchase.closeRemaining 也被堵死
   // （它要求关联收货订单 audit_status=1），用户在前端完全无路可走（审计 P0-3）。
   // 结算侧按 putaway_qty 全量重算，金额天然等于实收，无需额外处理。
-  const [[taskMeta]] = await conn.query(
-    'SELECT closed_reason FROM inbound_tasks WHERE id = ?',
-    [taskId],
-  )
   const shortClosed = taskMeta?.closed_reason === 'short_close'
 
   const [itemRows] = await conn.query('SELECT * FROM inbound_task_items WHERE task_id = ?', [taskId])
@@ -86,18 +86,6 @@ async function putaway(taskId, { containerId, locationId, deviatedFromSuggestion
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const requestState = await beginResourceOperationRequest(conn, {
-      requestKey,
-      action: 'inbound.putaway',
-      userId: operator?.userId ?? null,
-      resourceType: 'inbound_task',
-      resourceId: taskId,
-    })
-    if (requestState.replay) {
-      await conn.rollback()
-      return requestState.responseData
-    }
-
     const taskRow = await lockStatusRow(conn, {
       table: 'inbound_tasks',
       id: taskId,
@@ -112,6 +100,18 @@ async function putaway(taskId, { containerId, locationId, deviatedFromSuggestion
     }
     // 用户级仓库权限：设备会话尚未接入前端时（req.pda 恒为 null），这才是实际生效的那道闸门
     assertInScope(scopeWarehouseIds, taskRow.warehouse_id, '收货订单')
+    const requestState = await beginResourceOperationRequest(conn, {
+      requestKey,
+      action: 'inbound.putaway',
+      userId: operator?.userId ?? null,
+      resourceType: 'inbound_task',
+      resourceId: taskId,
+    })
+    if (requestState.replay) {
+      await conn.rollback()
+      return requestState.responseData
+    }
+
     assertTaskCanPutaway(taskRow)
     await assertPurchaseOrdersOpen(conn, taskId, '上架')
 

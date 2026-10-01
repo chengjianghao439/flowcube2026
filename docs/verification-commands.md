@@ -57,6 +57,10 @@ npm run test:permissions
 | 打印、标签 | `npm run test:label`、`npm run test:print`、`npm run test:print-purge`、`npm run test:print-barcode-void`、`npm run smoke:print-queue`、`npm run smoke:print-template-preview`、`npm run smoke:print-barcode-void`、`npm run smoke:print-barcode-void-receipt` |
 | 报表、开票 | `npm run smoke:reports`、`npm run smoke:reports-values`、`npm run smoke:warehouse-ops`、`npm run smoke:invoice-quota` |
 
+`npm run smoke:inbound-progressive-putaway`（`tests/inbound-progressive-putaway.smoke.test.js`）：真实独立测试库、专属新商品/仓库与 OS 随机回环 API 端口。覆盖开放收货100→20/30/50早上架、现货真实销售预占/派发/拣货及撤回拒绝，预计绑定兑现/20实物+80预计守恒，短装已全上架即完成及原回执、关闭前无采购结算凭证规格/关闭后金额与首次应付日期一致，仍有待上架与普通收满兼容，混采购来源/不同价，同采购跨批保留已付和首次账期并扣已执行退货金额，同任务收货/上架/结案真实并发，scope/device及同键范围/数量闸门，阶段与异常独立。已付与已执行退货用于结算重算的既有事实夹具，不把该case称为真实出款/退货实操。测试不全表清理，不借既有库存；server/pool在finally结束，设备会话按本轮ID清理，业务夹具保留供失败取证。
+
+前端 C4 专项：`src/pages/pda/inbound.test.tsx` / `putaway.test.tsx`、`src/hooks/useCloseReceivingInbound.test.tsx`、`src/pages/inbound-tasks/CloseReceivingDialog.test.tsx`。真实组件通过网络边界验证双入口、开放扫码/完成语义、原键/原端点、不自洽回执、撤权后可查询、换账号旧回调与真实弹窗恢复；还验证未知后重试 4xx 保留原键、切换端点的原成功不刷新新服务器、显式错误归属的 failed 回执保持未知。GUI、真机、物理出纸、CI与生产部署各有独立证据边界，自动化专项不能代替它们。
+
 `smoke:sale-adjustment` 会为连续创建的销售任务建立本轮专用分拣格，并在结束时按 ID 清理；分拣完成必须先有已分配的分拣格。
 
 `npm run test:fulfillment`、`test:procurement-planning` 为履约与采购净额纯规则回归；`smoke:fulfillment`、`smoke:procurement-planning` 必须使用本节独立测试库，已加入 Tests CI 专项矩阵。

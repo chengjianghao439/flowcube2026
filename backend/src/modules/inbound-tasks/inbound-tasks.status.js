@@ -83,11 +83,10 @@ function buildExceptionFlags(task) {
 
 function buildReceiptStatus(task) {
   if (Number(task.status) === 5) return { key: 'cancelled', label: RECEIPT_STATUS_LABEL.cancelled }
-  if (task.exceptionFlags?.hasException) return { key: 'exception', label: RECEIPT_STATUS_LABEL.exception }
-  if (Number(task.auditStatus) === 1) return { key: 'audited', label: RECEIPT_STATUS_LABEL.audited }
+  if (Number(task.status) === 4) return { key: 'audited', label: RECEIPT_STATUS_LABEL.audited }
+  if (Number(task.status) === 2) return { key: 'receiving', label: RECEIPT_STATUS_LABEL.receiving }
   if (task.putawayStatus?.key === 'putting_away') return { key: 'putaway_in_progress', label: RECEIPT_STATUS_LABEL.putaway_in_progress }
   if (Number(task.status) === 3) return { key: 'printed_waiting_putaway', label: RECEIPT_STATUS_LABEL.printed_waiting_putaway }
-  if (Number(task.status) === 2) return { key: 'receiving', label: RECEIPT_STATUS_LABEL.receiving }
   if (task.submittedAt) return { key: 'submitted', label: RECEIPT_STATUS_LABEL.submitted }
   return { key: 'draft', label: RECEIPT_STATUS_LABEL.draft }
 }

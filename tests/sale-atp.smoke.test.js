@@ -114,12 +114,13 @@ async function main() {
       log.assert('清理失败（不阻断）', false, e.message)
     }
     await ctx.close()
+    await require('../backend/src/config/db').pool.end()
   }
   const counts = log.summary()
-  process.exit(counts.failed > 0 ? 1 : 0)
+  process.exitCode = counts.failed > 0 ? 1 : 0
 }
 
 main().catch((e) => {
   console.error('[ATP] 未捕获异常：', e)
-  process.exit(1)
+  process.exitCode = 1
 })

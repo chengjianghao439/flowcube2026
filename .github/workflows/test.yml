@@ -514,6 +514,9 @@ jobs:
       - name: 冒烟测试 — 销售单执行期改单（增减量 / PDA物理确认）
         run: npm run smoke:sale-adjustment
 
+      - name: 冒烟测试 — 采购边收边上架（开放收货 / 原键结案 / 同任务并发）
+        run: npm run smoke:inbound-progressive-putaway
+
       - name: 冒烟测试 — 销售预计库存 ATP（采购预计量占库 / 取消与短装先解绑）
         run: npm run smoke:atp
 

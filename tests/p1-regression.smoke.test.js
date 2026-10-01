@@ -708,12 +708,13 @@ async function main() {
     await scenarioDuplicateScanGuard(ctx, log, token)
   } finally {
     await ctx.close()
+    await require('../backend/src/config/db').pool.end()
   }
   const counts = log.summary()
-  process.exit(counts.failed > 0 ? 1 : 0)
+  process.exitCode = counts.failed > 0 ? 1 : 0
 }
 
 main().catch((e) => {
   console.error('[P1-REGRESSION] 未捕获异常：', e)
-  process.exit(1)
+  process.exitCode = 1
 })

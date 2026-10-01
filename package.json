@@ -105,6 +105,7 @@
     "smoke:concurrency-guards": "node tests/concurrency-guards.smoke.test.js",
     "smoke:fulfillment-credit": "node tests/fulfillment-credit-concurrency.smoke.test.js",
     "smoke:sale-adjustment": "node tests/sale-adjustment.smoke.test.js",
+    "smoke:inbound-progressive-putaway": "node --test tests/inbound-progressive-putaway.smoke.test.js",
     "smoke:atp": "node tests/sale-atp.smoke.test.js",
     "smoke:p0-regression": "node tests/p0-regression.smoke.test.js",
     "smoke:p1-regression": "node tests/p1-regression.smoke.test.js",

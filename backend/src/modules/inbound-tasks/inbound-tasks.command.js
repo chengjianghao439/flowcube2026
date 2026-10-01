@@ -20,6 +20,7 @@ const {
   assertTaskCanReceive,
   assertTaskCanCancel,
 } = require('./inbound-tasks.status')
+const { tryFinishTask } = require('./inbound-tasks.putaway')
 const { findById, loadPurchasableCandidates } = require('./inbound-tasks.query')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
@@ -410,6 +411,15 @@ async function receive(taskId, payload, { userId, requestKey, pdaWarehouseId, sc
   }
   try {
     await conn.beginTransaction()
+    const taskRow = await lockStatusRow(conn, { table: 'inbound_tasks', id: taskId, entityName: '入库任务' })
+    // 设备级跨仓拦截：req.pda 由 pdaSessionRequired 中间件填充，PDA 必须先扫码绑定设备。
+    // 设备绑定了仓库时，这里挡住「A 仓的机器收货B 仓单据」；设备未绑仓库则不限仓，
+    // 此时仍有下面的用户级 scope 断言兜底。
+    if (pdaWarehouseId != null && Number(pdaWarehouseId) !== Number(taskRow.warehouse_id)) {
+      throw new AppError('当前设备绑定仓库与该收货订单所属仓库不一致，无法收货', 403)
+    }
+    // 用户级仓库权限：设备会话尚未接入前端时（req.pda 恒为 null），这才是实际生效的那道闸门
+    assertInScope(scopeWarehouseIds, taskRow.warehouse_id, '收货订单')
     const requestState = await beginResourceOperationRequest(conn, {
       requestKey,
       action: 'inbound.receive',
@@ -422,15 +432,6 @@ async function receive(taskId, payload, { userId, requestKey, pdaWarehouseId, sc
       return requestState.responseData
     }
 
-    const taskRow = await lockStatusRow(conn, { table: 'inbound_tasks', id: taskId, entityName: '入库任务' })
-    // 设备级跨仓拦截：req.pda 由 pdaSessionRequired 中间件填充，PDA 必须先扫码绑定设备。
-    // 设备绑定了仓库时，这里挡住「A 仓的机器收货B 仓单据」；设备未绑仓库则不限仓，
-    // 此时仍有下面的用户级 scope 断言兜底。
-    if (pdaWarehouseId != null && Number(pdaWarehouseId) !== Number(taskRow.warehouse_id)) {
-      throw new AppError('当前设备绑定仓库与该收货订单所属仓库不一致，无法收货', 403)
-    }
-    // 用户级仓库权限：设备会话尚未接入前端时（req.pda 恒为 null），这才是实际生效的那道闸门
-    assertInScope(scopeWarehouseIds, taskRow.warehouse_id, '收货订单')
     assertTaskCanReceive(taskRow)
     await assertPurchaseOrdersOpen(conn, taskId)
 
@@ -621,6 +622,8 @@ async function receive(taskId, payload, { userId, requestKey, pdaWarehouseId, sc
         entityName: '入库任务',
       })
     }
+
+    if (allReceived) await tryFinishTask(conn, taskId)
 
     await conn.query('UPDATE inbound_tasks SET lock_version = lock_version + 1 WHERE id = ?', [taskId])
     result = {
@@ -849,11 +852,11 @@ async function cancel(taskId, scopeWarehouseIds = null) {
   }
 }
 
-// 短装结案第一步：把「收货中(2)」的收货订单手动推进到「待上架(3)」，剩余未收量作罢。
+// 短装结束：2→3 后同事务评估实收是否已全上架，符合则复用原完结结算到4。
 // 状态机层面 receiveComplete 本来就允许 2→3（正常路径是收满后自动触发），这里只是补一个
 // 手动强推入口——否则短装后任务会永久卡在收货中，且连带堵死 purchase.closeRemaining（它要求
 // 关联收货订单要么已取消要么已全部上架完成，见 purchase.service.js:227-231）。
-async function closeReceiving(taskId, operator, scopeWarehouseIds = null) {
+async function closeReceiving(taskId, operator, scopeWarehouseIds = null, { requestKey } = {}) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
@@ -863,6 +866,14 @@ async function closeReceiving(taskId, operator, scopeWarehouseIds = null) {
       entityName: '收货订单',
     })
     assertInScope(scopeWarehouseIds, taskRow.warehouse_id, '收货订单')
+    const requestState = await beginResourceOperationRequest(conn, {
+      requestKey, action: 'inbound.closeReceiving', userId: operator?.userId ?? null,
+      resourceType: 'inbound_task', resourceId: taskId,
+    })
+    if (requestState.replay) {
+      await conn.rollback()
+      return requestState.responseData
+    }
     if (Number(taskRow.status) !== 2) {
       throw new AppError('只有"收货中"状态才能提前结束收货', 409)
     }
@@ -882,16 +893,22 @@ async function closeReceiving(taskId, operator, scopeWarehouseIds = null) {
       entityName: '收货订单',
       extraSet: { closed_reason: 'short_close' },
     })
+    await tryFinishTask(conn, taskId)
+    const [[finalTask]] = await conn.query('SELECT status FROM inbound_tasks WHERE id=?', [taskId])
+    const payload = { taskId: Number(taskId), status: Number(finalTask.status) }
+    const message = payload.status === 4 ? '已结束收货，实收已全部上架并完成结算' : '已结束收货，待实收全部上架后结算'
     await appendInboundEvent(
       conn,
       taskId,
       'receiving_closed',
       '提前结束收货',
-      `收货订单 ${taskRow.task_no} 已提前结束收货，剩余未收量作罢，进入待上架`,
+      `收货订单 ${taskRow.task_no} 已提前结束收货，剩余未收量作罢。${message}`,
       operator ? { userId: operator.userId, realName: operator.realName } : null,
       null,
     )
+    await completeOperationRequest(conn, requestState, { data: payload, message, resourceType: 'inbound_task', resourceId: taskId })
     await commitFulfillment(conn, 'inbound', taskId)
+    return payload
   } catch (e) {
     await conn.rollback()
     throw e

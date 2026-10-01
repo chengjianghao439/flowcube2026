@@ -184,17 +184,14 @@ export default function PdaPutawayPage() {
     )
   }
 
-  if (task.status < 3) {
+  if (task.status === 1) {
     return (
       <div className="min-h-screen bg-background">
         <PdaHeader title="扫码上架" onBack={() => navigate('/pda/inbound')} />
         <PdaEmptyState
           icon={<Hourglass className="h-12 w-12 text-muted-foreground" />}
-          title="收货尚未完成"
-          // 状态 1 还没收过货，短装结案要求已有实收数量，这里不能给这条出路
-          description={task.status === 1
-            ? '这张收货单还没有开始收货，请先到收货页登记实收数量，全部收满后才能上架。'
-            : '全部收满后才能上架。供应商少发货时，请在 ERP 端对这张收货单做「短装结案」，剩余未收量作罢，即可上架已收到的部分。'}
+          title="尚未收货"
+          description="这张收货单还没有开始收货，请先到收货页登记实收数量，已收到的货即可扫码上架。"
           actionText="返回收货订单"
           onAction={() => navigate('/pda/inbound')}
         />
@@ -217,14 +214,14 @@ export default function PdaPutawayPage() {
     )
   }
 
-  if (task.putawayStatus?.key === 'completed' || task.status >= 4) {
+  if (task.status === 4 || task.status === 5) {
     return (
       <div className="min-h-screen bg-background">
         <PdaHeader title="扫码上架" onBack={() => navigate('/pda/inbound')} />
         <PdaEmptyState
           icon={<CircleCheck className="h-12 w-12 text-muted-foreground" />}
-          title="已完成"
-          description="该订单上架已完成。"
+          title={task.status === 5 ? '已取消' : '已完成'}
+          description={task.status === 5 ? '该收货订单已取消，不能继续上架。' : '该订单上架已完成。'}
           actionText="返回收货订单"
           onAction={() => navigate('/pda/inbound')}
         />
@@ -232,5 +229,11 @@ export default function PdaPutawayPage() {
     )
   }
 
+  if (task.status === 2 && (task.putawaySummary?.waitingContainers ?? 0) === 0) {
+    return <div className="min-h-screen bg-background">
+      <PdaHeader title="扫码上架" onBack={() => navigate('/pda/inbound')} />
+      <PdaEmptyState title="暂无待上架货物" description="已收到的货已全部上架，仍可继续收货" actionText="继续收货" onAction={() => navigate(`/pda/receive/${taskId}`)} />
+    </div>
+  }
   return <PutawayRunner taskId={taskId} />
 }

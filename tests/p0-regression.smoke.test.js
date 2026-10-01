@@ -202,7 +202,7 @@ async function scenarioPartialShipReleasesRemainder(ctx, log) {
 // P0-3：短装收货全链路必须能走到底（任务完成 → 应付生成 → 采购单结案）
 // ───────────────────────────────────────────────────────────────────────────
 async function scenarioShortReceiveClosesOut(ctx, log, token) {
-  log.section('P0-3 短装收货：结束收货 → 上架 → 自动结算 → 采购单结案')
+  log.section('P0-3 短装收货：提前上架 → 结束收货 → 自动结算 → 采购单结案')
   const { http, pool, warehouse, location, supplier, pdaHeaders } = ctx
   const product = await createTestProduct(pool, 'short')
 
@@ -223,43 +223,29 @@ async function scenarioShortReceiveClosesOut(ctx, log, token) {
   const [t1] = await dbQuery(pool, 'SELECT status FROM inbound_tasks WHERE id=?', [taskId])
   log.assert('未收满时任务停在收货中(2)', Number(t1.status) === 2, `status=${t1.status}`)
 
-  // 收满才能上架：还有商品没收完、任务停在「收货中(2)」时，上架必须由服务端拒绝。
-  // 此前 putaway 的 from 含 2，服务端会放行未收满的单（只有 PDA 页面在拦），
-  // 这正是「收满才能上架」这条规则此前只管住了前端、没管住接口的漏洞。
+  // 边收边上架：已实收立即可用，但收货开放时不结算。
   const cBeforeClose = await http.get(`/api/inbound-tasks/${taskId}/containers`, { token })
-  const waitingBeforeClose = cBeforeClose.data?.data?.waiting || cBeforeClose.data?.data?.list || []
-  log.assert('结案前已存在待上架容器', waitingBeforeClose.length > 0, JSON.stringify(cBeforeClose.data).slice(0, 200))
+  const waitingBeforeClose = cBeforeClose.data?.data?.waiting || []
+  log.assert('结案前已有实际待上架容器', waitingBeforeClose.length > 0)
   const earlyPutaway = await http.post(`/api/inbound-tasks/${taskId}/putaway`, {
     token, headers: pdaHeaders(),
     json: { containerId: Number(waitingBeforeClose[0].id), locationId: Number(location.id) },
   })
-  log.assert(
-    '★未收满（收货中）时上架被服务端拒绝，且提示指向继续收货或短装结案',
-    earlyPutaway.status === 400 && /短装结案/.test(earlyPutaway.data?.message || ''),
-    `status=${earlyPutaway.status} message=${earlyPutaway.data?.message}`,
-  )
-
-  const closeResp = await http.post(`/api/inbound-tasks/${taskId}/close-receiving`, { token })
-  log.assert('可以提前结束收货', closeResp.ok, JSON.stringify(closeResp.data).slice(0, 200))
-
-  const [t2] = await dbQuery(pool, 'SELECT status, closed_reason FROM inbound_tasks WHERE id=?', [taskId])
-  log.assert(
-    '结束收货后进入待上架(3)并标记 short_close',
-    Number(t2.status) === 3 && t2.closed_reason === 'short_close',
-    JSON.stringify(t2),
-  )
-
-  // 把收到的货全部上架
+  log.assert('★收货中实收容器可提前上架', earlyPutaway.ok, JSON.stringify(earlyPutaway.data))
+  const [openTask] = await dbQuery(pool, 'SELECT status,audit_status FROM inbound_tasks WHERE id=?', [taskId])
+  const openAP = await dbQuery(pool, 'SELECT id FROM payment_records WHERE type=1 AND order_id=?', [poId])
+  log.assert('★开放收货仍2/audit0，本次尚无应付', Number(openTask.status) === 2 && Number(openTask.audit_status) === 0 && openAP.length === 0)
+  const key = randomRef('P0-CLOSE')
+  const closeResp = await http.post(`/api/inbound-tasks/${taskId}/close-receiving`, { token, headers: { 'X-Request-Key': key } })
+  log.assert('★已无待上架容器，短装结案立即4', closeResp.ok && closeResp.data?.data?.status === 4)
+  const [t2] = await dbQuery(pool, 'SELECT status,closed_reason FROM inbound_tasks WHERE id=?', [taskId])
+  log.assert('结案保留short_close', Number(t2.status) === 4 && t2.closed_reason === 'short_close')
+  const beforeReplay = await dbQuery(pool, 'SELECT id FROM inbound_task_events WHERE task_id=?', [taskId])
+  const replay = await http.post(`/api/inbound-tasks/${taskId}/close-receiving`, { token, headers: { 'X-Request-Key': key } })
+  const afterReplay = await dbQuery(pool, 'SELECT id FROM inbound_task_events WHERE task_id=?', [taskId])
+  log.assert('★结案同键回放原结果，无重复事件', replay.ok && replay.data?.data?.status === 4 && beforeReplay.length === afterReplay.length)
   const cResp = await http.get(`/api/inbound-tasks/${taskId}/containers`, { token })
-  const waiting = cResp.data?.data?.waiting || cResp.data?.data?.list || []
-  log.assert('存在待上架容器', waiting.length > 0, JSON.stringify(cResp.data).slice(0, 200))
-  for (const c of waiting) {
-    const put = await http.post(`/api/inbound-tasks/${taskId}/putaway`, {
-      token, headers: pdaHeaders(),
-      json: { containerId: Number(c.id), locationId: Number(location.id) },
-    })
-    log.assert(`容器 ${c.id} 上架成功`, put.ok, JSON.stringify(put.data).slice(0, 200))
-  }
+  log.assert('完成后无需等待不存在的下一箱', (cResp.data?.data?.waiting || []).length === 0)
 
   const [t3] = await dbQuery(pool, 'SELECT status, audit_status FROM inbound_tasks WHERE id=?', [taskId])
   log.assert(
@@ -518,12 +504,13 @@ async function main() {
     await scenarioOperationReceiptLookup(ctx, log, token)
   } finally {
     await ctx.close()
+    await require('../backend/src/config/db').pool.end()
   }
   const counts = log.summary()
-  process.exit(counts.failed > 0 ? 1 : 0)
+  process.exitCode = counts.failed > 0 ? 1 : 0
 }
 
 main().catch((e) => {
   console.error('[P0-REGRESSION] 未捕获异常：', e)
-  process.exit(1)
+  process.exitCode = 1
 })

@@ -86,13 +86,13 @@ afterEach(async () => {
   host?.remove()
 })
 
-test('收到一半（有待上架容器但任务仍是收货中）仍给「开始收货」入口', async () => {
+test('收到一半（有待上架容器但任务仍是收货中）仍给「继续收货」与上架双入口', async () => {
   await mountPage()
 
-  expect(buttonByText('开始收货'), '不应被判定成已进入上架阶段').toBeTruthy()
-  expect(host.textContent).not.toContain('扫码上架')
+  expect(buttonByText('继续收货'), '不应被判定成已进入上架阶段').toBeTruthy()
+  expect(buttonByText('扫码上架')).toBeTruthy()
 
-  await act(async () => { buttonByText('开始收货').click() })
+  await act(async () => { buttonByText('继续收货').click() })
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)) })
   expect(host.textContent, '应进收货录入页而不是上架页').toContain('收货录入页')
 })
@@ -111,4 +111,11 @@ test('全部收满（任务已推进到待上架）才把入口换成「扫码�
   await act(async () => { buttonByText('扫码上架').click() })
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)) })
   expect(host.textContent, '应进上架扫码页').toContain('上架扫码页')
+})
+
+test('收货中可独立进上架页，原收货入口保留', async () => {
+  await mountPage()
+  expect(buttonByText('继续收货')).toBeTruthy()
+  await act(async () => { buttonByText('扫码上架').click() })
+  expect(host.textContent).toContain('上架扫码页')
 })

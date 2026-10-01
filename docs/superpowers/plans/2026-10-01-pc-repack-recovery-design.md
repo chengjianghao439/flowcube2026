@@ -60,3 +60,5 @@
 2026-10-01 使用 Node 22，先运行实际页面刷新种子用例：3 例中原 2 例通过，新恢复入口断言失败（找不到原盒 #4/20×2）。随后实现版本化最小存储、同步共享 claim、原端点固定请求和页面恢复入口。实际 hook 和 Portal 页面继续取得红例并修复：同键身份替换误清、同 tick 撤权、B 草稿挡住 A 查询、桌面 file 来源绝对地址、端点切回残留 busy、查看原盒 A 的迟到 GET 覆盖后选 B。首发 A 延迟成功且已切 B，以及首发期间换账号的真实 Portal 页面用例通过，现有 boxId key 隔离与 hook 会话核验已保护 Promise 收尾，无需额外猜测守卫。
 
 最终定向命令：前端 `npx vitest run src/hooks/useCriticalOperationRecovery.test.tsx src/pages/plastic-boxes/index.recovery.test.tsx src/api/plastic-boxes.recovery.test.ts src/pages/plastic-boxes/index.test.tsx`；受影响文件 ESLint；`npx tsc --noEmit -p tsconfig.app.json`。最终四文件 63/63，受影响 lint、app 类型检查及 diff 自然退出 0。独立规格审查先发现回执类型、显式错盒值及旧 GET 原记录身份三个 P2，新增实际红例后修复，复审通过；独立质量审查发现成功后补读原盒的迟到 GET 可覆盖同盒新数量，补充选择与原盒操作代次后，原两条竞争探针及四文件 63 例独立通过。真实 GUI/代理与数据库证据见上节，均与组件证据分开；全量套件、构建、真机/物理打印、员工实际收益和生产仍未验证。未推送、未发版。
+
+本地代码提交 `d0612c2` 后，根代理重启冻结预览并实际补验：盒 #4 原余 40 提交 5×2，真实事务 200 后丢响应；刷新恢复原身份，代理 POST 总数保持 5（包括实施前基线与此前故障请求），没有自动提交。打开 #5 还原草稿 7×1，在该草稿内查询 #4 原回执后入口清除、#5 草稿和余量 60 保持。数据库只新增 #13/#14 各 5、对应四条流水及 #11/#12 两个打印入队，#4 余量 30，ACTIVE 总量仍 210。截图 `a3-final-commit-keeps-b.png`。本任务浏览器再次 close 后确认 session list 为空；没有提交 #5 草稿或物理出纸。

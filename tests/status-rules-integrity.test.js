@@ -108,31 +108,16 @@ try {
   assert('待分拣状态执行 ship 抛 400', e.statusCode === 400, `status=${e.statusCode}`)
 }
 
-// ── 4. 收满才能上架（2026-09-16 用户确定） ──
-// 上架只允许从「待上架(3)」发起。进入 3 有两条路：全部明细行收满后自动推进，
-// 或供应商短装时由 ERP 走「短装结案」把剩余未收量作罢。此前 from 含 2，等于把这条
-// 业务规则交给前端页面隐藏按钮去守——上架页自 v0.1.2 起就拦着 status<3，而服务端一直
-// 放行未收满的单，接口层可以绕过。
-console.log('收满才能上架')
+// ── 4. 2026-10-01 边收边上架；完结仍只允许收货结束后的 3→4 ──
+console.log('边收边上架')
 const putawayRule = DOCUMENT_STATUS_RULES.inboundTask.actions.putaway
-assert(
-  '上架只允许从待上架(3)发起',
-  Array.isArray(putawayRule.from) && putawayRule.from.length === 1 && putawayRule.from[0] === 3,
-  `from=${JSON.stringify(putawayRule.from)}`,
-)
-try {
-  assertStatusAction('inboundTask', 'putaway', 2)
-  assert('收货中(2) 不得上架', false)
-} catch (e) {
-  assert('收货中(2) 上架抛 400', e.statusCode === 400, `status=${e.statusCode}`)
-  assert(
-    '提示同时给出「继续收货」与「短装结案」两条出路',
-    /继续收货/.test(e.message) && /短装结案/.test(e.message),
-    `message=${e.message}`,
-  )
+assert('上架允许收货中2与待上架3', JSON.stringify(putawayRule.from) === '[2,3]')
+for (const status of [2, 3]) assert('已实收可上架 '+status, assertStatusAction('inboundTask', 'putaway', status).from.includes(status))
+for (const status of [1, 4, 5]) {
+  try { assertStatusAction('inboundTask', 'putaway', status); assert('非法上架阶段拒绝 '+status, false) }
+  catch (e) { assert('非法上架阶段拒绝 '+status, e.statusCode === 400) }
 }
-const putawayAtReady = assertStatusAction('inboundTask', 'putaway', 3)
-assert('待上架(3) 可以上架（收满或短装结案后）', putawayAtReady.from.includes(3))
+assert('完结仅3→4', JSON.stringify(DOCUMENT_STATUS_RULES.inboundTask.actions.finish.from) === '[3]' && DOCUMENT_STATUS_RULES.inboundTask.actions.finish.to === 4)
 
 // ── 状态**文案**一致性（2026-09-18 审计 [30]） ───────────────────────────────
 // 状态码有 documentStatusRules 守着，文案没有——于是同一个状态在不同地方被手写成不同的名字：

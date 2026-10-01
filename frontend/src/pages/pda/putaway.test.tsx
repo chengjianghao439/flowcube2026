@@ -83,19 +83,25 @@ afterEach(async () => {
   host?.remove()
 })
 
-test('收货中（未收满）不给上架界面，并指出收满或短装结案两条出路', async () => {
+test('收货中已收容器可以原扫码上架，仍能继续收货', async () => {
   await mountPage(TASK)
+  expect(host.textContent).toContain('扫描库存条码')
+  await scan('I000917')
+  await scan('R000804')
+  expect(api.putaway).toHaveBeenCalledWith(1979, expect.objectContaining({ containerId: 917 }), 'scan-test-key')
+})
 
-  expect(host.textContent).toContain('收货尚未完成')
-  expect(host.textContent).toContain('全部收满后才能上架')
-  expect(host.textContent, '供应商少发货是短装，要给出结案这条出路').toContain('短装结案')
-  expect(host.textContent, '不应渲染扫码上架界面').not.toContain('扫描库存条码')
+test('收货中实收已全上架只能说明继续收货，不能称整单完成', async () => {
+  await mountPage({ ...TASK, putawayStatus: { key: 'completed', label: '已上架' }, putawaySummary: { waitingContainers: 0, storedContainers: 3 } })
+  expect(host.textContent).toContain('已收到的货已全部上架，仍可继续收货')
+  expect(host.textContent).not.toContain('该订单上架已完成')
+  expect(host.textContent).not.toContain('扫描库存条码')
 })
 
 test('还没开始收货时不提短装结案（结案要求已有实收数量），只提示先收货', async () => {
   await mountPage({ ...TASK, status: 1, statusName: '待收货', putawaySummary: { waitingContainers: 0, storedContainers: 0 } })
 
-  expect(host.textContent).toContain('收货尚未完成')
+  expect(host.textContent).toContain('尚未收货')
   expect(host.textContent).toContain('还没有开始收货')
   expect(host.textContent, '未收货时短装结案不适用').not.toContain('短装结案')
 })

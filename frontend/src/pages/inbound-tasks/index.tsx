@@ -23,12 +23,13 @@ import DataTable from '@/components/shared/DataTable'
 import ListSummary from '@/components/shared/ListSummary'
 import type { TableColumn } from '@/types'
 import { useWorkspaceStore } from '@/store/workspaceStore'
-import { useSubmitInboundTask, useCancelInbound, useVoidInboundReceipt, useCloseReceivingInbound } from '@/hooks/useInboundTasks'
+import { useSubmitInboundTask, useCancelInbound, useVoidInboundReceipt } from '@/hooks/useInboundTasks'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { toast } from '@/lib/toast'
 import { formatDisplayDateTime, defaultRangeYmds } from '@/lib/dateTime'
 import { downloadExport } from '@/lib/exportDownload'
 import { readStringParam, upsertSearchParams } from '@/lib/urlSearchParams'
+import CloseReceivingDialog from './CloseReceivingDialog'
 import InboundTaskQueryDialog, { type InboundTaskQueryValues } from './InboundTaskQueryDialog'
 
 const STATUS_LABELS: Record<string, string> = INBOUND_STATUS_LABEL as unknown as Record<string, string>
@@ -47,7 +48,7 @@ export default function InboundTasksPage() {
   const submitMut = useSubmitInboundTask()
   const cancelMut = useCancelInbound()
   const voidReceiptMut = useVoidInboundReceipt()
-  const closeReceivingMut = useCloseReceivingInbound()
+  const [closeTargetId, setCloseTargetId] = useState<number | null>(null)
 
   const [confirmState, setConfirmState] = useState<{
     open: boolean
@@ -248,9 +249,19 @@ export default function InboundTasksPage() {
         return (
           <div className="min-w-0">
             <SoftStatusLabel label={task.receiptStatus?.label ?? INBOUND_STATUS_LABEL[task.status]} tone={tone} />
+            {task.exceptionFlags?.hasException && <p className="text-xs text-destructive mt-1">打印 / 上架异常</p>}
           </div>
         )
       },
+    },
+    {
+      key: 'receivedQty', title: '收货 / 上架进度', width: 14,
+      render: (_, task) => <div className="text-xs space-y-1 tabular-nums">
+        <p>应到 {task.orderedQty ?? 0} · 已收 {task.receivedQty ?? 0}</p>
+        <p>未收 {Math.max(0, (task.orderedQty ?? 0) - (task.receivedQty ?? 0))}</p>
+        <p>已上架 {task.putawayQty ?? 0} · 待上架 {task.putawaySummary?.waitingQty ?? 0}</p>
+        {task.status === 2 && <p className="text-muted-foreground">收货未结束 · 本次未结算</p>}
+      </div>,
     },
     {
       key: 'operatorName',
@@ -275,7 +286,7 @@ export default function InboundTasksPage() {
     {
       key: 'remark',
       title: '备注',
-      width: 26.95,
+      width: 12.95,
       render: v => v
         ? <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere] text-muted-foreground" title={String(v)}>{v as string}</span>
         : <span className="text-muted-foreground/50">—</span>,
@@ -310,16 +321,7 @@ export default function InboundTasksPage() {
           items.push({
             label: '结束收货',
             separatorBefore: true,
-            onClick: () => openConfirm(
-              '结束收货',
-              '供应商发货不足且不再继续收货时使用：立即结束收货，剩余未收数量不再收货，进入待上架，可正常上架已收到的部分。此操作不可撤回。',
-              () => closeReceivingMut.mutate(task.id, {
-                onSuccess: () => { toast.success('已结束收货，进入待上架'); closeConfirm() },
-                onError: (error: unknown) => toast.error((error as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '结束收货失败'),
-              }),
-              { confirmText: '确定结束收货' },
-            ),
-            disabled: closeReceivingMut.isPending,
+            onClick: () => setCloseTargetId(task.id),
           })
         }
         if (task.status === 2 || task.status === 3 || task.status === 4) {
@@ -439,13 +441,14 @@ export default function InboundTasksPage() {
         onApply={applyQuery}
       />
 
+      <CloseReceivingDialog taskId={closeTargetId} onClose={() => setCloseTargetId(null)} />
       <ConfirmDialog
         open={confirmState.open}
         title={confirmState.title}
         description={confirmState.description}
         variant={confirmState.variant ?? 'default'}
         confirmText={confirmState.confirmText ?? '确认'}
-        loading={cancelMut.isPending || voidReceiptMut.isPending || closeReceivingMut.isPending}
+        loading={cancelMut.isPending || voidReceiptMut.isPending}
         onConfirm={confirmState.onConfirm}
         onCancel={closeConfirm}
       />

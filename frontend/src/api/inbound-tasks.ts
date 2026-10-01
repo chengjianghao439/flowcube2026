@@ -54,6 +54,10 @@ export const cancelInboundApi = (id: number, config?: Parameters<typeof client.p
 export const voidInboundReceiptApi = (id: number, config?: Parameters<typeof client.post>[2]) =>
   client.post<InboundTask>(`/inbound-tasks/${id}/void-receipt`, {}, config)
 
-/** 短装结案：提前结束收货（收货中→待上架），剩余未收量作罢 */
-export const closeReceivingInboundApi = (id: number, config?: Parameters<typeof client.post>[2]) =>
-  client.post(`/inbound-tasks/${id}/close-receiving`, {}, config)
+export interface CloseReceivingResult { taskId: number; status: 3 | 4 }
+/** 短装结束：实收全上架时同事务完结，否则等待余下实收上架。 */
+export const closeReceivingInboundApi = (id: number, config?: Parameters<typeof client.post>[2], requestKey?: string) =>
+  client.post<CloseReceivingResult>(`/inbound-tasks/${id}/close-receiving`, {}, {
+    ...config,
+    headers: requestKey ? { ...config?.headers, ...withRequestKeyHeaders(requestKey) } : config?.headers,
+  })

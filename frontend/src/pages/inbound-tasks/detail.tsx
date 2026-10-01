@@ -15,6 +15,7 @@ import { TabPathContext } from '@/components/layout/TabPathContext'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { useWorkspaceTabTitle } from '@/hooks/useWorkspaceTabTitle'
 import { toast } from '@/lib/toast'
+import CloseReceivingDialog from './CloseReceivingDialog'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import {
@@ -22,7 +23,6 @@ import {
   useSubmitInboundTask,
   useCancelInbound,
   useVoidInboundReceipt,
-  useCloseReceivingInbound,
 } from '@/hooks/useInboundTasks'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { OrderPrintOverlay } from '@/components/print/OrderPrintOverlay'
@@ -75,7 +75,6 @@ export default function InboundTaskDetailPage() {
   const submitMut = useSubmitInboundTask()
   const cancelMut = useCancelInbound()
   const voidReceiptMut = useVoidInboundReceipt()
-  const closeReceivingMut = useCloseReceivingInbound()
 
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false)
   const [voidConfirmOpen, setVoidConfirmOpen] = useState(false)
@@ -193,7 +192,6 @@ export default function InboundTaskDetailPage() {
               <Button
                 variant="outline"
                 size="sm"
-                disabled={closeReceivingMut.isPending}
                 onClick={() => setCloseReceivingConfirmOpen(true)}
               >
                 结束收货
@@ -211,10 +209,10 @@ export default function InboundTaskDetailPage() {
           label="上架状态"
           value={putawayStatus?.label ?? '—'}
           tone={PUTAWAY_TONE[putawayStatus?.key ?? ''] ?? 'draft'}
-          detail={`待上架 ${putawaySummary?.waitingContainers ?? 0} · 已上架 ${putawaySummary?.storedContainers ?? 0}`}
+          detail={`待上架 ${putawaySummary?.waitingContainers ?? 0} 箱 / ${putawaySummary?.waitingQty ?? 0} · 已上架 ${putawaySummary?.storedContainers ?? 0} 箱 / ${putawaySummary?.storedQty ?? 0}`}
         />
         <StatusCard
-          label="审核状态"
+          label="结算状态"
           value={auditFlowStatus?.label ?? '—'}
           tone={AUDIT_TONE[auditFlowStatus?.key ?? ''] ?? 'draft'}
           detail={task.auditedAt ? `${formatDisplayDateTime(task.auditedAt)} · ${task.auditedByName ?? '—'}` : undefined}
@@ -227,6 +225,7 @@ export default function InboundTaskDetailPage() {
         />
       </div>
 
+      {task.exceptionFlags?.hasException && <p className="text-sm text-destructive">打印或上架有异常，请核对对应状态；收货阶段不受异常标识覆盖。</p>}
       <Section title="任务明细" sectionId="task-items">
         <DataTable
           columns={[
@@ -250,7 +249,7 @@ export default function InboundTaskDetailPage() {
             },
             { key: 'putawayQty', title: '已上架', width: 90, align: 'right', render: v => <span className="tabular-nums">{String(v)}</span> },
             { key: 'unitPrice', title: '单价', width: 100, align: 'right', render: v => <span className="text-muted-foreground tabular-nums">{v != null ? money(v as number) : '—'}</span> },
-            { key: 'lineAmount', title: '小计', width: 110, align: 'right', render: v => <span className="font-medium tabular-nums">{v != null ? money(v as number) : '—'}</span> },
+            { key: 'lineAmount', title: '已上架金额', width: 110, align: 'right', render: v => <span className="font-medium tabular-nums">{v != null ? money(v as number) : '—'}</span> },
           ] satisfies TableColumn<InboundTaskItem & { lineRemain: number; lineAmount: number | null }>[]}
           data={items.map(it => ({
             ...it,
@@ -267,6 +266,7 @@ export default function InboundTaskDetailPage() {
           <p className="text-muted-body">共 {items.length} 种商品</p>
           <div className="text-right">
             <p className="text-helper">已上架金额合计</p>
+            {task.status === 2 && <p className="text-helper">收货尚未结束，此金额不是本次已结算应付或采购结算凭证；仍可继续收货。</p>}
             <p className="text-2xl font-semibold text-foreground">
               {money(items.reduce((sum, it) => sum + (it.unitPrice != null ? it.putawayQty * it.unitPrice : 0), 0))}
             </p>
@@ -327,28 +327,8 @@ export default function InboundTaskDetailPage() {
         onCancel={() => setVoidConfirmOpen(false)}
       />
 
-      <ConfirmDialog
-        open={closeReceivingConfirmOpen}
-        title="结束收货"
-        description="供应商短装、不再继续收货时使用：立即结束收货，剩余未收数量作罢，进入待上架，可正常上架已收到的部分。此操作不可撤回。"
-        confirmText="确定结束收货"
-        loading={closeReceivingMut.isPending}
-        onConfirm={() => {
-          if (!validId) return
-          closeReceivingMut.mutate(validId, {
-            onSuccess: async () => {
-              setCloseReceivingConfirmOpen(false)
-              toast.success('已结束收货，进入待上架')
-              await afterMutation()
-            },
-            onError: (err: unknown) => {
-              const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '结束收货失败'
-              toast.error(msg)
-            },
-          })
-        }}
-        onCancel={() => setCloseReceivingConfirmOpen(false)}
-      />
+      <CloseReceivingDialog taskId={closeReceivingConfirmOpen ? validId : null}
+        onClose={() => setCloseReceivingConfirmOpen(false)} />
 
       {printOpen && task && (
         <OrderPrintOverlay

@@ -9,7 +9,6 @@ import {
   submitInboundTaskApi,
   cancelInboundApi,
   voidInboundReceiptApi,
-  closeReceivingInboundApi,
 } from '@/api/inbound-tasks'
 import type { QueryParams } from '@/types'
 import type { CreateInboundTaskParams } from '@/types/inbound-tasks'
@@ -81,10 +80,4 @@ export function useVoidInboundReceipt() {
   })
 }
 
-export function useCloseReceivingInbound() {
-  const invalidate = useInvalidate()
-  return useMutation({
-    mutationFn: (id: number) => closeReceivingInboundApi(id, { skipGlobalError: true }),
-    onSuccess: () => invalidate('inbound_close_receiving'),
-  })
-}
+export { useCloseReceivingInbound } from './useCloseReceivingInbound'
