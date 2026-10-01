@@ -21,12 +21,14 @@ const logger = require('../../utils/logger')
  */
 const requestStatus = async (req, res, next) => {
   try {
+    const receiptContext = { requestedAction:req.query.action }
     const data = await getScopedOperationRequestStatus({
       requestKey: req.params.key,
       action: req.query.action,
       userId: req.user?.userId ?? null,
+      receiptContext,
     })
-    await require('../sale/sale.commercial-receipts').assertReceiptScope(require('../../config/db').pool,data,req.user?.warehouseIds ?? null)
+    await require('../sale/sale.commercial-receipts').assertReceiptScope(require('../../config/db').pool,data,req.user?.warehouseIds ?? null,receiptContext)
     // 箱贴回执的**领域自洽校验**（纯函数，只读）：修复「同 requestKey 跨箱」之前落库的成功回执
     // 可能是「B 箱的资源 id + A 箱的 job」。前端恢复正是靠这个查询入口，一看到 success 就会清掉
     // 待确认记录并当作本次成功，之后再无校验点 —— 所以这里必须与写重放用同一把闸。

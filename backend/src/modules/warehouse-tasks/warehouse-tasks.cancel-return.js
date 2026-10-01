@@ -44,14 +44,17 @@ async function listPendingCancelReturns(warehouseId, scopeWarehouseIds = null) {
  */
 async function getCancelReturnDetail(taskId, scopeWarehouseIds = null) {
   const [[taskRow]] = await pool.query(
-    `SELECT id, task_no, status, cancel_requested_at, warehouse_id, warehouse_name, customer_name
-       FROM warehouse_tasks WHERE id = ? AND deleted_at IS NULL`,
+    `SELECT wt.id, wt.task_no, wt.status, wt.cancel_requested_at, wt.warehouse_id, wt.warehouse_name, wt.customer_name,
+            so.commercial_model
+       FROM warehouse_tasks wt LEFT JOIN sale_orders so ON so.id=wt.sale_order_id
+       WHERE wt.id = ? AND wt.deleted_at IS NULL`,
     [taskId],
   )
   if (!taskRow) throw new AppError('仓库任务不存在', 404)
   assertTaskScope(taskRow, { scopeWarehouseIds })
   const [containers] = await pool.query(
     `SELECT c.id, c.barcode, c.product_id, c.remaining_qty, c.container_type,
+            c.warehouse_id, c.locked_by_task_id, c.status, c.deleted_at,
             wti.product_name,
             loc.code AS location_code, loc.zone, loc.aisle, loc.rack, loc.level, loc.position
        FROM inventory_containers c
@@ -60,6 +63,8 @@ async function getCancelReturnDetail(taskId, scopeWarehouseIds = null) {
       WHERE c.locked_by_task_id = ?`,
     [taskId],
   )
+  const taskReturnQuantities = taskRow.commercial_model === 'kit-v1'
+    ? await require('./warehouse-tasks.kit-return-read').load(pool,taskRow,containers) : null
   // 只有已完成（已打印箱贴、有物理实体）的箱子需要人工扫码确认拆箱；
   // 打包中的箱子在 cancel() 发起拣货退回时已经被自动作废，不会出现在这里。
   const [packages] = await pool.query(
@@ -94,6 +99,7 @@ async function getCancelReturnDetail(taskId, scopeWarehouseIds = null) {
       productId: Number(c.product_id),
       productName: c.product_name || null,
       qty: Number(c.remaining_qty),
+      ...(taskReturnQuantities ? { taskReturnQty:taskReturnQuantities.get(Number(c.id)), remainingQty:Number(c.remaining_qty), quantitySource:'active_pick' } : {}),
       containerKind: Number(c.container_type) === 2 || /^B/i.test(String(c.barcode || ''))
         ? 'plastic_box' : 'inventory',
       suggestedLocationCode: c.location_code || null,

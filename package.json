@@ -167,9 +167,10 @@
     "smoke:confirmed-audit": "node --test tests/confirmed-audit.smoke.test.js",
     "smoke:audit-remediation-20260924": "node --test --test-concurrency=1 tests/auth-token-remediation.smoke.test.js tests/finance-account-precision.smoke.test.js tests/schema-reconcile.smoke.test.js",
     "smoke:audit-20260926": "node tests/payable-posting.smoke.test.js && node --test --test-concurrency=1 tests/sale-return-cancel-guard.smoke.test.js tests/finance-backfill-approval.smoke.test.js tests/finance-period-guard.smoke.test.js tests/finance-period-lock-order.smoke.test.js tests/payable-void-guard.smoke.test.js tests/payment-debit-account-options.smoke.test.js tests/printer-binding-scope.smoke.test.js tests/idempotency-request-key.smoke.test.js",
-    "test:sale-commercial": "node --test tests/sale-commercial-accounting.test.js tests/sale-commercial-cancellation.test.js tests/sale-commercial-contracts.test.js tests/sale-commercial-delivery.test.js tests/sale-commercial-financial.test.js tests/sale-commercial-refund-budget.test.js tests/sale-commercial-return-contracts.test.js tests/sale-commercial-units.test.js tests/sale-commercial-voucher-refunds.test.js",
+    "test:sale-commercial": "node --test tests/sale-commercial-cleanup.test.js tests/sale-commercial-accounting.test.js tests/sale-commercial-cancellation.test.js tests/sale-commercial-contracts.test.js tests/sale-commercial-delivery.test.js tests/sale-commercial-financial.test.js tests/sale-commercial-refund-budget.test.js tests/sale-commercial-return-contracts.test.js tests/sale-commercial-units.test.js tests/sale-commercial-voucher-refunds.test.js",
     "smoke:sale-commercial-lifecycle": "node tests/sale-commercial-lifecycle.smoke.test.js",
     "smoke:sale-commercial-partial-cancel": "node tests/sale-commercial-partial-cancel.smoke.test.js",
+    "smoke:sale-commercial-readonly": "KIT_TEST_SLICE=readonly node tests/sale-commercial-lifecycle.smoke.test.js",
     "smoke:sale-commercial-review": "KIT_TEST_SLICE=scope node tests/sale-commercial-lifecycle.smoke.test.js && KIT_TEST_SLICE=gates KIT_GATE_PHASE=qa node tests/sale-commercial-lifecycle.smoke.test.js"
   }
 }

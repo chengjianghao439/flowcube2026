@@ -33,7 +33,13 @@ async function http(path, body, { method = 'POST', key = randomUUID(), expect = 
   return json.data
 }
 async function main() {
+  let businessError
+  const cleanupErrors = []
+  const clean = async (stage, action) => {
+    try { await action() } catch (error) { cleanupErrors.push(new Error(`cleanup ${stage} failed`, { cause:error })) }
+  }
   try {
+    const [target]=await q('SELECT DATABASE() name');assert.equal(target.name,process.env.DB_NAME);console.log('[db target]',target.name);
     fixture.userId = await insert("INSERT INTO sys_users (username,password,real_name,role_id,role_name,is_active) VALUES (?,'!',?,1,'测试',1)", [ref, ref])
     token = require('../backend/node_modules/jsonwebtoken').sign({ userId: fixture.userId, tokenVersion: 0 }, process.env.JWT_SECRET, { expiresIn: '30m' })
     fixture.warehouseId = await insert('INSERT INTO inventory_warehouses (code,name) VALUES (?,?)', [ref, ref])
@@ -139,7 +145,7 @@ async function main() {
     assert.equal(detail.commercialGroups.length, 3)
     assert.deepEqual(detail.physicalItems.map(i => [i.productId, i.quantity]), [[fixture.products[0], 3], [fixture.products[1], 8]])
     assert.equal(new Set(detail.commercialGroups.flatMap(g => g.components.map(c => c.saleItemId))).size, 2)
-    if(process.env.KIT_TEST_SLICE!=='gates'){
+    if(!['gates','readonly'].includes(process.env.KIT_TEST_SLICE)){
     const marker={commercialModel:'kit-v1',expectedRevision:1}
     for(const [path,input,method] of [['/sale',body,'POST'],[`/sale/${sale.id}`,{...body,...marker},'PUT'],[`/sale/${sale.id}/adjust`,{...body,...marker},'PUT'],[`/sale/${sale.id}/reserve`,marker,'POST'],[`/sale/${sale.id}/release`,marker,'POST'],[`/sale/${sale.id}/ship`,{...marker,groups:[{groupId:detail.commercialGroups[0].id,qty:1}]},'POST'],[`/sale/${sale.id}/cancel`,marker,'POST'],[`/sale/${sale.id}`,marker,'DELETE'],['/returns/sale',{customerId:fixture.customerId,customerName:ref,warehouseId:fixture.warehouseId,warehouseName:ref,saleOrderId:sale.id,saleOrderNo:sale.orderNo,...marker,items:[{sourceItemId:detail.items[0].id,commercialComponentId:detail.commercialGroups[0].components[0].id,dispatchComponentId:1,productId:fixture.products[0],productCode:ref+'-0',productName:ref,unit:'个',quantity:1,unitPrice:80}]},'POST']]){
       const r=await fetch(`http://127.0.0.1:${server.address().port}/api${path}`,{method,headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json','X-Request-Key':''},body:JSON.stringify(input)});const j=await r.json();assert.equal(r.status,400);assert.equal(j.code,'SALE_COMMERCIAL_REQUEST_KEY_REQUIRED')
@@ -228,7 +234,35 @@ async function main() {
     const replay=await svc.ship(sale.id,operator(),{commercialModel:'kit-v1',expectedRevision:1,groups:[{groupId:a.id,qty:1}],requestKey:dispatchKey})
     const current=await http(`/sale/${sale.id}`,undefined,{method:'GET'});fixture.taskId=current.tasks[0].taskId
     assert.equal(current.tasks.length,1,'dispatch replay never adds a task')
+    const readPending=current.commercialGroups.map(g=>g.dispatch)
+    if(process.env.KIT_TEST_SLICE==='readonly')await assert.rejects(http(`/sale/${sale.id}/ship`,{commercialModel:'kit-v1',expectedRevision:1,groups:[{groupId:a.id,qty:1}]}),e=>e.code==='SALE_COMMERCIAL_DISPATCH_QTY')
     await actualShip(fixture.taskId)
+    if(process.env.KIT_TEST_SLICE==='readonly'){
+      const shipped=await http(`/sale/${sale.id}`,undefined,{method:'GET'});
+      await svc.cancel(sale.id,operator(),null,randomUUID(),{commercialModel:'kit-v1',expectedRevision:1});
+      const closed=await http(`/sale/${sale.id}`,undefined,{method:'GET'});
+      assert.deepEqual(readPending.map(d=>d&&[d.confirmedShippedQty,d.outstandingQty,d.activeAllocatedQty,d.availableQty]),[[0,1,1,0],[0,0,0,1],[0,0,0,1]],'created WT is pending, consumes allowance, never shipped');
+      assert.deepEqual(shipped.commercialGroups.map(g=>g.dispatch.confirmedShippedQty),[1,0,0],'shared physical SKU cannot imply B shipped');
+      assert.deepEqual(closed.commercialGroups.map(g=>[g.quantity,g.dispatch.confirmedShippedQty,g.dispatch.outstandingQty]),[[1,1,0],[0,0,0],[0,0,0]],'closing B leaves original confirmed A history');
+      assert.equal(closed.commercialGroups[0].dispatch.facts[0].taskId,fixture.taskId);
+      assert.equal(closed.commercialGroups[0].dispatch.facts[0].taskStatus,7);
+      const amended=await svc.create({...body,commercialGroups:[body.commercialGroups[0]],requestKey:randomUUID()});fixture.sales.push(amended.id);await supply([[fixture.products[0],2],[fixture.products[1],8]]);
+      const before=await http(`/sale/${amended.id}`,undefined,{method:'GET'}),oldGroupId=before.commercialGroups[0].id;
+      await svc.reserveStock(amended.id,operator(),before.items.map(i=>({id:i.id,warehouseId:fixture.warehouseId,qty:i.quantity})),{commercialModel:'kit-v1',expectedRevision:1,requestKey:randomUUID()});
+      const sameWT=(await svc.ship(amended.id,operator(),{commercialModel:'kit-v1',expectedRevision:1,groups:[{groupId:oldGroupId,qty:1}],requestKey:randomUUID()})).tasks[0].taskId;
+      await svc.requestAdjustment(amended.id,{commercialModel:'kit-v1',expectedRevision:1,commercialGroups:[{...body.commercialGroups[0],quantity:2}],requestKey:randomUUID()});await actualShip(sameWT);
+      const completedAmend=await http(`/sale/${amended.id}`,undefined,{method:'GET'});assert.equal(completedAmend.commercialGroups[0].dispatch.confirmedShippedQty,2);const withdrawnActual=completedAmend.commercialDispatches.find(d=>d.groupId===oldGroupId);assert.equal(withdrawnActual.taskId,sameWT);assert.equal(withdrawnActual.taskStatus,7);assert.equal(withdrawnActual.active,false);assert.equal(withdrawnActual.confirmedAt,null);assert.equal(withdrawnActual.confirmedShipped,false);assert.equal(withdrawnActual.outstanding,false);assert.equal(withdrawnActual.allocated,false);
+      console.log('[PASS withdrawn actual]',JSON.stringify({saleId:amended.id,taskId:sameWT,oldGroupId,oldActive:withdrawnActual.active,oldConfirmedAt:withdrawnActual.confirmedAt,currentConfirmedQty:completedAmend.commercialGroups[0].dispatch.confirmedShippedQty}));
+      const read=require('../backend/src/modules/sale/sale.commercial-dispatch-read'),store=require('../backend/src/modules/sale/sale.commercial-store'),proof=await pool.getConnection();
+      try{await proof.beginTransaction();const groups=await store.loadGroups(proof,sale.id),[[owned]]=await proof.query('SELECT id FROM sale_dispatch_groups WHERE order_id=? AND task_id=?',[sale.id,fixture.taskId]);assert.ok(owned);
+      await proof.query('UPDATE sale_dispatch_groups SET active=0 WHERE id=?',[owned.id]);const inactive=await read.load(proof,sale.id,groups);assert.equal(inactive.projections.get(a.id).confirmedShippedQty,1);assert.equal(inactive.projections.get(a.id).activeAllocatedQty,0);
+      await proof.query('SAVEPOINT withdrawn_history');await proof.query('UPDATE sale_dispatch_groups SET confirmed_at=NULL WHERE id=?',[owned.id]);const withdrawn=await read.load(proof,sale.id,groups);assert.equal(withdrawn.projections.get(a.id).confirmedShippedQty,0,'withdrawn unconfirmed history sharing completed WT is never a shipment');await proof.query('ROLLBACK TO SAVEPOINT withdrawn_history');
+      // Use another actual owned order for cross-order evidence instead of a missing FK.
+      const mismatch=await svc.create({...body,requestKey:randomUUID()});fixture.sales.push(mismatch.id);await proof.query('UPDATE sale_dispatch_groups SET order_id=? WHERE id=?',[mismatch.id,owned.id]);await assert.rejects(read.load(proof,sale.id,groups),e=>e.code==='SALE_COMMERCIAL_DISPATCH_SOURCE_INVALID');await proof.rollback();
+      await proof.beginTransaction();const query=proof.query.bind(proof);let count=0;proof.query=async(...args)=>{assert.equal(/FOR (UPDATE|SHARE)/.test(args[0]),false);count++;return query(...args)};await read.load(proof,sale.id,groups);assert.equal(count,1,'dispatch facts use one batch query');proof.query=query;
+      }finally{await proof.rollback();proof.release()}
+      console.log('[PASS readonly dispatch] actual A100+B200+ordinary30/shared hinge+screw: pending0 shipped, confirmed A1/B0, close remaining preserves A1/B0');return
+    }
     const [ar]=await q('SELECT total_amount FROM payment_records WHERE type=2 AND order_id=?',[sale.id]);assert.equal(Number(ar.total_amount),100,'A real shipment gross must be 100, never shared average')
     const facts=await require('../backend/src/modules/accounting/voucher-sale-periods').loadSaleShipmentFacts(pool)
     const filtered={orders:facts.orders.filter(o=>Number(o.soId)===sale.id),items:facts.items.filter(i=>Number(i.order_id)===sale.id),shipments:facts.shipments.filter(t=>Number(t.soId)===sale.id)}
@@ -549,33 +583,51 @@ async function main() {
     const [oldLedger]=await q("SELECT COUNT(*) count FROM stock_reservations WHERE ref_type='sale_order' AND ref_id=? AND status=1",[ordinaryCancelled.id]);assert.equal(Number(oldLedger.count),0)
     console.log('[PASS] legacy ordinary HTTP create auxiliary unit/reserve/dispatch/actual PDA ship/source return/QA/putaway leaves AR0; unshipped cancel releases original reservation rule')
 
+  } catch (error) {
+    businessError = error
   } finally {
-    fs.writeFileSync(`/tmp/flowcube-kits-lifecycle-${ref}.json`, JSON.stringify(fixture, null, 2), { mode: 0o600 })
     try {
-      for(const id of fixture.sales){
-        const [sale]=await q('SELECT status,commercial_revision,commercial_model FROM sale_orders WHERE id=?',[id])
-        if(sale&&[1,2,3,6].includes(Number(sale.status))){
-          await originalSvc.cancel(id,operator(),null,randomUUID(),sale.commercial_model==='kit-v1'?{commercialModel:'kit-v1',expectedRevision:Number(sale.commercial_revision)}:{})
-          const tasks=await q('SELECT id FROM warehouse_tasks WHERE sale_order_id=? AND cancel_requested_at IS NOT NULL AND status<>8',[id])
-          for(const task of tasks){
-            const pending=await http(`/warehouse-tasks/${task.id}/cancel-return-detail`,undefined,{method:'GET'})
-            for(const pkg of pending.packages)await http('/scan-logs/cancel-return/box',{taskId:Number(task.id),packageId:pkg.packageId,barcode:pkg.barcode},{pda:true,expect:201})
-            for(const c of pending.containers)await http('/scan-logs/cancel-return',{taskId:Number(task.id),containerId:c.containerId,barcode:c.barcode,locationId:fixture.locationId},{pda:true,expect:201})
+      await clean('fixture manifest', () => fs.writeFileSync(`/tmp/flowcube-kits-lifecycle-${ref}.json`, JSON.stringify(fixture, null, 2), { mode:0o600 }))
+      for (const id of fixture.sales) {
+        await clean(`sale ${id} normal cancellation`, async () => {
+          const [sale] = await q('SELECT status,commercial_revision,commercial_model FROM sale_orders WHERE id=?', [id])
+          if (!sale || ![1,2,3,6].includes(Number(sale.status))) return
+          await originalSvc.cancel(id,operator(),null,randomUUID(),sale.commercial_model==='kit-v1' ? { commercialModel:'kit-v1',expectedRevision:Number(sale.commercial_revision) } : {})
+          const tasks = await q('SELECT id FROM warehouse_tasks WHERE sale_order_id=? AND cancel_requested_at IS NOT NULL AND status<>8', [id])
+          for (const task of tasks) {
+            await clean(`task ${task.id} normal return`, async () => {
+              const pending = await http(`/warehouse-tasks/${task.id}/cancel-return-detail`,undefined,{method:'GET'})
+              for (const pkg of pending.packages) await clean(`package ${pkg.packageId} return`, () => http('/scan-logs/cancel-return/box',{taskId:Number(task.id),packageId:pkg.packageId,barcode:pkg.barcode},{pda:true,expect:201}))
+              for (const c of pending.containers) await clean(`container ${c.containerId} return`, () => http('/scan-logs/cancel-return',{taskId:Number(task.id),containerId:c.containerId,barcode:c.barcode,locationId:fixture.locationId},{pda:true,expect:201}))
+            })
           }
-        }
+        })
       }
+      if (ownPrint) await clean('owned printer', () => require('./helpers/ownedPrintFixture').releaseOwnPackageLabelPrinter(ownPrint,{http:ownPrint.http,token,assert}))
+      if (fixture.deviceId) {
+        await clean('device sessions', () => q('DELETE FROM pda_device_sessions WHERE device_id=?', [fixture.deviceId]))
+        await clean('device', () => q('DELETE FROM pda_devices WHERE id=?', [fixture.deviceId]))
+      }
+      for (const id of [fixture.userId,fixture.previewUserId].filter(Boolean)) await clean(`actor ${id}`, () => q('UPDATE sys_users SET is_active=0,token_version=token_version+1 WHERE id=?', [id]))
+      for (const id of [fixture.guardRoleId,fixture.previewRoleId].filter(Boolean)) await clean(`role ${id} permissions`, () => q('DELETE FROM sys_role_permissions WHERE role_id=?', [id]))
+      if (fixture.account) await clean('finance account', () => q('UPDATE finance_accounts SET is_active=0 WHERE id=?', [fixture.account.id]))
+      const proof = {}
+      if (fixture.userId) await clean('actor proof', async () => { const [r]=await q('SELECT is_active FROM sys_users WHERE id=?',[fixture.userId]);proof.activeActor=Number(r.is_active);assert.equal(proof.activeActor,0) })
+      if (fixture.deviceId) await clean('device proof', async () => { const [r]=await q('SELECT COUNT(*) count FROM pda_devices WHERE id=?',[fixture.deviceId]);proof.devices=Number(r.count);assert.equal(proof.devices,0) })
+      if (fixture.sales.length) {
+        await clean('container lock proof', async () => { const [r]=await q('SELECT COUNT(*) count FROM inventory_containers WHERE locked_by_task_id IN (SELECT id FROM warehouse_tasks WHERE sale_order_id IN (?))',[fixture.sales]);proof.locks=Number(r.count);assert.equal(proof.locks,0) })
+        await clean('reservation proof', async () => { const [r]=await q("SELECT COALESCE(SUM(qty),0) qty FROM stock_reservations WHERE ref_type='sale_order' AND ref_id IN (?) AND status=1",[fixture.sales]);proof.reserved=Number(r.qty);assert.equal(proof.reserved,0) })
+      }
+      console.log('[cleanup proof]',JSON.stringify({ ...proof, verified:cleanupErrors.length===0 }))
     } finally {
-      try {
-      if(ownPrint)await require('./helpers/ownedPrintFixture').releaseOwnPackageLabelPrinter(ownPrint,{http:ownPrint.http,token,assert})
-      } finally {
-      if(fixture.deviceId){await q('DELETE FROM pda_device_sessions WHERE device_id=?',[fixture.deviceId]);await q('DELETE FROM pda_devices WHERE id=?',[fixture.deviceId])}
-      if (fixture.userId) await q('UPDATE sys_users SET is_active=0,token_version=token_version+1 WHERE id=?', [fixture.userId]) }
-      if(fixture.previewUserId)await q('UPDATE sys_users SET is_active=0,token_version=token_version+1 WHERE id=?',[fixture.previewUserId])
-      if(fixture.guardRoleId)await q('DELETE FROM sys_role_permissions WHERE role_id=?',[fixture.guardRoleId])
-      if(fixture.previewRoleId)await q('DELETE FROM sys_role_permissions WHERE role_id=?',[fixture.previewRoleId])
-      if(fixture.account)await q('UPDATE finance_accounts SET is_active=0 WHERE id=?',[fixture.account.id])
-      try { if (server) await new Promise((resolve, reject) => server.close(e => e ? reject(e) : resolve())) } finally { await pool.end() }
+      // Transport closure is outside every business cleanup and proof stage.
+      try { await clean('server.close', async () => { if (server) await new Promise((resolve,reject) => server.close(error => error ? reject(error) : resolve())) }) }
+      finally { await clean('pool.end', () => pool.end()) }
     }
+    const failures = [...cleanupErrors]
+    if (businessError) failures.unshift(businessError)
+    if (cleanupErrors.length) throw new AggregateError(failures,'Business/cleanup failures; owned audit facts retained')
+    if (businessError) throw businessError
     console.log(`[fixtures] /tmp/flowcube-kits-lifecycle-${ref}.json; test user disabled; server/pool closed`)
   }
 }

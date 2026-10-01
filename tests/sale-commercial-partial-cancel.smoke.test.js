@@ -37,7 +37,15 @@ async function scenario(name,target,baseQty,packages,picks,otherQty){
  const cancelKey=randomUUID();await http('/sale/'+so.id+'/cancel',marker,{key:cancelKey});await http('/sale/'+so.id+'/cancel',marker,{key:cancelKey})
  const picked=picks.reduce((n,p)=>n+units(p),0),evidence={name,saleId:so.id,otherSaleId:other.id,taskId,containers,target,baseQty,picks,afterCancelReserved:(await reserveQty(so.id))/100,expectedAfterCancel:picked/100,returns:[]};f.cases.push(evidence)
  console.log('[cancel actual]',JSON.stringify(evidence));if(units(evidence.afterCancelReserved)!==picked)violations.push(name+' cancel retains container remainder rather than PICK')
- const cancelled=await http('/sale/'+so.id,undefined,{method:'GET'});assert.equal(cancelled.totalAmount,target*10);assert.equal(cancelled.commercialGroups[0].quantity,target)
+ // Every injected fact is an exact owned source row and rolls back before actual returns.
+ const read=require('../backend/src/modules/warehouse-tasks/warehouse-tasks.kit-return-read'),proofTask=(await q('SELECT id,warehouse_id FROM warehouse_tasks WHERE id=?',[taskId]))[0],proofContainers=await q('SELECT * FROM inventory_containers WHERE locked_by_task_id=? ORDER BY id',[taskId]);
+ const proof=await pool.getConnection();try{await proof.beginTransaction();const [[owned]]=await proof.query('SELECT id,item_id FROM scan_logs WHERE task_id=? AND container_id=? AND COALESCE(scan_purpose,1)=1',[taskId,containers[0].id]);assert.ok(owned);
+ for(const fault of ['missing','cross-item','over-remaining','over-picked']){await proof.query('SAVEPOINT owned_read_fault');if(fault==='missing')await proof.query('DELETE FROM scan_logs WHERE id=?',[owned.id]);else if(fault==='cross-item')await proof.query('UPDATE scan_logs SET item_id=? WHERE id=?',[owned.item_id+100000,owned.id]);else if(fault==='over-remaining')await proof.query('UPDATE scan_logs SET qty=? WHERE id=?',[Number(containers[0].remaining_qty)+1,owned.id]);else await proof.query('UPDATE warehouse_task_items SET picked_qty=0 WHERE id=?',[owned.item_id]);await assert.rejects(read.load(proof,proofTask,proofContainers),e=>e.code==='SALE_COMMERCIAL_PICK_SOURCE_INVALID');await proof.query('ROLLBACK TO SAVEPOINT owned_read_fault')}
+ const query=proof.query.bind(proof);let count=0;proof.query=async(...args)=>{assert.equal(/FOR (UPDATE|SHARE)/.test(args[0]),false,'read projection never acquires write/business locks');count++;return query(...args)};assert.equal((await read.load(proof,proofTask,proofContainers)).size,proofContainers.length);assert.equal(count,2,'two batch reads irrespective of container count');proof.query=query;
+ }finally{await proof.rollback();proof.release()}
+ const returnDetail=await http('/warehouse-tasks/'+taskId+'/cancel-return-detail',undefined,{method:'GET'});
+ for(let n=0;n<picks.length;n++){const c=returnDetail.containers.find(c=>c.containerId===Number(containers[n].id));if(c?.taskReturnQty!==picks[n]||c?.remainingQty!==Number(containers[n].remaining_qty)||c?.quantitySource!=='active_pick'||c?.qty!==Number(containers[n].remaining_qty))violations.push(name+' detail must distinguish own PICK from physical remainder')}
+ const cancelled=await http('/sale/'+so.id,undefined,{method:'GET'});assert.equal(cancelled.totalAmount,target*10);assert.equal(cancelled.commercialGroups[0].quantity,target);if(cancelled.commercialGroups[0].dispatch?.activeAllocatedQty!==0||cancelled.commercialGroups[0].dispatch?.outstandingQty!==0||cancelled.commercialGroups[0].dispatch?.confirmedShippedQty!==0)violations.push(name+' cancel withdraws only unconfirmed allocation');assert.equal(cancelled.commercialDispatches[0].active,false)
  await http('/sale/'+so.id,marker,{method:'DELETE',expect:409})
  await http('/scan-logs',{taskId,itemId:task.items[0].id,containerId:Number(containers[0].id),barcode:containers[0].barcode,productId,qty:picks[0],scanMode:'散件'},{expect:409,device:true})
  let expected=picked
@@ -78,7 +86,7 @@ async function ordinaryScenario(){
  const tasks=await q('SELECT id FROM warehouse_tasks WHERE sale_order_id=? AND deleted_at IS NULL ORDER BY id',[sale.id]);assert.equal(tasks.length,1)
  const taskId=Number(tasks[0].id),task=await http('/warehouse-tasks/'+taskId,undefined,{method:'GET'})
  await http('/scan-logs',{taskId,itemId:task.items[0].id,containerId:Number(container.id),barcode:container.barcode,productId,qty:1,scanMode:'散件'},{expect:201,device:true})
- await http('/sale/'+sale.id+'/cancel',{});assert.equal(await reserveQty(sale.id),0,'ordinary cancellation retains original immediate release policy')
+ await http('/sale/'+sale.id+'/cancel',{});const dto=await http('/warehouse-tasks/'+taskId+'/cancel-return-detail',undefined,{method:'GET'});assert.equal(dto.containers[0].qty,10);assert.equal(Object.hasOwn(dto.containers[0],'taskReturnQty'),false);assert.equal(Object.hasOwn(await http('/sale/'+sale.id,undefined,{method:'GET'}),'commercialGroups'),false);assert.equal(await reserveQty(sale.id),0,'ordinary cancellation retains original immediate release policy')
  const body={taskId,containerId:Number(container.id),barcode:container.barcode,locationId:f.locationId},key=randomUUID(),result=await http('/scan-logs/cancel-return',body,{expect:201,device:true,key});assert.deepEqual(await http('/scan-logs/cancel-return',body,{expect:201,device:true,key}),result)
  const [wt]=await q('SELECT status FROM warehouse_tasks WHERE id=?',[taskId]),[c]=await q('SELECT locked_by_task_id,remaining_qty FROM inventory_containers WHERE id=?',[container.id]),[scan]=await q('SELECT COUNT(*) count,SUM(qty) qty FROM scan_logs WHERE task_id=? AND scan_purpose=3',[taskId]);assert.equal(Number(wt.status),8);assert.equal(c.locked_by_task_id,null);assert.equal(Number(c.remaining_qty),10);assert.equal(Number(scan.count),1);assert.equal(Number(scan.qty),10,'ordinary return scan keeps original container remainder quantity')
  f.cases.push({name:'ordinary',saleId:sale.id,taskId,containers:[container],afterCancelReserved:0,finalStatus:8});console.log('[PASS ordinary] reserve5/PICK1/container10: original immediate reservation release, return scan10, replay once, WT8/lock0/stock10')
@@ -111,17 +119,42 @@ async function scopeScenario(){
  await scope([f.warehouseId,f.headWarehouseId])
  const wrongKey=randomUUID();evidence.wrongDeviceKey=wrongKey;await http('/scan-logs/cancel-return',{...body,pdaWarehouseId:f.warehouseId},{...opts,key:wrongKey,deviceHeaders:wrong,expect:403})
  const [locked]=await q('SELECT locked_by_task_id FROM inventory_containers WHERE id=?',[container.id]),[missing]=await q('SELECT COUNT(*) count FROM operation_requests WHERE request_key=?',[wrongKey]);assert.equal(Number(locked.locked_by_task_id),taskId);assert.equal(Number(missing.count),0);assert.equal(await reserveQty(sale.id),100);assert.equal(await reserveQty(other.id),100)
- await scope([f.warehouseId]);const returned=await http('/scan-logs/cancel-return',body,opts);assert.deepEqual(await http('/scan-logs/cancel-return',body,opts),returned)
+ await scope([f.warehouseId]);const precise=await http('/warehouse-tasks/'+taskId+'/cancel-return-detail',undefined,{method:'GET',auth});if(precise.containers[0].taskReturnQty!==1||precise.containers[0].remainingQty!==10)violations.push('task-only scope detail exact PICK1/remainder10');const returned=await http('/scan-logs/cancel-return',body,opts);assert.deepEqual(await http('/scan-logs/cancel-return',body,opts),returned)
  await scope([f.headWarehouseId]);await http('/scan-logs/cancel-return',body,{...opts,expect:403})
  await scope([f.warehouseId,f.headWarehouseId]);await http('/scan-logs/cancel-return',body,{...opts,deviceHeaders:wrong,expect:403})
  await scope([f.warehouseId]);assert.deepEqual(await http('/scan-logs/cancel-return',body,opts),returned);await http('/sale/'+sale.id,undefined,{method:'GET',auth,expect:403})
  const [wt]=await q('SELECT status FROM warehouse_tasks WHERE id=?',[taskId]),[scan]=await q('SELECT COUNT(*) count,SUM(qty) qty FROM scan_logs WHERE task_id=? AND scan_purpose=3',[taskId]),[receipt]=await q('SELECT COUNT(*) count FROM operation_requests WHERE request_key=?',[key]);assert.equal(Number(wt.status),8);assert.equal(Number(scan.count),1);assert.equal(Number(scan.qty),1);assert.equal(Number(receipt.count),1);assert.equal(await reserveQty(sale.id),0);assert.equal(await reserveQty(other.id),100)
+ for(const action of ['scan-log.cancel-return','scan-log.cancel-return.'+taskId]){let actual=200;try{const receipt=await http('/system/request-status/'+key+'?action='+action,undefined,{method:'GET',auth});assert.equal(receipt.status,'success');assert.equal(receipt.resourceId,taskId);assert.deepEqual(receipt.data,returned);assert.equal(Object.hasOwn(receipt,'matchedAction'),false)}catch(e){actual=e.status||500}if(actual!==200)violations.push('task-only original receipt '+action+' actual '+actual+' expected 200');console.log('[readonly receipt actual]',JSON.stringify({saleId:sale.id,taskId,userId:f.scopeUserId,action,expected:200,actual}))}
+ await scope([f.headWarehouseId]);await http('/system/request-status/'+key+'?action=scan-log.cancel-return',undefined,{method:'GET',auth,expect:403});await scope([f.warehouseId]);
+ const wrongReceipt=await http('/system/request-status/'+key+'?action=scan-log.cancel-return.'+(taskId+100000),undefined,{method:'GET',auth});assert.equal(wrongReceipt.status,'not_found');await http('/system/request-status/'+key+'?action=scan-log',undefined,{method:'GET',auth,expect:403});
+ // Legacy/scoped/ambiguous/action evidence comes from only this owned receipt;
+ // transaction rollback plus operation-read routing lets real HTTP see it without committing faults.
+ const proof=await pool.getConnection(),poolQuery=pool.query.bind(pool);
+ try{await proof.beginTransaction();const [[ownedReceipt]]=await proof.query('SELECT * FROM operation_requests WHERE request_key=? AND user_id=?',[key,f.scopeUserId]);assert.equal(Number(ownedReceipt.resource_id),taskId);
+ pool.query=(sql,...params)=>typeof sql==='string'&&/^\s*SELECT/.test(sql)&&(sql.includes('FROM operation_requests')||sql.includes('FROM warehouse_tasks t JOIN sale_orders s'))?proof.query(sql,...params):poolQuery(sql,...params);
+ await proof.query('UPDATE operation_requests SET action=? WHERE id=?',['scan-log.cancel-return',ownedReceipt.id]);
+ for(const action of ['scan-log.cancel-return','scan-log.cancel-return.'+taskId]){const receipt=await http('/system/request-status/'+key+'?action='+action,undefined,{method:'GET',auth});assert.equal(receipt.status,'success');assert.equal(receipt.resourceId,taskId);assert.deepEqual(receipt.data,returned)}
+ await proof.query('INSERT INTO operation_requests(request_key,action,user_id,status,response_json,resource_type,resource_id) VALUES (?,?,?,?,?,?,?)',[key,'scan-log.cancel-return.'+(taskId+100000),f.scopeUserId,1,ownedReceipt.response_json,'warehouse_task',taskId]);
+ // An exact legacy base keeps the existing exact-first matching behavior; use a
+ // scoped request that has two resource-identical candidates to test ambiguity.
+ const ambiguous=await http('/system/request-status/'+key+'?action=scan-log.cancel-return.'+taskId,undefined,{method:'GET',auth});assert.equal(ambiguous.status,'not_found');
+ await http('/system/request-status/'+key+'?action=scan-log.cancel-return.'+(taskId+100000),undefined,{method:'GET',auth,expect:403});
+ await proof.query('UPDATE warehouse_tasks SET task_type=? WHERE id=?',['transfer_out',taskId]);await http('/system/request-status/'+key+'?action=scan-log.cancel-return',undefined,{method:'GET',auth,expect:403});await proof.query('UPDATE warehouse_tasks SET task_type=? WHERE id=?',['sale_out',taskId]);
+ const otherKey=randomUUID();await proof.query('INSERT INTO operation_requests(request_key,action,user_id,status,response_json,resource_type,resource_id) VALUES (?,?,?,?,?,?,?)',[otherKey,'scan-log.cancel-return-box.'+taskId,f.scopeUserId,1,ownedReceipt.response_json,'warehouse_task',taskId]);await http('/system/request-status/'+otherKey+'?action=scan-log.cancel-return-box.'+taskId,undefined,{method:'GET',auth,expect:403});
+ }finally{pool.query=poolQuery;await proof.rollback();proof.release()}
+ await q('DELETE FROM sys_role_permissions WHERE role_id=?',[f.scopeRoleId]);const noWritePermission=await http('/system/request-status/'+key+'?action=scan-log.cancel-return',undefined,{method:'GET',auth});assert.equal(noWritePermission.status,'success','own receipt read requires neither business write permission nor PDA device headers');
+ const otherUserReceipt=await http('/system/request-status/'+key+'?action=scan-log.cancel-return',undefined,{method:'GET'});assert.equal(otherUserReceipt.status,'not_found','same request key is private to original actor');
  const [identity]=await q('SELECT resource_type,resource_id,user_id FROM operation_requests WHERE request_key=?',[key]);assert.equal(identity.resource_type,'warehouse_task');assert.equal(Number(identity.resource_id),taskId);assert.equal(Number(identity.user_id),f.scopeUserId)
  const [stock]=await q('SELECT quantity,reserved FROM inventory_stock WHERE product_id=? AND warehouse_id=?',[productId,f.warehouseId]);assert.equal(Number(stock.quantity),10);assert.equal(Number(stock.reserved),1)
  await http('/sale/'+other.id+'/cancel',{});evidence.finalStatus=8
  console.log('[PASS scope] own WT/device WH with SO head outside scope returns201 once while GET SO403; narrowed successful-key replay403; wrong bound device with full actor scope403/no mutation, body cannot override device fact')
 }
-async function main(){try{
+async function main(){
+ let businessError
+ const cleanupErrors=[]
+ const clean=async(stage,action)=>{try{await action()}catch(error){cleanupErrors.push(new Error(`cleanup ${stage} failed`,{cause:error}))}}
+ try{
+ const [target]=await q('SELECT DATABASE() name');assert.equal(target.name,process.env.DB_NAME);console.log('[db target]',target.name);
  f.userId=await ins("INSERT INTO sys_users(username,password,real_name,role_id,role_name,is_active) VALUES (?,'!',?,1,'测试',1)",[ref,ref]);token=require('../backend/node_modules/jsonwebtoken').sign({userId:f.userId,tokenVersion:0},process.env.JWT_SECRET,{expiresIn:'30m'})
  f.warehouseId=await ins('INSERT INTO inventory_warehouses(code,name) VALUES (?,?)',[ref,ref]);f.customerId=await ins('INSERT INTO sale_customers(code,name,credit_limit) VALUES (?,?,NULL)',[ref,ref]);f.supplierId=await ins('INSERT INTO supply_suppliers(code,name) VALUES (?,?)',[ref,ref]);f.locationId=await ins('INSERT INTO warehouse_locations(warehouse_id,code,name) VALUES (?,?,?)',[f.warehouseId,ref,ref]);f.binId=await ins('INSERT INTO sorting_bins(warehouse_id,code) VALUES (?,?)',[f.warehouseId,ref])
  const secret=randomUUID();f.deviceId=await ins("INSERT INTO pda_devices(device_code,device_name,warehouse_id,status,secret_hash) VALUES (?,?,?,'active',?)",[ref,ref,f.warehouseId,require('../backend/node_modules/bcryptjs').hashSync(secret,4)])
@@ -131,15 +164,42 @@ async function main(){try{
  await scopeScenario()
  assert.deepEqual(violations,[],'actual PICK quantities preserve and release exactly each pending container share')
  console.log('[PASS] single reserve5/PICK1/container10, two containers PICK1 each and decimal .1/.2: exact own pending reservations, same-key cancel/return once, other order preserved, WT8/locks0/reserves0, stock unchanged')
+}catch(error){
+ businessError = error
 }finally{
- const path='/tmp/flowcube-kit-partial-cancel-'+ref+'.json';fs.writeFileSync(path,JSON.stringify(f,null,2),{mode:0o600});console.log('[fixtures]',path)
  try{
- if(f.deviceId){await q('DELETE FROM pda_device_sessions WHERE device_id=?',[f.deviceId]);await q('DELETE FROM pda_devices WHERE id=?',[f.deviceId])}
- if(f.userId)await q('UPDATE sys_users SET is_active=0,token_version=token_version+1 WHERE id=?',[f.userId])
- for(const id of f.scopeDeviceIds||[]){await q('DELETE FROM pda_device_sessions WHERE device_id=?',[id]);await q('DELETE FROM pda_devices WHERE id=?',[id])}
- if(f.scopeUserId){await q('DELETE FROM user_warehouse_scope WHERE user_id=?',[f.scopeUserId]);await q('UPDATE sys_users SET is_active=0,token_version=token_version+1 WHERE id=?',[f.scopeUserId])}
- if(f.scopeRoleId)await q('DELETE FROM sys_role_permissions WHERE role_id=?',[f.scopeRoleId])
- }finally{try{if(server)await new Promise(resolve=>server.close(resolve))}finally{await pool.end()}}
+ const path='/tmp/flowcube-kit-partial-cancel-'+ref+'.json'
+ await clean('fixture manifest',()=>fs.writeFileSync(path,JSON.stringify(f,null,2),{mode:0o600}))
+ const deviceIds=[f.deviceId,...(f.scopeDeviceIds||[])].filter(Boolean),userIds=[f.userId,f.scopeUserId].filter(Boolean)
+ for(const id of deviceIds){
+  await clean(`device ${id} sessions`,()=>q('DELETE FROM pda_device_sessions WHERE device_id=?',[id]))
+  await clean(`device ${id}`,()=>q('DELETE FROM pda_devices WHERE id=?',[id]))
+ }
+ if(f.scopeUserId)await clean('actor scope',()=>q('DELETE FROM user_warehouse_scope WHERE user_id=?',[f.scopeUserId]))
+ for(const id of userIds)await clean(`actor ${id}`,()=>q('UPDATE sys_users SET is_active=0,token_version=token_version+1 WHERE id=?',[id]))
+ if(f.scopeRoleId)await clean('scope role permissions',()=>q('DELETE FROM sys_role_permissions WHERE role_id=?',[f.scopeRoleId]))
+ const proof={}
+ if(userIds.length)await clean('actor proof',async()=>{const [r]=await q('SELECT COUNT(*) count FROM sys_users WHERE id IN (?) AND is_active=1',[userIds]);proof.activeActors=Number(r.count);assert.equal(proof.activeActors,0)})
+ if(deviceIds.length){
+  await clean('device proof',async()=>{const [r]=await q('SELECT COUNT(*) count FROM pda_devices WHERE id IN (?)',[deviceIds]);proof.devices=Number(r.count);assert.equal(proof.devices,0)})
+  await clean('session proof',async()=>{const [r]=await q('SELECT COUNT(*) count FROM pda_device_sessions WHERE device_id IN (?)',[deviceIds]);proof.sessions=Number(r.count);assert.equal(proof.sessions,0)})
+ }
+ if(f.scopeUserId)await clean('scope proof',async()=>{const [r]=await q('SELECT COUNT(*) count FROM user_warehouse_scope WHERE user_id=?',[f.scopeUserId]);proof.scopes=Number(r.count);assert.equal(proof.scopes,0)})
+ if(f.sales.length){
+  await clean('container lock proof',async()=>{const [r]=await q('SELECT COUNT(*) count FROM inventory_containers WHERE locked_by_task_id IN (SELECT id FROM warehouse_tasks WHERE sale_order_id IN (?))',[f.sales]);proof.locks=Number(r.count);assert.equal(proof.locks,0)})
+  await clean('reservation proof',async()=>{const [r]=await q("SELECT COALESCE(SUM(qty),0) qty FROM stock_reservations WHERE ref_type='sale_order' AND ref_id IN (?) AND status=1",[f.sales]);proof.reserved=Number(r.qty);assert.equal(proof.reserved,0)})
+ }
+ if(f.products.length)await clean('stock cache proof',async()=>{const [r]=await q('SELECT COUNT(*) count FROM inventory_stock s WHERE s.product_id IN (?) AND s.quantity <> (SELECT COALESCE(SUM(c.remaining_qty),0) FROM inventory_containers c WHERE c.product_id=s.product_id AND c.warehouse_id=s.warehouse_id AND c.status=1 AND c.deleted_at IS NULL)',[f.products]);proof.stockCacheMismatches=Number(r.count);assert.equal(proof.stockCacheMismatches,0)})
+ console.log('[fixtures]',path)
+ console.log('[cleanup proof]',JSON.stringify({...proof,verified:cleanupErrors.length===0}))
+ }finally{
+  try{await clean('server.close',async()=>{if(server)await new Promise((resolve,reject)=>server.close(error => error ? reject(error) : resolve()))})}
+  finally{await clean('pool.end',()=>pool.end())}
+ }
+ const failures=[...cleanupErrors]
+ if (businessError) failures.unshift(businessError)
+ if(cleanupErrors.length)throw new AggregateError(failures,'Business/cleanup failures; owned audit facts retained')
+ if(businessError)throw businessError
  console.log('[cleanup] exact own actor/device closed; transaction evidence retained; pending failed business facts never force-cleared; server/pool closed')
 }}
 main().catch(e=>{console.error(e);process.exitCode=1})

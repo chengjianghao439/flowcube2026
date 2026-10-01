@@ -133,3 +133,10 @@ C2规格复审补充：销售退货receive、QA完成与putaway完成三处门�
 此修正不改原扫码条码/箱拆解流程。2026-10-02归还权限复审进一步明确：kit PDA散件归还的SO X只协调同单预占，授权沿`assertTaskScope`按当前WT仓库与真实设备绑定仓库；不要求仓库员工同时具有销售单头仓范围。SO→WT锁序不变，任务`FOR UPDATE`当前读之后、begin/replay之前先核范围与设备，业务当前WT再次核验。成功key重放也须通过当前范围/设备检查。真实设备事实来自`req.pda.warehouseId`，不能来自body；内部service可选参数默认null保持原调用兼容，实际kit HTTP始终由设备会话中间件透传。
 
 一个成交组仍只用单仓，订单可由不同仓的成交组组成；销售建改、占释、派发、取消、删除与来源退货继续按原整单头仓/保存物料范围授权。PDA不决定销售单取消，直接取消销售WT仍`SALE_ORDER_CANCEL_REQUIRED`。ordinary与box路径原政策不改。旧失败夹具曾留下的错误预占须另按精确来源核对恢复，更新helper不会自动修旧锁。
+
+
+### C2 窄只读回执范围（2026-10-02）
+
+系统本人回执查询沿原 auth + `(user_id,request_key,action)` 匹配，不新增业务写权限或 PDA 设备闸门。`getScopedOperationRequestStatus` 的可选内部 `receiptContext` 记录实际命中 operation row 的 `matchedAction`，不添加公开 DTO 字段，不改变 exact→legacy/唯一候选规则。仅当实际匹配 action 和请求 action 都严格为 `scan-log.cancel-return` 或 `.当前resourceId`，且真实资源为 `warehouse_task`、来源 SO 为 kit-v1、实际 WT 为 sale_out，`assertReceiptScope` 按当前 WT 仓授权本人原归还回执；每次重读仍核当前用户范围，撤销任务仓授权返回403。
+
+请求宽 prefix、action 尾部与资源ID不符、cancel-return-box、其他 WT/SO/SR/RT 动作保持原完整套单范围。合法第二仓的归还成功后可查询本人原结果，但整单详情仍可能403。派发、归还详情的只读 DTO 契约见 `docs/business-semantics.md`：均从原 persisted facts 批量投影，不增加第二份数量账或业务写锁，归还/派发/退款写链未改。

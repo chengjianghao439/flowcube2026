@@ -108,3 +108,12 @@ C2规格复审收口保持业务规则：退货完成看全部真实明细的当
 C2品质复审补齐散件取消归还口径：I码散拣锁整容器，但取消需保留的量是本任务有效PICK记录的实际量，不是容器全部余量。预占5、容器余10而只拣1，取消先释放4，正常归还该容器只释放1；两个容器各拣1时，第一份归还后仍保留第二份的1。归还记录也保存该实际拣货量，原库存实物不扣减，另一销售单的预占不受影响。缺少有效PICK、来源不符或本单预占不足均整笔拒绝回滚，不能以容器余量猜测或截断释放额。普通单取消立即清零预占和原归还记录余量规则保持。
 
 C2归还权限复审：销售员按整单范围发起取消，PDA员工只执行自己仓库任务的实物归还。套单头仓与本任务仓不同时，只要当前用户可操作本任务仓且真实设备绑定仓相同，合法归还可执行；销售单详情仍可能因整单范围403。归还中的销售单锁只协调预占，不授予查看或修改销售单权限，原数量/库存/账款规则不变。
+
+
+### C2 只读派发与归还事实接点（2026-10-02）
+
+`GET /sale/:id` 对 kit-v1 的 `commercialGroups[]` 新增 `dispatch`：`confirmedShippedQty` 只累计有 `confirmed_at` 且真实销售出库 WT.status=7 的派发数量；`outstandingQty` 只累计 active=1、WT非取消且未软删的未确认派发；`activeAllocatedQty` 完全沿原 dispatch.select 的 used 口径（active=1、WT.status<>8、未软删，**包含已确认**）；`availableQty=targetQty-activeAllocatedQty`。这些数是既有派发事实的只读投影，不是新的数量/收入账，也不代表已取消或待归还的订单可以再次派发，仍须满足原状态/版本/挂起闸门。
+
+组内 `dispatch.facts[]` 及单头 `commercialDispatches[]` 返回同一事实：`dispatchGroupId/groupId/taskId/taskNo/warehouseId/taskStatus/quantity/active/confirmedAt/confirmedShipped/outstanding/allocated/taskDeletedAt`。单头集合另保留已经 superseded 的 inactive 未确认历史行；当前组投影不把旧版本撤回事实计为本组额度。执行期改单的 `replaceUnconfirmed` 把旧组 active 置0并在同WT插入新组；WT后来实发7时，旧inactive且未确认行仍只作撤回历史，不能计为已发、待执行或额度。真实已确认历史不因 active=0、任务软删或关闭剩余而消失，确认事实却没有 WT7、active未确认却WT7、跨订单/仓库或缺关联均 409 `SALE_COMMERCIAL_DISPATCH_SOURCE_INVALID`，不截断数量、不按共享物料已发量猜套归属。新增事实查询只有一个批次；原头仓和全部 stored physical 行（含 quantity=0）的范围核对在商业 DTO 暴露前执行。普通销售详情不新增商业字段。
+
+`GET /warehouse-tasks/:id/cancel-return-detail` 对来源 kit-v1 的容器新增 `taskReturnQty/remainingQty/quantitySource:'active_pick'`。`taskReturnQty` 来自当前任务仍锁定容器的 `COALESCE(scan_purpose,1)=1` 实际 PICK 汇总，并核 own WT/item/container/product/warehouse、ACTIVE未删实物、正数量、容器余量和任务 picked_qty；不从 I 条码余量推归还份额。原 `qty` 仍为整容器 `remaining_qty`，普通单 DTO 不新增这些字段，盒/普通原写规则不改。只读份额只解释任务归还，不扣 I 库存、不加台账、不改变取消/释放数量；缺源/串 item/超量继续 409 `SALE_COMMERCIAL_PICK_SOURCE_INVALID`。批量读 items+PICK，不加 FOR UPDATE/FOR SHARE；仓库范围仍按当前 WT，不额外要求 SO 头仓。

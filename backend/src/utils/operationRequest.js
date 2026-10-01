@@ -187,11 +187,12 @@ async function beginResourceOperationRequest(conn, { requestKey, action, userId,
   return beginOperationRequest(conn, { requestKey: key, action: scopedAction, userId: uid })
 }
 
-async function getOperationRequestStatus({ requestKey, action, userId }) {
+async function getOperationRequestStatus({ requestKey, action, userId, receiptContext = null }) {
   const row = await getOperationRequest({ requestKey, action, userId })
   if (!row) {
     return { status: 'not_found', data: null, message: '未找到该请求记录' }
   }
+  if (receiptContext) receiptContext.matchedAction = row.action
   if (Number(row.status) === STATUS.SUCCESS) {
     return {
       status: 'success',
@@ -285,9 +286,9 @@ async function beginCreationOperationRequest(conn, { requestKey, action, userId,
  *  3. **恰好一条**才返回它——同一请求键对应多张单据时必须保持「待核实」，
  *     绝不能任选一单成功（那正是本缺陷要消灭的错法）。
  */
-async function getScopedOperationRequestStatus({ requestKey, action, userId }) {
+async function getScopedOperationRequestStatus({ requestKey, action, userId, receiptContext = null }) {
   const requestedAction = String(action ?? '').trim()
-  const exact = await getOperationRequestStatus({ requestKey, action: requestedAction, userId })
+  const exact = await getOperationRequestStatus({ requestKey, action: requestedAction, userId, receiptContext })
   if (exact.status !== 'not_found') return exact
 
   // 请求方可能传**基础 action**（旧客户端：`transfer.scanIn`），也可能传**完整 scoped action**
@@ -307,7 +308,7 @@ async function getScopedOperationRequestStatus({ requestKey, action, userId }) {
     : candidates.filter(r => Number(r.resource_id) === requestedId)
   // 同键对应多单时保持「待核实」，不任选一单（与迁移前 transfer 的语义一致）
   if (matched.length !== 1) return exact
-  return getOperationRequestStatus({ requestKey, action: matched[0].action, userId })
+  return getOperationRequestStatus({ requestKey, action: matched[0].action, userId, receiptContext })
 }
 
 async function findScopedOperationRequests({ requestKey, baseAction, userId }) {

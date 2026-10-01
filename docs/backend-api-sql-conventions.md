@@ -67,3 +67,10 @@
 C2规格复审范围补充：kit update在回执begin/replay之前核当前已保存全部物料仓库，包含quantity0历史行；只核head和新成交组不充分。kit create发现成功回执后，以存储的resource_type/resource_id当前锁读SO与其全部已保存物料范围，校验通过才返回原结果，软删历史仍可依法重放。scope/model与revision原前后顺序保持；ordinary创建回执政策不变。
 
 C2仓库执行归还接点：`POST /scan-logs/cancel-return` 的kit分支用SO X协调预占，仓库授权沿当前WT的`assertTaskScope`，不据SO头仓授权。controller显式透传`req.pda.warehouseId`；body中的同名字段不是设备事实。服务层可选`pdaWarehouseId=null`兼容内部调用，kit HTTP经设备会话中间件始终有真实值。SO→WT当前锁读后范围/设备先于begin/replay核验，业务WT再核验；普通与box分支契约不扩大。
+
+
+### C2 只读 DTO 接点（2026-10-02）
+
+`sale.commercial-dispatch-read.load` 在原整单范围核对后以单批 LEFT JOIN 读 dg→WT→commercial group，验证同订单/仓库/销售任务和确认状态；当前组 `dispatch` 四个数量及完整事实字段见 `docs/business-semantics.md`。LEFT JOIN 不吞缺关联，历史事实不以 active 或软删过滤。`warehouse-tasks.kit-return-read.load` 在原 WT 范围核对后批量读 items+active PICK，返回每容器实际份额，与写 helper 的来源/余量/已拣上界一致；只读不请求业务行锁。普通 sale/return-detail DTO 原字段保持。
+
+系统回执通过仅内部 `receiptContext.matchedAction` 传实际数据库 action 给窄 guard；同时核请求 base/exact 与匹配 action，不能按请求宽 prefix 放行。只有 kit sale_out 的原 scan-log.cancel-return 读回执可按 WT 范围，其他动作范围不变；公开回执 DTO、匹配与写重放均保持。没有新迁移，已执行269–275未修改。

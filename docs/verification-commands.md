@@ -381,3 +381,35 @@ Root实际GUI在`flowcube_product20261001_fdb108_test`，API3011→自有故障�
 Root保存资料维护检查点前自行Node22执行前端约定5/5、前端API路由契约零缺口、AGENTS文档守卫及未暂存diff空白核对，均自然0。没有重跑已独立通过且行为未再改的59组件/API例或整批构建；完整C2后续切片的统一验证仍待执行。
 
 C2备份竞态窄修的组件回归覆盖复制A在途改B后A迟到成功/失败、旧fallback不得承认B、当前手工文本确认及再次修改失效、改B再恢复A仍须新复制代次、复制时原来源/删除登录代次变化、数量输入即时精度保护及大额报价四位tooltip。组件回归不代表真实GUI剪贴板或生产验收。
+
+
+### C2 三个只读接点专项（2026-10-02）
+
+`npm run smoke:sale-commercial-readonly` 新增 Tests CI MySQL regression 实际 step，复用 lifecycle 的 readonly 最小切片：真实采购/PDA收货上架、A100+B200+ordinary30共享 hinge1/screw4 的完整套派发与真实 pick/sort/check/pack/client ack/ship；待执行 A0已发/占额度1，真实出库 A1/B0，关闭B后仍A1/B0。另核重复派发拒绝、active改变不抹已确认历史、跨订单坏事实409（仅自有事务rollback）、单批事实查询和不新增业务写锁。普通读兼容与取消归还读接点由原 `smoke:sale-commercial-partial-cancel` 同一CI step覆盖，未额外起浏览器/scheduler。
+
+归还专项用本轮单容器PICK1/余量10、多容器各PICK1、小数.1/.2和普通单真实生命周期，核 `taskReturnQty/remainingQty/quantitySource` 与原qty、取消后未确认派发占用0、实际归还后预占/锁0，其他订单预占与实物库存保持。坏PICK缺失/串item/超余量/超picked_qty仅精确自有事务rollback，真实读helper拒409，两批查询与无FOR UPDATE/SHARE。第二仓合法HTTP原归还成功后本人base/exact回执200；SO详情仍403，任务范围撤销403、错task not_found、宽prefix403，换本人key的actor not_found。legacy base/exact、双候选not_found、存储尾ID与资源不符403、其他动作/非sale_out仍完整scope的HTTP验证以本轮原回执行为基础，在隔离事务修改证据并临时路由该请求的只读operation/WT查询，finally恢复pool.query并rollback；不提交坏事实。移除业务写权限后查询本人成功回执仍200且不带PDA头。
+
+真实TDD初始红：`/tmp/c2-readonly-scope-red.log`（exit1：真实第二仓归还成功，详情无份额且base/exact原回执403）；`/tmp/c2-readonly-dispatch-red.log`（exit1：真实A出库关闭B后无商业派发字段）。第一轮绿为 `/tmp/c2-readonly-scope-green.log` 和 `/tmp/c2-readonly-dispatch-green.log`（均自然exit0）。最终扩展夹具输出见 `/tmp/c2-readonly-cancel-final.log`、`/tmp/c2-readonly-dispatch-final.log`，资源清理必须读取实际 `[cleanup proof]`，不能只依赖finally文案。运行前 validateTestEnvironment + SELECT DATABASE() 核固定本轮独立库，actor停用/device/session/scope精确收尾，业务审计行保留，旧失败夹具不复用/强改。
+
+边界：本批未提交/推送/部署，未验证下一销售/退货/PDA前端消费、新GUI、真实PDA硬件或物理打印；测试打印客户端ack只证明完整业务履约闸门。全量套件留本批所有后续前端改动完成后统一验证。
+
+
+最后历史兼容复核以当前写链实际形成：单套派发1→零出库执行期改单增为2→原WT完整实际确认。`replaceUnconfirmed` 留旧group inactive/confirmed_at=NULL，同WT7新group confirmed2；初读误拒真实 `/sale/362` 409（`/tmp/c2-readonly-withdrawn-real-red.log` 自然exit1），窄修仅允许inactive未确认WT7历史，仍不得累计旧group实发/占用；active未确认WT7继续拒。最终 `/tmp/c2-readonly-dispatch-final.log` 须含 `[PASS withdrawn actual]` 与正向收尾。纯规则17/17、受影响数量/上架/扫码30/30、后端lint、query-loop、API路由、CI资源26/26及文档守卫的原统一记录分别在 `/tmp/c2-readonly-{pure,affected-pure,lint,query-loop,api-contract,ci-resources,doc-guard}.log`；最后窄改只补相关read smoke/lint/diff/文档守卫，不重复无关资金全包。
+
+### C2 smoke finally 品质P2收口（2026-10-02）
+
+独立品质探针确认两个实际 smoke 的旧 finally 会覆盖原业务错误，lifecycle 的资源证明断言/查询错误还会跳过 server.close/pool.end。此轮仅修改 `tests/sale-commercial-lifecycle.smoke.test.js` 与 `tests/sale-commercial-partial-cancel.smoke.test.js` 的 main catch/finally：保存原业务错误，按 manifest、精确owned业务/actor/device/权限、资源证明分阶段尽力清理，各阶段失败带原因收集；最外层 finally 分别尝试 server.close 与 pool.end，一个关闭失败不跳过另一个。业务+cleanup同时失败用 AggregateError 保存全部原因；仅业务失败保留原异常；业务成功但cleanup失败仍自然失败。实际 main.catch 用 console.error(error) 输出完整错误及 cause，不仅输出泛化message。失败的审计事实仍保留，没有强写状态、预占或借用其他单据；正常业务清理仍走原 owned 取消/归还接点。
+
+新增 `tests/sale-commercial-cleanup.test.js` 加入已有 `npm run test:sale-commercial`，Tests CI static job 在安装frontend TypeScript后实际执行。它解析真实两个 main，**仅替换业务体**，执行原 catch/finally 字节：分别验证原业务+断言/查询/manifest/device/server/pool失败、多个cleanup同时失败、单独cleanup失败与干净成功；24例、不加载app/DB/browser。初始旧路径红 `/tmp/c2-cleanup-runtime-red.log` 自然exit1（18例中14失败）；最终 `/tmp/c2-cleanup-runtime-green.log` 24/24自然exit0。仅在内存破坏错误保留或server关闭的反向probe分别自然exit1：`/tmp/c2-cleanup-guard-original-mutant-red.log` 16失败、`/tmp/c2-cleanup-guard-close-mutant-red.log` 24失败，工作树源码不被破坏。原独立审查脚本原字节重跑 `/tmp/c2-cleanup-quality-probe-green.log` 自然exit0，六个actual-finally模式均保留original且events为server.close/pool.end。
+
+实际outer main.catch输出探针 `/tmp/c2-cleanup-original-plus-cleanup-failure.log` 自然exit1，输出原业务、清理query、server.close、pool.end四个可定位原因；`/tmp/c2-cleanup-success-plus-cleanup-failure.log` 业务体成功但cleanup三处失败仍自然exit1，两个关闭均尝试。这些离线探针不创建DB资源，不能替代实际smoke集成。
+
+真实集成仅各跑一次：`/tmp/c2-cleanup-readonly-actual-green.log`、`/tmp/c2-cleanup-cancel-actual-green.log` 均自然exit0，validateTestEnvironment+SELECT DATABASE固定本轮kits独立库。owned manifests `KLC-2d06760d` 与 `KPC-db31a259`：readonly actor/device/lock/reserve全0；完整取消actor/device/session/scope/lock/reserve/stockCacheMismatches全0；`[cleanup proof] verified:true`表示已执行的owned事实证明通过，随后最终成功文案仅在transport关闭也成功时输出。原业务失败或任一cleanup失败不能称smoke通过。产品backend/DTO/write/DDL及root plans未改；新GUI、真机/实际出纸、远端CI、统一全量回归、生产仍未验。
+
+### C2 三项只读接点最终独立接受（2026-10-02，本地）
+
+独立规格已接受产品读取链：`/tmp/c2-independent-spec-{readonly,partial-cancel,commercial-pure,query-loop,dispatch-probes,cancel-probes-valid,scope-probes,final-proof}.log`均自然exit0。新增11项dispatch检查、10项PICK错误来源与本人回执反例、历史零量仓读取403实际验证；7份manifest/14actor/26单的最终资源计数0。NOT NULL列故障注入及宽prefix错误预期曾导致探针中止，日志保留且精确自有单据随后由新actor正常API收尾，不计业务red。后续同规格只读核测试finally窄修，并独立24/24守卫自然通过`/tmp/c2-independent-spec-cleanup-guard.log`。
+
+最终同品质接受：`/tmp/c2-quality-readonly-finally-recheck-green.log`复验原actual-main故障，`/tmp/c2-quality-cleanup-commercial41-green.log`41/41；离线真实outer-catch子进程探针`/tmp/c2-quality-cleanup-natural-failure.js`的四次故障均自然exit1，原业务和query/server/pool原因完整保留。两条独立实际HTTP链`/tmp/c2-quality-cleanup-readonly-real-green.log`、`/tmp/c2-quality-cleanup-cancel-real-green.log`自然exit0；`/tmp/c2-quality-cleanup-resource-proof.log`正向核自有KLC-d8a13308与KPC-1eeeae09身份/设备/会话/范围/预占/锁/格/打印配置清零、缓存闭合、metadata0600，两个进程自然结束。旧失败审计与root GUI资源原样。
+
+Root自行Node22运行新守卫24/24、自然exit0（`/tmp/c2-root-cleanup-guard.log`），核最终产品diff与两份计划并保存本地检查点。Root后续GUI的独立打印前提通过正常登录/API建立本仓17配置2（`/tmp/flowcube-product-c2-gui-printer.log`自然exit0），暂留后续验收，自有临时server/pool已关闭。没有真实出纸证据；销售/来源退货/PDA消费和最终统一验证继续，不以本检查点宣称完整C2、远端CI或部署。

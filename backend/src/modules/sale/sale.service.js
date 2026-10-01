@@ -752,7 +752,10 @@ async function findById(id, scopeWarehouseIds = null) {
     }
   }
   if (order.commercialModel === 'kit-v1') {
-    order.commercialGroups = (await commercialStore.loadGroups(pool,id)).map(commercialStore.view)
+    const groups = await commercialStore.loadGroups(pool,id)
+    const dispatch = await require('./sale.commercial-dispatch-read').load(pool,id,groups)
+    order.commercialGroups = groups.map(g => ({ ...commercialStore.view(g), dispatch:dispatch.projections.get(g.id) }))
+    order.commercialDispatches = dispatch.facts
     order.physicalItems = order.items.map(i => ({ ...i, active:i.quantity>0 }))
   }
   order.packages = packages
