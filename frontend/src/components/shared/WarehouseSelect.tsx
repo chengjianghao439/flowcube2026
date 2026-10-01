@@ -1,8 +1,12 @@
+import type { KitReadOwner } from '@/api/kits'
+import { assertKitReadOwner } from '@/hooks/useKits'
+import { toast } from '@/lib/toast'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useWarehousesActive } from '@/hooks/useWarehouses'
 import { cn } from '@/lib/utils'
 
 interface WarehouseSelectProps {
+  readOwner?: KitReadOwner
   id?: string
   value: number | null
   onChange: (id: number | null, name: string) => void
@@ -17,6 +21,7 @@ interface WarehouseSelectProps {
 /** 统一仓库下拉选择：仓库数量有限，下拉比弹窗式 Finder 更快捷 */
 export function WarehouseSelect({
   id,
+  readOwner,
   value,
   onChange,
   placeholder = '选择仓库',
@@ -25,12 +30,16 @@ export function WarehouseSelect({
   className,
   disabled,
 }: WarehouseSelectProps) {
-  const { data: warehouses } = useWarehousesActive()
+  const { data: warehouses } = useWarehousesActive(readOwner)
 
   return (
     <Select
       value={value != null ? String(value) : allowClear ? '__all__' : ''}
       onValueChange={v => {
+        if (readOwner) {
+          try { assertKitReadOwner(readOwner) }
+          catch (error) { toast.error(error instanceof Error ? error.message : '读取来源已变化'); return }
+        }
         if (v === '__all__') { onChange(null, ''); return }
         const id = Number(v)
         const name = warehouses?.find(w => w.id === id)?.name || ''

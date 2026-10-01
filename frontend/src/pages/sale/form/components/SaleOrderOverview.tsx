@@ -7,10 +7,12 @@ import type { SaleOrder } from '@/types/sale'
 export function SaleOrderOverview({ order }: { order: SaleOrder }) {
   const receivable = getReceivableStatus(order)
   const payableAmount = Math.max(0, Number(order.totalAmount) - Number(order.discountAmount ?? 0))
+  const commercial = order.commercialModel === 'kit-v1'
+  const lineCount = commercial ? (order.commercialGroups?.filter(group => group.targetQty > 0).length ?? 0) : (order.items?.length ?? 0)
   const cells = [
     { label: '客户', value: order.customerName || '—', icon: Building2 },
     { label: '出库仓库', value: order.isMultiWarehouse ? '多仓履约' : (order.warehouseName || '—'), icon: Warehouse },
-    { label: '商品明细', value: `${order.items?.length ?? 0} 行`, icon: PackageOpen },
+    { label: commercial ? '当前成交明细' : '商品明细', value: `${lineCount} 行`, icon: PackageOpen },
     { label: '订单金额', value: money(payableAmount), icon: CircleDollarSign },
   ]
   return (

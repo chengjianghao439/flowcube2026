@@ -1,8 +1,20 @@
+import type { KitReadOwner } from '@/api/kits'
+import { assertKitReadOwner } from './useKits'
+import { commercialReadConfig } from '@/api/sale-commercial'
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { getCustomersApi, createCustomerApi, updateCustomerApi, deleteCustomerApi } from '@/api/customers'
 import type { CreateCustomerParams, UpdateCustomerParams } from '@/types/customers'
 import { toast } from '@/lib/toast'
-export const useCustomers = (params: object, keepPrevious = false) => useQuery({ queryKey: ['customers', params], queryFn: () => getCustomersApi(params).then(r=>r!), placeholderData: keepPrevious ? keepPreviousData : undefined })
+export const useCustomers = (params: object, keepPrevious = false, readOwner?: KitReadOwner) => useQuery({
+  queryKey: readOwner ? ['customers', params, readOwner.baseURL, readOwner.userId, readOwner.sessionGeneration] : ['customers', params],
+  queryFn: async () => {
+    if (!readOwner) return getCustomersApi(params).then(r => r!)
+    assertKitReadOwner(readOwner)
+    const data = await getCustomersApi(params, commercialReadConfig(readOwner))
+    assertKitReadOwner(readOwner)
+    return data
+  }, placeholderData: keepPrevious ? keepPreviousData : undefined
+})
 export const useCreateCustomer = () => {
   const qc=useQueryClient()
   return useMutation({

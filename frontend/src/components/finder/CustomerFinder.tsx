@@ -1,3 +1,6 @@
+import type { KitReadOwner } from '@/api/kits'
+import { assertKitReadOwner } from '@/hooks/useKits'
+import { toast } from '@/lib/toast'
 import { RecordIdentity } from '@/components/shared/RecordIdentity'
 import { useState, useRef, useEffect } from 'react'
 import { Users } from 'lucide-react'
@@ -7,6 +10,7 @@ import type { FinderResult, FinderColumn } from '@/types/finder'
 import type { Customer } from '@/types/customers'
 
 export interface CustomerFinderProps {
+  readOwner?: KitReadOwner
   open: boolean
   onClose: () => void
   onConfirm: (result: FinderResult) => void
@@ -20,7 +24,7 @@ const COLUMNS: FinderColumn<Row>[] = [
   { key: 'phone', title: '联系电话', width: 180 },
 ]
 
-export function CustomerFinder({ open, onClose, onConfirm }: CustomerFinderProps) {
+export function CustomerFinder({ open, onClose, onConfirm, readOwner }: CustomerFinderProps) {
   const [keyword,    setKeyword]    = useState('')
   const [searchText, setSearchText] = useState('')
   // 只存 id：选中行一律从**当前启用列表**派生 ⇒ 后台刷新后拿到的是最新值，
@@ -39,7 +43,7 @@ export function CustomerFinder({ open, onClose, onConfirm }: CustomerFinderProps
     return () => clearTimeout(debounceRef.current)
   }, [open])
 
-  const { data, isFetching, isError, error, refetch } = useCustomers({ pageSize: 500, keyword: searchText })
+  const { data, isFetching, isError, error, refetch } = useCustomers({ pageSize: 500, keyword: searchText }, false, readOwner)
 
   function handleKeywordChange(v: string) {
     setKeyword(v)
@@ -57,6 +61,10 @@ export function CustomerFinder({ open, onClose, onConfirm }: CustomerFinderProps
 
   // 页脚「确认选择」与行双击/空格共用这一个回调，映射只写一次。
   function handleConfirm(row: Row) {
+    if (readOwner) {
+      try { assertKitReadOwner(readOwner) }
+      catch (error) { toast.error(error instanceof Error ? error.message : '读取来源已变化'); return }
+    }
     onConfirm({
       id: row.id,
       name: row.name,

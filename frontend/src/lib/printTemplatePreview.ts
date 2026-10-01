@@ -30,7 +30,7 @@ export function adaptTemplatePreview(source: PrintTemplatePreview): { data: Reco
       : mapReturnOrderToPrint({ ...source.record, orderNo: source.record.returnNo ?? source.record.orderNo })
   return {
     data: mapped.data,
-    items: mapped.items.map(it => ({ articleNo: it.articleNumber ?? '', code: it.productCode, name: it.productName, spec: it.spec ?? '', color: it.color ?? '', unit: it.unit, qty: String(it.quantity), price: money(it.unitPrice), amount: money(it.amount), remark: it.remark ?? '' })),
+    items: mapped.items.map(it => ({ articleNo: it.articleNumber ?? '', code: it.productCode, name: it.productName, spec: it.spec ?? '', color: it.color ?? '', unit: it.unit, qty: String(it.quantity), price: it.priceText ?? money(it.unitPrice), amount: money(it.amount), remark: it.remark ?? '' })),
   }
 }
 

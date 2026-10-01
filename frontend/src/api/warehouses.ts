@@ -7,8 +7,8 @@ export async function getWarehousesApi(params: QueryParams): Promise<PaginatedDa
   return res
 }
 
-export async function getWarehousesActiveApi(): Promise<WarehouseOption[]> {
-  const res = await apiClient.get<WarehouseOption[]>('/warehouses/active')
+export async function getWarehousesActiveApi(config?: Parameters<typeof apiClient.get>[1]): Promise<WarehouseOption[]> {
+  const res = config ? await apiClient.get<WarehouseOption[]>('/warehouses/active', config) : await apiClient.get<WarehouseOption[]>('/warehouses/active')
   return res
 }
 

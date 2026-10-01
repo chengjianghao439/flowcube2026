@@ -1,3 +1,4 @@
+import type { CommercialGroup, CommercialDispatchFact } from './sale-commercial'
 export interface ScanLog {
   barcode: string
   qty: number
@@ -85,6 +86,10 @@ export interface Package {
 export interface SaleQuantitySummary { unit: string; ordered: number; reserved: number; dispatched: number; shipped: number }
 
 export interface SaleOrder {
+  commercialModel?: 'kit-v1' | null
+  commercialRevision?: number | null
+  commercialGroups?: CommercialGroup[]
+  commercialDispatches?: CommercialDispatchFact[]
   quantitySummary?: SaleQuantitySummary[]
   pendingAdjustment?: boolean
   pendingReturn?: boolean

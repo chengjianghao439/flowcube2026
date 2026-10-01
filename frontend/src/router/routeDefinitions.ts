@@ -84,6 +84,12 @@ export const routeRegistry: RouteRegistryEntry[] = [
     nav: { kind: 'link', label: '仪表盘', order: 10 },
   },
 
+  {
+    path: '/sale/new-kit', title: '新建套销售', permission: PERMISSIONS.SALE_ORDER_CREATE,
+    componentKey: 'SaleFormPage', keepAlive: true, tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '销售', section: '销售作业', order: 11 },
+  },
+
   // ── 采购 ──────────────────────────────────────────────
   {
     path: '/purchase',

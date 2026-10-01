@@ -1,3 +1,4 @@
+import type { KitReadOwner } from '@/api/kits'
 import { ShippingProductField } from '@/components/shared/ShippingProductField'
 import type { CarrierOption } from '@/types/carriers'
 import { useState } from 'react'
@@ -16,7 +17,7 @@ import AddressBookDialog from '@/pages/sale/components/AddressBookDialog'
 import { cn } from '@/lib/utils'
 
 export function SaleOrderHeaderFields({
-  customerId, customerName, customerError, setCustomerFinderOpen,
+  readOwner, customerId, customerName, customerError, setCustomerFinderOpen,
   warehouseId, setWarehouseId, setWarehouseName, warehouseError, setWarehouseError,
   carrierId, setCarrierId, carrierOptions,
   shippingProduct, setShippingProduct, shippingProductDisabled = false,
@@ -26,6 +27,7 @@ export function SaleOrderHeaderFields({
   receiverAddress, setReceiverAddress,
   remark, setRemark, headerReadOnly = false,
 }: {
+  readOwner?: KitReadOwner
   customerId: string
   customerName: string; customerError: boolean; setCustomerFinderOpen: (v: boolean) => void
   warehouseId: string; setWarehouseId: (v: string) => void; setWarehouseName: (v: string) => void
@@ -60,6 +62,7 @@ export function SaleOrderHeaderFields({
         <div data-entry-field="warehouse" className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground">
           <Label>出库仓库 *</Label>
           <WarehouseSelect
+            readOwner={readOwner}
             value={warehouseId ? +warehouseId : null}
             onChange={(id, name) => { setWarehouseId(id ? String(id) : ''); setWarehouseName(name); setWarehouseError(false) }}
             placeholder="选择仓库"
@@ -126,6 +129,7 @@ export function SaleOrderHeaderFields({
       </div>
       {customerId && (
         <AddressBookDialog
+          readOwner={readOwner}
           open={addrOpen}
           onOpenChange={setAddrOpen}
           customerId={+customerId}

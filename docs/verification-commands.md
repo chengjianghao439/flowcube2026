@@ -413,3 +413,26 @@ C2备份竞态窄修的组件回归覆盖复制A在途改B后A迟到成功/失�
 最终同品质接受：`/tmp/c2-quality-readonly-finally-recheck-green.log`复验原actual-main故障，`/tmp/c2-quality-cleanup-commercial41-green.log`41/41；离线真实outer-catch子进程探针`/tmp/c2-quality-cleanup-natural-failure.js`的四次故障均自然exit1，原业务和query/server/pool原因完整保留。两条独立实际HTTP链`/tmp/c2-quality-cleanup-readonly-real-green.log`、`/tmp/c2-quality-cleanup-cancel-real-green.log`自然exit0；`/tmp/c2-quality-cleanup-resource-proof.log`正向核自有KLC-d8a13308与KPC-1eeeae09身份/设备/会话/范围/预占/锁/格/打印配置清零、缓存闭合、metadata0600，两个进程自然结束。旧失败审计与root GUI资源原样。
 
 Root自行Node22运行新守卫24/24、自然exit0（`/tmp/c2-root-cleanup-guard.log`），核最终产品diff与两份计划并保存本地检查点。Root后续GUI的独立打印前提通过正常登录/API建立本仓17配置2（`/tmp/flowcube-product-c2-gui-printer.log`自然exit0），暂留后续验收，自有临时server/pool已关闭。没有真实出纸证据；销售/来源退货/PDA消费和最终统一验证继续，不以本检查点宣称完整C2、远端CI或部署。
+
+### C2 第二批销售前端专项（2026-10-02）
+
+在 Node22 环境，当前商业销售组件/API风险用例可用 `cd frontend && npm run test:unit -- src/pages/sale/commercial src/hooks/useCommercialSale.test.tsx src/api/sale-commercial.test.ts src/router/sale-commercial.test.ts`；均使用纯组件和 API mocks，不需数据库。覆盖共享组件整车预览、缺货仍可保存、四位包装依据、默认普通客户变价与人工/旧套保护、原单初始化/改单头只读、409 保草稿/复制竞态、408 原体原键冻结、双标签及端点/账号代次迟到隔离、商业派发确认与历史桥、客户打印新四位/旧两位与关闭包装口径、原履约事项动作/日期入口和固定来源、局部返回放弃确认、整数基本单位与辅助单位区别、头部普通默认缓存/API兼容和套销售读取/地址维护迟到来源拒绝。bootstrap 外国 kit 缓存只能触发 owned 重读，不能直接初始化编辑器。
+
+受影响旧回归包括 `src/pages/sale/form`、`src/components/shared/OrderFulfillmentPanel.test.tsx`、`src/components/shared/OrderFulfillmentPanel.handoff-refresh.test.tsx` 、`src/components/finder/CustomerFinder.test.tsx` 和 `src/lib/printTemplatePreview.test.ts`。类型检查仍须 `tsc -p tsconfig.app.json --noEmit`，对改动路径执行 scoped ESLint。本批未跑全量构建/全量回归，留给本批集中验收；组件通过不是 GUI、生产、真机或物理打印证据，第三批来源退货与持久化原请求查询也未完成。
+
+C2 第二批规格审查原字节探针 `address-reopen`、`gate-title`、`detail-retry` 分别复现自然失败后由窄修通过；原探针组合记录 `/tmp/c2-sales-spec-fixes-green.log`（3 文件 / 6 用例，自然 exit0）。仓内新增地址重开/同值重开/改后恢复原值和确认重试后原键重读最新派发额度回归，kit bootstrap 标签边界与同 ID 仓名断言补入既有 mounted 用例。探针/组件证据不代表真实 GUI。
+
+`gate-late-bootstrap` 原字节探针复现 legacy 晚到普通单使已识别套 gate 退出的自然红；窄修日志 `/tmp/c2-sales-gate-late-bootstrap-green.log`。仓内 `modelGate.test.tsx` 覆盖读取仍 pending 时晚到普通 DTO、原标签保持及最终 owned 实际数据套用。
+
+`gate-context` 原字节 probe 在同 SO 迟到 legacy 普通结果后改变 handoff 参数复现自然红；绿记录 `/tmp/c2-sales-gate-context-green.log`。仓内 `modelGate` 同时核同 SO handoff 保持 gate、实际换 SO81 普通资源重新判型。
+
+实际 preview 原说明字符串的 mounted 文案红/绿记录 `/tmp/c2-sales-preview-copy-{red,green}.log`；映射后仍保留追加原因及缺货可保存事实。
+
+`SaleOrderOverview.test.tsx` mounted 覆盖 4 成交行/2 物理 SKU、零目标历史不计当前及普通旧计数/金额卡兼容；实际 red/green 日志 `/tmp/c2-sales-overview-{red,green}.log`。
+
+`CommercialEditor` mounted 复现选择包后基本单位个消失的自然红，修后保留基本单位并核回个的 preview entry；日志 `/tmp/c2-sales-unit-return-{red,green}.log`。
+
+独立 QUALITY 原字节 `owned-cache-reopen` 的旧同源缓存首帧入草稿/新 GET 到达仍旧基线两断言亲自自然 red→green，绿记录 `/tmp/c2-sales-owned-cache-green.log`（1 文件2例）；仓内 `modelGate` mounted 补同 owned 缓存重开等待、新 revision 初始化、后台成功/失败不覆盖固定基线。
+
+此初始化窄修另有 KIT80→KIT81 的 pending/已初始化两种 mounted 时序，稳定 `saleId` key 重挂新 gate，同 SO handoff 不重挂；旧80迟到结果不得入81。受影响回归记录 `/tmp/c2-sales-owned-cache-affected-green.log`，未为这两个边界人为移除已存在的 key 制造红。
+第二批最后缓存初始化窄修的fresh规格真实整页探针6/6（`/tmp/c2-fresh-narrow-spec-green.log`）及modelGate7/7（`/tmp/c2-fresh-narrow-modelgate-green.log`）自然通过；同品质原字节2/2、app类型、scopedlint与diff通过，最终接受。Root接口对应、前端约定5/5、文档守卫自然exit0，日志`/tmp/c2-sales-root-test-*.log`。Root实际隔离GUI的SO15混合开单/2包12.3456/354.69/4成交行、parent打印四位单价、整单占库23+8、A1派发WT31实发仍0以及正向只读SQL核对，0600证据`/tmp/flowcube-c2-sales-gui-evidence.json`。本任务browser与三个services自然关闭且端口空；自有账号/设备/SO/WT/打印配置暂留后续链。此处仍不代表统一全量、刷新恢复、真实仓库完成/退货整链、真机、实纸或生产验证。

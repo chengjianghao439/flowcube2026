@@ -1,3 +1,6 @@
+import type { KitReadOwner } from '@/api/kits'
+import type { CommercialGroup } from '@/types/sale-commercial'
+import { assertKitReadOwner } from '@/hooks/useKits'
 /** 订单详情的发货安排、来源解释与事项跟进；交接只导航或展开只读事实。 */
 import { explainFulfillmentAction, fulfillmentDocumentPath } from '@/lib/fulfillmentAction'
 import { usePermission } from '@/hooks/usePermission'
@@ -40,14 +43,28 @@ function estimatedDateText(item: DeliveryItem, date: string | null) {
   if (item.shortage > 0) return '请先安排缺少的货源'
   return '请确认采购安排和到货日期'
 }
-export function OrderFulfillmentPanel({ type, id }: { type: FulfillmentType; id: number }) {
+export function OrderFulfillmentPanel({ type, id, readOwner, commercialGroups }: {
+  type: FulfillmentType; id: number; readOwner?: KitReadOwner; commercialGroups?: CommercialGroup[]
+}) {
   const active = useActiveWorkspaceTab()
   const { can } = usePermission()
   const details = useRef(new Map<number, HTMLDetailsElement>())
   const panel = useRef<HTMLDivElement>(null)
   const [locationNote, setLocationNote] = useState('')
   const qc = useQueryClient()
-  const query = useQuery({ queryKey: ['fulfillment', type, id], queryFn: ({ signal }) => getFulfillment(type, id, signal), enabled: active, staleTime: 0, refetchOnMount: 'always', refetchInterval: active ? 30_000 : false })
+  const query = useQuery({
+    queryKey: readOwner ? ['fulfillment', type, id, readOwner.baseURL, readOwner.userId, readOwner.sessionGeneration] : ['fulfillment', type, id],
+    queryFn: async ({ signal }) => {
+      if (readOwner) assertKitReadOwner(readOwner)
+      const data = readOwner ? await getFulfillment(type, id, signal, readOwner) : await getFulfillment(type, id, signal)
+      if (readOwner) {
+        assertKitReadOwner(readOwner)
+        if (data.id !== id || data.type !== type) throw new Error('备货结果不属于原单')
+      }
+      return data
+    },
+    enabled: active, staleTime: 0, refetchOnMount: 'always', refetchInterval: active ? 30_000 : false,
+  })
   const request = useRef({ signature: '', key: '' })
   const [editing, setEditing] = useState<FulfillmentIssue | null>(null)
   const [operation, setOperation] = useState<'assign' | 'progress' | 'resolve' | 'reopen'>('progress')
@@ -63,12 +80,16 @@ export function OrderFulfillmentPanel({ type, id }: { type: FulfillmentType; id:
   const [reason, setReason] = useState('')
   const [showResolved, setShowResolved] = useState(false)
   const mutation = useMutation({
-    mutationFn: (command: FulfillmentCommand) => {
+    mutationFn: async (command: FulfillmentCommand) => {
+      if (readOwner) assertKitReadOwner(readOwner)
       const signature = JSON.stringify({ type, id, command })
       if (signature !== request.current.signature) request.current = { signature, key: createRequestKey('fulfillment') }
-      return runFulfillmentCommand(type, id, command, request.current.key)
+      const response = readOwner ? await runFulfillmentCommand(type, id, command, request.current.key, readOwner) : await runFulfillmentCommand(type, id, command, request.current.key)
+      if (readOwner) assertKitReadOwner(readOwner)
+      return response
     },
     onSuccess: () => {
+      if (readOwner) assertKitReadOwner(readOwner)
       request.current = { signature: '', key: '' }
       setEditing(null); setNewIssue(false); setDateEditor(false)
       for (const key of ['fulfillment', 'fulfillment-issues', 'document-activity', 'role-workbench', 'sale', 'purchase']) void qc.invalidateQueries({ queryKey: [key] })
@@ -76,6 +97,10 @@ export function OrderFulfillmentPanel({ type, id }: { type: FulfillmentType; id:
     },
     onError: (error: Error) => toast.error(error.message),
   })
+  if (readOwner) {
+    try { assertKitReadOwner(readOwner) }
+    catch { return <p role="alert">读取来源已变化，原输入仍保留，请回原来源核对。</p> }
+  }
   if (query.isPending) return <p role="status" className="p-4 text-sm text-muted-foreground">正在加载订单进度和待处理问题…</p>
   if (query.isError) return <div role="alert" className="p-4 text-sm"><p>{query.error.message}</p><p className="mt-1 text-muted-foreground">已填写的进展和日期保留；重新读取后继续。</p><Button variant="outline" onClick={() => query.refetch()}>重新加载订单进度</Button></div>
   const data = query.data
@@ -148,6 +173,15 @@ export function OrderFulfillmentPanel({ type, id }: { type: FulfillmentType; id:
         {itemId > 0 && <p className="text-sm text-muted-foreground">日期留空沿用整单约定。</p>}
         <div className="flex gap-2"><Button type="submit" disabled={mutation.isPending}>保存</Button><Button variant="ghost" type="button" onClick={() => setDateEditor(false)}>取消</Button></div>
       </form>}
+      {commercialGroups && <div className="mt-3 space-y-2 text-sm">
+        <p>成套日期来自本单真实组件供货分配，取所有组件最晚已知日期；仍须完整实物可拣。</p>
+        {data.delivery?.commercialGroups?.map(group => {
+          const savedGroup = commercialGroups.find(g => g.id === group.groupId)
+          return <p key={group.groupId}>
+            {savedGroup?.kitName ?? savedGroup?.components[0]?.productName ?? '原成交行'} · 还需发 {group.remainingQty} · {group.readyDate ? `预计备齐 ${group.readyDate}` : '备齐日期未知'} · {group.readyDateExplanation}
+          </p>
+        }) ?? <p>成套备货安排尚未提供，备齐日期待核对。</p>}
+      </div>}
       {data.delivery && <div className="mt-4">
         {noRemaining ? <details><summary className="cursor-pointer text-sm font-medium text-primary">查看商品明细（{data.delivery.items.length} 项）</summary><div className="mt-3"><DataTable columns={columns} data={data.delivery.items} rowKey="id" /></div></details>
           : data.delivery.items.length ? <DataTable columns={columns} data={data.delivery.items} rowKey="id" />

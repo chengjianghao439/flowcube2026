@@ -1,3 +1,6 @@
+import CommercialSalePage, { NewCommercialSale } from '../commercial/CommercialSalePage'
+import { useCommercialSaleRead } from '@/hooks/useCommercialSale'
+import { assertKitReadOwner } from '@/hooks/useKits'
 import { readSaleHandoff } from './handoff'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { money } from '@/lib/format'
@@ -20,7 +23,7 @@ import { SaleOrderItemsSection } from './components/SaleOrderItemsSection'
  * 确保 keep-alive 多标签场景下路径隔离正确。
  */
 
-import { useState, useContext, useEffect } from 'react'
+import { useState, useContext, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Activity, AlertTriangle, CalendarClock, ClipboardList, Clock, History, Loader2, PackageCheck, Pencil, Save, ScanLine, Warehouse, X } from 'lucide-react'
 import { PrintPreviewOverlay } from '@/components/print/SaleOrderPrintTemplate'
@@ -45,7 +48,7 @@ import { getReceivableStatus } from '@/lib/receivableStatus'
 import DataTable from '@/components/shared/DataTable'
 import type { TableColumn } from '@/types'
 import { cn } from '@/lib/utils'
-import type { SaleOrderItem } from '@/types/sale'
+import type { SaleOrder, SaleOrderItem } from '@/types/sale'
 import { FulfillmentProgressCard } from './components/FulfillmentProgressCard'
 import { SaleOrderHeaderFields } from './components/SaleOrderHeaderFields'
 import { SaleOrderItemsTable } from './components/SaleOrderItemsTable'
@@ -72,6 +75,8 @@ export default function SaleFormPage() {
 
   // ─── ① 新建模式 ─────────────────────────────────────────────────────────────
 
+  if (tabPath === '/sale/new-kit') return <NewCommercialSale tabPath={tabPath} onDone={closeTab} />
+
   if (isNew) return <CreateView closeTab={closeTab} tabPath={tabPath} />
 
   // ─── ② 查看模式 ─────────────────────────────────────────────────────────────
@@ -85,6 +90,32 @@ export default function SaleFormPage() {
   }
 
   return <DetailView saleId={saleId} tabPath={tabPath} closeTab={closeTab} />
+}
+
+function SaleModelGate({ saleId, tabPath, closeTab }: { saleId: number; tabPath: string; closeTab: () => void }) {
+  const query = useCommercialSaleRead(saleId)
+  const [initial, setInitial] = useState<SaleOrder | null>(null)
+  const [sourceError, setSourceError] = useState('')
+  // Same-owner cache is not an opening baseline; only this mounted read may initialize it once.
+  useEffect(() => {
+    if (!initial && query.isFetchedAfterMount && query.data && !query.isFetching && !query.isError) {
+      try {
+        assertKitReadOwner(query.readOwner)
+        setInitial(query.data)
+      } catch (error) {
+        setSourceError(error instanceof Error ? error.message : '原单来源已变化')
+      }
+    }
+  }, [initial, query.data, query.isFetchedAfterMount, query.isFetching, query.isError, query.readOwner])
+  if (!initial) {
+    if (query.isError || sourceError) return <div role="alert">
+      <p>原单读取失败，请保留当前输入后重读。</p>
+      <Button variant="outline" onClick={() => { setSourceError(''); void query.refetch() }}>重新读取原单</Button>
+    </div>
+    return <p role="status">读取原销售单…</p>
+  }
+  if (initial.commercialModel === 'kit-v1') return <CommercialSalePage initial={initial} owner={query.readOwner} tabPath={tabPath} onClose={closeTab} />
+  return <p role="alert">原来源订单类型已变化，请保留输入并关闭后重新打开核对。</p>
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -460,6 +491,11 @@ function AdjustView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<
 
 function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: string; closeTab: () => void }) {
   const { data: order, isLoading, isFetching, isPaused, isError, refetch } = useSaleDetail(saleId)
+  // Once classified, this resource stays behind the owned read even if legacy bootstrap finishes later.
+  const commercialResource = useRef({ saleId, identified: false })
+  if (commercialResource.current.saleId !== saleId) commercialResource.current = { saleId, identified: false }
+  if (order?.commercialModel === 'kit-v1') commercialResource.current.identified = true
+  const needsCommercialRead = commercialResource.current.identified
   const active = useActiveWorkspaceTab()
   const handoff = readSaleHandoff(tabPath, saleId)
   const hasHandoff = handoff !== null && handoff !== 'invalid'
@@ -474,7 +510,7 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
   const handoffReady = !hasHandoff || (active && checkedPath === tabPath && !isFetching && !isPaused && !isError)
   // 直接访问或刷新 /#/sale/3260 时，标签原本是路由兜底的「销售单 #3260」（数据库主键，
   // 用户认不出是哪张单）；数据到位后换成真实单号，与「从列表点进来」保持一致。
-  useWorkspaceTabTitle(order?.orderNo)
+  useWorkspaceTabTitle(needsCommercialRead ? undefined : order?.orderNo)
   const shipMutate     = useShipSale()
   const deleteMutate   = useDeleteSale()
   const cancelMutate   = useCancelSale()
@@ -496,6 +532,8 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
   const [confirmState, setConfirmState] = useState<{
     open: boolean; title: string; description: string; variant: 'default' | 'destructive'; confirmText: string; onConfirm: () => void
   }>({ open: false, title: '', description: '', variant: 'default', confirmText: '确认', onConfirm: () => {} })
+
+  if (needsCommercialRead) return <SaleModelGate key={saleId} saleId={saleId} tabPath={tabPath} closeTab={closeTab} />
 
   if (isLoading) {
     return (

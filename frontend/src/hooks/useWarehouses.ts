@@ -1,3 +1,6 @@
+import type { KitReadOwner } from '@/api/kits'
+import { assertKitReadOwner } from './useKits'
+import { commercialReadConfig } from '@/api/sale-commercial'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   getWarehousesApi,
@@ -19,10 +22,16 @@ export function useWarehouses(params: QueryParams) {
   })
 }
 
-export function useWarehousesActive() {
+export function useWarehousesActive(readOwner?: KitReadOwner) {
   return useQuery({
-    queryKey: [QUERY_KEY, 'active'],
-    queryFn: getWarehousesActiveApi,
+    queryKey: readOwner ? [QUERY_KEY, 'active', readOwner.baseURL, readOwner.userId, readOwner.sessionGeneration] : [QUERY_KEY, 'active'],
+    queryFn: async () => {
+      if (!readOwner) return getWarehousesActiveApi()
+      assertKitReadOwner(readOwner)
+      const data = await getWarehousesActiveApi(commercialReadConfig(readOwner))
+      assertKitReadOwner(readOwner)
+      return data
+    },
     staleTime: 1000 * 60 * 10,
   })
 }

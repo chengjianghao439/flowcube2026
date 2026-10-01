@@ -258,7 +258,7 @@ export default function SalePage() {
               导出 Excel
             </Button>
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
-            {can(PERMISSIONS.SALE_ORDER_CREATE) && <Button onClick={goToNew}>+ 新建销售单</Button>}
+            {can(PERMISSIONS.SALE_ORDER_CREATE) && <><Button variant="outline" onClick={() => { addTab({ key: '/sale/new-kit', title: '新建套销售', path: '/sale/new-kit' }); navigate('/sale/new-kit') }}>新建套销售</Button><Button onClick={goToNew}>+ 新建销售单</Button></>}
           </>
         }
       />

@@ -1,3 +1,4 @@
+import type { KitReadOwner } from '@/api/kits'
 import { useState, useEffect, useRef, type SetStateAction } from 'react'
 import { useDirtyGuard } from '@/hooks/useDirtyGuard'
 import { useCarriersActive } from '@/hooks/useCarriers'
@@ -10,7 +11,7 @@ import type { FinderResult } from '@/types/finder'
 import type { DraftItem } from './validate'
 
 /** CreateView / EditView 共用的表单状态与操作逻辑；传 order 则从已有订单初始化（编辑），不传则从空白开始（新建）。 */
-export function useSaleOrderForm(tabPath: string, order?: NonNullable<ReturnType<typeof useSaleDetail>['data']>) {
+export function useSaleOrderForm(tabPath: string, order?: NonNullable<ReturnType<typeof useSaleDetail>['data']>, readOwner?: KitReadOwner) {
   const [customerId,      commitCustomerId]      = useState(order ? String(order.customerId) : '')
   const [customerName,    setCustomerName]    = useState(order?.customerName ?? '')
   const [warehouseId,     setWarehouseId]     = useState(order ? String(order.warehouseId) : '')
@@ -27,7 +28,7 @@ export function useSaleOrderForm(tabPath: string, order?: NonNullable<ReturnType
   const quantityRefs  = useRef<Map<number, HTMLInputElement>>(new Map())
   const mkEmpty = (): DraftItem => ({ _key: ++counterRef.current, productId: 0, productCode: '', productName: '', articleNumber: null, spec: null, color: null, unit: '', entryUnit: '', units: [], quantity: 1, unitPrice: 0, remark: '', priceSource: 'default', priceExplanation: { kind: 'default' }, resolvedPrice: null, resolvedPriceLevel: null, costPrice: null })
 
-  const { data: carrierOptions = [] } = useCarriersActive()
+  const { data: carrierOptions = [] } = useCarriersActive(readOwner)
 
   const [items, commitItems] = useState<DraftItem[]>(() =>
     (order?.items ?? []).map((item, i) => ({

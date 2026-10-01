@@ -1,4 +1,6 @@
-import { useEffect, useState } from 'react'
+import { assertKitReadOwner } from '@/hooks/useKits'
+import type { KitReadOwner } from '@/api/kits'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Star, Pencil, Trash2, Plus, MapPin } from 'lucide-react'
 import { AppDialog } from '@/components/shared/AppDialog'
 import { Button } from '@/components/ui/button'
@@ -30,6 +32,7 @@ export interface PickedAddress {
 }
 
 interface Props {
+  readOwner?: KitReadOwner
   open: boolean
   onOpenChange: (v: boolean) => void
   customerId: number
@@ -37,32 +40,41 @@ interface Props {
   onSelect: (addr: PickedAddress) => void
 }
 
-export default function AddressBookDialog({ open, onOpenChange, customerId, customerName, onSelect }: Props) {
+export default function AddressBookDialog({ open, onOpenChange, customerId, customerName, onSelect, readOwner }: Props) {
   const { can } = usePermission()
   const canWrite = can(PERMISSIONS.CUSTOMER_UPDATE)
 
-  const { data: addresses = [], isLoading } = useCustomerAddresses(customerId, open)
-  const create = useCreateCustomerAddress(customerId)
-  const update = useUpdateCustomerAddress(customerId)
-  const setDefault = useSetDefaultCustomerAddress(customerId)
-  const remove = useDeleteCustomerAddress(customerId)
+  const { data: addresses = [], isLoading } = useCustomerAddresses(customerId, open, readOwner)
 
   const [paste, setPaste] = useState('')
   const [form, setForm] = useState(emptyForm)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [adding, setAdding] = useState(false)   // 录入区是否展开；默认收起，让地址列表占满弹窗
+  const openingGeneration = useRef(0)
+  const addressContext = useRef({ customerId, readOwner, open, form, paste, editingId, adding })
+  addressContext.current = { customerId, readOwner, open, form, paste, editingId, adding }
+  const getDraftContext = () => JSON.stringify({ ...addressContext.current, generation: openingGeneration.current })
+  const markDraftChange = () => { if (readOwner) openingGeneration.current += 1 }
+  useLayoutEffect(() => {
+    if (readOwner) openingGeneration.current += 1
+  }, [open, customerId, readOwner])
+  const create = useCreateCustomerAddress(customerId, readOwner, getDraftContext)
+  const update = useUpdateCustomerAddress(customerId, readOwner, getDraftContext)
+  const setDefault = useSetDefaultCustomerAddress(customerId, readOwner, getDraftContext)
+  const remove = useDeleteCustomerAddress(customerId, readOwner, getDraftContext)
 
   // 每次打开或切换客户，重置录入区，避免残留上一单/上一客户的内容
   useEffect(() => {
     if (open) { setPaste(''); setForm(emptyForm); setEditingId(null); setAdding(false) }
   }, [open, customerId])
 
-  const startAdd = () => { setForm(emptyForm); setEditingId(null); setPaste(''); setAdding(true) }
-  const closeForm = () => { setForm(emptyForm); setEditingId(null); setPaste(''); setAdding(false) }
+  const startAdd = () => { markDraftChange(); setForm(emptyForm); setEditingId(null); setPaste(''); setAdding(true) }
+  const closeForm = () => { markDraftChange(); setForm(emptyForm); setEditingId(null); setPaste(''); setAdding(false) }
 
   const handleRecognize = () => {
     const p = parseAddressText(paste)
     if (!p.name && !p.phone && !p.address) { toast.warning('未能识别，请手动填写或调整格式'); return }
+    markDraftChange()
     setForm(f => ({
       receiverName: p.name ?? f.receiverName,
       receiverPhone: p.phone ?? f.receiverPhone,
@@ -78,6 +90,10 @@ export default function AddressBookDialog({ open, onOpenChange, customerId, cust
   }
 
   const handleFillOrder = () => {
+    if (readOwner) {
+      try { assertKitReadOwner(readOwner) }
+      catch (error) { toast.error(error instanceof Error ? error.message : '读取来源已变化'); return }
+    }
     if (!validateForm()) return
     onSelect({ receiverName: form.receiverName, receiverPhone: form.receiverPhone, receiverAddress: form.receiverAddress.trim() })
     onOpenChange(false)
@@ -85,6 +101,7 @@ export default function AddressBookDialog({ open, onOpenChange, customerId, cust
 
   const handleSave = async () => {
     if (!validateForm()) return
+    const submittedDraft = getDraftContext()
     const payload = {
       receiverName: form.receiverName || undefined,
       receiverPhone: form.receiverPhone || undefined,
@@ -93,16 +110,25 @@ export default function AddressBookDialog({ open, onOpenChange, customerId, cust
     try {
       if (editingId) await update.mutateAsync({ id: editingId, data: payload })
       else await create.mutateAsync({ customerId, ...payload })
+      if (readOwner) {
+        assertKitReadOwner(readOwner)
+        if (addressContext.current.customerId !== customerId || !addressContext.current.open || getDraftContext() !== submittedDraft) return
+      }
       closeForm()
     } catch { /* toast 已在 hook onError 处理 */ }
   }
 
   const handlePick = (a: CustomerAddress) => {
+    if (readOwner) {
+      try { assertKitReadOwner(readOwner) }
+      catch (error) { toast.error(error instanceof Error ? error.message : '读取来源已变化'); return }
+    }
     onSelect({ receiverName: a.receiverName, receiverPhone: a.receiverPhone, receiverAddress: a.receiverAddress })
     onOpenChange(false)
   }
 
   const handleEdit = (a: CustomerAddress) => {
+    markDraftChange()
     setEditingId(a.id)
     setForm({ receiverName: a.receiverName ?? '', receiverPhone: a.receiverPhone ?? '', receiverAddress: a.receiverAddress })
     setPaste('')
@@ -110,15 +136,24 @@ export default function AddressBookDialog({ open, onOpenChange, customerId, cust
   }
 
   const handleDelete = (a: CustomerAddress) => {
+    const submittedDraft = getDraftContext()
     confirmAction({
       title: '删除常用地址',
       description: `确认删除「${a.receiverName || '未填收货人'} · ${a.receiverAddress}」？`,
       confirmText: '删除',
-      onConfirm: () => remove.mutate(a.id, { onSuccess: () => { if (editingId === a.id) closeForm() } }),
+      onConfirm: () => remove.mutate(a.id, { onSuccess: () => {
+        if (readOwner) {
+          try { assertKitReadOwner(readOwner) } catch { return }
+          if (addressContext.current.customerId !== customerId || !addressContext.current.open || getDraftContext() !== submittedDraft) return
+        }
+        if (editingId === a.id) closeForm()
+      } }),
     })
   }
 
   const saving = create.isPending || update.isPending
+  let ownerCurrent = true
+  if (readOwner) { try { assertKitReadOwner(readOwner) } catch { ownerCurrent = false } }
 
   return (
     <AppDialog
@@ -131,7 +166,7 @@ export default function AddressBookDialog({ open, onOpenChange, customerId, cust
       minWidth={360}
       minHeight={460}
     >
-      <div className="flex h-full flex-col gap-3 overflow-hidden px-5 py-4">
+      {!ownerCurrent ? <p role="alert" className="p-4">读取来源已变化，请回原来源选择或维护地址。</p> : <div className="flex h-full flex-col gap-3 overflow-hidden px-5 py-4">
         {/* 顶部：仅在已有地址时显示计数与新增入口；空状态用居中 CTA，避免重复 */}
         {addresses.length > 0 && (
           <div className="flex shrink-0 items-center justify-between">
@@ -154,7 +189,7 @@ export default function AddressBookDialog({ open, onOpenChange, customerId, cust
                 <LimitedTextarea
                   maxLength={120}
                   value={paste}
-                  onChange={e => setPaste(e.target.value)}
+                  onChange={e => { markDraftChange(); setPaste(e.target.value) }}
                   placeholder="粘贴整段地址，自动识别收货人 / 电话 / 地址…"
                   rows={2}
                 />
@@ -165,9 +200,9 @@ export default function AddressBookDialog({ open, onOpenChange, customerId, cust
             </div>
             {/* 收货人 / 电话 / 地址 —— 占位即标签，保持紧凑 */}
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-[7rem_9.5rem_1fr]">
-              <LimitedInput maxLength={30} value={form.receiverName} onChange={e => setForm(f => ({ ...f, receiverName: e.target.value }))} aria-label="收货人或部门" placeholder="收货人或部门" />
-              <LimitedInput maxLength={30} value={form.receiverPhone} onChange={e => setForm(f => ({ ...f, receiverPhone: e.target.value }))} aria-label="联系电话" placeholder="联系电话" inputMode="tel" />
-              <LimitedTextarea maxLength={200} value={form.receiverAddress} onChange={e => setForm(f => ({ ...f, receiverAddress: e.target.value }))} aria-label="详细收货地址" placeholder="详细收货地址" rows={1} className="h-10 min-h-0 py-2" singleLine />
+              <LimitedInput maxLength={30} value={form.receiverName} onChange={e => { markDraftChange(); setForm(f => ({ ...f, receiverName: e.target.value })) }} aria-label="收货人或部门" placeholder="收货人或部门" />
+              <LimitedInput maxLength={30} value={form.receiverPhone} onChange={e => { markDraftChange(); setForm(f => ({ ...f, receiverPhone: e.target.value })) }} aria-label="联系电话" placeholder="联系电话" inputMode="tel" />
+              <LimitedTextarea maxLength={200} value={form.receiverAddress} onChange={e => { markDraftChange(); setForm(f => ({ ...f, receiverAddress: e.target.value })) }} aria-label="详细收货地址" placeholder="详细收货地址" rows={1} className="h-10 min-h-0 py-2" singleLine />
             </div>
             <div className="flex flex-wrap justify-end gap-2">
               <Button variant="ghost" onClick={closeForm}>取消</Button>
@@ -263,7 +298,7 @@ export default function AddressBookDialog({ open, onOpenChange, customerId, cust
             </ul>
           )}
         </div>
-      </div>
+      </div>}
     </AppDialog>
   )
 }

@@ -4,6 +4,7 @@
  */
 
 import { formatDisplayDateTime, formatDisplayDate } from '@/lib/dateTime'
+import { commercialPrintRows } from '@/pages/sale/commercial/commercialDraft'
 import { money } from '@/lib/format'
 import type { PrintItem } from '@/components/print/TemplateRenderer'
 import type { SaleOrder } from '@/types/sale'
@@ -30,7 +31,7 @@ export function mapSaleOrderToPrint(order: SaleOrder): { data: Record<string, st
       operator:        order.operatorName ?? '',
       printDate:       formatDisplayDateTime(new Date()),
     },
-    items: (order.items ?? []).map(it => ({
+    items: order.commercialModel === 'kit-v1' ? commercialPrintRows(order.commercialGroups ?? []) : (order.items ?? []).map(it => ({
       productCode: it.productCode,
       productName: it.productName,
       unit: it.unit,

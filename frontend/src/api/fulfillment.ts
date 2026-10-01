@@ -1,3 +1,6 @@
+import type { KitReadOwner } from './kits'
+import { commercialReadConfig } from './sale-commercial'
+import type { CommercialDeliveryGroup } from '@/types/sale-commercial'
 import { payloadClient as client } from './client'
 import type { PaginatedData } from '@/types'
 import { withRequestKeyHeaders } from '@/lib/requestKey'
@@ -19,20 +22,20 @@ export interface Commitment { itemId: number; promisedDate: string | null; origi
 export interface FulfillmentDocument {
   type: FulfillmentType; id: number; canManage: boolean; issues: FulfillmentIssue[]; owners: { id: number; name: string }[]
   commitments: Commitment[]; expectedDate: string | null; detectedCount: number
-  delivery: { items: DeliveryItem[]; firstDate: string | null; allDate: string | null } | null
+  delivery: { commercialGroups?: CommercialDeliveryGroup[]; items: DeliveryItem[]; firstDate: string | null; allDate: string | null } | null
   impacts: { saleId: number; orderNo: string; itemId: number; productCode: string; productName: string; unit: string; quantity: number; promisedDate: string | null; expectedDate: string | null }[]
 }
 export interface FulfillmentList extends PaginatedData<FulfillmentIssue> { summary: { open: number; mine: number; overdue: number; unassigned: number } }
-export const getFulfillment = (type: FulfillmentType, id: number, signal?: AbortSignal) => client.get<FulfillmentDocument>(`/fulfillment/${type}/${id}`, { signal, skipGlobalError: true })
+export const getFulfillment = (type: FulfillmentType, id: number, signal?: AbortSignal, owner?: KitReadOwner) => client.get<FulfillmentDocument>(`/fulfillment/${type}/${id}`, { signal, skipGlobalError: true, ...(owner ? commercialReadConfig(owner) : {}) })
 export const getFulfillmentIssues = (filter: string, summary = false, signal?: AbortSignal, options: { keyword?: string; documentType?: string } = {}) => client.get<FulfillmentList>('/fulfillment/issues', { params: { ...options, filter, page: 1, pageSize: summary ? 1 : 200 }, listMode: summary ? 'summary' : undefined, signal, skipGlobalError: true })
 export type FulfillmentCommand =
   | { action: 'sync' }
   | { action: 'dates'; itemId: number; date: string | null; processingDays: number | null; reason: string }
   | { action: 'create'; title: string; reason: string; ownerId?: number | null; dueDate: string | null }
   | { action: 'issue'; issueId: number; operation: 'claim' | 'assign' | 'progress' | 'resolve' | 'reopen'; version: number; result?: string; ownerId?: number | null; dueDate?: string | null }
-export function runFulfillmentCommand(type: FulfillmentType, id: number, command: FulfillmentCommand, requestKey: string) {
+export function runFulfillmentCommand(type: FulfillmentType, id: number, command: FulfillmentCommand, requestKey: string, owner?: KitReadOwner) {
   const path = `/fulfillment/${type}/${id}`
-  const config = { headers: withRequestKeyHeaders(requestKey), skipGlobalError: true }
+  const config = { ...(owner ? commercialReadConfig(owner) : {}), headers: withRequestKeyHeaders(requestKey), skipGlobalError: true }
   if (command.action === 'sync') return client.post(`${path}/sync`, {}, config)
   if (command.action === 'dates') return client.put(`${path}/dates`, command, config)
   if (command.action === 'create') return client.post(`${path}/issues`, command, config)

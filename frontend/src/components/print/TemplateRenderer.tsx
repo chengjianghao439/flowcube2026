@@ -59,6 +59,8 @@ export interface PrintItem {
   unit: string
   quantity: number
   unitPrice: number
+  /** Commercial rows opt in; old templates retain two-decimal money. */
+  priceText?: string
   amount: number
   /** 货号 / 型号 / 颜色 / 行备注（订单明细行均有，透传后可由模板列显示） */
   articleNumber?: string
@@ -76,7 +78,7 @@ function colValue(col: string, item: PrintItem): string {
     case 'color':     return item.color ?? ''
     case 'unit':      return item.unit
     case 'qty':       return String(item.quantity)
-    case 'price':     return money(item.unitPrice)
+    case 'price':     return item.priceText ?? money(item.unitPrice)
     case 'amount':    return money(item.amount)
     case 'remark':    return item.remark ?? ''
     default:          return ''
