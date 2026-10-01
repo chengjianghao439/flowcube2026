@@ -356,3 +356,28 @@ Tests CI 的 `regression-plastic-box` job 使用独立 MySQL 8 service（**映�
 独立品质再审 **APPROVED**，覆盖完整当前后端改动，无剩余确定阻断。原独立红场景的新owned复验 `/tmp/c2-quality-recheck-original-scenarios-green.log`自然exit0（SO306/307，单容器留1→0、双容器2→1→0）；六场景实际链 `/tmp/c2-quality-recheck-cancel-scope-green.log`自然exit0（SO317头WH121/WT255及设备WH120合法返库201、整SO读取403，范围/错设备先于新写/成功key重放）；24受影响纯例 `/tmp/c2-quality-recheck-pure-green.log`自然exit0。当前WT执行授权、SO互斥与库存锁顺序、来源守恒、直接取消WT拒绝均已读码确认。
 
 `/tmp/c2-quality-recheck-owned-proof.log`自然exit0，新两批own预占/锁0、WT8、格释放、库存缓存=ACTIVE、actor停用/device/session/scope收尾、metadata0600、server/pool关闭。旧SO211/212错误份额及待归还实物保留，不由本改动自动修正。Root在Node22自行执行`npm run test:sale-commercial`17/17、`npm --prefix backend run lint`及`npm run test:agents-md-guard`自然exit0，原未暂存`git diff --check`通过；暂存包括新增迁移后，默认`git diff --cached --check`返回2，仅274第93行EOF空行。274已执行，按迁移不可改规则保留原字节；`git -c core.whitespace=-blank-at-eof diff --cached --check`自然exit0，未关闭其他空白校验。未重复无新疑点的资金全量，不以本地检查点代表已部署、完整C2或前端已完成。
+
+### 成套配件维护前端切片（C2，2026-10-02）
+
+本切片无需数据库或迁移，使用 Node22：
+
+```bash
+npm --prefix frontend run test:unit -- src/api/kits.test.ts src/hooks/useKits.test.tsx src/pages/kits/kitDraft.test.ts src/pages/kits/index.test.tsx src/router/kits.test.ts
+./frontend/node_modules/.bin/tsc -p frontend/tsconfig.app.json --noEmit
+cd frontend
+./node_modules/.bin/eslint src/api/kits.ts src/api/kits.test.ts src/hooks/useKits.ts src/hooks/useKits.test.tsx src/types/kits.ts src/pages/kits src/router/kits.test.ts src/router/routeDefinitions.ts src/router/routeRegistry.ts
+```
+
+API单测核对真实分页与固定请求上下文；模型单测核对报价省略组成、原六位A价派生依据不被四位化、基本单位精度和全部显式比例；组件单测核对权限、服务端新版本/修订、409草稿保留与复制后显式重载、未知结果冻结原请求、删除原revision重试。原请求仅当前挂载页保留，未验证跨刷新恢复。单测不能替代真实GUI/API销售→履约→退货链路；全量构建与回归仍待本批发版前统一执行。
+
+C2规格窄修回归另覆盖首次HTTP408→改输入/新提交被阻止→原键4xx重试仍未知、固定GET端点/代次与禁止fallback、A409→切B重载拒绝→回A保留原草稿、编辑及删除迟到读取的账号/代次校验、首次详情读取在端点切换后的迟到结果拒绝。独立复核探针保留在原只读目录，本批不修改其源或配置。
+
+成套维护最终独立接受：规格`/tmp/c2-spec-backup-review-probes.log`33/33；品质原复制探针`/tmp/c2-quality-copy-recheck-green.log`15/15，旧红日志`/tmp/c2-quality-copy-probes.log`保留未改；新增备份边界`/tmp/c2-quality-backup-final-probes.log`5/5；完整当前7文件`/tmp/c2-quality-master-final-unit.log`59/59，TSapp/范围lint/diff均自然0。数量即时输入、精确四位报价/比例与原请求/读取来源保护不变。最终仅删除底部接口原始技术说明，双方只读核对，不重跑行为检查。
+
+Root实际GUI在`flowcube_product20261001_fdb108_test`，API3011→自有故障代理3012→Vite5181（frontend工作目录、`DEV_API_TARGET=http://127.0.0.1:3012`，不含scheduler）完成创建A/B、报价100→123.4567与显式1:4改版、正常API并行改名修订3→4后真实页面409、保草稿/复制后继续编辑禁重载/再次复制显式重载、正常保存修订5。只读版本核查自然0，私有证据`/tmp/flowcube-product-c2-master-gui-evidence.json`0600，最终A id1/version3/revision5、B id2/version4/revision1；截图`/tmp/flowcube-c2-master-quote-gui.png`、`/tmp/flowcube-c2-master-conflict-gui.png`。最终文案重启后重新打开观察无createdAt技术段落，采样未知仍保留。
+
+本次GUI没有同时更改组件A价，也未读回剪贴板字节；迟到复制竞态来自独立真实组件行为证据，不称已人工制造同样的GUI时序。三个自有服务自然退出0、端口无监听；浏览器close后即时列表短暂残留，第二次`agent-browser session list --json`确认本任务会话已消失。自有合成账号/设备保留供后续销售/PDA验收，未称已停用。未验证销售/退货整体页面链、原请求跨刷新、Android、纸张、员工效率或生产。
+
+Root保存资料维护检查点前自行Node22执行前端约定5/5、前端API路由契约零缺口、AGENTS文档守卫及未暂存diff空白核对，均自然0。没有重跑已独立通过且行为未再改的59组件/API例或整批构建；完整C2后续切片的统一验证仍待执行。
+
+C2备份竞态窄修的组件回归覆盖复制A在途改B后A迟到成功/失败、旧fallback不得承认B、当前手工文本确认及再次修改失效、改B再恢复A仍须新复制代次、复制时原来源/删除登录代次变化、数量输入即时精度保护及大额报价四位tooltip。组件回归不代表真实GUI剪贴板或生产验收。

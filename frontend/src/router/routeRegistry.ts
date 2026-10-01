@@ -18,6 +18,7 @@ const components: Record<definitions.RouteComponentKey, RouteComponent> = {
   RequisitionsPage: lazy(() => import('@/pages/purchase-requisitions')),
   RequisitionFormPage: lazy(() => import('@/pages/purchase-requisitions/form')),
   ProductPage: lazy(() => import('@/pages/products')),
+  KitsPage: lazy(() => import('@/pages/kits')),
   PriceChangePage: lazy(() => import('@/pages/price-change')),
   ProductFormPage: lazy(() => import('@/pages/products/form')),
   CategoryPage: lazy(() => import('@/pages/categories')),

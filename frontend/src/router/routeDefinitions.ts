@@ -7,7 +7,7 @@ export type RouteTabIdentity =
   | { kind: 'full-url' }
   | { kind: 'query-keys'; keys: string[] }
 
-export type RouteComponentKey = 'PartyLedgerPage' | 'DashboardPage' | 'SalePage' | 'SaleFormPage' | 'PurchasePage' | 'PurchaseFormPage' | 'RequisitionsPage' | 'RequisitionFormPage' | 'ProductPage' | 'PriceChangePage' | 'ProductFormPage' | 'CategoryPage' | 'WarehouseStructurePage' | 'InventoryPage' | 'InventoryTracePage' | 'PlasticBoxesPage' | 'StockcheckPage' | 'AbcClassPage' | 'DisposalPage' | 'ProcurementPlanListPage' | 'ProcurementPlanDetailPage' | 'TransferPage' | 'TransferFormPage' | 'InboundTasksPage' | 'InboundTaskCreatePage' | 'InboundTaskDetailPage' | 'PickingWavesPage' | 'CustomersPage' | 'CarriersPage' | 'CarrierAccountsPage' | 'LogisticsPage' | 'LogisticsDetailPage' | 'FreightReconciliationPage' | 'SuppliersPage' | 'ReturnsPage' | 'PurchaseReturnFormPage' | 'SaleReturnFormPage' | 'PayablePage' | 'ReceivablePage' | 'UsersPage' | 'DepartmentsPage' | 'ApprovalFlowsPage' | 'ApprovalPendingPage' | 'PermissionsPage' | 'SettingsPage' | 'BarcodePrintQueryPage' | 'OplogsPage' | 'ReportsPage' | 'RoleWorkbenchPage' | 'FinanceDashboardPage' | 'FinanceAccountsPage' | 'FinanceTransactionsPage' | 'ExpenseClaimsPage' | 'ExpenseCategoriesPage' | 'AcctAccountsPage' | 'AcctVouchersPage' | 'AcctLedgerPage' | 'AcctReportsPage' | 'AcctInvoicesPage' | 'RefundsPage' | 'CreditOverridesPage' | 'AcctPeriodsPage' | 'AcctBackfillsPage' | 'AcctConsolidationPage' | 'AcctTaxPage' | 'FixedAssetsPage' | 'AvgCostReconciliationPage' | 'ReconciliationPayablePage' | 'ReconciliationReceivablePage' | 'ProfitAnalysisPage' | 'KpiPage' | 'ReplenishmentPage' | 'InventoryAgingPage' | 'WavePerformancePage' | 'PdaAnomalyPage' | 'WarehouseOpsPage' | 'PrintTemplatesPage' | 'PrintTemplateEditorPage' | 'PrintersPage' | 'PdaDevicesPage' | 'PortalStatementsPage'
+export type RouteComponentKey = 'PartyLedgerPage' | 'DashboardPage' | 'SalePage' | 'SaleFormPage' | 'PurchasePage' | 'PurchaseFormPage' | 'RequisitionsPage' | 'RequisitionFormPage' | 'ProductPage' | 'KitsPage' | 'PriceChangePage' | 'ProductFormPage' | 'CategoryPage' | 'WarehouseStructurePage' | 'InventoryPage' | 'InventoryTracePage' | 'PlasticBoxesPage' | 'StockcheckPage' | 'AbcClassPage' | 'DisposalPage' | 'ProcurementPlanListPage' | 'ProcurementPlanDetailPage' | 'TransferPage' | 'TransferFormPage' | 'InboundTasksPage' | 'InboundTaskCreatePage' | 'InboundTaskDetailPage' | 'PickingWavesPage' | 'CustomersPage' | 'CarriersPage' | 'CarrierAccountsPage' | 'LogisticsPage' | 'LogisticsDetailPage' | 'FreightReconciliationPage' | 'SuppliersPage' | 'ReturnsPage' | 'PurchaseReturnFormPage' | 'SaleReturnFormPage' | 'PayablePage' | 'ReceivablePage' | 'UsersPage' | 'DepartmentsPage' | 'ApprovalFlowsPage' | 'ApprovalPendingPage' | 'PermissionsPage' | 'SettingsPage' | 'BarcodePrintQueryPage' | 'OplogsPage' | 'ReportsPage' | 'RoleWorkbenchPage' | 'FinanceDashboardPage' | 'FinanceAccountsPage' | 'FinanceTransactionsPage' | 'ExpenseClaimsPage' | 'ExpenseCategoriesPage' | 'AcctAccountsPage' | 'AcctVouchersPage' | 'AcctLedgerPage' | 'AcctReportsPage' | 'AcctInvoicesPage' | 'RefundsPage' | 'CreditOverridesPage' | 'AcctPeriodsPage' | 'AcctBackfillsPage' | 'AcctConsolidationPage' | 'AcctTaxPage' | 'FixedAssetsPage' | 'AvgCostReconciliationPage' | 'ReconciliationPayablePage' | 'ReconciliationReceivablePage' | 'ProfitAnalysisPage' | 'KpiPage' | 'ReplenishmentPage' | 'InventoryAgingPage' | 'WavePerformancePage' | 'PdaAnomalyPage' | 'WarehouseOpsPage' | 'PrintTemplatesPage' | 'PrintTemplateEditorPage' | 'PrintersPage' | 'PdaDevicesPage' | 'PortalStatementsPage'
 
 type RouteNavMeta =
   | { kind: 'link'; label: string; order: number; iconKey?: string }
@@ -292,6 +292,15 @@ export const routeRegistry: RouteRegistryEntry[] = [
     keepAlive: true,
     tabIdentity: pathnameIdentity,
     nav: { kind: 'menu', group: '库存', section: '商品资料', order: 50 },
+  },
+  {
+    path: '/kits',
+    title: '成套配件',
+    permission: PERMISSIONS.PRODUCT_VIEW,
+    componentKey: 'KitsPage',
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '库存', section: '商品资料', order: 55 },
   },
   {
     path: '/categories',
