@@ -33,7 +33,7 @@
 - A1b/A1c：本地检查点 `517d1d2`。已完成本地实现及两轮独立审查。规格复审 11 文件 102 例、另 3 例离线缓存独立回归通过；质量审查另一个 10 文件 91 例组合通过。读取中/失败/离线暂停均保护新交接，普通来源和草稿保持；定向 lint、app 类型与 diff 检查通过。真实 API 拣货→取消→归还及浏览器旧任务失效提示、采购到货定位、原收货打印与返回已核对。具体证据见 `2026-10-01-fulfillment-handoff-design.md`；真机、物理打印及岗位效率未验证。
 - A3：本地提交 `d0612c2`，规格与质量复审均通过；最终定向 4 文件 63 例、受影响 lint/app 类型检查通过。真实浏览器已验证请求未送达、成功后丢响应、刷新无自动 POST、原键重试及 A/B 草稿隔离，限定 ID 数据库核对无重复容器/流水/打印入队且库存总量守恒。迟到详情的修复有独立 Portal 竞争探针；在该提交上另补一次真实丢响应/刷新/查询，B 草稿保留、库存仍守恒。未推送、未部署、真机/纸张及员工收益未验。详见 `2026-10-01-pc-repack-recovery-design.md`。
 - C4：本地提交 `4a09d12`，独立规格和品质审查通过；未推送、未部署。新增真实 API 专项 9/9；独立审查在另一专用回归库复验 9/9，前端四文件 23/23，临时弹窗竞争探针 3/3。P0 44、P1 45、ATP 8、数量专项 2 均自然通过。原拒绝样例 #3/#8 实际经 PDA 页面手输库存/库位码提前上架 20，任务仍 2/audit0，ACTIVE 210→230、预计 100→80、应付无新增；已收全上架页面提供继续收货。ERP 显示已上架金额 200 与未结算的区别；关闭业务提交后真实丢弃响应，页面查询原回执得到最终4，单笔应付200，查询和刷新均无重复事件或账款。详情见同目录 `2026-10-01-inbound-progressive-putaway-design.md`。未称为真机、纸张、员工交接、跨期完整会计或生产验收。
-- C2：方向已确定；已向用户提出缺件发货和组件退货口径问题，尚待回答。初步集成核对见同目录 `2026-10-01-kit-integration-design.md`；相关回答到达前，先推进不依赖这些规则的工作包，不启用套件正式开单。
+- C2：方向已确定；已向用户提出缺件发货和组件退货口径问题，尚待回答。集成设计已补候选版本/商业快照与唯一物理行、显式接口、金额读取接点、关闭剩余路径及共享组件虚构夹具，见同目录 `2026-10-01-kit-integration-design.md`。首版建议版本默认报价与手动成交价，客户套价体系延后。C2a仍待业务口径与完整集成定稿，C2b–f未实现；答案到达前不启用正式套件开单。
 - 实测员工效率、真机扫码、物理打印及生产效果仍未验证；单测、浏览器和数据库证据分别记录。
 - 本批集中验证：前端全量 165 文件/913 例自然通过，前后端 lint 自然退出0（前端33条 warning，0 error），`tsconfig.app.json` 类型检查、ERP 与 PDA Web 构建通过；相关库存/接口/履约/会计契约组合 32/32。这是本地最终包验证，不代表 CI、APK 真机或部署；共用调用契约的发版前完整回归矩阵仍按发版流程执行。
 
@@ -342,7 +342,7 @@ C2、C4 为用户已确定要做的工作包，进入阶段 1B；保留编号便
 
 #### 调用链与文件边界
 
-- 定义与商品选择：`frontend/src/pages/products/form.tsx`、`backend/src/modules/products/` 的当前主数据契约；新增套定义与订单组成快照的具体 schema 在子设计中确定。
+- 定义与商品选择：复用 `backend/src/modules/products/` 的组件主数据/查找范围契约；子设计建议独立 `backend/src/modules/kits/` 与套定义维护/预览入口，不把虚拟套伪装为普通商品 ID。新路径及 schema仍是建议，未创建；订单组成快照在子设计中定稿。
 - 销售输入/快照/金额：`frontend/src/pages/sale/form/useSaleOrderForm.ts`、`validate.ts`、`components/SaleOrderItemsTable.tsx`、`frontend/src/types/sale.ts`、`backend/src/modules/sale/sale.service.js`、`backend/src/utils/unitConversion.js`。
 - 组件占用与供应：`backend/src/engine/reservationEngine.js`、`backend/src/utils/expectedStock.js`、`backend/src/modules/procurement/procurement.planning.js`。
 - 仓库执行：`backend/src/modules/warehouse-tasks/warehouse-tasks.pick.js`、`warehouse-tasks.ship.js`、`warehouse-tasks.adjust.js`，以及 PDA 对应任务/分拣/复核/打包页。
