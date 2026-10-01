@@ -168,6 +168,9 @@ jobs:
       - name: 前端单元测试 — vitest
         run: npm --prefix frontend run test:unit
 
+      - name: 分拣格交接精确查询契约
+        run: npm run test:sorting-bin-handoff
+
       - name: 履约与采购建议计算回归
         run: npm run test:fulfillment && npm run test:fulfillment-refresh && npm run test:procurement-planning
 

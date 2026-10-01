@@ -48,3 +48,15 @@ test('返货待出库列表：翻第 2 页必须真的把 page=2 发给后端', 
   expect(result.total).toBe(25)
   expect(result.list).toHaveLength(1)
 })
+
+test('分拣格补分配列表保留普通分页与精确任务过滤，不自动取齐', async () => {
+  const sent: Record<string, unknown>[] = []
+  const { default: apiClient } = await import('./client')
+  apiClient.defaults.adapter = async config => {
+    sent.push({ ...config.params })
+    return { status: 200, statusText: 'OK', headers: {}, config, data: { success: true, data: { list: [{ id: 91 }], pagination: { total: 1, page: config.params.page, pageSize: config.params.pageSize } } } }
+  }
+  const { getPendingSortingBinTasksApi } = await import('./warehouse-tasks')
+  await getPendingSortingBinTasksApi({ page: 2, pageSize: 20, taskId: 91, warehouseId: 8 })
+  expect(sent).toEqual([{ page: 2, pageSize: 20, taskId: 91, warehouseId: 8 }])
+})

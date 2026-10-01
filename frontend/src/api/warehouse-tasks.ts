@@ -153,8 +153,8 @@ export interface PendingSortingBinTask {
   createdAt: string
 }
 
-export const getPendingSortingBinTasksApi = (params: { warehouseId?: number; page?: number; pageSize?: number } = {}) =>
-  client.get<PaginatedData<PendingSortingBinTask>>('/warehouse-tasks/sorting-bin-pending', { params })
+export const getPendingSortingBinTasksApi = (params: { warehouseId?: number; taskId?: number; page?: number; pageSize?: number } = {}) =>
+  client.get<PaginatedData<PendingSortingBinTask>>('/warehouse-tasks/sorting-bin-pending', { params, listMode: 'paged', skipGlobalError: true })
 
 export const assignSortingBinApi = (taskId: number, requestKey: string) =>
   client.post<{ taskId: number; binId: number; binCode: string }>(`/warehouse-tasks/${taskId}/assign-sorting-bin`, {}, {

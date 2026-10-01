@@ -13,7 +13,7 @@ const list = async(req,res,next)=>{ try{const{page=1,pageSize=20,keyword='',stat
 const myTasks = async(req,res,next)=>{ try{return successResponse(res,await svc.findMyTasks(scopeOf(req)),'查询成功')}catch(e){next(e)} }
 const myTaskSkuSummary = async(req,res,next)=>{ try{return successResponse(res,await svc.findMyTaskSkuSummary(scopeOf(req)),'查询成功')}catch(e){next(e)} }
 const stats = async(req,res,next)=>{ try{return successResponse(res,await svc.getTaskStats(scopeOf(req)),'查询成功')}catch(e){next(e)} }
-const listAwaitingSortingBin = async(req,res,next)=>{ try{const{page=1,pageSize=20,warehouseId}=req.query;return successResponse(res,await svc.listAwaitingSortingBin({page:+page,pageSize:+pageSize,warehouseId:warehouseId?+warehouseId:null,scopeWarehouseIds:scopeOf(req)}),'查询成功')}catch(e){next(e)} }
+const listAwaitingSortingBin = async(req,res,next)=>{ try{const{page=1,pageSize=20,warehouseId,taskId}=req.query;return successResponse(res,await svc.listAwaitingSortingBin({page:+page,pageSize:+pageSize,warehouseId:warehouseId?+warehouseId:null,taskId:taskId?+taskId:null,scopeWarehouseIds:scopeOf(req)}),'查询成功')}catch(e){next(e)} }
 const pickSuggestions = async(req,res,next)=>{ try{return successResponse(res,await svc.getPickSuggestions(+req.params.id, scopeOf(req)))}catch(e){next(e)} }
 const pickRoute = async(req,res,next)=>{ try{return successResponse(res,await svc.getPickRoute(+req.params.id, scopeOf(req)))}catch(e){next(e)} }
 // 列表按用户范围 + PDA 设备绑定仓库取交集：设备仓过滤与 ship 的校验同源，

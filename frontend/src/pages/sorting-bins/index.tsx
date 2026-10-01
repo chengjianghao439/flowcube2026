@@ -2,7 +2,7 @@
  * 分拣格管理页
  * 路由：/sorting-bins
  */
-import { useState } from 'react'
+import { useContext, useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { X } from 'lucide-react'
 import { toast } from '@/lib/toast'
@@ -28,6 +28,9 @@ import { downloadExport } from '@/lib/exportDownload'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import AssignSortingBinDialog from './AssignSortingBinDialog'
+import { TabPathContext } from '@/components/layout/TabPathContext'
+import { useSectionActive } from '@/components/layout/SectionVisibilityContext'
+import { readSortingBinHandoff } from './handoff'
 
 // ─── 批量创建弹窗 ─────────────────────────────────────────────────────────────
 function BatchDialog({ open, onClose, onSuccess }: { open: boolean; onClose: () => void; onSuccess: () => void }) {
@@ -87,6 +90,33 @@ function BatchDialog({ open, onClose, onSuccess }: { open: boolean; onClose: () 
 
 // ─── 主页面 ───────────────────────────────────────────────────────────────────
 export default function SortingBinsPage() {
+  const { can } = usePermission()
+  const path = useContext(TabPathContext)
+  const active = useSectionActive()
+  const context = readSortingBinHandoff(path)
+  const [handoffOpen, setHandoffOpen] = useState(false)
+  const [normalOpen, setNormalOpen] = useState(false)
+  const canAssign = can(PERMISSIONS.WAREHOUSE_TASK_ASSIGN)
+  const canView = can(PERMISSIONS.SORTING_BIN_VIEW)
+  useEffect(() => {
+    const latest = readSortingBinHandoff(path)
+    setHandoffOpen(active && latest !== null && latest !== 'invalid')
+  }, [path, active])
+  return <>
+    {canView ? <SortingBinsManagementPage /> : <div className="space-y-3">
+      <h2 className="text-lg font-semibold">分拣格管理</h2>
+      {canAssign && <Button variant="outline" onClick={() => setNormalOpen(true)}>补分配分拣格</Button>}
+      {canAssign && <AssignSortingBinDialog open={normalOpen} onClose={() => setNormalOpen(false)} />}
+    </div>}
+    {context === 'invalid' && <p role="alert">交接信息无效，请返回订单重新进入分拣格分配。</p>}
+    {context && !canAssign && <p role="alert">没有分配仓库任务的权限，请联系主管处理。</p>}
+    {context && context !== 'invalid' && canAssign && <AssignSortingBinDialog
+      open={handoffOpen} onClose={() => setHandoffOpen(false)} taskId={context.taskId} warehouseId={context.warehouseId}
+    />}
+  </>
+}
+
+function SortingBinsManagementPage() {
   const [keyword, setKeyword] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [warehouseFilter, setWarehouseFilter] = useState<number | null>(null)

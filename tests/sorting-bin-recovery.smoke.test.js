@@ -89,6 +89,17 @@ async function main() {
     console.log('[sorting-bin-recovery] initial pending HTTP', pending.status)
     assert.equal(pending.status, 200, 'supervisor can list tasks awaiting a sorting bin')
     assert.deepEqual(pending.payload.data.list.map(item => item.id).sort((a, b) => a - b), [task1, task2].sort((a, b) => a - b))
+    const exact = await request(`${pendingPath}&taskId=${task2}&pageSize=1`)
+    assert.equal(exact.status, 200)
+    assert.deepEqual(exact.payload.data.list.map(item => item.id), [task2], 'target beyond first page is filtered before pagination')
+    assert.equal(exact.payload.data.pagination.total, 1)
+    assert.deepEqual((await request(`${pendingPath}&taskId=${adjusting}`)).payload.data.list, [], 'target filter keeps adjustment gate')
+    assert.deepEqual((await request(`${pendingPath}&taskId=${alreadyBound}`)).payload.data.list, [], 'target filter keeps already assigned gate')
+    assert.deepEqual((await request(`${pendingPath}&taskId=${otherWarehouseTask}`)).payload.data.list, [], 'task and warehouse context must match')
+    assert.deepEqual((await request(`/warehouse-tasks/sorting-bin-pending?taskId=${otherWarehouseTask}`, { userId: scoped })).payload.data.list, [], 'exact task filter preserves scope')
+    for (const invalid of ['0', '-1', '1.5', '1e2', '9007199254740992', `${task2}&taskId=${task1}`]) {
+      assert.equal((await request(`${pendingPath}&taskId=${invalid}`)).status, 400, 'invalid task context rejected')
+    }
     const bypass = await request(`/warehouse-tasks/${task2}/sort-done`, { method: 'PUT', key: `${mark}-sort-no-bin`, body: {}, extraHeaders: { 'X-Client': 'pda', 'X-PDA-Session': pdaToken } })
     assert.equal(bypass.status, 409, 'PDA HTTP cannot complete sorting without a bound bin')
     assert.match(bypass.payload.message || '', /分拣格|主管/, 'PDA receives an actionable no-bin error')

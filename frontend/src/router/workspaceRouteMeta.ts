@@ -23,17 +23,17 @@ function getWorkspaceSearchParams(search: string): URLSearchParams {
   return new URLSearchParams(raw)
 }
 
-function buildCanonicalSearch(searchParams: URLSearchParams, keys?: string[]): string {
+function buildCanonicalSearch(searchParams: URLSearchParams, keys?: string[], preserveEmptyKeys: readonly string[] = []): string {
   const pairs: Array<[string, string]> = []
   if (keys?.length) {
     for (const key of keys) {
-      const values = searchParams.getAll(key).filter(Boolean)
+      const values = searchParams.getAll(key).filter(value => value || preserveEmptyKeys.includes(key))
       values.sort()
       for (const value of values) pairs.push([key, value])
     }
   } else {
     for (const [key, value] of searchParams.entries()) {
-      if (!value) continue
+      if (!value && !preserveEmptyKeys.includes(key)) continue
       pairs.push([key, value])
     }
     pairs.sort(([aKey, aValue], [bKey, bValue]) => {
@@ -57,13 +57,16 @@ function resolveWorkspaceTabIdentity(pathname: string, search = ''): RouteTabIde
   return search ? { kind: 'full-url' } : { kind: 'pathname' }
 }
 
-export function buildCanonicalWorkspaceSearch(search = ''): string {
+export function buildCanonicalWorkspaceSearch(search = '', preserveEmptyKeys: readonly string[] = []): string {
   const searchParams = getWorkspaceSearchParams(search)
-  return buildCanonicalSearch(searchParams)
+  return buildCanonicalSearch(searchParams, undefined, preserveEmptyKeys)
 }
 
 export function buildCanonicalWorkspacePath(pathname: string, search = ''): string {
-  return `${normalizeWorkspacePath(pathname)}${buildCanonicalWorkspaceSearch(search)}`
+  const normalizedPath = normalizeWorkspacePath(pathname)
+  // 交接上下文的空值/重复值必须留给接收页拒绝，不能规范化成有效任务。
+  const preserveEmptyKeys = normalizedPath === '/sorting-bins' ? ['taskId', 'warehouseId'] : []
+  return `${normalizedPath}${buildCanonicalWorkspaceSearch(search, preserveEmptyKeys)}`
 }
 
 export function buildWorkspaceTabKey(pathname: string, search = ''): string {

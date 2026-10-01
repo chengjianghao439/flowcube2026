@@ -3,7 +3,7 @@ const { z } = require('zod')
 const ctrl = require('./warehouse-tasks.controller')
 const { authMiddleware, requirePermission } = require('../../middleware/auth')
 const { PERMISSIONS } = require('../../constants/permissions')
-const { validateBody } = require('../../utils/route')
+const { validateBody, validateQuery } = require('../../utils/route')
 const { pdaSessionRequired } = require('../../middleware/pdaSession')
 const { pdaOnly } = require('../../middleware/pdaOnly')
 const AppError = require('../../utils/AppError')
@@ -22,7 +22,9 @@ router.get('/my-sku-summary', requirePermission(PERMISSIONS.WAREHOUSE_TASK_VIEW)
 router.get('/stats', requirePermission(PERMISSIONS.WAREHOUSE_TASK_VIEW), ctrl.stats)
 
 // GET /api/warehouse-tasks/sorting-bin-pending — 主管查看可补分配的本仓任务
-router.get('/sorting-bin-pending', requirePermission(PERMISSIONS.WAREHOUSE_TASK_ASSIGN), ctrl.listAwaitingSortingBin)
+const handoffId = z.string().regex(/^[1-9]\d*$/, '任务与仓库编号必须为正整数').transform(Number).pipe(z.number().int().positive().safe())
+const sortingBinPendingQuery = z.object({ taskId: handoffId.optional(), warehouseId: handoffId.optional() }).passthrough()
+router.get('/sorting-bin-pending', requirePermission(PERMISSIONS.WAREHOUSE_TASK_ASSIGN), validateQuery(sortingBinPendingQuery), ctrl.listAwaitingSortingBin)
 
 // GET /api/warehouse-tasks/cancel-returns/pending — PDA「拣货退回」任务池（必须在 /:id 之前注册）
 router.get('/cancel-returns/pending', requirePermission(PERMISSIONS.WAREHOUSE_TASK_CANCEL_RETURN_VIEW), ctrl.pendingCancelReturns)

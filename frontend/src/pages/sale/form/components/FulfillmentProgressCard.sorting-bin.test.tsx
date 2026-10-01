@@ -1,9 +1,12 @@
 // @vitest-environment jsdom
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeEach, expect, test } from 'vitest'
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { FulfillmentProgressCard } from './FulfillmentProgressCard'
 import type { SaleOrder } from '@/types/sale'
+import { MemoryRouter } from 'react-router-dom'
+
+vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: () => false }) }))
 
 let host: HTMLDivElement
 let root: Root
@@ -15,9 +18,9 @@ test('销售进度卡对尚未分配分拣格的执行中任务提示主管补�
     taskNo: 'WT-001', warehouseTaskStatus: 3,
     tasks: [{ taskId: 1, taskNo: 'WT-001', warehouseId: 1, warehouseName: '主仓', status: 3, statusName: '待分拣', sortingBinId: null, sortingBinCode: null }],
   } as SaleOrder
-  act(() => root.render(<FulfillmentProgressCard order={order} />))
+  act(() => root.render(<MemoryRouter><FulfillmentProgressCard order={order} /></MemoryRouter>))
   expect(host.textContent).toContain('待分配分拣格')
   expect(host.textContent).toContain('主管')
-  act(() => root.render(<FulfillmentProgressCard order={{ ...order, tasks: [{ ...order.tasks![0], sortingBinId: 8, sortingBinCode: 'A08' }] }} />))
+  act(() => root.render(<MemoryRouter><FulfillmentProgressCard order={{ ...order, tasks: [{ ...order.tasks![0], sortingBinId: 8, sortingBinCode: 'A08' }] }} /></MemoryRouter>))
   expect(host.textContent).not.toContain('待分配分拣格')
 })

@@ -13,7 +13,7 @@ import { useContext } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
-import type { PermCode } from '@/lib/permissions'
+import type { PermissionRequirement } from '@/lib/permissions'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { PATH_TITLES } from '@/router/routeRegistry'
 import { TabPathContext } from '@/components/layout/TabPathContext'
@@ -48,11 +48,11 @@ const LABEL: Record<TabKey, string> = {
   'sorting-bins': '分拣格',
 }
 
-const TAB_PERM: Record<TabKey, PermCode> = {
+const TAB_PERM: Record<TabKey, PermissionRequirement> = {
   warehouses: PERMISSIONS.WAREHOUSE_VIEW,
   locations: PERMISSIONS.LOCATION_VIEW,
   racks: PERMISSIONS.RACK_VIEW,
-  'sorting-bins': PERMISSIONS.SORTING_BIN_VIEW,
+  'sorting-bins': [PERMISSIONS.SORTING_BIN_VIEW, PERMISSIONS.WAREHOUSE_TASK_ASSIGN],
 }
 
 export default function WarehouseStructurePage() {

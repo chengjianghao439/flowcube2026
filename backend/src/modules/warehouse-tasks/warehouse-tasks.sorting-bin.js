@@ -10,15 +10,17 @@ const { WT_EVENT, record: recordEvent } = require('./warehouse-task-events.servi
 
 const ASSIGN_ACTION = 'warehouse.assignSortingBin'
 
-async function listAwaitingSortingBin({ page = 1, pageSize = 20, warehouseId = null, scopeWarehouseIds = null } = {}) {
+async function listAwaitingSortingBin({ page = 1, pageSize = 20, warehouseId = null, taskId = null, scopeWarehouseIds = null } = {}) {
   const pagination = normalizePagination({ page, pageSize })
   const warehouseClause = warehouseId ? ' AND wt.warehouse_id=?' : ''
   const warehouseParams = warehouseId ? [warehouseId] : []
+  const taskClause = taskId ? ' AND wt.id=?' : ''
+  const taskParams = taskId ? [taskId] : []
   const scope = scopeFilter(scopeWarehouseIds, 'wt.warehouse_id')
   const where = `wt.deleted_at IS NULL AND COALESCE(wt.task_type,'sale_out')='sale_out'
     AND wt.status IN (?,?) AND wt.sorting_bin_id IS NULL
-    AND wt.cancel_requested_at IS NULL AND wt.adjustment_requested_at IS NULL${warehouseClause}${scope.sql}`
-  const params = [WT_STATUS.PICKING, WT_STATUS.SORTING, ...warehouseParams, ...scope.params]
+    AND wt.cancel_requested_at IS NULL AND wt.adjustment_requested_at IS NULL${warehouseClause}${taskClause}${scope.sql}`
+  const params = [WT_STATUS.PICKING, WT_STATUS.SORTING, ...warehouseParams, ...taskParams, ...scope.params]
   const [rows] = await pool.query(
     `SELECT wt.id,wt.task_no,wt.warehouse_id,wt.warehouse_name,wt.customer_name,wt.status,wt.created_at
      FROM warehouse_tasks wt WHERE ${where}

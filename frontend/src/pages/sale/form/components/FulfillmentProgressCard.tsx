@@ -1,3 +1,8 @@
+import { useNavigate } from 'react-router-dom'
+import { Button } from '@/components/ui/button'
+import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
+import { sortingBinHandoffPath } from '@/pages/sorting-bins/handoff'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import type { StatusTone } from '@/lib/statusTone'
 import type { SaleOrder } from '@/types/sale'
@@ -7,6 +12,14 @@ const awaitingBin = (task: NonNullable<SaleOrder['tasks']>[number]) =>
   && !task.cancelRequestedAt && !task.adjustmentRequestedAt
 
 export function FulfillmentProgressCard({ order }: { order: SaleOrder }) {
+  const navigate = useNavigate()
+  const { can } = usePermission()
+  const binHandoff = (task: NonNullable<SaleOrder['tasks']>[number]) => {
+    const path = sortingBinHandoffPath(task.taskId, task.warehouseId)
+    return can(PERMISSIONS.WAREHOUSE_TASK_ASSIGN) && path
+      ? <Button type="button" variant="outline" size="sm" className="mt-1" onClick={() => navigate(path)}>去分配分拣格</Button>
+      : <span>，请联系主管在分拣格管理页处理</span>
+  }
   const steps = [
     { status: 2, label: '拣货中' },
     { status: 3, label: '待分拣' },
@@ -44,7 +57,7 @@ export function FulfillmentProgressCard({ order }: { order: SaleOrder }) {
               </div>
               <div className="text-right">
                 <SoftStatusLabel label={t.statusName || `阶段 ${t.status}`} tone={wtTone(t.status)} />
-                {awaitingBin(t) && <p className="mt-1 text-xs text-warning">待分配分拣格，请联系主管</p>}
+                {awaitingBin(t) && <p className="mt-1 text-xs text-warning">待分配分拣格{binHandoff(t)}</p>}
               </div>
             </div>
           ))}
@@ -71,7 +84,7 @@ export function FulfillmentProgressCard({ order }: { order: SaleOrder }) {
 
       {tasks[0] && awaitingBin(tasks[0]) && (
         <p className="rounded-md border border-warning/35 bg-warning/[0.07] px-3 py-2 text-sm text-foreground">
-          待分配分拣格，请联系主管在分拣格管理页补分配，完成后刷新任务。
+          待分配分拣格{binHandoff(tasks[0])}；分配完成后刷新任务。
         </p>
       )}
 

@@ -350,7 +350,7 @@ export const routeRegistry: RouteRegistryEntry[] = [
   {
     path: '/sorting-bins',
     title: '分拣格管理',
-    permission: PERMISSIONS.SORTING_BIN_VIEW,
+    permission: [PERMISSIONS.SORTING_BIN_VIEW, PERMISSIONS.WAREHOUSE_TASK_ASSIGN],
     componentKey: 'WarehouseStructurePage',
     keepAlive: true,
     tabIdentity: pathnameIdentity,
