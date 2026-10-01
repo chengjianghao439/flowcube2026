@@ -87,6 +87,39 @@ const MIGRATED_GUIDE = {
   [MOVE_TYPE.MANUAL_OUT]:   'inventory.service.changeStock()（adjustContainerStock）',
 }
 
+async function assertOutboundPhysicalAvailable(conn, { productId,productName,warehouseId,qty,reservationRefType,reservationRefId }) {
+  // 预计预占不能借用其它销售的现货份额；未绑定部分才是本单已承诺的现货。
+  const projection = await getStockProjection(conn, { productId, warehouseId, lock: true })
+  const before = projection.quantity
+  const reservedBefore = projection.reserved
+  const [bindings] = await conn.query(
+    `SELECT sale_order_id,qty FROM sale_order_expected_bindings
+     WHERE product_id=? AND warehouse_id=? AND released_at IS NULL FOR UPDATE`,
+    [productId, warehouseId],
+  )
+  const boundTotal = bindings.reduce((sum, row) => sum + Number(row.qty), 0)
+  const ownBound = reservationRefType === 'sale_order'
+    ? bindings.filter(row => Number(row.sale_order_id) === Number(reservationRefId)).reduce((sum, row) => sum + Number(row.qty), 0)
+    : 0
+  let ownReserved = 0
+  if (reservationRefType && reservationRefId) {
+    const [[own]] = await conn.query(
+      `SELECT COALESCE(SUM(qty),0) AS qty FROM stock_reservations
+       WHERE ref_type=? AND ref_id=? AND product_id=? AND warehouse_id=? AND status=1 FOR UPDATE`,
+      [reservationRefType, reservationRefId, productId, warehouseId],
+    )
+    ownReserved = Number(own.qty)
+  }
+  const physicalReserved = Math.max(0, reservedBefore - boundTotal)
+  const ownPhysicalReserved = Math.max(0, ownReserved - ownBound)
+  const physicalAvailable = Math.max(0, before - physicalReserved) + ownPhysicalReserved
+  if (Number(qty) > physicalAvailable + 1e-6) {
+    throw new AppError(`商品「${productName}」现货不足以履行本单预占，请等待采购上架后再出库`, 409)
+  }
+
+  return { projection, physicalAvailable }
+}
+
 /**
  * 执行容器出库库存变动（仅处理 SALE_OUT + TASK_OUT）
  *
@@ -140,35 +173,10 @@ async function moveStock(conn, {
 
   // ── 容器出库路径（SALE_OUT + TASK_OUT）──────────────────────────────────────
   if (moveType === MOVE_TYPE.SALE_OUT || moveType === MOVE_TYPE.TASK_OUT) {
-    // 预计预占不能借用其它销售的现货份额；未绑定部分才是本单已承诺的现货。
-    const projection = await getStockProjection(conn, { productId, warehouseId, lock: true })
+    const { projection } = await assertOutboundPhysicalAvailable(conn, { productId,productName,warehouseId,qty:Math.abs(qty),reservationRefType,reservationRefId })
     const before = projection.quantity
     const reservedBefore = projection.reserved
     const absQty = Math.abs(qty)
-    const [bindings] = await conn.query(
-      `SELECT sale_order_id,qty FROM sale_order_expected_bindings
-       WHERE product_id=? AND warehouse_id=? AND released_at IS NULL FOR UPDATE`,
-      [productId, warehouseId],
-    )
-    const boundTotal = bindings.reduce((sum, row) => sum + Number(row.qty), 0)
-    const ownBound = reservationRefType === 'sale_order'
-      ? bindings.filter(row => Number(row.sale_order_id) === Number(reservationRefId)).reduce((sum, row) => sum + Number(row.qty), 0)
-      : 0
-    let ownReserved = 0
-    if (reservationRefType && reservationRefId) {
-      const [[own]] = await conn.query(
-        `SELECT COALESCE(SUM(qty),0) AS qty FROM stock_reservations
-         WHERE ref_type=? AND ref_id=? AND product_id=? AND warehouse_id=? AND status=1 FOR UPDATE`,
-        [reservationRefType, reservationRefId, productId, warehouseId],
-      )
-      ownReserved = Number(own.qty)
-    }
-    const physicalReserved = Math.max(0, reservedBefore - boundTotal)
-    const ownPhysicalReserved = Math.max(0, ownReserved - ownBound)
-    const physicalAvailable = Math.max(0, before - physicalReserved) + ownPhysicalReserved
-    if (absQty > physicalAvailable + 1e-6) {
-      throw new AppError(`商品「${productName}」现货不足以履行本单预占，请等待采购上架后再出库`, 409)
-    }
 
     // 2. 仍只扣本任务锁定的实物容器，不允许靠预计量实际出库。
     const deducted = lockedByTaskId
@@ -298,4 +306,4 @@ async function writeInventoryLog(conn, {
   )
 }
 
-module.exports = { moveStock, writeInventoryLog, MOVE_TYPE, MOVE_TYPE_LABEL }
+module.exports = { assertOutboundPhysicalAvailable, moveStock, writeInventoryLog, MOVE_TYPE, MOVE_TYPE_LABEL }

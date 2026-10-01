@@ -10,7 +10,6 @@ const idParam=z.object({id:z.coerce.number().int().positive('id 必须为正整�
 const sourceOrderQuery=z.object({orderNo:z.string().trim().min(1,'原单号不能为空')})
 const itemSchema=z.object({sourceItemId:z.number().int().positive().optional(),productId:z.number().int().positive(),productCode:z.string(),productName:z.string(),articleNumber:z.string().optional().nullable(),spec:z.string().optional().nullable(),color:z.string().optional().nullable(),unit:z.string(),entryUnit:z.string().optional(),quantity:z.number().positive(),unitPrice:z.number().nonnegative()})
 const prSchema=z.object({supplierId:z.number().int().positive(),supplierName:z.string(),warehouseId:z.number().int().positive(),warehouseName:z.string(),purchaseOrderId:z.number().int().positive().optional(),purchaseOrderNo:z.string().optional(),remark:z.string().optional(),items:z.array(itemSchema).min(1)})
-const srSchema=z.object({customerId:z.number().int().positive(),customerName:z.string(),warehouseId:z.number().int().positive(),warehouseName:z.string(),saleOrderId:z.number().int().positive().optional(),saleOrderNo:z.string().optional(),remark:z.string().optional(),items:z.array(itemSchema).min(1)})
 
 // 采购退货
 router.get('/purchase',              requirePermission(PERMISSIONS.RETURN_ORDER_VIEW), ctrl.listPR)
@@ -24,7 +23,7 @@ router.post('/purchase/:id/cancel',  requirePermission(PERMISSIONS.RETURN_ORDER_
 router.get('/sale',              requirePermission(PERMISSIONS.RETURN_ORDER_VIEW), ctrl.listSR)
 router.get('/sale/source-order', requirePermission(PERMISSIONS.RETURN_ORDER_CREATE), vQuery(sourceOrderQuery), ctrl.loadSRSsourceOrder)
 router.get('/sale/:id',          requirePermission(PERMISSIONS.RETURN_ORDER_VIEW), vParams(idParam),ctrl.detailSR)
-router.post('/sale',             requirePermission(PERMISSIONS.RETURN_ORDER_CREATE), validateBody(srSchema),ctrl.createSR)
+router.post('/sale',             requirePermission(PERMISSIONS.RETURN_ORDER_CREATE), validateBody(require('./returns.contracts').saleReturnSchema),ctrl.createSR)
 router.post('/sale/:id/confirm', requirePermission(PERMISSIONS.RETURN_ORDER_CONFIRM), vParams(idParam),ctrl.confirmSR)
 router.post('/sale/:id/cancel',  requirePermission(PERMISSIONS.RETURN_ORDER_CANCEL), vParams(idParam),ctrl.cancelSR)
 

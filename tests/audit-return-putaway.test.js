@@ -41,6 +41,7 @@ function fixture({ task = {}, container = {}, location = {}, deleteBeforeLock = 
     ...base, '../../engine/containerEngine': { CONTAINER_STATUS: { PENDING_PUTAWAY: 4 }, lockStockDimension: async () => {} },
     '../../utils/codeGenerator': {}, '../../utils/statusTransition': { lockStatusRow: async () => taskRow }, '../../utils/operationRequest': {},
     '../locations/locations.service': locations,
+    '../sale/sale.commercial-returns': { lockExecution: async () => false },
     './return-tasks.labels': { queueReturnLabels: async () => { throw new Error('Lookup/putaway must not enqueue a receive/QA label') } },
   })
   return { svc, calls, pool }

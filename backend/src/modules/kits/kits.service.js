@@ -3,10 +3,9 @@ const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { normalizePagination } = require('../../utils/pagination')
 const { assertInScope } = require('../../utils/warehouseScope')
-const { assertQtyPrecisionWith } = require('../../utils/qtyPrecision')
 const { getStockProjections } = require('../../engine/containerEngine')
 const { beginCreationOperationRequest, beginResourceOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
-const { assertPrice, snapshotComponents, expandCommercialGroups } = require('./kits.composition')
+const { assertPrice, snapshotComponents } = require('./kits.composition')
 
 async function transaction(fn, { readOnly = false } = {}) {
   const conn = await pool.getConnection()
@@ -164,61 +163,7 @@ async function mutate(id, input, ctx, deleting) {
 }
 function update(id, input, ctx) { return mutate(id, input, ctx, false) }
 function softDelete(id, input, ctx) { return mutate(id, input, ctx, true) }
-async function preview(input, ctx) {
-  return transaction(async conn => {
-    await warehouseIn(conn, input.warehouseId, ctx.scopeWarehouseIds)
-    const [[customer]] = await conn.query('SELECT id,name,is_active,price_level,price_list_id FROM sale_customers WHERE id=? AND deleted_at IS NULL', [input.customerId])
-    if (!customer || Number(customer.is_active) !== 1) throw new AppError('客户不存在或已停用', 400, 'KIT_CUSTOMER_UNAVAILABLE')
-    const kitIds = [...new Set(input.groups.filter(g => g.kind === 'kit').map(g => g.kitVersionId))]
-    const versions = await loadVersions(conn, kitIds)
-    const masters = new Map()
-    if (versions.size) {
-      const [rows] = await conn.query('SELECT * FROM kit_definitions WHERE id IN (?)', [[...new Set([...versions.values()].map(v => v.kitId))]])
-      for (const r of rows) masters.set(Number(r.id), r)
-    }
-    const ordinaryIds = [...new Set(input.groups.filter(g => g.kind === 'ordinary').map(g => g.productId))]
-    const ordinary = new Map(), listPrices = new Map()
-    if (ordinaryIds.length) {
-      const [rows] = await conn.query('SELECT id,code,name,unit,is_active,deleted_at,allow_decimal_qty,sale_price_a,sale_price_b,sale_price_c,sale_price_d FROM product_items WHERE id IN (?)', [ordinaryIds])
-      for (const r of rows) ordinary.set(Number(r.id), r)
-      if (customer.price_list_id) {
-        const [prices] = await conn.query('SELECT product_id,sale_price FROM price_list_items WHERE list_id=? AND product_id IN (?)', [customer.price_list_id, ordinaryIds])
-        for (const r of prices) listPrices.set(Number(r.product_id), Number(r.sale_price))
-      }
-    }
-    const levelPrice = p => ({ A: p.sale_price_a, B: p.sale_price_b, C: p.sale_price_c, D: p.sale_price_d }[String(customer.price_level || 'A').toUpperCase()] ?? p.sale_price_a)
-    const authoritative = input.groups.map(g => {
-      let unitPrice, extra
-      if (g.kind === 'kit') {
-        const version = versions.get(g.kitVersionId)
-        if (!version) throw new AppError('套件版本不存在', 404, 'KIT_VERSION_NOT_FOUND')
-        const master = masters.get(version.kitId)
-        if (!master) throw new AppError('套件不存在', 404, 'KIT_NOT_FOUND')
-        if (Number(master.current_version_id) !== version.id) throw new AppError('套件组成已更新，请保留输入并重新核对版本', 409, 'KIT_VERSION_CHANGED')
-        const reasons = disabledReasons(definitionView(master, version))
-        if (reasons.length) throw new AppError(reasons[0].message, 400, reasons[0].code)
-        unitPrice = version.referenceUnitPrice
-        extra = { kitId: version.kitId, kitCode: master.code, kitName: master.name, versionNo: version.versionNo, referenceSnapshotAt: version.referenceSnapshotAt, versionCreatedAt: version.createdAt, referenceBasisExplanation: version.referenceBasisExplanation, components: version.components }
-      } else {
-        const p = ordinary.get(g.productId)
-        if (!p || Number(p.is_active) !== 1 || p.deleted_at != null) throw new AppError('普通商品不存在、已停用或删除', 400, 'KIT_COMPONENT_UNAVAILABLE')
-        assertQtyPrecisionWith({ name: p.name, allowDecimal: p.allow_decimal_qty == null || Number(p.allow_decimal_qty) === 1 }, g.quantity)
-        unitPrice = listPrices.get(g.productId) ?? Number(levelPrice(p) || 0)
-        extra = { productCode: p.code, productName: p.name, unit: p.unit, resolvedPriceSource: listPrices.has(g.productId) ? 'price_list' : 'price_level' }
-      }
-      if (g.priceSource === 'manual') {
-        if (g.unitPrice === undefined) throw new AppError('手工价须提供单价', 400, 'KIT_MANUAL_PRICE_REQUIRED')
-        unitPrice = assertPrice(g.unitPrice)
-      }
-      return { ...g, ...extra, unitPrice, warehouseId: input.warehouseId }
-    })
-    const result = expandCommercialGroups(authoritative)
-    const stocks = await getStockProjections(conn, result.physicalItems)
-    result.physicalItems = result.physicalItems.map(p => {
-      const stock = stocks.get(`${p.productId}:${p.warehouseId}`) || { quantity: 0, reserved: 0, available: 0 }
-      return { ...p, inventory: { ...stock, required: p.quantity, shortage: Math.max(0, Math.round((p.quantity - stock.available) * 100) / 100) } }
-    })
-    return { ...result, customerId: input.customerId, warehouseId: input.warehouseId, canFulfillEntireVector: result.physicalItems.every(p => p.inventory.shortage === 0), inventoryBasis: 'current_physical_available', inventoryExplanation: '当前现货可用来自 ACTIVE 容器余量减现有预占；按本次整个需求向量核对。未计预计到货或整容器独占，不保证可拣、占库成功或交期', expected: null, readyDate: null, readyDateExplanation: '本切片未提供预计到货与成套交期' }
-  }, { readOnly: true })
+async function preview(input,ctx) {
+  return transaction(conn=>require('../sale/sale.commercial-preview').resolvePreview(conn,{customerId:input.customerId,warehouseId:input.warehouseId,commercialGroups:input.groups,scopeWarehouseIds:ctx.scopeWarehouseIds},[],{lineKeyMax:100}),{readOnly:true})
 }
-module.exports = { findAll, findById, findForFinder, create, update, softDelete, preview }
+module.exports = { findAll, findById, findForFinder, create, update, softDelete, preview, loadVersions, disabledReasons, definitionView }

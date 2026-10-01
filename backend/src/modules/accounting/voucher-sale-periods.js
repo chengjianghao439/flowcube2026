@@ -26,7 +26,7 @@ function shipmentDate(value, orderId, taskId) {
 /** 批量读取真实出库；不存在可审计的任务事实时禁止用应收创建日猜历史。 */
 async function loadSaleShipmentFacts(conn) {
   const [orders] = await conn.query(`SELECT so.id AS soId, so.order_no, so.customer_id, so.customer_name,
-      so.total_amount AS orderGross, so.discount_amount AS discount
+      so.commercial_model AS commercialModel, so.total_amount AS orderGross, so.discount_amount AS discount
     FROM sale_orders so WHERE EXISTS (SELECT 1 FROM payment_records pr WHERE pr.type=2 AND pr.order_id=so.id)
       OR EXISTS (SELECT 1 FROM sale_order_items i WHERE i.order_id=so.id AND i.shipped_qty<>0)
       OR EXISTS (SELECT 1 FROM warehouse_tasks t WHERE t.sale_order_id=so.id AND t.task_type='sale_out' AND t.status=7 AND t.deleted_at IS NULL)`)
@@ -41,6 +41,22 @@ async function loadSaleShipmentFacts(conn) {
       AND COALESCE(soi.warehouse_id,so.warehouse_id)=wt.warehouse_id
     WHERE wt.task_type='sale_out' AND wt.status=7 AND wt.deleted_at IS NULL
     ORDER BY wt.shipped_at,wt.id,wti.id,soi.id`)
+  const [money] = await conn.query("SELECT task_id,order_id,SUM(confirmed_gross) AS gross,SUM(CASE WHEN basis_origin IS NULL OR basis_origin NOT IN ('real_confirmation','legacy_verified') THEN 1 ELSE 0 END) AS unknown_basis,SUM(CASE WHEN order_gross_basis IS NULL OR discount_basis IS NULL THEN 1 ELSE 0 END) AS missing_basis,MIN(order_gross_basis) AS gross_basis,MAX(order_gross_basis) AS max_gross_basis,MIN(discount_basis) AS discount_basis,MAX(discount_basis) AS max_discount_basis FROM sale_dispatch_groups WHERE confirmed_at IS NOT NULL GROUP BY task_id,order_id")
+  if(money.some(m=>Number(m.unknown_basis)>0))throw sourceError(money.find(m=>Number(m.unknown_basis)>0).order_id,'原出库折扣依据尚未核对')
+  const bases=new Map()
+  for(const m of money){
+    if(Number(m.missing_basis))throw sourceError(m.order_id,'原出库折扣依据不完整')
+    const gross=sourceUnits(m.gross_basis,4,m.order_id,'原出库整单原值'),discount=sourceUnits(m.discount_basis,4,m.order_id,'原出库整单折扣')
+    const previous=bases.get(Number(m.order_id))
+    if(gross<=0n || gross!==sourceUnits(m.max_gross_basis,4,m.order_id,'原出库整单原值') || discount!==sourceUnits(m.max_discount_basis,4,m.order_id,'原出库整单折扣') || (previous && (previous.gross!==gross || previous.discount!==discount)))throw sourceError(m.order_id,'原出库折扣依据不一致')
+    bases.set(Number(m.order_id),{gross,discount,orderGross:m.gross_basis,discountAmount:m.discount_basis})
+  }
+  for(const order of orders){
+    const basis=bases.get(Number(order.soId))
+    if(order.commercialModel==='kit-v1' && basis){order.orderGross=basis.orderGross;order.discount=basis.discountAmount}
+  }
+  const byTask=new Map(money.map(m=>[Number(m.task_id),m.gross]))
+  for(const row of shipments)row.confirmedGross=byTask.get(Number(row.taskId)) ?? null
   return { orders, items, shipments }
 }
 
@@ -71,12 +87,16 @@ function projectSaleShipments({ orders, items, shipments }, taxBySO = new Map())
     order.shipments.sort((a, b) => a.date.localeCompare(b.date) || Number(a.taskId) - Number(b.taskId) || Number(a.taskItemId) - Number(b.taskItemId))
     const periods = new Map()
     let gross = 0n, cost = 0n, previousNet = 0n, previousTax = 0n, previousCost = 0n
+    const moneyTasks=new Set()
     const orderGross = sourceUnits(order.orderGross ?? 0, 4, order.soId, '整单原值')
     const discount = sourceUnits(order.discount ?? 0, 4, order.soId, '整单折扣')
     const orderTax = sourceUnits(taxBySO.get(Number(order.soId)) ?? 0, 2, order.soId, '销项税额')
     for (const s of order.shipments) {
       // 数量为百分单位；迁移187的单价保留八位，成本快照保留四位。
-      gross += s.qty * sourceUnits(s.item.unit_price, 8, order.soId, '销售单价')
+      if(order.commercialModel === 'kit-v1'){
+        if(s.confirmedGross == null)throw sourceError(order.soId,`任务 ${s.taskId} 缺少已确认商业毛额`)
+        if(!moneyTasks.has(Number(s.taskId))){gross+=sourceUnits(s.confirmedGross,2,order.soId,'已确认商业毛额')*100000000n;moneyTasks.add(Number(s.taskId))}
+      }else gross += s.qty * sourceUnits(s.item.unit_price, 8, order.soId, '销售单价')
       cost += s.qty * sourceUnits(s.item.cost_snapshot ?? 0, 4, order.soId, '成本快照')
       const grossCents = halfUp(gross, 100000000n)
       // 与原会计计算阶段一致：先毛额两位，再按比例分摊折扣四位，再净额两位。

@@ -60,7 +60,8 @@ async function assertCreditWithinLimit(conn, customerId, thisOrderAmount, operat
  * 执行出库（6→7）：扣减库存 + 更新销售单状态 + 生成应收账款
  */
 async function shipWithinTransaction(conn, id, operator, saleData, { requestKey, scopeWarehouseIds = null, pdaWarehouseId = null } = {}) {
-  const { saleOrderId, warehouseId, totalAmount, items } = saleData
+  const { saleOrderId, totalAmount } = saleData
+  let { warehouseId, items } = saleData
 
   // 加锁顺序统一为「先销售单、后仓库任务」，与 sale.cancel / requestAdjustment(SO→WT) 一致，
   // 避免 ship(原 WT→SO) 与它们并发同一订单+任务时 ABBA 死锁（审计 P2）。这里只「加锁」拿 SO 快照，
@@ -71,7 +72,7 @@ async function shipWithinTransaction(conn, id, operator, saleData, { requestKey,
     saleRow = await lockStatusRow(conn, {
       table: 'sale_orders',
       id: saleOrderId,
-      columns: 'id, status, order_no, customer_id, total_amount, discount_amount',
+      columns: 'id, status, order_no, customer_id, total_amount, discount_amount, commercial_model',
       entityName: '销售单',
     })
   }
@@ -93,8 +94,6 @@ async function shipWithinTransaction(conn, id, operator, saleData, { requestKey,
   if (taskRow.adjustment_requested_at) {
     throw new AppError('该任务有改单正在等待仓库确认，请先处理完成', 409)
   }
-  const rule = assertWarehouseTaskAction('ship', taskRow.status)
-  if (!isValidTransition(taskRow.status, rule.toStatus)) throw new AppError(`非法状态迁移：${taskRow.status} → ${rule.toStatus}`, 400)
   const requestState = await beginResourceOperationRequest(conn, {
     requestKey,
     action: 'warehouse.ship',
@@ -104,6 +103,16 @@ async function shipWithinTransaction(conn, id, operator, saleData, { requestKey,
   })
   if (requestState.replay) {
     return requestState.responseData
+  }
+
+  const rule = assertWarehouseTaskAction('ship', taskRow.status)
+  if (!isValidTransition(taskRow.status, rule.toStatus)) throw new AppError(`非法状态迁移：${taskRow.status} → ${rule.toStatus}`, 400)
+  let commercialShipment = null
+  if (saleRow?.commercial_model === 'kit-v1') {
+    if (Number(taskRow.sale_order_id)!==Number(saleRow.id)) throw new AppError('商业出库任务归属不符',409,'SALE_COMMERCIAL_SOURCE_INVALID')
+    commercialShipment = await require('../sale/sale.commercial-money').prepareShipment(conn,taskRow,saleRow)
+    items = commercialShipment.items
+    warehouseId = Number(taskRow.warehouse_id)
   }
 
   const isPurchaseReturn = taskRow.task_type === 'purchase_return'
@@ -185,7 +194,7 @@ async function shipWithinTransaction(conn, id, operator, saleData, { requestKey,
     })
   }
 
-  if (!isReturnOut && saleOrderId) {
+  if (!isReturnOut && saleOrderId && !commercialShipment) {
     const saleSvc = require('../sale/sale.service')
     await saleSvc.syncShippedByWarehouseTaskWithinTransaction(conn, saleOrderId, {
       taskId: Number(id),
@@ -241,6 +250,11 @@ async function shipWithinTransaction(conn, id, operator, saleData, { requestKey,
     }
     // 应收由 syncShippedByWarehouseTaskWithinTransaction 全量重算（按 shipped_qty 汇总，
     // 分批增量幂等，见 sale.service.recomputeSaleReceivable），此处不再单独生成。
+  }
+
+  if (commercialShipment) {
+    await require('../sale/sale.commercial-money').confirmShipment(conn,commercialShipment)
+    await require('../sale/sale.service').syncShippedByWarehouseTaskWithinTransaction(conn,saleOrderId,{taskId:Number(id),taskNo:taskRow.task_no})
   }
 
   try {

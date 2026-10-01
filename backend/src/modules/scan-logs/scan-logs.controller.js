@@ -49,6 +49,7 @@ const createCancelReturnScan = async (req, res, next) => {
       operatorName: operator.operatorName,
       requestKey: extractRequestKey(req),
       scopeWarehouseIds: req.user?.warehouseIds ?? null,
+      pdaWarehouseId: req.pda?.warehouseId ?? null,
     })
     return successResponse(res, data, data.finalized ? '归还完成，任务已取消' : '归还已记录', 201)
   } catch (e) { next(e) }

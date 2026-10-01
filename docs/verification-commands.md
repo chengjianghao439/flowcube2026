@@ -259,8 +259,100 @@ Tests CI 的 `regression-plastic-box` job 使用独立 MySQL 8 service（**映�
 
 三条均已接 Tests CI（计算放 static，两个 HTTP smoke 在 MySQL regression 顺序执行），本地即时验证是该高风险基础切片的最小验收。运行环境遵守本文件开头：Node22 + NODE_ENV=test + 显式回环 DB_* 与可写 APP_UPDATE_DOWNLOADS_DIR；无 prepareSmokeContext / 全表清理 / backend/.env 读取。2026-10-01 在新建唯一测试库（utf8mb4_0900_ai_ci）完整执行269迁移文件，并在其上验收；该库与真实业务夹具保留，不DROP，未碰开发库或生产。原始红证据为缺组成行为及真实POST /api/kits的404→预期201；微小非零五位以上价拒绝另取到了 Missing expected exception 再修；`1.005×1` 原浮点round2实测1.00、应为1.01，新增定点金额用例先红13/14再修；现订单DECIMAL(14,4)金额容量守卫先红14/15再修，商业行/物理行/总额均有限；参考时刻从错误版本创建时间改为null并解释沿用依据，API断言先红后修。补充微/大权重与库存专项为实现后增强验证，不冒称均有实现前红灯。
 
-**本切片未验/未实现**：正式销售套单保存、草稿/复制/改单、整套分批派发与发货/退款分摊、退货、应收/凭证接点、GUI、真实PDA硬件、物理出纸、CI远端结果、生产迁移/部署。全量后端/前端套件留发版前按统一规则运行。
+**C2b当时未验/未实现（后续接点见本文件C2完整证据段）**：正式销售套单保存、草稿/复制/改单、整套分批派发与发货/退款分摊、退货、应收/凭证接点、GUI、真实PDA硬件、物理出纸、CI远端结果、生产迁移/部署。全量后端/前端套件留发版前按统一规则运行。
 
 ### 2026-10-01 商业行分批金额与来源组件退款纯规则（C2c-1）
 
 `npm run test:sale-commercial-money` 为 C2c-1 的纯金额专项，Tests CI static job 实际执行，不连数据库。验证冻结套价累计、单调循环槽组件分摊、任意分批差额、ordinary 冻结成交额/两位基本数量、来源组件合格退款、精度/范围/快照守恒与不可变输入；还覆盖科学表示字符串指数±100与字符串长度128边界（超界409），以及JSON有限Number零正常接受。固定种子小 Q 逐槽独立参考与大量级 Q/50组件有界计算分别验证。旧累计组件前缀比例算法的负1分反例在测试中作为内存反向证据。此专项不能证明套单保存、占库、出库/退款事务、幂等或 GUI 已接通；既有 `test:kits-composition` 组成计算应一并回归。
+
+### 2026-10-01 C2 后端完整接点与可复查证据
+
+正式 HTTP 套单写入口已在本工作树接通，未提交/推送/部署。`npm run test:sale-commercial`（新契约、单位、日期、净金额与退款凭证13例）与原 `test:sale-commercial-money`（26例）共39例；`smoke:sale-commercial-lifecycle` 已接 Tests CI MySQL regression，server listen(0,'127.0.0.1')，只本轮精确ID夹具，无全表清理。环境为Node22、显式NODE_ENV=test/回环3307/独立库 `flowcube_kits20261001_7e429c_test`，不读取backend/.env凭据。
+
+实际证据按层分开：
+
+| 验收 | 日志及本轮精确metadata | 结果/界限 |
+|---|---|---|
+| 正式HTTP创建/更新、稳定物料ID、占库/整套派发、普通与套混排、关闭、改单、来源退货 | `/tmp/kits-formal-http-green.log`；`/tmp/flowcube-kits-lifecycle-KLC-8b8031a6.json` | 自然exit0；所有销售/来源创建均真实HTTP，实际PDA会话采购/仓储执行及打印client确认（非物理出纸） |
+| marker/混输/全写动作key、draft headers/旧revision成功键重放/新key409、范围变更回执拒绝、HTTP回执UPDATE故障 | `/tmp/kits-formal-guards-scope-fault.log`；`/tmp/flowcube-kits-lifecycle-KLC-439f311c.json` | 自然exit0；故障500后订单/组/物料全回滚，原key重试只有一份；同一用户限仓后成功回执与更新重放403 |
+| 已拣2套→减1、待实物归还阻断再派发/实发、PDA确认归还后quantity/reserved/WTI全为1且IDs不变 | `/tmp/kits-formal-pending-adjust.log`；`/tmp/flowcube-kits-lifecycle-KLC-e2863681.json` | 自然exit0；改单试改表头明确拒绝；`KIT_TEST_SLICE=adjust` 为收口最小分段，默认脚本执行全链 |
+| 原100/10全退gross100/financial90/AR0；300/.0101仅A100实发关闭、登记.01先拒确认、真实退款后净99.9966/AR0 | `/tmp/kits-refund-voucher-tail-green.log`；`/tmp/flowcube-kits-lifecycle-KLC-3cb7fe63.json` | 自然exit0；收款/退款创建提交执行均真实API；正式HTTP日志也覆盖同金额规则，但历史两份日志第二个关闭小额PASS标签误复用了100/10文字；实际断言为99.9966。脚本现已修正标签，本轮未为文案重跑整链 |
+| 最终diff新增收入basis修复：关闭gross3/.0151到2/.0101不得重排两期1.00/.99 | `/tmp/kits-closed-shipment-basis-red.log` → `/tmp/kits-closed-shipment-basis-green.log`；真实读取 `/tmp/kits-final-resource-proof.log` | 自然red exit1/green exit0；跨9/10月是pure函数输入，现owned正常WT7读取证明关闭后仍取冻结basis；未SQL伪造实发日期，不冒称完整跨期业务链 |
+| .02/.01两次真实合格来源部分退：每次financial.005，凭证累计.01/0而总.01 | 同上 | 会计业务红 `/tmp/kits-refund-voucher-tail-red.log` 实测累计.02，再窄adapter修复；成本腿未省略 |
+| 采购1箱=3基本组件、套内发1成本10/剩余库存2；mixedordinary1箱价1全发AR1；旧ordinary辅助单位真实占/派/发/退/AR0及cancel释放 | 同上与正式HTTP日志 | 辅助包装入库和混排录入是不同场景；套定义仍基本单位，不假装支持套内包装编辑 |
+| cent/3同来源两个SR并发与等待前RR快照、退款回执故障回滚/原key再试；A-source退款与B实发两种库存阻塞顺序 | 正式HTTP及净金额链日志 | 使用真实业务service+独立conn控制事务交错（实发是HTTP），无手改状态；明确不是全部HTTP并发。gross80/net72后再发B，AR198/退货凭证72；同SKU来源混单拒绝，拆单A合格/B全拒收正常完成0 |
+
+业务红与setup错误分开：正式HTTP原gate红为 `/tmp/kits-formal-http-red.log` 创建400；整单折扣红为 `/tmp/kits-discount-red.log` 真实已发90、计划gross100确认409。出库/退款交错红 `/tmp/kits-ship-refund-deadlock-red.log` 与 `/tmp/kits-ship-refund-deadlock-innodb.log` 显示冗余FK造成SO↔stock锁环；272后同一尝试两种顺序自然成功，未用deadlock重试。测试曾误查不存在的WTI.cost_snapshot、权限列名和退货明细嵌套，以及先收一商品就质检的setup顺序错误，均不算业务红。最后成本断言读取真实SOI快照。
+
+270–275在该精确测试库已执行，并各作幂等重复核验；最终正式迁移runner两遍与db_migrations ledger、索引名字/列序结果保存 `/tmp/kits-final-migration-ledger-shape.log`。引用schema/列序/FK证据 `/tmp/kits-final-fk-proof.json`。275本轮精确fixture依据恢复 `/tmp/flowcube-kit-basis-owned-review.js`、`/tmp/kits-basis-owned-reviewed-manifest.json` 与 `/tmp/kits-basis-owned-review.log`：只已核本轮owned IDs改legacy_verified，未知历史不猜。metadata0600，保留真实交易/库存/资金审计，不DROP库。最后精确user/device/session/reservations/locked-container/printer/account收尾结果 `/tmp/kits-final-resource-proof.log`。
+
+当前批即时检查：后端lint、combined39纯例、query-loop、API路由/写权限契约、migration ledger与shape、diff审阅。完整后端/前端全量lint/build/all套件及远端CI留整批统一验证；GUI响应丢失/草稿恢复、真实PDA硬件和纸张、生产迁移/部署均未验，不能由本轮HTTP/PDA会话或client打印确认推断。
+
+### C2 独立规格复审两项P1收口（2026-10-01）
+
+`npm run smoke:sale-commercial-review` 已接 Tests CI MySQL regression 的实际 step；依次运行 scope 与 gates/QA 最小分段，复用原真实履约脚本，不重复无关资金全链。业务代码只补已有 kit 保存/重放范围与销售退货完成门控；270–275未改、无新迁移/权限或数量台账。
+
+| 证据 | 精确日志/metadata | 自然结果 |
+|---|---|---|
+| 原范围漏洞：保存保留旧仓quantity0，缩范围后旧update key、新key、原create key错误通过 | `/tmp/kits-spec-scope-red.log`；`/tmp/flowcube-kits-lifecycle-KLC-c01abcb0.json` | exit1；实际200/200/201 vs期望403，不是setup错误 |
+| current saved scope修正，全范围合法旧键重放、普通创建旧政策 | `/tmp/kits-spec-scope-green.log`；`/tmp/flowcube-kits-lifecycle-KLC-fd8ce608.json` | exit0；三个漏洞触发均403，新key不变revision/remark |
+| 多组件退货旧RR快照：B锁等待前读RTI，A入仓组件1commit，B入仓组件2 | `/tmp/kits-spec-current-gates-red.log`；`/tmp/flowcube-kits-lifecycle-KLC-e6853edc.json` | exit1；实际RTI已1/1与4/4，RT4/SR2，未调用退款完成；保留卡住业务审计，不强写状态 |
+| 完整RTI当前读后，同交错kit/ordinary QA与上架、两组件kit全拒收 | `/tmp/kits-spec-current-gates-green.log`；`/tmp/flowcube-kits-lifecycle-KLC-cafc04e6.json` | exit0；RT5/SR3，合格来源receipts100/AR0/voucher100；全拒收receipts0/AR100 |
+| 最终package实际两段执行 | `/tmp/kits-spec-review-package-green.log`；`/tmp/flowcube-kits-lifecycle-KLC-6b04838c.json`、`/tmp/flowcube-kits-lifecycle-KLC-81325002.json` | exit0；销售/采购/仓储与SR创建正常HTTP，QA/入仓两事务交错为受控service，单attempt无死锁重试 |
+
+范围红前曾漏ordinary DTO两个展示字段，`/tmp/kits-spec-scope-setup.log`仅setup，不算业务红。旧quantity纯测试原stub硬编码SUM=0，现改为模拟实际received_qty更新；上架访问纯测试补无商业来源的lockExecution mock，避免在隔离测试加载真实环境。`/tmp/kits-spec-return-contracts.log`20/20，含1.2−拒收.3−入仓.9完成且真实剩.01仍阻断。最终受影响纯/契约合计59/59 `/tmp/kits-spec-final-pure-contracts.log`；后端lint `/tmp/kits-spec-final-lint.log`、query-loop `/tmp/kits-spec-query-guard.log`、CI资源守卫 `/tmp/kits-spec-ci-resource-guard.log`均自然exit0。
+
+最后精确资源与实物缓存、当前QA/退款及真实原成本复核 `/tmp/kits-spec-final-resource-stock-proof.log`（只读脚本 `/tmp/flowcube-kits-spec-final-proof.js`）：新own账号停用、设备/session删除、范围/预占/容器锁/活动打印机无残留；库存缓存等于ACTIVE容器，最新kit/ordinary退货凭证各应收100、原成本5。夹具与metadata0600保留，审查者原夹具未动。采购退货走原purchase_return_out仓储链，不调用本销售RT门控；其规则未改。未提交/推送/部署，GUI/真机/纸张/远端CI与整批全量验证边界仍按上一段。
+
+独立规格再审结论为接受：`/tmp/c2-respec-scope-green.log`、`/tmp/c2-respec-create-scope-green.log` 各自真实复验范围不足的旧更新重放/新保存/原创建重放403，以及完整范围合法重放；`/tmp/c2-respec-rr-multicomponent-green.log` 按原旧RR快照及来源等待交错取得RT5/SR3/两条退款回执/AR0；`/tmp/c2-respec-rr-qa-green.log` 另验质检交错推进RT4，随后真实HTTP上架RT5/AR0。四脚本自然exit0，受影响纯测试20/20、diff检查通过，独立精确资源已收尾；原失败SR156/RT154保留审计。此结论只覆盖后端规格，品质审查和页面验收继续后置。
+
+### C2 独立品质P1：散件取消逐容器份额（2026-10-01）
+
+`npm run smoke:sale-commercial-partial-cancel` 新增实际 Tests CI MySQL step，独立脚本 `tests/sale-commercial-partial-cancel.smoke.test.js` 自建精确夹具，通过采购→PDA收货/上架→正式套单创建/占库/派发→正常散拣→取消→逐容器PDA归还，不强写状态。新 `tests/sale-commercial-cancellation.test.js` 三例加入 `test:sale-commercial`，覆盖当前PICK来源、锁序与缺来源/错误item/超本单预占拒绝。没有新迁移，270–275未改；原品质审查夹具未修改。
+
+| 验收 | 日志/精确metadata | 自然结果 |
+|---|---|---|
+| 新owned单容器5/PICK1/余10、双容器各PICK1旧释放错误 | `/tmp/kits-quality-partial-cancel-red.log`；`/tmp/flowcube-kit-partial-cancel-KPC-97443972.json` | exit1；真实取消保留5而非1、首次双容器释放2而非1、后续归还409，业务断言失败 |
+| 当前PICK修正后同场景 | `/tmp/kits-quality-partial-cancel-green.log`；`/tmp/flowcube-kit-partial-cancel-KPC-d64d2357.json` | exit0；单容器取消留1/归还0，双容器逐份留1→0，.1/.2留.3→.2→0 |
+| 最终package：上述三种、等量容器、普通散拣取消；缺PICK与本单预占不足故障回滚 | `/tmp/kits-quality-partial-cancel-package-final.log`；`/tmp/flowcube-kit-partial-cancel-KPC-b7156c40.json` | exit0；取消/归还原key重放只一次；他单预占全程不变；WT8、锁0、预占0、库存未扣实物；故障409无回执/不解锁，原key正常重试成功 |
+| 精确actor/device/session/bin/cache/ledger/AR收尾及原审查红不变 | `/tmp/kits-quality-partial-cancel-resource-proof.log`；`/tmp/flowcube-kit-partial-cancel-final-proof.js`（0600） | exit0；user100–103停用，own设备/session删除，WH98–101无锁/预占，缓存等于ACTIVE容器，未实发不新增AR；失败user98–99也停用/删除设备会话，保留WH96–97真实业务锁审计 |
+
+故障注入仅在该HTTP请求连接返回空的来源或本单预占读结果，用于证明原事务失败不解锁/不释放，未改业务数据库事实；不是现场数据已经缺失的模拟恢复。NULL-purpose兼容是SQL谓词/纯例覆盖，本轮新真实PICK记录使用purpose1。首次采购夹具合计误算保留 `/tmp/kits-quality-partial-cancel-fixture-po-sum.log`，不作验收依据；新增普通回归曾误以为旧ship响应有tasks（实际200/null），按成功订单查实际WT修正。该中断精确SO245在只读确认无PICK后，已由原cancel服务合法收尾，证据见资源日志，不强改状态。
+
+受影响统一检查：金额26/26 `/tmp/kits-quality-final-money-pure.log`、商业16/16 `/tmp/kits-quality-final-commercial-pure.log`、原数量/上架契约20/20 `/tmp/kits-quality-final-affected-contracts.log`（合计62）；后端lint `/tmp/kits-quality-final-backend-lint.log`、query-loop `/tmp/kits-quality-final-query-guard.log`、CI资源守卫26/26 `/tmp/kits-quality-final-ci-resource-guard.log`均通过。新纯例最初隔离误加载环境JWT配置，已mock不受测scope依赖，不算业务红。文档守卫 `/tmp/kits-quality-final-doc-guard.log`自然exit0，最终diff检查通过。
+
+失败资源边界：原审查SO211/WT197/I651仍锁、预占5；SO212/WT198/I653仍锁、预占0，资源日志只读确认未变。新owned业务红同样保留真实失败审计，账号/设备收尾不等于业务锁已净。最小恢复建议是先按精确PICK来源核对、在原SO/WT/库存锁下订正自身错误预占至真实待归还份额，再走正常PDA归还；单容器5→1、双容器已误释放后0→剩余1。不能min/cap假成功或借他单预占，本轮不执行旧失败数据修复。
+
+本批只收口取消份额P1，尚待独立规格/品质复核。既有SO头仓+任务仓的归还范围要求未变，未独立验多仓订单限第二仓PDA归还授权；不得从本次数量绿推断权限政策已通过。未提交/推送/部署，远端CI、整批全量构建/回归、GUI、真机与纸张仍未验。
+
+### C2 套单PDA归还权限P1收口（2026-10-02）
+
+上一段数量修复阶段尚未验证的头仓授权问题，经独立真实对照后在本批窄修：SO X只协调同单预占，kit散件归还授权按当前WT仓库+真实设备绑定仓库。销售整单建改/占释/派发/取消/删除/来源退货全资源范围、直接取消销售WT禁令、ordinary与box路径保持。未改270–275或新增DDL/角色权限，root两份计划与旧红审计未修改。
+
+新增校验接点为`scan-logs.controller`透传`req.pda.warehouseId`，`scan-logs.service`在当前WT锁之后、幂等begin/replay之前用`assertTaskScope`核用户范围/设备，业务当前WT再核。`sale.commercial-cancellation.lockReturnOrder`保留SO X但不要求PDA获得SO头仓范围，原数量与SO→WT→dim→container顺序保持。
+
+| 验收 | 精确日志/metadata | 自然结果 |
+|---|---|---|
+| 修前：WT/设备/用户WH111，SO271头WH112；WT/detail200、SO403、合法归还被头仓挡403 | `/tmp/kits-cancel-task-scope-red.log`；`/tmp/flowcube-kit-partial-cancel-KPC-0d81b13c.json` | exit1；业务403≠201断言。扩大本轮actor范围后按原key合法归还并取消他单、资源收尾后才报红，不强写状态 |
+| 修后package原5种数量/ordinary+新scope六例真实HTTP | `/tmp/kits-cancel-task-scope-final-green.log`；`/tmp/flowcube-kit-partial-cancel-KPC-6d6b0bfc.json` | exit0；SO293头WH116/WT241与设备WH115/scopeduser115仅WH115正常201，而SO GET403 |
+| 当前范围/设备先于成功回执重放 | 同上 | 缩至头仓后成功原key403；完整actor范围下错绑头仓设备，新key403且无receipt/不解锁/预占不变，原成功key也403；body伪造设备仓不能替代req.pda事实；恢复本任务仓后原同payload/key/user/task结果重放且CANCEL_RETURN/receipt各一条 |
+| 原5种数量、缺PICK/本单预占不足回滚、他单份额不变 | 同上 | 单/多容器、小数.1/.2、等量容器、ordinary规则全部自然绿，任务8/锁0/预占0；scope归还库存仍10、他单预占1，不产生实发/退款 |
+| 精确五批新owned资源收尾、原审查红未变 | `/tmp/kits-cancel-task-scope-resource-proof.log`；`/tmp/flowcube-kit-cancel-task-scope-proof.js`（0600） | exit0；users107–115停用，device66–78/session删除，范围/临时角色权限清理；WH107–116无锁/预占、格空、缓存=ACTIVE；保留无权限角色与真实交易审计 |
+
+首次reserve测试DTO漏warehouseName记录 `/tmp/kits-cancel-task-scope-setup.log`，另一次cleanup误用角色无deleted_at列记录 `/tmp/kits-cancel-task-scope-cleanup-setup.log`，均不算自然业务红；后者自身node57111已精确终止（非全局进程清理），对应业务已正常归还/取消，actor/device也已清理，最终资源proof只读复核。SO268 setup草稿在精确来源确认后通过原kit cancel服务正常收尾。脚本finally现在即使资源清理报错也关闭server/pool。
+
+四个取消纯例（新增SO mutex一例）+原数量/上架20例共24/24 `/tmp/kits-cancel-task-scope-pure.log`，后端lint `/tmp/kits-cancel-task-scope-lint.log`、query-loop `/tmp/kits-cancel-task-scope-query-guard.log`、CI资源/PDA header守卫29/29 `/tmp/kits-cancel-task-scope-ci-pda-guard.log`均自然exit0。原package `smoke:sale-commercial-partial-cancel`已包含新scope，现CI同一实际step执行六例；未重复无关资金全包。文档守卫 `/tmp/kits-cancel-task-scope-doc-guard.log`与diff检查 `/tmp/kits-cancel-task-scope-diff-check.log`自然exit0。
+
+此DONE仅本次权限P1实施，待独立spec/quality复核。旧quantity红单的错误预占仍保留，不由本修复自动修；只读cancel-return-detail仍显示容器余量，任务PICK/实物数量呈现属后续独立DTO/页面接点。未提交/推送/部署，远端CI、整批全量、GUI、真机与纸张边界保持。
+
+### C2 最新归还权限独立规格再审（2026-10-02）
+
+独立规格审查者使用新owned夹具执行同一package六种真实场景及来源/预占故障回滚，`/tmp/c2-respec-task-scope-package-green.log`自然exit0；24个受影响纯例/契约 `/tmp/c2-respec-task-scope-pure-green.log`自然exit0。SO304头WH118、WT247/设备WH117、仅WH117用户117：任务/归还详情200、销售整单403、合法归还201且同key一次；收窄范围或错误设备仓的新key和成功key均403，body不能伪造设备事实，错误新key无回执且PICK/锁/他单预占不变。只读代码确认SO锁只作协调，当前WT与task/device范围检查位于begin/replay前；销售资源范围闸门保留。
+
+`/tmp/c2-respec-task-scope-resource-proof.log`自然exit0：users116/117停用、devices79–81及会话/范围/临时权限收尾、WT242–247全部8、own锁/预占0、格空、缓存等于ACTIVE、AR0、metadata0600，server/pool关闭，无打印资源。未修改旧失败审计。结论为完整最新后端**规格接受**，品质再审继续；PDA只读返库DTO数量呈现留到后续独立接点，页面、真机、纸张、远端CI、完整跨期与生产均未由本次证明。
+
+### C2 完整最新后端品质接受及root检查点核对（2026-10-02）
+
+独立品质再审 **APPROVED**，覆盖完整当前后端改动，无剩余确定阻断。原独立红场景的新owned复验 `/tmp/c2-quality-recheck-original-scenarios-green.log`自然exit0（SO306/307，单容器留1→0、双容器2→1→0）；六场景实际链 `/tmp/c2-quality-recheck-cancel-scope-green.log`自然exit0（SO317头WH121/WT255及设备WH120合法返库201、整SO读取403，范围/错设备先于新写/成功key重放）；24受影响纯例 `/tmp/c2-quality-recheck-pure-green.log`自然exit0。当前WT执行授权、SO互斥与库存锁顺序、来源守恒、直接取消WT拒绝均已读码确认。
+
+`/tmp/c2-quality-recheck-owned-proof.log`自然exit0，新两批own预占/锁0、WT8、格释放、库存缓存=ACTIVE、actor停用/device/session/scope收尾、metadata0600、server/pool关闭。旧SO211/212错误份额及待归还实物保留，不由本改动自动修正。Root在Node22自行执行`npm run test:sale-commercial`17/17、`npm --prefix backend run lint`及`npm run test:agents-md-guard`自然exit0，原未暂存`git diff --check`通过；暂存包括新增迁移后，默认`git diff --cached --check`返回2，仅274第93行EOF空行。274已执行，按迁移不可改规则保留原字节；`git -c core.whitespace=-blank-at-eof diff --cached --check`自然exit0，未关闭其他空白校验。未重复无新疑点的资金全量，不以本地检查点代表已部署、完整C2或前端已完成。

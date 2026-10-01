@@ -554,11 +554,17 @@ async function createCheckScanLog({
  */
 async function createCancelReturnScanLog({
   taskId, containerId, barcode, locationId,
-  operatorId, operatorName, requestKey, scopeWarehouseIds = null,
+  operatorId, operatorName, requestKey, scopeWarehouseIds = null, pdaWarehouseId = null,
 }) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    const kitOrderId=await require('../sale/sale.commercial-cancellation').lockReturnOrder(conn,taskId)
+    if(kitOrderId){
+      const [[taskScope]]=await conn.query('SELECT id,warehouse_id FROM warehouse_tasks WHERE id=? AND deleted_at IS NULL FOR UPDATE',[taskId])
+      if(!taskScope)throw new AppError('仓库任务不存在',404)
+      assertTaskScope(taskScope,{scopeWarehouseIds,pdaWarehouseId})
+    }
     const requestState = await beginResourceOperationRequest(conn, {
       requestKey,
       action: 'scan-log.cancel-return',
@@ -572,17 +578,23 @@ async function createCancelReturnScanLog({
     }
 
     const [[taskRow]] = await conn.query(
-      'SELECT id, task_no, status, warehouse_id, cancel_requested_at FROM warehouse_tasks WHERE id = ? AND deleted_at IS NULL FOR UPDATE',
+      'SELECT id, task_no, status, warehouse_id, sale_order_id, cancel_requested_at FROM warehouse_tasks WHERE id = ? AND deleted_at IS NULL FOR UPDATE',
       [taskId],
     )
     if (!taskRow) throw new AppError('仓库任务不存在', 404)
-    assertInScope(scopeWarehouseIds, taskRow.warehouse_id, '仓库任务')
+    if(kitOrderId)assertTaskScope(taskRow,{scopeWarehouseIds,pdaWarehouseId})
+    else assertInScope(scopeWarehouseIds, taskRow.warehouse_id, '仓库任务')
     if (!taskRow.cancel_requested_at) {
       throw new AppError('该任务未处于拣货退回状态，无需归还扫码', 400)
     }
 
+    if(kitOrderId){
+      const [[dimension]]=await conn.query('SELECT product_id,warehouse_id FROM inventory_containers WHERE id=?',[containerId])
+      if(!dimension)throw new AppError('库存条码不存在',404)
+      await lockStockDimension(conn,Number(dimension.product_id),Number(dimension.warehouse_id))
+    }
     const [[c]] = await conn.query(
-      `SELECT id, barcode, product_id, remaining_qty, locked_by_task_id, warehouse_id, location_id
+      `SELECT id, barcode, product_id, remaining_qty, locked_by_task_id, warehouse_id, location_id, status
        FROM inventory_containers WHERE id = ? AND deleted_at IS NULL FOR UPDATE`,
       [containerId],
     )
@@ -619,6 +631,9 @@ async function createCancelReturnScanLog({
     )
     if (!itemRow) throw new AppError('库存条码上的商品不属于当前任务，数据异常', 409)
 
+    const returnedQty=kitOrderId
+      ? await require('../sale/sale.commercial-cancellation').releaseReturned(conn,kitOrderId,taskRow,c,itemRow.id)
+      : Number(c.remaining_qty)
     await conn.query(
       `UPDATE inventory_containers
        SET locked_by_task_id = NULL, locked_at = NULL, location_id = ?
@@ -632,7 +647,7 @@ async function createCancelReturnScanLog({
           qty, scan_mode, scan_purpose, operator_id, operator_name, location_code)
        VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
       [taskId, itemRow.id, c.id, barcode, c.product_id,
-        Number(c.remaining_qty), '归还', SCAN_PURPOSE.CANCEL_RETURN, operatorId || null, operatorName || null, loc.code],
+        returnedQty, '归还', SCAN_PURPOSE.CANCEL_RETURN, operatorId || null, operatorName || null, loc.code],
     )
 
     try {

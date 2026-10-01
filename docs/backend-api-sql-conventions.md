@@ -42,7 +42,7 @@
 
 ### 成套配件基础接口（C2b-1，2026-10-01）
 
-独立 `/api/kits` 模块按 routes → controller → service 分层，当前只提供主档维护与只读预览，**尚未接入销售订单保存、占库、履约、退货或会计**。列表、详情、`finder` 使用 `product.view`；创建、编辑、软删分别复用 `product.create/update/delete`。`POST /api/kits/preview` 同时要求 `sale.order.create` 与 `product.view`，在数据库 READ ONLY 事务中运行。具名 finder/preview 路由在 `/:id` 前注册。列表与 finder 入口页码须为 1–100000 的有限整数、pageSize 为 1–100，offset 最大 9999900；超界返回400，不能把 Infinity 交给 MySQL。
+独立 `/api/kits` 模块按 routes → controller → service 分层，C2b当时只提供主档维护与只读预览；后续正式销售保存、履约、退货与会计接点见本文件下方C2段。列表、详情、`finder` 使用 `product.view`；创建、编辑、软删分别复用 `product.create/update/delete`。`POST /api/kits/preview` 同时要求 `sale.order.create` 与 `product.view`，在数据库 READ ONLY 事务中运行。具名 finder/preview 路由在 `/:id` 前注册。列表与 finder 入口页码须为 1–100000 的有限整数、pageSize 为 1–100，offset 最大 9999900；超界返回400，不能把 Infinity 交给 MySQL。
 
 迁移 `269_kit_definitions.sql` 增加主档、不可变组成版本、版本组件三张表；索引/外键在 CREATE IF NOT EXISTS 后单独幂等补齐，并按 information_schema 的名字与列序核对，已存在但形状不一致即失败。主档当前版本用 `(id,current_version_id) → (kit_id,id)` 复合外键防串套。主档 code 可维护，未软删编码唯一；停用不释放编码，软删后可以同码新建。
 
@@ -52,4 +52,18 @@
 
 预览请求有客户、仓库与至多 200 个独立商业组：套组 `kind=kit,kitVersionId,quantity,priceSource=kit_default|manual`；普通组 `kind=ordinary,productId,quantity,priceSource=default|manual`；手工价必须传 `unitPrice`。套数为正整数；套默认价只取所选当前版本，旧版本返回 `409 KIT_VERSION_CHANGED`。普通默认价按现客户价格表优先、等级价兜底，读取使用有界批量 SQL。客户/仓库/组件须当前启用且未删，finder/preview 必须核仓库范围。
 
-`commercialGroups` 保留每个商业组及组件金额，新预览父行金额按原四位单价×原两位数量的整数单位运算 half-up 到分（如 `1.005×1=1.01`），普通销售既有 `round2` 未改；组件金额按整数分、固定 sort/id 顺序分配尾差（零权重不分尾差），组件总额等于父行。`physicalItems` 仅按真实商品+仓库聚合，至多 200 行，普通商业归属仍独立，不造虚拟商品、容器或库存；新预览商业行/物理行/总额均不超过现订单金额 DECIMAL(14,4) 可保存的两位金额 `9999999999.99`，超限400 `KIT_AMOUNT_OVERFLOW`，避免Number回构丢分；物理单价八位仅作展示，不代替保存的商业金额。库存复用 `containerEngine.getStockProjections`，依据明确为“当前现货可用”（ACTIVE 容器余量减现有预占），并按本次整个需求向量计算缺量；finder 的独立可成套数不能相加承诺。未计预计到货、整容器独占或交期，返回 `expected/readyDate=null` 与解释。
+`commercialGroups` 保留每个商业组及组件金额，套件父行金额按原四位单价×原两位数量的整数单位运算 half-up 到分（如 kit `1.005×1=1.01`）；ordinary商业组冻结原entry fold `round2`预算（原 `1.005×1=1.00`），普通销售既有规则未改；组件金额按整数分、固定 sort/id 顺序分配尾差（零权重不分尾差），组件总额等于父行。`physicalItems` 仅按真实商品+仓库聚合，至多 200 行，普通商业归属仍独立，不造虚拟商品、容器或库存；新预览商业行/物理行/总额均不超过现订单金额 DECIMAL(14,4) 可保存的两位金额 `9999999999.99`，超限400 `KIT_AMOUNT_OVERFLOW`，避免Number回构丢分；物理单价八位仅作展示，不代替保存的商业金额。库存复用 `containerEngine.getStockProjections`，依据明确为“当前现货可用”（ACTIVE 容器余量减现有预占），并按本次整个需求向量计算缺量；finder 的独立可成套数不能相加承诺。这两种只读stock preview未计预计到货、整容器独占或交期，返回 `expected/readyDate=null` 与解释；不能把它当ATP交期。实际销售履约 `fulfillment.delivery.saleDelivery` 才从既有实际/预计供应分配消费共享组件一次，并给成交组齐套ETA（未知仍null）。
+
+### C2 正式销售 DTO 与证据迁移（2026-10-01）
+
+- `POST /sale`、`PUT /sale/:id`、`PUT /sale/:id/adjust` 接 `commercialModel:'kit-v1'` + `commercialGroups`；更新/改单另需 expectedRevision。kit 组为 kind/lineKey/kitVersionId/warehouseId/quantity/unitPrice/priceSource；ordinary 组为 kind/lineKey/productId/warehouseId/entryUnit/quantity/unitPrice/priceSource。服务端派生 items，拒商业组与客户端 items 混输。raw marker 先判再进入 schema，未知 model 不会被 zod strip 后误落普通路径。ordinary 原 DTO 保持。
+- reserve/release 沿原 items（stable物料行ID），另带 marker/revision，单独改物料仓库拒绝。`POST /sale/:id/ship` 套单只接 marker/revision + groups[{groupId,qty}]，不猜物料 payload 属哪套。cancel/delete 接 marker/revision；旧客户端对已有套单缺标记/版本明确拒绝。新 kit 写动作及来源退货创建要求非空稳定请求键≤128。资源 action 用 `sale.update.<id>` / adjust/reserve/release/ship/cancel/delete；create 与 update 指纹仍包括原成交组、单位、价格和全部持久化表头。普通原 colon action 兼容。
+- 资源范围与 model 在重放前校验，状态与 expectedRevision 在重放后校验；成功旧键仍回原结果，新键旧版本409。请求状态查询也重新检查当前资源仓库范围，包括已软删历史资源。回执完成与业务事实同 conn，失败全事务回滚。
+- `POST /sale/:id/commercial-preview` 是只读编辑预览，sale.order.update + product.view + 资源范围/版本；不要求创建权限。原 `/kits/preview` 创建权限契约保持，允许0参考/手动报价只读预览。read DTO 明确 items/physicalItems 为唯一物料视图，commercialGroups 提供当前目标额、original、版本/报价 metadata、ordinary entry审计快照。
+- `/returns/sale` 新套来源请求带 marker/revision 与每项 sourceItemId/commercialComponentId/dispatchComponentId，原商品展示字段仅兼容 DTO，金额由来源权威预算计算。来源 DTO 提供 sourceBudgetAmount/sourceQuantity/refundBudget、financialBasis/sourceFinancialEstimate、actualRefundGross/actualRefundAmount；不能以八位 unitPrice 倒算退款。confirm/cancel 是已冻结退货资源的状态动作，不重新选择来源，不要求当前 SO revision；原 scope/status/资金闸门保持。
+- 270–275 依次新增成交快照、真实派发/金额证据、退款执行证据及净金额依据。271冗余 refund→SO FK 被272按精确名字/列序订正，保留来源/SRI/RTI约束与 order_id 索引；该 FK 已真实造成退款 stock→SO 与出库 SO→stock 死锁。274核 surviving FK 名字、列序、引用 schema=DATABASE() 及金额列 shape；错误 fail-loud。
+- 273旧成功退款 NULL financial仅沿原实际 gross 减账事实；它对正式接口关闭前本轮旧夹具曾按当前头回填 basis，不能称原历史依据。275要求 basis_origin：新同事务实发为 real_confirmation；旧记录须人工核对真实初次执行证据后才能 legacy_verified。未知 confirmed origin 在迁移/读取显式拒绝，不降级到今日头。本机精确ID恢复脚本/manifest在 `/tmp/flowcube-kit-basis-owned-review.js` 与 `/tmp/kits-basis-owned-reviewed-manifest.json`，随机夹具ID不固化迁移。
+
+C2规格复审范围补充：kit update在回执begin/replay之前核当前已保存全部物料仓库，包含quantity0历史行；只核head和新成交组不充分。kit create发现成功回执后，以存储的resource_type/resource_id当前锁读SO与其全部已保存物料范围，校验通过才返回原结果，软删历史仍可依法重放。scope/model与revision原前后顺序保持；ordinary创建回执政策不变。
+
+C2仓库执行归还接点：`POST /scan-logs/cancel-return` 的kit分支用SO X协调预占，仓库授权沿当前WT的`assertTaskScope`，不据SO头仓授权。controller显式透传`req.pda.warehouseId`；body中的同名字段不是设备事实。服务层可选`pdaWarehouseId=null`兼容内部调用，kit HTTP经设备会话中间件始终有真实值。SO→WT当前锁读后范围/设备先于begin/replay核验，业务WT再核验；普通与box分支契约不扩大。

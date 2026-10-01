@@ -331,9 +331,10 @@ async function buildPurchaseReturn(conn) {
  * 成本冲回额 = SUM((合格入库量)×原出库 cost_snapshot)（**只反转当初已确认的成本**，见下方注释）。
  */
 async function buildSaleReturn(conn) {
+  const commercialAmounts=await require('./voucher-sale-returns').loadCommercialReturnVoucherAmounts(conn)
   const [rows] = await conn.query(`
     SELECT sr.id, sr.return_no, sr.customer_id, sr.customer_name, sr.updated_at AS vdate,
-           COALESCE(SUM((rti.checked_qty - rti.rejected_qty) * sri.unit_price), 0) AS arAmount,
+           COALESCE(SUM(CASE WHEN sri.dispatch_component_id IS NOT NULL THEN cri.financial_amount ELSE (rti.checked_qty - rti.rejected_qty) * sri.unit_price END), 0) AS arAmount,
            -- 成本冲回只反转「当初出库时**已确认**的成本」（sale_order_items.cost_snapshot），
            -- **不能**回退商品主档的 avg_cost/cost_price（2026-09-18 审计 [36]）：
            --   ① 出库凭证 buildSaleCogs 用的是 COALESCE(cost_snapshot, 0)；cost_snapshot 为空时它记 0，
@@ -346,12 +347,15 @@ async function buildSaleReturn(conn) {
       JOIN return_tasks rt ON rt.return_id = sr.id AND rt.return_type = 'sale' AND rt.deleted_at IS NULL
       JOIN return_task_items rti ON rti.task_id = rt.id
       JOIN sale_return_items sri ON sri.id = rti.return_item_id
+      LEFT JOIN sale_commercial_refund_receipts cri ON cri.return_item_id=sri.id
       LEFT JOIN sale_order_items soi ON soi.id = sri.sale_item_id
      WHERE sr.status = 3 AND sr.deleted_at IS NULL
      GROUP BY sr.id, sr.return_no, sr.customer_id, sr.customer_name, sr.updated_at`)
+  const [[{missing}]]=await conn.query(`SELECT COUNT(*) AS missing FROM sale_return_items sri JOIN sale_returns sr ON sr.id=sri.return_id LEFT JOIN sale_commercial_refund_receipts r ON r.return_item_id=sri.id WHERE sr.status=3 AND sr.deleted_at IS NULL AND sri.dispatch_component_id IS NOT NULL AND r.id IS NULL`)
+  if(Number(missing))throw new AppError('已执行成套退货缺少来源退款回执',409,'SALE_COMMERCIAL_SOURCE_INVALID')
   const specs = []
   for (const r of rows) {
-    const ar = round2(r.arAmount)
+    const ar = commercialAmounts.has(Number(r.id)) ? Number(commercialAmounts.get(Number(r.id))) : round2(r.arAmount)
     const cogs = round2(r.cogsBack)
     if (ar <= 0 && cogs <= 0) continue
     const legs = []

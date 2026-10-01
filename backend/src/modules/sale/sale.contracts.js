@@ -33,7 +33,7 @@ const salePhoneRule = z.string()
   .optional()
   .or(z.literal(''))
 
-const createSaleSchema = z.object({
+const ordinaryCreateSaleSchema = z.object({
   customerId: z.number().int().positive('请选择客户'),
   customerName: z.string(),
   warehouseId: z.number().int().positive('请选择仓库'),
@@ -50,7 +50,7 @@ const createSaleSchema = z.object({
   items: z.array(saleItemSchema).min(1, '至少添加一条明细').max(200, '销售单最多 200 条明细'),
 })
 
-const reserveSaleSchema = z.object({
+const ordinaryReserveSaleSchema = z.object({
   confirmCreditOverride: z.boolean().optional(),
   items: z.array(z.object({
     id: z.number().int().positive(),
@@ -60,19 +60,34 @@ const reserveSaleSchema = z.object({
   })).optional(),
 })
 
-const releaseSaleSchema = z.object({
+const ordinaryReleaseSaleSchema = z.object({
   items: z.array(z.object({
     id: z.number().int().positive(),
     qty: positiveQty,
   })).optional(),
 })
 
-const shipSaleSchema = z.object({
+const ordinaryShipSaleSchema = z.object({
   items: z.array(z.object({ id: z.number().int().positive(), qty: positiveQty })).optional(),
   itemIds: z.array(z.number().int().positive()).optional(),
 }).refine(value => !(value.items?.length && value.itemIds?.length), {
   message: 'items 与 itemIds 不能同时提交',
 })
+
+const commercialGroupSchema=z.discriminatedUnion('kind',[
+  z.object({kind:z.literal('kit'),lineKey:z.string().min(1).max(80),warehouseId:z.number().int().positive().optional(),kitVersionId:z.number().int().positive(),quantity:positiveQty.refine(Number.isSafeInteger,'套数须为整数'),unitPrice:z.number().nonnegative().optional(),priceSource:z.enum(['kit_default','manual'])}).strict(),
+  z.object({kind:z.literal('ordinary'),lineKey:z.string().min(1).max(80),warehouseId:z.number().int().positive().optional(),productId:z.number().int().positive(),entryUnit:z.string().max(20).optional().nullable(),quantity:positiveQty,unitPrice:z.number().positive().optional(),priceSource:z.enum(['default','list','manual'])}).strict(),
+])
+const commercialCreateSaleSchema=ordinaryCreateSaleSchema.omit({items:true}).extend({customerName:z.string().optional(),warehouseName:z.string().optional(),commercialModel:z.literal('kit-v1'),expectedRevision:z.number().int().positive().optional(),commercialGroups:z.array(commercialGroupSchema).min(1).max(200)}).strict()
+const commercialPreviewSchema=commercialCreateSaleSchema.extend({expectedRevision:z.number().int().positive()})
+const commercialMarker={commercialModel:z.literal('kit-v1'),expectedRevision:z.number().int().positive()}
+// Inspect the raw marker before an ordinary object schema can strip it.
+function modelSchema(ordinary,commercial){return z.any().transform((raw,ctx)=>{if(raw?.commercialModel===undefined&&(raw?.commercialGroups!==undefined||raw?.groups!==undefined)){ctx.addIssue({code:z.ZodIssueCode.custom,message:'当前客户端暂不能处理套单，请先保留输入并更新客户端'});return z.NEVER}const schema=raw?.commercialModel===undefined?ordinary:commercial;const parsed=schema.safeParse(raw);if(!parsed.success){for(const e of parsed.error.issues)ctx.addIssue(e);return z.NEVER}return parsed.data})}
+const createSaleSchema=modelSchema(ordinaryCreateSaleSchema,commercialCreateSaleSchema)
+const reserveSaleSchema=modelSchema(ordinaryReserveSaleSchema,ordinaryReserveSaleSchema.extend(commercialMarker).strict())
+const releaseSaleSchema=modelSchema(ordinaryReleaseSaleSchema,ordinaryReleaseSaleSchema.extend(commercialMarker).strict())
+const shipSaleSchema=modelSchema(ordinaryShipSaleSchema,z.object({...commercialMarker,groups:z.array(z.object({groupId:z.number().int().positive(),qty:positiveQty}).strict()).min(1).max(200)}).strict())
+const commercialActionSchema=modelSchema(z.object({}).default({}),z.object(commercialMarker).strict())
 
 function getNetOrderAmount(totalAmount, discountAmount) {
   const gross = Math.max(0, Number(totalAmount) || 0)
@@ -156,6 +171,11 @@ function selectDispatchRows(allRows, { items = null, itemIds = null } = {}) {
 }
 
 module.exports = {
+  modelSchema,
+  ordinaryCreateSaleSchema, ordinaryReserveSaleSchema, ordinaryReleaseSaleSchema, ordinaryShipSaleSchema,
+  commercialActionSchema,
+  commercialCreateSaleSchema,
+  commercialPreviewSchema,
   saleItemSchema,
   createSaleSchema,
   reserveSaleSchema,

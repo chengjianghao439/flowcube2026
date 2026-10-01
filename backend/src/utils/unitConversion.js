@@ -42,12 +42,11 @@ async function resolveConversionRate(conn, productId, entryUnit, baseUnit) {
  * 向后兼容：不传 entryUnit → entryUnit=基本单位 → rate=1 → 基本单位量=录入量，行为完全不变。
  * @returns 原 item 上补齐 { quantity, unitPrice(基本单位), amount, entryUnit, entryQty, conversionRate }
  */
-async function foldEntryItem(conn, item) {
+function foldEntryItemWithRate(item, rate) {
   assertQtyScale(item.quantity, '录入数量')
   const entryUnit = item.entryUnit || item.unit || null
-  const rate = await resolveConversionRate(conn, item.productId, entryUnit, item.unit)
   const entryQty = Number(item.quantity) || 0
-  const entryUnitPrice = Number(item.unitPrice) || 0
+  const entryUnitPrice = (Number(item.unitPrice) || 0) * (item.priceIsBase ? rate : 1)
   assertQtyScale(entryQty * rate, '折算后的基本单位数量')
   const quantity = roundQty(entryQty * rate)
   if (!(quantity > 0)) {
@@ -61,7 +60,33 @@ async function foldEntryItem(conn, item) {
     entryUnit,
     entryQty,
     conversionRate: rate,
+    entryUnitPrice,
   }
+}
+
+async function foldEntryItem(conn, item) {
+  const rate = await resolveConversionRate(conn, item.productId, item.entryUnit || item.unit, item.unit)
+  return foldEntryItemWithRate(item, rate)
+}
+
+/** Batch unit metadata; same fold rule as the ordinary single-item entry. */
+async function foldEntryItemsBatch(conn, items) {
+  const ids = [...new Set(items.filter(i => i.entryUnit && i.entryUnit !== i.unit).map(i => Number(i.productId)))]
+  const [units] = ids.length ? await conn.query('SELECT product_id,unit_name,conversion_rate FROM product_units WHERE product_id IN (?)', [ids]) : [[]]
+  const out = items.map(item => {
+    let rate = 1
+    if (item.entryUnit && item.entryUnit !== item.unit) {
+      const configured = units.filter(u => Number(u.product_id) === Number(item.productId))
+      if (!configured.length) throw new AppError(`商品未配置多计量单位，无法按「${item.entryUnit}」录入`, 400, 'UNIT_NOT_CONFIGURED')
+      const match = configured.find(u => u.unit_name === item.entryUnit)
+      if (!match) throw new AppError(`「${item.entryUnit}」不是该商品的有效计量单位`, 400, 'UNIT_INVALID')
+      rate = Number(match.conversion_rate)
+      if (!(rate > 0)) throw new AppError(`商品单位「${item.entryUnit}」换算率非法`, 400, 'UNIT_RATE_INVALID')
+    }
+    return foldEntryItemWithRate(item, rate)
+  })
+  await assertQtyPrecision(conn, out.map((i, n) => ({ productId: i.productId, qty: i.quantity, label: `第 ${n + 1} 行数量` })))
+  return out
 }
 
 /** 便捷：批量折算一组明细（顺序 await，含 product_units 查询）。 */
@@ -79,4 +104,4 @@ async function foldEntryItems(conn, items) {
   return out
 }
 
-module.exports = { round2, roundQty, round8, resolveConversionRate, foldEntryItem, foldEntryItems }
+module.exports = { round2, roundQty, round8, resolveConversionRate, foldEntryItem, foldEntryItems, foldEntryItemsBatch, foldEntryItemWithRate }

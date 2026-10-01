@@ -74,7 +74,13 @@ async function saleDelivery(conn, order, user) {
   })
   const open = items.filter(i => i.remaining > 0)
   const knownFirst = open.map(i => i.firstDate).filter(Boolean).sort()
-  return { commitments: dates, items, firstDate: knownFirst[0] || null,
+  let commercialGroups
+  if(order.commercial_model==='kit-v1'){
+    const groups=await require('../sale/sale.commercial-store').loadGroups(conn,order.id)
+    const [dispatch]=await conn.query('SELECT group_id,SUM(quantity) AS quantity FROM sale_dispatch_groups WHERE order_id=? AND confirmed_at IS NOT NULL GROUP BY group_id',[order.id])
+    commercialGroups=require('../sale/sale.commercial-delivery').allocateCommercialDelivery(groups,new Map(dispatch.map(d=>[Number(d.group_id),Number(d.quantity)])),items,today)
+  }
+  return { commitments: dates, items,...(commercialGroups?{commercialGroups}:{}),firstDate: knownFirst[0] || null,
     allDate: open.length && open.every(i => i.allDate) ? open.map(i => i.allDate).sort().at(-1) : null }
 }
 async function purchaseImpacts(conn, id, user) {

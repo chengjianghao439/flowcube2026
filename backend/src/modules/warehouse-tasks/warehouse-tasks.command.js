@@ -398,7 +398,7 @@ async function cancel(id, options = {}) {
       )
       const packagesToUnpack = sealedPackages.map(p => ({ packageId: Number(p.id), barcode: p.barcode }))
       if (taskRow.sale_order_id) {
-        await releaseByRef(conn, 'sale_order', Number(taskRow.sale_order_id))
+        if(!options.preserveReservation)await releaseByRef(conn, 'sale_order', Number(taskRow.sale_order_id))
         // 销售单业务状态立即变为已取消——不依赖物理归还进度。走 sale.service.cancel()
         // 间接调用时它自己会做这一步（并传 syncSaleStatus:false 跳过这里，避免重复）；
         // 直接调用本接口（PUT /warehouse-tasks/:id/cancel）时没有别人会做，必须在这里做。
@@ -452,7 +452,7 @@ async function cancel(id, options = {}) {
     await sortingBinSvc.releaseByTask(conn, id)
 
     if (taskRow.sale_order_id) {
-      await releaseByRef(conn, 'sale_order', Number(taskRow.sale_order_id))
+      if(!options.preserveReservation)await releaseByRef(conn, 'sale_order', Number(taskRow.sale_order_id))
     }
 
     // 取消关联的包裹（标记 status=3）并清理包裹打印任务

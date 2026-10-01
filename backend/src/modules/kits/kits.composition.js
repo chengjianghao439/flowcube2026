@@ -108,4 +108,4 @@ function expandCommercialGroups(groups) {
   if (!Number.isSafeInteger(amountCents) || amountCents > MAX_AMOUNT_CENTS) throw new AppError('总金额超出安全范围', 400, 'KIT_AMOUNT_OVERFLOW')
   return { commercialGroups, physicalItems, amount: amountCents / 100 }
 }
-module.exports = { amountFromPriceQuantity, assertPrice, assertPositiveQty, snapshotComponents, expandCommercialGroups }
+module.exports = { amountFromPriceQuantity, assertPrice, assertPositiveQty, allocateCents, snapshotComponents, expandCommercialGroups }

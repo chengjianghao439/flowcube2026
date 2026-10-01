@@ -9,15 +9,17 @@ const vm = require('node:vm')
 const qty = require('../backend/src/utils/qtyPrecision')
 const AppError = require('../backend/src/utils/AppError')
 
-function service(relative, { allowDecimal = 1, status = 2, allowWrites = false, expectedQty = 10 } = {}) {
+function service(relative, { allowDecimal = 1, status = 2, allowWrites = false, expectedQty = 10, qaItem = {} } = {}) {
   const writes = []
+  const reads = []
+  const returnItem={id:1,product_id:1,expected_qty:expectedQty,received_qty:0,checked_qty:0,...qaItem}
   const conn = {
     beginTransaction: async () => {}, commit: async () => {}, rollback: async () => {}, release() {},
-    async query(sql) {
-      if (/^\s*(INSERT|UPDATE|DELETE)/i.test(sql)) { writes.push(sql); if (!allowWrites) throw new Error('unexpected business write'); return [{ affectedRows: 1 }] }
+    async query(sql,params) {
+      if (/^\s*(INSERT|UPDATE|DELETE)/i.test(sql)) { writes.push(sql); if (!allowWrites) throw new Error('unexpected business write'); if(sql.includes('SET received_qty = received_qty + ?'))returnItem.received_qty=Number((returnItem.received_qty+params[0]).toFixed(2));return [{ affectedRows: 1 }] }
+      reads.push(sql)
       if (sql.includes('product_items')) return [[{ id: 1, name: '测试商品', allow_decimal_qty: allowDecimal }]]
-      if (sql.includes('SUM(expected_qty - received_qty)')) return [[{ remaining: 0 }]]
-      if (sql.includes('return_task_items')) return [[{ id: 1, product_id: 1, expected_qty: expectedQty, received_qty: 0, checked_qty: 0 }]]
+      if (sql.includes('return_task_items')) return [[{...returnItem}]]
       if (sql.includes('inventory_check_items')) return [[{ id: 1, product_id: 1, book_qty: 2 }]]
       if (sql.includes('inventory_containers')) return [[1, 2].map(id => ({ id, barcode: `I${id}`, product_id: 1, warehouse_id: 1, status: 1, remaining_qty: 1, initial_qty: 2, container_type: 2 }))]
       if (sql.includes('sale_order_items')) return [[{ id: 1, product_id: 1, warehouse_id: 1, reserved_qty: 2 }]]
@@ -41,8 +43,8 @@ function service(relative, { allowDecimal = 1, status = 2, allowWrites = false, 
       return fallback
     },
   }
-  vm.runInNewContext(fs.readFileSync(filename, 'utf8'), context, { filename })
-  return { api: context.module.exports, conn, writes }
+  vm.runInNewContext(fs.readFileSync(filename, 'utf8')+'\nmodule.exports.tryFinishForTest=typeof tryFinishReturnTaskPutaway === \'function\' ? tryFinishReturnTaskPutaway : undefined', context, { filename })
+  return { api: context.module.exports, conn, writes, reads }
 }
 
 for (const [label, value, code, allowDecimal] of [
@@ -82,4 +84,13 @@ test('退货合法两箱0.1加0.2完整分配0.3，不误报超收0', async () =
   const result = await api.receive(conn, 1, { productId: 1, packages: [{ qty: 0.1 }, { qty: 0.2 }] })
   assert.equal(result.containers.length, 2)
   assert.equal(result.status, 3)
+})
+
+test('退货完成门控读取当前完整明细，1.2减拒收.3减入仓.9没有浮点残量',async()=>{
+  for(const [putaway,expected] of [[.9,true],[.89,false]]){
+    const {api,conn,writes,reads}=service('modules/return-tasks/return-tasks.service.js',{allowWrites:true,qaItem:{checked_qty:'1.20',rejected_qty:'0.30',putaway_qty:putaway.toFixed(2)}})
+    assert.equal(await api.tryFinishForTest(conn,1,'RT',null),expected)
+    assert.equal(writes.includes('status change'),expected)
+    assert.ok(reads.some(sql=>sql.includes('checked_qty,rejected_qty,putaway_qty')&&sql.includes('FOR UPDATE')))
+  }
 })

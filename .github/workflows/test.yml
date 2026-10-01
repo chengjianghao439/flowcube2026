@@ -100,6 +100,8 @@ jobs:
 
       - name: 单元测试 — 商业行分批金额与来源组件退款纯规则
         run: npm run test:sale-commercial-money
+      - name: Kit lifecycle commercial contracts and accounting projections
+        run: npm run test:sale-commercial
 
       - name: 单元测试 — 标签几何及前端镜像（Node 22 实际执行）
         run: npm run test:label
@@ -528,6 +530,12 @@ jobs:
 
       - name: 冒烟测试 — 成套共享组件真实现货向量
         run: npm run smoke:kits-current-stock
+      - name: Kit lifecycle actual sales/warehouse/returns/financial flow
+        run: npm run smoke:sale-commercial-lifecycle
+      - name: Kit saved-scope replay and current return completion gates
+        run: npm run smoke:sale-commercial-review
+      - name: Kit partial cancellation PICK shares and current task/device scope
+        run: npm run smoke:sale-commercial-partial-cancel
 
       - name: 冒烟测试 — 销售预计库存 ATP（采购预计量占库 / 取消与短装先解绑）
         run: npm run smoke:atp

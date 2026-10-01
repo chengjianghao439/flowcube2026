@@ -229,11 +229,11 @@ async function receive(conn, taskId, { productId, packages, requestKey, userId, 
   }
 
   // 全部收货完成 → 待质检
-  const [[{ remaining: stillRemaining }]] = await conn.query(
-    `SELECT COALESCE(SUM(expected_qty - received_qty), 0) AS remaining
-     FROM return_task_items WHERE task_id = ?`,
+  const [currentReceived] = await conn.query(
+    'SELECT id,expected_qty,received_qty FROM return_task_items WHERE task_id=? ORDER BY id FOR UPDATE',
     [taskId],
   )
+  const stillRemaining=currentReceived.reduce((sum,i)=>sum+Math.round(Number(i.expected_qty)*100)-Math.round(Number(i.received_qty)*100),0) / 100
   if (Number(stillRemaining) <= 0) {
     await compareAndSetStatus(conn, {
       table: 'return_tasks', id: taskId,
@@ -339,11 +339,13 @@ function fmtSqlDate(d) {
  * 从没有容器进入过待上架状态，putaway() 根本不会被调用），所以两处都要收口检查。
  */
 async function tryFinishReturnTaskPutaway(conn, taskId, taskNo, returnId) {
-  const [[{ remaining }]] = await conn.query(
-    `SELECT COALESCE(SUM(checked_qty - rejected_qty - putaway_qty), 0) AS remaining
-     FROM return_task_items WHERE task_id = ?`,
+  // Lock complete current RTI facts, not an aggregate over a pre-wait RR snapshot.
+  // DECIMAL quantities remain hundredths; integer subtraction cannot leave a floating tail.
+  const [currentItems] = await conn.query(
+    'SELECT id,checked_qty,rejected_qty,putaway_qty FROM return_task_items WHERE task_id=? ORDER BY id FOR UPDATE',
     [taskId],
   )
+  const remaining=currentItems.reduce((sum,i)=>sum+Math.round(Number(i.checked_qty)*100)-Math.round(Number(i.rejected_qty)*100)-Math.round(Number(i.putaway_qty)*100),0) / 100
   if (Number(remaining) > 0) return false
 
   await compareAndSetStatus(conn, {
@@ -358,6 +360,7 @@ async function tryFinishReturnTaskPutaway(conn, taskId, taskNo, returnId) {
 }
 
 async function check(conn, taskId, { productId, passedQty, rejectedQty = 0, requestKey, userId, pdaWarehouseId = null }) {
+  await require('../sale/sale.commercial-returns').lockExecution(conn,taskId)
   const requestState = requestKey
     ? await beginResourceOperationRequest(conn, {
       requestKey, action: 'return.check', userId,
@@ -414,11 +417,11 @@ async function check(conn, taskId, { productId, passedQty, rejectedQty = 0, requ
   const containers = await allocateQaContainers(conn, { taskId, taskNo: taskRow.task_no, productId, passedQty: passed, rejectedQty: rejected })
 
   // 全部质检完成 → 待上架
-  const [[{ remaining: stillRemaining }]] = await conn.query(
-    `SELECT COALESCE(SUM(received_qty - checked_qty), 0) AS remaining
-     FROM return_task_items WHERE task_id = ?`,
+  const [currentChecked] = await conn.query(
+    'SELECT id,received_qty,checked_qty FROM return_task_items WHERE task_id=? ORDER BY id FOR UPDATE',
     [taskId],
   )
+  const stillRemaining=currentChecked.reduce((sum,i)=>sum+Math.round(Number(i.received_qty)*100)-Math.round(Number(i.checked_qty)*100),0) / 100
   let finalStatus = Number(taskRow.status)
   if (Number(stillRemaining) <= 0) {
     await compareAndSetStatus(conn, {
@@ -447,6 +450,7 @@ async function check(conn, taskId, { productId, passedQty, rejectedQty = 0, requ
 
 // ─── PDA 上架 ────────────────────────────────────────────────────────
 async function putaway(conn, taskId, { containerId, locationId, requestKey, userId, pdaWarehouseId = null, scopeWarehouseIds = null }) {
+  await require('../sale/sale.commercial-returns').lockExecution(conn,taskId)
   const requestState = requestKey
     ? await beginResourceOperationRequest(conn, {
       requestKey, action: 'return.putaway', userId,

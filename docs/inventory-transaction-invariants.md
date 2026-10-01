@@ -114,3 +114,22 @@
 本批只改变 PC 还原调用与恢复入口，不改容器、来源、成本、打印、库存汇总或后端回执事务。首发在 POST 前同步持久化账号/原盒/scoped action/原键/实际服务器端点/原数字参数；同盒未知结果不能被新输入覆盖。刷新仅恢复原身份，显式查询或同键同参数重试，`not_found` 不证明失败。
 
 恢复成功必须核对原回执归属，更新或重读原盒；不能用当前正在查看的盒代替。业务已确认而本地清理失败时保留阻断，禁止换键再还原。查询/重试固定原端点并禁用本次候选服务器回退，另一服务器上的同账号 ID/盒 ID 不属于原操作。打印降级与业务成功分别说明，均不宣称物理打印完成。实现与权限/会话细则见 `docs/frontend-pda-conventions.md` 的 PC A3 段；原 `smoke:plastic-box-batch-a` 守恒专项及断言保持，本轮不跑数据库套件。
+
+### C2 实发/退款锁序与唯一事实（2026-10-01）
+
+kit 实发仍 SO→WT→成交当前行→库存维度→容器，金额以真实本批 WT7 同 commit 冻结。退款创建用 SO X 序列化原物料与来源申请上限，只锁选定 immutable source budget IDs，不以金额 JOIN 锁 WT/成交组。退款执行在质检全拒收与上架两入口均先锁来源预算（稳定ID顺序）→本 SR→RT→库存维度/容器→payment→退款证据 current-read/INSERT。执行不再取得 SO/组/WT 锁；不可变来源金额可普通 MVCC 读，永不更新的预算行仅作退款互斥。
+
+QA数量从完整 RTI FOR UPDATE 当前读直接取得，不能先锁ID再用普通 JOIN 读旧RR快照。此前已完成退款 receipts 和其完成 RTI proof 当前读，核 checked−rejected=qualified=putaway；不去锁另一未完成 SR。不同来源退款与后批实发先锁 payment 再读/新增退款证据，防止等待前 RR 快照覆盖应收、证据范围锁与 payment 反锁。order current-money 查询只锁冗余 order_id 的证据主表，不锁 JOIN 的 g/wt，也不等 source budget mutex。
+
+退款证据只保存本次真实 QA 执行量与 immutable 金额，不维护另一可写库存数量台账。源预算与派发数量不会因退货改写；库存唯一源仍 ACTIVE 容器，缓存仍仅 syncStockFromContainers。kit 取消已拣待归还预占留到正常 PDA 实物返库；客户端不能传 preserveReservation 选择此行为，服务层只据锁定 kit 身份决定。
+
+C2规格复审补充：销售退货receive、QA完成与putaway完成三处门控必须按task锁之后，对完整RTI `ORDER BY id FOR UPDATE`当前读，再分别计算expected−received、received−checked、checked−rejected−putaway。不能用普通MVCC SUM，也不能只给聚合字面追加锁而假定所有事实已当前读。两位数量转百分整数差值，无浮点残量且不clamp真实剩量；source→SR→RT→库存维度→容器→payment既有执行锁序不改。普通销售RT采用同一当前读可靠性修正，采购退货不经过此销售RT链。
+### C2 散件取消的预占归还事实（2026-10-01品质复审）
+
+套单取消/逐容器归还读取本任务、本容器的当前有效PICK明细，`COALESCE(scan_purpose,1)=1`沿用历史NULL拣货口径，CHECK与CANCEL_RETURN不计入；合法改单会调整或删除原PICK记录，后续读其当前值。数量按百分整数累加，不新增数量台账。任务、明细、商品、仓库、容器锁归属及ACTIVE状态必须闭合；缺PICK或待归还量大于本单预占显式409，不用min/cap借用其他单份额。
+
+同一conn持SO→WT，先stock dimension再container锁，当前PICK与自身预占行用`FOR UPDATE`直接读取，不用等待前RR快照的SUM。取消批量读取任务/WTI/容器/PICK/预占；归还在已持own WT与container锁后当前读取own WTI，WT排他锁已经阻止同任务拣货/改单/取消，因此不反向等待另一任务的WTI。归还必须先精确释放本容器PICK份额，再解锁容器、记录实际归还量和同事务回执；来源/预占故障回滚不解锁，原key可重试，成功重放不再释放。
+
+此修正不改原扫码条码/箱拆解流程。2026-10-02归还权限复审进一步明确：kit PDA散件归还的SO X只协调同单预占，授权沿`assertTaskScope`按当前WT仓库与真实设备绑定仓库；不要求仓库员工同时具有销售单头仓范围。SO→WT锁序不变，任务`FOR UPDATE`当前读之后、begin/replay之前先核范围与设备，业务当前WT再次核验。成功key重放也须通过当前范围/设备检查。真实设备事实来自`req.pda.warehouseId`，不能来自body；内部service可选参数默认null保持原调用兼容，实际kit HTTP始终由设备会话中间件透传。
+
+一个成交组仍只用单仓，订单可由不同仓的成交组组成；销售建改、占释、派发、取消、删除与来源退货继续按原整单头仓/保存物料范围授权。PDA不决定销售单取消，直接取消销售WT仍`SALE_ORDER_CANCEL_REQUIRED`。ordinary与box路径原政策不改。旧失败夹具曾留下的错误预占须另按精确来源核对恢复，更新helper不会自动修旧锁。
