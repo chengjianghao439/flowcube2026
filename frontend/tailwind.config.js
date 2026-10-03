@@ -1,3 +1,5 @@
+import legacyColors from './tailwind-v3-colors.js'
+
 /** @type {import('tailwindcss').Config} */
 export default {
   darkMode: ['class'],
@@ -15,6 +17,7 @@ export default {
     },
     extend: {
       colors: {
+        ...legacyColors,
         // LoginPage 专属 token（不影响 ERP 主题）
         'background-light': '#f5f6f8',
         'background-dark':  '#0f1523',
@@ -77,6 +80,17 @@ export default {
           ring: 'hsl(var(--sidebar-ring))',
         },
       },
+      // v4 renamed the small shadow/blur scales; existing class names retain v3 values.
+      boxShadow: {
+        sm: '0 1px 2px 0 rgb(0 0 0 / 0.05)',
+        DEFAULT: '0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)',
+        md: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
+        lg: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
+        xl: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)',
+        '2xl': '0 25px 50px -12px rgb(0 0 0 / 0.25)',
+        inner: 'inset 0 2px 4px 0 rgb(0 0 0 / 0.05)',
+      },
+      blur: { sm: '4px', DEFAULT: '8px', md: '12px', lg: '16px', xl: '24px', '2xl': '40px', '3xl': '64px' },
       fontFamily: {
         sans: [
           'Inter',

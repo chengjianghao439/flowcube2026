@@ -57,6 +57,22 @@ jobs:
       - run: npm install --global agent-browser@0.36.0
       - run: agent-browser install --with-deps
       - run: npm run test:dirty-navigation
+      - run: npm run test:style-compat
+
+  desktop-download-compat:
+    name: 桌面下载失败路径与补丁契约
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - run: npm ci --prefix desktop --ignore-scripts
+      - run: node desktop/build-support/patch-builder-download.cjs
+      - run: npm run test:builder-download-compat
 
   static:
     name: 静态检查（lint + 类型）

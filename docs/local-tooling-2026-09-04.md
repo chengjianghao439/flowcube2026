@@ -134,3 +134,8 @@ FLOWCUBE_CHROME_SESSION="$(uuidgen)"
 ```
 
 `--autoConnect` 可在得到调试访问确认后连接当前 Chrome；此步骤与独立临时浏览器测试分开。官方参考：[项目与权限说明](https://github.com/ChromeDevTools/chrome-devtools-mcp)、[CLI](https://github.com/ChromeDevTools/chrome-devtools-mcp/blob/main/docs/cli.md)、[连接现有 Chrome](https://github.com/ChromeDevTools/chrome-devtools-mcp/blob/main/docs/advanced-usage.md)。AGENTS.md 已同步新工具和资源收尾规则。
+
+
+## 后续开发热重启候选（2026-10-03）
+
+为移除nodemon携带的未修补braces开发依赖，v0.12.0本地发布候选将 `backend` 的 `npm run dev` 改为既有Node22的 `node --watch index.js`，不改生产 `npm start`。用实际命令与合成require依赖验证文件修改能重启，退出后自有进程组已关闭；Node实测22.23.2。依赖安装/audit与上传回归通过，尚未随本版发布，详见 `docs/release-v0.12.0-result.md`。Node内置watch不自动把未加载的SQL/文档加入监听，需要调整配置时主动重启。

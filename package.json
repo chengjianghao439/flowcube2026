@@ -173,6 +173,8 @@
     "smoke:sale-commercial-partial-cancel": "node tests/sale-commercial-partial-cancel.smoke.test.js",
     "smoke:sale-commercial-source-metadata": "KIT_TEST_SLICE=source-metadata node tests/sale-commercial-lifecycle.smoke.test.js",
     "smoke:sale-commercial-readonly": "KIT_TEST_SLICE=readonly node tests/sale-commercial-lifecycle.smoke.test.js",
-    "smoke:sale-commercial-review": "KIT_TEST_SLICE=scope node tests/sale-commercial-lifecycle.smoke.test.js && KIT_TEST_SLICE=gates KIT_GATE_PHASE=qa node tests/sale-commercial-lifecycle.smoke.test.js"
+    "smoke:sale-commercial-review": "KIT_TEST_SLICE=scope node tests/sale-commercial-lifecycle.smoke.test.js && KIT_TEST_SLICE=gates KIT_GATE_PHASE=qa node tests/sale-commercial-lifecycle.smoke.test.js",
+    "test:builder-download-compat": "node --test tests/builder-download-compat.test.js",
+    "test:style-compat": "node scripts/browser-smoke/style-compat.cjs"
   }
 }

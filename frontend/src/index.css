@@ -1,9 +1,6 @@
-/* ──────────────────────────────────────────────────────────────────────────
- * 主题变量（:root / .dark）必须放在 @tailwind 指令之前、@layer 之外——
- * Tailwind 3.4 会剔除 @layer base 内「无 class 语义」的纯变量声明（purge/jit 认为未用到），
- * 导致 .dark 覆盖块从编译产物中消失（暗色主题完全失效，见 2026-08-25 评审附带发现）。
- * 顶层规则恒保留；@layer base 只留带 @apply 的规则。
- * ────────────────────────────────────────────────────────────────────────── */
+@import "tailwindcss";
+@config "../tailwind.config.js";
+/* Theme overrides stay outside cascade layers so both light/dark values remain explicit. */
 :root {
   --background: 220 14% 97%;
   --foreground: 222.2 84% 4.9%;
@@ -84,9 +81,6 @@
   --sidebar-ring: 217 68% 58%;
 }
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
 
 /* 表头和固定操作列表头共用不透明的同色底，横向滚动时内容不会透出。 */
 .data-table-header-surface {
@@ -126,26 +120,33 @@
   }
 }
 
-@layer utilities {
-  /* 排版工具类 */
-  .text-page-title    { @apply text-2xl font-semibold tracking-tight text-foreground; }
-  .text-section-title { @apply text-base font-medium text-foreground; }
-  .text-card-title    { @apply text-base font-semibold text-foreground; }
-  .text-table-head    { @apply text-xs font-medium text-muted-foreground; }
-  .text-label         { @apply text-sm font-medium text-foreground; }
-  .text-body          { @apply text-sm text-foreground; }
-  .text-muted-body    { @apply text-sm text-muted-foreground; }
-  .text-helper        { @apply text-xs text-muted-foreground; }
-  .text-doc-code      { @apply text-xs text-foreground; }
-  .text-doc-code-strong { @apply text-sm font-semibold text-foreground; }
-  .text-doc-code-muted  { @apply text-xs text-muted-foreground; }
-
-  /* 语义色（success / warning / info）已注册进 tailwind.config.js 的 theme.colors，
-     text-success、bg-warning/10、border-info/20 等全部由 Tailwind 自动生成，
-     这里不再手写——手写版本覆盖不到带透明度的修饰符，是配色不一致的历史根源。 */
-
-  /* 卡片基础样式 */
-  .card-base { @apply rounded-lg border border-border bg-card; }
+/* Existing semantic typography and card names stay available with v4 variants. */
+@utility text-page-title { @apply text-2xl font-semibold tracking-tight text-foreground; }
+@utility text-section-title { @apply text-base font-medium text-foreground; }
+@utility text-card-title { @apply text-base font-semibold text-foreground; }
+@utility text-table-head { @apply text-xs font-medium text-muted-foreground; }
+@utility text-label { @apply text-sm font-medium text-foreground; }
+@utility text-body { @apply text-sm text-foreground; }
+@utility text-muted-body { @apply text-sm text-muted-foreground; }
+@utility text-helper { @apply text-xs text-muted-foreground; }
+@utility text-doc-code { @apply text-xs text-foreground; }
+@utility text-doc-code-strong { @apply text-sm font-semibold text-foreground; }
+@utility text-doc-code-muted { @apply text-xs text-muted-foreground; }
+@utility card-base { @apply rounded-lg border border-border bg-card; }
+/* Keep the v3 transparent focus outline (also visible in forced colors).
+ * The visible-element selector wins deterministically over v4 built-in outline-style:none. */
+@utility outline-none {
+  &:not([hidden]) { outline: 2px solid transparent; outline-offset: 2px; }
+}
+@utility container {
+  width: 100%;
+  margin-inline: auto;
+  padding-inline: 2rem;
+  @media (min-width: 1400px) { max-width: 1400px; }
+}
+@layer base {
+  input::placeholder, textarea::placeholder { color: var(--color-gray-400); }
+  button:not(:disabled), [role="button"]:not(:disabled) { cursor: pointer; }
 }
 
 /* ── 电子木鱼「功德 +1」浮字 ─────────────────────────────────────────────── */
@@ -574,4 +575,164 @@ html {
   }
   .rail-dot { left: 50% !important; }
   .rail-node.is-lit::before { display: none !important; }
+}
+
+@utility space-x-0 {
+  & > :where(:not([hidden])) { margin-inline: 0; }
+  & > :not([hidden]) ~ :not([hidden]) {
+    --tw-space-x-reverse: 0;
+    margin-right: calc(0rem * var(--tw-space-x-reverse));
+    margin-left: calc(0rem * (1 - var(--tw-space-x-reverse)));
+  }
+}
+@utility space-x-1 {
+  & > :where(:not([hidden])) { margin-inline: 0; }
+  & > :not([hidden]) ~ :not([hidden]) {
+    --tw-space-x-reverse: 0;
+    margin-right: calc(0.25rem * var(--tw-space-x-reverse));
+    margin-left: calc(0.25rem * (1 - var(--tw-space-x-reverse)));
+  }
+}
+@utility space-x-2 {
+  & > :where(:not([hidden])) { margin-inline: 0; }
+  & > :not([hidden]) ~ :not([hidden]) {
+    --tw-space-x-reverse: 0;
+    margin-right: calc(0.5rem * var(--tw-space-x-reverse));
+    margin-left: calc(0.5rem * (1 - var(--tw-space-x-reverse)));
+  }
+}
+@utility space-x-4 {
+  & > :where(:not([hidden])) { margin-inline: 0; }
+  & > :not([hidden]) ~ :not([hidden]) {
+    --tw-space-x-reverse: 0;
+    margin-right: calc(1rem * var(--tw-space-x-reverse));
+    margin-left: calc(1rem * (1 - var(--tw-space-x-reverse)));
+  }
+}
+@utility space-y-0 {
+  & > :where(:not([hidden])) { margin-block: 0; }
+  & > :not([hidden]) ~ :not([hidden]) {
+    --tw-space-y-reverse: 0;
+    margin-top: calc(0rem * (1 - var(--tw-space-y-reverse)));
+    margin-bottom: calc(0rem * var(--tw-space-y-reverse));
+  }
+}
+@utility space-y-0.5 {
+  & > :where(:not([hidden])) { margin-block: 0; }
+  & > :not([hidden]) ~ :not([hidden]) {
+    --tw-space-y-reverse: 0;
+    margin-top: calc(0.125rem * (1 - var(--tw-space-y-reverse)));
+    margin-bottom: calc(0.125rem * var(--tw-space-y-reverse));
+  }
+}
+@utility space-y-1 {
+  & > :where(:not([hidden])) { margin-block: 0; }
+  & > :not([hidden]) ~ :not([hidden]) {
+    --tw-space-y-reverse: 0;
+    margin-top: calc(0.25rem * (1 - var(--tw-space-y-reverse)));
+    margin-bottom: calc(0.25rem * var(--tw-space-y-reverse));
+  }
+}
+@utility space-y-1.5 {
+  & > :where(:not([hidden])) { margin-block: 0; }
+  & > :not([hidden]) ~ :not([hidden]) {
+    --tw-space-y-reverse: 0;
+    margin-top: calc(0.375rem * (1 - var(--tw-space-y-reverse)));
+    margin-bottom: calc(0.375rem * var(--tw-space-y-reverse));
+  }
+}
+@utility space-y-2 {
+  & > :where(:not([hidden])) { margin-block: 0; }
+  & > :not([hidden]) ~ :not([hidden]) {
+    --tw-space-y-reverse: 0;
+    margin-top: calc(0.5rem * (1 - var(--tw-space-y-reverse)));
+    margin-bottom: calc(0.5rem * var(--tw-space-y-reverse));
+  }
+}
+@utility space-y-2.5 {
+  & > :where(:not([hidden])) { margin-block: 0; }
+  & > :not([hidden]) ~ :not([hidden]) {
+    --tw-space-y-reverse: 0;
+    margin-top: calc(0.625rem * (1 - var(--tw-space-y-reverse)));
+    margin-bottom: calc(0.625rem * var(--tw-space-y-reverse));
+  }
+}
+@utility space-y-3 {
+  & > :where(:not([hidden])) { margin-block: 0; }
+  & > :not([hidden]) ~ :not([hidden]) {
+    --tw-space-y-reverse: 0;
+    margin-top: calc(0.75rem * (1 - var(--tw-space-y-reverse)));
+    margin-bottom: calc(0.75rem * var(--tw-space-y-reverse));
+  }
+}
+@utility space-y-4 {
+  & > :where(:not([hidden])) { margin-block: 0; }
+  & > :not([hidden]) ~ :not([hidden]) {
+    --tw-space-y-reverse: 0;
+    margin-top: calc(1rem * (1 - var(--tw-space-y-reverse)));
+    margin-bottom: calc(1rem * var(--tw-space-y-reverse));
+  }
+}
+@utility space-y-5 {
+  & > :where(:not([hidden])) { margin-block: 0; }
+  & > :not([hidden]) ~ :not([hidden]) {
+    --tw-space-y-reverse: 0;
+    margin-top: calc(1.25rem * (1 - var(--tw-space-y-reverse)));
+    margin-bottom: calc(1.25rem * var(--tw-space-y-reverse));
+  }
+}
+@utility space-y-6 {
+  & > :where(:not([hidden])) { margin-block: 0; }
+  & > :not([hidden]) ~ :not([hidden]) {
+    --tw-space-y-reverse: 0;
+    margin-top: calc(1.5rem * (1 - var(--tw-space-y-reverse)));
+    margin-bottom: calc(1.5rem * var(--tw-space-y-reverse));
+  }
+}
+@utility space-y-8 {
+  & > :where(:not([hidden])) { margin-block: 0; }
+  & > :not([hidden]) ~ :not([hidden]) {
+    --tw-space-y-reverse: 0;
+    margin-top: calc(2rem * (1 - var(--tw-space-y-reverse)));
+    margin-bottom: calc(2rem * var(--tw-space-y-reverse));
+  }
+}
+
+/* Retain the existing leading sibling separator, including wrapped rows. */
+@utility divide-x {
+  & > :where(:not([hidden])) { border-inline-width: 0; }
+  & > :not([hidden]) ~ :not([hidden]) {
+    --tw-divide-x-reverse: 0;
+    border-right-width: calc(1px * var(--tw-divide-x-reverse));
+    border-left-width: calc(1px * (1 - var(--tw-divide-x-reverse)));
+  }
+}
+
+/* Retain the existing leading sibling separator, including wrapped rows. */
+@utility divide-y {
+  & > :where(:not([hidden])) { border-block-width: 0; }
+  & > :not([hidden]) ~ :not([hidden]) {
+    --tw-divide-y-reverse: 0;
+    border-top-width: calc(1px * (1 - var(--tw-divide-y-reverse)));
+    border-bottom-width: calc(1px * var(--tw-divide-y-reverse));
+  }
+}
+
+/* Responsive zero separators and reverse modifiers must target the same v3 siblings. */
+@utility divide-y-0 {
+  & > :where(:not([hidden])) { border-block-width: 0; }
+  & > :not([hidden]) ~ :not([hidden]) {
+    --tw-divide-y-reverse: 0;
+    border-top-width: 0;
+    border-bottom-width: 0;
+  }
+}
+@utility space-x-reverse {
+  & > :not([hidden]) ~ :not([hidden]) { --tw-space-x-reverse: 1; }
+}
+@utility space-y-reverse {
+  & > :not([hidden]) ~ :not([hidden]) { --tw-space-y-reverse: 1; }
+}
+@utility divide-y-reverse {
+  & > :not([hidden]) ~ :not([hidden]) { --tw-divide-y-reverse: 1; }
 }

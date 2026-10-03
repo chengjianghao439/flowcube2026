@@ -6,7 +6,7 @@
   "type": "commonjs",
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon index.js",
+    "dev": "node --watch index.js",
     "lint": "eslint src/",
     "smoke:reports": "node scripts/smoke-reports.js",
     "migrate": "node scripts/migrate.js",
@@ -35,8 +35,7 @@
     "@eslint/js": "^9.39.5",
     "@zxing/library": "0.21.3",
     "eslint": "^10.10.0",
-    "globals": "^17.12.0",
-    "nodemon": "^3.1.9"
+    "globals": "^17.12.0"
   },
   "overrides": {
     "qs": "^6.16.0",

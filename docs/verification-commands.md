@@ -562,3 +562,21 @@ SPEC补强的反向验证仅在专属测试进程加载临时变异器，未修�
 C2/C4 与 A/B 已开发批次最终业务代码 `79a3c54` 的本地完整选定矩阵、独立库存集成、前端 195 文件/1226 项及受控财务跨期专项通过；独占审计/塑料盒/严格修复也已在同一代码复验。完整结果和各次失败/修正边界见 `docs/superpowers/plans/2026-10-03-system-acceptance.md`；上述早期切片记录仍代表当时状态，远端 CI、真机/纸张/官方平台、员工效率和生产仍未验证。
 
 本机 Colima 约2GB内存，本轮并行三个 MySQL 导致原本地开发数据库被 OOM 停止；恢复原持久卷服务后剩余八组全部用全新库串行通过，原失败日志保留。今后在该资源条件下将独占 MySQL 专项串行安排，启动前核正在运行的实例与内存预算，不因每个专项单独拥有资源就默认可以并行；不得为腾资源关闭其他任务的实例。普通隔离库保留审计，严格修复临时容器/卷/归属文件按 runner 精确收尾。
+
+
+### v0.12.0 发布依赖候选（2026-10-03）
+
+首轮同SHA Tests在远端通过，但安全扫描阻断；该绿灯只覆盖原lock。用户批准调整构建依赖后的本地候选：四目录完整audit均0；固定桌面适配18项真实下载专项、最低Node22.12、官方NSIS下载/固定摘要/提取通过；原裸get5 override已撤回，不能混用中间audit0。根CI对应命令：
+
+```bash
+# 与桌面下载专项CI相同，不依赖实际Electron启动：
+npm ci --prefix desktop --ignore-scripts
+node desktop/build-support/patch-builder-download.cjs
+npm run test:builder-download-compat
+# frontend已安装、agent-browser已安装Chromium后，在根目录运行：
+npm run test:style-compat
+```
+
+style-compat用真实共享React组件和原Tailwind3浏览器计算值；不可用新引擎重写黄金值掩盖差异。原基本896项通过；独立审查扩展隐藏项/窄汇总栏/响应式/交互后的2070项先红39差异，修后自然0差异，保留旧引擎黄金值并独立复跑绿。桌面hover/focus、弹窗与现代Chromium触摸模拟通过，触摸hoverCapability实际true，不当现场设备或hover:none验收。迁移后完整前端1226项、app类型、ERP/PDA前端构建与lint通过，最后CSS补正后已补lint/app类型/ERP与PDA页面构建自然0；不重跑未受影响JS单测。未确认PDA WebView≥111，不能当平台兼容；远端新SHA完整门禁、Windows/Android真实安装及线上三端未验收。原上传6项和Node原生watch证据保留；详细现状/中间失败见 `docs/release-v0.12.0-result.md`。
+
+2026-10-04 代表真实电脑业务页以原合成测试库真实登录复验18张浅深截图，销售/套件/库存查询/月结对账及来源跳转自然成功；server/pool/owner自然退出、Vite受控停止、端口与自有浏览器已收尾。PDA仓库页/往来页/设备平台未补验，不据此称全部页面通过；报告 `/tmp/flowcube-v0120-business-pages-report.json`。新候选仅在本地发布分支，主线/线上未更新。
