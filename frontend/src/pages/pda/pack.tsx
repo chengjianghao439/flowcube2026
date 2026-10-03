@@ -5,7 +5,7 @@ import PdaProductIdentity from '@/components/pda/PdaProductIdentity'
  * 路由：/pda/pack
  */
 import { Package as PackageIcon, CircleCheck, Ban, PartyPopper } from 'lucide-react'
-import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { parseBarcode } from '@/utils/barcode'
@@ -33,6 +33,8 @@ import { usePendingRequests } from '@/hooks/usePendingRequests'
 import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
 import { PdaTaskState } from '@/components/pda/PdaTaskState'
 import PdaDoneView from '@/components/pda/PdaDoneView'
+import PdaNextStep from '@/components/pda/PdaNextStep'
+import { PERMISSIONS } from '@/lib/permission-codes'
 
 function readPositiveId(value: string | undefined | null): number {
   const n = Number(value)
@@ -196,13 +198,18 @@ export default function PdaPackPage() {
 
   const [task, setTask]                       = useState<WarehouseTask | null>(null)
   const [activePackageId, setActivePackageId] = useState<number | null>(null)
-  const [allDone, setAllDone]                 = useState(false)
+  const [completedTaskId, setCompletedTaskId] = useState<number | null>(null)
+  const [shipTaskId, setShipTaskId] = useState<number | null>(null)
 
   const taskId = task?.id ?? routeTaskId
+  const currentTaskId = useRef(taskId)
+  currentTaskId.current = taskId
+  const allDone = completedTaskId === taskId
   const goSelectTask = useCallback(() => {
     setTask(null)
     setActivePackageId(null)
-    setAllDone(false)
+    setCompletedTaskId(null)
+    setShipTaskId(null)
     navigate('/pda/pack')
   }, [navigate])
 
@@ -371,7 +378,13 @@ export default function PdaPackPage() {
       // 那时把当前页切成「打包完成！」就是在骗人。
       const origTaskId = Number(data?.taskId)
       if (Number.isInteger(origTaskId) && origTaskId === Number(taskId)) {
-        setAllDone(true)
+        if (currentTaskId.current !== taskId) return
+        setCompletedTaskId(origTaskId)
+        setShipTaskId(null)
+        try {
+          const latest = await getTaskByIdApi(origTaskId, { skipGlobalError: true })
+          if (currentTaskId.current === origTaskId && latest.id === origTaskId && latest.status === WT_STATUS.SHIPPING) setShipTaskId(origTaskId)
+        } catch { /* 原完成回执保留；读取失败不提供出库入口。 */ }
       } else if (Number.isInteger(origTaskId) && origTaskId > 0) {
         warn(`原任务 #${origTaskId} 的「完成打包」已确认；当前任务以本页状态为准。`, 5000)
       }
@@ -815,7 +828,13 @@ export default function PdaPackPage() {
       onAction={() => navigate('/pda')}
       secondaryText="继续打包"
       onSecondary={goSelectTask}
-    />
+    >
+      <PdaNextStep
+        enabled={shipTaskId === taskId && taskDetail.id === taskId && !anySubmitBlocked && !onlineBlocked}
+        required={[PERMISSIONS.WAREHOUSE_TASK_SHIP]}
+        to="/pda/ship" label="去出库" hint="到出库页扫描物流码或箱码，再确认出库。"
+      />
+    </PdaDoneView>
   )
 
   return (

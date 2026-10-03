@@ -7,7 +7,7 @@ import PdaProductIdentity from '@/components/pda/PdaProductIdentity'
  * 须扫描拣货阶段使用过的库存条码 / 塑料盒条码（I/B，兼容旧版 CNT），由后端按库存单元累加 checked_qty；禁止手填。
  */
 import { CircleCheck, ClipboardList } from 'lucide-react'
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { parseBarcode } from '@/utils/barcode'
@@ -27,6 +27,8 @@ import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
 import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
 import { PdaTaskState } from '@/components/pda/PdaTaskState'
 import { stateConfirmedMessage, taskReachedStatus } from '@/lib/pdaCriticalState'
+import PdaNextStep from '@/components/pda/PdaNextStep'
+import { PERMISSIONS } from '@/lib/permission-codes'
 
 interface CheckItem extends WarehouseTaskItem {
   checkedQty: number
@@ -145,6 +147,10 @@ export default function PdaCheckPage() {
   const [selectedTask, setSelectedTask] = useState<WarehouseTask | null>(null)
   const [allChecked, setAllChecked]     = useState(false)
   const taskId = selectedTask?.id ?? routeTaskId
+  const currentTaskId = useRef(taskId)
+  currentTaskId.current = taskId
+  const [confirmedTaskId, setConfirmedTaskId] = useState<number | null>(null)
+  const [packTaskId, setPackTaskId] = useState<number | null>(null)
 
   const { flash, ok, err, warn } = usePdaFeedback()
   const checkAction = useCriticalPdaAction<{
@@ -157,9 +163,17 @@ export default function PdaCheckPage() {
       await qc.invalidateQueries({ queryKey: ['pda-check-task', taskId] })
       await qc.invalidateQueries({ queryKey: ['pda-check-tasks'] })
       if (payload.allChecked) {
+        if (currentTaskId.current !== taskId) return
+        setConfirmedTaskId(taskId)
+        setPackTaskId(null)
         setAllChecked(true)
         setStep('done')
         ok('✓ 复核完成')
+        // 回执确认与目标阶段读取各自独立；读取失败不能从离线缓存提供交接。
+        try {
+          const latest = await getTaskByIdApi(taskId, { skipGlobalError: true })
+          if (currentTaskId.current === taskId && latest.id === taskId && latest.status === WT_STATUS.PACKING) setPackTaskId(taskId)
+        } catch { /* 原复核结果保持，下一步等待服务端重新核对。 */ }
       } else {
         ok('✓ 已复核，继续扫下一件')
       }
@@ -282,7 +296,8 @@ export default function PdaCheckPage() {
     )
   }
 
-  if (step !== 'done' && taskDetail.status !== WT_STATUS.CHECKING) {
+  const currentDone = step === 'done' && confirmedTaskId === taskId
+  if (!currentDone && taskDetail.status !== WT_STATUS.CHECKING) {
     return (
       <PdaTaskState
         title="当前任务不能复核"
@@ -295,7 +310,7 @@ export default function PdaCheckPage() {
     )
   }
 
-  if (step === 'done') {
+  if (currentDone) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-background px-6 text-center">
         {allChecked
@@ -310,7 +325,12 @@ export default function PdaCheckPage() {
         <p className="text-muted-foreground mb-8">
           {allChecked ? '任务已进入待打包' : `进度约 ${pct}%`}
         </p>
-        <div className="flex gap-3 w-full max-w-xs">
+        <div className="flex flex-col gap-3 w-full max-w-xs">
+          <PdaNextStep
+            enabled={allChecked && packTaskId === taskId && taskDetail.id === taskId && !checkAction.submitBlocked && checkAction.networkStatus === 'online'}
+            required={[PERMISSIONS.WAREHOUSE_TASK_VIEW, PERMISSIONS.WAREHOUSE_TASK_PACK]}
+            to={`/pda/pack/${taskId}`} label="去打包"
+          />
           {!allChecked && (
             <Button variant="outline" className="flex-1" onClick={() => setStep('checking')}>
               继续复核
@@ -319,8 +339,8 @@ export default function PdaCheckPage() {
           <Button variant="outline" className="flex-1" onClick={() => setStep('select-task')}>
             选择任务
           </Button>
-          <Button className="flex-1" onClick={() => navigate(allChecked ? '/pda/pack' : '/pda')}>
-            {allChecked ? '去打包' : '返回工作台'}
+          <Button variant="outline" className="flex-1" onClick={() => navigate('/pda')}>
+            返回工作台
           </Button>
         </div>
       </div>

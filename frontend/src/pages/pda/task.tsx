@@ -26,6 +26,8 @@ import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
 import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
 import PdaDoneView from '@/components/pda/PdaDoneView'
+import PdaNextStep from '@/components/pda/PdaNextStep'
+import { PERMISSIONS } from '@/lib/permission-codes'
 import { WT_STATUS } from '@/constants/warehouseTaskStatus'
 import { stateConfirmedMessage, taskReachedStatus } from '@/lib/pdaCriticalState'
 import { formatPdaActionError, formatPdaErrorMessage } from '@/utils/displayFormatters'
@@ -133,7 +135,10 @@ export default function PdaTaskPage() {
 
   const { flash, ok, err, warn }  = usePdaFeedback()
   const [scanning, setScanning]   = useState(false)
-  const [finished, setFinished] = useState<'completed'|null>(null)
+  const [finished, setFinished] = useState<number | null>(null)
+  const [sortTask, setSortTask] = useState<{ id: number; taskNo: string } | null>(null)
+  const currentTaskId = useRef(taskId)
+  currentTaskId.current = taskId
   /**
    * 取货结果统一提示（批 B1/B2）：正常提交与丢响应后「查回执」恢复**共用同一份文案**——
    * 不能拿任务状态去推断某张取货标签是否已排队；缺设备与渲染失败按 **reason** 分开说。
@@ -177,8 +182,9 @@ export default function PdaTaskPage() {
         queryKey: ['pda-task', taskId],
         queryFn: () => getTaskByIdApi(taskId, { skipGlobalError: true }),
       })
-      if (taskReachedStatus(latest, WT_STATUS.SORTING)) {
-        setFinished('completed')
+      if (currentTaskId.current === taskId && taskReachedStatus(latest, WT_STATUS.SORTING)) {
+        setFinished(taskId)
+        if (currentTaskId.current === taskId && latest.id === taskId && latest.status === WT_STATUS.SORTING) setSortTask(latest)
         ok('拣货已成功，任务状态已更新为「待分拣」')
       }
       // 仅**恢复**路径（查回执）在此提示：正常提交由 handleScan 单点提示，避免双发。
@@ -198,11 +204,17 @@ export default function PdaTaskPage() {
     requestAction: 'warehouse.ready-to-ship',
     label: `完成拣货任务 ${taskId}`,
     onConfirmed: async () => {
-      setFinished('completed')
+      if (currentTaskId.current !== taskId) return
+      setFinished(taskId)
+      setSortTask(null)
       await qc.invalidateQueries({ queryKey: ['pda-task', taskId] })
       await qc.invalidateQueries({ queryKey: ['pda-suggestions', taskId] })
       await qc.invalidateQueries({ queryKey: ['pda-my-tasks'] })
       await qc.invalidateQueries({ queryKey: ['pda-my-task-sku-summary'] })
+      try {
+        const latest = await getTaskByIdApi(taskId, { skipGlobalError: true })
+        if (currentTaskId.current === taskId && latest.id === taskId && latest.status === WT_STATUS.SORTING) setSortTask(latest)
+      } catch { /* 完成回执保留；无法重读原任务时不给分拣交接。 */ }
     },
     resolveServerState: async () => {
       const latest = await getTaskByIdApi(taskId, { skipGlobalError: true })
@@ -220,7 +232,7 @@ export default function PdaTaskPage() {
             : null
 
   // ── Queries ───────────────────────────────────────────────────────────
-  const { data: task, isLoading } = useQuery({
+  const { data: task, isLoading, isError: taskError } = useQuery({
     queryKey: ['pda-task', taskId],
     queryFn:  () => getTaskByIdApi(taskId),
     enabled:  taskId > 0, refetchOnWindowFocus: false,
@@ -337,14 +349,20 @@ export default function PdaTaskPage() {
   const totalReq  = items.reduce((s,i) => s + i.requiredQty, 0)
   const totalPick = items.reduce((s,i) => s + i.pickedQty,   0)
 
-  if (finished) return (
+  if (finished === taskId) return (
     <PdaDoneView
       icon={<CircleCheck className="h-20 w-20 text-green-600" />}
       title="拣货完成！"
-      description="任务已进入「待分拣」"
+      description={`任务 ${task?.taskNo ?? `#${taskId}`} 已进入「待分拣」`}
       actionText="返回任务列表"
       onAction={() => navigate('/pda/picking')}
-    />
+    >
+      <PdaNextStep
+        enabled={sortTask?.id === taskId && task?.id === taskId && !isLoading && !taskError && !pickAction.submitBlocked && !readyAction.submitBlocked && readyAction.networkStatus === 'online'}
+        required={[PERMISSIONS.SORTING_BIN_VIEW, PERMISSIONS.WAREHOUSE_TASK_SORT]}
+        to="/pda/sort" label="去分拣" hint="到分拣页仍需扫描商品或取货码，再扫分拣格码确认。"
+      />
+    </PdaDoneView>
   )
 
   return (
@@ -409,7 +427,7 @@ export default function PdaTaskPage() {
         <PdaScanner
           onScan={handleScan}
           placeholder="扫描库存条码"
-          disabled={scanning || !!finished || pickAction.submitBlocked || readyAction.submitBlocked}
+          disabled={scanning || finished === taskId || pickAction.submitBlocked || readyAction.submitBlocked}
           onDuplicate={() => err('重复扫码，请稍候')}
         />
       </PdaBottomBar>

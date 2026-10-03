@@ -8,7 +8,7 @@ import PdaOverviewText from '@/components/pda/PdaOverviewText'
  *  1. 扫商品码 → 自动显示目标分拣格
  *  2. 扫分拣格码 → 自动确认，无需点击按钮
  */
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { ClipboardList } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -27,6 +27,8 @@ import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
 import { WT_STATUS } from '@/constants/warehouseTaskStatus'
 import { stateConfirmedMessage, taskReachedStatus } from '@/lib/pdaCriticalState'
 import { formatPdaErrorMessage } from '@/utils/displayFormatters'
+import PdaNextStep from '@/components/pda/PdaNextStep'
+import { PERMISSIONS } from '@/lib/permission-codes'
 
 type Step = 'scan-product' | 'confirm-bin'
 
@@ -52,6 +54,8 @@ export default function PdaSortPage() {
   const [step, setStep]     = useState<Step>('scan-product')
   const [hint, setHint]     = useState<BinHint | null>(null)
   const [scanning, setScanning] = useState(false)
+  const [checkTask, setCheckTask] = useState<{ id: number; taskNo: string } | null>(null)
+  const scanGeneration = useRef(0)
   const { flash, ok, err, warn }  = usePdaFeedback()
   const sortAction = useCriticalPdaAction<{ allSorted: boolean; progress?: string; warning?: string | null }>({
     action: 'warehouse.sort',
@@ -61,15 +65,29 @@ export default function PdaSortPage() {
       // 只有「查回执」的恢复路径在这里提示；正常提交的提示由 handleBinScan 按任务真实状态给出，
       // 否则会双发。恢复也必须**按回执区分部分进度与整任务完成**——查到回执 ≠ 任务分拣完成。
       if (!ctx.recovered) return
-      if (data?.allSorted) {
-        ok('分拣已成功，任务已进入待复核')
-      } else {
-        warn(`本次分拣已确认（${data?.progress ?? '部分进度'}），任务尚未全部分拣完成，请继续扫其余商品`)
-      }
-      // 恢复成功后回到扫商品步骤并刷新分拣格数据，避免工人照着旧提示重扫
+      const generation = ++scanGeneration.current
+      setCheckTask(null)
+      // 先执行既有恢复收尾；随后只读核对不能迟到清掉员工新扫出的提示。
       setStep('scan-product')
       setHint(null)
       void refetch()
+      if (data?.allSorted) {
+        ok('分拣已成功，任务已进入待复核')
+        // 只读交接使用本次原回执的冻结定位；当前 hint 可能属于另一任务。
+        const record = sortAction.pendingRecord
+        const meta = record?.metadata
+        const taskId = Number(meta?.taskId)
+        const itemId = Number(meta?.itemId)
+        const binCode = typeof meta?.binCode === 'string' ? meta.binCode.trim() : ''
+        if (record && record.requestKey === ctx.requestKey && !record.unverifiedOwner && Number.isSafeInteger(taskId) && taskId > 0 && Number.isSafeInteger(itemId) && itemId > 0 && binCode) {
+          try {
+            const latest = await getTaskByIdApi(taskId, { skipGlobalError: true })
+            if (scanGeneration.current === generation && latest.id === taskId && latest.status === WT_STATUS.CHECKING) setCheckTask(latest)
+          } catch { /* 恢复提示保持；服务端读取失败时不给复核入口。 */ }
+        }
+      } else {
+        warn(`本次分拣已确认（${data?.progress ?? '部分进度'}），任务尚未全部分拣完成，请继续扫其余商品`)
+      }
     },
     resolveServerState: async ({ record }) => {
       // 只认**冻结记录**里的定位：页面重挂后 hint 已丢失，拿当前 hint 取数会张冠李戴。
@@ -107,6 +125,8 @@ export default function PdaSortPage() {
     if (sortAction.networkStatus !== 'online') { err('网络已断开，分拣作业已阻断，请恢复网络后再继续'); return }
     const code = raw.trim()
     if (!code) return
+    scanGeneration.current += 1
+    setCheckTask(null)
     setScanning(true)
     try {
       const res = await scanProductForSortApi(code)
@@ -140,6 +160,7 @@ export default function PdaSortPage() {
     }
     setScanning(true)
     try {
+      const generation = scanGeneration.current
       // 取货码走 `{ containerId, binCode }`，由服务端在同一事务内解析归属与份额；
       // 商品码保持原 `{ itemId, sortedQty }`。两条路都走同一个 sort-done，不新增平行接口。
       const items = hint.isPickCode && hint.containerId
@@ -165,6 +186,7 @@ export default function PdaSortPage() {
       }
       const result = submitted.data
       const latest = await getTaskByIdApi(hint.taskId, { skipGlobalError: true })
+      if (scanGeneration.current === generation && latest.id === hint.taskId && latest.status === WT_STATUS.CHECKING) setCheckTask(latest)
       if (taskReachedStatus(latest, WT_STATUS.CHECKING)) {
         ok(stateConfirmedMessage(`任务 ${latest.taskNo} 分拣`, latest.statusName))
       } else if (result?.allSorted) {
@@ -213,6 +235,15 @@ export default function PdaSortPage() {
           onClear={() => sortAction.clearPending()}
           onDismissError={() => sortAction.clearError()}
         />
+
+        {checkTask && <PdaCard>
+          <p className="font-mono text-sm font-semibold text-foreground mb-3">任务 {checkTask.taskNo} 已进入待复核</p>
+          <PdaNextStep
+            enabled={!scanning && !sortAction.submitBlocked && sortAction.networkStatus === 'online'}
+            required={[PERMISSIONS.WAREHOUSE_TASK_VIEW, PERMISSIONS.WAREHOUSE_TASK_CHECK]}
+            to={`/pda/check/${checkTask.id}`} label="去复核" hint="也可留在本页继续扫描其他商品。"
+          />
+        </PdaCard>}
 
         {/* 待确认期间的**原提交定位**：取自冻结记录而非当前 hint——页面重挂后 hint 已为 null，
             只有这份记录还能说明「上次提交的是哪一件」，并据此核对恢复结果。 */}

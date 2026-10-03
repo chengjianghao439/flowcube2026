@@ -21,6 +21,7 @@ interface PdaDoneViewProps {
   secondaryText?: string
   /** 次要按钮回调 */
   onSecondary?: () => void
+  children?: ReactNode
 }
 
 export default function PdaDoneView({
@@ -31,6 +32,7 @@ export default function PdaDoneView({
   onAction,
   secondaryText,
   onSecondary,
+  children,
 }: PdaDoneViewProps) {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background px-6 text-center">
@@ -38,6 +40,7 @@ export default function PdaDoneView({
       <h2 className="text-2xl font-semibold text-foreground mb-2">{title}</h2>
       {description && <p className="text-muted-foreground mb-8">{description}</p>}
       <div className="flex w-full max-w-xs flex-col gap-3">
+        {children}
         {secondaryText && onSecondary && (
           <Button size="lg" variant="outline" onClick={onSecondary}>{secondaryText}</Button>
         )}
