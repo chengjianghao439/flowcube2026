@@ -13,7 +13,8 @@ import { Label } from '@/components/ui/label'
 import { DatePicker } from '@/components/shared/DatePicker'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { getPartyLedger, type PartyLedgerRow, type PartyLedgerResult } from '@/api/party-ledger'
-import { getReceiptDetailApi, getEntriesApi } from '@/api/payments'
+import { getReceiptDetailApi, getEntriesApi, type ReceiptSettlement } from '@/api/payments'
+import { FinanceOrderLink } from '@/components/shared/payments/FinanceOrderLink'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
@@ -38,24 +39,26 @@ function exportLedger(data: PartyLedgerResult) {
   a.href = url; a.download = `${data.party.code}-往来明细.csv`; a.click()
   URL.revokeObjectURL(url)
 }
-function SourceDetails({ row, onClose }: { row: PartyLedgerRow; onClose: () => void }) {
+function SourceDetails({ row, type, onClose }: { row: PartyLedgerRow; type: 1 | 2; onClose: () => void }) {
   const query = useQuery({
-    queryKey: ['party-ledger-source', row.receiptId, row.recordId],
+    queryKey: ['party-ledger-source', row.receiptId, row.recordId, type],
     queryFn: async () => row.receiptId
       ? { receipt: await getReceiptDetailApi(row.receiptId), entries: null }
       : { receipt: null, entries: await getEntriesApi(row.recordId!) },
   })
-  return <Dialog open onOpenChange={v => !v && onClose()}><DialogContent className="max-w-4xl">
+  const canNavigate = !query.isFetching && !query.isPaused && !query.isError && !!query.data?.receipt && query.data.receipt.id === row.receiptId && query.data.receipt.type === type
+  return <Dialog open onOpenChange={v => !v && onClose()}><DialogContent className="max-w-4xl" aria-describedby={undefined}>
     <DialogHeader><DialogTitle>收付款明细 · {row.documentNo}</DialogTitle></DialogHeader>
     {query.isError ? <QueryErrorState error={query.error} onRetry={() => void query.refetch()} compact /> : query.isPending ? <p>正在加载明细…</p> : <div className="max-h-[65vh] space-y-4 overflow-auto">
-      {query.data.receipt && <>
+      {query.data?.receipt && <>
         <p>{query.data.receipt.partyName} · 汇款 {money(query.data.receipt.amount)} · 已核销 {money(query.data.receipt.settledAmount)} · 未核销 {money(query.data.receipt.balance)}</p>
+        <p className="text-xs text-muted-foreground">已核销和未核销是这笔款的分配，不能当作单位全部欠款。</p>
         <DataTable columns={[
-          { key: 'orderNo', title: '核销单号', width: 180 },
+          { key: 'orderNo', title: '核销单号', width: 180, render: (_, settlement: ReceiptSettlement) => <FinanceOrderLink {...settlement} enabled={canNavigate && settlement.type === type} onNavigate={onClose} /> },
           { key: 'amount', title: '核销金额', width: 120, align: 'right', render: v => money(Number(v)) },
         ]} data={query.data.receipt.settlements} rowKey="entryId" emptyText="尚未核销，款项保留为预收或预付。" />
       </>}
-      {query.data.entries && <DataTable columns={[
+      {query.data?.entries && <DataTable columns={[
         { key: 'paymentDate', title: '收付款日期', width: 120 },
         { key: 'amount', title: '登记金额', width: 120, align: 'right', render: v => money(Number(v)) },
         { key: 'remark', title: '备注', width: 240 },
@@ -131,6 +134,6 @@ export default function PartyLedgerPage() {
       <DataTable columns={columns} data={data?.list ?? []} loading={query.isPending} emptyText="所选期间暂无往来记录，可切换全部日期查看。" />
       {data && <p className="text-sm text-muted-foreground">共 {data.list.length} 笔 · 现结与月结合并展示</p>}
     </>}
-    {source && active && <SourceDetails row={source} onClose={() => setSource(null)} />}
+    {source && active && <SourceDetails row={source} type={type} onClose={() => setSource(null)} />}
   </div>
 }

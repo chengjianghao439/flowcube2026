@@ -2,7 +2,7 @@ import { payloadClient as client } from './client'
 import { withRequestKeyHeaders } from '@/lib/requestKey'
 import type { Pagination } from '@/types'
 
-export interface PaymentRecord { id:number; type:1|2; typeName:string; orderNo:string; partyName:string; totalAmount:number; paidAmount:number; balance:number; status:1|2|3; statusName:string; confirmStatus?:0|1; confirmedByName?:string|null; confirmedAt?:string|null; dueDate?:string; remark?:string; createdAt:string }
+export interface PaymentRecord { readonly orderId?:number|null; id:number; type:1|2; typeName:string; orderNo:string; partyName:string; totalAmount:number; paidAmount:number; balance:number; status:1|2|3; statusName:string; confirmStatus?:0|1; confirmedByName?:string|null; confirmedAt?:string|null; dueDate?:string; remark?:string; createdAt:string }
 export interface PaymentEntry { id:number; amount:number; paymentDate:string; method?:string; remark?:string; operatorName:string; createdAt:string }
 export interface PaymentSummary { totalAmount:number; paidAmount:number; balance:number }
 export interface SettlementDetail {
@@ -97,6 +97,8 @@ export interface PaymentReceipt {
 
 /** 这笔汇款核销到了哪些账款 */
 export interface ReceiptSettlement {
+  readonly orderId?: number | null
+  readonly type?: 1 | 2
   entryId: number
   recordId: number
   orderNo: string
@@ -165,6 +167,8 @@ export interface ReconciliationStatement {
 }
 
 export interface StatementItem {
+  readonly orderId?: number | null
+  readonly type?: 1 | 2
   recordId: number
   orderNo: string
   totalAmount: number

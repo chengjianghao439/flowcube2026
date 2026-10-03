@@ -10,6 +10,8 @@ import { getStatementDetailApi, removeStatementItemApi } from '@/api/payments'
 import { downloadExport } from '@/lib/exportDownload'
 import { toast } from '@/lib/toast'
 import { formatDisplayDate } from '@/lib/dateTime'
+import { FinanceOrderLink } from './FinanceOrderLink'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
 
 /** 1草稿 = 还能改 · 2已确认 = 锁定可发对方 · 3已核销 = 收完款 */
 const ST_TONE: Record<number, StatusTone> = { 1: 'draft', 2: 'active', 3: 'success' }
@@ -34,11 +36,13 @@ export function StatementDetailDialog({ open, onClose, statementId, type }: Prop
   const active = useActiveWorkspaceTab()
   const isPayable = type === 1
 
-  const { data: detail } = useQuery({
-    queryKey: ['payment-statement-detail', statementId],
+  const query = useQuery({
+    queryKey: ['payment-statement-detail', statementId, type],
     queryFn: () => getStatementDetailApi(statementId!),
     enabled: active && open && statementId != null,
   })
+  const detail = query.data?.id === statementId && query.data.type === type ? query.data : undefined
+  const canNavigate = open && active && !!detail && !query.isFetching && !query.isPaused && !query.isError
   const removeItemMut = useMutation({
     mutationFn: ({ id, recordId }: { id:number; recordId:number }) => removeStatementItemApi(id, recordId),
     onSuccess: () => {
@@ -72,6 +76,7 @@ export function StatementDetailDialog({ open, onClose, statementId, type }: Prop
       }
     >
       <div className="flex h-full flex-col gap-3 p-5">
+        {query.isError && <QueryErrorState error={query.error} onRetry={() => void query.refetch()} compact />}
         {detail && (
           <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
             <span>{detail.partyName}</span>
@@ -97,7 +102,7 @@ export function StatementDetailDialog({ open, onClose, statementId, type }: Prop
             <tbody>
               {detail?.items?.map(it => (
                 <tr key={it.recordId} className="border-t">
-                  <td className="px-2 py-1.5 text-doc-code">{it.orderNo}</td>
+                  <td className="px-2 py-1.5"><FinanceOrderLink {...it} enabled={canNavigate && it.type === type} onNavigate={onClose} /></td>
                   <td className="px-2 py-1.5 text-right tabular-nums">{money(it.totalAmount)}</td>
                   <td className="px-2 py-1.5 text-right tabular-nums text-success">{money(it.paidAmount)}</td>
                   <td className="px-2 py-1.5 text-right tabular-nums">

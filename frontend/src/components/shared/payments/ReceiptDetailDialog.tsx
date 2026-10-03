@@ -5,6 +5,9 @@ import { AppDialog } from '@/components/shared/AppDialog'
 import { Button } from '@/components/ui/button'
 import { ReportTable } from '@/components/shared/ReportTable'
 import { getReceiptDetailApi } from '@/api/payments'
+import { usePartyLedger } from '@/hooks/usePartyLedger'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
+import { FinanceOrderLink } from './FinanceOrderLink'
 
 
 interface Props {
@@ -25,11 +28,17 @@ export function ReceiptDetailDialog({ open, onClose, receiptId, type }: Props) {
   const active = useActiveWorkspaceTab()
   const actionLabel = type === 1 ? '付款' : '收款'
 
-  const { data: detail } = useQuery({
-    queryKey: ['payment-receipt-detail', receiptId],
+  const ledger = usePartyLedger(type)
+  const query = useQuery({
+    queryKey: ['payment-receipt-detail', receiptId, type],
     queryFn: () => getReceiptDetailApi(receiptId!),
-    enabled: active && open && receiptId != null,
+    enabled: active && open && Number.isSafeInteger(receiptId) && Number(receiptId) > 0,
   })
+
+  const detail = query.data?.id === receiptId && query.data.type === type ? query.data : undefined
+  const canNavigate = active && open && !!detail && !query.isFetching && !query.isPaused && !query.isError
+  const partyId = detail?.partyId
+  const canOpenLedger = canNavigate && ledger.canView && Number.isSafeInteger(partyId) && Number(partyId) > 0
 
   return (
     <AppDialog
@@ -48,12 +57,17 @@ export function ReceiptDetailDialog({ open, onClose, receiptId, type }: Props) {
       }
     >
       <div className="flex h-full flex-col gap-3 p-5">
+        {query.isError && <QueryErrorState error={query.error} onRetry={() => void query.refetch()} compact />}
+        {query.isPaused ? <p role="status" className="text-sm text-muted-foreground">网络暂停，明细尚未更新</p> : query.isFetching && <p role="status" className="text-sm text-muted-foreground">正在读取核销明细…</p>}
+        {query.data && !detail && <p role="alert">明细身份不匹配，请重试核对原汇款单</p>}
         {detail && (
           <div className="text-sm text-muted-foreground">
-            {detail.partyName} · {actionLabel} {money(detail.amount)} · 已核销 <span className="text-success">{money(detail.settledAmount)}</span>
-            {detail.balance > 0 && <> · 未核销 <span className="font-medium text-warning">{money(detail.balance)}</span></>}
+            {detail.partyName} {canOpenLedger && <Button size="sm" variant="link" onClick={() => { onClose(); ledger.open({ id: partyId!, name: detail.partyName }) }}>往来明细</Button>} · {actionLabel} {money(detail.amount)} · 已核销 <span className="text-success">{money(detail.settledAmount)}</span>
+            <> · 未核销 <span className="font-medium text-warning">{money(detail.balance)}</span></>
+            {(!Number.isSafeInteger(partyId) || Number(partyId) < 1) && <p>单位归属待核查，无法定位往来明细</p>}
           </div>
         )}
+        <p className="text-xs leading-5 text-muted-foreground">汇款金额、已核销和未核销表示这笔款的分配；订单剩余余额是当前订单账款，单位全部欠款请查看往来明细。</p>
         <div className="min-h-0 flex-1 overflow-y-auto rounded-md border">
           <ReportTable className="w-full text-sm">
             <thead className="bg-muted/50 text-xs text-muted-foreground">
@@ -67,7 +81,7 @@ export function ReceiptDetailDialog({ open, onClose, receiptId, type }: Props) {
             <tbody>
               {detail?.settlements?.map(s => (
                 <tr key={s.entryId} className="border-t">
-                  <td className="px-4 py-3 text-doc-code">{s.orderNo}</td>
+                  <td className="px-4 py-3"><FinanceOrderLink {...s} enabled={canNavigate && s.type === type} onNavigate={onClose} /></td>
                   <td className="px-4 py-3 text-right tabular-nums">{money(s.amount)}</td>
                   <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{money(s.orderTotal)}</td>
                   <td className="px-4 py-3 text-right tabular-nums">

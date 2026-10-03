@@ -23,6 +23,7 @@ function mapPaymentRecord(row) {
     id: row.id,
     type: row.type,
     typeName: row.type === 1 ? '应付' : '应收',
+    orderId: row.order_id == null ? null : Number(row.order_id),
     orderNo: row.order_no,
     partyName: row.party_name,
     totalAmount: Number(row.total_amount),

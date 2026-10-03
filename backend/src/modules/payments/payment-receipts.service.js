@@ -621,7 +621,7 @@ async function findById(id) {
   if (!row) throw new AppError('收付款单不存在', 404)
   const [entries] = await pool.query(
     `SELECT e.id, e.amount, e.payment_date, e.created_at,
-            r.id AS record_id, r.order_no, r.total_amount, r.paid_amount, r.balance, r.status
+            r.id AS record_id, r.order_id, r.type, r.order_no, r.total_amount, r.paid_amount, r.balance, r.status
        FROM payment_entries e
        JOIN payment_records r ON r.id = e.record_id
       WHERE e.receipt_id = ?
@@ -633,6 +633,8 @@ async function findById(id) {
     settlements: entries.map(e => ({
       entryId: Number(e.id),
       recordId: Number(e.record_id),
+      orderId: e.order_id == null ? null : Number(e.order_id),
+      type: Number(e.type),
       orderNo: e.order_no,
       amount: Number(e.amount),
       orderTotal: Number(e.total_amount),

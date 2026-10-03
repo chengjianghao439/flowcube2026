@@ -322,7 +322,7 @@ async function findById(id) {
   const [[row]] = await pool.query('SELECT * FROM reconciliation_statements WHERE id=? AND deleted_at IS NULL', [id])
   if (!row) throw new AppError('对账单不存在', 404)
   const [items] = await pool.query(
-    `SELECT i.record_id, i.order_no, r.total_amount, r.paid_amount, r.balance, r.status, r.due_date, r.created_at
+    `SELECT i.record_id, i.order_no, r.order_id, r.type, r.total_amount, r.paid_amount, r.balance, r.status, r.due_date, r.created_at
        FROM reconciliation_statement_items i
        JOIN payment_records r ON r.id = i.record_id
       WHERE i.statement_id = ?
@@ -337,6 +337,8 @@ async function findById(id) {
     ...fmt(realShaped(row, { total: realTotal, paid: realPaid })),
     items: items.map(x => ({
       recordId: Number(x.record_id),
+      orderId: x.order_id == null ? null : Number(x.order_id),
+      type: Number(x.type),
       orderNo: x.order_no,
       totalAmount: Number(x.total_amount),
       paidAmount: Number(x.paid_amount),

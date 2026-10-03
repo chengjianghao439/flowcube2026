@@ -22,6 +22,7 @@ import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { CreateManualPayableDialog } from '@/components/shared/payments/CreateManualPayableDialog'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
+import { FinanceOrderLink } from '@/components/shared/payments/FinanceOrderLink'
 
 /** 账款页只管现结；月结走对账页，两边合起来才是全量 */
 const IMMEDIATE_SCOPE = IMMEDIATE_SETTLEMENT_TYPES.join(',')
@@ -94,7 +95,7 @@ export default function PaymentsView({ type }: { type: PaymentType }) {
     ...(query.maxAmount ? { maxAmount: query.maxAmount } : {}),
   }
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isFetching, isPaused, isError } = useQuery({
     queryKey: ['payments', { type, query }],
     queryFn: () => getPaymentsApi({ ...exportParams, page: 1, pageSize: PAGE_SIZE, settlementTypes: IMMEDIATE_SCOPE }),
     enabled: active && tab === 'records',
@@ -105,7 +106,7 @@ export default function PaymentsView({ type }: { type: PaymentType }) {
   const applyQuery = (q: PaymentQueryValues) => { setQuery(q); }
 
   const columns: TableColumn<PaymentRecord>[] = [
-    { key: 'orderNo', title: '关联单号', width: 160, render: (v) => <span className="text-doc-code">{String(v)}</span> },
+    { key: 'orderNo', title: '关联单号', width: 160, render: (_, row) => <FinanceOrderLink {...row} enabled={active && tab === 'records' && row.type === type && !isFetching && !isPaused && !isError} /> },
     { key: 'partyName', title: copy.party, width: 140 },
     { key: 'totalAmount', title: '总金额', width: 100, align: 'right', render: (v) => money(Number(v)) },
     { key: 'paidAmount', title: copy.amountCol, width: 100, align: 'right', render: (v) => <span className="tabular-nums text-success">{money(Number(v))}</span> },
