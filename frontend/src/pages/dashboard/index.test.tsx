@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import type { DashboardLayout } from '@/types/dashboard'
 import DashboardPage from './index'
@@ -35,14 +36,14 @@ afterEach(() => { act(() => root.unmount()); host.remove() })
 test('保存的跨分区顺序及指标/业务卡交错顺序在展示页原样生效', async () => {
   const order = ['system-version', 'board-workbench', 'kpi-pending-sale', 'fun-year', 'chart-sale-trend']
   state.saved = { widgets: order.map(id => ({ id, visible: true, w: id === 'system-version' ? 4 : 2 })) }
-  await act(async () => root.render(<DashboardPage />))
+  await act(async () => root.render(<MemoryRouter initialEntries={['/dashboard']}><DashboardPage /></MemoryRouter>))
   expect(ids()).toEqual(order)
   expect(host.querySelector('[data-widget-id="system-version"]')?.className).toContain('lg:col-span-4')
 })
 
 test('系统版本从末尾拖到开头，保存及重新挂载后均保持第一张', async () => {
   state.saved = { widgets: ['kpi-pending-sale', 'board-workbench', 'system-version'].map(id => ({ id, visible: true, w: 2 })) }
-  await act(async () => root.render(<DashboardPage />))
+  await act(async () => root.render(<MemoryRouter initialEntries={['/dashboard']}><DashboardPage /></MemoryRouter>))
   await click('编辑仪表盘')
   act(() => host.querySelector('[data-widget-id="system-version"]')!.dispatchEvent(new Event('dragstart', { bubbles: true })))
   act(() => host.querySelector('[data-widget-id="kpi-pending-sale"]')!.dispatchEvent(new Event('dragenter', { bubbles: true })))
@@ -52,6 +53,6 @@ test('系统版本从末尾拖到开头，保存及重新挂载后均保持第�
   expect(state.save).toHaveBeenCalledTimes(1)
   expect(state.saved.widgets[0].id).toBe('system-version')
   expect(ids()[0]).toBe('system-version')
-  await act(async () => root.render(<DashboardPage key="reopened" />))
+  await act(async () => root.render(<MemoryRouter initialEntries={['/dashboard']}><DashboardPage key="reopened" /></MemoryRouter>))
   expect(ids()[0]).toBe('system-version')
 })
