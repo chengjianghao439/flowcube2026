@@ -91,6 +91,14 @@ test('等待菜单关闭时切走页面不打开隐藏详情，重新激活不�
   await render(true,false,items)
   act(()=>callbacks.close(new Event('closeAutoFocus',{cancelable:true})));expect(secondary).not.toHaveBeenCalled()
 })
+test('隐藏后重新激活，再到达的原菜单关闭回调不能恢复旧交接',async()=>{
+  const items=[{label:'明细',afterMenuClose:true,onClick:secondary}]
+  await openMenu(items);const callbacks=menuCallbacks()
+  act(()=>callbacks.select());await render(false,false,items)
+  await render(true,false,items)
+  act(()=>callbacks.close(new Event('closeAutoFocus',{cancelable:true})))
+  expect(secondary).not.toHaveBeenCalled()
+})
 test('菜单组件卸载取消尚未执行的只读详情交接',async()=>{
   await openMenu([{label:'明细',afterMenuClose:true,onClick:secondary}]);const callbacks=menuCallbacks()
   act(()=>callbacks.select());act(()=>root.render(<span>页面已关闭</span>))

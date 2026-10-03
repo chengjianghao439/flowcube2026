@@ -45,6 +45,7 @@ export default function TableActionsMenu({
   const active = useSectionActive()
   const activeRef = useRef(active)
   activeRef.current = active
+  useEffect(() => { if (!active) afterClose.current = null }, [active])
   useEffect(() => () => { afterClose.current = null }, [])
   // 主按钮样式：与下面拼接模式的主按钮保持完全一致（同高、同字号），避免有无下拉时大小不一
   const primaryClass = cn(

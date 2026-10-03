@@ -36,7 +36,7 @@ function installResponses(batch: (page: number) => unknown) {
 }
 
 for (const type of [1, 2] as const) {
-  test(`${type === 1 ? '客户' : '供应商'}数字快照取齐，续页沿用数字游标/计数/筛选，最终 DTO 保留数字与金额`, async () => {
+  test(`${type === 1 ? '供应商' : '客户'}数字快照取齐，续页沿用数字游标/计数/筛选，最终 DTO 保留数字与金额`, async () => {
     const requests = installResponses(page => ledgerPage(type, page))
     const params = { type, partyId: 14, startDate: '2026-10-01', endDate: '2026-10-03' }
     const signal = new AbortController().signal
@@ -49,7 +49,7 @@ for (const type of [1, 2] as const) {
     ])
     expect(requests.every(request => request.signal === signal && request._authSessionGeneration === 1)).toBe(true)
   })
-  test(`${type === 1 ? '客户' : '供应商'}无事件的数字 0 快照合法，空往来保留原汇总`, async () => {
+  test(`${type === 1 ? '供应商' : '客户'}无事件的数字 0 快照合法，空往来保留原汇总`, async () => {
     const batch = { ...ledgerPage(type), snapshotId: 0, snapshotCount: 0, list: [], pagination: { page: 1, pageSize: 200, total: 0 } }
     const requests = installResponses(() => batch)
     expect(await getPartyLedger({ type, partyId: 14 })).toMatchObject({ ...batch, pagination: { page: 1, pageSize: 0, total: 0 } })
