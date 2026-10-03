@@ -541,9 +541,6 @@ jobs:
       - name: Sale commercial source metadata read-only labels
         run: npm run smoke:sale-commercial-source-metadata
 
-      - name: 冒烟测试 — 成套与边收边上架真实财务及跨期凭证
-        run: npm run smoke:product-finance-period
-
       - name: 冒烟测试 — 销售预计库存 ATP（采购预计量占库 / 取消与短装先解绑）
         run: npm run smoke:atp
 
@@ -659,7 +656,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [prelaunch-finance, prelaunch-scope-export, prelaunch-hr, round2-transfer, round2-payroll, round2-runtime, fulfillment, procurement-planning, masterdata, masterdata-import, sorting-bin-recovery, warehouse-masterdata, warehouse-assets-waves]
+        suite: [prelaunch-finance, prelaunch-scope-export, prelaunch-hr, round2-transfer, round2-payroll, round2-runtime, fulfillment, procurement-planning, masterdata, masterdata-import, sorting-bin-recovery, warehouse-masterdata, warehouse-assets-waves, product-finance-period]
     services:
       mysql:
         image: mysql:8.0
