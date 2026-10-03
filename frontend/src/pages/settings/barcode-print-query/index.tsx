@@ -18,6 +18,10 @@ import type { TableColumn } from '@/types'
 import type { BarcodePrintCategory, BarcodePrintRecord } from '@/types/print-jobs'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
+import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
+import { buildWorkspaceTabRegistrationFromPath } from '@/router/workspaceRouteMeta'
+import { resolveRouteTitle } from '@/router/routeDefinitions'
 import { formatPrintStatus } from '@/utils/displayFormatters'
 import BarcodePrintQueryDialog, { type BarcodePrintQueryValues } from './BarcodePrintQueryDialog'
 import { BARCODE_PRINT_STATUS_OPTIONS } from './constants'
@@ -30,6 +34,17 @@ const CATEGORY_OPTIONS: Array<{ value: BarcodePrintCategory; label: string; hint
 
 /** 本页列表自动刷新间隔（毫秒）。页面文案直接引用它，避免文案与轮询周期再次对不上。 */
 const AUTO_REFRESH_MS = 15000
+
+function safeId(id: unknown): id is number {
+  return typeof id === 'number' && Number.isSafeInteger(id) && id > 0
+}
+
+function jobNextStep(job: BarcodePrintRecord['latestJob']) {
+  if (job?.statusKey === 'success') return '客户端已回报成功，请现场核对标签纸张。'
+  if (job?.statusKey === 'queued' || job?.statusKey === 'printing') return '回执尚待确认，请核对工作站和现场纸张，避免重复打印。'
+  if (job?.statusKey === 'failed' || job?.statusKey === 'timeout') return '先核对工作站、打印机和纸张，确认需要后再使用本页既有补打。'
+  return null
+}
 
 /** 「最近一次打印任务自身的结果」。注意它**不包含**条码的业务状态（见 barcodeStatusBadge）。 */
 function jobStatusBadge(job: BarcodePrintRecord['latestJob']) {
@@ -63,6 +78,11 @@ export default function BarcodePrintQueryPage() {
   const navigate = useNavigate()
   const addTab = useWorkspaceStore(s => s.addTab)
   const qc = useQueryClient()
+  const { can } = usePermission()
+  const canReprint = can(PERMISSIONS.PRINT_JOB_REPRINT)
+  const canViewInbound = can(PERMISSIONS.INBOUND_ORDER_VIEW)
+  const canViewWave = can(PERMISSIONS.PICKING_WAVE_VIEW)
+  const canViewReport = can(PERMISSIONS.REPORT_VIEW)
   const [locationParams] = useSearchParams()
   const tabPath = useContext(TabPathContext)
   const searchParams = tabPath ? new URLSearchParams(tabPath.split('?')[1] ?? '') : locationParams
@@ -95,12 +115,14 @@ export default function BarcodePrintQueryPage() {
       inboundTaskItemId: category === 'inbound' ? initialInboundTaskItemId : undefined,
     }),
     enabled: isActiveTab,
-    staleTime: hasInboundHandoff ? 0 : undefined,
-    refetchOnMount: hasInboundHandoff ? 'always' : true,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    retry: false,
     // 轮询间隔与其它记录类页面（PDA 10–30s）对齐：这是「查看打印记录」页，
     // 没有 3 秒级实时性要求，而这个间隔直接乘在每轮的串行请求数上。
     refetchInterval: isActiveTab ? AUTO_REFRESH_MS : false,
   })
+  const canOperate = isActiveTab && !!query.data && !query.isFetching && !query.isPaused && !query.isError
   const total = query.data?.pagination?.total ?? 0
 
   // ── 查询弹窗筛选值 ──
@@ -119,10 +141,11 @@ export default function BarcodePrintQueryPage() {
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   const reprintMut = useMutation({
-    mutationFn: (row: BarcodePrintRecord) => reprintBarcodeRecordApi({
-      category: row.category,
-      recordId: row.recordId,
-    }, { skipGlobalError: true }),
+    mutationFn: (row: BarcodePrintRecord) => {
+      const current = query.data?.list.find(item => item.category === row.category && item.recordId === row.recordId)
+      if (!canOperate || !canReprint || !safeId(row.recordId) || !current?.canReprint) throw new Error('请先重新读取并核对打印记录')
+      return reprintBarcodeRecordApi({ category: row.category, recordId: row.recordId }, { skipGlobalError: true })
+    },
     onSuccess: (d) => {
       if (!d) return
       if (!d.queued) {
@@ -147,9 +170,11 @@ export default function BarcodePrintQueryPage() {
 
   // columns 依赖它，不包 useCallback 的话 columns 每次渲染都要重建
   const openPath = useCallback((path: string, title: string) => {
-    addTab({ key: path, title, path })
-    navigate(path)
-  }, [addTab, navigate])
+    if (!canOperate) return
+    const target = buildWorkspaceTabRegistrationFromPath(path)
+    addTab({ ...target, title: resolveRouteTitle(target.path.split('?')[0]) || title })
+    navigate(target.path)
+  }, [addTab, navigate, canOperate])
 
   // 解构出稳定的 mutate 与需要的状态位：直接依赖整个 reprintMut 对象会让 columns
   // 每次渲染重建（该对象引用不稳定）
@@ -229,6 +254,7 @@ export default function BarcodePrintQueryPage() {
             {row.latestJob?.printerCode && (
               <div className="text-[11px] text-muted-foreground">打印机编号：{row.latestJob.printerCode}</div>
             )}
+            {jobNextStep(row.latestJob) && <p className="text-xs leading-5 text-muted-foreground">{jobNextStep(row.latestJob)}</p>}
           </div>
         ),
       },
@@ -248,13 +274,13 @@ export default function BarcodePrintQueryPage() {
             <TableActionsMenu
               primaryLabel={isReprinting ? '处理中…' : '重新打印'}
               primaryVariant="outline"
-              primaryDisabled={!row.canReprint || isReprinting}
+              primaryDisabled={!canOperate || !canReprint || !safeId(row.recordId) || !row.canReprint || isReprinting}
               onPrimaryClick={() => reprint(row)}
               items={[
-                ...(row.category === 'inbound' && row.inboundTaskId
+                ...(canOperate && canViewInbound && row.category === 'inbound' && safeId(row.inboundTaskId)
                   ? [{ label: '打开收货详情', onClick: () => openPath(`/inbound-tasks/${row.inboundTaskId}?focus=print-batches`, row.bizNo || `收货订单 #${row.inboundTaskId}`) }]
                   : []),
-                ...(row.category === 'outbound' && row.waveId
+                ...(canOperate && canViewWave && row.category === 'outbound' && safeId(row.waveId)
                   ? [{ label: '打开批次详情', onClick: () => openPath(`/picking-waves?waveId=${row.waveId}&focus=print-closure`, row.waveNo || `批次 #${row.waveId}`) }]
                   : []),
               ]}
@@ -263,12 +289,12 @@ export default function BarcodePrintQueryPage() {
         },
       },
     ]
-  }, [category, reprinting, reprintingRow, reprint, openPath])
+  }, [category, reprinting, reprintingRow, reprint, openPath, canOperate, canReprint, canViewInbound, canViewWave])
 
   const handoffReading = hasInboundHandoff && (query.isFetching || query.isPaused || query.isError)
   const rows = useMemo(() => handoffReading ? [] : query.data?.list ?? [], [query.data, handoffReading])
   const inboundContext = useMemo(() => {
-    if (category !== 'inbound' || !initialInboundTaskId || handoffReading) return null
+    if (category !== 'inbound' || !safeId(initialInboundTaskId) || !canOperate) return null
     const taskId = initialInboundTaskId
     const taskRows = rows.filter(row => row.inboundTaskId === taskId)
     const unassignedCount = taskRows.filter(row => row.latestJob?.statusKey === 'unassigned').length
@@ -284,20 +310,20 @@ export default function BarcodePrintQueryPage() {
       timeoutCount,
       printingCount,
     }
-  }, [category, initialInboundTaskId, rows, handoffReading])
+  }, [category, initialInboundTaskId, rows, canOperate])
   const outboundContext = useMemo(() => {
-    if (category !== 'outbound') return null
-    const waveId = rows.find(row => row.waveId)?.waveId
-    if (!waveId) return null
+    if (category !== 'outbound' || !canOperate) return null
+    const waveId = rows.find(row => safeId(row.waveId))?.waveId
+    if (!safeId(waveId)) return null
     const waveNo = rows.find(row => row.waveId === waveId)?.waveNo ?? `#${waveId}`
     const unassignedCount = rows.filter(row => row.waveId === waveId && row.latestJob?.statusKey === 'unassigned').length
     const failedCount = rows.filter(row => row.waveId === waveId && row.latestJob?.statusKey === 'failed').length
     const timeoutCount = rows.filter(row => row.waveId === waveId && row.latestJob?.statusKey === 'timeout').length
     const printingCount = rows.filter(row => row.waveId === waveId && (row.latestJob?.statusKey === 'printing' || row.latestJob?.statusKey === 'queued')).length
     return { waveId, waveNo, unassignedCount, failedCount, timeoutCount, printingCount }
-  }, [category, rows])
+  }, [category, rows, canOperate])
   const logisticsContext = useMemo(() => {
-    if (category !== 'logistics') return null
+    if (category !== 'logistics' || !canOperate) return null
     const unassignedCount = rows.filter(row => row.latestJob?.statusKey === 'unassigned').length
     const failedCount = rows.filter(row => row.latestJob?.statusKey === 'failed').length
     const timeoutCount = rows.filter(row => row.latestJob?.statusKey === 'timeout').length
@@ -309,7 +335,7 @@ export default function BarcodePrintQueryPage() {
       printingCount,
       latestBizNo: rows[0]?.bizNo ?? null,
     }
-  }, [category, rows])
+  }, [category, rows, canOperate])
 
   return (
     <div className="space-y-5">
@@ -319,8 +345,9 @@ export default function BarcodePrintQueryPage() {
         actions={<Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>}
       />
 
-      {handoffReading && <div className="space-y-2 rounded-md border p-3 text-sm" role={query.isError ? 'alert' : 'status'}>
-        <p>{query.isError ? '打印记录读取失败，无法核对最新状态；旧记录暂不提供操作。' : query.isPaused ? '网络已暂停，等待恢复后重新读取打印记录。' : '正在重新读取原收货单的打印记录…'}</p>
+      <p className="text-sm text-muted-foreground">业务完成与条码业务状态不代表已出纸；最近打印任务单独展示。客户端成功回报后仍需现场核对纸张，失败或超时先核对工作站、打印机和纸张。</p>
+      {!canOperate && <div className="space-y-2 rounded-md border p-3 text-sm" role={query.isError ? 'alert' : 'status'}>
+        <p>{query.isError ? '打印记录读取失败，无法核对最新状态；旧记录暂不提供操作。' : query.isPaused ? '网络已暂停，等待恢复后重新读取打印记录。' : query.isFetching ? hasInboundHandoff ? '正在重新读取原收货单的打印记录…' : '正在重新读取打印记录，旧记录待核对，暂不提供操作。' : '最新打印记录尚待核对，暂不提供操作。'}</p>
         {query.isError && <Button variant="outline" onClick={() => void query.refetch()}>重新读取打印记录</Button>}
       </div>}
       {inboundContext && (
@@ -333,13 +360,13 @@ export default function BarcodePrintQueryPage() {
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button
+              {canViewInbound && <Button
                 size="sm"
                 variant="outline"
                 onClick={() => openPath(`/inbound-tasks/${inboundContext.taskId}?focus=print-batches`, `收货订单 ${inboundContext.taskNo}`)}
               >
                 返回收货详情
-              </Button>
+              </Button>}
             </div>
           </div>
           <div className="grid gap-4 md:grid-cols-4">
@@ -373,13 +400,13 @@ export default function BarcodePrintQueryPage() {
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button
+              {canViewWave && <Button
                 size="sm"
                 variant="outline"
                 onClick={() => openPath(`/picking-waves?waveId=${outboundContext.waveId}&focus=print-closure`, `批次 ${outboundContext.waveNo}`)}
               >
                 返回批次详情
-              </Button>
+              </Button>}
             </div>
           </div>
           <div className="grid gap-4 md:grid-cols-4">
@@ -409,13 +436,13 @@ export default function BarcodePrintQueryPage() {
             <div>
               <p className="text-sm font-semibold text-foreground">当前正在处理物流标签打印任务</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                物流标签打印异常会直接影响现场出库确认。建议先绑定缺失的打印机，再处理失败 / 超时，再由现场继续扫描物流条码完成出库。
+                这里展示物流类别记录，需逐条核对原业务。先核对工作站、打印机和纸张，再处理失败 / 超时；取号与业务完成均不代表标签已出纸。
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button size="sm" variant="ghost" onClick={() => openPath('/reports/exception-workbench', '异常工作台')}>
+              {canViewReport && <Button size="sm" variant="ghost" onClick={() => openPath('/reports/exception-workbench', '异常工作台')}>
                 打开异常工作台
-              </Button>
+              </Button>}
             </div>
           </div>
           <div className="grid gap-4 md:grid-cols-4">

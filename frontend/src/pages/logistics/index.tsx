@@ -78,7 +78,7 @@ export default function LogisticsPage() {
   })
   const voidMut = useMutation({
     mutationFn: (id: number) => voidWaybillApi(id, undefined, { skipGlobalError: true }),
-    onSuccess: () => { toast.success('运单已作废'); invalidate() },
+    onSuccess: () => { toast.success('运单本地记录已作废'); invalidate() },
     onError: (e: unknown) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '操作失败'),
   })
 
@@ -121,7 +121,7 @@ export default function LogisticsPage() {
         }
         if (canManage && ![2, 5].includes(row.status) && !(direct && (row.submittedToPlatform || [3, 6].includes(row.status)))) {
           items.push({ label: '作废', destructive: true, onClick: () => confirmAction({
-            title: '作废运单', description: `确认作废运单 ${row.waybillNo}？`, variant: 'destructive', confirmText: '确认作废',
+            title: '作废运单本地记录', description: `确认作废运单 ${row.waybillNo} 的本地记录？此操作不代表快递官方订单已取消。`, variant: 'destructive', confirmText: '确认作废',
             onConfirm: () => voidMut.mutate(row.id),
           }) })
         }

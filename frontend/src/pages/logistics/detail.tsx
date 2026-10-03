@@ -11,6 +11,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { toast } from '@/lib/toast'
 import { useWorkspaceTabTitle } from '@/hooks/useWorkspaceTabTitle'
+import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
+import { useWorkspaceStore } from '@/store/workspaceStore'
+import { buildWorkspaceTabRegistration } from '@/router/workspaceRouteMeta'
+import { resolveRouteTitle } from '@/router/routeDefinitions'
+import type { LogisticsWaybill } from '@/types/logistics'
 import { confirmAction } from '@/lib/confirm'
 import PageHeader from '@/components/shared/PageHeader'
 import { SectionCard } from '@/components/shared/SectionCard'
@@ -19,7 +24,7 @@ import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { formatDisplayDateTime } from '@/lib/dateTime'
@@ -38,23 +43,41 @@ export default function LogisticsDetailPage() {
   // 多标签 keep-alive 下页面路径来自 TabPathContext（/* catch-all，useParams 取不到 id）
   const tabPath = useContext(TabPathContext)
   const params = useParams<{ id?: string }>()
-  const rawId = (tabPath || params.id || '').split('/').filter(Boolean).pop() ?? ''
+  const rawId = (tabPath?.split(/[?#]/)[0] || params.id || '').split('/').filter(Boolean).pop() ?? ''
   const waybillId = Number(rawId)
+  const validId = /^[1-9]\d*$/.test(rawId) && Number.isSafeInteger(waybillId) && waybillId > 0
+  const isActiveTab = useActiveWorkspaceTab()
+  const addTab = useWorkspaceStore(s => s.addTab)
   const nav = useNavigate()
   const qc = useQueryClient()
   const { can } = usePermission()
   const canManage = can(PERMISSIONS.LOGISTICS_MANAGE)
 
-  const [shipmentOpen, setShipmentOpen] = useState(false)
-  const [trackOpen, setTrackOpen] = useState(false)
+  const [shipmentTarget, setShipmentTarget] = useState<LogisticsWaybill | null>(null)
+  const [trackTarget, setTrackTarget] = useState<LogisticsWaybill | null>(null)
   const [trackingInput, setTrackingInput] = useState('')
 
-  const { data: wb, isLoading, isError, error, refetch } = useQuery({
+  const query = useQuery({
     queryKey: ['waybill', waybillId],
     queryFn: () => getWaybillDetailApi(waybillId),
-    enabled: Number.isFinite(waybillId) && waybillId > 0,
+    enabled: validId && isActiveTab,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    retry: false,
   })
-  useWorkspaceTabTitle(wb?.waybillNo)
+  const { isLoading, isError, error, refetch } = query
+  const wb = validId && query.data?.id === waybillId ? query.data : undefined
+  const readReady = isActiveTab && !!wb && !query.isFetching && !query.isPaused && !isError
+  const knownStatus = !!wb && [1, 2, 3, 4, 5, 6].includes(wb.status)
+  const canOperate = readReady && knownStatus
+  useWorkspaceTabTitle(readReady ? wb?.waybillNo : undefined)
+
+  function openPath(pathname: string, search = '') {
+    if (!canOperate) return
+    const target = buildWorkspaceTabRegistration(pathname, search)
+    addTab({ ...target, title: resolveRouteTitle(pathname) || '详情' })
+    nav(target.path)
+  }
 
   function invalidate() {
     qc.invalidateQueries({ queryKey: ['waybill', waybillId] })
@@ -63,35 +86,45 @@ export default function LogisticsDetailPage() {
   }
 
   const trackMut = useMutation({
-    mutationFn: () => setWaybillTrackingApi(waybillId, trackingInput.trim(), { skipGlobalError: true }),
-    onSuccess: () => { toast.success('已录入快递单号'); invalidate(); setTrackOpen(false); setTrackingInput('') },
+    mutationFn: () => {
+      if (!canOperate || !canManage || !canRecord || trackTarget?.id !== waybillId) throw new Error('请先重新读取原运单，草稿已保留')
+      return setWaybillTrackingApi(trackTarget.id, trackingInput.trim(), { skipGlobalError: true })
+    },
+    onSuccess: () => { toast.success('已录入快递单号'); invalidate(); setTrackTarget(null); setTrackingInput('') },
     onError: (e: unknown) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '录入失败'),
   })
   const retryMut = useMutation({
-    mutationFn: () => retryWaybillApi(waybillId, { skipGlobalError: true }),
+    mutationFn: (id: number) => {
+      if (!canOperate || !canManage || !canRetry || id !== waybillId) throw new Error('请先重新读取原运单')
+      return retryWaybillApi(id, { skipGlobalError: true })
+    },
     onSuccess: () => { toast.success('已提交处理；已发送的平台订单仅查询原单'); invalidate() },
     onError: (e: unknown) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '操作失败'),
   })
   const voidMut = useMutation({
-    mutationFn: () => voidWaybillApi(waybillId, undefined, { skipGlobalError: true }),
-    onSuccess: () => { toast.success('运单已作废'); invalidate() },
+    mutationFn: (id: number) => {
+      if (!canOperate || !canManage || !canVoid || id !== waybillId) throw new Error('请先重新读取原运单')
+      return voidWaybillApi(id, undefined, { skipGlobalError: true })
+    },
+    onSuccess: () => { toast.success('运单本地记录已作废'); invalidate() },
     onError: (e: unknown) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '操作失败'),
   })
 
-  if (isError && !wb) {
-    return (
-      <div className="space-y-4">
-        <PageHeader title="运单详情" actions={<Button variant="outline" onClick={() => nav('/logistics')}>返回列表</Button>} />
-        <QueryErrorState error={error} onRetry={() => void refetch()} title="运单加载失败" compact />
-      </div>
-    )
-  }
-
   const direct = wb && ['sf', 'deppon'].includes(wb.platformCode || '')
-  const canEditShipment = direct && !wb.submittedToPlatform && [1, 4].includes(wb.status) && wb.shipment
-  const canRecord = wb && !direct && (wb.status === 1 || wb.status === 4)
-  const canRetry = wb && [4, 6].includes(wb.status) && wb.platformCode
-  const canVoid = wb && ![2, 5].includes(wb.status) && !(direct && (wb.submittedToPlatform || [3, 6].includes(wb.status)))
+  const canEditShipment = canOperate && direct && !wb.submittedToPlatform && [1, 4].includes(wb.status) && wb.shipment
+  const canRecord = canOperate && wb && !direct && (wb.status === 1 || wb.status === 4)
+  const canRetry = canOperate && wb && [4, 6].includes(wb.status) && wb.platformCode
+  const canVoid = canOperate && wb && ![2, 5].includes(wb.status) && !(direct && (wb.submittedToPlatform || [3, 6].includes(wb.status)))
+  const saleOrderId = wb?.saleOrderId
+  const safeSaleId = typeof saleOrderId === 'number' && Number.isSafeInteger(saleOrderId) && saleOrderId > 0
+  const nextStep = !knownStatus ? '状态暂无法确认，请重新读取原运单后核对。'
+    : wb?.status === 5 ? '本地记录已作废，不代表快递官方订单已取消；官方取消结果需另行核实。'
+    : wb?.status === 3 ? `已取号不等于面单已出纸。${wb.printDataRef === 'official_platform' ? '请通过快递官方打印面单，并在现场核对纸张。' : '请现场核对面单和纸张。'}`
+    : wb?.status === 2 ? '取号正在处理中，请等待并核对原运单，避免重复提交。'
+    : wb?.submittedToPlatform || wb?.status === 6 ? '请查询原单核实平台结果，不新建订单或更换取号身份；取消请通过快递官方处理。'
+    : direct ? '尚未向平台提交，可补充寄件资料；取号失败时核对资料后使用既有重试取号。'
+    : wb?.platformCode ? '已配置快递平台，请核对取号进度；失败时先核查原因，再使用原重试或录入已有快递单号。'
+    : '待取号或取号失败时，请手工录入快递单号后核对面单。'
 
   return (
     <div className="space-y-4">
@@ -100,17 +133,25 @@ export default function LogisticsDetailPage() {
         description={wb ? <SoftStatusLabel label={wb.statusLabel} tone={wb.statusTone} /> : undefined}
         actions={
           <div className="flex items-center gap-2">
-            {canManage && canEditShipment && <Button variant="outline" onClick={() => setShipmentOpen(true)}>补充寄件资料</Button>}
-            {canManage && canRecord && <Button variant="outline" onClick={() => { setTrackingInput(wb?.trackingNo ?? ''); setTrackOpen(true) }}>手工录入快递单号</Button>}
-            {canManage && canRetry && <Button variant="outline" onClick={() => retryMut.mutate()} disabled={retryMut.isPending}>{wb?.submittedToPlatform || wb?.status === 6 ? '查询原单' : '重试取号'}</Button>}
+            {canManage && canEditShipment && <Button variant="outline" onClick={() => setShipmentTarget(wb!)}>补充寄件资料</Button>}
+            {canManage && canRecord && <Button variant="outline" onClick={() => { setTrackingInput(wb?.trackingNo ?? ''); setTrackTarget(wb!) }}>手工录入快递单号</Button>}
+            {canManage && canRetry && <Button variant="outline" onClick={() => retryMut.mutate(wb!.id)} disabled={retryMut.isPending}>{wb?.submittedToPlatform || wb?.status === 6 ? '查询原单' : '重试取号'}</Button>}
             {canManage && canVoid && <Button variant="outline" className="text-destructive" onClick={() => confirmAction({
-              title: '作废运单', description: `确认作废运单 ${wb?.waybillNo}？`, variant: 'destructive', confirmText: '确认作废',
-              onConfirm: () => voidMut.mutate(),
+              title: '作废运单本地记录', description: `确认作废运单 ${wb?.waybillNo} 的本地记录？此操作不代表快递官方订单已取消。`, variant: 'destructive', confirmText: '确认作废',
+              onConfirm: () => voidMut.mutate(wb!.id),
             })}>作废</Button>}
             <Button variant="outline" onClick={() => nav('/logistics')}>返回列表</Button>
           </div>
         }
       />
+
+      {isError && <QueryErrorState error={error} onRetry={() => void refetch()} title="运单加载失败" compact />}
+      {!readReady && <p className="text-sm text-muted-foreground" role="status">{!validId ? '运单标识无效，无法读取。' : query.isPaused ? '网络已暂停，恢复后重新读取原运单。' : isError ? '最新状态待核对，旧记录暂不提供操作；已打开的草稿保留。' : query.isFetching ? '正在重新读取原运单，旧记录暂不提供操作。' : '原运单尚未核实，暂不提供操作。'}</p>}
+      {readReady && <div className="rounded-md border border-border bg-muted/30 p-3 text-sm space-y-2">
+        <p>{nextStep}</p>
+        {canOperate && can(PERMISSIONS.PRINT_JOB_VIEW) && <Button size="sm" variant="outline" onClick={() => openPath('/settings/barcode-print-query', '?category=logistics')}>查看物流标签记录</Button>}
+        {canOperate && can(PERMISSIONS.PRINT_JOB_VIEW) && <p className="text-xs text-muted-foreground">进入物流类别查询，需按记录核对；此入口不定位本运单的原打印任务。</p>}
+      </div>}
 
       <OrderDetailSections type="logistics" id={wb?.id || 0}>
       <div className="space-y-4">
@@ -122,7 +163,7 @@ export default function LogisticsDetailPage() {
             <Field label="预估运费">{wb?.estFreight != null ? Number(wb.estFreight).toFixed(2) : '—'}</Field>
             <Field label="运费方式">{wb?.freightTypeLabel}</Field>
             <Field label="面单数据">{wb?.printDataRef === 'official_platform' ? '请通过快递官方打印面单' : wb?.printDataRef ?? '—'}</Field>
-            <Field label="销售单">{wb?.saleOrderNo}</Field>
+            <Field label="销售单">{canOperate && safeSaleId && can(PERMISSIONS.SALE_ORDER_VIEW) ? <Button size="sm" variant="link" className="h-auto justify-start p-0 text-doc-code" onClick={() => openPath(`/sale/${saleOrderId}`)}>{wb?.saleOrderNo || `销售单 #${saleOrderId}`}</Button> : wb?.saleOrderNo}</Field>
             <Field label="包裹条码">{wb?.shipment?.packages.map(p => p.barcode || p.id).join('、') || wb?.packageBarcode}</Field>
             <Field label="仓库">{wb?.warehouseName}</Field>
             {direct && <Field label="实际打包件数">{wb?.shipment?.packages.length ?? '—'}</Field>}
@@ -148,20 +189,21 @@ export default function LogisticsDetailPage() {
 
       </OrderDetailSections>
 
-      {shipmentOpen && wb && <DirectShipmentDialog waybill={wb} onClose={() => setShipmentOpen(false)} onSaved={invalidate} />}
-      <Dialog open={trackOpen} onOpenChange={v => { if (!v) { setTrackOpen(false); setTrackingInput('') } }}>
+      {shipmentTarget && <DirectShipmentDialog waybill={shipmentTarget} submitDisabled={!canManage || !canEditShipment || shipmentTarget.id !== waybillId} onClose={() => setShipmentTarget(null)} onSaved={invalidate} />}
+      <Dialog open={!!trackTarget} onOpenChange={v => { if (!v) { setTrackTarget(null); setTrackingInput('') } }}>
         <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>录入快递单号</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>录入快递单号</DialogTitle><DialogDescription>保留原运单草稿，核实最新状态后保存。</DialogDescription></DialogHeader>
           <div className="space-y-4 py-3">
-            <p className="text-sm text-muted-foreground">运单 {wb?.waybillNo}｜{wb?.carrierName ?? '未指定承运商'}</p>
+            <p className="text-sm text-muted-foreground">运单 {trackTarget?.waybillNo}｜{trackTarget?.carrierName ?? '未指定承运商'}</p>
+            {(!canRecord || trackTarget?.id !== waybillId) && <p className="text-sm text-muted-foreground" role="status">原运单最新状态待核对，已输入的单号保留，暂不能保存。</p>}
             <div>
               <Label htmlFor="logistics-detail-tracking-number">快递单号</Label>
               <Input id="logistics-detail-tracking-number" className="mt-2 font-mono" placeholder="输入承运商快递单号" value={trackingInput} onChange={e => setTrackingInput(e.target.value)} autoFocus />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setTrackOpen(false); setTrackingInput('') }}>取消</Button>
-            <Button disabled={!trackingInput.trim() || trackMut.isPending} onClick={() => trackMut.mutate()}>保存</Button>
+            <Button variant="outline" onClick={() => { setTrackTarget(null); setTrackingInput('') }}>取消</Button>
+            <Button disabled={!canManage || !canRecord || trackTarget?.id !== waybillId || !trackingInput.trim() || trackMut.isPending} onClick={() => trackMut.mutate()}>保存</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

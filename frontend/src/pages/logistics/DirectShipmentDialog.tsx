@@ -19,7 +19,7 @@ function ContactFields({ title, value, onChange }: { title: string; value: Shipm
     </div>)}
   </div></fieldset>
 }
-export function DirectShipmentDialog({ waybill, onClose, onSaved }: { waybill: LogisticsWaybill; onClose: () => void; onSaved: () => void }) {
+export function DirectShipmentDialog({ waybill, onClose, onSaved, submitDisabled = false }: { waybill: LogisticsWaybill; onClose: () => void; onSaved: () => void; submitDisabled?: boolean }) {
   const emptyContact: ShipmentContact = { name: '', phone: '', province: '', city: '', county: '', address: '' }
   const [sender, setSender] = useState(waybill.shipment?.sender || emptyContact)
   const [receiver, setReceiver] = useState(waybill.shipment?.receiver || emptyContact)
@@ -28,7 +28,10 @@ export function DirectShipmentDialog({ waybill, onClose, onSaved }: { waybill: L
   const [cargoName, setCargoName] = useState(waybill.shipment?.cargoName || '')
   const [freightType, setFreightType] = useState(waybill.freightType ? String(waybill.freightType) : '')
   const mutation = useMutation({
-    mutationFn: () => updateWaybillShipmentApi(waybill.id, { sender, receiver, productCode, deliveryType, cargoName, freightType: Number(freightType) as 1 | 2 }, { skipGlobalError: true }),
+    mutationFn: () => {
+      if (submitDisabled) throw new Error('请先重新读取原运单，寄件资料草稿已保留')
+      return updateWaybillShipmentApi(waybill.id, { sender, receiver, productCode, deliveryType, cargoName, freightType: Number(freightType) as 1 | 2 }, { skipGlobalError: true })
+    },
     onSuccess: () => { toast.success('寄件资料已保存，等待自动下单'); onSaved(); onClose() },
     onError: (e: Error) => toast.error(e.message || '保存失败'),
   })
@@ -44,6 +47,7 @@ export function DirectShipmentDialog({ waybill, onClose, onSaved }: { waybill: L
         {waybill.platformCode === 'deppon' && <div><Label>送货方式</Label><Select value={deliveryType} onValueChange={setDeliveryType}><SelectTrigger aria-label="送货方式"><SelectValue placeholder="选择送货方式" /></SelectTrigger><SelectContent><SelectItem value="1">自提</SelectItem><SelectItem value="3">送货不上楼</SelectItem><SelectItem value="4">送货上楼</SelectItem></SelectContent></Select></div>}
       </div>
     </div>
-    <DialogFooter><Button variant="outline" disabled={mutation.isPending} onClick={onClose}>取消</Button><Button disabled={mutation.isPending || !productCode || !cargoName || !['1', '2'].includes(freightType)} onClick={() => mutation.mutate()}>保存并提交下单</Button></DialogFooter>
+    {submitDisabled && <p role="status" className="text-sm text-muted-foreground">原运单最新状态待核对，草稿已保留，暂不能提交。</p>}
+    <DialogFooter><Button variant="outline" disabled={mutation.isPending} onClick={onClose}>取消</Button><Button disabled={submitDisabled || mutation.isPending || !productCode || !cargoName || !['1', '2'].includes(freightType)} onClick={() => mutation.mutate()}>保存并提交下单</Button></DialogFooter>
   </DialogContent></Dialog>
 }
