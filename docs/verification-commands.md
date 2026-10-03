@@ -495,3 +495,14 @@ npx tsc --noEmit -p tsconfig.app.json
 实际 GUI 发现商业销售未知操作的确认层遮挡页面查询入口后，窄修仅在父页 `pending && !busy` 时收起确认与发货弹窗；不清请求、发货数量或写阻断，不改变终端业务拒绝的原弹窗。使用真实 ConfirmDialog/AppDialog 的4动作和真实发货弹窗，并核请求在途时取消/关闭/Escape、原查询可达、显式同 key/body 重试、明确400与刷新后删除原回执只读不关闭页面。最终16例反向移除这6行修复后 `/tmp/c2-commercial-dialog-red-final.log` 自然 exit1，7红9绿，红均真实弹窗未收起；产品字节随后恢复。最早红日志 `/tmp/c2-commercial-dialog-red.log` 有1例释放按钮文案夹具错误，已纠正，不把该例计业务红。修后 `/tmp/c2-commercial-dialog-green.log` 自然 exit0，16/16；app 类型/scoped lint/diff/文档守卫为 `/tmp/c2-commercial-dialog-{types,lint,diff,docs}.log`。这是组件与 hook 接入点证据，实际断网 GUI 复验、全量与资源收尾由 root 独占执行，本窄修未操作浏览器、服务或数据库。
 
 后续实际 GUI 中原业务已提交、前端仍待查询时，底层通用“操作失败，请稍后重试”与未知恢复指引冲突。本页保留原 `error || write.error || backup.error` 优先级，仅在 `write.pending` 且选中错误精确等于该通用句时替换为“原操作结果待确认，请先查询原回执”；原查询未找到、会话变化、存储清理失败及备份错误仍显示，终端400原文不变。真实弹窗17例的最终原展示 `/tmp/c2-commercial-wording-red-final.log` 自然 exit1，四确认动作显示定性失败句、其余13绿；修后 `/tmp/c2-commercial-wording-green.log` 自然 exit0，17/17。新增真实原请求待确认后会话变化的只读查询守卫，确认拒绝原文、未发 GET/POST且记录未清；现有4动作还核 not_found 原文。`/tmp/c2-commercial-wording-specific-red.log` 自然 exit1 证明把所有 pending 错误覆盖成统一句会掩盖该拒绝原因，因此不采用全覆盖提示。scoped lint/diff/文档守卫 `/tmp/c2-commercial-wording-{lint,diff,docs}.log`，不改 hook、请求、回执或弹窗逻辑。本轮未跑全量或操作 GUI/服务/数据库，等待顺序 fresh SPEC→QUALITY 后由 root 收尾。
+
+
+### 2026-10-03 C2f：双草稿、迟到预览、四位净额列表补验（本地）
+
+隔离库仍为flowcube_product20261001_fdb108_test，所有helper先validateTestEnvironment并核SELECT DATABASE()；合成owner=CGU-56520aee/仓17，未读写生产。SO25/26实际ERP工作区编辑、迟到真实预览、各自保存；SO27正常API采购→入仓→占库→仓库完整出库，SR4/5正常API确认→实收→合格QA→上架完成，随后实际ERP详情/来源选择与修后列表核四位。本次接口和只读SQL断言自然exit0，证据/tmp/c2-next-final-business-proof.json（600）及同名log；截图/tmp/c2-next-late-{A-response-B-unchanged,A-draft-retained}.png、/tmp/c2-next-tiny-{return4-detail,return5-detail-after-fix,source-cumulative,list-after-fix}.png。迟到原预览真实200与release的held=1/delivered=1/aborted=0保存在/tmp/c2-next-preview-latency-proof.jsonl（600），不是伪造响应。场景结论与局限见主计划本轮节。
+
+列表修复的红→绿：新真实ReturnsPage例先因可见0.01而非0.0050失败，普通采购/销售例保持绿；后端契约先因无显式标记失败。测试夹具首次缺mock导出只是搭建错误，不作为产品红。最终新前端2/2及后端契约2/2绿；新后端用例沿现有test:sale-commercial执行。独立审查自行重复上述四例、正确tsconfig app类型和diff，并核已有return_id索引；没有实际EXPLAIN或测得性能收益。
+
+本轮最终命令：npm --prefix frontend run test:unit（188文件1084项，自然exit0，/tmp/c2-next-list-full-unit.log）、npm run test:sale-commercial（56项exit0，/tmp/c2-next-list-commercial.log）、tsc --noEmit -p frontend/tsconfig.app.json（0）、分别在frontend/backend目录执行受影响文件eslint（0）、npm --prefix frontend run build（0，/tmp/c2-next-list-build.log）。整套单测仍有23条jsdom请求AggregateError控制台输出，与/tmp/c2-final-unit-checkpoint.log相同；测试自然结束、无Vitest未捕获错误失败，不称日志零噪声。没有重跑PDA构建、全后端、远端CI或完整跨期；这批局部只读marker/列表显示不能取代发版前统一回归。
+
+资源：本任务Playwright finally退出0；API/代理退出0；Vite精确核本任务PID与完整命令后SIGTERM退出143。最终自有helper无进程、3011/3012/5181无监听、agent-browser session list为空，/tmp/flowcube-c2-next-resource-proof.json。预览重启时曾错用仓库根cwd造成Tailwind配置失败，已仅修到frontend cwd、重新启动并实际复验。合成资料和交易审计保留，无全表清理或生产操作。临时文件只是本机本轮证据，并非永久归档或他机可复现命令。

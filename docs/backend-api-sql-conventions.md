@@ -74,3 +74,6 @@ C2仓库执行归还接点：`POST /scan-logs/cancel-return` 的kit分支用SO X
 `sale.commercial-dispatch-read.load` 在原整单范围核对后以单批 LEFT JOIN 读 dg→WT→commercial group，验证同订单/仓库/销售任务和确认状态；当前组 `dispatch` 四个数量及完整事实字段见 `docs/business-semantics.md`。LEFT JOIN 不吞缺关联，历史事实不以 active 或软删过滤。`warehouse-tasks.kit-return-read.load` 在原 WT 范围核对后批量读 items+active PICK，返回每容器实际份额，与写 helper 的来源/余量/已拣上界一致；只读不请求业务行锁。普通 sale/return-detail DTO 原字段保持。
 
 系统回执通过仅内部 `receiptContext.matchedAction` 传实际数据库 action 给窄 guard；同时核请求 base/exact 与匹配 action，不能按请求宽 prefix 放行。只有 kit sale_out 的原 scan-log.cancel-return 读回执可按 WT 范围，其他动作范围不变；公开回执 DTO、匹配与写重放均保持。没有新迁移，已执行269–275未修改。
+
+
+销售退货列表的窄只读标记（2026-10-03 C2）：findAllSR在原分页SELECT中使用EXISTS(sale_return_items.return_id=sale_returns.id且dispatch_component_id IS NOT NULL)，仅命中行追加commercialModel=kit-v1给列表精度展示。以已存退货明细的来源关联为依据，不按商品名称/价格猜套、不额外读取整销售单；原过滤、仓库范围、分页和count仍保持，两次查询且没有逐行补查。普通行不追加标记，详情仍沿既有明细来源判断。totalAmount原值不变，无写入、状态/账款规则或DDL调整。对应守卫追加在现有sale-commercial-return-contracts.test.js，沿test:sale-commercial进入CI，不另加未接线命令。

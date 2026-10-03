@@ -362,3 +362,6 @@ PDA 拣货退回 `quantitySource=active_pick` 时突出 `taskReturnQty`（本任
 PDA 此页在详情 hook 前固定 owner；可选 owned 详情调用按原 task ID、endpoint、账号和 sessionGeneration 分隔 cache，GET 固定原配置并在读取前后核身份，返回 DTO 必须 `id === 原 taskId`。未传 owner 的既有 helper/hook 保持旧 key 与 API 默认配置。详情 loading、失败或 403 时原 row/box 持久回执查询、错误说明及 legacy 人工阻断仍显示，扫码入口不显示且写守卫继续阻断；本人原回执读取与详情 VIEW 是不同契约。查询失败或 `not_found` 保留原记录，可显式再次只读查询；恢复 query-only 不自动 POST/导航、不用详情清单或当前扫码目标推断完成。
 
 本段实现/组件证据不替代实际 GUI、真机、物理打印、部署或生产验证；只承诺同标签刷新查询，关窗、跨设备恢复未验证。
+
+
+来源销售退货列表（2026-10-03 C2补验）只对列表DTO显式commercialModel=kit-v1的行复用returnNet四位显示本单金额，避免0.0050被可见两位舍入成0.01。悬浮说明按状态3为“本单实际净冲减”、状态1/2为预计最多且合格入仓后确定、状态4为已取消原金额；不把累计来源金额或资金退款放进本单金额。普通销售/采购退货继续使用原money两位与千分位，详情现行来源识别保持。回归index.amount.test.tsx使用真实ReturnsPage/DataTable，覆盖半分钱、零、大额及普通两类边界。

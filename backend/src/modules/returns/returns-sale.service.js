@@ -17,7 +17,7 @@ const { normalizePagination } = require('../../utils/pagination')
 // 同 returns-purchase：3 的显示名统一为「已执行」（documentStatusRules / 迁移 146 / 前端筛选项一致）
 const SR_STATUS = { 1:'草稿', 2:'已确认', 3:'已执行', 4:'已取消' }
 
-const fmtSR = r => ({ id:r.id, returnNo:r.return_no, customerId:r.customer_id, customerName:r.customer_name, warehouseId:r.warehouse_id, warehouseName:r.warehouse_name, saleOrderId:r.sale_order_id||null, saleOrderNo:r.sale_order_no, status:r.status, statusName:SR_STATUS[r.status], totalAmount:Number(r.total_amount), remark:r.remark, operatorId:r.operator_id, operatorName:r.operator_name, createdAt:r.created_at })
+const fmtSR = r => ({ ...(Number(r.has_commercial_source) === 1 ? { commercialModel: 'kit-v1' } : {}), id:r.id, returnNo:r.return_no, customerId:r.customer_id, customerName:r.customer_name, warehouseId:r.warehouse_id, warehouseName:r.warehouse_name, saleOrderId:r.sale_order_id||null, saleOrderNo:r.sale_order_no, status:r.status, statusName:SR_STATUS[r.status], totalAmount:Number(r.total_amount), remark:r.remark, operatorId:r.operator_id, operatorName:r.operator_name, createdAt:r.created_at })
 
 async function loadSaleSourceOrderByNo(orderNo, scopeWarehouseIds = null) {
   const [rows] = await pool.query(
@@ -161,7 +161,7 @@ async function findAllSR({ page=1, pageSize=20, keyword='', status=null, product
   const scope = scopeFilter(scopeWarehouseIds, 'warehouse_id')
   if (scope.sql) { whereExtra += scope.sql; params.push(...scope.params) }
   const where = `deleted_at IS NULL AND (return_no LIKE ? OR customer_name LIKE ?) ${whereExtra}`
-  const [rows]=await pool.query(`SELECT * FROM sale_returns WHERE ${where} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`,[...params,ps,offset])
+  const [rows]=await pool.query(`SELECT sale_returns.*, EXISTS (SELECT 1 FROM sale_return_items sri WHERE sri.return_id = sale_returns.id AND sri.dispatch_component_id IS NOT NULL) AS has_commercial_source FROM sale_returns WHERE ${where} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`,[...params,ps,offset])
   const [[{total}]]=await pool.query(`SELECT COUNT(*) AS total FROM sale_returns WHERE ${where}`,params)
   return { list:rows.map(fmtSR), pagination:{page,pageSize:ps,total} }
 }
