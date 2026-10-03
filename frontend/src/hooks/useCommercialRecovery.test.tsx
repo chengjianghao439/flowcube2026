@@ -105,7 +105,7 @@ test('foreign resource receipt does not clear unknown or send retry', async () =
     })
     expect(mocks.execute).toHaveBeenCalledTimes(1)
     expect(hook.pending).toBeTruthy()
-    expect(hook.error).toContain('归属')
+    expect(hook.error).toContain('原操作结果对应的单据不符，请保留记录并核对')
   })
 })
 test('foreign failed receipt keeps unknown and cannot release it into a new key', async () => {

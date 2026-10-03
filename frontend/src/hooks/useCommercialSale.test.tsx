@@ -142,7 +142,7 @@ test('late success from original endpoint gives original result feedback without
       expect(await pending).toBeNull()
     })
     expect(invalidate).not.toHaveBeenCalled()
-    expect(write.error).toContain('来源或会话已变化')
+    expect(write.error).toContain('来源或登录状态已变化')
     expect(write.pending).toBeTruthy()
     expect(write.canApplyConfirmation).toBeDefined()
   })
