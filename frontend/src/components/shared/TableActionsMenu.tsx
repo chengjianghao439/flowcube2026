@@ -1,4 +1,5 @@
-import { useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useSectionActive } from '@/components/layout/SectionVisibilityContext'
 import { ChevronDown } from 'lucide-react'
 import {
   DropdownMenu,
@@ -16,6 +17,8 @@ export interface TableActionItem {
   destructive?: boolean
   disabled?: boolean
   separatorBefore?: boolean
+  /** 打开弹窗前等菜单浮层完成清理，避免两套 modal 指针锁重叠。 */
+  afterMenuClose?: boolean
 }
 
 interface TableActionsMenuProps {
@@ -38,6 +41,11 @@ export default function TableActionsMenu({
   const [menuInitialized, setMenuInitialized] = useState(false)
   const focusFirstItem = useRef(false)
   const menuContent = useRef<HTMLDivElement>(null)
+  const afterClose = useRef<(() => void) | null>(null)
+  const active = useSectionActive()
+  const activeRef = useRef(active)
+  activeRef.current = active
+  useEffect(() => () => { afterClose.current = null }, [])
   // 主按钮样式：与下面拼接模式的主按钮保持完全一致（同高、同字号），避免有无下拉时大小不一
   const primaryClass = cn(
     'shrink-0 whitespace-nowrap px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50',
@@ -100,7 +108,13 @@ export default function TableActionsMenu({
             <ChevronDown className="size-3.5" />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent ref={menuContent} align="end" onFocus={() => {
+        <DropdownMenuContent ref={menuContent} align="end" onCloseAutoFocus={event => {
+          const action = afterClose.current
+          afterClose.current = null
+          if (!action || !activeRef.current) return
+          event.preventDefault()
+          action()
+        }} onFocus={() => {
           // 首次按键发生在 Radix 挂载之前，补上键盘打开时应聚焦首个可用菜单项的语义。
           if (!focusFirstItem.current) return
           focusFirstItem.current = false
@@ -112,7 +126,10 @@ export default function TableActionsMenu({
               <DropdownMenuItem
                 disabled={item.disabled}
                 className={cn('text-xs', item.destructive && 'text-destructive focus:text-destructive')}
-                onClick={item.onClick}
+                onClick={() => {
+                  if (item.afterMenuClose) afterClose.current = item.onClick
+                  else item.onClick()
+                }}
               >
                 {item.icon}
                 {item.label}

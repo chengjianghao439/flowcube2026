@@ -123,7 +123,7 @@ export const StatementPanel = forwardRef<StatementPanelHandle, Props>(function S
     { key: 'id', title: '操作', width: 130, render: (_, row) => {
       const r = row as ReconciliationStatement
       // 与「按单登记」tab 一致：主按钮 + 下拉次操作，随状态变化
-      const items: TableActionItem[] = [{ label: '明细', onClick: () => setDetailId(r.id) }]
+      const items: TableActionItem[] = [{ label: '明细', afterMenuClose: true, onClick: () => setDetailId(r.id) }]
       if (r.status === 2 && r.settledAmount === 0) {
         items.push({ label: '解锁', onClick: () => unlockMut.mutate(r.id), disabled: unlockMut.isPending })
       }

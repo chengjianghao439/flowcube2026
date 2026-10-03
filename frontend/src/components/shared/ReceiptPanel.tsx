@@ -114,7 +114,7 @@ export const ReceiptPanel = forwardRef<ReceiptPanelHandle, Props>(function Recei
         <TableActionsMenu
           primaryLabel="继续核销"
           onPrimaryClick={() => { setContinueTarget(r); setFormOpen(true) }}
-          items={[{ label: '明细', onClick: () => setDetailId(r.id) }]}
+          items={[{ label: '明细', afterMenuClose: true, onClick: () => setDetailId(r.id) }]}
         />
       ) : (
         <TableActionsMenu primaryLabel="明细" primaryVariant="outline" onPrimaryClick={() => setDetailId(r.id)} items={[]} />

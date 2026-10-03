@@ -389,3 +389,7 @@ PDA 此页在详情 hook 前固定 owner；可选 owned 详情调用按原 task 
 打开原单/往来前由员工点击触发关闭当前只读详情，避免原 Portal 遮住目标页；原工作区的查询条件与登记草稿保持。后台重读、错误或暂停不自动关闭编辑表单，不覆盖输入。汇款查询键含所选类型，新增导航必须匹配当前打开 ID/type，并等本次打开或重新激活的成功读取，且不在 fetching/paused/error；最近缓存不代替本次读取。汇款/对账/往来来源三个局部只读查询设置 `staleTime: 0` 和 `refetchOnMount: always`，全局 QueryClient 不变。读取异常明确显示并可重试。
 
 `finance-navigation.test.tsx` 渲染真实页面与 Portal，覆盖收付两侧、多单部分核销、未核销、NULL/无效身份、无目标权限、旧缓存重读/错误、切换对象失败、暂停、非当前标签及关闭详情后导航。测试使用应用实际五分钟 `staleTime: 300000`，预置缓存重开/重新激活须重读；延迟成功前、读取失败及实际 `onlineManager` 离线暂停均禁新导航，来源弹窗重新挂载同样重读。修前 8 个预期失败、修后 32 例通过。既有 `PaymentsView.retention.test.tsx` 继续验证现结与月结核销筛选切换保留。组件和独立库专项只代表本地证据；统一 lint、类型检查、构建与现场 GUI 仍待总验收，不代表部署或生产结果。
+
+B4 现场指针锁补正：当前依赖中菜单和 Dialog 分别解析两套 `DismissableLayer`（1.1.19 / 1.1.11），同一次菜单点击立即打开 Dialog 会让后者保存菜单的 `body.pointerEvents=none`；菜单清理后页面暂时恢复，Dialog 再关闭却还原 `none`。现结汇款和月结对账的菜单“明细”显式传 `afterMenuClose`，由 `TableActionsMenu` 在 Radix `onCloseAutoFocus` 清理生命周期后一次性打开详情，并阻止旧菜单抢回焦点。未启用的动作与主按钮保持原行为；切走/卸载取消尚未执行的交接。往来来源详情由普通行按钮打开，无此菜单接点。本补正不直接写全局指针样式、不用固定延时、不更换依赖、不清输入或筛选。
+
+本地真实 Chrome 同一脚本红绿：菜单→对账详情→真实原销售单→点击原月结工作区标签，修前 Dialog 打开后 body 为 auto、关后 body 为 none，自然点击被 html 拦截而失败；修后 Dialog 打开 body 为 none 且 Dialog 为 auto，原单打开后 body 恢复 auto、Dialog 消失，自然返回原标签成功（退出码 0）。没有强制点击或改 DOM，脚本 finally 关闭自建浏览器。该证据只覆盖此真实菜单/详情/工作区点击链；不泛称全部财务 GUI 或生产已验。`TableActionsMenu.test.tsx` 对交接等待、一次消费、连续选择、普通动作与隐藏/卸载取消补 4 个机制案例，与真实 AppDialog 导航 32 例共 39 例通过。菜单全量 jsdom 渲染曾因定位/挂载超时未能形成业务断言，因此未计作红测或浏览器结果；产品红绿以真实 Chrome 为准。统一全量与其它现场路径由本批总验收继续执行。
