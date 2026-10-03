@@ -549,3 +549,9 @@ SPEC补强的反向验证仅在专属测试进程加载临时变异器，未修�
 `npm run test:qty-precision-coverage` 仍由现有静态 CI 门禁运行。`foldEntryItem` 已返回 `foldEntryItemWithRate(item, rate)`，守卫分别核对该返回委派、helper 对原 `item.quantity` 和未取整 `entryQty * rate` 的两处尺度校验，以及 `foldEntryItems`/`foldEntryItemsBatch` 各自的折算委派和返回前 `await assertQtyPrecision(conn, out.map(...))` 基本单位数量校验；不能仅凭文件内存在 helper 或另一入口的校验放行。AST 契约固定当前明确调用结构，合法结构重构需同步守卫；新增最小行为用例调用真实折算函数，以合成查询结果验证两位数量尺度、整数商品规则及四位单价保留，不使用数据库。
 
 旧门禁自然红为6项中2项误判包装函数缺少直接尺度调用；修正后8/8自然通过，既有数量精度与销售单位最小行为回归26/26通过，生产 `unitConversion.js` 未改。委派、原量/换算量 guard、两个批量 precision 及两个批量 delegate 共7个独立来源移除变异均自然 exit1（`/tmp/qty-precision-coverage-mutant-*.log`）；用进程内来源替换保留其他入口/导入/helper，不改产品文件。守卫内另逐项核删除、改名、注释伪装会失败；这些静态和行为证据不代表数据库、全量回归或远端 CI 已通过。
+
+### 2026-10-03 普通销售收入折扣测试夹具同步
+
+`npm run test:sale-revenue-discount` 的七个原场景继续调用真实 `buildSaleRevenue` 和出库期间投影；普通单夹具显式标记 `commercialModel: null`、提供物料商品/仓库字段，并对已确认商业派发金额查询返回空行。未识别的查询仍抛错，原净折扣、分批比例、税额、借贷平衡和零额凭证断言均未改。原七项因桩未支持 `sale_dispatch_groups` 查询自然 exit1，补齐后七项自然 exit0；相关 `test:accounting` 11项与商业出库会计规则3项自然通过。这是测试夹具契约失配，不是本轮修正了产品收入金额。
+
+反向验证仅在测试进程内替换来源：去掉净额折扣后六项自然失败；去掉税额夹取时超额税场景被金额非负守卫拒绝，另将超额税错误置零时原销项税额断言直接以 `0 !== 10` 失败，均 exit1。正常、原红及变异证据分别位于本机 `/tmp/flowcube-revenue-stub-*.log`；产品字节未改，未跑数据库、GUI或整批全量，不作为发布证明。

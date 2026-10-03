@@ -23,16 +23,17 @@ process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-only-secret-not-used-fo
 const { buildSaleRevenue } = require(path.resolve(__dirname, '../backend/src/modules/accounting/voucher-engine'))
 const { DIR } = require(path.resolve(__dirname, '../backend/src/constants/voucherSource'))
 
-// 只读桩连接分别提供订单、销售行与完成出库任务，日期不可由应收猜测。
+// 普通单只读桩提供订单、销售行与完成出库任务；没有商业派发金额，日期不可由应收猜测。
 const stubConn = (row) => ({ query: async sql => {
   if (sql.includes('FROM sale_orders so')) return [[row]]
-  if (sql.includes('FROM sale_order_items')) return [[{ id: 10, order_id: row.soId, shipped_qty: 1, unit_price: row.gross, cost_snapshot: 0 }]]
+  if (sql.includes('FROM sale_order_items')) return [[{ id: 10, order_id: row.soId, product_id: 11, warehouse_id: 1, shipped_qty: 1, unit_price: row.gross, cost_snapshot: 0 }]]
   if (sql.includes('FROM warehouse_tasks wt')) return [[{ taskId: 20, soId: row.soId, taskItemId: 30, saleItemId: 10, qty: 1, shippedAt: row.vdate }]]
+  if (sql.includes('FROM sale_dispatch_groups WHERE confirmed_at IS NOT NULL GROUP BY task_id,order_id')) return [[]]
   throw new Error(`未预期的查询: ${sql}`)
 } })
 const rowOf = ({ gross, discount = 0, orderGross, soId = 1 }) => ({
   soId, order_no: 'SO-TEST-1', vdate: new Date('2026-09-18T10:00:00+08:00'),
-  customer_id: 7, customer_name: '测试客户', gross, discount, orderGross,
+  customer_id: 7, customer_name: '测试客户', commercialModel: null, gross, discount, orderGross,
 })
 
 const legOf = (voucher, code) => voucher.legs.find(l => l.code === code)
