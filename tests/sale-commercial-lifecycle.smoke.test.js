@@ -50,7 +50,8 @@ async function main() {
       const kit = await http('/kits', { code: `${ref}-${price}`, name: `${ref}-${price}`, referenceUnitPrice: price, components: fixture.products.map((productId, i) => ({ productId, baseQty: i ? 4 : 1 })) }, { expect: 201 })
       fixture.kits.push(kit)
     }
-    const body = { customerId: fixture.customerId, warehouseId: fixture.warehouseId, commercialModel: 'kit-v1', commercialGroups: [
+    if(process.env.KIT_TEST_SLICE==='source-metadata') fixture.otherWarehouseId=await insert('INSERT INTO inventory_warehouses(code,name) VALUES (?,?)',[ref+'-head',ref+'-head'])
+    const body = { customerId: fixture.customerId, warehouseId: fixture.otherWarehouseId || fixture.warehouseId, commercialModel: 'kit-v1', commercialGroups: [
       ...fixture.kits.map((kit, i) => ({ kind: 'kit', lineKey: `K${i}`, kitVersionId: kit.currentVersionId, warehouseId: fixture.warehouseId, quantity: 1, priceSource: 'kit_default' })),
       { kind: 'ordinary', lineKey: 'O', productId: fixture.products[0], warehouseId: fixture.warehouseId, quantity: 1, unitPrice: 30, priceSource: 'manual' },
     ] }
@@ -65,6 +66,7 @@ async function main() {
     fixture.printHttp=undefined
     ownPrint=await require('./helpers/ownedPrintFixture').acquireOwnPackageLabelPrinter({http:printHttp,token,warehouseId:fixture.warehouseId,assert,randomRef:()=>ref+randomUUID().slice(0,5)})
     ownPrint.http=printHttp
+    if(process.env.KIT_TEST_SLICE==='source-metadata'){fixture.metadataPrinterId=ownPrint.printerId;fixture.metadataPrinterClientId=ownPrint.clientId}
     const ownPrinter=await http(`/printers/${ownPrint.printerId}`,undefined,{method:'GET'})
     ownPrint.code=ownPrinter.code
     await http('/printers/client-heartbeat',{clientId:ownPrint.clientId,hostname:ref})
@@ -145,7 +147,7 @@ async function main() {
     assert.equal(detail.commercialGroups.length, 3)
     assert.deepEqual(detail.physicalItems.map(i => [i.productId, i.quantity]), [[fixture.products[0], 3], [fixture.products[1], 8]])
     assert.equal(new Set(detail.commercialGroups.flatMap(g => g.components.map(c => c.saleItemId))).size, 2)
-    if(!['gates','readonly'].includes(process.env.KIT_TEST_SLICE)){
+    if(!['gates','readonly','source-metadata'].includes(process.env.KIT_TEST_SLICE)){
     const marker={commercialModel:'kit-v1',expectedRevision:1}
     for(const [path,input,method] of [['/sale',body,'POST'],[`/sale/${sale.id}`,{...body,...marker},'PUT'],[`/sale/${sale.id}/adjust`,{...body,...marker},'PUT'],[`/sale/${sale.id}/reserve`,marker,'POST'],[`/sale/${sale.id}/release`,marker,'POST'],[`/sale/${sale.id}/ship`,{...marker,groups:[{groupId:detail.commercialGroups[0].id,qty:1}]},'POST'],[`/sale/${sale.id}/cancel`,marker,'POST'],[`/sale/${sale.id}`,marker,'DELETE'],['/returns/sale',{customerId:fixture.customerId,customerName:ref,warehouseId:fixture.warehouseId,warehouseName:ref,saleOrderId:sale.id,saleOrderNo:sale.orderNo,...marker,items:[{sourceItemId:detail.items[0].id,commercialComponentId:detail.commercialGroups[0].components[0].id,dispatchComponentId:1,productId:fixture.products[0],productCode:ref+'-0',productName:ref,unit:'个',quantity:1,unitPrice:80}]},'POST']]){
       const r=await fetch(`http://127.0.0.1:${server.address().port}/api${path}`,{method,headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json','X-Request-Key':''},body:JSON.stringify(input)});const j=await r.json();assert.equal(r.status,400);assert.equal(j.code,'SALE_COMMERCIAL_REQUEST_KEY_REQUIRED')
@@ -237,6 +239,90 @@ async function main() {
     const readPending=current.commercialGroups.map(g=>g.dispatch)
     if(process.env.KIT_TEST_SLICE==='readonly')await assert.rejects(http(`/sale/${sale.id}/ship`,{commercialModel:'kit-v1',expectedRevision:1,groups:[{groupId:a.id,qty:1}]}),e=>e.code==='SALE_COMMERCIAL_DISPATCH_QTY')
     await actualShip(fixture.taskId)
+    if(process.env.KIT_TEST_SLICE==='source-metadata'){
+      const failures=[]
+      const check=(name,action)=>{try{action()}catch(error){console.log('[metadata missing]',name,error.message);failures.push(error)}}
+      const source=await sourceRead(sale.orderNo),hinge=source.items.find(i=>i.productId===fixture.products[0])
+      const [wt]=await q('SELECT task_no,warehouse_name,status FROM warehouse_tasks WHERE id=?',[fixture.taskId])
+      const [d]=await q('SELECT confirmed_at FROM sale_dispatch_groups WHERE order_id=? AND task_id=?',[sale.id,fixture.taskId])
+      assert.equal(Number(wt.status),7);assert.ok(d.confirmed_at)
+      check('source taskNo',()=>assert.equal(hinge.taskNo,wt.task_no))
+      check('source confirmedAt',()=>assert.equal(hinge.confirmedAt,d.confirmed_at.toISOString()))
+      check('source warehouse snapshot',()=>assert.equal(hinge.warehouseName,wt.warehouse_name))
+      check('source quantity policy',()=>assert.equal(hinge.allowDecimalQty,false))
+      assert.equal(hinge.sourceBudgetAmount,80);assert.equal(hinge.sourceQuantity,1);assert.equal(hinge.sourceFinancialEstimate,80)
+      const sr=await sourceCreate({customerId:fixture.customerId,customerName:ref,warehouseId:fixture.warehouseId,warehouseName:ref,saleOrderId:sale.id,saleOrderNo:sale.orderNo,commercialModel:'kit-v1',expectedRevision:1,items:[{...hinge,quantity:1}],requestKey:randomUUID()})
+      fixture.metadataReturnId=sr.id
+      const saved=await http(`/returns/sale/${sr.id}`,undefined,{method:'GET'})
+      const expected={kind:'kit',kitCode:fixture.kits[0].code,kitName:fixture.kits[0].name,groupId:a.id,lineKey:'K0',taskId:fixture.taskId,taskNo:wt.task_no,confirmedAt:d.confirmed_at.toISOString(),warehouseId:fixture.warehouseId,warehouseName:wt.warehouse_name,allowDecimalQty:false}
+      check('saved source labels',()=>assert.deepEqual(saved.items[0].source,expected))
+      assert.equal(saved.totalAmount,80);assert.equal(saved.items[0].amount,80)
+      if(failures.length)throw new AggregateError(failures,'real WT7 source and saved SR lack metadata')
+      fixture.previewRoleId=await insert('INSERT INTO sys_roles(code,name,is_system) VALUES (?,?,0)',[ref+'-return-view',ref+'-return-view'])
+      await q('INSERT INTO sys_role_permissions(role_id,permission) VALUES ?',[[[fixture.previewRoleId,'return.order.view'],[fixture.previewRoleId,'return.order.create']]])
+      fixture.previewUserId=await insert("INSERT INTO sys_users(username,password,real_name,role_id,role_name,is_active) VALUES (?,'!',?,?,?,1)",[ref+'-return-view',ref,fixture.previewRoleId,ref])
+      await q('INSERT INTO user_warehouse_scope(user_id,warehouse_id) VALUES (?,?)',[fixture.previewUserId,fixture.warehouseId])
+      const limited={Authorization:'Bearer '+require('../backend/node_modules/jsonwebtoken').sign({userId:fixture.previewUserId,tokenVersion:0},process.env.JWT_SECRET,{expiresIn:'30m'})}
+      assert.deepEqual((await http(`/returns/sale/${sr.id}`,undefined,{method:'GET',headers:limited})).items[0].source,expected)
+      await http(`/returns/sale/source-order?orderNo=${sale.orderNo}`,undefined,{method:'GET',headers:limited,expect:403})
+      await http(`/sale/${sale.id}`,undefined,{method:'GET',headers:limited,expect:403})
+      await q('UPDATE user_warehouse_scope SET warehouse_id=? WHERE user_id=?',[fixture.otherWarehouseId,fixture.previewUserId])
+      await http(`/returns/sale/${sr.id}`,undefined,{method:'GET',headers:limited,expect:403})
+      await q('UPDATE user_warehouse_scope SET warehouse_id=? WHERE user_id=?',[fixture.warehouseId,fixture.previewUserId])
+      await http(`/returns/sale/${sr.id}/confirm`,{})
+      const rt=(await http(`/returns/sale/${sr.id}`,undefined,{method:'GET'})).task.id
+      await http(`/return-tasks/${rt}/receive`,{productId:hinge.productId,packages:[{qty:1}]},{pda:true})
+      await http(`/return-tasks/${rt}/check`,{productId:hinge.productId,passedQty:1,rejectedQty:0},{pda:true})
+      const [c]=await q("SELECT id FROM inventory_containers WHERE source_ref_type='sale_return' AND source_ref_id=? AND status=4",[rt])
+      await http(`/return-tasks/${rt}/putaway`,{containerId:Number(c.id),locationId:fixture.locationId},{pda:true})
+      const executed=await http(`/returns/sale/${sr.id}`,undefined,{method:'GET',headers:limited});assert.equal(executed.totalAmount,80);assert.equal(executed.items[0].amount,80);assert.deepEqual(executed.items[0].source,expected)
+      const [ar]=await q('SELECT total_amount FROM payment_records WHERE type=2 AND order_id=?',[sale.id]);assert.equal(Number(ar.total_amount),20)
+      const after=await sourceRead(sale.orderNo);assert.equal(after.items[0].sourceBudgetAmount,80);assert.equal(after.items[0].actualRefundAmount,80)
+      const ordinary=await http('/sale',{customerId:fixture.customerId,customerName:ref,warehouseId:fixture.warehouseId,warehouseName:ref,items:[{productId:fixture.products[0],productCode:ref+'-0',productName:ref,unit:'个',quantity:1,unitPrice:30,priceSource:'manual'}]},{expect:201});fixture.sales.push(ordinary.id)
+      await supply([[fixture.products[0],1]])
+      const od=await http(`/sale/${ordinary.id}`,undefined,{method:'GET'});await http(`/sale/${ordinary.id}/reserve`,{items:od.items.map(i=>({id:i.id,warehouseId:fixture.warehouseId,warehouseName:ref,qty:i.quantity}))});await http(`/sale/${ordinary.id}/ship`,{items:od.items.map(i=>({id:i.id,qty:i.quantity}))});const [ow]=await q('SELECT id FROM warehouse_tasks WHERE sale_order_id=?',[ordinary.id]);await actualShip(Number(ow.id))
+      const os=await sourceRead(ordinary.orderNo)
+      for(const field of ['taskId','taskNo','confirmedAt','warehouseName','allowDecimalQty','source'])assert.equal(Object.hasOwn(os.items[0],field),false,'ordinary source remains original DTO')
+      const osr=await http('/returns/sale',{customerId:fixture.customerId,customerName:ref,warehouseId:fixture.warehouseId,warehouseName:ref,saleOrderId:ordinary.id,saleOrderNo:ordinary.orderNo,items:os.items.map(i=>({...i,quantity:1}))},{expect:201})
+      fixture.metadataOrdinaryReturnId=osr.id
+      const ordinarySaved=await http(`/returns/sale/${osr.id}`,undefined,{method:'GET'});assert.equal(Object.hasOwn(ordinarySaved.items[0],'source'),false);assert.equal(ordinarySaved.totalAmount,30)
+      // Invalid identities are tested on this run's rows inside rollback-only transactions.
+      const conn=await pool.getConnection(),read=require('../backend/src/modules/sale/sale.commercial-returns'),originalPoolQuery=pool.query.bind(pool)
+      let metadataError
+      const metadataCleanupErrors=[]
+      try{
+        pool.query=(sql,params)=>typeof sql==='string'&&sql.startsWith('SELECT sri.id AS returnItemId')?conn.query(sql,params):originalPoolQuery(sql,params)
+        await conn.beginTransaction()
+        for(const [sql,params]of [
+          ['UPDATE sale_return_items SET product_id=? WHERE return_id=?',[fixture.products[1],sr.id]],
+          ['UPDATE sale_return_items SET sale_item_id=? WHERE return_id=?',[od.items[0].id,sr.id]],
+          ['UPDATE sale_return_items SET commercial_component_id=? WHERE return_id=?',[detail.commercialGroups[1].components[0].id,sr.id]],
+          ['UPDATE sale_return_items SET dispatch_component_id=? WHERE return_id=?',[source.items.find(i=>i.productId===fixture.products[1]).dispatchComponentId,sr.id]],
+          ['UPDATE sale_returns SET sale_order_id=? WHERE id=?',[ordinary.id,sr.id]],
+          ['UPDATE sale_returns SET warehouse_id=? WHERE id=?',[fixture.otherWarehouseId,sr.id]],
+          ['UPDATE sale_dispatch_groups SET group_id=? WHERE order_id=?',[detail.commercialGroups[1].id,sale.id]],
+          ['UPDATE warehouse_tasks SET sale_order_id=? WHERE id=?',[ordinary.id,fixture.taskId]],
+          ['UPDATE warehouse_tasks SET warehouse_id=? WHERE id=?',[fixture.otherWarehouseId,fixture.taskId]],
+        ]){
+          await conn.query('SAVEPOINT metadata');await conn.query(sql,params)
+          assert.equal((await read.savedSources(conn,sr.id)).size,0,'invalid identity must not expose another source label')
+          const invalidSaved=await http(`/returns/sale/${sr.id}`,undefined,{method:'GET',headers:limited})
+          assert.equal(invalidSaved.items[0].source,null);assert.equal(invalidSaved.totalAmount,80);assert.equal(invalidSaved.items[0].amount,80)
+          await conn.query('ROLLBACK TO SAVEPOINT metadata')
+        }
+        const current=await read.savedSources(conn,sr.id);assert.equal(current.get(Number(saved.items[0].id)).taskNo,wt.task_no)
+      }catch(error){
+        metadataError=error
+      }finally{
+        pool.query=originalPoolQuery
+        try{await conn.rollback()}catch(error){metadataCleanupErrors.push(new Error('metadata rollback failed',{cause:error}))}
+        try{conn.release()}catch(error){metadataCleanupErrors.push(new Error('metadata release failed',{cause:error}))}
+      }
+      if(metadataCleanupErrors.length)throw new AggregateError(metadataError?[metadataError,...metadataCleanupErrors]:metadataCleanupErrors,'Metadata business/cleanup failures',{cause:metadataError})
+      if(metadataError)throw metadataError
+      console.log('[PASS source metadata]',JSON.stringify({saleId:sale.id,taskId:fixture.taskId,taskNo:wt.task_no,confirmedAt:expected.confirmedAt,returnId:sr.id,ordinarySaleId:ordinary.id,ordinaryReturnId:osr.id,grossBudget:80,actualAmount:executed.totalAmount,ar:20,limitedSR:200,wholeSource:403,revokedSR:403,invalidSources:9}))
+      return
+    }
     if(process.env.KIT_TEST_SLICE==='readonly'){
       const shipped=await http(`/sale/${sale.id}`,undefined,{method:'GET'});
       await svc.cancel(sale.id,operator(),null,randomUUID(),{commercialModel:'kit-v1',expectedRevision:1});
@@ -603,6 +689,8 @@ async function main() {
           }
         })
       }
+      for(const id of [fixture.metadataReturnId,fixture.metadataOrdinaryReturnId].filter(Boolean)) await clean(`source return ${id} normal cancellation`,async()=>{const [sr]=await q('SELECT status FROM sale_returns WHERE id=?',[id]);if(sr&&[1,2].includes(Number(sr.status)))await http(`/returns/sale/${id}/cancel`,{})})
+      if(fixture.previewUserId) await clean('source view actor scope',()=>q('DELETE FROM user_warehouse_scope WHERE user_id=?',[fixture.previewUserId]))
       if (ownPrint) await clean('owned printer', () => require('./helpers/ownedPrintFixture').releaseOwnPackageLabelPrinter(ownPrint,{http:ownPrint.http,token,assert}))
       if (fixture.deviceId) {
         await clean('device sessions', () => q('DELETE FROM pda_device_sessions WHERE device_id=?', [fixture.deviceId]))

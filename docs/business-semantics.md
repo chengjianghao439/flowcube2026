@@ -117,3 +117,12 @@ C2归还权限复审：销售员按整单范围发起取消，PDA员工只执行
 组内 `dispatch.facts[]` 及单头 `commercialDispatches[]` 返回同一事实：`dispatchGroupId/groupId/taskId/taskNo/warehouseId/taskStatus/quantity/active/confirmedAt/confirmedShipped/outstanding/allocated/taskDeletedAt`。单头集合另保留已经 superseded 的 inactive 未确认历史行；当前组投影不把旧版本撤回事实计为本组额度。执行期改单的 `replaceUnconfirmed` 把旧组 active 置0并在同WT插入新组；WT后来实发7时，旧inactive且未确认行仍只作撤回历史，不能计为已发、待执行或额度。真实已确认历史不因 active=0、任务软删或关闭剩余而消失，确认事实却没有 WT7、active未确认却WT7、跨订单/仓库或缺关联均 409 `SALE_COMMERCIAL_DISPATCH_SOURCE_INVALID`，不截断数量、不按共享物料已发量猜套归属。新增事实查询只有一个批次；原头仓和全部 stored physical 行（含 quantity=0）的范围核对在商业 DTO 暴露前执行。普通销售详情不新增商业字段。
 
 `GET /warehouse-tasks/:id/cancel-return-detail` 对来源 kit-v1 的容器新增 `taskReturnQty/remainingQty/quantitySource:'active_pick'`。`taskReturnQty` 来自当前任务仍锁定容器的 `COALESCE(scan_purpose,1)=1` 实际 PICK 汇总，并核 own WT/item/container/product/warehouse、ACTIVE未删实物、正数量、容器余量和任务 picked_qty；不从 I 条码余量推归还份额。原 `qty` 仍为整容器 `remaining_qty`，普通单 DTO 不新增这些字段，盒/普通原写规则不改。只读份额只解释任务归还，不扣 I 库存、不加台账、不改变取消/释放数量；缺源/串 item/超量继续 409 `SALE_COMMERCIAL_PICK_SOURCE_INVALID`。批量读 items+PICK，不加 FOR UPDATE/FOR SHARE；仓库范围仍按当前 WT，不额外要求 SO 头仓。
+
+
+### C2 原出库批次与已保存退货的只读标签（2026-10-02）
+
+套单的 `GET /returns/sale/source-order` 保留原来源字段、数量与预算，增加 `taskId/taskNo/confirmedAt/warehouseName/allowDecimalQty` 及 `kitCode/kitName/lineKey` 驼峰标签。`taskNo` 取该来源原 WT 的单号，`confirmedAt` 取原派发组真实 `confirmed_at`，仓名取 WT 的 `warehouse_name` 快照；没有仓名/单号返回 null，不追现在仓库名。数量提示取当前商品策略，已有商品 flag=0 为 false、1 为 true、NULL 沿既有口径为 true；商品记录不存在时为 null。LEFT JOIN 不按商品启停或软删筛掉历史来源；提交仍由原后端精度规则重新核验，不把当前策略写回冻结组成或价格。
+
+`GET /returns/sale/:id` 只给含 `dispatchComponentId` 的明细追加 `source`，形状为 `{kind,kitCode,kitName,groupId,lineKey,taskId,taskNo,confirmedAt,warehouseId,warehouseName,allowDecimalQty}`；ordinary 商业组可解释为 `kind:'ordinary'`，原普通退货明细不追加该字段。单批查询同时核退货原 SO、明细 sourceItem/product/commercialComponent/dispatchComponent、m→d→c→g 的派发组/成交组、WT 与唯一物料行的订单/仓库身份及 WT7/真实确认；关联不完整返回 `source:null`，不猜另一批次。历史 WT 不因软删丢掉已保存标签。该详情沿退货单自己的权限和仓库范围，不要求员工同时能查看完整销售单；没有额外逐行查询或业务锁。
+
+申请 `returnedQty` 仍是全部非取消申请占用额度；`actualQualifiedQty/actualRefundAmount` 与 `sourceFinancialEstimate` 仍按整个来源累计/估算。保存明细 `amount` 和单头 `totalAmount` 原样返回现有值，完成后仍是实际执行净额；本次只补标签，不重算预算、分摊、QA、账款或退款，不改变写锁序和普通 DTO。

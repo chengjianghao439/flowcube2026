@@ -63,3 +63,58 @@ for (const file of scripts) {
     test(`${file}: actual finally preserves errors and closes resources (${mode})`, async () => verify(await probe(file, mode), mode))
   }
 }
+
+function metadataSource(source) {
+  const tree = ts.createSourceFile('smoke.js', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS)
+  let statement
+  function visit(node) {
+    if (ts.isTryStatement(node) && node.finallyBlock
+      && node.tryBlock.getText(tree).includes('SAVEPOINT metadata')
+      && node.finallyBlock.getText(tree).includes('pool.query=originalPoolQuery')) statement = node
+    ts.forEachChild(node, visit)
+  }
+  visit(tree)
+  assert.ok(statement, 'actual metadata transaction must retain its own cleanup')
+  const prefix = statement.parent.statements.filter(n => ts.isVariableStatement(n)
+    && n.declarationList.declarations.some(d => ['metadataError','metadataCleanupErrors'].includes(d.name.getText(tree))))
+    .map(n => n.getText(tree)).join('\n')
+  const postCleanup = statement.parent.statements.slice(statement.parent.statements.indexOf(statement) + 1, statement.parent.statements.indexOf(statement) + 3)
+  assert.ok(postCleanup.every(ts.isIfStatement)
+    && postCleanup[0].expression.getText(tree) === 'metadataCleanupErrors.length'
+    && postCleanup[1].expression.getText(tree) === 'metadataError', 'metadata errors must be thrown after finally cleanup')
+  return prefix + '\ntry { if (original) throw original }'
+    + source.slice(statement.tryBlock.end, postCleanup[1].end) + '\nreturn "metadata success"'
+}
+async function metadataProbe(mode) {
+  const original = mode.startsWith('success') ? null : new Error('ORIGINAL_METADATA_FAILURE')
+  const failures = [], events = [], originalPoolQuery = () => {}
+  const pool = { query:() => {} }
+  const fail = message => { const error = new Error(message); failures.push(error); throw error }
+  const conn = {
+    async rollback() {
+      assert.equal(pool.query, originalPoolQuery, 'pool query must be restored before cleanup')
+      events.push('rollback')
+      if (mode.includes('rollback') || mode.includes('both')) fail('METADATA_ROLLBACK_FAILURE')
+    },
+    release() {
+      events.push('release')
+      if (mode.includes('release') || mode.includes('both')) fail('METADATA_RELEASE_FAILURE')
+    },
+  }
+  const source = fs.readFileSync(path.join(__dirname, scripts[0]), 'utf8')
+  const fn = new AsyncFunction('original', 'pool', 'originalPoolQuery', 'conn', metadataSource(source))
+  let error, result
+  try { result = await fn(original, pool, originalPoolQuery, conn) } catch (e) { error = e }
+  assert.equal(pool.query, originalPoolQuery, 'actual metadata block must restore pool query')
+  assert.deepEqual(events, ['rollback','release'], 'actual metadata block must release after rollback failure')
+  if (original) assert.ok(includes(error, original), 'actual metadata block must preserve original business error')
+  for (const failure of failures) assert.ok(includes(error, failure), 'actual metadata block must preserve every cleanup failure')
+  if (failures.length) {
+    assert.equal(error.name, 'AggregateError')
+    if (original) assert.equal(error.cause, original, 'cleanup aggregate cause must identify original business error')
+  } else if (original) assert.equal(error, original)
+  else { assert.equal(error, undefined); assert.equal(result, 'metadata success') }
+}
+for (const mode of ['business','business-rollback','business-release','business-both','success','success-rollback','success-release','success-both']) {
+  test(`lifecycle actual metadata inner cleanup preserves errors and attempts release (${mode})`, async () => metadataProbe(mode))
+}

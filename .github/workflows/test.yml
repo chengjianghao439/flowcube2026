@@ -538,6 +538,8 @@ jobs:
         run: npm run smoke:sale-commercial-partial-cancel
       - name: Kit commercial read projections and original task receipt
         run: npm run smoke:sale-commercial-readonly
+      - name: Sale commercial source metadata read-only labels
+        run: npm run smoke:sale-commercial-source-metadata
 
       - name: 冒烟测试 — 销售预计库存 ATP（采购预计量占库 / 取消与短装先解绑）
         run: npm run smoke:atp

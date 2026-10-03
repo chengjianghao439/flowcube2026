@@ -436,3 +436,25 @@ C2 第二批规格审查原字节探针 `address-reopen`、`gate-title`、`detai
 
 此初始化窄修另有 KIT80→KIT81 的 pending/已初始化两种 mounted 时序，稳定 `saleId` key 重挂新 gate，同 SO handoff 不重挂；旧80迟到结果不得入81。受影响回归记录 `/tmp/c2-sales-owned-cache-affected-green.log`，未为这两个边界人为移除已存在的 key 制造红。
 第二批最后缓存初始化窄修的fresh规格真实整页探针6/6（`/tmp/c2-fresh-narrow-spec-green.log`）及modelGate7/7（`/tmp/c2-fresh-narrow-modelgate-green.log`）自然通过；同品质原字节2/2、app类型、scopedlint与diff通过，最终接受。Root接口对应、前端约定5/5、文档守卫自然exit0，日志`/tmp/c2-sales-root-test-*.log`。Root实际隔离GUI的SO15混合开单/2包12.3456/354.69/4成交行、parent打印四位单价、整单占库23+8、A1派发WT31实发仍0以及正向只读SQL核对，0600证据`/tmp/flowcube-c2-sales-gui-evidence.json`。本任务browser与三个services自然关闭且端口空；自有账号/设备/SO/WT/打印配置暂留后续链。此处仍不代表统一全量、刷新恢复、真实仓库完成/退货整链、真机、实纸或生产验证。
+
+
+### C2 退货来源批次标签窄验收（2026-10-02）
+
+`npm run smoke:sale-commercial-source-metadata` 复用 lifecycle 的 `KIT_TEST_SLICE=source-metadata` 最小路径，已接 Tests CI MySQL regression 的实际 step；不重跑后续全部金额场景。仍先 `validateTestEnvironment` 与 `SELECT DATABASE()`，Node22 / 显式回环独立库 `flowcube_kits20261001_7e429c_test`，正常采购/PDA收货上架、完整套 pick/sort/check/pack/client ack/真实 WT7 后读 source GET 与创建后保存 SR GET。`tests/sale-commercial-source-metadata.test.js` 六例已接 `test:sale-commercial` static：当前 flag 0/1/NULL、缺商品、同 SKU 不同批次各自时间/单号、单批无锁与缺标签 null。初次纯例隔离依赖误加载 JWT 配置失败不计业务红；隔离非受测 money adapter 后的纯例红才是字段缺失/缺 helper。
+
+真实原字段缺失红 `/tmp/c2-source-metadata-red.log` 自然 exit1，owned manifest `/tmp/flowcube-kits-lifecycle-KLC-6a562a36.json`：SO420/WT313/SR166 的 GET 成功而 taskNo、confirmedAt、仓名、数量提示、保存 source 缺失；正常取消本轮草稿 SR、关闭销售且账号/设备/锁/预占为0后报原断言。初绿 `/tmp/c2-source-metadata-green.log` 自然 exit0。最终扩展 `/tmp/c2-source-metadata-final-green.log` 自然 exit0，manifest `/tmp/flowcube-kits-lifecycle-KLC-ee7fd079.json`：SO423/WT316/SR169，原预算80、合格退1实际金额80/AR20不变；只具 return.view/create、仅 WT 仓范围的账号 SR GET200，整SO source GET403/无sale.view，撤销 SR 仓范围后详情403。普通 SO424 来源与 SR170 保存详情均无新商业字段、金额30；普通草稿SR最终正常取消。
+
+九种失配（product、sourceItem、commercialComponent、dispatchComponent、SR原SO、SR仓、d.group、WT原SO、WT仓）只在本轮拥有的行上做 rollback-only 事务。仅将 saved metadata 的一个 SELECT 定向读到该事务，实际 HTTP GET 其余鉴权、scope、原退货头/明细仍走原 pool；均返回 source:null，头/行金额80不变。随后回滚、恢复 pool.query，正例标签仍对应本批，不提交损坏事实；这不是现场已有坏数据恢复证明。
+
+`/tmp/c2-source-metadata-pure.log` 自然 exit0 47/47（含原24项实际 main/finally故障守卫、新6例）；`/tmp/c2-source-metadata-{lint,query-loop,api-contract,ci-resources}.log` 均自然 exit0，资源守卫26/26。精确三批复核 `/tmp/c2-source-metadata-resource-proof.log` 自然 exit0，脚本 `/tmp/c2-source-metadata-resource-proof.js`（0600）：5个actor停用、各自device/session/scope/permission、业务锁/预占、分拣格占用、cache mismatch、打印绑定/在线本轮printer、未完成退货任务均0；3份 manifest 0600，5张销售及真实交易审计保留。两个绿与原红进程均自然结束，server/pool 关闭；不复用或清理旧失败夹具、root GUI库。对应文档守卫与最终 diff 检查记录 `/tmp/c2-source-metadata-doc-guard.log`、`/tmp/c2-source-metadata-diff-check.log`。未验前端GUI/真机/物理出纸、远端CI、发版前统一全量和生产；没有迁移、写规则、提交/推送/发布。
+
+
+### C2 来源元数据事务 cleanup 窄修复验（2026-10-03）
+
+独立品质原探针 `/tmp/c2-source-metadata-quality-rollback-red-recheck.log` 记录 inner metadata rollback-only 事务的旧 finally 在 rollback 失败时丢失原业务异常、且不尝试 release。此次仅补 lifecycle 的这段 cleanup：先恢复 `pool.query`，rollback 与 release 分别尽力，保存原业务错误与每个清理原因；finally 后才抛聚合或原错误。业务与清理同失败时 `AggregateError.cause` 指向原业务错误；业务成功而清理失败仍报错。没有修改产品读取/写入、DDL、原 outer main cleanup 或 root 两份计划。
+
+新增8模式守卫继续从实际 inner try/catch/finally及紧随的聚合/原错 throw 提取 AST 原字节，只替换业务体，成功模拟不提前 return 绕过 post-cleanup。原24项 main 守卫字节与 HEAD 完全一致。最初对正常控制流要求的红 `/tmp/c2-source-metadata-cleanup-postfinally-red.log` 自然 exit1（原24通过、新8失败）；完成移动后 `/tmp/c2-source-metadata-cleanup-guard-green.log` 自然 exit0 32/32，商业纯例 `/tmp/c2-source-metadata-cleanup-pure-green.log` 自然 exit0 55/55。上段47/47是2026-10-02补 inner 守卫前的历史结果，不是当前计数。
+
+品质原 `/tmp/c2-source-metadata-quality-rollback-probe.js` 仅适配实际事务 AST 定位、声明及 post-cleanup 原字节，保留原业务/release断言并补递归 rollback 原因核对；`/tmp/c2-source-metadata-quality-rollback-probe-green.log` 自然 exit0，原业务与 rollback 原因均保留，events为 rollback/release。`/tmp/c2-source-metadata-cleanup-old-finally-hook.js` 仅在内存恢复旧 finally、不改工作树：`/tmp/c2-source-metadata-cleanup-old-finally-mutant-red.log` 自然 exit1（26/32，6个故障模式失败），原品质断言重跑 `/tmp/c2-source-metadata-quality-rollback-mutant-red.log` 亦自然 exit1（原业务错缺失、events仅 rollback）。这两项反向结果证明新增守卫能拦实际旧缺陷。
+
+Node22（v22.23.2）下新增 cleanup 守卫 scoped lint `/tmp/c2-source-metadata-cleanup-guard-lint-green.log` 自然 exit0。对 lifecycle 使用同 backend ESLint 配置的 `/tmp/c2-source-metadata-cleanup-narrow-lint.log` 自然 exit1，仍有7条错误；`/tmp/c2-source-metadata-cleanup-lint-baseline-proof.log` 对 HEAD 与当前同配置/同文件名的 JSON 结果逐项比较自然 exit0，新增错误0（保留既有 no-useless-catch、4处 no-unused-vars与原 outer finally 2处 no-unsafe-finally），不称 lifecycle 全文件 lint 通过。文档守卫及 diff 检查记录 `/tmp/c2-source-metadata-cleanup-doc-guard.log`、`/tmp/c2-source-metadata-cleanup-diff-check.log`。此次全为离线纯验证，无数据库、服务器或浏览器资源，也没有重跑上段真实 WT316/SR169 与三批资源 proof；GUI/真机/实纸、远端 CI、发版前统一全量和生产边界保持未验，未提交/推送/发布。

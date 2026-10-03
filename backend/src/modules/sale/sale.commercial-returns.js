@@ -7,16 +7,43 @@ const { projectCommercialRefund } = require('./sale.commercial-money.math')
 const { refundEstimateUpperBound } = require('./sale.commercial-refund-budget')
 const { invalid } = require('./sale.commercial-money')
 const {financialRefundDelta,financialRefundEstimate}=require('./sale.commercial-financial')
+function sourceLabels(row) {
+  return {
+    kind:row.kind,kitCode:row.kit_code ?? null,kitName:row.kit_name ?? null,
+    groupId:Number(row.groupId),lineKey:row.line_key,
+    taskId:Number(row.task_id),taskNo:row.task_no || null,confirmedAt:row.confirmed_at ?? null,
+    warehouseId:Number(row.warehouse_id),warehouseName:row.warehouse_name || null,
+    // Current product policy is only an entry hint, never part of the frozen source budget.
+    allowDecimalQty:row.qty_policy_product_id == null ? null : row.allow_decimal_qty == null || Number(row.allow_decimal_qty)===1,
+  }
+}
+async function savedSources(conn,returnId) {
+  // SR viewing is scoped to its own warehouse. All source identities must close
+  // here; do not obtain labels by opening the whole SO or trusting one source ID.
+  const [rows]=await conn.query(`SELECT sri.id AS returnItemId,g.kind,g.kit_code,g.kit_name,g.id AS groupId,g.line_key,
+    d.task_id,d.confirmed_at,wt.task_no,g.warehouse_id,wt.warehouse_name,p.id AS qty_policy_product_id,p.allow_decimal_qty
+    FROM sale_return_items sri JOIN sale_returns sr ON sr.id=sri.return_id
+    JOIN sale_dispatch_component_money m ON m.id=sri.dispatch_component_id AND m.component_id=sri.commercial_component_id
+    JOIN sale_commercial_components c ON c.id=m.component_id AND c.sale_item_id=sri.sale_item_id AND c.product_id=sri.product_id
+    JOIN sale_commercial_groups g ON g.id=c.group_id AND g.order_id=sr.sale_order_id AND g.warehouse_id=sr.warehouse_id
+    JOIN sale_dispatch_groups d ON d.id=m.dispatch_group_id AND d.group_id=g.id AND d.order_id=sr.sale_order_id
+    JOIN warehouse_tasks wt ON wt.id=d.task_id AND wt.sale_order_id=sr.sale_order_id AND wt.warehouse_id=sr.warehouse_id AND wt.task_type='sale_out'
+    JOIN sale_order_items soi ON soi.id=c.sale_item_id AND soi.order_id=sr.sale_order_id AND soi.product_id=sri.product_id AND soi.warehouse_id=sr.warehouse_id
+    LEFT JOIN product_items p ON p.id=c.product_id
+    WHERE sri.return_id=? AND wt.status=7 AND d.confirmed_at IS NOT NULL ORDER BY sri.id`,[returnId])
+  return new Map(rows.map(row=>[Number(row.returnItemId),sourceLabels(row)]))
+}
 async function sources(conn,orderId) {
   // The money row is immutable and doubles as the refund serialization mutex only in writes.
   const [rows]=await conn.query(`SELECT m.id AS dispatchComponentId,m.component_id AS commercialComponentId,m.source_qty AS sourceQuantity,m.confirmed_amount AS sourceBudgetAmount,
-    d.order_gross_basis,d.discount_basis,d.basis_origin,g.order_id,g.warehouse_id,g.id AS groupId,g.line_key,g.kind,g.kit_code,g.kit_name,d.task_id,
+    d.order_gross_basis,d.discount_basis,d.basis_origin,g.order_id,g.warehouse_id,g.id AS groupId,g.line_key,g.kind,g.kit_code,g.kit_name,d.task_id,d.confirmed_at,wt.task_no,wt.warehouse_name,p.id AS qty_policy_product_id,p.allow_decimal_qty,
     c.sale_item_id,c.product_id,c.product_code,c.product_name,c.unit,c.article_number,c.spec,c.color
     FROM sale_dispatch_component_money m JOIN sale_dispatch_groups d ON d.id=m.dispatch_group_id
     JOIN warehouse_tasks wt ON wt.id=d.task_id JOIN sale_commercial_components c ON c.id=m.component_id JOIN sale_commercial_groups g ON g.id=c.group_id
+    LEFT JOIN product_items p ON p.id=c.product_id
     WHERE g.order_id=? AND wt.status=7 AND wt.deleted_at IS NULL AND d.confirmed_at IS NOT NULL ORDER BY m.id`,[orderId])
   if(rows.some(r=>!['real_confirmation','legacy_verified'].includes(r.basis_origin)))invalid('原出库批次的折扣依据尚未核对')
-  return rows.map(r=>({...r,dispatchComponentId:Number(r.dispatchComponentId),commercialComponentId:Number(r.commercialComponentId),sourceItemId:Number(r.sale_item_id),productId:Number(r.product_id),warehouseId:Number(r.warehouse_id),sourceQuantity:Number(r.sourceQuantity),sourceBudgetAmount:Number(r.sourceBudgetAmount),financialBasis:{orderGross:Number(r.order_gross_basis),discount:Number(r.discount_basis)}}))
+  return rows.map(r=>({...r,...sourceLabels(r),dispatchComponentId:Number(r.dispatchComponentId),commercialComponentId:Number(r.commercialComponentId),sourceItemId:Number(r.sale_item_id),productId:Number(r.product_id),warehouseId:Number(r.warehouse_id),sourceQuantity:Number(r.sourceQuantity),sourceBudgetAmount:Number(r.sourceBudgetAmount),financialBasis:{orderGross:Number(r.order_gross_basis),discount:Number(r.discount_basis)}}))
 }
 async function loadView(conn,order,scope) {
   const rows=await sources(conn,order.id)
@@ -111,4 +138,4 @@ async function complete(conn,returnId,taskId) {
   await conn.query('UPDATE sale_returns SET total_amount=? WHERE id=?',[totalFinancialUnits/10000,returnId])
   return totalFinancialUnits/10000
 }
-module.exports={sources,loadView,validate,lockExecution,complete}
+module.exports={sources,savedSources,loadView,validate,lockExecution,complete}

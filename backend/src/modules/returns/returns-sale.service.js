@@ -172,7 +172,8 @@ async function findByIdSR(id, scopeWarehouseIds = null) {
   assertInScope(scopeWarehouseIds, rows[0].warehouse_id, '销售退货单')
   const ret=fmtSR(rows[0])
   const [items]=await pool.query('SELECT * FROM sale_return_items WHERE return_id=?',[id])
-  ret.items=items.map(r=>({dispatchComponentId:r.dispatch_component_id==null?null:Number(r.dispatch_component_id),commercialComponentId:r.commercial_component_id==null?null:Number(r.commercial_component_id),id:r.id,sourceItemId:r.sale_item_id||null,productId:r.product_id,productCode:r.product_code,productName:r.product_name,articleNumber:r.article_number||null,spec:r.spec||null,color:r.color||null,unit:r.unit,entryUnit:r.entry_unit||r.unit,quantity:Number(r.quantity),entryQty:r.entry_qty!=null?Number(r.entry_qty):Number(r.quantity),conversionRate:Number(r.conversion_rate),unitPrice:Number(r.unit_price),amount:Number(r.amount)}))
+  const sources=items.some(r=>r.dispatch_component_id!=null) ? await commercialReturns.savedSources(pool,id) : new Map()
+  ret.items=items.map(r=>({dispatchComponentId:r.dispatch_component_id==null?null:Number(r.dispatch_component_id),commercialComponentId:r.commercial_component_id==null?null:Number(r.commercial_component_id),...(r.dispatch_component_id==null?{}:{source:sources.get(Number(r.id))||null}),id:r.id,sourceItemId:r.sale_item_id||null,productId:r.product_id,productCode:r.product_code,productName:r.product_name,articleNumber:r.article_number||null,spec:r.spec||null,color:r.color||null,unit:r.unit,entryUnit:r.entry_unit||r.unit,quantity:Number(r.quantity),entryQty:r.entry_qty!=null?Number(r.entry_qty):Number(r.quantity),conversionRate:Number(r.conversion_rate),unitPrice:Number(r.unit_price),amount:Number(r.amount)}))
   const [[task]]=await pool.query(
     "SELECT id, task_no, status FROM return_tasks WHERE return_id=? AND return_type='sale' AND deleted_at IS NULL ORDER BY id DESC LIMIT 1",
     [id],
