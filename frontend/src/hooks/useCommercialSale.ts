@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { assertKitReadOwner, captureKitReadOwner } from './useKits'
 import type { KitReadOwner } from '@/api/kits'
@@ -6,13 +6,13 @@ import { executeCommercialSaleApi, getCommercialSaleApi, previewCommercialSaleAp
 import type {
   CommercialBody,
   CommercialOperation,
-  CommercialOperationPlan,
   CommercialPreview,
-  CommercialWriteConfirmation
+  CommercialWriteConfirmation,
+  CommercialWriteResult
 } from '@/types/sale-commercial'
-import { createRequestKey } from '@/lib/requestKey'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { hasPermission } from '@/lib/permissions'
+import { useKitOperation, type KitOperationConfirmation } from './useKitOperation'
 import { useAuthStore } from '@/store/authStore'
 const permission = {
   create: PERMISSIONS.SALE_ORDER_CREATE,
@@ -81,133 +81,30 @@ export function useCommercialPreview(body: CommercialBody | null, owner: KitRead
     loading: !!body && validOwner && !current?.data && !current?.error
   }
 }
-export function useCommercialWrite(owner: KitReadOwner) {
-  const cache = useQueryClient(),
-    record = useRef<CommercialOperationPlan | null>(null),
-    lastConfirmed = useRef<CommercialOperationPlan | null>(null),
-    busyRef = useRef(false),
-    mounted = useRef(true)
-  const [pending, setPending] = useState<CommercialOperationPlan | null>(null),
-    [busy, setBusy] = useState(false),
-    [error, setError] = useState(''),
-    [conflict, setConflict] = useState(false)
-  useEffect(() => {
-    mounted.current = true
-    return () => {
-      mounted.current = false
-    }
-  }, [])
-  function owns(plan: CommercialOperationPlan) {
-    const a = useAuthStore.getState()
-    return !!a.token && a.user?.id === plan.userId && a.sessionGeneration === plan.sessionGeneration
-  }
-  async function execute(plan: CommercialOperationPlan): Promise<CommercialWriteConfirmation | null> {
-    const a = useAuthStore.getState()
-    if (busyRef.current) return null
-    if (!owns(plan) || !hasPermission(a.user?.permissions ?? [], permission[plan.operation.action], a.user?.roleId)) {
-      setError('原账号会话或操作权限已变化，原请求保留，请回原会话核对')
-      return null
-    }
-    busyRef.current = true
-    setBusy(true)
-    setError('')
-    setConflict(false)
-    try {
-      const result = await executeCommercialSaleApi(plan)
-      if (!mounted.current || record.current !== plan) return null
-      if (!owns(plan)) {
-        plan.uncertain = true
-        setPending({ ...plan })
-        setError('原操作响应已到达，但账号会话已变化；当前草稿保持冻结，请回原会话核对结果')
-        return null
-      }
-      if (plan.operation.action === 'create' && (!result?.id || !Number.isSafeInteger(result.id)))
-        throw new Error('原新单提交结果无法确认')
-      record.current = null
-      setPending(null)
-      try {
-        assertKitReadOwner(owner)
-      } catch {
-        setError(
-          `原服务器的${plan.operation.action === 'create' ? '新单' : `订单 #${plan.operation.id}`}操作已确认，请回原来源核对；当前页面保留。`
-        )
-        return null
-      }
-      void cache.invalidateQueries({ queryKey: ['sale', 'commercial-detail', plan.operation.id] })
-      void cache.invalidateQueries({ queryKey: ['sale'] })
-      lastConfirmed.current = plan
-      return { confirmed: true, result, plan }
-    } catch (e) {
-      if (!mounted.current || record.current !== plan) return null
-      if (!owns(plan)) {
-        plan.uncertain = true
-        setPending({ ...plan })
-        setError('原操作响应已到达，但账号会话已变化；当前草稿保持冻结，请回原会话核对结果')
-        return null
-      }
-      const caught = e as { status?: number; response?: { status?: number }; message?: string },
-        status = caught.status ?? caught.response?.status
-      if (plan.uncertain || status == null || status === 408 || status >= 500) {
-        plan.uncertain = true
-        setPending({ ...plan })
-        setError('提交结果待确认。当前草稿和原请求已冻结，请按原请求重试；不能修改输入另发请求。')
-      } else {
-        record.current = null
-        setPending(null)
-        setConflict(status === 409)
-        setError(caught.message ?? '操作被拒绝，请核对原单')
-      }
-      return null
-    } finally {
-      busyRef.current = false
-      if (mounted.current) setBusy(false)
-    }
-  }
-  async function submit(operation: CommercialOperation) {
-    if (record.current || busyRef.current) return null
-    try {
-      assertKitReadOwner(owner)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : '来源已变化')
-      return null
-    }
-    const auth = useAuthStore.getState()
-    if (!hasPermission(auth.user?.permissions ?? [], permission[operation.action], auth.user?.roleId)) {
-      setError('你没有本次操作权限，草稿保留')
-      return null
-    }
-    const plan: CommercialOperationPlan = {
-      operation: JSON.parse(JSON.stringify(operation)) as CommercialOperation,
-      requestKey: createRequestKey(`sale-${operation.action}`),
-      ...owner,
-      userId: owner.userId!,
-      uncertain: false,
-      queryHint: {
-        action: `sale.${operation.action}${operation.id ? `.${operation.id}` : ''}`,
-        resourceType: 'sale_order',
-        resourceId: operation.id
-      }
-    }
-    record.current = plan
-    lastConfirmed.current = null
-    return execute(plan)
+export function useCommercialWrite(owner: KitReadOwner, scope?: string) {
+  const cache = useQueryClient(), instance = useId()
+  const write = useKitOperation<CommercialOperation, CommercialWriteResult>(owner, scope ?? `commercial-mounted:${instance}`, {
+    execute: (operation, query, originalOwner) => executeCommercialSaleApi({ operation, requestKey: query.requestKey, ...originalOwner, userId: query.userId, uncertain: true, queryHint: { action: query.action, resourceType: 'sale_order', resourceId: query.resourceId } }),
+    mayWrite: operation => { const a = useAuthStore.getState(); return hasPermission(a.user?.permissions ?? [], permission[operation.action], a.user?.roleId) },
+    validate: (data, query) => query.kind === 'create' ? (!!data?.id && Number.isSafeInteger(data.id) && data.id > 0) : data?.id == null || data.id === query.resourceId
+  })
+  const last = useRef<{ raw: KitOperationConfirmation<CommercialOperation, CommercialWriteResult>; public: CommercialWriteConfirmation } | null>(null)
+  function convert(raw: KitOperationConfirmation<CommercialOperation, CommercialWriteResult> | null) {
+    if (!raw) return null
+    const plan = { ...raw.owner, userId: raw.query.userId, requestKey: raw.query.requestKey, uncertain: false,
+      operation: raw.payload ?? { action: raw.query.kind as CommercialOperation['action'], id: raw.query.resourceId },
+      queryHint: { action: raw.query.action, resourceType: 'sale_order' as const, resourceId: raw.query.resourceId } }
+    const answer: CommercialWriteConfirmation = { confirmed: true, result: raw.data, plan, queryOnly: raw.queryOnly }
+    last.current = { raw, public: answer }
+    if (!raw.queryOnly && write.canApply(raw)) { void cache.invalidateQueries({ queryKey: ['sale'] }) }
+    return answer
   }
   return {
-    submit,
-    retry: () => (record.current ? execute(record.current) : Promise.resolve(null)),
-    canApplyConfirmation: (confirmation: CommercialWriteConfirmation) => {
-      if (lastConfirmed.current !== confirmation.plan || record.current || busyRef.current || !mounted.current)
-        return false
-      try {
-        assertKitReadOwner(confirmation.plan)
-      } catch {
-        return false
-      }
-      return true
-    },
-    pending,
-    busy,
-    error,
-    conflict
+    ...write,
+    pending: write.pending ? { ...write.pending, uncertain: true, operation: write.pendingPayload } : null,
+    submit: async (operation: CommercialOperation) => convert(await write.submit(operation, { kind: operation.action, action: `sale.${operation.action}${operation.id ? `.${operation.id}` : ''}`, resourceType: 'sale_order', resourceId: operation.id })),
+    retry: async () => convert(await write.retry()),
+    queryOriginal: async () => convert(await write.queryOriginal()),
+    canApplyConfirmation: (answer: CommercialWriteConfirmation) => last.current?.public === answer && write.canApply(last.current.raw)
   }
 }

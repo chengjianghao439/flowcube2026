@@ -26,6 +26,7 @@ import { SaleOrderOverview } from '../form/components/SaleOrderOverview'
 import { readSaleHandoff } from '../form/handoff'
 import CommercialEditor from './CommercialEditor'
 import CommercialShipDialog from './CommercialShipDialog'
+import { buildWorkspaceTabRegistrationFromPath } from '@/router/workspaceRouteMeta'
 const permission = {
   ship: PERMISSIONS.SALE_ORDER_SHIP,
   cancel: PERMISSIONS.SALE_ORDER_CANCEL,
@@ -58,7 +59,7 @@ export default function CommercialSalePage({
     [error, setError] = useState(''),
     [reloading, setReloading] = useState(false)
   const { can } = usePermission(),
-    write = useCommercialWrite(owner),
+    write = useCommercialWrite(owner, `commercial-detail:${buildWorkspaceTabRegistrationFromPath(tabPath).key}`),
     mounted = useRef(true),
     readGeneration = useRef(0)
   useEffect(() => {
@@ -67,6 +68,12 @@ export default function CommercialSalePage({
       mounted.current = false
     }
   }, [])
+  useEffect(() => {
+    if (write.pending && !write.busy) {
+      setConfirm(null)
+      setShipOpen(false)
+    }
+  }, [write.pending, write.busy])
   useWorkspaceTabTitle(order.orderNo)
   let ownerCurrent = true
   try {
@@ -74,7 +81,7 @@ export default function CommercialSalePage({
   } catch {
     ownerCurrent = false
   }
-  const locked = write.busy || !!write.pending || reloading || !ownerCurrent
+  const locked = write.blocked || reloading || !ownerCurrent
   useDirtyGuard(tabPath, locked)
   const backup = useKitBackup(JSON.stringify({ order, owner, shipQuantities, confirm }), owner)
   const handoff = readSaleHandoff(tabPath, order.id)
@@ -111,7 +118,7 @@ export default function CommercialSalePage({
   async function operation(op: CommercialOperation) {
     setError('')
     const result = await write.submit(op)
-    if (result) {
+    if (result && write.canApplyConfirmation(result)) {
       setConfirm(null)
       setShipOpen(false)
       backup.invalidate()
@@ -209,17 +216,23 @@ export default function CommercialSalePage({
       <SaleOrderOverview order={order} />
       {(error || write.error || backup.error) && (
         <p role="alert" className="text-destructive">
-          {error || write.error || backup.error}
+          {write.pending && (error || write.error || backup.error) === '操作失败，请稍后重试'
+            ? '原操作结果待确认，请先查询原回执'
+            : error || write.error || backup.error}
         </p>
       )}
       {write.pending && (
         <div className="space-y-2 rounded border p-3">
-          <p>原操作结果待确认，原单及请求已冻结；刷新不会自动提交，原请求仅保留在当前页面。</p>
+          <p>原操作结果待确认，原单及请求已冻结；刷新不会自动提交，刷新后仅保留查询身份，不保存表单内容。</p>
+          <Button disabled={write.busy} onClick={() => void write.queryOriginal().then(answer => {
+            if (answer?.queryOnly) toast.success('原回执已核实，请自行打开原单；当前草稿未修改')
+            else if (answer && write.canApplyConfirmation(answer)) void reload(false, answer)
+          })}>查询原回执</Button>
           <Button
-            disabled={write.busy}
+            disabled={write.busy || !write.canRetry}
             onClick={() =>
               void write.retry().then((answer) => {
-                if (answer) {
+                if (answer && write.canApplyConfirmation(answer)) {
                   setShipOpen(false)
                   setConfirm(null)
                   if (answer.plan.operation.action === 'delete') onClose()

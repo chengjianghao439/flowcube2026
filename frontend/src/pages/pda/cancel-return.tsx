@@ -13,10 +13,9 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import {
-  getCancelReturnDetailApi,
   submitCancelReturnScanApi,
   submitCancelReturnBoxScanApi,
-  type CancelReturnContainer, type CancelReturnPackage,
+  type CancelReturnContainer,
 } from '@/api/warehouse-tasks'
 import { getLocationByCodeApi } from '@/api/locations'
 import PdaHeader, { PdaRefreshButton } from '@/components/pda/PdaHeader'
@@ -26,9 +25,14 @@ import PdaScanner from '@/components/pda/PdaScanner'
 import PdaFlash from '@/components/pda/PdaFlash'
 import { PdaEmptyCard, PdaLoading, PdaQueryError } from '@/components/pda/PdaEmptyState'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
-import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
+import { useKitOperation } from '@/hooks/useKitOperation'
+import { captureKitReadOwner, assertKitReadOwner } from '@/hooks/useKits'
+import { usePendingRequests } from '@/hooks/usePendingRequests'
+import { useNetworkStatus } from '@/hooks/useNetworkStatus'
+import { commercialReadConfig } from '@/api/sale-commercial'
+import { Button } from '@/components/ui/button'
+import type { KitQueryRecord } from '@/lib/kitOperationRecovery'
 import { usePdaPendingCancelReturns, usePdaCancelReturnDetail } from '@/hooks/usePdaCancelReturn'
-import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
 import { formatPdaErrorMessage } from '@/utils/displayFormatters'
 import { parseBarcode } from '@/utils/barcode'
 
@@ -78,80 +82,69 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
   const qc = useQueryClient()
   const [step, setStep] = useState<Step>('scan-container')
   const [target, setTarget] = useState<CancelReturnContainer | null>(null)
-  const [boxTarget, setBoxTarget] = useState<CancelReturnPackage | null>(null)
   const [scanning, setScanning] = useState(false)
   const { flash, ok, err, warn } = usePdaFeedback()
 
-  const { data: detail, isLoading, isError, refetch } = usePdaCancelReturnDetail(taskId)
-
-  const returnAction = useCriticalPdaAction<{ id: number; remaining: number; finalized: boolean }>({
-    action: `warehouse.cancel-return.${taskId}`,
-    label: '拣货退回扫码',
-    onConfirmed: async () => {
-      await qc.invalidateQueries({ queryKey: ['pda-cancel-return-detail', taskId] })
-      await qc.invalidateQueries({ queryKey: ['pda-cancel-returns-pending'] })
-    },
-    resolveServerState: async () => {
-      // 归还是否生效，看该容器是否还在待归还清单里即可核实，不需要额外查询接口。
-      const latest = await getCancelReturnDetailApi(taskId).catch(() => null)
-      if (!latest) return { effective: false }
-      const stillPending = latest.containers.some(c => c.containerId === target?.containerId)
-      if (!stillPending) {
-        return {
-          effective: true,
-          data: { id: 0, remaining: latest.containers.length, finalized: latest.containers.length === 0 },
-          message: '归还已生效，条码已不在待归还清单中。',
-        }
-      }
-      return { effective: false }
-    },
+  const [owner] = useState(captureKitReadOwner)
+  const { data: detail, isLoading, isError, refetch } = usePdaCancelReturnDetail(taskId, owner)
+  const network = useNetworkStatus()
+  const legacy = usePendingRequests().records.find(r => r.action === `warehouse.cancel-return.${taskId}` || r.action === `warehouse.cancel-return-box.${taskId}`)
+  type RowBody = { taskId: number; containerId: number; barcode: string; locationId: number }
+  type BoxBody = { taskId: number; packageId: number; barcode: string }
+  type RowResult = { id: number; remaining: number; packagesRemaining: number; finalized: boolean }
+  type BoxResult = { id: number; containersRemaining: number; packagesRemaining: number; finalized: boolean }
+  const returnAction = useKitOperation<RowBody, RowResult>(owner, `pda-cancel-return:${taskId}`, {
+    execute: (body, query, originalOwner) => submitCancelReturnScanApi(body.taskId, body.containerId, body.barcode, body.locationId, query.requestKey, commercialReadConfig(originalOwner)),
+    validate: data => !!data && Number.isSafeInteger(data.id) && data.id > 0 && Number.isInteger(data.remaining) && data.remaining >= 0 && Number.isInteger(data.packagesRemaining) && data.packagesRemaining >= 0 && typeof data.finalized === 'boolean'
   })
-
-  const boxAction = useCriticalPdaAction<{ id: number; containersRemaining: number; packagesRemaining: number; finalized: boolean }>({
-    action: `warehouse.cancel-return-box.${taskId}`,
-    label: '拣货退回拆箱确认',
-    onConfirmed: async () => {
-      await qc.invalidateQueries({ queryKey: ['pda-cancel-return-detail', taskId] })
-      await qc.invalidateQueries({ queryKey: ['pda-cancel-returns-pending'] })
-    },
-    resolveServerState: async () => {
-      // 拆箱确认是否生效，看该箱子是否还在待处理清单里即可核实，不需要额外查询接口。
-      const latest = await getCancelReturnDetailApi(taskId).catch(() => null)
-      if (!latest) return { effective: false }
-      const stillPending = latest.packages.some(p => p.packageId === boxTarget?.packageId)
-      if (!stillPending) {
-        return {
-          effective: true,
-          data: {
-            id: 0,
-            containersRemaining: latest.containers.length,
-            packagesRemaining: latest.packages.length,
-            finalized: latest.containers.length === 0 && latest.packages.length === 0,
-          },
-          message: '拆箱确认已生效，箱子已不在待处理清单中。',
-        }
-      }
-      return { effective: false }
-    },
+  const boxAction = useKitOperation<BoxBody, BoxResult>(owner, `pda-cancel-return-box:${taskId}`, {
+    execute: (body, query, originalOwner) => submitCancelReturnBoxScanApi(body.taskId, body.packageId, body.barcode, query.requestKey, commercialReadConfig(originalOwner)),
+    validate: data => !!data && Number.isSafeInteger(data.id) && data.id > 0 && Number.isInteger(data.packagesRemaining) && data.packagesRemaining >= 0 && Number.isInteger(data.containersRemaining) && data.containersRemaining >= 0 && typeof data.finalized === 'boolean'
   })
+  let ownerCurrent = true
+  try { assertKitReadOwner(owner) } catch { ownerCurrent = false }
+  const blocked = returnAction.blocked || boxAction.blocked || !!legacy || !ownerCurrent || network !== 'online' || isLoading || isError || !detail
+  async function reloadOriginal() {
+    assertKitReadOwner(owner)
+    await qc.invalidateQueries({ queryKey: ['pda-cancel-return-detail', taskId] })
+    await qc.invalidateQueries({ queryKey: ['pda-cancel-returns-pending'] })
+  }
+  function recoveredContext(query: KitQueryRecord) {
+    const c = query.context
+    return `原任务 #${c?.taskId ?? query.resourceId} · ${c?.containerId ? `原容器 #${c.containerId} · 原库位 #${c.locationId}` : `原箱 #${c?.packageId}`}`
+  }
+  async function recoverRow(retry: boolean) {
+    const answer = await (retry ? returnAction.retry() : returnAction.queryOriginal())
+    if (!answer) return
+    // A copied/restored record only reports its original operation. It cannot
+    // navigate, clear the new scan target, or update another draft.
+    if (answer.queryOnly) { ok('原归还回执已核实，当前扫码保持；请自行刷新原任务'); return }
+    if (returnAction.canApply(answer)) { await reloadOriginal(); ok('原归还回执已核实'); }
+  }
+  async function recoverBox(retry: boolean) {
+    const answer = await (retry ? boxAction.retry() : boxAction.queryOriginal())
+    if (!answer) return
+    if (answer.queryOnly) { ok('原拆箱回执已核实，当前扫码保持；请自行刷新原任务'); return }
+    if (boxAction.canApply(answer)) { await reloadOriginal(); ok('原拆箱回执已核实'); }
+  }
 
   async function handleBoxScan(raw: string) {
     const code = raw.trim()
     if (!code || !detail) return
     const found = detail.packages.find(p => p.barcode.toUpperCase() === code.toUpperCase())
     if (!found) { err('该箱子不属于本任务的待拆箱清单，请确认条码'); return }
-    if (boxAction.submitBlocked) { err(boxAction.blockedReason || '当前不可提交'); return }
-    setBoxTarget(found)
+    if (blocked) { err('原操作待核对或当前来源不可提交'); return }
     setScanning(true)
     try {
-      const submitted = await boxAction.run(
-        (requestKey) => submitCancelReturnBoxScanApi(taskId, found.packageId, found.barcode, requestKey),
-        { packageId: found.packageId },
+      const submitted = await boxAction.submit(
+        { taskId, packageId: found.packageId, barcode: found.barcode },
+        { action: `scan-log.cancel-return-box.${taskId}`, kind: 'cancel-return-box', resourceType: 'warehouse_task', resourceId: taskId, context: { taskId, packageId: found.packageId } },
       )
-      if (submitted.kind === 'pending') {
-        warn('网络中断，拆箱确认结果待确认。请先确认结果，再决定是否重扫。')
+      if (!submitted) {
+        warn('拆箱提交未确认，请查看原操作提示，暂勿重复扫码。')
         return
       }
+      if (!boxAction.canApply(submitted)) return
       const result = submitted.data
       if (result.finalized) {
         ok(`✓ 已确认拆箱 ${found.barcode}，任务全部处理完成，已取消`)
@@ -165,13 +158,12 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
       err(formatPdaErrorMessage((error as { message?: string })?.message, '拆箱确认失败，请重试'))
     } finally {
       setScanning(false)
-      setBoxTarget(null)
     }
   }
 
   function handleContainerScan(raw: string) {
     const code = raw.trim()
-    if (!code || !detail) return
+    if (!code || !detail || blocked) return
     const found = detail.containers.find(c => c.barcode.toUpperCase() === code.toUpperCase())
     if (!found) { err('该条码不属于本任务的待归还清单'); return }
     setTarget(found)
@@ -181,19 +173,23 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
   async function handleLocationScan(raw: string) {
     const code = raw.trim()
     if (!code || !target) return
-    if (returnAction.submitBlocked) { err(returnAction.blockedReason || '当前不可提交'); return }
+    if (blocked) { err('原操作待核对或当前来源不可提交'); return }
     setScanning(true)
     try {
-      const loc = await getLocationByCodeApi(code)
+      const originalTarget = target
+      assertKitReadOwner(owner)
+      const loc = await getLocationByCodeApi(code, commercialReadConfig(owner))
+      assertKitReadOwner(owner)
       if (!loc) { err('库位不对，请重扫'); return }
-      const submitted = await returnAction.run(
-        (requestKey) => submitCancelReturnScanApi(taskId, target.containerId, target.barcode, loc.id, requestKey),
-        { containerId: target.containerId },
+      const submitted = await returnAction.submit(
+        { taskId, containerId: originalTarget.containerId, barcode: originalTarget.barcode, locationId: loc.id },
+        { action: `scan-log.cancel-return.${taskId}`, kind: 'cancel-return-row', resourceType: 'warehouse_task', resourceId: taskId, context: { taskId, containerId: originalTarget.containerId, locationId: loc.id } },
       )
-      if (submitted.kind === 'pending') {
-        warn('网络中断，归还结果待确认。请先确认结果，再决定是否重扫。')
+      if (!submitted) {
+        warn('归还提交未确认，请查看原操作提示，暂勿重复扫码。')
         return
       }
+      if (!returnAction.canApply(submitted)) return
       const result = submitted.data
       if (result.finalized) {
         ok(`✓ 已归还到 ${loc.code}，任务全部归还完成，已取消`)
@@ -219,10 +215,21 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
     handleContainerScan(code)
   }
 
+  // Receipt ownership is independent of detail VIEW permission and loading.
+  const recoveryUI = <>
+        <PdaFlash flash={flash} />
+        {legacy && <PdaCard><p className="text-sm text-destructive">历史归还记录缺少原服务器与会话身份，不能认作当前操作；请人工核对原任务，暂勿重复扫码。</p><p className="text-xs">原记录号 {legacy.requestKey}</p></PdaCard>}
+        {(!ownerCurrent || network !== 'online') && <p role="alert" className="text-sm text-destructive">当前登录、服务器或网络不可提交，请完成正常登录 / 设备绑定后核对原记录。</p>}
+        {returnAction.error && <p role="alert" className="text-sm text-destructive">{returnAction.error}</p>}
+        {returnAction.pending && <PdaCard><p className="font-medium">归还结果待确认</p><p className="text-xs">{recoveredContext(returnAction.pending)}。按原键查询；刷新只恢复查询身份，不保存条码表单，不自动提交。</p><div className="mt-2 flex gap-2"><Button disabled={returnAction.busy} onClick={() => void recoverRow(false)}>查询原归还回执</Button><Button variant="outline" disabled={returnAction.busy || !returnAction.canRetry} onClick={() => void recoverRow(true)}>按原归还请求重试</Button></div></PdaCard>}
+        {boxAction.error && <p role="alert" className="text-sm text-destructive">{boxAction.error}</p>}
+        {boxAction.pending && <PdaCard><p className="font-medium">拆箱结果待确认</p><p className="text-xs">{recoveredContext(boxAction.pending)}。刷新只允许查询原结果。</p><div className="mt-2 flex gap-2"><Button disabled={boxAction.busy} onClick={() => void recoverBox(false)}>查询原拆箱回执</Button><Button variant="outline" disabled={boxAction.busy || !boxAction.canRetry} onClick={() => void recoverBox(true)}>按原拆箱请求重试</Button></div></PdaCard>}
+  </>
+
   if (isError || (!isLoading && !detail)) {
     return <div className="min-h-screen bg-background">
       <PdaHeader title="拣货退回确认" onBack={() => navigate('/pda/cancel-return')} />
-      <div className="max-w-md mx-auto px-4 pt-6"><PdaQueryError onRetry={() => { void refetch() }} /></div>
+      <div className="max-w-md mx-auto px-4 pt-6 space-y-4">{recoveryUI}<PdaQueryError onRetry={() => { void refetch() }} /></div>
     </div>
   }
 
@@ -230,7 +237,7 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
     return (
       <div className="min-h-screen bg-background">
         <PdaHeader title="拣货退回确认" onBack={() => navigate('/pda/cancel-return')} />
-        <PdaLoading className="h-40 mt-8" />
+        <div className="max-w-md mx-auto px-4 pt-6 space-y-4">{recoveryUI}<PdaLoading className="h-40 mt-8" /></div>
       </div>
     )
   }
@@ -242,45 +249,7 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
         right={<PdaRefreshButton onRefresh={() => refetch()} />} />
 
       <div className="max-w-md mx-auto flex-1 px-4 pb-8 space-y-4 py-4 w-full">
-        <PdaFlash flash={flash} />
-        <PdaCriticalActionNotice
-          blockedReason={returnAction.blockedReason}
-          pendingRecord={returnAction.pendingRecord}
-          confirming={returnAction.confirming}
-          phase={returnAction.phase}
-          phaseMessage={returnAction.phaseMessage}
-          lastErrorMessage={returnAction.lastErrorMessage}
-          onConfirm={() => {
-            void returnAction.confirmPending().then((status) => {
-              if (!status) return
-              if (status.status === 'pending') warn(formatPdaErrorMessage(status.message, '系统还未确认结果，请稍后再查'))
-              if (status.status === 'state_unconfirmed') warn(formatPdaErrorMessage(status.message, '归还状态还未确认，请稍后再查'))
-              if (status.status === 'not_found') warn(formatPdaErrorMessage(status.message, '未找到上次归还记录；请先刷新确认是否已落账，再决定是否重扫'))
-              if (status.status === 'failed') err(formatPdaErrorMessage(status.message, '归还失败，请刷新后重试'))
-            })
-          }}
-          onClear={() => returnAction.clearPending()}
-          onDismissError={() => returnAction.clearError()}
-        />
-        <PdaCriticalActionNotice
-          blockedReason={boxAction.blockedReason}
-          pendingRecord={boxAction.pendingRecord}
-          confirming={boxAction.confirming}
-          phase={boxAction.phase}
-          phaseMessage={boxAction.phaseMessage}
-          lastErrorMessage={boxAction.lastErrorMessage}
-          onConfirm={() => {
-            void boxAction.confirmPending().then((status) => {
-              if (!status) return
-              if (status.status === 'pending') warn(formatPdaErrorMessage(status.message, '系统还未确认结果，请稍后再查'))
-              if (status.status === 'state_unconfirmed') warn(formatPdaErrorMessage(status.message, '拆箱确认状态还未确认，请稍后再查'))
-              if (status.status === 'not_found') warn(formatPdaErrorMessage(status.message, '未找到上次拆箱确认记录；请先刷新确认是否已落账，再决定是否重扫'))
-              if (status.status === 'failed') err(formatPdaErrorMessage(status.message, '拆箱确认失败，请刷新后重试'))
-            })
-          }}
-          onClear={() => boxAction.clearPending()}
-          onDismissError={() => boxAction.clearError()}
-        />
+        {recoveryUI}
 
         <div className={`rounded-2xl border-2 px-4 py-3 text-center transition-all ${
           scanning ? 'border-yellow-400 bg-yellow-50' :
@@ -307,8 +276,7 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
                   <PdaProductIdentity code={target.barcode} name={target.productName} view="detail" />
                 </div>
                 <div className="shrink-0 text-right">
-                  <p className="text-xs text-muted-foreground">数量</p>
-                  <p className="font-bold text-primary">{target.qty}</p>
+                  {target.quantitySource === 'active_pick' ? <><p className="font-bold text-primary">本任务应归还 {target.taskReturnQty}</p><p className="text-xs text-muted-foreground">条码账面 {target.remainingQty}</p></> : <><p className="text-xs text-muted-foreground">数量</p><p className="font-bold text-primary">{target.qty}</p></>}
                 </div>
               </div>
               <button className="text-xs text-muted-foreground hover:text-foreground"
@@ -329,7 +297,7 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
                 <div className="min-w-0">
                   <PdaProductIdentity code={c.barcode} name={c.productName} view="detail" />
                 </div>
-                <p className="text-sm font-bold text-primary shrink-0 ml-2">{c.qty}</p>
+                <div className="shrink-0 ml-2 text-right">{c.quantitySource === 'active_pick' ? <><p className="text-sm font-bold text-primary">本任务应归还 {c.taskReturnQty}</p><p className="text-xs text-muted-foreground">条码账面 {c.remainingQty}</p></> : <p className="text-sm font-bold text-primary">{c.qty}</p>}</div>
               </div>
             ))}
           </div>
@@ -359,7 +327,7 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
         <PdaScanner
           onScan={handleScan}
           placeholder={step === 'scan-location' ? `扫描原库位条码确认放回：${target?.suggestedLocationCode ?? ''}` : '扫描待归还库存条码或待拆箱箱子条码'}
-          disabled={scanning || returnAction.submitBlocked || boxAction.submitBlocked}
+          disabled={scanning || blocked}
           onDuplicate={() => err('重复扫码，请稍候')}
         />
       </PdaBottomBar>
@@ -371,5 +339,5 @@ export default function PdaCancelReturnPage() {
   const { id } = useParams<{ id?: string }>()
   const taskId = id ? Number(id) : 0
   if (!taskId) return <CancelReturnListPage />
-  return <CancelReturnDetailPage taskId={taskId} />
+  return <CancelReturnDetailPage key={taskId} taskId={taskId} />
 }

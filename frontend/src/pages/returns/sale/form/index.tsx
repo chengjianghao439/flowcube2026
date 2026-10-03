@@ -13,7 +13,7 @@ import { productIdentityColumns } from '@/components/shared/productIdentityColum
  * 因此本文件只有 FormView（新建）与 DetailView（详情），没有 EditView。
  */
 
-import { useState, useRef, Fragment } from 'react'
+import { useState, useRef, useEffect, Fragment } from 'react'
 import { useContext } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Loader2, Save, X } from 'lucide-react'
@@ -41,17 +41,26 @@ import {
   createSaleReturnApi, confirmSaleReturnApi, cancelSaleReturnApi,
   getSaleReturnSourceOrderApi, getSaleReturnDetailApi,
 } from '@/api/returns'
-import type { SaleReturn, SaleReturnSourceOrder, ReturnItem, SaleReturnReverseTask } from '@/api/returns'
+import type { SaleReturn, SaleReturnSourceOrder, ReturnItem, SaleReturnReverseTask, ReturnSourceOrderItem, ReturnSourceLabels } from '@/api/returns'
 import DataTable from '@/components/shared/DataTable'
 import type { TableColumn } from '@/types'
 import type { FinderResult } from '@/types/finder'
 import type { ProductFinderResult, ProductUnit } from '@/types/products'
 import { getProductApi } from '@/api/products'
 import { useProductQtyPolicies } from '@/hooks/useProductQtyPolicies'
-import { qtyStep } from '@/lib/qtyStep'
+import { captureKitReadOwner, assertKitReadOwner, useKitBackup } from '@/hooks/useKits'
+import { useSourceReturnFacts } from '@/hooks/useSourceReturnFacts'
+import { useKitOperation } from '@/hooks/useKitOperation'
+import { commercialReadConfig } from '@/api/sale-commercial'
+import { SourceComponents, SourceLabel } from './SourceComponents'
+import { returnNet } from './returnSourcePresentation'
+import { hasQuantityPrecision, qtyStep } from '@/lib/qtyStep'
 
 interface DraftItem {
   _key: number
+  dispatchComponentId?: number
+  commercialComponentId?: number
+  source?: ReturnSourceOrderItem
   sourceItemId?: number | null
   productId: number
   productCode: string
@@ -81,8 +90,8 @@ export default function SaleReturnFormPage() {
     navigate(targetPath)
   }
 
-  if (isNew) return <FormView closeTab={closeTab} tabPath={tabPath} />
-  return <DetailView returnId={returnId!} closeTab={closeTab} tabPath={tabPath} />
+  if (isNew) return <FormView key={tabPath} closeTab={closeTab} tabPath={tabPath} />
+  return <DetailView key={returnId!} returnId={returnId!} closeTab={closeTab} tabPath={tabPath} />
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -92,6 +101,13 @@ export default function SaleReturnFormPage() {
 function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string }) {
   const navigate = useNavigate()
   const qc = useQueryClient()
+  const [owner] = useState(captureKitReadOwner)
+  const sourceSerial = useRef(0), mounted = useRef(true), currentOrderNo = useRef('')
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
+  const write = useKitOperation<object, { id: number; returnNo: string }>(owner, `source-return:${tabPath}`, {
+    execute: (body, query, originalOwner) => createSaleReturnApi(body, query.requestKey, commercialReadConfig(originalOwner)),
+    validate: data => !!data && Number.isSafeInteger(data.id) && data.id > 0 && typeof data.returnNo === 'string'
+  })
 
   const [customerFinderOpen, setCustomerFinderOpen] = useState(false)
   const [customer, setCustomer] = useState<FinderResult | null>(null)
@@ -107,7 +123,14 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
 
   const [items, setItems] = useState<DraftItem[]>([])
   // 「只能整数」的商品把退货数量框的 step 切成 1（迁移 254）
-  const allowDecimalOf = useProductQtyPolicies(items.map(i => i.productId))
+  const isKit = boundSource?.commercialModel === 'kit-v1'
+  const allowDecimalOf = useProductQtyPolicies(isKit ? [] : items.map(i => i.productId))
+  const [sourceError, setSourceError] = useState('')
+  let ownerCurrent = true
+  try { assertKitReadOwner(owner) } catch { ownerCurrent = false }
+  const locked = write.blocked || !ownerCurrent
+  const snapshot = JSON.stringify({ customer, warehouseId, warehouseName, orderNo, remark, items, revision: boundSource?.commercialRevision })
+  const backup = useKitBackup(snapshot, owner)
   const [counter, setCounter] = useState(0)
   const [finderOpen, setFinderOpen] = useState(false)
   const [finderItemKey, setFinderItemKey] = useState<number | null>(null)
@@ -116,7 +139,7 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
   const [warehouseError, setWarehouseError] = useState(false)
   const [invalidItemKeys, setInvalidItemKeys] = useState<Set<number>>(new Set())
 
-  const isDirty = !!(customer || warehouseId || remark || orderNo || items.length)
+  const isDirty = !!write.pending || !!(customer || warehouseId || remark || orderNo || items.length)
   useDirtyGuard(tabPath, isDirty)
 
   function addItem() {
@@ -131,12 +154,13 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
     setItems(p => p.map(i => (i._key === k ? { ...i, [field]: val } : i)))
 
   function handleCustomerConfirm(result: FinderResult) {
+    if (locked) return
     setCustomer(result)
     setCustomerError(false)
   }
 
   function handleFinderConfirm(product: ProductFinderResult) {
-    if (finderItemKey === null) return
+    if (finderItemKey === null || locked) return
     const k = finderItemKey
     setItems(prev => prev.map(i => i._key === k
       ? { ...i, productId: product.id, productCode: product.code, productName: product.name, articleNumber: product.articleNumber ?? null, spec: product.spec ?? null, color: product.color ?? null, unit: product.unit, entryUnit: product.unit, units: [], unitPrice: product.salePrice ?? 0 }
@@ -155,6 +179,8 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
   }
 
   const clearSourceBinding = () => {
+    if (write.conflict && !backup.canReload()) return
+    sourceSerial.current++; currentOrderNo.current = ''; setSourceError('')
     setBoundSource(null)
     setOrderNo('')
     setCustomer(null)
@@ -165,16 +191,20 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
   async function loadSourceOrder() {
     const trimmed = orderNo.trim()
     if (!trimmed) { toast.warning('请先填写关联原单号'); return }
-    setLoadingSource(true)
+    const serial = ++sourceSerial.current
+    currentOrderNo.current = trimmed
+    setLoadingSource(true); setSourceError('')
     try {
-      const source = await getSaleReturnSourceOrderApi(trimmed)
-      if (!source) return
+      assertKitReadOwner(owner)
+      const source = await getSaleReturnSourceOrderApi(trimmed, commercialReadConfig(owner))
+      assertKitReadOwner(owner)
+      if (!source || !mounted.current || serial !== sourceSerial.current || currentOrderNo.current.trim() !== trimmed || source.orderNo !== trimmed) return
       setBoundSource(source)
       setCustomer({ id: source.customerId, code: '', name: source.customerName })
       setCustomerError(false)
       setWarehouseId(String(source.warehouseId)); setWarehouseName(source.warehouseName)
       setWarehouseError(false)
-      const nextItems: DraftItem[] = source.items
+      const nextItems: DraftItem[] = (source.commercialModel === 'kit-v1' ? [] : source.items)
         .filter(item => item.remainingQty > 0)
         .map((item, index) => ({
           _key: index + 1,
@@ -194,12 +224,31 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
         }))
       setCounter(nextItems.length + 1)
       setItems(nextItems)
-      if (!nextItems.length) toast.warning('该原单已无剩余可退数量')
+      if (source.commercialModel === 'kit-v1') toast.success('已载入原实发来源，请明确选择本次退回的配件')
+      else if (!nextItems.length) toast.warning('该原单已无剩余可退数量')
       else toast.success('已载入原单真实明细与成交价')
-    } finally { setLoadingSource(false) }
+    } catch (e) { if (mounted.current && serial === sourceSerial.current) setSourceError(e instanceof Error ? e.message : '来源读取失败') }
+    finally { if (mounted.current && serial === sourceSerial.current) setLoadingSource(false) }
   }
 
+  function selectSource(item: ReturnSourceOrderItem) {
+    if (locked) return
+    if (items.some(row => row.dispatchComponentId === item.dispatchComponentId)) { setSourceError('该原来源已选择，请直接修改本次申请量'); return }
+    if (items.some(row => row.productId === item.productId || row.source?.warehouseId !== item.warehouseId)) { setSourceError('相同商品的不同原来源，或不同发货仓库，需要分单退货；已填数量保持'); return }
+    if (!item.dispatchComponentId || !item.commercialComponentId || !item.sourceItemId || !item.warehouseId) { setSourceError('来源身份不完整，请核对原批次'); return }
+    setWarehouseId(String(item.warehouseId)); setWarehouseName(item.warehouseName || '')
+    setItems(rows => [...rows, { ...item, _key: counter, quantity: Math.min(1, item.remainingQty), source: item, originalQty: item.sourceQuantity }])
+    setCounter(c => c + 1); setSourceError('')
+  }
+  function created(res: { id: number; returnNo: string }) {
+    void qc.invalidateQueries({ queryKey: ['returns'] })
+    toast.success(`销售退货单 ${res.returnNo} 已创建`)
+    const path = `/returns/sale/${res.id}`
+    useWorkspaceStore.getState().addTab({ key: path, title: res.returnNo, path })
+    closeTab(); navigate(path)
+  }
   async function handleSubmit() {
+    if (locked) return
     const missingCustomer = !customer
     const missingWarehouse = !warehouseId
     setCustomerError(missingCustomer)
@@ -210,24 +259,27 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
     const badItemKeys = new Set(items.filter(i => !i.productId || i.quantity <= 0).map(i => i._key))
     setInvalidItemKeys(badItemKeys)
     if (badItemKeys.size) { toast.warning('请完整填写所有明细'); return }
+    if (isKit && items.some(i => !hasQuantityPrecision(i.quantity) || (i.source?.allowDecimalQty === false && !Number.isInteger(i.quantity)) || i.quantity > (i.remainingQty ?? 0))) { setSourceError('本次申请量不能超过来源剩余额度；数量最多两位小数，整数商品只能填整数'); return }
 
     try {
       setSubmitting(true)
-      const res = await createSaleReturnApi({
+      const body = {
         customerId: customer!.id, customerName: customer!.name,
         warehouseId: +warehouseId, warehouseName,
         saleOrderId: boundSource ? boundSource.id : undefined,
         saleOrderNo: orderNo || undefined,
         remark: remark.trim() || undefined,
-        items: items.map(({ _key, originalQty, returnedQty, remainingQty, units, ...r }) => r),
-      }, requestKeyRef.current)
+        items: items.map(({ _key, originalQty, returnedQty, remainingQty, units, source, ...r }) => isKit ? ({ sourceItemId: r.sourceItemId, dispatchComponentId: r.dispatchComponentId, commercialComponentId: r.commercialComponentId, productId: r.productId, productCode: r.productCode, productName: r.productName, articleNumber: r.articleNumber, spec: r.spec, color: r.color, quantity: r.quantity, unit: r.unit, unitPrice: r.unitPrice }) : r),
+        ...(isKit ? { commercialModel: 'kit-v1', expectedRevision: boundSource!.commercialRevision } : {})
+      }
+      if (isKit) {
+        const answer = await write.submit(body, { action: 'saleReturn.create', kind: 'source-return-create', resourceType: 'sale_return' })
+        if (answer && write.canApply(answer)) created(answer.data)
+        return
+      }
+      const res = await createSaleReturnApi(body, requestKeyRef.current)
       requestKeyRef.current = createRequestKey('sale-return')
-      await qc.invalidateQueries({ queryKey: ['returns'] })
-      toast.success(`销售退货单 ${res.returnNo} 已创建`)
-      const path = `/returns/sale/${res.id}`
-      useWorkspaceStore.getState().addTab({ key: path, title: res.returnNo, path })
-      closeTab()
-      navigate(path)
+      created(res)
     } catch (_) {
     } finally { setSubmitting(false) }
   }
@@ -240,12 +292,16 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
         title="新建销售退货单"
         subtitle={isDirty ? <span className="text-xs font-normal text-muted-foreground">未保存</span> : undefined}
         rightActions={
-          <Button onClick={handleSubmit} disabled={submitting} className="gap-1.5">
+          <Button onClick={handleSubmit} disabled={submitting || locked} className="gap-1.5">
             {submitting ? (<><Loader2 className="h-4 w-4 animate-spin" />创建中…</>) : (<><Save className="h-4 w-4" />创建退货单</>)}
           </Button>
         }
       />
 
+      {(sourceError || write.error || !ownerCurrent) && <p role="alert" className="text-sm text-destructive">{sourceError || write.error || '登录或服务器已变化，草稿保留'}</p>}
+      {write.pending && <div className="rounded-md border p-3 space-y-2"><p>原创建结果待确认。刷新只保留查询身份，不会重新提交。</p><Button disabled={write.busy} onClick={() => void write.queryOriginal().then(answer => { if (answer?.queryOnly) toast.success(`原退货单 ${answer.data.returnNo} 回执已核实，当前草稿未修改，请自行打开原单`); else if (answer && write.canApply(answer)) created(answer.data) })}>查询原创建回执</Button><Button disabled={write.busy || !write.canRetry} onClick={() => void write.retry().then(answer => { if (answer && write.canApply(answer)) created(answer.data) })}>按原创建请求重试</Button></div>}
+      {write.conflict && <div className="space-y-2 rounded-md border p-3"><p>原成交版本已变化，先备份当前草稿，再重读来源；不会自动合并。</p><Button onClick={() => void backup.copy(snapshot)}>复制草稿内容</Button><Button disabled={!backup.copied} onClick={() => { if (backup.canReload()) { clearSourceBinding(); backup.invalidate() } }}>备份后清除来源</Button>{backup.text && <><textarea aria-label="退货草稿备份" readOnly value={backup.text} /><Button onClick={() => backup.acknowledge(backup.text)}>已备份草稿</Button></>}</div>}
+      <fieldset disabled={locked} className="contents">
       <SectionCard title="退货信息" compact>
         <div className="grid grid-cols-3 gap-x-5 gap-y-4">
           <div className="space-y-1.5">
@@ -277,14 +333,15 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
                 value={orderNo}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                   const next = e.target.value
+                  sourceSerial.current++; currentOrderNo.current = next; setLoadingSource(false)
                   setOrderNo(next)
                   if (boundSource && next.trim() !== boundSource.orderNo) { setBoundSource(null); setItems([]) }
                 }}
                 placeholder="输入原单号"
-                disabled={loadingSource}
+                disabled={locked || (write.conflict && !!boundSource)}
               />
               {boundSource ? (
-                <Button type="button" variant="ghost" size="sm" onClick={clearSourceBinding}>清除</Button>
+                <Button type="button" variant="ghost" size="sm" disabled={write.conflict && !backup.copied} onClick={clearSourceBinding}>清除</Button>
               ) : (
                 <Button type="button" variant="outline" size="sm" onClick={() => void loadSourceOrder()} disabled={loadingSource || !orderNo.trim()}>
                   {loadingSource ? '载入中…' : '载入'}
@@ -300,10 +357,12 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
 
         {boundSource && (
           <div className="mt-3 rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-            已关联原单 {boundSource.orderNo}。退货单价默认取原单真实成交价，数量默认取剩余可退数量。
+            已关联原单 {boundSource.orderNo}。{isKit ? '请按原成交行、实际出库批次和组件选择；原快照不随套定义改版变化。' : '退货单价默认取原单真实成交价，数量默认取剩余可退数量。'}
           </div>
         )}
       </SectionCard>
+
+      {isKit && <SourceComponents items={boundSource!.items} disabled={locked} onSelect={selectSource} />}
 
       <SectionCard
         title="退货明细"
@@ -362,9 +421,10 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
                       </td>
                       <td className="py-2.5 pr-2">
                         <Input quantity
-                          aria-label="退货数量" type="number" min="0.01" step={qtyStep(allowDecimalOf(item.productId))} placeholder="数量"
+                          aria-label="退货数量" type="number" min="0.01" step={qtyStep(isKit ? item.source?.allowDecimalQty !== false : allowDecimalOf(item.productId))} placeholder="数量"
                           value={item.quantity}
-                          disabled={!!boundSource}
+                          max={isKit ? item.remainingQty : undefined}
+                          disabled={!!boundSource && !isKit}
                           onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'quantity', +e.target.value)}
                           className="text-right text-sm"
                         />
@@ -382,15 +442,15 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
                           className="text-right text-sm"
                         />
                       </td>
-                      <td className="py-2.5 text-right font-medium tabular-nums">{money(item.quantity * item.unitPrice)}</td>
+                      <td className="py-2.5 text-right font-medium tabular-nums">{isKit ? '保存后估算' : money(item.quantity * item.unitPrice)}</td>
                       <td className="py-2.5 text-center">
-                        <Button type="button" size="sm" variant="ghost" aria-label="删除退货商品行" disabled={!!boundSource} className="h-8 w-9 p-0 text-muted-foreground hover:text-destructive" onClick={() => removeItem(item._key)}>✕</Button>
+                        <Button type="button" size="sm" variant="ghost" aria-label="删除退货商品行" disabled={!!boundSource && !isKit} className="h-8 w-9 p-0 text-muted-foreground hover:text-destructive" onClick={() => removeItem(item._key)}>✕</Button>
                       </td>
                     </tr>
                     {(item.originalQty != null || item.returnedQty != null) && (
                       <tr className="border-b border-border/40">
                         <td colSpan={10} className="pb-2.5 pt-0 text-xs text-muted-foreground">
-                          原单数量 {Number(item.originalQty || 0).toFixed(2)}，已退 {Number(item.returnedQty || 0).toFixed(2)}，剩余可退 {Number(item.remainingQty || 0).toFixed(2)}
+                          {isKit && <><SourceLabel source={item.source as ReturnSourceLabels} /><br /></>}原单数量 {Number(item.originalQty || 0).toFixed(2)}，{isKit ? '已申请' : '已退'} {Number(item.returnedQty || 0).toFixed(2)}，剩余可退 {Number(item.remainingQty || 0).toFixed(2)}
                         </td>
                       </tr>
                     )}
@@ -403,13 +463,14 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
             <p className="text-muted-body">退货明细：{items.length} 行</p>
             <div className="text-right">
               <p className="text-helper">合计金额</p>
-              <p className="text-2xl font-semibold text-foreground">{money(total)}</p>
+              <p className="text-2xl font-semibold text-foreground">{isKit ? '本次以保存后估算为准' : money(total)}</p>
             </div>
           </div>
           </>
         )}
       </SectionCard>
 
+      </fieldset>
       <ProductFinder
         open={finderOpen}
         warehouseName={warehouseName}
@@ -560,13 +621,16 @@ function ReverseTaskCard({ reverse }: { reverse: SaleReturnReverseTask }) {
 
 function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabPath: string }) {
   const qc = useQueryClient()
+  const [detailOwner] = useState(captureKitReadOwner)
+  const facts = useSourceReturnFacts(returnId, detailOwner)
   const detailQuery = useQuery({
-    queryKey: ['return-sale-detail', returnId],
-    queryFn: () => getSaleReturnDetailApi(returnId),
+    queryKey: ['return-sale-detail', returnId, detailOwner.baseURL, detailOwner.userId, detailOwner.sessionGeneration],
+    queryFn: async () => { assertKitReadOwner(detailOwner); const data = await getSaleReturnDetailApi(returnId, commercialReadConfig(detailOwner)); assertKitReadOwner(detailOwner); if (data.id !== returnId) throw new Error('原退货单身份不符'); return data },
     enabled: !!returnId,
     refetchInterval: 8000,
   })
   const ret = detailQuery.data
+  const isKit = ret?.items?.some(item => item.dispatchComponentId != null) ?? false
   useWorkspaceTabTitle(ret?.returnNo)
   const isLoading = detailQuery.isLoading
 
@@ -577,16 +641,23 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
   async function handleConfirm() {
     try {
       setPending(true)
-      await confirmSaleReturnApi(returnId)
+      if (isKit) {
+        const answer = await facts.perform('confirm')
+        if (!answer) return
+      } else await confirmSaleReturnApi(returnId)
+      assertKitReadOwner(detailOwner)
       await qc.invalidateQueries({ queryKey: ['return-sale-detail', returnId] })
       await qc.invalidateQueries({ queryKey: ['returns'] })
       toast.success('已确认，已派发到 PDA')
-    } finally { setPending(false); setConfirmOpen(false) }
+    } catch { /* 业务失败由原全局反馈显示，保留单据。 */ } finally { setPending(false); setConfirmOpen(false) }
   }
   async function handleCancel() {
     try {
       setPending(true)
-      const res = await cancelSaleReturnApi(returnId)
+      const answer = isKit ? await facts.perform('cancel') : null
+      if (isKit && !answer) return
+      assertKitReadOwner(detailOwner)
+      const res = isKit ? answer!.result : await cancelSaleReturnApi(returnId)
       await qc.invalidateQueries({ queryKey: ['return-sale-detail', returnId] })
       await qc.invalidateQueries({ queryKey: ['returns'] })
       // 已有合格品入库时后端生成返货出库单（202）而非直接取消，退货单此刻仍是已确认
@@ -600,7 +671,7 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
       } else {
         toast.success('已取消')
       }
-    } finally { setPending(false); setCancelOpen(false) }
+    } catch { /* 业务失败由原全局反馈显示，保留单据。 */ } finally { setPending(false); setCancelOpen(false) }
   }
 
   if (isLoading) {
@@ -618,16 +689,26 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
         rightActions={
           <>
             {(ret.status === 1 || ret.status === 2) && (
-              <Button variant="outline" className="border-destructive/30 text-destructive hover:bg-destructive/5" disabled={pending} onClick={() => setCancelOpen(true)}>
+              <Button variant="outline" className="border-destructive/30 text-destructive hover:bg-destructive/5" disabled={pending || facts.blocked} onClick={() => setCancelOpen(true)}>
                 <X className="h-4 w-4 mr-1" />取消
               </Button>
             )}
             {ret.status === 1 && (
-              <Button disabled={pending} onClick={() => setConfirmOpen(true)}>确认（派发到 PDA）</Button>
+              <Button disabled={pending || facts.blocked} onClick={() => setConfirmOpen(true)}>确认（派发到 PDA）</Button>
             )}
           </>
         }
       />
+
+      {facts.error && <p role="alert" className="text-sm text-destructive">{facts.error}</p>}
+      {facts.record && <div className="rounded-md border p-3 space-y-2"><p>原{facts.record.action === 'confirm' ? '确认' : '取消'}结果待核对。该操作没有原请求回执接口，刷新不会重新提交。</p><Button disabled={facts.busy} onClick={() => void facts.queryFacts()}>查询当前单据</Button>{facts.fact && <><p className="text-sm">{facts.fact.text}</p><Button variant="outline" disabled={!facts.fact.satisfied || facts.busy} onClick={() => void facts.acknowledge(async () => {
+        const result = await detailQuery.refetch()
+        // React Query can resolve refetch with an error and retain stale data.
+        if (!result.isSuccess || result.isError || !result.data) throw new Error('原退货单详情读取失败')
+        assertKitReadOwner(detailOwner)
+        if (result.data.id !== returnId) throw new Error('原退货单身份不符')
+        return result.data
+      })}>已核对当前单据</Button></>}</div>}
 
       <OrderDetailSections type="sale-return" id={ret.id} progress={ret.task ? <TaskProgressCard task={ret.task} /> : undefined}>
       {ret.reverseTask && <ReverseTaskCard reverse={ret.reverseTask} />}
@@ -658,6 +739,7 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
         <DataTable
           columns={[
             ...productIdentityColumns(),
+            ...(isKit ? [{ key: 'source', title: '原成交 / 出库来源', width: 300, render: (_: unknown, item: ReturnItem) => item.dispatchComponentId != null ? <SourceLabel source={item.source} /> : '普通明细' }] : []),
             { key: 'unit', title: '单位', width: 70, render: (_, item) => <span className="text-muted-foreground">{(item.entryUnit && item.entryUnit !== item.unit) ? item.entryUnit : item.unit}</span> },
             { key: 'quantity', title: '数量', width: 120, align: 'right', render: (v, item) => (item.entryUnit && item.entryUnit !== item.unit && item.entryQty != null)
               ? <span className="tabular-nums">{item.entryQty} {item.entryUnit}<span className="ml-1 text-xs text-muted-foreground">（{Number(v)} {item.unit}）</span></span>
@@ -665,7 +747,7 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
             { key: 'unitPrice', title: '单价', width: 120, align: 'right', render: (v, item) => (item.entryUnit && item.entryUnit !== item.unit && item.entryQty && item.entryQty > 0)
               ? <span className="tabular-nums" title={`¥${Number(v).toFixed(4)} / ${item.unit}`}>{money(item.amount / item.entryQty)}/{item.entryUnit}</span>
               : <span className="tabular-nums">{money(Number(v))}</span> },
-            { key: 'amount', title: '金额', width: 110, align: 'right', render: v => <span className="font-semibold tabular-nums">{money(Number(v))}</span> },
+            { key: 'amount', title: isKit ? (ret.status === 3 ? '实际净冲减' : '预计最多冲减') : '金额', width: 140, align: 'right', render: v => <span className="font-semibold tabular-nums">{isKit ? `¥${returnNet(Number(v))}` : money(Number(v))}</span> },
           ] satisfies TableColumn<ReturnItem>[]}
           data={ret.items ?? []}
           rowKey="id"
@@ -674,10 +756,11 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
         <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
           <p className="text-muted-body">共 {ret.items?.length ?? 0} 行退货明细</p>
           <div className="text-right">
-            <p className="text-helper">合计金额</p>
-            <p className="text-2xl font-semibold text-foreground">{money(Number(ret.totalAmount))}</p>
+            <p className="text-helper">{isKit ? (ret.status === 3 ? '本单实际净冲减' : ret.status === 4 ? '原估算（已取消，不作为冲减）' : '本单预计最多冲减') : '合计金额'}</p>
+            <p className="text-2xl font-semibold text-foreground">{isKit ? `¥${returnNet(ret.totalAmount)}` : money(Number(ret.totalAmount))}</p>
           </div>
         </div>
+        {isKit && <p className="mt-3 text-xs text-muted-foreground">{ret.status === 3 ? '本单已完成，金额为服务端按实际合格入仓结果确定的净冲减，保留四位；来源累计金额不是本单金额。' : '保存后为预计最多冲减；已确认、待收货或质检未完成均不代表已退款，合格入仓完成后由服务端确定。'} 原分摊毛预算、实际净冲减与会计凭证两位金额分别计算；净冲减为零仍可能有退库成本。资金退款需走原退款出款流程。</p>}
       </SectionCard>
 
       </OrderDetailSections>

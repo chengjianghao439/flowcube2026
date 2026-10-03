@@ -334,3 +334,31 @@ C2 第二批 bootstrap 后续窄修：某标签资源一旦识别 `kit-v1`，其
 新选普通商品的单位下拉保留已知基本单位、当前录入单位及已读辅助单位，切辅助单位后仍可回基本单位；人工价一直表示当前录入单位成交价，换单位须主动核对，不做报价倒算。
 
 套销售闭页重开即使 owned key 存在同端点/账号/代次缓存，也须等本次挂载后的成功 GET 完成并再次核读取来源，才固定首次基线。首次失败不从旧缓存初始化；初始化后后台成功/失败均不卸载页面或覆盖独立基线与编辑草稿。gate 按实际销售单 ID 重建，ordinary 原缓存行为保持。
+
+### C2 第三批：原组件来源退货与查询恢复（2026-10-03，当前工作树）
+
+套销售的来源退货仍在 `/returns/sale/new`。载入 `commercialModel=kit-v1` 的原单后只列来源，不自动添加全部配件；员工明确选择原成交行、已确认 WT 批次及组件，再录入本次基本数量。源 DTO 的 `taskNo/confirmedAt/warehouseName/lineKey/kitName` 是原出库事实；原单价和分摊预算只读，停用套定义不改变原快照。同商品的不同来源、或不同发货仓库需要分单；拒绝新选择时保留已填数量。数量仍按两位和源 `allowDecimalQty` 提示校验，最终规则由原后端判定。普通原单自动带入、无源手工与多单位路径保持。
+
+`returnedQty` 是有效申请占用量，不标成已实际入库。选择器分别呈现原发量、已申请、可申请剩余、来源毛预算、整个来源的折后参考，以及来源历史累计实际合格量/毛额/净额；不把全来源估计按本次数量比例计算成伪退款。保存后 SR 草稿/已确认的 `totalAmount/items.amount` 是服务端预计最多冲减，状态 3 是本单实际净冲减；净额显式显示四位（例如 `0.0050`），与毛预算两位、凭证两位分开解释。当前 RT 没有可精确映射到 SR 行的 `returnItemId`，不按同商品猜每行质检量；详情保留任务拒收汇总和原返货出库流程。saved SR 行直接使用嵌套 `source` 标签，不额外读取整 SO；`source=null` 明示来源身份待核对。
+
+商业销售八个写动作、来源 SR 创建及 PDA 拣货退回 row/box 使用窄 `useKitOperation`。POST 前同步保存原 query 身份；mounted page 才持有原 body，未知结果先查询固定 endpoint、本人原 key/action，只有员工显式重试且 mounted body 仍存在时，`not_found` 才允许同 key/body 重发。超时、408、5xx 为未知；首次明确 4xx 可解除本请求，未知后的 4xx 不解除。成功回执严格核对 resourceType/resourceId，创建回执还核对返回新 ID。实际服务的 failed DTO 不带资源字段，因此原查询端点/key/action 是其身份；若显式返回资源字段则必须自洽，外国失败回执不得清除未知记录。查询错误或 `not_found` 本身均不证明失败。
+
+`kitRecoveryIdentity` 在 `main.tsx` 静态接线，离开套页后仍观察真实 login/logout；token 续期保持会话身份，重新登录旋转查询会话 nonce。本地开发共享 auth 存储的外标签更新保守旋转本标签 nonce。`sessionGeneration` 刷新重建为 0，恢复用同标签 sessionStorage 的稳定查询身份；mounted 迟到结果仍核原代次、endpoint、scope/draft 及实际 stored key/nonce。存储不可用、旧格式或身份不完整会显式阻断，不能因为刷新后无 boundSource 就绕普通创建分支。存储仅含版本、scope/draft/session nonce、账号 ID、endpoint、原 key/action/resource 和 PDA task/container/location/package 数字 context；不存 token、客户/收货信息、条码或业务 body。
+
+刷新及 duplicate/opener 复制来的记录只提供“原操作查询”，没有原 body，绝不自动 POST、拼当前表单重试或把回执作为新草稿完成。只读查到原回执时提示自行打开原单/刷新任务，不自动导航、关闭或覆盖当前输入。来源读取另核读取序号、原单号和 owner，旧来源响应不能绑定新草稿。409 重读/清除来源先以精确草稿完成复制或手工备份，输入变化后须重新备份。
+
+商业销售 Editor 与详情恢复 scope 取 `buildWorkspaceTabRegistrationFromPath(tabPath).key` 的既有工作区身份；同 SO 的 `focus/taskId` handoff 不改变该身份、DOM、输入或原未知 key/body，handoff URL 刷新仍能找到原只读查询。不同 SO、新草稿及 owner 仍由原 scope/draft 和会话守卫隔离，不冻结初始完整 URL，不为 query 参数变化重置输入。
+
+商业销售详情的占库、释放、取消、删除确认框及发货弹窗，在请求结束且保留未知记录时自动收起，露出页面的“查询原回执”和“按原请求重试”。只关闭遮挡层，不清原 plan/key/body、持久查询身份或发货数量，也不解除写阻断；正在发送时取消、关闭及 Escape 仍不能关闭弹窗。明确业务拒绝仍保留原弹窗和错误处理。重试须由员工显式发起、先查原回执并使用 mounted 原 key/body；刷新只读查询不自动 POST、关闭页面或替换当前订单。
+
+该详情页保留 `error || write.error || backup.error` 的原优先级，仅在有待确认记录、且选中的原错误恰为客户端通用句“操作失败，请稍后重试”时替换为“原操作结果待确认，请先查询原回执”。原查询未找到、来源或会话变化、存储清理失败、备份失败等具体原因仍完整显示；无待确认记录的明确业务拒绝也显示原错误。不改变回执判断、请求或恢复按钮。
+
+SR confirm/cancel 的真实 API 没有 key/receipt 契约：源退货详情以独立数字身份记录阻断未知，刷新仅显式读取原 SR 当前 status、关联入库任务或返货任务。文案是“当前单据已确认/完成/取消”，明确不是原请求回执，状态也可能由其他员工改变；只有明确核对当前事实后才可结束提示，不自动重发。资金退款、权限、期间、返货会计规则保持原链路。
+
+“已核对当前单据”保持原持久核对记录和写阻断，等待原 owner 的详情读取自然成功、同 SR 身份与原确认/取消事实匹配且替换页面旧详情后才清理。React Query refetch 的 error 即使附带旧 data 也不能结束阻断；旧草稿、外资源、账号/服务器变化或离页后的迟到结果都不能清记录。失败显示“详情更新未完成”，保留“查询当前单据”和再次显式核对的只读重试路径，不自动 POST，也不把更新后的当前事实改称原回执。
+
+PDA 拣货退回 `quantitySource=active_pick` 时突出 `taskReturnQty`（本任务应归还），另列 `remainingQty`（条码账面），不修改 legacy `qty` 或塑料盒数量规则。row 查询用 `scan-log.cancel-return.<taskId>`，box 用 `scan-log.cancel-return-box.<taskId>`；资源是原 warehouse_task，响应 `data.id` 是新 scan_log ID，不能拿它比较容器、箱或任务。恢复只用原数字 context 和回执，不用 finally 已清掉的 current target 或清单缺失推断原动作成功。旧记录缺原服务器/登录身份时展示人工核对阻断。浏览器 PDA 刷新仍须正常登录/重新绑定，设备凭据不新增落盘或注入。
+
+PDA 此页在详情 hook 前固定 owner；可选 owned 详情调用按原 task ID、endpoint、账号和 sessionGeneration 分隔 cache，GET 固定原配置并在读取前后核身份，返回 DTO 必须 `id === 原 taskId`。未传 owner 的既有 helper/hook 保持旧 key 与 API 默认配置。详情 loading、失败或 403 时原 row/box 持久回执查询、错误说明及 legacy 人工阻断仍显示，扫码入口不显示且写守卫继续阻断；本人原回执读取与详情 VIEW 是不同契约。查询失败或 `not_found` 保留原记录，可显式再次只读查询；恢复 query-only 不自动 POST/导航、不用详情清单或当前扫码目标推断完成。
+
+本段实现/组件证据不替代实际 GUI、真机、物理打印、部署或生产验证；只承诺同标签刷新查询，关窗、跨设备恢复未验证。

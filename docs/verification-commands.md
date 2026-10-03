@@ -458,3 +458,40 @@ C2 第二批规格审查原字节探针 `address-reopen`、`gate-title`、`detai
 品质原 `/tmp/c2-source-metadata-quality-rollback-probe.js` 仅适配实际事务 AST 定位、声明及 post-cleanup 原字节，保留原业务/release断言并补递归 rollback 原因核对；`/tmp/c2-source-metadata-quality-rollback-probe-green.log` 自然 exit0，原业务与 rollback 原因均保留，events为 rollback/release。`/tmp/c2-source-metadata-cleanup-old-finally-hook.js` 仅在内存恢复旧 finally、不改工作树：`/tmp/c2-source-metadata-cleanup-old-finally-mutant-red.log` 自然 exit1（26/32，6个故障模式失败），原品质断言重跑 `/tmp/c2-source-metadata-quality-rollback-mutant-red.log` 亦自然 exit1（原业务错缺失、events仅 rollback）。这两项反向结果证明新增守卫能拦实际旧缺陷。
 
 Node22（v22.23.2）下新增 cleanup 守卫 scoped lint `/tmp/c2-source-metadata-cleanup-guard-lint-green.log` 自然 exit0。对 lifecycle 使用同 backend ESLint 配置的 `/tmp/c2-source-metadata-cleanup-narrow-lint.log` 自然 exit1，仍有7条错误；`/tmp/c2-source-metadata-cleanup-lint-baseline-proof.log` 对 HEAD 与当前同配置/同文件名的 JSON 结果逐项比较自然 exit0，新增错误0（保留既有 no-useless-catch、4处 no-unused-vars与原 outer finally 2处 no-unsafe-finally），不称 lifecycle 全文件 lint 通过。文档守卫及 diff 检查记录 `/tmp/c2-source-metadata-cleanup-doc-guard.log`、`/tmp/c2-source-metadata-cleanup-diff-check.log`。此次全为离线纯验证，无数据库、服务器或浏览器资源，也没有重跑上段真实 WT316/SR169 与三批资源 proof；GUI/真机/实纸、远端 CI、发版前统一全量和生产边界保持未验，未提交/推送/发布。
+
+### C2 第三批前端窄验收（2026-10-03）
+
+在 Node 22（先加载 `~/.config/flowcube/dev-env.sh`）的 `frontend` 目录运行：
+
+```bash
+npx vitest run src/hooks/useCommercialRecovery.test.tsx src/hooks/useKitOperation.test.tsx src/lib/kitRecoveryIdentity.test.ts src/hooks/useCommercialSale.test.tsx src/pages/sale/commercial/CommercialEditor.test.tsx src/pages/sale/commercial/CommercialSalePage.test.tsx src/pages/returns/sale/form/sourceReturn.test.tsx src/pages/pda/cancel-return.test.tsx
+npx tsc --noEmit -p tsconfig.app.json
+```
+
+专项检查覆盖来源不自动全选/同品分单/原快照/真实创建 zod schema、来源读取迟到、普通原单兼容、净金额四位、SR 无回执的当前事实核对、销售八动作原 action、query-first 原 body/key、外国成功/失败回执、合法 failed 无资源字段、真实 auth persistence rehydrate 代次 0 与模块重载、登录旋转及续期保持、存储阻断与业务已确认但清理失败、两个原资源草稿、Editor 迟到/复制记录不能关闭新草稿、PDA task 1 vs barcode 10、原 task/container/location/box context 和塑料盒/拆箱兼容。相关 frontend 文件另做 scoped eslint 和 `git diff --check`。
+
+这些是组件/实际 hook 与离线 DTO 契约证据，不是实际 GUI、真机或生产证据。统一构建、全量前端/后端套件及实际 GUI 由整批验收阶段集中执行；本专项不启动服务、不跑数据库清理、不改生产状态。
+
+初次交审的8文件59例自然通过记录 `/tmp/c2-third-final-focus.log`；当时 app 类型、scoped frontend lint、diff 的自然退出记录分别为 `/tmp/c2-third-final-types.log`、`/tmp/c2-third-final-lint.log`、`/tmp/c2-third-final-diff.log`，均 exit0。首次最终回归58/59的失败属于测试跨模块重载保留旧文档监听器，已在测试收尾按真实文档销毁移除；产品身份观察仍由 main 静态导入覆盖真实登录/退出。
+
+原行为红证据：query-first与外国成功回执 `/tmp/c2-commercial-red.log`，外国 failed `/tmp/c2-failed-identity-red.log`，草稿 scope 迟到 `/tmp/c2-scope-red.log`，来源自动选入 `/tmp/c2-source-red.log`，真实创建 schema `/tmp/c2-source-schema-red.log`，SR 当前事实入口 `/tmp/c2-facts-red.log`，PDA 数量与原查询入口 `/tmp/c2-pda-red.log`。身份观察与来源存储阻断的实际旧行为反向验证分别为 `/tmp/c2-identity-red-mutation.log`、`/tmp/c2-source-storage-red-mutation.log`；测试结束恢复产品原字节，最终59例包含相应反例。普通塑料盒、拆箱、普通销售/退货兼容均属组件证据，未升级为现场业务或设备证明。
+
+独立 SPEC 后的单项时序修复：原探针字节 `/tmp/c2-independent-spec-probes/source.test.tsx` 的核对后刷新在途例亲自复跑 `/tmp/c2-spec-ack-original-red.log` 自然 exit1，23/24，旧确认 API 被调2次；修后原探针 `/tmp/c2-spec-ack-original-green.log` 自然 exit0，24/24。仓内 source 组件增加8例，确认/取消的刷新在途与成功、失败后显式只读重试，以及外资源、旧 status、同 UID 重登和离页：旧实现 `/tmp/c2-spec-ack-components-red.log` 自然 exit1（原9通过、新8失败），修后 `/tmp/c2-spec-ack-components-green.log` 自然 exit0，17/17。持久记录仅在原身份详情成功并匹配当前事实后清理，error+旧 data 不被当作成功。对应 app 类型/scoped lint/diff/文档守卫记录 `/tmp/c2-spec-ack-{types,lint,diff,docs}.log`；这次只复跑受影响 source 与独立原探针，没有重复其余无变化前端套件或启动资源。
+
+独立 QUALITY 后三项窄修覆盖 actual `SaleFormPage`/gate/Editor handoff 正常写、unknown 原 key/body 重试、handoff URL 下 query-only 刷新及不同 SO 隔离；CommercialSalePage 同样覆盖正常发货/未知重试/刷新。PDA 组件改用真实 `usePdaCancelReturnDetail` 和 typed warehouse API，覆盖 owned cache/fixed GET、读前拒绝、A 开始 GET→B→A 后响应、DTO 的原 id、读后 owner 变化、loading/403 下 row/box 查询、查询失败重试、无扫码以及无 owner 默认兼容/legacy 人工阻断。旧行为 `/tmp/c2-quality-owned-components-red.log` 自然 exit1，15反例红、其余20例绿；修后受影响3文件36/36自然 exit0，记录 `/tmp/c2-quality-owned-components-green.log`。app 类型/scoped lint/diff/文档守卫分别记录 `/tmp/c2-quality-owned-{types,lint,diff,docs}.log`，未重跑其余无变化套件。
+
+独立 handoff 原探针字节 `/tmp/c2-independent-quality-probes/handoff.test.tsx` 亲自复跑自然红 `/tmp/c2-quality-handoff-original-red.log`，修后 `/tmp/c2-quality-owned-handoff-original-green.log` 自然 exit0 12/12。PDA 原探针字节亦保留：修前 `/tmp/c2-quality-pda-read-original-red.log` 的 QUALITY 三触发为 control 绿、403入口/跨源 body 红；整个原文件另有4个继承测试未设置 actual GET 夹具，不计产品回归。修后以 `-t QUALITY` 精确复跑 `/tmp/c2-quality-owned-pda-read-original-trigger-after.log` 自然 exit1，2绿、1红、4跳过；剩余仅旧中间断言要求切 B 后 GET 次数2，而正确读前身份拒绝保持1，尚未走到其 foreignFinish。该原 probe 不称通过，由独立 QUALITY 调整临时触发夹具再证伪，产品不为维持第二次 foreign GET 绕过守卫。仓内固定 A 请求、wrong ID/owner 和 no foreign body 的新时序另有自然红绿证据，仍属组件/API契约而非现场库存损坏或实际 GUI 证明。
+
+统一前端 unit 后的旧手输入测试夹具修复，仅改 `return-scan-ui.test.tsx` 与本说明，不改业务 guard。原最小复现 `/tmp/c2-return-scan-original-red.log` 自然 exit1：取消退回例对 null 调用 HTMLInputElement setter。`/tmp/c2-return-scan-fixture-rootcause.log` 的临时独立对照自然 exit1（5绿1红）：当前页旧 fixture 未登录、旧 hook 被硬 mock 成已加载且旧 CriticalAction 被 mock 开放，新 owner 守卫使手输按钮 disabled、input 不存在；不是实际 GET loading 失败。仅给同原 fixture 加真实 login，当前两例通过；HEAD 原页面与原未登录 fixture 两例亦通过。临时比较没有改工作树业务文件。
+
+修后 fixture 使用真实 authStore 登录、actual owned detail hook 和 typed warehouse/location API，只 mock payload client；保留真实 PdaScanner 手动输入进入原容器/原库位流程，并核 POST 的 task1/container7/location6/barcode、原 endpoint、会话代次、PDA header 与稳定请求键。新增 loading 无扫码/无提交及未登录 GET 前拒绝/无扫码守卫。`/tmp/c2-return-scan-green.log` 自然 exit0 4/4；app 类型/scoped test lint/diff 记录 `/tmp/c2-return-scan-{types,lint,diff}.log`。这次仅最小组件/夹具验证，不重跑全量、启动 GUI/服务/数据库或作为实物归还证明；root 的实际 GUI 作业保持独占，后续独立窄 SPEC→QUALITY 再接统一验收。
+
+统一前端 unit 的下一轮 `/tmp/c2-final-frontend-unit-after-fixture.log` 当时187文件/1071例通过但有1个未捕获异常，自然 exit1，不能称整套通过：真实 Radix focus-scope 卸载 `setTimeout(0)` 中 `dispatchEvent` 收到非该 jsdom realm 的 Event。`kits/index.test.tsx` 的 helper 原 finally 同步 unmount 后直接返回，而 Vitest jsdom 环境 teardown 会关闭窗口并恢复全局构造器。原文件19/19与最后一例各自隔离自然 exit0（`/tmp/c2-kits-focus-{file,last}-original.log`），没有把隔离结果冒充该整套时序复现。
+
+新增真实 Dialog DOM 事件守卫证明原 helper 返回时卸载 autofocus 尚未执行：`/tmp/c2-kits-focus-cleanup-red.log` 自然 exit1，事件0次而预期1次。只将此 fixture finally 改为在原 realm 内 `await act` 完成 unmount 与真实 `setTimeout(0)` 回调，再清 cache/host；不 suppress/ignore 异常、不 mock Radix 或改产品。最小守卫 `/tmp/c2-kits-focus-cleanup-green.log` 自然 exit0，1/1；文件 `/tmp/c2-kits-focus-file-green.log` 自然 exit0，20/20；scoped test lint与diff `/tmp/c2-kits-focus-{lint,diff}.log` 自然 exit0。
+
+跨 realm 机制另由临时 `/tmp/c2-kits-focus-realm-repro.cjs` 受控模型复现：真实 React/FocusScope 挂载卸载后，模拟关闭 jsdom 并恢复全局构造器的 realm 切换。脚本实际先恢复全局构造器再关闭窗口，Vitest 实际先关闭再恢复，因此该模型不是对 Vitest teardown 顺序的逐步复刻，也不是原整套异常的稳定复现。未等待策略 `/tmp/c2-kits-focus-realm-undrained.log` 自然 exit1，同 `dispatchEvent` 非 Event 和 FocusScope timeout 栈；等待真实卸载回调的策略 `/tmp/c2-kits-focus-realm-drained.log` 自然 exit0，恢复环境前后均仅1次合法 CustomEvent。该临时机制模型与仓内清理守卫是不同证据；原整套未捕获异常是否已完全消失仍待 root 最终统一单测，不用20/20替代。此次仅改本测试清理/守卫与说明，没有产品文件、服务、数据库、浏览器或提交操作。
+
+实际 GUI 发现商业销售未知操作的确认层遮挡页面查询入口后，窄修仅在父页 `pending && !busy` 时收起确认与发货弹窗；不清请求、发货数量或写阻断，不改变终端业务拒绝的原弹窗。使用真实 ConfirmDialog/AppDialog 的4动作和真实发货弹窗，并核请求在途时取消/关闭/Escape、原查询可达、显式同 key/body 重试、明确400与刷新后删除原回执只读不关闭页面。最终16例反向移除这6行修复后 `/tmp/c2-commercial-dialog-red-final.log` 自然 exit1，7红9绿，红均真实弹窗未收起；产品字节随后恢复。最早红日志 `/tmp/c2-commercial-dialog-red.log` 有1例释放按钮文案夹具错误，已纠正，不把该例计业务红。修后 `/tmp/c2-commercial-dialog-green.log` 自然 exit0，16/16；app 类型/scoped lint/diff/文档守卫为 `/tmp/c2-commercial-dialog-{types,lint,diff,docs}.log`。这是组件与 hook 接入点证据，实际断网 GUI 复验、全量与资源收尾由 root 独占执行，本窄修未操作浏览器、服务或数据库。
+
+后续实际 GUI 中原业务已提交、前端仍待查询时，底层通用“操作失败，请稍后重试”与未知恢复指引冲突。本页保留原 `error || write.error || backup.error` 优先级，仅在 `write.pending` 且选中错误精确等于该通用句时替换为“原操作结果待确认，请先查询原回执”；原查询未找到、会话变化、存储清理失败及备份错误仍显示，终端400原文不变。真实弹窗17例的最终原展示 `/tmp/c2-commercial-wording-red-final.log` 自然 exit1，四确认动作显示定性失败句、其余13绿；修后 `/tmp/c2-commercial-wording-green.log` 自然 exit0，17/17。新增真实原请求待确认后会话变化的只读查询守卫，确认拒绝原文、未发 GET/POST且记录未清；现有4动作还核 not_found 原文。`/tmp/c2-commercial-wording-specific-red.log` 自然 exit1 证明把所有 pending 错误覆盖成统一句会掩盖该拒绝原因，因此不采用全覆盖提示。scoped lint/diff/文档守卫 `/tmp/c2-commercial-wording-{lint,diff,docs}.log`，不改 hook、请求、回执或弹窗逻辑。本轮未跑全量或操作 GUI/服务/数据库，等待顺序 fresh SPEC→QUALITY 后由 root 收尾。

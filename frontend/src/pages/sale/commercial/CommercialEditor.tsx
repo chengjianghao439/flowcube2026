@@ -20,6 +20,7 @@ import { money } from '@/lib/format'
 import { toast } from '@/lib/toast'
 import CommercialPicker from './CommercialPicker'
 import { draftFromGroups, toCommercialInputs, type CommercialDraftRow } from './commercialDraft'
+import { buildWorkspaceTabRegistrationFromPath } from '@/router/workspaceRouteMeta'
 export default function CommercialEditor({
   order,
   owner,
@@ -43,7 +44,7 @@ export default function CommercialEditor({
     [error, setError] = useState(''),
     [reloading, setReloading] = useState(false),
     [discardOpen, setDiscardOpen] = useState(false)
-  const write = useCommercialWrite(owner),
+  const write = useCommercialWrite(owner, `commercial-editor:${buildWorkspaceTabRegistrationFromPath(tabPath).key}`),
     { can } = usePermission()
   let ownerCurrent = true
   try {
@@ -51,7 +52,7 @@ export default function CommercialEditor({
   } catch {
     ownerCurrent = false
   }
-  const locked = write.busy || !!write.pending || reloading || !ownerCurrent
+  const locked = write.blocked || reloading || !ownerCurrent
   const mounted = useRef(true)
   useEffect(() => {
     mounted.current = true
@@ -145,7 +146,7 @@ export default function CommercialEditor({
         id: order?.id,
         body: bodyResult.body
       })
-      if (answer) {
+      if (answer && write.canApplyConfirmation(answer)) {
         toast.success(
           answer.result?.pending ? '改单已提交，等待仓库确认；预占与派发以原单最新事实为准' : '销售单已保存'
         )
@@ -206,12 +207,16 @@ export default function CommercialEditor({
       )}
       {write.pending && (
         <div className="space-y-2 rounded-md border p-3">
-          <p>原请求结果待确认，离开或刷新不会自动重新提交。原请求仅保留在当前页面。</p>
+          <p>原请求结果待确认，离开或刷新不会自动重新提交。刷新后仅保留查询身份，不保存表单内容。</p>
+          <Button disabled={write.busy} onClick={() => void write.queryOriginal().then(answer => {
+            if (answer?.queryOnly) toast.success('原回执已核实，请自行打开原单；当前草稿未修改')
+            else if (answer && write.canApplyConfirmation(answer)) onDone(answer.result?.id)
+          })}>查询原回执</Button>
           <Button
-            disabled={write.busy}
+            disabled={write.busy || !write.canRetry}
             onClick={() =>
               void write.retry().then((answer) => {
-                if (answer) onDone(answer.result?.id)
+                if (answer && write.canApplyConfirmation(answer)) onDone(answer.result?.id)
               })
             }
           >

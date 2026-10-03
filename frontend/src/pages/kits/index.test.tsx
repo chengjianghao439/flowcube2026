@@ -25,7 +25,15 @@ async function mount(run: (host: HTMLElement) => Promise<void>, path = '/kits?ke
   try {
     await act(async () => { root.render(<QueryClientProvider client={qc}><MemoryRouter initialEntries={['/sale?keyword=销售']}><TabPathContext.Provider value={path}><KitsPage /></TabPathContext.Provider></MemoryRouter></QueryClientProvider>); await new Promise(r => setTimeout(r, 15)) })
     await act(async () => { await new Promise(r => setTimeout(r, 15)) }); await run(host)
-  } finally { act(() => root.unmount()); qc.clear(); host.remove() }
+  } finally {
+    await act(async () => {
+      root.unmount()
+      // Radix schedules unmount autofocus with setTimeout(0). Finish it while
+      // this jsdom realm still owns CustomEvent and the detached dialog.
+      await new Promise<void>(resolve => setTimeout(resolve, 0))
+    })
+    qc.clear(); host.remove()
+  }
 }
 const click = async (name: string) => { const button = Array.from(document.querySelectorAll('button')).find(b => b.textContent === name); expect(button, `应有按钮 ${name}`).toBeTruthy(); await act(async () => { button!.click(); await new Promise(r => setTimeout(r, 15)) }); await act(async () => { await new Promise(r => setTimeout(r, 10)) }) }
 const change = async (label: string, value: string) => { const input = document.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!; expect(input).toBeTruthy(); await act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value); input.dispatchEvent(new Event('input', { bubbles: true })) }) }
@@ -282,4 +290,15 @@ test('编辑复制在途切服务器，旧来源完成不得把草稿标为已�
       expect(Array.from(document.querySelectorAll('button')).find(b => b.textContent === '重载最新资料')!.matches(':disabled')).toBe(true)
     })
   } finally { fixtures.defaults.baseURL = '/api' }
+})
+test('dialog fixture finishes real Radix unmount autofocus before leaving its jsdom realm', async () => {
+  const events: Event[] = []
+  await mount(async () => {
+    await click('维护')
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"]')
+    expect(dialog).toBeTruthy()
+    dialog!.addEventListener('focusScope.autoFocusOnUnmount', event => events.push(event))
+  })
+  expect(events).toHaveLength(1)
+  expect(events[0]).toBeInstanceOf(window.CustomEvent)
 })

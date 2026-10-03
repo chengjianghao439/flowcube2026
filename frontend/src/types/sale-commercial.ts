@@ -137,7 +137,8 @@ export type CommercialWriteResult = { id?: number; orderNo?: string; pending?: b
 export interface CommercialWriteConfirmation {
   confirmed: true
   result: CommercialWriteResult
-  plan: CommercialOperationPlan
+  queryOnly?: boolean
+  plan: Omit<CommercialOperationPlan, 'operation'> & { operation: Pick<CommercialOperation, 'action' | 'id'> }
 }
 export type CommercialSaleOrder = SaleOrder & {
   commercialModel: 'kit-v1'

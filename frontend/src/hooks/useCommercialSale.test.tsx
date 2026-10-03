@@ -8,8 +8,9 @@ import { useKitBackup } from './useKits'
 import { useAuthStore } from '@/store/authStore'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import type { CommercialBody, CommercialOperation, CommercialPreview } from '@/types/sale-commercial'
-const mocks = vi.hoisted(() => ({ execute: vi.fn(), preview: vi.fn(), get: vi.fn(), defaults: { baseURL: '/a' } }))
+const mocks = vi.hoisted(() => ({ query: vi.fn(), execute: vi.fn(), preview: vi.fn(), get: vi.fn(), defaults: { baseURL: '/a' } }))
 vi.mock('@/api/client', () => ({ default: { defaults: mocks.defaults } }))
+vi.mock('@/api/operation-requests', () => ({ getOperationRequestStatusApi: mocks.query }))
 vi.mock('@/api/sale-commercial', () => ({
   executeCommercialSaleApi: mocks.execute,
   previewCommercialSaleApi: mocks.preview,
@@ -49,10 +50,12 @@ function deferred<T>() {
 }
 beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
-  localStorage.clear()
+  localStorage.clear(); sessionStorage.clear()
   vi.resetAllMocks()
   mocks.defaults.baseURL = '/a'
+  mocks.query.mockResolvedValue({ status: 'not_found', data: null })
   mocks.preview.mockResolvedValue({ amount: 100, commercialGroups: [], physicalItems: [] })
+  useAuthStore.getState().logout()
   useAuthStore.setState({
     token: 'fixture-only',
     sessionGeneration: 10,
@@ -139,8 +142,9 @@ test('late success from original endpoint gives original result feedback without
       expect(await pending).toBeNull()
     })
     expect(invalidate).not.toHaveBeenCalled()
-    expect(write.error).toContain('原服务器')
-    expect(write.error).toContain('已确认')
+    expect(write.error).toContain('来源或会话已变化')
+    expect(write.pending).toBeTruthy()
+    expect(write.canApplyConfirmation).toBeDefined()
   })
 })
 test('late session response cannot clear original pending or update cache', async () => {
@@ -269,13 +273,13 @@ test('two mounted tabs own separate original operations; lateA success cannot fi
       b.reject({ status: 408 })
       await pb
     })
-    expect(controls.B.pending?.operation.id).toBe(81)
+    expect(controls.B.pending?.operation?.id).toBe(81)
     await act(async () => {
       a.resolve({ id: 80 })
       await pa
     })
-    expect(controls.B.pending?.operation.id).toBe(81)
-    expect(controls.B.pending?.operation.body.expectedRevision).toBe(7)
+    expect(controls.B.pending?.operation?.id).toBe(81)
+    expect(controls.B.pending?.operation?.body.expectedRevision).toBe(7)
   } finally {
     act(() => root.unmount())
     host.remove()

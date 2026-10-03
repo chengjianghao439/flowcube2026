@@ -1,4 +1,5 @@
 import { payloadClient as client } from './client'
+import type { AxiosRequestConfig } from 'axios'
 import type { PaginatedData } from '@/types'
 import { withRequestKeyHeaders } from '@/lib/requestKey'
 import { type WtStatus } from '@/constants/warehouseTaskStatus'
@@ -273,6 +274,9 @@ export interface CancelReturnContainer {
   productId: number
   productName: string | null
   qty: number
+  taskReturnQty?: number
+  remainingQty?: number
+  quantitySource?: 'active_pick'
   containerKind: 'inventory' | 'plastic_box'
   suggestedLocationCode: string | null
   zone: string | null
@@ -306,17 +310,20 @@ export interface CancelReturnDetail {
   packages: CancelReturnPackage[]
 }
 
-export const getCancelReturnDetailApi = (taskId: number) =>
-  client.get<CancelReturnDetail>(`/warehouse-tasks/${taskId}/cancel-return-detail`)
+export const getCancelReturnDetailApi = (taskId: number, config?: AxiosRequestConfig) =>
+  config
+    ? client.get<CancelReturnDetail>(`/warehouse-tasks/${taskId}/cancel-return-detail`, config)
+    : client.get<CancelReturnDetail>(`/warehouse-tasks/${taskId}/cancel-return-detail`)
 
 /** 归还扫码：扫容器条码 + 扫目标库位条码，确认放回、解锁容器 */
 export const submitCancelReturnScanApi = (
-  taskId: number, containerId: number, barcode: string, locationId: number, requestKey?: string,
+  taskId: number, containerId: number, barcode: string, locationId: number, requestKey?: string, config?: AxiosRequestConfig,
 ) =>
   client.post<{ id: number; remaining: number; packagesRemaining: number; finalized: boolean }>(
     '/scan-logs/cancel-return',
     { taskId, containerId, barcode, locationId },
     {
+      ...config,
       skipGlobalError: true,
       headers: requestKey
         ? withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' })
@@ -326,12 +333,13 @@ export const submitCancelReturnScanApi = (
 
 /** 拆箱确认扫码：扫已完成箱子的条码，确认已拆箱处理（无需第二步选位置） */
 export const submitCancelReturnBoxScanApi = (
-  taskId: number, packageId: number, barcode: string, requestKey?: string,
+  taskId: number, packageId: number, barcode: string, requestKey?: string, config?: AxiosRequestConfig,
 ) =>
   client.post<{ id: number; containersRemaining: number; packagesRemaining: number; finalized: boolean }>(
     '/scan-logs/cancel-return/box',
     { taskId, packageId, barcode },
     {
+      ...config,
       skipGlobalError: true,
       headers: requestKey
         ? withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' })

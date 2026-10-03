@@ -1,3 +1,4 @@
+import '@/lib/kitRecoveryIdentity'
 import { StrictMode } from 'react'
 import { installUnhandledRejectionReporting } from '@/lib/unhandledRejection'
 import './index.css'
