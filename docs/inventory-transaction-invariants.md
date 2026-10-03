@@ -140,3 +140,9 @@ C2规格复审补充：销售退货receive、QA完成与putaway完成三处门�
 系统本人回执查询沿原 auth + `(user_id,request_key,action)` 匹配，不新增业务写权限或 PDA 设备闸门。`getScopedOperationRequestStatus` 的可选内部 `receiptContext` 记录实际命中 operation row 的 `matchedAction`，不添加公开 DTO 字段，不改变 exact→legacy/唯一候选规则。仅当实际匹配 action 和请求 action 都严格为 `scan-log.cancel-return` 或 `.当前resourceId`，且真实资源为 `warehouse_task`、来源 SO 为 kit-v1、实际 WT 为 sale_out，`assertReceiptScope` 按当前 WT 仓授权本人原归还回执；每次重读仍核当前用户范围，撤销任务仓授权返回403。
 
 请求宽 prefix、action 尾部与资源ID不符、cancel-return-box、其他 WT/SO/SR/RT 动作保持原完整套单范围。合法第二仓的归还成功后可查询本人原结果，但整单详情仍可能403。派发、归还详情的只读 DTO 契约见 `docs/business-semantics.md`：均从原 persisted facts 批量投影，不增加第二份数量账或业务写锁，归还/派发/退款写链未改。
+
+### 销售占库范围当前读与并发授信（2026-10-03）
+
+`reserveStock` 的完整已保存物料范围查询使用 `FOR SHARE` 当前读，包含数量为零的历史行，普通单与套单均须在 `begin/replay` 之前校验头仓和全部物料仓。不能为了读范围在客户锁之前建立 RR 一致性快照：同客户第二单即使等待 `sale_customers FOR UPDATE`，旧快照仍会漏掉第一单刚提交的在途授信占用。顺序仍为销售单锁 → 物料范围当前读 → 回执 → revision/状态 → 客户锁 → 授信读取 → 旧履约维度 → 库存锁；不把客户锁移到销售单锁之前。
+
+既有 `smoke:fulfillment-credit` 以两个真实 RR 连接控制交错，同客户两单各 10、额度 15，第一单持客户锁时第二单发起同客户锁查询，第一单提交后第二单必须 `409 CREDIT_LIMIT_EXCEEDED` 且保持草稿。此修正不改授信计算、超额放行政策、全局隔离级别、商品/仓库范围或回执/revision先后语义。真实测试库的本地红绿、窄兼容与锁序结果仅证明本地事务行为，生产状态及整批最终回归须独立核实。

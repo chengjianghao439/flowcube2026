@@ -1388,7 +1388,9 @@ async function reserveStock(id, operator, items = [], { confirmCreditOverride = 
     const commercialInput = {commercialModel,expectedRevision}
     commercialStore.assertModel(orderRow,commercialInput)
     commercialStore.assertRequestKey(orderRow.commercial_model,requestKey)
-    const [authRows] = await conn.query('SELECT warehouse_id FROM sale_order_items WHERE order_id=?',[id])
+    // 范围仍在重放前校验，但此处必须当前读：普通 SELECT 会在客户锁前建立 RR 快照，
+    // 令后续等待客户锁的占库事务漏掉刚提交的同客户授信占用。
+    const [authRows] = await conn.query('SELECT warehouse_id FROM sale_order_items WHERE order_id=? FOR SHARE',[id])
     for (const r of authRows) assertInScope(scopeWarehouseIds,r.warehouse_id ?? orderRow.warehouse_id,'销售单')
     const requestState = await beginOperationRequest(conn, {
       requestKey,
