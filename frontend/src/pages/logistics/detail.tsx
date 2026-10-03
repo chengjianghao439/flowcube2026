@@ -121,6 +121,7 @@ export default function LogisticsDetailPage() {
     : wb?.status === 5 ? '本地记录已作废，不代表快递官方订单已取消；官方取消结果需另行核实。'
     : wb?.status === 3 ? `已取号不等于面单已出纸。${wb.printDataRef === 'official_platform' ? '请通过快递官方打印面单，并在现场核对纸张。' : '请现场核对面单和纸张。'}`
     : wb?.status === 2 ? '取号正在处理中，请等待并核对原运单，避免重复提交。'
+    : wb?.submittedToPlatform && wb.status === 1 ? '先核对原单取号进度，不重复新建；进入取号失败或下单待核实时可用查询原单。'
     : wb?.submittedToPlatform || wb?.status === 6 ? '请查询原单核实平台结果，不新建订单或更换取号身份；取消请通过快递官方处理。'
     : direct ? '尚未向平台提交，可补充寄件资料；取号失败时核对资料后使用既有重试取号。'
     : wb?.platformCode ? '已配置快递平台，请核对取号进度；失败时先核查原因，再使用原重试或录入已有快递单号。'

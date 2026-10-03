@@ -96,11 +96,16 @@ test.each([
   [{ status: 1, platformCode: 'legacy' }, '已配置快递平台，请核对取号进度'],
   [{ status: 4, platformCode: 'legacy' }, '原重试或录入已有快递单号'],
   [{ status: 4, platformCode: 'deppon' }, '补充寄件资料'],
+  [{ status: 1, platformCode: 'sf', submittedToPlatform: true }, '进入取号失败或下单待核实时可用查询原单'],
   [{ status: 4, platformCode: 'sf', submittedToPlatform: true }, '查询原单核实'],
   [{ status: 6, platformCode: 'sf' }, '查询原单核实'],
   [{ status: 2 }, '取号正在处理中'], [{ status: 3 }, '不等于面单已出纸'],
   [{ status: 3, printDataRef: 'official_platform' }, '请通过快递官方打印面单'], [{ status: 5 }, '本地记录已作废'],
 ] as const)('状态说明 %j 引导 %s', async (changes, text) => {
   vi.mocked(getWaybillDetailApi).mockResolvedValue(waybill(changes as Partial<LogisticsWaybill>)); await render('/logistics/7'); expect(host.textContent).toContain(text)
-  if ('submittedToPlatform' in changes || changes.status === 6) { expect(button('作废')).toBeUndefined(); await act(async () => button('查询原单')!.click()); expect(retryWaybillApi).toHaveBeenCalledWith(7, expect.anything()) }
+  if ('submittedToPlatform' in changes || changes.status === 6) {
+    expect(button('作废')).toBeUndefined()
+    if (changes.status === 1) expect(button('查询原单')).toBeUndefined()
+    else { await act(async () => button('查询原单')!.click()); expect(retryWaybillApi).toHaveBeenCalledWith(7, expect.anything()) }
+  }
 })
