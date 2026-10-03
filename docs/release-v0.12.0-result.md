@@ -80,3 +80,11 @@ PDA 仍未提供可核实的 WebView 版本：Capacitor 未显式提高 `minWebV
 ## 2026-10-04 再次发布授权与验收边界
 
 用户在上一轮说明尚未发布及 PDA WebView111最低要求后，再次明确要求“发布新版本”。沿用用户此前“设备不在身边，先完成可自动验收部分”的安排，推进正式发布及线上系统核验，不再等待设备现场验收。此前“保留本地候选”的发布安排由本次指令更新；不把未答复的设备问题当成设备兼容已确认。代码候选为96d5cdb，新增本段仅记录发布范围和授权边界；完整发布目标SHA以本轮入口为准。现场PDA安装/内核/扫码、Windows更新弹窗、实际打印和员工试用继续明确待验。
+
+## 第二轮正式入口：f88d801（已失败，未部署）
+
+2026-10-04 01:00:20 北京时间再次启动。首次启动缺工作树本机部署配置，发生push前；改为让正式入口内部读取主目录既有私有配置路径，不将内容输出或复制入仓库。正式目标f88d80142d6a4dd805caaef03a5f6d91aa57c631。
+
+Security37138930020全部六job success；Tests37138930057的20job中19成功，唯页面夹具样式脚本失败；桌面main验证37138929898 success。浏览器37138929928因Tests拒绝；PDA37138930014原生构建success、等待浏览器失败、publish skipped。未tag，未生产切换或迁移。正式入口exit1，中转及caffeinate结束。
+
+样式失败在真实鼠标悬停能力断言，不是2070个属性比较已报差异。进一步将本机Chromium primaryHoverType设置为0，重现真实元素:hover=true而matchMedia('(hover: hover)')=false；日志`/tmp/flowcube-v0120-ci-hover-red2.log`自然exit1。裸环境变量启动参数探针发生空页超时（具体原因未核），属于无效重现，保留`-ci-hover-red.log`，不当作同一失败证据。脚本在初次启动显式设primaryHoverType=2，与[Playwright官方Chromium启动机制](https://github.com/microsoft/playwright/blob/main/packages/playwright-core/src/server/chromium/chromium.ts)一致；agent-browser0.36官方启动源码没有该desktop设置。保留真实mouse动作和元素:hover、媒体能力双断言、原2070 golden，不改产品CSS或刷新基线。新日志`/tmp/flowcube-v0120-ci-hover-green.log`自然exit0，2070项0差异、键盘focus/Dialog/现代touch均通过，自有会话退出确认。Linux输入能力差异是依据官方实现与同症状重现的判断，须由新SHA CI再次验证。

@@ -580,3 +580,5 @@ npm run test:style-compat
 style-compat用真实共享React组件和原Tailwind3浏览器计算值；不可用新引擎重写黄金值掩盖差异。原基本896项通过；独立审查扩展隐藏项/窄汇总栏/响应式/交互后的2070项先红39差异，修后自然0差异，保留旧引擎黄金值并独立复跑绿。桌面hover/focus、弹窗与现代Chromium触摸模拟通过，触摸hoverCapability实际true，不当现场设备或hover:none验收。迁移后完整前端1226项、app类型、ERP/PDA前端构建与lint通过，最后CSS补正后已补lint/app类型/ERP与PDA页面构建自然0；不重跑未受影响JS单测。未确认PDA WebView≥111，不能当平台兼容；远端新SHA完整门禁、Windows/Android真实安装及线上三端未验收。原上传6项和Node原生watch证据保留；详细现状/中间失败见 `docs/release-v0.12.0-result.md`。
 
 2026-10-04 代表真实电脑业务页以原合成测试库真实登录复验18张浅深截图，销售/套件/库存查询/月结对账及来源跳转自然成功；server/pool/owner自然退出、Vite受控停止、端口与自有浏览器已收尾。PDA仓库页/往来页/设备平台未补验，不据此称全部页面通过；报告 `/tmp/flowcube-v0120-business-pages-report.json`。新候选仅在本地发布分支，主线/线上未更新。
+
+样式兼容真实浏览器脚本在初次启动显式设置 Chromium primaryHoverType=2，统一桌面 hover 测试前提（Linux无鼠标的headless默认能力可能不同）。仍通过实际鼠标移动和元素:hover/媒体能力双断言验真，2070项旧引擎golden不变；后段触摸为现代Chromium模拟，不能证明PDA真机。失败复现与CI轮次见 `docs/release-v0.12.0-result.md`。

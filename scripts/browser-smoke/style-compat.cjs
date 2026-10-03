@@ -66,7 +66,8 @@ async function captureStates() {
     for (const id of ['primary', 'secondary', 'pda']) {
       cli('hover', `#${id}`)
       settle()
-      assert.equal(evaluate(`document.getElementById('${id}').matches(':hover') && matchMedia('(hover: hover)').matches`), true, 'Desktop mouse hover must be real')
+      const hover = evaluate(`({ element: document.getElementById('${id}').matches(':hover'), capability: matchMedia('(hover: hover)').matches })`)
+      assert.deepEqual(hover, { element: true, capability: true }, 'Desktop mouse hover must be real: ' + JSON.stringify(hover))
       actual[`1280-${theme}-hover-${id}`] = capture({ [id]: interactionProps })
     }
     cli('mouse', 'move', '1', '1')
@@ -177,7 +178,10 @@ async function main() {
     const htmlPath = path.join(temporary, 'index.html')
     writeFileSync(htmlPath, '<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><style>' + css.css + '</style><div id="root"></div><script>' + result.outputFiles[0].text.replaceAll('</script', '<\\/script') + '</script>')
     browserStarted = true
-    cli('--allow-file-access', 'open', pathToFileURL(htmlPath).href)
+    // Linux headless Chromium may report hover:none without a host mouse.
+    // Use the desktop hover setting used by Playwright's Chromium launcher; actual
+    // mouse input and :hover remain asserted, and touch below stays a simulation.
+    cli('--allow-file-access', '--args', '--blink-settings=primaryHoverType=2', 'open', pathToFileURL(htmlPath).href)
     cli('wait', '--fn', 'Boolean(window.__styleReady)')
     const actual = await captureStates()
     const expected = JSON.parse(readFileSync(golden, 'utf8'))
