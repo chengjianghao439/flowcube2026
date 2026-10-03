@@ -1,6 +1,6 @@
 # v0.12.0 发布结果（2026-10-03）
 
-**状态：2026-10-04 用户在获知 PDA 内核限制后再次明确要求“发布新版本”，本轮按此前延后现场设备验收的安排继续正式发布；当前尚未完成发布。** 本地依赖、样式及独立审查已通过，代表电脑业务页已复验。PDA设备内核仍未核实：新版样式要求 WebView/Chrome111及以上，现有配置最低60；本次发布授权不构成旧设备兼容证明。
+**状态：失败后修补并恢复发布完成。2026-10-04，浏览器、桌面与 PDA 均为 v0.12.0，PDA versionCode150；应用/tag/线上镜像 SHA 均为14e97aa9dc9df0700b394d59cafbc53dba0c5e69。** 同SHA全部CI、tag桌面正式发布及独立线上12/12核验通过。PDA实际设备内核仍未确认，新版样式要求WebView/Chrome111及以上；Windows真实更新弹窗、PDA安装扫码、实际出纸与员工试用仍待验。下面首轮/中间候选的“未发布”只记录当时状态，最终结果见文末。
 
 首轮应用目标 SHA：`02446403a9f86470642115b432bcffb766417fea`；版本 0.12.0，PDA versionCode 150。三端 package/lock、Android 与 PDA 清单、用户更新说明和官网摘要同批提交；主线由此前独立验收工作树快进整合，不纳入主目录未跟踪文档或 Claude 工作树变化。
 
@@ -88,3 +88,32 @@ PDA 仍未提供可核实的 WebView 版本：Capacitor 未显式提高 `minWebV
 Security37138930020全部六job success；Tests37138930057的20job中19成功，唯页面夹具样式脚本失败；桌面main验证37138929898 success。浏览器37138929928因Tests拒绝；PDA37138930014原生构建success、等待浏览器失败、publish skipped。未tag，未生产切换或迁移。正式入口exit1，中转及caffeinate结束。
 
 样式失败在真实鼠标悬停能力断言，不是2070个属性比较已报差异。进一步将本机Chromium primaryHoverType设置为0，重现真实元素:hover=true而matchMedia('(hover: hover)')=false；日志`/tmp/flowcube-v0120-ci-hover-red2.log`自然exit1。裸环境变量启动参数探针发生空页超时（具体原因未核），属于无效重现，保留`-ci-hover-red.log`，不当作同一失败证据。脚本在初次启动显式设primaryHoverType=2，与[Playwright官方Chromium启动机制](https://github.com/microsoft/playwright/blob/main/packages/playwright-core/src/server/chromium/chromium.ts)一致；agent-browser0.36官方启动源码没有该desktop设置。保留真实mouse动作和元素:hover、媒体能力双断言、原2070 golden，不改产品CSS或刷新基线。新日志`/tmp/flowcube-v0120-ci-hover-green.log`自然exit0，2070项0差异、键盘focus/Dialog/现代touch均通过，自有会话退出确认。Linux输入能力差异是依据官方实现与同症状重现的判断，须由新SHA CI再次验证。
+
+## 第三轮最终发布与独立复核（成功）
+
+最终应用SHA：`14e97aa9dc9df0700b394d59cafbc53dba0c5e69`；正式tag `v0.12.0`指向同SHA，origin/main同SHA。业务基线79a3c54，依赖/视觉修补96d5cdb，重新发布指令记录f88d801，本轮仅再修测试的desktop输入能力前提，未改产品CSS或业务规则。下表六个工作流全部success；Tests20个job、安全6个job均通过，新增2070项旧样式比较/真实hover/键盘focus/Dialog/现代touch在Linux CI通过，桌面18项真实下载专项通过。
+
+| 工作流 | Run ID | 结果 |
+| --- | --- | --- |
+| Tests | 37139541992 | success |
+| Security Scan | 37139541954 | success |
+| Deploy Browser App | 37139541962 | success |
+| Build PDA APK | 37139542079 | success |
+| Build Desktop Installer（main验证） | 37139541940 | success |
+| Build Desktop Installer（v0.12.0正式发布） | 37141018583 | success |
+
+正式入口`npm run release:prod`自然exit0；自动验证12/12及中转接收者确认通过。Root另独立执行`npm run release:verify -- --origin https://jixuflow.com`自然exit0、12/12，两次都实际流式下载EXE/APK核摘要，而非只看清单。独立完成时间2026-10-04 01:45:21北京时间。公开latest.json/桌面更新API0.12.0，PDA0.12.0/150 available=true，健康ok。GitHub Release为正式非草稿非预发布，发布时间2026-10-04 01:44:07北京时间，附件摘要与官网原包相同。来源：[正式Release](https://github.com/chengjianghao439/flowcube2026/releases/tag/v0.12.0)。
+
+| 原包 | 字节数 | SHA256 |
+| --- | --- | --- |
+| Windows EXE | 112466141 | a9204f5b369e94dc0b58214744733d651a9a547af97c22ae09b94b2b7cc6b20a |
+| PDA APK | 15136173 | b8a5262871913ed3edfbd2da7b37b9fb3cffaf11c56f91d1a43b0a99927ccd06 |
+| 镜像归档tar.gz | 205206460 | b8027dc1f37f447d0ea359cca02e1e0e1ece70c0a62683835ffc207faa3be4b5 |
+
+独立生产只读核对：backend/frontend现运行容器的OCI revision均为最终完整SHA；db_migrations的269–275七条已执行。information_schema按名称/列序核20个索引、21个保留外键，且272明确删除的fk_sale_refund_order不存在；basis_origin为nullable varchar(30)，与迁移最终状态一致。初版临时核对脚本只汇总ADD语句而未计272的DROP，曾将该外键缺失误报为一项不符；核实完整迁移后修正期望重验0差异，没有修改生产结构。只查询元数据，未获取真实客户或账款明细。证据`/tmp/flowcube-v0120-production-schema-report.json`；部署日志另证明迁移、健康与生产页面及对账来源跳转门禁通过。
+
+三个原始Actions artifact均自动本机中转，未手工复制或重新构建：PDA下载306.4s/上传3.8s；镜像下载565.2s/上传36.8s；桌面下载389.0s/上传20.7s。ZIP摘要、唯一成员、原包大小/摘要与服务器接收校验保留；慢分段通过既有256KiB细分恢复。依赖操作端既有127.0.0.1:7897代理、Mac在线及flowcube-prod SSH，不据此宣称脱离个人电脑的托管链路完成。原失败工作流和日志全部保留。
+
+计时：首轮2026-10-03 22:09:46北京时间到独立最终核验2026-10-04 01:45:21，总计3小时35分34秒（12934s取整），包含两次失败、调查修补及重试等待。最终应用提交/入口01:10:30到独立完成为34分51秒（2091s）；正式入口内部完成器记2036s，不用该较短值替代总耗时。本轮首次入口缺私有配置路径发生push前，记录保留。
+
+资源收尾：release入口退出后中转/caffeinate原PID91433/91434不存活，自有flowcube-relay临时目录已清除；独立元数据SSH控制连接60秒自动回收，随后退出查询报socket不存在，核对自有socket为空。agent-browser session list为空，本轮脚本/探针自有会话已退出；未关闭用户代理或共享数据库。最终结果记录另保存在发布分支的文档提交，应用发布SHA保持上述14e97aa，不以结果文档提交替代tag或线上证据。
