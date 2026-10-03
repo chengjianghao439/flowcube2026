@@ -3,6 +3,7 @@ import {
   Pencil, Save, X, RotateCcw, GripVertical, Plus, Minus, LayoutGrid, Check, Sparkles,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { DailyWork } from '@/components/shared/DailyWork'
 import { usePermission } from '@/hooks/usePermission'
 import { useDirtyGuard } from '@/hooks/useDirtyGuard'
 import { TabPathContext } from '@/components/layout/TabPathContext'
@@ -157,6 +158,8 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+
+      {!editing && <DailyWork />}
 
       {/* 组件库（编辑态内联展开，非模态） */}
       {editing && libOpen && (

@@ -1,4 +1,5 @@
 import { FulfillmentTodos } from '@/components/shared/FulfillmentTodos'
+import { DailyWork } from '@/components/shared/DailyWork'
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
@@ -150,6 +151,8 @@ export default function RoleWorkbenchPage() {
         description="按岗位分组展示待办事项，优先处理最紧急的事项；财务与系统级提醒统一在页面底部汇总。"
         actions={<Button onClick={() => { void refetch(); void notificationsQ.refetch() }}>立即刷新</Button>}
       />
+
+      <DailyWork />
 
       <FulfillmentTodos />
 
