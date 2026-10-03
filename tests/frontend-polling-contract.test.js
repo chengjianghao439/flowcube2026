@@ -77,7 +77,7 @@ function main() {
   const BOUNDED_SUMMARY_ALLOWLIST = new Map([
     ['frontend/src/hooks/useDashboard.ts:61',
       '首页「待我审批」只展示前 5 条摘要：listPendingApprovalsApi(..., true) → listMode: summary 单页直返'],
-    ['frontend/src/pages/inbound-tasks/index.tsx:104',
+    ['frontend/src/pages/inbound-tasks/index.tsx:105',
       '入库任务列表走默认取齐路径：client.ts:415 已 delete 外部 pageSize，首请实际 pageSize=200'
       + '（后端 normalizePagination clamp 到 [1,500]，200 原样通过），写的 20 不生效、不放大请求'],
   ])

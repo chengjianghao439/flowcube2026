@@ -506,3 +506,24 @@ npx tsc --noEmit -p tsconfig.app.json
 本轮最终命令：npm --prefix frontend run test:unit（188文件1084项，自然exit0，/tmp/c2-next-list-full-unit.log）、npm run test:sale-commercial（56项exit0，/tmp/c2-next-list-commercial.log）、tsc --noEmit -p frontend/tsconfig.app.json（0）、分别在frontend/backend目录执行受影响文件eslint（0）、npm --prefix frontend run build（0，/tmp/c2-next-list-build.log）。整套单测仍有23条jsdom请求AggregateError控制台输出，与/tmp/c2-final-unit-checkpoint.log相同；测试自然结束、无Vitest未捕获错误失败，不称日志零噪声。没有重跑PDA构建、全后端、远端CI或完整跨期；这批局部只读marker/列表显示不能取代发版前统一回归。
 
 资源：本任务Playwright finally退出0；API/代理退出0；Vite精确核本任务PID与完整命令后SIGTERM退出143。最终自有helper无进程、3011/3012/5181无监听、agent-browser session list为空，/tmp/flowcube-c2-next-resource-proof.json。预览重启时曾错用仓库根cwd造成Tailwind配置失败，已仅修到frontend cwd、重新启动并实际复验。合成资料和交易审计保留，无全表清理或生产操作。临时文件只是本机本轮证据，并非永久归档或他机可复现命令。
+
+
+### 2026-10-03 B3–B6 日常工作衔接（本地整批）
+
+授权范围是仓库下一步、财务来源/往来导航、物流打印解释及常用入口；不含到货建单或采购跟进，不改库存/财务写政策或数据库。完整流程、检查结果与现场边界见 `docs/superpowers/plans/2026-10-03-workflow-continuity.md`。
+
+先加载 `~/.config/flowcube/dev-env.sh` 的 Node22，再在工作树分别执行：
+
+```bash
+npm --prefix frontend run lint
+npm --prefix frontend run test:unit
+# 类型检查明确进入 frontend；随后回到工作树根目录：
+(cd frontend && npx tsc --noEmit -p tsconfig.app.json)
+# 同一个 frontend/dist，必须串行：
+npm --prefix frontend run build
+npm --prefix frontend run build:pda
+```
+
+本批最终前端195文件/1226项自然通过；初次2项旧首页夹具失败后补真实路由环境，未删除原布局断言。lint为0错误、33警告；23条既有jsdom请求AggregateError控制台输出保留，不称日志零噪声。app类型和两种前端构建通过。三个只读来源投影服务做 scoped 后端 lint，独立测试库 `payments-default-scope.smoke.test.js` 7项通过；未跑全后端/跨期或远端CI。轮询门禁旧白名单行号104→105与现页对应，未放宽频率/分页规则；其他权限、路由、前端约定、查询循环、打印入口及文档守卫通过。
+
+正常Chrome验证本批代表流程及原查询保持，正常GET核受控金额/状态与基线一致；B3是键盘扫码，箱贴只模拟原客户端回报。PDA构建、队列回执和手工运单不能代表真机、实际出纸和官方承运商。发版前仍须跑对应后端及整体回归并现场验收，不把本轮前端全量绿当所有既有C2/C4流程已验收。
