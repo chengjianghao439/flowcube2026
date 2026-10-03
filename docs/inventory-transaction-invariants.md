@@ -143,6 +143,10 @@ C2规格复审补充：销售退货receive、QA完成与putaway完成三处门�
 
 ### 销售占库范围当前读与并发授信（2026-10-03）
 
-`reserveStock` 的完整已保存物料范围查询使用 `FOR SHARE` 当前读，包含数量为零的历史行，普通单与套单均须在 `begin/replay` 之前校验头仓和全部物料仓。不能为了读范围在客户锁之前建立 RR 一致性快照：同客户第二单即使等待 `sale_customers FOR UPDATE`，旧快照仍会漏掉第一单刚提交的在途授信占用。顺序仍为销售单锁 → 物料范围当前读 → 回执 → revision/状态 → 客户锁 → 授信读取 → 旧履约维度 → 库存锁；不把客户锁移到销售单锁之前。
+`reserveStock` 的完整已保存物料范围查询使用 `FOR SHARE` 当前读，并固定走迁移086已有的 `idx_order_id(order_id)`，包含数量为零的历史行，普通单与套单均须在 `begin/replay` 之前校验头仓和全部物料仓。不能为了读范围在客户锁之前建立 RR 一致性快照：同客户第二单即使等待 `sale_customers FOR UPDATE`，旧快照仍会漏掉第一单刚提交的在途授信占用。顺序仍为销售单锁 → 物料范围当前读 → 回执 → revision/状态 → 客户锁 → 授信读取 → 旧履约维度 → 库存锁；不把客户锁移到销售单锁之前。
 
 既有 `smoke:fulfillment-credit` 以两个真实 RR 连接控制交错，同客户两单各 10、额度 15，第一单持客户锁时第二单发起同客户锁查询，第一单提交后第二单必须 `409 CREDIT_LIMIT_EXCEEDED` 且保持草稿。此修正不改授信计算、超额放行政策、全局隔离级别、商品/仓库范围或回执/revision先后语义。真实测试库的本地红绿、窄兼容与锁序结果仅证明本地事务行为，生产状态及整批最终回归须独立核实。
+
+只加当前读仍不足：优化器会为双仓物料范围选择迁移195的覆盖索引 `(order_id,product_id,warehouse_id)`。第二单持范围 gap S 等客户 X 时，前单的合法占库改仓需在这个可变仓索引上插入，形成真实死锁。`FORCE INDEX (idx_order_id)` 保留当前读与原锁序，同时避免范围锁落在改仓的索引插入路径；代价是该范围查询按稳定 order_id 索引回表读取仓库列。未把客户锁提前到范围/重放之前，也不捕获、重试或吞掉死锁。依赖已有086索引，本轮不新增迁移，不据本地 schema 核验声称生产索引已核。
+
+`smoke:fulfillment-credit` 仍经现有 Tests CI 回归入口，顺序执行原字节 `fulfillment-credit-concurrency.smoke.test.js` 和新增 `fulfillment-credit-warehouse-concurrency.smoke.test.js`。新增真实 reserveStock 双连接用相邻普通单各10、额度15，首单一行合法改到第二仓，次单同商品两仓各5；用查询信号控制交错，无偶发 sleep，核第二单准确授信拒绝、当前真实查询 EXPLAIN 为 order-only 索引、首单实际行仓/预占写回、原键重放不重复执行、撤销目标仓范围后同键403。finally正常取消精确自有订单、核有效预占0、停用本轮主档并关闭pool，保留交易事实。新回归在原覆盖索引当前读自然红（ER_LOCK_DEADLOCK）后修绿；专属进程内去掉hint与退回普通SELECT两种来源变异分别真实暴露死锁和旧快照超授信，不把变异结果称产品新故障。

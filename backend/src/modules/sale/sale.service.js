@@ -1390,7 +1390,8 @@ async function reserveStock(id, operator, items = [], { confirmCreditOverride = 
     commercialStore.assertRequestKey(orderRow.commercial_model,requestKey)
     // 范围仍在重放前校验，但此处必须当前读：普通 SELECT 会在客户锁前建立 RR 快照，
     // 令后续等待客户锁的占库事务漏掉刚提交的同客户授信占用。
-    const [authRows] = await conn.query('SELECT warehouse_id FROM sale_order_items WHERE order_id=? FOR SHARE',[id])
+    // 固定走不含可变仓库的 order_id 索引（迁移086），避免覆盖索引 gap S 与另一单改仓、客户 X 成环。
+    const [authRows] = await conn.query('SELECT warehouse_id FROM sale_order_items FORCE INDEX (idx_order_id) WHERE order_id=? FOR SHARE',[id])
     for (const r of authRows) assertInScope(scopeWarehouseIds,r.warehouse_id ?? orderRow.warehouse_id,'销售单')
     const requestState = await beginOperationRequest(conn, {
       requestKey,
