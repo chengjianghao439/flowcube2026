@@ -46,6 +46,22 @@ test.each([0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1])('非法销售ID %s只显示
 test.each(['0', '-1', '1.5', 'abc', '9007199254740992', '7e0'])('非法运单路径 %s不查询与操作', async id => {
   await render(`/logistics/${id}?focus=source`); expect(getWaybillDetailApi).not.toHaveBeenCalled(); expect(button('手工录入快递单号')).toBeUndefined()
 })
+test('合法读取失败后切非法同Number路径，不能点击重读旧运单', async () => {
+  vi.mocked(getWaybillDetailApi).mockRejectedValue(new Error('合法原单读取失败'))
+  await render('/logistics/7'); expect(getWaybillDetailApi).toHaveBeenCalledTimes(1)
+  await render('/logistics/7e0'); const retry = button('重试')
+  if (retry) { await act(async () => retry.click()); await settle() }
+  expect(getWaybillDetailApi).toHaveBeenCalledTimes(1); expect(button('重试')).toBeUndefined()
+})
+test('读取失败后隐藏标签不能手动重读，重新激活仍可读取原单', async () => {
+  vi.mocked(getWaybillDetailApi).mockRejectedValue(new Error('原单读取失败'))
+  await render('/logistics/7'); expect(getWaybillDetailApi).toHaveBeenCalledTimes(1)
+  controls.active = false; await render('/logistics/7'); const retry = button('重试')
+  if (retry) { await act(async () => retry.click()); await settle() }
+  expect(getWaybillDetailApi).toHaveBeenCalledTimes(1); expect(button('重试')).toBeUndefined()
+  controls.active = true; vi.mocked(getWaybillDetailApi).mockResolvedValue(waybill()); await render('/logistics/7')
+  expect(getWaybillDetailApi).toHaveBeenCalledTimes(2); expect(button('手工录入快递单号')).toBeDefined()
+})
 test('两个详情context使用各自原单，不从全局另tab推原对象', async () => {
   vi.mocked(getWaybillDetailApi).mockImplementation(async id => waybill({ id, waybillNo: `WB-${id}`, saleOrderId: id === 7 ? 28 : 29, saleOrderNo: id === 7 ? 'SO-28' : 'SO-29' }))
   await act(async () => root.render(<MemoryRouter initialEntries={['/logistics/99']}><QueryClientProvider client={qc}>{[7, 8].map(id => <div key={id} data-id={id}><TabPathContext.Provider value={`/logistics/${id}?focus=source`}><LogisticsDetailPage /></TabPathContext.Provider></div>)}</QueryClientProvider></MemoryRouter>)); await settle()

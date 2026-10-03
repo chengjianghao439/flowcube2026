@@ -146,7 +146,7 @@ export default function LogisticsDetailPage() {
         }
       />
 
-      {isError && <QueryErrorState error={error} onRetry={() => void refetch()} title="运单加载失败" compact />}
+      {isError && validId && isActiveTab && <QueryErrorState error={error} onRetry={() => { if (validId && isActiveTab) void refetch() }} title="运单加载失败" compact />}
       {!readReady && <p className="text-sm text-muted-foreground" role="status">{!validId ? '运单标识无效，无法读取。' : query.isPaused ? '网络已暂停，恢复后重新读取原运单。' : isError ? '最新状态待核对，旧记录暂不提供操作；已打开的草稿保留。' : query.isFetching ? '正在重新读取原运单，旧记录暂不提供操作。' : '原运单尚未核实，暂不提供操作。'}</p>}
       {readReady && <div className="rounded-md border border-border bg-muted/30 p-3 text-sm space-y-2">
         <p>{nextStep}</p>
