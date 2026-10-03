@@ -19,13 +19,23 @@ export async function getPartyLedger(params: { type: number; partyId: number; st
   let snapshotCount: number | undefined
   let snapshotId: number | undefined
   const generation = useAuthStore.getState().sessionGeneration
-  return collectAllRecords(async (page, pageSize) => {
+  const result = await collectAllRecords(async (page, pageSize) => {
     const data = await payloadClient.get<PartyLedgerResult>('/payments/party-ledger', {
       params: { ...params, page, pageSize: pageSize ?? 200, snapshotId, snapshotCount },
       signal, listMode: 'summary', _authSessionGeneration: generation,
     })
+    if (!data || !Number.isSafeInteger(data.snapshotId) || data.snapshotId < 0
+      || !Number.isSafeInteger(data.snapshotCount) || data.snapshotCount < 0
+      || !Array.isArray(data.list) || !data.pagination || typeof data.pagination !== 'object') {
+      throw new Error('列表数据不完整，请刷新后重试')
+    }
+    if (snapshotCount !== undefined && data.snapshotCount !== snapshotCount) {
+      throw new Error('列表数据已变化，请刷新后重试')
+    }
     snapshotId ??= data.snapshotId
     snapshotCount ??= data.snapshotCount
-    return data
+    // 往来接口使用数字事件 ID（含无事件的 0）；只在统一列表校验边界转换，请求和页面 DTO 仍用数字。
+    return { ...data, snapshotId: String(data.snapshotId) }
   }, signal)
+  return { ...result, snapshotId: Number(result.snapshotId) }
 }
