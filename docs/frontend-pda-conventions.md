@@ -374,4 +374,6 @@ PDA 此页在详情 hook 前固定 owner；可选 owned 详情调用按原 task 
 
 `PdaNextStep` 复用目标路由的全部权限：分拣需 `SORTING_BIN_VIEW + WAREHOUSE_TASK_SORT`，复核需 `WAREHOUSE_TASK_VIEW + WAREHOUSE_TASK_CHECK`，打包需 `WAREHOUSE_TASK_VIEW + WAREHOUSE_TASK_PACK`，出库需 `WAREHOUSE_TASK_SHIP`。按钮仅导航，目标页继续重读任务并保留服务端阶段、仓库范围及设备限制。后端、状态机、扫码次数、打印与完成规则均保持。
 
-最小组件回归 `workflow-continuity.test.tsx` 覆盖原任务 ID、目标权限、未确认与任务变化、恢复另一任务和旧记录兼容、读取失败/串任务/离线/阶段、继续扫码。已完成本地专项与 diff 审阅；本批统一 lint、类型检查与构建待整体验证，实际仓库 GUI、真机连续扫码、物理打印与生产部署未验证。
+分拣 `run()` 的即时错误兜底会沿用提交前闭包，该闭包未必含刚 claim 的 pendingRecord。页面另保留绑定原请求键的 mounted 提交定位与扫码代次，和原持久记录使用同一 metadata；`recovered` 回调可据此核对原任务，不从当前 hint 猜测，也不推进同一次 run 的扫码代次。下一步资格读取或原 run 收尾迟到时，若员工已经新扫另一商品，该旧结果不显示复核入口、不清新提示、不覆盖新扫码的忙碌状态；全局 hook 的成功判定、原键持久化和写请求规则保持。
+
+最小组件回归 `workflow-continuity.test.tsx` 覆盖原任务 ID、目标权限、未确认与任务变化、恢复另一任务和旧记录兼容、读取失败/串任务/离线/阶段、继续扫码。`sort.recovery-handoff.test.tsx` 保留真实 `useCriticalPdaAction` 和 `usePendingRequests`，覆盖无 pending 起步、明确错误后原冻结定位兜底成功，以及延迟读取期间新扫描的隔离；并行自动回执读取保持在途，避免替原 run 路径救场。已完成本地专项与 diff 审阅；本批统一 lint、类型检查与构建待整体验证，实际仓库 GUI、真机连续扫码、物理打印与生产部署未验证。

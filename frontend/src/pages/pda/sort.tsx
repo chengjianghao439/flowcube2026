@@ -56,6 +56,12 @@ export default function PdaSortPage() {
   const [scanning, setScanning] = useState(false)
   const [checkTask, setCheckTask] = useState<{ id: number; taskNo: string } | null>(null)
   const scanGeneration = useRef(0)
+  const submittedSort = useRef<{
+    requestKey: string
+    metadata: Record<string, unknown>
+    generation: number
+    unverifiedOwner?: boolean
+  } | null>(null)
   const { flash, ok, err, warn }  = usePdaFeedback()
   const sortAction = useCriticalPdaAction<{ allSorted: boolean; progress?: string; warning?: string | null }>({
     action: 'warehouse.sort',
@@ -65,16 +71,21 @@ export default function PdaSortPage() {
       // 只有「查回执」的恢复路径在这里提示；正常提交的提示由 handleBinScan 按任务真实状态给出，
       // 否则会双发。恢复也必须**按回执区分部分进度与整任务完成**——查到回执 ≠ 任务分拣完成。
       if (!ctx.recovered) return
-      const generation = ++scanGeneration.current
-      setCheckTask(null)
-      // 先执行既有恢复收尾；随后只读核对不能迟到清掉员工新扫出的提示。
-      setStep('scan-product')
-      setHint(null)
+      // run 的即时兜底仍使用提交前闭包（pendingRecord 可能为空），原提交定位另绑原键。
+      // 不推进扫码代次，否则同一次 run 返回后的正常收尾也会被误当迟到结果。
+      const submission = submittedSort.current?.requestKey === ctx.requestKey ? submittedSort.current : null
+      const generation = submission?.generation ?? scanGeneration.current
+      if (scanGeneration.current === generation) {
+        setCheckTask(null)
+        // 先执行既有恢复收尾；随后只读核对不能迟到清掉员工新扫出的提示。
+        setStep('scan-product')
+        setHint(null)
+      }
       void refetch()
       if (data?.allSorted) {
         ok('分拣已成功，任务已进入待复核')
         // 只读交接使用本次原回执的冻结定位；当前 hint 可能属于另一任务。
-        const record = sortAction.pendingRecord
+        const record = sortAction.pendingRecord?.requestKey === ctx.requestKey ? sortAction.pendingRecord : submission
         const meta = record?.metadata
         const taskId = Number(meta?.taskId)
         const itemId = Number(meta?.itemId)
@@ -158,35 +169,35 @@ export default function PdaSortPage() {
       err(`放错格：请放 ${hint.binCode}`)
       return
     }
+    const generation = scanGeneration.current
     setScanning(true)
     try {
-      const generation = scanGeneration.current
       // 取货码走 `{ containerId, binCode }`，由服务端在同一事务内解析归属与份额；
       // 商品码保持原 `{ itemId, sortedQty }`。两条路都走同一个 sort-done，不新增平行接口。
       const items = hint.isPickCode && hint.containerId
         ? [{ containerId: hint.containerId, binCode: hint.binCode }]
         : [{ itemId: hint.itemId, sortedQty: hint.qty }]
-      const submitted = await sortAction.run((requestKey) =>
-        sortDoneApi(hint.taskId, items, requestKey)
-          .then((res) => res as { allSorted: boolean; progress?: string; warning?: string | null }),
-        // 冻结记录持久化**原目标**（task/item/取货码容器/原条码/格/量）：页面重挂后 hint 已丢失，
-        // 只能靠这份记录还原「上次提交的到底是哪一件」，也才能核对恢复结果。
-        {
-          taskId: hint.taskId,
-          itemId: hint.itemId,
-          containerId: hint.containerId ?? null,
-          barcode: hint.scannedCode ?? null,
-          binCode: hint.binCode,
-          qty: hint.qty,
-        },
-      )
+      // 同一快照用于原持久记录与 mounted 提交定位；恢复不能读取当前 hint 猜原任务。
+      const metadata = {
+        taskId: hint.taskId,
+        itemId: hint.itemId,
+        containerId: hint.containerId ?? null,
+        barcode: hint.scannedCode ?? null,
+        binCode: hint.binCode,
+        qty: hint.qty,
+      }
+      const submitted = await sortAction.run((requestKey) => {
+        submittedSort.current = { requestKey, metadata, generation }
+        return sortDoneApi(metadata.taskId, items, requestKey)
+          .then((res) => res as { allSorted: boolean; progress?: string; warning?: string | null })
+      }, metadata)
       if (submitted.kind === 'pending') {
         warn('网络中断，分拣结果待确认。请先确认结果，再决定是否重扫。')
         return
       }
       const result = submitted.data
-      const latest = await getTaskByIdApi(hint.taskId, { skipGlobalError: true })
-      if (scanGeneration.current === generation && latest.id === hint.taskId && latest.status === WT_STATUS.CHECKING) setCheckTask(latest)
+      const latest = await getTaskByIdApi(metadata.taskId, { skipGlobalError: true })
+      if (scanGeneration.current === generation && latest.id === metadata.taskId && latest.status === WT_STATUS.CHECKING) setCheckTask(latest)
       if (taskReachedStatus(latest, WT_STATUS.CHECKING)) {
         ok(stateConfirmedMessage(`任务 ${latest.taskNo} 分拣`, latest.statusName))
       } else if (result?.allSorted) {
@@ -199,9 +210,11 @@ export default function PdaSortPage() {
     } catch (error: unknown) {
       err(formatPdaErrorMessage((error as { message?: string })?.message, '分拣失败，请刷新任务后重试'))
     }
-    finally { setScanning(false) }
-    setStep('scan-product')
-    setHint(null)
+    finally { if (scanGeneration.current === generation) setScanning(false) }
+    if (scanGeneration.current === generation) {
+      setStep('scan-product')
+      setHint(null)
+    }
   }
 
   const occupiedBins = (bins ?? []).filter(b => b.status === 2)
