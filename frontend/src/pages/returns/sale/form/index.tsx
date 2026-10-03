@@ -299,7 +299,7 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
       />
 
       {(sourceError || write.error || !ownerCurrent) && <p role="alert" className="text-sm text-destructive">{sourceError || write.error || '登录或服务器已变化，草稿保留'}</p>}
-      {write.pending && <div className="rounded-md border p-3 space-y-2"><p>原创建结果待确认。刷新只保留查询身份，不会重新提交。</p><Button disabled={write.busy} onClick={() => void write.queryOriginal().then(answer => { if (answer?.queryOnly) toast.success(`原退货单 ${answer.data.returnNo} 回执已核实，当前草稿未修改，请自行打开原单`); else if (answer && write.canApply(answer)) created(answer.data) })}>查询原创建回执</Button><Button disabled={write.busy || !write.canRetry} onClick={() => void write.retry().then(answer => { if (answer && write.canApply(answer)) created(answer.data) })}>按原创建请求重试</Button></div>}
+      {write.pending && <div className="rounded-md border p-3 space-y-2"><p>原创建结果待确认。刷新只保留查询身份，不会重新提交。</p><Button disabled={write.busy} onClick={() => void write.queryOriginal().then(answer => { if (answer?.queryOnly) toast.success(`原退货单 ${answer.data.returnNo} 结果已核实，当前草稿未修改，请自行打开原单`); else if (answer && write.canApply(answer)) created(answer.data) })}>查询原创建结果</Button><Button disabled={write.busy || !write.canRetry} onClick={() => void write.retry().then(answer => { if (answer && write.canApply(answer)) created(answer.data) })}>按原创建请求重试</Button></div>}
       {write.conflict && <div className="space-y-2 rounded-md border p-3"><p>原成交版本已变化，先备份当前草稿，再重读来源；不会自动合并。</p><Button onClick={() => void backup.copy(snapshot)}>复制草稿内容</Button><Button disabled={!backup.copied} onClick={() => { if (backup.canReload()) { clearSourceBinding(); backup.invalidate() } }}>备份后清除来源</Button>{backup.text && <><textarea aria-label="退货草稿备份" readOnly value={backup.text} /><Button onClick={() => backup.acknowledge(backup.text)}>已备份草稿</Button></>}</div>}
       <fieldset disabled={locked} className="contents">
       <SectionCard title="退货信息" compact>
@@ -357,7 +357,7 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
 
         {boundSource && (
           <div className="mt-3 rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-            已关联原单 {boundSource.orderNo}。{isKit ? '请按原成交行、实际出库批次和组件选择；原快照不随套定义改版变化。' : '退货单价默认取原单真实成交价，数量默认取剩余可退数量。'}
+            已关联原单 {boundSource.orderNo}。{isKit ? '请按原成交行、实际出库批次和组件选择；原成交资料不随套定义改版变化。' : '退货单价默认取原单真实成交价，数量默认取剩余可退数量。'}
           </div>
         )}
       </SectionCard>
@@ -701,7 +701,7 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
       />
 
       {facts.error && <p role="alert" className="text-sm text-destructive">{facts.error}</p>}
-      {facts.record && <div className="rounded-md border p-3 space-y-2"><p>原{facts.record.action === 'confirm' ? '确认' : '取消'}结果待核对。该操作没有原请求回执接口，刷新不会重新提交。</p><Button disabled={facts.busy} onClick={() => void facts.queryFacts()}>查询当前单据</Button>{facts.fact && <><p className="text-sm">{facts.fact.text}</p><Button variant="outline" disabled={!facts.fact.satisfied || facts.busy} onClick={() => void facts.acknowledge(async () => {
+      {facts.record && <div className="rounded-md border p-3 space-y-2"><p>原{facts.record.action === 'confirm' ? '确认' : '取消'}结果待核对。该操作没有可查询的原请求结果，刷新不会重新提交。</p><Button disabled={facts.busy} onClick={() => void facts.queryFacts()}>查询当前单据</Button>{facts.fact && <><p className="text-sm">{facts.fact.text}</p><Button variant="outline" disabled={!facts.fact.satisfied || facts.busy} onClick={() => void facts.acknowledge(async () => {
         const result = await detailQuery.refetch()
         // React Query can resolve refetch with an error and retain stale data.
         if (!result.isSuccess || result.isError || !result.data) throw new Error('原退货单详情读取失败')
@@ -760,7 +760,7 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
             <p className="text-2xl font-semibold text-foreground">{isKit ? `¥${returnNet(ret.totalAmount)}` : money(Number(ret.totalAmount))}</p>
           </div>
         </div>
-        {isKit && <p className="mt-3 text-xs text-muted-foreground">{ret.status === 3 ? '本单已完成，金额为服务端按实际合格入仓结果确定的净冲减，保留四位；来源累计金额不是本单金额。' : '保存后为预计最多冲减；已确认、待收货或质检未完成均不代表已退款，合格入仓完成后由服务端确定。'} 原分摊毛预算、实际净冲减与会计凭证两位金额分别计算；净冲减为零仍可能有退库成本。资金退款需走原退款出款流程。</p>}
+        {isKit && <p className="mt-3 text-xs text-muted-foreground">{ret.status === 3 ? '本单已完成，金额为系统按实际合格入仓结果确定的净冲减，保留四位；来源累计金额不是本单金额。' : '保存后为预计最多冲减；已确认、待收货或质检未完成均不代表已退款，合格入仓完成后由系统确定。'} 原分摊毛预算、实际净冲减与会计凭证两位金额分别计算；净冲减为零仍可能有退库成本。资金退款需走原退款出款流程。</p>}
       </SectionCard>
 
       </OrderDetailSections>

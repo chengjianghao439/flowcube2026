@@ -217,7 +217,7 @@ export default function CommercialSalePage({
       {(error || write.error || backup.error) && (
         <p role="alert" className="text-destructive">
           {write.pending && (error || write.error || backup.error) === '操作失败，请稍后重试'
-            ? '原操作结果待确认，请先查询原回执'
+            ? '原操作结果待确认，请先查询原操作结果'
             : error || write.error || backup.error}
         </p>
       )}
@@ -225,9 +225,9 @@ export default function CommercialSalePage({
         <div className="space-y-2 rounded border p-3">
           <p>原操作结果待确认，原单及请求已冻结；刷新不会自动提交，刷新后仅保留查询身份，不保存表单内容。</p>
           <Button disabled={write.busy} onClick={() => void write.queryOriginal().then(answer => {
-            if (answer?.queryOnly) toast.success('原回执已核实，请自行打开原单；当前草稿未修改')
+            if (answer?.queryOnly) toast.success('原操作结果已核实，请自行打开原单；当前草稿未修改')
             else if (answer && write.canApplyConfirmation(answer)) void reload(false, answer)
-          })}>查询原回执</Button>
+          })}>查询原操作结果</Button>
           <Button
             disabled={write.busy || !write.canRetry}
             onClick={() =>
@@ -267,7 +267,7 @@ export default function CommercialSalePage({
       )}
       {returning && (
         <p className="rounded border border-warning/30 bg-warning/5 p-3 text-sm">
-          待仓库扫码归还或确认改单。已拣容器未归还前，不视为预占释放，不允许再次派发；请沿下面原任务交接入口办理。
+          待仓库扫码归还或确认改单。已拣货品未扫码归还前，不视为预占释放，不允许再次派发；请沿下面原任务交接入口办理。
         </p>
       )}
       <SectionCard title="成交明细" compact>
@@ -376,7 +376,7 @@ export default function CommercialSalePage({
       </SectionCard>
       <CommercialFulfillmentSummary key={order.id} id={order.id} owner={owner} groups={order.commercialGroups ?? []} />
       {!ownerCurrent ? (
-        <p role="alert">读取来源已变化，原任务快照保留；请回原服务器核对后办理交接。</p>
+        <p role="alert">读取来源已变化，原任务资料保留；请回原服务器核对后办理交接。</p>
       ) : handoff === 'invalid' ? (
         <p role="alert">交接参数无效，请从原事项重新打开。</p>
       ) : (
@@ -428,13 +428,13 @@ export default function CommercialSalePage({
         description={
           confirm === 'cancel'
             ? confirmed
-              ? '按已确认的本单发货记录结案，保留原快照与已发生收入；已拣未发实物须先扫码归还，不能把待归还视为额度释放。'
-              : '取消后保留原成交快照；已拣实物仍需仓库在原任务扫码归还，未归还不能再次派发。'
+              ? '按已确认的本单发货记录结案，保留原成交资料与已发生收入；已拣未发实物须先扫码归还，不能把待归还视为额度释放。'
+              : '取消后保留原成交资料；已拣实物仍需仓库在原任务扫码归还，未归还不能再次派发。'
             : confirm === 'reserve'
               ? '同款配件合并占库，系统核对仓库、库存与授信；现货不足须等齐完整套再安排发货。'
               : confirm === 'release'
-                ? '释放未执行的整单预占，服务端按当前状态独立校验。'
-                : '删除已取消订单，历史关联按服务端规则保留。'
+                ? '释放未执行的整单预占，系统按当前状态独立校验。'
+                : '删除已取消订单，历史关联按系统规则保留。'
         }
         loading={write.busy}
         onCancel={() => {

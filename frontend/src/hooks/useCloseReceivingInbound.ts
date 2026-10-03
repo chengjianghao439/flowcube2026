@@ -93,13 +93,13 @@ export function useCloseReceivingInbound() {
       const receipt = await getOperationRequestStatusApi(r.requestKey, r.action, config(r))
       if (!sameSession(r) || recordRef.current !== r) return null
       if (receipt.status === 'success') {
-        if (receipt.resourceType !== 'inbound_task' || receipt.resourceId !== r.taskId) { keep(r); toast.warning('回执归属与原收货单不一致，结果仍未确认'); return null }
+        if (receipt.resourceType !== 'inbound_task' || receipt.resourceId !== r.taskId) { keep(r); toast.warning('原操作结果与原收货单不一致，结果仍未确认'); return null }
         return resolve(r, receipt.data)
       }
       if (receipt.status === 'failed') {
         // 现有 failed 契约无资源字段，由原端点的本人 key/action 查询确定归属；若返回资源字段则必须自洽。
         if ((receipt.resourceType != null || receipt.resourceId != null) && (receipt.resourceType !== 'inbound_task' || receipt.resourceId !== r.taskId)) {
-          keep(r); toast.warning('回执归属与原收货单不一致，结果仍未确认'); return null
+          keep(r); toast.warning('原操作结果与原收货单不一致，结果仍未确认'); return null
         }
         recordRef.current = null; setPendingRecord(null); toast.error('原提交已确认失败，请刷新单据后再操作'); return null
       }

@@ -32,7 +32,7 @@ export default function KitEditor({ id, source, onClose }: { id: number | 'new';
   if (id === 'new') return <KitEditorContent readOwner={readOwner} onClose={onClose} />
   if (!loaded) {
     return <AppDialog open dialogId="kit-editor" title="成套配件" onOpenChange={v => { if (!v) onClose() }}>
-      <div className="p-5">{(query.isError || sourceError) ? <QueryErrorState error={sourceError || query.error} onRetry={() => void query.refetch()} title="资料读取失败" /> : <p role="status">正在读取最新资料…</p>}</div>
+      <div className="p-5">{(query.isError || sourceError) ? <QueryErrorState error={sourceError || query.error} onRetry={() => void query.refetch()} title="资料读取失败" /> : <p role="status">正在加载最新资料…</p>}</div>
     </AppDialog>
   }
   // 初次最新读取后初始化独立草稿。后台列表失效不替换已打开的编辑基线。

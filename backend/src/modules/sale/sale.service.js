@@ -788,9 +788,9 @@ async function create({ customerId, warehouseId, remark,
       if(commercialModel==='kit-v1'){
         const [[receipt]]=await conn.query('SELECT resource_type,resource_id FROM operation_requests WHERE id=? FOR SHARE',[requestState.id])
         const resourceId=Number(receipt?.resource_id)
-        if(receipt?.resource_type!=='sale_order'||!Number.isSafeInteger(resourceId)||resourceId<=0||resourceId!==Number(requestState.responseData?.id))throw new AppError('原创建回执缺少销售单记录，请联系管理员核对',409,'SALE_COMMERCIAL_SOURCE_INVALID')
+        if(receipt?.resource_type!=='sale_order'||!Number.isSafeInteger(resourceId)||resourceId<=0||resourceId!==Number(requestState.responseData?.id))throw new AppError('原创建结果缺少销售单记录，请联系管理员核对',409,'SALE_COMMERCIAL_SOURCE_INVALID')
         const [[saved]]=await conn.query('SELECT id,warehouse_id,commercial_model FROM sale_orders WHERE id=? FOR SHARE',[resourceId])
-        if(!saved||saved.commercial_model!=='kit-v1')throw new AppError('原创建回执与套单记录不一致，请联系管理员核对',409,'SALE_COMMERCIAL_SOURCE_INVALID')
+        if(!saved||saved.commercial_model!=='kit-v1')throw new AppError('原创建结果与套单记录不一致，请联系管理员核对',409,'SALE_COMMERCIAL_SOURCE_INVALID')
         assertInScope(scopeWarehouseIds,saved.warehouse_id,'销售单')
         const [authRows]=await conn.query('SELECT warehouse_id FROM sale_order_items WHERE order_id=? FOR SHARE',[resourceId])
         for(const r of authRows)assertInScope(scopeWarehouseIds,r.warehouse_id ?? saved.warehouse_id,'销售单')

@@ -60,7 +60,7 @@ export function ReceiptDetailDialog({ open, onClose, receiptId, type }: Props) {
     >
       <div className="flex h-full flex-col gap-3 p-5">
         {query.isError && <QueryErrorState error={query.error} onRetry={() => void query.refetch()} compact />}
-        {query.isPaused ? <p role="status" className="text-sm text-muted-foreground">网络暂停，明细尚未更新</p> : query.isFetching && <p role="status" className="text-sm text-muted-foreground">正在读取核销明细…</p>}
+        {query.isPaused ? <p role="status" className="text-sm text-muted-foreground">网络暂停，明细尚未更新</p> : query.isFetching && <p role="status" className="text-sm text-muted-foreground">正在加载核销明细…</p>}
         {query.data && !detail && <p role="alert">明细身份不匹配，请重试核对原汇款单</p>}
         {detail && (
           <div className="text-sm text-muted-foreground">

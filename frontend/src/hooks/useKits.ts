@@ -14,7 +14,7 @@ export function captureKitReadOwner(): KitReadOwner {
 }
 export function assertKitReadOwner(owner: KitReadOwner) {
   const auth = useAuthStore.getState()
-  if (!auth.token || auth.user?.id !== owner.userId || auth.sessionGeneration !== owner.sessionGeneration) throw new Error('登录账号或会话已变化，当前草稿已保留，请重新打开资料')
+  if (!auth.token || auth.user?.id !== owner.userId || auth.sessionGeneration !== owner.sessionGeneration) throw new Error('登录账号或登录状态已变化，当前草稿已保留，请重新打开资料')
   if ((apiClient.defaults.baseURL ?? '/api') !== owner.baseURL) throw new Error('服务器已切换，当前草稿已保留；请回原服务器核对或关闭后重新打开资料')
 }
 export async function readKitOwned(id: number, owner: KitReadOwner) {

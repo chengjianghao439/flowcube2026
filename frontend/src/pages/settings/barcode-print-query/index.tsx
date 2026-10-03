@@ -41,7 +41,7 @@ function safeId(id: unknown): id is number {
 
 function jobNextStep(job: BarcodePrintRecord['latestJob']) {
   if (job?.statusKey === 'success') return '客户端已回报成功，请现场核对标签纸张。'
-  if (job?.statusKey === 'queued' || job?.statusKey === 'printing') return '回执尚待确认，请核对工作站和现场纸张，避免重复打印。'
+  if (job?.statusKey === 'queued' || job?.statusKey === 'printing') return '打印结果尚待确认，请核对工作站和现场纸张，避免重复打印。'
   if (job?.statusKey === 'failed' || job?.statusKey === 'timeout') return '先核对工作站、打印机和纸张，确认需要后再使用本页既有补打。'
   return null
 }

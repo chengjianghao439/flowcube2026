@@ -111,21 +111,21 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
   }
   function recoveredContext(query: KitQueryRecord) {
     const c = query.context
-    return `原任务 #${c?.taskId ?? query.resourceId} · ${c?.containerId ? `原容器 #${c.containerId} · 原库位 #${c.locationId}` : `原箱 #${c?.packageId}`}`
+    return `原任务 #${c?.taskId ?? query.resourceId} · ${c?.containerId ? `原库存条码 #${c.containerId} · 原库位 #${c.locationId}` : `原箱 #${c?.packageId}`}`
   }
   async function recoverRow(retry: boolean) {
     const answer = await (retry ? returnAction.retry() : returnAction.queryOriginal())
     if (!answer) return
     // A copied/restored record only reports its original operation. It cannot
     // navigate, clear the new scan target, or update another draft.
-    if (answer.queryOnly) { ok('原归还回执已核实，当前扫码保持；请自行刷新原任务'); return }
-    if (returnAction.canApply(answer)) { await reloadOriginal(); ok('原归还回执已核实'); }
+    if (answer.queryOnly) { ok('原归还结果已核实，当前扫码保持；请自行刷新原任务'); return }
+    if (returnAction.canApply(answer)) { await reloadOriginal(); ok('原归还结果已核实'); }
   }
   async function recoverBox(retry: boolean) {
     const answer = await (retry ? boxAction.retry() : boxAction.queryOriginal())
     if (!answer) return
-    if (answer.queryOnly) { ok('原拆箱回执已核实，当前扫码保持；请自行刷新原任务'); return }
-    if (boxAction.canApply(answer)) { await reloadOriginal(); ok('原拆箱回执已核实'); }
+    if (answer.queryOnly) { ok('原拆箱结果已核实，当前扫码保持；请自行刷新原任务'); return }
+    if (boxAction.canApply(answer)) { await reloadOriginal(); ok('原拆箱结果已核实'); }
   }
 
   async function handleBoxScan(raw: string) {
@@ -218,12 +218,12 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
   // Receipt ownership is independent of detail VIEW permission and loading.
   const recoveryUI = <>
         <PdaFlash flash={flash} />
-        {legacy && <PdaCard><p className="text-sm text-destructive">历史归还记录缺少原服务器与会话身份，不能认作当前操作；请人工核对原任务，暂勿重复扫码。</p><p className="text-xs">原记录号 {legacy.requestKey}</p></PdaCard>}
+        {legacy && <PdaCard><p className="text-sm text-destructive">历史归还记录缺少原服务器与登录身份，不能认作当前操作；请人工核对原任务，暂勿重复扫码。</p><p className="text-xs">原记录号 {legacy.requestKey}</p></PdaCard>}
         {(!ownerCurrent || network !== 'online') && <p role="alert" className="text-sm text-destructive">当前登录、服务器或网络不可提交，请完成正常登录 / 设备绑定后核对原记录。</p>}
         {returnAction.error && <p role="alert" className="text-sm text-destructive">{returnAction.error}</p>}
-        {returnAction.pending && <PdaCard><p className="font-medium">归还结果待确认</p><p className="text-xs">{recoveredContext(returnAction.pending)}。按原键查询；刷新只恢复查询身份，不保存条码表单，不自动提交。</p><div className="mt-2 flex gap-2"><Button disabled={returnAction.busy} onClick={() => void recoverRow(false)}>查询原归还回执</Button><Button variant="outline" disabled={returnAction.busy || !returnAction.canRetry} onClick={() => void recoverRow(true)}>按原归还请求重试</Button></div></PdaCard>}
+        {returnAction.pending && <PdaCard><p className="font-medium">归还结果待确认</p><p className="text-xs">{recoveredContext(returnAction.pending)}。按原键查询；刷新只恢复查询身份，不保存条码表单，不自动提交。</p><div className="mt-2 flex gap-2"><Button disabled={returnAction.busy} onClick={() => void recoverRow(false)}>查询原归还结果</Button><Button variant="outline" disabled={returnAction.busy || !returnAction.canRetry} onClick={() => void recoverRow(true)}>按原归还请求重试</Button></div></PdaCard>}
         {boxAction.error && <p role="alert" className="text-sm text-destructive">{boxAction.error}</p>}
-        {boxAction.pending && <PdaCard><p className="font-medium">拆箱结果待确认</p><p className="text-xs">{recoveredContext(boxAction.pending)}。刷新只允许查询原结果。</p><div className="mt-2 flex gap-2"><Button disabled={boxAction.busy} onClick={() => void recoverBox(false)}>查询原拆箱回执</Button><Button variant="outline" disabled={boxAction.busy || !boxAction.canRetry} onClick={() => void recoverBox(true)}>按原拆箱请求重试</Button></div></PdaCard>}
+        {boxAction.pending && <PdaCard><p className="font-medium">拆箱结果待确认</p><p className="text-xs">{recoveredContext(boxAction.pending)}。刷新只允许查询原结果。</p><div className="mt-2 flex gap-2"><Button disabled={boxAction.busy} onClick={() => void recoverBox(false)}>查询原拆箱结果</Button><Button variant="outline" disabled={boxAction.busy || !boxAction.canRetry} onClick={() => void recoverBox(true)}>按原拆箱请求重试</Button></div></PdaCard>}
   </>
 
   if (isError || (!isLoading && !detail)) {

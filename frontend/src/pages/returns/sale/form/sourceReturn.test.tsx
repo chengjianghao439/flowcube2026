@@ -375,7 +375,7 @@ test('source confirm unknown offers exact current facts only, never invents rece
     })
     await click(host, '查询当前单据')
     expect(host.textContent).toContain('当前单据已确认')
-    expect(host.textContent).toContain('不代表原请求回执')
+    expect(host.textContent).toContain('不代表原请求结果')
     expect(mocks.confirm).toHaveBeenCalledTimes(1)
   })
 })

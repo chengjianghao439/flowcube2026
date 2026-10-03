@@ -236,7 +236,7 @@ test('mounted sharedcart A100 B200 ordinary30 and manual4 packaging uses server 
     expect(document.body.textContent).toContain('当前现货存在短缺')
     expect(document.body.textContent).toContain('共享组件只汇总一次')
     expect(document.body.textContent).toContain(
-      '当前现货可用来自有效容器余量减现有预占；按整单配件需求核对。不能据此保证可拣或占库成功'
+      '当前现货可用来自有效库存条码余量减现有预占；按整单配件需求核对。不能据此保证可拣或占库成功'
     )
     expect(document.body.textContent).not.toContain('ACTIVE')
     expect(document.body.textContent).not.toContain('物理向量')
@@ -517,7 +517,7 @@ test('restored or copied Editor record queries only and cannot onDone or reset f
   const done = vi.fn()
   await mount(async () => {
     expect([...document.querySelectorAll('button')].find(b => b.textContent === '按原请求重试')!.disabled).toBe(true)
-    await click('查询原回执')
+    await click('查询原操作结果')
     expect(done).not.toHaveBeenCalled()
     expect(document.querySelector<HTMLInputElement>('input[aria-label="原包装成交单价"]')!.value).toBe('12.3456')
     expect(mocks.execute).toHaveBeenCalledTimes(1)
@@ -578,7 +578,7 @@ test('actual gate reload at handoff path finds original query-only identity with
   await actualGate(async (_, host) => {
     await click('编辑订单')
     expect([...host.querySelectorAll('button')].find(b => b.textContent === '按原请求重试')!.disabled).toBe(true)
-    await click('查询原回执')
+    await click('查询原操作结果')
     expect(mocks.query).toHaveBeenCalledWith(first.requestKey, 'sale.update.80', expect.objectContaining({ baseURL: '/a' }))
     expect((host.querySelector('input[aria-label="原包装成交单价"]') as HTMLInputElement).value).toBe('12.3456')
     expect(mocks.execute).toHaveBeenCalledTimes(1)

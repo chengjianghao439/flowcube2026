@@ -161,7 +161,7 @@ export function useSourceReturnFacts(id: number, owner: KitReadOwner) {
       if (mounted.current)
         setError(
           e.message ||
-            '原操作结果待核对。该操作无原请求回执，请只读查询当前单据，不要重复提交。'
+            '原操作结果待核对。该操作无可查询的原请求结果，请只读查询当前单据，不要重复提交。'
         )
       return null
     } finally {
@@ -191,7 +191,7 @@ export function useSourceReturnFacts(id: number, owner: KitReadOwner) {
       setFact({
         nonce: r.nonce,
         satisfied: satisfies(r, current),
-        text: `${current.status === 3 ? '当前单据已完成' : current.status === 2 ? '当前单据已确认' : current.status === 4 ? '当前单据已取消' : '当前单据仍为草稿'}${current.task ? ` · 入库任务 ${current.task.taskNo}` : ''}${current.reverseTask ? ` · 返货出库 ${current.reverseTask.taskNo}` : ''}。这是当前事实，不代表原请求回执；也可能由其他员工操作。`
+        text: `${current.status === 3 ? '当前单据已完成' : current.status === 2 ? '当前单据已确认' : current.status === 4 ? '当前单据已取消' : '当前单据仍为草稿'}${current.task ? ` · 入库任务 ${current.task.taskNo}` : ''}${current.reverseTask ? ` · 返货出库 ${current.reverseTask.taskNo}` : ''}。这是当前事实，不代表原请求结果；也可能由其他员工操作。`
       })
       setError('')
     } catch (e) {

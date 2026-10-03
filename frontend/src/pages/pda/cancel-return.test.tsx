@@ -130,7 +130,7 @@ test('unknown row scan stores original task/container/location and queries real 
       await new Promise((r) => setTimeout(r, 5))
     })
     const b = [...host.querySelectorAll('button')].find(
-      (b) => b.textContent === '查询原归还回执'
+      (b) => b.textContent === '查询原归还结果'
     )
     expect(b).toBeTruthy()
     await act(async () => b!.click())
@@ -218,7 +218,7 @@ test('box unknown uses original package action/context and successful current-ta
       )
       expect(doc.records[0].context).toEqual({ taskId: 80, packageId: 40 })
       const query = [...host.querySelectorAll('button')].find(
-        (b) => b.textContent === '查询原拆箱回执'
+        (b) => b.textContent === '查询原拆箱结果'
       )!
       await act(async () => query.click())
       expect(mocks.query.mock.calls[0][1]).toBe('scan-log.cancel-return-box.80')
@@ -255,7 +255,7 @@ test.each(['loading-row', '403-row', '403-box'] as const)('durable original quer
   })
   await mount(async host => {
     expect(host.textContent).not.toContain('scanner')
-    await clickText(host, box ? '查询原拆箱回执' : '查询原归还回执')
+    await clickText(host, box ? '查询原拆箱结果' : '查询原归还结果')
     expect(mocks.query).toHaveBeenCalledWith('owned-original-key', box ? 'scan-log.cancel-return-box.80' : 'scan-log.cancel-return.80', expect.objectContaining({ baseURL: '/a' }))
     expect(mocks.ok).toHaveBeenCalledWith(expect.stringContaining('当前扫码保持'))
     expect(JSON.parse(sessionStorage.getItem(KIT_QUERY_KEY)!).records).toHaveLength(0)
@@ -270,9 +270,9 @@ test('detail403 and failed receipt query keep original identity and a usable que
   mocks.query.mockRejectedValueOnce({ status: 503 }).mockResolvedValue({ status: 'not_found', data: null })
   await mount(async host => {
     const original = sessionStorage.getItem(KIT_QUERY_KEY)
-    await clickText(host, '查询原归还回执')
+    await clickText(host, '查询原归还结果')
     expect(sessionStorage.getItem(KIT_QUERY_KEY)).toBe(original)
-    await clickText(host, '查询原归还回执')
+    await clickText(host, '查询原归还结果')
     expect(sessionStorage.getItem(KIT_QUERY_KEY)).toBe(original)
     expect([...host.querySelectorAll('button')].find(b => b.textContent === '按原归还请求重试')!.disabled).toBe(true)
     expect(mocks.query).toHaveBeenCalledTimes(2)
@@ -362,9 +362,9 @@ test('detail403 retains legacy missing-identity manual block without adopting a 
   mocks.detailGet.mockRejectedValue({ status: 403 })
   try {
     await mount(async host => {
-      expect(host.textContent).toContain('历史归还记录缺少原服务器与会话身份')
+      expect(host.textContent).toContain('历史归还记录缺少原服务器与登录身份')
       expect(host.textContent).toContain('legacy-key')
-      expect(host.textContent).not.toContain('查询原归还回执')
+      expect(host.textContent).not.toContain('查询原归还结果')
       expect(host.textContent).not.toContain('scanner')
       expect(mocks.scan).not.toHaveBeenCalled()
       expect(mocks.query).not.toHaveBeenCalled()

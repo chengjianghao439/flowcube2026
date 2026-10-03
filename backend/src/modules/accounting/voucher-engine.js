@@ -352,7 +352,7 @@ async function buildSaleReturn(conn) {
      WHERE sr.status = 3 AND sr.deleted_at IS NULL
      GROUP BY sr.id, sr.return_no, sr.customer_id, sr.customer_name, sr.updated_at`)
   const [[{missing}]]=await conn.query(`SELECT COUNT(*) AS missing FROM sale_return_items sri JOIN sale_returns sr ON sr.id=sri.return_id LEFT JOIN sale_commercial_refund_receipts r ON r.return_item_id=sri.id WHERE sr.status=3 AND sr.deleted_at IS NULL AND sri.dispatch_component_id IS NOT NULL AND r.id IS NULL`)
-  if(Number(missing))throw new AppError('已执行成套退货缺少来源退款回执',409,'SALE_COMMERCIAL_SOURCE_INVALID')
+  if(Number(missing))throw new AppError('已执行成套退货缺少来源退款记录',409,'SALE_COMMERCIAL_SOURCE_INVALID')
   const specs = []
   for (const r of rows) {
     const ar = commercialAmounts.has(Number(r.id)) ? Number(commercialAmounts.get(Number(r.id))) : round2(r.arAmount)

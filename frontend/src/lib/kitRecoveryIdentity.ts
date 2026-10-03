@@ -60,6 +60,6 @@ export function kitQuerySession() {
   if (!identity)
     throw new Error('无法保存原查询身份，请保留草稿并检查浏览器存储')
   if (JSON.stringify(readIdentity()) !== JSON.stringify(identity))
-    throw new Error('原查询会话身份已变化，请保留草稿并人工核对')
+    throw new Error('原查询的登录身份已变化，请保留草稿并人工核对')
   return identity.sessionId
 }

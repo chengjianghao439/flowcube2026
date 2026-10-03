@@ -209,9 +209,9 @@ export default function CommercialEditor({
         <div className="space-y-2 rounded-md border p-3">
           <p>原请求结果待确认，离开或刷新不会自动重新提交。刷新后仅保留查询身份，不保存表单内容。</p>
           <Button disabled={write.busy} onClick={() => void write.queryOriginal().then(answer => {
-            if (answer?.queryOnly) toast.success('原回执已核实，请自行打开原单；当前草稿未修改')
+            if (answer?.queryOnly) toast.success('原操作结果已核实，请自行打开原单；当前草稿未修改')
             else if (answer && write.canApplyConfirmation(answer)) onDone(answer.result?.id)
-          })}>查询原回执</Button>
+          })}>查询原操作结果</Button>
           <Button
             disabled={write.busy || !write.canRetry}
             onClick={() =>
@@ -312,7 +312,7 @@ export default function CommercialEditor({
                             {row.input.priceSource === 'manual'
                               ? `人工确认${row.unit}单价；更改单位后请核对成交价`
                               : resolved?.metadata.quote
-                                ? `${resolved.metadata.quote.resolvedPriceSource === 'price_list' ? '客户价目表' : `客户${resolved.metadata.quote.resolvedPriceLevel}价`} · 按服务端换算`
+                                ? `${resolved.metadata.quote.resolvedPriceSource === 'price_list' ? '客户价目表' : `客户${resolved.metadata.quote.resolvedPriceLevel}价`} · 按系统换算`
                                 : '按当前客户默认价，等待系统核对'}
                           </p>
                         )}
@@ -455,7 +455,7 @@ export default function CommercialEditor({
         </SectionCard>
         <SectionCard title="订单汇总" compact>
           <div className="flex flex-wrap items-center gap-6 p-3">
-            <p>商品金额 {preview.data ? money(preview.data.amount) : '待服务端预览'}</p>
+            <p>商品金额 {preview.data ? money(preview.data.amount) : '待系统预览'}</p>
             <label className="flex items-center gap-2">
               折扣金额
               <Input
@@ -487,7 +487,7 @@ export default function CommercialEditor({
             </p>
             <p>
               {preview.data.inventoryExplanation
-                .replaceAll('来自 ACTIVE 容器', '来自有效容器')
+                .replaceAll(/来自 ACTIVE 容器/g, '来自有效库存条码')
                 .replaceAll('整个物理向量', '整单配件需求')}
             </p>
             <p>预计供货与成套日期尚未分配；{preview.data.readyDateExplanation}</p>

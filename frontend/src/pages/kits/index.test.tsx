@@ -201,7 +201,7 @@ test('重载期间账号id变化即使代次未变也不能套用原返回资料
       finish({ ...savedKit, name: '旧账号迟到资料', revision: 99 }); await new Promise(r => setTimeout(r, 15))
     })
     expect(document.querySelector<HTMLInputElement>('input[aria-label="配件名称"]')?.value).toBe('本人草稿')
-    expect(document.body.textContent).toContain('登录账号或会话已变化')
+    expect(document.body.textContent).toContain('登录账号或登录状态已变化')
   })
 })
 test('复制A在途继续修改B，A迟到成功不能解锁重载或覆盖未备份B', async () => {

@@ -139,7 +139,7 @@ export function useKitOperation<P, R>(
       const data = await options.execute(body.payload, query, body.owner)
       if (!owns(query, generation)) {
         if (mounted.current)
-          markUnknown(query, '原响应已到达，但来源或会话已变化，草稿保留')
+          markUnknown(query, '原结果已收到，但来源或登录状态已变化，草稿保留')
         return null
       }
       return finish(data, query, body.owner)
@@ -160,7 +160,7 @@ export function useKitOperation<P, R>(
       ) {
         markUnknown(
           query,
-          e.message || '提交结果待确认。原请求已冻结，请先查询原回执。'
+          e.message || '提交结果待确认。原请求已冻结，请先查询原操作结果。'
         )
       } else {
         removeKitQuery(query)
@@ -238,7 +238,7 @@ export function useKitOperation<P, R>(
       const generation = useAuthStore.getState().sessionGeneration
       if (!owns(query, generation))
         throw new Error(
-          '原记录的服务器、账号或登录会话归属已变化，请回原来源人工核对'
+          '原记录的服务器、账号或登录状态已变化，请回原来源人工核对'
         )
       const readOwner = {
         baseURL: query.baseURL,
@@ -258,7 +258,7 @@ export function useKitOperation<P, R>(
       if (!owns(query, generation)) return null
       if (result.status === 'success') {
         if (!receiptMatches(query, result))
-          throw new Error('原回执资源归属不符，请保留记录并核对')
+          throw new Error('原操作结果对应的单据不符，请保留记录并核对')
         return finish(result.data as R, query, readOwner)
       }
       if (result.status === 'failed') {
@@ -266,19 +266,19 @@ export function useKitOperation<P, R>(
           (result.resourceType != null || result.resourceId != null) &&
           !receiptMatches(query, result)
         )
-          throw new Error('失败回执的原资源归属无法核对，请保留未知记录')
+          throw new Error('失败结果对应的原单据无法核对，请保留待确认记录')
         removeKitQuery(query)
         queryRef.current = null
         mountedBody.current = null
         setPending(null)
-        setError(result.message || '原回执确认失败，草稿保留')
+        setError(result.message || '原操作已确认失败，草稿保留')
         return null
       }
       if (result.status === 'not_found' && retry && mountedBody.current)
         return execute(query)
       setError(
         result.status === 'not_found'
-          ? '暂未找到原回执，这不证明提交失败。刷新后只可继续查询；原表单未保存，不能重新拼接提交。'
+          ? '暂未找到原操作结果，这不证明提交失败。刷新后只可继续查询；原表单未保存，不能重新拼接提交。'
           : '原请求仍在处理中，请稍后再次查询，不要另发请求。'
       )
       return null

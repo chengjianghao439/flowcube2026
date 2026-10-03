@@ -34,7 +34,7 @@ export function SourceComponents({
   return (
     <div className="overflow-x-auto rounded-md border">
       <p className="px-3 py-2 text-xs text-muted-foreground">
-        请选择本次实际退回的原出库配件。同商品、同仓库的不同来源需分单，不合并平均价。来源全量参考不代表本次退款，本次金额以保存后服务端估算为准，合格入仓后确定。
+        请选择本次实际退回的原出库配件。同商品、同仓库的不同来源需分单，不合并平均价。来源全量参考不代表本次退款，本次金额以保存后系统估算为准，合格入仓后确定。
       </p>
       <table className="w-full min-w-[1000px] text-sm">
         <thead>

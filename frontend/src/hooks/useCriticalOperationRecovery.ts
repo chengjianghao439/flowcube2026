@@ -134,8 +134,8 @@ export function useCriticalOperationRecovery(options: Options) {
     try {
       const receipt = await getOperationRequestStatusApi(record.requestKey, record.action, captured.config)
       if (!captured.current()) return
-      if (receipt.resourceType != null && receipt.resourceType !== 'inventory_container') { noticeRecovery(record, { busy: false, message: '回执资源类型与原盒不一致，结果仍待确认，请核对原操作' }); return }
-      if (receipt.resourceId != null && receipt.resourceId !== record.boxId) { noticeRecovery(record, { busy: false, message: '回执归属与原盒不一致，请核对原操作' }); return }
+      if (receipt.resourceType != null && receipt.resourceType !== 'inventory_container') { noticeRecovery(record, { busy: false, message: '原操作结果对应的记录类型与原塑料盒不一致，结果仍待确认，请核对原操作' }); return }
+      if (receipt.resourceId != null && receipt.resourceId !== record.boxId) { noticeRecovery(record, { busy: false, message: '原操作结果对应的塑料盒与原盒不一致，请核对原操作' }); return }
       if (receipt.status === 'success' || receipt.status === 'failed') return finish(record, receipt.status, receipt.data)
       noticeRecovery(record, { busy: false, message: receipt.status === 'pending' ? '原操作仍在服务器处理中，请稍后查询' : '暂时查不到原提交，可能仍在处理或未送达；保留原身份' })
     } catch {
