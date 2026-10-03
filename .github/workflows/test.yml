@@ -541,6 +541,9 @@ jobs:
       - name: Sale commercial source metadata read-only labels
         run: npm run smoke:sale-commercial-source-metadata
 
+      - name: 冒烟测试 — 成套与边收边上架真实财务及跨期凭证
+        run: npm run smoke:product-finance-period
+
       - name: 冒烟测试 — 销售预计库存 ATP（采购预计量占库 / 取消与短装先解绑）
         run: npm run smoke:atp
 
