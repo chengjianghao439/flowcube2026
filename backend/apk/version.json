@@ -1,7 +1,7 @@
 {
-  "version": "0.11.5",
-  "versionCode": 149,
+  "version": "0.12.0",
+  "versionCode": 150,
   "filename": "app-release.apk",
-  "releaseNote": "本版修复慢查询监控的历史累计误报，并加强测试环境的隔离保护。",
-  "publishedAt": "2026-09-29T18:34:00.210Z"
+  "releaseNote": "本版新增成套配件销售与边收货边上架，改善销售、仓库和财务之间的工作衔接。",
+  "publishedAt": "2026-10-03T14:06:48.683Z"
 }
