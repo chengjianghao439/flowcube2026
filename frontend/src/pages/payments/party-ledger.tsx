@@ -42,6 +42,8 @@ function exportLedger(data: PartyLedgerResult) {
 function SourceDetails({ row, type, onClose }: { row: PartyLedgerRow; type: 1 | 2; onClose: () => void }) {
   const query = useQuery({
     queryKey: ['party-ledger-source', row.receiptId, row.recordId, type],
+    staleTime: 0,
+    refetchOnMount: 'always',
     queryFn: async () => row.receiptId
       ? { receipt: await getReceiptDetailApi(row.receiptId), entries: null }
       : { receipt: null, entries: await getEntriesApi(row.recordId!) },

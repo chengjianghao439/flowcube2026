@@ -38,6 +38,8 @@ export function StatementDetailDialog({ open, onClose, statementId, type }: Prop
 
   const query = useQuery({
     queryKey: ['payment-statement-detail', statementId, type],
+    staleTime: 0,
+    refetchOnMount: 'always',
     queryFn: () => getStatementDetailApi(statementId!),
     enabled: active && open && statementId != null,
   })

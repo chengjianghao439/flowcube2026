@@ -31,6 +31,8 @@ export function ReceiptDetailDialog({ open, onClose, receiptId, type }: Props) {
   const ledger = usePartyLedger(type)
   const query = useQuery({
     queryKey: ['payment-receipt-detail', receiptId, type],
+    staleTime: 0,
+    refetchOnMount: 'always',
     queryFn: () => getReceiptDetailApi(receiptId!),
     enabled: active && open && Number.isSafeInteger(receiptId) && Number(receiptId) > 0,
   })

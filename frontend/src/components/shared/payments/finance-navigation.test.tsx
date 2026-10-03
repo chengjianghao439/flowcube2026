@@ -34,7 +34,7 @@ beforeEach(()=>{
   useAuthStore.setState({user:{roleId:5,permissions:['payment.view','sale.order.view','purchase.order.view']} as never})
   useWorkspaceStore.setState({tabs:[],activeKey:'/payments/receivable'})
   close.mockReset();mocks.receipt.mockReset().mockResolvedValue(receipt());mocks.statement.mockReset();mocks.payments.mockReset();mocks.ledger.mockReset()
-  client=new QueryClient({defaultOptions:{queries:{retry:false}}})
+  client=new QueryClient({defaultOptions:{queries:{retry:false,staleTime:300000}}})
   host=document.createElement('div');document.body.append(host);root=createRoot(host)
 })
 afterEach(()=>{act(()=>root.unmount());client.clear();host.remove();onlineManager.setOnline(true)})
@@ -141,4 +141,65 @@ for(const patch of [{orderId:0},{orderId:1.5},{orderId:Number.MAX_SAFE_INTEGER+1
   const data=receipt();data.settlements[0]={...data.settlements[0],...patch} as typeof data.settlements[0]
   mocks.receipt.mockResolvedValue(data);await render(<ReceiptDetailDialog open receiptId={7} type={2} onClose={close}/>)
   expect(button('原业务单')).toBeUndefined()
+})
+
+const statement = () => ({id:3,type:2,statementNo:'ST-3',partyName:'单位',status:2,items:[{recordId:9,orderId:81,type:2,orderNo:'对账原单',totalAmount:100,paidAmount:30,balance:70}]})
+for(const kind of ['receipt','statement'] as const) test(`应用5分钟缓存下${kind}重开必须先读取，失败保留旧显示但禁导航`,async()=>{
+  const api=kind==='receipt'?mocks.receipt:mocks.statement
+  const key=kind==='receipt'?['payment-receipt-detail',7,2]:['payment-statement-detail',3,2]
+  client.setQueryData(key,kind==='receipt'?receipt():statement())
+  let reject!:(error:Error)=>void
+  api.mockImplementation(()=>new Promise((_,r)=>{reject=r}))
+  const dialog=(open:boolean)=>kind==='receipt'?<ReceiptDetailDialog open={open} receiptId={7} type={2} onClose={close}/>:<StatementDetailDialog open={open} statementId={3} type={2} onClose={close}/>
+  await render(dialog(false));expect(api).not.toHaveBeenCalled()
+  await render(dialog(true));expect(api).toHaveBeenCalledTimes(1)
+  expect(button('往来明细')).toBeUndefined();expect(button(kind==='receipt'?'原业务单':'对账原单')).toBeUndefined()
+  await act(async()=>{reject(new Error('本次读取失败'));await settle()})
+  expect(document.body.textContent).toContain('加载失败')
+  expect(button('往来明细')).toBeUndefined();expect(button(kind==='receipt'?'原业务单':'对账原单')).toBeUndefined()
+})
+test('应用5分钟缓存下汇款重新激活必须等成功读取，旧缓存不能恢复导航',async()=>{
+  const dialog=(path:string)=><TabPathContext.Provider value={path}><ReceiptDetailDialog open receiptId={7} type={2} onClose={close}/></TabPathContext.Provider>
+  await render(dialog('/payments/receivable'))
+  expect(button('往来明细')).toBeTruthy()
+  await render(dialog('/payments/payable'))
+  let resolve!:(data:ReturnType<typeof receipt>)=>void
+  mocks.receipt.mockImplementation(()=>new Promise(r=>{resolve=r}))
+  const before=mocks.receipt.mock.calls.length
+  await render(dialog('/payments/receivable'))
+  expect(mocks.receipt.mock.calls.length).toBe(before+1)
+  expect(button('往来明细')).toBeUndefined();expect(button('原业务单')).toBeUndefined()
+  await act(async()=>{resolve(receipt());await settle()})
+  expect(button('往来明细')).toBeTruthy();expect(button('原业务单')).toBeTruthy()
+})
+test('应用5分钟缓存下对账重开时网络暂停，旧缓存不开放原单',async()=>{
+  client.setQueryData(['payment-statement-detail',3,2],statement())
+  onlineManager.setOnline(false)
+  await render(<StatementDetailDialog open={false} statementId={3} type={2} onClose={close}/>)
+  await render(<StatementDetailDialog open statementId={3} type={2} onClose={close}/>)
+  expect(mocks.statement).not.toHaveBeenCalled();expect(button('对账原单')).toBeUndefined()
+  expect(client.getQueryState(['payment-statement-detail',3,2])?.fetchStatus).toBe('paused')
+})
+for(const fail of [false,true]) test(`应用5分钟缓存下往来来源弹窗挂载重读 ${fail?'失败':'成功'}`,async()=>{
+  const path='/payments/ledger/customer/42';useWorkspaceStore.setState({activeKey:path})
+  client.setQueryData(['party-ledger-source',7,null,2],{receipt:receipt(),entries:null})
+  mocks.ledger.mockResolvedValue({party:{name:'单位'},summary:{},list:[{id:1,receiptId:7,recordId:null,documentNo:'RC-7'}]})
+  let resolve!:(data:ReturnType<typeof receipt>)=>void,reject!:(error:Error)=>void
+  mocks.receipt.mockImplementation(()=>new Promise((r,j)=>{resolve=r;reject=j}))
+  await render(<PartyLedgerPage/>,path);await click('收付款');await act(async()=>{await settle()})
+  expect(mocks.receipt).toHaveBeenCalledTimes(1);expect(button('原业务单')).toBeUndefined()
+  await act(async()=>{if(fail)reject(new Error('原款读取失败'));else resolve(receipt());await settle()})
+  if(fail){expect(document.body.textContent).toContain('加载失败');expect(button('原业务单')).toBeUndefined()}
+  else expect(button('原业务单')).toBeTruthy()
+})
+
+test('应用5分钟缓存下往来来源重开暂停，旧缓存不能导航',async()=>{
+  const path='/payments/ledger/customer/42';useWorkspaceStore.setState({activeKey:path})
+  mocks.ledger.mockResolvedValue({party:{name:'单位'},summary:{},list:[{id:1,receiptId:7,recordId:null,documentNo:'RC-7'}]})
+  await render(<PartyLedgerPage/>,path);await click('收付款');await act(async()=>{await settle()})
+  expect(button('原业务单')).toBeTruthy();await click('关闭')
+  const before=mocks.receipt.mock.calls.length
+  onlineManager.setOnline(false);await click('收付款');await act(async()=>{await settle()})
+  expect(mocks.receipt.mock.calls.length).toBe(before);expect(button('原业务单')).toBeUndefined()
+  expect(client.getQueryState(['party-ledger-source',7,null,2])?.fetchStatus).toBe('paused')
 })
