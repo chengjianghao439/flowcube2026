@@ -543,3 +543,9 @@ C4：100件采购的首任务40只实收20，真实早上架 ACTIVE20，收货�
 SPEC补强的反向验证仅在专属测试进程加载临时变异器，未修改产品源码：净退款截到两位后，真实实收行35.99对预期35.9987自然失败（`/tmp/product-finance-period-precision-red.log`，exit1）；真实付款50后错误恢复现金余额，账户1000对预期950自然失败（`/tmp/product-finance-period-cash-red.log`，exit1）。两轮失败交易与finally资源记录保留600 manifest供审计，不把故意变异当产品缺陷。
 
 补强后最终正常运行 `/tmp/product-finance-period-spec-final.log` 自然exit0（1/1），CI资源守卫 `/tmp/product-finance-period-spec-ci-guard.log` 自然exit0（26/26），文档守卫 `/tmp/product-finance-period-spec-doc-guard.log` 自然exit0；最终归属与收尾证据 `/tmp/flowcube-product-finance-PFP-891151ad.json`（600）。这些临时文件是本机本轮证据，尚需 root 的 freshDB 整批复验与独立审查，不作为永久归档或发布证明。
+
+### 2026-10-03 数量精度覆盖守卫的明确委派
+
+`npm run test:qty-precision-coverage` 仍由现有静态 CI 门禁运行。`foldEntryItem` 已返回 `foldEntryItemWithRate(item, rate)`，守卫分别核对该返回委派、helper 对原 `item.quantity` 和未取整 `entryQty * rate` 的两处尺度校验，以及 `foldEntryItems`/`foldEntryItemsBatch` 各自的折算委派和返回前 `await assertQtyPrecision(conn, out.map(...))` 基本单位数量校验；不能仅凭文件内存在 helper 或另一入口的校验放行。AST 契约固定当前明确调用结构，合法结构重构需同步守卫；新增最小行为用例调用真实折算函数，以合成查询结果验证两位数量尺度、整数商品规则及四位单价保留，不使用数据库。
+
+旧门禁自然红为6项中2项误判包装函数缺少直接尺度调用；修正后8/8自然通过，既有数量精度与销售单位最小行为回归26/26通过，生产 `unitConversion.js` 未改。委派、原量/换算量 guard、两个批量 precision 及两个批量 delegate 共7个独立来源移除变异均自然 exit1（`/tmp/qty-precision-coverage-mutant-*.log`）；用进程内来源替换保留其他入口/导入/helper，不改产品文件。守卫内另逐项核删除、改名、注释伪装会失败；这些静态和行为证据不代表数据库、全量回归或远端 CI 已通过。
