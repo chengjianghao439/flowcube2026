@@ -5,6 +5,7 @@ const { authMiddleware, requirePermission } = require('../../middleware/auth')
 const { PERMISSIONS } = require('../../constants/permissions')
 const { validateBody } = require('../../utils/route')
 
+const { printClientRequired } = require('./print-client-auth')
 const router = Router()
 
 /**
@@ -25,7 +26,10 @@ const updateSchema = z.object({
 })
 
 router.use(authMiddleware)
-router.post('/client-heartbeat', requirePermission(PERMISSIONS.PRINT_CLIENT_CONSUME), ctrl.heartbeatClient)
+router.post('/client-heartbeat', requirePermission(PERMISSIONS.PRINT_CLIENT_CONSUME), printClientRequired, ctrl.heartbeatClient)
+router.get('/registration-warehouses', requirePermission(PERMISSIONS.PRINT_PRINTER_MANAGE), ctrl.registrationWarehouses)
+router.post('/clients/register', requirePermission(PERMISSIONS.PRINT_PRINTER_MANAGE), validateBody(z.object({ clientId: z.string().min(1).max(200), hostname: z.string().min(1).max(200), warehouseId: z.number().int().positive().nullable() }).strict()), ctrl.registerClient)
+router.post('/clients/:clientId/revoke', requirePermission(PERMISSIONS.PRINT_PRINTER_MANAGE), ctrl.revokeClient)
 router.get('/online-clients', requirePermission(PERMISSIONS.PRINT_PRINTER_VIEW), ctrl.listOnlineClients)
 router.get('/all-clients', requirePermission(PERMISSIONS.PRINT_PRINTER_VIEW), ctrl.listAllClients)
 router.put('/clients/:clientId/alias', requirePermission(PERMISSIONS.PRINT_PRINTER_MANAGE), ctrl.updateClientAlias)

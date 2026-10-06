@@ -25,6 +25,7 @@ from urllib.parse import urlsplit
 WORKFLOWS = {'image': 'deploy-browser.yml', 'pda': 'build-pda-apk.yml', 'desktop': 'build-desktop.yml'}
 MAX_ZIP = 2 * 1024**3
 MAX_FILE = 1024**3
+MAX_METADATA = 1024 * 1024
 
 
 def select_run(runs, sha, kind, version):
@@ -71,17 +72,98 @@ def file_sha(path):
     return digest.hexdigest()
 
 
-def verify_extract(archive, artifact, entry, directory):
+def unique_json_object(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError('Duplicate manifest key')
+        result[key] = value
+    return result
+
+
+def artifact_member(source, entry, expected_source_sha=None, expected_run_id=None):
+    # Kept in sync with the standalone receiver copied to the server: it cannot
+    # import a helper from the repository. Never extract metadata onto disk.
+    if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]*', entry):
+        raise ValueError('Invalid artifact entry')
+    members = source.infolist()
+    is_release = entry.endswith(('.exe', '.apk'))
+    allowed = {entry}
+    if is_release:
+        allowed.update(['release-provenance.json', 'version.json' if entry.endswith('.apk') else 'releaseNotes.md'])
+    names = [member.filename for member in members]
+    if not members or len(members) > len(allowed) or len(names) != len(set(names)):
+        raise ValueError('Unexpected ZIP members')
+    for member in members:
+        file_type = stat.S_IFMT(member.external_attr >> 16)
+        if (member.filename not in allowed or member.orig_filename != member.filename or member.is_dir()
+                or file_type not in (0, stat.S_IFREG) or member.flag_bits & 1):
+            raise ValueError('Unexpected ZIP member')
+    if entry not in names:
+        raise ValueError('Missing artifact binary')
+    binary = members[names.index(entry)]
+    if len(members) == 1:
+        # Legacy single-file artifacts retain the GitHub ZIP / raw-byte gates.
+        return binary, None
+    if not is_release or 'release-provenance.json' not in names or (entry.endswith('.apk') and 'version.json' not in names):
+        raise ValueError('Missing release metadata')
+    metadata = {}
+    total = 0
+    for member in members:
+        if member is binary:
+            continue
+        total += member.file_size
+        if not 0 <= member.file_size <= MAX_METADATA or total > MAX_METADATA:
+            raise ValueError('Release metadata too large')
+        with source.open(member) as content:
+            raw = content.read(MAX_METADATA + 1)
+        if len(raw) != member.file_size:
+            raise ValueError('Release metadata size mismatch')
+        metadata[member.filename] = raw
+    manifest = json.loads(metadata.pop('release-provenance.json').decode('utf-8'), object_pairs_hook=unique_json_object)
+    if (not isinstance(manifest, dict) or set(manifest) != {'sha', 'runId', 'file', 'sha256', 'metadata'}
+            or not isinstance(manifest['sha'], str) or not re.fullmatch(r'[a-f0-9]{40}', manifest['sha'])
+            or not isinstance(manifest['runId'], str) or not re.fullmatch(r'[1-9][0-9]{0,19}', manifest['runId'])
+            or manifest['file'] != entry or not isinstance(manifest['sha256'], str)
+            or not re.fullmatch(r'[a-f0-9]{64}', manifest['sha256'])
+            or not isinstance(manifest['metadata'], dict) or set(manifest['metadata']) != set(metadata)):
+        raise ValueError('Invalid release manifest')
+    if ((expected_source_sha is not None and manifest['sha'] != expected_source_sha)
+            or (expected_run_id is not None and manifest['runId'] != str(expected_run_id))):
+        raise ValueError('Release source/run mismatch')
+    for name, raw in metadata.items():
+        expected = manifest['metadata'][name]
+        if not isinstance(expected, str) or not re.fullmatch(r'[a-f0-9]{64}', expected) or hashlib.sha256(raw).hexdigest() != expected:
+            raise ValueError('Release metadata SHA256 mismatch')
+    return binary, manifest
+
+
+def verify_extract(archive, artifact, entry, directory, expected_source_sha=None, expected_run_id=None):
     if archive.stat().st_size != artifact['size_in_bytes'] or 'sha256:' + file_sha(archive) != artifact['digest']:
         raise ValueError('GitHub ZIP size/digest mismatch')
     target = directory / entry
-    with zipfile.ZipFile(archive) as source:
-        members = source.infolist()
-        if (len(members) != 1 or members[0].filename != entry or members[0].is_dir()
-                or stat.S_ISLNK(members[0].external_attr >> 16) or not 0 < members[0].file_size <= MAX_FILE):
-            raise ValueError('Unexpected ZIP member')
-        with source.open(members[0]) as src, target.open('xb') as dest:
-            shutil.copyfileobj(src, dest)
+    created = False
+    try:
+        with zipfile.ZipFile(archive) as source:
+            member, manifest = artifact_member(source, entry, expected_source_sha, expected_run_id)
+            if not 0 < member.file_size <= MAX_FILE:
+                raise ValueError('Invalid artifact size')
+            count = 0
+            digest = hashlib.sha256()
+            with source.open(member) as src, target.open('xb') as dest:
+                created = True
+                for block in iter(lambda: src.read(1024 * 1024), b''):
+                    count += len(block)
+                    if count > member.file_size:
+                        raise ValueError('Artifact too large')
+                    digest.update(block)
+                    dest.write(block)
+            if count != member.file_size or (manifest and digest.hexdigest() != manifest['sha256']):
+                raise ValueError('Artifact SHA256 mismatch')
+    except Exception:
+        if created:
+            target.unlink()
+        raise
     return target
 
 
@@ -239,7 +321,7 @@ class Relay:
             def url():
                 return self.command(['node', 'scripts/deploy-artifact-url.js'], env=env).decode().strip()
             archive = download_ranges(artifact['size_in_bytes'], directory, url, self.fetch)
-            original = verify_extract(archive, artifact, entry, directory)
+            original = verify_extract(archive, artifact, entry, directory, run['head_sha'], run['id'])
             downloaded = time.monotonic()
             if self.current_run(run, kind) is None:
                 return 'direct'

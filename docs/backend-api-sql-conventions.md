@@ -77,3 +77,9 @@ C2仓库执行归还接点：`POST /scan-logs/cancel-return` 的kit分支用SO X
 
 
 销售退货列表的窄只读标记（2026-10-03 C2）：findAllSR在原分页SELECT中使用EXISTS(sale_return_items.return_id=sale_returns.id且dispatch_component_id IS NOT NULL)，仅命中行追加commercialModel=kit-v1给列表精度展示。以已存退货明细的来源关联为依据，不按商品名称/价格猜套、不额外读取整销售单；原过滤、仓库范围、分页和count仍保持，两次查询且没有逐行补查。普通行不追加标记，详情仍沿既有明细来源判断。totalAmount原值不变，无写入、状态/账款规则或DDL调整。对应守卫追加在现有sale-commercial-return-contracts.test.js，沿test:sale-commercial进入CI，不另加未接线命令。
+
+## 安全扫描后的分页与对账导出（2026-10-06）
+
+运单、运费账单/结算、费用报销与库龄服务在 SQL 前核分页参数为正安全整数，再用 `normalizePagination` 将单批行数夹到 500；不接受非整数、非有限值或不安全 offset。对账报表保持单批 200，并采用相同的整数/offset 校验。校验放在 service 边界，不能只相信 controller 的数值转换。
+
+对账导出使用既有 `collectExportRows` 收齐多个有界报表批次，保留全部筛选与仓库授权范围；总量超 `EXPORT_MAX_ROWS` 或分页期间数据数量/身份发生变化时拒绝。不能向公共查询传很大 pageSize 并把被夹到 200 的结果当完整导出。回归与 CI 接线指针见 `docs/security-scope-remediation-2026-10-06.md`。

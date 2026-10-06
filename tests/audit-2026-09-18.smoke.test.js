@@ -233,7 +233,7 @@ async function main() {
 
     // 盘点员在货架上只能扫到 binId；料箱里的 lockedId 物理上扫不到
     const [[binRow]] = await conn.query('SELECT barcode FROM inventory_containers WHERE id=?', [binId])
-    await stockcheckSvc.saveItemContainerScans(checkId, item.id, [{ barcode: binRow.barcode, countedQty: 5 }], operator)
+    await stockcheckSvc.saveItemContainerScans(checkId, item.id, [{ barcode: binRow.barcode, countedQty: 5 }], operator, null, null, f.wh)
     await stockcheckSvc.submit(checkId, operator)
 
     const lockedAfter = await f.containerRow(lockedId)
@@ -259,7 +259,7 @@ async function main() {
       'SELECT id FROM inventory_check_items WHERE check_id=? AND product_id=?', [checkId, f.productId])
 
     const [[keepRow]] = await conn.query('SELECT barcode FROM inventory_containers WHERE id=?', [keepId])
-    await stockcheckSvc.saveItemContainerScans(checkId, item.id, [{ barcode: keepRow.barcode, countedQty: 5 }], operator)
+    await stockcheckSvc.saveItemContainerScans(checkId, item.id, [{ barcode: keepRow.barcode, countedQty: 5 }], operator, null, null, f.wh)
     await stockcheckSvc.submit(checkId, operator)
 
     const lostAfter = await f.containerRow(lostId)
@@ -942,7 +942,7 @@ async function main() {
       VALUES (?,?,?,'审计回归','个',5)`, [checkId, f.productId, f.code])
     const key = unique('KEY')
 
-    const first = await svc.saveItemContainerScans(checkId, itemId, [{ barcode: container.barcode, countedQty: 5 }], operator, null, key)
+    const first = await svc.saveItemContainerScans(checkId, itemId, [{ barcode: container.barcode, countedQty: 5 }], operator, null, key, f.wh)
     assert.equal(first.scannedContainers, 1)
     const [[row]] = await conn.query(
       'SELECT action, resource_type, resource_id, status FROM operation_requests WHERE request_key=?', [key])
@@ -956,7 +956,7 @@ async function main() {
     assert.equal(Number(receipt.data?.itemId), itemId)
 
     // 同键重放：返回同一份结果，不得重复写入
-    const replay = await svc.saveItemContainerScans(checkId, itemId, [{ barcode: container.barcode, countedQty: 5 }], operator, null, key)
+    const replay = await svc.saveItemContainerScans(checkId, itemId, [{ barcode: container.barcode, countedQty: 5 }], operator, null, key, f.wh)
     assert.deepEqual(replay, first, '同请求键重放必须回放原结果')
   })
 

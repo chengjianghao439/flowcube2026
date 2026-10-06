@@ -23,11 +23,11 @@ const withTx = (business) => async (req, res, next) => {
   }
 }
 
-const pdaList = async(req,res,next)=>{ try{const tasks=await svc.findPdaTasks(req.pda?.warehouseId??null);return successResponse(res,tasks)}catch(e){next(e)} }
+const pdaList = async(req,res,next)=>{ try{const tasks=await svc.findPdaTasks(req.pda?.warehouseId??null, req.user?.warehouseIds??null);return successResponse(res,tasks)}catch(e){next(e)} }
 const detail = async(req,res,next)=>{ try{const task=await svc.findById(+req.params.id, req.user?.warehouseIds??null);return successResponse(res,task)}catch(e){next(e)} }
 const submit = async(req,res,next)=>{ try{const op=getOperatorFromRequest(req);const task=await svc.submit(+req.params.id,op, req.user?.warehouseIds??null);return successResponse(res,task,'已提交到 PDA')}catch(e){next(e)} }
-const receive = withTx(async(conn, req)=>{ const{productId,packages}=req.body;return svc.receive(conn,+req.params.id,{productId,packages,requestKey:req.headers['x-request-key'],userId:req.user?.userId??null,pdaWarehouseId:req.pda?.warehouseId??null}) })
-const check = withTx(async(conn, req)=>{ const{productId,passedQty,rejectedQty}=req.body;return svc.check(conn,+req.params.id,{productId,passedQty,rejectedQty,requestKey:req.headers['x-request-key'],userId:req.user?.userId??null,pdaWarehouseId:req.pda?.warehouseId??null}) })
+const receive = withTx(async(conn, req)=>{ const{productId,packages}=req.body;return svc.receive(conn,+req.params.id,{productId,packages,requestKey:req.headers['x-request-key'],userId:req.user?.userId??null,pdaWarehouseId:req.pda?.warehouseId??null,scopeWarehouseIds:req.user?.warehouseIds??null}) })
+const check = withTx(async(conn, req)=>{ const{productId,passedQty,rejectedQty}=req.body;return svc.check(conn,+req.params.id,{productId,passedQty,rejectedQty,requestKey:req.headers['x-request-key'],userId:req.user?.userId??null,pdaWarehouseId:req.pda?.warehouseId??null,scopeWarehouseIds:req.user?.warehouseIds??null}) })
 const putaway = withTx(async(conn, req)=>{ const{containerId,locationId}=req.body;return svc.putaway(conn,+req.params.id,{containerId,locationId,requestKey:req.headers['x-request-key'],userId:req.user?.userId??null,pdaWarehouseId:req.pda?.warehouseId??null,scopeWarehouseIds:req.user?.warehouseIds??null}) })
 const cancel = async(req,res,next)=>{ try{const op=getOperatorFromRequest(req);await svc.cancel(+req.params.id,op,{ scopeWarehouseIds: req.user?.warehouseIds??null });return successResponse(res,null,'已取消')}catch(e){next(e)} }
 

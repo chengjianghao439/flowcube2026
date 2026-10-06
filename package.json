@@ -175,6 +175,8 @@
     "smoke:sale-commercial-readonly": "KIT_TEST_SLICE=readonly node tests/sale-commercial-lifecycle.smoke.test.js",
     "smoke:sale-commercial-review": "KIT_TEST_SLICE=scope node tests/sale-commercial-lifecycle.smoke.test.js && KIT_TEST_SLICE=gates KIT_GATE_PHASE=qa node tests/sale-commercial-lifecycle.smoke.test.js",
     "test:builder-download-compat": "node --test tests/builder-download-compat.test.js",
-    "test:style-compat": "node scripts/browser-smoke/style-compat.cjs"
+    "test:style-compat": "node scripts/browser-smoke/style-compat.cjs",
+    "test:security-scan-remediation": "node --test tests/security-api-ingress.test.js tests/security-image-sbom.test.js tests/security-import-budget.test.js tests/security-print-remediation.test.js tests/security-release-artifact.test.js tests/security-release-boundaries.test.js tests/security-release-target.test.js tests/security-scope-pda.test.js tests/security-scope-reconciliation-pagination.test.js tests/security-scope-search-approvals.test.js tests/security-session-cleanup.test.js tests/security-session-family.test.js",
+    "smoke:security-scan-remediation": "node --test --test-concurrency=1 tests/security-migrations.smoke.test.js tests/security-scope-warehouse.smoke.test.js tests/security-session-family.smoke.test.js && node tests/security-print-credentials.smoke.test.js"
   }
 }

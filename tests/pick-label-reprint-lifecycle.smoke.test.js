@@ -224,13 +224,13 @@ async function main() {
       //    或历史任务；且**只结算本轮 `finish` 产出的那个 job**（按 id 匹配）。
       //    **只证明 API 闭环，不代表实际出纸。**
       const claim = await http.post('/api/print-jobs/claim-client', {
-        token, json: { clientId: ownPrint.clientId, limit: 50 },
+        token, headers: ownPrint.headers, json: { limit: 50 },
       })
       assert.ok(claim.ok, `前置：claim-client 失败：${claim.status} ${JSON.stringify(claim.data).slice(0, 220)}`)
       const claimed = (claim.data?.data || []).find(j => Number(j.id) === printJobId)
       assert.ok(claimed?.ackToken, `前置：claim 应返回本任务的 job 与其 ackToken：${JSON.stringify(claim.data).slice(0, 300)}`)
       const done = await http.post(`/api/print-jobs/${printJobId}/complete-client`, {
-        token, headers: { 'X-Client-Id': ownPrint.clientId }, json: { ackToken: claimed.ackToken },
+        token, headers: ownPrint.headers, json: { ackToken: claimed.ackToken },
       })
       assert.ok(done.ok, `前置：complete-client 收口失败：${done.status} ${JSON.stringify(done.data).slice(0, 220)}`)
 

@@ -1,37 +1,21 @@
-# ============================================================
-# 极序 Flow — 安全扫描工作流
-#
-# 触发条件：
-#   - 每次 push 到 main
-#   - 每次 pull request 到 main
-#   - 每周一 06:00 定时扫描
-#
-# 扫描内容：
-#   - gitleaks: 敏感信息泄露检测
-#   - npm audit: 依赖漏洞扫描（三端及页面验收运行时）
-# ============================================================
 name: Security Scan
-
-on:
+'on':
   push:
-    branches: [main]
+    branches:
+      - main
   pull_request:
-    branches: [main]
+    branches:
+      - main
   schedule:
-    - cron: '0 22 * * 0'  # 北京时间周一 06:00 = UTC 周日 22:00
-
+    - cron: 0 22 * * 0
 permissions:
   contents: read
   security-events: write
   pull-requests: write
-  # upload-sarif 需读取本次 workflow run 的元数据来关联分析结果（私有仓库下必须显式声明）
   actions: read
-
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 jobs:
-  # ── 1. Gitleaks 敏感信息检测 ──────────────────────────────
   gitleaks:
     name: Gitleaks — 敏感信息扫描
     runs-on: ubuntu-latest
@@ -39,73 +23,69 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           fetch-depth: 0
-
+          persist-credentials: false
+      - name: Detect Gitleaks license
+        id: license
+        env:
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+        run: if [ -n "$GITLEAKS_LICENSE" ]; then echo "enabled=true" >> "$GITHUB_OUTPUT"; else echo "enabled=false" >> "$GITHUB_OUTPUT"; fi
       - name: Run Gitleaks
         uses: gitleaks/gitleaks-action@dcedce43c6f43de0b836d1fe38946645c9c638dc
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
-          # 关闭 gitleaks 上传「扫描结果构件」——它撞 Actions 存储配额会让整个 job 失败，
-          # 而这个构件是冗余的：扫描本身照常跑、发现泄露仍会 fail、SARIF 仍上传到 code
-          # scanning（见下方 Upload Gitleaks SARIF，走 code scanning API 不占 artifact 配额）。
           GITLEAKS_ENABLE_UPLOAD_ARTIFACT: false
-        # 若未配置 license，fallback 到 Docker 直接运行
-
+        if: steps.license.outputs.enabled == 'true'
       - name: Fallback gitleaks (Docker)
-        if: ${{ !env.GITLEAKS_LICENSE }}
-        run: |
-          docker run --rm \
-            -v ${{ github.workspace }}:/repo \
-            -e GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }} \
-            ghcr.io/gitleaks/gitleaks:latest detect \
-            --source=/repo \
-            --config=/repo/.gitleaks.toml \
-            --report-format=sarif \
-            --report-path=/repo/gitleaks-report.sarif \
-            --verbose
-
-      # 把 SARIF 推送到 GitHub 安全面板。本仓库为私有且未启用 Code Scanning
-      # （需 GitHub Advanced Security），该 API 不可用，必然报
-      # "Code scanning is not enabled for this repository"。
-      # 扫描本身与「发现泄露即失败」不依赖这一步，结果也已写入下方 job summary，
-      # 故 continue-on-error：将来启用 Code Scanning 后本步骤会自动恢复生效。
+        if: steps.license.outputs.enabled != 'true'
+        run: |-
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/gitleaks-output"
+          docker run --rm --cap-drop=ALL --security-opt=no-new-privileges --network=none \
+            -v "$GITHUB_WORKSPACE:/repo:ro" \
+            -v "$RUNNER_TEMP/gitleaks-output:/out" \
+            ghcr.io/gitleaks/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f detect \
+            --source=/repo --config=/repo/.gitleaks.toml \
+            --report-format=sarif --report-path=/out/gitleaks-report.sarif --redact
       - name: Upload Gitleaks SARIF
         if: always()
         continue-on-error: true
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: gitleaks-report.sarif
+          sarif_file: ${{ steps.license.outputs.enabled == 'true' && 'gitleaks-report.sarif' || format('{0}/gitleaks-output/gitleaks-report.sarif', runner.temp) }}
           category: gitleaks
-
       - name: Gitleaks Summary
         if: always()
         run: |
-          if [ -f gitleaks-report.sarif ]; then
-            ISSUES=$(jq -er '.runs[0].results | if type == "array" then length else error("invalid results") end' gitleaks-report.sarif)
+          if [ -f "$REPORT_FILE" ]; then
+            ISSUES=$(jq -er '.runs[0].results | if type == "array" then length else error("invalid results") end' "$REPORT_FILE")
             echo "## Gitleaks 扫描结果" >> "$GITHUB_STEP_SUMMARY"
             echo "发现 **$ISSUES** 个敏感信息问题" >> "$GITHUB_STEP_SUMMARY"
           else
             echo "## Gitleaks 扫描结果" >> "$GITHUB_STEP_SUMMARY"
             echo "未生成可读取的 SARIF 报告，请核对 Gitleaks 扫描步骤；不能据此判定零泄露。" >> "$GITHUB_STEP_SUMMARY"
           fi
-
-  # ── 2. npm audit 依赖漏洞扫描 ─────────────────────────────
+        env:
+          REPORT_FILE: ${{ steps.license.outputs.enabled == 'true' && 'gitleaks-report.sarif' || format('{0}/gitleaks-output/gitleaks-report.sarif', runner.temp) }}
   npm-audit:
     name: npm audit — 依赖漏洞扫描
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        target: [backend, frontend, desktop, scripts/browser-smoke]
+        target:
+          - backend
+          - frontend
+          - desktop
+          - scripts/browser-smoke
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
-
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: "22"
-
+          node-version: '22'
       - name: Install dependencies (${{ matrix.target }})
         run: npm ci --prefix ${{ matrix.target }} --ignore-scripts --no-audit
-
       - name: Audit dependencies and enforce result integrity
         timeout-minutes: 5
         shell: bash
@@ -116,14 +96,13 @@ jobs:
           AUDIT_EXIT=$?
           set -e
           node scripts/check-npm-audit.js audit-report.json "$AUDIT_EXIT"
-
-  # ── 3. 检查已跟踪的敏感文件 ───────────────────────────────
   sensitive-files:
     name: 敏感文件检查
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
-
+        with:
+          persist-credentials: false
       - name: Check for tracked secrets
         run: |
           ISSUES=0

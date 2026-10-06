@@ -9,7 +9,7 @@ process.env.SENTRY_DSN = ''
 process.env.LOKI_URL = ''
 
 const express = require('../backend/node_modules/express')
-const jwt = require('../backend/node_modules/jsonwebtoken')
+const bcrypt = require('../backend/node_modules/bcryptjs')
 const ExcelJS = require('../backend/node_modules/exceljs')
 const { pool } = require('../backend/src/config/db')
 const { PERMISSIONS } = require('../backend/src/constants/permissions')
@@ -17,6 +17,7 @@ const { SETTLEMENT_TYPE } = require('../backend/src/constants/settlementType')
 
 async function main() {
   const mark = `IM${randomBytes(5).toString('hex')}`
+  const password = `Fixture_${randomBytes(16).toString('hex')}`
   const results = []
   let server, roleId, userId
   const modules = [
@@ -49,17 +50,25 @@ async function main() {
     roleId = Array.from({ length: 254 }, (_, i) => 255 - i).find(id => !used.some(row => Number(row.id) === id))
     assert.ok(roleId)
     await pool.query('INSERT INTO sys_roles (id,code,name,is_system) VALUES (?,?,?,0)', [roleId, `${mark}R`, mark])
-    const [user] = await pool.query('INSERT INTO sys_users (username,password,real_name,role_id,role_name) VALUES (?,?,?,?,?)', [`${mark}U`, 'fixture-no-password-login', mark, roleId, mark])
+    const [user] = await pool.query('INSERT INTO sys_users (username,password,real_name,role_id,role_name) VALUES (?,?,?,?,?)', [`${mark}U`, await bcrypt.hash(password, 10), mark, roleId, mark])
     userId = user.insertId
     for (const permission of [PERMISSIONS.CUSTOMER_CREATE, PERMISSIONS.SUPPLIER_CREATE]) {
       await pool.query('INSERT INTO sys_role_permissions (role_id,permission) VALUES (?,?)', [roleId, permission])
     }
     const app = express()
+    app.use(express.json())
+    app.use('/api/auth', require('../backend/src/modules/auth/auth.routes'))
     app.use('/api/import', require('../backend/src/modules/import/import.routes'))
     app.use(require('../backend/src/middleware/errorHandler'))
     server = await new Promise(resolve => { const s = app.listen(0, '127.0.0.1', () => resolve(s)) })
     const endpoint = `http://127.0.0.1:${server.address().port}/api/import`
-    const authorization = `Bearer ${jwt.sign({ userId, tokenVersion: 0 }, process.env.JWT_SECRET, { expiresIn: '5m' })}`
+    const loginResponse = await fetch(`http://127.0.0.1:${server.address().port}/api/auth/login`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username: `${mark}U`, password }), signal: AbortSignal.timeout(10000),
+    })
+    assert.equal(loginResponse.status, 200, 'fixture obtains a real family-bound login session')
+    const login = await loginResponse.json()
+    const authorization = `Bearer ${login.data.token}`
 
     for (const module of modules) {
       const csv = [module.header, ...cases.map((entry, index) => {
@@ -127,7 +136,10 @@ async function main() {
         assert.equal(Number(count), 0, `${module.path}: own rows cleaned`)
       }
       if (userId) {
+        await pool.query('DELETE FROM operation_logs WHERE user_id=?', [userId])
         await pool.query('DELETE FROM auth_audit_logs WHERE user_id=?', [userId])
+        await pool.query('DELETE FROM refresh_token_sessions WHERE user_id=?', [userId])
+        await pool.query('DELETE FROM auth_session_families WHERE user_id=?', [userId])
         await pool.query('DELETE FROM sys_users WHERE id=?', [userId])
       }
       if (roleId) {

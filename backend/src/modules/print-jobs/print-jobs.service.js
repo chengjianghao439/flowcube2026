@@ -22,8 +22,8 @@ async function findAll(params) {
   return query.findAll(params)
 }
 
-async function getStatsCounts() {
-  return query.getStatsCounts()
+async function getStatsCounts(scopeWarehouseIds = null) {
+  return query.getStatsCounts(scopeWarehouseIds)
 }
 
 module.exports = {

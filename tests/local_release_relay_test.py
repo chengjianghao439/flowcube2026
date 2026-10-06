@@ -1,9 +1,12 @@
 import hashlib
 import importlib.util
 import io
+import inspect
+import json
 import pathlib
 import tempfile
 import unittest
+import warnings
 import zipfile
 
 spec = importlib.util.spec_from_file_location('relay', pathlib.Path(__file__).resolve().parents[1] / 'scripts/local-release-relay.py')
@@ -87,16 +90,94 @@ class RelayTests(unittest.TestCase):
 
     def zip_fixture(self, entries):
         buf = io.BytesIO()
-        with zipfile.ZipFile(buf, 'w') as archive:
-            for name, data in entries: archive.writestr(name, data)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', UserWarning)
+            with zipfile.ZipFile(buf, 'w') as archive:
+                for name, data in entries: archive.writestr(name, data)
         return buf.getvalue()
 
-    def extract(self, entries, digest=None):
+    def extract(self, entries, digest=None, entry='expected.apk', sha=None, run=None):
         data = self.zip_fixture(entries)
         with tempfile.TemporaryDirectory() as directory:
             source = pathlib.Path(directory)/'artifact.zip'; source.write_bytes(data)
-            result = relay.verify_extract(source, dict(size_in_bytes=len(data), digest=digest or 'sha256:'+hashlib.sha256(data).hexdigest()), 'expected.apk', pathlib.Path(directory))
+            arguments = [source, dict(size_in_bytes=len(data), digest=digest or 'sha256:'+hashlib.sha256(data).hexdigest()), entry, pathlib.Path(directory)]
+            if len(inspect.signature(relay.verify_extract).parameters) > 4:
+                arguments.extend([sha, run])
+            result = relay.verify_extract(*arguments)
             return result.read_bytes()
+
+    def bundle(self, entry='expected.apk', metadata=None):
+        payload = b'original CI bytes'
+        if metadata is None:
+            metadata = {'version.json': b'{"version":"1.2.3","versionCode":123}'} if entry.endswith('.apk') else {'releaseNotes.md': b'owned notes'}
+        manifest = dict(sha=SHA, runId='123', file=entry, sha256=hashlib.sha256(payload).hexdigest(),
+                        metadata={name: hashlib.sha256(data).hexdigest() for name, data in metadata.items()})
+        return [(entry, payload), ('release-provenance.json', json.dumps(manifest).encode())] + list(metadata.items())
+
+    def test_release_bundle_validates_original_binary_metadata_and_run(self):
+        for entry in ['expected.apk', 'expected.exe']:
+            self.assertEqual(self.extract(self.bundle(entry), entry=entry, sha=SHA, run='123'), b'original CI bytes')
+        self.assertEqual(self.extract(self.bundle('expected.exe', {}), entry='expected.exe', sha=SHA, run='123'), b'original CI bytes')
+
+    def test_release_bundle_rejects_source_run_and_byte_substitution(self):
+        for sha, run in [('b'*40, '123'), (SHA, '124')]:
+            with self.assertRaises(ValueError): self.extract(self.bundle(), sha=sha, run=run)
+        for position, data in [(0, b'changed binary'), (2, b'changed metadata')]:
+            entries = self.bundle(); entries[position] = (entries[position][0], data)
+            with self.assertRaises(ValueError): self.extract(entries, sha=SHA, run='123')
+        entries = self.bundle(); manifest = json.loads(entries[1][1]); manifest['metadata'] = {}
+        entries[1] = (entries[1][0], json.dumps(manifest).encode())
+        with self.assertRaises(ValueError): self.extract(entries, sha=SHA, run='123')
+
+    def test_release_bundle_rejects_unknown_duplicate_path_link_and_metadata_budget(self):
+        cases = [self.bundle() + [('extra', b'x')], self.bundle() + [('expected.apk', b'x')],
+                 self.bundle() + [('version.json', b'x')], self.bundle() + [('../version.json', b'x')],
+                 self.bundle(metadata={'version.json': b'x' * (1024 * 1024 + 1)}),
+                 self.bundle(metadata={'version.json': b'x' * (1024 * 1024)}),
+                 self.bundle(metadata={}), self.bundle('flowcube-images.tar.gz', {})]
+        for entries in cases:
+            with self.assertRaises(ValueError): self.extract(entries, entry=entries[0][0], sha=SHA, run='123')
+        link = zipfile.ZipInfo('version.json'); link.create_system = 3; link.external_attr = 0o120777 << 16
+        entries = self.bundle(); entries[2] = (link, entries[2][1])
+        with self.assertRaises(ValueError): self.extract(entries, sha=SHA, run='123')
+
+    def test_release_bundle_deliver_binds_actual_push_target_and_run_before_upload(self):
+        for field, wrong in [('sha', 'b' * 40), ('runId', '124')]:
+            instance = relay.Relay(dict(GITHUB_REPOSITORY='fixture/repo', GITHUB_SHA=SHA, RELEASE_TAG='v1.2.3', FLOWCUBE_RELAY_SSH_TARGET='fixture'))
+            run = self.run_fixture(path='.github/workflows/build-pda-apk.yml')
+            entries = self.bundle('FlowCubePDA-1.2.3.apk')
+            manifest = json.loads(entries[1][1]); manifest[field] = wrong
+            entries[1] = ('release-provenance.json', json.dumps(manifest).encode())
+            payload = self.zip_fixture(entries)
+            artifact = dict(id=42, expired=False, size_in_bytes=len(payload), digest='sha256:' + hashlib.sha256(payload).hexdigest(),
+                            workflow_run=dict(id=123, head_sha=SHA))
+            instance.current_run = lambda run, kind: run
+            calls = []; instance.ssh = lambda cmd: calls.append(cmd) or b''
+            def command(args, **kwargs):
+                if args[0] == 'node': return b'https://signed.invalid/private'
+                if args[0] == 'scp': self.fail('Wrong source/run must not reach upload')
+                return b''
+            instance.command = command
+            instance.fetch = lambda url, lo, hi, dest: dest.write_bytes(payload[lo:hi + 1])
+            try:
+                with self.assertRaisesRegex(ValueError, 'source/run'): instance.deliver('pda', run, artifact)
+            finally:
+                instance.close()
+            self.assertFalse(instance.root.exists())
+            self.assertFalse(any(cmd.startswith('mv ') for cmd in calls))
+
+    def test_failed_binary_hash_removes_owned_partial_and_keeps_existing_target(self):
+        entries = self.bundle(); entries[0] = ('expected.apk', b'changed CI bytes')
+        payload = self.zip_fixture(entries)
+        artifact = dict(size_in_bytes=len(payload), digest='sha256:' + hashlib.sha256(payload).hexdigest())
+        with tempfile.TemporaryDirectory() as directory:
+            directory = pathlib.Path(directory); source = directory / 'artifact.zip'; source.write_bytes(payload)
+            target = directory / 'expected.apk'
+            with self.assertRaisesRegex(ValueError, 'SHA256'): relay.verify_extract(source, artifact, 'expected.apk', directory, SHA, '123')
+            self.assertFalse(target.exists())
+            target.write_bytes(b'previous owned target')
+            with self.assertRaises(FileExistsError): relay.verify_extract(source, artifact, 'expected.apk', directory, SHA, '123')
+            self.assertEqual(target.read_bytes(), b'previous owned target')
 
     def test_valid_original_bytes(self):
         self.assertEqual(self.extract([('expected.apk', b'original CI bytes')]), b'original CI bytes')

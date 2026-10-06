@@ -2,6 +2,7 @@ const bcrypt = require('bcryptjs')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { normalizePagination } = require('../../utils/pagination')
+const { revokeAllFamilies } = require('../auth/sessionFamilies')
 
 // roleId=1 是超管，跳过全部权限校验（前后端都是）。允许创建/改到超管的唯一入口是
 // 调用方自己就是超管——否则任何一个有 user.create / user.update 权限的普通角色
@@ -206,12 +207,14 @@ async function update(id, { username, realName, roleId, isActive, departmentId, 
     const finalDeptId = departmentId !== undefined ? departmentId : (user.department_id ?? null)
     const finalSelfApprove = allowSelfApprove !== undefined ? (allowSelfApprove ? 1 : 0) : (user.allow_self_approve ? 1 : 0)
     if (finalDeptId) await assertDepartmentExists(finalDeptId, conn)
+    const finalActive = isActive === undefined ? !!user.is_active : !!isActive
     try {
       await conn.query(
-        `UPDATE sys_users SET username = ?, real_name = ?, role_id = ?, role_name = ?, is_active = ?, department_id = ?, allow_self_approve = ?
+        `UPDATE sys_users SET username = ?, real_name = ?, role_id = ?, role_name = ?, is_active = ?, department_id = ?, allow_self_approve = ?, token_version = COALESCE(token_version,0) + ?
          WHERE id = ? AND deleted_at IS NULL`,
-        [username ?? user.username, realName, finalRoleId, roleName, isActive ? 1 : 0, finalDeptId || null, finalSelfApprove, id],
+        [username ?? user.username, realName, finalRoleId, roleName, finalActive ? 1 : 0, finalDeptId || null, finalSelfApprove, finalActive ? 0 : 1, id],
       )
+      if (!finalActive) await revokeAllFamilies(conn, user.id)
     } catch (error) {
       if (changingUsername && error.code === 'ER_DUP_ENTRY') {
         throw new AppError('账号已存在', 400, 'USER_ACCOUNT_EXISTS')

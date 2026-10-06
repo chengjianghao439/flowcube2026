@@ -3,9 +3,9 @@ const path = require('path')
 const fs = require('fs')
 const cors = require('cors')
 const helmet = require('helmet')
-const rateLimit = require('express-rate-limit')
+const { buildTrustedProxy } = require('./utils/trustedProxy')
+const { createApiLimiter, loginLimiter, createRequestConcurrencyGuard, validateBodyBudget } = require('./middleware/apiIngress')
 const errorHandler    = require('./middleware/errorHandler')
-const opLogger        = require('./middleware/opLogger')
 const requestLogger   = require('./middleware/requestLogger')
 const { env } = require('./config/env')
 const { buildCorsOptions } = require('./config/cors')
@@ -23,7 +23,7 @@ app.set('json charset', 'utf-8')
 // 位于 Nginx / 负载均衡后时开启，否则 req.protocol 多为 http，拼出的安装包下载地址会变成 http://，
 // 公网若仅开放 443，Windows 客户端更新下载会失败（0.3.x 等旧版依赖接口返回的可访问 URL）。
 if (env.TRUST_PROXY) {
-  app.set('trust proxy', 1)
+  app.set('trust proxy', buildTrustedProxy())
 }
 
 const isProd = env.IS_PROD
@@ -46,10 +46,7 @@ app.use(
   ),
 )
 app.use(cors(buildCorsOptions(env)))
-app.use(express.json({ limit: '10mb' }))
-app.use(express.urlencoded({ extended: true }))
 app.use(requestLogger)
-app.use(opLogger)
 
 // ─── 健康检查 ─────────────────────────────────────────────────────────────────
 
@@ -69,18 +66,12 @@ app.get('/api/ready', createReadinessHandler(pool))
 // 防异常爆刷的基础防护。阈值默认宽松，兼容同一客户出口 IP（NAT）下多台 PDA / 桌面端并发；
 // 可用环境变量 RATE_LIMIT_WINDOW_MS / RATE_LIMIT_MAX 调整。登录接口另有更严格的专用限流。
 // 健康检查 /health、/api/health 已在上方注册，不经过此中间件，PDA 网络探测不受影响。
-const apiRateWindowMs = Number(process.env.RATE_LIMIT_WINDOW_MS) || 60_000
-const apiRateMax = Number(process.env.RATE_LIMIT_MAX) || 1000
-const apiLimiter = rateLimit({
-  windowMs: apiRateWindowMs,
-  max: apiRateMax,
-  standardHeaders: true,
-  legacyHeaders: false,
-  handler: (req, res) => {
-    res.status(429).json({ success: false, message: '请求过于频繁，请稍后再试', data: null })
-  },
-})
-app.use('/api', apiLimiter)
+app.use('/api', createApiLimiter())
+app.use('/api/auth/login', loginLimiter)
+app.use('/api', createRequestConcurrencyGuard())
+app.use('/api', express.json({ limit: '2mb' }))
+app.use('/api', express.urlencoded({ extended: false, limit: '64kb', parameterLimit: 1000 }))
+app.use('/api', validateBodyBudget)
 
 // ─── 业务路由（按模块在此注册）────────────────────────────────────────────────
 

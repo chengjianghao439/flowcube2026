@@ -1,5 +1,5 @@
 const { Router } = require('express')
-const rateLimit = require('express-rate-limit')
+const { loginLimiter } = require('../../middleware/apiIngress')
 const { z } = require('zod')
 const { successResponse } = require('../../utils/response')
 const authController = require('./auth.controller')
@@ -8,19 +8,6 @@ const { authMiddleware } = require('../../middleware/auth')
 const { validateBody } = require('../../utils/route')
 
 const router = Router()
-
-const loginWindowMs = Number(process.env.AUTH_LOGIN_WINDOW_MS || `${15 * 60 * 1000}`)
-const loginMaxPerIp = Number(process.env.AUTH_LOGIN_MAX_PER_IP || '20')
-
-const loginLimiter = rateLimit({
-  windowMs: Number.isFinite(loginWindowMs) && loginWindowMs > 0 ? loginWindowMs : 15 * 60 * 1000,
-  max: Number.isFinite(loginMaxPerIp) && loginMaxPerIp > 0 ? loginMaxPerIp : 300,
-  standardHeaders: true,
-  legacyHeaders: false,
-  handler: (_req, res) => {
-    res.status(429).json({ success: false, message: '登录尝试过于频繁，请稍后再试', data: null })
-  },
-})
 
 const loginSchema = z.object({
   username: z.string().min(1, '账号不能为空'),

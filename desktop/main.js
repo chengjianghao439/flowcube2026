@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain, dialog } = require('electron')
+const { app, BrowserWindow, Menu, ipcMain, dialog, safeStorage } = require('electron')
 const os = require('os')
 const path = require('path')
 const fs = require('fs')
@@ -13,6 +13,13 @@ log.info('🔥 当前 main.js 已加载')
 const { pathToFileURL } = require('url')
 const { checkAppUpdate, startUpdateDownload, ignoreVersion, getPendingUpdate, clearPendingUpdate } = require('./lib/updateCheck')
 const { printZpl } = require('./lib/localPrint')
+const { validatePrintBudget, printBoundedBatch } = require('./lib/printBudget')
+const { createPrintClientIdentity } = require('./lib/printClientIdentity')
+let printClientIdentity
+function getPrintClientIdentity() {
+  if (!printClientIdentity) printClientIdentity = createPrintClientIdentity({ userDataPath: app.getPath('userData'), safeStorage, hostname: os.hostname() })
+  return printClientIdentity
+}
 const { createRendererGuard } = require('./lib/rendererSecurity')
 const rendererGuard = createRendererGuard()
 
@@ -156,12 +163,7 @@ function normalizeApiOrigin(raw) {
 }
 
 function buildDesktopClientInfo() {
-  const hostnameRaw = String(os.hostname() || '').trim() || 'flowcube-desktop'
-  const hostname = hostnameRaw.slice(0, 200)
-  const clientId = `desktop:${hostnameRaw}`
-    .replace(/[^A-Za-z0-9_.:-]/g, '_')
-    .slice(0, 200)
-  return { clientId, hostname }
+  return getPrintClientIdentity().getInfo()
 }
 
 async function getRendererApiOrigin(win) {
@@ -284,15 +286,19 @@ handleRenderer('flowcube:get-system-printers', async (event) => {
 })
 
 handleRenderer('flowcube:get-client-info', async () => buildDesktopClientInfo())
+handleRenderer('flowcube:get-print-client-credential', async (_event, origin) => getPrintClientIdentity().getCredential(origin))
+handleRenderer('flowcube:set-print-client-credential', async (_event, origin, credential) => getPrintClientIdentity().setCredential(origin, credential))
+handleRenderer('flowcube:reset-print-client-identity', async () => getPrintClientIdentity().reset())
 
 /** 本机直连：按打印机名称 RAW 出 ZPL（Windows WinSpool / macOS·Linux lp） */
 handleRenderer('flowcube:print-zpl', async (event, opts) => {
   try {
     const o = opts && typeof opts === 'object' ? { ...opts } : {}
+    validatePrintBudget(o.content, o.copies)
     if (o.printerName != null) {
       o.printerName = await resolveCanonicalPrinterNameForRaw(event, o.printerName)
     }
-    await printZpl(o)
+    await printBoundedBatch(o, printZpl)
     return null
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)

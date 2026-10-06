@@ -1,17 +1,18 @@
 const { pool } = require('../../config/db')
-const { assertBoundWarehouseInScope, assertInScope } = require('../../utils/warehouseScope')
+const { assertBoundWarehouseInScope } = require('../../utils/warehouseScope')
 const AppError = require('../../utils/AppError')
 const logger = require('../../utils/logger')
 const { resolvePrinterForJob, normalizeJobType } = require('./print-dispatch')
 const { recordPrintSuccess, recordPrintFailure } = require('./printer-health')
 const { appendInboundPrintEventByJob } = require('./print-jobs.helpers')
 const { findById, findByIdWithExecutor } = require('./print-jobs.query')
+const { assertPrintBudget } = require('./print-budget')
+const { requireClientIdentity } = require('../printers/print-client-auth')
 const {
   STATUS,
   MAX_RETRY,
   ttlMinutes,
   parsePriority,
-  assertCanCompleteLocalDesktop,
 } = require('./print-jobs.status')
 
 async function findExistingActiveJob(exec, { jobUniqueKey, warehouseId, jobType }) {
@@ -82,6 +83,7 @@ async function createRecord(exec, {
   if (typeof copies !== 'number' || !Number.isInteger(copies) || copies < 1 || copies > 100) {
     throw new AppError('打印份数必须为 1–100 的整数', 400, 'PRINT_COPIES_INVALID')
   }
+  if (!unprintableReason) assertPrintBudget(content, copies)
 
   const jobUniqueKey = jobUniqueKeyRaw != null ? String(jobUniqueKeyRaw).trim() || null : null
   if (jobUniqueKey && jobUniqueKey.length > 160) {
@@ -139,7 +141,7 @@ async function createRecord(exec, {
   if (!unprintableReason) {
     const [[printer]] = await exec.query('SELECT id, code, status, warehouse_id FROM printers WHERE id=?', [resolvedId])
     if (!printer) throw new AppError('打印机不存在', 404, 'PRINT_PRINTER_NOT_FOUND')
-    assertInScope(scopeWarehouseIds, printer.warehouse_id, '打印机')
+    assertBoundWarehouseInScope(scopeWarehouseIds, printer.warehouse_id, '打印机')
   }
   const jobStatus = unprintableReason ? 3 : 0
   const jobError = unprintableReason ? String(unprintableReason).slice(0, 500) : null
@@ -267,7 +269,8 @@ async function assertQueueReady({
   }
 }
 
-async function complete(id, { ackToken } = {}, scopeWarehouseIds = null) {
+async function complete(id, { ackToken } = {}, scopeWarehouseIds = null, identity) {
+  const { clientId, credentialHash } = requireClientIdentity(identity)
   const job = await findById(id, scopeWarehouseIds)
   const token = String(ackToken || '').trim()
   if (!token) {
@@ -288,8 +291,9 @@ async function complete(id, { ackToken } = {}, scopeWarehouseIds = null) {
   const [ur] = await pool.query(
     `UPDATE print_jobs
      SET status=?, error_message=NULL, ack_token=NULL, acknowledged_at=NOW()
-     WHERE id=? AND status=? AND ack_token=?`,
-    [STATUS.DONE, id, STATUS.PRINTING, token],
+     WHERE id=? AND status=? AND ack_token=? AND claimed_client_id=? AND claimed_credential_hash=?
+       AND EXISTS (SELECT 1 FROM print_clients pc WHERE pc.client_id=? AND pc.credential_hash=? AND pc.revoked_at IS NULL)`,
+    [STATUS.DONE, id, STATUS.PRINTING, token, clientId, credentialHash, clientId, credentialHash],
   )
   if (!ur.affectedRows) {
     throw new AppError('打印任务状态或确认令牌已变化，请刷新后重试', 409, 'PRINT_JOB_STATE_CONFLICT')
@@ -311,29 +315,12 @@ async function complete(id, { ackToken } = {}, scopeWarehouseIds = null) {
   return findById(id)
 }
 
-async function completeLocalDesktop(id, scopeWarehouseIds = null) {
-  const job = await findById(id, scopeWarehouseIds)
-  if (job.status === STATUS.DONE) return job
-  const [[sec]] = await pool.query('SELECT ack_token FROM print_jobs WHERE id=?', [id])
-  assertCanCompleteLocalDesktop(job, !!sec?.ack_token)
-  const [ur] = await pool.query(
-    'UPDATE print_jobs SET status=?, error_message=NULL, ack_token=NULL, acknowledged_at=NOW() WHERE id=? AND status=?',
-    [STATUS.DONE, id, STATUS.PENDING],
-  )
-  if (!ur.affectedRows) {
-    throw new AppError('任务状态已变更，请刷新后重试', 409, 'STATE_CONFLICT')
-  }
-  await printOptionalSideEffect('appendInboundPrintEvent:completeLocalDesktop', appendInboundPrintEventByJob(
-    job,
-    'print_completed',
-    '库存条码打印成功',
-    job.refCode ? `库存条码 ${job.refCode} 已打印` : '库存条码已打印',
-    { printJobId: job.id, barcode: job.refCode || null },
-  ), { printJobId: job.id, refCode: job.refCode || null })
-  return findById(id)
+async function completeLocalDesktop(id, scopeWarehouseIds = null, body = {}, identity) {
+  return complete(id, body, scopeWarehouseIds, identity)
 }
 
-async function fail(id, { ackToken, errorMessage } = {}, scopeWarehouseIds = null) {
+async function fail(id, { ackToken, errorMessage } = {}, scopeWarehouseIds = null, identity) {
+  const { clientId, credentialHash } = requireClientIdentity(identity)
   const job = await findById(id, scopeWarehouseIds)
   if (typeof ackToken !== 'string' || !ackToken.trim()) {
     throw new AppError('缺少本次领取令牌，无法标记打印失败', 400, 'PRINT_ACK_TOKEN_REQUIRED')
@@ -344,8 +331,9 @@ async function fail(id, { ackToken, errorMessage } = {}, scopeWarehouseIds = nul
   const [ur] = await pool.query(
     `UPDATE print_jobs
      SET status=?, retry_count=?, error_message=?, ack_token=NULL, dispatched_at=NULL
-     WHERE id=? AND status=? AND ack_token=?`,
-    [STATUS.FAILED, retryCount, msg, id, STATUS.PRINTING, ackToken],
+     WHERE id=? AND status=? AND ack_token=? AND claimed_client_id=? AND claimed_credential_hash=?
+       AND EXISTS (SELECT 1 FROM print_clients pc WHERE pc.client_id=? AND pc.credential_hash=? AND pc.revoked_at IS NULL)`,
+    [STATUS.FAILED, retryCount, msg, id, STATUS.PRINTING, ackToken, clientId, credentialHash, clientId, credentialHash],
   )
   if (!ur.affectedRows) {
     throw new AppError('打印任务状态已变化，无法标记失败', 409, 'PRINT_JOB_STATE_CONFLICT')

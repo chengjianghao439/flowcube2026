@@ -29,12 +29,12 @@ async function main() {
     warehouseId = w.insertId
     const [p] = await pool.query('INSERT INTO printers (name,code,type,warehouse_id,client_id,status) VALUES (?,?,1,?,?,1)', ['虚拟标签机', code, warehouseId, clientId])
     printerIds.push(p.insertId)
-    await pool.query('INSERT INTO print_clients (client_id,hostname,status,last_seen) VALUES (?,?,1,NOW())', [clientId, 'test-only'])
+    const printClient = await require('./helpers/printClientIdentity').provisionTestPrintClient(pool, { clientId, warehouseId })
     const { token } = await login(http, 'smoke_admin', 'SmokeAdmin123!')
     assert.ok(token, '测试账号应登录成功')
-    const post = (route, json) => http.post(route, { token, headers: { 'X-Client-Id': clientId }, json })
+    const post = (route, json) => http.post(route, { token, headers: printClient.headers, json })
     const createJob = (extra = {}) => command.create({ printerId: p.insertId, warehouseId, jobType: 'product_label', title: '队列测试', contentType: 'zpl', content: '^XA^FDTEST^FS^XZ', ...extra })
-    const claim = () => dispatch.claimClientJobs({ clientId, limit: 10 })
+    const claim = () => dispatch.claimClientJobs({ identity: printClient.identity, limit: 10 })
     const state = async id => (await pool.query('SELECT status,ack_token FROM print_jobs WHERE id=?', [id]))[0][0]
 
     await check('缺少本次令牌的失败回执拒绝，正确令牌可失败并重试', async () => {

@@ -1,5 +1,5 @@
 /**
- * 标签 ZPL 纯映射层（零依赖：不碰 DB/env）。
+ * 标签 ZPL 纯映射层（不碰 DB/env）。
  * 职责：把统一几何层 resolveLayout 产出的中性图元（mm）×MM_TO_DOT 映射为 ZPL 指令。
  * 与前端预览共用同一几何（labelGeometry），保证「预览 = 真机」。
  *
@@ -9,6 +9,7 @@
 'use strict'
 
 const { resolveLayout } = require('./labelGeometry')
+const { assertPrintBudget, assertPrintByteBudget } = require('./print-budget')
 
 /** 203 dpi：1mm ≈ 8 点 */
 const MM_TO_DOT = 203 / 25.4
@@ -28,12 +29,36 @@ function sanitizeZplValue(v, { trim = true } = {}) {
  */
 function applyZplTemplate(body, vars) {
   const s = String(body ?? '')
+  // Reject legacy raw bodies before trim, sanitization or replacement allocation.
+  assertPrintBudget(s)
   const keys = Object.keys(vars || {})
   if (!keys.length) return s
   const alternatives = keys.map(key => key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')
   const re = new RegExp(`\\{\\{\\s*(${alternatives})\\s*\\}\\}`, 'g')
+  const sanitized = new Map()
+  const valueFor = key => {
+    if (!sanitized.has(key)) {
+      const raw = String(vars[key] ?? '')
+      assertPrintBudget(raw)
+      const value = sanitizeZplValue(raw)
+      sanitized.set(key, { value, bytes: Buffer.byteLength(value, 'utf8') })
+    }
+    return sanitized.get(key)
+  }
+  // Count literal segments and cached values without constructing the expanded
+  // result. Output prefixes grow monotonically, so an over-budget prefix rejects.
+  let bytes = 0
+  let last = 0
+  let match
+  while ((match = re.exec(s))) {
+    bytes += Buffer.byteLength(s.slice(last, match.index), 'utf8') + valueFor(match[1]).bytes
+    assertPrintByteBudget(bytes)
+    last = re.lastIndex
+  }
+  assertPrintByteBudget(bytes + Buffer.byteLength(s.slice(last), 'utf8'))
+  re.lastIndex = 0
   // 单次 callback 替换：$& 等保持字面量，替换值中的 {{字段}} 不再次展开。
-  return s.replace(re, (_, key) => sanitizeZplValue(vars[key]))
+  return s.replace(re, (_, key) => valueFor(key).value)
 }
 
 function calcBarcodeModuleWidth(codeLen, desiredWidthDots) {

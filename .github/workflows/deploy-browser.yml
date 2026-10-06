@@ -50,7 +50,18 @@ jobs:
         timeout-minutes: 20
         env:
           DEPLOY_IMAGE_OUTPUT: ${{ runner.temp }}/flowcube-images.tar.gz
-        run: bash scripts/build-deploy-images.sh
+          FLOWCUBE_IMAGE_REPORT_DIR: ${{ runner.temp }}/flowcube-image-reports
+        run: |
+          bash scripts/build-deploy-images.sh
+          bash scripts/generate-image-sbom.sh "$DEPLOY_IMAGE_OUTPUT"
+
+      - name: Retain image SBOM and provenance
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: image-provenance-${{ github.sha }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/flowcube-image-reports/
+          retention-days: 30
+          if-no-files-found: error
 
       - name: Stage image archive for HTTPS transfer
         id: image_artifact

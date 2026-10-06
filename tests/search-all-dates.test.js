@@ -8,13 +8,14 @@ const path = require('node:path')
 test('全局搜索忽略旧客户端日期参数，保留限仓条件及查询上限', async () => {
   const queries = []
   const sandbox = { module: { exports: {} }, require: name => {
+    if (name === '../../constants/permissions') return require('../backend/src/constants/permissions')
     if (name === '../../utils/AppError') return require('../backend/src/utils/AppError')
     if (name === '../../utils/sqlIdentifier') return require('../backend/src/utils/sqlIdentifier')
     assert.equal(name, '../../config/db')
     return { pool: { query: async (sql, params) => { queries.push({ sql, params }); return [[]] } } }
   } }
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../backend/src/modules/search/search.service.js'), 'utf8'), sandbox)
-  await sandbox.module.exports.searchGlobal('旧单号', [7], { startDate: '2026-09-06', endDate: '2026-09-06' })
+  await sandbox.module.exports.searchGlobal('旧单号', [7], { user: { userId: 1, roleId: 1 }, startDate: '2026-09-06', endDate: '2026-09-06' })
   assert.equal(queries.length, sandbox.module.exports.ENTITIES.length)
   for (const { sql, params } of queries) {
     assert.doesNotMatch(sql, /created_at\s*[<>]=/)
@@ -28,6 +29,7 @@ test('全局搜索忽略旧客户端日期参数，保留限仓条件及查询�
 
 function loadService(query) {
   const sandbox = { module: { exports: {} }, require: name => {
+    if (name === '../../constants/permissions') return require('../backend/src/constants/permissions')
     if (name === '../../utils/AppError') return require('../backend/src/utils/AppError')
     if (name === '../../utils/sqlIdentifier') return require('../backend/src/utils/sqlIdentifier')
     return { pool: { query } }
@@ -43,13 +45,13 @@ test('客户显示名称与联系资料，并能通过游标读完超过五条�
     const before = params.find(p => typeof p === 'number') ?? 100
     return [Array.from({ length: 27 }, (_, i) => ({ id: 27-i, no_val: `C${27-i}`, subtitle: `C${27-i}`, name: `客户${27-i}`, contact: '张先生', phone: '123456', address: '上海' })).filter(r => r.id < before).slice(0,21)]
   })
-  const first = await service.searchGlobal('客户', [7], { type: 'customer' })
+  const first = await service.searchGlobal('客户', [7], { type: 'customer', user: { userId: 1, roleId: 1 } })
   assert.equal(first.data.length, 20)
   assert.equal(first.data[0].title, '客户27')
   assert.equal(first.data[0].subtitle, 'C27')
   assert.ok(first.data[0].details.some(d => d.label === '联系人' && d.value === '张先生'))
   assert.equal(first.nextCursors.customer, 8)
-  const second = await service.searchGlobal('客户', [7], { type: 'customer', beforeId: first.nextCursors.customer })
+  const second = await service.searchGlobal('客户', [7], { type: 'customer', beforeId: first.nextCursors.customer, user: { userId: 1, roleId: 1 } })
   assert.equal(second.data.length, 7)
   assert.equal(second.nextCursors.customer, null)
   assert.equal(new Set([...first.data, ...second.data].map(r => r.id)).size, 27)
@@ -59,7 +61,7 @@ test('客户显示名称与联系资料，并能通过游标读完超过五条�
 test('续页继续执行限仓、空范围与软删除过滤，拒绝未知分类或无效游标', async () => {
   const queries = []
   const service = loadService(async (sql, params) => { queries.push({ sql, params }); return [[]] })
-  await service.searchGlobal('单', [], {type:'transfer', beforeId:20})
+  await service.searchGlobal('单', [], {type:'transfer', beforeId:20, user: { userId: 1, roleId: 1 }})
   assert.equal(queries.length, 1)
   assert.match(queries[0].sql, /1=0/)
   assert.match(queries[0].sql, /deleted_at IS NULL/)

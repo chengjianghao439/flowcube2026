@@ -1,8 +1,10 @@
+const opLogger = require('./opLogger')
 const jwt = require('jsonwebtoken')
 const AppError = require('../utils/AppError')
 const { loadRolePermissions } = require('./loadRolePermissions')
 const { env } = require('../config/env')
 const { getCurrentAuthUser } = require('../modules/auth/currentAuthUser')
+const { assertActiveFamily } = require('../modules/auth/sessionFamilies')
 const { recordAuthAudit, AUTH_AUDIT_EVENT } = require('../modules/auth/auth-audit.service')
 const { updateRequestContext } = require('../utils/requestContext')
 
@@ -39,6 +41,7 @@ async function authMiddleware(req, res, next) {
     if (payload.tokenType === 'refresh') {
       return next(new AppError('请使用登录后获取的访问令牌', 401, 'AUTH_SESSION_INVALID'))
     }
+    await assertActiveFamily(user.id, payload.familyId)
     req.user = {
       ...payload,
       userId: user.id,
@@ -51,7 +54,7 @@ async function authMiddleware(req, res, next) {
       warehouseIds: await require('../utils/warehouseScope').loadUserWarehouseScope(user.id, user.role_id),
     }
     updateRequestContext({ userId: user.id, username: user.username })
-    next()
+    opLogger(req, res, next)
   } catch (err) {
     if (err instanceof AppError) {
       return next(err)

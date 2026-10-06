@@ -62,14 +62,14 @@ async function main() {
     fixture.deviceId=await insert("INSERT INTO pda_devices (device_code,device_name,warehouse_id,status,secret_hash) VALUES (?,?,?,'active',?)",[ref,ref,fixture.warehouseId,require('../backend/node_modules/bcryptjs').hashSync(secret,4)])
     const session=await require('../backend/src/modules/pda/pda.sessions.service').createSession({deviceCode:ref,deviceSecret:secret,userId:fixture.userId})
     pdaHeaders={'X-Client':'pda','X-PDA-Session':session.sessionToken}
-    const printHttp=Object.fromEntries(['get','post','put','delete'].map(method=>[method,async(path,options={})=>{try{const data=await http(path.replace(/^\/api/,''),options.json,{method:method.toUpperCase(),expect:method==='post'&&path==='/api/printers'?201:200,headers:options.headers});return {ok:true,status:200,data:{data}}}catch(e){throw e}}]))
+    const printHttp=Object.fromEntries(['get','post','put','delete'].map(method=>[method,async(path,options={})=>{try{const data=await http(path.replace(/^\/api/,''),options.json,{method:method.toUpperCase(),expect:method==='post'&&(path==='/api/printers'||path==='/api/printers/clients/register')?201:200,headers:options.headers});return {ok:true,status:200,data:{data}}}catch(e){throw e}}]))
     fixture.printHttp=undefined
     ownPrint=await require('./helpers/ownedPrintFixture').acquireOwnPackageLabelPrinter({http:printHttp,token,warehouseId:fixture.warehouseId,assert,randomRef:()=>ref+randomUUID().slice(0,5)})
     ownPrint.http=printHttp
     if(process.env.KIT_TEST_SLICE==='source-metadata'){fixture.metadataPrinterId=ownPrint.printerId;fixture.metadataPrinterClientId=ownPrint.clientId}
     const ownPrinter=await http(`/printers/${ownPrint.printerId}`,undefined,{method:'GET'})
     ownPrint.code=ownPrinter.code
-    await http('/printers/client-heartbeat',{clientId:ownPrint.clientId,hostname:ref})
+    await http('/printers/client-heartbeat',{hostname:ref},{headers:ownPrint.headers})
     fixture.purchases=[];fixture.containers=[]
     async function supply(quantities){
       const po=await http('/purchase',{supplierId:fixture.supplierId,supplierName:ref,warehouseId:fixture.warehouseId,warehouseName:ref,items:quantities.map(([productId,qty])=>({productId,productCode:`${ref}-${fixture.products.indexOf(productId)}`,productName:ref,unit:'个',quantity:qty,unitPrice:1}))},{expect:201})
@@ -94,11 +94,11 @@ async function main() {
       for(const c of locked)await http('/scan-logs/check',{taskId,barcode:c.barcode},{pda:true,expect:201})
       for(const item of task.items){const pkg=await http('/packages',{warehouseTaskId:taskId},{pda:true});await http(`/packages/${pkg.id}/add-item`,{productCode:item.productCode,qty:item.requiredQty},{pda:true});await http(`/packages/${pkg.id}/finish`,{},{method:'PUT',pda:true})}
       for(let batch=0;batch<30;batch++){
-        const claimed=await http('/print-jobs/claim-client',{clientId:ownPrint.clientId,limit:100})
+        const claimed=await http('/print-jobs/claim-client',{limit:100},{headers:ownPrint.headers})
         const jobs=Array.isArray(claimed)?claimed:claimed.jobs
         assert.ok(Array.isArray(jobs),'claim jobs list')
         if(!jobs.length)break
-        for(const job of jobs)await http(`/print-jobs/${job.id}/complete-client`,{clientId:ownPrint.clientId,ackToken:job.ackToken},{headers:{'X-Printer-Code':ownPrint.code}})
+        for(const job of jobs)await http(`/print-jobs/${job.id}/complete-client`,{clientId:ownPrint.clientId,ackToken:job.ackToken},{headers:ownPrint.headers})
       }
       await http(`/warehouse-tasks/${taskId}/pack-done`,{},{method:'PUT',pda:true})
       const shipKey=randomUUID(),send=()=>http(`/warehouse-tasks/${taskId}/ship`,{},{method:'PUT',pda:true,key:shipKey})

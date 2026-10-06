@@ -8,7 +8,7 @@ const { resolveOperation } = require('../modules/document-activity/document-oper
 const SENSITIVE_FIELDS = new Set([
   'password', 'newPassword', 'oldPassword', 'confirmPassword', 'currentPassword',
   'token', 'secret', 'apiKey', 'accessToken', 'refreshToken',
-  'deviceSecret', 'sessionToken', 'idempotencyKey',
+  'deviceSecret', 'sessionToken', 'idempotencyKey', 'credential', 'clientCredential', 'printClientCredential',
 ])
 
 function isSensitiveKey(k) {
@@ -78,7 +78,8 @@ function shouldRecordOperation(method, path, statusCode, body) {
 }
 
 function opLogger(req, res, next) {
-  if (req.method === 'GET') return next()
+  if (req.method === 'GET' || req.method === 'HEAD' || !((req.operationActor || req.user)?.userId) || req.operationLogStarted) return next()
+  req.operationLogStarted = true
 
   const requestPath = (req.originalUrl || req.path).split('?')[0]
   // 登录和退出由认证控制器在验证后设置 operationActor；其他路由使用认证中间件身份。
@@ -89,7 +90,7 @@ function opLogger(req, res, next) {
   const bodyStr = safe && Object.keys(safe).length
     ? JSON.stringify(safe).substring(0, 500)
     : null
-  const ip = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || null
+  const ip = req.ip || req.socket?.remoteAddress || null
   const originalJson = res.json.bind(res)
   const originalSend = res.send?.bind(res)
   const deliver = send => {

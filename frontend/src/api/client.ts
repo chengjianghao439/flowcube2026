@@ -341,6 +341,11 @@ apiClient.interceptors.response.use(
       response: error.response?.data ?? null,
     })
 
+    // 打印工作站凭据由桌面端单独管理；其失效交给打印桥处理，保留ERP登录会话。
+    if (status === 401 && businessCode === 'PRINT_CLIENT_CREDENTIAL_INVALID') {
+      return Promise.reject(structuredError)
+    }
+
     if (status === 401) {
       // access token 过期（2026-08-21 权衡修复）：先尝试用 refresh token 换新，
       // 成功则重放原请求；refresh 也失效（过期/被吊销/改密码）才登出。

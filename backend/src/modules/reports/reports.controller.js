@@ -16,6 +16,8 @@ const parseReconciliationQuery = (q) => ({
   maxAmount: q.maxAmount || '',
   dueStart: q.dueStart || '',
   dueEnd: q.dueEnd || '',
+  page: q.page ?? 1,
+  pageSize: q.pageSize ?? 20,
 })
 
 const purchase = async(req,res,next)=>{ try{return successResponse(res,await svc.purchaseStats({...parseQuery(req.query), scopeWarehouseIds: req.user?.warehouseIds??null}),'查询成功')}catch(e){next(e)} }
@@ -25,7 +27,7 @@ const pdaPerformance = async(req,res,next)=>{ try{return successResponse(res,awa
 const wavePerformance = async(req,res,next)=>{ try{return successResponse(res,await svc.wavePerformance({...parseQuery(req.query), scopeWarehouseIds: req.user?.warehouseIds??null}),'查询成功')}catch(e){next(e)} }
 const warehouseOps = async(req,res,next)=>{ try{return successResponse(res,await svc.warehouseOps(req.user?.warehouseIds??null),'查询成功')}catch(e){next(e)} }
 const roleWorkbench = async(req,res,next)=>{ try{return successResponse(res,await svc.roleWorkbench(req.user?.warehouseIds??null,req.query),'查询成功')}catch(e){next(e)} }
-const reconciliation = async(req,res,next)=>{ try{return successResponse(res,await svc.reconciliationReport(parseReconciliationQuery(req.query)),'查询成功')}catch(e){next(e)} }
+const reconciliation = async(req,res,next)=>{ try{return successResponse(res,await svc.reconciliationReport({...parseReconciliationQuery(req.query), scopeWarehouseIds: req.user?.warehouseIds??null}),'查询成功')}catch(e){next(e)} }
 const avgCostReconciliation = async(req,res,next)=>{ try{return successResponse(res,await svc.avgCostReconciliation({ scopeWarehouseIds: req.user?.warehouseIds??null }),'查询成功')}catch(e){next(e)} }
 const profitAnalysis = async(req,res,next)=>{ try{return successResponse(res,await svc.profitAnalysis({...parseQuery(req.query), scopeWarehouseIds: req.user?.warehouseIds??null}),'查询成功')}catch(e){next(e)} }
 const kpi = async(req,res,next)=>{ try{return successResponse(res,await svc.kpiMetrics({ period: req.query.period || null, offsetPeriods: req.query.offset ? Number(req.query.offset) : -1, months: req.query.months ?? 12, scopeWarehouseIds: req.user?.warehouseIds??null }),'查询成功')}catch(e){next(e)} }

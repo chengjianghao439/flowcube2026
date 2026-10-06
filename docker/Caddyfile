@@ -36,7 +36,9 @@ YOUR_DOMAIN, www.YOUR_DOMAIN {
         Referrer-Policy "strict-origin-when-cross-origin"
     }
 
-    reverse_proxy 127.0.0.1:8080
+    reverse_proxy 127.0.0.1:8080 {
+        header_up X-Forwarded-For {remote_host}
+    }
 }
 
 # IP 直连：自签证书兜底（旧桌面端过渡期）。
@@ -51,5 +53,7 @@ PUBLIC_IP, LAN_IP {
         Referrer-Policy "strict-origin-when-cross-origin"
     }
 
-    reverse_proxy 127.0.0.1:8080
+    reverse_proxy 127.0.0.1:8080 {
+        header_up X-Forwarded-For {remote_host}
+    }
 }

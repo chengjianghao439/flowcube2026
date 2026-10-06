@@ -14,23 +14,25 @@ const { assertSqlIdentifier, assertSqlColumnList } = require('../../utils/sqlIde
  * 放行/发票）保持全量。调拨是跨仓实体（from/to 任一在范围内即可见）。
  */
 
+const { PERMISSIONS: P } = require('../../constants/permissions')
+
 const ENTITIES = [
-  { type: 'product',      label: '商品',       pathBase: '/products',             table: 'product_items',              noField: 'code',      subtitleField: 'code',       searchFields: ['name', 'code'] },
-  { type: 'supplier',     label: '供应商',     pathBase: '/suppliers',            table: 'supply_suppliers',          noField: 'code',      subtitleField: 'code',       searchFields: ['name'] },
-  { type: 'customer',     label: '客户',       pathBase: '/customers',            table: 'sale_customers',            noField: 'code',      subtitleField: 'code',       searchFields: ['name'] },
-  { type: 'purchase',     label: '采购单',     pathBase: '/purchase',             table: 'purchase_orders',           noField: 'order_no',  subtitleField: 'supplier_name', searchFields: ['order_no'], warehouseColumn: 'warehouse_id' },
-  { type: 'sale',         label: '销售单',     pathBase: '/sale',                 table: 'sale_orders',               noField: 'order_no',  subtitleField: 'customer_name', searchFields: ['order_no'], warehouseColumn: 'warehouse_id' },
-  { type: 'requisition',  label: '采购申请',   pathBase: '/purchase-requisitions', table: 'purchase_requisitions',    noField: 'requisition_no', subtitleField: 'applicant_name', searchFields: ['requisition_no', 'title'], warehouseColumn: 'warehouse_id' },
-  { type: 'transfer',     label: '调拨单',     pathBase: '/transfer',             table: 'transfer_orders',           noField: 'order_no',  subtitleField: 'from_warehouse_name', searchFields: ['order_no'], warehouseColumn: 'from_warehouse_id', warehouseColumnOr: 'to_warehouse_id' },
-  { type: 'purchaseReturn', label: '采购退货', pathBase: '/returns/purchase',      table: 'purchase_returns',          noField: 'return_no', subtitleField: 'supplier_name', searchFields: ['return_no'], warehouseColumn: 'warehouse_id' },
-  { type: 'saleReturn',   label: '销售退货',   pathBase: '/returns/sale',          table: 'sale_returns',              noField: 'return_no', subtitleField: 'customer_name', searchFields: ['return_no'], warehouseColumn: 'warehouse_id' },
-  { type: 'inbound',      label: '收货订单',   pathBase: '/inbound-tasks',        table: 'inbound_tasks',             noField: 'task_no',   subtitleField: 'supplier_name', searchFields: ['task_no'], warehouseColumn: 'warehouse_id' },
-  { type: 'expense',      label: '费用报销',   pathBase: '/expenses',              table: 'expense_claims',            noField: 'claim_no',  subtitleField: 'applicant_name', searchFields: ['claim_no', 'title'] },
-  { type: 'disposal',     label: '呆滞处置',   pathBase: '/disposals',             table: 'inventory_disposal_orders', noField: 'disposal_no', subtitleField: 'warehouse_name', searchFields: ['disposal_no'], warehouseColumn: 'warehouse_id' },
-  { type: 'refund',       label: '退款单',     pathBase: '/refunds',               table: 'refund_orders',             noField: 'refund_no', subtitleField: 'customer_name', searchFields: ['refund_no'] },
-  { type: 'creditOverride', label: '超额放行', pathBase: '/credit-overrides',      table: 'sale_credit_overrides',     noField: 'override_no', subtitleField: 'customer_name', searchFields: ['override_no'] },
-  { type: 'stockcheck',   label: '盘点单',     pathBase: '/stockcheck',            table: 'inventory_checks',          noField: 'check_no',  subtitleField: 'warehouse_name', searchFields: ['check_no'], warehouseColumn: 'warehouse_id' },
-  { type: 'invoice',      label: '发票',       pathBase: '/accounting/invoices',   table: 'fin_invoices',              noField: 'invoice_no', subtitleField: 'party_name',    searchFields: ['invoice_no'] },
+  { type: 'product', permission: P.PRODUCT_VIEW,      label: '商品',       pathBase: '/products',             table: 'product_items',              noField: 'code',      subtitleField: 'code',       searchFields: ['name', 'code'] },
+  { type: 'supplier', permission: P.SUPPLIER_VIEW,     label: '供应商',     pathBase: '/suppliers',            table: 'supply_suppliers',          noField: 'code',      subtitleField: 'code',       searchFields: ['name'] },
+  { type: 'customer', permission: P.CUSTOMER_VIEW,     label: '客户',       pathBase: '/customers',            table: 'sale_customers',            noField: 'code',      subtitleField: 'code',       searchFields: ['name'] },
+  { type: 'purchase', permission: P.PURCHASE_ORDER_VIEW,     label: '采购单',     pathBase: '/purchase',             table: 'purchase_orders',           noField: 'order_no',  subtitleField: 'supplier_name', searchFields: ['order_no'], warehouseColumn: 'warehouse_id' },
+  { type: 'sale', permission: P.SALE_ORDER_VIEW,         label: '销售单',     pathBase: '/sale',                 table: 'sale_orders',               noField: 'order_no',  subtitleField: 'customer_name', searchFields: ['order_no'], warehouseColumn: 'warehouse_id' },
+  { type: 'requisition', permission: P.PURCHASE_REQUISITION_VIEW,  label: '采购申请',   pathBase: '/purchase-requisitions', table: 'purchase_requisitions',    noField: 'requisition_no', subtitleField: 'applicant_name', searchFields: ['requisition_no', 'title'], warehouseColumn: 'warehouse_id' },
+  { type: 'transfer', permission: P.TRANSFER_ORDER_VIEW,     label: '调拨单',     pathBase: '/transfer',             table: 'transfer_orders',           noField: 'order_no',  subtitleField: 'from_warehouse_name', searchFields: ['order_no'], warehouseColumn: 'from_warehouse_id', warehouseColumnOr: 'to_warehouse_id' },
+  { type: 'purchaseReturn', permission: P.RETURN_ORDER_VIEW, label: '采购退货', pathBase: '/returns/purchase',      table: 'purchase_returns',          noField: 'return_no', subtitleField: 'supplier_name', searchFields: ['return_no'], warehouseColumn: 'warehouse_id' },
+  { type: 'saleReturn', permission: P.RETURN_ORDER_VIEW,   label: '销售退货',   pathBase: '/returns/sale',          table: 'sale_returns',              noField: 'return_no', subtitleField: 'customer_name', searchFields: ['return_no'], warehouseColumn: 'warehouse_id' },
+  { type: 'inbound', permission: P.INBOUND_ORDER_VIEW,      label: '收货订单',   pathBase: '/inbound-tasks',        table: 'inbound_tasks',             noField: 'task_no',   subtitleField: 'supplier_name', searchFields: ['task_no'], warehouseColumn: 'warehouse_id' },
+  { type: 'expense', permission: P.FINANCE_EXPENSE_VIEW,      label: '费用报销',   pathBase: '/expenses',              table: 'expense_claims',            noField: 'claim_no',  subtitleField: 'applicant_name', searchFields: ['claim_no', 'title'] },
+  { type: 'disposal', permission: P.INVENTORY_DISPOSAL_VIEW,     label: '呆滞处置',   pathBase: '/disposals',             table: 'inventory_disposal_orders', noField: 'disposal_no', subtitleField: 'warehouse_name', searchFields: ['disposal_no'], warehouseColumn: 'warehouse_id' },
+  { type: 'refund', permission: P.REFUND_ORDER_VIEW,       label: '退款单',     pathBase: '/refunds',               table: 'refund_orders',             noField: 'refund_no', subtitleField: 'customer_name', searchFields: ['refund_no'] },
+  { type: 'creditOverride', permission: P.SALE_CREDIT_OVERRIDE_VIEW, label: '超额放行', pathBase: '/credit-overrides',      table: 'sale_credit_overrides',     noField: 'override_no', subtitleField: 'customer_name', searchFields: ['override_no'] },
+  { type: 'stockcheck', permission: P.STOCKCHECK_VIEW,   label: '盘点单',     pathBase: '/stockcheck',            table: 'inventory_checks',          noField: 'check_no',  subtitleField: 'warehouse_name', searchFields: ['check_no'], warehouseColumn: 'warehouse_id' },
+  { type: 'invoice', permission: P.INVOICE_VIEW,      label: '发票',       pathBase: '/accounting/invoices',   table: 'fin_invoices',              noField: 'invoice_no', subtitleField: 'party_name',    searchFields: ['invoice_no'] },
 ]
 
 const PAGE_SIZE = 20
@@ -56,14 +58,16 @@ const MASTER_TYPES = new Set(['product', 'supplier', 'customer'])
 
 async function searchGlobal(rawQuery, scopeWarehouseIds = null, options = {}) {
   const keyword = String(rawQuery || '').trim()
-  const { type, beforeId } = options
+  const { type, beforeId, user = null, companyId = 1 } = options
+  const isAdmin = Number(user?.roleId) === 1
+  const permissions = new Set(user?.permissions || [])
   // 分类必须来自静态白名单，游标只作为 SQL 参数传递。
   if ((type != null && !ENTITIES.some(e => e.type === type)) ||
       (beforeId != null && (!type || !Number.isSafeInteger(Number(beforeId)) || Number(beforeId) <= 0))) {
     throw new AppError('搜索分页参数无效', 400)
   }
   if (!keyword) return { data: [], nextCursors: {}, message: '请输入搜索词' }
-  const entities = type ? ENTITIES.filter(e => e.type === type) : ENTITIES
+  const entities = ENTITIES.filter(e => (!type || e.type === type) && user && (isAdmin || permissions.has(e.permission)))
   const pages = await Promise.all(entities.map(async (ent) => {
     const conds = ['deleted_at IS NULL', `(${ent.searchFields.map(f => `${f} LIKE ?`).join(' OR ')})`]
     const params = ent.searchFields.map(() => `%${keyword}%`)
@@ -75,6 +79,26 @@ async function searchGlobal(rawQuery, scopeWarehouseIds = null, options = {}) {
       } else {
         conds.push(`${ent.warehouseColumn} IN (?)`)
         params.push(scopeWarehouseIds)
+      }
+    }
+    // 单据归属规则与原模块一致；知道游标或分类也不能跳过授权。
+    if (ent.type === 'expense' && !isAdmin && !permissions.has(P.FINANCE_EXPENSE_VIEW_ALL)) {
+      conds.push('applicant_id = ?')
+      params.push(Number(user.userId))
+    }
+    if (ent.type === 'invoice') {
+      conds.push('company_id = ?')
+      params.push(Number.isSafeInteger(Number(companyId)) && Number(companyId) > 0 ? Number(companyId) : 1)
+    }
+    if (Array.isArray(scopeWarehouseIds) && ['sale', 'refund', 'creditOverride'].includes(ent.type)) {
+      if (!scopeWarehouseIds.length) conds.push('1=0')
+      else if (ent.type === 'sale') {
+        conds.push('NOT EXISTS (SELECT 1 FROM sale_order_items scope_item WHERE scope_item.order_id=sale_orders.id AND scope_item.warehouse_id NOT IN (?))')
+        params.push(scopeWarehouseIds)
+      } else {
+        const orderLink = ent.type === 'refund' ? 'refund_orders.sale_order_id' : 'sale_credit_overrides.sale_order_id'
+        conds.push(`EXISTS (SELECT 1 FROM sale_orders scope_order WHERE scope_order.id=${orderLink} AND scope_order.warehouse_id IN (?) AND NOT EXISTS (SELECT 1 FROM sale_order_items scope_item WHERE scope_item.order_id=scope_order.id AND scope_item.warehouse_id NOT IN (?)))`)
+        params.push(scopeWarehouseIds, scopeWarehouseIds)
       }
     }
     if (beforeId != null) { conds.push('id < ?'); params.push(Number(beforeId)) }

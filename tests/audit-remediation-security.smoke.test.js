@@ -58,13 +58,13 @@ test('print reprint rejects foreign warehouse before enqueue', async () => {
 })
 test('all print completion routes require resource scope even with matching station', async () => {
   for (const action of ['complete-local', 'complete-client', 'fail-client', 'retry']) {
-    const r = await ctx.http.post(`/api/print-jobs/${foreignJob.id}/${action}`, { token: limited.token, headers: { 'X-Client-Id': ctx.printer.clientId }, json: { ackToken: 'audit-invalid' } })
+    const r = await ctx.http.post(`/api/print-jobs/${foreignJob.id}/${action}`, { token: limited.token, headers: ctx.printer.clientHeaders, json: { ackToken: 'audit-invalid' } })
     assert.equal(r.status, 403, action)
   }
 })
 test('claim only consumes authorized jobs and preserves foreign pending job', async () => {
   const own = await print.create({ printerId: ctx.printer.id, warehouseId: ctx.warehouse.id, jobType: 'waybill', title: 'Audit own', contentType: 'zpl', content: '^XA^FDAUDIT^FS^XZ' })
-  const r = await ctx.http.post('/api/print-jobs/claim-client', { token: limited.token, json: { clientId: ctx.printer.clientId, limit: 10 } })
+  const r = await ctx.http.post('/api/print-jobs/claim-client', { token: limited.token, headers: ctx.printer.clientHeaders, json: { limit: 10 } })
   assert.equal(r.status, 200)
   assert.ok(r.data.data.some(j => j.id === own.id))
   assert.ok(r.data.data.every(j => j.warehouseId === ctx.warehouse.id))

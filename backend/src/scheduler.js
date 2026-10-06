@@ -8,6 +8,7 @@ const logger = require('./utils/logger')
 const { beijingTodayYmd } = require('./utils/backendTime')
 const { runWithRequestContext } = require('./utils/requestContext')
 const { runFetchWaybills, runTrackWaybills } = require('./modules/logistics/logistics.worker')
+const { cleanupSessionFamilies } = require('./modules/auth/sessionFamilies')
 
 const num = (name, def) => {
   const n = Number(process.env[name])
@@ -108,6 +109,7 @@ function startScheduler() {
     await pool.query(
       'DELETE FROM refresh_token_sessions WHERE (revoked_at IS NOT NULL OR expires_at < NOW()) AND created_at < DATE_SUB(NOW(), INTERVAL 7 DAY)',
     )
+    await cleanupSessionFamilies()
   }, num('REFRESH_SESSION_CLEAN_INTERVAL_MS', 24 * 60 * 60 * 1000))
 
   // PDA 现场错误扫码/撤销流水清理（2026-08-30 审计）：两张运行时自建表无 TTL，随 PDA 作业无界增长。

@@ -68,6 +68,7 @@ async function main() {
   let location = null
   let pdaHeaders = () => ({})
   let clientId = null
+  let printClient = null
   const created = {
     warehouses: [], devices: [], printers: [], bins: [], sales: [], users: [],
     // 主数据无「合法删除入口」时按用户口径**保留并登记**（不为了收尾全 0 强删）
@@ -158,6 +159,9 @@ async function main() {
 
     // 本批独立打印机 + 客户端 + package_label 绑定
     clientId = `pb-c4-client-${rnd()}`
+    printClient = must(await http.post('/api/printers/clients/register', { token, json: { clientId, hostname: 'virtual-pack-test', warehouseId: Number(warehouse.id) } }), '注册工作站')
+    printClient.headers = { 'X-Client-Id': clientId, 'X-Print-Client-Credential': printClient.credential }
+    must(await http.post('/api/printers/client-heartbeat', { token, headers: printClient.headers, json: { hostname: 'virtual-pack-test' } }), '工作站心跳')
     const printer = must(await http.post('/api/printers', {
       token, json: {
         name: `PB-C4打印机${suffix.slice(0, 4)}`, code: `PB-C4-PRN-${suffix}`, type: 1,
@@ -275,12 +279,12 @@ async function main() {
 
     /** 用**本批独立打印机/客户端**走真实 claim → complete 核销箱贴（不碰任何他人 job） */
     async function consumePackageLabelJob(jobId) {
-      const claimed = must(await http.post('/api/print-jobs/claim-client', { token, json: { clientId, limit: 10 } }), '领取打印任务')
+      const claimed = must(await http.post('/api/print-jobs/claim-client', { token, headers: printClient.headers, json: { limit: 10 } }), '领取打印任务')
       const mine = claimed.find((j) => Number(j.id) === Number(jobId))
       assert.ok(mine, `本批客户端应领到本批箱贴任务 ${jobId}，实得 ${JSON.stringify(claimed.map((j) => j.id))}`)
       assert.ok(mine.ackToken, '领取应返回 ackToken')
       must(await http.post(`/api/print-jobs/${jobId}/complete-client`, {
-        token, headers: { 'X-Client-Id': clientId }, json: { ackToken: mine.ackToken },
+        token, headers: printClient.headers, json: { ackToken: mine.ackToken },
       }), '核销打印任务')
       const [row] = await q('SELECT status FROM print_jobs WHERE id=?', [jobId])
       assert.equal(Number(row.status), 2, '核销后打印任务应为已完成(2)')
@@ -692,6 +696,12 @@ async function main() {
           ['package_label', created.warehouses[0] ?? 0]))[0]
         assert.ok(Number(bind?.c) === 0, `package_label 绑定应已清空，实际 ${bind?.c} 条`)
       } catch (e) { cleanupFail(`打印机 ${id}`, e.message) }
+    }
+    if (token && clientId) {
+      try {
+        const off = await http.post(`/api/printers/clients/${encodeURIComponent(clientId)}/revoke`, { token, json: {} })
+        assert.ok(off.ok || off.status === 404, `工作站撤销应成功或不存在，实际 ${off.status}`)
+      } catch (e) { cleanupFail(`工作站 ${clientId}`, e.message) }
     }
     // 限仓用户：停用保留（不物理删历史账号）
     for (const id of token ? created.users : []) {

@@ -6,7 +6,7 @@ async function list(req, res, next) {
   try {
     const taskId = +req.query.taskId
     if (!taskId) return res.status(400).json({ success: false, message: '缺少 taskId', data: null })
-    const result = await svc.listByTask(taskId)
+    const result = await svc.listByTask(taskId, req.user?.warehouseIds ?? null)
     return successResponse(res, result, '查询成功')
   } catch (e) { next(e) }
 }
@@ -14,7 +14,7 @@ async function list(req, res, next) {
 async function create(req, res, next) {
   try {
     const { warehouseTaskId, remark } = req.body
-    const result = await svc.createPackage(warehouseTaskId, remark, req.user?.warehouseIds ?? null)
+    const result = await svc.createPackage(warehouseTaskId, remark, req.user?.warehouseIds ?? null, req.pda?.warehouseId ?? null)
     return successResponse(res, result, '箱子已创建')
   } catch (e) { next(e) }
 }
@@ -98,7 +98,7 @@ async function printLabel(req, res, next) {
 
 async function getByBarcode(req, res, next) {
   try {
-    const result = await svc.getByBarcode(req.params.barcode)
+    const result = await svc.getByBarcode(req.params.barcode, req.user?.warehouseIds ?? null)
     return successResponse(res, result, '查询成功')
   } catch (e) { next(e) }
 }

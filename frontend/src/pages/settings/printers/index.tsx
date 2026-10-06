@@ -1,4 +1,9 @@
 import PageHeader from '@/components/shared/PageHeader'
+import { payloadClient as apiClient } from '@/api/client'
+import { getEffectiveApiOrigin } from '@/config/api'
+import { updatePrinterApi } from '@/hooks/usePrinters'
+import { triggerPrintPoll } from '@/lib/printQueue'
+import { usePermission } from '@/hooks/usePermission'
 /**
  * 打印机管理页面
  * 路由：/settings/printers
@@ -127,11 +132,16 @@ function sourceBadgeLabel(source?: string) {
 }
 
 export default function PrintersPage() {
+  const { can } = usePermission()
+  const canManagePrinters = can('print.printer.manage')
   const [showAddDialog, setShowAddDialog] = useState(false)
   const [systemList, setSystemList] = useState<SystemPrinterRow[]>([])
   const [listLoading, setListLoading] = useState(false)
   const [listError, setListError] = useState<string | null>(null)
   const [selectedName, setSelectedName] = useState<string>('')
+  const [registrationWarehouses, setRegistrationWarehouses] = useState<Array<{ id: number; name: string }>>([])
+  const [warehouseId, setWarehouseId] = useState<string>('')
+  const [registering, setRegistering] = useState(false)
   const [addType, setAddType] = useState<1 | 2 | 3>(1)
   const [bindTarget, setBindTarget] = useState<Printer | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Printer | null>(null)
@@ -141,7 +151,53 @@ export default function PrintersPage() {
   const canUseSystemPrinters =
     isDesktop && typeof window.flowcubeDesktop?.getSystemPrinters === 'function'
 
-  const { data: printers = [], isLoading } = usePrinters()
+  const { data: printers = [], isLoading, refetch: refetchPrinters } = usePrinters()
+  useEffect(() => {
+    if (!canUseSystemPrinters || !canManagePrinters) return
+    let active = true
+    apiClient.get<Array<{ id: number; name: string }>>('/printers/registration-warehouses').then(rows => {
+      if (!active) return
+      setRegistrationWarehouses(rows)
+      if (rows.length === 1) setWarehouseId(String(rows[0].id))
+    }).catch(() => {})
+    return () => { active = false }
+  }, [canUseSystemPrinters, canManagePrinters])
+
+  async function registerThisDesktop() {
+    const origin = getEffectiveApiOrigin()
+    const bridge = window.flowcubeDesktop
+    if (!origin || !bridge?.resetPrintClientIdentity || !bridge.setPrintClientCredential || !warehouseId) { toast.error('请升级桌面端并选择本机所属仓库'); return }
+    setRegistering(true)
+    try {
+      const old = await bridge.getClientInfo?.()
+      if (old) {
+        try { await apiClient.post(`/printers/clients/${encodeURIComponent(old.clientId)}/revoke`, {}, { baseURL: `${origin}/api`, skipGlobalError: true }) }
+        catch (e) {
+          const failure = e as { status?: number; response?: { status?: number } }
+          if ((failure.status ?? failure.response?.status) !== 404) throw e
+        }
+      }
+      const info = await bridge.resetPrintClientIdentity()
+      const result = await apiClient.post<{ credential: string }>('/printers/clients/register', { ...info, warehouseId: Number(warehouseId) }, { baseURL: `${origin}/api`, skipGlobalError: true })
+      const saved = await bridge.setPrintClientCredential(origin, result.credential)
+      toast.success(saved.persisted ? '本机已注册，请将本机打印机关联到本机' : '本机已注册；系统安全存储不可用，重启后需重新注册')
+      triggerPrintPoll()
+    } catch (e) { toast.error(e instanceof Error ? e.message : '本机注册失败，请联系管理员') }
+    finally { setRegistering(false) }
+  }
+
+  async function associateWithThisDesktop(printer: Printer) {
+    const origin = getEffectiveApiOrigin()
+    const bridge = window.flowcubeDesktop
+    if (!bridge || !origin || !warehouseId || !await bridge.getPrintClientCredential?.(origin)) { toast.error('请先选择仓库并注册本机'); return }
+    const info = await bridge.getClientInfo?.()
+    const installed = await bridge.getSystemPrinters?.()
+    if (!info || !pickSystemPrinterRow(installed ?? [], printer.name)) { toast.error('该打印机未安装在本机，不能关联'); return }
+    try {
+      await updatePrinterApi(printer.id, { clientId: info.clientId, warehouseId: Number(warehouseId) }, { skipGlobalError: true })
+      await refetchPrinters(); triggerPrintPoll(); toast.success('已关联本机')
+    } catch (e) { toast.error(e instanceof Error ? e.message : '关联失败') }
+  }
 
   const existingCodes = useMemo(() => new Set(printers.map(p => p.code)), [printers])
   /** 与 RAW 打印侧规范化一致，避免「已添加」与系统枚举因 Unicode 不一致漏判 */
@@ -259,6 +315,8 @@ export default function PrintersPage() {
     const baseCode = systemNameToPrinterCode(name)
     const code = ensureUniquePrinterCode(baseCode, existingCodes)
     const description = `本机系统打印机`
+    const origin = getEffectiveApiOrigin()
+    if (!warehouseId || !origin || !await window.flowcubeDesktop?.getPrintClientCredential?.(origin)) { toast.error('请先选择仓库并注册本机'); return }
     const clientInfo = await window.flowcubeDesktop?.getClientInfo?.().catch(() => null)
     addPrinter.mutate({
       name,
@@ -266,7 +324,8 @@ export default function PrintersPage() {
       type: addType,
       description,
       clientId: clientInfo?.clientId ?? null,
-    } as { name: string; code: string; type: number; description: string | null; clientId?: string | null }, {
+      warehouseId: Number(warehouseId),
+    } as { name: string; code: string; type: number; description: string | null; clientId?: string | null; warehouseId?: number | null }, {
       onSuccess: () => {
         toast.success('已添加')
         setShowAddDialog(false)
@@ -356,17 +415,25 @@ export default function PrintersPage() {
     },
     {
       key: 'id', title: '操作', width: 100,
-      render: (_, p) => <Button size="sm" variant="destructive" onClick={() => setDeleteTarget(p)}>删除</Button>,
+      render: (_, p) => <div className="space-y-2">{canManagePrinters && canUseSystemPrinters && <Button size="sm" variant="outline" disabled={registering} onClick={() => { void associateWithThisDesktop(p) }}>关联本机</Button>}{canManagePrinters && <Button size="sm" variant="destructive" onClick={() => setDeleteTarget(p)}>删除</Button>}</div>,
     },
   ]
 
   return (
     <div className="space-y-6">
-      <PageHeader title="打印机管理" description="管理打印设备、标签用途与任务绑定" actions={<Button onClick={openAddDialog}>添加打印机</Button>} />
+      <PageHeader title="打印机管理" description="管理打印设备、标签用途与任务绑定" actions={canManagePrinters ? <Button disabled={registering} onClick={openAddDialog}>添加打印机</Button> : undefined} />
 
       {canUseSystemPrinters ? (
         <div className="rounded-lg border border-border bg-card p-4">
           <h3 className="text-card-title">本机标签打印机</h3>
+          {canManagePrinters && <div className="mt-3 flex items-center gap-3">
+            <Select value={warehouseId} onValueChange={setWarehouseId}>
+              <SelectTrigger className="w-48"><SelectValue placeholder="本机所属仓库" /></SelectTrigger>
+              <SelectContent>{registrationWarehouses.map(w => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}</SelectContent>
+            </Select>
+            <Button variant="outline" disabled={registering || !warehouseId} onClick={() => { void registerThisDesktop() }}>重新注册本机</Button>
+          </div>}
+          <p className="mt-2 text-helper">重新注册会撤销本机旧凭据；请将已有本机打印机逐台点击「关联本机」。已领取任务需先人工核对原打印结果。</p>
           <p className="mt-2 text-muted-body leading-relaxed">
             点击「添加打印机」选择本机已安装的设备，再绑定标签用途。打印机名称需与系统中的名称保持一致。
           </p>

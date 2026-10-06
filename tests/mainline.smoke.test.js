@@ -175,7 +175,8 @@ async function main() {
 
     const claim = await http.post('/api/print-jobs/claim-client', {
       token: adminToken,
-      json: { clientId: printer.clientId, limit: 50 },
+      headers: printer.clientHeaders,
+      json: { limit: 50 },
     })
     await expectJsonSuccess(log, claim, '打印任务 claim 成功')
     const claimedJob = (claim.data?.data || []).find((job) => Number(job.id) === printJobId)
@@ -183,23 +184,22 @@ async function main() {
 
     const completeLocalWhilePrinting = await http.post(`/api/print-jobs/${printJobId}/complete-local`, {
       token: adminToken,
-      // 2026-09-18 审计 P1：complete-local 现在与 complete-client 一样校验工作站，
-      // 必须带上本机登记的 client id（夹具已提供），否则会先被 400 挡下而不是走到「已被领取」的 409
-      headers: { 'X-Client-Id': printer.clientId },
+      // 已通过工作站凭据校验；缺少本次 claim 的 ackToken 仍不得核销。
+      headers: printer.clientHeaders,
       json: {},
     })
-    log.assert('打印中任务禁止本机核销', completeLocalWhilePrinting.status === 409, `status=${completeLocalWhilePrinting.status}`)
+    log.assert('缺少本次领取令牌禁止本机核销', completeLocalWhilePrinting.status === 400, `status=${completeLocalWhilePrinting.status}`)
 
     const completeWrongPrinter = await http.post(`/api/print-jobs/${printJobId}/complete`, {
       token: adminToken,
       headers: { 'X-Printer-Code': 'WRONG_PRINTER' },
       json: { ackToken: claimedJob.ackToken },
     })
-    log.assert('打印任务非法完成请求被拒绝', completeWrongPrinter.status === 403 || completeWrongPrinter.status === 400, `status=${completeWrongPrinter.status}`)
+    log.assert('打印任务非法完成请求被拒绝', completeWrongPrinter.status === 401, `status=${completeWrongPrinter.status}`)
 
     const completeOk = await http.post(`/api/print-jobs/${printJobId}/complete`, {
       token: adminToken,
-      headers: { 'X-Client-Id': printer.clientId },
+      headers: printer.clientHeaders,
       json: { ackToken: claimedJob.ackToken },
     })
     await expectJsonSuccess(log, completeOk, '打印任务 complete 成功')
@@ -220,14 +220,15 @@ async function main() {
 
     const claim2 = await http.post('/api/print-jobs/claim-client', {
       token: adminToken,
-      json: { clientId: printer.clientId, limit: 50 },
+      headers: printer.clientHeaders,
+      json: { limit: 50 },
     })
     const claimedJob2 = (claim2.data?.data || []).find((job) => Number(job.id) === printJobId2)
     log.assert('第二个打印任务 claim 成功', !!claimedJob2?.id, JSON.stringify(claim2.data).slice(0, 400))
 
     const failOk = await http.post(`/api/print-jobs/${printJobId2}/fail`, {
       token: adminToken,
-      headers: { 'X-Client-Id': printer.clientId },
+      headers: printer.clientHeaders,
       json: { ackToken: claimedJob2.ackToken, errorMessage: 'smoke fail' },
     })
     await expectJsonSuccess(log, failOk, '打印任务 fail 成功')

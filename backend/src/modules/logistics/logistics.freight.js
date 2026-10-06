@@ -1,3 +1,4 @@
+const { normalizePagination } = require('../../utils/pagination')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { generateDailyCode } = require('../../utils/codeGenerator')
@@ -57,13 +58,18 @@ function fmtSettlement(r) {
 
 // ─── 运费账单明细（人工录入 / 平台回传）─────────────────────────────────────────
 async function listFreightBills({ page = 1, pageSize = 20, carrierId = null, billPeriod = '', reconciled = null } = {}) {
+  if (![page, pageSize].every(v => Number.isSafeInteger(Number(v)) && Number(v) > 0)) throw new AppError('分页参数无效', 400)
+  const pagination = normalizePagination({ page, pageSize })
+  if (!Number.isSafeInteger(pagination.offset)) throw new AppError('分页参数无效', 400)
+  page = pagination.page
+  pageSize = pagination.pageSize
   const where = ['1=1']
   const params = []
   if (carrierId) { where.push('b.carrier_id = ?'); params.push(Number(carrierId)) }
   if (billPeriod) { where.push('b.bill_period = ?'); params.push(billPeriod) }
   if (reconciled != null && reconciled !== '') { where.push('b.reconciled = ?'); params.push(reconciled ? 1 : 0) }
   const whereSql = `WHERE ${where.join(' AND ')}`
-  const offset = (page - 1) * pageSize
+  const { offset } = pagination
   const [rows] = await pool.query(
     `SELECT b.*, c.name AS carrier_name, w.freight_type
      FROM logistics_freight_bills b
@@ -127,12 +133,17 @@ async function createFreightBill({ carrierId, trackingNo, waybillId = null, bill
 
 // ─── 汇总生成对承运商的应付 ────────────────────────────────────────────────────
 async function listSettlements({ page = 1, pageSize = 20, carrierId = null, billPeriod = '' } = {}) {
+  if (![page, pageSize].every(v => Number.isSafeInteger(Number(v)) && Number(v) > 0)) throw new AppError('分页参数无效', 400)
+  const pagination = normalizePagination({ page, pageSize })
+  if (!Number.isSafeInteger(pagination.offset)) throw new AppError('分页参数无效', 400)
+  page = pagination.page
+  pageSize = pagination.pageSize
   const where = ['1=1']
   const params = []
   if (carrierId) { where.push('carrier_id = ?'); params.push(Number(carrierId)) }
   if (billPeriod) { where.push('bill_period = ?'); params.push(billPeriod) }
   const whereSql = `WHERE ${where.join(' AND ')}`
-  const offset = (page - 1) * pageSize
+  const { offset } = pagination
   const [rows] = await pool.query(
     `SELECT * FROM logistics_freight_settlements ${whereSql} ORDER BY id DESC LIMIT ? OFFSET ?`,
     [...params, pageSize, offset],

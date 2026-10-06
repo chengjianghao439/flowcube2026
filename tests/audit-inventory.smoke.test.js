@@ -113,14 +113,14 @@ async function main() {
       await insert(`INSERT INTO return_task_items (task_id,product_id,product_code,product_name,unit,expected_qty,received_qty)
         VALUES (?,?,?,'库存回归','个',10,10)`, [taskId, f.productId, f.code])
       await f.container(10, ce.CONTAINER_STATUS.PENDING_QA, { sourceRefType: 'sale_return', sourceRefId: taskId })
-      await rt.check(conn, taskId, { productId: f.productId, passedQty: passed, rejectedQty: rejected })
+      await rt.check(conn, taskId, { pdaWarehouseId: wh, productId: f.productId, passedQty: passed, rejectedQty: rejected })
       const [rows] = await conn.query(`SELECT status, SUM(remaining_qty) AS qty FROM inventory_containers
         WHERE source_ref_type='sale_return' AND source_ref_id=? GROUP BY status`, [taskId])
       const qty = new Map(rows.map(r => [Number(r.status), Number(r.qty)]))
       assert.equal(qty.get(5) || 0, Number((10 - passed - rejected).toFixed(4)))
       assert.equal(qty.get(4) || 0, passed)
       assert.equal(qty.get(6) || 0, rejected)
-      await rt.check(conn, taskId, { productId: f.productId, passedQty: Number((10 - passed - rejected).toFixed(4)) })
+      await rt.check(conn, taskId, { pdaWarehouseId: wh, productId: f.productId, passedQty: Number((10 - passed - rejected).toFixed(4)) })
       const [[task]] = await conn.query('SELECT status FROM return_tasks WHERE id=?', [taskId])
       assert.equal(Number(task.status), 4)
     })
@@ -146,9 +146,9 @@ async function main() {
   test('F01 退货收货及质检分箱在同事务入队ZPL，重放不重复标签', async f => {
     await labelPrinter()
     const taskId = await returnFixture(f)
-    const received = await rt.receive(conn, taskId, { productId: f.productId, packages: [{ qty: 10 }], userId: 1, requestKey: unique('RECEIVE') })
+    const received = await rt.receive(conn, taskId, { pdaWarehouseId: wh, productId: f.productId, packages: [{ qty: 10 }], userId: 1, requestKey: unique('RECEIVE') })
     assert.equal(received.printJobIds.length, 1)
-    const checkArgs = { productId: f.productId, passedQty: 1, rejectedQty: 1, userId: 1, requestKey: unique('QA') }
+    const checkArgs = { pdaWarehouseId: wh, productId: f.productId, passedQty: 1, rejectedQty: 1, userId: 1, requestKey: unique('QA') }
     const checked = await rt.check(conn, taskId, checkArgs)
     assert.equal(checked.printJobIds.length, 3)
     assert.deepEqual(checked.containers.map(c => c.qty).sort((a,b) => a-b), [1,1,8])
@@ -164,9 +164,9 @@ async function main() {
   test('F01 暂无打印机仍完成质检，返回未入队数量及所有新条码', async f => {
     await conn.query('UPDATE printers SET status=2')
     const taskId = await returnFixture(f)
-    const received = await rt.receive(conn, taskId, { productId: f.productId, packages: [{ qty: 10 }] })
+    const received = await rt.receive(conn, taskId, { pdaWarehouseId: wh, productId: f.productId, packages: [{ qty: 10 }] })
     assert.equal(received.noPrinterCount, 1)
-    const checked = await rt.check(conn, taskId, { productId: f.productId, passedQty: 1, rejectedQty: 1 })
+    const checked = await rt.check(conn, taskId, { pdaWarehouseId: wh, productId: f.productId, passedQty: 1, rejectedQty: 1 })
     assert.equal(checked.noPrinterCount, 3)
     assert.deepEqual(checked.printJobIds, [])
     assert.equal(checked.containers.length, 3)
@@ -174,13 +174,13 @@ async function main() {
   test('F01 标签入队异常回滚质检及分箱，同键可安全重试', async f => {
     await labelPrinter()
     const taskId = await returnFixture(f)
-    await rt.receive(conn, taskId, { productId: f.productId, packages: [{ qty: 10 }], userId: 1 })
+    await rt.receive(conn, taskId, { pdaWarehouseId: wh, productId: f.productId, packages: [{ qty: 10 }], userId: 1 })
     await conn.query('SAVEPOINT label_failure')
     const failingConnection = { query: (sql, args) => {
       if (String(sql).includes('INSERT INTO print_jobs')) throw new Error('injected label queue failure')
       return conn.query(sql, args)
     } }
-    const args = { productId: f.productId, passedQty: 1, rejectedQty: 1, userId: 1, requestKey: unique('RETRY') }
+    const args = { pdaWarehouseId: wh, productId: f.productId, passedQty: 1, rejectedQty: 1, userId: 1, requestKey: unique('RETRY') }
     await assert.rejects(rt.check(failingConnection, taskId, args), /injected label queue failure/)
     await conn.query('ROLLBACK TO SAVEPOINT label_failure')
     const [[item]] = await conn.query('SELECT checked_qty FROM return_task_items WHERE task_id=?', [taskId])

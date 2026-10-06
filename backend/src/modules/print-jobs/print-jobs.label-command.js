@@ -94,6 +94,8 @@ async function resolveLabelPrinter({
 
 async function buildLabelBody({ templateType, vars }) {
   const content = (await getLabelZplFromDefaultTemplate(templateType, vars)) ?? (await renderLabelAsync({ layout: defaultLabelLayout(templateType), data: vars, preview: false })).zpl
+  // 在已有渲染降级边界内检查，超预算也只留失败打印记录，不回滚收货/装箱。
+  require('./print-budget').assertPrintBudget(content)
   return { contentType: 'zpl', content }
 }
 

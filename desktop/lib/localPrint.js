@@ -22,20 +22,18 @@ function stripUtf8Bom(s) {
   return t
 }
 
-function printZplViaLp(queue, content) {
-  return new Promise((resolve, reject) => {
-    const tmpFile = path.join(os.tmpdir(), `fc_desktop_zpl_${Date.now()}.zpl`)
-    fs.writeFileSync(tmpFile, content, 'utf8')
-    execFile('lp', ['-d', queue, '-o', 'raw', tmpFile], (err) => {
-      try {
-        fs.unlinkSync(tmpFile)
-      } catch {
-        /* 忽略 */
-      }
-      if (err) reject(err)
-      else resolve()
+async function printZplViaLp(queue, content) {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fc_desktop_zpl_'))
+  try {
+    fs.chmodSync(tmpDir, 0o700)
+    const tmpFile = path.join(tmpDir, 'label.zpl')
+    fs.writeFileSync(tmpFile, content, { encoding: 'utf8', flag: 'wx', mode: 0o600 })
+    await new Promise((resolve, reject) => {
+      execFile('lp', ['-d', queue, '-o', 'raw', tmpFile], err => err ? reject(err) : resolve())
     })
-  })
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true })
+  }
 }
 
 /** 将 stderr/stdout 转为可读字符串（Windows 上 PowerShell 常为系统代码页，避免全乱码） */

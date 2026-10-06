@@ -35,6 +35,7 @@ after(async () => {
   if (ctx) {
     if (userId) {
       await ctx.pool.query('DELETE FROM refresh_token_sessions WHERE user_id=?', [userId])
+      await ctx.pool.query('DELETE FROM auth_session_families WHERE user_id=?', [userId])
       await ctx.pool.query('DELETE FROM auth_audit_logs WHERE user_id=?', [userId])
       await ctx.pool.query('DELETE FROM sys_users WHERE id=?', [userId])
     }
@@ -77,8 +78,10 @@ test('管理员重置与旧密码修改交错时，最终保留管理员重置�
 test('旧密钥签发的 refresh token 登出后会话确实撤销', async () => {
   const [[user]] = await ctx.pool.query('SELECT * FROM sys_users WHERE id=?', [userId])
   const jti = crypto.randomUUID()
-  const token = jwt.sign({ ...buildAccessTokenPayload(user), tokenType: 'refresh', jti }, env.JWT_SECRET_PREVIOUS, { expiresIn: '1h' })
-  await ctx.pool.query('INSERT INTO refresh_token_sessions(jti,user_id,expires_at) VALUES(?,?,DATE_ADD(NOW(),INTERVAL 1 HOUR))', [jti, userId])
+  const familyId = crypto.randomUUID()
+  await ctx.pool.query('INSERT INTO auth_session_families(family_id,user_id) VALUES(?,?)', [familyId, userId])
+  const token = jwt.sign({ ...buildAccessTokenPayload(user), tokenType: 'refresh', jti, familyId }, env.JWT_SECRET_PREVIOUS, { expiresIn: '1h' })
+  await ctx.pool.query('INSERT INTO refresh_token_sessions(jti,user_id,family_id,expires_at) VALUES(?,?,?,DATE_ADD(NOW(),INTERVAL 1 HOUR))', [jti, userId, familyId])
   await auth.logout(token)
   const [[session]] = await ctx.pool.query('SELECT revoked_at FROM refresh_token_sessions WHERE jti=?', [jti])
   assert.notEqual(session.revoked_at, null)

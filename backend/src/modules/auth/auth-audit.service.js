@@ -7,6 +7,7 @@ const AUTH_AUDIT_EVENT = Object.freeze({
   LOGIN_FAILED: 'login_failed',
   LOGOUT_SUCCESS: 'logout_success',
   TOKEN_REFRESHED: 'token_refreshed',
+  REFRESH_REPLAY_DETECTED: 'refresh_replay_detected',
   PERMISSION_DENIED: 'permission_denied',
   INACTIVE_USER_DENIED: 'inactive_user_denied',
 })

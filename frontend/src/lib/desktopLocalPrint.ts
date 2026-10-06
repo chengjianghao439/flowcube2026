@@ -52,7 +52,7 @@ function isConflictError(e: unknown): boolean {
 export async function reportPrintOutcomeWithRetry(
   url: string,
   data: unknown,
-  config?: { headers?: Record<string, string>; skipGlobalError?: boolean },
+  config?: { headers?: Record<string, string>; baseURL?: string; _erpApiFallbackTried?: boolean; skipGlobalError?: boolean },
   attempts = 3,
 ): Promise<void> {
   let lastErr: unknown

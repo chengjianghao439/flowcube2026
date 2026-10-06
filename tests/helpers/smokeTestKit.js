@@ -207,6 +207,11 @@ async function prepareSmokeContext(options = {}) {
   const [[printer]] = await pool.query("SELECT id, code, name, client_id FROM printers WHERE code = 'SMOKE-PRN'")
   // 测试用例以 camelCase 读取 clientId（DB 列为 client_id）
   printer.clientId = printer.client_id
+  const printClient = await require('./printClientIdentity').provisionTestPrintClient(pool, { clientId: printer.clientId, warehouseId: warehouse.id })
+  printer.clientCredential = printClient.credential
+  printer.clientIdentity = printClient.identity
+  printer.clientHeaders = printClient.headers
+  await pool.query('UPDATE printers SET warehouse_id=? WHERE id=?', [warehouse.id, printer.id])
   // SMOKE-PRN 是所有并发 smoke 会话共用的固定打印机（见上方注释：用固定 code 幂等
   // upsert 换确定性）。claim-client 是按 (priority DESC, id ASC) 的 FIFO 队列，如果之前
   // 某次运行（本会话崩溃、其它并发 worktree 会话的 mainline 测试等）留下了没被认领的

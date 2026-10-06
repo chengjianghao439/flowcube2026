@@ -131,11 +131,11 @@ async function actualShip(taskId) {
     await http(`/packages/${pkg.id}/finish`, {}, { method: 'PUT', pda: true })
   }
   for (let n = 0; n < 30; n++) {
-    const claimed = await http('/print-jobs/claim-client', { clientId: printer.clientId, limit: 100 })
+    const claimed = await http('/print-jobs/claim-client', { limit: 100 }, { headers: printer.headers })
     const jobs = Array.isArray(claimed) ? claimed : claimed.jobs
     assert.ok(Array.isArray(jobs))
     if (!jobs.length) break
-    for (const j of jobs) await http(`/print-jobs/${j.id}/complete-client`, { clientId: printer.clientId, ackToken: j.ackToken }, { headers: { 'X-Printer-Code': printer.code } })
+    for (const j of jobs) await http(`/print-jobs/${j.id}/complete-client`, { clientId: printer.clientId, ackToken: j.ackToken }, { headers: printer.headers })
   }
   await http(`/warehouse-tasks/${taskId}/pack-done`, {}, { method: 'PUT', pda: true })
   const key = randomUUID()
@@ -179,13 +179,13 @@ test('C2/C4真实履约、财务和受控来源日期跨期入账', async () => 
     pdaHeaders = { 'X-Client': 'pda', 'X-PDA-Session': session.sessionToken }
     server = await new Promise((resolve, reject) => { const s = app.listen(0, '127.0.0.1', () => resolve(s)); s.once('error', reject) })
     const printHttp = Object.fromEntries(['get', 'post', 'put', 'delete'].map(method => [method, async (path, options = {}) => {
-      const data = await http(path.replace(/^\/api/, ''), options.json, { method: method.toUpperCase(), expect: method === 'post' && path === '/api/printers' ? 201 : 200, headers: options.headers })
+      const data = await http(path.replace(/^\/api/, ''), options.json, { method: method.toUpperCase(), expect: method === 'post' && (path === '/api/printers' || path === '/api/printers/clients/register') ? 201 : 200, headers: options.headers })
       return { ok: true, status: 200, data: { data } }
     }]))
     printer = await printFixture.acquireOwnPackageLabelPrinter({ http: printHttp, token, warehouseId, assert, randomRef: () => ref + randomUUID().slice(0, 4) })
     own.printerId = printer.printerId; own.printHttp = printHttp
     printer.code = (await read(`/printers/${printer.printerId}`)).code
-    await http('/printers/client-heartbeat', { clientId: printer.clientId, hostname: ref })
+    await http('/printers/client-heartbeat', { hostname: ref }, { headers: printer.headers })
     accountId = own.accountId = (await http('/finance/accounts', { name: ref, type: 2, openingBalance: 1000 }, { expect: 201 })).id
 
     const hinge = await product('hinge', 40, 7), screw = await product('screw', 5, 2)

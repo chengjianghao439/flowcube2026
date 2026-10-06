@@ -205,12 +205,12 @@ async function main() {
     const indBarcode = await (async () => { const [[r]] = await conn.query('SELECT barcode FROM inventory_containers WHERE id=?', [cInd.insertId]); return r.barcode })()
     const qtyBarcode = await (async () => { const [[r]] = await conn.query('SELECT barcode FROM inventory_containers WHERE id=?', [cQty.insertId]); return r.barcode })()
     const scanInd = await stockcheckSvc.saveItemContainerScans(ck.insertId, cki.insertId,
-      [{ barcode: indBarcode, countedQty: 1 }], { userId: 1 }, null)
+      [{ barcode: indBarcode, countedQty: 1 }], { userId: 1 }, null, null, ctx.warehouse.id)
     log.assert('★ 个体容器扫到计 1（actualQty=1）', Number(scanInd.actualQty) === 1, JSON.stringify(scanInd))
 
     // 数量容器预填账面 5（countedQty 可覆盖）
     const scanQty = await stockcheckSvc.saveItemContainerScans(ck.insertId, cki.insertId,
-      [{ barcode: qtyBarcode, countedQty: 5 }], { userId: 1 }, null)
+      [{ barcode: qtyBarcode, countedQty: 5 }], { userId: 1 }, null, null, ctx.warehouse.id)
     log.assert('★ 数量容器预填账面计 5', Number(scanQty.actualQty) === 5, JSON.stringify(scanQty))
 
     // 汇总：两容器共 6 = 账面 6 → 无差异
@@ -218,7 +218,7 @@ async function main() {
       [
         { barcode: indBarcode, countedQty: 1 },
         { barcode: qtyBarcode, countedQty: 5 },
-      ], { userId: 1 }, null)
+      ], { userId: 1 }, null, null, ctx.warehouse.id)
     log.assert('个体+数量容器合计=账面（6=6，diffQty=0）',
       Number(final.actualQty) === 6 && Number(final.diffQty) === 0, JSON.stringify(final))
 

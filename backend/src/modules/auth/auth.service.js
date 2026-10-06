@@ -3,20 +3,24 @@ const jwt = require('jsonwebtoken')
 const crypto = require('crypto')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
+const logger = require('../../utils/logger')
 const { env } = require('../../config/env')
 const { getCurrentAuthUser, buildAccessTokenPayload } = require('./currentAuthUser')
 const { recordAuthAudit, AUTH_AUDIT_EVENT } = require('./auth-audit.service')
+const { validFamilyId, assertActiveFamily, revokeFamily, revokeAllFamilies } = require('./sessionFamilies')
+// A fixed cost-10 dummy hash makes unknown accounts do the same password work.
+const DUMMY_PASSWORD_HASH = '$2b$10$7EqJtq98hPqEX7fNZaFWoO5Kx5LrmM1lkJg.IaTZSmBDnpdEyfzvi'
 
 /**
  * 签发一个 refresh token 并落库一条会话记录（jti 一次性轮换，迁移 221）。
  * 返回 { jti, refreshToken, expiresAt }，expiresAt 取 JWT 解码后的 exp（秒），
  * 落库时用 FROM_UNIXTIME 由 MySQL 按会话时区（+08:00）转 DATETIME，与 NOW() 同基准。
  */
-function issueRefreshToken(user) {
+function issueRefreshToken(user, familyId) {
   const jti = crypto.randomUUID()
   const payload = buildAccessTokenPayload(user)
   const refreshToken = jwt.sign(
-    { ...payload, tokenType: 'refresh', jti },
+    { ...payload, tokenType: 'refresh', jti, familyId },
     env.JWT_SECRET,
     { expiresIn: env.JWT_REFRESH_EXPIRES_IN },
   )
@@ -64,58 +68,43 @@ async function login(username, password) {
     [username],
   )
 
-  const user = rows[0]
-  if (!user) {
+  const candidate = rows[0]
+  const isMatch = await bcrypt.compare(password, candidate?.password || DUMMY_PASSWORD_HASH)
+  if (!candidate || !candidate.is_active || !isMatch) {
     await recordAuthAudit({
-      eventType: AUTH_AUDIT_EVENT.LOGIN_FAILED,
-      title: '登录失败',
-      description: '账号不存在或密码错误',
-      username,
-      payload: { reason: 'user_not_found' },
+      eventType: candidate && !candidate.is_active ? AUTH_AUDIT_EVENT.INACTIVE_USER_DENIED : AUTH_AUDIT_EVENT.LOGIN_FAILED,
+      title: '登录失败', description: '账号不存在、不可用或密码错误',
+      userId: candidate?.id ?? null, username,
+      payload: { reason: !candidate ? 'user_not_found' : !candidate.is_active ? 'inactive_user' : 'password_mismatch' },
     })
     throw new AppError('账号或密码错误', 401, 'AUTH_INVALID_CREDENTIALS')
   }
 
-  if (!user.is_active) {
-    await recordAuthAudit({
-      eventType: AUTH_AUDIT_EVENT.INACTIVE_USER_DENIED,
-      title: '禁用账号登录被拒绝',
-      description: '账号已被禁用',
-      userId: user.id,
-      username: user.username,
-      payload: { reason: 'inactive_user' },
-    })
-    throw new AppError('账号已被禁用，请联系管理员', 403, 'AUTH_USER_DISABLED')
-  }
-
-  const isMatch = await bcrypt.compare(password, user.password)
-  if (!isMatch) {
-    await recordAuthAudit({
-      eventType: AUTH_AUDIT_EVENT.LOGIN_FAILED,
-      title: '登录失败',
-      description: '账号不存在或密码错误',
-      userId: user.id,
-      username: user.username,
-      payload: { reason: 'password_mismatch' },
-    })
-    throw new AppError('账号或密码错误', 401, 'AUTH_INVALID_CREDENTIALS')
-  }
-
-  const payload = buildAccessTokenPayload(user)
-
-  // access token（短期，2026-08-21 权衡修复）：2h 默认，泄露窗口大幅缩短
-  const token = jwt.sign(payload, env.JWT_SECRET, {
-    expiresIn: env.JWT_ACCESS_EXPIRES_IN,
-  })
-  // refresh token（长期 + 一次性轮换，迁移 221）：30 天默认；携带 tokenType='refresh' 与
-  // 唯一 jti，仅能用于 /auth/refresh 换 access（authMiddleware 拒绝 refresh）。jti 落库
-  // refresh_token_sessions，刷新时原子作废旧 jti、签发新 jti——被泄露的 refresh 重放即被拒，
-  // 且每端独立 jti，不会像递增 token_version 那样互踢多端（三端共享同一账号）。
-  const { jti, refreshToken, expiresAt } = issueRefreshToken(user)
-  await pool.query(
-    'INSERT INTO refresh_token_sessions (jti, user_id, expires_at) VALUES (?, ?, FROM_UNIXTIME(?))',
-    [jti, user.id, expiresAt],
-  )
+  // Lock user first, as refresh/logout/disable do: a concurrent disable or password
+  // reset cannot mint a session from the password snapshot checked above.
+  const conn = await pool.getConnection()
+  let user, token, refreshToken
+  try {
+    await conn.beginTransaction()
+    const [[locked]] = await conn.query('SELECT * FROM sys_users WHERE id = ? AND deleted_at IS NULL FOR UPDATE', [candidate.id])
+    if (!locked?.is_active || locked.password !== candidate.password) {
+      throw new AppError('账号或密码错误', 401, 'AUTH_INVALID_CREDENTIALS')
+    }
+    user = locked
+    const familyId = crypto.randomUUID()
+    token = jwt.sign({ ...buildAccessTokenPayload(user), familyId }, env.JWT_SECRET, { expiresIn: env.JWT_ACCESS_EXPIRES_IN })
+    const issued = issueRefreshToken(user, familyId)
+    refreshToken = issued.refreshToken
+    await conn.query('INSERT INTO auth_session_families (family_id, user_id) VALUES (?, ?)', [familyId, user.id])
+    await conn.query(
+      'INSERT INTO refresh_token_sessions (jti, user_id, family_id, expires_at) VALUES (?, ?, ?, FROM_UNIXTIME(?))',
+      [issued.jti, user.id, familyId, issued.expiresAt],
+    )
+    await conn.commit()
+  } catch (error) {
+    await conn.rollback()
+    throw error
+  } finally { conn.release() }
 
   const permissions = await listRolePermissions(user.role_id)
 
@@ -170,7 +159,8 @@ async function getMe(userId) {
  * - tokenVersion 校验：用户改密码/被禁用（token_version 递增）后，旧 refresh 立即失效
  * - **一次性轮换**：refresh 携带 jti，落库 refresh_token_sessions；刷新时在同一事务里
  *   先原子作废旧 jti（UPDATE ... WHERE revoked_at IS NULL），affectedRows=0 即说明该
- *   refresh 已被用过 → 重放被拒（AUTH_REFRESH_REPLAY）。每端独立 jti，不互踢多端。
+ *   refresh 已被用过或祖先记录被清理 → 提交撤销整个 family 后拒绝重放。
+ * - familyId 在 access/refresh 中一致；退出或重放后 access 也立即失效，其他设备不受影响。
  * - 每次刷新签发新 refresh（轮换），access 保持 2h 短窗口
  */
 async function refreshAccessToken(rawRefreshToken) {
@@ -191,54 +181,62 @@ async function refreshAccessToken(rawRefreshToken) {
     throw new AppError('登录状态已升级，请重新登录', 401, 'AUTH_REFRESH_INVALID')
   }
 
-  const user = await getCurrentAuthUser(decoded.userId)
-  // token_version 校验：改密码/禁用用户会递增它，旧 refresh 立即失效
-  if (Number(decoded.tokenVersion) !== Number(user.token_version || 0)) {
-    throw new AppError('登录状态已失效，请重新登录', 401, 'AUTH_REFRESH_INVALID')
+  if (!validFamilyId(decoded.familyId)) {
+    throw new AppError('登录状态已升级，请重新登录', 401, 'AUTH_REFRESH_INVALID')
   }
-
-  // 一次性轮换：事务内先原子作废旧 jti；无 jti 的旧令牌在上面已拒绝。
   const conn = await pool.getConnection()
+  let committed = false
   try {
     await conn.beginTransaction()
-    const revoked = await revokeJti(conn, decoded.jti)
-    if (!revoked) {
-      // 作废失败有两种可能：已被用过（重放攻击）或已过期/已被登出。
+    const [[user]] = await conn.query('SELECT * FROM sys_users WHERE id = ? AND deleted_at IS NULL FOR UPDATE', [decoded.userId])
+    if (!user?.is_active || Number(decoded.tokenVersion) !== Number(user.token_version || 0)) {
+      throw new AppError('登录状态已失效，请重新登录', 401, 'AUTH_REFRESH_INVALID')
+    }
+    try { await assertActiveFamily(user.id, decoded.familyId, conn, true) }
+    catch (e) { if (e instanceof AppError) throw new AppError('登录状态已失效，请重新登录', 401, 'AUTH_REFRESH_INVALID'); throw e }
+    const [[session]] = await conn.query('SELECT family_id, revoked_at, expires_at FROM refresh_token_sessions WHERE jti = ? AND user_id = ? FOR UPDATE', [decoded.jti, user.id])
+    if (session && session.family_id !== decoded.familyId) {
+      throw new AppError('refresh token 无效，请重新登录', 401, 'AUTH_REFRESH_INVALID')
+    }
+    if (!session || !await revokeJti(conn, decoded.jti)) {
+      // Persist the security consequence before rejecting replay. Rolling back this
+      // branch would leave the already-issued descendant usable by the attacker.
+      await revokeFamily(conn, user.id, decoded.familyId)
+      await conn.commit()
+      committed = true
+      try {
+        await recordAuthAudit({
+          eventType: AUTH_AUDIT_EVENT.REFRESH_REPLAY_DETECTED,
+          title: '刷新令牌重放已撤销会话', description: '旧刷新令牌再次使用，已撤销同族访问和刷新令牌',
+          userId: user.id, username: user.username,
+          payload: { familyId: decoded.familyId, reason: session ? 'rotated_token' : 'retained_ancestor_missing' },
+        })
+      } catch (auditError) {
+        // Revocation is committed; an audit failure cannot replace the replay 401.
+        logger.error('重放撤销后的安全审计失败', auditError, { userId: user.id }, 'AUTH_AUDIT')
+      }
       throw new AppError('该 refresh token 已被使用，请重新登录', 401, 'AUTH_REFRESH_REPLAY')
     }
-
-    const payload = buildAccessTokenPayload(user)
-    const token = jwt.sign(payload, env.JWT_SECRET, {
-      expiresIn: env.JWT_ACCESS_EXPIRES_IN,
-    })
-    const { jti: newJti, refreshToken, expiresAt } = issueRefreshToken(user)
+    const token = jwt.sign({ ...buildAccessTokenPayload(user), familyId: decoded.familyId }, env.JWT_SECRET, { expiresIn: env.JWT_ACCESS_EXPIRES_IN })
+    const { jti, refreshToken, expiresAt } = issueRefreshToken(user, decoded.familyId)
     await conn.query(
-      'INSERT INTO refresh_token_sessions (jti, user_id, expires_at) VALUES (?, ?, FROM_UNIXTIME(?))',
-      [newJti, user.id, expiresAt],
+      'INSERT INTO refresh_token_sessions (jti, user_id, family_id, expires_at) VALUES (?, ?, ?, FROM_UNIXTIME(?))',
+      [jti, user.id, decoded.familyId, expiresAt],
     )
-
-    await recordAuthAudit({
-      eventType: AUTH_AUDIT_EVENT.TOKEN_REFRESHED,
-      title: '访问令牌已刷新',
-      description: '刷新访问令牌成功',
-      userId: user.id,
-      username: user.username,
-      payload: { roleId: user.role_id },
-    })
-
     await conn.commit()
+    committed = true
+    await recordAuthAudit({ eventType: AUTH_AUDIT_EVENT.TOKEN_REFRESHED, title: '访问令牌已刷新', description: '刷新访问令牌成功', userId: user.id, username: user.username, payload: { roleId: user.role_id } })
     return { token, refreshToken }
   } catch (e) {
-    await conn.rollback()
+    if (!committed) await conn.rollback()
     throw e
-  } finally {
-    conn.release()
-  }
+  } finally { conn.release() }
 }
 
 /**
- * 登出：仅有效、未作废且与当前启用用户版本匹配的 refresh token 能返回可信身份。
- * 无效/已用过的 token 静默成功并返回 null，不允许用请求体账号回填操作日志。
+ * 登出：签名有效且与当前启用用户版本、活跃族匹配的 refresh 可退出同族。
+ * 已轮换或清理的祖先仍能退出，防止前端在续期竞态中捕获旧票据后留下子代。
+ * 已撤销族、无效/过期 token 静默成功返回 null，不用请求体账号回填日志。
  */
 async function logout(rawRefreshToken) {
   const tokenStr = String(rawRefreshToken || '')
@@ -249,36 +247,35 @@ async function logout(rawRefreshToken) {
   } catch {
     return null
   }
-  if (decoded.tokenType !== 'refresh' || typeof decoded.jti !== 'string' || !decoded.jti) return null
+  if (decoded.tokenType !== 'refresh' || typeof decoded.jti !== 'string' || !decoded.jti || !validFamilyId(decoded.familyId)) return null
   const userId = Number(decoded.userId)
   const tokenVersion = Number(decoded.tokenVersion)
   if (!Number.isSafeInteger(userId) || userId <= 0 || !Number.isSafeInteger(tokenVersion)) return null
-
   const conn = await pool.getConnection()
   let actor = null
   try {
     await conn.beginTransaction()
-    const [[user]] = await conn.query(
-      `SELECT u.id, u.username, u.real_name, u.token_version, u.is_active
-         FROM refresh_token_sessions s
-         JOIN sys_users u ON u.id = s.user_id
-        WHERE s.jti = ? AND s.user_id = ? AND s.revoked_at IS NULL AND s.expires_at > NOW()
-          AND u.deleted_at IS NULL
-        FOR UPDATE`,
-      [decoded.jti, userId],
-    )
+    const [[user]] = await conn.query('SELECT * FROM sys_users WHERE id = ? AND deleted_at IS NULL FOR UPDATE', [userId])
     if (user?.is_active && tokenVersion === Number(user.token_version || 0)) {
-      if (await revokeJti(conn, decoded.jti)) {
-        actor = { userId: user.id, username: user.username, realName: user.real_name }
+      let active = false
+      try { await assertActiveFamily(userId, decoded.familyId, conn, true); active = true }
+      catch (error) { if (!(error instanceof AppError)) throw error }
+      if (active) {
+        const [[session]] = await conn.query('SELECT family_id FROM refresh_token_sessions WHERE jti = ? AND user_id = ? FOR UPDATE', [decoded.jti, userId])
+        // Signature/expiry, user epoch and owned active family are authoritative.
+        // A retained row must agree; a missing signed ancestor is still trusted.
+        if (!session || session.family_id === decoded.familyId) {
+          await revokeFamily(conn, userId, decoded.familyId)
+          actor = { userId: user.id, username: user.username, realName: user.real_name }
+        }
       }
     }
     await conn.commit()
   } catch (error) {
     await conn.rollback()
     throw error
-  } finally {
-    conn.release()
-  }
+  } finally { conn.release() }
+
   if (actor) {
     await recordAuthAudit({
       eventType: AUTH_AUDIT_EVENT.LOGOUT_SUCCESS,
@@ -310,6 +307,7 @@ async function changePassword(userId, oldPassword, newPassword) {
         WHERE id = ? AND deleted_at IS NULL`,
       [hash, userId],
     )
+    await revokeAllFamilies(conn, userId)
     await conn.commit()
   } catch (error) {
     await conn.rollback()

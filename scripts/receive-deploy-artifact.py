@@ -1,16 +1,20 @@
 #!/usr/bin/env python3
 """接收短期 HTTPS 地址；仅释放预期归档，不执行 ZIP 内的文件。"""
 import hashlib
+import json
 import os
 from pathlib import Path
 import re
 import signal
+import stat
 import subprocess
 import sys
 import tempfile
 import time
 from urllib.parse import urlsplit
 import zipfile
+
+MAX_METADATA = 1024 * 1024
 
 
 def accept_relay_archive(destination, expected_sha, expected_bytes):
@@ -43,19 +47,88 @@ def wait_for_relay(destination, expected_sha, expected_bytes, timeout=900):
     raise RuntimeError('relay timed out')
 
 
-def unpack_archive(zip_path, destination, expected_sha, expected_bytes, expected_entry='flowcube-images.tar.gz'):
+def unique_json_object(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError('Duplicate manifest key')
+        result[key] = value
+    return result
+
+
+def artifact_member(source, entry, expected_source_sha=None, expected_run_id=None):
+    # This script is copied alone to the server. Keep validation in sync with
+    # local-release-relay.py; metadata is checked in memory, never released.
+    if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]*', entry):
+        raise ValueError('Invalid artifact entry')
+    members = source.infolist()
+    is_release = entry.endswith(('.exe', '.apk'))
+    allowed = {entry}
+    if is_release:
+        allowed.update(['release-provenance.json', 'version.json' if entry.endswith('.apk') else 'releaseNotes.md'])
+    names = [member.filename for member in members]
+    if not members or len(members) > len(allowed) or len(names) != len(set(names)):
+        raise ValueError('Unexpected ZIP members')
+    for member in members:
+        file_type = stat.S_IFMT(member.external_attr >> 16)
+        if (member.filename not in allowed or member.orig_filename != member.filename or member.is_dir()
+                or file_type not in (0, stat.S_IFREG) or member.flag_bits & 1):
+            raise ValueError('Unexpected ZIP member')
+    if entry not in names:
+        raise ValueError('Missing artifact binary')
+    binary = members[names.index(entry)]
+    if len(members) == 1:
+        # Older artifacts still require the runner's expected raw-byte hash.
+        return binary, None
+    if not is_release or 'release-provenance.json' not in names or (entry.endswith('.apk') and 'version.json' not in names):
+        raise ValueError('Missing release metadata')
+    metadata = {}
+    total = 0
+    for member in members:
+        if member is binary:
+            continue
+        total += member.file_size
+        if not 0 <= member.file_size <= MAX_METADATA or total > MAX_METADATA:
+            raise ValueError('Release metadata too large')
+        with source.open(member) as content:
+            raw = content.read(MAX_METADATA + 1)
+        if len(raw) != member.file_size:
+            raise ValueError('Release metadata size mismatch')
+        metadata[member.filename] = raw
+    manifest = json.loads(metadata.pop('release-provenance.json').decode('utf-8'), object_pairs_hook=unique_json_object)
+    if (not isinstance(manifest, dict) or set(manifest) != {'sha', 'runId', 'file', 'sha256', 'metadata'}
+            or not isinstance(manifest['sha'], str) or not re.fullmatch(r'[a-f0-9]{40}', manifest['sha'])
+            or not isinstance(manifest['runId'], str) or not re.fullmatch(r'[1-9][0-9]{0,19}', manifest['runId'])
+            or manifest['file'] != entry or not isinstance(manifest['sha256'], str)
+            or not re.fullmatch(r'[a-f0-9]{64}', manifest['sha256'])
+            or not isinstance(manifest['metadata'], dict) or set(manifest['metadata']) != set(metadata)):
+        raise ValueError('Invalid release manifest')
+    if ((expected_source_sha is not None and manifest['sha'] != expected_source_sha)
+            or (expected_run_id is not None and manifest['runId'] != str(expected_run_id))):
+        raise ValueError('Release source/run mismatch')
+    for name, raw in metadata.items():
+        expected = manifest['metadata'][name]
+        if not isinstance(expected, str) or not re.fullmatch(r'[a-f0-9]{64}', expected) or hashlib.sha256(raw).hexdigest() != expected:
+            raise ValueError('Release metadata SHA256 mismatch')
+    return binary, manifest
+
+
+def unpack_archive(zip_path, destination, expected_sha, expected_bytes, expected_entry='flowcube-images.tar.gz',
+                   expected_source_sha=None, expected_run_id=None):
     destination = Path(destination)
     partial = destination.with_suffix(destination.suffix + '.partial')
     try:
         with zipfile.ZipFile(zip_path) as archive:
-            entries = archive.infolist()
-            if len(entries) != 1 or entries[0].filename != expected_entry:
-                raise ValueError('unexpected artifact entry')
-            if entries[0].file_size != expected_bytes:
+            entry, manifest = artifact_member(archive, expected_entry, expected_source_sha, expected_run_id)
+            if entry.file_size != expected_bytes or not 0 < expected_bytes <= 2 * 1024**3:
                 raise ValueError('artifact size mismatch')
+            # The fresh CI download verifies SHA/run before supplying this hash;
+            # CLI callers bind the received payload to those exact verified bytes.
+            if manifest and manifest['sha256'] != expected_sha:
+                raise ValueError('release manifest SHA256 mismatch')
             digest = hashlib.sha256()
             count = 0
-            with archive.open(entries[0]) as src, partial.open('wb') as dst:
+            with archive.open(entry) as src, partial.open('wb') as dst:
                 while True:
                     chunk = src.read(1024 * 1024)
                     if not chunk:
@@ -97,7 +170,7 @@ def main():
         result = subprocess.run([
             'curl', '--config', '-', '--silent', '--fail', '--location',
             '--proto', '=https', '--proto-redir', '=https', '--connect-timeout', '15',
-            '--max-time', '150', '--max-filesize', str(size + 1024 * 1024), '--output', str(archive),
+            '--max-time', '150', '--max-filesize', str(size + MAX_METADATA + 64 * 1024), '--output', str(archive),
         ], input='url = "' + signed_url + '"\n', universal_newlines=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=160)
         if result.returncode:
             # curl 的退出码与耗时可用于区分超时、HTTP 拒绝和连接失败；

@@ -96,7 +96,17 @@ async function acquireOwnPackageLabelPrinter({ http, token, warehouseId, assert,
   const code = `OWN-PRN-${String(randomRef('P')).replace(/[^A-Za-z0-9]/g, '').slice(-6)}`
 
   let printerId = null
+  let credential
+  let enrolledClient = false
   try {
+    const enrolled = await http.post('/api/printers/clients/register', { token, json: { clientId, hostname: 'virtual-own-fixture', warehouseId: wh } })
+    assert.ok(enrolled.ok, `自备工作站注册失败：${enrolled.status}`)
+    assert.equal(enrolled.data?.data?.clientId, clientId, '注册回执须属于本套新建工作站')
+    enrolledClient = true
+    credential = enrolled.data?.data?.credential
+    assert.ok(credential, '自备工作站应返回一次性凭据')
+    const heartbeat = await http.post('/api/printers/client-heartbeat', { token, headers: { 'X-Client-Id': clientId, 'X-Print-Client-Credential': credential }, json: { hostname: 'virtual-own-fixture' } })
+    assert.ok(heartbeat.ok, `自备工作站心跳失败：${heartbeat.status}`)
     const created = await http.post('/api/printers', {
       token,
       json: { name: `本套自建标签机${code.slice(-4)}`, code, type: 1, warehouseId: wh, clientId },
@@ -115,10 +125,16 @@ async function acquireOwnPackageLabelPrinter({ http, token, warehouseId, assert,
       problems.push(...await settleOwnBinding(http, token, wh, printerId, prevPrinterId, assert))
       problems.push(...await retireOwnPrinter(http, token, printerId))
     }
+    // Only a successful creation receipt proves ownership; a duplicate-ID error
+    // must never revoke someone else's registration.
+    if (enrolledClient) try {
+      const revoked = await http.post(`/api/printers/clients/${encodeURIComponent(clientId)}/revoke`, { token, json: {} })
+      if (!revoked.ok && revoked.status !== 404) problems.push(`撤销自建工作站失败：${revoked.status}`)
+    } catch (cleanupError) { problems.push(`撤销自建工作站异常：${cleanupError.message}`) }
     throw new Error(`${e.message}｜自备收尾${problems.length ? `未净：${problems.join('；')}` : '已净'}`)
   }
 
-  return { printerId, clientId, warehouseId: wh, prevPrinterId }
+  return { printerId, clientId, credential, headers: { 'X-Client-Id': clientId, 'X-Print-Client-Credential': credential }, warehouseId: wh, prevPrinterId }
 }
 
 async function releaseOwnPackageLabelPrinter(own, { http, token, assert }) {
@@ -128,6 +144,11 @@ async function releaseOwnPackageLabelPrinter(own, { http, token, assert }) {
 
   problems.push(...await settleOwnBinding(http, token, wh, printerId, prevPrinterId, assert))
   problems.push(...await retireOwnPrinter(http, token, printerId))
+
+  try {
+    const revoked = await http.post(`/api/printers/clients/${encodeURIComponent(own.clientId)}/revoke`, { token, json: {} })
+    if (!revoked.ok) problems.push(`撤销自建工作站失败：${revoked.status}`)
+  } catch (e) { problems.push(`撤销自建工作站异常：${e.message}`) }
 
   // 最终态：本仓该用途必须回到原值（原值存在时）或不再指向本套自建打印机
   try {

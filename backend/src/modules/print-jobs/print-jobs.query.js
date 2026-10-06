@@ -1,7 +1,8 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { getInboundClosureThresholds } = require('../../utils/inboundThresholds')
-const { assertBoundWarehouseInScope } = require('../../utils/warehouseScope')
+const { assertBoundWarehouseInScope, scopeFilter } = require('../../utils/warehouseScope')
+const { normalizePagination } = require('../../utils/pagination')
 const { CONTAINER_STATUS } = require('../../engine/containerEngine')
 const { MOVE_TYPE } = require('../../engine/inventoryEngine')
 const { fmt } = require('./print-jobs.helpers')
@@ -17,6 +18,15 @@ const {
   statusKey,
   printStateLabel,
 } = require('./print-jobs.status')
+
+function normalizePrintPagination({ page, pageSize }) {
+  if (![page, pageSize].every(v => (typeof v === 'number' || typeof v === 'string') && Number.isSafeInteger(Number(v)) && Number(v) > 0)) {
+    throw new AppError('分页参数须为有限的正整数', 400, 'PRINT_PAGINATION_INVALID')
+  }
+  const paging = normalizePagination({ page, pageSize })
+  if (!Number.isSafeInteger(paging.offset)) throw new AppError('分页范围超过安全限制', 400, 'PRINT_PAGINATION_INVALID')
+  return paging
+}
 
 async function listJobsByIds(ids, { includeAckToken = false } = {}) {
   const uniq = [...new Set(ids.map(Number).filter((n) => Number.isFinite(n) && n > 0))]
@@ -37,20 +47,26 @@ async function listJobsByIds(ids, { includeAckToken = false } = {}) {
 }
 
 async function findAll({ printerId, status, page = 1, pageSize = 50, scopeWarehouseIds = null } = {}) {
+  const paging = normalizePrintPagination({ page, pageSize })
+  page = paging.page; pageSize = paging.pageSize
   const conds = ['1=1']
   const params = []
   if (printerId) { conds.push('j.printer_id=?'); params.push(printerId) }
   if (status !== undefined && status !== null) { conds.push('j.status=?'); params.push(status) }
-  // 仓库数据权限（2026-09-18 审计 P2）：打印任务带完整 ZPL 内容（含箱贴/面单与业务条码），
-  // 此前列表与详情都不做范围过滤，限仓用户可跨仓读取全部打印内容。
+  // Metadata and detail both carry warehouse permissions. Content is fetched only
+  // for one detail or the small authenticated claim batch, never 500 list rows.
   if (Array.isArray(scopeWarehouseIds)) {
     if (scopeWarehouseIds.length) { conds.push('j.warehouse_id IN (?)'); params.push(scopeWarehouseIds) }
     else conds.push('1=0')
   }
   const where = 'WHERE ' + conds.join(' AND ')
-  const offset = (page - 1) * pageSize
+  const { offset } = paging
   const [rows] = await pool.query(
-    `SELECT j.*, p.code AS printer_code, p.name AS printer_name
+    `SELECT j.id, j.printer_id, j.template_id, j.title, j.content_type, j.copies,
+            j.priority, j.job_type, j.warehouse_id, j.status, j.retry_count, j.error_message,
+            j.expires_at, j.acknowledged_at, j.job_unique_key, j.dispatch_reason,
+            j.ref_type, j.ref_id, j.ref_code, j.dispatched_at, j.created_by, j.created_at,
+            p.code AS printer_code, p.name AS printer_name
      FROM print_jobs j
      LEFT JOIN printers p ON p.id = j.printer_id
      ${where} ORDER BY j.priority DESC, j.id DESC LIMIT ? OFFSET ?`,
@@ -59,6 +75,7 @@ async function findAll({ printerId, status, page = 1, pageSize = 50, scopeWareho
   const [[{ total }]] = await pool.query(`SELECT COUNT(*) AS total FROM print_jobs j ${where}`, params)
   return {
     list: rows.map((row) => fmt(row, {
+      includeContent: false,
       statusKey: statusKey(row.status),
       printStateLabel: printStateLabel(row.status),
     })),
@@ -88,19 +105,23 @@ async function findByIdWithExecutor(exec, id) {
   })
 }
 
-async function getStatsCounts() {
-  const [[p]] = await pool.query('SELECT COUNT(*) AS c FROM print_jobs WHERE status=?', [STATUS.PENDING])
-  const [[f]] = await pool.query('SELECT COUNT(*) AS c FROM print_jobs WHERE status=?', [STATUS.FAILED])
+async function getStatsCounts(scopeWarehouseIds = null) {
+  const scope = scopeFilter(scopeWarehouseIds, 'warehouse_id')
+  const [[p]] = await pool.query(`SELECT COUNT(*) AS c FROM print_jobs WHERE status=? ${scope.sql}`, [STATUS.PENDING, ...scope.params])
+  const [[f]] = await pool.query(`SELECT COUNT(*) AS c FROM print_jobs WHERE status=? ${scope.sql}`, [STATUS.FAILED, ...scope.params])
   return { pending: Number(p.c), failed: Number(f.c) }
 }
 
-async function listPrinterHealth() {
+async function listPrinterHealth(scopeWarehouseIds = null) {
+  const scope = scopeFilter(scopeWarehouseIds, 'p.warehouse_id')
   const [rows] = await pool.query(
     `SELECT h.printer_id, h.error_rate, h.avg_latency_ms, h.sample_count, h.updated_at,
             p.code AS printer_code, p.name AS printer_name
      FROM printer_health_stats h
      LEFT JOIN printers p ON p.id = h.printer_id
+     WHERE 1=1 ${scope.sql}
      ORDER BY h.printer_id ASC`,
+    scope.params,
   )
   return rows.map((r) => ({
     printerId: Number(r.printer_id),
@@ -114,6 +135,8 @@ async function listPrinterHealth() {
 }
 
 async function findBarcodeRecords({ category, keyword = '', status, page = 1, pageSize = 20, inboundTaskId = null, inboundTaskItemId = null, scopeWarehouseIds = null } = {}) {
+  const paging = normalizePrintPagination({ page, pageSize })
+  page = paging.page; pageSize = paging.pageSize
   const type = String(category || '').trim().toLowerCase()
   if (!['inbound', 'outbound', 'logistics'].includes(type)) {
     throw new AppError('条码分类无效', 400, 'PRINT_BARCODE_CATEGORY_INVALID')
@@ -296,7 +319,9 @@ async function findInboundBarcodeRecords({ keyword = '', status, page = 1, pageS
      LEFT JOIN inventory_warehouses w ON w.id = c.warehouse_id
      LEFT JOIN warehouse_locations loc ON loc.id = c.location_id
      LEFT JOIN (
-       SELECT j.*, pr.code AS printer_code, pr.name AS printer_name
+       SELECT j.id, j.ref_id, j.status, j.error_message, j.printer_id,
+              j.created_at, j.updated_at, j.dispatch_reason,
+              pr.code AS printer_code, pr.name AS printer_name
        FROM print_jobs j
        LEFT JOIN printers pr ON pr.id = j.printer_id
        INNER JOIN (
@@ -375,7 +400,7 @@ async function findInboundBarcodeRecords({ keyword = '', status, page = 1, pageS
      LEFT JOIN product_items p ON p.id = c.product_id
      LEFT JOIN inbound_tasks t ON t.id = c.inbound_task_id
      LEFT JOIN (
-       SELECT j.*
+       SELECT j.id, j.ref_id, j.status, j.error_message, j.printer_id, j.updated_at
        FROM print_jobs j
        INNER JOIN (
          SELECT ref_id, MAX(id) AS max_id
@@ -442,7 +467,9 @@ async function findOutboundBarcodeRecords({ keyword = '', status, page = 1, page
      LEFT JOIN picking_wave_tasks pwt ON pwt.task_id = wt.id
      LEFT JOIN picking_waves pw ON pw.id = pwt.wave_id
      LEFT JOIN (
-       SELECT j.*, pr.code AS printer_code, pr.name AS printer_name
+       SELECT j.id, j.ref_id, j.status, j.error_message, j.printer_id,
+              j.created_at, j.updated_at, j.dispatch_reason,
+              pr.code AS printer_code, pr.name AS printer_name
        FROM print_jobs j
        LEFT JOIN printers pr ON pr.id = j.printer_id
        INNER JOIN (
@@ -506,7 +533,7 @@ async function findOutboundBarcodeRecords({ keyword = '', status, page = 1, page
      FROM packages p
      INNER JOIN warehouse_tasks wt ON wt.id = p.warehouse_task_id
      LEFT JOIN (
-       SELECT j.*
+       SELECT j.id, j.ref_id, j.status, j.error_message, j.printer_id, j.updated_at
        FROM print_jobs j
        INNER JOIN (
          SELECT ref_id, MAX(id) AS max_id
@@ -537,7 +564,9 @@ async function findLogisticsBarcodeRecords({ keyword = '', status, page = 1, pag
   const offset = (page - 1) * pageSize
   const statusClause = genericStatusClause(status, 'j')
   const [rows] = await pool.query(
-    `SELECT j.*, p.code AS printer_code, p.name AS printer_name
+    `SELECT j.id, j.printer_id, j.status, j.error_message, j.dispatch_reason,
+            j.created_at, j.updated_at, j.ref_code, j.title, j.copies,
+            p.code AS printer_code, p.name AS printer_name
      FROM print_jobs j
      LEFT JOIN printers p ON p.id = j.printer_id
      WHERE ${logisticsScope.sql ? logisticsScope.sql + ' AND ' : ''}(j.ref_type = 'waybill' OR j.job_type = 'waybill')

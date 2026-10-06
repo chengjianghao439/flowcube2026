@@ -95,7 +95,7 @@ test('操作日志预写失败阻止业务执行；结束写失败保留待确�
     '../utils/logger': { error: (...args) => errors.push(args) },
     '../modules/document-activity/document-operation': require('../backend/src/modules/document-activity/document-operation'),
   })
-  const req = { method: 'POST', originalUrl: '/api/sale', path: '/api/sale', body: {}, headers: {} }
+  const req = { method: 'POST', originalUrl: '/api/sale', path: '/api/sale', body: {}, user: { userId: 7, realName: '测试经办人' }, headers: {} }
   let routed = false
   const initialFailure = new Error('DB unavailable')
   const errors = []
@@ -111,7 +111,7 @@ test('操作日志预写失败阻止业务执行；结束写失败保留待确�
   const conn = { beginTransaction: async () => {}, query: async () => { throw Error('finalize failed') }, rollback: async () => {}, release: () => {} }
   const finalMiddleware = load('backend/src/middleware/opLogger.js', deps({ query: async () => [{ insertId: 10 }], getConnection: async () => conn }, errors))
   const res = { statusCode: 200, json: () => { sent = true } }
-  await new Promise(resolve => finalMiddleware(req, res, resolve))
+  await new Promise(resolve => finalMiddleware({ ...req, operationLogStarted: false }, res, resolve))
   res.json({ success: true })
   assert.equal(sent, false)
   await new Promise(resolve => setImmediate(resolve))
@@ -127,7 +127,7 @@ test('二进制 send 响应也在补全日志后发送', async () => {
     '../utils/logger': { error: () => {} },
     '../modules/document-activity/document-operation': require('../backend/src/modules/document-activity/document-operation'),
   })
-  const req = { method: 'POST', originalUrl: '/api/settings/logo', path: '/api/settings/logo', body: {}, headers: {} }
+  const req = { method: 'POST', originalUrl: '/api/settings/logo', path: '/api/settings/logo', body: {}, user: { userId: 7, realName: '测试经办人' }, headers: {} }
   let sent = false
   const res = { statusCode: 200, json: () => {}, send: () => { sent = true } }
   await new Promise(resolve => middleware(req, res, resolve))
@@ -147,7 +147,7 @@ test('打印轮询只有需留痕的结果才先写日志再响应', async () =>
     '../utils/logger': { error: () => {} },
     '../modules/document-activity/document-operation': require('../backend/src/modules/document-activity/document-operation'),
   })
-  const req = { method: 'POST', originalUrl: '/api/print-jobs/claim-client', path: '/api/print-jobs/claim-client', body: {}, headers: {} }
+  const req = { method: 'POST', originalUrl: '/api/print-jobs/claim-client', path: '/api/print-jobs/claim-client', body: {}, user: { userId: 7, realName: '测试经办人' }, headers: {} }
   const res = { statusCode: 200, json: () => { sent++ } }
   middleware(req, res, () => {})
   res.json({ success: true, data: [] })
@@ -171,7 +171,7 @@ test('日志补全后 JSON 序列化失败仍进入 Express 错误处理', async
   const failure = Error('JSON serialize')
   const res = { statusCode: 200, json: () => { throw failure } }
   const errors = []
-  await new Promise(resolve => middleware({ method: 'POST', originalUrl: '/api/products', path: '/api/products', body: {}, headers: {} }, res, error => {
+  await new Promise(resolve => middleware({ method: 'POST', originalUrl: '/api/products', path: '/api/products', body: {}, user: { userId: 7, realName: '测试经办人' }, headers: {} }, res, error => {
     if (error) errors.push(error)
     else resolve()
   }))

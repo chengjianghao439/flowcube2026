@@ -7,6 +7,7 @@ const { pool } = require('../../config/db')
 const { safeJsonParse } = require('../../utils/safeJsonParse')
 const logger = require('../../utils/logger')
 const { renderLabelAsync } = require('./labelRasterService')
+const { assertPrintBudget } = require('./print-budget')
 const {
   applyZplTemplate,
   sanitizeZplValue,
@@ -52,8 +53,10 @@ async function getLabelZplFromDefaultTemplate(templateType, vars) {
       return null
     }
   }
-  if (layout?.format === 'zpl' && typeof layout.body === 'string' && layout.body.trim()) {
-    return applyZplTemplate(layout.body.trim(), vars)
+  if (layout?.format === 'zpl' && typeof layout.body === 'string') {
+    assertPrintBudget(layout.body)
+    const body = layout.body.trim()
+    return body ? applyZplTemplate(body, vars) : null
   }
   if (Array.isArray(layout?.elements)) {
     return (await renderLabelAsync({ layout, data: vars, paperSize, preview: false })).zpl

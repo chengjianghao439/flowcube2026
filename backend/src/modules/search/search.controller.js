@@ -8,7 +8,7 @@ async function searchGlobal(req, res, next) {
     const result = await searchService.searchGlobal(
       req.query.q,
       req.user?.warehouseIds ?? null,
-      { type: req.query.type, beforeId: req.query.beforeId },
+      { type: req.query.type, beforeId: req.query.beforeId, user: req.user, companyId: req.companyId },
     )
     // 旧客户端保留数组响应；新客户端显式请求游标分页。
     return successResponse(res, req.query.paginated === '1'

@@ -170,10 +170,14 @@ async function getScanItems(id, scopeWarehouseIds = null) {
  *  - 数量容器实盘须 ≥0 且不得多于账面剩余——盘盈不是仓库现场能决策的事，走 ERP 手工调整；
  *  - 同一条码本批重复 → 拒。
  */
-async function saveItemContainerScans(id, itemId, scans, operator, scopeWarehouseIds = null, requestKey = null) {
+async function saveItemContainerScans(id, itemId, scans, operator, scopeWarehouseIds = null, requestKey = null, pdaWarehouseId = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    const checkRow = await lockStatusRow(conn, { table:'inventory_checks', id, columns:'id, warehouse_id, status', entityName:'盘点单' })
+    assertInScope(scopeWarehouseIds, checkRow.warehouse_id, '盘点单')
+    if (pdaWarehouseId == null) throw new AppError('设备尚未绑定仓库，无法执行盘点扫码', 403, 'PDA_WAREHOUSE_REQUIRED')
+    if (Number(pdaWarehouseId) !== Number(checkRow.warehouse_id)) throw new AppError('当前设备绑定仓库与盘点单仓库不一致', 403, 'PDA_WAREHOUSE_MISMATCH')
     // 幂等回执（2026-09-18 审计 [6] 残留）：盘点扫码此前**完全不写 operation_requests**，
     // 而 PDA 页面用 requestAction='stockcheck.scan' 查回执 → 断网重连必然 not_found，只能靠
     // resolveServerState 兜底。这里按 stockcheck.scan.<盘点单ID> 绑定单据（与 submit 同款写法），
@@ -186,8 +190,6 @@ async function saveItemContainerScans(id, itemId, scans, operator, scopeWarehous
       resourceId: id,
     })
     if (requestState.replay) return requestState.responseData
-    const checkRow = await lockStatusRow(conn, { table:'inventory_checks', id, columns:'id, warehouse_id, status', entityName:'盘点单' })
-    assertInScope(scopeWarehouseIds, checkRow.warehouse_id, '盘点单')
     assertStatusAction('stockcheck', 'edit', checkRow.status)
 
     const [[item]] = await conn.query(

@@ -89,6 +89,29 @@ test.each(['refresh', 'replay'])('401 in %s terminates without a refresh loop', 
   expect(session.logout).toHaveBeenCalledOnce()
 })
 
+test.each(['refresh', null])('打印工作站凭据401保留ERP会话（refreshToken=%s）', async refreshToken => {
+  session.refreshToken = refreshToken
+  const { default: api, ApiClientError } = await import('./client')
+  api.defaults.adapter = async config => {
+    requests.push(config)
+    throw new AxiosError('print credential invalid', 'ERR_BAD_REQUEST', config, undefined, {
+      data: { success: false, code: 'PRINT_CLIENT_CREDENTIAL_INVALID', message: '打印工作站凭据无效' },
+      status: 401, statusText: 'Unauthorized', config, headers: {},
+    })
+  }
+  const error = await api.post('/printers/clients/heartbeat', {}, {
+    headers: { 'X-Client-Id': 'desktop:test', 'X-Print-Client-Credential': 'invalid-fixture' },
+    skipGlobalError: true,
+  }).catch(error => error)
+  expect(error).toBeInstanceOf(ApiClientError)
+  expect(error).toMatchObject({ status: 401, code: 'PRINT_CLIENT_CREDENTIAL_INVALID', message: '打印工作站凭据无效' })
+  expect(requests).toHaveLength(1)
+  expect(session.setTokens).not.toHaveBeenCalled()
+  expect(session.logout).not.toHaveBeenCalled()
+  expect(session.token).toBe('old')
+  expect(session.refreshToken).toBe(refreshToken)
+})
+
 test('a 401 without a refresh token does not poison refresh after a later login', async () => {
   const { default: api } = await import('./client')
   session.refreshToken = null

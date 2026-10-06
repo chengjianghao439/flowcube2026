@@ -1,5 +1,7 @@
 const { scopeFilter } = require('../../utils/warehouseScope')
 const crypto = require('crypto')
+const { requireClientIdentity } = require('../printers/print-client-auth')
+const { MAX_CONTENT_BYTES, MAX_EXPANDED_BYTES } = require('./print-budget')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const logger = require('../../utils/logger')
@@ -15,15 +17,20 @@ const {
 
 // 打印调度当前为客户端轮询模式：桌面客户端通过 claimClientJobs() 领取 PENDING 任务。
 // 本模块不提供实时推送通道，避免创建/重试路径误以为存在 push dispatch。
-async function claimClientJobs({ clientId, limit = 3, scopeWarehouseIds = null } = {}) {
-  const cid = String(clientId || '').trim()
-  if (!cid) throw new AppError('clientId 必填', 400, 'PRINT_CLIENT_ID_REQUIRED')
-  const n = Math.min(10, Math.max(1, Number(limit) || 3))
+async function claimClientJobs({ identity, limit = 3, scopeWarehouseIds = null } = {}) {
+  const { clientId: cid, credentialHash } = requireClientIdentity(identity)
+  const n = Math.min(10, Math.max(1, Math.trunc(Number(limit) || 3)))
 
   const scope = scopeFilter(scopeWarehouseIds, 'j.warehouse_id')
+  const printerScope = scopeFilter(scopeWarehouseIds, 'p.warehouse_id')
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    const [[client]] = await conn.query(
+      'SELECT client_id FROM print_clients WHERE client_id=? AND credential_hash=? AND revoked_at IS NULL FOR UPDATE',
+      [cid, credentialHash],
+    )
+    if (!client) throw new AppError('打印工作站认证已失效', 401, 'PRINT_CLIENT_CREDENTIAL_INVALID')
     await conn.query(
       `UPDATE print_clients
        SET last_seen = NOW(), status = 1
@@ -32,19 +39,21 @@ async function claimClientJobs({ clientId, limit = 3, scopeWarehouseIds = null }
     )
 
     const [rows] = await conn.query(
-      `SELECT j.id
+      `SELECT j.id, OCTET_LENGTH(j.content) AS content_bytes, j.copies
        FROM print_jobs j
        INNER JOIN printers p ON p.id = j.printer_id
        WHERE j.status = ?
          AND (j.expires_at IS NULL OR j.expires_at > NOW())
          AND p.status = 1
-         AND p.client_id = ? ${scope.sql}
+         AND p.client_id = ? ${scope.sql} ${printerScope.sql}
        ORDER BY j.priority DESC, j.id ASC
        LIMIT ?
        FOR UPDATE`,
-      [STATUS.PENDING, cid, ...scope.params, n],
+      [STATUS.PENDING, cid, ...scope.params, ...printerScope.params, n],
     )
-    const ids = rows.map((r) => Number(r.id)).filter(Boolean)
+    const oversized = rows.filter(r => Number(r.content_bytes) > MAX_CONTENT_BYTES || Number(r.content_bytes) * Number(r.copies) > MAX_EXPANDED_BYTES)
+    if (oversized.length) await conn.query("UPDATE print_jobs SET status=?, error_message='label render failed: PRINT_CONTENT_BUDGET_EXCEEDED', ack_token=NULL WHERE id IN (?) AND status=?", [STATUS.FAILED, oversized.map(r => r.id), STATUS.PENDING])
+    const ids = rows.filter(r => !oversized.includes(r)).map((r) => Number(r.id)).filter(Boolean)
     if (!ids.length) {
       await conn.commit()
       return []
@@ -59,11 +68,11 @@ async function claimClientJobs({ clientId, limit = 3, scopeWarehouseIds = null }
     for (const job of jobsWithToken) {
       const [result] = await conn.query(
         `UPDATE print_jobs
-         SET status = ?, ack_token = ?, dispatched_at = NOW(), error_message = NULL,
+         SET status = ?, ack_token = ?, claimed_client_id = ?, claimed_credential_hash = ?, dispatched_at = NOW(), error_message = NULL,
              expires_at = DATE_ADD(NOW(), INTERVAL ? MINUTE)
          WHERE id = ? AND status = ?
            AND (expires_at IS NULL OR expires_at > NOW())`,
-        [STATUS.PRINTING, job.ackToken, ttlMinutes(), job.id, STATUS.PENDING],
+        [STATUS.PRINTING, job.ackToken, cid, credentialHash, ttlMinutes(), job.id, STATUS.PENDING],
       )
       if (result.affectedRows) claimed.push(job)
     }

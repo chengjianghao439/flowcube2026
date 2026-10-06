@@ -1,0 +1,48 @@
+'use strict'
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path'),crypto=require('node:crypto')
+const {manifestFor,verifyArtifact}=require('../scripts/release-artifact-manifest.cjs')
+const {verifyNsisArchive}=require('../scripts/verify-nsis-archive.cjs')
+const sha='a'.repeat(40)
+test('发布产物必须绑定来源SHA、本轮run及精确字节；metadata和多安装包不能替换',t=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'flowcube-artifact-test-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}))
+ fs.writeFileSync(path.join(dir,'FlowCube-Setup-1.0.0.exe'),'synthetic installer')
+ fs.writeFileSync(path.join(dir,'releaseNotes.md'),'synthetic notes')
+ const manifest=manifestFor(dir,'.exe',sha,'123');fs.writeFileSync(path.join(dir,'release-provenance.json'),JSON.stringify(manifest))
+ assert.equal(verifyArtifact(dir,'.exe',sha,'123').file,'FlowCube-Setup-1.0.0.exe')
+ assert.throws(()=>verifyArtifact(dir,'.exe','b'.repeat(40),'123'),/sha/)
+ assert.throws(()=>verifyArtifact(dir,'.exe',sha,'124'),/runId/)
+ fs.writeFileSync(path.join(dir,'releaseNotes.md'),'tampered');assert.throws(()=>verifyArtifact(dir,'.exe',sha,'123'),/metadata/)
+ fs.writeFileSync(path.join(dir,'releaseNotes.md'),'synthetic notes')
+ fs.writeFileSync(path.join(dir,'FlowCube-Setup-1.0.0.exe'),'changed bytes');assert.throws(()=>verifyArtifact(dir,'.exe',sha,'123'),/sha256/)
+ fs.writeFileSync(path.join(dir,'other.exe'),'extra');assert.throws(()=>verifyArtifact(dir,'.exe',sha,'123'),/exactly one/)
+ fs.unlinkSync(path.join(dir,'other.exe'));fs.writeFileSync(path.join(dir,'unexpected.js'),'extra');assert.throws(()=>manifestFor(dir,'.exe',sha,'123'),/Unexpected/)
+})
+test('NSIS在解包前拒绝被替换字节，正常校验返回同一摘要',t=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'flowcube-nsis-test-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}))
+ const file=path.join(dir,'synthetic.7z');fs.writeFileSync(file,'synthetic archive')
+ const expected=crypto.createHash('sha256').update('synthetic archive').digest('hex')
+ assert.equal(verifyNsisArchive(file,expected),expected)
+ fs.appendFileSync(file,'tamper');assert.throws(()=>verifyNsisArchive(file,expected),/SHA256 mismatch/)
+ assert.throws(()=>verifyNsisArchive(file),/SHA256 mismatch/)
+})
+
+test('镜像来源记录绑定实际归档/镜像/SBOM字节和冻结依赖；空或损坏SBOM拒绝', t=>{
+ const {buildProvenance}=require('../scripts/write-image-provenance.cjs')
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'flowcube-provenance-test-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}))
+ const archive=path.join(dir,'images.tar.gz');fs.writeFileSync(archive,'synthetic image archive')
+ for(const service of ['backend','frontend']){
+  fs.mkdirSync(path.join(dir,service));fs.writeFileSync(path.join(dir,service,'package-lock.json'),'{}')
+  fs.writeFileSync(path.join(dir,'Dockerfile.'+service),'FROM fixture@sha256:'+ 'c'.repeat(64)+'\n')
+  fs.writeFileSync(path.join(dir,service+'.image-id'),'sha256:'+'d'.repeat(64))
+  fs.writeFileSync(path.join(dir,service+'.sbom.json'),JSON.stringify({bomFormat:'CycloneDX',components:[{name:'synthetic-package',version:'1.0.0'}]}))
+ }
+ const env={GITHUB_SHA:sha,GITHUB_RUN_ID:'123',GITHUB_REPOSITORY:'fixture/flowcube',GITHUB_RUN_ATTEMPT:'1'}
+ const result=buildProvenance(dir,archive,dir,env)
+ assert.equal(result.predicateType,'https://slsa.dev/provenance/v1')
+ assert.equal(result.subject.length,5)
+ assert.equal(result.predicate.buildDefinition.externalParameters.sourceSha,sha)
+ assert.equal(result.subject[0].digest.sha256,crypto.createHash('sha256').update('synthetic image archive').digest('hex'))
+ assert.equal(result.predicate.buildDefinition.resolvedDependencies.filter(d=>d.uri.startsWith('docker://')).length,2)
+ fs.writeFileSync(path.join(dir,'backend.sbom.json'),JSON.stringify({bomFormat:'CycloneDX',components:[]}));assert.throws(()=>buildProvenance(dir,archive,dir,env),/empty image SBOM/)
+ fs.writeFileSync(path.join(dir,'backend.sbom.json'),'not JSON');assert.throws(()=>buildProvenance(dir,archive,dir,env))
+})

@@ -9,7 +9,6 @@ const { configureTestEnvironment } = require('./helpers/testEnvironment')
 configureTestEnvironment()
 const { pool } = require('../backend/src/config/db')
 const requestLogger = require('../backend/src/middleware/requestLogger')
-const opLogger = require('../backend/src/middleware/opLogger')
 const authRoutes = require('../backend/src/modules/auth/auth.routes')
 const errorHandler = require('../backend/src/middleware/errorHandler')
 const { runMigrations } = require('../backend/src/database/migrate')
@@ -37,7 +36,6 @@ async function main() {
   const app = express()
   app.use(express.json())
   app.use(requestLogger)
-  app.use(opLogger)
   app.use('/api/auth', authRoutes)
   app.use(errorHandler)
   let server
@@ -64,13 +62,14 @@ async function main() {
 
     const badLogin = await request('/api/auth/login', { username: mark, password: 'wrong-password' })
     assert.equal(badLogin.status, 401)
-    const badLog = await waitForOperation(baselineId, '/api/auth/login', r => r.status_code === 401)
-    assert.equal(badLog.user_id, null, '失败登录不能相信请求体账号')
-    assert.equal(badLog.user_name, null)
+    const [[badCount]] = await pool.query('SELECT COUNT(*) AS n FROM operation_logs WHERE id>? AND path=?', [baselineId, '/api/auth/login'])
+    assert.equal(Number(badCount.n), 0, '失败登录不占用业务操作日志')
+    const [[failedAudit]] = await pool.query("SELECT COUNT(*) AS n FROM auth_audit_logs WHERE username=? AND event_type='login_failed'", [mark])
+    assert.equal(Number(failedAudit.n), 1, '限流后的失败登录保留安全审计')
 
     const login = await request('/api/auth/login', { username: mark, password })
     assert.equal(login.status, 200)
-    const loginLog = await waitForOperation(badLog.id, '/api/auth/login', r => r.status_code === 200)
+    const loginLog = await waitForOperation(baselineId, '/api/auth/login', r => r.status_code === 200)
     assert.equal(Number(loginLog.user_id), userId, '成功登录必须记录已验证身份')
     assert.equal(loginLog.user_name, mark)
     const [loginAudit] = await pool.query(
@@ -85,8 +84,8 @@ async function main() {
 
     const refreshed = await request('/api/auth/refresh', { refreshToken: login.data.data.refreshToken })
     assert.equal(refreshed.status, 200)
-    const refreshLog = await waitForOperation(profileLog.id, '/api/auth/refresh')
-    assert.equal(refreshLog.status_code, 200)
+    const [[refreshCount]] = await pool.query('SELECT COUNT(*) AS n FROM operation_logs WHERE id>? AND path=?', [profileLog.id, '/api/auth/refresh'])
+    assert.equal(Number(refreshCount.n), 0, '续期只记专用安全审计')
     const [refreshAudit] = await pool.query(
       "SELECT * FROM auth_audit_logs WHERE user_id=? AND event_type='token_refreshed' ORDER BY id DESC LIMIT 1", [userId],
     )
@@ -94,18 +93,14 @@ async function main() {
 
     const invalidLogout = await request('/api/auth/logout', { refreshToken: 'invalid', username: mark })
     assert.equal(invalidLogout.status, 200)
-    const invalidLog = await waitForOperation(refreshLog.id, '/api/auth/logout')
-    assert.equal(invalidLog.user_id, null, '无效退出不能信任请求体账号')
-    assert.equal(invalidLog.user_name, null)
-
     const accessTokenLogout = await request('/api/auth/logout', { refreshToken: refreshed.data.data.token })
     assert.equal(accessTokenLogout.status, 200)
-    const accessTokenLog = await waitForOperation(invalidLog.id, '/api/auth/logout')
-    assert.equal(accessTokenLog.user_id, null, 'access token 不得被当成有效退出票据')
+    const [[invalidCount]] = await pool.query('SELECT COUNT(*) AS n FROM operation_logs WHERE id>? AND path=?', [profileLog.id, '/api/auth/logout'])
+    assert.equal(Number(invalidCount.n), 0, '无效与access退出票据不写业务操作日志')
 
     const logout = await request('/api/auth/logout', { refreshToken: refreshed.data.data.refreshToken })
     assert.equal(logout.status, 200)
-    const logoutLog = await waitForOperation(accessTokenLog.id, '/api/auth/logout')
+    const logoutLog = await waitForOperation(profileLog.id, '/api/auth/logout')
     assert.equal(Number(logoutLog.user_id), userId, '有效退出需记录已验证身份')
     assert.equal(logoutLog.user_name, mark)
     const [logoutAudit] = await pool.query(
@@ -115,15 +110,14 @@ async function main() {
 
     const repeatedLogout = await request('/api/auth/logout', { refreshToken: refreshed.data.data.refreshToken })
     assert.equal(repeatedLogout.status, 200)
-    const repeatedLog = await waitForOperation(logoutLog.id, '/api/auth/logout')
-    assert.equal(repeatedLog.user_id, null, '重复退出不能冒充首次成功的身份')
-    assert.equal(repeatedLog.user_name, null)
+    const [[repeatedCount]] = await pool.query('SELECT COUNT(*) AS n FROM operation_logs WHERE id>? AND path=?', [logoutLog.id, '/api/auth/logout'])
+    assert.equal(Number(repeatedCount.n), 0, '重复退出不写业务操作日志')
     const [[logoutAuditCount]] = await pool.query(
       "SELECT COUNT(*) AS n FROM auth_audit_logs WHERE user_id=? AND event_type='logout_success'", [userId],
     )
     assert.equal(Number(logoutAuditCount.n), 1, '重复退出不能新增成功审计事件')
 
-    const [logs] = await pool.query('SELECT request_body FROM operation_logs WHERE id>? AND id<=?', [baselineId, repeatedLog.id])
+    const [logs] = await pool.query('SELECT request_body FROM operation_logs WHERE id>? AND id<=?', [baselineId, logoutLog.id])
     for (const row of logs) {
       assert.equal(String(row.request_body || '').includes(password), false, '不能写入明文密码')
       assert.equal(String(row.request_body || '').includes(login.data.data.refreshToken), false, '不能写入 refresh token')
@@ -143,6 +137,7 @@ async function main() {
       await pool.query('DELETE FROM operation_logs WHERE id>? AND path IN (?,?,?) AND request_body LIKE ?', [baselineId, '/api/auth/login', '/api/auth/logout', '/api/auth/refresh', `%${mark}%`])
       await pool.query('DELETE FROM auth_audit_logs WHERE user_id=? OR username=?', [userId, mark])
       await pool.query('DELETE FROM refresh_token_sessions WHERE user_id=?', [userId])
+      await pool.query('DELETE FROM auth_session_families WHERE user_id=?', [userId])
       await pool.query('DELETE FROM sys_users WHERE id=?', [userId])
     }
     await pool.end()

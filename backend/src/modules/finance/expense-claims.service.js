@@ -1,3 +1,4 @@
+const { normalizePagination } = require('../../utils/pagination')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { beijingTodayYmd } = require('../../utils/backendTime')
@@ -262,8 +263,12 @@ async function pay(id, { accountId, happenedAt, remark }, operator) {
 }
 
 async function findAll({ page = 1, pageSize = 20, status = '', keyword = '', applicantId = '', startDate = '', endDate = '', minAmount = '', maxAmount = '' } = {}) {
-  const p = Number(page) || 1
-  const ps = Number(pageSize) || 20
+  if (![page, pageSize].every(v => Number.isSafeInteger(Number(v)) && Number(v) > 0)) throw new AppError('分页参数无效', 400)
+  const pagination = normalizePagination({ page, pageSize })
+  if (!Number.isSafeInteger(pagination.offset)) throw new AppError('分页参数无效', 400)
+  page = pagination.page
+  pageSize = pagination.pageSize
+  const { page: p, pageSize: ps } = pagination
   const conds = ['c.deleted_at IS NULL']
   const params = []
   if (status) { conds.push('c.status=?'); params.push(Number(status)) }

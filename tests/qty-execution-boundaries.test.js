@@ -56,8 +56,8 @@ for (const [label, value, code, allowDecimal] of [
       const files = { inbound: 'modules/inbound-tasks/inbound-tasks.command.js', return: 'modules/return-tasks/return-tasks.service.js', stockcheck: 'modules/stockcheck/stockcheck.service.js' }
       const { api, conn, writes } = service(files[kind], { allowDecimal })
       const result = kind === 'inbound' ? api.receive(1, { productId: 1, packages: [{ qty: value }, { qty: value }] })
-        : kind === 'return' ? api.receive(conn, 1, { productId: 1, packages: [{ qty: value }, { qty: value }] })
-          : api.saveItemContainerScans(1, 1, [{ barcode: 'I1', countedQty: value }, { barcode: 'I2', countedQty: value }], { userId: 1 })
+        : kind === 'return' ? api.receive(conn, 1, { pdaWarehouseId: 1, productId: 1, packages: [{ qty: value }, { qty: value }] })
+          : api.saveItemContainerScans(1, 1, [{ barcode: 'I1', countedQty: value }, { barcode: 'I2', countedQty: value }], { userId: 1 }, null, null, 1)
       await assert.rejects(result, { code })
       assert.deepEqual(writes, [])
     })
@@ -65,7 +65,7 @@ for (const [label, value, code, allowDecimal] of [
 }
 test('退货质检分别校验合格与不合格量，不允许小数相加绕过整数策略', async () => {
   const { api, conn, writes } = service('modules/return-tasks/return-tasks.service.js', { allowDecimal: 0, status: 3 })
-  await assert.rejects(api.check(conn, 1, { productId: 1, passedQty: 0.5, rejectedQty: 0.5 }), { code: 'QTY_INTEGER_REQUIRED' })
+  await assert.rejects(api.check(conn, 1, { pdaWarehouseId: 1, productId: 1, passedQty: 0.5, rejectedQty: 0.5 }), { code: 'QTY_INTEGER_REQUIRED' })
   assert.deepEqual(writes, [])
 })
 test('释放预占拒绝三位数量，避免预计绑定与实际预占不同步', async () => {
@@ -76,12 +76,12 @@ test('释放预占拒绝三位数量，避免预计绑定与实际预占不同�
 
 test('退货首次收货也在状态推进前拒绝三位数量', async () => {
   const { api, conn, writes } = service('modules/return-tasks/return-tasks.service.js', { status: 1 })
-  await assert.rejects(api.receive(conn, 1, { productId: 1, packages: [{ qty: 0.005 }] }), { code: 'QTY_DECIMALS_EXCEEDED' })
+  await assert.rejects(api.receive(conn, 1, { pdaWarehouseId: 1, productId: 1, packages: [{ qty: 0.005 }] }), { code: 'QTY_DECIMALS_EXCEEDED' })
   assert.deepEqual(writes, [])
 })
 test('退货合法两箱0.1加0.2完整分配0.3，不误报超收0', async () => {
   const { api, conn } = service('modules/return-tasks/return-tasks.service.js', { expectedQty: 0.3, allowWrites: true })
-  const result = await api.receive(conn, 1, { productId: 1, packages: [{ qty: 0.1 }, { qty: 0.2 }] })
+  const result = await api.receive(conn, 1, { pdaWarehouseId: 1, productId: 1, packages: [{ qty: 0.1 }, { qty: 0.2 }] })
   assert.equal(result.containers.length, 2)
   assert.equal(result.status, 3)
 })

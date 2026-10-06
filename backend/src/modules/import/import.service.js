@@ -1,5 +1,5 @@
 const ExcelJS = require('exceljs')
-const { Readable } = require('stream')
+const { parseBudgetedRows } = require('./importBudget')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { generateMasterCode } = require('../../utils/codeGenerator')
@@ -33,60 +33,19 @@ async function buildWorkbookBuffer(sheets) {
   return workbook.xlsx.writeBuffer()
 }
 
-/** 将 ExcelJS 单元格值归一化为基础类型；空单元格返回 ''，富文本/超链接/公式取其文本或结果。 */
-function cellToValue(value) {
-  if (value === null || value === undefined) return ''
-  if (value instanceof Date) return value
-  if (typeof value === 'object') {
-    if (typeof value.text === 'string') return value.text
-    if (Array.isArray(value.richText)) return value.richText.map((part) => part.text).join('')
-    if (value.result !== undefined) return value.result
-    return ''
-  }
-  return value
-}
-
-/** 读取上传文件第一个工作表，返回以 0 为基准的二维数组（与旧的 sheet_to_json header:1 行为一致）。 */
-async function readSheetRows(fileBuffer, { preserveSettlementLexeme = false } = {}) {
-  const workbook = new ExcelJS.Workbook()
-  // xlsx 文件本质是 ZIP，以 "PK"(0x50 0x4B) 开头；否则按 CSV(UTF-8) 解析。
-  const isXlsx = fileBuffer.length >= 2 && fileBuffer[0] === 0x50 && fileBuffer[1] === 0x4b
-  if (isXlsx) {
-    await workbook.xlsx.load(fileBuffer)
-  } else {
-    // ExcelJS 默认会把 CSV 的 01/1.0/1e0/0x1 等先转成数字，令严格结算枚举失效。
-    // 客户/供应商导入的各列原本均在消费处显式 String/Number 转换，只在这两个入口保留原文。
-    await workbook.csv.read(
-      Readable.from(fileBuffer.toString('utf8')),
-      preserveSettlementLexeme ? { map: value => value } : undefined,
-    )
-  }
-  const sheet = workbook.worksheets[0]
-  if (!sheet) return []
-  const colCount = sheet.columnCount || 0
-  const rows = []
-  sheet.eachRow({ includeEmpty: false }, (row) => {
-    const out = []
-    for (let c = 1; c <= colCount; c += 1) {
-      const value = row.getCell(c).value
-      // XLSX 公式错误单元格不能被当成空值（空结算方式默认月结）。
-      out.push(preserveSettlementLexeme && c === 5 && value && typeof value === 'object' && value.error
-        ? String(value.error)
-        : cellToValue(value))
-    }
-    rows.push(out)
-  })
-  return rows
+// Complete bounded parsing before any import batch, code allocation, or business write.
+async function readSheetRows(fileBuffer, options) {
+  return parseBudgetedRows(fileBuffer, options)
 }
 
 async function parseProductImportRows(fileBuffer) {
-  const rows = await readSheetRows(fileBuffer)
+  const rows = await readSheetRows(fileBuffer, { entity: 'products' })
   if (rows.length < 2) throw new AppError('文件无数据行', 400)
   return rows.slice(1).filter((row) => row[0] || row[1])
 }
 
 async function parseStockImportRows(fileBuffer) {
-  const rows = await readSheetRows(fileBuffer)
+  const rows = await readSheetRows(fileBuffer, { entity: 'stock' })
   const dataRows = rows.slice(1).filter((row) => row[0])
   if (!dataRows.length) throw new AppError('文件无数据行', 400)
   return dataRows
@@ -364,7 +323,7 @@ async function buildCustomerTemplate() {
 }
 
 async function importCustomers({ fileBuffer }) {
-  const rows = await readSheetRows(fileBuffer, { preserveSettlementLexeme: true })
+  const rows = await readSheetRows(fileBuffer, { entity: 'customers', preserveSettlementLexeme: true })
   const dataRows = rows.slice(1).filter((row) => row[0] || row[1])
   if (!dataRows.length) throw new AppError('文件无数据行', 400)
 
@@ -464,7 +423,7 @@ async function buildSupplierTemplate() {
 }
 
 async function importSuppliers({ fileBuffer }) {
-  const rows = await readSheetRows(fileBuffer, { preserveSettlementLexeme: true })
+  const rows = await readSheetRows(fileBuffer, { entity: 'suppliers', preserveSettlementLexeme: true })
   const dataRows = rows.slice(1).filter((row) => row[0] || row[1])
   if (!dataRows.length) throw new AppError('文件无数据行', 400)
 
@@ -568,7 +527,7 @@ async function buildPriceListTemplate() {
 }
 
 async function importPriceListItems({ fileBuffer }) {
-  const rows = await readSheetRows(fileBuffer)
+  const rows = await readSheetRows(fileBuffer, { entity: 'priceListItems' })
   const dataRows = rows.slice(1).filter((row) => row[0] || row[1])
   if (!dataRows.length) throw new AppError('文件无数据行', 400)
 

@@ -1,3 +1,5 @@
+const AppError = require('../../utils/AppError')
+const { normalizePagination } = require('../../utils/pagination')
 const { pool } = require('../../config/db')
 const { scopeFilter } = require('../../utils/warehouseScope')
 
@@ -16,6 +18,11 @@ const AGE_EXPR = 'DATEDIFF(NOW(), c.created_at)'
 
 /** 库龄分布：概览分桶（0-30/30-60/60-90/90+）+ 明细列表（每「商品×仓库」一行，含呆滞标记） */
 async function getInventoryAging({ page = 1, pageSize = 20, keyword = '', warehouseId = null, staleDays = 90, scopeWarehouseIds = null }) {
+  if (![page, pageSize].every(v => Number.isSafeInteger(Number(v)) && Number(v) > 0)) throw new AppError('分页参数无效', 400)
+  const pagination = normalizePagination({ page, pageSize })
+  if (!Number.isSafeInteger(pagination.offset)) throw new AppError('分页参数无效', 400)
+  page = pagination.page
+  pageSize = pagination.pageSize
   const conds = ['c.status = 1', 'c.remaining_qty > 0', 'c.deleted_at IS NULL', 'p.deleted_at IS NULL']
   const params = []
   if (keyword) { conds.push('(p.code LIKE ? OR p.name LIKE ?)'); params.push(`%${keyword}%`, `%${keyword}%`) }
@@ -53,7 +60,7 @@ async function getInventoryAging({ page = 1, pageSize = 20, keyword = '', wareho
   }))
 
   // 明细列表（分页）
-  const offset = (page - 1) * pageSize
+  const { offset } = pagination
   const [rows] = await pool.query(
     `SELECT c.product_id, p.code AS product_code, p.name AS product_name, p.unit,
             p.article_number, p.spec, p.color,

@@ -1,0 +1,26 @@
+-- Existing clients and unclaimed jobs intentionally have no authority. Administrator enrollment is required.
+SET @sql := IF(EXISTS(SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='print_clients' AND COLUMN_NAME='credential_hash'), 'SELECT 1', 'ALTER TABLE print_clients ADD COLUMN credential_hash CHAR(64) NULL');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @shape := (SELECT CONCAT(COLUMN_TYPE,':',IS_NULLABLE) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='print_clients' AND COLUMN_NAME='credential_hash');
+SET @sql := IF(@shape='char(64):YES', 'SELECT 1', 'SELECT * FROM __print_credential_277_column_mismatch__');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @sql := IF(EXISTS(SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='print_clients' AND COLUMN_NAME='revoked_at'), 'SELECT 1', 'ALTER TABLE print_clients ADD COLUMN revoked_at DATETIME NULL');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @shape := (SELECT CONCAT(COLUMN_TYPE,':',IS_NULLABLE) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='print_clients' AND COLUMN_NAME='revoked_at');
+SET @sql := IF(@shape='datetime:YES', 'SELECT 1', 'SELECT * FROM __print_credential_277_column_mismatch__');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @sql := IF(EXISTS(SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='print_clients' AND COLUMN_NAME='warehouse_id'), 'SELECT 1', 'ALTER TABLE print_clients ADD COLUMN warehouse_id BIGINT UNSIGNED NULL');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @shape := (SELECT CONCAT(COLUMN_TYPE,':',IS_NULLABLE) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='print_clients' AND COLUMN_NAME='warehouse_id');
+SET @sql := IF(@shape='bigint unsigned:YES', 'SELECT 1', 'SELECT * FROM __print_credential_277_column_mismatch__');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @sql := IF(EXISTS(SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='print_jobs' AND COLUMN_NAME='claimed_client_id'), 'SELECT 1', 'ALTER TABLE print_jobs ADD COLUMN claimed_client_id VARCHAR(200) NULL');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @shape := (SELECT CONCAT(COLUMN_TYPE,':',IS_NULLABLE) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='print_jobs' AND COLUMN_NAME='claimed_client_id');
+SET @sql := IF(@shape='varchar(200):YES', 'SELECT 1', 'SELECT * FROM __print_credential_277_column_mismatch__');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @sql := IF(EXISTS(SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='print_jobs' AND COLUMN_NAME='claimed_credential_hash'), 'SELECT 1', 'ALTER TABLE print_jobs ADD COLUMN claimed_credential_hash CHAR(64) NULL');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @shape := (SELECT CONCAT(COLUMN_TYPE,':',IS_NULLABLE) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='print_jobs' AND COLUMN_NAME='claimed_credential_hash');
+SET @sql := IF(@shape='char(64):YES', 'SELECT 1', 'SELECT * FROM __print_credential_277_column_mismatch__');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;

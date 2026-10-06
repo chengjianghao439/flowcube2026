@@ -147,8 +147,8 @@ async function getReconciliationExportPayload(query) {
   //    与页面上看到的不一致；
   // ② 此前不传 page/pageSize，落到 fetchReconciliationRows 的默认 pageSize=20，
   //    静默只导出前 20 行（页面显示「共 N 条」，导出却只有 20 行）。
-  // 现在透传全部筛选项，并显式取到上限；确实超过上限时在文件名里标注，不再静默截断。
-  const data = await reportsService.reconciliationReport({
+  // 现在透传全部筛选与授权范围，复用有界分页收齐；超过导出总上限直接拒绝。
+  const authorizedQuery = {
     type: query.type || '1',
     startDate: query.startDate || null,
     endDate: query.endDate || null,
@@ -161,11 +161,10 @@ async function getReconciliationExportPayload(query) {
     maxAmount: query.maxAmount || '',
     dueStart: query.dueStart || '',
     dueEnd: query.dueEnd || '',
-    page: 1,
-    pageSize: EXPORT_MAX_ROWS,
-  })
-  // 与其它导出同口径：超过上限直接拒绝并提示缩小范围，而不是静默截断
-  assertExportLimit(Number(data.pagination?.total || 0))
+    scopeWarehouseIds: query.scopeWarehouseIds ?? null,
+  }
+  const data = await collectExportRows(options => reportsService.reconciliationReport(options), authorizedQuery)
+  data.type = Number(authorizedQuery.type) === 2 ? 2 : 1
   const sheetName = data.type === 1 ? '供应商对账单' : '客户对账单'
   return {
     filename: `${sheetName}_${buildDateStamp()}`,

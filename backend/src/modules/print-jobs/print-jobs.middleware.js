@@ -1,48 +1,19 @@
 const { pool } = require('../../config/db')
 const { assertBoundWarehouseInScope } = require('../../utils/warehouseScope')
 const AppError = require('../../utils/AppError')
-
+const { authenticateClient, SAFE_CLIENT_ID } = require('../printers/print-client-auth')
 const SAFE_PRINTER_CODE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,49}$/
+const SAFE_STATION_CLIENT_ID = SAFE_CLIENT_ID
 
-/** 工作站 ID：与 printers.client_id 一致（complete/fail 头校验） */
-const SAFE_STATION_CLIENT_ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$/
-
-/** complete / fail：X-Client-Id（工作站）或 X-Printer-Code 与任务目标打印机一致 */
+/** Public printer codes are routing metadata, never workstation authentication. */
 async function validateJobPrinterHeader(req, res, next) {
   try {
-    const jobId = +req.params.id
-    const [[job]] = await pool.query('SELECT printer_id, warehouse_id FROM print_jobs WHERE id=?', [jobId])
-    if (!job) return next(new AppError('打印任务不存在', 404))
-
+    req.printClient = await authenticateClient(String(req.headers['x-client-id'] || ''), req.headers['x-print-client-credential'], req.user?.warehouseIds ?? null, pool)
+    const [[job]] = await pool.query('SELECT printer_id, warehouse_id, claimed_client_id, claimed_credential_hash FROM print_jobs WHERE id=?', [+req.params.id])
+    if (!job) throw new AppError('打印任务不存在', 404)
     assertBoundWarehouseInScope(req.user?.warehouseIds ?? null, job.warehouse_id, '打印任务')
-    const stationHeader = String(req.headers['x-client-id'] || '').trim()
-    if (stationHeader) {
-      if (!SAFE_STATION_CLIENT_ID.test(stationHeader)) {
-        return next(new AppError('请求头 X-Client-Id 无效', 400))
-      }
-      const [[p]] = await pool.query('SELECT id, client_id FROM printers WHERE id=?', [job.printer_id])
-      if (!p || !p.client_id || String(p.client_id) !== stationHeader) {
-        return next(new AppError('任务与工作站（X-Client-Id）不匹配', 403))
-      }
-      return next()
-    }
-
-    const headerCode = String(req.headers['x-printer-code'] || '').trim()
-    if (!SAFE_PRINTER_CODE.test(headerCode)) {
-      return next(new AppError('请求头 X-Printer-Code 无效或未提供（工作站模式请传 X-Client-Id）', 400))
-    }
-    const [[p]] = await pool.query('SELECT id FROM printers WHERE code=?', [headerCode])
-    if (!p || p.id !== job.printer_id) {
-      return next(new AppError('任务与打印机编码不匹配', 403))
-    }
+    if (job.claimed_client_id !== req.printClient.clientId || job.claimed_credential_hash !== req.printClient.credentialHash) throw new AppError('打印任务未由本工作站领取，请核对原打印结果', 403, 'PRINT_CLIENT_CLAIM_MISMATCH')
     next()
-  } catch (e) {
-    next(e)
-  }
+  } catch (e) { next(e) }
 }
-
-module.exports = {
-  SAFE_PRINTER_CODE,
-  SAFE_STATION_CLIENT_ID,
-  validateJobPrinterHeader,
-}
+module.exports = { SAFE_PRINTER_CODE, SAFE_STATION_CLIENT_ID, validateJobPrinterHeader }

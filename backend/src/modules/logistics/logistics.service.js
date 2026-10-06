@@ -1,3 +1,4 @@
+const { normalizePagination } = require('../../utils/pagination')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { generateDailyCode } = require('../../utils/codeGenerator')
@@ -80,6 +81,11 @@ const SELECT_FROM = `
 
 // ─── 列表（接仓库数据权限）────────────────────────────────────────────────────
 async function listWaybills({ page = 1, pageSize = 20, keyword = '', status = null, warehouseIds = null, startDate = '', endDate = '', carrierId = null } = {}) {
+  if (![page, pageSize].every(v => Number.isSafeInteger(Number(v)) && Number(v) > 0)) throw new AppError('分页参数无效', 400)
+  const pagination = normalizePagination({ page, pageSize })
+  if (!Number.isSafeInteger(pagination.offset)) throw new AppError('分页参数无效', 400)
+  page = pagination.page
+  pageSize = pagination.pageSize
   const where = ['1=1']
   const params = []
   if (keyword) {
@@ -105,7 +111,7 @@ async function listWaybills({ page = 1, pageSize = 20, keyword = '', status = nu
   }
   const scope = scopeFilter(warehouseIds, 'w.warehouse_id')
   const whereSql = `WHERE ${where.join(' AND ')}${scope.sql}`
-  const offset = (page - 1) * pageSize
+  const { offset } = pagination
   const [rows] = await pool.query(
     `SELECT ${SELECT_COLS} ${SELECT_FROM} ${whereSql}
      ORDER BY w.id DESC LIMIT ? OFFSET ?`,

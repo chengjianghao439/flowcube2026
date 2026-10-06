@@ -33,10 +33,23 @@ const APPROVER_TYPE_LABEL = { 1: '指定角色', 2: '部门负责人', 3: '指�
 const BIZ_DOC_META = {
   purchase_requisition: { table: 'purchase_requisitions', permission: P.PURCHASE_REQUISITION_VIEW, warehouseCol: 'warehouse_id', name: '采购请购单' },
   sale_credit_override: { table: 'sale_credit_overrides', permission: P.SALE_CREDIT_OVERRIDE_VIEW, warehouseCol: null, name: '超额放行申请' },
-  expense_claim: { table: 'expense_claims', permission: P.FINANCE_EXPENSE_VIEW, warehouseCol: null, name: '费用报销' },
+  expense_claim: { table: 'expense_claims', permission: P.FINANCE_EXPENSE_VIEW, warehouseCol: null, name: '费用报销', authorize: authorizeExpenseApproval },
   purchase_order: { table: 'purchase_orders', permission: P.PURCHASE_ORDER_VIEW, warehouseCol: 'warehouse_id', name: '采购单' },
   inventory_disposal: { table: 'inventory_disposal_orders', permission: P.INVENTORY_DISPOSAL_VIEW, warehouseCol: 'warehouse_id', name: '呆滞处置单' },
   product_price: { table: 'price_change_requests', permission: P.PRODUCT_VIEW, warehouseCol: null, name: '商品改价申请' },
+}
+
+async function authorizeExpenseApproval(conn, { bizId, user }) {
+  const [[claim]] = await conn.query('SELECT applicant_id FROM expense_claims WHERE id=? AND deleted_at IS NULL', [bizId])
+  if (!claim) throw new AppError('费用报销单不存在', 404)
+  if (Number(user?.roleId) === 1) return
+  const [[viewAll]] = await conn.query(
+    'SELECT 1 AS ok FROM sys_role_permissions WHERE role_id=? AND permission=? LIMIT 1',
+    [Number(user?.roleId), P.FINANCE_EXPENSE_VIEW_ALL],
+  )
+  if (!viewAll && (!user?.userId || Number(claim.applicant_id) !== Number(user.userId))) {
+    throw new AppError('无权查看他人的费用报销单', 403, 'EXPENSE_VIEW_DENIED')
+  }
 }
 
 function fmtFlow(r) {
@@ -269,6 +282,7 @@ async function getBizApproval({ bizType, bizId, user = null, scopeWarehouseIds =
         `SELECT ${meta.warehouseCol} AS wh FROM ${meta.table} WHERE id=? LIMIT 1`, [bizId])
       if (doc) assertInScope(scopeWarehouseIds, doc.wh, meta.name)
     }
+    if (meta.authorize) await meta.authorize(conn, { bizId, user })
     const got = await approvalEngine.getLatestInstanceByBiz(conn, { bizType, bizId })
     if (!got) {
       // 纯读事务无写入，commit 安全（避免 rollback 抛错落入 catch 二次 rollback 的双重回滚）

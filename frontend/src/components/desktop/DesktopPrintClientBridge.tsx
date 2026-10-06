@@ -1,4 +1,5 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import { getEffectiveApiOrigin } from '@/config/api'
 import { payloadClient as apiClient } from '@/api/client'
 import { useAuthStore } from '@/store/authStore'
 import { IS_ELECTRON_DESKTOP } from '@/lib/platform'
@@ -6,7 +7,7 @@ import { preparePrintJobContent } from '@/lib/printJobContent'
 import { reportPrintOutcomeWithRetry } from '@/lib/desktopLocalPrint'
 import { registerPrintPoller, setDesktopClientId } from '@/lib/printQueue'
 
-type ClientInfo = { clientId: string; hostname: string }
+type ClientInfo = { clientId: string; hostname: string; credential: string; origin: string }
 
 type ClaimedJob = {
   id: number
@@ -25,41 +26,28 @@ async function getDesktopClientInfo(): Promise<ClientInfo | null> {
   try {
     const info = await fn()
     if (!info?.clientId || !info?.hostname) return null
-    return info
+    const origin = getEffectiveApiOrigin()
+    const credential = origin ? await window.flowcubeDesktop?.getPrintClientCredential?.(origin) : null
+    if (!credential) return null
+    return { ...info, credential, origin: origin! }
   } catch {
     return null
   }
 }
 
-async function getDesktopPrinterNames(): Promise<string[]> {
-  const fn = window.flowcubeDesktop?.getSystemPrinters
-  if (typeof fn !== 'function') return []
-  try {
-    const rows = await fn()
-    return [...new Set(
-      (Array.isArray(rows) ? rows : [])
-        .map((row) => String(row?.name || '').trim())
-        .filter(Boolean),
-    )]
-  } catch {
-    return []
-  }
-}
-
+function clientHeaders(info: ClientInfo) { return { 'X-Client-Id': info.clientId, 'X-Print-Client-Credential': info.credential } }
+// A workstation secret belongs to one server. Disable the API candidate fallback
+// even when the user has not explicitly configured a server address.
+function clientConfig(info: ClientInfo) { return { headers: clientHeaders(info), baseURL: `${info.origin}/api`, _erpApiFallbackTried: true, skipGlobalError: true } }
 async function heartbeatClient(info: ClientInfo) {
-  const printers = await getDesktopPrinterNames()
-  await apiClient.post('/printers/client-heartbeat', {
-    clientId: info.clientId,
-    hostname: info.hostname,
-    printers,
-  }, { skipGlobalError: true })
+  await apiClient.post('/printers/client-heartbeat', { hostname: info.hostname }, clientConfig(info))
 }
 
 async function claimClientJobs(info: ClientInfo): Promise<ClaimedJob[]> {
   const res = await apiClient.post<ClaimedJob[]>(
     '/print-jobs/claim-client',
-    { clientId: info.clientId, limit: 3 },
-    { skipGlobalError: true },
+    { limit: 3 },
+    clientConfig(info),
   )
   return Array.isArray(res) ? res : []
 }
@@ -68,7 +56,7 @@ async function completeClientJob(info: ClientInfo, jobId: number, ackToken?: str
   await reportPrintOutcomeWithRetry(
     `/print-jobs/${jobId}/complete-client`,
     { ackToken },
-    { headers: { 'X-Client-Id': info.clientId }, skipGlobalError: true },
+    clientConfig(info),
   )
 }
 
@@ -76,7 +64,7 @@ async function failClientJob(info: ClientInfo, jobId: number, errorMessage: stri
   await reportPrintOutcomeWithRetry(
     `/print-jobs/${jobId}/fail-client`,
     { errorMessage, ackToken },
-    { headers: { 'X-Client-Id': info.clientId }, skipGlobalError: true },
+    clientConfig(info),
   )
 }
 
@@ -93,7 +81,7 @@ async function printClaimedJob(info: ClientInfo, job: ClaimedJob) {
   }
   try {
     const batch = preparePrintJobContent(content, job.copies)
-    await window.flowcubeDesktop!.printZpl!({ printerName, content: batch })
+    await window.flowcubeDesktop!.printZpl!({ printerName, ...batch })
   } catch (e) {
     const message =
       e instanceof Error && e.message.trim()
@@ -108,6 +96,7 @@ async function printClaimedJob(info: ClientInfo, job: ClaimedJob) {
 }
 
 export default function DesktopPrintClientBridge() {
+  const [registrationRequired, setRegistrationRequired] = useState(false)
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
 
   useEffect(() => {
@@ -130,7 +119,9 @@ export default function DesktopPrintClientBridge() {
       busy = true
       try {
         const info = await getDesktopClientInfo()
-        if (!info || cancelled) return
+        if (cancelled) return
+        setRegistrationRequired(!info)
+        if (!info) return
         // 让入队请求能带上本机标识，实现「在哪台电脑点的就从哪台电脑的打印机出纸」
         setDesktopClientId(info.clientId)
         await heartbeatClient(info)
@@ -139,7 +130,9 @@ export default function DesktopPrintClientBridge() {
           if (cancelled) break
           await printClaimedJob(info, job)
         }
-      } catch {
+      } catch (e) {
+        const failure = e as { status?: number; code?: string; response?: { status?: number } }
+        if (failure.code === 'PRINT_CLIENT_CREDENTIAL_INVALID' || (failure.status ?? failure.response?.status) === 401) setRegistrationRequired(true)
         // 静默重试，避免桌面端每次轮询都弹错误
       } finally {
         busy = false
@@ -166,5 +159,5 @@ export default function DesktopPrintClientBridge() {
     }
   }, [isAuthenticated])
 
-  return null
+  return registrationRequired && isAuthenticated ? <div role="status" className="px-4 py-2 text-sm text-warning">本机打印尚未注册或凭据已失效。请升级桌面端，由管理员打开「设置 → 打印机管理」注册本机后继续打印。</div> : null
 }

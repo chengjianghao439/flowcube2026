@@ -904,14 +904,15 @@ async function scenarioCancelReverseReturnShipping(log, ctx, adminToken) {
   })
   const finishResp = await ctx.http.put(`/api/packages/${pkgId}/finish`, { token: adminToken, headers: ctx.pdaHeaders() })
   // pack-done 要求箱贴打印任务已收口完成（assertTaskPackagePrintClosure），
-  // 本机没有真机打印客户端在跑，直接用 complete-local 模拟"已打印完成"。
+  // 虚拟客户端走真实认证领取和ack，不绕过本机完成前提。
   const printJobId = Number(finishResp.data?.data?.printJobId)
-  await ctx.http.post(`/api/print-jobs/${printJobId}/complete-local`, {
-    token: adminToken,
-    // 同上：complete-local 现在校验工作站，补上夹具登记的 client id
-    headers: { 'X-Client-Id': ctx.printer.clientId },
-    json: {},
+  const claim = await ctx.http.post('/api/print-jobs/claim-client', { token: adminToken, headers: ctx.printer.clientHeaders, json: { limit: 10 } })
+  const claimedJob = claim.data?.data?.find(j => Number(j.id) === printJobId)
+  log.assert('箱贴由认证虚拟客户端领取', !!claimedJob?.ackToken, `HTTP ${claim.status}`)
+  const printed = await ctx.http.post(`/api/print-jobs/${printJobId}/complete-local`, {
+    token: adminToken, headers: ctx.printer.clientHeaders, json: { ackToken: claimedJob?.ackToken },
   })
+  log.assert('箱贴凭领取令牌核销', printed.ok, `HTTP ${printed.status}`)
 
   const packDoneResp = await ctx.http.put(`/api/warehouse-tasks/${taskId}/pack-done`, { token: adminToken, headers: ctx.pdaHeaders() })
   log.assert('打包完成成功，推进到待出库(6)', packDoneResp.ok, `status=${packDoneResp.status}`)

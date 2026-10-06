@@ -10,6 +10,7 @@ import type { TemplateLayout, TemplateElement } from '@/types/print-template'
 import { isZplTemplateLayout } from '@/types/print-template'
 import BarcodePreview from '@/components/print/BarcodePreview'
 import { money } from '@/lib/format'
+import { documentPrintBudgetError } from '@/lib/documentPrintBudget'
 
 // ─── 常量 ────────────────────────────────────────────────────────────────────
 
@@ -241,6 +242,8 @@ interface Props {
 }
 
 export default function TemplateRenderer({ layout, paperSize, data, items, displayScale = 1 }: Props) {
+  const budgetError = documentPrintBudgetError(layout, items.length)
+  if (budgetError) return <div role="alert" className="p-6 text-destructive">{budgetError}</div>
   const paper = PAPER_MM[paperSize] ?? PAPER_MM.A4
   const scale = displayScale
 

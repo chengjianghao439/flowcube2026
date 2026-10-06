@@ -102,6 +102,9 @@ jobs:
       - name: 安装前端依赖
         run: npm --prefix frontend ci
 
+      - name: 安全扫描修复离线契约
+        run: npm run test:security-scan-remediation
+
       - name: 契约测试 — 界面文案口径（禁用实现词/半角标点/官网双份一致/金额格式化）
         run: npm run test:copy-conventions
 
@@ -571,6 +574,9 @@ jobs:
 
       - name: PDA 设备会话回归（设备未绑定即拒绝作业）
         run: npm run smoke:pda-device-session
+
+      - name: 安全扫描修复真实HTTP与SQL
+        run: npm run smoke:security-scan-remediation
 
       - name: 认证操作日志可信身份与脱敏回归
         run: npm run smoke:auth-session-remediation

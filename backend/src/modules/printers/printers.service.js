@@ -1,6 +1,8 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
-const { assertInScope } = require('../../utils/warehouseScope')
+const { assertBoundWarehouseInScope, scopeFilter } = require('../../utils/warehouseScope')
+const crypto = require('crypto')
+const { requireClientIdentity, hashCredential, SAFE_CLIENT_ID } = require('./print-client-auth')
 
 const TYPE_NAME = { 1: '标签打印机', 2: '面单打印机', 3: 'A4打印机' }
 
@@ -24,14 +26,16 @@ function fmt(row) {
   }
 }
 
-async function findAll({ type } = {}) {
+async function findAll({ type, scopeWarehouseIds = null } = {}) {
   const conds = ['1=1']
   const params = []
   if (type) {
     conds.push('p.type=?')
     params.push(type)
   }
-  const where = 'WHERE ' + conds.join(' AND ')
+  const scope = scopeFilter(scopeWarehouseIds, 'p.warehouse_id')
+  params.push(...scope.params)
+  const where = 'WHERE ' + conds.join(' AND ') + scope.sql
   const [rows] = await pool.query(
     `SELECT p.*, pc.alias_name AS client_alias_name, pc.hostname AS client_hostname
      FROM printers p
@@ -51,8 +55,7 @@ async function findById(id, scopeWarehouseIds = null) {
     [id],
   )
   if (!row) throw new AppError('打印机不存在', 404)
-  // 限仓校验：warehouse_id 为 NULL 表示全局打印机（不限仓库），assertInScope 对 null 会放行。
-  assertInScope(scopeWarehouseIds, row.warehouse_id, '打印机')
+  assertBoundWarehouseInScope(scopeWarehouseIds, row.warehouse_id, '打印机')
   return fmt(row)
 }
 
@@ -88,7 +91,7 @@ async function create({
   warehouseId,
   source,
   clientId,
-}) {
+}, scopeWarehouseIds = null) {
   const nameNorm = normalizePrinterName(name)
   if (!nameNorm) throw new AppError('名称不能为空', 400)
   if (!code) throw new AppError('编码不能为空', 400)
@@ -97,87 +100,53 @@ async function create({
     warehouseId != null && warehouseId !== '' && Number.isFinite(Number(warehouseId))
       ? Number(warehouseId)
       : null
+  assertBoundWarehouseInScope(scopeWarehouseIds, wh, '打印机')
   // 兜底 'manual' 而非 null：printers.source 在历史库中为 NOT NULL DEFAULT 'manual'，
   // 显式传 NULL 不会回落到列默认值，会直接报错 —— 桌面端「从本机添加」不传 source，正会踩到。
   const src =
     source === 'local_desktop' || source === 'client' || source === 'manual' ? source : 'manual'
   const clientIdVal = clientId != null ? String(clientId).trim().slice(0, 200) || null : null
+  if (clientIdVal) await assertClientForPrinter(clientIdVal, wh, scopeWarehouseIds)
   const finalCode = await allocateUniqueCodeGlobally(code)
   const [r] = await pool.query(
     'INSERT INTO printers (name, code, type, warehouse_id, description, source, client_id) VALUES (?,?,?,?,?,?,?)',
     [nameNorm, finalCode, type, wh, description || null, src, clientIdVal],
   )
-  return findById(r.insertId)
+  return findById(r.insertId, scopeWarehouseIds)
 }
 
-async function update(id, {
-  name,
-  code,
-  type,
-  description,
-  status,
-  warehouseId,
-  clientId,
-}, scopeWarehouseIds = null) {
-  // 状态白名单：原先 `status ?? 1` 会把任意值直写进去（2026-09-18 审计 [34]）
-  if (status !== undefined && ![0, 1].includes(Number(status))) {
-    throw new AppError('打印机状态只能是 0(停用) 或 1(启用)', 400)
-  }
-  const existing = await findById(id, scopeWarehouseIds)
-  const nameVal = name !== undefined ? normalizePrinterName(name) : existing.name
-  if (name !== undefined && !nameVal) throw new AppError('名称不能为空', 400)
-  const clientIdVal =
-    clientId === undefined
-      ? (existing.clientId || null)
-      : (clientId != null ? String(clientId).trim().slice(0, 200) || null : null)
-  const wh =
-    warehouseId === undefined
-      ? undefined
-      : warehouseId != null && warehouseId !== '' && Number.isFinite(Number(warehouseId))
-        ? Number(warehouseId)
-        : null
-  // 部分更新必须沿用现值：code/type 是 NOT NULL 列，只传 {status} 时原来会把它们写成 NULL
-  // → ER_BAD_NULL_ERROR 500（2026-09-18 审计 [34] 顺手收口）
-  const codeVal = code !== undefined ? code : existing.code
-  const typeVal = type !== undefined ? type : existing.type
-  const descVal = description !== undefined ? (description || null) : existing.description
-  const statusVal = status !== undefined ? Number(status) : existing.status
-  const sets = [
-    'name=?',
-    'code=?',
-    'type=?',
-    'description=?',
-    'status=?',
-    'client_id=?',
-  ]
-  const params = [nameVal, codeVal, typeVal, descVal, statusVal, clientIdVal]
-  if (wh !== undefined) {
-    sets.push('warehouse_id=?')
-    params.push(wh)
-  }
-  params.push(id)
-  // 写语句本身必须带前置条件（2026-09-18 审计 [34]）：原先只有裸 `WHERE id=?`，
-  // 行在 findById 之后消失也会「成功」。这里同事务锁行 + 校验 affectedRows。
+async function assertClientForPrinter(clientId, warehouseId, scopeWarehouseIds, exec = pool) {
+  const [[client]] = await exec.query('SELECT client_id, warehouse_id, credential_hash, revoked_at FROM print_clients WHERE client_id=?', [clientId])
+  if (!client?.credential_hash || client.revoked_at) throw new AppError('工作站尚未注册或已撤销，请先由管理员注册本机', 400, 'PRINT_CLIENT_NOT_REGISTERED')
+  assertBoundWarehouseInScope(scopeWarehouseIds, client.warehouse_id, '打印工作站')
+  if (client.warehouse_id != null && Number(client.warehouse_id) !== Number(warehouseId)) throw new AppError('打印机与注册工作站的仓库不一致', 403, 'PRINT_CLIENT_WAREHOUSE_MISMATCH')
+}
+
+async function update(id, input, scopeWarehouseIds = null) {
+  if (input.status !== undefined && ![0, 1].includes(Number(input.status))) throw new AppError('打印机状态只能是 0(停用) 或 1(启用)', 400)
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const [locked] = await conn.query('SELECT id FROM printers WHERE id=? FOR UPDATE', [id])
-    if (!locked.length) throw new AppError('打印机不存在', 404)
-    await conn.query(
-      `UPDATE printers SET ${sets.join(', ')} WHERE id=?`,
-      params,
-    )
-    // 存在性由上面的 FOR UPDATE 行锁保证，**不要**改成校验 affectedRows：
-    // mysql2 没开 CLIENT_FOUND_ROWS，affectedRows 是「真正改动的行数」，
-    // 前端把整份未改动的对象回传时就等于 0，那样会把正常保存误判成 404。
+    const [[row]] = await conn.query('SELECT * FROM printers WHERE id=? FOR UPDATE', [id])
+    if (!row) throw new AppError('打印机不存在', 404)
+    assertBoundWarehouseInScope(scopeWarehouseIds, row.warehouse_id, '打印机')
+    const wh = input.warehouseId === undefined ? row.warehouse_id : input.warehouseId == null || input.warehouseId === '' ? null : Number(input.warehouseId)
+    if (wh != null && (!Number.isSafeInteger(wh) || wh <= 0)) throw new AppError('仓库编号无效', 400)
+    assertBoundWarehouseInScope(scopeWarehouseIds, wh, '打印机')
+    const name = input.name === undefined ? row.name : normalizePrinterName(input.name)
+    if (!name) throw new AppError('名称不能为空', 400)
+    const clientId = input.clientId === undefined ? row.client_id : String(input.clientId || '').trim() || null
+    // Status/description edits must still work for retired or legacy stations. Only a
+    // new association (including moving its warehouse) needs a live credential.
+    if (clientId && (clientId !== row.client_id || Number(wh) !== Number(row.warehouse_id))) await assertClientForPrinter(clientId, wh, scopeWarehouseIds, conn)
+    await conn.query('UPDATE printers SET name=?, code=?, type=?, description=?, status=?, client_id=?, warehouse_id=? WHERE id=?', [
+      name, input.code ?? row.code, input.type ?? row.type,
+      input.description === undefined ? row.description : input.description || null,
+      input.status === undefined ? row.status : Number(input.status), clientId, wh, id,
+    ])
     await conn.commit()
-  } catch (e) {
-    await conn.rollback()
-    throw e
-  } finally {
-    conn.release()
-  }
-  return findById(id)
+  } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
+  return findById(id, scopeWarehouseIds)
 }
 
 /**
@@ -186,119 +155,97 @@ async function update(id, {
  * （候选集非空但全部不可用 → 跳过 fallback 链 → 兜底到全库第一台打印机）。
  */
 async function remove(id, scopeWarehouseIds = null) {
-  await findById(id, scopeWarehouseIds)
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    const [[printer]] = await conn.query('SELECT id, warehouse_id FROM printers WHERE id=? FOR UPDATE', [id])
+    if (!printer) throw new AppError('打印机不存在', 404)
+    assertBoundWarehouseInScope(scopeWarehouseIds, printer.warehouse_id, '打印机')
     await conn.query('DELETE FROM printer_bindings WHERE printer_id=?', [id])
     await conn.query('DELETE FROM printers WHERE id=?', [id])
     await conn.commit()
+  } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
+}
+
+async function registrationWarehouses(scopeWarehouseIds = null) {
+  const scope = scopeFilter(scopeWarehouseIds, 'id')
+  const [rows] = await pool.query(`SELECT id, name FROM inventory_warehouses WHERE is_active=1 AND deleted_at IS NULL ${scope.sql} ORDER BY id`, scope.params)
+  return rows.map(r => ({ id: Number(r.id), name: r.name }))
+}
+
+/** Only a manager may provision a new random desktop identity; never overwrite another registration. */
+async function registerClient({ clientId, hostname, warehouseId }, scopeWarehouseIds = null) {
+  if (!SAFE_CLIENT_ID.test(clientId || '') || !String(hostname || '').trim()) throw new AppError('工作站资料无效', 400)
+  const wh = warehouseId == null ? null : Number(warehouseId)
+  if (wh != null && (!Number.isSafeInteger(wh) || wh <= 0)) throw new AppError('仓库编号无效', 400)
+  assertBoundWarehouseInScope(scopeWarehouseIds, wh, '打印工作站')
+  if (wh != null) {
+    const [[warehouse]] = await pool.query('SELECT id FROM inventory_warehouses WHERE id=? AND is_active=1 AND deleted_at IS NULL', [wh])
+    if (!warehouse) throw new AppError('仓库不存在或已停用', 400)
+  }
+  const credential = crypto.randomBytes(32).toString('hex')
+  try {
+    await pool.query('INSERT INTO print_clients (client_id, hostname, warehouse_id, credential_hash, revoked_at, status) VALUES (?, ?, ?, ?, NULL, 0)', [clientId, String(hostname).trim().slice(0, 200), wh, hashCredential(credential)])
   } catch (e) {
-    await conn.rollback()
+    if (e.code === 'ER_DUP_ENTRY') throw new AppError('工作站已注册，不能覆盖。丢失凭据时请撤销旧工作站后注册新的本机身份', 409, 'PRINT_CLIENT_ALREADY_REGISTERED')
     throw e
-  } finally {
-    conn.release()
   }
+  return { clientId, credential, warehouseId: wh }
 }
 
-// ─── 桌面客户端心跳 / 在线状态（审计 4.9：从 controller 下沉，消除直写 SQL） ─────────
-
-/** 客户端心跳：upsert print_clients + 认领同名打印机 + 返回该客户端拥有的在线打印机 */
-async function heartbeatClient({ clientId, hostname, printerNames, ip }) {
-  const id = String(clientId || '').trim().slice(0, 200)
-  const host = String(hostname || '').trim().slice(0, 200)
-  const names = [...new Set(
-    (printerNames || [])
-      .map((p) => String(p || '').trim())
-      .filter(Boolean)
-      .map((p) => p.slice(0, 100)),
-  )]
-
-  await pool.query(
-    `INSERT INTO print_clients (client_id, hostname, ip_address, last_seen, status)
-     VALUES (?, ?, ?, NOW(), 1)
-     ON DUPLICATE KEY UPDATE
-       hostname=VALUES(hostname),
-       ip_address=VALUES(ip_address),
-       last_seen=NOW(),
-       status=1`,
-    [id, host, ip || null],
-  )
-
-  if (names.length) {
-    const placeholders = names.map(() => '?').join(',')
-    await pool.query(
-      `UPDATE printers
-       SET client_id = ?, source = CASE WHEN source IS NULL OR source = '' THEN 'local_desktop' ELSE source END
-       WHERE name IN (${placeholders})
-         AND (client_id IS NULL OR client_id = ?)`,
-      [id, ...names, id],
-    )
-  }
-
-  const [ownedPrinters] = await pool.query(
-    `SELECT id, name, code
-     FROM printers
-     WHERE client_id = ? AND status = 1
-     ORDER BY id ASC`,
-    [id],
-  )
-  return { clientId: id, hostname: host, printers: ownedPrinters }
+async function assertManagedClient(clientId, scopeWarehouseIds = null, exec = pool, locked = false) {
+  const [[client]] = await exec.query(`SELECT client_id, warehouse_id FROM print_clients WHERE client_id=?${locked ? ' FOR UPDATE' : ''}`, [clientId])
+  if (!client) throw new AppError('客户端不存在', 404)
+  assertBoundWarehouseInScope(scopeWarehouseIds, client.warehouse_id, '打印工作站')
+  const [printers] = await exec.query('SELECT warehouse_id FROM printers WHERE client_id=?', [clientId])
+  for (const printer of printers) assertBoundWarehouseInScope(scopeWarehouseIds, printer.warehouse_id, '打印机')
+  return client
 }
 
-/** 把 30 秒无心跳的客户端标为离线（供在线客户端列表 / 心跳判定使用） */
+async function revokeClient(clientId, scopeWarehouseIds = null) {
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    await assertManagedClient(clientId, scopeWarehouseIds, conn, true)
+    await conn.query('UPDATE print_clients SET revoked_at=NOW(), credential_hash=NULL, status=0 WHERE client_id=?', [clientId])
+    await conn.commit()
+  } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
+  return { clientId, revoked: true }
+}
+
+/** Authenticated heartbeat updates only this registered client; printer associations are manager-owned. */
+async function heartbeatClient({ identity, hostname, ip, scopeWarehouseIds = null }) {
+  const { clientId, credentialHash } = requireClientIdentity(identity)
+  await pool.query('UPDATE print_clients SET hostname=?, ip_address=?, last_seen=NOW(), status=1 WHERE client_id=? AND credential_hash=? AND revoked_at IS NULL', [String(hostname || '').trim().slice(0, 200), ip || null, clientId, credentialHash])
+  const scope = scopeFilter(scopeWarehouseIds, 'warehouse_id')
+  const [printers] = await pool.query(`SELECT id, name, code FROM printers WHERE client_id=? AND status=1 ${scope.sql} ORDER BY id`, [clientId, ...scope.params])
+  return { clientId, printers }
+}
+
 async function markOfflineClients() {
-  await pool.query(
-    `UPDATE print_clients
-     SET status=0
-     WHERE status=1 AND last_seen < DATE_SUB(NOW(), INTERVAL 30 SECOND)`,
-  )
+  await pool.query('UPDATE print_clients SET status=0 WHERE status=1 AND last_seen < DATE_SUB(NOW(), INTERVAL 30 SECOND)')
 }
 
-/** 在线客户端列表（status=1 或 30 秒内有心跳），带各自在线的打印机 */
-async function listOnlineClients() {
-  await markOfflineClients()
-  const [clients] = await pool.query(
-    `SELECT client_id, hostname, alias_name, ip_address, last_seen
-     FROM print_clients
-     WHERE status=1 OR last_seen >= DATE_SUB(NOW(), INTERVAL 30 SECOND)
-     ORDER BY last_seen DESC`,
-  )
-  const data = []
-  for (const c of clients) {
-    const [printers] = await pool.query(
-      'SELECT name, code FROM printers WHERE client_id=? AND status=1 ORDER BY id ASC',
-      [c.client_id],
-    )
-    data.push({
-      clientId: c.client_id,
-      hostname: c.hostname,
-      aliasName: c.alias_name,
-      displayName: c.alias_name || c.hostname,
-      printers,
-      registeredAt: c.last_seen,
-      lastSeen: new Date(c.last_seen).getTime(),
-    })
-  }
-  return data
+async function listClients(scopeWarehouseIds, onlineOnly) {
+  const scope = scopeFilter(scopeWarehouseIds, 'pc.warehouse_id')
+  const [clients] = await pool.query(`SELECT pc.client_id, pc.hostname, pc.alias_name, pc.ip_address, pc.last_seen, pc.status, pc.warehouse_id, pc.revoked_at FROM print_clients pc WHERE 1=1 ${onlineOnly ? "AND pc.revoked_at IS NULL AND pc.last_seen >= DATE_SUB(NOW(), INTERVAL 30 SECOND)" : ''} ${scope.sql} ORDER BY pc.last_seen DESC`, scope.params)
+  if (!clients.length) return []
+  const printerScope = scopeFilter(scopeWarehouseIds, 'warehouse_id')
+  const [printers] = await pool.query(`SELECT client_id, name, code FROM printers WHERE client_id IN (?) AND status=1 ${printerScope.sql} ORDER BY id`, [clients.map(c => c.client_id), ...printerScope.params])
+  return clients.map(c => ({ ...c, clientId: c.client_id, hostname: c.hostname, aliasName: c.alias_name, displayName: c.alias_name || c.hostname, printers: printers.filter(p => p.client_id === c.client_id).map(({ name, code }) => ({ name, code })), registeredAt: c.last_seen, lastSeen: new Date(c.last_seen).getTime() }))
+}
+const listOnlineClients = (scopeWarehouseIds = null) => listClients(scopeWarehouseIds, true)
+const listAllClients = (scopeWarehouseIds = null) => listClients(scopeWarehouseIds, false)
+
+async function updateClientAlias(clientId, aliasName, scopeWarehouseIds = null) {
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    await assertManagedClient(clientId, scopeWarehouseIds, conn, true)
+    await conn.query('UPDATE print_clients SET alias_name=? WHERE client_id=?', [String(aliasName || '').trim().slice(0, 100) || null, clientId])
+    await conn.commit()
+  } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
+  return { clientId, aliasName: aliasName || null }
 }
 
-/** 所有客户端（含离线，完整历史） */
-async function listAllClients() {
-  await markOfflineClients()
-  const [rows] = await pool.query('SELECT * FROM print_clients ORDER BY last_seen DESC')
-  return rows
-}
-
-/** 给客户端设置显示别名 */
-async function updateClientAlias(clientId, aliasName) {
-  const [r] = await pool.query(
-    'UPDATE print_clients SET alias_name=? WHERE client_id=?',
-    [aliasName || null, clientId],
-  )
-  if (r.affectedRows === 0) return null
-  const [[row]] = await pool.query('SELECT * FROM print_clients WHERE client_id=?', [clientId])
-  return row
-}
-
-module.exports = { findAll, findById, create, update, remove, heartbeatClient, markOfflineClients, listOnlineClients, listAllClients, updateClientAlias }
+module.exports = { findAll, findById, create, update, remove, heartbeatClient, markOfflineClients, listOnlineClients, listAllClients, updateClientAlias, registerClient, revokeClient, registrationWarehouses }

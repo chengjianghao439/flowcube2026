@@ -54,6 +54,63 @@ with tempfile.TemporaryDirectory() as d:
   assert.equal(result.status, 0, result.stderr)
 })
 
+test('EXE/APK manifest bundle 校验所有字节与来源，拒污染成员而保留原包', () => {
+  const source = path.join(root, 'scripts/receive-deploy-artifact.py')
+  const result = spawnSync('python3', ['-c', `
+import importlib.util, tempfile, pathlib, zipfile, hashlib, json, warnings
+spec=importlib.util.spec_from_file_location('receiver', ${JSON.stringify(source)})
+m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+sha='a'*40; data=b'owned release bytes'; digest=hashlib.sha256(data).hexdigest()
+def bundle(name,metadata):
+ manifest=dict(sha=sha,runId='123',file=name,sha256=digest,metadata={k:hashlib.sha256(v).hexdigest() for k,v in metadata.items()})
+ return [(name,data),('release-provenance.json',json.dumps(manifest).encode())]+list(metadata.items())
+with tempfile.TemporaryDirectory() as d:
+ p=pathlib.Path(d); z=p/'artifact.zip'; dest=p/'package'
+ def write(entries):
+  with warnings.catch_warnings():
+   warnings.simplefilter('ignore',UserWarning)
+   with zipfile.ZipFile(z,'w') as f:
+    for name,raw in entries:f.writestr(name,raw)
+ for name,metadata in [('expected.apk',{'version.json':b'{"version":"1.2.3","versionCode":123}'}),('expected.exe',{'releaseNotes.md':b'owned notes'}),('expected.exe',{})]:
+  good=bundle(name,metadata); write(good)
+  m.unpack_archive(z,dest,digest,len(data),name)
+  assert dest.read_bytes()==data
+  # Optional independent source/run context is used by direct consumers; the
+  # deployed receiver additionally binds bytes to the fresh CI verification.
+  m.unpack_archive(z,dest,digest,len(data),name,sha,'123')
+  cases=[good+[('unknown',b'x')],good+[(name,data)],good+[('../version.json',b'x')]]
+  if metadata:
+   key=list(metadata)[0];cases += [good+[(key,b'x')],good[:2]+[(key,b'changed')],bundle(name,{key:b'x'*(1024*1024+1)}),bundle(name,{key:b'x'*(1024*1024)})]
+   link=zipfile.ZipInfo(key);link.create_system=3;link.external_attr=0o120777<<16
+   cases.append(good[:2]+[(link,metadata[key])])
+  changed=list(good);changed[0]=(name,b'changed release bytes');cases.append(changed)
+  wrong=list(good);manifest=json.loads(wrong[1][1]);manifest['file']='other.exe';wrong[1]=('release-provenance.json',json.dumps(manifest).encode());cases.append(wrong)
+  for field,value in [('sha','not-a-sha'),('runId','123;injected'),('sha256','bad'),('metadata',{}),('extra','unexpected')]:
+   wrong=list(good);manifest=json.loads(wrong[1][1]);manifest[field]=value
+   # Empty metadata is valid for the installer bundle without release notes.
+   if field=='metadata' and not metadata:continue
+   wrong[1]=('release-provenance.json',json.dumps(manifest).encode());cases.append(wrong)
+  wrong=list(good);wrong[1]=('release-provenance.json',wrong[1][1][:-1]+b',"sha":"'+sha.encode()+b'"}');cases.append(wrong)
+  for bad in cases:
+   dest.write_bytes(b'original');write(bad)
+   try:m.unpack_archive(z,dest,digest,len(data),name)
+   except ValueError:pass
+   else:raise AssertionError('polluted bundle accepted')
+   assert dest.read_bytes()==b'original';assert not list(p.glob('*.partial'))
+  write(good)
+  for target,run in [('b'*40,'123'),(sha,'124')]:
+   try:m.unpack_archive(z,dest,digest,len(data),name,target,run)
+   except ValueError:pass
+   else:raise AssertionError('different source/run accepted')
+ # Image archives never inherit the release-bundle exception.
+ write(bundle('flowcube-images.tar.gz',{}))
+ try:m.unpack_archive(z,dest,digest,len(data))
+ except ValueError:pass
+ else:raise AssertionError('multi-entry image archive accepted')
+`], { encoding: 'utf8', timeout: 5000 })
+  assert.equal(result.status, 0, result.stderr)
+})
+
 test('签名 URL 只从 stdin 进入 curl，不进入参数/日志，下载失败退出并清理', () => {
   const source = path.join(root, 'scripts/receive-deploy-artifact.py')
   assert.ok(fs.existsSync(source))
@@ -183,12 +240,16 @@ test('两端使用本轮 artifact，中转源必须在正式发布前就可下�
   const publish = steps.findIndex(s => s.name === 'Publish EXE to canonical download directory')
   assert.ok(stage >= 0 && stage < publish)
   assert.match(steps[publish].run, /bash scripts\/transfer-release-asset\.sh/)
-  assert.match(steps[publish].env.DEPLOY_ARTIFACT_ID, /steps\.exe_artifact\.outputs\.artifact-id/)
+  assert.match(desktop.jobs.build.outputs.artifact_id, /steps\.exe_artifact\.outputs\.artifact-id/)
+  assert.ok(desktop.jobs.publish.needs.includes('build'))
+  assert.match(steps[publish].env.DEPLOY_ARTIFACT_ID, /needs\.build\.outputs\.artifact_id/)
   const pda = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/build-pda-apk.yml'), 'utf8'))
   assert.match(pda.jobs['build-pda'].outputs.artifact_id, /steps\.apk_artifact\.outputs\.artifact-id/)
+  assert.match(pda.jobs['sign-pda'].outputs.artifact_id, /steps\.signed_apk\.outputs\.artifact-id/)
+  assert.ok(pda.jobs['publish-pda'].needs.includes('sign-pda'))
   const pdaPublish = pda.jobs['publish-pda'].steps.find(s => s.name === 'Publish PDA APK to server')
   assert.match(pdaPublish.run, /bash scripts\/transfer-release-asset\.sh/)
-  assert.match(pdaPublish.env.DEPLOY_ARTIFACT_ID, /needs\.build-pda\.outputs\.artifact_id/)
+  assert.match(pdaPublish.env.DEPLOY_ARTIFACT_ID, /needs\.sign-pda\.outputs\.artifact_id/)
 })
 
 for (const scenario of ['https', 'fallback', 'fallback-failed']) {

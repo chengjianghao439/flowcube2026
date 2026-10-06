@@ -405,3 +405,7 @@ B4 现场指针锁补正：当前依赖中菜单和 Dialog 分别解析两套 `D
 措辞调整仍明确保留原结果待确认、来源或单据不一致、草稿保留、当前单据状态不代表原请求结果、刷新只查询且不自动提交、未核对前不得重复提交，以及打印成功反馈不等于现场出纸的含义。仅同步直接依赖原文的组件断言，不放宽 `test:copy-conventions` 的禁用词或豁免；整批验收与部署结果另记，文案门禁通过不代表它们完成。
 
 随后整批前端单测发现 `useCommercialRecovery.test.tsx` 与 `useCommercialSale.test.tsx` 遗漏两处旧措辞断言，仅同步为原单据不符和登录状态变化的现行文案；原待确认、请求次数、缓存与来源隔离断言保持。Node 22 下原两例 `/tmp/flowcube-copy-hook-wording-original-red.log` 自然 exit1，修后同两例 `-original-green.log` 自然 exit0，受影响两文件 `-affected-green.log` 的19例自然通过。此前文案窄验未跑到这两条路径，本补缺不代表整批单测通过；整批仍由总验收重新验证，产品逻辑和文案守卫均未改。
+
+## 2026-10-06 会话与打印安全契约
+
+访问/续期票据共享每次登录的会话族；退出或重放撤销当前设备，升级前无 familyId 的票据需重新登录。打印凭据与 ERP 登录分开处理，`PRINT_CLIENT_CREDENTIAL_INVALID` 只显示重新注册指引，不刷新票据或登出 ERP；凭据仅驻留 renderer 内存，Electron 主进程按服务器加密保存，安全存储不可用时不明文回退。接口候选地址回退不得发送打印凭据到其他服务器。详见 `docs/security-session-import-remediation-2026-10-06.md` 与 `docs/security-print-remediation-2026-10-06.md`。

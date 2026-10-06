@@ -19,7 +19,7 @@ function requestLogger(req, res, next) {
   const requestId = String(req.headers['x-request-id'] || randomUUID())
   const method = req.method
   const path = req.originalUrl || req.path
-  const ip = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || null
+  const ip = req.ip || req.socket?.remoteAddress || null
   const userAgent = req.headers['user-agent'] || null
 
   req.requestId = requestId

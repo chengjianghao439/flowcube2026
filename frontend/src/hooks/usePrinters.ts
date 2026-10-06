@@ -24,7 +24,7 @@ export function getPrintersApi() {
   return apiClient.get<Printer[]>('/printers')
 }
 export function createPrinterApi(
-  payload: { name: string; code: string; type: number; description: string | null; clientId?: string | null },
+  payload: { name: string; code: string; type: number; description: string | null; clientId?: string | null; warehouseId?: number | null },
   config?: Parameters<typeof apiClient.post>[2],
 ) {
   return apiClient.post('/printers', { ...payload, source: 'local_desktop' }, config)
@@ -49,7 +49,7 @@ export function usePrinters() {
 export function useCreatePrinter() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (payload: { name: string; code: string; type: number; description: string | null; clientId?: string | null }) =>
+    mutationFn: (payload: { name: string; code: string; type: number; description: string | null; clientId?: string | null; warehouseId?: number | null }) =>
       createPrinterApi(payload, { skipGlobalError: true }),
     onSuccess: () => qc.invalidateQueries({ queryKey: [PRINTERS_QUERY_KEY] }),
   })

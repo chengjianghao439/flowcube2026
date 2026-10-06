@@ -70,7 +70,10 @@ interface Window {
     /** 当前桌面工作站标识 */
     getClientInfo?: () => Promise<{ clientId: string; hostname: string }>
     /** 主进程：按 printerName 本机 RAW 出 ZPL */
-    printZpl?: (opts: { content: string; printerName: string }) => Promise<null>
+    getPrintClientCredential?: (origin: string) => Promise<string | null>
+    setPrintClientCredential?: (origin: string, credential: string) => Promise<{ persisted: boolean }>
+    resetPrintClientIdentity?: () => Promise<{ clientId: string; hostname: string }>
+    printZpl?: (opts: { content: string; printerName: string; copies?: number }) => Promise<null>
   }
 }
 

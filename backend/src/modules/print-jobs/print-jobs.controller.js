@@ -8,8 +8,8 @@ async function list(req, res, next) {
     const result = await svc.findAll({
       printerId: printerId ? +printerId : undefined,
       status:    svc.parseListStatus(status),
-      page:      +page || 1,
-      pageSize:  +pageSize || 50,
+      page,
+      pageSize,
       scopeWarehouseIds: req.user?.warehouseIds ?? null,
     })
     return successResponse(res, result)
@@ -42,9 +42,8 @@ async function create(req, res, next) {
 async function claimClientJobs(req, res, next) {
   try {
     const body = req.body && typeof req.body === 'object' ? req.body : {}
-    const clientId = String(body.clientId || '').trim()
     return successResponse(res, await svc.claimClientJobs({
-      clientId,
+      identity: req.printClient,
       scopeWarehouseIds: req.user?.warehouseIds ?? null,
       limit: Number(body.limit) || 3,
     }))
@@ -53,7 +52,7 @@ async function claimClientJobs(req, res, next) {
 
 async function stats(req, res, next) {
   try {
-    return successResponse(res, await svc.getStatsCounts())
+    return successResponse(res, await svc.getStatsCounts(req.user?.warehouseIds ?? null))
   } catch (e) {
     next(e)
   }
@@ -66,8 +65,8 @@ async function barcodeRecords(req, res, next) {
       category,
       keyword: keyword || '',
       status: status || undefined,
-      page: Number(page) || 1,
-      pageSize: Number(pageSize) || 20,
+      page,
+      pageSize,
       inboundTaskId: inboundTaskId ? Number(inboundTaskId) : null,
       inboundTaskItemId: inboundTaskItemId ? Number(inboundTaskItemId) : null,
       scopeWarehouseIds: req.user?.warehouseIds ?? null,
@@ -110,7 +109,7 @@ async function reprintBarcode(req, res, next) {
 
 async function printerHealth(req, res, next) {
   try {
-    return successResponse(res, await svc.listPrinterHealth())
+    return successResponse(res, await svc.listPrinterHealth(req.user?.warehouseIds ?? null))
   } catch (e) {
     next(e)
   }
@@ -118,7 +117,7 @@ async function printerHealth(req, res, next) {
 
 async function complete(req, res, next) {
   try {
-    return successResponse(res, await svc.complete(+req.params.id, req.body || {}, req.user?.warehouseIds ?? null))
+    return successResponse(res, await svc.complete(+req.params.id, req.body || {}, req.user?.warehouseIds ?? null, req.printClient))
   } catch (e) {
     next(e)
   }
@@ -127,7 +126,7 @@ async function complete(req, res, next) {
 /** 桌面端本机打印后核销队列（需具备打印客户端消费权限） */
 async function completeLocal(req, res, next) {
   try {
-    return successResponse(res, await svc.completeLocalDesktop(+req.params.id, req.user?.warehouseIds ?? null))
+    return successResponse(res, await svc.completeLocalDesktop(+req.params.id, req.user?.warehouseIds ?? null, req.body || {}, req.printClient))
   } catch (e) {
     next(e)
   }
@@ -135,7 +134,7 @@ async function completeLocal(req, res, next) {
 
 async function fail(req, res, next) {
   try {
-    return successResponse(res, await svc.fail(+req.params.id, req.body, req.user?.warehouseIds ?? null))
+    return successResponse(res, await svc.fail(+req.params.id, req.body, req.user?.warehouseIds ?? null, req.printClient))
   } catch (e) {
     next(e)
   }

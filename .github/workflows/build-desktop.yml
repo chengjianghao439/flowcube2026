@@ -1,62 +1,74 @@
-# 唯一 Electron 桌面安装包构建定义。若 GitHub 上仍出现旧 workflow（含 cache: npm），请在默认分支删除 ci.yml / build.yml 等重复文件并合并此版本。
 name: Build Desktop Installer
-
-on:
+'on':
   workflow_dispatch:
     inputs:
       version:
-        description: '可选。填写如 0.3.2；留空则使用 desktop/package.json 的 version（与 checkout 的 main 上版本一致时最省事）'
+        description: 可选。填写如 0.3.2；留空则使用 desktop/package.json 的 version（与 checkout 的 main 上版本一致时最省事）
         required: false
         type: string
       attach_to_github_release:
-        description: '构建完成后将 desktop/release/*.exe 上传到已有 GitHub Release（下方填写 release_tag，如 v0.3.13）'
+        description: 构建完成后将 desktop/release/*.exe 上传到已有 GitHub Release（下方填写 release_tag，如 v0.3.13）
         required: false
         type: boolean
         default: false
       release_tag:
-        description: '已有 Release 的 tag（仅当勾选 attach_to_github_release 时必填），例如 v0.3.13'
+        description: 已有 Release 的 tag（仅当勾选 attach_to_github_release 时必填），例如 v0.3.13
         required: false
         type: string
       checkout_ref:
-        description: '可选。检出引用（补发某版本 exe 时填对应 tag，如 v0.3.13；留空则用运行界面所选分支）'
+        description: 仅支持 main、main 历史中的完整 SHA 或 v* 版本 tag；运行分支必须为 main。
         required: false
         type: string
   push:
     branches:
       - main
     tags:
-      - 'v*'
-
-# GITHUB_TOKEN 默认可能对 contents 只读，创建 Release 会 403
+      - v*
 permissions:
-  contents: write
+  contents: read
   actions: read
-
-# 打 tag 触发桌面**发布**（会 SSH 到服务器跑 release-desktop.js），必须与 deploy-browser /
-# build-pda-apk 串行，共用 flowcube-server-deploy。
-# 但 push main 触发的只是**验证构建**——本文件所有 SSH/发布步骤都带 `if: github.ref_type == 'tag'`，
-# 它根本不碰服务器，却同样占着部署 group、把真正的部署挤在 pending 里排队；
-# 更糟的是 GitHub 的语义是「同一 group 里后进入的 pending 会取消先前的 pending」，
-# 三个 workflow 同时被触发时会有其中一个被 cancelled（2026-09-16 发 v0.9.17 时 Build PDA APK 就是这样被取消的）。
-# 所以按事件分开 group：tag / 手动触发走部署组，push main 走独立组，互不干扰。
 concurrency:
   group: ${{ (github.ref_type == 'tag' || github.event_name == 'workflow_dispatch') && 'flowcube-server-deploy' || 'build-desktop-ci' }}
   cancel-in-progress: false
-
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 jobs:
+  resolve-release-target:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      sha: ${{ steps.target.outputs.sha }}
+      main_sha: ${{ steps.target.outputs.main_sha }}
+    steps:
+      - name: Checkout trusted target resolver
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate immutable release target
+        id: target
+        env:
+          RELEASE_CHECKOUT_REF: ${{ github.event.inputs.checkout_ref }}
+        run: node scripts/resolve-release-target.cjs
   build:
     runs-on: windows-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           fetch-depth: 0
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.checkout_ref != '' && github.event.inputs.checkout_ref || github.ref }}
-
+          ref: ${{ needs.resolve-release-target.outputs.sha }}
+          persist-credentials: false
+      - name: Checkout immutable trusted release tools
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ needs.resolve-release-target.outputs.main_sha }}
+          persist-credentials: false
+          path: release-gate-source
+          sparse-checkout: scripts
+          sparse-checkout-cone-mode: true
       - name: Resolve deploy config
         id: deploy_config
         shell: bash
@@ -98,13 +110,11 @@ jobs:
           echo "server_ssh_port=$SERVER_SSH_PORT" >> "$GITHUB_OUTPUT"
           echo "server_app_path=$SERVER_APP_PATH" >> "$GITHUB_OUTPUT"
           echo "server_downloads_path=$SERVER_DOWNLOADS_PATH" >> "$GITHUB_OUTPUT"
-
       - name: Print commit info
         shell: bash
         run: |
           echo "Commit SHA: ${{ github.sha }}"
           echo "Ref: ${{ github.ref }}"
-
       - name: DEBUG — step start marker (after checkout)
         shell: bash
         run: |
@@ -117,7 +127,6 @@ jobs:
           pwd
           ls -la
           echo "=== END step: post-checkout DEBUG ==="
-
       - name: Print workflow info
         run: |
           Write-Host "=== START step: Print workflow info ==="
@@ -134,7 +143,6 @@ jobs:
           Write-Host "=== END step: Print workflow info ==="
           Get-Location
           Get-ChildItem | Select-Object Name, Mode
-
       - name: DEBUG — after Print workflow info
         shell: bash
         run: |
@@ -142,7 +150,6 @@ jobs:
           echo "=== DEBUG checkpoint: after Print workflow info ==="
           pwd
           ls -la
-
       - name: Show directories
         run: |
           Write-Host "=== START step: Show directories ==="
@@ -152,7 +159,6 @@ jobs:
           Write-Host "=== END step: Show directories ==="
           Get-Location
           Get-ChildItem | Select-Object Name, Mode
-
       - name: Check frontend exists
         run: |
           Write-Host "=== START step: Check frontend exists ==="
@@ -166,7 +172,6 @@ jobs:
           Write-Host "=== END step: Check frontend exists ==="
           Get-Location
           Get-ChildItem | Select-Object Name, Mode
-
       - name: Check desktop exists
         run: |
           Write-Host "=== START step: Check desktop exists ==="
@@ -180,7 +185,6 @@ jobs:
           Write-Host "=== END step: Check desktop exists ==="
           Get-Location
           Get-ChildItem | Select-Object Name, Mode
-
       - name: DEBUG — before Setup Node.js
         shell: bash
         run: |
@@ -190,13 +194,10 @@ jobs:
           ls -la
           test -d frontend && ls -la frontend | head -20
           test -d desktop && ls -la desktop | head -20
-
-      # 勿使用 cache: npm：setup-node 默认在仓库根目录找 package-lock.json，本仓库锁文件在 frontend/、desktop/
       - name: Setup Node.js
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
           node-version: '22'
-
       - name: DEBUG — after Setup Node.js
         shell: bash
         run: |
@@ -206,8 +207,6 @@ jobs:
           npm -v
           pwd
           ls -la
-
-      # 须在 setup-node 之后：main 分支用 package.json 解析展示用版本；发版以推 tag 为准
       - name: Resolve version and tag
         id: version
         shell: bash
@@ -219,7 +218,7 @@ jobs:
             TAG="$REF_NAME"
             VERSION="${TAG#v}"
           elif [[ "$EVENT" == "workflow_dispatch" ]]; then
-            INPUT="${{ github.event.inputs.version }}"
+            INPUT="$REQUESTED_VERSION"
             if [[ -z "${INPUT// }" ]]; then
               VERSION="$(node -p "require('./desktop/package.json').version")"
               TAG="v${VERSION}"
@@ -236,14 +235,18 @@ jobs:
             echo "tag=$TAG"
           } >> "$GITHUB_OUTPUT"
           echo "Resolved version=$VERSION tag=$TAG (event=$EVENT ref=$REF_NAME)"
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::Invalid release version"; exit 1; }
           PKG_VERSION="$(node -p "require('./desktop/package.json').version")"
           [ "$VERSION" = "$PKG_VERSION" ] || { echo '::error::发布版本必须匹配实际检出代码的 package.json，不能只重命名安装包'; exit 1; }
-          if [[ "${{ github.event.inputs.attach_to_github_release }}" == 'true' ]]; then
-            RELEASE_TAG="${{ github.event.inputs.release_tag }}"
+          if [[ "$ATTACH_TO_RELEASE" == 'true' ]]; then
+            RELEASE_TAG="$REQUESTED_RELEASE_TAG"
             [ "$RELEASE_TAG" = "$TAG" ] || { echo '::error::补传 Release tag 必须匹配实际安装包版本'; exit 1; }
             [ "$(git rev-parse "${RELEASE_TAG}^{commit}")" = "$(git rev-parse HEAD)" ] || { echo '::error::Release tag 与实际构建提交不一致'; exit 1; }
           fi
-
+        env:
+          REQUESTED_VERSION: ${{ github.event.inputs.version }}
+          ATTACH_TO_RELEASE: ${{ github.event.inputs.attach_to_github_release }}
+          REQUESTED_RELEASE_TAG: ${{ github.event.inputs.release_tag }}
       - name: Verify desktop/package.json matches Git tag
         if: github.ref_type == 'tag'
         shell: bash
@@ -256,7 +259,6 @@ jobs:
             exit 1
           fi
           echo "OK: tag 与 package.json 均为 $PKG_VER"
-
       - name: Install frontend dependencies
         working-directory: ./frontend
         shell: bash
@@ -271,7 +273,6 @@ jobs:
           echo "=== STEP: Install frontend — END (success) ==="
           pwd
           ls -la
-
       - name: DEBUG — after Install frontend
         shell: bash
         run: |
@@ -280,7 +281,6 @@ jobs:
           pwd
           ls -la
           ls -la frontend | head -30
-
       - name: Build frontend for Electron
         working-directory: ./frontend
         shell: bash
@@ -297,7 +297,6 @@ jobs:
           pwd
           ls -la
           ls -la dist | head -20
-
       - name: DEBUG — after Build frontend
         shell: bash
         run: |
@@ -305,7 +304,6 @@ jobs:
           echo "=== DEBUG checkpoint: after frontend build ==="
           pwd
           ls -la frontend/dist | head -30
-
       - name: Log frontend dist after build
         run: |
           Write-Host "=== START step: Log frontend dist ==="
@@ -320,7 +318,6 @@ jobs:
           Write-Host "=== END step: Log frontend dist ==="
           Get-Location
           Get-ChildItem | Select-Object Name, Mode
-
       - name: Install desktop dependencies
         working-directory: ./desktop
         shell: bash
@@ -334,7 +331,6 @@ jobs:
           echo "=== STEP: Install desktop — END (success) ==="
           pwd
           ls -la
-
       - name: DEBUG — after Install desktop
         shell: bash
         run: |
@@ -342,14 +338,12 @@ jobs:
           echo "=== DEBUG checkpoint: after npm install (desktop) ==="
           pwd
           ls -la desktop | head -30
-
       - name: Verify desktop main.js is current (bundle marker)
         shell: bash
         run: |
           set -euo pipefail
           grep -q '当前 main.js 已加载' desktop/main.js || { echo 'ERROR: desktop/main.js 缺少打包验证日志，避免打入旧主进程'; exit 1; }
           echo 'OK: main.js 包含「当前 main.js 已加载」标记'
-
       - name: Prepare fixed NSIS 3.0.4.1
         shell: powershell
         run: |
@@ -360,35 +354,36 @@ jobs:
           if (Test-Path $dir) {
             Remove-Item -Recurse -Force $dir
           }
+          node release-gate-source/scripts/verify-nsis-archive.cjs $archive
+          if ($LASTEXITCODE -ne 0) { throw "NSIS archive integrity check failed" }
           7z x -y $archive "-o$dir"
           if (-not (Test-Path "$dir\Bin\makensis.exe")) {
             throw "Fixed NSIS package missing Bin\\makensis.exe"
           }
           "ELECTRON_BUILDER_NSIS_DIR=$dir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           Write-Host "Using fixed NSIS from $dir"
-
       - name: Build desktop installer
         working-directory: ./desktop
         shell: bash
         env:
           VITE_ELECTRON: 1
           VITE_ERP_PRODUCTION_ORIGIN: ${{ steps.deploy_config.outputs.erp_origin }}
-          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          GITHUB_SHA: ${{ needs.resolve-release-target.outputs.sha }}
         run: |
           set -euo pipefail
           echo "=== STEP: Build desktop — START (npm run dist:win) ==="
           pwd
           ls -la
           npm run dist:win
+          test "$(cat .git-build-sha)" = "$(git rev-parse HEAD)"
           echo "=== STEP: Build desktop — END (success) ==="
           pwd
           ls -la
           ls -la release | head -30
-
       - name: Verify embedded application icon
         shell: bash
         run: node scripts/verify-desktop-icon.cjs "desktop/release/win-unpacked/极序 Flow.exe"
-
       - name: Verify exe exists
         run: |
           Write-Host "=== Verify exe exists (desktop/release/*.exe) ==="
@@ -399,7 +394,6 @@ jobs:
           }
           Write-Host "✅ exe 已生成 ($($exes.Count) 个)"
           $exes | ForEach-Object { Write-Host "  $($_.Name) ($($_.Length) bytes)" }
-
       - name: Verify installer runtime is NSIS 3.04
         shell: powershell
         run: |
@@ -412,7 +406,6 @@ jobs:
             throw "Installer runtime is not NSIS v3.04"
           }
           Write-Host "✅ Verified NSIS runtime v3.04 in $($exe.Name)"
-
       - name: DEBUG — after Build desktop (dist:win)
         shell: bash
         run: |
@@ -420,7 +413,6 @@ jobs:
           echo "=== DEBUG checkpoint: after dist:win ==="
           pwd
           ls -la desktop/release
-
       - name: Log desktop release after build
         run: |
           Write-Host "=== START step: Log desktop release ==="
@@ -435,7 +427,6 @@ jobs:
           Write-Host "=== END step: Log desktop release ==="
           Get-Location
           Get-ChildItem | Select-Object Name, Mode
-
       - name: Rename output files (remove spaces)
         working-directory: ./desktop
         run: |
@@ -457,8 +448,140 @@ jobs:
           Write-Host "=== END step: Rename output files ==="
           Get-Location
           Get-ChildItem release | Select-Object Name, Length
+      - name: Prepare installer provenance
+        shell: bash
+        env:
+          TARGET_SHA: ${{ needs.resolve-release-target.outputs.sha }}
+        run: |-
+          set -euo pipefail
+          mkdir -p out
+          cp desktop/release/*.exe out/
+          notes="docs/release-notes/${{ steps.version.outputs.version }}.md"
+          if [ -f "$notes" ]; then cp "$notes" out/releaseNotes.md; fi
+          node release-gate-source/scripts/release-artifact-manifest.cjs write out .exe
+      - name: Upload artifacts
+        id: exe_artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: FlowCube-Desktop-Setup
+          path: out/
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+      - name: Detect portable ZIP artifact
+        id: portable_zip
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(desktop/release/*.zip)
+          if [ "${#files[@]}" -gt 0 ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "No portable ZIP artifact generated; skipping ZIP artifact upload."
+          fi
+      - name: DEBUG — before upload-artifact (exe)
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "=== DEBUG checkpoint: before Upload Windows Setup EXE artifact ==="
+          pwd
+          ls -la desktop/release
+      - name: Upload portable ZIP artifact (optional)
+        if: steps.portable_zip.outputs.present == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        continue-on-error: true
+        with:
+          name: FlowCube-Desktop-Portable
+          path: desktop/release/*.zip
+          if-no-files-found: error
+          retention-days: 7
+    needs: resolve-release-target
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      artifact_id: ${{ steps.exe_artifact.outputs.artifact-id }}
+  publish:
+    needs:
+      - resolve-release-target
+      - build
+    if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - name: Checkout immutable trusted release tools
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ needs.resolve-release-target.outputs.main_sha }}
+          persist-credentials: false
+      - name: Download exact installer artifact
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          artifact-ids: ${{ needs.build.outputs.artifact_id }}
+          path: desktop/release
+          merge-multiple: true
+      - name: Verify installer SHA, run and bytes
+        env:
+          TARGET_SHA: ${{ needs.resolve-release-target.outputs.sha }}
+        run: node scripts/release-artifact-manifest.cjs verify desktop/release .exe
+      - name: Resolve verified release version
+        id: version
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+          TAG: ${{ needs.build.outputs.tag }}
+        run: |-
+          set -euo pipefail
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          test "$TAG" = "v$VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+      - name: Resolve deploy config
+        id: deploy_config
+        shell: bash
+        env:
+          ERP_ORIGIN_VAR: ${{ vars.VITE_ERP_PRODUCTION_ORIGIN }}
+          SERVER_HOST_VAR: ${{ vars.FLOWCUBE_SERVER_HOST }}
+          SERVER_USER_VAR: ${{ vars.FLOWCUBE_SERVER_USER }}
+          SERVER_SSH_PORT_VAR: ${{ vars.FLOWCUBE_SERVER_SSH_PORT }}
+          SERVER_APP_PATH_VAR: ${{ vars.FLOWCUBE_SERVER_APP_PATH }}
+          SERVER_DOWNLOADS_PATH_VAR: ${{ vars.FLOWCUBE_DOWNLOADS_PATH }}
+        run: |
+          set -euo pipefail
+          if node scripts/read-deploy-config.js >/tmp/flowcube-deploy-config.json 2>/tmp/flowcube-deploy-config.err; then
+            echo "server_deploy_configured=true" >> "$GITHUB_OUTPUT"
+            echo "erp_origin=$(node scripts/read-deploy-config.js erpOrigin)" >> "$GITHUB_OUTPUT"
+            echo "server_host=$(node scripts/read-deploy-config.js server.host)" >> "$GITHUB_OUTPUT"
+            echo "server_user=$(node scripts/read-deploy-config.js server.user)" >> "$GITHUB_OUTPUT"
+            echo "server_ssh_port=$(node scripts/read-deploy-config.js server.sshPort)" >> "$GITHUB_OUTPUT"
+            echo "server_app_path=$(node scripts/read-deploy-config.js server.appPath)" >> "$GITHUB_OUTPUT"
+            echo "server_downloads_path=$(node scripts/read-deploy-config.js server.downloadsPath)" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
-      # if: 中不能引用 secrets.*（会整份 workflow 校验失败）；用一步写入 output 再判断
+          ERP_ORIGIN="${ERP_ORIGIN_VAR:-}"
+          if [ -z "$ERP_ORIGIN" ]; then
+            echo "::error::缺少部署配置：桌面安装包必须注入 VITE_ERP_PRODUCTION_ORIGIN，避免默认连到 localhost。请设置 deploy/production.local.json 或 GitHub Variable VITE_ERP_PRODUCTION_ORIGIN。"
+            cat /tmp/flowcube-deploy-config.err || true
+            exit 1
+          fi
+          SERVER_HOST="${SERVER_HOST_VAR:-$(node -e "const u=new URL(process.argv[1]); console.log(u.hostname)" "$ERP_ORIGIN")}"
+          SERVER_USER="${SERVER_USER_VAR:-root}"
+          SERVER_SSH_PORT="${SERVER_SSH_PORT_VAR:-22}"
+          SERVER_APP_PATH="${SERVER_APP_PATH_VAR:-/opt/flowcube}"
+          SERVER_DOWNLOADS_PATH="${SERVER_DOWNLOADS_PATH_VAR:-/var/www/flowcube-downloads}"
+          echo "server_deploy_configured=true" >> "$GITHUB_OUTPUT"
+          echo "erp_origin=$ERP_ORIGIN" >> "$GITHUB_OUTPUT"
+          echo "server_host=$SERVER_HOST" >> "$GITHUB_OUTPUT"
+          echo "server_user=$SERVER_USER" >> "$GITHUB_OUTPUT"
+          echo "server_ssh_port=$SERVER_SSH_PORT" >> "$GITHUB_OUTPUT"
+          echo "server_app_path=$SERVER_APP_PATH" >> "$GITHUB_OUTPUT"
+          echo "server_downloads_path=$SERVER_DOWNLOADS_PATH" >> "$GITHUB_OUTPUT"
       - name: Detect SSH deploy (SSH_PRIVATE_KEY set)
         id: ssh_deploy
         shell: bash
@@ -468,37 +591,14 @@ jobs:
           else
             echo "enabled=false" >> "$GITHUB_OUTPUT"
           fi
-
-      # 提前上传同一 EXE，供服务器 HTTPS 拉取或受信操作端中转；失败仍可 SCP。
-      - name: Upload artifacts
-        id: exe_artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        continue-on-error: true
-        with:
-          name: FlowCube-Desktop-Setup
-          path: desktop/release/*.exe
-          if-no-files-found: error
-          retention-days: 7
-          compression-level: 0
-
-      - name: Checkout trusted release gate
-        if: ${{ github.ref_type == 'tag' || github.event_name == 'workflow_dispatch' }}
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
-        with:
-          ref: main
-          path: release-gate-source
-          sparse-checkout: scripts/wait-release-checks.js
-          sparse-checkout-cone-mode: false
-
       - name: Wait for checks before publishing installer
         if: ${{ github.ref_type == 'tag' || github.event_name == 'workflow_dispatch' }}
         timeout-minutes: 30
         shell: bash
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: GITHUB_SHA="$(git rev-parse HEAD)" node release-gate-source/scripts/wait-release-checks.js
-
-      # ── 推 tag / 手动触发且已配置 SSH_PRIVATE_KEY 时：通过服务器 release-desktop.js 发布到 canonical 下载目录 ──
+          TARGET_SHA: ${{ needs.resolve-release-target.outputs.sha }}
+        run: GITHUB_SHA="$TARGET_SHA" node scripts/wait-release-checks.js
       - name: Setup SSH agent
         if: ${{ (github.ref_type == 'tag' || github.event_name == 'workflow_dispatch') && steps.ssh_deploy.outputs.enabled == 'true' && steps.deploy_config.outputs.server_deploy_configured == 'true' }}
         shell: bash
@@ -515,7 +615,6 @@ jobs:
           echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
           echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
           ssh-add "$KEY_FILE"
-
       - name: Add SSH known_hosts
         id: ssh_trust
         if: ${{ (github.ref_type == 'tag' || github.event_name == 'workflow_dispatch') && steps.ssh_deploy.outputs.enabled == 'true' && steps.deploy_config.outputs.server_deploy_configured == 'true' }}
@@ -525,13 +624,12 @@ jobs:
           FLOWCUBE_SSH_PORT: ${{ steps.deploy_config.outputs.server_ssh_port }}
           FLOWCUBE_SSH_KNOWN_HOSTS: ${{ vars.FLOWCUBE_SSH_KNOWN_HOSTS }}
         run: bash scripts/setup-ci-ssh-trust.sh
-
       - name: Publish EXE to canonical download directory
         if: ${{ (github.ref_type == 'tag' || github.event_name == 'workflow_dispatch') && steps.ssh_deploy.outputs.enabled == 'true' && steps.deploy_config.outputs.server_deploy_configured == 'true' }}
         shell: bash
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          DEPLOY_ARTIFACT_ID: ${{ steps.exe_artifact.outputs.artifact-id }}
+          DEPLOY_ARTIFACT_ID: ${{ needs.build.outputs.artifact_id }}
         run: |
           set -euo pipefail
           shopt -s nullglob
@@ -548,7 +646,7 @@ jobs:
 
           version="${{ steps.version.outputs.version }}"
           tag="${{ steps.version.outputs.tag }}"
-          notes_file="docs/release-notes/${version}.md"
+          notes_file="desktop/release/releaseNotes.md"
           if [ -f "$notes_file" ]; then
             notes_b64="$(node -e "process.stdout.write(Buffer.from(require('fs').readFileSync(process.argv[1], 'utf8')).toString('base64'))" "$notes_file")"
           else
@@ -590,13 +688,6 @@ jobs:
               flowcube-backend node /release-scripts/release-desktop.js '$version' --overwrite --artifact='$remote_artifact'"
 
           echo "=== 发布完成；权威入口: /latest.json，安装包路径: /versions/${tag}/FlowCube-Setup-${version}.exe ==="
-
-      # 推送 git tag：创建/更新 GitHub Release 并附上 exe。
-      # 用 scripts/publish-release-asset.cjs（直连 REST API），不用 `gh release upload`：
-      # gh CLI 没有超时、中断会留下**没有附件的草稿 Release**、也不校验附件是否真的落地
-      # （2026-09-18 发 v0.9.20 时在 Windows runner 上连续两次卡死 15 分钟以上）。
-      # 脚本行为：确保 Release 存在（缺则建草稿）→ 删同名 → 带超时重试上传 → 校验大小 → 才发布。
-      # Release 附件是完整发版的一部分；失败必须报红，不能以官网已发布掩盖。
       - name: Upload EXE to Release
         if: ${{ github.ref_type == 'tag' }}
         shell: bash
@@ -619,8 +710,6 @@ jobs:
             exit 1
           fi
           node scripts/publish-release-asset.cjs --tag "$tag" --version "$version" --file "${files[0]}"
-
-      # 手动运行：补传 exe 到已存在的 Release（例如先用 gh release create 建了空 Release、或 tag 构建失败）
       - name: Upload EXE to existing Release (workflow_dispatch)
         if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.attach_to_github_release == 'true' && github.event.inputs.release_tag != '' }}
         shell: bash
@@ -629,7 +718,7 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
-          release_tag="${{ github.event.inputs.release_tag }}"
+          release_tag="${{ steps.version.outputs.tag }}"
           version="${{ steps.version.outputs.version }}"
           shopt -s nullglob
           files=(desktop/release/*.exe)
@@ -643,36 +732,3 @@ jobs:
             exit 1
           fi
           node scripts/publish-release-asset.cjs --tag "$release_tag" --version "$version" --file "${files[0]}"
-
-      - name: Detect portable ZIP artifact
-        id: portable_zip
-        shell: bash
-        run: |
-          set -euo pipefail
-          shopt -s nullglob
-          files=(desktop/release/*.zip)
-          if [ "${#files[@]}" -gt 0 ]; then
-            echo "present=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "No portable ZIP artifact generated; skipping ZIP artifact upload."
-          fi
-
-      - name: DEBUG — before upload-artifact (exe)
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "=== DEBUG checkpoint: before Upload Windows Setup EXE artifact ==="
-          pwd
-          ls -la desktop/release
-
-      # 当前 win 目标多为 NSIS 仅 .exe；只有实际生成 zip 时才上传 portable artifact。
-      - name: Upload portable ZIP artifact (optional)
-        if: steps.portable_zip.outputs.present == 'true'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        continue-on-error: true
-        with:
-          name: FlowCube-Desktop-Portable
-          path: desktop/release/*.zip
-          if-no-files-found: error
-          retention-days: 7

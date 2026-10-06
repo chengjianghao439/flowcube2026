@@ -92,6 +92,8 @@
 - 含全表清理的采购/应收修复 smoke 只允许落在**本批专属临时实例**（`npm run repair:smoke-ephemeral`），写入前必须过归属门：0600 归属文件 + 拒绝共享端口 3307/3306 + 容器/卷 `docker inspect` 本批 label 与实时端口映射 + 同运行时间窗 + **runner 进程存活** + 实例 `@@server_uuid`；不认库名后缀、`IF NOT EXISTS`、可自填 env、空表 → `npm run test:repair-smoke-instance-guard`
 - `AGENTS.md` 体积、关键章节与红线必须在默认预算内，`docs/*.md` 与 `npm run` 引用有效 → `npm run test:agents-md-guard`
 
+- 安全扫描入口/授权/会话/解析/打印/发布资源预算，必须先限流与授权再解析、放大或回放；构建与发布凭据分离 → `npm run test:security-scan-remediation`、`npm run smoke:security-scan-remediation`（边界与逐项结果见 `docs/security-scan-remediation-2026-10-06.md`）
+
 ## 1. 协作与操作边界
 
 - 中文沟通（用户可见文案中文、标识符英文）；先说要做什么，过程报关键发现，最后给结果与验证依据。

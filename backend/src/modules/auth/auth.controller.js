@@ -1,3 +1,4 @@
+const opLogger = require('../../middleware/opLogger')
 const authService = require('./auth.service')
 const { successResponse } = require('../../utils/response')
 
@@ -11,7 +12,7 @@ async function login(req, res, next) {
       username: result.user.username,
       realName: result.user.realName,
     }
-    return successResponse(res, result, '登录成功')
+    return opLogger(req, res, error => error ? next(error) : successResponse(res, result, '登录成功'))
   } catch (err) {
     next(err)
   }
@@ -40,11 +41,11 @@ async function refresh(req, res, next) {
 async function logout(req, res, next) {
   try {
     // 作废当前 refresh token（一次性轮换配套）：jti 在服务端标记 revoked，
-    // 即使 refresh 已泄露也无法再续期。access 短效（2h）自然失效。
+    // 当前会话的 access 与 refresh 均立即撤销。
     const actor = await authService.logout(req.body?.refreshToken)
     // 无效、过期或已用过的票据仍按公开退出接口返回，但日志必须保持匿名。
     if (actor) req.operationActor = actor
-    return successResponse(res, null, '已退出登录')
+    return opLogger(req, res, error => error ? next(error) : successResponse(res, null, '已退出登录'))
   } catch (err) {
     next(err)
   }

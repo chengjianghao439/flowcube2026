@@ -4,7 +4,7 @@ const { beginResourceOperationRequest, completeOperationRequest } = require('../
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const printJobs = require('../print-jobs/print-jobs.service')
-const { assertInScope } = require('../../utils/warehouseScope')
+const { assertBoundWarehouseInScope } = require('../../utils/warehouseScope')
 const { assertTaskScope } = require('../warehouse-tasks/warehouse-tasks.helpers')
 const { assertPrintLabelReceiptConsistent } = require('./packages.receipt-guard')
 
@@ -15,7 +15,10 @@ const { buildPackagePrintSummary } = require('../../utils/printSummary')
 const logisticsSvc = require('../logistics/logistics.service')
 
 // ─── 查询任务下所有箱子（含明细）────────────────────────────────────────────
-async function listByTask(taskId) {
+async function listByTask(taskId, scopeWarehouseIds = null) {
+  const [[task]] = await pool.query('SELECT id, warehouse_id FROM warehouse_tasks WHERE id=? AND deleted_at IS NULL', [taskId])
+  if (!task) throw new AppError('任务不存在', 404)
+  assertBoundWarehouseInScope(scopeWarehouseIds, task.warehouse_id, '仓库任务')
   const [pkgs] = await pool.query(
     `SELECT p.id, p.barcode, p.status, p.remark, p.created_at
      FROM packages p
@@ -91,7 +94,7 @@ async function listByTask(taskId) {
 }
 
 // ─── 创建新物流条码（L + 6位 ID）───────────────────────────────────────────────
-async function createPackage(taskId, remark = null, scopeWarehouseIds = null) {
+async function createPackage(taskId, remark = null, scopeWarehouseIds = null, pdaWarehouseId = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
@@ -100,7 +103,8 @@ async function createPackage(taskId, remark = null, scopeWarehouseIds = null) {
       [taskId],
     )
     if (!task) throw new AppError('任务不存在', 404)
-    assertInScope(scopeWarehouseIds, task.warehouse_id, '仓库任务')
+    if (pdaWarehouseId == null) throw new AppError('设备尚未绑定仓库，无法创建箱子', 403, 'PDA_WAREHOUSE_REQUIRED')
+    assertTaskScope(task, { scopeWarehouseIds, pdaWarehouseId })
     if (task.cancel_requested_at) {
       throw new AppError('该任务正在拣货退回中，禁止继续打包操作', 409)
     }
@@ -912,21 +916,22 @@ async function finishPackage(packageId, { requestKey, userId, createdBy, scopeWa
 }
 
 // ─── 按条码查询箱子（含任务信息 + 所有箱的明细）────────────────────────────────
-async function getByBarcode(barcode) {
-  const inboundThresholds = await getInboundClosureThresholds()
+async function getByBarcode(barcode, scopeWarehouseIds = null) {
   const [[pkg]] = await pool.query(
     `SELECT p.id, p.barcode, p.status, p.warehouse_task_id,
-            wt.task_no, wt.customer_name, wt.warehouse_name,
+            wt.task_no, wt.customer_name, wt.warehouse_name, wt.warehouse_id,
             wt.status AS task_status
      FROM packages p
      JOIN warehouse_tasks wt ON wt.id = p.warehouse_task_id
-     WHERE p.barcode = ?`,
+     WHERE p.barcode = ? AND wt.deleted_at IS NULL`,
     [barcode],
   )
   if (!pkg) throw new AppError('箱子不存在', 404)
+  assertBoundWarehouseInScope(scopeWarehouseIds, pkg.warehouse_id, '仓库任务')
+  const inboundThresholds = await getInboundClosureThresholds()
 
   // 返回该任务下所有箱子的明细（方便一次展示全订单）
-  const allPkgs = await listByTask(pkg.warehouse_task_id)
+  const allPkgs = await listByTask(pkg.warehouse_task_id, scopeWarehouseIds)
   const [printRows] = await pool.query(
     `SELECT
         j.id AS job_id,

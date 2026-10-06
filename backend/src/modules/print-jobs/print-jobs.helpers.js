@@ -10,7 +10,7 @@ function num(v) {
   return Number.isFinite(n) ? n : null
 }
 
-function fmt(row, { includeAckToken = false, statusKey, printStateLabel } = {}) {
+function fmt(row, { includeAckToken = false, includeContent = true, statusKey, printStateLabel } = {}) {
   const st = Number(row.status)
   const pr = Number(row.priority ?? 0)
   const o = {
@@ -24,7 +24,6 @@ function fmt(row, { includeAckToken = false, statusKey, printStateLabel } = {}) 
     templateId: num(row.template_id),
     title: row.title,
     contentType: row.content_type,
-    content: row.content,
     copies: row.copies != null ? Number(row.copies) : 0,
     priority: pr,
     priorityKey: pr === 1 ? 'high' : 'normal',
@@ -46,6 +45,7 @@ function fmt(row, { includeAckToken = false, statusKey, printStateLabel } = {}) 
     createdBy: num(row.created_by),
     createdAt: row.created_at,
   }
+  if (includeContent) o.content = row.content
   if (includeAckToken && row.ack_token) o.ackToken = row.ack_token
   return o
 }

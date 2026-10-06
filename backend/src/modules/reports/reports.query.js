@@ -1,3 +1,4 @@
+const { normalizePagination } = require('../../utils/pagination')
 const { pool } = require('../../config/db')
 const { buildDateFilter } = require('./reports.helpers')
 const { SETTLEMENT_SCOPE_COLUMN, isValidSettlementType } = require('../../constants/settlementType')
@@ -563,11 +564,24 @@ async function fetchRoleWorkbenchRows({ thresholds, scopeWarehouseIds = null, ba
   }
 }
 
-async function fetchReconciliationRows({ type = 1, startDate = null, endDate = null, keyword = '', orderNo = '', partyName = '', status = null, settlementTypes = null, minAmount = '', maxAmount = '', dueStart = '', dueEnd = '', page = 1, pageSize = 20 } = {}) {
+async function fetchReconciliationRows({ type = 1, startDate = null, endDate = null, keyword = '', orderNo = '', partyName = '', status = null, settlementTypes = null, minAmount = '', maxAmount = '', dueStart = '', dueEnd = '', page = 1, pageSize = 20, scopeWarehouseIds = null } = {}) {
+  if (![page, pageSize].every(v => Number.isSafeInteger(Number(v)) && Number(v) > 0)) throw new AppError('分页参数无效', 400)
+  const { page: pageNum, pageSize: pageSizeNum, offset } = normalizePagination({ page, pageSize: Math.min(200, Number(pageSize)) })
+  if (!Number.isSafeInteger(offset)) throw new AppError('分页参数无效', 400)
   const typeNum = Number(type) === 2 ? 2 : 1
   const dateFilter = buildDateFilter('pr.created_at', startDate, endDate)
   const conds = ['pr.type = ?']
   const params = [typeNum]
+  // 账款没有仓库列，必须沿真实来源单授权；手工账款/缺失来源不对限仓账号放行。
+  if (Array.isArray(scopeWarehouseIds)) {
+    if (!scopeWarehouseIds.length) conds.push('1=0')
+    else {
+      conds.push(`((pr.type=1 AND EXISTS (SELECT 1 FROM purchase_orders scope_purchase WHERE scope_purchase.id=pr.order_id AND scope_purchase.warehouse_id IN (?)))
+        OR (pr.type=2 AND EXISTS (SELECT 1 FROM sale_orders scope_sale WHERE scope_sale.id=pr.order_id AND scope_sale.warehouse_id IN (?)
+          AND NOT EXISTS (SELECT 1 FROM sale_order_items scope_item WHERE scope_item.order_id=scope_sale.id AND COALESCE(scope_item.warehouse_id,scope_sale.warehouse_id) NOT IN (?)))))`)
+      params.push(scopeWarehouseIds, scopeWarehouseIds, scopeWarehouseIds)
+    }
+  }
   // 对账页只看月结账款。读的是账款自带的结算方式快照（迁移 136），不回溯往来方主数据——
   // 改客户类型只影响他之后新产生的账款，历史账款不搬家。
   const scopeList = (() => {
@@ -601,9 +615,6 @@ async function fetchReconciliationRows({ type = 1, startDate = null, endDate = n
   if (dueStart) { conds.push('pr.due_date >= ?'); params.push(dueStart) }
   if (dueEnd)   { conds.push('pr.due_date <= ?'); params.push(dueEnd) }
   const where = `WHERE ${conds.join(' AND ')}`
-  const pageNum = Math.max(1, Number(page) || 1)
-  const pageSizeNum = Math.max(1, Math.min(200, Number(pageSize) || 20))
-  const offset = (pageNum - 1) * pageSizeNum
 
   const summaryRow = await fetchOne(
     `SELECT

@@ -2,6 +2,8 @@ const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { validateLabelInput } = require('../print-jobs/labelRasterValidation')
 const { safeJsonParse } = require('../../utils/safeJsonParse')
+const { validateDocumentLayout } = require('./document-layout')
+const { assertPrintBudget } = require('../print-jobs/print-budget')
 
 const TYPE_NAME = {
   1: '销售订单',
@@ -23,6 +25,7 @@ function validateLayout(type, layout) {
   if (t >= 5 && t <= 11) {
     if (!layout) throw new AppError('布局不能为空', 400)
     if (layout.format === 'zpl' && typeof layout.body === 'string' && layout.body.trim()) {
+      assertPrintBudget(layout.body)
       if (!String(layout.body).includes('^XA')) {
         throw new AppError('ZPL 正文须包含 ^XA 起始指令', 400)
       }
@@ -49,12 +52,13 @@ function validateLayout(type, layout) {
     }
     throw new AppError('标签模板须使用画布布局（elements）或兼容的 ZPL 正文（format=zpl）', 400)
   }
-  if (!layout || !Array.isArray(layout.elements)) {
-    throw new AppError('布局须包含 elements 数组', 400)
-  }
+  validateDocumentLayout(layout)
 }
 
 function parseLayoutJson(row) {
+  if (Number(row.type) <= 4 && typeof row.layout_json === 'string' && Buffer.byteLength(row.layout_json, 'utf8') > 64 * 1024) {
+    throw new AppError('存量单据模板超过 64 KiB 安全限制，请联系管理员精简模板', 400, 'PRINT_DOCUMENT_LAYOUT_INVALID')
+  }
   if (typeof row.layout_json !== 'string') return row.layout_json
   try {
     return safeJsonParse(row.layout_json, `print_templates#${row.id} layout_json`, {
@@ -66,13 +70,15 @@ function parseLayoutJson(row) {
 }
 
 function fmt(row) {
+  const layout = parseLayoutJson(row)
+  validateLayout(row.type, layout)
   return {
     id:         row.id,
     name:       row.name,
     type:       row.type,
     typeName:   TYPE_NAME[row.type] || '未知',
     paperSize:  row.paper_size,
-    layout:     parseLayoutJson(row),
+    layout,
     isDefault:  !!row.is_default,
     createdBy:  row.created_by || null,
     createdAt:  row.created_at,

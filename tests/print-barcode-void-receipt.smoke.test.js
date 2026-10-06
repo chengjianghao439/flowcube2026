@@ -129,7 +129,7 @@ async function main() {
     // 打印基础设施：一台虚拟打印机 + 一个客户端，用于真实调用 claimClientJobs 验证「能否被领取」
     const code = randomRef('PVOIDR')
     const clientId = `test-${code}`
-    await pool.query('INSERT INTO print_clients (client_id,hostname,status,last_seen) VALUES (?,?,1,NOW())', [clientId, 'test-only'])
+    const printClient = await require('./helpers/printClientIdentity').provisionTestPrintClient(pool, { clientId, warehouseId: warehouse.id })
     const [printer] = await pool.query(
       'INSERT INTO printers (name,code,type,warehouse_id,client_id,status) VALUES (?,?,1,?,?,1)',
       ['虚拟标签机', code, warehouse.id, clientId],
@@ -147,7 +147,7 @@ async function main() {
       return r.insertId
     }
     const claimedIds = async () => {
-      const jobs = await dispatch.claimClientJobs({ clientId, limit: 50 })
+      const jobs = await dispatch.claimClientJobs({ identity: printClient.identity, limit: 50 })
       return jobs.map(j => Number(j.id))
     }
 

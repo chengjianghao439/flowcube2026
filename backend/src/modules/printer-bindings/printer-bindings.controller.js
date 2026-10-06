@@ -19,7 +19,7 @@ const bind = async (req, res, next) => {
     // 此前两条路径都不校验，限仓用户可改全局绑定或替别的仓库绑打印机
     // （2026-09-26 一致性审查 · 任务 6）。
     assertBoundWarehouseInScope(scopeOf(req), warehouseId, '打印机绑定')
-    const data = await svc.bind(type, printerId, warehouseId)
+    const data = await svc.bind(type, printerId, warehouseId, scopeOf(req))
     return successResponse(res, data, '绑定成功')
   } catch (e) { next(e) }
 }

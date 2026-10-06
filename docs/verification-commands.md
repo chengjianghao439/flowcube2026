@@ -47,6 +47,8 @@ npm run test:permissions
 
 按改动影响选择验证：
 
+安全扫描整改入口（2026-10-06）：`npm run test:security-scan-remediation` 是离线真实函数/HTTP/子进程及发布契约回归，需安装前后端依赖，不连接数据库；`npm run smoke:security-scan-remediation` 串行验证新增迁移重放/schema、资源范围、会话族和随机打印凭据，必须先按下文加载显式独立测试环境并完成迁移，不能连接生产。两者分别接入 Tests 的 static / MySQL job；本地通过不代表远端已运行。原主链路、打印、认证及导入回归仍需按受影响范围补跑，完整发版门禁保持。27 项证据及部署边界见 `docs/security-scan-remediation-2026-10-06.md`。
+
 | 影响 | 相关命令 |
 |---|---|
 | 库存、状态、并发主链路 | `npm run smoke:mainline`、`npm run smoke:concurrency-guards`、`npm run smoke:p0-regression`、`npm run smoke:p1-regression`、`npm run smoke:fulfillment-credit`、`npm run test:integration` |
