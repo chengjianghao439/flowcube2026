@@ -1463,7 +1463,12 @@
   {
     "path": "docs/release-v0.13.0-integration.md",
     "purpose": "主题说明与验收证据",
-    "sha256": "4e7e6c8d6a9f21af190cff7aea159bcff256243f73d88d0db7fe9235bacb7a77"
+    "sha256": "4b8d29b2651fb1a2cec72477dc44340643d2dd5efe19e916fa5a7ca55feacca4"
+  },
+  {
+    "path": "docs/release-v0.13.0-result.md",
+    "purpose": "同 SHA 三端正式交付、生产与下载验收及现场边界记录",
+    "sha256": "fb8b716fb4b43ddd40f40b32ed72f547dc1e3957468108d5b09351dc1717a19b"
   },
   {
     "path": "docs/runbooks/failure-recovery.md",
