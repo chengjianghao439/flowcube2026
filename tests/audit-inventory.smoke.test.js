@@ -20,13 +20,9 @@ async function main() {
   assert.match(server.version, /^8\./)
   await conn.query("SET time_zone = '+08:00'")
   await conn.query('SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci')
-  // Keep actual business queries and transaction rollbacks, while retaining outer fixture rollback.
-  const serviceConn = {
-    query: (...args) => conn.query(...args),
-    beginTransaction: () => conn.query('SAVEPOINT service_transaction'),
-    commit: () => conn.query('RELEASE SAVEPOINT service_transaction'),
-    rollback: () => conn.query('ROLLBACK TO SAVEPOINT service_transaction'), release() {},
-  }
+  // Keep actual business queries and savepoint rollbacks inside the outer fixture transaction.
+  const { createAuditInventoryTransaction } = require('./helpers/auditInventoryTransaction')
+  const { serviceConn, beginFixture } = createAuditInventoryTransaction(conn)
   let serviceOverride = null
   require.cache[require.resolve(path.join(root, 'config/db'))] = {
     exports: { pool: { query: (...args) => conn.query(...args), getConnection: async () => serviceOverride || serviceConn } },
@@ -105,7 +101,7 @@ async function main() {
     return { code, productId, poId, poiId, sale, reserve, container, ship, bindingQty, stock, receive }
   }
   const tests = []
-  const test = (name, run) => tests.push({ name, run })
+  const test = (name, run, isolation = 'REPEATABLE READ') => tests.push({ name, run, isolation })
   for (const [passed, rejected] of [[1, 1], [5, 0], [0, 5], [0.1, 0.2]]) {
     test(`F01 部分质检 ${passed}/${rejected} 保留未检量并可继续`, async f => {
       const taskId = await insert(`INSERT INTO return_tasks (task_no,return_type,return_id,return_no,warehouse_id,warehouse_name,status)
@@ -282,7 +278,7 @@ async function main() {
     assert.equal(await f.bindingQty(), 0)
     await purchase.closeRemaining(f.poId, operator)
     assert.equal((await f.stock()).expected, 0)
-  })
+  }, 'READ COMMITTED')
   test('F05 预计占库出库不能消耗其它销售的现货份额', async f => {
     const a = await f.sale(5), b = await f.sale(5)
     await f.reserve(a, 5)
@@ -476,8 +472,8 @@ async function main() {
   let failed = 0
   const [printerBindingsBefore] = await conn.query('SELECT * FROM printer_bindings ORDER BY id')
   try {
-    for (const { name, run } of tests) {
-      await conn.beginTransaction()
+    for (const { name, run, isolation } of tests) {
+      await beginFixture(isolation)
       try { await run(await fixture()); console.log('PASS', name) }
       catch (error) { failed++; console.error('FAIL', name, error.stack) }
       finally { await conn.rollback() }

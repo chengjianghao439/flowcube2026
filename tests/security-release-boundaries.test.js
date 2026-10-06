@@ -3,6 +3,8 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
+const os = require('node:os')
+const { spawnSync } = require('node:child_process')
 const yaml = require('../frontend/node_modules/js-yaml')
 const root = path.resolve(__dirname, '..')
 const read = file => fs.readFileSync(path.join(root, file), 'utf8')
@@ -40,6 +42,33 @@ test('Gitleaks许可选择互斥，fallback镜像固定、源只读且无token',
   assert.match(fallback.run, /gitleaks[^\s]*@sha256:[0-9a-f]{64}/)
   assert.match(fallback.run, /:\/repo:ro/)
   assert.doesNotMatch(fallback.run, /GITHUB_TOKEN|secrets\./)
+})
+
+test('Gitleaks实际fallback CLI以runner UID/GID写报告，删除用户绑定即失败', t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'flowcube-gitleaks-cli-'))
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }))
+  const bin = path.join(dir, 'bin')
+  fs.mkdirSync(bin)
+  fs.writeFileSync(path.join(bin, 'id'), '#!/bin/sh\ncase "$1" in -u) echo 10123;; -g) echo 10124;; *) exit 2;; esac\n', { mode: 0o755 })
+  fs.writeFileSync(path.join(bin, 'docker'), `#!${process.execPath}
+const fs = require('node:fs'), path = require('node:path'), args = process.argv.slice(2)
+fs.writeFileSync(process.env.CALLS, JSON.stringify(args))
+if (args[args.indexOf('--user') + 1] !== '10123:10124') { console.error('Report path is not writable for the container default user'); process.exit(1) }
+const output = args.find(arg => arg.endsWith(':/out')).slice(0, -5)
+fs.writeFileSync(path.join(output, 'gitleaks-report.sarif'), JSON.stringify({ runs: [{ results: [] }] }))
+`, { mode: 0o755 })
+  const command = workflow('security-scan.yml').jobs.gitleaks.steps.find(step => step.name === 'Fallback gitleaks (Docker)').run
+  for (const removeUser of [false, true]) {
+    const script = removeUser ? command.replace(/--user "\$\(id -u\):\$\(id -g\)"\s*/, '') : command
+    const report = path.join(dir, 'gitleaks-output', 'gitleaks-report.sarif')
+    fs.rmSync(report, { force: true })
+    const result = spawnSync('bash', ['-c', script], { encoding: 'utf8', timeout: 10_000, env: { PATH: `${bin}:${process.env.PATH}`, RUNNER_TEMP: dir, GITHUB_WORKSPACE: root, CALLS: path.join(dir, 'calls.json') } })
+    assert.equal(result.status, removeUser ? 1 : 0, result.stderr)
+    assert.equal(fs.existsSync(report), !removeUser)
+    const args = JSON.parse(fs.readFileSync(path.join(dir, 'calls.json'), 'utf8'))
+    assert.ok(args.includes('--cap-drop=ALL') && args.includes('--security-opt=no-new-privileges') && args.includes('--network=none'))
+    assert.ok(args.includes(`${root}:/repo:ro`) && args.includes('--redact'))
+  }
 })
 
 test('NSIS校验在提取可执行文件前执行', () => {

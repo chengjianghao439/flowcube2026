@@ -205,6 +205,58 @@ test('closeRemaining only selects RC for next transaction and passes narrow curr
   assert.equal(f.events[0], 'nextRC'); assert.ok(f.events.includes('settle:current'))
   await f.conn.beginTransaction(); assert.equal(f.events.at(-1), 'begin:RR')
 })
+test('audit savepoint adapter preserves closeRemaining domain refusal, retry and outer fixture rollback under RC', async () => {
+  const { createAuditInventoryTransaction } = require('./helpers/auditInventoryTransaction')
+  const queries = [], state = { value: 1, binding: true }, savepoints = new Map()
+  let outer = false, pendingIsolation = 'REPEATABLE READ', isolation
+  const raw = {
+    async beginTransaction() { outer = true; isolation = pendingIsolation; pendingIsolation = 'REPEATABLE READ'; queries.push('BEGIN') },
+    async rollback() { outer = false; state.value = 0; queries.push('ROLLBACK') },
+    async query(sql) {
+      queries.push(sql)
+      if (sql.startsWith('SET TRANSACTION')) {
+        if (outer) throw Object.assign(Error('Transaction characteristics cannot be changed while a transaction is in progress'), { code: 'ER_CANT_CHANGE_TX_CHARACTERISTICS' })
+        pendingIsolation = sql.endsWith('READ COMMITTED') ? 'READ COMMITTED' : 'REPEATABLE READ'; return [{}]
+      }
+      if (sql === 'SAVEPOINT service_transaction') { assert.ok(outer); savepoints.set('service_transaction', state.value); return [{}] }
+      if (sql === 'RELEASE SAVEPOINT service_transaction' || sql === 'ROLLBACK TO SAVEPOINT service_transaction') {
+        if (!savepoints.has('service_transaction')) throw Object.assign(Error('SAVEPOINT service_transaction does not exist'), { code: 'ER_SP_DOES_NOT_EXIST' })
+        if (sql.startsWith('ROLLBACK')) state.value = savepoints.get('service_transaction')
+        else savepoints.delete('service_transaction')
+        return [{}]
+      }
+      if (sql.includes('FROM purchase_orders')) return [[{ id: 10, order_no: 'PO10', status: 2, warehouse_id: 8 }]]
+      if (sql.includes('sale_order_expected_bindings')) return [state.binding ? [{ sale_order_id: 11, order_no: 'SO11', bound_qty: 2 }] : []]
+      if (sql.includes('AS pending')) return [[{ pending: 0 }]]
+      if (sql.includes('AS received')) return [[{ received: 5 }]]
+      if (sql.includes('UPDATE purchase_orders')) { state.value = 3; return [{ affectedRows: 1 }] }
+      unknown.push(`audit SQL ${sql}`); throw Error(`Unexpected audit SQL ${sql}`)
+    },
+  }
+  const adapter = createAuditInventoryTransaction(raw), conn = adapter.serviceConn
+  const purchase = load('modules/purchase/purchase.service.js', {
+    '../fulfillment/fulfillment.refresh': { commitFulfillment: actual => actual.commit() }, '../../config/db': { pool: { getConnection: async () => conn } }, '../../utils/AppError': AppError,
+    '../../utils/codeGenerator': {}, '../inbound-tasks/inbound-tasks.helpers': {}, '../inbound-tasks/inbound-tasks.query': {}, '../../utils/inboundThresholds': {},
+    '../../utils/statusTransition': transition, '../../constants/documentStatusRules': status, '../../utils/operationRequest': {},
+    '../inbound-tasks/inbound-tasks.settle': { recomputePurchasePayable: async (actual, _id, opts) => { assert.equal(actual, conn); assert.equal(opts.sourceReadMode, 'current'); assert.equal(isolation, 'READ COMMITTED') } },
+    '../../utils/unitConversion': {}, '../../utils/warehouseScope': scope, '../../utils/selfApprove': {}, '../../utils/pagination': {}, '../../utils/priceReference': {},
+  })
+  await adapter.beginFixture('READ COMMITTED')
+  await assert.rejects(purchase.closeRemaining(10, operator, [8]), error => error.code === 'BINDING_SALE_DEPENDENCY')
+  assert.equal(state.value, 1); assert.ok(outer, 'service refusal must retain outer fixture transaction')
+  state.binding = false
+  await purchase.closeRemaining(10, operator, [8])
+  assert.equal(state.value, 3); assert.ok(outer, 'service commit must not commit the fixture')
+  assert.deepEqual(queries.slice(0, 2), ['SET TRANSACTION ISOLATION LEVEL READ COMMITTED', 'BEGIN'])
+  assert.equal(queries.filter(sql => sql.startsWith('SET TRANSACTION')).length, 1, 'only select isolation before outer BEGIN')
+  assert.ok(queries.includes('ROLLBACK TO SAVEPOINT service_transaction'))
+  assert.equal(savepoints.size, 0)
+  await raw.rollback(); assert.equal(state.value, 0)
+  await adapter.beginFixture(); assert.equal(isolation, 'REPEATABLE READ', 'other inventory/concurrency fixtures retain RR')
+  const before = queries.length
+  await assert.rejects(purchase.closeRemaining(10, operator, [8]), /RC service requires an explicitly RC outer fixture/)
+  assert.equal(queries.length, before, 'pre-BEGIN errors must neither access a missing savepoint nor roll back the fixture')
+})
 test('completed cancellation releases budget; physical pending cancellation does not', async () => {
   const completed = fixture({ waitBudget: true })
   assert.equal((await completed.returns.cancelPR(11, operator, [8])).pendingCancel, false)

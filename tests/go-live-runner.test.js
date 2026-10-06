@@ -21,7 +21,7 @@ test('unknown ephemeral suite is rejected before any Docker operation', () => {
 })
 test('go-live uses the original owned-instance runner and isolated CI job', () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
-  assert.equal(pkg.scripts['smoke:go-live-runtime'], 'node --test --test-concurrency=1 tests/go-live-runtime.smoke.test.js')
+  assert.equal(pkg.scripts['smoke:go-live-runtime'], 'node --test --test-concurrency=1 tests/db-session-timezone.smoke.test.js tests/go-live-runtime.smoke.test.js')
   assert.equal(pkg.scripts['smoke:go-live-owned'], 'bash scripts/repair-smoke-ephemeral.sh --go-live')
   const script = fs.readFileSync(path.join(root, 'scripts/repair-smoke-ephemeral.sh'), 'utf8')
   assert.match(script, /DB_NAME='flowcube_golive20261006_test'/)

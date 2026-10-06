@@ -2,7 +2,55 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path'),crypto=require('node:crypto')
 const {manifestFor,verifyArtifact}=require('../scripts/release-artifact-manifest.cjs')
 const {verifyNsisArchive}=require('../scripts/verify-nsis-archive.cjs')
+const {spawnSync}=require('node:child_process')
+const yaml=require('../frontend/node_modules/js-yaml')
 const sha='a'.repeat(40)
+for (const scenario of ['normal','other-sidecar','symlink-sidecar','missing-cleanup']) test(`PDA签名目录只移除本次精确V4侧文件，保留来源白名单：${scenario}`,t=>{
+ const root=path.resolve(__dirname,'..'),dir=fs.mkdtempSync(path.join(os.tmpdir(),'flowcube-pda-sign-step-'))
+ t.after(()=>fs.rmSync(dir,{recursive:true,force:true}))
+ const bin=path.join(dir,'bin'),tools=path.join(dir,'sdk/build-tools/35.0.0')
+ fs.mkdirSync(bin);fs.mkdirSync(tools,{recursive:true});fs.mkdirSync(path.join(dir,'unsigned'))
+ fs.writeFileSync(path.join(dir,'unsigned/fixture.apk'),'fixture unsigned APK')
+ fs.writeFileSync(path.join(dir,'unsigned/version.json'),'{}')
+ fs.writeFileSync(path.join(dir,'untouched-target'),'owned synthetic target')
+ fs.writeFileSync(path.join(bin,'base64'),`#!${process.execPath}
+if(process.argv.slice(2).join(' ')!=='--decode')process.exit(2)
+let input='';process.stdin.on('data',chunk=>input+=chunk);process.stdin.on('end',()=>process.stdout.write(Buffer.from(input,'base64')))
+`,{mode:0o755})
+ fs.writeFileSync(path.join(tools,'zipalign'),`#!${process.execPath}
+const fs=require('node:fs'),args=process.argv.slice(2);fs.copyFileSync(args.at(-2),args.at(-1))
+`,{mode:0o755})
+ fs.writeFileSync(path.join(tools,'apksigner'),`#!${process.execPath}
+const fs=require('node:fs'),path=require('node:path'),args=process.argv.slice(2)
+if(args[0]==='sign'){
+ const output=args[args.indexOf('--out')+1]
+ fs.writeFileSync(output,fs.readFileSync(args.at(-1))+' signed')
+ if(process.env.SCENARIO==='symlink-sidecar')fs.symlinkSync(path.join(process.cwd(),'untouched-target'),output+'.idsig')
+ else fs.writeFileSync(output+'.idsig','generated v4 signature')
+ if(process.env.SCENARIO==='other-sidecar')fs.writeFileSync(path.join(path.dirname(output),'unrelated.apk.idsig'),'unexpected')
+}else if(args[0]==='verify'){
+ if(!fs.readFileSync(args.at(-1),'utf8').endsWith(' signed'))process.exit(3)
+ fs.writeFileSync(path.join(process.cwd(),'verified'),'verified')
+}else process.exit(4)
+`,{mode:0o755})
+ const workflow=yaml.load(fs.readFileSync(path.join(root,'.github/workflows/build-pda-apk.yml'),'utf8'))
+ let command=workflow.jobs['sign-pda'].steps.find(step=>step.name==='Sign APK in fresh runner').run
+ if(scenario==='missing-cleanup')command=command.replace(/\nif \[\[ -e "\$signed_apk\.idsig"[\s\S]*?\nfi\n/,'\n')
+ const result=spawnSync('bash',['-c',command],{cwd:dir,encoding:'utf8',timeout:10000,env:{PATH:`${bin}:${process.env.PATH}`,ANDROID_HOME:path.join(dir,'sdk'),RUNNER_TEMP:dir,PDA_SIGNING_KEYSTORE_BASE64:Buffer.from('synthetic keystore').toString('base64'),PDA_SIGNING_STORE_PASSWORD:'synthetic',PDA_SIGNING_KEY_ALIAS:'fixture',PDA_SIGNING_KEY_PASSWORD:'synthetic',SCENARIO:scenario}})
+ assert.equal(result.status,scenario==='symlink-sidecar'?1:0,result.stderr)
+ assert.ok(fs.existsSync(path.join(dir,'verified')),'signature must be verified before artifact cleanup')
+ assert.equal(fs.readFileSync(path.join(dir,'untouched-target'),'utf8'),'owned synthetic target')
+ assert.equal(fs.existsSync(path.join(dir,'flowcube-release.keystore')),false)
+ const out=path.join(dir,'out')
+ if(scenario==='normal'){
+  assert.deepEqual(fs.readdirSync(out),['fixture.apk','version.json'])
+  const manifest=manifestFor(out,'.apk',sha,'123')
+  assert.equal(manifest.sha256,crypto.createHash('sha256').update('fixture unsigned APK signed').digest('hex'))
+  fs.writeFileSync(path.join(out,'release-provenance.json'),JSON.stringify(manifest))
+  assert.equal(verifyArtifact(out,'.apk',sha,'123').file,'fixture.apk')
+ }else if(scenario==='other-sidecar'||scenario==='missing-cleanup')assert.throws(()=>manifestFor(out,'.apk',sha,'123'),/Unexpected artifact entry/)
+ else assert.ok(fs.lstatSync(path.join(out,'fixture.apk.idsig')).isSymbolicLink())
+})
 test('发布产物必须绑定来源SHA、本轮run及精确字节；metadata和多安装包不能替换',t=>{
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'flowcube-artifact-test-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}))
  fs.writeFileSync(path.join(dir,'FlowCube-Setup-1.0.0.exe'),'synthetic installer')

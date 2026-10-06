@@ -176,7 +176,9 @@
  2026-10-06 安全扫描的发布与打印契约
 
 - 手动桌面/PDA 目标只接受 main 历史中的冻结 SHA/版本 tag；构建无发布凭据，PDA 签名与发布分别在 fresh runner，发布下载精确 artifact ID 并校验 SHA/run/字节。NSIS/Gradle 校验前不得执行归档内容。所有外部镜像使用固定摘要，发布前生成并保留镜像 SBOM/来源记录。详见 `docs/security-release-remediation-2026-10-06.md`。
+- PDA fresh signer 的 `apksigner` 可为签后 APK 生成独立 `<APK>.idsig`（V4 增量安装侧文件），而当前发布只交付 APK。签名及 APK 验签成功后只移除本次准确输出路径的普通、非符号链接 `.idsig`，再绑定签后字节来源；不关闭 APK 签名方案、不扩大 artifact 白名单、不通配删除或忽略另名条目。`tests/security-release-artifact.test.js` 执行实际 workflow shell，覆盖正常侧文件、另名侧文件、符号链接以及删除处理块后的失败反证。本地 SDK 34/合成密钥实签名已复现生成侧文件及原清单拒绝；正式 SDK 35/发布密钥、最终 SHA 的签名及上传结果仍由远端运行单独核验。
 - SBOM 扫描两镜像串行，各容器限制 2 GiB 内存（含 tmpfs、不追加 swap）、2 CPU，缓存 tmpfs 上限 1 GiB，继续禁止网络、额外 capability 和根文件系统写入。Syft 缓存全部未压缩镜像层；固定 Node amd64 层、当前锁定的生产依赖和 Linux musl canvas 的最低合计 294607349 字节已超过旧 256 MiB，尚未计字体、npm cache 及新增层。`tests/security-image-sbom.test.js` 校验实际 CLI 预算并反证旧上限；真实 Syft/SBOM 仍须最终 SHA 的 CI 验证，扫描失败不得跳过。
+- Gitleaks fallback 与 Syft 容器显式使用 runner 的 UID/GID 写报告；固定镜像默认 root 在 `cap-drop=ALL` 下不能写 runner 拥有的 755 绑定目录。两套 CLI 回归保留删除用户绑定即失败的反证，不通过放宽报告目录权限或扫描豁免解决。
 
 2026-10-07 发版前实时 audit 新发现三项公告，按官方修复版本最小升级：[proxy-addr 2.0.8](https://github.com/advisories/GHSA-jqcg-44mw-7w3h)、[Capacitor Android/Core 8.4.3](https://github.com/advisories/GHSA-rvm3-566m-v7fv)、[source-map-js 1.2.2](https://github.com/advisories/GHSA-68fv-2mgg-jv7q)。Android/Core 固定同版满足 peer；保留现有 CLI、Gradle、SDK 和自定义插件。四目录完整 audit 归零；前端 1714 用例、lint、类型、ERP/PDA 构建与 sync、原生单测和 clean assembleRelease 均通过。8.4.3 SystemBars 的键盘/安全区行为须真机后补；同 SHA CI、签名和下载摘要仍分别核验。
 

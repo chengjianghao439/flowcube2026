@@ -10,6 +10,26 @@
     "sha256": "bbe5240688aeb5dcbc933d977212f90e074978cf6838a289cea304676204e7bc"
   },
   {
+    "path": ".github/workflows/build-desktop.yml",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "7cff516deb6ccee909d388246377977737918ace6427abb359aa33aa735b07f0"
+  },
+  {
+    "path": ".github/workflows/build-pda-apk.yml",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "e99bab2f05f26b56e74852eb48c12b700ff360b3c88235249c2bde2313d27940"
+  },
+  {
+    "path": ".github/workflows/deploy-browser.yml",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "af1013aeeb93a2c0760a30ed18ea784fb58f728df24aba6c8df5167e6f8a27bb"
+  },
+  {
+    "path": ".github/workflows/security-scan.yml",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "726c7947a321949dcfa6f7d86f29b43c3ac86c96ae2bc68c63545af5598be151"
+  },
+  {
     "path": ".github/workflows/test.yml",
     "purpose": "CI门禁",
     "sha256": "c0894214b0138b6f362b647e146ebc9cecf81af2a122738a211ddf4d7320874e"
@@ -23,6 +43,16 @@
     "path": "AGENTS.md",
     "purpose": "协作约定或配置样例",
     "sha256": "b10e9f99b9bf27e2e757fd89909d5ec025d6222f67e6deef09c1869f7b174f5e"
+  },
+  {
+    "path": "Dockerfile.backend",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "e97d0859afd82a9b7735a6ee0d8e622ac351c58e439a6d6fadeb1184f1221b6d"
+  },
+  {
+    "path": "Dockerfile.frontend",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "0b0464229cf0bbed27bdd2c4c426bf0f0c184bb7c0811848989eac2ca923ffb6"
   },
   {
     "path": "backend/apk/version.json",
@@ -45,6 +75,11 @@
     "sha256": "5f763d96300e164a041582fabb9779ec2d6fe7dc7a922419e15475a6242b9c9a"
   },
   {
+    "path": "backend/src/config/db.js",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "fde4e4a5e20ae6b2d6ef026cca8439a2fefb531aae4fe3add1e795163b1327a1"
+  },
+  {
     "path": "backend/src/constants/documentStatusRules.js",
     "purpose": "业务、权限与迁移",
     "sha256": "0724457ae4f29e26298288028dbd4828cef9d71a7ee090d813f117d1dfdd21cc"
@@ -58,6 +93,16 @@
     "path": "backend/src/constants/voucherSource.js",
     "purpose": "业务、权限与迁移",
     "sha256": "6b9cdd89b4d3f0a5b386cae244c864f07f76790c4fc52df9073c296182dae7b9"
+  },
+  {
+    "path": "backend/src/database/276_auth_session_families.sql",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "0d7fbb8f4d385e5020ab8baf0f877652dc586593a89385cfec2a47841ff79982"
+  },
+  {
+    "path": "backend/src/database/277_print_client_credentials.sql",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "8fa79f004294c86c33403be6089c6eab84c0a19f152f49dfdd175db1e0db7ab6"
   },
   {
     "path": "backend/src/database/278_party_profile_capacity.sql",
@@ -78,6 +123,26 @@
     "path": "backend/src/engine/containerEngine.js",
     "purpose": "业务、权限与迁移",
     "sha256": "e37e90700e18a6ac7c5b84d920d676bbadf2f9c3a279c56a3a42a912658828ac"
+  },
+  {
+    "path": "backend/src/middleware/apiIngress.js",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "0e24d2c0d39772341fee11f51cff38083c1e7961f4d117e0976921fd1cb74b4c"
+  },
+  {
+    "path": "backend/src/middleware/auth.js",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "018c21a4f892d30141b21b919c7038c88d3f23a2750bb4a6f3aabee0a998e7b0"
+  },
+  {
+    "path": "backend/src/middleware/opLogger.js",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "222a3703fe4a76d77e6efd64620ca6c742df9e1deac77c31cc344efbee5b7aa0"
+  },
+  {
+    "path": "backend/src/middleware/requestLogger.js",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "d7ccd3fa19cd039a6aab7a120d92aee81c05e0c2d6d091fd727f8088611e796d"
   },
   {
     "path": "backend/src/modules/accounting/accounting.period.service.js",
@@ -133,6 +198,31 @@
     "path": "backend/src/modules/approvals/approvals.service.js",
     "purpose": "业务、权限与迁移",
     "sha256": "37ec2a91fd843b332320640500e9cd31dfd263827e4d11b8741c0c97a9b52b5f"
+  },
+  {
+    "path": "backend/src/modules/auth/auth-audit.service.js",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "1bc9d21094a0edf36310fbfb23c483abc36c4f3667024e4b7b9c21686dd7d877"
+  },
+  {
+    "path": "backend/src/modules/auth/auth.controller.js",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "b243a29a472765e123844340f3c3242d3acf9790c690c5a7091a530c673b5c10"
+  },
+  {
+    "path": "backend/src/modules/auth/auth.routes.js",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "35fadf737b5cd6e1e78b0f0c38c433d72acc290ae7c8f04ec5942896f00a4749"
+  },
+  {
+    "path": "backend/src/modules/auth/auth.service.js",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "a151a09598fb15211952bcc98e41b52be732ebb4d6dd8b503db7592876aa6142"
+  },
+  {
+    "path": "backend/src/modules/auth/sessionFamilies.js",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "4615b6315d685758cf314cc9c9e58645f7f98d7934eb1b5b0b447ad2ad698366"
   },
   {
     "path": "backend/src/modules/customers/customers.routes.js",
@@ -255,6 +345,11 @@
     "sha256": "30ad02ad4514ae9cdb48c8f000157b5417084f139d7c20b01fcec3b42175b58f"
   },
   {
+    "path": "backend/src/modules/import/import.routes.js",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "61f418620e6d6dc1c4fc8a77b426aea013c8c1f7c0f0c31b895d28aaa7ec9180"
+  },
+  {
     "path": "backend/src/modules/import/import.service.js",
     "purpose": "业务、权限与迁移",
     "sha256": "75552f43c3ce00474e8232075eebd42c93eded868b9b2e33850f80282bf934cd"
@@ -290,6 +385,11 @@
     "sha256": "c5083c401441e8684c2e11dfc9694435681855fcb6b4a97be3841613519dd7ca"
   },
   {
+    "path": "backend/src/modules/inventory/inventory.aging.js",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "cefd50a51ccd892a4e249195ff2a1e02dbd3f3b12b49b07649675b268705b7bf"
+  },
+  {
     "path": "backend/src/modules/inventory/inventory.controller.js",
     "purpose": "业务、权限与迁移",
     "sha256": "2207870087368167a20229d4a19d27b63463965f444924387b16ef9652f822e4"
@@ -320,6 +420,16 @@
     "sha256": "cd8832762cf7b8e9f1cd9c9a0512e3f00a8c32b5cba2325c9523681504d9b43d"
   },
   {
+    "path": "backend/src/modules/logistics/logistics.freight.js",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "5f94a0f5b65938770114736f73b1845de8876fc7cfe10266171754e92b218b04"
+  },
+  {
+    "path": "backend/src/modules/logistics/logistics.service.js",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "0f4fc083fa95e91cf1768e2631229048562a40f538d69ece8060c5b77cd66f6a"
+  },
+  {
     "path": "backend/src/modules/notifications/notifications.service.js",
     "purpose": "业务、权限与迁移",
     "sha256": "5f0ade06410e18997d6f21f1690d49ff0a677542b17c9be14a1a42c5526d1945"
@@ -328,6 +438,16 @@
     "path": "backend/src/modules/notifications/operation-alerts.service.js",
     "purpose": "业务、权限与迁移",
     "sha256": "6df6f77dd70eb5589867f8ea2fdf56c0c60a9d80cd6e8de9050fd66f23e5da65"
+  },
+  {
+    "path": "backend/src/modules/packages/packages.controller.js",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "9160d916df091d90d884f47a24a09a689547679c16142fc8fc8dec0f1d4cef71"
+  },
+  {
+    "path": "backend/src/modules/packages/packages.service.js",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "60bde43e0b64d6bb136c9b0c29574ad8cc7eeed47b11a757b6c40f7a25109458"
   },
   {
     "path": "backend/src/modules/payments/payments.routes.js",
@@ -353,6 +473,106 @@
     "path": "backend/src/modules/plastic-boxes/plastic-boxes.service.js",
     "purpose": "业务、权限与迁移",
     "sha256": "d9b8ccc5a090608b852f2fbc9dda83ca95972a779738d267b37ac0f5283a3ff9"
+  },
+  {
+    "path": "backend/src/modules/print-jobs/labelZpl.js",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "3a5e54ff3b9396e35858ff93d50f63b25b36ac8e2269262fc63f643c2700ce2e"
+  },
+  {
+    "path": "backend/src/modules/print-jobs/labelZplTemplate.js",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "8c9009b38e6abc8aac278127e5821bc51dfbaf8060d24dca598bd54051e0f69f"
+  },
+  {
+    "path": "backend/src/modules/print-jobs/print-budget.js",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "42d87d4375695c00344ad266c5f30dfc8aa00c4c40facb180194167c16042d32"
+  },
+  {
+    "path": "backend/src/modules/print-jobs/print-jobs.command.js",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "d3519ba369112c2471facfec9e0bc013f61ba4ea8e0ce12d6b70d0051cfdc057"
+  },
+  {
+    "path": "backend/src/modules/print-jobs/print-jobs.controller.js",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "3658db39b661e46f7962fb3319f2fbde1a89189f045e8b3135b4f047882ce427"
+  },
+  {
+    "path": "backend/src/modules/print-jobs/print-jobs.dispatch.js",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "02b385510703b2cef699712948fc9d15863298203a52c5b60219e033665fb540"
+  },
+  {
+    "path": "backend/src/modules/print-jobs/print-jobs.helpers.js",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "2776175288dcce5e488f320ca0b8543a7d75b5674e1f9b2f632a05c324704f99"
+  },
+  {
+    "path": "backend/src/modules/print-jobs/print-jobs.label-command.js",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "0eed2c47701ee14990617cf5da391942cd086b06a45fa8cf7e1edf2ef5b110fa"
+  },
+  {
+    "path": "backend/src/modules/print-jobs/print-jobs.middleware.js",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "30362e5c6135122c3ce7aaad4d4a94d9e6f91c8fa3abd303652af3c844f21134"
+  },
+  {
+    "path": "backend/src/modules/print-jobs/print-jobs.query.js",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "9a6f125007fd20d02a9a8acddb9d4330d8aa8d05531cd3682a6135630a9e4d6a"
+  },
+  {
+    "path": "backend/src/modules/print-jobs/print-jobs.routes.js",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "b520443f17f69059e86177cc27e2023f67a2b737021670b646796c7f923c9e37"
+  },
+  {
+    "path": "backend/src/modules/print-jobs/print-jobs.service.js",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "523aed36772aac91b7da4c798822122d6b6fae9644a6ccacd3ab70c8041bee60"
+  },
+  {
+    "path": "backend/src/modules/print-templates/document-layout.js",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "513c3df4e780b5759dc72beed965cc47d6601739a22d0af6cb1f92a08bc5f745"
+  },
+  {
+    "path": "backend/src/modules/print-templates/print-templates.service.js",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "e6f56e348e5f10e6c700c7435e00192fa52f6621940493b77f3e66a33cfa951f"
+  },
+  {
+    "path": "backend/src/modules/printer-bindings/printer-bindings.controller.js",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "60855e4fe9a23893595a9086ffd9c97e1e2b8e36f37b112e9369558ac4a388fa"
+  },
+  {
+    "path": "backend/src/modules/printer-bindings/printer-bindings.service.js",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "670f8219fa164cd6ea0fb8bd4db136e969cc6a07a6c5d02659441ed45003aa41"
+  },
+  {
+    "path": "backend/src/modules/printers/print-client-auth.js",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "bda56a4400d118293f0ce4e12a72879edbcde4631130c78472eb3a220089cb67"
+  },
+  {
+    "path": "backend/src/modules/printers/printers.controller.js",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "743b925f6b8ccfe1772b55d00d53b6b99f4551f2e17f4d856461e2d4f2c23e9a"
+  },
+  {
+    "path": "backend/src/modules/printers/printers.routes.js",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "650cd7920f7d2431321375655ce8906e7c85eafb43cd9e39364478c3a83fa575"
+  },
+  {
+    "path": "backend/src/modules/printers/printers.service.js",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "95f1196f692fd3a94f5fa49ce105f44516330ff5555a819aac153f353f8986b4"
   },
   {
     "path": "backend/src/modules/products/productSearch.js",
@@ -440,6 +660,26 @@
     "sha256": "5e52c9356713e5a15a7584c9038a4404b63e9500c6448923cc02844dd3cf3d3f"
   },
   {
+    "path": "backend/src/modules/reports/reports.controller.js",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "985639e693fcfa425fb405d511c1d0d40a66b41d9f35c49c0124839010a22929"
+  },
+  {
+    "path": "backend/src/modules/reports/reports.query.js",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "f8a22c8a682d09fca1e6b4109727d759b7ac6bd533cdb902c63fab5c1fec0a7a"
+  },
+  {
+    "path": "backend/src/modules/return-tasks/return-tasks.controller.js",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "7dd502aad3768bf8edc1dc0f24296278fbfdf3a6b6067d26a68bf67e6dd15734"
+  },
+  {
+    "path": "backend/src/modules/return-tasks/return-tasks.service.js",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "e8ffc5c92f1a4ff29e4371eff7454539fa9d649b35cd1ad0078624cbf406f60f"
+  },
+  {
     "path": "backend/src/modules/returns/return-events.service.js",
     "purpose": "业务、权限与迁移",
     "sha256": "0852db122060aa57afaaf399e24373db5e8bca461235571733d38e104911c7cb"
@@ -500,9 +740,29 @@
     "sha256": "8328672c3c5747563523b6358a059813a203e311271acafb068ddbad9f8363e7"
   },
   {
+    "path": "backend/src/modules/search/search.controller.js",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "3ed5b72706ef0b82ae61c5064884907f33e3a3a84e930bb4a9038a0d6a3c3237"
+  },
+  {
+    "path": "backend/src/modules/search/search.routes.js",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "978bd3b40f558f7821faa3ed30e5d2c30c3fb3d1c337308122fb42e40b906542"
+  },
+  {
     "path": "backend/src/modules/search/search.service.js",
     "purpose": "业务、权限与迁移",
     "sha256": "50526e633c7759fff6f23cd1c79092dab4b08f1ac33df38e95063de3f6deea17"
+  },
+  {
+    "path": "backend/src/modules/stockcheck/stockcheck.controller.js",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "1992012d0bbdf0dd58498bb64ef7b4356bfaf91235cd9932277a53f6bfe615be"
+  },
+  {
+    "path": "backend/src/modules/stockcheck/stockcheck.service.js",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "b3c0e1a801fc86190d05ec4304d95d15e17050d52f4d8fec60238097b7357d82"
   },
   {
     "path": "backend/src/modules/suppliers/suppliers.routes.js",
@@ -533,6 +793,11 @@
     "path": "backend/src/modules/transfer/transfer.service.js",
     "purpose": "业务、权限与迁移",
     "sha256": "0a3315aa219d2b54b0ede6452126d554c4c5af6dc6dfa78beb7b4364b16a3f54"
+  },
+  {
+    "path": "backend/src/modules/users/users.service.js",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "1b848d3a2b504d193eee21822aa840139437de07a6263f09f42fd910a85fe4a9"
   },
   {
     "path": "backend/src/modules/warehouse-tasks/warehouse-tasks.command.js",
@@ -575,6 +840,31 @@
     "sha256": "6c9641a9b031ec636711620e3f20b78684b74456a604fca96ccefe5cc9280b09"
   },
   {
+    "path": "backend/src/utils/trustedProxy.js",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "faa84093ddaa00f55b7d729256c2292de9ba88bc9da168104d8637dd2e7d5887"
+  },
+  {
+    "path": "desktop/lib/localPrint.js",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "77ea2ab595ba7b70e7c7f38023f2692fb7eed06738fd1b8375bc33cba22e7f47"
+  },
+  {
+    "path": "desktop/lib/printBudget.js",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "284c820d132a6d6267b1b0ad2d626578e9703f8955cc2245ecbce7678f2eeb78"
+  },
+  {
+    "path": "desktop/lib/printClientIdentity.js",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "337b4a94802dd00d819de4f7e52d0c88e6f36c34ec5c39989987aeac96de3918"
+  },
+  {
+    "path": "desktop/main.js",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "6f240e8bb2168d9e877d15d9b1357eb74cc01d69a7eded40638a0611cb941d54"
+  },
+  {
     "path": "desktop/package-lock.json",
     "purpose": "桌面鉴权及版本",
     "sha256": "54ec4e28cca3598be3c6dffc0f97fad4d551100e84e76273be8c64d15360d478"
@@ -583,6 +873,21 @@
     "path": "desktop/package.json",
     "purpose": "桌面鉴权及版本",
     "sha256": "df7cefdabd1624f1bb3217fe08d2a1dcdcc885fca8589a68db9f39c84cc5d100"
+  },
+  {
+    "path": "desktop/preload.js",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "344d66ecd7993da4328e34bfb37e9a58a198ea974c47e03729396b987c5826e8"
+  },
+  {
+    "path": "docker-compose.yml",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "c6a0a7cf41f672282ccb397c26dfd4f37d7072ac27a9d48355349b7f22175770"
+  },
+  {
+    "path": "docker/Caddyfile",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "592a71e25ec5ed242b5e9eca453f34bf72a47f4abe43960a94e00efc3e205fa2"
   },
   {
     "path": "docs/2026-10-06-go-live-runtime-result.md",
@@ -1108,7 +1413,7 @@
     "path": "docs/acceptance/2026-10-07-release/integration-files.json",
     "purpose": "主题说明与验收证据",
     "sha256": null,
-    "hashExclusionReason": "清单自身不递归计算摘要"
+    "hashExclusionReason": "清单自引用，其他路径按当前候选文件字节核对"
   },
   {
     "path": "docs/backend-api-sql-conventions.md",
@@ -1123,7 +1428,7 @@
   {
     "path": "docs/finance-permission-time.md",
     "purpose": "说明与原分支验收证据",
-    "sha256": "9893e3b07fa79f9aef27977beee6076892722d382eb4e7de9c126db98c01477f"
+    "sha256": "94f6710577d818763d337da08ab48b66c30d9b7f20be56adf5e8178bb16a3f31"
   },
   {
     "path": "docs/frontend-pda-conventions.md",
@@ -1138,7 +1443,7 @@
   {
     "path": "docs/print-deploy-ops.md",
     "purpose": "说明与原分支验收证据",
-    "sha256": "f71219d64d7645043d441a869c42faf272faa18ced81d11fb7690d83b542ab86"
+    "sha256": "7a968763d6f06451fbfbf262582637dcbc7e408b037cb8627bb1ad1157058b98"
   },
   {
     "path": "docs/release-notes/0.13.0.md",
@@ -1153,12 +1458,32 @@
   {
     "path": "docs/release-v0.13.0-integration.md",
     "purpose": "主题说明与验收证据",
-    "sha256": "52b859962d60f3a70209485f517cc456f6c2bc0549817adf7b104e9c4f728fce"
+    "sha256": "16f139cfb619d2975f139390cd6708450a3b2fbe6d5a3d798c647cc224d67dda"
   },
   {
     "path": "docs/runbooks/failure-recovery.md",
     "purpose": "说明与原分支验收证据",
     "sha256": "f66194367cffa5a73d4dbff7a4b73c9bd82830fa906170c4de16d5df0e33960d"
+  },
+  {
+    "path": "docs/security-print-remediation-2026-10-06.md",
+    "purpose": "安全整改与交付记录",
+    "sha256": "46c923c63dc141493fbee172d02855fb8b81a5e4506822ab7151d0e07c58b4af"
+  },
+  {
+    "path": "docs/security-release-remediation-2026-10-06.md",
+    "purpose": "安全整改与交付记录",
+    "sha256": "92d4f3a22bd4320d7e863ea2dfdb3cc6cdd3317266437064fe6b050d0ce48251"
+  },
+  {
+    "path": "docs/security-scan-remediation-2026-10-06.md",
+    "purpose": "安全整改与交付记录",
+    "sha256": "15ad512d5afd5c6a2fc1f6aafa5784972a8b8dbe5661a2425150742e38df7594"
+  },
+  {
+    "path": "docs/security-scan-remediation-paths-2026-10-06.txt",
+    "purpose": "安全整改与交付记录",
+    "sha256": "df22f1152c7610e58d583f01e05c76d12dff9d09bef47478119b29b809423a94"
   },
   {
     "path": "docs/security-scope-remediation-2026-10-06.md",
@@ -1236,14 +1561,24 @@
     "sha256": "d6fac2a1a197b09f0e152f5c407c0ff6d085ea4a091b65757125b9ca85370476"
   },
   {
+    "path": "docs/superpowers/plans/2026-10-06-security-scan-remediation.md",
+    "purpose": "安全整改与交付记录",
+    "sha256": "d3d62c6a5228e905b7da797d8364dce11dceac35b36e970d07a703b6f49421f3"
+  },
+  {
     "path": "docs/verification-commands.md",
     "purpose": "说明与原分支验收证据",
-    "sha256": "6160ef6914362ff4e7b3c78880298812c82cec75f84d25e190f71e7688170216"
+    "sha256": "fbbf5914090d8626869a4b756e263393f27c66ab2f4725c020227ad85e48f58c"
   },
   {
     "path": "frontend/android/app/build.gradle",
     "purpose": "界面、会话与PDA",
     "sha256": "96079f966b6c4fc6a6652cd4e71493b7da20a33024a782589f597143a13ea73d"
+  },
+  {
+    "path": "frontend/android/gradle/wrapper/gradle-wrapper.properties",
+    "purpose": "前端安全与交付",
+    "sha256": "c0a7692f2fb1a8a6ad10e21f98e993188ddd29ad642fb35637033181642d992a"
   },
   {
     "path": "frontend/package-lock.json",
@@ -1396,6 +1731,16 @@
     "sha256": "5475f6962a7aebaaa40719b94f3da2f61ffecb649bdce8499e7af5f2a6f3d502"
   },
   {
+    "path": "frontend/src/components/desktop/DesktopPrintClientBridge.test.tsx",
+    "purpose": "前端安全与交付",
+    "sha256": "d3c2fb2bcf1de819a0a161218dd8f7975b3ebf2291b7e10630f307793322e8d1"
+  },
+  {
+    "path": "frontend/src/components/desktop/DesktopPrintClientBridge.tsx",
+    "purpose": "前端安全与交付",
+    "sha256": "e5ed34071b9608b14d38dd0d37616f312f2bac1e6a32c7b38186332c3f9c6a83"
+  },
+  {
     "path": "frontend/src/components/finder/CustomerFinder.tsx",
     "purpose": "界面、会话与PDA",
     "sha256": "5f3ef97d141518f19fff7852637d6fb8e78c95532237534b4022bbe43a46efdf"
@@ -1424,6 +1769,11 @@
     "path": "frontend/src/components/print/TemplateRenderer.profile.test.tsx",
     "purpose": "界面、会话与PDA",
     "sha256": "61e754877ad34a76ca5d8be4d4bfbe4b52781e060ac3ca0483e1bdfd9d212e4c"
+  },
+  {
+    "path": "frontend/src/components/print/TemplateRenderer.security.test.tsx",
+    "purpose": "前端安全与交付",
+    "sha256": "26de83188614a42b811a5510626afb85b10617aa17ba5f6e577dd09771635ca7"
   },
   {
     "path": "frontend/src/components/print/TemplateRenderer.tsx",
@@ -1656,6 +2006,11 @@
     "sha256": "f0eabc872b33e64d267ab7dbd722218494b3239e8772185f6732dafe22da5b62"
   },
   {
+    "path": "frontend/src/hooks/usePrinters.ts",
+    "purpose": "前端安全与交付",
+    "sha256": "eb45a2f1e0444359f48fa3322068deffde4cf61a9ff6de57fd34621768bbe5b9"
+  },
+  {
     "path": "frontend/src/hooks/useProductQtyPolicies.test.tsx",
     "purpose": "界面、会话与PDA",
     "sha256": "600b61f9ba0b69d30fcff70332b71fe436132be82bd5735798aedb3091533942"
@@ -1716,6 +2071,11 @@
     "sha256": "5b0eef70b170b607512edc61cbdeef4df0c8dd464165fba3f4451a54526c548d"
   },
   {
+    "path": "frontend/src/lib/desktopLocalPrint.ts",
+    "purpose": "前端安全与交付",
+    "sha256": "5e65fbb52b57cd91ee1e3a677934f56d94b6eb34e4af00b13cd71d627e3781d0"
+  },
+  {
     "path": "frontend/src/lib/disposalHandlingRecovery.test.ts",
     "purpose": "界面、会话与PDA",
     "sha256": "553e091ed5c05ea9c5c72b8b0306a923a835c275751548c960cc4985d64386e8"
@@ -1729,6 +2089,11 @@
     "path": "frontend/src/lib/disposalRecovery.ts",
     "purpose": "界面、会话与PDA",
     "sha256": "f509ed07c0d51e4775d8ee1efc168c874a83135df83372ef2f6a76b6fa495eb4"
+  },
+  {
+    "path": "frontend/src/lib/documentPrintBudget.ts",
+    "purpose": "前端安全与交付",
+    "sha256": "21cad31fa93fec3aa56e2a2e4d0b10333ca684f34403c11733fb7ad18baaec3d"
   },
   {
     "path": "frontend/src/lib/orderPrintData.profile.test.ts",
@@ -1759,6 +2124,11 @@
     "path": "frontend/src/lib/permission-codes.ts",
     "purpose": "界面、会话与PDA",
     "sha256": "101e75174315467bb27d2b701a63b0b126ff25dda5cf601b3e8d17d0e95b396d"
+  },
+  {
+    "path": "frontend/src/lib/printJobContent.ts",
+    "purpose": "前端安全与交付",
+    "sha256": "6f1441fde55da2966bf33c5daed8bf4e9f6f19a31c6d27c20fce3d5cd68152a4"
   },
   {
     "path": "frontend/src/lib/saleReorder.ts",
@@ -2216,6 +2586,11 @@
     "sha256": "4723326e4c37d9d1f965743bdae758e80cb6852fb2e8e1b26c35ba73b42c78d4"
   },
   {
+    "path": "frontend/src/pages/settings/printers/index.tsx",
+    "purpose": "前端安全与交付",
+    "sha256": "8932b9d29d496065a25f2ecef452507f77df1e03fc31b9942a786c83267388bc"
+  },
+  {
     "path": "frontend/src/pages/supplier-refunds/CreateRefundPage.tsx",
     "purpose": "界面、会话与PDA",
     "sha256": "62aaee39cffff16d84e3770d5ad1d0669536e8066402de4fd16c0633a3f56eed"
@@ -2351,9 +2726,14 @@
     "sha256": "523603a3f7d7961c59537cd6fecadc1fca7b7609dd60c8ba614d9ad21b81a40a"
   },
   {
+    "path": "frontend/src/vite-env.d.ts",
+    "purpose": "前端安全与交付",
+    "sha256": "62576a5b4a84be96f8eaf366b21bf3290f27db4313350b47d9e6cf26a44bdcbe"
+  },
+  {
     "path": "package.json",
     "purpose": "协作约定或配置样例",
-    "sha256": "2c1d4d1f256aa8b5372facb063b9b55d0379ce8e4b5bfbfaafaefe4e831af6ce"
+    "sha256": "20fecd24442b7dac558389f6a4efef29720732886e58b6d1e6d6cdfbd96b828c"
   },
   {
     "path": "scripts/backup-db.sh",
@@ -2368,7 +2748,7 @@
   {
     "path": "scripts/generate-image-sbom.sh",
     "purpose": "运维与发布工具",
-    "sha256": "c2bcde388fd07de56a4b35502fb400639db6bde439ba37d675868cae2d30b70d"
+    "sha256": "a97dbf2a3f6dbd271f5f69dd6e63d84805941affa8dd2c1679f7fffa288038d9"
   },
   {
     "path": "scripts/generate-status-constants.js",
@@ -2386,14 +2766,34 @@
     "sha256": "63a0cc8424693ba18ddf0cb257c501b11bc05fa3cf360d174bc59210ee4f6a83"
   },
   {
+    "path": "scripts/local-release-relay.py",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "f17849178c425ef44a4828b939a8e2a4933c7f67d2edd71e675f9a49a84f5f8b"
+  },
+  {
     "path": "scripts/monitor.sh",
     "purpose": "运维、发布与验收",
     "sha256": "05311cd31fb19792d6f37cd435b48b81d2aacbb3a86be2e7fc051cadb9c7a0f3"
   },
   {
+    "path": "scripts/receive-deploy-artifact.py",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "c535803de2d7dc2ee94ca9b55beaad76a1ee5cb7a69b09b42644206edc7daa88"
+  },
+  {
+    "path": "scripts/release-artifact-manifest.cjs",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "91186d401ed11a6d7c616aba6f8a7741fe42fa04053105d557f61dd621a071f0"
+  },
+  {
     "path": "scripts/repair-smoke-ephemeral.sh",
     "purpose": "运维、发布与验收",
     "sha256": "d5b6bf324f47893ae89c0a05f0a4d8d4e7032d075e3052fb82c5a5307c5be429"
+  },
+  {
+    "path": "scripts/resolve-release-target.cjs",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "5ec9710a9c5bf373c668ad5523f07b2d938b52eaf730bc88aa72952dec965d87"
   },
   {
     "path": "scripts/restore-check.sh",
@@ -2406,9 +2806,49 @@
     "sha256": "1666443b340b0bd527e4475a794190abc3fba6f526a5eff010c48fcc327c304a"
   },
   {
+    "path": "scripts/verify-nsis-archive.cjs",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "67723fb47c4fd27c24f72cff5a3d6414cacf5ea1ecdaa0088446f2cf4af732bf"
+  },
+  {
+    "path": "scripts/write-image-provenance.cjs",
+    "purpose": "安全整改与完整发布门禁",
+    "sha256": "a00e80e58948bd7e0c6039f0eee84cb0e6e624a560e6721772550a29efefe71c"
+  },
+  {
+    "path": "tests/accounting-period.smoke.test.js",
+    "purpose": "安全回归、夹具与来源验证",
+    "sha256": "bf915fd378474a5f5ba6fbc9b3b99955c30f116597af57d9213c9d2f89aef4fd"
+  },
+  {
     "path": "tests/approval-list-batches.test.js",
     "purpose": "回归与隔离守卫",
     "sha256": "2e4ea51d2b1845b3dc021e4031ff3fef848ef6509e7219460a771f7f472ba06a"
+  },
+  {
+    "path": "tests/audit-2026-09-18.smoke.test.js",
+    "purpose": "安全回归、夹具与来源验证",
+    "sha256": "6931298b4e021db2022d6a043b1fff7318b88b85e59a43a3ef4e624ea4159c24"
+  },
+  {
+    "path": "tests/audit-inventory.smoke.test.js",
+    "purpose": "安全回归、夹具与来源验证",
+    "sha256": "2311e1bb7d8f587d4eee33cbf46381257b371f17833d6cabe5a19cb6e7ce13b7"
+  },
+  {
+    "path": "tests/audit-remediation-security.smoke.test.js",
+    "purpose": "安全回归、夹具与来源验证",
+    "sha256": "83ae16e27245c22a51344c5115986c036abac66c66bb76c293bf63c8a60e7873"
+  },
+  {
+    "path": "tests/auth-session-remediation.smoke.test.js",
+    "purpose": "安全回归、夹具与来源验证",
+    "sha256": "b2a6658247898383fcd7714c32ebb704a8b0f2c73c7bc25143a5b2498ee255c8"
+  },
+  {
+    "path": "tests/auth-token-remediation.smoke.test.js",
+    "purpose": "安全回归、夹具与来源验证",
+    "sha256": "8b3646fe573cc5b40ae113a9ba3b8aa34dd15093555ac9c49cc8f221e3db4c89"
   },
   {
     "path": "tests/browser-smoke-live.test.js",
@@ -2436,6 +2876,21 @@
     "sha256": "21848fae9a3388e9cef198d43726a4734cd0b9b42fd7d23b6aa5999bc95d145a"
   },
   {
+    "path": "tests/db-session-timezone.smoke.test.js",
+    "purpose": "安全回归、夹具与来源验证",
+    "sha256": "a90e1b4808e9cce9f3160fe09a21b30f2a841f3046e4a53bb5854689b52dbab8"
+  },
+  {
+    "path": "tests/db-session-timezone.test.js",
+    "purpose": "安全回归、夹具与来源验证",
+    "sha256": "cac10453c2bd3ad2c10b52f28b6ffbd44204007a305f0923fa6366f81ce1daa1"
+  },
+  {
+    "path": "tests/deploy-artifact.test.js",
+    "purpose": "安全回归、夹具与来源验证",
+    "sha256": "0543626448acdf871e575dee8c5991a00714df19cecc1b7e7804b06fb57b6e43"
+  },
+  {
     "path": "tests/deployment-resources.test.js",
     "purpose": "回归与隔离守卫",
     "sha256": "408b38441fbf22619ee2a8d34ef33414e53ef2f82385961d1d78fc79d24bd64c"
@@ -2448,7 +2903,7 @@
   {
     "path": "tests/disposal-handling-create.test.js",
     "purpose": "回归与隔离守卫",
-    "sha256": "ab79b27a32883c57652556e6c23e0b73c9970b7157f9416ea83d3a079da49ea1"
+    "sha256": "b87ad9301114424983e8083bdac5bd0921e0eda70a131c9d8f69d3fcd7b7a97e"
   },
   {
     "path": "tests/disposal-handling-facts.test.js",
@@ -2481,6 +2936,11 @@
     "sha256": "327c6f31eff387edcda8b00c3f7db01088d85403a02e0e3ec8f3e8ef1a13ff89"
   },
   {
+    "path": "tests/document-activity.test.js",
+    "purpose": "安全回归、夹具与来源验证",
+    "sha256": "5b6ab4116c8e635d16fef15bb1e142b2d8c41e4c1b230b97661bff0717fda73d"
+  },
+  {
     "path": "tests/expense-pay-backfill-integration.test.js",
     "purpose": "回归与隔离守卫",
     "sha256": "5349345a772e10d92d97b25500ec82699acefff247e7fad5bf573e4fef275466"
@@ -2508,12 +2968,17 @@
   {
     "path": "tests/go-live-runner.test.js",
     "purpose": "回归与隔离守卫",
-    "sha256": "7d692d69396763f347d83ca20ad8b3292e24004d691bc4744566c9a4895d049e"
+    "sha256": "515ec2ca02898711bb0917fb6ab7bf27bff8aced00f8932b3cddfe038bd8096c"
   },
   {
     "path": "tests/go-live-runtime.smoke.test.js",
     "purpose": "回归与隔离守卫",
     "sha256": "a30a3ada48e46b09963143055a6af951d9e95b8431610ceccfc0f14f94925323"
+  },
+  {
+    "path": "tests/helpers/auditInventoryTransaction.js",
+    "purpose": "安全回归、夹具与来源验证",
+    "sha256": "7edbbfefffc021da34a9975701af80c1c847a8ca542faada29575186efca8aa1"
   },
   {
     "path": "tests/helpers/disposal-handling-fixture.js",
@@ -2529,6 +2994,21 @@
     "path": "tests/helpers/goLiveRuntimeFixture.js",
     "purpose": "回归与隔离守卫",
     "sha256": "27f31ddb4adf0169a4f670ede1bef8c09e9db85e744f8120b04f37f4c05940e2"
+  },
+  {
+    "path": "tests/helpers/ownedPrintFixture.js",
+    "purpose": "安全回归、夹具与来源验证",
+    "sha256": "5a21a4ccb26683e6cbdd2f1b29e5fd60845dd6375de6f0aa10e4f432ed8d9bd7"
+  },
+  {
+    "path": "tests/helpers/printClientIdentity.js",
+    "purpose": "安全回归、夹具与来源验证",
+    "sha256": "a1b2b63fd3404f2cf2541b011a3fd1ecd6c6b7673b7a32aa54c6673b4ad2bed3"
+  },
+  {
+    "path": "tests/helpers/smokeTestKit.js",
+    "purpose": "安全回归、夹具与来源验证",
+    "sha256": "67d6e7d6a54b41e36470df6980eedcf599c58a58c1fc55f09ecff2b62d851a78"
   },
   {
     "path": "tests/helpers/supplier-refunds-accounting-fixture.js",
@@ -2576,6 +3056,21 @@
     "sha256": "d69b9743b8391c448e41906393cc1253eb4798f91e2ba7072b5f276574463975"
   },
   {
+    "path": "tests/local_release_relay_test.py",
+    "purpose": "安全回归、夹具与来源验证",
+    "sha256": "fca8bc0d648671f10df076ea5e9928b27379476fd13db7e656451157059541a0"
+  },
+  {
+    "path": "tests/mainline.smoke.test.js",
+    "purpose": "安全回归、夹具与来源验证",
+    "sha256": "d0b8ad096ea56dbd162636d2e7b5a7df673822078fc1aa0c8789aca391f8a3f0"
+  },
+  {
+    "path": "tests/masterdata-import.smoke.test.js",
+    "purpose": "安全回归、夹具与来源验证",
+    "sha256": "8950dce9692c6bf6c197a72f99473039519dbd8094456dad44dc03180969ce38"
+  },
+  {
     "path": "tests/masterdata.smoke.test.js",
     "purpose": "回归与合成夹具",
     "sha256": "8f887aad1d16877eccc9e955ccc8619ec85358294d90f1f7b3af72e08b3361b6"
@@ -2596,14 +3091,34 @@
     "sha256": "7c4f2bff466afb807b0737540e2c472a593b0a736e4c92e4ce8e9984589edd7d"
   },
   {
+    "path": "tests/pack-done-replay.smoke.test.js",
+    "purpose": "安全回归、夹具与来源验证",
+    "sha256": "18403a809d11bd0d4a5a9b7f33603d760ca7abe5f9ba7447e174872f3731de84"
+  },
+  {
     "path": "tests/party-profile.test.js",
     "purpose": "回归与隔离守卫",
     "sha256": "789664755cd27cd70e45546f4b7702878cbbe8229a43bd5e47a35b6fefd886df"
   },
   {
+    "path": "tests/pick-label-reprint-lifecycle.smoke.test.js",
+    "purpose": "安全回归、夹具与来源验证",
+    "sha256": "3470135f9d87a74f10acfe396d0c0883e07ccfa7c570551c0c948607232fc67b"
+  },
+  {
+    "path": "tests/print-barcode-void-receipt.smoke.test.js",
+    "purpose": "安全回归、夹具与来源验证",
+    "sha256": "0c663c46f7cdf7bd81376ca99ff5bcef2e32c776c2ff867245bcb4e945ed50bd"
+  },
+  {
     "path": "tests/print-jobs-warehouse-scope.smoke.test.js",
     "purpose": "回归与隔离守卫",
     "sha256": "aecf24d6edc29b670ddaf93fa58205c5631bb7527334a9031be44cbb05b05956"
+  },
+  {
+    "path": "tests/print-queue.smoke.test.js",
+    "purpose": "安全回归、夹具与来源验证",
+    "sha256": "095d3de9672cdbd800a467bf31f25694cb7757616294de3773ee43d44a04bc85"
   },
   {
     "path": "tests/procurement-pagination.test.js",
@@ -2623,7 +3138,12 @@
   {
     "path": "tests/purchase-return-lock-budget.test.js",
     "purpose": "回归与隔离守卫",
-    "sha256": "0f19dc2154b9e3b7f922123cdc844d1183fe6988c7cd85830d84d73e62eda164"
+    "sha256": "64e728715f06a7446452640a34a2733396a9d737949360877a23b7a3dd8a4b13"
+  },
+  {
+    "path": "tests/qty-execution-boundaries.test.js",
+    "purpose": "安全回归、夹具与来源验证",
+    "sha256": "897dac17764d312ef648dbdd2fa78cc940a5c109a158173da44d280b72b72e32"
   },
   {
     "path": "tests/release-orchestration.test.js",
@@ -2641,14 +3161,19 @@
     "sha256": "2b8f84c7f3c098961b5d9dacd62b18869847c76df74bbd59026559579f2a1dbc"
   },
   {
+    "path": "tests/sale-commercial-cleanup.test.js",
+    "purpose": "安全回归、夹具与来源验证",
+    "sha256": "d46e154dca239f57efc51de7ac1d6d0c569cce2945f1d4887a7507de432e1d43"
+  },
+  {
     "path": "tests/sale-commercial-lifecycle.smoke.test.js",
     "purpose": "回归与合成夹具",
-    "sha256": "e070001d7c892d14d43ea59be527e9025989d4094e6203a39a007a2719a3d3fc"
+    "sha256": "692bb5c67d94a2344df1c96c4af98e0420203adff743e918e9f59299026dcb6d"
   },
   {
     "path": "tests/sale-commercial-partial-cancel.smoke.test.js",
     "purpose": "回归与合成夹具",
-    "sha256": "eaa15a893683d4aca1dc2efa776a4713a7fa125b953cdd921687f4cfad9fb5af"
+    "sha256": "6741d4d40d123073e6828e2df617edb7822b81ad76f40be8a271ffee1bc91bc4"
   },
   {
     "path": "tests/sale-reorder-source.test.js",
@@ -2666,9 +3191,19 @@
     "sha256": "9eb25bfec6ee76cd7a1f32d89729b190236945b9931ad13eeb6221ba3c5e1036"
   },
   {
+    "path": "tests/security-api-ingress.test.js",
+    "purpose": "安全回归、夹具与来源验证",
+    "sha256": "e5284a8932c67c3bf1db0aca02aca6764089bc4ad4870434966560a502f26209"
+  },
+  {
     "path": "tests/security-image-sbom.test.js",
     "purpose": "回归与合成夹具",
-    "sha256": "26f6176707fc209900022964f1367a3b343c337fea49cc915e0dbb2f6feaefe7"
+    "sha256": "fe62fc1258595e197b6676e92e06e6ad15b0d2ce3ec2f2fe1187d5e4cfa20775"
+  },
+  {
+    "path": "tests/security-import-budget.test.js",
+    "purpose": "安全回归、夹具与来源验证",
+    "sha256": "8dd9dec529d0b0198e0d50638364ae23b206966b4864e71d0a5e089bbf3ae01f"
   },
   {
     "path": "tests/security-import-profile-integration.test.js",
@@ -2676,9 +3211,44 @@
     "sha256": "96f743f34ac944887756a19ae16939e61309eedb03f310060c50a52958914206"
   },
   {
+    "path": "tests/security-migrations.smoke.test.js",
+    "purpose": "安全回归、夹具与来源验证",
+    "sha256": "d9eda4132e38611f415c37d301674c8e7b5a5d33aed0683194d2911083a0f7e1"
+  },
+  {
+    "path": "tests/security-print-credentials.smoke.test.js",
+    "purpose": "安全回归、夹具与来源验证",
+    "sha256": "23f57a1b66bfa081000bb2c10ce9bc216e51ace829a8d64e09b9f7fc4942d44d"
+  },
+  {
+    "path": "tests/security-print-remediation.test.js",
+    "purpose": "安全回归、夹具与来源验证",
+    "sha256": "63bc574ce49467aa796207bf4e5ace33376a84815afac88cf0f8a1eb8aa9c278"
+  },
+  {
+    "path": "tests/security-release-artifact.test.js",
+    "purpose": "安全回归、夹具与来源验证",
+    "sha256": "cc2b0332600e32c551a4143f51e855025ddcbb4cf521a3702106ea94c934f982"
+  },
+  {
+    "path": "tests/security-release-boundaries.test.js",
+    "purpose": "安全回归、夹具与来源验证",
+    "sha256": "5accfee1c1984c8680405dc4e71b498a5ae54bbec6d6560d26a62ca97f29ce82"
+  },
+  {
+    "path": "tests/security-release-target.test.js",
+    "purpose": "安全回归、夹具与来源验证",
+    "sha256": "d4b99268f622b476e3a5916faa842b0505fc1a6e364b9fad5a6cd706942891a4"
+  },
+  {
     "path": "tests/security-scope-inbound-transfer.test.js",
     "purpose": "回归与隔离守卫",
     "sha256": "0f432b1b0206e330ccb180bd07e3e81e70889f1738975e01f7b2afe18a0bb9e6"
+  },
+  {
+    "path": "tests/security-scope-pda.test.js",
+    "purpose": "安全回归、夹具与来源验证",
+    "sha256": "e5ddf1291108baf210b5f459f6155f25ca5dbef4f361faed54f582e01406968d"
   },
   {
     "path": "tests/security-scope-plastic-box.test.js",
@@ -2691,9 +3261,29 @@
     "sha256": "d93447c0c88dc1a28fe16bb037079d7c3c87670b03eccdec25e3d65be6a30285"
   },
   {
+    "path": "tests/security-scope-search-approvals.test.js",
+    "purpose": "安全回归、夹具与来源验证",
+    "sha256": "1e909dbf7f57cabb8b6b094f0dfea36b72de6479b028fce6c8106062782eb6e8"
+  },
+  {
     "path": "tests/security-scope-warehouse.smoke.test.js",
     "purpose": "回归与隔离守卫",
     "sha256": "5f3f8f87f2af891975158ed7d5c4a469a5190d167842c779ac765f2f4eeb566f"
+  },
+  {
+    "path": "tests/security-session-cleanup.test.js",
+    "purpose": "安全回归、夹具与来源验证",
+    "sha256": "37526dba1348bf0d8885f9c60ffda23cc51de6adc1604f3287d2e020966affa5"
+  },
+  {
+    "path": "tests/security-session-family.smoke.test.js",
+    "purpose": "安全回归、夹具与来源验证",
+    "sha256": "3376f121c26e42fb94121a5c72c23ffcb4268ce6adb22af2b966bfbfa5395175"
+  },
+  {
+    "path": "tests/security-session-family.test.js",
+    "purpose": "安全回归、夹具与来源验证",
+    "sha256": "83c19f5ea8a60f29f2fb94d0633afa1d91e2d2e7afb9f3f6a3829791f1554074"
   },
   {
     "path": "tests/sorting-bin-recovery.smoke.test.js",

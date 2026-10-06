@@ -15,7 +15,7 @@
 | archive/party-ledger-v0.9.10 | e4e907f | 两处承运商配置规则已与当前实现一致；归档中的生产配置、安装包及旧日志不重新纳入 |
 | 其余已核对分支 | 已合入 main 或无独有有效改动 | 保留分支及工作树，不重复覆盖现行实现 |
 
-原 go-live 与 dingtalk 工作树的逐路径 SHA-256 与快照仍一致。快照位于本机独占临时目录 `flowcube-release-20261007-h0i_iql4`；原工作树未被 reset/clean/覆盖。候选逐路径及用途见 [integration-files.json](acceptance/2026-10-07-release/integration-files.json)。原分支未提交的内容现由整合提交保存，原工作树保留供原任务继续核对。
+原 go-live 与 dingtalk 工作树的逐路径 SHA-256 与快照仍一致。快照位于本机独占临时目录 `flowcube-release-20261007-h0i_iql4`；原工作树未被 reset/clean/覆盖。完整版本逐路径清单已扩展至 671 项，覆盖 v0.12.0 基线以来的安全整改、分支整合与门禁订正；文件用途及字节摘要见 [integration-files.json](acceptance/2026-10-07-release/integration-files.json)。原分支未提交的内容现由整合提交保存，原工作树保留供原任务继续核对。
 
 远端另有 21 个 Dependabot 更新提案分支，属于独立的待评审依赖 PR，未作为已完成的本地开发任务合并。保留原 PR；Vite/Zod/Node 类型等 major 升级仍按现行兼容约束单独处理，当前锁定依赖继续经过完整 Security audit。此次分支整合覆盖上表的本地开发成果，不宣称合并了这些远端提案。
 
@@ -63,6 +63,23 @@
 - GitHub 工作流结构校验通过；完整 actionlint 的既有 shellcheck 提示单独保留，未称其全套通过。新独占 runner shellcheck 通过；实际发布仍须全部同 SHA 门禁。
 
 本地日志保存在 `/tmp/flowcube-release-*`，不能代替远端同 SHA 结果。最终 SHA/运行 ID/产物摘要/线上 revision 由本版结果记录补充。
+
+## 首轮远端门禁失败与补丁
+
+首轮提交 `828f2c9` 的 Tests 运行 `37507417613` 和 Security 运行 `37507417618` 均失败，发布停在门禁阶段，尚未切换生产应用或打 `v0.13.0` tag。不能用上文原本地候选结果覆盖这次远端失败。
+
+| 首轮失败 | 实际原因 | 当前补丁 |
+|---|---|---|
+| Tests：费用跨期补录，28 项通过 / 2 项失败 | CI 的 UTC MySQL 会话将批准日写为 `2026-10-06`，同一时刻北京业务日为 `2026-10-07`；首次凭证日期及原 ACK 日期断言失败。mysql2 的 `timezone` 只控制 Date 编解码，不能改变数据库 `NOW()` 的会话时区 | 新应用连接明确初始化 `+08:00` 会话、原锁超时及字符集；getConnection/query/execute 等待初始化完成，失败销毁连接，获取预算包含初始化。保留首次批准日和跨月原键语义，新增 UTC 时刻、跨日/月及初始化失败/超时守卫与真实数据库 smoke |
+| Tests：库存审计 F05，24 项通过 / 1 项失败 | 服务在 BEGIN 前要求本次 RC；旧 audit wrapper 已开启外层事务，隔离设置先失败，随后回滚尚未创建的 `service_transaction` savepoint，又将原错误覆盖 | 仅该 F05 在外层 BEGIN 前明确 RC，其余含并发反例保持 RR；adapter 核精确 RC 请求并追踪服务 savepoint 归属，保留真实业务 SQL、外层夹具回滚及原绑定/库存/结案断言 |
+| Tests：销售商业 cleanup VM | 新会话族收尾函数未注入真实 main 的 VM，干净成功路径出现 `cleanupFixtureSessionFamilies is not defined`；补齐后继续发现同一 finally 中 family/pool 双失败会丢失其中一个错误 | VM 注入本轮自有 family 边界；真实两个 smoke 将 family 清理与 pool.end 分别纳入错误收集，family 失败仍尝试关闭 pool，原业务与每项收尾错误分别保留；增加独立及同时失败用例 |
+| Security：Gitleaks Docker fallback | `/out/gitleaks-report.sarif` 报告路径不可写，实际 `permission denied`，没有可据此认定扫描通过的报告 | Docker 扫描按 runner UID/GID 写自有报告目录；SBOM 同类输出边界同步，保留固定镜像摘要、只读源码、无网络、资源上限及扫描失败门禁，不新增目录/规则豁免 |
+
+首轮 PDA 运行 `37507417756` 原生构建成功，但 fresh signer 在签名验证成功后，来源清单拒绝额外条目 `Unexpected artifact entry`；部署等待也因 Security 门禁失败停止。桌面 main 验证运行 `37507417596` 成功，发布步骤未执行。实际合成密钥签名复现 `.apk.idsig` 为额外条目；验签后只核普通、非符号链接的本次精确侧文件并移除，清单白名单及 APK 签名方案保持。现有 SDK34 实签名及新 shell、来源写入/核验通过，另名侧文件及符号链接仍拒绝，删除处理块反证失败；新 SHA 的 SDK35 签名/发布仍待远端，不用原生构建成功代替签名/发布完成。
+
+首轮 Security 的四个依赖 audit（backend、frontend、desktop、scripts/browser-smoke）通过；这只证明四个 audit 子项，不代表整个 Security 工作流通过。首轮失败日志保留为 `/tmp/flowcube-release-remote-tests-first-failed.log` 与 `/tmp/flowcube-release-remote-security-first-failed.log`。
+
+补丁真实复验已自然通过：全新专属 MySQL 的系统时区为 UTC、全局 SYSTEM，应用会话 +08:00；北京日界/月界的 NOW 写入与 Date 参数一致，完整 280 迁移及 timezone/go-live 共 11/11，容器/卷/归属文件退出已核实。独立测试库费用期间 30 项、财务期间 1 项、库存审计 25 项、两个销售商业 smoke 及各自清理证明通过；新增离线相关 62/62、后端 lint 通过。完整 71 组静态二轮有 70 组通过，处置夹具 6 例因用空对象替代真实状态规则而失败，换用真实单源规则后该组 249/249 通过，原失败记录保留；其余组没有新增修改，不重复验证。最新发布链路专项 46/46 通过；新候选完整远端 CI 尚未开始，不能将本地结果称为远端通过。timezone smoke 已接入现有费用期间和专属 go-live 入口，细则见 `docs/verification-commands.md`；最终须核新的同 SHA 完整 Tests/Security 结果，不能仅重跑失败步骤后沿用旧成功 job。前文旧本地验证依据及下文现场限制继续保留。
 
 ## 宿主配置与升级
 

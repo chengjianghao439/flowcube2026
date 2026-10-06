@@ -717,7 +717,10 @@ async function main() {
     } finally {
       // Transport closure is outside every business cleanup and proof stage.
       try { await clean('server.close', async () => { if (server) await new Promise((resolve,reject) => server.close(error => error ? reject(error) : resolve())) }) }
-      finally { await clean('pool.end', async () => { try { await cleanupFixtureSessionFamilies(pool) } finally { await pool.end() } }) }
+      finally {
+        try { await clean('session families', () => cleanupFixtureSessionFamilies(pool)) }
+        finally { await clean('pool.end', () => pool.end()) }
+      }
     }
     const failures = [...cleanupErrors]
     if (businessError) failures.unshift(businessError)

@@ -40,10 +40,15 @@ async function probe(file, mode, source = fs.readFileSync(path.join(__dirname, f
     } else callback()
   } }
   const pool = { async end() { events.push('pool.end'); if (fault === 'pool-error' || fault === 'all-errors') fail('OWN_POOL_CLOSE_FAILURE') } }
-  const fn = new AsyncFunction('fs', 'fixture', 'f', 'q', 'assert', 'server', 'pool', 'ref', 'ownPrint', 'originalSvc', 'operator', 'randomUUID', 'http', 'token', 'require', 'console', 'original', `return (${mainSource(source)})()`)
+  const cleanupFixtureSessionFamilies = async currentPool => {
+    assert.equal(currentPool, pool, 'family cleanup uses the same owned fixture pool')
+    events.push('families.cleanup')
+    if (fault === 'family-error' || fault === 'all-errors') fail('OWN_FAMILY_CLEANUP_FAILURE')
+  }
+  const fn = new AsyncFunction('fs', 'fixture', 'f', 'q', 'assert', 'server', 'pool', 'ref', 'ownPrint', 'originalSvc', 'operator', 'randomUUID', 'http', 'token', 'require', 'console', 'original', 'cleanupFixtureSessionFamilies', `return (${mainSource(source)})()`)
   let error, result
   try {
-    result = await fn({ writeFileSync() { if (fault === 'manifest-error' || fault === 'all-errors') fail('OWN_MANIFEST_FAILURE') } }, fixture, fixture, q, assert, server, pool, 'private-cleanup-probe', null, {}, () => ({}), () => '', async () => ({}), '', createRequire(path.join(__dirname, file)), { log() {} }, original)
+    result = await fn({ writeFileSync() { if (fault === 'manifest-error' || fault === 'all-errors') fail('OWN_MANIFEST_FAILURE') } }, fixture, fixture, q, assert, server, pool, 'private-cleanup-probe', null, {}, () => ({}), () => '', async () => ({}), '', createRequire(path.join(__dirname, file)), { log() {} }, original, cleanupFixtureSessionFamilies)
   } catch (e) { error = e }
   return { original, failures, events, error, result }
 }
@@ -51,6 +56,8 @@ function verify(p, mode) {
   const fault = mode.replace(/^success-/, '')
   assert.equal(p.events.filter(e => e === 'server.close').length, 1, 'server.close must be attempted exactly once')
   assert.equal(p.events.filter(e => e === 'pool.end').length, 1, 'pool.end must be attempted even if server.close fails')
+  assert.equal(p.events.filter(e => e === 'families.cleanup').length, 1, 'owned families are cleaned before closing the pool')
+  assert.ok(p.events.indexOf('families.cleanup') < p.events.indexOf('pool.end'), 'family cleanup must precede pool closure')
   if (p.original) assert.ok(includes(p.error, p.original), 'original business exception must survive cleanup failures')
   for (const error of p.failures) assert.ok(includes(p.error, error), 'every cleanup exception must be retained')
   if (fault === 'assertion-error') assert.ok(p.error.errors.some(e => e?.cause?.code === 'ERR_ASSERTION'), 'proof assertion must be collected with original failure')
@@ -59,7 +66,7 @@ function verify(p, mode) {
   else assert.ok(p.error)
 }
 for (const file of scripts) {
-  for (const mode of ['clean', 'assertion-error', 'query-error', 'manifest-error', 'device-error', 'server-error', 'pool-error', 'all-errors', 'clean-success', 'success-query-error', 'success-server-error', 'success-all-errors']) {
+  for (const mode of ['clean', 'assertion-error', 'query-error', 'manifest-error', 'device-error', 'server-error', 'pool-error', 'family-error', 'all-errors', 'clean-success', 'success-query-error', 'success-server-error', 'success-family-error', 'success-all-errors']) {
     test(`${file}: actual finally preserves errors and closes resources (${mode})`, async () => verify(await probe(file, mode), mode))
   }
 }

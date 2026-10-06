@@ -295,9 +295,16 @@ jobs:
           files=(unsigned/*.apk)
           test "${#files[@]}" -eq 1
           mkdir -p out
+          signed_apk="out/$(basename "${files[0]}")"
           "$ANDROID_HOME/build-tools/35.0.0/zipalign" -p -f 4 "${files[0]}" "$RUNNER_TEMP/flowcube-aligned.apk"
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" sign --ks "$key" --ks-key-alias "$PDA_SIGNING_KEY_ALIAS" --ks-pass env:PDA_SIGNING_STORE_PASSWORD --key-pass env:PDA_SIGNING_KEY_PASSWORD --out "out/$(basename "${files[0]}")" "$RUNNER_TEMP/flowcube-aligned.apk"
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "out/$(basename "${files[0]}")"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" sign --ks "$key" --ks-key-alias "$PDA_SIGNING_KEY_ALIAS" --ks-pass env:PDA_SIGNING_STORE_PASSWORD --key-pass env:PDA_SIGNING_KEY_PASSWORD --out "$signed_apk" "$RUNNER_TEMP/flowcube-aligned.apk"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$signed_apk"
+          # APK delivery does not use incremental-install V4 sidecars. Remove only
+          # the regular sidecar this signing invocation generated; all other entries fail provenance.
+          if [[ -e "$signed_apk.idsig" || -L "$signed_apk.idsig" ]]; then
+            test -f "$signed_apk.idsig" && test ! -L "$signed_apk.idsig"
+            rm -- "$signed_apk.idsig"
+          fi
           cp unsigned/version.json out/version.json
       - name: Bind signed APK provenance
         env:

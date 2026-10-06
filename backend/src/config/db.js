@@ -22,15 +22,32 @@ const pool = mysql.createPool({
   connectTimeout: 10000,
 })
 
-boundPoolAcquisition(pool, { timeoutMs: env.DB_ACQUIRE_TIMEOUT_MS })
-
-/** 会话字符集与排序规则，避免极少数环境下连接未按 utf8mb4 解释中文（姓名乱码、排序异常） */
+// mysql2 timezone only controls Date serialization/parsing. NOW()/CURRENT_TIMESTAMP
+// and DATE_FORMAT need the same server-session zone, including UTC-hosted MySQL.
+const sessionReady = new WeakMap()
 pool.on('connection', (connection) => {
-  void connection.query('SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci')
-  // 事务锁等待超时：极端死锁时快速失败，防止连接挂满 wait_timeout（默认8小时）。
-  // InnoDB lock_wait_timeout 默认 50 秒，设为 30 秒让死锁更快暴露。
-  void connection.query('SET SESSION innodb_lock_wait_timeout = 30')
+  const client = connection.promise()
+  const ready = client.query("SET SESSION time_zone = '+08:00', innodb_lock_wait_timeout = 30")
+    .then(() => client.query('SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci'))
+  sessionReady.set(connection, ready)
+  // Connection events fire before acquisition resolves. Retain the rejection for
+  // the borrower while observing it immediately, so setup failure is never unhandled.
+  void ready.catch(() => {})
 })
+
+const acquire = pool.getConnection.bind(pool)
+pool.getConnection = async () => {
+  const conn = await acquire()
+  try {
+    const ready = sessionReady.get(conn.connection)
+    if (!ready) throw new Error('数据库连接会话未初始化')
+    await ready
+    return conn
+  } catch (error) { conn.destroy(); throw error }
+}
+// Apply this last: its query/execute wrappers also borrow through initialization,
+// and its budget includes setup. A late initialized connection is returned without SQL.
+boundPoolAcquisition(pool, { timeoutMs: env.DB_ACQUIRE_TIMEOUT_MS })
 
 async function testConnection() {
   try {
