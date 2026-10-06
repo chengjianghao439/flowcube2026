@@ -190,15 +190,20 @@ fi
 CTR_CREATED=1
 d start "$CTR_ID" >/dev/null
 
-# 等待实例可连接（首启需初始化数据目录，最长约 180 秒）。
+# 首启的临时 server 只开放 socket，mysqladmin ping 即使认证失败也返回 0。
+# 只认本批口令通过最终 TCP server 的 SELECT 1；连接限 2 秒，失败间隔 2 秒。
+mysql_ready() {
+  d exec -e MYSQL_PWD="$ROOT_PW" "$CTR_ID" mysql --protocol=TCP --host=127.0.0.1 --port=3306 --connect-timeout=2 \
+    -uroot -N -B -e 'SELECT 1' >/dev/null 2>&1
+}
 for _ in $(seq 1 90); do
-  if d exec -e MYSQL_PWD="$ROOT_PW" "$CTR_ID" mysqladmin ping -uroot --silent >/dev/null 2>&1; then
+  if mysql_ready; then
     break
   fi
   sleep 2
 done
-if ! d exec -e MYSQL_PWD="$ROOT_PW" "$CTR_ID" mysqladmin ping -uroot --silent >/dev/null 2>&1; then
-  echo '[repair-ephemeral] 临时实例未能在预期时间内就绪。' >&2
+if ! mysql_ready; then
+  echo '[repair-ephemeral] 临时实例未能在预期时间内通过 TCP 本批口令认证（SELECT 1）。' >&2
   exit 1
 fi
 

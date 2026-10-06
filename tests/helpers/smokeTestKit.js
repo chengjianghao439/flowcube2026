@@ -4,6 +4,7 @@ const path = require('path')
 const { configureTestEnvironment, validateTestEnvironment } = require('./testEnvironment')
 configureTestEnvironment()
 const mysql = require(path.resolve(__dirname, '../../backend/node_modules/mysql2/promise'))
+const { boundPoolAcquisition } = require('../../backend/src/utils/boundedPool')
 
 const { PERMISSIONS } = require('../../backend/src/constants/permissions')
 
@@ -88,14 +89,36 @@ function createHttpClient(baseUrl, options = {}) {
   }
 }
 
-function createDbPool() {
-  return mysql.createPool({
+function createDbPool({ acquireTimeoutMs = 5000 } = {}) {
+  const pool = mysql.createPool({
     ...validateTestEnvironment(),
     waitForConnections: true,
     connectionLimit: 5,
     timezone: '+08:00',
     charset: 'utf8mb4',
   })
+  // Driver timezone only handles Date values. Fixture CURDATE()/NOW() must use
+  // Beijing business time too, even when the owned MySQL server defaults to UTC.
+  const sessionReady = new WeakMap()
+  pool.on('connection', connection => {
+    const ready = connection.promise().query("SET SESSION time_zone = '+08:00'")
+    sessionReady.set(connection, ready)
+    void ready.catch(() => {})
+  })
+  const acquire = pool.getConnection.bind(pool)
+  pool.getConnection = async () => {
+    const conn = await acquire()
+    try {
+      const ready = sessionReady.get(conn.connection)
+      if (!ready) throw new Error('测试数据库连接会话未初始化')
+      await ready
+      return conn
+    } catch (error) { conn.destroy(); throw error }
+  }
+  // Native pool.query/execute acquire internally. The bounded wrappers route
+  // both through setup, include it in the budget, and release late connections.
+  // This remains a separate fixture pool; end() and app-pool ownership are unchanged.
+  return boundPoolAcquisition(pool, { timeoutMs: acquireTimeoutMs })
 }
 
 async function dbQuery(pool, sql, params) {

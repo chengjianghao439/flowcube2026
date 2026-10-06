@@ -103,6 +103,8 @@ npm run test:permissions
 
 `audit-inventory` 的 service 事务用 savepoint 保留外层夹具回滚；服务要求本次 RC 时，该用例必须在外层 BEGIN 前显式选择 RC，不能在活动事务里再执行 `SET TRANSACTION`。只有 F05「部分到货兑现绑定、释放剩余后允许采购短装结案」采用 RC，其余（含 RR 并发反例）明确保持 RR。`helpers/auditInventoryTransaction.js` 仅适配精确的本次 RC 请求并核外层声明，不改 SESSION/GLOBAL、不跳过业务 SQL；未创建服务 savepoint 的错误不再被不存在的 savepoint 回滚覆盖。`purchase-return-lock-budget.test.js`（既有 CI 专项）加载真实 `closeRemaining`，离线反证旧 wrapper 的错误覆盖，并核业务拒绝、释放后成功、服务提交不提交外层夹具、外层回滚和其余 RR；仍须真实 MySQL 审计整套自然通过，离线模型不证明数据库事务结果。
 
+`npm run smoke:audit-2026-09-18` 已在 Tests CI regression job 执行。2026-10-07 第二轮 CI（应用 SHA `6914fc3`）的自主审批用例用空处置单期待异人批准成功，实际被现行完整明细守卫以 `409 DISPOSAL_SCRAP_ONLY` 拒绝（`/tmp/flowcube-release-regression-second-failed.log`）。夹具已补有效报废类型 3 明细，保留同人批准/驳回的 `403 SELF_APPROVAL_DENIED` 和异人批准进入状态 3 的断言，并核审批人/时间、批准不扣库存。新增异人批准空单、旧类型 1/2 及类型 3 混入旧行的拒绝证明，核原单头/明细、容器/缓存、库存流水与报废台账不变；服务与业务守卫未修改。该补丁本地语法/diff 检查及既有 `test:disposal-transition` 离线守卫 13/13 通过；真实 MySQL 深审计整套已自然通过 32/32；第二轮 CI 本身仍是失败记录，后续 regression 专项在下述专属实例补验，最终以新 SHA 完整 CI 为准。
+
 `npm run test:sql-identifier`（SQL 标识符插值守卫：每个表名/列名/列清单/别名插值都要有白名单校验）同为纯离线断言，与上一条同批执行。
 `npm run test:eslint-disable-rationale`（lint 禁用理由守卫：逐行 `eslint-disable-next-line`/`-line` 上方 15 行内必须有一条说明性注释；整文件 `/* eslint-disable */` 只允许出现在机器产物白名单里，生成器输出该字符串不算指令）同为纯离线断言，与上两条同批执行。
 `npm run test:logger-args-order`（logger 参数顺序守卫：`logger.info/warn` 的第二个参数必须是对象，即 `(msg, meta, module_)`；只传 msg 合法，`logger.error` 因签名含 err 不参与）同为纯离线断言，与上三条同批执行。
@@ -914,6 +916,8 @@ node --test --test-concurrency=1 tests/go-live-runtime.smoke.test.js
 `npm run test:expense-pay-backfill-integration` 覆盖费用付款闭期/申请/借用事务、固定首次批准日重试和 smoke 精确清理；`smoke:expense-pay-period-guard` 为真实资金回归。`smoke:operation-alerts` 只在当前独立测试库创建随机事务夹具并回滚，不发机器人。新增 PDA 塑料盒 HTTP 场景接入 `smoke:security-scan-remediation` 中的 scope 测试。
 
 首轮 UTC MySQL 批准日故障后的 timezone 接线：`test:expense-pay-backfill-integration` 已包含离线 `tests/db-session-timezone.test.js`，覆盖新连接会话时区、getConnection/query/execute 等待初始化、初始化失败销毁连接及预算超时无业务 SQL。`smoke:expense-pay-period-guard` 先执行 `node --test tests/db-session-timezone.smoke.test.js`，成功后才执行原费用期间 HTTP/MySQL 套件；Tests CI 的原费用期间步骤因此实际可达该 smoke。`smoke:go-live-runtime` 使用 `node --test --test-concurrency=1` 串行执行 timezone 与原 go-live 两文件，继续由 `smoke:go-live-owned` 的专属实例 runner 调用，不能直接用于共享 3307。
+
+共享 `smokeTestKit` 的夹具池也须初始化北京时间会话：只配置 mysql2 的 `timezone:'+08:00'` 不会改变 SQL `CURDATE()`；UTC 默认实例中，仪表盘夹具的到期日会比应用账龄池少一天。`createDbPool` 保留显式测试环境与独立池、客户端时区和原关闭契约，新连接等待 `SET SESSION time_zone='+08:00'` 成功后才借出，失败销毁且不执行业务 SQL；最后复用 `boundPoolAcquisition` 覆盖 getConnection/query/execute，默认 5 秒等待包含初始化，迟到连接归还而不继续执行业务。既有 timezone 离线套件加载真实应用/夹具池工厂，仅替换 mysql2 传输层，核 UTC 日/月界、三入口等待/拒绝/超时和独立池生命周期。共享池修前有效反证为 12 通过/11 失败，修后 23/23；仪表盘保留原 `[1,1,2,1,1]` 到期分布与产品算法，真实专属 MySQL 复验由发布主任务统一执行，离线结果不代替它。
 
 真实 timezone smoke 使用应用连接池，明确核 `@@session.time_zone='+08:00'`；仅本连接临时表和 `SET timestamp` 固定首轮 UTC 故障时刻及跨日/月边界，对照 `NOW()`、客户端 Date 写入、DATE_FORMAT 和北京日函数，后续时间推进也不能改变已保存原批准日。finally 恢复本连接时钟、删除临时表并关闭连接池，不改服务器全局时区或持久业务记录。仍须显式独立测试环境；当前新真实 DB 复验与完整 CI 正在进行，不能据接线或离线守卫称其已通过。
 

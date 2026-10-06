@@ -355,6 +355,7 @@ test('三个会写入文件：门在首次写入之前，且未过门只关连�
 const DOCKER_STUB = `#!/usr/bin/env node
 'use strict'
 const fs = require('node:fs')
+const crypto = require('node:crypto')
 const args = process.argv.slice(2)
 if (process.env.FC_STUB_LOG) fs.appendFileSync(process.env.FC_STUB_LOG, JSON.stringify(args) + '\\n')
 const sp = process.env.FC_STUB_STATE
@@ -425,6 +426,8 @@ if (cmd === 'volume' && rest[1] === 'inspect') {
 if (cmd === 'create') {
   if (process.env.FC_STUB_CREATE_FAIL === '1') { process.stderr.write('Error: create failed\\n'); process.exit(1) }
   const name = flag('--name')
+  const password = args.find((value) => value.startsWith('MYSQL_ROOT_PASSWORD=')) || ''
+  st.passwordHash = crypto.createHash('sha256').update(password.slice('MYSQL_ROOT_PASSWORD='.length)).digest('hex')
   st.containers.push({ id: 'c'.repeat(64), name, exists: true, labels: labelsOf(), createdAt: new Date().toISOString() })
   save(); process.stdout.write('c'.repeat(64) + '\\n'); process.exit(0)
 }
@@ -454,6 +457,20 @@ if (cmd === 'inspect') {
 }
 if (cmd === 'exec') {
   const sql = rest.join(' ')
+  if (rest.includes('SELECT 1')) {
+    st.readinessAttempts = (st.readinessAttempts || 0) + 1
+    const password = rest.find((value) => value.startsWith('MYSQL_PWD=')) || ''
+    const authenticated = password && crypto.createHash('sha256').update(password.slice('MYSQL_PWD='.length)).digest('hex') === st.passwordHash
+    const tcp = rest.includes('--protocol=TCP') && rest.includes('--host=127.0.0.1') && rest.includes('--port=3306')
+    st.transportRejected = !tcp
+    save()
+    if (!tcp || !rest.includes('--connect-timeout=2') || process.env.FC_STUB_SOCKET_ONLY === '1' || st.readinessAttempts <= Number(process.env.FC_STUB_READY_AFTER || 0)) process.exit(1)
+    if (!authenticated || process.env.FC_STUB_AUTH_DENIED === '1') { process.stderr.write('ERROR 1045: Access denied (using password: YES)\\n'); process.exit(1) }
+    st.authenticated = true; save(); process.stdout.write('1\\n'); process.exit(0)
+  }
+  // mysqladmin ping reports a running server even when authentication is denied.
+  if (rest.includes('mysqladmin')) process.exit(0)
+  if (process.env.FC_STUB_STRICT_READINESS === '1' && !st.authenticated) { process.stderr.write('ERROR 1045: Access denied (using password: YES)\\n'); process.exit(1) }
   if (sql.includes('@@server_uuid')) { process.stdout.write('uuid-本批\\n'); process.exit(0) }
   if (sql.includes('SCHEMA_NAME')) { process.stdout.write(process.env.FC_STUB_DB_EXISTS === '1' ? 'flowcube_repair20260908_test\\n' : ''); process.exit(0) }
   process.exit(0)
@@ -474,21 +491,29 @@ function runRunner(opts = {}) {
   // npm stub：模拟迁移与 smoke 成功，同时把归属文件复制一份供测试检查（真实 smoke 运行时该文件
   // 由归属门读取，这里只验证字段是否齐全且形如真实 runner 写入的内容）。
   fs.writeFileSync(path.join(stubDir, 'npm'), NPM_STUB, { mode: 0o755 })
+  fs.writeFileSync(path.join(stubDir, 'sleep'), '#!/usr/bin/env node\nrequire("node:fs").appendFileSync(process.env.FC_STUB_SLEEP_LOG, JSON.stringify(process.argv.slice(2)) + "\\n")\n', { mode: 0o755 })
 
   const log = path.join(dir, 'calls.log')
   const statePath = path.join(dir, 'state.json')
   const ownershipCopy = path.join(dir, 'ownership-copy.json')
+  const sleepLog = path.join(dir, 'sleep.log')
   fs.writeFileSync(log, '')
+  fs.writeFileSync(sleepLog, '')
   fs.writeFileSync(statePath, JSON.stringify({ containers: [], volumes: [] }))
 
   // 只替换三处「与环境绑定」的行；其余逻辑原样运行。
   const raw = fs.readFileSync(SCRIPT_SRC, 'utf8')
-  const body = raw
+  let body = raw
     .replace(/^CTX=.*$/m, "CTX='fc-test-ctx'")
     .replace(/^CONFIG_DIR=.*$/m, `CONFIG_DIR="${configDir}"`)
     .replace(/^ROOT=.*$/m, `ROOT="${tmpRoot}"`)
   assert.notEqual(body, raw, 'runner 脚本结构变化：三处环境绑定的替换未生效')
   assert.match(body, new RegExp(`^CONFIG_DIR="${configDir}"$`, 'm'), 'CONFIG_DIR 未被替换')
+  if (opts.withoutTcp) {
+    const mutant = body.replace('--protocol=TCP ', '')
+    assert.notEqual(mutant, body, 'TCP 反证必须确实移除就绪命令的协议绑定')
+    body = mutant
+  }
   const script = path.join(dir, 'runner.sh')
   fs.writeFileSync(script, body, { mode: 0o755 })
 
@@ -509,6 +534,11 @@ function runRunner(opts = {}) {
       FC_STUB_NAME_TAKEN: opts.nameTaken ? '1' : '0',
       FC_STUB_DB_EXISTS: opts.dbExists ? '1' : '0',
       FC_STUB_OWNERSHIP_COPY: ownershipCopy,
+      FC_STUB_SLEEP_LOG: sleepLog,
+      FC_STUB_STRICT_READINESS: opts.strictReadiness ? '1' : '0',
+      FC_STUB_READY_AFTER: String(opts.readyAfter || 0),
+      FC_STUB_SOCKET_ONLY: opts.socketOnly ? '1' : '0',
+      FC_STUB_AUTH_DENIED: opts.authDenied ? '1' : '0',
     },
   })
   return {
@@ -517,6 +547,7 @@ function runRunner(opts = {}) {
     state: () => JSON.parse(fs.readFileSync(statePath, 'utf8')),
     configFiles: () => fs.readdirSync(configDir),
     ownership: () => JSON.parse(fs.readFileSync(ownershipCopy, 'utf8')),
+    sleeps: () => fs.readFileSync(sleepLog, 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse),
     cleanup: () => fs.rmSync(dir, { recursive: true, force: true }),
   }
 }
@@ -535,6 +566,39 @@ const NPM_STUB = [
 const cmdOf = (call) => (call[0] === '--context' ? call[2] : call[0])
 const subOf = (call) => (call[0] === '--context' ? call[3] : call[1])
 const failed = (run) => `status=${run.result.status} stderr=${run.result.stderr}`
+
+test('runner：临时socket服务不算就绪，TCP使用本批口令认证后才读取身份及建库', (t) => {
+  const run = runRunner({ strictReadiness: true, readyAfter: 2 })
+  t.after(() => run.cleanup())
+  assert.equal(run.result.status, 0, failed(run))
+  assert.equal(run.state().readinessAttempts, 4, '两次未就绪、一次成功及最后认证确认')
+  assert.deepEqual(run.sleeps(), [['2'], ['2']])
+  const readiness = run.calls.filter((call) => call.includes('SELECT 1'))
+  assert.ok(readiness.every((call) => call.includes('--protocol=TCP') && call.includes('--host=127.0.0.1') && call.includes('--port=3306') && call.includes('--connect-timeout=2')))
+  assert.ok(!run.calls.some((call) => call.includes('mysqladmin')))
+  const firstIdentity = run.calls.findIndex((call) => call.join(' ').includes('@@server_uuid'))
+  assert.ok(firstIdentity > run.calls.findLastIndex((call) => call.includes('SELECT 1')))
+  assert.equal(run.state().containers.length, 0)
+  assert.equal(run.state().volumes.length, 0)
+})
+
+for (const opts of [{ authDenied: true }, { socketOnly: true }, { withoutTcp: true }]) test(`runner：认证/TCP未就绪有限重试后拒绝且清理：${Object.keys(opts)[0]}`, (t) => {
+  const run = runRunner({ strictReadiness: true, ...opts })
+  t.after(() => run.cleanup())
+  assert.notEqual(run.result.status, 0)
+  assert.match(run.result.stderr, /TCP.*认证/)
+  assert.equal(run.state().readinessAttempts, 91, '90轮重试及最后一次认证确认')
+  assert.equal(run.sleeps().length, 90)
+  assert.ok(run.sleeps().every((args) => args.length === 1 && args[0] === '2'))
+  assert.ok(!run.calls.some((call) => /@@server_uuid|SCHEMA_NAME|CREATE DATABASE/.test(call.join(' '))))
+  assert.equal(run.state().containers.length, 0)
+  assert.equal(run.state().volumes.length, 0)
+  assert.deepEqual(run.configFiles(), [])
+  const create = run.calls.find((call) => cmdOf(call) === 'create')
+  const password = create.find((value) => value.startsWith('MYSQL_ROOT_PASSWORD=')).slice('MYSQL_ROOT_PASSWORD='.length)
+  assert.ok(!(run.result.stdout + run.result.stderr).includes(password), '口令不得出现在runner输出')
+  if (opts.withoutTcp) assert.equal(run.state().transportRejected, true)
+})
 
 test('runner：正常路径先验 context、先建卷再建容器、建库前自检、结束清理并复查为空', (t) => {
   const run = runRunner()

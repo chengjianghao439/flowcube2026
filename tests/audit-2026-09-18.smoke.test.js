@@ -161,7 +161,18 @@ async function main() {
       const [[r]] = await conn.query('SELECT COALESCE(quantity,0) q FROM inventory_stock WHERE product_id=? AND warehouse_id=?', [productId, warehouseId])
       return Number(r?.q ?? 0)
     }
-    return { wh, wh2, code, productId, poId, poiId, inboundTask, activeContainer, containerRow, stockQty, saleOrder, saleItem, ledgerQty }
+    async function disposalOrder(makerId, disposeTypes = [3]) {
+      const id = await insert(`INSERT INTO inventory_disposal_orders
+        (disposal_no,warehouse_id,warehouse_name,status,total_value,operator_id,operator_name)
+        VALUES (?,?,'审计回归仓',2,?,?,'审计制单人')`, [unique('DP'), wh, disposeTypes.length * 10, makerId])
+      if (disposeTypes.length) {
+        await conn.query(`INSERT INTO inventory_disposal_items
+          (disposal_id,product_id,product_code,product_name,unit,quantity,unit_value,dispose_type)
+          VALUES ?`, [disposeTypes.map(disposeType => [id, productId, code, '审计回归', '个', 1, 10, disposeType])])
+      }
+      return id
+    }
+    return { wh, wh2, code, productId, poId, poiId, inboundTask, activeContainer, containerRow, stockQty, saleOrder, saleItem, ledgerQty, disposalOrder }
   }
 
   const tests = []
@@ -707,31 +718,70 @@ async function main() {
     assert.deepEqual([kdRow2.credential_ref, kdRow2.monthly_account, Number(kdRow2.waybill_enabled)], ['KD_REF2', 'KD001', 1])
   })
 
-  test('★P2 呆滞处置单不得自行审批（approve 是库存注销的唯一闸门）', async f => {
+  test('★P2 合法报废单不得自行批准或驳回，异人批准仅推进审批状态', async f => {
     const disposalSvc = require('../backend/src/modules/disposal/disposal.service')
     const makerId = 990001
-    const id = await insert(`INSERT INTO inventory_disposal_orders
-      (disposal_no,warehouse_id,warehouse_name,status,operator_id,operator_name)
-      VALUES (?,?,'审计回归仓',2,?,'审计制单人')`, [unique('DP'), f.wh, makerId])
+    const containerId = await f.activeContainer(10)
+    const beforeContainer = await f.containerRow(containerId)
+    const beforeStock = await f.stockQty()
+    const id = await f.disposalOrder(makerId)
 
     // 制单人自己审批 → 必须 403（无 allow_self_approve 豁免时）
     await assert.rejects(
       () => disposalSvc.approve(id, { userId: makerId, realName: '审计制单人' }, null),
       (e) => { assert.equal(e.statusCode, 403); assert.equal(e.code, 'SELF_APPROVAL_DENIED'); return true },
     )
-    // 换个人审批 → 放行
+    const [[pending]] = await conn.query('SELECT status,approved_by,approved_at FROM inventory_disposal_orders WHERE id=?', [id])
+    assert.deepEqual([Number(pending.status), pending.approved_by, pending.approved_at], [2, null, null], '自批被拒后仍待审批，无审批留痕')
+    // 完整合法的类型 3 明细换个人审批 → 放行；实际库存注销仍须另走执行入口。
     await disposalSvc.approve(id, { userId: makerId + 1, realName: '审计审批人' }, null)
-    const [[row]] = await conn.query('SELECT status FROM inventory_disposal_orders WHERE id=?', [id])
+    const [[row]] = await conn.query('SELECT status,approved_by,approved_by_name,approved_at,disposed_at FROM inventory_disposal_orders WHERE id=?', [id])
     assert.equal(Number(row.status), 3, '他人审批后应进入已批准(3)')
+    assert.equal(Number(row.approved_by), makerId + 1)
+    assert.equal(row.approved_by_name, '审计审批人')
+    assert.ok(row.approved_at, '成功批准必须保存审批时间')
+    assert.equal(row.disposed_at, null, '批准不能被当作已执行')
+    assert.deepEqual(await f.containerRow(containerId), beforeContainer, '批准不能扣减容器')
+    assert.equal(await f.stockQty(), beforeStock, '批准不能改库存缓存')
 
     // 驳回同样不得自审
-    const id2 = await insert(`INSERT INTO inventory_disposal_orders
-      (disposal_no,warehouse_id,warehouse_name,status,operator_id,operator_name)
-      VALUES (?,?,'审计回归仓',2,?,'审计制单人')`, [unique('DP'), f.wh, makerId])
+    const id2 = await f.disposalOrder(makerId)
     await assert.rejects(
       () => disposalSvc.reject(id2, { reason: '测试驳回', operator: { userId: makerId, realName: '审计制单人' } }, null),
-      (e) => { assert.equal(e.code, 'SELF_APPROVAL_DENIED'); return true },
+      (e) => { assert.equal(e.statusCode, 403); assert.equal(e.code, 'SELF_APPROVAL_DENIED'); return true },
     )
+    const [[rejectedSelf]] = await conn.query('SELECT status,approved_by,approved_at,reject_reason FROM inventory_disposal_orders WHERE id=?', [id2])
+    assert.deepEqual([Number(rejectedSelf.status), rejectedSelf.approved_by, rejectedSelf.approved_at, rejectedSelf.reject_reason], [2, null, null, null], '自驳回被拒后不得推进状态或写原因')
+  })
+
+  test('★P2 空单、旧处理类型及混合明细不得被异人批准', async f => {
+    const disposalSvc = require('../backend/src/modules/disposal/disposal.service')
+    const makerId = 990001
+    const containerId = await f.activeContainer(10)
+    const beforeContainer = await f.containerRow(containerId)
+    const beforeStock = await f.stockQty()
+    const [[beforeLogs]] = await conn.query('SELECT COUNT(*) n FROM inventory_logs WHERE product_id=? AND warehouse_id=?', [f.productId, f.wh])
+    for (const disposeTypes of [[], [1], [2], [3, 1], [3, 2]]) {
+      // 直接插入历史形态；新建接口已禁止旧类型，不能靠当前 create 伪造旧单。
+      const id = await f.disposalOrder(makerId, disposeTypes)
+      const [[beforeHead]] = await conn.query('SELECT * FROM inventory_disposal_orders WHERE id=?', [id])
+      const [beforeItems] = await conn.query('SELECT * FROM inventory_disposal_items WHERE disposal_id=? ORDER BY id', [id])
+      await assert.rejects(
+        () => disposalSvc.approve(id, { userId: makerId + 1, realName: '审计审批人' }, null),
+        e => { assert.equal(e.statusCode, 409); assert.equal(e.code, 'DISPOSAL_SCRAP_ONLY'); return true },
+        `类型 ${JSON.stringify(disposeTypes)} 必须由完整明细守卫拒绝，不以自批拒绝冒充`,
+      )
+      const [[afterHead]] = await conn.query('SELECT * FROM inventory_disposal_orders WHERE id=?', [id])
+      const [afterItems] = await conn.query('SELECT * FROM inventory_disposal_items WHERE disposal_id=? ORDER BY id', [id])
+      assert.deepEqual(afterHead, beforeHead, '拒绝批准不得推进状态或写审批留痕')
+      assert.deepEqual(afterItems, beforeItems, '拒绝批准不得重写历史明细')
+      assert.deepEqual(await f.containerRow(containerId), beforeContainer, '拒绝批准不得扣减容器')
+      assert.equal(await f.stockQty(), beforeStock, '拒绝批准不得改库存缓存')
+      const [[afterLogs]] = await conn.query('SELECT COUNT(*) n FROM inventory_logs WHERE product_id=? AND warehouse_id=?', [f.productId, f.wh])
+      assert.equal(Number(afterLogs.n), Number(beforeLogs.n), '拒绝批准不得新增库存流水')
+      const [[scrapped]] = await conn.query('SELECT COUNT(*) n FROM disposal_scrapped WHERE disposal_id=?', [id])
+      assert.equal(Number(scrapped.n), 0, '拒绝批准不得落报废台账')
+    }
   })
 
   test('★P2 软删后必须能用同一编码重建（active_unique_guard 由生成列推导）', async f => {

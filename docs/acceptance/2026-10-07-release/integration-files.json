@@ -1443,7 +1443,7 @@
   {
     "path": "docs/print-deploy-ops.md",
     "purpose": "说明与原分支验收证据",
-    "sha256": "7a968763d6f06451fbfbf262582637dcbc7e408b037cb8627bb1ad1157058b98"
+    "sha256": "a8a63e8fbd36e2df725e7288fe644d372f3b57e957bb2b6fec2124d15a24b5f8"
   },
   {
     "path": "docs/release-notes/0.13.0.md",
@@ -1458,7 +1458,7 @@
   {
     "path": "docs/release-v0.13.0-integration.md",
     "purpose": "主题说明与验收证据",
-    "sha256": "16f139cfb619d2975f139390cd6708450a3b2fbe6d5a3d798c647cc224d67dda"
+    "sha256": "5910874a0933efebd6725d2a9a8b4c45fd901982803adefabce3359a701b2e12"
   },
   {
     "path": "docs/runbooks/failure-recovery.md",
@@ -1568,7 +1568,7 @@
   {
     "path": "docs/verification-commands.md",
     "purpose": "说明与原分支验收证据",
-    "sha256": "fbbf5914090d8626869a4b756e263393f27c66ab2f4725c020227ad85e48f58c"
+    "sha256": "eaf6259ee3ef327d8964d1e8a684daad82a0e88b4492f5de1cba09f61c5733ac"
   },
   {
     "path": "frontend/android/app/build.gradle",
@@ -2788,7 +2788,7 @@
   {
     "path": "scripts/repair-smoke-ephemeral.sh",
     "purpose": "运维、发布与验收",
-    "sha256": "d5b6bf324f47893ae89c0a05f0a4d8d4e7032d075e3052fb82c5a5307c5be429"
+    "sha256": "50adb88d2e5b2b933f4a2a90dc104e671bc0d83d75d793f8efc5a2137ee0fb74"
   },
   {
     "path": "scripts/resolve-release-target.cjs",
@@ -2828,7 +2828,7 @@
   {
     "path": "tests/audit-2026-09-18.smoke.test.js",
     "purpose": "安全回归、夹具与来源验证",
-    "sha256": "6931298b4e021db2022d6a043b1fff7318b88b85e59a43a3ef4e624ea4159c24"
+    "sha256": "08c42922b0e05d5ca15333ac6223baac791e447cfe65851f02922a212cab1342"
   },
   {
     "path": "tests/audit-inventory.smoke.test.js",
@@ -2883,7 +2883,7 @@
   {
     "path": "tests/db-session-timezone.test.js",
     "purpose": "安全回归、夹具与来源验证",
-    "sha256": "cac10453c2bd3ad2c10b52f28b6ffbd44204007a305f0923fa6366f81ce1daa1"
+    "sha256": "70ae1989f9000881ad9853086a342ae2f18c8e452a00edde1ecb1565a4dba8fd"
   },
   {
     "path": "tests/deploy-artifact.test.js",
@@ -2968,7 +2968,7 @@
   {
     "path": "tests/go-live-runner.test.js",
     "purpose": "回归与隔离守卫",
-    "sha256": "515ec2ca02898711bb0917fb6ab7bf27bff8aced00f8932b3cddfe038bd8096c"
+    "sha256": "dcfeec1325c2a5a6834e4f777e425a3ef549b909750dbcb9601f17acf3eb4557"
   },
   {
     "path": "tests/go-live-runtime.smoke.test.js",
@@ -3008,7 +3008,7 @@
   {
     "path": "tests/helpers/smokeTestKit.js",
     "purpose": "安全回归、夹具与来源验证",
-    "sha256": "67d6e7d6a54b41e36470df6980eedcf599c58a58c1fc55f09ecff2b62d851a78"
+    "sha256": "2bbf973b3719b988aecc24ab8e259f594d1be9aca48490e961741c849b5cfbea"
   },
   {
     "path": "tests/helpers/supplier-refunds-accounting-fixture.js",
