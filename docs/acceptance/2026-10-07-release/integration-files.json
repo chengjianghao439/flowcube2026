@@ -1443,7 +1443,7 @@
   {
     "path": "docs/print-deploy-ops.md",
     "purpose": "说明与原分支验收证据",
-    "sha256": "a8a63e8fbd36e2df725e7288fe644d372f3b57e957bb2b6fec2124d15a24b5f8"
+    "sha256": "cd3d4461d6c6e02e5c012711cdd51de150dcdda127afa4fb1f781f6ff3b279a6"
   },
   {
     "path": "docs/release-notes/0.13.0.md",
@@ -1458,7 +1458,7 @@
   {
     "path": "docs/release-v0.13.0-integration.md",
     "purpose": "主题说明与验收证据",
-    "sha256": "5910874a0933efebd6725d2a9a8b4c45fd901982803adefabce3359a701b2e12"
+    "sha256": "da30e6c8b129b87a25da629f76608a680c2e79ff5530a09d954214933feaa40f"
   },
   {
     "path": "docs/runbooks/failure-recovery.md",
@@ -2748,7 +2748,7 @@
   {
     "path": "scripts/generate-image-sbom.sh",
     "purpose": "运维与发布工具",
-    "sha256": "a97dbf2a3f6dbd271f5f69dd6e63d84805941affa8dd2c1679f7fffa288038d9"
+    "sha256": "81ccf6ff1a53b42daae388e2318d71d8f97121190d81ab2d3381d8d42e9acfc7"
   },
   {
     "path": "scripts/generate-status-constants.js",
@@ -3151,6 +3151,11 @@
     "sha256": "e15cb96558123e15008916ef3558032c742f9ad9beb0c044a66e1f031c086c2c"
   },
   {
+    "path": "tests/repair-smoke-instance-guard.test.js",
+    "purpose": "专属临时实例归属与 readiness 反证守卫",
+    "sha256": "606ba1e7ef028be9e34624a87d5c8267eee0229bb1be6e943a12f1e760846281"
+  },
+  {
     "path": "tests/return-payment-lock-order.test.js",
     "purpose": "回归与隔离守卫",
     "sha256": "95bb10aa127b8063ed97901970c4990d7bd465103333da9ea85b79234dee19a9"
@@ -3198,7 +3203,7 @@
   {
     "path": "tests/security-image-sbom.test.js",
     "purpose": "回归与合成夹具",
-    "sha256": "fe62fc1258595e197b6676e92e06e6ad15b0d2ce3ec2f2fe1187d5e4cfa20775"
+    "sha256": "5672b2d9d05be5754d6727920e09607b5eb04af6ae19722a142b12cfc3a0bea9"
   },
   {
     "path": "tests/security-import-budget.test.js",

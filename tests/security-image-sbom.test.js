@@ -6,7 +6,7 @@ const root = path.resolve(__dirname, '..')
 // dependencies (93677374) + the Linux musl canvas package (31015095). This is a
 // measured lower bound: fonts, npm cache, and other build layers need more space.
 const measuredBackendLayerBytes = 294607349
-for (const scenario of ['success', 'scanner-fails', 'invalid-sbom', 'undersized-cache', 'missing-user']) test('image SBOM CLI isolates scanner and fails closed: ' + scenario, t => {
+for (const scenario of ['success', 'scanner-fails', 'invalid-sbom', 'undersized-cache', 'missing-user', 'missing-tmp-mode']) test('image SBOM CLI isolates scanner and fails closed: ' + scenario, t => {
  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'flowcube-sbom-contract-'))
  t.after(() => fs.rmSync(dir, { recursive: true, force: true }))
  fs.mkdirSync(path.join(dir, 'scripts')); fs.mkdirSync(path.join(dir, 'bin'))
@@ -18,6 +18,10 @@ for (const scenario of ['success', 'scanner-fails', 'invalid-sbom', 'undersized-
  if (scenario === 'missing-user') {
   const file = path.join(dir, 'scripts', 'generate-image-sbom.sh')
   fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace(/--user "\$\(id -u\):\$\(id -g\)"\s*/, ''))
+ }
+ if (scenario === 'missing-tmp-mode') {
+  const file = path.join(dir, 'scripts', 'generate-image-sbom.sh')
+  fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace(/,mode=1777\b/, ''))
  }
  for (const service of ['backend', 'frontend']) {
   fs.mkdirSync(path.join(dir, service)); fs.writeFileSync(path.join(dir, service, 'package-lock.json'), '{}')
@@ -38,6 +42,7 @@ if(cmd==='docker'){
   const output=a.find(x=>x.endsWith(':/out')).slice(0,-5),name=a.find(x=>x.startsWith('cyclonedx-json=')).split('/').pop();
   const owner=fs.statSync(output),user=a[a.indexOf('--user')+1];
   if(user!==owner.uid+':'+owner.gid){console.error('SBOM report path is not writable for the container default user');process.exit(1);}
+  if(!/(?:^|,)mode=1777(?:,|$)/.test(tmpfs)){console.error('Syft temporary cache is not writable for the runner UID');process.exit(1);}
   fs.writeFileSync(p.join(output,name),JSON.stringify({bomFormat:'CycloneDX',components:process.env.SCENARIO==='invalid-sbom'?[]:[{name:'synthetic-package',version:'1.0.0'}]}));
  }
 }
@@ -50,6 +55,7 @@ if(cmd==='docker'){
  assert.equal(fs.existsSync(path.join(reports, 'provenance.json')), scenario === 'success')
  if (scenario === 'undersized-cache') assert.match(result.stderr, /image layer cache exceeds tmpfs budget/)
  if (scenario === 'missing-user') assert.match(result.stderr, /SBOM report path is not writable/)
+ if (scenario === 'missing-tmp-mode') assert.match(result.stderr, /Syft temporary cache is not writable/)
  assert.equal(fs.readdirSync(dir).filter(name => name.startsWith('flowcube-sbom.')).length, 0)
  const calls = fs.readFileSync(log, 'utf8').trim().split('\n').map(JSON.parse), scans = calls.filter(c => c[0] === 'docker' && c[1] === 'run')
  assert.ok(scans.length > 0)
@@ -59,7 +65,9 @@ if(cmd==='docker'){
   if (scenario === 'missing-user') assert.ok(!args.includes('--user'))
   else assert.equal(args[args.indexOf('--user') + 1], `${process.getuid()}:${process.getgid()}`)
   assert.ok(args.includes('--memory=2g') && args.includes('--memory-swap=2g') && args.includes('--cpus=2'))
-  assert.ok(args.includes(scenario === 'undersized-cache' ? '/tmp:rw,noexec,nosuid,size=256m' : '/tmp:rw,noexec,nosuid,size=1g'))
+  const size = scenario === 'undersized-cache' ? '256m' : '1g'
+  assert.ok(args.includes(`/tmp:rw,noexec,nosuid,size=${size}${scenario === 'missing-tmp-mode' ? '' : ',mode=1777'}`))
+  assert.ok(args.includes('SYFT_CHECK_FOR_APP_UPDATE=false'))
   assert.ok(args.some(a => a.endsWith(':/scan:ro')))
   assert.ok(!args.some(a => a.includes('docker.sock') || a.includes('TOKEN')))
  }
