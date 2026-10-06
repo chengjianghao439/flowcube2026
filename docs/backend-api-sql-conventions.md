@@ -105,7 +105,11 @@ Finder、商品管理与全局搜索的商品组共用静态 `productSearch`：�
 
 数据行只有全部单元格经 trim 后为空才跳过；仅联系人、电话、地址、结算、额度/账期等有值的行也须进入共享校验并报告缺少名称，数字 0 属非空值。CSV 与 XLSX 的空行不压缩原行号，非法行仍不得查重、取号或写入；后续合法行可以正常导入，重复行按原表格行号报告。
 
-迁移目录核对旧最大号 275，新增 `276_party_profile_capacity.sql`：仅当 information_schema 的已知形状匹配时，把 `sale_customers.phone`、`supply_suppliers.phone` 的 VARCHAR(20) 扩为 30，以及实际表 `sale_credit_overrides.customer_name` 的 VARCHAR(80) 扩为 100。重复执行已扩列形状为 no-op，未知漂移留给 schema 对账；不改旧迁移、不缩列、不重写快照。源码检查和元数据计划 stub 不能证明 MySQL DDL 已执行；本轮未连接数据库，实际字符集/列定义和迁移重放待独立数据库验收。
+原容量迁移在合并发布中编号为 `278_party_profile_capacity.sql`：仅当 information_schema 的已知形状匹配时，把 `sale_customers.phone`、`supply_suppliers.phone` 的 VARCHAR(20) 扩为 30，以及实际表 `sale_credit_overrides.customer_name` 的 VARCHAR(80) 扩为 100。重复执行已扩列形状为 no-op，未知漂移留给 schema 对账；不缩列、不重写主档值或历史财务快照。
+
+2026-10-07 候选部署失败后的结构只读核对发现两主档 phone 实际为 nullable VARCHAR(11)，所以 278 虽已记执行，其 20 字符条件没有改变这两列。核对最大编号 280 后新增 `281_party_phone_capacity_known_legacy.sql`，保留已执行的 278：只订正这两列的 varchar/11/nullable YES/NULL 默认值/无 EXTRA 与生成表达式的普通旧形状。动态 DDL 保留原 charset、collation 与完整 COMMENT，字符集和排序规则名字经 ASCII 标识符条件及反引号引用；默认 SQL 模式使用 QUOTE，NO_BACKSLASH_ESCAPES 下使用单引号双写，原反斜杠与 Unicode 注释保持。已 30、其他长度、NOT NULL、非 NULL 默认值、CHAR 或生成列均 no-op，不猜未知漂移。
+
+既有 `test:party-profile` 的离线契约覆盖精确范围与删除条件/元数据/SQL 模式守卫的反证；同文件真实 MySQL 分支仅由 `smoke:go-live-owned` 的活跃独占 runner 显式启用。建本批随机 scratch schema、重建夹具与精确删除均要求 `assertOwnedRepairInstance` 的容器/卷标签、实时端口、UUID 与存活 runner 正向证明，不读配置文件或使用应用单例池。真实逐语句执行 278/281，核旧 11 下 30 字符写入失败、281 后完整保存，20 沿原 278 扩容、重复执行及未知形状不改；同时核默认模式与 NO_BACKSLASH_ESCAPES 的单引号/反斜杠/Unicode 注释，以及不同列字符集、原排序规则、默认值和本批合成行保持。该独立实例证明与最终 SHA 的 CI、生产迁移和结构核对分别记录，迁移记录存在不代替列定义验收。
 
 
 ### 库存预占只读接口（2026-10-04，R2）

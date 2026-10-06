@@ -1,7 +1,8 @@
 'use strict'
 
 // Real routes, services and ExcelJS parsing; only database/auth/stock dependencies
-// are stubbed. No app, configuration file or database connection is loaded.
+// are stubbed in ordinary CI. The explicit owned-MySQL branch below additionally
+// proves migration DDL; it never reads an environment file or uses the app pool.
 const test = require('node:test')
 const assert = require('node:assert/strict')
 const fs = require('node:fs')
@@ -202,7 +203,7 @@ test('customer template appends optional address after the original six columns'
 
 test('migration widens only known profile bottlenecks and is conditional/idempotent', () => {
   const filename = path.join(root, 'backend/src/database/278_party_profile_capacity.sql')
-  assert.ok(fs.existsSync(filename), 'add migration 276 after current maximum 275')
+  assert.ok(fs.existsSync(filename), 'original capacity migration 278 remains present')
   const source = fs.readFileSync(filename, 'utf8').replace(/^\s*--.*$/gm, '')
   assert.match(source, /information_schema\.COLUMNS/i)
   for (const table of ['sale_customers', 'supply_suppliers', 'sale_credit_overrides']) assert.ok(source.includes(table))
@@ -239,6 +240,154 @@ test('migration widens only known profile bottlenecks and is conditional/idempot
   assert.deepEqual(Object.values(known), [30, 30, 100])
   assert.equal(run(known).length, 0, 'replay emits no DDL')
   assert.equal(run({ 'sale_customers.phone': 40, 'supply_suppliers.phone': 10, 'sale_credit_overrides.customer_name': 150 }).length, 0, 'unknown shapes are not shrunk or rewritten')
+})
+
+const phone281File = path.join(root, 'backend/src/database/281_party_phone_capacity_known_legacy.sql')
+function assertPhone281Contract(source) {
+  const { splitSqlStatements } = require('../backend/src/database/sqlStatements')
+  const statements = splitSqlStatements(source.replace(/^\s*--.*$/gm, ''))
+  assert.equal(statements.length, 8)
+  const targets = []
+  for (let i = 0; i < statements.length; i += 4) {
+    const sql = statements[i]
+    targets.push(sql.match(/TABLE_NAME = '([^']+)'/)?.[1])
+    for (const pattern of [/TABLE_SCHEMA = DATABASE\(\)/, /COLUMN_NAME = 'phone'/, /DATA_TYPE = 'varchar'/,
+      /CHARACTER_MAXIMUM_LENGTH = 11/, /IS_NULLABLE = 'YES'/, /COLUMN_DEFAULT IS NULL/,
+      /EXTRA = ''/, /GENERATION_EXPRESSION = ''/, /CHARACTER_SET_NAME REGEXP '\^\[A-Za-z_\]\[A-Za-z0-9_\]\*\$'/,
+      /COLLATION_NAME REGEXP '\^\[A-Za-z_\]\[A-Za-z0-9_\]\*\$'/,
+      /VARCHAR\(30\) CHARACTER SET `/, /CHARACTER_SET_NAME/, /COLLATION_NAME/, /QUOTE\(COLUMN_COMMENT\)/,
+      /NO_BACKSLASH_ESCAPES/, /REPLACE\(COLUMN_COMMENT, CHAR\(39\), CONCAT\(CHAR\(39\), CHAR\(39\)\)\)/]) assert.match(sql, pattern)
+    assert.match(sql, /'SELECT 1'\)$/)
+    assert.equal(statements[i + 1], 'PREPARE party_phone_281_stmt FROM @party_phone_281_sql')
+    assert.equal(statements[i + 2], 'EXECUTE party_phone_281_stmt')
+    assert.equal(statements[i + 3], 'DEALLOCATE PREPARE party_phone_281_stmt')
+  }
+  assert.deepEqual(targets, ['sale_customers', 'supply_suppliers'])
+  assert.doesNotMatch(source, /\b(?:UPDATE|DELETE|DROP|TRUNCATE)\b/i)
+  return statements
+}
+test('281 repairs exactly the verified nullable 11-character phone shapes and preserves metadata', () => {
+  assert.ok(fs.existsSync(phone281File), 'add 281 after verified maximum 280; do not change executed 278')
+  assertPhone281Contract(fs.readFileSync(phone281File, 'utf8'))
+})
+test('281 contract rejects removing shape, metadata or SQL-mode guards', () => {
+  const source = fs.readFileSync(phone281File, 'utf8')
+  for (const change of [s => s.replace('CHARACTER_MAXIMUM_LENGTH = 11', 'CHARACTER_MAXIMUM_LENGTH = 20'),
+    s => s.replace("AND IS_NULLABLE = 'YES'", ''), s => s.replace('AND COLUMN_DEFAULT IS NULL', ''),
+    s => s.replace("AND EXTRA = ''", ''), s => s.replace('QUOTE(COLUMN_COMMENT)', "QUOTE('fixed comment')"),
+    s => s.replace('NO_BACKSLASH_ESCAPES', 'OTHER_MODE'), s => s.replace('COLLATION_NAME REGEXP', 'COLLATION_NAME LIKE')]) {
+    const changed = change(source)
+    assert.notEqual(changed, source)
+    assert.throws(() => assertPhone281Contract(changed))
+  }
+})
+
+// The existing --go-live runner enables this branch in CI and locally. Positive
+// live-runner/UUID/container/volume/port ownership is mandatory before scratch
+// creation, every fixture rebuild and exact scratch deletion. Ordinary tests
+// remain offline; a caller-supplied test database name alone cannot enable DDL.
+if (process.env.FLOWCUBE_PARTY_PROFILE_MYSQL_PROOF === '1') test('owned MySQL executes real 278/281, preserving data and all non-capacity metadata', async t => {
+  const { randomBytes } = require('node:crypto')
+  const backendRequire = createRequire(path.join(root, 'backend/package.json'))
+  const mysql = backendRequire('mysql2/promise')
+  const { assertOwnedRepairInstance } = require('./helpers/repairInstanceOwnership')
+  const { assertSqlIdentifier } = require('../backend/src/utils/sqlIdentifier')
+  const { splitSqlStatements } = require('../backend/src/database/sqlStatements')
+  const config = { host: process.env.DB_HOST, port: Number(process.env.DB_PORT), user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD, database: process.env.DB_NAME, charset: 'utf8mb4' }
+  assert.equal(process.env.NODE_ENV, 'test')
+  assert.equal(config.host, '127.0.0.1')
+  assert.ok(Number.isSafeInteger(config.port) && config.port > 0 && ![3306, 3307].includes(config.port))
+  assert.match(config.database || '', /^flowcube_[a-zA-Z0-9_]+_test$/)
+  const admin = await mysql.createConnection(config)
+  const scratch = assertSqlIdentifier('flowcube_phone281_' + randomBytes(12).toString('hex') + '_test', 'owned scratch schema')
+  let fixture, created = false
+  const guard = () => assertOwnedRepairInstance(admin, { config })
+  try {
+    const owner = await guard()
+    const [present] = await admin.query('SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME=?', [scratch])
+    assert.equal(present.length, 0, 'fresh random scratch schema must not exist')
+    await admin.query(`CREATE DATABASE \`${scratch}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci`)
+    created = true
+    fixture = await mysql.createConnection({ ...config, database: scratch })
+    const [[identity]] = await fixture.query('SELECT @@server_uuid AS serverUuid')
+    assert.equal(identity.serverUuid, owner.serverUuid)
+    const [[initialMode]] = await fixture.query('SELECT @@SESSION.sql_mode AS sqlMode')
+    const source281 = fs.readFileSync(phone281File, 'utf8')
+    const source278 = fs.readFileSync(path.join(root, 'backend/src/database/278_party_profile_capacity.sql'), 'utf8')
+    const execute = async source => { for (const sql of splitSqlStatements(source)) await fixture.query(sql) }
+    const metadata = async () => (await fixture.query("SELECT TABLE_NAME AS tableName,COLUMN_NAME AS name,COLUMN_TYPE AS type,IS_NULLABLE AS nullable,COLUMN_DEFAULT AS defaultValue,CHARACTER_SET_NAME AS charset,COLLATION_NAME AS collation,COLUMN_COMMENT AS comment,EXTRA AS extra,GENERATION_EXPRESSION AS generation FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND COLUMN_NAME IN ('phone','customer_name') ORDER BY TABLE_NAME,COLUMN_NAME"))[0].map(r => ({ ...r }))
+    const tables = ['sale_customers', 'supply_suppliers']
+    const cases = [
+      { name: 'known 11 default mode', definition: 'VARCHAR(11) NULL DEFAULT NULL', expected: 30, narrow: true },
+      { name: 'known 11 NO_BACKSLASH_ESCAPES', definition: 'VARCHAR(11) NULL DEFAULT NULL', expected: 30, narrow: true, noBackslash: true },
+      { name: 'known 11 retains different column charset', definition: 'VARCHAR(11) NULL DEFAULT NULL', expected: 30, narrow: true, charset: 'latin1', collation: 'latin1_bin' },
+      { name: 'original 20 uses 278 then 281 no-op', definition: 'VARCHAR(20) NULL DEFAULT NULL', expected: 30, old: true },
+      { name: 'already 30 remains exact', definition: 'VARCHAR(30) NULL DEFAULT NULL', expected: 30 },
+      { name: 'unknown 40 remains exact', definition: 'VARCHAR(40) NULL DEFAULT NULL', expected: 40 },
+      { name: 'unknown 10 remains exact', definition: 'VARCHAR(10) NULL DEFAULT NULL', expected: 10 },
+      { name: 'unknown nonnullable 11 remains exact', definition: 'VARCHAR(11) NOT NULL', expected: 11 },
+      { name: 'unknown non-NULL default remains exact', definition: "VARCHAR(11) NULL DEFAULT '123'", expected: 11 },
+      { name: 'unknown CHAR remains exact', definition: 'CHAR(11) NULL DEFAULT NULL', expected: 11 },
+      { name: 'unknown generated 11 remains exact', definition: "VARCHAR(11) GENERATED ALWAYS AS ('12345678901') VIRTUAL", expected: 11, generated: true },
+    ]
+    for (const scenario of cases) await t.test(scenario.name, async () => {
+      await guard()
+      await fixture.query('SET SESSION sql_mode=?', [initialMode.sqlMode])
+      for (const table of [...tables, 'sale_credit_overrides', 'unrelated_parties']) {
+        assertSqlIdentifier(table, 'owned fixture table')
+        await fixture.query(`DROP TABLE IF EXISTS \`${table}\``)
+      }
+      for (const table of tables) {
+        const comment = scenario.old ? (table === 'supply_suppliers' ? '联系电话' : '') : "仅本批'电话\\Unicode联系𠮷"
+        const collation = scenario.collation || (scenario.old ? 'utf8mb4_unicode_ci' : 'utf8mb4_bin')
+        const charset = scenario.charset || 'utf8mb4'
+        assertSqlIdentifier(charset, 'owned fixture charset')
+        assertSqlIdentifier(collation, 'owned fixture collation')
+        const definition = scenario.definition.replace(/^(VARCHAR|CHAR)\(\d+\)/, '$& CHARACTER SET ' + charset + ' COLLATE ' + collation)
+        await fixture.query(`CREATE TABLE \`${table}\` (id INT PRIMARY KEY, phone ${definition} COMMENT ${fixture.escape(comment)}) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`)
+        if (scenario.generated) await fixture.query(`INSERT INTO \`${table}\` (id) VALUES (1)`)
+        else await fixture.query(`INSERT INTO \`${table}\` (id,phone) VALUES (1,?)`, ['1234567890'])
+      }
+      await fixture.query('CREATE TABLE sale_credit_overrides (customer_name VARCHAR(80) NOT NULL) DEFAULT CHARSET=utf8mb4')
+      await fixture.query('CREATE TABLE unrelated_parties (phone VARCHAR(11) NULL DEFAULT NULL) DEFAULT CHARSET=utf8mb4')
+      if (scenario.noBackslash) await fixture.query('SET SESSION sql_mode=?', [initialMode.sqlMode + ',NO_BACKSLASH_ESCAPES'])
+      if (scenario.old) await execute(source278)
+      const before = await metadata()
+      if (scenario.narrow) {
+        await execute(source278)
+        assert.deepEqual((await metadata()).filter(r => tables.includes(r.tableName)), before.filter(r => tables.includes(r.tableName)), '278 does not repair the observed 11-character phone shape')
+        for (const table of tables) await assert.rejects(fixture.query(`INSERT INTO \`${table}\` (id,phone) VALUES (99,?)`, ['1'.repeat(30)]), e => e.code === 'ER_DATA_TOO_LONG')
+      }
+      const baseline = await metadata()
+      await execute(source281)
+      const after = await metadata()
+      const expected = baseline.map(row => tables.includes(row.tableName) && scenario.narrow ? { ...row, type: 'varchar(30)' } : row)
+      assert.deepEqual(after, expected, '281 changes only known 11 capacity; charset/default/comment/extra and other tables remain exact')
+      await execute(source281)
+      assert.deepEqual(await metadata(), after, 'replay changes no metadata')
+      for (const table of tables) {
+        const [rows] = await fixture.query(`SELECT phone FROM \`${table}\` WHERE id=1`)
+        assert.equal(rows[0].phone, scenario.generated ? '12345678901' : '1234567890')
+        if (scenario.expected === 30) {
+          await fixture.query(`INSERT INTO \`${table}\` (id,phone) VALUES (99,?)`, ['1'.repeat(30)])
+          const [[saved]] = await fixture.query(`SELECT phone FROM \`${table}\` WHERE id=99`)
+          assert.equal(saved.phone, '1'.repeat(30))
+        }
+      }
+    })
+  } finally {
+    try {
+      if (fixture) await fixture.end()
+      if (created) {
+        await guard()
+        await admin.query(`DROP DATABASE \`${scratch}\``)
+        const [remaining] = await admin.query('SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME=?', [scratch])
+        assert.equal(remaining.length, 0, 'only this exact owned scratch schema is deleted')
+        t.diagnostic('Owned scratch schema removed and absence verified; container/volume teardown belongs to the live runner')
+      }
+    } finally { await admin.end() }
+  }
 })
 
 test('master/order/credit/party exports preserve full names and opt into wrapping without changing row values', async () => {

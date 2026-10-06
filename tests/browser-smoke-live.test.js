@@ -24,6 +24,26 @@ const pdaSplitTitle = (() => {
   return m[1]
 })()
 
+// 独立从真实组合页注册读取渲染标题和当前视图，夹具不得继续呈现旧独立页标题。
+const mergedSource = fs.readFileSync(path.join(root, 'frontend/src/router/mergedPageGroups.ts'), 'utf8')
+const mergedViews = {}
+for (const group of mergedSource.matchAll(/\{\s*key:\s*'[^']+',\s*title:\s*'([^']+)'[^[]*views:\s*\[([\s\S]*?)\]/g)) {
+  for (const view of group[2].matchAll(/\{\s*path:\s*'([^']+)',\s*label:\s*'([^']+)'/g)) {
+    mergedViews[view[1]] = { title: group[1], label: view[2] }
+  }
+}
+assert.equal(Object.keys(mergedViews).length, 15, '组合页注册格式改变时须同步夹具读取器')
+const descriptions = {}
+for (const [file, routes] of [
+  ['reports/ReconciliationView.tsx', ['/reports/reconciliation/payable', '/reports/reconciliation/receivable']],
+  ['payments/PaymentsView.tsx', ['/payments/payable', '/payments/receivable']],
+]) {
+  const source = fs.readFileSync(path.join(root, 'frontend/src/pages', file), 'utf8')
+  const values = [...source.matchAll(/description: '([^']+)'/g)].map(match => match[1])
+  assert.equal(values.length, routes.length)
+  routes.forEach((route, index) => { descriptions[route] = values[index] })
+}
+
 // 真实 Chromium + 仅回环夹具；不使用开发/生产账号或数据库。
 const titles = {
   '/dashboard': '仪表盘', '/reports/role-workbench': '待办中心', '/reports/reconciliation/payable': '月结供应商对账',
@@ -51,6 +71,7 @@ async function runFixture(script, scenario = 'success') {
     if (req.url.startsWith('/seen?')) { seen.push(new URL(req.url, 'http://fixture').searchParams.get('path')); return res.end('ok') }
     res.setHeader('Content-Type', 'text/html; charset=utf-8')
     res.end(`<!doctype html><body><script>
+      const mergedViews=${JSON.stringify(mergedViews)}, descriptions=${JSON.stringify(descriptions)};
       const titles=${JSON.stringify(titles)}, scenario=${JSON.stringify(scenario)}, redirects=${JSON.stringify(redirects)};
       const pda=location.hash.startsWith('#/pda');
       function render(){
@@ -62,7 +83,21 @@ async function runFixture(script, scenario = 'success') {
         if(redirects[route]){location.hash=redirects[route];return}
         if(scenario==='blocked-reconciliation'&&route==='/purchase/1'){location.hash='/403';return}
         if(route==='/picking-waves'&&auth.state.user.username==='fixture-limited'&&scenario!=='broken-permission'){location.hash='/403';return}
+        if(mergedViews[route]){
+          const view=mergedViews[route];
+          document.body.replaceChildren();
+          const heading=document.createElement('h1');
+          heading.textContent=scenario==='stale-merged-title'?titles[route]:view.title;
+          const nav=document.createElement('nav');nav.setAttribute('aria-label',view.title+'视图');
+          const link=document.createElement('a');link.href='#'+(scenario==='wrong-merged-href'?'/incorrect-view':route);link.textContent=view.label;
+          link.setAttribute('aria-current',scenario==='wrong-merged-view'?'false':'page');
+          nav.append(link);document.body.append(heading,nav);
+          if(descriptions[route]){const description=document.createElement('p');description.textContent=scenario==='wrong-finance-component'?'错误的业务类型':descriptions[route];document.body.append(description)}
+          // 即使导航包含旧期望词，也必须检查真正标题和当前视图。
+          const oldTitle=document.createElement('p');oldTitle.textContent=titles[route];document.body.append(oldTitle);
+        }else{
         document.body.innerText=(scenario==='broken-pda'&&route==='/pda/split')?'错误的 PDA 页面':(scenario==='render-error'&&route==='/purchase/1')?'渲染错误':titles[route]||'夹具页面';
+        }
         fetch('/seen?path='+encodeURIComponent(route));
       }
       window.addEventListener('hashchange',render);render();
@@ -94,7 +129,7 @@ test('真实浏览器完成 ERP、四个 PDA 页面、受限权限和授权对�
   for (const route of Object.keys(titles)) assert.ok(r.seen.includes(route), `漏验收 ${route}`)
   t.diagnostic(`fixture elapsed ${r.elapsed} ms; distinct routes ${new Set(r.seen).size}`)
 })
-for (const scenario of ['broken-pda', 'broken-permission', 'render-error']) {
+for (const scenario of ['broken-pda', 'broken-permission', 'render-error', 'stale-merged-title', 'wrong-merged-view', 'wrong-merged-href', 'wrong-finance-component']) {
   test(`真实浏览器发现 ${scenario} 时必须失败并退出`, { timeout: 95000 }, async () => {
     const r = await runFixture('smoke-pages.node.js', scenario)
     assert.equal(r.status, 1, r.output)

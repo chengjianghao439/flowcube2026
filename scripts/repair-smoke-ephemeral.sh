@@ -297,6 +297,8 @@ run_smoke() {
 if [[ "$SUITE" = '--go-live' ]]; then
   log '执行上线新增处置/供应商退款真实链路（独占本批实例）…'
   run_smoke smoke:go-live-runtime
+  log '验证客户/供应商旧电话形状的条件迁移（同专属实例）…'
+  FLOWCUBE_PARTY_PROFILE_MYSQL_PROOF=1 run_smoke test:party-profile
 else
   log '执行采购修复 smoke（串行第一项）…'
   run_smoke smoke:purchase-repair

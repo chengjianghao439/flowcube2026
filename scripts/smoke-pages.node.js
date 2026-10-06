@@ -165,9 +165,26 @@ async function assertForbidden(path, expected = '无访问权限') {
   )
 }
 
-async function openAndCheck(path, expected = '', forbidden = '') {
+// 组合页统一 h1；必须确认可见标题及当前子视图，不能仅匹配始终存在的导航文字。
+function assertMergedPage(path, title, viewLabel, content = '') {
+  const expr = `(() => {
+    const visible = el => el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden';
+    const title = ${jsQuote(title)}, viewLabel = ${jsQuote(viewLabel)}, path = ${jsQuote(path)}, content = ${jsQuote(content)};
+    const heading = [...document.querySelectorAll('h1')].some(el => visible(el) && el.textContent.trim() === title);
+    const current = [...document.querySelectorAll('nav')]
+      .filter(nav => visible(nav) && nav.getAttribute('aria-label') === title + '视图')
+      .some(nav => [...nav.querySelectorAll('a[aria-current="page"]')].some(link =>
+        visible(link) && link.textContent.trim() === viewLabel && new URL(link.href).hash.split('?')[0] === '#' + path.split('?')[0]));
+    const text = document.body.innerText || '';
+    return heading && current && (!content || text.includes(content)) && ![${ERROR_MARKERS}].some(marker => text.includes(marker));
+  })()`
+  return waitFor(expr, { label: `${title} 当前视图 ${viewLabel}` })
+}
+
+async function openAndCheck(path, expected = '', forbidden = '', mergedView = '', mergedContent = '') {
   console.log(`==> 页面烟雾：${path}`)
   await setHashAndConfirm(path)
+  if (mergedView) return assertMergedPage(path, expected, mergedView, mergedContent)
   // 路由切换后轮询等待目标文本；无期望文本时退化为「无渲染错误」
   return expected ? assertText(expected, forbidden) : assertNoErrorText()
 }
@@ -229,13 +246,13 @@ async function openPdaAndCheck(path, expected) {
 async function main() {
   await login()
   await openAndCheck('/reports/role-workbench', '待办中心')
-  await openAndCheck('/reports/reconciliation/payable', '月结供应商对账')
-  await openAndCheck('/reports/reconciliation/receivable', '月结客户对账')
-  await openAndCheck('/reports/profit-analysis', '利润与库存')
-  await openAndCheck('/procurement', '采购建议')
-  await openAndCheck('/reports/wave-performance', '批次效率')
-  await openAndCheck('/reports/warehouse-ops', '作业概况')
-  await openAndCheck('/reports/pda-anomaly', 'PDA 异常')
+  await openAndCheck('/reports/reconciliation/payable', '供应商往来', '', '月结对账', '月结供应商的应付账单')
+  await openAndCheck('/reports/reconciliation/receivable', '客户往来', '', '月结对账', '月结客户的应收账单')
+  await openAndCheck('/reports/profit-analysis', '报表中心', '', '利润与库存')
+  await openAndCheck('/procurement', '采购建议', '', '采购计划')
+  await openAndCheck('/reports/wave-performance', '仓库运营', '', '批次效率')
+  await openAndCheck('/reports/warehouse-ops', '仓库运营', '', '作业概况')
+  await openAndCheck('/reports/pda-anomaly', '仓库运营', '', 'PDA 异常')
   await openAndCheck('/reports/inventory-aging', '存放时长与滞销')
   await openAndCheck('/warehouses', '仓库管理')
   await openAndCheck('/picking-waves?waveId=1&focus=print-closure', '批次拣货')
@@ -245,8 +262,8 @@ async function main() {
   await openAndCheck('/sale/1')
   await openAndCheck('/customers')
   await openAndCheck('/suppliers')
-  await openAndCheck('/payments/payable', '现结供应商账款')
-  await openAndCheck('/payments/receivable', '现结客户账款')
+  await openAndCheck('/payments/payable', '供应商往来', '', '现结账款', '现结供应商：到货即结')
+  await openAndCheck('/payments/receivable', '客户往来', '', '现结账款', '现结客户：出库即结')
   await openAndCheck('/carriers')
   await openAndCheck('/locations')
   await openAndCheck('/racks')

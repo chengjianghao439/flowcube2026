@@ -88,6 +88,8 @@
 - 迁移逐条执行、触发器函数体不得残留结尾分号 → `node --test tests/migration-trigger-bodies.test.js`
 - 前端命名与呈现结构：菜单名 = 工作区标签 = 页面标题、标签 ≤7 汉字、带日期的查询弹窗必须能重置回本页默认口径、纯图标按钮必须有可读名称 → `npm run test:frontend-conventions`
 - 只允许整数的商品（`allow_decimal_qty=0`）不得按小数下单/出入库/调拨/盘点；录入类模块须走 `foldEntryItems()` → `npm run test:qty-precision`、`npm run test:qty-precision-coverage`
+- 应用部署保留既有健康且认证 TCP SQL 通过的 MySQL，切换应用须 `--no-deps`；未知实例状态提前拒绝 → `node --test tests/audit-deployment.test.js`
+- 组合页发布验收须核可见组标题与当前子视图链接；电话旧形状真实迁移回归须专属实例归属证明 → `npm run test:browser-smoke`、`npm run test:party-profile`、`npm run test:go-live-runner`
 - 本地实例脚本 `start` 只启动实例（不改库结构）、迁移必须由显式 `dev:mysql8:migrate` 触发且目标固定、凭据只由 `start` 生成 → `npm run test:mysql8-dev-script`
 - 含全表清理的采购/应收修复 smoke 只允许落在**本批专属临时实例**（`npm run repair:smoke-ephemeral`），写入前必须过归属门：0600 归属文件 + 拒绝共享端口 3307/3306 + 容器/卷 `docker inspect` 本批 label 与实时端口映射 + 同运行时间窗 + **runner 进程存活** + 实例 `@@server_uuid`；不认库名后缀、`IF NOT EXISTS`、可自填 env、空表 → `npm run test:repair-smoke-instance-guard`
 - `AGENTS.md` 体积、关键章节与红线必须在默认预算内，`docs/*.md` 与 `npm run` 引用有效 → `npm run test:agents-md-guard`

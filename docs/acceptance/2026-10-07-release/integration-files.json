@@ -41,8 +41,8 @@
   },
   {
     "path": "AGENTS.md",
-    "purpose": "协作约定或配置样例",
-    "sha256": "b10e9f99b9bf27e2e757fd89909d5ec025d6222f67e6deef09c1869f7b174f5e"
+    "purpose": "部署既有MySQL生命周期与组合页/专属迁移守卫索引",
+    "sha256": "8a1c319c78d9d71c6f73a9ff99d97cac6dd72f0b73b6d3102558d76c2559b041"
   },
   {
     "path": "Dockerfile.backend",
@@ -118,6 +118,11 @@
     "path": "backend/src/database/280_supplier_refunds.sql",
     "purpose": "业务、权限与迁移",
     "sha256": "2700b14452156a0be20dda50a870e7329dd27c94644bc7fe506039b9a53aca6b"
+  },
+  {
+    "path": "backend/src/database/281_party_phone_capacity_known_legacy.sql",
+    "purpose": "已确认旧11位电话列的条件式容量订正；保留已执行迁移及原列属性",
+    "sha256": "2eac5107ecbfb3be4f040d64c480ee7d760bb1d3c344f0745ee9295a4be46082"
   },
   {
     "path": "backend/src/engine/containerEngine.js",
@@ -1418,7 +1423,7 @@
   {
     "path": "docs/backend-api-sql-conventions.md",
     "purpose": "说明与原分支验收证据",
-    "sha256": "3eb9899bea7f919b4529797f30c3db454fb30208146ec94eb95df20bc83b6ef6"
+    "sha256": "65b09fdb62e7789eb23dd27b3efd30ee2a4c6e6153140064b9e3e6b3147da814"
   },
   {
     "path": "docs/business-semantics.md",
@@ -1443,7 +1448,7 @@
   {
     "path": "docs/print-deploy-ops.md",
     "purpose": "说明与原分支验收证据",
-    "sha256": "b5b1dc0df840fde44d530ce9732b8eae4c41deaa51a990708576ed5be0e1b4e6"
+    "sha256": "52e25ec612bd10db6e0a2e032df0f1dcc772fdba447d5e5ec8e0b22cb30e8b60"
   },
   {
     "path": "docs/release-notes/0.13.0.md",
@@ -1458,7 +1463,7 @@
   {
     "path": "docs/release-v0.13.0-integration.md",
     "purpose": "主题说明与验收证据",
-    "sha256": "ebcc750499f045d4da909ad5e8a230f0b9c1a01c4669d4c50b01a38dee68b42a"
+    "sha256": "4e7e6c8d6a9f21af190cff7aea159bcff256243f73d88d0db7fe9235bacb7a77"
   },
   {
     "path": "docs/runbooks/failure-recovery.md",
@@ -1568,7 +1573,7 @@
   {
     "path": "docs/verification-commands.md",
     "purpose": "说明与原分支验收证据",
-    "sha256": "eaf6259ee3ef327d8964d1e8a684daad82a0e88b4492f5de1cba09f61c5733ac"
+    "sha256": "023bcba56331ed887206a300c39f5e88f8ffd9d73043018ded5c18c1661fef81"
   },
   {
     "path": "frontend/android/app/build.gradle",
@@ -2788,7 +2793,7 @@
   {
     "path": "scripts/repair-smoke-ephemeral.sh",
     "purpose": "运维、发布与验收",
-    "sha256": "50adb88d2e5b2b933f4a2a90dc104e671bc0d83d75d793f8efc5a2137ee0fb74"
+    "sha256": "bbabc8172b3e633200e211cc3ca3cbe7c1b5f2611eb459b3da454ceb763f6ecc"
   },
   {
     "path": "scripts/resolve-release-target.cjs",
@@ -2808,7 +2813,7 @@
   {
     "path": "scripts/smoke-pages.node.js",
     "purpose": "运维、发布与验收",
-    "sha256": "1666443b340b0bd527e4475a794190abc3fba6f526a5eff010c48fcc327c304a"
+    "sha256": "e310eb716090f46172682866ec1fd864611785b10170a809872fadaf8d071f71"
   },
   {
     "path": "scripts/verify-nsis-archive.cjs",
@@ -2863,7 +2868,7 @@
   {
     "path": "tests/browser-smoke-live.test.js",
     "purpose": "回归与隔离守卫",
-    "sha256": "771e6f6a7c354af9b2a54e71ddb6e57edb579c0db4a4d87bda404c16a92e7c45"
+    "sha256": "ee34ab8006d624db61c9b318f07afe73a114bbab579492ba646c05c42f2d7317"
   },
   {
     "path": "tests/concurrency-guards.smoke.test.js",
@@ -2978,7 +2983,7 @@
   {
     "path": "tests/go-live-runner.test.js",
     "purpose": "回归与隔离守卫",
-    "sha256": "dcfeec1325c2a5a6834e4f777e425a3ef549b909750dbcb9601f17acf3eb4557"
+    "sha256": "bf8fedfb8f9dcc23b3d8adb07097f89a391355f2eb355d7794c11f9385c401d2"
   },
   {
     "path": "tests/go-live-runtime.smoke.test.js",
@@ -3108,7 +3113,7 @@
   {
     "path": "tests/party-profile.test.js",
     "purpose": "回归与隔离守卫",
-    "sha256": "789664755cd27cd70e45546f4b7702878cbbe8229a43bd5e47a35b6fefd886df"
+    "sha256": "a02ed357a4454c3ac0a366ec0a8b08e623fd7e50f5ca626141bf997ced0e825e"
   },
   {
     "path": "tests/pick-label-reprint-lifecycle.smoke.test.js",

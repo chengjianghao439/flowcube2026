@@ -911,7 +911,7 @@ node --test --test-concurrency=1 tests/go-live-runtime.smoke.test.js
 
 ### v0.13.0 整合后的专属验收入口（2026-10-07）
 
-`npm run smoke:go-live-owned` 使用 `repair-smoke-ephemeral.sh --go-live` 新建本批专属 MySQL 实例，全量迁移后调用 `smoke:go-live-runtime`，继续通过原实例归属门并在退出时清理核实；后者不能直接用于共享 3307。未知参数在任何 Docker 操作前拒绝。Tests CI 独立 go-live-owned job 和 `test:go-live-runner` 保证可达及归属边界。
+`npm run smoke:go-live-owned` 使用 `repair-smoke-ephemeral.sh --go-live` 新建本批专属 MySQL 实例，全量迁移后调用 `smoke:go-live-runtime`，再以 `FLOWCUBE_PARTY_PROFILE_MYSQL_PROOF=1` 调用既有 `test:party-profile` 验证 278/281 已知旧电话形状与重复执行；真实 DDL 只落在完整归属证明后的本批随机 scratch schema，未知形状保持，精确清理。两项继续通过原实例归属门并在退出时清理核实；后者不能直接用于共享 3307。未知参数在任何 Docker 操作前拒绝。Tests CI 独立 go-live-owned job 和 `test:go-live-runner` 保证可达及归属边界。
 
 `npm run test:expense-pay-backfill-integration` 覆盖费用付款闭期/申请/借用事务、固定首次批准日重试和 smoke 精确清理；`smoke:expense-pay-period-guard` 为真实资金回归。`smoke:operation-alerts` 只在当前独立测试库创建随机事务夹具并回滚，不发机器人。新增 PDA 塑料盒 HTTP 场景接入 `smoke:security-scan-remediation` 中的 scope 测试。
 

@@ -34,3 +34,17 @@ test('go-live uses the original owned-instance runner and isolated CI job', () =
   assert.match(workflow, /go-live-owned:/)
   assert.match(workflow, /run: npm run smoke:go-live-owned/)
 })
+
+function assertPartyCapacityLane(source) {
+  const blocks = [...source.replace(/^\s*#.*$/gm, '').matchAll(/if \[\[ "\$SUITE" = '--go-live' \]\]; then([\s\S]*?)\nelse/g)]
+  const lane = blocks.find(match => match[1].includes('run_smoke smoke:go-live-runtime'))?.[1]
+  assert.ok(lane, '必须在既有 go-live 专属实例分支运行')
+  assert.match(lane, /run_smoke smoke:go-live-runtime[\s\S]*FLOWCUBE_PARTY_PROFILE_MYSQL_PROOF=1 run_smoke test:party-profile/)
+}
+
+test('电话旧形状真实迁移回归必须接在专属实例入口，删除开关或调用会失败', () => {
+  const source = fs.readFileSync(path.join(root, 'scripts/repair-smoke-ephemeral.sh'), 'utf8')
+  assertPartyCapacityLane(source)
+  assert.throws(() => assertPartyCapacityLane(source.replace('FLOWCUBE_PARTY_PROFILE_MYSQL_PROOF=1 ', '')))
+  assert.throws(() => assertPartyCapacityLane(source.replace('run_smoke test:party-profile', ':')))
+})
