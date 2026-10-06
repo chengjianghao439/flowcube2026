@@ -1,0 +1,54 @@
+{
+  "name": "gui-backfill-approve",
+  "checks": [
+    "补录申请人自批403"
+  ],
+  "api": [
+    {
+      "method": "POST",
+      "path": "/api/accounting/backfills/4/approve",
+      "status": 403
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/logout",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/login",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/printer-bindings",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/settings/logo",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/accounting/backfills?page=1&pageSize=50",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/warehouses/active",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/finance/accounts/active",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/notifications",
+      "status": 200
+    }
+  ],
+  "errors": []
+}

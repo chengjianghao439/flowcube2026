@@ -1,0 +1,12 @@
+{
+  "oldBatch": "20261006183247-0a3d7a",
+  "oldContainer": "3f0399a83219586c8e4363109da9e089a172432d3a986707ca43a32736e610ea",
+  "oldVolume": "flowcube-golive-ephemeral-20261006183247-0a3d7a-data",
+  "oldCleanupVerified": true,
+  "activeBatch": "20261006185739-285424",
+  "activeContainer": "7988230cf90ddd75f8c9dfb5b3465877d85bc3b06a258dc4214f8b229c7d5484",
+  "activeVolume": "flowcube-golive-ephemeral-20261006185739-285424-data",
+  "port": 32774,
+  "database": "flowcube_golive20261006_test",
+  "serverUuid": "bf914dd9-c174-11f1-93ca-5af76ee4b50a"
+}

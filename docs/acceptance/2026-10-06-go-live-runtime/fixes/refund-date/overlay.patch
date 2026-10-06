@@ -1,0 +1,58 @@
+--- a/backend/src/modules/refunds/supplier-refunds.service.js
++++ b/backend/src/modules/refunds/supplier-refunds.service.js
+@@ -141,7 +141,7 @@
+     const {where,args}=listWhere(currentActor),from=' FROM supplier_refund_orders rf JOIN purchase_orders po ON po.id=rf.purchase_order_id JOIN purchase_returns pr ON pr.id=rf.purchase_return_id WHERE '+where
+     const [[count]]=await conn.query('SELECT COUNT(*) AS total'+from,args)
+     const [list]=await conn.query('SELECT rf.id,rf.refund_no,rf.purchase_return_id,rf.purchase_order_id,rf.warehouse_id,rf.refund_date,rf.amount,rf.status'+from+' ORDER BY rf.id DESC LIMIT ? OFFSET ?',[...args,pageSize,(page-1)*pageSize])
+-    return{list,total:Number(count.total),page,pageSize}
++    return{list:list.map(row=>({...row,refund_date:rules.date(row.refund_date)})),total:Number(count.total),page,pageSize}
+   })
+ }
+ async function findById(id,userId) {
+@@ -151,7 +151,7 @@
+     const ctx=await context(conn,Number(row.purchase_return_id),currentActor,false)
+     await frozenContext(conn,row,ctx,currentActor,false)
+     const [allocations]=await conn.query('SELECT entry_id,receipt_id,amount,budget_state FROM supplier_refund_allocations WHERE refund_id=? ORDER BY id',[row.id])
+-    return{...row,allocations,confirmAllowed:Number(row.status)===1 && (currentActor.roleId===1 || currentActor.permissions.includes(P.SUPPLIER_REFUND_CONFIRM)) && (Number(row.created_by)!==currentActor.userId || currentActor.allowSelfApprove)}
++    return{...row,refund_date:rules.date(row.refund_date),allocations,confirmAllowed:Number(row.status)===1 && (currentActor.roleId===1 || currentActor.permissions.includes(P.SUPPLIER_REFUND_CONFIRM)) && (Number(row.created_by)!==currentActor.userId || currentActor.allowSelfApprove)}
+   })
+ }
+ async function receive(id,body,options){
+--- a/tests/supplier-refunds.test.js
++++ b/tests/supplier-refunds.test.js
+@@ -120,6 +120,22 @@
+  const empty=await f.module('service').findAll({},9);assert.equal(empty.total,0);assert.equal(empty.list.length,0)
+  for(const query of [{page:''},{page:['1','2']},{pageSize:201}])await assert.rejects(f.module('service').findAll(query,9),e=>e.statusCode===400)
+ })
++for(const read of ['list','detail'])for(const mysqlDate of [false,true])test(`RF ${read} exposes the exact Beijing business DATE as YYYY-MM-DD (${mysqlDate?'Date':'string'} projection)`,async()=>{
++ const f=fixture(),body={...input(),refundDate:'2026-10-06'}
++ await f.module('service').create(body,f.options)
++ const before=f.snapshot(),query=f.conn.query
++ // Inject Date after the fixture JSON clone, as the ordinary +08:00 mysql2 pool does.
++ f.conn.query=async(sql,args)=>{
++  const result=await query(sql,args)
++  if(mysqlDate&&sql.includes('FROM supplier_refund_orders'))for(const row of result[0])if(row.refund_date)row.refund_date=new Date('2026-10-06T00:00:00+08:00')
++  return result
++ }
++ const result=read==='list'?(await f.module('service').findAll({},9)).list[0]:await f.module('service').findById(61,9)
++ assert.equal(result.refund_date,body.refundDate)
++ assert.equal(copy(result).refund_date,body.refundDate,'HTTP JSON must retain the frozen YYYY-MM-DD identity')
++ assert.equal(result.amount,body.amount)
++ assert.deepEqual(f.snapshot(),before,'read DTO normalization must not rewrite frozen requests or business facts')
++})
+ test('dedicated VIEW does not grant source/list without full original viewing permissions',async()=>{
+  const f=fixture();await create(f);f.data.sys_role_permissions=f.data.sys_role_permissions.filter(r=>r.permission!=='payment.view')
+  for(const read of [()=>f.module('service').findAll({},9),()=>f.module('service').getSource(11,9),()=>f.module('service').findById(61,9)])await assert.rejects(read(),e=>e.code==='SUPPLIER_REFUND_AUTH_DENIED')
+--- a/docs/finance-permission-time.md
++++ b/docs/finance-permission-time.md
+@@ -441,3 +441,10 @@
+ `GET /api/notifications` 的待调拨计数沿现行调拨列表规则：`from_warehouse_id` 或 `to_warehouse_id` 任一端在当前用户范围内即可计入，使用既有 `transferScopeFilter`。原通知误用该表不存在的 `warehouse_id`，使非空限仓请求在计数查询报错。空范围计数为0，不限仓保留全量；状态1/2、软删除排除、原通知文本/跳转及其它计数保持。
+ 
+ `tests/workbench.test.js` 在不连接数据库的边界替身下执行真实通知服务，覆盖源仓/目标仓、两端命中不重复、范围外、空范围和不限仓，并保留原待上架与已取消巡检守卫。先取得不存在列的预期红测，再验证最小修补转绿；此证据只证明离线 SQL/参数与响应契约，修后真实 API/GUI、MySQL 和现场结果由总验收另核，不代表生产已验证。
++
++
++### 2026-10-06 供应商退款读取的业务 DATE 合同补正
++
++普通应用连接池使用 `timezone: +08:00` 且未设置 `dateStrings`，MySQL `refund_date` 因而可以读为北京午夜的 `Date`；直接 JSON 序列化会变成前一日16时的 UTC 时间字符串。RF 列表与详情现沿本域已有 `rules.date` → `backendTime.beijingTodayYmd`，将业务 DATE 明确输出为冻结的 `YYYY-MM-DD`，供确认、收到、取消与原完整请求恢复使用。原付款来源日期与资金/补录证明已经沿该工具核对；本次只补两处只读 DTO，不改连接池、SQL、资金金额、期间或前端严格日期合同。
++
++`tests/supplier-refunds.test.js` 在夹具 JSON 克隆之后向真实服务读取注入 MySQL 式 `Date`，分别验证列表/详情及字符串对照，并断言冻结请求和业务事实未被只读转换改写。Node 22.23.2 禁网/禁 listen/受保护文件守卫下，修前两项 `Date` 用例准确复现 `2026-10-05T16:00:00.000Z` 对 `2026-10-06` 的失败，修后四项通过；既有八文件 RF 离线回归295项通过、守卫企图为0。证据仅为离线服务/DTO合同，真实 API/GUI 复验由本批总验收另核，不代表银行、人员、会计或生产验收。

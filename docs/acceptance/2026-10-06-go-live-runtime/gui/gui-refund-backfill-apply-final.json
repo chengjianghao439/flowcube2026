@@ -1,0 +1,77 @@
+{
+  "name": "gui-refund-backfill-apply-final",
+  "checks": [
+    "闭期RF另一人员冻结200",
+    "闭期实收409不改日期",
+    "显式申请跨期补录200",
+    "页面区分申请与已收资金"
+  ],
+  "api": [
+    {
+      "method": "GET",
+      "path": "/api/supplier-refunds/19",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/supplier-refunds/19/confirm",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/supplier-refunds?page=1&pageSize=20",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/logout",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/login",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/settings/logo",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/printer-bindings",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/supplier-refunds?page=1&pageSize=20",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/supplier-refunds?page=1&pageSize=20",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/notifications",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/supplier-refunds/19",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/supplier-refunds/19/receive",
+      "status": 409
+    },
+    {
+      "method": "POST",
+      "path": "/api/supplier-refunds/19/receive",
+      "status": 200
+    }
+  ],
+  "errors": []
+}

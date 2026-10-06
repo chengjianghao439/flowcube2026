@@ -109,6 +109,10 @@ async function readyToShipWithinTransaction(conn, id, { requestKey, userId, scop
     }
   }
 
+  if (isReturnOut && Number(taskRow.status) !== WT_STATUS.PICKING) {
+    throw new AppError('退货出库任务已不在拣货中，请核对原操作结果', 409, 'RETURN_READY_STATUS_CHANGED')
+  }
+
   await assertTaskPickScanClosure(conn, id)
   await compareAndSetStatus(conn, {
     table: 'warehouse_tasks',

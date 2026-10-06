@@ -1,3 +1,9 @@
+import { HandlingSourcesPanel } from './HandlingSourcesPanel'
+import { HandlingIntentDialog } from './HandlingIntentDialog'
+import { ConversionDialog } from './ConversionDialog'
+import { useApprovalDetailHandoff } from '@/hooks/useApprovalDetailHandoff'
+import { ApprovalHandoffNotice } from '@/components/shared/ApprovalHandoffNotice'
+import { getDisposalDetailApi } from '@/api/disposal'
 import { money } from '@/lib/format'
 import { useState } from 'react'
 import { X } from 'lucide-react'
@@ -21,6 +27,7 @@ import DisposalQueryDialog, { type DisposalQueryValues } from './DisposalQueryDi
 import { DISPOSAL_STATUS_TONE, DISPOSAL_STATUS_LABEL } from './constants'
 
 export default function DisposalPage() {
+  const [intentVisited, setIntentVisited] = useState(false), [intentOpen, setIntentOpen] = useState(false), [conversionIds, setConversionIds] = useState<number[]>([]), [conversionId, setConversionId] = useState<number | null>(null)
   const [keyword, setKeyword] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [warehouseFilter, setWarehouseFilter] = useState<number | null>(null)
@@ -29,8 +36,11 @@ export default function DisposalPage() {
   const [endDate, setEndDate] = useState('')
   const [queryOpen, setQueryOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
+  const [suggestionOpen, setSuggestionOpen] = useState(false)
+  const [suggestionVisited, setSuggestionVisited] = useState(false)
   const [detailId, setDetailId] = useState<number | null>(null)
   const { can } = usePermission()
+  const handoff = useApprovalDetailHandoff('/disposals', PERMISSIONS.INVENTORY_DISPOSAL_VIEW, getDisposalDetailApi, createOpen || suggestionOpen || queryOpen || detailId != null)
   const { data: warehouses } = useWarehousesActive()
 
   const { data, isLoading } = useDisposalList({
@@ -96,7 +106,7 @@ export default function DisposalPage() {
     {
       key: 'id', title: '操作', width: 100,
       render: (_, row) => (
-        <Button size="sm" variant="outline" onClick={() => setDetailId((row as DisposalOrder).id)}>查看/处理</Button>
+        <div className="flex gap-1"><Button size="sm" variant="outline" onClick={() => setDetailId((row as DisposalOrder).id)}>查看/处理</Button>{(row as DisposalOrder).status === 3 && can(PERMISSIONS.INVENTORY_DISPOSAL_APPROVE) && <Button size="sm" variant="outline" onClick={() => { const id = (row as DisposalOrder).id; setConversionIds(ids => ids.includes(id) ? ids : [...ids, id]); setConversionId(id) }}>整单签认</Button>}</div>
       ),
     },
   ]
@@ -105,13 +115,14 @@ export default function DisposalPage() {
     <div className="space-y-4">
       <PageHeader
         title="滞销库存处理"
-        description="圈选滞销商品生成处置单 → 审批 → 降价促销/退货供应商/报废（处置只走 ERP 端，出库自动扣库存）"
+        description="促销走正常销售，退供应商走采购退货；新独立单只报废，沿原审批后执行。历史处理单保留追溯，旧已批准单待签认。"
         actions={
           <>
             <Button variant="outline" onClick={() => downloadExport('/export/disposals').catch(e => toast.error((e as Error).message))}>导出</Button>
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
+            <Button variant="outline" onClick={() => { setSuggestionVisited(true); setSuggestionOpen(true) }}>滞销建议</Button>
             {can(PERMISSIONS.INVENTORY_DISPOSAL_CREATE) ? (
-              <Button onClick={() => setCreateOpen(true)}>+ 新建处置单</Button>
+              <Button onClick={() => { setSuggestionVisited(true); setCreateOpen(true) }}>+ 新建报废单</Button>
             ) : undefined}
           </>
         }
@@ -130,10 +141,16 @@ export default function DisposalPage() {
         </div>
       )}
 
+      {can(PERMISSIONS.INVENTORY_DISPOSAL_CREATE) && <Button variant="outline" onClick={() => { setIntentVisited(true); setIntentOpen(true) }}>保存处理意图</Button>}
+      <HandlingSourcesPanel />
       <DataTable columns={columns} data={data?.list || []} loading={isLoading} />
       <ListSummary total={total} unit="单" />
 
-      <CreateDisposalDialog open={createOpen} onClose={() => setCreateOpen(false)} />
+      <ApprovalHandoffNotice {...handoff} />
+      {handoff.data && <DisposalDetailDialog open={handoff.open} onClose={handoff.close} id={handoff.data.id} initialDetail={handoff.data} actionsDisabled={!handoff.ready} />}
+      {suggestionVisited && <CreateDisposalDialog open={createOpen || suggestionOpen} mode={createOpen ? 'create' : 'suggestions'} onClose={() => { setCreateOpen(false); setSuggestionOpen(false) }} />}
+      {intentVisited && <HandlingIntentDialog open={intentOpen} onClose={() => setIntentOpen(false)} />}
+      {conversionIds.map(id => <ConversionDialog key={id} id={id} open={conversionId === id} onClose={() => setConversionId(null)} />)}
       <DisposalDetailDialog open={!!detailId} onClose={() => setDetailId(null)} id={detailId} />
       <DisposalQueryDialog
         open={queryOpen}

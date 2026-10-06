@@ -1,4 +1,5 @@
 import { payloadClient as client } from './client'
+import { withRequestKeyHeaders } from '@/lib/requestKey'
 import type { Pagination } from '@/types'
 
 /** 资金账户。currentBalance 是流水投影，服务端重算，前端只读 */
@@ -26,8 +27,8 @@ export interface AccountTransaction {
   direction: 1 | 2
   directionName: string
   amount: number
-  /** 1收款 2付款 3费用报销 4余额调整 5退货退款（后端 BIZ_TYPE） */
-  bizType: 1 | 2 | 3 | 4 | 5
+  /** 1收款 2付款 3费用报销 4余额调整 5退货退款 6供应商退款（后端 BIZ_TYPE） */
+  bizType: 1 | 2 | 3 | 4 | 5 | 6
   bizTypeName: string
   bizId?: number | null
   bizNo?: string | null
@@ -44,7 +45,7 @@ export const getAccountsApi = (p: object = {}) =>
     '/finance/accounts', { params: p })
 
 /** 收付款弹窗的账户下拉：只返回启用的 */
-export const getActiveAccountsApi = () => client.get<FinanceAccount[]>('/finance/accounts/active')
+export const getActiveAccountsApi = (config: import('axios').AxiosRequestConfig = {}) => client.get<FinanceAccount[]>('/finance/accounts/active', config)
 
 export const createAccountApi = (d: object) => client.post<{ id:number; code:string }>('/finance/accounts', d)
 export const updateAccountApi = (id: number, d: object) => client.put<unknown>(`/finance/accounts/${id}`, d)
@@ -55,9 +56,9 @@ export const adjustAccountApi = (id: number, d: { targetBalance: number; happene
   client.post<{ id:number; balance:number; diff:number }>(`/finance/accounts/${id}/adjust`, d)
 
 /** 账户流水。不传 accountId = 查全部账户（资金流水页的默认形态） */
-export const getAccountTransactionsApi = (p: { accountId?: number; bizType?: string; direction?: string; startDate?: string; endDate?: string; keyword?: string; page?: number; pageSize?: number }) =>
+export const getAccountTransactionsApi = (p: { accountId?: number; bizType?: string; direction?: string; startDate?: string; endDate?: string; keyword?: string; page?: number; pageSize?: number }, config: import('axios').AxiosRequestConfig = {}) =>
   client.get<{ list: AccountTransaction[]; summary: { inAmount:number; outAmount:number }; pagination: Pagination }>(
-    '/finance/accounts/transactions', { params: p })
+    '/finance/accounts/transactions', { ...config, params: p })
 
 // ── 费用报销 ──────────────────────────────────────────────────────────────────
 
@@ -128,8 +129,27 @@ export const cancelExpenseClaimApi   = (id: number) => client.post<unknown>(`/fi
 export const approveExpenseClaimApi  = (id: number) => client.post<unknown>(`/finance/expense-claims/${id}/approve`)
 export const rejectExpenseClaimApi   = (id: number, reason: string) =>
   client.post<unknown>(`/finance/expense-claims/${id}/reject`, { reason })
-export const payExpenseClaimApi = (id: number, d: { accountId: number; happenedAt?: string; remark?: string }) =>
-  client.post<unknown>(`/finance/expense-claims/${id}/pay`, d)
+/**
+ * 报销付款。带 requestKey 幂等（后端 beginResourceOperationRequest，action=expense.pay.<id>）：
+ * 连点/断网重试不会重复出账；缺请求键时后端放行老客户端。
+ *
+ * backfillReason 有值＝这次不是「付款」，而是把它**提交成一张跨期补录申请**：付款日期落在
+ * 已结账期间时后端 409，业务入口据此改走审批流，用**同一个 requestKey** 重发并带上原因。
+ * 此时返回体是申请单 `{ applicationNo }`（HTTP 202），不是付款结果——调用方按 applicationNo
+ * 是否存在区分，不能因为 HTTP 状态拿不到就当成功。
+ */
+export const payExpenseClaimApi = (
+  id: number,
+  d: { accountId: number; happenedAt?: string; remark?: string },
+  requestKey?: string,
+  backfillReason?: string,
+  config?: { skipGlobalError?: boolean },
+) =>
+  client.post<{ id: number; status: number; amount: number; applicationNo?: string }>(
+    `/finance/expense-claims/${id}/pay`,
+    backfillReason ? { ...d, backfillRequest: true, backfillReason } : d,
+    requestKey ? { ...config, headers: withRequestKeyHeaders(requestKey) } : config,
+  )
 
 // ── 资金看板 ──────────────────────────────────────────────────────────────────
 
@@ -148,3 +168,11 @@ export interface FinanceDashboard {
 
 export const getFinanceDashboardApi = (p: { startDate?: string; endDate?: string } = {}) =>
   client.get<FinanceDashboard>('/finance/dashboard', { params: p })
+
+/** 资金流水的准确供应商退款来源，仅只读追溯。 */
+export interface SupplierRefundTrace {
+  id: number; refund_no: string; status: number; amount: string; refund_date: string
+  fund_transaction_id: number | null; voucher_id: number | null; voucher_generate_error: string | null
+}
+export const getSupplierRefundTraceApi = (id: number, config: import('axios').AxiosRequestConfig) =>
+  client.get<SupplierRefundTrace>(`/supplier-refunds/${id}`, config)

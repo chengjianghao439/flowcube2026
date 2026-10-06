@@ -39,6 +39,12 @@ import { useQueryClient } from '@tanstack/react-query'
 
 const INVALIDATION_MAP = {
 
+  /** 六类审批来源的提交、撤回、节点推进或结束；仅由真实成功回调调用。 */
+  approval_pending_changed: [
+    ['approval-pending'],
+    ['dash-pending-approvals'],
+  ],
+
   // ── 销售 ──────────────────────────────────────────────────────────────────
 
   /** 新建草稿：仅影响销售列表 */
@@ -118,11 +124,15 @@ const INVALIDATION_MAP = {
   /** 确认采购单（不再自动生成入库任务） */
   purchase_confirm: [
     ['purchase'],
+    ['approval-pending'],
+    ['dash-pending-approvals'],
   ],
 
   /** 取消采购单 */
   purchase_cancel: [
     ['purchase'],
+    ['approval-pending'],
+    ['dash-pending-approvals'],
   ],
 
   /** 编辑采购单草稿 */
@@ -135,9 +145,11 @@ const INVALIDATION_MAP = {
     ['purchase'],
   ],
 
-  /** 撤回确认：回到草稿，仅影响采购单本身 */
+  /** 撤回确认：回到草稿，同步统一待办与首页摘要 */
   purchase_withdraw_confirm: [
     ['purchase'],
+    ['approval-pending'],
+    ['dash-pending-approvals'],
   ],
 
   /** 采购审批通过（审计 4.7）：待审批 → 已提交，刷新采购列表 + 待我审批 */
@@ -268,9 +280,11 @@ const INVALIDATION_MAP = {
 
   // ── 滞销库存处理（P2-9）──────────────────────────────────────────────────
 
-  /** 创建/取消处置单：仅影响处置单列表 */
+  /** 处置原状态动作：更新处置列表及统一待办 */
   disposals_action: [
     ['disposals'],
+    ['approval-pending'],
+    ['dash-pending-approvals'],
   ],
 
   /** 建议圈选（新建页面）：滞销商品列表 */
@@ -280,6 +294,8 @@ const INVALIDATION_MAP = {
 
   /** 执行处置：FIFO 扣容器，库存全维度刷新（处置后建议列表也应刷新——该商品已不滞销） */
   disposal_execute: [
+    ['approval-pending'],
+    ['dash-pending-approvals'],
     ['disposals'],
     ['disposal-suggestions'],
     ['inventory-stock'],

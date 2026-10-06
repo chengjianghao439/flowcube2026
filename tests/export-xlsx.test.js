@@ -14,7 +14,7 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 const path = require('node:path')
 const ExcelJS = require(path.join(__dirname, '../backend/node_modules/exceljs'))
-const { exportXlsx } = require('../backend/src/utils/excelExport')
+const { exportXlsx, exportStatementXlsx } = require('../backend/src/utils/excelExport')
 
 /** 收集导出流为 Buffer 的假响应对象 */
 function fakeRes() {
@@ -77,4 +77,31 @@ test('非日期值不被打扰（金额/字符串保持原值与原类型）', a
   const cell = ws.getRow(2).getCell(1)
   assert.equal(cell.value, 358.43)
   assert.equal(cell.numFmt, undefined)
+})
+
+test('资料名称地址按列选择换行且留足行高，完整值和其他列格式保持', async () => {
+  const profile = { name: '𠮷'.repeat(100), address: '长地址'.repeat(66) + '尾字', amount: 358.43 }
+  const ws = await exportToWorksheet([
+    { header: '客户', key: 'name', width: 24, wrapText: true },
+    { header: '地址', key: 'address', width: 30, wrapText: true },
+    { header: '金额', key: 'amount', width: 14 },
+  ], [profile])
+  const row = ws.getRow(2)
+  assert.equal(row.getCell(1).value, profile.name)
+  assert.equal(row.getCell(2).value, profile.address)
+  assert.equal(row.getCell(1).alignment?.wrapText, true)
+  assert.equal(row.getCell(2).alignment?.wrapText, true)
+  assert.ok(row.height >= 100, '200字符地址必须有多行空间')
+  assert.equal(row.getCell(3).value, profile.amount)
+  assert.notEqual(row.getCell(3).alignment?.wrapText, true)
+})
+
+test('正式对账单的长单位抬头完整换行，不固定20pt裁切', async () => {
+  const res = fakeRes(); const name = '𠮷'.repeat(100)
+  await exportStatementXlsx(res, { title: '客户对账单', partyLabel: '客户', partyName: name, statementNo: 'ST-TEST', periodStart: '2031-01-01', periodEnd: '2031-01-31' }, [])
+  const wb = new ExcelJS.Workbook(); await wb.xlsx.load(Buffer.concat(res.chunks))
+  const ws = wb.worksheets[0]
+  assert.equal(ws.getCell('A2').value, `客户：${name}`)
+  assert.equal(ws.getCell('A2').alignment.wrapText, true)
+  assert.ok(ws.getRow(2).height > 20)
 })

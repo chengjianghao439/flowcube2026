@@ -10,6 +10,7 @@ import { useCreateCustomer, useUpdateCustomer } from '@/hooks/useCustomers'
 import { toast } from '@/lib/toast'
 import { SETTLEMENT_TYPE, type SettlementType } from '@/generated/status'
 import type { Customer } from '@/types/customers'
+import { normalizePartyProfile, PARTY_PROFILE_LIMITS } from '@/lib/partyProfile'
 
 interface Props { open: boolean; onClose: () => void; customer?: Customer | null }
 
@@ -21,7 +22,6 @@ const empty = {
   creditLimit: '' as string,
   isActive: true,
 }
-const PHONE_RE = /^1\d{10}$/
 
 export default function CustomerFormDialog({ open, onClose, customer }: Props) {
   const isEdit = !!customer
@@ -56,9 +56,11 @@ export default function CustomerFormDialog({ open, onClose, customer }: Props) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (f.phone && !PHONE_RE.test(f.phone)) { toast.error('请输入正确的手机号'); return }
+    let profile
+    try { profile = normalizePartyProfile(f, '客户') }
+    catch (error) { toast.error((error as Error).message); return }
     const { creditEnabled, creditLimit: cl, isActive, ...rest } = f
-    const payload = { ...rest, creditLimit: creditEnabled ? (cl === '' ? 0 : Number(cl)) : null }
+    const payload = { ...rest, ...profile, creditLimit: creditEnabled ? (cl === '' ? 0 : Number(cl)) : null }
     try {
       if (isEdit && customer) {
         await update.mutateAsync({ id:customer.id, data:{ ...payload, isActive } })
@@ -100,15 +102,15 @@ export default function CustomerFormDialog({ open, onClose, customer }: Props) {
             )}
             <div className="space-y-1">
               <Label htmlFor="customer-name">客户名称 *</Label>
-              <LimitedInput maxLength={20} id="customer-name" value={f.name} onChange={set('name')} placeholder="公司/个人名称" required />
+              <LimitedInput maxLength={PARTY_PROFILE_LIMITS.name} lengthMode="unicode" id="customer-name" value={f.name} onChange={set('name')} placeholder="公司/个人名称" required />
             </div>
             <div className="space-y-1">
               <Label htmlFor="customer-contact">联系人</Label>
-              <LimitedInput maxLength={5} id="customer-contact" value={f.contact} onChange={set('contact')} placeholder="联系人姓名" />
+              <LimitedInput maxLength={PARTY_PROFILE_LIMITS.contact} lengthMode="unicode" id="customer-contact" value={f.contact} onChange={set('contact')} placeholder="联系人姓名" />
             </div>
             <div className="space-y-1">
               <Label htmlFor="customer-phone">联系电话</Label>
-              <LimitedInput maxLength={11} id="customer-phone" value={f.phone} onChange={set('phone')} placeholder="11位手机号" inputMode="numeric" />
+              <LimitedInput maxLength={PARTY_PROFILE_LIMITS.phone} lengthMode="unicode" id="customer-phone" value={f.phone} onChange={set('phone')} placeholder="手机、座机或国际电话" inputMode="tel" />
             </div>
             <div className="space-y-1">
               <Label htmlFor="customer-email">邮箱</Label>
@@ -116,12 +118,12 @@ export default function CustomerFormDialog({ open, onClose, customer }: Props) {
             </div>
             <div className="space-y-1">
               <Label htmlFor="customer-address">地址</Label>
-              <LimitedInput maxLength={30} id="customer-address" value={f.address} onChange={set('address')} placeholder="详细地址" />
+              <LimitedInput maxLength={PARTY_PROFILE_LIMITS.address} lengthMode="unicode" id="customer-address" value={f.address} onChange={set('address')} placeholder="详细地址" />
             </div>
           </div>
           <div className="space-y-1">
             <Label htmlFor="customer-remark">备注</Label>
-            <LimitedInput maxLength={30} id="customer-remark" value={f.remark} onChange={set('remark')} placeholder="备注信息" />
+            <LimitedInput maxLength={PARTY_PROFILE_LIMITS.remark} lengthMode="unicode" id="customer-remark" value={f.remark} onChange={set('remark')} placeholder="备注信息" />
           </div>
           <h3 className="border-t pt-4 text-sm font-medium">结算与授信</h3>
           <SettlementTypeField

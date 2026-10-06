@@ -86,6 +86,8 @@ npm run test:permissions
 
 `npm run smoke:masterdata` 验证客户、供应商、部门和分类的真实 HTTP 管理接口、权限、引用保护与层级边界，使用本节独立测试环境，已接入 Tests CI 专项矩阵。夹具按本次ID清理，不全表删除，不重置共享编码序列。部门更新沿父链验证有效父级，省略 `managerId` 保留负责人，显式 `null` 清空；不能把局部字段更新当作负责人清空。细节见 `docs/masterdata-regression-2026-09-12.md`。
 
+`npm run test:party-profile` 是不启动应用、不连接数据库的真实 routes/service/导入/导出离线回归：仅 stub 数据库、鉴权及库存依赖，覆盖两主档字段、Unicode、原权限/唯一性、旧模板及地址尾列、原行号错误和 276 迁移的条件式源码/元数据计划。已接入 Tests CI static job；迁移 stub 不证明 MySQL 执行。`test:export` 另回读真实 XLSX 的完整名称/地址与换行行高；前端资料表单、跨端规则、打印数据适配和真实打印组件的受控 DOM 用例由既有 `npm --prefix frontend run test:unit` 通配发现并接 CI。GUI、Excel 客户端、真实 DB 与物理打印仍须独立验收。
+
 运行涉及数据库的测试前确认连接目标与测试数据清理行为，**不得连接生产库跑测试**。公共 `tests/helpers/testEnvironment.js` 要求 `NODE_ENV=test`、显式回环 `DB_HOST`、合法 `DB_PORT`、`DB_USER`/`DB_PASSWORD`、`flowcube_test` 或 `flowcube_<用途>_test` 库名；测试不再加载真实 `backend/.env`。可用 `FLOWCUBE_TEST_ENV_FILE=/绝对路径/.env.test` 显式加载测试专用配置，命令行环境优先，配置错误及迁移失败立即终止。新数据库测试必须复用此校验。**本机实操（2026-09-17 验证）**：测试库凭据在 `~/.config/flowcube/operations20260912-test.env`，文件名不是 `.env.test` 因而走不了 `FLOWCUBE_TEST_ENV_FILE`，改为 `set -a; source ~/.config/flowcube/operations20260912-test.env; set +a` 注入；还必须 `export APP_UPDATE_DOWNLOADS_DIR=/tmp/<可写目录>`，否则 `backend/src/app.js` 启动时就因默认 `/var/www/flowcube-downloads` 无写权限抛 EACCES——**这个报错与业务代码无关，别当成回归失败**。本机 Node 为 v26，前端单测因此有 9 个文件 56 个用例失败（`localStorage is not available`），属既有环境问题；对照基线时不看绝对数，看是否新增失败。没有运行或环境不具备时明确说明；不能据此声称全部通过。纯文档修改核对内容、路径和 diff 即可，不必启动数据库或全量业务回归。
 
 本轮修复回归入口：`npm run smoke:prelaunch-finance`、`smoke:prelaunch-scope-export`、`smoke:prelaunch-hr` 与 `test:prelaunch-runtime`；数据库仍必须使用第 3 节独立测试环境。
@@ -105,7 +107,7 @@ npm run test:permissions
 `npm run test:api-route-contract`（前后端路由契约：把 `app.use('/api/x')` 前缀与各 routes 文件的平铺路由拼成完整路径，比对前端 `client.<method>('<path>')` 的静态调用——参数名与查询串归一化；不一致即运行期 404，构建/lint/类型检查都不会红）同为纯离线断言，与上五条同批执行。**改路由名、改前端调用路径或新增嵌套 `router.use` 后都要跑它**（嵌套 router 需先补守卫的展开逻辑，见该文件头「已知边界」）。
 `npm run test:chart-series-limit`（分布类图表系列上限守卫：`TOP_SERIES_LIMIT` 只能定义在 `frontend/src/lib/topSeries.ts`，每个 `<Pie>` 的 `data` 必须来自 `limitTopSeries(...)`，点名的两张分布卡片与「其他 N 个…」文案必须仍在，「其他」切片必须有中性色）为纯离线断言，与上面各契约测试同批执行。**改分布类图表或 `limitTopSeries` 后都要跑它**（三条反向验证：饼图退回 `data.accounts`、再抄一份常量、删掉「其他 N 个」文案，都必须失败）。
 `.github/workflows/server-diagnostics.yml`（`workflow_dispatch` **只读**服务器诊断：内存/`MemAvailable`、进程 TOP RSS、容器状态与 cgroup 内存、OOM 记录、磁盘与目录占用、镜像/卷计数）是运维诊断入口——**本机出口 IP 被 sshd 限流时的唯一通道**，`tests/deployment-resources.test.js` 机械断言它不得含删除/重启/清理命令（反向验证 3 例成立）。
-运维/迁移回归（static job 「运维回归」步骤）：`node --test tests/ops-monitor-restore.test.js tests/deployment-resources.test.js tests/restore-trigger-normalize.test.js tests/migration-trigger-bodies.test.js`。前两项验备份恢复判定与资源边界，后两项验触发器分号规范化与迁移逐条切分，均不连数据库。
+运维/迁移回归（static job 「运维回归」步骤）：`node --test tests/ops-alert-notifications.test.js tests/ops-monitor-restore.test.js tests/deployment-resources.test.js tests/restore-trigger-normalize.test.js tests/migration-trigger-bodies.test.js`。前两项验备份恢复判定与资源边界，后两项验触发器分号规范化与迁移逐条切分，均不连数据库。
 
 废弃目录回归：`npm run release:check-downloads`（`backend/downloads/` 只允许 `.gitignore`/`README.md`）——`.gitignore` 挡得住普通提交、挡不住 `git add -f`，而守卫只看 git 视角，所以必须在 CI 静态 job 真跑，不连数据库。
 
@@ -584,3 +586,328 @@ style-compat用真实共享React组件和原Tailwind3浏览器计算值；不可
 2026-10-04 代表真实电脑业务页以原合成测试库真实登录复验18张浅深截图，销售/套件/库存查询/月结对账及来源跳转自然成功；server/pool/owner自然退出、Vite受控停止、端口与自有浏览器已收尾。PDA仓库页/往来页/设备平台未补验，不据此称全部页面通过；报告 `/tmp/flowcube-v0120-business-pages-report.json`。新候选仅在本地发布分支，主线/线上未更新。
 
 样式兼容真实浏览器脚本在初次启动显式设置 Chromium primaryHoverType=2，统一桌面 hover 测试前提（Linux无鼠标的headless默认能力可能不同）。仍通过实际鼠标移动和元素:hover/媒体能力双断言验真，2070项旧引擎golden不变；后段触摸为现代Chromium模拟，不能证明PDA真机。失败复现与CI轮次见 `docs/release-v0.12.0-result.md`。
+
+
+### R2 库存预占离线回归（2026-10-04）
+
+`bash scripts/with-dev-env.sh npm run test:inventory-reservations` 跑真实 routes/controller/service 与库存 projection/expected helper 的数据库边界 stub 回归，已接 Tests CI static job；不启动应用或连接数据库。前端可定向运行 `bash scripts/with-dev-env.sh npm --prefix frontend run test:unit -- src/pages/inventory/ReservationDetailsDialog.test.tsx src/api/inventory.reservations.test.ts`，由既有 test:unit 进入 CI。覆盖只读同连接、授权先于 count/page、隐藏原单隐私、有效/孤儿/未知来源、ATP不双扣绑定、准确行关联及异步读取所有者隔离。真实 MySQL SQL/隔离/EXPLAIN、GUI与现场属于独立证据，尚待验收。
+
+
+R2 服务器订阅补正可定向运行 `bash scripts/with-dev-env.sh npm --prefix frontend run test:unit -- src/api/client.base-url.test.ts src/api/inventory.reservations.test.ts src/pages/inventory/ReservationDetailsDialog.test.tsx src/api/plastic-boxes.recovery.test.ts src/api/client.refresh.test.ts src/api/client.session.test.tsx`。真实无draw组件回归先自然 exit1（旧原单仍显示）后修复，三条合法改址链与相邻Axios会话/续期/回退回归共6文件55项自然exit0；均由既有 test:unit 接入 CI。此证据不含真实服务器、GUI或数据库。
+
+### R3 统一审批原单级来源离线回归（2026-10-04）
+
+`bash scripts/with-dev-env.sh npm run test:approval-list-batches` 继续经既有Tests CI static命令覆盖真实service/routes的混合来源、原查看/动作权限、count/page同只读快照、自批NULL边界、无活动实例重复来源及失败释放；数据库边界stub，不启动应用。前端定向 `bash scripts/with-dev-env.sh npm --prefix frontend run test:unit -- src/pages/approvals/pending.test.tsx src/pages/approvals/pending.sources.test.tsx src/hooks/useApprovals.invalidation.test.tsx src/api/dashboard.test.ts src/hooks/useDashboard.polling.test.tsx` 覆盖真实API身份、单级原单跳转、四岗位OR入口、首页同count、合法服务器订阅/KeepAlive/会话晚响应，以及原成功动作失效两key。新增Vitest文件均由原test:unit自动进入CI，不另增无CI调用的脚本。
+
+先红证据分别为 `/tmp/go-live-r3-backend-red.log`（旧pool双连接读取及路由单权）、`/tmp/go-live-r3-frontend-red.log`（document NULL身份拒绝/层级与rowkey）、`/tmp/go-live-r3-invalidation-red.log`（原成功回调未刷新统一待办）；均自然exit1。这些证据仅证明离线源码/组件行为，不代表MySQL、EXPLAIN、真实GUI/仓库或生产；全批统一lint/类型/构建和数据库现场验收另行执行。
+
+最终离线服务9项自然exit0见 `/tmp/go-live-r3-approval-green.log`；与首批原单草稿/详情、默认API取齐及R2服务器setter相邻回归合计前端9文件89项自然exit0见 `/tmp/go-live-r3-frontend-final.log`。反向把role1误设为自批豁免，目标自批用例自然exit1（`/tmp/go-live-r3-self-guard-reverse.log`），恢复产品字节后再次9项通过。SQL标识符、只读查询循环、权限、路由、轮询及主题文档守卫分别验证，不代替上述真实业务链边界。
+
+六类成功动作缓存接线补正：`useApprovals.invalidation.test.tsx` 真实授信hook、改价页面及请购form的13个新增动作，409/网络未知后不刷新，真实成功才失效两待办key；原3项保留。先自然exit1（13红/3绿）见 `/tmp/go-live-r3-engine-invalidation-red.log`，修后16项自然exit0见 `/tmp/go-live-r3-engine-invalidation-green.log`。请购沿真实form.run/refetch链，不虚构专用hook；改价未finished保留原商品缓存规则，草稿创建不启动引擎。
+
+### R4–R6 连续前端批次定向离线回归
+
+通过 CI 已有 `npm --prefix frontend run test:unit` 自动收录，无新增独立脚本。Node 22 下定向命令：
+
+```bash
+bash scripts/with-dev-env.sh npm --prefix frontend run test:unit -- src/store/workspaceStore.test.ts src/router/mergedPageGroups.test.ts src/components/shared/MergedPage.test.tsx src/components/shared/MergedFinancePages.test.tsx src/components/shared/DailyWork.integration.test.tsx src/components/dashboard/registry.test.ts src/pages/dashboard/index.test.tsx
+```
+
+原相邻基线 6 文件 30/30。新增行为首轮自然 exit1（4 失败/13 通过），真实资金页和登记弹窗隐藏后读数反例自然 exit1（2/2 失败）。实现后上述 7 文件 39/39 自然 exit0，分别记录 `/tmp/go-live-r456-baseline.log`、`/tmp/go-live-r456-red.log`、`/tmp/go-live-r456-finance-red.log`、`/tmp/go-live-r456-green.log`。最终加入相邻 KeepAlive、成套路由、登记跨目标、手工应付及财务原单导航回归后，12 文件 88/88 自然 exit0（`/tmp/go-live-r456-final-targeted.log`）。定向 lint 自然 exit0（TopNav 原有 Fast Refresh 导出警告仍保留），前端约定 5/5、文档索引守卫与 diff 检查通过。资金页反例使用真实 KeepAlive、QueryClient、router、原表单及 API 边界 stub；不启动服务、不连接数据库。日志为本地证据，不能证明 GUI、真实财务动作或部署。
+
+### R7/R8 普通拆分回执与塑料盒三动作定向离线回归
+
+```bash
+bash scripts/with-dev-env.sh npm run test:container-split-recovery
+bash scripts/with-dev-env.sh npm --prefix frontend run test:unit -- src/pages/pda/split.recovery.test.tsx src/pages/pda/plastic-box.test.tsx src/pages/pda/index.permissions.test.tsx src/pages/pda/workflow-continuity.test.tsx src/router/pdaRoutes.binding.test.tsx src/api/plastic-boxes.recovery.test.ts
+```
+
+后端真实 service/controller/engine/routes 仅在 DB、打印、设备与幂等工具边界 stub，覆盖同连接一次提交/回滚、重放顺序、当前范围/设备、PC全量/PDA部分量、自并拒绝、原流水仓及首发明确未执行证据；新增脚本接 Tests CI 无DB契约步骤。前端真实页面/hooks/存储/API client 用离线 Axios adapter，覆盖 5xx与重挂/退出、失败查询、TTL、原键原body重试、错身份、账号/撤权/服务器往返晚响应、三动作固定码种、保留实例与隐藏扫码/自动核对，以及旧填盒深链订阅改址。Vitest沿原test:unit自动收录。
+
+自然 red 日志：`/tmp/go-live-r78-backend-red.log`（原行为6/6失败）、`/tmp/go-live-r78-definite-reject-backend-red.log`（1失败/8通过）、`/tmp/go-live-r78-definite-reject-pda-red.log`（1失败/14通过）、`/tmp/go-live-r78-fill-owner-red.log`（1失败/5通过）、`/tmp/go-live-r78-preflight-403-red.log`（前置403两条失败）、`/tmp/go-live-r78-pending-home-red.log`（持久未决返回首页失败）。最终自然 exit0：后端9/9 `/tmp/go-live-r78-backend-final.log`，前端6文件59/59 `/tmp/go-live-r78-frontend-final.log`。反向去掉隐藏实例成功守卫，`/tmp/go-live-r78-hidden-guard-reverse-red.log` 自然exit1；恢复后同用例exit0 `/tmp/go-live-r78-hidden-guard-restored-green.log`。定向 lint 后端0错误，前端0错误/路由27条FastRefresh警告；相关库存/路由/API/SQL/扫码/数量/CI接线契约 `/tmp/go-live-r78-contracts.log` 均自然exit0。
+
+质量复核补写事务重放的 RR 可见性边界：同一真实 service/helper 在维度锁等待期间模拟首请求提交，修前自然 exit1（9通过/1失败，`/tmp/go-live-r78-replay-snapshot-red.log`），写重放改当前读后同命令自然 exit0（10/10，`/tmp/go-live-r78-replay-snapshot-green.log`）。同时断言初始维度读取无容器锁、重放无新拆分/打印/回执写、本人独立查询仍非锁读；这是离线 SQL 边界模拟，未运行真实 MySQL 并发。
+
+smoke默认旧split标题取源码 `LEGACY_PAGE_TITLE`，兼容新固定动作动态标题；这里只同步夹具，不执行浏览器或DB smoke。真实 MySQL隔离/并发/回滚、实体打印及真实PDA票据/扫码、GUI、整批全量lint/type/build留总验收；不把离线stub或源码契约当现场证据。
+
+### R5 月结权限落点补正定向离线回归
+
+```bash
+bash scripts/with-dev-env.sh npm --prefix frontend run test:unit -- src/pages/reports/ReconciliationView.access.test.tsx src/pages/reports/ReconciliationView.confirm.test.tsx src/pages/payments/PaymentsView.retention.test.tsx src/components/shared/payments/SettleReceiptDialog.test.tsx src/components/shared/payments/finance-navigation.test.tsx src/components/shared/MergedFinancePages.test.tsx src/components/shared/DailyWork.integration.test.tsx
+```
+
+新增实际月结 leaf/HTTP adapter 反例先自然 exit1（6/6 失败，`/tmp/go-live-r5-monthly-red.log`），另核销 closed Finder 无查看权自动读取反例自然 exit1（1 失败/8 通过，`/tmp/go-live-r5-monthly-receipt-finder-red.log`）。窄修后包含原确认、保留与财务导航的 7 文件 63/63 自然 exit0（`/tmp/go-live-r5-monthly-final.log`），无 XHR 取数噪音。原相邻基线 6/6 有既有未 stub XHR 噪音，因此只作为旧断言基线；当前保留夹具补报表边界并用拒绝 adapter 断言无遗漏读取。新增测试沿 CI 原 `test:unit` 自动收录，不新增独立脚本。仅离线组件/API 边界，不连接 DB、不启动应用；整批全量 lint/type/build 与现场仍待总验收。
+
+### R9 最小重复销售开单定向离线回归
+
+```bash
+bash scripts/with-dev-env.sh npm run test:sale-reorder-source
+bash scripts/with-dev-env.sh npm --prefix frontend run test:unit -- src/pages/sale/reorder.test.tsx src/hooks/useRepeatSaleCreate.test.tsx src/pages/sale/RepeatSaleRecoveryPage.test.tsx src/pages/sale/form/index.test.tsx src/pages/sale/commercial/CommercialSalePage.test.tsx src/router/sale-commercial.test.ts
+```
+
+后端真实来源 service、原 create service/controller/routes 仅在 DB 与原依赖边界 stub，不加载数据库配置、不启动 HTTP；来源三批只读 RR/全单scope/白名单、准确父套及零目标/历史单位、单组件拒绝、严格参数与首发成功rollback证据均为实际行为。新增 `test:sale-reorder-source` 接 Tests CI static job；前端真实新建页面、KeepAlive、工作区 store/hooks 与 Axios adapter 沿原 `test:unit` 自动收录，覆盖当前报价/版本和0量、已有输入保护、source/raw query身份、满30拒绝/同源focus、三草稿同实例、隐藏晚ACK、原键原body、网络/5xx、重挂query-only、7天TTL、撤权查询与错误成功身份。
+
+自然业务 red：普通页面路由/导入4失败 `/tmp/go-live-r9-import-red.log`；保存冻结/恢复4失败 `/tmp/go-live-r9-create-behavior-red.log`；零目标/组件身份2失败4通过 `/tmp/go-live-r9-source-group-red.log`；原create与controller修正出口2失败2通过 `/tmp/go-live-r9-service-red.log`；旧概要服务器往返入口1失败 `/tmp/go-live-r9-opener-owner-red.log`。隐藏ACK导航反例见 `/tmp/go-live-r9-page-boundary-red.log`，该轮另一个失败是preview夹具漏必填说明字段，已补夹具，不将该错误当产品反例。最初新module/hook尚不存在的加载失败另存日志，不充作业务行为证据。
+
+最后diff自检发现先确认A后改址B仍露旧result ID，独立反例自然exit1（`/tmp/go-live-r9-confirmed-owner-red.log`），结果读取代次隔离后通过。本人普通create回执范围/动作/资源反例自然exit1（三失败四通过，`/tmp/go-live-r9-receipt-scope-red.log`），窄修后七项通过。恢复落点最初缺文件的加载失败不作业务证据；加空入口定位后，实际撤权重挂无核对界面和未注册落点两失败（`/tmp/go-live-r9-recovery-landing-behavior-red.log`），实现后真实 TopNav/KeepAlive/API adapter 两项通过，无来源/主档/额外POST（`/tmp/go-live-r9-recovery-landing-green.log`）。
+
+最终自然 exit0：后端13/13 `/tmp/go-live-r9-service-source-final.log`；前端R9与原详情五文件51/51，加相邻路由契约一项，共六文件52/52 `/tmp/go-live-r9-frontend-final.log`。相邻路由原测试仍要求独立套销售菜单，与已实现R4入口约定冲突，仅同步无独立nav、保深链/CREATE的期望，不改R4产品代码。两端原触及文件定向lint自然exit0 `/tmp/go-live-r9-eslint-front.log`、`/tmp/go-live-r9-eslint-back.log`；最后窄修lint `/tmp/go-live-r9-recovery-frontend-lint.log`、`/tmp/go-live-r9-receipt-backend-lint.log` 均exit0，TopNav保留既有HMR常量导出warning。首次窄lint未指定子目录config导致工具配置错误，补明确config后重跑，不将该错误当产品失败。本轮没有DB/app/browser或真实业务测试，没有迁移/提交/推送/部署；实际SQL与EXPLAIN、MySQL快照/并发/回滚、员工GUI与商业/普通创建后续库存资金链仍待验收。整批lint/type/build及全量单测留R11统一运行。
+
+R9规格窄补的来源隐藏反例自然exit1（54项中2失败，`/tmp/go-live-r9-source-pause-red.log`）：source迟到后仍GETcustomer、product迟到后仍GETquote；逐段代次检查后恢复只读新代次。真实Header/AddressBook/Select与Axios adapter新增`reorderAddress.test.tsx`，地址读取暂停、同实例未保存输入、unknown/ABA、合法UPDATE晚完成、旧onSelect/onValueChange及慢删除确认均有行为覆盖。反向仅撤Header的R9 opt-in接线，12项自然失败（`/tmp/go-live-r9-header-callback-red.log`）；测试捕获真实组件旧回调，复核冻结后原仓/承运商/运费/产品/地址的选择文本和输入不变。一次额外Select键盘展开步骤在jsdom中act超时，已移除该不稳定步骤，不计入业务反例或GUI证据；地址Portal仍为真实DOM验证。
+
+使用禁HTTP/socket/项目env的临时runner：`bash scripts/with-dev-env.sh env -u NODE_OPTIONS node /tmp/go-live-final-runner.cjs r9-spec-frontend`。新增地址测试及原`commercial/headerOwner.test.tsx`、`commercial/addressDraft.test.tsx`已纳定向名单，沿仓库`test:unit`自动收录。窄补终验9文件73/73、自然exit0，`/tmp/go-live-r9-spec-fix-final.log`与对应`.result.json`，workerGuards=9、auditEvents=0；九个触及TS/TSX文件定向lint自然exit0且audit0（`/tmp/go-live-r9-spec-fix-lint.runner.log`），后端本次无改不重跑13项。本证据仅离线组件/接口边界，原41文件交付和52项日志保留，DB/GUI与整批验收边界不变。
+
+### R10独立报废第一段定向离线回归
+
+```bash
+bash scripts/with-dev-env.sh npm run test:disposal-transition
+bash scripts/with-dev-env.sh npm --prefix frontend run test:unit -- src/api/disposal.test.ts src/hooks/useDisposalExecution.test.tsx src/pages/disposal/transition.test.tsx src/pages/disposal/DisposalRecoveryPage.test.tsx
+```
+
+后端严格VM只加载纯helper，DB/config/库存/日志/回执边界stub，执行真实service/routes/controller/domain guard，未知require直接拒绝。覆盖完整明细当前读、旧1/2/mixed拒绝无库存写、原驳回/取消/自批/范围、缺键、终态原键回放、RR当前读metadata、同conn排序维度/批量台账/一次commit及首发rollback证据。前端真实页面/hooks/KeepAlive/路由与Axios adapter覆盖共享持久占位、5xx/查询失败/TTL/缺body、原键原body、清理失败、晚confirm/ACK/隐藏/server ABA、撤VIEW后本人查询及真实建议API/草稿query/满30保留。建议用例仅替换低层Select的jsdom浮层定位，其他leaf和API为真实代码；不充作GUI证据。
+
+业务自然红包括新方式限制、完整旧行审批/执行和单位估值（/tmp/go-live-r10-backend-red.log），旧详情的动作与VIEW建议入口/API自动重放（/tmp/go-live-r10-frontend-existing-red.log），未查询就允许retry（/tmp/go-live-r10-fresh-proof-red.log），以及新审批交接隐藏旧驳回输入的相邻反例（/tmp/go-live-r10-reject-draft-red.log）。新文件未实现的加载失败、jsdom Select定位超时和夹具漏认证token另记为测试设置问题，不当业务红灯。最终定向证据沿/tmp/go-live-final-r10-*.log与.result.json，检查自然exit、worker-ready及audit0，不将守卫杀进程或超时称通过。前端随既有test:unit进入CI；新增backend脚本已接static job。
+
+旧tests/disposal.smoke.test.js仅同步源码：新1/2创建拒绝、合法全报废、稳定键原结果回放、容器/缓存一致、报废台账与原超可用量/状态断言；本轮不执行该DB smoke。状态3取消错误提示改documentStatusRules源文案；generated/status未包含该取消guard，也未手改生成物。尚待隔离MySQL的SQL/索引/并发/实际回滚、设备与员工GUI、真实库存/打印验收；整批lint/type/build/fullunit留R11统一，未完成06c–f关联或旧3签认出口。
+
+R10首轮交付（以下为规格窄修前）定向自然exit0：后端12/12、前端4文件33/33，相邻后端26/26、前端2文件38/38；对应`/tmp/go-live-final-r10-{backend,frontend,neighbors-backend,neighbors-frontend}.log`及`.result.json`，两组前端workerGuards分别4/2，全部auditEvents=0。临时撤完整旧明细分类守卫会自然exit1（2失败10通过，`/tmp/go-live-r10-classification-reverse.log`及`.result.json`）；finally还原后12/12再绿。反向仅离线交易模拟，不能称MySQL已复现。作者git diff --check通过；全lint/type/build留R11。
+
+最终资源复用自检补两条真实hook回归：A成功后切B旧反馈/answer不得挡B，A在途切B不能以A的running挡B或清B；A未知原记录仍持久供本人核对。前者自然exit1（1失败31通过，/tmp/go-live-r10-resource-context-red.log）；后者实际blocked反例存/tmp/go-live-r10-inflight-resource-red.log（该轮另两项失败由反例提前退出未释放延迟夹具连带，补finally释放，不算另两业务缺陷）。按原资源隔离反馈、uncertain及running后33/33自然exit0、4workers/audit0；此前31项结果为中间证据，最终以最新result.json为准。
+
+R10规格两Missing窄补：真实hook的延迟POST/查询拒绝覆盖server/actor ABA与撤权，清理失败反馈复核原epoch；真实详情覆盖A→B→A草稿恢复、准确原ID/reason提交及归属变化隔离。原实现自然11失败33通过（/tmp/go-live-r10-spec-fix-red.log及.result.json），修后4文件44/44、相邻审批交接2文件38/38自然exit0，workerGuards分别4/2、auditEvents均0；终验另存/tmp/go-live-r10-spec-fix-green.log、/tmp/go-live-r10-spec-fix-neighbors-green.log及对应.result.json。原首轮33项证据另保留/tmp/go-live-r10-before-spec-fix-frontend.log及.result.json；后端本次无改，不重复12项。仅离线组件/接口边界，MySQL/GUI/整批R11边界不变。
+
+R11首轮集成窄补只执行受影响离线名单：`bash scripts/with-dev-env.sh env -u NODE_OPTIONS node /tmp/go-live-final-runner.cjs r11-fixes-frontend r11-fixes-backend`。新增真实ProductFinderModal.reorder.test.tsx经Axios adapter覆盖原端点、actor/server ABA、隐藏/未知保存暂停与保输入、旧回调禁止回填、CATEGORY_VIEW；恢复入口测试覆盖损坏记录及打开前重核/MAX30。实际红为9失败40通过及商业Editor集合加载失败（新Finder7+恢复入口1+旧普通hook实参1，/tmp/go-live-r11-fixes-red.log/.result.json），修后6文件65/65、自然exit0/6workers/audit0。实际库存路由VM补pdaSessionOptional并将未知依赖严格拒绝，不读真实auth/DB配置或补JWT；原scope与库存查看权断言保留，文案/标准多行路由布局随原契约验收，后端窄12/12自然exit0/audit0。绿证据另存/tmp/go-live-r11-fixes-{frontend,backend}-green.log及.result.json，新组件测试沿既有test:unit进入CI。
+
+上述是定向证据，R11首轮全部日志保留initial前缀；两端lint和两build首轮0，前端36 warnings为HEAD既有33+本批新增3个react-refresh/only-export-components，非全为基线且无error。作者不重复全lint/type/build/fullunit；类型修复与15次被严格拦截、尚未定位来源的HTTP企图由根代理独立复核后按worker testPath整批复验，不能据定向audit0宣称15已消失。MySQL/GUI/设备与06c–f/旧3签认边界不变。
+
+Finder续批自检另有真实红：首批挂起→隐藏→返回仍GET第二批（1失败64通过，/tmp/go-live-r11-finder-batches-red.log/.result.json，exit1/6workers/audit0）。仅R9 scoped query消费并透传React Query取消signal，默认请求分支不消费/透传；还原可见后从新代次首批重新读并取齐第二批，原输入保留，终验65/65自然exit0/6workers/audit0。
+
+R11完整前端单测的15次被拦HTTP按worker定位为请购转单键测试9次、PDA收货测试6次，本次只补这两个真实页面夹具：严格Axios adapter分别接受原GET `/suppliers`（空keyword、page1、pageSize200）及GET `/products/qty-policies`（当前夹具商品169或162），返回合法列表/数量策略；未知请求在afterEach显式断言失败，finally还原adapter并清理QueryClient/DOM，不改SupplierFinder闭窗行为、收货业务或网络守卫。命令`bash scripts/with-dev-env.sh env -u NODE_OPTIONS node /tmp/go-live-final-runner.cjs r11-http-fixtures-frontend`初跑14断言均绿但wrapper因audit15失败（/tmp/go-live-r11-http-fixtures-red.log/.result.json）；修后2文件14/14、自然exit0/2workers/audit0（/tmp/go-live-r11-http-fixtures-green.log/.result.json）。临时拒绝该供应商URL会产生9失败5通过、自然exit1/audit0，证明查询库接住rejection也不能吞掉未知请求；finally还原后再绿（反向证据/tmp/go-live-r11-http-fixtures-unknown-red.log/.result.json）。这是两文件离线证据，完整frontend-unit以及受影响类型/lint复验由根代理接续，不能把窄audit0写成整批完成。
+
+2026-10-04 R11最终记录：最后两夹具分别通过独立规格和质量门，各自2文件14/14、自然exit0/worker2/audit0。随后根完整复跑frontend-unit为225文件1546/1546、自然exit0/worker225/audit0，日志无OFFLINE_NETWORK_DISABLED；受影响frontend lint（0 error/36 warning）和正确tsconfig类型复跑exit0/audit0。已通过的backend纯离线115/115、契约81/81、backend lint及ERP/PDA静态构建未受最后仅测试/文档变动影响；各job日志/结果位于`/tmp/go-live-final-<job>.log/.result.json`，完整汇总见`docs/superpowers/plans/2026-10-04-go-live-continuation-execution.md`的R11最终表。33 lint warning既有、3新增，非零警告。tmp runner与配置仅为本轮离线防护；没有DB/应用/真实HTTP/迁移/设备/打印/生产证据，276迁移与隔离/现场验收仍待执行。完整处置06c–f及旧批准单签认、供应商退款仍未实施。
+
+
+### E1 采购退货协调门的定向离线回归
+
+专项 `test:purchase-return-lock-budget` 在 package.json 和 Tests static job 接线，包含 `tests/purchase-return-lock-budget.test.js`、`tests/return-payment-lock-order.test.js`；前端 `src/pages/returns/purchase/form/cancel.test.tsx` 沿原 test:unit 自动收录。仅真实函数/页面与 SQL/引擎/Axios 边界 stub，VM require 白名单未知直接拒绝，不读 config/db、项目 env 或启动 app。原 inbound 来源断言默认可纯加载，新显式限仓调用才加载范围工具（测试替换该依赖）；不弱化业务限仓检查。
+
+本轮唯一测试运行方式为临时禁外连/项目凭据读取 runner：
+
+```bash
+bash scripts/with-dev-env.sh env -u NODE_OPTIONS node /tmp/go-live-final-runner.cjs e1-backend
+bash scripts/with-dev-env.sh env -u NODE_OPTIONS node /tmp/go-live-final-runner.cjs e1-frontend
+```
+
+正确夹具的首轮业务红为15失败2通过（/tmp/go-live-e1-red.log/.result.json）；先前缺 binding SQL stub 的设置错误不作业务红。当前成员投影0.1+0.2的四位精度反例1失败22通过（/tmp/go-live-e1-money-red.log/.result.json），补写回精度后绿。历史准确PO ID但缺可选单号反例被新 guard 错拒1失败23通过（/tmp/go-live-e1-historical-no-red.log/.result.json）；保留缺单号合法性，非空错单号仍拒绝。取消页真实确认/提示反例1失败1通过（/tmp/go-live-e1-cancel-red.log/.result.json），修后2/2（/tmp/go-live-e1-cancel-green.log/.result.json）。
+
+临时撤创建本次RC与对账成员漂移检查，等锁预算/待取消预算/对账成员三条断言自然失败，3失败20通过（/tmp/go-live-e1-guards-reverse.log/.result.json，exit1/audit0），finally还原正确代码。最终后端25/25、前端1文件2/2自然exit0、auditEvents=0，前端workerGuards=1，证据另存 /tmp/go-live-e1-backend-green.log/.result.json 与 /tmp/go-live-e1-frontend-green.log/.result.json，避免审阅重跑覆盖。取消用例严格只接受实际详情GET及原ID取消POST，未知请求afterEach断言失败，finally清理DOM/缓存及还原adapter；证明一次请求和两种真实员工提示，不充作GUI。
+
+离线只证明源码函数/交易模拟与响应边界，不称MySQL已复现或死锁已消除。实际SQL/索引/RC可见性、PO/PR/IT/WT/AP真实等锁并发、库存/实物归还与数据库提交回滚、ERP/PDA/设备验收仍待隔离环境执行。没有DB/app/browser/网络业务测试、迁移或提交推送；本批未跑全lint/type/build/全套件，留统一收尾。没有新增PR修改/删除、confirm/cancel成功回执、供应商退款或来源解除。
+
+
+E1质量门指出共享helper空 identity 的静态缺口：普通销售退货已读金额/model时，RR空快照不能证明AR当前不存在。仅补`returns.helpers.js`空分支当前存在性查询与`return-payment-lock-order.test.js`两个真实VM边界：recordType2快照无行/当前有行409且无statement/金额/event写；当前也无行保持null且无写。自然红2失败25通过（/tmp/go-live-e1-empty-identity-red.log/.result.json，exit1/audit0）；窄修绿27/27。临时撤新分支，精准同两项自然失败（/tmp/go-live-e1-empty-identity-reverse.log/.result.json，exit1/audit0），finally还原后最终27/27自然exit0/signalnull/audit0（/tmp/go-live-e1-empty-identity-green.log/.result.json）。只运行原e1-backend禁网runner，未重跑前端/整套；前述25/25+2/2为本修补前固定证据。原相对before的整体增量已刷新，同时提供/tmp/go-live-e1-quality-fix.diff，不将SQL stub的RR反例写成MySQL已复现。
+
+### 2026-10-05 · H1来源基础（离线，未执行277）
+
+`npm run test:disposal-handling` → `tests/disposal-handling.test.js`，已接Tests CI静态job。本批仅以Node22禁网/禁listen/禁受保护env读取的根临时runner `h1-backend`运行；VM默认拒绝未知require/SQL，只实际加载纯规则、领域service/routes/controller及纯zod/权限/operator/requestKey/sqlStatements，pool、连接、Express/auth及原业务模块为明确stub。没有DB/app/HTTP或DDL。
+
+首轮可调用空骨架14项红中，9项为输入/范围/身份/预算/结果断言缺失，5项空返回导致fixture TypeError单列，不当作业务复现（`/tmp/go-live-h1-scaffold-red.log/.result.json`，自然exit1/audit0）。后续三个夹具问题（JSON对象键序比较与将事务SET也误当数据SELECT）仅修夹具，不算业务红。真实模块新增两项明确反例：来源revision变更误阻原创建ACK、相同损坏digest被当作本人成功，14通过2失败（`/tmp/go-live-h1-original-receipt-red.log/.result.json`，自然exit1/audit0）；真实新API注册缺失16通过1失败（`/tmp/go-live-h1-route-red.log/.result.json`）；canonical JSON拼undefined的真实纯反例23通过1失败（`/tmp/go-live-h1-json-red.log/.result.json`）。
+
+完成后24/24，自然exit0/signalnull/audit0，固定 `/tmp/go-live-h1-green.log/.result.json`。覆盖范围先于连接/重放/总数/分页、UUID/key/actor/action/fullbody/resource永久身份、同conn一次提交及原响应写失败全回滚、当前master/unit/integer规则、Q/A/R异常不夹0、本人撤写权仍可核准确原结果/撤仓拒绝、不泄露目标、pending/not_found不猜成功、raw参数/controller/routes及277与真实INSERT列对齐。Date保留ISO、对象undefined省略/数组null保持真实JSON语义。反向同时撤范围/UUID身份/Q上限/旧JSON实现，精确5项失败19通过，`/tmp/go-live-h1-reverse.log/.result.json`自然exit1/audit0；finally还原后固定green来自最终24/24。
+
+277仅源码：四新表、三个nullable头marker，旧行历史ID无明细FK；索引/FK按名字与列序核对，所有证据RESTRICT而非cascade，具名CHECK及列形状漂移fail-loud。纯迁移拆句/结构守卫不能证明MySQL接受DDL、CHECK元数据规范化、重复执行、FK/索引形状或真实锁/并发/EXPLAIN。以上与完整主链、GUI/员工/PDA/打印均待独立验收；H2目标、H3事实、H4解除、H5旧单签认、H6UI/F退款未实施。最终全量lint/types/build/回归留本轮统一收尾。
+
+收尾静态核对发现原`disposal-transition.test.js`严格controller夹具需显式隔离新增`./disposal.handling`require；仅加空stub，不改原dispose/权限/状态断言。根将已核纯离线旧12项加入同一h1-backend，最终新24+邻接12=36/36，自然exit0/signalnull/audit0，固定`/tmp/go-live-h1-final-green.log/.result.json`；前述red/reverse仍为新增24项范围，旧12没有被降级或删除。
+
+H1规格窄修：277三头FK共用`fk_dh277_link`属数据库级symbol冲突。新增真实迁移源码守卫先在旧SQL自然exit1（36通过1失败，ERR_ASSERTION跨三表3≠1，audit0），`/tmp/go-live-h1-fk-fix-red.log/.result.json`。仅改三个全库唯一名字及对应两个metadata查询，保留各表原索引名；37/37。临时撤名称修复、另单独破坏metadata symbol归属，均精准同项36通过1失败，分别`/tmp/go-live-h1-fk-fix-reverse-symbols.log/.result.json`和`/tmp/go-live-h1-fk-fix-reverse-metadata.log/.result.json`，自然exit1/audit0。finally还原后最终37/37自然exit0/signalnull/audit0，固定`/tmp/go-live-h1-fk-fix-green.log/.result.json`。H1整体增量刷新；精准四路径fix单独保存。没有执行277/任何DDL、DB或整批套件，原36绿为修补前证据。
+
+H1质量CHECK窄修：旧归一化删除所有括号，弱budget/JSON分组被接受。新测试提取真实277 `SET @dh277_sql`条件，用严格有限模型执行生产比较，不是只测独立helper或SQL通用解析器；12个MySQL8源码打印canonical先全绿，两个弱式行为反例自然红49通过2失败（`/tmp/go-live-h1-check-fix-red.log/.result.json`，exit1/signalnull/audit0）：TERMINATED A=R=E=0弱式放行、evidence NULL/response bad-json弱式放行。生产仅改pending277的逐CHECK BINARY精确有限原文与CREATE/ADD字面introducer，未自动DROP/重建未知约束。
+
+新增12canonical/缺约束ADD/未知打印形态回归及两个反例，原37保持，最终51/51自然exit0/signalnull/audit0（`/tmp/go-live-h1-check-fix-green.log/.result.json`）。临时恢复生产旧删括号方法，12未知形态+2弱式共14精准失败、37通过，`/tmp/go-live-h1-check-fix-reverse.log/.result.json`自然exit1/audit0；finally还原后取固定最终green。四路径精准fix、15路径整体增量分别更新，根计划不动。源码打印规则取官方8.0分支（后端主题列来源）；仍非真实MySQL初次执行/重跑/DDL或并发证据，没有执行DB/app/整批检查，也未进入H2。
+
+## 2026-10-05 H2 离线创建验证
+
+`npm run test:disposal-handling` 现同时接 `tests/disposal-handling.test.js` 与 `tests/disposal-handling-create.test.js`，沿既有 Tests CI 静态 job 可达。本批只运行根严格临时 job `h2-backend`：H2 新文件、H1 两文件、sale-repeat-create、E1 两文件共六文件。命令为 `bash scripts/with-dev-env.sh env -u NODE_OPTIONS node /tmp/go-live-final-runner.cjs h2-backend`。新夹具实际加载三个原 create wrapper、领域规则/预算/永久操作/目标/本人读取、权威 unitConversion 与原 schema/controller/routes；仅 SQL/WMS/履约/事件/取号边界 stub，未知 require/SQL 抛错，新领域查询按准确资源绑定参数、marker/revision 模拟 WHERE/CAS，事件及 generic/永久占位纳入同 conn snapshot。
+
+首轮103项88绿15失败，其中1项原 schema 必填头缺失的 ZodError 是夹具错误，不计业务红；其余14项是缺关联、永久回放/回滚和拒绝断言。补合法头后的生产 schema 撤修独立证伪来源被 strip。自审补基础预算应先于 generic/普通主档查询的真实顺序反例105绿3红；随后在 source X 下将一次当前预算读取移到新 revision 后，fold 后只比较 A、不重复查询。最终108/108自然 code0/signal null/audit0；H2 新23项和必要邻接85项。覆盖三原创建同连接一次提交、link/marker/永久结果失败回滚、源 scope 先于 ACK、全域 UUID/action/actor/key/body/resource 身份、revision/TTL/当前行删除后原 ACK、fold 基本量、PR 原价/剩余/准确 PO、current active/单位漂移、超预算、无源原载荷同形/新表零读、本人查询及 POST/编辑/商业/repeat 组合边界。
+
+生产反向：撤早 scope/永久身份/预算组104绿4红；单撤预算107绿1红；撤 POST 来源 schema107绿1红；撤 edit raw 守卫107绿1红，均自然 code1/signal null/audit0，finally 已恢复正确源码后重跑108绿。固定证据 `/tmp/go-live-h2-{red,order-red,reverse-domain,reverse-budget,reverse-post-schema,reverse-edit,green}.{log,result.json}`；首红夹具归因必须保留。未运行277/真实 MySQL 并发与事务、HTTP/app、GUI/设备、业务 smoke、全量 lint/types/build；这些仍需授权后的隔离验收与最终统一检查。不能将离线模型称作数据库已验证。
+
+
+## 2026-10-05 H3 离线目标保护验证
+
+`test:disposal-handling` / 原 Tests CI 增接 `tests/disposal-handling-target-guards.test.js`。本批只运行根严格 `h3-backend` 四文件（新 H3、H2-create、E1 两文件），命令 `bash scripts/with-dev-env.sh env -u NODE_OPTIONS node /tmp/go-live-final-runner.cjs h3-backend`。真实 sale/disposal/WT ship wrapper、statusTransition、数量与领域守卫执行，SQL 按宣告 SELECT 投影返回字段、核准确 bound ID，未知 require/SQL 直接抛错；WMS/履约/授信/DB 边界仅离线 stub，禁止 source 查询。相邻两 fixture 只补纯 guard 的明确 require 名单，未改变原业务断言。
+
+有效首红68项57绿11红（4重建、零预占跨仓、pending软删、link身份、实发旧量9≠当前2、错 SO、历史行/量和真实重复行），自然 code1/signalnull/audit0，固定 `/tmp/go-live-h3-red.log/.result.json`。此前 DELETE 被 SELECT fixture 宽匹配与错 SO fixture 没提供合法旧头造成的 setup 另存 `setup-red`，不计业务红。修后覆盖原无来源零新表查询、同仓 reserve/release/部分派发、部分实发结案保历史 A、删除归还门无 WT 锁、当前 SOI/WTI 量和单价2（旧99）、头/任务身份、scope/device先于 ACK、原 ACK 后删行兼容及回执失败回滚。
+
+冻结前 exact-A 反例：未终结当前量9<A10本不合法，旧≤守卫72项70绿2红，`quantity-red`；改==后绿。生产反向撤 editable、pending删除门、新实发 current context，71项62绿9红（`reverse`）；单撤==回≤，72项70绿2红（`quantity-reverse`）。均自然 code1/signalnull/audit0，finally 精确恢复原正确字节。最终72/72（H3新21+必要邻接51）自然 code0/signalnull/audit0，固定 `/tmp/go-live-h3-green.log/.result.json`，全部反向已还原。
+
+这些是源代码/事务与 SQL 边界模拟证据，不是 MySQL 竞态或锁验证。277仍未执行；真实事务/等锁/索引、完整应用与业务 smoke、GUI/设备现场、整批 lint/types/build 尚未运行，留授权后的隔离验收与统一收尾。H4执行全集/解除、H5旧单签认、H6 UI/F退款未实施。
+
+H3规格派发窄修：SQL fixture 真实执行原派发过滤，新增两个真实 wrapper 负例（同仓额外零预占/已全派发行）、合法 sole 全派发仍原400及原 ACK 跳过当前行。生产旧过滤先行75项72绿3红（`/tmp/go-live-h3-dispatch-fix-red.log/.result.json`），均真实业务断言，没有新 setup/import 红。仅 linked 在 ACK 后完整当前 SOI 读/核，再原余量选择。反向只撤新增 full-row 校验，75项72绿3红，两个额外行负例及既有派发精确A负例（`dispatch-fix-reverse`），finally 精确恢复；最终四文件75/75自然code0/signalnull/audit0（H3新24+必要邻接51），固定 `/tmp/go-live-h3-dispatch-fix-green.log/.result.json`。原72绿及原反向证据保留为修前结果；六路径精准fix及13路径整体increment刷新。仍未执行MySQL、应用/业务smoke/现场或整批检查，没有进入H4/277新改。
+
+## 2026-10-05 H4 离线执行事实与解除验证
+
+`test:disposal-handling` / 原 Tests CI 增接 `tests/disposal-handling-facts.test.js` 和 `tests/disposal-handling-release.test.js`，现包含 H1/H2/H3/H4 五个本域文件。仅根严格临时 `h4-backend` 运行两新文件、H1 handling、H2 create、H3 guards、E1 purchase-return-budget 与原 disposal-transition 共七文件：`bash scripts/with-dev-env.sh env -u NODE_OPTIONS node /tmp/go-live-final-runner.cjs h4-backend`。真实领域/provider/永久操作/原 ready/controller/routes 执行；VM 显式 require 白名单，未知 require/SQL 抛错，不加载 config/db/app/env，SQL 依真实投影与准确 bound ID 模拟，同 conn snapshot/CAS/提交回滚可归因。
+
+首红128项107绿21个业务断言失败，固定 `/tmp/go-live-h4-red.log/.result.json`，自然 code1/signalnull/audit0。后续 finite 反例分别关闭新 release 路由/真实权限映射（142绿2红）、数量/进度/legacy 完整批准身份（148绿6红）、正常 no-WT/PR3 全量完成口径（160绿5红）、canonical UUID 与冻结缺 flag（166绿2红）、无 WT 真实必要字段（168绿1红）。固定证据为同前缀 `route-red/boundary-red/progress-red/proof-red/no-task-proof-red`，均自然 code1/audit0，不将 fixture/setup 当业务红。
+
+生产反向仅撤范围、永久 UUID 身份、日志候选完整身份、PR3 全量 E=A 与新 return ready 状态门，最终183项163绿20个业务断言失败，自然 code1/signalnull/audit0（`/tmp/go-live-h4-reverse.log/.result.json`）；四生产文件 finally 精确恢复字节，记录 `/tmp/go-live-h4-reverse-restore.json`。首次加入 R10 邻接曾有9个缺 pure target-guard require 的 setup 失败，另存 `reverse-setup`，不计进20个业务反例；补真实纯 guard 和 NULL marker 后原断言保留，没有宽放 require/SQL。
+
+恢复正确源码、补 originKind/link.state 与原 R10 邻接后的最终七文件183/183，自然 code0/signalnull/audit0，固定 `/tmp/go-live-h4-green.log/.result.json`。这次 green 包含相邻原断言，不能把未运行层级写作已验收。
+
+覆盖全历史软删 WT、合法分段日志/typed 候选与脏跨域/错 SKU/仓/move、取消 picked 非 E、ANY 容器锁和取消/已发箱、准确 PR/POI/原价身份、报废台账、无 WT 强创建证明及 missing 字段、批量查询数不随 links 增长、目标概要真实 VIEW/full scope、Q10/A6/E2/R4/avail8、六档进度、ordinary/legacy 分类与 ACTIVE/TERMINATED（含 R0）、RC/固定锁序/无事实锁、CAS 全回滚、永久 UUID 全身份/revision/TTL 重放与本人撤写权查询、new ready terminal 拒绝/原 ACK 保留。真实 MySQL、RC/等锁/并发/索引与180天流水缺失现场、完整 app/HTTP/业务 smoke、GUI/PDA/打印及统一 lint/types/build 未运行，留授权隔离验收；277 本批未改/未执行，未进入 H5/H6/F。
+
+### H4 规格两处窄修
+
+新增真实读/release SO4 反例：删除实发 WT21/流水只留取消 WT22，或全部历史 WT8，均不能以当前 SOI 证明 E0。legacy 正例升级完整原199/277头行、批准、固定 DTO、两旧行/两来源和成功原 operation；新增 canonical null、缺字段/错 ID/no/UUID/fingerprint、漏/重/多/错映射来源、错误冻结快照/key/原响应/永久操作等27反例。结构反例同步同一错误响应到 conversion/source/op，确保检验协议本身而非仅副本不同。另有 current revision 前进仍保原 DTO revision1、全来源同连接一次非锁批读正例。
+
+修前七文件215项183绿32个业务断言红，自然 code1/signalnull/audit0，没有 setup/import/SQL 红，固定 `/tmp/go-live-h4-spec-fix-red.log/.result.json`。只改 SO4 E>0 与 legacy 纯协议 validator/非锁批读后215绿。有限生产反向恢复修前 facts/release 两文件，215项183绿32业务红，固定 `spec-fix-reverse` 同前缀 log/result；finally 两文件精确字节恢复（`/tmp/go-live-h4-spec-fix-reverse-restore.json`）。这是本域代码/事务边界证据，不是实际 MySQL 竞态或 H5 serializer/签认验收；277、DB/app 与全量检查未执行。
+
+恢复后最终七文件215/215自然 code0/signalnull/audit0，固定 `/tmp/go-live-h4-spec-fix-green.log/.result.json`；11路径修补增量与原21路径整体快照 diff 分别保存。作者停止写入待独立规格复验与质量门，不能将作者绿称作 H4 已验收。
+
+### H4 质量 PR 事实窄修
+
+将独立只读探针转成现有严格夹具15个真实反例：PR4+WT7/准确 E2 的 getSource 与 release、PR WT4/8/7 的 sale_order_id 为987/0/缺字段的读取及解除、冻结取消 PR 的脏销售指针，以及冻结 PR3 实发证据被重标 PR4。原合法 PR 夹具显式 NULL 与真实 SELECT* 字段一致，PR3 全量完成/R0 等相邻原断言保持。没有新增测试文件，原 package/CI 接线沿用。
+
+首红七文件230项215绿15 BUSINESS 红，natural code1/signalnull/audit0，无 SETUP/import/SQL 错误，固定 `/tmp/go-live-h4-quality-fix-red.log/.result.json`。生产只补 evaluate 的显式 NULL PR 归属和 PR4 E0 两个条件；单独恢复本次之前 facts 源码撤这组新条件，230项215绿15 BUSINESS 红（`quality-fix-reverse` 同前缀 log/result），finally 精确恢复一个生产文件，`/tmp/go-live-h4-quality-fix-reverse-restore.json`含字节一致与SHA256。未改 SQL/锁/277、H5/H6/F 或其他业务；这些仍是代码/事务模拟证据，不是 MySQL/实物、应用或全量验收。
+
+恢复后中间221绿9个夹具断言失败，是 combined getSource/release 用例把原只读快照 commit 误计为写提交；单列 `quality-fix-fixture-commit-red`，不计业务缺陷。仅将该断言限定为读取结束后解除不新增 commit，保留 pending/E/状态快照不变断言。修正夹具后，同最终测试文本再次只撤上述两条 PR 守卫：230项215绿15 BUSINESS 红，自然 code1/signalnull/audit0，固定 `/tmp/go-live-h4-quality-fix-final-reverse.log/.result.json`；finally 精确恢复，`/tmp/go-live-h4-quality-fix-final-reverse-restore.json`记录一致字节/SHA256。最终七文件230/230自然 code0/signalnull/audit0，固定 `/tmp/go-live-h4-quality-fix-final-green.log/.result.json`。早先 reverse/green 文件保留为过程记录；7路径窄补与整体21路径增量刷新，停止写入待原 Spec→Quality 复验。
+
+## 2026-10-05 H5：旧批准整单签认离线验证
+
+`test:disposal-handling` 和原 Tests CI 静态接入 `tests/disposal-conversion.test.js`（本域现6文件）。本轮只运行根登记严格临时 `h5-backend`：新转换测试+H4原7文件，共8文件。唯一命令 `bash scripts/with-dev-env.sh env -u NODE_OPTIONS node /tmp/go-live-final-runner.cjs h5-backend`；VM require显式白名单/未知SQL抛错，真实 snapshot/conversion/handling/operations/proof/routes/controller/dispose 与原邻接执行，DB/stock/generic请求为准确 stub，不加载 config/db/app/env，所有 net/listen/fetch 禁止。SQL按准确where参数/声明投影/列集合模拟，FK父S与同conn耐久状态/批插真实不连续source ID覆盖。
+
+首红268项230邻接绿38新缺能力断言红，natural code1/signalnull/audit0，`/tmp/go-live-h5-red.log/.result.json`：API/serializer/own转换无intent和真实route不存在。它不证明每个数量/rollback守卫已单独证伪。再加actual dispose纯3转换门，269项230绿39红，`/tmp/go-live-h5-dispose-red.log/.result.json`，新门真实 Missing expected rejection且已执行。第一轮实现后5项旧fixture跨realm数组断言误报（first-implementation），单列为夹具问题，不算业务缺陷；只使用clean(params)保留准确ID断言，269/269后续补有限规范/权限/锁序覆盖。
+
+最终文本的有限生产撤修只撤 conversion 自批flag/实物候选门和 dispose 已转换新执行门，277项273绿4 BUSINESS 红，自然 code1/signalnull/audit0，`/tmp/go-live-h5-reverse.log/.result.json`；两个生产文件 finally 字节精确恢复，`/tmp/go-live-h5-reverse-restore.json`含equal/SHA256。最终八文件277/277自然 code0/signalnull/audit0，固定 `/tmp/go-live-h5-green.log/.result.json`。原code与事务模型不等同真实MySQL/隐式FK/并发；277 DDL未执行、完整app/HTTP/business smoke、GUI/PDA/打印、全量lint/type/build未运行。H6/F未进入；作者停止写入待独立Spec→Quality。
+
+### H6 员工来源入口及完整持久请求（2026-10-05，本地离线）
+
+`npm run test:disposal-handling-ui` 精确调用五份 Vitest 回归（完整记录、实际 write hook、真实处置/普通销售/采购退货 leaf+API adapter），已静态接入 Tests CI；原 `test:unit` 也会发现这些文件。本轮仅根登记的 Node22 guarded `h6-frontend` 执行，禁 HTTP/socket/listen/protected env，未知 adapter 请求 afterEach 显式断言；没有执行常规 CLI、应用、DB、277或业务 smoke。
+
+固定首红 `/tmp/go-live-h6-red.log/.result.json` 为14能力断言红，natural code1/signalnull/5 worker guards/audit0；显式未接线 stub和真实旧页/路由缺入口仅证明能力缺失，不当完整边界覆盖。后续 JSX语法、缺 QueryClient 和旧展示词/数量尾零预期属于 setup/fixture，单列不计业务。`boundaries-red` 同前缀45项42绿3 BUSINESS 红（完整预览纯3/已执行4未禁签、新来源报废落点遗漏原CREATE）；`freeze-red` 49项45绿4 BUSINESS 红（数量政策 hidden/server ABA晚数据、客户 Finder 自动续批、实际 POST 未用持久体）；此前 send fixture 对 undefined 使用 JSON.parse 的错误已纠正，不计业务。`callbacks-red` 51项49绿2 BUSINESS 红：首次意图 Dialog 提前绑旧owner，以及PR成功后异步刷新server ABA关闭/导航旧草稿。上述固定均 code1/signalnull/5guards/audit0，无未知 adapter/网络审计事件。
+
+最终文本有限 production reverse 只撤持久读回闸、send 使用持久 body/key、PR异步刷新后与导航前 canApply 两处复核。51项48绿3 BUSINESS 红，natural code1/signalnull/5guards/audit0，固定 `/tmp/go-live-h6-reverse.log/.result.json`；`reverse-mutations.diff` 和 `reverse-restore.json`（同前缀）记录三生产文件 finally 按原字节恢复、equal/SHA256。恢复后最终五文件51/51自然 code0/signalnull/5guards/audit0，固定 `/tmp/go-live-h6-green.log/.result.json`。相邻 R9/原报废/工作区三文件35/35自然 code0/signalnull/3guards/audit0，固定 `neighbors-green`；旧相邻 fixtures不具本轮显式未知 adapter 收集，仅证明原行为回归。固定 `.result.json` 保留原 runner logPath，验收时读取同前缀固定 `.log` 而非后续可被覆盖的 `/tmp/go-live-final-*`。
+
+覆盖完整body持久/readback零POST/容量与损坏保留、confirmed/cleanup失败阻断、原键端点配置、own成功资源及身份验证、owner/session/权限/server ABA及hidden晚响应、撤权auth-only source/conversion精确GET不伪造intent/无业务查询、实际单SKU/原仓/基本单位/当前客户价、重复SKU精确原POI与原价、已有备注不覆盖、来源报废新草稿、完整mixed签认/资格变化/漂移保预览、终结R0禁解除、说明重开保留、第二页和标签容量/同身份focus。真实浏览器/localStorage故障、GUI/员工操作、MySQL事务/277首次及重跑/隐式FK/并发、远端CI和整批 E7 lint/type/build尚未验证。作者绿与静态接线不能代替独立Code Spec→Quality。
+
+
+H6 独立 Code Spec 曾发现三个 Important：错误销售退货模型降空白、工作区删除 mixed 来源空/重复参数、confirmed 后归属变化仍清理。修补在现五文件内补真实 SaleReturn leaf、registered sale/scrap path 与真实 hook confirmed storage ABA；修前63项51绿12 BUSINESS 红，自然 code1/signalnull/5guards/audit0，固定 `/tmp/go-live-h6-spec-fix-red.log/.result.json`。有限反向仅撤三处生产门，最终同文本63项51绿12 BUSINESS 红，code1/null/5/audit0，固定 `spec-fix-reverse`；三文件 finally 字节精确恢复的 equal/SHA 在 `spec-fix-reverse-restore.json`，`spec-fix-reverse-mutations.diff` 为准确撤修。缺 alert 对空串及记录应保留的断言是真业务失败；无未知 adapter、导入或 setup 红。恢复后最终63/63证据见 `spec-fix-final-green`，仍待独立 Spec→Quality，真实 GUI/存储/MySQL/E7 边界不变。
+
+受影响四邻接（R9、原处置、工作区、returns/sourceHandoff）最终80/80自然 code0/signalnull/4guards/audit0，固定 `/tmp/go-live-h6-spec-fix-neighbors-green.log/.result.json`。四邻接首跑旧 sourceHandoff client mock 缺 subscribeApiClientBaseURL，0 test 的导入 SETUP 红单列在 `spec-fix-neighbors-setup`；仅补明确纯订阅 stub，无真实 client fallback、原断言不变，不算业务红。
+
+
+H6 Quality 活动 ABA 窄修新增严格实际 adapter 延迟反例：同实例隐藏→恢复后，销售旧报价成功/错误、PR 旧 PO 成功/错误与数量策略旧数据不得应用；各例继续证明当前新活动可重新读、原数量/PO 文本保留，PR 旧收尾不能结束当前新请求。R9 邻接另补相同真实普通表单晚报价反例，并在 finally 显式断言未知调用0。修前五文件68项63绿5 BUSINESS 红、四邻接81项80绿1 BUSINESS 红，固定 `/tmp/go-live-h6-quality-fix-red.log/.result.json` 与 `quality-fix-neighbors-red`；均自然 code1/signalnull、5/4 worker guards、audit0，无 SETUP/未知接口红。
+
+有限反向同时只撤四处本次生产活动防护，不撤先前 Spec 三门：来源对外活动代次和 PR 进度代次共同覆盖两条 PO 反例；共用普通表单 opt-in 读取代次覆盖 H6 两报价和 R9 一报价；数量策略读取/缓存代次覆盖一数量策略反例。最终同测试文本为68项63绿5 BUSINESS 红及81项80绿1 BUSINESS 红，固定 `quality-fix-final-reverse` 与 `quality-fix-neighbors-final-reverse`，code1/null/5或4guards/audit0；这是联合撤修证据，不称每门分别独立 mutation。四文件 finally 字节精确恢复，`quality-fix-final-reverse-restore.json` 含 equal/SHA256。原 readCurrent 未提供及数量策略默认调用不新增活动键/读取门，原业务断言保留。真实 GUI/持久存储/MySQL/277、设备/员工现场与统一 E7 边界不变。
+
+恢复后的最终五文件68/68、四邻接81/81自然 code0/signalnull、5/4guards/audit0，固定 `/tmp/go-live-h6-quality-fix-final-green.log/.result.json` 和 `quality-fix-neighbors-final-green`。最终复跑曾出现67/68的一条 PO success 夹具失败：请求在 await 后复用共享计数，将旧请求误挂新等待器；固定 `quality-fix-final-attempt`，不计生产 BUSINESS 红。仅改为每次请求起点固定序号，保留旧 success/error、当前再读和旧 finally 不清新 loading 断言；按修正后最终文本再联合撤四门、finally精确恢复、最终绿。早先 `quality-fix-reverse` 和中间绿保留为过程证据，验收使用上述 final 文件。活动代次窄补共11路径，H6整体相对原before共45路径，未新增测试文件或扩散默认普通模式；当前只冻结作者结果，仍待独立 Spec→Quality。
+
+### 供应商退款基础 F1（纯离线）
+
+`npm run test:supplier-refunds` 接入 CI 静态门，精确覆盖四文件：`supplier-refunds.test.js`、`supplier-refunds-source.test.js`、`supplier-refunds-pr-gate.test.js`、`supplier-refunds-schema.test.js`。严格 VM 执行实际 service/source/actor/rules/operations、原 PR wrapper、真实 route.parse/controller；未知 require/SQL 拒绝，config/db 仅精确连接 stub，无 app/env/实际网络。278 只拆结构及有限实际 SET 决策模型，不执行 DDL；MySQL8 打印形式依据沿277已有源级证据，不能称真实数据库验证。
+
+本轮作者通过 root 注册的 `f1-backend`/`f1-neighbors-backend`/`f1-generate-status` 禁网 runner；状态由官方纯 generator 产生，不手改产物。首轮合法能力红38项：36缺新能力断言、2原 PR 未拒 reserved；另存语法/夹具 setup，未计产品反例。实际资源、金额、长期 ACK、日期/100键/列宽、事务回滚及278漂移反例和有限生产门反向证据保存在 `/tmp/go-live-f1-*`。根统一 lint/type/build/full 功能/契约门留后续收尾，现场 GUI、278 首次及幂等、真实 RC/RR/并发、银行/会计/人员验收全部待验；F2–F6尚非本批交付。
+
+F1 作者最终固定证据：四文件77/77、两个原 PR/处理来源邻接41/41，均自然 code0/signalnull/audit0（纯 BE 无 Vitest worker，workerGuards=0）。最终五生产门撤修为77项52绿/25 BUSINESS红、0 SETUP，finally 字节/SHA恢复后再取77/77。原同数字ID即拒的假设已撤销，不把旧 `source-collision-red` 当真实来源 bug；完整双 parent 碰撞和错三元组的有限实际门反证另存 `exact-triple-clean-red`（74绿/2业务红），实际财务提示描述先75绿/2业务红再修。所有 `*.result.json` 的 mutable logPath 对应另复制的同前缀 fixed log，以 handoff 为准。
+
+
+### 供应商退款实际收到 F2（纯离线）
+
+`npm run test:supplier-refunds` 同原 CI 门精确加入 `tests/supplier-refunds-receive.test.js`。本轮只通过已注册 Node22 禁网 runner 的 f2-backend 与 f2-neighbors-backend：实际新域 service/context/receive/operations/source，实际 finance.recordTransaction/refreshBalance、reconciliation.refreshSettlement/paymentEvents/period guard，实际 route.parse/controller 与原 PR cancel 均在严格 VM 白名单和 SQL 投影/参数/事务夹具中运行。未知 require/SQL 直接拒绝，不实际加载 config/db/auth/app/env；禁止所有网络/listen。
+
+作者固定最终专项51/51、六文件邻接118/118，均自然 code0/signalnull/audit0，纯 BE workerGuards=0；固定 `/tmp/go-live-f2-final-green.log/.result.json` 与 `final-neighbors-green`。首红34项全部缺新 receive 能力，`f2-red` 不冒充事务缺陷；后续真实 IN 污染七反例、借用原 ACK 撤权反例及金额 opt-in 反例分别固定。有限联合撤实际四文件生产门，最终同文本51项35绿/16 BUSINESS红、0 SETUP，自然 code1/null/audit0；fixed `f2-reverse`、`reverse-mutations.json` 与四文件 finally equal/SHA `reverse-restore.json`，恢复后取上述最终绿。
+
+金额证据分两层：两成员 0.000099182… 为浮点表示/四位字符串合同差异，旧 SQL DECIMAL 写回会舍入为 .0001，不能称数据库吞量；实际 refresh 的1000个合法高值成员用例则证明 Number 汇总 paid9999999999.7999/balance0.1001 对应精确9999999999.8000/0.1000，差一个 .0001，总额仍在 DECIMAL14,4 内。这仍是源码/离线算术与 SQL 参数模型，不是真 MySQL、实际资金或银行证明。
+
+覆盖同账户旧 OUT 当前流水与异账户不追锁、NULL entry.statement_id 的当前月结成员、归属漂移、完整 receipt 型 NULL account/独立 ID 碰撞、PR/entry/AP .0001 上限、各写失败回滚、借用零事务管理/门前读取、永久身份/TTL/闭期/撤权、实际 PR 后续取消不冲钱和提交后失败固定 ACK。278 首次/幂等与实际 SQL/索引/FK、RC/RR/并发/事务、GUI/员工/银行/会计和整批 E7 lint/type/build 均未运行；F3–F6 留后续审阅批，作者绿不代独立 Code Spec→Quality。
+
+### 供应商退款 F3 定向离线验证（2026-10-05）
+
+`npm run test:supplier-refunds` 在原 CI 门加入实际 `tests/supplier-refunds-accounting.test.js`。新测试使用严格 VM 的真实 source/projection、原 voucher-engine.generate/upsert、单笔/default postcommit、原 closePeriod、实际勾稽 service、route/controller；原 F1/F2/PR 邻接保留。FE两文件使用真实资金流水/凭证页与精确 Axios adapter，afterEach断言未知调用0。禁止网络/listen/真实config/env/app/数据库。
+
+作者首轮冻结固定证据 `/tmp/go-live-f3-final-*`：BE56、FE8、邻接169（7文件），均自然 code0/signalnull/audit0，FE两个 worker 已加载禁网守卫；仅本地模型。首 BE31 是缺能力红；初 FE3 是 adapter/刷新时点 SETUP，修正后3项1绿2真实行为红。净已付相消红有1业务+1手工错误保存注入时点 SETUP；闭期已有证明红53项52绿1业务。带可选 reason 的实际 F1→F2→F3 链另取得56项55绿1业务红，固定 `f3-reason-red`，修后严格保完整 action body/hash。最终文本有限生产联合撤9门后，BE56项47绿9业务红、FE8项6绿2业务红、0SETUP，finally4生产文件字节/SHA恢复；固定 `f3-reverse-*`。实际零分/半分、永久来源、合法历史、hash/腿/期间、手工当前权限、逐 AP 相消、真实消费和晚owner均有必要断言。另一账套的完整 RF/账户/FAT 父身份由实际 SQL 条件的严格边界模型排除，缺父仍 fail-loud；这不是数据库账套隔离或并发证明。
+
+这些不是 MySQL 金额/并发/隐式锁、实际凭证/银行/GUI/现场验收。整批 lint/type/build/full suites 留统一 E7；本轮未执行数据库或迁移，也未提交发布。
+
+
+F3 独立 Code Spec 的辅助类型窄修另有固定 `f3-spec-fix-*`：62项修前56绿/6 BUSINESS红、修后62/62；供应商/资金腿 × 实际 proveSources/default postcommit/actual closePeriod 六反例均保留 hash、现金与 AP 断言。仅撤本轮 aux_type 核对后同文本62项56绿/6 BUSINESS红、0SETUP，单 builder finally 字节/SHA精确恢复，最终62/62自然 code0/signalnull/audit0。只运行已登记 f3-backend；未重跑无关 FE8/邻接169，其生产及夹具 SHA 未变。旧九门反证属于首轮56文本，本轮新门独立反证属于62最终文本，不混称完整新版九门验证。原 CI 专项已覆盖此既有测试文件，无新增导入/SQL或测试接线。
+
+
+F3 Code Quality 的结果schema窄修固定 `f3-quality-fix-*`：strict fixture纯读实际278列名和VARCHAR500，不再凭空生成RF时间字段；已知具体RF列/长度违规则模拟ER_BAD_FIELD_ERROR/ER_DATA_TOO_LONG并记录，未知require/SQL仍afterEach拒绝。首66/47/19中13直接schema业务红、5生成前置TypeError及1ACK跨VM原型SETUP单列initial-setup；补真正前置断言与按值比较后，正式首红66/48/18 BUSINESS、0SETUP。generated/zero/pending/500/error-save-fail及实际controller→findById/list均覆盖，原62来源/辅助腿用例保留。
+
+修后及恢复后66/66自然code0/signalnull/audit0。仅撤结果列名66/48/18 BUSINESS红，单撤500限制66/65/1 BUSINESS红，均naturalcode1/null/audit0、0SETUP；单accounting文件finally字节/SHA恢复。只已登记f3-backend，未改共享receivefixture或前端，不重跑FE8/169/旧九门及aux变异；旧证据按原版本保留。6路径本轮增量与整体28路径SHA重新冻结，278只纯文本核对、未执行或修改；这不是MySQL迁移/存储/并发或实际凭证验收。
+
+
+F3 实际资金页结果schema消费者窄修另固定 `f3-frontend-schema-fix-*`：真实页面/严格 Axios adapter 使用实际278形态，没有生成时间字段；非零4.0000、voucher_id正值且errorNULL显示“凭证已生成”，zero的ID为NULL，普通pending仍原说明。正式首红10项9绿/1 BUSINESS红，单撤实际呈现条件后同文本10项9绿/1 BUSINESS红、0SETUP，finally页面字节/SHA精确恢复；修后及恢复后10/10，自然code0/signalnull、2worker/audit0。所有未知调用afterEach断言0。只已登记 f3-frontend；BE66生产/夹具未改不重跑，旧FE8仅证明当时zero/trace范围，本轮新增真实generated正例补足消费者。旧九门与aux反证按修前文本保留，不冒充本轮新版反证。证据仍限源码/离线页面模型，未作真实GUI、存储/MySQL或会计验收。
+
+### 供应商退款补录 F4 定向离线验证（2026-10-05）
+
+`npm run test:supplier-refunds` 的既有 CI job 现精确包括 `tests/supplier-refunds-backfill.test.js`。本轮只用 Node22 禁网/禁.env 临时 runner 的 `f4-backend`（51项）和 `f4-neighbors-backend`（8文件235项），没有直接运行该 npm 总脚本或真实业务 smoke。actual backfills/guard/RF/F3/HTTP adapter 在 strict VM 中执行，DB、旧支付域和 Express 边界精确声明，所有未知 require/SQL、被吞断言均 afterEach 拒绝。模型纯读258/260的列与300长度、保278原500模型，不执行迁移。
+
+固定作者证据 `/tmp/go-live-f4-*.log/.result.json`：正式首红31项1绿30红，其中4批准日期/重开行为、26明确缺能力，0SETUP；中间31项28绿3SETUP（前置锁事件混入/文本金额预期/注入失败误列未知）另存 intermediate，不当产品红。period-order-red 31/30/1业务；expanded-red 43/41/2中1全关联错类型FAT业务、1同义提示断言SETUP；consumer-red 47/45/2业务；http-identity-red 49/47/2业务；snapshot-order-red 50/49/1业务。最终51项/235邻接分别保 fixed final 证据，均自然退出与审计0后才称本地通过。
+
+同最终51文本有限联合撤修六路径有25业务链/断言红，批准日期的早拒会遮住部分后续consumer，不能将它们都称单独反证；分组 identity/snapshot 51/46/5、results 51/47/4 是对应真实断言红，0SETUP/审计0，finally逐文件字节/SHA恢复。固定 mutations/restore/proof、before/current、精准增量/清单位于 `/tmp/go-live-f4-*`。旧种类正例只证明原 executor 的执行日传参，不是旧付款真实业务验收；F3原无批准申请的 override 用例改为非法来源负例，合法F4完整源保批准日正例。
+
+本地源码/离线模型不等于 MySQL期间/DATE_FORMAT/FK/并发等锁/资金金额/实际会计、GUI/员工/银行、远端CI或上线验收。258/260/278均未执行；未跑E7全量lint/type/build、未改旧种类日期历史，没有DB/app/browser/网络业务测试/提交推送，F5/F6留后续双门批。
+
+F4 Code Spec 共享来源修补另存 `/tmp/go-live-f4-source-fix-*`：最终文本66项。首轮66/53/13中8为实际旁路业务、1缺批量读取能力、4为已有身份拒绝的错误码预期 SETUP；纠正后 clean-red 66/57/9（8业务+1缺能力，unknown0）。生产接入新批读后一次跨 VM Array 深比较造成的夹具失败单列 batch-fixture-setup，不当产品反证。仅撤共享 unique 和已执行 originalFund 两门，同最终文本66/58/8业务红，natural1/signalnull/audit0、0SETUP，finally两文件字节/SHA恢复。最终 f4-backend 66/66 与八邻接235/235均自然0/null/audit0。原51项及旧三组反证保留修前版本边界，不宣称覆盖新门；package/CI既有精确文件接线不变。
+
+F4 Code Quality 后提交窄修固定于 `/tmp/go-live-f4-postcommit-fix-*`。首红70/66/4均实际 execute/retry 的种类读取异常向外抛，0SETUP/unknown；最终71文本额外含缺期间错误保存异常后继续下一旧核销的有限 consumer。只撤本轮 settle/逐笔隔离的单文件生产改动，同71文本71/66/5业务红，natural1/null/audit0，finally原字节/SHA恢复。修复后的最终专项71/71及原八邻接235/235均自然0/null/audit0；原51/66与共享来源反证保修前版本边界。无新imports/test路径/package/CI脚本，不跑真实业务smoke。实际MySQL锁/FK/期间/DDL/资金银行/会计/GUI与E7仍未验。
+
+### 供应商退款 F5/F6 受控验收入口
+
+`npm run test:supplier-refunds`包括supplier-refunds-approvals.test.js：统一只读RF document/count/page、六引擎不扩、当前权限/自批/范围与准确source、confirmAllowed；使用严格VM与有限模型，无DB/network。`npm run test:supplier-refund-ui`明确枚举真实Axios adapter恢复hook、supplier-refunds实际页面/store/KeepAlive和accounting/backfills新kind呈现；未知调用afterEach0，无默认API或真实HTTP/listen。二者在CI明确可达。
+
+本批实际执行仅由主线程静审登记的 /tmp/go-live-final-runner.cjs 禁网job，记录自然退出、guard readiness与audit0；初始缺能力、导入/setup错误、业务断言红、有限生产门反证与恢复后绿分别登记，不互相冒充。当前lint/type/build/全量验证集中E7；真实DB/迁移、资金、会计/人员审批、GUI/PDA/打印/生产与上线均未在此离线批执行。
+
+F5/F6 补录邻接修正：`getBackfillsApi` 显式 `listMode: paged`，准确透传页号/页大小/筛选，避免取齐层将第二页重置到首页。供应商退款补录金额四位，快照只读 `supplier_refund.frozen` 原日期、收入账户与原 RF 身份；零分逐笔证明显示“零分投影已核对/无需分位凭证”，核销旧说明保持。原回款与补录申请须全组已确认，再一次 CAS 持久清理；刷新、存储、owner 或活动变化保留完整组，不能孤立删除原回款。专项离线证据不代表 MySQL、GUI、实际收款或上线验收；统一 lint/type/build 留 E7。
+
+F5/F6 Spec 三点窄修仍使用已注册 f5-f6-frontend / f5-f6-neighbors-frontend / e1-backend：真实列表 GET 迟到与 Section 代次、delegate 真实 Radix/Confirm 捕获旧 Portal 关闭回调、真实 PR AxiosError code/data 与 helper/锁后 PR 身份透传。实际绿 47/47、54/54、29/29；旧 E1 缺 F2 纯 decimalMoney 依赖的 10 个 SETUP 红单列保留，补准确真实依赖后 clean red 29/27/2 才属结构身份业务红。RF 原 6/6 与未变闭包 252/252 保前轮独立固定证据；本轮不重复或宣称新增 DB/GUI/资金/会计/上线证据。有限联合撤读代次/slot 清理/结构 code 与 finally 原字节 SHA 恢复另存 /tmp/go-live-f5-f6-spec-fix-*；完整 lint/type/build 仍归 E7。
+
+F5/F6 Quality 唯一清理缺口采用原 f5-f6-frontend 入口：真实 QueryClient invalidate deferred、actual hook 与真实 storage save/replace/remove helper，覆盖同 coarse 新 confirmed UUID/key/body、同 immutable 换有效 ACK、同 UUID/key 换 body/source/date、session/epoch/活动代次/创建时点、原 app 来源/parent/等待换组。首红 55/48/7 为业务失败，底层 CAS 旧完整 snapshot 拒新记录及原47例保持绿；不是 import/SETUP 反证。固定日志与 finally 字节/SHA 恢复存 /tmp/go-live-f5-f6-quality-fix-*，当前整体以 quality-final 的47路径包为准。BE/E1/邻接54闭包未变沿原固定证据，不重复全套；E7及真实DB/资金/会计/GUI仍未执行。
+
+Quality 新增确认申请永久 ID/单号反例后 57/55/2 业务红，原55例包括合法 accepted→executed 仍绿；永久身份门补齐后 57/57。联合有限撤完整 immutable/ACK、原 app 关系与永久申请身份门产生 57/48/9 BUSINESS（不声称各门全独立），finally 原 hook bytes/SHA 恢复后 fresh 57/57，自然0/audit0/3guards/每afterEach unknown0。
+
+同57例随后细化两错申请身份为先显示合法 accepted、再错误 GET，旧缓存呈现清理首红 57/55/2（quality-fix-cache-red）；仅当前 owner 的 guarded catch 清本次 application/answer 后 57/57。最终联合3组身份门撤修仍57/48/9、finally精确恢复后 fresh57/57；此联合未撤缓存清理门，不称缓存自身独立反证。早先 identity-version 57绿及9红日志/测试字节另存历史，不与新缓存版本混用。
+
+E7 初检记录由共同 runner 冻结，linter/type 的夹具修正、可见文案、RF 三路由格式及 supplierRefund 状态1–4手工登记独立形成 overlay；状态机器预期仍手工固定为16。旧 sourceHandoff 夹具使用真实 API 客户端的 owner/base/epoch/订阅及严格 adapter，afterEach 未知请求必须为0；初四次被阻止 HTTP 来源需临时 trace 核对，不能把断网或断言绿当零企图。此段编辑尚未宣称 E7 检查通过。
+
+E7 全前端 trace 将初四次被阻止 HTTP 定位到 `OrderEntryForms.test.tsx` 的真实仓库、客户与承运商自动读取；该旧夹具默认 enabled:false 被 hooks 的显式 enabled:true 覆盖。现仅夹具安装准确三 GET 的 Axios adapter、客户空分页契约和未知调用 afterEach0，卸载/清缓存后恢复 adapter/base/auth；生产读取与权限未改。首次1692断言全绿但 audit4 的诊断仍是失败证据，待受控重验确认零企图。
+
+E7 B 严格 F4 VM/Controller 首轮82/74/8因跨 VM 参数数组原型为 SETUP，copy(args)补准后82/74/8才为最后详情查询/JSON业务红。扩旧 payment/receipt_settle后88/74/14 BUSINESS；实际窄修后后端88/88自然0/null/audit0。FE新增五例和真实结果形状初62/56/6含一例初始zero隐藏重试按钮的 SETUP；精确起始状态修正后62/56/6均BUSINESS（含原零分例），实现真实Result/toast后62/62自然0/null/audit0/3guards/未知0。固定 /tmp/go-live-e7-B-*；这仅严格离线调用链，不代表实际DB/资金/会计/GUI。后续有限撤门与最终累计检查另记，历史初检不覆盖。
+
+E7 A 定向由根固定 /tmp/go-live-e7-A-green-manifest.json：源交接/数量48、HTTP夹具2、H6五文件68均自然通过/guard ready/audit0/未知0；1692断言绿但audit4历史诊断仍为失败，最后全量零企图待根统一检查。supplierRefund单条手工登记撤回在原16机器守卫产生367通过/2失败，finally原bytes/SHA恢复后379/379绿；这是静态状态契约，不是业务数据库状态验收。B 单次只撤postcommit最后详情隔离产生88/74/14 BUSINESS，finally service bytes/SHA恢复后最终88/88；未称独立验证所有结果字段。
+
+E7 C 原首BE17/4/13含两primary SETUP（严格fixture漏管理页既有单位批读），后续首次实现17/8/9为同漏SQL/累积unknown的SETUP，保历史不作业务绿。补唯一准确product_units SQL/params后，用原pre-C helper固定clean-red17/5/12 BUSINESS/未知0，finally恢复当前helper后17/17；FE首红13/11/2 BUSINESS，当前13/13。有限联合撤rank1/2区别、literal转义与数字id tie产生BE17/7/10、FE13/12/1 BUSINESS，不称各门独立；finally两生产文件bytes/SHA准确恢复，fresh最终BE17/17、FE13/13，均自然0/null/audit0，FE两workerguards/每afterEach未知0。SQL/CASE/参数与实际API组件链为离线证据，真正MySQL排序/SQL_MODE/EXPLAIN待隔离验收。
+
+E7 A/B/C精确overlay仅保存本作者开改前实际WIP与当前字节，历史357/47路径冻结不改；完整lint/type/build/全量门与本包独立Spec/Quality/Whole仍由根执行，当前不称整批通过或上线。
+
+### 2026-10-06 本轮真实 MySQL/API 有限验收入口
+
+新增 `tests/go-live-runtime.smoke.test.js`，仅由本批专属临时实例的根 runner 执行；夹具为 `tests/helpers/goLiveRuntimeFixture.js`。入口先调用既有 `configureTestEnvironment` / `validateTestEnvironment`，再在任何种子、业务写入及 app 导入前调用真实 `assertOwnedRepairInstance`，不注入 probe stub。数据库固定 `flowcube_golive20261006_test`，`DB_HOST=127.0.0.1`，端口由本批随机映射且禁止 3306/3307；0600 归属文件、容器/卷实时 label、端口、runner 存活、时间窗及实例 UUID 由既有归属门核对。本脚本不创建数据库、不执行迁移、不读取 `backend/.env`，不能复用共享 smoke 环境或以库名替代归属证明。
+
+根先完成新实例完整迁移，在 runner 仍存活且归属窗口有效时，注入 `NODE_ENV=test`、明确 `DB_HOST/DB_PORT/DB_USER/DB_PASSWORD/DB_NAME`、`FLOWCUBE_REPAIR_INSTANCE_FILE`、`FLOWCUBE_REPAIR_DOCKER_CONTEXT`、`JWT_SECRET`（至少32位合成密钥）、绝对且可写的 `APP_UPDATE_DOWNLOADS_DIR`，并保持与归属 runner 一致的 locale。使用 Node22；已有 backend 依赖须可用。命令不包含凭据：
+
+```sh
+node --test --test-concurrency=1 tests/go-live-runtime.smoke.test.js
+```
+
+脚本只加载实际 app 并以 `app.listen(0, '127.0.0.1')` 监听，禁用打印回收任务及外部日志传输，不加载 server/scheduler/外发 worker。全合成的独立仓、商品、供应商、客户、角色及员工通过实际登录、权限、仓范围、PDA 会话和业务路由验收；制单人与批准人分离，无自批豁免。采购→收货→上架提供实物及准确 POI/AP；普通 sale/PR/scrap 来源关联后实际执行/终结/解除，含销售部分实发和 PR 全发 R0 冻结；旧批准 mixed1/2/3 仅用合成历史头行提供转换证据，原记录不变、无现金库存副作用，mixed3 重走新报废审批。
+
+资金主链读取准确 PR/PO/AP、直付与汇款核销的原 entry/receipt/OUT，覆盖四位部分回款、确认只占额度、实际 IN、AP 净已付、原本金保持、对账单/往来/资金 API、准确资金 ID 驱动的分位凭证、0.0001 零分真实回款和无需凭证、原 UUID/action/key 永久 ACK 及合法 PR 出库/取消后的重放。准确来源负例通过另一 PO 的实际收货/上架/支付获得正 entry 与 OUT，将其用于当前 PR；当前实链在 `source.payments` 先返回409 `SUPPLIER_REFUND_SOURCE_INVALID`，并核无 RF/分配/操作记录、两边 AP 与资金及原付款事实保持。并发用例覆盖同 PR 两个超合计草稿最多确认一个、取消释放预算、同原键并发回款只一笔 IN，以及四位超额、精度、权限和仓范围拒绝。
+
+闭期用例从实际查询未存在的1990年月份中选择本次合成历史期，业务日期固定该月15日；只 INSERT 本次新期间的已结事实，不覆盖旧轮已存在的 `199001` 或其他期间。默认回款409；当前 RF 补录申请接口200返回申请对象，以 `backfillRequested=true/executed=false` 和 AP/资金无变化区分申请与已收。另人批准后核原申请人、原业务日期、首次批准日凭证期、准确 backfill_id 和凭证，并核重复执行无第二资金变化。这不覆盖完整结账操作、关账与登记竞争、故障注入回滚及全部污损来源组合。合成 PDA 请求和自建工作站打印 ACK 只证明 API 闸门；GUI、员工、Android 实机、纸张和真实银行证据仍须独立验收。
+
+收尾逐项关闭本批 API、两连接池，精确删除本批 PDA 会话/设备，恢复本仓打印绑定并停用自建打印机；期间 INSERT 成功立即读实际非空 `closed_at`（dateStrings），仅按本次记下的 `(company_id,period,closed_by,closed_by_name,status=2,closed_at)` 回读核对并以同一原子 DELETE 谓词删除新建期间元数据。任一身份或结账时间变化（含原人反结重结）即保留并报收尾失败，不碰旧轮期间。保留其他业务 ID 和记录供根取证，最终由根按准确容器/卷销毁本批实例，无全表清理或强制退出。失败须分别登记 `[SETUP]`、`[FIXTURE]` 与业务断言，不把设置错误或静态解析通过称为产品通过。此入口初次作者交付仅为静态准备；实际 MySQL/API 结果由根另行记录，不表示 CI 接线、生产或上线验收。根首轮真实运行的三处状态拒绝为既有400（已实发PR取消、未提交新报废执行、已收RF取消），夹具修正为精确400及原消息，并核拒绝前后原单、库存或资金事实保持，不接受任意4xx或修改业务状态机。
+
+钉钉预警回归（2026-10-04）：`tests/ops-alert-notifications.test.js`运行真实运维脚本并仅在临时目录捕获模拟机器人请求，验证JSON排版、故障级去重/恢复/重试、近期重启与日报；隔离scheduler验证作业worker注册和经营worker移除，并验证作业消息内容及只读有界SQL契约。不访问生产或真实机器人；SQL契约本身不证明MySQL执行结果。实际查询需在独立测试实例核对最新打印、终态排除与近期扫码；本批在专属临时MySQL8.0.46中用脱敏夹具执行，两条查询自然成功，按容器归属label清理且无数据卷，不等同于生产数据验证。
+
+### v0.13.0 整合后的专属验收入口（2026-10-07）
+
+`npm run smoke:go-live-owned` 使用 `repair-smoke-ephemeral.sh --go-live` 新建本批专属 MySQL 实例，全量迁移后调用 `smoke:go-live-runtime`，继续通过原实例归属门并在退出时清理核实；后者不能直接用于共享 3307。未知参数在任何 Docker 操作前拒绝。Tests CI 独立 go-live-owned job 和 `test:go-live-runner` 保证可达及归属边界。
+
+`npm run test:expense-pay-backfill-integration` 覆盖费用付款闭期/申请/借用事务、固定首次批准日重试和 smoke 精确清理；`smoke:expense-pay-period-guard` 为真实资金回归。`smoke:operation-alerts` 只在当前独立测试库创建随机事务夹具并回滚，不发机器人。新增 PDA 塑料盒 HTTP 场景接入 `smoke:security-scan-remediation` 中的 scope 测试。
+
+迁移编号冲突整合为安全276/277、资料278、处理279、退款280；原 go-live 验收日志中的276–278保留为原分支历史证据。完整映射和合并树验证见 `docs/release-v0.13.0-integration.md`。

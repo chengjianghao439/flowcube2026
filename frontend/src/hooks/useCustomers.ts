@@ -5,13 +5,16 @@ import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tansta
 import { getCustomersApi, createCustomerApi, updateCustomerApi, deleteCustomerApi } from '@/api/customers'
 import type { CreateCustomerParams, UpdateCustomerParams } from '@/types/customers'
 import { toast } from '@/lib/toast'
-export const useCustomers = (params: object, keepPrevious = false, readOwner?: KitReadOwner) => useQuery({
+export const useCustomers = (params: object, keepPrevious = false, readOwner?: KitReadOwner, readCurrent?: () => boolean, readSignal?: AbortSignal) => useQuery({
   queryKey: readOwner ? ['customers', params, readOwner.baseURL, readOwner.userId, readOwner.sessionGeneration] : ['customers', params],
+  enabled: !readCurrent || readCurrent(),
   queryFn: async () => {
+    if (readCurrent && !readCurrent()) throw Error("当前读取已暂停")
     if (!readOwner) return getCustomersApi(params).then(r => r!)
     assertKitReadOwner(readOwner)
-    const data = await getCustomersApi(params, commercialReadConfig(readOwner))
+    const data = await getCustomersApi(params, { ...commercialReadConfig(readOwner), signal: readSignal })
     assertKitReadOwner(readOwner)
+    if (readCurrent && !readCurrent()) throw Error("当前读取已暂停")
     return data
   }, placeholderData: keepPrevious ? keepPreviousData : undefined
 })

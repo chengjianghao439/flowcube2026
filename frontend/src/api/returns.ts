@@ -34,11 +34,13 @@ export interface ReturnTask {
 
 export const getPurchaseReturnsApi  = (p:object) => client.get<PaginatedData<PurchaseReturn>>('/returns/purchase', {params:p})
 export const getPurchaseReturnDetailApi = (id:number) => client.get<PurchaseReturn>(`/returns/purchase/${id}`)
-export const getPurchaseReturnSourceOrderApi = (orderNo:string) => client.get<PurchaseReturnSourceOrder>('/returns/purchase/source-order', { params:{ orderNo } })
-export const createPurchaseReturnApi= (d:object, requestKey?: string) =>
-  client.post<{id:number; returnNo:string}>('/returns/purchase', d, requestKey ? { headers: withRequestKeyHeaders(requestKey) } : undefined)
-export const confirmPurchaseReturnApi=(id:number) => client.post<null>(`/returns/purchase/${id}/confirm`)
-export const cancelPurchaseReturnApi = (id:number) => client.post<null>(`/returns/purchase/${id}/cancel`)
+export const getPurchaseReturnSourceOrderApi = (orderNo:string, config?: AxiosRequestConfig) => client.get<PurchaseReturnSourceOrder>('/returns/purchase/source-order', { ...config, params:{ ...config?.params, orderNo } })
+export const createPurchaseReturnApi= (d:object, requestKey?: string, config?: AxiosRequestConfig) =>
+  client.post<{id:number; returnNo:string}>('/returns/purchase', d, { ...config, ...(requestKey ? { headers: { ...config?.headers, ...withRequestKeyHeaders(requestKey) } } : {}) })
+export const confirmPurchaseReturnApi=(id:number,config?:import('axios').AxiosRequestConfig) => client.post<null>(`/returns/purchase/${id}/confirm`, undefined, config)
+/** 拣货实物尚未归还时保留原退货状态；null 兼容已完成取消的原响应。 */
+export interface PurchaseReturnCancelResult { pendingCancel: boolean; tasks: Array<{ id: number; taskNo: string }> }
+export const cancelPurchaseReturnApi = (id:number) => client.post<PurchaseReturnCancelResult | null>(`/returns/purchase/${id}/cancel`)
 export const getSaleReturnsApi       = (p:object) => client.get<PaginatedData<SaleReturn>>('/returns/sale', {params:p})
 export const getSaleReturnDetailApi  = (id:number, config?: AxiosRequestConfig) => client.get<SaleReturn>(`/returns/sale/${id}`, config)
 export const getSaleReturnSourceOrderApi = (orderNo:string, config?: AxiosRequestConfig) => client.get<SaleReturnSourceOrder>('/returns/sale/source-order', { ...config, params:{ ...config?.params, orderNo } })

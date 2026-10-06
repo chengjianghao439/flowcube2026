@@ -1,0 +1,52 @@
+{
+  "name": "gui-conversion",
+  "checks": [
+    "旧混合处置详情修后正确出口",
+    "预览含三个完整历史行及报废行",
+    "不同人员整单签认实际200",
+    "没有第二次签认POST"
+  ],
+  "api": [
+    {
+      "method": "GET",
+      "path": "/api/warehouses/active",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/disposals?page=1&pageSize=200",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/disposals/handling-sources?page=1&pageSize=20",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/disposals/9",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/disposals/9/conversion-snapshot",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/disposals/9/sign-conversion",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/disposals?page=1&pageSize=200",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/disposals/handling-sources?page=1&pageSize=20",
+      "status": 200
+    }
+  ],
+  "errors": []
+}

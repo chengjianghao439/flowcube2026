@@ -29,9 +29,12 @@ function canExplainBaseQty(item: DraftItem): boolean {
 }
 
 export function SaleOrderItemsTable({
-  items, invalidItemKeys, quantityRefs, priceLoading, priceErrors = {},
+  lockedIdentity = false, readEnabled = true, quantityRead, items, invalidItemKeys, quantityRefs, priceLoading, priceErrors = {},
   setFinderItemKey, setFinderOpen, updateItem, removeItem,
 }: {
+  lockedIdentity?: boolean
+  readEnabled?: boolean
+  quantityRead?: Parameters<typeof useProductQtyPolicies>[1]
   items: DraftItem[]
   invalidItemKeys: Set<number>
   quantityRefs: React.MutableRefObject<Map<number, HTMLInputElement>>
@@ -44,7 +47,7 @@ export function SaleOrderItemsTable({
 }) {
   const navigate = useNavigate()
   // 「只能整数」的商品把数量框的 step 切成 1（迁移 254）；真正的拦截在服务端
-  const allowDecimalOf = useProductQtyPolicies(items.map(item => item.productId))
+  const allowDecimalOf = useProductQtyPolicies(readEnabled ? items.map(item => item.productId) : [], quantityRead)
   return (
     <div className="overflow-x-auto rounded-lg border border-border">
       <table className="w-full min-w-[1320px] text-sm">
@@ -62,7 +65,7 @@ export function SaleOrderItemsTable({
           {items.map(item => (
             <tr key={item._key} className="border-b border-border/40 transition-colors hover:bg-muted/20">
               <ProductIdentityCells product={item} nameContent={<button
-                  type="button"
+                  type="button" disabled={lockedIdentity}
                   data-entry-field={`item-${item._key}-product`}
                   onClick={() => { setFinderItemKey(item._key); setFinderOpen(true) }}
                   onDoubleClick={() => { setFinderOpen(false); setFinderItemKey(null); navigate('/products') }}
@@ -76,6 +79,7 @@ export function SaleOrderItemsTable({
               <td className="py-2.5 text-center">
                 {(item.units && item.units.filter(u => !u.isBase).length > 0) ? (
                   <select
+                    disabled={lockedIdentity}
                     value={item.entryUnit || item.unit}
                     onChange={e => updateItem(item._key, 'entryUnit', e.target.value)}
                     className="h-9 w-full rounded-md border border-border bg-background px-1 text-center text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -126,7 +130,7 @@ export function SaleOrderItemsTable({
                 <Button
                   type="button" size="sm" variant="ghost"
                   className="h-8 w-9 p-0 text-muted-foreground hover:text-destructive"
-                  onClick={() => removeItem(item._key)}
+                  disabled={lockedIdentity} onClick={() => removeItem(item._key)}
                   aria-label="删除商品行"
                 ><Trash2 className="h-4 w-4" /></Button>
               </td>

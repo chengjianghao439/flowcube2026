@@ -1,0 +1,57 @@
+--- a/tests/concurrency-guards.smoke.test.js
++++ b/tests/concurrency-guards.smoke.test.js
+@@ -234,9 +234,19 @@
+     qty: 9,
+   })
+   const originalEnqueue = printJobsService.enqueueContainerLabelJob
+-  printJobsService.enqueueContainerLabelJob = async () => null
++  const splitModuleId = require.resolve('../backend/src/modules/inventory/inventory.split')
++  const splitWasCached = Object.prototype.hasOwnProperty.call(require.cache, splitModuleId)
++  const originalSplitModule = require.cache[splitModuleId]
++  const splitParentModule = require.cache[require.resolve('../backend/src/modules/inventory/inventory.service')]
++  let enqueueCalls = 0
+   try {
+-    let failed = false
++    printJobsService.enqueueContainerLabelJob = async () => {
++      enqueueCalls += 1
++      return null
++    }
++    // split 模块顶层解构打印函数；前一并发场景已加载它，须只重载这个消费者。
++    delete require.cache[splitModuleId]
++    let splitError = null
+     try {
+       await inventoryService.splitContainerOp(seeded.containerId, {
+         qty: 3,
+@@ -244,13 +254,28 @@
+         printLabel: true,
+         userId: 1,
+       })
+-    } catch (_) {
+-      failed = true
++    } catch (error) {
++      splitError = error
+     }
+-    log.assert('split 打印任务创建失败时返回失败', failed)
++    log.assert('[FIXTURE] split 打印入队故障注入命中一次', enqueueCalls === 1, `calls=${enqueueCalls}`)
++    log.assert('split 打印任务创建失败时返回失败',
++      splitError?.statusCode === 500 && /的打印任务创建失败$/.test(splitError.message),
++      `status=${splitError?.statusCode} message=${splitError?.message}`)
+   } finally {
+     printJobsService.enqueueContainerLabelJob = originalEnqueue
+-  }
++    const injectedSplitModule = require.cache[splitModuleId]
++    if (splitWasCached) require.cache[splitModuleId] = originalSplitModule
++    else delete require.cache[splitModuleId]
++    // 重载会在真实调用方 children 追加新模块；只移除本夹具创建的引用。
++    if (injectedSplitModule && injectedSplitModule !== originalSplitModule) {
++      const childIndex = splitParentModule.children.indexOf(injectedSplitModule)
++      if (childIndex !== -1) splitParentModule.children.splice(childIndex, 1)
++    }
++  }
++  log.assert('[FIXTURE] split 故障注入后打印函数与模块缓存已恢复',
++    printJobsService.enqueueContainerLabelJob === originalEnqueue
++      && Object.prototype.hasOwnProperty.call(require.cache, splitModuleId) === splitWasCached
++      && require.cache[splitModuleId] === originalSplitModule)
+ 
+   const [[source]] = await ctx.pool.query(
+     'SELECT remaining_qty FROM inventory_containers WHERE id = ?',

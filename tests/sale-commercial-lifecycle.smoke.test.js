@@ -1,4 +1,6 @@
 'use strict'
+const { issueFixtureAccessToken, cleanupFixtureSessionFamilies } = require('./helpers/fixtureAuthSession')
+
 // Owned fixtures only. Transactions are retained for audit; no global cleanup or status shortcuts.
 const assert = require('node:assert/strict')
 require('./helpers/testEnvironment').validateTestEnvironment()
@@ -41,7 +43,7 @@ async function main() {
   try {
     const [target]=await q('SELECT DATABASE() name');assert.equal(target.name,process.env.DB_NAME);console.log('[db target]',target.name);
     fixture.userId = await insert("INSERT INTO sys_users (username,password,real_name,role_id,role_name,is_active) VALUES (?,'!',?,1,'测试',1)", [ref, ref])
-    token = require('../backend/node_modules/jsonwebtoken').sign({ userId: fixture.userId, tokenVersion: 0 }, process.env.JWT_SECRET, { expiresIn: '30m' })
+    token = await issueFixtureAccessToken(pool, fixture.userId, { expiresIn: '30m' })
     fixture.warehouseId = await insert('INSERT INTO inventory_warehouses (code,name) VALUES (?,?)', [ref, ref])
     fixture.customerId = await insert('INSERT INTO sale_customers (code,name,credit_limit) VALUES (?,?,NULL)', [ref, ref])
     for (const [name, price] of [['铰链', 80], ['螺钉', 5]]) fixture.products.push(await insert("INSERT INTO product_items (code,name,unit,sale_price_a,cost_price,allow_decimal_qty) VALUES (?,?,'个',?,1,0)", [`${ref}-${fixture.products.length}`, `${ref}-${name}`, price]))
@@ -131,10 +133,15 @@ async function main() {
         const ordinaryBody={customerId:fixture.customerId,customerName:ref,warehouseId:fixture.warehouseId,warehouseName:ref,items:[{productId:fixture.products[0],productCode:ref+'-0',productName:ref,unit:'个',quantity:1,unitPrice:80,priceSource:'manual'}]},ordinaryKey=randomUUID()
         const ordinary=await http('/sale',ordinaryBody,{expect:201,key:ordinaryKey});fixture.sales.push(ordinary.id)
         await http(`/sale/${ordinary.id}`,{...ordinaryBody,warehouseId:fixture.otherWarehouseId},{method:'PUT'})
-        await shrink();assert.deepEqual(await http('/sale',ordinaryBody,{expect:201,key:ordinaryKey}),ordinary,'ordinary original creation replay policy');await restore();await http(`/sale/${ordinary.id}/cancel`,{})
+        const [ordinaryBefore]=await q('SELECT warehouse_id,commercial_revision FROM sale_orders WHERE id=?',[ordinary.id])
+        await shrink();statuses.push(await status('/sale',ordinaryBody,{key:ordinaryKey}));await restore()
+        const [ordinaryAfter]=await q('SELECT warehouse_id,commercial_revision FROM sale_orders WHERE id=?',[ordinary.id])
+        assert.deepEqual(ordinaryAfter,ordinaryBefore,'denied ordinary replay leaves the saved order unchanged')
+        assert.deepEqual(await http('/sale',ordinaryBody,{expect:201,key:ordinaryKey}),ordinary,'restored current warehouse scope returns the original ordinary receipt')
+        await http(`/sale/${ordinary.id}/cancel`,{})
       }finally{await restore()}
-      assert.deepEqual(denied,[403,403]);assert.deepEqual(statuses,[403,403,403])
-      console.log('[PASS] current saved physical warehouses including zero rows authorize kit update old/new keys and create replay; full-scope replay succeeds, ordinary original create replay unchanged')
+      assert.deepEqual(denied,[403,403]);assert.deepEqual(statuses,[403,403,403,403])
+      console.log('[PASS] current saved physical warehouses including zero rows authorize kit and ordinary create replay; denied replay leaves the order unchanged and restored scope returns the original receipt')
       return
     }
     const key = randomUUID()
@@ -218,7 +225,7 @@ async function main() {
     fixture.previewRoleId=await insert('INSERT INTO sys_roles (code,name,is_system) VALUES (?,?,0)',[ref+'-preview',ref+'-preview'])
     await q('INSERT INTO sys_role_permissions (role_id,permission) VALUES ?',[[[fixture.previewRoleId,'sale.order.update'],[fixture.previewRoleId,'product.view']]])
     fixture.previewUserId=await insert("INSERT INTO sys_users(username,password,real_name,role_id,role_name,is_active) VALUES (?,'!',?,?,?,1)",[ref+'-preview',ref,fixture.previewRoleId,ref])
-    const previewToken=require('../backend/node_modules/jsonwebtoken').sign({userId:fixture.previewUserId,tokenVersion:0},process.env.JWT_SECRET,{expiresIn:'30m'})
+    const previewToken=await issueFixtureAccessToken(pool, fixture.previewUserId, {expiresIn:'30m'})
     const previewHeaders={Authorization:`Bearer ${previewToken}`}
     assert.equal((await http(`/sale/${sale.id}/commercial-preview`,{...body,expectedRevision:1},{headers:previewHeaders})).amount,330,'update-only editor can preview saved disabled kit without create permission')
     await http('/kits/preview',{customerId:fixture.customerId,warehouseId:fixture.warehouseId,groups:[{...body.commercialGroups[0],warehouseId:undefined}]},{headers:previewHeaders,expect:403})
@@ -262,7 +269,7 @@ async function main() {
       await q('INSERT INTO sys_role_permissions(role_id,permission) VALUES ?',[[[fixture.previewRoleId,'return.order.view'],[fixture.previewRoleId,'return.order.create']]])
       fixture.previewUserId=await insert("INSERT INTO sys_users(username,password,real_name,role_id,role_name,is_active) VALUES (?,'!',?,?,?,1)",[ref+'-return-view',ref,fixture.previewRoleId,ref])
       await q('INSERT INTO user_warehouse_scope(user_id,warehouse_id) VALUES (?,?)',[fixture.previewUserId,fixture.warehouseId])
-      const limited={Authorization:'Bearer '+require('../backend/node_modules/jsonwebtoken').sign({userId:fixture.previewUserId,tokenVersion:0},process.env.JWT_SECRET,{expiresIn:'30m'})}
+      const limited={Authorization:'Bearer '+await issueFixtureAccessToken(pool, fixture.previewUserId, {expiresIn:'30m'})}
       assert.deepEqual((await http(`/returns/sale/${sr.id}`,undefined,{method:'GET',headers:limited})).items[0].source,expected)
       await http(`/returns/sale/source-order?orderNo=${sale.orderNo}`,undefined,{method:'GET',headers:limited,expect:403})
       await http(`/sale/${sale.id}`,undefined,{method:'GET',headers:limited,expect:403})
@@ -710,7 +717,7 @@ async function main() {
     } finally {
       // Transport closure is outside every business cleanup and proof stage.
       try { await clean('server.close', async () => { if (server) await new Promise((resolve,reject) => server.close(error => error ? reject(error) : resolve())) }) }
-      finally { await clean('pool.end', () => pool.end()) }
+      finally { await clean('pool.end', async () => { try { await cleanupFixtureSessionFamilies(pool) } finally { await pool.end() } }) }
     }
     const failures = [...cleanupErrors]
     if (businessError) failures.unshift(businessError)

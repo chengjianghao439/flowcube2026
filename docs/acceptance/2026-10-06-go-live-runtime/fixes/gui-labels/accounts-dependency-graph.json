@@ -1,0 +1,39 @@
+{
+  "method": "static relative literal require traversal, no module execution",
+  "start": "/Users/chengjianghao/.codex/worktrees/go-live-batch-one/flowcube/backend/src/modules/finance/finance-accounts.service.js",
+  "target": "/Users/chengjianghao/.codex/worktrees/go-live-batch-one/flowcube/backend/src/modules/finance/finance-dashboard.service.js",
+  "reachesDashboard": false,
+  "filesRead": 10,
+  "unresolved": [],
+  "edges": {
+    "/Users/chengjianghao/.codex/worktrees/go-live-batch-one/flowcube/backend/src/modules/finance/finance-accounts.service.js": [
+      "/Users/chengjianghao/.codex/worktrees/go-live-batch-one/flowcube/backend/src/utils/decimalMoney.js",
+      "/Users/chengjianghao/.codex/worktrees/go-live-batch-one/flowcube/backend/src/config/db.js",
+      "/Users/chengjianghao/.codex/worktrees/go-live-batch-one/flowcube/backend/src/utils/AppError.js",
+      "/Users/chengjianghao/.codex/worktrees/go-live-batch-one/flowcube/backend/src/utils/backendTime.js",
+      "/Users/chengjianghao/.codex/worktrees/go-live-batch-one/flowcube/backend/src/utils/codeGenerator.js",
+      "/Users/chengjianghao/.codex/worktrees/go-live-batch-one/flowcube/backend/src/utils/pagination.js"
+    ],
+    "/Users/chengjianghao/.codex/worktrees/go-live-batch-one/flowcube/backend/src/utils/decimalMoney.js": [
+      "/Users/chengjianghao/.codex/worktrees/go-live-batch-one/flowcube/backend/src/utils/AppError.js"
+    ],
+    "/Users/chengjianghao/.codex/worktrees/go-live-batch-one/flowcube/backend/src/utils/AppError.js": [],
+    "/Users/chengjianghao/.codex/worktrees/go-live-batch-one/flowcube/backend/src/config/db.js": [
+      "/Users/chengjianghao/.codex/worktrees/go-live-batch-one/flowcube/backend/src/config/env.js",
+      "/Users/chengjianghao/.codex/worktrees/go-live-batch-one/flowcube/backend/src/utils/boundedPool.js"
+    ],
+    "/Users/chengjianghao/.codex/worktrees/go-live-batch-one/flowcube/backend/src/config/env.js": [],
+    "/Users/chengjianghao/.codex/worktrees/go-live-batch-one/flowcube/backend/src/utils/boundedPool.js": [
+      "/Users/chengjianghao/.codex/worktrees/go-live-batch-one/flowcube/backend/src/utils/AppError.js"
+    ],
+    "/Users/chengjianghao/.codex/worktrees/go-live-batch-one/flowcube/backend/src/utils/backendTime.js": [],
+    "/Users/chengjianghao/.codex/worktrees/go-live-batch-one/flowcube/backend/src/utils/codeGenerator.js": [
+      "/Users/chengjianghao/.codex/worktrees/go-live-batch-one/flowcube/backend/src/utils/sqlIdentifier.js",
+      "/Users/chengjianghao/.codex/worktrees/go-live-batch-one/flowcube/backend/src/utils/backendTime.js"
+    ],
+    "/Users/chengjianghao/.codex/worktrees/go-live-batch-one/flowcube/backend/src/utils/sqlIdentifier.js": [
+      "/Users/chengjianghao/.codex/worktrees/go-live-batch-one/flowcube/backend/src/utils/AppError.js"
+    ],
+    "/Users/chengjianghao/.codex/worktrees/go-live-batch-one/flowcube/backend/src/utils/pagination.js": []
+  }
+}

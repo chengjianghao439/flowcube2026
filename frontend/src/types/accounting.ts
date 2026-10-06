@@ -122,6 +122,7 @@ export interface UnpostedLedger {
 export interface ReconciliationResult {
   items: ReconciliationItem[]
   unpostedLedger: UnpostedLedger
+  supplierRefunds?: { cashAmount4: string; projectedAmount2: string; roundingDifference4: string; netPaid4: string; currentPaid4: string; paidDifference4: string; balanceDifference4?: string; mismatchedPaymentCount?: number; matched: boolean }
 }
 
 export interface ManualEntryInput {
@@ -276,6 +277,7 @@ export const VOUCHER_SOURCE_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'sale_cogs', label: '销售成本' },
   { value: 'receipt_in', label: '收款' },
   { value: 'payment_out', label: '付款' },
+  { value: 'supplier_refund_in', label: '供应商退款' },
   { value: 'expense_pay', label: '费用报销' },
   { value: 'purchase_return', label: '采购退货' },
   { value: 'sale_return', label: '销售退货' },
@@ -336,8 +338,30 @@ export interface BackfillApplication {
   voucherPending: boolean
   /** 核销类补录本就不产生凭证，页面要显示「不涉及凭证」而不是「待生成」 */
   voucherNotRequired: boolean
+  /** 供应商退款逐笔证明结果；零分保留真实资金事实。 */
+  voucherResult?: 'generated' | 'notRequired' | 'pending'
   /** 仅详情接口返回：批准后重放原请求用的快照 */
   requestSnapshot?: unknown
+}
+
+/** 业务提交后的结果；申请详情加载与凭证证明分别报告。 */
+export interface BackfillOperationResult {
+  id: number
+  applicationNo: string
+  bizType: string
+  bizTypeName: string
+  postingPeriod: string | null
+  executed?: boolean
+  alreadyExecuted?: boolean
+  result?: unknown
+  voucherStats: unknown
+  vouchersVerified: number
+  voucherRequired: boolean
+  voucherResult?: 'generated' | 'notRequired' | 'pending'
+  voucherError: string | null
+  application: BackfillApplication | null
+  applicationPending: boolean
+  applicationError: string | null
 }
 
 export interface BackfillListQuery {
@@ -360,6 +384,8 @@ export const BACKFILL_BIZ_TYPE_OPTIONS: Array<{ value: string; label: string }> 
   { value: 'receipt', label: '收付款单登记' },
   { value: 'receipt_settle', label: '收付款核销' },
   { value: 'refund', label: '退款出账' },
+  { value: 'supplier_refund', label: '供应商退款' },
+  { value: 'expense_pay', label: '报销付款' },
 ]
 
 /** 补录状态（筛选下拉；展示直接用后端 statusName） */

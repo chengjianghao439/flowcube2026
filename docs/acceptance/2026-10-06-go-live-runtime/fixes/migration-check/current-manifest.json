@@ -1,0 +1,32 @@
+[
+  {
+    "path": "backend/src/database/277_disposal_handling.sql",
+    "beforeSha256": "12b8a34e86c604c25d1c932d552e682a033a735916d0d9210504808191c38d89",
+    "afterSha256": "7477a353845fe02589e7485a5e1fca614b80ff83d40388fd70f1994986bb60c7",
+    "size": 71619
+  },
+  {
+    "path": "backend/src/database/278_supplier_refunds.sql",
+    "beforeSha256": "8de76df196cab73adc913aadeb977aa6433309a514a4129cef4cd26c02a36ca0",
+    "afterSha256": "2700b14452156a0be20dda50a870e7329dd27c94644bc7fe506039b9a53aca6b",
+    "size": 47032
+  },
+  {
+    "path": "tests/disposal-handling.test.js",
+    "beforeSha256": "102df38a3b469d69432ce2e33962cdef779012402dbc9b124ec823dd1e8c26fb",
+    "afterSha256": "2c16191c3ca6e63fa7f82399c5addb8ec2485369d83331312316dca8517b9b69",
+    "size": 37154
+  },
+  {
+    "path": "tests/supplier-refunds-schema.test.js",
+    "beforeSha256": "0ae866e21d98b7d52687db13f75e5a3282465b829dc4244316d6659d34205749",
+    "afterSha256": "7ff421ef182a8fbc2f548a8f690f521861c5b3f95fb5ab01904e66f9018c82e6",
+    "size": 13850
+  },
+  {
+    "path": "docs/backend-api-sql-conventions.md",
+    "beforeSha256": "7a945995d02e1da022d0e40f2d40c73bde6f3b09ba9fd97c1e61f9bc84d0b769",
+    "afterSha256": "9cfe21c9d347c94aad29e9de0358925f0fb5ae14a5273346cfbee0829adda68a",
+    "size": 66780
+  }
+]

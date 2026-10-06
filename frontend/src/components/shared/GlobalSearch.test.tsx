@@ -82,3 +82,13 @@ test('完整结果保留补充资料，不显示加载更多或分页说明', as
   expect(host.textContent).not.toContain('加载更多')
   expect(host.textContent).not.toContain('每类最多')
 })
+
+test('商品结果展示服务端命中说明和条码，提示六字段范围', async () => {
+  vi.mocked(searchGlobalApi).mockResolvedValue(page([{...result('连接器'),type:'product',typeLabel:'商品',path:'/products',searchMatch:'供应商型号',details:[{label:'条码',value:'690001'}]}] as never))
+  await type('SUP-01')
+  expect(host.textContent).toContain('命中：供应商型号')
+  expect(host.textContent).toContain('条码：690001')
+  expect(host.querySelector('input')?.title).toContain('编码、名称、条码、供应商型号、型号、颜色')
+  await type('')
+  expect(host.textContent).not.toContain('命中：')
+})

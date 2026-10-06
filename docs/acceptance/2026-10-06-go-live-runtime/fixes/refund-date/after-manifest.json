@@ -1,0 +1,21 @@
+{
+  "worktree": "/Users/chengjianghao/.codex/worktrees/go-live-batch-one/flowcube",
+  "head": "14e97aa9dc9df0700b394d59cafbc53dba0c5e69",
+  "files": {
+    "backend/src/modules/refunds/supplier-refunds.service.js": {
+      "before_sha256": "2f11368f297dbe1bb4cee72bc05509ecfd31253a42766cb940f68b6695c49e29",
+      "overlay_before_sha256": "2f11368f297dbe1bb4cee72bc05509ecfd31253a42766cb940f68b6695c49e29",
+      "after_sha256": "ef16cd0a0a3b4677937fdb6b07d49cac73d9b1ce7cbff206183219041cb2be05"
+    },
+    "tests/supplier-refunds.test.js": {
+      "before_sha256": "434c57769aca965e46a6ddb50157a3c91afd84175babab649451c3c98399454a",
+      "overlay_before_sha256": "434c57769aca965e46a6ddb50157a3c91afd84175babab649451c3c98399454a",
+      "after_sha256": "1e25c66d898456f4b0ed02c8ca5b6bd66d8daafbcaae1b091de3e81653dfaf8d"
+    },
+    "docs/finance-permission-time.md": {
+      "before_sha256": "fb11dd1e31eb06da13633bfa58234ae3862909eac5032f0aa5d85f1040ad6824",
+      "overlay_before_sha256": "fb11dd1e31eb06da13633bfa58234ae3862909eac5032f0aa5d85f1040ad6824",
+      "after_sha256": "6a218da7f06940de17d06568ee139e2e701ea5644b72fe8c760e6f5e012c22ea"
+    }
+  }
+}

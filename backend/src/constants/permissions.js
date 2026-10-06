@@ -157,6 +157,10 @@ const PERMISSIONS = {
   FINANCE_EXPENSE_VIEW_ALL: 'finance.expense.view.all',
 
   // 已收款退货退款单（P2-6）。EXECUTE 直接动资金账户出账，敏感度等同 FINANCE_EXPENSE_PAY。
+  SUPPLIER_REFUND_VIEW: 'supplier.refund.view',
+  SUPPLIER_REFUND_CREATE: 'supplier.refund.create',
+  SUPPLIER_REFUND_CONFIRM: 'supplier.refund.confirm',
+  SUPPLIER_REFUND_RECEIVE: 'supplier.refund.receive',
   REFUND_ORDER_VIEW: 'refund.order.view',
   REFUND_ORDER_CREATE: 'refund.order.create',
   REFUND_ORDER_EXECUTE: 'refund.order.execute',

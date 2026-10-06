@@ -1,0 +1,17 @@
+{
+  "name": "gui-returns",
+  "checks": [
+    "销售原单退货准确来源",
+    "销售原价20与剩余可退2",
+    "采购原单退货准确来源",
+    "采购原价10剩余可退6"
+  ],
+  "api": [
+    {
+      "method": "GET",
+      "path": "/api/notifications",
+      "status": 500
+    }
+  ],
+  "errors": []
+}

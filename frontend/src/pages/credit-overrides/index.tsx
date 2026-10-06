@@ -1,8 +1,12 @@
+import { useApprovalDetailHandoff } from '@/hooks/useApprovalDetailHandoff'
+import { ApprovalHandoffNotice } from '@/components/shared/ApprovalHandoffNotice'
+import { getCreditOverrideApi } from '@/api/credit-overrides'
 import { OrderActivityDialog } from '@/components/shared/OrderActivityDialog'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { money } from '@/lib/format'
 import { RecordIdentity } from '@/components/shared/RecordIdentity'
-import { useMemo, useState } from 'react'
+import { useContext, useMemo, useState } from 'react'
+import { TabPathContext } from '@/components/layout/TabPathContext'
 import { useSearchParams } from 'react-router-dom'
 import { X } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
@@ -118,7 +122,9 @@ function CreateDialog({ open, onClose }: { open: boolean; onClose: () => void })
 export default function CreditOverridesPage() {
   const { can } = usePermission()
   const canApply = can(PERMISSIONS.SALE_CREDIT_OVERRIDE_APPLY)
-  const [searchParams, setSearchParams] = useSearchParams()
+  const tabPath = useContext(TabPathContext)
+  const [urlParams, setSearchParams] = useSearchParams()
+  const searchParams = tabPath ? new URLSearchParams(tabPath.split('?')[1] || '') : urlParams
   const [queryOpen, setQueryOpen] = useState(false)
   const [rejectTarget, setRejectTarget] = useState<CreditOverride | null>(null)
   const [rejectReason, setRejectReason] = useState('')
@@ -130,6 +136,8 @@ export default function CreditOverridesPage() {
   const endDate   = readStringParam(searchParams, 'endDate')
 
   const [createOpen, setCreateOpen] = useState(false)
+  const [manualDetailOpen, setManualDetailOpen] = useState(false)
+  const handoff = useApprovalDetailHandoff('/credit-overrides', PERMISSIONS.SALE_CREDIT_OVERRIDE_VIEW, getCreditOverrideApi, createOpen || queryOpen || !!rejectTarget || manualDetailOpen)
 
   const { data, isLoading, isError, error, refetch } = useCreditOverrides({
     page: 1,
@@ -202,7 +210,7 @@ export default function CreditOverridesPage() {
       title: '操作',
       width: 200,
       render: (_, row) => {
-        const els: React.ReactNode[] = [<OrderActivityDialog key="detail" type="credit" id={row.id} title={row.overrideNo} fields={[
+        const els: React.ReactNode[] = [<OrderActivityDialog onOpenChange={setManualDetailOpen} key="detail" type="credit" id={row.id} title={row.overrideNo} fields={[
           ['销售单', row.saleOrderNo], ['客户', row.customerName], ['本单净额', money(row.thisAmount)], ['授信额度', money(row.creditLimit)], ['超额金额', money(row.overAmount)], ['状态', row.statusName], ['申请人', row.applicantName], ['申请原因', row.reason], ['驳回原因', row.rejectReason],
         ]} />]
         if (row.status === 1) els.push(<Button key="submit" size="sm" variant="outline" onClick={() => submit(row.id, { onSuccess: () => toast.success('已提交审批'), onError: (e: Error) => toast.error(e.message) })}>提交</Button>)
@@ -255,6 +263,10 @@ export default function CreditOverridesPage() {
       )}
       {total > 0 && <ListSummary total={total} />}
 
+      <ApprovalHandoffNotice {...handoff} />
+      {handoff.data && <OrderActivityDialog type="credit" id={handoff.data.id} title={handoff.data.overrideNo} open={handoff.open} hideTrigger onOpenChange={open => { if (!open) handoff.close() }} fields={[
+        ['销售单', handoff.data.saleOrderNo], ['客户', handoff.data.customerName], ['本单净额', money(handoff.data.thisAmount)], ['授信额度', money(handoff.data.creditLimit)], ['超额金额', money(handoff.data.overAmount)], ['状态', handoff.data.statusName], ['申请人', handoff.data.applicantName], ['申请原因', handoff.data.reason], ['驳回原因', handoff.data.rejectReason],
+      ]} />}
       <Dialog open={!!rejectTarget} onOpenChange={open => { if (!open && !rejecting) setRejectTarget(null) }}>
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>驳回超额放行申请</DialogTitle><DialogDescription>说明驳回原因，便于申请人调整销售安排。</DialogDescription></DialogHeader>

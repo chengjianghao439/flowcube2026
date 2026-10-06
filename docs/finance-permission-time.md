@@ -40,7 +40,7 @@
 - 迁移 `256_acct_sale_source_period.sql` 增加 `source_period`，销售唯一来源为 `(company_id, source_type, source_id=销售单ID, source_period=YYYYMM)`；其它来源及旧累计根保留空期间。旧凭证与分录不搬期、不改金额；新期间投影为「真实当期目标分录 − 同期间旧累计根已记净分录」。例如旧八月 50、事实八月/九月各 50，九月只记 50；旧八月 100、事实各 50，开放时追加八月负 50/九月正 50。账套锁后的历史凭证、分录与闭期对账使用当前锁定读，避免调用方旧事务快照漏抵扣刚提交凭证。期间根后续变化、归零、恢复复用 `source_root_id` 自动修订链，保留历史分录。人工冲销旧累计根停止该销售来源的自动恢复；人工冲销期间根停止该期间恢复。
 - **闭期与历史兼容边界**：生成任一月份之前先对账全部销售闭期；历史归期或金额不一致抛 `ACCT_SALE_CLOSED_PERIOD_CONFLICT`（订单 ID、期间、来源类型），即使请求的是后月也不可绕过。没有可验证出库事实的历史累计量必须先核查修复来源，不自动回退日期。结账入口补只读销售来源完整性检查，漏生成/陈旧投影抛 `ACCT_SALE_VOUCHER_REQUIRED`；该检查与凭证写入共用账套锁，但实际出库事务未持该锁，**不保证检查之后的实时出库与结账互斥**。跨期回归见 `tests/accounting-sale-period.smoke.test.js`，采购既有修订回归仍由 `tests/audit-finance-security.smoke.test.js` 覆盖。
 
-- **资金期间闸门与跨期补录（2026-09-26，任务 7）**：收付款登记、核销、退款出账三条资金入口在写入前调 `assertFinancePeriodOpen`（`accounting/finance-period.guard.js`）；业务日期落在**已结账**期间（`acct_periods.status=2`）默认返回 **409 `FINANCE_PERIOD_CLOSED`**，不再静默放行。有权限者（`finance.period.backfill`——**只加常量、不写 seed 迁移**，与 `PAYMENT_CONFIRM` 同样"不 seed、由产品手动开放"）可带**必填原因**走特权补录，落痕于 `finance_period_backfills`（迁移 258/260/261）。**补录不撬开已封的期间**：业务数据（账款余额、`payment_entries`、资金流水）按业务日期落库，资金流水 `happened_at` **保持业务日期不变**；调整凭证落在**执行审批当天所属的未结账期间**（`voucherDateOverride = beijingTodayYmd()` 写入 `finance_account_transactions.voucher_date_override`，凭证引擎取 `r.vdate_override || r.vdate`）。**生成时机是"业务提交后立即"**：`finance-backfills.service.js` `execute` 提交业务事务后立即 `settleVouchersFor`，跑 `generatePeriodVouchers` 并**逐笔核对**本申请产生的每条资金流水（有**有效**凭证、期间=补录当期、借贷各自等于该笔流水金额、分录 ≥2 条），通过才置 `voucher_generated_at`；核对不过才写 `voucher_generate_error` 停在待生成，由审批页 `regenerateVoucher` 与定时 `retryPendingVoucherGeneration` 重试。两段事务**不可合并**：凭证生成是独立的全量重算，读的是已落库的流水与单据，塞进业务事务会读不到自己未提交的写入、把刚补好的凭证判成缺失。**若补录当期（审批当天所属期间）本身也已结账**：`assertFinancePeriodOpen` 在**业务事务内、已持账套锁与期间行锁**时调 `assertBackfillPostingPeriodOpen(..., { lockForUpdate: true })` 复核，直接 **409 `FINANCE_BACKFILL_POSTING_PERIOD_CLOSED`** 拒绝——**业务分文不写**，补录单停在「已批准 · 待执行」，**不是"钱先动了、凭证再补不上"**。`resolvePostingPeriod` 里另有一道不加锁的**预检**（措辞相同、为的是在写业务之前就给出明确拒绝）；预检通过不代表写入时仍放行，事务内那次才是真正的防线。**证据强度：端到端。** `tests/finance-backfill-approval.smoke.test.js` **§O** 就是这条的反例：申请后、批准前把**真实的当期行**临时置为已结账（先连原值快照，finally 按原值回写；原本不存在则删本轮新建行——两条分支各实跑一次），批准即返回 409 `FINANCE_BACKFILL_POSTING_PERIOD_CLOSED`，并断言停在「已批准 · 待执行」、付款分录 0 条、账款已付仍 0、资金流水数不变。~~此前标注的"该错误码在 `tests/` 中零引用、无专门反例回归"~~ 已作废。核销类补录（`receipt_settle`）**本来就不产生资金流水**，按 `NO_FUND_TXN_BIZ_TYPES` 跳过核对，不判为失败。回归 `tests/finance-backfill-approval.smoke.test.js`、`tests/finance-period-guard.smoke.test.js`。
+- **资金期间闸门与跨期补录（2026-09-26，任务 7）**：收付款登记、核销、退款出账、报销付款四条资金入口在写入前调 `assertFinancePeriodOpen`（`accounting/finance-period.guard.js`）；业务日期落在**已结账**期间（`acct_periods.status=2`）默认返回 **409 `FINANCE_PERIOD_CLOSED`**，不再静默放行。有权限者（`finance.period.backfill`——**只加常量、不写 seed 迁移**，与 `PAYMENT_CONFIRM` 同样"不 seed、由产品手动开放"）可带**必填原因**走特权补录，落痕于 `finance_period_backfills`（迁移 258/260/261）。**补录不撬开已封的期间**：业务数据（账款余额、`payment_entries`、资金流水）按业务日期落库，资金流水 `happened_at` **保持业务日期不变**；调整凭证落在**执行审批当天所属的未结账期间**（`voucherDateOverride = beijingTodayYmd()` 写入 `finance_account_transactions.voucher_date_override`，凭证引擎取 `r.vdate_override || r.vdate`）。**生成时机是"业务提交后立即"**：`finance-backfills.service.js` `execute` 提交业务事务后立即 `settleVouchersFor`，跑 `generatePeriodVouchers` 并**逐笔核对**本申请产生的每条资金流水（有**有效**凭证、期间=补录当期、借贷各自等于该笔流水金额、分录 ≥2 条），通过才置 `voucher_generated_at`；核对不过才写 `voucher_generate_error` 停在待生成，由审批页 `regenerateVoucher` 与定时 `retryPendingVoucherGeneration` 重试。两段事务**不可合并**：凭证生成是独立的全量重算，读的是已落库的流水与单据，塞进业务事务会读不到自己未提交的写入、把刚补好的凭证判成缺失。**若补录当期（审批当天所属期间）本身也已结账**：`assertFinancePeriodOpen` 在**业务事务内、已持账套锁与期间行锁**时调 `assertBackfillPostingPeriodOpen(..., { lockForUpdate: true })` 复核，直接 **409 `FINANCE_BACKFILL_POSTING_PERIOD_CLOSED`** 拒绝——**业务分文不写**，补录单停在「已批准 · 待执行」，**不是"钱先动了、凭证再补不上"**。`resolvePostingPeriod` 里另有一道不加锁的**预检**（措辞相同、为的是在写业务之前就给出明确拒绝）；预检通过不代表写入时仍放行，事务内那次才是真正的防线。**证据强度：端到端。** `tests/finance-backfill-approval.smoke.test.js` **§O** 就是这条的反例：申请后、批准前把**真实的当期行**临时置为已结账（先连原值快照，finally 按原值回写；原本不存在则删本轮新建行——两条分支各实跑一次），批准即返回 409 `FINANCE_BACKFILL_POSTING_PERIOD_CLOSED`，并断言停在「已批准 · 待执行」、付款分录 0 条、账款已付仍 0、资金流水数不变。~~此前标注的"该错误码在 `tests/` 中零引用、无专门反例回归"~~ 已作废。核销类补录（`receipt_settle`）**本来就不产生资金流水**，按 `NO_FUND_TXN_BIZ_TYPES` 跳过核对，不判为失败。**报销付款是后补上的第四条**（2026-09-26 一致性审查 · 任务 2，`finance/expense-claims.service.js` 的 `pay`）：同一道闸门、同一 `bizLabel`（"本次报销付款"），差异只在锁与调用位置——闸门在业务事务内，锁序仍是**账套 → 账户**（先 `lockAccountingCompanyShared`，再对付款账户 `SELECT … FOR UPDATE`）；补录申请分支必须在业务事务**之前**（`tryRecordBackfillApplication` 走全局 pool，塞进事务会读不到自己未提交的写入），审批执行时把 `voucherDateOverride` 透传 `recordTransaction`，落 `finance_account_transactions.voucher_date_override`，凭证因此落在执行当天所属期间。**证据强度：端到端**（`tests/expense-pay-period-guard.smoke.test.js`：§A 已结账期间 409 且一分钱不动、§B 申请只落单不动账、§C 批准即执行且落期为当期、§D 未结账照常放行、§E 同键重发幂等）。回归 `tests/finance-backfill-approval.smoke.test.js`、`tests/finance-period-guard.smoke.test.js`、`tests/expense-pay-period-guard.smoke.test.js`。
 - **资金写入与结账的锁模式必须分离（2026-09-26）**：普通资金登记只取**共享锁** `lockAccountingCompanyShared`（`acct_companies FOR SHARE` + `acct_periods FOR SHARE`），跨期补录与 `closePeriod` 取**排他锁** `lockAccountingCompany`（`FOR UPDATE`）（`accounting/accounting.period-lock.js`）。共享-共享兼容 ⇒ 并发登记**不互相串行化**；共享-排他互斥 ⇒ "检查时未结账、写入时已结"这一竞态被挡住。加锁顺序全链统一：**账套 → 账户 → 对账单 → 账款**；凭证写入与结账**必须共用同一把账套锁**。**把任一侧改成另一种模式都会坏**：全排他 → 并发登记排队（性能退化为串行）；全共享 → 结账挡不住写入（闸门形同不存在，正是本模块存在的理由原样复现）。回归 `tests/finance-period-lock-order.smoke.test.js`（含**反向验证**：改回排他锁后 §1 精准红 `ER_LOCK_WAIT_TIMEOUT`，其余断言不受影响）。注意 `acct_periods` 主键是 `(company_id, period)`，**没有 `id` 列**。
 - **非单据应付进总账（2026-09-26，任务 3）**：运费结算与手工应付原先只在 `payment_records` 落账、不进凭证引擎。现 `voucher-engine.js` 的 `generateVouchers` 内 `...await buildUnbilledPayable(conn)` 把**无业务单据来源**的应付接入主流程，按 `is_freight` 分派 `SOURCE_TYPES.FREIGHT_SETTLE` / `MANUAL_PAYABLE`。借方科目取 `payment_records.debit_account_code`（迁移 `259_payment_debit_account.sql`）；**该列为 NULL 表示历史未分类，引擎跳过、不猜科目**。手工录入走 `payments.service.js` `createManual`，`assertDebitAccount` 拦不存在/已停用/汇总科目/2202 本身；运费侧 `logistics.freight.js` 固定写 `6601`。回归 `tests/payable-posting.smoke.test.js`。
 
@@ -321,3 +321,147 @@ B4 菜单交接补验：页面隐藏时立即清除待交接回调，重新激�
 `GET /approvals/biz/expense_claim/:id` 在读取审批实例与意见前，核底层报销申请人；超管或当前角色有查看全部报销权限才允许跨申请人查看。不能只靠审批查看权限或报销基本查看权限。
 
 对账报表的汇总、计数、明细共用来源单据仓库条件：应付沿采购单，应收沿销售单及其全部明细仓。限仓用户不读取手工账款或缺失来源账款；不限仓用户仍保持既有财务口径。导出透传同一授权范围和全部业务筛选，分批收齐且总量超限拒绝。回归及当前证据边界见 `docs/security-scope-remediation-2026-10-06.md`。
+
+
+### 审批待办与费用报销可见范围（2026-10-04）
+
+审批待办只读概要沿用费用详情的可见口径：持有 `FINANCE_EXPENSE_VIEW` 后，只有 `FINANCE_EXPENSE_VIEW_ALL`（`finance.expense.view.all`）或超管可以看全部报销；其余只纳入本人的报销单。该条件在待办计数和分页前执行；审批查看、审批动作或付款权限均不替代查看全部权限。首批列表与原单定位不纳入单级待办，R3将原状态2报销只读纳入document来源，仍不改审核动作和公司级资金权限。单级还须FINANCE_EXPENSE_APPROVE，自批仅真实sys_users.allow_self_approve=1可见本人待审，role1没有自批豁免；NULL/0历史制单身份不额外拒绝。费用金额取原total_amount、时间取实际submitted_at；原审批处理后仅在既有成功回调刷新待办与首页，无数据库或现场验收证据时保留相应待验证边界。
+
+### 往来名称容量与导出呈现（2026-10-04，R1）
+
+客户/供应商主档允许 100 Unicode 码点名称。收付款登记、手工账款、对账创建和发票修改的 `partyName` 原上限 100 改用同一码点长度单位，并拒绝不完整代理项；财务单据保留其既有名称原值，不在该校验中 trim 或重写历史身份。权限、期间闸门、结算、核销与金额规则未改。授信名称快照的 VARCHAR(80) 瓶颈由新增 276 迁移源码处理，未执行 DDL。
+
+客户/供应商资料、订单、授信、资金流水的名称/地址列，以及直接返回列定义的对账、账款、收付款单、对账汇总、账龄 Top 往来方导出均显式允许换行；Excel 工具按完整文本估算行高，不截短单元格值。单张正式对账单的往来名称抬头同样换行并增高。导出的金额、过滤条件、行数上限和往来身份来源保持原语义；XLSX 回读与真实导出 service 的离线 stub 验证只证明内容和样式定义，Excel 客户端实际显示、数据库和实物打印另行验收。
+
+
+### 库存预占概要的原单隐私（2026-10-04，R2）
+
+库存查看权仅允许读取指定授权仓库的数量解释，不授销售或采购查看权。`/inventory/reservations` 同一只读快照按真实 roleId 查 sys_role_permissions：销售来源须原 SALE_ORDER_VIEW 和完整头仓/全部明细仓范围，采购来源须原 PURCHASE_ORDER_VIEW 和头仓范围；超管沿既有 roleId=1 规则。统计可见单数与分页先应用这些约束。无权、未知和已缺失来源只返回各自数量汇总，剥离原单身份和客户/状态资料，不借 ref_no 推测单据链接，也不改变任何审批、出库或财务动作权限。
+
+### 报废与正常业务入口的权限边界（2026-10-04，R10第一段）
+
+建议查看沿INVENTORY_DISPOSAL_VIEW，创建仍须INVENTORY_DISPOSAL_CREATE；正常销售沿SALE_ORDER_CREATE，改价入口同时PRODUCT_VIEW+PRODUCT_UPDATE，采购退货沿RETURN_ORDER_CREATE。导航只打开原URL，不给予源读取、资金、退货或其他写授权。处置原批准/驳回自批仍只认真实allow_self_approve，role1不因此自动豁免；旧待审的驳回与取消保留。
+
+报废执行保持INVENTORY_DISPOSAL_EXECUTE及当前原头仓范围；本人原结果核对页只需认证，撤VIEW/EXECUTE后仍可查自己的原账号/服务器请求，不读详情、库存或审批，不自动POST。手动原键重试另核当前EXECUTE和服务端范围，不新增VIEW门。本段不建立供应商退款收入/会计凭证，不用负数付款、账户余额调整或客户退款绕过既有paid保护。
+
+
+### 退货账款/对账当前重核（2026-10-04，E1）
+
+共享退货调整在同连接先定位准确 AP 与全部对账成员，升序锁对账单后当前锁 AP；最新 AP 身份或对账成员集合变化即 409，不在 AP 后补锁新对账单。仅此调用当前读取完整成员金额行刷新原对账投影，写回四位金额；其他 refreshSettlement 默认行为不改。原总额冲减、待确认标记、事件、已付保护与提交保持，例如已付80/应付100/退30仍拒绝。
+
+原权限、自批、设备及仓库范围不增加；准确 PO/PR/WT 在锁后核归属和当前范围。历史真无源文本单号不推断 AP 身份。没有实现供应商退款/会计新事实，实际 MySQL 当前读与锁并发需隔离环境验证，离线函数模拟不能充作账款或实物验收。
+
+共享退货账款的空 identity 快照不再直接视作“无账款”：原 type/order 条件同连接当前核实，当前出现AR/AP就409回滚重核，不追锁statement、不写冲减或事件；当前真正不存在保持null。此窄修不改金额、权限或销售/采购来源规则；普通销售退货的旧RR视图也适用，实际MySQL并发仍待隔离验。
+
+## 2026-10-05 H1：处理来源权限边界
+
+普通意图使用原 `INVENTORY_DISPOSAL_CREATE`，来源列表/数量详情使用原 `INVENTORY_DISPOSAL_VIEW`，当前仓范围在写重放和count/page前应用（null全仓、[]无仓）。来源VIEW不授目标创建、执行、审批或查看价款；本批没有目标写行为、账款/核销/会计变更。独立永久结果接口仅原认证本人按准确operation UUID+原action/key/intent核对，撤CREATE/VIEW后仍可读取自己原来源响应，但撤原仓范围拒绝；它不附其他目标身份/价款、不新增POST或自动重试。未知、损坏或不匹配身份不合成成功。旧批准单转换、解除与其管理权限未在H1开放。
+
+## 2026-10-05 H2：来源查看与目标创建的独立授权
+
+带来源创建在原目标 CREATE 已加载的真实请求权限上，条件再核 `INVENTORY_DISPOSAL_VIEW` 与当前源仓范围；body 的权限/role 不作为授权。来源 VIEW 不授销售/退货/报废创建或审核权。本人永久原结果只需认证、精确本人操作身份及当前源/完整目标仓范围；minimal ACK 仅 id/no，不附单价、金额、客户或供应商详情。写回放仍要当前目标 CREATE、来源 VIEW 与范围，且不能靠 generic 成功补关联。无源原权限路径保持。
+
+本批仅正常目标原子创建与分配，不扣库存、不登记资金、不冲应付/退款/入账；PR 原价与剩余校验保持，原单审批、自批、后续动作权限未扩展。真实账款/并发/现场验收未运行。
+
+## 2026-10-05 H4：来源解除与目标隐私
+
+来源 VIEW 允许数量说明，不授目标 VIEW。销售/采购退货/报废概要分别由真实 SALE_ORDER_VIEW/RETURN_ORDER_VIEW/INVENTORY_DISPOSAL_VIEW 加完整头、全部当前行和全部历史 WT 仓范围决定；没有原查看权或范围不足，只返回 link 数量/状态与通用 pending 原因，不返回 target ID/no/path/客户/供应商或价款。controller 从已加载真实权限生成内部映射，不接受 query/body 权限。
+
+普通来源解除沿原 INVENTORY_DISPOSAL_CREATE+VIEW+当前范围；未来 legacy 来源沿 APPROVE+VIEW+不可变整单批准证据及真实 allow_self_approve。仅 flag1 可豁免本人旧制单自批，role1 不自动豁免；客户端不能指定 origin。H4 只验证277预留的完整 canonical legacy 头/行/批准/响应结构，没有创建签认或转换行为。
+
+精确本人永久解除结果仅认证与当前完整来源/目标仓范围，不额外要求 VIEW/CREATE/APPROVE，不附原单价款，不授重试/目标写权。未知、pending、not_found 或损坏证明不能合成成功。解除只恢复未执行来源量，不冲原销售/退货账款、不退款、不入账、不改 target 状态；PR3 全量完成只可冻结 R0，PR4 才可释放未执行量。原期间、金额精度、自批、paid 保护及会计链不变，供应商退款另批。
+
+H4 规格窄修进一步核 legacy 完整固定 DTO 和全旧行/冻结来源/永久 operation 一致身份，canonical null、最小两字段响应或错映射不能仅凭原批准字段进入解除。原 creator 自批仍核真实 allow_self_approve，签认 actor 不替换原 creator；原响应每源 revision1 不随当前协调版本变化。只内部核准确历史快照，不附价款、不创建 H5 签认、不扩大来源或目标权限。
+
+## 2026-10-05 H5：旧整单签认的权限与历史估值
+
+完整 conversion-snapshot 沿原 INVENTORY_DISPOSAL_VIEW+当前整仓范围；sign-conversion 必须同时原 VIEW/APPROVE，controller从实际 loaded permission 传授权，body不能自报origin/权限。旧制单人自签仅同 conn actor S 读 allow_self_approve=1，超管角色不自动豁免。永久原结果的 handling-operations 转换分支仅认证本人 UUID/action/key及当前准确原仓范围，无额外VIEW/APPROVE要求，也不授写权。
+
+version1完整旧批准快照保留原 approved_by/approved_by_name/approved_at及历史两位量/四位估值原文本，Date沿JSON序列化；旧批准/头行/updated_at不UPDATE，不改会计时点、收入、应付、退款或估值。最小本人ACK无参考价/金额，后来来源revision和主档停用不改原响应。签认不是库存执行或资金事实，后续普通目标仍各自原权限/审批/期间规则；H6及供应商退款本批不实施。
+
+### 供应商退款 F1 的权限与时间边界
+
+新增 `supplier.refund.view/create/confirm/receive` 前后端常量及既有权限管理分组，不自动授普通角色，不新建权限目录表。读取还要求原 PO/PR/PAYMENT 查看权；create/confirm/cancel 沿本域动作权及 VIEW、完整仓范围。当前用户/角色/权限/范围在事务内核实，role1 只保原权限例外，自己确认自己的退款单仍仅 `allow_self_approve=1` 豁免。
+
+F1 为非现金意图：账套1共享门只校身份，不查资金期间、不锁期间、不生成凭证；闭期仍可合法创建/确认/取消。业务 refund_date 必填真实 YYYY-MM-DD，不以今天兜底；mysql 北京午夜 Date 通过 `backendTime.beijingTodayYmd` 还原日期，无效 Date/溢出日转领域错误。原付款账户和唯一原 OUT 核公司/账户/日期/本金，收入账户当前启用用于创建/新确认；取消允许原账户后来停用但仍核公司和冻结身份。
+
+非现金事件使用专用 `SUPPLIER_REFUND_*`，不调用会更新最近往来的旧 REFUND 事件。永久请求键完整支持100字，原事件 request_id64 使用此次36位 operation UUID并在 payload 关联，不截请求键。收到时 `received_account_type` 1–5 与真实 IN/登记人日期预留在278，F1 不伪填、不称资金已收或会计已完成。
+
+
+### 供应商退款 F2：资金期间、四位金额与原结果
+
+新回款沿 RECEIVE+VIEW+原 PO/PR/PAYMENT 查看权、当前 actor/角色/完整仓范围，账套共享及真实资金期间共享门在账户前；闭期新操作准确拒绝，不建议默认改日期、不授补录权。收入账户在 X 下核公司1/启用/身份，真实 `recordTransaction` 使用数值 DIRECTION.IN、biz_type6 及独立第三参数登记人，刷新原余额；同账户全流水当前锁读可含原 OUT，异账户原 OUT 不在 AP 后追锁。收到时冻结真实 received_account_type1–5，后来账户类型不会重写历史。
+
+AP paid、entry/PR 预算及 opt-in 对账汇总采用 decimalMoney BigInt；原对账默认 DTO/规则保持。往来新增准确 type1/supplier/PO/AP/RFno/正四位 delta，238 baseline_key 为本 RF 稳定唯一来源；专用 SUPPLIER_REFUND_RECEIVED 事件不会触发旧 REFUND 的最近往来修改，request_id 用 operation UUID36，完整 requestKey 不截断。资金/往来/事件/永久结果原子提交。
+
+精确成功永久 ACK 在当前本人/完整范围/来源和真实 IN 证据核对后先于新闭期/状态/预算；撤 VIEW/RECEIVE 后可用 auth-only 本人 GET 核原最小结果，不获得详情或新写权。内部借用成功回放不因撤写权伪装未知，只有已存在精确成功操作享此分支。提交时凭证仍 pending；本批 postcommit 只提供有限可注入尝试边界，默认或生成/保存失败保留 pending，不能把资金成功改失败或再次 receive。F3 实际会计、F4 补录和 F5/F6 UI 未在 F2 实施。
+
+### 已收供应商退款会计 F3
+
+本域真实 IN 仍为四位资金/AP变化。会计只作分位投影：以 BigInt 的 0.0001 单位计算 `(u+50)/100`，0.004 为完整来源核对后零分无需凭证，0.005 为两腿各 0.01；每笔单独投影，尾差不凑分、不 ADJUST。`supplier_refund_in` 的 source ID 为准确 IN 流水 ID，借方按收到时冻结的 received_account_type（2→1001，其余合法类型→1002），贷 2202 为准确供应商。后来账户类型、合法 PR3/AP总额与确认投影、未发 PR取消、其它退款及 receipt核销不重写原腿/hash。缺冻结映射或真实资金/永久操作证据失败。
+
+正常提交后只核这笔退款；错误保持待核对，不修改原资金成功回执或再次收款。已有有效凭证先证明，后来闭期不将其降级为待生成；需要新写时仍受原会计期间门。人工重核需要原凭证管理权及完整退款/PO/PR/付款查看权、当前范围；失败后新事务保存错误也重核。结账检查新 biz6 已提交来源的完整有效投影，完整零分无需凭证，缺失/陈旧/人工红字仍拒。
+
+退款勾稽单列实际四位回款、分位投影与舍入差；净已付=原正付款−已收到 RF，逐 AP 对当前 paid/balance 核对，不能因各单差额相消显示一致。原采购 gross 与旧收付款/报销范围保持。仅本地离线代码模型验证，未验真实会计账/银行/期间并发。
+
+
+F3 完整凭证腿核对包含辅助类型。即使 hash、金额、供应商 ID/名称均相同，2202 被改为无往来辅助或资金腿被改为往来辅助仍拒绝核对成功；提交后保持待核对，结账拒绝。该补充仅本退款域逐腿 proof，不改旧 hash、现金/AP 或旧业务会计规则，证据仍限源码/离线模型。
+
+
+RF会计结果只用实际278的 voucher_id 与 voucher_generate_error(VARCHAR500)。保存证明失败仍待核对；generated保存准确凭证ID，notRequired在完整真实资金证明后保存NULL与明确零分说明，pending清空ID并保存有限错误。没有本域生成时间列；原固定收到回执和现金/AP不混入结果保存状态，也不能依ID单独宣称完整证明。
+
+
+F3 资金流水详情也沿上述实际结果列展示：有准确已存凭证 ID 且无错误为“凭证已生成”，零分与待生成/失败保留各自明确说明，不用不存在的生成时间列。此文案不声称凭证当前有效、实时完整核对或可结账；后端 source/proof/期间门仍独立权威。原四位回款、现金/AP及固定收到 ACK 不变。
+
+### 供应商退款跨期补录 F4（2026-10-05，本地实现）
+
+新 `supplier_refund` 与旧种类日期策略分开：先申请、他人批准、原申请人当前权/范围核对后重放完整原 RF 请求。新种类始终按服务器首次批准日落凭证；真实 `happened_at/refund_date` 保持原收回日，`voucherDateOverride/backfillId` 精确绑定原申请。批准日10月31日而等待到11月的请求仍落10月31日；批准期间后来关闭则在 PO 前409保留已批准待执行，即使真实业务期重开也不改月/不兜底今日。旧付款等种类继续原执行日口径。批准硬拒申请人自批，role1不因此豁免；RF制单经办可以与申请/收到经办不同，审批人不替申请人写资金。
+
+新 kind 正常收到闭期提示申请，不引导改真实日期。VIEW/写权撤回仍可按原 UUID/action/key 本人查询申请最小状态，不能拿状态或16位指纹猜回款已成功。已执行申请再核精确永久 RF 回执/不可变来源/当前范围，不因后来闭期或凭证结果改变原 ACK。全关联资金唯一、日期/金额/收入账户/申请ID和完整 source/hash/legs 证明一致后，.004 实际 IN 仍记现金/AP且结果为“零分投影已核对/无需分位凭证”，.005 两腿.01；供应商退款不加入无资金/无凭证种类白名单。
+
+F3单笔生成/核对在外层提交后完成，公司锁释放后才保存申请结果，不引入 company X→application X 反锁。RF用278现有 voucher_id/error≤500，申请用260现有完成时间/error≤300并派生 generated/notRequired/pending；申请列表summary、详情及实际重核提示能区分零分。生成或任一结果保存失败不改真实资金/AP/原日期/原键/固定收到 DTO，仍留待核对。这里是代码与严格离线交易模型，真实会计期间/人员审批/银行与会计验收未执行。
+
+F4 共享已收来源在单笔/批量/结账时批取申请全部资金（包含非 biz6），要求唯一且等于 RF 原绑定流水，再沿完整原批准、资金与源证明。已执行申请回放也重核该集合及原 ACK/head ID；原资金方向/账户/金额/单号守卫保留，已证原成功不受新期间或新资格闸门影响。
+
+F4 后提交读取/错误保存的故障隔离不改变申请批准或资金准入：已提交的现金/AP/执行事实及固定原 ACK 保留，种类读取失败时不猜旧生成路径；返回凭证 pending，未保存状态不伪称保存成功。自动重试逐笔计失败并继续，保持原旧种类与 receipt_settle 策略；没有新增权限、默认授权或日期兜底。
+
+### F5/F6 退款查看、确认与原请求恢复
+
+RF列表/来源/详情/待审均需RF VIEW及PO/PR/PAYMENT完整源读；RF待审分支在同RR只读事务使用supplier-refunds.actor.load取得当前角色/权限/仓范围/自批，middleware旧role/scope不能放宽RF集合。RF/PO/PR完整归属、三个仓范围、自批和RF1状态在COUNT/LIMIT之前过滤，首页brief和列表同源。role1不豁免自己的allow_self_approve=0。会计重核另需ACCOUNTING_VOUCHER_MANAGE与完整RF VIEW/scope，不用receive替代。
+
+真实银行回款日保留冻结值。receive409闭期仅允许明确跨期补录申请并保原UUID/key/body，原补录request与RFreceive为两种完整身份分别持久；unknown依本人原申请/操作查询核对，不改日期或重新申请。批准须他人，实际凭证落准确批准日所属期间，待审批不显示已收到。F4实际proof为notRequired时显示“零分投影已核对/无需分位凭证”，不套receipt_settle“不涉及凭证”解释，不报凭证已生成，也不永远列待生成；pending保持待核对。
+
+原本人auth-only查询不要求新VIEW/写权，不挂任何价款详情或主档读取；新POST必须现完整查看/写权，owner/活动变化拒绝填草稿与新缓存。统一E7与现场授权/人员/银行/会计验收仍待执行，本段仅本地代码与受控模型。
+
+F5/F6 的供应商退款补录页面沿原 `supplier_refund` 快照展示 `frozen.createPayloadJson` 本次原分配四位金额及 `sourceSnapshotJson` 原 PO/PR 单号、准确供应商/仓库身份、原基本量两位与原成交单价四位；坏/缺 JSON 明确人工核对，不查当前商品或供应商主档，不呈现 hash/key/UUID。仅新 kind 的 target 冻结 mount owner、同步 workspace 活动 epoch 和 Section 可见活动代次；所有详情与批准/驳回/撤回/执行/重核凭证在派发及每个 await 后重核，固定原 owner config，关闭 replay/fallback。隐藏页 Portal 隔离但原备注保持；旧四类补录默认 API、状态文案、核销不涉及凭证解释保持。离线专项与真实 MySQL/资金/GUI/生产验收分开。
+
+E7 B：已确认提交的资金/业务与凭证证明独立于补录申请详情加载。最后详情查询或坏 JSON 不再改写为“业务没能成功”；返回原现金 ACK、准确落期与凭证结果，同时标记申请详情待加载。RF 已执行重放不再 settle，旧核销仍无需调整凭证；commit 不确定与提交前错误继续拒绝，不能以 applicationPending 推断资金已成功。历史已执行申请 postingPeriod 可为 null，前端类型接受实际结果而不新增历史拒绝规则。
+
+### 2026-10-06 资金看板业务名称与区间说明补正
+
+资金看板的独立名称表只含业务码1–4，使已纳入既有查询的5/6显示为“其他”。看板现直接复用 `finance-accounts.service` 导出的 `BIZ_TYPE_NAME`，5显示“退货退款”、6显示“供应商退款”；静态相对依赖链未回到看板模块。区间收入说明包含供应商退款，支出说明包含退货退款及余额调整出账，金额继续取原 direction 聚合。
+
+本次仅修只读呈现，所有 SQL、流水金额、收入/支出方向、AP、账户余额、会计期间及权限规则保持；旧单签认仍只登记处理意图，不因详情提示产生库存或资金事实。后端语法与差异检查只能证明有限源码边界，修后真实 API/GUI 由独立总验收复验，不等同银行、人员、会计或生产验收。
+
+
+### 2026-10-06 通知调拨计数的仓库范围修补
+
+`GET /api/notifications` 的待调拨计数沿现行调拨列表规则：`from_warehouse_id` 或 `to_warehouse_id` 任一端在当前用户范围内即可计入，使用既有 `transferScopeFilter`。原通知误用该表不存在的 `warehouse_id`，使非空限仓请求在计数查询报错。空范围计数为0，不限仓保留全量；状态1/2、软删除排除、原通知文本/跳转及其它计数保持。
+
+`tests/workbench.test.js` 在不连接数据库的边界替身下执行真实通知服务，覆盖源仓/目标仓、两端命中不重复、范围外、空范围和不限仓，并保留原待上架与已取消巡检守卫。先取得不存在列的预期红测，再验证最小修补转绿；此证据只证明离线 SQL/参数与响应契约，修后真实 API/GUI、MySQL 和现场结果由总验收另核，不代表生产已验证。
+
+
+### 2026-10-06 供应商退款读取的业务 DATE 合同补正
+
+普通应用连接池使用 `timezone: +08:00` 且未设置 `dateStrings`，MySQL `refund_date` 因而可以读为北京午夜的 `Date`；直接 JSON 序列化会变成前一日16时的 UTC 时间字符串。RF 列表与详情现沿本域已有 `rules.date` → `backendTime.beijingTodayYmd`，将业务 DATE 明确输出为冻结的 `YYYY-MM-DD`，供确认、收到、取消与原完整请求恢复使用。原付款来源日期与资金/补录证明已经沿该工具核对；本次只补两处只读 DTO，不改连接池、SQL、资金金额、期间或前端严格日期合同。
+
+`tests/supplier-refunds.test.js` 在夹具 JSON 克隆之后向真实服务读取注入 MySQL 式 `Date`，分别验证列表/详情及字符串对照，并断言冻结请求和业务事实未被只读转换改写。Node 22.23.2 禁网/禁 listen/受保护文件守卫下，修前两项 `Date` 用例准确复现 `2026-10-05T16:00:00.000Z` 对 `2026-10-06` 的失败，修后四项通过；既有八文件 RF 离线回归295项通过、守卫企图为0。证据仅为离线服务/DTO合同，真实 API/GUI 复验由本批总验收另核，不代表银行、人员、会计或生产验收。
+
+
+### 2026-10-07 合并发布：费用付款与补录重试
+
+费用报销付款走相同的闭期闸门、稳定资源键和同事务补录执行；申请不提前出款，审批执行保留原业务日期，资金与申请 executed 一次提交。所有补录凭证固定首次批准日及该月，延期重试不能换成执行当天或其他开放月；原批准月已关闭或缺原批准日时明确拒绝。业务原期间重新开放也不抹掉批准日 override。供应商退款保留其独立精确资金证明和已执行原 ACK。
+
+报销补录同请求键即使省略补录控制字段、业务期间重新开放，也先核原申请、冻结载荷和指纹，待审批/已批准/已驳回返回原申请，不能转为普通付款。实际执行只使用原批准申请，同连接核对全部业务类型中唯一的资金流水及原单、账户、金额、业务日期和批准落期。已执行原键在这些证据与原操作回执一致后只读返回最初回执；不得用另一笔资金或改载荷冒充原成功。回执查询使用同一连接按完整 action、键和经办人精确匹配，不依赖工具模块的私有函数或另一个池连接。
+
+已执行旧申请仍返回原存储回执及凭证结果，不重写历史资金或凭证；首次批准日约束针对尚未执行的批准申请及其重试。

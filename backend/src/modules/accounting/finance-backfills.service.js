@@ -37,6 +37,8 @@ const BIZ_TYPE_NAME = {
   receipt: '收付款单登记',
   receipt_settle: '收付款核销',
   refund: '退款出账',
+  supplier_refund: '供应商退款',
+  expense_pay: '报销付款',
 }
 
 const SELECT_FIELDS = `
@@ -96,6 +98,11 @@ function fmt(row, { withSnapshot = false } = {}) {
   // 而不是「凭证待生成」——后者会让人一直等一个永远不会来的凭证。
   out.voucherNotRequired = NO_FUND_TXN_BIZ_TYPES.has(row.biz_type)
   if (out.voucherNotRequired) out.voucherPending = false
+  if (row.biz_type === 'supplier_refund') {
+    out.voucherResult = out.voucherGeneratedAt ? (out.voucherGenerateError === '零分投影已核对/无需分位凭证' ? 'notRequired' : !out.voucherGenerateError ? 'generated' : 'pending') : 'pending'
+    out.voucherNotRequired = out.voucherResult === 'notRequired'
+    out.voucherPending = !!out.executedAt && out.voucherResult === 'pending'
+  }
   if (withSnapshot) {
     out.requestSnapshot = row.request_snapshot
       ? (typeof row.request_snapshot === 'string' ? JSON.parse(row.request_snapshot) : row.request_snapshot)
@@ -302,7 +309,7 @@ async function cancel(id, operator, { reason, canApprove = false } = {}, company
   try {
     await conn.beginTransaction()
     const [[row]] = await conn.query(
-      'SELECT * FROM finance_period_backfills WHERE id = ? AND company_id = ? FOR UPDATE',
+      "SELECT *,DATE_FORMAT(approved_at,'%Y-%m-%d') AS approved_date FROM finance_period_backfills WHERE id = ? AND company_id = ? FOR UPDATE",
       [Number(id), companyId],
     )
     if (!row) throw new AppError('补录申请不存在', 404)
@@ -367,6 +374,7 @@ async function cancel(id, operator, { reason, canApprove = false } = {}, company
  *   · payment        { recordId, body }          → recordPayment(recordId, body, …)
  *   · receipt        { body }                    → receipts.create(body, …)
  *   · receipt_settle { receiptId, body }         → receipts.settle(receiptId, body, …)
+ *   · expense_pay    { claimId, body }           → expenseClaims.pay(claimId, body, …)
  *   · refund         { orderId, warehouseIds, body } → refunds.execute(orderId, …, warehouseIds, …)
  *     （refund 的 body 不是重放入参——退款的执行参数取自退款单本身——而是**核对基准**：
  *      execute 拿它比对锁行后的现值，不一致就拒绝执行。理由见那边的 SOURCE_DRIFT 注释。）
@@ -380,12 +388,14 @@ async function cancel(id, operator, { reason, canApprove = false } = {}, company
  * （见 finance-period.guard），漏了它，重放就会被业务侧当成一笔新业务，同一笔钱记两次。
  */
 async function replay(conn, row, snapshot, postingPeriod) {
-  const backfill = { mode: 'execute', approvedId: Number(row.id), postingPeriod, reason: row.reason }
+  const backfill = { mode: 'execute', approvedId: Number(row.id), postingPeriod, postingDate: row.approved_date, reason: row.reason }
   const applicant = normalizeOperator({ userId: row.applicant_id ?? null, realName: row.applicant_name ?? null })
   const requestKey = row.request_key ?? null
   // conn 传下去：业务写入与下面回填 executed_* 必须在**同一个事务**里，否则业务写成、痕迹没写成，
   // 申请单会永远停在「已批准 · 待执行」，而每次重试又会重放一遍业务。
   switch (row.biz_type) {
+    case 'supplier_refund':
+      return require('../refunds/supplier-refunds.backfill').executeInTransaction(conn, row, snapshot)
     case 'payment':
       return paymentsSvc.recordPayment(snapshot.recordId, snapshot.body, applicant, requestKey, { backfill, conn })
     case 'receipt':
@@ -396,6 +406,8 @@ async function replay(conn, row, snapshot, postingPeriod) {
       return refundSvc.execute(snapshot.orderId, applicant, snapshot.warehouseIds ?? null, requestKey, {
         backfill, conn, expectedRefund: snapshot.body ?? null,
       })
+    case 'expense_pay':
+      return require('../finance/expense-claims.service').pay(snapshot.claimId, snapshot.body, applicant, requestKey, { backfill, conn })
     default:
       throw new AppError(`未知的补录业务类型「${row.biz_type}」，无法自动补写，请人工处理`, 409, 'FINANCE_BACKFILL_UNKNOWN_BIZ')
   }
@@ -410,62 +422,100 @@ async function replay(conn, row, snapshot, postingPeriod) {
  *     （voucher_generate_error），页面显著提示并可一键重试生成。凭证生成本身是全量重算 + 幂等，
  *     重试不会重复出凭证。
  */
+/** Stable fields come from the transaction's explicit SQL projection, never a later detail lookup. */
+function committedApplicationIdentity(row) {
+  return { id: Number(row.id), applicationNo: row.application_no, bizType: row.biz_type,
+    bizTypeName: BIZ_TYPE_NAME[row.biz_type] || row.biz_type }
+}
+async function readCommittedApplication(identity, companyId) {
+  try {
+    const application = await findOne(identity.id, companyId)
+    if (application.id !== identity.id || application.applicationNo !== identity.applicationNo || application.bizType !== identity.bizType) {
+      throw new AppError('申请详情身份已变化，请重新核对原记录', 409, 'FINANCE_BACKFILL_APPLICATION_CHANGED')
+    }
+    return { application, applicationPending: false, applicationError: null }
+  } catch (error) {
+    return { application: null, applicationPending: true,
+      applicationError: [...String(error?.message || '申请详情暂时无法加载')].slice(0, 300).join('') }
+  }
+}
+/** Replay returns saved proof metadata; it must never run settlement again or rewrite results. */
+function savedVoucherOutcome(row) {
+  const noVoucher = NO_FUND_TXN_BIZ_TYPES.has(row.biz_type)
+  const checked = !!row.voucher_generated_at && (!row.voucher_generate_error || row.voucher_generate_error === '零分投影已核对/无需分位凭证')
+  const voucherResult = checked ? (row.voucher_generate_error ? 'notRequired' : 'generated') : 'pending'
+  return { voucherStats: null, vouchersVerified: checked ? 1 : 0,
+    voucherRequired: !noVoucher && voucherResult !== 'notRequired',
+    ...(row.biz_type === 'supplier_refund' ? { voucherResult } : {}),
+    voucherError: noVoucher || checked ? null : row.voucher_generate_error || '调整凭证仍待核对' }
+}
+
 async function execute(id, operator, companyId = 1) {
   const conn = await pool.getConnection()
-  let result, postingPeriod
+  let result, postingPeriod, committedRow, alreadyExecuted = false
   try {
     await conn.beginTransaction()
     // 锁申请行：批准 / 驳回 / 执行三个动作互斥，也让「两个审批人同时点执行」串行化——
     // 否则两边都读到 executed_at 为空，各自放行一次重放。
     const [[row]] = await conn.query(
-      'SELECT * FROM finance_period_backfills WHERE id = ? AND company_id = ? FOR UPDATE',
+      `SELECT *,${APPLICATION_NO_SQL} AS application_no,DATE_FORMAT(approved_at,'%Y-%m-%d') AS approved_date FROM finance_period_backfills WHERE id = ? AND company_id = ? FOR UPDATE`,
       [Number(id), companyId],
     )
     if (!row) throw new AppError('补录申请不存在', 404)
     if (Number(row.status) !== STATUS.APPROVED) {
       throw new AppError('只有已批准的补录申请才能执行', 409, 'FINANCE_BACKFILL_NOT_APPROVED')
     }
+    committedRow = row
     // 已执行过就直接返回（重复点「执行」、断网重试都走这里，靠 executed_at 判幂等，
     // 不依赖请求键——审批单上的执行业务是同一次重放，绝不能再写第二遍）
     if (row.executed_at) {
-      await conn.commit()
-      return { alreadyExecuted: true, application: await findOne(id, companyId) }
-    }
+      if (row.biz_type === 'supplier_refund') {
+        const stored = typeof row.request_snapshot === 'string' ? JSON.parse(row.request_snapshot) : row.request_snapshot
+        result = await replay(conn, row, stored, row.posting_period)
+      }
+      postingPeriod = row.posting_period
+      alreadyExecuted = true
+    } else {
 
-    const snapshot = row.request_snapshot
-      ? (typeof row.request_snapshot === 'string' ? JSON.parse(row.request_snapshot) : row.request_snapshot)
-      : null
-    if (!snapshot) {
-      throw new AppError('该申请缺少原始请求资料，无法自动补写业务。请人工按申请内容登记后，另行生成凭证。', 409, 'FINANCE_BACKFILL_NO_SNAPSHOT')
-    }
+      const snapshot = row.request_snapshot
+        ? (typeof row.request_snapshot === 'string' ? JSON.parse(row.request_snapshot) : row.request_snapshot)
+        : null
+      if (!snapshot) {
+        throw new AppError('该申请缺少原始请求资料，无法自动补写业务。请人工按申请内容登记后，另行生成凭证。', 409, 'FINANCE_BACKFILL_NO_SNAPSHOT')
+      }
 
-    // 执行前复核「补录当期」：从申请到批准之间会计可能把当期也结了，此时凭证无处可落。
-    // 以**执行日**所在的当期为准（不是业务期间，也不是任何历史开放月份）。读本事务的连接：
-    // 这次判断要与后面的业务写入看到同一个期间状态。
-    postingPeriod = await resolvePostingPeriod(conn, companyId)
+      // 取锁行投影的原批准日；延期重试不能把原审批的凭证悄悄移到执行月份。
+      // 原批准期间后来关闭时仍拒绝，不挑另一个开放期间。业务事务内再以排他锁复核。
+      if (row.biz_type !== 'supplier_refund' && (typeof row.approved_date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(row.approved_date))) {
+        throw new AppError('原批准日期缺失，无法核对补录期间，请联系财务负责人', 409, 'FINANCE_BACKFILL_APPROVAL_DATE_INVALID')
+      }
+      postingPeriod = row.biz_type === 'supplier_refund'
+        ? require('../refunds/supplier-refunds.backfill-rules').approved(row).postingPeriod
+        : await resolvePostingPeriod(conn, companyId, row.approved_date)
 
-    // 业务写入与执行痕迹**同事务**：业务回滚则痕迹一并回滚，单子停在「已批准 · 待执行」可重试，
-    // 不会出现「业务没写成、却记着已执行」的假状态（那会让重放与凭证状态永远不闭环）。
-    result = await replay(conn, row, snapshot, postingPeriod)
+      // 业务写入与执行痕迹**同事务**：业务回滚则痕迹一并回滚，单子停在「已批准 · 待执行」可重试，
+      // 不会出现「业务没写成、却记着已执行」的假状态（那会让重放与凭证状态永远不闭环）。
+      result = await replay(conn, row, snapshot, postingPeriod)
 
-    // executed_biz_id 要记「这次补录最终写成了哪条业务记录」，可各业务的返回字段名并不统一：
-    //   payment  → entryId（本次付款登记的分录 id）
-    //   receipt / receipt_settle / refund → id（收付款单 / 退款单 id）
-    // 原来的 `result?.id` 只对后三类成立，payment 一路恒为 undefined，于是补录单执行成功后
-    // executed_biz_id 一直是 NULL——事后无法从补录单反查到业务记录。这里统一归一化；
-    // 将来新增 biz_type 必须让自己的返回带上其中之一。
-    const executedBizId = result?.entryId ?? result?.id ?? null
-    const affected = await markBackfillExecuted(conn, Number(id), {
-      bizId: executedBizId,
-      postingPeriod,
-      executedBy: operator?.operatorId ?? null,
-      executedByName: operator?.operatorName ?? null,
-    })
-    // 行锁已在本事务手里，正常必然 affected=1；为 0 只有一种可能：状态在锁等待期间被别人改成了
-    // 非「已批准」（例如另一路把它驳回）。此时业务写入已在同一事务里发生，必须整笔回滚，
-    // 绝不能提交——那会变成「业务动账了、申请单却驳回了」。
-    if (affected === 0) {
-      throw new AppError('该补录申请的状态已变化，本次执行未生效，请刷新后重试', 409, 'FINANCE_BACKFILL_RACE')
+      // executed_biz_id 要记「这次补录最终写成了哪条业务记录」，可各业务的返回字段名并不统一：
+      //   payment  → entryId（本次付款登记的分录 id）
+      //   receipt / receipt_settle / refund → id（收付款单 / 退款单 id）
+      // 原来的 `result?.id` 只对后三类成立，payment 一路恒为 undefined，于是补录单执行成功后
+      // executed_biz_id 一直是 NULL——事后无法从补录单反查到业务记录。这里统一归一化；
+      // 将来新增 biz_type 必须让自己的返回带上其中之一。
+      const executedBizId = result?.entryId ?? result?.id ?? null
+      const affected = await markBackfillExecuted(conn, Number(id), {
+        bizId: executedBizId,
+        postingPeriod,
+        executedBy: operator?.operatorId ?? null,
+        executedByName: operator?.operatorName ?? null,
+      })
+      // 行锁已在本事务手里，正常必然 affected=1；为 0 只有一种可能：状态在锁等待期间被别人改成了
+      // 非「已批准」（例如另一路把它驳回）。此时业务写入已在同一事务里发生，必须整笔回滚，
+      // 绝不能提交——那会变成「业务动账了、申请单却驳回了」。
+      if (affected === 0) {
+        throw new AppError('该补录申请的状态已变化，本次执行未生效，请刷新后重试', 409, 'FINANCE_BACKFILL_RACE')
+      }
     }
     await conn.commit()
   } catch (e) {
@@ -477,15 +527,16 @@ async function execute(id, operator, companyId = 1) {
 
   // 凭证生成放在业务**提交之后**：它是独立事务的全量重算，读的是已落库的流水与单据；
   // 塞进上面那个事务反而读不到自己未提交的写入，会把「刚补好的凭证」判成缺失。
-  const vouchers = await settleVouchersFor(Number(id), postingPeriod, operator, companyId)
-  return { executed: true, result, postingPeriod, ...vouchers, application: await findOne(id, companyId) }
+  const vouchers = alreadyExecuted ? savedVoucherOutcome(committedRow) : await settleVouchersFor(Number(id), postingPeriod, operator, companyId)
+  const identity = committedApplicationIdentity(committedRow)
+  return { ...identity, ...(alreadyExecuted ? { alreadyExecuted: true } : { executed: true }), result, postingPeriod, ...vouchers, ...await readCommittedApplication(identity, companyId) }
 }
 
 // ─── 补录凭证：生成 → 核对 → 回填 ────────────────────────────────────────────
 
 /** 资金流水 biz_type → 凭证来源。与 voucher-engine.buildFundVouchers 的四条分支一一对应。 */
 const FUND_SOURCE_TYPE_SQL = `CASE t.biz_type
-  WHEN 1 THEN 'receipt_in' WHEN 2 THEN 'payment_out' WHEN 3 THEN 'expense_pay' WHEN 5 THEN 'refund_pay' END`
+  WHEN 1 THEN 'receipt_in' WHEN 2 THEN 'payment_out' WHEN 3 THEN 'expense_pay' WHEN 5 THEN 'refund_pay' WHEN 6 THEN 'supplier_refund_in' END`
 
 /** 金额比较的分位容差：DECIMAL 经 JS 浮点累加后可能有尾数，严格相等会把平衡误判成不平 */
 const AMOUNT_EPS = 0.005
@@ -544,6 +595,9 @@ async function requiresVoucher(backfillId, companyId = 1) {
  * 会静默失效，而失效方向恰好是「永远报凭证缺失、自动重试永不收敛」。
  */
 async function inspectBackfillVouchers(backfillId, postingPeriod, companyId = 1) {
+  const [[kind]] = await pool.query("SELECT *,DATE_FORMAT(approved_at,'%Y-%m-%d') AS approved_date FROM finance_period_backfills WHERE id = ? AND company_id = ?", [Number(backfillId),companyId])
+  if (kind?.biz_type === 'supplier_refund') return require('../refunds/supplier-refunds.backfill').inspect(kind,postingPeriod)
+
   const voucherRequired = await requiresVoucher(backfillId, companyId)
   const [rows] = await pool.query(
     `SELECT t.id AS txn_id, t.biz_type, t.amount,
@@ -644,21 +698,32 @@ async function generateAndVerifyVouchers(id, postingPeriod, operator, companyId 
  * source_period)），重复重试不会多出凭证。
  */
 async function settleVouchersFor(id, postingPeriod, operator, companyId) {
+  let kind
   try {
+    // The business commit precedes this lookup too; failure must not look like cash failure.
+    const [[row]] = await pool.query("SELECT *,DATE_FORMAT(approved_at,'%Y-%m-%d') AS approved_date FROM finance_period_backfills WHERE id = ? AND company_id = ?", [id, companyId])
+    kind = row
+    if (kind?.biz_type === 'supplier_refund') {
+      return await require('../refunds/supplier-refunds.backfill').settle(kind)
+    }
     const { voucherStats, vouchersVerified, voucherRequired } = await generateAndVerifyVouchers(id, postingPeriod, operator, companyId)
     await markVoucherGenerated(id)
     return { voucherStats, vouchersVerified, voucherRequired, voucherError: null }
   } catch (e) {
-    const voucherError = e?.message || '凭证生成失败'
-    await markVoucherError(id, voucherError)
-    return { voucherStats: null, vouchersVerified: 0, voucherRequired: true, voucherError }
+    const voucherError = [...String(e?.message || '凭证生成失败')].slice(0, 300).join('')
+    const pending = !kind || kind.biz_type === 'supplier_refund'
+    try {
+      if (pending) await pool.query('UPDATE finance_period_backfills SET voucher_generated_at=NULL,voucher_generate_error=? WHERE id = ?', [voucherError, id])
+      else await markVoucherError(id, voucherError)
+    } catch { /* Business committed; an unsaved voucher error remains pending. */ }
+    return { voucherStats: null, vouchersVerified: 0, voucherRequired: true, ...(pending ? { voucherResult: 'pending' } : {}), voucherError }
   }
 }
 
 /** 已执行但凭证没生成出来时的重试入口（审批页那个「重新生成凭证」按钮） */
 async function regenerateVoucher(id, operator, companyId = 1) {
   const [[row]] = await pool.query(
-    'SELECT id, executed_at, posting_period FROM finance_period_backfills WHERE id = ? AND company_id = ?',
+    `SELECT id, ${APPLICATION_NO_SQL} AS application_no, biz_type, executed_at, posting_period FROM finance_period_backfills WHERE id = ? AND company_id = ?`,
     [Number(id), companyId],
   )
   if (!row) throw new AppError('补录申请不存在', 404)
@@ -671,7 +736,8 @@ async function regenerateVoucher(id, operator, companyId = 1) {
   if (vouchers.voucherError) {
     throw new AppError(vouchers.voucherError, 500, 'FINANCE_BACKFILL_VOUCHER_NOT_READY')
   }
-  return { ...vouchers, application: await findOne(id, companyId) }
+  const identity = committedApplicationIdentity(row)
+  return { ...identity, postingPeriod: row.posting_period, ...vouchers, ...await readCommittedApplication(identity, companyId) }
 }
 
 /**
@@ -688,7 +754,7 @@ async function regenerateVoucher(id, operator, companyId = 1) {
  */
 async function retryPendingVoucherGeneration({ limit = 50 } = {}) {
   const [rows] = await pool.query(
-    `SELECT id, company_id, posting_period FROM finance_period_backfills
+    `SELECT id, company_id, posting_period, biz_type FROM finance_period_backfills
       WHERE executed_at IS NOT NULL AND voucher_generated_at IS NULL
       ORDER BY id LIMIT ?`,
     [Number(limit)],
@@ -696,18 +762,22 @@ async function retryPendingVoucherGeneration({ limit = 50 } = {}) {
   const result = { scanned: rows.length, succeeded: 0, failed: 0 }
   for (const r of rows) {
     const companyId = Number(r.company_id) || 1
-    if (!r.posting_period) {
-      await markVoucherError(Number(r.id), '申请单没有记录补录期间，无法自动生成凭证，请人工处理')
-      result.failed += 1
-      continue
-    }
     try {
+      if (!r.posting_period) {
+        throw new AppError('申请单没有记录补录期间，无法自动生成凭证，请人工处理', 409, 'FINANCE_BACKFILL_NO_POSTING_PERIOD')
+      }
+      if (r.biz_type === 'supplier_refund') {
+        const settled = await settleVouchersFor(Number(r.id), r.posting_period, null, companyId)
+        result[settled.voucherError ? 'failed' : 'succeeded'] += 1
+        continue
+      }
       const { vouchersVerified } = await generateAndVerifyVouchers(Number(r.id), r.posting_period, null, companyId)
       await markVoucherGenerated(Number(r.id))
       result.succeeded += 1
       logger.info(`补录申请 ${r.id} 的调整凭证已自动补齐（${vouchersVerified} 笔流水）`, { id: r.id }, 'accounting')
     } catch (e) {
-      await markVoucherError(Number(r.id), e?.message || '凭证生成失败')
+      try { await markVoucherError(Number(r.id), [...String(e?.message || '凭证生成失败')].slice(0, 300).join('')) }
+      catch { /* Count this row as failed even when its error cannot be saved. */ }
       result.failed += 1
     }
   }

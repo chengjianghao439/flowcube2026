@@ -1,6 +1,7 @@
 import { money } from '@/lib/format'
 import { useRef, useState } from 'react'
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { useMutation } from '@tanstack/react-query'
+import { useVisibleQuery } from '@/hooks/useVisibleQuery'
 import { AppDialog } from '@/components/shared/AppDialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -50,7 +51,7 @@ export function RegisterPaymentDialog({ open, onClose, type, record }: Props) {
   const [payAccountId, setPayAccountId] = useState('')
 
   // 收/付款账户下拉：仅在弹窗打开时拉取启用账户
-  const { data: activeAccounts } = useQuery({
+  const { data: activeAccounts } = useVisibleQuery({
     queryKey: ['finance-accounts', 'active'],
     queryFn: () => getActiveAccountsApi().then(r => r || []),
     enabled: open,

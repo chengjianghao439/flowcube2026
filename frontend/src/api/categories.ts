@@ -4,7 +4,9 @@ import type { Category, CreateCategoryParams, UpdateCategoryParams } from '@/typ
 
 const BASE = '/categories'
 
-export const getCategoryTreeApi = async () => apiClient.get<Category[]>(`${BASE}/tree`)
+export const getCategoryTreeApi = async (config?: Parameters<typeof apiClient.get>[1]) => config === undefined
+  ? apiClient.get<Category[]>(`${BASE}/tree`)
+  : apiClient.get<Category[]>(`${BASE}/tree`, config)
 
 export const createCategoryApi = async (d: CreateCategoryParams) =>
   apiClient.post<{ id: number }>(`${BASE}`, d)

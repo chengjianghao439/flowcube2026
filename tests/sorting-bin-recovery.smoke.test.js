@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 'use strict'
+const { issueFixtureAccessToken, cleanupFixtureSessionFamilies } = require('./helpers/fixtureAuthSession')
+
 
 const assert = require('node:assert/strict')
 const { randomBytes } = require('node:crypto')
@@ -9,7 +11,6 @@ process.env.SENTRY_DSN = ''
 process.env.LOKI_URL = ''
 
 const express = require('../backend/node_modules/express')
-const jwt = require('../backend/node_modules/jsonwebtoken')
 const { pool } = require('../backend/src/config/db')
 const { PERMISSIONS } = require('../backend/src/constants/permissions')
 const { WT_STATUS } = require('../backend/src/constants/warehouseTaskStatus')
@@ -77,7 +78,7 @@ async function main() {
     server = await new Promise(resolve => { const s = app.listen(0, '127.0.0.1', () => resolve(s)) })
     const request = async (path, { method = 'GET', userId = actor, key, body, extraHeaders = {} } = {}) => {
       const headers = { 'Content-Type': 'application/json' }
-      if (userId) headers.Authorization = `Bearer ${jwt.sign({ userId, tokenVersion: 0 }, process.env.JWT_SECRET, { expiresIn: '5m' })}`
+      if (userId) headers.Authorization = `Bearer ${await issueFixtureAccessToken(pool, userId, { expiresIn: '5m' })}`
       if (key) headers['X-Request-Key'] = key
       Object.assign(headers, extraHeaders)
       const response = await fetch(`http://127.0.0.1:${server.address().port}/api${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(10000) })
@@ -165,7 +166,7 @@ async function main() {
         }
       }
       console.log('[sorting-bin-recovery] cleanup verified: only owned fixture IDs removed')
-    } finally { await pool.end() }
+    } finally { try { await cleanupFixtureSessionFamilies(pool) } finally { await pool.end() } }
   }
 }
 main().catch(error => { console.error(error); process.exitCode = 1 })

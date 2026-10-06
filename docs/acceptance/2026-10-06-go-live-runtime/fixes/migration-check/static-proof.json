@@ -1,0 +1,24 @@
+[
+  {
+    "filename": "277_disposal_handling.sql",
+    "statementsBefore": 373,
+    "statementsAfter": 373,
+    "changedCheckNames": [
+      "ck_dhl_target",
+      "ck_dhl_budget"
+    ],
+    "unchangedDdlAndOtherStatements": true,
+    "matchedObservedChecks": 11
+  },
+  {
+    "filename": "278_supplier_refunds.sql",
+    "statementsBefore": 234,
+    "statementsAfter": 234,
+    "changedCheckNames": [
+      "ck_sro_resource",
+      "ck_sra_state"
+    ],
+    "unchangedDdlAndOtherStatements": true,
+    "matchedObservedChecks": 10
+  }
+]

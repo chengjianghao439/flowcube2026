@@ -1,0 +1,117 @@
+{
+  "name": "gui-refund-confirm",
+  "checks": [
+    "制单者没有自批按钮",
+    "统一审批RF正确原详情参数",
+    "另一人员冻结确认200",
+    "确认后仍明确尚未收款"
+  ],
+  "api": [
+    {
+      "method": "POST",
+      "path": "/api/auth/logout",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/login",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/printer-bindings",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/settings/logo",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/supplier-refunds?page=1&pageSize=20",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/supplier-refunds?page=1&pageSize=20",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/notifications",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/supplier-refunds/18",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/logout",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/login",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/settings/logo",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/printer-bindings",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/supplier-refunds?page=1&pageSize=20",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/notifications",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/supplier-refunds?page=1&pageSize=20",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/approvals/pending?page=1&pageSize=20",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/supplier-refunds?page=1&pageSize=20",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/supplier-refunds?page=1&pageSize=20",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/supplier-refunds/18",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/supplier-refunds/18/confirm",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/supplier-refunds?page=1&pageSize=20",
+      "status": 200
+    }
+  ],
+  "errors": []
+}

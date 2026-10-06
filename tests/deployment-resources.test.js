@@ -478,6 +478,11 @@ test('每个 smoke/test 脚本必须在 CI 里跑得到（未接线须显式豁�
   const isReached = (name) => {
     if (workflowText.includes(`npm run ${name}`)) return true
     if (matrixSuites.has(name)) return true
+    // The destructive go-live suite runs inside the owned runner, never on a shared CI DB.
+    if (name === 'smoke:go-live-runtime' &&
+        pkg.scripts['smoke:go-live-owned'] === 'bash scripts/repair-smoke-ephemeral.sh --go-live' &&
+        workflowText.includes('npm run smoke:go-live-owned') &&
+        fs.readFileSync(path.join(root, 'scripts/repair-smoke-ephemeral.sh'), 'utf8').includes('run_smoke smoke:go-live-runtime')) return true
     // 有些脚本在 CI 里按文件调用（如 node --test tests/xxx.test.js）
     const files = (pkg.scripts[name].match(/[\w./-]+\.(js|sh|cjs)/g) || [])
     return files.some(f => workflowText.includes(path.basename(f)))

@@ -1,3 +1,4 @@
+const handlingGuards = require('../disposal/disposal.handling.target-guards')
 const commercialDispatch = require('./sale.commercial-dispatch')
 const commercialStore = require('./sale.commercial-store')
 const commercialResolver = require('./sale.commercial-resolver')
@@ -769,32 +770,44 @@ async function findById(id, scopeWarehouseIds = null) {
 }
 
 async function create({ customerId, warehouseId, remark,
-  carrierId, carrier, freightType, shippingProduct, receiverName, receiverPhone, receiverAddress, items, operator, requestKey, discountAmount, scopeWarehouseIds = null, commercialModel, commercialGroups }) {
+  carrierId, carrier, freightType, shippingProduct, receiverName, receiverPhone, receiverAddress, items, operator, requestKey, discountAmount, scopeWarehouseIds = null, commercialModel, commercialGroups, repeatCreate = false, disposalSource, disposalSourceAuthorized = false }) {
+  if (disposalSource !== undefined && (commercialModel !== undefined || commercialGroups !== undefined || repeatCreate)) throw new AppError('处理来源不支持套单或重复开单组合', 400, 'DISPOSAL_HANDLING_INPUT_INVALID')
   commercialStore.assertRequestKey(commercialModel,requestKey)
   const conn = await pool.getConnection()
+  let requestState = null, commitStarted = false
   try {
     await conn.beginTransaction()
     assertInScope(scopeWarehouseIds,warehouseId,'销售单')
     for (const g of commercialGroups || []) assertInScope(scopeWarehouseIds,g.warehouseId || warehouseId,'销售单')
     // 创建类动作没有既有单据 ID 可绑，用**载荷指纹**充当作用域（2026-09-18 审计 [6] 收尾）：
     // 同一次创建的重试仍幂等，而把同一个键误用到另一次内容不同的创建上时不会再回放上一单的结果。
-    const requestState = await beginCreationOperationRequest(conn, {
+    const creationPayload = { customerId, warehouseId, remark, carrierId, carrier, freightType, shippingProduct, receiverName, receiverPhone, receiverAddress, items, discountAmount, commercialModel, commercialGroups,
+      ...(disposalSource !== undefined ? { disposalSource } : {}) }
+    // Opt-in only: no source does not load/query the new domain or add fingerprint fields.
+    const handling = disposalSource !== undefined ? require('../disposal/disposal.handling.targets') : null
+    const handlingContext = handling ? await handling.prepare(conn, { reference: disposalSource, type: 'sale_order', authorized: disposalSourceAuthorized, payload: creationPayload, requestKey, operator, scopeWarehouseIds }) : null
+    if (handlingContext?.response) { await conn.rollback(); return handlingContext.response }
+    requestState = await beginCreationOperationRequest(conn, {
       requestKey,
       action: 'sale.create',
       userId: operator?.userId ?? null,
-      payload: { customerId, warehouseId, remark, carrierId, carrier, freightType, shippingProduct, receiverName, receiverPhone, receiverAddress, items, discountAmount, commercialModel, commercialGroups },
+      payload: creationPayload,
     })
     if (requestState.replay) {
-      if(commercialModel==='kit-v1'){
-        const [[receipt]]=await conn.query('SELECT resource_type,resource_id FROM operation_requests WHERE id=? FOR SHARE',[requestState.id])
-        const resourceId=Number(receipt?.resource_id)
-        if(receipt?.resource_type!=='sale_order'||!Number.isSafeInteger(resourceId)||resourceId<=0||resourceId!==Number(requestState.responseData?.id))throw new AppError('原创建结果缺少销售单记录，请联系管理员核对',409,'SALE_COMMERCIAL_SOURCE_INVALID')
-        const [[saved]]=await conn.query('SELECT id,warehouse_id,commercial_model FROM sale_orders WHERE id=? FOR SHARE',[resourceId])
-        if(!saved||saved.commercial_model!=='kit-v1')throw new AppError('原创建结果与套单记录不一致，请联系管理员核对',409,'SALE_COMMERCIAL_SOURCE_INVALID')
-        assertInScope(scopeWarehouseIds,saved.warehouse_id,'销售单')
-        const [authRows]=await conn.query('SELECT warehouse_id FROM sale_order_items WHERE order_id=? FOR SHARE',[resourceId])
-        for(const r of authRows)assertInScope(scopeWarehouseIds,r.warehouse_id ?? saved.warehouse_id,'销售单')
+      if (handling) throw new AppError('原通用结果缺少永久来源关联，请人工核对', 409, 'DISPOSAL_HANDLING_RECEIPT_INVALID')
+      const replayCode = commercialModel === 'kit-v1' ? 'SALE_COMMERCIAL_SOURCE_INVALID' : 'SALE_CREATE_RECEIPT_INVALID'
+      const [[receipt]] = await conn.query('SELECT resource_type,resource_id FROM operation_requests WHERE id=? FOR SHARE', [requestState.id])
+      const resourceId = Number(receipt?.resource_id)
+      if (receipt?.resource_type !== 'sale_order' || !Number.isSafeInteger(resourceId) || resourceId <= 0 || resourceId !== Number(requestState.responseData?.id)) {
+        throw new AppError('原创建结果缺少销售单记录，请联系管理员核对', 409, replayCode)
       }
+      const [[saved]] = await conn.query('SELECT id,warehouse_id,commercial_model FROM sale_orders WHERE id=? FOR SHARE', [resourceId])
+      if (!saved || (commercialModel === 'kit-v1' && saved.commercial_model !== 'kit-v1')) {
+        throw new AppError('原创建结果与销售单记录不一致，请联系管理员核对', 409, replayCode)
+      }
+      assertInScope(scopeWarehouseIds, saved.warehouse_id, '销售单')
+      const [authRows] = await conn.query('SELECT warehouse_id FROM sale_order_items WHERE order_id=? FOR SHARE', [resourceId])
+      for (const row of authRows) assertInScope(scopeWarehouseIds, row.warehouse_id ?? saved.warehouse_id, '销售单')
       await conn.rollback()
       return requestState.responseData
     }
@@ -809,6 +822,7 @@ async function create({ customerId, warehouseId, remark,
     assertNoDuplicateSaleItemLines(items, warehouseId)
     const orderNo = await genOrderNo(conn)
     const folded = commercial ? commercial.items : await foldEntryItems(conn, items)   // 多单位折算成基本单位口径（后端权威）
+    if (handling) await handling.validateItems(conn, handlingContext, folded, warehouseId)
     const total = commercial ? commercial.total : round2(folded.reduce((s,i)=>s+i.amount,0))
     const discount = Math.max(0, Number(discountAmount) || 0)
     assertDiscountWithinTotal(discount, total)
@@ -822,15 +836,24 @@ async function create({ customerId, warehouseId, remark,
     await appendSaleEvent(conn, orderId, 'created', '创建订单', `共 ${items.length} 条明细`, operator)
     if (!commercial) await buildPricingEvents(conn, orderId, folded, operator)   // folded：单价已折成每基本单位价，与基本单位进价可比
     const result = { id:orderId, orderNo }
+    if (handling) await handling.complete(conn, handlingContext, result)
     await completeOperationRequest(conn, requestState, {
       data: result,
       message: '创建成功',
       resourceType: 'sale_order',
       resourceId: orderId,
     })
+    commitStarted = true
     await commitFulfillment(conn, 'sale', orderId)
     return result
-  } catch(e){ await conn.rollback(); throw e }
+  } catch(e){
+    await conn.rollback()
+    // 只给重复开单首发的已回滚事务修正出口；回放、pending及提交阶段未知不得解冻原请求。
+    if (repeatCreate && requestState?.enabled && requestState.id && !requestState.replay && !commitStarted && e instanceof AppError && e.statusCode >= 400 && e.statusCode < 500) {
+      e.data = { ...e.data, saleCreateNotExecuted: true }
+    }
+    throw e
+  }
   finally { conn.release() }
 }
 
@@ -840,8 +863,9 @@ async function update(id, { customerId, warehouseId, remark,
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const orderRow = await lockStatusRow(conn, { table: 'sale_orders', id, columns: 'id, status, warehouse_id, commercial_model, commercial_revision', entityName: '销售单' })
+    const orderRow = await lockStatusRow(conn, { table: 'sale_orders', id, columns: 'id, status, warehouse_id, commercial_model, commercial_revision, disposal_handling_link_id', entityName: '销售单' })
     assertInScope(scopeWarehouseIds, orderRow.warehouse_id, '销售单')
+    const handlingLink = await handlingGuards.readLink(conn, orderRow, 'sale_order', scopeWarehouseIds)
     commercialStore.assertModel(orderRow,{commercialModel,expectedRevision})
     commercialStore.assertRequestKey(orderRow.commercial_model,requestKey)
     if(orderRow.commercial_model==='kit-v1'){
@@ -854,6 +878,7 @@ async function update(id, { customerId, warehouseId, remark,
       payload: { customerId, warehouseId, remark, carrierId, carrier, freightType, shippingProduct, receiverName, receiverPhone, receiverAddress, items, discountAmount, commercialModel, commercialGroups },
     })
     if (requestState.replay) { await conn.rollback(); return requestState.responseData }
+    handlingGuards.assertEditable(handlingLink)
     commercialStore.assertRevision(orderRow,{expectedRevision})
     const previousDimensions = await captureDimensions(conn, 'sale', id)
     assertStatusAction('sale', 'edit', orderRow.status)
@@ -903,10 +928,11 @@ async function requestAdjustment(id, input) {
     await conn.beginTransaction()
     const orderRow = await lockStatusRow(conn, {
       table: 'sale_orders', id,
-      columns: 'id, order_no, status, task_id, task_no, warehouse_id, warehouse_name, customer_id, discount_amount, commercial_model, commercial_revision, carrier_id, carrier, freight_type, shipping_product, receiver_name, receiver_phone, receiver_address, remark',
+      columns: 'id, order_no, status, task_id, task_no, warehouse_id, warehouse_name, customer_id, discount_amount, commercial_model, commercial_revision, disposal_handling_link_id, carrier_id, carrier, freight_type, shipping_product, receiver_name, receiver_phone, receiver_address, remark',
       entityName: '销售单',
     })
     assertInScope(scopeWarehouseIds, orderRow.warehouse_id, '销售单')
+    const handlingLink = await handlingGuards.readLink(conn, orderRow, 'sale_order', scopeWarehouseIds)
     commercialStore.assertModel(orderRow,{commercialModel,expectedRevision})
     commercialStore.assertRequestKey(orderRow.commercial_model,requestKey)
     const [authRows] = await conn.query('SELECT warehouse_id FROM sale_order_items WHERE order_id=?',[id])
@@ -921,6 +947,7 @@ async function requestAdjustment(id, input) {
       return requestState.responseData
     }
 
+    handlingGuards.assertEditable(handlingLink)
     commercialStore.assertRevision(orderRow,{expectedRevision})
     if(orderRow.commercial_model==='kit-v1'){
       const fixed={customerId:'customer_id',warehouseId:'warehouse_id',carrierId:'carrier_id',carrier:'carrier',freightType:'freight_type',shippingProduct:'shipping_product',receiverName:'receiver_name',receiverPhone:'receiver_phone',receiverAddress:'receiver_address',discountAmount:'discount_amount',remark:'remark'}
@@ -1385,6 +1412,7 @@ async function reserveStock(id, operator, items = [], { confirmCreditOverride = 
     await conn.beginTransaction()
     const orderRow = await lockStatusRow(conn, { table: 'sale_orders', id, entityName: '销售单' })
     assertInScope(scopeWarehouseIds, orderRow.warehouse_id, '销售单')
+    const handlingLink = await handlingGuards.readLink(conn, orderRow, 'sale_order', scopeWarehouseIds)
     const commercialInput = {commercialModel,expectedRevision}
     commercialStore.assertModel(orderRow,commercialInput)
     commercialStore.assertRequestKey(orderRow.commercial_model,requestKey)
@@ -1443,6 +1471,7 @@ async function reserveStock(id, operator, items = [], { confirmCreditOverride = 
 
     // 按 items 里的 id 精确取本次要占的明细行，并用 items 里的 qty/仓库覆盖
     const [allItemRows] = await conn.query('SELECT * FROM sale_order_items WHERE order_id = ? ORDER BY id', [id])
+    handlingGuards.assertSaleItems(handlingLink, allItemRows, orderRow)
     if (!allItemRows.length) throw new AppError('销售单无明细，无法占用库存', 400)
     const itemById = new Map(allItemRows.map(r => [Number(r.id), r]))
     // 向后兼容：不传 items（旧客户端/测试）＝占满所有未占余量（等价于旧的整单占库）
@@ -1467,6 +1496,7 @@ async function reserveStock(id, operator, items = [], { confirmCreditOverride = 
       const whId = it.warehouseId != null ? Number(it.warehouseId)
         : (row.warehouse_id != null ? Number(row.warehouse_id) : Number(orderRow.warehouse_id))
       assertInScope(scopeWarehouseIds, whId, '销售单')
+      handlingGuards.assertWarehouse(handlingLink, whId)
       // 已占库的行禁止在补占时更换发货仓库（2026-09-18 审计 P0-4）。
       // 预占账按 (商品, 仓库) 记账，而明细行只保存一个 warehouse_id：若无条件改写行仓库，
       // 旧仓那笔预占会变成永不释放的孤儿（该仓可用量永久虚低），而新仓出库时又按「行仓库」
@@ -1617,6 +1647,7 @@ async function ship(id, operator, { itemIds = null, items = null, scopeWarehouse
     await conn.beginTransaction()
     const orderRow = await lockStatusRow(conn, { table: 'sale_orders', id, entityName: '销售单' })
     assertInScope(scopeWarehouseIds, orderRow.warehouse_id, '销售单')
+    const handlingLink = await handlingGuards.readLink(conn, orderRow, 'sale_order', scopeWarehouseIds)
     const commercialInput = {commercialModel,expectedRevision}
     commercialStore.assertModel(orderRow,commercialInput)
     commercialStore.assertRequestKey(orderRow.commercial_model,requestKey)
@@ -1640,6 +1671,12 @@ async function ship(id, operator, { itemIds = null, items = null, scopeWarehouse
 
     const commercialBatch = orderRow.commercial_model === 'kit-v1' ? await commercialDispatch.select(conn,orderRow,commercialGroups,scopeWarehouseIds) : null
     if (commercialBatch) items=commercialBatch.items
+    // Only new linked dispatches validate the entire current line set. Eligibility
+    // must not hide extra unreserved/already-dispatched lines from the frozen identity.
+    if (handlingLink) {
+      const [linkedItems] = await conn.query('SELECT * FROM sale_order_items WHERE order_id=? ORDER BY id FOR SHARE', [id])
+      handlingGuards.assertSaleItems(handlingLink, linkedItems, orderRow)
+    }
     // 取「已占未发完」的行，再按新 items 或兼容的旧 itemIds 契约选择本批数量。
     let [itemRows] = await conn.query(
       'SELECT * FROM sale_order_items WHERE order_id = ? AND dispatched_qty < reserved_qty ORDER BY id',
@@ -1749,6 +1786,7 @@ async function releaseStock(id, operator, items = null, scopeWarehouseIds = null
     await conn.beginTransaction()
     const orderRow = await lockStatusRow(conn, { table: 'sale_orders', id, entityName: '销售单' })
     assertInScope(scopeWarehouseIds, orderRow.warehouse_id, '销售单')
+    const handlingLink = await handlingGuards.readLink(conn, orderRow, 'sale_order', scopeWarehouseIds)
     commercialStore.assertModel(orderRow,commercialInput)
     commercialStore.assertRequestKey(orderRow.commercial_model,requestKey)
     const [authRows] = await conn.query('SELECT warehouse_id FROM sale_order_items WHERE order_id=?',[id])
@@ -1764,6 +1802,10 @@ async function releaseStock(id, operator, items = null, scopeWarehouseIds = null
     }
     commercialStore.assertRevision(orderRow,commercialInput)
     const rule = assertStatusAction('sale', 'release', orderRow.status)
+    if (handlingLink) {
+      const [linkedItems] = await conn.query('SELECT * FROM sale_order_items WHERE order_id=? ORDER BY id FOR SHARE', [id])
+      handlingGuards.assertSaleItems(handlingLink, linkedItems, orderRow)
+    }
 
     if (Array.isArray(items) && items.length) {
       // 按产品/数量释放：先锁明细行，逐行 partialReleaseByProduct，回写 reserved_qty
@@ -1859,6 +1901,7 @@ async function cancel(id, operator, scopeWarehouseIds = null, requestKey = null,
     await conn.beginTransaction()
     const orderRow = await lockStatusRow(conn, { table: 'sale_orders', id, entityName: '销售单' })
     assertInScope(scopeWarehouseIds, orderRow.warehouse_id, '销售单')
+    await handlingGuards.readLink(conn, orderRow, 'sale_order', scopeWarehouseIds)
     commercialStore.assertModel(orderRow,commercialInput)
     commercialStore.assertRequestKey(orderRow.commercial_model,requestKey)
     const [authRows] = await conn.query('SELECT warehouse_id FROM sale_order_items WHERE order_id=?',[id])
@@ -2016,6 +2059,7 @@ async function deleteOrder(id, operator, scopeWarehouseIds = null, requestKey = 
     const [[order]] = await conn.query('SELECT * FROM sale_orders WHERE id=? FOR UPDATE',[id])
     if (!order) throw new AppError('订单不存在',404)
     assertInScope(scopeWarehouseIds,order.warehouse_id,'销售单')
+    const handlingLink = await handlingGuards.readLink(conn, order, 'sale_order', scopeWarehouseIds)
     commercialStore.assertModel(order,commercialInput)
     commercialStore.assertRequestKey(order.commercial_model,requestKey)
     const [authRows] = await conn.query('SELECT warehouse_id FROM sale_order_items WHERE order_id=?',[id])
@@ -2026,6 +2070,7 @@ async function deleteOrder(id, operator, scopeWarehouseIds = null, requestKey = 
     if(requestState.replay){await conn.rollback();return requestState.responseData ?? null}
     commercialStore.assertRevision(order,commercialInput)
     if(order.deleted_at)throw new AppError('订单不存在',404)
+    await handlingGuards.assertDeleteClosed(conn, order, handlingLink)
     if(order.commercial_model==='kit-v1'){
       const [pending]=await conn.query('SELECT id FROM warehouse_tasks WHERE sale_order_id=? AND (cancel_requested_at IS NOT NULL OR adjustment_requested_at IS NOT NULL) ORDER BY id FOR SHARE',[id])
       if(pending.length)throw new AppError('请先完成仓库实物归还再删除销售单',409,'SALE_COMMERCIAL_PHYSICAL_RETURN_PENDING')

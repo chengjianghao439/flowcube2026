@@ -10,6 +10,8 @@ import { CustomerFinder, SupplierFinder } from '@/components/finder'
 import { QueryChips, type QueryChip } from '@/components/shared/QueryChips'
 import { getMonthDateRange, getRelativeDateRange } from '@/lib/dateRange'
 import { todayYmd } from '@/lib/dateTime'
+import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
 
 /** 账款 / 汇款单 / 对账单三类列表共用的查询条件；用不到的字段由开关关掉 */
 export interface PaymentQueryValues {
@@ -127,6 +129,8 @@ export function PaymentQueryDialog({
 }: Props) {
   const [v, setV] = useState<PaymentQueryValues>(initial)
   const [partyFinderOpen, setPartyFinderOpen] = useState(false)
+  const { can } = usePermission()
+  const canFindParty = can(partyType === 1 ? PERMISSIONS.SUPPLIER_VIEW : PERMISSIONS.CUSTOMER_VIEW)
   useEffect(() => { if (open) setV(initial) }, [open, initial])
 
   const set = <K extends keyof PaymentQueryValues>(k: K, val: PaymentQueryValues[K]) =>
@@ -150,6 +154,8 @@ export function PaymentQueryDialog({
               {/* 从往来方档案里选，而非手打——与销售/采购查询弹窗一致，避免同名/错字导致筛不到 */}
               <div className="flex items-center gap-1">
                 <Button type="button" variant="outline" className="h-9 flex-1 justify-start font-normal"
+                  disabled={!canFindParty}
+                  title={canFindParty ? undefined : `需要${labels.partyLabel}查看权限`}
                   onClick={() => setPartyFinderOpen(true)}>
                   {v.partyName || <span className="text-muted-foreground">选择{labels.partyLabel}</span>}
                 </Button>
@@ -256,13 +262,13 @@ export function PaymentQueryDialog({
     </Dialog>
 
     {/* 往来方选择器：选中后把名称写进 partyName（账款按 party_name 快照筛，不需要 id） */}
-    {partyType === 1 ? (
+    {canFindParty && partyFinderOpen && (partyType === 1 ? (
       <SupplierFinder open={partyFinderOpen} onClose={() => setPartyFinderOpen(false)}
         onConfirm={r => set('partyName', r.name)} />
     ) : (
       <CustomerFinder open={partyFinderOpen} onClose={() => setPartyFinderOpen(false)}
         onConfirm={r => set('partyName', r.name)} />
-    )}
+    ))}
     </>
   )
 }

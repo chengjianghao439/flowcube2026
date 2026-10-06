@@ -1,0 +1,157 @@
+{
+  "rows": [
+    {
+      "id": 1,
+      "search_match": "编码",
+      "search_rank": 0
+    },
+    {
+      "id": 2,
+      "search_match": "条码",
+      "search_rank": 0
+    },
+    {
+      "id": 3,
+      "search_match": "颜色",
+      "search_rank": 1
+    },
+    {
+      "id": 4,
+      "search_match": "型号",
+      "search_rank": 2
+    },
+    {
+      "id": 5,
+      "search_match": "供应商型号",
+      "search_rank": 3
+    }
+  ],
+  "explain": [
+    {
+      "id": 1,
+      "select_type": "PRIMARY",
+      "table": "<derived2>",
+      "partitions": null,
+      "type": "ALL",
+      "possible_keys": null,
+      "key": null,
+      "key_len": null,
+      "ref": null,
+      "rows": 5,
+      "filtered": 100,
+      "Extra": "Using filesort"
+    },
+    {
+      "id": 2,
+      "select_type": "DERIVED",
+      "table": null,
+      "partitions": null,
+      "type": null,
+      "possible_keys": null,
+      "key": null,
+      "key_len": null,
+      "ref": null,
+      "rows": null,
+      "filtered": null,
+      "Extra": "No tables used"
+    },
+    {
+      "id": 3,
+      "select_type": "UNION",
+      "table": null,
+      "partitions": null,
+      "type": null,
+      "possible_keys": null,
+      "key": null,
+      "key_len": null,
+      "ref": null,
+      "rows": null,
+      "filtered": null,
+      "Extra": "No tables used"
+    },
+    {
+      "id": 4,
+      "select_type": "UNION",
+      "table": null,
+      "partitions": null,
+      "type": null,
+      "possible_keys": null,
+      "key": null,
+      "key_len": null,
+      "ref": null,
+      "rows": null,
+      "filtered": null,
+      "Extra": "No tables used"
+    },
+    {
+      "id": 5,
+      "select_type": "UNION",
+      "table": null,
+      "partitions": null,
+      "type": null,
+      "possible_keys": null,
+      "key": null,
+      "key_len": null,
+      "ref": null,
+      "rows": null,
+      "filtered": null,
+      "Extra": "No tables used"
+    },
+    {
+      "id": 6,
+      "select_type": "UNION",
+      "table": null,
+      "partitions": null,
+      "type": null,
+      "possible_keys": null,
+      "key": null,
+      "key_len": null,
+      "ref": null,
+      "rows": null,
+      "filtered": null,
+      "Extra": "No tables used"
+    },
+    {
+      "id": 7,
+      "select_type": "UNION",
+      "table": null,
+      "partitions": null,
+      "type": null,
+      "possible_keys": null,
+      "key": null,
+      "key_len": null,
+      "ref": null,
+      "rows": null,
+      "filtered": null,
+      "Extra": "Impossible WHERE"
+    },
+    {
+      "id": 8,
+      "select_type": "UNION",
+      "table": null,
+      "partitions": null,
+      "type": null,
+      "possible_keys": null,
+      "key": null,
+      "key_len": null,
+      "ref": null,
+      "rows": null,
+      "filtered": null,
+      "Extra": "Impossible WHERE"
+    },
+    {
+      "id": 9,
+      "select_type": "UNION",
+      "table": null,
+      "partitions": null,
+      "type": null,
+      "possible_keys": null,
+      "key": null,
+      "key_len": null,
+      "ref": null,
+      "rows": null,
+      "filtered": null,
+      "Extra": "Impossible WHERE"
+    }
+  ]
+}

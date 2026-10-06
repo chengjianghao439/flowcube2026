@@ -28,6 +28,7 @@ import { ProductFinder } from '@/components/finder'
 import { PickerField } from '@/components/shared/PickerField'
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
 import ContainerDrawer from '@/components/shared/ContainerDrawer'
+import ReservationDetailsDialog from './ReservationDetailsDialog'
 import CategoryPathDisplay from '@/components/shared/CategoryPathDisplay'
 import { useCategoryTree } from '@/hooks/useCategories'
 import { formatDisplayDateTime, defaultRangeYmds } from '@/lib/dateTime'
@@ -118,6 +119,7 @@ export default function InventoryPage() {
   // 容器侧滑
   const [drawerItem, setDrawerItem] = useState<InventoryOverviewItem | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [reservationItem, setReservationItem] = useState<InventoryOverviewItem | null>(null)
 
   // 查询弹窗
   const [overviewQueryOpen, setOverviewQueryOpen] = useState(false)
@@ -273,7 +275,7 @@ export default function InventoryPage() {
       <td className="px-4 py-3 text-xs text-muted-foreground"><CategoryPathDisplay path={row.categoryPath} /></td>
       <td className="px-4 py-3 text-muted-foreground">{row.warehouseName}</td>
       <td className="px-4 py-3 text-right tabular-nums"><span className="font-medium">{formatQty(row.onHand)}</span></td>
-      <td className="px-4 py-3 text-right tabular-nums">{row.reserved > 0 ? <span className="font-medium text-amber-600">{formatQty(row.reserved)}</span> : <span className="text-muted-foreground">—</span>}</td>
+      <td className="px-4 py-3 text-right tabular-nums"><Button variant="link" size="sm" className="h-auto p-0 tabular-nums" aria-label={`查看${row.productName}在${row.warehouseName}的预占明细`} onClick={() => setReservationItem(row)}>{formatQty(row.reserved)}</Button></td>
       <td className="px-4 py-3 text-right tabular-nums"><AvailableBadge available={row.available} onHand={row.onHand} /></td>
       <td className="px-4 py-3 text-left text-xs text-muted-foreground">{formatDisplayDateTime(row.updatedAt)}</td>
       <td className="px-4 py-3 text-left">
@@ -378,6 +380,7 @@ export default function InventoryPage() {
           <ListSummary total={overviewTotal} unit="条" />
 
           <ContainerDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} item={drawerItem} />
+          <ReservationDetailsDialog open={reservationItem != null} onClose={() => setReservationItem(null)} item={reservationItem} />
       </KeepAliveSection>
 
       <KeepAliveSection active={tab === 'logs'} className="space-y-4">

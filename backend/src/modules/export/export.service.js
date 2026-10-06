@@ -41,7 +41,8 @@ function buildExportPayload({ filenamePrefix, sheetName, columns, rows }) {
   return {
     filename: `${filenamePrefix}_${buildDateStamp()}`,
     sheetName,
-    columns,
+    columns: columns.map(column => ['customer_name', 'supplier_name', 'party_name', 'partyName', 'receiver_address'].includes(column.key)
+      ? { ...column, wrapText: true } : column),
     rows,
   }
 }
@@ -172,7 +173,7 @@ async function getReconciliationExportPayload(query) {
     columns: [
       { header: '单据类型', key: 'statementName', width: 14 },
       { header: '关联单号', key: 'orderNo', width: 22 },
-      { header: '往来方', key: 'partyName', width: 20 },
+      { header: '往来方', key: 'partyName', width: 20, wrapText: true },
       { header: '源单号', key: 'sourceOrderNo', width: 22 },
       { header: '收货单号', key: 'receiptTaskNo', width: 22 },
       { header: '总金额', key: 'totalAmount', width: 14 },
@@ -475,7 +476,7 @@ async function getPaymentsExportPayload(query) {
     sheetName,
     columns: [
       { header: '关联单号', key: 'orderNo', width: 22 },
-      { header: isPayable ? '供应商' : '客户', key: 'partyName', width: 20 },
+      { header: isPayable ? '供应商' : '客户', key: 'partyName', width: 20, wrapText: true },
       { header: '总金额', key: 'totalAmount', width: 14 },
       { header: isPayable ? '已付金额' : '已收金额', key: 'paidAmount', width: 14 },
       { header: '余额', key: 'balance', width: 14 },
@@ -522,7 +523,7 @@ async function getPaymentReceiptsExportPayload(query) {
     sheetName,
     columns: [
       { header: '单号', key: 'receiptNo', width: 22 },
-      { header: isPayable ? '供应商' : '客户', key: 'partyName', width: 20 },
+      { header: isPayable ? '供应商' : '客户', key: 'partyName', width: 20, wrapText: true },
       { header: `${isPayable ? '付款' : '收款'}金额`, key: 'amount', width: 14 },
       { header: '已核销', key: 'settledAmount', width: 14 },
       { header: '未核销', key: 'balance', width: 14 },
@@ -582,7 +583,7 @@ async function getStatementsExportPayload(query) {
     sheetName,
     columns: [
       { header: '对账单号', key: 'statementNo', width: 22 },
-      { header: isPayable ? '供应商' : '客户', key: 'partyName', width: 20 },
+      { header: isPayable ? '供应商' : '客户', key: 'partyName', width: 20, wrapText: true },
       { header: '对账期间', key: 'period', width: 24 },
       { header: '笔数', key: 'itemCount', width: 8 },
       { header: '汇总金额', key: 'totalAmount', width: 14 },
@@ -828,7 +829,7 @@ async function getAgingExportPayload() {
       {
         sheetName: '应收Top往来方',
         columns: [
-          { header: '往来方', key: 'partyName', width: 20 },
+          { header: '往来方', key: 'partyName', width: 20, wrapText: true },
           { header: '笔数', key: 'count', width: 10 },
           { header: '敞口金额', key: 'amount', width: 16 },
           { header: '逾期金额', key: 'overdueAmount', width: 16 },
@@ -839,7 +840,7 @@ async function getAgingExportPayload() {
       {
         sheetName: '应付Top往来方',
         columns: [
-          { header: '往来方', key: 'partyName', width: 20 },
+          { header: '往来方', key: 'partyName', width: 20, wrapText: true },
           { header: '笔数', key: 'count', width: 10 },
           { header: '敞口金额', key: 'amount', width: 16 },
           { header: '逾期金额', key: 'overdueAmount', width: 16 },
@@ -1494,11 +1495,11 @@ async function getSuppliersExportPayload() {
     sheetName: '供应商',
     columns: [
       { header: '编码', key: 'code', width: 16 },
-      { header: '名称', key: 'name', width: 24 },
-      { header: '联系人', key: 'contact', width: 12 },
-      { header: '电话', key: 'phone', width: 16 },
+      { header: '名称', key: 'name', width: 24, wrapText: true },
+      { header: '联系人', key: 'contact', width: 12, wrapText: true },
+      { header: '电话', key: 'phone', width: 16, wrapText: true },
       { header: '邮箱', key: 'email', width: 24 },
-      { header: '地址', key: 'address', width: 30 },
+      { header: '地址', key: 'address', width: 30, wrapText: true },
       { header: '结算方式', key: 'settlement_type_name', width: 12 },
       { header: '账期(天)', key: 'payment_terms_days', width: 10 },
       { header: '备货周期(天)', key: 'lead_time_days', width: 14 },
@@ -1531,11 +1532,11 @@ async function getCustomersExportPayload() {
     sheetName: '客户',
     columns: [
       { header: '编码', key: 'code', width: 16 },
-      { header: '名称', key: 'name', width: 24 },
-      { header: '联系人', key: 'contact', width: 12 },
-      { header: '电话', key: 'phone', width: 16 },
+      { header: '名称', key: 'name', width: 24, wrapText: true },
+      { header: '联系人', key: 'contact', width: 12, wrapText: true },
+      { header: '电话', key: 'phone', width: 16, wrapText: true },
       { header: '邮箱', key: 'email', width: 24 },
-      { header: '地址', key: 'address', width: 30 },
+      { header: '地址', key: 'address', width: 30, wrapText: true },
       { header: '结算方式', key: 'settlement_type_name', width: 12 },
       { header: '账期(天)', key: 'payment_terms_days', width: 10 },
       { header: '授信额度', key: 'credit_limit', width: 14 },

@@ -1,0 +1,52 @@
+[
+  {
+    "command": [
+      "bash",
+      "scripts/with-dev-env.sh",
+      "env",
+      "-u",
+      "NODE_OPTIONS",
+      "node",
+      "--check",
+      "backend/src/modules/refunds/supplier-refunds.service.js"
+    ],
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "command": [
+      "bash",
+      "scripts/with-dev-env.sh",
+      "env",
+      "-u",
+      "NODE_OPTIONS",
+      "node",
+      "--check",
+      "tests/supplier-refunds.test.js"
+    ],
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "command": [
+      "git",
+      "apply",
+      "--check",
+      "--reverse",
+      "/tmp/flowcube-runtime-refund-date-fix-20261006-n70reu26/overlay.patch"
+    ],
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "command": [
+      "git",
+      "diff",
+      "--check",
+      "--",
+      "docs/finance-permission-time.md"
+    ],
+    "exit_code": 0,
+    "output": ""
+  }
+]

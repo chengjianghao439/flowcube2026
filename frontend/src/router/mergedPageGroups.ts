@@ -4,10 +4,24 @@ import type { PermCode } from '@/lib/permissions'
 export interface MergedPageGroup {
   key: string
   title: string
+  tabTitle?: 'group'
   views: { path: string; label: string; permission: PermCode }[]
 }
 
 export const MERGED_PAGE_GROUPS: MergedPageGroup[] = [
+  { key: '/payments/receivable', title: '客户往来', tabTitle: 'group', views: [
+    { path: '/payments/receivable', label: '现结账款', permission: PERMISSIONS.PAYMENT_VIEW },
+    { path: '/reports/reconciliation/receivable', label: '月结对账', permission: PERMISSIONS.REPORT_VIEW },
+  ] },
+  { key: '/payments/payable', title: '供应商往来', tabTitle: 'group', views: [
+    { path: '/payments/payable', label: '现结账款', permission: PERMISSIONS.PAYMENT_VIEW },
+    { path: '/reports/reconciliation/payable', label: '月结对账', permission: PERMISSIONS.REPORT_VIEW },
+  ] },
+  { key: '/finance/dashboard', title: '资金工作区', tabTitle: 'group', views: [
+    { path: '/finance/dashboard', label: '资金看板', permission: PERMISSIONS.FINANCE_ACCOUNT_VIEW },
+    { path: '/finance/accounts', label: '账户管理', permission: PERMISSIONS.FINANCE_ACCOUNT_VIEW },
+    { path: '/finance/transactions', label: '资金流水', permission: PERMISSIONS.FINANCE_ACCOUNT_VIEW },
+  ] },
   {
     key: '/procurement', title: '采购建议',
     views: [

@@ -39,6 +39,7 @@ const fill = async (req, res, next) => {
     }, {
       userId: req.user?.userId ?? null,
       userName: req.user?.realName || req.user?.username || null,
+      isPda: Boolean(req.pda),
       pdaWarehouseId: req.pda?.warehouseId ?? null,
     }, req.user.warehouseIds)
     return successResponse(res, result, '放货成功')
@@ -56,6 +57,7 @@ const repack = async (req, res, next) => {
     }, {
       userId: req.user?.userId ?? null,
       userName: req.user?.realName || req.user?.username || null,
+      isPda: Boolean(req.pda),
       pdaWarehouseId: req.pda?.warehouseId ?? null,
     }, req.user.warehouseIds)
     return successResponse(res, result, '还原整件成功')

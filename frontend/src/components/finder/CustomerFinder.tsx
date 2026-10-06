@@ -1,8 +1,10 @@
+import type { CustomerAddressGuard } from '@/hooks/useCustomerAddresses'
+import { useSectionActive } from '@/components/layout/SectionVisibilityContext'
 import type { KitReadOwner } from '@/api/kits'
 import { assertKitReadOwner } from '@/hooks/useKits'
 import { toast } from '@/lib/toast'
 import { RecordIdentity } from '@/components/shared/RecordIdentity'
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { Users } from 'lucide-react'
 import { FinderModal } from './FinderModal'
 import { useCustomers } from '@/hooks/useCustomers'
@@ -11,6 +13,7 @@ import type { Customer } from '@/types/customers'
 
 export interface CustomerFinderProps {
   readOwner?: KitReadOwner
+  readGuard?: CustomerAddressGuard
   open: boolean
   onClose: () => void
   onConfirm: (result: FinderResult) => void
@@ -24,7 +27,15 @@ const COLUMNS: FinderColumn<Row>[] = [
   { key: 'phone', title: '联系电话', width: 180 },
 ]
 
-export function CustomerFinder({ open, onClose, onConfirm, readOwner }: CustomerFinderProps) {
+export function CustomerFinder({ open, onClose, onConfirm, readOwner, readGuard }: CustomerFinderProps) {
+  const active = useSectionActive(), latest = useRef({ open, active, readGuard })
+  latest.current = { open, active, readGuard }
+  const current = () => latest.current.open && latest.current.active && (!latest.current.readGuard || latest.current.readGuard.isCurrent())
+  const visible = readGuard ? current() : open
+  // The controller belongs to this visibility/owner epoch; reopening aborts the old read.
+  const readLifecycle = useMemo(() => ({ controller: new AbortController(), visible, epoch: readGuard?.epoch }), [visible, readGuard?.epoch])
+  const abort = readLifecycle.controller
+  useEffect(() => () => abort.abort(), [abort])
   const [keyword,    setKeyword]    = useState('')
   const [searchText, setSearchText] = useState('')
   // 只存 id：选中行一律从**当前启用列表**派生 ⇒ 后台刷新后拿到的是最新值，
@@ -43,9 +54,10 @@ export function CustomerFinder({ open, onClose, onConfirm, readOwner }: Customer
     return () => clearTimeout(debounceRef.current)
   }, [open])
 
-  const { data, isFetching, isError, error, refetch } = useCustomers({ pageSize: 500, keyword: searchText }, false, readOwner)
+  const { data, isFetching, isError, error, refetch } = useCustomers({ pageSize: 500, keyword: searchText }, false, readOwner, readGuard ? current : undefined, readGuard ? abort.signal : undefined)
 
   function handleKeywordChange(v: string) {
+    if (readGuard && !current()) return
     setKeyword(v)
     setSelectedId(null)   // 搜索立刻清选择：避免"选了一条又搜成别的，却确认了原来那条"
     clearTimeout(debounceRef.current)
@@ -61,6 +73,7 @@ export function CustomerFinder({ open, onClose, onConfirm, readOwner }: Customer
 
   // 页脚「确认选择」与行双击/空格共用这一个回调，映射只写一次。
   function handleConfirm(row: Row) {
+    if (readGuard && !current()) return
     if (readOwner) {
       try { assertKitReadOwner(readOwner) }
       catch (error) { toast.error(error instanceof Error ? error.message : '读取来源已变化'); return }
@@ -77,14 +90,14 @@ export function CustomerFinder({ open, onClose, onConfirm, readOwner }: Customer
 
   return (
     <FinderModal
-      open={open}
-      onClose={onClose}
+      open={visible}
+      onClose={() => { if (!readGuard || current()) onClose() }}
       title={<span className="flex items-center gap-2"><Users className="h-4 w-4 text-primary" />选择客户</span>}
       dialogId="customer-finder"
       columns={COLUMNS}
-      data={rows}
+      data={visible ? rows : []}
       selected={selected}
-      onSelect={row => setSelectedId(row.id)}
+      onSelect={row => { if (!readGuard || current()) setSelectedId(row.id) }}
       onConfirm={handleConfirm}
       getRowKey={r => r.id}
       isLoading={isFetching || debouncing}

@@ -16,7 +16,7 @@ test('空商品列表不查询，混合列表去掉 null、零、负数与重复
   await render([null, undefined, 0, -1, NaN])
   expect(getProductQtyPoliciesApi).not.toHaveBeenCalled()
   await render([2, null, 0, 2, 3])
-  expect(getProductQtyPoliciesApi).toHaveBeenCalledWith([2, 3])
+  expect(getProductQtyPoliciesApi).toHaveBeenCalledWith([2, 3], undefined)
 })
 test('商品保存失效 products 缓存时同步刷新数量策略', async () => {
   await render([2])

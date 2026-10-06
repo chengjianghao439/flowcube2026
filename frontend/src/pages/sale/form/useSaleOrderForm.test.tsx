@@ -116,7 +116,7 @@ test.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY])('无效响应价格 %s 
 test('同一事件批次切换客户后选择商品仍查询新客户', async () => {
   customer(1); const key = await selectProduct(10)
   await act(async () => { form.handleCustomerConfirm({ id: 2, name: '客户2' }); void form.handleFinderConfirm(product(20)) })
-  expect(getCustomerPriceApi).toHaveBeenLastCalledWith(2, 20)
+  expect(getCustomerPriceApi).toHaveBeenLastCalledWith(2, 20, undefined)
   await resolve(2, price(22)); await resolve(1, price(11)); await resolve(0, price(10))
   expect(form.items[0].unitPrice).toBe(22); expect(form.priceLoading[key]).toBe(false)
 })

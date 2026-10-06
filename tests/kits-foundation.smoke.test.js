@@ -1,10 +1,11 @@
 'use strict'
+const { issueFixtureAccessToken, cleanupFixtureSessionFamilies } = require('./helpers/fixtureAuthSession')
+
 // This suite owns unique rows only. No prepareSmokeContext, table-wide DELETE, or stock writes.
 const assert = require('node:assert/strict')
 require('./helpers/testEnvironment').validateTestEnvironment()
 const { pool } = require('../backend/src/config/db')
 const app = require('../backend/src/app')
-const jwt = require('../backend/node_modules/jsonwebtoken')
 const { PERMISSIONS: P } = require('../backend/src/constants/permissions')
 const { randomUUID } = require('node:crypto')
 const suffix = randomUUID().slice(0, 8)
@@ -13,7 +14,7 @@ const own = { users: [], roles: [], warehouses: [], products: [], customers: [],
 let passed = 0
 const q = async (sql, params = []) => (await pool.query(sql, params))[0]
 const insert = async (table, sql, params) => { const r = await q(sql, params); own[table].push(Number(r.insertId)); return Number(r.insertId) }
-function sign(userId) { return jwt.sign({ userId, tokenVersion: 0 }, process.env.JWT_SECRET, { expiresIn: '10m' }) }
+function sign(userId) { return issueFixtureAccessToken(pool, userId, { expiresIn: '10m' }) }
 async function main() {
   try {
     // Re-run the new migration's actual SQL, then inspect ordered metadata (not only names).
@@ -30,7 +31,7 @@ async function main() {
     const role = await insert('roles', 'INSERT INTO sys_roles (code,name,is_system) VALUES (?,?,0)', [`KIT-${suffix}`, `kit-${suffix}`])
     await q('INSERT INTO sys_role_permissions (role_id,permission) VALUES ?', [[P.PRODUCT_VIEW, P.PRODUCT_CREATE, P.PRODUCT_UPDATE, P.PRODUCT_DELETE, P.SALE_ORDER_CREATE].map(p => [role, p])])
     const user = await insert('users', 'INSERT INTO sys_users (username,password,real_name,role_id,role_name,is_active) VALUES (?,\'!\',?,?,?,1)', [`kit_${suffix}`, '套件测试', role, '套件测试'])
-    const token = sign(user)
+    const token = await sign(user)
     const warehouse = await insert('warehouses', 'INSERT INTO inventory_warehouses (code,name) VALUES (?,?)', [`KIT-${suffix}`, `套件仓-${suffix}`])
     const otherWarehouse = await insert('warehouses', 'INSERT INTO inventory_warehouses (code,name) VALUES (?,?)', [`KIT-O-${suffix}`, `套件外仓-${suffix}`])
     await q('INSERT INTO user_warehouse_scope (user_id,warehouse_id) VALUES (?,?)', [user, warehouse])
@@ -284,7 +285,7 @@ async function main() {
     if (own.customers.length) await q('DELETE FROM sale_customers WHERE id IN (?)', [own.customers])
     if (own.warehouses.length) await q('DELETE FROM inventory_warehouses WHERE id IN (?)', [own.warehouses])
     } finally {
-      try { if (server) await new Promise((resolve, reject) => server.close(e => e ? reject(e) : resolve())) } finally { await pool.end() }
+      try { if (server) await new Promise((resolve, reject) => server.close(e => e ? reject(e) : resolve())) } finally { try { await cleanupFixtureSessionFamilies(pool) } finally { await pool.end() } }
     }
   }
   console.log(`${passed} passed; owned fixtures cleaned; server/pool closed`)

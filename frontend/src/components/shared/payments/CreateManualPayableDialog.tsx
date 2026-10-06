@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { useMutation } from '@tanstack/react-query'
+import { useVisibleQuery } from '@/hooks/useVisibleQuery'
 import { AppDialog } from '@/components/shared/AppDialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -85,7 +86,7 @@ export function CreateManualPayableDialog({ open, onClose }: Props) {
   const markUncertain = (v: boolean) => { uncertainRef.current = v; setUncertain(v) }
 
   // 借方科目下拉：只在弹窗打开时拉取；科目停用/汇总都由后端拒绝，这里只提供合法候选
-  const { data: options } = useQuery({
+  const { data: options } = useVisibleQuery({
     queryKey: ['debit-account-options'],
     queryFn: () => getDebitAccountOptionsApi().then(r => r || []),
     enabled: open,

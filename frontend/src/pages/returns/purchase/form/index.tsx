@@ -1,3 +1,11 @@
+import { readHandlingSourceId, handlingConfig, mayHandle, handlingQty } from '@/lib/disposalHandlingRecovery'
+import { PERMISSIONS as P } from '@/lib/permission-codes'
+import { useDisposalHandlingSource } from '@/hooks/useDisposalHandlingSource'
+import { useDisposalHandlingOperation } from '@/hooks/useDisposalHandlingOperation'
+import { HandlingOperationPanel } from '@/pages/disposal/HandlingOperationPanel'
+import { ApiClientError } from '@/api/client'
+import { captureRefundOwner, refundOwnerCurrent, refundConfig, refundActivityEpoch, subscribeRefund, refundRevision, refundId } from '@/lib/supplierRefundRecovery'
+import { SupplierRefundSourceButton } from '@/pages/supplier-refunds/SupplierRefundSourceButton'
 import { money } from '@/lib/format'
 import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
 import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
@@ -13,9 +21,11 @@ import { productIdentityColumns } from '@/components/shared/productIdentityColum
  * 因此本文件只有 FormView（新建）与 DetailView（详情），没有 EditView。
  */
 
-import { useState, useRef, Fragment } from 'react'
+import { useState, useRef, useEffect, useSyncExternalStore, Fragment } from 'react'
 import { useContext } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
+import { buildWorkspaceTabRegistrationFromPath } from '@/router/workspaceRouteMeta'
+import { readReturnSourceHandoff, type ReturnSourceHandoff } from '@/pages/returns/sourceHandoff'
 import { Loader2, Save, X } from 'lucide-react'
 import { ActionBar } from '@/components/shared/ActionBar'
 import { TabPathContext } from '@/components/layout/TabPathContext'
@@ -30,9 +40,10 @@ import { SupplierFinder, ProductFinder } from '@/components/finder'
 import { PickerField } from '@/components/shared/PickerField'
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useWorkspaceStore } from '@/store/workspaceStore'
+import { MAX_WORKSPACE_TABS, useWorkspaceStore } from '@/store/workspaceStore'
 import { useWorkspaceTabTitle } from '@/hooks/useWorkspaceTabTitle'
 import { useDirtyGuard } from '@/hooks/useDirtyGuard'
+import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { toast } from '@/lib/toast'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { createRequestKey } from '@/lib/requestKey'
@@ -46,6 +57,9 @@ import type { FinderResult } from '@/types/finder'
 import type { ProductFinderResult, ProductUnit } from '@/types/products'
 import { getProductApi } from '@/api/products'
 import { useProductQtyPolicies } from '@/hooks/useProductQtyPolicies'
+import { captureKitReadOwner, assertKitReadOwner } from '@/hooks/useKits'
+import { commercialReadConfig } from '@/api/sale-commercial'
+import { useAuthStore } from '@/store/authStore'
 import { qtyStep } from '@/lib/qtyStep'
 import DataTable from '@/components/shared/DataTable'
 import type { TableColumn } from '@/types'
@@ -70,18 +84,27 @@ interface DraftItem {
 }
 
 export default function PurchaseReturnFormPage() {
-  const tabPath = useContext(TabPathContext)
+  const contextPath = useContext(TabPathContext)
+  const location = useLocation()
+  const tabPath = contextPath || (location.pathname.startsWith('/returns/purchase/') ? location.pathname + location.search : '/returns/purchase/new')
+  const registration = buildWorkspaceTabRegistrationFromPath(tabPath)
+  const pathname = tabPath.split(/[?#]/)[0]
   const navigate = useNavigate()
-  const isNew = tabPath === '/returns/purchase/new' || tabPath === ''
-  const returnId = isNew ? null : Number(tabPath.split('/').pop())
+  const isNew = pathname === '/returns/purchase/new'
+  const rawId = pathname.split('/').pop() || ''
+  const returnId = /^[1-9]\d*$/.test(rawId) && Number.isSafeInteger(Number(rawId)) ? Number(rawId) : null
 
   function closeTab(targetPath = '/returns/purchase') {
     const { removeTab } = useWorkspaceStore.getState()
-    removeTab(tabPath || '/returns/purchase/new')
+    removeTab(registration.key)
     navigate(targetPath)
   }
 
-  if (isNew) return <FormView closeTab={closeTab} tabPath={tabPath} />
+  const handlingId = readHandlingSourceId(tabPath)
+  if (handlingId === 'invalid' || (handlingId !== null && !isNew)) return <p role="alert">处理来源参数无效，请从来源列表重新打开；原参数保留</p>
+  if (isNew && typeof handlingId === 'number') return <HandlingReturnView sourceId={handlingId} tabPath={tabPath} tabKey={registration.key} />
+  if (isNew) return <FormView key={registration.key} tabPath={tabPath} tabKey={registration.key} />
+  if (!returnId) return <p role="alert">退货单路由无效，请从列表重新打开</p>
   return <DetailView returnId={returnId!} closeTab={closeTab} tabPath={tabPath} />
 }
 
@@ -89,25 +112,53 @@ export default function PurchaseReturnFormPage() {
 // 新建视图
 // ════════════════════════════════════════════════════════════════════════════
 
-function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string }) {
+interface HandlingReturnProps { source: ReturnType<typeof useDisposalHandlingSource>; write: ReturnType<typeof useDisposalHandlingOperation>; operationUuid: string; requestKey: string }
+function HandlingReturnView({ sourceId, tabPath, tabKey }: { sourceId: number; tabPath: string; tabKey: string }) {
+  const source = useDisposalHandlingSource(sourceId, 2), [operationUuid] = useState(() => crypto.randomUUID()), [requestKey] = useState(() => createRequestKey('handling-return'))
+  const write = useDisposalHandlingOperation(tabKey, source.active, () => source.isCurrent() && mayHandle(P.INVENTORY_DISPOSAL_VIEW, P.RETURN_ORDER_CREATE))
+  return <FormView tabPath={tabPath} tabKey={tabKey} handling={{ source, write, operationUuid, requestKey }} />
+}
+function FormView({ tabPath, tabKey, handling }: { tabPath: string; tabKey: string; handling?: HandlingReturnProps }) {
   const navigate = useNavigate()
   const qc = useQueryClient()
+  const active = useActiveWorkspaceTab(), activeRef = useRef(active)
+  activeRef.current = active
+  const [createdReturn, setCreatedReturn] = useState<{ id: number; returnNo: string } | null>(null)
+  const createdReturnRef = useRef<{ id: number; returnNo: string } | null>(null)
+  const [owner] = useState(captureKitReadOwner)
+  const sourceSerial = useRef(0), mounted = useRef(true), currentOrderNo = useRef('')
+  useAuthStore(state => state.sessionGeneration)
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
 
   const [supplierFinderOpen, setSupplierFinderOpen] = useState(false)
   const [supplier, setSupplier] = useState<FinderResult | null>(null)
   const [warehouseId, setWarehouseId] = useState<string>('')
   const [warehouseName, setWarehouseName] = useState('')
   const [remark, setRemark] = useState('')
-  const [orderNo, setOrderNo] = useState('')
+  const [handoff] = useState(() => readReturnSourceHandoff(tabPath, 'purchase'))
+  const handoffActive = useRef(!!handoff && handoff !== 'invalid'), autoAttempted = useRef(false)
+  const [orderNo, setOrderNo] = useState(handoff && handoff !== 'invalid' ? handoff.orderNo : '')
   const [loadingSource, setLoadingSource] = useState(false)
+  const handlingActivityGeneration = handling?.source.activityGeneration
+  useEffect(() => {
+    if (handlingActivityGeneration === undefined) return
+    // Cancel only this opt-in read's progress; keep the PO text, selected rows and employee inputs.
+    sourceSerial.current++
+    setLoadingSource(false)
+  }, [handlingActivityGeneration])
   const [boundSource, setBoundSource] = useState<PurchaseReturnSourceOrder | null>(null)
   const [submitting, setSubmitting] = useState(false)
-  // 稳定幂等键：整个组件生命周期内复用同一 key（重试/网络回退不建重单），成功后轮换供下次新建
+  const [sourceError, setSourceError] = useState(handoff === 'invalid' ? '原单交接参数无效，请核对来源；可清除后手动录入' : '')
+  let ownerCurrent = true
+  try { assertKitReadOwner(owner) } catch { ownerCurrent = false }
+  const locked = !ownerCurrent || !!createdReturn || !!handling && (handling.write.blocked || !handling.source.current)
+  const handlingCurrent = () => !!handling && handling.source.isCurrent() && !handling.write.blocked && activeRef.current && mayHandle(P.INVENTORY_DISPOSAL_VIEW, P.RETURN_ORDER_CREATE)
+  // 稳定幂等键：整个原草稿生命周期复用同一 key；确认创建后阻止重复提交，不轮换成新请求。
   const requestKeyRef = useRef(createRequestKey('purchase-return'))
 
   const [items, setItems] = useState<DraftItem[]>([])
   // 「只能整数」的商品把退货数量框的 step 切成 1（迁移 254）
-  const allowDecimalOf = useProductQtyPolicies(items.map(i => i.productId))
+  const allowDecimalOf = useProductQtyPolicies(handling && (!handling.source.current || handling.write.blocked) ? [] : items.map(i => i.productId), handling ? { owner: handling.source.owner, isCurrent: () => handlingCurrent() && mayHandle(P.PRODUCT_VIEW) } : undefined)
   const [counter, setCounter] = useState(0)
   const [finderOpen, setFinderOpen] = useState(false)
   const [finderItemKey, setFinderItemKey] = useState<number | null>(null)
@@ -116,26 +167,43 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
   const [warehouseError, setWarehouseError] = useState(false)
   const [invalidItemKeys, setInvalidItemKeys] = useState<Set<number>>(new Set())
 
-  const isDirty = !!(supplier || warehouseId || remark || orderNo || items.length)
-  useDirtyGuard(tabPath, isDirty)
+  const isDirty = !createdReturn && !!(supplier || warehouseId || remark || orderNo || items.length)
+  useDirtyGuard(tabKey, isDirty)
+
+  const sourceDraftSnapshot = JSON.stringify({ supplier, warehouseId, warehouseName, remark, items })
+  const sourceDraftRef = useRef(sourceDraftSnapshot), sourceLockedRef = useRef(locked || submitting)
+  sourceDraftRef.current = sourceDraftSnapshot; sourceLockedRef.current = locked || submitting
+
+  // 只在这个来源草稿首次挂载、未有原回执/冲突时预载；query 更新与清除不重填。
+  useEffect(() => {
+    if (handling || autoAttempted.current) return
+    autoAttempted.current = true
+    if (!handoff || handoff === 'invalid' || sourceLockedRef.current) return
+    void loadSourceOrder(handoff.orderNo, handoff)
+  })
 
   function addItem() {
+    if (handling) return
     const key = counter
     setCounter(c => c + 1)
     setItems(p => [...p, { _key: key, productId: 0, productCode: '', productName: '', articleNumber: null, spec: null, color: null, unit: '', entryUnit: '', units: [], quantity: 1, unitPrice: 0 }])
     setFinderItemKey(key)
     setFinderOpen(true)
   }
-  const removeItem = (k: number) => setItems(p => p.filter(i => i._key !== k))
-  const updateItem = (k: number, field: string, val: string | number) =>
+  const removeItem = (k: number) => { if (!handling) setItems(p => p.filter(i => i._key !== k)) }
+  const updateItem = (k: number, field: string, val: string | number) => {
+    if (handling && (!handlingCurrent() || field !== 'quantity')) return
     setItems(p => p.map(i => (i._key === k ? { ...i, [field]: val } : i)))
+  }
 
   function handleSupplierConfirm(result: FinderResult) {
+    if (locked) return
     setSupplier(result)
     setSupplierError(false)
   }
 
   function handleFinderConfirm(product: ProductFinderResult) {
+    if (handling) return
     if (finderItemKey === null) return
     const k = finderItemKey
     setItems(prev => prev.map(i => i._key === k
@@ -155,6 +223,9 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
   }
 
   const clearSourceBinding = () => {
+    if (handling || createdReturnRef.current || locked || submitting) return
+    handoffActive.current = false
+    sourceSerial.current++; currentOrderNo.current = ''; setLoadingSource(false); setSourceError('')
     setBoundSource(null)
     setOrderNo('')
     setSupplier(null)
@@ -162,19 +233,33 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
     setItems([])
   }
 
-  async function loadSourceOrder() {
-    const trimmed = orderNo.trim()
+  async function loadSourceOrder(number = orderNo, carried?: ReturnSourceHandoff) {
+    if (sourceLockedRef.current || (handling && (!handlingCurrent() || !handling.source.data || boundSource))) return
+    const trimmed = number.trim()
+    const expected = carried ?? (handoffActive.current && handoff && handoff !== 'invalid' ? handoff : undefined)
+    const draftAtRead = sourceDraftRef.current
     if (!trimmed) { toast.warning('请先填写关联原单号'); return }
-    setLoadingSource(true)
+    const serial = ++sourceSerial.current
+    currentOrderNo.current = trimmed
+    setLoadingSource(true); setSourceError('')
     try {
-      const source = await getPurchaseReturnSourceOrderApi(trimmed)
-      if (!source) return
+      assertKitReadOwner(owner)
+      const source = await getPurchaseReturnSourceOrderApi(trimmed, handling ? handlingConfig(handling.source.owner) : commercialReadConfig(owner))
+      if (!mounted.current || serial !== sourceSerial.current || currentOrderNo.current.trim() !== trimmed) return
+      assertKitReadOwner(owner)
+      if (sourceLockedRef.current || (handling && !handlingCurrent())) return
+      if (sourceDraftRef.current !== draftAtRead) { setSourceError('草稿已修改，来源未覆盖输入；请核对后手动载入'); return }
+      if (!source || !Number.isSafeInteger(source.id) || source.id <= 0 || source.orderNo !== trimmed || (expected && (source.id !== expected.id || source.orderNo !== expected.orderNo))) throw new Error('来源身份不符，原单号和草稿已保留，请重新核对')
+      if (handling) {
+        const origin = handling.source.data!.source
+        if (source.warehouseId !== origin.warehouseId || !source.items.some(i => i.productId === origin.productId && i.unit === origin.unit && Number.isSafeInteger(i.sourceItemId) && i.sourceItemId > 0 && i.remainingQty > 0)) throw Error('该原采购单没有本来源商品、原仓、基本单位的准确可退行；不会降级手工退货')
+      }
       setBoundSource(source)
       setSupplier({ id: source.supplierId, code: '', name: source.supplierName })
       setSupplierError(false)
       setWarehouseId(String(source.warehouseId)); setWarehouseName(source.warehouseName)
       setWarehouseError(false)
-      const nextItems: DraftItem[] = source.items
+      const nextItems: DraftItem[] = (handling ? [] : source.items)
         .filter(item => item.remainingQty > 0)
         .map((item, index) => ({
           _key: index + 1,
@@ -194,12 +279,34 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
         }))
       setCounter(nextItems.length + 1)
       setItems(nextItems)
-      if (!nextItems.length) toast.warning('该原单已无剩余可退数量')
+      if (handling) toast.success('已载入原采购单，请明确选择对应的可退行')
+      else if (!nextItems.length) toast.warning('该原单已无剩余可退数量')
       else toast.success('已载入原单真实明细与成交价')
-    } finally { setLoadingSource(false) }
+    } catch (e) { if (mounted.current && serial === sourceSerial.current && (!handling || handlingCurrent())) setSourceError(e instanceof Error ? e.message : '来源读取失败，输入已保留') }
+    finally { if (mounted.current && serial === sourceSerial.current && (!handling || handlingCurrent())) setLoadingSource(false) }
+  }
+
+  function openCreatedReturn(res: { id: number; returnNo: string }) {
+    if (handling && !handling.write.canApply(res)) return
+    const workspace = useWorkspaceStore.getState()
+    if (!mounted.current || !activeRef.current || workspace.activeKey !== tabKey) return
+    try { assertKitReadOwner(owner) } catch { return }
+    const path = `/returns/purchase/${res.id}`
+    const hasOriginal = workspace.tabs.some(tab => tab.key === tabKey)
+    const hasDetail = workspace.tabs.some(tab => tab.key === path)
+    if (!hasDetail && workspace.tabs.length - (hasOriginal ? 1 : 0) >= MAX_WORKSPACE_TABS) {
+      toast.warning('工作区标签已满，请先关闭不需要的页面，再查看已创建退货单')
+      return
+    }
+    // 已确认的原草稿先腾自己的位置，不能让 addTab 的 LRU 驱逐另一份草稿。
+    if (hasOriginal) workspace.removeTab(tabKey)
+    if (workspace.addTab({ key: path, title: res.returnNo, path })) navigate(path)
   }
 
   async function handleSubmit() {
+    if (createdReturnRef.current || locked || submitting || loadingSource) return
+    if (handling && (!handlingCurrent() || !handling.source.data || !boundSource || items.length !== 1 || !items[0].sourceItemId || !handlingQty(items[0].quantity) || items[0].quantity > Math.min(items[0].remainingQty ?? 0, handling.source.data.source.budget.availableQuantity))) { toast.warning('请选择准确原采购行并核对可关联与可退基本量'); return }
+    if (handoffActive.current && !boundSource) { toast.warning('请先载入并核对原单，或清除来源后按手工退货填写'); return }
     const missingSupplier = !supplier
     const missingWarehouse = !warehouseId
     setSupplierError(missingSupplier)
@@ -212,24 +319,30 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
     if (badItemKeys.size) { toast.warning('请完整填写所有明细'); return }
 
     try {
+      assertKitReadOwner(owner)
       setSubmitting(true)
-      const res = await createPurchaseReturnApi({
+      const payload = {
         supplierId: supplier!.id, supplierName: supplier!.name,
         warehouseId: +warehouseId, warehouseName,
         purchaseOrderId: boundSource ? boundSource.id : undefined,
-        purchaseOrderNo: orderNo || undefined,
+        purchaseOrderNo: boundSource?.orderNo || orderNo.trim() || undefined,
         remark: remark.trim() || undefined,
         items: items.map(({ _key, originalQty, returnedQty, remainingQty, units, ...r }) => r),
-      }, requestKeyRef.current)
-      requestKeyRef.current = createRequestKey('purchase-return')
-      await qc.invalidateQueries({ queryKey: ['returns'] })
+        ...(handling?.source.data ? { disposalSource: { sourceId: handling.source.data.source.id, expectedRevision: handling.source.data.source.revision, operationUuid: handling.operationUuid } } : {}),
+      }
+      const res = handling?.source.data
+        ? await handling.write.submit({ kind: 'purchase_return', draftIdentity: tabKey, sourceId: handling.source.data.source.id, intentUuid: handling.source.data.source.intentUuid, operationUuid: handling.operationUuid, requestKey: handling.requestKey, path: '/returns/purchase', action: 'disposal.handling.purchase_return.create', body: payload }, (body, key, config) => createPurchaseReturnApi(body, key, config))
+        : await createPurchaseReturnApi(payload, requestKeyRef.current)
+      if (!mounted.current || !res || !('returnNo' in res) || (handling && !handling.write.canApply(res))) return
+      assertKitReadOwner(owner)
+      createdReturnRef.current = res; setCreatedReturn(res)
+      try { await qc.invalidateQueries({ queryKey: ['returns'] }) } catch { /* 原创建已确认，列表刷新失败也不能再次提交。 */ }
+      if (!mounted.current || (handling && !handling.write.canApply(res))) return
+      assertKitReadOwner(owner)
       toast.success(`采购退货单 ${res.returnNo} 已创建`)
-      const path = `/returns/purchase/${res.id}`
-      useWorkspaceStore.getState().addTab({ key: path, title: res.returnNo, path })
-      closeTab()
-      navigate(path)
+      openCreatedReturn(res)
     } catch (_) {
-    } finally { setSubmitting(false) }
+    } finally { if (mounted.current) setSubmitting(false) }
   }
 
   const total = items.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
@@ -240,34 +353,43 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
         title="新建采购退货单"
         subtitle={isDirty ? <span className="text-xs font-normal text-muted-foreground">未保存</span> : undefined}
         rightActions={
-          <Button onClick={handleSubmit} disabled={submitting} className="gap-1.5">
+          <Button onClick={handleSubmit} disabled={submitting || locked || loadingSource} className="gap-1.5">
             {submitting ? (<><Loader2 className="h-4 w-4 animate-spin" />创建中…</>) : (<><Save className="h-4 w-4" />创建退货单</>)}
           </Button>
         }
       />
 
+      {handling && <><p>处理来源：{handling.source.data?.source.productName ?? '核对中'}；可关联基本量 {handling.source.data?.source.budget.availableQuantity ?? '—'}。请填写准确采购单并明确选择原采购行。</p>{handling.source.error && <p role="alert">{handling.source.error}</p>}<HandlingOperationPanel write={handling.write} />
+      {boundSource && handling.source.data && <section aria-label="选择原采购行"><p>匹配来源的原采购行（同商品多行须明确选择）</p>{boundSource.items.filter(i => i.productId === handling.source.data!.source.productId && i.unit === handling.source.data!.source.unit && i.remainingQty > 0).map((i,index) => <Button key={i.sourceItemId} variant="outline" disabled={locked || submitting} onClick={() => {
+        if (!handlingCurrent() || remark || items.length) { toast.warning('已有输入，未覆盖；请保留并核对'); return }
+        setItems([{ _key: 1, sourceItemId: i.sourceItemId, productId: i.productId, productCode: i.productCode, productName: i.productName, articleNumber: i.articleNumber, spec: i.spec, color: i.color, unit: i.unit, quantity: 0, unitPrice: i.unitPrice, entryUnit: i.unit, units: [], originalQty: i.quantity, returnedQty: i.returnedQty, remainingQty: i.remainingQty }]); setCounter(2)
+      }}>选择原采购第 {index + 1} 行（剩余 {i.remainingQty} {i.unit}，原价 {money(i.unitPrice)}）</Button>)}</section>}
+      </>}
+      {createdReturn && <div role="status" className="rounded-md border p-3 space-y-2"><p>退货单 {createdReturn.returnNo} 已创建，可查看单据。</p><Button variant="outline" disabled={!ownerCurrent} onClick={() => openCreatedReturn(createdReturn)}>查看已创建退货单</Button></div>}
+      {(sourceError || !ownerCurrent) && <p role="alert" className="text-sm text-destructive">{sourceError || '登录或服务器已变化，草稿保留'}</p>}
+      <fieldset disabled={locked || submitting} className="contents">
       <SectionCard title="退货信息" compact>
         <div className="flex flex-wrap items-start gap-4">
           <div className="w-[272px] shrink-0 space-y-1.5">
             <Label>供应商 *</Label>
-            <PickerField
+            {handling ? <p className="py-2">{supplier?.name || '由准确原采购单确定'}</p> : <PickerField
               value={supplier?.name ?? ''}
               placeholder="点击选择供应商…"
               onOpen={() => setSupplierFinderOpen(true)}
               onDoubleClick={() => { setSupplierFinderOpen(false); navigate('/suppliers') }}
               className={cn(supplierError && 'border-destructive/60 bg-destructive/5', !!boundSource && 'pointer-events-none opacity-60')}
-            />
+            />}
             {supplierError && <p className="text-xs text-destructive">请选择供应商</p>}
           </div>
           <div className="w-56 shrink-0 space-y-1.5">
             <Label>退货仓库 *</Label>
-            <WarehouseSelect
+            {handling ? <p className="py-2">{warehouseName || handling.source.data?.source.warehouseName || '原仓核对中'}</p> : <WarehouseSelect
               value={warehouseId ? +warehouseId : null}
               onChange={(id, name) => { setWarehouseId(id ? String(id) : ''); setWarehouseName(name); setWarehouseError(false) }}
               placeholder="选择仓库"
-              disabled={!!boundSource}
+              disabled={!!boundSource || !!handling}
               className={cn(warehouseError && 'border-destructive/60 bg-destructive/5')}
-            />
+            />}
             {warehouseError && <p className="text-xs text-destructive">请选择仓库</p>}
           </div>
           <div className="w-64 shrink-0 space-y-1.5">
@@ -276,15 +398,18 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
               <Input
                 value={orderNo}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                  if (handling && !handlingCurrent()) return
                   const next = e.target.value
+                  sourceSerial.current++; currentOrderNo.current = next; setLoadingSource(false); setSourceError('')
                   setOrderNo(next)
                   if (boundSource && next.trim() !== boundSource.orderNo) { setBoundSource(null); setItems([]) }
                 }}
                 placeholder="输入原单号"
-                disabled={loadingSource}
+                disabled={locked || submitting || (!!handling && !!boundSource)}
               />
+              {!handling && !boundSource && (orderNo || sourceError) && <Button type="button" variant="ghost" size="sm" onClick={clearSourceBinding}>清除</Button>}
               {boundSource ? (
-                <Button type="button" variant="ghost" size="sm" onClick={clearSourceBinding}>清除</Button>
+                <Button type="button" variant="ghost" size="sm" disabled={!!handling} onClick={clearSourceBinding}>清除</Button>
               ) : (
                 <Button type="button" variant="outline" size="sm" onClick={() => void loadSourceOrder()} disabled={loadingSource || !orderNo.trim()}>
                   {loadingSource ? '载入中…' : '载入'}
@@ -298,6 +423,7 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
           </div>
         </div>
 
+        {!boundSource && <p className="mt-3 text-xs text-muted-foreground">本系统原单请填写单号并载入；无本系统原单的旧系统退货，可手工选择供应商、仓库与商品填写。</p>}
         {boundSource && (
           <div className="mt-3 rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
             已锚定原单 {boundSource.orderNo}。退货单价默认取原单真实成交价，数量默认取剩余可退数量。
@@ -308,7 +434,7 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
       <SectionCard
         title="退货明细"
         compact
-        actions={!boundSource ? (
+        actions={!boundSource && !handling ? (
           <Button type="button" size="sm" variant="outline" onClick={addItem} className="gap-1.5">+ 添加商品</Button>
         ) : undefined}
       >
@@ -363,7 +489,7 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
                         <Input quantity
                           type="number" min="0.01" step={qtyStep(allowDecimalOf(item.productId))} placeholder="数量"
                           value={item.quantity}
-                          disabled={!!boundSource}
+                          disabled={!!boundSource && !handling}
                           onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'quantity', +e.target.value)}
                           className="text-right text-sm"
                         />
@@ -409,18 +535,19 @@ function FormView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string
         )}
       </SectionCard>
 
-      <ProductFinder
+      {!handling && <ProductFinder
         open={finderOpen}
         warehouseName={warehouseName}
         warehouseId={warehouseId ? +warehouseId : null}
         onConfirm={handleFinderConfirm}
         onClose={() => { setFinderOpen(false); setFinderItemKey(null) }}
-      />
-      <SupplierFinder
+      />}
+      </fieldset>
+      {!handling && <SupplierFinder
         open={supplierFinderOpen}
         onClose={() => setSupplierFinderOpen(false)}
         onConfirm={handleSupplierConfirm}
-      />
+      />}
       <div className="h-4" />
     </div>
   )
@@ -481,6 +608,11 @@ function TaskProgressCard({ task }: { task: PurchaseReturn['task'] }) {
 }
 
 function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabPath: string }) {
+  useSyncExternalStore(subscribeRefund, refundRevision)
+  const [confirmOwner] = useState(captureRefundOwner), active = useActiveWorkspaceTab(), confirmActive = useRef({active,generation:0})
+  if (confirmActive.current.active !== active) confirmActive.current.generation++
+  confirmActive.current.active = active
+  const [confirmError, setConfirmError] = useState<{message:string;purchaseReturnId?:number;current:()=>boolean} | null>(null)
   const qc = useQueryClient()
   const detailQuery = useQuery({
     queryKey: ['return-purchase-detail', returnId],
@@ -497,21 +629,36 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
   const [pending, setPending] = useState(false)
 
   async function handleConfirm() {
+    const generation = confirmActive.current.generation, activity = refundActivityEpoch()
+    const current = () => confirmActive.current.active && confirmActive.current.generation === generation && refundActivityEpoch() === activity && refundOwnerCurrent(confirmOwner)
+    if (!current() || !ret || ret.id !== returnId || ret.status !== 1) return
+    const purchaseOrderId = ret.purchaseOrderId
     try {
       setPending(true)
-      await confirmPurchaseReturnApi(returnId)
+      await confirmPurchaseReturnApi(returnId, { ...refundConfig(confirmOwner), skipGlobalError: true })
+      if (!current()) return
       await qc.invalidateQueries({ queryKey: ['return-purchase-detail', returnId] })
+      if (!current()) return
       await qc.invalidateQueries({ queryKey: ['returns'] })
+      if (!current()) return
       toast.success('已确认，已派发到 PDA')
-    } finally { setPending(false); setConfirmOpen(false) }
+    } catch (error) {
+      if (!current()) return
+      const data = error instanceof ApiClientError ? error.data : null
+      const source = data && typeof data === 'object' ? data as Record<string,unknown> : null
+      const exact = error instanceof ApiClientError && error.status === 409 && error.code === 'PURCHASE_RETURN_REFUND_REQUIRED'
+        && refundId(purchaseOrderId) && source?.purchaseReturnId === returnId && source?.purchaseOrderId === purchaseOrderId
+      setConfirmError({ message: error instanceof Error ? error.message : '采购退货确认失败，请核对原单', purchaseReturnId: exact ? returnId : undefined, current })
+    } finally { if (current()) { setPending(false); setConfirmOpen(false) } }
   }
   async function handleCancel() {
     try {
       setPending(true)
-      await cancelPurchaseReturnApi(returnId)
+      const result = await cancelPurchaseReturnApi(returnId)
       await qc.invalidateQueries({ queryKey: ['return-purchase-detail', returnId] })
       await qc.invalidateQueries({ queryKey: ['returns'] })
-      toast.success('已取消')
+      if (result?.pendingCancel) toast.warning('取消处理中，请先按原任务完成实物归还，完成后再次确认取消')
+      else toast.success('已取消')
     } finally { setPending(false); setCancelOpen(false) }
   }
 
@@ -546,6 +693,11 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
         }
       />
 
+      {confirmError?.current() && <section data-pr-refund-error role="alert" className="space-y-2">
+        <p>{confirmError.message}</p>
+        {confirmError.purchaseReturnId && ret.status === 1 && <SupplierRefundSourceButton purchaseReturnId={confirmError.purchaseReturnId} disabled={detailQuery.isFetching || detailQuery.isError || detailQuery.isPaused}/>}
+      </section>}
+      <section className="space-y-2"><p>供应商退款与实物退货分别办理。原账款已付形成负余额时，从本采购退货草稿核对准确原付款分配，先登记真实回款，再继续实物退货。</p>{ret.status===1 && ret.purchaseOrderId && <SupplierRefundSourceButton purchaseReturnId={ret.id} disabled={detailQuery.isFetching||detailQuery.isError||detailQuery.isPaused}/>}</section>
       <OrderDetailSections type="purchase-return" id={ret.id} progress={ret.task ? <TaskProgressCard task={ret.task} /> : undefined}>
       <SectionCard title="基础信息" compact>
         <dl className="grid grid-cols-3 gap-x-6 gap-y-3 text-sm">

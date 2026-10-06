@@ -19,8 +19,7 @@ import { FilterCard } from '@/components/shared/FilterCard'
 import { downloadExport } from '@/lib/exportDownload'
 import { toast } from '@/lib/toast'
 import { payloadClient as client } from '@/api/client'
-
-const PHONE_RE = /^1\d{10}$/
+import { normalizePartyProfile, PARTY_PROFILE_LIMITS } from '@/lib/partyProfile'
 
 const empty = {
   name:'', contact:'', phone:'', email:'', address:'', remark:'',
@@ -124,7 +123,7 @@ export default function SuppliersPage() {
           {importOpen && (
             <div className="space-y-3 rounded-lg border border-border bg-card p-4">
               <p className="text-sm text-muted-foreground">
-                请先下载模板，按格式填写后上传。列：供应商编码（可空，留空自动生成）、供应商名称*、联系人、电话、结算方式（现结或 1、月结或 2；留空默认月结）、账期（天，仅月结有效）、采购提前期（天）、地址。结算方式无效、名称或编码重复的行会跳过并显示行号和原因。
+                请先下载模板，按格式填写后上传。列：供应商编码（可空，留空自动生成）、供应商名称*、联系人、电话、结算方式（现结或 1、月结或 2；留空默认月结）、账期（天，仅月结有效）、采购提前期（天）、地址。名称最多 100 字、联系人 50 字、电话 30 字、地址 200 字。电话支持数字、空格、+、(、)、-。格式无效、超限、名称或编码重复的行会跳过并显示行号和原因，不会截短资料。
               </p>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={() => downloadExport('/import/suppliers/template').catch(e => toast.error((e as Error).message))}>下载导入模板</Button>
@@ -166,13 +165,13 @@ export default function SuppliersPage() {
                   <Input id="supplier-code" value={editing.code} disabled className="bg-muted/50 font-mono text-sm" />
                 </div>
               )}
-              <div className="space-y-1"><Label htmlFor="supplier-name">名称 *</Label><LimitedInput maxLength={20} id="supplier-name" value={form.name} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('name',e.target.value)} placeholder="供应商名称"/></div>
-              <div className="space-y-1"><Label htmlFor="supplier-contact">联系人</Label><LimitedInput maxLength={5} id="supplier-contact" value={form.contact} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('contact',e.target.value)}/></div>
-              <div className="space-y-1"><Label htmlFor="supplier-phone">电话</Label><LimitedInput maxLength={11} id="supplier-phone" value={form.phone} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('phone',e.target.value)} placeholder="11位手机号" inputMode="numeric"/></div>
+              <div className="space-y-1"><Label htmlFor="supplier-name">名称 *</Label><LimitedInput maxLength={PARTY_PROFILE_LIMITS.name} lengthMode="unicode" id="supplier-name" value={form.name} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('name',e.target.value)} placeholder="供应商名称"/></div>
+              <div className="space-y-1"><Label htmlFor="supplier-contact">联系人</Label><LimitedInput maxLength={PARTY_PROFILE_LIMITS.contact} lengthMode="unicode" id="supplier-contact" value={form.contact} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('contact',e.target.value)}/></div>
+              <div className="space-y-1"><Label htmlFor="supplier-phone">电话</Label><LimitedInput maxLength={PARTY_PROFILE_LIMITS.phone} lengthMode="unicode" id="supplier-phone" value={form.phone} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('phone',e.target.value)} placeholder="手机、座机或国际电话" inputMode="tel"/></div>
               <div className="space-y-1"><Label htmlFor="supplier-email">邮箱</Label><Input id="supplier-email" value={form.email} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('email',e.target.value)} placeholder="选填"/></div>
             </div>
-            <div className="space-y-1"><Label htmlFor="supplier-address">地址</Label><LimitedInput maxLength={30} id="supplier-address" value={form.address} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('address',e.target.value)}/></div>
-            <div className="space-y-1"><Label htmlFor="supplier-remark">备注</Label><LimitedInput maxLength={30} id="supplier-remark" value={form.remark} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('remark',e.target.value)}/></div>
+            <div className="space-y-1"><Label htmlFor="supplier-address">地址</Label><LimitedInput maxLength={PARTY_PROFILE_LIMITS.address} lengthMode="unicode" id="supplier-address" value={form.address} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('address',e.target.value)}/></div>
+            <div className="space-y-1"><Label htmlFor="supplier-remark">备注</Label><LimitedInput maxLength={PARTY_PROFILE_LIMITS.remark} lengthMode="unicode" id="supplier-remark" value={form.remark} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('remark',e.target.value)}/></div>
             <h3 className="border-t pt-4 text-sm font-medium">结算与供货</h3>
             <SettlementTypeField
               side="payable"
@@ -191,8 +190,10 @@ export default function SuppliersPage() {
         )
       }}
       submitForm={(editing) => {
-        if (form.phone && !PHONE_RE.test(form.phone)) throw { response: { data: { message: '请输入正确的手机号' } } }
-        const p = { name:form.name, contact:form.contact||undefined, phone:form.phone||undefined, email:form.email||undefined, address:form.address||undefined, remark:form.remark||undefined, settlementType:form.settlementType, paymentTermsDays:form.paymentTermsDays, leadTimeDays:form.leadTimeDays }
+        let profile
+        try { profile = normalizePartyProfile(form, '供应商') }
+        catch (error) { throw { response: { data: { message: (error as Error).message } } } }
+        const p = { ...profile, email:form.email||undefined, settlementType:form.settlementType, paymentTermsDays:form.paymentTermsDays, leadTimeDays:form.leadTimeDays }
         return editing
           ? updateSupplierApi(editing.id, {...p, isActive: form.isActive})
           : createSupplierApi(p)

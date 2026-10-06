@@ -5,9 +5,17 @@ import { PageHeaderContext } from './PageHeaderContext'
 import { getMergedPageGroup, type MergedPageGroup } from '@/router/mergedPageGroups'
 import { usePermission } from '@/hooks/usePermission'
 import KeepAliveSection from './KeepAliveSection'
+import { useWorkspaceStore } from '@/store/workspaceStore'
 
 // 每个视图独立分包；进入一个中心不会加载其余图表或触发其查询。
 const views: Record<string, LazyExoticComponent<ComponentType>> = {
+  '/payments/receivable': lazy(() => import('@/pages/payments/receivable')),
+  '/payments/payable': lazy(() => import('@/pages/payments/payable')),
+  '/reports/reconciliation/receivable': lazy(() => import('@/pages/reports/reconciliation-receivable')),
+  '/reports/reconciliation/payable': lazy(() => import('@/pages/reports/reconciliation-payable')),
+  '/finance/dashboard': lazy(() => import('@/pages/finance/dashboard')),
+  '/finance/accounts': lazy(() => import('@/pages/finance/accounts')),
+  '/finance/transactions': lazy(() => import('@/pages/finance/transactions')),
   '/procurement': lazy(() => import('@/pages/procurement')),
   '/reports/replenishment': lazy(() => import('@/pages/reports/replenishment')),
   '/reports': lazy(() => import('@/pages/reports')),
@@ -22,6 +30,7 @@ function MergedPageViews({ group, ownPath }: { group: MergedPageGroup; ownPath: 
   const { can } = usePermission()
   const pathname = ownPath.split(/[?#]/)[0]
   const [visited, setVisited] = useState<Record<string, string>>({})
+  const savedPaths = useWorkspaceStore(s => s.tabs.find(tab => tab.key === group.key)?.viewPaths)
   const visibleViews = group.views.filter(view => can(view.permission))
   const allowed = visibleViews.some(view => view.path === pathname)
 
@@ -30,9 +39,7 @@ function MergedPageViews({ group, ownPath }: { group: MergedPageGroup; ownPath: 
     setVisited(previous => previous[pathname] === ownPath ? previous : { ...previous, [pathname]: ownPath })
   }, [pathname, ownPath, allowed])
 
-  if (!allowed) return <p className="py-12 text-center text-muted-foreground">无访问权限</p>
-
-  const paths = { ...visited, [pathname]: ownPath }
+  const paths = { ...savedPaths, ...visited, ...(allowed ? { [pathname]: ownPath } : {}) }
   const navigation = (
     <nav aria-label={`${group.title}视图`} className="mb-4 flex flex-wrap gap-x-5 gap-y-1 border-b border-border">
       {visibleViews.map(view => (
@@ -47,10 +54,11 @@ function MergedPageViews({ group, ownPath }: { group: MergedPageGroup; ownPath: 
   )
 
   return <>
-    {visibleViews.filter(view => paths[view.path]).map(view => {
+    {!allowed && <p className="py-12 text-center text-muted-foreground">无访问权限</p>}
+    {group.views.filter(view => paths[view.path]).map(view => {
       const Component = views[view.path]
       return (
-        <KeepAliveSection key={view.path} active={pathname === view.path}>
+        <KeepAliveSection key={view.path} active={allowed && pathname === view.path && can(view.permission)}>
           <TabPathContext.Provider value={paths[view.path]}>
             <PageHeaderContext.Provider value={{ title: group.title, navigation }}>
               <Suspense fallback={<p className="py-12 text-center text-muted-foreground">正在加载{view.label}…</p>}>

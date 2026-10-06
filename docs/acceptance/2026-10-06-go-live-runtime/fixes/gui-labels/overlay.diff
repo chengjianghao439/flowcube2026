@@ -1,0 +1,74 @@
+--- a/frontend/src/pages/disposal/components/DisposalDetailDialog.tsx
++++ b/frontend/src/pages/disposal/components/DisposalDetailDialog.tsx
+@@ -92,7 +92,7 @@
+         <OrderDetailSections type="disposal" id={id || 0}>
+ 
+         {isLoading && <p className="text-center py-8 text-muted-foreground">加载中…</p>}
+-        {disposal && !allScrap && <p role="alert" className="rounded border p-3">{status === 3 ? '旧处理单待签认：本单含促销、退供应商或异常明细，不能直接扣库；旧已批准单的合法转换／终止出口尚未闭合，请人工签认核对。' : status === 4 ? '历史直接处置记录仅供追溯，不补单、不重算历史金额、不再次执行。' : '本单含旧处理方式；草稿／待审可先取消后手动走正常销售或采购退货，待审仍可按原规则驳回。不能把旧行改成报废。'}</p>}
++        {disposal && !allScrap && <p role="alert" className="rounded border p-3">{status === 3 ? '本单含促销、退供应商或异常明细，不能直接扣库。请返回列表选择“整单签认”，核对全部旧行后由另一名人员签认处理意图，再走正常销售、采购退货或重新报废流程；未签认前保持旧单。' : status === 4 ? '历史直接处置记录仅供追溯，不补单、不重算历史金额、不再次执行。' : '本单含旧处理方式；草稿／待审可先取消后手动走正常销售或采购退货，待审仍可按原规则驳回。不能把旧行改成报废。'}</p>}
+         <DisposalExecutionPanel write={write} active={readable && !actionsDisabled} />
+         {disposal && (
+           <div className="space-y-4">
+--- a/backend/src/modules/finance/finance-dashboard.service.js
++++ b/backend/src/modules/finance/finance-dashboard.service.js
+@@ -1,5 +1,6 @@
+ const { pool } = require('../../config/db')
+ const { beijingTodayYmd } = require('../../utils/backendTime')
++const { BIZ_TYPE_NAME } = require('./finance-accounts.service')
+ 
+ /**
+  * 资金看板：账户余额分布、收支趋势、费用构成。
+@@ -85,7 +86,6 @@
+        FROM expense_claims WHERE deleted_at IS NULL`,
+   )
+ 
+-  const BIZ_NAME = { 1: '收款', 2: '付款', 3: '费用报销', 4: '余额调整' }
+   const TYPE_NAME = { 1: '银行账户', 2: '现金', 3: '支付宝', 4: '微信', 5: '其他' }
+ 
+   return {
+@@ -112,7 +112,7 @@
+     })),
+     byBizType: byBizType.map(b => ({
+       bizType: Number(b.biz_type),
+-      bizTypeName: BIZ_NAME[Number(b.biz_type)] || '其他',
++      bizTypeName: BIZ_TYPE_NAME[Number(b.biz_type)] || '其他',
+       inAmount: Number(b.inAmount),
+       outAmount: Number(b.outAmount),
+       txCount: Number(b.txCount),
+--- a/frontend/src/pages/finance/dashboard/index.tsx
++++ b/frontend/src/pages/finance/dashboard/index.tsx
+@@ -231,8 +231,8 @@
+           {/* 顶部 KPI */}
+           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+             <StatTile icon={Wallet} label="账户余额合计" value={money(data.summary.totalBalance)} hint={`${data.summary.accountCount} 个启用账户`} />
+-            <StatTile icon={ArrowDownLeft} label="区间收入" value={money(data.summary.inAmount)} tone="success" hint="收款 + 余额调整入账" />
+-            <StatTile icon={ArrowUpRight} label="区间支出" value={money(data.summary.outAmount)} tone="danger" hint="付款 + 费用报销" />
++            <StatTile icon={ArrowDownLeft} label="区间收入" value={money(data.summary.inAmount)} tone="success" hint="收款 + 供应商退款 + 余额调整入账" />
++            <StatTile icon={ArrowUpRight} label="区间支出" value={money(data.summary.outAmount)} tone="danger" hint="付款 + 费用报销 + 退货退款 + 余额调整出账" />
+             <StatTile
+               icon={ArrowUpDown}
+               label="区间净现金流"
+--- a/docs/frontend-pda-conventions.md
++++ b/docs/frontend-pda-conventions.md
+@@ -576,3 +576,9 @@
+ E7 初检窄修保留 Finder 按可见/owner epoch 的读取生命周期与 AbortController 重建，H6 来源与旧单预览的 current 回调稳定且 effect 清理绑定原状态对象。RF 路由按现有多行格式登记，用户可见提示用结果/记录、原依据/历史资料和系统；请求字段、UUID/hash 与完整身份/CAS 合同不变。
+ 
+ E7 B 补录写接口采用实际 BackfillOperationResult，列表/详情 BackfillApplication 保持原 DTO。批准、重试记账与重核分别消费结果顶层的凭证证明和 applicationPending；现金已记账/凭证已生成但详情待加载以独立提示展示，不能从不存在的 row flags 假判凭证 pending。RF 零分保原专有文案，旧核销显示无需生成调整凭证，查询详情失败不冒充凭证失败。原 owner/活动代次与 Portal slot 门保持。
++
++### 2026-10-06 运行验收发现的有限呈现补正
++
++旧已批准混合处理单详情曾仍提示“出口尚未闭合”，与列表已有“整单签认”入口不一致。本次仅改 status3 且非纯报废的提示：返回列表核对全部旧行，由另一名人员签认处理意图后，再走正常销售、采购退货或重新报废流程；不能直接扣库，未签认前保持旧单。提示不根据旧 status3 推断已签认，不新增详情弹窗动作；其他状态提示、读取及执行资格保持。
++
++资金看板区间收入说明补入供应商退款，区间支出说明补入退货退款与余额调整出账，与既有按 direction 汇总全部流水的查询一致。只改说明文字，金额、图表、筛选和权限不变。本次保存源码及差异证据，修后真实 API/GUI 由独立总验收复验，不据文案修改宣称现场通过。
+--- a/docs/finance-permission-time.md
++++ b/docs/finance-permission-time.md
+@@ -428,3 +428,9 @@
+ F5/F6 的供应商退款补录页面沿原 `supplier_refund` 快照展示 `frozen.createPayloadJson` 本次原分配四位金额及 `sourceSnapshotJson` 原 PO/PR 单号、准确供应商/仓库身份、原基本量两位与原成交单价四位；坏/缺 JSON 明确人工核对，不查当前商品或供应商主档，不呈现 hash/key/UUID。仅新 kind 的 target 冻结 mount owner、同步 workspace 活动 epoch 和 Section 可见活动代次；所有详情与批准/驳回/撤回/执行/重核凭证在派发及每个 await 后重核，固定原 owner config，关闭 replay/fallback。隐藏页 Portal 隔离但原备注保持；旧四类补录默认 API、状态文案、核销不涉及凭证解释保持。离线专项与真实 MySQL/资金/GUI/生产验收分开。
+ 
+ E7 B：已确认提交的资金/业务与凭证证明独立于补录申请详情加载。最后详情查询或坏 JSON 不再改写为“业务没能成功”；返回原现金 ACK、准确落期与凭证结果，同时标记申请详情待加载。RF 已执行重放不再 settle，旧核销仍无需调整凭证；commit 不确定与提交前错误继续拒绝，不能以 applicationPending 推断资金已成功。历史已执行申请 postingPeriod 可为 null，前端类型接受实际结果而不新增历史拒绝规则。
++
++### 2026-10-06 资金看板业务名称与区间说明补正
++
++资金看板的独立名称表只含业务码1–4，使已纳入既有查询的5/6显示为“其他”。看板现直接复用 `finance-accounts.service` 导出的 `BIZ_TYPE_NAME`，5显示“退货退款”、6显示“供应商退款”；静态相对依赖链未回到看板模块。区间收入说明包含供应商退款，支出说明包含退货退款及余额调整出账，金额继续取原 direction 聚合。
++
++本次仅修只读呈现，所有 SQL、流水金额、收入/支出方向、AP、账户余额、会计期间及权限规则保持；旧单签认仍只登记处理意图，不因详情提示产生库存或资金事实。后端语法与差异检查只能证明有限源码边界，修后真实 API/GUI 由独立总验收复验，不等同银行、人员、会计或生产验收。

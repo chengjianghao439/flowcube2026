@@ -1,4 +1,6 @@
 'use strict'
+const { issueFixtureAccessToken, cleanupFixtureSessionFamilies } = require('./helpers/fixtureAuthSession')
+
 const root = require('node:path').resolve(__dirname, '..')
 const req = p => require(root + '/' + p)
 process.env.NODE_ENV = 'test'
@@ -21,7 +23,7 @@ before(async () => {
  for(const permission of [P.TRANSFER_ORDER_VIEW,P.TRANSFER_ORDER_CREATE,P.TRANSFER_ORDER_CONFIRM,P.TRANSFER_ORDER_EXECUTE,P.WAREHOUSE_VIEW]) if(permission) await q('INSERT INTO sys_role_permissions(role_id,permission) VALUES(?,?)',[role,permission])
  const uid=await insert('INSERT INTO sys_users(username,password,real_name,role_id,role_name,is_active) VALUES(?,?,?,?,?,1)',[suffix,bcrypt.hashSync(crypto.randomBytes(24).toString('hex'),4),'调拨审计员',role,suffix])
  await q('INSERT INTO user_warehouse_scope(user_id,warehouse_id) VALUES(?,?)',[uid,wh[0]])
- const token=jwt.sign({userId:uid,tokenVersion:0,tokenType:'access'},req('backend/src/config/env').env.JWT_SECRET,{expiresIn:'10m'})
+ const token=await issueFixtureAccessToken(pool, uid, {expiresIn:'10m'})
  const sessions=[]; for(let i=0;i<3;i++) { const session=crypto.randomBytes(24).toString('hex');const did=await insert('INSERT INTO pda_devices(device_code,device_name,warehouse_id,status,secret_hash) VALUES(?,?,?,\'active\',?)',[suffix+'D'+i,'审计设备',wh[i],bcrypt.hashSync('fixture',4)]);await q('INSERT INTO pda_device_sessions(device_id,user_id,session_token_hash,warehouse_id,scopes,expires_at) VALUES(?,?,?,?,?,DATE_ADD(NOW(),INTERVAL 1 DAY))',[did,uid,req('backend/src/modules/pda/pda.sessions.service').hashToken(session),wh[i],'[]']); sessions.push(session) }
  const app=express(); app.use(express.json());app.use('/api/system',req('backend/src/modules/system/system.routes'));app.use('/api/warehouses',req('backend/src/modules/warehouses/warehouses.routes'));app.use('/api/transfer',req('backend/src/modules/transfer/transfer.routes'));app.use(req('backend/src/middleware/errorHandler'));server=await new Promise(r=>{const s=app.listen(0,'127.0.0.1',()=>r(s))});const base='http://127.0.0.1:'+server.address().port
  async function http(label,method,path,body,device,key){const headers={Authorization:'Bearer '+token,'Content-Type':'application/json'};if(device!==undefined){headers['X-Client']='pda';headers['X-PDA-Session']=sessions[device]}if(key)headers['X-Request-Key']=suffix+key;const r=await fetch(base+path,{method,headers,body:body?JSON.stringify(body):undefined});const data=await r.json();const record={label,method,path,status:r.status,response:data};if(path.includes('/scan-')) record.sqlAfter={items:(await q('SELECT order_id,quantity,deducted_qty,received_qty FROM transfer_order_items WHERE order_id=?',[Number(path.split('/')[3])]))[0],order:(await q('SELECT id,status FROM transfer_orders WHERE id=?',[Number(path.split('/')[3])]))[0],container:(await q('SELECT barcode,warehouse_id,status,transfer_order_id FROM inventory_containers WHERE barcode=?',[body.containerBarcode]))[0]};evidence.calls.push(record);return record}
@@ -54,7 +56,7 @@ after(async () => {
  if(f.uid) await best('DELETE FROM user_warehouse_scope WHERE user_id=?',[f.uid])
  if(f.uid) await best('DELETE FROM sys_users WHERE id=?',[f.uid])
  if(f.role){await best('DELETE FROM sys_role_permissions WHERE role_id=?',[f.role]);await best('DELETE FROM sys_roles WHERE id=?',[f.role])}
- if(server)await new Promise(r=>server.close(r));await pool.end()
+ if(server)await new Promise(r=>server.close(r));try { await cleanupFixtureSessionFamilies(pool) } finally { await pool.end() }
 })
 
 function success(r) { assert.equal(r.status,200,JSON.stringify(r)); return r.response.data }

@@ -1,7 +1,7 @@
+import { useVisibleQuery } from '@/hooks/useVisibleQuery'
 import { SummaryStrip } from '@/components/shared/SummaryStrip'
 import { money } from '@/lib/format'
-import { useState, useEffect } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useState, useEffect, useRef, useSyncExternalStore } from 'react'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import ListSummary from '@/components/shared/ListSummary'
@@ -17,12 +17,17 @@ import { toast } from '@/lib/toast'
 import { downloadExport } from '@/lib/exportDownload'
 import { formatDisplayDate, todayYmd } from '@/lib/dateTime'
 import { getAccountTransactionsApi, getActiveAccountsApi, type AccountTransaction } from '@/api/finance'
+import { usePermission } from '@/hooks/usePermission'
+import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
+import { PERMISSIONS as P } from '@/lib/permission-codes'
+import { captureDisposalOwner, disposalOwnerCurrent, disposalConfig, disposalEpoch, subscribeDisposalRecovery } from '@/lib/disposalRecovery'
+import { getSupplierRefundTraceApi } from '@/api/finance'
 import type { TableColumn } from '@/types'
 
 
 /** 与后端 finance-accounts.service 的 BIZ_TYPE 对齐 */
 const BIZ_TYPE_OPTIONS = [
-  ['1', '收款'], ['2', '付款'], ['3', '费用报销'], ['4', '余额调整'], ['5', '退货退款'],
+  ['1', '收款'], ['2', '付款'], ['3', '费用报销'], ['4', '余额调整'], ['5', '退货退款'], ['6', '供应商退款'],
 ] as const
 const BIZ_TYPE_NAME: Record<string, string> = Object.fromEntries(BIZ_TYPE_OPTIONS.map(([v, l]) => [v, l]))
 const DIRECTION_NAME: Record<string, string> = { '1': '收入', '2': '支出' }
@@ -119,6 +124,19 @@ function TransactionsQueryDialog({ open, initial, accounts, onClose, onApply }: 
  * 要调整余额走账户管理页的「余额调整」（补一笔差额流水留痕）。
  */
 export default function FinanceTransactionsPage() {
+  const active = useActiveWorkspaceTab(), { can } = usePermission()
+  const readEpoch=useSyncExternalStore(subscribeDisposalRecovery, disposalEpoch)
+  const activity=useRef({active,generation:0})
+  if(activity.current.active!==active){activity.current={active,generation:activity.current.generation+1}}
+  const readOwner=captureDisposalOwner(),readActivity=activity.current.generation
+  const [trace,setTrace]=useState<{ id:number; owner:ReturnType<typeof captureDisposalOwner>; activity:number; refundNo:string; fundId:number; amount4:string } | null>(null)
+  const mayTrace=can(P.SUPPLIER_REFUND_VIEW)&&can(P.PURCHASE_ORDER_VIEW)&&can(P.RETURN_ORDER_VIEW)&&can(P.PAYMENT_VIEW)
+  const traceCurrent=!!trace&&active&&mayTrace&&trace.activity===activity.current.generation&&disposalOwnerCurrent(trace.owner)
+  const traceQuery=useVisibleQuery({
+    queryKey:['supplier-refund-trace',trace?.id,trace?.owner.epoch,trace?.activity],
+    queryFn:({signal})=>getSupplierRefundTraceApi(trace!.id,{...disposalConfig(trace!.owner),signal}),
+    enabled:traceCurrent, staleTime:0,
+  })
   const [query, setQuery] = useState<TxQuery>(EMPTY_TX_QUERY)
   const [queryOpen, setQueryOpen] = useState(false)
 
@@ -133,15 +151,18 @@ export default function FinanceTransactionsPage() {
     endDate: query.endDate || undefined,
     keyword: query.keyword || undefined,
   }
-  const { data, isLoading } = useQuery({
-    queryKey: ['finance-account-transactions', 'page', query],
-    queryFn: () => getAccountTransactionsApi(params),
+  const { data, isLoading } = useVisibleQuery({
+    queryKey: ['finance-account-transactions', 'page', query, readEpoch],
+    queryFn: ({signal}) => getAccountTransactionsApi(params,{...disposalConfig(readOwner),signal}),
+    enabled:can(P.FINANCE_ACCOUNT_VIEW),
   })
-  const { data: accounts } = useQuery({
-    queryKey: ['finance-accounts', 'active'],
-    queryFn: () => getActiveAccountsApi(),
+  const { data: accounts } = useVisibleQuery({
+    queryKey: ['finance-accounts', 'active', readEpoch],
+    queryFn: ({signal}) => getActiveAccountsApi({...disposalConfig(readOwner),signal}),
+    enabled:can(P.FINANCE_ACCOUNT_VIEW),
   })
 
+  const traceData=traceCurrent&&traceQuery.data&&traceQuery.data.id===trace?.id&&traceQuery.data.refund_no===trace.refundNo&&traceQuery.data.fund_transaction_id===trace.fundId&&traceQuery.data.amount===trace.amount4?traceQuery.data:null
   const total = data?.pagination?.total ?? 0
 
   const queryChips: QueryChip[] = []
@@ -163,13 +184,14 @@ export default function FinanceTransactionsPage() {
       // 余额调整是人工对平账目的动作，与常规收付款区分开
       return <SoftStatusLabel label={t.bizTypeName} tone={t.bizType === 4 ? 'warning' : 'info'} />
     }},
-    { key: 'bizNo', title: '关联单号', width: 160, render: v => v
-      ? <span className="text-doc-code-muted">{String(v)}</span>
+    { key: 'bizNo', title: '关联单号', width: 160, render: (v,row) => (row as AccountTransaction).bizType===6 && mayTrace && Number.isSafeInteger((row as AccountTransaction).bizId) && Number((row as AccountTransaction).bizId)>0
+      ? <Button size="sm" variant="link" onClick={()=>{if(activity.current.active&&readActivity===activity.current.generation&&disposalOwnerCurrent(readOwner)&&mayTrace)setTrace({id:Number((row as AccountTransaction).bizId),owner:readOwner,activity:readActivity,refundNo:String(v),fundId:Number((row as AccountTransaction).id),amount4:Number((row as AccountTransaction).amount).toFixed(4)})}}>{String(v)}</Button>
+      : v ? <span className="text-doc-code-muted">{String(v)}</span>
       : <span className="text-muted-foreground">—</span> },
     { key: 'partyName', title: '往来单位', width: 150, render: v => (v as string) || <span className="text-muted-foreground">—</span> },
     { key: 'amount', title: '收入', width: 120, align: 'right', render: (_, row) => {
       const t = row as AccountTransaction
-      return t.direction === 1 ? <span className="tabular-nums font-medium text-success">{money(t.amount)}</span> : <span className="text-muted-foreground">—</span>
+      return t.direction === 1 ? <span className="tabular-nums font-medium text-success">{t.bizType===6?Number(t.amount).toFixed(4):money(t.amount)}</span> : <span className="text-muted-foreground">—</span>
     }},
     { key: 'direction', title: '支出', width: 120, align: 'right', render: (_, row) => {
       const t = row as AccountTransaction
@@ -213,6 +235,18 @@ export default function FinanceTransactionsPage() {
 
       <ListSummary total={total} unit="笔" />
 
+      <Dialog open={traceCurrent} onOpenChange={open=>{if(!open&&traceCurrent)setTrace(null)}}>
+        <DialogContent aria-describedby={undefined}><DialogHeader><DialogTitle>供应商退款</DialogTitle></DialogHeader>
+          {traceQuery.isLoading && <p>正在加载原退款单…</p>}
+          {traceQuery.error && <p>无法读取，请稍后重新核对。</p>}
+          {traceCurrent && traceQuery.data && !traceData && <p>原退款单与这笔流水不符，请人工核对。</p>}
+          {traceCurrent && traceData && <div className="space-y-2 text-sm">
+            <p>{traceData!.refund_no} / {formatDisplayDate(traceData!.refund_date)}</p>
+            <p className="tabular-nums">回款 {traceData!.amount}</p>
+            <p>{traceData!.voucher_generate_error || (typeof traceData!.voucher_id==='number'&&Number.isSafeInteger(traceData!.voucher_id)&&traceData!.voucher_id>0?'凭证已生成':'凭证待核对')}</p>
+          </div>}
+        </DialogContent>
+      </Dialog>
       <TransactionsQueryDialog
         open={queryOpen}
         initial={query}

@@ -1,0 +1,47 @@
+{
+  "root": "/Users/chengjianghao/.codex/worktrees/go-live-batch-one/flowcube",
+  "allowedPaths": [
+    "backend/src/modules/notifications/notifications.service.js",
+    "tests/workbench.test.js",
+    "docs/finance-permission-time.md"
+  ],
+  "before": {
+    "backend/src/modules/notifications/notifications.service.js": "9d10af05d611968379ee176a67e6488c6390e9c8486abcd2695ac19ebeac688b",
+    "tests/workbench.test.js": "5632ade0549fcbc0c75616d775a57bec0e9642170a7ff48b405269a2299d83dd",
+    "docs/finance-permission-time.md": "00d8b4d0ef093cb4452cc47238ef658d6045b004f468cd74d1be7461205a87c6"
+  },
+  "after": {
+    "backend/src/modules/notifications/notifications.service.js": "5f0ade06410e18997d6f21f1690d49ff0a677542b17c9be14a1a42c5526d1945",
+    "tests/workbench.test.js": "bbe29db403f88b1c4a377d6787690fb2dc9911cc25ed75250229ba33aba410b5",
+    "docs/finance-permission-time.md": "fb11dd1e31eb06da13633bfa58234ae3862909eac5032f0aa5d85f1040ad6824"
+  },
+  "overlaySha256": "409492ad0a6f101f4d27bd942bd50387bb19caefe43ff463471ec646c8b8ff9d",
+  "head": "14e97aa9dc9df0700b394d59cafbc53dba0c5e69",
+  "verification": {
+    "nodeVersion": "v22.23.2",
+    "testCommand": "bash scripts/with-dev-env.sh node --test tests/workbench.test.js",
+    "red": {
+      "exitCode": 1,
+      "tests": 10,
+      "pass": 5,
+      "fail": 5,
+      "reason": "4 nonempty scope subtests reject nonexistent warehouse_id; parent aggregate fails"
+    },
+    "green": {
+      "exitCode": 0,
+      "tests": 10,
+      "pass": 10,
+      "fail": 0
+    },
+    "syntax": {
+      "service": 0,
+      "test": 0
+    },
+    "diffCheck": 0,
+    "ciWiring": {
+      "package": "test:workbench",
+      "workflow": ".github/workflows/test.yml:475"
+    },
+    "boundary": "offline service + SQL/parameter and response contracts only; no DB/Docker/application/browser/credentials/network/commit"
+  }
+}

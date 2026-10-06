@@ -64,6 +64,25 @@ export interface InventoryOverviewParams {
   categoryId?:  number | null
 }
 
+export interface InventoryReservationParams { productId: number; warehouseId: number; page?: number; pageSize?: number }
+export interface InventoryReservationSummary {
+  activeQuantity: number; cacheOnHand: number; reserved: number; available: number; expected: number; atp: number; pickableQuantity: number
+  reservationQuantity: number; expectedBindingQuantity: number; expectedPoolBindingQuantity: number
+  cacheDifference: number; reservationDifference: number; bindingPoolDifference: number
+  visibleReservationQuantity: number; hiddenReservationQuantity: number; orphanReservationQuantity: number; unknownReservationQuantity: number
+  visibleBindingQuantity: number; hiddenBindingQuantity: number; orphanBindingQuantity: number
+}
+export interface InventoryReservationSource {
+  saleOrderId: number; orderNo: string; customerName: string | null; status: number; createdAt: string | null
+  reservationQuantity: number; expectedBindingQuantity: number; hiddenBindingQuantity: number; orphanBindingQuantity: number
+  bindings: Array<{ bindingId: number; saleOrderItemId: number; quantity: number; sourceState: 'expected_supply' | 'outside_expected_supply' | 'putaway_exceeds_order'
+    purchase: { purchaseOrderId: number; purchaseItemId: number; orderNo: string; status: number; expectedDate: string | null; openQuantity: number; boundQuantity: number } }>
+}
+export interface InventoryReservationsResult {
+  productId: number; warehouseId: number; summary: InventoryReservationSummary; list: InventoryReservationSource[]
+  pagination: { page: number; pageSize: number; total: number }
+}
+
 // ─── 容器 ─────────────────────────────────────────────────────────────────────
 
 export interface InventoryContainer {

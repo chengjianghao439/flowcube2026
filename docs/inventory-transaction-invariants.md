@@ -51,6 +51,12 @@
   > 注：该闸只保证「票有效」，**不自动核对目标任务仓**——跨仓比对必须在业务服务层显式做。
 - **打印失败降级不回滚库存**：标签入队失败（无可用打印机 / 渲染失败）只产生 `status=3` 的失败记录供补打，业务事务照常提交；两种原因**分开计数**（`noPrinterCount` / `renderFailedCount`），界面不得说错原因。
 
+## 2026-10-04 R7：普通拆分原回执
+
+`inventory.container.split.<来源ID>` 使用原资源幂等工具，库存、标签任务及来源余量/新码/目标别名/打印结果快照同事务提交。范围和设备仓先于重放；锁顺序仍维度→容器，锁后核当前维度未变化。PDA 仅部分量、旧 PC 合法全量的差异保持；目标等于来源在引擎第一处写入之前拒绝，不能先扣再往同一行加。数量、个体、任务锁、效期、混批及缓存同步规则不变。历史查询核原流水仓，不以调拨后的当前仓否定历史；本轮只有离线边界证据，真实 MySQL 锁等待/回滚/重放并发和打印仍待验收。
+
+写事务重放在已持维度和来源容器锁之后，以 `currentRead: true` 调用领域核验，原流水与容器身份使用 `FOR SHARE` 当前读。初始非锁维度读可能已建立 RR 快照，不能再用该旧快照核等锁期间另一请求提交的新流水和新容器；不为解决可见性提前锁来源容器，也不修改隔离级别。本人独立结果查询不传该选项，仍核原操作仓/身份且不加库存锁。离线夹具只模拟快照/等锁边界，实际 MySQL 并发仍待验。
+
 ## 2026-09-29 批 B3a：取货码下游链（分拣接入真实 sort-done / 复核真实 CHECK）
 
 - **分拣进度只有两个事实源**：`warehouse_tasks.status` 与 `warehouse_task_items.sorted_qty`。新增的 `sorting_bin_items`（迁移 `267`）**只是作业记录与防重**（`UNIQUE(task_id, container_id)`、`qty DECIMAL(12,2)`），不改 `remaining_qty`、不参与 `syncStockFromContainers()`，也**不能**用来判定「分拣完成」。
@@ -156,3 +162,127 @@ C2规格复审补充：销售退货receive、QA完成与putaway完成三处门�
 退货收货、质检、上架，以及盘点扫码，先按既有业务锁顺序读取当前任务/盘点单，核当前用户仓库范围与非空设备仓，再 begin/replay 原操作回执；合法同键重放仍返回原结果，状态检查保持在回放之后。设备未绑定仓库不能退化为不限仓。退货 PDA 队列也核设备仓属于当前用户范围，并只查询该设备仓。
 
 PDA 新建包裹必须同时满足用户范围和设备仓与任务仓相同。包裹任务列表和条码详情在查询商品与打印详情前核任务仓库范围；无明确归属仓的包裹任务不对限仓用户放行。没有改动数量、状态迁移、预占、资金与凭证政策。回归及设备/实物验证边界见 `docs/security-scope-remediation-2026-10-06.md`。
+
+
+### 商品仓库预占的只读解释（2026-10-04，R2）
+
+`inventory.reservations.listReservations` 只解释指定商品与仓库，不写库存、缓存、预占或绑定。先核仓库范围，再在同一连接显式开启 REPEATABLE READ 的只读一致性快照；真实角色权限、摘要、可见来源 count/page、精确绑定及采购汇总都在该快照内读取，失败回滚，完成释放连接。复用 `getStockProjection(lock:false)` 与 `getExpectedStock(lock:false)`，不请求业务行锁。
+
+实物在库是未删 ACTIVE 容器的 remaining_qty 合计；查询不按库位过滤，因此页面说明不把 ACTIVE 等同于“全部已上架”。列表在库仍是 inventory_stock.quantity 缓存，已预占仍是该维度 reserved；列表可用仍为 max(0,缓存在库−reserved)。含预计可承诺为 max(0,ACTIVE余量＋totalExpected−reserved)，预计绑定不再重复扣除。预计采购沿状态2/5，扣除未删、未取消收货任务的已上架量。当前可拣参考沿同仓 ACTIVE、正余量且未被任务锁定的容器，不能解释为某张单可直接发货。
+
+有效预占仅 status=1，有效预计绑定仅 released_at IS NULL；缓存/事实、reserved/有效预占、全部绑定/当前预计池绑定三个差额保留两位原值，不截零掩盖异常。expectedStock.items 只含可继续绑定的供给，不能当完整追溯来源；本接口另批量读原始有效绑定，覆盖已占满及异常采购来源。无行身份的预占只能按销售来源单汇总，精确销售行与采购行只取绑定的实际关联。
+
+### R9 重复销售创建的原请求保护（2026-10-04）
+
+来源读取是同连接只读 RR，不复制预占、预计绑定、库存或发货事实。重复开单仍用原 sale.create 载荷指纹动作和既有创建事务；本批未改库存/预占/资金写链，也没有迁移。来源草稿首次保存固定原body/key/account/endpoint，未知/network/5xx不轮换键或允许另一份payload；手动重试只认新鲜not_found、原完整载荷、7天TTL内及当前创建权。重挂仅持查询身份、超期或残缺只核结果/人工处理。正常ACK核安全新单ID，恢复核 sale_order/resourceId===data.id，不能把来源旧单或当前量当创建成功。窄opt-in未执行证据只在首发新事务业务4xx、成功rollback且提交未开始后附加；pending/回放冲突/提交阶段未知不得声明未执行。真实数据库并发、事务回滚与库存后续链仍待总验收。
+
+本人普通 sale.create 成功回执按当前原单完整头/物料仓范围核对，动作/资源不匹配及缺原资源 failclosed；not_found/pending 不据当前库存推断成功。撤创建权后的独立本人核对页只查询原记录，不自动重试或读取来源，新建与库存写权限不扩大。
+
+### 独立报废执行的资源回执（2026-10-04，R10第一段）
+
+报废执行必须原稳定键，action为disposal.dispose.<原单ID>、resourceType为inventory_disposal；读取并锁原头、核当前仓范围后才beginResourceOperationRequest。成功原键在终态拒绝前重放原DTO，回放按同conn当前共享读核真实operation_requests资源metadata与原头，避免早期RR快照漏首笔提交；不据status4或当前金额造成功。初发核完整原明细当前读且全部3，先原头→按商品ID排序的stock维度→原引擎容器扣减。原库存日志、报废台账VALUES?非空批量、CAS、disposed_at和回执同conn一次commit，失败整笔rollback。仅本事务新建请求的业务4xx、尚未开始提交且rollback成功才附disposalNotExecuted；待处理中、回放冲突或提交/回滚未知均不声明未执行。
+
+本人原回执查询只读核实际matchedAction、类型/原ID、完整DTO、原头存在与当前仓范围，不增加查看/执行权。宽请求前缀命中本域仍核领域；not_found/pending不读头或编造成功。写重试仍受当前执行权与范围，查询成功不授权写操作。此处仅离线代码/SQL边界模拟；MySQL真实锁、并发、回滚和查询性能待隔离验收。
+
+
+### 采购退货/收货的原 PO 协调（2026-10-04，E1）
+
+准确原 PO 是本批协调门：退货创建/关闭采购余量取 PO X；退货确认、取消、WT 实际出库按 PO S→PR X→WT→原维度/容器/账款；收货关闭沿 IT→准确 PO 升序 X→原库存，不改维度→容器规则。出库事务前只定位，事务内 WT 前仅当前头/明细锁读，锁后真实 WTI/PRI 才决定数量和原价。当前所有 WT 的已发/错归属异常会阻断取消；原物理归还未闭合只进入取消处理中，不能释放 PR 预算或宣称任务已终止。完成归还后员工再次确认取消，不自动重发。
+
+真实无准确来源历史保持原入口，含 POI 却无准确 PO、跨 PO/商品来源待人工核对。原 ACTIVE remaining_qty、缓存同步、数量两位、原回执及一次同连接提交保持；没有新增库存账或供应商退款。离线 SQL stub 证明函数调用顺序/错误出口，不能证明数据库锁、死锁消除、实际实物或事务结果。
+
+## 2026-10-05 H1：处理意图不是库存事实
+
+不可变来源Q只表示员工确认的两位基本量处理意图，保存不读取onhand作可履约保证、不扣ACTIVE容器、不写缓存/预占/预计绑定，不产生目标或资金事实。基础预算严格 `Q−Σ(A−R)`；Q10/A6/E2且终结R4留下8，已执行2仍消耗来源。负量、缺量、串商品/仓/单位、E>A、R>A−E或总消耗>Q拒绝，不截0。ACTIVE link的最终E必须为空且R0；TERMINATED须有最终E及R=A−E。H1未接原业务实扣/归还证据，`actualExecutedQuantity=null`，有link仅“待核对”，不能按保存/审批/预占或目标状态说完成。
+
+普通来源UUID与领域全局operation UUID永久保存完整身份/原响应；新建同事务一次提交，重放先核当前范围/启用主档/基本单位，仍返回原响应，不依赖operation_requests七天TTL。H1仅来源基础，不改变原库存引擎或无来源目标路径。277关联/转换/头marker只是未来结构，真实目标创建、解除与签认尚未接；离线SQL stub不证明MySQL并发/回滚/锁等待。
+
+## 2026-10-05 H2：分配基本量与正常目标创建
+
+来源关联只支持同商品、同仓的一条普通目标：意图1→普通销售、2→准确原 PO/POI 采购退货、3→报废。A 取原权威 hydrate/fold 后的基本量，两位数量和当前整数策略保持；客户录入箱数不直接记 A。新关联再核 active 商品/仓、当前基本单位，PR 原采购明细单位须与来源相同，原价及真实剩余可退量仍由原同 conn PO X/POI 校验决定。原无源 PR/报废不新增这些主档规则。来源 X 串行化本域分配，当前 link 预算严格 Q−Σ(A−R)，超额拒绝，不截零。
+
+目标/link/头 marker/永久结果共原一次提交，销售沿原 commitFulfillment 与提交后通知；没有新增预占、容器扣量、预计绑定、发货、退款或会计事实。当前 E 仍未接 H3 原业务事实，保存/审批不能称实物完成。H3 行保护、H4 终结解除及 H5 签认尚待后续批次；本批不做这些行为。离线真实函数模拟和反向守卫不证明数据库并发或设备现场结果。
+
+
+## 2026-10-05 H3：目标保护不引入来源锁
+
+关联目标原写沿原头 X 后 link 主键 S，禁读/锁 source。特别是 reserve 客户 X 前不增加普通来源 SELECT，避免建立旧 RR 视图；锁序仍由原客户/库存维度/容器链负责。新 reserve/release/dispatch/ship 当前 sole 行必须准确历史 line/SKU/仓/基本单位且 quantity=A，同仓正常操作保留。partial cancel 结案合法缩行/删行保留，原 ACK 先于新实发当前行核对；不能将现行缺行当 E0。
+
+linked ship 固定事务前任务身份，SO→WT 锁后重核同一 SO/task/link；新实发才当前读 SOI/WTI 并重建原库存动作上下文，源 Q 非库存承诺，原 moveStock/应收/回执/提交不增次数。删除门只作非锁保守归还事实检查，不新增 WT 反向锁，也不声称 RR 普通读是当前快照。实际 E 全历史任务/流水核对与终结解除留 H4，未由本批另算或按单头猜成功。
+
+H3新 linked dispatch 在成功回放后、原余量选择前作完整 SOI 当前 S 读与固定身份/精确 A 校验，不能由 eligible 行集代替全明细。没有新增 source 读/锁或库存动作，非法额外行在新 WT/派发累加/commit 前拒绝；NULL marker 原路径不增加查询。
+
+## 2026-10-05 H4：全历史执行证明与永久释放
+
+执行 provider 在 caller conn 独立批读全历史 WT/WTI、库存日志、locked_by_task_id 容器（不限 ACTIVE/未删）与 packages，不新增 WT/WTI/容器/箱锁，也不调用原 pool 详情。日志候选是 typed warehouse_task/refId、typed sale_task/refId 或准确任务单号；不得裸数字跨域或先按正确 SKU/仓/move 过滤脏候选。候选再完整核 move8/type2/warehouse_task id/no/sale_task id/SKU/仓/正合法量，按 logID 去重且 sum=WT7 实发 picked；PR 同样沿 sale_task，准确 PRI→POI→PO。报废核 move13 与准确 disposal 台账。180天 TTL 缺证据待核对，本批未扩 retention。
+
+解除自有下一 RC 事务沿 source X→适用的准确 PO S→目标头 X→link X，普通目标原写仍不反锁 source。原永久 ACK 先于新 revision/预算/现场事实；仅新操作共享 provider 证明终结与全归还，再 absolute R=A−E 与 revision CAS，同连接冻结 version1 完整身份/执行/归还证据和响应后一次提交。link/source/永久结果任一步失败全回滚。TERMINATED 从冻结字段重算，不因当前日志过期释放第二次，不把当前主档停用/删除/单位改变当历史 E0；当前范围和目标身份仍需合法。
+
+原 return-out ready 在成功键回放之后，仅新 purchase_return/sale_return_out 允许2→6，6/7/8 等新键不能复活；终态原键仍返回最初 taskId/status。原普通 ready、实发、库存缓存同步与 picked 保留语义不变。此处只证明离线函数和事务模型，真实 MySQL RC/锁等待/并发、归还扫码和设备现场仍待隔离验收；277 未执行。
+
+H4 规格窄修的 SO4 终结还必须 E>0，不能用当前销售行或取消 WT8 的 picked 代替缺失实扣。legacy 管理验证在本源 X 后只批读整个转换的不可变来源身份/原响应及成功原操作，不对其他来源加 S/X，也不读其预算/当前 revision 作原1比较；未新增 WT/物理锁、库存扣减或 H5 写入。缺完整转换身份在永久解除占位前拒绝，失败保原额度。
+
+H4 质量 PR 窄修把准确采购退货任务的显式 NULL 销售指针、取消头4的 E0 门同时用于 live facts 和冻结 evidence 的 evaluate；冻结 PR3 实发证明不能改成 PR4 后继续当合法 ACK。不会按当前 PRI 推 E、改 picked 或增事实锁，也不改变原 PR3 全量执行/R0 和正常无 WT 强证明。缺字段/串域/已发取消组合保原额度并待核对，真实 MySQL 与现场仍另验。
+
+## 2026-10-05 H5：整单签认的原子意图边界
+
+旧头 X 和全部原行 X 固定快照，当前范围及原 creator 自批门先于永久 UUID 回放；只有显式 allow_self_approve=1可自签，role1不自动豁免。来源批插、准确ID回读、转换及全来源原响应、永久 operation completeConversion 同一个签认自有 conn 一次 commit；任一步失败全 rollback，原头/行/批准/updated_at一字不写。UUID 全域 action/actor/key/full canonical payload/resource严格匹配，不依赖7天通用回执TTL、不据当前头状态猜success。原转换 DTO 每源revision固定1，后续预算/关联变化不改原ACK。
+
+保存前有限父 S 仅准确 actor/warehouse/排序product，满足277真实 FK；不锁 WT/容器/箱、不新建库存账，不用当前 active/master unit 重解释历史基本量。只读 RR 本人核对使用普通同快照 SELECT；POST持旧头X的回放只核当前 head/conversion与不可变来源身份，不锁其他来源。原 dispose 成功 ACK 仍先行，新执行再检查已转换，拒绝进入 dimension/容器/流水。277未执行/未改；本域严格VM证明代码和事务边界，真实MySQL锁等待、隐式FK与并发仍待验收。
+
+### 原采购退货与待收供应商退款门（F1）
+
+原 PR confirm/cancel 在准确 PO S→PR X→PRI/POI 当前锁读后，以首个普通查询核本 PR 的 allocation；所有本域写同样持 PR X 到提交，所以该有限 RR 首读可读共同门内已提交状态。reserved 要求先收到或取消退款，不能先推进 PR/创建 WT/改账款；不加 allocation/peer RF 锁，不与 F1 的 AP→allocation 顺序反向。准确 PO 为 NULL 的原历史链跳过新域查询。
+
+RF 草稿不阻断原 PR；已收历史允许原合法未发 PR 后续动作，原事件提示财务核对，不回退资金/AP、不替代原库存取消/实物归还门。F1 零库存、容器、预占、入账写。永久原结果与当前授权/来源证据同连接核对，不能凭当前 PR/RF 显示状态合成成功。离线锁/事务夹具只是代码证据，未验证真实 MySQL 等锁、隐式 FK 或资金/库存并发。
+
+
+### 供应商退款 F2：回款原子边界与原 PR 后续
+
+真实 IN、原 AP paid 减少、received allocation、对账/往来/专用事件和永久固定回执在同一个收到 conn 一次 commit；任何资金、余额、AP、allocation、statement、ledger、事件、RF 或 operation 写失败整笔 rollback。自有入口下一事务 RC；借用入口不管理事务，由外层提交后才尝试凭证边界。原 receipt/entry/OUT、stock/container/reservation、处理来源 E/R 不写；不得负付款、旧 REFUND 事件或据最近 ledger 猜金额。
+
+F1 原 PR 门仍拒 reserved；received 后原合法未发 PR 可取消，原退款资金/AP 不撤销，保留财务核对提示。新回款准确 PO S→PR X→本 RF X 序列化原 PR/退款，不锁 peer RF，不 AP 后追锁另一付款账户。本人/内部原成功回放核真正唯一 IN 和固定原身份，不能用当前 RF3 或 UI 状态代替执行证明。离线 rollback/锁模型未证明真实 MySQL 事务、隐式 FK、等锁或实际回款。
+
+### 供应商退款 F3 的事实边界
+
+F3 来源证明与会计收尾不写库存、容器、预占、处理来源 E/R、原付款/receipt/OUT 或原 PR数量。收到后 accounting 批量只读证明用准确旧行价量、全分配、原 OUT/新 IN 和永久收到身份，不通过当前 PR草稿状态或 AP剩余额度重新解释已经发生的钱。新会计事务仅账套 X、原会计表与 RF核对 metadata；结账不增加 PR/RF/WT/物理锁，禁止反锁原执行链。
+
+测试为严格同连接 SQL/事务模型，未执行 MySQL、DDL、仓库业务或真实回款；不能把模型 rollback/锁顺序断言写成真实数据库并发验收。
+
+### F4 供应商退款补录的事务与幂等
+
+仅新 supplier_refund：申请 INSERT/重复键核对在预核公司/用户锁释放后，业务执行锁序 application X→company X→当前 actor/role/scope→PO S→PR X→RF X，批准期关闭/撤写权拒绝在 PO 前。内部准确 locator/完整 RF snapshot 前置核对后借用 F2 同conn，无内层 SET/BEGIN/COMMIT/ROLLBACK/release；收到、AP、资金/往来/专用事件、永久操作和申请 executed 一次提交，任何失败整体回滚。后提交 F3 单笔证明/保存与申请 metadata 不持同一公司/申请反向锁。
+
+完整 UUID/key/action/actor/body64hash/source proof 是永久身份，申请16位指纹为附加项。显式补录原因同原申请一致，普通同原键省略 controls 只能回查原申请，不能绕过 pending 去收到；unknown 本人 GET 只查不 POST。所有本申请 FAT 必须唯一，错误类型/其他 RF 不能由先滤 biz6 隐藏；有效 override与backfillID成对绑定原批准申请。已执行原ACK保持最初 DTO，后续闭期/零分/保存失败不重收资金。库存/容器/预占/处理 E/R 无任何新写，真实数据库锁与事务仍待隔离验证。
+
+F4 共享来源与已执行回放均以全部申请资金集合核唯一，批读不逐申请查，不新增资金/物理锁或 source 写；错误类型或另一 RF 的额外资金保持待核对，禁止靠零分投影或已执行状态放过。专项只读/回放反例继续断言原资金、AP、凭证及期间不被误改。
+
+F4 后提交凭证的种类读取与状态保存失败隔离在业务 commit/release 之后，只呈现 pending；不重收、重写现金/AP、永久 ACK 或执行痕迹，不改变库存或业务事务锁序。自动重试单笔失败不停止整轮，后续旧核销不生成新资金事实。此边界仅源码/有限离线事务模型证明，实际 MySQL 锁/FK/期间仍未验证。
+
+### F5/F6 退款UI不改变库存事实
+
+RF确认仅冻结退款本体/精确付款分配，不出入库；实际receive现金/AP与实物采购退货分别沿原后端事务。前端POST必须先持久完整canonical请求并读回，用原UUID/key/method/path/action/date和准确来源，unknown不得重新发送、换key、改日期或从当前UI猜原body。收到成功最小ACK与当前凭证proof分开，前者先持久confirmed，刷新失败/owner活动变化/清理失败保原confirmed阻断；auth-only本人GET不加载库存、来源或价款。恢复仅说明原结果，不证明真实MySQL事务/资金/会计/实物验收。
+
+### 2026-09-26 容器拆分纳入资源级幂等（任务 4 续）
+
+容器拆分（`POST /api/inventory/containers/:id/split`）是真实库存写——扣减源容器余量、新建塑料盒、写库存流水——但一直是同域里唯一**没有稳定请求键、也没有幂等回执**的写入口（同域的移库/出库早已带上）。PDA 在弱网下连点或自动重试，同一个拆分请求会真的执行两次：源容器被扣两次、凭空多出一个盒子，而现场只看到「拆分成功」。
+
+现按第 11 条的既有形态接入：前端复用 `frontend/src/lib/requestKey.ts` 的稳定键，后端 action 为 **`inventory.container.split.<源容器 id>`**、回执 `resource_type='inventory_container'` / `resource_id=源容器 id`，同键重放原样返回**同一份回执**（同一新盒条码与 ID），不再扣源容器、不再建盒、不再写流水；换新键照常执行（幂等是「同键去重」，不是「拆过一次就锁死」）；**电脑旧客户端不带键时 `enabled:false` 放行；PDA 必须稳定键并有有效绑定仓库**。回归 `tests/container-split-idempotency.smoke.test.js`（§A 首拆 / §B 同键重放 / §C 换键 / §D 无键 / §E 落库形态 / §F 范围撤销后的重放）。
+
+注意该回归里「拆分前后库存总量不变」只守**守恒不变量**，不能当幂等证据：旧行为下它也照样通过（重复拆分只是把同一批货多切了一刀，总量仍守恒）；真正证伪旧行为的是源容器余量、子盒个数、流水条数与回执一致性那四条。
+
+回放**先复核当前仓库范围**（2026-10-07 整合后的完整顺序）：`inventory.split.js` 先普通读探维度并核用户范围 → 锁商品/仓库维度 → `FOR UPDATE` 当前读源容器 → 核维度仍一致、当前用户范围与设备仓 → `beginResourceOperationRequest`。PDA 缺稳定键或非空正整数设备仓在事务前拒绝。先维度、后容器的锁序保持；等锁期间容器换仓不能继续沿用旧 RR 快照。命中成功回放后，`assertSplitReceipt` 用 `inventory_logs FOR SHARE` 当前读核原来源/目标、回执仓与当前用户范围/设备仓，再提交并返回原回执；不再次拆分或打印。本人独立回执 GET 使用普通读核原流水与回执仓，不继承写事务锁，也不依赖后来调拨的容器余量/状态。回执带新盒条码、容器 ID 与仓库，原键只能免去重复副作用，不能免去当前授权。回归 §F：范围内用户首拆 → 范围改为其它仓 → 同键回放 403 `WAREHOUSE_SCOPE_DENIED`，不含原新盒条码且库存/流水不变；离线 `tests/container-split-recovery.test.js` 另核 NULL 设备仓、锁后当前读与原回执恢复。
+
+塑料盒放货/还原同样保留 PDA 身份：controller 透传 `isPda`，PDA 空/非法设备仓先拒绝，不能作为 PC 无设备上下文放行。`plastic-boxes.service.js` 在回放前先核目标盒范围；幂等锁等待后仅回放分支增加 `FOR SHARE` 当前读再核范围/设备仓。还原新请求复用维度锁之后已有的盒 `FOR UPDATE`，在任何库存写之前重新核范围/设备仓与已锁维度一致；变化即拒绝重扫，不追锁另一个维度。PC 原无设备上下文、正确 PDA、已完成原键回放均保留。离线反例与真实 HTTP/MySQL 验收边界见 `docs/security-scope-remediation-2026-10-06.md`。
+
+塑料盒本人独立回执 GET 同样覆盖当前用户范围与 PDA 有效仓。精确/base action 在查询前核 PDA 票据，宽前缀实际命中 `plastic_box.fill/repack` 后补核；查询仍是本人 auth-only，不要求库存执行权限。`plastic-boxes.receipt.js` 只读核实际 action/resource、完整来源/目标 ID 与条码、商品及原双边 `container_split` 流水，还原目标另核新建来源、初始量与回执量；原操作仓由完整原流水确定，不能仅相信 response warehouse。当前用户范围与设备仓按原操作仓授权；之后容器调拨、清空或软删不否定原结果。不加库存锁、不写业务、不补打印；缺原身份或流水返回 409，保留原请求待人工核对。RF/disposal 等其它本人回执契约保持。
+
+来源容器条码的回执身份按**来源 ID + 库中完整条码 + 原拆分流水**核对：PC 可合法拆分既有非数字条码，不能在首次成功后只因来源不匹配新造码格式而拒绝原键回放/本人查询。来源码必须非空且不超过 schema 64 字符；新目标 B 码格式、塑料盒 kind、资源 action、来源/目标分离、商品/原仓及两侧流水仍校验。此兼容只纠正显示码格式的过严假设，不免除身份、用户范围、设备仓或锁后当前读。
+
+### 2026-09-27 在途异常了结后的撤回收货（任务 1 第三条路径）
+
+`forceCloseInTransit`（`transfer.service.js`）把在途容器置 VOID 并清空 `transfer_order_id`，**不加库存、也不写 `inventory_logs`**——scanOut 时已从源仓扣减，货物按实际运输损耗核销。而撤回收货的候选集只查 ACTIVE/待上架/EMPTY 的容器，于是该容器同时脱离候选状态、摘掉在途标记，原有的在途 / 已不在任务仓 / 数量不等 / 任务锁四道守卫全部落空：撤回会把已核销的货当成「从未收货」作废并反冲采购应付，而源仓已扣、调拨单不会回退，账面既没有库存、也没有应付。
+
+守卫改为按**该收货单名下全部未删除容器**（不只是撤回候选集）是否存在 `ref_type='transfer'` 流水判定，即上面的 ③ 号守卫（`inbound-tasks.void.js`）。判据取「流水」而不是「状态是不是 VOID」：普通作废（出库耗尽、人工核销）没有调拨流水，不会被误伤。该查询用 `FOR SHARE` 当前读，避免漏掉本事务快照建立后提交的新流水；候选集之外的容器本事务只共享锁其流水行、不再请求其容器行锁，与写方只构成单向等待，不成环。回归 `tests/inbound-void-transferred-container.smoke.test.js` §E（异常了结后撤回 409、应付/任务/流水均无副作用）/ §F（VOID 但无调拨流水 → 照常放行）。
+
+同路径另修一处**阻塞缺陷**：`forceCloseInTransit` 的容器查询在 `SELECT` 列表里带了 `inventory_containers` 上并不存在的 `product_name` 列，任何调用都 500 `DB_COLUMN_MISMATCH`（scanOut/scanIn 用 `SELECT *`，取到 `undefined` 后靠 `|| ''` 兜成空串，所以一直没暴露）。该列在本函数内并未使用，已从 SELECT 移除。

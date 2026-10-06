@@ -3,6 +3,7 @@ const AppError = require('../../utils/AppError')
 const { generateMasterCode } = require('../../utils/codeGenerator')
 const { getCustomerCreditUsed } = require('../../utils/creditExposure')
 const { normalizePagination } = require('../../utils/pagination')
+const { normalizePartyProfile } = require('../../utils/partyProfile')
 const {
   SETTLEMENT_TYPE_NAME,
   normalizeSettlementType,
@@ -70,24 +71,26 @@ async function findById(id) {
   return fmt(rows[0])
 }
 async function create({ name,contact,phone,email,address,remark,settlementType,paymentTermsDays,creditLimit }) {
-  const normalizedName = await ensureCustomerNameUnique(name)
+  const profile = normalizePartyProfile({ name, contact, phone, address, remark }, '客户')
+  const normalizedName = await ensureCustomerNameUnique(profile.name)
   const code = await generateMasterCode(pool, 'CUS', 'sale_customers')
   // 账期只有月结才有意义，normalizeTermsDays 会把其余结算方式强制归零
   const settle = normalizeSettlementType(settlementType)
   const terms = normalizeTermsDays(settle, paymentTermsDays)
   const limit = creditLimit === null || creditLimit === undefined || creditLimit === '' ? null : Math.max(0, Number(creditLimit))
-  const [r] = await pool.query('INSERT INTO sale_customers (code,name,contact,phone,email,address,remark,price_level,settlement_type,payment_terms_days,credit_limit) VALUES (?,?,?,?,?,?,?,?,?,?,?)',[code,normalizedName,contact||null,phone||null,email||null,address||null,remark||null,'A',settle,terms,limit])
+  const [r] = await pool.query('INSERT INTO sale_customers (code,name,contact,phone,email,address,remark,price_level,settlement_type,payment_terms_days,credit_limit) VALUES (?,?,?,?,?,?,?,?,?,?,?)',[code,normalizedName,profile.contact||null,profile.phone||null,email||null,profile.address||null,profile.remark||null,'A',settle,terms,limit])
   return { id:r.insertId, code }
 }
 async function update(id,{name,contact,phone,email,address,remark,isActive,settlementType,paymentTermsDays,creditLimit}, operator) {
+  const profile = normalizePartyProfile({ name, contact, phone, address, remark }, '客户')
   const before = await findById(id)
-  const normalizedName = await ensureCustomerNameUnique(name, id)
+  const normalizedName = await ensureCustomerNameUnique(profile.name, id)
   const settle = normalizeSettlementType(settlementType)
   const terms = normalizeTermsDays(settle, paymentTermsDays)
   // creditLimit 未传时保持原值；传 null/'' 表示关闭信控；数字表示启用（0 合法=现款现货）
   const newLimit = creditLimit === undefined ? before.creditLimit
     : (creditLimit === null || creditLimit === '' ? null : Math.max(0, Number(creditLimit)))
-  await pool.query('UPDATE sale_customers SET name=?,contact=?,phone=?,email=?,address=?,remark=?,is_active=?,settlement_type=?,payment_terms_days=?,credit_limit=? WHERE id=? AND deleted_at IS NULL',[normalizedName,contact||null,phone||null,email||null,address||null,remark||null,isActive?1:0,settle,terms,newLimit,id])
+  await pool.query('UPDATE sale_customers SET name=?,contact=?,phone=?,email=?,address=?,remark=?,is_active=?,settlement_type=?,payment_terms_days=?,credit_limit=? WHERE id=? AND deleted_at IS NULL',[normalizedName,profile.contact||null,profile.phone||null,email||null,profile.address||null,profile.remark||null,isActive?1:0,settle,terms,newLimit,id])
   // 授信额度变化留痕（审计）
   const changed = (before.creditLimit == null) !== (newLimit == null)
     || (before.creditLimit != null && newLimit != null && Number(before.creditLimit) !== Number(newLimit))

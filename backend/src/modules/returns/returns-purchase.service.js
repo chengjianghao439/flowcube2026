@@ -10,6 +10,8 @@ const { genNo, adjustPaymentRecordForReturn, assertReturnPaymentHeadroom } = req
 const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
 const { foldEntryItems } = require('../../utils/unitConversion')  // 多单位折算（文档03 Phase4a，退货按箱）
 const { normalizePagination } = require('../../utils/pagination')
+const { assertNoPendingRefund } = require('../refunds/supplier-refunds.pr-gate')
+const { peekPurchaseReturn, lockPurchaseReturn } = require('./returns.purchase-lock')
 
 // 状态名唯一口径 = documentStatusRules.purchaseReturn / 迁移 146 的列注释 / 前端筛选项（都是「已执行」）。
 // 旧名「已退货」「已退货入库」是更早的叫法，曾导致同一页面筛选写「已执行」、表格写「已退货」（2026-09-18 审计 [30]）。
@@ -80,13 +82,13 @@ async function loadPurchaseSourceOrderByNo(orderNo, scopeWarehouseIds = null) {
   }
 }
 
-async function validatePurchaseReturnItems(conn, purchaseOrderId, items) {
+async function validatePurchaseReturnItems(conn, purchaseOrderId, items, expectedUnit = null) {
   if (!purchaseOrderId) return
   // 锁住该采购单下的明细行：不加锁时，并发创建多张退货单会各自读到同一份"还有余量"的
   // 过期快照，都校验通过，合计超出实际已收货量退货（金额/库存双重超退）。
   await conn.query('SELECT id FROM purchase_order_items WHERE order_id = ? FOR UPDATE', [purchaseOrderId])
   const [rows] = await conn.query(
-    `SELECT poi.id, poi.product_id, poi.quantity, poi.unit_price,
+    `SELECT poi.id, poi.product_id, poi.quantity, poi.unit_price${expectedUnit !== null ? ", poi.unit" : ""},
             COALESCE((
               SELECT SUM(iti.received_qty)
               FROM inbound_task_items iti
@@ -118,6 +120,7 @@ async function validatePurchaseReturnItems(conn, purchaseOrderId, items) {
     if (Number(source.product_id) !== Number(item.productId)) {
       throw new AppError(`退货商品与原采购明细不一致`, 400)
     }
+    if (expectedUnit !== null && source.unit !== expectedUnit) throw new AppError('原采购明细基本单位与处理来源不一致', 409, 'DISPOSAL_HANDLING_UNIT_CHANGED')
     // 单价以原采购明细为准，不信任客户端传入值：前端"添加商品"手动追加行时默认填的是
     // 商品当前成本价，可能与下单时的采购单价不同（成本价后续会被调整），若不在此处强制
     // 覆盖，冲减应付时算出的金额会和 recomputePurchasePayable 用原始 unit_price 重算出的
@@ -172,43 +175,50 @@ async function findByIdPR(id, scopeWarehouseIds = null) {
   return ret
 }
 
-async function createPR({ supplierId, supplierName, warehouseId, warehouseName, purchaseOrderId = null, purchaseOrderNo, remark, items, operator, requestKey, scopeWarehouseIds = null }) {
+async function createPR({ supplierId, supplierName, warehouseId, warehouseName, purchaseOrderId = null, purchaseOrderNo, remark, items, operator, requestKey, scopeWarehouseIds = null, disposalSource, disposalSourceAuthorized = false }) {
   assertInScope(scopeWarehouseIds, warehouseId, '采购退货单')
   const conn=await pool.getConnection()
   try {
+    await conn.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED')
     await conn.beginTransaction()
+    const creationPayload = { supplierId, supplierName, warehouseId, warehouseName, purchaseOrderId, purchaseOrderNo, remark, items,
+      ...(disposalSource !== undefined ? { disposalSource } : {}) }
+    const handling = disposalSource !== undefined ? require('../disposal/disposal.handling.targets') : null
+    const handlingContext = handling ? await handling.prepare(conn, { reference: disposalSource, type: 'purchase_return', authorized: disposalSourceAuthorized, payload: creationPayload, requestKey, operator, scopeWarehouseIds }) : null
+    if (handlingContext?.response) { await conn.rollback(); return handlingContext.response }
     const requestState = await beginCreationOperationRequest(conn, {
       requestKey,
       action: 'purchaseReturn.create',
       userId: operator?.userId ?? null,
-      payload: { supplierId, supplierName, warehouseId, warehouseName, purchaseOrderId, purchaseOrderNo, remark, items },
+      payload: creationPayload,
     })
     if (requestState.replay) {
+      if (handling) throw new AppError('原通用结果缺少永久来源关联，请人工核对', 409, 'DISPOSAL_HANDLING_RECEIPT_INVALID')
       await conn.rollback()
       return requestState.responseData
     }
     let resolvedPurchaseOrderId = purchaseOrderId || null
     let sourceOrder = null
     if (!resolvedPurchaseOrderId && purchaseOrderNo) {
-      sourceOrder = await loadPurchaseSourceOrderByNo(purchaseOrderNo)
-      resolvedPurchaseOrderId = sourceOrder.id
+      const [[row]] = await conn.query('SELECT id, order_no, supplier_id, warehouse_id FROM purchase_orders WHERE order_no=? AND deleted_at IS NULL FOR UPDATE', [purchaseOrderNo])
+      if (!row) throw new AppError('关联采购单不存在', 404)
+      sourceOrder = row
+      resolvedPurchaseOrderId = Number(row.id)
     } else if (resolvedPurchaseOrderId) {
       const [rows] = await conn.query(
-        'SELECT id, supplier_id, warehouse_id FROM purchase_orders WHERE id=? AND deleted_at IS NULL LIMIT 1',
+        'SELECT id, order_no, supplier_id, warehouse_id FROM purchase_orders WHERE id=? AND deleted_at IS NULL FOR UPDATE',
         [resolvedPurchaseOrderId],
       )
       if (!rows[0]) throw new AppError('关联采购单不存在', 404)
-      sourceOrder = {
-        id: Number(rows[0].id),
-        supplierId: Number(rows[0].supplier_id),
-        warehouseId: Number(rows[0].warehouse_id),
-      }
+      sourceOrder = rows[0]
     }
     if (sourceOrder) {
-      if (Number(sourceOrder.supplierId) !== Number(supplierId)) {
+      assertInScope(scopeWarehouseIds, sourceOrder.warehouse_id, '原采购单')
+      if (purchaseOrderNo && purchaseOrderNo !== sourceOrder.order_no) throw new AppError('原采购单号与来源不一致', 409, 'PURCHASE_RETURN_SOURCE_INVALID')
+      if (Number(sourceOrder.supplier_id) !== Number(supplierId)) {
         throw new AppError('采购退货供应商必须与原采购单一致', 400)
       }
-      if (Number(sourceOrder.warehouseId) !== Number(warehouseId)) {
+      if (Number(sourceOrder.warehouse_id) !== Number(warehouseId)) {
         throw new AppError('采购退货仓库必须与原采购单一致', 400)
       }
     }
@@ -216,10 +226,13 @@ async function createPR({ supplierId, supplierName, warehouseId, warehouseName, 
     // 再校验/落库。有源退货前端锁死数量/单价（entryUnit=基本单位→rate 1，等价旧行为）；
     // validatePurchaseReturnItems 用 folded（quantity 已是基本单位）比对剩余可退量、并强制覆盖 unitPrice 为源单价。
     const folded = await foldEntryItems(conn, items)
-    await validatePurchaseReturnItems(conn, resolvedPurchaseOrderId, folded)
+    if (!resolvedPurchaseOrderId && folded.some(item => item.sourceItemId != null)) throw new AppError('来源明细缺少准确原采购单，请先核对', 409, 'PURCHASE_RETURN_SOURCE_INVALID')
+    if (handling && (!resolvedPurchaseOrderId || folded.length !== 1 || !folded[0].sourceItemId)) throw new AppError('关联退货须绑定准确原采购单及明细', 409, 'PURCHASE_RETURN_SOURCE_INVALID')
+    await validatePurchaseReturnItems(conn, resolvedPurchaseOrderId, folded, handlingContext?.source.unit ?? null)
+    if (handling) await handling.validateItems(conn, handlingContext, folded, warehouseId)
     const returnNo=await genNo(conn,'PR','purchase_returns','return_no')
     const total=folded.reduce((s,i)=>s+i.quantity*i.unitPrice,0)
-    const [r]=await conn.query(`INSERT INTO purchase_returns (return_no,supplier_id,supplier_name,warehouse_id,warehouse_name,purchase_order_id,purchase_order_no,total_amount,remark,operator_id,operator_name) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,[returnNo,supplierId,supplierName,warehouseId,warehouseName,resolvedPurchaseOrderId,purchaseOrderNo||null,total,remark||null,operator.userId,operator.realName])
+    const [r]=await conn.query(`INSERT INTO purchase_returns (return_no,supplier_id,supplier_name,warehouse_id,warehouse_name,purchase_order_id,purchase_order_no,total_amount,remark,operator_id,operator_name) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,[returnNo,supplierId,supplierName,warehouseId,warehouseName,resolvedPurchaseOrderId,sourceOrder?.order_no||purchaseOrderNo||null,total,remark||null,operator.userId,operator.realName])
     for(const item of folded) await conn.query(`INSERT INTO purchase_return_items (return_id,purchase_item_id,product_id,product_code,product_name,article_number,spec,color,unit,entry_unit,quantity,entry_qty,conversion_rate,unit_price,amount) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,[r.insertId,item.sourceItemId||null,item.productId,item.productCode,item.productName,item.articleNumber||null,item.spec||null,item.color||null,item.unit,item.entryUnit,item.quantity,item.entryQty,item.conversionRate,item.unitPrice,item.quantity*item.unitPrice])
     await recordReturnEvent(conn, {
       returnType: 'purchase',
@@ -239,6 +252,7 @@ async function createPR({ supplierId, supplierName, warehouseId, warehouseName, 
       },
     })
     const result = { id: r.insertId, returnNo }
+    if (handling) await handling.complete(conn, handlingContext, result)
     await completeOperationRequest(conn, requestState, {
       data: result,
       message: '创建成功',
@@ -252,20 +266,20 @@ async function createPR({ supplierId, supplierName, warehouseId, warehouseName, 
 async function confirmPR(id, operator = null, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
+    const identity = await peekPurchaseReturn(conn, id)
+    assertInScope(scopeWarehouseIds, identity.warehouse_id, '采购退货单')
     await conn.beginTransaction()
-    const retRow = await lockStatusRow(conn, {
-      table: 'purchase_returns',
-      id,
-      columns: 'id, return_no, purchase_order_id, purchase_order_no, total_amount, supplier_id, supplier_name, warehouse_id, warehouse_name, status',
-      entityName: '采购退货单',
-    })
+    const { row: retRow, items: itemRows } = await lockPurchaseReturn(conn, identity, scopeWarehouseIds)
     assertInScope(scopeWarehouseIds, retRow.warehouse_id, '采购退货单')
+    // PO S / PR X are held; this must be the first non-locking read in this transaction.
+    const refundState = retRow.purchase_order_id ? await assertNoPendingRefund(conn, Number(retRow.id)) : { received: false }
     const rule = assertStatusAction('purchaseReturn', 'confirm', retRow.status)
     // 负余额前置拦截：已付供应商金额 > 退货冲减后应付总额时，不让退货单走到出库末端才抛 409
     // 回滚、卡在中间态。采购退货全额出库，预判额与末端冲减额一致；末端 FOR UPDATE 仍兜底。
     if (retRow.purchase_order_id) {
       await assertReturnPaymentHeadroom(conn, {
         recordType: 1,
+        purchaseReturnId: Number(retRow.id),
         orderId: Number(retRow.purchase_order_id),
         orderNo: retRow.purchase_order_no,
         amount: Number(retRow.total_amount || 0),
@@ -280,9 +294,6 @@ async function confirmPR(id, operator = null, scopeWarehouseIds = null) {
     })
 
     // 确认后自动创建仓库任务（拣货→出库）
-    const [itemRows] = await conn.query(
-      'SELECT * FROM purchase_return_items WHERE return_id=? ORDER BY id', [id],
-    )
     const taskSvc = require('../warehouse-tasks/warehouse-tasks.service')
     const { taskId, taskNo } = await taskSvc.createForPurchaseReturn({
       returnId: Number(retRow.id),
@@ -310,11 +321,11 @@ async function confirmPR(id, operator = null, scopeWarehouseIds = null) {
       returnNo: retRow.return_no,
       eventType: RETURN_EVENT.CONFIRMED,
       title: '采购退货单已确认',
-      description: `已生成仓库拣货任务 ${taskNo}，请提交到 PDA 执行`,
+      description: `已生成仓库拣货任务 ${taskNo}，请提交到 PDA 执行${refundState.received ? '；已收供应商退款，请财务核对后续退货账款' : ''}`,
       operatorId: operator?.userId ?? null,
       operatorName: operator?.realName ?? null,
       requestId: getRequestId(),
-      payload: { taskId, taskNo },
+      payload: { taskId, taskNo, ...(refundState.received ? { supplierRefundReceived: true, financialReview: '已收供应商退款，请财务核对后续退货账款' } : {}) },
     })
     await conn.commit()
   } catch (e) {
@@ -328,52 +339,60 @@ async function confirmPR(id, operator = null, scopeWarehouseIds = null) {
 async function cancelPR(id, operator = null, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
+    const identity = await peekPurchaseReturn(conn, id)
+    assertInScope(scopeWarehouseIds, identity.warehouse_id, '采购退货单')
     await conn.beginTransaction()
-    const retRow = await lockStatusRow(conn, {
-      table: 'purchase_returns',
-      id,
-      columns: 'id, return_no, status, warehouse_id',
-      entityName: '采购退货单',
-    })
+    const { row: retRow } = await lockPurchaseReturn(conn, identity, scopeWarehouseIds)
     assertInScope(scopeWarehouseIds, retRow.warehouse_id, '采购退货单')
+    // PO S / PR X are held; this must be the first non-locking read in this transaction.
+    const refundState = retRow.purchase_order_id ? await assertNoPendingRefund(conn, Number(retRow.id)) : { received: false }
     const rule = assertStatusAction('purchaseReturn', 'cancel', retRow.status)
-    await compareAndSetStatus(conn, {
-      table: 'purchase_returns',
-      id,
-      fromStatus: rule.from,
-      toStatus: rule.to,
-      entityName: '采购退货单',
-    })
-
-    // 已确认(2)会自动创建出库仓库任务；取消时必须同步终止该任务，否则仓库端会
-    // 继续把一个"已取消"的退货单执行完，造成账实不符（P0-2）。任务已出库(SHIPPED)
-    // 的情况不会出现在这里——那条路径会先把本单据的状态推进到 3(已执行)，
-    // 与本函数只允许的 from:[1,2] 互斥（两边都对 purchase_returns 行加锁，天然互斥）。
-    const [[linkedTask]] = await conn.query(
-      `SELECT id, status FROM warehouse_tasks
+    // 核全部当前任务，不能仅信最后一张；已发异常拒绝，实际归还未完成时PR仍占用预算。
+    const [linkedTasks] = await conn.query(
+      `SELECT id, task_no, task_type, return_id, sale_order_id, warehouse_id, status, shipped_at, cancel_requested_at, deleted_at FROM warehouse_tasks
        WHERE return_id = ? AND task_type = 'purchase_return'
-       ORDER BY id DESC LIMIT 1`,
+       ORDER BY id FOR UPDATE`,
       [id],
     )
-    if (linkedTask && WT_STATUS_ACTIVE.includes(Number(linkedTask.status))) {
-      const taskSvc = require('../warehouse-tasks/warehouse-tasks.service')
-      await taskSvc.cancel(Number(linkedTask.id), { conn })
+    for (const task of linkedTasks) {
+      assertInScope(scopeWarehouseIds, task.warehouse_id, '仓库任务')
+      if (Number(task.warehouse_id) !== Number(retRow.warehouse_id) || Number(task.return_id) !== Number(retRow.id)
+        || task.sale_order_id != null || Number(task.status) === 7 || task.shipped_at
+        || ![...WT_STATUS_ACTIVE, 8].includes(Number(task.status)) || task.deleted_at && Number(task.status) !== 8) {
+        throw new AppError('关联出库任务存在已发或来源异常，请先核对', 409, 'PURCHASE_RETURN_TASK_INVALID')
+      }
     }
+    const taskSvc = require('../warehouse-tasks/warehouse-tasks.service')
+    for (const task of linkedTasks) {
+      if (WT_STATUS_ACTIVE.includes(Number(task.status)) && !task.cancel_requested_at) {
+        await taskSvc.cancel(Number(task.id), { conn, operator, scopeWarehouseIds, purchaseReturnId: Number(retRow.id) })
+      }
+    }
+    const [currentTasks] = await conn.query("SELECT id, task_no, status, cancel_requested_at FROM warehouse_tasks WHERE return_id=? AND task_type='purchase_return' ORDER BY id FOR UPDATE", [id])
+    const pendingTasks = currentTasks.filter(task => Number(task.status) !== 8 || task.cancel_requested_at)
+    const pendingCancel = pendingTasks.length > 0
+    if (!pendingCancel) await compareAndSetStatus(conn, {
+      table: 'purchase_returns', id, fromStatus: rule.from, toStatus: rule.to, entityName: '采购退货单',
+    })
 
     await recordReturnEvent(conn, {
       returnType: 'purchase',
       returnId: Number(retRow.id),
       returnNo: retRow.return_no,
-      eventType: RETURN_EVENT.CANCELLED,
-      title: '采购退货单已取消',
-      description: linkedTask && WT_STATUS_ACTIVE.includes(Number(linkedTask.status))
+      eventType: pendingCancel ? RETURN_EVENT.CANCEL_REQUESTED : RETURN_EVENT.CANCELLED,
+      title: pendingCancel ? '采购退货取消待归还' : '采购退货单已取消',
+      description: (pendingCancel ? '原退货单保持已确认与可退预算占用，待仓库完成实物归还后再次取消'
+        : linkedTasks.length
         ? '采购退货单已取消，未执行库存扣减，关联的出库仓库任务已同步终止'
-        : '采购退货单已取消，未执行库存扣减',
+        : '采购退货单已取消，未执行库存扣减')
+        + (refundState.received ? '；已收供应商退款，请财务核对后续退货账款' : ''),
       operatorId: operator?.userId ?? null,
       operatorName: operator?.realName ?? null,
       requestId: getRequestId(),
+      ...(refundState.received ? { payload: { supplierRefundReceived: true, financialReview: '已收供应商退款，请财务核对后续退货账款' } } : {}),
     })
     await conn.commit()
+    return { pendingCancel, tasks: pendingTasks.map(task => ({ id: Number(task.id), taskNo: task.task_no })) }
   } catch (e) {
     await conn.rollback()
     throw e
@@ -386,8 +405,8 @@ async function cancelPR(id, operator = null, scopeWarehouseIds = null) {
  * 采购退货出库完成回调（由 WT ship 事务内调用）
  * 容器扣减已在 moveStock 中完成，此处仅做退货单状态同步和账款冲减
  */
-async function syncPurchaseReturnShipped(conn, returnId, { taskId, taskNo, operator }) {
-  const retRow = await lockStatusRow(conn, {
+async function syncPurchaseReturnShipped(conn, returnId, { taskId, taskNo, operator, lockedPurchaseReturn }) {
+  const retRow = lockedPurchaseReturn?.row || await lockStatusRow(conn, {
     table: 'purchase_returns',
     id: returnId,
     columns: 'id, return_no, purchase_order_id, purchase_order_no, supplier_id, warehouse_id, status',

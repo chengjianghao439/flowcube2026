@@ -416,9 +416,9 @@ export function SettleReceiptDialog({ open, onClose, type, settlementTypes, rece
         </div>
       </AppDialog>
 
-      {type === 2
+      {finderOpen && can(type === 2 ? PERMISSIONS.CUSTOMER_VIEW : PERMISSIONS.SUPPLIER_VIEW) && (type === 2
         ? <CustomerFinder open={finderOpen} onClose={() => setFinderOpen(false)} onConfirm={party => { setPartyId(party.id); setPartyName(party.name); setAlloc({}); setFinderOpen(false) }} />
-        : <SupplierFinder open={finderOpen} onClose={() => setFinderOpen(false)} onConfirm={party => { setPartyId(party.id); setPartyName(party.name); setAlloc({}); setFinderOpen(false) }} />}
+        : <SupplierFinder open={finderOpen} onClose={() => setFinderOpen(false)} onConfirm={party => { setPartyId(party.id); setPartyName(party.name); setAlloc({}); setFinderOpen(false) }} />)}
 
       <BackfillRequestDialog
         open={!!prompt}

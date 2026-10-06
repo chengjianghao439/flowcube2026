@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, expect, test, vi } from 'vitest'
 import CommercialSalePage from './CommercialSalePage'
@@ -9,14 +9,16 @@ import type { SaleOrder } from '@/types/sale'
 import type { CommercialGroup } from '@/types/sale-commercial'
 import { useAuthStore } from '@/store/authStore'
 import { PERMISSIONS } from '@/lib/permission-codes'
+import { useWorkspaceStore, HOME_TAB } from '@/store/workspaceStore'
 const mocks = vi.hoisted(() => ({ query: vi.fn(), execute: vi.fn(), get: vi.fn(), defaults: { baseURL: '/a' } }))
-vi.mock('@/api/client', () => ({ default: { defaults: mocks.defaults } }))
+vi.mock('@/api/client', () => ({ default: { defaults: mocks.defaults }, getApiClientBaseURL: () => mocks.defaults.baseURL, subscribeApiClientBaseURL: () => () => {} }))
 vi.mock('@/api/operation-requests', () => ({ getOperationRequestStatusApi: mocks.query }))
 vi.mock('@/api/sale-commercial', () => ({ executeCommercialSaleApi: mocks.execute, getCommercialSaleApi: mocks.get }))
 vi.mock('./CommercialFulfillmentSummary', () => ({ default: () => <p>真实供货分配</p> }))
 vi.mock('../form/components/SaleOrderOverview', () => ({ SaleOrderOverview: () => <p>原销售概览</p> }))
 vi.mock('../form/components/FulfillmentProgressCard', () => ({ FulfillmentProgressCard: () => <p>原任务归还入口</p> }))
 vi.mock('@/components/print/SaleOrderPrintTemplate', () => ({ PrintPreviewOverlay: () => <p>客户预览</p> }))
+function CurrentRoute() { const location = useLocation(); return <output data-route>{location.pathname + location.search}</output> }
 const owner = { baseURL: '/a', userId: 5, sessionGeneration: 10 }
 const group = {
   id: 8,
@@ -122,7 +124,7 @@ async function mount(run: (host: HTMLElement) => Promise<void>, input = order, o
     await act(async () =>
       root.render(
         <QueryClientProvider client={cache}>
-          <MemoryRouter>
+          <MemoryRouter><CurrentRoute />
             <CommercialSalePage initial={input} owner={owner} tabPath="/sale/80" onClose={onClose} />
           </MemoryRouter>
         </QueryClientProvider>
@@ -403,4 +405,18 @@ test('pending query retains the specific original session refusal instead of hid
     expect(mocks.execute).toHaveBeenCalledTimes(1)
     expect(sessionStorage.getItem('flowcube-kit-query-records-v1')).toBe(saved)
   }, actionOrder(1))
+})
+
+
+test.each([true, false])('commercial original return entry uses shared create permission and navigates without commercial writes: %s', async allowed => {
+  useAuthStore.setState({ user: { ...useAuthStore.getState().user!, permissions: allowed ? [PERMISSIONS.RETURN_ORDER_CREATE] : [] } })
+  useWorkspaceStore.setState({ tabs: [HOME_TAB], activeKey: HOME_TAB.key })
+  await mount(async host => {
+    const button = [...host.querySelectorAll('button')].find(b => b.textContent === '发起退货')
+    if (!allowed) { expect(button).toBeUndefined(); return }
+    expect(button).toBeTruthy(); await click('发起退货')
+    expect(useWorkspaceStore.getState().activeKey).toBe('/returns/sale/new?sourceId=80&sourceNo=SO80')
+    expect(host.querySelector('[data-route]')?.textContent).toBe('/returns/sale/new?sourceId=80&sourceNo=SO80')
+    expect(mocks.execute).not.toHaveBeenCalled()
+  })
 })

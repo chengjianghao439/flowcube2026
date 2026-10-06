@@ -1,0 +1,143 @@
+TAP version 13
+# Subtest: 待办不生成已取消的异常工作台卡片，不再查询巡检日志充当业务待办
+ok 1 - 待办不生成已取消的异常工作台卡片，不再查询巡检日志充当业务待办
+  ---
+  duration_ms: 1.277083
+  type: 'test'
+  ...
+# Subtest: 通知不查询或展示已取消的系统巡检提醒
+ok 2 - 通知不查询或展示已取消的系统巡检提醒
+  ---
+  duration_ms: 0.347875
+  type: 'test'
+  ...
+# Subtest: 调拨通知按任一端授权计数，空范围不泄漏，不限仓保留原计数
+    # Subtest: 源仓命中
+    not ok 1 - 源仓命中
+      ---
+      duration_ms: 0.595292
+      type: 'test'
+      location: '/Users/chengjianghao/.codex/worktrees/go-live-batch-one/flowcube/tests/workbench.test.js:50:13'
+      failureType: 'testCodeFailure'
+      error: '调拨表没有单仓 warehouse_id 列'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected:
+      actual: 'SELECT COUNT(*) AS pendingTransfer FROM transfer_orders WHERE status IN (1,2) AND deleted_at IS NULL AND warehouse_id IN (?)'
+      operator: 'doesNotMatch'
+      stack: |-
+        Object.<anonymous> (/Users/chengjianghao/.codex/worktrees/go-live-batch-one/flowcube/tests/workbench.test.js:55:16)
+        Object.apply (node:internal/test_runner/mock/mock:765:20)
+        buildNotifications (/Users/chengjianghao/.codex/worktrees/go-live-batch-one/flowcube/backend/src/modules/notifications/notifications.service.js:84:46)
+        async TestContext.<anonymous> (/Users/chengjianghao/.codex/worktrees/go-live-batch-one/flowcube/tests/workbench.test.js:73:24)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async TestContext.<anonymous> (/Users/chengjianghao/.codex/worktrees/go-live-batch-one/flowcube/tests/workbench.test.js:50:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: 目标仓命中
+    not ok 2 - 目标仓命中
+      ---
+      duration_ms: 0.103416
+      type: 'test'
+      location: '/Users/chengjianghao/.codex/worktrees/go-live-batch-one/flowcube/tests/workbench.test.js:50:13'
+      failureType: 'testCodeFailure'
+      error: '调拨表没有单仓 warehouse_id 列'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected:
+      actual: 'SELECT COUNT(*) AS pendingTransfer FROM transfer_orders WHERE status IN (1,2) AND deleted_at IS NULL AND warehouse_id IN (?)'
+      operator: 'doesNotMatch'
+      stack: |-
+        Object.<anonymous> (/Users/chengjianghao/.codex/worktrees/go-live-batch-one/flowcube/tests/workbench.test.js:55:16)
+        Object.apply (node:internal/test_runner/mock/mock:765:20)
+        buildNotifications (/Users/chengjianghao/.codex/worktrees/go-live-batch-one/flowcube/backend/src/modules/notifications/notifications.service.js:84:46)
+        async TestContext.<anonymous> (/Users/chengjianghao/.codex/worktrees/go-live-batch-one/flowcube/tests/workbench.test.js:73:24)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async TestContext.<anonymous> (/Users/chengjianghao/.codex/worktrees/go-live-batch-one/flowcube/tests/workbench.test.js:50:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: 两端命中只计一次
+    not ok 3 - 两端命中只计一次
+      ---
+      duration_ms: 0.092792
+      type: 'test'
+      location: '/Users/chengjianghao/.codex/worktrees/go-live-batch-one/flowcube/tests/workbench.test.js:50:13'
+      failureType: 'testCodeFailure'
+      error: '调拨表没有单仓 warehouse_id 列'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected:
+      actual: 'SELECT COUNT(*) AS pendingTransfer FROM transfer_orders WHERE status IN (1,2) AND deleted_at IS NULL AND warehouse_id IN (?)'
+      operator: 'doesNotMatch'
+      stack: |-
+        Object.<anonymous> (/Users/chengjianghao/.codex/worktrees/go-live-batch-one/flowcube/tests/workbench.test.js:55:16)
+        Object.apply (node:internal/test_runner/mock/mock:765:20)
+        buildNotifications (/Users/chengjianghao/.codex/worktrees/go-live-batch-one/flowcube/backend/src/modules/notifications/notifications.service.js:84:46)
+        async TestContext.<anonymous> (/Users/chengjianghao/.codex/worktrees/go-live-batch-one/flowcube/tests/workbench.test.js:73:24)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async TestContext.<anonymous> (/Users/chengjianghao/.codex/worktrees/go-live-batch-one/flowcube/tests/workbench.test.js:50:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: 范围外
+    not ok 4 - 范围外
+      ---
+      duration_ms: 0.094791
+      type: 'test'
+      location: '/Users/chengjianghao/.codex/worktrees/go-live-batch-one/flowcube/tests/workbench.test.js:50:13'
+      failureType: 'testCodeFailure'
+      error: '调拨表没有单仓 warehouse_id 列'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected:
+      actual: 'SELECT COUNT(*) AS pendingTransfer FROM transfer_orders WHERE status IN (1,2) AND deleted_at IS NULL AND warehouse_id IN (?)'
+      operator: 'doesNotMatch'
+      stack: |-
+        Object.<anonymous> (/Users/chengjianghao/.codex/worktrees/go-live-batch-one/flowcube/tests/workbench.test.js:55:16)
+        Object.apply (node:internal/test_runner/mock/mock:765:20)
+        buildNotifications (/Users/chengjianghao/.codex/worktrees/go-live-batch-one/flowcube/backend/src/modules/notifications/notifications.service.js:84:46)
+        async TestContext.<anonymous> (/Users/chengjianghao/.codex/worktrees/go-live-batch-one/flowcube/tests/workbench.test.js:73:24)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async TestContext.<anonymous> (/Users/chengjianghao/.codex/worktrees/go-live-batch-one/flowcube/tests/workbench.test.js:50:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: 空范围
+    ok 5 - 空范围
+      ---
+      duration_ms: 0.161125
+      type: 'test'
+      ...
+    # Subtest: 不限仓
+    ok 6 - 不限仓
+      ---
+      duration_ms: 0.237792
+      type: 'test'
+      ...
+    1..6
+not ok 3 - 调拨通知按任一端授权计数，空范围不泄漏，不限仓保留原计数
+  ---
+  duration_ms: 2.086334
+  type: 'test'
+  location: '/Users/chengjianghao/.codex/worktrees/go-live-batch-one/flowcube/tests/workbench.test.js:32:1'
+  failureType: 'subtestsFailed'
+  error: '4 subtests failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# Subtest: 待上架相关的容器查询用真实状态 4，不得再用不存在的状态 0
+ok 4 - 待上架相关的容器查询用真实状态 4，不得再用不存在的状态 0
+  ---
+  duration_ms: 0.737291
+  type: 'test'
+  ...
+1..4
+# tests 10
+# suites 0
+# pass 5
+# fail 5
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 73.927583

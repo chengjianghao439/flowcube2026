@@ -1,6 +1,6 @@
+import { useVisibleQuery } from '@/hooks/useVisibleQuery'
 import { useState } from 'react'
 import { money } from '@/lib/format'
-import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import {
   ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -146,12 +146,12 @@ export default function FinanceDashboardPage() {
   const [endDate, setEndDate] = useState(recent6m.endDate)
   const [applied, setApplied] = useState(recent6m)
 
-  const { data, isLoading, isError, error, refetch } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useVisibleQuery({
     queryKey: ['finance-dashboard', applied],
     queryFn: () => getFinanceDashboardApi(applied),
   })
   // 账龄是 as-of 今天、与区间无关；仅在有账款查看权限时拉取（看板路由只要求账户查看权限）
-  const { data: aging } = useQuery({
+  const { data: aging } = useVisibleQuery({
     queryKey: ['finance-dashboard', 'aging'],
     queryFn: () => getAgingApi(6),
     enabled: canViewAging,
@@ -231,8 +231,8 @@ export default function FinanceDashboardPage() {
           {/* 顶部 KPI */}
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <StatTile icon={Wallet} label="账户余额合计" value={money(data.summary.totalBalance)} hint={`${data.summary.accountCount} 个启用账户`} />
-            <StatTile icon={ArrowDownLeft} label="区间收入" value={money(data.summary.inAmount)} tone="success" hint="收款 + 余额调整入账" />
-            <StatTile icon={ArrowUpRight} label="区间支出" value={money(data.summary.outAmount)} tone="danger" hint="付款 + 费用报销" />
+            <StatTile icon={ArrowDownLeft} label="区间收入" value={money(data.summary.inAmount)} tone="success" hint="收款 + 供应商退款 + 余额调整入账" />
+            <StatTile icon={ArrowUpRight} label="区间支出" value={money(data.summary.outAmount)} tone="danger" hint="付款 + 费用报销 + 退货退款 + 余额调整出账" />
             <StatTile
               icon={ArrowUpDown}
               label="区间净现金流"

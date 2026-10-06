@@ -39,6 +39,22 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
+  go-live-owned:
+    name: 新处置与供应商退款（归属专属实例）
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - run: npm --prefix backend ci
+      - name: 准备本地 Docker context 与镜像
+        run: |
+          docker context create colima-flowcube --docker host=unix:///var/run/docker.sock
+          docker --context colima-flowcube pull mysql:8.0
+      - run: npm run smoke:go-live-owned
+
   browser-smoke-runtime:
     name: 页面验收脚本（本地夹具真浏览器）
     runs-on: ubuntu-latest
@@ -105,6 +121,9 @@ jobs:
       - name: 安全扫描修复离线契约
         run: npm run test:security-scan-remediation
 
+      - name: 上线验收独占实例入口守卫
+        run: npm run test:go-live-runner
+
       - name: 契约测试 — 界面文案口径（禁用实现词/半角标点/官网双份一致/金额格式化）
         run: npm run test:copy-conventions
 
@@ -130,6 +149,12 @@ jobs:
       - name: 上传单文件与字段限制回归
         run: npm run test:upload && npm run test:export
 
+      - name: 费用闭期付款与供应商退款补录整合回归
+        run: npm run test:expense-pay-backfill-integration
+
+      - name: 客户供应商资料、导入与容量迁移离线回归
+        run: npm run test:party-profile
+
       # 列表导出必须与页面同口径：解析各列表接口 findAll 的筛选签名，断言导出把它们全部透传。
       # 纯离线（stub findAll，不连库）——2026-09-27 修「对账单/收付款单导出丢弃筛选」时补齐；
       # 这类缺陷在页面、接口、原守卫全绿时完全不可见（原 stub 恰好只断言了 keyword）。
@@ -151,7 +176,7 @@ jobs:
         run: npm run release:check-downloads
 
       - name: 运维回归 — 备份恢复判定与数据库指标
-        run: node --test tests/ops-monitor-restore.test.js tests/deployment-resources.test.js tests/restore-trigger-normalize.test.js tests/migration-trigger-bodies.test.js
+        run: node --test tests/ops-alert-notifications.test.js tests/ops-monitor-restore.test.js tests/deployment-resources.test.js tests/restore-trigger-normalize.test.js tests/migration-trigger-bodies.test.js
 
       # 本地实例脚本：`start` 只能启动实例、迁移必须由显式 `migrate` 触发且目标固定。
       # 否则"只想借 3307 实例做隔离测试"会顺带把迁移写进开发库（同类边界失效已发生过两次，
@@ -173,6 +198,25 @@ jobs:
       - name: "PDA 契约回归 — pdaOnly 路由必须带 X-Client 头"
         run: node --test tests/pda-only-client-header.test.js
 
+      - name: 普通容器拆分与原回执恢复（离线 service、路由及设备边界，无需 DB）
+        run: npm run test:container-split-recovery
+
+      - name: 重复销售开单来源与首发回滚边界（离线 service、路由及控制器，无需 DB）
+        run: npm run test:sale-reorder-source
+
+      - name: 独立报废与本人原回执（离线 service、路由及 SQL/库存边界，无需 DB）
+        run: npm run test:disposal-transition
+
+      - name: 供应商退款来源、实际收到与会计投影（离线真实函数，无需 DB）
+        # Includes supplier-refunds-backfill/approvals.test.js; strict VM, no DB/network.
+        run: npm run test:supplier-refunds
+
+      - name: 处理来源、原子目标、执行事实、解除与旧整单签认（离线真实函数、路由及 schema 源码，无需 DB）
+        run: npm run test:disposal-handling
+
+      - name: 采购退货原采购门与账款当前读（离线真实函数、SQL 边界，无需 DB）
+        run: npm run test:purchase-return-lock-budget
+
       - name: Nginx 安全头和缓存策略真实响应
         run: npm run smoke:nginx-headers
 
@@ -192,8 +236,14 @@ jobs:
         run: ./frontend/node_modules/.bin/tsc -p frontend/tsconfig.app.json --noEmit
 
       # 前端单元测试（vitest，审计 4.3 起步）：纯逻辑，无需 DB
+      - name: 供应商退款页面、持久原回执与补录呈现（严格 Axios adapter，无真实网络）
+        run: npm run test:supplier-refund-ui
+
       - name: 前端单元测试 — vitest
         run: npm --prefix frontend run test:unit
+
+      - name: 处理来源员工入口与完整原请求恢复（真实组件、严格离线 API adapter）
+        run: npm run test:disposal-handling-ui
 
       - name: 分拣格交接精确查询契约
         run: npm run test:sorting-bin-handoff
@@ -358,6 +408,9 @@ jobs:
 
       - name: 库存域加锁顺序契约（机械核对）
         run: npm run test:inventory-lock-order
+
+      - name: 库存预占只读追溯（离线SQL边界与权限，无需 DB）
+        run: npm run test:inventory-reservations
 
       - name: 契约测试 — 库存缓存只能由引擎入口写（防 quantity/reserved 被旁路改写导致静默漂移）
         run: npm run test:stock-cache-write
@@ -587,7 +640,7 @@ jobs:
       - name: 冒烟测试 — 财务（收款核销 / 对账单 / 资金账户 / 费用报销）
         run: npm run smoke:finance
 
-      - name: 冒烟测试 — 呆滞库存处置（建议→审批→处置，容器扣减+报废台账）
+      - name: 冒烟测试 — 独立报废（旧1/2建单拒绝、容器扣减+报废台账）
         run: npm run smoke:disposal
 
       - name: 冒烟测试 — 开票量校验（防多开票，累计开票≤应收/应付基准）
@@ -740,3 +793,14 @@ jobs:
         run: npm --prefix backend run migrate
       - name: 退货、跨期补录、应付、权限与幂等闭环
         run: npm run smoke:audit-20260926
+      # 2026-09-26 一致性审查确认修复的四项，同一独占库内串行执行（每项自建夹具、自洁）
+      - name: 撤回收货拒绝「货已不在本仓」的容器（整箱调拨已完成）
+        run: npm run smoke:inbound-void-transferred-container
+      - name: 报销付款受已结账期间闸门约束（含特权补录落期）
+        run: npm run smoke:expense-pay-period-guard
+      - name: 打印统计与打印机健康遵守仓库数据权限
+        run: npm run smoke:print-jobs-warehouse-scope
+      - name: 作业告警真实 SQL 与终态排除
+        run: npm run smoke:operation-alerts
+      - name: 容器拆分按稳定请求键幂等（同键重放回原回执）
+        run: npm run smoke:container-split-idempotency

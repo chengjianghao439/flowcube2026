@@ -1,7 +1,7 @@
 const { Router } = require('express')
 const { z } = require('zod')
 const ctrl = require('./approvals.controller')
-const { authMiddleware, requirePermission } = require('../../middleware/auth')
+const { authMiddleware, requirePermission, requireAnyPermission } = require('../../middleware/auth')
 const { PERMISSIONS } = require('../../constants/permissions')
 const { validateBody } = require('../../utils/route')
 
@@ -44,7 +44,7 @@ router.delete('/flows/:id',     requirePermission(PERMISSIONS.APPROVAL_FLOW_MANA
 // 业务单据的审批进度（详情页展示）
 router.get('/biz/:bizType/:bizId', requirePermission(PERMISSIONS.APPROVAL_TASK_VIEW), ctrl.getBizApproval)
 
-// 待我审批（每人自己的任务，全部角色可见）
-router.get('/pending',          requirePermission(PERMISSIONS.APPROVAL_TASK_VIEW), ctrl.listPending)
+// 统一待办入口；每种来源的查看、动作、范围与自批仍由service分别过滤。
+router.get('/pending',          requireAnyPermission([PERMISSIONS.APPROVAL_TASK_VIEW, PERMISSIONS.PURCHASE_ORDER_APPROVE, PERMISSIONS.INVENTORY_DISPOSAL_APPROVE, PERMISSIONS.FINANCE_EXPENSE_APPROVE, PERMISSIONS.SUPPLIER_REFUND_CONFIRM]), ctrl.listPending)
 
 module.exports = router

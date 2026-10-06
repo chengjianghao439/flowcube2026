@@ -14,13 +14,16 @@ function validateSourceItems(rows) {
   return [...new Set(rows.map(r => Number(r.purchase_order_id)))].sort((a, b) => a - b)
 }
 
-async function assertPurchaseOrderOpen(conn, purchaseOrderId, actionLabel = '收货') {
+async function assertPurchaseOrderOpen(conn, purchaseOrderId, actionLabel = '收货', { scopeWarehouseIds = null, warehouseId = null } = {}) {
   if (!validId(purchaseOrderId)) throw invalidSource()
   const [[purchaseRow]] = await conn.query(
-    'SELECT id, order_no, status FROM purchase_orders WHERE id = ? AND deleted_at IS NULL FOR UPDATE',
+    'SELECT id, order_no, status, warehouse_id FROM purchase_orders WHERE id = ? AND deleted_at IS NULL FOR UPDATE',
     [purchaseOrderId],
   )
   if (!purchaseRow) throw new AppError('关联采购单不存在', 404)
+  // 原来源断言可作为纯模块离线加载；仅新限仓调用加载含DB读取能力的范围工具。
+  if (Array.isArray(scopeWarehouseIds)) require('../../utils/warehouseScope').assertInScope(scopeWarehouseIds, purchaseRow.warehouse_id, '原采购单')
+  if (warehouseId != null && Number(warehouseId) !== Number(purchaseRow.warehouse_id)) throw invalidSource()
   if (Number(purchaseRow.status) === 4) throw new AppError(`采购单 ${purchaseRow.order_no} 已取消，不能继续${actionLabel}`, 409)
 }
 
@@ -29,7 +32,20 @@ const SOURCE_COLUMNS = `i.id,i.purchase_order_id,i.purchase_item_id,i.product_id
 
 // 调用方先锁收货任务。不能只取 DISTINCT purchase_order_id 后跳过 NULL：
 // 历史单没有行来源时会漏掉取消校验，且上架后结算 JOIN 无法找到采购价格。
-async function assertPurchaseOrdersOpen(conn, taskId, actionLabel = '收货') {
+async function assertPurchaseOrdersOpen(conn, taskId, actionLabel = '收货', { currentRead = false, scopeWarehouseIds = null, warehouseId = null } = {}) {
+  if (currentRead) {
+    // 先只锁本IT的来源身份，不先锁POI；准确PO排序X门之后再当前重核完整来源。
+    const [identities] = await conn.query('SELECT purchase_order_id FROM inbound_task_items WHERE task_id=? ORDER BY purchase_order_id,id FOR SHARE', [taskId])
+    if (!identities.length || identities.some(row => !validId(row.purchase_order_id))) throw invalidSource()
+    const ids = [...new Set(identities.map(row => Number(row.purchase_order_id)))].sort((a, b) => a - b)
+    for (const id of ids) await assertPurchaseOrderOpen(conn, id, actionLabel, { scopeWarehouseIds, warehouseId })
+    const [current] = await conn.query(`SELECT ${SOURCE_COLUMNS} FROM inbound_task_items i
+      LEFT JOIN purchase_order_items p ON p.id=i.purchase_item_id
+      WHERE i.task_id=? ORDER BY i.purchase_order_id,i.id FOR SHARE`, [taskId])
+    const currentIds = validateSourceItems(current)
+    if (currentIds.length !== ids.length || currentIds.some((id, index) => id !== ids[index])) throw invalidSource()
+    return
+  }
   const [rows] = await conn.query(`SELECT ${SOURCE_COLUMNS} FROM inbound_task_items i
     LEFT JOIN purchase_order_items p ON p.id=i.purchase_item_id
     WHERE i.task_id=? ORDER BY i.purchase_order_id,i.id`, [taskId])

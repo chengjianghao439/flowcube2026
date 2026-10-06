@@ -1,0 +1,6 @@
+{
+  "command": "bash scripts/with-dev-env.sh frontend/node_modules/.bin/tsc -p frontend/tsconfig.app.json --noEmit",
+  "node": "22.23.2",
+  "exitCode": 0,
+  "origin": "root observed exec session11619 completion after current frontend label changes; empty log alone is not the assertion"
+}

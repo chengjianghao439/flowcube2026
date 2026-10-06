@@ -1,5 +1,6 @@
 import { money } from '@/lib/format'
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { useMutation } from '@tanstack/react-query'
+import { useVisibleQuery } from '@/hooks/useVisibleQuery'
 import { AppDialog } from '@/components/shared/AppDialog'
 import { Button } from '@/components/ui/button'
 import { confirmPaymentApi, getSettlementDetailApi } from '@/api/payments'
@@ -21,7 +22,7 @@ interface Props {
 export function SettlementConfirmDialog({ open, onClose, record }: Props) {
   const invalidatePaymentViews = usePaymentViewInvalidation()
 
-  const { data: settlement, isPending, isError, error, refetch } = useQuery({
+  const { data: settlement, isPending, isError, error, refetch } = useVisibleQuery({
     queryKey: ['payment-settlement', record?.id],
     queryFn: () => getSettlementDetailApi(record!.id),
     enabled: open && !!record,

@@ -5,7 +5,7 @@ import type {
   Voucher, GenerateStats, ReconciliationResult, CreateManualVoucherParams,
   TrialBalance, AccountLedger, IncomeStatement, BalanceSheet, CashFlow,
   Invoice, CreateInvoiceParams, AccountingPeriod,
-  BackfillApplication, BackfillListQuery, BackfillListResult,
+  BackfillApplication, BackfillOperationResult, BackfillListQuery, BackfillListResult,
 } from '@/types/accounting'
 
 // ── 账套 / 合并报表（文档10 多账套） ──────────────────────────────────
@@ -159,29 +159,32 @@ export const deleteInvoiceApi = async (id: number) => { await apiClient.delete(`
 // 调整凭证落在**执行审批日所在期间**（补录当期），不是业务期间。
 const BBASE = '/accounting/backfills'
 
-export const getBackfillsApi = async (params: BackfillListQuery = {}) => {
+export const getBackfillsApi = async (params: BackfillListQuery = {}, config?: import('axios').AxiosRequestConfig) => {
   const q = new URLSearchParams()
   Object.entries(params).forEach(([k, v]) => { if (v !== undefined && v !== null && v !== '') q.set(k, String(v)) })
   const qs = q.toString()
-  return apiClient.get<BackfillListResult>(`${BBASE}${qs ? `?${qs}` : ''}`)
+  return apiClient.get<BackfillListResult>(`${BBASE}${qs ? `?${qs}` : ''}`, { ...config, listMode: 'paged' })
 }
 
-export const getBackfillDetailApi = async (id: number) => apiClient.get<BackfillApplication>(`${BBASE}/${id}`)
+export const getBackfillDetailApi = async (id: number, config?: import('axios').AxiosRequestConfig) => apiClient.get<BackfillApplication>(`${BBASE}/${id}`, config)
 
-export const approveBackfillApi = async (id: number, remark?: string) =>
-  apiClient.post<BackfillApplication & { voucherError?: string | null }>(`${BBASE}/${id}/approve`, { remark: remark || null })
+export const approveBackfillApi = async (id: number, remark?: string, config?: import('axios').AxiosRequestConfig) =>
+  apiClient.post<BackfillOperationResult>(`${BBASE}/${id}/approve`, { remark: remark || null }, config)
 
-export const rejectBackfillApi = async (id: number, remark: string) =>
-  apiClient.post<BackfillApplication>(`${BBASE}/${id}/reject`, { remark })
+export const rejectBackfillApi = async (id: number, remark: string, config?: import('axios').AxiosRequestConfig) =>
+  apiClient.post<BackfillApplication>(`${BBASE}/${id}/reject`, { remark }, config)
 
 /** 撤回（待审批，申请人自己）或作废（已批准但执行不下去，审批侧）；能否作废由后端按状态判 */
-export const cancelBackfillApi = async (id: number, reason: string) =>
-  apiClient.post<BackfillApplication>(`${BBASE}/${id}/cancel`, { reason })
+export const cancelBackfillApi = async (id: number, reason: string, config?: import('axios').AxiosRequestConfig) =>
+  apiClient.post<BackfillApplication>(`${BBASE}/${id}/cancel`, { reason }, config)
 
 /** 重试执行「已批准但业务没写进去」的单子；业务已漂移的会再次失败，届时作废重报 */
-export const executeBackfillApi = async (id: number) =>
-  apiClient.post<BackfillApplication & { voucherError?: string | null }>(`${BBASE}/${id}/execute`, {})
+export const executeBackfillApi = async (id: number, config?: import('axios').AxiosRequestConfig) =>
+  apiClient.post<BackfillOperationResult>(`${BBASE}/${id}/execute`, {}, config)
 
 /** 业务已记账、调整凭证没生成出来时的重试入口 */
-export const regenerateBackfillVoucherApi = async (id: number) =>
-  apiClient.post<BackfillApplication>(`${BBASE}/${id}/regenerate-voucher`, {})
+export const regenerateBackfillVoucherApi = async (id: number, config?: import('axios').AxiosRequestConfig) =>
+  apiClient.post<BackfillOperationResult>(`${BBASE}/${id}/regenerate-voucher`, {}, config)
+
+/** 核对已收到供应商退款的凭证；服务器另核本域查看与原单范围。 */
+export const regenerateSupplierRefundVoucherApi = (id: number) => apiClient.post<{ status: 'generated' | 'notRequired' | 'pending'; voucherId?: number }>(`/supplier-refunds/${id}/regenerate-voucher`)

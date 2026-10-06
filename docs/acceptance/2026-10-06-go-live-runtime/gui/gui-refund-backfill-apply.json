@@ -1,0 +1,69 @@
+{
+  "name": "gui-refund-backfill-apply",
+  "checks": [
+    "闭期业务日允许建立冻结草稿200"
+  ],
+  "api": [
+    {
+      "method": "GET",
+      "path": "/api/returns/purchase/12",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/finance/accounts/active",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/supplier-refunds/source?purchaseReturnId=12",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/supplier-refunds",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/logout",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/login",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/settings/logo",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/printer-bindings",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/notifications",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/supplier-refunds?page=1&pageSize=20",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/supplier-refunds?page=1&pageSize=20",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/supplier-refunds/19",
+      "status": 200
+    }
+  ],
+  "errors": []
+}

@@ -1,4 +1,6 @@
 'use strict'
+const { issueFixtureAccessToken, cleanupFixtureSessionFamilies } = require('./helpers/fixtureAuthSession')
+
 
 // Real HTTP execution, owned facts only. Calendar attribution is controlled AFTER
 // execution by changing only the owned source timestamps listed in the manifest.
@@ -165,9 +167,8 @@ test('C2/C4真实履约、财务和受控来源日期跨期入账', async () => 
     assert.equal((await one('SELECT DATABASE() AS name')).name, process.env.DB_NAME)
     own.inbounds = []; own.dispatches = []; own.payables = []; own.stockLogs = []; own.purchaseReturns = []; own.closedPeriods = []
     for (let n = 0; n < 2; n++) own.actors.push(await insert("INSERT INTO sys_users(username,password,real_name,role_id,role_name,is_active) VALUES (?,'!',?,1,'测试',1)", [`${ref}-${n}`, ref]))
-    const jwt = require('../backend/node_modules/jsonwebtoken')
-    token = jwt.sign({ userId: own.actors[0], tokenVersion: 0 }, process.env.JWT_SECRET, { expiresIn: '30m' })
-    const approver = jwt.sign({ userId: own.actors[1], tokenVersion: 0 }, process.env.JWT_SECRET, { expiresIn: '30m' })
+        token = await issueFixtureAccessToken(pool, own.actors[0], { expiresIn: '30m' })
+    const approver = await issueFixtureAccessToken(pool, own.actors[1], { expiresIn: '30m' })
     warehouseId = own.warehouseId = await insert('INSERT INTO inventory_warehouses(code,name) VALUES (?,?)', [ref, ref])
     locationId = own.locationId = await insert('INSERT INTO warehouse_locations(warehouse_id,code,name) VALUES (?,?,?)', [warehouseId, ref, ref])
     supplierId = own.supplierId = await insert('INSERT INTO supply_suppliers(code,name,settlement_type,payment_terms_days) VALUES (?,?,2,30)', [ref, ref])
@@ -427,7 +428,7 @@ test('C2/C4真实履约、财务和受控来源日期跨期入账', async () => 
       }
     })
     await clean('server', async () => { if (server) { server.closeAllConnections(); await new Promise((resolve, reject) => server.close(e => e ? reject(e) : resolve())); own.cleanup.serverClosed = server.address() === null } })
-    await clean('pool', async () => { await pool.end(); if (own.cleanup) own.cleanup.poolEnded = true })
+    await clean('pool', async () => { try { await cleanupFixtureSessionFamilies(pool) } finally { await pool.end() }; if (own.cleanup) own.cleanup.poolEnded = true })
     own.cleanupErrors = cleanupErrors.map(e => `${e.message}: ${e.cause?.message || ''}`)
     await clean('final manifest', async () => { save() })
   }

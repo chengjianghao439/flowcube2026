@@ -1,7 +1,9 @@
 import type { KitReadOwner } from '@/api/kits'
+import type { CustomerAddressGuard } from '@/hooks/useCustomerAddresses'
+import { SectionVisibilityContext, useSectionActive } from '@/components/layout/SectionVisibilityContext'
 import { ShippingProductField } from '@/components/shared/ShippingProductField'
 import type { CarrierOption } from '@/types/carriers'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Input }  from '@/components/ui/input'
 import { MapPin, MessageSquareText, Truck, UserRound } from 'lucide-react'
@@ -17,8 +19,8 @@ import AddressBookDialog from '@/pages/sale/components/AddressBookDialog'
 import { cn } from '@/lib/utils'
 
 export function SaleOrderHeaderFields({
-  readOwner, customerId, customerName, customerError, setCustomerFinderOpen,
-  warehouseId, setWarehouseId, setWarehouseName, warehouseError, setWarehouseError,
+  readOwner, interactionGuard, warehouseReadOnly = false, customerId, customerName, customerError, setCustomerFinderOpen,
+  warehouseId, warehouseName, setWarehouseId, setWarehouseName, warehouseError, setWarehouseError,
   carrierId, setCarrierId, carrierOptions,
   shippingProduct, setShippingProduct, shippingProductDisabled = false,
   freightType, setFreightType,
@@ -28,8 +30,12 @@ export function SaleOrderHeaderFields({
   remark, setRemark, headerReadOnly = false,
 }: {
   readOwner?: KitReadOwner
+  warehouseReadOnly?: boolean
+  /** 仅R9传入：门户浮层和所有选择回调复核当前读取代次/未决保存。 */
+  interactionGuard?: CustomerAddressGuard
   customerId: string
   customerName: string; customerError: boolean; setCustomerFinderOpen: (v: boolean) => void
+  warehouseName?: string
   warehouseId: string; setWarehouseId: (v: string) => void; setWarehouseName: (v: string) => void
   warehouseError: boolean; setWarehouseError: (v: boolean) => void
   carrierId: string; setCarrierId: (v: string) => void; carrierOptions: CarrierOption[]
@@ -44,12 +50,19 @@ export function SaleOrderHeaderFields({
 }) {
   const selectedCarrier = carrierOptions.find(c => String(c.id) === carrierId)
   const navigate = useNavigate()
+  const sectionActive = useSectionActive()
+  const currentInteraction = useRef({ interactionGuard, headerReadOnly, sectionActive })
+  currentInteraction.current = { interactionGuard, headerReadOnly, sectionActive }
+  const mayInteract = () => !currentInteraction.current.interactionGuard || (!currentInteraction.current.headerReadOnly && currentInteraction.current.sectionActive && currentInteraction.current.interactionGuard.isCurrent())
+  const apply = (change: () => void) => { if (mayInteract()) change() }
   const [addrOpen, setAddrOpen] = useState(false)
   const openAddrBook = () => {
+    if (!mayInteract()) return
     if (!customerId) { toast.warning('请先选择客户'); return }
     setAddrOpen(true)
   }
   return (
+    <SectionVisibilityContext.Provider value={sectionActive && mayInteract()}>
     <SectionCard title="订单信息" compact contentClassName="px-4 py-3">
       <div className="mb-3 flex items-center gap-2 text-xs font-medium text-muted-foreground">
         <UserRound className="h-3.5 w-3.5 text-primary" />客户与履约
@@ -57,22 +70,22 @@ export function SaleOrderHeaderFields({
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
         <div data-entry-field="party" className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground">
           <Label>客户 *</Label>
-          <PickerField value={customerName} placeholder="点击选择客户…" onOpen={() => setCustomerFinderOpen(true)} onDoubleClick={() => { setCustomerFinderOpen(false); navigate('/customers') }} disabled={headerReadOnly} className={cn('h-9', customerError && 'border-destructive/60 bg-destructive/5')} />
+          <PickerField value={customerName} placeholder="点击选择客户…" onOpen={() => apply(() => setCustomerFinderOpen(true))} onDoubleClick={() => apply(() => { setCustomerFinderOpen(false); navigate('/customers') })} disabled={headerReadOnly} className={cn('h-9', customerError && 'border-destructive/60 bg-destructive/5')} />
         </div>
         <div data-entry-field="warehouse" className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground">
           <Label>出库仓库 *</Label>
-          <WarehouseSelect
+          {warehouseReadOnly ? <p className="py-2 text-sm">{warehouseName || warehouseId}</p> : <WarehouseSelect
             readOwner={readOwner}
             value={warehouseId ? +warehouseId : null}
-            onChange={(id, name) => { setWarehouseId(id ? String(id) : ''); setWarehouseName(name); setWarehouseError(false) }}
+            onChange={(id, name) => apply(() => { setWarehouseId(id ? String(id) : ''); setWarehouseName(name); setWarehouseError(false) })}
             placeholder="选择仓库"
             disabled={headerReadOnly}
             className={cn('h-9', warehouseError && 'border-destructive/60 bg-destructive/5')}
-          />
+          />}
         </div>
         <div className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground">
           <Label>承运商</Label>
-          <Select value={carrierId || '__none__'} onValueChange={v => { setCarrierId(v === '__none__' ? '' : v); setShippingProduct('') }} disabled={headerReadOnly}>
+          <Select value={carrierId || '__none__'} onValueChange={v => apply(() => { setCarrierId(v === '__none__' ? '' : v); setShippingProduct('') })} disabled={headerReadOnly}>
             <SelectTrigger className="h-9 w-full">
               <SelectValue placeholder={carrierOptions.length === 0 ? '暂无承运商，请先创建' : '请选择承运商'} />
             </SelectTrigger>
@@ -86,7 +99,7 @@ export function SaleOrderHeaderFields({
         </div>
         <div className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground">
           <Label>运费方式</Label>
-          <Select value={freightType || '__none__'} onValueChange={v => setFreightType(v === '__none__' ? '' : v)} disabled={headerReadOnly}>
+          <Select value={freightType || '__none__'} onValueChange={v => apply(() => setFreightType(v === '__none__' ? '' : v))} disabled={headerReadOnly}>
             <SelectTrigger className="h-9 w-full">
               <SelectValue placeholder="请选择" />
             </SelectTrigger>
@@ -101,7 +114,7 @@ export function SaleOrderHeaderFields({
       </div>
       {['sf', 'deppon'].includes(selectedCarrier?.platformCode || '') && <div className="mt-3 max-w-sm space-y-1.5">
         <Label htmlFor="sale-shipping-product">本单发货产品</Label>
-        <ShippingProductField id="sale-shipping-product" platform={selectedCarrier?.platformCode} value={shippingProduct} onChange={setShippingProduct} defaultCode={selectedCarrier?.shippingProduct} disabled={shippingProductDisabled} />
+        <ShippingProductField id="sale-shipping-product" platform={selectedCarrier?.platformCode} value={shippingProduct} onChange={value => apply(() => setShippingProduct(value))} defaultCode={selectedCarrier?.shippingProduct} disabled={shippingProductDisabled} />
         <p className="text-xs text-muted-foreground">{shippingProductDisabled ? '执行期改单只修改商品明细；寄件资料在提交平台前可从运单详情补充。' : '通常沿用默认产品，航空等特殊发货按合同指定。件数由打包结果自动填写。'}</p>
       </div>}
       <div className="my-4 border-t border-border" />
@@ -112,29 +125,31 @@ export function SaleOrderHeaderFields({
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-12">
         <div className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground xl:col-span-2">
           <Label>收货人</Label>
-          <LimitedInput maxLength={30} value={receiverName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setReceiverName(e.target.value)} placeholder="请输入收货人或部门" disabled={headerReadOnly} className="h-9" />
+          <LimitedInput maxLength={30} value={receiverName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => apply(() => setReceiverName(e.target.value))} placeholder="请输入收货人或部门" disabled={headerReadOnly} className="h-9" />
         </div>
         <div className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground xl:col-span-2">
           <Label>联系电话</Label>
-          <LimitedInput data-entry-field="phone" aria-label="联系电话" maxLength={30} value={receiverPhone} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setReceiverPhone(e.target.value)} placeholder="手机、座机或国际号码" inputMode="tel" disabled={headerReadOnly} className="h-9" />
+          <LimitedInput data-entry-field="phone" aria-label="联系电话" maxLength={30} value={receiverPhone} onChange={(e: React.ChangeEvent<HTMLInputElement>) => apply(() => setReceiverPhone(e.target.value))} placeholder="手机、座机或国际号码" inputMode="tel" disabled={headerReadOnly} className="h-9" />
         </div>
         <div className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground xl:col-span-5">
           <Label className="inline-flex items-center gap-1.5"><Truck className="h-3.5 w-3.5 text-muted-foreground" />收货地址</Label>
-          <LimitedTextarea maxLength={200} value={receiverAddress} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setReceiverAddress(e.target.value)} placeholder="请输入详细收货地址" rows={1} disabled={headerReadOnly} className="h-9 min-h-0 py-1.5" singleLine />
+          <LimitedTextarea maxLength={200} value={receiverAddress} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => apply(() => setReceiverAddress(e.target.value))} placeholder="请输入详细收货地址" rows={1} disabled={headerReadOnly} className="h-9 min-h-0 py-1.5" singleLine />
         </div>
         <div className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground xl:col-span-3">
           <Label className="inline-flex items-center gap-1.5"><MessageSquareText className="h-3.5 w-3.5 text-muted-foreground" />备注</Label>
-          <Input maxLength={50} value={remark} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRemark(e.target.value)} placeholder="选填" disabled={headerReadOnly} className="h-9" />
+          <Input maxLength={50} value={remark} onChange={(e: React.ChangeEvent<HTMLInputElement>) => apply(() => setRemark(e.target.value))} placeholder="选填" disabled={headerReadOnly} className="h-9" />
         </div>
       </div>
       {customerId && (
         <AddressBookDialog
           readOwner={readOwner}
+          readGuard={interactionGuard}
           open={addrOpen}
           onOpenChange={setAddrOpen}
           customerId={+customerId}
           customerName={customerName}
           onSelect={a => {
+            if (!mayInteract()) return
             setReceiverName(a.receiverName ?? '')
             setReceiverPhone(a.receiverPhone ?? '')
             setReceiverAddress(a.receiverAddress)
@@ -142,5 +157,6 @@ export function SaleOrderHeaderFields({
         />
       )}
     </SectionCard>
+    </SectionVisibilityContext.Provider>
   )
 }

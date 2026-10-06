@@ -1,0 +1,7 @@
+{
+  "scopeAllowed": true,
+  "localLinksChecked": 54,
+  "stagingEmpty": true,
+  "businessSourceAfterFinalRuntimeUnmodified": true,
+  "evidenceScan": "JWT-like data and JSON credential values absent in selected saved textual files; source/private/env files not copied"
+}

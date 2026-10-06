@@ -1,0 +1,38 @@
+{
+  "node": "v22.23.2",
+  "changedPaths": [
+    "backend/src/database/277_disposal_handling.sql",
+    "backend/src/database/278_supplier_refunds.sql",
+    "tests/disposal-handling.test.js",
+    "tests/supplier-refunds-schema.test.js",
+    "docs/backend-api-sql-conventions.md"
+  ],
+  "red": {
+    "tests": 62,
+    "pass": 54,
+    "fail": 8,
+    "exitCode": 1
+  },
+  "green": {
+    "tests": 62,
+    "pass": 62,
+    "fail": 0,
+    "exitCode": 0
+  },
+  "reverseBeforePreload": {
+    "tests": 62,
+    "pass": 54,
+    "fail": 8,
+    "exitCode": 1,
+    "sharedSourcesMutated": false
+  },
+  "finalGreen": {
+    "tests": 62,
+    "pass": 62,
+    "fail": 0,
+    "exitCode": 0
+  },
+  "addedLineWhitespace": "clean",
+  "scope": "only offline source repair, no DB/Docker/network/commit/push/deploy",
+  "databaseValidationOwner": "root"
+}

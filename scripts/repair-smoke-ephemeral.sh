@@ -34,6 +34,17 @@ DB_NAME='flowcube_repair20260908_test'
 DB_COLLATION='utf8mb4_0900_ai_ci'   # 与 CI 默认一致，避免在开发实例的 unicode_ci 上跑出假差异
 CONFIG_DIR="$HOME/.config/flowcube"
 
+# Only named suites may use this runner. All modes keep the same ownership proof
+# and teardown; an unknown argument must fail before the first Docker operation.
+SUITE="${1:-repair}"
+case "$SUITE" in
+  repair) ;;
+  --go-live) DB_NAME='flowcube_golive20261006_test' ;;
+  *) echo '[ephemeral] unsupported validation suite' >&2; exit 1 ;;
+esac
+[ "$#" -le 1 ] || { echo '[ephemeral] unsupported validation suite arguments' >&2; exit 1; }
+export LC_ALL=C
+
 BATCH_ID="$(date +%Y%m%d%H%M%S)-$(node -e 'process.stdout.write(require("node:crypto").randomBytes(3).toString("hex"))')"
 CTR="flowcube-repair-ephemeral-${BATCH_ID}"
 VOL="flowcube-repair-ephemeral-${BATCH_ID}-data"
@@ -45,6 +56,7 @@ CTR_CREATED=0
 VOL_CREATED=0
 FILE_CREATED=0
 CTR_ID=''
+DOWNLOADS_DIR=''
 
 log() { echo "[repair-ephemeral] $*"; }
 
@@ -108,6 +120,10 @@ cleanup() {
     if [[ -e "$OWNERSHIP_FILE" ]]; then
       echo "[repair-ephemeral] 清理失败：归属文件 ${OWNERSHIP_FILE} 仍在" >&2; failed=1
     fi
+  fi
+  if [[ -n "$DOWNLOADS_DIR" ]]; then
+    rm -rf "$DOWNLOADS_DIR"
+    if [[ -e "$DOWNLOADS_DIR" ]]; then failed=1; fi
   fi
   if [[ "$failed" != 0 && "$rc" = 0 ]]; then rc=1; fi
   exit "$rc"
@@ -252,6 +268,15 @@ fs.writeFileSync(file, JSON.stringify({
 NODE
 FILE_CREATED=1
 
+if [[ "$SUITE" = '--go-live' ]]; then
+  DOWNLOADS_DIR="$(mktemp -d "${TMPDIR:-/tmp}/flowcube-golive-downloads.XXXXXX")"
+  export APP_UPDATE_DOWNLOADS_DIR="$DOWNLOADS_DIR"
+  JWT_SECRET="$(node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("hex"))')"
+  export JWT_SECRET
+  export LOGISTICS_WORKER_ENABLED=0 DINGTALK_ALERT_WEBHOOK='' DINGTALK_WEBHOOK='' LOKI_URL='' SENTRY_DSN=''
+  export DISABLE_PRINT_JOB_SWEEPER=1
+fi
+
 log "迁移 ${DB_NAME}（目标：127.0.0.1:${HOST_PORT}）…"
 cd "$ROOT"
 NODE_ENV=test DB_HOST=127.0.0.1 DB_PORT="$HOST_PORT" DB_NAME="$DB_NAME" DB_USER=root \
@@ -264,9 +289,14 @@ run_smoke() {
     npm run "$1"
 }
 
-log '执行采购修复 smoke（串行第一项）…'
-run_smoke smoke:purchase-repair
-log '执行应收修复 + 一致性扫描 smoke（串行第二项）…'
-run_smoke smoke:legacy-receivable-repair
+if [[ "$SUITE" = '--go-live' ]]; then
+  log '执行上线新增处置/供应商退款真实链路（独占本批实例）…'
+  run_smoke smoke:go-live-runtime
+else
+  log '执行采购修复 smoke（串行第一项）…'
+  run_smoke smoke:purchase-repair
+  log '执行应收修复 + 一致性扫描 smoke（串行第二项）…'
+  run_smoke smoke:legacy-receivable-repair
+fi
 
 log '全部通过。清理本批容器/数据卷/归属文件…'

@@ -877,6 +877,7 @@ async function closeReceiving(taskId, operator, scopeWarehouseIds = null, { requ
     if (Number(taskRow.status) !== 2) {
       throw new AppError('只有"收货中"状态才能提前结束收货', 409)
     }
+    await assertPurchaseOrdersOpen(conn, taskId, '结束收货', { currentRead: true, scopeWarehouseIds, warehouseId: taskRow.warehouse_id })
     const [[{ receivedTotal }]] = await conn.query(
       'SELECT COALESCE(SUM(received_qty),0) AS receivedTotal FROM inbound_task_items WHERE task_id=?',
       [taskId],

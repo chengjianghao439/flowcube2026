@@ -1,0 +1,7 @@
+{
+  "frontend/src/pages/disposal/components/DisposalDetailDialog.tsx": "185b9695f0a8b7669ad76ff5b2fae8afc6da48d8f20ccb2be755a8fd7f56b9c5",
+  "backend/src/modules/finance/finance-dashboard.service.js": "5f3047f90e046339b7216e71faeaa409655728f80c12b6a802832f825b6cef30",
+  "frontend/src/pages/finance/dashboard/index.tsx": "81f4a8001c833fd8b958f648eeabac285d08f05a91d8018fed0cd858369e39b8",
+  "docs/frontend-pda-conventions.md": "3f273e73375ea14b594d846fc8b9a20c513b3decec15e0ff888dcb2b632e9a09",
+  "docs/finance-permission-time.md": "00d8b4d0ef093cb4452cc47238ef658d6045b004f468cd74d1be7461205a87c6"
+}

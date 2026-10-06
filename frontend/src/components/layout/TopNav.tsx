@@ -12,6 +12,10 @@ import { getMergedPageGroup } from '@/router/mergedPageGroups'
 import { cn } from '@/lib/utils'
 import { usePermission } from '@/hooks/usePermission'
 import { useWorkspaceStore } from '@/store/workspaceStore'
+import { buildWorkspaceTabRegistrationFromPath, resolveWorkspaceEntryPath } from '@/router/workspaceRouteMeta'
+import { RefundRecoveryEntry } from '@/pages/supplier-refunds/RefundRecoveryPage'
+import { DisposalRecoveryEntry } from '@/pages/disposal/DisposalRecoveryPage'
+import { RepeatSaleRecoveryEntry } from '@/pages/sale/RepeatSaleRecoveryPage'
 import {
   PATH_TITLES,
   buildTopNavSections,
@@ -196,10 +200,14 @@ export function TopNav() {
   const openNavPath = useCallback(
     (path: string) => {
       const title = PATH_TITLES[path] ?? path
-      addTab({ key: path, title, path })
-      navigate(path)
+      const key = buildWorkspaceTabRegistrationFromPath(path).key
+      const target = getMergedPageGroup(path)?.tabTitle === 'group'
+        ? resolveWorkspaceEntryPath(path, useWorkspaceStore.getState().tabs.find(tab => tab.key === key), can)
+        : path
+      addTab({ key, title, path: target })
+      navigate(target)
     },
-    [addTab, navigate]
+    [addTab, navigate, can]
   )
 
   const nodes: ReactNode[] = []
@@ -254,11 +262,12 @@ export function TopNav() {
     )
   }
 
-  if (!nodes.length) return null
+  if (!nodes.length) return <><RepeatSaleRecoveryEntry /><DisposalRecoveryEntry /><RefundRecoveryEntry /></>
 
   return (
     <nav className="flex shrink-0 flex-wrap items-center gap-0.5" aria-label="主导航">
       {nodes}
+      <RepeatSaleRecoveryEntry /><DisposalRecoveryEntry /><RefundRecoveryEntry />
     </nav>
   )
 }

@@ -1,8 +1,9 @@
+import { useVisibleQuery } from '@/hooks/useVisibleQuery'
 import { ReportTable } from '@/components/shared/ReportTable'
 import { money } from '@/lib/format'
 import { RecordIdentity } from '@/components/shared/RecordIdentity'
 import { useState, useEffect } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
@@ -107,7 +108,7 @@ export default function FinanceAccountsPage() {
   const [adjustRemark, setAdjustRemark] = useState('')
   const [deleteTarget, setDeleteTarget] = useState<FinanceAccount | null>(null)
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading } = useVisibleQuery({
     queryKey: ['finance-accounts', query],
     queryFn: () => getAccountsApi({
       keyword: query.keyword || undefined,
@@ -121,7 +122,7 @@ export default function FinanceAccountsPage() {
   if (query.keyword) queryChips.push({ key: 'kw', text: `搜索：${query.keyword}`, onClear: dropQ('keyword') })
   if (query.type) queryChips.push({ key: 'type', text: `类型：${TYPE_NAME[query.type] ?? query.type}`, onClear: dropQ('type') })
   if (query.isActive) queryChips.push({ key: 'act', text: `状态：${query.isActive === '1' ? '启用' : '停用'}`, onClear: dropQ('isActive') })
-  const { data: transactions } = useQuery({
+  const { data: transactions } = useVisibleQuery({
     queryKey: ['finance-account-transactions', txAccount?.id],
     queryFn: () => getAccountTransactionsApi({ accountId: txAccount!.id, pageSize: 200 }),
     enabled: !!txAccount,

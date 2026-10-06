@@ -5,8 +5,8 @@
  * 余量留在盒内。旧方向「从整件 I 拆出散件塑料盒 B」保留为另一分支（扫到 I 时走原
  * splitContainerApi），后端能力不变——本页不再只有一个反方向入口。
  *
- * 请求键：同一次提交重试复用同一个键，后端按目标盒绑定做资源级幂等，
- * 稳定键重放会返回原已提交结果（不会重复建码）。
+ * 还原整件沿原盒资源回执；I→B 普通拆分按来源ID绑定稳定键，并冻结原账号、
+ * 服务器和完整载荷。未决结果只能主动核对或经新鲜未找到结果按原键原内容重试。
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -18,19 +18,33 @@ import PdaFlash from '@/components/pda/PdaFlash'
 import PdaBottomBar from '@/components/pda/PdaBottomBar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { getContainerByBarcodeApi, splitContainerApi, repackPlasticBoxApi, type PlasticBoxRepackResult } from '@/api/inventory'
+import { getContainerByBarcodeApi, repackPlasticBoxApi, type PlasticBoxRepackResult } from '@/api/inventory'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
 import { usePendingRequests } from '@/hooks/usePendingRequests'
+import PdaSplitRecoveryPanel from '@/components/pda/PdaSplitRecoveryPanel'
+import { splitEndpoint } from '@/lib/pdaSplitRecovery'
+import { usePdaRole } from '@/hooks/usePdaRole'
+import { PERMISSIONS } from '@/lib/permission-codes'
+import { plasticReadContext, usePdaPlasticReadGuard } from '@/hooks/usePdaPlasticReadGuard'
+import { usePdaSplitRecovery } from '@/hooks/usePdaSplitRecovery'
 import { formatPdaActionError } from '@/utils/displayFormatters'
 
 type Mode = 'repack' | 'split'
+const LEGACY_PAGE_TITLE = '塑料盒作业'
 
-export default function PdaSplitPage() {
+export default function PdaSplitPage({ fixedMode, active = true, onBack, onWorkStateChange }: {
+  fixedMode?: Mode; active?: boolean; onBack?: () => void; onWorkStateChange?: (state: { hasInput: boolean; pending: boolean }) => void
+} = {}) {
   const navigate = useNavigate()
   const { flash, ok, err } = usePdaFeedback()
+  const { can } = usePdaRole()
+  const canExecute = can(PERMISSIONS.INVENTORY_CONTAINER_SPLIT)
+  const captureRead = usePdaPlasticReadGuard(active)
+  const [formContext, setFormContext] = useState<string | null>(null)
+  const contextCurrent = formContext === null || formContext === plasticReadContext()
   const [step, setStep] = useState<'scan' | 'form'>('scan')
-  const [mode, setMode] = useState<Mode>('repack')
+  const [mode, setMode] = useState<Mode>(fixedMode ?? 'repack')
   const [boxId, setBoxId] = useState<number | null>(null)
   const [barcode, setBarcode] = useState<string | null>(null)
   const [productHint, setProductHint] = useState('')
@@ -42,10 +56,17 @@ export default function PdaSplitPage() {
   const [repackMode, setRepackMode] = useState<'quick' | 'list'>('quick')
   const [itemsStr, setItemsStr] = useState('')
   const [printLabel, setPrintLabel] = useState(false)
+  const [dimension, setDimension] = useState<{ productId: number; warehouseId: number } | null>(null)
+  const splitAction = usePdaSplitRecovery({ active, onConfirmed: (res, recovered) => {
+    ok(`${recovered ? '已核对：' : ''}拆分成功：新塑料盒条码 ${res.newBarcode}；原码余量 ${res.sourceRemainingAfter}`)
+    if (Number(res.noPrinterCount) + Number(res.renderFailedCount) > 0) err('标签未打印，请在打印记录中核对并补打')
+    finishReset()
+  } })
 
   // 还原整件走 useCriticalPdaAction：请求键随 pending 记录持久化，resource action 精确绑定盒，
   // 未确认期间不允许取消/改目标，也不按当前显示数量猜本次成功。
   const repackAction = useCriticalPdaAction<PlasticBoxRepackResult>({
+    active,
     action: `plastic_box.repack.${boxId ?? 'none'}`,
     label: '还原整件',
     onConfirmed: (res, ctx) => {
@@ -64,11 +85,13 @@ export default function PdaSplitPage() {
   })
 
   const loadMut = useMutation({
-    mutationFn: async (bc: string) => {
-      const res = await getContainerByBarcodeApi(bc, { skipGlobalError: true })
+    mutationFn: async ({ bc, owner }: { bc: string; owner: ReturnType<typeof captureRead> }) => {
+      const res = await getContainerByBarcodeApi(bc, owner.config)
       return res!
     },
-    onSuccess: (d) => {
+    onSuccess: (d, { owner }) => {
+      if (!owner.current()) return
+      setFormContext(owner.contextKey)
       if (d.containerStatus === 'waiting_putaway') {
         err('待上架库存条码不能操作')
         return
@@ -78,6 +101,8 @@ export default function PdaSplitPage() {
         return
       }
       const isBox = d.containerKind === 'plastic_box'
+      if (fixedMode && (fixedMode === 'repack') !== isBox) { err(fixedMode === 'repack' ? '本动作须扫塑料盒B码，不能扫整件库存码' : '本动作须扫整件库存I码，不能扫塑料盒'); return }
+      setDimension({ productId: d.productId, warehouseId: d.warehouseId })
       setMode(isBox ? 'repack' : 'split')
       setBoxId(d.containerId)
       setBarcode(d.barcode)
@@ -90,7 +115,7 @@ export default function PdaSplitPage() {
       setStep('form')
       ok(`已识别 ${d.barcode}：${isBox ? '还原整件' : '拆出散件盒'}`)
     },
-    onError: (e: unknown) => err(formatPdaActionError(e, '查询失败')),
+    onError: (e: unknown, { owner }) => { if (owner.current()) err(formatPdaActionError(e, '查询失败')) },
   })
 
   /** 还原整件：B → 逐箱 qty → 生成 I（useCriticalPdaAction 提交，pending 时挂回查原回执） */
@@ -105,7 +130,7 @@ export default function PdaSplitPage() {
   // 是否为「从待确认快照恢复」的界面（用于把余量标注成历史快照，避免被当成当前库存）
   const [restoredSnapshot, setRestoredSnapshot] = useState(false)
   useEffect(() => {
-    if (restored || boxId) return
+    if (restored || boxId || fixedMode === 'split' || splitAction.records.length) return
     const rec = myPendings.find((r) => {
       const m = r.metadata as { boxId?: number } | undefined
       return m?.boxId != null && Number(m.boxId) > 0 && r.action === `plastic_box.repack.${Number(m.boxId)}`
@@ -115,6 +140,7 @@ export default function PdaSplitPage() {
       boxId: number; barcode?: string; mode?: 'quick' | 'list'
       items?: number[]; perBoxQty?: number; boxCount?: number; remaining?: number
     }
+    setFormContext(plasticReadContext())
     setBoxId(Number(m.boxId))
     setBarcode(m.barcode ?? `#${m.boxId}`)
     // 用**原提交时的余量快照**（不是当前库存，也不用默认 0），并标为历史快照
@@ -131,10 +157,10 @@ export default function PdaSplitPage() {
     }
     setStep('form')
     setRestored(true)
-  }, [myPendings, restored, boxId])
+  }, [myPendings, restored, boxId, fixedMode, splitAction.records.length])
 
   const submitRepack = useCallback(async () => {
-    if (!boxId) return
+    if (!active || !contextCurrent || !canExecute || !boxId) return
     let body: { perBoxQty?: number; boxCount?: number; items?: number[] }
     if (repackMode === 'list') {
       const list = itemsStr.split(/[\s,，]+/).filter(Boolean).map(Number)
@@ -164,25 +190,25 @@ export default function PdaSplitPage() {
     } catch (e) {
       err(formatPdaActionError(e, '还原整件未提交成功'))
     }
-  }, [boxId, barcode, repackMode, itemsStr, perBoxQty, boxCount, remaining, repackAction, err])
+  }, [active, contextCurrent, canExecute, boxId, barcode, repackMode, itemsStr, perBoxQty, boxCount, remaining, repackAction, err])
 
-  /** 旧方向保留：I → 拆出散件塑料盒 B。
-   * 注意：该后端接口**未接资源级幂等**，因此这里不使用/不声称稳定请求键——
-   * 避免「看起来有幂等保护」的错觉（要接需另行在后端补 begin/complete）。 */
-  const splitMut = useMutation({
-    mutationFn: () => {
-      if (!boxId) throw new Error('no container')
-      const q = Number(qtyStr)
-      if (!Number.isFinite(q) || q <= 0) throw new Error('数量无效')
-      if (q >= remaining) throw new Error('数量须小于剩余数量')
-      return splitContainerApi(boxId, { qty: q, printLabel })
-    },
-    onSuccess: (res) => {
-      ok(`拆分成功：新塑料盒条码 ${res.newBarcode}`)
-      resetToScan()
-    },
-    onError: (e: unknown) => err(formatPdaActionError(e, '拆分失败')),
-  })
+  // 原拆分快照恢复不取当前库存、不自动POST。残缺快照只提供查询入口。
+  useEffect(() => {
+    const rec = splitAction.records.find(r => r.endpoint === splitEndpoint())
+    if (!rec || boxId || fixedMode === 'repack') return
+    setFormContext(plasticReadContext())
+    setMode('split'); setBoxId(rec.sourceContainerId); setBarcode(rec.sourceBarcode ?? `#${rec.sourceContainerId}`)
+    setProductHint('原提交数据，请先核对结果'); setRemaining(rec.remaining ?? 0)
+    setQtyStr(rec.body ? String(rec.body.qty) : ''); setPrintLabel(rec.body?.printLabel ?? false)
+    setRestoredSnapshot(true); setStep('form')
+  }, [splitAction.records, boxId, fixedMode])
+  const submitSplit = async () => {
+    if (!active || !contextCurrent || !canExecute || !boxId || !barcode || !dimension) return
+    const qty = Number(qtyStr)
+    if (!Number.isFinite(qty) || qty <= 0 || qty >= remaining) { err('拆分数量须大于0且小于剩余数量'); return }
+    try { await splitAction.run({ sourceContainerId: boxId, sourceBarcode: barcode, ...dimension, remaining }, { qty, printLabel }) }
+    catch (error) { err(formatPdaActionError(error, '拆分未提交')) }
+  }
 
   /**
    * 内部复位（**已确定成功**后调用）：不经防取消闸。
@@ -197,6 +223,8 @@ export default function PdaSplitPage() {
     setProductHint('')
     setRemaining(0)
     setQtyStr('1')
+    setDimension(null)
+    setFormContext(null)
     setPerBoxQty('1')
     setBoxCount('1')
     setItemsStr('')
@@ -206,22 +234,23 @@ export default function PdaSplitPage() {
 
   /** 用户主动取消/重新扫码：仍带 guard（待确认时不能把记录藏起来） */
   const resetToScan = () => {
-    if (repackAction.phase === 'submitting' || repackAction.phase === 'pending'
+    if (splitAction.blocked || repackAction.phase === 'submitting' || repackAction.phase === 'pending'
         || repackAction.phase === 'confirming' || repackAction.pendingRecord) {
-      err('有还原结果待确认，请先点「确认结果」，暂勿重新扫码或切换目标')
+      err('有原作业结果待确认，请先核对，暂勿重新扫码或切换目标')
       return
     }
     finishReset()
   }
 
   const handleScan = useCallback((raw: string) => {
+    if (!active || !canExecute || splitAction.blocked || repackAction.submitBlocked) return
     const parsed = parseBarcode(raw)
     if (parsed.type !== 'container' && parsed.type !== 'unknown') {
       err('扫描库存条码或塑料盒条码')
       return
     }
-    loadMut.mutate(raw.trim())
-  }, [err, loadMut])
+    loadMut.mutate({ bc: raw.trim(), owner: captureRead() })
+  }, [err, loadMut, active, canExecute, captureRead, splitAction.blocked, repackAction.submitBlocked])
 
   // 未确认期间锁住输入与模式：不能一边等回执一边改目标/改数量（防止「按当前输入猜成功」）
   const repackLocked = repackAction.phase === 'submitting'
@@ -229,6 +258,7 @@ export default function PdaSplitPage() {
     || repackAction.phase === 'confirming'
     || Boolean(repackAction.pendingRecord)
 
+  useEffect(() => { onWorkStateChange?.({ hasInput: step !== 'scan', pending: splitAction.blocked || repackLocked }) }, [step, splitAction.blocked, repackLocked, onWorkStateChange])
   const perNum = Number(perBoxQty)
   const cntNum = Number(boxCount)
   const estTotal = Number.isFinite(perNum) && Number.isInteger(cntNum) && perNum > 0 && cntNum > 0 ? perNum * cntNum : 0
@@ -239,20 +269,23 @@ export default function PdaSplitPage() {
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <PdaHeader
-        title="塑料盒作业"
+        title={fixedMode === 'split' ? '拆出散件盒' : fixedMode === 'repack' ? '盒还原整件' : LEGACY_PAGE_TITLE}
         subtitle={mode === 'repack' ? '扫盒 → 各箱数量 → 生成整件码' : '扫整件 → 拆出散件盒'}
-        onBack={() => navigate('/pda')}
+        onBack={onBack ?? (() => navigate('/pda'))}
       />
-      <PdaFlash flash={flash} />
+      <PdaFlash flash={contextCurrent ? flash : null} />
+      {!canExecute && <p className="px-4 py-2 text-sm text-amber-800">当前无拆分执行权限，仍可核对本人原拆分结果。</p>}
+      <PdaSplitRecoveryPanel recovery={splitAction} onError={err} />
 
       <div className="flex-1 overflow-y-auto px-4 py-4 max-w-md mx-auto w-full space-y-4">
         {step === 'scan' && (
           <div className="rounded-2xl border border-border bg-card p-4 space-y-2">
-            <p className="text-sm text-muted-foreground">扫描塑料盒条码（还原整件）或库存条码（拆出散件盒）</p>
+            <p className="text-sm text-muted-foreground">{fixedMode === 'repack' ? '扫描塑料盒B码，填写各整件数量' : fixedMode === 'split' ? '扫描整件库存I码，填写拆出散件数量' : '扫描塑料盒条码（还原整件）或库存条码（拆出散件盒）'}</p>
           </div>
         )}
 
-        {step === 'form' && boxId && (
+        {!contextCurrent && <div className="space-y-2 rounded border border-amber-300 p-3 text-sm"><p>账号、服务器或权限已变，原输入已保留但不能用于当前作业；请核对原结果或重新扫码。</p><Button variant="outline" onClick={resetToScan}>重新扫码</Button></div>}
+        {step === 'form' && boxId && contextCurrent && (
           <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4 space-y-3">
             <p className="font-mono text-lg font-bold text-foreground">{barcode}</p>
             <p className="text-sm text-foreground">{productHint}</p>
@@ -314,10 +347,10 @@ export default function PdaSplitPage() {
                 <div className="space-y-1">
                   <label className="text-xs text-muted-foreground">拆分数量</label>
                   <Input quantity type="number" inputMode="decimal" min={1} max={Math.max(0, remaining - 1)}
-                    value={qtyStr} onChange={e => setQtyStr(e.target.value)} className="font-mono text-lg" />
+                    value={qtyStr} disabled={splitAction.blocked} onChange={e => setQtyStr(e.target.value)} className="font-mono text-lg" />
                 </div>
                 <label className="flex items-center gap-2 text-sm">
-                  <input type="checkbox" checked={printLabel} onChange={e => setPrintLabel(e.target.checked)}
+                  <input type="checkbox" checked={printLabel} disabled={splitAction.blocked} onChange={e => setPrintLabel(e.target.checked)}
                     className="h-4 w-4 rounded border-border" />
                   打印新塑料盒条码
                 </label>
@@ -347,12 +380,12 @@ export default function PdaSplitPage() {
               </Button>
               <Button
                 className="flex-1"
-                onClick={() => { if (mode === 'repack') void submitRepack(); else splitMut.mutate() }}
-                disabled={(mode === 'repack' ? repackAction.phase === 'submitting' || repackAction.submitBlocked : splitMut.isPending)}
+                onClick={() => { if (mode === 'repack') void submitRepack(); else void submitSplit() }}
+                disabled={!active || !canExecute || (mode === 'repack' ? repackAction.phase === 'submitting' || repackAction.submitBlocked : splitAction.blocked)}
               >
                 {mode === 'repack'
                   ? (repackAction.phase === 'submitting' ? '提交中…' : '确认还原')
-                  : (splitMut.isPending ? '提交中…' : '确认拆分')}
+                  : '确认拆分'}
               </Button>
             </div>
           </div>
@@ -361,7 +394,7 @@ export default function PdaSplitPage() {
 
       <PdaBottomBar>
         {step === 'scan' && (
-          <PdaScanner onScan={handleScan} placeholder="扫描塑料盒或库存条码" disabled={loadMut.isPending} />
+          <PdaScanner onScan={handleScan} placeholder="扫描塑料盒或库存条码" disabled={!active || !canExecute || loadMut.isPending || splitAction.blocked || repackAction.submitBlocked} />
         )}
       </PdaBottomBar>
     </div>

@@ -12,7 +12,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Inbox, ArrowUpFromLine, ClipboardList, Shuffle,
-  ClipboardCheck, Package, PackagePlus, Scissors, ScanSearch, Truck, ArrowLeftRight,
+  ClipboardCheck, Package, Scissors, ScanSearch, Truck, ArrowLeftRight,
   Undo2, PackageX, PencilLine, Smartphone, ShieldAlert, Ban, MoreHorizontal, ChevronDown,
   Search, type LucideIcon,
 } from 'lucide-react'
@@ -28,6 +28,8 @@ import { performSessionLogout } from '@/lib/authSession'
 import { formatDisplayDateTime, beijingHour } from '@/lib/dateTime'
 import { getDeviceCredential, getDeviceSession } from '@/lib/pdaDeviceBinding'
 import { visibleAccountIdentity } from '@/lib/visibleAccountIdentity'
+import { usePdaSplitRecovery } from '@/hooks/usePdaSplitRecovery'
+import { splitEndpoint } from '@/lib/pdaSplitRecovery'
 
 type OpTone = 'blue' | 'green' | 'orange' | 'purple' | 'teal' | 'red' | 'indigo' | 'cyan'
 
@@ -73,8 +75,7 @@ const ALL_OPS: OpEntry[] = [
   { icon: Undo2,           label: '拣货退回', path: '/pda/cancel-return', perm: PERMISSIONS.WAREHOUSE_TASK_CANCEL_RETURN_VIEW, tone: 'red' },
   { icon: PencilLine,      label: '改单确认', path: '/pda/adjustments',   perm: PERMISSIONS.WAREHOUSE_TASK_ADJUST_VIEW, tone: 'indigo' },
   // ── 更多（自主操作，收进底部折叠区） ──
-  { icon: Scissors,        label: '塑料盒作业', path: '/pda/split',        perm: PERMISSIONS.INVENTORY_CONTAINER_SPLIT, tone: 'cyan', more: true },
-  { icon: PackagePlus,     label: '塑料盒放货', path: '/pda/fill',         perm: PERMISSIONS.INVENTORY_CONTAINER_SPLIT, tone: 'cyan', more: true },
+  { icon: Scissors,        label: '塑料盒作业', path: '/pda/plastic-box',   perm: PERMISSIONS.INVENTORY_CONTAINER_SPLIT, tone: 'cyan', more: true },
   { icon: Search,          label: '库存查询',   path: '/pda/inventory-query', perm: PERMISSIONS.INVENTORY_VIEW, tone: 'teal', more: true },
 ]
 
@@ -100,6 +101,8 @@ export default function PdaWorkbench() {
   const hour     = beijingHour()
   const greeting = hour < 12 ? '早上好' : hour < 18 ? '下午好' : '晚上好'
   const { roleLabel, roleColor, can, canAll, permissionsMissing } = usePdaRole()
+  const splitRecovery = usePdaSplitRecovery({ active: false })
+  const hasSplitRecovery = splitRecovery.records.some(r => r.endpoint === splitEndpoint())
   const [moreOpen, setMoreOpen] = useState(false)
   // 作业待办通知：按设备绑定仓库聚合各作业待办数，30s 轮询
   const { data: todoCounts } = usePdaTodoCounts()
@@ -151,6 +154,7 @@ export default function PdaWorkbench() {
       </div>
 
       <div className="max-w-md mx-auto px-4 py-4">
+        {hasSplitRecovery && <button type="button" className="mb-4 w-full rounded-xl border border-amber-300 bg-amber-50 p-3 text-left text-sm text-amber-900" onClick={() => navigate('/pda/split-recovery')}>拆分结果待确认 · 核对本人原请求</button>}
         {/* 设备绑定状态。设备会话是硬性要求，未绑定的机器点任何作业都会被拒，
             所以这块必须显眼且常驻——否则员工只会看到一堆点不动的按钮，
             却找不到「哪里能绑定」。 */}

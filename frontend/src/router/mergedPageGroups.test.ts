@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { expect, test } from 'vitest'
-import { buildWorkspaceTabRegistrationFromPath } from './workspaceRouteMeta'
+import { buildWorkspaceTabRegistrationFromPath, resolveWorkspaceEntryPath } from './workspaceRouteMeta'
 import { buildTopNavSections, resolveRoutePermission } from './routeDefinitions'
 import { hasPermission } from '@/lib/permissions'
 import { PERMISSIONS } from '@/lib/permission-codes'
@@ -10,6 +10,9 @@ test.each([
   ['/procurement', '/reports/replenishment'],
   ['/reports', '/reports/kpi', '/reports/profit-analysis'],
   ['/reports/warehouse-ops', '/reports/wave-performance', '/reports/pda-anomaly'],
+  ['/payments/receivable', '/reports/reconciliation/receivable'],
+  ['/payments/payable', '/reports/reconciliation/payable'],
+  ['/finance/dashboard', '/finance/accounts', '/finance/transactions'],
 ])('合并视图复用 %s 工作区，旧地址和查询参数保留', (...paths) => {
   const keys = paths.map(path => buildWorkspaceTabRegistrationFromPath(`${path}?warehouseId=3`).key)
   expect(new Set(keys).size).toBe(1)
@@ -53,5 +56,24 @@ test('各组合并成一个菜单入口，原页面权限保持原样', () => {
   for (const label of ['采购建议', '报表中心', '仓库运营']) expect(menus.filter(item => item.label === label)).toHaveLength(1)
   expect(resolveRoutePermission('/procurement')).toBe(PERMISSIONS.PROCUREMENT_PLAN_VIEW)
   expect(resolveRoutePermission('/reports/replenishment')).toBe(PERMISSIONS.REPORT_VIEW)
-  expect(buildWorkspaceTabRegistrationFromPath('/payments/receivable').key).not.toBe(buildWorkspaceTabRegistrationFromPath('/reports/reconciliation/receivable').key)
+  expect(buildWorkspaceTabRegistrationFromPath('/payments/receivable').key).toBe(buildWorkspaceTabRegistrationFromPath('/reports/reconciliation/receivable').key)
+})
+
+test('财务菜单逐子页授权，撤权后使用合法原上下文且保留隐藏偏好', () => {
+  const can = (permission: Parameters<typeof hasPermission>[1]) => hasPermission([PERMISSIONS.REPORT_VIEW], permission)
+  const finance = buildTopNavSections(can).find(section => section.label === '财务')
+  if (finance?.kind !== 'menu') throw new Error('财务菜单缺失')
+  expect(finance.children.map(item => [item.label, item.path])).toEqual([
+    ['供应商往来', '/reports/reconciliation/payable'], ['客户往来', '/reports/reconciliation/receivable'],
+  ])
+  const existing = { path: '/payments/receivable?keyword=hidden', viewPaths: {
+    '/payments/receivable': '/payments/receivable?keyword=hidden',
+    '/reports/reconciliation/receivable': '/reports/reconciliation/receivable?partyId=7',
+  } }
+  expect(resolveWorkspaceEntryPath('/reports/reconciliation/receivable', existing, can)).toBe('/reports/reconciliation/receivable?partyId=7')
+  expect(existing.viewPaths['/payments/receivable']).toBe('/payments/receivable?keyword=hidden')
+  expect(resolveWorkspaceEntryPath('/payments/receivable', existing, requirement => hasPermission([PERMISSIONS.PAYMENT_VIEW], requirement))).toBe(existing.path)
+  expect(buildWorkspaceTabRegistrationFromPath('/payments').path).toBe('/payments/payable')
+  expect(buildWorkspaceTabRegistrationFromPath('/reports/reconciliation').path).toBe('/reports/reconciliation/payable')
+  expect(buildWorkspaceTabRegistrationFromPath('/payments/ledger/customer/7?keyword=old').key).not.toBe('/payments/receivable')
 })

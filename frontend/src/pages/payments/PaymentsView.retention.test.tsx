@@ -8,6 +8,8 @@ import PaymentsView from './PaymentsView'
 import ReconciliationView from '../reports/ReconciliationView'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { useAuthStore } from '@/store/authStore'
+import api from '@/api/client'
+import type { InternalAxiosRequestConfig } from 'axios'
 
 const mocks=vi.hoisted(()=>({ receipts:vi.fn(), statements:vi.fn() }))
 vi.mock('@/api/payments',async importOriginal=>({
@@ -17,16 +19,21 @@ vi.mock('@/api/payments',async importOriginal=>({
   getStatementsApi:mocks.statements,
 }))
 vi.mock('@/components/shared/usePaymentActions',()=>({usePaymentActions:()=>({renderActions:()=>null,dialogs:null})}))
+// 月结切到全部账款可能读取原报表；邻接保留测试也必须只使用离线API边界。
+vi.mock('@/api/reports',()=>({getReconciliationApi:vi.fn(async()=>({list:[],pagination:{total:0},summary:{}}))}))
 let host:HTMLDivElement,root:Root,client:QueryClient
+const originalAdapter=api.defaults.adapter
+const blockedTransport=vi.fn(async(config:InternalAxiosRequestConfig)=>{throw new Error(`保留测试未允许网络端点：${config.url}`)})
 beforeEach(()=>{
   Object.assign(globalThis,{IS_REACT_ACT_ENVIRONMENT:true})
   useAuthStore.setState({user:{roleId:1,permissions:[]} as never})
   mocks.receipts.mockReset().mockResolvedValue({list:[],pagination:{total:0}})
   mocks.statements.mockReset().mockResolvedValue({list:[],pagination:{total:0}})
+  blockedTransport.mockClear();api.defaults.adapter=blockedTransport
   client=new QueryClient({defaultOptions:{queries:{retry:false}}})
   host=document.createElement('div');document.body.append(host);root=createRoot(host)
 })
-afterEach(()=>{act(()=>root.unmount());client.clear();host.remove()})
+afterEach(()=>{act(()=>root.unmount());client.clear();host.remove();api.defaults.adapter=originalAdapter;expect(blockedTransport).not.toHaveBeenCalled()})
 const settle=()=>new Promise(resolve=>setTimeout(resolve,20))
 async function render(monthly:boolean,key='initial') {
   const path=monthly?'/reports/reconciliation/receivable':'/payments/receivable'

@@ -1,7 +1,7 @@
 /* eslint-disable */
 // AUTO-GENERATED FILE. Do not edit manually.
 // Source: backend/src/constants/warehouseTaskStatus.js, backend/src/constants/saleOrderStatus.js,
-//         backend/src/constants/settlementType.js
+//         backend/src/constants/settlementType.js, backend/src/constants/documentStatusRules.js
 // Regenerate with: node scripts/generate-status-constants.js
 
 export type StatusTone = 'draft' | 'active' | 'success' | 'danger'
@@ -397,6 +397,103 @@ export const SALE_STATUS_OPTIONS = [
   },
   {
     "label": "部分占库",
+    "value": "6"
+  }
+] as const
+
+export const SUPPLIER_REFUND_STATUS = {
+  "CANCELLED": 4,
+  "CONFIRMED": 2,
+  "DRAFT": 1,
+  "RECEIVED": 3
+} as const
+export const SUPPLIER_REFUND_STATUS_NAME = {
+  "1": "草稿",
+  "2": "待收退款",
+  "3": "已收退款",
+  "4": "已取消"
+} as const
+export const SUPPLIER_REFUND_ACTION_RULES = {
+  "cancel": {
+    "from": [
+      1,
+      2
+    ],
+    "message": "已收退款不能取消，请财务核对",
+    "to": 4
+  },
+  "confirm": {
+    "from": [
+      1
+    ],
+    "message": "只有草稿退款单可确认",
+    "to": 2
+  },
+  "receive": {
+    "from": [
+      2
+    ],
+    "message": "只有待收退款单可登记收到",
+    "to": 3
+  }
+} as const
+export const SUPPLIER_REFUND_STATUS_OPTIONS = [
+  {
+    "label": "全部状态",
+    "value": ""
+  },
+  {
+    "label": "草稿",
+    "value": "1"
+  },
+  {
+    "label": "待收退款",
+    "value": "2"
+  },
+  {
+    "label": "已收退款",
+    "value": "3"
+  },
+  {
+    "label": "已取消",
+    "value": "4"
+  }
+] as const
+
+export const DISPOSAL_STATUS_NAME = {
+  "1": "草稿",
+  "2": "待审批",
+  "3": "已批准",
+  "4": "已处置",
+  "5": "已驳回",
+  "6": "已取消"
+} as const
+export const DISPOSAL_DISPLAY_LABEL = {
+  "LEGACY_APPROVED": "待签认"
+} as const
+export const DISPOSAL_STATUS_OPTIONS = [
+  {
+    "label": "草稿",
+    "value": "1"
+  },
+  {
+    "label": "待审批",
+    "value": "2"
+  },
+  {
+    "label": "已批准",
+    "value": "3"
+  },
+  {
+    "label": "已处置",
+    "value": "4"
+  },
+  {
+    "label": "已驳回",
+    "value": "5"
+  },
+  {
+    "label": "已取消",
     "value": "6"
   }
 ] as const

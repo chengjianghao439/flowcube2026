@@ -1,4 +1,6 @@
 'use strict'
+const { issueFixtureAccessToken, cleanupFixtureSessionFamilies } = require('./helpers/fixtureAuthSession')
+
 
 // 真实隔离库 + 独立 HTTP 服务；每轮专属商品/仓库，不借既有库存掩盖提前可拣资格。
 const { test, before, after } = require('node:test')
@@ -23,7 +25,7 @@ before(async () => {
   const user = await one('SELECT id, username, token_version FROM sys_users WHERE role_id=1 AND is_active=1 AND deleted_at IS NULL LIMIT 1')
   assert.ok(user, '隔离库必须已有管理员')
   operator = { userId: user.id, realName: ref }
-  token = require('../backend/node_modules/jsonwebtoken').sign({ userId: user.id, tokenVersion: Number(user.token_version || 0) }, require('../backend/src/config/env').env.JWT_SECRET, { expiresIn: '1h' })
+  token = await issueFixtureAccessToken(pool, user.id, { expiresIn: '1h' })
   warehouse = { id: await insert('INSERT INTO inventory_warehouses (code,name) VALUES (?,?)', [ref, ref]), name: ref }
   location = { id: await insert('INSERT INTO warehouse_locations (warehouse_id,code,name) VALUES (?,?,?)', [warehouse.id, ref, ref]) }
   supplier = { id: await insert('INSERT INTO supply_suppliers (code,name,settlement_type,payment_terms_days) VALUES (?,?,2,30)', [ref, ref]), name: ref }
@@ -57,7 +59,7 @@ after(async () => {
     await pool.query('DELETE FROM pda_device_sessions WHERE device_id=?', [deviceId])
     await pool.query('DELETE FROM pda_devices WHERE id=?', [deviceId])
   }
-  } finally { await pool.end() }
+  } finally { try { await cleanupFixtureSessionFamilies(pool) } finally { await pool.end() } }
 })
 async function fixture(qty = 100, { product, price = 10, taskQty, skipTask = false } = {}) {
   if (!product) {

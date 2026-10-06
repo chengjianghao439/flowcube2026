@@ -17,7 +17,7 @@ function runOps(script, scenario, { ageHours = 0, explicit = false, corrupt = fa
   fs.mkdirSync(bin)
   fs.mkdirSync(path.join(dir, 'scripts/lib'), { recursive: true })
   fs.mkdirSync(path.join(dir, 'backups'))
-  for (const file of [script, 'lib/ops-common.sh']) {
+  for (const file of [script, 'lib/ops-common.sh', 'lib/ops-alerts.js']) {
     fs.copyFileSync(path.join(root, 'scripts', file), path.join(dir, 'scripts', file))
   }
   fs.copyFileSync(path.join(root, 'scripts/lib/runtime-guards.sh'), path.join(dir, 'scripts/lib/runtime-guards.sh'))
@@ -80,7 +80,7 @@ process.exit(0);
   const state = path.join(dir, 'backups/.monitor.state')
   const env = { ...process.env, PATH: bin + ':' + process.env.PATH, PROJECT_DIR: dir,
     BACKUP_DIR: path.join(dir, 'backups'), STATE_FILE: state, DINGTALK_WEBHOOK: '',
-    MIN_TABLES: '130', MIN_ROWS: '1', BACKUP_MAX_AGE_HOURS: '48', SLOW_QUERY_WARN: '50',
+    MIN_TABLES: '130', MIN_ROWS: '1', MIN_BYTES: '1', BACKUP_MAX_AGE_HOURS: '48',
     OPS_TEST_SCENARIO: scenario, OPS_TEST_LOG: log, OPS_TEST_SLOW_LOG: slowLog }
   if (previousMonitorState) fs.writeFileSync(state, previousMonitorState)
   try {
@@ -88,7 +88,9 @@ process.exit(0);
       { cwd: dir, env, encoding: 'utf8', timeout: 15000 })
     const commands = fs.existsSync(log) ? fs.readFileSync(log, 'utf8').trim().split('\n').map(JSON.parse) : []
     assert.ok(!commands.some(c => c[0] === 'curl' && c.includes('-d')), '测试不能发送通知')
-    return { ...result, commands, state: fs.existsSync(state) ? fs.readFileSync(state, 'utf8') : '' }
+    const restoreFile = path.join(dir, 'backups/.restore-check.status.json')
+    return { ...result, commands, state: fs.existsSync(state) ? fs.readFileSync(state, 'utf8') : '',
+      restoreStatus: fs.existsSync(restoreFile) ? JSON.parse(fs.readFileSync(restoreFile, 'utf8')) : null }
   } finally { fs.rmSync(dir, { recursive: true, force: true }) }
 }
 
@@ -96,6 +98,7 @@ test('新备份可恢复，即使最近 668 小时没有销售单', () => {
   const r = runOps('restore-check.sh', 'idle')
   assert.equal(r.status, 0, r.stdout + r.stderr)
   assert.match(r.stdout, /备份恢复演练通过/)
+  assert.equal(r.restoreStatus.status, 'passed')
 })
 
 test('自动演练拒绝超过 48 小时的备份，且不启动演练容器', () => {
@@ -103,18 +106,21 @@ test('自动演练拒绝超过 48 小时的备份，且不启动演练容器', (
   assert.equal(r.status, 1, r.stdout + r.stderr)
   assert.match(r.stderr, /备份.*过期/)
   assert.ok(!r.commands.some(c => c[0] === 'docker'))
+  assert.equal(r.restoreStatus.status, 'failed')
 })
 
 test('显式指定历史备份允许验证恢复能力，但提示文件年龄', () => {
   const r = runOps('restore-check.sh', 'idle', { ageHours: 72, explicit: true })
   assert.equal(r.status, 0, r.stdout + r.stderr)
   assert.match(r.stdout, /历史备份/)
+  assert.equal(r.restoreStatus, null, '历史手工演练不得覆盖自动演练结果')
 })
 
 for (const [scenario, options] of [['import-fails', {}], ['missing-tables', {}], ['corrupt', { corrupt: true }]]) {
   test(`恢复演练仍拒绝 ${scenario}`, () => {
     const r = runOps('restore-check.sh', scenario, options)
     assert.equal(r.status, 1, r.stdout + r.stderr)
+    assert.equal(r.restoreStatus.status, 'failed')
   })
 }
 
@@ -122,21 +128,21 @@ for (const scenario of ['query-fails', 'invalid-metric']) {
   test(`连接数 ${scenario} 必须记录异常，不能静默回退为零`, () => {
     const r = runOps('monitor.sh', scenario)
     assert.equal(r.status, 0, r.stderr)
-    assert.match(r.state, /^bad /, r.stdout + r.stderr)
+    assert.ok(Object.keys(JSON.parse(r.state).observed).length > 0, r.stdout + r.stderr)
     assert.match(r.stdout, /MySQL.*连接数.*(失败|无效)/)
   })
 }
 
 test('认证后的真实连接数触发阈值告警', () => {
   const r = runOps('monitor.sh', 'high-connections')
-  assert.match(r.state, /^bad /, r.stdout + r.stderr)
+  assert.ok(JSON.parse(r.state).observed.connections, r.stdout + r.stderr)
   assert.match(r.stdout, /MySQL 活跃连接 130/)
 })
 
 test('连接数正常时保留正常状态', () => {
   const r = runOps('monitor.sh', 'healthy')
   assert.equal(r.status, 0, r.stderr)
-  assert.equal(r.state, 'ok 0\n', r.stdout + r.stderr)
+  assert.deepEqual(JSON.parse(r.state).observed, {}, r.stdout + r.stderr)
 })
 
 test('多日前的慢查询不会持续告警，先前的异常状态应恢复', () => {
@@ -145,14 +151,15 @@ test('多日前的慢查询不会持续告警，先前的异常状态应恢复',
     previousMonitorState: `bad ${Math.floor(Date.now() / 1000) - 86400}\n`,
   })
   assert.equal(r.status, 0, r.stderr)
-  assert.equal(r.state, 'ok 0\n', r.stdout + r.stderr)
+  assert.deepEqual(JSON.parse(r.state).observed, {}, r.stdout + r.stderr)
   assert.match(r.stdout, /服务已恢复正常/)
 })
 
-test('最近 24 小时内慢查询达到阈值仍告警', () => {
+test('最近24小时慢查询数量进入性能摘要，数量本身不产生即时告警', () => {
   const r = runOps('monitor.sh', 'healthy', { slowHours: Array(50).fill(1) })
   assert.equal(r.status, 0, r.stderr)
-  assert.match(r.state, /^bad /, r.stdout + r.stderr)
+  assert.deepEqual(JSON.parse(r.state).observed, {}, r.stdout + r.stderr)
+  assert.equal(JSON.parse(r.state).metrics.slow, '50')
   assert.match(r.stdout, /慢查询.*50 条/)
 })
 
@@ -167,7 +174,7 @@ for (const scenario of ['docker-timeout', 'tls-timeout']) {
   test(`${scenario} 不无限挂起，记录异常而不是正常`, () => {
     const r = runOps('monitor.sh', scenario)
     assert.equal(r.status, 0, r.stderr)
-    assert.match(r.state, /^bad /, r.stdout + r.stderr)
+    assert.ok(Object.keys(JSON.parse(r.state).observed).length > 0, r.stdout + r.stderr)
     if (scenario === 'tls-timeout') assert.match(r.stdout, /证书.*(失败|超时)/)
   })
 }

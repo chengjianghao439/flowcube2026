@@ -8,11 +8,11 @@
 
 - **monitor 告警会持续重提醒**：monitor.sh 每 5 分钟检查一次，持续异常按 `REMIND_HOURS`（默认 24h）反复推钉钉，
   不会只响一声。看到「仍未恢复」类告警时，说明故障从上次提醒到现在一直没好，**先当故障还在处理**。
-- **告警去抖**：只有「正常→异常」和「异常→恢复」才通知，其余每 5 分钟的检查静默。所以收到异常告警后 5 分钟内
-  没有恢复通知 = 故障持续。
+- **按故障去重**：新故障、等级变化、逐项恢复都会通知；持续同一故障按默认24小时重提醒。
+  发送成功后才确认，发送失败下轮重试。没有恢复通知需继续核对，不能仅凭消息缺失断言故障状态。
 - **先看日志再动手**：`docker compose logs --tail=200 <svc>` 是第一步，别直接重启（会丢失现场）。
-- **慢查询告警看最近 24 小时**：`monitor.sh` 按慢日志的 UTC `# Time:` 统计最近 24 小时，默认达到 50 条才告警；
-  旧日志保留作调查证据，不再因历史累计条数反复提醒。日志不可读取或时间格式不受支持时仍告警。
+- **慢查询数量属于性能摘要**：`monitor.sh` 按当前慢日志UTC `# Time:`统计最近24小时，进入日志与日报，不按数量即时报警；
+  旧日志保留作调查证据。日志不可读取或时间格式不受支持时仍告警。
   不要通过清空慢日志或手改 `.monitor.state` 来消除提醒；先核对近期数量、服务健康与负载。
 
 ---
@@ -88,7 +88,7 @@ docker compose logs mysql | tail -100
 
 ### 症状
 
-- monitor 告警「公网探测 https://jixuflow.com/api/health HTTP xxx」——注意回环检查（第 3 项）是通的，
+- monitor 告警「公网探测 HTTP xxx（实际地址为 /api/ready）」——注意回环检查（第 3 项）是通的，
   说明问题在公网链路：Caddy、DNS 或证书
 - 浏览器访问 https://jixuflow.com 报证书错误 / 连接拒绝
 
@@ -195,7 +195,7 @@ cat /proc/pressure/io
 
 - [ ] `curl -fsS http://127.0.0.1:3000/api/health` 与 `https://jixuflow.com/api/health` 都 200
 - [ ] `docker compose ps` 三容器（mysql / backend / frontend）均 Up，重启计数不再增长
-- [ ] monitor 推送了「✅ 服务已恢复正常」钉钉（说明状态文件已回到 ok）
+- [ ] monitor 推送了「✅ 服务已恢复正常」钉钉（说明本轮异常已全部解除；状态文件当前观察为空且推送已确认）
 - [ ] 若涉及库存：跑 `resync:inventory-stock` 或 `GET /api/inventory/check-consistency`
 - [ ] 若涉及备份恢复：`bash scripts/restore-check.sh` 通过（备份文件时间 + 导入 + 表数 + 关键表行数）。自动选最新文件时默认最多 48 小时，可用 `BACKUP_MAX_AGE_HOURS` 调整；显式传入历史文件时仅提示过期并验证其恢复能力。销售单多久没有新增与备份是否新鲜无关。
 - [ ] 若动过证书：`echo | openssl s_client -servername jixuflow.com -connect jixuflow.com:443 2>/dev/null | openssl x509 -noout -enddate`

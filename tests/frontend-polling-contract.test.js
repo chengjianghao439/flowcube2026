@@ -75,7 +75,7 @@ function main() {
   //      实际批量由 `pageSize ?? 200` 决定——已用 HTTP 拦截测试实测，见
   //      frontend/src/api/warehouse-tasks.return-out-paging.test.ts。
   const BOUNDED_SUMMARY_ALLOWLIST = new Map([
-    ['frontend/src/hooks/useDashboard.ts:61',
+    ['frontend/src/hooks/useDashboard.ts:67',
       '首页「待我审批」只展示前 5 条摘要：listPendingApprovalsApi(..., true) → listMode: summary 单页直返'],
     ['frontend/src/pages/inbound-tasks/index.tsx:105',
       '入库任务列表走默认取齐路径：client.ts:415 已 delete 外部 pageSize，首请实际 pageSize=200'

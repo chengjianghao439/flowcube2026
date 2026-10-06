@@ -11,6 +11,8 @@ const state = vi.hoisted(() => ({
 
 vi.mock('@/store/authStore', () => ({ useAuthStore: (select: (value: { user: typeof state.user }) => unknown) => select(state) }))
 vi.mock('@/hooks/usePdaTodoCounts', () => ({ usePdaTodoCounts: () => ({ data: {} }) }))
+vi.mock('@/hooks/usePdaSplitRecovery', () => ({ usePdaSplitRecovery: () => ({ records: [] }) }))
+vi.mock('@/lib/pdaSplitRecovery', () => ({ splitEndpoint: () => '/api' }))
 vi.mock('@/lib/pdaDeviceBinding', () => ({
   getDeviceCredential: () => ({ deviceCode: 'PDA-TEST' }),
   getDeviceSession: () => ({ token: 'test' }),

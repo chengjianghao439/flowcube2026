@@ -1,3 +1,4 @@
+import { useApprovalReadScope } from '@/hooks/useApprovalReadScope'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   getDashboardSummaryApi, getLowStockApi, getTrendApi, getTopStockApi,
@@ -15,6 +16,7 @@ import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import type { DashboardLayout } from '@/types/dashboard'
 import { usePermission } from './usePermission'
 import { visibleWorkbench } from '@/lib/workbench'
+import { PENDING_APPROVAL_PERMISSIONS } from '@/lib/approvalBusiness'
 
 // 图表/统计类小组件的默认区间：在模块加载时求值一次，保证同一页面生命周期内 queryKey 稳定
 // （趋势看板不需要秒级更新区间；刷新页面自然取新区间）。
@@ -55,10 +57,18 @@ export const useSaleStats       = () => useQuery({ queryKey:['dash-sale-stats',R
 export const usePurchaseStats   = () => useQuery({ queryKey:['dash-purchase-stats',RANGE_180], queryFn:()=>getPurchaseStatsApi(RANGE_180).then(r=>r!), staleTime:300000 })
 export const useInventoryStats  = () => useQuery({ queryKey:['dash-inventory-stats'], queryFn:()=>getInventoryStatsApi({}).then(r=>r!), staleTime:300000 })
 export const usePdaAnomaly      = () => useQuery({ queryKey:['dash-anomaly',RANGE_30], queryFn:()=>getPdaAnomalyApi(RANGE_30).then(r=>r!), staleTime:300000 })
-/** 待我审批（approval.task.view）——首页 widget 每 60s 与通知中心同步刷新 */
+/** 与完整待办同一来源集合；首页仅单批摘要，每60s刷新。 */
 export function usePendingApprovalsBrief() {
   const active = useActiveWorkspaceTab()
-  return useQuery({ queryKey: ['dash-pending-approvals'], queryFn: () => listPendingApprovalsApi({ page: 1, pageSize: 5 }, true).then(r => r!), enabled: active, refetchInterval: active ? 60000 : false })
+  const scope = useApprovalReadScope()
+  const { can } = usePermission()
+  const enabled = active && can(PENDING_APPROVAL_PERMISSIONS)
+  const query = useQuery({ queryKey: ['dash-pending-approvals', scope.key], queryFn: async ({ signal }) => {
+    const result = await listPendingApprovalsApi({ page: 1, pageSize: 5 }, true, { signal, baseURL: scope.server, _authSessionGeneration: scope.generation, _erpApiFallbackTried: true })
+    if (!scope.isCurrent()) throw new Error('审批待办读取上下文已变化，请重试')
+    return result
+  }, enabled, subscribed: enabled, refetchInterval: enabled ? 60000 : false, placeholderData: undefined, staleTime: 0 })
+  return { ...query, data: enabled && scope.isCurrent() && !query.isFetching && !query.isPaused ? query.data : undefined }
 }
 
 // ── 个性化布局存取 ─────────────────────────────────────────────────────────────

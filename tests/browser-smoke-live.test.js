@@ -19,7 +19,7 @@ assert.equal(redirects['/payments'], '/payments/payable')
 // 二者共同的要求是：**真实页面必须呈现与该源一致的标题**（若服务端页面未随发布 SHA 更新，检查同样会失败）。
 const pdaSplitTitle = (() => {
   const src = fs.readFileSync(path.join(root, 'frontend/src/pages/pda/split.tsx'), 'utf8')
-  const m = /<PdaHeader\s+title="([^"]+)"/.exec(src)
+  const m = /<PdaHeader\s+title="([^"]+)"/.exec(src) || /const LEGACY_PAGE_TITLE = '([^']+)'/.exec(src)
   assert.ok(m, '未能从 frontend/src/pages/pda/split.tsx 读到 PdaHeader.title')
   return m[1]
 })()

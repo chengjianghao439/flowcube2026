@@ -151,6 +151,8 @@ declare module 'axios' {
      */
     listMode?: 'summary' | 'paged'
     skipGlobalError?: boolean
+    /** 资源恢复请求显式由员工重试：禁地址fallback、认证/设备自动重放。默认其它调用保持。 */
+    automaticReplay?: false
     /** ERP API fallback 已尝试过，避免循环重试 */
     _erpApiFallbackTried?: boolean
     /** 首次发起时绑定账套；续期重放不能改投另一账套。 */
@@ -183,7 +185,7 @@ function originFromAxiosConfig(config: InternalAxiosRequestConfig): string | nul
 }
 
 async function tryErpApiFallbackAndRetry(config: InternalAxiosRequestConfig): Promise<boolean> {
-  if (config._erpApiFallbackTried) return false
+  if (config.automaticReplay === false || config._erpApiFallbackTried) return false
   config._erpApiFallbackTried = true
   // PDA 场景（真机 APK 或 dev:pda / build:pda 的 Vite live）不走 ERP 候选地址回退：
   // PDA 的 API 基址由 pdaRuntime 统一管理（真机用 resolveHealthyPdaApiOrigin，Vite live 走相对 /api 代理），
@@ -200,7 +202,7 @@ async function tryErpApiFallbackAndRetry(config: InternalAxiosRequestConfig): Pr
     assertCurrentAuthSession(config)
     setApiBase(n)
     const nextBase = `${n}/api`
-    apiClient.defaults.baseURL = nextBase
+    setApiClientBaseURL(nextBase)
     config.baseURL = nextBase
     return true
   }
@@ -214,6 +216,19 @@ const apiClient = axios.create({
     'Content-Type': 'application/json',
   },
 })
+
+const apiBaseURLListeners = new Set<() => void>()
+export function getApiClientBaseURL(): string | undefined { return apiClient.defaults.baseURL }
+export function subscribeApiClientBaseURL(listener: () => void): () => void {
+  apiBaseURLListeners.add(listener)
+  return () => { apiBaseURLListeners.delete(listener) }
+}
+/** Runtime改址统一入口：同步默认请求地址后通知依赖服务器身份的读取界面。 */
+export function setApiClientBaseURL(baseURL: string | undefined): void {
+  if (apiClient.defaults.baseURL === baseURL) return
+  apiClient.defaults.baseURL = baseURL
+  for (const listener of apiBaseURLListeners) listener()
+}
 
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
@@ -295,6 +310,7 @@ apiClient.interceptors.response.use(
     // 只重试一次并打标记，避免密钥已被重置时陷入「换票→仍失败→再换票」的死循环。
     if (
       cfg
+      && cfg.automaticReplay !== false
       && status === 403
       && error.response?.data?.code === 'PDA_SESSION_REQUIRED'
       && !(cfg as RetriableConfig).__pdaSessionRetried
@@ -345,6 +361,8 @@ apiClient.interceptors.response.use(
     if (status === 401 && businessCode === 'PRINT_CLIENT_CREDENTIAL_INVALID') {
       return Promise.reject(structuredError)
     }
+
+    if (status === 401 && cfg?.automaticReplay === false) return Promise.reject(structuredError)
 
     if (status === 401) {
       // access token 过期（2026-08-21 权衡修复）：先尝试用 refresh token 换新，

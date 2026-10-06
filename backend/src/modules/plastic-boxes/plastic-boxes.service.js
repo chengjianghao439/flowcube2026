@@ -7,6 +7,29 @@ const REPACK_MAX_BOXES = 100
 const { normalizePagination } = require('../../utils/pagination')
 const { assertInScope, scopeFilter } = require('../../utils/warehouseScope')
 
+function requireDeviceWarehouse(isPda, warehouseId) {
+  if (isPda && (warehouseId == null || !Number.isSafeInteger(Number(warehouseId)) || Number(warehouseId) <= 0)) {
+    throw new AppError('设备尚未绑定有效仓库，无法执行塑料盒作业', 403, 'PDA_WAREHOUSE_REQUIRED')
+  }
+}
+
+function assertBoxScope(box, scopeWarehouseIds, pdaWarehouseId) {
+  assertInScope(scopeWarehouseIds, box.warehouse_id, '塑料盒')
+  if (pdaWarehouseId != null && Number(pdaWarehouseId) !== Number(box.warehouse_id)) {
+    throw new AppError('该 PDA 设备未绑定到目标仓库，不能在此仓库作业', 403, 'PDA_WAREHOUSE_MISMATCH')
+  }
+}
+
+async function assertReplayBoxScope(conn, boxId, scopeWarehouseIds, pdaWarehouseId) {
+  // 幂等锁可能等待其它事务提交；RR 探维度快照不能继续用于授权原回执。
+  const [[box]] = await conn.query(
+    "SELECT warehouse_id FROM inventory_containers WHERE id = ? AND barcode LIKE 'B%' AND deleted_at IS NULL FOR SHARE",
+    [boxId],
+  )
+  if (!box) throw new AppError('塑料盒不存在', 404)
+  assertBoxScope(box, scopeWarehouseIds, pdaWarehouseId)
+}
+
 async function findAll({ page = 1, pageSize = 20, keyword, warehouseId, productId, scopeWarehouseIds = null } = {}) {
   const conditions = ["c.deleted_at IS NULL", "c.barcode LIKE 'B%'"]
   const params = []
@@ -119,7 +142,7 @@ async function create({ productId, warehouseId, locationId, remark }, scopeWareh
  * 幂等按**目标盒**绑定（`plastic_box.fill.<盒id>`），稳定键重放直接返回原结果，
  * 不会再去读来源（因此来源已空的场景重放仍成功）。
  */
-async function fill(id, { sourceContainerId, expectedSourceQty, requestKey }, { userId = null, userName = null, pdaWarehouseId = null }, scopeWarehouseIds = null) {
+async function fill(id, { sourceContainerId, expectedSourceQty, requestKey }, { userId = null, userName = null, isPda = false, pdaWarehouseId = null }, scopeWarehouseIds = null) {
   const { splitContainer, lockStockDimension } = require('../../engine/containerEngine')
   const { beginResourceOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 
@@ -127,6 +150,7 @@ async function fill(id, { sourceContainerId, expectedSourceQty, requestKey }, { 
   if (!Number.isFinite(boxId) || boxId <= 0) throw new AppError('塑料盒不存在', 404)
   const srcId = Number(sourceContainerId)
   if (!Number.isFinite(srcId) || srcId <= 0) throw new AppError('来源库存条码无效', 400)
+  requireDeviceWarehouse(isPda, pdaWarehouseId)
 
   const conn = await pool.getConnection()
   let result
@@ -140,11 +164,7 @@ async function fill(id, { sourceContainerId, expectedSourceQty, requestKey }, { 
     )
     if (!box) throw new AppError('塑料盒不存在', 404)
     // 仓库数据权限：放货会改库存与流水，必须先确认调用方有权访问该仓库。
-    assertInScope(scopeWarehouseIds, box.warehouse_id, '塑料盒')
-    // PDA 设备仓必须等于目标盒所在仓：带票据的 PDA 不得跨仓操作别仓的盒
-    if (pdaWarehouseId != null && Number(pdaWarehouseId) !== Number(box.warehouse_id)) {
-      throw new AppError('该 PDA 设备未绑定到目标仓库，不能在此仓库作业', 403, 'PDA_WAREHOUSE_MISMATCH')
-    }
+    assertBoxScope(box, scopeWarehouseIds, pdaWarehouseId)
 
     const requestState = await beginResourceOperationRequest(conn, {
       requestKey,
@@ -154,6 +174,7 @@ async function fill(id, { sourceContainerId, expectedSourceQty, requestKey }, { 
       resourceId: boxId,
     })
     if (requestState.replay) {
+      await assertReplayBoxScope(conn, boxId, scopeWarehouseIds, pdaWarehouseId)
       await conn.rollback()
       return requestState.responseData
     }
@@ -218,7 +239,7 @@ async function fill(id, { sourceContainerId, expectedSourceQty, requestKey }, { 
  * 绝不能先锁盒再锁维度，否则与上架/出库路径构成 ABBA 死锁面。
  * 幂等按盒绑定（`plastic_box.repack.<盒id>`），稳定键重放返回**原生成的容器清单**，不重复建码。
  */
-async function repack(id, { perBoxQty, boxCount, items, requestKey }, { userId = null, userName = null, pdaWarehouseId = null }, scopeWarehouseIds = null) {
+async function repack(id, { perBoxQty, boxCount, items, requestKey }, { userId = null, userName = null, isPda = false, pdaWarehouseId = null }, scopeWarehouseIds = null) {
   const { lockStockDimension, createContainersBatch, logContainerSplitBatch, syncStockFromContainers } = require('../../engine/containerEngine')
   const { beginResourceOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
   const { roundQty } = require('../../utils/unitConversion')
@@ -226,6 +247,7 @@ async function repack(id, { perBoxQty, boxCount, items, requestKey }, { userId =
 
   const boxId = Number(id)
   if (!Number.isFinite(boxId) || boxId <= 0) throw new AppError('塑料盒不存在', 404)
+  requireDeviceWarehouse(isPda, pdaWarehouseId)
 
   // 互斥按「字段是否出现」判定：`items: []` 也是明确占位，不能被非空真假掩盖成走快捷分支
   const hasItems = items !== undefined && items !== null
@@ -264,11 +286,7 @@ async function repack(id, { perBoxQty, boxCount, items, requestKey }, { userId =
       [boxId],
     )
     if (!boxDim) throw new AppError('塑料盒不存在', 404)
-    assertInScope(scopeWarehouseIds, boxDim.warehouse_id, '塑料盒')
-    // PDA 设备仓必须等于目标盒所在仓：带票据的 PDA 不得跨仓操作别仓的盒
-    if (pdaWarehouseId != null && Number(pdaWarehouseId) !== Number(boxDim.warehouse_id)) {
-      throw new AppError('该 PDA 设备未绑定到目标仓库，不能在此仓库作业', 403, 'PDA_WAREHOUSE_MISMATCH')
-    }
+    assertBoxScope(boxDim, scopeWarehouseIds, pdaWarehouseId)
 
     const requestState = await beginResourceOperationRequest(conn, {
       requestKey,
@@ -278,6 +296,7 @@ async function repack(id, { perBoxQty, boxCount, items, requestKey }, { userId =
       resourceId: boxId,
     })
     if (requestState.replay) {
+      await assertReplayBoxScope(conn, boxId, scopeWarehouseIds, pdaWarehouseId)
       await conn.rollback()
       return requestState.responseData
     }
@@ -300,6 +319,10 @@ async function repack(id, { perBoxQty, boxCount, items, requestKey }, { userId =
       [boxId],
     )
     if (!box) throw new AppError('塑料盒不存在', 404)
+    assertBoxScope(box, scopeWarehouseIds, pdaWarehouseId)
+    if (Number(box.product_id) !== Number(boxDim.product_id) || Number(box.warehouse_id) !== Number(boxDim.warehouse_id)) {
+      throw new AppError('塑料盒所属商品或仓库已变化，请重新扫码后还原整件', 409, 'CONTAINER_DIMENSION_CHANGED')
+    }
     if (Number(box.status) !== CONTAINER_STATUS.ACTIVE) throw new AppError('塑料盒当前不可用（状态异常或已清空）', 400)
     if (box.locked_by_task_id != null) throw new AppError('塑料盒已被拣货任务锁定，不能还原整件', 409)
 

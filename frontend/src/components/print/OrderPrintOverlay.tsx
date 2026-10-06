@@ -18,6 +18,7 @@ import TemplateRenderer from './TemplateRenderer'
 import type { PrintItem } from './TemplateRenderer'
 import type { PrintTemplate } from '@/types/print-template'
 import { isZplTemplateLayout } from '@/types/print-template'
+import { PARTY_PRINT_FIT_EVENT, refreshPartyPrintFields } from './PartyPrintText'
 
 const PRINT_STYLE_ID = 'fc-order-print-style'
 
@@ -73,7 +74,9 @@ export function OrderPrintOverlay({ templateType, title, data, items, onClose }:
   const [loading,   setLoading]   = useState(true)
   const [showPicker, setShowPicker] = useState(false)
   const [docZoom, setDocZoom] = useState(1)
+  const [partyTextNotice, setPartyTextNotice] = useState('')
   const prePrintZoomRef = useRef(1)
+  const preparedPrintRef = useRef(false)
   const docZoomRef = useRef(1)
   const printRootRef = useRef<HTMLDivElement>(null)
   docZoomRef.current = docZoom
@@ -111,11 +114,12 @@ export function OrderPrintOverlay({ templateType, title, data, items, onClose }:
     let printing = false
     const before = () => {
       printing = true
-      prePrintZoomRef.current = docZoomRef.current
+      if (!preparedPrintRef.current) prePrintZoomRef.current = docZoomRef.current
       flushSync(() => setDocZoom(1))
     }
     const after = () => {
       printing = false
+      preparedPrintRef.current = false
       flushSync(() => setDocZoom(prePrintZoomRef.current))
     }
     window.addEventListener('beforeprint', before)
@@ -123,7 +127,10 @@ export function OrderPrintOverlay({ templateType, title, data, items, onClose }:
     return () => {
       window.removeEventListener('beforeprint', before)
       window.removeEventListener('afterprint', after)
-      if (printing) setDocZoom(prePrintZoomRef.current)
+      if (printing || preparedPrintRef.current) {
+        preparedPrintRef.current = false
+        setDocZoom(prePrintZoomRef.current)
+      }
     }
   }, [active])
 
@@ -139,20 +146,52 @@ export function OrderPrintOverlay({ templateType, title, data, items, onClose }:
       .finally(() => setLoading(false))
   }, [templateType])
 
+  useLayoutEffect(() => {
+    const root = printRootRef.current
+    if (!root) return
+    const update = () => {
+      const boxes = Array.from(root.querySelectorAll<HTMLElement>('[data-party-print-field]'))
+      const overflow = [...new Set(boxes.filter(box => box.dataset.printFit === 'overflow').map(box => box.dataset.partyPrintLabel || '资料'))]
+      setPartyTextNotice(overflow.length ? `请增大打印模板中的${overflow.join('、')}文本框，当前内容超出版面。`
+        : boxes.some(box => box.dataset.printFit === 'unavailable') ? '当前预览尚无法核对资料文本框，请在可见预览中核对完整内容。' : '')
+    }
+    root.addEventListener(PARTY_PRINT_FIT_EVENT, update)
+    refreshPartyPrintFields(root)
+    update()
+    return () => root.removeEventListener(PARTY_PRINT_FIT_EVENT, update)
+  }, [active, selected, loading, docZoom, data])
+
   /**
    * 打印前等待打印页内所有 <img> 完成解码（公司 Logo 等），避免首帧未解码导致打印空白。
    * decode() 失败（如 CORS/非法图片）时静默放行，不阻塞打印。
    */
   async function handlePrint() {
-    if (!canPrint.current) return
-    const generation = printGeneration.current
+    if (!canPrint.current || preparedPrintRef.current) return
+    const generation = ++printGeneration.current
     const root = printRootRef.current
     if (root) {
       const imgs = Array.from(root.querySelectorAll('img'))
       await Promise.all(imgs.map(img => (img.decode?.() ?? Promise.resolve()).catch(() => {})))
+      await document.fonts?.ready
     }
     if (!canPrint.current || generation !== printGeneration.current || !printRootRef.current) return
-    window.print()
+    prePrintZoomRef.current = docZoomRef.current
+    preparedPrintRef.current = true
+    // Fixed padding and integer layout measurements do not scale perfectly.
+    // Check physical paper geometry before invoking the browser print dialog.
+    flushSync(() => setDocZoom(1))
+    const fit = refreshPartyPrintFields(printRootRef.current)
+    if (fit.overflow.length) {
+      preparedPrintRef.current = false
+      flushSync(() => setDocZoom(prePrintZoomRef.current))
+      setPartyTextNotice(`请增大打印模板中的${fit.overflow.join('、')}文本框，实际打印尺寸下内容超出版面。`)
+      return
+    }
+    try { window.print() } catch {
+      preparedPrintRef.current = false
+      flushSync(() => setDocZoom(prePrintZoomRef.current))
+      setPartyTextNotice('无法打开打印窗口，请稍后重试。')
+    }
   }
 
   function handleClose() {
@@ -237,6 +276,8 @@ export function OrderPrintOverlay({ templateType, title, data, items, onClose }:
         <div style={{ flexShrink: 0 }}>
           <PrintPreviewZoomControls value={docZoom} onChange={setDocZoom} compact />
         </div>
+
+        {partyTextNotice && <p role="status" style={{ margin: 0, fontSize: 12, color: 'hsl(var(--destructive))' }}>{partyTextNotice}</p>}
 
         <div style={{ display: 'flex', gap: 8 }}>
           <Button size="sm" onClick={handlePrint} disabled={!selected}>

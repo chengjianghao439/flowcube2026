@@ -1,8 +1,8 @@
+import { useVisibleQuery } from '@/hooks/useVisibleQuery'
 import { money } from '@/lib/format'
 import KeepAliveSection from '@/components/shared/KeepAliveSection'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { useMemo, useState, useRef } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
@@ -71,8 +71,13 @@ export default function ReconciliationView({ type }: { type: StatementType }) {
   // 第一期：对账明细 + 收款核销。第二期会把「对账明细」换成汇总对账单。
   const active = useActiveWorkspaceTab()
   const { can } = usePermission()
+  const canViewPayments = can(PERMISSIONS.PAYMENT_VIEW)
+  const canExecutePayments = can(PERMISSIONS.PAYMENT_EXECUTE)
+  const canConfirmPayments = canViewPayments && can(PERMISSIONS.PAYMENT_CONFIRM)
   const [confirmRecord, setConfirmRecord] = useState<ReconciliationRecord | null>(null)
   const [tab, setTab] = useState<'statements' | 'receipts' | 'records'>('statements')
+  // 保留用户请求的子页偏好；查看权暂不可用时只切换有效视图，不改筛选与草稿。
+  const effectiveTab = canViewPayments ? tab : 'records'
   // 查询条件统一收在弹窗里；不设默认日期，进来即全量（可在查询弹窗里自行按日期筛）
   const [query, setQuery] = useState<PaymentQueryValues>(EMPTY_PAYMENT_QUERY)
   const [queryOpen, setQueryOpen] = useState(false)
@@ -99,10 +104,10 @@ export default function ReconciliationView({ type }: { type: StatementType }) {
     ...(query.dueEnd ? { dueEnd: query.dueEnd } : {}),
   }
 
-  const reconciliationQ = useQuery({
+  const reconciliationQ = useVisibleQuery({
     queryKey: ['reconciliation', type, query],
     queryFn: () => getReconciliationApi({ ...exportParams, pageSize: 500, settlementTypes: MONTHLY_SCOPE }),
-    enabled: active && tab === 'records',
+    enabled: active && effectiveTab === 'records',
   })
 
   const { data, isLoading, isError, error, refetch } = reconciliationQ
@@ -168,7 +173,7 @@ export default function ReconciliationView({ type }: { type: StatementType }) {
     { key: 'id', title: '操作', width: 120, render: (_, row) => {
       const r = row as ReconciliationRecord
       // 月结账款只能通过对账单核销；待确认应付先由财务核对上架结算。
-      const pendingConfirmation = type === 1 && r.confirmStatus === 0 && can(PERMISSIONS.PAYMENT_CONFIRM)
+      const pendingConfirmation = type === 1 && r.confirmStatus === 0 && canConfirmPayments
       const items: TableActionItem[] = []
       if (pendingConfirmation && r.sourcePath) items.push({ label: '原单', onClick: () => openPath(r.sourcePath, `原单 ${r.sourceOrderNo}`) })
       if (r.receiptPath) items.push({ label: '收货单', onClick: () => openPath(r.receiptPath, `收货单 ${r.receiptTaskNo}`) })
@@ -192,17 +197,17 @@ export default function ReconciliationView({ type }: { type: StatementType }) {
         actions={(
           <div className="flex flex-wrap gap-2">
             {/* 每个 tab 的动作按钮都落在右上角 PageHeader，跨 tab 位置一致 */}
-            {tab === 'statements' && (<>
+            {effectiveTab === 'statements' && (<>
               <Button variant="outline" onClick={() => statementRef.current?.openQuery()}>查询</Button>
               <Button variant="outline" onClick={() => statementRef.current?.exportExcel()}>导出汇总</Button>
-              <Button onClick={() => statementRef.current?.openCreate()}>新建对账单</Button>
+              {canExecutePayments && <Button onClick={() => statementRef.current?.openCreate()}>新建对账单</Button>}
             </>)}
-            {tab === 'receipts' && (<>
+            {effectiveTab === 'receipts' && (<>
               <Button variant="outline" onClick={() => receiptRef.current?.openQuery()}>查询</Button>
               <Button variant="outline" onClick={() => receiptRef.current?.exportExcel()}>导出 Excel</Button>
-              <Button onClick={() => receiptRef.current?.openRegister()}>登记{type === 1 ? '付款' : '收款'}</Button>
+              {canExecutePayments && <Button onClick={() => receiptRef.current?.openRegister()}>登记{type === 1 ? '付款' : '收款'}</Button>}
             </>)}
-            {tab === 'records' && (<>
+            {effectiveTab === 'records' && (<>
               <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
               <Button
                 variant="outline"
@@ -220,22 +225,22 @@ export default function ReconciliationView({ type }: { type: StatementType }) {
           { key: 'statements' as const, label: '汇总对账' },
           { key: 'receipts' as const, label: `${type === 1 ? '付款' : '收款'}核销` },
           { key: 'records' as const, label: '全部账款' },
-        ]).map(item => (
+        ]).filter(item => item.key === 'records' || canViewPayments).map(item => (
           <button
             key={item.key}
             type="button"
             onClick={() => setTab(item.key)}
-            className={`px-4 py-2 text-sm font-medium transition-colors ${tab === item.key ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+            className={`px-4 py-2 text-sm font-medium transition-colors ${effectiveTab === item.key ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'}`}
           >
             {item.label}
           </button>
         ))}
       </div>
 
-      <KeepAliveSection active={tab === 'statements'}><StatementPanel ref={statementRef} type={type} hideToolbar /></KeepAliveSection>
-      <KeepAliveSection active={tab === 'receipts'}><ReceiptPanel ref={receiptRef} type={type} settlementTypes={MONTHLY_SCOPE} target="statement" hideToolbar /></KeepAliveSection>
+      <KeepAliveSection active={canViewPayments && effectiveTab === 'statements'}><StatementPanel ref={statementRef} type={type} hideToolbar /></KeepAliveSection>
+      <KeepAliveSection active={canViewPayments && effectiveTab === 'receipts'}><ReceiptPanel ref={receiptRef} type={type} settlementTypes={MONTHLY_SCOPE} target="statement" hideToolbar /></KeepAliveSection>
 
-      <KeepAliveSection active={tab === 'records'} className="space-y-4">
+      <KeepAliveSection active={effectiveTab === 'records'} className="space-y-4">
       <PaymentQueryBar query={query} onChange={setQuery} labels={queryLabels} />
 
       <PaymentQueryDialog
@@ -270,11 +275,13 @@ export default function ReconciliationView({ type }: { type: StatementType }) {
       )}
       </KeepAliveSection>
 
-      <SettlementConfirmDialog
-        open={!!confirmRecord}
-        record={confirmRecord}
-        onClose={() => setConfirmRecord(null)}
-      />
+      <KeepAliveSection active={effectiveTab === 'records' && canConfirmPayments}>
+        <SettlementConfirmDialog
+          open={!!confirmRecord}
+          record={confirmRecord}
+          onClose={() => setConfirmRecord(null)}
+        />
+      </KeepAliveSection>
 
     </div>
   )

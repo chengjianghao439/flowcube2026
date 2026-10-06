@@ -84,7 +84,7 @@ export default function DashboardPage() {
   function startEdit() { setDraft(mergeLayout(saved)); setEditing(true) }
   function cancelEdit() { setEditing(false); setDraft(null); setLibOpen(false) }
   function showAll() { setDraft(buildAllLayout()); setEditing(true); setLibOpen(false) }
-  function resetDefault() { setDraft(buildDefaultLayout()); toast.success('已载入默认布局，保存后生效') }
+  function resetDefault() { setDraft(buildDefaultLayout()); toast.success('已载入推荐布局预览，保存后生效') }
   async function save() {
     if (!draft) return
     try {
@@ -136,7 +136,7 @@ export default function DashboardPage() {
         <div className="flex flex-wrap items-center gap-2">
           {!editing ? (
             <>
-              <Button variant="outline" size="sm" onClick={showAll}><LayoutGrid className="h-3.5 w-3.5" /> {addable.length > 0 ? '展示全部卡片' : '推荐排版'}</Button>
+              <Button variant="outline" size="sm" onClick={showAll}><LayoutGrid className="h-3.5 w-3.5" /> 展示全部卡片</Button>
               <Button variant="outline" size="sm" onClick={startEdit}><Pencil className="h-3.5 w-3.5" /> 编辑仪表盘</Button>
             </>
           ) : (
@@ -146,7 +146,7 @@ export default function DashboardPage() {
                 {addable.length > 0 && <span className="ml-1 rounded-full bg-primary/10 px-1.5 text-xs text-primary">{addable.length}</span>}
               </Button>
               <Button variant="outline" size="sm" onClick={resetDefault}>
-                <RotateCcw className="h-3.5 w-3.5" /> 恢复默认
+                <RotateCcw className="h-3.5 w-3.5" /> 载入推荐
               </Button>
               <Button variant="outline" size="sm" onClick={cancelEdit}>
                 <X className="h-3.5 w-3.5" /> 取消

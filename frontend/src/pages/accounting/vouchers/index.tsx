@@ -88,6 +88,12 @@ function ReconciliationCard() {
           </div>
         ))}
       </div>
+      {data?.supplierRefunds && <div className="mt-3 card-base p-3 text-sm space-y-1">
+        <div className="font-medium">供应商退款</div>
+        <div className="tabular-nums">实际回款 {data.supplierRefunds.cashAmount4} / 分位投影 {data.supplierRefunds.projectedAmount2} / 舍入差 {data.supplierRefunds.roundingDifference4}</div>
+        <div className="tabular-nums">净已付 {data.supplierRefunds.netPaid4} / 账款已付 {data.supplierRefunds.currentPaid4} / 差 {data.supplierRefunds.paidDifference4}</div>
+        <div className="text-muted-foreground">净已付为原正付款减已收到供应商退款；采购总额仍沿原毛额口径。{!data.supplierRefunds.matched && `有 ${data.supplierRefunds.mismatchedPaymentCount ?? '部分'} 笔账款不一致，请逐笔财务核对。`}</div>
+      </div>}
       {unpostedTotal > 0 && (
         <div className="mt-3 card-base border-warning/40 p-3">
           <div className="flex items-center justify-between">

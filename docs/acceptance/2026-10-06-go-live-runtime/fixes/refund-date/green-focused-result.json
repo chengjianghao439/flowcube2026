@@ -1,0 +1,16 @@
+{
+  "command": [
+    "bash",
+    "scripts/with-dev-env.sh",
+    "env",
+    "-u",
+    "NODE_OPTIONS",
+    "node",
+    "--require",
+    "/tmp/flowcube-runtime-refund-date-fix-20261006-n70reu26/offline-guard.cjs",
+    "--test",
+    "--test-name-pattern=RF (list|detail) exposes",
+    "tests/supplier-refunds.test.js"
+  ],
+  "exit_code": 0
+}

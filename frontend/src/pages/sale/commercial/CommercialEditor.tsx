@@ -21,13 +21,20 @@ import { toast } from '@/lib/toast'
 import CommercialPicker from './CommercialPicker'
 import { draftFromGroups, toCommercialInputs, type CommercialDraftRow } from './commercialDraft'
 import { buildWorkspaceTabRegistrationFromPath } from '@/router/workspaceRouteMeta'
+import { ReorderSourcePanel } from '../ReorderSourcePanel'
+import { RepeatCreateRecoveryPanel } from '../RepeatCreateRecoveryPanel'
+import { commercialReorderDrafts } from '../reorderDraft'
+import type { useSaleReorderSource } from '@/hooks/useSaleReorderSource'
+import type { RepeatSaleCreate } from '@/hooks/useRepeatSaleCreate'
+import { mayCreateReorder, mayReorder } from '@/lib/saleReorder'
 export default function CommercialEditor({
   order,
   owner,
   tabPath,
   adjust = false,
   onDone,
-  onReload
+  onReload,
+  reorder
 }: {
   order?: SaleOrder
   owner: KitReadOwner
@@ -35,10 +42,12 @@ export default function CommercialEditor({
   adjust?: boolean
   onDone: (id?: number) => void
   onReload?: (order: SaleOrder) => void
+  reorder?: { source: ReturnType<typeof useSaleReorderSource>; write: RepeatSaleCreate }
 }) {
   // Header reuse without entering the legacy physical item initialization/pricing path.
   const headerOrder = useMemo(() => (order ? { ...order, items: [] } : undefined), [order])
-  const h = useSaleOrderForm('', headerOrder, owner)
+  const h = useSaleOrderForm('', headerOrder, owner, reorder?.source.isActiveCurrent)
+  const [imported, setImported] = useState(false)
   const [rows, setRows] = useState<CommercialDraftRow[]>(() => draftFromGroups(order?.commercialGroups ?? [])),
     [picker, setPicker] = useState<'kit' | 'ordinary' | null>(null),
     [error, setError] = useState(''),
@@ -52,7 +61,14 @@ export default function CommercialEditor({
   } catch {
     ownerCurrent = false
   }
-  const locked = write.blocked || reloading || !ownerCurrent
+  const locked = write.blocked || reloading || !ownerCurrent || (!!reorder && (reorder.write.blocked || !reorder.source.current || !reorder.source.active))
+  function importSource(include: boolean) {
+    const data = reorder?.source.data
+    if (locked || imported || rows.length || !data?.customer || data.customerError || data.items.some(i => i.error)) return
+    const fresh = commercialReorderDrafts(data, include)
+    if (h.initializeIdentities(data.customer, [])) { setRows(fresh); setImported(true) }
+    else toast.warning('当前新单已有输入，未覆盖；请保留输入后重新打开独立来源草稿')
+  }
   const mounted = useRef(true)
   useEffect(() => {
     mounted.current = true
@@ -79,7 +95,7 @@ export default function CommercialEditor({
   const original = useRef(snapshot),
     current = useRef(snapshot)
   current.current = snapshot
-  useDirtyGuard(tabPath, snapshot !== original.current || !!write.pending || write.busy)
+  useDirtyGuard(tabPath, snapshot !== original.current || !!write.pending || write.busy || !!reorder?.write.pending)
   const backup = useKitBackup(snapshot, owner)
   const bodyResult = useMemo((): { body: CommercialBody | null; error?: string } => {
     try {
@@ -126,7 +142,7 @@ export default function CommercialEditor({
     order,
     rows
   ])
-  const preview = useCommercialPreview(bodyResult.body, owner, order?.id)
+  const preview = useCommercialPreview(reorder && (!reorder.source.active || !reorder.source.current || reorder.write.blocked) ? null : bodyResult.body, owner, order?.id, reorder?.source.isActiveCurrent)
   const priceRequired = preview.data?.commercialGroups.some((g) => !(g.unitPrice > 0))
   const valid =
     !!preview.data &&
@@ -138,9 +154,14 @@ export default function CommercialEditor({
     if (!locked) setRows((old) => old.map((r) => (r.input.lineKey === key ? { ...r, ...patch } : r)))
   }
   async function save() {
-    if (!valid || !bodyResult.body || locked) return
+    if (!valid || !bodyResult.body || locked || (reorder && !imported)) return
     try {
       assertKitReadOwner(owner)
+      if (reorder) {
+        const answer = await reorder.write.submit(bodyResult.body)
+        if (answer && reorder.write.canApply(answer) && reorder.source.isActiveCurrent()) onDone(answer.id)
+        return
+      }
       const answer = await write.submit({
         action: order ? (adjust ? 'adjust' : 'update') : 'create',
         id: order?.id,
@@ -190,13 +211,14 @@ export default function CommercialEditor({
               返回订单
             </Button>
             {can(permission) && (
-              <Button disabled={locked || !valid} onClick={() => void save()}>
+              <Button disabled={locked || !valid || (!!reorder && !imported)} onClick={() => void save()}>
                 保存草稿
               </Button>
             )}
           </>
         }
       />
+      {reorder && <><ReorderSourcePanel data={reorder.source.data} error={reorder.source.error} loading={reorder.source.loading} imported={imported} disabled={locked} onImport={importSource} onReload={reorder.source.reload} /><RepeatCreateRecoveryPanel write={reorder.write} active={reorder.source.active} onConfirmed={a => { if (reorder.source.isActiveCurrent()) onDone(a.id) }} /></>}
       <p className="text-sm text-muted-foreground">
         固定组成按完整套安排发货；普通商品保留独立成交行。套主无库存，仓库按真实组件作业。原套组成和成交价不变、数量不超过当前目标时才可保留；改价或组成需重新核对当前启用版本。
       </p>
@@ -255,6 +277,7 @@ export default function CommercialEditor({
       <fieldset disabled={locked} className="min-w-0 space-y-3">
         <SaleOrderHeaderFields
           readOwner={owner}
+          interactionGuard={reorder ? { epoch: reorder.source.owner.epoch, isCurrent: () => reorder.source.isActiveCurrent() && !reorder.write.blocked && !write.blocked && !reloading && mayCreateReorder() && mayReorder(PERMISSIONS.CUSTOMER_VIEW) } : undefined}
           {...h}
           headerReadOnly={adjust || locked}
           shippingProductDisabled={adjust || locked}
@@ -513,6 +536,7 @@ export default function CommercialEditor({
           onClose={() => h.setCustomerFinderOpen(false)}
           onConfirm={(customer) => {
             try {
+              if (reorder && !reorder.source.isActiveCurrent()) return
               assertKitReadOwner(owner)
               h.setCustomerId(String(customer.id))
               h.setCustomerName(customer.name)
@@ -530,6 +554,7 @@ export default function CommercialEditor({
           owner={owner}
           onClose={() => setPicker(null)}
           onSelect={(row) => {
+            if (reorder && !reorder.source.isActiveCurrent()) return
             setRows((old) => [...old, row])
             setPicker(null)
           }}

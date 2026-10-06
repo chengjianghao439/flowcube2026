@@ -1,3 +1,20 @@
+import { readHandlingSourceId, mayHandle } from '@/lib/disposalHandlingRecovery'
+import { useDisposalHandlingSource } from '@/hooks/useDisposalHandlingSource'
+import { useDisposalHandlingOperation } from '@/hooks/useDisposalHandlingOperation'
+import { HandlingOperationPanel } from '@/pages/disposal/HandlingOperationPanel'
+import { createSaleApi } from '@/api/sale'
+import { createRequestKey } from '@/lib/requestKey'
+import { ReturnSourceButton } from '@/pages/returns/ReturnSourceButton'
+import { ReorderSourceButton } from '../ReorderSourceButton'
+import { ReorderSourcePanel } from '../ReorderSourcePanel'
+import { RepeatCreateRecoveryPanel } from '../RepeatCreateRecoveryPanel'
+import { useSaleReorderSource } from '@/hooks/useSaleReorderSource'
+import { useRepeatSaleCreate } from '@/hooks/useRepeatSaleCreate'
+import { mayCreateReorder, mayReorder, readReorderSource } from '@/lib/saleReorder'
+import { PERMISSIONS } from '@/lib/permission-codes'
+import { ordinaryReorderDrafts } from '../reorderDraft'
+import { buildWorkspaceTabRegistrationFromPath } from '@/router/workspaceRouteMeta'
+import { toast } from '@/lib/toast'
 import CommercialSalePage, { NewCommercialSale } from '../commercial/CommercialSalePage'
 import { useCommercialSaleRead } from '@/hooks/useCommercialSale'
 import { assertKitReadOwner } from '@/hooks/useKits'
@@ -62,22 +79,28 @@ import { useSaleOrderForm } from './useSaleOrderForm'
 export default function SaleFormPage() {
   const tabPath  = useContext(TabPathContext)
   const navigate = useNavigate()
-  const isNew    = tabPath === '/sale/new' || tabPath === ''
+  const pathname = tabPath.split(/[?#]/)[0]
+  const isNew    = pathname === '/sale/new' || tabPath === ''
+  const reorder = readReorderSource(tabPath)
+  const handlingId = readHandlingSourceId(tabPath)
   const rawSaleId = isNew ? null : tabPath.split('?')[0].split('/').pop() ?? null
   const saleId   = rawSaleId && /^\d+$/.test(rawSaleId) ? Number(rawSaleId) : null
 
   // ── 关闭当前 Tab 并返回 ──
   function closeTab() {
     const { removeTab } = useWorkspaceStore.getState()
-    removeTab(tabPath || '/sale/new')
+    removeTab(buildWorkspaceTabRegistrationFromPath(tabPath || '/sale/new').key)
     navigate('/sale')
   }
 
   // ─── ① 新建模式 ─────────────────────────────────────────────────────────────
 
-  if (tabPath === '/sale/new-kit') return <NewCommercialSale tabPath={tabPath} onDone={closeTab} />
+  if (handlingId === 'invalid' || (handlingId !== null && !isNew)) return <p role="alert">处理来源参数无效，请从处理来源列表重新打开；原参数保留</p>
+  if ((isNew || pathname === '/sale/new-kit') && reorder === 'invalid') return <p role="alert">来源参数无效，请从原销售单重新打开；未载入任何草稿。</p>
+  if (pathname === '/sale/new-kit') return <NewCommercialSale tabPath={tabPath} onDone={closeTab} sourceId={typeof reorder === 'number' ? reorder : undefined} />
 
-  if (isNew) return <CreateView closeTab={closeTab} tabPath={tabPath} />
+  if (isNew && typeof handlingId === 'number') return <HandlingCreateView sourceId={handlingId} tabPath={tabPath} closeTab={closeTab} />
+  if (isNew) return typeof reorder === 'number' ? <RepeatCreateView sourceId={reorder} closeTab={closeTab} tabPath={tabPath} /> : <CreateView closeTab={closeTab} tabPath={tabPath} />
 
   // ─── ② 查看模式 ─────────────────────────────────────────────────────────────
 
@@ -122,8 +145,21 @@ function SaleModelGate({ saleId, tabPath, closeTab }: { saleId: number; tabPath:
 // 新建视图
 // ════════════════════════════════════════════════════════════════════════════
 
-function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: string }) {
+function RepeatCreateView({ sourceId, closeTab, tabPath }: { sourceId: number; closeTab: () => void; tabPath: string }) {
+  const source = useSaleReorderSource(sourceId, 'ordinary')
+  const write = useRepeatSaleCreate(sourceId, 'ordinary', source.owner, buildWorkspaceTabRegistrationFromPath(tabPath).key)
+  return <CreateView closeTab={closeTab} tabPath={tabPath} reorder={{ source, write }} />
+}
+interface HandlingCreateProps { source: ReturnType<typeof useDisposalHandlingSource>; write: ReturnType<typeof useDisposalHandlingOperation>; operationUuid: string; requestKey: string }
+function HandlingCreateView({ sourceId, tabPath, closeTab }: { sourceId: number; tabPath: string; closeTab: () => void }) {
+  const source = useDisposalHandlingSource(sourceId, 1), [operationUuid] = useState(() => crypto.randomUUID()), [requestKey] = useState(() => createRequestKey('handling-sale'))
+  const write = useDisposalHandlingOperation(buildWorkspaceTabRegistrationFromPath(tabPath).key, source.active, () => source.isCurrent() && mayHandle(PERMISSIONS.INVENTORY_DISPOSAL_VIEW, PERMISSIONS.SALE_ORDER_CREATE))
+  return <CreateView tabPath={tabPath} closeTab={closeTab} handling={{ source, write, operationUuid, requestKey }} />
+}
+function CreateView({ closeTab, tabPath, reorder, handling }: { closeTab: () => void; tabPath: string; reorder?: { source: ReturnType<typeof useSaleReorderSource>; write: ReturnType<typeof useRepeatSaleCreate> }; handling?: HandlingCreateProps }) {
   const createMutate = useCreateSale()
+  const [imported, setImported] = useState(false)
+  const frozen = !!reorder && (reorder.write.blocked || !reorder.source.current || !reorder.source.active) || !!handling && (handling.write.blocked || !handling.source.current || !handling.source.active)
   const {
     customerId, customerName,
     warehouseId, setWarehouseId, warehouseName, setWarehouseName,
@@ -137,14 +173,22 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
     setCustomerError, setWarehouseError,
     setInvalidItemKeys,
     isDirty, addItem, removeItem, updateItem,
-    handleCustomerConfirm, handleFinderConfirm,
-  } = useSaleOrderForm(tabPath)
+    handleCustomerConfirm, handleFinderConfirm, initializeIdentities, initializeHandling,
+  } = useSaleOrderForm(tabPath, undefined, reorder?.source.owner ?? handling?.source.owner, reorder ? () => reorder.source.isActiveCurrent() && !reorder.write.blocked && mayCreateReorder() : handling ? () => handling.source.isCurrent() && !handling.write.blocked && mayHandle(PERMISSIONS.INVENTORY_DISPOSAL_VIEW, PERMISSIONS.SALE_ORDER_CREATE) : undefined, !!handling)
+  function importSource(include: boolean) {
+    const data = reorder?.source.data
+    if (!data?.customer || data.customerError || frozen || imported || data.items.some(i => i.error)) return
+    if (initializeIdentities(data.customer, ordinaryReorderDrafts(data, include))) setImported(true)
+    else toast.warning('当前新单已有输入，未覆盖；请保留输入后重新打开独立来源草稿')
+  }
+  const confirmed = () => { if (reorder?.source.isActiveCurrent()) closeTab() }
 
   const [validationAttempted, setValidationAttempted] = useState(false)
   const allIssues = collectOrderIssues({ kind: 'sale', partyId: customerId, partyName: customerName, warehouseId, warehouseName, items, receiverPhone, discountAmount, priceLoading, priceErrors })
   const issues = validationAttempted ? allIssues : []
 
   async function handleSubmit() {
+    if ((reorder || handling) && (frozen || !imported)) return
     setValidationAttempted(true)
     const filledItems = validateSaleForm({
       items, customerId, customerName, warehouseId, warehouseName, receiverPhone, discountAmount, priceLoading, priceErrors,
@@ -152,7 +196,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
     })
     if (!filledItems) return
     try {
-      await createMutate.mutateAsync({
+      const payload = {
         customerId: +customerId, customerName,
         warehouseId: +warehouseId, warehouseName,
         remark: remark || undefined,
@@ -164,8 +208,17 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
         receiverPhone: receiverPhone || undefined,
         receiverAddress: receiverAddress || undefined,
         items: serializeSaleItems(filledItems),
-      })
-      closeTab()
+        ...(handling?.source.data ? { disposalSource: { sourceId: handling.source.data.source.id, expectedRevision: handling.source.data.source.revision, operationUuid: handling.operationUuid } } : {}),
+      }
+      if (handling?.source.data) {
+        const source = handling.source.data.source
+        if (!handling.source.isCurrent() || filledItems.length !== 1 || filledItems[0].productId !== source.productId || filledItems[0].unit !== source.unit || filledItems[0].entryUnit !== source.unit || +warehouseId !== source.warehouseId || filledItems[0].quantity > source.budget.availableQuantity) { toast.warning('请核对来源商品、原仓及可关联基本量'); return }
+        const result = await handling.write.submit({ kind: 'sale', draftIdentity: buildWorkspaceTabRegistrationFromPath(tabPath).key, sourceId: source.id, intentUuid: source.intentUuid, operationUuid: handling.operationUuid, requestKey: handling.requestKey, action: 'disposal.handling.sale.create', path: '/sale', body: payload }, (body, key, config) => createSaleApi(body, key, config))
+        if (result && handling.write.canApply(result)) { toast.success('销售草稿已关联，仍按原流程执行'); closeTab() }
+        return
+      }
+      if (reorder) { const answer = await reorder.write.submit(payload); if (answer && reorder.write.canApply(answer)) confirmed() }
+      else { await createMutate.mutateAsync(payload); closeTab() }
     } catch (_) {}
   }
 
@@ -177,7 +230,7 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
         rightActions={
           <>
 
-            <Button onClick={handleSubmit} disabled={createMutate.isPending} className="gap-1.5">
+            <Button onClick={handleSubmit} disabled={createMutate.isPending || frozen || (!!reorder && !imported) || (!!handling && !imported)} className="gap-1.5">
               {createMutate.isPending
                 ? <><Loader2 className="h-4 w-4 animate-spin" />保存中…</>
                 : <><Save className="h-4 w-4" />保存草稿</>}
@@ -186,13 +239,23 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
         }
       />
 
+      {handling && <><p>处理来源：{handling.source.data?.source.productName ?? '核对中'}；仅原商品、原仓、基本单位，客户由员工选择。可关联 {handling.source.data?.source.budget.availableQuantity ?? '—'}</p>{handling.source.error && <p role="alert">{handling.source.error}</p>}<Button disabled={frozen || imported || !handling.source.data} onClick={() => { if (handling.source.data && initializeHandling(handling.source.data.source, handling.source.data.product)) setImported(true); else toast.warning('已有输入，来源未覆盖草稿；请保留并核对') }}>载入来源商品</Button><HandlingOperationPanel write={handling.write} /></>}
+      {reorder && <><ReorderSourcePanel data={reorder.source.data} error={reorder.source.error} loading={reorder.source.loading} imported={imported} disabled={frozen} onImport={importSource} onReload={reorder.source.reload} /><RepeatCreateRecoveryPanel write={reorder.write} active={reorder.source.active} onConfirmed={confirmed} /></>}
+      <fieldset disabled={frozen} className="contents">
+
       <OrderEntryIssues issues={issues} />
       <SaleOrderHeaderFields
+        readOwner={reorder?.source.owner ?? handling?.source.owner}
+        warehouseReadOnly={!!handling}
+        warehouseName={warehouseName}
+        headerReadOnly={frozen}
+        interactionGuard={reorder ? { epoch: reorder.source.owner.epoch, isCurrent: () => reorder.source.isActiveCurrent() && !reorder.write.blocked && mayCreateReorder() && mayReorder(PERMISSIONS.CUSTOMER_VIEW) } : handling ? { epoch: handling.source.owner.epoch, isCurrent: () => handling.source.isCurrent() && !handling.write.blocked && mayHandle(PERMISSIONS.INVENTORY_DISPOSAL_VIEW, PERMISSIONS.SALE_ORDER_CREATE) } : undefined}
         customerId={customerId} customerName={customerName} customerError={issues.some(i => i.target === 'party')} setCustomerFinderOpen={setCustomerFinderOpen}
-        warehouseId={warehouseId} setWarehouseId={setWarehouseId} setWarehouseName={setWarehouseName}
+        warehouseId={warehouseId} setWarehouseId={handling ? () => {} : setWarehouseId} setWarehouseName={handling ? () => {} : setWarehouseName}
         warehouseError={issues.some(i => i.target === 'warehouse')} setWarehouseError={setWarehouseError}
         carrierId={carrierId} setCarrierId={setCarrierId} carrierOptions={carrierOptions}
         shippingProduct={shippingProduct} setShippingProduct={setShippingProduct}
+        shippingProductDisabled={frozen}
         freightType={freightType} setFreightType={setFreightType}
         receiverName={receiverName} setReceiverName={setReceiverName}
         receiverPhone={receiverPhone} setReceiverPhone={setReceiverPhone}
@@ -201,8 +264,11 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
       />
 
       {/* 商品明细：跟采购单/调拨单/退货单一致，点击"添加商品"弹出选品对话框 */}
-      <SaleOrderItemsSection hasItems={items.length > 0} onAdd={addItem}>
+      <SaleOrderItemsSection allowAdd={!handling} hasItems={items.length > 0} onAdd={handling ? () => toast.warning("处理来源仅允许一条原商品明细") : addItem}>
           <SaleOrderItemsTable
+            lockedIdentity={!!handling}
+            quantityRead={handling ? { owner: handling.source.owner, isCurrent: () => handling.source.isCurrent() && !handling.write.blocked && mayHandle(PERMISSIONS.PRODUCT_VIEW) } : undefined}
+            readEnabled={!handling || (handling.source.current && handling.source.active && !handling.write.blocked)}
             items={items} invalidItemKeys={new Set(issues.flatMap(i => i.itemKey === undefined ? [] : [i.itemKey]))} quantityRefs={quantityRefs} priceLoading={priceLoading} priceErrors={priceErrors}
             setFinderItemKey={setFinderItemKey} setFinderOpen={setFinderOpen}
             updateItem={updateItem} removeItem={removeItem}
@@ -214,24 +280,29 @@ function CreateView({ closeTab, tabPath }: { closeTab: () => void; tabPath: stri
         warningText="存在低于进价的销售行，提交后会记录到时间线" />
 
       {/* 商品选择中心 */}
-      <ProductFinder
+      {!handling && <ProductFinder
         mode="sale"
         warehouseName={warehouseName}
-        open={finderOpen}
+        open={handling ? false : finderOpen}
+        readGuard={reorder ? () => reorder.source.isActiveCurrent() && !reorder.write.blocked && mayCreateReorder() : undefined}
+        readOwner={reorder?.source.owner}
         warehouseId={warehouseId ? +warehouseId : null}
         onConfirm={handleFinderConfirm}
         onClose={() => { setFinderOpen(false); setFinderItemKey(null) }}
-      />
+      />}
 
       {/* 客户 / 仓库 Finder */}
       <CustomerFinder
-        open={customerFinderOpen}
+        open={handling ? customerFinderOpen : customerFinderOpen && !frozen}
+        readOwner={reorder?.source.owner ?? handling?.source.owner}
+        readGuard={handling ? { epoch: handling.source.owner.epoch, isCurrent: () => handling.source.isCurrent() && !handling.write.blocked && mayHandle(PERMISSIONS.CUSTOMER_VIEW, PERMISSIONS.SALE_ORDER_CREATE, PERMISSIONS.INVENTORY_DISPOSAL_VIEW) } : undefined}
         onClose={() => setCustomerFinderOpen(false)}
         onConfirm={handleCustomerConfirm}
       />
 
       {/* 底部安全间距 */}
       <div className="h-4" />
+      </fieldset>
     </div>
   )
 }
@@ -581,6 +652,8 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
         }
         rightActions={
           <>
+            <ReturnSourceButton kind="sale" sourceId={order.id} sourceNo={order.orderNo} />
+            <ReorderSourceButton sourceId={order.id} model="ordinary" disabled={isFetching || isError || isPaused} />
             {order.status === 5 && (
               <Button variant="outline" className="text-destructive border-destructive/30 hover:bg-destructive/5" disabled={isPending}
                 onClick={() => setConfirmState({

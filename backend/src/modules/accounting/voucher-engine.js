@@ -120,11 +120,12 @@ async function insertEntries(conn, voucherId, legs, accountMap) {
 async function upsertVoucher(conn, spec, accountMap, allocSeq, createdBy, companyId = 1) {
   const cid = Number(companyId) || 1
   const isSale = SALE_TYPES.includes(spec.sourceType)
-  const legs = isSale ? normalizeSaleLegs(spec.legs) : spec.legs
+  const isExactMoney = isSale || spec.sourceType === SOURCE_TYPES.SUPPLIER_REFUND_IN
+  const legs = isExactMoney ? normalizeSaleLegs(spec.legs) : spec.legs
     .map(l => ({ ...l, amount: round2(l.amount) }))
     .filter(l => l.amount > 0)
   if (!legs.length && spec.sourceType !== SOURCE_TYPES.PURCHASE_SETTLE && !SALE_TYPES.includes(spec.sourceType)) return { skipped: true, reason: 'empty' }
-  const { debit, credit } = isSale ? saleBalance(legs) : assertBalanced(legs)
+  const { debit, credit } = isExactMoney ? saleBalance(legs) : assertBalanced(legs)
   const voucherDate = toDateStr(spec.voucherDate)
   const period = periodOf(voucherDate)
   const hash = hashSpec(voucherDate, legs)
@@ -518,6 +519,7 @@ async function generateVouchers(conn, { period = null, createdBy = null, closedP
     ...await buildPurchaseSettle(conn, taxByPO),
     ...saleSpecs,
     ...await buildFundVouchers(conn),
+    ...(await require('./voucher-supplier-refunds').loadSources(conn,{companyId:cid})).map(source=>source.spec),
     ...await buildPurchaseReturn(conn),
     ...await buildSaleReturn(conn),
     ...await buildStockCheck(conn),

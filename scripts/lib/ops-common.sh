@@ -2,7 +2,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # 运维脚本公共函数（backup-db.sh / monitor.sh / daily-report.sh 共享）
 #
-# 本文件只定义函数，不执行副作用，供 source 使用：
+# 本文件只初始化公共路径与函数，不执行运维操作，供 source 使用：
 #   source "$(dirname "$0")/lib/ops-common.sh"
 #
 # 背景（2026-08-21 事故）：MySQL 容器曾被 Docker 重命名为
@@ -10,6 +10,14 @@
 # 既定行为），而三个脚本都硬编码容器名 `flowcube-mysql`，导致 mysqldump 连续
 # 12 天失败却无人察觉。容器名不再当作常量，一律经 resolve_container() 解析。
 # ─────────────────────────────────────────────────────────────────────────────
+
+FLOWCUBE_OPS_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# cron 的默认 PATH 只有 /usr/bin:/bin；宿主 Node 22 安装在 /usr/local/bin。
+# 仅缺少 Node 时补入已存在的系统安装目录，不覆盖调用方选定的 Node。
+if ! command -v node >/dev/null 2>&1 && [ -x /usr/local/bin/node ]; then
+  export PATH="/usr/local/bin:$PATH"
+fi
 
 # 解析 compose 服务对应的真实容器名。
 #   用法：resolve_container <service> <期望容器名>
@@ -65,12 +73,9 @@ read_dingtalk_webhook() {
 # 部署失败告警的时间戳缺失。各运维脚本内置的同名 ts() 会覆盖此定义，行为不变）
 ts() { date '+%Y-%m-%d %H:%M:%S'; }
 
-# 推送钉钉文本消息；未配置 webhook 时静默跳过（仍由调用方写日志）。
+# 推送钉钉文本消息；未配置webhook时打WARN并返回2。
 #   用法：dingtalk_send "$webhook" "消息内容"
-# JSON 字符串净化（2026-09-18 审计）：钉钉 text 消息体是手工拼接的 JSON，消息里的引号/反斜杠
-# 会让整个请求体非法、钉钉直接拒绝。旧实现把这种失败一起吞掉，等于告警静默失效。
-# 采用与 restore-check.sh 一致的「剥离」策略（去引号/反斜杠、换行折叠、截断），
-# 保证任何调用方送进来的文本都能变成合法 JSON 字符串。
+# 历史单行净化工具，兼容已有调用；钉钉发送不再使用它，改用JSON.stringify。
 #   用法：json_escape "文本" [最大长度，默认 500]
 json_escape() {
   printf '%s' "$1" | tr '\n\r\t' '   ' | sed 's/["\\]//g' | cut -c1-"${2:-500}"
@@ -92,10 +97,14 @@ dingtalk_send() {
     return 2
   fi
   local body resp http_code payload
-  body="$(json_escape "$msg" 500)"
+  # Node 22 是宿主运维依赖；正确编码真实换行/引号/反斜杠，不能删除字符破坏排版。
+  if ! body="$(printf '%s' "$msg" | node "$FLOWCUBE_OPS_LIB_DIR/ops-alerts.js" encode)"; then
+    echo "[$(ts)] [ERROR] 钉钉消息编码失败，未发送" >&2
+    return 1
+  fi
   # 末行是 HTTP 状态码，其余是响应体
   if ! resp="$(curl -s -m 10 -w '\n%{http_code}' -H 'Content-Type: application/json' \
-      -d "{\"msgtype\":\"text\",\"text\":{\"content\":\"${body}\"}}" \
+      -d "$body" \
       "$webhook" 2>/dev/null)"; then
     echo "[$(ts)] [ERROR] 钉钉告警发送失败（curl 未能完成，检查网络与 webhook 可达性）：${msg}" >&2
     return 1
@@ -107,8 +116,9 @@ dingtalk_send() {
     *) echo "[$(ts)] [ERROR] 钉钉告警 HTTP ${http_code}：${payload}" >&2; return 1 ;;
   esac
   # 钉钉即使 HTTP 200 也会用 errcode 表达业务失败（如 invalid webhook / 限流）
-  case "$payload" in
-    *'"errcode":0'*) return 0 ;;
-    *) echo "[$(ts)] [ERROR] 钉钉告警被拒：${payload}" >&2; return 1 ;;
-  esac
+  if printf '%s' "$payload" | node "$FLOWCUBE_OPS_LIB_DIR/ops-alerts.js" accepted; then
+    return 0
+  fi
+  echo "[$(ts)] [ERROR] 钉钉告警被拒：${payload}" >&2
+  return 1
 }

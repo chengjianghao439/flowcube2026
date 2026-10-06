@@ -26,7 +26,7 @@
 | 声明及实际展开 | 单条目 8 MiB、合计 20 MiB，单条目及累计压缩比 100 |
 | 工作表 | 常规 1 张，库存模板允许 2 张（含参考表） |
 | 行数 | 每表最多 1001 行，含表头，即每批最多 1000 条数据 |
-| 列数 | 商品 10、库存 3、客户 6、供应商 8、价格表明细 3 |
+| 列数 | 商品 10、库存 3、客户 7（含选填地址，旧六列兼容）、供应商 8、价格表明细 3 |
 | 单元格 | 各实体 `1001 × 列数 × 允许工作表数`；稀疏坐标也必须在行列预算内 |
 | 字符串 | 单格 2048 字符，总计 2 MiB（UTF-8） |
 | 解析 | 5 秒墙钟期限，子进程 V8 old-space 上限 96 MiB；展开字节限制同时约束外部 Buffer |
@@ -58,3 +58,9 @@ Node `v22.23.2`，按项目 `dev-env.sh` 加载。首次离线会话测试 4/4 �
 打印交叉接口 `frontend/src/api/client.ts` 在 `PRINT_CLIENT_CREDENTIAL_INVALID` 的 401 上返回结构化错误，由桌面桥处理注册提示，保持 ERP 会话；其他认证 401 继续原续期/退出逻辑。真实 Axios 拦截器回归先红两条（误续期三请求或无 refresh 时误退出，自然 1），修复后 `client.refresh.test.ts` 全 **21/21，自然 0**；日志 `/tmp/flowcube-security-print401-green.log`。相关前后端受影响文件 ESLint 及全工作树 `git diff --check` 自然退出 0。
 
 新增离线测试已接入 `test:security-scan-remediation` 及 CI 静态 job，真实专项已接入 `smoke:security-scan-remediation` 及 MySQL job；前端拦截器回归沿用 CI `test:unit`，原 masterdata-import 保留在既有烟测矩阵。此处核对的是源码接线与本地实跑，不代表 GitHub CI 已运行。迁移幂等/schema 名称列序及共享主题文档由根代理统一核验；族清理实现和窄说明已由本子任务按授权扩展完成。本子任务未操作浏览器、未暂存/提交/推送/发版。
+
+## v0.13.0 整合复核（2026-10-07）
+
+将 go-live 的 partyProfile 合并到同一解析入口，继续在取号和任何业务查询之前完成整单预算检查。客户增加第七列地址，供应商仍为八列；两类导入透传 `preserveRowNumbers`，在有界数组中保留 CSV/XLSX 空行后的来源行号，不改变其它实体的紧凑行合同。客户/供应商名称、联系人、电话、地址沿统一 Unicode 长度及电话字符校验，结算方式继续保留原词素。
+
+新增真实 worker 反例先红 2/2（客户第七列被拒、空行后第4行被压成第2行），自然退出1；收口后 `security-import-profile-integration`、原预算测试与 `party-profile` 合计 **48/48、无 skip、自然退出0**。日志 `/tmp/flowcube-release-import-integration-{red,green}.log`。恢复请求的 `automaticReplay=false` 与打印凭据401同时保留；新增两条反例先红，随后客户端 refresh/base-url/disposal **31/31、自然退出0**，日志 `/tmp/flowcube-release-client-integration-{red,green}.log`。此次整合离线验证未连接数据库，前述真实SQL证据属于安全分支整合前的运行；最终发布树数据库验收由根代理另行记录。

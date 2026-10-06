@@ -208,8 +208,20 @@ const DOCUMENT_STATUS_RULES = Object.freeze({
       },
     },
   },
+  supplierRefund: {
+    entityName: '供应商退款单',
+    statuses: { 1: '草稿', 2: '待收退款', 3: '已收退款', 4: '已取消' },
+    actions: {
+      confirm: { from: [1], to: 2, message: '只有草稿退款单可确认' },
+      receive: { from: [2], to: 3, message: '只有待收退款单可登记收到' },
+      cancel: { from: [1, 2], to: 4, message: '已收退款不能取消，请财务核对' },
+    },
+  },
   inventoryDisposal: {
     entityName: '呆滞库存处置单',
+    statuses: { 1: '草稿', 2: '待审批', 3: '已批准', 4: '已处置', 5: '已驳回', 6: '已取消' },
+    // 展示状态不推进历史单据；已批准的旧促销/退供应商明细须另行整单签认。
+    displayLabels: { LEGACY_APPROVED: '待签认' },
     actions: {
       edit: { from: [1], message: '只有草稿状态的处置单可以修改明细' },
       submit: { from: [1], to: 2, message: '只有草稿状态的处置单可以提交审批' },
@@ -226,7 +238,7 @@ const DOCUMENT_STATUS_RULES = Object.freeze({
         from: [1, 2],
         to: 6,
         message: '当前状态的处置单不能取消',
-        blocked: { 3: '已批准的处置单不能取消，请先处置或驳回', 4: '处置单已处置', 5: '处置单已驳回' },
+        blocked: { 3: '已批准的处置单不能取消或驳回；全报废单可执行报废，含旧处理方式须签认核对', 4: '处置单已处置', 5: '处置单已驳回' },
       },
     },
   },

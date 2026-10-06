@@ -1,3 +1,4 @@
+import { PENDING_APPROVAL_PERMISSIONS } from '@/lib/approvalBusiness'
 import { getMergedPageGroup } from './mergedPageGroups'
 import type { PermissionRequirement } from '@/lib/permissions'
 import { PERMISSIONS } from '@/lib/permission-codes'
@@ -7,7 +8,7 @@ export type RouteTabIdentity =
   | { kind: 'full-url' }
   | { kind: 'query-keys'; keys: string[] }
 
-export type RouteComponentKey = 'PartyLedgerPage' | 'DashboardPage' | 'SalePage' | 'SaleFormPage' | 'PurchasePage' | 'PurchaseFormPage' | 'RequisitionsPage' | 'RequisitionFormPage' | 'ProductPage' | 'KitsPage' | 'PriceChangePage' | 'ProductFormPage' | 'CategoryPage' | 'WarehouseStructurePage' | 'InventoryPage' | 'InventoryTracePage' | 'PlasticBoxesPage' | 'StockcheckPage' | 'AbcClassPage' | 'DisposalPage' | 'ProcurementPlanListPage' | 'ProcurementPlanDetailPage' | 'TransferPage' | 'TransferFormPage' | 'InboundTasksPage' | 'InboundTaskCreatePage' | 'InboundTaskDetailPage' | 'PickingWavesPage' | 'CustomersPage' | 'CarriersPage' | 'CarrierAccountsPage' | 'LogisticsPage' | 'LogisticsDetailPage' | 'FreightReconciliationPage' | 'SuppliersPage' | 'ReturnsPage' | 'PurchaseReturnFormPage' | 'SaleReturnFormPage' | 'PayablePage' | 'ReceivablePage' | 'UsersPage' | 'DepartmentsPage' | 'ApprovalFlowsPage' | 'ApprovalPendingPage' | 'PermissionsPage' | 'SettingsPage' | 'BarcodePrintQueryPage' | 'OplogsPage' | 'ReportsPage' | 'RoleWorkbenchPage' | 'FinanceDashboardPage' | 'FinanceAccountsPage' | 'FinanceTransactionsPage' | 'ExpenseClaimsPage' | 'ExpenseCategoriesPage' | 'AcctAccountsPage' | 'AcctVouchersPage' | 'AcctLedgerPage' | 'AcctReportsPage' | 'AcctInvoicesPage' | 'RefundsPage' | 'CreditOverridesPage' | 'AcctPeriodsPage' | 'AcctBackfillsPage' | 'AcctConsolidationPage' | 'AcctTaxPage' | 'FixedAssetsPage' | 'AvgCostReconciliationPage' | 'ReconciliationPayablePage' | 'ReconciliationReceivablePage' | 'ProfitAnalysisPage' | 'KpiPage' | 'ReplenishmentPage' | 'InventoryAgingPage' | 'WavePerformancePage' | 'PdaAnomalyPage' | 'WarehouseOpsPage' | 'PrintTemplatesPage' | 'PrintTemplateEditorPage' | 'PrintersPage' | 'PdaDevicesPage' | 'PortalStatementsPage'
+export type RouteComponentKey = 'SupplierRefundPage' | 'SupplierRefundCreatePage' | 'RefundRecoveryPage' | 'HandlingScrapPage' | 'DisposalRecoveryPage' | 'RepeatSaleRecoveryPage' | 'PartyLedgerPage' | 'DashboardPage' | 'SalePage' | 'SaleFormPage' | 'PurchasePage' | 'PurchaseFormPage' | 'RequisitionsPage' | 'RequisitionFormPage' | 'ProductPage' | 'KitsPage' | 'PriceChangePage' | 'ProductFormPage' | 'CategoryPage' | 'WarehouseStructurePage' | 'InventoryPage' | 'InventoryTracePage' | 'PlasticBoxesPage' | 'StockcheckPage' | 'AbcClassPage' | 'DisposalPage' | 'ProcurementPlanListPage' | 'ProcurementPlanDetailPage' | 'TransferPage' | 'TransferFormPage' | 'InboundTasksPage' | 'InboundTaskCreatePage' | 'InboundTaskDetailPage' | 'PickingWavesPage' | 'CustomersPage' | 'CarriersPage' | 'CarrierAccountsPage' | 'LogisticsPage' | 'LogisticsDetailPage' | 'FreightReconciliationPage' | 'SuppliersPage' | 'ReturnsPage' | 'PurchaseReturnFormPage' | 'SaleReturnFormPage' | 'PayablePage' | 'ReceivablePage' | 'UsersPage' | 'DepartmentsPage' | 'ApprovalFlowsPage' | 'ApprovalPendingPage' | 'PermissionsPage' | 'SettingsPage' | 'BarcodePrintQueryPage' | 'OplogsPage' | 'ReportsPage' | 'RoleWorkbenchPage' | 'FinanceDashboardPage' | 'FinanceAccountsPage' | 'FinanceTransactionsPage' | 'ExpenseClaimsPage' | 'ExpenseCategoriesPage' | 'AcctAccountsPage' | 'AcctVouchersPage' | 'AcctLedgerPage' | 'AcctReportsPage' | 'AcctInvoicesPage' | 'RefundsPage' | 'CreditOverridesPage' | 'AcctPeriodsPage' | 'AcctBackfillsPage' | 'AcctConsolidationPage' | 'AcctTaxPage' | 'FixedAssetsPage' | 'AvgCostReconciliationPage' | 'ReconciliationPayablePage' | 'ReconciliationReceivablePage' | 'ProfitAnalysisPage' | 'KpiPage' | 'ReplenishmentPage' | 'InventoryAgingPage' | 'WavePerformancePage' | 'PdaAnomalyPage' | 'WarehouseOpsPage' | 'PrintTemplatesPage' | 'PrintTemplateEditorPage' | 'PrintersPage' | 'PdaDevicesPage' | 'PortalStatementsPage'
 
 type RouteNavMeta =
   | { kind: 'link'; label: string; order: number; iconKey?: string }
@@ -86,8 +87,7 @@ export const routeRegistry: RouteRegistryEntry[] = [
 
   {
     path: '/sale/new-kit', title: '新建套销售', permission: PERMISSIONS.SALE_ORDER_CREATE,
-    componentKey: 'SaleFormPage', keepAlive: true, tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '销售', section: '销售作业', order: 11 },
+    componentKey: 'SaleFormPage', keepAlive: true, tabIdentity: { kind: 'query-keys', keys: ['sourceId', 'handlingSourceId'] },
   },
 
   // ── 采购 ──────────────────────────────────────────────
@@ -270,8 +270,9 @@ export const routeRegistry: RouteRegistryEntry[] = [
     componentKey: 'AbcClassPage',
     keepAlive: true,
     tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '库存', section: '库存作业', order: 31 },
+    nav: { kind: 'menu', group: '系统', section: '系统管理', order: 35 },
   },
+  { path: '/disposals/new', title: '来源报废草稿', permission: PERMISSIONS.INVENTORY_DISPOSAL_CREATE, componentKey: 'HandlingScrapPage', keepAlive: true, tabIdentity: { kind: 'query-keys', keys: ['handlingSourceId', 'sourceId'] } },
   {
     path: '/disposals',
     title: '滞销库存处理',
@@ -374,7 +375,7 @@ export const routeRegistry: RouteRegistryEntry[] = [
   // ── 财务 ──────────────────────────────────────────────
   {
     path: '/payments/payable',
-    title: '现结供应商账款',
+    title: '供应商往来',
     permission: PERMISSIONS.PAYMENT_VIEW,
     componentKey: 'PayablePage',
     keepAlive: true,
@@ -384,7 +385,7 @@ export const routeRegistry: RouteRegistryEntry[] = [
   },
   {
     path: '/payments/receivable',
-    title: '现结客户账款',
+    title: '客户往来',
     permission: PERMISSIONS.PAYMENT_VIEW,
     componentKey: 'ReceivablePage',
     keepAlive: true,
@@ -393,7 +394,7 @@ export const routeRegistry: RouteRegistryEntry[] = [
   },
   {
     path: '/reports/reconciliation/payable',
-    title: '月结供应商对账',
+    title: '供应商往来',
     permission: PERMISSIONS.REPORT_VIEW,
     componentKey: 'ReconciliationPayablePage',
     keepAlive: true,
@@ -403,7 +404,7 @@ export const routeRegistry: RouteRegistryEntry[] = [
   },
   {
     path: '/reports/reconciliation/receivable',
-    title: '月结客户对账',
+    title: '客户往来',
     permission: PERMISSIONS.REPORT_VIEW,
     componentKey: 'ReconciliationReceivablePage',
     keepAlive: true,
@@ -421,7 +422,7 @@ export const routeRegistry: RouteRegistryEntry[] = [
   },
   {
     path: '/finance/dashboard',
-    title: '资金看板',
+    title: '资金工作区',
     permission: PERMISSIONS.FINANCE_ACCOUNT_VIEW,
     componentKey: 'FinanceDashboardPage',
     keepAlive: true,
@@ -430,7 +431,7 @@ export const routeRegistry: RouteRegistryEntry[] = [
   },
   {
     path: '/finance/accounts',
-    title: '账户管理',
+    title: '资金工作区',
     permission: PERMISSIONS.FINANCE_ACCOUNT_VIEW,
     componentKey: 'FinanceAccountsPage',
     keepAlive: true,
@@ -439,7 +440,7 @@ export const routeRegistry: RouteRegistryEntry[] = [
   },
   {
     path: '/finance/transactions',
-    title: '资金流水',
+    title: '资金工作区',
     permission: PERMISSIONS.FINANCE_ACCOUNT_VIEW,
     componentKey: 'FinanceTransactionsPage',
     keepAlive: true,
@@ -512,6 +513,23 @@ export const routeRegistry: RouteRegistryEntry[] = [
     nav: { kind: 'menu', group: '会计', section: '发票税务', order: 50 },
   },
   {
+    path: '/supplier-refunds',
+    title: '供应商退款',
+    permission: PERMISSIONS.SUPPLIER_REFUND_VIEW,
+    componentKey: 'SupplierRefundPage',
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+    nav: { kind: 'menu', group: '财务', section: '资金往来', order: 75 },
+  },
+  {
+    path: '/supplier-refunds/new',
+    title: '供应商退款',
+    permission: PERMISSIONS.SUPPLIER_REFUND_CREATE,
+    componentKey: 'SupplierRefundCreatePage',
+    keepAlive: true,
+    tabIdentity: { kind: 'query-keys', keys: ['purchaseReturnId'] },
+  },
+  {
     path: '/refunds',
     title: '退货退款单',
     permission: PERMISSIONS.REFUND_ORDER_VIEW,
@@ -538,7 +556,7 @@ export const routeRegistry: RouteRegistryEntry[] = [
     componentKey: 'FixedAssetsPage',
     keepAlive: true,
     tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '会计', section: '固定资产', order: 70 },
+    nav: { kind: 'menu', group: '系统', section: '高级会计', order: 70 },
   },
   {
     path: '/accounting/consolidation',
@@ -547,7 +565,7 @@ export const routeRegistry: RouteRegistryEntry[] = [
     componentKey: 'AcctConsolidationPage',
     keepAlive: true,
     tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '会计', section: '合并报表', order: 80 },
+    nav: { kind: 'menu', group: '系统', section: '高级会计', order: 80 },
   },
   {
     path: '/accounting/tax',
@@ -556,7 +574,7 @@ export const routeRegistry: RouteRegistryEntry[] = [
     componentKey: 'AcctTaxPage',
     keepAlive: true,
     tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '会计', section: '发票税务', order: 90 },
+    nav: { kind: 'menu', group: '系统', section: '高级会计', order: 90 },
   },
   {
     path: '/accounting/backfills',
@@ -660,7 +678,7 @@ export const routeRegistry: RouteRegistryEntry[] = [
     componentKey: 'RoleWorkbenchPage',
     keepAlive: true,
     tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '审批中心', order: 5 },
+    nav: { kind: 'link', label: '待办中心', order: 15 },
     // 巡检功能已取消；仅兼容旧书签，当前待办/通知不能再生成这个处理入口。
     aliases: ['/reports/exception-workbench'],
   },
@@ -698,7 +716,7 @@ export const routeRegistry: RouteRegistryEntry[] = [
   {
     path: '/approvals/pending',
     title: '待我审批',
-    permission: PERMISSIONS.APPROVAL_TASK_VIEW,
+    permission: PENDING_APPROVAL_PERMISSIONS,
     componentKey: 'ApprovalPendingPage',
     keepAlive: true,
     tabIdentity: pathnameIdentity,
@@ -711,7 +729,7 @@ export const routeRegistry: RouteRegistryEntry[] = [
     componentKey: 'ApprovalFlowsPage',
     keepAlive: true,
     tabIdentity: pathnameIdentity,
-    nav: { kind: 'menu', group: '审批中心', order: 20 },
+    nav: { kind: 'menu', group: '系统', section: '系统设置', order: 65 },
   },
   {
     path: '/departments',
@@ -813,7 +831,7 @@ export const routePatterns: RoutePatternEntry[] = [
     permission: PERMISSIONS.SALE_ORDER_CREATE,
     componentKey: 'SaleFormPage',
     keepAlive: true,
-    tabIdentity: pathnameIdentity,
+    tabIdentity: { kind: 'query-keys', keys: ['sourceId', 'handlingSourceId'] },
     listPath: '/sale',
   },
   {
@@ -894,7 +912,7 @@ export const routePatterns: RoutePatternEntry[] = [
     permission: PERMISSIONS.RETURN_ORDER_CREATE,
     componentKey: 'PurchaseReturnFormPage',
     keepAlive: true,
-    tabIdentity: pathnameIdentity,
+    tabIdentity: { kind: 'query-keys', keys: ['sourceId', 'sourceNo', 'sourceType', 'handlingSourceId'] },
     listPath: '/returns/purchase',
   },
   {
@@ -912,7 +930,7 @@ export const routePatterns: RoutePatternEntry[] = [
     permission: PERMISSIONS.RETURN_ORDER_CREATE,
     componentKey: 'SaleReturnFormPage',
     keepAlive: true,
-    tabIdentity: pathnameIdentity,
+    tabIdentity: { kind: 'query-keys', keys: ['sourceId', 'sourceNo', 'sourceType', 'handlingSourceId'] },
     listPath: '/returns/sale',
   },
   {
@@ -958,7 +976,33 @@ export const ROUTE_ALIASES: Record<string, string> = routeRegistry.reduce<Record
   return acc
 }, {})
 
-const routeByPath = new Map(routeRegistry.map((route) => [route.path, route]))
+// 本人原请求核对仅要求登录；与原创建/查看业务路由分开登记。
+export type AuthenticationRouteEntry = Omit<RouteRegistryEntry, 'permission' | 'nav' | 'aliases'>
+export const authenticationRoutes: AuthenticationRouteEntry[] = [
+  {
+    path: '/supplier-refunds/recovery',
+    title: '退款结果核对',
+    componentKey: 'RefundRecoveryPage',
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+  },
+  {
+    path: '/disposals/recovery',
+    title: '报废结果核对',
+    componentKey: 'DisposalRecoveryPage',
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+  },
+  {
+    path: '/sale/create-recovery',
+    title: '开单结果核对',
+    componentKey: 'RepeatSaleRecoveryPage',
+    keepAlive: true,
+    tabIdentity: pathnameIdentity,
+  },
+]
+const authenticationRouteByPath = new Map(authenticationRoutes.map(route => [route.path, route]))
+const routeByPath = new Map(routeRegistry.map(route => [route.path, route]))
 
 export function getRouteByPath(path: string): RouteRegistryEntry | undefined {
   return routeByPath.get(path)
@@ -969,7 +1013,7 @@ export function getRoutePatternByPath(path: string): RoutePatternEntry | undefin
 }
 
 export function resolveRouteTitle(path: string): string | undefined {
-  return getRouteByPath(path)?.title ?? getRoutePatternByPath(path)?.title(path)
+  return getRouteByPath(path)?.title ?? authenticationRouteByPath.get(path)?.title ?? getRoutePatternByPath(path)?.title(path)
 }
 
 export function resolveRoutePermission(path: string): PermissionRequirement | undefined {
@@ -978,7 +1022,7 @@ export function resolveRoutePermission(path: string): PermissionRequirement | un
 
 
 export function resolveRouteTabIdentity(path: string): RouteTabIdentity | undefined {
-  return getRouteByPath(path)?.tabIdentity ?? getRoutePatternByPath(path)?.tabIdentity
+  return getRouteByPath(path)?.tabIdentity ?? authenticationRouteByPath.get(path)?.tabIdentity ?? getRoutePatternByPath(path)?.tabIdentity
 }
 
 /** 详情/表单路由所属的列表页路径；关闭该标签时应回到这里，而非任意相邻标签 */
@@ -987,10 +1031,10 @@ export function getRouteListPath(path: string): string | undefined {
 }
 
 export function isRegisteredErpRoute(path: string): boolean {
-  return Boolean(getRouteByPath(path) ?? getRoutePatternByPath(path))
+  return Boolean(getRouteByPath(path) ?? authenticationRouteByPath.get(path) ?? getRoutePatternByPath(path))
 }
 
-export const PATH_TITLES: Record<string, string> = routeRegistry.reduce<Record<string, string>>((acc, route) => {
+export const PATH_TITLES: Record<string, string> = [...routeRegistry, ...authenticationRoutes].reduce<Record<string, string>>((acc, route) => {
   acc[route.path] = route.title
   return acc
 }, {})
@@ -1029,7 +1073,7 @@ export function buildTopNavSections(can: (permission: PermissionRequirement) => 
     const sectionKey = route.nav.section ?? ''
     const items = sectionsOfGroup.get(sectionKey) ?? []
     items.push({
-      label: route.nav.label ?? route.title,
+      label: mergedGroup?.tabTitle === 'group' ? mergedGroup.title : route.nav.label ?? route.title,
       path: route.path,
       perm: route.permission,
       iconKey: route.nav.iconKey,

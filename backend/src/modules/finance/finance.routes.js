@@ -92,10 +92,21 @@ router.post('/expense-claims/:id/approve',  requirePermission(PERMISSIONS.FINANC
 router.post('/expense-claims/:id/reject',   requirePermission(PERMISSIONS.FINANCE_EXPENSE_APPROVE), vParams(idParam), validateBody(z.object({
   reason: z.string().min(1, '请填写驳回原因').max(300),
 })), ctrl.expenseReject)
+// 跨期补录（2026-09-26 一致性审查 · 任务 7 收口）：报销付款是三条资金入口里原先唯一没有
+// 期间闸门的，补上闸门后同样需要「先审批、后动账」的申请入口。
+// 必须在 schema 里声明 backfill 两个字段——validateBody 用 schema.parse 的结果**整体替换**
+// req.body，未声明的字段会被 zod 剥掉，controller 读到的 backfillRequest 恒为 undefined，
+// 申请入口形同虚设。权限不在这里卡：路由级 requirePermission 会让没补录权限的出纳连正常
+// 付款都做不了，只有显式传 backfillRequest=true 时才在 service 侧条件校验。
+const backfillFields = {
+  backfillRequest: z.boolean().optional(),
+  backfillReason: z.string().max(300).optional(),
+}
 router.post('/expense-claims/:id/pay',      requirePermission(PERMISSIONS.FINANCE_EXPENSE_PAY), vParams(idParam), validateBody(z.object({
   accountId: z.number().int().positive('请选择付款账户'),
   happenedAt: z.string().optional(),
   remark: z.string().max(300).optional().or(z.literal('')),
+  ...backfillFields,
 })), ctrl.expensePay)
 
 module.exports = router

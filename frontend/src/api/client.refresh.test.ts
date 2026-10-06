@@ -112,6 +112,17 @@ test.each(['refresh', null])('打印工作站凭据401保留ERP会话（refreshT
   expect(session.refreshToken).toBe(refreshToken)
 })
 
+test.each(['refresh', null])('原业务恢复请求禁止自动重放时401保留ERP会话（refreshToken=%s）', async refreshToken => {
+  session.refreshToken = refreshToken
+  const { default: api } = await import('./client')
+  await expect(api.post('/sale', {}, { automaticReplay: false })).rejects.toMatchObject({ status: 401, code: 'UNAUTHORIZED' })
+  expect(requests).toHaveLength(1)
+  expect(session.setTokens).not.toHaveBeenCalled()
+  expect(session.logout).not.toHaveBeenCalled()
+  expect(session.token).toBe('old')
+  expect(session.refreshToken).toBe(refreshToken)
+})
+
 test('a 401 without a refresh token does not poison refresh after a later login', async () => {
   const { default: api } = await import('./client')
   session.refreshToken = null

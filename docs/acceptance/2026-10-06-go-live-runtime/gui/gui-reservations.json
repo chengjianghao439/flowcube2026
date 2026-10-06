@@ -1,0 +1,25 @@
+{
+  "name": "gui-reservations",
+  "checks": [
+    "库存预占显示真实销售来源",
+    "库存解释同时呈现实物与预计口径"
+  ],
+  "api": [
+    {
+      "method": "GET",
+      "path": "/api/categories/tree",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/inventory/overview?keyword=&page=1&pageSize=200",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/inventory/reservations?productId=22&warehouseId=5&page=1&pageSize=20",
+      "status": 200
+    }
+  ],
+  "errors": []
+}

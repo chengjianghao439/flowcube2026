@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { PATH_TITLES, resolveRouteTitle } from '@/router/routeDefinitions'
 import { getMergedPageView } from '@/router/mergedPageGroups'
-import { buildWorkspaceTabRegistrationFromPath } from '@/router/workspaceRouteMeta'
+import { buildWorkspaceTabRegistrationFromPath, mergeWorkspaceViewPaths } from '@/router/workspaceRouteMeta'
 export { PATH_TITLES } from '@/router/routeDefinitions'
 
 export interface WorkspaceTab {
@@ -10,6 +10,7 @@ export interface WorkspaceTab {
   title: string
   path: string
   closable: boolean
+  viewPaths?: Record<string, string>
 }
 
 export const HOME_TAB: WorkspaceTab = {
@@ -49,7 +50,8 @@ interface WorkspaceState {
 /** 旧快捷入口与持久化标题同步新名称，不改其他单据的自定义标题。 */
 function currentTabTitle(path: string, fallback: string): string {
   const base = path.split(/[?#]/)[0]
-  if (['/payments/payable','/payments/receivable','/reports/reconciliation/payable','/reports/reconciliation/receivable'].includes(base)) return PATH_TITLES[base]
+  const merged = getMergedPageView(path)
+  if (merged?.group.tabTitle === 'group') return merged.group.title
   // 合并页（采购建议 / 报表中心 / 仓库运营）用**子页名**做标签，而不是组合名：
   // 组内切换虽只更新同一个标签，但标签一直叫「报表中心」会让用户看不出当前在看哪个子页。
   return getMergedPageView(path)?.view.label
@@ -71,6 +73,7 @@ function sanitizeTabs(rawTabs: unknown): WorkspaceTab[] {
       path: normalized.path,
       title: currentTabTitle(normalized.path, typeof tab.title === 'string' && tab.title ? tab.title : normalized.path),
       closable: true,
+      viewPaths: mergeWorkspaceViewPaths(normalized.path, deduped.get(normalized.key)?.viewPaths, deduped.get(normalized.key)?.path, tab.viewPaths),
     })
   }
   // 持久化恢复也受上限约束（2026-08-21 审计 C.3 修复）：超出裁剪掉最旧的
@@ -97,7 +100,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           set({
             tabs: tabs.map((item) => (
               item.key === normalized.key
-                ? { ...item, title, path: normalized.path }
+                ? { ...item, title, path: normalized.path, viewPaths: mergeWorkspaceViewPaths(normalized.path, item.viewPaths, item.path, tab.viewPaths) }
                 : item
             )),
             activeKey: normalized.key,
@@ -106,7 +109,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         }
         // LRU 上限（2026-08-21 审计 C.3 修复）：超出 MAX_WORKSPACE_TABS 时
         // 关闭最旧的可关闭 tab（keepAlive 组件实例随之卸载），防止无限累积。
-        let next = [...tabs, { ...tab, key: normalized.key, path: normalized.path, title, closable: true }]
+        let next = [...tabs, { ...tab, key: normalized.key, path: normalized.path, title, closable: true, viewPaths: mergeWorkspaceViewPaths(normalized.path, tab.viewPaths) }]
         if (next.length > MAX_WORKSPACE_TABS) {
           const lru = next.findIndex(t => t.closable)
           if (lru !== -1) {
@@ -160,6 +163,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
                 path: normalized.path,
                 title: currentTabTitle(normalized.path, title || normalized.path),
                 closable: normalized.key !== HOME_TAB.key,
+                viewPaths: mergeWorkspaceViewPaths(normalized.path),
               },
             ],
             activeKey: normalized.key,
@@ -177,7 +181,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         set({
           tabs: tabs.map((tab) => (
             tab.key === normalized.key
-              ? { ...tab, path: normalized.path, title: nextTitle }
+              ? { ...tab, path: normalized.path, title: nextTitle, viewPaths: mergeWorkspaceViewPaths(normalized.path, tab.viewPaths, tab.path) }
               : tab
           )),
           activeKey: normalized.key,

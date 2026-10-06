@@ -10,7 +10,7 @@ import type { CommercialBody, CommercialGroup } from '@/types/sale-commercial'
 import { useAuthStore } from '@/store/authStore'
 import { PERMISSIONS } from '@/lib/permission-codes'
 const mocks = vi.hoisted(() => ({ query: vi.fn(), preview: vi.fn(), execute: vi.fn(), get: vi.fn(), defaults: { baseURL: '/a' } }))
-vi.mock('@/api/client', () => ({ default: { defaults: mocks.defaults } }))
+vi.mock('@/api/client', () => ({ default: { defaults: mocks.defaults }, getApiClientBaseURL: () => mocks.defaults.baseURL, subscribeApiClientBaseURL: () => () => {} }))
 vi.mock('@/api/operation-requests', () => ({ getOperationRequestStatusApi: mocks.query }))
 vi.mock('@/api/sale-commercial', () => ({
   previewCommercialSaleApi: mocks.preview,

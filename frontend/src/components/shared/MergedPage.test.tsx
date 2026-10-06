@@ -10,6 +10,7 @@ import { useAuthStore } from '@/store/authStore'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import PageHeader from './PageHeader'
 import { Suspense } from 'react'
+import { HOME_TAB, useWorkspaceStore } from '@/store/workspaceStore'
 
 function TestView() {
   const ownPath = useContext(TabPathContext)
@@ -25,6 +26,8 @@ vi.mock('@/pages/reports/kpi', () => ({ default: TestView }))
 vi.mock('@/pages/reports/profit-analysis', () => ({ default: TestView }))
 vi.mock('@/pages/procurement', () => ({ default: TestView }))
 vi.mock('@/pages/reports/replenishment', () => ({ default: TestView }))
+vi.mock('@/pages/payments/receivable', () => ({ default: TestView }))
+vi.mock('@/pages/reports/reconciliation-receivable', () => ({ default: TestView }))
 
 let navigate: NavigateFunction
 function Harness() {
@@ -40,6 +43,7 @@ let host: HTMLDivElement
 beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
   useAuthStore.setState({ user: { roleId: 1, permissions: [] } as never })
+  useWorkspaceStore.setState({ tabs: [HOME_TAB], activeKey: HOME_TAB.key })
   host = document.createElement('div'); document.body.append(host); root = createRoot(host)
 })
 afterEach(async () => { await act(async () => root.unmount()); host.remove() })
@@ -77,5 +81,20 @@ test('只有报表权限时采购建议不挂载采购计划，直达无权地�
   expect(host.querySelectorAll('[data-view]')).toHaveLength(1)
   await act(async () => navigate('/procurement'))
   expect(host.textContent).toContain('无访问权限')
-  expect(host.querySelectorAll('[data-view]')).toHaveLength(0)
+  expect(host.querySelectorAll('[data-view][data-active="true"]')).toHaveLength(0)
+  expect(host.querySelector('[data-view="/procurement"]')).toBeNull()
+})
+
+test('财务组从持久child上下文打开，首次访问才挂载，切回保留同实例筛选', async () => {
+  useWorkspaceStore.getState().addTab({ key: '/payments/receivable', path: '/payments/receivable?keyword=old', title: '旧页' })
+  useWorkspaceStore.getState().syncFromLocation('/reports/reconciliation/receivable?partyId=7')
+  await render('/reports/reconciliation/receivable?partyId=7')
+  expect(host.querySelector('h1')?.textContent).toBe('客户往来')
+  expect(host.querySelectorAll('[data-view]')).toHaveLength(1)
+  expect(host.querySelector('a[href="/payments/receivable?keyword=old"]')).toBeTruthy()
+  await click('现结账款'); await click('查询')
+  const original = view('/payments/receivable?keyword=old')
+  await click('月结对账'); await click('现结账款')
+  expect(view('/payments/receivable?keyword=old')).toBe(original)
+  expect(original.textContent).toContain('已筛选')
 })

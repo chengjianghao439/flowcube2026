@@ -1,6 +1,7 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { assertSqlIdentifier, assertSqlColumnList } = require('../../utils/sqlIdentifier')
+const { PRODUCT_SEARCH_FIELDS, productSearch } = require('../products/productSearch')
 
 /**
  * 全局搜索（跨单据 + 基础资料）。
@@ -17,7 +18,7 @@ const { assertSqlIdentifier, assertSqlColumnList } = require('../../utils/sqlIde
 const { PERMISSIONS: P } = require('../../constants/permissions')
 
 const ENTITIES = [
-  { type: 'product', permission: P.PRODUCT_VIEW,      label: '商品',       pathBase: '/products',             table: 'product_items',              noField: 'code',      subtitleField: 'code',       searchFields: ['name', 'code'] },
+  { type: 'product', permission: P.PRODUCT_VIEW,      label: '商品',       pathBase: '/products',             table: 'product_items',              noField: 'code',      subtitleField: 'code',       searchFields: PRODUCT_SEARCH_FIELDS },
   { type: 'supplier', permission: P.SUPPLIER_VIEW,     label: '供应商',     pathBase: '/suppliers',            table: 'supply_suppliers',          noField: 'code',      subtitleField: 'code',       searchFields: ['name'] },
   { type: 'customer', permission: P.CUSTOMER_VIEW,     label: '客户',       pathBase: '/customers',            table: 'sale_customers',            noField: 'code',      subtitleField: 'code',       searchFields: ['name'] },
   { type: 'purchase', permission: P.PURCHASE_ORDER_VIEW,     label: '采购单',     pathBase: '/purchase',             table: 'purchase_orders',           noField: 'order_no',  subtitleField: 'supplier_name', searchFields: ['order_no'], warehouseColumn: 'warehouse_id' },
@@ -37,7 +38,7 @@ const ENTITIES = [
 
 const PAGE_SIZE = 20
 const DETAIL_FIELDS = {
-  product: [['article_number', '供应商型号'], ['spec', '型号'], ['color', '颜色'], ['unit', '单位']],
+  product: [['barcode', '条码'], ['article_number', '供应商型号'], ['spec', '型号'], ['color', '颜色'], ['unit', '单位']],
   supplier: [['contact', '联系人'], ['phone', '电话'], ['address', '地址']],
   customer: [['contact', '联系人'], ['phone', '电话'], ['address', '地址']],
   purchase: [['warehouse_name', '仓库'], ['operator_name', '经办人']],
@@ -69,8 +70,9 @@ async function searchGlobal(rawQuery, scopeWarehouseIds = null, options = {}) {
   if (!keyword) return { data: [], nextCursors: {}, message: '请输入搜索词' }
   const entities = ENTITIES.filter(e => (!type || e.type === type) && user && (isAdmin || permissions.has(e.permission)))
   const pages = await Promise.all(entities.map(async (ent) => {
-    const conds = ['deleted_at IS NULL', `(${ent.searchFields.map(f => `${f} LIKE ?`).join(' OR ')})`]
-    const params = ent.searchFields.map(() => `%${keyword}%`)
+    const search = ent.type === 'product' ? productSearch(keyword) : null
+    const conds = ['deleted_at IS NULL', search ? search.where : `(${ent.searchFields.map(f => `${f} LIKE ?`).join(' OR ')})`]
+    const params = search ? [...search.whereParams] : ent.searchFields.map(() => `%${keyword}%`)
     if (Array.isArray(scopeWarehouseIds) && ent.warehouseColumn) {
       if (!scopeWarehouseIds.length) conds.push('1=0')
       else if (ent.warehouseColumnOr) {
@@ -112,8 +114,8 @@ async function searchGlobal(rawQuery, scopeWarehouseIds = null, options = {}) {
     assertSqlIdentifier(ent.subtitleField, 'ent.subtitleField')
     assertSqlColumnList(columns.join(', '), 'columns')
     const [rows] = await pool.query(
-      `SELECT id, ${ent.noField} AS no_val, ${ent.subtitleField} AS subtitle, ${columns.join(', ')}
-       FROM ${ent.table} WHERE ${conds.join(' AND ')} ORDER BY id DESC LIMIT ${PAGE_SIZE + 1}`, params,
+      `SELECT id, ${ent.noField} AS no_val, ${ent.subtitleField} AS subtitle, ${columns.join(', ')}${search?.select || ''}
+       FROM ${ent.table} WHERE ${conds.join(' AND ')} ORDER BY id DESC LIMIT ${PAGE_SIZE + 1}`, [...(search?.selectParams || []), ...params],
     )
     const visible = rows.slice(0, PAGE_SIZE)
     return {
@@ -123,6 +125,7 @@ async function searchGlobal(rawQuery, scopeWarehouseIds = null, options = {}) {
         id: Number(r.id), type: ent.type, typeLabel: ent.label,
         title: (master ? r.name : r.no_val) || r.no_val,
         subtitle: master ? r.no_val : (r.subtitle || ''),
+        ...(search ? { searchMatch: r.search_match || '', searchRank: Number(r.search_rank) } : {}),
         details: fields.filter(([field]) => r[field] != null && String(r[field]).trim())
           .map(([field, label]) => ({ label, value: String(r[field]) })),
         path: master ? ent.pathBase : `${ent.pathBase}/${Number(r.id)}`,

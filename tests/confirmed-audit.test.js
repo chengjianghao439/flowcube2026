@@ -86,6 +86,8 @@ test('barcode details enforce warehouse scope in service and controller', async 
     './inventory.service': { getContainerByBarcode: async (_, scopeIds) => { passedScope = scopeIds; return {} } },
     './inventory.procurement': {}, '../../utils/warehouseScope': scope,
     './inventory.aging': {},
+    // This controller case never lists reservations; loading that unrelated reader would open DB configuration.
+    './inventory.reservations': { listReservations: () => { throw new Error('barcode fixture must not list reservations') } },
   })
   await ctrl.containerByBarcode({ params: { bc: row.barcode }, user: { warehouseIds: [3] } }, { json() {}, status() { return this } }, e => { throw e })
   assert.deepEqual(passedScope, [3])

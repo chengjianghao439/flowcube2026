@@ -11,6 +11,7 @@ import { isZplTemplateLayout } from '@/types/print-template'
 import BarcodePreview from '@/components/print/BarcodePreview'
 import { money } from '@/lib/format'
 import { documentPrintBudgetError } from '@/lib/documentPrintBudget'
+import { PartyPrintText } from './PartyPrintText'
 
 // ─── 常量 ────────────────────────────────────────────────────────────────────
 
@@ -210,6 +211,9 @@ function ElementNode({
 
   const label = el.label ? `${el.label}：` : ''
   const value = data[el.fieldKey] ?? ''
+  if (['customerName', 'supplierName', 'receiverAddress'].includes(el.fieldKey)) {
+    return <PartyPrintText el={el} value={value} scale={scale} style={base} />
+  }
   const jc = el.textAlign === 'center' ? 'center' : el.textAlign === 'right' ? 'flex-end' : 'flex-start'
   return (
     <div

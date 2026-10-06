@@ -6,6 +6,7 @@ const { getInventoryDisplayProjectionSql } = require('../inventory/inventoryProj
 const { normalizePagination } = require('../../utils/pagination')
 const { assertInScope } = require('../../utils/warehouseScope')
 const { assertQtyScale, assertQtyPrecision } = require('../../utils/qtyPrecision')
+const { productSearch } = require('./productSearch')
 
 async function ensureCategoryExists(categoryId) {
   if (!categoryId) throw new AppError('请选择商品分类', 400)
@@ -108,7 +109,7 @@ async function validateProductPayload({ name, categoryId, barcode, costPrice, cu
 
 /**
  * 商品选择中心专用分页查询
- * - 支持关键字（编码 / 名称 / 条码）
+ * - 支持关键字（编码 / 名称 / 条码 / 供应商型号 / 型号 / 颜色）
  * - 支持分类过滤（自动包含所有子孙分类）
  * - 可选传入 warehouseId 以联查该仓库当前展示用可用库存（容器汇总 + reserved projection）
  * - 自动构建完整分类路径（一级 > 二级 > 三级 > 四级）
@@ -147,11 +148,11 @@ async function findForFinder({ page = 1, pageSize = 20, keyword = '', categoryId
   // 3. 动态构建 WHERE 条件
   const conditions = ['p.deleted_at IS NULL', 'p.is_active = 1']
   const queryParams = []
+  const search = productSearch(keyword, 'p')
 
-  if (keyword) {
-    const like = `%${keyword}%`
-    conditions.push('(p.code LIKE ? OR p.name LIKE ? OR p.barcode LIKE ? OR p.article_number LIKE ? OR p.spec LIKE ? OR p.color LIKE ?)')
-    queryParams.push(like, like, like, like, like, like)
+  if (search.keyword) {
+    conditions.push(search.where)
+    queryParams.push(...search.whereParams)
   }
   if (catIds) {
     conditions.push(`p.category_id IN (${catIds.map(() => '?').join(',')})`)
@@ -170,14 +171,14 @@ async function findForFinder({ page = 1, pageSize = 20, keyword = '', categoryId
 
   const [rows] = await pool.query(
     `SELECT p.id, p.code, p.sku_code, p.article_number, p.name, p.category_id, p.supplier_id, p.unit, p.sale_price, p.sale_price_a, p.sale_price_b, p.sale_price_c, p.sale_price_d, p.cost_price, p.spec, p.color, p.barcode, p.allow_decimal_qty,
-            c.name AS category_name, sup.name AS supplier_name, ${stockCol} AS stock
+            c.name AS category_name, sup.name AS supplier_name, ${stockCol} AS stock${search.select}
      FROM product_items p
      LEFT JOIN product_categories c ON p.category_id = c.id AND c.deleted_at IS NULL
      LEFT JOIN supply_suppliers sup ON p.supplier_id = sup.id
      ${stockJoin}
      ${where}
-     ORDER BY p.name ASC, p.id ASC LIMIT ? OFFSET ?`,
-    [...stockParams, ...queryParams, ps, offset],
+     ORDER BY ${search.keyword ? 'search_rank ASC, ' : ''}p.name ASC, p.id ASC LIMIT ? OFFSET ?`,
+    [...search.selectParams, ...stockParams, ...queryParams, ps, offset],
   )
 
   const [[{ total }]] = await pool.query(
@@ -191,6 +192,7 @@ async function findForFinder({ page = 1, pageSize = 20, keyword = '', categoryId
   return {
     list: rows.map(r => ({
       id: r.id, code: r.code, name: r.name, barcode: r.barcode || null,
+      ...(search.keyword ? { searchMatch: r.search_match || '' } : {}),
       skuCode: r.sku_code || null, articleNumber: r.article_number || null,
       categoryId:   r.category_id   || null,
       categoryName: r.category_name || null,
@@ -287,10 +289,10 @@ async function findAll({ page=1, pageSize=20, keyword='', categoryId=null, statu
   const { pageSize: ps, offset } = normalizePagination({ page, pageSize })
   const conds = ['p.deleted_at IS NULL']
   const params = []
-  if (keyword) {
-    const like = `%${keyword}%`
-    conds.push('(p.code LIKE ? OR p.name LIKE ? OR p.barcode LIKE ?)')
-    params.push(like, like, like)
+  const search = productSearch(keyword, 'p')
+  if (search.keyword) {
+    conds.push(search.where)
+    params.push(...search.whereParams)
   }
   if (categoryId) { conds.push('p.category_id = ?'); params.push(categoryId) }
   // 启用状态（is_active）：'1' 启用 / '0' 停用
@@ -302,18 +304,18 @@ async function findAll({ page=1, pageSize=20, keyword='', categoryId=null, statu
   const where = conds.join(' AND ')
 
   const [rows] = await pool.query(
-    `SELECT p.*, c.name AS category_name, s.name AS supplier_name
+    `SELECT p.*, c.name AS category_name, s.name AS supplier_name${search.select}
      FROM product_items p LEFT JOIN product_categories c ON p.category_id=c.id
      LEFT JOIN supply_suppliers s ON p.supplier_id=s.id
-     WHERE ${where} ORDER BY p.created_at DESC, p.id DESC LIMIT ? OFFSET ?`,
-    [...params, ps, offset],
+     WHERE ${where} ORDER BY ${search.keyword ? 'search_rank ASC, ' : ''}p.created_at DESC, p.id DESC LIMIT ? OFFSET ?`,
+    [...search.selectParams, ...params, ps, offset],
   )
 
   const [[{total}]] = await pool.query(
     `SELECT COUNT(*) AS total FROM product_items p WHERE ${where}`,
     params,
   )
-  const list = rows.map(fmtProduct)
+  const list = rows.map(row => ({ ...fmtProduct(row), ...(search.keyword ? { searchMatch: row.search_match || '' } : {}) }))
   // 批量带出计量单位（文档03 Phase1 只读展示），一次查询避免 N+1
   if (list.length) {
     const ids = list.map(p => p.id)

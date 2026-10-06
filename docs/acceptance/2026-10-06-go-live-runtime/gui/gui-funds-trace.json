@@ -1,0 +1,20 @@
+{
+  "name": "gui-funds-trace",
+  "checks": [
+    "资金流水按精确原退款查询仅一笔",
+    "流水追溯核对原退款/日期/四位金额/凭证"
+  ],
+  "api": [
+    {
+      "method": "GET",
+      "path": "/api/finance/accounts/transactions?startDate=2026-10-06&endDate=2026-10-06&keyword=RF5I8CXCK6RJWGLZPWQQZH3F8F6&page=1&pageSize=200",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/supplier-refunds/18",
+      "status": 200
+    }
+  ],
+  "errors": []
+}

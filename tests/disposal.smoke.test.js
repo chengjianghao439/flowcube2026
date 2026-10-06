@@ -7,7 +7,7 @@
  * 这条链路直接动库存（FIFO 扣容器 + 刷新缓存），错法和库存的「静默出错」同性质——
  * 界面正常、账悄悄对不上，靠人工点测发现不了。本测试锁死的是几处违反即事故的口径：
  *
- *   1. 执行处置（三种方式）都走容器路径扣减：扣完 ACTIVE 容器合计 = inventory_stock.quantity，
+ *   1. 仅全报废独立单允许走容器路径扣减，新的1/2方式建单拒绝：扣完 ACTIVE 容器合计 = inventory_stock.quantity，
  *      两者必须一致（缓存刷新正确）。
  *   2. 报废除扣库存外，必须落 disposal_scrapped 台账（资产灭失的审计证据）。
  *   3. 状态机：只有已批准(3)能执行处置；待审批驳回后不能执行；取消后不能提交。
@@ -87,14 +87,14 @@ async function scenarioFullFlow(ctx, log, token) {
   const sugHit = sugList.find(s => Number(s.productId) === Number(product.id))
   log.assert('呆滞建议命中测试商品', Boolean(sugHit), JSON.stringify(sugList).slice(0, 300))
 
-  // 2. 创建草稿（降价促销 1）
+  // 2. 新独立报废草稿；旧促销/退供应商不能从新入口建单。
   const create = await http.post('/api/disposals', {
     token,
     json: {
       warehouseId: warehouse.id,
       warehouseName: warehouse.name,
       remark: '处置测试',
-      items: [{ productId: product.id, quantity: 5, disposeType: 1, remark: '降价清仓' }],
+      items: [{ productId: product.id, quantity: 5, disposeType: 3, remark: '独立报废' }],
     },
   })
   log.assert('创建处置单 200', create.status === 200, `status=${create.status} msg=${create.message}`)
@@ -116,10 +116,13 @@ async function scenarioFullFlow(ctx, log, token) {
   log.assert('审批后状态=3', detail2.data?.data?.status === 3, `status=${detail2.data?.data?.status}`)
 
   // 5. 执行处置 → 已处置，库存扣减 5
-  const dis = await http.post(`/api/disposals/${disposalId}/dispose`, { token })
+  const dis = await http.post(`/api/disposals/${disposalId}/dispose`, { token, headers: { 'X-Request-Key': `disposal-smoke-${disposalId}` } })
   log.assert('执行处置 200', dis.status === 200, `status=${dis.status} msg=${dis.message}`)
   const after = await currentOnHand(pool, product.id, warehouse.id)
   log.assert('库存扣减 20→15', after === 15, `after=${after}`)
+  const replay = await http.post(`/api/disposals/${disposalId}/dispose`, { token, headers: { 'X-Request-Key': `disposal-smoke-${disposalId}` } })
+  log.assert('原键终态回放原回执', replay.status === 200 && replay.data?.data?.id === disposalId, `status=${replay.status}`)
+  log.assert('原键回放未二次扣量', await currentOnHand(pool, product.id, warehouse.id) === 15)
 
   // 6. 库存缓存与容器一致（不变量 1）
   const [{ cqty }] = await dbQuery(pool,
@@ -152,7 +155,7 @@ async function scenarioScrapLeavesLedger(ctx, log, token) {
   const disposalId = create.data?.data?.id
   await http.post(`/api/disposals/${disposalId}/submit`, { token })
   await http.post(`/api/disposals/${disposalId}/approve`, { token })
-  const dis = await http.post(`/api/disposals/${disposalId}/dispose`, { token })
+  const dis = await http.post(`/api/disposals/${disposalId}/dispose`, { token, headers: { 'X-Request-Key': `disposal-smoke-${disposalId}` } })
   log.assert('报废处置 200', dis.status === 200, `status=${dis.status}`)
 
   const scrapRows = await dbQuery(pool,
@@ -176,11 +179,11 @@ async function scenarioStatusGuards(ctx, log, token) {
     token,
     json: {
       warehouseId: warehouse.id, warehouseName: warehouse.name,
-      items: [{ productId: product.id, quantity: 2, disposeType: 1 }],
+      items: [{ productId: product.id, quantity: 2, disposeType: 3 }],
     },
   })
   const d1 = c1.data?.data?.id
-  const early = await http.post(`/api/disposals/${d1}/dispose`, { token })
+  const early = await http.post(`/api/disposals/${d1}/dispose`, { token, headers: { 'X-Request-Key': `disposal-smoke-${d1}` } })
   log.assert('草稿不可执行处置', early.status === 409 || early.status === 400,
     `status=${early.status} msg=${early.message}`)
 
@@ -189,7 +192,7 @@ async function scenarioStatusGuards(ctx, log, token) {
     token,
     json: {
       warehouseId: warehouse.id, warehouseName: warehouse.name,
-      items: [{ productId: product.id, quantity: 2, disposeType: 1 }],
+      items: [{ productId: product.id, quantity: 2, disposeType: 3 }],
     },
   })
   const d2 = d2res.data?.data?.id
@@ -199,7 +202,7 @@ async function scenarioStatusGuards(ctx, log, token) {
   const afterReject = await http.get(`/api/disposals/${d2}`, { token })
   log.assert('驳回后状态=5 且理由已写', afterReject.data?.data?.status === 5 && afterReject.data?.data?.rejectReason === '不需要',
     `status=${afterReject.data?.data?.status}`)
-  const rejectExec = await http.post(`/api/disposals/${d2}/dispose`, { token })
+  const rejectExec = await http.post(`/api/disposals/${d2}/dispose`, { token, headers: { 'X-Request-Key': `disposal-smoke-${d2}` } })
   log.assert('已驳回不可执行', rejectExec.status === 409 || rejectExec.status === 400,
     `status=${rejectExec.status}`)
 
@@ -208,7 +211,7 @@ async function scenarioStatusGuards(ctx, log, token) {
     token,
     json: {
       warehouseId: warehouse.id, warehouseName: warehouse.name,
-      items: [{ productId: product.id, quantity: 2, disposeType: 1 }],
+      items: [{ productId: product.id, quantity: 2, disposeType: 3 }],
     },
   })
   const d3 = d3res.data?.data?.id
@@ -235,17 +238,29 @@ async function scenarioOverQuantityRejected(ctx, log, token) {
     token,
     json: {
       warehouseId: warehouse.id, warehouseName: warehouse.name,
-      items: [{ productId: product.id, quantity: 10, disposeType: 1 }],
+      items: [{ productId: product.id, quantity: 10, disposeType: 3 }],
     },
   })
   const d = create.data?.data?.id
   await http.post(`/api/disposals/${d}/submit`, { token })
   await http.post(`/api/disposals/${d}/approve`, { token })
-  const dis = await http.post(`/api/disposals/${d}/dispose`, { token })
+  const dis = await http.post(`/api/disposals/${d}/dispose`, { token, headers: { 'X-Request-Key': `disposal-smoke-${d}` } })
   log.assert('处置数量超可用被拒', dis.status === 400 || dis.status === 409,
     `status=${dis.status} msg=${dis.message}`)
   const after = await currentOnHand(pool, product.id, warehouse.id)
   log.assert('超量被拒后库存不变', after === 4, `after=${after}`)
+}
+
+/** 新1/2独立单必须拒绝；正常销售/采购退货仅另走原业务入口。 */
+async function scenarioLegacyCreateRejected(ctx, log, token) {
+  const { http, pool, warehouse } = ctx
+  const product = await createTestProduct(pool)
+  await seedStock(pool, product.id, warehouse.id, 6)
+  for (const disposeType of [1, 2]) {
+    const create = await http.post('/api/disposals', { token, json: { warehouseId: warehouse.id, warehouseName: warehouse.name, items: [{ productId: product.id, quantity: 2, disposeType }] } })
+    log.assert(`新方式${disposeType}独立建单拒绝`, create.status === 400, `status=${create.status}`)
+  }
+  log.assert('拒绝1/2建单未改变库存', await currentOnHand(pool, product.id, warehouse.id) === 6)
 }
 
 async function main() {
@@ -265,6 +280,7 @@ async function main() {
     const { token } = await login(ctx.http, 'smoke_admin', 'SmokeAdmin123!')
     if (!token) throw new Error('登录失败，无法执行处置单回归')
 
+    await scenarioLegacyCreateRejected(ctx, log, token)
     await scenarioFullFlow(ctx, log, token)
     await scenarioScrapLeavesLedger(ctx, log, token)
     await scenarioStatusGuards(ctx, log, token)

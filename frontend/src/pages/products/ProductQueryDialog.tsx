@@ -62,7 +62,7 @@ export default function ProductQueryDialog({ open, initial, onClose, onApply }: 
       >
         <QueryFormLayout>
           <label className="flex flex-col gap-1 col-span-2">
-            <span className="text-xs font-medium text-muted-foreground">编码 / 名称 / 条码</span>
+            <span className="text-xs font-medium text-muted-foreground">编码 / 名称 / 条码 / 供应商型号 / 型号 / 颜色</span>
             <Input
               placeholder="请输入关键字…"
               value={draft.keyword}

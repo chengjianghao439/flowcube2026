@@ -4,16 +4,17 @@ import { SectionCard } from '@/components/shared/SectionCard'
 import { Button } from '@/components/ui/button'
 
 /** 新建、编辑和改单共用的商品区域，只负责布局。 */
-export function SaleOrderItemsSection({ hasItems, onAdd, children }: {
+export function SaleOrderItemsSection({ hasItems, onAdd, children, allowAdd = true }: {
+  allowAdd?: boolean
   hasItems: boolean
   onAdd: () => void
   children: ReactNode
 }) {
   return (
-    <SectionCard title="商品明细" compact actions={
+    <SectionCard title="商品明细" compact actions={allowAdd ?
       <Button data-entry-add data-entry-field="add" type="button" size="sm" variant="outline" onClick={onAdd} className="gap-1.5">
         <Plus className="h-4 w-4" />添加商品
-      </Button>
+      </Button> : undefined
     }>
       {hasItems && <p className="mb-2 text-xs text-muted-foreground">数量、单价按 Enter 前进，Shift+Enter 返回；末行可继续添加商品。</p>}
       {hasItems ? children : (

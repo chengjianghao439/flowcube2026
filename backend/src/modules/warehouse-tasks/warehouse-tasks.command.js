@@ -290,11 +290,14 @@ async function cancel(id, options = {}) {
     const taskRow = await lockStatusRow(conn, {
       table: 'warehouse_tasks',
       id,
-      columns: 'id, task_no, task_type, status, sale_order_id, sorting_bin_id, sorting_bin_code, cancel_requested_at, warehouse_id',
+      columns: 'id, task_no, task_type, status, return_id, sale_order_id, sorting_bin_id, sorting_bin_code, cancel_requested_at, warehouse_id',
       entityName: '仓库任务',
     })
     // 单据级数据权限（2026-08-21 审计高危）：限仓用户不能取消他人仓库的任务
     assertInScope(options.scopeWarehouseIds, taskRow.warehouse_id, '仓库任务')
+    if (options.purchaseReturnId != null && (taskRow.task_type !== 'purchase_return' || Number(taskRow.return_id) !== Number(options.purchaseReturnId))) {
+      throw new AppError('采购退货任务归属已变化，请刷新后核对', 409, 'PURCHASE_RETURN_SOURCE_CHANGED')
+    }
     // ── 返货出库单不可单独取消（2026-09-26 一致性审查 · 任务 1 第二期）──────────────
     // 返货出库单不是独立业务单，它是「取消退货单」这一动作的组成部分：取消退货单时，
     // 退货单保持在已确认(2)、其退货任务被置为反向处理中(7)，正是等这张单把货退回客户后

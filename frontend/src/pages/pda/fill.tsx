@@ -22,6 +22,7 @@ import { getContainerByBarcodeApi, fillPlasticBoxApi, type PlasticBoxFillResult 
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
 import { usePendingRequests } from '@/hooks/usePendingRequests'
+import { plasticReadContext, usePdaPlasticReadGuard } from '@/hooks/usePdaPlasticReadGuard'
 import { formatPdaActionError } from '@/utils/displayFormatters'
 
 interface ScannedSource {
@@ -31,15 +32,21 @@ interface ScannedSource {
   remainingQty: number
 }
 
-export default function PdaFillPage() {
+export default function PdaFillPage({ active = true, onBack, onWorkStateChange }: {
+  active?: boolean; onBack?: () => void; onWorkStateChange?: (state: { hasInput: boolean; pending: boolean }) => void
+} = {}) {
   const navigate = useNavigate()
   const { flash, ok, err } = usePdaFeedback()
+  const captureRead = usePdaPlasticReadGuard(active)
+  const [formContext, setFormContext] = useState<string | null>(null)
+  const contextCurrent = formContext === null || formContext === plasticReadContext()
   const [step, setStep] = useState<'source' | 'target' | 'confirm'>('source')
   const [source, setSource] = useState<ScannedSource | null>(null)
   const [box, setBox] = useState<{ containerId: number; barcode: string } | null>(null)
 
   // resource action 精确绑定目标盒：同盒同键可重放，不同盒天然落在不同幂等记录上
   const fillAction = useCriticalPdaAction<PlasticBoxFillResult>({
+    active,
     action: `plastic_box.fill.${box?.containerId ?? 'none'}`,
     label: '塑料盒放货',
     onConfirmed: (data, ctx) => {
@@ -50,6 +57,7 @@ export default function PdaFillPage() {
       )
       setStep('source')
       setSource(null)
+      setFormContext(null)
       setBox(null)
       // 复位恢复标志：否则合法第二笔或再次重挂会被首笔的标志影响
       setRestored(false)
@@ -87,6 +95,7 @@ export default function PdaFillPage() {
       boxId: number; boxBarcode?: string
       sourceContainerId: number; sourceBarcode?: string; expectedSourceQty?: number
     }
+    setFormContext(plasticReadContext())
     setBox({ containerId: Number(m.boxId), barcode: m.boxBarcode ?? `#${m.boxId}` })
     setSource({
       containerId: Number(m.sourceContainerId),
@@ -106,6 +115,7 @@ export default function PdaFillPage() {
     }
     setStep('source')
     setSource(null)
+    setFormContext(null)
     setBox(null)
     setRestored(false)
     fillAction.clearError()
@@ -114,11 +124,13 @@ export default function PdaFillPage() {
 
   /** 扫来源：必须是整件库存条码（塑料盒不能作为放货来源） */
   const sourceMut = useMutation({
-    mutationFn: async (bc: string) => {
-      const res = await getContainerByBarcodeApi(bc, { skipGlobalError: true })
+    mutationFn: async ({ bc, owner }: { bc: string; owner: ReturnType<typeof captureRead> }) => {
+      const res = await getContainerByBarcodeApi(bc, owner.config)
       return res!
     },
-    onSuccess: (d) => {
+    onSuccess: (d, { owner }) => {
+      if (!owner.current()) return
+      setFormContext(owner.contextKey)
       if (d.containerKind === 'plastic_box') {
         err('塑料盒不能作为放货来源，请扫整件库存条码')
         return
@@ -144,16 +156,18 @@ export default function PdaFillPage() {
       setStep('target')
       ok(`来源 ${d.barcode}：${d.remainingQty} 件，请扫目标塑料盒`)
     },
-    onError: (e: unknown) => err(formatPdaActionError(e, '查询来源失败')),
+    onError: (e: unknown, { owner }) => { if (owner.current()) err(formatPdaActionError(e, '查询来源失败')) },
   })
 
   /** 扫目标盒：必须是塑料盒（同商品同仓库由后端把关；设备仓由后端 PDA 分支把关） */
   const boxMut = useMutation({
-    mutationFn: async (bc: string) => {
-      const res = await getContainerByBarcodeApi(bc, { skipGlobalError: true })
+    mutationFn: async ({ bc, owner }: { bc: string; owner: ReturnType<typeof captureRead> }) => {
+      const res = await getContainerByBarcodeApi(bc, owner.config)
       return res!
     },
-    onSuccess: (d) => {
+    onSuccess: (d, { owner }) => {
+      if (!owner.current()) return
+      setFormContext(owner.contextKey)
       if (d.containerKind !== 'plastic_box') {
         err('目标必须是塑料盒条码（B 开头）')
         return
@@ -166,11 +180,11 @@ export default function PdaFillPage() {
       setStep('confirm')
       ok(`目标盒 ${d.barcode}`)
     },
-    onError: (e: unknown) => err(formatPdaActionError(e, '查询塑料盒失败')),
+    onError: (e: unknown, { owner }) => { if (owner.current()) err(formatPdaActionError(e, '查询塑料盒失败')) },
   })
 
   const submit = useCallback(async () => {
-    if (!source || !box) return
+    if (!active || !contextCurrent || !source || !box) return
     try {
       const res = await fillAction.run(
         (requestKey) =>
@@ -193,9 +207,10 @@ export default function PdaFillPage() {
     } catch (e) {
       err(formatPdaActionError(e, '放货未提交成功'))
     }
-  }, [fillAction, source, box, err])
+  }, [active, contextCurrent, fillAction, source, box, err])
 
   const handleScan = useCallback((raw: string) => {
+    if (!active || !contextCurrent) return
     const parsed = parseBarcode(raw)
     if (parsed.type !== 'container' && parsed.type !== 'unknown') {
       err('请扫描库存条码或塑料盒条码')
@@ -205,19 +220,22 @@ export default function PdaFillPage() {
       err(fillAction.blockedReason ?? '当前不可提交')
       return
     }
-    if (step === 'source') sourceMut.mutate(raw.trim())
-    else if (step === 'target') boxMut.mutate(raw.trim())
-  }, [step, err, sourceMut, boxMut, fillAction])
+    if (step === 'source') sourceMut.mutate({ bc: raw.trim(), owner: captureRead() })
+    else if (step === 'target') boxMut.mutate({ bc: raw.trim(), owner: captureRead() })
+  }, [active, contextCurrent, captureRead, step, err, sourceMut, boxMut, fillAction])
 
   const busy = fillAction.phase === 'submitting'
+  const pending = busy || !!fillAction.pendingRecord
+  useEffect(() => { onWorkStateChange?.({ hasInput: !!source || !!box, pending }) }, [source, box, pending, onWorkStateChange])
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <PdaHeader title="塑料盒放货" subtitle="扫整件来源 → 扫目标盒 → 全部放入" onBack={() => navigate('/pda')} />
-      <PdaFlash flash={flash} />
+      <PdaHeader title="塑料盒放货" subtitle="扫整件来源 → 扫目标盒 → 全部放入" onBack={onBack ?? (() => navigate('/pda'))} />
+      <PdaFlash flash={contextCurrent ? flash : null} />
 
       <div className="flex-1 overflow-y-auto px-4 py-4 max-w-md mx-auto w-full space-y-4">
-        <div className="rounded-2xl border border-border bg-card p-4 space-y-2">
+        {!contextCurrent && <div className="space-y-2 rounded border border-amber-300 p-3 text-sm"><p>账号、服务器或权限已变，原来源输入已保留；请先核对原结果或重新扫码。</p><Button variant="outline" onClick={reset}>重新扫码</Button></div>}
+        <div hidden={!contextCurrent} className="rounded-2xl border border-border bg-card p-4 space-y-2">
           <p className="text-xs text-muted-foreground">
             当前步骤：<span className="font-semibold text-foreground">
               {step === 'source' ? '① 扫整件来源' : step === 'target' ? '② 扫目标塑料盒' : '③ 确认放货'}
@@ -252,7 +270,7 @@ export default function PdaFillPage() {
           </div>
         )}
 
-        {step === 'confirm' && (
+        {contextCurrent && step === 'confirm' && (
           <div className="flex gap-2">
             <Button variant="outline" className="flex-1" onClick={reset} disabled={busy}>取消</Button>
             <Button className="flex-1" onClick={() => { void submit() }} disabled={busy || fillAction.submitBlocked || sourceMut.isPending || boxMut.isPending}>
@@ -263,11 +281,11 @@ export default function PdaFillPage() {
       </div>
 
       <PdaBottomBar>
-        {step !== 'confirm' && (
+        {contextCurrent && step !== 'confirm' && (
           <PdaScanner
             onScan={handleScan}
             placeholder={step === 'source' ? '扫描整件库存条码' : '扫描目标塑料盒条码'}
-            disabled={sourceMut.isPending || boxMut.isPending || fillAction.submitBlocked}
+            disabled={!active || sourceMut.isPending || boxMut.isPending || fillAction.submitBlocked}
           />
         )}
       </PdaBottomBar>

@@ -1,0 +1,32 @@
+{
+  "name": "gui-backfill-approve-final",
+  "checks": [
+    "批准前详情保留199001原日期与准确退款金额",
+    "另一人员批准并记账200",
+    "业务已保存和凭证已生成分别呈现",
+    "已记账详情保留原业务日及202610落期"
+  ],
+  "api": [
+    {
+      "method": "GET",
+      "path": "/api/accounting/backfills/4",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/accounting/backfills/4/approve",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/accounting/backfills?page=1&pageSize=50",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/accounting/backfills/4",
+      "status": 200
+    }
+  ],
+  "errors": []
+}

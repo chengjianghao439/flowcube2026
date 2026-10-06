@@ -4,10 +4,19 @@ import {
   createCategoryApi, updateCategoryApi, deleteCategoryApi, toggleCategoryStatusApi,
 } from '@/api/categories'
 import type { CreateCategoryParams, UpdateCategoryParams } from '@/types/categories'
+import type { ProductFinderReadContext } from './useProducts'
 
 const QK = 'categories'
 
-export const useCategoryTree = () => useQuery({ queryKey: [QK, 'tree'], queryFn: getCategoryTreeApi, staleTime: 60000 })
+export const useCategoryTree = (context?: ProductFinderReadContext) => useQuery({
+  queryKey: context ? [QK, 'tree', ...context.key] : [QK, 'tree'],
+  queryFn: async query => {
+    context?.assertCurrent()
+    const data = context ? await getCategoryTreeApi({ ...context.config, signal: query.signal }) : await getCategoryTreeApi()
+    context?.assertCurrent()
+    return data
+  }, enabled: !context || context.enabled, staleTime: 60000,
+})
 
 function invalidate(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: [QK] })

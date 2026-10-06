@@ -1,3 +1,4 @@
+import { ReturnSourceButton } from '@/pages/returns/ReturnSourceButton'
 import { money } from '@/lib/format'
 import { roundQuantity } from '@/lib/qtyStep'
 import { OrderEntryIssues } from '@/components/shared/OrderEntryIssues'
@@ -578,6 +579,7 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
         subtitle={<StatusBadge type="purchase" status={order.status} />}
         rightActions={
           <>
+            <ReturnSourceButton kind="purchase" sourceId={order.id} sourceNo={order.orderNo} />
             {canCancel && (
               <Button variant="outline" className="border-destructive/30 text-destructive hover:bg-destructive/5" disabled={isPending}
                 onClick={() => ask('取消采购单', '取消后此采购单将无法恢复，请确认操作。', 'destructive', () => {

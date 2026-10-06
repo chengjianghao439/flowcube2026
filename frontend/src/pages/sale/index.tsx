@@ -11,6 +11,7 @@ import DataTable from '@/components/shared/DataTable'
 import ListSummary from '@/components/shared/ListSummary'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { Button } from '@/components/ui/button'
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel } from '@/components/ui/dropdown-menu'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { SaleRowActions } from './components/SaleRowActions'
 import StockShortageDialog, { type StockShortageItem } from './components/StockShortageDialog'
@@ -258,7 +259,12 @@ export default function SalePage() {
               导出 Excel
             </Button>
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
-            {can(PERMISSIONS.SALE_ORDER_CREATE) && <><Button variant="outline" onClick={() => { addTab({ key: '/sale/new-kit', title: '新建套销售', path: '/sale/new-kit' }); navigate('/sale/new-kit') }}>新建套销售</Button><Button onClick={goToNew}>+ 新建销售单</Button></>}
+            {can(PERMISSIONS.SALE_ORDER_CREATE) && <><Button onClick={goToNew}>新建销售</Button><DropdownMenu>
+              <DropdownMenuTrigger asChild><Button variant="outline">开单方式</Button></DropdownMenuTrigger>
+              <DropdownMenuContent align="end"><DropdownMenuLabel>需要按组合成交时选择</DropdownMenuLabel>
+                <DropdownMenuItem onSelect={() => { addTab({ key: '/sale/new-kit', title: '新建套销售', path: '/sale/new-kit' }); navigate('/sale/new-kit') }}>成套配件销售</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu></>}
           </>
         }
       />

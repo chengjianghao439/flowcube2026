@@ -19,6 +19,7 @@ const SOURCE_TYPE_LABELS = {
   [SOURCE_TYPES.PAYMENT_OUT]:     '付款',
   [SOURCE_TYPES.EXPENSE_PAY]:     '费用报销',
   [SOURCE_TYPES.REFUND_PAY]:      '退款',
+  [SOURCE_TYPES.SUPPLIER_REFUND_IN]: '供应商退款',
   [SOURCE_TYPES.PURCHASE_RETURN]: '采购退货',
   [SOURCE_TYPES.SALE_RETURN]:     '销售退货',
   [SOURCE_TYPES.STOCK_CHECK]:     '盘点盈亏',
@@ -373,12 +374,23 @@ async function reconciliation(companyId = 1) {
     [companyId, companyId, companyId],
   )
 
+  // The new received-refund projection is separate from the historical gross white lists above.
+  const read=await pool.getConnection()
+  let supplierRefunds
+  try{
+    await read.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ')
+    await read.query('START TRANSACTION READ ONLY')
+    supplierRefunds=await require('./voucher-supplier-refunds').reconciliation(read,companyId)
+    await read.commit()
+  }catch(error){await read.rollback();throw error}finally{read.release()}
+
   return {
     items: [
       item('资金（收付款/报销 vs 资金流水）', fundV.s, fundT.s),
       item('应付账款（凭证净额 vs 应付余额）', payableV.s, payableB.s),
       item('应收账款（凭证净额 vs 应收余额）', recvV.s, recvB.s),
     ],
+    supplierRefunds,
     unpostedLedger: {
       total: round2(unposted.total),
       unclassified: round2(unposted.unclassified),

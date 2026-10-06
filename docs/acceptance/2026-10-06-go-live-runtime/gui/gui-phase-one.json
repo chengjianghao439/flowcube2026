@@ -1,0 +1,21 @@
+{
+  "name": "gui-phase-one",
+  "checks": [
+    "真实登录后常用工作可见",
+    "首页工作入口进入资金工作区",
+    "资金工作区标题可见"
+  ],
+  "api": [
+    {
+      "method": "GET",
+      "path": "/api/payments/aging?topLimit=6",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/finance/dashboard?startDate=2026-04-10&endDate=2026-10-06",
+      "status": 200
+    }
+  ],
+  "errors": []
+}

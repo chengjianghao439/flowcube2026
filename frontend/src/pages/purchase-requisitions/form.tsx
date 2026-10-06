@@ -27,6 +27,7 @@ import { TabPathContext } from '@/components/layout/TabPathContext'
 import { toast } from '@/lib/toast'
 import { confirmAction } from '@/lib/confirm'
 import { usePermission } from '@/hooks/usePermission'
+import { useInvalidate } from '@/hooks/useInvalidate'
 import { useDirtyGuard } from '@/hooks/useDirtyGuard'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { formatDisplayDateTime } from '@/lib/dateTime'
@@ -105,6 +106,7 @@ export default function RequisitionFormPage() {
   const editId = isNew ? null : Number(tabPath.split('/').pop())
   const navigate = useNavigate()
   const { can } = usePermission()
+  const invalidate = useInvalidate()
 
   const { data: detail, isLoading, refetch } = useQuery({
     queryKey: ['requisition', editId],
@@ -231,6 +233,14 @@ export default function RequisitionFormPage() {
     finally { setBusy(false) }
   }
 
+  function runApproval(fn: () => Promise<unknown>, okMsg: string) {
+    return run(async () => {
+      const result = await fn()
+      invalidate('approval_pending_changed')
+      return result
+    }, okMsg)
+  }
+
   async function handleSave() {
     const payload = buildPayload(); if (!payload) return
     if (editId) await run(() => updateRequisitionApi(editId, payload), '已保存')
@@ -323,14 +333,14 @@ export default function RequisitionFormPage() {
         rightActions={
           <div className="flex flex-wrap gap-2">
             {editable && canCreate && <Button onClick={handleSave} disabled={busy}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : '保存'}</Button>}
-            {editId && status === 1 && canCreate && <Button variant="outline" disabled={busy} onClick={() => run(() => submitRequisitionApi(editId), '已提交审批')}>提交审批</Button>}
-            {status === 2 && canCreate && <Button variant="outline" disabled={busy} onClick={() => run(() => withdrawRequisitionApi(editId as number), '已撤回')}>撤回</Button>}
-            {status === 2 && canApprove && <Button disabled={busy} onClick={() => run(() => approveRequisitionApi(editId as number), '已批准')}>批准</Button>}
+            {editId && status === 1 && canCreate && <Button variant="outline" disabled={busy} onClick={() => runApproval(() => submitRequisitionApi(editId), '已提交审批')}>提交审批</Button>}
+            {status === 2 && canCreate && <Button variant="outline" disabled={busy} onClick={() => runApproval(() => withdrawRequisitionApi(editId as number), '已撤回')}>撤回</Button>}
+            {status === 2 && canApprove && <Button disabled={busy} onClick={() => runApproval(() => approveRequisitionApi(editId as number), '已批准')}>批准</Button>}
             {status === 2 && canApprove && <Button variant="outline" disabled={busy} onClick={() => setRejectOpen(true)}>驳回</Button>}
             {status === 3 && canConvert && <Button disabled={busy} onClick={openConvert}>转采购单</Button>}
             {editId && (status === 1 || status === 2 || status === 4) && canCreate && (
               <Button variant="ghost" className="text-destructive" disabled={busy}
-                onClick={() => confirmAction({ title: '取消采购申请单', description: '确定取消这张采购申请单吗？此操作不可撤销。', onConfirm: () => run(() => cancelRequisitionApi(editId), '已取消') })}>取消</Button>
+                onClick={() => confirmAction({ title: '取消采购申请单', description: '确定取消这张采购申请单吗？此操作不可撤销。', onConfirm: () => runApproval(() => cancelRequisitionApi(editId), '已取消') })}>取消</Button>
             )}
           </div>
         }
@@ -422,7 +432,7 @@ export default function RequisitionFormPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRejectOpen(false)} disabled={busy}>取消</Button>
-            <Button disabled={busy || !rejectReason.trim()} onClick={async () => { await run(() => rejectRequisitionApi(editId as number, rejectReason.trim()), '已驳回'); setRejectOpen(false); setRejectReason('') }}>确认驳回</Button>
+            <Button disabled={busy || !rejectReason.trim()} onClick={async () => { await runApproval(() => rejectRequisitionApi(editId as number, rejectReason.trim()), '已驳回'); setRejectOpen(false); setRejectReason('') }}>确认驳回</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

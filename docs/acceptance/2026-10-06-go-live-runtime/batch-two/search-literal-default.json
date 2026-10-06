@@ -1,0 +1,142 @@
+{
+  "rows": [
+    {
+      "id": 6,
+      "search_match": "名称",
+      "search_rank": 1
+    },
+    {
+      "id": 8,
+      "search_match": "名称",
+      "search_rank": 2
+    }
+  ],
+  "explain": [
+    {
+      "id": 1,
+      "select_type": "PRIMARY",
+      "table": "<derived2>",
+      "partitions": null,
+      "type": "ALL",
+      "possible_keys": null,
+      "key": null,
+      "key_len": null,
+      "ref": null,
+      "rows": 2,
+      "filtered": 100,
+      "Extra": "Using filesort"
+    },
+    {
+      "id": 2,
+      "select_type": "DERIVED",
+      "table": null,
+      "partitions": null,
+      "type": null,
+      "possible_keys": null,
+      "key": null,
+      "key_len": null,
+      "ref": null,
+      "rows": null,
+      "filtered": null,
+      "Extra": "Impossible WHERE"
+    },
+    {
+      "id": 3,
+      "select_type": "UNION",
+      "table": null,
+      "partitions": null,
+      "type": null,
+      "possible_keys": null,
+      "key": null,
+      "key_len": null,
+      "ref": null,
+      "rows": null,
+      "filtered": null,
+      "Extra": "Impossible WHERE"
+    },
+    {
+      "id": 4,
+      "select_type": "UNION",
+      "table": null,
+      "partitions": null,
+      "type": null,
+      "possible_keys": null,
+      "key": null,
+      "key_len": null,
+      "ref": null,
+      "rows": null,
+      "filtered": null,
+      "Extra": "Impossible WHERE"
+    },
+    {
+      "id": 5,
+      "select_type": "UNION",
+      "table": null,
+      "partitions": null,
+      "type": null,
+      "possible_keys": null,
+      "key": null,
+      "key_len": null,
+      "ref": null,
+      "rows": null,
+      "filtered": null,
+      "Extra": "Impossible WHERE"
+    },
+    {
+      "id": 6,
+      "select_type": "UNION",
+      "table": null,
+      "partitions": null,
+      "type": null,
+      "possible_keys": null,
+      "key": null,
+      "key_len": null,
+      "ref": null,
+      "rows": null,
+      "filtered": null,
+      "Extra": "Impossible WHERE"
+    },
+    {
+      "id": 7,
+      "select_type": "UNION",
+      "table": null,
+      "partitions": null,
+      "type": null,
+      "possible_keys": null,
+      "key": null,
+      "key_len": null,
+      "ref": null,
+      "rows": null,
+      "filtered": null,
+      "Extra": "No tables used"
+    },
+    {
+      "id": 8,
+      "select_type": "UNION",
+      "table": null,
+      "partitions": null,
+      "type": null,
+      "possible_keys": null,
+      "key": null,
+      "key_len": null,
+      "ref": null,
+      "rows": null,
+      "filtered": null,
+      "Extra": "Impossible WHERE"
+    },
+    {
+      "id": 9,
+      "select_type": "UNION",
+      "table": null,
+      "partitions": null,
+      "type": null,
+      "possible_keys": null,
+      "key": null,
+      "key_len": null,
+      "ref": null,
+      "rows": null,
+      "filtered": null,
+      "Extra": "No tables used"
+    }
+  ]
+}

@@ -41,14 +41,15 @@ export function useCommercialSaleRead(id: number) {
   })
   return { ...query, readOwner }
 }
-export function useCommercialPreview(body: CommercialBody | null, owner: KitReadOwner, id?: number) {
+export function useCommercialPreview(body: CommercialBody | null, owner: KitReadOwner, id?: number, readCurrent?: () => boolean) {
+  const contextCurrent = !readCurrent || readCurrent()
   const signature = JSON.stringify(body),
     serial = useRef(0)
   const [result, setResult] = useState<{ signature: string; data?: CommercialPreview; error?: string } | null>(null)
   useEffect(() => {
     const generation = ++serial.current,
       controller = new AbortController()
-    if (!body) {
+    if (!body || !contextCurrent) {
       setResult(null)
       return
     }
@@ -56,8 +57,10 @@ export function useCommercialPreview(body: CommercialBody | null, owner: KitRead
     void (async () => {
       try {
         assertKitReadOwner(owner)
+        if (readCurrent && !readCurrent()) throw new Error('原读取上下文已变化，草稿保留')
         const data = await previewCommercialSaleApi(body, owner, id, controller.signal)
         assertKitReadOwner(owner)
+        if (readCurrent && !readCurrent()) throw new Error('原读取上下文已变化，草稿保留')
         if (serial.current === generation && !controller.signal.aborted) setResult({ signature, data })
       } catch (e) {
         if (serial.current === generation && !controller.signal.aborted)
@@ -67,9 +70,9 @@ export function useCommercialPreview(body: CommercialBody | null, owner: KitRead
     return () => controller.abort()
     // signature is the complete immutable request body; rerenders do not issue another identical quote.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- Use the serialized body as the preview identity rather than object allocation.
-  }, [signature, owner, id])
+  }, [signature, owner, id, contextCurrent])
   const current = body && result?.signature === signature ? result : null
-  let validOwner = true
+  let validOwner = contextCurrent
   try {
     assertKitReadOwner(owner)
   } catch {

@@ -1,5 +1,5 @@
 'use strict'
-// 合成权限夹具：仅证明 HTTP/SQL 授权，不代表库存、资金、PDA真机或物理打包流程验收。
+// 合成权限与塑料盒夹具：证明 HTTP/SQL 授权及本段库存守恒，不代表完整库存/资金或PDA真机验收。
 const { test } = require('node:test')
 const assert = require('node:assert/strict')
 const crypto = require('node:crypto')
@@ -33,7 +33,7 @@ test('security scope uses real HTTP authentication and real scoped SQL with owne
       await pool.query('INSERT INTO user_warehouse_scope (user_id,warehouse_id) VALUES ?', [warehouseIds.map(w => [id, w])])
       return { id, username: ref+suffix }
     }
-    const perms = [P.DASHBOARD_VIEW, P.PRODUCT_VIEW, P.SALE_ORDER_VIEW, P.PURCHASE_ORDER_VIEW, P.RETURN_ORDER_VIEW, P.RETURN_ORDER_EXECUTE, P.WAREHOUSE_TASK_VIEW, P.WAREHOUSE_TASK_PACK, P.STOCKCHECK_VIEW, P.STOCKCHECK_UPDATE, P.FINANCE_EXPENSE_VIEW, P.APPROVAL_TASK_VIEW, P.INVOICE_VIEW, P.REPORT_VIEW]
+    const perms = [P.DASHBOARD_VIEW, P.PRODUCT_VIEW, P.INVENTORY_CONTAINER_SPLIT, P.SALE_ORDER_VIEW, P.PURCHASE_ORDER_VIEW, P.RETURN_ORDER_VIEW, P.RETURN_ORDER_EXECUTE, P.WAREHOUSE_TASK_VIEW, P.WAREHOUSE_TASK_PACK, P.STOCKCHECK_VIEW, P.STOCKCHECK_UPDATE, P.FINANCE_EXPENSE_VIEW, P.APPROVAL_TASK_VIEW, P.INVOICE_VIEW, P.REPORT_VIEW]
     const scoped = await user('S', perms, [a])
     const multi = await user('M', perms, [a,b])
     const dashboard = await user('D', [P.DASHBOARD_VIEW], [a])
@@ -108,6 +108,103 @@ test('security scope uses real HTTP authentication and real scoped SQL with owne
     // 拒绝的PDA写没有创造包裹、盘点扫码或退货容器。
     const [[counts]] = await pool.query('SELECT (SELECT COUNT(*) FROM packages WHERE warehouse_task_id=?) AS packages, (SELECT COUNT(*) FROM inventory_containers WHERE source_ref_type=? AND source_ref_id=?) AS containers', [taskB,'sale_return',returnB])
     assert.equal(Number(counts.packages),1); assert.equal(Number(counts.containers),0)
+
+    // 塑料盒新增作业的真实 HTTP/SQL 闭环：只使用本轮独占商品/仓/容器，不复用历史库名。
+    const boxResponse = await req('POST', '/api/plastic-boxes', scoped, { productId: product, warehouseId: a })
+    assert.equal(boxResponse.status, 201, JSON.stringify(boxResponse.body))
+    const boxId = Number(boxResponse.body.data.id)
+    assert.ok(boxId > 0)
+    const sourceId = await insert(
+      'INSERT INTO inventory_containers (barcode,container_type,product_id,warehouse_id,initial_qty,remaining_qty,status,unit) VALUES (?,1,?,?,10,10,1,?)',
+      ['I'+ref,product,a,'个'],
+    )
+    // 夹具也走唯一合法库存缓存入口；不直接 UPDATE inventory_stock.quantity。
+    const { lockStockDimension, syncStockFromContainers } = require('../backend/src/engine/containerEngine')
+    const seed = await pool.getConnection()
+    try {
+      await seed.beginTransaction(); await lockStockDimension(seed, product, a)
+      await syncStockFromContainers(seed, product, a); await seed.commit()
+    } catch (error) { await seed.rollback(); throw error } finally { seed.release() }
+    async function plasticFacts() {
+      const [containers] = await pool.query('SELECT id,remaining_qty,status FROM inventory_containers WHERE product_id=? ORDER BY id', [product])
+      const [[stock]] = await pool.query('SELECT quantity FROM inventory_stock WHERE product_id=? AND warehouse_id=?', [product,a])
+      const [[logs]] = await pool.query('SELECT COUNT(*) AS total FROM inventory_logs WHERE product_id=?', [product])
+      const [[prints]] = await pool.query('SELECT COUNT(*) AS total FROM print_jobs WHERE created_by=?', [scoped.id])
+      const [[receipts]] = await pool.query('SELECT COUNT(*) AS total FROM operation_requests WHERE user_id=? AND action IN (?,?)', [scoped.id,`plastic_box.fill.${boxId}`,`plastic_box.repack.${boxId}`])
+      return { containers, stock, logs, prints, receipts }
+    }
+    async function plasticDenied(path, body, pda, requestKey, code) {
+      const before = await plasticFacts()
+      const response = await req('POST', path, scoped, body, pda, { 'X-Request-Key': requestKey })
+      assert.equal(response.status, 403, JSON.stringify(response.body))
+      if (code) assert.equal(response.body.code, code)
+      assert.deepEqual(await plasticFacts(), before, '拒绝不得改变库存/流水/打印或幂等回执')
+    }
+    async function plasticStatus(requestKey, action, pda, extra = {}) {
+      return req('GET', `/api/system/request-status/${encodeURIComponent(requestKey)}?action=${encodeURIComponent(action)}`, scoped, undefined, pda, extra)
+    }
+    async function plasticStatusDenied(requestKey, action, pda, code, extra = {}) {
+      const before = await plasticFacts()
+      const response = await plasticStatus(requestKey, action, pda, extra)
+      assert.equal(response.status,403,JSON.stringify(response.body)); assert.equal(response.body.code,code)
+      assert.deepEqual(await plasticFacts(),before,'本人回执GET不得改业务事实或补打')
+    }
+    const fillPath = `/api/plastic-boxes/${boxId}/fill`, fillBody = { sourceContainerId: sourceId, expectedSourceQty: 10 }, fillKey = ref+'fill'
+    await plasticDenied(fillPath, fillBody, unbound, fillKey, 'PDA_WAREHOUSE_REQUIRED')
+    await plasticDenied(fillPath, fillBody, scopedB, fillKey, 'PDA_WAREHOUSE_MISMATCH')
+    const fill = await req('POST', fillPath, scoped, fillBody, scopedA, { 'X-Request-Key': fillKey })
+    assert.equal(fill.status, 200, JSON.stringify(fill.body))
+    const filledFacts = await plasticFacts()
+    assert.equal(Number(filledFacts.containers.find(row => row.id === sourceId).remaining_qty), 0)
+    assert.equal(Number(filledFacts.containers.find(row => row.id === boxId).remaining_qty), 10)
+    assert.equal(Number(filledFacts.stock.quantity), 10)
+    const fillReplay = await req('POST', fillPath, scoped, fillBody, scopedA, { 'X-Request-Key': fillKey })
+    assert.equal(fillReplay.status, 200); assert.deepEqual(fillReplay.body.data, fill.body.data)
+    assert.deepEqual(await plasticFacts(), filledFacts)
+    await plasticDenied(fillPath, fillBody, unbound, fillKey, 'PDA_WAREHOUSE_REQUIRED')
+    await plasticDenied(fillPath, fillBody, scopedB, fillKey, 'PDA_WAREHOUSE_MISMATCH')
+    const repackPath = `/api/plastic-boxes/${boxId}/repack`, repackBody = { items: [2,3] }, repackKey = ref+'repack'
+    await plasticDenied(repackPath, repackBody, unbound, repackKey, 'PDA_WAREHOUSE_REQUIRED')
+    await plasticDenied(repackPath, repackBody, scopedB, repackKey, 'PDA_WAREHOUSE_MISMATCH')
+    const repack = await req('POST', repackPath, scoped, repackBody, scopedA, { 'X-Request-Key': repackKey })
+    assert.equal(repack.status, 200, JSON.stringify(repack.body)); assert.equal(repack.body.data.created.length,2)
+    assert.equal(Number(repack.body.data.boxRemainingAfter),5)
+    const repackedFacts = await plasticFacts()
+    assert.equal(Number(repackedFacts.containers.find(row => row.id === boxId).remaining_qty),5)
+    assert.equal(Number(repackedFacts.stock.quantity),10)
+    assert.equal(repackedFacts.containers.filter(row => ![sourceId,boxId].includes(row.id)).length,2)
+    const repackReplay = await req('POST', repackPath, scoped, repackBody, scopedA, { 'X-Request-Key': repackKey })
+    assert.equal(repackReplay.status,200); assert.deepEqual(repackReplay.body.data,repack.body.data)
+    assert.deepEqual(await plasticFacts(),repackedFacts)
+    await plasticDenied(repackPath,repackBody,unbound,repackKey,'PDA_WAREHOUSE_REQUIRED')
+    await plasticDenied(repackPath,repackBody,scopedB,repackKey,'PDA_WAREHOUSE_MISMATCH')
+    // 查询保留本人auth-only；撤执行权不妨碍核对，已知领域仍核票据与原流水仓。
+    await pool.query('DELETE FROM sys_role_permissions WHERE role_id=(SELECT role_id FROM sys_users WHERE id=?) AND permission=?', [scoped.id,P.INVENTORY_CONTAINER_SPLIT])
+    for (const [kind,key,result] of [['fill',fillKey,fill.body.data],['repack',repackKey,repack.body.data]]) {
+      for (const action of [`plastic_box.${kind}.${boxId}`,`plastic_box.${kind}`,'plastic_box']) {
+        const before = await plasticFacts()
+        for (const pda of [undefined,scopedA]) {
+          const status = await plasticStatus(key,action,pda)
+          assert.equal(status.status,200,JSON.stringify(status.body)); assert.equal(status.body.data.status,'success')
+          assert.deepEqual(status.body.data.data,result)
+        }
+        assert.deepEqual(await plasticFacts(),before)
+        await plasticStatusDenied(key,action,undefined,'PDA_SESSION_REQUIRED',{'X-Client':'pda'})
+        await plasticStatusDenied(key,action,unbound,'PDA_WAREHOUSE_REQUIRED')
+        await plasticStatusDenied(key,action,scopedB,'PDA_WAREHOUSE_MISMATCH')
+      }
+    }
+    await pool.query('INSERT INTO sys_role_permissions (role_id,permission) SELECT role_id,? FROM sys_users WHERE id=?', [P.INVENTORY_CONTAINER_SPLIT,scoped.id])
+    await pool.query('UPDATE user_warehouse_scope SET warehouse_id=? WHERE user_id=? AND warehouse_id=?', [b,scoped.id,a])
+    await plasticDenied(fillPath,fillBody,scopedA,fillKey,'WAREHOUSE_SCOPE_DENIED')
+    await plasticDenied(repackPath,repackBody,scopedA,repackKey,'WAREHOUSE_SCOPE_DENIED')
+    for (const [kind,key] of [['fill',fillKey],['repack',repackKey]]) {
+      for (const action of [`plastic_box.${kind}.${boxId}`,'plastic_box']) {
+        await plasticStatusDenied(key,action,undefined,'WAREHOUSE_SCOPE_DENIED')
+        await plasticStatusDenied(key,action,scopedA,'WAREHOUSE_SCOPE_DENIED')
+      }
+    }
+    await pool.query('UPDATE user_warehouse_scope SET warehouse_id=? WHERE user_id=? AND warehouse_id=?', [a,scoped.id,b])
   } finally {
     if (server) await new Promise((resolve,reject) => { server.close(e => e ? reject(e) : resolve()); server.closeAllConnections() })
     // 精确自有资源收尾；交易/授权夹具保留作审计，不清理共享表。

@@ -1,0 +1,51 @@
+{
+  "name": "gui-approval",
+  "checks": [
+    "审批第二页有准确采购原单",
+    "第二页原单为本批其他制单人员",
+    "第二页去审批进入准确采购详情"
+  ],
+  "api": [
+    {
+      "method": "POST",
+      "path": "/api/auth/logout",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/login",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/settings/logo",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/printer-bindings",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/notifications",
+      "status": 500
+    },
+    {
+      "method": "GET",
+      "path": "/api/approvals/pending?page=1&pageSize=20",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/approvals/pending?page=2&pageSize=20",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/purchase/26",
+      "status": 200
+    }
+  ],
+  "errors": []
+}

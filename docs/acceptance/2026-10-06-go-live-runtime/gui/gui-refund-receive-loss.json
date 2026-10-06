@@ -1,0 +1,95 @@
+{
+  "name": "gui-refund-receive-loss",
+  "checks": [
+    "修后业务日是原YYYY-MM-DD",
+    "丢响应前真实收到API200",
+    "未知结果不能重复收到POST",
+    "刷新后GET准确原实收回执200",
+    "响应丢失和刷新恢复合计仅1POST",
+    "已收页面凭证已生成与四位金额",
+    "已收单不再呈现取消退款"
+  ],
+  "api": [
+    {
+      "method": "POST",
+      "path": "/api/auth/logout",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/login",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/settings/logo",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/printer-bindings",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/supplier-refunds?page=1&pageSize=20",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/supplier-refunds?page=1&pageSize=20",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/notifications",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/supplier-refunds/18",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/health",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/settings/logo",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/notifications",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/supplier-refunds/operations/cd5fff50-9651-429b-a98e-4f6bb22035c5?action=supplier.refund.receive.18&requestKey=supplier-receive-1791288233724-40tjv93h",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/supplier-refunds?page=1&pageSize=20",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/supplier-refunds?page=1&pageSize=20",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/supplier-refunds/18",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/supplier-refunds/18",
+      "status": 200
+    }
+  ],
+  "errors": []
+}

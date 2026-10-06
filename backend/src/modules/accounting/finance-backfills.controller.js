@@ -48,6 +48,8 @@ const detail = async (req, res, next) => {
   } catch (e) { next(e) }
 }
 
+function detailPendingMessage(data, message) { return data?.applicationPending ? `${message}；申请详情待加载，请主动核对原申请` : message }
+
 const approve = async (req, res, next) => {
   try {
     const data = await svc.approve(+req.params.id, getOperatorFromRequest(req), {
@@ -58,7 +60,7 @@ const approve = async (req, res, next) => {
     const msg = data?.voucherError
       ? '已批准并记账，但调整凭证未生成成功，请在列表里重试生成'
       : '已批准并记账'
-    return successResponse(res, data, msg)
+    return successResponse(res, data, detailPendingMessage(data, msg))
   } catch (e) { next(e) }
 }
 
@@ -87,16 +89,16 @@ const execute = async (req, res, next) => {
     const msg = data?.voucherError
       ? '已记账，但调整凭证未生成成功，请重试生成'
       : '已记账'
-    return successResponse(res, data, msg)
+    return successResponse(res, data, detailPendingMessage(data, msg))
   } catch (e) { next(e) }
 }
 
 /** 业务已记账、调整凭证没生成出来时的重试入口 */
 const regenerateVoucher = async (req, res, next) => {
   try {
-    return successResponse(res, await svc.regenerateVoucher(
-      +req.params.id, getOperatorFromRequest(req), companyOf(req),
-    ), '调整凭证已生成')
+    const data = await svc.regenerateVoucher(+req.params.id, getOperatorFromRequest(req), companyOf(req))
+    const message = data.voucherResult === 'notRequired' ? '零分投影已核对，无需分位凭证' : data.voucherRequired === false ? '本类补录无需生成调整凭证' : '调整凭证已生成'
+    return successResponse(res, data, detailPendingMessage(data, message))
   } catch (e) { next(e) }
 }
 

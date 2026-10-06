@@ -3,11 +3,13 @@ import { describe, expect, it } from 'vitest'
 import { WIDGETS, buildAllLayout, buildDefaultLayout, mergeLayout, DASHBOARD_SECTIONS } from './registry'
 
 describe('全部仪表盘布局', () => {
-  it('新默认首页显示待办摘要，旧默认迁移而个人布局保留', () => {
+  it('新默认收敛一个关注区在前；任意合法旧默认形状及空布局不自动迁移', () => {
     expect(buildDefaultLayout().widgets.find(w => w.id === 'board-workbench')).toMatchObject({ visible: true, w: 4 })
     const oldIds = ['kpi-pending-sale', 'kpi-shipped-today', 'kpi-receivable', 'kpi-approval-count', 'board-sales-actions', 'board-business-risk', 'chart-sale-trend', 'chart-receivable-due']
     const old = { widgets: oldIds.map(id => ({ id, visible: true, w: WIDGETS.find(w => w.id === id)!.defaultW })) }
-    expect(mergeLayout(old)).toEqual(buildDefaultLayout())
+    expect(mergeLayout(old).widgets.slice(0, old.widgets.length)).toEqual(old.widgets)
+    expect(mergeLayout({ widgets: [] }).widgets.every(w => !w.visible)).toBe(true)
+    expect(buildDefaultLayout().widgets.filter(w => w.visible).map(w => w.id)).toEqual(['board-workbench', 'kpi-pending-sale', 'kpi-shipped-today', 'kpi-receivable', 'kpi-approval-count'])
     const custom = { widgets: old.widgets.map((w, i) => i === 0 ? { ...w, w: 2 } : w) }
     expect(mergeLayout(custom).widgets.find(w => w.id === 'board-workbench')?.visible).toBe(false)
   })

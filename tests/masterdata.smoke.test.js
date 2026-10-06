@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 'use strict'
+const { issueFixtureAccessToken, cleanupFixtureSessionFamilies } = require('./helpers/fixtureAuthSession')
+
 
 const assert = require('node:assert/strict')
 const { randomBytes } = require('node:crypto')
@@ -10,9 +12,9 @@ process.env.SENTRY_DSN = ''
 process.env.LOKI_URL = ''
 const { pool } = require('../backend/src/config/db')
 const express = require('../backend/node_modules/express')
-const jwt = require('../backend/node_modules/jsonwebtoken')
 const { PERMISSIONS } = require('../backend/src/constants/permissions')
 const { SETTLEMENT_TYPE } = require('../backend/src/constants/settlementType')
+const { PARTY_PROFILE_LIMITS } = require('../backend/src/utils/partyProfile')
 
 async function main() {
   const mark = `MD${randomBytes(5).toString('hex')}`
@@ -58,7 +60,7 @@ async function main() {
     server = await new Promise(resolve => { const s = app.listen(0, '127.0.0.1', () => resolve(s)) })
     request = async (module, path = '', method = 'GET', body, userId = actor) => {
       const headers = { 'Content-Type': 'application/json' }
-      if (userId) headers.Authorization = `Bearer ${jwt.sign({ userId, tokenVersion: 0 }, process.env.JWT_SECRET, { expiresIn: '5m' })}`
+      if (userId) headers.Authorization = `Bearer ${await issueFixtureAccessToken(pool, userId, { expiresIn: '5m' })}`
       const response = await fetch(`http://127.0.0.1:${server.address().port}/api/${module}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(10000) })
       const payload = await response.json()
       // 即使未来无效创建被错误接受，也先登记回执 ID，确保失败路径能清理本次行。
@@ -114,7 +116,15 @@ async function main() {
       }
       await expectStatus(module, '重复名称创建', '', 'POST', { ...body, name: ` ${name} ` }, 400)
       await expectStatus(module, '重复名称更新', `/${second.id}`, 'PUT', { ...secondEdit, isActive: true }, 400)
-      for (const invalid of [{ name: '' }, { name: '   ' }, { name: '长'.repeat(21) }, { phone: '123' }, { email: 'bad' }, { settlementType: 9 }, { paymentTermsDays: 45 }, customer ? { creditLimit: -1 } : { leadTimeDays: 366 }]) {
+      const boundary = { name: `${mark}EDGE`.padEnd(PARTY_PROFILE_LIMITS.name, '长'), contact: '联'.repeat(PARTY_PROFILE_LIMITS.contact), phone: '1'.repeat(PARTY_PROFILE_LIMITS.phone), address: '址'.repeat(PARTY_PROFILE_LIMITS.address), remark: '备'.repeat(PARTY_PROFILE_LIMITS.remark) }
+      const boundaryParty = await create(module, table, { ...body, ...boundary })
+      const boundaryDetail = await expectStatus(module, '往来方字段上限可持久化', `/${boundaryParty.id}`, 'GET', undefined, 200)
+      for (const [field, value] of Object.entries(boundary)) check(module, `${field} 上限没有截断`, boundaryDetail[field], value)
+      await expectStatus(module, '清理字段上限夹具', `/${boundaryParty.id}`, 'DELETE', undefined, 200)
+      const formerlyTooLong = await create(module, table, { ...body, name: `${mark}OLD`.padEnd(21, '长') })
+      await expectStatus(module, '旧 21 字符名称符合现行上限', `/${formerlyTooLong.id}`, 'DELETE', undefined, 200)
+      const overLimit = Object.entries(PARTY_PROFILE_LIMITS).map(([field, limit]) => ({ [field]: (field === 'phone' ? '1' : '长').repeat(limit + 1) }))
+      for (const invalid of [{ name: '' }, { name: '   ' }, ...overLimit, { phone: '123X' }, { email: 'bad' }, { settlementType: 9 }, { paymentTermsDays: 45 }, customer ? { creditLimit: -1 } : { leadTimeDays: 366 }]) {
         await expectStatus(module, `无效输入 ${Object.keys(invalid)[0]}=${JSON.stringify(Object.values(invalid)[0])}`, '', 'POST', { ...body, name: `${name}X`, ...invalid }, 400)
       }
       // 同时间排序仍使用 ID，分页不可重复；SQL keyword 不能扩大结果。
@@ -266,7 +276,7 @@ async function main() {
         assert.equal(Number(n), 0, `cleanup related ${table}`)
       }
       console.log('[masterdata] cleanup verified: all owned IDs removed; no whole-table deletes')
-    } finally { await pool.end() }
+    } finally { try { await cleanupFixtureSessionFamilies(pool) } finally { await pool.end() } }
   }
   console.log('[masterdata] PASS assertion counts', counts)
 }

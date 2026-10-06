@@ -61,7 +61,7 @@ async function preflightCsv(buffer, shape, limits) {
     input.pipe(parser)
   })
 }
-async function parse({ buffer, entries, shape, limits, preserveSettlementLexeme }) {
+async function parse({ buffer, entries, shape, limits, preserveSettlementLexeme, preserveRowNumbers }) {
   let expanded = 0, sheetEntries = 0
   if (entries) {
     for (const entry of entries) {
@@ -106,7 +106,8 @@ async function parse({ buffer, entries, shape, limits, preserveSettlementLexeme 
       const value = row.getCell(c).value
       out.push(preserveSettlementLexeme && c === 5 && value && typeof value === 'object' && value.error ? String(value.error) : normalized(value))
     }
-    rows.push(out)
+    if (preserveRowNumbers) rows[row.number - 1] = out
+    else rows.push(out)
   })
   return rows
 }

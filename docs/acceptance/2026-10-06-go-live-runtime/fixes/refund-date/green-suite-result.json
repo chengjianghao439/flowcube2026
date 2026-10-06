@@ -1,0 +1,22 @@
+{
+  "command": [
+    "bash",
+    "scripts/with-dev-env.sh",
+    "env",
+    "-u",
+    "NODE_OPTIONS",
+    "node",
+    "--require",
+    "/tmp/flowcube-runtime-refund-date-fix-20261006-n70reu26/offline-guard.cjs",
+    "--test",
+    "tests/supplier-refunds.test.js",
+    "tests/supplier-refunds-source.test.js",
+    "tests/supplier-refunds-pr-gate.test.js",
+    "tests/supplier-refunds-schema.test.js",
+    "tests/supplier-refunds-receive.test.js",
+    "tests/supplier-refunds-accounting.test.js",
+    "tests/supplier-refunds-backfill.test.js",
+    "tests/supplier-refunds-approvals.test.js"
+  ],
+  "exit_code": 0
+}

@@ -1,0 +1,67 @@
+{
+  "name": "gui-refund-create-loss",
+  "checks": [],
+  "api": [
+    {
+      "method": "POST",
+      "path": "/api/auth/logout",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/login",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/settings/logo",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/printer-bindings",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/warehouses/active",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/disposals?page=1&pageSize=200",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/notifications",
+      "status": 500
+    },
+    {
+      "method": "GET",
+      "path": "/api/disposals/handling-sources?page=1&pageSize=20",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/returns/purchase/12",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/disposals/handling-sources?page=1&pageSize=20",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/notifications",
+      "status": 500
+    },
+    {
+      "method": "GET",
+      "path": "/api/returns/purchase/12",
+      "status": 200
+    }
+  ],
+  "errors": []
+}

@@ -1,0 +1,59 @@
+{
+  "name": "gui-profiles",
+  "checks": [
+    "customer非法电话前端拒绝且未PUT",
+    "customer实际保存200",
+    "customer name完整重读",
+    "customer contact完整重读",
+    "customer phone完整重读",
+    "customer address完整重读",
+    "customer remark完整重读",
+    "customer编码保持",
+    "supplier非法电话前端拒绝且未PUT",
+    "supplier实际保存200",
+    "supplier name完整重读",
+    "supplier contact完整重读",
+    "supplier phone完整重读",
+    "supplier address完整重读",
+    "supplier remark完整重读",
+    "supplier编码保持"
+  ],
+  "api": [
+    {
+      "method": "PUT",
+      "path": "/api/customers/3",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/customers?keyword=&page=1&pageSize=200",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/customers?keyword=&page=1&pageSize=200",
+      "status": 200
+    },
+    {
+      "method": "PUT",
+      "path": "/api/suppliers/3",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/suppliers?page=1&pageSize=200",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/suppliers?keyword=&page=1&pageSize=200",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/suppliers?keyword=&page=1&pageSize=200",
+      "status": 200
+    }
+  ],
+  "errors": []
+}

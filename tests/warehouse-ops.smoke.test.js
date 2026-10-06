@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 'use strict'
+const { issueFixtureAccessToken, cleanupFixtureSessionFamilies } = require('./helpers/fixtureAuthSession')
+
 
 // 独立回环测试库；仅删除本次 ID/唯一标记，不 DROP 运行时日志表。
 const assert = require('node:assert/strict')
@@ -15,7 +17,6 @@ const { PERMISSIONS } = require('../backend/src/constants/permissions')
 const { WT_STATUS, WT_STATUS_NAME, WT_STATUS_ACTIVE } = require('../backend/src/constants/warehouseTaskStatus')
 const { getStatusRule } = require('../backend/src/constants/documentStatusRules')
 const express = require('../backend/node_modules/express')
-const jwt = require('../backend/node_modules/jsonwebtoken')
 
 async function main() {
   const log = createLogger()
@@ -164,9 +165,9 @@ async function main() {
     app.use((error, req, res, next) => { void next; res.status(error.statusCode || 500).json({ code: error.code }) })
     server = await new Promise(resolve => { const s = app.listen(0, '127.0.0.1', () => resolve(s)) })
     const endpoint = `http://127.0.0.1:${server.address().port}/api/reports/warehouse-ops`
-    const token = userId => jwt.sign({ userId, tokenVersion: 0 }, process.env.JWT_SECRET, { expiresIn: '2m' })
+    const token = userId => issueFixtureAccessToken(pool, userId, { expiresIn: '2m' })
     const request = async (userId, url = endpoint) => {
-      const response = await fetch(url, { headers: userId ? { Authorization: `Bearer ${token(userId)}` } : {} })
+      const response = await fetch(url, { headers: userId ? { Authorization: `Bearer ${await token(userId)}` } : {} })
       return { status: response.status, body: await response.json() }
     }
     log.assert('真实 HTTP 无登录返回 401', (await request()).status === 401)
@@ -203,7 +204,7 @@ async function main() {
       await pool.query('DELETE FROM sys_roles WHERE id IN (?)', [roles])
     }
     if (warehouses.length) await pool.query('DELETE FROM inventory_warehouses WHERE id IN (?)', [warehouses])
-    await pool.end()
+    try { await cleanupFixtureSessionFamilies(pool) } finally { await pool.end() }
   }
   const { failed } = log.summary()
   if (failed) process.exitCode = 1

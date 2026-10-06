@@ -27,6 +27,8 @@ function fixture({ sourceRows, stocks = new Map() } = {}) {
   })
   const controller = load('../backend/src/modules/inventory/inventory.controller.js', {
     './inventory.service': {}, './inventory.aging': {}, './inventory.procurement': procurement,
+    // Keep the real procurement controller path; the separate reservations reader is not exercised here.
+    './inventory.reservations': { listReservations: () => { throw new Error('procurement fixture must not list reservations') } },
     '../../utils/response': { successResponse: (_res, data) => data }, '../../utils/operator': {}, '../../utils/requestKey': {},
   })
   const request = (query = {}, user = { userId: 7, warehouseIds: [2, 3] }) => controller.procurementPlan({ query: { pageSize: 2, ...query }, user }, {}, error => { throw error })

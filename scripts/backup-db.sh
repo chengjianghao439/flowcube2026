@@ -45,7 +45,8 @@ fail() {
   echo "[$(ts)] [ERROR] $reason" >&2
   rm -f "${PART:-}" "${ERRLOG:-}"
   dingtalk_send "$(read_dingtalk_webhook "$PROJECT_DIR")" \
-    "🔴 FlowCube 数据库备份失败（$(ts)）：${reason}\n请尽快检查，当前可能没有可用的最新备份。"
+    "🔴 FlowCube 数据库备份失败（$(ts)）：${reason}
+请尽快检查，当前可能没有可用的最新备份。"
   exit 1
 }
 

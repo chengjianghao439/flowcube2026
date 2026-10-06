@@ -1,0 +1,27 @@
+{
+  "scope": "Five presentation/documentation files only; existing worktree changes preserved",
+  "node": {
+    "version": "v22.23.2",
+    "command": "node --check backend/src/modules/finance/finance-dashboard.service.js",
+    "exitCode": 0
+  },
+  "diffCheck": {
+    "command": "git diff --check -- frontend/src/pages/disposal/components/DisposalDetailDialog.tsx backend/src/modules/finance/finance-dashboard.service.js frontend/src/pages/finance/dashboard/index.tsx docs/frontend-pda-conventions.md docs/finance-permission-time.md",
+    "exitCode": 0
+  },
+  "runtimeVerification": "not executed; API/GUI rereview delegated to root; no DB, Docker, network, app/browser, actual business tests, commit, push, or deployment",
+  "beforeSHA256": {
+    "frontend/src/pages/disposal/components/DisposalDetailDialog.tsx": "46186c89da00f44e281a5bcad23679cf9795a81385c5568f81d2035f2bf02147",
+    "backend/src/modules/finance/finance-dashboard.service.js": "6c0cdd8f54609f911121deb2bbede8de916d4426dd2209dbde79a62fa2cdc3b0",
+    "frontend/src/pages/finance/dashboard/index.tsx": "7deb301996f340898cd533cfbfdece3c2499675621ca070d9171d07222888774",
+    "docs/frontend-pda-conventions.md": "f3c774d38f0d5a78c070bad840f2d3966736fcade4183c166a9b072cc14fab82",
+    "docs/finance-permission-time.md": "c0d42c764ab7d629d61d9242e1b005bf3271b86e074b3bfdc21c5f1b4adc40ac"
+  },
+  "afterSHA256": {
+    "frontend/src/pages/disposal/components/DisposalDetailDialog.tsx": "185b9695f0a8b7669ad76ff5b2fae8afc6da48d8f20ccb2be755a8fd7f56b9c5",
+    "backend/src/modules/finance/finance-dashboard.service.js": "5f3047f90e046339b7216e71faeaa409655728f80c12b6a802832f825b6cef30",
+    "frontend/src/pages/finance/dashboard/index.tsx": "81f4a8001c833fd8b958f648eeabac285d08f05a91d8018fed0cd858369e39b8",
+    "docs/frontend-pda-conventions.md": "3f273e73375ea14b594d846fc8b9a20c513b3decec15e0ff888dcb2b632e9a09",
+    "docs/finance-permission-time.md": "00d8b4d0ef093cb4452cc47238ef658d6045b004f468cd74d1be7461205a87c6"
+  }
+}

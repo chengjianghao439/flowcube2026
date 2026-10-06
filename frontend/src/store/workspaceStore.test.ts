@@ -3,6 +3,22 @@ import { beforeEach, expect, test } from 'vitest'
 import { HOME_TAB, useWorkspaceStore } from './workspaceStore'
 import { resolveRouteTitle } from '@/router/routeDefinitions'
 
+test('财务同组运行切换保留每个child原query，恢复合并旧标签且只接受本组成员', async () => {
+  useWorkspaceStore.setState({ tabs: [HOME_TAB], activeKey: HOME_TAB.key })
+  syncLikeRouter('/payments/receivable?keyword=old')
+  syncLikeRouter('/reports/reconciliation/receivable?partyId=7')
+  expect(useWorkspaceStore.getState().tabs).toHaveLength(2)
+  expect(useWorkspaceStore.getState().tabs[1]).toMatchObject({ title: '客户往来', viewPaths: { '/payments/receivable': '/payments/receivable?keyword=old', '/reports/reconciliation/receivable': '/reports/reconciliation/receivable?partyId=7' } })
+  localStorage.setItem('flowcube-workspace', JSON.stringify({ state: { tabs: [
+    { path: '/payments/receivable?keyword=A', key: '/payments/receivable' },
+    { path: '/reports/reconciliation/receivable?partyId=9', key: '/reports/reconciliation/receivable', viewPaths: { '/payments/payable': '/payments/payable?private=1', '/payments/receivable': '/sale/new' } },
+  ] }, version: 0 }))
+  await useWorkspaceStore.persist.rehydrate()
+  expect(useWorkspaceStore.getState().tabs).toHaveLength(2)
+  expect(useWorkspaceStore.getState().tabs[1]).toMatchObject({ viewPaths: { '/payments/receivable': '/payments/receivable?keyword=A', '/reports/reconciliation/receivable': '/reports/reconciliation/receivable?partyId=9' } })
+  expect(Object.keys(useWorkspaceStore.getState().tabs[1].viewPaths ?? {})).toHaveLength(2)
+})
+
 /**
  * 详情页标签名（2026-09-19）。
  *

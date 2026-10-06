@@ -1,9 +1,15 @@
 const svc = require('./inventory.service')
 const aging = require('./inventory.aging')
 const procurement = require('./inventory.procurement')
+const reservationRead = require('./inventory.reservations')
 const { successResponse } = require('../../utils/response')
 const { getOperatorFromRequest } = require('../../utils/operator')
 const { extractRequestKey } = require('../../utils/requestKey')
+
+async function reservations(req, res, next) {
+  try { return successResponse(res, await reservationRead.listReservations(req.query, req.user), '查询成功') }
+  catch (error) { next(error) }
+}
 
 async function trace(req, res, next) {
   try {
@@ -191,6 +197,9 @@ async function splitContainer(req, res, next) {
       targetContainerId: targetContainerId != null ? Number(targetContainerId) : null,
       userId:     req.user.userId,
       userName:   req.user.realName || req.user.username || null,
+      requestKey: extractRequestKey(req),
+      isPda: Boolean(req.pda),
+      pdaWarehouseId: req.pda?.warehouseId ?? null,
     }, req.user?.warehouseIds ?? null)
     return successResponse(res, result, '拆分成功')
   } catch (e) { next(e) }
@@ -270,6 +279,7 @@ async function procurementPlan(req, res, next) {
 }
 
 module.exports = {
+  reservations,
   trace,
   replenishment,
   stockPolicies,

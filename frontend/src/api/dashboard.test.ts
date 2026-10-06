@@ -68,6 +68,13 @@ test('待审批使用 taskId，同审批实例不同任务合法，同任务重�
   await expect(listPendingApprovalsApi({ page: 1, pageSize: 1 })).rejects.toThrow('重复')
 })
 
+test('混合审批默认取齐按entryKey区分原单，null任务不碰撞；旧真实taskId仍兼容', async () => {
+  api.defaults.adapter = paginatedAdapter(page => [{ sourceKind: 'document', entryKey: `document:purchase_order:${page}:approve`, taskId: null, instanceId: null, bizType: 'purchase_order', bizId: page }])
+  expect((await listPendingApprovalsApi()).list).toHaveLength(2)
+  api.defaults.adapter = paginatedAdapter(() => [{ sourceKind: 'document', entryKey: 'document:purchase_order:1:approve', taskId: null }])
+  await expect(listPendingApprovalsApi()).rejects.toThrow('重复')
+})
+
 test('调用方身份解析只在汇总层运行，不进入 Axios 配置或请求参数', async () => {
   const identity = vi.fn((row: unknown) => String((row as { code: number }).code))
   const request = paginatedAdapter(page => [{ code: page }])

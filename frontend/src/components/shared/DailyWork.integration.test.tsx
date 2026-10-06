@@ -43,7 +43,7 @@ vi.mock('@/router/routeRegistry', async importOriginal => ({
 const sale = [P.DASHBOARD_VIEW, P.SALE_ORDER_VIEW, P.CUSTOMER_VIEW]
 const warehouse = [P.DASHBOARD_VIEW, P.WAREHOUSE_TASK_VIEW, P.INVENTORY_VIEW, P.PRINT_JOB_VIEW]
 const finance = [P.DASHBOARD_VIEW, P.PAYMENT_VIEW]
-const candidates = ['/sale', '/purchase', '/inbound-tasks', '/picking-waves', '/inventory', '/payments/receivable', '/payments/payable', '/reports/reconciliation/receivable', '/reports/reconciliation/payable', '/logistics', '/settings/barcode-print-query']
+const candidates = ['/sale', '/purchase', '/inbound-tasks', '/picking-waves', '/inventory', '/payments/receivable', '/payments/payable', '/logistics', '/settings/barcode-print-query']
 let host: HTMLDivElement, root: Root, qc: QueryClient, saved: DashboardLayout, navigate: NavigateFunction
 
 function login(permissions: string[], id = 7, roleId = 5) {
@@ -89,7 +89,7 @@ afterEach(async () => {
 test.each([
   ['销售', sale, ['销售订单'], ['采购与销售']],
   ['仓库', warehouse, ['库存管理', '条码打印查询'], ['仓库作业', '物流与打印']],
-  ['财务', finance, ['现结客户账款', '现结供应商账款'], ['财务往来']],
+  ['财务', finance, ['客户往来', '供应商往来'], ['财务往来']],
 ] as const)('%s普通岗位无需报表权限即可从仪表盘打开常用列表', async (_, permissions, expected, expectedGroups) => {
   login([...permissions]); await render()
   expect(labels()).toEqual(expected); expect(groups()).toEqual(expectedGroups)
@@ -118,14 +118,14 @@ test('只有仓库任务查看不代替批次拣货或收货权限，撤权实�
   expect(work()).toBeNull()
 })
 test('退出及切换账号不留下旧权限入口，超级管理员退出后也为空', async () => {
-  login([], 1, 1); await render(); expect(labels()).toHaveLength(candidates.length)
+  login([], 1, 1); await render(); expect(labels()).toHaveLength(candidates.length + 1)
   await act(async () => useAuthStore.getState().logout()); expect(work()).toBeNull()
-  await act(async () => login(finance, 8)); expect(labels()).toEqual(['现结客户账款', '现结供应商账款'])
+  await act(async () => login(finance, 8)); expect(labels()).toEqual(['客户往来', '供应商往来'])
   await act(async () => login(sale, 9)); expect(labels()).toEqual(['销售订单'])
 })
 test('待办中心复用相同常用工作且仍保留自身REPORT_VIEW门槛', async () => {
   login([...warehouse, P.REPORT_VIEW]); await render('workbench')
-  expect(labels()).toEqual(['库存管理', '月结客户对账', '月结供应商对账', '条码打印查询'])
+  expect(labels()).toEqual(['库存管理', '客户往来', '供应商往来', '条码打印查询'])
   expect(host.textContent).toContain('订单履约待办'); expect(host.textContent).toContain('财务与系统提醒')
   expect(resolveRoutePermission('/reports/role-workbench')).toBe(P.REPORT_VIEW)
 })

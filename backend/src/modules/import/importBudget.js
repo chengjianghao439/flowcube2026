@@ -3,7 +3,7 @@ const path = require('node:path')
 const AppError = require('../../utils/AppError')
 
 const LIMITS = Object.freeze({ uploadBytes: 5 * 1024 * 1024, zipEntries: 256, expandedBytes: 20 * 1024 * 1024, entryBytes: 8 * 1024 * 1024, compressionRatio: 100, rows: 1001, stringChars: 2048, stringBytes: 2 * 1024 * 1024, parseMs: 5000, heapMb: 96, concurrent: 2 })
-const ENTITIES = Object.freeze({ products: { columns: 10, sheets: 1 }, stock: { columns: 3, sheets: 2 }, customers: { columns: 6, sheets: 1 }, suppliers: { columns: 8, sheets: 1 }, priceListItems: { columns: 3, sheets: 1 } })
+const ENTITIES = Object.freeze({ products: { columns: 10, sheets: 1 }, stock: { columns: 3, sheets: 2 }, customers: { columns: 7, sheets: 1 }, suppliers: { columns: 8, sheets: 1 }, priceListItems: { columns: 3, sheets: 1 } })
 function budgetError() { return new AppError('导入文件超过安全预算，请按模板拆分为每批最多1000条数据', 400, 'IMPORT_BUDGET_EXCEEDED') }
 function invalidFile() { return new AppError('导入文件格式无效或已损坏', 400, 'IMPORT_FILE_INVALID') }
 
@@ -50,7 +50,7 @@ function preflightZip(buffer) {
 }
 
 let parsing = 0
-async function parseBudgetedRows(buffer, { entity, preserveSettlementLexeme = false, timeoutMs = LIMITS.parseMs } = {}) {
+async function parseBudgetedRows(buffer, { entity, preserveSettlementLexeme = false, preserveRowNumbers = false, timeoutMs = LIMITS.parseMs } = {}) {
   const shape = ENTITIES[entity]
   if (!shape) throw invalidFile()
   if (!Buffer.isBuffer(buffer) || !buffer.length) throw invalidFile()
@@ -78,7 +78,7 @@ async function parseBudgetedRows(buffer, { entity, preserveSettlementLexeme = fa
       // A failed spawn emits error/close without exit. Both events share the
       // idempotent completion; live workers still release only after termination.
       worker.once('close', finish)
-      worker.send({ buffer, entries, shape, limits: LIMITS, preserveSettlementLexeme }, sendError => { if (sendError) { error ||= invalidFile(); worker.kill('SIGKILL') } })
+      worker.send({ buffer, entries, shape, limits: LIMITS, preserveSettlementLexeme, preserveRowNumbers }, sendError => { if (sendError) { error ||= invalidFile(); worker.kill('SIGKILL') } })
     })
   } finally { parsing-- }
 }

@@ -1,0 +1,107 @@
+{
+  "ap": [
+    {
+      "id": 25,
+      "total_amount": "100.0000",
+      "paid_amount": "79.8766",
+      "balance": "20.1234"
+    }
+  ],
+  "income": [
+    {
+      "current_balance": "20.1234"
+    }
+  ],
+  "rf": [
+    {
+      "id": 18,
+      "refund_no": "RF5I8CXCK6RJWGLZPWQQZH3F8F6",
+      "status": 3,
+      "amount": "20.1234",
+      "refund_date": "2026-10-06",
+      "fund_transaction_id": 34,
+      "voucher_id": 12,
+      "voucher_generate_error": null
+    },
+    {
+      "id": 19,
+      "refund_no": "RF0937NJU2GVZ51DVXKY1EFY7GZ",
+      "status": 2,
+      "amount": "1.0000",
+      "refund_date": "1990-01-15",
+      "fund_transaction_id": null,
+      "voucher_id": null,
+      "voucher_generate_error": null
+    }
+  ],
+  "bf": [
+    {
+      "id": 4,
+      "status": 0,
+      "business_date": "1990-01-15",
+      "period": "199001",
+      "posting_period": null,
+      "applicant_id": 12,
+      "approver_id": null,
+      "executed_at": null,
+      "voucher_generate_error": null,
+      "approved_date": null
+    }
+  ],
+  "tx": [
+    {
+      "id": 34,
+      "account_id": 6,
+      "direction": 1,
+      "amount": "20.1234",
+      "biz_type": 6,
+      "biz_id": 18,
+      "biz_no": "RF5I8CXCK6RJWGLZPWQQZH3F8F6",
+      "happened_at": "2026-10-06",
+      "backfill_id": null,
+      "voucher_date_override": null
+    }
+  ],
+  "vouchers": [
+    {
+      "id": 12,
+      "source_id": 34,
+      "source_no": "RF5I8CXCK6RJWGLZPWQQZH3F8F6",
+      "voucher_date": "2026-10-06",
+      "period": "202610",
+      "total_debit": "20.12",
+      "total_credit": "20.12"
+    }
+  ],
+  "legs": [
+    {
+      "voucher_id": 12,
+      "account_code": "1002",
+      "direction": 1,
+      "amount": "20.12"
+    },
+    {
+      "voucher_id": 12,
+      "account_code": "2202",
+      "direction": 2,
+      "amount": "20.12"
+    }
+  ],
+  "payment": [
+    {
+      "id": 13,
+      "amount": "100.0000"
+    }
+  ],
+  "stock": [
+    {
+      "quantity": "10.00",
+      "reserved": "0.00"
+    }
+  ],
+  "physical": [
+    {
+      "quantity": "10.00"
+    }
+  ]
+}

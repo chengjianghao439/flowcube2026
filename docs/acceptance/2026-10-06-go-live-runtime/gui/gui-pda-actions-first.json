@@ -1,0 +1,32 @@
+{
+  "name": "gui-pda-actions",
+  "checks": [
+    "整件部分拆出真实200",
+    "拆出4源余6",
+    "从盒还原真实200",
+    "生成整件2盒余2"
+  ],
+  "api": [
+    {
+      "method": "GET",
+      "path": "/api/inventory/containers/barcode/I000045",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/inventory/containers/47/split",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/inventory/containers/barcode/B000002",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/plastic-boxes/60/repack",
+      "status": 200
+    }
+  ],
+  "errors": []
+}

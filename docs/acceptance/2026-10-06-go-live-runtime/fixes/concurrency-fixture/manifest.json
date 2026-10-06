@@ -1,0 +1,46 @@
+{
+  "root": "/Users/chengjianghao/.codex/worktrees/go-live-batch-one/flowcube",
+  "target": "tests/concurrency-guards.smoke.test.js",
+  "beforeSha256": "ea7b898c90a9f731db142f850aa1410491cc503650f7d00364c884730b5f1279",
+  "protectedSha256": {
+    "backend/src/modules/inventory/inventory.service.js": "d689cdbe443db3ded453ede612796fd84c53a55eb1081dab3ece70b1ad8598f4",
+    "backend/src/modules/inventory/inventory.split.js": "fef78cbd621e79424fdfa9f5fecd1ad13ef460178b966678eb24cd17cf4b980d",
+    "backend/src/modules/print-jobs/print-jobs.service.js": "40c3f1fbd34bcc3cbb28e4f8fa5b5bd071cb92a04b19f5a23d068b3ce17bf036",
+    "docs/verification-commands.md": "098ec1d4f610bdad53933b4840583c17cda59a9749474e96bbd4d0a8434ffd86"
+  },
+  "baselineLog": "/var/folders/p_/qbf0z5n52cdbmh3kywwz91dc0000gn/T/flowcube-golive-20261006-_k9k_8e7/concurrency-owned-01.log",
+  "validation": "pending-root-real-MySQL-rerun",
+  "afterSha256": "4229fbbf6f5fd5eefc9623bdb694761b377fbc8cd607d490cb84d196e48db69e",
+  "overlaySha256": "648e678ba44a92913d399163a5cda4728b713d3d851e1baffc2162754e9b0de0",
+  "protectedCurrentSha256": {
+    "backend/src/modules/inventory/inventory.service.js": "d689cdbe443db3ded453ede612796fd84c53a55eb1081dab3ece70b1ad8598f4",
+    "backend/src/modules/inventory/inventory.split.js": "fef78cbd621e79424fdfa9f5fecd1ad13ef460178b966678eb24cd17cf4b980d",
+    "backend/src/modules/print-jobs/print-jobs.service.js": "40c3f1fbd34bcc3cbb28e4f8fa5b5bd071cb92a04b19f5a23d068b3ce17bf036",
+    "docs/verification-commands.md": "098ec1d4f610bdad53933b4840583c17cda59a9749474e96bbd4d0a8434ffd86"
+  },
+  "protectedUnchanged": {
+    "backend/src/modules/inventory/inventory.service.js": true,
+    "backend/src/modules/inventory/inventory.split.js": true,
+    "backend/src/modules/print-jobs/print-jobs.service.js": true,
+    "docs/verification-commands.md": true
+  },
+  "syntaxCheck": {
+    "nodeVersion": "v22.23.2",
+    "command": "node --check tests/concurrency-guards.smoke.test.js",
+    "exitCode": 0,
+    "scope": "syntax only; does not load source or connect database"
+  },
+  "diffCheck": {
+    "command": "git diff --check -- tests/concurrency-guards.smoke.test.js",
+    "exitCode": 0
+  },
+  "baselineObserved": {
+    "passed": 118,
+    "failed": 3,
+    "scope": "root-owned real MySQL log; all three scenarioSplitRollback failures; no new rerun by this author"
+  },
+  "extraAssertions": [
+    "[FIXTURE] split 打印入队故障注入命中一次",
+    "[FIXTURE] split 故障注入后打印函数与模块缓存已恢复"
+  ]
+}

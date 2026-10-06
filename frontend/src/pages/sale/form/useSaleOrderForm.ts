@@ -1,3 +1,7 @@
+import { mayHandle } from '@/lib/disposalHandlingRecovery'
+import { PERMISSIONS as P } from '@/lib/permission-codes'
+import type { HandlingSource } from '@/types/disposal-handling'
+import type { Product } from '@/types/products'
 import type { KitReadOwner } from '@/api/kits'
 import { useState, useEffect, useRef, type SetStateAction } from 'react'
 import { useDirtyGuard } from '@/hooks/useDirtyGuard'
@@ -9,9 +13,20 @@ import { dirtyItems } from '@/lib/editMode'
 import type { ProductFinderResult, ProductUnit } from '@/types/products'
 import type { FinderResult } from '@/types/finder'
 import type { DraftItem } from './validate'
+import type { Customer } from '@/types/customers'
+import { reorderConfig } from '@/lib/saleReorder'
+import { useSectionActive } from '@/components/layout/SectionVisibilityContext'
 
 /** CreateView / EditView 共用的表单状态与操作逻辑；传 order 则从已有订单初始化（编辑），不传则从空白开始（新建）。 */
-export function useSaleOrderForm(tabPath: string, order?: NonNullable<ReturnType<typeof useSaleDetail>['data']>, readOwner?: KitReadOwner) {
+export function useSaleOrderForm(tabPath: string, order?: NonNullable<ReturnType<typeof useSaleDetail>['data']>, readOwner?: KitReadOwner, readCurrent?: () => boolean, handlingMode = false) {
+  const sectionActive = useSectionActive(), ownedRead = !!readCurrent
+  const readable = !!readCurrent && sectionActive && readCurrent()
+  const readActivity = useRef({ readable, generation: 0 })
+  if (ownedRead && readActivity.current.readable !== readable) readActivity.current.generation++
+  readActivity.current.readable = readable
+  const readGeneration = readActivity.current.generation
+  // A request keeps its render's generation; hidden→visible must never revive an old quote/product read.
+  const isReadCurrent = () => !readCurrent || (readActivity.current.readable && readActivity.current.generation === readGeneration && readCurrent())
   const [customerId,      commitCustomerId]      = useState(order ? String(order.customerId) : '')
   const [customerName,    setCustomerName]    = useState(order?.customerName ?? '')
   const [warehouseId,     setWarehouseId]     = useState(order ? String(order.warehouseId) : '')
@@ -28,7 +43,7 @@ export function useSaleOrderForm(tabPath: string, order?: NonNullable<ReturnType
   const quantityRefs  = useRef<Map<number, HTMLInputElement>>(new Map())
   const mkEmpty = (): DraftItem => ({ _key: ++counterRef.current, productId: 0, productCode: '', productName: '', articleNumber: null, spec: null, color: null, unit: '', entryUnit: '', units: [], quantity: 1, unitPrice: 0, remark: '', priceSource: 'default', priceExplanation: { kind: 'default' }, resolvedPrice: null, resolvedPriceLevel: null, costPrice: null })
 
-  const { data: carrierOptions = [] } = useCarriersActive(readOwner)
+  const { data: carrierOptions = [] } = useCarriersActive(readOwner, ownedRead ? () => isReadCurrent() && (!handlingMode || mayHandle(P.CARRIER_VIEW)) : undefined)
 
   const [items, commitItems] = useState<DraftItem[]>(() =>
     (order?.items ?? []).map((item, i) => ({
@@ -96,6 +111,12 @@ export function useSaleOrderForm(tabPath: string, order?: NonNullable<ReturnType
     return () => { cancelled = true }
   }, [order])
   const [priceLoading, setPriceLoading] = useState<Record<number, boolean>>({})
+  useEffect(() => {
+    if (!ownedRead) return
+    priceRequests.current.clear()
+    productRequests.current.clear()
+    setPriceLoading({})
+  }, [ownedRead, readGeneration])
   const [priceErrors, setPriceErrors] = useState<Record<number, string>>({})
   const [finderOpen,    setFinderOpen]    = useState(false)
   const [finderItemKey, setFinderItemKey] = useState<number | null>(null)
@@ -119,6 +140,7 @@ export function useSaleOrderForm(tabPath: string, order?: NonNullable<ReturnType
 
   // 添加商品：新增一行并立即弹出选品对话框，与采购单/调拨单/退货单一致
   const addItem = () => {
+    if (handlingMode) return
     const item = mkEmpty()
     setItems(prev => [...prev, item])
     setFinderItemKey(item._key)
@@ -134,9 +156,11 @@ export function useSaleOrderForm(tabPath: string, order?: NonNullable<ReturnType
   }
 
   async function lookupPrice(k: number, productId: number, cid: string) {
+    if (!isReadCurrent() || (handlingMode && !mayHandle(P.PRICE_LIST_VIEW, P.CUSTOMER_VIEW))) return
     const request = {}
     priceRequests.current.set(k, request)
     const isCurrent = () => mountedRef.current
+      && isReadCurrent()
       && priceRequests.current.get(k) === request
       && customerIdRef.current === cid
       && itemsRef.current.some(i => i._key === k && i.productId === productId)
@@ -147,7 +171,7 @@ export function useSaleOrderForm(tabPath: string, order?: NonNullable<ReturnType
       ? { ...i, priceSource: 'default', priceExplanation: { kind: 'unknown' }, resolvedPrice: null, resolvedPriceLevel: null }
       : i))
     try {
-      const r = await getCustomerPriceApi(+cid, productId)
+      const r = await getCustomerPriceApi(+cid, productId, readOwner ? reorderConfig(readOwner) : undefined)
       if (!isCurrent()) return
       if (r && Number.isFinite(r.salePrice) && r.salePrice > 0) {
         setItems(prev => prev.map(i => i._key === k
@@ -171,6 +195,7 @@ export function useSaleOrderForm(tabPath: string, order?: NonNullable<ReturnType
   }
 
   function handleCustomerConfirm(result: FinderResult) {
+    if ((readCurrent && !readCurrent()) || (handlingMode && !mayHandle(P.CUSTOMER_VIEW))) return
     const cid = String(result.id)
     setCustomerId(cid)
     setCustomerName(result.name)
@@ -182,6 +207,7 @@ export function useSaleOrderForm(tabPath: string, order?: NonNullable<ReturnType
   }
 
   function removeItem(k: number) {
+    if (handlingMode) return
     priceRequests.current.delete(k)
     productRequests.current.delete(k)
     setItems(prev => prev.filter(i => i._key !== k))
@@ -194,6 +220,7 @@ export function useSaleOrderForm(tabPath: string, order?: NonNullable<ReturnType
   }
 
   function updateItem(k: number, field: string, val: string | number) {
+    if (handlingMode && ((!readCurrent || !readCurrent()) || !["quantity", "unitPrice", "remark"].includes(field))) return
     if (field === 'unitPrice') {
       priceRequests.current.delete(k)
       clearPriceError(k)
@@ -206,7 +233,7 @@ export function useSaleOrderForm(tabPath: string, order?: NonNullable<ReturnType
   }
 
   async function handleFinderConfirm(product: ProductFinderResult) {
-    if (finderItemKey === null || !mountedRef.current) return
+    if (handlingMode || finderItemKey === null || !mountedRef.current || !isReadCurrent()) return
     const k = finderItemKey
     if (!itemsRef.current.some(i => i._key === k)) return
     priceRequests.current.delete(k)
@@ -215,6 +242,7 @@ export function useSaleOrderForm(tabPath: string, order?: NonNullable<ReturnType
     const selection = {}
     productRequests.current.set(k, selection)
     const isCurrentProduct = () => mountedRef.current
+      && isReadCurrent()
       && productRequests.current.get(k) === selection
       && itemsRef.current.some(i => i._key === k && i.productId === product.id)
     setItems(prev => prev.map(i => i._key === k
@@ -229,7 +257,7 @@ export function useSaleOrderForm(tabPath: string, order?: NonNullable<ReturnType
     }, 0)
     focusTimers.current.add(timer)
     // 单位查询与查价并行，且使用独立版本，手动改价不丢弃合法的单位响应。
-    void getProductApi(product.id)
+    void getProductApi(product.id, readOwner ? reorderConfig(readOwner) : undefined)
       .then(full => {
         if (!isCurrentProduct()) return
         const units = full?.units ?? []
@@ -244,6 +272,21 @@ export function useSaleOrderForm(tabPath: string, order?: NonNullable<ReturnType
   const discount = Math.max(0, Number(discountAmount) || 0)
   const discountedTotal = Math.max(0, total - discount)
 
+  function initializeIdentities(customer: Customer, entries: Omit<DraftItem, '_key'>[]) {
+    if ((readCurrent && !readCurrent()) || customerIdRef.current || itemsRef.current.length || warehouseId || remark || carrierId || shippingProduct || freightType || receiverName || receiverPhone || receiverAddress || discountAmount) return false
+    setCustomerId(String(customer.id)); setCustomerName(customer.name)
+    setItems(entries.map(item => ({ ...item, _key: ++counterRef.current })))
+    return true
+  }
+
+  function initializeHandling(source: HandlingSource, product: Product) {
+    if (!handlingMode || (readCurrent && !readCurrent()) || customerIdRef.current || itemsRef.current.length || warehouseId || remark || carrierId || shippingProduct || freightType || receiverName || receiverPhone || receiverAddress || discountAmount) return false
+    if (source.productId !== product.id || source.unit !== product.unit || !product.isActive) return false
+    setWarehouseId(String(source.warehouseId)); setWarehouseName(source.warehouseName)
+    setItems([{ _key: ++counterRef.current, productId: product.id, productCode: product.code, productName: product.name, unit: product.unit, entryUnit: product.unit, quantity: 0, unitPrice: product.salePrice ?? 0, units: [], warehouseId: source.warehouseId, warehouseName: source.warehouseName, priceSource: 'default', priceExplanation: { kind: 'default' }, costPrice: product.costPrice }])
+    return true
+  }
+
   return {
     customerId, setCustomerId, customerName, setCustomerName,
     warehouseId, setWarehouseId, warehouseName, setWarehouseName,
@@ -257,6 +300,6 @@ export function useSaleOrderForm(tabPath: string, order?: NonNullable<ReturnType
     customerError, setCustomerError, warehouseError, setWarehouseError,
     invalidItemKeys, setInvalidItemKeys,
     isDirty, addItem, removeItem, updateItem,
-    handleCustomerConfirm, handleFinderConfirm,
+    handleCustomerConfirm, handleFinderConfirm, initializeIdentities, initializeHandling,
   }
 }

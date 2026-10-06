@@ -1,4 +1,6 @@
 'use strict'
+const { issueFixtureAccessToken, cleanupFixtureSessionFamilies } = require('./helpers/fixtureAuthSession')
+
 // Exact owned resources; actual purchase/PDA/pick/cancel/return, no state shortcuts.
 const assert=require('node:assert/strict'),fs=require('node:fs'),{randomUUID}=require('node:crypto')
 require('./helpers/testEnvironment').validateTestEnvironment()
@@ -105,7 +107,7 @@ async function scopeScenario(){
  f.scopeRoleId=await ins('INSERT INTO sys_roles(code,name,is_system) VALUES (?,?,0)',[ref+'-scope',ref+'-scope'])
  await q('INSERT INTO sys_role_permissions(role_id,permission) VALUES ?',[['warehouse.task.view','warehouse.task.cancel_return','warehouse.task.cancel_return.view','scan.log.view','sale.order.view'].map(p=>[f.scopeRoleId,p])])
  f.scopeUserId=await ins("INSERT INTO sys_users(username,password,real_name,role_id,role_name,is_active) VALUES (?,'!',?,?,?,1)",[ref+'-scope',ref+'-scope',f.scopeRoleId,ref+'-scope'])
- const auth=require('../backend/node_modules/jsonwebtoken').sign({userId:f.scopeUserId,tokenVersion:0},process.env.JWT_SECRET,{expiresIn:'30m'}),key=randomUUID(),body={taskId,containerId:Number(container.id),barcode:container.barcode,locationId:f.locationId};evidence.returnKey=key
+ const auth=await issueFixtureAccessToken(pool, f.scopeUserId, {expiresIn:'30m'}),key=randomUUID(),body={taskId,containerId:Number(container.id),barcode:container.barcode,locationId:f.locationId};evidence.returnKey=key
  const scope=async ids=>{await q('DELETE FROM user_warehouse_scope WHERE user_id=?',[f.scopeUserId]);await q('INSERT INTO user_warehouse_scope(user_id,warehouse_id) VALUES ?',[ids.map(id=>[f.scopeUserId,id])])}
  f.scopeDeviceIds=[]
  const device=async(warehouseId,suffix)=>{const secret=randomUUID(),code=ref+'-'+suffix,id=await ins("INSERT INTO pda_devices(device_code,device_name,warehouse_id,status,secret_hash) VALUES (?,?,?,'active',?)",[code,code,warehouseId,require('../backend/node_modules/bcryptjs').hashSync(secret,4)]);f.scopeDeviceIds.push(id);const s=await require('../backend/src/modules/pda/pda.sessions.service').createSession({deviceCode:code,deviceSecret:secret,userId:f.scopeUserId});return {'X-Client':'pda','X-PDA-Session':s.sessionToken}}
@@ -155,7 +157,7 @@ async function main(){
  const clean=async(stage,action)=>{try{await action()}catch(error){cleanupErrors.push(new Error(`cleanup ${stage} failed`,{cause:error}))}}
  try{
  const [target]=await q('SELECT DATABASE() name');assert.equal(target.name,process.env.DB_NAME);console.log('[db target]',target.name);
- f.userId=await ins("INSERT INTO sys_users(username,password,real_name,role_id,role_name,is_active) VALUES (?,'!',?,1,'测试',1)",[ref,ref]);token=require('../backend/node_modules/jsonwebtoken').sign({userId:f.userId,tokenVersion:0},process.env.JWT_SECRET,{expiresIn:'30m'})
+ f.userId=await ins("INSERT INTO sys_users(username,password,real_name,role_id,role_name,is_active) VALUES (?,'!',?,1,'测试',1)",[ref,ref]);token=await issueFixtureAccessToken(pool, f.userId, {expiresIn:'30m'})
  f.warehouseId=await ins('INSERT INTO inventory_warehouses(code,name) VALUES (?,?)',[ref,ref]);f.customerId=await ins('INSERT INTO sale_customers(code,name,credit_limit) VALUES (?,?,NULL)',[ref,ref]);f.supplierId=await ins('INSERT INTO supply_suppliers(code,name) VALUES (?,?)',[ref,ref]);f.locationId=await ins('INSERT INTO warehouse_locations(warehouse_id,code,name) VALUES (?,?,?)',[f.warehouseId,ref,ref]);f.binId=await ins('INSERT INTO sorting_bins(warehouse_id,code) VALUES (?,?)',[f.warehouseId,ref])
  const secret=randomUUID();f.deviceId=await ins("INSERT INTO pda_devices(device_code,device_name,warehouse_id,status,secret_hash) VALUES (?,?,?,'active',?)",[ref,ref,f.warehouseId,require('../backend/node_modules/bcryptjs').hashSync(secret,4)])
  const session=await require('../backend/src/modules/pda/pda.sessions.service').createSession({deviceCode:ref,deviceSecret:secret,userId:f.userId});pda={'X-Client':'pda','X-PDA-Session':session.sessionToken}
@@ -194,7 +196,7 @@ async function main(){
  console.log('[cleanup proof]',JSON.stringify({...proof,verified:cleanupErrors.length===0}))
  }finally{
   try{await clean('server.close',async()=>{if(server)await new Promise((resolve,reject)=>server.close(error => error ? reject(error) : resolve()))})}
-  finally{await clean('pool.end',()=>pool.end())}
+  finally{await clean('pool.end',async()=>{ try { await cleanupFixtureSessionFamilies(pool) } finally { await pool.end() } })}
  }
  const failures=[...cleanupErrors]
  if (businessError) failures.unshift(businessError)

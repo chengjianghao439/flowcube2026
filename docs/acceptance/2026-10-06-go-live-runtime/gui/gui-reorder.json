@@ -1,0 +1,67 @@
+{
+  "name": "gui-reorder",
+  "checks": [
+    "原量默认不带",
+    "带入准确商品且数量0当前价20",
+    "仓库和收货信息重新选择",
+    "未产生新销售POST"
+  ],
+  "api": [
+    {
+      "method": "GET",
+      "path": "/api/sale/20",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/qty-policies?ids=22",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/qty-policies?ids=22",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/warehouses/active",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/carriers/active",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/customers?keyword=&page=1&pageSize=200",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/sale/20/reorder-source",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/sale/20/reorder-source",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/customers/3",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/22",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/price-lists/customer-price?customerId=3&productId=22",
+      "status": 200
+    }
+  ],
+  "errors": []
+}

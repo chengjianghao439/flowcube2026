@@ -1,5 +1,6 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
+const { moneyUnits, moneyText } = require('../../utils/decimalMoney')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const { SETTLEMENT_TYPE } = require('../../constants/settlementType')
 const { normalizePagination } = require('../../utils/pagination')
@@ -63,19 +64,50 @@ function realShaped(row, { total, paid }) {
  * 按下属明细的实际核销情况重算对账单金额与状态。
  * 每次核销后调用；调用方已在事务内并锁好对账单行。
  */
-async function refreshSettlement(conn, statementId) {
-  const [[agg]] = await conn.query(
-    `SELECT COALESCE(SUM(r.total_amount),0) AS total,
-            COALESCE(SUM(r.paid_amount),0)  AS paid
+async function refreshSettlement(conn, statementId, { currentRead = false, exactMoney = false } = {}) {
+  let agg
+  if (currentRead) {
+    // 退货调用方已按对账单→账款锁序取得成员门；直接当前读完整事实行，避免旧RR聚合。
+    const [rows] = await conn.query(
+      `SELECT r.total_amount, r.paid_amount
        FROM reconciliation_statement_items i
        JOIN payment_records r ON r.id = i.record_id
-      WHERE i.statement_id = ?`,
-    [statementId],
-  )
+       WHERE i.statement_id = ? ORDER BY r.id FOR SHARE`,
+      [statementId],
+    )
+    const sum = exactMoney
+      ? rows.reduce((values, row) => ({ total: values.total + moneyUnits(row.total_amount), paid: values.paid + moneyUnits(row.paid_amount) }), { total: 0n, paid: 0n })
+      : rows.reduce((values, row) => ({ total: values.total + Number(row.total_amount), paid: values.paid + Number(row.paid_amount) }), { total: 0, paid: 0 })
+    // 原SQL SUM(DECIMAL)保持四位金额；当前行投影也在写回前收敛到同一精度。
+    agg = exactMoney ? sum : { total: Number(sum.total.toFixed(4)), paid: Number(sum.paid.toFixed(4)) }
+  } else {
+    const [[row]] = await conn.query(
+      `SELECT COALESCE(SUM(r.total_amount),0) AS total,
+              COALESCE(SUM(r.paid_amount),0)  AS paid
+         FROM reconciliation_statement_items i
+         JOIN payment_records r ON r.id = i.record_id
+        WHERE i.statement_id = ?`,
+      [statementId],
+    )
+    agg = row
+  }
+  // F2-only four-place projection; default and existing currentRead callers keep their DTO.
+  if (currentRead && exactMoney) {
+    const total = agg.total, paid = agg.paid < total ? agg.paid : total
+    const balance = total > paid ? total - paid : 0n
+    const [[cur]] = await conn.query('SELECT status FROM reconciliation_statements WHERE id=? FOR SHARE', [statementId])
+    const status = Number(cur.status) === ST.DRAFT ? ST.DRAFT : (balance === 0n && total > 0n ? ST.SETTLED : ST.CONFIRMED)
+    const shaped = { total: moneyText(total), paid: moneyText(paid), balance: moneyText(balance), status }
+    await conn.query('UPDATE reconciliation_statements SET total_amount=?,settled_amount=?,balance=?,status=? WHERE id=?',
+      [shaped.total, shaped.paid, shaped.balance, status, statementId])
+    return shaped
+  }
   const total = Number(agg.total)
   const paid = Math.min(Number(agg.paid), total)
   const balance = Math.max(0, total - paid)
-  const [[cur]] = await conn.query('SELECT status FROM reconciliation_statements WHERE id=?', [statementId])
+  const [[cur]] = await conn.query(currentRead
+    ? 'SELECT status FROM reconciliation_statements WHERE id=? FOR SHARE'
+    : 'SELECT status FROM reconciliation_statements WHERE id=?', [statementId])
   // 只有已确认的单据会因核销完而进入终态；草稿单不因为下属账款被别处核销就自动完成
   const nextStatus = Number(cur.status) === ST.DRAFT
     ? ST.DRAFT

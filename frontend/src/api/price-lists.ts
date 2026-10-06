@@ -8,5 +8,5 @@ export interface CustomerResolvedPrice {
   priceListId?: number
 }
 
-export const getCustomerPriceApi     = (customerId:number, productId:number) => client.get<CustomerResolvedPrice|null>('/price-lists/customer-price', { params:{customerId,productId} })
+export const getCustomerPriceApi     = (customerId:number, productId:number, config?: Parameters<typeof client.get>[1]) => client.get<CustomerResolvedPrice|null>('/price-lists/customer-price', { ...config, params:{customerId,productId} })
 export const bindCustomerApi         = (customerId:number, priceLevel:'A'|'B'|'C'|'D', config?: Parameters<typeof client.put>[2]) => client.put<null>('/price-lists/bind-customer', { customerId, priceLevel }, config)

@@ -1,0 +1,79 @@
+{
+  "head": "14e97aa9dc9df0700b394d59cafbc53dba0c5e69",
+  "changed_files": [
+    "backend/src/modules/refunds/supplier-refunds.service.js",
+    "tests/supplier-refunds.test.js",
+    "docs/finance-permission-time.md"
+  ],
+  "node": "v22.23.2",
+  "red": {
+    "passed": 2,
+    "failed": 2,
+    "exit_code": 1
+  },
+  "green_focused": {
+    "passed": 4,
+    "failed": 0,
+    "exit_code": 0
+  },
+  "green_suite": {
+    "passed": 295,
+    "failed": 0,
+    "exit_code": 0,
+    "files": 8
+  },
+  "guard_processes": 9,
+  "guard_attempts": 0,
+  "static_checks": [
+    {
+      "command": [
+        "bash",
+        "scripts/with-dev-env.sh",
+        "env",
+        "-u",
+        "NODE_OPTIONS",
+        "node",
+        "--check",
+        "backend/src/modules/refunds/supplier-refunds.service.js"
+      ],
+      "exit_code": 0,
+      "output": ""
+    },
+    {
+      "command": [
+        "bash",
+        "scripts/with-dev-env.sh",
+        "env",
+        "-u",
+        "NODE_OPTIONS",
+        "node",
+        "--check",
+        "tests/supplier-refunds.test.js"
+      ],
+      "exit_code": 0,
+      "output": ""
+    },
+    {
+      "command": [
+        "git",
+        "apply",
+        "--check",
+        "--reverse",
+        "/tmp/flowcube-runtime-refund-date-fix-20261006-n70reu26/overlay.patch"
+      ],
+      "exit_code": 0,
+      "output": ""
+    },
+    {
+      "command": [
+        "git",
+        "diff",
+        "--check",
+        "--",
+        "docs/finance-permission-time.md"
+      ],
+      "exit_code": 0,
+      "output": ""
+    }
+  ]
+}

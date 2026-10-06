@@ -1,0 +1,67 @@
+{
+  "baselineSha256": "dae14eca2646dcaa8755708f39f6bb6050cada540f69f0f23d1af63b524321ce",
+  "baselinePaths": 360,
+  "identicalPaths": 348,
+  "changedPaths": [
+    {
+      "path": "backend/src/database/277_disposal_handling.sql",
+      "before": "12b8a34e86c604c25d1c932d552e682a033a735916d0d9210504808191c38d89",
+      "after": "7477a353845fe02589e7485a5e1fca614b80ff83d40388fd70f1994986bb60c7"
+    },
+    {
+      "path": "backend/src/database/278_supplier_refunds.sql",
+      "before": "8de76df196cab73adc913aadeb977aa6433309a514a4129cef4cd26c02a36ca0",
+      "after": "2700b14452156a0be20dda50a870e7329dd27c94644bc7fe506039b9a53aca6b"
+    },
+    {
+      "path": "backend/src/modules/refunds/supplier-refunds.service.js",
+      "before": "2f11368f297dbe1bb4cee72bc05509ecfd31253a42766cb940f68b6695c49e29",
+      "after": "ef16cd0a0a3b4677937fdb6b07d49cac73d9b1ce7cbff206183219041cb2be05"
+    },
+    {
+      "path": "docs/backend-api-sql-conventions.md",
+      "before": "7a945995d02e1da022d0e40f2d40c73bde6f3b09ba9fd97c1e61f9bc84d0b769",
+      "after": "9cfe21c9d347c94aad29e9de0358925f0fb5ae14a5273346cfbee0829adda68a"
+    },
+    {
+      "path": "docs/finance-permission-time.md",
+      "before": "c0d42c764ab7d629d61d9242e1b005bf3271b86e074b3bfdc21c5f1b4adc40ac",
+      "after": "6a218da7f06940de17d06568ee139e2e701ea5644b72fe8c760e6f5e012c22ea"
+    },
+    {
+      "path": "docs/frontend-pda-conventions.md",
+      "before": "f3c774d38f0d5a78c070bad840f2d3966736fcade4183c166a9b072cc14fab82",
+      "after": "3f273e73375ea14b594d846fc8b9a20c513b3decec15e0ff888dcb2b632e9a09"
+    },
+    {
+      "path": "docs/verification-commands.md",
+      "before": "f535a0ce41483b473ca081a606c6fd11d0c531ce01ff74ed95148577fba5bf6a",
+      "after": "12bcf2401af7ac34230a0ecfb3cab5a9b55e84a3531c0bcd3e2a4fc1e4b119e6"
+    },
+    {
+      "path": "frontend/src/pages/disposal/components/DisposalDetailDialog.tsx",
+      "before": "46186c89da00f44e281a5bcad23679cf9795a81385c5568f81d2035f2bf02147",
+      "after": "185b9695f0a8b7669ad76ff5b2fae8afc6da48d8f20ccb2be755a8fd7f56b9c5"
+    },
+    {
+      "path": "frontend/src/pages/finance/dashboard/index.tsx",
+      "before": "7deb301996f340898cd533cfbfdece3c2499675621ca070d9171d07222888774",
+      "after": "81f4a8001c833fd8b958f648eeabac285d08f05a91d8018fed0cd858369e39b8"
+    },
+    {
+      "path": "tests/disposal-handling.test.js",
+      "before": "102df38a3b469d69432ce2e33962cdef779012402dbc9b124ec823dd1e8c26fb",
+      "after": "2c16191c3ca6e63fa7f82399c5addb8ec2485369d83331312316dca8517b9b69"
+    },
+    {
+      "path": "tests/supplier-refunds-schema.test.js",
+      "before": "0ae866e21d98b7d52687db13f75e5a3282465b829dc4244316d6659d34205749",
+      "after": "7ff421ef182a8fbc2f548a8f690f521861c5b3f95fb5ab01904e66f9018c82e6"
+    },
+    {
+      "path": "tests/supplier-refunds.test.js",
+      "before": "434c57769aca965e46a6ddb50157a3c91afd84175babab649451c3c98399454a",
+      "after": "1e25c66d898456f4b0ed02c8ca5b6bd66d8daafbcaae1b091de3e81653dfaf8d"
+    }
+  ]
+}

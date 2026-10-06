@@ -2,7 +2,7 @@
  * PDA 独立 App（Capacitor bundled）运行时：API 根地址、全局打印桥
  */
 import { Capacitor } from '@capacitor/core'
-import apiClient, { payloadClient } from '@/api/client'
+import { payloadClient, setApiClientBaseURL } from '@/api/client'
 import { API_BASE_STORAGE_KEY, isHealthyApiPayload, normalizeApiBase } from '@/config/api'
 import { ERP_PRODUCTION_ORIGIN, PDA_FALLBACK_API_ORIGIN } from '@/config/env'
 import { useAuthStore } from '@/store/authStore'
@@ -96,7 +96,7 @@ export async function applyPdaApiBaseFromStorage(): Promise<string> {
 
   const origin = await resolveHealthyPdaApiOrigin()
   if (origin) {
-    apiClient.defaults.baseURL = `${origin}/api`
+    setApiClientBaseURL(`${origin}/api`)
   }
   return origin
 }

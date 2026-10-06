@@ -12,7 +12,11 @@ export interface DisposalSuggestion {
   color: string | null
   warehouseId: number
   warehouseName: string
+  /** 扣缓存reserved后的原参考数量，不是总在库 */
   totalQty: number
+  onHandQty: number
+  reservedQty: number
+  valuationBasis: 'avg_cost' | 'cost_price' | 'sale_price' | 'none'
   unitValue: number
   totalValue: number
   lastOutboundAt: string | null
@@ -57,10 +61,11 @@ export interface DisposalOrder {
 }
 
 export interface CreateDisposalParams {
+  disposalSource?: import('./disposal-handling').DisposalSourceInput
   warehouseId: number
   warehouseName: string
   remark?: string
-  items: { productId: number; quantity: number; disposeType: DisposeType; remark?: string }[]
+  items: { productId: number; quantity: number; disposeType: 3; remark?: string }[]
 }
 
 export interface DisposalSuggestionParams {
@@ -82,3 +87,5 @@ export const DISPOSE_TYPE_TONES: Record<DisposeType, 'info' | 'warning' | 'dange
   2: 'warning',
   3: 'danger',
 }
+
+export interface DisposalExecutionResult { id: number; disposalNo: string; disposedValue: number }

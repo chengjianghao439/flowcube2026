@@ -1,0 +1,43 @@
+{
+  "checkedAt": "2026-10-06T20:19:06.101000+08:00",
+  "ownedResources": [
+    {
+      "kind": "container",
+      "id": "7988230cf90ddd75f8c9dfb5b3465877d85bc3b06a258dc4214f8b229c7d5484",
+      "absent": true
+    },
+    {
+      "kind": "container",
+      "id": "3f0399a83219586c8e4363109da9e089a172432d3a986707ca43a32736e610ea",
+      "absent": true
+    },
+    {
+      "kind": "volume",
+      "id": "flowcube-golive-ephemeral-20261006185739-285424-data",
+      "absent": true
+    },
+    {
+      "kind": "volume",
+      "id": "flowcube-golive-ephemeral-20261006183247-0a3d7a-data",
+      "absent": true
+    }
+  ],
+  "ownedServicePidsAbsent": [
+    9893,
+    9959,
+    10040,
+    26171,
+    35368,
+    9960,
+    10041
+  ],
+  "batch2OwnerProofAbsent": true,
+  "controllerExitCode": 0,
+  "controllerSignal": null,
+  "shared3307": {
+    "id": "17ef5cae318146f6c249cc4158616273c18f961c23b06f7554b4323113cc108e",
+    "running": true,
+    "hostPort": "3307",
+    "notConnectedByThisTask": true
+  }
+}

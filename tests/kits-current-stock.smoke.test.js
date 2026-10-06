@@ -1,4 +1,6 @@
 'use strict'
+const { issueFixtureAccessToken, cleanupFixtureSessionFamilies } = require('./helpers/fixtureAuthSession')
+
 // Real purchase -> PDA receive -> putaway supplies stock. Business evidence is retained by exact IDs.
 const assert = require('node:assert/strict')
 require('./helpers/testEnvironment').validateTestEnvironment()
@@ -14,7 +16,7 @@ const insert = async (sql, params) => Number((await q(sql, params)).insertId)
 async function main() {
   try {
     fixture.userId = await insert('INSERT INTO sys_users (username,password,real_name,role_id,role_name,is_active) VALUES (?,\'!\',?,1,\'测试\',1)', [ref, ref])
-    const token = require('../backend/node_modules/jsonwebtoken').sign({ userId: fixture.userId, tokenVersion: 0 }, process.env.JWT_SECRET, { expiresIn: '10m' })
+    const token = await issueFixtureAccessToken(pool, fixture.userId, { expiresIn: '10m' })
     fixture.warehouseId = await insert('INSERT INTO inventory_warehouses (code,name) VALUES (?,?)', [ref, ref])
     fixture.locationId = await insert('INSERT INTO warehouse_locations (warehouse_id,code,name) VALUES (?,?,?)', [fixture.warehouseId, ref, ref])
     fixture.supplierId = await insert('INSERT INTO supply_suppliers (code,name) VALUES (?,?)', [ref, ref])
@@ -125,7 +127,7 @@ async function main() {
         }
       }
     } finally {
-      try { if (server) await new Promise((resolve, reject) => server.close(e => e ? reject(e) : resolve())) } finally { await pool.end() }
+      try { if (server) await new Promise((resolve, reject) => server.close(e => e ? reject(e) : resolve())) } finally { try { await cleanupFixtureSessionFamilies(pool) } finally { await pool.end() } }
     }
     console.log(`[fixtures] /tmp/flowcube-kits-stock-${ref}.json (owned business facts retained; test user disabled; device removed; server/pool closed)`)
   }

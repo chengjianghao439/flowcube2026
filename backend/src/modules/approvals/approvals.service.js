@@ -1,8 +1,10 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const approvalEngine = require('../../engine/approvalEngine')
+const refundActor = require('../refunds/supplier-refunds.actor')
 const { PERMISSIONS: P } = require('../../constants/permissions')
-const { assertInScope } = require('../../utils/warehouseScope')
+const { assertInScope, scopeFilter } = require('../../utils/warehouseScope')
+const { assertSqlIdentifier } = require('../../utils/sqlIdentifier')
 
 /**
  * 审批流配置（P2-7）：审批流 CRUD + 待我审批列表。
@@ -31,12 +33,12 @@ const APPROVER_TYPE_LABEL = { 1: '指定角色', 2: '部门负责人', 3: '指�
  * warehouseCol 为 null 的是公司级单据（财务报销、客户授信、价格申请），没有仓库维度。
  */
 const BIZ_DOC_META = {
-  purchase_requisition: { table: 'purchase_requisitions', permission: P.PURCHASE_REQUISITION_VIEW, warehouseCol: 'warehouse_id', name: '采购请购单' },
-  sale_credit_override: { table: 'sale_credit_overrides', permission: P.SALE_CREDIT_OVERRIDE_VIEW, warehouseCol: null, name: '超额放行申请' },
-  expense_claim: { table: 'expense_claims', permission: P.FINANCE_EXPENSE_VIEW, warehouseCol: null, name: '费用报销', authorize: authorizeExpenseApproval },
-  purchase_order: { table: 'purchase_orders', permission: P.PURCHASE_ORDER_VIEW, warehouseCol: 'warehouse_id', name: '采购单' },
-  inventory_disposal: { table: 'inventory_disposal_orders', permission: P.INVENTORY_DISPOSAL_VIEW, warehouseCol: 'warehouse_id', name: '呆滞处置单' },
-  product_price: { table: 'price_change_requests', permission: P.PRODUCT_VIEW, warehouseCol: null, name: '商品改价申请' },
+  purchase_requisition: { table: 'purchase_requisitions', permission: P.PURCHASE_REQUISITION_VIEW, warehouseCol: 'warehouse_id', name: '采购请购单', noCol: 'requisition_no', titleCol: 'title', softDelete: true },
+  sale_credit_override: { table: 'sale_credit_overrides', permission: P.SALE_CREDIT_OVERRIDE_VIEW, warehouseCol: null, name: '超额放行申请', noCol: 'override_no', titleCol: 'reason', softDelete: true },
+  expense_claim: { table: 'expense_claims', permission: P.FINANCE_EXPENSE_VIEW, warehouseCol: null, name: '费用报销', authorize: authorizeExpenseApproval, noCol: 'claim_no', titleCol: 'title', softDelete: true },
+  purchase_order: { table: 'purchase_orders', permission: P.PURCHASE_ORDER_VIEW, warehouseCol: 'warehouse_id', name: '采购单', noCol: 'order_no', titleCol: 'remark', softDelete: true },
+  inventory_disposal: { table: 'inventory_disposal_orders', permission: P.INVENTORY_DISPOSAL_VIEW, warehouseCol: 'warehouse_id', name: '呆滞处置单', noCol: 'disposal_no', titleCol: 'remark', softDelete: true },
+  product_price: { table: 'price_change_requests', permission: P.PRODUCT_VIEW, warehouseCol: null, name: '商品改价申请', noCol: 'request_no', titleCol: 'reason', softDelete: false },
 }
 
 async function authorizeExpenseApproval(conn, { bizId, user }) {
@@ -208,60 +210,140 @@ async function removeFlow(id) {
   return { id: Number(id) }
 }
 
-/** 审批待办列表（引擎只按 user_id 命中，这里补业务概要 + 分页）。 */
-async function listPending({ page = 1, pageSize = 20 }, userId) {
-  const ps = Math.min(Math.max(Number(pageSize) || 20, 1), 100)
-  const [total, rows] = await Promise.all([
-    approvalEngine.countPendingTasks(pool, { userId }),
-    approvalEngine.listPendingTasks(pool, { userId, page, pageSize: ps }),
-  ])
+const DOCUMENT_PENDING_META = {
+  purchase_order: { approvePermission: P.PURCHASE_ORDER_APPROVE, pendingStatus: 5, creatorCol: 'operator_id', creatorNameCol: 'operator_name', amountCol: 'total_amount', submittedCol: null },
+  inventory_disposal: { approvePermission: P.INVENTORY_DISPOSAL_APPROVE, pendingStatus: 2, creatorCol: 'operator_id', creatorNameCol: 'operator_name', amountCol: 'total_value', submittedCol: null },
+  expense_claim: { approvePermission: P.FINANCE_EXPENSE_APPROVE, pendingStatus: 2, creatorCol: 'applicant_id', creatorNameCol: 'applicant_name', amountCol: 'total_amount', submittedCol: 'submitted_at' },
+}
 
-  // N+1 优化：按 biz_type 分组后批量查询，避免逐行查询
-  const bizTypeMeta = {
-    purchase_requisition: { table: 'purchase_requisitions', noCol: 'requisition_no', titleCol: 'title', statusCol: 'status' },
-  }
-  const grouped = {}
-  for (const r of rows) {
-    if (!grouped[r.biz_type]) grouped[r.biz_type] = []
-    grouped[r.biz_type].push(Number(r.biz_id))
-  }
-  const bizCache = {}
-  for (const [bizType, ids] of Object.entries(grouped)) {
-    const meta = bizTypeMeta[bizType]
-    if (!meta || !ids.length) continue
-    const placeholders = ids.map(() => '?').join(',')
-    const [rows2] = await pool.query(
-      `SELECT id, ${meta.noCol} AS no, ${meta.titleCol} AS title, ${meta.statusCol} AS status FROM ${meta.table} WHERE id IN (${placeholders})`,
-      ids,
-    )
-    for (const b of rows2) bizCache[`${bizType}:${b.id}`] = { no: b.no || '', title: b.title || '', status: b.status ?? null }
-  }
+// RF is a business confirmation document, never an approval-engine flow type.
+const SUPPLIER_REFUND_PENDING = {
+  permissions: [P.SUPPLIER_REFUND_VIEW, P.SUPPLIER_REFUND_CONFIRM, P.PURCHASE_ORDER_VIEW, P.RETURN_ORDER_VIEW, P.PAYMENT_VIEW],
+}
 
-  const list = rows.map(r => {
-    const key = `${r.biz_type}:${r.biz_id}`
-    const biz = bizCache[key] || {}
-    return {
-      instanceId: Number(r.instance_id),
-      taskId: Number(r.task_id),
-      bizType: r.biz_type,
-      bizId: Number(r.biz_id),
-      no: biz.no || '',
-      title: biz.title || '',
-      status: biz.status ?? null,
-      applicantId: Number(r.applicant_id),
-      applicantName: r.applicant_name,
-      amount: Number(r.amount),
-      currentStep: Number(r.current_step),
-      flowId: Number(r.flow_id),
-      createdAt: r.created_at,
+/** 统一只读待办：运行中引擎节点及既有业务单级审核；动作仍由原业务负责。 */
+async function listPending({ page = 1, pageSize = 20 }, user) {
+  const userId = Number(user?.userId), roleId = Number(user?.roleId)
+  if (!Number.isSafeInteger(userId) || userId <= 0 || !Number.isSafeInteger(roleId) || roleId <= 0) throw new AppError('请先登录', 401)
+  const requestedPage = Number(page), requestedSize = Number(pageSize)
+  const p = Math.min(100000, Math.max(1, Math.trunc(Number.isFinite(requestedPage) ? requestedPage || 1 : 1)))
+  const ps = Math.min(100, Math.max(1, Math.trunc(Number.isFinite(requestedSize) ? requestedSize || 20 : 20)))
+  const scope = roleId === 1 ? null : user.warehouseIds ?? null
+  const conn = await pool.getConnection()
+  try {
+    await conn.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ')
+    await conn.query('START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY')
+    const required = [...new Set([P.APPROVAL_TASK_VIEW, P.FINANCE_EXPENSE_VIEW_ALL, ...Object.values(BIZ_DOC_META).map(m => m.permission), ...Object.values(DOCUMENT_PENDING_META).map(m => m.approvePermission), ...SUPPLIER_REFUND_PENDING.permissions])]
+    const [permissions] = await conn.query('SELECT permission FROM sys_role_permissions WHERE role_id=? AND permission IN (?)', [roleId, required])
+    const held = new Set(permissions.map(row => row.permission))
+    const can = permission => roleId === 1 || held.has(permission)
+    const [[actor]] = await conn.query('SELECT allow_self_approve FROM sys_users WHERE id=? AND deleted_at IS NULL LIMIT 1', [userId])
+    const selfApproval = Number(actor?.allow_self_approve) === 1 ? 1 : 0
+    const parts = [], params = []
+    for (const [bizType, meta] of Object.entries(BIZ_DOC_META)) {
+      const table = meta.table
+      assertSqlIdentifier(table, 'approval document table')
+      const noCol = assertSqlIdentifier(meta.noCol, 'approval document number')
+      const titleCol = assertSqlIdentifier(meta.titleCol, 'approval document title')
+      const conds = [meta.softDelete ? 'd.deleted_at IS NULL' : '1=1']
+      const branchParams = [bizType, userId]
+      if (!can(P.APPROVAL_TASK_VIEW) || !can(meta.permission)) conds.push('1=0')
+      if (meta.warehouseCol) {
+        const warehouseCol = assertSqlIdentifier(meta.warehouseCol, 'approval document warehouse')
+        const filter = scopeFilter(scope, `d.${warehouseCol}`)
+        if (filter.sql) conds.push(filter.sql.replace(/^ AND /, ''))
+        branchParams.push(...filter.params)
+      }
+      if (bizType === 'expense_claim' && !can(P.FINANCE_EXPENSE_VIEW_ALL)) { conds.push('d.applicant_id=?'); branchParams.push(userId) }
+      // 六类只关联当前本人快照；新单级审核菜单权不能放宽此集合。
+      parts.push(`SELECT 'engine' AS source_kind,i.id AS instance_id,t.id AS task_id,i.biz_type,i.biz_id,
+        i.applicant_id,i.applicant_name,i.amount,i.current_step,i.flow_id,i.created_at,
+        i.created_at AS submitted_at,'submitted' AS time_kind,i.created_at AS pending_at,
+        d.${noCol} AS no,d.${titleCol} AS title,d.status
+        FROM approval_instance_task_approvers a
+        JOIN approval_instance_tasks t ON t.id=a.task_id
+        JOIN approval_instances i ON i.id=a.instance_id AND i.status=1 AND i.biz_type=?
+        JOIN ${table} d ON d.id=i.biz_id
+        WHERE a.user_id=? AND t.status=1 AND t.step_order=i.current_step AND ${conds.join(' AND ')}`)
+      params.push(...branchParams)
     }
-  })
-  return { list, pagination: { page: Number(page), pageSize: ps, total } }
+    for (const [bizType, document] of Object.entries(DOCUMENT_PENDING_META)) {
+      const meta = BIZ_DOC_META[bizType]
+      const table = meta.table
+      assertSqlIdentifier(table, 'pending business table')
+      const noCol = assertSqlIdentifier(meta.noCol, 'pending business number')
+      const titleCol = assertSqlIdentifier(meta.titleCol, 'pending business title')
+      const creatorCol = assertSqlIdentifier(document.creatorCol, 'pending creator')
+      const creatorNameCol = assertSqlIdentifier(document.creatorNameCol, 'pending creator name')
+      const amountCol = assertSqlIdentifier(document.amountCol, 'pending original amount')
+      const submittedCol = document.submittedCol ? assertSqlIdentifier(document.submittedCol, 'pending submitted time') : null
+      const submittedSql = submittedCol ? `d.${submittedCol}` : 'NULL'
+      const pendingTimeSql = submittedCol ? `COALESCE(d.${submittedCol},d.created_at)` : 'd.created_at'
+      const conds = ['d.deleted_at IS NULL', 'd.status=?', `(?=1 OR d.${creatorCol} IS NULL OR d.${creatorCol}<>?)`]
+      const branchParams = [bizType, document.pendingStatus, selfApproval, userId]
+      if (!can(meta.permission) || !can(document.approvePermission)) conds.push('1=0')
+      if (meta.warehouseCol) {
+        const warehouseCol = assertSqlIdentifier(meta.warehouseCol, 'pending business warehouse')
+        const filter = scopeFilter(scope, `d.${warehouseCol}`)
+        if (filter.sql) conds.push(filter.sql.replace(/^ AND /, ''))
+        branchParams.push(...filter.params)
+      }
+      if (bizType === 'expense_claim' && !can(P.FINANCE_EXPENSE_VIEW_ALL)) { conds.push('d.applicant_id=?'); branchParams.push(userId) }
+      conds.push('NOT EXISTS (SELECT 1 FROM approval_instances active WHERE active.biz_type=? AND active.biz_id=d.id AND active.status=1)')
+      branchParams.push(bizType)
+      parts.push(`SELECT 'document' AS source_kind,NULL AS instance_id,NULL AS task_id,? AS biz_type,d.id AS biz_id,
+        d.${creatorCol} AS applicant_id,d.${creatorNameCol} AS applicant_name,d.${amountCol} AS amount,
+        NULL AS current_step,NULL AS flow_id,d.created_at,${submittedSql} AS submitted_at,
+        '${submittedCol ? 'submitted' : 'created'}' AS time_kind,${pendingTimeSql} AS pending_at,
+        d.${noCol} AS no,d.${titleCol} AS title,d.status FROM ${table} d WHERE ${conds.join(' AND ')}`)
+      params.push(...branchParams)
+    }
+    const currentRefundActor = await refundActor.load(conn, userId, false)
+    const refundCan = permission => currentRefundActor.roleId === 1 || currentRefundActor.permissions.includes(permission)
+    const refundConditions = ['d.company_id=1', 'd.status=?', '(?=1 OR d.created_by<>?)',
+      'po.deleted_at IS NULL', 'pr.deleted_at IS NULL', 'po.id=d.purchase_order_id',
+      'pr.purchase_order_id=po.id', 'pr.supplier_id=po.supplier_id', 'd.supplier_id=po.supplier_id',
+      'd.warehouse_id=pr.warehouse_id', 'pr.warehouse_id=po.warehouse_id',
+      'd.warehouse_id>0', 'po.warehouse_id>0', 'pr.warehouse_id>0']
+    const refundParams = ['supplier_refund', 1, currentRefundActor.allowSelfApprove ? 1 : 0, userId]
+    if (!SUPPLIER_REFUND_PENDING.permissions.every(refundCan)) refundConditions.push('1=0')
+    for (const col of ['d.warehouse_id', 'po.warehouse_id', 'pr.warehouse_id']) {
+      const filter = scopeFilter(currentRefundActor.warehouseIds, col)
+      if (filter.sql) refundConditions.push(filter.sql.replace(/^ AND /, ''))
+      refundParams.push(...filter.params)
+    }
+    parts.push(`SELECT 'document' AS source_kind,NULL AS instance_id,NULL AS task_id,? AS biz_type,d.id AS biz_id,
+      d.created_by AS applicant_id,creator.real_name AS applicant_name,d.amount,
+      NULL AS current_step,NULL AS flow_id,d.created_at,NULL AS submitted_at,
+      'created' AS time_kind,d.created_at AS pending_at,d.refund_no AS no,d.remark AS title,d.status
+      FROM supplier_refund_orders d
+      JOIN purchase_orders po ON po.id=d.purchase_order_id
+      JOIN purchase_returns pr ON pr.id=d.purchase_return_id
+      LEFT JOIN sys_users creator ON creator.id=d.created_by
+      WHERE ${refundConditions.join(' AND ')}`)
+    params.push(...refundParams)
+    const from = `FROM (${parts.join(' UNION ALL ')}) pending`
+    const [[{ total }]] = await conn.query(`SELECT COUNT(*) AS total ${from}`, params)
+    const [rows] = await conn.query(`SELECT pending.* ${from}
+      ORDER BY pending.pending_at DESC,pending.source_kind ASC,pending.biz_type ASC,pending.biz_id DESC,pending.current_step DESC,pending.task_id DESC LIMIT ? OFFSET ?`, [...params, ps, (p - 1) * ps])
+    const list = rows.map(r => {
+      const sourceKind = r.source_kind === 'document' ? 'document' : 'engine'
+      const document = sourceKind === 'document'
+      return { sourceKind, entryKey: document ? `document:${r.biz_type}:${r.biz_id}:${r.biz_type === 'supplier_refund' ? 'confirm' : 'approve'}` : `engine:${r.biz_type}:${r.biz_id}:${r.current_step}:${r.task_id}`,
+        instanceId: document ? null : Number(r.instance_id), taskId: document ? null : Number(r.task_id),
+        bizType: r.biz_type, bizId: Number(r.biz_id), no: r.no || '', title: r.title || '', status: r.status ?? null,
+        applicantId: r.applicant_id == null ? null : Number(r.applicant_id), applicantName: r.applicant_name || '', amount: Number(r.amount),
+        currentStep: document ? null : Number(r.current_step), flowId: document ? null : Number(r.flow_id),
+        createdAt: r.created_at, submittedAt: r.submitted_at ?? null, timeKind: r.time_kind }
+    })
+    await conn.commit()
+    return { list, pagination: { page: p, pageSize: ps, total: Number(total) } }
+  } catch (error) { await conn.rollback(); throw error } finally { conn.release() }
 }
 
 /** 供业务详情页查询审批进度（含终态历史）。 */
 async function getBizApproval({ bizType, bizId, user = null, scopeWarehouseIds = null }) {
-  const meta = BIZ_DOC_META[bizType]
+  const meta = Object.hasOwn(BIZ_DOC_META, bizType) ? BIZ_DOC_META[bizType] : null
   if (!meta) throw new AppError('业务类型无效', 400)
   const conn = await pool.getConnection()
   try {
@@ -278,8 +360,12 @@ async function getBizApproval({ bizType, bizId, user = null, scopeWarehouseIds =
       if (!allowed) throw new AppError('无权查看该单据的审批信息', 403, 'APPROVAL_BIZ_FORBIDDEN')
     }
     if (meta.warehouseCol) {
+      const warehouseCol = meta.warehouseCol
+      assertSqlIdentifier(warehouseCol, 'approval warehouse column')
+      const table = meta.table
+      assertSqlIdentifier(table, 'approval document table')
       const [[doc]] = await conn.query(
-        `SELECT ${meta.warehouseCol} AS wh FROM ${meta.table} WHERE id=? LIMIT 1`, [bizId])
+        `SELECT ${warehouseCol} AS wh FROM ${table} WHERE id=? LIMIT 1`, [bizId])
       if (doc) assertInScope(scopeWarehouseIds, doc.wh, meta.name)
     }
     if (meta.authorize) await meta.authorize(conn, { bizId, user })

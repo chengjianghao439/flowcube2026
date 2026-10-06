@@ -22,7 +22,7 @@ export function FulfillmentTodos({ summary = false }: { summary?: boolean }) {
   const query = useVisibleQuery({ queryKey: ['fulfillment-issues', userId, summary ? 'summary' : { filter, documentType, keyword }], queryFn: ({ signal }) => getFulfillmentIssues(summary ? 'open' : filter, summary, signal, summary ? {} : { documentType, keyword }), enabled: active, refetchInterval: active ? 30_000 : false })
   if (query.isError) return <div role="alert" className="p-3 text-sm">履约待办读取失败：{query.error.message}<Button size="sm" variant="ghost" onClick={() => query.refetch()}>重试</Button></div>
   if (summary) return <a href="#/reports/role-workbench" className="mb-3 block rounded-md border border-border px-3 py-2 text-sm text-primary">
-    {query.isPending ? '正在加载履约待办…' : `履约事项：我负责 ${query.data.summary.mine} · 待认领 ${query.data.summary.unassigned} · 超时 ${query.data.summary.overdue}`}
+    {query.isPending ? '正在加载履约待办…' : `履约事项：待我处理 ${query.data.summary.mine} · 待认领 ${query.data.summary.unassigned} · 需关注（超时） ${query.data.summary.overdue}`}
   </a>
   const columns: TableColumn<FulfillmentIssue>[] = [
     { key: 'title', title: '事项', width: 180 },
@@ -39,7 +39,7 @@ export function FulfillmentTodos({ summary = false }: { summary?: boolean }) {
     } },
   ]
   return <SectionCard title="订单履约待办" compact actions={<Button variant="outline" size="sm" onClick={() => query.refetch()} disabled={query.isFetching}>刷新事项</Button>}>
-    <div className="mb-3 flex flex-wrap gap-2">{[['open', '全部未处理'], ['mine', '我负责'], ['unassigned', '待认领'], ['overdue', '已超时'], ['resolved', '已处理']].map(([value, label]) => <Button key={value} size="sm" variant={filter === value ? 'default' : 'outline'} onClick={() => update({ filter: value })}>{label}</Button>)}</div>
+    <div className="mb-3 flex flex-wrap gap-2">{[['open', '全部未处理'], ['mine', '待我处理'], ['unassigned', '待认领'], ['overdue', '需关注（超时）'], ['resolved', '已处理']].map(([value, label]) => <Button key={value} size="sm" variant={filter === value ? 'default' : 'outline'} onClick={() => update({ filter: value })}>{label}</Button>)}</div>
     <form className="mb-3 flex flex-wrap items-center gap-2" onSubmit={event => { event.preventDefault(); update({ keyword: draft.trim() }) }}>
       <select aria-label="单据类型" className="h-9 rounded-md border border-input bg-background px-3 text-sm" value={documentType} onChange={event => update({ documentType: event.target.value })}>
         <option value="">全部单据类型</option>{Object.entries(names).map(([value, label]) => <option key={value} value={value}>{label}</option>)}

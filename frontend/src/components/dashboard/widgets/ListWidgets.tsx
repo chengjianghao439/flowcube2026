@@ -1,3 +1,5 @@
+import { approvalSource, approvalNavigationPath, pendingApprovalRowKey, pendingApprovalProgress, pendingApprovalTime, pendingApprovalAmountLabel, pendingApprovalAmount } from '@/lib/approvalBusiness'
+import { usePermission } from '@/hooks/usePermission'
 import { FulfillmentTodos } from '@/components/shared/FulfillmentTodos'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -14,7 +16,6 @@ import {
   useRoleWorkbench, useSaleStats, usePurchaseStats, usePdaAnomaly,
   usePendingApprovalsBrief,
 } from '@/hooks/useDashboard'
-import type { PendingApproval } from '@/types/approval'
 
 // 固定卡高下，滚动交给 WidgetShell 的 scrollBody；列表本身只管排布
 const scroll = 'space-y-1'
@@ -159,13 +160,13 @@ export function BoardWorkbench() {
   const cards = (data?.sections ?? []).flatMap(s => s.cards).filter(c => c.count > 0).sort((a, b) => a.priorityRank - b.priorityRank).slice(0, 6)
   function go(path: string, title: string) { addTab({ key: path, title, path }); navigate(path) }
   return (
-    <WidgetShell loading={isLoading} error={error} onRetry={() => void refetch()} title="我的待办" icon={ListTodo} tone="primary" scrollBody
+    <WidgetShell loading={isLoading} error={error} onRetry={() => void refetch()} title="待处理与关注" icon={ListTodo} tone="primary" scrollBody
       action={<div className="flex items-center gap-3">
-        {data && data.summary.totalAlerts > 0 && <SoftStatusLabel label={`${data.summary.totalAlerts} 待办`} tone="warning" />}
+        {data && data.summary.totalAlerts > 0 && <SoftStatusLabel label="有岗位关注事项" tone="warning" />}
         <button type="button" className="text-sm text-primary hover:underline" onClick={() => go('/reports/role-workbench', '待办中心')}>查看全部</button>
       </div>}>
       <FulfillmentTodos summary />
-      {cards.length === 0 ? <p className={EMPTY_HINT}>暂无业务待办；财务与系统提醒可在待办中心查看。</p> : (
+      {cards.length === 0 ? <p className={EMPTY_HINT}>暂无岗位关注事项；财务与系统提醒可在待办中心查看。</p> : (
         <div className="grid gap-x-4 gap-y-1 grid-cols-[repeat(auto-fit,minmax(min(100%,240px),1fr))]">
           {cards.map(c => (
             <button key={c.key} type="button" onClick={() => go(c.path, c.title)}
@@ -227,28 +228,8 @@ export function ListTopSupplier() {
 }
 
 // —— 待我审批（approval.task.view）——
-const BIZ_LABEL: Record<string, string> = {
-  purchase_requisition: '采购申请单',
-  expense_claim: '费用报销',
-  purchase_order: '采购单',
-  inventory_disposal: '滞销处理单',
-  sale_credit_override: '超额放行',
-  product_price: '商品改价',
-}
-
-function approvalDetailPath(item: PendingApproval): string {
-  switch (item.bizType) {
-    case 'purchase_requisition': return `/purchase-requisitions/${item.bizId}`
-    case 'expense_claim': return `/finance/expenses`
-    case 'inventory_disposal': return `/disposals/${item.bizId}`
-    case 'sale_credit_override': return `/credit-overrides/${item.bizId}`
-    case 'purchase_order': return `/purchase/${item.bizId}`
-    case 'product_price': return `/products`
-    default: return `/approvals/pending`
-  }
-}
-
 export function ListPendingApprovals() {
+  const { can } = usePermission()
   const { data, isLoading, error, refetch } = usePendingApprovalsBrief()
   const navigate = useNavigate()
   const addTab = useWorkspaceStore(s => s.addTab)
@@ -262,21 +243,24 @@ export function ListPendingApprovals() {
         <div className="space-y-1">
           {list.slice(0, 5).map(item => (
             <button
-              key={item.instanceId}
+              key={pendingApprovalRowKey(item)}
               type="button"
-              onClick={() => go(approvalDetailPath(item), `待审批 · ${BIZ_LABEL[item.bizType] ?? item.bizType}`)}
+              disabled={!approvalSource(item.bizType, item.bizId, can).path}
+              title={approvalSource(item.bizType, item.bizId, can).reason || undefined}
+              onClick={() => { const source = approvalSource(item.bizType, item.bizId, can); if (source.path) go(approvalNavigationPath(source.path, useWorkspaceStore.getState().tabs), source.label) }}
               className="flex w-full items-center gap-3 dashboard-row-action border-b border-border px-2 py-3 text-left"
             >
-              <SoftStatusLabel label={BIZ_LABEL[item.bizType] ?? '审批'} tone="info" />
+              <SoftStatusLabel label={approvalSource(item.bizType, item.bizId, can).label} tone="info" />
               <div className="min-w-0 flex-1">
                 <p className="min-w-0 whitespace-normal [overflow-wrap:anywhere] text-sm font-medium text-foreground">{item.no || `#${item.bizId}`}</p>
                 <p className="min-w-0 whitespace-normal [overflow-wrap:anywhere] text-xs text-muted-foreground">
-                  {item.title || '—'} · {item.applicantName} · {money(item.amount)}
+                  {item.title || '—'} · {item.applicantName} · {pendingApprovalAmountLabel(item)} {pendingApprovalAmount(item)}
+                  {approvalSource(item.bizType, item.bizId, can).reason && <span className="block">{approvalSource(item.bizType, item.bizId, can).reason}</span>}
                 </p>
               </div>
               <div className="shrink-0 text-right">
-                <p className="text-xs text-muted-foreground">第 {item.currentStep} 级</p>
-                <p className="text-xs text-muted-foreground">{formatDisplayDate(item.createdAt)}</p>
+                <p className="text-xs text-muted-foreground">{pendingApprovalProgress(item)}</p>
+                <p className="text-xs text-muted-foreground">{pendingApprovalTime(item).label} {pendingApprovalTime(item).value ? formatDisplayDate(pendingApprovalTime(item).value) : '未记录'}</p>
               </div>
               <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
             </button>

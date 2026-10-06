@@ -1,0 +1,1890 @@
+{
+  "runtime": {
+    "version": "8.0.46",
+    "serverUuid": "bf914dd9-c174-11f1-93ca-5af76ee4b50a",
+    "sqlMode": "IGNORE_SPACE,ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION",
+    "isolation": "REPEATABLE-READ",
+    "databaseName": "flowcube_golive20261006_test"
+  },
+  "tables": [
+    "disposal_handling_operations",
+    "disposal_handling_sources",
+    "disposal_handling_links",
+    "inventory_disposal_conversions",
+    "supplier_refund_operations",
+    "supplier_refund_orders",
+    "supplier_refund_allocations"
+  ],
+  "metadata": {
+    "disposal_handling_operations": {
+      "columns": [
+        {
+          "COLUMN_NAME": "id",
+          "COLUMN_TYPE": "bigint unsigned",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": "auto_increment"
+        },
+        {
+          "COLUMN_NAME": "operation_uuid",
+          "COLUMN_TYPE": "char(36)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "ascii_bin",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "action",
+          "COLUMN_TYPE": "varchar(80)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "utf8mb4_unicode_ci",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "actor_id",
+          "COLUMN_TYPE": "bigint unsigned",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "request_key",
+          "COLUMN_TYPE": "varchar(100)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "utf8mb4_unicode_ci",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "intent_uuid",
+          "COLUMN_TYPE": "char(36)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "ascii_bin",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "payload_hash",
+          "COLUMN_TYPE": "char(64)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "ascii_bin",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "payload_json",
+          "COLUMN_TYPE": "longtext",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "utf8mb4_unicode_ci",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "source_id",
+          "COLUMN_TYPE": "bigint unsigned",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "target_type",
+          "COLUMN_TYPE": "varchar(30)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "utf8mb4_unicode_ci",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "target_id",
+          "COLUMN_TYPE": "bigint unsigned",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "target_line_id",
+          "COLUMN_TYPE": "bigint unsigned",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "legacy_disposal_id",
+          "COLUMN_TYPE": "bigint unsigned",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "resource_type",
+          "COLUMN_TYPE": "varchar(50)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "utf8mb4_unicode_ci",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "resource_id",
+          "COLUMN_TYPE": "bigint unsigned",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "response_json",
+          "COLUMN_TYPE": "longtext",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "utf8mb4_unicode_ci",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "status",
+          "COLUMN_TYPE": "tinyint unsigned",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": "0",
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "created_at",
+          "COLUMN_TYPE": "datetime",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": "CURRENT_TIMESTAMP",
+          "COLLATION_NAME": null,
+          "EXTRA": "DEFAULT_GENERATED"
+        },
+        {
+          "COLUMN_NAME": "completed_at",
+          "COLUMN_TYPE": "datetime",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        }
+      ],
+      "indexes": [
+        {
+          "INDEX_NAME": "idx_dho_actor_operation",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "actor_id"
+        },
+        {
+          "INDEX_NAME": "idx_dho_actor_operation",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 2,
+          "COLUMN_NAME": "operation_uuid"
+        },
+        {
+          "INDEX_NAME": "idx_dho_legacy",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "legacy_disposal_id"
+        },
+        {
+          "INDEX_NAME": "idx_dho_source",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "source_id"
+        },
+        {
+          "INDEX_NAME": "PRIMARY",
+          "NON_UNIQUE": 0,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "id"
+        },
+        {
+          "INDEX_NAME": "uk_dho_operation",
+          "NON_UNIQUE": 0,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "operation_uuid"
+        }
+      ],
+      "fks": [
+        {
+          "CONSTRAINT_NAME": "fk_dho_actor",
+          "COLUMN_NAME": "actor_id",
+          "REFERENCED_TABLE_NAME": "sys_users",
+          "REFERENCED_COLUMN_NAME": "id"
+        },
+        {
+          "CONSTRAINT_NAME": "fk_dho_legacy",
+          "COLUMN_NAME": "legacy_disposal_id",
+          "REFERENCED_TABLE_NAME": "inventory_disposal_orders",
+          "REFERENCED_COLUMN_NAME": "id"
+        },
+        {
+          "CONSTRAINT_NAME": "fk_dho_source",
+          "COLUMN_NAME": "source_id",
+          "REFERENCED_TABLE_NAME": "disposal_handling_sources",
+          "REFERENCED_COLUMN_NAME": "id"
+        }
+      ],
+      "checks": [
+        {
+          "CONSTRAINT_NAME": "ck_dho_payload",
+          "CHECK_CLAUSE": "json_valid(`payload_json`)",
+          "ENFORCED": "YES"
+        },
+        {
+          "CONSTRAINT_NAME": "ck_dho_response",
+          "CHECK_CLAUSE": "((`response_json` is null) or json_valid(`response_json`))",
+          "ENFORCED": "YES"
+        },
+        {
+          "CONSTRAINT_NAME": "ck_dho_status",
+          "CHECK_CLAUSE": "(`status` in (0,1))",
+          "ENFORCED": "YES"
+        }
+      ]
+    },
+    "disposal_handling_sources": {
+      "columns": [
+        {
+          "COLUMN_NAME": "id",
+          "COLUMN_TYPE": "bigint unsigned",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": "auto_increment"
+        },
+        {
+          "COLUMN_NAME": "intent_uuid",
+          "COLUMN_TYPE": "char(36)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "ascii_bin",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "created_operation_uuid",
+          "COLUMN_TYPE": "char(36)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "ascii_bin",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "product_id",
+          "COLUMN_TYPE": "bigint unsigned",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "product_code",
+          "COLUMN_TYPE": "varchar(50)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "utf8mb4_unicode_ci",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "product_name",
+          "COLUMN_TYPE": "varchar(150)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "utf8mb4_unicode_ci",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "warehouse_id",
+          "COLUMN_TYPE": "bigint unsigned",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "warehouse_code",
+          "COLUMN_TYPE": "varchar(30)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "utf8mb4_unicode_ci",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "warehouse_name",
+          "COLUMN_TYPE": "varchar(100)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "utf8mb4_unicode_ci",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "unit",
+          "COLUMN_TYPE": "varchar(20)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "utf8mb4_unicode_ci",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "handling_type",
+          "COLUMN_TYPE": "tinyint unsigned",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "quantity",
+          "COLUMN_TYPE": "decimal(12,2)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "created_by",
+          "COLUMN_TYPE": "bigint unsigned",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "created_by_name",
+          "COLUMN_TYPE": "varchar(50)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "utf8mb4_unicode_ci",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "request_key",
+          "COLUMN_TYPE": "varchar(100)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "utf8mb4_unicode_ci",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "payload_hash",
+          "COLUMN_TYPE": "char(64)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "ascii_bin",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "payload_json",
+          "COLUMN_TYPE": "longtext",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "utf8mb4_unicode_ci",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "response_json",
+          "COLUMN_TYPE": "longtext",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "utf8mb4_unicode_ci",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "revision",
+          "COLUMN_TYPE": "bigint unsigned",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": "1",
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "legacy_disposal_id",
+          "COLUMN_TYPE": "bigint unsigned",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "legacy_disposal_item_id",
+          "COLUMN_TYPE": "bigint unsigned",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "created_at",
+          "COLUMN_TYPE": "datetime",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": "CURRENT_TIMESTAMP",
+          "COLLATION_NAME": null,
+          "EXTRA": "DEFAULT_GENERATED"
+        }
+      ],
+      "indexes": [
+        {
+          "INDEX_NAME": "idx_dhs_creator",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "created_by"
+        },
+        {
+          "INDEX_NAME": "idx_dhs_legacy",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "legacy_disposal_id"
+        },
+        {
+          "INDEX_NAME": "idx_dhs_operation",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "created_operation_uuid"
+        },
+        {
+          "INDEX_NAME": "idx_dhs_product_warehouse_id",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "product_id"
+        },
+        {
+          "INDEX_NAME": "idx_dhs_product_warehouse_id",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 2,
+          "COLUMN_NAME": "warehouse_id"
+        },
+        {
+          "INDEX_NAME": "idx_dhs_product_warehouse_id",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 3,
+          "COLUMN_NAME": "id"
+        },
+        {
+          "INDEX_NAME": "idx_dhs_warehouse_id",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "warehouse_id"
+        },
+        {
+          "INDEX_NAME": "idx_dhs_warehouse_id",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 2,
+          "COLUMN_NAME": "id"
+        },
+        {
+          "INDEX_NAME": "idx_dhs_warehouse_type_id",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "warehouse_id"
+        },
+        {
+          "INDEX_NAME": "idx_dhs_warehouse_type_id",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 2,
+          "COLUMN_NAME": "handling_type"
+        },
+        {
+          "INDEX_NAME": "idx_dhs_warehouse_type_id",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 3,
+          "COLUMN_NAME": "id"
+        },
+        {
+          "INDEX_NAME": "PRIMARY",
+          "NON_UNIQUE": 0,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "id"
+        },
+        {
+          "INDEX_NAME": "uk_dhs_intent",
+          "NON_UNIQUE": 0,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "intent_uuid"
+        },
+        {
+          "INDEX_NAME": "uk_dhs_legacy_item",
+          "NON_UNIQUE": 0,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "legacy_disposal_item_id"
+        }
+      ],
+      "fks": [
+        {
+          "CONSTRAINT_NAME": "fk_dhs_creator",
+          "COLUMN_NAME": "created_by",
+          "REFERENCED_TABLE_NAME": "sys_users",
+          "REFERENCED_COLUMN_NAME": "id"
+        },
+        {
+          "CONSTRAINT_NAME": "fk_dhs_legacy",
+          "COLUMN_NAME": "legacy_disposal_id",
+          "REFERENCED_TABLE_NAME": "inventory_disposal_orders",
+          "REFERENCED_COLUMN_NAME": "id"
+        },
+        {
+          "CONSTRAINT_NAME": "fk_dhs_operation",
+          "COLUMN_NAME": "created_operation_uuid",
+          "REFERENCED_TABLE_NAME": "disposal_handling_operations",
+          "REFERENCED_COLUMN_NAME": "operation_uuid"
+        },
+        {
+          "CONSTRAINT_NAME": "fk_dhs_product",
+          "COLUMN_NAME": "product_id",
+          "REFERENCED_TABLE_NAME": "product_items",
+          "REFERENCED_COLUMN_NAME": "id"
+        },
+        {
+          "CONSTRAINT_NAME": "fk_dhs_warehouse",
+          "COLUMN_NAME": "warehouse_id",
+          "REFERENCED_TABLE_NAME": "inventory_warehouses",
+          "REFERENCED_COLUMN_NAME": "id"
+        }
+      ],
+      "checks": [
+        {
+          "CONSTRAINT_NAME": "ck_dhs_intention",
+          "CHECK_CLAUSE": "((`quantity` > 0) and (`revision` > 0) and (`handling_type` in (1,2,3)))",
+          "ENFORCED": "YES"
+        },
+        {
+          "CONSTRAINT_NAME": "ck_dhs_legacy_pair",
+          "CHECK_CLAUSE": "(((`legacy_disposal_id` is null) and (`legacy_disposal_item_id` is null)) or ((`legacy_disposal_id` is not null) and (`legacy_disposal_item_id` is not null)))",
+          "ENFORCED": "YES"
+        },
+        {
+          "CONSTRAINT_NAME": "ck_dhs_payload",
+          "CHECK_CLAUSE": "json_valid(`payload_json`)",
+          "ENFORCED": "YES"
+        },
+        {
+          "CONSTRAINT_NAME": "ck_dhs_response",
+          "CHECK_CLAUSE": "((`response_json` is null) or json_valid(`response_json`))",
+          "ENFORCED": "YES"
+        }
+      ]
+    },
+    "disposal_handling_links": {
+      "columns": [
+        {
+          "COLUMN_NAME": "id",
+          "COLUMN_TYPE": "bigint unsigned",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": "auto_increment"
+        },
+        {
+          "COLUMN_NAME": "source_id",
+          "COLUMN_TYPE": "bigint unsigned",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "target_type",
+          "COLUMN_TYPE": "varchar(30)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "utf8mb4_unicode_ci",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "target_id",
+          "COLUMN_TYPE": "bigint unsigned",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "target_line_id",
+          "COLUMN_TYPE": "bigint unsigned",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "product_id",
+          "COLUMN_TYPE": "bigint unsigned",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "warehouse_id",
+          "COLUMN_TYPE": "bigint unsigned",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "unit",
+          "COLUMN_TYPE": "varchar(20)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "utf8mb4_unicode_ci",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "allocated_quantity",
+          "COLUMN_TYPE": "decimal(12,2)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "released_quantity",
+          "COLUMN_TYPE": "decimal(12,2)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": "0.00",
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "final_executed_quantity",
+          "COLUMN_TYPE": "decimal(12,2)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "state",
+          "COLUMN_TYPE": "varchar(16)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": "ACTIVE",
+          "COLLATION_NAME": "utf8mb4_unicode_ci",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "created_operation_uuid",
+          "COLUMN_TYPE": "char(36)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "ascii_bin",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "response_json",
+          "COLUMN_TYPE": "longtext",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "utf8mb4_unicode_ci",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "release_operation_uuid",
+          "COLUMN_TYPE": "char(36)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "ascii_bin",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "released_by",
+          "COLUMN_TYPE": "bigint unsigned",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "released_by_name",
+          "COLUMN_TYPE": "varchar(50)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "utf8mb4_unicode_ci",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "released_at",
+          "COLUMN_TYPE": "datetime",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "release_reason",
+          "COLUMN_TYPE": "varchar(500)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "utf8mb4_unicode_ci",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "release_evidence_json",
+          "COLUMN_TYPE": "longtext",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "utf8mb4_unicode_ci",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "release_response_json",
+          "COLUMN_TYPE": "longtext",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "utf8mb4_unicode_ci",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "created_at",
+          "COLUMN_TYPE": "datetime",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": "CURRENT_TIMESTAMP",
+          "COLLATION_NAME": null,
+          "EXTRA": "DEFAULT_GENERATED"
+        }
+      ],
+      "indexes": [
+        {
+          "INDEX_NAME": "idx_dhl_create_operation",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "created_operation_uuid"
+        },
+        {
+          "INDEX_NAME": "idx_dhl_product",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "product_id"
+        },
+        {
+          "INDEX_NAME": "idx_dhl_release_operation",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "release_operation_uuid"
+        },
+        {
+          "INDEX_NAME": "idx_dhl_released_by",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "released_by"
+        },
+        {
+          "INDEX_NAME": "idx_dhl_source_id",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "source_id"
+        },
+        {
+          "INDEX_NAME": "idx_dhl_source_id",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 2,
+          "COLUMN_NAME": "id"
+        },
+        {
+          "INDEX_NAME": "idx_dhl_warehouse",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "warehouse_id"
+        },
+        {
+          "INDEX_NAME": "PRIMARY",
+          "NON_UNIQUE": 0,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "id"
+        },
+        {
+          "INDEX_NAME": "uk_dhl_target",
+          "NON_UNIQUE": 0,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "target_type"
+        },
+        {
+          "INDEX_NAME": "uk_dhl_target",
+          "NON_UNIQUE": 0,
+          "SEQ_IN_INDEX": 2,
+          "COLUMN_NAME": "target_id"
+        }
+      ],
+      "fks": [
+        {
+          "CONSTRAINT_NAME": "fk_dhl_create_operation",
+          "COLUMN_NAME": "created_operation_uuid",
+          "REFERENCED_TABLE_NAME": "disposal_handling_operations",
+          "REFERENCED_COLUMN_NAME": "operation_uuid"
+        },
+        {
+          "CONSTRAINT_NAME": "fk_dhl_product",
+          "COLUMN_NAME": "product_id",
+          "REFERENCED_TABLE_NAME": "product_items",
+          "REFERENCED_COLUMN_NAME": "id"
+        },
+        {
+          "CONSTRAINT_NAME": "fk_dhl_release_operation",
+          "COLUMN_NAME": "release_operation_uuid",
+          "REFERENCED_TABLE_NAME": "disposal_handling_operations",
+          "REFERENCED_COLUMN_NAME": "operation_uuid"
+        },
+        {
+          "CONSTRAINT_NAME": "fk_dhl_releaser",
+          "COLUMN_NAME": "released_by",
+          "REFERENCED_TABLE_NAME": "sys_users",
+          "REFERENCED_COLUMN_NAME": "id"
+        },
+        {
+          "CONSTRAINT_NAME": "fk_dhl_source",
+          "COLUMN_NAME": "source_id",
+          "REFERENCED_TABLE_NAME": "disposal_handling_sources",
+          "REFERENCED_COLUMN_NAME": "id"
+        },
+        {
+          "CONSTRAINT_NAME": "fk_dhl_warehouse",
+          "COLUMN_NAME": "warehouse_id",
+          "REFERENCED_TABLE_NAME": "inventory_warehouses",
+          "REFERENCED_COLUMN_NAME": "id"
+        }
+      ],
+      "checks": [
+        {
+          "CONSTRAINT_NAME": "ck_dhl_budget",
+          "CHECK_CLAUSE": "((`allocated_quantity` > 0) and (`released_quantity` >= 0) and (`released_quantity` <= `allocated_quantity`) and (((`state` = _utf8mb4\\'ACTIVE\\') and (`released_quantity` = 0) and (`final_executed_quantity` is null)) or ((`state` = _utf8mb4\\'TERMINATED\\') and (`final_executed_quantity` is not null) and (`final_executed_quantity` >= 0) and (`final_executed_quantity` <= `allocated_quantity`) and (`released_quantity` = (`allocated_quantity` - `final_executed_quantity`)))))",
+          "ENFORCED": "YES"
+        },
+        {
+          "CONSTRAINT_NAME": "ck_dhl_release_json",
+          "CHECK_CLAUSE": "(((`release_evidence_json` is null) or json_valid(`release_evidence_json`)) and ((`release_response_json` is null) or json_valid(`release_response_json`)))",
+          "ENFORCED": "YES"
+        },
+        {
+          "CONSTRAINT_NAME": "ck_dhl_response",
+          "CHECK_CLAUSE": "json_valid(`response_json`)",
+          "ENFORCED": "YES"
+        },
+        {
+          "CONSTRAINT_NAME": "ck_dhl_target",
+          "CHECK_CLAUSE": "(`target_type` in (_utf8mb4\\'sale_order\\',_utf8mb4\\'purchase_return\\',_utf8mb4\\'inventory_disposal\\'))",
+          "ENFORCED": "YES"
+        }
+      ]
+    },
+    "inventory_disposal_conversions": {
+      "columns": [
+        {
+          "COLUMN_NAME": "id",
+          "COLUMN_TYPE": "bigint unsigned",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": "auto_increment"
+        },
+        {
+          "COLUMN_NAME": "original_disposal_id",
+          "COLUMN_TYPE": "bigint unsigned",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "original_head_json",
+          "COLUMN_TYPE": "longtext",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "utf8mb4_unicode_ci",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "original_items_json",
+          "COLUMN_TYPE": "longtext",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "utf8mb4_unicode_ci",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "approval_snapshot_json",
+          "COLUMN_TYPE": "longtext",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "utf8mb4_unicode_ci",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "signed_by",
+          "COLUMN_TYPE": "bigint unsigned",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "signed_by_name",
+          "COLUMN_TYPE": "varchar(50)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "utf8mb4_unicode_ci",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "signed_at",
+          "COLUMN_TYPE": "datetime",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": "CURRENT_TIMESTAMP",
+          "COLLATION_NAME": null,
+          "EXTRA": "DEFAULT_GENERATED"
+        },
+        {
+          "COLUMN_NAME": "reason",
+          "COLUMN_TYPE": "varchar(500)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "utf8mb4_unicode_ci",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "payload_hash",
+          "COLUMN_TYPE": "char(64)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "ascii_bin",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "payload_json",
+          "COLUMN_TYPE": "longtext",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "utf8mb4_unicode_ci",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "operation_uuid",
+          "COLUMN_TYPE": "char(36)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "ascii_bin",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "response_json",
+          "COLUMN_TYPE": "longtext",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "utf8mb4_unicode_ci",
+          "EXTRA": ""
+        }
+      ],
+      "indexes": [
+        {
+          "INDEX_NAME": "idx_dhc_signed_by",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "signed_by"
+        },
+        {
+          "INDEX_NAME": "PRIMARY",
+          "NON_UNIQUE": 0,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "id"
+        },
+        {
+          "INDEX_NAME": "uk_dhc_operation",
+          "NON_UNIQUE": 0,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "operation_uuid"
+        },
+        {
+          "INDEX_NAME": "uk_dhc_original",
+          "NON_UNIQUE": 0,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "original_disposal_id"
+        }
+      ],
+      "fks": [
+        {
+          "CONSTRAINT_NAME": "fk_dhc_actor",
+          "COLUMN_NAME": "signed_by",
+          "REFERENCED_TABLE_NAME": "sys_users",
+          "REFERENCED_COLUMN_NAME": "id"
+        },
+        {
+          "CONSTRAINT_NAME": "fk_dhc_operation",
+          "COLUMN_NAME": "operation_uuid",
+          "REFERENCED_TABLE_NAME": "disposal_handling_operations",
+          "REFERENCED_COLUMN_NAME": "operation_uuid"
+        },
+        {
+          "CONSTRAINT_NAME": "fk_dhc_original",
+          "COLUMN_NAME": "original_disposal_id",
+          "REFERENCED_TABLE_NAME": "inventory_disposal_orders",
+          "REFERENCED_COLUMN_NAME": "id"
+        }
+      ],
+      "checks": [
+        {
+          "CONSTRAINT_NAME": "ck_dhc_json",
+          "CHECK_CLAUSE": "(json_valid(`original_head_json`) and json_valid(`original_items_json`) and json_valid(`approval_snapshot_json`) and json_valid(`payload_json`) and json_valid(`response_json`))",
+          "ENFORCED": "YES"
+        }
+      ]
+    },
+    "supplier_refund_operations": {
+      "columns": [
+        {
+          "COLUMN_NAME": "id",
+          "COLUMN_TYPE": "bigint unsigned",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": "auto_increment"
+        },
+        {
+          "COLUMN_NAME": "operation_uuid",
+          "COLUMN_TYPE": "char(36)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "ascii_bin",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "action",
+          "COLUMN_TYPE": "varchar(80)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "utf8mb4_unicode_ci",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "actor_id",
+          "COLUMN_TYPE": "bigint unsigned",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "request_key",
+          "COLUMN_TYPE": "varchar(100)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "utf8mb4_unicode_ci",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "payload_hash",
+          "COLUMN_TYPE": "char(64)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "ascii_bin",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "payload_json",
+          "COLUMN_TYPE": "longtext",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "utf8mb4_unicode_ci",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "refund_id",
+          "COLUMN_TYPE": "bigint unsigned",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "resource_type",
+          "COLUMN_TYPE": "varchar(50)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "utf8mb4_unicode_ci",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "resource_id",
+          "COLUMN_TYPE": "bigint unsigned",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "response_json",
+          "COLUMN_TYPE": "longtext",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "utf8mb4_unicode_ci",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "status",
+          "COLUMN_TYPE": "tinyint unsigned",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": "0",
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "created_at",
+          "COLUMN_TYPE": "datetime",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": "CURRENT_TIMESTAMP",
+          "COLLATION_NAME": null,
+          "EXTRA": "DEFAULT_GENERATED"
+        },
+        {
+          "COLUMN_NAME": "completed_at",
+          "COLUMN_TYPE": "datetime",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        }
+      ],
+      "indexes": [
+        {
+          "INDEX_NAME": "idx_sro_own",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "actor_id"
+        },
+        {
+          "INDEX_NAME": "idx_sro_own",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 2,
+          "COLUMN_NAME": "created_at"
+        },
+        {
+          "INDEX_NAME": "idx_sro_own",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 3,
+          "COLUMN_NAME": "id"
+        },
+        {
+          "INDEX_NAME": "idx_sro_refund",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "refund_id"
+        },
+        {
+          "INDEX_NAME": "PRIMARY",
+          "NON_UNIQUE": 0,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "id"
+        },
+        {
+          "INDEX_NAME": "uq_sro_uuid",
+          "NON_UNIQUE": 0,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "operation_uuid"
+        }
+      ],
+      "fks": [
+        {
+          "CONSTRAINT_NAME": "fk_sro_actor",
+          "COLUMN_NAME": "actor_id",
+          "REFERENCED_TABLE_NAME": "sys_users",
+          "REFERENCED_COLUMN_NAME": "id"
+        },
+        {
+          "CONSTRAINT_NAME": "fk_sro_refund",
+          "COLUMN_NAME": "refund_id",
+          "REFERENCED_TABLE_NAME": "supplier_refund_orders",
+          "REFERENCED_COLUMN_NAME": "id"
+        }
+      ],
+      "checks": [
+        {
+          "CONSTRAINT_NAME": "ck_sro_payload",
+          "CHECK_CLAUSE": "json_valid(`payload_json`)",
+          "ENFORCED": "YES"
+        },
+        {
+          "CONSTRAINT_NAME": "ck_sro_resource",
+          "CHECK_CLAUSE": "(((`status` = 0) and (`refund_id` is null) and (`resource_type` is null) and (`resource_id` is null) and (`response_json` is null)) or ((`status` = 1) and (`refund_id` is not null) and (`resource_type` is not null) and (`resource_id` is not null) and (`resource_type` = _utf8mb4\\'supplier_refund_order\\') and (`resource_id` = `refund_id`) and json_valid(`response_json`) and (`response_json` is not null)))",
+          "ENFORCED": "YES"
+        },
+        {
+          "CONSTRAINT_NAME": "ck_sro_status",
+          "CHECK_CLAUSE": "(`status` in (0,1))",
+          "ENFORCED": "YES"
+        }
+      ]
+    },
+    "supplier_refund_orders": {
+      "columns": [
+        {
+          "COLUMN_NAME": "id",
+          "COLUMN_TYPE": "bigint unsigned",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": "auto_increment"
+        },
+        {
+          "COLUMN_NAME": "refund_no",
+          "COLUMN_TYPE": "varchar(30)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "utf8mb4_unicode_ci",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "company_id",
+          "COLUMN_TYPE": "bigint unsigned",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "purchase_order_id",
+          "COLUMN_TYPE": "bigint unsigned",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "purchase_return_id",
+          "COLUMN_TYPE": "bigint unsigned",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "payment_record_id",
+          "COLUMN_TYPE": "bigint unsigned",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "supplier_id",
+          "COLUMN_TYPE": "bigint unsigned",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "warehouse_id",
+          "COLUMN_TYPE": "bigint unsigned",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "income_account_id",
+          "COLUMN_TYPE": "bigint unsigned",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "refund_date",
+          "COLUMN_TYPE": "date",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "amount",
+          "COLUMN_TYPE": "decimal(14,4)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "status",
+          "COLUMN_TYPE": "tinyint unsigned",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": "1",
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "created_by",
+          "COLUMN_TYPE": "bigint unsigned",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "created_operation_uuid",
+          "COLUMN_TYPE": "char(36)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "ascii_bin",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "request_key",
+          "COLUMN_TYPE": "varchar(100)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "utf8mb4_unicode_ci",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "payload_hash",
+          "COLUMN_TYPE": "char(64)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "ascii_bin",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "create_payload_json",
+          "COLUMN_TYPE": "longtext",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "utf8mb4_unicode_ci",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "source_snapshot_json",
+          "COLUMN_TYPE": "longtext",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "utf8mb4_unicode_ci",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "source_fingerprint",
+          "COLUMN_TYPE": "char(64)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "ascii_bin",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "remark",
+          "COLUMN_TYPE": "varchar(500)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "utf8mb4_unicode_ci",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "confirmed_by",
+          "COLUMN_TYPE": "bigint unsigned",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "confirmed_at",
+          "COLUMN_TYPE": "datetime",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "cancelled_by",
+          "COLUMN_TYPE": "bigint unsigned",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "cancelled_at",
+          "COLUMN_TYPE": "datetime",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "received_by",
+          "COLUMN_TYPE": "bigint unsigned",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "received_at",
+          "COLUMN_TYPE": "datetime",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "received_account_type",
+          "COLUMN_TYPE": "tinyint unsigned",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "fund_transaction_id",
+          "COLUMN_TYPE": "bigint unsigned",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "voucher_id",
+          "COLUMN_TYPE": "bigint unsigned",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "voucher_generate_error",
+          "COLUMN_TYPE": "varchar(500)",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "utf8mb4_unicode_ci",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "created_at",
+          "COLUMN_TYPE": "datetime",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": "CURRENT_TIMESTAMP",
+          "COLLATION_NAME": null,
+          "EXTRA": "DEFAULT_GENERATED"
+        },
+        {
+          "COLUMN_NAME": "updated_at",
+          "COLUMN_TYPE": "datetime",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": "CURRENT_TIMESTAMP",
+          "COLLATION_NAME": null,
+          "EXTRA": "DEFAULT_GENERATED on update CURRENT_TIMESTAMP"
+        }
+      ],
+      "indexes": [
+        {
+          "INDEX_NAME": "fk_sr_ap",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "payment_record_id"
+        },
+        {
+          "INDEX_NAME": "fk_sr_canceller",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "cancelled_by"
+        },
+        {
+          "INDEX_NAME": "fk_sr_company",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "company_id"
+        },
+        {
+          "INDEX_NAME": "fk_sr_confirmer",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "confirmed_by"
+        },
+        {
+          "INDEX_NAME": "fk_sr_income",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "income_account_id"
+        },
+        {
+          "INDEX_NAME": "fk_sr_new_in",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "fund_transaction_id"
+        },
+        {
+          "INDEX_NAME": "fk_sr_po",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "purchase_order_id"
+        },
+        {
+          "INDEX_NAME": "fk_sr_receiver",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "received_by"
+        },
+        {
+          "INDEX_NAME": "idx_sr_own",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "created_by"
+        },
+        {
+          "INDEX_NAME": "idx_sr_own",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 2,
+          "COLUMN_NAME": "id"
+        },
+        {
+          "INDEX_NAME": "idx_sr_pr",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "purchase_return_id"
+        },
+        {
+          "INDEX_NAME": "idx_sr_pr",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 2,
+          "COLUMN_NAME": "status"
+        },
+        {
+          "INDEX_NAME": "idx_sr_pr",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 3,
+          "COLUMN_NAME": "id"
+        },
+        {
+          "INDEX_NAME": "idx_sr_wh_status",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "warehouse_id"
+        },
+        {
+          "INDEX_NAME": "idx_sr_wh_status",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 2,
+          "COLUMN_NAME": "status"
+        },
+        {
+          "INDEX_NAME": "idx_sr_wh_status",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 3,
+          "COLUMN_NAME": "id"
+        },
+        {
+          "INDEX_NAME": "PRIMARY",
+          "NON_UNIQUE": 0,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "id"
+        },
+        {
+          "INDEX_NAME": "uq_sr_created_op",
+          "NON_UNIQUE": 0,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "created_operation_uuid"
+        },
+        {
+          "INDEX_NAME": "uq_sr_no",
+          "NON_UNIQUE": 0,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "refund_no"
+        }
+      ],
+      "fks": [
+        {
+          "CONSTRAINT_NAME": "fk_sr_ap",
+          "COLUMN_NAME": "payment_record_id",
+          "REFERENCED_TABLE_NAME": "payment_records",
+          "REFERENCED_COLUMN_NAME": "id"
+        },
+        {
+          "CONSTRAINT_NAME": "fk_sr_canceller",
+          "COLUMN_NAME": "cancelled_by",
+          "REFERENCED_TABLE_NAME": "sys_users",
+          "REFERENCED_COLUMN_NAME": "id"
+        },
+        {
+          "CONSTRAINT_NAME": "fk_sr_company",
+          "COLUMN_NAME": "company_id",
+          "REFERENCED_TABLE_NAME": "acct_companies",
+          "REFERENCED_COLUMN_NAME": "id"
+        },
+        {
+          "CONSTRAINT_NAME": "fk_sr_confirmer",
+          "COLUMN_NAME": "confirmed_by",
+          "REFERENCED_TABLE_NAME": "sys_users",
+          "REFERENCED_COLUMN_NAME": "id"
+        },
+        {
+          "CONSTRAINT_NAME": "fk_sr_created_op",
+          "COLUMN_NAME": "created_operation_uuid",
+          "REFERENCED_TABLE_NAME": "supplier_refund_operations",
+          "REFERENCED_COLUMN_NAME": "operation_uuid"
+        },
+        {
+          "CONSTRAINT_NAME": "fk_sr_creator",
+          "COLUMN_NAME": "created_by",
+          "REFERENCED_TABLE_NAME": "sys_users",
+          "REFERENCED_COLUMN_NAME": "id"
+        },
+        {
+          "CONSTRAINT_NAME": "fk_sr_income",
+          "COLUMN_NAME": "income_account_id",
+          "REFERENCED_TABLE_NAME": "finance_accounts",
+          "REFERENCED_COLUMN_NAME": "id"
+        },
+        {
+          "CONSTRAINT_NAME": "fk_sr_new_in",
+          "COLUMN_NAME": "fund_transaction_id",
+          "REFERENCED_TABLE_NAME": "finance_account_transactions",
+          "REFERENCED_COLUMN_NAME": "id"
+        },
+        {
+          "CONSTRAINT_NAME": "fk_sr_po",
+          "COLUMN_NAME": "purchase_order_id",
+          "REFERENCED_TABLE_NAME": "purchase_orders",
+          "REFERENCED_COLUMN_NAME": "id"
+        },
+        {
+          "CONSTRAINT_NAME": "fk_sr_pr",
+          "COLUMN_NAME": "purchase_return_id",
+          "REFERENCED_TABLE_NAME": "purchase_returns",
+          "REFERENCED_COLUMN_NAME": "id"
+        },
+        {
+          "CONSTRAINT_NAME": "fk_sr_receiver",
+          "COLUMN_NAME": "received_by",
+          "REFERENCED_TABLE_NAME": "sys_users",
+          "REFERENCED_COLUMN_NAME": "id"
+        }
+      ],
+      "checks": [
+        {
+          "CONSTRAINT_NAME": "ck_sr_amount",
+          "CHECK_CLAUSE": "(`amount` > 0)",
+          "ENFORCED": "YES"
+        },
+        {
+          "CONSTRAINT_NAME": "ck_sr_json",
+          "CHECK_CLAUSE": "(json_valid(`create_payload_json`) and json_valid(`source_snapshot_json`))",
+          "ENFORCED": "YES"
+        },
+        {
+          "CONSTRAINT_NAME": "ck_sr_received",
+          "CHECK_CLAUSE": "(((`status` = 3) and (`received_account_type` in (1,2,3,4,5)) and (`received_account_type` is not null) and (`received_at` is not null) and (`fund_transaction_id` is not null) and (`received_by` is not null)) or ((`status` in (1,2,4)) and (`received_account_type` is null) and (`received_at` is null) and (`fund_transaction_id` is null) and (`received_by` is null)))",
+          "ENFORCED": "YES"
+        },
+        {
+          "CONSTRAINT_NAME": "ck_sr_status",
+          "CHECK_CLAUSE": "(`status` in (1,2,3,4))",
+          "ENFORCED": "YES"
+        }
+      ]
+    },
+    "supplier_refund_allocations": {
+      "columns": [
+        {
+          "COLUMN_NAME": "id",
+          "COLUMN_TYPE": "bigint unsigned",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": "auto_increment"
+        },
+        {
+          "COLUMN_NAME": "refund_id",
+          "COLUMN_TYPE": "bigint unsigned",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "payment_record_id",
+          "COLUMN_TYPE": "bigint unsigned",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "purchase_return_id",
+          "COLUMN_TYPE": "bigint unsigned",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "entry_id",
+          "COLUMN_TYPE": "bigint unsigned",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "receipt_id",
+          "COLUMN_TYPE": "bigint unsigned",
+          "IS_NULLABLE": "YES",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "original_transaction_id",
+          "COLUMN_TYPE": "bigint unsigned",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "amount",
+          "COLUMN_TYPE": "decimal(14,4)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": null,
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "budget_state",
+          "COLUMN_TYPE": "varchar(10)",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "utf8mb4_unicode_ci",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "source_snapshot_json",
+          "COLUMN_TYPE": "longtext",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": null,
+          "COLLATION_NAME": "utf8mb4_unicode_ci",
+          "EXTRA": ""
+        },
+        {
+          "COLUMN_NAME": "created_at",
+          "COLUMN_TYPE": "datetime",
+          "IS_NULLABLE": "NO",
+          "COLUMN_DEFAULT": "CURRENT_TIMESTAMP",
+          "COLLATION_NAME": null,
+          "EXTRA": "DEFAULT_GENERATED"
+        }
+      ],
+      "indexes": [
+        {
+          "INDEX_NAME": "fk_sra_entry",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "entry_id"
+        },
+        {
+          "INDEX_NAME": "fk_sra_receipt",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "receipt_id"
+        },
+        {
+          "INDEX_NAME": "idx_sra_ap_budget",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "payment_record_id"
+        },
+        {
+          "INDEX_NAME": "idx_sra_ap_budget",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 2,
+          "COLUMN_NAME": "entry_id"
+        },
+        {
+          "INDEX_NAME": "idx_sra_ap_budget",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 3,
+          "COLUMN_NAME": "budget_state"
+        },
+        {
+          "INDEX_NAME": "idx_sra_ap_budget",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 4,
+          "COLUMN_NAME": "id"
+        },
+        {
+          "INDEX_NAME": "idx_sra_pr_budget",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "purchase_return_id"
+        },
+        {
+          "INDEX_NAME": "idx_sra_pr_budget",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 2,
+          "COLUMN_NAME": "budget_state"
+        },
+        {
+          "INDEX_NAME": "idx_sra_pr_budget",
+          "NON_UNIQUE": 1,
+          "SEQ_IN_INDEX": 3,
+          "COLUMN_NAME": "id"
+        },
+        {
+          "INDEX_NAME": "PRIMARY",
+          "NON_UNIQUE": 0,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "id"
+        },
+        {
+          "INDEX_NAME": "uq_sra_refund_entry",
+          "NON_UNIQUE": 0,
+          "SEQ_IN_INDEX": 1,
+          "COLUMN_NAME": "refund_id"
+        },
+        {
+          "INDEX_NAME": "uq_sra_refund_entry",
+          "NON_UNIQUE": 0,
+          "SEQ_IN_INDEX": 2,
+          "COLUMN_NAME": "entry_id"
+        }
+      ],
+      "fks": [
+        {
+          "CONSTRAINT_NAME": "fk_sra_entry",
+          "COLUMN_NAME": "entry_id",
+          "REFERENCED_TABLE_NAME": "payment_entries",
+          "REFERENCED_COLUMN_NAME": "id"
+        },
+        {
+          "CONSTRAINT_NAME": "fk_sra_receipt",
+          "COLUMN_NAME": "receipt_id",
+          "REFERENCED_TABLE_NAME": "payment_receipts",
+          "REFERENCED_COLUMN_NAME": "id"
+        },
+        {
+          "CONSTRAINT_NAME": "fk_sra_refund",
+          "COLUMN_NAME": "refund_id",
+          "REFERENCED_TABLE_NAME": "supplier_refund_orders",
+          "REFERENCED_COLUMN_NAME": "id"
+        }
+      ],
+      "checks": [
+        {
+          "CONSTRAINT_NAME": "ck_sra_amount",
+          "CHECK_CLAUSE": "(`amount` > 0)",
+          "ENFORCED": "YES"
+        },
+        {
+          "CONSTRAINT_NAME": "ck_sra_json",
+          "CHECK_CLAUSE": "json_valid(`source_snapshot_json`)",
+          "ENFORCED": "YES"
+        },
+        {
+          "CONSTRAINT_NAME": "ck_sra_state",
+          "CHECK_CLAUSE": "(`budget_state` in (_utf8mb4\\'draft\\',_utf8mb4\\'reserved\\',_utf8mb4\\'received\\',_utf8mb4\\'released\\'))",
+          "ENFORCED": "YES"
+        }
+      ]
+    }
+  },
+  "directRerunStatements": 1238,
+  "passed": 131
+}

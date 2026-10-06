@@ -229,6 +229,8 @@ async function closePeriod(period, operator, companyId = 1) {
   try {
     await conn.beginTransaction()
     await lockAccountingCompany(conn, companyId)
+    // First ordinary business snapshot follows the company X gate; no reverse RF/PR locks.
+    await require('./voucher-supplier-refunds').assertPeriodCurrent(conn,p,companyId)
     const [[existing]] = await conn.query('SELECT status FROM acct_periods WHERE period = ? AND company_id = ? FOR UPDATE', [p, companyId])
     if (existing && Number(existing.status) === 2) throw new AppError(`会计期间 ${p} 已是结账状态`, 409)
     await engine.assertSalePeriodCurrent(conn, p, companyId)

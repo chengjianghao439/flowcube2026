@@ -46,7 +46,7 @@ export default function CustomersPage() {
   const [importResult, setImportResult] = useState<{ success: number; errors: string[] } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  // 客户批量导入：模板列 = 编码/名称/联系人/电话/结算方式/授信额度，行级回执由后端逐行返回
+  // 前六列保持旧模板顺序，末尾地址选填；旧六列模板仍可导入。
   async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -131,7 +131,7 @@ export default function CustomersPage() {
       {importOpen && (
         <div className="rounded-lg border border-border bg-card p-4 space-y-3">
           <h3 className="text-sm font-medium">批量导入客户</h3>
-          <p className="max-w-4xl text-sm leading-6 text-muted-foreground">请先下载模板，按照格式填写后上传。列：客户编码（可空，留空自动生成）、客户名称、联系人、电话、结算方式（现结或 1、月结或 2；留空默认月结）、授信额度（可空）。结算方式无效、名称重复或编码重复的行会跳过并显示行号和原因。</p>
+          <p className="max-w-4xl text-sm leading-6 text-muted-foreground">请先下载模板，按照格式填写后上传。列：客户编码（可空，留空自动生成）、客户名称*、联系人、电话、结算方式（现结或 1、月结或 2；留空默认月结）、授信额度（可空）、地址（选填，旧六列模板仍可用）。名称最多 100 字、联系人 50 字、电话 30 字、地址 200 字。电话支持数字、空格、+、(、)、-。格式无效、超限、名称或编码重复的行会跳过并显示行号和原因，不会截短资料。</p>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={() => downloadExport('/import/customers/template').catch(e => toast.error((e as Error).message))}>下载导入模板</Button>
             <div className="flex items-center gap-2">

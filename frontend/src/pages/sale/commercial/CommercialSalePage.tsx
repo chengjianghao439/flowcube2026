@@ -1,3 +1,7 @@
+import { ReturnSourceButton } from '@/pages/returns/ReturnSourceButton'
+import { ReorderSourceButton } from '../ReorderSourceButton'
+import { useSaleReorderSource } from '@/hooks/useSaleReorderSource'
+import { useRepeatSaleCreate } from '@/hooks/useRepeatSaleCreate'
 import { commercialWarehouseName } from './warehouseName'
 import { useEffect, useRef, useState } from 'react'
 import type { SaleOrder } from '@/types/sale'
@@ -34,9 +38,15 @@ const permission = {
   release: PERMISSIONS.SALE_ORDER_RELEASE,
   delete: PERMISSIONS.SALE_ORDER_DELETE
 }
-export function NewCommercialSale({ tabPath, onDone }: { tabPath: string; onDone: (id?: number) => void }) {
+export function NewCommercialSale({ tabPath, onDone, sourceId }: { tabPath: string; onDone: (id?: number) => void; sourceId?: number }) {
   const [owner] = useState(captureKitReadOwner)
+  if (sourceId) return <RepeatCommercialCreate sourceId={sourceId} tabPath={tabPath} onDone={onDone} />
   return <CommercialEditor owner={owner} tabPath={tabPath} onDone={onDone} />
+}
+function RepeatCommercialCreate({ sourceId, tabPath, onDone }: { sourceId: number; tabPath: string; onDone: (id?: number) => void }) {
+  const source = useSaleReorderSource(sourceId, 'kit-v1')
+  const write = useRepeatSaleCreate(sourceId, 'kit-v1', source.owner, buildWorkspaceTabRegistrationFromPath(tabPath).key)
+  return <CommercialEditor owner={source.owner} tabPath={tabPath} onDone={onDone} reorder={{ source, write }} />
 }
 export default function CommercialSalePage({
   initial,
@@ -170,6 +180,8 @@ export default function CommercialSalePage({
         subtitle={<SoftStatusLabel label={workflow.label} tone={workflow.tone} />}
         rightActions={
           <>
+            <ReturnSourceButton kind="sale" sourceId={order.id} sourceNo={order.orderNo} disabled={locked} />
+            <ReorderSourceButton sourceId={order.id} model="kit-v1" disabled={locked} />
             <Button variant="outline" disabled={locked || shipOpen || !!confirm} onClick={() => void reload()}>
               读取最新订单
             </Button>

@@ -2,6 +2,7 @@ import { recordIdentityByFields } from './allRecords'
 import { payloadClient as apiClient } from './client'
 import type { PaginatedData } from '@/types'
 import type { ApprovalFlow, ApprovalFlowStep, PendingApproval } from '@/types/approval'
+import type { AxiosRequestConfig } from 'axios'
 
 export const listApprovalFlowsApi = (bizType = '') =>
   apiClient.get<ApprovalFlow[]>('/approvals/flows', { params: bizType ? { bizType } : {} })
@@ -27,6 +28,13 @@ export const updateApprovalFlowApi = (id: number, d: Partial<{
 
 export const deleteApprovalFlowApi = (id: number) => apiClient.delete<null>(`/approvals/flows/${id}`)
 
-const pendingTaskIdentity = recordIdentityByFields('taskId')
-export const listPendingApprovalsApi = (p: { page?: number; pageSize?: number } = {}, summary = false) =>
-  apiClient.get<PaginatedData<PendingApproval>>('/approvals/pending', { params: p, ...(summary ? {listMode: 'summary' as const} : {}) }, pendingTaskIdentity)
+const legacyTaskIdentity = recordIdentityByFields('taskId')
+const pendingTaskIdentity = (value: unknown) => {
+  if (value && typeof value === 'object' && 'entryKey' in value && typeof value.entryKey === 'string' && value.entryKey) return JSON.stringify(['entry', value.entryKey])
+  if (value && typeof value === 'object' && 'sourceKind' in value && value.sourceKind === 'document') throw new Error('列表数据不完整，请刷新后重试')
+  return legacyTaskIdentity(value)
+}
+export const listPendingApprovalsApi = (p: { page?: number; pageSize?: number } = {}, mode: boolean | 'paged' = false, config?: AxiosRequestConfig) =>
+  apiClient.get<PaginatedData<PendingApproval>>('/approvals/pending', {
+    ...config, params: p, ...(mode === 'paged' ? { listMode: 'paged' as const } : mode ? { listMode: 'summary' as const } : {}),
+  }, pendingTaskIdentity)

@@ -54,21 +54,24 @@ export interface ApprovalInstance {
 }
 
 /** 待我审批列表项（跨业务类型聚合） */
-export interface PendingApproval {
-  instanceId: number
-  taskId: number
+interface PendingApprovalFields {
   bizType: string
   bizId: number
   no: string
   title: string | null
   status: number | null
-  applicantId: number
+  applicantId: number | null
   applicantName: string
   amount: number
-  currentStep: number
-  flowId: number
   createdAt: string
+  submittedAt?: string | null
+  timeKind?: 'created' | 'submitted'
 }
+/** 旧DTO仍可按真实taskId识别；原单级审核没有引擎ID/层级。 */
+export type PendingApproval = PendingApprovalFields & (
+  { sourceKind?: 'engine'; entryKey?: string; instanceId: number; taskId: number; currentStep: number; flowId: number }
+  | { sourceKind: 'document'; entryKey: string; instanceId: null; taskId: null; currentStep: null; flowId: null }
+)
 
 export const INSTANCE_STATUS = {
   PENDING: 1,

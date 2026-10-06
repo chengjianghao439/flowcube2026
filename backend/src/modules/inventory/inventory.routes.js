@@ -40,6 +40,7 @@ router.get('/check-consistency',      requirePermission(PERMISSIONS.INVENTORY_TR
 router.post('/resync-stock',          requirePermission(PERMISSIONS.INVENTORY_ADJUST), ctrl.resyncStock)
 router.get('/trace/:productId',       requirePermission(PERMISSIONS.INVENTORY_TRACE_VIEW), ctrl.trace)
 router.get('/overview',                requirePermission(PERMISSIONS.INVENTORY_VIEW), ctrl.overview)
+router.get('/reservations',            requirePermission(PERMISSIONS.INVENTORY_VIEW), ctrl.reservations)
 router.get('/replenishment',           requirePermission(PERMISSIONS.REPORT_VIEW), ctrl.replenishment)
 router.get('/stock-policies',          requirePermission(PERMISSIONS.INVENTORY_VIEW), ctrl.stockPolicies)
 router.put('/stock-policies',          requirePermission(PERMISSIONS.INVENTORY_ADJUST), validateBody(policiesSchema), ctrl.saveStockPolicies)
@@ -63,6 +64,7 @@ router.put('/containers/:containerId/location',
   ctrl.assignContainerLocation
 )
 router.post('/containers/:id/split',
+  require('../../middleware/pdaSession').pdaSessionOptional(),
   requirePermission(PERMISSIONS.INVENTORY_CONTAINER_SPLIT),
   validateBody(z.object({
     qty: z.number().positive('拆分数量须大于 0'),

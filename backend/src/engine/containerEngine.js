@@ -1177,6 +1177,7 @@ async function splitContainer(conn, { containerId, qty, remark = null, targetCon
   const tid = targetContainerId != null ? Number(targetContainerId) : null
   if (!Number.isFinite(cid) || cid <= 0) throw new AppError('库存条码无效', 400)
   if (!Number.isFinite(q) || q <= 0) throw new AppError('拆分数量须为正数', 400)
+  if (tid === cid) throw new AppError('来源与目标不能是同一个塑料盒', 400, 'CONTAINER_SELF_MERGE_FORBIDDEN')
 
   // 加锁顺序（2026-09-18 审计 P1）：本引擎的全局约定是「先 lockStockDimension(商品,仓库) 再锁容器」
   // ——deductFromContainers 的注释与上架/出库/盘点路径都按此顺序。本函数原先直接 FOR UPDATE 容器，

@@ -114,6 +114,7 @@ export default function GlobalSearch() {
         <input
           ref={inputRef}
           aria-label="全局搜索单据与资料"
+          title="搜索单据与资料；商品支持编码、名称、条码、供应商型号、型号、颜色"
           // 不声明的话，浏览器会把登录表单的用户名自动填充灌进这个框（进系统就看到
           // 搜索框里是当前账号名、还挂着一条"未找到 xxx"的提示）——2026-09-16 修复
           autoComplete="off"
@@ -152,6 +153,7 @@ export default function GlobalSearch() {
                         className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-accent transition-colors text-left">
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium break-words leading-5">{r.title}</p>
+                          {r.type === 'product' && query.trim() && r.searchMatch && <p className="text-xs text-muted-foreground break-words leading-5">命中：{r.searchMatch}</p>}
                           {r.subtitle && r.subtitle !== r.title && <p className="text-xs text-muted-foreground break-words leading-5">{r.subtitle}</p>}
                           {!!r.details?.length && <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
                             {r.details.map(detail => <span key={detail.label} className="break-words min-w-0 max-w-full leading-5">{detail.label}：{detail.value}</span>)}

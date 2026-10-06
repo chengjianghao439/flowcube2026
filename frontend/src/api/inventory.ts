@@ -4,6 +4,10 @@ import { payloadClient as apiClient } from './client'
 import { withRequestKeyHeaders } from '@/lib/requestKey'
 import type { PaginatedData, QueryParams } from '@/types'
 import type { StockItem, InventoryLog, StockChangeParams, InventoryOverviewParams, InventoryOverviewResult, InventoryContainer } from '@/types/inventory'
+import type { InventoryReservationParams, InventoryReservationsResult } from '@/types/inventory'
+
+export const getInventoryReservationsApi = (params: InventoryReservationParams, config?: AxiosRequestConfig) =>
+  apiClient.get<InventoryReservationsResult>('/inventory/reservations', { ...config, params, listMode: 'paged', skipGlobalError: true })
 
 export const getStockApi    = async (p: QueryParams) => apiClient.get<PaginatedData<StockItem>>('/inventory/stock', { params: p })
 export const getLogsApi     = async (p: QueryParams, signal?: AbortSignal) => apiClient.get<PaginatedData<InventoryLog>>('/inventory/logs', { params: p, signal })
@@ -123,13 +127,26 @@ export interface SplitContainerResult {
   newContainerKind?: 'inventory' | 'plastic_box'
   productId: number
   warehouseId: number
+  targetContainerId?: number
+  targetBarcode?: string
+  targetQtyAfter?: number
+  printJobId?: number | null
+  printJobIds?: number[]
+  noPrinterCount?: number
+  renderFailedCount?: number
 }
 
+export interface SplitContainerBody { qty: number; remark?: string; printLabel?: boolean; targetContainerId?: number }
 export const splitContainerApi = async (
   containerId: number,
-  body: { qty: number; remark?: string; printLabel?: boolean; targetContainerId?: number },
+  body: SplitContainerBody,
+  requestKey?: string,
+  client?: 'pda',
+  config?: import('axios').AxiosRequestConfig,
 ) =>
-  apiClient.post<SplitContainerResult>(`/inventory/containers/${containerId}/split`, body, { skipGlobalError: true })
+  apiClient.post<SplitContainerResult>(`/inventory/containers/${containerId}/split`, body, { ...config, skipGlobalError: true,
+    headers: { ...config?.headers, ...(requestKey ? { 'X-Request-Key': requestKey } : {}), ...(client ? { 'X-Client': client } : {}) },
+  })
 
 // ─── 塑料盒作业流（批 A）：放货 / 还原整件 / 来源贡献 ─────────────────────────
 

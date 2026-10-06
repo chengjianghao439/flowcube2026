@@ -82,9 +82,8 @@ const periodOfDate = (ymd) => `${ymd.slice(0, 4)}${ymd.slice(5, 7)}`
  *
  * @param {*} conn 事务连接（调用方已开启事务）
  * @param {string|Date} businessDate 业务发生日期
- * @param {{companyId?: number, bizLabel?: string, backfill?: {mode?: string, postingPeriod?: string, reason?: string}|null, backfillHint?: boolean}} opts
- *   backfillHint=false 表示该业务**没有**补录出路（如费用报销付款：finance-backfills
- *   目前没有 expense 类型分支），此时拒绝消息不再引导用户去申请补录——那是一条走不通的路，
+ * @param {{companyId?: number, bizLabel?: string, backfill?: {mode?: string, postingPeriod?: string, postingDate?: string, reason?: string}|null, backfillHint?: boolean}} opts
+ *   backfillHint=false 表示该业务**没有**补录出路，此时拒绝消息不再引导用户去申请补录，
  *   只会让人以为找财务主管就能补上；**同时也不再提示「改用未结账的日期」**，因为那等于
  *   诱导操作人把真实发生的付款日期填成假的（事实失真比账实不符更难查），改为请其联系
  *   财务负责人核实处理方式。默认 true，既有入口行为不变。
@@ -106,28 +105,32 @@ async function assertFinancePeriodOpen(conn, businessDate, opts = {}) {
     [period, companyId],
   )
   const closed = !!row && Number(row.status) === 2
-  if (!closed) return { ymd, period, closed: false, voucherDateOverride: null }
-  if (backfill) {
-    // 补录：业务日期所属期间已结账，业务写入放行；但**补录当期**（凭证归属期间）必须仍未结账，
-    // 否则凭证落不下去——钱进账、会计账上没有，正是本模块存在的理由。
-    //
-    // 这道复核必须在这里做：调用方在业务事务外算出的 postingPeriod 只是一次预检，从预检到
-    // 写入之间存在会计结账的窗口。此处已在业务事务内、且已持有账套行锁与期间行锁，
-    // 读到的才是真正生效的状态——预检放行不代表写入时仍放行。
-    await assertBackfillPostingPeriodOpen(conn, companyId, backfill.postingPeriod || period, { lockForUpdate: true })
-    return {
-      ymd,
-      period,
-      closed: true,
-      // 凭证归属日期用**执行审批的今天**，不是业务日期：补录凭证落补录当期（前期差错在当期调整）。
-      // 资金流水的 happened_at 仍是 ymd——钱确实是那天动的，银行对账依据它，不能改。
-      voucherDateOverride: beijingTodayYmd(),
-    }
+  if (backfill?.kind === 'supplier_refund') {
+    let postingDate
+    try {
+      postingDate = require('../refunds/supplier-refunds.rules').date(backfill.postingDate)
+      if (postingDate.replaceAll('-', '').slice(0, 6) !== backfill.postingPeriod) throw Error('month')
+    } catch { throw new AppError('原批准日期或期间不完整，请核对原补录申请', 409, 'SUPPLIER_REFUND_BACKFILL_IDENTITY_CHANGED') }
+    await assertBackfillPostingPeriodOpen(conn, companyId, backfill.postingPeriod, { lockForUpdate: true })
+    return { ymd, period, closed, voucherDateOverride: postingDate }
   }
+  if (backfill) {
+    // 凭证固定在原批准日，业务期间后来反结账也不能改掉已经批准的补录身份。
+    const postingDate = toYmd(backfill.postingDate)
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(postingDate) || periodOfDate(postingDate) !== backfill.postingPeriod) {
+      throw new AppError('原批准日期或期间不完整，请核对原补录申请', 409, 'FINANCE_BACKFILL_APPROVAL_DATE_INVALID')
+    }
+    // 排他锁复核原批准期间：事务外预检不能保证执行时该期间仍开放。
+    await assertBackfillPostingPeriodOpen(conn, companyId, backfill.postingPeriod, { lockForUpdate: true })
+    return { ymd, period, closed, voucherDateOverride: postingDate }
+  }
+  if (!closed) return { ymd, period, closed: false, voucherDateOverride: null }
   throw new AppError(
     `会计期间 ${period} 已结账，${bizLabel}的日期（${ymd}）落在该期间内，不能登记：`
     + '账已封存，此时登记会让这笔钱进入已结账期间的凭证之外（钱动了账不记）。'
-    + (backfillHint
+    + (backfillHint === 'supplier_refund'
+      ? '请保留真实收回日期，由持跨期补录权限的人员提交申请，再由他人审批执行。'
+      : backfillHint
       ? '请改用未结账的日期登记；若这笔业务确实发生在该期间，'
         + '需由持「跨期补录」权限的财务主管填写原因后补录。'
       // 没有补录出路时**也不能**提示「改用别的日期」——那等于诱导操作人把真实发生的

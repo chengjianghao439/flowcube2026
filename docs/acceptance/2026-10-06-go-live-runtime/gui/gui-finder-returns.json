@@ -1,0 +1,35 @@
+{
+  "name": "gui-finder-returns",
+  "checks": [
+    "开单选择器四档排序及命中说明",
+    "开单选择器 !%_ 字面命中"
+  ],
+  "api": [
+    {
+      "method": "GET",
+      "path": "/api/products/finder?keyword=&page=1&pageSize=200",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/finder?keyword=FCGUIRANK&page=1&pageSize=200",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/finder?keyword=L!%25_END&page=1&pageSize=200",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/notifications",
+      "status": 500
+    },
+    {
+      "method": "GET",
+      "path": "/api/notifications",
+      "status": 500
+    }
+  ],
+  "errors": []
+}

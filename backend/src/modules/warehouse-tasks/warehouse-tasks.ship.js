@@ -1,3 +1,4 @@
+const handlingGuards = require('../disposal/disposal.handling.target-guards')
 const { commitFulfillment } = require('../fulfillment/fulfillment.refresh')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
@@ -19,6 +20,7 @@ const {
   assertTaskScope,
 } = require('./warehouse-tasks.helpers')
 const { findById } = require('./warehouse-tasks.query')
+const { peekPurchaseReturn, lockPurchaseReturn } = require('../returns/returns.purchase-lock')
 
 /**
  * 出库信用复查（审计 4.8）。客户行 FOR UPDATE 锁住，防止同客户并发出库都读到旧已用值。
@@ -59,9 +61,11 @@ async function assertCreditWithinLimit(conn, customerId, thisOrderAmount, operat
 /**
  * 执行出库（6→7）：扣减库存 + 更新销售单状态 + 生成应收账款
  */
-async function shipWithinTransaction(conn, id, operator, saleData, { requestKey, scopeWarehouseIds = null, pdaWarehouseId = null } = {}) {
-  const { saleOrderId, totalAmount } = saleData
-  let { warehouseId, items } = saleData
+async function shipWithinTransaction(conn, id, operator, saleData, { requestKey, scopeWarehouseIds = null, pdaWarehouseId = null, taskIdentity, purchaseReturnIdentity } = {}) {
+  const saleOrderId = saleData?.saleOrderId ?? null
+  let { warehouseId, items, totalAmount } = saleData || {}
+  const lockedPurchaseReturn = purchaseReturnIdentity
+    ? await lockPurchaseReturn(conn, purchaseReturnIdentity, scopeWarehouseIds) : null
 
   // 加锁顺序统一为「先销售单、后仓库任务」，与 sale.cancel / requestAdjustment(SO→WT) 一致，
   // 避免 ship(原 WT→SO) 与它们并发同一订单+任务时 ABBA 死锁（审计 P2）。这里只「加锁」拿 SO 快照，
@@ -72,7 +76,7 @@ async function shipWithinTransaction(conn, id, operator, saleData, { requestKey,
     saleRow = await lockStatusRow(conn, {
       table: 'sale_orders',
       id: saleOrderId,
-      columns: 'id, status, order_no, customer_id, total_amount, discount_amount, commercial_model',
+      columns: 'id, status, order_no, customer_id, total_amount, discount_amount, commercial_model, warehouse_id, disposal_handling_link_id',
       entityName: '销售单',
     })
   }
@@ -88,6 +92,23 @@ async function shipWithinTransaction(conn, id, operator, saleData, { requestKey,
   })
   // 出库是最重的库存动作：限仓用户只能出本仓任务；PDA 设备绑定仓库必须与任务仓库一致
   assertTaskScope(taskRow, { scopeWarehouseIds, pdaWarehouseId })
+  if (taskIdentity && (taskRow.task_type !== taskIdentity.task_type
+    || Number(taskRow.return_id || 0) !== Number(taskIdentity.return_id || 0)
+    || Number(taskRow.sale_order_id || 0) !== Number(taskIdentity.sale_order_id || 0)
+    || Number(taskRow.warehouse_id) !== Number(taskIdentity.warehouse_id))) {
+    throw new AppError('出库任务来源已变化，请刷新后核对', 409, 'PURCHASE_RETURN_SOURCE_CHANGED')
+  }
+  if (taskRow.task_type === 'purchase_return' && (!lockedPurchaseReturn
+    || Number(taskRow.return_id) !== Number(lockedPurchaseReturn.row.id)
+    || Number(taskRow.warehouse_id) !== Number(lockedPurchaseReturn.row.warehouse_id)
+    || taskRow.sale_order_id != null)) {
+    throw new AppError('采购退货出库来源不一致，请核对', 409, 'PURCHASE_RETURN_SOURCE_CHANGED')
+  }
+  if (taskRow.task_type === 'sale_out' && (!saleRow || Number(taskRow.sale_order_id) !== Number(saleRow.id))) {
+    throw new AppError('销售出库任务归属已变化，请刷新后核对', 409, 'SALE_SHIP_SOURCE_CHANGED')
+  }
+  const handlingLink = saleRow ? await handlingGuards.readLink(conn, saleRow, 'sale_order', scopeWarehouseIds) : null
+  if (handlingLink) handlingGuards.assertWarehouse(handlingLink, taskRow.warehouse_id)
   if (taskRow.cancel_requested_at) {
     throw new AppError('该任务正在拣货退回中，不可出库', 409)
   }
@@ -107,6 +128,12 @@ async function shipWithinTransaction(conn, id, operator, saleData, { requestKey,
 
   const rule = assertWarehouseTaskAction('ship', taskRow.status)
   if (!isValidTransition(taskRow.status, rule.toStatus)) throw new AppError(`非法状态迁移：${taskRow.status} → ${rule.toStatus}`, 400)
+  if (handlingLink) {
+    const current = await handlingGuards.saleShipContext(conn, saleRow, taskRow, handlingLink)
+    warehouseId = current.warehouseId
+    items = current.items
+    totalAmount = current.totalAmount
+  }
   let commercialShipment = null
   if (saleRow?.commercial_model === 'kit-v1') {
     if (Number(taskRow.sale_order_id)!==Number(saleRow.id)) throw new AppError('商业出库任务归属不符',409,'SALE_COMMERCIAL_SOURCE_INVALID')
@@ -116,6 +143,12 @@ async function shipWithinTransaction(conn, id, operator, saleData, { requestKey,
   }
 
   const isPurchaseReturn = taskRow.task_type === 'purchase_return'
+  if (isPurchaseReturn) {
+    const context = await getLockedPurchaseReturnShipContext(conn, taskRow, lockedPurchaseReturn)
+    warehouseId = context.warehouseId
+    items = context.items
+    totalAmount = context.totalAmount
+  }
   // 销售退货返货出库（任务 1 第二期）：把已入库的那批退货货品退回客户。
   // 与销售出库的本质差异是**会计上什么都不做**——这批货所属的退货单此刻还是状态 2，
   // 应收从未冲减、退货凭证从未生成（凭证引擎取数条件是 sr.status = 3），所以返货不能去
@@ -209,6 +242,7 @@ async function shipWithinTransaction(conn, id, operator, saleData, { requestKey,
       taskId: Number(id),
       taskNo: taskRow.task_no,
       operator,
+      lockedPurchaseReturn,
     })
   }
 
@@ -289,12 +323,47 @@ async function shipWithinTransaction(conn, id, operator, saleData, { requestKey,
 async function ship(id, operator, saleData, { requestKey, scopeWarehouseIds = null, pdaWarehouseId = null } = {}) {
   const conn = await pool.getConnection()
   try {
+    // begin前仅定位身份并早核范围；事务内WT锁前不能普通peek建立旧RR快照。
+    const [[taskIdentity]] = await conn.query('SELECT id, task_type, return_id, sale_order_id, warehouse_id FROM warehouse_tasks WHERE id=? AND deleted_at IS NULL', [id])
+    if (!taskIdentity) throw new AppError('仓库任务不存在', 404)
+    assertTaskScope(taskIdentity, { scopeWarehouseIds, pdaWarehouseId })
+    const purchaseReturnIdentity = taskIdentity.task_type === 'purchase_return'
+      ? await peekPurchaseReturn(conn, taskIdentity.return_id) : null
+    if (purchaseReturnIdentity) {
+      // 原PR范围仍在锁后重核，早检不能替代准确PO/PR门。
+      assertTaskScope({ warehouse_id: purchaseReturnIdentity.warehouse_id }, { scopeWarehouseIds, pdaWarehouseId })
+    } else if (!saleData) saleData = await getShipContext(id)
+    if (taskIdentity.task_type !== 'purchase_return' && Number(saleData?.saleOrderId || 0) !== Number(taskIdentity.sale_order_id || 0)) {
+      throw new AppError('出库预检与任务销售来源不一致，请刷新后核对', 409, 'SALE_SHIP_SOURCE_CHANGED')
+    }
     await conn.beginTransaction()
-    const payload = await shipWithinTransaction(conn, id, operator, saleData, { requestKey, scopeWarehouseIds, pdaWarehouseId })
+    const payload = await shipWithinTransaction(conn, id, operator, purchaseReturnIdentity ? null : saleData, { requestKey, scopeWarehouseIds, pdaWarehouseId, taskIdentity, purchaseReturnIdentity })
     await commitFulfillment(conn, 'warehouse', id)
     return payload
   } catch (e) { await conn.rollback(); throw e }
   finally { conn.release() }
+}
+
+async function getLockedPurchaseReturnShipContext(conn, taskRow, lockedReturn) {
+  const [rows] = await conn.query(
+    'SELECT id, purchase_return_item_id, product_id, product_name, picked_qty, required_qty FROM warehouse_task_items WHERE task_id=? ORDER BY id FOR UPDATE', [taskRow.id],
+  )
+  if (!rows.length) throw new AppError('任务无出库明细', 400)
+  const used = new Set()
+  const items = rows.map(row => {
+    const matches = row.purchase_return_item_id == null
+      ? lockedReturn.items.filter(item => Number(item.product_id) === Number(row.product_id))
+      : lockedReturn.items.filter(item => Number(item.id) === Number(row.purchase_return_item_id))
+    const source = matches.length === 1 ? matches[0] : null
+    if (!source || Number(source.product_id) !== Number(row.product_id) || used.has(Number(source.id))
+      || Number(row.required_qty) !== Number(source.quantity) || Number(row.picked_qty) !== Number(source.quantity)) {
+      throw new AppError('采购退货任务明细关联或数量不一致，请核对原行后重建任务', 409, 'PURCHASE_RETURN_ITEM_LINK_MISSING')
+    }
+    used.add(Number(source.id))
+    return { productId: Number(row.product_id), productName: row.product_name, quantity: Number(row.picked_qty), unitPrice: Number(source.unit_price) }
+  })
+  if (used.size !== lockedReturn.items.length) throw new AppError('采购退货任务未覆盖完整原明细，请核对', 409, 'PURCHASE_RETURN_ITEM_LINK_MISSING')
+  return { warehouseId: Number(taskRow.warehouse_id), items, totalAmount: items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0) }
 }
 
 /**

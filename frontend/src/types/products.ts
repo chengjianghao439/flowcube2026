@@ -2,6 +2,8 @@
 export interface ProductUnit { unitName: string; conversionRate: number; isBase: boolean }
 
 export interface Product {
+  /** 本次关键词命中字段，由数据库比较返回，仅供搜索结果展示。 */
+  searchMatch?: string
   batchManaged?: boolean
   /** 迁移 254：false = 该商品数量只能是整数（不允许小数出货） */
   allowDecimalQty?: boolean
@@ -63,6 +65,7 @@ export interface ProductQtyPolicy { id: number; allowDecimal: boolean }
 
 /** 商品选择中心返回结果 */
 export interface ProductFinderResult {
+  searchMatch?: string
   barcode?: string | null
   id: number; code: string; name: string
   skuCode: string | null; articleNumber: string | null

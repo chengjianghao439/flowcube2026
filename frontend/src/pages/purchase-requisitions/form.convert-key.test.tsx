@@ -24,6 +24,8 @@ import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
+import type { AxiosAdapter } from 'axios'
+import apiClient from '@/api/client'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import RequisitionFormPage from './form'
 
@@ -58,6 +60,8 @@ vi.mock('@/api/products', () => ({
 vi.mock('@/components/shared/OrderDetailSections', () => ({ OrderDetailSections: ({ children }: { children?: unknown }) => <>{children}</> }))
 
 let host: HTMLDivElement, root: Root, client: QueryClient
+let previousAdapter: typeof apiClient.defaults.adapter
+const unexpectedRequests: string[] = []
 
 const detail = {
   id: 1, requisitionNo: 'PR-TEST-1', status: 3, statusName: '已批准', statusTone: 'active',
@@ -75,11 +79,33 @@ beforeEach(() => {
   mocks.getRequisitionApi.mockResolvedValue(detail)
   mocks.convertRequisitionApi.mockResolvedValue({ requisitionId: 1, createdOrders: [{ id: 1, orderNo: 'PC1', supplierName: '供应商1', itemCount: 1 }], completed: false })
   mocks.getOperationRequestStatusApi.mockResolvedValue({ status: 'not_found', data: null, message: '' })
+  previousAdapter = apiClient.defaults.adapter
+  unexpectedRequests.length = 0
+  // SupplierFinder 原本关闭时也读取列表；隔离这条实际 GET，保持真实页面挂载与转单断言。
+  apiClient.defaults.adapter = (async config => {
+    const params = config.params
+    if (config.method !== 'get' || config.url !== '/suppliers'
+      || params?.keyword !== '' || params?.page !== 1 || params?.pageSize !== 200
+      || Object.keys(params ?? {}).length !== 3) {
+      const request = `${config.method} ${config.url} ${JSON.stringify(params)}`
+      unexpectedRequests.push(request)
+      throw new Error(`未声明的离线请求：${request}`)
+    }
+    return {
+      status: 200, statusText: 'OK', headers: {}, config,
+      data: { success: true, data: { list: [], pagination: { page: 1, pageSize: 200, total: 0 } } },
+    }
+  }) satisfies AxiosAdapter
   host = document.createElement('div'); document.body.append(host); root = createRoot(host)
   client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
   client.setQueryData(['requisition', 1], detail)     // 预置详情：避免依赖异步查询落定
 })
-afterEach(() => { act(() => root.unmount()); client.clear(); host.remove() })
+afterEach(() => {
+  try { act(() => root.unmount()) }
+  finally { client.clear(); host.remove(); apiClient.defaults.adapter = previousAdapter }
+  // React Query 会接住 adapter 的 rejection；显式断言才能让未知请求使测试失败。
+  expect(unexpectedRequests).toEqual([])
+})
 
 function render() {
   act(() => root.render(

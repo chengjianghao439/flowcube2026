@@ -1,0 +1,27 @@
+{
+  "name": "gui-funds-final",
+  "checks": [
+    "资金看板正确呈现供应商退款类型6",
+    "区间收入说明包含供应商退款",
+    "资金工作区切至原账户管理保留相同标题",
+    "资金流水可定位准确原退款并显示供应商退款"
+  ],
+  "api": [
+    {
+      "method": "GET",
+      "path": "/api/finance/accounts",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/finance/accounts/active",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/finance/accounts/transactions?startDate=2026-10-06&endDate=2026-10-06&page=1&pageSize=200",
+      "status": 200
+    }
+  ],
+  "errors": []
+}

@@ -6,7 +6,8 @@ import CustomerFormDialog from './CustomerFormDialog'
 import { SETTLEMENT_TYPE } from '@/generated/status'
 import type { Customer } from '@/types/customers'
 
-const mocks = vi.hoisted(() => ({ create: vi.fn(), update: vi.fn() }))
+const mocks = vi.hoisted(() => ({ create: vi.fn(), update: vi.fn(), error: vi.fn() }))
+vi.mock('@/lib/toast', () => ({ toast: { error: mocks.error } }))
 vi.mock('@/hooks/useCustomers', () => ({
   useCreateCustomer: () => ({ mutateAsync: mocks.create, isPending: false }),
   useUpdateCustomer: () => ({ mutateAsync: mocks.update, isPending: false }),
@@ -21,6 +22,7 @@ beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
   mocks.create.mockReset().mockResolvedValue({})
   mocks.update.mockReset().mockResolvedValue({})
+  mocks.error.mockReset()
   host = document.createElement('div'); document.body.append(host); root = createRoot(host)
 })
 afterEach(async () => { await act(async () => root.unmount()); host.remove() })
@@ -71,4 +73,36 @@ test('新建保持默认启用契约，不提交编辑专用状态字段', async
   expect(mocks.create).toHaveBeenCalledOnce()
   expect(mocks.create.mock.calls[0][0]).not.toHaveProperty('isActive')
   expect(mocks.create.mock.calls[0][0].name).toBe('新建回归客户')
+})
+
+test('资料边界按Unicode字符计数，座机和长企业资料完整trim后提交', async () => {
+  const profile = { name: '𠮷'.repeat(100), contact: '𠮷'.repeat(50), phone: '+86 (010) 1234-5678', address: '𠮷'.repeat(200), remark: '𠮷'.repeat(500) }
+  const editing = { ...customer, ...Object.fromEntries(Object.entries(profile).map(([k, v]) => [k, ` ${v} `])) }
+  await act(async () => root.render(<CustomerFormDialog open onClose={() => {}} customer={editing} />))
+  for (const [field, limit] of Object.entries({ name: 100, contact: 50, phone: 30, address: 200, remark: 500 })) {
+    const input = document.querySelector<HTMLInputElement>(`#customer-${field}`)!
+    expect(input.hasAttribute('maxlength'), `${field}不能用UTF16原生上限拦截Unicode字符`).toBe(false)
+    expect(input.parentElement!.textContent).toContain(`${Array.from(profile[field as keyof typeof profile]).length}/${limit}`)
+  }
+  await submit()
+  expect(mocks.update).toHaveBeenCalledWith({ id: customer.id, data: expect.objectContaining(profile) })
+  expect(mocks.error).not.toHaveBeenCalled()
+})
+
+test.each([
+  ['name', '名'.repeat(101), '客户名称最多 100 个字符'],
+  ['name', '  ', '客户名称不能为空'],
+  ['contact', '人'.repeat(51), '联系人最多 50 个字符'],
+  ['phone', '1'.repeat(31), '电话最多 30 个字符'],
+  ['phone', '123x456', '电话仅支持数字、空格、+、(、)、-'],
+  ['address', '址'.repeat(201), '地址最多 200 个字符'],
+  ['remark', '注'.repeat(501), '备注最多 500 个字符'],
+])('非法资料%s保留输入且只提示一次', async (field, value, message) => {
+  const close = vi.fn()
+  await act(async () => root.render(<CustomerFormDialog open onClose={close} customer={{ ...customer, [field]: value }} />))
+  await submit()
+  expect(mocks.update).not.toHaveBeenCalled()
+  expect(close).not.toHaveBeenCalled()
+  expect(mocks.error).toHaveBeenCalledExactlyOnceWith(message)
+  expect(document.querySelector<HTMLInputElement>(`#customer-${field}`)!.value).toBe(value)
 })

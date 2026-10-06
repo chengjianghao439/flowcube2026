@@ -1,0 +1,24 @@
+{
+  "name": "gui-pda-loss-pending",
+  "checks": [
+    "还原响应丢失前真实提交200",
+    "原逐箱输入仍冻结",
+    "待确认阻止其他塑料盒动作",
+    "只查询准确原资源回执200",
+    "丢响应及恢复仅一个真实POST",
+    "恢复后其他动作解锁"
+  ],
+  "api": [
+    {
+      "method": "GET",
+      "path": "/api/inventory/containers/barcode/B000002",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/system/request-status/plastic-box-repack-60-1791288046810-xxb67tvg?action=plastic_box.repack.60",
+      "status": 200
+    }
+  ],
+  "errors": []
+}

@@ -1,4 +1,5 @@
-import { useMemo } from 'react'
+import { handlingConfig, type captureHandlingOwner } from '@/lib/disposalHandlingRecovery'
+import { useMemo, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { getProductQtyPoliciesApi } from '@/api/products'
 
@@ -17,7 +18,14 @@ import { getProductQtyPoliciesApi } from '@/api/products'
  * @param productIds 当前页面会出现的商品 ID（可变数组，内部自行去重排序）
  * @returns 查询函数：给商品 ID 返回是否允许小数
  */
-export function useProductQtyPolicies(productIds: Array<number | null | undefined>) {
+export interface QuantityReadContext { owner: ReturnType<typeof captureHandlingOwner>; isCurrent: () => boolean }
+export function useProductQtyPolicies(productIds: Array<number | null | undefined>, read?: QuantityReadContext) {
+  const readable = !read || read.isCurrent()
+  const activity = useRef({ readable, generation: 0 })
+  if (read && activity.current.readable !== readable) activity.current.generation++
+  activity.current.readable = readable
+  const generation = activity.current.generation
+  const isCurrent = () => !read || (activity.current.readable && activity.current.generation === generation && read.isCurrent())
   // 去重 + 排序后再拼 key：明细行增删顺序变化不该产生新请求
   const key = useMemo(
     () => [...new Set(productIds.filter((id): id is number => Number.isSafeInteger(id) && Number(id) > 0))].sort((a, b) => a - b).join(','),
@@ -25,16 +33,20 @@ export function useProductQtyPolicies(productIds: Array<number | null | undefine
   )
 
   const { data } = useQuery({
-    queryKey: ['products', 'qty-policies', key],
-    queryFn: async () => {
+    queryKey: read ? ['products', 'qty-policies', key, read.owner, generation] : ['products', 'qty-policies', key],
+    queryFn: async ({ signal }) => {
+      const assert = () => { if (!isCurrent()) throw Error('当前数量策略读取已暂停') }
+      assert()
       const ids = key.split(',').map(Number)
       const batches = []
       for (let offset = 0; offset < ids.length; offset += 500) {
-        batches.push(await getProductQtyPoliciesApi(ids.slice(offset, offset + 500)))
+        assert()
+        batches.push(await getProductQtyPoliciesApi(ids.slice(offset, offset + 500), read ? { ...handlingConfig(read.owner), signal } : undefined))
+        assert()
       }
       return batches.flat()
     },
-    enabled: key.length > 0,
+    enabled: key.length > 0 && isCurrent(),
     staleTime: 5 * 60 * 1000,
   })
 
@@ -45,7 +57,7 @@ export function useProductQtyPolicies(productIds: Array<number | null | undefine
 
   return (productId?: number | null): boolean => {
     if (productId == null) return true
-    const value = map.get(Number(productId))
+    const value = !isCurrent() ? undefined : map.get(Number(productId))
     return value === undefined ? true : value
   }
 }

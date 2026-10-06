@@ -72,9 +72,18 @@ test('桌面 Release 附件失败不能被 continue-on-error 伪装为完整发�
   const root = path.resolve(__dirname, '..')
   const yaml = require(path.join(root, 'frontend/node_modules/js-yaml'))
   const wf = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/build-desktop.yml'), 'utf8'))
-  const step = wf.jobs.build.steps.find(s => s.name === 'Upload EXE to Release')
-  assert.ok(step)
-  assert.notEqual(step['continue-on-error'], true)
+  const verify = workflow => {
+    const publishSteps = workflow.jobs.publish.steps.filter(s => /publish-release-asset\.cjs/.test(s.run || ''))
+    assert.equal(publishSteps.length, 2, 'tag and manual publishing must retain the same fail-closed asset uploader')
+    assert.notEqual(workflow.jobs.publish['continue-on-error'], true)
+    for (const step of publishSteps) assert.notEqual(step['continue-on-error'], true)
+    assert.ok(workflow.jobs.publish.needs.includes('build'))
+    assert.equal(workflow.jobs.build.permissions.contents, 'read')
+  }
+  verify(wf)
+  const broken = structuredClone(wf)
+  broken.jobs.publish.steps.find(s => /publish-release-asset\.cjs/.test(s.run || ''))['continue-on-error'] = true
+  assert.throws(() => verify(broken))
 })
 
 test('PDA 发布检查覆盖每次 main 推送，不能被源码路径过滤漏掉', () => {
@@ -84,7 +93,8 @@ test('PDA 发布检查覆盖每次 main 推送，不能被源码路径过滤漏�
   const wf = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/build-pda-apk.yml'), 'utf8'))
   assert.deepEqual(wf.on.push.branches, ['main'])
   assert.equal(wf.on.push.paths, undefined)
-  assert.match(wf.jobs['build-pda'].concurrency.group, /github\.sha/)
+  assert.equal(wf.jobs['build-pda'].concurrency.group, 'build-pda-ci-${{ needs.resolve-release-target.outputs.sha }}')
+  assert.ok(wf.jobs['build-pda'].needs.includes('resolve-release-target'))
 })
 
 test('桌面发布等待对应 tag，不能把 main 验证构建当成发布成功', () => {

@@ -1,6 +1,6 @@
 const { pool } = require('../../config/db')
 const { getInboundClosureThresholds } = require('../../utils/inboundThresholds')
-const { scopeFilter } = require('../../utils/warehouseScope')
+const { scopeFilter, transferScopeFilter } = require('../../utils/warehouseScope')
 const { CONTAINER_STATUS } = require('../../engine/containerEngine')
 
 function pushNotification(items, seen, item) {
@@ -22,7 +22,7 @@ async function buildNotifications(scopeWarehouseIds = null, userId = null) {
   const poSc = scopeFilter(scopeWarehouseIds, 'warehouse_id')
   const soSc = scopeFilter(scopeWarehouseIds, 'warehouse_id')
   const stSc = scopeFilter(scopeWarehouseIds, 's.warehouse_id')
-  const trSc = scopeFilter(scopeWarehouseIds, 'warehouse_id')
+  const trSc = transferScopeFilter(scopeWarehouseIds, 'from_warehouse_id', 'to_warehouse_id')
   const inSc = scopeFilter(scopeWarehouseIds, 'warehouse_id')
   const cSc = scopeFilter(scopeWarehouseIds, 'c.warehouse_id')
 

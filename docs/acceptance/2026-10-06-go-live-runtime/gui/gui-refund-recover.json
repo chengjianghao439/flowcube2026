@@ -1,0 +1,15 @@
+{
+  "name": "gui-refund-recover",
+  "checks": [
+    "已提交并刷新后GET本人创建回执200",
+    "恢复期间无POST"
+  ],
+  "api": [
+    {
+      "method": "GET",
+      "path": "/api/supplier-refunds/operations/5d02b3a8-c033-48b3-a182-97f940b84f62?action=supplier.refund.create&requestKey=supplier-refund-1791286960486-kcjx21wc",
+      "status": 200
+    }
+  ],
+  "errors": []
+}

@@ -1,8 +1,8 @@
 /**
- * 钉钉机器人告警推送（2026-08-22 功能：库存/账款预警主动推送）。
+ * 钉钉机器人告警推送：作业异常和库存缓存漂移。
  *
  * 与 scripts/lib/ops-common.sh 的 dingtalk_send 同源逻辑（运维脚本侧），这里是后端业务侧：
- * scheduler 的预警 worker 命中高危事件（逾期应收应付/低于补货点/临期批次）时推送。
+ * scheduler 的作业异常与库存缓存漂移 worker 调用；普通经营计数只留在站内。
  *
  * 配置：
  *   DINGTALK_ALERT_WEBHOOK — 群机器人 webhook（必填，未配置静默跳过）

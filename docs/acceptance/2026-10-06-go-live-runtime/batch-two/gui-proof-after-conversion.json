@@ -1,0 +1,151 @@
+{
+  "head": [
+    {
+      "id": 9,
+      "disposal_no": "GLc34a8c6c-GUI-LEGACY",
+      "warehouse_id": 5,
+      "warehouse_name": "验收合成仓-GLc34a8c6c",
+      "status": 3,
+      "total_value": "42.7500",
+      "remark": null,
+      "operator_id": 12,
+      "operator_name": "GLc34a8c6c-creator",
+      "approved_by": 13,
+      "approved_by_name": "GLc34a8c6c-approver",
+      "approved_at": "2026-09-01T02:00:00.000Z",
+      "reject_reason": null,
+      "disposed_at": null,
+      "created_at": "2026-10-06T03:08:53.000Z",
+      "updated_at": "2026-10-06T03:08:53.000Z",
+      "deleted_at": null,
+      "disposal_handling_link_id": null
+    }
+  ],
+  "items": [
+    {
+      "id": 13,
+      "disposal_id": 9,
+      "product_id": 22,
+      "product_code": "GLc34a8c6cP0",
+      "product_name": "GLc34a8c6cP0历史行0",
+      "unit": "个",
+      "quantity": "2.00",
+      "unit_value": "7.1250",
+      "dispose_type": 1,
+      "remark": null,
+      "created_at": "2026-10-06T03:08:53.000Z"
+    },
+    {
+      "id": 14,
+      "disposal_id": 9,
+      "product_id": 22,
+      "product_code": "GLc34a8c6cP0",
+      "product_name": "GLc34a8c6cP0历史行1",
+      "unit": "个",
+      "quantity": "3.00",
+      "unit_value": "7.1250",
+      "dispose_type": 2,
+      "remark": null,
+      "created_at": "2026-10-06T03:08:53.000Z"
+    },
+    {
+      "id": 15,
+      "disposal_id": 9,
+      "product_id": 22,
+      "product_code": "GLc34a8c6cP0",
+      "product_name": "GLc34a8c6cP0历史行2",
+      "unit": "个",
+      "quantity": "1.00",
+      "unit_value": "7.1250",
+      "dispose_type": 3,
+      "remark": null,
+      "created_at": "2026-10-06T03:08:53.000Z"
+    }
+  ],
+  "stock": [
+    {
+      "product_id": 22,
+      "warehouse_id": 5,
+      "quantity": "8.00",
+      "reserved": "10.00"
+    },
+    {
+      "product_id": 23,
+      "warehouse_id": 5,
+      "quantity": "10.00",
+      "reserved": "0.00"
+    }
+  ],
+  "containers": [
+    {
+      "id": 45,
+      "remaining_qty": "0.00",
+      "status": 2
+    },
+    {
+      "id": 46,
+      "remaining_qty": "8.00",
+      "status": 1
+    },
+    {
+      "id": 47,
+      "remaining_qty": "10.00",
+      "status": 1
+    }
+  ],
+  "ap": [
+    {
+      "id": 25,
+      "type": 1,
+      "order_id": 25,
+      "order_no": "PC20261006025",
+      "party_name": "验收合成供应商-GLc34a8c6c",
+      "total_amount": "100.0000",
+      "paid_amount": "100.0000",
+      "balance": "0.0000",
+      "status": 3,
+      "confirm_status": 1,
+      "settlement_type": 2,
+      "confirmed_by": 13,
+      "confirmed_by_name": "GLc34a8c6c-approver",
+      "confirmed_at": "2026-10-06T03:08:52.000Z",
+      "due_date": "2026-11-04T16:00:00.000Z",
+      "remark": null,
+      "created_at": "2026-10-06T03:08:52.000Z",
+      "updated_at": "2026-10-06T03:08:52.000Z",
+      "debit_account_code": null
+    }
+  ],
+  "account": [
+    {
+      "id": 6,
+      "current_balance": "0.0000"
+    }
+  ],
+  "refunds": [],
+  "sources": [
+    {
+      "id": 21,
+      "legacy_disposal_item_id": 13,
+      "handling_type": 1,
+      "quantity": "2.00"
+    },
+    {
+      "id": 22,
+      "legacy_disposal_item_id": 14,
+      "handling_type": 2,
+      "quantity": "3.00"
+    },
+    {
+      "id": 23,
+      "legacy_disposal_item_id": 15,
+      "handling_type": 3,
+      "quantity": "1.00"
+    }
+  ],
+  "zones": [
+    {
+      "sessionZone": "+08:00"
+    }
+  ]
+}

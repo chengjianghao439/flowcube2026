@@ -1,10 +1,15 @@
+import { useApprovalDetailHandoff } from '@/hooks/useApprovalDetailHandoff'
+import { useApprovalReadScope } from '@/hooks/useApprovalReadScope'
+import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
+import { ApprovalHandoffNotice } from '@/components/shared/ApprovalHandoffNotice'
+import { TabPathContext } from '@/components/layout/TabPathContext'
 import { money } from '@/lib/format'
 import { invalidateAfterPriceChange } from '@/hooks/useProducts'
 import { OrderActivityDialog } from '@/components/shared/OrderActivityDialog'
 import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
-import { useEffect, useState } from 'react'
+import { useContext, useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useSearchParams } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import ListSummary from '@/components/shared/ListSummary'
@@ -19,6 +24,7 @@ import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import ProductFinderModal from '@/components/shared/ProductFinderModal'
 import { payloadClient } from '@/api/client'
 import { usePermission } from '@/hooks/usePermission'
+import { useInvalidate } from '@/hooks/useInvalidate'
 import { readNullableIntParam } from '@/lib/urlSearchParams'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import type { TableColumn } from '@/types'
@@ -60,9 +66,15 @@ interface ApproveResult {
   finished: boolean
 }
 
+const readPriceChange = (id: number) => payloadClient.get<PriceChangeRequest>(`/price-change/${id}`)
+
 export default function PriceChangePage() {
   const qc = useQueryClient()
-  const [searchParams] = useSearchParams()
+  const invalidate = useInvalidate()
+  const tabPath = useContext(TabPathContext)
+  const location = useLocation()
+  const [ownPath, ownSearch = ''] = (tabPath || `${location.pathname}${location.search}`).split('?')
+  const searchParams = new URLSearchParams(ownSearch)
   const [keyword, setKeyword] = useState('')
   const [search, setSearch] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
@@ -76,20 +88,32 @@ export default function PriceChangePage() {
   const [cancelTarget, setCancelTarget] = useState<PriceChangeRequest | null>(null)
   const { can } = usePermission()
   const canApprove = can('approval.task.view')
+  const [manualDetailOpen, setManualDetailOpen] = useState(false)
+  const handoff = useApprovalDetailHandoff('/price-change', 'product.view', readPriceChange, createOpen || productFinderOpen || !!rejectTarget || !!cancelTarget || manualDetailOpen)
+  const scope = useApprovalReadScope()
+  const active = useActiveWorkspaceTab()
 
   // 商品列表「申请改价」跳转（?productId=）时预填商品并打开申请弹窗
   const preselectProductId = readNullableIntParam(searchParams, 'productId')
+  const canPreselectProduct = ownPath === '/price-change' && active && !searchParams.has('detailId') && can('product.view')
+    && !createOpen && !productFinderOpen && !rejectTarget && !cancelTarget && !manualDetailOpen && !handoff.open
+  const consumedProduct = useRef('')
   useEffect(() => {
-    if (preselectProductId != null && !product) {
+    let obsolete = false
+    const identity = `${scope.key}:${preselectProductId}`
+    if (canPreselectProduct && preselectProductId != null && !product && consumedProduct.current !== identity) {
       payloadClient.get<{ id: number; code: string; name: string }>(`/products/${preselectProductId}`).then((p) => {
-        if (p?.id) {
+        if (!obsolete && scope.isCurrent() && p?.id === preselectProductId) {
+          consumedProduct.current = identity
           setProduct({ id: p.id, code: p.code, name: p.name })
           setCreateOpen(true)
         }
-      }).catch(() => { /* 商品不存在则忽略 */ })
+      }).catch(() => { /* 商品不可查看时保留当前输入 */ })
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [preselectProductId])
+    return () => { obsolete = true }
+    // isCurrent 由此代次的key和服务器快照核对，不依赖每次渲染创建的函数引用。
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- key变化使旧会话读取失效，已有草稿保持
+  }, [preselectProductId, product, canPreselectProduct, scope.key])
 
   const PAGE_SIZE = 20
   const { data, isLoading } = useQuery({
@@ -112,7 +136,7 @@ export default function PriceChangePage() {
 
   const submitMut = useMutation({
     mutationFn: (id: number) => payloadClient.post(`/price-change/${id}/submit`),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['price-change'] }); toast.success('已提交审批') },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['price-change'] }); invalidate('approval_pending_changed'); toast.success('已提交审批') },
     onError: (e: unknown) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '提交失败'),
   })
 
@@ -120,6 +144,7 @@ export default function PriceChangePage() {
     mutationFn: (id: number) => payloadClient.post<ApproveResult>(`/price-change/${id}/approve`),
     onSuccess: (d) => {
       qc.invalidateQueries({ queryKey: ['price-change'] })
+      invalidate('approval_pending_changed')
       // 审批真正完成时价格才落库 ⇒ 连带失效商品缓存（详情/列表/Finder），否则编辑页会在
       // 5min staleTime 内继续显示旧的 labelSalePrice。具体与理由见 useProducts 的同名函数。
       invalidateAfterPriceChange(qc, d)
@@ -130,13 +155,13 @@ export default function PriceChangePage() {
 
   const rejectMut = useMutation({
     mutationFn: ({ id, reason: r }: { id: number; reason: string }) => payloadClient.post(`/price-change/${id}/reject`, { reason: r }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['price-change'] }); setRejectTarget(null); setRejectReason(''); toast.success('已驳回') },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['price-change'] }); invalidate('approval_pending_changed'); setRejectTarget(null); setRejectReason(''); toast.success('已驳回') },
     onError: (e: unknown) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '驳回失败'),
   })
 
   const cancelMut = useMutation({
     mutationFn: (id: number) => payloadClient.post(`/price-change/${id}/cancel`),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['price-change'] }); setCancelTarget(null); toast.success('已取消') },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['price-change'] }); invalidate('approval_pending_changed'); setCancelTarget(null); toast.success('已取消') },
     onError: (e: unknown) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '取消失败'),
   })
 
@@ -151,7 +176,7 @@ export default function PriceChangePage() {
     { key: 'createdAt', title: '申请时间', width: 160, render: v => formatDisplayDateTime(v) },
     { key: 'id', title: '操作', width: 200, render: (_, row) => (
       <div className="flex gap-1">
-        <OrderActivityDialog type="price" id={row.id} title={row.requestNo} fields={[
+        <OrderActivityDialog onOpenChange={setManualDetailOpen} type="price" id={row.id} title={row.requestNo} fields={[
           ['商品', row.productName], ['价格类型', PRICE_TYPE_LABEL[row.priceType]], ['原价格', row.oldPrice], ['申请价格', row.newPrice], ['状态', STATUS_LABEL[row.status]], ['申请人', row.applicantName], ['申请原因', row.reason],
         ]} />
         {row.status === 1 && (
@@ -179,6 +204,10 @@ export default function PriceChangePage() {
       <DataTable columns={columns} data={list} loading={isLoading} />
       <ListSummary total={total} unit="单" />
 
+      <ApprovalHandoffNotice {...handoff} />
+      {handoff.data && <OrderActivityDialog type="price" id={handoff.data.id} title={handoff.data.requestNo} open={handoff.open} hideTrigger onOpenChange={open => { if (!open) handoff.close() }} fields={[
+        ['商品', handoff.data.productName], ['价格类型', PRICE_TYPE_LABEL[handoff.data.priceType]], ['原价格', handoff.data.oldPrice], ['申请价格', handoff.data.newPrice], ['状态', handoff.data.statusName], ['申请人', handoff.data.applicantName], ['申请原因', handoff.data.reason],
+      ]} />}
       {/* 新建改价申请 */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="max-w-2xl">

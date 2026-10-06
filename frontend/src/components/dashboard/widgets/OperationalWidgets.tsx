@@ -50,7 +50,7 @@ export function KpiApprovalCount() {
     <StatTile
       label="待我审批"
       value={data?.pagination?.total ?? '—'}
-      hint="流转至当前审批节点"
+      hint="可处理的审批与单级审核"
       icon={ClipboardCheck}
       loading={isLoading} error={error} onRetry={() => void refetch()}
     />

@@ -8,7 +8,7 @@ const updateFlow = async (req, res, next) => { try { await svc.updateFlow(+req.p
 const removeFlow = async (req, res, next) => { try { await svc.removeFlow(+req.params.id); return successResponse(res, null, '已删除') } catch (e) { next(e) } }
 const listPending = async (req, res, next) => {
   try {
-    return successResponse(res, await svc.listPending({ page: +req.query.page || 1, pageSize: +req.query.pageSize || 20 }, req.user?.userId ?? null), '查询成功')
+    return successResponse(res, await svc.listPending({ page: +req.query.page || 1, pageSize: +req.query.pageSize || 20 }, req.user), '查询成功')
   } catch (e) { next(e) }
 }
 const getBizApproval = async (req, res, next) => {

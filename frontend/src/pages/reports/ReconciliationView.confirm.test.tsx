@@ -65,7 +65,7 @@ it('月结客户和无确认权限的供应商不显示确认入口', async () =
 })
 
 it('没有财务确认权限时，供应商仍能看到待确认状态但不能执行确认', async () => {
-  useAuthStore.setState({ user: { roleId: 5, permissions: [] } as never })
+  useAuthStore.setState({ user: { roleId: 5, permissions: [PERMISSIONS.REPORT_VIEW] } as never })
   await render(1)
   expect(host.textContent).toContain('待确认')
   expect(host.textContent).not.toContain('确认结算')
@@ -73,7 +73,7 @@ it('没有财务确认权限时，供应商仍能看到待确认状态但不能�
 })
 
 it('普通财务具备确认权限可以操作，已确认应付不再显示入口', async () => {
-  useAuthStore.setState({ user: { roleId: 5, permissions: [PERMISSIONS.PAYMENT_CONFIRM] } as never })
+  useAuthStore.setState({ user: { roleId: 5, permissions: [PERMISSIONS.REPORT_VIEW, PERMISSIONS.PAYMENT_VIEW, PERMISSIONS.PAYMENT_CONFIRM] } as never })
   await render(1)
   expect(host.textContent).toContain('确认结算')
   fixture.list = fixture.list.map(r => ({ ...r, confirmStatus: 1 }))

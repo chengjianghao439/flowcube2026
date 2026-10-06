@@ -15,6 +15,7 @@ function fixture(file) {
     '../../config/db': { pool }, '../../utils/warehouseScope': scope, '../../utils/codeGenerator': {},
     './logistics.direct': {}, './finance-accounts.service': {}, '../accounting/finance-period.guard': {},
     '../../utils/logger': {}, '../../utils/statusTransition': {}, '../../utils/selfApprove': {}, '../../engine/containerEngine': { CONTAINER_STATUS: {} },
+    '../../utils/operationRequest': {},
   }) }
 }
 for (const [file, method, cap] of [

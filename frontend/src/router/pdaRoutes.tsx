@@ -35,6 +35,8 @@ const PdaPackPage    = lazy(() => import('@/pages/pda/pack'))
 const PdaStockcheckPage = lazy(() => import('@/pages/pda/stockcheck'))
 const PdaSplitPage   = lazy(() => import('@/pages/pda/split'))
 const PdaFillPage    = lazy(() => import('@/pages/pda/fill'))
+const PdaPlasticBoxPage = lazy(() => import('@/pages/pda/plastic-box'))
+const PdaSplitRecoveryPage = lazy(() => import('@/pages/pda/split-recovery'))
 const PdaBindPage    = lazy(() => import('@/pages/pda/bind'))
 const PdaShipPage    = lazy(() => import('@/pages/pda/ship'))
 const PdaSortPage    = lazy(() => import('@/pages/pda/sort'))
@@ -76,6 +78,9 @@ export function pdaRoutes() {
               <Route path="pack" element={<PdaRoutePermission title="打包作业" required={[PERMISSIONS.WAREHOUSE_TASK_VIEW, PERMISSIONS.WAREHOUSE_TASK_PACK]}><PdaPackPage /></PdaRoutePermission>} />
               {/* 塑料盒作业：扫 B 还原整件（主语义）；旧 I→散件盒方向保留为同页另一分支 */}
               <Route path="split" element={<PdaRoutePermission title="塑料盒作业" required={[PERMISSIONS.INVENTORY_CONTAINER_SPLIT]}><PdaSplitPage /></PdaRoutePermission>} />
+              <Route path="plastic-box" element={<PdaRoutePermission title="塑料盒作业" required={[PERMISSIONS.INVENTORY_CONTAINER_SPLIT]}><PdaPlasticBoxPage /></PdaRoutePermission>} />
+              {/* 本人原拆分查询沿request-status契约；设备仍必需，重试在页面和handler守原SPLIT。 */}
+              <Route path="split-recovery" element={<PdaRoutePermission title="拆分结果核对" required={[]}><PdaSplitRecoveryPage /></PdaRoutePermission>} />
               {/* 放货：扫整件来源 → 扫目标盒 → 全部放入 */}
               <Route path="fill" element={<PdaRoutePermission title="塑料盒放货" required={[PERMISSIONS.INVENTORY_CONTAINER_SPLIT]}><PdaFillPage /></PdaRoutePermission>} />
               <Route path="stockcheck/:id" element={<PdaRoutePermission title="扫码盘点" required={[PERMISSIONS.STOCKCHECK_VIEW]}><PdaStockcheckPage /></PdaRoutePermission>} />

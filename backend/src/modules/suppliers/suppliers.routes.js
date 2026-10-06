@@ -6,20 +6,15 @@ const { PERMISSIONS } = require('../../constants/permissions')
 const { SETTLEMENT_TYPE, MONTHLY_TERMS_OPTIONS } = require('../../constants/settlementType')
 const { pool } = require('../../config/db')
 const { validateBody } = require('../../utils/route')
+const { partyProfileSchema } = require('../../utils/partyProfile')
 
 const VALID_SETTLEMENT_TYPES = Object.values(SETTLEMENT_TYPE)
 
 const router = Router()
 
-const phoneRule = z.string().max(11).regex(/^1\d{10}$/, '请输入正确的手机号').optional().or(z.literal(''))
-const base = z.object({
+const base = partyProfileSchema('供应商').extend({
   code:    z.string().min(1,'编码不能为空').max(30),
-  name:    z.string().min(1,'名称不能为空').max(20,'供应商名称最多 20 个字符'),
-  contact: z.string().max(5,'联系人最多 5 个字符').optional(),
-  phone:   phoneRule,
   email:   z.string().email('邮箱格式不正确').max(100).optional().or(z.literal('')),
-  address: z.string().max(30,'地址最多 30 个字符').optional(),
-  remark:  z.string().max(30,'备注最多 30 个字符').optional(),
   settlementType: z.number().int().refine(v => VALID_SETTLEMENT_TYPES.includes(v), '结算方式不合法').optional(),
   // 账期只对月结生效；其余结算方式服务端会强制归零，这里不拦
   paymentTermsDays: z.number().int().refine(

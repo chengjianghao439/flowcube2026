@@ -1,6 +1,6 @@
+import { useVisibleQuery } from '@/hooks/useVisibleQuery'
 import { money } from '@/lib/format'
 import { useState, useRef } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import ListSummary from '@/components/shared/ListSummary'
@@ -95,7 +95,7 @@ export default function PaymentsView({ type }: { type: PaymentType }) {
     ...(query.maxAmount ? { maxAmount: query.maxAmount } : {}),
   }
 
-  const { data, isLoading, isFetching, isPaused, isError } = useQuery({
+  const { data, isLoading, isFetching, isPaused, isError } = useVisibleQuery({
     queryKey: ['payments', { type, query }],
     queryFn: () => getPaymentsApi({ ...exportParams, page: 1, pageSize: PAGE_SIZE, settlementTypes: IMMEDIATE_SCOPE }),
     enabled: active && tab === 'records',

@@ -1,7 +1,7 @@
 import { money } from '@/lib/format'
 import { useState } from 'react'
 import { EmptyState } from './EmptyState'
-import { useQuery } from '@tanstack/react-query'
+import { useVisibleQuery } from '@/hooks/useVisibleQuery'
 import { Button } from '@/components/ui/button'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
@@ -32,7 +32,7 @@ export function usePaymentActions(type: 1 | 2) {
 
   const actionLabel = isPayable ? '登记付款' : '登记收款'
 
-  const { data: entries } = useQuery({
+  const { data: entries } = useVisibleQuery({
     queryKey: ['payment-entries', selected?.id],
     queryFn: () => getEntriesApi(selected!.id).then(r => r || []),
     enabled: !!selected && entriesOpen,

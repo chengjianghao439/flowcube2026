@@ -1,3 +1,4 @@
+const handlingGuards = require('./disposal.handling.target-guards')
 /**
  * 呆滞库存处置单（P2-9）：建议 → 审批 → 处置。
  *
@@ -8,29 +9,32 @@
  * 默认 90 天）。只读建议不做决策，由运营圈选生成处置单。
  *
  * 执行处置的库存语义（唯一库存事实源 = inventory_containers）：
- *   - 降价促销 / 退货供应商 / 报废 三者的共同点是商品从账面移除 → 走 adjustContainerStock(qty<0)
+ *   - 新独立单仅允许报废3；旧1/2保留历史，禁止直接扣库。报废走 adjustContainerStock(qty<0)
  *     FIFO 扣减容器 + syncStockFromContainers 刷新缓存，来源 disposal；
  *   - 报废是资产灭失，除扣库存外另落 disposal_scrapped 台账留痕（跨模块仍以容器与流水为账，台账只作审计）；
  *   - 处置一律走 ERP 端（决策权在运营，不在仓库现场），不建仓库任务、不走 PDA。
  */
 
 const { pool } = require('../../config/db')
-const { assertQtyPrecisionWith } = require('../../utils/qtyPrecision')  // 商品级数量精度开关（迁移 254）
+const { assertQtyPrecisionWith, assertQtyPrecision } = require('../../utils/qtyPrecision')  // 商品级数量精度开关（迁移 254）
 const AppError = require('../../utils/AppError')
 const { MOVE_TYPE, writeInventoryLog } = require('../../engine/inventoryEngine')
 const { adjustContainerStock, SOURCE_TYPE, lockStockDimension } = require('../../engine/containerEngine')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
-const { assertStatusAction } = require('../../constants/documentStatusRules')
+const { assertStatusAction, DOCUMENT_STATUS_RULES } = require('../../constants/documentStatusRules')
 const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
 const { assertNotSelfApproval } = require('../../utils/selfApprove')
 const { normalizePagination } = require('../../utils/pagination')
+const { beginResourceOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
+const { replayDisposal } = require('./disposal.receipt')
 
-const STATUS = { 1: '草稿', 2: '待审批', 3: '已批准', 4: '已处置', 5: '已驳回', 6: '已取消' }
+const STATUS = DOCUMENT_STATUS_RULES.inventoryDisposal.statuses
 const DISPOSE_TYPE_LABEL = { 1: '降价促销', 2: '退货供应商', 3: '报废' }
 
-// remaining_qty × 持有成本（avg_cost 优先，回落 cost_price / sale_price）——与 inventory.aging 一致
-const VALUE_EXPR = 'c.remaining_qty * COALESCE(NULLIF(p.avg_cost,0), NULLIF(p.cost_price,0), p.sale_price, 0)'
+// 基本单位参考价：avg_cost → cost_price → sale_price，最后兜底0；不称成交价或纯成本。
+const UNIT_VALUE_EXPR = 'COALESCE(NULLIF(p.avg_cost,0), NULLIF(p.cost_price,0), p.sale_price, 0)'
+const VALUE_EXPR = `c.remaining_qty * ${UNIT_VALUE_EXPR}`
 
 const genNo = conn => generateDailyCode(conn, 'DP', 'inventory_disposal_orders', 'disposal_no')
 
@@ -89,7 +93,12 @@ async function getSuggestions({ page = 1, pageSize = 50, keyword = '', warehouse
             p.article_number, p.spec, p.color,
             c.warehouse_id, w.name AS warehouse_name,
             SUM(c.remaining_qty) - COALESCE(MAX(st.reserved), 0) AS total_qty,
-            MAX(${VALUE_EXPR}) AS unit_value,       -- 单容器持有成本相同（同一商品），取 MAX 即单件成本
+            MAX(${UNIT_VALUE_EXPR}) AS unit_value,
+            SUM(c.remaining_qty) AS on_hand_qty,
+            COALESCE(MAX(st.reserved), 0) AS reserved_qty,
+            CASE WHEN MAX(p.avg_cost) IS NOT NULL AND MAX(p.avg_cost)<>0 THEN 'avg_cost'
+                 WHEN MAX(p.cost_price) IS NOT NULL AND MAX(p.cost_price)<>0 THEN 'cost_price'
+                 WHEN MAX(p.sale_price) IS NOT NULL THEN 'sale_price' ELSE 'none' END AS valuation_basis,
             SUM(${VALUE_EXPR}) AS total_value,
             MAX(lo.last_outbound_at) AS last_outbound_at
      FROM inventory_containers c
@@ -133,6 +142,9 @@ async function getSuggestions({ page = 1, pageSize = 50, keyword = '', warehouse
     warehouseId: r.warehouse_id,
     warehouseName: r.warehouse_name,
     totalQty: Number(r.total_qty),
+    onHandQty: Number(r.on_hand_qty),
+    reservedQty: Number(r.reserved_qty),
+    valuationBasis: r.valuation_basis,
     unitValue: Number(r.unit_value),
     totalValue: Number(r.total_value),
     lastOutboundAt: r.last_outbound_at,
@@ -195,23 +207,36 @@ function assertValidItems(items) {
     if (seen.has(key)) throw new AppError('同一商品只能添加一条处置明细', 400)
     seen.add(key)
     if (!Number.isFinite(quantity) || quantity <= 0) throw new AppError('处置数量必须大于 0', 400)
-    if (![1, 2, 3].includes(disposeType)) throw new AppError('处置方式无效：1降价促销 2退货供应商 3报废', 400)
+    if (disposeType !== 3) throw new AppError('新独立处理单仅支持报废；促销与退供应商请走正常业务入口', 400, 'DISPOSAL_SCRAP_ONLY')
   }
 }
 
-/** 新建处置单（草稿）。快照持有成本（avg_cost 兜底），total_value 按建议单价×数量落表 */
-async function create({ warehouseId, remark, items, operator, scopeWarehouseIds = null }) {
+/** 分类只能使用锁头后的完整当前明细，不JOIN主档或按旧软删字段丢行。 */
+async function lockScrapItems(conn, id) {
+  const [items] = await conn.query('SELECT * FROM inventory_disposal_items WHERE disposal_id=? ORDER BY id ASC FOR UPDATE', [id])
+  if (!items.length || items.some(item => Number(item.dispose_type) !== 3)) {
+    throw new AppError('本单含旧处理方式或明细异常，不能提交、批准或直接扣库；草稿/待审可沿原取消、驳回，已批准旧单须签认核对', 409, 'DISPOSAL_SCRAP_ONLY')
+  }
+  return items
+}
+
+/** 新建报废草稿。保存本次基本单位参考价快照，不把销售参考价称成本或成交价。 */
+async function create({ warehouseId, remark, items, operator, scopeWarehouseIds = null, requestKey, disposalSource, disposalSourceAuthorized = false }) {
   assertInScope(scopeWarehouseIds, warehouseId, '处置单')
   assertValidItems(items)
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    const handling = disposalSource !== undefined ? require('./disposal.handling.targets') : null
+    const handlingContext = handling ? await handling.prepare(conn, { reference: disposalSource, type: 'inventory_disposal', authorized: disposalSourceAuthorized,
+      payload: { warehouseId, remark, items, disposalSource }, requestKey, operator, scopeWarehouseIds }) : null
+    if (handlingContext?.response) { await conn.rollback(); return handlingContext.response }
     const [[warehouse]] = await conn.query(
       'SELECT id, name FROM inventory_warehouses WHERE id=? AND deleted_at IS NULL AND is_active=1', [warehouseId],
     )
     if (!warehouse) throw new AppError('仓库不存在或已停用', 404)
 
-    // 汇总行成本：建议单价（avg_cost 优先，回落 cost_price / sale_price）
+    // 本次参考单价：avg_cost 优先，回落 cost_price / sale_price。
     const productIds = [...new Set(items.map(i => Number(i.productId)))]
     const [products] = await conn.query(
       `SELECT id, code, name, unit, allow_decimal_qty,
@@ -225,6 +250,7 @@ async function create({ warehouseId, remark, items, operator, scopeWarehouseIds 
       if (!productMap.has(Number(it.productId))) throw new AppError('明细中存在无效或已删除的商品', 400)
     }
 
+    if (handling) await handling.validateItems(conn, handlingContext, items.map(item => ({ ...item, unit: productMap.get(Number(item.productId)).unit })), warehouseId)
     const disposalNo = await genNo(conn)
     const [r] = await conn.query(
       `INSERT INTO inventory_disposal_orders
@@ -255,8 +281,10 @@ async function create({ warehouseId, remark, items, operator, scopeWarehouseIds 
     await conn.query(
       'UPDATE inventory_disposal_orders SET total_value=? WHERE id=?', [totalValue, disposalId],
     )
+    const result = { id: disposalId, disposalNo }
+    if (handling) await handling.complete(conn, handlingContext, result)
     await conn.commit()
-    return { id: disposalId, disposalNo }
+    return result
   } catch (e) {
     await conn.rollback()
     throw e
@@ -271,9 +299,12 @@ async function update(id, { warehouseId, remark, items }, scopeWarehouseIds = nu
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const row = await lockStatusRow(conn, { table: 'inventory_disposal_orders', id, columns: 'id, warehouse_id, status', entityName: '处置单' })
+    const row = await lockStatusRow(conn, { table: 'inventory_disposal_orders', id, columns: 'id, warehouse_id, status, disposal_handling_link_id', entityName: '处置单' })
     assertInScope(scopeWarehouseIds, row.warehouse_id, '处置单')
+    const handlingLink = await handlingGuards.readLink(conn, row, 'inventory_disposal', scopeWarehouseIds)
+    handlingGuards.assertEditable(handlingLink)
     assertStatusAction('inventoryDisposal', 'edit', row.status)
+    await lockScrapItems(conn, id)
     if (Number(row.warehouse_id) !== Number(warehouseId)) throw new AppError('处置单仓库不可修改', 400)
 
     const productIds = [...new Set(items.map(i => Number(i.productId)))]
@@ -331,6 +362,7 @@ async function submit(id, scopeWarehouseIds = null) {
     const row = await lockStatusRow(conn, { table: 'inventory_disposal_orders', id, columns: 'id, status, warehouse_id', entityName: '处置单' })
     assertInScope(scopeWarehouseIds, row.warehouse_id, '处置单')
     const rule = assertStatusAction('inventoryDisposal', 'submit', row.status)
+    await lockScrapItems(conn, id)
     await compareAndSetStatus(conn, {
       table: 'inventory_disposal_orders', id, fromStatus: rule.from, toStatus: rule.to, entityName: '处置单',
     })
@@ -355,6 +387,7 @@ async function approve(id, operator, scopeWarehouseIds = null) {
     // 与采购请购单同范式，走统一 selfApprove（超管或显式开启 allow_self_approve 的账号可自批）。
     await assertNotSelfApproval(row.operator_id, operator?.userId, '不能审批自己提交的处置单，请由他人审批')
     const rule = assertStatusAction('inventoryDisposal', 'approve', row.status)
+    await lockScrapItems(conn, id)
     await compareAndSetStatus(conn, {
       table: 'inventory_disposal_orders', id, fromStatus: rule.from, toStatus: rule.to, entityName: '处置单',
     })
@@ -401,18 +434,26 @@ async function reject(id, { reason, operator }, scopeWarehouseIds = null) {
  * 执行处置：已批准 → 已处置。逐行 FIFO 扣减容器 + 刷新缓存 + 写流水；
  * 报废行额外落 disposal_scrapped 台账。整单一个事务，任一行失败整单回滚。
  */
-async function dispose(id, operator, scopeWarehouseIds = null) {
+async function dispose(id, operator, scopeWarehouseIds = null, requestKey = null) {
+  if (typeof requestKey !== 'string' || !requestKey.trim()) throw new AppError('报废执行必须携带原请求键', 400, 'REQUEST_KEY_REQUIRED')
   const conn = await pool.getConnection()
+  let request, commitStarted = false
   try {
     await conn.beginTransaction()
     const row = await lockStatusRow(conn, { table: 'inventory_disposal_orders', id, columns: 'id, warehouse_id, warehouse_name, disposal_no, status', entityName: '处置单' })
     assertInScope(scopeWarehouseIds, row.warehouse_id, '处置单')
+    request = await beginResourceOperationRequest(conn, { requestKey, action: 'disposal.dispose', userId: operator.userId, resourceType: 'inventory_disposal', resourceId: id })
+    if (request.replay) {
+      const result = await replayDisposal(conn, request, id, scopeWarehouseIds)
+      commitStarted = true
+      await conn.commit()
+      return result
+    }
+    const [[conversion]] = await conn.query('SELECT id FROM inventory_disposal_conversions WHERE original_disposal_id=? FOR SHARE', [id])
+    if (conversion) throw new AppError('旧整单已签认处理来源，不可再独立执行，请沿各来源原业务处理', 409, 'DISPOSAL_ALREADY_CONVERTED')
     const rule = assertStatusAction('inventoryDisposal', 'dispose', row.status)
-
-    const [items] = await conn.query(
-      'SELECT * FROM inventory_disposal_items WHERE disposal_id=? ORDER BY id ASC', [id],
-    )
-    if (!items.length) throw new AppError('处置单没有明细，无法执行', 400)
+    const items = await lockScrapItems(conn, id)
+    await assertQtyPrecision(conn, items.map(item => ({ productId: item.product_id, qty: item.quantity, label: '报废数量' })))
 
     // 统一加锁顺序：先按 product_id 升序取 inventory_stock 维度锁，再做容器扣减（与盘点提交同序，
     // 防止与出库/上架的「先 stock 后容器」顺序相反造成 ABBA 死锁，见 containerEngine.lockStockDimension 注释）。
@@ -422,6 +463,7 @@ async function dispose(id, operator, scopeWarehouseIds = null) {
     }
 
     let disposedValue = 0
+    const ledgerRows = []
     for (const item of items) {
       const { product_id, product_name, quantity, unit, unit_value, dispose_type } = item
       const beforeAfter = await adjustContainerStock(conn, {
@@ -437,18 +479,9 @@ async function dispose(id, operator, scopeWarehouseIds = null) {
         remark: `${DISPOSE_TYPE_LABEL[dispose_type]} ${row.disposal_no}`,
       })
 
-      // 报废：除扣库存外另落台账留痕（资产灭失的审计证据）
-      if (Number(dispose_type) === 3) {
-        await conn.query(
-          `INSERT INTO disposal_scrapped
-             (disposal_id, disposal_no, product_id, product_code, product_name, unit,
-              quantity, unit_value, warehouse_id, warehouse_name, remark, scrapped_by, scrapped_by_name)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-          [id, row.disposal_no, product_id, item.product_code, product_name, unit,
-            quantity, unit_value, Number(row.warehouse_id), row.warehouse_name,
-            `${row.disposal_no} 报废`, operator.userId, operator.realName],
-        )
-      }
+      ledgerRows.push([id, row.disposal_no, product_id, item.product_code, product_name, unit,
+        quantity, unit_value, Number(row.warehouse_id), row.warehouse_name,
+        `${row.disposal_no} 报废`, operator.userId, operator.realName])
 
       disposedValue += Number(quantity) * Number(unit_value)
 
@@ -474,16 +507,25 @@ async function dispose(id, operator, scopeWarehouseIds = null) {
       })
     }
 
+    if (ledgerRows.length) await conn.query(
+      `INSERT INTO disposal_scrapped
+       (disposal_id, disposal_no, product_id, product_code, product_name, unit, quantity, unit_value,
+        warehouse_id, warehouse_name, remark, scrapped_by, scrapped_by_name) VALUES ?`, [ledgerRows])
     await compareAndSetStatus(conn, {
       table: 'inventory_disposal_orders', id, fromStatus: rule.from, toStatus: rule.to, entityName: '处置单',
     })
     await conn.query(
       'UPDATE inventory_disposal_orders SET disposed_at=NOW() WHERE id=?', [id],
     )
+    const result = { id, disposalNo: row.disposal_no, disposedValue }
+    await completeOperationRequest(conn, request, { data: result, message: '报废完成', resourceType: 'inventory_disposal', resourceId: id })
+    commitStarted = true
     await conn.commit()
-    return { id, disposalNo: row.disposal_no, disposedValue }
+    return result
   } catch (e) {
-    await conn.rollback()
+    let rolledBack = false
+    try { await conn.rollback(); rolledBack = true } catch { /* 提交/回滚未知时保留原请求，不声称未执行 */ }
+    if (rolledBack && request?.enabled && !request.replay && !commitStarted && e?.statusCode >= 400 && e.statusCode < 500) e.data = { ...e.data, disposalNotExecuted: true }
     throw e
   } finally {
     conn.release()

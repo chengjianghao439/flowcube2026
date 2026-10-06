@@ -1,3 +1,4 @@
+import { PENDING_APPROVAL_PERMISSIONS } from '@/lib/approvalBusiness'
 import { KpiApprovalCount, BoardSalesActions, BoardBusinessRisk, ReceivableDueDistribution } from './widgets/OperationalWidgets'
 import type { ComponentType, LazyExoticComponent } from 'react'
 import { lazy } from 'react'
@@ -23,7 +24,8 @@ const ChartAccountBalance = lazy(() => import('./widgets/ChartWidgets').then(m =
 import * as List from './widgets/ListWidgets'
 import * as Fun from './widgets/FunWidgets'
 import DashboardVersionCard from './DashboardVersionCard'
-import { PERMISSIONS, type PermissionCode } from '@/lib/permission-codes'
+import { PERMISSIONS } from '@/lib/permission-codes'
+import type { PermissionRequirement } from '@/lib/permissions'
 import type { DashboardLayout } from '@/types/dashboard'
 
 export type WidgetCategory = 'kpi' | 'chart' | 'list' | 'fun' | 'system'
@@ -37,7 +39,7 @@ export interface WidgetDef {
   icon: LucideIcon
   category: WidgetCategory
   /** 所需权限码；缺省表示所有登录用户可见 */
-  permission?: PermissionCode
+  permission?: PermissionRequirement
   /** 默认列跨度（4 列网格），1–4 */
   defaultW: number
   /** 高度档（固定卡高，内容在卡内居中/滚动，不随内容变化） */
@@ -54,7 +56,7 @@ export const CATEGORY_ORDER: WidgetCategory[] = ['kpi', 'chart', 'list', 'fun', 
 // 注册表：新增小组件只需在此追加一项 + 写好组件，默认布局与组件库会自动纳入。
 // permission 必须与后端对应接口的 requirePermission 一致，否则会向无权限用户发出注定 403 的请求。
 export const WIDGETS: WidgetDef[] = [
-  {id:'kpi-approval-count',title:'待我审批',description:'当前待审批总量',icon:ClipboardCheck,category:'kpi',permission:PERMISSIONS.APPROVAL_TASK_VIEW,defaultW:1,size:'sm',Component:KpiApprovalCount},
+  {id:'kpi-approval-count',title:'待我审批',description:'当前待审批总量',icon:ClipboardCheck,category:'kpi',permission:PENDING_APPROVAL_PERMISSIONS,defaultW:1,size:'sm',Component:KpiApprovalCount},
   {id:'board-sales-actions',title:'今天要推进的业务',description:'销售与采购下一步',icon:ClipboardList,category:'list',permission:PERMISSIONS.DASHBOARD_VIEW,defaultW:2,size:'lg',Component:BoardSalesActions},
   {id:'board-business-risk',title:'需要关注',description:'账款、授信与库存风险',icon:AlertTriangle,category:'list',permission:PERMISSIONS.DASHBOARD_VIEW,defaultW:2,size:'lg',Component:BoardBusinessRisk},
   {id:'chart-receivable-due',title:'应收到期分布',description:'逾期、今天、未来七天和更晚',icon:CalendarClock,category:'chart',permission:PERMISSIONS.PAYMENT_VIEW,defaultW:2,size:'lg',Component:ReceivableDueDistribution},
@@ -87,11 +89,11 @@ export const WIDGETS: WidgetDef[] = [
   { id: 'list-pda-perf',     title: '今日 PDA 作业', description: '今日扫码 / 拣货与操作员排行', icon: ScanLine,     category: 'list', permission: PERMISSIONS.REPORT_VIEW,    defaultW: 2, size: 'lg', Component: List.ListPdaPerf },
   { id: 'list-collect-top',  title: '催收 Top',      description: '应收敞口最高的往来单位',      icon: HandCoins,     category: 'list', permission: PERMISSIONS.PAYMENT_VIEW,   defaultW: 2, size: 'lg', Component: List.ListCollectTop },
   { id: 'list-pay-top',      title: '催付 Top',      description: '应付敞口最高的往来单位',      icon: Wallet,        category: 'list', permission: PERMISSIONS.PAYMENT_VIEW,   defaultW: 2, size: 'lg', Component: List.ListPayTop },
-  { id: 'board-workbench',   title: '我的待办',    description: '按角色聚合的待处理事项',    icon: ListTodo,      category: 'list', permission: PERMISSIONS.REPORT_VIEW,    defaultW: 2, size: 'lg', Component: List.BoardWorkbench },
+  { id: 'board-workbench',   title: '待处理与关注',    description: '按岗位汇总的处理入口与关注事项',    icon: ListTodo,      category: 'list', permission: PERMISSIONS.REPORT_VIEW,    defaultW: 2, size: 'lg', Component: List.BoardWorkbench },
   { id: 'list-top-customer', title: 'Top 客户',      description: '销售额最高的客户',          icon: Users,         category: 'list', permission: PERMISSIONS.REPORT_VIEW,    defaultW: 2, size: 'lg', Component: List.ListTopCustomer },
   { id: 'list-top-supplier', title: 'Top 供应商',    description: '采购额最高的供应商',        icon: Building2,     category: 'list', permission: PERMISSIONS.REPORT_VIEW,    defaultW: 2, size: 'lg', Component: List.ListTopSupplier },
   { id: 'list-anomaly',      title: '异常扫码分析',  description: '近 30 天扫码异常概况',      icon: TriangleAlert, category: 'list', permission: PERMISSIONS.SCAN_LOG_VIEW,  defaultW: 2, size: 'lg', Component: List.ListAnomaly },
-  { id: 'list-pending-approvals', title: '待我审批', description: '流转到当前节点的审批单据', icon: ClipboardCheck, category: 'list', permission: PERMISSIONS.APPROVAL_TASK_VIEW, defaultW: 2, size: 'lg', Component: List.ListPendingApprovals },
+  { id: 'list-pending-approvals', title: '待我审批', description: '可处理的引擎与业务单级审核', icon: ClipboardCheck, category: 'list', permission: PENDING_APPROVAL_PERMISSIONS, defaultW: 2, size: 'lg', Component: List.ListPendingApprovals },
 
   // —— 趣味 ——
   { id: 'fun-wooden-fish', title: '电子木鱼',   description: '敲一敲，功德 +1（连击特效）', icon: Sparkles,    category: 'fun', defaultW: 1, size: 'sm', Component: Fun.WoodenFish },
@@ -117,18 +119,7 @@ const clampW = (w: number, id: string): number => {
 }
 
 // 新用户 / 未个性化时的默认布局：这些默认显示，其余进组件库待添加（visible:false）。
-const PREVIOUS_VISIBLE_ORDER = [
-  'kpi-pending-sale', 'kpi-pending-purchase', 'kpi-shipped-today', 'kpi-credit-warning',
-  'board-workbench', 'list-pending-approvals',
-  'list-low-stock', 'board-incoming',
-  'chart-sale-trend', 'chart-io-trend',
-]
-const PRE_MERGE_VISIBLE_ORDER = [
-  'kpi-pending-sale', 'kpi-shipped-today', 'kpi-receivable', 'kpi-approval-count',
-  'board-sales-actions', 'board-business-risk', 'chart-sale-trend', 'chart-receivable-due',
-]
-
-const DEFAULT_VISIBLE_ORDER = [...PRE_MERGE_VISIBLE_ORDER.slice(0, 4), 'board-workbench', ...PRE_MERGE_VISIBLE_ORDER.slice(4)]
+const DEFAULT_VISIBLE_ORDER = ['board-workbench', 'kpi-pending-sale', 'kpi-shipped-today', 'kpi-receivable', 'kpi-approval-count']
 
 /** 推荐排版的业务分类；仅生成推荐顺序，不重排用户保存的布局。 */
 export const DASHBOARD_SECTIONS = [
@@ -175,10 +166,7 @@ export function buildDefaultLayout(): DashboardLayout {
  * widget（默认隐藏、排末尾）、夹紧 w。保证注册表演进后老布局不崩、也不丢新组件。
  */
 export function mergeLayout(saved: DashboardLayout | null | undefined): DashboardLayout {
-  if (!saved?.widgets?.length) return buildDefaultLayout()
-  const previousVisible = saved.widgets.filter(w => w.visible)
-  if ([PREVIOUS_VISIBLE_ORDER, PRE_MERGE_VISIBLE_ORDER].some(order => previousVisible.length === order.length && previousVisible.every((w,i) => w.id === order[i] && w.w === WIDGET_MAP[w.id]?.defaultW))) return buildDefaultLayout()
-  // 不再用三张趣味卡片猜测旧默认：全部展示和合法的个性化组合也会命中。
+  if (saved == null || !Array.isArray(saved.widgets)) return buildDefaultLayout()
   const seen = new Set<string>()
   const merged: DashboardLayout['widgets'] = []
   for (const w of saved.widgets) {

@@ -93,3 +93,56 @@ docs/backend-api-sql-conventions.md
 ```
 
 本清单共 30 文件，仅计权限隔离组；主代理及其他组在共享工作树的文件不归入本组。随后经主代理授权补做的发布 ZIP 传输兼容修复由独立安全发布记录汇总。
+
+## 2026-10-07 分支整合复核与补修
+
+此段发生在同一隔离工作树的 `codex/release-v0.13.0` 整合工作区。主代理负责提交与发布，本组未暂存、提交、连接数据库或发布。本段离线结果不能替代原 go-live 工作树的运行证据，也不能替代最终整合 SHA 的全量/真实数据库/部署验收。
+
+- 搜索冲突保留每类权限、费用本人/查看全部、发票账套与销售全部明细仓授权，同时保留商品匹配等级及有界 ID 游标；前端既有全分页收集后商品等级排序保持。审批保留业务授权 callback 与旧六类引擎详情，同时保留新采购/处置/费用/供应商退款 pending 分页、当前角色与自审批限制。
+- PDA 拆分及其回执原先把 NULL 设备仓当作无设备上下文，active 设备/会话仓均 NULL 时中间件可以通过。新增明确 PDA 身份与设备仓闸门，fresh、原键回放及回执查询均先拒绝；PC 无设备上下文与正确设备仓保持。
+- 塑料盒 controller 原先丢 PDA 身份，放货/还原同样存在 NULL fail-open。现透传 `isPda`，PDA 必须有效非空设备仓。真实 service SQL 桩还反证：探维度后、等幂等锁期间盒换仓，回放仍返回旧快照授权；还原锁后当前盒属另一仓却继续 UPDATE/创建容器。最小修正为回放共享当前读核范围，以及还原已有行锁后核范围/设备仓和维度一致，拒绝前无库存/流水/打印/回执变化。未改变库存数量算法或维度→容器顺序。
+- 旧 `5d04014` 撤回收货/调拨补丁由主代理合入：本组确认当前仓已移走拒绝、所有未删除任务容器的调拨流水当前读拒绝 A→B→A 与 force-close VOID；正常未调拨仍能撤回，在途与用户范围闸门保持。调出/调入名称取真实商品主档普通读，异常了结删除无效 `inventory_containers.product_name` 投影，不增加任一仓库存。产品无需进一步修改。
+- 旧拆分 smoke 仅将 action 断言适配当前 `inventory.container.split.<id>`；数量、原键/新键/无键、流水与撤销范围断言保留。报销分页测试仅新增其新幂等依赖的 SQL 桩，未用真实环境变量绕过离线隔离。
+
+### 本轮红绿与静态证据
+
+全部 Node 命令先加载 dev-env，均自然结束。
+
+| 验证 | 结果 / 退出码 | 日志 |
+|---|---|---|
+| 只读旧 go-live 搜索/审批源码装载到安全授权测试 | 8 红 / 1 绿，exit 1 | `/tmp/security-golive-auth-before-merge-red.log` |
+| 拆分 PDA NULL fresh/replay/receipt 反例（修改前） | 2 红，exit 1 | `/tmp/security-golive-split-null-red.log` |
+| 塑料盒真实函数/controller：NULL、等待后回放与还原换仓（修改前） | 4 红 / 1 绿，exit 1 | `/tmp/security-golive-plastic-red.log` |
+| 用补丁前 HEAD 撤回/调拨源码装载到新测试 | 4 红 / 1 绿，exit 1 | `/tmp/security-golive-inbound-transfer-red.log` |
+| PC 既有非数字库存条码即时回放/本人查询（修复前实际函数） | 1 红，exit 1 | `/tmp/security-golive-split-legacy-barcode-red.log` |
+| 搜索/审批/商品 finder/拆分恢复/塑料盒/撤回调拨，8 文件 | 65/65，exit 0 | `/tmp/security-golive-scope-final.log` |
+| PDA/对账分页/库存预占/处置创建、目标、释放、转换，8 文件 | 225/225，exit 0 | `/tmp/security-golive-stock-disposal-final.log` |
+| SQL identifier/query-loop/扫码闭环，3 文件 | 12/12，exit 0 | `/tmp/security-golive-scope-contract.log` |
+| 9 个产品文件定向 eslint | exit 0 | `/tmp/security-golive-scope-final-eslint.log` |
+| 所有本组路径 diff check、旧两套 smoke 与新增 HTTP smoke 语法检查 | exit 0 | 命令无诊断输出 |
+
+主要离线命令：
+
+```sh
+node --test tests/container-split-recovery.test.js tests/security-scope-search-approvals.test.js tests/search-all-dates.test.js tests/approval-list-batches.test.js tests/product-finder.test.js tests/supplier-refunds-approvals.test.js tests/security-scope-plastic-box.test.js tests/security-scope-inbound-transfer.test.js
+node --test tests/security-scope-pda.test.js tests/security-scope-reconciliation-pagination.test.js tests/inventory-reservations.test.js tests/disposal-transition.test.js tests/disposal-handling-create.test.js tests/disposal-handling-target-guards.test.js tests/disposal-handling-release.test.js tests/disposal-conversion.test.js
+node --test tests/sql-identifier-contract.test.js tests/query-loop-contract.test.js tests/warehouse-scan-closure.test.js
+```
+
+红证据加载冻结源码，不恢复/覆盖共享工作树。塑料盒等待场景显式区分 RR 快照与锁后当前读，观察实际函数库存写调用；这是离线事务边界模型，尚不证明真实 MySQL 的竞争与死锁表现。中途 225 套件曾有 2 个 fixture 装载失败：一次费用合并重复 import，另一次新增 operationRequest 未 stub 导致缺 JWT 配置；均不是业务反例，不计为红证据，修正后 225 项自然通过。
+
+主代理随后在统一 fresh MySQL 运行旧 F6 smoke，得到 26 pass / 2 fail（`/tmp/flowcube-release-db-container-split-idempotency.log`）：普通 PC 首次 200，立即原键回放 409 `CONTAINER_SPLIT_RECEIPT_INVALID`。实际首响应来源码为 `F6SRC-6b6e51ec-114cba62`，回执守卫却要求来源码匹配新造码格式 `[IB]+数字`；问题与请求键是否 UUID 无关。首次业务合法支持既有唯一来源码，回执不应再用新造码格式拒绝它。最小修正只将来源码约束改为非空、≤ schema `VARCHAR(64)` 字符；原 SQL 的来源 ID/完整条码/商品/原仓/目标 ID 和 B 码/原流水仍精确核对，目标码格式与 kind、资源 action、用户/设备范围、当前读全部保留。新增真实失败响应形状的首拆→原键回放→本人查询反例先红后绿，并覆盖空/超界/伪造来源 ID/条码/原仓、目标、缺流水、错误 action 的拒绝。旧 smoke 的成功预期不改。本组定向 lint 自然 exit 0；该实际数据库缺陷修正后的真 HTTP 重跑仍交主代理汇总。
+
+### 整合后的真实 HTTP smoke 与边界
+
+2026-10-07 独立整合审查确认另一个发布前缺口：真实 `system.controller` 的本人 GET 可直接返回塑料盒放货/还原完整条码回执，原仓范围已撤销或 PDA 无票据仍为 200；此前 POST 重放修正没有覆盖前端 `getOperationRequestStatusApi` 恢复路径。离线真实 controller/设备闸/领域测试先红（5 pass / 4 fail，自然 exit 1，`/tmp/flowcube-release-plastic-receipt-red.log`），修正后补核原操作身份与双边流水仓，不从当前容器仓推断历史，也不独认响应 warehouse。只对已知 fill/repack 与 split 领域启用设备闸，宽查询在实际匹配后补核；RF/disposal 等本人 auth-only 查询不扩大权限或设备要求。更新旧「plastic 不进设备闸」测试为已知 scope 类必须核票据，其它领域保持。
+
+原 scope smoke 已追加实际 HTTP GET：精确/base/宽 action，PC/正确 PDA 本人核对（撤执行权限仍可查询），无票据/NULL/别仓设备拒绝，以及撤原仓范围后 PC/PDA 两回执均拒绝；比较自有库存/流水/打印/回执行，GET 不增副作用。新增 DB 场景由主代理在统一 fresh MySQL 执行；本组没有连接数据库，不把离线 SQL 边界测试当实际锁、设备或实物打印证据。
+
+本次修改后联合 `security-scope-plastic-box` / `container-split-recovery` / `sale-repeat-create` / `disposal-transition` 四文件 45/45、自然 exit 0（`/tmp/flowcube-release-plastic-receipt-green.log`）；相关产品和测试定向 ESLint 自然 exit 0，新增 smoke 语法及 diff check 无诊断输出。首次联合运行的 3 个失败是旧 controller VM fixture 拒绝新无条件 require，已将新 helper 装载限于本领域实际/请求 action，未改 RF/disposal fixture 或业务契约；不计作业务红证据。
+
+已在原 `tests/security-scope-warehouse.smoke.test.js` 末追加塑料盒场景，待主代理在其统一 fresh 数据库串行执行：真实登录/授权、空盒 API、自有整件容器、唯一合法库存缓存入口；NULL/错误设备仓 fresh 和旧键拒绝，正常放入 10、还原 2+3 后盒剩 5 和两条整件码，库存缓存总量仍 10；正常同键回放完全一致，拒绝/回放不新增库存、流水、本人打印或操作回执；当前用户仓库改为 B 后两旧键拒绝。只按本轮独占商品/用户 ID 取事实，原精准会话/角色收尾保持，没有硬编码历史库/端口或全表清理。本组只做语法/diff 检查，未运行此新增数据库场景。旧 `plastic-box-batch-a` 硬绑定历史库，不能直接对统一 fresh 库运行。
+
+主代理已告知将两个新增离线专项接入安全脚本。本组对应产品/测试改动为 search、approvals、inventory.split、inventory.split-receipt、system.controller、plastic-boxes controller/service；测试为 container-split-recovery、search-all-dates、container-split-idempotency smoke、security-scope-reconciliation-pagination、security-scope-warehouse smoke，以及新增 security-scope-plastic-box/security-scope-inbound-transfer。撤回/调拨产品及其旧 smoke 是主代理引入的旧补丁，本组只复核。
+
+待验证：新增 HTTP 场景和旧 F1/F6 整合后的真实 MySQL；受影响完整库存/资金/全后端套件与远端 CI；ERP GUI、PDA 真机、实物打印/员工现场；最终提交、推送、版本和部署由主代理汇总。本组不以先前独立工作树 GUI 或运行结果证明最终发布 SHA。

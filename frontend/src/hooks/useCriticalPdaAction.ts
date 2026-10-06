@@ -69,13 +69,18 @@ export function useCriticalPdaAction<T>({
   label,
   onConfirmed,
   resolveServerState,
+  active = true,
 }: {
   action: string
   requestAction?: string
   label: string
   onConfirmed?: (data: T, ctx: ConfirmContext) => void | Promise<void>
   resolveServerState?: ResolveServerState<T>
+  /** 塑料盒三动作的保留实例使用；默认沿用原行为，隐藏不自动核对/接收结果。 */
+  active?: boolean
 }) {
+  const visibility = useRef({ active, epoch: 0 })
+  if (visibility.current.active !== active) visibility.current = { active, epoch: visibility.current.epoch + 1 }
   const networkStatus = useNetworkStatus()
   const { records, claimPending, removePending, discardUnclaimed } = usePendingRequests()
   const pendingRecord = useMemo(
@@ -116,9 +121,10 @@ export function useCriticalPdaAction<T>({
   }, [action, onConfirmed, removePending, resolveServerState])
 
   const confirmPending = useCallback(async (): Promise<CriticalPdaConfirmResult | null> => {
-    if (!pendingRecord || networkStatus !== 'online' || confirming || phase === 'submitting') return null
+    if (!visibility.current.active || !pendingRecord || networkStatus !== 'online' || confirming || phase === 'submitting') return null
     const generation = useAuthStore.getState().sessionGeneration
-    const isCurrentSession = () => useAuthStore.getState().sessionGeneration === generation
+    const visible = visibility.current.epoch
+    const isCurrentSession = () => visibility.current.active && visibility.current.epoch === visible && useAuthStore.getState().sessionGeneration === generation
     setConfirming(true)
     setPhase('confirming')
     setPhaseMessage(`正在确认${pendingRecord.label}的结果，请勿重复提交。`)
@@ -198,12 +204,12 @@ export function useCriticalPdaAction<T>({
   }, [action, confirmByServerState, confirming, discardUnclaimed, networkStatus, onConfirmed, pendingRecord, phase, removePending, requestAction, resolveServerState, statusAction])
 
   useEffect(() => {
-    if (networkStatus !== 'online' || !pendingRecord) return
+    if (!active || networkStatus !== 'online' || !pendingRecord) return
     if (phase === 'submitting') return
     if (autoConfirmRef.current === pendingRecord.requestKey) return
     autoConfirmRef.current = pendingRecord.requestKey
     void confirmPending()
-  }, [networkStatus, pendingRecord, phase, confirmPending])
+  }, [active, networkStatus, pendingRecord, phase, confirmPending])
 
   const blockedReason = useMemo(() => {
     if (networkStatus !== 'online') {
@@ -219,6 +225,8 @@ export function useCriticalPdaAction<T>({
     executor: (requestKey: string) => Promise<T>,
     metadata?: Record<string, unknown>,
   ): Promise<{ kind: 'success'; data: T } | { kind: 'pending'; requestKey: string }> => {
+    if (!visibility.current.active) throw new Error('请回到原作业页面再提交')
+    const visible = visibility.current.epoch
     if (networkStatus !== 'online') {
       throw new Error('网络已断开，关键操作不可提交')
     }
@@ -242,6 +250,7 @@ export function useCriticalPdaAction<T>({
 
     try {
       const data = await executor(requestKey)
+      if (!visibility.current.active || visibility.current.epoch !== visible) { setPhase('pending'); return { kind: 'pending', requestKey } }
       removePending(action)
       setPhase('idle')
       setPhaseMessage(null)
@@ -250,6 +259,7 @@ export function useCriticalPdaAction<T>({
       }
       return { kind: 'success', data }
     } catch (error) {
+      if (!visibility.current.active || visibility.current.epoch !== visible) { setPhase('pending'); return { kind: 'pending', requestKey } }
       const message = error instanceof Error ? error.message : String(error ?? '')
       if (isTransientFailure(error)) {
         setPhase('pending')

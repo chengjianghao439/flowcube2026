@@ -4,12 +4,19 @@ export * from './routeDefinitions'
 
 export type RouteComponent = LazyExoticComponent<ComponentType>
 export type RouteRegistryEntry = definitions.RouteRegistryEntry & { component: RouteComponent }
+export type AuthenticationRouteEntry = definitions.AuthenticationRouteEntry & { component: RouteComponent }
 export type RoutePatternEntry = definitions.RoutePatternEntry & { component: RouteComponent }
 
 const mergedPage = lazy(() => import('@/components/shared/MergedPage'))
 
 // 仅 ERP 渲染入口加载页面；工作区元数据不再把所有页面带入 PDA。
 const components: Record<definitions.RouteComponentKey, RouteComponent> = {
+  SupplierRefundPage: lazy(() => import('@/pages/supplier-refunds')),
+  SupplierRefundCreatePage: lazy(() => import('@/pages/supplier-refunds/CreateRefundPage')),
+  RefundRecoveryPage: lazy(() => import('@/pages/supplier-refunds/RefundRecoveryPage')),
+  HandlingScrapPage: lazy(() => import('@/pages/disposal/HandlingScrapPage')),
+  DisposalRecoveryPage: lazy(() => import('@/pages/disposal/DisposalRecoveryPage')),
+  RepeatSaleRecoveryPage: lazy(() => import('@/pages/sale/RepeatSaleRecoveryPage')),
   DashboardPage: lazy(() => import('@/pages/dashboard')),
   SalePage: lazy(() => import('@/pages/sale')),
   SaleFormPage: lazy(() => import('@/pages/sale/form')),
@@ -48,8 +55,8 @@ const components: Record<definitions.RouteComponentKey, RouteComponent> = {
   PurchaseReturnFormPage: lazy(() => import('@/pages/returns/purchase/form')),
   SaleReturnFormPage: lazy(() => import('@/pages/returns/sale/form')),
   PartyLedgerPage: lazy(() => import('@/pages/payments/party-ledger')),
-  PayablePage: lazy(() => import('@/pages/payments/payable')),
-  ReceivablePage: lazy(() => import('@/pages/payments/receivable')),
+  PayablePage: mergedPage,
+  ReceivablePage: mergedPage,
   UsersPage: lazy(() => import('@/pages/users')),
   DepartmentsPage: lazy(() => import('@/pages/departments')),
   ApprovalFlowsPage: lazy(() => import('@/pages/approvals/flows')),
@@ -60,9 +67,9 @@ const components: Record<definitions.RouteComponentKey, RouteComponent> = {
   OplogsPage: lazy(() => import('@/pages/oplogs')),
   ReportsPage: mergedPage,
   RoleWorkbenchPage: lazy(() => import('@/pages/reports/role-workbench')),
-  FinanceDashboardPage: lazy(() => import('@/pages/finance/dashboard')),
-  FinanceAccountsPage: lazy(() => import('@/pages/finance/accounts')),
-  FinanceTransactionsPage: lazy(() => import('@/pages/finance/transactions')),
+  FinanceDashboardPage: mergedPage,
+  FinanceAccountsPage: mergedPage,
+  FinanceTransactionsPage: mergedPage,
   ExpenseClaimsPage: lazy(() => import('@/pages/finance/expenses')),
   ExpenseCategoriesPage: lazy(() => import('@/pages/finance/expense-categories')),
   AcctAccountsPage: lazy(() => import('@/pages/accounting/accounts')),
@@ -78,8 +85,8 @@ const components: Record<definitions.RouteComponentKey, RouteComponent> = {
   AcctTaxPage: lazy(() => import('@/pages/accounting/tax')),
   FixedAssetsPage: lazy(() => import('@/pages/fixed-assets')),
   AvgCostReconciliationPage: lazy(() => import('@/pages/reports/avg-cost-reconciliation')),
-  ReconciliationPayablePage: lazy(() => import('@/pages/reports/reconciliation-payable')),
-  ReconciliationReceivablePage: lazy(() => import('@/pages/reports/reconciliation-receivable')),
+  ReconciliationPayablePage: mergedPage,
+  ReconciliationReceivablePage: mergedPage,
   ProfitAnalysisPage: mergedPage,
   KpiPage: mergedPage,
   ReplenishmentPage: mergedPage,
@@ -96,10 +103,12 @@ const components: Record<definitions.RouteComponentKey, RouteComponent> = {
 
 export const routeRegistry: RouteRegistryEntry[] = definitions.routeRegistry.map(entry => ({ ...entry, component: components[entry.componentKey] }))
 export const routePatterns: RoutePatternEntry[] = definitions.routePatterns.map(entry => ({ ...entry, component: components[entry.componentKey] }))
+export const authenticationRoutes: AuthenticationRouteEntry[] = definitions.authenticationRoutes.map(entry => ({ ...entry, component: components[entry.componentKey] }))
+const authenticationByPath = new Map(authenticationRoutes.map(entry => [entry.path, entry]))
 const byPath = new Map(routeRegistry.map(entry => [entry.path, entry]))
 export function getRouteByPath(path: string): RouteRegistryEntry | undefined { return byPath.get(path) }
 export function getRoutePatternByPath(path: string): RoutePatternEntry | undefined { return routePatterns.find(entry => entry.pattern.test(path)) }
 
 export function resolveRouteComponent(path: string): RouteComponent | undefined {
-  return getRouteByPath(path)?.component ?? getRoutePatternByPath(path)?.component
+  return getRouteByPath(path)?.component ?? authenticationByPath.get(path)?.component ?? getRoutePatternByPath(path)?.component
 }

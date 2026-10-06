@@ -1,0 +1,26 @@
+{
+  "name": "gui-pda-actions-final",
+  "checks": [
+    "整件全部放入盒真实200",
+    "整件6全部放盒合计8",
+    "三动作原真实回执均保存，续跑仅POST放货"
+  ],
+  "api": [
+    {
+      "method": "GET",
+      "path": "/api/inventory/containers/barcode/I000045",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/inventory/containers/barcode/B000002",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/api/plastic-boxes/60/fill",
+      "status": 200
+    }
+  ],
+  "errors": []
+}

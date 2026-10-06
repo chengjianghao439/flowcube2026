@@ -56,6 +56,7 @@ export default function ProductsPage() {
   const [locationParams, setSearchParams] = useSearchParams()
   const searchParams = tabPath ? new URLSearchParams(tabPath.split('?')[1] || '') : locationParams
   const keyword = readStringParam(searchParams, 'keyword')
+  const hasKeyword = Boolean(keyword.trim())
   const catFilter = readNullableIntParam(searchParams, 'categoryId')
   const statusFilter = readStringParam(searchParams, 'status')
   const supplierId = readNullableIntParam(searchParams, 'supplierId')
@@ -171,7 +172,10 @@ export default function ProductsPage() {
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   const cols = useMemo<TableColumn<Product>[]>(() => [
-    ...productIdentityColumns({code: 'code', name: 'name'}),
+    ...productIdentityColumns({code: 'code', name: 'name'}).map(column => column.key === 'name' ? {
+      ...column,
+      render: (_: unknown, row: Product) => <><span className="block break-words leading-6">{row.name || '—'}</span>{hasKeyword && row.searchMatch && <span className="block text-xs leading-5 text-muted-foreground">命中：{row.searchMatch}</span>}</>,
+    } : column),
     { key:'categoryName', title:'分类', width:180, render:(_, r)=><CategoryPathDisplay path={r.categoryId ? categoryPathMap.get(r.categoryId) ?? null : null} fallback={r.categoryName} /> },
     { key:'unit', title:'单位', width:140, render:(_,r)=>{
       const aux=(r.units||[]).filter(u=>!u.isBase)
@@ -194,7 +198,7 @@ export default function ProductsPage() {
         ]}
       />
     )},
-  ], [categoryPathMap, navigateFromTable, handlePrintProductLabel, printingIds])
+  ], [categoryPathMap, navigateFromTable, handlePrintProductLabel, printingIds, hasKeyword])
 
   return (
     <div className="space-y-4">

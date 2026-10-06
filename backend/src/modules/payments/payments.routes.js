@@ -4,6 +4,7 @@ const ctrl = require('./payments.controller')
 const { authMiddleware, requirePermission } = require('../../middleware/auth')
 const { PERMISSIONS } = require('../../constants/permissions')
 const { validateBody } = require('../../utils/route')
+const { partyNameSchema } = require('../../utils/partyProfile')
 const router = Router()
 router.use(authMiddleware)
 
@@ -41,7 +42,7 @@ router.get('/receipts',      requirePermission(PERMISSIONS.PAYMENT_VIEW), ctrl.r
 router.get('/receipts/:id',  requirePermission(PERMISSIONS.PAYMENT_VIEW), vParams(idParam), ctrl.receiptDetail)
 router.post('/receipts',     requirePermission(PERMISSIONS.PAYMENT_EXECUTE), validateBody(z.object({
   type: z.number().int().min(1).max(2),
-  partyName: z.string().min(1, '往来方不能为空').max(100),
+  partyName: partyNameSchema('往来方不能为空'),
   partyId: z.number().int().positive().optional(),
   amount: z.number().positive('汇款金额必须大于 0'),
   paymentDate: z.string().min(1, '请选择汇款日期'),
@@ -63,7 +64,7 @@ router.get('/statements/candidates', requirePermission(PERMISSIONS.PAYMENT_VIEW)
 router.get('/statements/:id',        requirePermission(PERMISSIONS.PAYMENT_VIEW), vParams(idParam), ctrl.statementDetail)
 router.post('/statements',           requirePermission(PERMISSIONS.PAYMENT_EXECUTE), validateBody(z.object({
   type: z.number().int().min(1).max(2),
-  partyName: z.string().min(1, '往来方不能为空').max(100),
+  partyName: partyNameSchema('往来方不能为空'),
   periodStart: z.string().optional(),
   periodEnd: z.string().optional(),
   recordIds: z.array(z.number().int().positive()).min(1, '请至少选择一笔账款'),
@@ -94,7 +95,7 @@ router.get('/', requirePermission(PERMISSIONS.PAYMENT_VIEW), ctrl.list)
 router.post('/', requirePermission(PERMISSIONS.PAYMENT_CREATE), validateBody(z.object({
   type: z.number().int().min(1).max(2),
   orderNo: z.string().min(1, '单号不能为空').max(50),
-  partyName: z.string().min(1, '往来方不能为空').max(100),
+  partyName: partyNameSchema('往来方不能为空'),
   totalAmount: z.number().positive('金额必须大于 0'),
   settlementType: z.number().int().min(1).max(2).optional(),
   dueDate: z.string().optional(),

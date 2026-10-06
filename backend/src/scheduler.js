@@ -143,44 +143,20 @@ function startScheduler() {
   }, num('STOCKCHECK_CYCLE_INTERVAL_MS', 60 * 60 * 1000))
   logger.info('[scheduler] 循环盘自动排程 worker 已启动（每日一次，可 STOCKCHECK_CYCLE_INTERVAL_MS 调检查频率）', {}, 'Scheduler')
 
-  // 库存/账款预警钉钉推送（2026-08-22 功能）：复用 buildNotifications 口径，
-  // 命中高危事件（逾期应收应付/低于补货点/临期批次/呆滞）时推钉钉，管理层无需进系统。
-  // 去重：按「类别+日期」记录，同类别当天只推一次（避免每轮扫描都刷屏）。
-  // 配置 DINGTALK_ALERT_WEBHOOK 启用，未配置静默跳过。
+  // 钉钉只推作业异常；普通经营计数保留站内。消息带单号/持续时间/处理位置。
   const { sendDingtalkAlert } = require('./utils/dingtalkAlert')
-  let lastAlertDate = ''
-  let alertedCodes = new Set()
-  startWorker('dingtalk-alert', async () => {
-    const today = beijingTodayYmd()
-    if (lastAlertDate !== today) {
-      lastAlertDate = today
-      alertedCodes = new Set()
-    }
-    const { buildNotifications } = require('./modules/notifications/notifications.service')
-    const result = await buildNotifications(null)
-    const DANGER_CODES = new Set(['OVERDUE_PAYABLE', 'OVERDUE_RECEIVABLE', 'LOW_STOCK', 'EXPIRING_STOCK', 'STALE_STOCK'])
-    const targets = (result.items || []).filter(i => DANGER_CODES.has(i.code) && !alertedCodes.has(i.code))
-    if (!targets.length) return
-    // 【钉钉「查看」链接 2026-08-28】钉钉客户端只认绝对 http(s) URL，且前端是 HashRouter：
-    // 必须拼成 https://<APP_PUBLIC_URL>/#/<path> 才是可点的真实链接。此前直接写 t.path
-    // （相对路径 /payments/payable），钉钉解析成自己域下的无效相对链接——电脑端点开
-    // 无反应、手机端显示无法连接。APP_PUBLIC_URL 生产必填（config/env.js 校验）。
-    const publicUrl = String(process.env.APP_PUBLIC_URL || '').replace(/\/$/, '')
-    const alertLink = (path) => {
-      const p = (path || '').startsWith('/') ? path : `/${path || ''}`
-      return publicUrl ? `${publicUrl}/#${p}` : p
-    }
-    const lines = targets.map(t => `- **${t.text}**（[查看](${alertLink(t.path)})）`)
-    const ok = await sendDingtalkAlert(
-      `⚠️ 极序 Flow 经营预警 ${today}`,
-      `### 经营预警\n\n${lines.join('\n')}\n\n> 由系统自动推送，请及时处理。`,
-    )
-    if (ok) {
-      for (const t of targets) alertedCodes.add(t.code)
-      logger.info(`[scheduler] 钉钉预警已推送：${targets.map(t => t.code).join(',')}`, {}, 'Scheduler')
-    }
-  }, num('DINGTALK_ALERT_INTERVAL_MS', 30 * 60 * 1000))
-  logger.info('[scheduler] 钉钉预警 worker 已启动（30 分钟扫描，DINGTALK_ALERT_WEBHOOK 未配置则静默）', {}, 'Scheduler')
+  const { buildOperationAlerts, createOperationAlertWorker } = require('./modules/notifications/operation-alerts.service')
+  const { getInboundClosureThresholds } = require('./utils/inboundThresholds')
+  const operationAlert = createOperationAlertWorker({
+    query: async () => buildOperationAlerts(pool, await getInboundClosureThresholds()),
+    send: sendDingtalkAlert,
+    publicUrl: () => process.env.APP_PUBLIC_URL,
+  })
+  startWorker('operation-alert', async () => {
+    if (!String(process.env.DINGTALK_ALERT_WEBHOOK || '').trim()) return
+    await operationAlert()
+  }, num('DINGTALK_ALERT_INTERVAL_MS', 5 * 60 * 1000))
+  logger.info('[scheduler] 作业异常预警已启动（5分钟扫描，未配置webhook则跳过）', {}, 'Scheduler')
 
   // 库存缓存漂移巡检（2026-08-25）：缓存(投影)与容器(事实源)失联时,业务判断会静默出错。
   // 每 30 分钟跑一次 findStockDrift,发现漂移推钉钉,人工经成本对账页「修复缓存」或 resync 处理。

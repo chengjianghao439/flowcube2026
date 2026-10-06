@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 'use strict'
+const { issueFixtureAccessToken, cleanupFixtureSessionFamilies } = require('./helpers/fixtureAuthSession')
+
 const assert = require('node:assert/strict')
 const { randomBytes } = require('node:crypto')
 require('./helpers/testEnvironment').configureTestEnvironment()
@@ -7,7 +9,6 @@ process.env.SENTRY_DSN = ''
 process.env.LOKI_URL = ''
 const { pool } = require('../backend/src/config/db')
 const express = require('../backend/node_modules/express')
-const jwt = require('../backend/node_modules/jsonwebtoken')
 const { PERMISSIONS } = require('../backend/src/constants/permissions')
 const { WT_STATUS } = require('../backend/src/constants/warehouseTaskStatus')
 const tables = { warehouses: 'inventory_warehouses', locations: 'warehouse_locations', racks: 'warehouse_racks', 'sorting-bins': 'sorting_bins' }
@@ -46,7 +47,7 @@ async function main() {
     server = await new Promise(resolve => { const s = app.listen(0, '127.0.0.1', () => resolve(s)) })
     const req = async (mod, path='', method='GET', body, user=actor) => {
       const headers = { 'Content-Type': 'application/json' }
-      if (user) headers.Authorization = `Bearer ${jwt.sign({ userId: user, tokenVersion: 0 }, process.env.JWT_SECRET, { expiresIn: '10m' })}`
+      if (user) headers.Authorization = `Bearer ${await issueFixtureAccessToken(pool, user, { expiresIn: '10m' })}`
       const r = await fetch(`http://127.0.0.1:${server.address().port}/api/${mod}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(10000) })
       const payload = await r.json()
       if (method === 'POST' && path === '' && payload.data?.id) remember(tables[mod], payload.data.id)
@@ -197,7 +198,7 @@ async function main() {
       for(const [table,col,values] of [['auth_audit_logs','user_id',ids('sys_users')],['user_warehouse_scope','user_id',ids('sys_users')],['sys_role_permissions','role_id',ids('sys_roles')]])if(values.length){await pool.query(`DELETE FROM ${table} WHERE ${col} IN (?)`,[values]);const [[r]]=await pool.query(`SELECT COUNT(*) n FROM ${table} WHERE ${col} IN (?)`,[values]);assert.equal(Number(r.n),0)}
       for(const table of ['warehouse_task_items','warehouse_tasks','sorting_bins','inventory_containers','inventory_stock','inventory_logs','warehouse_locations','warehouse_racks','product_items','inventory_warehouses','sys_users','sys_roles'])if(ids(table).length){await pool.query(`DELETE FROM ${table} WHERE id IN (?)`,[ids(table)]);const [[r]]=await pool.query(`SELECT COUNT(*) n FROM ${table} WHERE id IN (?)`,[ids(table)]);assert.equal(Number(r.n),0,`cleanup ${table}`)}
       console.log('[warehouse-masterdata] cleanup verified: all owned IDs removed; no whole-table delete; sequences preserved')
-    } finally {await pool.end()}
+    } finally {try { await cleanupFixtureSessionFamilies(pool) } finally { await pool.end() }}
   }
   console.log('[warehouse-masterdata] assertion counts',counts)
   assert.equal(failures.length,0,failures.join('\n'))

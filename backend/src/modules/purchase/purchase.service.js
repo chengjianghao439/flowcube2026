@@ -317,6 +317,7 @@ async function assertNoActiveSaleBinding(conn, purchaseOrderId, actionLabel) {
 async function closeRemaining(id, operator, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
+    await conn.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED')
     await conn.beginTransaction()
     const row = await lockStatusRow(conn, { table: 'purchase_orders', id, columns: 'id, order_no, status, warehouse_id', entityName: '采购单' })
     assertInScope(scopeWarehouseIds, row.warehouse_id, '采购单')
@@ -336,7 +337,8 @@ async function closeRemaining(id, operator, scopeWarehouseIds = null) {
       [id],
     )
     if (Number(received) <= 0) throw new AppError('该采购单尚无已入库数量，不能关闭结案（如需终止请改用取消）', 409)
-    await recomputePurchasePayable(conn, id)
+    // 已持准确PO X，下一事务RC下每条来源语句读当前提交；不反向等待IT/PR锁。
+    await recomputePurchasePayable(conn, id, { sourceReadMode: 'current' })
     await compareAndSetStatus(conn, {
       table: 'purchase_orders', id,
       fromStatus: rule.from, toStatus: rule.to, entityName: '采购单',

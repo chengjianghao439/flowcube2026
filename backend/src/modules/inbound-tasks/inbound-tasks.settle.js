@@ -13,7 +13,7 @@ const { assertPurchaseSettlementSources } = require('./inbound-purchase-source')
  * 的静默财务问题）。金额=实收（上架）量，天然反映短装。依赖 payment_records 的
  * UNIQUE(type, order_id)（迁移 091）。
  */
-async function recomputePurchasePayable(conn, purchaseOrderId) {
+async function recomputePurchasePayable(conn, purchaseOrderId, { sourceReadMode = 'locked' } = {}) {
   const poId = Number(purchaseOrderId)
   if (!Number.isFinite(poId) || poId <= 0) return
   const [[po]] = await conn.query(
@@ -27,6 +27,8 @@ async function recomputePurchasePayable(conn, purchaseOrderId) {
   )
   if (!po) return
   await assertPurchaseSettlementSources(conn, poId)
+  // 唯一current调用为closeRemaining：同连接已持准确PO X并设置本次RC，不反向锁IT/PRI。
+  // 其他调用继续以下默认锁读；source断言、金额、确认/upsert与历史快照均共用。
   // 聚合必须走当前读（FOR UPDATE），不能用快照读。否则在默认 REPEATABLE READ 下会 lost-update：
   // 同一采购单的多张收货单并发上架末箱、各自触发本函数时，事务的 read view 早在 putaway 前段
   // （非锁定 SELECT）就已固定，此处快照 SUM 看不到并发事务刚提交的另一张收货单 audit_status=1，
@@ -42,7 +44,7 @@ async function recomputePurchasePayable(conn, purchaseOrderId) {
        JOIN purchase_order_items poi ON poi.id = iti.purchase_item_id
       WHERE iti.purchase_order_id = ? AND it.deleted_at IS NULL
         AND it.status <> 5 AND it.audit_status = 1
-      FOR UPDATE`,
+      ${sourceReadMode === 'current' ? '' : 'FOR UPDATE'}`,
     [poId],
   )
   const grossTotal = Number(amount) || 0
@@ -52,7 +54,7 @@ async function recomputePurchasePayable(conn, purchaseOrderId) {
     `SELECT COALESCE(SUM(total_amount), 0) AS returnedAmount
        FROM purchase_returns
       WHERE purchase_order_id = ? AND deleted_at IS NULL AND status = 3
-      FOR UPDATE`,
+      ${sourceReadMode === 'current' ? '' : 'FOR UPDATE'}`,
     [poId],
   )
   const total = Math.max(0, grossTotal - (Number(returnedAmount) || 0))

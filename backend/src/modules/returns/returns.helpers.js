@@ -36,11 +36,45 @@ async function adjustPaymentRecordForReturn(conn, {
     return null
   }
 
+  const [[identity]] = await conn.query(
+    `SELECT id, type, order_id, order_no FROM payment_records WHERE ${where} ORDER BY id DESC LIMIT 1`,
+    params,
+  )
+  if (!identity) {
+    // 普通销售退货可能已建立RR旧视图；空快照不能证明当前确实没有账款。
+    // 这里只核当前存在性；发现新账款即回滚重核，不能在已锁账款后追锁对账单。
+    const [[current]] = await conn.query(
+      `SELECT id FROM payment_records WHERE ${where} ORDER BY id DESC LIMIT 1 FOR SHARE`,
+      params,
+    )
+    if (current) throw new AppError('账款已变化，请刷新后核对退货账款', 409, 'RETURN_PAYMENT_CONTEXT_CHANGED')
+    return null
+  }
+  const [stmtRows] = await conn.query(
+    'SELECT DISTINCT statement_id FROM reconciliation_statement_items WHERE record_id = ? ORDER BY statement_id',
+    [identity.id],
+  )
+  for (const s of stmtRows) {
+    const [[statement]] = await conn.query('SELECT id FROM reconciliation_statements WHERE id=? FOR UPDATE', [s.statement_id])
+    if (!statement) throw new AppError('对账关系已变化，请刷新后核对退货账款', 409, 'RETURN_PAYMENT_CONTEXT_CHANGED')
+  }
   const [[record]] = await conn.query(
     `SELECT * FROM payment_records WHERE ${where} ORDER BY id DESC LIMIT 1 FOR UPDATE`,
     params,
   )
-  if (!record) return null
+  const [memberRows] = await conn.query(
+    'SELECT statement_id FROM reconciliation_statement_items WHERE record_id = ? ORDER BY statement_id, id FOR SHARE',
+    [identity.id],
+  )
+  const currentMembers = [...new Set(memberRows.map(row => Number(row.statement_id)))]
+  if (!record || Number(record.id) !== Number(identity.id)
+    || Number(record.type) !== Number(identity.type)
+    || Number(record.order_id || 0) !== Number(identity.order_id || 0)
+    || record.order_no !== identity.order_no
+    || currentMembers.length !== stmtRows.length
+    || currentMembers.some((id, index) => id !== Number(stmtRows[index].statement_id))) {
+    throw new AppError('账款或对账关系已变化，请刷新后核对退货账款', 409, 'RETURN_PAYMENT_CONTEXT_CHANGED')
+  }
 
   const currentTotal = Number(record.total_amount || 0)
   const currentPaid = Number(record.paid_amount || 0)
@@ -65,15 +99,8 @@ async function adjustPaymentRecordForReturn(conn, {
 
   // 对账单投影刷新（2026-08-21 审计 E.3 修复）：退货冲减 total_amount 后，
   // 若该账款属于某对账单，同事务刷新 settled_amount/状态（对齐 recordPayment 范式）。
-  const [stmtRows] = await conn.query(
-    'SELECT DISTINCT statement_id FROM reconciliation_statement_items WHERE record_id = ? ORDER BY statement_id',
-    [record.id],
-  )
   for (const s of stmtRows) {
-    await conn.query('SELECT id FROM reconciliation_statements WHERE id=? FOR UPDATE', [s.statement_id])
-  }
-  for (const s of stmtRows) {
-    await statementSvc.refreshSettlement(conn, s.statement_id)
+    await statementSvc.refreshSettlement(conn, s.statement_id, { currentRead: true })
   }
   await recordPaymentEvent(conn, {
     paymentRecordId: Number(record.id),
@@ -113,7 +140,7 @@ async function adjustPaymentRecordForReturn(conn, {
  *    不合格其实不会负余额」的单——这与「前置拦截 + 末端兜底」的定位一致，文案用「预计」；
  *  - 账款尚未生成时（如现结应付要到收货上架完成才落库）直接放行，交由末端兜底。
  */
-async function assertReturnPaymentHeadroom(conn, { recordType, orderId = null, orderNo = null, amount }) {
+async function assertReturnPaymentHeadroom(conn, { recordType, orderId = null, orderNo = null, amount, purchaseReturnId = null }) {
   const params = [recordType]
   let where = 'type=?'
   if (orderId) {
@@ -134,9 +161,13 @@ async function assertReturnPaymentHeadroom(conn, { recordType, orderId = null, o
   const currentPaid = Number(record.paid_amount || 0)
   const newTotal = Number((currentTotal - Number(amount || 0)).toFixed(4))
   if (currentPaid > newTotal) {
+    const refundSource = recordType === 1 && Number.isSafeInteger(purchaseReturnId) && purchaseReturnId > 0 && Number.isSafeInteger(orderId) && orderId > 0
+      ? { purchaseReturnId, purchaseOrderId: orderId } : null
     throw new AppError(
       `该账款已登记金额 ¥${currentPaid.toFixed(2)}，预计退货 ¥${Number(amount || 0).toFixed(2)} 后将形成负余额；请先处理退款/退款凭证后再确认退货`,
       409,
+      refundSource ? 'PURCHASE_RETURN_REFUND_REQUIRED' : null,
+      refundSource,
     )
   }
 }

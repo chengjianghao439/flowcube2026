@@ -3,18 +3,20 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { MemoryRouter, useNavigate, type NavigateFunction } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { afterEach, expect, test, vi } from 'vitest'
+import { beforeEach, afterEach, expect, test, vi } from 'vitest'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { SectionVisibilityContext } from '@/components/layout/SectionVisibilityContext'
 import { useDashboardSummary, usePdaPerformance, useWarehouseOps, usePendingApprovalsBrief } from './useDashboard'
 import { getDashboardSummaryApi } from '@/api/dashboard'
 import { getPdaPerformanceApi, getWarehouseOpsApi } from '@/api/reports'
 import { listPendingApprovalsApi } from '@/api/approvals'
+import { useAuthStore } from '@/store/authStore'
 
 vi.mock('@/api/dashboard', () => ({ getDashboardSummaryApi: vi.fn(async () => ({})) }))
 vi.mock('@/api/reports', () => ({ getPdaPerformanceApi: vi.fn(async () => ({})), getWarehouseOpsApi: vi.fn(async () => ({})) }))
 vi.mock('@/api/approvals', () => ({ listPendingApprovalsApi: vi.fn(async () => ({})) }))
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
+beforeEach(() => useAuthStore.setState({ user: { id: 7, username: 'fixture', realName: '测试', roleId: 1, roleName: '测试' } }))
 afterEach(() => { vi.useRealTimers(); vi.clearAllMocks() })
 
 for (const [name, hook, request, key] of [
@@ -39,6 +41,9 @@ for (const [name, hook, request, key] of [
       expect(document.hidden).toBe(false)
       await render()
       expect(request).toHaveBeenCalledTimes(1)
+      const originalKeys = client.getQueryCache().getAll().map(query => query.queryKey)
+      expect(originalKeys).toHaveLength(1)
+      expect(originalKeys[0]?.[0]).toBe(key)
       await act(async () => navigate('/sale'))
       await act(async () => vi.advanceTimersByTimeAsync(120_000))
       await act(async () => { await client.invalidateQueries({ queryKey: [key] }) })
@@ -50,7 +55,7 @@ for (const [name, hook, request, key] of [
       await render(false)
       await act(async () => vi.advanceTimersByTimeAsync(120_000))
       expect(request).toHaveBeenCalledTimes(resumedCalls)
-      expect(client.getQueryCache().getAll().map(query => query.queryKey)).toEqual([[key]])
+      expect(client.getQueryCache().getAll().map(query => query.queryKey)).toEqual(originalKeys)
     } finally { await act(async () => root.unmount()); client.clear() }
   })
 }

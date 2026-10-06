@@ -3,6 +3,8 @@ const expenseSvc = require('./expense-claims.service')
 const dashboardSvc = require('./finance-dashboard.service')
 const { successResponse } = require('../../utils/response')
 const { getOperatorFromRequest } = require('../../utils/operator')
+const { extractRequestKey } = require('../../utils/requestKey')
+const { resolveBackfillRequest } = require('../accounting/finance-period.guard')
 const { PERMISSIONS } = require('../../constants/permissions')
 
 const list = async(req,res,next)=>{ try{return successResponse(res,await svc.findAll(req.query),'查询成功')}catch(e){next(e)} }
@@ -35,7 +37,16 @@ const expenseSubmit = async(req,res,next)=>{ try{const op=getOperatorFromRequest
 const expenseWithdraw = async(req,res,next)=>{ try{const op=getOperatorFromRequest(req);return successResponse(res,await expenseSvc.withdraw(+req.params.id,op),'已撤回为草稿')}catch(e){next(e)} }
 const expenseApprove = async(req,res,next)=>{ try{const op=getOperatorFromRequest(req);return successResponse(res,await expenseSvc.approve(+req.params.id,op),'已批准，可付款')}catch(e){next(e)} }
 const expenseReject = async(req,res,next)=>{ try{const op=getOperatorFromRequest(req);return successResponse(res,await expenseSvc.reject(+req.params.id,req.body,op),'已驳回')}catch(e){next(e)} }
-const expensePay = async(req,res,next)=>{ try{const op=getOperatorFromRequest(req);return successResponse(res,await expenseSvc.pay(+req.params.id,req.body,op),'付款完成，已记入账户流水')}catch(e){next(e)} }
+// 跨期补录**申请**：把请求意图解析成 service 的 backfill 入参（权限是条件校验，见
+// finance-period.guard.resolveBackfillRequest）。返回申请单时响应必须是 **202**——
+// 这不是「付款成功」，是「已提交待审批」，业务一行未写、钱还没动。
+const backfillOf = (req) => {
+  const r = resolveBackfillRequest(req)
+  return r ? { mode: 'apply', ...r } : null
+}
+const BACKFILL_APPLIED_MSG = '已提交跨期补录申请，审批通过后才会记账'
+
+const expensePay = async(req,res,next)=>{ try{const op=getOperatorFromRequest(req);const data=await expenseSvc.pay(+req.params.id,req.body,op,extractRequestKey(req),{backfill:backfillOf(req)});return data?.backfillApplication?successResponse(res,data.backfillApplication,BACKFILL_APPLIED_MSG,202):successResponse(res,data,'付款完成，已记入账户流水')}catch(e){next(e)} }
 const expenseCancel = async(req,res,next)=>{ try{const op=getOperatorFromRequest(req);return successResponse(res,await expenseSvc.cancel(+req.params.id,op),'已取消')}catch(e){next(e)} }
 
 const categoryList = async(req,res,next)=>{ try{return successResponse(res,await expenseSvc.listCategories({activeOnly:req.query.activeOnly==='1'}),'查询成功')}catch(e){next(e)} }

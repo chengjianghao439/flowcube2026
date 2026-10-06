@@ -110,6 +110,86 @@ async function voidReceipt(taskId, operator, scopeWarehouseIds = null) {
         409,
       )
     }
+    // 容器已整箱调拨**完成**（scanIn 后 transfer_order_id 被清空、warehouse_id 改成调入仓）时，
+    // 上面三道守卫会全部放行：同一容器行、remaining_qty 与 initial_qty 仍相等、无任务锁。
+    // 而这一单此时已经不属于本仓库了——撤回会把**调入仓**的库存作废（还记成一次「撤回收货」），
+    // 同时按「从未收货」反冲采购应付，调拨单却仍是已完成状态：货在调入仓账面消失、源仓应付也没了，
+    // 账实从此对不上。跨仓越权也在同一处堵住：撤回只允许动作在任务所属仓库内的容器，
+    // 否则持 A 仓范围的人可以作废 B 仓的库存。
+    // 方案取「按容器当前仓库判定」而不是「另查调拨单状态」：前者是容器行的直接事实，
+    // 不依赖调拨单表，也不会漏掉未来任何新的移仓路径。2026-09-26 一致性审查 · 任务 1。
+    const movedAway = containers.filter(c => Number(c.warehouse_id) !== Number(taskRow.warehouse_id))
+    if (movedAway.length) {
+      const destWarehouses = [...new Set(movedAway.map(c => Number(c.warehouse_id)))]
+      throw new AppError(
+        `存在 ${movedAway.length} 个库存条码已调拨离开本仓库（现在仓库 #${destWarehouses.join('、#')}），不能撤回收货：`
+        + '这些货已经通过调拨单进了别的仓库，撤回会把调入仓的库存一并作废并把采购应付按「从未收货」反冲，'
+        + '而调拨单仍是已完成状态，账实会对不上。'
+        + '如确需把货退回供应商，请改用采购退货单（冲减应付）；如需更正库存数量，请通过库存盘点处理实际差异。'
+        + '本收货单不能再撤回——即使日后把这批货调回本仓也一样：这单已按调拨单在仓库之间进出过，撤回仍会被拒绝。',
+        409,
+        'INBOUND_TASK_CONTAINER_MOVED_AWAY',
+        {
+          containerCount: movedAway.length,
+          destWarehouses,
+          taskWarehouseId: Number(taskRow.warehouse_id),
+        },
+      )
+    }
+    // 只看「容器当前仓库」仍然不够：整箱调拨 A→B 完成后再被 B→A 调回并扫入时，容器行又回到
+    // 任务所属仓、transfer_order_id 在扫入时被清空、remaining_qty 与 initial_qty 仍相等、
+    // 也没有任务锁——上面所有守卫会第二次放行。但两张调拨单仍是已完成状态、其
+    // deducted_qty/received_qty 已把这批货记成「出 A、入 B、出 B、入 A」，撤回却会把它当成
+    // 「从未收货」作废并反冲采购应付，已完成调拨单不会回退，账实从此对不上。
+    // 容器行本身不留这段历史（transfer_order_id 只在在途期间有值，transfer_order_items
+    // 也没有 container_id），唯一的结构化留痕是 inventory_logs 里 ref_type='transfer' 的
+    // 调出/调入流水（transfer.service.js 的 scanOut/scanIn 各写一条，带 container_id 与调拨单号）。
+    // 因此按「该容器是否出现过调拨流水」判定，与它此刻在哪个仓无关。2026-09-27 二轮独立审阅 · 任务 1 补修。
+    //
+    // 判定范围是**该收货单名下所有未删除容器**，不是上面那份撤回候选集：在途异常了结
+    // （transfer.service.js 的 forceCloseInTransit）把在途容器置 VOID 并清空 transfer_order_id，
+    // 容器因此同时脱离候选状态、摘掉在途标记——候选集里看不到它，仓库又因调出时已改到调入仓而
+    // 与任务仓不同也无从判断（它压根不在集合里）。此时若只看候选容器，四道守卫全部落空，
+    // 撤回会把这批已按「运输损耗核销」的货当成「从未收货」作废并反冲采购应付：源仓在 scanOut
+    // 时已扣减、调拨单不会回退，账面从此既无库存也无应付，两头空。它留下的 TRANSFER_OUT 流水
+    // 是唯一还没被抹掉的证据，所以判据取「流水」而不是「状态」——普通作废（出库耗尽、人工核销）
+    // 没有调拨流水，不会被误伤。
+    //
+    // FOR SHARE 是当前读：普通快照读会漏掉本事务快照建立之后才提交的调拨流水
+    // （同 operationRequest.js 对幂等回执的处理）。已进入候选集的容器行仍被上面 FOR UPDATE 独占，
+    // 写它们流水的路径必须先取同一行锁；而仅在候选集之外的容器（如已 VOID 的）本事务只共享锁其
+    // 流水行、不再请求其容器行锁，任何写方都只会在拿到容器行锁后来等这次共享锁，是单向等待，不成环。
+    const [taskContainerRows] = await conn.query(
+      'SELECT id FROM inventory_containers WHERE inbound_task_id = ? AND deleted_at IS NULL',
+      [taskId],
+    )
+    if (taskContainerRows.length) {
+      const [transferLogs] = await conn.query(
+        `SELECT container_id, ref_no
+           FROM inventory_logs
+          WHERE container_id IN (?) AND ref_type = 'transfer'
+          FOR SHARE`,
+        [taskContainerRows.map(r => Number(r.id))],
+      )
+      if (transferLogs.length) {
+        const hitContainers = [...new Set(transferLogs.map(r => Number(r.container_id)))]
+        const orderNos = [...new Set(transferLogs.map(r => r.ref_no).filter(Boolean))]
+        throw new AppError(
+          `存在 ${hitContainers.length} 个库存条码已经参与过调拨（调拨单 ${orderNos.join('、')}），不能撤回收货：`
+          + '这些货已按调拨单在仓库之间进出过——无论是又被调回本仓，还是已在运输途中按异常了结核销——'
+          + '撤回都会把它们当成「从未收货」作废、并把采购应付一并反冲，而调拨单不会回退，账实会对不上。'
+          + '如确需把货退回供应商，请改用采购退货单（冲减应付）；如需更正库存数量，请通过库存盘点处理实际差异。'
+          + '本收货单不能再撤回。',
+          409,
+          'INBOUND_TASK_CONTAINER_TRANSFERRED',
+          {
+            containerCount: hitContainers.length,
+            transferOrderNos: orderNos,
+            taskWarehouseId: Number(taskRow.warehouse_id),
+          },
+        )
+      }
+    }
     const touched = containers.filter(c => Number(c.remaining_qty) !== Number(c.initial_qty))
     if (touched.length) {
       throw new AppError(

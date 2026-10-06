@@ -56,3 +56,12 @@ test('系统版本从末尾拖到开头，保存及重新挂载后均保持第�
   await act(async () => root.render(<MemoryRouter initialEntries={['/dashboard']}><DashboardPage key="reopened" /></MemoryRouter>))
   expect(ids()[0]).toBe('system-version')
 })
+
+test('用户空布局保持空；主动载入推荐只是预览，原保存才写', async () => {
+  state.saved = { widgets: [] }
+  await act(async () => root.render(<MemoryRouter><DashboardPage /></MemoryRouter>))
+  expect(ids()).toEqual([]); expect(state.save).not.toHaveBeenCalled()
+  await click('编辑仪表盘'); await click('载入推荐')
+  expect(ids()[0]).toBe('board-workbench'); expect(state.save).not.toHaveBeenCalled()
+  await click('保存'); expect(state.save).toHaveBeenCalledOnce()
+})

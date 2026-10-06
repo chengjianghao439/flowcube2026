@@ -152,6 +152,7 @@ export interface SaleOrder {
   packages?: Package[]
 }
 export interface CreateSaleParams {
+  disposalSource?: import('./disposal-handling').DisposalSourceInput
   customerId: number
   customerName: string
   warehouseId: number

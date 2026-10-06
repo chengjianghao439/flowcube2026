@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { usePermission } from '@/hooks/usePermission'
 import { canOpenWorkbenchPath } from '@/lib/workbench'
 import { resolveRouteTitle } from '@/router/routeDefinitions'
-import { buildWorkspaceTabRegistrationFromPath } from '@/router/workspaceRouteMeta'
+import { buildWorkspaceTabRegistrationFromPath, resolveWorkspaceEntryPath } from '@/router/workspaceRouteMeta'
 import { useAuthStore } from '@/store/authStore'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 
@@ -11,7 +11,7 @@ import { useWorkspaceStore } from '@/store/workspaceStore'
 const DAILY_GROUPS = [
   { title: '采购与销售', paths: ['/sale', '/purchase'] },
   { title: '仓库作业', paths: ['/inbound-tasks', '/picking-waves', '/inventory'] },
-  { title: '财务往来', paths: ['/payments/receivable', '/payments/payable', '/reports/reconciliation/receivable', '/reports/reconciliation/payable'] },
+  { title: '财务往来', paths: ['/payments/receivable', '/payments/payable', '/reports/reconciliation/receivable', '/reports/reconciliation/payable', '/finance/dashboard'] },
   { title: '物流与打印', paths: ['/logistics', '/settings/barcode-print-query'] },
 ]
 
@@ -21,11 +21,15 @@ export function DailyWork() {
   const authenticated = useAuthStore(s => s.isAuthenticated)
   const addTab = useWorkspaceStore(s => s.addTab)
   const navigate = useNavigate()
+  const seen = new Set<string>()
   const groups = DAILY_GROUPS.map(group => ({
     ...group,
     items: group.paths.flatMap(path => {
       const title = resolveRouteTitle(path)
-      return authenticated && title && canOpenWorkbenchPath(path, can) ? [{ path, title }] : []
+      const key = buildWorkspaceTabRegistrationFromPath(path).key
+      if (!authenticated || !title || !canOpenWorkbenchPath(path, can) || seen.has(key)) return []
+      seen.add(key)
+      return [{ path, title }]
     }),
   })).filter(group => group.items.length > 0)
 
@@ -34,7 +38,7 @@ export function DailyWork() {
     const target = buildWorkspaceTabRegistrationFromPath(path)
     // 已打开的列表沿用自己的 query 与组件实例，保留筛选和未保存输入。
     const existing = useWorkspaceStore.getState().tabs.find(tab => tab.key === target.key)
-    const registration = existing ? { key: existing.key, path: existing.path } : target
+    const registration = { key: target.key, path: resolveWorkspaceEntryPath(path, existing, can) }
     if (addTab({ ...registration, title })) navigate(registration.path)
   }
 

@@ -3,7 +3,7 @@ const { pool } = require('../../config/db')
 const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
 const AppError = require('../../utils/AppError')
 const { MOVE_TYPE, MOVE_TYPE_LABEL, writeInventoryLog } = require('../../engine/inventoryEngine')
-const { adjustContainerStock, SOURCE_TYPE, splitContainer, syncStockFromContainers } = require('../../engine/containerEngine')
+const { adjustContainerStock, SOURCE_TYPE, syncStockFromContainers } = require('../../engine/containerEngine')
 const { getInventoryDisplayProjectionSql } = require('./inventoryProjection')
 const { normalizePagination } = require('../../utils/pagination')
 const { getExpectedStock } = require('../../utils/expectedStock')
@@ -1115,72 +1115,8 @@ async function assignContainerLocation(containerId, locationId, scopeWarehouseId
 /**
  * 同仓容器拆分（散件）：单容器扣减并生成新塑料盒条码（B），可选打印新标签
  */
-async function splitContainerOp(containerId, { qty, remark, printLabel, targetContainerId, userId, userName = null }, scopeWarehouseIds = null) {
-  const { enqueueContainerLabelJob } = require('../print-jobs/print-jobs.service')
-  const conn = await pool.getConnection()
-  let result
-  try {
-    await conn.beginTransaction()
-    // 拆分前先做仓库数据权限校验（2026-09-18 审计 P0-2）：拆分 = 扣减源容器余量 + 新建容器
-    // + 写库存流水，属于真实库存写操作，必须先确认调用方有权访问该容器所在仓库。
-    const [[scopeRow]] = await conn.query(
-      'SELECT warehouse_id FROM inventory_containers WHERE id=? AND deleted_at IS NULL',
-      [containerId],
-    )
-    if (!scopeRow) throw new AppError('库存条码不存在', 404)
-    assertInScope(scopeWarehouseIds, scopeRow.warehouse_id, '库存容器')
-    result = await splitContainer(conn, {
-      containerId, qty, remark, targetContainerId,
-      operatorId: userId ?? null, operatorName: userName,
-    })
-    result.printJobId = null
-    result.printJobIds = []
-
-    if (printLabel && !targetContainerId) {
-      const [[row]] = await conn.query(
-        `SELECT c.barcode, c.remaining_qty, p.name AS product_name
-         FROM inventory_containers c
-         JOIN product_items p ON p.id = c.product_id
-         WHERE c.id = ?`,
-        [result.newContainerId],
-      )
-      if (!row) {
-        throw new AppError('拆分后新库存条码不存在，无法创建标签打印任务', 500)
-      }
-      const job = await enqueueContainerLabelJob({
-        conn,
-        containerId: result.newContainerId,
-        warehouseId: result.warehouseId,
-        data: {
-          container_code: row.barcode,
-          product_name: row.product_name,
-          qty: row.remaining_qty,
-        },
-        createdBy: userId ?? null,
-        jobUniqueKey: `split_cnt_${result.newContainerId}`,
-      })
-      if (!job?.id) {
-        throw new AppError(`库存条码 ${row.barcode} 的打印任务创建失败`, 500)
-      }
-      // unprintable：没有可用打印机，只留下打印记录（打印记录页可见、之后可补打），
-      // 不算「已提交打印」，避免现场以为标签已经在打。
-      if (job.unprintable) {
-        result.printJobId = null
-        result.noPrinterCount = 1
-      } else {
-        result.printJobId = Number(job.id)
-        result.printJobIds.push(Number(job.id))
-      }
-    }
-    await conn.commit()
-  } catch (e) {
-    await conn.rollback()
-    throw e
-  } finally {
-    conn.release()
-  }
-
-  return result
+async function splitContainerOp(...args) {
+  return require('./inventory.split').splitContainerOp(...args)
 }
 
 // ─── 补货策略与补货建议（文档 01）──────────────────────────────────────────────

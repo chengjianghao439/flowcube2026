@@ -83,7 +83,7 @@ const commercialPreviewSchema=commercialCreateSaleSchema.extend({expectedRevisio
 const commercialMarker={commercialModel:z.literal('kit-v1'),expectedRevision:z.number().int().positive()}
 // Inspect the raw marker before an ordinary object schema can strip it.
 function modelSchema(ordinary,commercial){return z.any().transform((raw,ctx)=>{if(raw?.commercialModel===undefined&&(raw?.commercialGroups!==undefined||raw?.groups!==undefined)){ctx.addIssue({code:z.ZodIssueCode.custom,message:'当前客户端暂不能处理套单，请先保留输入并更新客户端'});return z.NEVER}const schema=raw?.commercialModel===undefined?ordinary:commercial;const parsed=schema.safeParse(raw);if(!parsed.success){for(const e of parsed.error.issues)ctx.addIssue(e);return z.NEVER}return parsed.data})}
-const createSaleSchema=modelSchema(ordinaryCreateSaleSchema,commercialCreateSaleSchema)
+const createSaleSchema=modelSchema(ordinaryCreateSaleSchema.extend({disposalSource:require('../disposal/disposal.handling.contracts').disposalSourceSchema.optional()}),commercialCreateSaleSchema)
 const reserveSaleSchema=modelSchema(ordinaryReserveSaleSchema,ordinaryReserveSaleSchema.extend(commercialMarker).strict())
 const releaseSaleSchema=modelSchema(ordinaryReleaseSaleSchema,ordinaryReleaseSaleSchema.extend(commercialMarker).strict())
 const shipSaleSchema=modelSchema(ordinaryShipSaleSchema,z.object({...commercialMarker,groups:z.array(z.object({groupId:z.number().int().positive(),qty:positiveQty}).strict()).min(1).max(200)}).strict())

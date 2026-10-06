@@ -1,0 +1,44 @@
+{
+  "name": "gui-search",
+  "checks": [
+    "商品管理四档命中排序",
+    "商品管理显示条码供应商型号颜色命中",
+    "商品管理 !%_ 字面命中且无控制商品",
+    "全局搜索四档排序",
+    "全局搜索显示各命中字段",
+    "全局搜索 !%_ 字面命中"
+  ],
+  "api": [
+    {
+      "method": "GET",
+      "path": "/api/products?keyword=L!%25_END&page=1&pageSize=200",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/search?q=FCGUIRANK&paginated=1",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/search?q=L!%25_END&paginated=1",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/warehouses/active",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/carriers/active",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/customers?keyword=&page=1&pageSize=200",
+      "status": 200
+    }
+  ],
+  "errors": []
+}

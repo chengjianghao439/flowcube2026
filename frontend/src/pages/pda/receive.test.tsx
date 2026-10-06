@@ -15,6 +15,8 @@ import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
+import type { AxiosAdapter } from 'axios'
+import apiClient from '@/api/client'
 import Page from './receive'
 
 const api = vi.hoisted(() => ({ task: vi.fn(), receive: vi.fn(), warn: vi.fn() }))
@@ -72,6 +74,10 @@ const TASK = {
 
 let host: HTMLDivElement
 let root: Root | null = null
+let client: QueryClient | null = null
+let previousAdapter: typeof apiClient.defaults.adapter
+const unexpectedRequests: string[] = []
+const quantityPolicyIds: string[] = []
 
 function setInputValue(input: HTMLInputElement, value: string) {
   const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
@@ -91,6 +97,7 @@ async function mountPage(task: Record<string, unknown> = TASK) {
   document.body.appendChild(host)
   root = createRoot(host)
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
+  client = qc
   await act(async () => {
     root!.render(
       <QueryClientProvider client={qc}>
@@ -110,11 +117,31 @@ beforeEach(() => {
   api.warn.mockReset()
   api.receive.mockResolvedValue({ containers: [{ containerId: 108, barcode: 'I000108', qty: 4, status: 4 }], printJobIds: [198], noPrinterCount: 0 })
   root = null
+  client = null
+  previousAdapter = apiClient.defaults.adapter
+  unexpectedRequests.length = 0
+  quantityPolicyIds.length = 0
+  // 保留真实数量策略 hook/API，仅返回本夹具两个商品的整数策略。
+  apiClient.defaults.adapter = (async config => {
+    const ids = config.params?.ids
+    if (config.method !== 'get' || config.url !== '/products/qty-policies'
+      || typeof ids !== 'string' || !['169', '162'].includes(ids) || Object.keys(config.params ?? {}).length !== 1) {
+      const request = `${config.method} ${config.url} ${JSON.stringify(config.params)}`
+      unexpectedRequests.push(request)
+      throw new Error(`未声明的离线请求：${request}`)
+    }
+    quantityPolicyIds.push(ids)
+    return {
+      status: 200, statusText: 'OK', headers: {}, config,
+      data: { success: true, data: [{ id: Number(ids), allowDecimal: false }] },
+    }
+  }) satisfies AxiosAdapter
 })
 
 afterEach(async () => {
-  if (root) await act(async () => { root!.unmount() })
-  host?.remove()
+  try { if (root) await act(async () => { root!.unmount() }) }
+  finally { client?.clear(); host?.remove(); apiClient.defaults.adapter = previousAdapter }
+  expect(unexpectedRequests).toEqual([])
 })
 
 test('收货页不再渲染扫码框', async () => {
@@ -127,6 +154,7 @@ test('点选商品后点一次「打印并登记」即提交，不再要求二�
   await mountPage()
   const input = host.querySelector<HTMLInputElement>('input[type="number"]')
   expect(input, '应有箱数输入框').toBeTruthy()
+  expect(quantityPolicyIds, '实际数量策略 API 已读取当前商品').toContain('169')
   await act(async () => { setInputValue(input!, '4') })
 
   await act(async () => { buttonByText('打印并登记').click() })

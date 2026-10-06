@@ -11,6 +11,7 @@ const { authMiddleware, requirePermission } = require('../../middleware/auth')
 const { companyScope } = require('../../middleware/companyScope')
 const { PERMISSIONS } = require('../../constants/permissions')
 const { validateBody } = require('../../utils/route')
+const { partyNameSchema } = require('../../utils/partyProfile')
 
 const router = Router()
 router.use(authMiddleware)
@@ -98,7 +99,7 @@ const invoiceSchema = z.object({
   invoiceType:    z.number().int().min(1).max(2),
   invoiceCode:    z.string().max(20).optional().nullable(),
   invoiceNo:      z.string().min(1, '发票号码必填').max(20),
-  partyName:      z.string().min(1, '对方单位必填').max(100),
+  partyName:      partyNameSchema('对方单位必填'),
   partyTaxNo:     z.string().max(30).optional().nullable(),
   amountNoTax:    z.number(),
   taxRate:        z.number().min(0).max(1),

@@ -24,7 +24,9 @@ const PAGE_SMOKE_SETTLE_MS = Number(process.env.PAGE_SMOKE_SETTLE_MS || 2000) //
  */
 function readPdaHeaderTitle(pageFile) {
   const src = fs.readFileSync(path.join(ROOT, `frontend/src/pages/pda/${pageFile}.tsx`), 'utf8')
+  // split 的三动作共用实例有动态标题；旧深链仍取源码明确声明的默认标题。
   const m = /<PdaHeader\s+title="([^"]+)"/.exec(src)
+    || (pageFile === 'split' ? /const LEGACY_PAGE_TITLE = '([^']+)'/.exec(src) : null)
   if (!m) throw new Error(`未能从 frontend/src/pages/pda/${pageFile}.tsx 读到 PdaHeader.title`)
   return m[1]
 }

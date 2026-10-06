@@ -1,0 +1,29 @@
+{
+  "name": "gui-pda-loss",
+  "checks": [
+    "还原响应丢失前真实提交200"
+  ],
+  "api": [
+    {
+      "method": "GET",
+      "path": "/api/inventory/containers/barcode/B000002",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/system/request-status/plastic-box-repack-60-1791287939640-3t4cswmm?action=plastic_box.repack.60",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/health",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/api/health",
+      "status": 200
+    }
+  ],
+  "errors": []
+}

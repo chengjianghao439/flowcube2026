@@ -1,5 +1,6 @@
 const { pool } = require('../../config/db')
 const { beijingTodayYmd } = require('../../utils/backendTime')
+const { BIZ_TYPE_NAME } = require('./finance-accounts.service')
 
 /**
  * 资金看板：账户余额分布、收支趋势、费用构成。
@@ -85,7 +86,6 @@ async function overview({ startDate, endDate } = {}) {
        FROM expense_claims WHERE deleted_at IS NULL`,
   )
 
-  const BIZ_NAME = { 1: '收款', 2: '付款', 3: '费用报销', 4: '余额调整' }
   const TYPE_NAME = { 1: '银行账户', 2: '现金', 3: '支付宝', 4: '微信', 5: '其他' }
 
   return {
@@ -112,7 +112,7 @@ async function overview({ startDate, endDate } = {}) {
     })),
     byBizType: byBizType.map(b => ({
       bizType: Number(b.biz_type),
-      bizTypeName: BIZ_NAME[Number(b.biz_type)] || '其他',
+      bizTypeName: BIZ_TYPE_NAME[Number(b.biz_type)] || '其他',
       inAmount: Number(b.inAmount),
       outAmount: Number(b.outAmount),
       txCount: Number(b.txCount),

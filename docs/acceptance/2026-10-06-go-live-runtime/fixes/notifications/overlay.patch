@@ -1,0 +1,101 @@
+--- a/backend/src/modules/notifications/notifications.service.js
++++ b/backend/src/modules/notifications/notifications.service.js
+@@ -1,6 +1,6 @@
+ const { pool } = require('../../config/db')
+ const { getInboundClosureThresholds } = require('../../utils/inboundThresholds')
+-const { scopeFilter } = require('../../utils/warehouseScope')
++const { scopeFilter, transferScopeFilter } = require('../../utils/warehouseScope')
+ const { CONTAINER_STATUS } = require('../../engine/containerEngine')
+ 
+ function pushNotification(items, seen, item) {
+@@ -22,7 +22,7 @@
+   const poSc = scopeFilter(scopeWarehouseIds, 'warehouse_id')
+   const soSc = scopeFilter(scopeWarehouseIds, 'warehouse_id')
+   const stSc = scopeFilter(scopeWarehouseIds, 's.warehouse_id')
+-  const trSc = scopeFilter(scopeWarehouseIds, 'warehouse_id')
++  const trSc = transferScopeFilter(scopeWarehouseIds, 'from_warehouse_id', 'to_warehouse_id')
+   const inSc = scopeFilter(scopeWarehouseIds, 'warehouse_id')
+   const cSc = scopeFilter(scopeWarehouseIds, 'c.warehouse_id')
+ 
+--- a/tests/workbench.test.js
++++ b/tests/workbench.test.js
+@@ -27,6 +27,66 @@
+   assert.ok(!result.items.some(item => item.code === 'SYSTEM_HEALTH_ANOMALY'))
+ })
+ 
++// 只替换数据库边界，运行真实通知服务与仓库过滤工具；不创建连接或启动应用。
++// transfer_orders 没有 warehouse_id，且调拨列表允许源/目标任一端在范围内。
++test('调拨通知按任一端授权计数，空范围不泄漏，不限仓保留原计数', async (t) => {
++  const transfers = [
++    { from_warehouse_id: 11, to_warehouse_id: 99, status: 1, deleted_at: null },
++    { from_warehouse_id: 99, to_warehouse_id: 12, status: 2, deleted_at: null },
++    { from_warehouse_id: 11, to_warehouse_id: 12, status: 2, deleted_at: null },
++    { from_warehouse_id: 99, to_warehouse_id: 98, status: 1, deleted_at: null },
++    { from_warehouse_id: 11, to_warehouse_id: 12, status: 3, deleted_at: null },
++    { from_warehouse_id: 11, to_warehouse_id: 12, status: 2, deleted_at: '2026-10-06' },
++  ]
++  const pool = require(dbPath).pool
++  for (const [label, scope, expected] of [
++    ['源仓命中', [11], 2],
++    ['目标仓命中', [12], 2],
++    ['两端命中只计一次', [11, 12], 3],
++    ['范围外', [77], 0],
++    ['空范围', [], 0],
++    ['不限仓', null, 4],
++  ]) {
++    await t.test(label, async () => {
++      let transferQueries = 0
++      const queryMock = t.mock.method(pool, 'query', async (sql, params) => {
++        if (!/FROM transfer_orders\b/i.test(sql)) return [[{ count: 0 }]]
++        transferQueries += 1
++        assert.doesNotMatch(sql, /\bwarehouse_id\b/, '调拨表没有单仓 warehouse_id 列')
++        assert.match(sql, /WHERE status IN \(1,2\) AND deleted_at IS NULL/)
++        if (scope === null) {
++          assert.doesNotMatch(sql, /\bIN \(\?\)|1\s*=\s*0/)
++          assert.deepEqual(params, [])
++        } else if (scope.length === 0) {
++          assert.match(sql, /AND 1=0/)
++          assert.deepEqual(params, [])
++        } else {
++          assert.match(sql, /AND \(from_warehouse_id IN \(\?\) OR to_warehouse_id IN \(\?\)\)/)
++          assert.deepEqual(params, [scope, scope])
++        }
++        const visible = transfers.filter(row => [1, 2].includes(row.status)
++          && row.deleted_at === null
++          && (scope === null || scope.includes(row.from_warehouse_id) || scope.includes(row.to_warehouse_id)))
++        return [[{ pendingTransfer: visible.length }]]
++      })
++      try {
++        const result = await buildNotifications(scope, null)
++        assert.equal(transferQueries, 1)
++        assert.equal(result.counts.pendingTransfer, expected)
++        const notification = result.items.find(item => item.code === 'PENDING_TRANSFER')
++        if (expected > 0) {
++          assert.equal(notification?.text, `${expected} 笔调拨单待处理`)
++          assert.equal(notification?.path, '/transfer')
++        } else {
++          assert.equal(notification, undefined)
++        }
++      } finally {
++        queryMock.mock.restore()
++      }
++    })
++  }
++})
++
+ // 待上架容器是 status=4（CONTAINER_STATUS.PENDING_PUTAWAY），容器没有 0 状态。
+ // 此前工作台的「待上架」卡片与「打印后未上架超时」通知都写成 `status = 0`，条件恒不成立：
+ // 待办永远是空的、超时提醒从不出现，收完货没人上架也没人知道（2026-09-16 修复，
+--- a/docs/finance-permission-time.md
++++ b/docs/finance-permission-time.md
+@@ -434,3 +434,10 @@
+ 资金看板的独立名称表只含业务码1–4，使已纳入既有查询的5/6显示为“其他”。看板现直接复用 `finance-accounts.service` 导出的 `BIZ_TYPE_NAME`，5显示“退货退款”、6显示“供应商退款”；静态相对依赖链未回到看板模块。区间收入说明包含供应商退款，支出说明包含退货退款及余额调整出账，金额继续取原 direction 聚合。
+ 
+ 本次仅修只读呈现，所有 SQL、流水金额、收入/支出方向、AP、账户余额、会计期间及权限规则保持；旧单签认仍只登记处理意图，不因详情提示产生库存或资金事实。后端语法与差异检查只能证明有限源码边界，修后真实 API/GUI 由独立总验收复验，不等同银行、人员、会计或生产验收。
++
++
++### 2026-10-06 通知调拨计数的仓库范围修补
++
++`GET /api/notifications` 的待调拨计数沿现行调拨列表规则：`from_warehouse_id` 或 `to_warehouse_id` 任一端在当前用户范围内即可计入，使用既有 `transferScopeFilter`。原通知误用该表不存在的 `warehouse_id`，使非空限仓请求在计数查询报错。空范围计数为0，不限仓保留全量；状态1/2、软删除排除、原通知文本/跳转及其它计数保持。
++
++`tests/workbench.test.js` 在不连接数据库的边界替身下执行真实通知服务，覆盖源仓/目标仓、两端命中不重复、范围外、空范围和不限仓，并保留原待上架与已取消巡检守卫。先取得不存在列的预期红测，再验证最小修补转绿；此证据只证明离线 SQL/参数与响应契约，修后真实 API/GUI、MySQL 和现场结果由总验收另核，不代表生产已验证。

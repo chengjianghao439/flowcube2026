@@ -6,6 +6,7 @@ const { generateMasterCode } = require('../../utils/codeGenerator')
 const { MOVE_TYPE, writeInventoryLog } = require('../../engine/inventoryEngine')
 const { adjustContainerStock, SOURCE_TYPE, getStockProjection } = require('../../engine/containerEngine')
 const { SETTLEMENT_TYPE, normalizeTermsDays } = require('../../constants/settlementType')
+const { normalizePartyProfile } = require('../../utils/partyProfile')
 
 // 仅导入入口使用严格枚举；历史记录读取仍由 settlementType.normalizeSettlementType 兼容旧值。
 function parseImportedSettlementType(value) {
@@ -307,15 +308,15 @@ async function importStock({ fileBuffer, originalName, operator, scopeWarehouseI
 }
 
 // ── 客户导入 ──────────────────────────────────────────────────────────────────
-// 列：code/name/contact/phone/settlement_type/credit_limit
+// 列：code/name/contact/phone/settlement_type/credit_limit/[address]；旧六列继续兼容。
 // 与 customers.service.create 口径一致：名称查重、结算方式严格校验、账期归零、授信额度可空。
 
 async function buildCustomerTemplate() {
   const rows = [
-    ['客户编码', '客户名称*', '联系人', '电话', '结算方式(现结/1/月结/2；空=月结)', '授信额度'],
-    ['C0001', '示例客户', '张三', '13800000000', '现结', '50000'],
+    ['客户编码', '客户名称*', '联系人', '电话', '结算方式(现结/1/月结/2；空=月结)', '授信额度', '地址（选填）'],
+    ['C0001', '示例客户', '张三', '13800000000', '现结', '50000', '北京市朝阳区'],
   ]
-  const widths = [14, 24, 12, 16, 36, 14]
+  const widths = [14, 24, 12, 20, 36, 14, 30]
   return {
     filename: '客户导入模板.xlsx',
     buffer: await buildWorkbookBuffer([{ name: '客户导入', rows, widths }]),
@@ -323,25 +324,17 @@ async function buildCustomerTemplate() {
 }
 
 async function importCustomers({ fileBuffer }) {
-  const rows = await readSheetRows(fileBuffer, { entity: 'customers', preserveSettlementLexeme: true })
-  const dataRows = rows.slice(1).filter((row) => row[0] || row[1])
+  const rows = await readSheetRows(fileBuffer, { entity: 'customers', preserveSettlementLexeme: true, preserveRowNumbers: true })
+  const dataRows = rows.slice(1).map((row, index) => ({ row, rowNumber: index + 2 })).filter(({ row }) => row.some(value => String(value ?? '').trim() !== ''))
   if (!dataRows.length) throw new AppError('文件无数据行', 400)
 
   let success = 0
   const errors = []
-  const cut = (v, max) => {
-    const s = String(v ?? '').trim()
-    return s ? s.slice(0, max) : null
-  }
-
-  for (let index = 0; index < dataRows.length; index += 1) {
-    const [code, name, contact, phone, settlementType, creditLimit] = dataRows[index]
-    const normalizedName = String(name ?? '').trim()
-    if (!normalizedName) {
-      errors.push(`第${index + 2}行：客户名称为必填`)
-      continue
-    }
+  for (const { row, rowNumber } of dataRows) {
+    const [code, name, contact, phone, settlementType, creditLimit, address] = row
     try {
+      const profile = normalizePartyProfile({ name: String(name ?? ''), contact: String(contact ?? ''), phone: String(phone ?? ''), address: String(address ?? '') }, '客户')
+      const normalizedName = profile.name
       const settle = parseImportedSettlementType(settlementType)
       // 名称唯一（与 customers.service.ensureCustomerNameUnique 同口径）
       const [dup] = await pool.query(
@@ -349,7 +342,7 @@ async function importCustomers({ fileBuffer }) {
         [normalizedName],
       )
       if (dup[0]) {
-        errors.push(`第${index + 2}行：客户名称"${normalizedName}"已存在`)
+        errors.push(`第${rowNumber}行：客户名称"${normalizedName}"已存在`)
         continue
       }
 
@@ -363,7 +356,7 @@ async function importCustomers({ fileBuffer }) {
           [finalCode],
         )
         if (codeDup[0]) {
-          errors.push(`第${index + 2}行：客户编码"${finalCode}"已存在`)
+          errors.push(`第${rowNumber}行：客户编码"${finalCode}"已存在`)
           continue
         }
       }
@@ -375,22 +368,23 @@ async function importCustomers({ fileBuffer }) {
 
       await pool.query(
         `INSERT INTO sale_customers
-           (code,name,contact,phone,price_level,settlement_type,payment_terms_days,credit_limit)
-         VALUES (?,?,?,?,?,?,?,?)`,
+           (code,name,contact,phone,price_level,settlement_type,payment_terms_days,credit_limit,address)
+         VALUES (?,?,?,?,?,?,?,?,?)`,
         [
           finalCode,
           normalizedName,
-          cut(contact, 50),
-          cut(phone, 20),
+          profile.contact || null,
+          profile.phone || null,
           'A',
           settle,
           terms,
           limit,
+          profile.address || null,
         ],
       )
       success += 1
     } catch (error) {
-      errors.push(`第${index + 2}行：${error instanceof AppError ? error.message : '导入失败（数据格式或约束不符）'}`)
+      errors.push(`第${rowNumber}行：${error instanceof AppError ? error.message : '导入失败（数据格式或约束不符）'}`)
     }
   }
 
@@ -415,7 +409,7 @@ async function buildSupplierTemplate() {
     ['供应商编码', '供应商名称*', '联系人', '电话', '结算方式(现结/1/月结/2；空=月结)', '账期（天）', '采购提前期（天）', '地址'],
     ['S0001', '示例供应商', '李四', '13900000000', '2', '30', '7', '北京市朝阳区'],
   ]
-  const widths = [14, 24, 12, 14, 36, 14, 16, 30]
+  const widths = [14, 24, 12, 20, 36, 14, 16, 30]
   return {
     filename: '供应商导入模板.xlsx',
     buffer: await buildWorkbookBuffer([{ name: '供应商导入', rows, widths }]),
@@ -423,32 +417,17 @@ async function buildSupplierTemplate() {
 }
 
 async function importSuppliers({ fileBuffer }) {
-  const rows = await readSheetRows(fileBuffer, { entity: 'suppliers', preserveSettlementLexeme: true })
-  const dataRows = rows.slice(1).filter((row) => row[0] || row[1])
+  const rows = await readSheetRows(fileBuffer, { entity: 'suppliers', preserveSettlementLexeme: true, preserveRowNumbers: true })
+  const dataRows = rows.slice(1).map((row, index) => ({ row, rowNumber: index + 2 })).filter(({ row }) => row.some(value => String(value ?? '').trim() !== ''))
   if (!dataRows.length) throw new AppError('文件无数据行', 400)
 
   let success = 0
   const errors = []
-  const cut = (v, max) => {
-    const s = String(v ?? '').trim()
-    return s ? s.slice(0, max) : null
-  }
-
-  for (let index = 0; index < dataRows.length; index += 1) {
-    const [code, name, contact, phone, settlementType, paymentTermsDays, leadTimeDays, address] = dataRows[index]
-    // name 与前端 LimitedInput maxLength={20} 对齐，避免超 DB VARCHAR(100) 整行失败
-    const normalizedName = String(name ?? '').trim().slice(0, 20)
-    if (!normalizedName) {
-      errors.push(`第${index + 2}行：供应商名称为必填`)
-      continue
-    }
-    // phone 非空时校验 11 位手机号（与前端 PHONE_RE 一致），非法直接留痕跳过
-    const normPhone = String(phone ?? '').trim()
-    if (normPhone && !/^1\d{10}$/.test(normPhone)) {
-      errors.push(`第${index + 2}行：电话"${normPhone}"不是有效的 11 位手机号`)
-      continue
-    }
+  for (const { row, rowNumber } of dataRows) {
+    const [code, name, contact, phone, settlementType, paymentTermsDays, leadTimeDays, address] = row
     try {
+      const profile = normalizePartyProfile({ name: String(name ?? ''), contact: String(contact ?? ''), phone: String(phone ?? ''), address: String(address ?? '') }, '供应商')
+      const normalizedName = profile.name
       const settle = parseImportedSettlementType(settlementType)
       // 名称唯一（与 suppliers.service.ensureSupplierNameUnique 同口径）
       const [dup] = await pool.query(
@@ -456,7 +435,7 @@ async function importSuppliers({ fileBuffer }) {
         [normalizedName],
       )
       if (dup[0]) {
-        errors.push(`第${index + 2}行：供应商名称"${normalizedName}"已存在`)
+        errors.push(`第${rowNumber}行：供应商名称"${normalizedName}"已存在`)
         continue
       }
 
@@ -470,7 +449,7 @@ async function importSuppliers({ fileBuffer }) {
           [finalCode],
         )
         if (codeDup[0]) {
-          errors.push(`第${index + 2}行：供应商编码"${finalCode}"已存在`)
+          errors.push(`第${rowNumber}行：供应商编码"${finalCode}"已存在`)
           continue
         }
       }
@@ -487,10 +466,10 @@ async function importSuppliers({ fileBuffer }) {
         [
           finalCode,
           normalizedName,
-          cut(contact, 5),
-          normPhone || null,
+          profile.contact || null,
+          profile.phone || null,
           null, // email 不在模板里
-          cut(address, 30),
+          profile.address || null,
           settle,
           terms,
           leadTime,
@@ -498,7 +477,7 @@ async function importSuppliers({ fileBuffer }) {
       )
       success += 1
     } catch (error) {
-      errors.push(`第${index + 2}行：${error instanceof AppError ? error.message : '导入失败（数据格式或约束不符）'}`)
+      errors.push(`第${rowNumber}行：${error instanceof AppError ? error.message : '导入失败（数据格式或约束不符）'}`)
     }
   }
 

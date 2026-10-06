@@ -28,7 +28,15 @@ const requestStatus = async (req, res, next) => {
       userId: req.user?.userId ?? null,
       receiptContext,
     })
+    await require('./system.split-device').ensureSplitReceiptDevice(req, res, receiptContext.matchedAction)
+    await require('../inventory/inventory.split-receipt').assertSplitReceipt(require('../../config/db').pool, data, req.user?.warehouseIds ?? null, { ...receiptContext, isPda: Boolean(req.pda), pdaWarehouseId: req.pda?.warehouseId ?? null })
+    if ([receiptContext.requestedAction, receiptContext.matchedAction].some(action => /^plastic_box\.(fill|repack)(?:\.[1-9]\d*)?$/.test(String(action ?? '')))) {
+      await require('../plastic-boxes/plastic-boxes.receipt').assertPlasticBoxReceipt(require('../../config/db').pool, data, req.user?.warehouseIds ?? null, { ...receiptContext, isPda: Boolean(req.pda), pdaWarehouseId: req.pda?.warehouseId ?? null })
+    }
     await require('../sale/sale.commercial-receipts').assertReceiptScope(require('../../config/db').pool,data,req.user?.warehouseIds ?? null,receiptContext)
+    if ([receiptContext.requestedAction, receiptContext.matchedAction].some(action => String(action ?? '').startsWith('disposal.dispose'))) {
+      await require('../disposal/disposal.receipt').assertDisposalReceipt(require('../../config/db').pool, data, req.user?.warehouseIds ?? null, receiptContext)
+    }
     // 箱贴回执的**领域自洽校验**（纯函数，只读）：修复「同 requestKey 跨箱」之前落库的成功回执
     // 可能是「B 箱的资源 id + A 箱的 job」。前端恢复正是靠这个查询入口，一看到 success 就会清掉
     // 待确认记录并当作本次成功，之后再无校验点 —— 所以这里必须与写重放用同一把闸。

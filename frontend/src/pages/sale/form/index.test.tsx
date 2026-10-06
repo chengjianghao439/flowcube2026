@@ -1,13 +1,16 @@
 // @vitest-environment jsdom
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { useSectionActive } from '@/components/layout/SectionVisibilityContext'
 import type { SaleOrder } from '@/types/sale'
 import SaleFormPage from './index'
+import { useAuthStore } from '@/store/authStore'
+import { PERMISSIONS } from '@/lib/permission-codes'
+import { useWorkspaceStore, HOME_TAB, MAX_WORKSPACE_TABS } from '@/store/workspaceStore'
 import { buildWorkspaceTabRegistration } from '@/router/workspaceRouteMeta'
 
 vi.mock('@/components/shared/OrderFulfillmentPanel', () => ({ OrderFulfillmentPanel: () => {
@@ -25,8 +28,9 @@ beforeEach(() => {
   client.setQueryData(['sale', 12], order)
 })
 afterEach(() => { act(() => root.unmount()); client.clear(); host.remove(); window.history.replaceState({}, '', '/') })
+function CurrentRoute() { const location = useLocation(); return <output data-route>{location.pathname + location.search}</output> }
 function render(path = '/sale/12') {
-  act(() => root.render(<MemoryRouter><QueryClientProvider client={client}><TabPathContext.Provider value={path}><SaleFormPage /></TabPathContext.Provider></QueryClientProvider></MemoryRouter>))
+  act(() => root.render(<MemoryRouter><CurrentRoute /><QueryClientProvider client={client}><TabPathContext.Provider value={path}><SaleFormPage /></TabPathContext.Provider></QueryClientProvider></MemoryRouter>))
 }
 function tab(label: string) { return [...host.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')].find(button => button.textContent === label)! }
 function navigate(id: number) {
@@ -83,4 +87,24 @@ test('已经打开的交接收到重复参数后拒绝任务定位并回本单�
   render(buildWorkspaceTabRegistration('/sale/12', '?focus=progress&taskId=91&taskId=').path)
   expect(host.textContent).toContain('交接参数无效')
   expect(tab('订单信息').getAttribute('aria-pressed')).toBe('true')
+})
+
+test.each([true, false])('原普通销售发起退货按共享创建权限导航：%s', allowed => {
+  useAuthStore.setState({ token: 'fixture', user: { id: 5, roleId: 5, permissions: allowed ? [PERMISSIONS.RETURN_ORDER_CREATE] : [] } as never })
+  useWorkspaceStore.setState({ tabs: [HOME_TAB], activeKey: HOME_TAB.key })
+  render()
+  const button = [...host.querySelectorAll('button')].find(b => b.textContent === '发起退货')
+  if (!allowed) { expect(button).toBeUndefined(); return }
+  expect(button).toBeTruthy(); act(() => button!.click())
+  expect(useWorkspaceStore.getState().activeKey).toBe('/returns/sale/new?sourceId=12&sourceNo=XS-12')
+  expect(host.querySelector('[data-route]')?.textContent).toBe('/returns/sale/new?sourceId=12&sourceNo=XS-12')
+})
+test('原单退货入口达到标签上限先提示，不驱逐现有草稿', () => {
+  useAuthStore.setState({ token: 'fixture', user: { id: 5, roleId: 5, permissions: [PERMISSIONS.RETURN_ORDER_CREATE] } as never })
+  const tabs = [HOME_TAB, ...Array.from({ length: MAX_WORKSPACE_TABS - 1 }, (_, i) => ({ key: `/sale/${i + 1}`, path: `/sale/${i + 1}`, title: '草稿', closable: true }))]
+  useWorkspaceStore.setState({ tabs, activeKey: '/sale/12' }); render()
+  const button = [...host.querySelectorAll('button')].find(b => b.textContent === '发起退货')!
+  expect(button).toBeTruthy(); const before = useWorkspaceStore.getState().tabs; act(() => button.click())
+  expect(useWorkspaceStore.getState().tabs).toEqual(before)
+  expect(useWorkspaceStore.getState().activeKey).toBe('/sale/12')
 })

@@ -33,11 +33,22 @@ export function invalidateAfterPriceChange(qc: QueryClient, result: { finished?:
   if (result?.finished) qc.invalidateQueries({ queryKey: [K] })
 }
 export const useProducts        = (p: QueryParams) => useVisibleQuery({ queryKey:[K,p], queryFn:({ signal })=>getProductsApi(p, signal) })
-export const useProductFinder   = (p: ProductFinderParams, enabled=true) =>
+export interface ProductFinderReadContext {
+  key: readonly unknown[]
+  enabled: boolean
+  config: Parameters<typeof getProductsForFinderApi>[1]
+  assertCurrent: () => void
+}
+export const useProductFinder   = (p: ProductFinderParams, enabled=true, context?: ProductFinderReadContext) =>
   // 显式打开的选择器：每次参数激活（挂载 / 关键词·分类·仓库变化）都取新值。
   // **不能**用 `refetchOnMount:'always'` —— 它只作用于「挂载」，覆盖不到同一次挂载内的 key 变化
   // （如重开后重复搜索原关键词、A→B→A）。仅本 hook 局部降 staleTime，不动全局默认。
-  useQuery({ queryKey:[K,'finder',p], queryFn:()=>getProductsForFinderApi(p), enabled, staleTime: 0 })
+  useQuery({ queryKey:context ? [K,'finder',...context.key,p] : [K,'finder',p], queryFn:async query => {
+    context?.assertCurrent()
+    const data = context ? await getProductsForFinderApi(p, { ...context.config, signal: query.signal }) : await getProductsForFinderApi(p)
+    context?.assertCurrent()
+    return data
+  }, enabled: enabled && (!context || context.enabled), staleTime: 0 })
 export function useCreateProduct() { const qc=useQueryClient(); return useMutation({ mutationFn:(d:CreateProductParams)=>createProductApi(d), onSuccess:()=>qc.invalidateQueries({queryKey:[K]}) }) }
 export function useUpdateProduct() { const qc=useQueryClient(); return useMutation({ mutationFn:({id,data}:{id:number;data:UpdateProductParams})=>updateProductApi(id,data), onSuccess:()=>qc.invalidateQueries({queryKey:[K]}) }) }
 export function useDeleteProduct() {

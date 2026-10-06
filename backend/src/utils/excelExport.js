@@ -19,7 +19,7 @@ function ymd(value) {
  * @param {object} res - Express response
  * @param {string} filename - 文件名（不含扩展名）
  * @param {string} sheetName - 工作表名
- * @param {Array<{header:string, key:string, width?:number}>} columns
+ * @param {Array<{header:string, key:string, width?:number, wrapText?:boolean}>} columns
  * @param {Array<object>} data
  */
 async function exportXlsx(res, filename, sheetName, columns, data) {
@@ -28,6 +28,17 @@ async function exportXlsx(res, filename, sheetName, columns, data) {
   fillSheet(ws, columns, data, 1)
 
   await writeWorkbook(res, wb, filename)
+}
+
+// Excel column widths use roughly one Latin character. Wide Unicode characters
+// need two units; allow padding and explicit newlines instead of cutting values.
+function wrappedTextHeight(value, width) {
+  const capacity = Math.max(1, (width || 18) - 2)
+  const lines = String(value ?? '').split(/\r?\n/).reduce((sum, line) => {
+    const units = Array.from(line).reduce((n, char) => n + (char.codePointAt(0) >= 0x2e80 ? 2 : 1), 0)
+    return sum + Math.max(1, Math.ceil(units / capacity))
+  }, 0)
+  return Math.min(409, Math.max(20, lines * 15))
 }
 
 /**
@@ -55,8 +66,13 @@ function fillSheet(ws, columns, data, startRow = 1) {
   data.forEach((row, i) => {
     ws.addRow(row)
     const r = ws.getRow(startRow + 1 + i)
-    r.eachCell(cell => {
+    r.eachCell((cell, columnNumber) => {
       cell.border = { bottom: { style: 'hair', color: { argb: 'FFDDDDDD' } } }
+      const column = columns[columnNumber - 1]
+      if (column.wrapText) {
+        cell.alignment = { ...cell.alignment, vertical: 'top', wrapText: true }
+        r.height = Math.max(r.height || 0, wrappedTextHeight(cell.value, column.width))
+      }
       // mysql2 把 DATE/DATETIME 列返回成 JS Date 对象，exceljs 会按默认的 mm-dd-yy 写成日期单元格
       // （英文习惯，且与同一份表里 DATE_FORMAT 成字符串的列格式不一致）。这里统一指定数字格式：
       // 纯日期写 yyyy-mm-dd，带时分秒的写 yyyy-mm-dd hh:mm。设置 numFmt 而不是转字符串，
@@ -156,6 +172,10 @@ async function exportStatementXlsx(res, meta, items) {
     ws.getCell(`E${r}`).value = pair[1]
     ws.getRow(r).height = 20
     ;['A', 'E'].forEach(c => { ws.getCell(`${c}${r}`).alignment = { vertical: 'middle' } })
+    if (i === 0) {
+      ws.getCell(`A${r}`).alignment = { vertical: 'middle', wrapText: true }
+      ws.getRow(r).height = wrappedTextHeight(pair[0], 6 + 24 + 14 + 14)
+    }
   })
 
   // ── 表头 ──

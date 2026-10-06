@@ -16,6 +16,7 @@ const SOURCE_TYPES = {
   RECEIPT_IN:      'receipt_in',      // 收款核销
   PAYMENT_OUT:     'payment_out',     // 付款核销
   EXPENSE_PAY:     'expense_pay',     // 费用报销付款
+  SUPPLIER_REFUND_IN: 'supplier_refund_in', // 已收供应商退款，准确资金流水ID
   REFUND_PAY:      'refund_pay',      // 退款出账（退款单 execute，biz_type=5，2026-08-21 审计修复）
   PURCHASE_RETURN: 'purchase_return', // 采购退货出库
   SALE_RETURN:     'sale_return',     // 销售退货入库
@@ -123,6 +124,13 @@ const ACCOUNT_MAPPING = {
     legs: [
       { code: '1122', dir: DIR.DEBIT,  aux: 'customer' },               // 借 应收账款〔客户〕
       { code: '1002', dir: DIR.CREDIT, aux: null, altCodes: ['1001'] }, // 贷 银行存款/库存现金
+    ],
+  },
+  [SOURCE_TYPES.SUPPLIER_REFUND_IN]: {
+    summary: '供应商退款回款',
+    legs: [
+      { code: '1002', dir: DIR.DEBIT, aux: null, altCodes: ['1001'] },
+      { code: '2202', dir: DIR.CREDIT, aux: 'supplier' },
     ],
   },
   [SOURCE_TYPES.PURCHASE_RETURN]: {

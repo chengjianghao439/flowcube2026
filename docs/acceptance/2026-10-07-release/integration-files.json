@@ -1,0 +1,2758 @@
+[
+  {
+    "path": ".env.example",
+    "purpose": "协作约定或配置样例",
+    "sha256": "77fd50e76a34ed4c058de296a6a023ba460c9bd29e198dd597499f1f5cf15e78"
+  },
+  {
+    "path": ".github/workflows/test.yml",
+    "purpose": "CI门禁",
+    "sha256": "c0894214b0138b6f362b647e146ebc9cecf81af2a122738a211ddf4d7320874e"
+  },
+  {
+    "path": "AGENTS.md",
+    "purpose": "协作约定或配置样例",
+    "sha256": "b10e9f99b9bf27e2e757fd89909d5ec025d6222f67e6deef09c1869f7b174f5e"
+  },
+  {
+    "path": "backend/apk/version.json",
+    "purpose": "业务、权限与迁移",
+    "sha256": "e38179f7138127cc65b2081cef89a9cc566addb0975e34cd071b78bc36af6b0b"
+  },
+  {
+    "path": "backend/package-lock.json",
+    "purpose": "业务、权限与迁移",
+    "sha256": "a3cbe05d98293390eef98376914020631eb52cf42f1eb785fc8b96c8a7d29698"
+  },
+  {
+    "path": "backend/package.json",
+    "purpose": "业务、权限与迁移",
+    "sha256": "ae943a2a262251e8756f1b0513761ac5999c8edf75ee2c8416009286cbbad539"
+  },
+  {
+    "path": "backend/src/app.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "5f763d96300e164a041582fabb9779ec2d6fe7dc7a922419e15475a6242b9c9a"
+  },
+  {
+    "path": "backend/src/constants/documentStatusRules.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "0724457ae4f29e26298288028dbd4828cef9d71a7ee090d813f117d1dfdd21cc"
+  },
+  {
+    "path": "backend/src/constants/permissions.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "85842fd46123882ca3f1f0803ad11d311ee210e0fc502d42116cd837fdf6019c"
+  },
+  {
+    "path": "backend/src/constants/voucherSource.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "6b9cdd89b4d3f0a5b386cae244c864f07f76790c4fc52df9073c296182dae7b9"
+  },
+  {
+    "path": "backend/src/database/278_party_profile_capacity.sql",
+    "purpose": "业务、权限与迁移",
+    "sha256": "a2a0e98cab3229b89a8170355e1ea0b835ae08c6ca66bbf2efb6f42d15b2e349"
+  },
+  {
+    "path": "backend/src/database/279_disposal_handling.sql",
+    "purpose": "业务、权限与迁移",
+    "sha256": "7477a353845fe02589e7485a5e1fca614b80ff83d40388fd70f1994986bb60c7"
+  },
+  {
+    "path": "backend/src/database/280_supplier_refunds.sql",
+    "purpose": "业务、权限与迁移",
+    "sha256": "2700b14452156a0be20dda50a870e7329dd27c94644bc7fe506039b9a53aca6b"
+  },
+  {
+    "path": "backend/src/engine/containerEngine.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "e37e90700e18a6ac7c5b84d920d676bbadf2f9c3a279c56a3a42a912658828ac"
+  },
+  {
+    "path": "backend/src/modules/accounting/accounting.period.service.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "152d0ae121a24b33ee0f2e76a40ff3ee3aa20e1c143f2d6c0f6e19e8ded93bc9"
+  },
+  {
+    "path": "backend/src/modules/accounting/accounting.routes.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "dcacea927f059aa33c0583cfc22c07349e8481a9848db304434e94b93fd74b76"
+  },
+  {
+    "path": "backend/src/modules/accounting/accounting.voucher.service.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "a4765dfb8766fa657f56401ec4d3233b9aeb5705bc3a9e4057c25f376c152a97"
+  },
+  {
+    "path": "backend/src/modules/accounting/finance-backfills.controller.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "5fea786b071c84a86627d90442aca3cd547461501f305a4d2fe78e22aab99bbd"
+  },
+  {
+    "path": "backend/src/modules/accounting/finance-backfills.service.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "8228a34956515fb2ec1b108194ddd3ac4856a0183ffba1e2096d1d92f9d44d11"
+  },
+  {
+    "path": "backend/src/modules/accounting/finance-period.guard.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "bfaffe58bfd20b2c396df2e4cf72aa8feb4de7d6d42674b27a5926a23fc581f7"
+  },
+  {
+    "path": "backend/src/modules/accounting/voucher-engine.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "0caeca86e2c8e73ba5a32f03c65c992e99cb3807f55af6f2473678fb048bf968"
+  },
+  {
+    "path": "backend/src/modules/accounting/voucher-supplier-refunds.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "58291a01c70c324bc6af759d8d6d39c7f1c1dfe445193b9ff56291d13f42434d"
+  },
+  {
+    "path": "backend/src/modules/approvals/approvals.controller.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "2eae9fbdc4ab585d003a0ecbaa4fdb2bb8306d2d4350ab153207c54cb2b23f52"
+  },
+  {
+    "path": "backend/src/modules/approvals/approvals.routes.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "7ec5cef178fcaf62507bd931463a36472e68a7afcdab15aaa3525f5f6d4fe165"
+  },
+  {
+    "path": "backend/src/modules/approvals/approvals.service.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "37ec2a91fd843b332320640500e9cd31dfd263827e4d11b8741c0c97a9b52b5f"
+  },
+  {
+    "path": "backend/src/modules/customers/customers.routes.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "9301cfb16cb44ec8f9191657e5ef8d7d3281ad3aa9a02d0fcf29013d678edc42"
+  },
+  {
+    "path": "backend/src/modules/customers/customers.service.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "09a08e8642d96611efbb631d2113535f4a94082d6f5c17310c2f6f731a6a11df"
+  },
+  {
+    "path": "backend/src/modules/disposal/disposal.controller.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "1b88c58d46f0811bbbeb0786a4e0b2d88bfba7a6ed84d2c011a40e9f738a3e38"
+  },
+  {
+    "path": "backend/src/modules/disposal/disposal.conversion.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "8c36f10933b633cdbd95cc87170427044e73546dafaf94112435edccf9a49623"
+  },
+  {
+    "path": "backend/src/modules/disposal/disposal.conversion.snapshot.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "55b8f79e000bf8a209eabeb97565a12bd90e91989d2306d0e7dc0039f4ae6dc4"
+  },
+  {
+    "path": "backend/src/modules/disposal/disposal.handling.contracts.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "19df45ebf03d1f2d167a94f24358f1e4eeb0433dce5cdb13e6e822b5d4bcc521"
+  },
+  {
+    "path": "backend/src/modules/disposal/disposal.handling.facts.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "c4ac549d88de2fda514ad389bbbfe2c07b20e64ee03b5417978eace913c1b0ce"
+  },
+  {
+    "path": "backend/src/modules/disposal/disposal.handling.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "f90981dabe916d77d06d1c8fd471a9b75f8438d35c12c2f6658938d281d0ec52"
+  },
+  {
+    "path": "backend/src/modules/disposal/disposal.handling.operations.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "d6eecbeeaf5cc8cac7301307c0bf6a5b0cc0d952894945496c80930bc9a5e7d8"
+  },
+  {
+    "path": "backend/src/modules/disposal/disposal.handling.proof.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "e075933176c8950b8c9fcb534e5559d9fea4f5d8836b20b8073fd46168cb5d0a"
+  },
+  {
+    "path": "backend/src/modules/disposal/disposal.handling.release.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "44a8e2a9dbe9cb8f461615d7fa10a71d3b84808d6b713440c8967b251674ceb5"
+  },
+  {
+    "path": "backend/src/modules/disposal/disposal.handling.rules.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "b36b54af652b027d2d4b8f870384159be4711378e4703f4cd1d3449b177aec9f"
+  },
+  {
+    "path": "backend/src/modules/disposal/disposal.handling.target-guards.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "6476ac388283f26ac3bceef240124f473c939028ee49304bd02b443c8e4e3290"
+  },
+  {
+    "path": "backend/src/modules/disposal/disposal.handling.targets.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "7b260d6950419cf279a902b543223cccdb161f8b25828c62a029ee1e259cf517"
+  },
+  {
+    "path": "backend/src/modules/disposal/disposal.receipt.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "8a5ad772b031dd420eac5ecab0bc94b1dd5efb1cd502a3c6de8c4d9915234a27"
+  },
+  {
+    "path": "backend/src/modules/disposal/disposal.routes.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "519c31b7e14ea74ae674058ccf05c08800498429ce304bb8b84eebc54f869097"
+  },
+  {
+    "path": "backend/src/modules/disposal/disposal.service.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "21eca9ae0ef4649240859451d00ca647c4597089f981182aa6f7d936018e5a56"
+  },
+  {
+    "path": "backend/src/modules/export/export.service.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "e2986e7ed0116a2c79bff8381debbfebdef09e0ab2923554e1914928dccc3db8"
+  },
+  {
+    "path": "backend/src/modules/finance/expense-claims.service.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "f5aa792585fb29b3c8ddfb1d1be6efa917c0b466d4e433f101e0e68503a48ae3"
+  },
+  {
+    "path": "backend/src/modules/finance/expense-pay.backfill.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "b880d60692583d14011295882ff2c2346b61462f9fb36cce49f3110fc69b8600"
+  },
+  {
+    "path": "backend/src/modules/finance/finance-accounts.service.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "2a74fa1aea2c0fe0f6f359871d9d9a1e0c439ada7beb2c58ced39cadf7e41f02"
+  },
+  {
+    "path": "backend/src/modules/finance/finance-dashboard.service.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "5f3047f90e046339b7216e71faeaa409655728f80c12b6a802832f825b6cef30"
+  },
+  {
+    "path": "backend/src/modules/finance/finance.controller.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "da58ffa601272abb619aea3539d5f817c7af9cdb1d76e5ad9f0b9b9e57f24b36"
+  },
+  {
+    "path": "backend/src/modules/finance/finance.routes.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "30ad02ad4514ae9cdb48c8f000157b5417084f139d7c20b01fcec3b42175b58f"
+  },
+  {
+    "path": "backend/src/modules/import/import.service.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "75552f43c3ce00474e8232075eebd42c93eded868b9b2e33850f80282bf934cd"
+  },
+  {
+    "path": "backend/src/modules/import/importBudget.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "3a6143ada46f263a2596dddaa7bd0f1d643289c77bce15db8f56c898854260ef"
+  },
+  {
+    "path": "backend/src/modules/import/importParseWorker.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "c042df38c9e73c66ed877a987b907de13f0a3fb4df46665ab45cdbbb6ca1e99a"
+  },
+  {
+    "path": "backend/src/modules/inbound-tasks/inbound-purchase-source.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "9d5a79b990195723e1bc6c9331c88b50df08d16db1f7abb7d66cf1ab60d59605"
+  },
+  {
+    "path": "backend/src/modules/inbound-tasks/inbound-tasks.command.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "103cd3f145e12a4b6a81f6689d560eb73d28517480cb96a0b1d02ee08f2ef5cc"
+  },
+  {
+    "path": "backend/src/modules/inbound-tasks/inbound-tasks.settle.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "827352919bc23f2274cc07e2906af620823059b8e812268eddb302d0e62b2b17"
+  },
+  {
+    "path": "backend/src/modules/inbound-tasks/inbound-tasks.void.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "c5083c401441e8684c2e11dfc9694435681855fcb6b4a97be3841613519dd7ca"
+  },
+  {
+    "path": "backend/src/modules/inventory/inventory.controller.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "2207870087368167a20229d4a19d27b63463965f444924387b16ef9652f822e4"
+  },
+  {
+    "path": "backend/src/modules/inventory/inventory.reservations.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "01f378eca3f8d3f38031dcaf546091e5908017cb04c05d1df4f62a58dde425d5"
+  },
+  {
+    "path": "backend/src/modules/inventory/inventory.routes.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "0b6fdb12384a72affbec6d522d5d0b24f4d57344965585d59032889770d83837"
+  },
+  {
+    "path": "backend/src/modules/inventory/inventory.service.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "d689cdbe443db3ded453ede612796fd84c53a55eb1081dab3ece70b1ad8598f4"
+  },
+  {
+    "path": "backend/src/modules/inventory/inventory.split-receipt.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "8c67666ba74163a7c7001a17e2f8520ba6eeaed19f5a5735f4d9391190ee6615"
+  },
+  {
+    "path": "backend/src/modules/inventory/inventory.split.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "cd8832762cf7b8e9f1cd9c9a0512e3f00a8c32b5cba2325c9523681504d9b43d"
+  },
+  {
+    "path": "backend/src/modules/notifications/notifications.service.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "5f0ade06410e18997d6f21f1690d49ff0a677542b17c9be14a1a42c5526d1945"
+  },
+  {
+    "path": "backend/src/modules/notifications/operation-alerts.service.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "6df6f77dd70eb5589867f8ea2fdf56c0c60a9d80cd6e8de9050fd66f23e5da65"
+  },
+  {
+    "path": "backend/src/modules/payments/payments.routes.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "f4f84763530c1018e1ca001e4808023626909b9e389f098907ec087e01f751fa"
+  },
+  {
+    "path": "backend/src/modules/payments/reconciliation-statements.service.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "7e12512c9f99b8d2643af454058dcfe695f266702b07f2b3962a99f0d7ff94a8"
+  },
+  {
+    "path": "backend/src/modules/plastic-boxes/plastic-boxes.controller.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "95a3985ed39d48508bbf96c3917e3aaaef92ada2940c64236091f431473425e2"
+  },
+  {
+    "path": "backend/src/modules/plastic-boxes/plastic-boxes.receipt.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "fe40032884bf10d1b651cc65b36ba04fa008863425994e741264c8d1b87be55e"
+  },
+  {
+    "path": "backend/src/modules/plastic-boxes/plastic-boxes.service.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "d9b8ccc5a090608b852f2fbc9dda83ca95972a779738d267b37ac0f5283a3ff9"
+  },
+  {
+    "path": "backend/src/modules/products/productSearch.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "311ce5d47004fc1b03e9df585bb7219cb6b6eb479490c92d778d43aa02d9c8d2"
+  },
+  {
+    "path": "backend/src/modules/products/products.service.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "68edae769a87c17b7b99727345342d691dfd57eac2938fad07a43cd6cd57e7a3"
+  },
+  {
+    "path": "backend/src/modules/purchase/purchase.service.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "6d9f562b81b3f65fcf8444c85a77b61992f521958aa7488038f82c7a24bf245d"
+  },
+  {
+    "path": "backend/src/modules/refunds/supplier-refunds.accounting.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "277fc1ed90bd0d7462fbf5cb313af310d0d33e0c9e4722b343aa92a457272c50"
+  },
+  {
+    "path": "backend/src/modules/refunds/supplier-refunds.actor.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "30a0239aa6597178ce8a81edc7ace26b74506bb41053ce9ead99eecf79685be2"
+  },
+  {
+    "path": "backend/src/modules/refunds/supplier-refunds.backfill-rules.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "8c139be64bb12d690cab7c1f8a06df5e6b15f432f8ed96d7c1ad9c74e0b340ff"
+  },
+  {
+    "path": "backend/src/modules/refunds/supplier-refunds.backfill.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "aff7c0cba52b004b4515ecc80a2f50f2e23449ae41dbb589d2ef0317cb329a25"
+  },
+  {
+    "path": "backend/src/modules/refunds/supplier-refunds.context.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "5945930a4aa64ca8a6ef131aca026a9910a2825b673bd07bb6a5a174a192ec04"
+  },
+  {
+    "path": "backend/src/modules/refunds/supplier-refunds.controller.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "17f3a29148aa91514dc93bf30300a2c694599be448fcb47af269594cad3f225d"
+  },
+  {
+    "path": "backend/src/modules/refunds/supplier-refunds.operations.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "0879364ce75578b5c906b04ade1b778854be229f587f96ad3a9172d837b49118"
+  },
+  {
+    "path": "backend/src/modules/refunds/supplier-refunds.postcommit.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "3467d99088ea24626a0e6e0066780bda0ba2c5474e90582702bfc088f8beb0a0"
+  },
+  {
+    "path": "backend/src/modules/refunds/supplier-refunds.pr-gate.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "c79a3c4172cfdcbc189342573aa8dd5f3e5a559fbe1eefafbbde0b0fda93e7ac"
+  },
+  {
+    "path": "backend/src/modules/refunds/supplier-refunds.receive.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "58da7911ecae69d739c14f77ffc32e08e137e731e32bcea8d32d30c50962f39e"
+  },
+  {
+    "path": "backend/src/modules/refunds/supplier-refunds.routes.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "7f8c39e7e38862241831104057eda6dbb61e2309bda2d94d3a34cc88c123d36a"
+  },
+  {
+    "path": "backend/src/modules/refunds/supplier-refunds.rules.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "3067f38ad022a45007dde61635082edf7060716e9c313c1c62c1ba17cee51587"
+  },
+  {
+    "path": "backend/src/modules/refunds/supplier-refunds.service.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "ef16cd0a0a3b4677937fdb6b07d49cac73d9b1ce7cbff206183219041cb2be05"
+  },
+  {
+    "path": "backend/src/modules/refunds/supplier-refunds.source.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "5e52c9356713e5a15a7584c9038a4404b63e9500c6448923cc02844dd3cf3d3f"
+  },
+  {
+    "path": "backend/src/modules/returns/return-events.service.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "0852db122060aa57afaaf399e24373db5e8bca461235571733d38e104911c7cb"
+  },
+  {
+    "path": "backend/src/modules/returns/returns-purchase.service.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "1bc01ebf608c0cd405871d2f11b1063dd76b0b2afe4a96e87cd59398aef9a9f2"
+  },
+  {
+    "path": "backend/src/modules/returns/returns.controller.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "575d8bcf30ab86eb20a81e3c8d21a43e780ca44cb8749bd498db724f1ffca2f1"
+  },
+  {
+    "path": "backend/src/modules/returns/returns.helpers.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "33954472c2ad8f85eda8e507f7be648ab7419c242cbf630b308f8fe5e6143f9c"
+  },
+  {
+    "path": "backend/src/modules/returns/returns.purchase-lock.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "91aacb8a9f04a9e9f1e0b3b78217555cf03236533bf20002d943c40776623638"
+  },
+  {
+    "path": "backend/src/modules/returns/returns.routes.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "6b6bf0dcaa49e5b704c7bf5b566bcf809ddb76e275f2be5fc055aa20d7841392"
+  },
+  {
+    "path": "backend/src/modules/sale/sale.commercial-receipts.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "27d008110753435965fcd656bb7443e83b352483a61a5ec238cf48a6126d8929"
+  },
+  {
+    "path": "backend/src/modules/sale/sale.contracts.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "9a4a82c713ace89267609d56aac4b4040d3f826a39850cddc93687114aba7d4b"
+  },
+  {
+    "path": "backend/src/modules/sale/sale.controller.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "aebb31a49ad9f030569cd5fb317381b03069220fc58530b49bd4c6164d95bb9c"
+  },
+  {
+    "path": "backend/src/modules/sale/sale.reorder-source.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "ccf0634e977ef236896d8837760ebcf606d11c934cfcc6c70dbb3228e741de43"
+  },
+  {
+    "path": "backend/src/modules/sale/sale.routes.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "fed990ad0d5ead8a683db06b774974b3664679ade0d77ac75f6c5ec0440207a1"
+  },
+  {
+    "path": "backend/src/modules/sale/sale.service.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "8328672c3c5747563523b6358a059813a203e311271acafb068ddbad9f8363e7"
+  },
+  {
+    "path": "backend/src/modules/search/search.service.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "50526e633c7759fff6f23cd1c79092dab4b08f1ac33df38e95063de3f6deea17"
+  },
+  {
+    "path": "backend/src/modules/suppliers/suppliers.routes.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "281763b7307b12955b93ffccf830e63fb609f3cd4a415f2d79bd731dd4e114e4"
+  },
+  {
+    "path": "backend/src/modules/suppliers/suppliers.service.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "4b7cb757a2fd96d5c7f0d92a73a3e0f674c5dd1997e51c2a38e727da6ada3798"
+  },
+  {
+    "path": "backend/src/modules/system/system.controller.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "b6759c59e876e76fd7aa902d4c3394a8dac7995b1b7c40d848b0a8bcb05743e4"
+  },
+  {
+    "path": "backend/src/modules/system/system.routes.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "0679030108936418535a6e61f823c3061df3992bb96f7ecdbb864f1d9a7d59bb"
+  },
+  {
+    "path": "backend/src/modules/system/system.split-device.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "61d2341b8a892cf3faaefd77ba670ca687127c0a1a8b3d31d99ef31fbdb93e42"
+  },
+  {
+    "path": "backend/src/modules/transfer/transfer.service.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "0a3315aa219d2b54b0ede6452126d554c4c5af6dc6dfa78beb7b4364b16a3f54"
+  },
+  {
+    "path": "backend/src/modules/warehouse-tasks/warehouse-tasks.command.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "45fa6613128989d99468a737c6b5dd31f1b7a0ac0fa3eab05db1603a5dc40258"
+  },
+  {
+    "path": "backend/src/modules/warehouse-tasks/warehouse-tasks.controller.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "323eafe6edaba20a73e726cf99faffee66c8685afc1729671b32d9a51e7aa65f"
+  },
+  {
+    "path": "backend/src/modules/warehouse-tasks/warehouse-tasks.pick.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "c1e38901c1af2b654638089345580218b69c3af4c72867a31e14a329cb18353c"
+  },
+  {
+    "path": "backend/src/modules/warehouse-tasks/warehouse-tasks.ship.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "621dcab36e103d0ece5512a58f48e48ad096aedcb1c89beb7b3e0d88468d641c"
+  },
+  {
+    "path": "backend/src/scheduler.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "2410c16244ffdaa3fe171325a8e455c2c486035595d4c855ea8a9d7b5927ebd6"
+  },
+  {
+    "path": "backend/src/utils/dingtalkAlert.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "ed9711a599644781b7e9f327fdb4f181f6e71c055333298c0c7bcab1a1c06ca9"
+  },
+  {
+    "path": "backend/src/utils/excelExport.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "b97ba52c12960093768cc89f5035adbaacea4e5fee4247f890e6d9b92678fbd1"
+  },
+  {
+    "path": "backend/src/utils/partyProfile.js",
+    "purpose": "业务、权限与迁移",
+    "sha256": "6c9641a9b031ec636711620e3f20b78684b74456a604fca96ccefe5cc9280b09"
+  },
+  {
+    "path": "desktop/package-lock.json",
+    "purpose": "桌面鉴权及版本",
+    "sha256": "54ec4e28cca3598be3c6dffc0f97fad4d551100e84e76273be8c64d15360d478"
+  },
+  {
+    "path": "desktop/package.json",
+    "purpose": "桌面鉴权及版本",
+    "sha256": "df7cefdabd1624f1bb3217fe08d2a1dcdcc885fca8589a68db9f39c84cc5d100"
+  },
+  {
+    "path": "docs/2026-10-06-go-live-runtime-result.md",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "b633b179c6de422c16ce3a58fa3b649622c07a69f781d7fb4c58e42237d6c3a6"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/README.md",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "6d621753e93c577f8ef9551672db58463a252674f989296db79ff4565e8a83c2"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/batch-one/accounting-owned-01.result.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "d01dd575893c5c8c75cf93e6eba6c9efacbfd9094e0965840b0fbc8d135a3a75"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/batch-one/accounting-period-owned-01.result.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "ea7d3ecb484ab8ff2fc4b68461d6d04905fa004482aabc172f028fbf21110f9e"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/batch-one/backfill-owned-01.result.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "0d723e64f6442014f4c6e22313ba48771315c3f800c700d51a9be2df9f1adf99"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/batch-one/concurrency-owned-01.result.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "cb21557d617bc69825185d2ad5c828fcd7bf184516d3db3554ad8678ab8f399c"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/batch-one/disposal-owned-01.result.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "7d1f5830e75e6f45e3d9cf9180b98a325c5492ae95db2be037d0cc2a58e64581"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/batch-one/finance-owned-01.result.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "059bdf9a6ab23efdb06a748a63220704d73cd2b55c3c26209d4408aa8a871740"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/batch-one/migration-corrected-recovery.result.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "8e9442a8772c7094a74c64b69c008ba7a08a0ff6f5c0d383f396d2a9059fd4bc"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/batch-one/migration-corrected-skip.result.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "61bb6c686b7ab75eeddb33fd9d2a0b38eccaebee4712212c9f85710ecdda658c"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/batch-one/migration-first-locale-fixed.result.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "af1fca6cdc22d888946bf1fb6bdaa47cf6a4209fbba52337200e7cb7f77ff42a"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/batch-one/migration-first.result.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "8334ebe33ce7e733fd4ed9404f8121b47406a2bc8f4713345788d4fe361fba43"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/batch-one/pda-session-owned-01.result.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "73fab899f6c169617d38b4812892cf5412b9878751216f922dd17ca3dee29b36"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/batch-one/period-lock-owned-01.result.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "dcb474c732a265adeac150f4251f474ccd562c501f002b2bb98b1ff5e2f4fab5"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/batch-one/refund-owned-01.result.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "294fbc27023d54485c8f46f561dfbd803cbd8c05f54759e8e417334edc7e15f2"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/batch-one/schema-corrected-double-replay-02.result.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "addad6231660d5fc847c765c2bbda4990cef9d1bd405dc67f0b9a1d8055f6084"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/batch-one/schema-corrected-double-replay-03.result.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "2b75ad1c3707f64971bc12c4d703859e4e5a45f1f4bfe9d0e10738e642ba50a6"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/batch-one/schema-corrected-double-replay.result.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "842f4674f9964de16f7315fff87e64b1c8f1af53e7940c0653e7c8edbaa475c7"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/batch-one/scope-owned-01.result.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "95c6914af48221755dc4901fbfddb8128b630deed1d99874eb3a2ff310313c7d"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/batch-two/browser-cleanup.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "16857490ba0235b8470186ad94958f71d8ad82e501eea106a1bf6c1c24fabe7c"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/batch-two/concurrency-owned-fixed.result.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "0b621bfe919a2b04e3bcc8f885f67822b7a31d3b74c8a05e3d1d5357edfea644"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/batch-two/go-live-new-chain-02.result.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "489a062f95cda9532382a2ed6a9ae0a2f8994c54dc9fd592d3f3b4c1d3390b01"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/batch-two/go-live-new-chain-first.result.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "784d784dafb572bf73f005c67ab5405b4dbe1ae17223fdad07dd926185c9fc00"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/batch-two/go-live-new-chain-runtime-final.result.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "576e6c142ca824e3d67a841f3c1054ede953d91ae84eee07b1a03a4e018aa3fd"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/batch-two/gui-finance-before-backfill-approve.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "b39c9fc841e59a4d29337d849ed8826ce73b2171a66eb43a972aafd062a830e7"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/batch-two/gui-finance-final.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "94a51c4b8e330116084bbd8d57b1cb837cc311606fa9ca2c4a1ab1164d411cf2"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/batch-two/gui-proof-after-conversion.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "09b6bfe5cbbb9905bb576d71d68e8619d475faf8dbf083f2619fe304527feefa"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/batch-two/gui-proof-after-rf18.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "80c169c6e16b2cd8eeceb873b9525feb40e321dc55be0a4e78c521000f470907"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/batch-two/gui-proof-before-receive.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "83b16ab75e411cb583c3926201bbf30837bdb60e054bb699de11922fe06c6c68"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/batch-two/gui-proof-before.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "edf783634e5595eb6725648807d79e770cdd3344b56b7c74b09c4ae8a5e1803f"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/batch-two/migration-clean-first.result.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "28073c88410f09a22399f721359b3cc0a8e23f9431b94851cf7c9dcdedee2f95"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/batch-two/resource-cleanup.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "deec1d60704fe721f7410d20b224d173eb7e41aa6581bb63fd2aad5a09b4fcae"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/batch-two/schema-clean-double-mode-replay.result.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "c3d0c460fd89fbab69557697ca130e61c2ecfbc1abd94f7a6e2e257c3be1f446"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/batch-two/schema-metadata.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "643f30799eb6bb6444853aada36e6dff992e11157baac1c449598c2a04cbb9db"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/batch-two/search-literal-default.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "f562678f70eebe935eacbf9d4ba8f72a449c6e14e8fa6579e625c08eb86f1c28"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/batch-two/search-literal-nb.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "f562678f70eebe935eacbf9d4ba8f72a449c6e14e8fa6579e625c08eb86f1c28"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/batch-two/search-ranks-default.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "46eaac15ce049ba5297284bc0a6decbf9b235831505d1a1b14c8e1321964188a"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/batch-two/search-ranks-nb.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "46eaac15ce049ba5297284bc0a6decbf9b235831505d1a1b14c8e1321964188a"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/batch-two/task-ownership-public.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "52c4184333181ed6c47e79f209ddeae04e004a5444776bd4e8c1ac07ae4ddfd7"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/final-independent-review.md",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "a6f0f8139d403cf01c2c2d890f1b1ff11a892e358063935a66d864f9c7ff8886"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/fixes/concurrency-fixture/manifest.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "86cb16c2ca9d720f2a663834dc6312eb8a2d345d45518ad332a197b8ab60516b"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/fixes/concurrency-fixture/overlay.patch",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "648e678ba44a92913d399163a5cda4728b713d3d851e1baffc2162754e9b0de0"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/fixes/gui-labels/accounts-dependency-graph.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "9a245de6ed6d59f47abb435dace796979eb40c150181d0b9ea6ac1c38c47b1a1"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/fixes/gui-labels/after-5sha.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "737fd1ef4b2c7516bd28a52ac2e6d31bdbff6789cd15753dff98b48f34e9f8aa"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/fixes/gui-labels/before-5sha.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "559a0c7ecdce185d1b1e1e8e04ca2b909d39ec75a5b4726c54e4fbb638b69197"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/fixes/gui-labels/overlay.diff",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "1111b8d5f297912b00129fc11b824d42be5251354b1d19eedf6dafadc9fc7f77"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/fixes/gui-labels/source-boundary-review.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "fe83668fce99ca0e9afeb6cd60df949a17add326edbc992b8a107151c8fb260d"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/fixes/gui-labels/verification.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "8985b97d8653d99acc889b5d1a7234fa97408dded1b4f38b3cce65ff6033b326"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/fixes/migration-check/author-summary.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "8c28e1efbff883424d1c8082ea92259be442ca3140133d72a5de02814607b501"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/fixes/migration-check/current-manifest.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "98de7d468bf61a566fb96dbc2df238745ac2f38bdee5042007ccc00f1d5afda8"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/fixes/migration-check/static-proof.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "b21bca3a2dd711e94cc6612b77b206088bc06f99b380e2671541b775b34510c6"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/fixes/notifications/green.tap",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "078050c8712d2f1cba3fb95ecfd251a4e178d187f7b996f05f8c8183b0a74e5c"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/fixes/notifications/manifest.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "4f8da72995039612d3239950a51b15e800087538ff4e626b4da5a1895cd377b6"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/fixes/notifications/overlay.patch",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "409492ad0a6f101f4d27bd942bd50387bb19caefe43ff463471ec646c8b8ff9d"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/fixes/notifications/red.tap",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "52ce582686a5cc1469b50c7c1edc16193f9a75aefb306ea6b4a7275ed41c095a"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/fixes/refund-date/after-manifest.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "bdf7c2cb41e39904ee77e03ace9566b45295fe31ebb8baf823686fc234d280d2"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/fixes/refund-date/green-focused-result.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "dafde2a77b126055ce02306c33dd7f7e8da7b6a257d0dd71f11d5cb7bcb2e5c8"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/fixes/refund-date/green-suite-result.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "3d963e55344b9a9f9c102c4179d7a8398ae6159619363656e9b7890d6f50153d"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/fixes/refund-date/overlay.patch",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "7f37292ad68d4a7aa3f89be30859f4be2c9bceaca1bfd329a70358b223bd3f06"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/fixes/refund-date/red-result.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "c27abaefe57cf46d466a4c7fb5719829808295959a5c2800ba281d0f6c467a32"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/fixes/refund-date/static-checks.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "f103205c811239d0f17b5b6387049c9d77e182153d9d317eb9c8d6aa790f3b87"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/fixes/refund-date/summary.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "66291c8f70318b93968f94c3747f4d474b069845852bde55815ea453f72ad34a"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/gui/gui-approval.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "66be92402f8cb2378c2f83426e31760219e41c9c81faa9ce6a2730b1ccb60ed7"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/gui/gui-backfill-approve-final.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "5ec220f488bcff87c126c0b34b2362a2ee8ca0dd9e9f7ea1db1f6b3ec2d1c353"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/gui/gui-backfill-self-approve.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "00e1b35a76e4a15322363f53df752fde1bb5ef55494f72f18aa6c982250f0d09"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/gui/gui-conversion.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "f95a5036b7bed68fa2ce3c182c7288eb46f18792a2d6ac0e34b26795ecc0c95a"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/gui/gui-finder-returns.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "b8dc758a1e18df46c37cee07957df1ecd5aa3f30601030d4e8d2d62d7084932f"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/gui/gui-funds-final.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "63ea4eb073bf3455ef481cd6efb1060699ee7e94937ebab66bdb67b3d94f93f5"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/gui/gui-funds-trace.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "0d560d046ff4d1890b9852c89a87306eafc42afaef86c97244d4f571b0bf39ec"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/gui/gui-pda-actions-final.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "c0ff98acf9a579115300ba82660c4179418ec6d525ca9f128db29f45a54f0ce8"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/gui/gui-pda-actions-first.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "c2052aa03c597565c3980d105137c2c48b4f8c7a8d08cd3a1e290fbbff83eb12"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/gui/gui-pda-loss-pending.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "db7c54db079209c8e6c2b9d25d8d9969c58dda22fd72f7dbf8f6da2dd0f014ac"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/gui/gui-pda-loss.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "9f5c792b59ab787ad5f72fb4a65f4938e91ff5a242d59071583cc950d6cdc6cd"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/gui/gui-phase-one.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "447529d0bbed9152198d94fff1bd8e1ebcfa6ccd3599c35633d2811c39595697"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/gui/gui-profiles.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "0675e053da558f18adc859ff6eb791f78784a4462e87a8840196cb55affda8ed"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/gui/gui-refund-backfill-apply-final.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "7e996acc23b2afba053f389642d359f95b032706e73cc6bce5c2c10ab3d70a49"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/gui/gui-refund-backfill-apply.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "cb4ac11474f68b5b4068384d06577a9f66af022c8854bde3ee827d972ba86d64"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/gui/gui-refund-confirm.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "0e86870d85728bd456be3d0266353b3214bb00ef3b20499687e2a7ac72c65121"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/gui/gui-refund-create-loss.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "2a133fbea2d59bb708356b72bec58ce83594f45134e5a9627137f10cae770323"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/gui/gui-refund-receive-loss.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "9485b26672ec1ccf10aee99be6b5b4ff711bec49f29be3160f411612e0d11d8b"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/gui/gui-refund-recover.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "19827a531a8bf77613268d46c115e8ede4344264dde2a7427fdc54819fba078c"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/gui/gui-reorder.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "34a77c1423ecc2d2f18cb43e67384534d6432cf8bb617d8b073d61cc6d034ec6"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/gui/gui-reservations.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "b703926fe32b9788179b62011c0a61fb6bd9c57890c2b73148d6539b7131489b"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/gui/gui-returns.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "2c1a9945e418dec0171c85758eaeb2c8ac1fdfad3b5db1cb2d61e22ed1ffb2bd"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/gui/gui-search.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "6b43b970047f0ccc3eaa4479763e5962b74384e274a2b579bf4899ca0a1344ea"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/manifest.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "16a5ad09038df36786bd57db54f4227e40d5f7f505993a563b4ed0dbd819b9d8"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/screens/gui-approval.png",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "8a6f8241ef60fc7150180132c2732c56a5b4ad8d74f9aa5e1a7d0b473524033d"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/screens/gui-backfill-approved.png",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "8ca424566c5664fe7d332427b6d748a2b47b84ae967b42c529bd388edb4da575"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/screens/gui-conversion.png",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "126bc4f41a1cf6f56eb9da85e2dbec37d641c92bc5c2913b1036b32bb7123b5c"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/screens/gui-funds-final-dashboard.png",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "927ca665a93aaddc8d500bbdeba039e09678dbd4342ef211c4a52f55423926d2"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/screens/gui-funds-trace.png",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "ece0018f1293f0b9f7f2a85cddfa4fa008434dcc9e18938c24dc41d7e788338e"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/screens/gui-pda-actions.png",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "2068650f76724064a5b3dd231968c2c0a3c704327f58a8a14c27e23a59dd480c"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/screens/gui-pda-pending.png",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "b34565b690f82f6f2c7fdb9776532ecd33327b69fcd3fd0128e93dec8e1ba11e"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/screens/gui-profiles.png",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "b06f28b998b5abc5209d6e2390a33a61c4468a3469ff0f59f03c5741cc61db36"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/screens/gui-refund-received.png",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "dc6a10f1100862717af9753ebded515ef554b726939f6d4b99a8b0003102b38e"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/screens/gui-reorder.png",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "52628a37e0daff61e0f6a2525d08fbd7a79ae6b56f0b12a4fa658c1fc187ac76"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/screens/gui-reservations.png",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "3dee1facd50dcd77e001960e8bddcdb820df1b3a0f21d49275c9c3a205fc0706"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/screens/gui-search.png",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "bdbdec87064653edce29f55c2bb7b56f790790f59ec0ab9f0e0766139a57a1d0"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/screens/gui-source-return.png",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "a47b4b63cff4fe4e2bde49aa03c75b6f295cfc616a6103d4d7b65bfa080c7c06"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/source/baseline-360.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "dae14eca2646dcaa8755708f39f6bb6050cada540f69f0f23d1af63b524321ce"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/source/baseline-differences.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "6d0eb1b93d4c5760202d4f3dce38456453035e6faf04f2409c0bfe0ebfb2b55a"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/source/final-workspace-manifest.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "9ad552224485b88339439e4aa6dbdd5a94e6d5f385a6654f41726e4de09f3971"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/static/final-doc-scope-check.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "97730c7d1fe0b6815887dc595e8b01cffaeca7b106d2023ef56a963ef0ab9321"
+  },
+  {
+    "path": "docs/acceptance/2026-10-06-go-live-runtime/static/frontend-types.result.json",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "60bfbbaf4ae49c9eb1b3f9f24e568dd3624797e87e673da7d692835f559c3061"
+  },
+  {
+    "path": "docs/acceptance/2026-10-07-release/integration-files.json",
+    "purpose": "主题说明与验收证据",
+    "sha256": null,
+    "hashExclusionReason": "清单自身不递归计算摘要"
+  },
+  {
+    "path": "docs/backend-api-sql-conventions.md",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "3eb9899bea7f919b4529797f30c3db454fb30208146ec94eb95df20bc83b6ef6"
+  },
+  {
+    "path": "docs/business-semantics.md",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "5b08c17b51a0514d3bb4d3a4b0087e5e7091a1d4c2f2925d488ad1f0b550ffc3"
+  },
+  {
+    "path": "docs/finance-permission-time.md",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "9893e3b07fa79f9aef27977beee6076892722d382eb4e7de9c126db98c01477f"
+  },
+  {
+    "path": "docs/frontend-pda-conventions.md",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "3a057173fa8858f8fb92da34ae69d5326a1e4ed7246871d3058f7d46390a93f0"
+  },
+  {
+    "path": "docs/inventory-transaction-invariants.md",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "5f5bfba32ab4d98dec1fdd3d96a0372907762c3458a4dfad9228340f30a3d619"
+  },
+  {
+    "path": "docs/print-deploy-ops.md",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "648afd2acf3b29f9172ce11c8de1b586dbdaf7e1185065def8f931355fe71693"
+  },
+  {
+    "path": "docs/release-notes/0.13.0.md",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "8951acbc35df4e2cb3d06eb45a79c37c539ea0cdb416e2d25dbb110bda2cc984"
+  },
+  {
+    "path": "docs/release-v0.12.0-result.md",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "c300fcbdf8ffe683713da34e5d1b80e664373b06f61822cd2b19e6a71be30209"
+  },
+  {
+    "path": "docs/release-v0.13.0-integration.md",
+    "purpose": "主题说明与验收证据",
+    "sha256": "e4aed40b191af4fb7739dfb90e5e7867a104937ad19caa5c2015b4fc63c887e2"
+  },
+  {
+    "path": "docs/runbooks/failure-recovery.md",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "f66194367cffa5a73d4dbff7a4b73c9bd82830fa906170c4de16d5df0e33960d"
+  },
+  {
+    "path": "docs/security-scope-remediation-2026-10-06.md",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "ca2a0c5663dd4f1184584cce4df89f50ae28c6dafeccb5f5af636e51fad5f8bf"
+  },
+  {
+    "path": "docs/security-session-import-remediation-2026-10-06.md",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "c81084b0838ec48091cf6cdb445de84e8fb73a25059f5073468a5d1a3dfe337b"
+  },
+  {
+    "path": "docs/superpowers/plans/2026-10-01-flowcube-product-improvement.md",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "2cbd5f60f741ed06e1ed4ea393b2b7d1a120794a42430c888c37de7837b67d87"
+  },
+  {
+    "path": "docs/superpowers/plans/2026-10-03-release-build-dependencies.md",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "9dc268a255e845e74f5eec6cbb122c2382d11938972f6f01cee7065c6f78cb28"
+  },
+  {
+    "path": "docs/superpowers/plans/2026-10-03-system-acceptance.md",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "d039a9be2d2e63ab387aa125c32ad580e84e7dab58cf3493ca3a71eb24f51da9"
+  },
+  {
+    "path": "docs/superpowers/plans/2026-10-04-dingtalk-alerts.md",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "1700301635b87ba546a1eb60932a190d741268d7c20869f93b6a2bfc4be70387"
+  },
+  {
+    "path": "docs/superpowers/plans/2026-10-04-disposal-handling-implementation.md",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "71f4666a78e4217093a98021a0cfeb87484b7e4b3420e9e5d83156faedb3a2be"
+  },
+  {
+    "path": "docs/superpowers/plans/2026-10-04-disposal-transition-design.md",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "856bc02cdedcc30b274b4480e3c415c8bf57b265fb095da55c1748f06d2b639e"
+  },
+  {
+    "path": "docs/superpowers/plans/2026-10-04-flowcube-go-live-backlog.md",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "4c40e2ecd93310a9c3c2662381d1c9fed97adad9633a4a8f34efa1c7f512c376"
+  },
+  {
+    "path": "docs/superpowers/plans/2026-10-04-go-live-accounting-parallel-policy.md",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "09e519f1fd40b077d74f2ff1f8bad10dd09e6d1619ef8d06d12119d12099f981"
+  },
+  {
+    "path": "docs/superpowers/plans/2026-10-04-go-live-batch-one-implementation.md",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "50918098f18457e926ac183e4f988b6e53eaab15a6d7a8e6dde772b784ad1d04"
+  },
+  {
+    "path": "docs/superpowers/plans/2026-10-04-go-live-continuation-execution.md",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "7409dffceba25af1eaa42d8977fb92c29e10d8a6aa00d97bb50b054d45d9ff30"
+  },
+  {
+    "path": "docs/superpowers/plans/2026-10-04-go-live-remaining-execution.md",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "3834889602bf6849ee5e42ab87b383e85ee638f6bd52097c0720a8fc16904afc"
+  },
+  {
+    "path": "docs/superpowers/plans/2026-10-04-supplier-refund-implementation.md",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "90300fca3e7963d3cf14ca60840e15a6868144eeabf607a21865566fbeaf69b2"
+  },
+  {
+    "path": "docs/superpowers/plans/2026-10-06-go-live-runtime-acceptance.md",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "d6fac2a1a197b09f0e152f5c407c0ff6d085ea4a091b65757125b9ca85370476"
+  },
+  {
+    "path": "docs/verification-commands.md",
+    "purpose": "说明与原分支验收证据",
+    "sha256": "6160ef6914362ff4e7b3c78880298812c82cec75f84d25e190f71e7688170216"
+  },
+  {
+    "path": "frontend/android/app/build.gradle",
+    "purpose": "界面、会话与PDA",
+    "sha256": "96079f966b6c4fc6a6652cd4e71493b7da20a33024a782589f597143a13ea73d"
+  },
+  {
+    "path": "frontend/package-lock.json",
+    "purpose": "界面、会话与PDA",
+    "sha256": "4ee540897f57876ccc3c08a795f7f7c0a0e5a6b8747a2fb0d3bc1441e80dd619"
+  },
+  {
+    "path": "frontend/package.json",
+    "purpose": "界面、会话与PDA",
+    "sha256": "bfde8ceb417ae12eefe9e0bb71d3ebba0c6250fe5b03920aa97f30271f543f09"
+  },
+  {
+    "path": "frontend/src/api/accounting.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "0dfae255f5790074660d958fde7c2e44e84326e3b17bf69c5603cdad3324054a"
+  },
+  {
+    "path": "frontend/src/api/approvals.test.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "b1df66bb6060216006e4c93ecbdd79a9dd269be9ea6814a04826f41b952f44d4"
+  },
+  {
+    "path": "frontend/src/api/approvals.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "3fca80826d6e18577bb5768dd2586cbefa8429d47b4c73db47692faf647749aa"
+  },
+  {
+    "path": "frontend/src/api/categories.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "f8cca43f773e8915e0eb98daa1b37f382ecd2bc2912277c458c0870b570172b8"
+  },
+  {
+    "path": "frontend/src/api/client.base-url.test.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "332d8681e83ae3667589a9d9f8fc970903bbb9ecd7fc8c1eb272693e10e8fb36"
+  },
+  {
+    "path": "frontend/src/api/client.refresh.test.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "e68d47886aab6de83dd2370cb23449226ed8af076da5154ff8f4d5b2422e701d"
+  },
+  {
+    "path": "frontend/src/api/client.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "81f5130b33a4e610486234034c44dd6fc61651a8c9b9644574e60b58f49184db"
+  },
+  {
+    "path": "frontend/src/api/customers.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "7fb9505b59c66b822f2b203ced56f20266a131a383a728c82e7623080df97e9b"
+  },
+  {
+    "path": "frontend/src/api/dashboard.test.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "cc736436c5f21190d565dee8cf19accb56066bb2d78754682370b49607a93052"
+  },
+  {
+    "path": "frontend/src/api/disposal-handling.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "9d877727a9ad02eb7e86220b95476736920f4bc36fee3e29dc03f9a506a2de56"
+  },
+  {
+    "path": "frontend/src/api/disposal.test.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "8c32110a6e27c0f5ba552a3d404f218c01e565848ef80753e228d8b31fb5861a"
+  },
+  {
+    "path": "frontend/src/api/disposal.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "a89794854d129eb9ffdf9e0a60ec96325bd14bd4e96a25d1d5f487ee45a93610"
+  },
+  {
+    "path": "frontend/src/api/finance.expense-pay.test.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "eace1d610d27eed3a404e166b58bf67051b39ccf2685df9ad66744573edb34f3"
+  },
+  {
+    "path": "frontend/src/api/finance.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "c650fd8d296e8ab9eadbb2736f27efb4d072ed8582160cb4291d4fbe872c8236"
+  },
+  {
+    "path": "frontend/src/api/inventory.reservations.test.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "4699dd7369e6dd4952dac7ac6fe30599d7614b665ee319e907eb8ed60c2d6aff"
+  },
+  {
+    "path": "frontend/src/api/inventory.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "6039f5b19dfc52860d20c5c3212fa5776a4d62107985d6b162804fb2ce181830"
+  },
+  {
+    "path": "frontend/src/api/price-lists.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "0a74a4f2c90096d59ac4c59d73fb9936d8c10aebb4ebf0be339b1581e47d407b"
+  },
+  {
+    "path": "frontend/src/api/products.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "e53e1dc3bb9ac3096fa2e6f7eb550fac9734e324755182e0db3d995caf823808"
+  },
+  {
+    "path": "frontend/src/api/returns.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "c5c09324a48fbe4debf07257a59fa28a2672f9e42e50e931560df040c1e069d5"
+  },
+  {
+    "path": "frontend/src/api/sale.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "416286ca8b3d7d12d6e2ed0355e6b744e1e8f4f880a437fe3304287c397e82af"
+  },
+  {
+    "path": "frontend/src/api/search.test.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "643011adfc98d81ee3b78b78c0db8bdd9cc5af498786336d5a309a68b98969ed"
+  },
+  {
+    "path": "frontend/src/api/search.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "f216ee1129bc2a4e943bd838ef5834b83b9b038bffd9337d5ee1f9f478a71e1d"
+  },
+  {
+    "path": "frontend/src/api/supplier-refunds.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "038b5cce3d3eaa968f4d335b225045293773eda74e9a5a8993490e936b57b380"
+  },
+  {
+    "path": "frontend/src/components/dashboard/registry.test.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "7bc842eb28a22e37740c1a7dcf8a4424907ae65ec8902ab2f086e989302d20d9"
+  },
+  {
+    "path": "frontend/src/components/dashboard/registry.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "b12ef9f1dfdaa8949965c76ee8f41f519ce11d9a2928164029de04592e21fe8c"
+  },
+  {
+    "path": "frontend/src/components/dashboard/widgets/ListWidgets.approvals.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "e972cbd916be2c07fbf7030f36be130fb2136905817e7e5660bb6929c53a7d06"
+  },
+  {
+    "path": "frontend/src/components/dashboard/widgets/ListWidgets.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "fc8bd0305585f86c63da14b12c69b10ff9fc4b5d3cbfc81636e82911b7b8810e"
+  },
+  {
+    "path": "frontend/src/components/dashboard/widgets/OperationalWidgets.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "5475f6962a7aebaaa40719b94f3da2f61ffecb649bdce8499e7af5f2a6f3d502"
+  },
+  {
+    "path": "frontend/src/components/finder/CustomerFinder.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "5f3ef97d141518f19fff7852637d6fb8e78c95532237534b4022bbe43a46efdf"
+  },
+  {
+    "path": "frontend/src/components/layout/TopNav.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "99486cef6f83c87315fca24accc4350eac47b6aae7c45f6667f4742019708b98"
+  },
+  {
+    "path": "frontend/src/components/pda/PdaSplitRecoveryPanel.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "378ba0c82ef4258f7b74aff5bb9d96a7cb8021aca88a021e38437e21678f35bd"
+  },
+  {
+    "path": "frontend/src/components/print/OrderPrintOverlay.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "b5190369d74365afcfbc681ee452b98e4496757c2f6d7f859de500ae20ff49cc"
+  },
+  {
+    "path": "frontend/src/components/print/PartyPrintText.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "113bdbb0264d19ec61b2baf0f88b77b9c10db9799785a69b559ab63b1d275b3b"
+  },
+  {
+    "path": "frontend/src/components/print/TemplateRenderer.profile.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "61e754877ad34a76ca5d8be4d4bfbe4b52781e060ac3ca0483e1bdfd9d212e4c"
+  },
+  {
+    "path": "frontend/src/components/print/TemplateRenderer.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "6dd75a2f2fa3fbd908e832862c696ac619e6911cc5c2bb904668a9b8eb254393"
+  },
+  {
+    "path": "frontend/src/components/shared/ApprovalHandoffNotice.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "678e97978817a76b1e691eda061a7cbe8479fa8112623e37fa76a350d28b7d7a"
+  },
+  {
+    "path": "frontend/src/components/shared/DailyWork.integration.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "6aafbc1f31c3caa264291fe3d8e38b7dd1e5cb94ae521a262f2aca09c870cb95"
+  },
+  {
+    "path": "frontend/src/components/shared/DailyWork.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "a50cdcd0c6ec6ab57acd660dc1dc4c6b7412f058c631d7d049725a6ff65686a3"
+  },
+  {
+    "path": "frontend/src/components/shared/FulfillmentTodos.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "30d321c57abb2cbbad60ffd2243a3f9c6d85e5c439ce82794ff5ab113c649e09"
+  },
+  {
+    "path": "frontend/src/components/shared/GlobalSearch.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "02f66cf2257bc1d11c1828733ec989ef6025e354edd30a806feeeebde91190ce"
+  },
+  {
+    "path": "frontend/src/components/shared/GlobalSearch.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "c77b1ec99f1505015df35503bd1e591fb7dc76aeb22864ebd27403036d092a83"
+  },
+  {
+    "path": "frontend/src/components/shared/LimitedInput.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "f8d244c20fe97d65ea418b343005f4a096ddac55c55e5779699e173dd1093b20"
+  },
+  {
+    "path": "frontend/src/components/shared/MergedFinancePages.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "451208137476f5266953caf51ff04bf1d5d4a869a581ffc3187788ec4a600003"
+  },
+  {
+    "path": "frontend/src/components/shared/MergedPage.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "a6feb8e4f8435b8c246ccf77776378af87b87a576e146dbf19aabde7bc6320b4"
+  },
+  {
+    "path": "frontend/src/components/shared/MergedPage.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "fca30f699fdc1b5dac4780395a6eceb6fdefd1d74e54190a6623e19c11805201"
+  },
+  {
+    "path": "frontend/src/components/shared/OrderActivityDialog.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "50c49321677421a3b465a0174e2cdf7c4820b2c97b30404400bb2737471312d2"
+  },
+  {
+    "path": "frontend/src/components/shared/OrderEntryForms.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "083091d365416b1a974c360934f0d0483e675f8fa19bca3a903b1aa2acaaa183"
+  },
+  {
+    "path": "frontend/src/components/shared/PaymentQueryDialog.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "7c44caaf971bfb88605984fe267521cc09fc2f5ed388710b37b4ca2d947cb1be"
+  },
+  {
+    "path": "frontend/src/components/shared/ProductFinderModal.reorder.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "67b030a83c106006cbf061af6faab7ed8d3b3f8131bf663a3a9e3093f2a9b2fb"
+  },
+  {
+    "path": "frontend/src/components/shared/ProductFinderModal.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "3508ad3bcd1c2f4326fe571e933170574092a06a01932dadc9f82d190cbcf707"
+  },
+  {
+    "path": "frontend/src/components/shared/ProductFinderModal.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "1fd27d2ece75b84a788d4110757614608a56ad4688da23f09766508d287d8184"
+  },
+  {
+    "path": "frontend/src/components/shared/payments/CreateManualPayableDialog.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "748d38b6a5c380b0eed03f88c697081c949a972d09785c0e55c49ca246233a9b"
+  },
+  {
+    "path": "frontend/src/components/shared/payments/RegisterPaymentDialog.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "4ee83d81462b2a5ca43a8cf08f7df54fa8416c88d770a199a5132fe8509a8b46"
+  },
+  {
+    "path": "frontend/src/components/shared/payments/SettleReceiptDialog.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "7f3dda31e3be44c095ea1c1877edea8a6e5b0763fdf40573183aea9b4fd61c79"
+  },
+  {
+    "path": "frontend/src/components/shared/payments/SettlementConfirmDialog.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "25e2cc4fd3e8b407c528a69255ec0e80e6be1a7e10150e062e609f9718277094"
+  },
+  {
+    "path": "frontend/src/components/shared/usePaymentActions.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "00377bea403eef8807ae4f0c29e481f03b2e3390fd2d1bd75f4b3a3e2dd069bf"
+  },
+  {
+    "path": "frontend/src/generated/status.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "3c346c7d76ebfa45f4520609564bbc344ab1d1a35334c55743554e767268ca9a"
+  },
+  {
+    "path": "frontend/src/hooks/useApprovalDetailHandoff.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "321cdd29e90e8a331d4815c711feaad538902e613a1e4a325d82af096c962730"
+  },
+  {
+    "path": "frontend/src/hooks/useApprovalReadScope.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "27117397e2481b9442ba75c8f2f6d649e6be78b7e7395dde695f2c4009d923ae"
+  },
+  {
+    "path": "frontend/src/hooks/useApprovals.invalidation.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "b87d5c4f8f76c829b86d3a75f371a8a4f404aaae8dd9094048c1eb82564e5d61"
+  },
+  {
+    "path": "frontend/src/hooks/useApprovals.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "2814c1219922262a6957c03216435e47baf70f7c71caceb9fe6c0ed1fb62bf57"
+  },
+  {
+    "path": "frontend/src/hooks/useBackfills.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "af54c5fdbfdb2d9d63e2eb02ca480182dde088406069b88f3ffe760f1d9acf31"
+  },
+  {
+    "path": "frontend/src/hooks/useCarriers.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "c96fdbf68765be46b58a5717b59b87f02840a3fa5bf182589e89ad113cf82f03"
+  },
+  {
+    "path": "frontend/src/hooks/useCategories.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "09eb7093989829ca04d238c47bc838c79d40a0cbe3d2c103882d89d62c095723"
+  },
+  {
+    "path": "frontend/src/hooks/useCommercialSale.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "87db5a0d919df2847b753ea7a36c4f482fd752d07ff9847326a95c323a64d30e"
+  },
+  {
+    "path": "frontend/src/hooks/useCreditOverrides.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "5a010483eecad90825d21d52d18d2838897323a48b75d97a4ae9f15c3f88e0fc"
+  },
+  {
+    "path": "frontend/src/hooks/useCriticalPdaAction.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "1e444b3f484e91fb3e3b01372ad4b7cdf61a3dae7b812b2391653367f5c3db86"
+  },
+  {
+    "path": "frontend/src/hooks/useCustomerAddresses.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "2b41ed7314084f50a3bce04ddcd704f9e475453c88abfa6ade4fa0c886750c36"
+  },
+  {
+    "path": "frontend/src/hooks/useCustomers.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "7e8219196c15481a5154f11e4f2c80c982d00716ae001dfe853654469566b2c6"
+  },
+  {
+    "path": "frontend/src/hooks/useDashboard.polling.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "0816138a25cd161e9e160b0eab437fae0ed579ad3d6993dabebfa0829198d567"
+  },
+  {
+    "path": "frontend/src/hooks/useDashboard.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "78233b2c84c928339e0422feba0632f2df0b6b36997caed23d1a3ee0aa632f18"
+  },
+  {
+    "path": "frontend/src/hooks/useDisposal.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "2db8c031cfe0dcfee14cab89bc5fba2568e6dd646c7f5cd486ef95d77d7336cb"
+  },
+  {
+    "path": "frontend/src/hooks/useDisposalExecution.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "4bf7a23b335721f509b84ac5b66a95279d130a43a2b8cbb479384128c696f673"
+  },
+  {
+    "path": "frontend/src/hooks/useDisposalExecution.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "22da9c0f7041f5124615233387d04c65f268c1b09828a18e14e92e3fec9d461f"
+  },
+  {
+    "path": "frontend/src/hooks/useDisposalHandlingOperation.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "56294dc25cffabf44fde515c2f299d41be1223fd6d4e6c822d1a3d0bd7f5d30f"
+  },
+  {
+    "path": "frontend/src/hooks/useDisposalHandlingOperation.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "1a78415c9e544c3ccdbf8d86dbf247fd2803c14e2e93352bee6faaff22cb028b"
+  },
+  {
+    "path": "frontend/src/hooks/useDisposalHandlingSource.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "f9f0edf1325ef182b77d77ac537f08333b5cb99658737997b3c34e4e40d7f6fb"
+  },
+  {
+    "path": "frontend/src/hooks/useInvalidate.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "466ba3e0129865972356acdb640cd94737d05b49faf5905c7464f88aa1856ecb"
+  },
+  {
+    "path": "frontend/src/hooks/usePdaPlasticReadGuard.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "79dd2d7b01d34cb45272d6046f8e8167190a4d433c0c5a369b7c6af2ad38614a"
+  },
+  {
+    "path": "frontend/src/hooks/usePdaSplitRecovery.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "f0eabc872b33e64d267ab7dbd722218494b3239e8772185f6732dafe22da5b62"
+  },
+  {
+    "path": "frontend/src/hooks/useProductQtyPolicies.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "600b61f9ba0b69d30fcff70332b71fe436132be82bd5735798aedb3091533942"
+  },
+  {
+    "path": "frontend/src/hooks/useProductQtyPolicies.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "ca2b514f370762955bdfb9c3a7d55e2cdc628e71eb3b1da0107f5f3d1a7130de"
+  },
+  {
+    "path": "frontend/src/hooks/useProducts.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "7b65c119c0fb5e86a31384eb40f1868edd979ad57166906c08a11d514800779e"
+  },
+  {
+    "path": "frontend/src/hooks/useRepeatSaleCreate.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "6bd49056811e0e044225917135e86173d44dd65f7c0649ed11e542fffac69854"
+  },
+  {
+    "path": "frontend/src/hooks/useRepeatSaleCreate.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "58d53c09f756b507ee139e5bd1b042431a3d6f2a4ab9c15286db028bfa818e3d"
+  },
+  {
+    "path": "frontend/src/hooks/useSaleReorderSource.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "9666761e47905062b862a37d127323f882e0abf198d1d8c10207fc0c7bf8a77e"
+  },
+  {
+    "path": "frontend/src/hooks/useSupplierRefundOperation.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "2dcb0dbfd7af9452fe4d7d3b3a7b98926e8769aaa0ad35ecc0d8f2669354d673"
+  },
+  {
+    "path": "frontend/src/hooks/useSupplierRefundOperation.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "4f2274ea73f28e7c7701080b97f37acaa3d7deea0bfee25b7dfac06fbf0b9f3a"
+  },
+  {
+    "path": "frontend/src/hooks/useSupplierRefundRead.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "6be66a420733903f74e17b2fb7f5e11287455f947fe2c7c1f073c7af8c6a29ee"
+  },
+  {
+    "path": "frontend/src/hooks/useWarehouses.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "a3dcad13bdba460b0636298e818392fe287c05009f0e2603749bf4d79fead543"
+  },
+  {
+    "path": "frontend/src/lib/apiOrigin.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "e2eaf4df2b39134e2bf0accc6297e70b2d3eefdb905c73ddad90e89feb4f424e"
+  },
+  {
+    "path": "frontend/src/lib/approvalBusiness.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "5b0eef70b170b607512edc61cbdeef4df0c8dd464165fba3f4451a54526c548d"
+  },
+  {
+    "path": "frontend/src/lib/disposalHandlingRecovery.test.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "553e091ed5c05ea9c5c72b8b0306a923a835c275751548c960cc4985d64386e8"
+  },
+  {
+    "path": "frontend/src/lib/disposalHandlingRecovery.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "ba461f782ca722697cd5f96b75964360ee1ceb933be5d9b3daece0f35e3aaf53"
+  },
+  {
+    "path": "frontend/src/lib/disposalRecovery.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "f509ed07c0d51e4775d8ee1efc168c874a83135df83372ef2f6a76b6fa495eb4"
+  },
+  {
+    "path": "frontend/src/lib/orderPrintData.profile.test.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "ddfa4e421e8ff5e15ec57df81c8ffdad10fd12c011f986eb6590e50254328fe3"
+  },
+  {
+    "path": "frontend/src/lib/partyProfile.test.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "7b9c8bcefdd3587395f0ad69176aab526e7195ca571f77236ddb81291906ee4b"
+  },
+  {
+    "path": "frontend/src/lib/partyProfile.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "fb30a7ef7fe8f0087cb04dcbee0af8414abd38fe5821d9c42c7d9afb60a3eadf"
+  },
+  {
+    "path": "frontend/src/lib/pdaRuntime.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "056d4c421c3b1796d9cd21a28ec70323b48cef189eba47a84e7cced3a7821b5a"
+  },
+  {
+    "path": "frontend/src/lib/pdaSplitRecovery.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "14cc17afa381b79d55acffef39591d9f3aa5c3264492917849ffbd2e1342d1b3"
+  },
+  {
+    "path": "frontend/src/lib/permission-codes.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "101e75174315467bb27d2b701a63b0b126ff25dda5cf601b3e8d17d0e95b396d"
+  },
+  {
+    "path": "frontend/src/lib/saleReorder.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "be00761cedcaf91898989a0d28c91af66629a947632395a224b31468567d0c40"
+  },
+  {
+    "path": "frontend/src/lib/supplierRefundRecovery.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "843b8fd7b935a3bad17919a7d41a261143b3d3b2c39c5321b79e47c06b105538"
+  },
+  {
+    "path": "frontend/src/pages/accounting/backfills/index.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "69c165d150744dea60165ee7fdcc5cf609cedc0b1838ded4394a964f47790c7a"
+  },
+  {
+    "path": "frontend/src/pages/accounting/backfills/supplierRefund.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "6debfb59389a5d60cb24d377f3360257d76123d3306d83126907a647db7daa30"
+  },
+  {
+    "path": "frontend/src/pages/accounting/vouchers/index.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "02e71f8cf5d6e4f2440ae870e7d64c7d791ace76ece417d7f551418fa6be412a"
+  },
+  {
+    "path": "frontend/src/pages/accounting/vouchers/supplierRefund.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "41b83ed7c61b038a9fd629cf317cc87035ee5cd8e9cd4900174f101990bd761a"
+  },
+  {
+    "path": "frontend/src/pages/approvals/detail-handoff.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "7b8513754bc3b555336862a83c23a952cea9477150be3f994f29f57af3f1e020"
+  },
+  {
+    "path": "frontend/src/pages/approvals/pending.sources.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "9b57f2fbad73115ea1c90c1339d6e68100997a1b985a804ca84a785a0ad077a8"
+  },
+  {
+    "path": "frontend/src/pages/approvals/pending.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "87fcab90a7adebc62b10f13971cb2cbce8b0a43a84dc854f5c1b86d01151a46b"
+  },
+  {
+    "path": "frontend/src/pages/approvals/pending.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "3b127a55e8d092f2ce4a6598fb1b541ec1c37c52b12d9801fde8d2225194b29e"
+  },
+  {
+    "path": "frontend/src/pages/credit-overrides/index.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "739355431c5a45e1c1cd3b5df3b57d63e62ba511df46e8708b6d7d022ef661e3"
+  },
+  {
+    "path": "frontend/src/pages/customers/components/CustomerFormDialog.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "918110dfe7e1d78ec9207ffdad59ab33aaf694bdc29df830c620ced00ef52397"
+  },
+  {
+    "path": "frontend/src/pages/customers/components/CustomerFormDialog.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "e5a9ad754c25b8fe85f2b6fba8b56c966c62d55e6576318cdbedad4801791fc2"
+  },
+  {
+    "path": "frontend/src/pages/customers/index.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "c4184707c5f79349310cbd8cac6707aeda24d254efa0eca29d7295336d07a6d4"
+  },
+  {
+    "path": "frontend/src/pages/dashboard/index.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "240e1186c60d6b666dac71a2a9f6ced53f6e1533566b978e26991d3a4770ab36"
+  },
+  {
+    "path": "frontend/src/pages/dashboard/index.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "b9581774b1b722190a56d47e7ab2aa338878a8b2d8772fb78025d250255a2432"
+  },
+  {
+    "path": "frontend/src/pages/disposal/ConversionDialog.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "ad3311448778f41e6c8c90c049e138c9519f6bf49b49c3549e1eb05ade5d4062"
+  },
+  {
+    "path": "frontend/src/pages/disposal/DisposalExecutionPanel.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "81501458c1c244fed1d9459de09c986fbb96e927a62720e01cdf800311ea6144"
+  },
+  {
+    "path": "frontend/src/pages/disposal/DisposalRecoveryPage.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "9e1215680f4e39b703a61f74063b6493b56aa39574379de24a58bd019d29ba0d"
+  },
+  {
+    "path": "frontend/src/pages/disposal/DisposalRecoveryPage.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "8a357ea189f85c0a63d0b6363b4730094c2c5f5667a45e6a4a26f9eef28a455a"
+  },
+  {
+    "path": "frontend/src/pages/disposal/HandlingIntentDialog.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "1e0e76dff44345b884380ad92501906defc378535cc78f56ef4f4a6f02a55d5d"
+  },
+  {
+    "path": "frontend/src/pages/disposal/HandlingOperationPanel.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "f145b4c12deb2cf74673833e096bd71e64f99817d4f14f9ada7d038e33e4b617"
+  },
+  {
+    "path": "frontend/src/pages/disposal/HandlingScrapPage.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "9a05da82bb0b6671638ac54bc15b3f77b901d22a4866ac00442b16e6e79fc24f"
+  },
+  {
+    "path": "frontend/src/pages/disposal/HandlingSourcesPanel.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "45f9a2652b513f97e139e05ac9f0c9ca574ee3cd410bd5c02cf55d92f715226b"
+  },
+  {
+    "path": "frontend/src/pages/disposal/components/CreateDisposalDialog.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "14396ede795289a277c3b3e7394cee71ef60f1f29ddf763f2a428986f588f654"
+  },
+  {
+    "path": "frontend/src/pages/disposal/components/DisposalDetailDialog.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "57351d986d79aa77604b86d09ad6b0f90213771b2ccbf87a4d36f41cf03061e8"
+  },
+  {
+    "path": "frontend/src/pages/disposal/constants.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "8c925351669b4a43cbb7873bcd7aa7230fd61ad10149101e4c2a8ac1ae0e9ebf"
+  },
+  {
+    "path": "frontend/src/pages/disposal/handling.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "39cc9783a5bdc7e957d80e3956772eaeef81fb3d14d11dc872fc54bf37f1a67c"
+  },
+  {
+    "path": "frontend/src/pages/disposal/index.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "d76ce18970f7e1f9ac74b4b9183b460abf10e0deda0b1a12bfc538ed6479500f"
+  },
+  {
+    "path": "frontend/src/pages/disposal/transition.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "bd54b8d4b83b0e9c7cb42a28f0e12cde83d5edb81355fd6eecf1c34df16bb6d9"
+  },
+  {
+    "path": "frontend/src/pages/finance/accounts/index.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "0fd1c17c0559844a10399d906d92adff4a825022538448a432ce3eaf7199d3db"
+  },
+  {
+    "path": "frontend/src/pages/finance/dashboard/index.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "81f4a8001c833fd8b958f648eeabac285d08f05a91d8018fed0cd858369e39b8"
+  },
+  {
+    "path": "frontend/src/pages/finance/expenses/index.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "2bc5369ac53f3c16a384c440ba42e8593569e649d06d5976f57e7325e9683630"
+  },
+  {
+    "path": "frontend/src/pages/finance/transactions/index.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "5235e5b0ced90b7e1484c498b16625ed5ac8d514241f80c2d8e5a0153f5e6a36"
+  },
+  {
+    "path": "frontend/src/pages/finance/transactions/supplierRefund.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "4bd8c0a511001c6cb59ad45fbc0459f0694355635d612e3a6b2f589e44531bf1"
+  },
+  {
+    "path": "frontend/src/pages/inventory/ReservationDetailsDialog.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "4dc07e45a6f8ff8677ef9932019acda2a2c1d8977e6c3589d82448ee1207da93"
+  },
+  {
+    "path": "frontend/src/pages/inventory/ReservationDetailsDialog.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "10042183bc87228ded713801ae255773589b6ae5f7faa794f894aba4ba9779eb"
+  },
+  {
+    "path": "frontend/src/pages/inventory/index.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "5935a6725ae959c0fd09eb1ef49bb9ee652b5172eb2b2973aea5deb912ae4278"
+  },
+  {
+    "path": "frontend/src/pages/landing/updates.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "9247f162d95b7753f95eff7eb5a24d594f486fb2fff6b1f6d522fe7336c6618e"
+  },
+  {
+    "path": "frontend/src/pages/payments/PaymentsView.retention.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "09f93774e1798743f0a43a7673eff5d11874de7e3a678dcf9f423d693bbc0c80"
+  },
+  {
+    "path": "frontend/src/pages/payments/PaymentsView.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "b765467af976e034bc23c6fa97dd37b9f060f02a7408fe2c977fd7038eba8c7a"
+  },
+  {
+    "path": "frontend/src/pages/pda/fill.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "5788723fe0a928e423fddb7aeb7398c516db727208a0820b95de267673ce23a6"
+  },
+  {
+    "path": "frontend/src/pages/pda/index.permissions.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "9effdb8ef00b806b4908b9a68ecbeab8acde67e379b95e416027d60d931bafb5"
+  },
+  {
+    "path": "frontend/src/pages/pda/index.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "298ea350e3b5cc0fbc552f8d4ed896987f202989607751e3ac4f84f33431f067"
+  },
+  {
+    "path": "frontend/src/pages/pda/plastic-box.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "58c72f501b3513920337f3934281000c8b465d3b916f7d702db314e249264c5c"
+  },
+  {
+    "path": "frontend/src/pages/pda/plastic-box.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "813aef2edcfe9c553f4077fc2eca351f0a3c3edc89138fc0442e328eaa782022"
+  },
+  {
+    "path": "frontend/src/pages/pda/receive.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "215689dbfefc613953174cf6a20e864f320f4b8629a6f5292f34870042048867"
+  },
+  {
+    "path": "frontend/src/pages/pda/split-recovery.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "7cb37d97c1d6a8af5415c998328cdabb342b13f03c1ba04aa8e5cf3b0aaf993d"
+  },
+  {
+    "path": "frontend/src/pages/pda/split.recovery.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "fce7db990774e6ee4bc498378ee94bf3a43f996e652ca87c84f41cca3f49cfc2"
+  },
+  {
+    "path": "frontend/src/pages/pda/split.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "b795a5b365b1a2d7e8550c3cbfcfdb6bd56c424c4a16b21877f19259f6b65966"
+  },
+  {
+    "path": "frontend/src/pages/price-change/index.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "3d72484685354370cca36a1891bae37508368f7e2691aaef143f1e9e5d9b073c"
+  },
+  {
+    "path": "frontend/src/pages/products/ProductQueryDialog.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "18396747d399af00a51b028597daca4432a915576cf08243bc03d408ce325c38"
+  },
+  {
+    "path": "frontend/src/pages/products/index.search.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "08913e66f018c6481958794bb2443ab72a1e4ef19ee490557faf794cb0f232b3"
+  },
+  {
+    "path": "frontend/src/pages/products/index.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "9fd02b16bb45fb399fff3bccb8e20527515c03526755ac43967ec56719e99c3b"
+  },
+  {
+    "path": "frontend/src/pages/purchase-requisitions/form.convert-key.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "0da7e6c2322eae6943d1b2efae3c3eeebef1e17afe95eb35fe45d800201ddcaa"
+  },
+  {
+    "path": "frontend/src/pages/purchase-requisitions/form.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "81c452996da880ff98454d9df6f7d0b3f356e5b8b99bb26a5b9685fe18beb160"
+  },
+  {
+    "path": "frontend/src/pages/purchase/form/index.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "6b0aa56a03882cb4fb7b931f1f2896d1f625d4e83949eda18bd4a1ef430c1d34"
+  },
+  {
+    "path": "frontend/src/pages/purchase/form/returnEntry.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "c41a39c40107c5760d90736f12d3fed7ef8de8349b0fce7e9ee2c6e6d3f72e52"
+  },
+  {
+    "path": "frontend/src/pages/reports/ReconciliationView.access.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "92f37bc22ce1c4441c8cab3209d9b14e9dd721e2ab0ec42fd1e4e2871da69ae9"
+  },
+  {
+    "path": "frontend/src/pages/reports/ReconciliationView.confirm.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "7a6f18f67028819e7345bcbcea9373a11b6b2201b7a9ef716b1b01b5ea83ce8a"
+  },
+  {
+    "path": "frontend/src/pages/reports/ReconciliationView.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "b0079606e2fbe5585d2035f511e3b2c84069e4d0b595ec42875f43add4f5586c"
+  },
+  {
+    "path": "frontend/src/pages/returns/ReturnSourceButton.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "656b876a9eb6745d79cd4527de06fd664cdfc9ee2cfe6aba5b6b5e6e99224c93"
+  },
+  {
+    "path": "frontend/src/pages/returns/purchase/form/cancel.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "f25fa9d909c0839b2e2763c50c019c5fe57d3f8e7df0d6a47fd9f2d885e56169"
+  },
+  {
+    "path": "frontend/src/pages/returns/purchase/form/handling.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "2963fbd32d0306f607e55de064f768b336768c6515ba30a23a598958c2f2f7f0"
+  },
+  {
+    "path": "frontend/src/pages/returns/purchase/form/index.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "8a32e8a4820d25b2eea49b14eca1a3e821b7c6164ebd8502d9229ef764bc64c6"
+  },
+  {
+    "path": "frontend/src/pages/returns/sale/form/index.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "0cde9cfaaf46859e1457233226dd661417a0035c513fd99dc6d0a9f6af87fe45"
+  },
+  {
+    "path": "frontend/src/pages/returns/sale/form/ordinaryError.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "19a48e147eed3b7898f7142dab360eb17bd412ddf3ba30b1fa4f8ebea6391afd"
+  },
+  {
+    "path": "frontend/src/pages/returns/sourceHandoff.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "991b187f0f9f56349f169b39cfabb86ab0ea19b1698abb7770698638aa4d8a1c"
+  },
+  {
+    "path": "frontend/src/pages/returns/sourceHandoff.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "f3677c1ec7410a415ad5fc69b8726d477afa92d36d7ddf5ac05cdc48930222cc"
+  },
+  {
+    "path": "frontend/src/pages/sale/ReorderSourceButton.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "5e55ab6381ee3067f621d88d8b5ee45745acd1471f185830fc2c96af5900251e"
+  },
+  {
+    "path": "frontend/src/pages/sale/ReorderSourcePanel.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "7845fde08a3c51b9454b9441c69c8645e64d028a1e0ff11da24ae01c640b3569"
+  },
+  {
+    "path": "frontend/src/pages/sale/RepeatCreateRecoveryPanel.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "2d2ae9832d5ed8e3806773c6a81c76dfc6e0ae73692abd1208c491e5462f726c"
+  },
+  {
+    "path": "frontend/src/pages/sale/RepeatSaleRecoveryPage.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "0822bbb482c19c311d87fdcd960270ce2a9cea74573f4785111b819db08349f9"
+  },
+  {
+    "path": "frontend/src/pages/sale/RepeatSaleRecoveryPage.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "ec0204e76bdc0416c3c9ba2da0f01f76eb251b944486852825a31f80a61cf933"
+  },
+  {
+    "path": "frontend/src/pages/sale/commercial/CommercialEditor.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "9bd6f3d46131a060b4801f8b9eba288ed50c1aba0551ed398d32821aa5e29706"
+  },
+  {
+    "path": "frontend/src/pages/sale/commercial/CommercialEditor.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "b5f72bd0b3a50b5a3223d1cd6695e11aa972cd4ddb3bd2de70b152229b79cc3a"
+  },
+  {
+    "path": "frontend/src/pages/sale/commercial/CommercialSalePage.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "92613dd93783aabf472f7a94be160515a3db0b53e658b63b17797020855c659b"
+  },
+  {
+    "path": "frontend/src/pages/sale/commercial/CommercialSalePage.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "9e762ec92c3c529ce1e545aafb8a0c6d47f5803c9c5af7cc1da979560ed34c00"
+  },
+  {
+    "path": "frontend/src/pages/sale/components/AddressBookDialog.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "09052953c2603aaff6f48d05d58ad8c4f33e2b096d89c4554356f208844a77bd"
+  },
+  {
+    "path": "frontend/src/pages/sale/form/components/SaleOrderHeaderFields.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "859979da32cb0bf0c89fa37678fdf183d97798a295b3a33e8adf4c14a373a2a1"
+  },
+  {
+    "path": "frontend/src/pages/sale/form/components/SaleOrderItemsSection.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "8e22e0f034d2d16abf0fdc1019d477ed95701814b88f665a6bf5b810aef73da7"
+  },
+  {
+    "path": "frontend/src/pages/sale/form/components/SaleOrderItemsTable.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "87703ca6232c7aab70bcd2806340e05dbab4bb817a91d0b3bb486d9b5bd8f858"
+  },
+  {
+    "path": "frontend/src/pages/sale/form/handling.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "de716bd930ab7c023c71a6a4d147edd0804c1abd48e56be57b2ca6ad67b0c51c"
+  },
+  {
+    "path": "frontend/src/pages/sale/form/index.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "399708b1c1d5f2f216e970797a98a539e0668295b9c47fa9aff04b577dc36e93"
+  },
+  {
+    "path": "frontend/src/pages/sale/form/index.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "5878aa426b95655b0a93e0c752ba0357f84e3150d8d8a996918c3b1ea9ed4900"
+  },
+  {
+    "path": "frontend/src/pages/sale/form/useSaleOrderForm.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "3a1b8e81af16be4d0a3ba78b54e3dbb6ab3d441e42213728b6fe17f05b1dc1ea"
+  },
+  {
+    "path": "frontend/src/pages/sale/form/useSaleOrderForm.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "8ab877b87f82b4f1387bf0f593997732ca88f309403142551c042aaaac473170"
+  },
+  {
+    "path": "frontend/src/pages/sale/index.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "c50c754f4cb098ed9910623ecd50a41c2eeffae50f23434f10421fc1cda73a8e"
+  },
+  {
+    "path": "frontend/src/pages/sale/reorder.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "1f92857deec114d9f71b77928c221ee0552ef2adf551255170b00901b18708e6"
+  },
+  {
+    "path": "frontend/src/pages/sale/reorderAddress.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "1fa83dc7cc5319d66fe93fbf656d01b4e09eda201ccec6388cfeafaf9be32aa4"
+  },
+  {
+    "path": "frontend/src/pages/sale/reorderDraft.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "4723326e4c37d9d1f965743bdae758e80cb6852fb2e8e1b26c35ba73b42c78d4"
+  },
+  {
+    "path": "frontend/src/pages/supplier-refunds/CreateRefundPage.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "62aaee39cffff16d84e3770d5ad1d0669536e8066402de4fd16c0633a3f56eed"
+  },
+  {
+    "path": "frontend/src/pages/supplier-refunds/RecoveryPanel.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "d011073c9de4a8453f2886b242e28d575edbe76e094ea163eb577cc4df81a729"
+  },
+  {
+    "path": "frontend/src/pages/supplier-refunds/RefundDetailDialog.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "618157e45d09ea99a045564a8cc4596a1288f6c6911a458d5600f9b27d42868f"
+  },
+  {
+    "path": "frontend/src/pages/supplier-refunds/RefundRecoveryPage.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "3c99e2d9f92d5fbb20b711dbd5d3e5ee91fce0c78e708bd513d2cc064ac6641c"
+  },
+  {
+    "path": "frontend/src/pages/supplier-refunds/SupplierRefundSourceButton.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "4a99e7533fc84bd919d095d3731e95c18f4d9bca17e2621f17479b97fb5dac65"
+  },
+  {
+    "path": "frontend/src/pages/supplier-refunds/index.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "f1252bebf887155741575a8e3c692a5ccf56a8134b463b646b8b96ba524e751a"
+  },
+  {
+    "path": "frontend/src/pages/supplier-refunds/index.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "2505f3e643fc50b02a5517605791f239d2b75542dfe9e2962a4975b7d6a84b12"
+  },
+  {
+    "path": "frontend/src/pages/suppliers/index.profile.test.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "1e368a8a966535589e6ae6b911cb378003279ebfa746a5434d3a38006cbfdfa6"
+  },
+  {
+    "path": "frontend/src/pages/suppliers/index.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "d94d1db51d7c933a1bb90f5790c50d5332f41df218f63d7691437b6f030c0af4"
+  },
+  {
+    "path": "frontend/src/router/mergedPageGroups.test.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "3afa97ba7c7429f6669751c4110b9b829eb95e955dce27ac80c5fabc01f7dfe5"
+  },
+  {
+    "path": "frontend/src/router/mergedPageGroups.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "49c5c21a58bf5530e95a877d09113dd0c90ecc443e4263ab83f2aa2d204fc56a"
+  },
+  {
+    "path": "frontend/src/router/pdaRoutes.tsx",
+    "purpose": "界面、会话与PDA",
+    "sha256": "cda35f7002c7a7d95c9821a2b78aee969578231746939e3a7b3fcfdc4ca7b437"
+  },
+  {
+    "path": "frontend/src/router/routeDefinitions.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "b2614f7f405639506433207f55be5c90a255432e3241f88c9958a454ccfbe9a8"
+  },
+  {
+    "path": "frontend/src/router/routeRegistry.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "d5158df360c5f7d204261d93e6cb1081f254a5b6aaaca0a8f56447cfb33090f3"
+  },
+  {
+    "path": "frontend/src/router/sale-commercial.test.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "da844b9cac2896fffea9e36067b96f5f495b79281af52be10e24bb865b99413d"
+  },
+  {
+    "path": "frontend/src/router/workspaceRouteMeta.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "ac4d665281dd11577a5d3369aeb729f110f35bbf72a89d2083ab20747d375b5b"
+  },
+  {
+    "path": "frontend/src/store/workspaceStore.test.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "9e4ca2b7ff32d96e28939ddb2f6580d75e7ddf64ff4a21daa69713b837ad9913"
+  },
+  {
+    "path": "frontend/src/store/workspaceStore.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "5fd11e0c568c7ab9011070438c203763985f772fa76d48530fb90138048f20e7"
+  },
+  {
+    "path": "frontend/src/types/accounting.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "d51ca7888ef50023c5610fe8ed925fce17a3ede157cc65294673e092f568d558"
+  },
+  {
+    "path": "frontend/src/types/approval.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "5e086b3f89277f33bddb7ddf99d2038597a0477fdd55eb9679f77f7b26c8940d"
+  },
+  {
+    "path": "frontend/src/types/disposal-handling.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "c430a1f02c6b1dfc3341f5148e1d9f411a4db920c42ca9f24f4ea1f808b09c89"
+  },
+  {
+    "path": "frontend/src/types/disposal.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "8daba00034f02346afd40db889815f13b61238433485b1c074dfe62d542b4ca5"
+  },
+  {
+    "path": "frontend/src/types/inventory.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "92c0a4b15a5c600de058e50f5476327ebeea132f2e6622a88b8292c20abc60f0"
+  },
+  {
+    "path": "frontend/src/types/products.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "93a333999f1155ffa7de6c212e55e39c6241e7563831a36a829131767d1d0e13"
+  },
+  {
+    "path": "frontend/src/types/sale-reorder.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "9c6226212e5b8b1f56594dc2c26181b67343d11d52c9198ee24577affad30b4b"
+  },
+  {
+    "path": "frontend/src/types/sale.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "766bdb903404c7e5224a44c43303e7da37ad2c176a220ea2cc8a614f6ab5f5e9"
+  },
+  {
+    "path": "frontend/src/types/supplier-refund.ts",
+    "purpose": "界面、会话与PDA",
+    "sha256": "523603a3f7d7961c59537cd6fecadc1fca7b7609dd60c8ba614d9ad21b81a40a"
+  },
+  {
+    "path": "package.json",
+    "purpose": "协作约定或配置样例",
+    "sha256": "2c1d4d1f256aa8b5372facb063b9b55d0379ce8e4b5bfbfaafaefe4e831af6ce"
+  },
+  {
+    "path": "scripts/backup-db.sh",
+    "purpose": "运维、发布与验收",
+    "sha256": "cde6558f70ecd6d82f99c681b1c7751643f82a7bf91356b00f1e3c9b175c853b"
+  },
+  {
+    "path": "scripts/daily-report.sh",
+    "purpose": "运维、发布与验收",
+    "sha256": "a0425c03fca3cde9fefeb34876041e4bb9e713f21789de4d3779d1fca706b7b0"
+  },
+  {
+    "path": "scripts/generate-image-sbom.sh",
+    "purpose": "运维与发布工具",
+    "sha256": "c2bcde388fd07de56a4b35502fb400639db6bde439ba37d675868cae2d30b70d"
+  },
+  {
+    "path": "scripts/generate-status-constants.js",
+    "purpose": "运维、发布与验收",
+    "sha256": "28109b031e6310f6ae986178e012b011c9a2b90d3c1c96c625aaae6924ac714a"
+  },
+  {
+    "path": "scripts/lib/ops-alerts.js",
+    "purpose": "运维、发布与验收",
+    "sha256": "222e2030b52f81a7540f0d4c9fd9a8d02a251e6c94e7e58dd75f0b574e83d4c1"
+  },
+  {
+    "path": "scripts/lib/ops-common.sh",
+    "purpose": "运维、发布与验收",
+    "sha256": "63a0cc8424693ba18ddf0cb257c501b11bc05fa3cf360d174bc59210ee4f6a83"
+  },
+  {
+    "path": "scripts/monitor.sh",
+    "purpose": "运维、发布与验收",
+    "sha256": "05311cd31fb19792d6f37cd435b48b81d2aacbb3a86be2e7fc051cadb9c7a0f3"
+  },
+  {
+    "path": "scripts/repair-smoke-ephemeral.sh",
+    "purpose": "运维、发布与验收",
+    "sha256": "d5b6bf324f47893ae89c0a05f0a4d8d4e7032d075e3052fb82c5a5307c5be429"
+  },
+  {
+    "path": "scripts/restore-check.sh",
+    "purpose": "运维、发布与验收",
+    "sha256": "8ca21a56167ba9b67ddc11ccfaffdf1637fccfb5b4a4f2cef96de4ecf06e9ab1"
+  },
+  {
+    "path": "scripts/smoke-pages.node.js",
+    "purpose": "运维、发布与验收",
+    "sha256": "1666443b340b0bd527e4475a794190abc3fba6f526a5eff010c48fcc327c304a"
+  },
+  {
+    "path": "tests/approval-list-batches.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "2e4ea51d2b1845b3dc021e4031ff3fef848ef6509e7219460a771f7f472ba06a"
+  },
+  {
+    "path": "tests/browser-smoke-live.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "771e6f6a7c354af9b2a54e71ddb6e57edb579c0db4a4d87bda404c16a92e7c45"
+  },
+  {
+    "path": "tests/concurrency-guards.smoke.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "83fdd30c6cf7634029d36d882eacd6d7f9b2b86ef3522ec7247681a13f450395"
+  },
+  {
+    "path": "tests/confirmed-audit.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "0b7a8a34fd40baa4e300ecf33c86977ed11dab22198eb4bfef840329cca99f8e"
+  },
+  {
+    "path": "tests/container-split-idempotency.smoke.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "80bedf57c38fde39bc35b32c2e998cd7fcfbd9c503679a7cf11fb058dc71e63a"
+  },
+  {
+    "path": "tests/container-split-recovery.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "21848fae9a3388e9cef198d43726a4734cd0b9b42fd7d23b6aa5999bc95d145a"
+  },
+  {
+    "path": "tests/deployment-resources.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "408b38441fbf22619ee2a8d34ef33414e53ef2f82385961d1d78fc79d24bd64c"
+  },
+  {
+    "path": "tests/disposal-conversion.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "7fe8f85b838628a3fb3dee73638294c1beeac5ca6f2581907032553201113e08"
+  },
+  {
+    "path": "tests/disposal-handling-create.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "ab79b27a32883c57652556e6c23e0b73c9970b7157f9416ea83d3a079da49ea1"
+  },
+  {
+    "path": "tests/disposal-handling-facts.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "3b22758d0edef406da77e3f9114f7b11d166a7dde91832af48a1a67a15b1e0d8"
+  },
+  {
+    "path": "tests/disposal-handling-release.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "628b8ebe652dce7c450c361574dc3d099153d136c3548be04e8cd9338c046e90"
+  },
+  {
+    "path": "tests/disposal-handling-target-guards.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "03c625ebbb42ed4167615fc8eb8153880ba834e069c098a11f825fb411282376"
+  },
+  {
+    "path": "tests/disposal-handling.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "7a815652f1f4ead45c2a20c548428d0b505883ab9dc6b4864800d211fdb0496f"
+  },
+  {
+    "path": "tests/disposal-transition.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "87062fb73d2096dbd8083e749c28528cf7eac8acaef104be1f3de6a39c8bc4b7"
+  },
+  {
+    "path": "tests/disposal.smoke.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "327c6f31eff387edcda8b00c3f7db01088d85403a02e0e3ec8f3e8ef1a13ff89"
+  },
+  {
+    "path": "tests/expense-pay-backfill-integration.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "5349345a772e10d92d97b25500ec82699acefff247e7fad5bf573e4fef275466"
+  },
+  {
+    "path": "tests/expense-pay-period-guard.smoke.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "c455b3882ac9944ee836abbc8e67266e8674c6252992a14050c98b6cd45466fe"
+  },
+  {
+    "path": "tests/expense-pay-smoke-cleanup.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "6a7105ff8a049d7b21b585db528b4de5ba8b77f00dbf3d99780b0fb418603d14"
+  },
+  {
+    "path": "tests/export-xlsx.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "dbb9c656e26442783138dd05da68b087f5552e24c723deb8aa84d43e0740bfe5"
+  },
+  {
+    "path": "tests/frontend-polling-contract.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "43b2f1ca9acde3da2cf5d4d20f6d60e7a9cbaaf71390644bc28ee68aa851f8f6"
+  },
+  {
+    "path": "tests/go-live-runner.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "7d692d69396763f347d83ca20ad8b3292e24004d691bc4744566c9a4895d049e"
+  },
+  {
+    "path": "tests/go-live-runtime.smoke.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "a30a3ada48e46b09963143055a6af951d9e95b8431610ceccfc0f14f94925323"
+  },
+  {
+    "path": "tests/helpers/disposal-handling-fixture.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "e6b87261963dc0372595854180c0bd295a2c4ed02ebd82a387a565ef06457ccd"
+  },
+  {
+    "path": "tests/helpers/fixtureAuthSession.js",
+    "purpose": "回归与合成夹具",
+    "sha256": "6e56ba352499c890f11cd74a3afe72428f67a3d90d167a49e321da4235652be4"
+  },
+  {
+    "path": "tests/helpers/goLiveRuntimeFixture.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "27f31ddb4adf0169a4f670ede1bef8c09e9db85e744f8120b04f37f4c05940e2"
+  },
+  {
+    "path": "tests/helpers/supplier-refunds-accounting-fixture.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "06e318c29ee01ee5a8a1adea7d417791495f944c12107cc8af3901b489aee80d"
+  },
+  {
+    "path": "tests/helpers/supplier-refunds-backfill-fixture.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "e7c6138ed242d435f29294399a79604cd12d709053b8a6d4d63f65b61319ee53"
+  },
+  {
+    "path": "tests/helpers/supplier-refunds-fixture.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "be56d21d4df02752f321b1e05ea1d01f421ceb901b1a8db69f56fa537e6c5929"
+  },
+  {
+    "path": "tests/helpers/supplier-refunds-receive-fixture.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "55e829e2d3ed904db61335378d05b0d4eb766cba13eb83ddcc6f2dd20daf1c41"
+  },
+  {
+    "path": "tests/inbound-progressive-putaway.smoke.test.js",
+    "purpose": "回归与合成夹具",
+    "sha256": "dc9c8c75eb3ffe78f6bca9839d0ee0bb6a384cb5657b408d2c076aa781d01fcc"
+  },
+  {
+    "path": "tests/inbound-void-transferred-container.smoke.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "3375155e6ca0345f6459a725d5b7790a64697370637928f03423164e9a7e69ce"
+  },
+  {
+    "path": "tests/inventory-reservations.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "827f4872aedeadcaa4393f82d072ae85de9b6786e12fa674e52cd7e553c01e95"
+  },
+  {
+    "path": "tests/kits-current-stock.smoke.test.js",
+    "purpose": "回归与合成夹具",
+    "sha256": "f23486f2b1899d3e63685e7c94e4605cba64321bd5197e643fa31d5e7ea77265"
+  },
+  {
+    "path": "tests/kits-foundation.smoke.test.js",
+    "purpose": "回归与合成夹具",
+    "sha256": "d69b9743b8391c448e41906393cc1253eb4798f91e2ba7072b5f276574463975"
+  },
+  {
+    "path": "tests/masterdata.smoke.test.js",
+    "purpose": "回归与合成夹具",
+    "sha256": "8f887aad1d16877eccc9e955ccc8619ec85358294d90f1f7b3af72e08b3361b6"
+  },
+  {
+    "path": "tests/operation-alerts.smoke.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "3695d7afc2dbb1dbb28c37392a1393224fd2a147da386bca38c46fff89c02fa1"
+  },
+  {
+    "path": "tests/ops-alert-notifications.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "ffe6961f676d381805cbb1773602ac21445972ecbdeea32b847a7f68ca9c9eca"
+  },
+  {
+    "path": "tests/ops-monitor-restore.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "7c4f2bff466afb807b0737540e2c472a593b0a736e4c92e4ce8e9984589edd7d"
+  },
+  {
+    "path": "tests/party-profile.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "789664755cd27cd70e45546f4b7702878cbbe8229a43bd5e47a35b6fefd886df"
+  },
+  {
+    "path": "tests/print-jobs-warehouse-scope.smoke.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "aecf24d6edc29b670ddaf93fa58205c5631bb7527334a9031be44cbb05b05956"
+  },
+  {
+    "path": "tests/procurement-pagination.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "65b04055517e468aafb7a33e7121651479648f708d0de294a9b1fc9534dc48ca"
+  },
+  {
+    "path": "tests/product-finance-period.smoke.test.js",
+    "purpose": "回归与合成夹具",
+    "sha256": "ea8a105039339dda7e7441f34145785edd9bd3da61eec0f9d85646336f6ac23a"
+  },
+  {
+    "path": "tests/product-finder.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "70c57a7cab9608665c7b382c531be8b916905b882fcc7f31d9f7e48e1b89d81b"
+  },
+  {
+    "path": "tests/purchase-return-lock-budget.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "0f19dc2154b9e3b7f922123cdc844d1183fe6988c7cd85830d84d73e62eda164"
+  },
+  {
+    "path": "tests/release-orchestration.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "e15cb96558123e15008916ef3558032c742f9ad9beb0c044a66e1f031c086c2c"
+  },
+  {
+    "path": "tests/return-payment-lock-order.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "95bb10aa127b8063ed97901970c4990d7bd465103333da9ea85b79234dee19a9"
+  },
+  {
+    "path": "tests/round2-transfer.smoke.test.js",
+    "purpose": "回归与合成夹具",
+    "sha256": "2b8f84c7f3c098961b5d9dacd62b18869847c76df74bbd59026559579f2a1dbc"
+  },
+  {
+    "path": "tests/sale-commercial-lifecycle.smoke.test.js",
+    "purpose": "回归与合成夹具",
+    "sha256": "e070001d7c892d14d43ea59be527e9025989d4094e6203a39a007a2719a3d3fc"
+  },
+  {
+    "path": "tests/sale-commercial-partial-cancel.smoke.test.js",
+    "purpose": "回归与合成夹具",
+    "sha256": "eaa15a893683d4aca1dc2efa776a4713a7fa125b953cdd921687f4cfad9fb5af"
+  },
+  {
+    "path": "tests/sale-reorder-source.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "75a0adba01be481a41d8a076a3fde456b1d2b52b50456002b3991373585ef4df"
+  },
+  {
+    "path": "tests/sale-repeat-create.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "50d37dd36bb7c5d4844ff728073fd851efb7d23b9c1607a483e06c3347aca8ad"
+  },
+  {
+    "path": "tests/search-all-dates.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "9eb25bfec6ee76cd7a1f32d89729b190236945b9931ad13eeb6221ba3c5e1036"
+  },
+  {
+    "path": "tests/security-image-sbom.test.js",
+    "purpose": "回归与合成夹具",
+    "sha256": "26f6176707fc209900022964f1367a3b343c337fea49cc915e0dbb2f6feaefe7"
+  },
+  {
+    "path": "tests/security-import-profile-integration.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "96f743f34ac944887756a19ae16939e61309eedb03f310060c50a52958914206"
+  },
+  {
+    "path": "tests/security-scope-inbound-transfer.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "0f432b1b0206e330ccb180bd07e3e81e70889f1738975e01f7b2afe18a0bb9e6"
+  },
+  {
+    "path": "tests/security-scope-plastic-box.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "9eed89437bbd8836a0322b697428658f30e280a3021c39a97ae37e05f6253799"
+  },
+  {
+    "path": "tests/security-scope-reconciliation-pagination.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "d93447c0c88dc1a28fe16bb037079d7c3c87670b03eccdec25e3d65be6a30285"
+  },
+  {
+    "path": "tests/security-scope-warehouse.smoke.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "5f3f8f87f2af891975158ed7d5c4a469a5190d167842c779ac765f2f4eeb566f"
+  },
+  {
+    "path": "tests/sorting-bin-recovery.smoke.test.js",
+    "purpose": "回归与合成夹具",
+    "sha256": "21cf0e56002d0f12cd4c7d6e83ac8214b57fd61a37f9b95842d977181518318f"
+  },
+  {
+    "path": "tests/status-rules-integrity.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "8b673dba6687ec881f5a9cb4e5bc37f797a6b846f50ab6aae66ea22a5aa10e55"
+  },
+  {
+    "path": "tests/supplier-refunds-accounting.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "7b4406fec02de1bedf1aa163ec87bfe7fb12ff06584cdd28f3c2ebb362904b24"
+  },
+  {
+    "path": "tests/supplier-refunds-approvals.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "6d3e5e9ba67a91dd4efabd4d4eaefcab77351836a5035fc25600b4e22e835fef"
+  },
+  {
+    "path": "tests/supplier-refunds-backfill.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "a9003cbd814bf8586c4d2bfd56f7037bfe268fcd225accbf52f081a76e1df246"
+  },
+  {
+    "path": "tests/supplier-refunds-pr-gate.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "fcc8148031fa817461018a2e3a6725e48999396d52384b3520fe3cc1bec7cc20"
+  },
+  {
+    "path": "tests/supplier-refunds-receive.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "ef74f6a2930090d314948d0d4a6e7bb6679087d75c18933b446480f6120424a8"
+  },
+  {
+    "path": "tests/supplier-refunds-schema.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "e5d655742d43a20378b48a4f5b60fa274b33f73ce02ec706472095586c354f9a"
+  },
+  {
+    "path": "tests/supplier-refunds-source.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "fd4f64258620bc0a919a87848787ccb0397ae7eb4275871dfbf9550325cdbe98"
+  },
+  {
+    "path": "tests/supplier-refunds.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "1e25c66d898456f4b0ed02c8ca5b6bd66d8daafbcaae1b091de3e81653dfaf8d"
+  },
+  {
+    "path": "tests/warehouse-assets-waves.smoke.test.js",
+    "purpose": "回归与合成夹具",
+    "sha256": "791239a6bd8e942258019f914a69768fe70137f46c6ad8ad257037a3cd6a7e07"
+  },
+  {
+    "path": "tests/warehouse-masterdata.smoke.test.js",
+    "purpose": "回归与合成夹具",
+    "sha256": "1e569ceccafd2ebcadbd575e9bdd26356ddae143fdbf3d653f20f4367120bffa"
+  },
+  {
+    "path": "tests/warehouse-ops.smoke.test.js",
+    "purpose": "回归与合成夹具",
+    "sha256": "6bcac6e7ced6e0f64db6b2ea0400f68cc698ac4210fb3c5507c740b776a2fd2a"
+  },
+  {
+    "path": "tests/workbench.test.js",
+    "purpose": "回归与隔离守卫",
+    "sha256": "bbe29db403f88b1c4a377d6787690fb2dc9911cc25ed75250229ba33aba410b5"
+  }
+]

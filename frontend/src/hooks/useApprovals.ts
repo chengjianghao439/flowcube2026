@@ -1,3 +1,4 @@
+import { useApprovalReadScope } from '@/hooks/useApprovalReadScope'
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import {
   listApprovalFlowsApi,
@@ -7,6 +8,9 @@ import {
   listPendingApprovalsApi,
 } from '@/api/approvals'
 import type { ApprovalFlowStep } from '@/types/approval'
+import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
+import { usePermission } from '@/hooks/usePermission'
+import { PENDING_APPROVAL_PERMISSIONS } from '@/lib/approvalBusiness'
 
 const FLOW_KEY = 'approval-flows'
 const PENDING_KEY = 'approval-pending'
@@ -60,8 +64,17 @@ export function useDeleteApprovalFlow() {
 
 /** 待我审批列表 */
 export function usePendingApprovals(page: number, pageSize = 20) {
-  return useQuery({
-    queryKey: [PENDING_KEY, page, pageSize],
-    queryFn: () => listPendingApprovalsApi({ page, pageSize }),
+  const scope = useApprovalReadScope()
+  const active = useActiveWorkspaceTab()
+  const { can } = usePermission()
+  const enabled = active && can(PENDING_APPROVAL_PERMISSIONS)
+  const query = useQuery({
+    queryKey: [PENDING_KEY, scope.key, page, pageSize],
+    queryFn: async ({ signal }) => {
+      const result = await listPendingApprovalsApi({ page, pageSize }, 'paged', { signal, baseURL: scope.server, _authSessionGeneration: scope.generation, _erpApiFallbackTried: true })
+      if (!scope.isCurrent()) throw new Error('审批待办读取上下文已变化，请重试')
+      return result
+    }, enabled, subscribed: enabled, placeholderData: undefined, staleTime: 0,
   })
+  return { ...query, data: enabled && scope.isCurrent() && !query.isFetching && !query.isPaused ? query.data : undefined }
 }

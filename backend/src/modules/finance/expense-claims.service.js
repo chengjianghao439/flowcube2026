@@ -6,8 +6,9 @@ const { generateDailyCode, generateMasterCode } = require('../../utils/codeGener
 const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { assertNotSelfApproval } = require('../../utils/selfApprove')
+const { beginResourceOperationRequest, completeOperationRequest, stableStringify } = require('../../utils/operationRequest')
+const { assertFinancePeriodOpen, tryRecordBackfillApplication } = require('../accounting/finance-period.guard')
 const accountSvc = require('./finance-accounts.service')
-const { assertFinancePeriodOpen } = require('../accounting/finance-period.guard')
 
 /**
  * 日常费用报销。
@@ -202,29 +203,101 @@ async function cancel(id, operator) {
  * 付款：从指定资金账户出账，同事务写账户流水。
  * 钱出去和单据状态必须同生共死，不能只改状态不动账。
  *
- * **跨期闸门（2026-09-27）**：这是第四条真实出钱路径，与直付/核销/退款一样会写
- * `finance_account_transactions`、并被 voucher-engine 的 buildFundVouchers 读去生成
- * 凭证（biz_type=3 → EXPENSE_PAY）。缺这道闸门时，付款日期落在已结账期间会让这笔钱
- * 进到已结账期间的凭证之外。**实测已证实**的是业务侧三项事实——报销单状态流转、
- * 资金流水照写、账户余额照扣；而「这笔流水的 EXPENSE_PAY 凭证会在后续 generateVouchers
- * 时因期间已封被跳过、会计账上因此缺此分录」是**代码审阅推断**（本轮未端到端跑过
- * generateVouchers）。若真发生，跳过那一步会落一条 logger.warn，但界面无任何提示。
- * 界面上付款弹窗只传 accountId，故付款日期恒为今天；真实触发场景是
- * 「当月已结账后又在本月付款」（提前结账）。
+ * 与收付款/退款三个入口同范式（2026-09-26 一致性审查 · 任务 7 收口）：
+ *   · 保留原有期间闸门，业务日期落在已结账期间时拒绝普通付款。
+ *   · 因此同样接 **跨期补录**（先审批、后动账）与**请求键幂等**：补录执行是按 request_snapshot
+ *     重放这次调用，请求键就是这笔操作的永久身份，漏了它重放会被当成一笔新的付款再付一次。
  */
-async function pay(id, { accountId, happenedAt, remark }, operator) {
-  const conn = await pool.getConnection()
+async function pay(id, { accountId, happenedAt, remark }, operator, requestKey = null, { backfill = null, conn: sharedConn = null } = {}) {
+  const bizDate = happenedAt || beijingTodayYmd()
+  const original = require('./expense-pay.backfill')
+  const input = { claimId: Number(id), body: { accountId, happenedAt, remark }, operator, requestKey, backfill }
+  // The original application owns this key across all states, even if controls are omitted
+  // or its business period has reopened. Only the application execution may write its cash.
+  if (backfill?.mode !== 'execute') {
+    const recovered = await original.lookup(pool, input)
+    if (recovered) return recovered
+  }
+
+  // 跨期补录的**申请**分支：只落一张待审批申请单，业务一行不写、钱不动。放在业务事务之前——
+  // 申请单必须独立提交，否则「业务没写成」会把申请单一起回滚，出纳拿着单号而库里没有这张单。
+  if (backfill?.mode === 'apply') {
+    // 没有资金账户就不会写账户流水，也就没有凭证来源：批准执行后只会留下一个永远补不出
+    // 调整凭证的差异。预先拒绝，让申请人先选账户。
+    if (!accountId) {
+      throw new AppError(
+        '这次报销付款没有指定资金账户，不会产生资金流水，跨期补录也就生成不了调整凭证。'
+        + '请先选择付款账户再申请补录。',
+        400, 'FINANCE_BACKFILL_NO_FUND_ACCOUNT',
+      )
+    }
+    // 申请期的**只读**可执行性预检：审批是异步的，若申请时不看，一张明摆着付不成的单子
+    // （状态不是已批准、金额为 0）也会走完审批、停在「已批准 · 待执行」，还得人工作废。
+    // 这里不加锁、不做承诺，权威判定在执行期（下面带行锁的三处校验）。
+    const [[target]] = await pool.query(
+      'SELECT claim_no, status, total_amount FROM expense_claims WHERE id = ? AND deleted_at IS NULL',
+      [Number(id)],
+    )
+    if (!target) throw new AppError('费用报销单不存在', 404)
+    assertStatusAction('expenseClaim', 'pay', target.status)
+    const preAmount = Number(target.total_amount)
+    if (preAmount <= 0) throw new AppError('报销金额为 0，无需付款', 400)
+
+    const applied = await tryRecordBackfillApplication({
+      businessDate: bizDate,
+      bizType: 'expense_pay',
+      bizId: Number(id),
+      bizNo: target.claim_no,
+      amount: preAmount,
+      reason: backfill.reason,
+      requestKey,
+      applicantId: backfill.applicantId,
+      applicantName: backfill.applicantName,
+      // 快照 = 批准后重放这次调用所需的入参（形状见 finance-backfills.replay 的约定），
+      // 同时也是审批人在补录审批页上核对的依据：钱从哪个账户出、业务日期是哪天。
+      requestSnapshot: {
+        kind: 'expense_pay',
+        claimId: Number(id),
+        body: { accountId: Number(accountId), happenedAt: bizDate, remark: remark || null },
+      },
+      // 指纹只覆盖影响金额与资金去向的字段：同一个请求键的载荷变了要报「键被复用」，
+      // 而不是静默按旧单执行。
+      fingerprintPayload: { claimId: Number(id), amount: preAmount, accountId: Number(accountId) },
+    })
+    if (applied) return { backfillApplication: applied }
+  }
+
+  // 补录执行（finance-backfills.execute）要在**一个事务**里做完「重放业务 + 回填申请单执行
+  // 痕迹」，连接由调用方传入，事务的开/提交/回滚与释放都归它。
+  const own = !sharedConn
+  const conn = sharedConn || await pool.getConnection()
   try {
-    await conn.beginTransaction()
-    // 有效业务日期只算一次：闸门判定与实际落库必须用同一个日期，否则「判的期间」与
-    // 「写的期间」可能错位。闸门放在行锁之前——它取的账套锁是全链最外层（与直付登记、
-    // 固定资产计提/处置同序：账套 → 单据 → 账户），期间已封就不必再锁报销单与资金账户。
-    const bizDate = happenedAt || beijingTodayYmd()
-    await assertFinancePeriodOpen(conn, bizDate, {
-      bizLabel: '本次费用报销付款',
-      // 报销目前没有跨期补录通道（finance-backfills 无 expense 分支），
-      // 不能引导用户去走一条走不通的路
-      backfillHint: false,
+    if (own) await conn.beginTransaction()
+    const application = backfill?.mode === 'execute' ? await original.read(conn, input) : null
+
+    // 幂等：付款是改钱，连点两次/断网重试不能重复出账。资源级 action 绑本单据 id
+    // （expense.pay.<id>），与收付款/退款同范式；缺请求键时 begin 返回 enabled:false 直接放行。
+    const reqState = await beginResourceOperationRequest(conn, {
+      requestKey, action: 'expense.pay', userId: operator.operatorId ?? null,
+      resourceType: 'expense_claim', resourceId: Number(id),
+    })
+    if (reqState.replay) {
+      if (application) {
+        const ack = await original.receipt(conn, application)
+        if (stableStringify(ack) !== stableStringify(reqState.responseData)) throw original.conflict()
+      }
+      if (own) await conn.commit()
+      return reqState.responseData ?? { replayed: true }
+    }
+
+    // 跨期闸门：业务日期落在已结账期间时默认 409（凭证引擎会跳过已结账期间，钱动了账上却没有）。
+    // 放在业务行锁**之前**，理由与 payments.recordPayment 一致：期间已封就不必再锁单据/账户，
+    // 也不占着别人的锁等待；更重要的是让加锁顺序保持「账套（闸门内持锁）→ 账户」，
+    // 与 recordTransaction 内部「先锁账户行再重算余额」的正范式同向，不会形成反向环。
+    // 只有 mode='execute'（执行已批准的补录）才把授权交给闸门，由它放行并给出凭证归属日期。
+    const periodState = await assertFinancePeriodOpen(conn, bizDate, {
+      bizLabel: '本次报销付款',
+      backfill: backfill?.mode === 'execute' ? backfill : null,
     })
 
     const row = await lockStatusRow(conn, {
@@ -233,6 +306,11 @@ async function pay(id, { accountId, happenedAt, remark }, operator) {
     const rule = assertStatusAction('expenseClaim', 'pay', row.status)
     const amount = Number(row.total_amount)
     if (amount <= 0) throw new AppError('报销金额为 0，无需付款', 400)
+    if (application && (row.claim_no !== application.row.biz_no || amount !== Number(application.row.amount))) throw original.conflict()
+
+    // 账户行锁：闸门已持账套锁，这里补上「账户」这一环，顺序即账套→账户。
+    // 后面的 recordTransaction 对同一账户行是同事务重入。
+    await conn.query('SELECT id FROM finance_accounts WHERE id=? FOR UPDATE', [Number(accountId)])
 
     await compareAndSetStatus(conn, {
       table: 'expense_claims', id, fromStatus: rule.from, toStatus: rule.to, entityName: '费用报销单',
@@ -241,7 +319,7 @@ async function pay(id, { accountId, happenedAt, remark }, operator) {
       'UPDATE expense_claims SET paid_account_id=?,paid_at=NOW(),paid_by_name=? WHERE id=?',
       [Number(accountId), operator.operatorName, id],
     )
-    await accountSvc.recordTransaction(conn, {
+    const fund = await accountSvc.recordTransaction(conn, {
       accountId: Number(accountId),
       direction: accountSvc.DIRECTION.OUT,
       amount,
@@ -249,16 +327,26 @@ async function pay(id, { accountId, happenedAt, remark }, operator) {
       bizId: Number(id),
       bizNo: row.claim_no,
       partyName: row.applicant_name,
+      // 资金流水仍按业务日期记（银行对账依据它，补录不能把它改成今天）；
+      // 只有凭证归属日期改用补录当期，并把申请单挂上供自动核对反查。
       happenedAt: bizDate,
       remark: remark || `费用报销 ${row.claim_no}`,
+      voucherDateOverride: periodState.voucherDateOverride,
+      backfillId: backfill?.mode === 'execute' ? backfill.approvedId : null,
     }, operator)
-    await conn.commit()
-    return { id: Number(id), status: rule.to, amount }
+    if (application) await original.assertFunds(conn, application, { fundId: fund.id })
+    const result = { id: Number(id), status: rule.to, amount }
+    await completeOperationRequest(conn, reqState, {
+      data: result, message: '付款完成，已记入账户流水',
+      resourceType: 'expense_claim', resourceId: Number(id),
+    })
+    if (own) await conn.commit()
+    return result
   } catch (error) {
-    await conn.rollback()
+    if (own) await conn.rollback()
     throw error
   } finally {
-    conn.release()
+    if (own) conn.release()
   }
 }
 
