@@ -5,6 +5,11 @@
     "sha256": "77fd50e76a34ed4c058de296a6a023ba460c9bd29e198dd597499f1f5cf15e78"
   },
   {
+    "path": ".gitattributes",
+    "purpose": "原始统一 diff 证据格式",
+    "sha256": "bbe5240688aeb5dcbc933d977212f90e074978cf6838a289cea304676204e7bc"
+  },
+  {
     "path": ".github/workflows/test.yml",
     "purpose": "CI门禁",
     "sha256": "c0894214b0138b6f362b647e146ebc9cecf81af2a122738a211ddf4d7320874e"
@@ -1143,7 +1148,7 @@
   {
     "path": "docs/release-v0.13.0-integration.md",
     "purpose": "主题说明与验收证据",
-    "sha256": "e4aed40b191af4fb7739dfb90e5e7867a104937ad19caa5c2015b4fc63c887e2"
+    "sha256": "4392376698af800cf8aaee063348865304cb7975c3974e622cd566f83c27d57a"
   },
   {
     "path": "docs/runbooks/failure-recovery.md",

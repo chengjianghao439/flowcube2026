@@ -1,3 +1,8 @@
 # 原始工具输出作为审计证据保留原始字节；空行/行尾空格来自测试运行器，不按源码检查。
 docs/audit-round2-2026-09-05/*.log -whitespace
 docs/audit-round2-fixes-2026-09-05/*.log -whitespace
+# 这些历史统一 diff 的空上下文行必须保留一个空格，保证原始补丁可解析。
+docs/acceptance/2026-10-06-go-live-runtime/fixes/concurrency-fixture/overlay.patch whitespace=-blank-at-eol
+docs/acceptance/2026-10-06-go-live-runtime/fixes/notifications/overlay.patch whitespace=-blank-at-eol
+docs/acceptance/2026-10-06-go-live-runtime/fixes/refund-date/overlay.patch whitespace=-blank-at-eol
+docs/acceptance/2026-10-06-go-live-runtime/fixes/gui-labels/overlay.diff whitespace=-blank-at-eol

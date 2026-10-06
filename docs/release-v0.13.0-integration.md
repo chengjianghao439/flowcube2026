@@ -17,6 +17,10 @@
 
 原 go-live 与 dingtalk 工作树的逐路径 SHA-256 与快照仍一致。快照位于本机独占临时目录 `flowcube-release-20261007-h0i_iql4`；原工作树未被 reset/clean/覆盖。候选逐路径及用途见 [integration-files.json](acceptance/2026-10-07-release/integration-files.json)。原分支未提交的内容现由整合提交保存，原工作树保留供原任务继续核对。
 
+远端另有 21 个 Dependabot 更新提案分支，属于独立的待评审依赖 PR，未作为已完成的本地开发任务合并。保留原 PR；Vite/Zod/Node 类型等 major 升级仍按现行兼容约束单独处理，当前锁定依赖继续经过完整 Security audit。此次分支整合覆盖上表的本地开发成果，不宣称合并了这些远端提案。
+
+四份原始验收 patch/diff 的空上下文行包含必要的一个空格。仅对这些精确路径设置 Git 的 blank-at-eol 属性，保留原始字节和补丁可解析性；产品源码的空白检查继续生效。
+
 ## 迁移编号
 
 原安全分支 276/277 保持；原 go-live 276/277/278 尚未进入 main，因此只在新整合候选重编号，原分支及历史验收日志保持原样。
