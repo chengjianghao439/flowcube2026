@@ -15,6 +15,11 @@
     "sha256": "c0894214b0138b6f362b647e146ebc9cecf81af2a122738a211ddf4d7320874e"
   },
   {
+    "path": ".gitleaks.toml",
+    "purpose": "已核实非认证幂等键的精确值规则",
+    "sha256": "e3859bf059e4a4d89cea141f43d97a03889a7d1380a23d2c3f959bf4a6efcdc0"
+  },
+  {
     "path": "AGENTS.md",
     "purpose": "协作约定或配置样例",
     "sha256": "b10e9f99b9bf27e2e757fd89909d5ec025d6222f67e6deef09c1869f7b174f5e"
@@ -27,12 +32,12 @@
   {
     "path": "backend/package-lock.json",
     "purpose": "业务、权限与迁移",
-    "sha256": "a3cbe05d98293390eef98376914020631eb52cf42f1eb785fc8b96c8a7d29698"
+    "sha256": "c05691c2690dc424b32cbbf9542128b76d666c3b222ad5aaf386e4824d2f5758"
   },
   {
     "path": "backend/package.json",
     "purpose": "业务、权限与迁移",
-    "sha256": "ae943a2a262251e8756f1b0513761ac5999c8edf75ee2c8416009286cbbad539"
+    "sha256": "2acf3a882457240518e6088949000d188647dd4b8138d4ae879d6a97f5b30ed5"
   },
   {
     "path": "backend/src/app.js",
@@ -1133,7 +1138,7 @@
   {
     "path": "docs/print-deploy-ops.md",
     "purpose": "说明与原分支验收证据",
-    "sha256": "648afd2acf3b29f9172ce11c8de1b586dbdaf7e1185065def8f931355fe71693"
+    "sha256": "f71219d64d7645043d441a869c42faf272faa18ced81d11fb7690d83b542ab86"
   },
   {
     "path": "docs/release-notes/0.13.0.md",
@@ -1148,7 +1153,7 @@
   {
     "path": "docs/release-v0.13.0-integration.md",
     "purpose": "主题说明与验收证据",
-    "sha256": "4392376698af800cf8aaee063348865304cb7975c3974e622cd566f83c27d57a"
+    "sha256": "52b859962d60f3a70209485f517cc456f6c2bc0549817adf7b104e9c4f728fce"
   },
   {
     "path": "docs/runbooks/failure-recovery.md",
@@ -1243,12 +1248,12 @@
   {
     "path": "frontend/package-lock.json",
     "purpose": "界面、会话与PDA",
-    "sha256": "4ee540897f57876ccc3c08a795f7f7c0a0e5a6b8747a2fb0d3bc1441e80dd619"
+    "sha256": "b6e94a20fdfa834b658e0178bef9dd12ee87b4ada3cdc549d612a0e27dafd4eb"
   },
   {
     "path": "frontend/package.json",
     "purpose": "界面、会话与PDA",
-    "sha256": "bfde8ceb417ae12eefe9e0bb71d3ebba0c6250fe5b03920aa97f30271f543f09"
+    "sha256": "4092b655b51daa1870271e545ee13847b4a4292686040e85679ea4aaac20fc01"
   },
   {
     "path": "frontend/src/api/accounting.ts",

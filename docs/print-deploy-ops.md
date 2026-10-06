@@ -177,6 +177,10 @@
 
 - 手动桌面/PDA 目标只接受 main 历史中的冻结 SHA/版本 tag；构建无发布凭据，PDA 签名与发布分别在 fresh runner，发布下载精确 artifact ID 并校验 SHA/run/字节。NSIS/Gradle 校验前不得执行归档内容。所有外部镜像使用固定摘要，发布前生成并保留镜像 SBOM/来源记录。详见 `docs/security-release-remediation-2026-10-06.md`。
 - SBOM 扫描两镜像串行，各容器限制 2 GiB 内存（含 tmpfs、不追加 swap）、2 CPU，缓存 tmpfs 上限 1 GiB，继续禁止网络、额外 capability 和根文件系统写入。Syft 缓存全部未压缩镜像层；固定 Node amd64 层、当前锁定的生产依赖和 Linux musl canvas 的最低合计 294607349 字节已超过旧 256 MiB，尚未计字体、npm cache 及新增层。`tests/security-image-sbom.test.js` 校验实际 CLI 预算并反证旧上限；真实 Syft/SBOM 仍须最终 SHA 的 CI 验证，扫描失败不得跳过。
+
+2026-10-07 发版前实时 audit 新发现三项公告，按官方修复版本最小升级：[proxy-addr 2.0.8](https://github.com/advisories/GHSA-jqcg-44mw-7w3h)、[Capacitor Android/Core 8.4.3](https://github.com/advisories/GHSA-rvm3-566m-v7fv)、[source-map-js 1.2.2](https://github.com/advisories/GHSA-68fv-2mgg-jv7q)。Android/Core 固定同版满足 peer；保留现有 CLI、Gradle、SDK 和自定义插件。四目录完整 audit 归零；前端 1714 用例、lint、类型、ERP/PDA 构建与 sync、原生单测和 clean assembleRelease 均通过。8.4.3 SystemBars 的键盘/安全区行为须真机后补；同 SHA CI、签名和下载摘要仍分别核验。
+
+Gitleaks 全历史初次识别三项 generic-api-key，实际是两份合成 GUI 证据 URL 的 requestKey（供应商退款创建/收到款），以及离线容器拆分的固定幂等请求键。只精确匹配这三个已核实完整值，不豁免目录、规则或其他密钥；原失败报告与修后扫描分别保留。
 - 打印工作站须经具有管理权限的管理员注册随机凭据；所有消费同时核登录、站凭据与本次 claim/ack，旧公开 ID 不再鉴权。升级需迁移 277 与新版桌面注册；模板/ZPL 预算超限明确拒绝，业务标签渲染失败仍降级、不回滚业务事务。详见 `docs/security-print-remediation-2026-10-06.md`。
 
 ## HTML 单据的长企业资料文本（2026-10-04，R1）

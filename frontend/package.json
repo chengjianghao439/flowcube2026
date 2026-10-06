@@ -17,10 +17,10 @@
   },
   "dependencies": {
     "@capacitor-mlkit/barcode-scanning": "^8.1.0",
-    "@capacitor/android": "^8.2.0",
+    "@capacitor/android": "8.4.3",
     "@capacitor/app": "^8.1.0",
     "@capacitor/cli": "^7.6.0",
-    "@capacitor/core": "^8.2.0",
+    "@capacitor/core": "8.4.3",
     "@capacitor/splash-screen": "^8.0.1",
     "@capacitor/status-bar": "^8.0.1",
     "@radix-ui/react-dialog": "^1.1.15",
