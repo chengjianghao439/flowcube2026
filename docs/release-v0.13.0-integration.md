@@ -15,7 +15,7 @@
 | archive/party-ledger-v0.9.10 | e4e907f | 两处承运商配置规则已与当前实现一致；归档中的生产配置、安装包及旧日志不重新纳入 |
 | 其余已核对分支 | 已合入 main 或无独有有效改动 | 保留分支及工作树，不重复覆盖现行实现 |
 
-原 go-live 与 dingtalk 工作树的逐路径 SHA-256 与快照仍一致。快照位于本机独占临时目录 `flowcube-release-20261007-h0i_iql4`；原工作树未被 reset/clean/覆盖。完整版本逐路径清单已扩展至 672 项，覆盖 v0.12.0 基线以来的安全整改、分支整合与门禁订正；文件用途及字节摘要见 [integration-files.json](acceptance/2026-10-07-release/integration-files.json)。原分支未提交的内容现由整合提交保存，原工作树保留供原任务继续核对。
+原 go-live 与 dingtalk 工作树的逐路径 SHA-256 与快照仍一致。快照位于本机独占临时目录 `flowcube-release-20261007-h0i_iql4`；原工作树未被 reset/clean/覆盖。完整版本逐路径清单已扩展至 674 项，覆盖 v0.12.0 基线以来的安全整改、分支整合与门禁订正；文件用途及字节摘要见 [integration-files.json](acceptance/2026-10-07-release/integration-files.json)。原分支未提交的内容现由整合提交保存，原工作树保留供原任务继续核对。
 
 远端另有 21 个 Dependabot 更新提案分支，属于独立的待评审依赖 PR，未作为已完成的本地开发任务合并。保留原 PR；Vite/Zod/Node 类型等 major 升级仍按现行兼容约束单独处理，当前锁定依赖继续经过完整 Security audit。此次分支整合覆盖上表的本地开发成果，不宣称合并了这些远端提案。
 
@@ -98,6 +98,14 @@
 浏览器 `37513633864` 在镜像构建后的 Syft SBOM 阶段失败：扫描容器已使用宿主 UID/GID，但 `/tmp` 的 tmpfs 未显式设置可写模式，实际缓存目录与镜像层展开报 permission denied。后续上传、SSH 与生产部署步骤全部未执行，线上 SSH 核对仍为 `14e97aa9dc9df0700b394d59cafbc53dba0c5e69` / v0.12.0。此次失败日志保留为 `/tmp/flowcube-release-third-browser-failed.log`。缓存 tmpfs 明确 mode=1777，仍使用原 UID、固定扫描器摘要和全部隔离。真实扫描器对两份含真实 npm 元数据的独立 tiny 镜像，旧权限均报层展开拒绝，修后均自然通过并生成非空 CycloneDX，分别发现 proxy-addr 2.0.8 与 source-map-js 1.2.2；任务容器、两卷和两镜像标签精确清理复核。相关离线检查 32/32 通过。tiny 复验不能代替完整应用镜像，下一候选仍须新 SHA 的全部门禁及完整镜像实扫，不沿用旧成功 job。
 
 独立核对另发现逐路径清单漏了一项新增改动 `tests/repair-smoke-instance-guard.test.js`；清单现按 v0.12.0 基线的完整实际 diff 重新生成，包含该路径并复核全部字节摘要。原来源工作树和快照保持。
+
+## 第四轮完整镜像扫描与部署失败
+
+第四候选 `01f6d7bc0c4102a4678960326275a5707b4b7962`：Tests `37516958281` 全部 21 个 job、Security `37516958302` 全部 6 个 job 成功；桌面 main 验证 `37516958319` 成功。PDA `37516958325` 签名产物 `11437831771` 的 APK 为 15166282 字节、SHA-256 `bf5bfc312a2b2d2852bfeec556d77153967c5ffd536c83620f1ba4f95556d589`，中转核验通过；尚未发布。浏览器 `37516958366` 的完整两镜像 SBOM 和来源步骤成功，保留 artifact `11438650002`，后端/前端分别 1564/1287 个 components，归档来源 SHA-256 `73185245f3f00f30621381d1e127660dcbe0bf249105d816931828d14410f66a`；独立核对源码、lock、固定基础镜像、SBOM 字节与来源摘要一致。这不表示整轮浏览器部署成功。
+
+服务器已校验并加载两份新应用镜像，随后 compose 尝试为 MySQL 拉取声明的新 digest，访问 Docker Hub 超时。在 `APPLICATION_SWITCHED=0`、迁移尚未开始时失败；回退处理完成旧应用健康检查。实际运行后端仍为 `14e97aa` / v0.12.0，而服务器 Git checkout 已为 `01f6d7b`，二者不能混淆。MySQL 仍是原健康实例：8.0.45、image ID `sha256:a123df39bc7c56bb6e40f8e5ef90469cc191dd7afcbf6e0d618c61a12e225dde`、RepoDigest `mysql@sha256:432e695697f70c5e13ed6a844397075ea68ce91b6d6e44286067348e746ecd9a`。未执行本版生产迁移、未打版本 tag，原失败日志 `/tmp/flowcube-release-fourth-browser-failed.log` 保留。
+
+后续订正将应用发布与既有 MySQL 生命周期分开：既有容器须唯一、running、healthy 且认证 TCP SELECT 1；停止、不健康、认证失败均提前拒绝。首次无实例仅允许已缓存的声明固定镜像，不在部署窗口拉取或降级；应用切换明确 no-deps，迁移停写、同 SHA、兼容回退和页面门禁仍完整执行。部署专项 37/37 与主任务集中发布/隔离/来源契约 78/78 自然通过；首次绿色 34/35 的旧命令定位失败已经按新 no-deps 参数语义修正，原顺序断言保留。真实独占 MySQL 用当前函数验证本地固定 pin 首次启动、二次保留原 ID/启动时间、错误口令与停止状态拒绝，精确容器/具名卷均清理复核。独立审查最终三文件哈希一致且无阻塞问题。最终结果必须核新的同 SHA 门禁、生产结构及真实下载。
 
 ## 宿主配置与升级
 

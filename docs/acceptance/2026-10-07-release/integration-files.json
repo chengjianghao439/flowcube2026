@@ -1443,7 +1443,7 @@
   {
     "path": "docs/print-deploy-ops.md",
     "purpose": "说明与原分支验收证据",
-    "sha256": "cd3d4461d6c6e02e5c012711cdd51de150dcdda127afa4fb1f781f6ff3b279a6"
+    "sha256": "b5b1dc0df840fde44d530ce9732b8eae4c41deaa51a990708576ed5be0e1b4e6"
   },
   {
     "path": "docs/release-notes/0.13.0.md",
@@ -1458,7 +1458,7 @@
   {
     "path": "docs/release-v0.13.0-integration.md",
     "purpose": "主题说明与验收证据",
-    "sha256": "da30e6c8b129b87a25da629f76608a680c2e79ff5530a09d954214933feaa40f"
+    "sha256": "ebcc750499f045d4da909ad5e8a230f0b9c1a01c4669d4c50b01a38dee68b42a"
   },
   {
     "path": "docs/runbooks/failure-recovery.md",
@@ -2801,6 +2801,11 @@
     "sha256": "8ca21a56167ba9b67ddc11ccfaffdf1637fccfb5b4a4f2cef96de4ecf06e9ab1"
   },
   {
+    "path": "scripts/server-update.sh",
+    "purpose": "生产应用切换与既有 MySQL 保留",
+    "sha256": "db691dda96ac72a1e1da92dfeabfdf7c08e6e80173d4d8238525de283cbfa6d9"
+  },
+  {
     "path": "scripts/smoke-pages.node.js",
     "purpose": "运维、发布与验收",
     "sha256": "1666443b340b0bd527e4475a794190abc3fba6f526a5eff010c48fcc327c304a"
@@ -2829,6 +2834,11 @@
     "path": "tests/audit-2026-09-18.smoke.test.js",
     "purpose": "安全回归、夹具与来源验证",
     "sha256": "08c42922b0e05d5ca15333ac6223baac791e447cfe65851f02922a212cab1342"
+  },
+  {
+    "path": "tests/audit-deployment.test.js",
+    "purpose": "部署停写/回退与 MySQL 生命周期 CLI 回归",
+    "sha256": "562b831fb584185faa9654e33623adb0f8de4aad40e2514c63d5aed909412091"
   },
   {
     "path": "tests/audit-inventory.smoke.test.js",

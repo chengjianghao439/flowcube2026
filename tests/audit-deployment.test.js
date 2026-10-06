@@ -9,12 +9,14 @@ const { spawnSync } = require('node:child_process')
 const { createHash } = require('node:crypto')
 
 const root = path.resolve(__dirname, '..')
-function deployment(scenario) {
+function deployment(scenario, transform = source => source) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'flowcube-deploy-test-'))
   const bin = path.join(dir, 'bin')
   fs.mkdirSync(bin)
   fs.mkdirSync(path.join(dir, 'scripts/lib'), { recursive: true })
   for (const file of ['server-update.sh', 'lib/ops-common.sh']) fs.copyFileSync(path.join(root, 'scripts', file), path.join(dir, 'scripts', file))
+  const updatePath = path.join(dir, 'scripts/server-update.sh')
+  fs.writeFileSync(updatePath, transform(fs.readFileSync(updatePath, 'utf8')))
   for (const file of ['lib/runtime-guards.sh']) if (fs.existsSync(path.join(root, 'scripts', file))) fs.copyFileSync(path.join(root, 'scripts', file), path.join(dir, 'scripts', file))
   fs.copyFileSync(path.join(root, 'docker-compose.yml'), path.join(dir, 'docker-compose.yml'))
   fs.writeFileSync(path.join(dir, 'scripts/release-gate.sh'), '#!/bin/bash\n[[ "$DEPLOY_TEST_SCENARIO" != gate && "$DEPLOY_TEST_SCENARIO" != ledger_gate && "$DEPLOY_TEST_SCENARIO" != ledger_retry && "$DEPLOY_TEST_SCENARIO" != rollback_failure && "$DEPLOY_TEST_SCENARIO" != first_deploy && "$DEPLOY_TEST_SCENARIO" != legacy ]]\n')
@@ -29,6 +31,7 @@ function deployment(scenario) {
 const fs=require('node:fs'),path=require('node:path');
 const cmd=path.basename(process.argv[1]),args=process.argv.slice(2),s=process.env.DEPLOY_TEST_SCENARIO;
 const log=process.env.DEPLOY_TEST_LOG,rolled=log+'.rolled';
+const first=s.startsWith('first_'),mysqlStarted=log+'.mysql-started';
 fs.appendFileSync(log,JSON.stringify([cmd,...args])+'\\n');
 if(cmd==='git') {if(args[0]==='rev-parse')console.log((s==='sha'?'b':'a').repeat(40)); process.exit(0);}
 if(cmd==='flock'||cmd==='sleep')process.exit(0);
@@ -39,6 +42,23 @@ if(cmd==='df'){console.log('Filesystem 1M-blocks Used Available Use% Mounted on\
 if(cmd==='curl'){console.log('<title>极序 Flow</title>');process.exit((s==='health'&&!fs.existsSync(rolled))||(s==='public'&&args.some(a=>a.startsWith('https://')))?22:0);}
 if(cmd==='docker') {
  const a=args.join(' ');
+ if(a==='compose config --images mysql') {console.log(s==='first_bad_pin'?'mysql:8.0':'mysql:8.0@sha256:'+'7'.repeat(64));process.exit(0);}
+ if(a==='compose ps -aq mysql') {if(!first||fs.existsSync(mysqlStarted))console.log(s==='multi_mysql'?'old-mysql-container\\nother-mysql-container':'old-mysql-container');process.exit(0);}
+ if(args[0]==='inspect'&&a.includes('.State.Status')) {console.log(s==='mysql_stopped'?'exited healthy':['mysql_unhealthy','first_unhealthy'].includes(s)?'running unhealthy':s==='mysql_no_health'?'running missing':'running healthy');process.exit(0);}
+ if(args[0]==='image'&&args[1]==='inspect'&&args.at(-1).startsWith('mysql:')) {process.exit(s==='first_missing_pin'?1:0);}
+ if(args[0]==='exec'&&a.includes('SELECT 1')) {
+   if(!a.includes('--protocol=TCP')||!a.includes('-h127.0.0.1')||!a.includes('-P3306')||!a.includes('--connect-timeout=2')||!a.includes('MYSQL_PWD="$MYSQL_ROOT_PASSWORD"'))process.exit(1);
+   if(['mysql','mysql_auth_fail','first_auth_fail'].includes(s))process.exit(1);
+   if(s==='mysql_bad_result') {console.log('0');process.exit(0);}
+   if(s==='first_sql_delay') {const p=log+'.sql-count',n=fs.existsSync(p)?Number(fs.readFileSync(p))+1:1;fs.writeFileSync(p,String(n));if(n<3)process.exit(1);}
+   console.log('1');process.exit(0);
+ }
+ if(a.startsWith('compose up')&&args.at(-1)==='mysql') {
+   if(!args.includes('--pull')||args[args.indexOf('--pull')+1]!=='never'||!args.includes('--no-deps')) {fs.appendFileSync(log,JSON.stringify(['implicit-mysql-reconcile'])+'\\n');process.exit(1);}
+   if(s==='first_start_fail')process.exit(1);
+   fs.writeFileSync(mysqlStarted,'yes');process.exit(0);
+ }
+ if(a.startsWith('compose up')&&a.endsWith('backend frontend')&&!args.includes('--no-deps')) {fs.appendFileSync(log,JSON.stringify(['implicit-mysql-reconcile'])+'\\n');process.exit(1);}
  if(a.includes('SELECT @@GLOBAL.log_bin_trust_function_creators')) {if(s==='ledger_retry_pre_migration')process.exit(1);console.log('0');}
  if(a.includes("table_name='db_migrations'"))console.log('1');
  if(a.includes("filename='240_party_ledger_explicit_identity.sql'"))console.log(s==='ledger_gate'?'0':'1');
@@ -106,7 +126,7 @@ test('成功部署先迁移后替换应用，并通过门禁后结束', () => {
   const result = deployment('success')
   assert.equal(result.status, 0, result.stdout + result.stderr)
   const migrate = result.commands.findIndex(c => c[0] === 'docker' && c.slice(1, 3).join(' ') === 'compose run' && c.join(' ').includes('backend npm run migrate'))
-  const replace = result.commands.findIndex(c => c.join(' ').includes('compose up -d --no-build backend frontend'))
+  const replace = result.commands.findIndex(c => c[0] === 'docker' && c.slice(1, 3).join(' ') === 'compose up' && c.includes('--no-build') && c.includes('--no-deps') && c.slice(-2).join(' ') === 'backend frontend')
   const pause = result.commands.findIndex(c => c.join(' ').includes('compose stop -t 60 backend'))
   const restore = result.commands.findIndex(c => c.join(' ').includes('SET GLOBAL log_bin_trust_function_creators=0'))
   assert.ok(pause >= 0 && pause < migrate && restore > migrate && restore < replace, JSON.stringify(result.commands))
@@ -160,4 +180,58 @@ test('首发回退旧后端前恢复与实际APK匹配的兼容版本清单', ()
   assert.equal(result.legacyMeta.filename, 'FlowCubePDA-1-fixture.apk')
   assert.match(result.stderr, /已恢复部署前应用镜像/)
   assert.doesNotMatch(result.stderr, /需要人工恢复/)
+})
+
+test('常规部署保留现有健康 MySQL，只核同容器 TCP 认证，应用切换不重建依赖', () => {
+  const result = deployment('mysql_ready')
+  assert.equal(result.status, 0, result.stdout + result.stderr)
+  assert.ok(!result.commands.some(c => c.join(' ').startsWith('docker compose up') && c.at(-1) === 'mysql'))
+  assert.ok(!result.commands.some(c => c.join(' ').includes('compose config --images mysql')))
+  const probe = result.commands.find(c => c[0] === 'docker' && c[1] === 'exec' && c.join(' ').includes('SELECT 1'))
+  assert.ok(probe && probe.includes('old-mysql-container'))
+  const paused = result.commands.findIndex(c => c.join(' ').includes('compose stop'))
+  assert.ok(result.commands.indexOf(probe) < paused)
+  assert.ok(result.commands.filter(c => c.join(' ').startsWith('docker compose up')).every(c => c.includes('--no-deps')))
+})
+
+for (const scenario of ['mysql_stopped','mysql_unhealthy','mysql_no_health','multi_mysql','mysql_auth_fail','mysql_bad_result','first_missing_pin','first_bad_pin','first_start_fail','first_auth_fail','first_unhealthy']) {
+  test(`${scenario} 在停写与迁移前拒绝，不恢复或重建现有数据库`, () => {
+    const result = deployment(scenario)
+    assert.equal(result.status, 1, result.stdout + result.stderr)
+    assert.ok(!result.commands.some(c => c.join(' ').includes('compose stop') || c.join(' ').includes('npm run migrate') || c.includes('--force-recreate')))
+    assert.ok(!result.commands.some(c => c[0] === 'implicit-mysql-reconcile' || c.includes('pull')))
+    if (!scenario.startsWith('first_')) assert.ok(!result.commands.some(c => c.join(' ').startsWith('docker compose up')))
+    if (['first_missing_pin','first_bad_pin'].includes(scenario)) assert.ok(!result.commands.some(c => c.join(' ').startsWith('docker compose up')))
+  })
+}
+
+for (const scenario of ['first_cached','first_sql_delay']) test(`${scenario} 仅启动本地固定 pin，健康及实际 TCP SQL 成功后才暂停业务`, () => {
+  const result = deployment(scenario)
+  assert.equal(result.status, 0, result.stdout + result.stderr)
+  const start = result.commands.find(c => c.join(' ').startsWith('docker compose up') && c.at(-1) === 'mysql')
+  assert.ok(start && start.includes('--pull') && start[start.indexOf('--pull') + 1] === 'never' && start.includes('--no-deps') && start.includes('--wait'))
+  assert.ok(result.commands.some(c => c.join(' ').startsWith('docker image inspect mysql:8.0@sha256:')))
+  const probes = result.commands.filter(c => c[0] === 'docker' && c[1] === 'exec' && c.join(' ').includes('SELECT 1'))
+  assert.equal(probes.length, scenario === 'first_sql_delay' ? 3 : 1)
+  assert.ok(result.commands.indexOf(probes.at(-1)) < result.commands.findIndex(c => c.join(' ').includes('compose stop')))
+})
+
+test('删除 MySQL 健康状态门会使不健康容器被错误放行，专项精确反证', () => {
+  const result = deployment('mysql_unhealthy', source => {
+    const changed = source.replace(/\[ "\$mysql_state" = 'running healthy' \] \|\| return 1/, ': # deliberately removed health gate')
+    assert.notEqual(changed, source)
+    return changed
+  })
+  assert.equal(result.status, 0, result.stdout + result.stderr)
+  assert.ok(result.commands.some(c => c.join(' ').includes('npm run migrate')))
+})
+
+test('删除应用 --no-deps 会触发依赖重建并拒绝，不能只修前置 MySQL 检查', () => {
+  const result = deployment('mysql_ready', source => {
+    const changed = source.replace('docker compose up -d --no-build --no-deps backend frontend', 'docker compose up -d --no-build backend frontend')
+    assert.notEqual(changed, source)
+    return changed
+  })
+  assert.equal(result.status, 1, result.stdout + result.stderr)
+  assert.ok(result.commands.some(c => c[0] === 'implicit-mysql-reconcile'))
 })

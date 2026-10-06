@@ -51,6 +51,45 @@ wait_for_frontend() {
   return 1
 }
 
+assert_mysql_ready() {
+  local mysql_id="$1" mysql_state sql_result
+  mysql_state=$(DOCKER_COMMAND_TIMEOUT=5 docker inspect -f '{{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' "$mysql_id") || return 1
+  [ "$mysql_state" = 'running healthy' ] || return 1
+  # The image healthcheck can accept a temporary socket-only server or denied
+  # authentication. Require TCP and SQL on this exact container; secrets expand
+  # only inside it, never into host arguments or deployment output.
+  sql_result=$(DOCKER_COMMAND_TIMEOUT=5 docker exec "$mysql_id" sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql --protocol=TCP -h127.0.0.1 -P3306 --connect-timeout=2 -uroot --database="$MYSQL_DATABASE" --batch --skip-column-names -e "SELECT 1"' 2>/dev/null) || return 1
+  [ "$sql_result" = '1' ]
+}
+
+ensure_mysql_ready() {
+  local mysql_id mysql_image attempt deadline
+  mysql_id=$(docker compose ps -aq mysql) || fail_deploy '无法核实 MySQL 容器，业务保持原状态'
+  [[ "$mysql_id" != *$'\n'* ]] || fail_deploy 'MySQL 存在多个容器，须维护窗口核对；不自动恢复或重建'
+  if [ -n "$mysql_id" ]; then
+    assert_mysql_ready "$mysql_id" || fail_deploy '现有 MySQL 未同时通过 running/healthy 与 TCP 认证 SQL，须维护窗口核对；不自动恢复或重建'
+    echo '==> 保留现有 MySQL 容器，健康与 TCP 认证 SQL 已通过'
+    return 0
+  fi
+  # A routine application deployment never reconciles a running database with
+  # a newer Compose pin. Only first start may use the declared locally cached pin.
+  mysql_image=$(docker compose config --images mysql) || fail_deploy '无法读取首次启动的 MySQL 固定镜像引用'
+  [[ "$mysql_image" =~ ^[a-zA-Z0-9._/:+-]+@sha256:[a-f0-9]{64}$ ]] || fail_deploy '首次启动 MySQL 必须声明唯一固定摘要镜像'
+  docker image inspect "$mysql_image" >/dev/null 2>&1 || fail_deploy '本机缺少首次启动 MySQL 的固定镜像，请在维护窗口预装；部署期间禁止联网拉取或降级 tag'
+  DOCKER_COMMAND_TIMEOUT=150 docker compose up -d --no-build --no-deps --pull never --wait --wait-timeout 120 mysql
+  mysql_id=$(docker compose ps -aq mysql) || fail_deploy '无法核实首次启动后的 MySQL 容器'
+  [ -n "$mysql_id" ] && [[ "$mysql_id" != *$'\n'* ]] || fail_deploy '首次启动后须存在唯一 MySQL 容器'
+  # Initial image health can precede final TCP/auth readiness. This bounded wait
+  # only observes the first-started container; it never starts or repairs it again.
+  deadline=$((SECONDS + 30))
+  for ((attempt=1; attempt<=15; attempt++)); do
+    if assert_mysql_ready "$mysql_id"; then return 0; fi
+    if [ "$attempt" -ge 15 ] || [ "$SECONDS" -ge "$deadline" ]; then break; fi
+    sleep 2
+  done
+  fail_deploy '首次启动 MySQL 未通过健康与 TCP 认证 SQL，须维护窗口核对；不自动恢复或重建'
+}
+
 # 创建触发器需要管理员提供短暂的迁移窗口；不授予应用 SUPER，不永久放宽配置。
 mysql_admin_sql() {
   docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot --database="$MYSQL_DATABASE" --batch --skip-column-names -e "$1"' sh "$1"
@@ -185,7 +224,7 @@ if command -v docker >/dev/null 2>&1 && [ -f docker-compose.yml ]; then
   fi
   for service in backend frontend; do docker tag "flowcube-${service}:${expected}" "flowcube-${service}:latest"; done
   assert_expected_commit
-  DOCKER_COMMAND_TIMEOUT=150 docker compose up -d --no-build --wait --wait-timeout 120 mysql
+  ensure_mysql_ready
   # 迁移 238 的历史结转需要一致的停写边界；backend 内含 scheduler/worker。
   # 迁移前失败可以恢复旧服务；部分 DDL 或首次引入新记账契约后禁止旧后端恢复写入。
   APPLICATION_SWITCHED=1
@@ -222,7 +261,7 @@ if command -v docker >/dev/null 2>&1 && [ -f docker-compose.yml ]; then
 
   echo '==> 切换 backend / frontend...'
   APPLICATION_SWITCHED=1
-  DOCKER_COMMAND_TIMEOUT=120 docker compose up -d --no-build backend frontend
+  DOCKER_COMMAND_TIMEOUT=120 docker compose up -d --no-build --no-deps backend frontend
   wait_for_health
   wait_for_frontend
   if [ "${SKIP_RELEASE_GATE:-0}" = '1' ]; then
