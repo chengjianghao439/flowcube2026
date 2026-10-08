@@ -18,7 +18,7 @@ import Page from './index'
 import HandlingScrapPage from './HandlingScrapPage'
 import RecoveryPage from './DisposalRecoveryPage'
 import { saveHandlingRecord, readHandlingRecords, type HandlingRecord } from '@/lib/disposalHandlingRecovery'
-import { openHandlingTab } from './HandlingSourcesPanel'
+import { openHandlingTab } from './openHandlingTab'
 import { MAX_WORKSPACE_TABS, HOME_TAB, useWorkspaceStore } from '@/store/workspaceStore'
 import { buildWorkspaceTabRegistrationFromPath } from '@/router/workspaceRouteMeta'
 test('真实处置页有独立处理意图入口与来源分页，不取目标或自行执行', async () => { await page('/disposals', host => { expect(host.textContent).toContain('保存处理意图'); expect(host.textContent).toContain('处理来源'); expect(calls).toContain('/disposals/handling-sources') }) })

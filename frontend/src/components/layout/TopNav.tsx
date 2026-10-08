@@ -23,7 +23,7 @@ import {
   type TopNavSection,
 } from '@/router/routeRegistry'
 
-export const TOP_NAV_SECTIONS: TopNavSection[] = buildTopNavSections()
+const TOP_NAV_SECTIONS: TopNavSection[] = buildTopNavSections()
 
 /** 全部导航项 path，按长度倒序，供最长前缀匹配 */
 const ALL_NAV_PATHS: string[] = TOP_NAV_SECTIONS.flatMap((section) =>

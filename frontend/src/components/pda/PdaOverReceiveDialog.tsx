@@ -11,7 +11,7 @@
 import { useState, useId } from 'react'
 import PdaDialog from './PdaDialog'
 
-export const OVER_RECEIVE_REASONS = [
+const OVER_RECEIVE_REASONS = [
   { code: 'supplier_over_delivery', label: '供应商多发货' },
   { code: 'previous_short_makeup', label: '前次少收，本次补发' },
   { code: 'scan_mistake', label: '扫码/数量录错' },

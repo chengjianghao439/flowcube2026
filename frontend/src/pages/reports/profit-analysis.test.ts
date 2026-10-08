@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { costBasisNote } from './profit-analysis'
+import { costBasisNote } from './costBasisNote'
 
 test('行内成本来源：四种明确来源各自有简洁中文说明', () => {
   expect(costBasisNote({ costBasis: 'snapshot' }).text).toBe('出库时记录的成本')

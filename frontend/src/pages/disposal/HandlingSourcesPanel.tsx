@@ -6,10 +6,6 @@ import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { useDisposalHandlingOperation } from '@/hooks/useDisposalHandlingOperation'
 import { captureHandlingOwner, handlingOwnerCurrent, handlingConfig, handlingRevision, mayHandle, subscribeHandling } from '@/lib/disposalHandlingRecovery'
 import { PERMISSIONS as P } from '@/lib/permission-codes'
-import { MAX_WORKSPACE_TABS, useWorkspaceStore } from '@/store/workspaceStore'
-import { buildWorkspaceTabRegistrationFromPath } from '@/router/workspaceRouteMeta'
-import { resolveRouteTitle } from '@/router/routeDefinitions'
-import { toast } from '@/lib/toast'
 import { qty } from '@/lib/format'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -17,12 +13,8 @@ import { Input } from '@/components/ui/input'
 import { createRequestKey } from '@/lib/requestKey'
 import type { HandlingSource, HandlingLink } from '@/types/disposal-handling'
 import { HandlingOperationPanel } from './HandlingOperationPanel'
-export function openHandlingTab(path: string, navigate: (path: string) => void) {
-  const tab = buildWorkspaceTabRegistrationFromPath(path), workspace = useWorkspaceStore.getState(), existing = workspace.tabs.find(t => t.key === tab.key)
-  if (!existing && workspace.tabs.length >= MAX_WORKSPACE_TABS) { toast.warning('工作区标签已满，原草稿保留，请先关闭不需要的页面'); return false }
-  if (workspace.addTab(existing ?? { ...tab, title: resolveRouteTitle(tab.path) ?? '处理来源' })) { navigate(existing?.path ?? tab.path); return true }
-  return false
-}
+import { openHandlingTab } from './openHandlingTab'
+
 function ReleaseDialog({ source, link, open, onClose }: { source: HandlingSource; link: HandlingLink; open: boolean; onClose: () => void }) {
   const [owner] = useState(captureHandlingOwner), active = useActiveWorkspaceTab(), latest = useRef({ open, active })
   latest.current = { open, active }

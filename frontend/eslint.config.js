@@ -38,8 +38,8 @@ export default tseslint.config(
       // 不认对象引用），那里写明了理由——新增 disable 也请照此写清楚为什么。
       'react-hooks/exhaustive-deps': 'error',
 
-      // 热更新边界：非组件导出会让整文件失去 HMR。项目里有大量「组件 + 常量」同文件的
-      // 既有写法，降为 warn 而不是强行拆文件。
+      // 热更新边界：组件模块只导出组件，共用工具、对象常量放在独立模块。
+      // Vite 支持的静态字面量常量仍可同文件导出；保留 warn 级别提示边界问题。
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
 
       // any 在这个仓库里主要出现在与后端信封解包、第三方库交接的地方，

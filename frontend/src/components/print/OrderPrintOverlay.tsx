@@ -18,7 +18,7 @@ import TemplateRenderer from './TemplateRenderer'
 import type { PrintItem } from './TemplateRenderer'
 import type { PrintTemplate } from '@/types/print-template'
 import { isZplTemplateLayout } from '@/types/print-template'
-import { PARTY_PRINT_FIT_EVENT, refreshPartyPrintFields } from './PartyPrintText'
+import { PARTY_PRINT_FIT_EVENT, refreshPartyPrintFields } from './partyPrintFit'
 
 const PRINT_STYLE_ID = 'fc-order-print-style'
 
