@@ -1,6 +1,6 @@
 {
-  "sourceCommit": "66fa87e4a0c440270189693480673c69320bce85",
-  "sourceSnapshot": "f1fc22b9a7464df4e926cbfcd624b9f9aa78e7e81c67a80e51d14b717f141ac3",
+  "sourceCommit": "8a6224a3d2b8beb8367c312d2b9cefb24ce12421",
+  "sourceSnapshot": "2dbba87d87b6c40763f8f7886a63570362d865bd8788e7b5a19a1bc680d9e6a4",
   "evidenceBoundary": "本文件包含静态覆盖地图与按具体路径/条件登记的审查证据。route、import、JSX、共享组件能力、截图捕获或测试文件存在均不能证明 GUI/业务/权限/真机/打印验收。所有新记录未查看、未执行；入口总览、人工细看、交互和状态验证分别记录，不能相互代替。",
   "routes": [
     {

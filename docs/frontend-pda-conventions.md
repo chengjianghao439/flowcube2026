@@ -636,3 +636,6 @@ PDA Header、Stat、Section、Scanner、反馈与恢复提示消费共享 surfac
 受控 `DialogContent` 与直接使用 Radix 原语的 `AppDialog` 共用 `useDialogFocusReturn`。正常关闭回原打开操作；调用方显式 onCloseAutoFocus/preventDefault 优先；原目标已隐藏、失活、断开或禁用时不抢另一页焦点。日期输入与日历图标分开命名，Esc 先关日历并回输入、再关外层；不通过 blur 强行提交日期来结束弹层。
 
 嵌套 Radix 弹层必须共用 dismissable-layer 和 focus-scope 单例。frontend 的 npm overrides 锁定兼容实现，`radixSingletons.ts` 同时用于 Vite/Vitest dedupe；Vitest 对 Radix 包内联，使外部依赖也经过同一解析。不能只用 stopPropagation 修复重复 Escape，或去重到不识别当前组件属性的旧模块。改动后必须复验真实内外 Dialog/日历/Select/菜单的键盘与焦点，测试同步超时不作为业务失败。
+
+
+2026-10-08发布门禁续修：Vitest的CI限定两个worker，真实Radix内联单例与原5秒超时/全部断言保留，降低并行DOM测试的资源争用；本地CI=true全265文件/2006例通过。样式兼容仍保留不可变v3golden；fixture只显式补已退役的text-success/text-warning原记录候选，F12的深色primary前景只通过独立九槽精确设计增量登记，新增缺失/原值变化反向守卫，其余逐值比较及真实鼠标/键盘/触控模拟仍执行。style-compat实际会话在finally关闭并回读session list；不等同于PDA真机。原失败与最终同SHA证据见release-v0.13.1-result.md。

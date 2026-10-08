@@ -1,5 +1,7 @@
 # 开发与验证命令（全量）
 
+2026-10-08销售历史容量专项：`tests/sale-order-capacity.test.js`随`test:party-profile`进入现有CI static及go-live-owned实库步骤。普通运行仅离线四列条件/属性/模式和反向破坏守卫；真实SQL分支要求`FLOWCUBE_PARTY_PROFILE_MYSQL_PROOF=1`、NODE_ENV=test、非3306/3307的本批实例及完整`assertOwnedRepairInstance`证明，随机scratch schema在同UUID实例中创建/精确清理。覆盖已核旧容量、NO_BACKSLASH_ESCAPES、不同列字符集、正常/未知容量、非nullable/非NULL默认/生成列，核旧值、索引、所有非容量属性、两次重放和长收货资料保存；不能直接在共享开发/测试实例或生产执行。
+
 > **来源**：本文件由 `AGENTS.md` 的 §3 迁出（2026-09-19 文档体系重构，原文见 `docs/agents-md-archive-2026-09-19.md`），内容为无损搬运。
 > **何时必须读**：要跑某个具体 smoke/test 回归、确认某项检查需要哪些环境变量、或判断某个改动该跑哪些套件时。
 > **常驻速查**：`AGENTS.md` §3 只留验证执行时机、「按改动影响选命令」的表格与 DB 测试环境要求；细节一律看本文件。

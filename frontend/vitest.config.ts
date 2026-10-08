@@ -9,6 +9,9 @@ import { radixSingletons } from './radixSingletons'
  */
 export default defineConfig({
   test: {
+    // Each DOM worker has real inlined Radix graphs. Bound CI workers to avoid
+    // memory/CPU starvation of focus timers; retain every assertion and 5s timeout.
+    maxWorkers: process.env.CI ? 2 : undefined,
     // Apply the same singleton resolution as the browser bundle instead of
     // letting Node load private Radix copies through externalized packages.
     server: { deps: { inline: [/\/@radix-ui\//] } },

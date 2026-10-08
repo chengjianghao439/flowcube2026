@@ -1,5 +1,7 @@
 # 后端 / API / 数据库规范
 
+2026-10-08发布前只读核对发现销售单四列仍是已知旧VARCHAR容量：remark30、receiver_name5、receiver_phone11、receiver_address30。新增283按007/078既有声明分别订正为500/100/50/255，只匹配nullable、NULL默认、无EXTRA/生成表达式的已确认旧形状；字符集、排序规则、COMMENT保留，兼容NO_BACKSLASH_ESCAPES，未知或已正常容量不动。007/078和已执行迁移保持原字节，API现有长度校验和业务规则不改；正式写入只经本版发布入口。真实专属实例、反向守卫、重复和生产前后元数据证据见release-v0.13.1-result.md。
+
 > **来源**：本文件由 `AGENTS.md` 的 §5 迁出（2026-09-19 文档体系重构，原文见 `docs/agents-md-archive-2026-09-19.md`），内容为无损搬运。
 > **何时必须读**：改后端 routes/controller/service、写 SQL、加迁移、动批量写入或 SQL 标识符时。
 > **约定**：能机器验证的规则一律以 `tests/` 守卫为准；本文件写「为什么」与「边界」，与守卫冲突时先核实代码，再同步两者。

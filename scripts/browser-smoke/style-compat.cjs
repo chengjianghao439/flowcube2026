@@ -10,6 +10,7 @@ const path = require('node:path')
 const { createRequire } = require('node:module')
 const { pathToFileURL } = require('node:url')
 const assert = require('node:assert/strict')
+const { designBaseline } = require('./style-design-baseline.cjs')
 const frontend = path.join(__dirname, '../../frontend')
 const requireFrontend = createRequire(path.join(frontend, 'package.json'))
 const { build } = requireFrontend('esbuild')
@@ -170,9 +171,12 @@ async function main() {
     process.chdir(frontend)
     const config = (await import(pathToFileURL(path.join(frontend, 'postcss.config.js')))).default
     const plugins = Object.entries(config.plugins).map(([name, options]) => requireFrontend(name)(options))
-    // Only new edge candidates: the original 896 values used the application's v3 content.
-    const edgeClasses = [...readFileSync(fixture, 'utf8').split('<section')[1].matchAll(/className="([^"]*)"/g)].map(match => match[1]).join(' ')
-    const source = readFileSync(path.join(frontend, 'src/index.css'), 'utf8') + `\n@source inline("${edgeClasses}");`
+    // Preserve the original v3 candidate set. These two recorded text utilities
+    // were retired from product pages by F12; keep testing their compilation.
+    // Adding all main candidates would alter historically un-emitted palette
+    // utilities, so only the existing edge section adds further candidates.
+    const fixtureClasses = ['text-success text-warning', ...[...readFileSync(fixture, 'utf8').split('<section')[1].matchAll(/className="([^"]*)"/g)].map(match => match[1])].join(' ')
+    const source = readFileSync(path.join(frontend, 'src/index.css'), 'utf8') + `\n@source inline("${fixtureClasses}");`
     const css = await postcss(plugins).process(source, { from: path.join(frontend, 'src/index.css') })
     const result = await build({ entryPoints: [fixture], bundle: true, write: false, format: 'iife', jsx: 'automatic', tsconfig: path.join(frontend, 'tsconfig.app.json'), nodePaths: [path.join(frontend, 'node_modules')], define: { 'process.env.NODE_ENV': '"test"', 'import.meta.env': '{}', 'import.meta.hot': 'undefined' } })
     const htmlPath = path.join(temporary, 'index.html')
@@ -184,7 +188,7 @@ async function main() {
     cli('--allow-file-access', '--args', '--blink-settings=primaryHoverType=2', 'open', pathToFileURL(htmlPath).href)
     cli('wait', '--fn', 'Boolean(window.__styleReady)')
     const actual = await captureStates()
-    const expected = JSON.parse(readFileSync(golden, 'utf8'))
+    const expected = designBaseline(JSON.parse(readFileSync(golden, 'utf8')))
     const report = compare(expected, actual)
     console.log(JSON.stringify(report, null, 2))
     assert.equal(report.differences.length, 0, 'Shared control styles differ from pre-migration baseline')
