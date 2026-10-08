@@ -14,7 +14,8 @@ import {
   getStatementsApi, confirmStatementApi, unlockStatementApi,
   type ReconciliationStatement,
 } from '@/api/payments'
-import { PaymentQueryDialog, PaymentQueryBar, EMPTY_PAYMENT_QUERY, type PaymentQueryValues } from '@/components/shared/PaymentQueryDialog'
+import { PaymentQueryDialog, PaymentQueryBar } from '@/components/shared/PaymentQueryDialog'
+import { EMPTY_PAYMENT_QUERY, type PaymentQueryValues } from '@/components/shared/paymentQuery'
 import { CreateStatementDialog } from '@/components/shared/payments/CreateStatementDialog'
 import { StatementDetailDialog } from '@/components/shared/payments/StatementDetailDialog'
 import type { TableColumn } from '@/types'

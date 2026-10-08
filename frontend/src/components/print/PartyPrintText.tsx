@@ -1,19 +1,8 @@
 import { useLayoutEffect, useRef } from 'react'
 import type { TemplateElement } from '@/types/print-template'
 
-const MEASURE_EVENT = 'flowcube-party-print-measure'
-export const PARTY_PRINT_FIT_EVENT = 'flowcube-party-print-fit'
+import { MEASURE_EVENT, PARTY_PRINT_FIT_EVENT } from './partyPrintFit'
 const labels: Record<string, string> = { customerName: '客户', supplierName: '供应商', receiverAddress: '收货地址' }
-
-/** Refresh only mounted party fields. Hidden/unmeasurable boxes remain unknown. */
-export function refreshPartyPrintFields(root: HTMLElement) {
-  const boxes = Array.from(root.querySelectorAll<HTMLElement>('[data-party-print-field]'))
-  for (const box of boxes) box.dispatchEvent(new Event(MEASURE_EVENT))
-  return {
-    overflow: [...new Set(boxes.filter(box => box.dataset.printFit === 'overflow').map(box => box.dataset.partyPrintLabel || '资料'))],
-    unavailable: boxes.some(box => box.dataset.printFit === 'unavailable' || box.dataset.printFit === 'pending'),
-  }
-}
 
 /** Local HTML document fitting; it never changes the source value or template. */
 export function PartyPrintText({ el, value, scale, style }: {

@@ -8,7 +8,7 @@ export const PRINT_PREVIEW_ZOOM_MIN = 0.5
 export const PRINT_PREVIEW_ZOOM_MAX = 2.5
 export const PRINT_PREVIEW_ZOOM_STEP = 0.1
 
-export function clampPrintPreviewZoom(z: number) {
+function clampPrintPreviewZoom(z: number) {
   return Math.min(PRINT_PREVIEW_ZOOM_MAX, Math.max(PRINT_PREVIEW_ZOOM_MIN, Math.round(z * 100) / 100))
 }
 

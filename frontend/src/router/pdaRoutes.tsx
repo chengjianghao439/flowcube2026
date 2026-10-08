@@ -1,54 +1,37 @@
-import { lazy, useEffect, useState } from 'react'
-import { Outlet, Route } from 'react-router-dom'
+import { Route } from 'react-router-dom'
 import { PdaProtectedRoute, PdaGuestRoute } from './PdaAuthRoutes'
 import PdaLayout from '@/layouts/PdaLayout'
 import PdaRoutePermission from '@/components/pda/PdaRoutePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
-import { initDeviceBinding } from '@/lib/pdaDeviceBinding'
-
-/** ERP 直达 PDA 路由时也必须先水合设备缓存；独立 PDA 启动已水合时这里直接复用。 */
-function PdaBindingHydrationGate() {
-  const [status, setStatus] = useState<'loading' | 'ready' | 'failed'>('loading')
-  useEffect(() => {
-    let active = true
-    void initDeviceBinding().then(ok => { if (active) setStatus(ok ? 'ready' : 'failed') })
-    return () => { active = false }
-  }, [])
-  if (status === 'loading') return <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">正在加载设备信息…</div>
-  if (status === 'failed') return <div role="alert" className="flex min-h-screen flex-col items-center justify-center gap-3 p-6 text-center text-sm">
-    <p>设备信息加载失败，请重新绑定设备。</p>
-    <button type="button" className="rounded-md bg-primary px-4 py-2 text-primary-foreground" onClick={() => setStatus('ready')}>继续重新绑定</button>
-  </div>
-  return <Outlet />
-}
-
-// ── PDA 子系统页面 ────────────────────────────────────────────────────────────
-const PdaLoginPage   = lazy(() => import('@/pages/pda/login'))
-const PdaIndexPage   = lazy(() => import('@/pages/pda'))
-const PdaPickingPage = lazy(() => import('@/pages/pda/picking'))
-const PdaTaskPage    = lazy(() => import('@/pages/pda/task'))
-const PdaInboundPage = lazy(() => import('@/pages/pda/inbound'))
-const PdaReceivePage = lazy(() => import('@/pages/pda/receive'))
-const PdaPutawayPage = lazy(() => import('@/pages/pda/putaway'))
-const PdaCheckPage   = lazy(() => import('@/pages/pda/check'))
-const PdaPackPage    = lazy(() => import('@/pages/pda/pack'))
-const PdaStockcheckPage = lazy(() => import('@/pages/pda/stockcheck'))
-const PdaSplitPage   = lazy(() => import('@/pages/pda/split'))
-const PdaFillPage    = lazy(() => import('@/pages/pda/fill'))
-const PdaPlasticBoxPage = lazy(() => import('@/pages/pda/plastic-box'))
-const PdaSplitRecoveryPage = lazy(() => import('@/pages/pda/split-recovery'))
-const PdaBindPage    = lazy(() => import('@/pages/pda/bind'))
-const PdaShipPage    = lazy(() => import('@/pages/pda/ship'))
-const PdaSortPage    = lazy(() => import('@/pages/pda/sort'))
-const PdaSaleReturnListPage = lazy(() => import('@/pages/pda/sale-return'))
-const PdaSaleReturnReceivePage = lazy(() => import('@/pages/pda/sale-return-receive'))
-const PdaSaleReturnPutawayPage = lazy(() => import('@/pages/pda/sale-return-putaway'))
-const PdaCancelReturnPage = lazy(() => import('@/pages/pda/cancel-return'))
-const PdaAdjustmentPage = lazy(() => import('@/pages/pda/adjustment'))
-const PdaTransferPage    = lazy(() => import('@/pages/pda/transfer'))
-const PdaTransferOutPage = lazy(() => import('@/pages/pda/transfer-out'))
-const PdaTransferInPage  = lazy(() => import('@/pages/pda/transfer-in'))
-const PdaInventoryQueryPage = lazy(() => import('@/pages/pda/inventory-query'))
+import PdaBindingHydrationGate from './PdaBindingHydrationGate'
+import {
+  PdaLoginPage,
+  PdaIndexPage,
+  PdaPickingPage,
+  PdaTaskPage,
+  PdaInboundPage,
+  PdaReceivePage,
+  PdaPutawayPage,
+  PdaCheckPage,
+  PdaPackPage,
+  PdaStockcheckPage,
+  PdaSplitPage,
+  PdaFillPage,
+  PdaPlasticBoxPage,
+  PdaSplitRecoveryPage,
+  PdaBindPage,
+  PdaShipPage,
+  PdaSortPage,
+  PdaSaleReturnListPage,
+  PdaSaleReturnReceivePage,
+  PdaSaleReturnPutawayPage,
+  PdaCancelReturnPage,
+  PdaAdjustmentPage,
+  PdaTransferPage,
+  PdaTransferOutPage,
+  PdaTransferInPage,
+  PdaInventoryQueryPage,
+} from './pdaPages'
 
 // ERP 浏览器与独立 PDA 构建共用同一份路由、认证及权限定义。
 export function pdaRoutes() {

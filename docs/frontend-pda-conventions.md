@@ -641,3 +641,11 @@ PDA Header、Stat、Section、Scanner、反馈与恢复提示消费共享 surfac
 
 
 2026-10-08发布门禁续修：Vitest的CI限定两个worker，真实Radix内联单例与原5秒超时/全部断言保留，降低并行DOM测试的资源争用；本地CI=true全265文件/2006例通过。样式兼容仍保留不可变v3golden；fixture只显式补已退役的text-success/text-warning原记录候选，F12的深色primary前景只通过独立九槽精确设计增量登记，新增缺失/原值变化反向守卫，其余逐值比较及真实鼠标/键盘/触控模拟仍执行。style-compat实际会话在finally关闭并回读session list；不等同于PDA真机。原失败与最终同SHA证据见release-v0.13.1-result.md。
+
+### 2026-10-09 前端 Fast Refresh 导出整理（本地修复）
+
+本次 lint 的 37 条警告均来自 `react-refresh/only-export-components`。PDA 路由的 26 个懒加载页面声明移至 `router/pdaPages.tsx`，设备缓存加载组件移至 `router/PdaBindingHydrationGate.tsx`；`pdaRoutes.tsx` 继续提供 ERP 与独立 PDA 共用的原路由工厂，路由树、权限、懒加载目标及缓存加载时机保持原实现。
+
+共用按钮样式、账款查询数据、打印字段测量、处理来源导航与利润成本说明分别移至 `buttonVariants.ts`、`paymentQuery.ts`、`partyPrintFit.ts`、`openHandlingTab.ts`、`costBasisNote.ts`，调用方和原测试同步改为直接导入。导航常量、超收原因、徽标样式与缩放工具的仅内部使用导出收回；原 JSX、样式、默认筛选、打印事件及业务判断保持。ESLint 规则与警告级别保留，零警告以 `npm --prefix frontend run lint -- --max-warnings 0` 检查，不增加忽略或禁用规则。
+
+本轮 Node 22 下严格 lint 为 0 error / 0 warning，`tsc -p tsconfig.app.json --noEmit` 通过；补齐工作树后端依赖后，全量前端单测 266 文件 / 2010 用例通过，前端呈现/日期/disable 理由与文档注入守卫通过。对移出的函数、按钮样式、设备加载组件、26 个懒加载声明及原路由树逐段核对，与拆分前正文一致。实际打开本任务回环预览的 ERP/PDA 登录页并看图，未登录页面正常渲染、浏览器错误为空；没有启动后端或提交登录，该检查不代表业务、真机或打印验收。浏览器会话与本任务 Vite 服务均已关闭并复核。本轮未发版，ERP/PDA 构建留发版前验证。
