@@ -83,7 +83,7 @@ function LogRow({ item }: { item: ContainerLogItem }) {
         {item.remark && <div className="mt-1 text-sm text-muted-foreground">{item.remark}</div>}
       </div>
       <div className="text-right">
-        <div className={`font-medium ${item.qty < 0 ? 'text-destructive' : ''}`}>
+        <div className={`font-medium ${item.qty < 0 ? 'text-destructive-ink' : ''}`}>
           {item.qty > 0 ? '+' : ''}{Number(item.qty)}
         </div>
         <div className="text-xs text-muted-foreground">{formatDisplayDateTime(item.createdAt)}</div>
@@ -147,7 +147,7 @@ export default function TracePage() {
       </FilterCard>
 
       {error && (
-        <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-destructive">
+        <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-destructive-ink">
           {error}
         </div>
       )}

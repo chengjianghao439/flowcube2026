@@ -52,8 +52,8 @@ export function BoardIncoming() {
   const { data, isLoading, error, refetch } = useIncomingPurchases()
   const total = data ? data.dueToday.length + data.dueThisWeek.length + data.overdue.length : 0
   const cols = ([
-    { key: 'overdue' as const, label: '已逾期未到货', tone: 'text-destructive' },
-    { key: 'dueToday' as const, label: '今日待到货', tone: 'text-warning' },
+    { key: 'overdue' as const, label: '已逾期未到货', tone: 'text-destructive-ink' },
+    { key: 'dueToday' as const, label: '今日待到货', tone: 'text-warning-ink' },
     { key: 'dueThisWeek' as const, label: '本周待到货', tone: 'text-foreground' },
   ])
   return (
@@ -106,7 +106,7 @@ export function ListPdaPerf() {
           <p className="mb-1 text-xs font-medium text-muted-foreground">操作员排行</p>
           {ops.slice(0, 5).map((op, i) => (
             <div key={op.operatorId} className="flex items-center gap-3 rounded-lg px-2 py-1.5 transition-colors hover:bg-muted/40">
-              <span className={`w-4 text-center text-xs font-bold ${i === 0 ? 'text-warning' : i === 1 ? 'text-muted-foreground' : i === 2 ? 'text-orange-400' : 'text-muted-foreground'}`}>{i + 1}</span>
+              <span className={`w-4 text-center text-xs font-bold ${i === 0 ? 'text-warning-ink' : i === 1 ? 'text-muted-foreground' : i === 2 ? 'text-orange-400' : 'text-muted-foreground'}`}>{i + 1}</span>
               <p className="min-w-0 flex-1 whitespace-normal [overflow-wrap:anywhere] text-sm font-medium text-foreground">{op.operatorName}</p>
               <span className="text-xs text-muted-foreground"><span className="font-semibold text-foreground">{op.scanCount}</span> 次 · <span className="font-semibold text-foreground">{op.pickQty.toFixed(0)}</span> 件</span>
             </div>
@@ -128,7 +128,7 @@ function PartyTable({ parties, empty }: { parties: AgingParty[]; empty: string }
           <strong className="text-sm tabular-nums">{money(p.amount)}</strong>
         </div>
         <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-          <span>逾期金额 <span className={p.overdueAmount > 0 ? 'font-medium text-destructive' : ''}>{money(p.overdueAmount)}</span></span>
+          <span>逾期金额 <span className={p.overdueAmount > 0 ? 'font-medium text-destructive-ink' : ''}>{money(p.overdueAmount)}</span></span>
           {p.maxOverdueDays > 0 ? <SoftStatusLabel label={`最长逾期 ${p.maxOverdueDays} 天`} tone={p.maxOverdueDays > 90 ? 'danger' : 'warning'} /> : <span>未到期</span>}
         </div>
       </div>)}
@@ -283,11 +283,11 @@ export function ListAnomaly() {  const { data, isLoading, error, refetch } = use
         </div>
         <div className="min-w-0 px-2 py-2">
           <p className="text-xs text-muted-foreground">异常数</p>
-          <p className="mt-0.5 text-xl font-semibold tabular-nums text-destructive">{data?.summary.totalErrors ?? '—'}</p>
+          <p className="mt-0.5 text-xl font-semibold tabular-nums text-destructive-ink">{data?.summary.totalErrors ?? '—'}</p>
         </div>
         <div className="min-w-0 px-2 py-2">
           <p className="text-xs text-muted-foreground">异常率</p>
-          <p className="mt-0.5 text-xl font-semibold tabular-nums text-warning">{data?.summary.errorRate ?? '—'}</p>
+          <p className="mt-0.5 text-xl font-semibold tabular-nums text-warning-ink">{data?.summary.errorRate ?? '—'}</p>
         </div>
       </div>
       {reasons.length > 0 ? (

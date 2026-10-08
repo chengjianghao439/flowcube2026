@@ -113,9 +113,9 @@ export const StatementPanel = forwardRef<StatementPanelHandle, Props>(function S
     }},
     { key: 'itemCount', title: '笔数', width: 70, render: v => `${v ?? 0} 笔` },
     { key: 'totalAmount', title: '汇总金额', width: 120, render: v => <span className="tabular-nums font-medium">{money(v as number)}</span> },
-    { key: 'settledAmount', title: '已核销', width: 110, render: v => <span className="tabular-nums text-success">{money(v as number)}</span> },
+    { key: 'settledAmount', title: '已核销', width: 110, render: v => <span className="tabular-nums text-success-ink">{money(v as number)}</span> },
     { key: 'balance', title: '未核销', width: 110, render: v => (
-      <span className={`tabular-nums ${Number(v) > 0 ? 'font-semibold text-destructive' : 'text-muted-foreground'}`}>{money(v as number)}</span>
+      <span className={`tabular-nums ${Number(v) > 0 ? 'font-semibold text-destructive-ink' : 'text-muted-foreground'}`}>{money(v as number)}</span>
     )},
     { key: 'status', title: '状态', width: 90, render: (v, row) => (
       <SoftStatusLabel label={(row as ReconciliationStatement).statusName} tone={ST_TONE[v as number] ?? 'draft'} />

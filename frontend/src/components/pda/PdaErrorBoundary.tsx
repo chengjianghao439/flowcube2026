@@ -53,7 +53,7 @@ export default class PdaErrorBoundary extends Component<Props, State> {
     if (this.state.hasError) {
       return (
         <div className="flex min-h-screen flex-col items-center justify-center bg-background px-6 text-center">
-          <TriangleAlert className="mx-auto mb-4 h-14 w-14 text-red-500" />
+          <TriangleAlert className="mx-auto mb-4 h-14 w-14 text-destructive-ink" />
           <h2 className="text-xl font-bold text-foreground mb-2">页面出错</h2>
           <p className="text-sm text-muted-foreground mb-6 max-w-xs">
             当前操作未完成，错误已记录。请先重试；如果仍不能恢复，请返回工作台重新进入任务。
@@ -61,13 +61,13 @@ export default class PdaErrorBoundary extends Component<Props, State> {
           <div className="flex gap-3 w-full max-w-xs">
             <button
               onClick={this.handleRetry}
-              className="flex-1 rounded-2xl border border-border bg-card py-3 text-sm font-semibold text-foreground active:scale-95"
+              className="flex-1 rounded-2xl border border-border bg-card py-3 text-sm font-semibold text-foreground motion-safe:active:scale-95"
             >
               ↺ 重试
             </button>
             <button
               onClick={this.handleHome}
-              className="flex-1 rounded-2xl bg-primary py-3 text-sm font-bold text-primary-foreground active:scale-95"
+              className="flex-1 rounded-2xl bg-primary py-3 text-sm font-bold text-primary-foreground motion-safe:active:scale-95"
             >
               返回工作台
             </button>

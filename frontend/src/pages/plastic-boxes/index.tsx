@@ -144,7 +144,10 @@ export default function PlasticBoxesPage() {
       <BaseCrudPage<PlasticBox>
         title="塑料盒管理"
         description="管理塑料盒（B 条码），每个塑料盒固定存放一个商品，用于零散出货"
-        columns={columns}
+        canCreate={can(PERMISSIONS.INVENTORY_CONTAINER_SPLIT)}
+      canEdit={can(PERMISSIONS.INVENTORY_CONTAINER_SPLIT)}
+      canDelete={can(PERMISSIONS.INVENTORY_CONTAINER_SPLIT)}
+      columns={columns}
         queryKey={['plastic-boxes', { page, pageSize: 20, keyword }]}
         listQuery={() => getPlasticBoxesApi({ page, pageSize: 20, keyword })}
         recordUnit="个"
@@ -189,7 +192,7 @@ export default function PlasticBoxesPage() {
                     .catch((e: unknown) => toast.error((e as Error)?.message ?? '打印失败'))
                 },
               },
-              ...(row.remainingQty === 0 ? [{
+              ...(canRepack && row.remainingQty === 0 ? [{
                 label: '删除',
                 destructive: true,
                 onClick: () => helpers.openDelete(row),
@@ -197,22 +200,23 @@ export default function PlasticBoxesPage() {
             ]}
           />
         )}
-        renderForm={() => (
+        renderForm={(_editing, _open, locked, markDirty) => (
           <div className="space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="plastic-box-product">绑定商品 *</Label>
-              <PickerField id="plastic-box-product" value={product?.name ?? ''} placeholder="点击选择商品…" onOpen={() => setProductFinderOpen(true)} />
+              <PickerField id="plastic-box-product" disabled={locked} value={product?.name ?? ''} placeholder="点击选择商品…" onOpen={() => { if (!locked) setProductFinderOpen(true) }} />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="plastic-box-warehouse">所属仓库 *</Label>
               <WarehouseSelect
                 id="plastic-box-warehouse"
+                disabled={locked}
                 value={warehouse?.id ?? null}
-                onChange={(id, name) => setWarehouse(id ? { id, name } : null)}
+                onChange={(id, name) => { if (!locked) { markDirty(); setWarehouse(id ? { id, name } : null) } }}
                 placeholder="选择仓库"
               />
             </div>
-            <ProductFinder open={productFinderOpen} onClose={() => setProductFinderOpen(false)} onConfirm={(p) => { setProduct(p); setProductFinderOpen(false) }} />
+            <ProductFinder open={productFinderOpen && !locked} onClose={() => setProductFinderOpen(false)} onConfirm={(p) => { if (!locked) { markDirty(); setProduct(p); setProductFinderOpen(false) } }} />
           </div>
         )}
         submitForm={() => {
@@ -444,7 +448,7 @@ function RepackDialog({
             </div>
           )}
           <p className="text-xs text-muted-foreground">将生成 <span className="font-semibold text-foreground">{boxTotal}</span> 个整件码，合计 <span className="font-semibold text-foreground">{sum}</span>，盒内留 <span className="font-semibold text-foreground">{Math.max(0, remaining - sum)}</span></p>
-          {error && <p className="text-xs text-destructive">{error}</p>}
+          {error && <p className="text-xs text-destructive-ink">{error}</p>}
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={onClose}>取消</Button>
             <Button

@@ -15,7 +15,7 @@ export default function StockShortageDialog({ open, onClose, shortages }: Props)
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) onClose() }}>
       <DialogContent className="max-h-[90dvh] w-[calc(100%-2rem)] max-w-xl">
-        <DialogHeader><DialogTitle className="flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-destructive" />可用库存不足</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle className="flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-destructive-ink" />可用库存不足</DialogTitle></DialogHeader>
         <DialogDescription>以下商品本次占库数量超过可用库存，请关闭后回占库弹窗调整数量：</DialogDescription>
         <div className="max-h-72 overflow-auto rounded-md border">
           <table className="w-full text-sm">
@@ -27,7 +27,7 @@ export default function StockShortageDialog({ open, onClose, shortages }: Props)
                 <tr key={`${s.productId}-${index}`}>
                   <td className="max-w-48 break-words px-3 py-3 font-medium">{s.productName}</td>
                   <td className="px-3 py-3 text-right tabular-nums">{s.required}</td>
-                  <td className="px-3 py-3 text-right font-medium tabular-nums text-destructive">{s.available}</td>
+                  <td className="px-3 py-3 text-right font-medium tabular-nums text-destructive-ink">{s.available}</td>
                 </tr>
               ))}
             </tbody>

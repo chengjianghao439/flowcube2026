@@ -70,6 +70,8 @@ export default function WarehousesPage() {
     <BaseCrudPage<Warehouse>
       title="仓库管理"
       description="管理仓库档案信息"
+      canEdit={can(PERMISSIONS.WAREHOUSE_UPDATE)}
+      canDelete={can(PERMISSIONS.WAREHOUSE_DELETE)}
       columns={columns}
       queryKey={['warehouses', { page, pageSize: 20, keyword }]}
       listQuery={() => getWarehousesApi({ page, pageSize: 20, keyword })}
@@ -84,7 +86,7 @@ export default function WarehousesPage() {
       onOpen={handleOpen}
       renderToolbar={
         <FilterCard>
-          <Input placeholder="搜索编码或名称" value={search}
+          <Input aria-label="搜索仓库编码或名称" placeholder="搜索编码或名称" value={search}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
             onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') { setKeyword(search) } }}
             className="h-9 w-60" />

@@ -8,6 +8,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import ListSummary from '@/components/shared/ListSummary'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -22,7 +23,7 @@ import { payloadClient as client } from '@/api/client'
 import { useCustomers, useDeleteCustomer } from '@/hooks/useCustomers'
 import CustomerFormDialog from './components/CustomerFormDialog'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
-import TableActionsMenu from '@/components/shared/TableActionsMenu'
+import TableActionsMenu, { type TableActionItem } from '@/components/shared/TableActionsMenu'
 import { bindCustomerApi } from '@/api/price-lists'
 import type { Customer } from '@/types/customers'
 import type { TableColumn } from '@/types'
@@ -32,6 +33,9 @@ const PRICE_LEVELS = ['A', 'B', 'C', 'D'] as const
 export default function CustomersPage() {
   // 2026-09-17 验收修复（G-10）：写入口按权限渲染
   const { can } = usePermission()
+  const canUpdate = can(PERMISSIONS.CUSTOMER_UPDATE)
+  const canDelete = can(PERMISSIONS.CUSTOMER_DELETE)
+  const canBindPrice = can(PERMISSIONS.PRICE_LIST_UPDATE)
   const ledger = usePartyLedger(2)
   const qc = useQueryClient()
   const [keyword, setKeyword] = useState('')
@@ -65,7 +69,7 @@ export default function CustomersPage() {
     }
   }
 
-  const { data, isFetching } = useCustomers({ page: 1, pageSize: 200, keyword }, true)
+  const { data, isFetching, isError, error, refetch } = useCustomers({ page: 1, pageSize: 200, keyword }, true)
   const total = data?.pagination?.total ?? 0
   const del = useDeleteCustomer()
   const [confirmTarget, setConfirmTarget] = useState<Customer | null>(null)
@@ -76,6 +80,7 @@ export default function CustomersPage() {
   })
 
   const openBind = (c: Customer) => {
+    if (!canBindPrice) return
     setBindCustomer(c)
     setSelectedPriceLevel((c.priceLevel ?? 'A') as 'A' | 'B' | 'C' | 'D')
     setBindOpen(true)
@@ -98,18 +103,16 @@ export default function CustomersPage() {
       ? <span className="text-xs text-muted-foreground">未启用</span>
       : <span className="tabular-nums">{money(Number(row.creditLimit))}</span> },
     { key: 'isActive', title: '状态', width: 70, render:(v)=> <SoftStatusLabel label={v ? '启用' : '停用'} tone={activeTone(v as boolean)} /> },
-    { key: 'id', title: '操作', width: 120, render:(_, row)=>(
-      <TableActionsMenu
-        primaryLabel="编辑"
-        primaryVariant="outline"
-        onPrimaryClick={()=>{ setEditing(row as Customer); setDialogOpen(true) }}
-        items={[
+    { key: 'id', title: '操作', width: 120, render:(_, row) => {
+      const actions: TableActionItem[] = [
+          ...(canUpdate ? [{ label: '编辑', onClick: () => { setEditing(row); setDialogOpen(true) } }] : []),
           ...(ledger.canView ? [{ label: '往来明细', onClick: () => ledger.open(row) }] : []),
-          { label: '绑定价格', onClick:()=>openBind(row as Customer) },
-          { label: '删除', onClick:()=> setConfirmTarget(row as Customer), destructive: true, separatorBefore: true },
-        ]}
-      />
-    )}
+          ...(canBindPrice ? [{ label: '绑定价格', onClick: () => openBind(row) }] : []),
+          ...(canDelete ? [{ label: '删除', onClick: () => setConfirmTarget(row), destructive: true, separatorBefore: true }] : []),
+      ]
+      const [primary, ...items] = actions
+      return primary ? <TableActionsMenu primaryLabel={primary.label} primaryVariant={primary.destructive ? 'destructive' : 'outline'} onPrimaryClick={primary.onClick} items={items} /> : <span className="text-muted-foreground">—</span>
+    }}
   ]
 
   return (
@@ -125,7 +128,7 @@ export default function CustomersPage() {
         <Input aria-label="搜索客户编码或名称" placeholder="搜索客户编码或名称" value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} className="h-9 w-80" onKeyDown={(e: React.KeyboardEvent)=>{ if(e.key==='Enter'){ setKeyword(search); } }} />
         <Button size="sm" variant="outline" onClick={()=>{ setKeyword(search); }}>搜索</Button>
         {keyword && <Button size="sm" variant="ghost" onClick={()=>{ setSearch(''); setKeyword(''); }}>重置</Button>}
-      <span className="ml-auto text-xs text-muted-foreground">共 {total.toLocaleString()} 位客户</span>
+      {!isError && !isFetching && data && <span className="ml-auto text-xs text-muted-foreground">共 {total.toLocaleString()} 位客户</span>}
       </FilterCard>
 
       {importOpen && (
@@ -143,7 +146,7 @@ export default function CustomersPage() {
           </div>
           {importResult && (
             <div className="rounded-lg border p-3 text-sm space-y-1">
-              <p className="text-success font-medium">导入成功：{importResult.success} 条</p>
+              <p className="text-success-ink font-medium">导入成功：{importResult.success} 条</p>
               {importResult.errors.length > 0 && (
                 <div className="max-h-40 space-y-0.5 overflow-y-auto text-xs text-muted-foreground">
                   {importResult.errors.map((err, i) => <p key={i}>{err}</p>)}
@@ -154,24 +157,24 @@ export default function CustomersPage() {
         </div>
       )}
       <section aria-label="客户列表">
-        <DataTable columns={columns} data={data?.list||[]} loading={isFetching} />
-        <footer className="px-1 py-3">
+        {isError ? <QueryErrorState error={error} onRetry={() => void refetch()} /> : <DataTable columns={columns} data={data?.list||[]} loading={isFetching} />}
+        {!isError && !isFetching && data && <footer className="px-1 py-3">
           <ListSummary total={total} unit="条" />
-        </footer>
+        </footer>}
       </section>
-      <CustomerFormDialog open={dialogOpen} onClose={()=>setDialogOpen(false)} customer={editing} />
+      <CustomerFormDialog open={dialogOpen && (editing ? canUpdate : can(PERMISSIONS.CUSTOMER_CREATE))} onClose={()=>setDialogOpen(false)} customer={editing} />
       <ConfirmDialog
-        open={!!confirmTarget}
+        open={!!confirmTarget && canDelete}
         title="确认删除"
         description={`删除客户「${confirmTarget?.name}」？客户被销售、退货或任务引用后不能删除；如需停用，请编辑并取消启用。`}
         variant="destructive"
         confirmText="删除"
-        onConfirm={() => { del.mutate(confirmTarget!.id); setConfirmTarget(null) }}
+        onConfirm={() => { if (canDelete && confirmTarget) del.mutate(confirmTarget.id); setConfirmTarget(null) }}
         onCancel={() => setConfirmTarget(null)}
       />
 
       {/* 绑定价格等级弹窗 */}
-      <Dialog open={bindOpen} onOpenChange={setBindOpen}>
+      <Dialog open={bindOpen && canBindPrice} onOpenChange={setBindOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>绑定价格等级</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">

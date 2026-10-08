@@ -6,7 +6,7 @@ import { DatePicker } from '@/components/shared/DatePicker'
  * 进项/销项发票池 + 录入 + 认证/抵扣/红冲台账。发票与业务单弱关联，税额只在凭证映射时拆分。
  * 前端不算会计（税额拆分/凭证一律后端）；本页仅按税率给录入做价税辅助计算。
  */
-import { useMemo, useState, useEffect } from 'react'
+import { useMemo, useState, useEffect, useId } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Plus, Pencil, Trash2, BadgeCheck, Undo2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -24,7 +24,8 @@ import { toast } from '@/lib/toast'
 import { todayYmd } from '@/lib/dateTime'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
-import { EditModeBadge } from '@/components/shared/EditModeBadge'
+import { useDialogDraftGuard } from '@/hooks/useDialogDraftGuard'
+import { EditModeBadge, UnsavedBadge } from '@/components/shared/EditModeBadge'
 import { useInvoices, useCreateInvoice, useUpdateInvoice, useChangeInvoiceStatus, useDeleteInvoice } from '@/hooks/useInvoices'
 import type { TableColumn } from '@/types'
 import type { Invoice, CreateInvoiceParams } from '@/types/accounting'
@@ -43,27 +44,33 @@ function InvoiceDialog({ open, invoiceType, edit, onClose }: { open: boolean; in
   const qc = useQueryClient()
   const { mutate: create, isPending: creating } = useCreateInvoice()
   const { mutate: update, isPending: updating } = useUpdateInvoice()
-  const isPending = creating || updating
+  const inputId = useId()
   const [f, setF] = useState({
     invoiceCode: '', invoiceNo: '', partyName: '', partyTaxNo: '',
     withTax: '', taxRate: '0.13', invoiceDate: todayYmd(), sourceNo: '', remark: '',
   })
   // 版本冲突（迁移 263）：**保留弹窗与草稿**，只做提示，由用户复制后关闭重开核对。
   const [conflict, setConflict] = useState(false)
-  // 依赖刻意只认 open 与 edit?.id：edit 是 React Query 每次 refetch 都重建的对象引用，
+  const [baseline, setBaseline] = useState(f)
+  // 日期手输先保存在控件内，未 blur 前也属于未保存输入。
+  const [inputDirty, setInputDirty] = useState(false)
+  const dirty = inputDirty || JSON.stringify(f) !== JSON.stringify(baseline)
+  const draft = useDialogDraftGuard({ open, identity: `${invoiceType}:${edit?.id ?? 'new'}`, dirty, pending: creating || updating, onClose })
+  const isPending = draft.locked
+  // 依赖刻意只认 open、invoiceType 与 edit?.id：edit 是 React Query 每次 refetch 都重建的对象引用，
   // 整体入依赖会让后台刷新在用户填写途中重置表单；只有换了一条发票（id 变）才该重填。
   useEffect(() => {
     if (!open) return
     // 每次**真正重建表单**（打开 / 换编辑对象 / 转录入）都清掉上一次的冲突提示，
     // 否则手动关闭重开或转"录入"会带着旧冲突条。
-    setConflict(false)
-    if (edit) setF({
+    setConflict(false); setInputDirty(false)
+    const next = edit ? {
       invoiceCode: edit.invoiceCode ?? '', invoiceNo: edit.invoiceNo ?? '', partyName: edit.partyName, partyTaxNo: edit.partyTaxNo ?? '',
       withTax: String(edit.amountWithTax), taxRate: String(edit.taxRate), invoiceDate: String(edit.invoiceDate).slice(0, 10), sourceNo: edit.sourceNo ?? '', remark: edit.remark ?? '',
-    })
-    else setF({ invoiceCode: '', invoiceNo: '', partyName: '', partyTaxNo: '', withTax: '', taxRate: '0.13', invoiceDate: todayYmd(), sourceNo: '', remark: '' })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, edit?.id])
+    } : { invoiceCode: '', invoiceNo: '', partyName: '', partyTaxNo: '', withTax: '', taxRate: '0.13', invoiceDate: todayYmd(), sourceNo: '', remark: '' }
+    setF(next); setBaseline(next)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 打开/切换发票时建立基线，同 id 刷新不得覆盖草稿
+  }, [open, edit?.id, invoiceType])
 
   const withTax = Number(f.withTax) || 0
   const rate = Number(f.taxRate) || 0
@@ -71,6 +78,8 @@ function InvoiceDialog({ open, invoiceType, edit, onClose }: { open: boolean; in
   const noTax = Math.round((withTax - taxAmount) * 100) / 100
 
   function submit() {
+    const submission = draft.beginSubmit()
+    if (!submission) return
     const d: CreateInvoiceParams = {
       invoiceType, invoiceCode: f.invoiceCode || null, invoiceNo: f.invoiceNo.trim(), partyName: f.partyName.trim(), partyTaxNo: f.partyTaxNo || null,
       amountNoTax: noTax, taxRate: rate, taxAmount, amountWithTax: withTax, invoiceDate: f.invoiceDate, sourceNo: f.sourceNo || null, remark: f.remark || null,
@@ -80,12 +89,13 @@ function InvoiceDialog({ open, invoiceType, edit, onClose }: { open: boolean; in
       ...(edit ? { revision: edit.revision } : {}),
     }
     if (edit) update({ id: edit.id, d }, {
-      onSuccess: () => { toast.success('已保存'); onClose() },
+      onSuccess: () => { if (submission.finish()) { toast.success('已保存'); onClose() } },
       // 并发编辑冲突（迁移 263）：这张票已被他人改过。**保留弹窗与草稿**，只做两件事——
       // 失效列表（**异步**，不是立刻就有新数据）+ 置冲突提示（提示用户先复制、关闭、等刷新完成后再重开核对）；
       // **不**自动关闭弹窗、**不**自动重试、**不**把新版本 merge 进旧草稿（避免"新版本 + 旧草稿"）。
       // **提示不在这里发**：全局拦截器已对 409 统一 `toast.error(后端 message)`，本地再 toast 会双重报错。
       onError: (e: unknown) => {
+        if (!submission.finish()) return
         const code = (e as { code?: string } | null)?.code
         if (code === 'INVOICE_CONCURRENT_MODIFIED') {
           // **保留弹窗与草稿**：只失效列表并给内联提示；由用户先复制、关闭、等刷新完成后重开核对。
@@ -95,18 +105,20 @@ function InvoiceDialog({ open, invoiceType, edit, onClose }: { open: boolean; in
         }
       },
     })
-    else create(d, { onSuccess: () => { toast.success('发票已录入'); onClose() } })
+    else create(d, { onSuccess: () => { if (submission.finish()) { toast.success('发票已录入'); onClose() } }, onError: () => { submission.finish() } })
   }
 
   const typeName = invoiceType === 1 ? '进项' : '销项'
   return (
-    <Dialog open={open} onOpenChange={v => { if (!v) onClose() }}>
-      <DialogContent className="sm:max-w-2xl">
+    <>
+    <Dialog open={open} onOpenChange={v => { if (!v) draft.requestClose() }}>
+      <DialogContent ref={draft.contentRef} onFocusCapture={draft.rememberFocus} onInputCapture={() => { if (draft.canEdit()) setInputDirty(true) }} className="sm:max-w-2xl">
         {/* 编辑态与默认（录入）态一眼可分 */}
         <DialogHeader>
           <DialogTitle className="flex flex-wrap items-center gap-2">
             {edit ? '编辑' : '录入'}{typeName}发票
             {edit && <EditModeBadge />}
+            <UnsavedBadge show={dirty} />
           </DialogTitle>
           {edit && (
             <p className="text-helper mt-1">
@@ -118,22 +130,22 @@ function InvoiceDialog({ open, invoiceType, edit, onClose }: { open: boolean; in
           // 版本冲突（迁移 263）：**保留弹窗与草稿**，提示"先复制再关闭重开核对"。
           // 不自动关闭、不自动重试、不把新版本 merge 进旧草稿；toast 仍由全局拦截器统一给出。
           <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm">
-            <p className="font-medium text-destructive">本次修改未保存（该发票已被他人修改）</p>
+            <p className="font-medium text-destructive-ink">本次修改未保存（该发票已被他人修改）</p>
             <p className="mt-1 text-xs text-muted-foreground">
               当前填写内容仍在。请先复制需要保留的内容，再关闭本弹窗、等列表刷新完成后重新打开，核对最新内容后再提交。
             </p>
           </div>
         )}
         <div className="grid grid-cols-2 gap-4 py-1">
-          <div className="space-y-1.5"><Label>发票代码</Label><Input value={f.invoiceCode} onChange={e => setF(s => ({ ...s, invoiceCode: e.target.value }))} disabled={isPending} className="font-mono" /></div>
-          <div className="space-y-1.5"><Label>发票号码 *</Label><Input value={f.invoiceNo} onChange={e => setF(s => ({ ...s, invoiceNo: e.target.value }))} disabled={isPending} className="font-mono" /></div>
-          <div className="space-y-1.5 col-span-2"><Label>{invoiceType === 1 ? '供应商' : '客户'} *</Label><Input value={f.partyName} onChange={e => setF(s => ({ ...s, partyName: e.target.value }))} disabled={isPending} /></div>
-          <div className="space-y-1.5 col-span-2"><Label>对方纳税人识别号</Label><Input value={f.partyTaxNo} onChange={e => setF(s => ({ ...s, partyTaxNo: e.target.value }))} disabled={isPending} className="font-mono" /></div>
-          <div className="space-y-1.5"><Label>价税合计 *</Label><Input type="number" value={f.withTax} onChange={e => setF(s => ({ ...s, withTax: e.target.value }))} disabled={isPending} className="text-right tabular-nums" /></div>
+          <div className="space-y-1.5"><Label htmlFor={`${inputId}-invoiceCode`}>发票代码</Label><Input id={`${inputId}-invoiceCode`} value={f.invoiceCode} onChange={e => setF(s => ({ ...s, invoiceCode: e.target.value }))} disabled={isPending} className="font-mono" /></div>
+          <div className="space-y-1.5"><Label htmlFor={`${inputId}-invoiceNo`}>发票号码 *</Label><Input id={`${inputId}-invoiceNo`} value={f.invoiceNo} onChange={e => setF(s => ({ ...s, invoiceNo: e.target.value }))} disabled={isPending} className="font-mono" /></div>
+          <div className="space-y-1.5 col-span-2"><Label htmlFor={`${inputId}-partyName`}>{invoiceType === 1 ? '供应商' : '客户'} *</Label><Input id={`${inputId}-partyName`} value={f.partyName} onChange={e => setF(s => ({ ...s, partyName: e.target.value }))} disabled={isPending} /></div>
+          <div className="space-y-1.5 col-span-2"><Label htmlFor={`${inputId}-partyTaxNo`}>对方纳税人识别号</Label><Input id={`${inputId}-partyTaxNo`} value={f.partyTaxNo} onChange={e => setF(s => ({ ...s, partyTaxNo: e.target.value }))} disabled={isPending} className="font-mono" /></div>
+          <div className="space-y-1.5"><Label htmlFor={`${inputId}-withTax`}>价税合计 *</Label><Input id={`${inputId}-withTax`} type="number" value={f.withTax} onChange={e => setF(s => ({ ...s, withTax: e.target.value }))} disabled={isPending} className="text-right tabular-nums" /></div>
           <div className="space-y-1.5">
-            <Label>税率</Label>
-            <Select value={f.taxRate} onValueChange={v => setF(s => ({ ...s, taxRate: v }))} disabled={isPending}>
-              <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+            <Label htmlFor={`${inputId}-taxRate`}>税率</Label>
+            <Select value={f.taxRate} onValueChange={v => { if (draft.canEdit()) setF(s => ({ ...s, taxRate: v })) }} disabled={isPending}>
+              <SelectTrigger id={`${inputId}-taxRate`} className="h-10"><SelectValue /></SelectTrigger>
               <SelectContent>{TAX_RATES.map(r => <SelectItem key={r} value={String(r)}>{(r * 100).toFixed(0)}%</SelectItem>)}</SelectContent>
             </Select>
           </div>
@@ -142,16 +154,18 @@ function InvoiceDialog({ open, invoiceType, edit, onClose }: { open: boolean; in
             <span>税额 <span className="tabular-nums font-medium">{m(taxAmount)}</span></span>
             <span>价税合计 <span className="tabular-nums font-medium">{m(withTax)}</span></span>
           </div>
-          <div className="space-y-1.5"><Label>开票日期 *</Label><DatePicker value={f.invoiceDate} onChange={v => setF(s => ({ ...s, invoiceDate: v }))} disabled={isPending} /></div>
-          <div className="space-y-1.5"><Label>关联单号（选填）</Label><Input value={f.sourceNo} onChange={e => setF(s => ({ ...s, sourceNo: e.target.value }))} disabled={isPending} placeholder="采购/销售单号" /></div>
-          <div className="space-y-1.5 col-span-2"><Label>备注</Label><Input value={f.remark} onChange={e => setF(s => ({ ...s, remark: e.target.value }))} disabled={isPending} /></div>
+          <div className="space-y-1.5"><Label htmlFor={`${inputId}-invoiceDate`}>开票日期 *</Label><DatePicker id={`${inputId}-invoiceDate`} value={f.invoiceDate} onChange={v => { if (draft.canEdit()) setF(s => ({ ...s, invoiceDate: v })) }} disabled={isPending} /></div>
+          <div className="space-y-1.5"><Label htmlFor={`${inputId}-sourceNo`}>关联单号（选填）</Label><Input id={`${inputId}-sourceNo`} value={f.sourceNo} onChange={e => setF(s => ({ ...s, sourceNo: e.target.value }))} disabled={isPending} placeholder="采购/销售单号" /></div>
+          <div className="space-y-1.5 col-span-2"><Label htmlFor={`${inputId}-remark`}>备注</Label><Input id={`${inputId}-remark`} value={f.remark} onChange={e => setF(s => ({ ...s, remark: e.target.value }))} disabled={isPending} /></div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={isPending}>取消</Button>
+          <Button variant="outline" onClick={draft.requestClose} disabled={isPending}>取消</Button>
           <Button onClick={submit} disabled={isPending || !f.invoiceNo.trim() || !f.partyName.trim() || !(withTax > 0)}>{isPending ? '保存中…' : (edit ? '保存修改' : '保存')}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    <ConfirmDialog {...draft.discardProps} />
+    </>
   )
 }
 
@@ -163,7 +177,7 @@ export default function InvoicesPage() {
   const [keyword, setKeyword] = useState('')
   const query = useMemo(() => ({ invoiceType, keyword: keyword || undefined, page: 1, pageSize: PAGE_SIZE }), [invoiceType, keyword])
   // `isFetching`（而非 `isLoading`）：已有数据时后台刷新 isLoading 不成立，但仍在"刷新中"。
-  const { data, isLoading, isFetching, isError, refetch } = useInvoices(query)
+  const { data, isLoading, isFetching, isError, error, refetch } = useInvoices(query)
   const list = data?.list ?? []
   const total = data?.pagination?.total ?? 0
 
@@ -193,9 +207,9 @@ export default function InvoicesPage() {
           <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground" title={isError ? '列表加载失败，请先重试再编辑' : isFetching ? '列表刷新中，请稍候再编辑' : '编辑'} disabled={isFetching || isError} onClick={() => { setEditTarget(r); setDialogOpen(true) }}><Pencil className="h-3.5 w-3.5" /></Button>
         )}
         {r.invoiceType === 1 && r.status === 1 && <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground hover:text-primary" onClick={() => doStatus(r, 'certify', '认证')}><BadgeCheck className="mr-1 h-3.5 w-3.5" />认证</Button>}
-        {r.invoiceType === 1 && r.status === 2 && <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground hover:text-success" onClick={() => doStatus(r, 'deduct', '抵扣')}>抵扣</Button>}
-        {r.invoiceType === 2 && r.status === 1 && <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive" onClick={() => doStatus(r, 'redFlush', '红冲')}><Undo2 className="mr-1 h-3.5 w-3.5" />红冲</Button>}
-        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive" title="删除" onClick={() => setDeleteTarget(r)}><Trash2 className="h-3.5 w-3.5" /></Button>
+        {r.invoiceType === 1 && r.status === 2 && <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground hover:text-success-ink" onClick={() => doStatus(r, 'deduct', '抵扣')}>抵扣</Button>}
+        {r.invoiceType === 2 && r.status === 1 && <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive-ink" onClick={() => doStatus(r, 'redFlush', '红冲')}><Undo2 className="mr-1 h-3.5 w-3.5" />红冲</Button>}
+        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive-ink" title="删除" onClick={() => setDeleteTarget(r)}><Trash2 className="h-3.5 w-3.5" /></Button>
       </div>
     ) },
   ]
@@ -216,18 +230,18 @@ export default function InvoicesPage() {
           ))}
         </div>
         <Input value={keyword} onChange={e => { setKeyword(e.target.value); }} placeholder="发票号 / 单位 / 单号" className="h-9 w-52" />
-        <span className="ml-auto text-sm text-muted-foreground">共 {total} 张</span>
+        {!isError && <span className="ml-auto text-sm text-muted-foreground">共 {total} 张</span>}
       </div>
 
       <div className="card-base p-2">
         {isError ? (
-          <QueryErrorState error={undefined} onRetry={() => void refetch()} title="发票列表加载失败" compact />
+          <QueryErrorState error={error} onRetry={() => void refetch()} title="发票列表加载失败" compact />
         ) : (
           <DataTable columns={columns} data={list} loading={isLoading} emptyText="暂无发票，点击右上角录入" columnStorageKey={`acct-invoices-${invoiceType}`} />
         )}
       </div>
 
-      <ListSummary total={total} />
+      {!isError && <ListSummary total={total} />}
 
       <InvoiceDialog open={dialogOpen} invoiceType={editTarget?.invoiceType ?? invoiceType} edit={editTarget} onClose={() => { setDialogOpen(false); setEditTarget(null) }} />
       <ConfirmDialog

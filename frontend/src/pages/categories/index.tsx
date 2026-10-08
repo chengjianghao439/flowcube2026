@@ -286,7 +286,7 @@ function CategoryNode({ cat, onAddChild, onEdit, onDelete, onToggleStatus, expan
           </Button>
           <Button
             size="sm" variant="ghost"
-            className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+            className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive-ink"
             title="删除"
             onClick={() => onDelete(cat)}
           >
@@ -401,7 +401,7 @@ export default function CategoriesPage() {
           <span key={l} className="flex items-center gap-1">
             <SoftStatusLabel label={`L${l}`} tone="info" />
             {LEVEL_LABEL[l]}分类
-            {l === 4 && <span className="text-info">（可绑定商品）</span>}
+            {l === 4 && <span className="text-info-ink">（可绑定商品）</span>}
           </span>
         ))}
         <span className="ml-auto">默认显示一级分类，点击当前分类展开或收起下一级</span>

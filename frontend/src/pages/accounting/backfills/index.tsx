@@ -173,7 +173,7 @@ function refundBusinessSnapshot(snap: Snapshot): RefundBusinessSnapshot | null {
 }
 function RefundBusinessFields({ snap }: { snap: Snapshot }) {
   const business = refundBusinessSnapshot(snap)
-  if (!business) return <p role="alert" className="col-span-2 text-warning">原退款依据不可核对：原付款分配或原单信息缺失、损坏或不一致，请核对原始业务单据，不按当前主档补齐。</p>
+  if (!business) return <p role="alert" className="col-span-2 text-warning-ink">原退款依据不可核对：原付款分配或原单信息缺失、损坏或不一致，请核对原始业务单据，不按当前主档补齐。</p>
   return <>
     <Field label="原采购单号" value={business.po.orderNo} mono />
     <Field label="原采购退货单号" value={business.pr.returnNo} mono />
@@ -277,7 +277,7 @@ function CountCard({ label, value, hint }: { label: string; value: number; hint:
         <span className="text-xs text-muted-foreground">{label}</span>
         {active && <SoftStatusLabel label="待处理" tone="warning" />}
       </div>
-      <div className={`mt-2 text-xl tabular-nums ${active ? 'text-warning' : 'text-muted-foreground'}`}>{value}</div>
+      <div className={`mt-2 text-xl tabular-nums ${active ? 'text-warning-ink' : 'text-muted-foreground'}`}>{value}</div>
       <div className="mt-0.5 text-xs text-muted-foreground">{hint}</div>
     </div>
   )
@@ -478,22 +478,22 @@ export default function BackfillsPage() {
             （后端按权限限定可见范围），所以「非审批人 + 待审批」必然是自己的单——撤回。 */}
         {r.status === 0 && canApprove && (
           <>
-            <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground hover:text-success" onClick={() => setApproveTarget(freezeTarget(r))}>批准</Button>
-            <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive" onClick={() => setRejectTarget(freezeTarget(r))}>驳回</Button>
+            <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground hover:text-success-ink" onClick={() => setApproveTarget(freezeTarget(r))}>批准</Button>
+            <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive-ink" onClick={() => setRejectTarget(freezeTarget(r))}>驳回</Button>
           </>
         )}
         {r.status === 0 && !canApprove && (
-          <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive" onClick={() => setCancelTarget(freezeTarget(r))}>撤回</Button>
+          <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive-ink" onClick={() => setCancelTarget(freezeTarget(r))}>撤回</Button>
         )}
         {/* 已批准但业务没写进去：可重试，或作废后重新申请 */}
         {r.pendingExecution && canApprove && (
           <>
             <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => setExecuteTarget(freezeTarget(r))}>重试记账</Button>
-            <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive" onClick={() => setCancelTarget(freezeTarget(r))}>作废</Button>
+            <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive-ink" onClick={() => setCancelTarget(freezeTarget(r))}>作废</Button>
           </>
         )}
         {r.voucherPending && canApprove && (
-          <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground hover:text-warning" onClick={() => setRegenTarget(freezeTarget(r))}>重试生成凭证</Button>
+          <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground hover:text-warning-ink" onClick={() => setRegenTarget(freezeTarget(r))}>重试生成凭证</Button>
         )}
       </div>
     ) },
@@ -596,7 +596,7 @@ export default function BackfillsPage() {
               </div>
 
               {detail.voucherPending && (
-                <div className="rounded-md border border-destructive/30 bg-destructive/5 p-2 text-xs text-destructive">
+                <div className="rounded-md border border-destructive/30 bg-destructive/5 p-2 text-xs text-destructive-ink">
                   这笔业务已经记账，但调整凭证没生成成功{detail.voucherGenerateError ? `：${detail.voucherGenerateError}` : ''}。
                   请关闭本窗口后在列表里点「重试生成凭证」——账上还差这一张。
                 </div>
@@ -607,7 +607,7 @@ export default function BackfillsPage() {
                 </div>
               )}
               {detail.pendingExecution && (
-                <div className="rounded-md border border-warning/40 bg-warning/5 p-2 text-xs text-warning">
+                <div className="rounded-md border border-warning/40 bg-warning/5 p-2 text-xs text-warning-ink">
                   这张单已批准，但业务没能执行成功（常见原因：业务单据已被改动或作废）。
                   可回列表重试记账；若业务本身已做不了，请作废它再按新情况重新申请。
                 </div>

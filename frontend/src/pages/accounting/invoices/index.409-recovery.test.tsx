@@ -53,6 +53,10 @@ async function mount() {
   })
 }
 const btnByText = (t: string) => [...document.querySelectorAll('button')].find(b => (b.textContent ?? '').trim() === t) as HTMLButtonElement | undefined
+async function discardIfDirty() {
+  const discard = btnByText('放弃修改')
+  if (discard) await act(async () => discard.click())
+}
 const dialog = () => document.querySelector('[role="dialog"]')
 const inputByValue = (v: string) => [...document.querySelectorAll('input')].find(i => i.value === v) as HTMLInputElement | undefined
 function setNativeValue(el: HTMLInputElement, v: string) {
@@ -96,11 +100,11 @@ it('★ 409 ⇒ 保留弹窗与草稿，并给出"先复制再关闭重开"的�
   await vi.waitFor(() => expect(document.body.textContent).toMatch(/未保存|复制/))
 
   // 手动关闭 → 重开：**不得**携带旧冲突提示
-  await act(async () => { btnByText('取消')!.click() })
+  await act(async () => { btnByText('取消')!.click() }); await discardIfDirty()
   await vi.waitFor(() => expect(dialog()).toBeNull())
   await openEditor()
   expect(document.body.textContent, '重开后不应显示旧冲突提示').not.toMatch(/该发票已被他人修改/)
-  await act(async () => { btnByText('取消')!.click() })
+  await act(async () => { btnByText('取消')!.click() }); await discardIfDirty()
   await vi.waitFor(() => expect(dialog()).toBeNull())
 
   // 转「录入」：同样**不得**携带旧冲突提示
@@ -147,7 +151,7 @@ it('★ 手动关闭后从最新列表再开：用新 revision 保存成功', as
 
   // 手动关闭 + 重开（期望行为下弹窗仍在；若实现仍是 409 即关，这里也能继续）
   const cancel = btnByText('取消')
-  if (cancel && dialog()) await act(async () => { cancel.click() })
+  if (cancel && dialog()) { await act(async () => { cancel.click() }); await discardIfDirty() }
   await vi.waitFor(() => expect(dialog()).toBeNull())
   await openEditor()
   await vi.waitFor(() => expect(inputByValue('他人改过')).toBeTruthy())
@@ -197,7 +201,7 @@ it('★ 列表刷新期间**阻止重新编辑**（等刷新完成后再开，�
 
   // 关掉弹窗（期望行为下 409 后仍开着 ⇒ 手动取消）
   const cancel2 = btnByText('取消')
-  if (cancel2 && dialog()) await act(async () => { cancel2.click() })
+  if (cancel2 && dialog()) { await act(async () => { cancel2.click() }); await discardIfDirty() }
   await vi.waitFor(() => expect(dialog()).toBeNull())
 
   // **刷新仍 pending** ⇒ 编辑入口被**明确阻止**（不自动续开到旧 row / 旧 revision）

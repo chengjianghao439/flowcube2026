@@ -1,0 +1,259 @@
+{
+  "report": "a-followup-overlays.md",
+  "viewport": {
+    "width": 1024,
+    "height": 768
+  },
+  "environment": "本批专属临时实例与合成数据",
+  "darkThemeMethod": "DOM .dark 模拟，不是产品主题切换",
+  "screenshotCount": 41,
+  "images": [
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-fixed-approval-labels-1024-light.png",
+      "imageReviewed": true,
+      "theme": "light",
+      "evidenceBoundary": "具体入口与操作以报告逐项表格为准，截图不外推共享依赖或业务写入通过"
+    },
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-fixed-approval-resume-1024-dark.png",
+      "imageReviewed": true,
+      "theme": "dark",
+      "evidenceBoundary": "具体入口与操作以报告逐项表格为准，截图不外推共享依赖或业务写入通过"
+    },
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-fixed-customer-discard-1024-dark.png",
+      "imageReviewed": true,
+      "theme": "dark",
+      "evidenceBoundary": "具体入口与操作以报告逐项表格为准，截图不外推共享依赖或业务写入通过"
+    },
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-fixed-customer-discard-1024-light.png",
+      "imageReviewed": true,
+      "theme": "light",
+      "evidenceBoundary": "具体入口与操作以报告逐项表格为准，截图不外推共享依赖或业务写入通过"
+    },
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-fixed-customer-resume-1024-dark.png",
+      "imageReviewed": true,
+      "theme": "dark",
+      "evidenceBoundary": "具体入口与操作以报告逐项表格为准，截图不外推共享依赖或业务写入通过"
+    },
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-fixed-customer-selector-resume-1024-light.png",
+      "imageReviewed": true,
+      "theme": "light",
+      "evidenceBoundary": "具体入口与操作以报告逐项表格为准，截图不外推共享依赖或业务写入通过"
+    },
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-fixed-invoice-labels-1024-light.png",
+      "imageReviewed": true,
+      "theme": "light",
+      "evidenceBoundary": "具体入口与操作以报告逐项表格为准，截图不外推共享依赖或业务写入通过"
+    },
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-fixed-invoice-resume-1024-dark.png",
+      "imageReviewed": true,
+      "theme": "dark",
+      "evidenceBoundary": "具体入口与操作以报告逐项表格为准，截图不外推共享依赖或业务写入通过"
+    },
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-fixed-pda-create-labels-1024-dark.png",
+      "imageReviewed": true,
+      "theme": "dark",
+      "evidenceBoundary": "具体入口与操作以报告逐项表格为准，截图不外推共享依赖或业务写入通过"
+    },
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-fixed-pda-create-labels-1024-light.png",
+      "imageReviewed": true,
+      "theme": "light",
+      "evidenceBoundary": "具体入口与操作以报告逐项表格为准，截图不外推共享依赖或业务写入通过"
+    },
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-fixed-pda-edit-labels-1024-dark.png",
+      "imageReviewed": true,
+      "theme": "dark",
+      "evidenceBoundary": "具体入口与操作以报告逐项表格为准，截图不外推共享依赖或业务写入通过"
+    },
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-fixed-pda-edit-labels-1024-light.png",
+      "imageReviewed": true,
+      "theme": "light",
+      "evidenceBoundary": "具体入口与操作以报告逐项表格为准，截图不外推共享依赖或业务写入通过"
+    },
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-fixed-transactions-query-labels-1024-dark.png",
+      "imageReviewed": true,
+      "theme": "dark",
+      "evidenceBoundary": "具体入口与操作以报告逐项表格为准，截图不外推共享依赖或业务写入通过"
+    },
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-fixed-transactions-query-labels-1024-light.png",
+      "imageReviewed": true,
+      "theme": "light",
+      "evidenceBoundary": "具体入口与操作以报告逐项表格为准，截图不外推共享依赖或业务写入通过"
+    },
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-fixed-user-discard-1024-light.png",
+      "imageReviewed": true,
+      "theme": "light",
+      "evidenceBoundary": "具体入口与操作以报告逐项表格为准，截图不外推共享依赖或业务写入通过"
+    },
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-fixed-user-resume-1024-dark.png",
+      "imageReviewed": true,
+      "theme": "dark",
+      "evidenceBoundary": "具体入口与操作以报告逐项表格为准，截图不外推共享依赖或业务写入通过"
+    },
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-followup-account-flow-1024-dark.png",
+      "imageReviewed": true,
+      "theme": "dark",
+      "evidenceBoundary": "具体入口与操作以报告逐项表格为准，截图不外推共享依赖或业务写入通过"
+    },
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-followup-account-flow-1024-light.png",
+      "imageReviewed": true,
+      "theme": "light",
+      "evidenceBoundary": "具体入口与操作以报告逐项表格为准，截图不外推共享依赖或业务写入通过"
+    },
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-followup-approval-flow-create-1024-light.png",
+      "imageReviewed": true,
+      "theme": "light",
+      "evidenceBoundary": "具体入口与操作以报告逐项表格为准，截图不外推共享依赖或业务写入通过"
+    },
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-followup-approvals-pending-1024-light.png",
+      "imageReviewed": true,
+      "theme": "light",
+      "evidenceBoundary": "具体入口与操作以报告逐项表格为准，截图不外推共享依赖或业务写入通过"
+    },
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-followup-customer-edit-1024-dark.png",
+      "imageReviewed": true,
+      "theme": "dark",
+      "evidenceBoundary": "具体入口与操作以报告逐项表格为准，截图不外推共享依赖或业务写入通过"
+    },
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-followup-customer-edit-1024-light.png",
+      "imageReviewed": true,
+      "theme": "light",
+      "evidenceBoundary": "具体入口与操作以报告逐项表格为准，截图不外推共享依赖或业务写入通过"
+    },
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-followup-customer-ledger-1024-light.png",
+      "imageReviewed": true,
+      "theme": "light",
+      "evidenceBoundary": "具体入口与操作以报告逐项表格为准，截图不外推共享依赖或业务写入通过"
+    },
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-followup-invoice-create-1024-dark.png",
+      "imageReviewed": true,
+      "theme": "dark",
+      "evidenceBoundary": "具体入口与操作以报告逐项表格为准，截图不外推共享依赖或业务写入通过"
+    },
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-followup-invoice-create-1024-light.png",
+      "imageReviewed": true,
+      "theme": "light",
+      "evidenceBoundary": "具体入口与操作以报告逐项表格为准，截图不外推共享依赖或业务写入通过"
+    },
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-followup-logistics-query-1024-dark.png",
+      "imageReviewed": true,
+      "theme": "dark",
+      "evidenceBoundary": "具体入口与操作以报告逐项表格为准，截图不外推共享依赖或业务写入通过"
+    },
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-followup-logistics-query-1024-light.png",
+      "imageReviewed": true,
+      "theme": "light",
+      "evidenceBoundary": "具体入口与操作以报告逐项表格为准，截图不外推共享依赖或业务写入通过"
+    },
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-followup-pda-device-edit-1024-dark.png",
+      "imageReviewed": true,
+      "theme": "dark",
+      "evidenceBoundary": "具体入口与操作以报告逐项表格为准，截图不外推共享依赖或业务写入通过"
+    },
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-followup-pda-device-edit-1024-light.png",
+      "imageReviewed": true,
+      "theme": "light",
+      "evidenceBoundary": "具体入口与操作以报告逐项表格为准，截图不外推共享依赖或业务写入通过"
+    },
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-followup-print-templates-error-1024-light.png",
+      "imageReviewed": true,
+      "theme": "light",
+      "evidenceBoundary": "具体入口与操作以报告逐项表格为准，截图不外推共享依赖或业务写入通过"
+    },
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-followup-printer-binding-1024-dark.png",
+      "imageReviewed": true,
+      "theme": "dark",
+      "evidenceBoundary": "具体入口与操作以报告逐项表格为准，截图不外推共享依赖或业务写入通过"
+    },
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-followup-printer-binding-1024-light.png",
+      "imageReviewed": true,
+      "theme": "light",
+      "evidenceBoundary": "具体入口与操作以报告逐项表格为准，截图不外推共享依赖或业务写入通过"
+    },
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-followup-printer-table-1024-light.png",
+      "imageReviewed": true,
+      "theme": "light",
+      "evidenceBoundary": "具体入口与操作以报告逐项表格为准，截图不外推共享依赖或业务写入通过"
+    },
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-followup-role-permissions-edit-1024-light.png",
+      "imageReviewed": true,
+      "theme": "light",
+      "evidenceBoundary": "具体入口与操作以报告逐项表格为准，截图不外推共享依赖或业务写入通过"
+    },
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-followup-settings-edit-1024-light.png",
+      "imageReviewed": true,
+      "theme": "light",
+      "evidenceBoundary": "具体入口与操作以报告逐项表格为准，截图不外推共享依赖或业务写入通过"
+    },
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-followup-template-editor-1024-light.png",
+      "imageReviewed": true,
+      "theme": "light",
+      "evidenceBoundary": "具体入口与操作以报告逐项表格为准，截图不外推共享依赖或业务写入通过"
+    },
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-followup-transactions-query-1024-light.png",
+      "imageReviewed": true,
+      "theme": "light",
+      "evidenceBoundary": "具体入口与操作以报告逐项表格为准，截图不外推共享依赖或业务写入通过"
+    },
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-followup-user-edit-1024-light.png",
+      "imageReviewed": true,
+      "theme": "light",
+      "evidenceBoundary": "具体入口与操作以报告逐项表格为准，截图不外推共享依赖或业务写入通过"
+    },
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-followup-vouchers-empty-1024-light.png",
+      "imageReviewed": true,
+      "theme": "light",
+      "evidenceBoundary": "具体入口与操作以报告逐项表格为准，截图不外推共享依赖或业务写入通过"
+    },
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-followup-vouchers-query-1024-dark.png",
+      "imageReviewed": true,
+      "theme": "dark",
+      "evidenceBoundary": "具体入口与操作以报告逐项表格为准，截图不外推共享依赖或业务写入通过"
+    },
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-followup-vouchers-query-1024-light.png",
+      "imageReviewed": true,
+      "theme": "light",
+      "evidenceBoundary": "具体入口与操作以报告逐项表格为准，截图不外推共享依赖或业务写入通过"
+    }
+  ],
+  "latestReadFailureAndDateGui": "已在独立a-final-screens.json完成；本清单保留原41张"
+}

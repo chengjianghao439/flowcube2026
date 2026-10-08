@@ -46,7 +46,12 @@ export function usePdaScanner({ onScan, enabled = true, onDuplicate, allowIntent
   useEffect(() => { allowIntentionalRepeatRef.current = allowIntentionalRepeat }, [allowIntentionalRepeat])
 
   useEffect(() => {
+    // portalled PDA dialog 标记同步生效，原生广播与延迟 flush 也必须受同一道闸门约束。
+    function paused() {
+      return !enabledRef.current || document.querySelector('[data-pda-scan-paused="true"]') !== null
+    }
     function acceptCode(raw: string, source: 'keyboard' | 'native') {
+      if (paused()) return
       const code = raw.trim()
       if (code.length < MIN_SCAN_LENGTH) return
 
@@ -73,7 +78,7 @@ export function usePdaScanner({ onScan, enabled = true, onDuplicate, allowIntent
     let disposed = false
     if (Capacitor.isNativePlatform()) {
       void PdaScanBridge.addListener('scan', ({ barcode }) => {
-        if (!enabledRef.current || typeof barcode !== 'string') return
+        if (paused() || typeof barcode !== 'string') return
         // 双输出设备可能先发键盘字符、后发广播；丢弃未结束的键盘缓冲。
         bufferRef.current = ''
         if (timerRef.current) clearTimeout(timerRef.current)
@@ -87,15 +92,21 @@ export function usePdaScanner({ onScan, enabled = true, onDuplicate, allowIntent
     }
 
     function handleKeyDown(e: KeyboardEvent) {
-      if (!enabledRef.current) return
+      if (paused()) {
+        bufferRef.current = ''
+        if (timerRef.current) clearTimeout(timerRef.current)
+        return
+      }
+      if (e.defaultPrevented || e.ctrlKey || e.altKey || e.metaKey) return
       if (e.key === 'Shift' || e.key === 'Control' || e.key === 'Alt' || e.key === 'Meta') return
 
-      const target = e.target as HTMLElement
-      const isManualInput = (
-        (target.tagName === 'INPUT' && (target as HTMLInputElement).dataset.scannerManual === 'true') ||
-        target.tagName === 'TEXTAREA'
-      )
-      if (isManualInput) return
+      // 人工数量、搜索与备注不属于扫码流；默认扫码仍不依赖输入焦点。
+      const target = e.target instanceof Element ? e.target : null
+      if (target?.closest('input, textarea, select, [contenteditable="true"]')) {
+        bufferRef.current = ''
+        if (timerRef.current) clearTimeout(timerRef.current)
+        return
+      }
 
       const now = Date.now()
       const gap = now - lastTimeRef.current
@@ -106,6 +117,8 @@ export function usePdaScanner({ onScan, enabled = true, onDuplicate, allowIntent
       }
 
       if (e.key === 'Enter') {
+        // 没有完整扫码缓冲时，保留按钮/链接的原生 Enter 激活。
+        if (bufferRef.current.length < MIN_SCAN_LENGTH) return
         e.preventDefault()
         if (timerRef.current) clearTimeout(timerRef.current)
         flush()

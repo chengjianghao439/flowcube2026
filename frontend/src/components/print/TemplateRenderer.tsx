@@ -247,7 +247,7 @@ interface Props {
 
 export default function TemplateRenderer({ layout, paperSize, data, items, displayScale = 1 }: Props) {
   const budgetError = documentPrintBudgetError(layout, items.length)
-  if (budgetError) return <div role="alert" className="p-6 text-destructive">{budgetError}</div>
+  if (budgetError) return <div role="alert" className="p-6 text-destructive-ink">{budgetError}</div>
   const paper = PAPER_MM[paperSize] ?? PAPER_MM.A4
   const scale = displayScale
 

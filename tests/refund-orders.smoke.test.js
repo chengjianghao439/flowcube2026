@@ -42,6 +42,27 @@ async function readPaid(pool, orderId) {
   return rows[0] ? { paid: money(rows[0].paid_amount), balance: money(rows[0].balance), status: Number(rows[0].status) } : null
 }
 
+/** 同一真实 SELECT 的列表/计数必须保留不限仓、限仓和空范围语义；本段只读取，不造退款。 */
+async function scenarioRefundListScope(ctx, log) {
+  const svc = require('../backend/src/modules/refunds/refund-orders.service')
+  const [warehouses] = await ctx.pool.query('SELECT DISTINCT warehouse_id FROM sale_orders WHERE deleted_at IS NULL ORDER BY warehouse_id LIMIT 1')
+  const warehouseId = Number(warehouses[0]?.warehouse_id || 1)
+  const [allRows] = await ctx.pool.query('SELECT ro.id, so.warehouse_id FROM refund_orders ro LEFT JOIN sale_orders so ON so.id = ro.sale_order_id WHERE ro.deleted_at IS NULL ORDER BY ro.created_at DESC, ro.id DESC')
+  for (const [label, scope] of [['不限仓', null], ['限仓', [warehouseId]], ['空范围', []]]) {
+    try {
+      const result = await svc.findAll({ page: 1, pageSize: 200, scopeWarehouseIds: scope })
+      // 独立从未过滤行逐条判定授权，不复制被测方法的 WHERE 拼接。
+      const expected = allRows.filter(row => scope === null || scope.includes(Number(row.warehouse_id)))
+      log.assert(`退款列表${label}计数与授权集合一致`, result.pagination.total === expected.length)
+      log.assert(`退款列表${label}行与授权集合一致`, JSON.stringify(result.list.map(row => Number(row.id))) === JSON.stringify(expected.slice(0, 200).map(row => Number(row.id))))
+      const filtered = await svc.findAll({ page: 1, pageSize: 200, keyword: '不存在的退款单号-范围回归', status: 1, startDate: '2040-01-01', endDate: '2040-01-02', scopeWarehouseIds: scope })
+      log.assert(`退款列表${label}筛选仍返回真实空结果`, filtered.list.length === 0 && filtered.pagination.total === 0)
+    } catch (error) {
+      log.assert(`退款列表${label}读取成功`, false, error.code || error.message)
+    }
+  }
+}
+
 async function scenarioRefundExecutes(ctx, log, token) {
   const { http, pool } = ctx
   const { orderId, orderNo } = await seedSaleWithPaid(pool, 1000, 800)
@@ -150,6 +171,7 @@ async function main() {
 
     await scenarioRefundExecutes(ctx, log, token)
     await scenarioRefundThenReturnPasses(ctx, log, token)
+    await scenarioRefundListScope(ctx, log)
   } finally {
     await ctx.close()
   }
@@ -157,7 +179,10 @@ async function main() {
   process.exit(counts.failed > 0 ? 1 : 0)
 }
 
-main().catch((e) => {
-  console.error('[REFUND-ORDERS] 未捕获异常：', e)
-  process.exit(1)
-})
+module.exports = { scenarioRefundListScope }
+if (require.main === module) {
+  main().catch((e) => {
+    console.error('[REFUND-ORDERS] 未捕获异常：', e)
+    process.exit(1)
+  })
+}

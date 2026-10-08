@@ -11,7 +11,10 @@ import { PERMISSIONS } from '@/lib/permission-codes'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 const fixtures = vi.hoisted(() => ({ list: vi.fn(), detail: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn(), defaults: { baseURL: '/api' } }))
 vi.mock('@/api/kits', () => ({ getKitsApi: fixtures.list, getKitApi: fixtures.detail, createKitApi: fixtures.create, updateKitApi: fixtures.update, deleteKitApi: fixtures.remove }))
-vi.mock('@/api/client', () => ({ default: { defaults: fixtures.defaults } }))
+vi.mock('@/api/client', () => ({ default: { defaults: fixtures.defaults }, subscribeApiClientBaseURL: () => () => {}, getApiClientBaseURL: () => fixtures.defaults.baseURL }))
+vi.mock('@/api/settings', () => ({ getSettingsApi: vi.fn(async () => ({ map: {} })) }))
+vi.mock('@/api/categories', () => ({ getCategoryTreeApi: vi.fn(async () => [{ id: 2, name: '五金配件', status: 1 }]) }))
+vi.mock('@/api/suppliers', () => ({ getSuppliersApi: vi.fn(async () => ({ list: [{ id: 3, name: '配件供应商', code: 'S3', isActive: true }], pagination: { total: 1 } })) }))
 // 商品选择器本身已有组件回归，本测试只替代其查询/弹窗以点击真实回填路径。
 vi.mock('@/components/shared/ProductFinderModal', () => ({ default: ({ open, onConfirm, onClose }: { open: boolean; onConfirm: (p: unknown) => void; onClose: () => void }) => open ? <button onClick={() => { onConfirm({ id: 13, code: 'P13', name: '新组件', unit: '个', allowDecimalQty: false }); onClose() }}>选择真实商品</button> : null }))
 beforeEach(() => {
@@ -37,24 +40,28 @@ async function mount(run: (host: HTMLElement) => Promise<void>, path = '/kits?ke
 }
 const click = async (name: string) => { const button = Array.from(document.querySelectorAll('button')).find(b => b.textContent === name); expect(button, `应有按钮 ${name}`).toBeTruthy(); await act(async () => { button!.click(); await new Promise(r => setTimeout(r, 15)) }); await act(async () => { await new Promise(r => setTimeout(r, 10)) }) }
 const change = async (label: string, value: string) => { const input = document.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!; expect(input).toBeTruthy(); await act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value); input.dispatchEvent(new Event('input', { bubbles: true })) }) }
+const profile = { categoryId: 2, supplierId: 3, unit: '套', spec: 'H-10', color: '银色', articleNumber: 'SUP-H10', costPrice: 80, remark: '原资料' }
 test('资料列表只查当前页，自己的Tab查询；只读账号查看但不出现写入口', async () => {
   useAuthStore.setState({ user: { ...useAuthStore.getState().user!, permissions: [PERMISSIONS.PRODUCT_VIEW] } })
   await mount(async host => {
     expect(host.textContent).toContain('成套配件'); expect(host.textContent).toContain('铰链套')
+    for (const title of ['分类', '供应商', '单位', '型号', '颜色', '进价', '价格A', '价格B', '价格C', '价格D']) expect(host.textContent).toContain(title)
+    for (const value of ['五金配件', '配件供应商', 'H-10', '银色']) expect(host.textContent).toContain(value)
+    expect(host.querySelector('input[name="keyword"]')?.getAttribute('placeholder')).toBe('按编码、名称、型号、颜色或供应商型号搜索')
     expect(fixtures.list.mock.calls[0][0]).toEqual({ page: 1, pageSize: 20, keyword: '套' })
     expect(host.textContent).not.toContain('新增配件'); expect(host.textContent).not.toContain('删除')
     await click('查看'); expect(document.body.textContent).toContain('采样时间未单独保存')
     expect(document.body.textContent).toContain('0.000001')
     expect(document.body.textContent).not.toContain('保存修改')
-    expect(document.querySelector<HTMLInputElement>('input[aria-label="每套默认报价"]')?.matches(':disabled')).toBe(true)
+    expect(document.querySelector<HTMLInputElement>('input[aria-label="价格A"]')?.matches(':disabled')).toBe(true)
   })
 })
 test('报价独立修改省略组成并展示服务端新版本/revision，原A价参考不变', async () => {
   const updated = structuredClone(savedKit); updated.revision = 4; updated.currentVersionId = 20; updated.version!.id = 20; updated.version!.versionNo = 3; updated.version!.referenceUnitPrice = 200
   fixtures.update.mockResolvedValue(updated)
   await mount(async () => {
-    await click('维护'); await change('每套默认报价', '200'); await click('保存修改')
-    expect(fixtures.update.mock.calls[0][1]).toEqual({ code: 'K7', name: '铰链套', isActive: true, referenceUnitPrice: 200, revision: 3 })
+    await click('维护'); await change('价格A', '200'); await click('保存修改')
+    expect(fixtures.update.mock.calls[0][1]).toEqual({ ...profile, name: '铰链套', isActive: true, referenceUnitPrice: 200, salePriceA: 200, revision: 3 })
     expect(document.body.textContent).toContain('当前版本 3'); expect(document.body.textContent).toContain('资料修订 4')
     expect(document.body.textContent).toContain('0.000001')
   })
@@ -83,13 +90,16 @@ test('未知提交冻结编辑，原键原内容重试不会生成第二份', as
 })
 test('新增通过真实商品选择回填基本单位，显式模式必须全部填写', async () => {
   await mount(async () => {
-    await click('新增配件'); await change('配件编码', 'KNEW'); await change('配件名称', '新套'); await change('每套默认报价', '20')
+    await click('新增配件'); await change('配件名称', '新套'); await change('价格A', '20')
+    await click('点击选择分类…'); await click('五金配件'); await click('点击选择供应商…')
+    await act(async () => { document.querySelector<HTMLElement>('[role="row"][aria-selected]')!.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })) })
+    await change('型号', 'H-10'); await change('颜色', '银色'); await change('进价', '80')
     await click('添加组件'); await click('选择真实商品')
     const radio = document.querySelector<HTMLInputElement>('input[value="explicit"]')!
     await act(async () => radio.click()); await click('创建配件')
     expect(fixtures.create).not.toHaveBeenCalled(); expect(document.body.textContent).toContain('全部组件')
     await change('新组件分摊比例', '1'); fixtures.create.mockResolvedValue(savedKit); await click('创建配件')
-    expect(fixtures.create.mock.calls[0][0]).toEqual({ code: 'KNEW', name: '新套', isActive: true, referenceUnitPrice: 20, components: [{ productId: 13, baseQty: 1, amountWeight: 1 }] })
+    expect(fixtures.create.mock.calls[0][0]).toEqual({ ...profile, articleNumber: '', remark: '', name: '新套', isActive: true, referenceUnitPrice: 20, salePriceA: 20, components: [{ productId: 13, baseQty: 1, amountWeight: 1 }] })
   })
 })
 test('删除提交原修订，超时同键重试，关闭按钮不丢原提交', async () => {
@@ -134,7 +144,9 @@ test('A服务器409后切B不能重载B同号资料；回A保留原草稿而非B
       expect(fixtures.detail).toHaveBeenCalledTimes(calls)
       expect(document.querySelector<HTMLInputElement>('input[aria-label="配件名称"]')?.value).toBe('A草稿')
       fixtures.defaults.baseURL = '/api'; await change('配件名称', 'A继续修改'); await click('保存修改')
-      expect(fixtures.update.mock.calls[1][1]).toMatchObject({ code: 'K7', name: 'A继续修改', referenceUnitPrice: 100, revision: 3 })
+      expect(fixtures.update.mock.calls[1][1]).toMatchObject({ name: 'A继续修改', revision: 3 })
+      expect(fixtures.update.mock.calls[1][1]).not.toHaveProperty('referenceUnitPrice')
+      expect(fixtures.update.mock.calls[1][1]).not.toHaveProperty('code')
     })
   } finally { fixtures.defaults.baseURL = '/api' }
 })

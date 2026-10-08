@@ -366,7 +366,7 @@ function FormView({ tabPath, tabKey, handling }: { tabPath: string; tabKey: stri
       }}>选择原采购第 {index + 1} 行（剩余 {i.remainingQty} {i.unit}，原价 {money(i.unitPrice)}）</Button>)}</section>}
       </>}
       {createdReturn && <div role="status" className="rounded-md border p-3 space-y-2"><p>退货单 {createdReturn.returnNo} 已创建，可查看单据。</p><Button variant="outline" disabled={!ownerCurrent} onClick={() => openCreatedReturn(createdReturn)}>查看已创建退货单</Button></div>}
-      {(sourceError || !ownerCurrent) && <p role="alert" className="text-sm text-destructive">{sourceError || '登录或服务器已变化，草稿保留'}</p>}
+      {(sourceError || !ownerCurrent) && <p role="alert" className="text-sm text-destructive-ink">{sourceError || '登录或服务器已变化，草稿保留'}</p>}
       <fieldset disabled={locked || submitting} className="contents">
       <SectionCard title="退货信息" compact>
         <div className="flex flex-wrap items-start gap-4">
@@ -379,7 +379,7 @@ function FormView({ tabPath, tabKey, handling }: { tabPath: string; tabKey: stri
               onDoubleClick={() => { setSupplierFinderOpen(false); navigate('/suppliers') }}
               className={cn(supplierError && 'border-destructive/60 bg-destructive/5', !!boundSource && 'pointer-events-none opacity-60')}
             />}
-            {supplierError && <p className="text-xs text-destructive">请选择供应商</p>}
+            {supplierError && <p className="text-xs text-destructive-ink">请选择供应商</p>}
           </div>
           <div className="w-56 shrink-0 space-y-1.5">
             <Label>退货仓库 *</Label>
@@ -390,7 +390,7 @@ function FormView({ tabPath, tabKey, handling }: { tabPath: string; tabKey: stri
               disabled={!!boundSource || !!handling}
               className={cn(warehouseError && 'border-destructive/60 bg-destructive/5')}
             />}
-            {warehouseError && <p className="text-xs text-destructive">请选择仓库</p>}
+            {warehouseError && <p className="text-xs text-destructive-ink">请选择仓库</p>}
           </div>
           <div className="w-64 shrink-0 space-y-1.5">
             <Label>关联原采购单号</Label>
@@ -509,7 +509,7 @@ function FormView({ tabPath, tabKey, handling }: { tabPath: string; tabKey: stri
                       </td>
                       <td className="py-2.5 text-right font-medium tabular-nums">{money(item.quantity * item.unitPrice)}</td>
                       <td className="py-2.5 text-center">
-                        <Button type="button" size="sm" variant="ghost" disabled={!!boundSource} className="h-8 w-9 p-0 text-muted-foreground hover:text-destructive" onClick={() => removeItem(item._key)}>✕</Button>
+                        <Button type="button" size="sm" variant="ghost" disabled={!!boundSource} className="h-8 w-9 p-0 text-muted-foreground hover:text-destructive-ink" onClick={() => removeItem(item._key)}>✕</Button>
                       </td>
                     </tr>
                     {(item.originalQty != null || item.returnedQty != null) && (
@@ -677,7 +677,7 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
         rightActions={
           <>
             {ret.status === 1 && (
-              <Button variant="outline" className="border-destructive/30 text-destructive hover:bg-destructive/5" disabled={pending} onClick={() => setCancelOpen(true)}>
+              <Button variant="outline" className="border-destructive/30 text-destructive-ink hover:bg-destructive/5" disabled={pending} onClick={() => setCancelOpen(true)}>
                 <X className="h-4 w-4 mr-1" />取消
               </Button>
             )}
@@ -685,7 +685,7 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
               <Button disabled={pending} onClick={() => setConfirmOpen(true)}>确认（派发到 PDA）</Button>
             )}
             {ret.status === 2 && (
-              <Button variant="outline" className="border-destructive/30 text-destructive hover:bg-destructive/5" disabled={pending} onClick={() => setCancelOpen(true)}>
+              <Button variant="outline" className="border-destructive/30 text-destructive-ink hover:bg-destructive/5" disabled={pending} onClick={() => setCancelOpen(true)}>
                 <X className="h-4 w-4 mr-1" />取消
               </Button>
             )}

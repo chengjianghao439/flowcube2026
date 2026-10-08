@@ -262,8 +262,8 @@ Tests CI 的 `regression-plastic-box` job 使用独立 MySQL 8 service（**映�
 
 ### 2026-10-01 成套配件基础切片（C2b-1）
 
-- `npm run test:kits-composition`：15 个纯计算用例，覆盖 A 价快照/全显式权重、微单位与大权重精确性、重复/两位数量/整数策略/零权重拒绝、分尾差守恒、共享组件与普通商业组独立、200 商业/物理维度边界。新预览采用 price4×qty2 的定点 half-up 金额，不改普通销售 round2 与八位内部单价口径。
-- `npm run smoke:kits-foundation`：真实 HTTP/MySQL，20 组验收；自建唯一角色/用户/仓库/客户/商品/套件，按登记 ID 清理主档夹具并关闭 server/pool。覆盖列表/finder超大page的500→400回归、269实际 SQL重跑幂等与索引/FK列序、稳定键重放/创建载荷区分、编辑并发/旧revision、改组成新版本/旧版本不变、启停/软删历史可读、权限/范围/主数据禁用或软删、微/大权重 DB 往返、客户等级价与套默认价隔离、同 conn 回执失败整事务回滚/原键重试，以及库存/预占/日志/销售/应收应付总量与金额不变。故障用例仅注入回执 UPDATE 错误，出现预期500日志；不代表其它故障类型已验。付款表为 `payment_records`，不存在 `fin_receivables`，早期夹具命名错误不是业务红灯。
+- `npm run test:kits-composition`：当前 38 个无数据库用例（2026-10-07），覆盖原 15 个组成/分尾差用例，以及自动编码、真实回执模块契约、独立进价与 A/B/C/D、NULL/零价、客户等级与成交资料快照。组成部分覆盖 A 价快照/全显式权重、微单位与大权重精确性、重复/两位数量/整数策略/零权重拒绝、共享组件与普通商业组独立、200 商业/物理维度边界。预览采用 price4×qty2 的定点 half-up 金额，不改普通销售 round2 与八位内部单价口径。
+- `npm run smoke:kits-foundation`：真实 HTTP/MySQL，当前 28 组验收（2026-10-07）；自建唯一角色/用户/仓库/客户/商品/套件，按登记 ID 清理主档夹具并关闭 server/pool。覆盖列表/finder超大page的500→400回归、269/282 实际 SQL 重跑幂等与列完整形状/索引/FK列序/引用schema/规则、服务端自动编码/四个同MAX创建请求碰撞重取、旧客户端 code-bearing 不同键与同键的双读并发、旧编码和精确已提交旧回执兼容、资料/四档价格往返与版本保留、稳定键重放/创建载荷区分、编辑并发/旧revision、改组成新版本/旧版本不变、启停/软删历史可读、权限/范围/主数据禁用或软删、微/大权重 DB 往返、套和普通商品各自按客户等级取价且客户端默认价不被采信、同 conn 创建或编辑回执失败整事务回滚/原键重试，以及库存/预占/日志/销售/应收应付总量与金额不变。故障注入用例会出现预期500日志，不能据此称日志零噪声。付款表为 `payment_records`，不存在 `fin_receivables`，早期夹具命名错误不是业务红灯。
 - `npm run smoke:kits-current-stock`：真实采购确认→PDA会话收货→上架，取得铰链1/螺钉8与应付9的实物基线；分别预览两个单套均有现货参考，合并向量明确缺铰链1，金额300守恒。追加允许小数的真实商品，采购1、实际收货上架0.30并合法短收结算应付0.30，真实普通销售预占0.20；每套0.10时finder无预占3套、有预占1套，与预览一套零缺量一致。该边界先红实测2/0，再按百分整数单位修复绿灯，日志为 `/tmp/kits-finder-qty-red.log`（自然exit1）与 `/tmp/kits-finder-qty-green.log`（自然exit0）。finder/预览前后容器/库存/预占/库存日志/AP/销售逐表不变。为保留真实业务审计，不直接清除入库/库存事实；精确ID保存在 `/tmp/flowcube-kits-stock-KST-*.json`（0600），退出前正常取消本轮普通销售单并核对预占为0，停用本轮测试账号、删本轮PDA会话/设备、关闭server/pool。此夹具不得视为生产或真机证据。
 
 三条均已接 Tests CI（计算放 static，两个 HTTP smoke 在 MySQL regression 顺序执行），本地即时验证是该高风险基础切片的最小验收。运行环境遵守本文件开头：Node22 + NODE_ENV=test + 显式回环 DB_* 与可写 APP_UPDATE_DOWNLOADS_DIR；无 prepareSmokeContext / 全表清理 / backend/.env 读取。2026-10-01 在新建唯一测试库（utf8mb4_0900_ai_ci）完整执行269迁移文件，并在其上验收；该库与真实业务夹具保留，不DROP，未碰开发库或生产。原始红证据为缺组成行为及真实POST /api/kits的404→预期201；微小非零五位以上价拒绝另取到了 Missing expected exception 再修；`1.005×1` 原浮点round2实测1.00、应为1.01，新增定点金额用例先红13/14再修；现订单DECIMAL(14,4)金额容量守卫先红14/15再修，商业行/物理行/总额均有限；参考时刻从错误版本创建时间改为null并解释沿用依据，API断言先红后修。补充微/大权重与库存专项为实现后增强验证，不冒称均有实现前红灯。
@@ -922,3 +922,21 @@ node --test --test-concurrency=1 tests/go-live-runtime.smoke.test.js
 真实 timezone smoke 使用应用连接池，明确核 `@@session.time_zone='+08:00'`；仅本连接临时表和 `SET timestamp` 固定首轮 UTC 故障时刻及跨日/月边界，对照 `NOW()`、客户端 Date 写入、DATE_FORMAT 和北京日函数，后续时间推进也不能改变已保存原批准日。finally 恢复本连接时钟、删除临时表并关闭连接池，不改服务器全局时区或持久业务记录。仍须显式独立测试环境；当前新真实 DB 复验与完整 CI 正在进行，不能据接线或离线守卫称其已通过。
 
 迁移编号冲突整合为安全276/277、资料278、处理279、退款280；原 go-live 验收日志中的276–278保留为原分支历史证据。完整映射和合并树验证见 `docs/release-v0.13.0-integration.md`。
+
+
+### 2026-10-07 成套资料与自动编码本地验收
+
+2026-10-08的0.13.1发布前扩展回归发现，`kits-current-stock.smoke.test.js`仍按客户端提交的旧code筛选，而新增成套已由服务器自动生成编码：创建201之后finder200为空，库存断言尚未执行。夹具改用创建回执的编码，并增加服务器编码格式断言；保留真实小数收货0.30、预占0.20、finder3→1套和只读不改变事实的全部断言。原失败日志与全新专属实例复验分别记录于本版发布文档；没有把失败改写为业务成功或放宽库存断言。
+
+本批在 `codex/kit-product-profile` 对齐普通商品资料、进价与四档独立售价；API 兼容旧资料空值，新增迁移只有 282。代码仍为本地改动，本节不代表新版本已经上线。创建编码使用同事务共享取号，只有编码唯一键碰撞才整体换新事务重取；已提交旧 code-bearing 回执按原键/原指纹/操作人精确重放，兼容探测不用缺失行锁。
+
+独立测试库为 `flowcube_kitprofile20261007_5d8a6975_test`，MySQL 8.0.46 / 回环 3307，Node22；写入前核对专属数据库创建记录与实时 server UUID。完整迁移执行自然退出0，再对最终 269/282 SQL 重复执行与形状检查通过；不读取生产配置、不迁移开发库。最初实际迁移重复失败为 NO ACTION/RESTRICT 等价规则误判，创建实际500为调用未导出函数，旧指纹双读两批并发为实际死锁；均保留红灯日志并按原场景重跑成功。
+
+- 无库专项：成套38/38、商业销售60/60、金额26/26，自然exit0；日志 `/tmp/flowcube-kit-profile-{pure,sale,money}-final.log`。
+- 真实 HTTP/MySQL：foundation28/28，自然exit0，`/tmp/flowcube-kit-profile-foundation-final-green.log`。同时完成完整 `smoke:sale-commercial-lifecycle` 16组PASS，涵盖正式保存、预占、真实测试PDA会话收货/拣货/出库/退货、应收及凭证原流程；自然exit0，`/tmp/flowcube-kit-profile-lifecycle-final.log`。cleanup proof 为 actor0/devices0/locks0/reserved0，真实业务审计数据保留。测试PDA会话不是真机证据。
+- 前端关联17文件164/164，自然exit0，`/tmp/flowcube-kit-profile-frontend-final.log`；品质审查修正选择器价格A参考/单位后，Picker与Editor补跑17/17，自然exit0，`/tmp/flowcube-kit-profile-picker-green.log`。app类型、后端lint、SQL/N+1/API路由/写权限/界面/迁移守卫已验；最终25个改动前端文件lint与文档引用守卫自然exit0，日志 `/tmp/flowcube-kit-profile-frontend-lint-final.log`、`/tmp/flowcube-kit-profile-doc-guard-final.log`。旧B/C/D为NULL的未改售价载荷省略；真实DOM证明权威预览单位优先于旧选择单位。
+- 本地开发页面：仅 app.listen 的测试后端，不启动 scheduler，物流worker与钉钉配置显式关闭；前端监听5187并指向本任务59819，均核对所属工作树。普通账号登录与真实分类/供应商/商品查找后，创建铰链1个+螺钉4个，独立进价10，自动编码K000007且输入readOnly；空A/B/D算11/12/14，手工C13.1234原值保留。名称和进价修改只增revision不增版本；手工B改价新增版本，实际键盘清空B后进价20算24，再次关闭/打开资料确认unit=组、cost=20、A11/B24/C13.1234/D14、原组件参考80:20与三个历史版本仍完整。浏览器AX浮点展示不作精度证据，实际input.value与数据库列值均核13.1234。
+
+GUI数据库只读核对日志 `/tmp/flowcube-kit-profile-gui-db-proof.log`，登记准确kit ID；截图 `/tmp/flowcube-kit-profile-editor-gui-final.png` 与 `/tmp/flowcube-kit-profile-prices-components-gui.png`。来源切换/权限/迟到选择/读取缓存由真实React与API配置专项证明，本轮GUI未模拟两服务器切换。不把开发热刷新重挂、自动化工具未发React input事件、测试通过或本地提交当成生产证据。完整后端/前端/PDA构建、远端CI、生产迁移/部署、真实设备与物理出纸留下一次正式发布/现场验收；本轮不推送或打tag。
+
+本轮资源收尾已核实：本任务 browser session 已从 session list 退出，专属加密登录档已删除；两个预览监听端口与登记PID均已退出，后端server/pool关闭。GUI夹具按准确账号/角色核对后停用账号并吊销全部该账号会话，live session0，私有凭据文件去掉password；专属测试数据库与真实履约审计事实保留。没有批量关闭其它浏览器或删除开发/生产数据。

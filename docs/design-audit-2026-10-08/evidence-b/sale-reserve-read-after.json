@@ -1,0 +1,56 @@
+{
+  "method": "actual loopback GET route abort for only /api/sale/3/reserve-preview, remove route, normal Retry returns actual source; no mocked successful response/no business confirm",
+  "failed": {
+    "url": "#/sale/3",
+    "viewport": [
+      1024,
+      768
+    ],
+    "dialogText": "占用库存核对商品身份，按明细选择发货仓库和本次占库数量商品明细—订单总量—已占数量—待占数量—加载失败无法连接服务器，请检查网络与后端服务是否正常重试查看错误详情占库预览读取失败，请重试后确认取消确认占用（0 项）关闭",
+    "tableCount": 0,
+    "editableSourceCount": 0,
+    "confirmDisabled": true
+  },
+  "recovered": {
+    "url": "#/sale/3",
+    "viewport": [
+      1024,
+      768
+    ],
+    "dialogText": "占用库存核对商品身份，按明细选择发货仓库和本次占库数量商品明细1 行订单总量3 个已占数量0 个待占数量3 个编码供应商型号型号名称颜色单位订购情况发货仓库本次占库库存参考GL76c9c150P0供应商型号-1-LONG型号-1-EXTENDED验收合成：加长静音阻尼铰链（嵌入式柜门用）长名称与型号识别检查银白色个需求3已占0待占3选择库存所在仓库验收合成仓-GL76c9c150最多可占 3 个20.75 个可承诺量（ATP）现货 24 · 已占 3.25当前可拣现货 24（作业参考）预计到货 0占后剩余 17.75已选择 1 行明细，占用数量合计 3 个取消确认占用（1 项）关闭",
+    "quantity": "3",
+    "labels": [
+      {
+        "text": "选择库存所在仓库",
+        "for": ":r13:-warehouse-3",
+        "targetRole": "combobox"
+      }
+    ],
+    "confirmDisabled": false
+  },
+  "safeRequests": [
+    {
+      "requestId": "51728.343",
+      "url": "http://127.0.0.1:5186/api/sale/3/reserve-preview",
+      "method": "GET"
+    },
+    {
+      "requestId": "51728.344",
+      "url": "http://127.0.0.1:5186/api/sale/3/reserve-preview",
+      "method": "GET"
+    },
+    {
+      "requestId": "51728.345",
+      "url": "http://127.0.0.1:5186/api/sale/3/reserve-preview",
+      "method": "GET",
+      "status": 200
+    }
+  ],
+  "screenshots": [
+    "screens/after/b-sale-reserve-read-error-1024.png",
+    "screens/after/b-sale-reserve-read-retry-1024.png"
+  ],
+  "visualReviewed": true,
+  "pendingProof": "component tests only; no real stock mutation created",
+  "reviewScope": "两张1024图已人工查看：失败指标—、无分配表、错误/重试与取消可达；解除abort后真实GET200恢复数量3、具名仓库与可确认状态，随后取消。顶部原API错误toast可暂留，不据此宣称重试失败。"
+}

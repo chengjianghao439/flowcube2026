@@ -1,4 +1,5 @@
 import { commercialWarehouseName } from './warehouseName'
+import { commercialUnit } from './commercialDraft'
 import type { SaleOrder } from '@/types/sale'
 import { AppDialog } from '@/components/shared/AppDialog'
 import { Input } from '@/components/ui/input'
@@ -66,7 +67,7 @@ export default function CommercialShipDialog({
               <p className="text-xs text-muted-foreground">
                 已确认实发 {g.dispatch!.confirmedShippedQty} · 待完成 {g.dispatch!.outstandingQty} · 可选{' '}
                 {g.dispatch!.availableQty}
-                {g.kind === 'kit' ? '套' : g.components[0]?.unit}
+                {commercialUnit(g)}
               </p>
             </div>
             <Input

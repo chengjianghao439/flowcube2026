@@ -1,0 +1,44 @@
+[
+  {
+    "path": "/refunds?page=1&pageSize=200",
+    "status": 500,
+    "success": false,
+    "code": "INTERNAL_ERROR",
+    "message": "服务器内部错误"
+  },
+  {
+    "path": "/warehouse-tasks/my-tasks",
+    "status": 500,
+    "success": false,
+    "code": "DB_COLUMN_MISMATCH",
+    "message": "数据库字段与当前程序版本不一致（请先部署最新代码并确保迁移已跑完）。详情见后端日志。"
+  },
+  {
+    "path": "/warehouse-tasks/my-task-sku-summary",
+    "status": 500,
+    "success": false,
+    "code": "DB_COLUMN_MISMATCH",
+    "message": "数据库字段与当前程序版本不一致（请先部署最新代码并确保迁移已跑完）。详情见后端日志。"
+  },
+  {
+    "path": "/reports/avg-cost-reconciliation",
+    "status": 200,
+    "success": true,
+    "code": null,
+    "message": "查询成功"
+  },
+  {
+    "path": "/reports/kpi?period=2026-10&months=12",
+    "status": 200,
+    "success": true,
+    "code": null,
+    "message": "查询成功"
+  },
+  {
+    "path": "/reports/profit-analysis?startDate=2026-10-01&endDate=2026-10-08",
+    "status": 200,
+    "success": true,
+    "code": null,
+    "message": "查询成功"
+  }
+]

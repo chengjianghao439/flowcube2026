@@ -1,0 +1,341 @@
+{
+  "session": "flowcube-impeccable-crud",
+  "attempts": [
+    {
+      "stage": "final-canonical-date-select",
+      "error": "{\"success\":false,\"data\":null,\"error\":\"Element '@e4' is covered by <div.fixed.inset-0> at its click point, so the input would land on that element instead. Dismiss or interact with the covering element first (it is often a dialog, banner, or sticky header).\"}\n",
+      "observed": {
+        "dialogs": [
+          {
+            "text": "新建供应商\n供应商与联系方式\n名称 *\n0/100\n联系人\n0/50\n电话\n0/30\n邮箱\n地址\n0/200\n备注\n0/500\n结算与供货\n结算方式\n现结\n现结\n月结\n\n下单当天即到期，逾期会进通知提醒\n\n采购提前期（天）\n取消\n创建\n关闭",
+            "title": "新建供应商"
+          },
+          {
+            "text": "放弃未保存输入？\n关闭\n关闭后本次输入不会保存。可返回表单继续编辑。\n继续编辑\n放弃并关闭",
+            "title": "放弃未保存输入？"
+          }
+        ],
+        "focus": {
+          "id": "",
+          "label": null,
+          "tag": "BUTTON",
+          "text": "关闭"
+        },
+        "inputs": [
+          {
+            "id": "",
+            "placeholder": "搜索编码或名称",
+            "type": "text",
+            "value": ""
+          }
+        ],
+        "url": "#/suppliers"
+      }
+    },
+    {
+      "stage": "final-canonical-select-stable",
+      "error": "{\"success\":false,\"data\":null,\"error\":\"Wait timed out after 25000ms\"}\n",
+      "observed": {
+        "dialogs": [
+          {
+            "text": "新建供应商\n供应商与联系方式\n名称 *\n0/100\n联系人\n0/50\n电话\n0/30\n邮箱\n地址\n0/200\n备注\n0/500\n结算与供货\n结算方式\n现结\n现结\n月结\n\n下单当天即到期，逾期会进通知提醒\n\n采购提前期（天）\n取消\n创建\n关闭",
+            "title": "新建供应商"
+          }
+        ],
+        "focus": {
+          "id": ":r15:-type",
+          "label": null,
+          "tag": "BUTTON",
+          "text": "现结"
+        },
+        "inputs": [
+          {
+            "id": "",
+            "placeholder": "搜索编码或名称",
+            "type": "text",
+            "value": ""
+          }
+        ],
+        "url": "#/suppliers"
+      }
+    }
+  ],
+  "method": "真实UI；本批合成全权账号；仅打开/输入/Escape/继续编辑/放弃；不保存删除释放打印。每图人工细看在单独报告确认后才登记。",
+  "routes": [
+    {
+      "route": "/sale/new",
+      "immediate": {
+        "dialogs": [],
+        "focus": {
+          "id": "",
+          "label": null,
+          "tag": "BODY",
+          "text": "极序 Flow\n仪表盘\n待办中心\n采购\n销售\n库存\n仓储\n财务\n审批中心\n会计\n报表\n系统\n6\nGL\n\nGL76c9c150-creator\n\nGL76c9c150-creator\n\n仪表盘\n新建销售单\n新建销售单\n未保存\n保存草稿\n订单信息\n客户与履约\n客户 *\n点击选择客户…\n出库仓库 *\n选择仓库\n承运商\n暂无承运商，请先创建\n运费方式\n请选择\n收货信息\n从地址簿选择\n收货人\n0/30\n联系电话\n0/30\n收货地址\n0/200\n备注\n商品明细\n添加商品\n\n添加本单商品\n\n点击右上角“添加商品”，选择后填写数量与单价。\n\n商品明细\n\n0 行\n\n基本单位数量\n\n—\n\n商品金额\n¥0.00\n折扣金额\n订单金额\n\n¥0.00"
+        },
+        "inputs": [
+          {
+            "id": ":rt:-receiver",
+            "placeholder": "请输入收货人或部门",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "id": ":rt:-phone",
+            "placeholder": "手机、座机或国际号码",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "id": ":rt:-remark",
+            "placeholder": "选填",
+            "type": "text",
+            "value": "AUDIT-ONLY-FOCUS-WAIT"
+          },
+          {
+            "id": "sale-discount-amount",
+            "placeholder": "0.00",
+            "type": "number",
+            "value": ""
+          }
+        ],
+        "url": "#/sale/new"
+      },
+      "afterFocusReturn": {
+        "dialogs": [],
+        "focus": {
+          "id": "",
+          "label": "关闭 新建销售单",
+          "tag": "BUTTON",
+          "text": ""
+        },
+        "inputs": [
+          {
+            "id": ":rt:-receiver",
+            "placeholder": "请输入收货人或部门",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "id": ":rt:-phone",
+            "placeholder": "手机、座机或国际号码",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "id": ":rt:-remark",
+            "placeholder": "选填",
+            "type": "text",
+            "value": "AUDIT-ONLY-FOCUS-WAIT"
+          },
+          {
+            "id": "sale-discount-amount",
+            "placeholder": "0.00",
+            "type": "number",
+            "value": ""
+          }
+        ],
+        "url": "#/sale/new"
+      },
+      "screenshots": [
+        "screens/after/c-focus-sale-close-focus-restored-final-1024.png"
+      ],
+      "result": "真实新建销售备注草稿关闭→继续编辑；等自动回焦完成后确认返回原close按钮，备注保留",
+      "businessWrite": false,
+      "humanViewed": true,
+      "visualReviewer": "coverage_inventory",
+      "visualReview": "列表/表单/确认/回焦各截图已逐张人工细看；仅所列实际路径与阶段。"
+    },
+    {
+      "route": "/sale",
+      "calendarOpened": {
+        "dialogs": [
+          {
+            "text": "查询销售订单\n关闭\n\n订单条件\n\n单号\n状态\n全部状态\n客户\n选择客户\n仓库\n全部仓库\n商品\n选择商品\n经办人\n全部经办人\n\n日期与备注\n\n创建日期（起）\n十月 2026\n一\n二\n三\n四\n五\n六\n日\n28\n29\n30\n1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n1\n2\n3\n4\n5\n6\n7\n8\n清除\n今天\n创建日期（止）\n备注\n重置\n取消\n查询",
+            "title": "查询销售订单"
+          },
+          {
+            "text": "十月 2026\n一\n二\n三\n四\n五\n六\n日\n28\n29\n30\n1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n1\n2\n3\n4\n5\n6\n7\n8\n清除\n今天"
+          }
+        ],
+        "focus": {
+          "id": "",
+          "label": null,
+          "tag": "INPUT",
+          "text": ""
+        },
+        "inputs": [],
+        "url": "#/sale?endDate=2026-10-08&startDate=2026-10-02"
+      },
+      "oneEscape": {
+        "dialogs": [
+          {
+            "text": "查询销售订单\n关闭\n\n订单条件\n\n单号\n状态\n全部状态\n客户\n选择客户\n仓库\n全部仓库\n商品\n选择商品\n经办人\n全部经办人\n\n日期与备注\n\n创建日期（起）\n创建日期（止）\n备注\n重置\n取消\n查询",
+            "title": "查询销售订单"
+          }
+        ],
+        "focus": {
+          "id": "",
+          "label": null,
+          "tag": "INPUT",
+          "text": ""
+        },
+        "inputs": [],
+        "url": "#/sale?endDate=2026-10-08&startDate=2026-10-02"
+      },
+      "closed": {
+        "dialogs": [],
+        "focus": {
+          "id": "",
+          "label": null,
+          "tag": "BUTTON",
+          "text": "查询"
+        },
+        "inputs": [],
+        "url": "#/sale?endDate=2026-10-08&startDate=2026-10-02"
+      },
+      "screenshots": [
+        "screens/after/c-focus-date-query-calendar-final-768.png",
+        "screens/after/c-focus-date-query-escape-final-768.png"
+      ],
+      "result": "768真实具名创建日期起点击/输入合法2026-10-01；日历2层→一次Escape仅收日历回原input/值保留→二次Escape关闭外查询回原查询按钮；无执行查询或提交",
+      "businessWrite": false,
+      "humanViewed": true,
+      "visualReviewer": "coverage_inventory",
+      "visualReview": "列表/表单/确认/回焦各截图已逐张人工细看；仅所列实际路径与阶段。"
+    },
+    {
+      "route": "/suppliers",
+      "continued": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 585,
+          "overflowY": "auto",
+          "scrollHeight": 633,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": ":r15:-type",
+          "inside": true,
+          "name": null,
+          "tag": "BUTTON"
+        },
+        "focusables": 10,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "supplier-name",
+            "placeholder": "供应商名称",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-contact",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-phone",
+            "placeholder": "手机、座机或国际电话",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-email",
+            "placeholder": "选填",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-address",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-remark",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-leadTimeDays",
+            "placeholder": "下单到到货天数，用于采购计划预测",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "number",
+            "value": "0"
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 731,
+          "width": 768,
+          "x": 128,
+          "y": 84.5
+        },
+        "text": "新建供应商\n供应商与联系方式\n名称 *\n0/100\n联系人\n0/50\n电话\n0/30\n邮箱\n地址\n0/200\n备注\n0/500\n结算与供货\n结算方式\n现结\n现结\n月结\n\n下单当天即到期，逾期会进通知提醒\n\n采购提前期（天）\n取消\n创建\n关闭",
+        "title": "新建供应商",
+        "viewport": {
+          "height": 900,
+          "width": 1024
+        }
+      },
+      "closed": {
+        "dialogs": [],
+        "focus": {
+          "id": "",
+          "label": null,
+          "tag": "BODY",
+          "text": "极序 Flow\n仪表盘\n待办中心\n采购\n销售\n库存\n仓储\n财务\n审批中心\n会计\n报表\n系统\n6\nGL\n\nGL76c9c150-creator\n\nGL76c9c150-creator\n\n仪表盘\n供应商管理\n供应商管理\n管理采购供应商档案\n导出\n批量导入\n新增供应商\n搜索\n供应商 / 编码\n\t\n联系人\n\t\n电话\n\t\n邮箱\n\t\n结算方式\n\t\n状态\n\t\n操作\n\n\n验收合成供应商-GL76c9c150\nGL76c9c150\n\t\n-\n\t\n-\n\t\n-\n\t\n月结 30 天\n\t\n启用\n\t\n编辑\n共 1 个"
+        },
+        "inputs": [
+          {
+            "id": "",
+            "placeholder": "搜索编码或名称",
+            "type": "text",
+            "value": ""
+          }
+        ],
+        "url": "#/suppliers"
+      },
+      "screenshots": [
+        "screens/after/c-focus-supplier-select-only-final-canonical-1024.png"
+      ],
+      "result": "最终canonical仅Radix结算方式月结→现结，Escape确认→继续保留且回原combobox→放弃；无普通文本变化或保存",
+      "businessWrite": false,
+      "humanViewed": true,
+      "visualReviewer": "coverage_inventory",
+      "visualReview": "列表/表单/确认/回焦各截图已逐张人工细看；仅所列实际路径与阶段。"
+    }
+  ],
+  "sourceBoundary": "最终产品源码freeze、Radix dismissable-layer1.1.13/focus-scope1.1.16及Vite dedupe；root后续DialogDescription小收口之前。其它尺寸/主题、权限、pending/业务写入及硬件不外推。",
+  "browserCleanup": {
+    "closed": true,
+    "verifiedSessionList": [
+      "flowcube-impeccable-root",
+      "flowcube-impeccable-b"
+    ],
+    "ownedSessionAbsent": true,
+    "method": "finally执行owned close；后独立session list核验"
+  },
+  "probeBoundary": "失败attempt保留：一次放弃点击时覆盖层动画仍在，重试等待可交互后成功；一次remember在Select Portal卸载前存了旧选项而非原combobox，观察结果已实际在原combobox、属于无效等待目标；最终等待combobox再remember后通过。"
+}

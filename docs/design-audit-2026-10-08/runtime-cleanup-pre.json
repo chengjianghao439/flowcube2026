@@ -1,0 +1,48 @@
+{
+  "createdAt": "2026-10-08T02:14:22.952Z",
+  "context": "colima-flowcube",
+  "runtime": {
+    "pid": 16833,
+    "command": "node scripts/design-audit/runtime.cjs"
+  },
+  "vite": {
+    "pid": 58477,
+    "port": 5186
+  },
+  "api": {
+    "pid": 33314,
+    "port": 50060
+  },
+  "originalApiPort": 55391,
+  "databasePort": 32769,
+  "container": {
+    "id": "9178c9c6698c5450808b1a7e9c77c25b97240a021acadb2772a7184921bf203c",
+    "name": "flowcube-repair-ephemeral-20261008075154-5374b3",
+    "batch": "20261008075154-5374b3"
+  },
+  "volume": "flowcube-repair-ephemeral-20261008075154-5374b3-data",
+  "ownershipFile": "/Users/chengjianghao/.config/flowcube/repair-ephemeral-20261008075154-5374b3.json",
+  "privateDir": "/var/folders/p_/qbf0z5n52cdbmh3kywwz91dc0000gn/T/flowcube-impeccable-private-g0ziiz7n",
+  "shared3307ContainerIds": [
+    "17ef5cae3181"
+  ],
+  "ownershipMatched": true,
+  "logout": {
+    "status": 200,
+    "success": true
+  },
+  "signals": [
+    {
+      "pid": 58477,
+      "signal": "SIGTERM"
+    },
+    {
+      "pid": 33314,
+      "signal": "SIGTERM"
+    },
+    {
+      "pid": 16833,
+      "signal": "SIGTERM"
+    }
+  ]
+}

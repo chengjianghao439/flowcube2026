@@ -145,7 +145,7 @@ export function CreateStatementDialog({ open, onClose, type, onCreated }: Props)
                   {it.dueDate ? `到期 ${formatDisplayDate(it.dueDate)}` : ''}
                 </span>
                 <span className="tabular-nums text-sm font-medium">{money(it.totalAmount)}</span>
-                {it.paidAmount > 0 && <span className="text-xs text-success">已{type === 1 ? '付' : '收'} {money(it.paidAmount)}</span>}
+                {it.paidAmount > 0 && <span className="text-xs text-success-ink">已{type === 1 ? '付' : '收'} {money(it.paidAmount)}</span>}
               </label>
             ))}
           </div>

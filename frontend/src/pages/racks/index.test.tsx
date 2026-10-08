@@ -6,6 +6,7 @@ import RacksPage from './index'
 import type { Rack } from '@/types/racks'
 
 const mocks = vi.hoisted(() => ({ update: vi.fn() }))
+vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: (permission: string) => ['rack.view', 'rack.create', 'rack.update', 'rack.delete', 'rack.print_label'].includes(permission) }) }))
 vi.mock('@tanstack/react-query', async (importOriginal) => ({ ...await importOriginal<typeof import('@tanstack/react-query')>(), useQuery: () => ({ data: [] }), useMutation: () => ({}) }))
 vi.mock('@/api/racks', async (importOriginal) => ({ ...await importOriginal<typeof import('@/api/racks')>(), updateRackApi: mocks.update }))
 vi.mock('./RackQueryDialog', () => ({ default: () => null }))

@@ -135,7 +135,7 @@ export default function SettingsPage() {
       />
 
       {isDirty && (
-        <div className="flex items-center gap-2 rounded-lg border border-warning/20 bg-warning/5 px-4 py-2.5 text-sm text-warning">
+        <div className="flex items-center gap-2 rounded-lg border border-warning/20 bg-warning/5 px-4 py-2.5 text-sm text-warning-ink">
           <span className="h-2 w-2 rounded-full bg-warning" />
           有未保存的更改，关闭标签前请先保存。
         </div>

@@ -61,6 +61,12 @@ describe('commercial draft preserves authoritative provenance', () => {
   it('retains old kit version and input identity without looking up current master', () => {
     expect(toCommercialInputs(draftFromGroups([kit]))).toEqual([{ ...kit.metadata.input, quantity: 1 }])
   })
+  it('restores and prints the frozen kit identity and unit instead of current product details', () => {
+    const group = { ...kit, metadata: { ...kit.metadata, kitUnit: '组', kitIdentity: { spec: 'H-20', color: '银色', articleNumber: 'SUP-20' } } }
+    expect(draftFromGroups([group])[0]).toMatchObject({ unit: '组', baseUnit: '组' })
+    expect(commercialPrintRows([group])[0]).toMatchObject({ unit: '组', spec: 'H-20', color: '银色', articleNumber: 'SUP-20' })
+    expect(commercialPrintRows([kit])[0]).toMatchObject({ unit: '套', spec: '', color: '', articleNumber: '' })
+  })
   it('prints auxiliary current basic quantity with stored derived quote and original packaging basis', () => {
     const row = commercialPrintRows([auxiliary])[0]
     expect(row).toMatchObject({ quantity: 15, unit: '个', unitPrice: 1.23456, amount: 18.52, priceText: '¥1.23456000' })

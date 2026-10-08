@@ -1,0 +1,37 @@
+[
+  {
+    "path": "/warehouse-tasks/my",
+    "status": 200,
+    "success": true,
+    "code": null,
+    "message": "查询成功"
+  },
+  {
+    "path": "/warehouse-tasks/my-sku-summary",
+    "status": 200,
+    "success": true,
+    "code": null,
+    "message": "查询成功"
+  },
+  {
+    "path": "/reports/avg-cost-reconciliation",
+    "status": 200,
+    "success": true,
+    "code": null,
+    "message": "查询成功"
+  },
+  {
+    "path": "/reports/kpi",
+    "status": 200,
+    "success": true,
+    "code": null,
+    "message": "查询成功"
+  },
+  {
+    "path": "/reports/profit-analysis",
+    "status": 200,
+    "success": true,
+    "code": null,
+    "message": "查询成功"
+  }
+]

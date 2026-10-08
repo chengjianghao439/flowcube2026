@@ -1,0 +1,57 @@
+[
+  {
+    "route": "/sale/:id",
+    "path": "/sale/1",
+    "boundary": "after-only synthetic fixture; resource exists; no confirmation/write-flow acceptance"
+  },
+  {
+    "route": "/purchase/:id",
+    "path": "/purchase/1",
+    "boundary": "after-only synthetic fixture; resource exists; no confirmation/write-flow acceptance"
+  },
+  {
+    "route": "/returns/purchase/:id",
+    "path": "/returns/purchase/1",
+    "boundary": "after-only synthetic fixture; resource exists; no confirmation/write-flow acceptance"
+  },
+  {
+    "route": "/returns/sale/:id",
+    "path": "/returns/sale/1",
+    "boundary": "after-only synthetic fixture; resource exists; no confirmation/write-flow acceptance"
+  },
+  {
+    "route": "/inbound-tasks/:id",
+    "path": "/inbound-tasks/2",
+    "boundary": "after-only synthetic fixture; resource exists; no confirmation/write-flow acceptance"
+  },
+  {
+    "route": "/products/:id",
+    "path": "/products/1",
+    "boundary": "after-only synthetic fixture; resource exists; no confirmation/write-flow acceptance"
+  },
+  {
+    "route": "/payments/ledger/customer/:id",
+    "path": "/payments/ledger/customer/1",
+    "boundary": "after-only synthetic fixture; resource exists; no confirmation/write-flow acceptance"
+  },
+  {
+    "route": "/payments/ledger/supplier/:id",
+    "path": "/payments/ledger/supplier/1",
+    "boundary": "after-only synthetic fixture; resource exists; no confirmation/write-flow acceptance"
+  },
+  {
+    "route": "/purchase-requisitions/:id",
+    "path": "/purchase-requisitions/1",
+    "boundary": "after-only synthetic fixture; resource exists; no confirmation/write-flow acceptance"
+  },
+  {
+    "route": "/settings/print-templates/:id",
+    "path": "/settings/print-templates/10",
+    "boundary": "after-only synthetic fixture; resource exists; no confirmation/write-flow acceptance"
+  },
+  {
+    "route": "/procurement/:id",
+    "path": "/procurement/1",
+    "boundary": "after-only legal synthetic draft; no execution/write-flow acceptance"
+  }
+]

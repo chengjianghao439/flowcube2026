@@ -1,0 +1,43 @@
+{
+  "method": "owned temporary API; real synthetic sale2 reserved + sale3 draft; UI open/fill/cancel only, never confirm write",
+  "reserve": {
+    "route": "#/sale/3",
+    "dialog": "占用库存核对商品身份，按明细选择发货仓库和本次占库数量商品明细1 行订单总量3 个已占数量0 个待占数量3 个编码供应商型号型号名称颜色单位订购情况发货仓库本次占库库存参考GL76c9c150P0供应商型号-1-LONG型号-1-EXTENDED验收合成：加长静音阻尼铰链（嵌入式柜门用）长名称与型号识别检查银白色个需求3已占0待占3选择库存所在仓库验收合成仓-GL76c9c150最多可占 3 个20.75 个可承诺量（ATP）现货 24 · 已占 3.25当前可拣现货 24（作业参考）预计到货 0占后剩余 16.751 项数量无效或库存不足，请检查数量（最多两位小数）与仓库取消确认占用（1 项）关闭",
+    "qty": "4",
+    "confirmDisabled": true,
+    "viewport": [
+      1024,
+      768
+    ]
+  },
+  "ship": {
+    "route": "#/sale/2",
+    "viewport": [
+      1024,
+      768
+    ],
+    "qty": "0",
+    "confirmDisabled": true,
+    "observedText": "1 项数量无效：须大于 0、不超过已占未发量，最多 2 位小数",
+    "interaction": "normal open -> fill0 -> cancel; no POST"
+  },
+  "release": {
+    "route": "#/sale/2",
+    "viewport": [
+      1024,
+      768
+    ],
+    "qty": "0",
+    "confirmDisabled": true,
+    "observedText": "释放数量须大于 0、不超过已占数量，最多保留 2 位小数。",
+    "interaction": "normal open -> fill0 -> cancel; no POST"
+  },
+  "screenshots": [
+    "screens/after/b-sale-ship-select-1024.png",
+    "screens/after/b-sale-release-allocation-1024.png",
+    "screens/after/b-sale-reserve-allocation-1024.png"
+  ],
+  "visualReviewed": true,
+  "pendingProof": "AllocationDialogs.pending.test.tsx only; browser did not create true business pending",
+  "reviewScope": "三张1024×768图人工实看；横向表格随输入控件滚至右侧，数量无效文案、disabled确认与取消完整可读。只证明这些读/输入/取消状态，不证明业务pending或库存结果。"
+}

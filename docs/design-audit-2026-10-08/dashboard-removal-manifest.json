@@ -1,0 +1,25 @@
+{
+  "updatedAt": "2026-10-08T08:26:30.868Z",
+  "branch": "codex/impeccable-system-audit-20261008",
+  "scope": "移除仪表盘常用工作；以前系统批次final-manifest为历史验证",
+  "productFiles": [
+    "frontend/src/pages/dashboard/index.tsx",
+    "frontend/src/components/shared/DailyWork.tsx"
+  ],
+  "testFiles": [
+    "frontend/src/components/shared/DailyWork.integration.test.tsx"
+  ],
+  "checks": {
+    "affectedTests": {
+      "files": 2,
+      "tests": 12,
+      "exit": 0
+    },
+    "types": 0,
+    "scopedLint": 0,
+    "frontendConventions": 0,
+    "docsGuard": 0
+  },
+  "browserScope": "真实DashboardPage组件合成只读缓存，不是完整登录/API验收",
+  "release": false
+}

@@ -43,12 +43,12 @@ function InboundCard({ task, onTap, onPutaway }: { task:InboundTask; onTap:()=>v
         <div>
           <p className="text-xs text-muted-foreground">应到 {totalOrdered}，已收 {totalReceived}，未收 {Math.max(0, totalOrdered - totalReceived)}</p>
           <p className="text-xs text-muted-foreground mt-1">打印 {task.printStatus?.label ?? '—'} · 上架 {task.putawayStatus?.label ?? '—'} · 待上架 {task.putawaySummary?.waitingQty ?? 0}</p>
-          {task.exceptionFlags?.hasException && <p className="text-xs text-destructive">有打印或上架异常，请查看详情；收货阶段不变</p>}
+          {task.exceptionFlags?.hasException && <p className="text-xs text-destructive-ink">有打印或上架异常，请查看详情；收货阶段不变</p>}
         </div>
         {task.status !== 1 && (
           <div>
             <div className="flex justify-between text-xs text-muted-foreground mb-1"><span>收货进度</span><span>{pct}%</span></div>
-            <div className="h-1.5 rounded-full bg-muted"><div className="h-1.5 rounded-full transition-all" style={{width:`${pct}%`,background:'hsl(var(--primary))'}} /></div>
+            <div className="h-1.5 rounded-full bg-muted"><div className="h-1.5 rounded-full transition-all motion-reduce:transition-none" style={{width:`${pct}%`,background:'hsl(var(--primary))'}} /></div>
           </div>
         )}
         <Button size="pda" className="w-full" variant={isReady ? 'outline' : 'default'} onClick={onTap}>

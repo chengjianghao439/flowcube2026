@@ -28,16 +28,16 @@ export function PdaTaskState({
       <PdaHeader title={title} onBack={onAction} />
       <div className="flex-1 px-4 py-10">
         <div className="mx-auto max-w-md rounded-2xl border border-border bg-card p-6 text-center shadow-sm">
-          <TriangleAlert className="mx-auto mb-4 h-14 w-14 text-amber-500" />
+          <TriangleAlert className="mx-auto mb-4 h-14 w-14 text-warning-ink" />
           <h2 className="text-lg font-bold text-foreground">{title}</h2>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>
           <div className="mt-6 flex gap-3">
             {secondaryText && onSecondary ? (
-              <Button variant="outline" className="flex-1" onClick={onSecondary}>
+              <Button size="lg" variant="outline" className="px-3 flex-1" onClick={onSecondary}>
                 {secondaryText}
               </Button>
             ) : null}
-            <Button className="flex-1" onClick={onAction}>
+            <Button size="lg" className="px-3 flex-1" onClick={onAction}>
               {actionText}
             </Button>
           </div>

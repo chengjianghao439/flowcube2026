@@ -72,7 +72,7 @@ export function FulfillmentProgressCard({ order, targetTaskId }: { order: SaleOr
               </div>
               <div className="text-right">
                 <SoftStatusLabel label={t.statusName || `阶段 ${t.status}`} tone={wtTone(t.status)} />
-                {awaitingBin(t) && <p className="mt-1 text-xs text-warning">待分配分拣格{binHandoff(t)}</p>}
+                {awaitingBin(t) && <p className="mt-1 text-xs text-warning-ink">待分配分拣格{binHandoff(t)}</p>}
               </div>
             </div>
           ))}

@@ -63,7 +63,7 @@ function SourceDetails({ row, type, onClose }: { row: PartyLedgerRow; type: 1 | 
       {query.data?.entries && <DataTable columns={[
         { key: 'paymentDate', title: '收付款日期', width: 120 },
         { key: 'amount', title: '登记金额', width: 120, align: 'right', render: v => money(Number(v)) },
-        { key: 'remark', title: '备注', width: 240 },
+        { key: 'remark', title: '备注', expandableText: true, width: 240 },
       ]} data={query.data.entries} emptyText="该账款尚无收付款记录。" />}
     </div>}
   </DialogContent></Dialog>
@@ -129,8 +129,8 @@ export default function PartyLedgerPage() {
         <div className="space-y-1 text-sm leading-6 text-muted-foreground">
           <p>正数为{type === 2 ? '客户欠款' : '待付供应商款项'}，负数为{type === 2 ? '预收或应退客户款项' : '预付或待供应商退回款项'}。金额单位：元。</p>
           <p>完整记账始于 {data.historyStartedAt}。此前账款以当时净余额结转，业务日期仅供追溯，不能据此还原更早的逐笔余额。</p>
-          {data.historyIncomplete && <p className="text-warning" role="status">查询起日早于记账启用时间，期初及发生额仅包含已有记录，不能作为该历史期间的完整对账依据。</p>}
-          {data.unassignedCount > 0 && <p className="text-warning">系统另有 {data.unassignedCount} 条{type === 2 ? '应收' : '应付'}记录尚无明确单位归属，未分配到本明细，请在原账款中核查。</p>}
+          {data.historyIncomplete && <p className="text-warning-ink" role="status">查询起日早于记账启用时间，期初及发生额仅包含已有记录，不能作为该历史期间的完整对账依据。</p>}
+          {data.unassignedCount > 0 && <p className="text-warning-ink">系统另有 {data.unassignedCount} 条{type === 2 ? '应收' : '应付'}记录尚无明确单位归属，未分配到本明细，请在原账款中核查。</p>}
         </div>
       </>}
       <DataTable columns={columns} data={data?.list ?? []} loading={query.isPending} emptyText="所选期间暂无往来记录，可切换全部日期查看。" />

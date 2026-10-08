@@ -88,7 +88,7 @@ export class GlobalErrorBoundary extends Component<Props, State> {
           {/* 图标 */}
           <div className="mb-6 flex justify-center">
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10">
-              <AlertTriangle className="h-8 w-8 text-destructive" />
+              <AlertTriangle className="h-8 w-8 text-destructive-ink" />
             </div>
           </div>
 

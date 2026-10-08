@@ -43,13 +43,13 @@ export function StatTile({
         {error && onRetry ? <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={onRetry}>重试</Button> : null}
         {trendValue ? (
           <span
-            className={cn('shrink-0 text-xs font-medium tabular-nums', trendValue.startsWith('-') ? 'text-destructive' : 'text-success')}
+            className={cn('shrink-0 text-xs font-medium tabular-nums', trendValue.startsWith('-') ? 'text-destructive-ink' : 'text-success-ink')}
             title={trendValue}
           >
             {trendValue}
           </span>
-        ) : trend === 'up' ? <TrendingUp className="h-4 w-4 shrink-0 text-warning" aria-label="需要关注" />
-          : trend === 'down' ? <TrendingDown className="h-4 w-4 shrink-0 text-destructive" aria-label="下降" /> : null}
+        ) : trend === 'up' ? <TrendingUp className="h-4 w-4 shrink-0 text-warning-ink" aria-label="需要关注" />
+          : trend === 'down' ? <TrendingDown className="h-4 w-4 shrink-0 text-destructive-ink" aria-label="下降" /> : null}
       </div>
     </div>
   )

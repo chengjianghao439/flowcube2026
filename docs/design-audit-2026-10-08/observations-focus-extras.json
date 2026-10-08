@@ -1,0 +1,252 @@
+{
+  "session": "flowcube-impeccable-crud",
+  "attempts": [
+    {
+      "stage": "final-focus-extras",
+      "error": "{\"success\":false,\"data\":null,\"error\":\"Element '[data-agent-browser-located='true']' is covered by <div.fixed.inset-0> at its click point, so the input would land on that element instead. Dismiss or interact with the covering element first (it is often a dialog, banner, or sticky header).\"}\n"
+    }
+  ],
+  "method": "真实UI；本批合成全权账号；仅打开/输入/Escape/继续编辑/放弃；不保存删除释放打印。每图人工细看在单独报告确认后才登记。",
+  "routes": [
+    {
+      "route": "/procurement/1",
+      "screenshots": [
+        "screens/after/c-focus-procurement-open-1024.png"
+      ],
+      "opened": {
+        "dialogs": [
+          {
+            "text": "验收合成补货策略商品 · 验收合成仓-GL76c9c150\n\n按本次读取的数据核对需求、已有供给与交期，查看包装规则。\n\n净需求 5 个\n建议采购 5 个\n\n包装倍数不限 · 最低起订不限 · 多购 0 个\n\n到货条件\n\n暂无销售交期\n\n暂无在途采购\n\n总量覆盖不代表按期到货。先核对销售交期、催货或调拨；计划和申请尚未成为供应商承诺。\n\n对照生成时与当前数据\n查看需求与覆盖明细\n可调拨候选\n\n授权仓库内暂无可推荐余量。\n\n来源仓先保留自身未发需求、预测、有效预占和目标/安全库存；未确认候选不抵扣采购量。\n\n采购包装与起订规则\n采购单位\n个\n整包装倍数\n最低起订量\n\n1 个 = 1 个；0 表示不限。数量按商品现有单位换算。\n\n保存规则\n关闭",
+            "title": "验收合成补货策略商品 · 验收合成仓-GL76c9c150"
+          }
+        ],
+        "focus": {
+          "id": "",
+          "label": null,
+          "tag": "SUMMARY",
+          "text": "查看需求与覆盖明细"
+        },
+        "inputs": [
+          {
+            "id": "",
+            "placeholder": null,
+            "type": "checkbox",
+            "value": "on"
+          },
+          {
+            "id": "",
+            "placeholder": null,
+            "type": "checkbox",
+            "value": "on"
+          },
+          {
+            "id": "",
+            "placeholder": null,
+            "type": "number",
+            "value": "5"
+          }
+        ],
+        "url": "#/procurement/1"
+      },
+      "closed": {
+        "dialogs": [],
+        "focus": {
+          "id": "",
+          "label": null,
+          "tag": "BUTTON",
+          "text": "需求与覆盖"
+        },
+        "inputs": [
+          {
+            "id": "",
+            "placeholder": null,
+            "type": "checkbox",
+            "value": "on"
+          },
+          {
+            "id": "",
+            "placeholder": null,
+            "type": "checkbox",
+            "value": "on"
+          },
+          {
+            "id": "",
+            "placeholder": null,
+            "type": "number",
+            "value": "5"
+          }
+        ],
+        "url": "#/procurement/1"
+      },
+      "result": "Tab后Escape关闭，焦点回原需求与覆盖按钮；未刷新需求或转采购",
+      "businessWrite": false,
+      "humanViewed": true,
+      "visualReview": "本审查者逐张细看3张1024浅色图；具体打开/回焦交互按记录，不推广全状态"
+    },
+    {
+      "route": "/suppliers",
+      "screenshots": [
+        "screens/after/c-focus-supplier-select-only-resume-1024.png"
+      ],
+      "continued": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 585,
+          "overflowY": "auto",
+          "scrollHeight": 633,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": ":r1t:-type",
+          "inside": true,
+          "name": null,
+          "tag": "BUTTON"
+        },
+        "focusables": 10,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "supplier-name",
+            "placeholder": "供应商名称",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-contact",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-phone",
+            "placeholder": "手机、座机或国际电话",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-email",
+            "placeholder": "选填",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-address",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-remark",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-leadTimeDays",
+            "placeholder": "下单到到货天数，用于采购计划预测",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "number",
+            "value": "0"
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 731,
+          "width": 768,
+          "x": 128,
+          "y": 84.5
+        },
+        "text": "新建供应商\n供应商与联系方式\n名称 *\n0/100\n联系人\n0/50\n电话\n0/30\n邮箱\n地址\n0/200\n备注\n0/500\n结算与供货\n结算方式\n现结\n现结\n月结\n\n下单当天即到期，逾期会进通知提醒\n\n采购提前期（天）\n取消\n创建\n关闭",
+        "title": "新建供应商",
+        "viewport": {
+          "height": 900,
+          "width": 1024
+        }
+      },
+      "result": "仅真实可见Radix结算方式月结→现结，Escape确认→继续保留且回原combobox→放弃；无普通文本变化或保存",
+      "businessWrite": false,
+      "humanViewed": true,
+      "visualReview": "本审查者逐张细看3张1024浅色图；具体打开/回焦交互按记录，不推广全状态"
+    },
+    {
+      "route": "/customers",
+      "screenshots": [
+        "screens/after/c-focus-customer-resume-1024.png"
+      ],
+      "continued": {
+        "dialogs": [
+          {
+            "text": "新增客户\n未保存\n客户与联系方式\n客户名称 *\n0/100\n联系人\n0/50\n联系电话\n0/30\n邮箱\n地址\n0/200\n备注\n25/500\n结算与授信\n结算方式\n月结\n现结\n月结\n\n从结算发生当天起算账期\n\n应收账期\n30 天\n30 天\n60 天\n90 天\n\n至少每 30 天结算一次\n\n启用授信信控\n\n未启用时，不对该客户执行授信额度校验。\n\n取消\n保存\n关闭",
+            "title": "新增客户\n未保存"
+          }
+        ],
+        "focus": {
+          "id": "customer-remark",
+          "label": null,
+          "tag": "INPUT",
+          "text": ""
+        },
+        "inputs": [
+          {
+            "id": "",
+            "placeholder": "搜索客户编码或名称",
+            "type": "text",
+            "value": ""
+          }
+        ],
+        "url": "#/customers"
+      },
+      "closed": {
+        "dialogs": [],
+        "focus": {
+          "id": "",
+          "label": null,
+          "tag": "BODY",
+          "text": "极序 Flow\n仪表盘\n待办中心\n采购\n销售\n库存\n仓储\n财务\n审批中心\n会计\n报表\n系统\n6\nGL\n\nGL76c9c150-creator\n\nGL76c9c150-creator\n\n仪表盘\nPLAN000001\n供应商管理\n客户管理\n客户管理\n维护客户档案、结算与授信，配置销售默认价格等级。\n导出\n批量导入\n新增客户\n搜索\n共 1 位客户\n编码\n\t\n客户名称\n\t\n联系人\n\t\n电话\n\t\n邮箱\n\t\n价格等级\n\t\n结算方式\n\t\n授信额度\n\t\n状态\n\t\n操作\n\n\nGL76c9c150\n\t\n验收合成客户-GL76c9c150\n\t\n\t\n\t\n\t\n价格A\n\t\n月结 30 天\n\t\n未启用\n\t\n启用\n\t\n编辑\n共 1 条"
+        },
+        "inputs": [
+          {
+            "id": "",
+            "placeholder": "搜索客户编码或名称",
+            "type": "text",
+            "value": ""
+          }
+        ],
+        "url": "#/customers"
+      },
+      "result": "独立新建客户备注变化→Escape确认→继续输入保留/回原备注→放弃；公共AppDialog/Confirm与A自定义guard兼容",
+      "businessWrite": false,
+      "humanViewed": true,
+      "visualReview": "本审查者逐张细看3张1024浅色图；具体打开/回焦交互按记录，不推广全状态"
+    }
+  ],
+  "cleanup": {
+    "closeRequested": true,
+    "listVerified": true,
+    "sessionAbsent": true,
+    "activeSessionsAtVerification": [
+      "flowcube-impeccable-root",
+      "flowcube-impeccable-a"
+    ]
+  },
+  "sourceBoundary": "当前产品源码及旧顶层Radix1.1.11/1.1.7 dedupe；根随后将统一到已有锁中新版singleton，后者需关键fresh复验"
+}

@@ -42,7 +42,7 @@ it('分仓占比按全部仓库销售净额计算，负毛利不显示成功色'
   expect(host.textContent).toContain('60.0%')
   expect(host.textContent).toContain('40.0%')
   expect(host.textContent).not.toContain('100.0%')
-  expect([...host.querySelectorAll('.text-destructive')].some(el => el.textContent?.includes('-10'))).toBe(true)
+  expect([...host.querySelectorAll('.text-destructive-ink')].some(el => el.textContent?.includes('-10'))).toBe(true)
 })
 it('刷新失败保留趋势和分仓明细并警示，恢复后警示消失', async () => {
   vi.mocked(getKpiApi).mockResolvedValueOnce(report).mockRejectedValue(new Error('KPI 刷新失败'))

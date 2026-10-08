@@ -54,7 +54,7 @@ async function resolve(conn, { customerId, warehouseId, commercialGroups, scopeW
     const qty = assertPositiveQty(input.quantity)
     if (input.kind === 'kit' && !Number.isSafeInteger(qty)) throw new AppError('套数须为正整数', 400, 'KIT_QUANTITY_INTEGER')
     const old = oldByKey.get(input.lineKey)
-    if (old && (input.kind !== 'ordinary' || input.priceSource === 'manual' || Number(old.metadata.priceCustomerId)===Number(customerId)) && identity(input) === identity(old.metadata.input) && (input.kind==='ordinary'?roundQty(qty*Number(old.metadata.entry.conversionRate)):qty)<=old.targetQty) {
+    if (old && (input.priceSource === 'manual' || (input.kind === 'kit' && !old.metadata.quote) || Number(old.metadata.priceCustomerId)===Number(customerId)) && identity(input) === identity(old.metadata.input) && (input.kind==='ordinary'?roundQty(qty*Number(old.metadata.entry.conversionRate)):qty)<=old.targetQty) {
       const targetQty = old.kind === 'ordinary' ? roundQty(qty * Number(old.metadata.entry.conversionRate)) : qty
       keep.set(input.lineKey, { ...old, targetQty, retained: true })
     } else fresh.push(input)
@@ -89,9 +89,11 @@ async function resolve(conn, { customerId, warehouseId, commercialGroups, scopeW
       if (!v || !m) throw new AppError('套件版本不存在', 404, 'KIT_VERSION_NOT_FOUND')
       if (Number(m.current_version_id) !== v.id) throw new AppError('套件组成已更新，请保留输入并重新核对版本', 409, 'KIT_VERSION_CHANGED')
       const reasons = disabledReasons(definitionView(m, v)); if (reasons.length) throw new AppError(reasons[0].message, 400, reasons[0].code)
-      const price = g.priceSource === 'manual' ? assertPrice(g.unitPrice) : v.referenceUnitPrice
+      const level = String(customer.price_level || 'A').toUpperCase()
+      const reference = ({ A:v.salePriceA,B:v.salePriceB,C:v.salePriceC,D:v.salePriceD }[level] ?? v.referenceUnitPrice)
+      const price = g.priceSource === 'manual' ? assertPrice(g.unitPrice) : assertPrice(reference)
       if (formal && !(price > 0)) throw new AppError('正式销售成交价必须大于零', 400, 'SALE_PRICE_REQUIRED')
-      return { ...g, price, version: v, master: m }
+      return { ...g, price, version: v, master: m, referencePrice:reference, resolvedPriceSource:'price_level', resolvedPriceLevel:level, priceListId:null }
     }
     const p = products.get(Number(g.productId))
     const reference = listPrices.get(Number(g.productId)) ?? Number(({ A:p.sale_price_a,B:p.sale_price_b,C:p.sale_price_c,D:p.sale_price_d }[String(customer.price_level || 'A').toUpperCase()] ?? p.sale_price_a) || 0)
@@ -108,7 +110,7 @@ async function resolve(conn, { customerId, warehouseId, commercialGroups, scopeW
     if(gross>9999999999.99)throw new AppError('成交金额超出允许范围',400,'KIT_AMOUNT_OVERFLOW')
     const components = g.kind === 'kit' ? g.version.components : [{ productId: Number(g.productId), baseQty: 1, sortNo: 0, referencePrice: g.referencePrice, amountWeight: '1.000000' }]
     const amounts = g.kind === 'kit' ? allocateCents(gross, components) : [gross]
-    const group = { lineKey: g.lineKey, kind: g.kind, warehouseId: g.warehouseId, kitVersionId: g.kitVersionId || null, kitCode: g.master?.code || null, kitName: g.master?.name || null, originalQty: entry?.quantity ?? g.quantity, targetQty: entry?.quantity ?? g.quantity, unitPrice: entry?.unitPrice ?? g.price, priceSource: g.priceSource || (g.kind === 'kit' ? 'kit_default' : 'default'), grossAmount: gross, metadata: { quote:g.kind==='ordinary'?{referenceUnitPrice:g.referencePrice,resolvedPriceSource:g.resolvedPriceSource,resolvedPriceLevel:g.resolvedPriceLevel,priceListId:g.priceListId}:null,referenceSnapshotAt:g.version?.referenceSnapshotAt ?? null,versionCreatedAt:g.version?.createdAt ?? null,referenceBasisExplanation:g.version?.referenceBasisExplanation ?? null,priceCustomerId:Number(customerId), input: fresh.find(f => f.lineKey === g.lineKey), entry: entry ? { entryUnit: entry.entryUnit, entryQty: entry.entryQty, conversionRate: entry.conversionRate, entryUnitPrice: entry.entryUnitPrice } : null }, components: components.map((c,n) => { const p = products.get(c.productId); return { ...c, requiredQty: g.kind === 'kit' ? roundQty(c.baseQty*g.quantity) : entry.quantity, allocatedAmount: amounts[n], productCode:p.code,productName:p.name,unit:p.unit,articleNumber:p.article_number,spec:p.spec,color:p.color } }) }
+    const group = { lineKey: g.lineKey, kind: g.kind, warehouseId: g.warehouseId, kitVersionId: g.kitVersionId || null, kitCode: g.master?.code || null, kitName: g.master?.name || null, originalQty: entry?.quantity ?? g.quantity, targetQty: entry?.quantity ?? g.quantity, unitPrice: entry?.unitPrice ?? g.price, priceSource: g.priceSource || (g.kind === 'kit' ? 'kit_default' : 'default'), grossAmount: gross, metadata: { quote:{referenceUnitPrice:g.referencePrice,resolvedPriceSource:g.resolvedPriceSource,resolvedPriceLevel:g.resolvedPriceLevel,priceListId:g.priceListId},...(g.kind==='kit'?{kitUnit:g.master.unit||'套',kitIdentity:{spec:g.master.spec||'',color:g.master.color||'',articleNumber:g.master.article_number||''}}:{}),referenceSnapshotAt:g.version?.referenceSnapshotAt ?? null,versionCreatedAt:g.version?.createdAt ?? null,referenceBasisExplanation:g.version?.referenceBasisExplanation ?? null,priceCustomerId:Number(customerId), input: fresh.find(f => f.lineKey === g.lineKey), entry: entry ? { entryUnit: entry.entryUnit, entryQty: entry.entryQty, conversionRate: entry.conversionRate, entryUnitPrice: entry.entryUnitPrice } : null }, components: components.map((c,n) => { const p = products.get(c.productId); return { ...c, requiredQty: g.kind === 'kit' ? roundQty(c.baseQty*g.quantity) : entry.quantity, allocatedAmount: amounts[n], productCode:p.code,productName:p.name,unit:p.unit,articleNumber:p.article_number,spec:p.spec,color:p.color } }) }
     return [g.lineKey, group]
   }))
   const result = materialize(commercialGroups.map(g => keep.get(g.lineKey) || freshByKey.get(g.lineKey)), products, warehouses)

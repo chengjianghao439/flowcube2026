@@ -119,7 +119,7 @@ export function SaleOrderItemsTable({
                 />
                 {item.productId > 0 && <p className="mt-0.5 text-right text-[11px] text-muted-foreground">每{item.entryUnit || item.unit || '录入单位'}</p>}
                 <p className="mt-1 text-right text-[11px] text-muted-foreground">{priceLoading[item._key] ? '正在获取价格…' : priceExplanationLabel(item)}</p>
-                {priceErrors[item._key] && <div className="mt-1 text-xs text-destructive"><p>{priceErrors[item._key]}</p><button type="button" className="mt-1 underline" onClick={() => updateItem(item._key, 'unitPrice', item.unitPrice)}>确认当前单价</button></div>}
+                {priceErrors[item._key] && <div className="mt-1 text-xs text-destructive-ink"><p>{priceErrors[item._key]}</p><button type="button" className="mt-1 underline" onClick={() => updateItem(item._key, 'unitPrice', item.unitPrice)}>确认当前单价</button></div>}
               </td>
 
               <td className="py-2.5 text-right font-medium tabular-nums">
@@ -129,7 +129,7 @@ export function SaleOrderItemsTable({
               <td className="py-2.5 text-center">
                 <Button
                   type="button" size="sm" variant="ghost"
-                  className="h-8 w-9 p-0 text-muted-foreground hover:text-destructive"
+                  className="h-8 w-9 p-0 text-muted-foreground hover:text-destructive-ink"
                   disabled={lockedIdentity} onClick={() => removeItem(item._key)}
                   aria-label="删除商品行"
                 ><Trash2 className="h-4 w-4" /></Button>

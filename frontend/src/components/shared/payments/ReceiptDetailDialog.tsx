@@ -64,8 +64,8 @@ export function ReceiptDetailDialog({ open, onClose, receiptId, type }: Props) {
         {query.data && !detail && <p role="alert">明细身份不匹配，请重试核对原汇款单</p>}
         {detail && (
           <div className="text-sm text-muted-foreground">
-            {detail.partyName} {canOpenLedger && <Button size="sm" variant="link" onClick={() => { onClose(); ledger.open({ id: partyId!, name: detail.partyName }) }}>往来明细</Button>} · {actionLabel} {money(detail.amount)} · 已核销 <span className="text-success">{money(detail.settledAmount)}</span>
-            <> · 未核销 <span className="font-medium text-warning">{money(detail.balance)}</span></>
+            {detail.partyName} {canOpenLedger && <Button size="sm" variant="link" onClick={() => { onClose(); ledger.open({ id: partyId!, name: detail.partyName }) }}>往来明细</Button>} · {actionLabel} {money(detail.amount)} · 已核销 <span className="text-success-ink">{money(detail.settledAmount)}</span>
+            <> · 未核销 <span className="font-medium text-warning-ink">{money(detail.balance)}</span></>
             {(!Number.isSafeInteger(partyId) || Number(partyId) < 1) && <p>单位归属待核查，无法定位往来明细</p>}
           </div>
         )}
@@ -88,8 +88,8 @@ export function ReceiptDetailDialog({ open, onClose, receiptId, type }: Props) {
                   <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{money(s.orderTotal)}</td>
                   <td className="px-4 py-3 text-right tabular-nums">
                     {s.orderBalance > 0
-                      ? <span className="text-destructive">{money(s.orderBalance)}</span>
-                      : <span className="text-success">已结清</span>}
+                      ? <span className="text-destructive-ink">{money(s.orderBalance)}</span>
+                      : <span className="text-success-ink">已结清</span>}
                   </td>
                 </tr>
               ))}

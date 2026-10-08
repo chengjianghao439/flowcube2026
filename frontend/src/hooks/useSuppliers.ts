@@ -3,9 +3,18 @@ import { getSuppliersApi, getSuppliersActiveApi, createSupplierApi, updateSuppli
 import type { QueryParams } from '@/types'
 import type { CreateSupplierParams, UpdateSupplierParams } from '@/types/suppliers'
 import { toast } from '@/lib/toast'
+import type { ProductFinderReadContext } from './useProducts'
 
 const K = 'suppliers'
-export const useSuppliers       = (p: QueryParams) => useQuery({ queryKey:[K,p], queryFn:()=>getSuppliersApi(p) })
+export const useSuppliers = (p: QueryParams, context?: ProductFinderReadContext) => useQuery({
+  queryKey: context ? [K, 'owned', ...context.key, p] : [K, p],
+  queryFn: async query => {
+    context?.assertCurrent()
+    const data = context ? await getSuppliersApi(p, { ...context.config, signal: query.signal }) : await getSuppliersApi(p)
+    context?.assertCurrent()
+    return data
+  }, enabled: !context || context.enabled,
+})
 export const useSuppliersActive = () => useQuery({ queryKey:[K,'active'], queryFn:getSuppliersActiveApi, staleTime:600000 })
 export function useCreateSupplier() {
   const qc=useQueryClient(); return useMutation({ mutationFn:(d:CreateSupplierParams)=>createSupplierApi(d), onSuccess:()=>qc.invalidateQueries({queryKey:[K]}) })

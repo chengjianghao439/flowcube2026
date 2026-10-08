@@ -181,7 +181,7 @@ export default function ProductsPage() {
       const aux=(r.units||[]).filter(u=>!u.isBase)
       return <div className="flex flex-wrap items-center gap-1"><span>{r.unit}</span>{aux.map(u=><span key={u.unitName} className="rounded bg-muted px-1 text-xs text-muted-foreground tabular-nums">{u.unitName}×{u.conversionRate}</span>)}{
         // 默认是允许小数，只标出被限制的商品——「哪些不能按小数卖」是要一眼看出来的例外
-        r.allowDecimalQty === false && <span className="rounded bg-warning/10 px-1 text-xs text-warning">只能整数</span>}</div>
+        r.allowDecimalQty === false && <span className="rounded bg-warning/10 px-1 text-xs text-warning-ink">只能整数</span>}</div>
     }},
     { key:'supplierName', title:'供应商', width:140, render:v=>(v as string)||'-' },
     { key:'isActive', title:'状态', width:70, render:(_,r)=><SoftStatusLabel label={r.isActive?'启用':'停用'} tone={activeTone(r.isActive)} /> },
@@ -250,12 +250,12 @@ export default function ProductsPage() {
             } />
             {importResult && (
               <div className="rounded-lg border p-3 text-sm space-y-1">
-                <p className="text-success font-medium">导入成功：{importResult.success} 条</p>
+                <p className="text-success-ink font-medium">导入成功：{importResult.success} 条</p>
                 {importResult.skip > 0 && <p className="text-muted-foreground">跳过（已存在）：{importResult.skip} 条</p>}
                 {importResult.errors.length > 0 && (
                   <div className="mt-2">
-                    <p className="text-destructive font-medium">失败 {importResult.errors.length} 条：</p>
-                    <ul className="mt-1 space-y-0.5 text-destructive text-sm leading-6 max-h-32 overflow-y-auto">
+                    <p className="text-destructive-ink font-medium">失败 {importResult.errors.length} 条：</p>
+                    <ul className="mt-1 space-y-0.5 text-destructive-ink text-sm leading-6 max-h-32 overflow-y-auto">
                       {importResult.errors.map((e, i) => <li key={i}>{e}</li>)}
                     </ul>
                   </div>

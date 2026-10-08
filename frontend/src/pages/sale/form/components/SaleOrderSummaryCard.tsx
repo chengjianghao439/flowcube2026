@@ -52,7 +52,7 @@ export function SaleOrderSummaryCard({
         </div>
 
         {belowCost && warningText && (
-          <div className={cn('flex gap-2 rounded-lg border border-destructive/20 bg-destructive/[0.04] px-3 py-2.5 text-xs leading-5 text-destructive md:col-span-3')}>
+          <div className={cn('flex gap-2 rounded-lg border border-destructive/20 bg-destructive/[0.04] px-3 py-2.5 text-xs leading-5 text-destructive-ink md:col-span-3')}>
             <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             <span>{warningText}</span>
           </div>

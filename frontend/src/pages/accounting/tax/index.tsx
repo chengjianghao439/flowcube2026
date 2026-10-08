@@ -87,8 +87,8 @@ function TaxReport({ companyId, period, tab }: { companyId: number; period: stri
     { key: 'period', title: '期间', width: 100, render: v => <span className="text-doc-code">{String(v)}</span> },
     { key: 'adjustItem', title: '调整项' },
     { key: 'amount', title: '金额', width: 120, align: 'right', render: v => <span className={`tabular-nums ${Number(v) !== 0 ? 'text-amber-600 font-medium' : ''}`}>{money(Number(v))}</span> },
-    { key: 'remark', title: '备注', render: v => String(v || '—') },
-    { key: 'id', title: '操作', width: 80, render: (_, r) => <Button size="sm" variant="ghost" className="text-destructive" onClick={() => removeAdj(r.id)}>删除</Button> },
+    { key: 'remark', title: '备注', expandableText: true, render: v => String(v || '—') },
+    { key: 'id', title: '操作', width: 80, render: (_, r) => <Button size="sm" variant="ghost" className="text-destructive-ink" onClick={() => removeAdj(r.id)}>删除</Button> },
   ]
 
   return (
@@ -125,7 +125,7 @@ function TaxReport({ companyId, period, tab }: { companyId: number; period: stri
               <div className="space-y-1.5 px-4 py-3 text-sm">
                 <div className="flex justify-between"><span className="text-muted-foreground">营业收入</span><span className="tabular-nums">{money(income?.revenue ?? 0)}</span></div>
                 <div className="flex justify-between"><span className="text-muted-foreground">成本费用</span><span className="tabular-nums">{money(income?.expense ?? 0)}</span></div>
-                <div className="flex justify-between border-t border-border pt-2"><span>利润总额</span><span className={`tabular-nums font-semibold ${(income?.profitTotal ?? 0) < 0 ? 'text-destructive' : ''}`}>{money(income?.profitTotal ?? 0)}</span></div>
+                <div className="flex justify-between border-t border-border pt-2"><span>利润总额</span><span className={`tabular-nums font-semibold ${(income?.profitTotal ?? 0) < 0 ? 'text-destructive-ink' : ''}`}>{money(income?.profitTotal ?? 0)}</span></div>
                 <div className="flex justify-between"><span className="text-muted-foreground">应纳税所得额（+调整，取非负）</span><span className="tabular-nums">{money(income?.taxableIncome ?? 0)}</span></div>
                 <div className="flex justify-between"><span>应纳所得税额（{(income?.taxRate ?? 0.25) * 100}%）</span><span className="tabular-nums font-semibold text-primary">{money(income?.taxDue ?? 0)}</span></div>
               </div>

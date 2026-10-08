@@ -1,3 +1,5 @@
+import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
 import { RecordIdentity } from '@/components/shared/RecordIdentity'
 /**
  * 承运商管理页
@@ -41,6 +43,7 @@ function platformPayload(f: FormState) {
 }
 
 export default function CarriersPage() {
+  const { can } = usePermission()
   const navigate = useNavigate()
   const [keyword, setKeyword] = useState('')
   const [search, setSearch] = useState('')
@@ -83,6 +86,9 @@ export default function CarriersPage() {
     <BaseCrudPage<Carrier>
       title="承运商管理"
       description="管理物流、快递等承运商信息"
+      canCreate={can(PERMISSIONS.CARRIER_CREATE)}
+      canEdit={can(PERMISSIONS.CARRIER_UPDATE)}
+      canDelete={can(PERMISSIONS.CARRIER_DELETE)}
       columns={columns}
       queryKey={['carriers', { page, pageSize: 20, keyword }]}
       listQuery={() => getCarriersApi({ keyword, page, pageSize: 20 })}
@@ -112,13 +118,13 @@ export default function CarriersPage() {
           </div>
         </FilterCard>
       }
-      renderForm={(editing) => (
+      renderForm={(editing, _open, locked) => (
         <div className="grid grid-cols-2 gap-x-6 gap-y-4 py-2">
           <h3 className="col-span-2 text-sm font-medium">基本资料</h3>
           <div><Label htmlFor="carrier-name">名称</Label><Input className="mt-1" placeholder="承运商名称" id="carrier-name" value={form.name} onChange={e => set('name', e.target.value)} /></div>
           <div>
             <Label>类型</Label>
-            <Select value={form.type} onValueChange={v => set('type', v)}>
+            <Select disabled={locked} value={form.type} onValueChange={v => !locked && set('type', v)}>
               <SelectTrigger aria-label="承运商类型" className="mt-1"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {CARRIER_TYPE_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
@@ -133,7 +139,7 @@ export default function CarriersPage() {
           <div className="col-span-2 border-t border-border pt-4 mt-1 space-y-4">
             <div>
               <Label>快递公司 / 对接平台</Label>
-              <Select value={form.platformCode || ''} onValueChange={v => setForm(f => ({ ...f, platformCode: v, shippingProduct: '', shippingDeliveryType: '' }))}>
+              <Select disabled={locked} value={form.platformCode || ''} onValueChange={v => !locked && setForm(f => ({ ...f, platformCode: v, shippingProduct: '', shippingDeliveryType: '' }))}>
                 <SelectTrigger aria-label="快递公司 / 对接平台" className="mt-1"><SelectValue placeholder="选择平台" /></SelectTrigger>
                 <SelectContent>
                   {WAYBILL_PLATFORM_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
@@ -154,7 +160,7 @@ export default function CarriersPage() {
             ) : <>
             <div className="flex items-center justify-between">
               <Label>电子面单取号</Label>
-              <Select value={form.waybillEnabled ? '1' : '0'} onValueChange={v => set('waybillEnabled', v === '1')}>
+              <Select disabled={locked} value={form.waybillEnabled ? '1' : '0'} onValueChange={v => !locked && set('waybillEnabled', v === '1')}>
                 <SelectTrigger aria-label="电子面单取号状态" className="h-8 w-28"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="0">未开通</SelectItem>
@@ -180,7 +186,7 @@ export default function CarriersPage() {
           {editing && (
             <div>
               <Label>状态</Label>
-              <Select value={form.isActive ? '1' : '0'} onValueChange={v => set('isActive', v === '1')}>
+              <Select disabled={locked} value={form.isActive ? '1' : '0'} onValueChange={v => !locked && set('isActive', v === '1')}>
                 <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="1">启用</SelectItem>

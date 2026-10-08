@@ -267,7 +267,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
               placeholder="选择调出仓库"
               className={cn(fromError && 'border-destructive/60 bg-destructive/5')}
             />
-            {fromError && <p className="text-xs text-destructive">请选择调出仓库</p>}
+            {fromError && <p className="text-xs text-destructive-ink">请选择调出仓库</p>}
           </div>
 
           <div className="w-56 shrink-0 space-y-1.5">
@@ -279,8 +279,8 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
               placeholder="选择调入仓库"
               className={cn((toError || sameWarehouse) && 'border-destructive/60 bg-destructive/5')}
             />
-            {toError && <p className="text-xs text-destructive">请选择调入仓库</p>}
-            {!toError && sameWarehouse && <p className="text-xs text-destructive">与调出仓库不能相同</p>}
+            {toError && <p className="text-xs text-destructive-ink">请选择调入仓库</p>}
+            {!toError && sameWarehouse && <p className="text-xs text-destructive-ink">与调出仓库不能相同</p>}
           </div>
 
           <div className="flex-1 space-y-1.5">
@@ -358,7 +358,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
                         size="sm"
                         variant="ghost"
                         aria-label="删除该行商品"
-                        className="h-8 w-9 p-0 text-muted-foreground hover:text-destructive"
+                        className="h-8 w-9 p-0 text-muted-foreground hover:text-destructive-ink"
                         onClick={() => removeItem(item._key)}
                       >
                         ✕
@@ -442,7 +442,7 @@ function DetailView({ transferId, closeTab, tabPath }: { transferId: number; clo
         rightActions={
           <>
             {canCancel && (
-              <Button variant="outline" className="border-destructive/30 text-destructive hover:bg-destructive/5" disabled={isPending}
+              <Button variant="outline" className="border-destructive/30 text-destructive-ink hover:bg-destructive/5" disabled={isPending}
                 onClick={() => ask('取消调拨单', '取消后此调拨单将无法恢复，请确认操作。', 'destructive', () => {
                   setConfirmState(s => ({ ...s, open: false })); cancelMutate.mutate()
                 })}>

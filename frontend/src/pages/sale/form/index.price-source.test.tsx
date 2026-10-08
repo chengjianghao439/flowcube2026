@@ -44,7 +44,7 @@ vi.mock('@/api/warehouses', () => ({
   getWarehousesApi: vi.fn(), createWarehouseApi: vi.fn(), updateWarehouseApi: vi.fn(), deleteWarehouseApi: vi.fn(),
 }))
 // 不 mock「发货安排」等未访问 tab 的组件：默认 detailTab='info'，KeepAliveSection 未访问不挂载，
-// 保持三个真实保存入口；API mock 承接请求，Hook 包装提供相同的界面解释草稿。
+// 普通新建的真实保存回归已迁移至 CommercialEditor.test.tsx；保留历史编辑/改单保存入口；API mock 承接请求，Hook 包装提供相同的界面解释草稿。
 
 
 const draft: DraftItem = {
@@ -118,7 +118,6 @@ test('共享销售序列化只剥界面字段，完整保留业务数量、价�
 })
 
 test.each([
-  ['create', 1, '/sale/new', null, '保存草稿'],
   ['edit', 1, '/sale/12', '编辑', '保存修改'],
   ['adjust', 2, '/sale/12', '修改订单', '提交改单'],
 ] as const)('%s 实际保存入口不发送解释字段且保留原业务字段', async (mode, status, path, entry, save) => {
@@ -126,7 +125,7 @@ test.each([
   render(path)
   if (entry) await act(async () => button(entry).click())
   await act(async () => button(save).click())
-  const api = mode === 'create' ? mocks.createSaleApi : mode === 'edit' ? mocks.updateSaleApi : mocks.adjustSaleApi
+  const api = mode === 'edit' ? mocks.updateSaleApi : mocks.adjustSaleApi
   expect(api).toHaveBeenCalledTimes(1)
   const payload = api.mock.calls[0][0]
   expect(payload.items).toEqual([originalBusinessFields])

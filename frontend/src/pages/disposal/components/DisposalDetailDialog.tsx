@@ -110,7 +110,7 @@ export default function DisposalDetailDialog({ open, onClose, id, initialDetail,
               {disposal.approvedByName && <div><span className="text-muted-foreground">审批人：</span>{disposal.approvedByName}</div>}
               {disposal.disposedAt && <div><span className="text-muted-foreground">处置时间：</span>{formatDisplayDateTime(disposal.disposedAt)}</div>}
               {disposal.remark && <div className="col-span-3"><span className="text-muted-foreground">备注：</span>{disposal.remark}</div>}
-              {disposal.rejectReason && <div className="col-span-3 text-destructive"><span className="text-muted-foreground">驳回原因：</span>{disposal.rejectReason}</div>}
+              {disposal.rejectReason && <div className="col-span-3 text-destructive-ink"><span className="text-muted-foreground">驳回原因：</span>{disposal.rejectReason}</div>}
             </div>
 
             <div className="overflow-x-auto">

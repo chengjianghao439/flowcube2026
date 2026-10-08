@@ -19,6 +19,7 @@
 - **批量写入用 `VALUES ?`（mysql2 展开二维数组），禁止在循环里逐行 INSERT/UPDATE**：一次生成可能有上百行的路径（采购计划、工资单等）逐行走一次往返会明显变慢。**`VALUES ?` 传空数组会 `ER_PARSE_ERROR`，必须先判 `length`**；表名与列名固定、值走批量参数。2026-09-18 已在 `procurement.service.generatePlan`（每行 3 次往返 → 2 次，快照并入 INSERT）与 `hr.service.createPayroll`（N → 1）落地，实测 MySQL 8.0.46 可用。
 - 销售建单和草稿编辑复用 `sale.items.js`，每批最多 100 行使用 `VALUES ?`；`createSaleSchema` 限制单据最多 200 条明细，空数组不执行批量 SQL。
 - SQL 参数化；API 小写、连字符、复数名词。页面不分页，但传输与 SQL 保留有界批次；批次查询按主排序追加唯一 ID（库存按商品/仓库组合）保持稳定，防止相同时间或名称在不同批次重复/遗漏。后台批次复用 `normalizePagination`，导出遵循既有上限与截断告警，不能用无限大 pageSize 绕过分页。
+- `scopeFilter()` 返回的 SQL 自带前导 `AND`，应直接追加到已有 `WHERE`；不能作为裸条件加入 `conds.join(' AND ')`，否则限仓和空范围都可能出现 `AND AND`。退款列表的不限仓、限仓、空范围及筛选读取回归纳入 `smoke:refund-orders`，列表/计数使用同一授权条件，未放宽仓库范围。
 - **`role_id` 列必须与 `sys_roles.id` 同量级**：`sys_users.role_id` 与 `sys_role_permissions.role_id` 原为 TINYINT UNSIGNED（上限 255）且**无外键**，角色数超过 255 后给新角色分配权限/挂用户会 `ER_WARN_DATA_OUT_OF_RANGE`；迁移 `253_widen_role_id_columns.sql` 已对齐为 BIGINT UNSIGNED（本机测试库曾因此自毒化，表现为 round2-transfer fixture 大面积失败、看起来像代码回归）。
 - `GET /api/users?hideDevelopment=1` 与 `GET /api/users/options?hideDevelopment=1` 供所有前端过滤开发账号，列表按账号编码在 SQL 分页与总数统计前过滤；`GET /api/export/users?hideDevelopment=1` 与页面列表保持一致。缺省后端请求仍返回全部用户供测试使用。部门列表对开发账号负责人隐藏姓名但保留原 ID，避免改写审批关联。`GET /api/users/assignable-roles` 返回 `id/code/name`，`code` 供前端隐藏开发角色，实际角色授予仍由服务端权限子集校验。
 - 操作日志页面和导出都传 `hideDevelopment=1`，服务端在列表与总数统计前按操作人账号编码排除开发账号；匿名访问仍保留。缺省后端接口保持完整审计数据供排障使用。
@@ -44,9 +45,9 @@
 
 独立 `/api/kits` 模块按 routes → controller → service 分层，C2b当时只提供主档维护与只读预览；后续正式销售保存、履约、退货与会计接点见本文件下方C2段。列表、详情、`finder` 使用 `product.view`；创建、编辑、软删分别复用 `product.create/update/delete`。`POST /api/kits/preview` 同时要求 `sale.order.create` 与 `product.view`，在数据库 READ ONLY 事务中运行。具名 finder/preview 路由在 `/:id` 前注册。列表与 finder 入口页码须为 1–100000 的有限整数、pageSize 为 1–100，offset 最大 9999900；超界返回400，不能把 Infinity 交给 MySQL。
 
-迁移 `269_kit_definitions.sql` 增加主档、不可变组成版本、版本组件三张表；索引/外键在 CREATE IF NOT EXISTS 后单独幂等补齐，并按 information_schema 的名字与列序核对，已存在但形状不一致即失败。主档当前版本用 `(id,current_version_id) → (kit_id,id)` 复合外键防串套。主档 code 可维护，未软删编码唯一；停用不释放编码，软删后可以同码新建。
+迁移 `269_kit_definitions.sql` 增加主档、不可变组成版本、版本组件三张表；索引/外键在 CREATE IF NOT EXISTS 后单独幂等补齐，并按 information_schema 的名字与列序核对，已存在但形状不一致即失败。主档当前版本用 `(id,current_version_id) → (kit_id,id)` 复合外键防串套。未软删编码唯一；停用不释放编码。2026-10-07 资料对齐后，新建编码由服务端统一取 K + 六位累计流水，编辑不修改编码；旧编码保持，软删除记录仍计入累计取号。
 
-写入必须有稳定 `X-Request-Key`。创建使用载荷指纹 action，编辑/删除使用资源 ID action；锁主档 → begin/replay → 核 revision → 业务/同 conn 回执 → commit。重放先于旧 revision 拒绝，以便本次成功后原键仍可取回原结果。新键携带过期 revision 返回 `409 KIT_REVISION_CONFLICT`，不写版本或主档；改组成/每套参考价创建新版本，改名/编码/启停仅递增主档 revision，历史版本可通过 `GET /api/kits/:id?versionId=...` 读取，停用/软删仍可解释历史。
+写入必须有稳定 `X-Request-Key`。创建使用载荷指纹 action，编辑/删除使用资源 ID action；锁主档 → begin/replay → 核 revision → 业务/同 conn 回执 → commit。重放先于旧 revision 拒绝，以便本次成功后原键仍可取回原结果。新键携带过期 revision 返回 `409 KIT_REVISION_CONFLICT`，不写版本或主档；改组成/任一档售价创建新版本，改名/元资料/启停仅递增主档 revision，历史版本可通过 `GET /api/kits/:id?versionId=...` 读取，停用/软删仍可解释历史。
 
 组件只引用真实 `product_items`，不支持嵌套、替代或制造；每套 1–50 个不重复商品。原始基本量先校验两位数量尺度、再校验当前整数商品策略。组件 A 价快照与每套价为四位，显式权重输入最多四位；派生权重 = 明确提交组成时 A 价 × 每套基本量，采用整数微单位计算，`DECIMAL(20,6)` 及六位字符串往返保存，以保留 `0.0001×0.01=0.000001`。全套默认 A 价权重或全套显式非负权重二选一，混用、全零权重拒绝，不自动均分。版本详情返回 `weightSource/createdAt` 与参考依据解释；未提交组成而仅修改套报价时沿用原版本参考依据，只有明确重新提交组成才采当前A价生成默认权重。原始采样时刻未单独保存，`referenceSnapshotAt=null`；`createdAt`只表示该版本创建时间。以后商品 A 价变化不改旧版本的依据。
 
@@ -286,3 +287,12 @@ getSource在原已授权RR快照内additive返回canonical PR items、paymentRec
 统一approval pending的RF metadata独立于BIZ_DOC_META六类与旧DOCUMENT_PENDING_META三类；真实RF created_by/remark/refund_no、creator.real_name与created_at作为VM，RF1动作confirm，所有engine ID NULL。当前RF actor和PO/PR关系/三仓范围在同RR只读COUNT/page集合前过滤，未知require/SQL在有限VM夹具throw；该夹具不是MySQL执行或锁并发证明。
 
 E7 B 提交后详情隔离：execute 首次执行与已执行重放、regenerate 的最后 findOne 查询/JSON 格式化均在业务提交已确定成功之后单独隔离。锁行/种类查询明确 SELECT 原字段和 APPLICATION_NO_SQL alias，返回稳定 id/applicationNo/bizType/bizTypeName、原 result 与 postingPeriod；详情失败只置 application:null、applicationPending/applicationError，不改 voucherResult/voucherError。RF 重放读取已保存逐笔证明，不重生成或写 metadata；提交前失败正常回滚，commit 抛错仍拒绝，不猜提交是否成功。旧 payment/receipt/receipt_settle/refund 的授权、事务、原期与凭证策略保持。
+
+
+### 成套配件对齐商品资料（2026-10-07，本地实现）
+
+成套主档增加分类、供应商、基本单位、型号、颜色、供应商型号、进价及备注，沿商品字段名；引用非空时核启用未删主档，列表/详情一次 JOIN 回显名称，避免逐行查询。新增迁移 282 按列元数据、索引名字与列序、外键引用 schema/规则核对并幂等补齐；269–281 不修改。旧资料缺字段继续可读，旧 API 的 referenceUnitPrice 保持价格 A 兼容。
+
+创建/修改接受旧 code 字段但不采信指定值。新建在同事务调用 generateMasterCode(K,kit_definitions)，明确编码唯一键撞号才回滚并取得新连接事务重试；不是在旧 RR 快照中重复 MAX。成功原键仍只返回原主档与版本。编码编辑只读，旧码不重排。
+
+四档售价保存在不可变版本，A 沿 reference_unit_price，B/C/D 新列可空以保留未知历史；版本 DTO 保留 NULL，资料顶层显示 NULL→A 的有效价。新建空档按独立进价和 loadPriceRates/computeTierPrices 计算；编辑 undefined 表示原档，null 表示员工明确清空后按进价计算；明确 0 必须保留，五位小数与超界拒绝。referenceUnitPrice 与 salePriceA 同传必须一致。只改价格复制原组件依据，旧版本与订单不变。

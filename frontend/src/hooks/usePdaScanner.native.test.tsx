@@ -102,3 +102,37 @@ test('偏离推荐库位待确认时允许第二次同源实扫，但仍丢弃�
     clock.mockRestore()
   }
 })
+
+test('聚焦按钮的 Enter 保留原生激活，人工输入不被送入扫码', async () => {
+  const onScan = vi.fn()
+  function Harness() {
+    usePdaScanner({ onScan })
+    return <><button>展开人工输入</button><input aria-label="数量" /><div contentEditable aria-label="备注" /></>
+  }
+  await act(async () => { root.render(<Harness />) })
+  const button = host.querySelector('button')!
+  button.focus()
+  const enter = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
+  button.dispatchEvent(enter)
+  expect(enter.defaultPrevented).toBe(false)
+  for (const target of [host.querySelector('input')!, host.querySelector('[contenteditable]')!]) {
+    for (const key of '123') target.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }))
+    target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
+  }
+  expect(onScan).not.toHaveBeenCalled()
+})
+
+test('PDA 模态打开时原生扫码暂停，关闭后恢复同一监听', async () => {
+  const onScan = vi.fn()
+  function Harness({ paused }: { paused: boolean }) {
+    usePdaScanner({ onScan })
+    return paused ? <div data-pda-scan-paused="true" /> : null
+  }
+  await act(async () => { root.render(<Harness paused />) })
+  await act(async () => { native.listener?.({ barcode: 'I000123' }) })
+  expect(onScan).not.toHaveBeenCalled()
+  await act(async () => { root.render(<Harness paused={false} />) })
+  await act(async () => { native.listener?.({ barcode: 'I000123' }) })
+  expect(onScan).toHaveBeenCalledWith('I000123')
+  expect(native.addListener).toHaveBeenCalledTimes(1)
+})

@@ -181,7 +181,7 @@ export default function CreateDisposalDialog({ open, onClose, mode = 'create', h
                     <input type="checkbox" checked={selected} disabled={s.totalQty <= 0 && !selected} onChange={() => toggleSuggestion(s)} className="accent-primary" />
                   </div>
                   <ProductIdentityGridCells product={s} />
-                  <div className="tabular-nums">{qty(s.onHandQty)}{s.unit}／{qty(s.totalQty)}{s.unit}<p className="text-xs text-muted-foreground">预占 {qty(s.reservedQty)}；{basis[s.valuationBasis]} {money(s.unitValue)}</p>{s.totalQty <= 0 && <p className="text-xs text-destructive">参考量为零或异常，请核对</p>}</div>
+                  <div className="tabular-nums">{qty(s.onHandQty)}{s.unit}／{qty(s.totalQty)}{s.unit}<p className="text-xs text-muted-foreground">预占 {qty(s.reservedQty)}；{basis[s.valuationBasis]} {money(s.unitValue)}</p>{s.totalQty <= 0 && <p className="text-xs text-destructive-ink">参考量为零或异常，请核对</p>}</div>
                   <div className="tabular-nums">{money(s.totalValue)}</div>
                   <div className="text-xs text-muted-foreground">
                     {s.lastOutboundAt ? formatDisplayDateTime(s.lastOutboundAt) : '从未出库'}
@@ -242,7 +242,7 @@ export default function CreateDisposalDialog({ open, onClose, mode = 'create', h
                         onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateRow(r.suggestion.productId, { remark: e.target.value })} />
                     </div>
                     <div className="">
-                      <Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-xs text-destructive" onClick={() => removeRow(r.suggestion.productId)}>移除</Button>
+                      <Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-xs text-destructive-ink" onClick={() => removeRow(r.suggestion.productId)}>移除</Button>
                     </div>
                   </div>
                 ))}

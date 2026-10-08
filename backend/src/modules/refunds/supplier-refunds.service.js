@@ -140,7 +140,7 @@ async function findAll(query,userId) {
     const currentActor=await actor.load(conn,userId,false);actor.authorize(currentActor)
     const {where,args}=listWhere(currentActor),from=' FROM supplier_refund_orders rf JOIN purchase_orders po ON po.id=rf.purchase_order_id JOIN purchase_returns pr ON pr.id=rf.purchase_return_id WHERE '+where
     const [[count]]=await conn.query('SELECT COUNT(*) AS total'+from,args)
-    const [list]=await conn.query('SELECT rf.id,rf.refund_no,rf.purchase_return_id,rf.purchase_order_id,rf.warehouse_id,rf.refund_date,rf.amount,rf.status'+from+' ORDER BY rf.id DESC LIMIT ? OFFSET ?',[...args,pageSize,(page-1)*pageSize])
+    const [list]=await conn.query('SELECT rf.id,rf.refund_no,rf.purchase_return_id,rf.purchase_order_id,rf.warehouse_id,rf.refund_date,rf.amount,rf.status,pr.return_no AS purchase_return_no,po.order_no AS purchase_order_no,pr.supplier_name,pr.warehouse_name'+from+' ORDER BY rf.id DESC LIMIT ? OFFSET ?',[...args,pageSize,(page-1)*pageSize])
     return{list:list.map(row=>({...row,refund_date:rules.date(row.refund_date)})),total:Number(count.total),page,pageSize}
   })
 }
@@ -151,7 +151,7 @@ async function findById(id,userId) {
     const ctx=await context(conn,Number(row.purchase_return_id),currentActor,false)
     await frozenContext(conn,row,ctx,currentActor,false)
     const [allocations]=await conn.query('SELECT entry_id,receipt_id,amount,budget_state FROM supplier_refund_allocations WHERE refund_id=? ORDER BY id',[row.id])
-    return{...row,refund_date:rules.date(row.refund_date),allocations,confirmAllowed:Number(row.status)===1 && (currentActor.roleId===1 || currentActor.permissions.includes(P.SUPPLIER_REFUND_CONFIRM)) && (Number(row.created_by)!==currentActor.userId || currentActor.allowSelfApprove)}
+    return{...row,purchase_return_no:ctx.pr.return_no,purchase_order_no:ctx.po.order_no,supplier_name:ctx.pr.supplier_name,warehouse_name:ctx.pr.warehouse_name,refund_date:rules.date(row.refund_date),allocations,confirmAllowed:Number(row.status)===1 && (currentActor.roleId===1 || currentActor.permissions.includes(P.SUPPLIER_REFUND_CONFIRM)) && (Number(row.created_by)!==currentActor.userId || currentActor.allowSelfApprove)}
   })
 }
 async function receive(id,body,options){

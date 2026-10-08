@@ -8,6 +8,7 @@ import { X } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import ListSummary from '@/components/shared/ListSummary'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { Button } from '@/components/ui/button'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
@@ -83,7 +84,7 @@ export default function ReturnsPage() {
   const effectiveStartDate = startDate || (rangeAll ? '' : defaultRange.start)
   const effectiveEndDate = endDate || (rangeAll ? '' : defaultRange.end)
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['returns', type, { keyword, remark, operatorId, statusFilter, productId, partyId, warehouseId, effectiveStartDate, effectiveEndDate }],
     queryFn: () => apiList({
       page: 1,
@@ -245,7 +246,7 @@ export default function ReturnsPage() {
     { key: 'operatorName', title: '经办人', width: 90 },
     ...(type === 'purchase' ? [{ key: 'createdAt', title: '时间', width: 160, render: (v: unknown) => formatDisplayDateTime(v) } satisfies TableColumn<RowType>] : []),
     {
-      key: 'remark', title: '备注', width: 200,
+      key: 'remark', title: '备注', expandableText: true, width: 200,
       render: (v) => v
         ? <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere] text-muted-foreground" title={String(v)}>{String(v)}</span>
         : <span className="text-muted-foreground/50">—</span>
@@ -314,9 +315,11 @@ export default function ReturnsPage() {
         </div>
       )}
 
-      <DataTable columns={columns} data={(data?.list || []) as RowType[]} loading={isLoading} onRowDoubleClick={goToDetail} />
+      {isError ? <QueryErrorState error={error} onRetry={() => void refetch()} /> : (
+        <DataTable columns={columns} data={(data?.list || []) as RowType[]} loading={isLoading} onRowDoubleClick={goToDetail} />
+      )}
 
-      <ListSummary total={total} unit="单" />
+      {!isError && !isLoading && data && <ListSummary total={total} unit="单" />}
 
       <ConfirmDialog
         open={confirmState.open}

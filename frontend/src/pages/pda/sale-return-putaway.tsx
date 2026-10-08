@@ -6,7 +6,7 @@ import PdaCard from '@/components/pda/PdaCard'
 import PdaBottomBar from '@/components/pda/PdaBottomBar'
 import PdaScanner from '@/components/pda/PdaScanner'
 import PdaFlash from '@/components/pda/PdaFlash'
-import { PdaLoading } from '@/components/pda/PdaEmptyState'
+import { PdaLoading, PdaQueryError } from '@/components/pda/PdaEmptyState'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
 import { getReturnTaskByIdApi, getReturnPutawayContainerApi, getReturnPutawayLocationApi, putawayReturnApi } from '@/api/returns'
@@ -36,7 +36,7 @@ export default function PdaSaleReturnPutawayPage() {
     return () => { scanGeneration.current += 1; taskLifetime.active = false }
   }, [taskId, taskLifetime])
 
-  const { data: task, isLoading, refetch } = useQuery({
+  const { data: task, isLoading, isError, refetch } = useQuery({
     queryKey: ['pda-return-task', taskId],
     queryFn: () => getReturnTaskByIdApi(taskId),
     enabled: !!taskId,
@@ -103,9 +103,10 @@ export default function PdaSaleReturnPutawayPage() {
     }
   }, [step, containerId, ok, err, putawayAction, taskId, task])
 
+  if (isError) return <div className="flex min-h-screen flex-col bg-background"><PdaHeader title="退货上架" onBack={() => nav('/pda/sale-return')} /><div className="mx-auto w-full max-w-md p-4"><PdaQueryError onRetry={() => { void refetch() }} /></div></div>
   if (isLoading) return <div className="flex min-h-screen flex-col bg-background"><PdaHeader title="退货上架" onBack={() => nav('/pda/sale-return')} /><PdaLoading /></div>
   if (!task) return <div className="flex min-h-screen flex-col bg-background"><PdaHeader title="退货上架" onBack={() => nav('/pda/sale-return')} /><div className="p-4 text-center text-muted-foreground">任务不存在</div></div>
-  if (task.status === 5) return <div className="flex min-h-screen flex-col bg-background"><PdaHeader title="退货上架" onBack={() => nav('/pda/sale-return')} /><div className="p-4 text-center text-green-600 font-semibold">退货入仓已完成</div></div>
+  if (task.status === 5) return <div className="flex min-h-screen flex-col bg-background"><PdaHeader title="退货上架" onBack={() => nav('/pda/sale-return')} /><div className="p-4 text-center text-success-ink font-semibold">退货入仓已完成</div></div>
   if (task.status !== 4) return <div className="flex min-h-screen flex-col bg-background"><PdaHeader title="退货上架" onBack={() => nav('/pda/sale-return')} /><div className="p-4 text-center text-muted-foreground">当前任务不在待上架状态，请先核对质检进度与任务状态。</div></div>
 
   return (
@@ -117,13 +118,13 @@ export default function PdaSaleReturnPutawayPage() {
         {putawayAction.blockedReason && (
           <div role="status" className="space-y-2 text-sm text-muted-foreground">
             <p>{putawayAction.phaseMessage || putawayAction.blockedReason}</p>
-            {putawayAction.pendingRecord && <Button type="button" variant="outline" disabled={putawayAction.confirming} onClick={() => void putawayAction.confirmPending()}>确认上次结果</Button>}
+            {putawayAction.pendingRecord && <Button className="px-3" size="lg" type="button" variant="outline" disabled={putawayAction.confirming} onClick={() => void putawayAction.confirmPending()}>确认上次结果</Button>}
           </div>
         )}
         <PdaCard active={step === 'container'} done={!!containerBarcode}>
           <div className="text-sm text-muted-foreground">步骤 1</div>
           <div className="font-semibold">扫描库存条码</div>
-          {containerBarcode && <div className="mt-2 font-mono text-lg text-green-600">{containerBarcode}</div>}
+          {containerBarcode && <div className="mt-2 font-mono text-lg text-success-ink">{containerBarcode}</div>}
         </PdaCard>
         <PdaCard active={step === 'location'}>
           <div className="text-sm text-muted-foreground">步骤 2</div>

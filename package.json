@@ -125,7 +125,7 @@
     "smoke:finance": "node tests/finance.smoke.test.js",
     "smoke:invoice-quota": "node tests/invoice-quota.smoke.test.js",
     "smoke:invoice-edit-concurrency": "node tests/invoice-edit-concurrency.smoke.test.js",
-    "test:kits-composition": "node --test tests/kits-composition.test.js",
+    "test:kits-composition": "node --test tests/kits-composition.test.js tests/kits-profile.test.js tests/kits-sale-profile.test.js",
     "test:sale-commercial-money": "node --test tests/sale-commercial-money.test.js",
     "smoke:kits-foundation": "node tests/kits-foundation.smoke.test.js",
     "smoke:kits-current-stock": "node tests/kits-current-stock.smoke.test.js",

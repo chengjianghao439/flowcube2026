@@ -5,10 +5,10 @@ export type WidgetTone = 'primary' | 'success' | 'warning' | 'info' | 'danger'
 
 export const TONE_ICON: Record<WidgetTone, string> = {
   primary: 'bg-primary/10 text-primary',
-  success: 'bg-success/10 text-success',
-  warning: 'bg-warning/10 text-warning',
-  info:    'bg-info/10 text-info',
-  danger:  'bg-destructive/10 text-destructive',
+  success: 'bg-success/10 text-success-ink',
+  warning: 'bg-warning/10 text-warning-ink',
+  info:    'bg-info/10 text-info-ink',
+  danger:  'bg-destructive/10 text-destructive-ink',
 }
 
 // StatTile 的 accent 模式：整卡浅色调 + tone 色值（tone='danger' 即「红底红字」告警卡）。
@@ -23,8 +23,8 @@ export const TONE_CARD: Record<WidgetTone, string> = {
 // StatTile 的 accent 模式下的大数值文字色。
 export const TONE_TEXT: Record<WidgetTone, string> = {
   primary: 'text-primary',
-  success: 'text-success',
-  warning: 'text-warning',
-  info:    'text-info',
-  danger:  'text-destructive',
+  success: 'text-success-ink',
+  warning: 'text-warning-ink',
+  info:    'text-info-ink',
+  danger:  'text-destructive-ink',
 }

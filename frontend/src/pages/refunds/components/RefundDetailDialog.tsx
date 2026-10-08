@@ -1,12 +1,14 @@
 import { money } from '@/lib/format'
 import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from '@/lib/toast'
 import { confirmAction } from '@/lib/confirm'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
+import { useSectionActive } from '@/components/layout/SectionVisibilityContext'
 import type { StatusTone } from '@/lib/statusTone'
 import { useRefundDetail, useSubmitRefund, useExecuteRefund, useCancelRefund, invalidateFinance } from '@/hooks/useRefund'
 import { usePermission } from '@/hooks/usePermission'
@@ -25,7 +27,23 @@ const STATUS_TONE: Record<number, StatusTone> = {
 
 
 export default function RefundDetailDialog({ open, onClose, id }: Props) {
-  const { data: refund, isLoading } = useRefundDetail(id || 0)
+  const { data: refund, isLoading, isFetching, isError, isPaused, error, refetch, dataUpdatedAt } = useRefundDetail(id || 0)
+  const sectionActive = useSectionActive()
+  const readReady = open && sectionActive && refund?.id === id && !isFetching && !isError && !isPaused
+  // 确认框和补录框保存的是旧回调。读失败、刷新、切单、隐藏后，即使又回到同一单也须重新确认。
+  const readRef = useRef({ id, open, sectionActive, dataUpdatedAt, isFetching, isError, isPaused, ready: readReady, generation: 0 })
+  const previousRead = readRef.current
+  if (previousRead.id !== id || previousRead.open !== open || previousRead.sectionActive !== sectionActive
+    || previousRead.dataUpdatedAt !== dataUpdatedAt || previousRead.isFetching !== isFetching
+    || previousRead.isError !== isError || previousRead.isPaused !== isPaused) {
+    readRef.current = { id, open, sectionActive, dataUpdatedAt, isFetching, isError, isPaused, ready: readReady, generation: previousRead.generation + 1 }
+  } else {
+    readRef.current.ready = readReady
+  }
+  const readGeneration = readRef.current.generation
+  const mountedRef = useRef(true)
+  const isCurrentRead = () => mountedRef.current && readRef.current.ready && readRef.current.generation === readGeneration
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false } }, [])
   const submit = useSubmitRefund()
   const execute = useExecuteRefund()
   const cancel = useCancelRefund()
@@ -51,7 +69,7 @@ export default function RefundDetailDialog({ open, onClose, id }: Props) {
 
   /** 确认/取消这类动作：错误提示交给全局拦截器，这里吞掉异常以免留下未处理的 rejection */
   async function run(fn: () => Promise<unknown>, successMsg: string) {
-    if (lockRef.current) return
+    if (lockRef.current || !isCurrentRead()) return
     try {
       lock()
       await fn()
@@ -70,7 +88,7 @@ export default function RefundDetailDialog({ open, onClose, id }: Props) {
    * 既不会重复退钱，也不会多出一张申请单。
    */
   async function runExecute(backfillReason?: string) {
-    if (lockRef.current || !refund) return
+    if (lockRef.current || !refund || !isCurrentRead()) return
     try {
       lock()
       // 绑本次退款单 id 到查询 action；label 补退款单号（同额同客户的两张单此前无法区分）
@@ -111,18 +129,18 @@ export default function RefundDetailDialog({ open, onClose, id }: Props) {
   const status = refund?.status
   const isDraft = status === 1
   const isConfirmed = status === 2
-  const canSubmit = isDraft && can(PERMISSIONS.REFUND_ORDER_CREATE)
-  const canExecute = isConfirmed && can(PERMISSIONS.REFUND_ORDER_EXECUTE)
-  const canCancel = (isDraft || isConfirmed) && can(PERMISSIONS.REFUND_ORDER_CREATE)
+  const canSubmit = readReady && isDraft && can(PERMISSIONS.REFUND_ORDER_CREATE)
+  const canExecute = readReady && isConfirmed && can(PERMISSIONS.REFUND_ORDER_EXECUTE)
+  const canCancel = readReady && (isDraft || isConfirmed) && can(PERMISSIONS.REFUND_ORDER_CREATE)
 
   return (
     <>
-    <Dialog open={open} onOpenChange={(next) => { if (!next && !actionLocked) { onClose(); closePrompt() } }}>
-      <DialogContent className="max-w-4xl">
+    <Dialog open={open && sectionActive} onOpenChange={(next) => { if (!next && !actionLocked) { onClose(); closePrompt() } }}>
+      <DialogContent className="max-w-4xl" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle className="flex flex-wrap items-center gap-3">
             退款单详情
-            {refund && <SoftStatusLabel label={refund.statusName} tone={STATUS_TONE[refund.status] ?? 'draft'} />}
+            {refund && !isError && <SoftStatusLabel label={refund.statusName} tone={STATUS_TONE[refund.status] ?? 'draft'} />}
           </DialogTitle>
         </DialogHeader>
         <UncertainSubmitNotice
@@ -144,9 +162,12 @@ export default function RefundDetailDialog({ open, onClose, id }: Props) {
         />
         <OrderDetailSections type="refund" id={id || 0}>
 
+        {isError ? <QueryErrorState compact error={error} onRetry={() => void refetch()} /> : <>
         {isLoading && <p className="text-center py-8 text-muted-foreground">加载中…</p>}
+        {isFetching && !isLoading && <p className="text-sm text-muted-foreground">正在刷新退款单，请等待核验后操作。</p>}
+        {isPaused && <p className="text-sm text-muted-foreground">网络连接已暂停，请恢复连接后再操作。</p>}
         {refund && (
-          <div className="grid grid-cols-2 gap-x-8 gap-y-5 rounded-lg border border-border bg-muted/20 p-5 text-sm [&>div]:break-words [&>div]:leading-6">
+          <div className="grid grid-cols-1 gap-x-8 gap-y-5 rounded-lg border border-border bg-muted/20 p-5 text-sm sm:grid-cols-2 [&>div]:break-words [&>div]:leading-6">
             <div><span className="text-muted-foreground">退款单号：</span><span className="text-doc-code-strong">{refund.refundNo}</span></div>
             <div><span className="text-muted-foreground">销售单：</span><span className="text-doc-code">{refund.saleOrderNo}</span></div>
             <div><span className="text-muted-foreground">客户：</span>{refund.customerName}</div>
@@ -155,9 +176,10 @@ export default function RefundDetailDialog({ open, onClose, id }: Props) {
             <div><span className="text-muted-foreground">经办人：</span>{refund.operatorName || '—'}</div>
             {refund.confirmedByName && <div><span className="text-muted-foreground">确认人：</span>{refund.confirmedByName}</div>}
             {refund.refundedAt && <div><span className="text-muted-foreground">退款完成：</span>{formatDisplayDateTime(refund.refundedAt)}</div>}
-            {refund.remark && <div className="col-span-2"><span className="text-muted-foreground">备注：</span>{refund.remark}</div>}
+            {refund.remark && <div className="sm:col-span-2"><span className="text-muted-foreground">备注：</span>{refund.remark}</div>}
           </div>
         )}
+        </>}
         </OrderDetailSections>
         <DialogFooter className="gap-2">
           {canSubmit && (
@@ -191,7 +213,7 @@ export default function RefundDetailDialog({ open, onClose, id }: Props) {
       </DialogContent>
     </Dialog>
     <BackfillRequestDialog
-      open={!!prompt}
+      open={!!prompt && open && sectionActive}
       onClose={closePrompt}
       message={prompt?.message ?? ''}
       summary={prompt?.summary}

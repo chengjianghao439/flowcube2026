@@ -12,13 +12,16 @@
  * 软键盘只在用户主动请求手输后才出现（2026-09-17 用户要求，不要再加 autoFocus 之类的入参）。
  */
 import { useRef, useState, useCallback } from 'react'
-import { Loader2, Keyboard, ScanLine } from 'lucide-react'
+import { Loader2, Keyboard, ScanLine, PauseCircle } from 'lucide-react'
 import { usePdaScanner } from '@/hooks/usePdaScanner'
 
 interface PdaScannerProps {
   onScan: (barcode: string) => void
   placeholder?: string
   disabled?: boolean
+  /** 处理中才显示 spinner；等待核对/完成等禁用状态使用暂停说明。 */
+  busy?: boolean
+  disabledReason?: string
   /** false：仅扫码枪，隐藏手输入口（调拨等强制扫码场景） */
   allowManualEntry?: boolean
   /** 同一条码 1 秒内重复扫描时触发（可选，比如弹提示告诉用户"重复扫码"）；不传则静默丢弃 */
@@ -31,6 +34,8 @@ export default function PdaScanner({
   onScan,
   placeholder = '等待扫码…',
   disabled = false,
+  busy = false,
+  disabledReason = '扫码已暂停，请先处理当前提示',
   allowManualEntry = true,
   onDuplicate,
   allowIntentionalRepeat = false,
@@ -77,18 +82,18 @@ export default function PdaScanner({
     <div>
       <div
         data-testid="pda-scan-area"
-        className={`flex items-center gap-3 rounded-2xl border px-4 py-3 shadow-sm transition-all ${
+        className={`flex items-center gap-3 rounded-2xl border px-4 py-3 shadow-sm transition-all motion-reduce:transition-none ${
         disabled
-          ? 'border-slate-200 bg-slate-100'
+          ? 'border-border bg-muted'
           : manualMode
-          ? 'border-amber-300 bg-amber-50'
+          ? 'border-warning/40 bg-warning/10'
           : 'border-border bg-card'
       }`}>
         <span className="shrink-0">
           {disabled
-            ? <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+            ? busy ? <Loader2 className="h-5 w-5 motion-safe:animate-spin text-muted-foreground" /> : <PauseCircle className="h-5 w-5 text-muted-foreground" />
             : manualMode
-              ? <Keyboard className="h-5 w-5 text-amber-500" />
+              ? <Keyboard className="h-5 w-5 text-warning-ink" />
               : <ScanLine className="h-5 w-5 text-muted-foreground" />}
         </span>
 
@@ -97,6 +102,7 @@ export default function PdaScanner({
             <input
               ref={manualInputRef}
               data-scanner-manual="true"
+              aria-label={`手动输入：${placeholder}`}
               value={manualValue}
               onChange={e => setManualValue(e.target.value)}
               onKeyDown={e => {
@@ -104,12 +110,12 @@ export default function PdaScanner({
                 if (e.key === 'Escape') exitManualMode()
               }}
               placeholder="输入条码后按回车"
-              className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+              className="min-h-11 w-full rounded-sm bg-transparent text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring placeholder:text-muted-foreground"
               autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false}
             />
           ) : (
-            <p className={`break-words text-sm leading-6 ${disabled ? 'text-slate-500' : 'text-foreground'}`}>
-              {disabled ? '正在处理扫码结果…' : placeholder}
+            <p role={disabled ? 'status' : undefined} className={`break-words text-sm leading-6 ${disabled ? 'text-muted-foreground' : 'text-foreground'}`}>
+              {disabled ? busy ? '正在处理扫码结果…' : disabledReason : placeholder}
             </p>
           )}
         </div>
@@ -120,19 +126,19 @@ export default function PdaScanner({
               {manualValue.trim() && (
                 <button
                   onClick={commitManual}
-                  className="min-h-11 min-w-11 rounded-xl bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground active:scale-95"
+                  className="min-h-11 min-w-11 rounded-xl bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground motion-safe:active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >确认</button>
               )}
               <button
                 onClick={exitManualMode}
-                className="min-h-11 min-w-11 rounded-xl border border-border bg-background px-3 py-2 text-xs text-muted-foreground active:scale-95"
+                className="min-h-11 min-w-11 rounded-xl border border-border bg-background px-3 py-2 text-xs text-muted-foreground motion-safe:active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >取消</button>
             </>
           ) : allowManualEntry ? (
             <button
               onClick={enterManualMode}
               disabled={disabled}
-              className="min-h-11 rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-muted-foreground active:scale-95 disabled:opacity-40 whitespace-nowrap"
+              className="min-h-11 rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-muted-foreground motion-safe:active:scale-95 disabled:opacity-40 whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >手动输入</button>
           ) : null}
         </div>

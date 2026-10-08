@@ -2,7 +2,7 @@ import { useVisibleQuery } from '@/hooks/useVisibleQuery'
 import { ReportTable } from '@/components/shared/ReportTable'
 import { money } from '@/lib/format'
 import { RecordIdentity } from '@/components/shared/RecordIdentity'
-import { useState, useEffect } from 'react'
+import { useId, useState, useEffect } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
@@ -45,23 +45,24 @@ const TYPE_NAME: Record<string, string> = Object.fromEntries(TYPE_OPTIONS.map(([
 function AccountsQueryDialog({ open, initial, onClose, onApply }: {
   open: boolean; initial: AcctQuery; onClose: () => void; onApply: (q: AcctQuery) => void
 }) {
+  const fieldId = useId()
   const [v, setV] = useState<AcctQuery>(initial)
   useEffect(() => { if (open) setV(initial) }, [open, initial])
   return (
     <Dialog open={open} onOpenChange={x => !x && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg" aria-describedby={undefined}>
         <DialogHeader><DialogTitle>查询资金账户</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <div className="space-y-1">
-            <Label>关键字</Label>
-            <Input className="h-9" placeholder="编码 / 名称 / 账号" value={v.keyword}
+            <Label htmlFor={`${fieldId}-keyword`}>关键字</Label>
+            <Input id={`${fieldId}-keyword`} className="h-9" placeholder="编码 / 名称 / 账号" value={v.keyword}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setV(p => ({ ...p, keyword: e.target.value }))} />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">
-              <Label>账户类型</Label>
+              <Label htmlFor={`${fieldId}-type`}>账户类型</Label>
               <Select value={v.type || '__all__'} onValueChange={x => setV(p => ({ ...p, type: x === '__all__' ? '' : x }))}>
-                <SelectTrigger className="h-9"><SelectValue placeholder="全部" /></SelectTrigger>
+                <SelectTrigger id={`${fieldId}-type`} className="h-9"><SelectValue placeholder="全部" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__all__">全部</SelectItem>
                   {TYPE_OPTIONS.map(([val, l]) => <SelectItem key={val} value={val}>{l}</SelectItem>)}
@@ -69,9 +70,9 @@ function AccountsQueryDialog({ open, initial, onClose, onApply }: {
               </Select>
             </div>
             <div className="space-y-1">
-              <Label>状态</Label>
+              <Label htmlFor={`${fieldId}-active`}>状态</Label>
               <Select value={v.isActive || '__all__'} onValueChange={x => setV(p => ({ ...p, isActive: x === '__all__' ? '' : x }))}>
-                <SelectTrigger className="h-9"><SelectValue placeholder="全部" /></SelectTrigger>
+                <SelectTrigger id={`${fieldId}-active`} className="h-9"><SelectValue placeholder="全部" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__all__">全部</SelectItem>
                   <SelectItem value="1">启用</SelectItem>
@@ -92,6 +93,7 @@ function AccountsQueryDialog({ open, initial, onClose, onApply }: {
 }
 
 export default function FinanceAccountsPage() {
+  const fieldId = useId()
   const qc = useQueryClient()
   const { can } = usePermission()
   const canUpdate = can(PERMISSIONS.FINANCE_ACCOUNT_UPDATE)
@@ -188,7 +190,7 @@ export default function FinanceAccountsPage() {
     }},
     { key: 'openingBalance', title: '期初余额', width: 120, align: 'right', render: v => <span className="tabular-nums text-muted-foreground">{money(v as number)}</span> },
     { key: 'currentBalance', title: '当前余额', width: 130, align: 'right', render: v => (
-      <span className={`tabular-nums font-semibold ${Number(v) < 0 ? 'text-destructive' : 'text-foreground'}`}>{money(v as number)}</span>
+      <span className={`tabular-nums font-semibold ${Number(v) < 0 ? 'text-destructive-ink' : 'text-foreground'}`}>{money(v as number)}</span>
     )},
     { key: 'isActive', title: '状态', width: 80, render: (_, row) => {
       const r = row as FinanceAccount
@@ -257,39 +259,39 @@ export default function FinanceAccountsPage() {
           </DialogHeader>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">
-              <Label>账户名称 *</Label>
-              <Input value={form.name} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, name: e.target.value }))} placeholder="如：工商银行基本户" />
+              <Label htmlFor={`${fieldId}-name`}>账户名称 *</Label>
+              <Input id={`${fieldId}-name`} value={form.name} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, name: e.target.value }))} placeholder="如：工商银行基本户" />
             </div>
             <div className="space-y-1">
-              <Label>类型 *</Label>
+              <Label htmlFor={`${fieldId}-type`}>类型 *</Label>
               <Select value={form.type} onValueChange={v => setForm(f => ({ ...f, type: v }))}>
-                <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                <SelectTrigger id={`${fieldId}-type`} className="h-10"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {TYPE_OPTIONS.map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-1">
-              <Label>账号</Label>
-              <Input value={form.accountNo} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, accountNo: e.target.value }))} placeholder="现金账户可留空" />
+              <Label htmlFor={`${fieldId}-account-no`}>账号</Label>
+              <Input id={`${fieldId}-account-no`} value={form.accountNo} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, accountNo: e.target.value }))} placeholder="现金账户可留空" />
             </div>
             <div className="space-y-1">
-              <Label>开户行</Label>
-              <Input value={form.bankName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, bankName: e.target.value }))} />
+              <Label htmlFor={`${fieldId}-bank`}>开户行</Label>
+              <Input id={`${fieldId}-bank`} value={form.bankName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, bankName: e.target.value }))} />
             </div>
             <div className="space-y-1">
-              <Label>户名</Label>
-              <Input value={form.holder} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, holder: e.target.value }))} />
+              <Label htmlFor={`${fieldId}-holder`}>户名</Label>
+              <Input id={`${fieldId}-holder`} value={form.holder} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, holder: e.target.value }))} />
             </div>
             <div className="space-y-1">
-              <Label>期初余额</Label>
-              <Input type="number" step="0.01" value={form.openingBalance}
+              <Label htmlFor={`${fieldId}-opening`}>期初余额</Label>
+              <Input id={`${fieldId}-opening`} type="number" step="0.01" value={form.openingBalance}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, openingBalance: e.target.value }))} />
               {editing && <p className="text-helper">已有流水后不可再改，需调整请用「余额调整」</p>}
             </div>
             <div className="space-y-1 col-span-2">
-              <Label>备注</Label>
-              <Input value={form.remark} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, remark: e.target.value }))} />
+              <Label htmlFor={`${fieldId}-remark`}>备注</Label>
+              <Input id={`${fieldId}-remark`} value={form.remark} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, remark: e.target.value }))} />
             </div>
             {editing && (
               <div className="col-span-2 flex items-center gap-2">
@@ -316,8 +318,8 @@ export default function FinanceAccountsPage() {
             <div className="text-sm text-muted-foreground">
               当前余额 <span className="font-semibold text-foreground">{money(txAccount.currentBalance)}</span>
               {transactions && <>
-                {' '}· 期间收入 <span className="text-success">{money(transactions.summary.inAmount)}</span>
-                {' '}· 支出 <span className="text-destructive">{money(transactions.summary.outAmount)}</span>
+                {' '}· 期间收入 <span className="text-success-ink">{money(transactions.summary.inAmount)}</span>
+                {' '}· 支出 <span className="text-destructive-ink">{money(transactions.summary.outAmount)}</span>
               </>}
             </div>
           )}
@@ -341,8 +343,8 @@ export default function FinanceAccountsPage() {
                     <td className="px-2 py-1.5"><SoftStatusLabel label={t.bizTypeName} tone={t.bizType === 4 ? 'warning' : 'info'} /></td>
                     <td className="px-2 py-1.5 text-doc-code-muted">{t.bizNo || '—'}</td>
                     <td className="px-2 py-1.5">{t.partyName || '—'}</td>
-                    <td className="px-2 py-1.5 text-right tabular-nums text-success">{t.direction === 1 ? money(t.amount) : ''}</td>
-                    <td className="px-2 py-1.5 text-right tabular-nums text-destructive">{t.direction === 2 ? money(t.amount) : ''}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums text-success-ink">{t.direction === 1 ? money(t.amount) : ''}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums text-destructive-ink">{t.direction === 2 ? money(t.amount) : ''}</td>
                     <td className="px-2 py-1.5 text-right tabular-nums font-medium">{money(t.balanceAfter)}</td>
                   </tr>
                 ))}
@@ -365,23 +367,23 @@ export default function FinanceAccountsPage() {
           </p>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">
-              <Label>当前余额</Label>
-              <Input value={adjustTarget ? money(adjustTarget.currentBalance) : ''} disabled className="bg-muted/50" />
+              <Label htmlFor={`${fieldId}-current`}>当前余额</Label>
+              <Input id={`${fieldId}-current`} value={adjustTarget ? money(adjustTarget.currentBalance) : ''} disabled className="bg-muted/50" />
             </div>
             <div className="space-y-1">
-              <Label>调整后余额 *</Label>
-              <Input type="number" step="0.01" value={adjustBalance}
+              <Label htmlFor={`${fieldId}-adjusted`}>调整后余额 *</Label>
+              <Input id={`${fieldId}-adjusted`} type="number" step="0.01" value={adjustBalance}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAdjustBalance(e.target.value)} />
             </div>
             <div className="space-y-1 col-span-2">
-              <Label>调整原因</Label>
-              <Input value={adjustRemark} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAdjustRemark(e.target.value)} placeholder="如：与银行流水核对差异" />
+              <Label htmlFor={`${fieldId}-reason`}>调整原因</Label>
+              <Input id={`${fieldId}-reason`} value={adjustRemark} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAdjustRemark(e.target.value)} placeholder="如：与银行流水核对差异" />
             </div>
           </div>
           {adjustTarget && adjustBalance !== '' && (
             <p className="text-sm">
               将产生差额流水：
-              <span className={`ml-1 font-semibold tabular-nums ${Number(adjustBalance) >= adjustTarget.currentBalance ? 'text-success' : 'text-destructive'}`}>
+              <span className={`ml-1 font-semibold tabular-nums ${Number(adjustBalance) >= adjustTarget.currentBalance ? 'text-success-ink' : 'text-destructive-ink'}`}>
                 {Number(adjustBalance) >= adjustTarget.currentBalance ? '+' : '-'}
                 {money(Math.abs(Number(adjustBalance) - adjustTarget.currentBalance))}
               </span>

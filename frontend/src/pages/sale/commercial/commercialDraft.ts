@@ -9,9 +9,16 @@ export interface CommercialDraftRow {
   price: string
   units: ProductUnit[]
   baseUnit?: string
+  spec?: string | null
+  color?: string | null
+  articleNumber?: string | null
+  costPrice?: number | null
   allowDecimalQty?: boolean
   saved?: CommercialGroup
   packagingExpressible: boolean
+}
+export function commercialUnit(group?: CommercialGroup): string {
+  return group?.kind === 'kit' ? (group.metadata.kitUnit || '套') : (group?.components[0]?.unit ?? '')
 }
 export function draftFromGroups(groups: CommercialGroup[]): CommercialDraftRow[] {
   return groups.map((g) => {
@@ -23,11 +30,14 @@ export function draftFromGroups(groups: CommercialGroup[]): CommercialDraftRow[]
       input,
       name: g.kind === 'kit' ? (g.kitName ?? '原套') : (g.components[0]?.productName ?? ''),
       code: g.kind === 'kit' ? (g.kitCode ?? '') : (g.components[0]?.productCode ?? ''),
-      unit: g.kind === 'kit' ? '套' : input.kind === 'ordinary' ? (input.entryUnit ?? g.components[0]?.unit ?? '') : '',
+      unit: g.kind === 'kit' ? commercialUnit(g) : input.kind === 'ordinary' ? (input.entryUnit ?? g.components[0]?.unit ?? '') : '',
       quantity: String(q),
       price: String(input.unitPrice ?? (g.kind === 'kit' ? g.unitPrice : (entry?.entryUnitPrice ?? g.unitPrice))),
       units: [],
-      baseUnit: g.kind === 'ordinary' ? g.components[0]?.unit : '套',
+      baseUnit: commercialUnit(g),
+      spec: g.kind === 'kit' ? g.metadata.kitIdentity?.spec : g.components[0]?.spec,
+      color: g.kind === 'kit' ? g.metadata.kitIdentity?.color : g.components[0]?.color,
+      articleNumber: g.kind === 'kit' ? g.metadata.kitIdentity?.articleNumber : g.components[0]?.articleNumber,
       saved: g,
       packagingExpressible
     }
@@ -69,14 +79,14 @@ export function commercialPrintRows(groups: CommercialGroup[]): CommercialPrintI
       return {
         productCode: g.kind === 'kit' ? (g.kitCode ?? '') : (c?.productCode ?? ''),
         productName: g.kind === 'kit' ? (g.kitName ?? '') : (c?.productName ?? ''),
-        unit: g.kind === 'kit' ? '套' : packaging ? entry.entryUnit : (c?.unit ?? ''),
+        unit: g.kind === 'kit' ? commercialUnit(g) : packaging ? entry.entryUnit : (c?.unit ?? ''),
         quantity: packaging ? entry.entryQty : g.targetQty,
         unitPrice,
         priceText: `¥${Number(unitPrice).toFixed(g.kind === 'ordinary' && !packaging ? 8 : 4)}`,
         amount: g.amount,
-        articleNumber: g.kind === 'ordinary' ? (c?.articleNumber ?? '') : '',
-        spec: g.kind === 'ordinary' ? (c?.spec ?? '') : '',
-        color: g.kind === 'ordinary' ? (c?.color ?? '') : '',
+        articleNumber: g.kind === 'ordinary' ? (c?.articleNumber ?? '') : (g.metadata.kitIdentity?.articleNumber ?? ''),
+        spec: g.kind === 'ordinary' ? (c?.spec ?? '') : (g.metadata.kitIdentity?.spec ?? ''),
+        color: g.kind === 'ordinary' ? (c?.color ?? '') : (g.metadata.kitIdentity?.color ?? ''),
         remark:
           g.kind === 'ordinary' && entry && !wholeOriginal
             ? `原成交依据 ${entry.entryQty}${entry.entryUnit} × ${Number(entry.entryUnitPrice).toFixed(4)}/${entry.entryUnit}；1${entry.entryUnit}=${entry.conversionRate}${c?.unit ?? ''}；本行显示当前基本量与已存基本单价`

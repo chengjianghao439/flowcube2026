@@ -249,7 +249,7 @@ export default function InboundTasksPage() {
         return (
           <div className="min-w-0">
             <SoftStatusLabel label={task.receiptStatus?.label ?? INBOUND_STATUS_LABEL[task.status]} tone={tone} />
-            {task.exceptionFlags?.hasException && <p className="text-xs text-destructive mt-1">打印 / 上架异常</p>}
+            {task.exceptionFlags?.hasException && <p className="text-xs text-destructive-ink mt-1">打印 / 上架异常</p>}
           </div>
         )
       },
@@ -285,7 +285,7 @@ export default function InboundTasksPage() {
     },
     {
       key: 'remark',
-      title: '备注',
+      title: '备注', expandableText: true,
       width: 12.95,
       render: v => v
         ? <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere] text-muted-foreground" title={String(v)}>{v as string}</span>

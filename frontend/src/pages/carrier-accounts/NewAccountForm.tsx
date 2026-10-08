@@ -29,7 +29,7 @@ export function NewAccountForm({ saving, onCreate, onCancel, onDirtyChange }: {
       <div className="space-y-2"><Label htmlFor="new-account-name">承运商名称</Label><Input id="new-account-name" value={name} onChange={e => setName(e.target.value)} maxLength={10} required placeholder="例如：顺丰北京仓" /></div>
       <div className="space-y-2"><Label htmlFor="new-account-monthly">月结账号</Label><Input id="new-account-monthly" value={monthly} onChange={e => setMonthly(e.target.value)} maxLength={platform === 'sf' ? 20 : 32} pattern="[A-Za-z0-9_\-]+" required autoComplete="off" placeholder="填写快递公司提供的月结账号" /></div>
     </fieldset>
-    {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+    {error && <p role="alert" className="text-sm text-destructive-ink">{error}</p>}
     <div className="flex gap-3"><Button type="submit" disabled={saving}>{saving ? '正在新增…' : '保存并继续'}</Button><Button type="button" variant="outline" disabled={saving} onClick={onCancel}>取消新增</Button></div>
   </form>
 }

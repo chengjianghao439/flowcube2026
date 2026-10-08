@@ -301,7 +301,7 @@ export default function AddressBookDialog({ open, onOpenChange, customerId, cust
                         <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" title="编辑" onClick={() => handleEdit(a)}>
                           <Pencil className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" title="删除" onClick={() => handleDelete(a)}>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive-ink" title="删除" onClick={() => handleDelete(a)}>
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </>

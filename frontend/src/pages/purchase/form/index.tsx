@@ -317,7 +317,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
               }}
               className={cn(supplierError && 'border-destructive/60 bg-destructive/5')}
             />
-            {supplierError && <p className="text-xs text-destructive">请选择供应商</p>}
+            {supplierError && <p className="text-xs text-destructive-ink">请选择供应商</p>}
           </div>
 
           <div data-entry-field="warehouse" className="w-56 shrink-0 space-y-1.5">
@@ -329,7 +329,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
               placeholder="选择仓库"
               className={cn(warehouseError && 'border-destructive/60 bg-destructive/5')}
             />
-            {warehouseError && <p className="text-xs text-destructive">请选择仓库</p>}
+            {warehouseError && <p className="text-xs text-destructive-ink">请选择仓库</p>}
           </div>
 
           <div className="w-48 shrink-0 space-y-1.5">
@@ -461,7 +461,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
                         size="sm"
                         variant="ghost"
                         aria-label="删除该行商品"
-                        className="h-8 w-9 p-0 text-muted-foreground hover:text-destructive"
+                        className="h-8 w-9 p-0 text-muted-foreground hover:text-destructive-ink"
                         onClick={() => removeItem(item._key)}
                       >
                         ✕
@@ -581,7 +581,7 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
           <>
             <ReturnSourceButton kind="purchase" sourceId={order.id} sourceNo={order.orderNo} />
             {canCancel && (
-              <Button variant="outline" className="border-destructive/30 text-destructive hover:bg-destructive/5" disabled={isPending}
+              <Button variant="outline" className="border-destructive/30 text-destructive-ink hover:bg-destructive/5" disabled={isPending}
                 onClick={() => ask('取消采购单', '取消后此采购单将无法恢复，请确认操作。', 'destructive', () => {
                   setConfirmState(s => ({ ...s, open: false }))
                   cancelMutate.mutate(order.id)
@@ -613,7 +613,7 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
                   }, '通过')}>
                   审批通过
                 </Button>
-                <Button variant="outline" className="border-destructive/30 text-destructive hover:bg-destructive/5" disabled={isPending}
+                <Button variant="outline" className="border-destructive/30 text-destructive-ink hover:bg-destructive/5" disabled={isPending}
                   onClick={() => setRejectOpen(true)}>
                   驳回
                 </Button>
@@ -656,7 +656,7 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
             return (
               <div>
                 <dt className="mb-0.5 text-helper">收货进度</dt>
-                <dd className={cn('font-medium', fullyReceived && 'text-success')}>{received} / {ordered} 件</dd>
+                <dd className={cn('font-medium', fullyReceived && 'text-success-ink')}>{received} / {ordered} 件</dd>
                 <div className="mt-1.5 h-1.5 w-full max-w-32 rounded-full bg-muted">
                   <div
                     className="h-1.5 rounded-full transition-all"
@@ -682,9 +682,9 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
                   // 不然这里显示"已完成"，点进去却是异常，会让人confused
                   const label = t.receiptStatus?.label ?? INBOUND_STATUS_LABEL[t.status as InboundTaskStatus] ?? '未知'
                   const toneClass = t.receiptStatus?.key === 'exception'
-                    ? 'text-destructive'
+                    ? 'text-destructive-ink'
                     : t.receiptStatus?.key === 'audited'
-                      ? 'text-success'
+                      ? 'text-success-ink'
                       : 'text-muted-foreground'
                   return (
                     <button

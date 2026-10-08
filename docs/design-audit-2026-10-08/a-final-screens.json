@@ -1,0 +1,68 @@
+{
+  "report": "a-followup-overlays.md",
+  "viewport": {
+    "width": 1024,
+    "height": 768
+  },
+  "screenshotCount": 11,
+  "aAfterTotal": 119,
+  "themeMethod": "浅色和DOM .dark模拟",
+  "images": [
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-final-invoice-date-calendar-1024-light.png",
+      "imageReviewed": true,
+      "theme": "light"
+    },
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-final-invoice-date-discard-1024-light.png",
+      "imageReviewed": true,
+      "theme": "light"
+    },
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-final-invoice-date-inner-escape-1024-light.png",
+      "imageReviewed": true,
+      "theme": "light"
+    },
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-final-invoice-date-resume-1024-dark.png",
+      "imageReviewed": true,
+      "theme": "dark"
+    },
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-final-invoices-abort-1024-dark.png",
+      "imageReviewed": true,
+      "theme": "dark"
+    },
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-final-invoices-abort-1024-light.png",
+      "imageReviewed": true,
+      "theme": "light"
+    },
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-final-invoices-retry-empty-1024-dark.png",
+      "imageReviewed": true,
+      "theme": "dark"
+    },
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-final-logistics-date-labels-1024-dark.png",
+      "imageReviewed": true,
+      "theme": "dark"
+    },
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-final-logistics-date-labels-1024-light.png",
+      "imageReviewed": true,
+      "theme": "light"
+    },
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-final-templates-error-1024-light.png",
+      "imageReviewed": true,
+      "theme": "light"
+    },
+    {
+      "path": "docs/design-audit-2026-10-08/screens/after/a-final-templates-retry-1024-dark.png",
+      "imageReviewed": true,
+      "theme": "dark"
+    }
+  ],
+  "evidenceBoundary": "稳定窗口样本在root后续dependency overrides前；不得外推其它调用点/业务写入/原生端"
+}

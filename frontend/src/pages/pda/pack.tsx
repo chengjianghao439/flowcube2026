@@ -1,3 +1,4 @@
+import { qty as formatQty } from '@/lib/format'
 import PdaOverviewText from '@/components/pda/PdaOverviewText'
 import PdaProductIdentity from '@/components/pda/PdaProductIdentity'
 /**
@@ -95,15 +96,15 @@ function PackageCard({ pkg, active, onActivate, onFinish, finishing, onPrintLabe
   const totalQty = pkg.items.reduce((s, i) => s + i.qty, 0)
   const editable = active && pkg.status === 1
   return (
-    <div className={`rounded-2xl border transition-all ${
-      active ? 'border-primary bg-primary/5' : pkg.status === 2 ? 'border-green-200 bg-green-50/40' : pkg.status === 3 ? 'border-border bg-muted/20 opacity-60' : 'border-border bg-card'
+    <div className={`rounded-2xl border transition-all motion-reduce:transition-none ${
+      active ? 'border-primary bg-primary/5' : pkg.status === 2 ? 'border-success/30 bg-success/10' : pkg.status === 3 ? 'border-border bg-muted/20 opacity-60' : 'border-border bg-card'
     }`}>
       <button onClick={() => { setOpen(o => !o); if (!active && pkg.status !== 3) onActivate() }}
         className="w-full flex items-center justify-between px-4 py-3 text-left">
         <div className="flex items-center gap-2">
           <span className="shrink-0">
             {pkg.status === 2
-              ? <CircleCheck className="h-4 w-4 text-green-600" />
+              ? <CircleCheck className="h-4 w-4 text-success-ink" />
               : pkg.status === 3
                 ? <Ban className="h-4 w-4 text-muted-foreground" />
                 : <PackageIcon className={active ? 'h-4 w-4 text-primary' : 'h-4 w-4 text-muted-foreground'} />}
@@ -112,7 +113,7 @@ function PackageCard({ pkg, active, onActivate, onFinish, finishing, onPrintLabe
             <p className="font-mono font-bold text-foreground text-sm">{pkg.barcode}</p>
             {/* 种数按**商品**去重：装箱行按来源取货标签分行后，同一商品会有多行
                 （旧 SKU 一行 + 各取货标签各一行），不能拿行数当"种"数 */}
-            <p className="text-xs text-muted-foreground">{new Set(pkg.items.map(i => i.productId)).size} 种，{totalQty.toFixed(0)} 件</p>
+            <p className="text-xs text-muted-foreground">{new Set(pkg.items.map(i => i.productId)).size} 种，{formatQty(totalQty)} 件</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -138,9 +139,9 @@ function PackageCard({ pkg, active, onActivate, onFinish, finishing, onPrintLabe
                 <p className="font-bold text-primary">{item.qty} <span className="text-xs font-normal text-muted-foreground">{item.unit}</span></p>
                 {editable && (
                   <Button
-                    size="sm"
+                    size="lg"
                     variant="ghost"
-                    className="h-7 px-2 text-xs text-destructive hover:text-destructive"
+                    className="px-3 text-xs text-destructive-ink hover:text-destructive-ink"
                     onClick={() => onRemoveItem(item.id)}
                     disabled={removingItemId === item.id}
                   >
@@ -151,9 +152,9 @@ function PackageCard({ pkg, active, onActivate, onFinish, finishing, onPrintLabe
             </div>
           ))}
           <Button
-            size="sm"
+            size="lg"
             variant="outline"
-            className="w-full mt-2"
+            className="px-3 w-full mt-2"
             onClick={onPrintLabel}
             disabled={printingLabel}
           >
@@ -165,20 +166,20 @@ function PackageCard({ pkg, active, onActivate, onFinish, finishing, onPrintLabe
             （2026-09-17 验收 ISSUE-003）。
           */}
           <p className={`mt-1 text-xs ${
-            pkg.printStatus?.key === 'success' ? 'text-emerald-600'
-              : pkg.printStatus?.key === 'failed' ? 'text-destructive'
-                : 'text-amber-600'
+            pkg.printStatus?.key === 'success' ? 'text-success-ink'
+              : pkg.printStatus?.key === 'failed' ? 'text-destructive-ink'
+                : 'text-warning-ink'
           }`}>
             箱贴：{pkg.printStatus?.label ?? '未生成箱贴'}
             {pkg.printStatus?.errorMessage ? `（${pkg.printStatus.errorMessage}）` : ''}
           </p>
           {editable && pkg.items.length > 0 && (
-            <Button size="sm" className="w-full mt-1" onClick={onFinish} disabled={finishing}>
+            <Button size="lg" className="px-3 w-full mt-1" onClick={onFinish} disabled={finishing}>
               {finishing ? '处理中…' : '✓ 完成此箱'}
             </Button>
           )}
           {editable && (
-            <Button size="sm" variant="outline" className="w-full mt-1 text-destructive hover:text-destructive" onClick={onVoid} disabled={voiding}>
+            <Button size="lg" variant="outline" className="px-3 w-full mt-1 text-destructive-ink hover:text-destructive-ink" onClick={onVoid} disabled={voiding}>
               {voiding ? '作废中…' : '作废本箱（装错重来）'}
             </Button>
           )}
@@ -217,7 +218,7 @@ export default function PdaPackPage() {
     data: taskDetail,
     isLoading: taskLoading,
     isError: taskError,
-    error: taskLoadError,
+    refetch: refetchTask,
   } = useQuery({
     queryKey: ['pda-pack-task', taskId],
     queryFn: () => getTaskByIdApi(taskId),
@@ -408,7 +409,7 @@ export default function PdaPackPage() {
     },
   })
 
-  const { data: packages = [], isLoading: pkgLoading } = useQuery({
+  const { data: packages = [], isLoading: pkgLoading, isError: pkgError, refetch: refetchPackages } = useQuery({
     queryKey: ['pda-packages', taskId],
     queryFn:  () => getPackagesApi(taskId),
     // **只读事实的加载不绑状态**：任务被「完成打包」推进到 6 之后（尤其是后台成功、响应丢失后
@@ -753,105 +754,7 @@ export default function PdaPackPage() {
     void submitAdd({ productCode: raw, qty: 1 })
   }, [activePackageId, err, anyBlockedReason, anySubmitBlocked, onlineBlocked, taskDetail, taskLoading, submitAdd])
 
-  // ── 任务未选 ────────────────────────────────────────────────────────────
-  if (!task && !routeTaskId) return <TaskSelectStep onSelect={t => { setTask(t); setActivePackageId(null) }} />
-
-  if (taskId <= 0) {
-    return (
-      <PdaTaskState
-        title="缺少打包任务"
-        description="未找到打包任务信息，请返回列表重新选择。"
-        actionText="选择任务"
-        onAction={goSelectTask}
-        secondaryText="返回工作台"
-        onSecondary={() => navigate('/pda')}
-      />
-    )
-  }
-
-  if (taskLoading) {
-    return (
-      <div className="flex min-h-screen flex-col bg-background">
-        <PdaHeader title="打包作业" onBack={goSelectTask} />
-        <div className="flex flex-1 items-center justify-center">
-          <div className="space-y-3 text-center">
-            <PdaLoading className="h-10" />
-            <p className="text-sm text-muted-foreground">正在加载任务数据…</p>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (taskError || !taskDetail) {
-    return (
-      <PdaTaskState
-        title="打包任务不存在"
-        description={(taskLoadError as { message?: string })?.message || `未找到任务 #${taskId}，请确认任务是否已被删除或状态已变化。`}
-        actionText="选择其他任务"
-        onAction={goSelectTask}
-        secondaryText="返回工作台"
-        onSecondary={() => navigate('/pda')}
-      />
-    )
-  }
-
-  // 有未确认的原键记录时**不能**提前 return：「完成打包」后台成功、响应丢失后任务已经推进到 6，
-  // 重挂时 `allDone`（本地 state）是 false、`taskDetail.status` 又不是 5 ⇒ 会直接落到这个分支，
-  // 把「确认上次结果 / 原目标定位」整个藏掉 —— 那正是本页最需要用户看见的东西。
-  if (!allDone && taskDetail.status !== WT_STATUS.PACKING && !noticePendingAction) {
-    return (
-      <PdaTaskState
-        title="当前任务不能打包"
-        description={`任务 ${taskDetail.taskNo} 当前状态为「${taskDetail.statusName}」。打包页只允许处理「待打包」任务，请选择其他待打包任务。`}
-        actionText="选择其他任务"
-        onAction={goSelectTask}
-        secondaryText="返回工作台"
-        onSecondary={() => navigate('/pda')}
-      />
-    )
-  }
-
-  const activeBoxes = packages.filter(p => p.status !== 3)
-  const totalBoxes = activeBoxes.length
-  const doneBoxes  = activeBoxes.filter(p => p.status === 2).length
-  const totalItems = activeBoxes.reduce((s, p) => s + p.items.reduce((ss, i) => ss + i.qty, 0), 0)
-  // 已完成但箱贴还没打印成功的箱子：它们正是「完成打包」被服务端拦下的原因
-  const unprintedBoxes = activeBoxes.filter(p => p.status === 2 && p.printStatus?.key !== 'success')
-  // ── 全部完成页 ────────────────────────────────────────────────────────────
-  if (allDone) return (
-    <PdaDoneView
-      icon={<PartyPopper className="h-20 w-20 text-green-600" />}
-      title="打包完成！"
-      description={`任务：${taskDetail.taskNo} · 共 ${totalBoxes} 箱，${totalItems.toFixed(0)} 件商品`}
-      actionText="返回工作台"
-      onAction={() => navigate('/pda')}
-      secondaryText="继续打包"
-      onSecondary={goSelectTask}
-    >
-      <PdaNextStep
-        enabled={shipTaskId === taskId && taskDetail.id === taskId && !anySubmitBlocked && !onlineBlocked}
-        required={[PERMISSIONS.WAREHOUSE_TASK_SHIP]}
-        to="/pda/ship" label="去出库" hint="到出库页扫描物流码或箱码，再确认出库。"
-      />
-    </PdaDoneView>
-  )
-
-  return (
-    <div className="flex min-h-screen flex-col bg-background">
-
-      <PdaHeader
-        title={taskDetail.taskNo}
-        subtitle={taskDetail.customerName}
-        onBack={goSelectTask}
-        right={<span className="text-xs text-muted-foreground">{doneBoxes}/{totalBoxes} 箱</span>}
-      />
-
-      {/* Flash */}
-      <PdaFlash flash={flash} />
-
-      <div className="flex-1 overflow-y-auto">
-        <div className="max-w-md mx-auto px-4 py-4 space-y-3">
+  const recoveryNotice = <>
           <PdaCriticalActionNotice
             blockedReason={
               anyBlockedReason
@@ -886,8 +789,8 @@ export default function PdaPackPage() {
               可能已指向别的箱子，任务列表也可能换了人，不能让它们替代原目标。
               移出/作废同样冻结**原箱与原明细**，否则恢复时无法确认「上次动的到底是哪一行」。 */}
           {frozenRecord && (
-            <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 dark:border-amber-700 dark:bg-amber-950/40">
-              <p className="text-xs font-semibold text-amber-800 dark:text-amber-200">
+            <div className="rounded-xl border border-warning/30 bg-warning/10 p-3 dark:border-warning/30 dark:bg-warning/10">
+              <p className="text-xs font-semibold text-warning-ink dark:text-warning-ink">
                 {frozenRecord.action === 'package.add'
                   ? '上次装箱提交（结果待确认）'
                   : frozenRecord.action === 'package.remove-item'
@@ -899,7 +802,7 @@ export default function PdaPackPage() {
                       : `上次${frozenRecord.label}（结果待确认）`}
               </p>
               {frozenRecordTrusted ? (
-                <div className="mt-1 grid grid-cols-2 gap-2 text-xs text-amber-900 dark:text-amber-100">
+                <div className="mt-1 grid grid-cols-2 gap-2 text-xs text-warning-ink dark:text-warning-ink">
                   <div>任务 <span className="font-mono">{String(frozenRecord.metadata?.taskNo ?? frozenRecord.metadata?.taskId ?? '—')}</span></div>
                   <div>箱子 <span className="font-mono">{String(frozenRecord.metadata?.packageBarcode ?? frozenRecord.metadata?.packageId ?? '—')}</span></div>
                   <div className="min-w-0">
@@ -920,7 +823,7 @@ export default function PdaPackPage() {
                   )}
                 </div>
               ) : (
-                <p className="mt-1 text-xs text-amber-900 dark:text-amber-100">
+                <p className="mt-1 text-xs text-warning-ink dark:text-warning-ink">
                   这条待确认记录的<strong>归属无法确认</strong>（关键字段缺失或与任务不一致），
                   因此不展示原内容，以免张冠李戴。已继续阻止重复提交：请人工核对实物后，
                   用「结果未生效，清除记录」显式清除，或先点「确认上次结果」再查一次。
@@ -929,16 +832,122 @@ export default function PdaPackPage() {
             </div>
           )}
 
+  </>
+
+  // ── 任务未选 ────────────────────────────────────────────────────────────
+  if (!task && !routeTaskId) return <TaskSelectStep onSelect={t => { setTask(t); setActivePackageId(null) }} />
+
+  if (taskId <= 0) {
+    return (
+      <PdaTaskState
+        title="缺少打包任务"
+        description="未找到打包任务信息，请返回列表重新选择。"
+        actionText="选择任务"
+        onAction={goSelectTask}
+        secondaryText="返回工作台"
+        onSecondary={() => navigate('/pda')}
+      />
+    )
+  }
+
+  if (taskLoading) {
+    return (
+      <div className="flex min-h-screen flex-col bg-background">
+        <PdaHeader title="打包作业" onBack={goSelectTask} />
+        <div className="flex flex-1 items-center justify-center">
+          <div className="space-y-3 text-center">
+            <PdaLoading className="h-10" />
+            <p className="text-sm text-muted-foreground">正在加载任务数据…</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (taskError) return <div className="min-h-screen bg-background"><PdaHeader title="打包作业" onBack={goSelectTask} /><div className="mx-auto max-w-md space-y-3 p-4">{recoveryNotice}<PdaQueryError onRetry={() => { void refetchTask() }} /></div></div>
+
+  if (!taskDetail) {
+    return (
+      <PdaTaskState
+        title="打包任务不存在"
+        description={`未找到任务 #${taskId}，请确认任务是否已被删除或状态已变化。`}
+        actionText="选择其他任务"
+        onAction={goSelectTask}
+        secondaryText="返回工作台"
+        onSecondary={() => navigate('/pda')}
+      />
+    )
+  }
+
+  // 有未确认的原键记录时**不能**提前 return：「完成打包」后台成功、响应丢失后任务已经推进到 6，
+  // 重挂时 `allDone`（本地 state）是 false、`taskDetail.status` 又不是 5 ⇒ 会直接落到这个分支，
+  // 把「确认上次结果 / 原目标定位」整个藏掉 —— 那正是本页最需要用户看见的东西。
+  if (!allDone && taskDetail.status !== WT_STATUS.PACKING && !noticePendingAction) {
+    return (
+      <PdaTaskState
+        title="当前任务不能打包"
+        description={`任务 ${taskDetail.taskNo} 当前状态为「${taskDetail.statusName}」。打包页只允许处理「待打包」任务，请选择其他待打包任务。`}
+        actionText="选择其他任务"
+        onAction={goSelectTask}
+        secondaryText="返回工作台"
+        onSecondary={() => navigate('/pda')}
+      />
+    )
+  }
+
+  const activeBoxes = packages.filter(p => p.status !== 3)
+  const totalBoxes = activeBoxes.length
+  const doneBoxes  = activeBoxes.filter(p => p.status === 2).length
+  const totalItems = activeBoxes.reduce((s, p) => s + p.items.reduce((ss, i) => ss + i.qty, 0), 0)
+  // 已完成但箱贴还没打印成功的箱子：它们正是「完成打包」被服务端拦下的原因
+  const unprintedBoxes = activeBoxes.filter(p => p.status === 2 && p.printStatus?.key !== 'success')
+  // ── 全部完成页 ────────────────────────────────────────────────────────────
+  if (allDone) return (
+    <PdaDoneView
+      icon={<PartyPopper className="h-20 w-20 text-success-ink" />}
+      title="打包完成！"
+      description={`任务：${taskDetail.taskNo} · 共 ${totalBoxes} 箱，${formatQty(totalItems)} 件商品`}
+      actionText="返回工作台"
+      onAction={() => navigate('/pda')}
+      secondaryText="继续打包"
+      onSecondary={goSelectTask}
+    >
+      <PdaNextStep
+        enabled={shipTaskId === taskId && taskDetail.id === taskId && !anySubmitBlocked && !onlineBlocked}
+        required={[PERMISSIONS.WAREHOUSE_TASK_SHIP]}
+        to="/pda/ship" label="去出库" hint="到出库页扫描物流码或箱码，再确认出库。"
+      />
+    </PdaDoneView>
+  )
+
+  return (
+    <div className="flex min-h-screen flex-col bg-background">
+
+      <PdaHeader
+        title={taskDetail.taskNo}
+        subtitle={taskDetail.customerName}
+        onBack={goSelectTask}
+        right={<span className="text-xs text-muted-foreground">{pkgError ? '箱子暂不可读取' : `${doneBoxes}/${totalBoxes} 箱`}</span>}
+      />
+
+      {/* Flash */}
+      <PdaFlash flash={flash} />
+
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-md mx-auto px-4 py-4 space-y-3">
+          {recoveryNotice}
+
           {/* 统计行 */}
           <PdaStatGrid cols={3}>
-            <PdaStat label="箱子数" value={totalBoxes} />
-            <PdaStat label="已完成" value={doneBoxes} accent />
-            <PdaStat label="总件数" value={totalItems.toFixed(0)} />
+            <PdaStat label="箱子数" value={pkgError ? '—' : totalBoxes} />
+            <PdaStat label="已完成" value={pkgError ? '—' : doneBoxes} accent />
+            <PdaStat label="总件数" value={pkgError ? '—' : formatQty(totalItems)} />
           </PdaStatGrid>
 
           {/* 箱子列表 */}
           {pkgLoading && <PdaLoading className="h-24" />}
-          {packages.map(pkg => (
+          {pkgError && <PdaQueryError onRetry={() => { void refetchPackages() }} />}
+          {!pkgError && packages.map(pkg => (
             <PackageCard
               key={pkg.id}
               pkg={pkg}
@@ -971,32 +980,32 @@ export default function PdaPackPage() {
               voiding={voidAction.phase === 'submitting' || anySubmitBlocked}
             />
           ))}
-          {packages.length === 0 && !pkgLoading && (
+          {packages.length === 0 && !pkgLoading && !pkgError && (
             <div className="rounded-2xl border border-dashed border-border bg-muted/20 py-10 text-center">
               <p className="text-muted-foreground text-sm">点击下方「新建箱子」开始打包</p>
             </div>
           )}
-          {totalBoxes > 0 && activeBoxes.every((pkg) => pkg.status === 2) ? (
+          {!pkgError && !pkgLoading && totalBoxes > 0 && activeBoxes.every((pkg) => pkg.status === 2) ? (
             <>
               {/*
                 箱贴未打印成功时，完成打包会被系统拒绝（出库前置：箱贴必须有打印成功记录）。
                 这里把原因与出路直接摆出来，避免操作员只看到通用错误后反复无效重试。
               */}
               {unprintedBoxes.length > 0 && (
-                <div className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-800 space-y-1">
+                <div className="rounded-2xl border border-warning/30 bg-warning/10 px-4 py-3 text-xs text-warning-ink space-y-1">
                   <p className="font-semibold">箱贴尚未打印完成，暂时不能进入待出库</p>
                   <p>
                     待处理箱：{unprintedBoxes.map(pkg => `${pkg.barcode}（${pkg.printStatus?.label ?? '未生成箱贴'}）`).join('、')}
                   </p>
-                  <p className="text-amber-700">
+                  <p className="text-warning-ink">
                     处理办法：点该箱的「打印箱贴」重新入队，或在 ERP「系统 → 条码打印查询 → 出库条码」重新打印；
                     若无出纸，请先启动绑定该打印机的极序 Flow 桌面端，客户端上线后会自动领取待派发任务。
                   </p>
                 </div>
               )}
-              <Button
+              <Button size="lg"
                 type="button"
-                className="w-full"
+                className="px-3 w-full"
                 onClick={() => {
                   if (anySubmitBlocked || finalizeAction.submitBlocked) {
                     err(anyBlockedReason || finalizeAction.blockedReason || '上次操作结果待确认，请先确认')
@@ -1014,11 +1023,11 @@ export default function PdaPackPage() {
       </div>
 
       <PdaBottomBar>
-          {activePackageId && <PdaScanner onScan={handleScan} placeholder="扫描商品条码或取货标签" disabled={anySubmitBlocked || onlineBlocked} onDuplicate={() => err('重复扫码，请稍候')} />}
-          <Button variant={activePackageId ? 'outline' : 'default'} className="w-full" onClick={() => {
+          {activePackageId && <PdaScanner onScan={handleScan} placeholder="扫描商品条码或取货标签" disabled={anySubmitBlocked || onlineBlocked || pkgLoading || pkgError} onDuplicate={() => err('重复扫码，请稍候')} />}
+          <Button size="lg" variant={activePackageId ? 'outline' : 'default'} className="px-3 w-full" onClick={() => {
             if (anySubmitBlocked) { err(anyBlockedReason || '上次操作结果待确认，请先确认'); return }
             createMut.mutate()
-          }} disabled={createMut.isPending || anySubmitBlocked || onlineBlocked}>
+          }} disabled={createMut.isPending || anySubmitBlocked || onlineBlocked || pkgLoading || pkgError}>
             {createMut.isPending ? '创建中…' : '＋ 新建箱子'}
           </Button>
       </PdaBottomBar>

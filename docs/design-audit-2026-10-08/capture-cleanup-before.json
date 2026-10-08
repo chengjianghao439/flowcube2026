@@ -1,0 +1,11 @@
+{
+  "success": true,
+  "data": {
+    "sessions": [
+      "flowcube-impeccable-capture",
+      "flowcube-impeccable-root",
+      "flowcube-impeccable-b",
+      "flowcube-impeccable-a"
+    ]
+  }
+}

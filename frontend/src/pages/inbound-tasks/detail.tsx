@@ -180,7 +180,7 @@ export default function InboundTaskDetailPage() {
             {canVoidReceipt && (
               <Button
                 variant="outline"
-                className="text-destructive border-destructive/30 hover:bg-destructive/5"
+                className="text-destructive-ink border-destructive/30 hover:bg-destructive/5"
                 size="sm"
                 disabled={voidReceiptMut.isPending}
                 onClick={() => setVoidConfirmOpen(true)}
@@ -225,7 +225,7 @@ export default function InboundTaskDetailPage() {
         />
       </div>
 
-      {task.exceptionFlags?.hasException && <p className="text-sm text-destructive">打印或上架有异常，请核对对应状态；收货阶段不受异常标识覆盖。</p>}
+      {task.exceptionFlags?.hasException && <p className="text-sm text-destructive-ink">打印或上架有异常，请核对对应状态；收货阶段不受异常标识覆盖。</p>}
       <Section title="任务明细" sectionId="task-items">
         <DataTable
           columns={[
@@ -235,7 +235,7 @@ export default function InboundTaskDetailPage() {
             {
               key: 'receivedQty', title: '已收', width: 90, align: 'right',
               render: (v, r) => (
-                <span className={`tabular-nums ${(v as number) > r.orderedQty ? 'font-semibold text-destructive' : ''}`}>{String(v)}</span>
+                <span className={`tabular-nums ${(v as number) > r.orderedQty ? 'font-semibold text-destructive-ink' : ''}`}>{String(v)}</span>
               ),
             },
             {
@@ -243,7 +243,7 @@ export default function InboundTaskDetailPage() {
               render: (v, r) => {
                 const overQty = r.receivedQty - r.orderedQty
                 return overQty > 0
-                  ? <span className="font-semibold text-destructive tabular-nums">超收 {overQty}</span>
+                  ? <span className="font-semibold text-destructive-ink tabular-nums">超收 {overQty}</span>
                   : <span className="text-muted-foreground tabular-nums">{String(v)}</span>
               },
             },

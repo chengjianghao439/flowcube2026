@@ -122,7 +122,7 @@ export default function AbcClassPage() {
     { key: 'warehouseName', title: '仓库', width: 150 },
     { key: 'abcClass', title: '档位', width: 120, render: (_, r) => <SoftStatusLabel label={`${r.abcClass} 类`} tone={ABC_TONE[r.abcClass] ?? 'info'} /> },
     { key: 'totalItems', title: '应盘商品', width: 100, align: 'right', render: (v) => <span className="tabular-nums">{Number(v)}</span> },
-    { key: 'dueItems', title: '到期未盘', width: 100, align: 'right', render: (_, r) => <span className={`tabular-nums ${r.dueItems > 0 ? 'text-destructive font-semibold' : 'text-muted-foreground'}`}>{r.dueItems}</span> },
+    { key: 'dueItems', title: '到期未盘', width: 100, align: 'right', render: (_, r) => <span className={`tabular-nums ${r.dueItems > 0 ? 'text-destructive-ink font-semibold' : 'text-muted-foreground'}`}>{r.dueItems}</span> },
     {
       key: 'coverageRate',
       title: '按期盘点率',

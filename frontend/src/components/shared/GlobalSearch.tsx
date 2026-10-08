@@ -132,7 +132,7 @@ export default function GlobalSearch() {
       {showDropdown && (
         <div data-search-results className="absolute top-full right-0 mt-2 w-[560px] max-w-[calc(100vw-2rem)] bg-popover text-popover-foreground rounded-lg shadow-lg border border-border z-50 max-h-[70vh] overflow-y-auto">
           {loading && <div role="status" className="py-8 text-center text-sm text-muted-foreground">正在搜索全部历史记录…</div>}
-          {error && <div role="alert" className="px-4 py-8 text-center text-sm text-destructive">{error}</div>}
+          {error && <div role="alert" className="px-4 py-8 text-center text-sm text-destructive-ink">{error}</div>}
           {results.length === 0 && !loading && !error && (
             <EmptyState variant="no-result" compact title={`未找到「${query}」相关内容`} description="" />
           )}

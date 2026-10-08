@@ -72,7 +72,7 @@ export function usePdaFeedback(options: {
   function show(type: FlashState['type'], msg: string, ms: number) {
     if (timerRef.current) clearTimeout(timerRef.current)
     setFlash({ type, msg })
-    timerRef.current = setTimeout(() => setFlash(null), ms)
+    timerRef.current = ms > 0 ? setTimeout(() => setFlash(null), ms) : null
   }
 
   const ok = useCallback((msg: string, ms = 1500) => {
@@ -81,7 +81,8 @@ export function usePdaFeedback(options: {
     if (useVibrate) vibrate(60)           // 单次短震
   }, [sound, useVibrate])
 
-  const err = useCallback((msg: string, ms = 2500) => {
+  // 错误需读完处理；默认保留到明确清除或下一次反馈，显式传时长仍沿原语义。
+  const err = useCallback((msg: string, ms = 0) => {
     show('err', msg, ms)
     if (sound)      soundErr()
     if (useVibrate) vibrate([100, 50, 100]) // 双震

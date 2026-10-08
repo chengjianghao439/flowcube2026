@@ -15,6 +15,6 @@ export default function PdaNextStep({ enabled, required, to, label, hint }: {
   if (!enabled || permissionsMissing || !canAll(required)) return null
   return <div className="w-full space-y-2">
     {hint && <p className="text-sm text-muted-foreground">{hint}</p>}
-    <Button size="lg" className="w-full" onClick={() => navigate(to)}>{label}</Button>
+    <Button size="lg" className="px-3 w-full" onClick={() => navigate(to)}>{label}</Button>
   </div>
 }

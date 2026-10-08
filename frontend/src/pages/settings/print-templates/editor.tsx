@@ -292,7 +292,7 @@ function PalettePanel({
                   </button>
                   <button
                     type="button"
-                    className="rounded p-0.5 text-muted-foreground/60 hover:text-destructive"
+                    className="rounded p-0.5 text-muted-foreground/60 hover:text-destructive-ink"
                     title="删除元素"
                     aria-label={`删除元素 ${el.label || el.fieldKey}`}
                     onClick={(e) => { e.stopPropagation(); onDeleteLayer(el.id) }}
@@ -623,7 +623,7 @@ function PropertiesPanel({ el, multiCount, isLabel, canvasW, canvasH, onChange, 
               </Button>
             </div>
           </div>
-          <Button size="sm" variant="outline" className="w-full text-destructive hover:text-destructive"
+          <Button size="sm" variant="outline" className="w-full text-destructive-ink hover:text-destructive-ink"
             onClick={() => onDeleteMulti()}>
             删除选中项 (Delete)
           </Button>
@@ -642,7 +642,7 @@ function PropertiesPanel({ el, multiCount, isLabel, canvasW, canvasH, onChange, 
     <div className="flex w-60 shrink-0 flex-col overflow-hidden border-l bg-muted/20">
       <div className="flex items-center justify-between border-b px-4 py-3">
         <p className="text-sm font-medium text-foreground">属性面板</p>
-        <Button size="sm" variant="ghost" className="size-7 p-0 text-destructive hover:text-destructive" aria-label="删除该元素"
+        <Button size="sm" variant="ghost" className="size-7 p-0 text-destructive-ink hover:text-destructive-ink" aria-label="删除该元素"
           onClick={() => onDelete(el.id)}>
           <Trash2 className="size-3.5" />
         </Button>
@@ -983,7 +983,7 @@ function PropertiesPanel({ el, multiCount, isLabel, canvasW, canvasH, onChange, 
               {customCols.map(key => (
                 <div key={key} className="flex items-center justify-between rounded-md border border-dashed px-2 py-1">
                   <span className="font-mono text-xs">{key}</span>
-                  <Button size="sm" variant="ghost" className="size-5 p-0 text-muted-foreground hover:text-destructive"
+                  <Button size="sm" variant="ghost" className="size-5 p-0 text-muted-foreground hover:text-destructive-ink"
                     title="移除自定义列"
                     onClick={() => {
                       const cols = el.tableColumns ?? []

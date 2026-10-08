@@ -8,7 +8,7 @@
  * 绑定后这台机器的每次作业都会带上设备身份：绑了仓库的设备扫别仓的单据会被直接拒绝，
  * 机器丢了也能在 ERP 里一键停用、立即吊销它手上的票据。
  */
-import { useState } from 'react'
+import { useState, useId } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Camera } from 'lucide-react'
 import PdaHeader from '@/components/pda/PdaHeader'
@@ -43,7 +43,7 @@ function CameraOverlay({ onCancel, scanning }: { onCancel: () => void; scanning:
         <div className="text-sm">
           {scanning ? (
             <>
-              <span className="mr-2 inline-block h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-white align-middle" />
+              <span className="mr-2 inline-block h-3 w-3 motion-safe:animate-spin rounded-full border-2 border-white/30 border-t-white align-middle" />
               正在识别…
             </>
           ) : (
@@ -55,7 +55,7 @@ function CameraOverlay({ onCancel, scanning }: { onCancel: () => void; scanning:
       <button
         type="button"
         onClick={onCancel}
-        className="pointer-events-auto mt-4 rounded-full bg-background/90 px-8 py-2 text-sm font-medium text-foreground shadow-lg active:scale-95"
+        className="pointer-events-auto mt-4 rounded-full bg-background/90 px-8 py-2 text-sm font-medium text-foreground shadow-lg motion-safe:active:scale-95"
       >
         取消
       </button>
@@ -64,6 +64,7 @@ function CameraOverlay({ onCancel, scanning }: { onCancel: () => void; scanning:
 }
 
 export default function PdaBindPage() {
+  const fieldId = useId()
   const nav = useNavigate()
   const { flash, ok, err, warn } = usePdaFeedback()
   const { scan, close, scanning, open } = useCameraScanner()
@@ -153,7 +154,7 @@ export default function PdaBindPage() {
       <div className="flex-1 overflow-y-auto px-4 py-4 max-w-md mx-auto w-full space-y-3">
         {credential ? (
           <PdaCard active className="space-y-2">
-            <div className="text-base font-semibold text-emerald-600">本机已绑定</div>
+            <div className="text-base font-semibold text-success-ink">本机已绑定</div>
             <div className="space-y-1 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">设备码</span>
@@ -175,7 +176,7 @@ export default function PdaBindPage() {
                 <SoftStatusLabel label={session ? '有效' : '需重新登录以获取'} tone={session ? 'success' : 'danger'} />
               </div>
             </div>
-            <Button variant="outline" className="w-full" onClick={handleUnbind}>解除绑定</Button>
+            <Button size="lg" variant="outline" className="px-3 w-full" onClick={handleUnbind}>解除绑定</Button>
           </PdaCard>
         ) : (
           <PdaCard className="space-y-2">
@@ -189,25 +190,31 @@ export default function PdaBindPage() {
         <PdaCard className="space-y-2">
           <button
             type="button"
-            className="w-full text-left text-sm text-primary"
+            className="min-h-11 w-full rounded-md text-left text-sm text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-expanded={manualOpen}
+            aria-controls={`${fieldId}-manual`}
             onClick={() => setManualOpen(v => !v)}
           >
             {manualOpen ? '▲ 收起手动输入' : '▼ 扫码失败？可手动输入设备码和密钥'}
           </button>
           {manualOpen && (
-            <div className="space-y-2">
+            <div id={`${fieldId}-manual`} className="space-y-2">
+              <label htmlFor={`${fieldId}-code`} className="block text-sm font-medium">设备码</label>
               <Input
+                id={`${fieldId}-code`} className="min-h-11" data-scanner-manual="true"
                 placeholder="设备码，例如 PDA-260726-4DE8"
                 value={manual.code}
                 onChange={e => setManual(m => ({ ...m, code: e.target.value }))}
               />
+              <label htmlFor={`${fieldId}-secret`} className="block text-sm font-medium">设备密钥</label>
               <Input
+                id={`${fieldId}-secret`} className="min-h-11" type="password" autoComplete="off" data-scanner-manual="true"
                 placeholder="密钥（64 位）"
                 value={manual.secret}
                 onChange={e => setManual(m => ({ ...m, secret: e.target.value }))}
               />
               <Button
-                className="w-full"
+                size="lg" className="px-3 w-full"
                 disabled={!manual.code.trim() || !manual.secret.trim() || binding}
                 onClick={() => void bind(manual.code, manual.secret)}
               >
@@ -228,7 +235,7 @@ export default function PdaBindPage() {
               type="button"
               onClick={() => void handleCameraScan()}
               disabled={scanning || binding}
-              className="shrink-0 rounded-2xl border border-border bg-card px-4 text-muted-foreground transition-all active:scale-95 disabled:opacity-40"
+              className="shrink-0 rounded-2xl border border-border bg-card px-4 text-muted-foreground transition-all motion-reduce:transition-none motion-safe:active:scale-95 disabled:opacity-40"
               aria-label="相机扫码"
             >
               <Camera className="mx-auto h-5 w-5" />

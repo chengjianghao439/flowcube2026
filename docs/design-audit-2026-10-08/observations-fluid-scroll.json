@@ -1,0 +1,126 @@
+[
+  {
+    "route": "/sale",
+    "viewport": "768x900",
+    "theme": "light",
+    "screenshots": [
+      "screens/after/root-fluid-scroll-sale-768.png"
+    ],
+    "humanViewed": true,
+    "interaction": true,
+    "businessWrite": false,
+    "rightEnd": {
+      "action": [
+        {
+          "left": 605.75,
+          "right": 743,
+          "text": "查看"
+        },
+        {
+          "left": 605.75,
+          "right": 743,
+          "text": "占库"
+        }
+      ],
+      "clientWidth": 718,
+      "pageOverflow": false,
+      "scrollLeft": 709,
+      "scrollWidth": 1427
+    },
+    "returnedLeft": 0,
+    "result": "实际工具滚动可见工作区表内到右端，原操作列可见，再回左端；不点击业务动作"
+  },
+  {
+    "route": "/purchase",
+    "viewport": "768x900",
+    "theme": "light",
+    "screenshots": [
+      "screens/after/root-fluid-scroll-purchase-768.png"
+    ],
+    "humanViewed": true,
+    "interaction": true,
+    "businessWrite": false,
+    "rightEnd": {
+      "action": [
+        {
+          "left": 614.9375,
+          "right": 743,
+          "text": "详情"
+        },
+        {
+          "left": 614.9375,
+          "right": 743,
+          "text": "详情"
+        }
+      ],
+      "clientWidth": 718,
+      "pageOverflow": false,
+      "scrollLeft": 562,
+      "scrollWidth": 1280
+    },
+    "returnedLeft": 0,
+    "result": "实际工具滚动可见工作区表内到右端，原操作列可见，再回左端；不点击业务动作"
+  },
+  {
+    "route": "/inbound-tasks",
+    "viewport": "768x900",
+    "theme": "light",
+    "screenshots": [
+      "screens/after/root-fluid-scroll-inbound-tasks-768.png"
+    ],
+    "humanViewed": true,
+    "interaction": true,
+    "businessWrite": false,
+    "rightEnd": {
+      "action": [
+        {
+          "left": 614.9375,
+          "right": 743,
+          "text": "详情"
+        },
+        {
+          "left": 614.9375,
+          "right": 743,
+          "text": "详情"
+        }
+      ],
+      "clientWidth": 718,
+      "pageOverflow": false,
+      "scrollLeft": 797,
+      "scrollWidth": 1515
+    },
+    "returnedLeft": 0,
+    "result": "实际工具滚动可见工作区表内到右端，原操作列可见，再回左端；不点击业务动作"
+  },
+  {
+    "route": "/settings/pda-devices",
+    "viewport": "768x900",
+    "theme": "light",
+    "screenshots": [
+      "screens/after/root-fluid-scroll-settings-pda-devices-768.png"
+    ],
+    "humanViewed": true,
+    "interaction": true,
+    "businessWrite": false,
+    "rightEnd": {
+      "action": [
+        {
+          "left": 550.96875,
+          "right": 743,
+          "text": "编辑"
+        },
+        {
+          "left": 550.96875,
+          "right": 743,
+          "text": "编辑"
+        }
+      ],
+      "clientWidth": 718,
+      "pageOverflow": false,
+      "scrollLeft": 242,
+      "scrollWidth": 960
+    },
+    "returnedLeft": 0,
+    "result": "实际工具滚动可见工作区表内到右端，原操作列可见，再回左端；不点击业务动作"
+  }
+]

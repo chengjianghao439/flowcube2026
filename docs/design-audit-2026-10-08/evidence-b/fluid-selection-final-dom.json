@@ -1,0 +1,778 @@
+[
+  {
+    "action": {
+      "background": "rgb(255, 255, 255)",
+      "bottom": 123,
+      "height": 40.5,
+      "position": "sticky",
+      "right": 463,
+      "width": 128.015625,
+      "x": 334.984375,
+      "y": 82.5
+    },
+    "checkboxes": [
+      {
+        "checked": false,
+        "label": "选择当前结果中所有可选行"
+      },
+      {
+        "checked": false,
+        "label": "选择第 1 行"
+      }
+    ],
+    "cols": [
+      {
+        "bottom": 123,
+        "height": 82,
+        "right": 73,
+        "style": "56px",
+        "width": 56,
+        "x": 17,
+        "y": 41
+      },
+      {
+        "bottom": 123,
+        "height": 82,
+        "right": 457,
+        "style": "60%",
+        "width": 384,
+        "x": 73,
+        "y": 41
+      },
+      {
+        "bottom": 123,
+        "height": 82,
+        "right": 584.984375,
+        "style": "20%",
+        "width": 127.984375,
+        "x": 457,
+        "y": 41
+      },
+      {
+        "bottom": 123,
+        "height": 82,
+        "right": 713,
+        "style": "20%",
+        "width": 128.015625,
+        "x": 584.984375,
+        "y": 41
+      }
+    ],
+    "documentWidth": 768,
+    "expectedWidths": [
+      56,
+      384,
+      128,
+      128
+    ],
+    "identity": "验收合成商品：完整型号、颜色、供应商型号必须保留",
+    "ratioAndFixedSelectionCorrect": true,
+    "scroll": {
+      "bottom": 123,
+      "clientWidth": 446,
+      "height": 82,
+      "left": 0,
+      "right": 463,
+      "scrollWidth": 696,
+      "width": 446,
+      "x": 17,
+      "y": 41
+    },
+    "source": "final product component after normal reload; no DOM column overrides",
+    "state": "initial-768",
+    "table": {
+      "bottom": 123,
+      "height": 82,
+      "minWidth": "696px",
+      "right": 713,
+      "styleWidth": "100%",
+      "width": 696,
+      "x": 17,
+      "y": 41
+    },
+    "time": "2026-10-08T02:08:25.050Z",
+    "viewport": [
+      768,
+      768
+    ]
+  },
+  {
+    "action": {
+      "background": "rgb(241, 245, 249)",
+      "bottom": 123,
+      "height": 40.5,
+      "position": "sticky",
+      "right": 463,
+      "width": 128.015625,
+      "x": 334.984375,
+      "y": 82.5
+    },
+    "checkboxes": [
+      {
+        "checked": true,
+        "label": "选择当前结果中所有可选行"
+      },
+      {
+        "checked": true,
+        "label": "选择第 1 行"
+      }
+    ],
+    "cols": [
+      {
+        "bottom": 123,
+        "height": 82,
+        "right": 73,
+        "style": "56px",
+        "width": 56,
+        "x": 17,
+        "y": 41
+      },
+      {
+        "bottom": 123,
+        "height": 82,
+        "right": 457,
+        "style": "60%",
+        "width": 384,
+        "x": 73,
+        "y": 41
+      },
+      {
+        "bottom": 123,
+        "height": 82,
+        "right": 584.984375,
+        "style": "20%",
+        "width": 127.984375,
+        "x": 457,
+        "y": 41
+      },
+      {
+        "bottom": 123,
+        "height": 82,
+        "right": 713,
+        "style": "20%",
+        "width": 128.015625,
+        "x": 584.984375,
+        "y": 41
+      }
+    ],
+    "documentWidth": 768,
+    "expectedWidths": [
+      56,
+      384,
+      128,
+      128
+    ],
+    "identity": "验收合成商品：完整型号、颜色、供应商型号必须保留",
+    "ratioAndFixedSelectionCorrect": true,
+    "scroll": {
+      "bottom": 123,
+      "clientWidth": 446,
+      "height": 82,
+      "left": 0,
+      "right": 463,
+      "scrollWidth": 696,
+      "width": 446,
+      "x": 17,
+      "y": 41
+    },
+    "source": "final product component after normal reload; no DOM column overrides",
+    "state": "selected-hover-768",
+    "table": {
+      "bottom": 123,
+      "height": 82,
+      "minWidth": "696px",
+      "right": 713,
+      "styleWidth": "100%",
+      "width": 696,
+      "x": 17,
+      "y": 41
+    },
+    "time": "2026-10-08T02:08:40.583Z",
+    "viewport": [
+      768,
+      768
+    ]
+  },
+  {
+    "action": {
+      "background": "rgb(255, 255, 255)",
+      "bottom": 123,
+      "height": 40.5,
+      "position": "sticky",
+      "right": 303,
+      "width": 128.015625,
+      "x": 174.984375,
+      "y": 82.5
+    },
+    "checkboxes": [
+      {
+        "checked": true,
+        "label": "选择当前结果中所有可选行"
+      },
+      {
+        "checked": true,
+        "label": "选择第 1 行"
+      }
+    ],
+    "cols": [
+      {
+        "bottom": 123,
+        "height": 82,
+        "right": 73,
+        "style": "56px",
+        "width": 56,
+        "x": 17,
+        "y": 41
+      },
+      {
+        "bottom": 123,
+        "height": 82,
+        "right": 457,
+        "style": "60%",
+        "width": 384,
+        "x": 73,
+        "y": 41
+      },
+      {
+        "bottom": 123,
+        "height": 82,
+        "right": 584.984375,
+        "style": "20%",
+        "width": 127.984375,
+        "x": 457,
+        "y": 41
+      },
+      {
+        "bottom": 123,
+        "height": 82,
+        "right": 713,
+        "style": "20%",
+        "width": 128.015625,
+        "x": 584.984375,
+        "y": 41
+      }
+    ],
+    "documentWidth": 320,
+    "expectedWidths": [
+      56,
+      384,
+      128,
+      128
+    ],
+    "identity": "验收合成商品：完整型号、颜色、供应商型号必须保留",
+    "ratioAndFixedSelectionCorrect": true,
+    "scroll": {
+      "bottom": 123,
+      "clientWidth": 286,
+      "height": 82,
+      "left": 0,
+      "right": 303,
+      "scrollWidth": 696,
+      "width": 286,
+      "x": 17,
+      "y": 41
+    },
+    "source": "final product component after normal reload; no DOM column overrides",
+    "state": "selected-left-320",
+    "table": {
+      "bottom": 123,
+      "height": 82,
+      "minWidth": "696px",
+      "right": 713,
+      "styleWidth": "100%",
+      "width": 696,
+      "x": 17,
+      "y": 41
+    },
+    "time": "2026-10-08T02:08:40.652Z",
+    "viewport": [
+      320,
+      844
+    ]
+  },
+  {
+    "action": {
+      "background": "rgb(241, 245, 249)",
+      "bottom": 123,
+      "height": 40.5,
+      "position": "sticky",
+      "right": 303,
+      "width": 128.015625,
+      "x": 174.984375,
+      "y": 82.5
+    },
+    "checkboxes": [
+      {
+        "checked": true,
+        "label": "选择当前结果中所有可选行"
+      },
+      {
+        "checked": true,
+        "label": "选择第 1 行"
+      }
+    ],
+    "cols": [
+      {
+        "bottom": 123,
+        "height": 82,
+        "right": 73,
+        "style": "56px",
+        "width": 56,
+        "x": 17,
+        "y": 41
+      },
+      {
+        "bottom": 123,
+        "height": 82,
+        "right": 457,
+        "style": "60%",
+        "width": 384,
+        "x": 73,
+        "y": 41
+      },
+      {
+        "bottom": 123,
+        "height": 82,
+        "right": 584.984375,
+        "style": "20%",
+        "width": 127.984375,
+        "x": 457,
+        "y": 41
+      },
+      {
+        "bottom": 123,
+        "height": 82,
+        "right": 713,
+        "style": "20%",
+        "width": 128.015625,
+        "x": 584.984375,
+        "y": 41
+      }
+    ],
+    "documentWidth": 320,
+    "expectedWidths": [
+      56,
+      384,
+      128,
+      128
+    ],
+    "identity": "验收合成商品：完整型号、颜色、供应商型号必须保留",
+    "ratioAndFixedSelectionCorrect": true,
+    "scroll": {
+      "bottom": 123,
+      "clientWidth": 286,
+      "height": 82,
+      "left": 0,
+      "right": 303,
+      "scrollWidth": 696,
+      "width": 286,
+      "x": 17,
+      "y": 41
+    },
+    "source": "final product component after normal reload; no DOM column overrides",
+    "state": "selected-wheel-no-move-320",
+    "table": {
+      "bottom": 123,
+      "height": 82,
+      "minWidth": "696px",
+      "right": 713,
+      "styleWidth": "100%",
+      "width": 696,
+      "x": 17,
+      "y": 41
+    },
+    "time": "2026-10-08T02:09:28.491Z",
+    "viewport": [
+      320,
+      844
+    ]
+  },
+  {
+    "action": {
+      "background": "rgb(255, 255, 255)",
+      "bottom": 123,
+      "height": 40.5,
+      "position": "sticky",
+      "right": 303,
+      "width": 128.015625,
+      "x": 174.984375,
+      "y": 82.5
+    },
+    "checkboxes": [
+      {
+        "checked": false,
+        "label": "选择当前结果中所有可选行"
+      },
+      {
+        "checked": false,
+        "label": "选择第 1 行"
+      }
+    ],
+    "cols": [
+      {
+        "bottom": 123,
+        "height": 82,
+        "right": 73,
+        "style": "56px",
+        "width": 56,
+        "x": 17,
+        "y": 41
+      },
+      {
+        "bottom": 123,
+        "height": 82,
+        "right": 457,
+        "style": "60%",
+        "width": 384,
+        "x": 73,
+        "y": 41
+      },
+      {
+        "bottom": 123,
+        "height": 82,
+        "right": 584.984375,
+        "style": "20%",
+        "width": 127.984375,
+        "x": 457,
+        "y": 41
+      },
+      {
+        "bottom": 123,
+        "height": 82,
+        "right": 713,
+        "style": "20%",
+        "width": 128.015625,
+        "x": 584.984375,
+        "y": 41
+      }
+    ],
+    "documentWidth": 320,
+    "expectedWidths": [
+      56,
+      384,
+      128,
+      128
+    ],
+    "identity": "验收合成商品：完整型号、颜色、供应商型号必须保留",
+    "ratioAndFixedSelectionCorrect": true,
+    "scroll": {
+      "bottom": 123,
+      "clientWidth": 286,
+      "height": 82,
+      "left": 0,
+      "right": 303,
+      "scrollWidth": 696,
+      "width": 286,
+      "x": 17,
+      "y": 41
+    },
+    "source": "final product component after normal reload; no DOM column overrides",
+    "state": "unselected-wheel-left-320",
+    "table": {
+      "bottom": 123,
+      "height": 82,
+      "minWidth": "696px",
+      "right": 713,
+      "styleWidth": "100%",
+      "width": 696,
+      "x": 17,
+      "y": 41
+    },
+    "time": "2026-10-08T02:09:28.589Z",
+    "viewport": [
+      320,
+      844
+    ]
+  },
+  {
+    "action": {
+      "background": "rgb(241, 245, 249)",
+      "bottom": 123,
+      "height": 40.5,
+      "position": "sticky",
+      "right": 303,
+      "width": 128.015625,
+      "x": 174.984375,
+      "y": 82.5
+    },
+    "checkboxes": [
+      {
+        "checked": true,
+        "label": "选择当前结果中所有可选行"
+      },
+      {
+        "checked": true,
+        "label": "选择第 1 行"
+      }
+    ],
+    "cols": [
+      {
+        "bottom": 123,
+        "height": 82,
+        "right": -337,
+        "style": "56px",
+        "width": 56,
+        "x": -393,
+        "y": 41
+      },
+      {
+        "bottom": 123,
+        "height": 82,
+        "right": 47,
+        "style": "60%",
+        "width": 384,
+        "x": -337,
+        "y": 41
+      },
+      {
+        "bottom": 123,
+        "height": 82,
+        "right": 174.984375,
+        "style": "20%",
+        "width": 127.984375,
+        "x": 47,
+        "y": 41
+      },
+      {
+        "bottom": 123,
+        "height": 82,
+        "right": 303,
+        "style": "20%",
+        "width": 128.015625,
+        "x": 174.984375,
+        "y": 41
+      }
+    ],
+    "documentWidth": 320,
+    "expectedWidths": [
+      56,
+      384,
+      128,
+      128
+    ],
+    "identity": "验收合成商品：完整型号、颜色、供应商型号必须保留",
+    "ratioAndFixedSelectionCorrect": true,
+    "scroll": {
+      "bottom": 123,
+      "clientWidth": 286,
+      "height": 82,
+      "left": 410,
+      "right": 303,
+      "scrollWidth": 696,
+      "width": 286,
+      "x": 17,
+      "y": 41
+    },
+    "source": "final product component after normal reload; no DOM column overrides",
+    "state": "selected-dom-scroll-right-320",
+    "table": {
+      "bottom": 123,
+      "height": 82,
+      "minWidth": "696px",
+      "right": 303,
+      "styleWidth": "100%",
+      "width": 696,
+      "x": -393,
+      "y": 41
+    },
+    "time": "2026-10-08T02:10:58.635Z",
+    "viewport": [
+      320,
+      844
+    ]
+  },
+  {
+    "action": {
+      "background": "rgb(241, 245, 249)",
+      "bottom": 123,
+      "height": 40.5,
+      "position": "sticky",
+      "right": 303,
+      "width": 128.015625,
+      "x": 174.984375,
+      "y": 82.5
+    },
+    "checkboxes": [
+      {
+        "checked": true,
+        "label": "选择当前结果中所有可选行"
+      },
+      {
+        "checked": true,
+        "label": "选择第 1 行"
+      }
+    ],
+    "cols": [
+      {
+        "bottom": 123,
+        "height": 82,
+        "right": 73,
+        "style": "56px",
+        "width": 56,
+        "x": 17,
+        "y": 41
+      },
+      {
+        "bottom": 123,
+        "height": 82,
+        "right": 457,
+        "style": "60%",
+        "width": 384,
+        "x": 73,
+        "y": 41
+      },
+      {
+        "bottom": 123,
+        "height": 82,
+        "right": 584.984375,
+        "style": "20%",
+        "width": 127.984375,
+        "x": 457,
+        "y": 41
+      },
+      {
+        "bottom": 123,
+        "height": 82,
+        "right": 713,
+        "style": "20%",
+        "width": 128.015625,
+        "x": 584.984375,
+        "y": 41
+      }
+    ],
+    "documentWidth": 320,
+    "expectedWidths": [
+      56,
+      384,
+      128,
+      128
+    ],
+    "identity": "验收合成商品：完整型号、颜色、供应商型号必须保留",
+    "ratioAndFixedSelectionCorrect": true,
+    "scroll": {
+      "bottom": 123,
+      "clientWidth": 286,
+      "height": 82,
+      "left": 0,
+      "right": 303,
+      "scrollWidth": 696,
+      "width": 286,
+      "x": 17,
+      "y": 41
+    },
+    "source": "final product component after normal reload; no DOM column overrides",
+    "state": "selected-dom-scroll-left-320",
+    "table": {
+      "bottom": 123,
+      "height": 82,
+      "minWidth": "696px",
+      "right": 713,
+      "styleWidth": "100%",
+      "width": 696,
+      "x": 17,
+      "y": 41
+    },
+    "time": "2026-10-08T02:11:47.531Z",
+    "viewport": [
+      320,
+      844
+    ]
+  },
+  {
+    "action": {
+      "background": "rgb(255, 255, 255)",
+      "bottom": 123,
+      "height": 40.5,
+      "position": "sticky",
+      "right": 303,
+      "width": 128.015625,
+      "x": 174.984375,
+      "y": 82.5
+    },
+    "checkboxes": [
+      {
+        "checked": false,
+        "label": "选择当前结果中所有可选行"
+      },
+      {
+        "checked": false,
+        "label": "选择第 1 行"
+      }
+    ],
+    "cols": [
+      {
+        "bottom": 123,
+        "height": 82,
+        "right": 73,
+        "style": "56px",
+        "width": 56,
+        "x": 17,
+        "y": 41
+      },
+      {
+        "bottom": 123,
+        "height": 82,
+        "right": 457,
+        "style": "60%",
+        "width": 384,
+        "x": 73,
+        "y": 41
+      },
+      {
+        "bottom": 123,
+        "height": 82,
+        "right": 584.984375,
+        "style": "20%",
+        "width": 127.984375,
+        "x": 457,
+        "y": 41
+      },
+      {
+        "bottom": 123,
+        "height": 82,
+        "right": 713,
+        "style": "20%",
+        "width": 128.015625,
+        "x": 584.984375,
+        "y": 41
+      }
+    ],
+    "documentWidth": 320,
+    "expectedWidths": [
+      56,
+      384,
+      128,
+      128
+    ],
+    "identity": "验收合成商品：完整型号、颜色、供应商型号必须保留",
+    "ratioAndFixedSelectionCorrect": true,
+    "scroll": {
+      "bottom": 123,
+      "clientWidth": 286,
+      "height": 82,
+      "left": 0,
+      "right": 303,
+      "scrollWidth": 696,
+      "width": 286,
+      "x": 17,
+      "y": 41
+    },
+    "source": "final product component after normal reload; no DOM column overrides",
+    "state": "unselected-after-dom-scroll-320",
+    "table": {
+      "bottom": 123,
+      "height": 82,
+      "minWidth": "696px",
+      "right": 713,
+      "styleWidth": "100%",
+      "width": 696,
+      "x": 17,
+      "y": 41
+    },
+    "time": "2026-10-08T02:11:47.546Z",
+    "viewport": [
+      320,
+      844
+    ]
+  }
+]

@@ -40,7 +40,7 @@ export default class TabErrorBoundary extends Component<Props, State> {
       return (
         <div className="flex h-full items-center justify-center bg-background/50">
           <div className="flex flex-col items-center gap-4 m-6 rounded-lg border border-border bg-card p-8 text-center max-w-lg">
-            <AlertTriangle className="h-10 w-10 text-warning" />
+            <AlertTriangle className="h-10 w-10 text-warning-ink" />
             <div>
               <h3 className="text-lg font-semibold text-foreground mb-2">
                 {this.props.tabName ? `「${this.props.tabName}」页面出错` : '页面出错'}

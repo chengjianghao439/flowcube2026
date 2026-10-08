@@ -31,7 +31,7 @@ export function FulfillmentTodos({ summary = false }: { summary?: boolean }) {
     { key: 'warehouseName', title: '仓库', width: 160, render: v => v ? String(v) : '—' },
     { key: 'reason', title: '阻塞原因', width: 340 }, { key: 'ownerName', title: '负责人', width: 110, render: v => v ? String(v) : '待认领' },
     { key: 'due_at', title: '处理期限', width: 170, render: v => v ? formatDisplayDateTime(String(v)) : '未设置' },
-    { key: 'status', title: '状态', width: 120, render: (_, r) => <span className="flex flex-wrap items-center gap-1"><SoftStatusLabel label={r.status === 'resolved' ? '已处理' : r.status === 'processing' ? '处理中' : '待处理'} tone={r.status === 'resolved' ? 'success' : r.status === 'processing' ? 'active' : 'warning'} />{r.overdue ? <span className="text-xs font-medium text-destructive">已超时</span> : r.dueSoon ? <span className="text-xs font-medium text-warning">即将到期</span> : null}</span> },
+    { key: 'status', title: '状态', width: 120, render: (_, r) => <span className="flex flex-wrap items-center gap-1"><SoftStatusLabel label={r.status === 'resolved' ? '已处理' : r.status === 'processing' ? '处理中' : '待处理'} tone={r.status === 'resolved' ? 'success' : r.status === 'processing' ? 'active' : 'warning'} />{r.overdue ? <span className="text-xs font-medium text-destructive-ink">已超时</span> : r.dueSoon ? <span className="text-xs font-medium text-warning-ink">即将到期</span> : null}</span> },
     { key: 'result', title: '处理结果', width: 260 },
     { key: 'action', title: '操作', width: 190, render: (_, r) => {
       const action = explainFulfillmentAction(r, can)

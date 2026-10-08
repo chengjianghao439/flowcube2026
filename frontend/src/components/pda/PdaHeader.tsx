@@ -6,6 +6,7 @@
  */
 import type { ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
+import { qty } from '@/lib/format'
 
 interface ProgressProps {
   current: number
@@ -41,7 +42,7 @@ export default function PdaHeader({
     : 0
 
   return (
-    <div className="sticky top-0 z-10 border-b border-border bg-white" style={{ minHeight: 56 }}>
+    <header className="sticky top-0 z-10 border-b border-border bg-card text-card-foreground" style={{ minHeight: 56 }}>
       <div className="max-w-md mx-auto px-4 py-2 flex items-center" style={{ minHeight: 56 }}>
 
         {/* 左：返回按钮（固定宽度保证标题居中） */}
@@ -49,7 +50,7 @@ export default function PdaHeader({
           {onBack && (
             <button
               onClick={onBack}
-              className="flex min-h-11 min-w-11 items-center text-sm text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
+              className="flex min-h-11 min-w-11 items-center text-sm text-muted-foreground hover:text-foreground transition-colors motion-reduce:transition-none whitespace-nowrap"
             >
               {backLabel}
             </button>
@@ -58,7 +59,7 @@ export default function PdaHeader({
 
         {/* 中：标题 + 副标题 */}
         <div className="flex-1 text-center min-w-0 px-1">
-          <p className="font-semibold text-foreground text-sm leading-tight min-w-0 whitespace-normal [overflow-wrap:anywhere]">{title}</p>
+          <h1 className="font-semibold text-foreground text-sm leading-tight min-w-0 whitespace-normal [overflow-wrap:anywhere]">{title}</h1>
           {subtitle && (
             <p className="text-xs text-muted-foreground mt-0.5 min-w-0 whitespace-normal [overflow-wrap:anywhere]">{subtitle}</p>
           )}
@@ -76,11 +77,11 @@ export default function PdaHeader({
         <div className="max-w-md mx-auto px-4 pb-2">
           <div className="flex justify-between text-xs text-muted-foreground mb-1">
             <span>{progress.label ?? '进度'}</span>
-            <span>{progress.current.toFixed(0)}/{progress.total.toFixed(0)} ({pct}%)</span>
+            <span>{qty(progress.current)}/{qty(progress.total)} ({pct}%)</span>
           </div>
           <div className="h-1.5 rounded-full bg-muted">
             <div
-              className="h-1.5 rounded-full transition-all"
+              className="h-1.5 rounded-full transition-all motion-reduce:transition-none"
               style={{
                 width: `${pct}%`,
                 background: pct >= 100
@@ -91,11 +92,11 @@ export default function PdaHeader({
           </div>
         </div>
       )}
-    </div>
+    </header>
   )
 }
 
 /** 刷新按钮快捷帮助器（常用 right 插槽） */
 export function PdaRefreshButton({ onRefresh }: { onRefresh: () => void }) {
-  return <Button variant="outline" size="sm" className="min-h-11 min-w-11 px-2" onClick={onRefresh}>刷新</Button>
+  return <Button variant="outline" size="lg" className="px-3 min-h-11 min-w-11 px-2" onClick={onRefresh}>刷新</Button>
 }

@@ -1,0 +1,20 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>仪表盘区块删除复验（只读合成组件夹具）</title></head><body><main id="root" style="padding:24px"></main><script type="module">
+import React from 'react';
+import ReactDOMClient from 'react-dom/client';
+import { MemoryRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import DashboardPage from '/src/pages/dashboard/index.tsx';
+import { WIDGETS } from '/src/components/dashboard/registry.ts';
+import { TabPathContext } from '/src/components/layout/TabPathContext.ts';
+import { useAuthStore } from '/src/store/authStore.ts';
+import api from '/src/api/client.ts';
+import '/src/index.css';
+window.__dashboardFixtureRequests = [];
+api.defaults.adapter = async config => { window.__dashboardFixtureRequests.push({method:config.method,url:config.url}); throw new Error('只读界面夹具禁止网络请求'); };
+useAuthStore.getState().login('synthetic-ui-fixture-no-backend-token', null, { id: 1, username: 'synthetic-ui', realName:'合成界面样本', roleId:1, roleName:'合成角色', permissions:[] });
+const qc = new QueryClient({defaultOptions:{queries:{staleTime:Infinity,retry:false,refetchOnWindowFocus:false}}});
+qc.setQueryData(['dashboard-layout'], {widgets:WIDGETS.map(w=>({id:w.id,visible:w.id==='kpi-pending-sale',w:w.defaultW}))});
+qc.setQueryData(['low-stock',10], []);
+qc.setQueryData(['dashboard-summary'], {pendingSaleOrders:3});
+ReactDOMClient.createRoot(document.getElementById('root')).render(React.createElement(QueryClientProvider,{client:qc},React.createElement(MemoryRouter,null,React.createElement(TabPathContext.Provider,{value:'/dashboard'},React.createElement(DashboardPage)))));
+</script></body></html>

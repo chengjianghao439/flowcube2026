@@ -4,9 +4,15 @@ const AppError = require('../../utils/AppError')
 const { normalizePagination } = require('../../utils/pagination')
 const { assertInScope } = require('../../utils/warehouseScope')
 const { getStockProjections } = require('../../engine/containerEngine')
-const { beginCreationOperationRequest, beginResourceOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
-const { assertPrice, snapshotComponents } = require('./kits.composition')
+const { beginCreationOperationRequest, beginResourceOperationRequest, completeOperationRequest, creationFingerprint } = require('../../utils/operationRequest')
+const { snapshotComponents } = require('./kits.composition')
+const { generateMasterCode } = require('../../utils/codeGenerator')
+const { loadPriceRates } = require('../../utils/priceLevels')
+const { resolvePrices, effectivePrices, profileValues, profileView, validateReferences } = require('./kits.profile')
 
+function isKitCodeCollision(error) {
+  return error?.code === 'ER_DUP_ENTRY' && /for key ['`](?:kit_definitions\.)?uk_kit_code_active['`]/.test(error.sqlMessage || error.message || '')
+}
 async function transaction(fn, { readOnly = false } = {}) {
   const conn = await pool.getConnection()
   try {
@@ -17,9 +23,21 @@ async function transaction(fn, { readOnly = false } = {}) {
     return result
   } catch (e) {
     await conn.rollback()
-    if (e.code === 'ER_DUP_ENTRY') throw new AppError('套件编码已存在', 409, 'KIT_CODE_EXISTS')
     throw e
   } finally { conn.release() }
+}
+async function createTransaction(fn) {
+  const attempts = 8
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    try { return await transaction(fn) } catch (e) {
+      // MAX(code) is an RR consistent read. Only a new transaction can see a winning insert.
+      if (isKitCodeCollision(e)) {
+        if (attempt + 1 < attempts) continue
+        throw new AppError('成套编码生成暂时冲突，请使用原请求键重试', 409, 'KIT_CODE_RETRY_EXHAUSTED')
+      }
+      throw e
+    }
+  }
 }
 function requiredKey(value) {
   const key = String(value || '').trim()
@@ -27,13 +45,13 @@ function requiredKey(value) {
   return key
 }
 function definitionView(row, version) {
-  return { id: Number(row.id), code: row.code, name: row.name, isActive: !!Number(row.is_active), deletedAt: row.deleted_at, revision: Number(row.revision), currentVersionId: Number(row.current_version_id), version }
+  return { id: Number(row.id), code: row.code, name: row.name, ...profileView(row), ...(version ? effectivePrices(version) : {}), isActive: !!Number(row.is_active), deletedAt: row.deleted_at, revision: Number(row.revision), currentVersionId: Number(row.current_version_id), version }
 }
 async function loadVersions(conn, ids) {
   const uniqueIds = [...new Set(ids.map(Number))]
   if (!uniqueIds.length) return new Map()
   if (uniqueIds.length > 200) throw new AppError('版本查询超过上限', 400, 'KIT_GROUP_LIMIT')
-  const [versions] = await conn.query('SELECT id,kit_id,version_no,reference_unit_price,created_by,created_at FROM kit_definition_versions WHERE id IN (?)', [uniqueIds])
+  const [versions] = await conn.query('SELECT id,kit_id,version_no,reference_unit_price,sale_price_b,sale_price_c,sale_price_d,created_by,created_at FROM kit_definition_versions WHERE id IN (?)', [uniqueIds])
   const [rows] = await conn.query(
     `SELECT c.id,c.version_id,c.product_id,c.base_qty,c.reference_price,c.amount_weight,c.weight_source,c.sort_no,
             p.code,p.name,p.unit,p.is_active,p.deleted_at,p.allow_decimal_qty
@@ -45,10 +63,10 @@ async function loadVersions(conn, ids) {
     list.push({ id: Number(c.id), productId: Number(c.product_id), baseQty: Number(c.base_qty), referencePrice: Number(c.reference_price), amountWeight: c.amount_weight, weightSource: c.weight_source, sortNo: Number(c.sort_no), productCode: c.code, productName: c.name, unit: c.unit, productActive: Number(c.is_active) === 1 && c.deleted_at == null && c.code != null, allowDecimal: c.allow_decimal_qty == null || Number(c.allow_decimal_qty) === 1 })
     byVersion.set(Number(c.version_id), list)
   }
-  return new Map(versions.map(v => [Number(v.id), { id: Number(v.id), kitId: Number(v.kit_id), versionNo: Number(v.version_no), referenceUnitPrice: Number(v.reference_unit_price), createdBy: v.created_by == null ? null : Number(v.created_by), createdAt: v.created_at, referenceBasis: 'version_product_a_snapshot_or_explicit_weights', referenceSnapshotAt: null, referenceBasisExplanation: '组成明确提交时保存当时A价或显式权重；未提交组成而仅修改套报价时沿用原版本参考依据。createdAt仅表示该版本创建时间，原始采样时间未单独保存', components: byVersion.get(Number(v.id)) || [] }]))
+  return new Map(versions.map(v => [Number(v.id), { id: Number(v.id), kitId: Number(v.kit_id), versionNo: Number(v.version_no), referenceUnitPrice: Number(v.reference_unit_price), salePriceA: Number(v.reference_unit_price), salePriceB: v.sale_price_b == null ? null : Number(v.sale_price_b), salePriceC: v.sale_price_c == null ? null : Number(v.sale_price_c), salePriceD: v.sale_price_d == null ? null : Number(v.sale_price_d), createdBy: v.created_by == null ? null : Number(v.created_by), createdAt: v.created_at, referenceBasis: 'version_product_a_snapshot_or_explicit_weights', referenceSnapshotAt: null, referenceBasisExplanation: '组成明确提交时保存当时A价或显式权重；未提交组成而仅修改套报价时沿用原版本参考依据。createdAt仅表示该版本创建时间，原始采样时间未单独保存', components: byVersion.get(Number(v.id)) || [] }]))
 }
 async function detailIn(conn, id, versionId) {
-  const [[row]] = await conn.query('SELECT * FROM kit_definitions WHERE id=?', [id])
+  const [[row]] = await conn.query('SELECT k.*,c.name AS category_name,s.name AS supplier_name FROM kit_definitions k LEFT JOIN product_categories c ON c.id=k.category_id LEFT JOIN supply_suppliers s ON s.id=k.supplier_id WHERE k.id=?', [id])
   if (!row) throw new AppError('套件不存在', 404, 'KIT_NOT_FOUND')
   const selected = Number(versionId ?? row.current_version_id)
   const version = (await loadVersions(conn, [selected])).get(selected)
@@ -59,8 +77,8 @@ function findById(id, versionId) { return transaction(conn => detailIn(conn, id,
 async function listIn(conn, { page = 1, pageSize = 20, keyword = '' }) {
   const pagination = normalizePagination({ page, pageSize: Math.min(100, pageSize) })
   const like = `%${keyword}%`
-  const [rows] = await conn.query('SELECT * FROM kit_definitions WHERE deleted_at IS NULL AND (code LIKE ? OR name LIKE ?) ORDER BY code,id LIMIT ? OFFSET ?', [like, like, pagination.pageSize, pagination.offset])
-  const [[{ total }]] = await conn.query('SELECT COUNT(*) total FROM kit_definitions WHERE deleted_at IS NULL AND (code LIKE ? OR name LIKE ?)', [like, like])
+  const [rows] = await conn.query('SELECT k.*,c.name AS category_name,s.name AS supplier_name FROM kit_definitions k LEFT JOIN product_categories c ON c.id=k.category_id LEFT JOIN supply_suppliers s ON s.id=k.supplier_id WHERE k.deleted_at IS NULL AND (k.code LIKE ? OR k.name LIKE ? OR k.spec LIKE ? OR k.color LIKE ? OR k.article_number LIKE ?) ORDER BY k.code,k.id LIMIT ? OFFSET ?', [like, like, like, like, like, pagination.pageSize, pagination.offset])
+  const [[{ total }]] = await conn.query('SELECT COUNT(*) total FROM kit_definitions WHERE deleted_at IS NULL AND (code LIKE ? OR name LIKE ? OR spec LIKE ? OR color LIKE ? OR article_number LIKE ?)', [like, like, like, like, like])
   const versions = await loadVersions(conn, rows.map(r => r.current_version_id))
   return { list: rows.map(r => definitionView(r, versions.get(Number(r.current_version_id)) || null)), pagination: { page: pagination.page, pageSize: pagination.pageSize, total: Number(total) } }
 }
@@ -111,8 +129,8 @@ async function componentsIn(conn, input) {
   if (rows.some(p => Number(p.is_active) !== 1 || p.deleted_at != null)) throw new AppError('套件组件必须是启用且未删除的真实商品', 400, 'KIT_COMPONENT_UNAVAILABLE')
   return snapshot
 }
-async function writeVersion(conn, kitId, versionNo, price, components, userId) {
-  const [version] = await conn.query('INSERT INTO kit_definition_versions (kit_id,version_no,reference_unit_price,created_by) VALUES (?,?,?,?)', [kitId, versionNo, price, userId])
+async function writeVersion(conn, kitId, versionNo, prices, components, userId) {
+  const [version] = await conn.query('INSERT INTO kit_definition_versions (kit_id,version_no,reference_unit_price,sale_price_b,sale_price_c,sale_price_d,created_by) VALUES (?,?,?,?,?,?,?)', [kitId, versionNo, prices.referenceUnitPrice, prices.salePriceB, prices.salePriceC, prices.salePriceD, userId])
   const versionId = Number(version.insertId)
   if (!components.length) throw new AppError('套件版本不能没有组件', 400, 'KIT_COMPONENT_LIMIT')
   await conn.query('INSERT INTO kit_definition_components (version_id,product_id,base_qty,reference_price,amount_weight,weight_source,sort_no) VALUES ?', [components.map(c => [versionId, c.productId, c.baseQty, c.referencePrice, c.amountWeight, c.weightSource, c.sortNo])])
@@ -120,14 +138,31 @@ async function writeVersion(conn, kitId, versionNo, price, components, userId) {
 }
 async function create(input, ctx) {
   const requestKey = requiredKey(ctx.requestKey)
-  return transaction(async conn => {
-    const state = await beginCreationOperationRequest(conn, { requestKey, action: 'kit.create', userId: ctx.userId, payload: input })
+  const payload = { ...input }
+  delete payload.code
+  return createTransaction(async conn => {
+    // Before this upgrade the client code belonged to the creation fingerprint.
+    // Keep retries of committed old requests bound to their exact original receipt.
+    if (input.code !== undefined) {
+      // This compatibility probe only reads committed historical receipts. A missing locking
+      // read would gap-lock before inserting the normalized action and deadlock new requests.
+      const [[legacy]] = await conn.query('SELECT status,response_json,error_message FROM operation_requests WHERE request_key=? AND action=? AND user_id <=> ?', [requestKey, `kit.create.${creationFingerprint(input)}`, ctx.userId])
+      if (legacy) {
+        if (Number(legacy.status) === 1) return JSON.parse(legacy.response_json)
+        throw new AppError(Number(legacy.status) === 0 ? '上次提交结果仍待确认，请刷新或稍后查询结果' : (legacy.error_message || '上次提交失败，请重新操作'), 409)
+      }
+    }
+    const state = await beginCreationOperationRequest(conn, { requestKey, action: 'kit.create', userId: ctx.userId, payload })
     if (state.replay) return state.responseData
-    const price = assertPrice(input.referenceUnitPrice, '每套参考价')
+    await validateReferences(conn, input)
+    const profile = profileValues(input)
+    const prices = resolvePrices(input, null, await loadPriceRates(conn))
     const components = await componentsIn(conn, input.components)
-    const [created] = await conn.query('INSERT INTO kit_definitions (code,name,is_active) VALUES (?,?,?)', [input.code, input.name, input.isActive === false ? 0 : 1])
+    const code = await generateMasterCode(conn, 'K', 'kit_definitions')
+    if (!/^K\d{6}$/.test(code)) throw new AppError('成套编码六位序号已用尽，请联系管理员', 409, 'KIT_CODE_EXHAUSTED')
+    const [created] = await conn.query('INSERT INTO kit_definitions (code,name,is_active,category_id,supplier_id,unit,spec,color,article_number,cost_price,remark) VALUES (?,?,?,?,?,?,?,?,?,?,?)', [code, input.name, input.isActive === false ? 0 : 1, profile.categoryId, profile.supplierId, profile.unit, profile.spec, profile.color, profile.articleNumber, profile.costPrice, profile.remark])
     const kitId = Number(created.insertId)
-    const versionId = await writeVersion(conn, kitId, 1, price, components, ctx.userId)
+    const versionId = await writeVersion(conn, kitId, 1, prices, components, ctx.userId)
     await conn.query('UPDATE kit_definitions SET current_version_id=? WHERE id=?', [versionId, kitId])
     const data = await detailIn(conn, kitId)
     await completeOperationRequest(conn, state, { data, message: '创建成功', resourceType: 'kit', resourceId: kitId })
@@ -150,12 +185,17 @@ async function mutate(id, input, ctx, deleting) {
     if (!deleting) {
       const old = (await loadVersions(conn, [versionId])).get(versionId)
       if (!old) throw new AppError('当前套件版本无效', 409, 'KIT_VERSION_INVALID')
-      const price = input.referenceUnitPrice === undefined ? old.referenceUnitPrice : assertPrice(input.referenceUnitPrice, '每套参考价')
+      await validateReferences(conn, input)
+      const pricingInput = { ...input, costPrice: input.costPrice === undefined ? master.cost_price ?? undefined : input.costPrice }
+      const prices = resolvePrices(pricingInput, old, await loadPriceRates(conn))
       const components = input.components === undefined ? old.components : await componentsIn(conn, input.components)
-      if (price !== old.referenceUnitPrice || componentSignature(components) !== componentSignature(old.components)) versionId = await writeVersion(conn, id, old.versionNo + 1, price, components, ctx.userId)
+      if (prices.referenceUnitPrice !== old.referenceUnitPrice || prices.salePriceB !== old.salePriceB || prices.salePriceC !== old.salePriceC || prices.salePriceD !== old.salePriceD || componentSignature(components) !== componentSignature(old.components)) versionId = await writeVersion(conn, id, old.versionNo + 1, prices, components, ctx.userId)
     }
     if (deleting) await conn.query('UPDATE kit_definitions SET deleted_at=NOW(),is_active=0,revision=revision+1 WHERE id=? AND revision=?', [id, master.revision])
-    else await conn.query('UPDATE kit_definitions SET code=?,name=?,is_active=?,current_version_id=?,revision=revision+1 WHERE id=? AND revision=?', [input.code ?? master.code, input.name ?? master.name, input.isActive === undefined ? master.is_active : Number(input.isActive), versionId, id, master.revision])
+    else {
+      const profile = profileValues(input, master)
+      await conn.query('UPDATE kit_definitions SET name=?,is_active=?,current_version_id=?,category_id=?,supplier_id=?,unit=?,spec=?,color=?,article_number=?,cost_price=?,remark=?,revision=revision+1 WHERE id=? AND revision=?', [input.name ?? master.name, input.isActive === undefined ? master.is_active : Number(input.isActive), versionId, profile.categoryId, profile.supplierId, profile.unit, profile.spec, profile.color, profile.articleNumber, profile.costPrice, profile.remark, id, master.revision])
+    }
     const data = await detailIn(conn, id)
     await completeOperationRequest(conn, state, { data, message: deleting ? '删除成功' : '更新成功', resourceType: 'kit', resourceId: id })
     return data

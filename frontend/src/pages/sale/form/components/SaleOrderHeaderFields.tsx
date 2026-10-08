@@ -3,7 +3,7 @@ import type { CustomerAddressGuard } from '@/hooks/useCustomerAddresses'
 import { SectionVisibilityContext, useSectionActive } from '@/components/layout/SectionVisibilityContext'
 import { ShippingProductField } from '@/components/shared/ShippingProductField'
 import type { CarrierOption } from '@/types/carriers'
-import { useRef, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Input }  from '@/components/ui/input'
 import { MapPin, MessageSquareText, Truck, UserRound } from 'lucide-react'
@@ -48,6 +48,7 @@ export function SaleOrderHeaderFields({
   /** 改单（占库期/执行期）只修改商品明细：表头字段全部只读，避免「看起来能改、提交后被丢弃」 */
   headerReadOnly?: boolean
 }) {
+  const fieldId = useId()
   const selectedCarrier = carrierOptions.find(c => String(c.id) === carrierId)
   const navigate = useNavigate()
   const sectionActive = useSectionActive()
@@ -69,12 +70,13 @@ export function SaleOrderHeaderFields({
       </div>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
         <div data-entry-field="party" className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground">
-          <Label>客户 *</Label>
-          <PickerField value={customerName} placeholder="点击选择客户…" onOpen={() => apply(() => setCustomerFinderOpen(true))} onDoubleClick={() => apply(() => { setCustomerFinderOpen(false); navigate('/customers') })} disabled={headerReadOnly} className={cn('h-9', customerError && 'border-destructive/60 bg-destructive/5')} />
+          <Label htmlFor={`${fieldId}-customer`}>客户 *</Label>
+          <PickerField id={`${fieldId}-customer`} value={customerName} placeholder="点击选择客户…" onOpen={() => apply(() => setCustomerFinderOpen(true))} onDoubleClick={() => apply(() => { setCustomerFinderOpen(false); navigate('/customers') })} disabled={headerReadOnly} className={cn('h-9', customerError && 'border-destructive/60 bg-destructive/5')} />
         </div>
         <div data-entry-field="warehouse" className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground">
-          <Label>出库仓库 *</Label>
+          <Label htmlFor={`${fieldId}-warehouse`}>出库仓库 *</Label>
           {warehouseReadOnly ? <p className="py-2 text-sm">{warehouseName || warehouseId}</p> : <WarehouseSelect
+            id={`${fieldId}-warehouse`}
             readOwner={readOwner}
             value={warehouseId ? +warehouseId : null}
             onChange={(id, name) => apply(() => { setWarehouseId(id ? String(id) : ''); setWarehouseName(name); setWarehouseError(false) })}
@@ -84,9 +86,9 @@ export function SaleOrderHeaderFields({
           />}
         </div>
         <div className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground">
-          <Label>承运商</Label>
+          <Label htmlFor={`${fieldId}-carrier`}>承运商</Label>
           <Select value={carrierId || '__none__'} onValueChange={v => apply(() => { setCarrierId(v === '__none__' ? '' : v); setShippingProduct('') })} disabled={headerReadOnly}>
-            <SelectTrigger className="h-9 w-full">
+            <SelectTrigger id={`${fieldId}-carrier`} className="h-9 w-full">
               <SelectValue placeholder={carrierOptions.length === 0 ? '暂无承运商，请先创建' : '请选择承运商'} />
             </SelectTrigger>
             <SelectContent>
@@ -98,9 +100,9 @@ export function SaleOrderHeaderFields({
           </Select>
         </div>
         <div className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground">
-          <Label>运费方式</Label>
+          <Label htmlFor={`${fieldId}-freight`}>运费方式</Label>
           <Select value={freightType || '__none__'} onValueChange={v => apply(() => setFreightType(v === '__none__' ? '' : v))} disabled={headerReadOnly}>
-            <SelectTrigger className="h-9 w-full">
+            <SelectTrigger id={`${fieldId}-freight`} className="h-9 w-full">
               <SelectValue placeholder="请选择" />
             </SelectTrigger>
             <SelectContent>
@@ -113,8 +115,8 @@ export function SaleOrderHeaderFields({
         </div>
       </div>
       {['sf', 'deppon'].includes(selectedCarrier?.platformCode || '') && <div className="mt-3 max-w-sm space-y-1.5">
-        <Label htmlFor="sale-shipping-product">本单发货产品</Label>
-        <ShippingProductField id="sale-shipping-product" platform={selectedCarrier?.platformCode} value={shippingProduct} onChange={value => apply(() => setShippingProduct(value))} defaultCode={selectedCarrier?.shippingProduct} disabled={shippingProductDisabled} />
+        <Label htmlFor={`${fieldId}-shipping-product`}>本单发货产品</Label>
+        <ShippingProductField id={`${fieldId}-shipping-product`} platform={selectedCarrier?.platformCode} value={shippingProduct} onChange={value => apply(() => setShippingProduct(value))} defaultCode={selectedCarrier?.shippingProduct} disabled={shippingProductDisabled} />
         <p className="text-xs text-muted-foreground">{shippingProductDisabled ? '执行期改单只修改商品明细；寄件资料在提交平台前可从运单详情补充。' : '通常沿用默认产品，航空等特殊发货按合同指定。件数由打包结果自动填写。'}</p>
       </div>}
       <div className="my-4 border-t border-border" />
@@ -124,20 +126,20 @@ export function SaleOrderHeaderFields({
       </div>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-12">
         <div className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground xl:col-span-2">
-          <Label>收货人</Label>
-          <LimitedInput maxLength={30} value={receiverName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => apply(() => setReceiverName(e.target.value))} placeholder="请输入收货人或部门" disabled={headerReadOnly} className="h-9" />
+          <Label htmlFor={`${fieldId}-receiver`}>收货人</Label>
+          <LimitedInput id={`${fieldId}-receiver`} maxLength={30} value={receiverName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => apply(() => setReceiverName(e.target.value))} placeholder="请输入收货人或部门" disabled={headerReadOnly} className="h-9" />
         </div>
         <div className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground xl:col-span-2">
-          <Label>联系电话</Label>
-          <LimitedInput data-entry-field="phone" aria-label="联系电话" maxLength={30} value={receiverPhone} onChange={(e: React.ChangeEvent<HTMLInputElement>) => apply(() => setReceiverPhone(e.target.value))} placeholder="手机、座机或国际号码" inputMode="tel" disabled={headerReadOnly} className="h-9" />
+          <Label htmlFor={`${fieldId}-phone`}>联系电话</Label>
+          <LimitedInput id={`${fieldId}-phone`} data-entry-field="phone" aria-label="联系电话" maxLength={30} value={receiverPhone} onChange={(e: React.ChangeEvent<HTMLInputElement>) => apply(() => setReceiverPhone(e.target.value))} placeholder="手机、座机或国际号码" inputMode="tel" disabled={headerReadOnly} className="h-9" />
         </div>
         <div className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground xl:col-span-5">
-          <Label className="inline-flex items-center gap-1.5"><Truck className="h-3.5 w-3.5 text-muted-foreground" />收货地址</Label>
-          <LimitedTextarea maxLength={200} value={receiverAddress} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => apply(() => setReceiverAddress(e.target.value))} placeholder="请输入详细收货地址" rows={1} disabled={headerReadOnly} className="h-9 min-h-0 py-1.5" singleLine />
+          <Label htmlFor={`${fieldId}-address`} className="inline-flex items-center gap-1.5"><Truck className="h-3.5 w-3.5 text-muted-foreground" />收货地址</Label>
+          <LimitedTextarea id={`${fieldId}-address`} maxLength={200} value={receiverAddress} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => apply(() => setReceiverAddress(e.target.value))} placeholder="请输入详细收货地址" rows={1} disabled={headerReadOnly} className="h-9 min-h-0 py-1.5" singleLine />
         </div>
         <div className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground xl:col-span-3">
-          <Label className="inline-flex items-center gap-1.5"><MessageSquareText className="h-3.5 w-3.5 text-muted-foreground" />备注</Label>
-          <Input maxLength={50} value={remark} onChange={(e: React.ChangeEvent<HTMLInputElement>) => apply(() => setRemark(e.target.value))} placeholder="选填" disabled={headerReadOnly} className="h-9" />
+          <Label htmlFor={`${fieldId}-remark`} className="inline-flex items-center gap-1.5"><MessageSquareText className="h-3.5 w-3.5 text-muted-foreground" />备注</Label>
+          <Input id={`${fieldId}-remark`} maxLength={50} value={remark} onChange={(e: React.ChangeEvent<HTMLInputElement>) => apply(() => setRemark(e.target.value))} placeholder="选填" disabled={headerReadOnly} className="h-9" />
         </div>
       </div>
       {customerId && (

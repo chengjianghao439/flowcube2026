@@ -234,7 +234,7 @@ export default function PdaFillPage({ active = true, onBack, onWorkStateChange }
       <PdaFlash flash={contextCurrent ? flash : null} />
 
       <div className="flex-1 overflow-y-auto px-4 py-4 max-w-md mx-auto w-full space-y-4">
-        {!contextCurrent && <div className="space-y-2 rounded border border-amber-300 p-3 text-sm"><p>账号、服务器或权限已变，原来源输入已保留；请先核对原结果或重新扫码。</p><Button variant="outline" onClick={reset}>重新扫码</Button></div>}
+        {!contextCurrent && <div className="space-y-2 rounded border border-warning/30 p-3 text-sm"><p>账号、服务器或权限已变，原来源输入已保留；请先核对原结果或重新扫码。</p><Button className="px-3" size="lg" variant="outline" onClick={reset}>重新扫码</Button></div>}
         <div hidden={!contextCurrent} className="rounded-2xl border border-border bg-card p-4 space-y-2">
           <p className="text-xs text-muted-foreground">
             当前步骤：<span className="font-semibold text-foreground">
@@ -257,12 +257,12 @@ export default function PdaFillPage({ active = true, onBack, onWorkStateChange }
         {/* 未确认/待确认状态：提示 + 手动确认，期间禁改目标。
             重挂后 phase 仍是初始 idle，因此**同时按 pendingRecord 显示**，否则确认按钮不出现。 */}
         {(fillAction.phaseMessage || fillAction.lastErrorMessage || fillAction.pendingRecord) && (
-          <div className="rounded-2xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
+          <div className="rounded-2xl border border-warning/30 bg-warning/10 p-3 text-xs text-warning-ink">
             {fillAction.phaseMessage || fillAction.lastErrorMessage
               || `${fillAction.pendingRecord?.label ?? '放货'}结果待确认，请核对原提交后再继续。`}
             {fillAction.pendingRecord && (
               <div className="mt-2">
-                <Button size="sm" variant="outline" onClick={() => { void fillAction.confirmPending() }} disabled={fillAction.confirming}>
+                <Button className="px-3" size="lg" variant="outline" onClick={() => { void fillAction.confirmPending() }} disabled={fillAction.confirming}>
                   {fillAction.confirming ? '核对中…' : '确认结果'}
                 </Button>
               </div>
@@ -272,8 +272,8 @@ export default function PdaFillPage({ active = true, onBack, onWorkStateChange }
 
         {contextCurrent && step === 'confirm' && (
           <div className="flex gap-2">
-            <Button variant="outline" className="flex-1" onClick={reset} disabled={busy}>取消</Button>
-            <Button className="flex-1" onClick={() => { void submit() }} disabled={busy || fillAction.submitBlocked || sourceMut.isPending || boxMut.isPending}>
+            <Button size="lg" variant="outline" className="px-3 flex-1" onClick={reset} disabled={busy}>取消</Button>
+            <Button size="lg" className="px-3 flex-1" onClick={() => { void submit() }} disabled={busy || fillAction.submitBlocked || sourceMut.isPending || boxMut.isPending}>
               {busy ? '提交中…' : '确认放货'}
             </Button>
           </div>
@@ -286,6 +286,7 @@ export default function PdaFillPage({ active = true, onBack, onWorkStateChange }
             onScan={handleScan}
             placeholder={step === 'source' ? '扫描整件库存条码' : '扫描目标塑料盒条码'}
             disabled={!active || sourceMut.isPending || boxMut.isPending || fillAction.submitBlocked}
+            busy={sourceMut.isPending || boxMut.isPending}
           />
         )}
       </PdaBottomBar>

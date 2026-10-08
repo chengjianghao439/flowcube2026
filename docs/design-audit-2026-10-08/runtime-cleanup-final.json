@@ -1,0 +1,67 @@
+{
+  "checkedAt": "2026-10-08T02:14:42.910Z",
+  "containerAbsent": true,
+  "volumeAbsent": true,
+  "ownershipFileAbsent": true,
+  "processes": [
+    {
+      "pid": 58477,
+      "exists": false
+    },
+    {
+      "pid": 33314,
+      "exists": false
+    },
+    {
+      "pid": 16833,
+      "exists": false
+    },
+    {
+      "pid": 16667,
+      "exists": false
+    }
+  ],
+  "closedPorts": [
+    {
+      "port": 5186,
+      "listeners": []
+    },
+    {
+      "port": 50060,
+      "listeners": []
+    },
+    {
+      "port": 55391,
+      "listeners": []
+    },
+    {
+      "port": 32769,
+      "listeners": []
+    }
+  ],
+  "shared3307": [
+    {
+      "id": "17ef5cae318146f6c249cc4158616273c18f961c23b06f7554b4323113cc108e",
+      "running": true,
+      "health": "healthy",
+      "ports": {
+        "3306/tcp": [
+          {
+            "HostIp": "127.0.0.1",
+            "HostPort": "3307"
+          }
+        ],
+        "33060/tcp": null
+      }
+    }
+  ],
+  "privateAuthArtifactsAbsent": true,
+  "runtimeWrapperExit": 1,
+  "previewApiExit": 0,
+  "viteSignalExit": 143,
+  "fixtureHelper": {
+    "exit": 1,
+    "reason": "原runtime细粒度打印前提helper使用旧合成token，认证过期401；不能作为helper清理通过。外层专属容器/卷已独立核对删除、全部端口/进程停止。",
+    "wrapperTrapDeletedExactInstance": true
+  }
+}

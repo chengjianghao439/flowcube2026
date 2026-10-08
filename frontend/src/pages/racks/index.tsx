@@ -1,3 +1,5 @@
+import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
 /**
  * 货架管理
  * 路由：/racks
@@ -30,6 +32,7 @@ const defaultForm = {
 }
 
 export default function RacksPage() {
+  const { can } = usePermission()
   const [keyword, setKeyword] = useState('')
   const [warehouseFilter, setWarehouseFilter] = useState<number | null>(null)
   const [warehouseName, setWarehouseName] = useState('')
@@ -145,7 +148,10 @@ export default function RacksPage() {
       <BaseCrudPage<Rack>
         title="货架管理"
         description="货架唯一条码（H）与标签打印"
-        columns={columns}
+        canCreate={can(PERMISSIONS.RACK_CREATE)}
+      canEdit={can(PERMISSIONS.RACK_UPDATE)}
+      canDelete={can(PERMISSIONS.RACK_DELETE)}
+      columns={columns}
         queryKey={['racks', keyword, warehouseFilter, zoneFilter]}
         listQuery={() =>
           getRacksApi({
@@ -176,7 +182,7 @@ export default function RacksPage() {
               <div
                 className={`rounded-lg border px-4 py-3 text-sm leading-relaxed ${
                   localPrintEnv === 'electron_no_bridge'
-                    ? 'border-destructive/50 bg-destructive/5 text-destructive'
+                    ? 'border-destructive/50 bg-destructive/5 text-destructive-ink'
                     : 'border-amber-500/50 bg-amber-500/5 text-amber-950 dark:text-amber-100'
                 }`}
               >
@@ -212,20 +218,20 @@ export default function RacksPage() {
           <TableActionsMenu
             primaryLabel="打印"
             primaryVariant="outline"
-            primaryDisabled={printMut.isPending && printMut.variables === row.id}
+            primaryDisabled={!can(PERMISSIONS.RACK_PRINT_LABEL) || (printMut.isPending && printMut.variables === row.id)}
             onPrimaryClick={() => printMut.mutate(row.id)}
             items={[
-              { label: '编辑', onClick: () => helpers.openEdit(row) },
-              {
+              ...(can(PERMISSIONS.RACK_UPDATE) ? [{ label: '编辑', onClick: () => helpers.openEdit(row) }] : []),
+              ...(can(PERMISSIONS.RACK_DELETE) ? [{
                 label: '删除',
                 destructive: true,
                 separatorBefore: true,
                 onClick: () => helpers.openDelete(row),
-              },
+              }] : []),
             ]}
           />
         )}
-        renderForm={(editing) => {
+        renderForm={(editing, _open, locked) => {
           const isEdit = !!editing
           return (
             <div className="space-y-4 py-2">
@@ -235,8 +241,9 @@ export default function RacksPage() {
                   <Input id="rack-warehouse" value={editing?.warehouseName ?? ''} disabled className="bg-muted/50 text-sm" />
                 ) : (
                   <Select
+                    disabled={locked}
                     value={form.warehouseId ? String(form.warehouseId) : '__none__'}
-                    onValueChange={v => setForm(f => ({ ...f, warehouseId: v === '__none__' ? 0 : +v }))}
+                    onValueChange={v => !locked && setForm(f => ({ ...f, warehouseId: v === '__none__' ? 0 : +v }))}
                   >
                     <SelectTrigger id="rack-warehouse" className="h-9 w-full">
                       <SelectValue placeholder="请选择仓库" />
@@ -349,7 +356,7 @@ export default function RacksPage() {
               {isEdit && (
                 <div className="space-y-2">
                   <Label htmlFor="rack-status">状态</Label>
-                  <Select value={String(form.status)} onValueChange={v => setForm(f => ({ ...f, status: +v }))}>
+                  <Select disabled={locked} value={String(form.status)} onValueChange={v => !locked && setForm(f => ({ ...f, status: +v }))}>
                     <SelectTrigger id="rack-status" className="h-9 w-full">
                       <SelectValue />
                     </SelectTrigger>

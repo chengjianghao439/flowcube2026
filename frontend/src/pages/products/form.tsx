@@ -262,7 +262,7 @@ export default function ProductFormPage() {
       {conflict && (
         // 冲突提示：**保留草稿**（不自动刷新详情，否则会抹掉未保存输入）
         <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm">
-          <p className="font-medium text-destructive">该商品已被他人修改，本次修改未保存</p>
+          <p className="font-medium text-destructive-ink">该商品已被他人修改，本次修改未保存</p>
           <p className="mt-1 text-xs text-muted-foreground">
             当前填写内容仍在。请先复制需要保留的内容，关闭本页重新打开，核对最新价格后再编辑。
           </p>
@@ -271,7 +271,7 @@ export default function ProductFormPage() {
       {isEdit && isError && baseline !== null && (
         // 已初始化后的后台刷新失败：**保留当前表单与草稿**，只提示"看到的可能不是最新"，并提供重试。
         <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm">
-          <p className="font-medium text-destructive">最新数据刷新失败</p>
+          <p className="font-medium text-destructive-ink">最新数据刷新失败</p>
           <p className="mt-1 text-xs text-muted-foreground">
             当前填写内容仍在。保存时若提示已被修改，请复制需要保留的内容后关闭重开核对。
           </p>
@@ -397,7 +397,7 @@ export default function ProductFormPage() {
               <span className="text-sm text-muted-foreground">1 {u.unitName.trim() || '箱'} =</span>
               <Input type="number" min="2" step="1" value={u.conversionRate} onChange={e => setUnit(i, 'conversionRate', e.target.value)} disabled={submitting} placeholder="12" className="w-24 text-right tabular-nums" />
               <span className="text-sm text-muted-foreground">{form.unit.trim() || '基本单位'}</span>
-              <Button type="button" variant="ghost" size="sm" className="text-destructive" onClick={() => removeUnit(i)} disabled={submitting}>删除</Button>
+              <Button type="button" variant="ghost" size="sm" className="text-destructive-ink" onClick={() => removeUnit(i)} disabled={submitting}>删除</Button>
             </div>
           ))}
           <Button type="button" variant="outline" size="sm" onClick={addUnit} disabled={submitting || !form.unit.trim()}>+ 增加辅助单位</Button>
@@ -422,7 +422,7 @@ export default function ProductFormPage() {
                   placeholder={Number.isFinite(cost) ? (cost * (1 + item.rate / 100)).toFixed(2) : '0.00'}
                 />
                 {margin != null && (
-                  <p className={`text-xs ${margin >= 0 ? 'text-emerald-600' : 'text-destructive'}`}>
+                  <p className={`text-xs ${margin >= 0 ? 'text-emerald-600' : 'text-destructive-ink'}`}>
                     利润率 {margin}%
                   </p>
                 )}

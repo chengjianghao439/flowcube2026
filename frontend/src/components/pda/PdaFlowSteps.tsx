@@ -24,8 +24,8 @@ export default function PdaFlowSteps({ steps, currentId }: Props) {
           idx === currentIdx ? 'active' : 'pending'
         return (
           <div key={step.id} className="flex items-center gap-2 flex-1 min-w-0">
-            <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold transition-all ${
-              state === 'done'   ? 'bg-green-500 text-white' :
+            <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold transition-all motion-reduce:transition-none ${
+              state === 'done'   ? 'bg-success/100 text-white' :
               state === 'active' ? 'bg-primary text-primary-foreground' :
                                    'bg-muted text-muted-foreground'
             }`}>

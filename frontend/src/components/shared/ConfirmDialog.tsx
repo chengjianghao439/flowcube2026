@@ -23,6 +23,8 @@ interface ConfirmDialogProps {
   loading?: boolean
   onConfirm: () => void
   onCancel: () => void
+  /** 浏览器弹窗关闭后的焦点归属；原生桌面确认仍由系统管理。 */
+  onCloseAutoFocus?: (event: Event) => void
 }
 
 function useNativeConfirmAvailable(): boolean {
@@ -43,6 +45,7 @@ export function ConfirmDialog({
   loading = false,
   onConfirm,
   onCancel,
+  onCloseAutoFocus,
 }: ConfirmDialogProps) {
   const native = useNativeConfirmAvailable()
   const handledRef = useRef(false)
@@ -90,6 +93,7 @@ export function ConfirmDialog({
   return (
     <AppDialog
       open={open}
+      onCloseAutoFocus={onCloseAutoFocus}
       onOpenChange={v => {
         if (!v) {
           if (loading) return
@@ -105,7 +109,7 @@ export function ConfirmDialog({
       title={
         <span className="flex items-center gap-2">
           {variant === 'destructive' && (
-            <AlertTriangle className="h-4 w-4 text-destructive" />
+            <AlertTriangle className="h-4 w-4 text-destructive-ink" />
           )}
           {title}
         </span>

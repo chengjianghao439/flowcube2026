@@ -138,7 +138,7 @@ export default function UserMenu() {
         <DialogContent className="max-w-2xl">
           <DialogHeader><DialogTitle>我的信息</DialogTitle></DialogHeader>
           <div className="space-y-3 py-2">
-            {myInfoError && <p role="alert" className="text-sm text-destructive">个人资料加载失败。<button type="button" className="underline" onClick={() => void refetchMyInfo()}>重试</button></p>}
+            {myInfoError && <p role="alert" className="text-sm text-destructive-ink">个人资料加载失败。<button type="button" className="underline" onClick={() => void refetchMyInfo()}>重试</button></p>}
             <div className="rounded-lg border border-border">
               <div className="border-b border-border bg-muted/30 px-4 py-2 text-xs font-semibold text-muted-foreground">账号信息</div>
               <dl className="divide-y divide-border/60 text-sm">
@@ -154,11 +154,11 @@ export default function UserMenu() {
               </div>
               <div className="px-4 py-2 text-sm">
                 {whError ? (
-                  <p role="alert" className="text-destructive">仓库权限加载失败。<button type="button" className="underline" onClick={() => void refetchMyWarehouses()}>重试</button></p>
+                  <p role="alert" className="text-destructive-ink">仓库权限加载失败。<button type="button" className="underline" onClick={() => void refetchMyWarehouses()}>重试</button></p>
                 ) : whLoading ? (
                   <div className="flex items-center gap-2 text-muted-foreground py-1"><Loader2 className="size-3.5 animate-spin" /> 加载中…</div>
                 ) : isUnrestricted ? (
-                  <p className="text-success font-medium">不限仓库（可访问全部仓库）</p>
+                  <p className="text-success-ink font-medium">不限仓库（可访问全部仓库）</p>
                 ) : (
                   <div className="flex flex-wrap gap-1.5">
                     {myWarehouses?.map(w => (

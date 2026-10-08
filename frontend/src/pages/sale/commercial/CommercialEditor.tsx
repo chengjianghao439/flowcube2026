@@ -1,7 +1,7 @@
 import { commercialWarehouseName } from './warehouseName'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { SaleOrder } from '@/types/sale'
-import type { CommercialBody } from '@/types/sale-commercial'
+import type { CommercialBody, CommercialWriteConfirmation } from '@/types/sale-commercial'
 import type { KitReadOwner } from '@/api/kits'
 import { assertKitReadOwner, useKitBackup } from '@/hooks/useKits'
 import { useCommercialPreview, useCommercialWrite, readCommercialSaleOwned } from '@/hooks/useCommercialSale'
@@ -19,7 +19,7 @@ import { SectionCard } from '@/components/shared/SectionCard'
 import { money } from '@/lib/format'
 import { toast } from '@/lib/toast'
 import CommercialPicker from './CommercialPicker'
-import { draftFromGroups, toCommercialInputs, type CommercialDraftRow } from './commercialDraft'
+import { commercialUnit, draftFromGroups, toCommercialInputs, type CommercialDraftRow } from './commercialDraft'
 import { buildWorkspaceTabRegistrationFromPath } from '@/router/workspaceRouteMeta'
 import { ReorderSourcePanel } from '../ReorderSourcePanel'
 import { RepeatCreateRecoveryPanel } from '../RepeatCreateRecoveryPanel'
@@ -27,11 +27,20 @@ import { commercialReorderDrafts } from '../reorderDraft'
 import type { useSaleReorderSource } from '@/hooks/useSaleReorderSource'
 import type { RepeatSaleCreate } from '@/hooks/useRepeatSaleCreate'
 import { mayCreateReorder, mayReorder } from '@/lib/saleReorder'
+import { handleEntryKeyDown } from '@/lib/orderEntryNavigation'
+import { UnsavedBadge } from '@/components/shared/EditModeBadge'
+import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
+import { buildNewSalePayload } from './newSalePayload'
+import { saleEntryEpoch, subscribeSaleEntry } from '@/lib/saleEntryOwner'
+import { OrderEntryIssues } from '@/components/shared/OrderEntryIssues'
+import type { EntryIssue } from '@/lib/orderEntry'
+import { SectionVisibilityContext } from '@/components/layout/SectionVisibilityContext'
 export default function CommercialEditor({
   order,
   owner,
   tabPath,
   adjust = false,
+  ordinaryOnlySave = false,
   onDone,
   onReload,
   reorder
@@ -40,6 +49,7 @@ export default function CommercialEditor({
   owner: KitReadOwner
   tabPath: string
   adjust?: boolean
+  ordinaryOnlySave?: boolean
   onDone: (id?: number) => void
   onReload?: (order: SaleOrder) => void
   reorder?: { source: ReturnType<typeof useSaleReorderSource>; write: RepeatSaleCreate }
@@ -48,20 +58,33 @@ export default function CommercialEditor({
   const headerOrder = useMemo(() => (order ? { ...order, items: [] } : undefined), [order])
   const h = useSaleOrderForm('', headerOrder, owner, reorder?.source.isActiveCurrent)
   const [imported, setImported] = useState(false)
+  const [validationAttempted, setValidationAttempted] = useState(false)
   const [rows, setRows] = useState<CommercialDraftRow[]>(() => draftFromGroups(order?.commercialGroups ?? [])),
     [picker, setPicker] = useState<'kit' | 'ordinary' | null>(null),
     [error, setError] = useState(''),
     [reloading, setReloading] = useState(false),
     [discardOpen, setDiscardOpen] = useState(false)
-  const write = useCommercialWrite(owner, `commercial-editor:${buildWorkspaceTabRegistrationFromPath(tabPath).key}`),
+  const epoch = useSyncExternalStore(subscribeSaleEntry, saleEntryEpoch)
+  const [openingEpoch] = useState(saleEntryEpoch)
+  const sourceCurrent = () => !ordinaryOnlySave || openingEpoch === saleEntryEpoch()
+  const [savedConfirmation, setSavedConfirmation] = useState<CommercialWriteConfirmation | null>(null)
+  const write = useCommercialWrite(owner, `commercial-editor:${buildWorkspaceTabRegistrationFromPath(tabPath).key}`, sourceCurrent),
     { can } = usePermission()
+  const active = useActiveWorkspaceTab(), activeRef = useRef(active)
+  activeRef.current = active
+  const activity = useRef({ active, generation: 0 })
+  if (activity.current.active !== active) activity.current = { active, generation: activity.current.generation + 1 }
   let ownerCurrent = true
   try {
     assertKitReadOwner(owner)
   } catch {
     ownerCurrent = false
   }
-  const locked = write.blocked || reloading || !ownerCurrent || (!!reorder && (reorder.write.blocked || !reorder.source.current || !reorder.source.active))
+  const locked = write.blocked || !!savedConfirmation || reloading || !ownerCurrent || !sourceCurrent() || (!!reorder && (reorder.write.blocked || !reorder.source.current || !reorder.source.active))
+  const interaction = useRef({ locked, warehouseId: h.warehouseId })
+  interaction.current = { locked, warehouseId: h.warehouseId }
+  const renderGeneration = activity.current.generation
+  const mayInteract = () => activeRef.current && sourceCurrent() && !interaction.current.locked
   function importSource(include: boolean) {
     const data = reorder?.source.data
     if (locked || imported || rows.length || !data?.customer || data.customerError || data.items.some(i => i.error)) return
@@ -142,7 +165,19 @@ export default function CommercialEditor({
     order,
     rows
   ])
-  const preview = useCommercialPreview(reorder && (!reorder.source.active || !reorder.source.current || reorder.write.blocked) ? null : bodyResult.body, owner, order?.id, reorder?.source.isActiveCurrent)
+  const entryIssues: EntryIssue[] = []
+  if (!h.customerId || !h.customerName) entryIssues.push({ target: 'party', message: '请选择客户' })
+  if (!h.warehouseId || !h.warehouseName) entryIssues.push({ target: 'warehouse', message: '请选择仓库' })
+  if (!rows.length) entryIssues.push({ target: 'add', message: '请添加至少一条商品明细' })
+  const readable = active && !locked && can(PERMISSIONS.PRODUCT_VIEW)
+  const readCurrent = () => activeRef.current && sourceCurrent() && !write.blocked && (!reorder || (reorder.source.isActiveCurrent() && !reorder.write.blocked))
+  const preview = useCommercialPreview(readable ? bodyResult.body : null, owner, order?.id, readCurrent)
+  const heldPreview = useRef<{ signature: string; data: typeof preview.data } | null>(null)
+  const bodySignature = JSON.stringify(bodyResult.body)
+  if (preview.data) heldPreview.current = { signature: bodySignature, data: preview.data }
+  const shownPreview = preview.data ?? (locked && heldPreview.current?.signature === bodySignature ? heldPreview.current.data : undefined)
+  if (preview.data && Number(h.discountAmount || 0) > preview.data.amount) entryIssues.push({ target: 'discount', message: '折扣金额不能超过商品金额' })
+  const visibleIssues = ordinaryOnlySave && validationAttempted ? entryIssues : []
   const priceRequired = preview.data?.commercialGroups.some((g) => !(g.unitPrice > 0))
   const valid =
     !!preview.data &&
@@ -153,25 +188,42 @@ export default function CommercialEditor({
   function update(key: string, patch: Partial<CommercialDraftRow>) {
     if (!locked) setRows((old) => old.map((r) => (r.input.lineKey === key ? { ...r, ...patch } : r)))
   }
+  function applySaved(answer: CommercialWriteConfirmation | null, generation: number) {
+    if (!answer || !write.canApplyConfirmation(answer) || !sourceCurrent()) return
+    if (activeRef.current && activity.current.generation === generation) onDone(answer.result?.id)
+    else setSavedConfirmation(answer)
+  }
+  async function recover(retry: boolean) {
+    const generation = activity.current.generation
+    const answer = await (retry ? write.retry() : write.queryOriginal())
+    if (answer?.queryOnly) toast.success('原操作结果已核实，请自行打开原单；当前草稿未修改')
+    else applySaved(answer, generation)
+  }
   async function save() {
-    if (!valid || !bodyResult.body || locked || (reorder && !imported)) return
+    const generation = activity.current.generation
+    if (!mayInteract() || (reorder && !imported)) return
+    setValidationAttempted(true)
+    if (ordinaryOnlySave && entryIssues.length) return
+    if (!valid || !bodyResult.body || !preview.data) {
+      setError(bodyResult.error || preview.error || (priceRequired ? '请填写大于零的成交单价' : '请等待系统完成报价核对'))
+      return
+    }
     try {
       assertKitReadOwner(owner)
+      const body = !order && ordinaryOnlySave ? buildNewSalePayload(bodyResult.body, preview.data) : bodyResult.body
       if (reorder) {
-        const answer = await reorder.write.submit(bodyResult.body)
-        if (answer && reorder.write.canApply(answer) && reorder.source.isActiveCurrent()) onDone(answer.id)
+        const answer = await reorder.write.submit(body)
+        if (answer && activity.current.generation === generation && reorder.write.canApply(answer) && reorder.source.isActiveCurrent()) onDone(answer.id)
         return
       }
-      const answer = await write.submit({
-        action: order ? (adjust ? 'adjust' : 'update') : 'create',
-        id: order?.id,
-        body: bodyResult.body
-      })
-      if (answer && write.canApplyConfirmation(answer)) {
+      const answer = await write.submit(order
+        ? { action: adjust ? 'adjust' : 'update', id: order.id, body: bodyResult.body }
+        : { action: 'create', body })
+      if (answer && write.canApplyConfirmation(answer) && sourceCurrent()) {
         toast.success(
           answer.result?.pending ? '改单已提交，等待仓库确认；预占与派发以原单最新事实为准' : '销售单已保存'
         )
-        onDone(answer.result?.id)
+        applySaved(answer, generation)
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : '保存失败')
@@ -195,9 +247,10 @@ export default function CommercialEditor({
   }
   const permission = order ? PERMISSIONS.SALE_ORDER_UPDATE : PERMISSIONS.SALE_ORDER_CREATE
   return (
-    <div className="space-y-3">
+    <div data-order-entry onKeyDown={handleEntryKeyDown} className="space-y-3">
       <ActionBar
-        title={order ? `${order.orderNo} · ${adjust ? '修改订单' : '编辑订单'}` : '新建套销售'}
+        title={order ? `${order.orderNo} · ${adjust ? '修改订单' : '编辑订单'}` : ordinaryOnlySave ? '新建销售单' : '新建套销售'}
+        subtitle={<UnsavedBadge show={snapshot !== original.current} />}
         rightActions={
           <>
             <Button
@@ -211,36 +264,32 @@ export default function CommercialEditor({
               返回订单
             </Button>
             {can(permission) && (
-              <Button disabled={locked || !valid || (!!reorder && !imported)} onClick={() => void save()}>
+              <Button disabled={locked || (!ordinaryOnlySave && !valid) || preview.loading || (!!reorder && !imported)} onClick={() => void save()}>
                 保存草稿
               </Button>
             )}
           </>
         }
       />
-      {reorder && <><ReorderSourcePanel data={reorder.source.data} error={reorder.source.error} loading={reorder.source.loading} imported={imported} disabled={locked} onImport={importSource} onReload={reorder.source.reload} /><RepeatCreateRecoveryPanel write={reorder.write} active={reorder.source.active} onConfirmed={a => { if (reorder.source.isActiveCurrent()) onDone(a.id) }} /></>}
+      {reorder && <><ReorderSourcePanel data={reorder.source.data} error={reorder.source.error} loading={reorder.source.loading} imported={imported} disabled={locked} onImport={importSource} onReload={reorder.source.reload} /><RepeatCreateRecoveryPanel write={reorder.write} active={reorder.source.active} onConfirmed={a => { if (activity.current.generation === renderGeneration && reorder.source.isActiveCurrent()) onDone(a.id) }} /></>}
       <p className="text-sm text-muted-foreground">
-        固定组成按完整套安排发货；普通商品保留独立成交行。套主无库存，仓库按真实组件作业。原套组成和成交价不变、数量不超过当前目标时才可保留；改价或组成需重新核对当前启用版本。
+        普通商品与成套配件可在同一张订单销售，成套配件按完整套安排发货。{order && '原套组成和成交价不变、数量不超过当前目标时可保留；改价或组成请重新核对当前版本。'}
       </p>
-      {(error || write.error || preview.error || bodyResult.error || backup.error) && (
-        <p role="alert" className="text-sm text-destructive">
-          {error || write.error || preview.error || bodyResult.error || backup.error}
+      <OrderEntryIssues issues={visibleIssues} />
+      {(error || write.error || (bodyResult.body && preview.error) || ((!ordinaryOnlySave || validationAttempted) && !visibleIssues.length && bodyResult.error) || backup.error) && (
+        <p role="alert" className="text-sm text-destructive-ink">
+          {error || write.error || (bodyResult.body && preview.error) || bodyResult.error || backup.error}
         </p>
       )}
+      {!sourceCurrent() && <p role="alert">账号、权限或服务器已变化，原草稿保留；请核对后重新打开新单。</p>}
+      {savedConfirmation && <div className="space-y-2 rounded-md border p-3"><p>销售单已保存，当前草稿禁止重复提交。请主动打开已保存销售单。</p><Button disabled={!active || !ownerCurrent || !sourceCurrent()} onClick={() => { if (activeRef.current && sourceCurrent() && write.canApplyConfirmation(savedConfirmation)) onDone(savedConfirmation.result?.id) }}>查看已保存销售单</Button></div>}
       {write.pending && (
         <div className="space-y-2 rounded-md border p-3">
           <p>原请求结果待确认，离开或刷新不会自动重新提交。刷新后仅保留查询身份，不保存表单内容。</p>
-          <Button disabled={write.busy} onClick={() => void write.queryOriginal().then(answer => {
-            if (answer?.queryOnly) toast.success('原操作结果已核实，请自行打开原单；当前草稿未修改')
-            else if (answer && write.canApplyConfirmation(answer)) onDone(answer.result?.id)
-          })}>查询原操作结果</Button>
+          <Button disabled={write.busy} onClick={() => void recover(false)}>查询原操作结果</Button>
           <Button
             disabled={write.busy || !write.canRetry}
-            onClick={() =>
-              void write.retry().then((answer) => {
-                if (answer && write.canApplyConfirmation(answer)) onDone(answer.result?.id)
-              })
-            }
+            onClick={() => void recover(true)}
           >
             按原请求重试
           </Button>
@@ -277,26 +326,29 @@ export default function CommercialEditor({
       <fieldset disabled={locked} className="min-w-0 space-y-3">
         <SaleOrderHeaderFields
           readOwner={owner}
-          interactionGuard={reorder ? { epoch: reorder.source.owner.epoch, isCurrent: () => reorder.source.isActiveCurrent() && !reorder.write.blocked && !write.blocked && !reloading && mayCreateReorder() && mayReorder(PERMISSIONS.CUSTOMER_VIEW) } : undefined}
+          interactionGuard={{ epoch, isCurrent: () => mayInteract() && (!reorder || (reorder.source.isActiveCurrent() && mayCreateReorder() && mayReorder(PERMISSIONS.CUSTOMER_VIEW))) }}
           {...h}
+          customerError={visibleIssues.some(issue => issue.target === 'party')}
+          warehouseError={visibleIssues.some(issue => issue.target === 'warehouse')}
           headerReadOnly={adjust || locked}
           shippingProductDisabled={adjust || locked}
         />
         <SectionCard title="成交明细" compact>
-          <div className="flex gap-2 p-3">
+          <div data-entry-field="add" className="flex gap-2 p-3">
+            <Button
+              data-entry-add
+              variant="outline"
+              disabled={(!ordinaryOnlySave && !h.warehouseId) || !can(PERMISSIONS.PRODUCT_VIEW)}
+              onClick={() => { if (!h.warehouseId) { setValidationAttempted(true); return }; setPicker('ordinary') }}
+            >
+              添加普通商品
+            </Button>
             <Button
               variant="outline"
               disabled={!h.warehouseId || !can(PERMISSIONS.PRODUCT_VIEW)}
               onClick={() => setPicker('kit')}
             >
               添加成套配件
-            </Button>
-            <Button
-              variant="outline"
-              disabled={!h.warehouseId || !can(PERMISSIONS.PRODUCT_VIEW)}
-              onClick={() => setPicker('ordinary')}
-            >
-              添加普通商品
             </Button>
           </div>
           <div className="overflow-x-auto">
@@ -314,7 +366,7 @@ export default function CommercialEditor({
               </thead>
               <tbody>
                 {rows.map((row) => {
-                  const resolved = preview.data?.commercialGroups.find((g) => g.lineKey === row.input.lineKey)
+                  const resolved = shownPreview?.commercialGroups.find((g) => g.lineKey === row.input.lineKey)
                   const integerQuantity =
                     row.input.kind === 'kit' || (row.allowDecimalQty === false && row.unit === row.baseUnit)
                   return (
@@ -322,7 +374,9 @@ export default function CommercialEditor({
                       <td className="p-3">
                         <p>
                           {row.code} · {row.name}
+                          {row.input.kind === 'kit' && <span className="ml-2 text-xs text-muted-foreground">成套配件</span>}
                         </p>
+                        {(row.spec || row.color || row.articleNumber) && <p className="text-xs text-muted-foreground">{[row.spec, row.color, row.articleNumber].filter(Boolean).join(' · ')}</p>}
                         {row.input.kind === 'kit' ? (
                           <p className="text-xs text-muted-foreground">
                             {row.saved ? '原订单套组成' : '所选套组成 · 已选报价版本'} ·{' '}
@@ -353,6 +407,8 @@ export default function CommercialEditor({
                             {row.saved.targetQty}
                           </p>
                         )}
+                        {resolved?.metadata.entry && row.unit !== row.baseUnit && <p className="text-xs text-muted-foreground">折合 {resolved.quantity}{row.baseUnit || resolved.components[0]?.unit}</p>}
+                        {row.costPrice != null && resolved && (row.input.kind === 'kit' ? resolved.unitPrice : (resolved.metadata.entry?.entryUnitPrice ?? resolved.unitPrice) / (resolved.metadata.entry?.conversionRate ?? 1)) < row.costPrice && <p className="text-xs text-destructive">成交价低于进价，请核对</p>}
                         {row.input.kind === 'kit' && (
                           <details className="mt-1 text-xs">
                             <summary>展开真实组件（只读）</summary>
@@ -365,7 +421,7 @@ export default function CommercialEditor({
                           </details>
                         )}
                         {!row.packagingExpressible && (
-                          <p className="text-destructive">
+                          <p className="text-destructive-ink">
                             当前 {row.saved?.targetQty}
                             {row.saved?.components[0]?.unit}{' '}
                             无法按原包装精度表达；不能按原包装填写，保留原包装成交依据。
@@ -374,6 +430,7 @@ export default function CommercialEditor({
                       </td>
                       <td className="p-2">
                         <Input
+                          data-entry-input
                           quantity
                           aria-label={`${row.name}数量`}
                           type="number"
@@ -409,11 +466,12 @@ export default function CommercialEditor({
                             ))}
                           </select>
                         ) : (
-                          row.unit
+                          row.input.kind === 'kit' && resolved ? commercialUnit(resolved) : row.unit
                         )}
                       </td>
                       <td className="p-2">
                         <Input
+                          data-entry-input
                           aria-label={`${row.name}成交单价`}
                           type="number"
                           step="0.0001"
@@ -442,7 +500,7 @@ export default function CommercialEditor({
                         {row.input.priceSource === 'manual'
                           ? '人工确认'
                           : row.input.kind === 'kit'
-                            ? '套默认报价'
+                            ? (resolved?.metadata.quote ? `客户${resolved.metadata.quote.resolvedPriceLevel}价` : '客户默认价')
                             : '客户默认价'}
                         <Button
                           variant="ghost"
@@ -479,9 +537,11 @@ export default function CommercialEditor({
         <SectionCard title="订单汇总" compact>
           <div className="flex flex-wrap items-center gap-6 p-3">
             <p>商品金额 {preview.data ? money(preview.data.amount) : '待系统预览'}</p>
+            <p className="font-semibold">订单金额 {preview.data ? money(Math.max(0, preview.data.amount - Number(h.discountAmount || 0))) : '待系统预览'}</p>
             <label className="flex items-center gap-2">
               折扣金额
               <Input
+                data-entry-field="discount"
                 aria-label="折扣金额"
                 type="number"
                 min="0"
@@ -495,7 +555,7 @@ export default function CommercialEditor({
         </SectionCard>
       </fieldset>
       {priceRequired && (
-        <p role="alert" className="text-destructive">
+        <p role="alert" className="text-destructive-ink">
           默认报价为零，请填写大于零的正式成交价后保存。
         </p>
       )}
@@ -529,15 +589,19 @@ export default function CommercialEditor({
           </div>
         </SectionCard>
       )}
-      {h.customerFinderOpen && !locked && (
-        <CustomerFinder
+      <SectionVisibilityContext.Provider value={readable}><CustomerFinder
           readOwner={owner}
-          open
+          readGuard={{ epoch, isCurrent: mayInteract }}
+          open={h.customerFinderOpen}
           onClose={() => h.setCustomerFinderOpen(false)}
           onConfirm={(customer) => {
             try {
               if (reorder && !reorder.source.isActiveCurrent()) return
               assertKitReadOwner(owner)
+              if (!mayInteract() || activity.current.generation !== renderGeneration) return
+              if (ordinaryOnlySave && !order && h.customerId && h.customerId !== String(customer.id)) {
+                setRows(old => old.map(row => row.input.kind === 'ordinary' ? { ...row, price: '', input: { ...row.input, priceSource: 'default', unitPrice: undefined } } : row))
+              }
               h.setCustomerId(String(customer.id))
               h.setCustomerName(customer.name)
               h.setCustomerFinderOpen(false)
@@ -545,20 +609,23 @@ export default function CommercialEditor({
               setError(e instanceof Error ? e.message : '来源已变化')
             }
           }}
-        />
-      )}
-      {picker && !locked && (
-        <CommercialPicker
+        /></SectionVisibilityContext.Provider>
+      {picker && (
+        <SectionVisibilityContext.Provider value={readable}><CommercialPicker
           kind={picker}
+          readGuard={{ epoch, isCurrent: mayInteract }}
           warehouseId={+h.warehouseId}
           owner={owner}
           onClose={() => setPicker(null)}
           onSelect={(row) => {
+            if (row.input.warehouseId !== Number(interaction.current.warehouseId)) return
             if (reorder && !reorder.source.isActiveCurrent()) return
+            if (!mayInteract() || activity.current.generation !== renderGeneration) return
+            assertKitReadOwner(owner)
             setRows((old) => [...old, row])
             setPicker(null)
           }}
-        />
+        /></SectionVisibilityContext.Provider>
       )}
       <ConfirmDialog
         open={discardOpen}

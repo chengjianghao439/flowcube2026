@@ -45,6 +45,8 @@ test('准确PR原价/4位预算和原付款分配，实际页面POSTunknown持�
     await fill('原付款分配21退款金额', '0.0049');
     await fill('收入账户', '42');
     await click('保存退款草稿');
+    expect((document.querySelector('[aria-label="原付款分配21退款金额"]') as HTMLInputElement)?.value).toBe('0.0049');
+    expect(document.body.textContent).toContain('原请求退款合计');
     expect(readRefundRecords()[0].body).toMatchObject({ purchaseReturnId: 11, incomeAccountId: 42, refundDate: '2026-10-01', amount: '0.0049', allocations: [{ entryId: 21, amount: '0.0049' }] });
     await click('查询原结果');
     expect(calls.filter(c => c.method === 'post')).toHaveLength(1);
@@ -53,6 +55,17 @@ test('准确PR原价/4位预算和原付款分配，实际页面POSTunknown持�
 finally {
     await m.close();
 } });
+test('已创建原回执仍呈现提交的四位金额和原分配，不显示为零或重新提交', async () => {
+ const adapter=client.defaults.adapter as (c:InternalAxiosRequestConfig)=>Promise<unknown>
+ client.defaults.adapter=async c=>c.method==='post'&&c.url==='/supplier-refunds'?response(c,{id:61,refundNo:'RF61',status:1}):adapter(c) as never
+ const m=await mount('/supplier-refunds/new?purchaseReturnId=11',true)
+ try {
+  await fill('真实银行回款日','2026-10-01');await fill('收入账户','42');await fill('原付款分配21退款金额','0.0049');await click('保存退款草稿')
+  expect(document.body.textContent).toContain('RF61');expect(document.body.textContent).toContain('¥0.0049')
+  expect((document.querySelector('[aria-label="原付款分配21退款金额"]') as HTMLInputElement)?.value).toBe('0.0049')
+  expect(buttons('保存退款草稿').every(b=>b.disabled)).toBe(true)
+ }finally{await m.close()}
+})
 test.each([1, 2, 3, 4])('状态%d准确detail动作，state3不撤销，确认只RF1与真实confirmAllowed', async (value) => { status = value; const m = await mount('/supplier-refunds?detailId=61'); try {
     expect(document.body.textContent).toContain('RF61');
     expect(buttons('确认退款单').some(b => !b.disabled)).toBe(value === 1);

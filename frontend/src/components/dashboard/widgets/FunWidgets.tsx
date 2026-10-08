@@ -162,10 +162,10 @@ export function OffWorkCountdown() {
   let big: ReactNode
   let hint: string
   if (isWeekend) {
-    big = <span className="text-2xl font-semibold text-success">周末愉快 🎉</span>
+    big = <span className="text-2xl font-semibold text-success-ink">周末愉快 🎉</span>
     hint = '今天休息，别想工作'
   } else if (done) {
-    big = <span className="text-2xl font-semibold text-success">已下班，辛苦啦 🎉</span>
+    big = <span className="text-2xl font-semibold text-success-ink">已下班，辛苦啦 🎉</span>
     hint = `下班时间 ${off} · 点这里再撒把花`
   } else {
     const s = Math.floor(diffMs / 1000)
@@ -266,11 +266,11 @@ export function HolidayCountdown() {
           <div className="flex h-full flex-col items-center justify-center gap-1">
             <span className="text-3xl leading-none">{next.emoji}</span>
             {days === 0 ? (
-              <span className="text-lg font-bold text-success">今天是{next.name} 🎉</span>
+              <span className="text-lg font-bold text-success-ink">今天是{next.name} 🎉</span>
             ) : (
               <p className="text-center leading-tight">
                 <span className="text-xs text-muted-foreground">距离{next.name}还有 </span>
-                <span className="text-3xl font-semibold tabular-nums text-success">{days}</span>
+                <span className="text-3xl font-semibold tabular-nums text-success-ink">{days}</span>
                 <span className="text-sm text-muted-foreground"> 天</span>
               </p>
             )}
@@ -311,7 +311,7 @@ export function HolidayCountdown() {
                 <span className="flex-1 min-w-0 whitespace-normal [overflow-wrap:anywhere] text-foreground">{i.name}</span>
                 <span className="text-xs tabular-nums text-muted-foreground">{i.date.replace(/-/g, '/')}</span>
                 <button type="button" onClick={() => persist(items.filter(x => x.id !== i.id))} title="删除"
-                  className="flex h-6 w-6 items-center justify-center rounded text-destructive hover:bg-destructive/10">
+                  className="flex h-6 w-6 items-center justify-center rounded text-destructive-ink hover:bg-destructive/10">
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
               </div>
@@ -445,7 +445,7 @@ export function SlackingCountdown() {
         </div>
         <div className="flex items-center justify-between border-b border-border px-1 py-3">
           <span className="text-sm text-muted-foreground">距离发薪日</span>
-          <span className="text-sm font-semibold text-success">
+          <span className="text-sm font-semibold text-success-ink">
             {daysToPay === 0 ? '发钱啦 🤑' : `还有 ${daysToPay} 天`}
           </span>
         </div>
@@ -497,7 +497,7 @@ export function DailyFortune() {
         ) : (
           <>
             <span className="text-4xl">{f.emoji}</span>
-            <span className="text-lg font-bold text-success">{f.level}</span>
+            <span className="text-lg font-bold text-success-ink">{f.level}</span>
             <span className="text-center text-sm text-muted-foreground">{f.text}</span>
             <button type="button" onClick={draw} className="mt-0.5 text-xs text-primary hover:underline">再抽一次</button>
           </>
@@ -537,7 +537,7 @@ export function WaterTracker() {
           ))}
         </div>
         <p className="text-sm text-muted-foreground">
-          今日 <span className="font-bold text-info">{cups}</span> / {WATER_GOAL} 杯
+          今日 <span className="font-bold text-info-ink">{cups}</span> / {WATER_GOAL} 杯
           {cups >= WATER_GOAL && ' · 达标啦 🎉'}
         </p>
       </div>
@@ -577,11 +577,11 @@ export function TodoNote() {
             {todos.map(t => (
               <div key={t.id} className="group flex items-center gap-2 rounded-md px-2 py-1 text-sm transition-colors hover:bg-muted/50">
                 <button type="button" onClick={() => persist(todos.map(x => x.id === t.id ? { ...x, done: !x.done } : x))} aria-label={t.done ? '标记未完成' : '标记完成'}>
-                  {t.done ? <CheckCircle2 className="h-4 w-4 text-success" /> : <Circle className="h-4 w-4 text-muted-foreground" />}
+                  {t.done ? <CheckCircle2 className="h-4 w-4 text-success-ink" /> : <Circle className="h-4 w-4 text-muted-foreground" />}
                 </button>
                 <span className={cn('min-w-0 flex-1 whitespace-normal [overflow-wrap:anywhere]', t.done && 'text-muted-foreground line-through')}>{t.text}</span>
                 <button type="button" onClick={() => persist(todos.filter(x => x.id !== t.id))} title="删除"
-                  className="flex h-6 w-6 items-center justify-center rounded text-destructive opacity-70 transition-opacity hover:bg-destructive/10 focus-visible:opacity-100 group-hover:opacity-100">
+                  className="flex h-6 w-6 items-center justify-center rounded text-destructive-ink opacity-70 transition-opacity hover:bg-destructive/10 focus-visible:opacity-100 group-hover:opacity-100">
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
               </div>

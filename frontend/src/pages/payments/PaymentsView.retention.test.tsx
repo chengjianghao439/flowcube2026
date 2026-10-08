@@ -35,9 +35,9 @@ beforeEach(()=>{
 })
 afterEach(()=>{act(()=>root.unmount());client.clear();host.remove();api.defaults.adapter=originalAdapter;expect(blockedTransport).not.toHaveBeenCalled()})
 const settle=()=>new Promise(resolve=>setTimeout(resolve,20))
-async function render(monthly:boolean,key='initial') {
-  const path=monthly?'/reports/reconciliation/receivable':'/payments/receivable'
-  await act(async()=>{root.render(<MemoryRouter initialEntries={[path]}><QueryClientProvider client={client}><TabPathContext.Provider value={path}><div key={key}>{monthly?<ReconciliationView type={2}/>:<PaymentsView type={2}/>}</div></TabPathContext.Provider></QueryClientProvider></MemoryRouter>);await settle()})
+async function render(monthly:boolean,key='initial',type:1|2=2) {
+  const path=monthly?'/reports/reconciliation/receivable':`/payments/${type===1?'payable':'receivable'}`
+  await act(async()=>{root.render(<MemoryRouter initialEntries={[path]}><QueryClientProvider client={client}><TabPathContext.Provider value={path}><div key={key}>{monthly?<ReconciliationView type={type}/>:<PaymentsView type={type}/>}</div></TabPathContext.Provider></QueryClientProvider></MemoryRouter>);await settle()})
 }
 async function click(text:string,scope:ParentNode=document) {
   const button=[...scope.querySelectorAll('button')].find(b=>b.textContent===text)!
@@ -54,21 +54,35 @@ async function queryReceipt() {
   })
   await click('查询',dialog)
 }
-for(const monthly of [false,true]) test(`${monthly?'月结':'现结'}核销筛选切换保留，关闭大页重开重置`,async()=>{
-  await render(monthly)
+for(const [monthly,type] of [[false,1],[false,2],[true,2]] as const) test(`${monthly?'月结':'现结'}${type===1?'供应商':'客户'}核销当前语义与筛选切换保留，关闭大页重开重置`,async()=>{
+  const receiptLabel=`${type===1?'付款':'收款'}核销`
+  const assertCurrent=(label:string)=>{
+    if(monthly)return
+    const nav=host.querySelector(`nav[aria-label="现结${type===1?'供应商':'客户'}账款登记方式"]`)!
+    expect(nav).toBeTruthy()
+    expect(nav.querySelectorAll('[aria-current="true"]')).toHaveLength(1)
+    expect(nav.querySelector('[aria-current="true"]')?.textContent).toBe(label)
+  }
+  await render(monthly,'initial',type)
+  assertCurrent('按单登记')
   expect(mocks.receipts).not.toHaveBeenCalled()
-  await click('收款核销',host)
+  await click(receiptLabel,host)
+  assertCurrent(receiptLabel)
   await queryReceipt()
   expect(mocks.receipts.mock.lastCall?.[0].receiptNo).toBe('RC-KEEP')
   await click(monthly?'汇总对账':'按单登记',host)
+  assertCurrent('按单登记')
   const calls=mocks.receipts.mock.calls.length
   await act(async()=>{await client.invalidateQueries({queryKey:['payment-receipts']});await settle()})
   expect(mocks.receipts.mock.calls.length).toBe(calls)
-  await click('收款核销',host)
+  await click(receiptLabel,host)
+  assertCurrent(receiptLabel)
   expect(host.textContent).toContain('RC-KEEP')
   expect(mocks.receipts.mock.lastCall?.[0].receiptNo).toBe('RC-KEEP')
-  await render(monthly,'reopened')
-  await click('收款核销',host)
+  await render(monthly,'reopened',type)
+  assertCurrent('按单登记')
+  await click(receiptLabel,host)
+  assertCurrent(receiptLabel)
   expect(mocks.receipts.mock.lastCall?.[0].receiptNo).toBeUndefined()
   expect(host.textContent).not.toContain('RC-KEEP')
 })

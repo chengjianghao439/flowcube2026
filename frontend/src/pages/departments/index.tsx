@@ -243,7 +243,7 @@ export default function DepartmentsPage() {
       render: (_v, row) => (
         <span>
           <span className="block">{row.dept.managerName || <span className="text-muted-foreground">—</span>}</span>
-          {row.dept.managerIsActive === false && !row.dept.managerIsDevelopment && <span className="block text-xs text-destructive">{row.dept.managerName ? '负责人已禁用' : '负责人已删除'}</span>}
+          {row.dept.managerIsActive === false && !row.dept.managerIsDevelopment && <span className="block text-xs text-destructive-ink">{row.dept.managerName ? '负责人已禁用' : '负责人已删除'}</span>}
         </span>
       ),
     },
@@ -364,7 +364,7 @@ export default function DepartmentsPage() {
             <div className="space-y-2">
               <Label htmlFor="department-name">部门名称</Label>
               <Input id="department-name" value={form.name} aria-invalid={!!errors.name} aria-describedby={errors.name ? 'department-name-error' : undefined} onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setForm({ ...form, name: e.target.value }); setErrors(prev => ({ ...prev, name: undefined })) }} placeholder="如：采购部" />
-              {errors.name && <p id="department-name-error" className="text-xs text-destructive">{errors.name}</p>}
+              {errors.name && <p id="department-name-error" className="text-xs text-destructive-ink">{errors.name}</p>}
             </div>
             <div className="space-y-2">
               <Label htmlFor="department-parentId">上级部门</Label>
@@ -394,18 +394,18 @@ export default function DepartmentsPage() {
                   {form.managerId && !selectedManager && <SelectItem value={String(form.managerId)} disabled>{editing?.managerIsDevelopment ? '负责人不可用' : `${editing?.managerName || '原负责人'}（已删除）`}</SelectItem>}
                 </SelectContent>
               </Select>
-              {managerInvalid && <p className="text-xs text-destructive">{editing?.managerIsDevelopment && editing.managerId === form.managerId ? '负责人不可用，请更换或清空' : editing?.managerId === form.managerId && !editing.managerName ? '原负责人已删除，请更换或清空' : '当前负责人已禁用，请更换或清空'}</p>}
-              {errors.managerId && <p id="department-managerId-error" className="text-xs text-destructive">{errors.managerId}</p>}
+              {managerInvalid && <p className="text-xs text-destructive-ink">{editing?.managerIsDevelopment && editing.managerId === form.managerId ? '负责人不可用，请更换或清空' : editing?.managerId === form.managerId && !editing.managerName ? '原负责人已删除，请更换或清空' : '当前负责人已禁用，请更换或清空'}</p>}
+              {errors.managerId && <p id="department-managerId-error" className="text-xs text-destructive-ink">{errors.managerId}</p>}
             </div>
             <div className="space-y-2">
               <Label htmlFor="department-sortOrder">排序</Label>
               <Input type="number" min={0} step={1} id="department-sortOrder" value={form.sortOrder} aria-invalid={!!errors.sortOrder} aria-describedby={errors.sortOrder ? 'department-sortOrder-error' : undefined} onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setForm({ ...form, sortOrder: Number(e.target.value) }); setErrors(prev => ({ ...prev, sortOrder: undefined })) }} />
-              {errors.sortOrder && <p id="department-sortOrder-error" className="text-xs text-destructive">{errors.sortOrder}</p>}
+              {errors.sortOrder && <p id="department-sortOrder-error" className="text-xs text-destructive-ink">{errors.sortOrder}</p>}
             </div>
             <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="department-remark">备注</Label>
               <Input id="department-remark" value={form.remark} aria-invalid={!!errors.remark} aria-describedby={errors.remark ? 'department-remark-error' : undefined} onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setForm({ ...form, remark: e.target.value }); setErrors(prev => ({ ...prev, remark: undefined })) }} />
-              {errors.remark && <p id="department-remark-error" className="text-xs text-destructive">{errors.remark}</p>}
+              {errors.remark && <p id="department-remark-error" className="text-xs text-destructive-ink">{errors.remark}</p>}
             </div>
           </div>
           <DialogFooter>

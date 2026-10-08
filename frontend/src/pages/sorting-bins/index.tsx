@@ -190,7 +190,7 @@ function SortingBinsManagementPage() {
       render: (v) => (v as string | null) ?? <span className="text-muted-foreground">—</span> },
     { key: 'capacity',      title: '容量阈值', width: 90,
       render: (v) => (v != null ? `${v} 件` : <span className="text-muted-foreground">不限</span>) },
-    { key: 'remark',        title: '备注',
+    { key: 'remark',        title: '备注', expandableText: true,
       render: (v) => (v as string | null) ?? <span className="text-muted-foreground">—</span> },
   ]
 
@@ -199,7 +199,10 @@ function SortingBinsManagementPage() {
       <BaseCrudPage<SortingBin>
         title="分拣格管理"
         description="管理仓库 Put Wall 分拣格，查看占用状态"
-        columns={columns}
+        canCreate={can(PERMISSIONS.SORTING_BIN_MANAGE)}
+      canEdit={can(PERMISSIONS.SORTING_BIN_MANAGE)}
+      canDelete={can(PERMISSIONS.SORTING_BIN_MANAGE)}
+      columns={columns}
         queryKey={['sorting-bins', keyword, statusFilter, warehouseFilter]}
         listQuery={() => getSortingBinsApi({
           keyword,
@@ -218,7 +221,7 @@ function SortingBinsManagementPage() {
             <Button variant="outline" onClick={() => downloadExport('/export/sorting-bins').catch(e => toast.error((e as Error).message))}>导出</Button>
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
             {can(PERMISSIONS.WAREHOUSE_TASK_ASSIGN) && <Button variant="outline" onClick={() => setAssignOpen(true)}>补分配分拣格</Button>}
-            <Button variant="outline" onClick={() => setBatchOpen(true)}>批量创建</Button>
+            {can(PERMISSIONS.SORTING_BIN_MANAGE) && <Button variant="outline" onClick={() => setBatchOpen(true)}>批量创建</Button>}
           </>
         }
         renderToolbar={
@@ -237,7 +240,7 @@ function SortingBinsManagementPage() {
           ) : null
         }
         renderActions={(row, helpers) => (
-          row.status === 2 ? (
+          !can(PERMISSIONS.SORTING_BIN_MANAGE) ? null : row.status === 2 ? (
             <TableActionsMenu
               primaryLabel="释放"
               primaryVariant="outline"
@@ -254,7 +257,7 @@ function SortingBinsManagementPage() {
             </div>
           )
         )}
-        renderForm={(editing) => editing ? (
+        renderForm={(editing, _open, locked) => editing ? (
           <div className="space-y-4 py-2">
             <div>
               <Label htmlFor="sorting-bin-capacity">容量阈值（件）</Label>
@@ -268,7 +271,7 @@ function SortingBinsManagementPage() {
             <div><Label htmlFor="sorting-bin-code">编号</Label><Input id="sorting-bin-code" className="mt-1" placeholder="如 A01" value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value }))} /></div>
             <div>
               <Label htmlFor="sorting-bin-warehouse">仓库</Label>
-              <Select value={form.warehouseId} onValueChange={v => setForm(f => ({ ...f, warehouseId: v }))}>
+              <Select disabled={locked} value={form.warehouseId} onValueChange={v => !locked && setForm(f => ({ ...f, warehouseId: v }))}>
                 <SelectTrigger id="sorting-bin-warehouse" className="mt-1"><SelectValue placeholder="选择仓库" /></SelectTrigger>
                 <SelectContent>
                   {(whData ?? []).map((w: { id: number; name: string }) => (

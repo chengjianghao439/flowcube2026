@@ -33,7 +33,7 @@ export default function PdaRoutePermission({
       <div className="min-h-screen bg-background">
         <PdaHeader title={title} onBack={() => navigate(backTo)} />
         <PdaEmptyState
-          icon={<Smartphone className="h-12 w-12 text-amber-500" />}
+          icon={<Smartphone className="h-12 w-12 text-warning-ink" />}
           title="当前 PDA 未绑定设备"
           description="系统已切换为受限模式。未绑定的机器无法执行任何作业，请先到「设备绑定」页面扫码绑定管理员生成的绑定码。"
           actionText="去绑定设备"
@@ -48,7 +48,7 @@ export default function PdaRoutePermission({
       <div className="min-h-screen bg-background">
         <PdaHeader title={title} onBack={() => navigate(backTo)} />
         <PdaEmptyState
-          icon={<ShieldAlert className="h-12 w-12 text-amber-500" />}
+          icon={<ShieldAlert className="h-12 w-12 text-warning-ink" />}
           title="暂时无法确认权限"
           description="当前账号没有收到可用权限信息，系统已切换为受限模式。请重新登录；若问题仍然存在，请联系管理员检查账号权限。"
           actionText="返回工作台"
@@ -64,7 +64,7 @@ export default function PdaRoutePermission({
       <div className="min-h-screen bg-background">
         <PdaHeader title={title} onBack={() => navigate(backTo)} />
         <PdaEmptyState
-          icon={<Ban className="h-12 w-12 text-red-500" />}
+          icon={<Ban className="h-12 w-12 text-destructive-ink" />}
           title="当前账号无权访问"
           description="当前账号缺少本页面所需权限，请联系管理员分配。"
           actionText="返回工作台"

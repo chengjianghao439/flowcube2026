@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>比例表格选择列验收夹具</title></head>
+<body><main id="fixture" style="width:480px;max-width:100%;padding:16px"><h1>组件验收夹具：不代表业务页面</h1><div id="table"></div></main>
+<script type="module">
+import React from '/node_modules/.vite/deps/react.js';
+import ReactDOMClient from '/node_modules/.vite/deps/react-dom_client.js';
+import DataTable from '/src/components/shared/DataTable.tsx';
+import '/src/index.css';
+const columns=[{key:'name',title:'商品身份',width:60},{key:'qty',title:'数量',width:20},{key:'actions',title:'操作',width:20,render:()=>React.createElement('button',{type:'button'},'只读操作')}];
+const data=[{id:1,name:'验收合成商品：完整型号、颜色、供应商型号必须保留',qty:'1.25'}];
+function Fixture(){const [selected,setSelected]=React.useState(new Set());return React.createElement(DataTable,{columns,data,fluid:true,selectionMode:'multiple',selectedIds:selected,onSelectionChange:setSelected,columnStorageKey:'design-audit-only-fluid-selection'});}
+ReactDOMClient.createRoot(document.getElementById('table')).render(React.createElement(Fixture));
+</script></body></html>

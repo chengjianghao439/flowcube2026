@@ -10,7 +10,7 @@ export default function ForbiddenPage() {
       <div className="w-full max-w-lg rounded-lg border border-border bg-card p-8 text-center">
         <div className="mb-6 flex justify-center">
           <div className="flex h-16 w-16 items-center justify-center rounded-full bg-warning/10">
-            <ShieldOff className="h-8 w-8 text-warning" />
+            <ShieldOff className="h-8 w-8 text-warning-ink" />
           </div>
         </div>
 

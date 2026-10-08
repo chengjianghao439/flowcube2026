@@ -221,7 +221,7 @@ export default function InboundTaskCreatePage() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                            className="h-7 w-7 text-muted-foreground hover:text-destructive-ink"
                             onClick={() => removeLine(item.purchaseItemId)}
                           >
                             <X className="h-4 w-4" />

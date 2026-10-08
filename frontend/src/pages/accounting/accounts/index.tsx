@@ -307,7 +307,7 @@ function AccountNode({ acct, canManage, onAddChild, onEdit, onDelete, onToggle, 
                   title={acct.isActive ? '停用' : '启用'} onClick={() => onToggle(acct)}>
                   <Power className="h-3.5 w-3.5" />
                 </Button>
-                <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive-ink"
                   title="删除" onClick={() => onDelete(acct)}>
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>

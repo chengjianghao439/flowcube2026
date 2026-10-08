@@ -37,6 +37,24 @@ function move(x: number) { act(() => window.dispatchEvent(new MouseEvent('mousem
 function up(x: number) { act(() => window.dispatchEvent(new MouseEvent('mouseup', { clientX: x }))) }
 function widths() { return Array.from(host.querySelectorAll('col'), c => Number.parseFloat(c.style.width)) }
 
+test('长备注可就地展开完整内容，商品身份仍完整显示，双击展开不打开单据', () => {
+  const text = '用于长文本验收的备注。'.repeat(12)
+  const onDetail = vi.fn()
+  const cols: TableColumn<{ id: number; name: string; remark: string }>[] = [
+    { key: 'name', title: '商品身份' },
+    { key: 'remark', title: '备注', expandableText: true },
+  ]
+  act(() => root!.render(<DataTable columns={cols} data={[{ id: 1, name: text, remark: text }]} onRowDoubleClick={onDetail} />))
+  const cells = host.querySelectorAll('tbody td')
+  expect(cells[0].textContent).toBe(text)
+  expect(cells[0].querySelector('details')).toBeNull()
+  const disclosure = cells[1].querySelector('details')!
+  expect(disclosure).not.toBeNull()
+  expect(disclosure.textContent).toContain(text)
+  act(() => disclosure.querySelector('summary')!.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })))
+  expect(onDetail).not.toHaveBeenCalled()
+})
+
 test('多选框不参与业务列宽快照，拖拽后保留每列对应关系', () => {
   render(columns, true); measure([56, 240, 360, 180]); down(); up(320)
   expect(widths()).toEqual([56, 260, 360, 180])

@@ -29,14 +29,14 @@ function ContainerRow({ c }: { c: InventoryQueryContainer }) {
     <PdaCard>
       <div className="space-y-1.5 text-sm">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-doc-code font-medium text-foreground">{c.barcode}</span>
+          <span className="min-w-0 text-doc-code font-medium text-foreground [overflow-wrap:anywhere]">{c.barcode}</span>
           <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
             {c.containerKind === 'plastic_box' ? '塑料盒' : c.individual ? '单件' : '库存'}
             {c.containerStatus === 'waiting_putaway' ? ' · 待上架' : ''}
           </span>
         </div>
-        <p className="font-medium text-foreground">{c.productName}</p>
-        <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+        <p className="font-medium text-foreground [overflow-wrap:anywhere]">{c.productName}</p>
+        <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-xs text-muted-foreground [&>span]:min-w-0 [&>span]:[overflow-wrap:anywhere]">
           <span>仓库：{c.warehouseName}</span>
           <span>库位：{c.locationCode ?? '—'}</span>
           <span>批次：{c.batchNo ?? '—'}</span>
@@ -96,7 +96,7 @@ export default function PdaInventoryQueryPage() {
             <button
               type="button"
               onClick={() => { setResults(null); setLastBarcode('') }}
-              className="w-full rounded-xl border border-border bg-card px-3 py-2.5 text-sm text-muted-foreground active:scale-95 transition-all"
+              className="min-h-11 w-full rounded-xl border border-border bg-card px-3 py-2.5 text-sm text-muted-foreground motion-safe:active:scale-95 transition-all motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               清除结果
             </button>
@@ -105,7 +105,7 @@ export default function PdaInventoryQueryPage() {
       </div>
       <PdaFlash flash={flash} />
       <PdaBottomBar>
-        <PdaScanner onScan={(code) => { void doQuery(code) }} placeholder="扫描库存条码（I…/B…）" disabled={querying} />
+        <PdaScanner onScan={(code) => { void doQuery(code) }} placeholder="扫描库存条码（I…/B…）" disabled={querying} busy={querying} />
       </PdaBottomBar>
     </div>
   )

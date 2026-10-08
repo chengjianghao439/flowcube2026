@@ -42,6 +42,7 @@ import { X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Dialog, DialogPortal, DialogOverlay } from '@/components/ui/dialog'
 import { useResizableDialog } from '@/hooks/useResizableDialog'
+import { useDialogFocusReturn } from '@/hooks/useDialogFocusReturn'
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -88,6 +89,7 @@ export interface AppDialogProps {
    * 不传时保持 Radix 默认行为。
    */
   onOpenAutoFocus?: (event: Event) => void
+  onCloseAutoFocus?: (event: Event) => void
 }
 
 // ─── Resize Handle ────────────────────────────────────────────────────────────
@@ -124,7 +126,9 @@ export function AppDialog({
   minHeight     = 400,
   resizable     = true,
   onOpenAutoFocus,
+  onCloseAutoFocus,
 }: AppDialogProps) {
+  const focusReturn = useDialogFocusReturn({ onOpenAutoFocus, onCloseAutoFocus })
   const { width: preferredWidth, height: preferredHeight, handleResizeMouseDown } = useResizableDialog({
     dialogId,
     defaultWidth,
@@ -177,7 +181,7 @@ export function AppDialog({
         {/* 弹窗主体：使用 Radix Content 原语，完全控制位置和尺寸 */}
         <DialogPrimitive.Content
           aria-describedby={undefined}
-          onOpenAutoFocus={onOpenAutoFocus}
+          {...focusReturn}
           className={cn(
             'fixed z-50 flex flex-col rounded-lg border bg-background shadow-xl',
             'focus:outline-none',

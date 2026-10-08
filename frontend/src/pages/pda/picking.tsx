@@ -56,7 +56,7 @@ function TaskCard({ task, onStart, starting }: { task: MyTask; onStart: () => vo
             <span>{formatQty(task.totalPicked)} / {formatQty(task.totalRequired)} ({pct}%)</span>
           </div>
           <div className="h-1.5 rounded-full bg-muted">
-            <div className="h-1.5 rounded-full transition-all"
+            <div className="h-1.5 rounded-full transition-all motion-reduce:transition-none"
               style={{ width: `${pct}%`, background: pct >= 100 ? 'hsl(var(--success))' : 'hsl(var(--primary))' }} />
           </div>
         </div>
@@ -99,7 +99,7 @@ function SkuCard({ sku, tasksById, onTaskSelect, startingId }: {
           <div className="min-w-0 flex-1">
             <PdaProductIdentity code={sku.productCode} name={sku.productName} view="overview" />
           </div>
-          <span className={`shrink-0 rounded-lg px-2 py-1 text-right text-xs font-semibold ${done ? 'bg-green-100 text-green-800' : 'bg-primary/10 text-primary'}`}>
+          <span className={`shrink-0 rounded-lg px-2 py-1 text-right text-xs font-semibold ${done ? 'bg-success/10 text-success-ink' : 'bg-primary/10 text-primary'}`}>
             {done ? '已拣齐' : <>还需拣 {formatQty(remaining)} {sku.unit}</>}
           </span>
         </div>
@@ -115,7 +115,7 @@ function SkuCard({ sku, tasksById, onTaskSelect, startingId }: {
           <span className="shrink-0 text-muted-foreground">涉及 {sku.orderCount} 单</span>
         </div>
         <div className="mt-2 h-1.5 rounded-full bg-muted">
-          <div className="h-1.5 rounded-full transition-all"
+          <div className="h-1.5 rounded-full transition-all motion-reduce:transition-none"
             style={{ width: `${pct}%`, background: done ? 'hsl(var(--success))' : 'hsl(var(--primary))' }} />
         </div>
         <p className="mt-2 text-right text-xs font-medium text-primary">
@@ -241,8 +241,8 @@ export default function PdaPickingPage() {
 
       {/* 视图切换 */}
       <div className="flex gap-2 px-4 py-2 max-w-md mx-auto">
-        <Button size="sm" variant={viewMode === 'sku' ? 'default' : 'outline'} className="flex-1" onClick={() => setViewMode('sku')}>商品列表</Button>
-        <Button size="sm" variant={viewMode === 'order' ? 'default' : 'outline'} className="flex-1" onClick={() => setViewMode('order')}>订单列表</Button>
+        <Button size="lg" variant={viewMode === 'sku' ? 'default' : 'outline'} className="px-3 flex-1" onClick={() => setViewMode('sku')}>商品列表</Button>
+        <Button size="lg" variant={viewMode === 'order' ? 'default' : 'outline'} className="px-3 flex-1" onClick={() => setViewMode('order')}>订单列表</Button>
       </div>
 
       <div className="max-w-md mx-auto px-4 pb-8 space-y-3">
@@ -256,7 +256,7 @@ export default function PdaPickingPage() {
         {/* 加载失败 */}
         {(isError || (viewMode === 'sku' && skuError)) && (
           <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-center">
-            <p className="text-sm text-destructive">加载失败</p>
+            <p className="text-sm text-destructive-ink">加载失败</p>
             <Button variant="outline" size="pda" className="mt-2" onClick={() => { void (viewMode === 'sku' && skuError ? refetchSku() : refetch()) }}>重试</Button>
           </div>
         )}

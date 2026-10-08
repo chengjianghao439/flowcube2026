@@ -36,6 +36,7 @@ export function WarehouseSelect({
     <Select
       value={value != null ? String(value) : allowClear ? '__all__' : ''}
       onValueChange={v => {
+        if (disabled) return
         if (readOwner) {
           try { assertKitReadOwner(readOwner) }
           catch (error) { toast.error(error instanceof Error ? error.message : '读取来源已变化'); return }

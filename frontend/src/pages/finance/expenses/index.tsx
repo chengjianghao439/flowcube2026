@@ -335,7 +335,7 @@ export default function ExpenseClaimsPage() {
         )}
       />
 
-      {summary && <SummaryStrip items={[{ label: '报销总额', value: money(summary.totalAmount) }, { label: '待审批', value: money(summary.pendingAmount), tone: 'text-warning' }, { label: '已付款', value: money(summary.paidAmount), tone: 'text-success' }]} />}
+      {summary && <SummaryStrip items={[{ label: '报销总额', value: money(summary.totalAmount) }, { label: '待审批', value: money(summary.pendingAmount), tone: 'text-warning-ink' }, { label: '已付款', value: money(summary.paidAmount), tone: 'text-success-ink' }]} />}
 
       <QueryChips chips={queryChips} onClearAll={() => { setQuery(EMPTY_EXP_QUERY); }} />
 
@@ -438,7 +438,7 @@ export default function ExpenseClaimsPage() {
             </div>
           )}
           {detail?.rejectReason && (
-            <p className="rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            <p className="rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive-ink">
               驳回原因：{detail.rejectReason}
             </p>
           )}

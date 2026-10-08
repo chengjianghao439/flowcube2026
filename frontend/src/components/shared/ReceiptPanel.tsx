@@ -97,9 +97,9 @@ export const ReceiptPanel = forwardRef<ReceiptPanelHandle, Props>(function Recei
     { key: 'receiptNo', title: '单号', width: 220, render: v => <span className="text-doc-code">{String(v)}</span> },
     { key: 'partyName', title: partyLabel, width: 160 },
     { key: 'amount', title: `${actionLabel}金额`, width: 110, align: 'right', render: v => <span className="tabular-nums font-medium">{money(v as number)}</span> },
-    { key: 'settledAmount', title: '已核销', width: 110, align: 'right', render: v => <span className="tabular-nums text-success">{money(v as number)}</span> },
+    { key: 'settledAmount', title: '已核销', width: 110, align: 'right', render: v => <span className="tabular-nums text-success-ink">{money(v as number)}</span> },
     { key: 'balance', title: '未核销', width: 110, align: 'right', render: v => (
-      <span className={`tabular-nums ${Number(v) > 0 ? 'font-semibold text-warning' : 'text-muted-foreground'}`}>{money(v as number)}</span>
+      <span className={`tabular-nums ${Number(v) > 0 ? 'font-semibold text-warning-ink' : 'text-muted-foreground'}`}>{money(v as number)}</span>
     )},
     { key: 'status', title: '状态', width: 100, render: (v, row) => (
       <SoftStatusLabel label={(row as PaymentReceipt).statusName} tone={RECEIPT_TONE[v as number] ?? 'draft'} />

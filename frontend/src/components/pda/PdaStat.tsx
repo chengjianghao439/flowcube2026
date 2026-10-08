@@ -23,11 +23,11 @@ interface PdaStatProps {
 
 export default function PdaStat({ icon, label, value, accent = false }: PdaStatProps) {
   return (
-    <div className="flex flex-col items-center justify-center gap-1 rounded-2xl border border-border bg-white px-3 py-4 text-center">
+    <div className="min-w-0 flex flex-col items-center justify-center gap-1 rounded-2xl border border-border bg-card text-card-foreground px-3 py-4 text-center">
       {icon && <span className="text-2xl leading-none">{icon}</span>}
       <p className="text-xs text-muted-foreground">{label}</p>
       <p
-        className={`text-2xl font-bold tabular-nums leading-none ${
+        className={`text-2xl font-bold tabular-nums leading-snug [overflow-wrap:anywhere] ${
           accent ? 'text-primary' : 'text-foreground'
         }`}
       >

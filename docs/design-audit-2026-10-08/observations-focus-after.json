@@ -1,0 +1,759 @@
+{
+  "session": "flowcube-impeccable-crud",
+  "attempts": [
+    {
+      "stage": "harness-first-open",
+      "reason": "仅等main存在时页面权限/新增入口尚未挂载，静态createName读空；随后真实snapshot有新增供应商，不计产品失败"
+    },
+    {
+      "stage": "harness-navigation",
+      "reason": "新导航加载未稳定时旧DialogOverlay覆盖新增点击；未产生业务动作，继续等待当前h1和遮罩退出，不计产品失败"
+    },
+    {
+      "stage": "harness-navigation",
+      "reason": "新导航加载未稳定时旧DialogOverlay覆盖新增点击；未产生业务动作，继续等待当前h1和遮罩退出，不计产品失败"
+    },
+    {
+      "stage": "harness-navigation",
+      "reason": "新导航加载未稳定时旧DialogOverlay覆盖新增点击；未产生业务动作，继续等待当前h1和遮罩退出，不计产品失败"
+    }
+  ],
+  "method": "真实UI；本批合成全权账号；仅打开/输入/Escape/继续编辑/放弃；不保存删除释放打印。每图人工细看在单独报告确认后才登记。",
+  "routes": [
+    {
+      "route": "/suppliers",
+      "continued": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 585,
+          "overflowY": "auto",
+          "scrollHeight": 633,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": "supplier-name",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        "focusables": 12,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "supplier-name",
+            "placeholder": "供应商名称",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": "AUDIT-ONLY-FOCUS-suppliers"
+          },
+          {
+            "disabled": false,
+            "id": "supplier-contact",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-phone",
+            "placeholder": "手机、座机或国际电话",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-email",
+            "placeholder": "选填",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-address",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-remark",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-leadTimeDays",
+            "placeholder": "下单到到货天数，用于采购计划预测",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "number",
+            "value": "0"
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 731,
+          "width": 768,
+          "x": 128,
+          "y": 84.5
+        },
+        "text": "新建供应商\n供应商与联系方式\n名称 *\n26/100\n联系人\n0/50\n电话\n0/30\n邮箱\n地址\n0/200\n备注\n0/500\n结算与供货\n结算方式\n月结\n现结\n月结\n\n从结算发生当天起算账期\n\n应付账期\n30 天\n30 天\n60 天\n90 天\n\n至少每 30 天结算一次\n\n采购提前期（天）\n取消\n创建\n关闭",
+        "title": "新建供应商",
+        "viewport": {
+          "height": 900,
+          "width": 1024
+        }
+      },
+      "screenshots": [
+        "screens/after/c-focus-suppliers-resume-1024.png"
+      ],
+      "humanViewed": true,
+      "businessWrite": false,
+      "checks": {
+        "focusReturnedToOriginalField": true,
+        "valuePreserved": true,
+        "discardClosed": true,
+        "outerReturnToCreateButton": true
+      },
+      "visualReview": "本审查者逐张 view_image 细看8张1024回焦图；字段真实焦点环、当前值/商品仓库预览、页脚可读；不等同于1440/深色或全态复验"
+    },
+    {
+      "route": "/carriers",
+      "continued": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 501,
+          "overflowY": "auto",
+          "scrollHeight": 501,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": "carrier-name",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        "focusables": 10,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "carrier-name",
+            "placeholder": "承运商名称",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": "AUDIT-ONLY-FOCUS-carriers"
+          },
+          {
+            "disabled": false,
+            "id": "carrier-contact",
+            "placeholder": "可选",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "carrier-phone",
+            "placeholder": "可选",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "carrier-remark",
+            "placeholder": "可选",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 647,
+          "width": 768,
+          "x": 128,
+          "y": 126.5
+        },
+        "text": "新建承运商\n基本资料\n名称\n类型\n快递\n送货\n快递\n快运\n物流\n联系人\n电话\n备注\n快递公司 / 对接平台\n选择平台\n快递鸟\n德邦开放平台\n顺丰丰桥\n\n在这里选择一次，快递账号绑定页会自动带入。尚未对接的物流可留空，选择平台不会启用自动下单。\n\n电子面单取号\n未开通\n未开通\n已开通\n取消\n创建\n关闭",
+        "title": "新建承运商",
+        "viewport": {
+          "height": 900,
+          "width": 1024
+        }
+      },
+      "screenshots": [
+        "screens/after/c-focus-carriers-resume-1024.png"
+      ],
+      "humanViewed": true,
+      "businessWrite": false,
+      "checks": {
+        "focusReturnedToOriginalField": true,
+        "valuePreserved": true,
+        "discardClosed": true,
+        "outerReturnToCreateButton": true
+      },
+      "visualReview": "本审查者逐张 view_image 细看8张1024回焦图；字段真实焦点环、当前值/商品仓库预览、页脚可读；不等同于1440/深色或全态复验"
+    },
+    {
+      "route": "/warehouses",
+      "continued": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 420,
+          "overflowY": "auto",
+          "scrollHeight": 420,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": "warehouse-name",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        "focusables": 12,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "warehouse-name",
+            "placeholder": "仓库名称",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": "AUDIT-ONLY-FOCUS-warehouses"
+          },
+          {
+            "disabled": false,
+            "id": "",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "radio",
+            "value": "1"
+          },
+          {
+            "disabled": false,
+            "id": "",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "radio",
+            "value": "2"
+          },
+          {
+            "disabled": false,
+            "id": "",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "radio",
+            "value": "3"
+          },
+          {
+            "disabled": false,
+            "id": "",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "radio",
+            "value": "4"
+          },
+          {
+            "disabled": false,
+            "id": "warehouse-manager",
+            "placeholder": "负责人姓名",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "warehouse-phone",
+            "placeholder": "联系电话",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "warehouse-address",
+            "placeholder": "详细地址",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "warehouse-remark",
+            "placeholder": "备注信息",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 566,
+          "width": 672,
+          "x": 176,
+          "y": 167
+        },
+        "text": "新建仓库\n仓库名称 *\n仓库类型 *\n成品仓\n原料仓\n退货仓\n其他\n负责人\n联系电话\n仓库地址\n备注\n取消\n创建\n关闭",
+        "title": "新建仓库",
+        "viewport": {
+          "height": 900,
+          "width": 1024
+        }
+      },
+      "screenshots": [
+        "screens/after/c-focus-warehouses-resume-1024.png"
+      ],
+      "humanViewed": true,
+      "businessWrite": false,
+      "checks": {
+        "focusReturnedToOriginalField": true,
+        "valuePreserved": true,
+        "discardClosed": true,
+        "outerReturnToCreateButton": true
+      },
+      "visualReview": "本审查者逐张 view_image 细看8张1024回焦图；字段真实焦点环、当前值/商品仓库预览、页脚可读；不等同于1440/深色或全态复验"
+    },
+    {
+      "route": "/locations",
+      "continued": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 420,
+          "overflowY": "auto",
+          "scrollHeight": 420,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": "location-zone",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        "focusables": 11,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "location-zone",
+            "placeholder": "如 A",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": "AUDIT-ONLY-FOCUS-locations"
+          },
+          {
+            "disabled": false,
+            "id": "location-aisle",
+            "placeholder": "如 01",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "location-rack",
+            "placeholder": "如 01",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "location-level",
+            "placeholder": "如 01",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "location-position",
+            "placeholder": "如 01",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "location-code",
+            "placeholder": "自动生成",
+            "readOnly": true,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "location-capacity",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "number",
+            "value": "0"
+          },
+          {
+            "disabled": false,
+            "id": "location-remark",
+            "placeholder": "可选",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 566,
+          "width": 672,
+          "x": 176,
+          "y": 167
+        },
+        "text": "新建库位\n仓库\n选择仓库\n验收合成仓-GL76c9c150\n库区\n通道\n货架\n层\n位\n库位编码\n容量\n备注\n取消\n创建\n关闭",
+        "title": "新建库位",
+        "viewport": {
+          "height": 900,
+          "width": 1024
+        }
+      },
+      "screenshots": [
+        "screens/after/c-focus-locations-resume-1024.png"
+      ],
+      "humanViewed": true,
+      "businessWrite": false,
+      "checks": {
+        "focusReturnedToOriginalField": true,
+        "valuePreserved": true,
+        "discardClosed": true,
+        "outerReturnToCreateButton": true
+      },
+      "visualReview": "本审查者逐张 view_image 细看8张1024回焦图；字段真实焦点环、当前值/商品仓库预览、页脚可读；不等同于1440/深色或全态复验"
+    },
+    {
+      "route": "/racks",
+      "continued": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 585,
+          "overflowY": "auto",
+          "scrollHeight": 594,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": "rack-scan",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        "focusables": 10,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "rack-scan",
+            "placeholder": "扫描或粘贴条码后回车",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": "AUDIT-ONLY-FOCUS-racks"
+          },
+          {
+            "disabled": false,
+            "id": "rack-zone",
+            "placeholder": "A",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "rack-code",
+            "placeholder": "A01",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "rack-name",
+            "placeholder": "货架名称（选填）",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "rack-maxLevels",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "number",
+            "value": "5"
+          },
+          {
+            "disabled": false,
+            "id": "rack-maxPositions",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "number",
+            "value": "10"
+          },
+          {
+            "disabled": false,
+            "id": "rack-remark",
+            "placeholder": "备注信息",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 731,
+          "width": 672,
+          "x": 176,
+          "y": 84.5
+        },
+        "text": "新建货架\n所属仓库 *\n请选择仓库\n请选择仓库\n验收合成仓-GL76c9c150\n扫码校验（选填）\n\n填写仓库与货架编码后，可扫 H / P / I 或商品编码，检查条码冲突或在库绑定提示。\n\n校验\n库区\n货架编码 *\n货架名称\n最大层数\n每层位数\n备注\n取消\n创建\n关闭",
+        "title": "新建货架",
+        "viewport": {
+          "height": 900,
+          "width": 1024
+        }
+      },
+      "screenshots": [
+        "screens/after/c-focus-racks-resume-1024.png"
+      ],
+      "humanViewed": true,
+      "businessWrite": false,
+      "checks": {
+        "focusReturnedToOriginalField": true,
+        "valuePreserved": true,
+        "discardClosed": true,
+        "outerReturnToCreateButton": true
+      },
+      "visualReview": "本审查者逐张 view_image 细看8张1024回焦图；字段真实焦点环、当前值/商品仓库预览、页脚可读；不等同于1440/深色或全态复验"
+    },
+    {
+      "route": "/sorting-bins",
+      "continued": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 268,
+          "overflowY": "auto",
+          "scrollHeight": 268,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": "sorting-bin-code",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        "focusables": 5,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "sorting-bin-code",
+            "placeholder": "如 A01",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": "AUDIT-ONLY-FOCUS-sorting-bins"
+          },
+          {
+            "disabled": false,
+            "id": "sorting-bin-remark",
+            "placeholder": "可选",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 414,
+          "width": 672,
+          "x": 176,
+          "y": 243
+        },
+        "text": "新建分拣格\n编号\n仓库\n选择仓库\n验收合成仓-GL76c9c150\n备注\n取消\n创建\n关闭",
+        "title": "新建分拣格",
+        "viewport": {
+          "height": 900,
+          "width": 1024
+        }
+      },
+      "screenshots": [
+        "screens/after/c-focus-sorting-bins-resume-1024.png"
+      ],
+      "humanViewed": true,
+      "businessWrite": false,
+      "checks": {
+        "focusReturnedToOriginalField": true,
+        "valuePreserved": true,
+        "discardClosed": true,
+        "outerReturnToCreateButton": true
+      },
+      "visualReview": "本审查者逐张 view_image 细看8张1024回焦图；字段真实焦点环、当前值/商品仓库预览、页脚可读；不等同于1440/深色或全态复验"
+    },
+    {
+      "route": "/finance/expense-categories",
+      "continued": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 252,
+          "overflowY": "auto",
+          "scrollHeight": 252,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": "expense-category-name",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        "focusables": 6,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "expense-category-name",
+            "placeholder": "如：差旅费",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": "AUDIT-ONLY-FOCUS-finance/expense-categories"
+          },
+          {
+            "disabled": false,
+            "id": "expense-category-sort",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "number",
+            "value": "0"
+          },
+          {
+            "disabled": false,
+            "id": "expense-category-remark",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 398,
+          "width": 448,
+          "x": 288,
+          "y": 251
+        },
+        "text": "新建类别\n类别名称 *\n排序\n备注\n取消\n创建\n关闭",
+        "title": "新建类别",
+        "viewport": {
+          "height": 900,
+          "width": 1024
+        }
+      },
+      "screenshots": [
+        "screens/after/c-focus-finance-expense-categories-resume-1024.png"
+      ],
+      "humanViewed": true,
+      "businessWrite": false,
+      "checks": {
+        "focusReturnedToOriginalField": true,
+        "valuePreserved": true,
+        "discardClosed": true,
+        "outerReturnToCreateButton": true
+      },
+      "visualReview": "本审查者逐张 view_image 细看8张1024回焦图；字段真实焦点环、当前值/商品仓库预览、页脚可读；不等同于1440/深色或全态复验"
+    },
+    {
+      "route": "/plastic-boxes",
+      "continued": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 190,
+          "overflowY": "auto",
+          "scrollHeight": 190,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": "plastic-box-warehouse",
+          "inside": true,
+          "name": null,
+          "tag": "BUTTON"
+        },
+        "focusables": 5,
+        "inputs": [],
+        "pageOverflow": false,
+        "rect": {
+          "height": 336,
+          "width": 448,
+          "x": 288,
+          "y": 282
+        },
+        "text": "新建塑料盒\n绑定商品 *\n验收合成：加长静音阻尼铰链（嵌入式柜门用）长名称与型号识别检查\n所属仓库 *\n验收合成仓-GL76c9c150\n验收合成仓-GL76c9c150\n取消\n创建\n关闭",
+        "title": "新建塑料盒",
+        "viewport": {
+          "height": 900,
+          "width": 1024
+        }
+      },
+      "screenshots": [
+        "screens/after/c-focus-plastic-boxes-resume-1024.png"
+      ],
+      "humanViewed": true,
+      "businessWrite": false,
+      "checks": {
+        "focusReturnedToOriginalField": true,
+        "productAndWarehousePreserved": true,
+        "discardClosed": true,
+        "outerReturnToCreateButton": true
+      },
+      "visualReview": "本审查者逐张 view_image 细看8张1024回焦图；字段真实焦点环、当前值/商品仓库预览、页脚可读；不等同于1440/深色或全态复验"
+    }
+  ],
+  "cleanup": {
+    "closeRequested": true,
+    "listVerified": true,
+    "sessionAbsent": true,
+    "activeSessionsAtVerification": [
+      "flowcube-impeccable-root"
+    ]
+  }
+}

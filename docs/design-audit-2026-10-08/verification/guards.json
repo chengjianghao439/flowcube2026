@@ -1,0 +1,62 @@
+[
+  {
+    "name": "test:frontend-conventions",
+    "exit": 0
+  },
+  {
+    "name": "test:pda-scan-focus",
+    "exit": 0
+  },
+  {
+    "name": "test:pda-list-refresh",
+    "exit": 0
+  },
+  {
+    "name": "test:copy-conventions",
+    "exit": 0
+  },
+  {
+    "name": "test:frontend-date-source",
+    "exit": 0
+  },
+  {
+    "name": "test:frontend-session-contract",
+    "exit": 0
+  },
+  {
+    "name": "test:frontend-polling-contract",
+    "exit": 0
+  },
+  {
+    "name": "test:api-route-contract",
+    "exit": 0
+  },
+  {
+    "name": "test:route-permission-contract",
+    "exit": 0
+  },
+  {
+    "name": "test:permissions",
+    "exit": 0
+  },
+  {
+    "name": "test:qty-precision-coverage",
+    "exit": 0
+  },
+  {
+    "name": "test:query-loop",
+    "exit": 0
+  },
+  {
+    "name": "test:sql-identifier",
+    "exit": 0
+  },
+  {
+    "name": "test:sql-placeholder",
+    "exit": 0
+  },
+  {
+    "name": "test:agents-md-guard",
+    "exit": 0
+  }
+]

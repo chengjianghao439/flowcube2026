@@ -4,6 +4,7 @@ import { useState, useRef } from 'react'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import ListSummary from '@/components/shared/ListSummary'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { Button } from '@/components/ui/button'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import type { StatusTone } from '@/lib/statusTone'
@@ -95,7 +96,7 @@ export default function PaymentsView({ type }: { type: PaymentType }) {
     ...(query.maxAmount ? { maxAmount: query.maxAmount } : {}),
   }
 
-  const { data, isLoading, isFetching, isPaused, isError } = useVisibleQuery({
+  const { data, isLoading, isFetching, isPaused, isError, error, refetch } = useVisibleQuery({
     queryKey: ['payments', { type, query }],
     queryFn: () => getPaymentsApi({ ...exportParams, page: 1, pageSize: PAGE_SIZE, settlementTypes: IMMEDIATE_SCOPE }),
     enabled: active && tab === 'records',
@@ -109,8 +110,8 @@ export default function PaymentsView({ type }: { type: PaymentType }) {
     { key: 'orderNo', title: '关联单号', width: 160, render: (_, row) => <FinanceOrderLink {...row} enabled={active && tab === 'records' && row.type === type && !isFetching && !isPaused && !isError} /> },
     { key: 'partyName', title: copy.party, width: 140 },
     { key: 'totalAmount', title: '总金额', width: 100, align: 'right', render: (v) => money(Number(v)) },
-    { key: 'paidAmount', title: copy.amountCol, width: 100, align: 'right', render: (v) => <span className="tabular-nums text-success">{money(Number(v))}</span> },
-    { key: 'balance', title: '余额', width: 100, align: 'right', render: (v) => <span className={`tabular-nums ${Number(v) > 0 ? 'font-medium text-destructive' : 'text-muted-foreground'}`}>{money(Number(v))}</span> },
+    { key: 'paidAmount', title: copy.amountCol, width: 100, align: 'right', render: (v) => <span className="tabular-nums text-success-ink">{money(Number(v))}</span> },
+    { key: 'balance', title: '余额', width: 100, align: 'right', render: (v) => <span className={`tabular-nums ${Number(v) > 0 ? 'font-medium text-destructive-ink' : 'text-muted-foreground'}`}>{money(Number(v))}</span> },
     { key: 'status', title: '状态', width: 130, render: (v, row) => {
       const r = row as PaymentRecord
       // 现结当天到期，逾期信息原本挂在到期日列上；那列换成创建日期后移到这里，避免丢失
@@ -166,7 +167,7 @@ export default function PaymentsView({ type }: { type: PaymentType }) {
         )}
       />
 
-      <div className="flex gap-1 border-b border-border">
+      <nav aria-label={`${copy.title}登记方式`} className="flex gap-1 border-b border-border">
         {([
           { key: 'records' as const, label: '按单登记' },
           { key: 'receipts' as const, label: `${isPayable ? '付款' : '收款'}核销` },
@@ -174,22 +175,23 @@ export default function PaymentsView({ type }: { type: PaymentType }) {
           <button
             key={item.key}
             type="button"
+            aria-current={tab === item.key ? 'true' : undefined}
             onClick={() => setTab(item.key)}
             className={`px-4 py-2 text-sm font-medium transition-colors ${tab === item.key ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'}`}
           >
             {item.label}
           </button>
         ))}
-      </div>
+      </nav>
 
       <KeepAliveSection active={tab === 'receipts'}><ReceiptPanel ref={receiptRef} type={type} settlementTypes={IMMEDIATE_SCOPE} hideToolbar /></KeepAliveSection>
 
       <KeepAliveSection active={tab === 'records'} className="space-y-4">
       <PaymentQueryBar query={query} onChange={(q) => { setQuery(q); }} labels={queryLabels} clearValue={ALL_DATES_QUERY} />
 
-      <DataTable columns={columns} data={data?.list || []} loading={isLoading} />
+      {isError ? <QueryErrorState error={error} onRetry={() => void refetch()} /> : <DataTable columns={columns} data={data?.list || []} loading={isLoading} />}
 
-      <ListSummary total={total} unit="笔" />
+      {!isError && !isLoading && data && <ListSummary total={total} unit="笔" />}
 
       <PaymentQueryDialog
         open={queryOpen}

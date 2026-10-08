@@ -137,7 +137,7 @@ export default function LogisticsDetailPage() {
             {canManage && canEditShipment && <Button variant="outline" onClick={() => setShipmentTarget(wb!)}>补充寄件资料</Button>}
             {canManage && canRecord && <Button variant="outline" onClick={() => { setTrackingInput(wb?.trackingNo ?? ''); setTrackTarget(wb!) }}>手工录入快递单号</Button>}
             {canManage && canRetry && <Button variant="outline" onClick={() => retryMut.mutate(wb!.id)} disabled={retryMut.isPending}>{wb?.submittedToPlatform || wb?.status === 6 ? '查询原单' : '重试取号'}</Button>}
-            {canManage && canVoid && <Button variant="outline" className="text-destructive" onClick={() => confirmAction({
+            {canManage && canVoid && <Button variant="outline" className="text-destructive-ink" onClick={() => confirmAction({
               title: '作废运单本地记录', description: `确认作废运单 ${wb?.waybillNo} 的本地记录？此操作不代表快递官方订单已取消。`, variant: 'destructive', confirmText: '确认作废',
               onConfirm: () => voidMut.mutate(wb!.id),
             })}>作废</Button>}

@@ -5,6 +5,7 @@ import type { IncomingMessage } from 'node:http'
 import type { ClientRequest } from 'node:http'
 import { defineConfig } from 'vite'
 import type { ProxyOptions } from 'vite'
+import { radixSingletons } from './radixSingletons'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const pkg = JSON.parse(readFileSync(path.join(__dirname, 'package.json'), 'utf-8')) as {
@@ -170,6 +171,7 @@ export default defineConfig(({ command }) => {
       },
     },
     resolve: {
+      dedupe: radixSingletons,
       alias: {
         '@': path.resolve(__dirname, './src'),
       },

@@ -1,0 +1,83 @@
+[
+  {
+    "path": "/refunds?page=1&pageSize=200",
+    "http": 200,
+    "success": true,
+    "code": null,
+    "dataKeys": [
+      "list",
+      "pagination"
+    ],
+    "total": 0
+  },
+  {
+    "path": "/refunds?page=1&pageSize=200&keyword=RF-not-present&status=1&startDate=2040-01-01&endDate=2040-01-02",
+    "http": 200,
+    "success": true,
+    "code": null,
+    "dataKeys": [
+      "list",
+      "pagination"
+    ],
+    "total": 0
+  },
+  {
+    "path": "/warehouse-tasks/my",
+    "http": 200,
+    "success": true,
+    "code": null,
+    "dataKeys": null,
+    "total": null
+  },
+  {
+    "path": "/warehouse-tasks/my-sku-summary",
+    "http": 200,
+    "success": true,
+    "code": null,
+    "dataKeys": null,
+    "total": null
+  },
+  {
+    "path": "/reports/avg-cost-reconciliation",
+    "http": 200,
+    "success": true,
+    "code": null,
+    "dataKeys": [
+      "ok",
+      "driftedCount",
+      "totalDiffValue",
+      "totalRows",
+      "list"
+    ],
+    "total": null
+  },
+  {
+    "path": "/reports/kpi?period=2026-10",
+    "http": 200,
+    "success": true,
+    "code": null,
+    "dataKeys": [
+      "period",
+      "prevPeriod",
+      "trend",
+      "byWarehouse",
+      "costBasis",
+      "metrics"
+    ],
+    "total": null
+  },
+  {
+    "path": "/reports/profit-analysis?startDate=2026-09-09&endDate=2026-10-08",
+    "http": 200,
+    "success": true,
+    "code": null,
+    "dataKeys": [
+      "summary",
+      "saleOrders",
+      "products",
+      "stockValue",
+      "slowMoving"
+    ],
+    "total": null
+  }
+]

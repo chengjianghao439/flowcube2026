@@ -1,0 +1,4903 @@
+{
+  "session": "flowcube-impeccable-crud",
+  "attempts": [
+    {
+      "route": "/suppliers",
+      "timestamp": "2026-10-08T00:53:07.672Z",
+      "screenshots": [
+        "screens/after/c-crud-suppliers-1440.png",
+        "screens/after/c-crud-suppliers-1024.png",
+        "screens/after/c-crud-suppliers-1024-scroll.png",
+        "screens/after/c-crud-suppliers-1024-discard.png"
+      ],
+      "humanViewed": false,
+      "businessWrite": false,
+      "checks": {
+        "tabFocusWithinDialog": true,
+        "inputPreserved": true
+      },
+      "createButton": "新增供应商",
+      "initial1440": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 585,
+          "overflowY": "auto",
+          "scrollHeight": 633,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": "supplier-name",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        "focusables": 11,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "supplier-name",
+            "placeholder": "供应商名称",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-contact",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-phone",
+            "placeholder": "手机、座机或国际电话",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-email",
+            "placeholder": "选填",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-address",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-remark",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-leadTimeDays",
+            "placeholder": "下单到到货天数，用于采购计划预测",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "number",
+            "value": "0"
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 731,
+          "width": 768,
+          "x": 336,
+          "y": 84.5
+        },
+        "text": "新建供应商\n供应商与联系方式\n名称 *\n0/100\n联系人\n0/50\n电话\n0/30\n邮箱\n地址\n0/200\n备注\n0/500\n结算与供货\n结算方式\n月结\n现结\n月结\n\n从结算发生当天起算账期\n\n应付账期\n30 天\n30 天\n60 天\n90 天\n\n至少每 30 天结算一次\n\n采购提前期（天）\n取消\n创建\n关闭",
+        "title": "新建供应商",
+        "viewport": {
+          "height": 900,
+          "width": 1440
+        }
+      },
+      "tabFocus": [
+        {
+          "id": "supplier-contact",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": "supplier-phone",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": "supplier-email",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": "supplier-address",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": "supplier-remark",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": ":r15:-type",
+          "inside": true,
+          "name": null,
+          "tag": "BUTTON"
+        },
+        {
+          "id": ":r15:-terms",
+          "inside": true,
+          "name": null,
+          "tag": "BUTTON"
+        },
+        {
+          "id": "supplier-leadTimeDays",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": "",
+          "inside": true,
+          "name": null,
+          "tag": "BUTTON"
+        },
+        {
+          "id": "",
+          "inside": true,
+          "name": null,
+          "tag": "BUTTON"
+        },
+        {
+          "id": "supplier-name",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": "supplier-contact",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        }
+      ],
+      "initial1024": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 585,
+          "overflowY": "auto",
+          "scrollHeight": 633,
+          "scrollTop": 48
+        },
+        "focus": {
+          "id": "supplier-contact",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        "focusables": 11,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "supplier-name",
+            "placeholder": "供应商名称",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-contact",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-phone",
+            "placeholder": "手机、座机或国际电话",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-email",
+            "placeholder": "选填",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-address",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-remark",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-leadTimeDays",
+            "placeholder": "下单到到货天数，用于采购计划预测",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "number",
+            "value": "0"
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 731,
+          "width": 768,
+          "x": 128,
+          "y": 84.5
+        },
+        "text": "新建供应商\n供应商与联系方式\n名称 *\n0/100\n联系人\n0/50\n电话\n0/30\n邮箱\n地址\n0/200\n备注\n0/500\n结算与供货\n结算方式\n月结\n现结\n月结\n\n从结算发生当天起算账期\n\n应付账期\n30 天\n30 天\n60 天\n90 天\n\n至少每 30 天结算一次\n\n采购提前期（天）\n取消\n创建\n关闭",
+        "title": "新建供应商",
+        "viewport": {
+          "height": 900,
+          "width": 1024
+        }
+      },
+      "scroll1024": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 585,
+          "overflowY": "auto",
+          "scrollHeight": 633,
+          "scrollTop": 48
+        },
+        "focus": {
+          "id": "supplier-contact",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        "focusables": 11,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "supplier-name",
+            "placeholder": "供应商名称",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-contact",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-phone",
+            "placeholder": "手机、座机或国际电话",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-email",
+            "placeholder": "选填",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-address",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-remark",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-leadTimeDays",
+            "placeholder": "下单到到货天数，用于采购计划预测",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "number",
+            "value": "0"
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 731,
+          "width": 768,
+          "x": 128,
+          "y": 84.5
+        },
+        "text": "新建供应商\n供应商与联系方式\n名称 *\n0/100\n联系人\n0/50\n电话\n0/30\n邮箱\n地址\n0/200\n备注\n0/500\n结算与供货\n结算方式\n月结\n现结\n月结\n\n从结算发生当天起算账期\n\n应付账期\n30 天\n30 天\n60 天\n90 天\n\n至少每 30 天结算一次\n\n采购提前期（天）\n取消\n创建\n关闭",
+        "title": "新建供应商",
+        "viewport": {
+          "height": 900,
+          "width": 1024
+        }
+      },
+      "field": {
+        "disabled": false,
+        "id": "supplier-name",
+        "index": 0,
+        "readOnly": false,
+        "type": "text",
+        "visible": true,
+        "value": "AUDIT-ONLY-NO-SUBMIT-suppliers"
+      },
+      "discardPrompt": {
+        "text": [
+          "新建供应商\n供应商与联系方式\n名称 *\n30/100\n联系人\n0/50\n电话\n0/30\n邮箱\n地址\n0/200\n备注\n0/500\n结算与供货\n结算方式\n月结\n现结\n月结\n\n从结算发生当天起算账期\n\n应付账期\n30 天\n30 天\n60 天\n90 天\n\n至少每 30 天结算一次\n\n采购提前期（天）\n取消\n创建\n关闭",
+          "放弃未保存输入？\n关闭\n关闭后本次输入不会保存。可返回表单继续编辑。\n继续编辑\n放弃并关闭"
+        ],
+        "visible": true
+      },
+      "continued": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 585,
+          "overflowY": "auto",
+          "scrollHeight": 633,
+          "scrollTop": 48
+        },
+        "focus": {
+          "id": "",
+          "inside": false,
+          "name": null,
+          "tag": "BODY"
+        },
+        "focusables": 12,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "supplier-name",
+            "placeholder": "供应商名称",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": "AUDIT-ONLY-NO-SUBMIT-suppliers"
+          },
+          {
+            "disabled": false,
+            "id": "supplier-contact",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-phone",
+            "placeholder": "手机、座机或国际电话",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-email",
+            "placeholder": "选填",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-address",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-remark",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-leadTimeDays",
+            "placeholder": "下单到到货天数，用于采购计划预测",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "number",
+            "value": "0"
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 731,
+          "width": 768,
+          "x": 128,
+          "y": 84.5
+        },
+        "text": "新建供应商\n供应商与联系方式\n名称 *\n30/100\n联系人\n0/50\n电话\n0/30\n邮箱\n地址\n0/200\n备注\n0/500\n结算与供货\n结算方式\n月结\n现结\n月结\n\n从结算发生当天起算账期\n\n应付账期\n30 天\n30 天\n60 天\n90 天\n\n至少每 30 天结算一次\n\n采购提前期（天）\n取消\n创建\n关闭",
+        "title": "新建供应商",
+        "viewport": {
+          "height": 900,
+          "width": 1024
+        }
+      },
+      "result": "受阻：{\"success\":false,\"data\":null,\"error\":\"Element '@e19' is covered by <div.fixed.inset-0> at its click point, so the input would land on that element instead. Dismiss or interact with the covering element first (it is often a dialog, banner, or sticky header).\"}\n"
+    },
+    {
+      "route": "/suppliers",
+      "timestamp": "2026-10-08T00:54:35.605Z",
+      "screenshots": [
+        "screens/after/c-crud-suppliers-1440.png",
+        "screens/after/c-crud-suppliers-1024.png",
+        "screens/after/c-crud-suppliers-1024-scroll.png",
+        "screens/after/c-crud-suppliers-1024-discard.png"
+      ],
+      "humanViewed": false,
+      "businessWrite": false,
+      "checks": {
+        "tabFocusWithinDialog": true,
+        "inputPreserved": true
+      },
+      "createButton": "新增供应商",
+      "initial1440": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 585,
+          "overflowY": "auto",
+          "scrollHeight": 633,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": "supplier-name",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        "focusables": 11,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "supplier-name",
+            "placeholder": "供应商名称",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-contact",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-phone",
+            "placeholder": "手机、座机或国际电话",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-email",
+            "placeholder": "选填",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-address",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-remark",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-leadTimeDays",
+            "placeholder": "下单到到货天数，用于采购计划预测",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "number",
+            "value": "0"
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 731,
+          "width": 768,
+          "x": 336,
+          "y": 84.5
+        },
+        "text": "新建供应商\n供应商与联系方式\n名称 *\n0/100\n联系人\n0/50\n电话\n0/30\n邮箱\n地址\n0/200\n备注\n0/500\n结算与供货\n结算方式\n月结\n现结\n月结\n\n从结算发生当天起算账期\n\n应付账期\n30 天\n30 天\n60 天\n90 天\n\n至少每 30 天结算一次\n\n采购提前期（天）\n取消\n创建\n关闭",
+        "title": "新建供应商",
+        "viewport": {
+          "height": 900,
+          "width": 1440
+        }
+      },
+      "tabFocus": [
+        {
+          "id": "supplier-contact",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": "supplier-phone",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": "supplier-email",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": "supplier-address",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": "supplier-remark",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": ":r15:-type",
+          "inside": true,
+          "name": null,
+          "tag": "BUTTON"
+        },
+        {
+          "id": ":r15:-terms",
+          "inside": true,
+          "name": null,
+          "tag": "BUTTON"
+        },
+        {
+          "id": "supplier-leadTimeDays",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": "",
+          "inside": true,
+          "name": null,
+          "tag": "BUTTON"
+        },
+        {
+          "id": "",
+          "inside": true,
+          "name": null,
+          "tag": "BUTTON"
+        },
+        {
+          "id": "supplier-name",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": "supplier-contact",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        }
+      ],
+      "initial1024": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 585,
+          "overflowY": "auto",
+          "scrollHeight": 633,
+          "scrollTop": 48
+        },
+        "focus": {
+          "id": "supplier-contact",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        "focusables": 11,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "supplier-name",
+            "placeholder": "供应商名称",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-contact",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-phone",
+            "placeholder": "手机、座机或国际电话",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-email",
+            "placeholder": "选填",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-address",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-remark",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-leadTimeDays",
+            "placeholder": "下单到到货天数，用于采购计划预测",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "number",
+            "value": "0"
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 731,
+          "width": 768,
+          "x": 128,
+          "y": 84.5
+        },
+        "text": "新建供应商\n供应商与联系方式\n名称 *\n0/100\n联系人\n0/50\n电话\n0/30\n邮箱\n地址\n0/200\n备注\n0/500\n结算与供货\n结算方式\n月结\n现结\n月结\n\n从结算发生当天起算账期\n\n应付账期\n30 天\n30 天\n60 天\n90 天\n\n至少每 30 天结算一次\n\n采购提前期（天）\n取消\n创建\n关闭",
+        "title": "新建供应商",
+        "viewport": {
+          "height": 900,
+          "width": 1024
+        }
+      },
+      "scroll1024": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 585,
+          "overflowY": "auto",
+          "scrollHeight": 633,
+          "scrollTop": 48
+        },
+        "focus": {
+          "id": "supplier-contact",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        "focusables": 11,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "supplier-name",
+            "placeholder": "供应商名称",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-contact",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-phone",
+            "placeholder": "手机、座机或国际电话",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-email",
+            "placeholder": "选填",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-address",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-remark",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-leadTimeDays",
+            "placeholder": "下单到到货天数，用于采购计划预测",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "number",
+            "value": "0"
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 731,
+          "width": 768,
+          "x": 128,
+          "y": 84.5
+        },
+        "text": "新建供应商\n供应商与联系方式\n名称 *\n0/100\n联系人\n0/50\n电话\n0/30\n邮箱\n地址\n0/200\n备注\n0/500\n结算与供货\n结算方式\n月结\n现结\n月结\n\n从结算发生当天起算账期\n\n应付账期\n30 天\n30 天\n60 天\n90 天\n\n至少每 30 天结算一次\n\n采购提前期（天）\n取消\n创建\n关闭",
+        "title": "新建供应商",
+        "viewport": {
+          "height": 900,
+          "width": 1024
+        }
+      },
+      "field": {
+        "disabled": false,
+        "id": "supplier-name",
+        "index": 0,
+        "readOnly": false,
+        "type": "text",
+        "visible": true,
+        "value": "AUDIT-ONLY-NO-SUBMIT-suppliers"
+      },
+      "discardPrompt": {
+        "text": [
+          "新建供应商\n供应商与联系方式\n名称 *\n30/100\n联系人\n0/50\n电话\n0/30\n邮箱\n地址\n0/200\n备注\n0/500\n结算与供货\n结算方式\n月结\n现结\n月结\n\n从结算发生当天起算账期\n\n应付账期\n30 天\n30 天\n60 天\n90 天\n\n至少每 30 天结算一次\n\n采购提前期（天）\n取消\n创建\n关闭",
+          "放弃未保存输入？\n关闭\n关闭后本次输入不会保存。可返回表单继续编辑。\n继续编辑\n放弃并关闭"
+        ],
+        "visible": true
+      },
+      "continued": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 585,
+          "overflowY": "auto",
+          "scrollHeight": 633,
+          "scrollTop": 48
+        },
+        "focus": {
+          "id": "",
+          "inside": false,
+          "name": null,
+          "tag": "BODY"
+        },
+        "focusables": 12,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "supplier-name",
+            "placeholder": "供应商名称",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": "AUDIT-ONLY-NO-SUBMIT-suppliers"
+          },
+          {
+            "disabled": false,
+            "id": "supplier-contact",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-phone",
+            "placeholder": "手机、座机或国际电话",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-email",
+            "placeholder": "选填",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-address",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-remark",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-leadTimeDays",
+            "placeholder": "下单到到货天数，用于采购计划预测",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "number",
+            "value": "0"
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 731,
+          "width": 768,
+          "x": 128,
+          "y": 84.5
+        },
+        "text": "新建供应商\n供应商与联系方式\n名称 *\n30/100\n联系人\n0/50\n电话\n0/30\n邮箱\n地址\n0/200\n备注\n0/500\n结算与供货\n结算方式\n月结\n现结\n月结\n\n从结算发生当天起算账期\n\n应付账期\n30 天\n30 天\n60 天\n90 天\n\n至少每 30 天结算一次\n\n采购提前期（天）\n取消\n创建\n关闭",
+        "title": "新建供应商",
+        "viewport": {
+          "height": 900,
+          "width": 1024
+        }
+      },
+      "result": "受阻：{\"success\":false,\"data\":null,\"error\":\"Unknown action 'focus' for find. Valid actions: click, fill, check, hover, text.\"}\n"
+    }
+  ],
+  "method": "真实UI；本批合成全权账号；仅打开/输入/Escape/继续编辑/放弃；不保存删除释放打印。每图人工细看在单独报告确认后才登记。",
+  "routes": [
+    {
+      "route": "/suppliers",
+      "timestamp": "2026-10-08T00:55:06.591Z",
+      "screenshots": [
+        "screens/after/c-crud-suppliers-1440.png",
+        "screens/after/c-crud-suppliers-1024.png",
+        "screens/after/c-crud-suppliers-1024-scroll.png",
+        "screens/after/c-crud-suppliers-1024-discard.png",
+        "screens/after/c-crud-suppliers-1440-reopen.png"
+      ],
+      "humanViewed": true,
+      "businessWrite": false,
+      "checks": {
+        "tabFocusWithinDialog": true,
+        "inputPreserved": true,
+        "discardClosed": true,
+        "reopenReset": true,
+        "cleanCancelClosed": true
+      },
+      "createButton": "新增供应商",
+      "initial1440": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 585,
+          "overflowY": "auto",
+          "scrollHeight": 633,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": "supplier-name",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        "focusables": 11,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "supplier-name",
+            "placeholder": "供应商名称",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-contact",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-phone",
+            "placeholder": "手机、座机或国际电话",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-email",
+            "placeholder": "选填",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-address",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-remark",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-leadTimeDays",
+            "placeholder": "下单到到货天数，用于采购计划预测",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "number",
+            "value": "0"
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 731,
+          "width": 768,
+          "x": 336,
+          "y": 84.5
+        },
+        "text": "新建供应商\n供应商与联系方式\n名称 *\n0/100\n联系人\n0/50\n电话\n0/30\n邮箱\n地址\n0/200\n备注\n0/500\n结算与供货\n结算方式\n月结\n现结\n月结\n\n从结算发生当天起算账期\n\n应付账期\n30 天\n30 天\n60 天\n90 天\n\n至少每 30 天结算一次\n\n采购提前期（天）\n取消\n创建\n关闭",
+        "title": "新建供应商",
+        "viewport": {
+          "height": 900,
+          "width": 1440
+        }
+      },
+      "tabFocus": [
+        {
+          "id": "supplier-contact",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": "supplier-phone",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": "supplier-email",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": "supplier-address",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": "supplier-remark",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": ":r15:-type",
+          "inside": true,
+          "name": null,
+          "tag": "BUTTON"
+        },
+        {
+          "id": ":r15:-terms",
+          "inside": true,
+          "name": null,
+          "tag": "BUTTON"
+        },
+        {
+          "id": "supplier-leadTimeDays",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": "",
+          "inside": true,
+          "name": null,
+          "tag": "BUTTON"
+        },
+        {
+          "id": "",
+          "inside": true,
+          "name": null,
+          "tag": "BUTTON"
+        },
+        {
+          "id": "supplier-name",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": "supplier-contact",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        }
+      ],
+      "initial1024": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 585,
+          "overflowY": "auto",
+          "scrollHeight": 633,
+          "scrollTop": 48
+        },
+        "focus": {
+          "id": "supplier-contact",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        "focusables": 11,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "supplier-name",
+            "placeholder": "供应商名称",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-contact",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-phone",
+            "placeholder": "手机、座机或国际电话",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-email",
+            "placeholder": "选填",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-address",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-remark",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-leadTimeDays",
+            "placeholder": "下单到到货天数，用于采购计划预测",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "number",
+            "value": "0"
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 731,
+          "width": 768,
+          "x": 128,
+          "y": 84.5
+        },
+        "text": "新建供应商\n供应商与联系方式\n名称 *\n0/100\n联系人\n0/50\n电话\n0/30\n邮箱\n地址\n0/200\n备注\n0/500\n结算与供货\n结算方式\n月结\n现结\n月结\n\n从结算发生当天起算账期\n\n应付账期\n30 天\n30 天\n60 天\n90 天\n\n至少每 30 天结算一次\n\n采购提前期（天）\n取消\n创建\n关闭",
+        "title": "新建供应商",
+        "viewport": {
+          "height": 900,
+          "width": 1024
+        }
+      },
+      "scroll1024": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 585,
+          "overflowY": "auto",
+          "scrollHeight": 633,
+          "scrollTop": 48
+        },
+        "focus": {
+          "id": "supplier-contact",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        "focusables": 11,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "supplier-name",
+            "placeholder": "供应商名称",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-contact",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-phone",
+            "placeholder": "手机、座机或国际电话",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-email",
+            "placeholder": "选填",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-address",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-remark",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-leadTimeDays",
+            "placeholder": "下单到到货天数，用于采购计划预测",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "number",
+            "value": "0"
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 731,
+          "width": 768,
+          "x": 128,
+          "y": 84.5
+        },
+        "text": "新建供应商\n供应商与联系方式\n名称 *\n0/100\n联系人\n0/50\n电话\n0/30\n邮箱\n地址\n0/200\n备注\n0/500\n结算与供货\n结算方式\n月结\n现结\n月结\n\n从结算发生当天起算账期\n\n应付账期\n30 天\n30 天\n60 天\n90 天\n\n至少每 30 天结算一次\n\n采购提前期（天）\n取消\n创建\n关闭",
+        "title": "新建供应商",
+        "viewport": {
+          "height": 900,
+          "width": 1024
+        }
+      },
+      "field": {
+        "disabled": false,
+        "id": "supplier-name",
+        "index": 0,
+        "readOnly": false,
+        "type": "text",
+        "visible": true,
+        "value": "AUDIT-ONLY-NO-SUBMIT-suppliers"
+      },
+      "discardPrompt": {
+        "text": [
+          "新建供应商\n供应商与联系方式\n名称 *\n30/100\n联系人\n0/50\n电话\n0/30\n邮箱\n地址\n0/200\n备注\n0/500\n结算与供货\n结算方式\n月结\n现结\n月结\n\n从结算发生当天起算账期\n\n应付账期\n30 天\n30 天\n60 天\n90 天\n\n至少每 30 天结算一次\n\n采购提前期（天）\n取消\n创建\n关闭",
+          "放弃未保存输入？\n关闭\n关闭后本次输入不会保存。可返回表单继续编辑。\n继续编辑\n放弃并关闭"
+        ],
+        "visible": true
+      },
+      "continued": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 585,
+          "overflowY": "auto",
+          "scrollHeight": 633,
+          "scrollTop": 48
+        },
+        "focus": {
+          "id": "",
+          "inside": false,
+          "name": null,
+          "tag": "BODY"
+        },
+        "focusables": 12,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "supplier-name",
+            "placeholder": "供应商名称",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": "AUDIT-ONLY-NO-SUBMIT-suppliers"
+          },
+          {
+            "disabled": false,
+            "id": "supplier-contact",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-phone",
+            "placeholder": "手机、座机或国际电话",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-email",
+            "placeholder": "选填",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-address",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-remark",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-leadTimeDays",
+            "placeholder": "下单到到货天数，用于采购计划预测",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "number",
+            "value": "0"
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 731,
+          "width": 768,
+          "x": 128,
+          "y": 84.5
+        },
+        "text": "新建供应商\n供应商与联系方式\n名称 *\n30/100\n联系人\n0/50\n电话\n0/30\n邮箱\n地址\n0/200\n备注\n0/500\n结算与供货\n结算方式\n月结\n现结\n月结\n\n从结算发生当天起算账期\n\n应付账期\n30 天\n30 天\n60 天\n90 天\n\n至少每 30 天结算一次\n\n采购提前期（天）\n取消\n创建\n关闭",
+        "title": "新建供应商",
+        "viewport": {
+          "height": 900,
+          "width": 1024
+        }
+      },
+      "reopened": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 585,
+          "overflowY": "auto",
+          "scrollHeight": 633,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": "supplier-name",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        "focusables": 11,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "supplier-name",
+            "placeholder": "供应商名称",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-contact",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-phone",
+            "placeholder": "手机、座机或国际电话",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-email",
+            "placeholder": "选填",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-address",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-remark",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "supplier-leadTimeDays",
+            "placeholder": "下单到到货天数，用于采购计划预测",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "number",
+            "value": "0"
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 731,
+          "width": 768,
+          "x": 336,
+          "y": 84.5
+        },
+        "text": "新建供应商\n供应商与联系方式\n名称 *\n0/100\n联系人\n0/50\n电话\n0/30\n邮箱\n地址\n0/200\n备注\n0/500\n结算与供货\n结算方式\n月结\n现结\n月结\n\n从结算发生当天起算账期\n\n应付账期\n30 天\n30 天\n60 天\n90 天\n\n至少每 30 天结算一次\n\n采购提前期（天）\n取消\n创建\n关闭",
+        "title": "新建供应商",
+        "viewport": {
+          "height": 900,
+          "width": 1440
+        }
+      },
+      "result": "已执行限定交互；44张截图已逐张细看",
+      "visualReview": {
+        "reviewer": "coverage_inventory",
+        "method": "44图逐张 view_image 细看，1440/1024。不是接触表缩略图替代。",
+        "result": "标题/字段/页脚/确认弹窗可读；短表单无额外滚动属实际内容高度，供应商滚动可达。原继续编辑焦点 BODY 缺陷保留，修复后的独立现场证据另存。"
+      }
+    },
+    {
+      "route": "/carriers",
+      "timestamp": "2026-10-08T00:55:07.477Z",
+      "screenshots": [
+        "screens/after/c-crud-carriers-1440.png",
+        "screens/after/c-crud-carriers-1024.png",
+        "screens/after/c-crud-carriers-1024-scroll.png",
+        "screens/after/c-crud-carriers-1024-discard.png",
+        "screens/after/c-crud-carriers-1440-reopen.png"
+      ],
+      "humanViewed": true,
+      "businessWrite": false,
+      "checks": {
+        "tabFocusWithinDialog": true,
+        "inputPreserved": true,
+        "discardClosed": true,
+        "reopenReset": true,
+        "cleanCancelClosed": true
+      },
+      "createButton": "新建承运商",
+      "initial1440": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 501,
+          "overflowY": "auto",
+          "scrollHeight": 501,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": "carrier-name",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        "focusables": 9,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "carrier-name",
+            "placeholder": "承运商名称",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "carrier-contact",
+            "placeholder": "可选",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "carrier-phone",
+            "placeholder": "可选",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "carrier-remark",
+            "placeholder": "可选",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 647,
+          "width": 768,
+          "x": 336,
+          "y": 126.5
+        },
+        "text": "新建承运商\n基本资料\n名称\n类型\n快递\n送货\n快递\n快运\n物流\n联系人\n电话\n备注\n快递公司 / 对接平台\n选择平台\n快递鸟\n德邦开放平台\n顺丰丰桥\n\n在这里选择一次，快递账号绑定页会自动带入。尚未对接的物流可留空，选择平台不会启用自动下单。\n\n电子面单取号\n未开通\n未开通\n已开通\n取消\n创建\n关闭",
+        "title": "新建承运商",
+        "viewport": {
+          "height": 900,
+          "width": 1440
+        }
+      },
+      "tabFocus": [
+        {
+          "id": "",
+          "inside": true,
+          "name": "承运商类型",
+          "tag": "BUTTON"
+        },
+        {
+          "id": "carrier-contact",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": "carrier-phone",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": "carrier-remark",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": "",
+          "inside": true,
+          "name": "快递公司 / 对接平台",
+          "tag": "BUTTON"
+        },
+        {
+          "id": "",
+          "inside": true,
+          "name": "电子面单取号状态",
+          "tag": "BUTTON"
+        },
+        {
+          "id": "",
+          "inside": true,
+          "name": null,
+          "tag": "BUTTON"
+        },
+        {
+          "id": "",
+          "inside": true,
+          "name": null,
+          "tag": "BUTTON"
+        },
+        {
+          "id": "carrier-name",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": "",
+          "inside": true,
+          "name": "承运商类型",
+          "tag": "BUTTON"
+        }
+      ],
+      "initial1024": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 501,
+          "overflowY": "auto",
+          "scrollHeight": 501,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": "",
+          "inside": true,
+          "name": "承运商类型",
+          "tag": "BUTTON"
+        },
+        "focusables": 9,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "carrier-name",
+            "placeholder": "承运商名称",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "carrier-contact",
+            "placeholder": "可选",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "carrier-phone",
+            "placeholder": "可选",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "carrier-remark",
+            "placeholder": "可选",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 647,
+          "width": 768,
+          "x": 128,
+          "y": 126.5
+        },
+        "text": "新建承运商\n基本资料\n名称\n类型\n快递\n送货\n快递\n快运\n物流\n联系人\n电话\n备注\n快递公司 / 对接平台\n选择平台\n快递鸟\n德邦开放平台\n顺丰丰桥\n\n在这里选择一次，快递账号绑定页会自动带入。尚未对接的物流可留空，选择平台不会启用自动下单。\n\n电子面单取号\n未开通\n未开通\n已开通\n取消\n创建\n关闭",
+        "title": "新建承运商",
+        "viewport": {
+          "height": 900,
+          "width": 1024
+        }
+      },
+      "scroll1024": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 501,
+          "overflowY": "auto",
+          "scrollHeight": 501,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": "",
+          "inside": true,
+          "name": "承运商类型",
+          "tag": "BUTTON"
+        },
+        "focusables": 9,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "carrier-name",
+            "placeholder": "承运商名称",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "carrier-contact",
+            "placeholder": "可选",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "carrier-phone",
+            "placeholder": "可选",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "carrier-remark",
+            "placeholder": "可选",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 647,
+          "width": 768,
+          "x": 128,
+          "y": 126.5
+        },
+        "text": "新建承运商\n基本资料\n名称\n类型\n快递\n送货\n快递\n快运\n物流\n联系人\n电话\n备注\n快递公司 / 对接平台\n选择平台\n快递鸟\n德邦开放平台\n顺丰丰桥\n\n在这里选择一次，快递账号绑定页会自动带入。尚未对接的物流可留空，选择平台不会启用自动下单。\n\n电子面单取号\n未开通\n未开通\n已开通\n取消\n创建\n关闭",
+        "title": "新建承运商",
+        "viewport": {
+          "height": 900,
+          "width": 1024
+        }
+      },
+      "field": {
+        "disabled": false,
+        "id": "carrier-name",
+        "index": 0,
+        "readOnly": false,
+        "type": "text",
+        "visible": true,
+        "value": "AUDIT-ONLY-NO-SUBMIT-carriers"
+      },
+      "discardPrompt": {
+        "text": [
+          "新建承运商\n基本资料\n名称\n类型\n快递\n送货\n快递\n快运\n物流\n联系人\n电话\n备注\n快递公司 / 对接平台\n选择平台\n快递鸟\n德邦开放平台\n顺丰丰桥\n\n在这里选择一次，快递账号绑定页会自动带入。尚未对接的物流可留空，选择平台不会启用自动下单。\n\n电子面单取号\n未开通\n未开通\n已开通\n取消\n创建\n关闭",
+          "放弃未保存输入？\n关闭\n关闭后本次输入不会保存。可返回表单继续编辑。\n继续编辑\n放弃并关闭"
+        ],
+        "visible": true
+      },
+      "continued": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 501,
+          "overflowY": "auto",
+          "scrollHeight": 501,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": "",
+          "inside": false,
+          "name": null,
+          "tag": "BODY"
+        },
+        "focusables": 10,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "carrier-name",
+            "placeholder": "承运商名称",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": "AUDIT-ONLY-NO-SUBMIT-carriers"
+          },
+          {
+            "disabled": false,
+            "id": "carrier-contact",
+            "placeholder": "可选",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "carrier-phone",
+            "placeholder": "可选",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "carrier-remark",
+            "placeholder": "可选",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 647,
+          "width": 768,
+          "x": 128,
+          "y": 126.5
+        },
+        "text": "新建承运商\n基本资料\n名称\n类型\n快递\n送货\n快递\n快运\n物流\n联系人\n电话\n备注\n快递公司 / 对接平台\n选择平台\n快递鸟\n德邦开放平台\n顺丰丰桥\n\n在这里选择一次，快递账号绑定页会自动带入。尚未对接的物流可留空，选择平台不会启用自动下单。\n\n电子面单取号\n未开通\n未开通\n已开通\n取消\n创建\n关闭",
+        "title": "新建承运商",
+        "viewport": {
+          "height": 900,
+          "width": 1024
+        }
+      },
+      "reopened": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 501,
+          "overflowY": "auto",
+          "scrollHeight": 501,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": "carrier-name",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        "focusables": 9,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "carrier-name",
+            "placeholder": "承运商名称",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "carrier-contact",
+            "placeholder": "可选",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "carrier-phone",
+            "placeholder": "可选",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "carrier-remark",
+            "placeholder": "可选",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 647,
+          "width": 768,
+          "x": 336,
+          "y": 126.5
+        },
+        "text": "新建承运商\n基本资料\n名称\n类型\n快递\n送货\n快递\n快运\n物流\n联系人\n电话\n备注\n快递公司 / 对接平台\n选择平台\n快递鸟\n德邦开放平台\n顺丰丰桥\n\n在这里选择一次，快递账号绑定页会自动带入。尚未对接的物流可留空，选择平台不会启用自动下单。\n\n电子面单取号\n未开通\n未开通\n已开通\n取消\n创建\n关闭",
+        "title": "新建承运商",
+        "viewport": {
+          "height": 900,
+          "width": 1440
+        }
+      },
+      "result": "已执行限定交互；44张截图已逐张细看",
+      "visualReview": {
+        "reviewer": "coverage_inventory",
+        "method": "44图逐张 view_image 细看，1440/1024。不是接触表缩略图替代。",
+        "result": "标题/字段/页脚/确认弹窗可读；短表单无额外滚动属实际内容高度，供应商滚动可达。原继续编辑焦点 BODY 缺陷保留，修复后的独立现场证据另存。"
+      }
+    },
+    {
+      "route": "/warehouses",
+      "timestamp": "2026-10-08T00:55:08.284Z",
+      "screenshots": [
+        "screens/after/c-crud-warehouses-1440.png",
+        "screens/after/c-crud-warehouses-1024.png",
+        "screens/after/c-crud-warehouses-1024-scroll.png",
+        "screens/after/c-crud-warehouses-1024-discard.png",
+        "screens/after/c-crud-warehouses-1440-reopen.png"
+      ],
+      "humanViewed": true,
+      "businessWrite": false,
+      "checks": {
+        "tabFocusWithinDialog": true,
+        "inputPreserved": true,
+        "discardClosed": true,
+        "reopenReset": true,
+        "cleanCancelClosed": true
+      },
+      "createButton": "新增仓库",
+      "initial1440": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 420,
+          "overflowY": "auto",
+          "scrollHeight": 420,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": "warehouse-name",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        "focusables": 11,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "warehouse-name",
+            "placeholder": "仓库名称",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "radio",
+            "value": "1"
+          },
+          {
+            "disabled": false,
+            "id": "",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "radio",
+            "value": "2"
+          },
+          {
+            "disabled": false,
+            "id": "",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "radio",
+            "value": "3"
+          },
+          {
+            "disabled": false,
+            "id": "",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "radio",
+            "value": "4"
+          },
+          {
+            "disabled": false,
+            "id": "warehouse-manager",
+            "placeholder": "负责人姓名",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "warehouse-phone",
+            "placeholder": "联系电话",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "warehouse-address",
+            "placeholder": "详细地址",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "warehouse-remark",
+            "placeholder": "备注信息",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 566,
+          "width": 672,
+          "x": 384,
+          "y": 167
+        },
+        "text": "新建仓库\n仓库名称 *\n仓库类型 *\n成品仓\n原料仓\n退货仓\n其他\n负责人\n联系电话\n仓库地址\n备注\n取消\n创建\n关闭",
+        "title": "新建仓库",
+        "viewport": {
+          "height": 900,
+          "width": 1440
+        }
+      },
+      "tabFocus": [
+        {
+          "id": "",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": "warehouse-manager",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": "warehouse-phone",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": "warehouse-address",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": "warehouse-remark",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": "",
+          "inside": true,
+          "name": null,
+          "tag": "BUTTON"
+        },
+        {
+          "id": "",
+          "inside": true,
+          "name": null,
+          "tag": "BUTTON"
+        },
+        {
+          "id": "warehouse-name",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": "",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": "warehouse-manager",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": "warehouse-phone",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": "warehouse-address",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        }
+      ],
+      "initial1024": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 420,
+          "overflowY": "auto",
+          "scrollHeight": 420,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": "warehouse-address",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        "focusables": 11,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "warehouse-name",
+            "placeholder": "仓库名称",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "radio",
+            "value": "1"
+          },
+          {
+            "disabled": false,
+            "id": "",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "radio",
+            "value": "2"
+          },
+          {
+            "disabled": false,
+            "id": "",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "radio",
+            "value": "3"
+          },
+          {
+            "disabled": false,
+            "id": "",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "radio",
+            "value": "4"
+          },
+          {
+            "disabled": false,
+            "id": "warehouse-manager",
+            "placeholder": "负责人姓名",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "warehouse-phone",
+            "placeholder": "联系电话",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "warehouse-address",
+            "placeholder": "详细地址",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "warehouse-remark",
+            "placeholder": "备注信息",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 566,
+          "width": 672,
+          "x": 176,
+          "y": 167
+        },
+        "text": "新建仓库\n仓库名称 *\n仓库类型 *\n成品仓\n原料仓\n退货仓\n其他\n负责人\n联系电话\n仓库地址\n备注\n取消\n创建\n关闭",
+        "title": "新建仓库",
+        "viewport": {
+          "height": 900,
+          "width": 1024
+        }
+      },
+      "scroll1024": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 420,
+          "overflowY": "auto",
+          "scrollHeight": 420,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": "warehouse-address",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        "focusables": 11,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "warehouse-name",
+            "placeholder": "仓库名称",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "radio",
+            "value": "1"
+          },
+          {
+            "disabled": false,
+            "id": "",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "radio",
+            "value": "2"
+          },
+          {
+            "disabled": false,
+            "id": "",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "radio",
+            "value": "3"
+          },
+          {
+            "disabled": false,
+            "id": "",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "radio",
+            "value": "4"
+          },
+          {
+            "disabled": false,
+            "id": "warehouse-manager",
+            "placeholder": "负责人姓名",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "warehouse-phone",
+            "placeholder": "联系电话",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "warehouse-address",
+            "placeholder": "详细地址",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "warehouse-remark",
+            "placeholder": "备注信息",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 566,
+          "width": 672,
+          "x": 176,
+          "y": 167
+        },
+        "text": "新建仓库\n仓库名称 *\n仓库类型 *\n成品仓\n原料仓\n退货仓\n其他\n负责人\n联系电话\n仓库地址\n备注\n取消\n创建\n关闭",
+        "title": "新建仓库",
+        "viewport": {
+          "height": 900,
+          "width": 1024
+        }
+      },
+      "field": {
+        "disabled": false,
+        "id": "warehouse-name",
+        "index": 0,
+        "readOnly": false,
+        "type": "text",
+        "visible": true,
+        "value": "AUDIT-ONLY-NO-SUBMIT-warehouses"
+      },
+      "discardPrompt": {
+        "text": [
+          "新建仓库\n仓库名称 *\n仓库类型 *\n成品仓\n原料仓\n退货仓\n其他\n负责人\n联系电话\n仓库地址\n备注\n取消\n创建\n关闭",
+          "放弃未保存输入？\n关闭\n关闭后本次输入不会保存。可返回表单继续编辑。\n继续编辑\n放弃并关闭"
+        ],
+        "visible": true
+      },
+      "continued": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 420,
+          "overflowY": "auto",
+          "scrollHeight": 420,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": "",
+          "inside": false,
+          "name": null,
+          "tag": "BODY"
+        },
+        "focusables": 12,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "warehouse-name",
+            "placeholder": "仓库名称",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": "AUDIT-ONLY-NO-SUBMIT-warehouses"
+          },
+          {
+            "disabled": false,
+            "id": "",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "radio",
+            "value": "1"
+          },
+          {
+            "disabled": false,
+            "id": "",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "radio",
+            "value": "2"
+          },
+          {
+            "disabled": false,
+            "id": "",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "radio",
+            "value": "3"
+          },
+          {
+            "disabled": false,
+            "id": "",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "radio",
+            "value": "4"
+          },
+          {
+            "disabled": false,
+            "id": "warehouse-manager",
+            "placeholder": "负责人姓名",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "warehouse-phone",
+            "placeholder": "联系电话",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "warehouse-address",
+            "placeholder": "详细地址",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "warehouse-remark",
+            "placeholder": "备注信息",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 566,
+          "width": 672,
+          "x": 176,
+          "y": 167
+        },
+        "text": "新建仓库\n仓库名称 *\n仓库类型 *\n成品仓\n原料仓\n退货仓\n其他\n负责人\n联系电话\n仓库地址\n备注\n取消\n创建\n关闭",
+        "title": "新建仓库",
+        "viewport": {
+          "height": 900,
+          "width": 1024
+        }
+      },
+      "reopened": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 420,
+          "overflowY": "auto",
+          "scrollHeight": 420,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": "warehouse-name",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        "focusables": 11,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "warehouse-name",
+            "placeholder": "仓库名称",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "radio",
+            "value": "1"
+          },
+          {
+            "disabled": false,
+            "id": "",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "radio",
+            "value": "2"
+          },
+          {
+            "disabled": false,
+            "id": "",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "radio",
+            "value": "3"
+          },
+          {
+            "disabled": false,
+            "id": "",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "radio",
+            "value": "4"
+          },
+          {
+            "disabled": false,
+            "id": "warehouse-manager",
+            "placeholder": "负责人姓名",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "warehouse-phone",
+            "placeholder": "联系电话",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "warehouse-address",
+            "placeholder": "详细地址",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "warehouse-remark",
+            "placeholder": "备注信息",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 566,
+          "width": 672,
+          "x": 384,
+          "y": 167
+        },
+        "text": "新建仓库\n仓库名称 *\n仓库类型 *\n成品仓\n原料仓\n退货仓\n其他\n负责人\n联系电话\n仓库地址\n备注\n取消\n创建\n关闭",
+        "title": "新建仓库",
+        "viewport": {
+          "height": 900,
+          "width": 1440
+        }
+      },
+      "result": "已执行限定交互；44张截图已逐张细看",
+      "visualReview": {
+        "reviewer": "coverage_inventory",
+        "method": "44图逐张 view_image 细看，1440/1024。不是接触表缩略图替代。",
+        "result": "标题/字段/页脚/确认弹窗可读；短表单无额外滚动属实际内容高度，供应商滚动可达。原继续编辑焦点 BODY 缺陷保留，修复后的独立现场证据另存。"
+      }
+    },
+    {
+      "route": "/locations",
+      "timestamp": "2026-10-08T00:55:09.165Z",
+      "screenshots": [
+        "screens/after/c-crud-locations-1440.png",
+        "screens/after/c-crud-locations-1024.png",
+        "screens/after/c-crud-locations-1024-scroll.png",
+        "screens/after/c-crud-locations-1024-discard.png",
+        "screens/after/c-crud-locations-1440-reopen.png"
+      ],
+      "humanViewed": true,
+      "businessWrite": false,
+      "checks": {
+        "tabFocusWithinDialog": true,
+        "inputPreserved": true,
+        "discardClosed": true,
+        "reopenReset": true,
+        "cleanCancelClosed": true
+      },
+      "createButton": "+ 新建库位",
+      "initial1440": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 420,
+          "overflowY": "auto",
+          "scrollHeight": 420,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": "location-warehouse",
+          "inside": true,
+          "name": null,
+          "tag": "BUTTON"
+        },
+        "focusables": 11,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "location-zone",
+            "placeholder": "如 A",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "location-aisle",
+            "placeholder": "如 01",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "location-rack",
+            "placeholder": "如 01",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "location-level",
+            "placeholder": "如 01",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "location-position",
+            "placeholder": "如 01",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "location-code",
+            "placeholder": "自动生成",
+            "readOnly": true,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "location-capacity",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "number",
+            "value": "0"
+          },
+          {
+            "disabled": false,
+            "id": "location-remark",
+            "placeholder": "可选",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 566,
+          "width": 672,
+          "x": 384,
+          "y": 167
+        },
+        "text": "新建库位\n仓库\n选择仓库\n验收合成仓-GL76c9c150\n库区\n通道\n货架\n层\n位\n库位编码\n容量\n备注\n取消\n创建\n关闭",
+        "title": "新建库位",
+        "viewport": {
+          "height": 900,
+          "width": 1440
+        }
+      },
+      "tabFocus": [
+        {
+          "id": "location-zone",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": "location-aisle",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": "location-rack",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": "location-level",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": "location-position",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": "location-code",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": "location-capacity",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": "location-remark",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": "",
+          "inside": true,
+          "name": null,
+          "tag": "BUTTON"
+        },
+        {
+          "id": "",
+          "inside": true,
+          "name": null,
+          "tag": "BUTTON"
+        },
+        {
+          "id": "location-warehouse",
+          "inside": true,
+          "name": null,
+          "tag": "BUTTON"
+        },
+        {
+          "id": "location-zone",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        }
+      ],
+      "initial1024": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 420,
+          "overflowY": "auto",
+          "scrollHeight": 420,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": "location-zone",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        "focusables": 11,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "location-zone",
+            "placeholder": "如 A",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "location-aisle",
+            "placeholder": "如 01",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "location-rack",
+            "placeholder": "如 01",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "location-level",
+            "placeholder": "如 01",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "location-position",
+            "placeholder": "如 01",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "location-code",
+            "placeholder": "自动生成",
+            "readOnly": true,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "location-capacity",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "number",
+            "value": "0"
+          },
+          {
+            "disabled": false,
+            "id": "location-remark",
+            "placeholder": "可选",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 566,
+          "width": 672,
+          "x": 176,
+          "y": 167
+        },
+        "text": "新建库位\n仓库\n选择仓库\n验收合成仓-GL76c9c150\n库区\n通道\n货架\n层\n位\n库位编码\n容量\n备注\n取消\n创建\n关闭",
+        "title": "新建库位",
+        "viewport": {
+          "height": 900,
+          "width": 1024
+        }
+      },
+      "scroll1024": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 420,
+          "overflowY": "auto",
+          "scrollHeight": 420,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": "location-zone",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        "focusables": 11,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "location-zone",
+            "placeholder": "如 A",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "location-aisle",
+            "placeholder": "如 01",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "location-rack",
+            "placeholder": "如 01",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "location-level",
+            "placeholder": "如 01",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "location-position",
+            "placeholder": "如 01",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "location-code",
+            "placeholder": "自动生成",
+            "readOnly": true,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "location-capacity",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "number",
+            "value": "0"
+          },
+          {
+            "disabled": false,
+            "id": "location-remark",
+            "placeholder": "可选",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 566,
+          "width": 672,
+          "x": 176,
+          "y": 167
+        },
+        "text": "新建库位\n仓库\n选择仓库\n验收合成仓-GL76c9c150\n库区\n通道\n货架\n层\n位\n库位编码\n容量\n备注\n取消\n创建\n关闭",
+        "title": "新建库位",
+        "viewport": {
+          "height": 900,
+          "width": 1024
+        }
+      },
+      "field": {
+        "disabled": false,
+        "id": "location-zone",
+        "index": 0,
+        "readOnly": false,
+        "type": "text",
+        "visible": true,
+        "value": "AUDIT-ONLY-NO-SUBMIT-locations"
+      },
+      "discardPrompt": {
+        "text": [
+          "新建库位\n仓库\n选择仓库\n验收合成仓-GL76c9c150\n库区\n通道\n货架\n层\n位\n库位编码\n容量\n备注\n取消\n创建\n关闭",
+          "放弃未保存输入？\n关闭\n关闭后本次输入不会保存。可返回表单继续编辑。\n继续编辑\n放弃并关闭"
+        ],
+        "visible": true
+      },
+      "continued": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 420,
+          "overflowY": "auto",
+          "scrollHeight": 420,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": "",
+          "inside": false,
+          "name": null,
+          "tag": "BODY"
+        },
+        "focusables": 11,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "location-zone",
+            "placeholder": "如 A",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": "AUDIT-ONLY-NO-SUBMIT-locations"
+          },
+          {
+            "disabled": false,
+            "id": "location-aisle",
+            "placeholder": "如 01",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "location-rack",
+            "placeholder": "如 01",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "location-level",
+            "placeholder": "如 01",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "location-position",
+            "placeholder": "如 01",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "location-code",
+            "placeholder": "自动生成",
+            "readOnly": true,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "location-capacity",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "number",
+            "value": "0"
+          },
+          {
+            "disabled": false,
+            "id": "location-remark",
+            "placeholder": "可选",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 566,
+          "width": 672,
+          "x": 176,
+          "y": 167
+        },
+        "text": "新建库位\n仓库\n选择仓库\n验收合成仓-GL76c9c150\n库区\n通道\n货架\n层\n位\n库位编码\n容量\n备注\n取消\n创建\n关闭",
+        "title": "新建库位",
+        "viewport": {
+          "height": 900,
+          "width": 1024
+        }
+      },
+      "reopened": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 420,
+          "overflowY": "auto",
+          "scrollHeight": 420,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": "location-warehouse",
+          "inside": true,
+          "name": null,
+          "tag": "BUTTON"
+        },
+        "focusables": 11,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "location-zone",
+            "placeholder": "如 A",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "location-aisle",
+            "placeholder": "如 01",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "location-rack",
+            "placeholder": "如 01",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "location-level",
+            "placeholder": "如 01",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "location-position",
+            "placeholder": "如 01",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "location-code",
+            "placeholder": "自动生成",
+            "readOnly": true,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "location-capacity",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "number",
+            "value": "0"
+          },
+          {
+            "disabled": false,
+            "id": "location-remark",
+            "placeholder": "可选",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 566,
+          "width": 672,
+          "x": 384,
+          "y": 167
+        },
+        "text": "新建库位\n仓库\n选择仓库\n验收合成仓-GL76c9c150\n库区\n通道\n货架\n层\n位\n库位编码\n容量\n备注\n取消\n创建\n关闭",
+        "title": "新建库位",
+        "viewport": {
+          "height": 900,
+          "width": 1440
+        }
+      },
+      "result": "已执行限定交互；44张截图已逐张细看",
+      "visualReview": {
+        "reviewer": "coverage_inventory",
+        "method": "44图逐张 view_image 细看，1440/1024。不是接触表缩略图替代。",
+        "result": "标题/字段/页脚/确认弹窗可读；短表单无额外滚动属实际内容高度，供应商滚动可达。原继续编辑焦点 BODY 缺陷保留，修复后的独立现场证据另存。"
+      }
+    },
+    {
+      "route": "/racks",
+      "timestamp": "2026-10-08T00:55:09.983Z",
+      "screenshots": [
+        "screens/after/c-crud-racks-1440.png",
+        "screens/after/c-crud-racks-1024.png",
+        "screens/after/c-crud-racks-1024-scroll.png",
+        "screens/after/c-crud-racks-1024-discard.png",
+        "screens/after/c-crud-racks-1440-reopen.png"
+      ],
+      "humanViewed": true,
+      "businessWrite": false,
+      "checks": {
+        "tabFocusWithinDialog": true,
+        "inputPreserved": true,
+        "discardClosed": true,
+        "reopenReset": true,
+        "cleanCancelClosed": true
+      },
+      "createButton": "+ 新建货架",
+      "initial1440": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 585,
+          "overflowY": "auto",
+          "scrollHeight": 594,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": "rack-warehouse",
+          "inside": true,
+          "name": null,
+          "tag": "BUTTON"
+        },
+        "focusables": 10,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "rack-scan",
+            "placeholder": "扫描或粘贴条码后回车",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "rack-zone",
+            "placeholder": "A",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "rack-code",
+            "placeholder": "A01",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "rack-name",
+            "placeholder": "货架名称（选填）",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "rack-maxLevels",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "number",
+            "value": "5"
+          },
+          {
+            "disabled": false,
+            "id": "rack-maxPositions",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "number",
+            "value": "10"
+          },
+          {
+            "disabled": false,
+            "id": "rack-remark",
+            "placeholder": "备注信息",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 731,
+          "width": 672,
+          "x": 384,
+          "y": 84.5
+        },
+        "text": "新建货架\n所属仓库 *\n请选择仓库\n请选择仓库\n验收合成仓-GL76c9c150\n扫码校验（选填）\n\n填写仓库与货架编码后，可扫 H / P / I 或商品编码，检查条码冲突或在库绑定提示。\n\n校验\n库区\n货架编码 *\n货架名称\n最大层数\n每层位数\n备注\n取消\n创建\n关闭",
+        "title": "新建货架",
+        "viewport": {
+          "height": 900,
+          "width": 1440
+        }
+      },
+      "tabFocus": [
+        {
+          "id": "rack-scan",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": "rack-zone",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": "rack-code",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": "rack-name",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": "rack-maxLevels",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": "rack-maxPositions",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": "rack-remark",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": "",
+          "inside": true,
+          "name": null,
+          "tag": "BUTTON"
+        },
+        {
+          "id": "",
+          "inside": true,
+          "name": null,
+          "tag": "BUTTON"
+        },
+        {
+          "id": "rack-warehouse",
+          "inside": true,
+          "name": null,
+          "tag": "BUTTON"
+        },
+        {
+          "id": "rack-scan",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        }
+      ],
+      "initial1024": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 585,
+          "overflowY": "auto",
+          "scrollHeight": 594,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": "rack-scan",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        "focusables": 10,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "rack-scan",
+            "placeholder": "扫描或粘贴条码后回车",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "rack-zone",
+            "placeholder": "A",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "rack-code",
+            "placeholder": "A01",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "rack-name",
+            "placeholder": "货架名称（选填）",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "rack-maxLevels",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "number",
+            "value": "5"
+          },
+          {
+            "disabled": false,
+            "id": "rack-maxPositions",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "number",
+            "value": "10"
+          },
+          {
+            "disabled": false,
+            "id": "rack-remark",
+            "placeholder": "备注信息",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 731,
+          "width": 672,
+          "x": 176,
+          "y": 84.5
+        },
+        "text": "新建货架\n所属仓库 *\n请选择仓库\n请选择仓库\n验收合成仓-GL76c9c150\n扫码校验（选填）\n\n填写仓库与货架编码后，可扫 H / P / I 或商品编码，检查条码冲突或在库绑定提示。\n\n校验\n库区\n货架编码 *\n货架名称\n最大层数\n每层位数\n备注\n取消\n创建\n关闭",
+        "title": "新建货架",
+        "viewport": {
+          "height": 900,
+          "width": 1024
+        }
+      },
+      "scroll1024": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 585,
+          "overflowY": "auto",
+          "scrollHeight": 594,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": "rack-scan",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        "focusables": 10,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "rack-scan",
+            "placeholder": "扫描或粘贴条码后回车",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "rack-zone",
+            "placeholder": "A",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "rack-code",
+            "placeholder": "A01",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "rack-name",
+            "placeholder": "货架名称（选填）",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "rack-maxLevels",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "number",
+            "value": "5"
+          },
+          {
+            "disabled": false,
+            "id": "rack-maxPositions",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "number",
+            "value": "10"
+          },
+          {
+            "disabled": false,
+            "id": "rack-remark",
+            "placeholder": "备注信息",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 731,
+          "width": 672,
+          "x": 176,
+          "y": 84.5
+        },
+        "text": "新建货架\n所属仓库 *\n请选择仓库\n请选择仓库\n验收合成仓-GL76c9c150\n扫码校验（选填）\n\n填写仓库与货架编码后，可扫 H / P / I 或商品编码，检查条码冲突或在库绑定提示。\n\n校验\n库区\n货架编码 *\n货架名称\n最大层数\n每层位数\n备注\n取消\n创建\n关闭",
+        "title": "新建货架",
+        "viewport": {
+          "height": 900,
+          "width": 1024
+        }
+      },
+      "field": {
+        "disabled": false,
+        "id": "rack-scan",
+        "index": 0,
+        "readOnly": false,
+        "type": "text",
+        "visible": true,
+        "value": "AUDIT-ONLY-NO-SUBMIT-racks"
+      },
+      "discardPrompt": {
+        "text": [
+          "新建货架\n所属仓库 *\n请选择仓库\n请选择仓库\n验收合成仓-GL76c9c150\n扫码校验（选填）\n\n填写仓库与货架编码后，可扫 H / P / I 或商品编码，检查条码冲突或在库绑定提示。\n\n校验\n库区\n货架编码 *\n货架名称\n最大层数\n每层位数\n备注\n取消\n创建\n关闭",
+          "放弃未保存输入？\n关闭\n关闭后本次输入不会保存。可返回表单继续编辑。\n继续编辑\n放弃并关闭"
+        ],
+        "visible": true
+      },
+      "continued": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 585,
+          "overflowY": "auto",
+          "scrollHeight": 594,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": "",
+          "inside": false,
+          "name": null,
+          "tag": "BODY"
+        },
+        "focusables": 10,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "rack-scan",
+            "placeholder": "扫描或粘贴条码后回车",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": "AUDIT-ONLY-NO-SUBMIT-racks"
+          },
+          {
+            "disabled": false,
+            "id": "rack-zone",
+            "placeholder": "A",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "rack-code",
+            "placeholder": "A01",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "rack-name",
+            "placeholder": "货架名称（选填）",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "rack-maxLevels",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "number",
+            "value": "5"
+          },
+          {
+            "disabled": false,
+            "id": "rack-maxPositions",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "number",
+            "value": "10"
+          },
+          {
+            "disabled": false,
+            "id": "rack-remark",
+            "placeholder": "备注信息",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 731,
+          "width": 672,
+          "x": 176,
+          "y": 84.5
+        },
+        "text": "新建货架\n所属仓库 *\n请选择仓库\n请选择仓库\n验收合成仓-GL76c9c150\n扫码校验（选填）\n\n填写仓库与货架编码后，可扫 H / P / I 或商品编码，检查条码冲突或在库绑定提示。\n\n校验\n库区\n货架编码 *\n货架名称\n最大层数\n每层位数\n备注\n取消\n创建\n关闭",
+        "title": "新建货架",
+        "viewport": {
+          "height": 900,
+          "width": 1024
+        }
+      },
+      "reopened": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 585,
+          "overflowY": "auto",
+          "scrollHeight": 594,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": "rack-warehouse",
+          "inside": true,
+          "name": null,
+          "tag": "BUTTON"
+        },
+        "focusables": 10,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "rack-scan",
+            "placeholder": "扫描或粘贴条码后回车",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "rack-zone",
+            "placeholder": "A",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "rack-code",
+            "placeholder": "A01",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "rack-name",
+            "placeholder": "货架名称（选填）",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "rack-maxLevels",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "number",
+            "value": "5"
+          },
+          {
+            "disabled": false,
+            "id": "rack-maxPositions",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "number",
+            "value": "10"
+          },
+          {
+            "disabled": false,
+            "id": "rack-remark",
+            "placeholder": "备注信息",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 731,
+          "width": 672,
+          "x": 384,
+          "y": 84.5
+        },
+        "text": "新建货架\n所属仓库 *\n请选择仓库\n请选择仓库\n验收合成仓-GL76c9c150\n扫码校验（选填）\n\n填写仓库与货架编码后，可扫 H / P / I 或商品编码，检查条码冲突或在库绑定提示。\n\n校验\n库区\n货架编码 *\n货架名称\n最大层数\n每层位数\n备注\n取消\n创建\n关闭",
+        "title": "新建货架",
+        "viewport": {
+          "height": 900,
+          "width": 1440
+        }
+      },
+      "result": "已执行限定交互；44张截图已逐张细看",
+      "visualReview": {
+        "reviewer": "coverage_inventory",
+        "method": "44图逐张 view_image 细看，1440/1024。不是接触表缩略图替代。",
+        "result": "标题/字段/页脚/确认弹窗可读；短表单无额外滚动属实际内容高度，供应商滚动可达。原继续编辑焦点 BODY 缺陷保留，修复后的独立现场证据另存。"
+      }
+    },
+    {
+      "route": "/sorting-bins",
+      "timestamp": "2026-10-08T00:55:10.782Z",
+      "screenshots": [
+        "screens/after/c-crud-sorting-bins-1440.png",
+        "screens/after/c-crud-sorting-bins-1024.png",
+        "screens/after/c-crud-sorting-bins-1024-scroll.png",
+        "screens/after/c-crud-sorting-bins-1024-discard.png",
+        "screens/after/c-crud-sorting-bins-1440-reopen.png"
+      ],
+      "humanViewed": true,
+      "businessWrite": false,
+      "checks": {
+        "tabFocusWithinDialog": true,
+        "inputPreserved": true,
+        "discardClosed": true,
+        "reopenReset": true,
+        "cleanCancelClosed": true
+      },
+      "createButton": "+ 新建分拣格",
+      "initial1440": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 268,
+          "overflowY": "auto",
+          "scrollHeight": 268,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": "sorting-bin-code",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        "focusables": 5,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "sorting-bin-code",
+            "placeholder": "如 A01",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "sorting-bin-remark",
+            "placeholder": "可选",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 414,
+          "width": 672,
+          "x": 384,
+          "y": 243
+        },
+        "text": "新建分拣格\n编号\n仓库\n选择仓库\n验收合成仓-GL76c9c150\n备注\n取消\n创建\n关闭",
+        "title": "新建分拣格",
+        "viewport": {
+          "height": 900,
+          "width": 1440
+        }
+      },
+      "tabFocus": [
+        {
+          "id": "sorting-bin-warehouse",
+          "inside": true,
+          "name": null,
+          "tag": "BUTTON"
+        },
+        {
+          "id": "sorting-bin-remark",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": "",
+          "inside": true,
+          "name": null,
+          "tag": "BUTTON"
+        },
+        {
+          "id": "",
+          "inside": true,
+          "name": null,
+          "tag": "BUTTON"
+        },
+        {
+          "id": "sorting-bin-code",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": "sorting-bin-warehouse",
+          "inside": true,
+          "name": null,
+          "tag": "BUTTON"
+        }
+      ],
+      "initial1024": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 268,
+          "overflowY": "auto",
+          "scrollHeight": 268,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": "sorting-bin-warehouse",
+          "inside": true,
+          "name": null,
+          "tag": "BUTTON"
+        },
+        "focusables": 5,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "sorting-bin-code",
+            "placeholder": "如 A01",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "sorting-bin-remark",
+            "placeholder": "可选",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 414,
+          "width": 672,
+          "x": 176,
+          "y": 243
+        },
+        "text": "新建分拣格\n编号\n仓库\n选择仓库\n验收合成仓-GL76c9c150\n备注\n取消\n创建\n关闭",
+        "title": "新建分拣格",
+        "viewport": {
+          "height": 900,
+          "width": 1024
+        }
+      },
+      "scroll1024": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 268,
+          "overflowY": "auto",
+          "scrollHeight": 268,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": "sorting-bin-warehouse",
+          "inside": true,
+          "name": null,
+          "tag": "BUTTON"
+        },
+        "focusables": 5,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "sorting-bin-code",
+            "placeholder": "如 A01",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "sorting-bin-remark",
+            "placeholder": "可选",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 414,
+          "width": 672,
+          "x": 176,
+          "y": 243
+        },
+        "text": "新建分拣格\n编号\n仓库\n选择仓库\n验收合成仓-GL76c9c150\n备注\n取消\n创建\n关闭",
+        "title": "新建分拣格",
+        "viewport": {
+          "height": 900,
+          "width": 1024
+        }
+      },
+      "field": {
+        "disabled": false,
+        "id": "sorting-bin-code",
+        "index": 0,
+        "readOnly": false,
+        "type": "text",
+        "visible": true,
+        "value": "AUDIT-ONLY-NO-SUBMIT-sorting-bins"
+      },
+      "discardPrompt": {
+        "text": [
+          "新建分拣格\n编号\n仓库\n选择仓库\n验收合成仓-GL76c9c150\n备注\n取消\n创建\n关闭",
+          "放弃未保存输入？\n关闭\n关闭后本次输入不会保存。可返回表单继续编辑。\n继续编辑\n放弃并关闭"
+        ],
+        "visible": true
+      },
+      "continued": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 268,
+          "overflowY": "auto",
+          "scrollHeight": 268,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": "",
+          "inside": false,
+          "name": null,
+          "tag": "BODY"
+        },
+        "focusables": 5,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "sorting-bin-code",
+            "placeholder": "如 A01",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": "AUDIT-ONLY-NO-SUBMIT-sorting-bins"
+          },
+          {
+            "disabled": false,
+            "id": "sorting-bin-remark",
+            "placeholder": "可选",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 414,
+          "width": 672,
+          "x": 176,
+          "y": 243
+        },
+        "text": "新建分拣格\n编号\n仓库\n选择仓库\n验收合成仓-GL76c9c150\n备注\n取消\n创建\n关闭",
+        "title": "新建分拣格",
+        "viewport": {
+          "height": 900,
+          "width": 1024
+        }
+      },
+      "reopened": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 268,
+          "overflowY": "auto",
+          "scrollHeight": 268,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": "sorting-bin-code",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        "focusables": 5,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "sorting-bin-code",
+            "placeholder": "如 A01",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "sorting-bin-remark",
+            "placeholder": "可选",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 414,
+          "width": 672,
+          "x": 384,
+          "y": 243
+        },
+        "text": "新建分拣格\n编号\n仓库\n选择仓库\n验收合成仓-GL76c9c150\n备注\n取消\n创建\n关闭",
+        "title": "新建分拣格",
+        "viewport": {
+          "height": 900,
+          "width": 1440
+        }
+      },
+      "result": "已执行限定交互；44张截图已逐张细看",
+      "visualReview": {
+        "reviewer": "coverage_inventory",
+        "method": "44图逐张 view_image 细看，1440/1024。不是接触表缩略图替代。",
+        "result": "标题/字段/页脚/确认弹窗可读；短表单无额外滚动属实际内容高度，供应商滚动可达。原继续编辑焦点 BODY 缺陷保留，修复后的独立现场证据另存。"
+      }
+    },
+    {
+      "route": "/finance/expense-categories",
+      "timestamp": "2026-10-08T00:55:11.548Z",
+      "screenshots": [
+        "screens/after/c-crud-finance-expense-categories-1440.png",
+        "screens/after/c-crud-finance-expense-categories-1024.png",
+        "screens/after/c-crud-finance-expense-categories-1024-scroll.png",
+        "screens/after/c-crud-finance-expense-categories-1024-discard.png",
+        "screens/after/c-crud-finance-expense-categories-1440-reopen.png"
+      ],
+      "humanViewed": true,
+      "businessWrite": false,
+      "checks": {
+        "tabFocusWithinDialog": true,
+        "inputPreserved": true,
+        "discardClosed": true,
+        "reopenReset": true,
+        "cleanCancelClosed": true
+      },
+      "createButton": "新建类别",
+      "initial1440": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 252,
+          "overflowY": "auto",
+          "scrollHeight": 252,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": "expense-category-name",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        "focusables": 5,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "expense-category-name",
+            "placeholder": "如：差旅费",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "expense-category-sort",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "number",
+            "value": "0"
+          },
+          {
+            "disabled": false,
+            "id": "expense-category-remark",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 398,
+          "width": 448,
+          "x": 496,
+          "y": 251
+        },
+        "text": "新建类别\n类别名称 *\n排序\n备注\n取消\n创建\n关闭",
+        "title": "新建类别",
+        "viewport": {
+          "height": 900,
+          "width": 1440
+        }
+      },
+      "tabFocus": [
+        {
+          "id": "expense-category-sort",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": "expense-category-remark",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": "",
+          "inside": true,
+          "name": null,
+          "tag": "BUTTON"
+        },
+        {
+          "id": "",
+          "inside": true,
+          "name": null,
+          "tag": "BUTTON"
+        },
+        {
+          "id": "expense-category-name",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        {
+          "id": "expense-category-sort",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        }
+      ],
+      "initial1024": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 252,
+          "overflowY": "auto",
+          "scrollHeight": 252,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": "expense-category-sort",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        "focusables": 5,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "expense-category-name",
+            "placeholder": "如：差旅费",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "expense-category-sort",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "number",
+            "value": "0"
+          },
+          {
+            "disabled": false,
+            "id": "expense-category-remark",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 398,
+          "width": 448,
+          "x": 288,
+          "y": 251
+        },
+        "text": "新建类别\n类别名称 *\n排序\n备注\n取消\n创建\n关闭",
+        "title": "新建类别",
+        "viewport": {
+          "height": 900,
+          "width": 1024
+        }
+      },
+      "scroll1024": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 252,
+          "overflowY": "auto",
+          "scrollHeight": 252,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": "expense-category-sort",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        "focusables": 5,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "expense-category-name",
+            "placeholder": "如：差旅费",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "expense-category-sort",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "number",
+            "value": "0"
+          },
+          {
+            "disabled": false,
+            "id": "expense-category-remark",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 398,
+          "width": 448,
+          "x": 288,
+          "y": 251
+        },
+        "text": "新建类别\n类别名称 *\n排序\n备注\n取消\n创建\n关闭",
+        "title": "新建类别",
+        "viewport": {
+          "height": 900,
+          "width": 1024
+        }
+      },
+      "field": {
+        "disabled": false,
+        "id": "expense-category-name",
+        "index": 0,
+        "readOnly": false,
+        "type": "text",
+        "visible": true,
+        "value": "AUDIT-ONLY-NO-SUBMIT-finance-expense-categories"
+      },
+      "discardPrompt": {
+        "text": [
+          "新建类别\n类别名称 *\n排序\n备注\n取消\n创建\n关闭",
+          "放弃未保存输入？\n关闭\n关闭后本次输入不会保存。可返回表单继续编辑。\n继续编辑\n放弃并关闭"
+        ],
+        "visible": true
+      },
+      "continued": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 252,
+          "overflowY": "auto",
+          "scrollHeight": 252,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": "",
+          "inside": false,
+          "name": null,
+          "tag": "BODY"
+        },
+        "focusables": 6,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "expense-category-name",
+            "placeholder": "如：差旅费",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": "AUDIT-ONLY-NO-SUBMIT-finance-expense-categories"
+          },
+          {
+            "disabled": false,
+            "id": "expense-category-sort",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "number",
+            "value": "0"
+          },
+          {
+            "disabled": false,
+            "id": "expense-category-remark",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 398,
+          "width": 448,
+          "x": 288,
+          "y": 251
+        },
+        "text": "新建类别\n类别名称 *\n排序\n备注\n取消\n创建\n关闭",
+        "title": "新建类别",
+        "viewport": {
+          "height": 900,
+          "width": 1024
+        }
+      },
+      "reopened": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 252,
+          "overflowY": "auto",
+          "scrollHeight": 252,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": "expense-category-name",
+          "inside": true,
+          "name": null,
+          "tag": "INPUT"
+        },
+        "focusables": 5,
+        "inputs": [
+          {
+            "disabled": false,
+            "id": "expense-category-name",
+            "placeholder": "如：差旅费",
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "disabled": false,
+            "id": "expense-category-sort",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "number",
+            "value": "0"
+          },
+          {
+            "disabled": false,
+            "id": "expense-category-remark",
+            "placeholder": null,
+            "readOnly": false,
+            "tag": "INPUT",
+            "type": "text",
+            "value": ""
+          }
+        ],
+        "pageOverflow": false,
+        "rect": {
+          "height": 398,
+          "width": 448,
+          "x": 496,
+          "y": 251
+        },
+        "text": "新建类别\n类别名称 *\n排序\n备注\n取消\n创建\n关闭",
+        "title": "新建类别",
+        "viewport": {
+          "height": 900,
+          "width": 1440
+        }
+      },
+      "result": "已执行限定交互；44张截图已逐张细看",
+      "visualReview": {
+        "reviewer": "coverage_inventory",
+        "method": "44图逐张 view_image 细看，1440/1024。不是接触表缩略图替代。",
+        "result": "标题/字段/页脚/确认弹窗可读；短表单无额外滚动属实际内容高度，供应商滚动可达。原继续编辑焦点 BODY 缺陷保留，修复后的独立现场证据另存。"
+      }
+    },
+    {
+      "route": "/plastic-boxes",
+      "timestamp": "2026-10-08T00:58:18.182Z",
+      "screenshots": [
+        "screens/after/c-crud-plastic-boxes-finder-1024.png",
+        "screens/after/c-crud-plastic-boxes-selected-1024.png",
+        "screens/after/c-crud-plastic-boxes-1024-discard.png",
+        "screens/after/c-crud-plastic-boxes-1024-preserved.png",
+        "screens/after/c-crud-plastic-boxes-1440.png",
+        "screens/after/c-crud-plastic-boxes-1024.png",
+        "screens/after/c-crud-plastic-boxes-product-only-discard-1024.png",
+        "screens/after/c-crud-plastic-boxes-warehouse-only-discard-1024.png",
+        "screens/after/c-crud-plastic-boxes-1440-reopen.png"
+      ],
+      "humanViewed": true,
+      "businessWrite": false,
+      "checks": {
+        "bothProgrammaticChangesPrompt": true,
+        "productAndWarehousePreserved": true,
+        "discardClosed": true,
+        "tabFocusWithinDialog": true,
+        "productOnlyDirtyPrompt": true,
+        "productOnlyPreserved": true,
+        "warehouseOnlyDirtyPrompt": true,
+        "warehouseOnlyPreserved": true,
+        "reopenReset": true,
+        "cleanCancelClosed": true
+      },
+      "bothSelected": {
+        "dialogCount": 2,
+        "fieldset": {
+          "clientHeight": 190,
+          "overflowY": "auto",
+          "scrollHeight": 190,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": "",
+          "inside": false,
+          "name": null,
+          "tag": "BUTTON"
+        },
+        "focusables": 0,
+        "inputs": [],
+        "pageOverflow": false,
+        "rect": {
+          "height": 336,
+          "width": 448,
+          "x": 288,
+          "y": 282
+        },
+        "text": "新建塑料盒\n绑定商品 *\n验收合成：加长静音阻尼铰链（嵌入式柜门用）长名称与型号识别检查\n所属仓库 *\n验收合成仓-GL76c9c150\n验收合成仓-GL76c9c150\n取消\n创建\n关闭",
+        "title": "新建塑料盒",
+        "viewport": {
+          "height": 900,
+          "width": 1024
+        }
+      },
+      "continued": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 190,
+          "overflowY": "auto",
+          "scrollHeight": 190,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": "",
+          "inside": false,
+          "name": null,
+          "tag": "BODY"
+        },
+        "focusables": 5,
+        "inputs": [],
+        "pageOverflow": false,
+        "rect": {
+          "height": 336,
+          "width": 448,
+          "x": 288,
+          "y": 282
+        },
+        "text": "新建塑料盒\n绑定商品 *\n验收合成：加长静音阻尼铰链（嵌入式柜门用）长名称与型号识别检查\n所属仓库 *\n验收合成仓-GL76c9c150\n验收合成仓-GL76c9c150\n取消\n创建\n关闭",
+        "title": "新建塑料盒",
+        "viewport": {
+          "height": 900,
+          "width": 1024
+        }
+      },
+      "afterContinueTabFocus": {
+        "id": "plastic-box-product",
+        "inside": true,
+        "name": null,
+        "tag": "BUTTON"
+      },
+      "initial1440": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 172,
+          "overflowY": "auto",
+          "scrollHeight": 172,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": "plastic-box-product",
+          "inside": true,
+          "name": null,
+          "tag": "BUTTON"
+        },
+        "focusables": 4,
+        "inputs": [],
+        "pageOverflow": false,
+        "rect": {
+          "height": 318,
+          "width": 448,
+          "x": 496,
+          "y": 291
+        },
+        "text": "新建塑料盒\n绑定商品 *\n点击选择商品…\n所属仓库 *\n选择仓库\n验收合成仓-GL76c9c150\n取消\n创建\n关闭",
+        "title": "新建塑料盒",
+        "viewport": {
+          "height": 900,
+          "width": 1440
+        }
+      },
+      "tabFocus": [
+        {
+          "id": "plastic-box-warehouse",
+          "inside": true,
+          "name": null,
+          "tag": "BUTTON"
+        },
+        {
+          "id": "",
+          "inside": true,
+          "name": null,
+          "tag": "BUTTON"
+        },
+        {
+          "id": "",
+          "inside": true,
+          "name": null,
+          "tag": "BUTTON"
+        },
+        {
+          "id": "plastic-box-product",
+          "inside": true,
+          "name": null,
+          "tag": "BUTTON"
+        },
+        {
+          "id": "plastic-box-warehouse",
+          "inside": true,
+          "name": null,
+          "tag": "BUTTON"
+        }
+      ],
+      "initial1024": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 172,
+          "overflowY": "auto",
+          "scrollHeight": 172,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": "plastic-box-warehouse",
+          "inside": true,
+          "name": null,
+          "tag": "BUTTON"
+        },
+        "focusables": 4,
+        "inputs": [],
+        "pageOverflow": false,
+        "rect": {
+          "height": 318,
+          "width": 448,
+          "x": 288,
+          "y": 291
+        },
+        "text": "新建塑料盒\n绑定商品 *\n点击选择商品…\n所属仓库 *\n选择仓库\n验收合成仓-GL76c9c150\n取消\n创建\n关闭",
+        "title": "新建塑料盒",
+        "viewport": {
+          "height": 900,
+          "width": 1024
+        }
+      },
+      "scroll1024": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 172,
+          "overflowY": "auto",
+          "scrollHeight": 172,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": "plastic-box-warehouse",
+          "inside": true,
+          "name": null,
+          "tag": "BUTTON"
+        },
+        "focusables": 4,
+        "inputs": [],
+        "pageOverflow": false,
+        "rect": {
+          "height": 318,
+          "width": 448,
+          "x": 288,
+          "y": 291
+        },
+        "text": "新建塑料盒\n绑定商品 *\n点击选择商品…\n所属仓库 *\n选择仓库\n验收合成仓-GL76c9c150\n取消\n创建\n关闭",
+        "title": "新建塑料盒",
+        "viewport": {
+          "height": 900,
+          "width": 1024
+        }
+      },
+      "productOnly": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 190,
+          "overflowY": "auto",
+          "scrollHeight": 190,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": "",
+          "inside": false,
+          "name": null,
+          "tag": "BODY"
+        },
+        "focusables": 4,
+        "inputs": [],
+        "pageOverflow": false,
+        "rect": {
+          "height": 336,
+          "width": 448,
+          "x": 288,
+          "y": 282
+        },
+        "text": "新建塑料盒\n绑定商品 *\n验收合成：加长静音阻尼铰链（嵌入式柜门用）长名称与型号识别检查\n所属仓库 *\n选择仓库\n验收合成仓-GL76c9c150\n取消\n创建\n关闭",
+        "title": "新建塑料盒",
+        "viewport": {
+          "height": 900,
+          "width": 1024
+        }
+      },
+      "warehouseOnly": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 172,
+          "overflowY": "auto",
+          "scrollHeight": 172,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": "radix-:rbn:",
+          "inside": true,
+          "name": null,
+          "tag": "DIV"
+        },
+        "focusables": 4,
+        "inputs": [],
+        "pageOverflow": false,
+        "rect": {
+          "height": 318,
+          "width": 448,
+          "x": 288,
+          "y": 291
+        },
+        "text": "新建塑料盒\n绑定商品 *\n点击选择商品…\n所属仓库 *\n验收合成仓-GL76c9c150\n验收合成仓-GL76c9c150\n取消\n创建\n关闭",
+        "title": "新建塑料盒",
+        "viewport": {
+          "height": 900,
+          "width": 1024
+        }
+      },
+      "reopened": {
+        "dialogCount": 1,
+        "fieldset": {
+          "clientHeight": 172,
+          "overflowY": "auto",
+          "scrollHeight": 172,
+          "scrollTop": 0
+        },
+        "focus": {
+          "id": "plastic-box-product",
+          "inside": true,
+          "name": null,
+          "tag": "BUTTON"
+        },
+        "focusables": 4,
+        "inputs": [],
+        "pageOverflow": false,
+        "rect": {
+          "height": 318,
+          "width": 448,
+          "x": 496,
+          "y": 291
+        },
+        "text": "新建塑料盒\n绑定商品 *\n点击选择商品…\n所属仓库 *\n选择仓库\n验收合成仓-GL76c9c150\n取消\n创建\n关闭",
+        "title": "新建塑料盒",
+        "viewport": {
+          "height": 900,
+          "width": 1440
+        }
+      },
+      "result": "已执行商品+仓库、仅商品、仅仓库三个程序回调脏保护与保留；未创建；44张图片已逐张细看",
+      "visualReview": {
+        "reviewer": "coverage_inventory",
+        "method": "44图逐张 view_image 细看，1440/1024。不是接触表缩略图替代。",
+        "result": "标题/字段/页脚/确认弹窗可读；短表单无额外滚动属实际内容高度，供应商滚动可达。原继续编辑焦点 BODY 缺陷保留，修复后的独立现场证据另存。"
+      }
+    }
+  ]
+}

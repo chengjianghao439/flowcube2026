@@ -1,0 +1,23 @@
+[
+  {
+    "method": "GET",
+    "path": "/api/accounting/invoices",
+    "query": "invoiceType=1&page=1&pageSize=200",
+    "status": null,
+    "requestId": "52716.258"
+  },
+  {
+    "method": "GET",
+    "path": "/api/accounting/invoices",
+    "query": "invoiceType=1&page=1&pageSize=200",
+    "status": null,
+    "requestId": "52716.259"
+  },
+  {
+    "method": "GET",
+    "path": "/api/accounting/invoices",
+    "query": "invoiceType=1&page=1&pageSize=200",
+    "status": 200,
+    "requestId": "52716.261"
+  }
+]

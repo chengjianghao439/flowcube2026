@@ -13,7 +13,7 @@ import PdaBottomBar from '@/components/pda/PdaBottomBar'
 import PdaScanner from '@/components/pda/PdaScanner'
 import PdaCard from '@/components/pda/PdaCard'
 import PdaFlash from '@/components/pda/PdaFlash'
-import PdaEmptyState, { PdaLoading } from '@/components/pda/PdaEmptyState'
+import PdaEmptyState, { PdaLoading, PdaQueryError } from '@/components/pda/PdaEmptyState'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
@@ -26,7 +26,7 @@ export default function PdaTransferOutPage() {
   const transferId = id ? Number(id) : 0
   const { flash, ok, err, warn } = usePdaFeedback()
 
-  const { data: order, isLoading } = useQuery({
+  const { data: order, isLoading, isError, refetch } = useQuery({
     queryKey: ['pda-transfer', transferId],
     queryFn: () => getTransferDetailApi(transferId),
     enabled: transferId > 0,
@@ -63,45 +63,7 @@ export default function PdaTransferOutPage() {
     scanMut.mutate(b)
   }, [order, scanMut, err])
 
-  if (!transferId) {
-    return (
-      <div className="min-h-screen bg-background">
-        <PdaHeader title="调出仓扫码出库" onBack={() => navigate('/pda/transfer')} />
-        <PdaEmptyState icon={<ArrowUpFromLine className="h-12 w-12 text-muted-foreground" />} title="请选择调拨单" description="请从调拨执行列表进入待出库调拨。" actionText="返回调拨执行" onAction={() => navigate('/pda/transfer')} />
-      </div>
-    )
-  }
-  if (isLoading || !order) {
-    return (
-      <div className="min-h-screen bg-background">
-        <PdaHeader title="调出仓扫码出库" onBack={() => navigate('/pda/transfer')} />
-        <PdaLoading className="h-40 mt-8" />
-      </div>
-    )
-  }
-  if (order.status !== 2 && order.status !== 3) {
-    return (
-      <div className="min-h-screen bg-background">
-        <PdaHeader title="调出仓扫码出库" onBack={() => navigate('/pda/transfer')} />
-        <PdaEmptyState icon={order.status >= 4 ? <CircleCheck className="h-12 w-12 text-green-600" /> : <Hourglass className="h-12 w-12 text-muted-foreground" />} title={order.statusName}
-          description={order.status === 1 ? '调拨单尚未派发，请先在 ERP 确认派发。' : '该调拨单不在待出库状态。'}
-          actionText="返回调拨执行" onAction={() => navigate('/pda/transfer')} />
-      </div>
-    )
-  }
-
-  return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <PdaHeader
-        title="调出仓扫码出库"
-        subtitle={`${order.orderNo} · ${order.fromWarehouseName} → ${order.toWarehouseName}`}
-        onBack={() => navigate('/pda/transfer')}
-        right={<SoftStatusLabel label={`调出仓：${order.fromWarehouseName}`} tone="info" />}
-      />
-      <PdaFlash flash={flash} />
-
-      <div className="flex-1 overflow-y-auto">
-        <div className="max-w-md mx-auto px-4 py-4 space-y-3">
+  const recoveryNotice = (
           <PdaCriticalActionNotice
             blockedReason={scanAction.blockedReason}
             pendingRecord={scanAction.pendingRecord}
@@ -120,6 +82,51 @@ export default function PdaTransferOutPage() {
             onClear={() => scanAction.clearPending()}
             onDismissError={() => scanAction.clearError()}
           />
+  )
+
+  if (!transferId) {
+    return (
+      <div className="min-h-screen bg-background">
+        <PdaHeader title="调出仓扫码出库" onBack={() => navigate('/pda/transfer')} />
+        <PdaEmptyState icon={<ArrowUpFromLine className="h-12 w-12 text-muted-foreground" />} title="请选择调拨单" description="请从调拨执行列表进入待出库调拨。" actionText="返回调拨执行" onAction={() => navigate('/pda/transfer')} />
+      </div>
+    )
+  }
+  if (isError && !order) return <div className="min-h-screen bg-background"><PdaHeader title="调出仓扫码出库" onBack={() => navigate('/pda/transfer')} /><div className="mx-auto max-w-md p-4"><PdaQueryError onRetry={() => { void refetch() }} />{recoveryNotice}</div></div>
+
+  if (isLoading || !order) {
+    return (
+      <div className="min-h-screen bg-background">
+        <PdaHeader title="调出仓扫码出库" onBack={() => navigate('/pda/transfer')} />
+        <PdaLoading className="h-40 mt-8" />
+      </div>
+    )
+  }
+  if (!isError && order.status !== 2 && order.status !== 3) {
+    return (
+      <div className="min-h-screen bg-background">
+        <PdaHeader title="调出仓扫码出库" onBack={() => navigate('/pda/transfer')} />
+        <PdaEmptyState icon={order.status >= 4 ? <CircleCheck className="h-12 w-12 text-success-ink" /> : <Hourglass className="h-12 w-12 text-muted-foreground" />} title={order.statusName}
+          description={order.status === 1 ? '调拨单尚未派发，请先在 ERP 确认派发。' : '该调拨单不在待出库状态。'}
+          actionText="返回调拨执行" onAction={() => navigate('/pda/transfer')} />
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex min-h-screen flex-col bg-background">
+      <PdaHeader
+        title="调出仓扫码出库"
+        subtitle={`${order.orderNo} · ${order.fromWarehouseName} → ${order.toWarehouseName}`}
+        onBack={() => navigate('/pda/transfer')}
+        right={<SoftStatusLabel label={`调出仓：${order.fromWarehouseName}`} tone="info" />}
+      />
+      <PdaFlash flash={flash} />
+
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-md mx-auto px-4 py-4 space-y-3">
+          {isError && <PdaQueryError onRetry={() => { void refetch() }} />}
+          {recoveryNotice}
 
           {/*
             整容器调拨要求「容器数量 ≤ 该商品剩余可调量」，扫到更大的容器会被系统拒绝。
@@ -137,7 +144,7 @@ export default function PdaTransferOutPage() {
                 </div>
                 <div className="text-right shrink-0">
                   <p className="text-xs text-muted-foreground">计划 {item.quantity}</p>
-                  <p className="text-sm font-semibold text-amber-600">已出库 {item.deductedQty ?? 0}</p>
+                  <p className="text-sm font-semibold text-warning-ink">已出库 {item.deductedQty ?? 0}</p>
                   <p className="text-xs text-muted-foreground">剩余可调 {remaining}</p>
                 </div>
               </div>
@@ -148,7 +155,7 @@ export default function PdaTransferOutPage() {
       </div>
 
       <PdaBottomBar>
-        <PdaScanner onScan={handleScan} placeholder="扫描调出仓库存条码" disabled={scanMut.isPending || scanAction.submitBlocked} allowManualEntry={false} />
+        <PdaScanner onScan={handleScan} placeholder="扫描调出仓库存条码" disabled={scanMut.isPending || scanAction.submitBlocked || isError} busy={scanMut.isPending} allowManualEntry={false} />
       </PdaBottomBar>
     </div>
   )

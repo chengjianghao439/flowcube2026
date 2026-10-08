@@ -15,7 +15,7 @@ const DAILY_GROUPS = [
   { title: '物流与打印', paths: ['/logistics', '/settings/barcode-print-query'] },
 ]
 
-/** 首页与待办中心共用；随当前登录者权限更新，不增加配置或持久化。 */
+/** 待办中心常用入口；随当前登录者权限更新，不增加配置或持久化。 */
 export function DailyWork() {
   const { can } = usePermission()
   const authenticated = useAuthStore(s => s.isAuthenticated)

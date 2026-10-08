@@ -1,0 +1,72 @@
+{
+  "method": "normal UI device binding; task1/sale5 read-only; actual scroll then manual input/cancel with empty value, no business write",
+  "taskBeforeScroll": {
+    "bound": true,
+    "documentHeight": 844,
+    "horizontalOverflow": false,
+    "manualButton": {
+      "bottom": 807,
+      "fullyWithinViewport": true,
+      "height": 44,
+      "width": 74,
+      "x": 217,
+      "y": 763
+    },
+    "scrollY": 0,
+    "ticket": true,
+    "timeOrigin": 1791421227929.5,
+    "url": "#/pda/task/1",
+    "viewport": [
+      320,
+      844
+    ]
+  },
+  "taskAfterScroll": {
+    "bound": true,
+    "documentHeight": 844,
+    "horizontalOverflow": false,
+    "manualButton": {
+      "bottom": 807,
+      "fullyWithinViewport": true,
+      "height": 44,
+      "width": 74,
+      "x": 217,
+      "y": 763
+    },
+    "scrollY": 0,
+    "ticket": true,
+    "timeOrigin": 1791421227929.5,
+    "url": "#/pda/task/1",
+    "viewport": [
+      320,
+      844
+    ]
+  },
+  "manualOpenedAndCancelled": {
+    "focusedManual": true,
+    "horizontalOverflow": false,
+    "inputHeight": 44,
+    "name": "手动输入：扫描库存条码",
+    "url": "#/pda/task/1"
+  },
+  "putaway2Phase": {
+    "bound": true,
+    "documentHeight": 844,
+    "horizontalOverflow": false,
+    "text": "← 返回\n扫码上架\n\n尚未收货\n\n这张收货单还没有开始收货，请先到收货页登记实收数量，已收到的货即可扫码上架。\n\n返回收货订单",
+    "ticket": true,
+    "timeOrigin": 1791421227929.5,
+    "url": "#/pda/putaway/2",
+    "viewport": [
+      320,
+      844
+    ]
+  },
+  "visualReviewed": true,
+  "reviewScope": "三图均人工实看：task1/sale5长身份与1.25，扫描手输入完整可达；打开后44px输入获焦→空取消；putaway2真实尚未收货与返回完整。无业务写入。",
+  "screenshots": [
+    "screens/after/b-pda-task-1-scroll-final-320.png",
+    "screens/after/b-pda-task-1-manual-final-320.png",
+    "screens/after/b-pda-putaway-2-reach-final-320.png"
+  ]
+}

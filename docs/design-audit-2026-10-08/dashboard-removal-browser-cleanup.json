@@ -1,0 +1,15 @@
+{
+  "session": "flowcube-dashboard-remove",
+  "sessionAbsent": true,
+  "list": {
+    "success": true,
+    "data": {
+      "sessions": []
+    }
+  },
+  "vitePid": 66811,
+  "signal": "SIGTERM",
+  "ownedTemporaryHtmlRemoved": true,
+  "viteAbsent": true,
+  "port5188Listeners": []
+}

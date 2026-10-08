@@ -15,7 +15,7 @@ import PdaBottomBar from '@/components/pda/PdaBottomBar'
 import PdaScanner from '@/components/pda/PdaScanner'
 import PdaCard from '@/components/pda/PdaCard'
 import PdaFlash from '@/components/pda/PdaFlash'
-import PdaEmptyState, { PdaLoading } from '@/components/pda/PdaEmptyState'
+import PdaEmptyState, { PdaLoading, PdaQueryError } from '@/components/pda/PdaEmptyState'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
@@ -32,7 +32,7 @@ export default function PdaTransferInPage() {
   // 两步扫码：先扫容器，再扫库位
   const [pendingContainer, setPendingContainer] = useState<string | null>(null)
 
-  const { data: order, isLoading } = usePdaTransferInDetail(transferId)
+  const { data: order, isLoading, isError, refetch } = usePdaTransferInDetail(transferId)
 
   const scanAction = useCriticalPdaAction<TransferScanResult>({
     action: `transfer.scanIn.${transferId}`,
@@ -84,45 +84,7 @@ export default function PdaTransferInPage() {
     }
   }, [order, pendingContainer, submitMut, err, ok])
 
-  if (!transferId) {
-    return (
-      <div className="min-h-screen bg-background">
-        <PdaHeader title="调入仓扫码入库" onBack={() => navigate('/pda/transfer')} />
-        <PdaEmptyState icon={<ArrowDownToLine className="h-12 w-12 text-muted-foreground" />} title="请选择调拨单" description="请从调拨执行列表进入待入库调拨。" actionText="返回调拨执行" onAction={() => navigate('/pda/transfer')} />
-      </div>
-    )
-  }
-  if (isLoading || !order) {
-    return (
-      <div className="min-h-screen bg-background">
-        <PdaHeader title="调入仓扫码入库" onBack={() => navigate('/pda/transfer')} />
-        <PdaLoading className="h-40 mt-8" />
-      </div>
-    )
-  }
-  if (order.status !== 3) {
-    return (
-      <div className="min-h-screen bg-background">
-        <PdaHeader title="调入仓扫码入库" onBack={() => navigate('/pda/transfer')} />
-        <PdaEmptyState icon={order.status >= 4 ? <CircleCheck className="h-12 w-12 text-green-600" /> : <Hourglass className="h-12 w-12 text-muted-foreground" />} title={order.statusName}
-          description={order.status < 3 ? '尚未出库，请先由调出仓扫码出库。' : '该调拨单不在待入库状态。'}
-          actionText="返回调拨执行" onAction={() => navigate('/pda/transfer')} />
-      </div>
-    )
-  }
-
-  return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <PdaHeader
-        title="调入仓扫码入库"
-        subtitle={`${order.orderNo} · ${order.fromWarehouseName} → ${order.toWarehouseName}`}
-        onBack={() => navigate('/pda/transfer')}
-        right={<SoftStatusLabel label={`调入仓：${order.toWarehouseName}`} tone="info" />}
-      />
-      <PdaFlash flash={flash} />
-
-      <div className="flex-1 overflow-y-auto">
-        <div className="max-w-md mx-auto px-4 py-4 space-y-3">
+  const recoveryNotice = (
           <PdaCriticalActionNotice
             blockedReason={scanAction.blockedReason}
             pendingRecord={scanAction.pendingRecord}
@@ -141,11 +103,56 @@ export default function PdaTransferInPage() {
             onClear={() => scanAction.clearPending()}
             onDismissError={() => scanAction.clearError()}
           />
+  )
+
+  if (!transferId) {
+    return (
+      <div className="min-h-screen bg-background">
+        <PdaHeader title="调入仓扫码入库" onBack={() => navigate('/pda/transfer')} />
+        <PdaEmptyState icon={<ArrowDownToLine className="h-12 w-12 text-muted-foreground" />} title="请选择调拨单" description="请从调拨执行列表进入待入库调拨。" actionText="返回调拨执行" onAction={() => navigate('/pda/transfer')} />
+      </div>
+    )
+  }
+  if (isError && !order) return <div className="min-h-screen bg-background"><PdaHeader title="调入仓扫码入库" onBack={() => navigate('/pda/transfer')} /><div className="mx-auto max-w-md p-4"><PdaQueryError onRetry={() => { void refetch() }} />{recoveryNotice}</div></div>
+
+  if (isLoading || !order) {
+    return (
+      <div className="min-h-screen bg-background">
+        <PdaHeader title="调入仓扫码入库" onBack={() => navigate('/pda/transfer')} />
+        <PdaLoading className="h-40 mt-8" />
+      </div>
+    )
+  }
+  if (!isError && order.status !== 3) {
+    return (
+      <div className="min-h-screen bg-background">
+        <PdaHeader title="调入仓扫码入库" onBack={() => navigate('/pda/transfer')} />
+        <PdaEmptyState icon={order.status >= 4 ? <CircleCheck className="h-12 w-12 text-success-ink" /> : <Hourglass className="h-12 w-12 text-muted-foreground" />} title={order.statusName}
+          description={order.status < 3 ? '尚未出库，请先由调出仓扫码出库。' : '该调拨单不在待入库状态。'}
+          actionText="返回调拨执行" onAction={() => navigate('/pda/transfer')} />
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex min-h-screen flex-col bg-background">
+      <PdaHeader
+        title="调入仓扫码入库"
+        subtitle={`${order.orderNo} · ${order.fromWarehouseName} → ${order.toWarehouseName}`}
+        onBack={() => navigate('/pda/transfer')}
+        right={<SoftStatusLabel label={`调入仓：${order.toWarehouseName}`} tone="info" />}
+      />
+      <PdaFlash flash={flash} />
+
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-md mx-auto px-4 py-4 space-y-3">
+          {isError && <PdaQueryError onRetry={() => { void refetch() }} />}
+          {recoveryNotice}
 
           <div className={`rounded-xl border px-3 py-2 text-sm ${pendingContainer ? 'border-primary/40 bg-primary/5 text-primary' : 'border-border bg-card text-muted-foreground'}`}>
             {pendingContainer ? `已扫条码 ${pendingContainer}，请扫目标库位` : '第一步：扫描在途库存条码'}
             {pendingContainer && (
-              <button type="button" className="ml-2 underline" onClick={() => setPendingContainer(null)}>重扫</button>
+              <button type="button" className="ml-2 inline-flex min-h-11 items-center rounded-md px-2 underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => setPendingContainer(null)}>重扫</button>
             )}
           </div>
 
@@ -158,7 +165,7 @@ export default function PdaTransferInPage() {
                 <div className="text-right shrink-0 text-xs">
                   <p className="text-muted-foreground">计划 {item.quantity}</p>
                   <p className="text-muted-foreground">已出库 {item.deductedQty ?? 0}</p>
-                  <p className="font-semibold text-emerald-600">已入库 {item.receivedQty ?? 0}</p>
+                  <p className="font-semibold text-success-ink">已入库 {item.receivedQty ?? 0}</p>
                 </div>
               </div>
             </PdaCard>
@@ -170,7 +177,8 @@ export default function PdaTransferInPage() {
         <PdaScanner
           onScan={handleScan}
           placeholder={pendingContainer ? '扫描目标库位条码' : '扫描在途库存条码'}
-          disabled={submitMut.isPending || scanAction.submitBlocked}
+          disabled={submitMut.isPending || scanAction.submitBlocked || isError}
+          busy={submitMut.isPending}
           allowManualEntry={false}
         />
       </PdaBottomBar>

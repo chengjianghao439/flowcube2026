@@ -69,7 +69,7 @@ function StatCard({ icon, label, value, sub, accent = 'text-foreground' }: {
 }
 
 function AvailableBadge({ available, onHand }: { available: number; onHand: number }) {
-  if (available <= 0) return <span className="font-semibold text-destructive">0</span>
+  if (available <= 0) return <span className="font-semibold text-destructive-ink">0</span>
   const ratio = onHand > 0 ? available / onHand : 1
   const cls = ratio < 0.2 ? 'text-amber-600 font-medium' : 'text-emerald-600 font-medium'
   return <span className={cls}>{formatQty(available)}</span>
@@ -250,7 +250,7 @@ export default function InventoryPage() {
     { key: 'afterQty', title: '变动后', width: 90, render: v => <span>{v as number}</span> },
     { key: 'supplierName', title: '供应商', width: 140, render: v => (v as string) || '-' },
     { key: 'operatorName', title: '操作人', width: 90 },
-    { key: 'remark', title: '备注', render: v => (v as string) || '-' },
+    { key: 'remark', title: '备注', expandableText: true, render: v => (v as string) || '-' },
   ]
 
   // 库存初始化导入：下载模板 → 填数上传 → 后端逐行建容器/落库（POST /import/stock）
@@ -439,9 +439,9 @@ export default function InventoryPage() {
             } />
             {importResult && (
               <div className="rounded-lg border p-3 text-sm space-y-1">
-                <p className="text-success font-medium">导入成功：{importResult.success} 条</p>
+                <p className="text-success-ink font-medium">导入成功：{importResult.success} 条</p>
                 {importResult.errors.length > 0 && (
-                  <div className="max-h-64 overflow-y-auto text-destructive text-sm leading-6 space-y-0.5">
+                  <div className="max-h-64 overflow-y-auto text-destructive-ink text-sm leading-6 space-y-0.5">
                     {importResult.errors.slice(0, 20).map((err, i) => <p key={i}>{err}</p>)}
                   </div>
                 )}

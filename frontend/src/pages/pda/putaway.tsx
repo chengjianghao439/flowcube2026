@@ -111,7 +111,7 @@ function PutawayRunner({ taskId }: { taskId: number }) {
           常驻显示，直到再扫一次或改扫推荐库位。
         */}
         {engine.context.deviationArmedCode ? (
-          <div className="mt-3 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+          <div className="mt-3 rounded-2xl border border-warning/30 bg-warning/10 px-4 py-3 text-xs text-warning-ink">
             <p className="font-semibold">与推荐库位不同，需要再扫一次确认</p>
             <p className="mt-1">
               已扫库位 <span className="font-mono">{engine.context.deviationArmedCode}</span>
@@ -136,6 +136,7 @@ function PutawayRunner({ taskId }: { taskId: number }) {
           }}
           placeholder={engine.currentStep.placeholder}
           disabled={engine.scanning || putawayAction.submitBlocked}
+          busy={engine.scanning}
         />
       </PdaBottomBar>
     </div>

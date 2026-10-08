@@ -80,8 +80,8 @@ async function findAll({ page = 1, pageSize = 20, keyword = '', status = null, s
   if (endDate) { conds.push('ro.created_at <= ?'); params.push(`${endDate} 23:59:59`) }
   // 限仓用户只能看到本仓销售单对应的退款单
   const scope = scopeFilter(scopeWarehouseIds, 'so.warehouse_id')
-  if (scope.sql) { conds.push(scope.sql); params.push(...scope.params) }
-  const where = conds.join(' AND ')
+  params.push(...scope.params)
+  const where = conds.join(' AND ') + scope.sql
   const joins = 'LEFT JOIN sale_orders so ON so.id = ro.sale_order_id'
   const [[{ total }]] = await pool.query(`SELECT COUNT(*) AS total FROM refund_orders ro ${joins} WHERE ${where}`, params)
   const [rows] = await pool.query(

@@ -55,7 +55,7 @@ function AdjustmentListPage() {
                 <PdaOverviewText>{t.customerName ?? '未知客户'}</PdaOverviewText>
                 <p className="text-sm text-muted-foreground mt-0.5">{t.warehouseName}</p>
               </div>
-              <span className="shrink-0 rounded-full bg-orange-100 text-orange-700 text-xs font-bold px-2.5 py-1">
+              <span className="shrink-0 rounded-full bg-warning/10 text-warning-ink text-xs font-bold px-2.5 py-1">
                 待归还 {t.containerReturnsRemaining}{t.packageVoidsRemaining > 0 ? ` · 待拆箱 ${t.packageVoidsRemaining}` : ''}
               </span>
             </div>
@@ -264,12 +264,12 @@ function AdjustmentDetailPage({ adjustmentId }: { adjustmentId: number }) {
           onDismissError={() => voidAction.clearError()}
         />
 
-        <div className={`rounded-2xl border-2 px-4 py-3 text-center transition-all ${
-          scanning ? 'border-yellow-400 bg-yellow-50' :
-          step === 'scan' ? 'border-primary/30 bg-primary/5' : 'border-green-400/30 bg-green-50'
+        <div className={`rounded-2xl border-2 px-4 py-3 text-center transition-all motion-reduce:transition-none ${
+          scanning ? 'border-warning/30 bg-warning/10' :
+          step === 'scan' ? 'border-primary/30 bg-primary/5' : 'border-success/30 bg-success/10'
         }`}>
           <p className="text-sm font-semibold text-foreground">
-            {scanning ? <span className="inline-flex items-center gap-1"><Loader2 className="h-3.5 w-3.5 animate-spin" />处理中…</span> :
+            {scanning ? <span className="inline-flex items-center gap-1"><Loader2 className="h-3.5 w-3.5 motion-safe:animate-spin" />处理中…</span> :
              step === 'scan' ? '扫描待拆箱的箱子条码，或待归还的库存条码' :
              `扫描原库位条码确认放回：${target?.suggestedLocationCode ?? ''}`}
           </p>
@@ -287,7 +287,7 @@ function AdjustmentDetailPage({ adjustmentId }: { adjustmentId: number }) {
                 <div><p className="text-xs text-muted-foreground">条码</p><p className="font-semibold min-w-0 whitespace-normal [overflow-wrap:anywhere]">{target.barcode}</p></div>
                 <div><p className="text-xs text-muted-foreground">数量</p><p className="font-bold text-primary">{target.qty}</p></div>
               </div>
-              <button className="text-xs text-muted-foreground hover:text-foreground"
+              <button className="min-h-11 rounded-md px-2 text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 onClick={() => { setStep('scan'); setTarget(null) }}
               >← 取消，重新扫描</button>
             </div>
@@ -297,7 +297,7 @@ function AdjustmentDetailPage({ adjustmentId }: { adjustmentId: number }) {
         <div>
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">待归还库存条码（{pendingReturns.length}）</p>
           {pendingReturns.length === 0 && pendingVoids.length === 0 && (
-            <PdaEmptyCard icon={<CircleCheck className="h-12 w-12 text-green-600" />} title="已全部处理完成" description="系统将自动应用本次改单" />
+            <PdaEmptyCard icon={<CircleCheck className="h-12 w-12 text-success-ink" />} title="已全部处理完成" description="系统将自动应用本次改单" />
           )}
           <div className="space-y-2">
             {pendingReturns.map(r => (

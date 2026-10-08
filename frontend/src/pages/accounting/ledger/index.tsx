@@ -140,10 +140,10 @@ export default function LedgerPage() {
                 <td className="px-3 py-2" colSpan={2}>合计</td>
                 <td className={cn('border-l border-border/40 px-3 py-2 text-right tabular-nums')}>{m(t.openingDebit)}</td>
                 <td className="px-3 py-2 text-right tabular-nums">{m(t.openingCredit)}</td>
-                <td className={cn('border-l border-border/40 px-3 py-2 text-right tabular-nums', t.periodDebit !== t.periodCredit && 'text-destructive')}>{m(t.periodDebit)}</td>
-                <td className={cn('px-3 py-2 text-right tabular-nums', t.periodDebit !== t.periodCredit && 'text-destructive')}>{m(t.periodCredit)}</td>
-                <td className={cn('border-l border-border/40 px-3 py-2 text-right tabular-nums', t.closingDebit !== t.closingCredit && 'text-destructive')}>{m(t.closingDebit)}</td>
-                <td className={cn('px-3 py-2 text-right tabular-nums', t.closingDebit !== t.closingCredit && 'text-destructive')}>{m(t.closingCredit)}</td>
+                <td className={cn('border-l border-border/40 px-3 py-2 text-right tabular-nums', t.periodDebit !== t.periodCredit && 'text-destructive-ink')}>{m(t.periodDebit)}</td>
+                <td className={cn('px-3 py-2 text-right tabular-nums', t.periodDebit !== t.periodCredit && 'text-destructive-ink')}>{m(t.periodCredit)}</td>
+                <td className={cn('border-l border-border/40 px-3 py-2 text-right tabular-nums', t.closingDebit !== t.closingCredit && 'text-destructive-ink')}>{m(t.closingDebit)}</td>
+                <td className={cn('px-3 py-2 text-right tabular-nums', t.closingDebit !== t.closingCredit && 'text-destructive-ink')}>{m(t.closingCredit)}</td>
               </tr>
             </tfoot>
           )}

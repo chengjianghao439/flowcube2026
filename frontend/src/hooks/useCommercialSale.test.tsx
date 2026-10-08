@@ -279,7 +279,10 @@ test('two mounted tabs own separate original operations; lateA success cannot fi
       await pa
     })
     expect(controls.B.pending?.operation?.id).toBe(81)
-    expect(controls.B.pending?.operation?.body.expectedRevision).toBe(7)
+    const pendingOperation = controls.B.pending?.operation
+    expect(pendingOperation?.action).toBe('update')
+    if (pendingOperation?.action !== 'update') throw new Error('fixture requires the original update operation')
+    expect(pendingOperation.body.expectedRevision).toBe(7)
   } finally {
     act(() => root.unmount())
     host.remove()

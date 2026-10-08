@@ -1,0 +1,3590 @@
+{
+  "sourceCommit": "66fa87e4a0c440270189693480673c69320bce85",
+  "sourceSnapshot": "f1fc22b9a7464df4e926cbfcd624b9f9aa78e7e81c67a80e51d14b717f141ac3",
+  "evidenceBoundary": "本文件包含静态覆盖地图与按具体路径/条件登记的审查证据。route、import、JSX、共享组件能力、截图捕获或测试文件存在均不能证明 GUI/业务/权限/真机/打印验收。所有新记录未查看、未执行；入口总览、人工细看、交互和状态验证分别记录，不能相互代替。",
+  "routes": [
+    {
+      "route": "/credit-overrides",
+      "path": "/credit-overrides",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/credit-overrides/index.tsx",
+      "rendererSource": "frontend/src/pages/credit-overrides/index.tsx",
+      "category": "销售",
+      "routeKey": "/credit-overrides",
+      "page": "超额放行申请",
+      "permission": "PERMISSIONS.SALE_CREDIT_OVERRIDE_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "销售",
+          "section": "销售作业",
+          "order": 25
+        },
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/returns/sale",
+      "path": "/returns/sale",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/returns/index.tsx",
+      "rendererSource": "frontend/src/pages/returns/index.tsx",
+      "category": "销售",
+      "routeKey": "/returns/sale",
+      "page": "销售退货",
+      "permission": "PERMISSIONS.RETURN_ORDER_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "销售",
+          "section": "销售作业",
+          "order": 20
+        },
+        "dailyWork": []
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "已执行记录中的限定交互；未等同于业务提交或全页面验收"
+    },
+    {
+      "route": "/returns/sale/:id",
+      "path": null,
+      "pattern": "/^\\/returns\\/sale\\/\\d+$/",
+      "kind": "dynamic",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/returns/sale/form/index.tsx",
+      "rendererSource": "frontend/src/pages/returns/sale/form/index.tsx",
+      "category": "销售",
+      "routeKey": "/returns/sale/:id",
+      "page": "销售退货单 #<id>",
+      "permission": "PERMISSIONS.RETURN_ORDER_VIEW",
+      "navigation": {
+        "hidden": true,
+        "mode": "无顶栏注册；按钮/来源跳转/直达",
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/returns/sale/new",
+      "path": "/returns/sale/new",
+      "pattern": "/^\\/returns\\/sale\\/new$/",
+      "kind": "new",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/returns/sale/form/index.tsx",
+      "rendererSource": "frontend/src/pages/returns/sale/form/index.tsx",
+      "category": "销售",
+      "routeKey": "/returns/sale/new",
+      "page": "新建销售退货单",
+      "permission": "PERMISSIONS.RETURN_ORDER_CREATE",
+      "navigation": {
+        "hidden": true,
+        "mode": "无顶栏注册；按钮/来源跳转/直达",
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/sale",
+      "path": "/sale",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [
+        "/sales"
+      ],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/sale/index.tsx",
+      "rendererSource": "frontend/src/pages/sale/index.tsx",
+      "category": "销售",
+      "routeKey": "/sale",
+      "page": "销售订单",
+      "permission": "PERMISSIONS.SALE_ORDER_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "销售",
+          "section": "销售作业",
+          "order": 10
+        },
+        "dailyWork": [
+          "采购与销售"
+        ]
+      },
+      "actualView": "已实际查看并操作本轮合成状态；完整界限见sale-entry-recovery.md",
+      "verification": "本轮指定合成状态与保存/重开通过；未代表全部状态或业务执行"
+    },
+    {
+      "route": "/sale/:id",
+      "path": null,
+      "pattern": "/^\\/sale\\/\\d+$/",
+      "kind": "dynamic",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/sale/form/index.tsx",
+      "rendererSource": "frontend/src/pages/sale/form/index.tsx",
+      "category": "销售",
+      "routeKey": "/sale/:id",
+      "page": "销售单 #<id>",
+      "permission": "PERMISSIONS.SALE_ORDER_VIEW",
+      "navigation": {
+        "hidden": true,
+        "mode": "无顶栏注册；按钮/来源跳转/直达",
+        "dailyWork": []
+      },
+      "actualView": "已实际查看并操作本轮合成状态；完整界限见sale-entry-recovery.md",
+      "verification": "本轮指定合成状态与保存/重开通过；未代表全部状态或业务执行"
+    },
+    {
+      "route": "/sale/create-recovery",
+      "path": "/sale/create-recovery",
+      "pattern": null,
+      "kind": "authentication",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/sale/RepeatSaleRecoveryPage.tsx",
+      "rendererSource": "frontend/src/pages/sale/RepeatSaleRecoveryPage.tsx",
+      "category": "销售",
+      "routeKey": "/sale/create-recovery",
+      "page": "开单结果核对",
+      "permission": "登录认证",
+      "navigation": {
+        "hidden": true,
+        "mode": "无顶栏注册；按钮/来源跳转/直达",
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/sale/new",
+      "path": "/sale/new",
+      "pattern": "/^\\/sale\\/new$/",
+      "kind": "new",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/sale/form/index.tsx",
+      "rendererSource": "frontend/src/pages/sale/form/index.tsx",
+      "category": "销售",
+      "routeKey": "/sale/new",
+      "page": "新建销售单",
+      "permission": "PERMISSIONS.SALE_ORDER_CREATE",
+      "navigation": {
+        "hidden": true,
+        "mode": "无顶栏注册；按钮/来源跳转/直达",
+        "dailyWork": []
+      },
+      "actualView": "已实际查看并操作本轮合成状态；完整界限见sale-entry-recovery.md",
+      "verification": "本轮指定合成状态与保存/重开通过；未代表全部状态或业务执行"
+    },
+    {
+      "route": "/sale/new-kit",
+      "path": "/sale/new-kit",
+      "pattern": null,
+      "kind": "new",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/sale/form/index.tsx",
+      "rendererSource": "frontend/src/pages/sale/form/index.tsx",
+      "category": "销售",
+      "routeKey": "/sale/new-kit",
+      "page": "新建套销售",
+      "permission": "PERMISSIONS.SALE_ORDER_CREATE",
+      "navigation": {
+        "hidden": true,
+        "mode": "无顶栏注册；按钮/来源跳转/直达",
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/sales",
+      "path": "/sales",
+      "pattern": null,
+      "kind": "alias",
+      "aliases": [],
+      "aliasTarget": "/sale",
+      "source": "frontend/src/pages/sale/index.tsx",
+      "rendererSource": "frontend/src/pages/sale/index.tsx",
+      "category": "销售",
+      "routeKey": "/sale",
+      "page": "旧地址 → /sale",
+      "permission": "PERMISSIONS.SALE_ORDER_VIEW",
+      "navigation": {
+        "hidden": true,
+        "mode": "旧地址兼容跳转"
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/procurement",
+      "path": "/procurement",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/procurement/index.tsx",
+      "rendererSource": "frontend/src/components/shared/MergedPage.tsx",
+      "category": "采购",
+      "routeKey": "/procurement",
+      "page": "采购建议",
+      "permission": "PERMISSIONS.PROCUREMENT_PLAN_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "采购",
+          "section": "采购作业",
+          "order": 6
+        },
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/procurement/:id",
+      "path": null,
+      "pattern": "/^\\/procurement\\/\\d+$/",
+      "kind": "dynamic",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/procurement/detail.tsx",
+      "rendererSource": "frontend/src/pages/procurement/detail.tsx",
+      "category": "采购",
+      "routeKey": "/procurement/:id",
+      "page": "采购计划 #<id>",
+      "permission": "PERMISSIONS.PROCUREMENT_PLAN_VIEW",
+      "navigation": {
+        "hidden": true,
+        "mode": "无顶栏注册；按钮/来源跳转/直达",
+        "dailyWork": []
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "已执行记录中的限定交互；未等同于业务提交或全页面验收"
+    },
+    {
+      "route": "/purchase",
+      "path": "/purchase",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/purchase/index.tsx",
+      "rendererSource": "frontend/src/pages/purchase/index.tsx",
+      "category": "采购",
+      "routeKey": "/purchase",
+      "page": "采购订单",
+      "permission": "PERMISSIONS.PURCHASE_ORDER_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "采购",
+          "section": "采购作业",
+          "order": 10
+        },
+        "dailyWork": [
+          "采购与销售"
+        ]
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "已执行记录中的限定交互；未等同于业务提交或全页面验收"
+    },
+    {
+      "route": "/purchase-requisitions",
+      "path": "/purchase-requisitions",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/purchase-requisitions/index.tsx",
+      "rendererSource": "frontend/src/pages/purchase-requisitions/index.tsx",
+      "category": "采购",
+      "routeKey": "/purchase-requisitions",
+      "page": "采购申请",
+      "permission": "PERMISSIONS.PURCHASE_REQUISITION_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "采购",
+          "section": "采购作业",
+          "order": 5
+        },
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/purchase-requisitions/:id",
+      "path": null,
+      "pattern": "/^\\/purchase-requisitions\\/\\d+$/",
+      "kind": "dynamic",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/purchase-requisitions/form.tsx",
+      "rendererSource": "frontend/src/pages/purchase-requisitions/form.tsx",
+      "category": "采购",
+      "routeKey": "/purchase-requisitions/:id",
+      "page": "采购申请单 #<id>",
+      "permission": "PERMISSIONS.PURCHASE_REQUISITION_VIEW",
+      "navigation": {
+        "hidden": true,
+        "mode": "无顶栏注册；按钮/来源跳转/直达",
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/purchase-requisitions/new",
+      "path": "/purchase-requisitions/new",
+      "pattern": "/^\\/purchase-requisitions\\/new$/",
+      "kind": "new",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/purchase-requisitions/form.tsx",
+      "rendererSource": "frontend/src/pages/purchase-requisitions/form.tsx",
+      "category": "采购",
+      "routeKey": "/purchase-requisitions/new",
+      "page": "新建采购申请单",
+      "permission": "PERMISSIONS.PURCHASE_REQUISITION_CREATE",
+      "navigation": {
+        "hidden": true,
+        "mode": "无顶栏注册；按钮/来源跳转/直达",
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/purchase/:id",
+      "path": null,
+      "pattern": "/^\\/purchase\\/\\d+$/",
+      "kind": "dynamic",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/purchase/form/index.tsx",
+      "rendererSource": "frontend/src/pages/purchase/form/index.tsx",
+      "category": "采购",
+      "routeKey": "/purchase/:id",
+      "page": "采购订单 #<id>",
+      "permission": "PERMISSIONS.PURCHASE_ORDER_VIEW",
+      "navigation": {
+        "hidden": true,
+        "mode": "无顶栏注册；按钮/来源跳转/直达",
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/purchase/new",
+      "path": "/purchase/new",
+      "pattern": "/^\\/purchase\\/new$/",
+      "kind": "new",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/purchase/form/index.tsx",
+      "rendererSource": "frontend/src/pages/purchase/form/index.tsx",
+      "category": "采购",
+      "routeKey": "/purchase/new",
+      "page": "新建采购单",
+      "permission": "PERMISSIONS.PURCHASE_ORDER_CREATE",
+      "navigation": {
+        "hidden": true,
+        "mode": "无顶栏注册；按钮/来源跳转/直达",
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/reports/replenishment",
+      "path": "/reports/replenishment",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/reports/replenishment.tsx",
+      "rendererSource": "frontend/src/components/shared/MergedPage.tsx",
+      "category": "采购",
+      "routeKey": "/procurement",
+      "page": "采购建议",
+      "permission": "PERMISSIONS.REPORT_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "合并工作区子视图（顶栏组项去重）",
+        "declaration": {
+          "kind": "menu",
+          "group": "采购",
+          "section": "采购作业",
+          "order": 6
+        },
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/returns",
+      "path": "/returns",
+      "pattern": null,
+      "kind": "alias",
+      "aliases": [],
+      "aliasTarget": "/returns/purchase",
+      "source": "frontend/src/pages/returns/index.tsx",
+      "rendererSource": "frontend/src/pages/returns/index.tsx",
+      "category": "采购",
+      "routeKey": "/returns/purchase",
+      "page": "旧地址 → /returns/purchase",
+      "permission": "PERMISSIONS.RETURN_ORDER_VIEW",
+      "navigation": {
+        "hidden": true,
+        "mode": "旧地址兼容跳转"
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/returns/purchase",
+      "path": "/returns/purchase",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [
+        "/returns"
+      ],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/returns/index.tsx",
+      "rendererSource": "frontend/src/pages/returns/index.tsx",
+      "category": "采购",
+      "routeKey": "/returns/purchase",
+      "page": "采购退货",
+      "permission": "PERMISSIONS.RETURN_ORDER_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "采购",
+          "section": "采购作业",
+          "order": 30
+        },
+        "dailyWork": []
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "已执行记录中的限定交互；未等同于业务提交或全页面验收"
+    },
+    {
+      "route": "/returns/purchase/:id",
+      "path": null,
+      "pattern": "/^\\/returns\\/purchase\\/\\d+$/",
+      "kind": "dynamic",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/returns/purchase/form/index.tsx",
+      "rendererSource": "frontend/src/pages/returns/purchase/form/index.tsx",
+      "category": "采购",
+      "routeKey": "/returns/purchase/:id",
+      "page": "采购退货单 #<id>",
+      "permission": "PERMISSIONS.RETURN_ORDER_VIEW",
+      "navigation": {
+        "hidden": true,
+        "mode": "无顶栏注册；按钮/来源跳转/直达",
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/returns/purchase/new",
+      "path": "/returns/purchase/new",
+      "pattern": "/^\\/returns\\/purchase\\/new$/",
+      "kind": "new",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/returns/purchase/form/index.tsx",
+      "rendererSource": "frontend/src/pages/returns/purchase/form/index.tsx",
+      "category": "采购",
+      "routeKey": "/returns/purchase/new",
+      "page": "新建采购退货单",
+      "permission": "PERMISSIONS.RETURN_ORDER_CREATE",
+      "navigation": {
+        "hidden": true,
+        "mode": "无顶栏注册；按钮/来源跳转/直达",
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/disposals",
+      "path": "/disposals",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/disposal/index.tsx",
+      "rendererSource": "frontend/src/pages/disposal/index.tsx",
+      "category": "库存仓储",
+      "routeKey": "/disposals",
+      "page": "滞销库存处理",
+      "permission": "PERMISSIONS.INVENTORY_DISPOSAL_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "库存",
+          "section": "库存作业",
+          "order": 32
+        },
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/disposals/new",
+      "path": "/disposals/new",
+      "pattern": null,
+      "kind": "new",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/disposal/HandlingScrapPage.tsx",
+      "rendererSource": "frontend/src/pages/disposal/HandlingScrapPage.tsx",
+      "category": "库存仓储",
+      "routeKey": "/disposals/new",
+      "page": "来源报废草稿",
+      "permission": "PERMISSIONS.INVENTORY_DISPOSAL_CREATE",
+      "navigation": {
+        "hidden": true,
+        "mode": "无顶栏注册；按钮/来源跳转/直达",
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/disposals/recovery",
+      "path": "/disposals/recovery",
+      "pattern": null,
+      "kind": "authentication",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/disposal/DisposalRecoveryPage.tsx",
+      "rendererSource": "frontend/src/pages/disposal/DisposalRecoveryPage.tsx",
+      "category": "库存仓储",
+      "routeKey": "/disposals/recovery",
+      "page": "报废结果核对",
+      "permission": "登录认证",
+      "navigation": {
+        "hidden": true,
+        "mode": "无顶栏注册；按钮/来源跳转/直达",
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/inbound-tasks",
+      "path": "/inbound-tasks",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/inbound-tasks/index.tsx",
+      "rendererSource": "frontend/src/pages/inbound-tasks/index.tsx",
+      "category": "库存仓储",
+      "routeKey": "/inbound-tasks",
+      "page": "收货订单",
+      "permission": "PERMISSIONS.INBOUND_ORDER_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "采购",
+          "section": "采购作业",
+          "order": 20
+        },
+        "dailyWork": [
+          "仓库作业"
+        ]
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "已执行记录中的限定交互；未等同于业务提交或全页面验收"
+    },
+    {
+      "route": "/inbound-tasks/:id",
+      "path": null,
+      "pattern": "/^\\/inbound-tasks\\/\\d+$/",
+      "kind": "dynamic",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/inbound-tasks/detail.tsx",
+      "rendererSource": "frontend/src/pages/inbound-tasks/detail.tsx",
+      "category": "库存仓储",
+      "routeKey": "/inbound-tasks/:id",
+      "page": "收货订单 #<id>",
+      "permission": "PERMISSIONS.INBOUND_ORDER_VIEW",
+      "navigation": {
+        "hidden": true,
+        "mode": "无顶栏注册；按钮/来源跳转/直达",
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/inbound-tasks/new",
+      "path": "/inbound-tasks/new",
+      "pattern": "/^\\/inbound-tasks\\/new$/",
+      "kind": "new",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/inbound-tasks/create.tsx",
+      "rendererSource": "frontend/src/pages/inbound-tasks/create.tsx",
+      "category": "库存仓储",
+      "routeKey": "/inbound-tasks/new",
+      "page": "新建收货订单",
+      "permission": "PERMISSIONS.INBOUND_ORDER_VIEW",
+      "navigation": {
+        "hidden": true,
+        "mode": "无顶栏注册；按钮/来源跳转/直达",
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/inventory",
+      "path": "/inventory",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [
+        "/inventory/overview"
+      ],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/inventory/index.tsx",
+      "rendererSource": "frontend/src/pages/inventory/index.tsx",
+      "category": "库存仓储",
+      "routeKey": "/inventory",
+      "page": "库存管理",
+      "permission": "PERMISSIONS.INVENTORY_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "库存",
+          "section": "库存查询",
+          "order": 10
+        },
+        "dailyWork": [
+          "仓库作业"
+        ]
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "已执行记录中的限定交互；未等同于业务提交或全页面验收"
+    },
+    {
+      "route": "/inventory/overview",
+      "path": "/inventory/overview",
+      "pattern": null,
+      "kind": "alias",
+      "aliases": [],
+      "aliasTarget": "/inventory",
+      "source": "frontend/src/pages/inventory/index.tsx",
+      "rendererSource": "frontend/src/pages/inventory/index.tsx",
+      "category": "库存仓储",
+      "routeKey": "/inventory",
+      "page": "旧地址 → /inventory",
+      "permission": "PERMISSIONS.INVENTORY_VIEW",
+      "navigation": {
+        "hidden": true,
+        "mode": "旧地址兼容跳转"
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/inventory/trace",
+      "path": "/inventory/trace",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/inventory/trace.tsx",
+      "rendererSource": "frontend/src/pages/inventory/trace.tsx",
+      "category": "库存仓储",
+      "routeKey": "/inventory/trace",
+      "page": "批次追溯",
+      "permission": "PERMISSIONS.INVENTORY_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "库存",
+          "section": "库存查询",
+          "order": 25
+        },
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/locations",
+      "path": "/locations",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/locations/index.tsx",
+      "rendererSource": "frontend/src/pages/warehouse-structure/index.tsx",
+      "category": "库存仓储",
+      "routeKey": "/locations",
+      "page": "库位管理",
+      "permission": "PERMISSIONS.LOCATION_VIEW",
+      "navigation": {
+        "hidden": true,
+        "mode": "无顶栏注册；按钮/来源跳转/直达",
+        "dailyWork": []
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "已执行记录中的限定交互；未等同于业务提交或全页面验收"
+    },
+    {
+      "route": "/picking-waves",
+      "path": "/picking-waves",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/picking-waves/index.tsx",
+      "rendererSource": "frontend/src/pages/picking-waves/index.tsx",
+      "category": "库存仓储",
+      "routeKey": "/picking-waves",
+      "page": "批次拣货",
+      "permission": "PERMISSIONS.PICKING_WAVE_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "仓储",
+          "section": "现场作业",
+          "order": 10
+        },
+        "dailyWork": [
+          "仓库作业"
+        ]
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/plastic-boxes",
+      "path": "/plastic-boxes",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/plastic-boxes/index.tsx",
+      "rendererSource": "frontend/src/pages/plastic-boxes/index.tsx",
+      "category": "库存仓储",
+      "routeKey": "/plastic-boxes",
+      "page": "塑料盒管理",
+      "permission": "PERMISSIONS.INVENTORY_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "库存",
+          "section": "库存查询",
+          "order": 20
+        },
+        "dailyWork": []
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "已执行记录中的限定交互；未等同于业务提交或全页面验收"
+    },
+    {
+      "route": "/racks",
+      "path": "/racks",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/racks/index.tsx",
+      "rendererSource": "frontend/src/pages/warehouse-structure/index.tsx",
+      "category": "库存仓储",
+      "routeKey": "/racks",
+      "page": "货架管理",
+      "permission": "PERMISSIONS.RACK_VIEW",
+      "navigation": {
+        "hidden": true,
+        "mode": "无顶栏注册；按钮/来源跳转/直达",
+        "dailyWork": []
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "已执行记录中的限定交互；未等同于业务提交或全页面验收"
+    },
+    {
+      "route": "/reports/inventory-aging",
+      "path": "/reports/inventory-aging",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/reports/inventory-aging.tsx",
+      "rendererSource": "frontend/src/pages/reports/inventory-aging.tsx",
+      "category": "库存仓储",
+      "routeKey": "/reports/inventory-aging",
+      "page": "存放时长与滞销",
+      "permission": "PERMISSIONS.REPORT_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "报表",
+          "section": "经营分析",
+          "order": 27
+        },
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/reports/pda-anomaly",
+      "path": "/reports/pda-anomaly",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/reports/pda-anomaly.tsx",
+      "rendererSource": "frontend/src/components/shared/MergedPage.tsx",
+      "category": "库存仓储",
+      "routeKey": "/reports/warehouse-ops",
+      "page": "仓库运营",
+      "permission": "PERMISSIONS.REPORT_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "合并工作区子视图（顶栏组项去重）",
+        "declaration": {
+          "kind": "menu",
+          "group": "报表",
+          "section": "仓储绩效",
+          "order": 50
+        },
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/reports/warehouse-ops",
+      "path": "/reports/warehouse-ops",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/reports/warehouse-ops.tsx",
+      "rendererSource": "frontend/src/components/shared/MergedPage.tsx",
+      "category": "库存仓储",
+      "routeKey": "/reports/warehouse-ops",
+      "page": "仓库运营",
+      "permission": "PERMISSIONS.REPORT_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "报表",
+          "section": "仓储绩效",
+          "order": 30
+        },
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/reports/wave-performance",
+      "path": "/reports/wave-performance",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/reports/wave-performance.tsx",
+      "rendererSource": "frontend/src/components/shared/MergedPage.tsx",
+      "category": "库存仓储",
+      "routeKey": "/reports/warehouse-ops",
+      "page": "仓库运营",
+      "permission": "PERMISSIONS.REPORT_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "合并工作区子视图（顶栏组项去重）",
+        "declaration": {
+          "kind": "menu",
+          "group": "报表",
+          "section": "仓储绩效",
+          "order": 40
+        },
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/sorting-bins",
+      "path": "/sorting-bins",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/sorting-bins/index.tsx",
+      "rendererSource": "frontend/src/pages/warehouse-structure/index.tsx",
+      "category": "库存仓储",
+      "routeKey": "/sorting-bins",
+      "page": "分拣格管理",
+      "permission": "[PERMISSIONS.SORTING_BIN_VIEW, PERMISSIONS.WAREHOUSE_TASK_ASSIGN]",
+      "navigation": {
+        "hidden": true,
+        "mode": "无顶栏注册；按钮/来源跳转/直达",
+        "dailyWork": []
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "已执行记录中的限定交互；未等同于业务提交或全页面验收"
+    },
+    {
+      "route": "/stockcheck",
+      "path": "/stockcheck",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/stockcheck/index.tsx",
+      "rendererSource": "frontend/src/pages/stockcheck/index.tsx",
+      "category": "库存仓储",
+      "routeKey": "/stockcheck",
+      "page": "库存盘点",
+      "permission": "PERMISSIONS.STOCKCHECK_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "库存",
+          "section": "库存作业",
+          "order": 30
+        },
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/stockcheck/abc",
+      "path": "/stockcheck/abc",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/stockcheck/abc.tsx",
+      "rendererSource": "frontend/src/pages/stockcheck/abc.tsx",
+      "category": "库存仓储",
+      "routeKey": "/stockcheck/abc",
+      "page": "分档与盘点规则",
+      "permission": "PERMISSIONS.STOCKCHECK_ABC_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "系统",
+          "section": "系统管理",
+          "order": 35
+        },
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/transfer",
+      "path": "/transfer",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/transfer/index.tsx",
+      "rendererSource": "frontend/src/pages/transfer/index.tsx",
+      "category": "库存仓储",
+      "routeKey": "/transfer",
+      "page": "库存调拨",
+      "permission": "PERMISSIONS.TRANSFER_ORDER_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "库存",
+          "section": "库存作业",
+          "order": 40
+        },
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/transfer/:id",
+      "path": null,
+      "pattern": "/^\\/transfer\\/\\d+$/",
+      "kind": "dynamic",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/transfer/form/index.tsx",
+      "rendererSource": "frontend/src/pages/transfer/form/index.tsx",
+      "category": "库存仓储",
+      "routeKey": "/transfer/:id",
+      "page": "调拨单 #<id>",
+      "permission": "PERMISSIONS.TRANSFER_ORDER_VIEW",
+      "navigation": {
+        "hidden": true,
+        "mode": "无顶栏注册；按钮/来源跳转/直达",
+        "dailyWork": []
+      },
+      "actualView": "未查看",
+      "verification": "未执行"
+    },
+    {
+      "route": "/transfer/new",
+      "path": "/transfer/new",
+      "pattern": "/^\\/transfer\\/new$/",
+      "kind": "new",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/transfer/form/index.tsx",
+      "rendererSource": "frontend/src/pages/transfer/form/index.tsx",
+      "category": "库存仓储",
+      "routeKey": "/transfer/new",
+      "page": "新建调拨单",
+      "permission": "PERMISSIONS.TRANSFER_ORDER_CREATE",
+      "navigation": {
+        "hidden": true,
+        "mode": "无顶栏注册；按钮/来源跳转/直达",
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/warehouses",
+      "path": "/warehouses",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/warehouses/index.tsx",
+      "rendererSource": "frontend/src/pages/warehouse-structure/index.tsx",
+      "category": "库存仓储",
+      "routeKey": "/warehouses",
+      "page": "仓库管理",
+      "permission": "PERMISSIONS.WAREHOUSE_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "仓储",
+          "section": "仓库结构",
+          "order": 20
+        },
+        "dailyWork": []
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "已执行记录中的限定交互；未等同于业务提交或全页面验收"
+    },
+    {
+      "route": "/accounting/accounts",
+      "path": "/accounting/accounts",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/accounting/accounts/index.tsx",
+      "rendererSource": "frontend/src/pages/accounting/accounts/index.tsx",
+      "category": "财务会计",
+      "routeKey": "/accounting/accounts",
+      "page": "会计科目表",
+      "permission": "PERMISSIONS.ACCOUNTING_ACCOUNT_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "会计",
+          "section": "科目",
+          "order": 10
+        },
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/accounting/backfills",
+      "path": "/accounting/backfills",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/accounting/backfills/index.tsx",
+      "rendererSource": "frontend/src/pages/accounting/backfills/index.tsx",
+      "category": "财务会计",
+      "routeKey": "/accounting/backfills",
+      "page": "跨期补录审批",
+      "permission": "[PERMISSIONS.FINANCE_PERIOD_BACKFILL, PERMISSIONS.FINANCE_PERIOD_BACKFILL_APPROVE]",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "会计",
+          "section": "结账",
+          "order": 100
+        },
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/accounting/consolidation",
+      "path": "/accounting/consolidation",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/accounting/consolidation/index.tsx",
+      "rendererSource": "frontend/src/pages/accounting/consolidation/index.tsx",
+      "category": "财务会计",
+      "routeKey": "/accounting/consolidation",
+      "page": "合并报表与账套",
+      "permission": "PERMISSIONS.ACCOUNTING_LEDGER_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "系统",
+          "section": "高级会计",
+          "order": 80
+        },
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/accounting/fixed-assets",
+      "path": "/accounting/fixed-assets",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/fixed-assets/index.tsx",
+      "rendererSource": "frontend/src/pages/fixed-assets/index.tsx",
+      "category": "财务会计",
+      "routeKey": "/accounting/fixed-assets",
+      "page": "固定资产",
+      "permission": "PERMISSIONS.ACCOUNTING_LEDGER_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "系统",
+          "section": "高级会计",
+          "order": 70
+        },
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/accounting/invoices",
+      "path": "/accounting/invoices",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/accounting/invoices/index.tsx",
+      "rendererSource": "frontend/src/pages/accounting/invoices/index.tsx",
+      "category": "财务会计",
+      "routeKey": "/accounting/invoices",
+      "page": "发票管理",
+      "permission": "PERMISSIONS.INVOICE_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "会计",
+          "section": "发票税务",
+          "order": 50
+        },
+        "dailyWork": []
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "已执行记录中的限定交互；未等同于业务提交或全页面验收"
+    },
+    {
+      "route": "/accounting/ledger",
+      "path": "/accounting/ledger",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/accounting/ledger/index.tsx",
+      "rendererSource": "frontend/src/pages/accounting/ledger/index.tsx",
+      "category": "财务会计",
+      "routeKey": "/accounting/ledger",
+      "page": "总账与试算平衡",
+      "permission": "PERMISSIONS.ACCOUNTING_LEDGER_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "会计",
+          "section": "账簿报表",
+          "order": 30
+        },
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/accounting/periods",
+      "path": "/accounting/periods",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/accounting/periods/index.tsx",
+      "rendererSource": "frontend/src/pages/accounting/periods/index.tsx",
+      "category": "财务会计",
+      "routeKey": "/accounting/periods",
+      "page": "会计期间与结转",
+      "permission": "PERMISSIONS.ACCOUNTING_LEDGER_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "会计",
+          "section": "结账",
+          "order": 60
+        },
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/accounting/reports",
+      "path": "/accounting/reports",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/accounting/reports/index.tsx",
+      "rendererSource": "frontend/src/pages/accounting/reports/index.tsx",
+      "category": "财务会计",
+      "routeKey": "/accounting/reports",
+      "page": "会计报表",
+      "permission": "PERMISSIONS.ACCOUNTING_LEDGER_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "会计",
+          "section": "账簿报表",
+          "order": 40
+        },
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/accounting/tax",
+      "path": "/accounting/tax",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/accounting/tax/index.tsx",
+      "rendererSource": "frontend/src/pages/accounting/tax/index.tsx",
+      "category": "财务会计",
+      "routeKey": "/accounting/tax",
+      "page": "报税数据",
+      "permission": "PERMISSIONS.ACCOUNTING_LEDGER_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "系统",
+          "section": "高级会计",
+          "order": 90
+        },
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/accounting/vouchers",
+      "path": "/accounting/vouchers",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/accounting/vouchers/index.tsx",
+      "rendererSource": "frontend/src/pages/accounting/vouchers/index.tsx",
+      "category": "财务会计",
+      "routeKey": "/accounting/vouchers",
+      "page": "记账凭证",
+      "permission": "PERMISSIONS.ACCOUNTING_VOUCHER_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "会计",
+          "section": "凭证",
+          "order": 20
+        },
+        "dailyWork": []
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "已执行记录中的限定交互；未等同于业务提交或全页面验收"
+    },
+    {
+      "route": "/finance/accounts",
+      "path": "/finance/accounts",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/finance/accounts/index.tsx",
+      "rendererSource": "frontend/src/components/shared/MergedPage.tsx",
+      "category": "财务会计",
+      "routeKey": "/finance/dashboard",
+      "page": "资金工作区",
+      "permission": "PERMISSIONS.FINANCE_ACCOUNT_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "合并工作区子视图（顶栏组项去重）",
+        "declaration": {
+          "kind": "menu",
+          "group": "财务",
+          "section": "资金",
+          "order": 55
+        },
+        "dailyWork": []
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "已执行记录中的限定交互；未等同于业务提交或全页面验收"
+    },
+    {
+      "route": "/finance/dashboard",
+      "path": "/finance/dashboard",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/finance/dashboard/index.tsx",
+      "rendererSource": "frontend/src/components/shared/MergedPage.tsx",
+      "category": "财务会计",
+      "routeKey": "/finance/dashboard",
+      "page": "资金工作区",
+      "permission": "PERMISSIONS.FINANCE_ACCOUNT_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "财务",
+          "section": "资金",
+          "order": 50
+        },
+        "dailyWork": [
+          "财务往来"
+        ]
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "未执行"
+    },
+    {
+      "route": "/finance/expense-categories",
+      "path": "/finance/expense-categories",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/finance/expense-categories/index.tsx",
+      "rendererSource": "frontend/src/pages/finance/expense-categories/index.tsx",
+      "category": "财务会计",
+      "routeKey": "/finance/expense-categories",
+      "page": "费用类别",
+      "permission": "PERMISSIONS.FINANCE_EXPENSE_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "财务",
+          "section": "费用",
+          "order": 70
+        },
+        "dailyWork": []
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "已执行记录中的限定交互；未等同于业务提交或全页面验收"
+    },
+    {
+      "route": "/finance/expenses",
+      "path": "/finance/expenses",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/finance/expenses/index.tsx",
+      "rendererSource": "frontend/src/pages/finance/expenses/index.tsx",
+      "category": "财务会计",
+      "routeKey": "/finance/expenses",
+      "page": "费用报销",
+      "permission": "PERMISSIONS.FINANCE_EXPENSE_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "财务",
+          "section": "费用",
+          "order": 60
+        },
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/finance/transactions",
+      "path": "/finance/transactions",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/finance/transactions/index.tsx",
+      "rendererSource": "frontend/src/components/shared/MergedPage.tsx",
+      "category": "财务会计",
+      "routeKey": "/finance/dashboard",
+      "page": "资金工作区",
+      "permission": "PERMISSIONS.FINANCE_ACCOUNT_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "合并工作区子视图（顶栏组项去重）",
+        "declaration": {
+          "kind": "menu",
+          "group": "财务",
+          "section": "资金",
+          "order": 57
+        },
+        "dailyWork": []
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "已执行记录中的限定交互；未等同于业务提交或全页面验收"
+    },
+    {
+      "route": "/payments",
+      "path": "/payments",
+      "pattern": null,
+      "kind": "alias",
+      "aliases": [],
+      "aliasTarget": "/payments/payable",
+      "source": "frontend/src/components/shared/MergedPage.tsx",
+      "rendererSource": "frontend/src/components/shared/MergedPage.tsx",
+      "category": "财务会计",
+      "routeKey": "/payments/payable",
+      "page": "旧地址 → /payments/payable",
+      "permission": "PERMISSIONS.PAYMENT_VIEW",
+      "navigation": {
+        "hidden": true,
+        "mode": "旧地址兼容跳转"
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/payments/ledger/customer/:id",
+      "path": null,
+      "pattern": "/^\\/payments\\/ledger\\/(customer|supplier)\\/\\d+$/",
+      "kind": "dynamic",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/payments/party-ledger.tsx",
+      "rendererSource": "frontend/src/pages/payments/party-ledger.tsx",
+      "category": "财务会计",
+      "routeKey": "/payments/ledger/customer/:id",
+      "page": "客户往来明细 #<id>",
+      "permission": "PERMISSIONS.PAYMENT_VIEW",
+      "navigation": {
+        "hidden": true,
+        "mode": "无顶栏注册；按钮/来源跳转/直达",
+        "dailyWork": []
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "未执行"
+    },
+    {
+      "route": "/payments/ledger/supplier/:id",
+      "path": null,
+      "pattern": "/^\\/payments\\/ledger\\/(customer|supplier)\\/\\d+$/",
+      "kind": "dynamic",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/payments/party-ledger.tsx",
+      "rendererSource": "frontend/src/pages/payments/party-ledger.tsx",
+      "category": "财务会计",
+      "routeKey": "/payments/ledger/supplier/:id",
+      "page": "供应商往来明细 #<id>",
+      "permission": "PERMISSIONS.PAYMENT_VIEW",
+      "navigation": {
+        "hidden": true,
+        "mode": "无顶栏注册；按钮/来源跳转/直达",
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/payments/payable",
+      "path": "/payments/payable",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [
+        "/payments"
+      ],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/payments/payable.tsx",
+      "rendererSource": "frontend/src/components/shared/MergedPage.tsx",
+      "category": "财务会计",
+      "routeKey": "/payments/payable",
+      "page": "供应商往来",
+      "permission": "PERMISSIONS.PAYMENT_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "财务",
+          "section": "往来账款",
+          "order": 10
+        },
+        "dailyWork": [
+          "财务往来"
+        ]
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "已执行记录中的限定交互；未等同于业务提交或全页面验收"
+    },
+    {
+      "route": "/payments/receivable",
+      "path": "/payments/receivable",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/payments/receivable.tsx",
+      "rendererSource": "frontend/src/components/shared/MergedPage.tsx",
+      "category": "财务会计",
+      "routeKey": "/payments/receivable",
+      "page": "客户往来",
+      "permission": "PERMISSIONS.PAYMENT_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "财务",
+          "section": "往来账款",
+          "order": 20
+        },
+        "dailyWork": [
+          "财务往来"
+        ]
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "已执行记录中的限定交互；未等同于业务提交或全页面验收"
+    },
+    {
+      "route": "/portal/statements",
+      "path": "/portal/statements",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/portal/statements.tsx",
+      "rendererSource": "frontend/src/pages/portal/statements.tsx",
+      "category": "财务会计",
+      "routeKey": "/portal/statements",
+      "page": "客户对账单查询",
+      "permission": "PERMISSIONS.PAYMENT_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "销售",
+          "section": "对外查询",
+          "order": 50
+        },
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/refunds",
+      "path": "/refunds",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/refunds/index.tsx",
+      "rendererSource": "frontend/src/pages/refunds/index.tsx",
+      "category": "财务会计",
+      "routeKey": "/refunds",
+      "page": "退货退款单",
+      "permission": "PERMISSIONS.REFUND_ORDER_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "财务",
+          "section": "往来账款",
+          "order": 25
+        },
+        "dailyWork": []
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "已执行记录中的限定交互；未等同于业务提交或全页面验收"
+    },
+    {
+      "route": "/reports",
+      "path": "/reports",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/reports/index.tsx",
+      "rendererSource": "frontend/src/components/shared/MergedPage.tsx",
+      "category": "财务会计",
+      "routeKey": "/reports",
+      "page": "报表中心",
+      "permission": "PERMISSIONS.REPORT_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "报表",
+          "section": "经营分析",
+          "order": 10
+        },
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/reports/avg-cost-reconciliation",
+      "path": "/reports/avg-cost-reconciliation",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/reports/avg-cost-reconciliation.tsx",
+      "rendererSource": "frontend/src/pages/reports/avg-cost-reconciliation.tsx",
+      "category": "财务会计",
+      "routeKey": "/reports/avg-cost-reconciliation",
+      "page": "成本对账",
+      "permission": "PERMISSIONS.REPORT_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "报表",
+          "section": "库存分析",
+          "order": 30
+        },
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/reports/kpi",
+      "path": "/reports/kpi",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/reports/kpi.tsx",
+      "rendererSource": "frontend/src/components/shared/MergedPage.tsx",
+      "category": "财务会计",
+      "routeKey": "/reports",
+      "page": "报表中心",
+      "permission": "PERMISSIONS.REPORT_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "合并工作区子视图（顶栏组项去重）",
+        "declaration": {
+          "kind": "menu",
+          "group": "报表",
+          "section": "经营分析",
+          "order": 15
+        },
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/reports/profit-analysis",
+      "path": "/reports/profit-analysis",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/reports/profit-analysis.tsx",
+      "rendererSource": "frontend/src/components/shared/MergedPage.tsx",
+      "category": "财务会计",
+      "routeKey": "/reports",
+      "page": "报表中心",
+      "permission": "PERMISSIONS.REPORT_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "合并工作区子视图（顶栏组项去重）",
+        "declaration": {
+          "kind": "menu",
+          "group": "报表",
+          "section": "经营分析",
+          "order": 20
+        },
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/reports/reconciliation",
+      "path": "/reports/reconciliation",
+      "pattern": null,
+      "kind": "alias",
+      "aliases": [],
+      "aliasTarget": "/reports/reconciliation/payable",
+      "source": "frontend/src/components/shared/MergedPage.tsx",
+      "rendererSource": "frontend/src/components/shared/MergedPage.tsx",
+      "category": "财务会计",
+      "routeKey": "/reports/reconciliation/payable",
+      "page": "旧地址 → /reports/reconciliation/payable",
+      "permission": "PERMISSIONS.REPORT_VIEW",
+      "navigation": {
+        "hidden": true,
+        "mode": "旧地址兼容跳转"
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/reports/reconciliation/payable",
+      "path": "/reports/reconciliation/payable",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [
+        "/reports/reconciliation"
+      ],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/reports/reconciliation-payable.tsx",
+      "rendererSource": "frontend/src/components/shared/MergedPage.tsx",
+      "category": "财务会计",
+      "routeKey": "/payments/payable",
+      "page": "供应商往来",
+      "permission": "PERMISSIONS.REPORT_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "合并工作区子视图（顶栏组项去重）",
+        "declaration": {
+          "kind": "menu",
+          "group": "财务",
+          "section": "对账",
+          "order": 30
+        },
+        "dailyWork": [
+          "财务往来"
+        ]
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/reports/reconciliation/receivable",
+      "path": "/reports/reconciliation/receivable",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/reports/reconciliation-receivable.tsx",
+      "rendererSource": "frontend/src/components/shared/MergedPage.tsx",
+      "category": "财务会计",
+      "routeKey": "/payments/receivable",
+      "page": "客户往来",
+      "permission": "PERMISSIONS.REPORT_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "合并工作区子视图（顶栏组项去重）",
+        "declaration": {
+          "kind": "menu",
+          "group": "财务",
+          "section": "对账",
+          "order": 40
+        },
+        "dailyWork": [
+          "财务往来"
+        ]
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/supplier-refunds",
+      "path": "/supplier-refunds",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/supplier-refunds/index.tsx",
+      "rendererSource": "frontend/src/pages/supplier-refunds/index.tsx",
+      "category": "财务会计",
+      "routeKey": "/supplier-refunds",
+      "page": "供应商退款",
+      "permission": "PERMISSIONS.SUPPLIER_REFUND_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "财务",
+          "section": "资金往来",
+          "order": 75
+        },
+        "dailyWork": []
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "已执行记录中的限定交互；未等同于业务提交或全页面验收"
+    },
+    {
+      "route": "/supplier-refunds/new",
+      "path": "/supplier-refunds/new",
+      "pattern": null,
+      "kind": "new",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/supplier-refunds/CreateRefundPage.tsx",
+      "rendererSource": "frontend/src/pages/supplier-refunds/CreateRefundPage.tsx",
+      "category": "财务会计",
+      "routeKey": "/supplier-refunds/new",
+      "page": "供应商退款",
+      "permission": "PERMISSIONS.SUPPLIER_REFUND_CREATE",
+      "navigation": {
+        "hidden": true,
+        "mode": "无顶栏注册；按钮/来源跳转/直达",
+        "dailyWork": []
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "已执行记录中的限定交互；未等同于业务提交或全页面验收"
+    },
+    {
+      "route": "/supplier-refunds/recovery",
+      "path": "/supplier-refunds/recovery",
+      "pattern": null,
+      "kind": "authentication",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/supplier-refunds/RefundRecoveryPage.tsx",
+      "rendererSource": "frontend/src/pages/supplier-refunds/RefundRecoveryPage.tsx",
+      "category": "财务会计",
+      "routeKey": "/supplier-refunds/recovery",
+      "page": "退款结果核对",
+      "permission": "登录认证",
+      "navigation": {
+        "hidden": true,
+        "mode": "无顶栏注册；按钮/来源跳转/直达",
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/categories",
+      "path": "/categories",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/categories/index.tsx",
+      "rendererSource": "frontend/src/pages/categories/index.tsx",
+      "category": "基础资料",
+      "routeKey": "/categories",
+      "page": "商品分类",
+      "permission": "PERMISSIONS.CATEGORY_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "库存",
+          "section": "商品资料",
+          "order": 60
+        },
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/customers",
+      "path": "/customers",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/customers/index.tsx",
+      "rendererSource": "frontend/src/pages/customers/index.tsx",
+      "category": "基础资料",
+      "routeKey": "/customers",
+      "page": "客户管理",
+      "permission": "PERMISSIONS.CUSTOMER_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "销售",
+          "section": "基础资料",
+          "order": 30
+        },
+        "dailyWork": []
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "已执行记录中的限定交互；未等同于业务提交或全页面验收"
+    },
+    {
+      "route": "/kits",
+      "path": "/kits",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/kits/index.tsx",
+      "rendererSource": "frontend/src/pages/kits/index.tsx",
+      "category": "基础资料",
+      "routeKey": "/kits",
+      "page": "成套配件",
+      "permission": "PERMISSIONS.PRODUCT_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "库存",
+          "section": "商品资料",
+          "order": 55
+        },
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/price-change",
+      "path": "/price-change",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/price-change/index.tsx",
+      "rendererSource": "frontend/src/pages/price-change/index.tsx",
+      "category": "基础资料",
+      "routeKey": "/price-change",
+      "page": "商品改价申请",
+      "permission": "PERMISSIONS.PRODUCT_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "库存",
+          "section": "商品资料",
+          "order": 70
+        },
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/products",
+      "path": "/products",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/products/index.tsx",
+      "rendererSource": "frontend/src/pages/products/index.tsx",
+      "category": "基础资料",
+      "routeKey": "/products",
+      "page": "商品管理",
+      "permission": "PERMISSIONS.PRODUCT_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "库存",
+          "section": "商品资料",
+          "order": 50
+        },
+        "dailyWork": []
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "已执行记录中的限定交互；未等同于业务提交或全页面验收"
+    },
+    {
+      "route": "/products/:id",
+      "path": null,
+      "pattern": "/^\\/products\\/\\d+$/",
+      "kind": "dynamic",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/products/form.tsx",
+      "rendererSource": "frontend/src/pages/products/form.tsx",
+      "category": "基础资料",
+      "routeKey": "/products/:id",
+      "page": "编辑商品 #<id>",
+      "permission": "PERMISSIONS.PRODUCT_VIEW",
+      "navigation": {
+        "hidden": true,
+        "mode": "无顶栏注册；按钮/来源跳转/直达",
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/products/new",
+      "path": "/products/new",
+      "pattern": "/^\\/products\\/new$/",
+      "kind": "new",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/products/form.tsx",
+      "rendererSource": "frontend/src/pages/products/form.tsx",
+      "category": "基础资料",
+      "routeKey": "/products/new",
+      "page": "新增商品",
+      "permission": "PERMISSIONS.PRODUCT_CREATE",
+      "navigation": {
+        "hidden": true,
+        "mode": "无顶栏注册；按钮/来源跳转/直达",
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/suppliers",
+      "path": "/suppliers",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/suppliers/index.tsx",
+      "rendererSource": "frontend/src/pages/suppliers/index.tsx",
+      "category": "基础资料",
+      "routeKey": "/suppliers",
+      "page": "供应商管理",
+      "permission": "PERMISSIONS.SUPPLIER_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "采购",
+          "section": "基础资料",
+          "order": 40
+        },
+        "dailyWork": []
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "已执行记录中的限定交互；未等同于业务提交或全页面验收"
+    },
+    {
+      "route": "/approvals/flows",
+      "path": "/approvals/flows",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/approvals/flows.tsx",
+      "rendererSource": "frontend/src/pages/approvals/flows.tsx",
+      "category": "审批待办",
+      "routeKey": "/approvals/flows",
+      "page": "审批流配置",
+      "permission": "PERMISSIONS.APPROVAL_FLOW_MANAGE",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "系统",
+          "section": "系统设置",
+          "order": 65
+        },
+        "dailyWork": []
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "已执行记录中的限定交互；未等同于业务提交或全页面验收"
+    },
+    {
+      "route": "/approvals/pending",
+      "path": "/approvals/pending",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/approvals/pending.tsx",
+      "rendererSource": "frontend/src/pages/approvals/pending.tsx",
+      "category": "审批待办",
+      "routeKey": "/approvals/pending",
+      "page": "待我审批",
+      "permission": "PENDING_APPROVAL_PERMISSIONS",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "审批中心",
+          "order": 10
+        },
+        "dailyWork": []
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "未执行"
+    },
+    {
+      "route": "/dashboard",
+      "path": "/dashboard",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/dashboard/index.tsx",
+      "rendererSource": "frontend/src/pages/dashboard/index.tsx",
+      "category": "审批待办",
+      "routeKey": "/dashboard",
+      "page": "仪表盘",
+      "permission": "PERMISSIONS.DASHBOARD_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "link",
+          "label": "仪表盘",
+          "order": 10
+        },
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/reports/exception-workbench",
+      "path": "/reports/exception-workbench",
+      "pattern": null,
+      "kind": "alias",
+      "aliases": [],
+      "aliasTarget": "/reports/role-workbench",
+      "source": "frontend/src/pages/reports/role-workbench.tsx",
+      "rendererSource": "frontend/src/pages/reports/role-workbench.tsx",
+      "category": "审批待办",
+      "routeKey": "/reports/role-workbench",
+      "page": "旧地址 → /reports/role-workbench",
+      "permission": "PERMISSIONS.REPORT_VIEW",
+      "navigation": {
+        "hidden": true,
+        "mode": "旧地址兼容跳转"
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/reports/role-workbench",
+      "path": "/reports/role-workbench",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [
+        "/reports/exception-workbench"
+      ],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/reports/role-workbench.tsx",
+      "rendererSource": "frontend/src/pages/reports/role-workbench.tsx",
+      "category": "审批待办",
+      "routeKey": "/reports/role-workbench",
+      "page": "待办中心",
+      "permission": "PERMISSIONS.REPORT_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "link",
+          "label": "待办中心",
+          "order": 15
+        },
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/carrier-accounts",
+      "path": "/carrier-accounts",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/carrier-accounts/index.tsx",
+      "rendererSource": "frontend/src/pages/carrier-accounts/index.tsx",
+      "category": "打印物流",
+      "routeKey": "/carrier-accounts",
+      "page": "快递账号绑定",
+      "permission": "PERMISSIONS.CARRIER_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "销售",
+          "section": "基础资料",
+          "order": 41
+        },
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/carriers",
+      "path": "/carriers",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/carriers/index.tsx",
+      "rendererSource": "frontend/src/pages/carriers/index.tsx",
+      "category": "打印物流",
+      "routeKey": "/carriers",
+      "page": "承运商管理",
+      "permission": "PERMISSIONS.CARRIER_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "销售",
+          "section": "基础资料",
+          "order": 40
+        },
+        "dailyWork": []
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "已执行记录中的限定交互；未等同于业务提交或全页面验收"
+    },
+    {
+      "route": "/logistics",
+      "path": "/logistics",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/logistics/index.tsx",
+      "rendererSource": "frontend/src/pages/logistics/index.tsx",
+      "category": "打印物流",
+      "routeKey": "/logistics",
+      "page": "物流运单",
+      "permission": "PERMISSIONS.LOGISTICS_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "销售",
+          "section": "销售作业",
+          "order": 25
+        },
+        "dailyWork": [
+          "物流与打印"
+        ]
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "已执行记录中的限定交互；未等同于业务提交或全页面验收"
+    },
+    {
+      "route": "/logistics/:id",
+      "path": null,
+      "pattern": "/^\\/logistics\\/\\d+$/",
+      "kind": "dynamic",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/logistics/detail.tsx",
+      "rendererSource": "frontend/src/pages/logistics/detail.tsx",
+      "category": "打印物流",
+      "routeKey": "/logistics/:id",
+      "page": "运单 #<id>",
+      "permission": "PERMISSIONS.LOGISTICS_VIEW",
+      "navigation": {
+        "hidden": true,
+        "mode": "无顶栏注册；按钮/来源跳转/直达",
+        "dailyWork": []
+      },
+      "actualView": "未查看",
+      "verification": "未执行"
+    },
+    {
+      "route": "/logistics/freight-reconciliation",
+      "path": "/logistics/freight-reconciliation",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/logistics/freight-reconciliation.tsx",
+      "rendererSource": "frontend/src/pages/logistics/freight-reconciliation.tsx",
+      "category": "打印物流",
+      "routeKey": "/logistics/freight-reconciliation",
+      "page": "运费对账",
+      "permission": "PERMISSIONS.LOGISTICS_FREIGHT_RECONCILE",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "财务",
+          "section": "对账",
+          "order": 45
+        },
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/settings/barcode-print-query",
+      "path": "/settings/barcode-print-query",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/settings/barcode-print-query/index.tsx",
+      "rendererSource": "frontend/src/pages/settings/barcode-print-query/index.tsx",
+      "category": "打印物流",
+      "routeKey": "/settings/barcode-print-query",
+      "page": "条码打印查询",
+      "permission": "PERMISSIONS.PRINT_JOB_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "系统",
+          "section": "打印",
+          "order": 65
+        },
+        "dailyWork": [
+          "物流与打印"
+        ]
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/settings/print-templates",
+      "path": "/settings/print-templates",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/settings/print-templates/index.tsx",
+      "rendererSource": "frontend/src/pages/settings/print-templates/index.tsx",
+      "category": "打印物流",
+      "routeKey": "/settings/print-templates",
+      "page": "打印模板",
+      "permission": "PERMISSIONS.PRINT_TEMPLATE_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "系统",
+          "section": "打印",
+          "order": 55
+        },
+        "dailyWork": []
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "已执行记录中的限定交互；未等同于业务提交或全页面验收"
+    },
+    {
+      "route": "/settings/print-templates/:id",
+      "path": null,
+      "pattern": "/^\\/settings\\/print-templates\\/(new|\\d+)$/",
+      "kind": "dynamic",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/settings/print-templates/editor.tsx",
+      "rendererSource": "frontend/src/pages/settings/print-templates/editor.tsx",
+      "category": "打印物流",
+      "routeKey": "/settings/print-templates/:id",
+      "page": "编辑打印模板",
+      "permission": "PERMISSIONS.PRINT_TEMPLATE_VIEW",
+      "navigation": {
+        "hidden": true,
+        "mode": "无顶栏注册；按钮/来源跳转/直达",
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/settings/print-templates/new",
+      "path": "/settings/print-templates/new",
+      "pattern": "/^\\/settings\\/print-templates\\/(new|\\d+)$/",
+      "kind": "new",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/settings/print-templates/editor.tsx",
+      "rendererSource": "frontend/src/pages/settings/print-templates/editor.tsx",
+      "category": "打印物流",
+      "routeKey": "/settings/print-templates/new",
+      "page": "新建打印模板",
+      "permission": "PERMISSIONS.PRINT_TEMPLATE_VIEW",
+      "navigation": {
+        "hidden": true,
+        "mode": "无顶栏注册；按钮/来源跳转/直达",
+        "dailyWork": []
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "已执行记录中的限定交互；未等同于业务提交或全页面验收"
+    },
+    {
+      "route": "/settings/printers",
+      "path": "/settings/printers",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/settings/printers/index.tsx",
+      "rendererSource": "frontend/src/pages/settings/printers/index.tsx",
+      "category": "打印物流",
+      "routeKey": "/settings/printers",
+      "page": "打印机管理",
+      "permission": "PERMISSIONS.PRINT_PRINTER_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "系统",
+          "section": "打印",
+          "order": 60
+        },
+        "dailyWork": []
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "已执行记录中的限定交互；未等同于业务提交或全页面验收"
+    },
+    {
+      "route": "*",
+      "path": "*",
+      "pattern": null,
+      "kind": "fallback",
+      "aliases": [],
+      "aliasTarget": "/",
+      "source": "frontend/src/router/index.tsx",
+      "rendererSource": "frontend/src/router/index.tsx",
+      "category": "系统设置",
+      "routeKey": "/",
+      "page": "跳转 → /",
+      "permission": "游客/公开路由；见路由父守卫",
+      "navigation": {
+        "hidden": true,
+        "mode": "公开/认证/回退入口"
+      },
+      "actualView": "未查看",
+      "verification": "未执行"
+    },
+    {
+      "route": "/",
+      "path": "/",
+      "pattern": null,
+      "kind": "public",
+      "aliases": [
+        "*"
+      ],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/landing/index.tsx",
+      "rendererSource": "frontend/src/pages/landing/index.tsx",
+      "category": "系统设置",
+      "routeKey": "/",
+      "page": "官网入口",
+      "permission": "游客/公开路由；见路由父守卫",
+      "navigation": {
+        "hidden": true,
+        "mode": "公开/认证/回退入口"
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/403",
+      "path": "/403",
+      "pattern": null,
+      "kind": "public",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/403/index.tsx",
+      "rendererSource": "frontend/src/pages/403/index.tsx",
+      "category": "系统设置",
+      "routeKey": "/403",
+      "page": "无访问权限",
+      "permission": "游客/公开路由；见路由父守卫",
+      "navigation": {
+        "hidden": true,
+        "mode": "公开/认证/回退入口"
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/departments",
+      "path": "/departments",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/departments/index.tsx",
+      "rendererSource": "frontend/src/pages/departments/index.tsx",
+      "category": "系统设置",
+      "routeKey": "/departments",
+      "page": "部门管理",
+      "permission": "PERMISSIONS.DEPARTMENT_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "系统",
+          "section": "用户与权限",
+          "order": 5
+        },
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/login",
+      "path": "/login",
+      "pattern": null,
+      "kind": "public",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/login/index.tsx",
+      "rendererSource": "frontend/src/pages/login/index.tsx",
+      "category": "系统设置",
+      "routeKey": "/login",
+      "page": "系统登录",
+      "permission": "游客/公开路由；见路由父守卫",
+      "navigation": {
+        "hidden": true,
+        "mode": "公开/认证/回退入口"
+      },
+      "actualView": "真实未认证登录正常/错误/空密码禁用代表状态已查看；旧认证跳转截图保留",
+      "verification": "已执行记录中的限定交互；未等同于业务提交或全页面验收"
+    },
+    {
+      "route": "/oplogs",
+      "path": "/oplogs",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/oplogs/index.tsx",
+      "rendererSource": "frontend/src/pages/oplogs/index.tsx",
+      "category": "系统设置",
+      "routeKey": "/oplogs",
+      "page": "操作日志",
+      "permission": "PERMISSIONS.AUDIT_LOG_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "系统",
+          "section": "审计",
+          "order": 50
+        },
+        "dailyWork": []
+      },
+      "actualView": "已查看入口布局总览；未等同于表单、子表面或全状态验收",
+      "verification": "未执行"
+    },
+    {
+      "route": "/permissions",
+      "path": "/permissions",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/permissions/index.tsx",
+      "rendererSource": "frontend/src/pages/permissions/index.tsx",
+      "category": "系统设置",
+      "routeKey": "/permissions",
+      "page": "权限管理",
+      "permission": "PERMISSIONS.ROLE_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "系统",
+          "section": "用户与权限",
+          "order": 20
+        },
+        "dailyWork": []
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "已执行记录中的限定交互；未等同于业务提交或全页面验收"
+    },
+    {
+      "route": "/settings",
+      "path": "/settings",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/settings/index.tsx",
+      "rendererSource": "frontend/src/pages/settings/index.tsx",
+      "category": "系统设置",
+      "routeKey": "/settings",
+      "page": "系统设置",
+      "permission": "PERMISSIONS.SETTINGS_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "系统",
+          "section": "设备与设置",
+          "order": 40
+        },
+        "dailyWork": []
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "已执行记录中的限定交互；未等同于业务提交或全页面验收"
+    },
+    {
+      "route": "/settings/pda-devices",
+      "path": "/settings/pda-devices",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/settings/pda-devices/index.tsx",
+      "rendererSource": "frontend/src/pages/settings/pda-devices/index.tsx",
+      "category": "系统设置",
+      "routeKey": "/settings/pda-devices",
+      "page": "PDA 设备",
+      "permission": "PERMISSIONS.PDA_DEVICE_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "系统",
+          "section": "设备与设置",
+          "order": 30
+        },
+        "dailyWork": []
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "已执行记录中的限定交互；未等同于业务提交或全页面验收"
+    },
+    {
+      "route": "/users",
+      "path": "/users",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/users/index.tsx",
+      "rendererSource": "frontend/src/pages/users/index.tsx",
+      "category": "系统设置",
+      "routeKey": "/users",
+      "page": "用户管理",
+      "permission": "PERMISSIONS.USER_VIEW",
+      "navigation": {
+        "hidden": false,
+        "mode": "顶栏可见候选（按权限过滤）",
+        "declaration": {
+          "kind": "menu",
+          "group": "系统",
+          "section": "用户与权限",
+          "order": 10
+        },
+        "dailyWork": []
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "已执行记录中的限定交互；未等同于业务提交或全页面验收"
+    },
+    {
+      "route": "/pda",
+      "path": "/pda",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/pda/index.tsx",
+      "rendererSource": "frontend/src/pages/pda/index.tsx",
+      "category": "PDA",
+      "routeKey": "/pda",
+      "page": "PDA 工作台",
+      "permission": "PDA 登录、设备绑定/会话守卫",
+      "navigation": {
+        "hidden": true,
+        "mode": "PDA 子作业/条件入口/直达"
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "已执行记录中的限定交互；未等同于业务提交或全页面验收"
+    },
+    {
+      "route": "/pda/adjustments",
+      "path": "/pda/adjustments",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/pda/adjustment.tsx",
+      "rendererSource": "frontend/src/pages/pda/adjustment.tsx",
+      "category": "PDA",
+      "routeKey": "/pda/adjustments",
+      "page": "改单确认",
+      "permission": "[PERMISSIONS.WAREHOUSE_TASK_ADJUST_VIEW]",
+      "navigation": {
+        "hidden": false,
+        "mode": "PDA 常用作业（按权限过滤）",
+        "declaration": {
+          "icon": "PencilLine",
+          "label": "改单确认",
+          "path": "/pda/adjustments",
+          "perm": "PERMISSIONS.WAREHOUSE_TASK_ADJUST_VIEW",
+          "tone": "indigo"
+        }
+      },
+      "actualView": "已捕获；人工细看待核实",
+      "verification": "未执行"
+    },
+    {
+      "route": "/pda/adjustments/:id",
+      "path": null,
+      "pattern": "/pda/adjustments/:id",
+      "kind": "dynamic",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/pda/adjustment.tsx",
+      "rendererSource": "frontend/src/pages/pda/adjustment.tsx",
+      "category": "PDA",
+      "routeKey": "/pda/adjustments/:id",
+      "page": "改单确认",
+      "permission": "[PERMISSIONS.WAREHOUSE_TASK_ADJUST_VIEW, PERMISSIONS.WAREHOUSE_TASK_ADJUST]",
+      "navigation": {
+        "hidden": true,
+        "mode": "PDA 子作业/条件入口/直达"
+      },
+      "actualView": "未查看",
+      "verification": "未执行"
+    },
+    {
+      "route": "/pda/bind",
+      "path": "/pda/bind",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/pda/bind.tsx",
+      "rendererSource": "frontend/src/pages/pda/bind.tsx",
+      "category": "PDA",
+      "routeKey": "/pda/bind",
+      "page": "设备绑定",
+      "permission": "PDA 登录、设备绑定/会话守卫",
+      "navigation": {
+        "hidden": true,
+        "mode": "PDA 子作业/条件入口/直达"
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "已执行记录中的限定交互；未等同于业务提交或全页面验收"
+    },
+    {
+      "route": "/pda/cancel-return",
+      "path": "/pda/cancel-return",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/pda/cancel-return.tsx",
+      "rendererSource": "frontend/src/pages/pda/cancel-return.tsx",
+      "category": "PDA",
+      "routeKey": "/pda/cancel-return",
+      "page": "拣货退回",
+      "permission": "[PERMISSIONS.WAREHOUSE_TASK_CANCEL_RETURN_VIEW]",
+      "navigation": {
+        "hidden": false,
+        "mode": "PDA 常用作业（按权限过滤）",
+        "declaration": {
+          "icon": "Undo2",
+          "label": "拣货退回",
+          "path": "/pda/cancel-return",
+          "perm": "PERMISSIONS.WAREHOUSE_TASK_CANCEL_RETURN_VIEW",
+          "tone": "red"
+        }
+      },
+      "actualView": "已捕获；人工细看待核实",
+      "verification": "未执行"
+    },
+    {
+      "route": "/pda/cancel-return/:id",
+      "path": null,
+      "pattern": "/pda/cancel-return/:id",
+      "kind": "dynamic",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/pda/cancel-return.tsx",
+      "rendererSource": "frontend/src/pages/pda/cancel-return.tsx",
+      "category": "PDA",
+      "routeKey": "/pda/cancel-return/:id",
+      "page": "拣货退回确认",
+      "permission": "[PERMISSIONS.WAREHOUSE_TASK_CANCEL_RETURN_VIEW, PERMISSIONS.WAREHOUSE_TASK_CANCEL_RETURN]",
+      "navigation": {
+        "hidden": true,
+        "mode": "PDA 子作业/条件入口/直达"
+      },
+      "actualView": "未查看",
+      "verification": "未执行"
+    },
+    {
+      "route": "/pda/check",
+      "path": "/pda/check",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/pda/check.tsx",
+      "rendererSource": "frontend/src/pages/pda/check.tsx",
+      "category": "PDA",
+      "routeKey": "/pda/check",
+      "page": "复核作业",
+      "permission": "[PERMISSIONS.WAREHOUSE_TASK_VIEW, PERMISSIONS.WAREHOUSE_TASK_CHECK]",
+      "navigation": {
+        "hidden": false,
+        "mode": "PDA 常用作业（按权限过滤）",
+        "declaration": {
+          "icon": "ClipboardCheck",
+          "label": "复核任务",
+          "path": "/pda/check",
+          "perm": "PERMISSIONS.WAREHOUSE_TASK_CHECK",
+          "perms": [
+            "PERMISSIONS.WAREHOUSE_TASK_VIEW",
+            "PERMISSIONS.WAREHOUSE_TASK_CHECK"
+          ],
+          "tone": "green"
+        }
+      },
+      "actualView": "已捕获；人工细看待核实",
+      "verification": "未执行"
+    },
+    {
+      "route": "/pda/check/:id",
+      "path": null,
+      "pattern": "/pda/check/:id",
+      "kind": "dynamic",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/pda/check.tsx",
+      "rendererSource": "frontend/src/pages/pda/check.tsx",
+      "category": "PDA",
+      "routeKey": "/pda/check/:id",
+      "page": "复核作业",
+      "permission": "[PERMISSIONS.WAREHOUSE_TASK_VIEW, PERMISSIONS.WAREHOUSE_TASK_CHECK]",
+      "navigation": {
+        "hidden": true,
+        "mode": "PDA 子作业/条件入口/直达"
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "未执行"
+    },
+    {
+      "route": "/pda/fill",
+      "path": "/pda/fill",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/pda/fill.tsx",
+      "rendererSource": "frontend/src/pages/pda/fill.tsx",
+      "category": "PDA",
+      "routeKey": "/pda/fill",
+      "page": "塑料盒放货",
+      "permission": "[PERMISSIONS.INVENTORY_CONTAINER_SPLIT]",
+      "navigation": {
+        "hidden": true,
+        "mode": "PDA 子作业/条件入口/直达"
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "未执行"
+    },
+    {
+      "route": "/pda/inbound",
+      "path": "/pda/inbound",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/pda/inbound.tsx",
+      "rendererSource": "frontend/src/pages/pda/inbound.tsx",
+      "category": "PDA",
+      "routeKey": "/pda/inbound",
+      "page": "收货订单",
+      "permission": "[PERMISSIONS.INBOUND_ORDER_VIEW]",
+      "navigation": {
+        "hidden": false,
+        "mode": "PDA 常用作业（按权限过滤）",
+        "declaration": {
+          "icon": "Inbox",
+          "label": "收货订单",
+          "path": "/pda/inbound",
+          "perm": "PERMISSIONS.INBOUND_ORDER_VIEW",
+          "tone": "blue"
+        }
+      },
+      "actualView": "已捕获；人工细看待核实",
+      "verification": "未执行"
+    },
+    {
+      "route": "/pda/inventory-query",
+      "path": "/pda/inventory-query",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/pda/inventory-query.tsx",
+      "rendererSource": "frontend/src/pages/pda/inventory-query.tsx",
+      "category": "PDA",
+      "routeKey": "/pda/inventory-query",
+      "page": "库存查询",
+      "permission": "[PERMISSIONS.INVENTORY_VIEW]",
+      "navigation": {
+        "hidden": false,
+        "mode": "PDA 更多功能（按权限过滤）",
+        "declaration": {
+          "icon": "Search",
+          "label": "库存查询",
+          "path": "/pda/inventory-query",
+          "perm": "PERMISSIONS.INVENTORY_VIEW",
+          "tone": "teal",
+          "more": true
+        }
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "已执行记录中的限定交互；未等同于业务提交或全页面验收"
+    },
+    {
+      "route": "/pda/login",
+      "path": "/pda/login",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/pda/login.tsx",
+      "rendererSource": "frontend/src/pages/pda/login.tsx",
+      "category": "PDA",
+      "routeKey": "/pda/login",
+      "page": "PDA 登录",
+      "permission": "游客；设备缓存水合闸门",
+      "navigation": {
+        "hidden": true,
+        "mode": "PDA 子作业/条件入口/直达"
+      },
+      "actualView": "未查看",
+      "verification": "未执行"
+    },
+    {
+      "route": "/pda/pack",
+      "path": "/pda/pack",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/pda/pack.tsx",
+      "rendererSource": "frontend/src/pages/pda/pack.tsx",
+      "category": "PDA",
+      "routeKey": "/pda/pack",
+      "page": "打包作业",
+      "permission": "[PERMISSIONS.WAREHOUSE_TASK_VIEW, PERMISSIONS.WAREHOUSE_TASK_PACK]",
+      "navigation": {
+        "hidden": false,
+        "mode": "PDA 常用作业（按权限过滤）",
+        "declaration": {
+          "icon": "Package",
+          "label": "打包作业",
+          "path": "/pda/pack",
+          "perm": "PERMISSIONS.WAREHOUSE_TASK_PACK",
+          "perms": [
+            "PERMISSIONS.WAREHOUSE_TASK_VIEW",
+            "PERMISSIONS.WAREHOUSE_TASK_PACK"
+          ],
+          "tone": "blue"
+        }
+      },
+      "actualView": "已捕获；人工细看待核实",
+      "verification": "未执行"
+    },
+    {
+      "route": "/pda/pack/:id",
+      "path": null,
+      "pattern": "/pda/pack/:id",
+      "kind": "dynamic",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/pda/pack.tsx",
+      "rendererSource": "frontend/src/pages/pda/pack.tsx",
+      "category": "PDA",
+      "routeKey": "/pda/pack/:id",
+      "page": "打包作业",
+      "permission": "[PERMISSIONS.WAREHOUSE_TASK_VIEW, PERMISSIONS.WAREHOUSE_TASK_PACK]",
+      "navigation": {
+        "hidden": true,
+        "mode": "PDA 子作业/条件入口/直达"
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "未执行"
+    },
+    {
+      "route": "/pda/picking",
+      "path": "/pda/picking",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/pda/picking.tsx",
+      "rendererSource": "frontend/src/pages/pda/picking.tsx",
+      "category": "PDA",
+      "routeKey": "/pda/picking",
+      "page": "拣货任务",
+      "permission": "[PERMISSIONS.WAREHOUSE_TASK_VIEW, PERMISSIONS.WAREHOUSE_TASK_PICK]",
+      "navigation": {
+        "hidden": false,
+        "mode": "PDA 常用作业（按权限过滤）",
+        "declaration": {
+          "icon": "ClipboardList",
+          "label": "拣货任务",
+          "path": "/pda/picking",
+          "perm": "PERMISSIONS.WAREHOUSE_TASK_PICK",
+          "perms": [
+            "PERMISSIONS.WAREHOUSE_TASK_VIEW",
+            "PERMISSIONS.WAREHOUSE_TASK_PICK"
+          ],
+          "tone": "indigo"
+        }
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "未执行"
+    },
+    {
+      "route": "/pda/plastic-box",
+      "path": "/pda/plastic-box",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/pda/plastic-box.tsx",
+      "rendererSource": "frontend/src/pages/pda/plastic-box.tsx",
+      "category": "PDA",
+      "routeKey": "/pda/plastic-box",
+      "page": "塑料盒作业",
+      "permission": "[PERMISSIONS.INVENTORY_CONTAINER_SPLIT]",
+      "navigation": {
+        "hidden": false,
+        "mode": "PDA 更多功能（按权限过滤）",
+        "declaration": {
+          "icon": "Scissors",
+          "label": "塑料盒作业",
+          "path": "/pda/plastic-box",
+          "perm": "PERMISSIONS.INVENTORY_CONTAINER_SPLIT",
+          "tone": "cyan",
+          "more": true
+        }
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "未执行"
+    },
+    {
+      "route": "/pda/putaway",
+      "path": "/pda/putaway",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/pda/putaway.tsx",
+      "rendererSource": "frontend/src/pages/pda/putaway.tsx",
+      "category": "PDA",
+      "routeKey": "/pda/putaway",
+      "page": "扫码上架",
+      "permission": "[PERMISSIONS.INBOUND_ORDER_VIEW, PERMISSIONS.INBOUND_PUTAWAY_EXECUTE]",
+      "navigation": {
+        "hidden": false,
+        "mode": "PDA 常用作业（按权限过滤）",
+        "declaration": {
+          "icon": "ArrowUpFromLine",
+          "label": "扫码上架",
+          "path": "/pda/putaway",
+          "perm": "PERMISSIONS.INBOUND_PUTAWAY_EXECUTE",
+          "perms": [
+            "PERMISSIONS.INBOUND_ORDER_VIEW",
+            "PERMISSIONS.INBOUND_PUTAWAY_EXECUTE"
+          ],
+          "tone": "teal"
+        }
+      },
+      "actualView": "已捕获；人工细看待核实",
+      "verification": "未执行"
+    },
+    {
+      "route": "/pda/putaway/:id",
+      "path": null,
+      "pattern": "/pda/putaway/:id",
+      "kind": "dynamic",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/pda/putaway.tsx",
+      "rendererSource": "frontend/src/pages/pda/putaway.tsx",
+      "category": "PDA",
+      "routeKey": "/pda/putaway/:id",
+      "page": "扫码上架",
+      "permission": "[PERMISSIONS.INBOUND_ORDER_VIEW, PERMISSIONS.INBOUND_PUTAWAY_EXECUTE]",
+      "navigation": {
+        "hidden": true,
+        "mode": "PDA 子作业/条件入口/直达"
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "未执行"
+    },
+    {
+      "route": "/pda/receive/:id",
+      "path": null,
+      "pattern": "/pda/receive/:id",
+      "kind": "dynamic",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/pda/receive.tsx",
+      "rendererSource": "frontend/src/pages/pda/receive.tsx",
+      "category": "PDA",
+      "routeKey": "/pda/receive/:id",
+      "page": "收货登记",
+      "permission": "[PERMISSIONS.INBOUND_ORDER_VIEW, PERMISSIONS.INBOUND_RECEIVE_EXECUTE]",
+      "navigation": {
+        "hidden": true,
+        "mode": "PDA 子作业/条件入口/直达"
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "已执行记录中的限定交互；未等同于业务提交或全页面验收"
+    },
+    {
+      "route": "/pda/sale-return",
+      "path": "/pda/sale-return",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/pda/sale-return.tsx",
+      "rendererSource": "frontend/src/pages/pda/sale-return.tsx",
+      "category": "PDA",
+      "routeKey": "/pda/sale-return",
+      "page": "销售退货",
+      "permission": "[PERMISSIONS.RETURN_ORDER_VIEW]",
+      "navigation": {
+        "hidden": false,
+        "mode": "PDA 常用作业（按权限过滤）",
+        "declaration": {
+          "icon": "PackageX",
+          "label": "销售退货",
+          "path": "/pda/sale-return",
+          "perm": "PERMISSIONS.RETURN_ORDER_VIEW",
+          "tone": "teal"
+        }
+      },
+      "actualView": "已捕获；人工细看待核实",
+      "verification": "未执行"
+    },
+    {
+      "route": "/pda/sale-return/:id/putaway",
+      "path": null,
+      "pattern": "/pda/sale-return/:id/putaway",
+      "kind": "dynamic",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/pda/sale-return-putaway.tsx",
+      "rendererSource": "frontend/src/pages/pda/sale-return-putaway.tsx",
+      "category": "PDA",
+      "routeKey": "/pda/sale-return/:id/putaway",
+      "page": "退货上架",
+      "permission": "[PERMISSIONS.RETURN_ORDER_VIEW, PERMISSIONS.RETURN_ORDER_EXECUTE]",
+      "navigation": {
+        "hidden": true,
+        "mode": "PDA 子作业/条件入口/直达"
+      },
+      "actualView": "未查看",
+      "verification": "未执行"
+    },
+    {
+      "route": "/pda/sale-return/:id/receive",
+      "path": null,
+      "pattern": "/pda/sale-return/:id/receive",
+      "kind": "dynamic",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/pda/sale-return-receive.tsx",
+      "rendererSource": "frontend/src/pages/pda/sale-return-receive.tsx",
+      "category": "PDA",
+      "routeKey": "/pda/sale-return/:id/receive",
+      "page": "退货收货",
+      "permission": "[PERMISSIONS.RETURN_ORDER_VIEW, PERMISSIONS.RETURN_ORDER_EXECUTE]",
+      "navigation": {
+        "hidden": true,
+        "mode": "PDA 子作业/条件入口/直达"
+      },
+      "actualView": "未查看",
+      "verification": "未执行"
+    },
+    {
+      "route": "/pda/ship",
+      "path": "/pda/ship",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/pda/ship.tsx",
+      "rendererSource": "frontend/src/pages/pda/ship.tsx",
+      "category": "PDA",
+      "routeKey": "/pda/ship",
+      "page": "出库确认",
+      "permission": "[PERMISSIONS.WAREHOUSE_TASK_SHIP]",
+      "navigation": {
+        "hidden": false,
+        "mode": "PDA 常用作业（按权限过滤）",
+        "declaration": {
+          "icon": "Truck",
+          "label": "出库确认",
+          "path": "/pda/ship",
+          "perm": "PERMISSIONS.WAREHOUSE_TASK_SHIP",
+          "tone": "orange"
+        }
+      },
+      "actualView": "已捕获；人工细看待核实",
+      "verification": "未执行"
+    },
+    {
+      "route": "/pda/ship/:id",
+      "path": null,
+      "pattern": "/pda/ship/:id",
+      "kind": "dynamic",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/pda/ship.tsx",
+      "rendererSource": "frontend/src/pages/pda/ship.tsx",
+      "category": "PDA",
+      "routeKey": "/pda/ship/:id",
+      "page": "出库确认",
+      "permission": "[PERMISSIONS.WAREHOUSE_TASK_SHIP]",
+      "navigation": {
+        "hidden": true,
+        "mode": "PDA 子作业/条件入口/直达"
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "未执行"
+    },
+    {
+      "route": "/pda/sort",
+      "path": "/pda/sort",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/pda/sort.tsx",
+      "rendererSource": "frontend/src/pages/pda/sort.tsx",
+      "category": "PDA",
+      "routeKey": "/pda/sort",
+      "page": "分拣作业",
+      "permission": "[PERMISSIONS.SORTING_BIN_VIEW, PERMISSIONS.WAREHOUSE_TASK_SORT]",
+      "navigation": {
+        "hidden": false,
+        "mode": "PDA 常用作业（按权限过滤）",
+        "declaration": {
+          "icon": "Shuffle",
+          "label": "订单分拣",
+          "path": "/pda/sort",
+          "perm": "PERMISSIONS.SORTING_BIN_VIEW",
+          "perms": [
+            "PERMISSIONS.SORTING_BIN_VIEW",
+            "PERMISSIONS.WAREHOUSE_TASK_SORT"
+          ],
+          "tone": "orange"
+        }
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "未执行"
+    },
+    {
+      "route": "/pda/split",
+      "path": "/pda/split",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/pda/split.tsx",
+      "rendererSource": "frontend/src/pages/pda/split.tsx",
+      "category": "PDA",
+      "routeKey": "/pda/split",
+      "page": "塑料盒作业",
+      "permission": "[PERMISSIONS.INVENTORY_CONTAINER_SPLIT]",
+      "navigation": {
+        "hidden": true,
+        "mode": "PDA 子作业/条件入口/直达"
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "已执行记录中的限定交互；未等同于业务提交或全页面验收"
+    },
+    {
+      "route": "/pda/split-recovery",
+      "path": "/pda/split-recovery",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/pda/split-recovery.tsx",
+      "rendererSource": "frontend/src/pages/pda/split-recovery.tsx",
+      "category": "PDA",
+      "routeKey": "/pda/split-recovery",
+      "page": "拆分结果核对",
+      "permission": "[]",
+      "navigation": {
+        "hidden": true,
+        "mode": "PDA 子作业/条件入口/直达"
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "未执行"
+    },
+    {
+      "route": "/pda/stockcheck",
+      "path": "/pda/stockcheck",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/pda/stockcheck.tsx",
+      "rendererSource": "frontend/src/pages/pda/stockcheck.tsx",
+      "category": "PDA",
+      "routeKey": "/pda/stockcheck",
+      "page": "扫码盘点",
+      "permission": "[PERMISSIONS.STOCKCHECK_VIEW]",
+      "navigation": {
+        "hidden": false,
+        "mode": "PDA 常用作业（按权限过滤）",
+        "declaration": {
+          "icon": "ScanSearch",
+          "label": "扫码盘点",
+          "path": "/pda/stockcheck",
+          "perm": "PERMISSIONS.STOCKCHECK_VIEW",
+          "tone": "cyan"
+        }
+      },
+      "actualView": "已捕获；人工细看待核实",
+      "verification": "未执行"
+    },
+    {
+      "route": "/pda/stockcheck/:id",
+      "path": null,
+      "pattern": "/pda/stockcheck/:id",
+      "kind": "dynamic",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/pda/stockcheck.tsx",
+      "rendererSource": "frontend/src/pages/pda/stockcheck.tsx",
+      "category": "PDA",
+      "routeKey": "/pda/stockcheck/:id",
+      "page": "扫码盘点",
+      "permission": "[PERMISSIONS.STOCKCHECK_VIEW]",
+      "navigation": {
+        "hidden": true,
+        "mode": "PDA 子作业/条件入口/直达"
+      },
+      "actualView": "未查看",
+      "verification": "未执行"
+    },
+    {
+      "route": "/pda/task/:id",
+      "path": null,
+      "pattern": "/pda/task/:id",
+      "kind": "dynamic",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/pda/task.tsx",
+      "rendererSource": "frontend/src/pages/pda/task.tsx",
+      "category": "PDA",
+      "routeKey": "/pda/task/:id",
+      "page": "扫码拣货",
+      "permission": "[PERMISSIONS.WAREHOUSE_TASK_VIEW, PERMISSIONS.WAREHOUSE_TASK_PICK]",
+      "navigation": {
+        "hidden": true,
+        "mode": "PDA 子作业/条件入口/直达"
+      },
+      "actualView": "已人工查看代表状态；具体阶段/条件见证据；未覆盖状态仍待验",
+      "verification": "已执行记录中的限定交互；未等同于业务提交或全页面验收"
+    },
+    {
+      "route": "/pda/transfer",
+      "path": "/pda/transfer",
+      "pattern": null,
+      "kind": "static",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/pda/transfer.tsx",
+      "rendererSource": "frontend/src/pages/pda/transfer.tsx",
+      "category": "PDA",
+      "routeKey": "/pda/transfer",
+      "page": "调拨执行",
+      "permission": "[PERMISSIONS.TRANSFER_ORDER_VIEW]",
+      "navigation": {
+        "hidden": false,
+        "mode": "PDA 常用作业（按权限过滤）",
+        "declaration": {
+          "icon": "ArrowLeftRight",
+          "label": "调拨执行",
+          "path": "/pda/transfer",
+          "perm": "PERMISSIONS.TRANSFER_ORDER_VIEW",
+          "tone": "purple"
+        }
+      },
+      "actualView": "已捕获；人工细看待核实",
+      "verification": "未执行"
+    },
+    {
+      "route": "/pda/transfer-in/:id",
+      "path": null,
+      "pattern": "/pda/transfer-in/:id",
+      "kind": "dynamic",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/pda/transfer-in.tsx",
+      "rendererSource": "frontend/src/pages/pda/transfer-in.tsx",
+      "category": "PDA",
+      "routeKey": "/pda/transfer-in/:id",
+      "page": "调入仓扫码入库",
+      "permission": "[PERMISSIONS.TRANSFER_ORDER_VIEW, PERMISSIONS.TRANSFER_ORDER_EXECUTE]",
+      "navigation": {
+        "hidden": true,
+        "mode": "PDA 子作业/条件入口/直达"
+      },
+      "actualView": "未查看",
+      "verification": "未执行"
+    },
+    {
+      "route": "/pda/transfer-out/:id",
+      "path": null,
+      "pattern": "/pda/transfer-out/:id",
+      "kind": "dynamic",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/pda/transfer-out.tsx",
+      "rendererSource": "frontend/src/pages/pda/transfer-out.tsx",
+      "category": "PDA",
+      "routeKey": "/pda/transfer-out/:id",
+      "page": "调出仓扫码出库",
+      "permission": "[PERMISSIONS.TRANSFER_ORDER_VIEW, PERMISSIONS.TRANSFER_ORDER_EXECUTE]",
+      "navigation": {
+        "hidden": true,
+        "mode": "PDA 子作业/条件入口/直达"
+      },
+      "actualView": "未查看",
+      "verification": "未执行"
+    }
+  ]
+}

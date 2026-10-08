@@ -4,6 +4,7 @@ import { CalendarIcon } from 'lucide-react'
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
+import { useSectionActive } from '@/components/layout/SectionVisibilityContext'
 
 const DATE_FMT = 'yyyy-MM-dd'
 
@@ -39,6 +40,12 @@ interface DatePickerProps {
 /** 统一日期选择控件：可直接输入 yyyy-MM-dd，也可点击日历图标弹出选择——跨度大时打字比翻页快 */
 export function DatePicker({ id, value, onChange, min, max, placeholder = 'yyyy-mm-dd', className, disabled }: DatePickerProps) {
   const [open, setOpen] = React.useState(false)
+  const inputRef = React.useRef<HTMLInputElement>(null)
+  const skipFocusOpen = React.useRef(false)
+  const interactedOutside = React.useRef(false)
+  const active = useSectionActive()
+  const current = React.useRef({ active, disabled })
+  current.current = { active, disabled }
   const [text, setText] = React.useState(value)
   const selected = parseStrict(value)
   const minDate = parseStrict(min)
@@ -59,6 +66,24 @@ export function DatePicker({ id, value, onChange, min, max, placeholder = 'yyyy-
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverAnchor asChild>
         <div className="relative flex items-center">
+          <input
+            ref={inputRef}
+            id={id}
+            type="text"
+            value={text}
+            placeholder={placeholder}
+            disabled={disabled}
+            onChange={e => setText(e.target.value)}
+            onBlur={commitText}
+            onKeyDown={e => { if (e.key === 'Enter') { e.currentTarget.blur() } }}
+            onFocus={() => { if (skipFocusOpen.current) { skipFocusOpen.current = false; return }; setOpen(true) }}
+            className={cn(
+              'h-10 w-full rounded-md border border-input bg-background py-2 pl-9 pr-3 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
+              className,
+            )}
+          />
+          {/* Input comes first so an enclosing label identifies the date,
+              rather than the separate calendar icon button. */}
           <button
             type="button"
             tabIndex={-1}
@@ -69,24 +94,20 @@ export function DatePicker({ id, value, onChange, min, max, placeholder = 'yyyy-
           >
             <CalendarIcon className="h-4 w-4" />
           </button>
-          <input
-            id={id}
-            type="text"
-            value={text}
-            placeholder={placeholder}
-            disabled={disabled}
-            onChange={e => setText(e.target.value)}
-            onBlur={commitText}
-            onKeyDown={e => { if (e.key === 'Enter') { e.currentTarget.blur() } }}
-            onFocus={() => setOpen(true)}
-            className={cn(
-              'h-10 w-full rounded-md border border-input bg-background py-2 pl-9 pr-3 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
-              className,
-            )}
-          />
         </div>
       </PopoverAnchor>
-      <PopoverContent className="w-auto p-0" align="start">
+      <PopoverContent className="w-auto p-0" align="start"
+        onOpenAutoFocus={event => { event.preventDefault(); interactedOutside.current = false }}
+        onFocusOutside={event => { if (event.target === inputRef.current) event.preventDefault() }}
+        onInteractOutside={() => { interactedOutside.current = true }}
+        onEscapeKeyDown={event => { event.preventDefault(); event.stopPropagation(); setOpen(false) }}
+        onCloseAutoFocus={event => {
+          if (interactedOutside.current) return
+          event.preventDefault()
+          const input = inputRef.current
+          if (!current.current.active || current.current.disabled || !input?.isConnected || input.closest('[hidden],[inert]')) return
+          if (document.activeElement !== input) { skipFocusOpen.current = true; input.focus({ preventScroll: true }) }
+        }}>
         {/* 视口高度不足时只滚动日历本体，底部"清除/今天"始终可见 */}
         <div className="flex max-h-[var(--radix-popper-available-height)] flex-col">
           <div className="min-h-0 overflow-y-auto">

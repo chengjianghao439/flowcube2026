@@ -90,7 +90,10 @@ function fixture(options = {}) {
           const scoped=sql.includes('rf.warehouse_id IN (?)'), scopes=scoped?args.slice(0,3):[];if(scoped)assert.equal(scopes.length,3);
           let matches=state.supplier_refund_orders.filter(r=>{const po=state.purchase_orders.find(p=>p.id===r.purchase_order_id),pr=state.purchase_returns.find(p=>p.id===r.purchase_return_id);return po&&pr&&r.company_id===1&&po.id===pr.purchase_order_id&&pr.supplier_id===po.supplier_id&&r.supplier_id===po.supplier_id&&r.warehouse_id===pr.warehouse_id&&pr.warehouse_id===po.warehouse_id&&r.warehouse_id>0&&(!scoped||scopes.every(scope=>scope.includes(r.warehouse_id)))&&!sql.includes('1=0')}).sort((a,b)=>b.id-a.id);
           if(sql.startsWith('SELECT COUNT(*)'))return [[{total:matches.length}]];
-          assert.match(sql,/LIMIT \? OFFSET \?$/);const [limit,offset]=args.slice(-2);return [matches.slice(offset,offset+limit).map(r=>Object.fromEntries(['id','refund_no','purchase_return_id','purchase_order_id','warehouse_id','refund_date','amount','status'].map(k=>[k,r[k]])))];
+          assert.match(sql,/LIMIT \? OFFSET \?$/);const [limit,offset]=args.slice(-2);
+          // Evaluate the actual simple SELECT projection against its already authorized heads.
+          const columns=sql.slice(7,sql.indexOf(' FROM ')).split(',').map(column=>{const match=column.trim().match(/^(rf|po|pr)\.([a-z_]+)(?: AS ([a-z_]+))?$/);assert.ok(match,column);return match});
+          return [matches.slice(offset,offset+limit).map(r=>{const heads={rf:r,po:state.purchase_orders.find(p=>p.id===r.purchase_order_id),pr:state.purchase_returns.find(p=>p.id===r.purchase_return_id)};return Object.fromEntries(columns.map(([,alias,column,key])=>[key||column,heads[alias][column]]))})];
         }
         if(fail.scope&&table==='user_warehouse_scope')throw Error('scope unavailable')
         let rows=state[table].map(copy)

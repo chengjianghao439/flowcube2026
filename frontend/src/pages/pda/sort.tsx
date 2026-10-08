@@ -20,7 +20,7 @@ import PdaCard from '@/components/pda/PdaCard'
 import PdaBottomBar from '@/components/pda/PdaBottomBar'
 import PdaScanner from '@/components/pda/PdaScanner'
 import PdaFlash from '@/components/pda/PdaFlash'
-import { PdaEmptyCard, PdaLoading } from '@/components/pda/PdaEmptyState'
+import { PdaEmptyCard, PdaLoading, PdaQueryError } from '@/components/pda/PdaEmptyState'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
 import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
@@ -124,7 +124,7 @@ export default function PdaSortPage() {
     },
   })
 
-  const { data: bins, isLoading, refetch } = useQuery({
+  const { data: bins, isLoading, isError, refetch } = useQuery({
     queryKey: ['sorting-bins-occupied'],
     queryFn: () => getSortingBinsApi().then(r => r ?? []),
     refetchInterval: 15_000,
@@ -293,7 +293,7 @@ export default function PdaSortPage() {
             <div className="space-y-3">
               <p className="text-xs text-muted-foreground">请将以下商品放入指定分拣格</p>
               <div className="rounded-xl bg-primary/5 border border-primary/20 p-4 text-center">
-                <p className="text-4xl font-black text-primary tracking-widest">{hint.binCode}</p>
+                <p className="font-mono text-4xl font-black text-primary [overflow-wrap:anywhere]">{hint.binCode}</p>
                 <p className="text-xs text-muted-foreground mt-1">分拣格编号</p>
               </div>
               <div className="grid grid-cols-2 gap-3 text-sm">
@@ -302,7 +302,7 @@ export default function PdaSortPage() {
                 <div><p className="text-xs text-muted-foreground">任务号</p><p className="font-mono text-xs min-w-0 whitespace-normal [overflow-wrap:anywhere]">{hint.taskNo}</p></div>
                 <div><p className="text-xs text-muted-foreground">客户</p><p className="text-xs min-w-0 whitespace-normal [overflow-wrap:anywhere]">{hint.customerName}</p></div>
               </div>
-              <button className="text-xs text-muted-foreground hover:text-foreground disabled:opacity-40"
+              <button className="min-h-11 rounded-md text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
                 disabled={sortAction.submitBlocked}
                 onClick={() => {
                   // 待确认期间冻结原目标：这时清掉提示会让工人误以为可以换一件重扫
@@ -316,13 +316,14 @@ export default function PdaSortPage() {
 
         {/* 分拣格状态总览 */}
         {isLoading && <PdaLoading className="h-24" />}
-        {!isLoading && (
+        {isError && <PdaQueryError onRetry={() => { void refetch() }} />}
+        {!isLoading && !isError && (
           <>
             <div className="flex items-center justify-between">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">分拣格状态</p>
               <div className="flex gap-3 text-xs">
-                <span className="text-green-600">空闲 {freeBins.length}</span>
-                <span className="text-orange-600">占用 {occupiedBins.length}</span>
+                <span className="text-success-ink">空闲 {freeBins.length}</span>
+                <span className="text-warning-ink">占用 {occupiedBins.length}</span>
               </div>
             </div>
             {(bins ?? []).length === 0 && (
@@ -330,11 +331,11 @@ export default function PdaSortPage() {
             )}
             <div className="grid grid-cols-3 gap-2">
               {(bins ?? []).map((bin: SortingBin) => (
-                <div key={bin.id} className={`rounded-xl border p-3 text-center ${
-                  bin.status===2 ? 'border-orange-200 bg-orange-50' : 'border-border bg-card'
+                <div key={bin.id} className={`min-w-0 rounded-xl border p-3 text-center ${
+                  bin.status===2 ? 'border-warning/30 bg-warning/10' : 'border-border bg-card'
                 }`}>
-                  <p className={`text-lg font-black tracking-wide ${
-                    bin.status===2 ? 'text-orange-700' : 'text-muted-foreground'
+                  <p className={`font-mono text-lg font-black [overflow-wrap:anywhere] ${
+                    bin.status===2 ? 'text-warning-ink' : 'text-muted-foreground'
                   }`}>{bin.code}</p>
                   <PdaOverviewText className="mt-0.5">
                     {bin.status===2 ? (bin.customerName ?? bin.currentTaskNo ?? '占用中') : '空闲'}
@@ -349,7 +350,8 @@ export default function PdaSortPage() {
         <PdaScanner
           onScan={(code) => { if (step === 'scan-product') void handleProductScan(code); else void handleBinScan(code) }}
           placeholder={step === 'scan-product' ? '扫描商品条码' : '扫描分拣格条码'}
-          disabled={scanning || sortAction.submitBlocked}
+          disabled={scanning || sortAction.submitBlocked || isError}
+          busy={scanning}
           onDuplicate={() => err('重复扫码，请稍候')}
         />
       </PdaBottomBar>

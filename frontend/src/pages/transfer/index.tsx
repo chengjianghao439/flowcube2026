@@ -191,7 +191,7 @@ export default function TransferPage() {
     { key: 'operatorName', title: '经办人', width: 90 },
     { key: 'createdAt', title: '创建时间', width: 160, render: (v) => formatDisplayDateTime(v) },
     {
-      key: 'remark', title: '备注', width: 200,
+      key: 'remark', title: '备注', expandableText: true, width: 200,
       render: (v) => v
         ? <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere] text-xs text-muted-foreground" title={String(v)}>{String(v)}</span>
         : <span className="text-xs text-muted-foreground/50">—</span>

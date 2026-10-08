@@ -8,7 +8,7 @@
  * 还原整件沿原盒资源回执；I→B 普通拆分按来源ID绑定稳定键，并冻结原账号、
  * 服务器和完整载荷。未决结果只能主动核对或经新鲜未找到结果按原键原内容重试。
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useId, useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { parseBarcode } from '@/utils/barcode'
@@ -36,6 +36,7 @@ const LEGACY_PAGE_TITLE = '塑料盒作业'
 export default function PdaSplitPage({ fixedMode, active = true, onBack, onWorkStateChange }: {
   fixedMode?: Mode; active?: boolean; onBack?: () => void; onWorkStateChange?: (state: { hasInput: boolean; pending: boolean }) => void
 } = {}) {
+  const fieldId = useId()
   const navigate = useNavigate()
   const { flash, ok, err } = usePdaFeedback()
   const { can } = usePdaRole()
@@ -274,7 +275,7 @@ export default function PdaSplitPage({ fixedMode, active = true, onBack, onWorkS
         onBack={onBack ?? (() => navigate('/pda'))}
       />
       <PdaFlash flash={contextCurrent ? flash : null} />
-      {!canExecute && <p className="px-4 py-2 text-sm text-amber-800">当前无拆分执行权限，仍可核对本人原拆分结果。</p>}
+      {!canExecute && <p className="px-4 py-2 text-sm text-warning-ink">当前无拆分执行权限，仍可核对本人原拆分结果。</p>}
       <PdaSplitRecoveryPanel recovery={splitAction} onError={err} />
 
       <div className="flex-1 overflow-y-auto px-4 py-4 max-w-md mx-auto w-full space-y-4">
@@ -284,7 +285,7 @@ export default function PdaSplitPage({ fixedMode, active = true, onBack, onWorkS
           </div>
         )}
 
-        {!contextCurrent && <div className="space-y-2 rounded border border-amber-300 p-3 text-sm"><p>账号、服务器或权限已变，原输入已保留但不能用于当前作业；请核对原结果或重新扫码。</p><Button variant="outline" onClick={resetToScan}>重新扫码</Button></div>}
+        {!contextCurrent && <div className="space-y-2 rounded border border-warning/30 p-3 text-sm"><p>账号、服务器或权限已变，原输入已保留但不能用于当前作业；请核对原结果或重新扫码。</p><Button className="px-3" size="lg" variant="outline" onClick={resetToScan}>重新扫码</Button></div>}
         {step === 'form' && boxId && contextCurrent && (
           <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4 space-y-3">
             <p className="font-mono text-lg font-bold text-foreground">{barcode}</p>
@@ -299,11 +300,11 @@ export default function PdaSplitPage({ fixedMode, active = true, onBack, onWorkS
             {mode === 'repack' ? (
               <>
                 <div className="flex gap-2">
-                  <button type="button" disabled={repackLocked}
-                    className={`flex-1 rounded-md border px-3 py-1.5 text-xs ${repackMode === 'quick' ? 'border-primary bg-primary/10 font-semibold' : 'border-border'} disabled:opacity-50`}
+                  <button type="button" disabled={repackLocked} aria-pressed={repackMode === 'quick'}
+                    className={`min-h-11 flex-1 rounded-md border px-3 py-2 text-xs ${repackMode === 'quick' ? 'border-primary bg-primary/10 font-semibold' : 'border-border'} disabled:opacity-50`}
                     onClick={() => setRepackMode('quick')}>等量快捷</button>
-                  <button type="button" disabled={repackLocked}
-                    className={`flex-1 rounded-md border px-3 py-1.5 text-xs ${repackMode === 'list' ? 'border-primary bg-primary/10 font-semibold' : 'border-border'} disabled:opacity-50`}
+                  <button type="button" disabled={repackLocked} aria-pressed={repackMode === 'list'}
+                    className={`min-h-11 flex-1 rounded-md border px-3 py-2 text-xs ${repackMode === 'list' ? 'border-primary bg-primary/10 font-semibold' : 'border-border'} disabled:opacity-50`}
                     onClick={() => setRepackMode('list')}>逐箱清单</button>
                 </div>
 
@@ -311,14 +312,14 @@ export default function PdaSplitPage({ fixedMode, active = true, onBack, onWorkS
                   <>
                     <div className="flex gap-2">
                       <div className="flex-1 space-y-1">
-                        <label className="text-xs text-muted-foreground">每箱数量</label>
-                        <Input quantity type="number" inputMode="decimal" min={1} value={perBoxQty} disabled={repackLocked}
-                          onChange={e => setPerBoxQty(e.target.value)} className="font-mono text-lg" />
+                        <label htmlFor={`${fieldId}-per-box`} className="text-xs text-muted-foreground">每箱数量</label>
+                        <Input id={`${fieldId}-per-box`} data-scanner-manual="true" quantity type="number" inputMode="decimal" min={1} value={perBoxQty} disabled={repackLocked}
+                          onChange={e => setPerBoxQty(e.target.value)} className="min-h-11 font-mono text-lg" />
                       </div>
                       <div className="flex-1 space-y-1">
-                        <label className="text-xs text-muted-foreground">箱数</label>
-                        <Input quantity type="number" inputMode="numeric" min={1} max={100} value={boxCount} disabled={repackLocked}
-                          onChange={e => setBoxCount(e.target.value)} className="font-mono text-lg" />
+                        <label htmlFor={`${fieldId}-box-count`} className="text-xs text-muted-foreground">箱数</label>
+                        <Input id={`${fieldId}-box-count`} data-scanner-manual="true" quantity type="number" inputMode="numeric" min={1} max={100} value={boxCount} disabled={repackLocked}
+                          onChange={e => setBoxCount(e.target.value)} className="min-h-11 font-mono text-lg" />
                       </div>
                     </div>
                     <p className="text-xs text-muted-foreground">
@@ -330,9 +331,9 @@ export default function PdaSplitPage({ fixedMode, active = true, onBack, onWorkS
                 ) : (
                   <>
                     <div className="space-y-1">
-                      <label className="text-xs text-muted-foreground">逐箱数量（空格或逗号分隔，每箱可不同）</label>
-                      <Input type="text" inputMode="text" value={itemsStr} disabled={repackLocked}
-                        onChange={e => setItemsStr(e.target.value)} placeholder="如 30 25 25" className="font-mono text-lg" />
+                      <label htmlFor={`${fieldId}-box-list`} className="text-xs text-muted-foreground">逐箱数量（空格或逗号分隔，每箱可不同）</label>
+                      <Input id={`${fieldId}-box-list`} data-scanner-manual="true" type="text" inputMode="text" value={itemsStr} disabled={repackLocked}
+                        onChange={e => setItemsStr(e.target.value)} placeholder="如 30 25 25" className="min-h-11 font-mono text-lg" />
                     </div>
                     <p className="text-xs text-muted-foreground">
                       共 <span className="font-semibold text-foreground">{listCount}</span> 箱，合计
@@ -345,11 +346,11 @@ export default function PdaSplitPage({ fixedMode, active = true, onBack, onWorkS
             ) : (
               <>
                 <div className="space-y-1">
-                  <label className="text-xs text-muted-foreground">拆分数量</label>
-                  <Input quantity type="number" inputMode="decimal" min={1} max={Math.max(0, remaining - 1)}
-                    value={qtyStr} disabled={splitAction.blocked} onChange={e => setQtyStr(e.target.value)} className="font-mono text-lg" />
+                  <label htmlFor={`${fieldId}-split-qty`} className="text-xs text-muted-foreground">拆分数量</label>
+                  <Input id={`${fieldId}-split-qty`} data-scanner-manual="true" quantity type="number" inputMode="decimal" min={1} max={Math.max(0, remaining - 1)}
+                    value={qtyStr} disabled={splitAction.blocked} onChange={e => setQtyStr(e.target.value)} className="min-h-11 font-mono text-lg" />
                 </div>
-                <label className="flex items-center gap-2 text-sm">
+                <label className="flex min-h-11 items-center gap-2 text-sm">
                   <input type="checkbox" checked={printLabel} disabled={splitAction.blocked} onChange={e => setPrintLabel(e.target.checked)}
                     className="h-4 w-4 rounded border-border" />
                   打印新塑料盒条码
@@ -358,12 +359,12 @@ export default function PdaSplitPage({ fixedMode, active = true, onBack, onWorkS
             )}
 
             {(repackAction.phaseMessage || repackAction.lastErrorMessage || repackAction.pendingRecord) && (
-              <div className="rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
+              <div className="rounded-md border border-warning/30 bg-warning/10 p-2 text-xs text-warning-ink">
                 {repackAction.phaseMessage || repackAction.lastErrorMessage
                   || `${repackAction.pendingRecord?.label ?? '还原整件'}结果待确认，请核对原提交后再继续。`}
                 {repackAction.pendingRecord && (
                   <div className="mt-2">
-                    <Button size="sm" variant="outline" disabled={repackAction.confirming}
+                    <Button className="px-3" size="lg" variant="outline" disabled={repackAction.confirming}
                       onClick={() => { void repackAction.confirmPending() }}>
                       {repackAction.confirming ? '核对中…' : '确认结果'}
                     </Button>
@@ -373,13 +374,13 @@ export default function PdaSplitPage({ fixedMode, active = true, onBack, onWorkS
             )}
 
             <div className="flex gap-2 pt-2">
-              <Button variant="outline" className="flex-1"
+              <Button size="lg" variant="outline" className="px-3 flex-1"
                 onClick={() => { if (repackAction.phase === 'submitting') { err('提交中，暂勿取消'); return } resetToScan() }}
                 disabled={repackAction.phase === 'submitting'}>
                 重新扫码
               </Button>
-              <Button
-                className="flex-1"
+              <Button size="lg"
+                className="px-3 flex-1"
                 onClick={() => { if (mode === 'repack') void submitRepack(); else void submitSplit() }}
                 disabled={!active || !canExecute || (mode === 'repack' ? repackAction.phase === 'submitting' || repackAction.submitBlocked : splitAction.blocked)}
               >

@@ -278,7 +278,7 @@ export function CreateManualPayableDialog({ open, onClose }: Props) {
             <Input value={remark} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRemark(e.target.value)} placeholder="选填：为什么没有单据、对应哪笔业务" />
           </div>
         </div>
-        {error && <p className="mt-4 text-sm text-destructive">{error}</p>}
+        {error && <p className="mt-4 text-sm text-destructive-ink">{error}</p>}
       </form>
     </AppDialog>
   )

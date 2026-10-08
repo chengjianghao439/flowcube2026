@@ -183,7 +183,7 @@ export default function PriceChangePage() {
           <>
             <Button size="sm" variant="outline" onClick={() => submitMut.mutate(row.id)} disabled={submitMut.isPending}>提交</Button>
             {canApprove && <Button size="sm" onClick={() => approveMut.mutate(row.id)} disabled={approveMut.isPending}>通过</Button>}
-            {canApprove && <Button size="sm" variant="outline" className="text-destructive" onClick={() => { setRejectTarget(row); setRejectReason('') }}>驳回</Button>}
+            {canApprove && <Button size="sm" variant="outline" className="text-destructive-ink" onClick={() => { setRejectTarget(row); setRejectReason('') }}>驳回</Button>}
             <Button size="sm" variant="ghost" onClick={() => setCancelTarget(row)}>取消</Button>
           </>
         )}

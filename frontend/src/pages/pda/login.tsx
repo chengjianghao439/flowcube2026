@@ -24,7 +24,7 @@ export default function PdaLoginPage() {
       <div className="mb-8 flex flex-col items-center gap-2">
         <SystemBrand boxClassName="h-14 w-14 rounded-2xl shadow-lg shadow-primary/20" />
         <h1 className="text-2xl font-bold tracking-tight text-foreground">极序 Flow</h1>
-        <p className="text-sm text-slate-600">仓库作业终端</p>
+        <p className="text-sm text-muted-foreground">仓库作业终端</p>
       </div>
 
       {/* Card */}
@@ -38,7 +38,7 @@ export default function PdaLoginPage() {
         {error && (
           <div
             role="alert"
-            className="mb-5 flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive"
+            className="mb-5 flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive-ink"
           >
             <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
             {error.message || '登录失败，请检查账号和密码'}
@@ -62,7 +62,7 @@ export default function PdaLoginPage() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 disabled={isPending}
-                className="w-full rounded-xl border border-border bg-background py-3 pl-10 pr-4 text-foreground outline-none placeholder:text-muted-foreground transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-60"
+                className="w-full rounded-xl border border-border bg-background py-3 pl-10 pr-4 text-foreground outline-none placeholder:text-muted-foreground transition-all motion-reduce:transition-none focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-60"
               />
             </div>
           </div>
@@ -82,13 +82,13 @@ export default function PdaLoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={isPending}
-                className="w-full rounded-xl border border-border bg-background py-3 pl-10 pr-12 text-foreground outline-none placeholder:text-muted-foreground transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-60"
+                className="w-full rounded-xl border border-border bg-background py-3 pl-10 pr-12 text-foreground outline-none placeholder:text-muted-foreground transition-all motion-reduce:transition-none focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-60"
               />
               <button
                 type="button"
                 aria-label={showPassword ? '隐藏密码' : '显示密码'}
                 aria-pressed={showPassword}
-                className="absolute right-1 top-1/2 flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:text-foreground"
+                className="absolute right-1 top-1/2 flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center rounded-lg text-muted-foreground transition-colors motion-reduce:transition-none hover:text-foreground"
                 onClick={() => setShowPassword((v) => !v)}
               >
                 {showPassword ? <EyeOff className="size-5" /> : <Eye className="size-5" />}
@@ -104,11 +104,11 @@ export default function PdaLoginPage() {
           <button
             type="submit"
             disabled={isPending || !username.trim() || !password.trim()}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3.5 font-bold text-white shadow-lg shadow-primary/20 transition-all hover:bg-primary/90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3.5 font-bold text-primary-foreground shadow-lg shadow-primary/20 transition-all motion-reduce:transition-none hover:bg-primary/90 motion-safe:active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isPending ? (
               <>
-                <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                <svg className="h-4 w-4 motion-safe:animate-spin" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>

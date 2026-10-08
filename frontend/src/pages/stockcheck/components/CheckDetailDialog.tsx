@@ -246,7 +246,7 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
                             onChange={(e: React.ChangeEvent<HTMLInputElement>)=>handleActualChange(item.id, e.target.value)}
                             aria-invalid={hasError}
                           />
-                          {hasError ? <p className="text-xs text-destructive">{fieldErrors[item.id]}</p> : null}
+                          {hasError ? <p className="text-xs text-destructive-ink">{fieldErrors[item.id]}</p> : null}
                         </div>
                       ) : (
                         <span className="text-sm block">{item.actualQty??'-'}</span>

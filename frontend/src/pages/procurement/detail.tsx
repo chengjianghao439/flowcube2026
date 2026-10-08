@@ -96,10 +96,10 @@ export default function ProcurementPlanDetailPage() {
       <OrderDetailSections type="plan" id={plan.id}>
       <div className="overflow-x-auto rounded-lg border border-border">
         <table className="w-full min-w-[1900px] text-sm">
-          <thead className="bg-muted/40 text-muted-foreground">
+          <thead className="bg-muted/40 text-muted-foreground [&_th]:whitespace-nowrap">
             <tr>
               <th className="px-3 py-2 text-center font-medium">
-                {editable && canConvert && pendingIds.length > 0 && <input type="checkbox" checked={selected.size === pendingIds.length && pendingIds.length > 0} onChange={toggleAll} className="h-4 w-4 accent-primary" />}
+                {editable && canConvert && pendingIds.length > 0 && <input type="checkbox" aria-label="选择全部待处理计划明细" checked={selected.size === pendingIds.length && pendingIds.length > 0} onChange={toggleAll} className="h-4 w-4 accent-primary" />}
               </th>
               <ProductIdentityHeaders /><th className="min-w-20 px-3 py-3 text-left">单位</th>
               <th className="px-3 py-2 text-left font-medium">仓库</th>
@@ -125,7 +125,7 @@ export default function ProcurementPlanDetailPage() {
               return (
                 <tr key={it.id} className={`border-t border-border ${it.status === 3 ? 'opacity-50' : ''}`}>
                   <td className="px-3 py-2 text-center">
-                    {editable && canConvert && pending && <input type="checkbox" checked={selected.has(it.id)} onChange={() => toggle(it.id)} className="h-4 w-4 accent-primary" />}
+                    {editable && canConvert && pending && <input type="checkbox" aria-label={`选择 ${it.productName} ${it.warehouseName}`} checked={selected.has(it.id)} onChange={() => toggle(it.id)} className="h-4 w-4 accent-primary" />}
                   </td>
                   <ProductIdentityCells product={it} /><td className="px-3 py-3">{it.unit || '—'}</td>
                   <td className="px-3 py-2">{it.warehouseName}</td>
@@ -139,14 +139,14 @@ export default function ProcurementPlanDetailPage() {
                   <td className="px-3 py-2 text-right tabular-nums">{it.currentSupply ? `${num(it.currentSupply.netRequirement)} / ${num(it.currentSupply.suggestedQty)}` : '当前需求暂不可用'}</td>
                   <td className="px-3 py-2 text-right">
                     {editable && pending
-                      ? <Input quantity type="number" step={qtyStep(allowDecimalOf(it.productId))} defaultValue={it.adjustedQty} key={`${it.id}-${it.adjustedQty}`} className="ml-auto h-8 w-24 text-right tabular-nums"
+                      ? <Input quantity aria-label={`${it.productName} ${it.warehouseName}采购量`} type="number" step={qtyStep(allowDecimalOf(it.productId))} defaultValue={it.adjustedQty} key={`${it.id}-${it.adjustedQty}`} className="ml-auto h-8 w-24 text-right tabular-nums"
                           onBlur={(e) => { const v = Number(e.target.value); if (Number.isFinite(v) && v >= 0 && v !== it.adjustedQty) updateItem.mutate({ itemId: it.id, patch: { adjustedQty: v } }) }} />
                       : <span className="tabular-nums">{num(it.adjustedQty)} {it.unit}</span>}
                   </td>
                   <td className="px-3 py-2">
                     {editable && pending
                       ? <Select value={it.supplierId != null ? String(it.supplierId) : '0'} onValueChange={(v) => updateItem.mutate({ itemId: it.id, patch: { supplierId: v === '0' ? null : Number(v) } })}>
-                          <SelectTrigger className="h-8 w-40"><SelectValue placeholder="待选" /></SelectTrigger>
+                          <SelectTrigger aria-label={`${it.productName} ${it.warehouseName}供应商`} className="h-8 w-40"><SelectValue placeholder="待选" /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="0">待选供应商</SelectItem>
                             {/* 快照供应商若已停用/不在活跃列表，仍列出来避免退回 placeholder 误显「待选」 */}

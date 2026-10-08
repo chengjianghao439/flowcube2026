@@ -5,6 +5,10 @@ import { AppDialog } from '@/components/shared/AppDialog'
 import { Button } from '@/components/ui/button'
 import { useCategoryTree } from '@/hooks/useCategories'
 import type { Category } from '@/types/categories'
+import type { ProductFinderReadContext } from '@/hooks/useProducts'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
+
+const EMPTY_CATEGORIES: Category[] = []
 
 export interface CategoryFinderProps {
   open: boolean
@@ -12,6 +16,7 @@ export interface CategoryFinderProps {
   onConfirm: (category: { id: number; name: string }) => void
   value?: number | null
   leafOnly?: boolean
+  context?: ProductFinderReadContext
 }
 
 function CategoryTree({
@@ -84,8 +89,16 @@ function CategoryTree({
   )
 }
 
-export function CategoryFinder({ open, onClose, onConfirm, value, leafOnly = true }: CategoryFinderProps) {
-  const { data: categoryTree = [] } = useCategoryTree()
+export function CategoryFinder({ open, onClose, onConfirm, value, leafOnly = true, context }: CategoryFinderProps) {
+  const query = useCategoryTree(context ? { ...context, enabled: open && context.enabled } : undefined)
+  function current() {
+    if (!context) return true
+    if (!open || !context.enabled) return false
+    try { context.assertCurrent(); return true } catch { return false }
+  }
+  const readable = current()
+  const categoryTree = readable ? query.data ?? EMPTY_CATEGORIES : EMPTY_CATEGORIES
+  const ready = !context || (readable && !query.isFetching && !query.isError)
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set())
   const [selectedId, setSelectedId] = useState<number | null>(null)
 
@@ -121,12 +134,13 @@ export function CategoryFinder({ open, onClose, onConfirm, value, leafOnly = tru
   }
 
   function handleSelect(cat: Category) {
+    if (!ready || !current()) return
     onConfirm({ id: cat.id, name: cat.name })
     onClose()
   }
 
   function handleConfirm() {
-    if (selectedId == null) return
+    if (selectedId == null || !ready || !current() || (context && !selectedName)) return
     onConfirm({ id: selectedId, name: selectedName })
     onClose()
   }
@@ -146,12 +160,12 @@ export function CategoryFinder({ open, onClose, onConfirm, value, leafOnly = tru
           <span className="text-sm text-muted-foreground">{selectedName ? `当前分类：${selectedName}` : '展开分类后点击末级分类填入'}</span>
           <div className="flex gap-2">
             <Button variant="outline" onClick={onClose}>取消</Button>
-            <Button onClick={handleConfirm} disabled={selectedId == null}>确认</Button>
+            <Button onClick={handleConfirm} disabled={selectedId == null || !ready || (!!context && !selectedName)}>确认</Button>
           </div>
         </div>
       }
     >
-      {categoryTree.length === 0 ? (
+      {context && !readable ? <p role="status" className="p-5 text-sm text-muted-foreground">资料读取已暂停，当前草稿仍保留。</p> : context && query.isError ? <QueryErrorState error={query.error} title="分类加载失败" onRetry={() => { if (current()) void query.refetch() }} /> : context && query.isFetching ? <p role="status" className="p-5 text-sm text-muted-foreground">正在加载分类…</p> : categoryTree.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted-foreground">暂无分类</p>
       ) : (
         <div className="h-full overflow-y-auto p-4">

@@ -6,6 +6,7 @@ import { X } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import ListSummary from '@/components/shared/ListSummary'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { Button } from '@/components/ui/button'
@@ -43,6 +44,7 @@ export default function PurchasePage() {
   const [printId, setPrintId]     = useState<number | null>(null)
 
   function goToNew() {
+    if (!can(PERMISSIONS.PURCHASE_ORDER_CREATE)) return
     addTab({ key: '/purchase/new', title: '新建采购单', path: '/purchase/new' })
     navigate('/purchase/new')
   }
@@ -91,7 +93,7 @@ export default function PurchasePage() {
   const [rejectReason, setRejectReason] = useState('')
 
   const PAGE_SIZE = 20
-  const { data, isLoading } = usePurchaseList({
+  const { data, isLoading, isError, error, refetch } = usePurchaseList({
     page: 1,
     pageSize: PAGE_SIZE,
     keyword,
@@ -114,6 +116,7 @@ export default function PurchasePage() {
   const close = useClosePurchase()
   const { can } = usePermission()
   const canApprove = can(PERMISSIONS.PURCHASE_ORDER_APPROVE)
+  const canCreate = can(PERMISSIONS.PURCHASE_ORDER_CREATE)
   const { data: printDetail } = usePurchaseDetail(printId || 0)
 
   function updateParams(updates: Record<string, string | number | null | undefined>) {
@@ -222,7 +225,7 @@ export default function PurchasePage() {
     { key: 'operatorName', title: '经办人', width: 11 },
     { key: 'createdAt', title: '创建时间', width: 13, render: (v) => formatDisplayDateTime(v) },
     {
-      key: 'remark', title: '备注', width: 11,
+      key: 'remark', title: '备注', expandableText: true, width: 11,
       render: (v) => v
         ? <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere] text-muted-foreground" title={String(v)}>{String(v)}</span>
         : <span className="text-muted-foreground/50">—</span>
@@ -323,7 +326,7 @@ export default function PurchasePage() {
               variant={overdueOnly ? 'default' : 'outline'}
               onClick={() => setOverdueOnly(v => !v)}
             >{overdueOnly ? '✕ 仅看逾期未到' : '逾期未到'}</Button>
-            <Button onClick={goToNew}>+ 新建采购单</Button>
+            {canCreate && <Button onClick={goToNew}>+ 新建采购单</Button>}
           </>
         }
       />
@@ -346,16 +349,16 @@ export default function PurchasePage() {
         </div>
       )}
 
-      <DataTable
+      {isError ? <QueryErrorState error={error} onRetry={() => void refetch()} /> : <DataTable
         columns={columns}
         data={data?.list || []}
         loading={isLoading}
         onRowDoubleClick={goToDetail}
         fluid
         columnStorageKey="purchase:status-v3"
-      />
+      />}
 
-      <ListSummary total={total} unit="单" />
+      {!isError && !isLoading && data && <ListSummary total={total} unit="单" />}
 
       {printDetail && (
         <OrderPrintOverlay

@@ -7,7 +7,7 @@ import PdaCard from '@/components/pda/PdaCard'
 import PdaBottomBar from '@/components/pda/PdaBottomBar'
 import PdaScanner from '@/components/pda/PdaScanner'
 import PdaFlash from '@/components/pda/PdaFlash'
-import { PdaLoading } from '@/components/pda/PdaEmptyState'
+import { PdaLoading, PdaQueryError } from '@/components/pda/PdaEmptyState'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
 import { getReturnTaskByIdApi, receiveReturnApi, checkReturnApi, type ReturnTaskActionResult } from '@/api/returns'
@@ -30,7 +30,7 @@ export default function PdaSaleReturnReceivePage() {
   const [step, setStep] = useState<'select' | 'qty' | 'check'>('select')
   const [labelReceipt, setLabelReceipt] = useState<Partial<ReturnTaskActionResult> | null>(null)
 
-  const { data: task, isLoading, refetch } = useQuery({
+  const { data: task, isLoading, isError, refetch } = useQuery({
     queryKey: ['pda-return-task', taskId],
     queryFn: () => getReturnTaskByIdApi(taskId),
     enabled: !!taskId,
@@ -131,11 +131,12 @@ export default function PdaSaleReturnReceivePage() {
   }, [productList, err, ok, task?.status])
 
   // Guard states
+  if (isError) return <div className="flex min-h-screen flex-col bg-background"><PdaHeader title="退货收货" onBack={() => nav('/pda/sale-return')} /><div className="mx-auto w-full max-w-md p-4"><PdaQueryError onRetry={() => { void refetch() }} /></div></div>
   if (isLoading) return <div className="flex min-h-screen flex-col bg-background"><PdaHeader title="退货收货" onBack={() => nav('/pda/sale-return')} /><PdaLoading /></div>
   if (!task) return <div className="flex min-h-screen flex-col bg-background"><PdaHeader title="退货收货" onBack={() => nav('/pda/sale-return')} /><div className="p-4 text-center text-muted-foreground">任务不存在</div></div>
   if (!task.submittedAt) return <div className="flex min-h-screen flex-col bg-background"><PdaHeader title="退货收货" onBack={() => nav('/pda/sale-return')} /><div className="p-4 text-center text-muted-foreground">请先在 ERP 提交退货单</div></div>
   if (task.status >= 4) {
-    return <div className="flex min-h-screen flex-col bg-background"><PdaHeader title="退货质检" onBack={() => nav('/pda/sale-return')} /><div className="mx-auto w-full max-w-md space-y-3 p-4"><p className="text-center text-muted-foreground">{task.status === 4 ? '质检完成，请贴好对应标签后进入上架' : '退货任务已结束'}</p><ReturnLabelReceiptView receipt={labelReceipt} />{task.status === 4 && <Button className="w-full" onClick={() => nav(`/pda/sale-return/${taskId}/putaway`)}>前往退货上架</Button>}</div></div>
+    return <div className="flex min-h-screen flex-col bg-background"><PdaHeader title="退货质检" onBack={() => nav('/pda/sale-return')} /><div className="mx-auto w-full max-w-md space-y-3 p-4"><p className="text-center text-muted-foreground">{task.status === 4 ? '质检完成，请贴好对应标签后进入上架' : '退货任务已结束'}</p><ReturnLabelReceiptView receipt={labelReceipt} />{task.status === 4 && <Button size="lg" className="px-3 w-full" onClick={() => nav(`/pda/sale-return/${taskId}/putaway`)}>前往退货上架</Button>}</div></div>
   }
 
   const totalQty = boxes.reduce((s, v) => s + (Number(v) || 0), 0)
@@ -192,7 +193,7 @@ export default function PdaSaleReturnReceivePage() {
             </div>
             {p.totalExpected > p.totalReceived && (
               <div className="mt-2 h-1.5 bg-muted rounded-full overflow-hidden">
-                <div className="h-full bg-blue-500 rounded-full" style={{ width: `${(p.totalReceived / p.totalExpected) * 100}%` }} />
+                <div className="h-full bg-info/100 rounded-full" style={{ width: `${(p.totalReceived / p.totalExpected) * 100}%` }} />
               </div>
             )}
           </PdaCard>
@@ -206,7 +207,7 @@ export default function PdaSaleReturnReceivePage() {
             {boxes.map((qty, i) => (
               <div key={i} className="flex items-center gap-2 mb-2">
                 <span className="text-sm w-10">箱{i + 1}</span>
-                <Input quantity type="number" min={0} step={qtyStep(allowDecimalOf(selectedProduct?.id))} value={qty || ''} className="h-10 text-lg"
+                <Input aria-label={`箱${i + 1}数量`} data-scanner-manual="true" quantity type="number" min={0} step={qtyStep(allowDecimalOf(selectedProduct?.id))} value={qty || ''} className="min-h-11 text-lg"
                   onChange={e => {
                     const next = [...boxes]
                     next[i] = Number(e.target.value) || 0
@@ -214,9 +215,9 @@ export default function PdaSaleReturnReceivePage() {
                   }}
                 />
                 {i === boxes.length - 1 ? (
-                  <Button variant="outline" size="sm" onClick={() => setBoxes([...boxes, 0])}>+</Button>
+                  <Button className="px-3" variant="outline" size="lg" aria-label="添加一箱" onClick={() => setBoxes([...boxes, 0])}>+</Button>
                 ) : (
-                  <Button variant="outline" size="sm" onClick={() => setBoxes(boxes.filter((_, j) => j !== i))}>-</Button>
+                  <Button className="px-3" variant="outline" size="lg" aria-label={`删除箱${i + 1}`} onClick={() => setBoxes(boxes.filter((_, j) => j !== i))}>-</Button>
                 )}
               </div>
             ))}
@@ -231,13 +232,13 @@ export default function PdaSaleReturnReceivePage() {
             <div className="text-sm text-muted-foreground mb-3">已收货：{selectedProduct.remaining + (task?.items?.reduce((s, i) => i.productId === selectedProduct.id ? s + i.receivedQty : s, 0) || 0)} {selectedProduct.unit}</div>
             <div className="mb-3">
               <span className="text-sm">质检通过数量：</span>
-              <Input quantity type="number" min={0} step={qtyStep(allowDecimalOf(selectedProduct?.id))} value={boxes[0] || ''} className="h-10 text-lg mt-1"
+              <Input aria-label="质检通过数量" data-scanner-manual="true" quantity type="number" min={0} step={qtyStep(allowDecimalOf(selectedProduct?.id))} value={boxes[0] || ''} className="min-h-11 text-lg mt-1"
                 onChange={e => setBoxes([Number(e.target.value) || 0])}
               />
             </div>
             <div className="mb-1">
-              <span className="text-sm text-destructive">不合格数量：</span>
-              <Input quantity type="number" min={0} step={qtyStep(allowDecimalOf(selectedProduct?.id))} value={rejectedQty || ''} className="h-10 text-lg mt-1"
+              <span className="text-sm text-destructive-ink">不合格数量：</span>
+              <Input aria-label="不合格数量" data-scanner-manual="true" quantity type="number" min={0} step={qtyStep(allowDecimalOf(selectedProduct?.id))} value={rejectedQty || ''} className="min-h-11 text-lg mt-1"
                 onChange={e => setRejectedQty(Number(e.target.value) || 0)}
               />
             </div>
@@ -250,14 +251,14 @@ export default function PdaSaleReturnReceivePage() {
           <PdaScanner onScan={handleScan} placeholder="扫描商品条码…" />
         )}
         {step === 'qty' && selectedProduct && totalQty > 0 && (
-          <Button className="w-full h-12 text-lg" disabled={receiveAction.phase !== 'idle'}
+          <Button size="lg" className="px-3 w-full h-12 text-lg" disabled={receiveAction.phase !== 'idle'}
             onClick={() => void doReceive()}
           >
             {`确认收货 ${totalQty} ${selectedProduct.unit}`}
           </Button>
         )}
         {step === 'check' && selectedProduct && (Number(boxes[0]) > 0 || rejectedQty > 0) && (
-          <Button className="w-full h-12 text-lg" disabled={checkAction.phase !== 'idle'}
+          <Button size="lg" className="px-3 w-full h-12 text-lg" disabled={checkAction.phase !== 'idle'}
             onClick={() => void doCheck()}
           >
             确认质检：合格 {Number(boxes[0]) || 0}{rejectedQty > 0 ? `，不合格 ${rejectedQty}` : ''} {selectedProduct.unit}
@@ -278,7 +279,7 @@ function ReturnLabelReceiptView({ receipt }: { receipt: Partial<ReturnTaskAction
       {/* 2026-09-14 起没有可用打印机也会留一条打印记录，退货容器同样会出现在「打印记录」页，
           现场先解决打印机，再从那里补打（系统内唯一补打入口）。 */}
       {(receipt.noPrinterCount || 0) > 0 ? (
-        <p role="alert" className="text-destructive">{receipt.noPrinterCount} 张标签未找到可用标签打印机，收货已记录并留有打印记录；请先配置标签打印机，再到「打印记录」页补打后再扫码上架。</p>
+        <p role="alert" className="text-destructive-ink">{receipt.noPrinterCount} 张标签未找到可用标签打印机，收货已记录并留有打印记录；请先配置标签打印机，再到「打印记录」页补打后再扫码上架。</p>
       ) : <p role="status" className="text-muted-foreground">{receipt.printJobIds?.length || 0} 张标签已加入打印队列，请确认出纸后贴标。</p>}
       <ul className="divide-y">
         {receipt.containers.map(container => (

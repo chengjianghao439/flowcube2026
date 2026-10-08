@@ -60,10 +60,14 @@ export interface TableColumn<T extends object> {
   key: keyof T | string
   title: string
   width?: number | string
+  /** 比例布局的可读最小列宽（px，含内边距）；默认业务列 96、操作列 128。手动像素列宽不受此值影响。 */
+  minWidth?: number
   render?: (value: unknown, record: T) => React.ReactNode
   sortable?: boolean
   /** 单元格 + 表头文字对齐，默认 left。数字/金额列用 'right' 便于纵向比对。 */
   align?: 'left' | 'right' | 'center'
+  /** 长备注等辅助文字默认两行，可鼠标或键盘就地展开；商品身份字段保持完整换行。 */
+  expandableText?: boolean
 }
 
 // ─── 通用查询参数 ───────────────────────────────────────────────────────────────

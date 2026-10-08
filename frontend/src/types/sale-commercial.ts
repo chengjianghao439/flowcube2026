@@ -1,4 +1,4 @@
-import type { SaleOrder, SaleOrderItem } from './sale'
+import type { CreateSaleParams, SaleOrder, SaleOrderItem } from './sale'
 import type { PrintItem } from '@/components/print/TemplateRenderer'
 export type CommercialInput = { lineKey: string; warehouseId?: number; quantity: number } & (
   | { kind: 'kit'; kitVersionId: number; priceSource: 'kit_default' | 'manual'; unitPrice?: number }
@@ -62,6 +62,8 @@ export interface CommercialGroup {
   priceSource: CommercialInput['priceSource']
   components: CommercialComponent[]
   metadata: {
+    kitUnit?: string
+    kitIdentity?: { spec: string; color: string; articleNumber: string }
     input: CommercialInput
     entry: CommercialEntry | null
     priceCustomerId?: number
@@ -99,6 +101,8 @@ export interface CommercialBody {
   receiverAddress?: string
 }
 export interface CommercialPreview {
+  customerId: number
+  warehouseId: number
   commercialGroups: CommercialGroup[]
   physicalItems: (SaleOrderItem & {
     warehouseId: number
@@ -117,7 +121,8 @@ export interface CommercialMarker {
   expectedRevision: number
 }
 export type CommercialOperation =
-  | { action: 'create' | 'update' | 'adjust'; id?: number; body: CommercialBody }
+  | { action: 'create'; id?: number; body: CreateSaleParams | CommercialBody }
+  | { action: 'update' | 'adjust'; id?: number; body: CommercialBody }
   | {
       action: Exclude<CommercialAction, 'create' | 'update' | 'adjust'>
       id: number

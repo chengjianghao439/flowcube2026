@@ -1,10 +1,11 @@
 import { useVisibleQuery } from '@/hooks/useVisibleQuery'
 import { SummaryStrip } from '@/components/shared/SummaryStrip'
 import { money } from '@/lib/format'
-import { useState, useEffect, useRef, useSyncExternalStore } from 'react'
+import { useState, useEffect, useRef, useSyncExternalStore, useId } from 'react'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import ListSummary from '@/components/shared/ListSummary'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { QueryChips, type QueryChip } from '@/components/shared/QueryChips'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -49,6 +50,7 @@ function TransactionsQueryDialog({ open, initial, accounts, onClose, onApply }: 
   onClose: () => void
   onApply: (q: TxQuery) => void
 }) {
+  const inputId = useId()
   const [v, setV] = useState<TxQuery>(initial)
   useEffect(() => { if (open) setV(initial) }, [open, initial])
   const set = (patch: Partial<TxQuery>) => setV(p => ({ ...p, ...patch }))
@@ -59,9 +61,9 @@ function TransactionsQueryDialog({ open, initial, accounts, onClose, onApply }: 
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label>资金账户</Label>
+              <Label htmlFor={`${inputId}-accountId`}>资金账户</Label>
               <Select value={v.accountId || '__all__'} onValueChange={x => set({ accountId: x === '__all__' ? '' : x })}>
-                <SelectTrigger className="h-9"><SelectValue placeholder="全部账户" /></SelectTrigger>
+                <SelectTrigger id={`${inputId}-accountId`} className="h-9"><SelectValue placeholder="全部账户" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__all__">全部账户</SelectItem>
                   {accounts.map(a => <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>)}
@@ -69,16 +71,16 @@ function TransactionsQueryDialog({ open, initial, accounts, onClose, onApply }: 
               </Select>
             </div>
             <div className="space-y-1">
-              <Label>关键字</Label>
-              <Input className="h-9" placeholder="关联单号 / 往来单位" value={v.keyword}
+              <Label htmlFor={`${inputId}-keyword`}>关键字</Label>
+              <Input id={`${inputId}-keyword`} className="h-9" placeholder="关联单号 / 往来单位" value={v.keyword}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => set({ keyword: e.target.value })} />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label>业务类型</Label>
+              <Label htmlFor={`${inputId}-bizType`}>业务类型</Label>
               <Select value={v.bizType || '__all__'} onValueChange={x => set({ bizType: x === '__all__' ? '' : x })}>
-                <SelectTrigger className="h-9"><SelectValue placeholder="全部" /></SelectTrigger>
+                <SelectTrigger id={`${inputId}-bizType`} className="h-9"><SelectValue placeholder="全部" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__all__">全部</SelectItem>
                   {BIZ_TYPE_OPTIONS.map(([val, l]) => <SelectItem key={val} value={val}>{l}</SelectItem>)}
@@ -86,9 +88,9 @@ function TransactionsQueryDialog({ open, initial, accounts, onClose, onApply }: 
               </Select>
             </div>
             <div className="space-y-1">
-              <Label>收支方向</Label>
+              <Label htmlFor={`${inputId}-direction`}>收支方向</Label>
               <Select value={v.direction || '__all__'} onValueChange={x => set({ direction: x === '__all__' ? '' : x })}>
-                <SelectTrigger className="h-9"><SelectValue placeholder="全部" /></SelectTrigger>
+                <SelectTrigger id={`${inputId}-direction`} className="h-9"><SelectValue placeholder="全部" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__all__">全部</SelectItem>
                   <SelectItem value="1">收入</SelectItem>
@@ -98,11 +100,13 @@ function TransactionsQueryDialog({ open, initial, accounts, onClose, onApply }: 
             </div>
           </div>
           <div className="space-y-1">
-            <Label>发生日期</Label>
+            <div className="text-sm font-medium">发生日期</div>
             <div className="flex items-center gap-2">
-              <DatePicker value={v.startDate} onChange={x => set({ startDate: x })} max={v.endDate || undefined} className="h-9 flex-1" />
+              <Label htmlFor={`${inputId}-startDate`} className="sr-only">发生日期（起）</Label>
+              <DatePicker id={`${inputId}-startDate`} value={v.startDate} onChange={x => set({ startDate: x })} max={v.endDate || undefined} className="h-9 flex-1" />
               <span className="text-muted-foreground">至</span>
-              <DatePicker value={v.endDate} onChange={x => set({ endDate: x })} min={v.startDate || undefined} className="h-9 flex-1" />
+              <Label htmlFor={`${inputId}-endDate`} className="sr-only">发生日期（止）</Label>
+              <DatePicker id={`${inputId}-endDate`} value={v.endDate} onChange={x => set({ endDate: x })} min={v.startDate || undefined} className="h-9 flex-1" />
             </div>
           </div>
         </div>
@@ -151,7 +155,7 @@ export default function FinanceTransactionsPage() {
     endDate: query.endDate || undefined,
     keyword: query.keyword || undefined,
   }
-  const { data, isLoading } = useVisibleQuery({
+  const { data, isLoading, isError, error, refetch } = useVisibleQuery({
     queryKey: ['finance-account-transactions', 'page', query, readEpoch],
     queryFn: ({signal}) => getAccountTransactionsApi(params,{...disposalConfig(readOwner),signal}),
     enabled:can(P.FINANCE_ACCOUNT_VIEW),
@@ -191,17 +195,17 @@ export default function FinanceTransactionsPage() {
     { key: 'partyName', title: '往来单位', width: 150, render: v => (v as string) || <span className="text-muted-foreground">—</span> },
     { key: 'amount', title: '收入', width: 120, align: 'right', render: (_, row) => {
       const t = row as AccountTransaction
-      return t.direction === 1 ? <span className="tabular-nums font-medium text-success">{t.bizType===6?Number(t.amount).toFixed(4):money(t.amount)}</span> : <span className="text-muted-foreground">—</span>
+      return t.direction === 1 ? <span className="tabular-nums font-medium text-success-ink">{t.bizType===6?Number(t.amount).toFixed(4):money(t.amount)}</span> : <span className="text-muted-foreground">—</span>
     }},
     { key: 'direction', title: '支出', width: 120, align: 'right', render: (_, row) => {
       const t = row as AccountTransaction
-      return t.direction === 2 ? <span className="tabular-nums font-medium text-destructive">{money(t.amount)}</span> : <span className="text-muted-foreground">—</span>
+      return t.direction === 2 ? <span className="tabular-nums font-medium text-destructive-ink">{money(t.amount)}</span> : <span className="text-muted-foreground">—</span>
     }},
     { key: 'balanceAfter', title: '账户余额', width: 130, align: 'right', render: v => (
-      <span className={`tabular-nums ${Number(v) < 0 ? 'text-destructive' : 'text-foreground'}`}>{money(v as number)}</span>
+      <span className={`tabular-nums ${Number(v) < 0 ? 'text-destructive-ink' : 'text-foreground'}`}>{money(v as number)}</span>
     )},
     { key: 'operatorName', title: '操作人', width: 100, render: v => (v as string) || <span className="text-muted-foreground">—</span> },
-    { key: 'remark', title: '备注', width: 200, render: v => (v as string) || <span className="text-muted-foreground">—</span> },
+    { key: 'remark', title: '备注', expandableText: true, width: 200, render: v => (v as string) || <span className="text-muted-foreground">—</span> },
   ]
 
   const summary = data?.summary
@@ -227,24 +231,25 @@ export default function FinanceTransactionsPage() {
         )}
       />
 
-      {summary && <SummaryStrip items={[{ label: '期间收入', value: money(summary.inAmount), tone: 'text-success' }, { label: '期间支出', value: money(summary.outAmount), tone: 'text-destructive' }, { label: '净额', value: money(netAmount), tone: netAmount < 0 ? 'text-destructive' : 'text-foreground' }]} />}
+      {summary && !isError && <SummaryStrip items={[{ label: '期间收入', value: money(summary.inAmount), tone: 'text-success-ink' }, { label: '期间支出', value: money(summary.outAmount), tone: 'text-destructive-ink' }, { label: '净额', value: money(netAmount), tone: netAmount < 0 ? 'text-destructive-ink' : 'text-foreground' }]} />}
 
       <QueryChips chips={queryChips} onClearAll={() => { setQuery({ ...EMPTY_TX_QUERY, startDate: '', endDate: '' }); }} />
 
-      <DataTable columns={columns} data={data?.list || []} loading={isLoading} rowKey="id" />
+      {isError ? <QueryErrorState error={error} onRetry={() => void refetch()} /> : <DataTable columns={columns} data={data?.list || []} loading={isLoading} rowKey="id" />}
 
-      <ListSummary total={total} unit="笔" />
+      {!isError && !isLoading && data && <ListSummary total={total} unit="笔" />}
 
       <Dialog open={traceCurrent} onOpenChange={open=>{if(!open&&traceCurrent)setTrace(null)}}>
         <DialogContent aria-describedby={undefined}><DialogHeader><DialogTitle>供应商退款</DialogTitle></DialogHeader>
+          {traceQuery.isError ? <QueryErrorState compact error={traceQuery.error} onRetry={() => void traceQuery.refetch()} /> : <>
           {traceQuery.isLoading && <p>正在加载原退款单…</p>}
-          {traceQuery.error && <p>无法读取，请稍后重新核对。</p>}
           {traceCurrent && traceQuery.data && !traceData && <p>原退款单与这笔流水不符，请人工核对。</p>}
           {traceCurrent && traceData && <div className="space-y-2 text-sm">
             <p>{traceData!.refund_no} / {formatDisplayDate(traceData!.refund_date)}</p>
             <p className="tabular-nums">回款 {traceData!.amount}</p>
             <p>{traceData!.voucher_generate_error || (typeof traceData!.voucher_id==='number'&&Number.isSafeInteger(traceData!.voucher_id)&&traceData!.voucher_id>0?'凭证已生成':'凭证待核对')}</p>
           </div>}
+          </>}
         </DialogContent>
       </Dialog>
       <TransactionsQueryDialog

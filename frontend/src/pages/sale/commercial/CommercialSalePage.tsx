@@ -3,6 +3,7 @@ import { ReorderSourceButton } from '../ReorderSourceButton'
 import { useSaleReorderSource } from '@/hooks/useSaleReorderSource'
 import { useRepeatSaleCreate } from '@/hooks/useRepeatSaleCreate'
 import { commercialWarehouseName } from './warehouseName'
+import { commercialUnit } from './commercialDraft'
 import { useEffect, useRef, useState } from 'react'
 import type { SaleOrder } from '@/types/sale'
 import type { CommercialAction, CommercialOperation, CommercialWriteConfirmation } from '@/types/sale-commercial'
@@ -38,15 +39,15 @@ const permission = {
   release: PERMISSIONS.SALE_ORDER_RELEASE,
   delete: PERMISSIONS.SALE_ORDER_DELETE
 }
-export function NewCommercialSale({ tabPath, onDone, sourceId }: { tabPath: string; onDone: (id?: number) => void; sourceId?: number }) {
+export function NewCommercialSale({ tabPath, onDone, sourceId, sourceModel = 'kit-v1', ordinaryOnlySave = false }: { tabPath: string; onDone: (id?: number) => void; sourceId?: number; sourceModel?: 'ordinary' | 'kit-v1'; ordinaryOnlySave?: boolean }) {
   const [owner] = useState(captureKitReadOwner)
-  if (sourceId) return <RepeatCommercialCreate sourceId={sourceId} tabPath={tabPath} onDone={onDone} />
-  return <CommercialEditor owner={owner} tabPath={tabPath} onDone={onDone} />
+  if (sourceId) return <RepeatCommercialCreate sourceId={sourceId} sourceModel={sourceModel} ordinaryOnlySave={ordinaryOnlySave} tabPath={tabPath} onDone={onDone} />
+  return <CommercialEditor owner={owner} ordinaryOnlySave={ordinaryOnlySave} tabPath={tabPath} onDone={onDone} />
 }
-function RepeatCommercialCreate({ sourceId, tabPath, onDone }: { sourceId: number; tabPath: string; onDone: (id?: number) => void }) {
-  const source = useSaleReorderSource(sourceId, 'kit-v1')
-  const write = useRepeatSaleCreate(sourceId, 'kit-v1', source.owner, buildWorkspaceTabRegistrationFromPath(tabPath).key)
-  return <CommercialEditor owner={source.owner} tabPath={tabPath} onDone={onDone} reorder={{ source, write }} />
+function RepeatCommercialCreate({ sourceId, sourceModel, ordinaryOnlySave, tabPath, onDone }: { sourceId: number; sourceModel: 'ordinary' | 'kit-v1'; ordinaryOnlySave: boolean; tabPath: string; onDone: (id?: number) => void }) {
+  const source = useSaleReorderSource(sourceId, sourceModel)
+  const write = useRepeatSaleCreate(sourceId, sourceModel, source.owner, buildWorkspaceTabRegistrationFromPath(tabPath).key)
+  return <CommercialEditor owner={source.owner} ordinaryOnlySave={ordinaryOnlySave} tabPath={tabPath} onDone={onDone} reorder={{ source, write }} />
 }
 export default function CommercialSalePage({
   initial,
@@ -227,7 +228,7 @@ export default function CommercialSalePage({
       />
       <SaleOrderOverview order={order} />
       {(error || write.error || backup.error) && (
-        <p role="alert" className="text-destructive">
+        <p role="alert" className="text-destructive-ink">
           {write.pending && (error || write.error || backup.error) === '操作失败，请稍后重试'
             ? '原操作结果待确认，请先查询原操作结果'
             : error || write.error || backup.error}
@@ -324,7 +325,7 @@ export default function CommercialSalePage({
                   </td>
                   <td className="p-3 text-right">
                     {g.targetQty}
-                    {g.kind === 'kit' ? '套' : g.components[0]?.unit}
+                    {commercialUnit(g)}
                   </td>
                   <td className="p-3 text-right">{money(g.amount)}</td>
                   <td className="p-3 text-right">
@@ -353,9 +354,7 @@ export default function CommercialSalePage({
                 order.commercialGroups?.find((g) => g.id === f.groupId)?.components[0]?.productName ??
                 `原成交行 #${f.groupId}`}{' '}
               · {f.quantity}
-              {order.commercialGroups?.find((g) => g.id === f.groupId)?.kind === 'kit'
-                ? '套'
-                : (order.commercialGroups?.find((g) => g.id === f.groupId)?.components[0]?.unit ?? '')}{' '}
+              {commercialUnit(order.commercialGroups?.find((g) => g.id === f.groupId))}{' '}
               · {commercialWarehouseName(order, f.warehouseId)} ·{' '}
               {WT_STATUS_NAME[String(f.taskStatus) as keyof typeof WT_STATUS_NAME] ?? '未知状态'} ·{' '}
               {f.confirmedShipped ? '已确认实发' : f.outstanding ? '待完成' : '原批次（未确认）'}

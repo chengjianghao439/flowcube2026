@@ -1,3 +1,5 @@
+import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { usePartyLedger } from '@/hooks/usePartyLedger'
 import { RecordIdentity } from '@/components/shared/RecordIdentity'
@@ -30,6 +32,7 @@ const empty = {
 }
 
 export default function SuppliersPage() {
+  const { can } = usePermission()
   const ledger = usePartyLedger(1)
   const [keyword, setKeyword] = useState(''); const [search, setSearch] = useState('')
   const page = 1
@@ -97,11 +100,14 @@ export default function SuppliersPage() {
     <BaseCrudPage<Supplier>
       title="供应商管理"
       description="管理采购供应商档案"
+      canCreate={can(PERMISSIONS.SUPPLIER_CREATE)}
+      canEdit={can(PERMISSIONS.SUPPLIER_UPDATE)}
+      canDelete={can(PERMISSIONS.SUPPLIER_DELETE)}
       columns={cols}
-      renderActions={(row, helpers) => <TableActionsMenu primaryLabel="编辑" primaryVariant="outline" onPrimaryClick={() => helpers.openEdit(row)} items={[
+      renderActions={(row, helpers) => can(PERMISSIONS.SUPPLIER_UPDATE) ? <TableActionsMenu primaryLabel="编辑" primaryVariant="outline" onPrimaryClick={() => helpers.openEdit(row)} items={[
         ...(ledger.canView ? [{ label: '往来明细', onClick: () => ledger.open(row) }] : []),
-        { label: '删除', destructive: true, onClick: () => helpers.openDelete(row) },
-      ]} />}
+        ...(can(PERMISSIONS.SUPPLIER_DELETE) ? [{ label: '删除', destructive: true, onClick: () => helpers.openDelete(row) }] : []),
+       ]} /> : <div className="flex flex-wrap gap-1">{ledger.canView && <Button size="sm" variant="outline" onClick={() => ledger.open(row)}>往来明细</Button>}{can(PERMISSIONS.SUPPLIER_DELETE) && <Button size="sm" variant="outline" onClick={() => helpers.openDelete(row)}>删除</Button>}</div>}
       queryKey={['suppliers', { page, pageSize: 20, keyword }]}
       listQuery={() => getSuppliersApi({ page, pageSize: 20, keyword })}
       recordUnit="个"
@@ -111,7 +117,7 @@ export default function SuppliersPage() {
       headerActions={
         <>
           <Button variant="outline" onClick={() => downloadExport('/export/suppliers').catch(e => toast.error((e as Error).message))}>导出</Button>
-          <Button variant="outline" onClick={() => setImportOpen(v => !v)}>批量导入</Button>
+          {can(PERMISSIONS.SUPPLIER_CREATE) && <Button variant="outline" onClick={() => setImportOpen(v => !v)}>批量导入</Button>}
         </>
       }
       saveSuccessMessage={(editing) => editing ? '供应商已保存' : '供应商已创建'}
@@ -136,7 +142,7 @@ export default function SuppliersPage() {
               </div>
               {importResult && (
                 <div className="rounded-lg border p-3 text-sm space-y-1">
-                  <p className="text-success font-medium">导入成功：{importResult.success} 条</p>
+                  <p className="text-success-ink font-medium">导入成功：{importResult.success} 条</p>
                   {importResult.errors.length > 0 && (
                     <div className="max-h-40 space-y-0.5 overflow-y-auto text-xs text-muted-foreground">
                       {importResult.errors.map((err, i) => <p key={i}>{err}</p>)}
@@ -147,13 +153,13 @@ export default function SuppliersPage() {
             </div>
           )}
           <FilterCard>
-            <Input placeholder="搜索编码或名称" value={search} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} onKeyDown={(e:React.KeyboardEvent)=>{ if(e.key==='Enter'){ setKeyword(search) } }} className="h-9 w-60" />
+            <Input aria-label="搜索供应商编码或名称" placeholder="搜索编码或名称" value={search} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} onKeyDown={(e:React.KeyboardEvent)=>{ if(e.key==='Enter'){ setKeyword(search) } }} className="h-9 w-60" />
             <Button size="sm" variant="outline" onClick={()=>{setKeyword(search);}}>搜索</Button>
             {keyword && <Button size="sm" variant="ghost" onClick={()=>{setSearch('');setKeyword('');}}>重置</Button>}
           </FilterCard>
         </>
       }
-      renderForm={(editing) => {
+      renderForm={(editing, _open, locked) => {
         const isEdit = !!editing
         return (
           <div className="space-y-5">
@@ -174,6 +180,7 @@ export default function SuppliersPage() {
             <div className="space-y-1"><Label htmlFor="supplier-remark">备注</Label><LimitedInput maxLength={PARTY_PROFILE_LIMITS.remark} lengthMode="unicode" id="supplier-remark" value={form.remark} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('remark',e.target.value)}/></div>
             <h3 className="border-t pt-4 text-sm font-medium">结算与供货</h3>
             <SettlementTypeField
+              disabled={locked}
               side="payable"
               settlementType={form.settlementType}
               paymentTermsDays={form.paymentTermsDays}

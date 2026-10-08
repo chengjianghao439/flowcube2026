@@ -13,6 +13,7 @@ import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { Button } from '@/components/ui/button'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import DataTable from '@/components/shared/DataTable'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import type { TableColumn } from '@/types'
 import { getPrintTemplateListApi, deletePrintTemplateApi } from '@/api/print-templates'
@@ -24,7 +25,7 @@ export default function PrintTemplatesPage() {
   const { addTab } = useWorkspaceStore()
   const [deleteTarget, setDeleteTarget] = useState<PrintTemplate | null>(null)
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['print-templates'],
     queryFn: () => getPrintTemplateListApi().then(r => r ?? []),
   })
@@ -79,12 +80,14 @@ export default function PrintTemplatesPage() {
         actions={<Button onClick={goToNew}>+ 新建模板</Button>}
       />
 
-      <DataTable
+      {isError ? (
+        <QueryErrorState title="打印模板加载失败" error={error} onRetry={() => void refetch()} />
+      ) : <DataTable
         columns={columns}
         data={data ?? []}
         loading={isLoading}
         rowKey="id"
-      />
+      />}
 
       <ConfirmDialog
         open={!!deleteTarget}

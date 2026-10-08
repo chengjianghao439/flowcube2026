@@ -86,9 +86,10 @@ async function main() {
     const decimalAP = await q('SELECT total_amount FROM payment_records WHERE type=1 AND order_id=?', [decimalPurchase.id])
     assert.equal(Number(decimalAP[0]?.total_amount), 0.3, '小数实收应付基线须存在')
     const decimalKit = await post('/kits', { code: `${ref}-D`, name: `${ref}-小数套`, referenceUnitPrice: 1, components: [{ productId: fixture.decimalProductId, baseQty: 0.1 }] })
+    assert.match(decimalKit.code, /^K\d{6}$/, '新增成套使用服务器自动编码')
     fixture.decimalKit = { id: decimalKit.id, versionId: decimalKit.currentVersionId }
     const finderSets = async () => {
-      const response = await fetch(`http://127.0.0.1:${server.address().port}/api/kits/finder?warehouseId=${fixture.warehouseId}&keyword=${ref}-D`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(20000) })
+      const response = await fetch(`http://127.0.0.1:${server.address().port}/api/kits/finder?warehouseId=${fixture.warehouseId}&keyword=${encodeURIComponent(decimalKit.code)}`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(20000) })
       const json = await response.json()
       assert.ok(response.ok, `${response.status} ${JSON.stringify(json)}`)
       const kit = json.data.list.find(k => k.id === decimalKit.id)

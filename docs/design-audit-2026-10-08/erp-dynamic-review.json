@@ -1,0 +1,490 @@
+{
+  "baseline": "66fa87e",
+  "counts": {
+    "allDynamic": 26,
+    "erpDynamic": 13,
+    "pdaDynamic": 13
+  },
+  "source": "routes.json/当前源码 + dynamic-fixtures.json/observations-root-final.json的精确合成资源路径/标题回读声明；不读取auth/env或生产数据",
+  "boundary": "path=null/pattern保留动态注册语义；concretePath只填root实际回读路径。actualResourceVerified仅资源存在/路径标题，不等于全详情、网络API或写流程验收",
+  "routes": [
+    {
+      "route": "/returns/sale/:id",
+      "path": null,
+      "pattern": "/^\\/returns\\/sale\\/\\d+$/",
+      "kind": "dynamic",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/returns/sale/form/index.tsx",
+      "rendererSource": "frontend/src/pages/returns/sale/form/index.tsx",
+      "category": "销售",
+      "routeKey": "/returns/sale/:id",
+      "page": "销售退货单 #<id>",
+      "permission": "PERMISSIONS.RETURN_ORDER_VIEW",
+      "navigation": {
+        "hidden": true,
+        "mode": "无顶栏注册；按钮/来源跳转/直达",
+        "dailyWork": []
+      },
+      "actualView": "实际具体路径/标题回读+布局总览；详情细节未逐项查看",
+      "verification": "实际资源路径/标题回读；不是全字段、API网络日志、编辑或业务写入验收",
+      "concretePath": "/returns/sale/1",
+      "actualResourceVerified": true,
+      "fixtureSuggestion": "优先本批已有合法已发销售的合成退货草稿；没有可退原单则保留未覆盖",
+      "boundary": "不为截图贸然发货或收回实物；创建需要后端来源真实可退量校验",
+      "resourceEvidence": [
+        {
+          "source": "observations-root-final.json",
+          "path": "/returns/sale/1",
+          "observedUrl": "#/returns/sale/1",
+          "headings": [
+            "SR20261008001"
+          ],
+          "overviewReviewed": true,
+          "humanViewed": false,
+          "result": "本批合法合成资源已创建，实际页面资源路径/标题已回读，root已看该入口contact布局总览；不等于详情各区、编辑、写入、权限和全状态验收"
+        }
+      ],
+      "remainingBoundary": "其余子区/弹窗、七态、权限/隐藏迟到、业务写入与其他尺寸仍待验"
+    },
+    {
+      "route": "/sale/:id",
+      "path": null,
+      "pattern": "/^\\/sale\\/\\d+$/",
+      "kind": "dynamic",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/sale/form/index.tsx",
+      "rendererSource": "frontend/src/pages/sale/form/index.tsx",
+      "category": "销售",
+      "routeKey": "/sale/:id",
+      "page": "销售单 #<id>",
+      "permission": "PERMISSIONS.SALE_ORDER_VIEW",
+      "navigation": {
+        "hidden": true,
+        "mode": "无顶栏注册；按钮/来源跳转/直达",
+        "dailyWork": []
+      },
+      "actualView": "实际具体路径/标题回读+布局总览；详情细节未逐项查看",
+      "verification": "实际资源路径/标题回读；不是全字段、API网络日志、编辑或业务写入验收",
+      "concretePath": "/sale/1",
+      "actualResourceVerified": true,
+      "fixtureSuggestion": "runtime.cjs 的 facts.sales 中本批合成草稿/占库两种状态；先读确认精确ID与授权",
+      "boundary": "只查看/查询/打开取消，避免 reserve/release/ship 等库存写链",
+      "resourceEvidence": [
+        {
+          "source": "observations-root-final.json",
+          "path": "/sale/1",
+          "observedUrl": "#/sale/1",
+          "headings": [
+            "SL20261008001"
+          ],
+          "overviewReviewed": true,
+          "humanViewed": false,
+          "result": "本批合法合成资源已创建，实际页面资源路径/标题已回读，root已看该入口contact布局总览；不等于详情各区、编辑、写入、权限和全状态验收"
+        }
+      ],
+      "remainingBoundary": "其余子区/弹窗、七态、权限/隐藏迟到、业务写入与其他尺寸仍待验"
+    },
+    {
+      "route": "/procurement/:id",
+      "path": null,
+      "pattern": "/^\\/procurement\\/\\d+$/",
+      "kind": "dynamic",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/procurement/detail.tsx",
+      "rendererSource": "frontend/src/pages/procurement/detail.tsx",
+      "category": "采购",
+      "routeKey": "/procurement/:id",
+      "page": "采购计划 #<id>",
+      "permission": "PERMISSIONS.PROCUREMENT_PLAN_VIEW",
+      "navigation": {
+        "hidden": true,
+        "mode": "无顶栏注册；按钮/来源跳转/直达",
+        "dailyWork": []
+      },
+      "actualView": "具体资源代表状态人工细看；未覆盖全详情/动作",
+      "verification": "实际资源路径/标题回读；不是全字段、API网络日志、编辑或业务写入验收",
+      "concretePath": "/procurement/1",
+      "actualResourceVerified": true,
+      "fixtureSuggestion": "本批已归属的独立临时库中，使用采购计划实际创建API建立草稿，再回读返回ID",
+      "boundary": "没有现成已确认资源；只建草稿，不转采购/取消执行单",
+      "resourceEvidence": [
+        {
+          "source": "observations-root-final.json",
+          "path": "/procurement/1",
+          "observedUrl": "#/procurement/1",
+          "overviewReviewed": true,
+          "humanViewed": true,
+          "result": "实际PLAN1正常待处理1行，表头196→44.5，宽表2416不造成整页水平溢出。查看SupplyDetails和补货覆盖说明，未执行转换或保存规则。覆盖规则底部需滚动，不宣称首屏全部按钮可见"
+        }
+      ],
+      "remainingBoundary": "其余子区/弹窗、七态、权限/隐藏迟到、业务写入与其他尺寸仍待验"
+    },
+    {
+      "route": "/purchase-requisitions/:id",
+      "path": null,
+      "pattern": "/^\\/purchase-requisitions\\/\\d+$/",
+      "kind": "dynamic",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/purchase-requisitions/form.tsx",
+      "rendererSource": "frontend/src/pages/purchase-requisitions/form.tsx",
+      "category": "采购",
+      "routeKey": "/purchase-requisitions/:id",
+      "page": "采购申请单 #<id>",
+      "permission": "PERMISSIONS.PURCHASE_REQUISITION_VIEW",
+      "navigation": {
+        "hidden": true,
+        "mode": "无顶栏注册；按钮/来源跳转/直达",
+        "dailyWork": []
+      },
+      "actualView": "实际具体路径/标题回读+布局总览；详情细节未逐项查看",
+      "verification": "实际资源路径/标题回读；不是全字段、API网络日志、编辑或业务写入验收",
+      "concretePath": "/purchase-requisitions/1",
+      "actualResourceVerified": true,
+      "fixtureSuggestion": "本批临时库的请购创建API草稿，关联本批产品/部门，并回读返回ID",
+      "boundary": "没有现成已确认资源；不submit/approve/convert，只读/打开取消",
+      "resourceEvidence": [
+        {
+          "source": "observations-root-final.json",
+          "path": "/purchase-requisitions/1",
+          "observedUrl": "#/purchase-requisitions/1",
+          "headings": [
+            "采购申请单 PR20261008001"
+          ],
+          "overviewReviewed": true,
+          "humanViewed": false,
+          "result": "本批合法合成资源已创建，实际页面资源路径/标题已回读，root已看该入口contact布局总览；不等于详情各区、编辑、写入、权限和全状态验收"
+        }
+      ],
+      "remainingBoundary": "其余子区/弹窗、七态、权限/隐藏迟到、业务写入与其他尺寸仍待验"
+    },
+    {
+      "route": "/purchase/:id",
+      "path": null,
+      "pattern": "/^\\/purchase\\/\\d+$/",
+      "kind": "dynamic",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/purchase/form/index.tsx",
+      "rendererSource": "frontend/src/pages/purchase/form/index.tsx",
+      "category": "采购",
+      "routeKey": "/purchase/:id",
+      "page": "采购订单 #<id>",
+      "permission": "PERMISSIONS.PURCHASE_ORDER_VIEW",
+      "navigation": {
+        "hidden": true,
+        "mode": "无顶栏注册；按钮/来源跳转/直达",
+        "dailyWork": []
+      },
+      "actualView": "实际具体路径/标题回读+布局总览；详情细节未逐项查看",
+      "verification": "实际资源路径/标题回读；不是全字段、API网络日志、编辑或业务写入验收",
+      "concretePath": "/purchase/1",
+      "actualResourceVerified": true,
+      "fixtureSuggestion": "facts.purchase 原合成采购及 facts.pendingInbound.purchaseId 的待收采购",
+      "boundary": "只查看；既有收货采购与待收采购分开记录，不执行收货",
+      "resourceEvidence": [
+        {
+          "source": "observations-root-final.json",
+          "path": "/purchase/1",
+          "observedUrl": "#/purchase/1",
+          "headings": [
+            "PC20261008001"
+          ],
+          "overviewReviewed": true,
+          "humanViewed": false,
+          "result": "本批合法合成资源已创建，实际页面资源路径/标题已回读，root已看该入口contact布局总览；不等于详情各区、编辑、写入、权限和全状态验收"
+        }
+      ],
+      "remainingBoundary": "其余子区/弹窗、七态、权限/隐藏迟到、业务写入与其他尺寸仍待验"
+    },
+    {
+      "route": "/returns/purchase/:id",
+      "path": null,
+      "pattern": "/^\\/returns\\/purchase\\/\\d+$/",
+      "kind": "dynamic",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/returns/purchase/form/index.tsx",
+      "rendererSource": "frontend/src/pages/returns/purchase/form/index.tsx",
+      "category": "采购",
+      "routeKey": "/returns/purchase/:id",
+      "page": "采购退货单 #<id>",
+      "permission": "PERMISSIONS.RETURN_ORDER_VIEW",
+      "navigation": {
+        "hidden": true,
+        "mode": "无顶栏注册；按钮/来源跳转/直达",
+        "dailyWork": []
+      },
+      "actualView": "实际具体路径/标题回读+布局总览；详情细节未逐项查看",
+      "verification": "实际资源路径/标题回读；不是全字段、API网络日志、编辑或业务写入验收",
+      "concretePath": "/returns/purchase/1",
+      "actualResourceVerified": true,
+      "fixtureSuggestion": "facts.returned 对应本批原采购退货，先按实际 return ID 回读",
+      "boundary": "独立查看源单/表单；供应商退款是 query 或独立静态路由，不把退款ID代入退货ID",
+      "resourceEvidence": [
+        {
+          "source": "observations-root-final.json",
+          "path": "/returns/purchase/1",
+          "observedUrl": "#/returns/purchase/1",
+          "headings": [
+            "PR20261008001"
+          ],
+          "overviewReviewed": true,
+          "humanViewed": false,
+          "result": "本批合法合成资源已创建，实际页面资源路径/标题已回读，root已看该入口contact布局总览；不等于详情各区、编辑、写入、权限和全状态验收"
+        }
+      ],
+      "remainingBoundary": "其余子区/弹窗、七态、权限/隐藏迟到、业务写入与其他尺寸仍待验"
+    },
+    {
+      "route": "/inbound-tasks/:id",
+      "path": null,
+      "pattern": "/^\\/inbound-tasks\\/\\d+$/",
+      "kind": "dynamic",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/inbound-tasks/detail.tsx",
+      "rendererSource": "frontend/src/pages/inbound-tasks/detail.tsx",
+      "category": "库存仓储",
+      "routeKey": "/inbound-tasks/:id",
+      "page": "收货订单 #<id>",
+      "permission": "PERMISSIONS.INBOUND_ORDER_VIEW",
+      "navigation": {
+        "hidden": true,
+        "mode": "无顶栏注册；按钮/来源跳转/直达",
+        "dailyWork": []
+      },
+      "actualView": "实际具体路径/标题回读+布局总览；详情细节未逐项查看",
+      "verification": "实际资源路径/标题回读；不是全字段、API网络日志、编辑或业务写入验收",
+      "concretePath": "/inbound-tasks/2",
+      "actualResourceVerified": true,
+      "fixtureSuggestion": "facts.pendingInbound.taskId 的合成待收货任务（PDA task2已有明确读取样本）",
+      "boundary": "只读任务及子表面；不收货、撤回、打印，不按数组顺序猜ID",
+      "resourceEvidence": [
+        {
+          "source": "observations-root-final.json",
+          "path": "/inbound-tasks/2",
+          "observedUrl": "#/inbound-tasks/2",
+          "headings": [
+            "收货订单 IN20261008002"
+          ],
+          "overviewReviewed": true,
+          "humanViewed": false,
+          "result": "本批合法合成资源已创建，实际页面资源路径/标题已回读，root已看该入口contact布局总览；不等于详情各区、编辑、写入、权限和全状态验收"
+        }
+      ],
+      "remainingBoundary": "其余子区/弹窗、七态、权限/隐藏迟到、业务写入与其他尺寸仍待验"
+    },
+    {
+      "route": "/transfer/:id",
+      "path": null,
+      "pattern": "/^\\/transfer\\/\\d+$/",
+      "kind": "dynamic",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/transfer/form/index.tsx",
+      "rendererSource": "frontend/src/pages/transfer/form/index.tsx",
+      "category": "库存仓储",
+      "routeKey": "/transfer/:id",
+      "page": "调拨单 #<id>",
+      "permission": "PERMISSIONS.TRANSFER_ORDER_VIEW",
+      "navigation": {
+        "hidden": true,
+        "mode": "无顶栏注册；按钮/来源跳转/直达",
+        "dailyWork": []
+      },
+      "actualView": "未查看",
+      "verification": "未执行",
+      "concretePath": null,
+      "actualResourceVerified": false,
+      "fixtureSuggestion": "临时库内本批源/目标仓和合成容器，用实际API创建未执行调拨草稿并回读ID",
+      "boundary": "创建前核对当前容器/范围/数量，不能借用共享仓库存；不扫码出入/提交执行",
+      "remainingBoundary": "根本批新仓3资源GET403；当前scope仅仓1，不扩权凑验收。缺合法在范围合成调拨资源"
+    },
+    {
+      "route": "/payments/ledger/customer/:id",
+      "path": null,
+      "pattern": "/^\\/payments\\/ledger\\/(customer|supplier)\\/\\d+$/",
+      "kind": "dynamic",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/payments/party-ledger.tsx",
+      "rendererSource": "frontend/src/pages/payments/party-ledger.tsx",
+      "category": "财务会计",
+      "routeKey": "/payments/ledger/customer/:id",
+      "page": "客户往来明细 #<id>",
+      "permission": "PERMISSIONS.PAYMENT_VIEW",
+      "navigation": {
+        "hidden": true,
+        "mode": "无顶栏注册；按钮/来源跳转/直达",
+        "dailyWork": []
+      },
+      "actualView": "实际具体路径/标题回读+布局总览；详情细节未逐项查看",
+      "verification": "实际资源路径/标题回读；不是全字段、API网络日志、编辑或业务写入验收",
+      "concretePath": "/payments/ledger/customer/1",
+      "actualResourceVerified": true,
+      "fixtureSuggestion": "facts.customer.id 本批合成客户",
+      "boundary": "即使流水空也可验身份与真实空；不要为造非空触发真实收款/核销",
+      "resourceEvidence": [
+        {
+          "source": "observations-root-final.json",
+          "path": "/payments/ledger/customer/1",
+          "observedUrl": "#/payments/ledger/customer/1",
+          "headings": [
+            "客户往来明细 · 验收合成客户-GL76c9c150"
+          ],
+          "overviewReviewed": true,
+          "humanViewed": false,
+          "result": "本批合法合成资源已创建，实际页面资源路径/标题已回读，root已看该入口contact布局总览；不等于详情各区、编辑、写入、权限和全状态验收"
+        }
+      ],
+      "remainingBoundary": "其余子区/弹窗、七态、权限/隐藏迟到、业务写入与其他尺寸仍待验"
+    },
+    {
+      "route": "/payments/ledger/supplier/:id",
+      "path": null,
+      "pattern": "/^\\/payments\\/ledger\\/(customer|supplier)\\/\\d+$/",
+      "kind": "dynamic",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/payments/party-ledger.tsx",
+      "rendererSource": "frontend/src/pages/payments/party-ledger.tsx",
+      "category": "财务会计",
+      "routeKey": "/payments/ledger/supplier/:id",
+      "page": "供应商往来明细 #<id>",
+      "permission": "PERMISSIONS.PAYMENT_VIEW",
+      "navigation": {
+        "hidden": true,
+        "mode": "无顶栏注册；按钮/来源跳转/直达",
+        "dailyWork": []
+      },
+      "actualView": "实际具体路径/标题回读+布局总览；详情细节未逐项查看",
+      "verification": "实际资源路径/标题回读；不是全字段、API网络日志、编辑或业务写入验收",
+      "concretePath": "/payments/ledger/supplier/1",
+      "actualResourceVerified": true,
+      "fixtureSuggestion": "facts.supplier.id 本批合成供应商",
+      "boundary": "可读已有合成采购/付款链；身份ID不是付款单或供应商退款ID",
+      "resourceEvidence": [
+        {
+          "source": "observations-root-final.json",
+          "path": "/payments/ledger/supplier/1",
+          "observedUrl": "#/payments/ledger/supplier/1",
+          "headings": [
+            "供应商往来明细 · 验收合成供应商-GL76c9c150"
+          ],
+          "overviewReviewed": true,
+          "humanViewed": false,
+          "result": "本批合法合成资源已创建，实际页面资源路径/标题已回读，root已看该入口contact布局总览；不等于详情各区、编辑、写入、权限和全状态验收"
+        }
+      ],
+      "remainingBoundary": "其余子区/弹窗、七态、权限/隐藏迟到、业务写入与其他尺寸仍待验"
+    },
+    {
+      "route": "/products/:id",
+      "path": null,
+      "pattern": "/^\\/products\\/\\d+$/",
+      "kind": "dynamic",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/products/form.tsx",
+      "rendererSource": "frontend/src/pages/products/form.tsx",
+      "category": "基础资料",
+      "routeKey": "/products/:id",
+      "page": "编辑商品 #<id>",
+      "permission": "PERMISSIONS.PRODUCT_VIEW",
+      "navigation": {
+        "hidden": true,
+        "mode": "无顶栏注册；按钮/来源跳转/直达",
+        "dailyWork": []
+      },
+      "actualView": "实际具体路径/标题回读+布局总览；详情细节未逐项查看",
+      "verification": "实际资源路径/标题回读；不是全字段、API网络日志、编辑或业务写入验收",
+      "concretePath": "/products/1",
+      "actualResourceVerified": true,
+      "fixtureSuggestion": "facts.products[0] 长名称/型号合成商品及另一普通合成商品",
+      "boundary": "打开已有详情/编辑观察后取消，不改价、不保存",
+      "resourceEvidence": [
+        {
+          "source": "observations-root-final.json",
+          "path": "/products/1",
+          "observedUrl": "#/products/1",
+          "headings": [
+            "编辑商品"
+          ],
+          "overviewReviewed": true,
+          "humanViewed": false,
+          "result": "本批合法合成资源已创建，实际页面资源路径/标题已回读，root已看该入口contact布局总览；不等于详情各区、编辑、写入、权限和全状态验收"
+        }
+      ],
+      "remainingBoundary": "其余子区/弹窗、七态、权限/隐藏迟到、业务写入与其他尺寸仍待验"
+    },
+    {
+      "route": "/logistics/:id",
+      "path": null,
+      "pattern": "/^\\/logistics\\/\\d+$/",
+      "kind": "dynamic",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/logistics/detail.tsx",
+      "rendererSource": "frontend/src/pages/logistics/detail.tsx",
+      "category": "打印物流",
+      "routeKey": "/logistics/:id",
+      "page": "运单 #<id>",
+      "permission": "PERMISSIONS.LOGISTICS_VIEW",
+      "navigation": {
+        "hidden": true,
+        "mode": "无顶栏注册；按钮/来源跳转/直达",
+        "dailyWork": []
+      },
+      "actualView": "未查看",
+      "verification": "未执行",
+      "concretePath": null,
+      "actualResourceVerified": false,
+      "fixtureSuggestion": "先查临时库本批合成业务产生的真实 waybill ID；若无运单，明确缺少资源",
+      "boundary": "不以销售ID替代运单ID；新造运单要隔离 mock carrier 且只用本批发货链，避免真实承运商取号",
+      "remainingBoundary": "本批没有明确合法具体物流详情资源读取证据，保留动态缺口"
+    },
+    {
+      "route": "/settings/print-templates/:id",
+      "path": null,
+      "pattern": "/^\\/settings\\/print-templates\\/(new|\\d+)$/",
+      "kind": "dynamic",
+      "aliases": [],
+      "aliasTarget": null,
+      "source": "frontend/src/pages/settings/print-templates/editor.tsx",
+      "rendererSource": "frontend/src/pages/settings/print-templates/editor.tsx",
+      "category": "打印物流",
+      "routeKey": "/settings/print-templates/:id",
+      "page": "编辑打印模板",
+      "permission": "PERMISSIONS.PRINT_TEMPLATE_VIEW",
+      "navigation": {
+        "hidden": true,
+        "mode": "无顶栏注册；按钮/来源跳转/直达",
+        "dailyWork": []
+      },
+      "actualView": "实际具体路径/标题回读+布局总览；详情细节未逐项查看",
+      "verification": "实际资源路径/标题回读；不是全字段、API网络日志、编辑或业务写入验收",
+      "concretePath": "/settings/print-templates/10",
+      "actualResourceVerified": true,
+      "fixtureSuggestion": "临时库模板列表返回的本批/seed模板ID；记录来源，再getPrintTemplateDetailApi回读",
+      "boundary": "先只读已有模板；new静态入口另列，不物理打印，不覆盖原模板",
+      "resourceEvidence": [
+        {
+          "source": "observations-root-final.json",
+          "path": "/settings/print-templates/10",
+          "observedUrl": "#/settings/print-templates/10",
+          "headings": [
+            "编辑打印模板 #10"
+          ],
+          "overviewReviewed": true,
+          "humanViewed": false,
+          "result": "本批合法合成资源已创建，实际页面资源路径/标题已回读，root已看该入口contact布局总览；不等于详情各区、编辑、写入、权限和全状态验收"
+        }
+      ],
+      "remainingBoundary": "仅资源路径/编辑标题回读；既有非法label格式读400阻碍编辑，不视为完整模板详情通过"
+    }
+  ]
+}

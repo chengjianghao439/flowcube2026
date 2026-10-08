@@ -12,6 +12,7 @@ import { TabPathContext } from '@/components/layout/TabPathContext'
 import SaleFormPage from './form'
 import type { AxiosRequestConfig } from 'axios'
 import { _registerConfirmFn, type ConfirmOptions } from '@/lib/confirm'
+import type { CommercialInput, CommercialPreview } from '@/types/sale-commercial'
 
 const calls: AxiosRequestConfig[] = []
 const address = { id: 9, customerId: 4, receiverName: '原收货人', receiverPhone: '12345', receiverAddress: '原常用地址', isDefault: true }
@@ -27,6 +28,44 @@ vi.mock('@/pages/sale/components/AddressBookDialog', async importOriginal => {
   return { ...original, default: function AddressBook(props: ComponentProps<typeof original.default>) { captured.addressSelect = props.onSelect; return <original.default {...props} /> } }
 })
 vi.mock('@/pages/sale/form/components/SaleOrderItemsTable', () => ({ SaleOrderItemsTable: (p: { items: { _key: number; quantity: number }[] }) => <output>{p.items.map(i => i.quantity).join(',')}</output> }))
+function ordinaryPreview(config: AxiosRequestConfig): CommercialPreview | null {
+  // Derive the response only from this immutable Axios request, never a later page/store state.
+  const body = JSON.parse(config.data) as { customerId: number; warehouseId: number; groups: CommercialInput[] }
+  if (body.groups.some(input => input.kind === 'kit')) return null
+  expect(config.method).toBe('post')
+  expect(body.customerId).toBe(4)
+  expect(body.warehouseId).toBe(8)
+  expect(body.groups).toHaveLength(1)
+  const commercialGroups = body.groups.map(input => {
+    if (input.kind !== 'ordinary') throw new Error('普通预览须为准确普通商品')
+    expect(input.lineKey).toEqual(expect.any(String)); expect(input.lineKey).not.toBe('')
+    expect(input.productId).toBe(3); expect(input.entryUnit).toBe('个'); expect(input.priceSource).toBe('default')
+    expect(input.warehouseId).toBeUndefined(); expect(input.quantity).toBe(2)
+    const amount = input.quantity * 7
+    return {
+      id: 0, lineKey: input.lineKey, kind: input.kind, warehouseId: body.warehouseId,
+      kitVersionId: null, kitCode: null, kitName: null,
+      originalQty: input.quantity, targetQty: input.quantity, quantity: input.quantity,
+      unitPrice: 7, amount, originalAmount: amount, priceSource: input.priceSource,
+      components: [{ productId: 3, productCode: 'P3', productName: '当前商品', unit: '个', baseQty: 1, quantity: input.quantity, allocatedAmount: amount }],
+      metadata: {
+        input: { ...input, warehouseId: body.warehouseId }, priceCustomerId: body.customerId,
+        entry: { entryUnit: input.entryUnit!, entryQty: input.quantity, conversionRate: 1, entryUnitPrice: 7 },
+        quote: { referenceUnitPrice: 7, resolvedPriceSource: 'price_level', resolvedPriceLevel: 'B', priceListId: null }
+      }
+    }
+  })
+  return {
+    customerId: body.customerId, warehouseId: body.warehouseId, commercialGroups,
+    physicalItems: commercialGroups.map(group => ({
+      id: 0, productId: 3, productCode: 'P3', productName: '当前商品', unit: '个', warehouseId: body.warehouseId,
+      quantity: group.quantity, unitPrice: 7, amount: group.amount,
+      inventory: { quantity: 10, reserved: 0, available: 10, required: group.quantity, shortage: 0 }
+    })),
+    amount: commercialGroups.reduce((sum, group) => sum + group.amount, 0), canFulfillEntireVector: true,
+    expected: null, readyDate: null, inventoryExplanation: '当前现货', readyDateExplanation: '未分配'
+  }
+}
 beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true }); sessionStorage.clear(); localStorage.clear(); calls.length = 0
   captured.next = 0; captured.values.clear(); captured.addressSelect = null
@@ -41,7 +80,7 @@ beforeEach(() => {
     else if (config.url === '/products/3') data = { id: 3, code: 'P3', name: '当前商品', unit: '个', units: [], isActive: true, allowDecimalQty: false }
     else if (config.url === '/price-lists/customer-price') data = { salePrice: 7, priceLevel: 'B', source: 'price_level', priceLevelName: 'B价' }
     else if (config.url === '/kits/7') data = { id: 7, name: '当前套', code: 'K7', isActive: true, deletedAt: null, currentVersionId: 41, version: { id: 41, kitId: 7, versionNo: 1, referenceUnitPrice: 12, components: [{ productId: 3, productActive: true }] } }
-    else if (config.url === '/kits/preview') data = { amount: 24, commercialGroups: [], physicalItems: [], inventoryExplanation: '当前现货', readyDateExplanation: '未分配', canFulfillEntireVector: true }
+    else if (config.url === '/kits/preview') data = ordinaryPreview(config) ?? { amount: 24, commercialGroups: [], physicalItems: [], inventoryExplanation: '当前现货', readyDateExplanation: '未分配', canFulfillEntireVector: true }
     else if (config.url === '/customer-addresses' && config.method === 'get') data = [address]
     else if (config.url === '/carriers/active') data = [{ id: 5, name: '当前承运商', platformCode: 'deppon', shippingProduct: 'DJBK' }]
     else if (config.url === '/warehouses/active') data = [{ id: 8, name: '当前仓' }, { id: 9, name: '另一仓' }]

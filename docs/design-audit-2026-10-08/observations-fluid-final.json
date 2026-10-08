@@ -1,0 +1,596 @@
+[
+  {
+    "route": "/sale",
+    "viewport": "768x900",
+    "theme": "light",
+    "sourceVersion": "final DataTable floor + canonical Layer1.1.13 Scope1.1.16",
+    "screenshots": [
+      "screens/after/root-fluid-sale-768.png"
+    ],
+    "humanViewed": true,
+    "businessWrite": false,
+    "interaction": false,
+    "columns": [
+      192.09375,
+      192.09375,
+      109.765625,
+      137.203125,
+      205.8125,
+      109.765625,
+      109.765625,
+      96.046875,
+      137.203125,
+      137.25
+    ],
+    "hash": "#/sale",
+    "heading": [
+      "销售订单"
+    ],
+    "pageOverflow": false,
+    "rows": [
+      81,
+      81,
+      81,
+      81,
+      80.5
+    ],
+    "scrollClientWidth": 718,
+    "scrollWidth": 1427,
+    "stickyAction": [
+      {
+        "left": 605.75,
+        "right": 743,
+        "text": "查看"
+      },
+      {
+        "left": 605.75,
+        "right": 743,
+        "text": "占库"
+      }
+    ],
+    "tableMinWidth": "1427px",
+    "tableWidth": 1427,
+    "visualReview": "root已逐张实际查看12原图，指定数据/尺寸布局正常；没有推导全状态"
+  },
+  {
+    "route": "/sale",
+    "viewport": "1024x900",
+    "theme": "light",
+    "sourceVersion": "final DataTable floor + canonical Layer1.1.13 Scope1.1.16",
+    "screenshots": [
+      "screens/after/root-fluid-sale-1024.png"
+    ],
+    "humanViewed": true,
+    "businessWrite": false,
+    "interaction": false,
+    "columns": [
+      192.09375,
+      192.09375,
+      109.765625,
+      137.203125,
+      205.8125,
+      109.765625,
+      109.765625,
+      96.046875,
+      137.203125,
+      137.25
+    ],
+    "hash": "#/sale",
+    "heading": [
+      "销售订单"
+    ],
+    "pageOverflow": false,
+    "rows": [
+      81,
+      81,
+      81,
+      81,
+      80.5
+    ],
+    "scrollClientWidth": 974,
+    "scrollWidth": 1427,
+    "stickyAction": [
+      {
+        "left": 861.75,
+        "right": 999,
+        "text": "查看"
+      },
+      {
+        "left": 861.75,
+        "right": 999,
+        "text": "占库"
+      }
+    ],
+    "tableMinWidth": "1427px",
+    "tableWidth": 1427,
+    "visualReview": "root已逐张实际查看12原图，指定数据/尺寸布局正常；没有推导全状态"
+  },
+  {
+    "route": "/sale",
+    "viewport": "1440x900",
+    "theme": "light",
+    "sourceVersion": "final DataTable floor + canonical Layer1.1.13 Scope1.1.16",
+    "screenshots": [
+      "screens/after/root-fluid-sale-1440.png"
+    ],
+    "humanViewed": true,
+    "businessWrite": false,
+    "interaction": false,
+    "columns": [
+      192.09375,
+      192.09375,
+      109.765625,
+      137.203125,
+      205.8125,
+      109.765625,
+      109.765625,
+      96.046875,
+      137.203125,
+      137.25
+    ],
+    "hash": "#/sale",
+    "heading": [
+      "销售订单"
+    ],
+    "pageOverflow": false,
+    "rows": [
+      81,
+      81,
+      81,
+      81,
+      80.5
+    ],
+    "scrollClientWidth": 1390,
+    "scrollWidth": 1427,
+    "stickyAction": [
+      {
+        "left": 1277.75,
+        "right": 1415,
+        "text": "查看"
+      },
+      {
+        "left": 1277.75,
+        "right": 1415,
+        "text": "占库"
+      }
+    ],
+    "tableMinWidth": "1427px",
+    "tableWidth": 1427,
+    "visualReview": "root已逐张实际查看12原图，指定数据/尺寸布局正常；没有推导全状态"
+  },
+  {
+    "route": "/purchase",
+    "viewport": "768x900",
+    "theme": "light",
+    "sourceVersion": "final DataTable floor + canonical Layer1.1.13 Scope1.1.16",
+    "screenshots": [
+      "screens/after/root-fluid-purchase-768.png"
+    ],
+    "humanViewed": true,
+    "businessWrite": false,
+    "interaction": false,
+    "columns": [
+      153.59375,
+      217.59375,
+      115.1875,
+      115.1875,
+      102.390625,
+      140.796875,
+      166.390625,
+      140.796875,
+      128.0625
+    ],
+    "hash": "#/purchase?endDate=2026-10-08&startDate=2026-10-02",
+    "heading": [
+      "采购订单"
+    ],
+    "pageOverflow": false,
+    "rows": [
+      61,
+      60.5
+    ],
+    "scrollClientWidth": 718,
+    "scrollWidth": 1280,
+    "stickyAction": [
+      {
+        "left": 614.9375,
+        "right": 743,
+        "text": "详情"
+      },
+      {
+        "left": 614.9375,
+        "right": 743,
+        "text": "详情"
+      }
+    ],
+    "tableMinWidth": "1280px",
+    "tableWidth": 1280,
+    "visualReview": "root已逐张实际查看12原图，指定数据/尺寸布局正常；没有推导全状态"
+  },
+  {
+    "route": "/purchase",
+    "viewport": "1024x900",
+    "theme": "light",
+    "sourceVersion": "final DataTable floor + canonical Layer1.1.13 Scope1.1.16",
+    "screenshots": [
+      "screens/after/root-fluid-purchase-1024.png"
+    ],
+    "humanViewed": true,
+    "businessWrite": false,
+    "interaction": false,
+    "columns": [
+      153.59375,
+      217.59375,
+      115.1875,
+      115.1875,
+      102.390625,
+      140.796875,
+      166.390625,
+      140.796875,
+      128.0625
+    ],
+    "hash": "#/purchase?endDate=2026-10-08&startDate=2026-10-02",
+    "heading": [
+      "采购订单"
+    ],
+    "pageOverflow": false,
+    "rows": [
+      61,
+      60.5
+    ],
+    "scrollClientWidth": 974,
+    "scrollWidth": 1280,
+    "stickyAction": [
+      {
+        "left": 870.9375,
+        "right": 999,
+        "text": "详情"
+      },
+      {
+        "left": 870.9375,
+        "right": 999,
+        "text": "详情"
+      }
+    ],
+    "tableMinWidth": "1280px",
+    "tableWidth": 1280,
+    "visualReview": "root已逐张实际查看12原图，指定数据/尺寸布局正常；没有推导全状态"
+  },
+  {
+    "route": "/purchase",
+    "viewport": "1440x900",
+    "theme": "light",
+    "sourceVersion": "final DataTable floor + canonical Layer1.1.13 Scope1.1.16",
+    "screenshots": [
+      "screens/after/root-fluid-purchase-1440.png"
+    ],
+    "humanViewed": true,
+    "businessWrite": false,
+    "interaction": false,
+    "columns": [
+      166.796875,
+      236.296875,
+      125.09375,
+      125.09375,
+      111.1875,
+      152.890625,
+      180.6875,
+      152.890625,
+      139.0625
+    ],
+    "hash": "#/purchase?endDate=2026-10-08&startDate=2026-10-02",
+    "heading": [
+      "采购订单"
+    ],
+    "pageOverflow": false,
+    "rows": [
+      61,
+      60.5
+    ],
+    "scrollClientWidth": 1390,
+    "scrollWidth": 1390,
+    "stickyAction": [
+      {
+        "left": 1275.9375,
+        "right": 1415,
+        "text": "详情"
+      },
+      {
+        "left": 1275.9375,
+        "right": 1415,
+        "text": "详情"
+      }
+    ],
+    "tableMinWidth": "1280px",
+    "tableWidth": 1390,
+    "visualReview": "root已逐张实际查看12原图，指定数据/尺寸布局正常；没有推导全状态"
+  },
+  {
+    "route": "/inbound-tasks",
+    "viewport": "768x900",
+    "theme": "light",
+    "sourceVersion": "final DataTable floor + canonical Layer1.1.13 Scope1.1.16",
+    "screenshots": [
+      "screens/after/root-fluid-inbound-tasks-768.png"
+    ],
+    "humanViewed": true,
+    "businessWrite": false,
+    "interaction": false,
+    "columns": [
+      173.765625,
+      200.421875,
+      120.4375,
+      114.078125,
+      212.09375,
+      167.40625,
+      202.546875,
+      196.1875,
+      128.0625
+    ],
+    "hash": "#/inbound-tasks?endDate=2026-10-08&startDate=2026-10-02",
+    "heading": [
+      "收货订单"
+    ],
+    "pageOverflow": false,
+    "rows": [
+      77,
+      78.5
+    ],
+    "scrollClientWidth": 718,
+    "scrollWidth": 1515,
+    "stickyAction": [
+      {
+        "left": 614.9375,
+        "right": 743,
+        "text": "详情"
+      },
+      {
+        "left": 614.9375,
+        "right": 743,
+        "text": "详情"
+      }
+    ],
+    "tableMinWidth": "1515px",
+    "tableWidth": 1515,
+    "visualReview": "root已逐张实际查看12原图，指定数据/尺寸布局正常；没有推导全状态"
+  },
+  {
+    "route": "/inbound-tasks",
+    "viewport": "1024x900",
+    "theme": "light",
+    "sourceVersion": "final DataTable floor + canonical Layer1.1.13 Scope1.1.16",
+    "screenshots": [
+      "screens/after/root-fluid-inbound-tasks-1024.png"
+    ],
+    "humanViewed": true,
+    "businessWrite": false,
+    "interaction": false,
+    "columns": [
+      173.765625,
+      200.421875,
+      120.4375,
+      114.078125,
+      212.09375,
+      167.40625,
+      202.546875,
+      196.1875,
+      128.0625
+    ],
+    "hash": "#/inbound-tasks?endDate=2026-10-08&startDate=2026-10-02",
+    "heading": [
+      "收货订单"
+    ],
+    "pageOverflow": false,
+    "rows": [
+      77,
+      78.5
+    ],
+    "scrollClientWidth": 974,
+    "scrollWidth": 1515,
+    "stickyAction": [
+      {
+        "left": 870.9375,
+        "right": 999,
+        "text": "详情"
+      },
+      {
+        "left": 870.9375,
+        "right": 999,
+        "text": "详情"
+      }
+    ],
+    "tableMinWidth": "1515px",
+    "tableWidth": 1515,
+    "visualReview": "root已逐张实际查看12原图，指定数据/尺寸布局正常；没有推导全状态"
+  },
+  {
+    "route": "/inbound-tasks",
+    "viewport": "1440x900",
+    "theme": "light",
+    "sourceVersion": "final DataTable floor + canonical Layer1.1.13 Scope1.1.16",
+    "screenshots": [
+      "screens/after/root-fluid-inbound-tasks-1440.png"
+    ],
+    "humanViewed": true,
+    "businessWrite": false,
+    "interaction": false,
+    "columns": [
+      173.765625,
+      200.421875,
+      120.4375,
+      114.078125,
+      212.09375,
+      167.40625,
+      202.546875,
+      196.1875,
+      128.0625
+    ],
+    "hash": "#/inbound-tasks?endDate=2026-10-08&startDate=2026-10-02",
+    "heading": [
+      "收货订单"
+    ],
+    "pageOverflow": false,
+    "rows": [
+      77,
+      78.5
+    ],
+    "scrollClientWidth": 1390,
+    "scrollWidth": 1515,
+    "stickyAction": [
+      {
+        "left": 1286.9375,
+        "right": 1415,
+        "text": "详情"
+      },
+      {
+        "left": 1286.9375,
+        "right": 1415,
+        "text": "详情"
+      }
+    ],
+    "tableMinWidth": "1515px",
+    "tableWidth": 1515,
+    "visualReview": "root已逐张实际查看12原图，指定数据/尺寸布局正常；没有推导全状态"
+  },
+  {
+    "route": "/settings/pda-devices",
+    "viewport": "768x900",
+    "theme": "light",
+    "sourceVersion": "final DataTable floor + canonical Layer1.1.13 Scope1.1.16",
+    "screenshots": [
+      "screens/after/root-fluid-settings-pda-devices-768.png"
+    ],
+    "humanViewed": true,
+    "businessWrite": false,
+    "interaction": false,
+    "columns": [
+      153.59375,
+      153.59375,
+      134.390625,
+      96,
+      96,
+      134.390625,
+      192.03125
+    ],
+    "hash": "#/settings/pda-devices",
+    "heading": [
+      "PDA 设备"
+    ],
+    "pageOverflow": false,
+    "rows": [
+      61,
+      60.5
+    ],
+    "scrollClientWidth": 718,
+    "scrollWidth": 960,
+    "stickyAction": [
+      {
+        "left": 550.96875,
+        "right": 743,
+        "text": "编辑"
+      },
+      {
+        "left": 550.96875,
+        "right": 743,
+        "text": "编辑"
+      }
+    ],
+    "tableMinWidth": "960px",
+    "tableWidth": 960,
+    "visualReview": "root已逐张实际查看12原图，指定数据/尺寸布局正常；没有推导全状态"
+  },
+  {
+    "route": "/settings/pda-devices",
+    "viewport": "1024x900",
+    "theme": "light",
+    "sourceVersion": "final DataTable floor + canonical Layer1.1.13 Scope1.1.16",
+    "screenshots": [
+      "screens/after/root-fluid-settings-pda-devices-1024.png"
+    ],
+    "humanViewed": true,
+    "businessWrite": false,
+    "interaction": false,
+    "columns": [
+      155.828125,
+      155.828125,
+      136.359375,
+      97.390625,
+      97.390625,
+      136.359375,
+      194.84375
+    ],
+    "hash": "#/settings/pda-devices",
+    "heading": [
+      "PDA 设备"
+    ],
+    "pageOverflow": false,
+    "rows": [
+      61,
+      60.5
+    ],
+    "scrollClientWidth": 974,
+    "scrollWidth": 974,
+    "stickyAction": [
+      {
+        "left": 804.15625,
+        "right": 999,
+        "text": "编辑"
+      },
+      {
+        "left": 804.15625,
+        "right": 999,
+        "text": "编辑"
+      }
+    ],
+    "tableMinWidth": "960px",
+    "tableWidth": 974,
+    "visualReview": "root已逐张实际查看12原图，指定数据/尺寸布局正常；没有推导全状态"
+  },
+  {
+    "route": "/settings/pda-devices",
+    "viewport": "1440x900",
+    "theme": "light",
+    "sourceVersion": "final DataTable floor + canonical Layer1.1.13 Scope1.1.16",
+    "screenshots": [
+      "screens/after/root-fluid-settings-pda-devices-1440.png"
+    ],
+    "humanViewed": true,
+    "businessWrite": false,
+    "interaction": false,
+    "columns": [
+      222.390625,
+      222.390625,
+      194.59375,
+      139,
+      139,
+      194.59375,
+      278.03125
+    ],
+    "hash": "#/settings/pda-devices",
+    "heading": [
+      "PDA 设备"
+    ],
+    "pageOverflow": false,
+    "rows": [
+      51,
+      50.5
+    ],
+    "scrollClientWidth": 1390,
+    "scrollWidth": 1390,
+    "stickyAction": [
+      {
+        "left": 1136.96875,
+        "right": 1415,
+        "text": "编辑"
+      },
+      {
+        "left": 1136.96875,
+        "right": 1415,
+        "text": "编辑"
+      }
+    ],
+    "tableMinWidth": "960px",
+    "tableWidth": 1390,
+    "visualReview": "root已逐张实际查看12原图，指定数据/尺寸布局正常；没有推导全状态"
+  }
+]

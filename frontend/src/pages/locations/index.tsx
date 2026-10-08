@@ -1,3 +1,5 @@
+import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
 /**
  * 库位管理页
  * 路由：/locations
@@ -39,6 +41,7 @@ function buildCode(zone: string, aisle: string, rack: string, level: string, pos
 }
 
 export default function LocationsPage() {
+  const { can } = usePermission()
   const [keyword, setKeyword]         = useState('')
   const [warehouseFilter, setWarehouseFilter] = useState<number | null>(null)
   const [statusFilter, setStatusFilter] = useState('')
@@ -137,7 +140,10 @@ export default function LocationsPage() {
       <BaseCrudPage<Location>
         title="库位管理"
         description="管理仓库内的存储库位"
-        columns={columns}
+        canCreate={can(PERMISSIONS.LOCATION_CREATE)}
+      canEdit={can(PERMISSIONS.LOCATION_UPDATE)}
+      canDelete={can(PERMISSIONS.LOCATION_DELETE)}
+      columns={columns}
         queryKey={['locations', keyword, warehouseFilter, statusFilter, zoneFilter]}
         listQuery={() => getLocationsApi({
           keyword,
@@ -168,13 +174,13 @@ export default function LocationsPage() {
             primaryDisabled={printMut.isPending && printMut.variables === row.id}
             onPrimaryClick={() => printMut.mutate(row.id)}
             items={[
-              { label: '编辑', onClick: () => helpers.openEdit(row) },
-              {
+              ...(can(PERMISSIONS.LOCATION_UPDATE) ? [{ label: '编辑', onClick: () => helpers.openEdit(row) }] : []),
+              ...(can(PERMISSIONS.LOCATION_DELETE) ? [{
                 label: '删除',
                 destructive: true,
                 separatorBefore: true,
                 onClick: () => helpers.openDelete(row),
-              },
+              }] : []),
             ]}
           />
         )}
@@ -193,11 +199,11 @@ export default function LocationsPage() {
             </div>
           ) : null
         }
-        renderForm={(editing) => (
+        renderForm={(editing, _open, locked) => (
           <div className="space-y-3 py-2">
             <div>
               <Label htmlFor="location-warehouse">仓库</Label>
-              <Select value={String(form.warehouseId || '')} onValueChange={v => set('warehouseId', +v)} disabled={!!editing}>
+              <Select disabled={locked || !!editing} value={String(form.warehouseId || '')} onValueChange={v => !locked && set('warehouseId', +v)}>
                 <SelectTrigger id="location-warehouse" className="mt-1"><SelectValue placeholder="选择仓库" /></SelectTrigger>
                 <SelectContent>
                   {(whData ?? []).map((w: { id: number; name: string }) => (
@@ -221,7 +227,7 @@ export default function LocationsPage() {
             {editing && (
               <div>
                 <Label htmlFor="location-status">状态</Label>
-                <Select value={String(form.status ?? editing.status ?? 1)} onValueChange={v => set('status' as keyof CreateLocationParams, +v)}>
+                <Select disabled={locked} value={String(form.status ?? editing.status ?? 1)} onValueChange={v => !locked && set('status' as keyof CreateLocationParams, +v)}>
                   <SelectTrigger id="location-status" className="mt-1"><SelectValue placeholder="选择状态" /></SelectTrigger>
                   <SelectContent>
                     {LOCATION_STATUS_OPTIONS.map((option) => (

@@ -1,0 +1,316 @@
+[
+  {
+    "route": "/sale/:id",
+    "requestedRoute": "/sale/1",
+    "observedUrl": "#/sale/1",
+    "stage": "after-only-dynamic-overview",
+    "screenshots": [
+      "screens/after/route-sale-1.png"
+    ],
+    "viewport": "1440x900",
+    "theme": "light",
+    "overviewReviewed": true,
+    "humanViewed": false,
+    "interaction": false,
+    "concreteResourceRead": true,
+    "headings": [
+      "SL20261008001"
+    ],
+    "result": "本批合法合成资源已创建，实际页面资源路径/标题已回读，root已看该入口contact布局总览；不等于详情各区、编辑、写入、权限和全状态验收",
+    "source": "observations-after.json + dynamic-fixtures.json + root contact-after-01–12逐张概览声明"
+  },
+  {
+    "route": "/purchase/:id",
+    "requestedRoute": "/purchase/1",
+    "observedUrl": "#/purchase/1",
+    "stage": "after-only-dynamic-overview",
+    "screenshots": [
+      "screens/after/route-purchase-1.png"
+    ],
+    "viewport": "1440x900",
+    "theme": "light",
+    "overviewReviewed": true,
+    "humanViewed": false,
+    "interaction": false,
+    "concreteResourceRead": true,
+    "headings": [
+      "PC20261008001"
+    ],
+    "result": "本批合法合成资源已创建，实际页面资源路径/标题已回读，root已看该入口contact布局总览；不等于详情各区、编辑、写入、权限和全状态验收",
+    "source": "observations-after.json + dynamic-fixtures.json + root contact-after-01–12逐张概览声明"
+  },
+  {
+    "route": "/returns/purchase/:id",
+    "requestedRoute": "/returns/purchase/1",
+    "observedUrl": "#/returns/purchase/1",
+    "stage": "after-only-dynamic-overview",
+    "screenshots": [
+      "screens/after/route-returns-purchase-1.png"
+    ],
+    "viewport": "1440x900",
+    "theme": "light",
+    "overviewReviewed": true,
+    "humanViewed": false,
+    "interaction": false,
+    "concreteResourceRead": true,
+    "headings": [
+      "PR20261008001"
+    ],
+    "result": "本批合法合成资源已创建，实际页面资源路径/标题已回读，root已看该入口contact布局总览；不等于详情各区、编辑、写入、权限和全状态验收",
+    "source": "observations-after.json + dynamic-fixtures.json + root contact-after-01–12逐张概览声明"
+  },
+  {
+    "route": "/returns/sale/:id",
+    "requestedRoute": "/returns/sale/1",
+    "observedUrl": "#/returns/sale/1",
+    "stage": "after-only-dynamic-overview",
+    "screenshots": [
+      "screens/after/route-returns-sale-1.png"
+    ],
+    "viewport": "1440x900",
+    "theme": "light",
+    "overviewReviewed": true,
+    "humanViewed": false,
+    "interaction": false,
+    "concreteResourceRead": true,
+    "headings": [
+      "SR20261008001"
+    ],
+    "result": "本批合法合成资源已创建，实际页面资源路径/标题已回读，root已看该入口contact布局总览；不等于详情各区、编辑、写入、权限和全状态验收",
+    "source": "observations-after.json + dynamic-fixtures.json + root contact-after-01–12逐张概览声明"
+  },
+  {
+    "route": "/inbound-tasks/:id",
+    "requestedRoute": "/inbound-tasks/2",
+    "observedUrl": "#/inbound-tasks/2",
+    "stage": "after-only-dynamic-overview",
+    "screenshots": [
+      "screens/after/route-inbound-tasks-2.png"
+    ],
+    "viewport": "1440x900",
+    "theme": "light",
+    "overviewReviewed": true,
+    "humanViewed": false,
+    "interaction": false,
+    "concreteResourceRead": true,
+    "headings": [
+      "收货订单 IN20261008002"
+    ],
+    "result": "本批合法合成资源已创建，实际页面资源路径/标题已回读，root已看该入口contact布局总览；不等于详情各区、编辑、写入、权限和全状态验收",
+    "source": "observations-after.json + dynamic-fixtures.json + root contact-after-01–12逐张概览声明"
+  },
+  {
+    "route": "/products/:id",
+    "requestedRoute": "/products/1",
+    "observedUrl": "#/products/1",
+    "stage": "after-only-dynamic-overview",
+    "screenshots": [
+      "screens/after/route-products-1.png"
+    ],
+    "viewport": "1440x900",
+    "theme": "light",
+    "overviewReviewed": true,
+    "humanViewed": false,
+    "interaction": false,
+    "concreteResourceRead": true,
+    "headings": [
+      "编辑商品"
+    ],
+    "result": "本批合法合成资源已创建，实际页面资源路径/标题已回读，root已看该入口contact布局总览；不等于详情各区、编辑、写入、权限和全状态验收",
+    "source": "observations-after.json + dynamic-fixtures.json + root contact-after-01–12逐张概览声明"
+  },
+  {
+    "route": "/payments/ledger/customer/:id",
+    "requestedRoute": "/payments/ledger/customer/1",
+    "observedUrl": "#/payments/ledger/customer/1",
+    "stage": "after-only-dynamic-overview",
+    "screenshots": [
+      "screens/after/route-payments-ledger-customer-1.png"
+    ],
+    "viewport": "1440x900",
+    "theme": "light",
+    "overviewReviewed": true,
+    "humanViewed": false,
+    "interaction": false,
+    "concreteResourceRead": true,
+    "headings": [
+      "客户往来明细 · 验收合成客户-GL76c9c150"
+    ],
+    "result": "本批合法合成资源已创建，实际页面资源路径/标题已回读，root已看该入口contact布局总览；不等于详情各区、编辑、写入、权限和全状态验收",
+    "source": "observations-after.json + dynamic-fixtures.json + root contact-after-01–12逐张概览声明"
+  },
+  {
+    "route": "/payments/ledger/supplier/:id",
+    "requestedRoute": "/payments/ledger/supplier/1",
+    "observedUrl": "#/payments/ledger/supplier/1",
+    "stage": "after-only-dynamic-overview",
+    "screenshots": [
+      "screens/after/route-payments-ledger-supplier-1.png"
+    ],
+    "viewport": "1440x900",
+    "theme": "light",
+    "overviewReviewed": true,
+    "humanViewed": false,
+    "interaction": false,
+    "concreteResourceRead": true,
+    "headings": [
+      "供应商往来明细 · 验收合成供应商-GL76c9c150"
+    ],
+    "result": "本批合法合成资源已创建，实际页面资源路径/标题已回读，root已看该入口contact布局总览；不等于详情各区、编辑、写入、权限和全状态验收",
+    "source": "observations-after.json + dynamic-fixtures.json + root contact-after-01–12逐张概览声明"
+  },
+  {
+    "route": "/purchase-requisitions/:id",
+    "requestedRoute": "/purchase-requisitions/1",
+    "observedUrl": "#/purchase-requisitions/1",
+    "stage": "after-only-dynamic-overview",
+    "screenshots": [
+      "screens/after/route-purchase-requisitions-1.png"
+    ],
+    "viewport": "1440x900",
+    "theme": "light",
+    "overviewReviewed": true,
+    "humanViewed": false,
+    "interaction": false,
+    "concreteResourceRead": true,
+    "headings": [
+      "采购申请单 PR20261008001"
+    ],
+    "result": "本批合法合成资源已创建，实际页面资源路径/标题已回读，root已看该入口contact布局总览；不等于详情各区、编辑、写入、权限和全状态验收",
+    "source": "observations-after.json + dynamic-fixtures.json + root contact-after-01–12逐张概览声明"
+  },
+  {
+    "route": "/settings/print-templates/:id",
+    "requestedRoute": "/settings/print-templates/10",
+    "observedUrl": "#/settings/print-templates/10",
+    "stage": "after-only-dynamic-overview",
+    "screenshots": [
+      "screens/after/route-settings-print-templates-10.png"
+    ],
+    "viewport": "1440x900",
+    "theme": "light",
+    "overviewReviewed": true,
+    "humanViewed": false,
+    "interaction": false,
+    "concreteResourceRead": true,
+    "headings": [
+      "编辑打印模板 #10"
+    ],
+    "result": "本批合法合成资源已创建，实际页面资源路径/标题已回读，root已看该入口contact布局总览；不等于详情各区、编辑、写入、权限和全状态验收",
+    "source": "observations-after.json + dynamic-fixtures.json + root contact-after-01–12逐张概览声明"
+  },
+  {
+    "route": "/login",
+    "stage": "root-representative-after",
+    "screenshots": [
+      "screens/after/root-login-1024-light.png",
+      "screens/after/root-login-error-1024.png",
+      "screens/after/root-login-error-1024-dark.png",
+      "screens/after/root-login-768-dark.png"
+    ],
+    "viewport": "1024x768",
+    "theme": "light",
+    "humanViewed": true,
+    "overviewReviewed": true,
+    "interaction": true,
+    "concreteResourceRead": false,
+    "result": "真实未认证登录表单/合成错误账号401/空密码禁用，浅深1024/768，未记录口令或生产认证",
+    "source": "root实际操作与逐图人工查看；未知结果仅专项测试，未变成GUI通过"
+  },
+  {
+    "route": "/sale",
+    "stage": "root-representative-after",
+    "screenshots": [
+      "screens/after/root-sale-query-768-light.png",
+      "screens/after/root-sale-query-calendar-final-768.png",
+      "screens/after/root-sale-query-return-final-768.png"
+    ],
+    "viewport": "768x768",
+    "theme": "light",
+    "humanViewed": true,
+    "overviewReviewed": true,
+    "interaction": true,
+    "concreteResourceRead": false,
+    "result": "正确find label实际日历2 dialogs→Escape1/query保留且INPUT、起止值不变、页面无横向溢出；不支持:has-text的CSS focus探针与HMR关闭窗已剔除",
+    "source": "root实际操作与逐图人工查看；未知结果仅专项测试，未变成GUI通过"
+  },
+  {
+    "route": "/sale/new",
+    "stage": "root-representative-after",
+    "screenshots": [
+      "screens/after/root-customer-finder-1024.png",
+      "screens/after/root-customer-finder-keyboard-result.png",
+      "screens/after/root-product-finder-1024.png",
+      "screens/after/root-sale-draft-retained-1024.png"
+    ],
+    "viewport": "1024x768",
+    "theme": "light",
+    "humanViewed": true,
+    "overviewReviewed": true,
+    "interaction": true,
+    "concreteResourceRead": false,
+    "result": "客户Finder Home/Enter/Space；ProductFinder选择2商品，原qty1.25/2+备注；切dashboard再回保留2行，未保存。关闭标签一次探针无有效结论，仍待C稳定复验",
+    "source": "root实际操作与逐图人工查看；未知结果仅专项测试，未变成GUI通过"
+  },
+  {
+    "route": "/supplier-refunds",
+    "stage": "root-representative-after",
+    "screenshots": [
+      "screens/after/root-supplier-refund-list-1440.png",
+      "screens/after/root-supplier-refund-list-1024.png",
+      "screens/after/root-supplier-refund-list-dark-1024.png",
+      "screens/after/root-supplier-refund-detail-1440.png",
+      "screens/after/root-supplier-refund-detail-1024.png",
+      "screens/after/root-supplier-refund-detail-final-dark-1024.png"
+    ],
+    "viewport": "1024x768",
+    "theme": "light",
+    "humanViewed": true,
+    "overviewReviewed": true,
+    "interaction": true,
+    "concreteResourceRead": false,
+    "result": "同RF1草稿4.0000，原单/供应商/仓库与原付款分配；真实打开/关闭详情、1440/1024浅深。最终dark axe37pass/0violation/2incomplete，不能称全部axe通过；未到账/取消资金动作",
+    "source": "root实际操作与逐图人工查看；未知结果仅专项测试，未变成GUI通过"
+  },
+  {
+    "route": "/procurement/:id",
+    "stage": "root-representative-after",
+    "screenshots": [
+      "screens/after/root-procurement-detail-1024.png",
+      "screens/after/root-procurement-detail-final-1024.png",
+      "screens/after/root-procurement-detail-final-dark-1024.png",
+      "screens/after/root-procurement-coverage-dialog-1024.png"
+    ],
+    "viewport": "1024x768",
+    "theme": "light",
+    "humanViewed": true,
+    "overviewReviewed": true,
+    "interaction": true,
+    "concreteResourceRead": true,
+    "result": "实际PLAN1正常待处理1行，表头196→44.5，宽表2416不造成整页水平溢出。查看SupplyDetails和补货覆盖说明，未执行转换或保存规则。覆盖规则底部需滚动，不宣称首屏全部按钮可见",
+    "source": "root实际操作与逐图人工查看；未知结果仅专项测试，未变成GUI通过",
+    "requestedRoute": "/procurement/1",
+    "observedUrl": "#/procurement/1"
+  },
+  {
+    "route": "/supplier-refunds",
+    "stage": "final-description-aria",
+    "viewport": "1024x900",
+    "themes": [
+      "light",
+      "dark"
+    ],
+    "screenshots": [
+      "screens/after/root-supplier-description-final-1024.png",
+      "screens/after/root-supplier-description-final-dark-1024.png"
+    ],
+    "humanViewed": true,
+    "interaction": true,
+    "result": "真实DialogDescription目标存在；Tab/Tab/ShiftTab仍在弹窗；Esc关闭0dialogs，等待真实onCloseAutoFocus后回原退款单号button，正常重开。浅深稳定动画结束后axe均0violation/1incomplete(aria-hidden-focus)。焦点现场样本证明该路径未逃到被隐藏背景，不把incomplete自动算通过。首次立即截图/关闭采样在动画/卸载前，已重拍并条件等待，非产品red。",
+    "accessibilityFiles": [
+      "root-supplier-description-axe-final.json",
+      "root-supplier-description-axe-final-dark.json"
+    ],
+    "businessWrite": false
+  }
+]

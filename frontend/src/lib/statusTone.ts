@@ -18,13 +18,13 @@ export const STATUS_TONE_CLASS = {
   /** 进行中：已占库、拣货中、收货中、待上架，一切流程内的中间态 */
   active: 'bg-primary/10 text-primary border-primary/20',
   /** 终态成功：已完成、已出库、已执行、启用、质检合格 */
-  success: 'bg-success/10 text-success border-success/20',
+  success: 'bg-success/10 text-success-ink border-success/20',
   /** 需要留意但不算失败：在途、超时待确认、部分完成、逾期临近 */
-  warning: 'bg-warning/10 text-warning border-warning/20',
+  warning: 'bg-warning/10 text-warning-ink border-warning/20',
   /** 失败或终止：已取消、打印失败、异常、逾期 */
-  danger: 'bg-destructive/10 text-destructive border-destructive/20',
+  danger: 'bg-destructive/10 text-destructive-ink border-destructive/20',
   /** 分类标识：仓库类型、角色、价格等级——不表达进度，只作区分 */
-  info: 'bg-info/10 text-info border-info/20',
+  info: 'bg-info/10 text-info-ink border-info/20',
 } as const
 
 export type StatusTone = keyof typeof STATUS_TONE_CLASS

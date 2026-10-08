@@ -48,7 +48,7 @@ async function mount(open: boolean, onConfirm: (r: unknown) => void = () => {}) 
     )
   })
 }
-const rows = () => [...host.querySelectorAll('[role="row"]')] as HTMLElement[]
+const rows = () => [...host.querySelectorAll('[role="row"][aria-selected]')] as HTMLElement[]
 const btn = (t: string) => [...host.querySelectorAll('button')].find(b => (b.textContent ?? '').trim() === t) as HTMLButtonElement | undefined
 const hasRow = (name: string) => rows().some(r => (r.textContent ?? '').includes(name))
 const searchInput = () => host.querySelector('input') as HTMLInputElement

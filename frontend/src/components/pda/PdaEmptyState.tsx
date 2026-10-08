@@ -52,9 +52,9 @@ export default function PdaEmptyState({
 
       {/* 操作按钮 */}
       {actionText && onAction && (
-        <Button
+        <Button size="lg"
           variant="outline"
-          className="mt-6 min-h-11 w-full max-w-[200px]"
+          className="px-3 mt-6 min-h-11 w-full max-w-[200px]"
           onClick={onAction}
         >
           {actionText}
@@ -99,7 +99,7 @@ export function PdaLoading({ size = 28, className = '' }: PdaLoadingProps) {
   return (
     <div className={`flex items-center justify-center ${className}`}>
       <div
-        className="animate-spin rounded-full border-2 border-primary border-t-transparent"
+        className="motion-safe:animate-spin rounded-full border-2 border-primary border-t-transparent"
         style={{ width: size, height: size }}
       />
     </div>

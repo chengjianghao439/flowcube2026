@@ -3,10 +3,11 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import { Capacitor } from '@capacitor/core'
-import { Rocket, CheckCircle2 } from 'lucide-react'
+import { CheckCircle2 } from 'lucide-react'
 import type { PdaVersionInfo } from '@/hooks/usePdaUpdate'
 import { PdaAppUpdate, type PdaNativeUpdateProgress } from '@/lib/pdaNativeUpdate'
 import { toast } from '@/lib/toast'
+import PdaDialog from './PdaDialog'
 
 interface Props {
   version: PdaVersionInfo
@@ -114,15 +115,25 @@ export default function PdaUpdateDialog({ version, onDismiss }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 p-4 backdrop-blur-[2px]">
-      <div className="w-full max-w-sm rounded-3xl border border-border bg-card p-6 shadow-2xl shadow-slate-200/80">
-        <div className="mb-4 flex items-start gap-3">
-          <Rocket className="h-8 w-8 shrink-0 text-primary" />
-          <div>
-            <h2 className="text-lg font-bold text-foreground">发现新版本 v{version.version}</h2>
-            <p className="text-sm text-muted-foreground">当前版本可升级</p>
-          </div>
+    <PdaDialog title={`发现新版本 v${version.version}`} description="当前版本可升级" onDismiss={onDismiss} footer={
+        <div className="flex gap-3">
+          {progress < 100 && (
+            <button
+              onClick={handleUpdate}
+              disabled={downloading}
+              className="flex-1 rounded-xl bg-primary py-3 font-bold text-primary-foreground motion-safe:active:scale-95 disabled:opacity-60"
+            >
+              {downloading ? (Capacitor.isNativePlatform() ? `${nativeStatus || '下载中'} ${progress}%` : `下载中 ${progress}%`) : '立即更新'}
+            </button>
+          )}
+          <button
+            onClick={onDismiss}
+            className="rounded-xl border border-border bg-background px-5 py-3 text-sm text-muted-foreground motion-safe:active:scale-95"
+          >
+            {progress === 100 ? '关闭' : '稍后更新'}
+          </button>
         </div>
+    }>
         {version.releaseNote && (
           <div className="mb-4 rounded-2xl border border-border bg-muted/40 p-3">
             <p className="mb-1 text-xs font-semibold text-muted-foreground">更新内容</p>
@@ -138,41 +149,23 @@ export default function PdaUpdateDialog({ version, onDismiss }: Props) {
               <span>{nativeStatus || '正在下载…'}</span><span>{progress}%</span>
             </div>
             <div className="h-2 rounded-full bg-muted">
-              <div className="h-2 rounded-full bg-primary transition-all" style={{ width: `${progress}%` }} />
+              <div className="h-2 rounded-full bg-primary transition-all motion-reduce:transition-none" style={{ width: `${progress}%` }} />
             </div>
           </div>
         )}
         {progress === 100 && (
-          <div className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-center">
-            <p className="flex items-center justify-center gap-1.5 text-sm text-emerald-700">
+          <div className="mb-4 rounded-2xl border border-success/30 bg-success/10 p-3 text-center">
+            <p className="flex items-center justify-center gap-1.5 text-sm text-success-ink">
               <CheckCircle2 className="h-4 w-4" />
               {Capacitor.isNativePlatform() ? '已打开安装界面，请按系统提示完成安装' : '下载完成，请确认安装'}
             </p>
           </div>
         )}
         {error && (
-          <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 p-3">
-            <p className="text-sm text-red-700">{error}</p>
+          <div className="mb-4 rounded-2xl border border-destructive/30 bg-destructive/10 p-3">
+            <p role="alert" className="text-sm text-destructive-ink">{error}</p>
           </div>
         )}
-        <div className="flex gap-3">
-          {progress < 100 && (
-            <button
-              onClick={handleUpdate}
-              disabled={downloading}
-              className="flex-1 rounded-xl bg-primary py-3 font-bold text-primary-foreground active:scale-95 disabled:opacity-60"
-            >
-              {downloading ? (Capacitor.isNativePlatform() ? `${nativeStatus || '下载中'} ${progress}%` : `下载中 ${progress}%`) : '立即更新'}
-            </button>
-          )}
-          <button
-            onClick={onDismiss}
-            className="rounded-xl border border-border bg-background px-5 py-3 text-sm text-muted-foreground active:scale-95"
-          >
-            {progress === 100 ? '关闭' : '稍后更新'}
-          </button>
-        </div>
-      </div>
-    </div>
+    </PdaDialog>
   )
 }

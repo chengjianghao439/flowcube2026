@@ -67,8 +67,8 @@ function CheckList() {
                 {c.itemCount === 0
                   // 空盘点单（历史数据）：在 PDA 上明说无法盘点，并指出收口入口，
                   // 不要显示「待盘 0/0」这种看不出怎么办的状态（2026-09-17 验收 ISSUE-009）。
-                  ? <span className="text-xs text-amber-600 text-right">无盘点明细<br />请在 ERP 取消后重建</span>
-                  : <span className="text-sm tabular-nums">待盘 <b className="text-amber-600">{c.pendingCount}</b>/{c.itemCount}</span>}
+                  ? <span className="text-xs text-warning-ink text-right">无盘点明细<br />请在 ERP 取消后重建</span>
+                  : <span className="text-sm tabular-nums">待盘 <b className="text-warning-ink">{c.pendingCount}</b>/{c.itemCount}</span>}
               </div>
             </PdaCard>
           </button>
@@ -88,7 +88,7 @@ function CheckWork({ checkId }: { checkId: number }) {
   const [scanned, setScanned] = useState<ScannedContainer[]>([])
   const [checking, setChecking] = useState(false)
 
-  const { data: detail, isLoading, refetch } = useQuery({
+  const { data: detail, isLoading, isError, refetch } = useQuery({
     queryKey: ['pda-stockcheck', checkId],
     queryFn: () => getScanCheckItemsApi(checkId),
   })
@@ -160,6 +160,7 @@ function CheckWork({ checkId }: { checkId: number }) {
   }, [activeItem, totalCounted])
 
   if (isLoading) return <PdaLoading />
+  if (isError) return <div className="min-h-screen bg-background"><PdaHeader title="扫码盘点" onBack={() => navigate('/pda/stockcheck')} /><div className="mx-auto max-w-md p-4"><PdaQueryError onRetry={() => { void refetch() }} /></div></div>
   if (!detail) return <div className="p-8 text-center text-muted-foreground">盘点单不存在</div>
 
   // ── 作业中：某商品逐只扫容器 ──
@@ -174,7 +175,7 @@ function CheckWork({ checkId }: { checkId: number }) {
             <p className="text-sm">
               扫描<b>在架的每一个库存条码</b>：已扫 <b className="tabular-nums text-primary">{scanned.length}</b> 个 · 实盘 <b className="tabular-nums text-primary">{totalCounted}</b>
               {diffPreview !== null && diffPreview !== 0 && (
-                <span className={diffPreview > 0 ? ' text-emerald-600' : ' text-amber-600'}>
+                <span className={diffPreview > 0 ? ' text-success-ink' : ' text-warning-ink'}>
                   （账面 {activeItem.bookQty}，差 {diffPreview > 0 ? '+' : ''}{diffPreview}）
                 </span>
               )}
@@ -188,7 +189,7 @@ function CheckWork({ checkId }: { checkId: number }) {
             <div className="space-y-1">
               {scanned.map(s => (
                 <div key={s.barcode} className="flex items-center justify-between gap-2 rounded-md bg-background px-2 py-1 text-sm">
-                  <span className="text-doc-code shrink-0">{s.barcode}</span>
+                  <span className="text-doc-code min-w-0 [overflow-wrap:anywhere]">{s.barcode}</span>
                   {s.individual ? (
                     <span className="text-xs text-muted-foreground">单件 ×1</span>
                   ) : (
@@ -197,17 +198,17 @@ function CheckWork({ checkId }: { checkId: number }) {
                       <Input quantity
                         type="number" min={0} max={s.bookQty} step={qtyStep(allowDecimalOf(activeItem?.productId))}
                         data-scanner-manual="true"
-                        className="h-7 w-20 text-right tabular-nums"
+                        aria-label={`${s.barcode} 实盘数量`} className="min-h-11 w-20 text-right tabular-nums"
                         value={String(s.countedQty)}
                         onChange={e => {
                           const v = Number(e.target.value)
                           setScanned(prev => prev.map(x => x.barcode === s.barcode ? { ...x, countedQty: Number.isFinite(v) ? v : 0 } : x))
                         }}
                       />
-                      <span className={s.countedQty !== s.bookQty ? 'text-amber-600' : ''}>/ 账面 {s.bookQty}</span>
+                      <span className={s.countedQty !== s.bookQty ? 'text-warning-ink' : ''}>/ 账面 {s.bookQty}</span>
                     </span>
                   )}
-                  <button type="button" className="min-h-11 min-w-11 px-2 text-xs text-destructive shrink-0"
+                  <button type="button" className="min-h-11 min-w-11 px-2 text-xs text-destructive-ink shrink-0"
                     onClick={() => setScanned(prev => prev.filter(x => x.barcode !== s.barcode))}
                   >移除</button>
                 </div>
@@ -217,7 +218,7 @@ function CheckWork({ checkId }: { checkId: number }) {
         </div>
         <PdaBottomBar>
           <PdaScanner onScan={(code) => { void addContainer(code) }} placeholder="扫描在架库存条码" disabled={checking || saveAction.submitBlocked} />
-          <Button className="w-full" disabled={saveAction.phase === 'submitting' || checking} onClick={submit}>
+          <Button size="lg" className="px-3 w-full" disabled={saveAction.phase === 'submitting' || checking} onClick={submit}>
             {saveAction.phase === 'submitting' ? '提交中…' : `提交本商品（${scanned.length} 个条码 / 实盘 ${totalCounted}）`}
           </Button>
         </PdaBottomBar>
@@ -249,7 +250,7 @@ function CheckWork({ checkId }: { checkId: number }) {
                   </div>
                   <div className="shrink-0 text-right text-sm">
                     {done
-                      ? <span className={diff === 0 ? 'text-emerald-600' : 'text-amber-600'}>
+                      ? <span className={diff === 0 ? 'text-success-ink' : 'text-warning-ink'}>
                           已扫 {it.scannedContainerCount} 个{diff !== 0 ? `（${diff > 0 ? '+' : ''}${diff}）` : ' ✓'}
                         </span>
                       : <span className="text-muted-foreground">待盘</span>}

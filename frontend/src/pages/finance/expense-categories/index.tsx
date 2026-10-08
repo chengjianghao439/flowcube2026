@@ -1,3 +1,5 @@
+import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
 import { useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -13,6 +15,7 @@ import BaseCrudPage from '@/components/shared/BaseCrudPage'
 const EMPTY = { name: '', sortOrder: '0', remark: '', isActive: true }
 
 export default function ExpenseCategoriesPage() {
+  const { can } = usePermission()
   const [form, setForm] = useState(EMPTY)
 
   const columns: TableColumn<ExpenseCategory>[] = [
@@ -23,13 +26,16 @@ export default function ExpenseCategoriesPage() {
       const c = row as ExpenseCategory
       return <SoftStatusLabel label={c.isActive ? '启用' : '停用'} tone={activeTone(c.isActive)} />
     }},
-    { key: 'remark', title: '备注', render: v => (v as string) || <span className="text-muted-foreground">—</span> },
+    { key: 'remark', title: '备注', expandableText: true, render: v => (v as string) || <span className="text-muted-foreground">—</span> },
   ]
 
   return (
     <BaseCrudPage<ExpenseCategory>
       title="费用类别"
       description="报销单填写时可选的费用类别。已被报销单使用的类别不能删除，只能停用。"
+      canCreate={can(PERMISSIONS.FINANCE_EXPENSE_CATEGORY_MANAGE)}
+      canEdit={can(PERMISSIONS.FINANCE_EXPENSE_CATEGORY_MANAGE)}
+      canDelete={can(PERMISSIONS.FINANCE_EXPENSE_CATEGORY_MANAGE)}
       columns={columns}
       queryKey={['expense-categories', 'all']}
       listQuery={() => getExpenseCategoriesApi(false)}
@@ -37,20 +43,21 @@ export default function ExpenseCategoriesPage() {
       deleteMessage="已被报销单使用的类别不能删除，请改为停用。"
       createLabel="新建类别"
       saveSuccessMessage={(editing) => editing ? '类别已保存' : '类别已创建'}
+      onOpen={editing => setForm(editing ? { name: editing.name, sortOrder: String(editing.sortOrder), remark: editing.remark ?? '', isActive: editing.isActive } : EMPTY)}
       canSubmit={() => !!form.name.trim()}
       renderForm={(editing) => (
         <>
           <div className="space-y-1">
-            <Label>类别名称 *</Label>
-            <Input value={form.name} onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))} placeholder="如：差旅费" />
+            <Label htmlFor="expense-category-name">类别名称 *</Label>
+            <Input id="expense-category-name" value={form.name} onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))} placeholder="如：差旅费" />
           </div>
           <div className="space-y-1">
-            <Label>排序</Label>
-            <Input type="number" value={form.sortOrder} onChange={(e) => setForm(f => ({ ...f, sortOrder: e.target.value }))} />
+            <Label htmlFor="expense-category-sort">排序</Label>
+            <Input id="expense-category-sort" type="number" value={form.sortOrder} onChange={(e) => setForm(f => ({ ...f, sortOrder: e.target.value }))} />
           </div>
           <div className="space-y-1">
-            <Label>备注</Label>
-            <Input value={form.remark} onChange={(e) => setForm(f => ({ ...f, remark: e.target.value }))} />
+            <Label htmlFor="expense-category-remark">备注</Label>
+            <Input id="expense-category-remark" value={form.remark} onChange={(e) => setForm(f => ({ ...f, remark: e.target.value }))} />
           </div>
           {editing && (
             <div className="flex items-center gap-2">

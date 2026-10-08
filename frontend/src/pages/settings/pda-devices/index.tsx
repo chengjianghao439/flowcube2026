@@ -8,7 +8,7 @@
  *
  * 密钥只在「新增」和「重置密钥」之后显示这一次，关掉就再也拿不到（库里只存哈希）。
  */
-import { useState } from 'react'
+import { useState, useId } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { QRCodeSVG } from 'qrcode.react'
 import {
@@ -24,6 +24,7 @@ import {
 } from '@/api/pda-devices'
 import { getWarehousesActiveApi } from '@/api/warehouses'
 import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import {
@@ -50,7 +51,7 @@ const STATUS_LABEL: Record<PdaDeviceStatus, string> = {
 const NO_WAREHOUSE = '__none__'
 
 export default function PdaDevicesPage() {
-  const qc = useQueryClient()
+  const qc = useQueryClient(), inputId = useId()
   const [keyword, setKeyword] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
   const [form, setForm] = useState<{ deviceName: string; warehouseId: string }>({ deviceName: '', warehouseId: NO_WAREHOUSE })
@@ -179,17 +180,18 @@ export default function PdaDevicesPage() {
           </DialogHeader>
           <div className="space-y-3">
             <div>
-              <div className="mb-1 text-sm font-medium">设备名称</div>
+              <Label htmlFor={`${inputId}-create-deviceName`} className="mb-1 block">设备名称</Label>
               <Input
+                id={`${inputId}-create-deviceName`}
                 placeholder="例如：一号仓收货机"
                 value={form.deviceName}
                 onChange={e => setForm(f => ({ ...f, deviceName: e.target.value }))}
               />
             </div>
             <div>
-              <div className="mb-1 text-sm font-medium">所属仓库</div>
+              <Label htmlFor={`${inputId}-create-warehouseId`} className="mb-1 block">所属仓库</Label>
               <Select value={form.warehouseId} onValueChange={v => setForm(f => ({ ...f, warehouseId: v }))}>
-                <SelectTrigger><SelectValue placeholder="选择仓库" /></SelectTrigger>
+                <SelectTrigger id={`${inputId}-create-warehouseId`}><SelectValue placeholder="选择仓库" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value={NO_WAREHOUSE}>不绑定（可在任何仓作业）</SelectItem>
                   {(warehouses ?? []).map(w => (
@@ -243,7 +245,7 @@ export default function PdaDevicesPage() {
                 </div>
               </div>
               {typeof secretView.revokedSessions === 'number' && secretView.revokedSessions > 0 && (
-                <p className="text-xs text-destructive">
+                <p className="text-xs text-destructive-ink">
                   已退出该设备原有的 {secretView.revokedSessions} 个登录，这台机器需要重新绑定才能继续作业。
                 </p>
               )}
@@ -273,19 +275,20 @@ export default function PdaDevicesPage() {
           {editing && (
             <div className="space-y-3">
               <div>
-                <div className="mb-1 text-sm font-medium">设备名称</div>
+                <Label htmlFor={`${inputId}-edit-deviceName`} className="mb-1 block">设备名称</Label>
                 <Input
+                  id={`${inputId}-edit-deviceName`}
                   value={editing.deviceName ?? ''}
                   onChange={e => setEditing(d => d && ({ ...d, deviceName: e.target.value }))}
                 />
               </div>
               <div>
-                <div className="mb-1 text-sm font-medium">所属仓库</div>
+                <Label htmlFor={`${inputId}-edit-warehouseId`} className="mb-1 block">所属仓库</Label>
                 <Select
                   value={editing.warehouseId == null ? NO_WAREHOUSE : String(editing.warehouseId)}
                   onValueChange={v => setEditing(d => d && ({ ...d, warehouseId: v === NO_WAREHOUSE ? null : Number(v) }))}
                 >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger id={`${inputId}-edit-warehouseId`}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value={NO_WAREHOUSE}>不绑定（可在任何仓作业）</SelectItem>
                     {(warehouses ?? []).map(w => (

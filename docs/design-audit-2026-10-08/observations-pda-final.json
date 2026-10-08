@@ -1,0 +1,415 @@
+{
+  "method": "normal device2 UI binding; GET resource identity verified before capture; one PDA tab; read-only/phase views; all 12 route screenshots manually viewed after close; no business POST",
+  "identity": [
+    {
+      "id": 1,
+      "status": 4,
+      "statusName": "已完成",
+      "taskNo": "IN20261008001"
+    },
+    {
+      "id": 2,
+      "status": 1,
+      "statusName": "待收货",
+      "taskNo": "IN20261008002"
+    }
+  ],
+  "routes": [
+    {
+      "bound": true,
+      "mainCount": 1,
+      "overflow": false,
+      "text": "← 返回\n扫码上架\n\n尚未收货\n\n这张收货单还没有开始收货，请先到收货页登记实收数量，已收到的货即可扫码上架。\n\n返回收货订单",
+      "ticket": true,
+      "timeOrigin": 1791420639438.7,
+      "url": "#/pda/putaway/2",
+      "viewport": [
+        320,
+        844
+      ],
+      "screenshot": "screens/after/b-pda-putaway-2-final-320.png",
+      "interaction": "normal bound GET original inbound; phase read only",
+      "visualReviewed": true,
+      "reviewScope": "真实inbound2待收货，尚未收货+返回收货订单；无待上架执行态"
+    },
+    {
+      "bound": true,
+      "mainCount": 1,
+      "overflow": false,
+      "text": "← 返回\n扫码上架\n\n尚未收货\n\n这张收货单还没有开始收货，请先到收货页登记实收数量，已收到的货即可扫码上架。\n\n返回收货订单",
+      "ticket": true,
+      "timeOrigin": 1791420639438.7,
+      "url": "#/pda/putaway/2",
+      "viewport": [
+        390,
+        844
+      ],
+      "screenshot": "screens/after/b-pda-putaway-2-final-390.png",
+      "interaction": "normal bound GET original inbound; phase read only",
+      "visualReviewed": true,
+      "reviewScope": "真实inbound2待收货，尚未收货+返回收货订单；无待上架执行态"
+    },
+    {
+      "bound": true,
+      "mainCount": 1,
+      "overflow": false,
+      "text": "← 返回\n扫码上架\n\n已完成\n\n该订单上架已完成。\n\n返回收货订单",
+      "ticket": true,
+      "timeOrigin": 1791420639438.7,
+      "url": "#/pda/putaway/1",
+      "viewport": [
+        320,
+        844
+      ],
+      "screenshot": "screens/after/b-pda-putaway-1-final-320.png",
+      "interaction": "normal bound GET original inbound; phase read only",
+      "visualReviewed": true,
+      "reviewScope": "真实inbound1已完成阶段；无执行/写动作"
+    },
+    {
+      "bound": true,
+      "mainCount": 1,
+      "overflow": false,
+      "text": "← 返回\n扫码上架\n\n已完成\n\n该订单上架已完成。\n\n返回收货订单",
+      "ticket": true,
+      "timeOrigin": 1791420639438.7,
+      "url": "#/pda/putaway/1",
+      "viewport": [
+        390,
+        844
+      ],
+      "screenshot": "screens/after/b-pda-putaway-1-final-390.png",
+      "interaction": "normal bound GET original inbound; phase read only",
+      "visualReviewed": true,
+      "reviewScope": "真实inbound1已完成阶段；无执行/写动作"
+    },
+    {
+      "bound": true,
+      "buttons": [
+        {
+          "disabled": false,
+          "height": 44,
+          "name": "← 拣货列表"
+        },
+        {
+          "disabled": false,
+          "height": 44,
+          "name": "▲ 收起推荐"
+        },
+        {
+          "disabled": false,
+          "height": 58.28125,
+          "name": "GL76c9c150I000001库存12"
+        },
+        {
+          "disabled": false,
+          "height": 58.28125,
+          "name": "GL76c9c150I000002库存12"
+        },
+        {
+          "disabled": false,
+          "height": 44,
+          "name": "手动输入"
+        }
+      ],
+      "mainCount": 1,
+      "overflow": false,
+      "text": "← 拣货列表\nWT20261008001\n\n验收合成客户-GL76c9c150\n\n拣货进度\n0/1.25 (0%)\n\nGL76c9c150P0\n\n验收合成：加长静音阻尼铰链（嵌入式柜门用）长名称与型号识别检查\n\n供应商型号-1-LONG / 型号-1-EXTENDED / 银白色\n\n剩余 1.25 个\n已拣 0\n共需 1.25\n▲ 收起推荐\n\nGL76c9c150\n\nI000001\n\n库存\n\n12\n\nGL76c9c150\n\nI000002\n\n库存\n\n12\n\n扫描库存条码\n\n手动输入",
+      "ticket": true,
+      "timeOrigin": 1791420883466.6,
+      "url": "#/pda/task/1",
+      "viewport": [
+        320,
+        844
+      ],
+      "screenshot": "screens/after/b-pda-task-1-final-320.png",
+      "visualReviewed": true,
+      "interaction": "GET task1/sale5 phase read only; no scanner/manual/business mutation",
+      "reviewScope": "真实task1/sale5拣货中，0/1.25、长商品/型号与两容器推荐完整；未拣货",
+      "limit": "后续同资源正常重绑复查：manual按钮y763/h44/bottom807已完整可达；打开后44px人工输入获焦并空取消。原中间图的折叠疑点已证伪，不代表拣货执行通过。"
+    },
+    {
+      "bound": true,
+      "buttons": [
+        {
+          "disabled": false,
+          "height": 44,
+          "name": "← 拣货列表"
+        },
+        {
+          "disabled": false,
+          "height": 44,
+          "name": "▲ 收起推荐"
+        },
+        {
+          "disabled": false,
+          "height": 58.28125,
+          "name": "GL76c9c150I000001库存12"
+        },
+        {
+          "disabled": false,
+          "height": 58.28125,
+          "name": "GL76c9c150I000002库存12"
+        },
+        {
+          "disabled": false,
+          "height": 44,
+          "name": "手动输入"
+        }
+      ],
+      "mainCount": 1,
+      "overflow": false,
+      "text": "← 拣货列表\nWT20261008001\n\n验收合成客户-GL76c9c150\n\n拣货进度\n0/1.25 (0%)\n\nGL76c9c150P0\n\n验收合成：加长静音阻尼铰链（嵌入式柜门用）长名称与型号识别检查\n\n供应商型号-1-LONG / 型号-1-EXTENDED / 银白色\n\n剩余 1.25 个\n已拣 0\n共需 1.25\n▲ 收起推荐\n\nGL76c9c150\n\nI000001\n\n库存\n\n12\n\nGL76c9c150\n\nI000002\n\n库存\n\n12\n\n扫描库存条码\n\n手动输入",
+      "ticket": true,
+      "timeOrigin": 1791420883466.6,
+      "url": "#/pda/task/1",
+      "viewport": [
+        390,
+        844
+      ],
+      "screenshot": "screens/after/b-pda-task-1-final-390.png",
+      "visualReviewed": true,
+      "interaction": "GET task1/sale5 phase read only; no scanner/manual/business mutation",
+      "reviewScope": "真实task1/sale5拣货中，0/1.25、长商品/型号与两容器推荐完整；未拣货"
+    },
+    {
+      "bound": true,
+      "buttons": [
+        {
+          "disabled": false,
+          "height": 44,
+          "name": "← 返回"
+        },
+        {
+          "disabled": false,
+          "height": 44,
+          "name": "返回工作台"
+        },
+        {
+          "disabled": false,
+          "height": 44,
+          "name": "选择其他任务"
+        }
+      ],
+      "mainCount": 1,
+      "overflow": false,
+      "text": "← 返回\n当前任务不能复核\n当前任务不能复核\n\n任务 WT20261008001 当前状态为「拣货中」。复核页只允许处理「待复核」任务，请选择其他待复核任务。\n\n返回工作台\n选择其他任务",
+      "ticket": true,
+      "timeOrigin": 1791420883466.6,
+      "url": "#/pda/check/1",
+      "viewport": [
+        320,
+        844
+      ],
+      "screenshot": "screens/after/b-pda-check-1-final-320.png",
+      "visualReviewed": true,
+      "interaction": "GET task1/sale5 phase read only; no scanner/manual/business mutation",
+      "reviewScope": "真实task1拣货阶段被明确拒绝复核；非待复核执行态"
+    },
+    {
+      "bound": true,
+      "buttons": [
+        {
+          "disabled": false,
+          "height": 44,
+          "name": "← 返回"
+        },
+        {
+          "disabled": false,
+          "height": 44,
+          "name": "返回工作台"
+        },
+        {
+          "disabled": false,
+          "height": 44,
+          "name": "选择其他任务"
+        }
+      ],
+      "mainCount": 1,
+      "overflow": false,
+      "text": "← 返回\n当前任务不能复核\n当前任务不能复核\n\n任务 WT20261008001 当前状态为「拣货中」。复核页只允许处理「待复核」任务，请选择其他待复核任务。\n\n返回工作台\n选择其他任务",
+      "ticket": true,
+      "timeOrigin": 1791420883466.6,
+      "url": "#/pda/check/1",
+      "viewport": [
+        390,
+        844
+      ],
+      "screenshot": "screens/after/b-pda-check-1-final-390.png",
+      "visualReviewed": true,
+      "interaction": "GET task1/sale5 phase read only; no scanner/manual/business mutation",
+      "reviewScope": "真实task1拣货阶段被明确拒绝复核；非待复核执行态"
+    },
+    {
+      "bound": true,
+      "buttons": [
+        {
+          "disabled": false,
+          "height": 44,
+          "name": "← 返回"
+        },
+        {
+          "disabled": false,
+          "height": 44,
+          "name": "返回工作台"
+        },
+        {
+          "disabled": false,
+          "height": 44,
+          "name": "选择其他任务"
+        }
+      ],
+      "mainCount": 1,
+      "overflow": false,
+      "text": "← 返回\n当前任务不能打包\n当前任务不能打包\n\n任务 WT20261008001 当前状态为「拣货中」。打包页只允许处理「待打包」任务，请选择其他待打包任务。\n\n返回工作台\n选择其他任务",
+      "ticket": true,
+      "timeOrigin": 1791420883466.6,
+      "url": "#/pda/pack/1",
+      "viewport": [
+        320,
+        844
+      ],
+      "screenshot": "screens/after/b-pda-pack-1-final-320.png",
+      "visualReviewed": true,
+      "interaction": "GET task1/sale5 phase read only; no scanner/manual/business mutation",
+      "reviewScope": "真实task1拣货阶段被明确拒绝打包；非待打包执行态"
+    },
+    {
+      "bound": true,
+      "buttons": [
+        {
+          "disabled": false,
+          "height": 44,
+          "name": "← 返回"
+        },
+        {
+          "disabled": false,
+          "height": 44,
+          "name": "返回工作台"
+        },
+        {
+          "disabled": false,
+          "height": 44,
+          "name": "选择其他任务"
+        }
+      ],
+      "mainCount": 1,
+      "overflow": false,
+      "text": "← 返回\n当前任务不能打包\n当前任务不能打包\n\n任务 WT20261008001 当前状态为「拣货中」。打包页只允许处理「待打包」任务，请选择其他待打包任务。\n\n返回工作台\n选择其他任务",
+      "ticket": true,
+      "timeOrigin": 1791420883466.6,
+      "url": "#/pda/pack/1",
+      "viewport": [
+        390,
+        844
+      ],
+      "screenshot": "screens/after/b-pda-pack-1-final-390.png",
+      "visualReviewed": true,
+      "interaction": "GET task1/sale5 phase read only; no scanner/manual/business mutation",
+      "reviewScope": "真实task1拣货阶段被明确拒绝打包；非待打包执行态"
+    },
+    {
+      "bound": true,
+      "buttons": [
+        {
+          "disabled": false,
+          "height": 44,
+          "name": "← 返回"
+        },
+        {
+          "disabled": false,
+          "height": 44,
+          "name": "手动输入"
+        }
+      ],
+      "mainCount": 1,
+      "overflow": false,
+      "text": "← 返回\n出库确认\n\n扫描物流条码\n\n手动输入",
+      "ticket": true,
+      "timeOrigin": 1791420883466.6,
+      "url": "#/pda/ship/1",
+      "viewport": [
+        320,
+        844
+      ],
+      "screenshot": "screens/after/b-pda-ship-1-final-320.png",
+      "visualReviewed": true,
+      "interaction": "GET task1/sale5 phase read only; no scanner/manual/business mutation",
+      "reviewScope": "路由参数未被ship组件消费；实际只扫描初态，不是task1原单/阶段详情",
+      "resourceDetailAcceptance": false
+    },
+    {
+      "bound": true,
+      "buttons": [
+        {
+          "disabled": false,
+          "height": 44,
+          "name": "← 返回"
+        },
+        {
+          "disabled": false,
+          "height": 44,
+          "name": "手动输入"
+        }
+      ],
+      "mainCount": 1,
+      "overflow": false,
+      "text": "← 返回\n出库确认\n\n扫描物流条码\n\n手动输入",
+      "ticket": true,
+      "timeOrigin": 1791420883466.6,
+      "url": "#/pda/ship/1",
+      "viewport": [
+        390,
+        844
+      ],
+      "screenshot": "screens/after/b-pda-ship-1-final-390.png",
+      "visualReviewed": true,
+      "interaction": "GET task1/sale5 phase read only; no scanner/manual/business mutation",
+      "reviewScope": "路由参数未被ship组件消费；实际只扫描初态，不是task1原单/阶段详情",
+      "resourceDetailAcceptance": false
+    }
+  ],
+  "task1Probe": {
+    "status": 404,
+    "code": "NOT_FOUND",
+    "message": "仓库任务不存在",
+    "boundary": "root confirms sale2 reserved only, task1 was inferred/nonexistent; not a real task detail",
+    "subsequentCorrection": "root later created and dispatched independent sale5 normally; real task1/sale5 now confirmed by GET before detail navigation"
+  },
+  "warehouseTaskIdentity": {
+    "id": 1,
+    "items": [
+      {
+        "id": 1,
+        "pickedQty": 0,
+        "productId": 1,
+        "requiredQty": 1.25
+      }
+    ],
+    "saleOrderId": 5,
+    "status": 2,
+    "statusName": "拣货中",
+    "taskNo": "WT20261008001",
+    "taskType": "sale_out",
+    "timeOrigin": 1791420883466.6
+  },
+  "finalBoundAxe": {
+    "viewport": [
+      320,
+      844
+    ],
+    "passes": 35,
+    "violations": 0,
+    "incomplete": 0,
+    "scope": "正常绑定手动区空凭据字段，当前main与嵌套有效badge",
+    "evidence": "evidence-b/pda-bind-final-axe.json",
+    "screenshot": "screens/after/b-pda-bind-final-320.png"
+  },
+  "resourcesClosed": {
+    "session": "flowcube-impeccable-b",
+    "inactiveVerified": true,
+    "pid": null,
+    "evidence": "evidence-b/browser-cleanup-b-final.json"
+  },
+  "reachabilitySupplement": "evidence-b/pda-320-reachability.json"
+}

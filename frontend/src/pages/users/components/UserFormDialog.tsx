@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { EditModeBadge } from '@/components/shared/EditModeBadge'
+import { useDialogDraftGuard } from '@/hooks/useDialogDraftGuard'
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
+import { EditModeBadge, UnsavedBadge } from '@/components/shared/EditModeBadge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -58,9 +60,16 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
   const { mutate: updateUser, isPending: updating } = useUpdateUser()
   const { data: departments, isError: departmentsError, refetch: refetchDepartments } = useDepartmentOptions()
 
-  const isPending = creating || updating
+  const [baseline, setBaseline] = useState('')
+  const formState = JSON.stringify({ username, password, realName, roleId, departmentId, isActive, allowSelfApprove })
+  const dirty = baseline !== '' && formState !== baseline
+  const draft = useDialogDraftGuard({ open, identity: editUser?.id ?? 'new', dirty, pending: creating || updating, onClose })
+  const isPending = draft.locked
 
   useEffect(() => {
+    if (!open) return
+    setBaseline(JSON.stringify({ username: editUser?.username ?? '', password: '', realName: editUser?.realName ?? '', roleId: editUser?.roleId ?? 0, departmentId: editUser?.departmentId ?? null, isActive: editUser?.isActive ?? true, allowSelfApprove: !!editUser?.allowSelfApprove }))
+    setPassword('')
     if (editUser) {
       setUsername(editUser.username)
       setRealName(editUser.realName)
@@ -79,7 +88,9 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
     }
     setFieldErrors({})
     setServerError('')
-  }, [editUser, open])
+    // 仅在打开弹窗或切换用户时初始化；同一用户的后台刷新不得抹掉未保存草稿。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editUser?.id, open])
 
   function clearError(field: 'username' | 'password' | 'realName' | 'roleId') {
     setFieldErrors(current => ({ ...current, [field]: undefined }))
@@ -106,7 +117,9 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
     if (Object.keys(errors).length) { setFieldErrors(errors); return }
     setFieldErrors({})
     setServerError('')
-    const onError = (error: Error) => setServerError(error.message)
+    const submission = draft.beginSubmit()
+    if (!submission) return
+    const onError = (error: Error) => { if (submission.finish()) setServerError(error.message) }
     if (isEdit && editUser) {
       // 编辑超管账号时不传 roleId（后端保持原角色）——超管不可经此表单改派
       // allowSelfApprove 只在操作者是超管时才带上：非超管传该字段会被后端 403 拒绝，
@@ -118,23 +131,26 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
       updateUser(
         { id: editUser.id, data: payload },
         { onSuccess: () => {
+          if (!submission.finish()) return
           if (isOperatorSuperAdmin && editUser.id === operatorId) updateCurrentUser({ username: account })
           onClose()
         }, onError },
       )
     } else {
-      createUser({ username: account, password, realName: name, roleId, departmentId }, { onSuccess: onClose, onError })
+      createUser({ username: account, password, realName: name, roleId, departmentId }, { onSuccess: () => { if (submission.finish()) onClose() }, onError })
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={(v) => !v && !isPending && onClose()}>
-      <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
+    <>
+    <Dialog open={open} onOpenChange={v => { if (!v) draft.requestClose() }}>
+      <DialogContent ref={draft.contentRef} onFocusCapture={draft.rememberFocus} className="flex max-h-[calc(100dvh-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
         <DialogHeader className="shrink-0 px-6 pb-4 pt-6">
           {/* 编辑态与默认（新增）态一眼可分 */}
           <DialogTitle className="flex flex-wrap items-center gap-2">
             {isEdit ? '编辑用户' : '新增用户'}
             {isEdit && <EditModeBadge />}
+            <UnsavedBadge show={dirty} />
           </DialogTitle>
           <DialogDescription className="text-foreground/80">
             {isEdit && editUser
@@ -147,7 +163,7 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
           <div className="grid min-h-0 grid-cols-1 gap-x-5 gap-y-4 overflow-y-auto px-6 py-4 sm:grid-cols-2">
           <h3 className="border-b pb-2 text-sm font-semibold sm:col-span-2">账号信息</h3>
           <div className="space-y-2">
-            <Label htmlFor="form-username">账号 <span className="text-destructive">*</span></Label>
+            <Label htmlFor="form-username">账号 <span className="text-destructive-ink">*</span></Label>
             <Input
               id="form-username"
               value={username}
@@ -159,12 +175,12 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
               aria-describedby={fieldErrors.username ? 'form-username-error' : undefined}
               disabled={isPending || (isEdit && !isOperatorSuperAdmin)}
             />
-            {fieldErrors.username && <p id="form-username-error" className="text-sm text-destructive">{fieldErrors.username}</p>}
+            {fieldErrors.username && <p id="form-username-error" className="text-sm text-destructive-ink">{fieldErrors.username}</p>}
           </div>
           {!isEdit && (
             <>
               <div className="space-y-2">
-                <Label htmlFor="form-password">初始密码 <span className="text-destructive">*</span></Label>
+                <Label htmlFor="form-password">初始密码 <span className="text-destructive-ink">*</span></Label>
                 <Input
                   id="form-password"
                   type="password"
@@ -177,13 +193,13 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
                   aria-describedby={fieldErrors.password ? 'form-password-error' : undefined}
                   disabled={isPending}
                 />
-                {fieldErrors.password && <p id="form-password-error" className="text-sm text-destructive">{fieldErrors.password}</p>}
+                {fieldErrors.password && <p id="form-password-error" className="text-sm text-destructive-ink">{fieldErrors.password}</p>}
               </div>
             </>
           )}
 
           <div className="space-y-2">
-            <Label htmlFor="form-realName">姓名 <span className="text-destructive">*</span></Label>
+            <Label htmlFor="form-realName">姓名 <span className="text-destructive-ink">*</span></Label>
             <Input
               id="form-realName"
               value={realName}
@@ -195,12 +211,12 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
               aria-describedby={fieldErrors.realName ? 'form-realName-error' : undefined}
               disabled={isPending}
             />
-            {fieldErrors.realName && <p id="form-realName-error" className="text-sm text-destructive">{fieldErrors.realName}</p>}
+            {fieldErrors.realName && <p id="form-realName-error" className="text-sm text-destructive-ink">{fieldErrors.realName}</p>}
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="form-department">部门</Label>
-            <Select value={departmentId ? String(departmentId) : '0'} onValueChange={(v) => { setDepartmentId(v === '0' ? null : Number(v)); setServerError('') }}>
+            <Select disabled={isPending} value={departmentId ? String(departmentId) : '0'} onValueChange={(v) => { if (!draft.canEdit()) return; setDepartmentId(v === '0' ? null : Number(v)); setServerError('') }}>
               <SelectTrigger id="form-department" className="w-full" disabled={isPending || departmentsError}>
                 <SelectValue placeholder="未分配" />
               </SelectTrigger>
@@ -211,12 +227,12 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
                 ))}
               </SelectContent>
             </Select>
-            {departmentsError && <p className="text-sm text-destructive">部门加载失败。<button type="button" className="underline" onClick={() => void refetchDepartments()}>重试</button></p>}
+            {departmentsError && <p className="text-sm text-destructive-ink">部门加载失败。<button type="button" className="underline" onClick={() => void refetchDepartments()}>重试</button></p>}
           </div>
 
           <h3 className="border-b pb-2 text-sm font-semibold sm:col-span-2">访问权限</h3>
           <fieldset className="space-y-2 sm:col-span-2" aria-describedby={fieldErrors.roleId ? 'form-role-error' : undefined}>
-            <legend className="text-sm font-medium">角色 {!isEdit && <span className="text-destructive">*</span>}</legend>
+            <legend className="text-sm font-medium">角色 {!isEdit && <span className="text-destructive-ink">*</span>}</legend>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               {isSuperAdmin(roleId) && (
                 <label className="flex min-h-11 items-center gap-3 rounded-md border bg-muted/30 px-3 py-2 text-sm cursor-not-allowed opacity-60">
@@ -247,10 +263,10 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
               ))}
             </div>
             {rolesLoading && <p className="text-sm text-muted-foreground">正在加载角色…</p>}
-            {rolesError && <p className="text-sm text-destructive">角色加载失败。<button type="button" className="underline" onClick={() => void refetchRoles()}>重试</button></p>}
+            {rolesError && <p className="text-sm text-destructive-ink">角色加载失败。<button type="button" className="underline" onClick={() => void refetchRoles()}>重试</button></p>}
             {!rolesLoading && !rolesError && roles.length === 0 && <p className="text-sm text-muted-foreground">暂无可分配角色，请联系管理员。</p>}
             {currentRoleHidden && <p className="text-sm text-foreground/80">当前角色不可选；保存其他资料时会保留原角色。</p>}
-            {fieldErrors.roleId && <p id="form-role-error" className="text-sm text-destructive">{fieldErrors.roleId}</p>}
+            {fieldErrors.roleId && <p id="form-role-error" className="text-sm text-destructive-ink">{fieldErrors.roleId}</p>}
             {ownRoleLocked && <p className="text-sm text-muted-foreground">不能修改自己的角色。</p>}
           </fieldset>
 
@@ -292,14 +308,14 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
           )}
 
           {serverError && (
-            <p role="alert" className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive sm:col-span-2">
+            <p role="alert" className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive-ink sm:col-span-2">
               {serverError}
             </p>
           )}
           </div>
 
           <DialogFooter className="shrink-0 border-t px-6 py-4">
-            <Button type="button" variant="outline" onClick={onClose} disabled={isPending}>
+            <Button type="button" variant="outline" onClick={draft.requestClose} disabled={isPending}>
               取消
             </Button>
             <Button type="submit" disabled={isPending || (!isEdit && (rolesLoading || rolesError || visibleAssignableRoles.length === 0))}>
@@ -309,5 +325,7 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
         </form>
       </DialogContent>
     </Dialog>
+    <ConfirmDialog {...draft.discardProps} />
+    </>
   )
 }

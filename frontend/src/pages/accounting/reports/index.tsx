@@ -78,8 +78,8 @@ function BalanceSheetView({ period }: { period: string }) {
     <div>
       <div className="mb-3 flex items-center gap-2 text-sm">
         {data.balanced
-          ? <><CheckCircle2 className="h-4 w-4 text-success" /><span>资产 {m(data.assetTotal)} = 负债+所有者权益 {m(data.liabEquityTotal)}，会计等式成立</span></>
-          : <><AlertTriangle className="h-4 w-4 text-warning" /><span className="text-warning">资产 {m(data.assetTotal)} ≠ 负债+权益 {m(data.liabEquityTotal)}</span></>}
+          ? <><CheckCircle2 className="h-4 w-4 text-success-ink" /><span>资产 {m(data.assetTotal)} = 负债+所有者权益 {m(data.liabEquityTotal)}，会计等式成立</span></>
+          : <><AlertTriangle className="h-4 w-4 text-warning-ink" /><span className="text-warning-ink">资产 {m(data.assetTotal)} ≠ 负债+权益 {m(data.liabEquityTotal)}</span></>}
       </div>
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {side('资产', data.assets, data.assetTotal, '资产合计')}

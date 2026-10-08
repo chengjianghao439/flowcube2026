@@ -159,5 +159,5 @@ export default function DesktopPrintClientBridge() {
     }
   }, [isAuthenticated])
 
-  return registrationRequired && isAuthenticated ? <div role="status" className="px-4 py-2 text-sm text-warning">本机打印尚未注册或凭据已失效。请升级桌面端，由管理员打开「设置 → 打印机管理」注册本机后继续打印。</div> : null
+  return registrationRequired && isAuthenticated ? <div role="status" className="px-4 py-2 text-sm text-warning-ink">本机打印尚未注册或凭据已失效。请升级桌面端，由管理员打开「设置 → 打印机管理」注册本机后继续打印。</div> : null
 }

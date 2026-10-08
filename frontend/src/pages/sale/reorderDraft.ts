@@ -17,13 +17,13 @@ function ordinaryDrafts(data: CurrentReorderSource, include: boolean): Omit<Draf
 }
 export const ordinaryReorderDrafts = ordinaryDrafts
 export function commercialReorderDrafts(data: CurrentReorderSource, include: boolean): CommercialDraftRow[] {
-  const ordinary = ordinaryDrafts(data, include).map(p => ({ input: { lineKey: crypto.randomUUID(), kind: 'ordinary' as const, productId: p.productId, entryUnit: p.unit, quantity: p.quantity, priceSource: 'default' as const }, name: p.productName, code: p.productCode, unit: p.unit, baseUnit: p.unit, quantity: String(p.quantity), price: String(p.unitPrice), units: p.units ?? [], allowDecimalQty: data.items.find(i => i.product?.id === p.productId)?.product?.allowDecimalQty, packagingExpressible: true }))
+  const ordinary = ordinaryDrafts(data, include).map(p => ({ input: { lineKey: crypto.randomUUID(), kind: 'ordinary' as const, productId: p.productId, entryUnit: p.unit, quantity: p.quantity, priceSource: 'default' as const }, name: p.productName, code: p.productCode, spec: p.spec, color: p.color, articleNumber: p.articleNumber, costPrice: p.costPrice, unit: p.unit, baseUnit: p.unit, quantity: String(p.quantity), price: String(p.unitPrice), units: p.units ?? [], allowDecimalQty: data.items.find(i => i.product?.id === p.productId)?.product?.allowDecimalQty, packagingExpressible: true }))
   const kits = data.items.flatMap(item => {
     if (item.identity.kind !== 'kit') return []
     const k = item.kit
     if (!k?.version || item.error) throw new Error('当前套版本未核对，原行保留')
     const quantity = include && k.currentVersionId === item.identity.originalKitVersionId && validReorderQuantity(item.identity.quantity, true) ? item.identity.quantity : 0
-    return [{ input: { lineKey: crypto.randomUUID(), kind: 'kit' as const, kitVersionId: k.currentVersionId, quantity, priceSource: 'kit_default' as const }, name: k.name, code: k.code, unit: '套', baseUnit: '套', quantity: String(quantity), price: String(k.version.referenceUnitPrice), units: [], packagingExpressible: true }]
+    return [{ input: { lineKey: crypto.randomUUID(), kind: 'kit' as const, kitVersionId: k.currentVersionId, quantity, priceSource: 'kit_default' as const }, name: k.name, code: k.code, unit: k.unit || '套', baseUnit: k.unit || '套', quantity: String(quantity), price: String(k.version.referenceUnitPrice), units: [], packagingExpressible: true }]
   })
   return [...kits, ...ordinary]
 }

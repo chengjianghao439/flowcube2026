@@ -19,11 +19,11 @@ export default function PdaSection({ title, children, className = '' }: PdaSecti
   return (
     <div className={`space-y-2 ${className}`}>
       {title && (
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground px-1">
+        <p className="text-xs font-semibold text-muted-foreground px-1">
           {title}
         </p>
       )}
-      <div className="rounded-2xl border border-border bg-white overflow-hidden">
+      <div className="rounded-2xl border border-border bg-card text-card-foreground overflow-hidden">
         {children}
       </div>
     </div>
@@ -47,12 +47,12 @@ interface PdaSectionRowProps {
 export function PdaSectionRow({ label, value, children, divider = true }: PdaSectionRowProps) {
   return (
     <div
-      className={`flex items-center justify-between px-4 py-3 text-sm ${
+      className={`flex items-center justify-between gap-3 px-4 py-3 text-sm ${
         divider ? 'border-b border-border last:border-0' : ''
       }`}
     >
       <span className="text-muted-foreground shrink-0">{label}</span>
-      <span className="font-medium text-foreground text-right">{value ?? children}</span>
+      <span className="min-w-0 font-medium text-foreground text-right [overflow-wrap:anywhere]">{value ?? children}</span>
     </div>
   )
 }

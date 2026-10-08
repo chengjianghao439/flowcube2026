@@ -120,6 +120,15 @@ test('list count/page share snapshot and full PO/PR/RF warehouse authorization b
  const empty=await f.module('service').findAll({},9);assert.equal(empty.total,0);assert.equal(empty.list.length,0)
  for(const query of [{page:''},{page:['1','2']},{pageSize:201}])await assert.rejects(f.module('service').findAll(query,9),e=>e.statusCode===400)
 })
+for (const kind of ['list','detail']) test(`RF ${kind} presents original document snapshots without reading current masters`, async () => {
+ const f=fixture();f.data.purchase_returns[0].supplier_name='原单供应商长名称';f.data.purchase_returns[0].warehouse_name='原单仓库';await create(f)
+ const before=f.snapshot(),start=f.queries.length
+ const row=kind==='list'?(await f.module('service').findAll({},9)).list[0]:await f.module('service').findById(61,9)
+ assert.equal(row.purchase_return_no,'PR11');assert.equal(row.purchase_order_no,'PO10')
+ assert.equal(row.supplier_name,'原单供应商长名称');assert.equal(row.warehouse_name,'原单仓库')
+ assert.equal(f.queries.slice(start).some(q=>/FROM (suppliers|warehouses)\b/.test(q.sql)),false)
+ assert.deepEqual(f.snapshot(),before)
+})
 for(const read of ['list','detail'])for(const mysqlDate of [false,true])test(`RF ${read} exposes the exact Beijing business DATE as YYYY-MM-DD (${mysqlDate?'Date':'string'} projection)`,async()=>{
  const f=fixture(),body={...input(),refundDate:'2026-10-06'}
  await f.module('service').create(body,f.options)

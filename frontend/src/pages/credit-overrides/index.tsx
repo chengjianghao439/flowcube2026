@@ -99,7 +99,7 @@ function CreateDialog({ open, onClose }: { open: boolean; onClose: () => void })
             </div>
           )}
           <div className="space-y-2">
-            <Label htmlFor="credit-reason">超额原因 <span className="text-destructive">*</span></Label>
+            <Label htmlFor="credit-reason">超额原因 <span className="text-destructive-ink">*</span></Label>
             <textarea id="credit-reason" value={reason} onChange={e => setReason(e.target.value)} placeholder="说明业务背景、预计回款安排，供审批人参考" maxLength={500} rows={3} className="w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />
             <p className="text-right text-xs tabular-nums text-muted-foreground">{reason.length} / 500</p>
           </div>
@@ -195,7 +195,7 @@ export default function CreditOverridesPage() {
       title: '超额金额',
       width: 110,
       align: 'right',
-      render: v => <span className="tabular-nums text-destructive">{money(v as number)}</span>,
+      render: v => <span className="tabular-nums text-destructive-ink">{money(v as number)}</span>,
     },
     {
       key: 'status',
@@ -203,7 +203,7 @@ export default function CreditOverridesPage() {
       width: 90,
       render: (_, row) => <SoftStatusLabel label={row.statusName} tone={(row.statusTone as 'draft' | 'warning' | 'success' | 'danger')} />,
     },
-    { key: 'reason', title: '申请原因', width: 220, render: (v, row) => <div className="space-y-1 py-1"><p className="whitespace-normal break-words">{String(v || '—')}</p>{row.rejectReason && <p className="whitespace-normal break-words text-xs text-destructive">驳回：{row.rejectReason}</p>}</div> },
+    { key: 'reason', title: '申请原因', width: 220, render: (v, row) => <div className="space-y-1 py-1"><p className="whitespace-normal break-words">{String(v || '—')}</p>{row.rejectReason && <p className="whitespace-normal break-words text-xs text-destructive-ink">驳回：{row.rejectReason}</p>}</div> },
     { key: 'applicantName', title: '申请人', width: 100 },
     {
       key: 'id',
@@ -215,7 +215,7 @@ export default function CreditOverridesPage() {
         ]} />]
         if (row.status === 1) els.push(<Button key="submit" size="sm" variant="outline" onClick={() => submit(row.id, { onSuccess: () => toast.success('已提交审批'), onError: (e: Error) => toast.error(e.message) })}>提交</Button>)
         if (row.status === 2 && canApply) els.push(<Button key="ap" size="sm" variant="outline" onClick={() => approve(row.id, { onSuccess: () => toast.success('已批准'), onError: (e: Error) => toast.error(e.message) })}>批准</Button>)
-        if (row.status === 2 && canApply) els.push(<Button key="rj" size="sm" variant="ghost" className="text-destructive" onClick={() => {
+        if (row.status === 2 && canApply) els.push(<Button key="rj" size="sm" variant="ghost" className="text-destructive-ink" onClick={() => {
           setRejectTarget(row); setRejectReason('')
         }}>驳回</Button>)
         if (row.status === 1 || row.status === 2 || row.status === 4) els.push(<Button key="cx" size="sm" variant="ghost" onClick={() => confirmAction({ title: '取消申请', description: '确定取消这张放行申请吗？', onConfirm: () => cancel(row.id, { onSuccess: () => toast.success('已取消'), onError: (e: Error) => toast.error(e.message) }) })}>取消</Button>)

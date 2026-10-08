@@ -1,11 +1,12 @@
 import { money } from '@/lib/format'
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { DatePicker } from '@/components/shared/DatePicker'
 import { X } from 'lucide-react'
 import { toast } from '@/lib/toast'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import ListSummary from '@/components/shared/ListSummary'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -45,7 +46,7 @@ export default function RefundsPage() {
   const { can } = usePermission()
   const canCreate = can(PERMISSIONS.REFUND_ORDER_CREATE)
 
-  const { data, isLoading } = useRefundList({
+  const { data, isLoading, isError, error, refetch } = useRefundList({
     page: 1,
     pageSize: 20,
     keyword,
@@ -123,8 +124,10 @@ export default function RefundsPage() {
         </div>
       )}
 
-      <DataTable columns={columns} data={data?.list || []} loading={isLoading} />
-      <ListSummary total={total} unit="单" />
+      {isError ? <QueryErrorState error={error} onRetry={() => void refetch()} /> : (
+        <DataTable columns={columns} data={data?.list || []} loading={isLoading} />
+      )}
+      {!isError && !isLoading && data && <ListSummary total={total} unit="单" />}
 
       <CreateRefundDialog open={createOpen} onClose={() => setCreateOpen(false)} />
       <RefundDetailDialog open={!!detailId} onClose={() => setDetailId(null)} id={detailId} />
@@ -141,6 +144,7 @@ export default function RefundsPage() {
 
 /** 新建退款单弹窗：销售单号 → 金额 → 退款账户 → 日期 */
 function CreateRefundDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const fieldId = useId()
   const { data: accounts } = useQuery({ queryKey: ['finance-accounts-active'], queryFn: getActiveAccountsApi })
   const create = useCreateRefund()
   const [saleOrderNo, setSaleOrderNo] = useState('')
@@ -184,18 +188,18 @@ function CreateRefundDialog({ open, onClose }: { open: boolean; onClose: () => v
         <DialogHeader><DialogTitle>新建退款单</DialogTitle></DialogHeader>
         <div className="space-y-4 py-2">
           <div className="space-y-1">
-            <Label>销售单号 *</Label>
-            <Input value={saleOrderNo} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSaleOrderNo(e.target.value)} placeholder="输入销售单号" className="font-mono" />
+            <Label htmlFor={`${fieldId}-sale`}>销售单号 *</Label>
+            <Input id={`${fieldId}-sale`} value={saleOrderNo} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSaleOrderNo(e.target.value)} placeholder="输入销售单号" className="font-mono" />
             <p className="text-xs text-muted-foreground">系统按单号反查该销售单已收金额，退款不能超过已收金额</p>
           </div>
           <div className="space-y-1">
-            <Label>退款金额 *</Label>
-            <Input type="number" min="0" step="0.01" value={amount} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAmount(e.target.value)} className="text-right tabular-nums" />
+            <Label htmlFor={`${fieldId}-amount`}>退款金额 *</Label>
+            <Input id={`${fieldId}-amount`} type="number" min="0" step="0.01" value={amount} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAmount(e.target.value)} className="text-right tabular-nums" />
           </div>
           <div className="space-y-1">
-            <Label>退款账户</Label>
+            <Label htmlFor={`${fieldId}-account`}>退款账户</Label>
             <Select value={accountId || '__none__'} onValueChange={(v) => setAccountId(v === '__none__' ? '' : v)}>
-              <SelectTrigger className="h-10 w-full"><SelectValue placeholder="请选择（不选则不记资金账户）" /></SelectTrigger>
+              <SelectTrigger id={`${fieldId}-account`} className="h-10 w-full"><SelectValue placeholder="请选择（不选则不记资金账户）" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="__none__">请选择</SelectItem>
                 {(accounts || []).map(a => <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>)}
@@ -203,12 +207,12 @@ function CreateRefundDialog({ open, onClose }: { open: boolean; onClose: () => v
             </Select>
           </div>
           <div className="space-y-1">
-            <Label>退款日期</Label>
-            <DatePicker value={refundDate} onChange={setRefundDate} />
+            <Label htmlFor={`${fieldId}-date`}>退款日期</Label>
+            <DatePicker id={`${fieldId}-date`} value={refundDate} onChange={setRefundDate} />
           </div>
           <div className="space-y-1">
-            <Label>备注</Label>
-            <Input value={remark} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRemark(e.target.value)} />
+            <Label htmlFor={`${fieldId}-remark`}>备注</Label>
+            <Input id={`${fieldId}-remark`} value={remark} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRemark(e.target.value)} />
           </div>
         </div>
         <DialogFooter>

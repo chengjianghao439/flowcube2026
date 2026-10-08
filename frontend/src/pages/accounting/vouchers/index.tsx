@@ -1,4 +1,5 @@
 import ListSummary from '@/components/shared/ListSummary'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { DatePicker } from '@/components/shared/DatePicker'
 import { amount } from '@/lib/format'
 import { ReportTable } from '@/components/shared/ReportTable'
@@ -49,7 +50,7 @@ const statusTone = (s: number) => (s === 3 ? 'danger' : s === 2 ? 'active' : 'su
 
 // ─── 勾稽对账卡片 ─────────────────────────────────────────────────────────────
 function ReconciliationCard() {
-  const { data } = useReconciliation()
+  const { data, isError, error, refetch } = useReconciliation()
   const { can } = usePermission()
   const navigate = useNavigate()
   const addTab = useWorkspaceStore(s => s.addTab)
@@ -57,6 +58,7 @@ function ReconciliationCard() {
   const openPayables = (path: string, title: string) => { addTab({ key: path, title, path }); navigate(path) }
   const items = data?.items ?? []
   const unposted = data?.unpostedLedger
+  if (isError) return <QueryErrorState compact title="勾稽核对加载失败" error={error} onRetry={() => void refetch()} />
   if (!items.length) return null
   // 三项都平 ≠ 账就对了：非单据应付（运费/手工）在没有凭证来源时会同时从凭证侧和业务侧消失，
   // 三项因此显示为平。所以「未入账应付 > 0」必须独立于三项结果单独提示——否则页面给出的是
@@ -79,11 +81,11 @@ function ReconciliationCard() {
             </div>
             <div className="mt-2 flex items-center gap-2 text-sm">
               {it.matched
-                ? <CheckCircle2 className="h-4 w-4 text-success" />
-                : <AlertTriangle className="h-4 w-4 text-warning" />}
+                ? <CheckCircle2 className="h-4 w-4 text-success-ink" />
+                : <AlertTriangle className="h-4 w-4 text-warning-ink" />}
               <span className="tabular-nums">凭证 {amount(it.voucher)}</span>
               <span className="text-muted-foreground">/ 业务 {amount(it.business)}</span>
-              {!it.matched && <span className="text-warning tabular-nums">差 {amount(it.diff)}</span>}
+              {!it.matched && <span className="text-warning-ink tabular-nums">差 {amount(it.diff)}</span>}
             </div>
           </div>
         ))}
@@ -101,9 +103,9 @@ function ReconciliationCard() {
             <SoftStatusLabel label="待处理" tone="warning" />
           </div>
           <div className="mt-2 flex items-start gap-2 text-sm">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning-ink" />
             <div className="space-y-1">
-              <div className="text-warning tabular-nums">尚有 {amount(unpostedTotal)} 应付未入账</div>
+              <div className="text-warning-ink tabular-nums">尚有 {amount(unpostedTotal)} 应付未入账</div>
               {unclassified > 0 && (
                 <div className="text-muted-foreground">
                   其中 {amount(unclassified)}（{unclassifiedCount} 笔）是历史记录未分类：缺借方科目，
@@ -181,18 +183,18 @@ function GenerateDialog({ open, onClose }: { open: boolean; onClose: () => void 
 
 // ─── 凭证详情弹窗 ─────────────────────────────────────────────────────────────
 function DetailDialog({ id, onClose }: { id: number | null; onClose: () => void }) {
-  const { data: v, isLoading } = useVoucher(id)
+  const { data: v, isLoading, isError, error, refetch } = useVoucher(id)
   return (
     <Dialog open={!!id} onOpenChange={o => { if (!o) onClose() }}>
       <DialogContent className="sm:max-w-6xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            凭证 {v?.voucherNo}
-            {v && <SoftStatusLabel label={VOUCHER_STATUS_LABELS[v.status]} tone={statusTone(v.status)} />}
-            {v?.isReversal === 1 && <SoftStatusLabel label="红字" tone="danger" />}
+            凭证 {!isError && v?.voucherNo}
+            {v && !isError && <SoftStatusLabel label={VOUCHER_STATUS_LABELS[v.status]} tone={statusTone(v.status)} />}
+            {!isError && v?.isReversal === 1 && <SoftStatusLabel label="红字" tone="danger" />}
           </DialogTitle>
         </DialogHeader>
-        {isLoading || !v ? (
+        {isError ? <QueryErrorState compact error={error} onRetry={() => void refetch()} /> : isLoading || !v ? (
           <div className="py-10 text-center text-sm text-muted-foreground">加载中…</div>
         ) : (
           <div className="space-y-3">
@@ -301,7 +303,7 @@ function ManualDialog({ open, onClose }: { open: boolean; onClose: () => void })
                   placeholder="金额" className="w-32 text-right tabular-nums" disabled={isPending} />
                 <Input value={r.summary} onChange={e => setRow(i, { summary: e.target.value })}
                   placeholder="行摘要" className="w-40" disabled={isPending} />
-                <Button variant="ghost" size="sm" className="h-9 w-9 p-0 text-muted-foreground hover:text-destructive" aria-label="删除本行分录"
+                <Button variant="ghost" size="sm" className="h-9 w-9 p-0 text-muted-foreground hover:text-destructive-ink" aria-label="删除本行分录"
                   onClick={() => setRows(rs => rs.length > 2 ? rs.filter((_, idx) => idx !== i) : rs)} disabled={isPending || rows.length <= 2}>
                   <Trash2 className="h-4 w-4" />
                 </Button>
@@ -345,7 +347,7 @@ export default function VouchersPage() {
     status: status ? Number(status) : undefined, keyword: keyword || undefined,
     page: 1, pageSize: PAGE_SIZE,
   }), [period, sourceType, status, keyword])
-  const { data, isLoading } = useVouchers(query)
+  const { data, isLoading, isError, error, refetch } = useVouchers(query)
   const list = data?.list ?? []
   const total = data?.pagination?.total ?? 0
 
@@ -400,12 +402,12 @@ export default function VouchersPage() {
           <FileText className="mr-1 h-3.5 w-3.5" />查看
         </Button>
         {canManage && r.status !== 3 && r.isReversal !== 1 && (
-          <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground hover:text-warning" onClick={() => setReverseTarget(r)}>
+          <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground hover:text-warning-ink" onClick={() => setReverseTarget(r)}>
             <Undo2 className="mr-1 h-3.5 w-3.5" />冲销
           </Button>
         )}
         {canManage && r.sourceType === 'manual' && !r.isReversal && !r.reversedId && r.status !== 3 && (
-          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive" aria-label="删除这张凭证" onClick={() => setDeleteTarget(r)}>
+          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive-ink" aria-label="删除这张凭证" onClick={() => setDeleteTarget(r)}>
             <Trash2 className="h-3.5 w-3.5" />
           </Button>
         )}
@@ -455,13 +457,13 @@ export default function VouchersPage() {
         </div>
       )}
 
-      <div className="text-sm text-muted-foreground">共 {total} 张</div>
+      {!isError && !isLoading && data && <div className="text-sm text-muted-foreground">共 {total} 张</div>}
 
       <div className="card-base p-2">
-        <DataTable columns={columns} data={list} loading={isLoading} emptyText="暂无凭证，点击「生成本期凭证」" columnStorageKey="acct-vouchers" />
+        {isError ? <QueryErrorState error={error} onRetry={() => void refetch()} /> : <DataTable columns={columns} data={list} loading={isLoading} emptyText="暂无凭证，点击「生成本期凭证」" columnStorageKey="acct-vouchers" />}
       </div>
 
-      <ListSummary total={total} />
+      {!isError && !isLoading && data && <ListSummary total={total} />}
 
       <GenerateDialog open={genOpen} onClose={() => setGenOpen(false)} />
       <ManualDialog open={manualOpen} onClose={() => setManualOpen(false)} />

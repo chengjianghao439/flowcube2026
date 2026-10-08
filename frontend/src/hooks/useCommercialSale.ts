@@ -84,9 +84,10 @@ export function useCommercialPreview(body: CommercialBody | null, owner: KitRead
     loading: !!body && validOwner && !current?.data && !current?.error
   }
 }
-export function useCommercialWrite(owner: KitReadOwner, scope?: string) {
+export function useCommercialWrite(owner: KitReadOwner, scope?: string, isCurrent?: () => boolean) {
   const cache = useQueryClient(), instance = useId()
   const write = useKitOperation<CommercialOperation, CommercialWriteResult>(owner, scope ?? `commercial-mounted:${instance}`, {
+    isCurrent,
     execute: (operation, query, originalOwner) => executeCommercialSaleApi({ operation, requestKey: query.requestKey, ...originalOwner, userId: query.userId, uncertain: true, queryHint: { action: query.action, resourceType: 'sale_order', resourceId: query.resourceId } }),
     mayWrite: operation => { const a = useAuthStore.getState(); return hasPermission(a.user?.permissions ?? [], permission[operation.action], a.user?.roleId) },
     validate: (data, query) => query.kind === 'create' ? (!!data?.id && Number.isSafeInteger(data.id) && data.id > 0) : data?.id == null || data.id === query.resourceId

@@ -120,7 +120,7 @@ export default function RiskDetails({
                           额度 {money(row.creditLimit)} · 已用 {money(row.used)}
                         </p>
                       </div>
-                      <strong className="text-sm text-destructive">
+                      <strong className="text-sm text-destructive-ink">
                         超出 {money(row.used - row.creditLimit)}
                       </strong>
                       {can(PERMISSIONS.SALE_ORDER_VIEW) && (

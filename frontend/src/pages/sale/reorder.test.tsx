@@ -13,12 +13,63 @@ import { buildWorkspaceTabRegistrationFromPath } from '@/router/workspaceRouteMe
 import type { AxiosRequestConfig } from 'axios'
 import KeepAliveSection from '@/components/shared/KeepAliveSection'
 import { ReorderSourceButton } from './ReorderSourceButton'
+import type { CommercialGroup, CommercialInput, CommercialPreview } from '@/types/sale-commercial'
 const records: AxiosRequestConfig[] = []
 const source = { id: 80, orderNo: 'S80', model: 'ordinary', customerId: 4, items: [{ kind: 'ordinary', productId: 3, baseUnit: '个', baseQty: 12 }, { kind: 'ordinary', productId: 3, baseUnit: '个', baseQty: 3 }] }
 vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), warning: vi.fn(), error: vi.fn() } }))
 vi.mock('@/components/finder', () => ({ CustomerFinder: (p: { open: boolean; onConfirm: (value: { id: number; name: string; code: string }) => void }) => p.open ? <button onClick={() => p.onConfirm({ id: 4, name: '当前客户', code: 'C4' })}>重选当前客户</button> : null, ProductFinder: () => null }))
 vi.mock('@/pages/sale/form/components/SaleOrderHeaderFields', () => ({ SaleOrderHeaderFields: (p: { customerName: string; warehouseId: string; remark: string; receiverAddress: string; setRemark: (v: string) => void; setWarehouseId: (v: string) => void; setWarehouseName: (v: string) => void; setCustomerFinderOpen: (v: boolean) => void }) => <div><span>客户:{p.customerName}</span><button onClick={() => p.setCustomerFinderOpen(true)}>选择客户</button><span>仓库:{p.warehouseId}</span><span>收货:{p.receiverAddress}</span><input aria-label="备注" value={p.remark} onChange={e => p.setRemark(e.target.value)} /><button onClick={() => { p.setWarehouseId('8'); p.setWarehouseName('当前仓') }}>选择当前仓</button></div> }))
-vi.mock('@/pages/sale/form/components/SaleOrderItemsTable', () => ({ SaleOrderItemsTable: (p: { items: { _key: number; productName: string; unit: string; quantity: number; unitPrice: number }[]; updateItem: (k: number, f: string, v: number) => void }) => <div>{p.items.map(i => <div key={i._key}><span>{i.productName}:{i.unit}:{i.unitPrice}</span><input aria-label="数量" value={i.quantity} onChange={e => p.updateItem(i._key, 'quantity', +e.target.value)} /></div>)}</div> }))
+
+function previewFor(config: AxiosRequestConfig, referencePrice = 7.1234): CommercialPreview {
+  const body = JSON.parse(config.data) as { customerId: number; warehouseId: number; groups: CommercialInput[] }
+  expect(config.method).toBe('post')
+  expect(body.customerId).toBe(4)
+  expect(body.warehouseId).toBe(8)
+  expect(body.groups).toHaveLength(1)
+  const commercialGroups: CommercialGroup[] = body.groups.map(input => {
+    expect(input.lineKey).toEqual(expect.any(String))
+    expect(input.lineKey).not.toBe('')
+    expect(input.warehouseId).toBeUndefined()
+    expect(input.quantity).toBeGreaterThan(0)
+    const ordinary = input.kind === 'ordinary'
+    if (ordinary) {
+      expect(input.productId).toBe(3)
+      expect(['个', '箱']).toContain(input.entryUnit)
+      expect(['default', 'manual']).toContain(input.priceSource)
+    } else {
+      expect(input.kitVersionId).toBe(42)
+      expect(input.priceSource).toBe('kit_default')
+    }
+    const rate = ordinary && input.entryUnit === '箱' ? 6 : 1
+    const entryPrice = input.priceSource === 'manual' ? input.unitPrice! : ordinary ? referencePrice * rate : 123.4567
+    const baseQty = input.quantity * rate
+    const amount = Math.round(input.quantity * entryPrice * 100) / 100
+    return {
+      id: 0, lineKey: input.lineKey, kind: input.kind, warehouseId: body.warehouseId,
+      kitVersionId: ordinary ? null : input.kitVersionId,
+      kitCode: ordinary ? null : 'K7', kitName: ordinary ? null : '当前套',
+      originalQty: baseQty, targetQty: baseQty, quantity: baseQty,
+      unitPrice: entryPrice / rate, amount, originalAmount: amount, priceSource: input.priceSource,
+      components: [{ productId: 3, productCode: 'P3', productName: '当前商品', unit: '个', baseQty: 1, quantity: baseQty, allocatedAmount: amount }],
+      metadata: {
+        input: { ...input, warehouseId: body.warehouseId }, priceCustomerId: body.customerId,
+        entry: ordinary ? { entryUnit: input.entryUnit!, entryQty: input.quantity, conversionRate: rate, entryUnitPrice: entryPrice } : null,
+        quote: { referenceUnitPrice: ordinary ? referencePrice : 123.4567, resolvedPriceSource: 'price_level', resolvedPriceLevel: 'B', priceListId: null },
+        ...(ordinary ? {} : { kitUnit: '套' })
+      }
+    }
+  })
+  return {
+    customerId: body.customerId, warehouseId: body.warehouseId, commercialGroups,
+    physicalItems: commercialGroups.map(g => ({
+      id: 0, productId: 3, productCode: 'P3', productName: '当前商品', unit: '个', warehouseId: body.warehouseId,
+      quantity: g.quantity, unitPrice: g.unitPrice, amount: g.amount,
+      inventory: { quantity: 100, reserved: 0, available: 100, required: g.quantity, shortage: 0 }
+    })),
+    amount: commercialGroups.reduce((sum, group) => sum + group.amount, 0), canFulfillEntireVector: true,
+    expected: null, readyDate: null, inventoryExplanation: '当前现货', readyDateExplanation: '未分配'
+  }
+}
 beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
   sessionStorage.clear(); localStorage.clear(); records.length = 0
@@ -32,6 +83,7 @@ beforeEach(() => {
     else if (config.url === '/customers/4') data = { id: 4, code: 'C4', name: '当前客户', isActive: true }
     else if (config.url === '/products/3') data = { id: 3, code: 'P3', name: '当前商品', unit: '个', units: [{ unitName: '箱', conversionRate: 6, isBase: false }], isActive: true, allowDecimalQty: false }
     else if (config.url === '/price-lists/customer-price') data = { salePrice: 7.1234, priceLevel: 'B', source: 'price_level', priceLevelName: 'B价' }
+    else if (config.url === '/kits/preview') data = previewFor(config)
     else if (config.url === '/carriers/active') data = []
     else throw new Error(`禁止真实网络，未stub ${config.url}`)
     return { data: { success: true, data }, status: 200, statusText: 'OK', config, headers: {} }
@@ -54,10 +106,15 @@ test('新建query先识别pathname；当前身份导入默认0量/基本单位/�
   await page('/sale/new?sourceId=80', async host => {
     expect(host.textContent).not.toContain('销售单路由无效')
     await click(host, '载入当前客户和商品')
-    expect(host.textContent).toContain('客户:当前客户'); expect(host.textContent).toContain('当前商品:个:7.1234')
-    expect([...host.querySelectorAll<HTMLInputElement>('input[aria-label="数量"]')].map(i => i.value)).toEqual(['0'])
+    expect(host.textContent).toContain('客户:当前客户'); expect(host.textContent).toContain('P3 · 当前商品')
+    expect(host.querySelector<HTMLInputElement>('input[aria-label="当前商品成交单价"]')?.value).toBe('7.1234')
+    expect(host.querySelector<HTMLSelectElement>('select[aria-label="当前商品录入单位"]')?.value).toBe('个')
+    expect([...host.querySelectorAll<HTMLInputElement>('input[aria-label="当前商品数量"]')].map(i => i.value)).toEqual(['0'])
     expect(host.textContent).toContain('同一商品'); expect(host.textContent).toContain('仓库:'); expect(host.textContent).toContain('收货:')
+    expect([...host.querySelectorAll('span')].some(span => span.textContent === '仓库:')).toBe(true)
+    expect([...host.querySelectorAll('span')].some(span => span.textContent === '收货:')).toBe(true)
     expect(records.filter(r => r.url === '/products/3')).toHaveLength(1)
+    expect(records.some(r => r.url === '/kits/preview')).toBe(false)
     expect(records.filter(r => r.url?.includes('reorder-source') || r.url === '/customers/4' || r.url === '/products/3' || r.url?.includes('customer-price')).every(r => r.baseURL === '/a' && r._erpApiFallbackTried === true)).toBe(true)
   })
 })
@@ -65,7 +122,8 @@ test('显式带基本量只将同商品旧仓量合为15；不把原2箱当2套�
   await page('/sale/new?sourceId=80', async host => {
     const option = host.querySelector<HTMLInputElement>('input[type="checkbox"]'); expect(option).toBeTruthy()
     await act(async () => option!.click()); await click(host, '载入当前客户和商品')
-    expect(host.querySelector<HTMLInputElement>('input[aria-label="数量"]')?.value).toBe('15')
+    expect(host.querySelector<HTMLInputElement>('input[aria-label="当前商品数量"]')?.value).toBe('15')
+    expect(host.querySelector<HTMLSelectElement>('select[aria-label="当前商品录入单位"]')?.value).toBe('个')
   })
 })
 test('空/重复来源参数保持raw并拒绝，不加载合法来源或降级空白新建', async () => {
@@ -92,7 +150,7 @@ test('载入前员工已录备注，迟到资料与显式导入都不能覆盖�
     const remark = host.querySelector<HTMLInputElement>('input[aria-label="备注"]')!
     await input(remark, '我已输入'); expect(complete).toBeTruthy()
     await act(async () => complete!()); await flush(); await click(host, '载入当前客户和商品')
-    expect(remark.value).toBe('我已输入'); expect(host.querySelector('input[aria-label="数量"]')).toBeNull()
+    expect(remark.value).toBe('我已输入'); expect(host.querySelector('input[aria-label="当前商品数量"]')).toBeNull()
   })
 })
 test('实际商业新建采用准确父套当前版本；默认0套，旧版本/商业revision/旧lineKey不进预览', async () => {
@@ -104,7 +162,7 @@ test('实际商业新建采用准确父套当前版本；默认0套，旧版本/
     let data: unknown
     if (config.url.includes('reorder-source')) data = { ...source, model: 'kit-v1', items: [{ kind: 'kit', kitId: 7, originalKitVersionId: 41, quantity: 2 }] }
     else if (config.url === '/kits/7') data = { id: 7, code: 'K7', name: '当前套', isActive: true, deletedAt: null, currentVersionId: 42, revision: 9, version: { id: 42, kitId: 7, versionNo: 2, referenceUnitPrice: 123.4567, components: [{ productId: 3, productActive: true }] } }
-    else data = { amount: 246.9134, commercialGroups: [], physicalItems: [], inventoryExplanation: '当前现货', readyDateExplanation: '未分配', canFulfillEntireVector: true }
+    else data = previewFor(config)
     return { data: { success: true, data }, status: 200, statusText: 'OK', config, headers: {} }
   }
   await page('/sale/new-kit?sourceId=80', async host => {
@@ -128,10 +186,16 @@ test('真实KeepAlive新单隐藏期间晚到保存成功不关闭该草稿或�
   await page('/sale/new?sourceId=80', async (host, show) => {
     await act(async () => host.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click())
     await click(host, '载入当前客户和商品'); await click(host, '选择当前仓'); await click(host, '保存草稿')
-    expect(complete).toBeTruthy(); await show(false)
+    expect(complete).toBeTruthy()
+    const posted = JSON.parse(records.find(r => r.method === 'post' && r.url === '/sale')!.data)
+    expect(posted.items).toHaveLength(1)
+    expect(posted.items[0]).toMatchObject({ productId: 3, warehouseId: 8, unit: '个', entryUnit: '个', quantity: 15, unitPrice: 7.1234 })
+    expect(posted).not.toHaveProperty('commercialModel'); expect(posted).not.toHaveProperty('commercialGroups')
+    expect(JSON.parse(sessionStorage.getItem('flowcube-repeat-sale-query-v1')!)[0]).toMatchObject({ sourceId: 80, model: 'ordinary', baseURL: '/a' })
+    await show(false)
     await act(async () => { complete!(); await Promise.resolve() }); await flush()
     expect(host.querySelector('[data-route]')?.textContent).toBe('/sale/new?sourceId=80')
-    await show(true); expect(host.querySelector<HTMLInputElement>('input[aria-label="数量"]')?.value).toBe('15')
+    await show(true); expect(host.querySelector<HTMLInputElement>('input[aria-label="当前商品数量"]')?.value).toBe('15')
     expect(host.textContent).toContain('查看已创建销售单')
   })
 })
@@ -154,7 +218,7 @@ test('当前停用商品保留可见失败行，不静默跳过或导入旧价',
   await page('/sale/new?sourceId=80', async host => {
     expect(host.textContent).toContain('原行 1'); expect(host.textContent).toContain('已停用')
     const importButton = [...host.querySelectorAll('button')].find(b => b.textContent === '载入当前客户和商品')!
-    expect(importButton.disabled).toBe(true); expect(host.querySelector('input[aria-label="数量"]')).toBeNull()
+    expect(importButton.disabled).toBe(true); expect(host.querySelector('input[aria-label="当前商品数量"]')).toBeNull()
     expect(records.some(r => r.url === '/price-lists/customer-price')).toBe(false)
   })
 })
@@ -230,7 +294,7 @@ test('实际三个KeepAlive草稿隔离来源与空白；同源返回保留输�
     expect(first.querySelector<HTMLInputElement>('input[aria-label="备注"]')?.value).toBe('源80输入')
     expect(blank.querySelector<HTMLInputElement>('input[aria-label="备注"]')?.value).toBe('空白输入')
     expect(second.querySelector<HTMLInputElement>('input[aria-label="备注"]')?.value).toBe('源81输入')
-    expect(first.querySelector('input[aria-label="数量"]')).not.toBeNull(); expect(blank.querySelector('input[aria-label="数量"]')).toBeNull()
+    expect(first.querySelector('input[aria-label="当前商品数量"]')).not.toBeNull(); expect(blank.querySelector('input[aria-label="当前商品数量"]')).toBeNull()
     expect(records.filter(r => r.url?.includes('reorder-source'))).toHaveLength(2)
   } finally { await act(async () => root.unmount()); cache.clear() }
 })
@@ -240,17 +304,18 @@ test('R9真实报价隐藏恢复后不能应用旧价，保持草稿并可主动
   const adapter = apiClient.defaults.adapter
   if (typeof adapter !== 'function') throw Error('exact adapter required')
   const unknown: string[] = []
-  let quotes = 0, resolveOld!: () => void
+  let quotes = 0, resolveOld: (() => void) | undefined
   apiClient.defaults.adapter = async c => {
-    if (c.method !== 'get' || !['/sale/80/reorder-source', '/customers/4', '/products/3', '/price-lists/customer-price', '/carriers/active'].includes(c.url!)) {
+    const permittedRead = c.method === 'get' && ['/sale/80/reorder-source', '/customers/4', '/products/3', '/price-lists/customer-price', '/carriers/active'].includes(c.url!)
+    if (!permittedRead && !(c.method === 'post' && c.url === '/kits/preview')) {
       unknown.push(c.method + ' ' + c.url); throw Error('unexpected R9 read')
     }
-    if (c.url === '/price-lists/customer-price') {
+    if (c.url === '/kits/preview') {
       quotes++
-      if (quotes === 2) {
+      if (quotes === 1) {
         records.push(c)
         await new Promise<void>(r => { resolveOld = r })
-        return { data: { success: true, data: { salePrice: 99, priceLevel: 'OLD', source: 'price_level' } }, status: 200, statusText: 'OK', config: c, headers: {} }
+        return { data: { success: true, data: previewFor(c, 99) }, status: 200, statusText: 'OK', config: c, headers: {} }
       }
     }
     return adapter(c)
@@ -258,14 +323,21 @@ test('R9真实报价隐藏恢复后不能应用旧价，保持草稿并可主动
   try {
     await page('/sale/new?sourceId=80', async (host, show) => {
       await click(host, '载入当前客户和商品')
-      await input(host.querySelector<HTMLInputElement>('[aria-label="数量"]')!, '3')
-      await click(host, '选择客户'); await click(host, '重选当前客户'); expect(resolveOld).toBeTruthy()
-      await show(false); await show(true); await act(async () => resolveOld()); await flush()
-      expect(host.textContent).toContain('当前商品:个:7.1234')
-      expect(host.textContent).not.toContain('当前商品:个:99')
-      expect(host.querySelector<HTMLInputElement>('[aria-label="数量"]')!.value).toBe('3')
-      await click(host, '重选当前客户'); expect(quotes).toBe(3)
-      expect(host.textContent).toContain('当前商品:个:7.1234')
+      const quantity = host.querySelector<HTMLInputElement>('input[aria-label="当前商品数量"]')!
+      const price = host.querySelector<HTMLInputElement>('input[aria-label="当前商品成交单价"]')!
+      await input(quantity, '3'); await click(host, '选择当前仓')
+      expect(resolveOld).toBeTruthy(); expect(quotes).toBe(1)
+      await show(false); await show(true); await flush()
+      expect(quotes).toBe(2)
+      await act(async () => resolveOld!()); await flush()
+      expect(price.value).toBe('7.1234'); expect(price.value).not.toBe('99')
+      expect(quantity.value).toBe('3')
+      await input(price, '8.8888'); await flush(); expect(quotes).toBe(3)
+      await click(host, '用默认价'); expect(quotes).toBe(4)
+      expect(price.value).toBe('7.1234'); expect(quantity.value).toBe('3')
+      const previewReads = records.filter(r => r.url === '/kits/preview')
+      expect(previewReads.every(r => r.baseURL === '/a' && r._erpApiFallbackTried === true)).toBe(true)
+      expect(JSON.parse(previewReads.at(-1)!.data).groups[0]).toMatchObject({ kind: 'ordinary', quantity: 3, entryUnit: '个', priceSource: 'default' })
     })
   } finally { apiClient.defaults.adapter = adapter; expect(unknown).toEqual([]) }
 })

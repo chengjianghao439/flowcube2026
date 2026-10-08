@@ -72,7 +72,7 @@ export default function PdaLayout() {
         - overflow-y-auto  避免工作台 / 列表页被外层容器裁掉
         - touch-action: manipulation 加快点击响应，消除 300ms 延迟
       */}
-      <div
+      <main
         className="pda-root flex min-h-[100dvh] flex-col overflow-x-hidden overflow-y-auto bg-background text-foreground antialiased"
         style={{
           WebkitTapHighlightColor: 'transparent',
@@ -87,7 +87,7 @@ export default function PdaLayout() {
         <PdaErrorBoundary>
           <Outlet />
         </PdaErrorBoundary>
-      </div>
+      </main>
       <AppToast placement="pda" />
       {newVersion && <PdaUpdateDialog version={newVersion} onDismiss={dismiss} />}
     </>

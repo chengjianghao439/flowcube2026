@@ -36,6 +36,7 @@ export function SettlementTypeField({ settlementType, paymentTermsDays, onChange
   const termsLabel = side === 'payable' ? '应付账期' : '应收账期'
 
   const handleTypeChange = (raw: string) => {
+    if (disabled) return
     const next = Number(raw) as SettlementType
     // 切到月结时给个默认 30 天；切走月结一律归零
     const days = next === SETTLEMENT_TYPE.MONTHLY
@@ -64,7 +65,7 @@ export function SettlementTypeField({ settlementType, paymentTermsDays, onChange
           <Label htmlFor={termsId}>{termsLabel}</Label>
           <Select
             value={String(paymentTermsDays || 30)}
-            onValueChange={v => onChange({ settlementType, paymentTermsDays: Number(v) })}
+            onValueChange={v => { if (!disabled) onChange({ settlementType, paymentTermsDays: Number(v) }) }}
             disabled={disabled}
           >
             <SelectTrigger id={termsId}><SelectValue /></SelectTrigger>

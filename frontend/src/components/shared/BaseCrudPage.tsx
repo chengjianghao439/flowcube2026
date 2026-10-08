@@ -11,7 +11,10 @@ import { QueryErrorState } from '@/components/shared/QueryErrorState'
  * - 行内额外操作（详情/打印/批量）→ renderRowExtra 插槽注入到操作列
  * - 列表筛选（关键词/复杂查询）→ 可选 renderToolbar 插槽
  */
-import { useState, type ReactNode } from 'react'
+import { useContext, useRef, useState, type ReactNode } from 'react'
+import { TabPathContext } from '@/components/layout/TabPathContext'
+import { useSectionActive } from '@/components/layout/SectionVisibilityContext'
+import { useDirtyGuard } from '@/hooks/useDirtyGuard'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from '@/lib/toast'
 import { ApiClientError } from '@/api/client'
@@ -42,7 +45,7 @@ interface Props<T extends RowLike> {
   /** 删除确认文案 */
   deleteMessage: string
   /** 新增/编辑弹窗表单内容 */
-  renderForm: (editing: T | null, open: boolean) => ReactNode
+  renderForm: (editing: T | null, open: boolean, locked: boolean, markDirty: () => void) => ReactNode
   /** 打开弹窗时回调（新建 editing=null，编辑=行对象）。页面在此回填表单，避免在 renderForm 里用 useEffect（回调内不能调 hooks） */
   onOpen?: (editing: T | null) => void
   /** 新增/编辑提交 */
@@ -67,6 +70,8 @@ interface Props<T extends RowLike> {
   createLabel?: string
   /** 2026-09-17 验收修复（G-10）：写入口按权限渲染；默认 true 保持既有页面行为 */
   canCreate?: boolean
+  canEdit?: boolean
+  canDelete?: boolean
   /** 保存校验 */
   canSubmit?: (editing: T | null) => boolean
   /** PageHeader 额外动作（查询/导出等，置于新建按钮之前） */
@@ -85,7 +90,7 @@ export default function BaseCrudPage<T extends RowLike>(props: Props<T>) {
   const {
     title, description, columns: dataColumns, queryKey, listQuery, deleteApi, deleteMessage,
     renderForm, submitForm, saveSuccessMessage, formTitle, formWidthClass = 'max-w-md',
-    renderRowExtra, renderActions, createLabel = '+ 新建', canCreate = true, canSubmit, headerActions, renderToolbar,
+    renderRowExtra, renderActions, createLabel = '+ 新建', canCreate = true, canEdit = true, canDelete = true, canSubmit, headerActions, renderToolbar,
     formIdentity, emptyText, showActions = true, recordUnit,
   } = props
 
@@ -93,6 +98,16 @@ export default function BaseCrudPage<T extends RowLike>(props: Props<T>) {
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<T | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<T | null>(null)
+  const [dirty, setDirty] = useState(false)
+  const [discardOpen, setDiscardOpen] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const formDialogRef = useRef<HTMLDivElement>(null)
+  const discardFocusRef = useRef<HTMLElement | null>(null)
+  const resumeDiscardFocusRef = useRef(false)
+  const active = useSectionActive()
+  const activeRef = useRef(active)
+  activeRef.current = active
+  const tabPath = useContext(TabPathContext)
 
   const { data, isLoading, isError, error, refetch } = useQuery({ queryKey, queryFn: listQuery })
   const invalidate = () => qc.invalidateQueries({ queryKey: [queryKey[0]] })
@@ -101,13 +116,17 @@ export default function BaseCrudPage<T extends RowLike>(props: Props<T>) {
     mutationFn: () => submitForm(editing),
     onSuccess: () => {
       invalidate()
-      setFormOpen(false)
+      setSaved(true)
+      setDirty(false)
+      // 隐藏页的成功回执不关掉原输入；返回后由用户核对并关闭。
+      if (activeRef.current) setFormOpen(false)
       toast.success(saveSuccessMessage ? saveSuccessMessage(editing) : (editing ? '已保存' : '已创建'))
     },
     onError: (e: unknown) =>
       toast.error(e instanceof ApiClientError ? e.message
         : (e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '保存失败'),
   })
+  useDirtyGuard(tabPath, formOpen && ((dirty && !saved) || saveMut.isPending))
 
   const deleteMut = useMutation({
     mutationFn: (id: number) => deleteApi(id),
@@ -116,9 +135,30 @@ export default function BaseCrudPage<T extends RowLike>(props: Props<T>) {
       toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '删除失败'),
   })
 
-  function openCreate() { setEditing(null); setFormOpen(true); props.onOpen?.(null) }
-  function openEdit(row: T) { setEditing(row); setFormOpen(true); props.onOpen?.(row) }
-  function closeDialog() { setFormOpen(false); setEditing(null) }
+  function openCreate() { if (!canCreate || saveMut.isPending) return; setSaved(false); setDirty(false); setEditing(null); setFormOpen(true); props.onOpen?.(null) }
+  function openEdit(row: T) { if (!canEdit || saveMut.isPending) return; setSaved(false); setDirty(false); setEditing(row); setFormOpen(true); props.onOpen?.(row) }
+  function discardDialog() { resumeDiscardFocusRef.current = false; setFormOpen(false); setEditing(null); setDirty(false); setDiscardOpen(false) }
+  function closeDialog() {
+    if (saveMut.isPending) return
+    if (dirty && !saved) {
+      discardFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+      resumeDiscardFocusRef.current = false
+      setDiscardOpen(true)
+    } else discardDialog()
+  }
+  function resumeDialog() { resumeDiscardFocusRef.current = true; setDiscardOpen(false) }
+  function restoreDiscardFocus(event: Event) {
+    if (!resumeDiscardFocusRef.current) return
+    resumeDiscardFocusRef.current = false
+    // 在 Radix 的卸载事件覆盖默认 BODY 恢复，避免定时器先回焦再被覆盖。
+    event.preventDefault()
+    const dialog = formDialogRef.current
+    if (!activeRef.current || !dialog?.isConnected) return
+    const target = discardFocusRef.current
+    if (target?.isConnected && dialog.contains(target) && !target.matches(':disabled')) target.focus({ preventScroll: true })
+    else dialog.focus({ preventScroll: true })
+  }
+  function openDelete(row: T) { if (canDelete && !deleteMut.isPending) setDeleteTarget(row) }
 
   const list = Array.isArray(data) ? data : (data as { list?: T[] })?.list ?? []
 
@@ -128,18 +168,18 @@ export default function BaseCrudPage<T extends RowLike>(props: Props<T>) {
         {
           key: 'id', title: '操作', width: 140,
           render: (_, row) => renderActions
-            ? renderActions(row, { openEdit, openDelete: (r) => setDeleteTarget(r) })
+            ? renderActions(row, { openEdit, openDelete })
             : (
               <div className="flex items-center gap-1">
                 {renderRowExtra ? renderRowExtra(row) : null}
-                <TableActionsMenu
+                {canEdit ? <TableActionsMenu
                   primaryLabel="编辑"
                   primaryVariant="outline"
                   onPrimaryClick={() => openEdit(row)}
                   items={[
-                    { label: '删除', destructive: true, onClick: () => setDeleteTarget(row) },
+                    ...(canDelete ? [{ label: '删除', destructive: true, onClick: () => openDelete(row) }] : []),
                   ]}
-                />
+                /> : canDelete ? <Button size="sm" variant="outline" onClick={() => openDelete(row)}>删除</Button> : null}
               </div>
             ),
         },
@@ -162,10 +202,10 @@ export default function BaseCrudPage<T extends RowLike>(props: Props<T>) {
       {renderToolbar}
 
       {isError ? <QueryErrorState error={error} onRetry={() => void refetch()} title={`${title}加载失败`} compact /> : <DataTable columns={columns} data={list} loading={isLoading} rowKey="id" emptyText={emptyText} />}
-      <ListSummary total={(data as { pagination?: { total?: number } } | undefined)?.pagination?.total ?? list.length} unit={recordUnit} />
+      {!isError && !isLoading && <ListSummary total={(data as { pagination?: { total?: number } } | undefined)?.pagination?.total ?? list.length} unit={recordUnit} />}
 
       <Dialog open={formOpen} onOpenChange={v => !v && closeDialog()}>
-        <DialogContent className={formWidthClass}>
+        <DialogContent ref={formDialogRef} className={formWidthClass} aria-busy={saveMut.isPending} aria-describedby={undefined}>
           <DialogHeader>
             {/* 编辑态与默认（新建）态必须一眼可分：编辑态带「编辑中」标识 + 编辑对象 */}
             <DialogTitle className="flex flex-wrap items-center gap-2">
@@ -178,11 +218,15 @@ export default function BaseCrudPage<T extends RowLike>(props: Props<T>) {
               </p>
             )}
           </DialogHeader>
-          <div className="min-h-0 max-h-[65vh] space-y-4 overflow-y-auto py-2 pr-1">{renderForm(editing, formOpen)}</div>
+          <form onSubmit={event => event.preventDefault()}>
+            <fieldset disabled={saveMut.isPending || saved} onChangeCapture={() => setDirty(true)} className="min-h-0 max-h-[65vh] space-y-4 overflow-y-auto py-2 pr-1">{renderForm(editing, formOpen, saveMut.isPending || saved, () => { if (!saveMut.isPending && !saved) setDirty(true) })}</fieldset>
+          </form>
+          {saveMut.isPending && <p role="status" className="text-sm text-muted-foreground">正在保存，请保留当前表单，等待原操作结果。</p>}
+          {saved && <p role="status" className="text-sm text-success-ink">原操作已保存，请核对后关闭。</p>}
           <DialogFooter>
-            <Button variant="outline" onClick={closeDialog}>取消</Button>
+            <Button variant="outline" disabled={saveMut.isPending} onClick={closeDialog}>{saved ? '关闭' : '取消'}</Button>
             <Button
-              disabled={(canSubmit && !canSubmit(editing)) || saveMut.isPending}
+              disabled={saved || !(editing ? canEdit : canCreate) || (canSubmit && !canSubmit(editing)) || saveMut.isPending}
               onClick={() => saveMut.mutate()}
             >
               {saveMut.isPending ? '保存中…' : (editing ? '保存修改' : '创建')}
@@ -192,13 +236,25 @@ export default function BaseCrudPage<T extends RowLike>(props: Props<T>) {
       </Dialog>
 
       <ConfirmDialog
+        open={discardOpen}
+        title="放弃未保存输入？"
+        description="关闭后本次输入不会保存。可返回表单继续编辑。"
+        confirmText="放弃并关闭"
+        cancelText="继续编辑"
+        onConfirm={discardDialog}
+        onCancel={resumeDialog}
+        onCloseAutoFocus={restoreDiscardFocus}
+      />
+
+      <ConfirmDialog
         open={!!deleteTarget}
         title={`删除${title.replace(/管理$/, '')}`}
         description={deleteMessage}
         variant="destructive"
         confirmText="确认删除"
-        onConfirm={() => deleteTarget && deleteMut.mutate(deleteTarget.id)}
-        onCancel={() => setDeleteTarget(null)}
+        loading={deleteMut.isPending}
+        onConfirm={() => canDelete && deleteTarget && !deleteMut.isPending && deleteMut.mutate(deleteTarget.id)}
+        onCancel={() => { if (!deleteMut.isPending) setDeleteTarget(null) }}
       />
     </div>
   )

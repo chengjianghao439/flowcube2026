@@ -1,0 +1,311 @@
+{
+  "method": "synthetic authorized device; browser only; no task mutations",
+  "initialDeviceGate": "first captures encountered dev reload clearing memory credentials; repeated with legal rebind, original gate evidence not used as page acceptance",
+  "routes": [
+    {
+      "url": "#/pda/",
+      "text": "极序 FLOW\n\n检查更新\n早上好，GL76c9c150-creator\nGL76c9c150-creator\n\n2026-10-08 08:07\n\nGL76c9c150-creator 可用作业（14 项）\n\n收货订单\n\n扫码上架\n\n拣货任务\n\n订单分拣\n\n复核任务\n\n打包作业\n\n出库确认\n\n调拨执行\n\n销售退货\n\n扫码盘点\n\n拣货退回\n\n改单确认\n\n更多功能\n设备绑定：PDA-261008-A502",
+      "links": [],
+      "overflow": false,
+      "focused": "BODY",
+      "binding": {
+        "bound": true,
+        "ticket": true
+      },
+      "screenshot390": "screens/before/b-pda-home-390.png",
+      "screenshot320": "screens/before/b-pda-home-320.png",
+      "overflow320": false,
+      "interaction": "navigation/read only",
+      "loopCaptureVisualPass": false
+    },
+    {
+      "url": "#/pda/inbound",
+      "text": "← 返回\n\n收货订单\n\n刷新\n\n0 个待处理任务\n\n暂无收货任务",
+      "links": [],
+      "overflow": false,
+      "focused": "BODY",
+      "binding": {
+        "bound": true,
+        "ticket": true
+      },
+      "screenshot390": "screens/before/b-pda-inbound-390.png",
+      "screenshot320": "screens/before/b-pda-inbound-320.png",
+      "overflow320": false,
+      "interaction": "navigation/read only",
+      "loopCaptureVisualPass": false
+    },
+    {
+      "url": "#/pda/putaway",
+      "text": "← 返回\n\n扫码上架\n\n请选择上架任务\n\n请先从收货订单列表进入待上架任务。\n\n返回收货订单",
+      "links": [],
+      "overflow": false,
+      "focused": "BODY",
+      "binding": {
+        "bound": true,
+        "ticket": true
+      },
+      "screenshot390": "screens/before/b-pda-putaway-390.png",
+      "screenshot320": "screens/before/b-pda-putaway-320.png",
+      "overflow320": false,
+      "interaction": "navigation/read only",
+      "loopCaptureVisualPass": false
+    },
+    {
+      "url": "#/pda/picking",
+      "text": "← 返回\n\n拣货任务\n\n刷新\n商品列表\n订单列表\n\n0 个 SKU\n\n暂无待拣商品\n\n订单确认后会自动显示在这里",
+      "links": [],
+      "overflow": false,
+      "focused": "BODY",
+      "binding": {
+        "bound": true,
+        "ticket": true
+      },
+      "screenshot390": "screens/before/b-pda-picking-390.png",
+      "screenshot320": "screens/before/b-pda-picking-320.png",
+      "overflow320": false,
+      "interaction": "navigation/read only",
+      "loopCaptureVisualPass": false
+    },
+    {
+      "url": "#/pda/check",
+      "text": "← 返回\n\n选择复核任务\n\n0 个待复核\n\n暂无待复核任务\n\n分拣完成后自动出现在这里",
+      "links": [],
+      "overflow": false,
+      "focused": "BODY",
+      "binding": {
+        "bound": true,
+        "ticket": true
+      },
+      "screenshot390": "screens/before/b-pda-check-390.png",
+      "screenshot320": "screens/before/b-pda-check-320.png",
+      "overflow320": false,
+      "interaction": "navigation/read only",
+      "loopCaptureVisualPass": false
+    },
+    {
+      "url": "#/pda/pack",
+      "text": "← 返回\n\n选择打包任务\n\n0 个待打包\n\n暂无待打包任务",
+      "links": [],
+      "overflow": false,
+      "focused": "BODY",
+      "binding": {
+        "bound": true,
+        "ticket": true
+      },
+      "screenshot390": "screens/before/b-pda-pack-390.png",
+      "screenshot320": "screens/before/b-pda-pack-320.png",
+      "overflow320": false,
+      "interaction": "navigation/read only",
+      "loopCaptureVisualPass": false
+    },
+    {
+      "url": "#/pda/ship",
+      "text": "← 返回\n\n出库确认\n\n扫描物流条码\n\n手动输入",
+      "links": [],
+      "overflow": false,
+      "focused": "BODY",
+      "binding": {
+        "bound": true,
+        "ticket": true
+      },
+      "screenshot390": "screens/before/b-pda-ship-390.png",
+      "screenshot320": "screens/before/b-pda-ship-320.png",
+      "overflow320": false,
+      "interaction": "navigation/read only",
+      "loopCaptureVisualPass": false
+    },
+    {
+      "url": "#/pda/sort",
+      "text": "← 返回\n\n分拣作业\n\nPut Wall\n\n刷新\n1\n\n扫产品条码\n\n2\n\n扫分拣格确认\n\n分拣格状态\n\n空闲 1\n占用 0\n\nGL76c9c150S\n\n空闲\n\n扫描商品条码\n\n手动输入",
+      "links": [],
+      "overflow": false,
+      "focused": "BODY",
+      "binding": {
+        "bound": true,
+        "ticket": true
+      },
+      "screenshot390": "screens/before/b-pda-sort-390.png",
+      "screenshot320": "screens/before/b-pda-sort-320.png",
+      "overflow320": false,
+      "interaction": "navigation/read only",
+      "loopCaptureVisualPass": false
+    },
+    {
+      "url": "#/pda/transfer",
+      "text": "← 返回\n\n调拨执行\n\n刷新\n\n待出库（调出仓扫码）· 0\n\n暂无待出库调拨\n\n待入库（调入仓扫码）· 0\n\n暂无待入库调拨",
+      "links": [],
+      "overflow": false,
+      "focused": "BODY",
+      "binding": {
+        "bound": true,
+        "ticket": true
+      },
+      "screenshot390": "screens/before/b-pda-transfer-390.png",
+      "screenshot320": "screens/before/b-pda-transfer-320.png",
+      "overflow320": false,
+      "interaction": "navigation/read only",
+      "loopCaptureVisualPass": false
+    },
+    {
+      "url": "#/pda/sale-return",
+      "text": "← 返回\n\n销售退货\n\n退货收货/质检/上架\n\n暂无退货任务\n\n请在 ERP 端确认退货单并提交到 PDA",
+      "links": [],
+      "overflow": false,
+      "focused": "BODY",
+      "binding": {
+        "bound": true,
+        "ticket": true
+      },
+      "screenshot390": "screens/before/b-pda-sale-return-390.png",
+      "screenshot320": "screens/before/b-pda-sale-return-320.png",
+      "overflow320": false,
+      "interaction": "navigation/read only",
+      "loopCaptureVisualPass": false
+    },
+    {
+      "url": "#/pda/stockcheck",
+      "text": "← 返回\n\n扫码盘点\n\n逐商品扫描在架库存条码\n\n暂无进行中的盘点单",
+      "links": [],
+      "overflow": false,
+      "focused": "BODY",
+      "binding": {
+        "bound": true,
+        "ticket": true
+      },
+      "screenshot390": "screens/before/b-pda-stockcheck-390.png",
+      "screenshot320": "screens/before/b-pda-stockcheck-320.png",
+      "overflow320": false,
+      "interaction": "navigation/read only",
+      "loopCaptureVisualPass": false
+    },
+    {
+      "url": "#/pda/cancel-return",
+      "text": "← 返回\n\n拣货退回\n\n逆向归还已拣库存条码\n\n刷新\n\n0 个任务待归还\n\n暂无待归还任务\n\n没有因订单取消而需要归还货物的任务",
+      "links": [],
+      "overflow": false,
+      "focused": "BODY",
+      "binding": {
+        "bound": true,
+        "ticket": true
+      },
+      "screenshot390": "screens/before/b-pda-cancel-return-390.png",
+      "screenshot320": "screens/before/b-pda-cancel-return-320.png",
+      "overflow320": false,
+      "interaction": "navigation/read only",
+      "loopCaptureVisualPass": false
+    },
+    {
+      "url": "#/pda/adjustments",
+      "text": "← 返回\n\n改单确认\n\n拆箱 / 归还库位确认\n\n刷新\n\n0 个任务待处理\n\n暂无待确认改单\n\n没有因订单修改而需要归还/拆箱的任务",
+      "links": [],
+      "overflow": false,
+      "focused": "BODY",
+      "binding": {
+        "bound": true,
+        "ticket": true
+      },
+      "screenshot390": "screens/before/b-pda-adjustments-390.png",
+      "screenshot320": "screens/before/b-pda-adjustments-320.png",
+      "overflow320": false,
+      "interaction": "navigation/read only",
+      "loopCaptureVisualPass": false
+    },
+    {
+      "url": "#/pda/split",
+      "text": "← 返回\n\n塑料盒作业\n\n扫盒 → 各箱数量 → 生成整件码\n\n扫描塑料盒条码（还原整件）或库存条码（拆出散件盒）\n\n扫描塑料盒或库存条码\n\n手动输入",
+      "links": [],
+      "overflow": false,
+      "focused": "BODY",
+      "binding": {
+        "bound": true,
+        "ticket": true
+      },
+      "screenshot390": "screens/before/b-pda-split-390.png",
+      "screenshot320": "screens/before/b-pda-split-320.png",
+      "overflow320": false,
+      "interaction": "navigation/read only",
+      "loopCaptureVisualPass": false
+    },
+    {
+      "url": "#/pda/plastic-box",
+      "text": "← 返回\n\n塑料盒作业\n\n选择本次动作，分别按原条码和数量规则执行\n\n整件放入盒\n扫整件I码与目标B盒，按原整件实存全部放入\n盒还原整件\n扫B盒，逐箱填写数量，生成整件I码\n整件拆出散件盒\n扫整件I码，填写部分数量，生成散件B盒",
+      "links": [],
+      "overflow": false,
+      "focused": "BODY",
+      "binding": {
+        "bound": true,
+        "ticket": true
+      },
+      "screenshot390": "screens/before/b-pda-plastic-box-390.png",
+      "screenshot320": "screens/before/b-pda-plastic-box-320.png",
+      "overflow320": false,
+      "interaction": "navigation/read only",
+      "loopCaptureVisualPass": false
+    },
+    {
+      "url": "#/pda/split-recovery",
+      "text": "← 返回\n\n拆分结果核对\n\n当前 PDA 未绑定设备\n\n系统已切换为受限模式。未绑定的机器无法执行任何作业，请先到「设备绑定」页面扫码绑定管理员生成的绑定码。\n\n去绑定设备",
+      "links": [],
+      "overflow": false,
+      "focused": "BODY",
+      "binding": {
+        "bound": true,
+        "ticket": true
+      },
+      "screenshot390": "screens/before/b-pda-split-recovery-390.png",
+      "screenshot320": "screens/before/b-pda-split-recovery-320.png",
+      "overflow320": false,
+      "interaction": "navigation/read only",
+      "loopCaptureVisualPass": false
+    },
+    {
+      "url": "#/pda/fill",
+      "text": "← 返回\n\n塑料盒放货\n\n扫整件来源 → 扫目标盒 → 全部放入\n\n当前步骤：① 扫整件来源\n\n扫描整件库存条码\n\n手动输入",
+      "links": [],
+      "overflow": false,
+      "focused": "BODY",
+      "binding": {
+        "bound": true,
+        "ticket": true
+      },
+      "screenshot390": "screens/before/b-pda-fill-390.png",
+      "screenshot320": "screens/before/b-pda-fill-320.png",
+      "overflow320": false,
+      "interaction": "navigation/read only",
+      "loopCaptureVisualPass": false
+    },
+    {
+      "url": "#/pda/inventory-query",
+      "text": "← 返回\n\n库存查询\n\n扫描库存条码查看在库信息\n\n扫描库存条码（I…/B…）\n\n手动输入",
+      "links": [],
+      "overflow": false,
+      "focused": "BODY",
+      "binding": {
+        "bound": true,
+        "ticket": true
+      },
+      "screenshot390": "screens/before/b-pda-inventory-query-390.png",
+      "screenshot320": "screens/before/b-pda-inventory-query-320.png",
+      "overflow320": false,
+      "interaction": "navigation/read only",
+      "loopCaptureVisualPass": false
+    },
+    {
+      "url": "#/pda/bind",
+      "text": "← 工作台\n\n设备绑定\n\n本机已绑定\n设备码\nPDA-261008-A502\n所属仓库\n验收合成仓-GL76c9c150\n票据状态\n有效\n解除绑定\n▼ 扫码失败？可手动输入设备码和密钥\n\n扫描绑定二维码\n\n手动输入",
+      "links": [],
+      "overflow": false,
+      "focused": "BODY",
+      "binding": {
+        "bound": true,
+        "ticket": true
+      },
+      "screenshot390": "screens/before/b-pda-bind-390.png",
+      "screenshot320": "screens/before/b-pda-bind-320.png",
+      "overflow320": false,
+      "interaction": "navigation/read only",
+      "loopCaptureVisualPass": false
+    }
+  ],
+  "evidenceBoundary": "19条路由390/320循环仅自动导航、截图、DOM/overflow；人工代表记录见assessment-b与implementation-b，不以自动截图算视觉通过。split-recovery初轮设备门不得计业务页覆盖。"
+}

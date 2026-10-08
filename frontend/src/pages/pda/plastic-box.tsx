@@ -29,10 +29,10 @@ export default function PdaPlasticBoxPage() {
     <KeepAliveSection active={selected === null}>
       <PdaHeader title="塑料盒作业" subtitle="选择本次动作，分别按原条码和数量规则执行" onBack={() => { if (!hasUnsubmittedInput) navigate('/pda') }} />
       <div className="mx-auto max-w-md space-y-4 p-4">
-        {hasDraft && <p className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">原动作的输入和待确认记录已保留，请点原动作继续；有结果待确认时先核对原提交，再切换其他塑料盒动作。{hasUnsubmittedInput ? '返回工作台前请先完成或取消尚未提交的输入。' : '原请求已保存，可返回工作台进行其他仓库作业，再从原动作继续核对。'}</p>}
-        {choices.map(c => <Button key={c.action} variant="outline" className="h-auto w-full flex-col items-start whitespace-normal py-4 text-left" disabled={!!pendingAction && pendingAction !== c.action} onClick={() => setSelected(c.action)}>
+        {hasDraft && <p className="rounded border border-warning/30 bg-warning/10 p-3 text-sm text-warning-ink">原动作的输入和待确认记录已保留，请点原动作继续；有结果待确认时先核对原提交，再切换其他塑料盒动作。{hasUnsubmittedInput ? '返回工作台前请先完成或取消尚未提交的输入。' : '原请求已保存，可返回工作台进行其他仓库作业，再从原动作继续核对。'}</p>}
+        {choices.map(c => <Button size="lg" key={c.action} variant="outline" className="px-3 h-auto w-full flex-col items-start whitespace-normal py-4 text-left" disabled={!!pendingAction && pendingAction !== c.action} onClick={() => setSelected(c.action)}>
           <span className="font-semibold">{c.label}</span><span className="text-xs text-muted-foreground">{c.hint}</span>
-          {(states[c.action]?.hasInput || states[c.action]?.pending || c.action === pendingAction) && <span className="text-xs text-amber-700">原输入已保留 · 点此继续</span>}
+          {(states[c.action]?.hasInput || states[c.action]?.pending || c.action === pendingAction) && <span className="text-xs text-warning-ink">原输入已保留 · 点此继续</span>}
         </Button>)}
       </div>
     </KeepAliveSection>

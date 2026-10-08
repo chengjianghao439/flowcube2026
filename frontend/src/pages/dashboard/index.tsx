@@ -3,7 +3,6 @@ import {
   Pencil, Save, X, RotateCcw, GripVertical, Plus, Minus, LayoutGrid, Check, Sparkles,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { DailyWork } from '@/components/shared/DailyWork'
 import { usePermission } from '@/hooks/usePermission'
 import { useDirtyGuard } from '@/hooks/useDirtyGuard'
 import { TabPathContext } from '@/components/layout/TabPathContext'
@@ -159,8 +158,6 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {!editing && <DailyWork />}
-
       {/* 组件库（编辑态内联展开，非模态） */}
       {editing && libOpen && (
         <div className="card-base p-4">
@@ -258,7 +255,7 @@ export default function DashboardPage() {
                         <GripVertical className="h-3.5 w-3.5" />
                       </span>
                       <button type="button" title="隐藏" onClick={() => hide(w.id)}
-                        className="flex h-6 w-6 items-center justify-center rounded text-destructive hover:bg-destructive/10">
+                        className="flex h-6 w-6 items-center justify-center rounded text-destructive-ink hover:bg-destructive/10">
                         <X className="h-3.5 w-3.5" />
                       </button>
                     </div>

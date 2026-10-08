@@ -91,7 +91,7 @@ function ApprovalProgress({ approval }: { approval: NonNullable<import('@/types/
                 {t.comment ? ` · ${t.comment}` : ''}
               </span>
               {t.actionAt && <span className="ml-auto text-xs text-muted-foreground">{formatDisplayDateTime(t.actionAt)}</span>}
-              {isCurrent && <span className="ml-auto text-xs text-warning">当前</span>}
+              {isCurrent && <span className="ml-auto text-xs text-warning-ink">当前</span>}
             </div>
           )
         })}
@@ -339,7 +339,7 @@ export default function RequisitionFormPage() {
             {status === 2 && canApprove && <Button variant="outline" disabled={busy} onClick={() => setRejectOpen(true)}>驳回</Button>}
             {status === 3 && canConvert && <Button disabled={busy} onClick={openConvert}>转采购单</Button>}
             {editId && (status === 1 || status === 2 || status === 4) && canCreate && (
-              <Button variant="ghost" className="text-destructive" disabled={busy}
+              <Button variant="ghost" className="text-destructive-ink" disabled={busy}
                 onClick={() => confirmAction({ title: '取消采购申请单', description: '确定取消这张采购申请单吗？此操作不可撤销。', onConfirm: () => runApproval(() => cancelRequisitionApi(editId), '已取消') })}>取消</Button>
             )}
           </div>
@@ -347,7 +347,7 @@ export default function RequisitionFormPage() {
       />
 
       {detail?.status === 4 && detail.rejectReason && (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-2 text-sm text-destructive">驳回原因：{detail.rejectReason}</div>
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-2 text-sm text-destructive-ink">驳回原因：{detail.rejectReason}</div>
       )}
 
 
@@ -409,7 +409,7 @@ export default function RequisitionFormPage() {
                       : <span className="text-muted-foreground">{it.suggestedSupplierName || '—'}</span>}
                   </td>
                   {!editable && <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{it.convertedQty ?? 0}</td>}
-                  {editable && <td className="px-3 py-2 text-center"><Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" aria-label="删除本行明细" onClick={() => removeItem(idx)} disabled={busy}><Trash2 className="h-4 w-4" /></Button></td>}
+                  {editable && <td className="px-3 py-2 text-center"><Button size="icon" variant="ghost" className="h-7 w-7 text-destructive-ink" aria-label="删除本行明细" onClick={() => removeItem(idx)} disabled={busy}><Trash2 className="h-4 w-4" /></Button></td>}
                 </tr>
               ))}
             </tbody>

@@ -367,7 +367,7 @@ export function SettleReceiptDialog({ open, onClose, type, settlementTypes, rece
               </span>
               <div className="flex items-center gap-3 text-xs">
                 <span className="text-muted-foreground">已分配 <span className="tabular-nums font-medium text-foreground">{money(allocatedTotal)}</span></span>
-                <span className={unallocated < -1e-6 ? 'font-semibold text-destructive' : 'text-muted-foreground'}>
+                <span className={unallocated < -1e-6 ? 'font-semibold text-destructive-ink' : 'text-muted-foreground'}>
                   {unallocated < -1e-6 ? `超出 ${money(-unallocated)}` : `未分配 ${money(unallocated)}`}
                 </span>
                 <Button size="sm" variant="outline" onClick={autoAllocate} disabled={!candidates.length || totalAmount <= 0}>
@@ -393,7 +393,7 @@ export function SettleReceiptDialog({ open, onClose, type, settlementTypes, rece
                     </div>
                     <p className="text-xs text-muted-foreground">
                       {byStatement ? '汇总' : `应${isPayableType(type) ? '付' : '收'}`} {money(c.total)}
-                      {' · '}余额 <span className="font-medium text-destructive">{money(c.balance)}</span>
+                      {' · '}余额 <span className="font-medium text-destructive-ink">{money(c.balance)}</span>
                       {c.sub ? ` · ${c.sub}` : ''}
                     </p>
                   </div>

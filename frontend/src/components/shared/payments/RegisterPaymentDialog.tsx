@@ -190,7 +190,7 @@ export function RegisterPaymentDialog({ open, onClose, type, record }: Props) {
         {record && (
           <div className="mb-4 space-y-1 text-sm text-muted-foreground">
             <p>关联单号：<span className="text-doc-code-strong">{record.orderNo}</span> &nbsp;·&nbsp; {partyLabel}：{record.partyName}</p>
-            <p>余额：<span className="font-medium text-destructive">{money(record.balance)}</span></p>
+            <p>余额：<span className="font-medium text-destructive-ink">{money(record.balance)}</span></p>
           </div>
         )}
         <div className="grid grid-cols-2 gap-4">

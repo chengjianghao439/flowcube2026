@@ -1,0 +1,66 @@
+{
+  "state": {
+    "base": "/api",
+    "bound": true,
+    "generation": 0,
+    "ticket": true,
+    "timeOrigin": 1791419171265.6,
+    "userId": 2
+  },
+  "timeOrigin": 1791419171265.6,
+  "trace": [
+    {
+      "base": "/api",
+      "bound": false,
+      "generation": 0,
+      "kind": "start",
+      "ticket": false,
+      "timeOrigin": 1791419171265.6,
+      "userId": 2
+    },
+    {
+      "base": "/api",
+      "bound": true,
+      "generation": 0,
+      "kind": "request",
+      "method": "post",
+      "ticket": false,
+      "timeOrigin": 1791419171265.6,
+      "url": "/pda/sessions",
+      "userId": 2
+    },
+    {
+      "base": "/api",
+      "bound": true,
+      "generation": 0,
+      "kind": "response",
+      "status": 200,
+      "ticket": false,
+      "timeOrigin": 1791419171265.6,
+      "url": "/pda/sessions",
+      "userId": 2
+    },
+    {
+      "base": "/api",
+      "bound": true,
+      "generation": 0,
+      "kind": "request",
+      "method": "get",
+      "ticket": true,
+      "timeOrigin": 1791419171265.6,
+      "url": "/pda/todo-counts",
+      "userId": 2
+    },
+    {
+      "base": "/api",
+      "bound": true,
+      "generation": 0,
+      "kind": "response",
+      "status": 200,
+      "ticket": true,
+      "timeOrigin": 1791419171265.6,
+      "url": "/pda/todo-counts",
+      "userId": 2
+    }
+  ]
+}

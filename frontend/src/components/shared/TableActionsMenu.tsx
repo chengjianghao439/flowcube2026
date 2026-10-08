@@ -126,7 +126,7 @@ export default function TableActionsMenu({
               {item.separatorBefore && <DropdownMenuSeparator />}
               <DropdownMenuItem
                 disabled={item.disabled}
-                className={cn('text-xs', item.destructive && 'text-destructive focus:text-destructive')}
+                className={cn('text-xs', item.destructive && 'text-destructive-ink focus:text-destructive-ink')}
                 onClick={() => {
                   if (item.afterMenuClose) afterClose.current = item.onClick
                   else item.onClick()

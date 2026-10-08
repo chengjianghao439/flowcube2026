@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { useDialogDraftGuard } from '@/hooks/useDialogDraftGuard'
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { Button } from '@/components/ui/button'
 import { EditModeBadge, UnsavedBadge } from '@/components/shared/EditModeBadge'
 import { Input } from '@/components/ui/input'
@@ -30,7 +32,7 @@ export default function CustomerFormDialog({ open, onClose, customer }: Props) {
   const [f, setF] = useState(empty)
   // 基线：编辑=加载到的记录值，新增=默认值。改动后与默认态明显区分（「未保存」标识）
   const [baseline, setBaseline] = useState(empty)
-  const set = (k: keyof typeof empty) => (e: React.ChangeEvent<HTMLInputElement>) => setF(p=>({...p,[k]:e.target.value}))
+  const set = (k: keyof typeof empty) => (e: React.ChangeEvent<HTMLInputElement>) => { if (draft.canEdit()) setF(p=>({...p,[k]:e.target.value})) }
 
   useEffect(() => {
     if (!open) return
@@ -50,15 +52,20 @@ export default function CustomerFormDialog({ open, onClose, customer }: Props) {
       setF(empty)
       setBaseline(empty)
     }
-  }, [customer, open])
+    // 同一客户后台刷新不替换打开时的草稿。
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 只在打开/切换记录时建立草稿基线
+  }, [customer?.id, open])
 
   const isDirty = JSON.stringify(f) !== JSON.stringify(baseline)
+  const draft = useDialogDraftGuard({ open, identity: customer?.id ?? 'new', dirty: isDirty, pending: create.isPending || update.isPending, onClose })
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     let profile
     try { profile = normalizePartyProfile(f, '客户') }
     catch (error) { toast.error((error as Error).message); return }
+    const submission = draft.beginSubmit()
+    if (!submission) return
     const { creditEnabled, creditLimit: cl, isActive, ...rest } = f
     const payload = { ...rest, ...profile, creditLimit: creditEnabled ? (cl === '' ? 0 : Number(cl)) : null }
     try {
@@ -67,17 +74,19 @@ export default function CustomerFormDialog({ open, onClose, customer }: Props) {
       } else {
         await create.mutateAsync(payload)
       }
-      onClose()
+      if (submission.finish()) onClose()
     } catch {
+      submission.finish()
       // Toast 已在 hooks 的 onError 中处理
     }
   }
 
-  const loading = create.isPending || update.isPending
+  const loading = draft.locked
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+    <>
+    <Dialog open={open} onOpenChange={value => { if (!value) draft.requestClose() }}>
+      <DialogContent ref={draft.contentRef} onFocusCapture={draft.rememberFocus} className="max-w-3xl max-h-[90vh] overflow-y-auto" aria-describedby={undefined}>
         {/* 编辑态与默认（新增）态必须一眼可分：带「编辑中」标识 + 编辑对象 + 未保存提示 */}
         <DialogHeader>
           <DialogTitle className="flex flex-wrap items-center gap-2">
@@ -91,7 +100,8 @@ export default function CustomerFormDialog({ open, onClose, customer }: Props) {
             </p>
           )}
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-5 py-2">
+        <form onSubmit={handleSubmit}>
+          <fieldset disabled={loading} className="space-y-5 py-2">
           <h3 className="text-sm font-medium">客户与联系方式</h3>
           <div className="grid grid-cols-2 gap-x-6 gap-y-3">
             {isEdit && (
@@ -130,7 +140,7 @@ export default function CustomerFormDialog({ open, onClose, customer }: Props) {
             side="receivable"
             settlementType={f.settlementType}
             paymentTermsDays={f.paymentTermsDays}
-            onChange={next => setF(p => ({ ...p, ...next }))}
+            onChange={next => { if (draft.canEdit()) setF(p => ({ ...p, ...next })) }}
             disabled={loading}
           />
           <div className="space-y-3 rounded-md bg-muted/40 p-4">
@@ -159,11 +169,14 @@ export default function CustomerFormDialog({ open, onClose, customer }: Props) {
             </div>
           )}
           <DialogFooter className="border-t pt-4">
-            <Button type="button" variant="outline" onClick={onClose}>取消</Button>
+            <Button type="button" variant="outline" onClick={draft.requestClose} disabled={loading}>取消</Button>
             <Button type="submit" disabled={loading}>{loading ? '保存中…' : (isEdit ? '保存修改' : '保存')}</Button>
           </DialogFooter>
+          </fieldset>
         </form>
       </DialogContent>
     </Dialog>
+    <ConfirmDialog {...draft.discardProps} />
+    </>
   )
 }

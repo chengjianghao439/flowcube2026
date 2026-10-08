@@ -33,7 +33,7 @@ export default function PdaConnectionGate({ children }: { children: React.ReactN
   if (phase === 'checking') {
     return (
       <div className="flex h-[100dvh] flex-col items-center justify-center gap-3 bg-background px-6 text-center">
-        <svg className="h-8 w-8 animate-spin text-muted-foreground" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <svg className="h-8 w-8 motion-safe:animate-spin text-muted-foreground" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
         </svg>
@@ -47,11 +47,11 @@ export default function PdaConnectionGate({ children }: { children: React.ReactN
   if (phase === 'fail' && !onLoginConfig) {
     return (
       <div className="flex h-[100dvh] flex-col items-center justify-center gap-4 bg-background px-6 text-center">
-        <p className="text-base font-medium text-destructive">无法连接服务器</p>
+        <p className="text-base font-medium text-destructive-ink">无法连接服务器</p>
         <p className="text-xs text-muted-foreground max-w-sm">
           请确认 PDA 与服务器网络互通、服务器已启动。应用会优先使用上次保存的服务器地址，未保存时使用安装包内置的默认地址。
         </p>
-        <Button type="button" onClick={() => window.location.reload()}>
+        <Button className="px-3" size="lg" type="button" onClick={() => window.location.reload()}>
           重试连接
         </Button>
       </div>

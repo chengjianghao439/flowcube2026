@@ -123,6 +123,25 @@ export function useTableColumns<T extends object>({columns, fluid, columnStorage
   const hasCustomWidths = Object.keys(columnWidths).length > 0
   const tableWidth = orderedColumns.reduce((sum, col) => sum + getColumnWidth(col), isSelectEnabled ? 56 : 0)
 
+  const percentLayout = useMemo(() => {
+    const weights = orderedColumns.map(getColumnWidth)
+    const totalWeight = weights.reduce((sum, weight) => sum + weight, 0)
+    const selectionWidth = isSelectEnabled ? 56 : 0
+    const widths: Record<string, string> = {}
+    let minimum = 0
+    orderedColumns.forEach((col, index) => {
+      const share = Number.isFinite(totalWeight) && totalWeight > 0 ? weights[index] / totalWeight : 1 / orderedColumns.length
+      const fallback = isAction(String(col.key), col.title) ? 128 : 96
+      const floor = typeof col.minWidth === 'number' && Number.isFinite(col.minWidth) && col.minWidth > 0 ? col.minWidth : fallback
+      minimum = Math.max(minimum, floor / share)
+      // fixed table 自动扣除固定勾选列后分配比例；col 不支持混合百分比/像素的 calc。
+      widths[String(col.key)] = `${share * 100}%`
+    })
+    return { widths, minWidth: selectionWidth + Math.ceil(minimum) }
+  }, [orderedColumns, getColumnWidth, isSelectEnabled])
+
+  const getPercentColumnWidth = (col: TableColumn<T>) => percentLayout.widths[String(col.key)]
+
   const measureWidths = () => {
     const elements = Array.from(colgroupRef.current?.querySelectorAll('col') ?? []).slice(isSelectEnabled ? 1 : 0)
     return Object.fromEntries(orderedColumns.map((col, index) => [String(col.key), elements[index]?.getBoundingClientRect().width || getColumnWidth(col)]))
@@ -243,5 +262,5 @@ export function useTableColumns<T extends object>({columns, fluid, columnStorage
     savePixelWidths({ ...snapshot, [String(col.key)]: Math.min(800, Math.ceil(width)) })
   }
 
-  return { orderedColumns, usesPercent, getColumnWidth, colgroupRef, tableRef, tableWidth, hasCustomWidths, setDraggingKey, draggingKey, moveColumn, startResize, fitColumn, resizeCleanupRef, measureWidths, savePixelWidths }
+  return { orderedColumns, usesPercent, getColumnWidth, getPercentColumnWidth, percentMinWidth: percentLayout.minWidth, colgroupRef, tableRef, tableWidth, hasCustomWidths, setDraggingKey, draggingKey, moveColumn, startResize, fitColumn, resizeCleanupRef, measureWidths, savePixelWidths }
 }

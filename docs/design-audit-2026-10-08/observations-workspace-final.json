@@ -1,0 +1,245 @@
+{
+  "session": "flowcube-impeccable-crud",
+  "attempts": [
+    {
+      "stage": "final-focus-extras",
+      "error": "{\"success\":false,\"data\":null,\"error\":\"2 elements have role \\\"tab\\\", but none match name \\\"null\\\". Names seen: \\\"仪表盘\\\", \\\"新建销售单\\\"\"}\n"
+    }
+  ],
+  "method": "真实UI；本批合成全权账号；仅打开/输入/Escape/继续编辑/放弃；不保存删除释放打印。每图人工细看在单独报告确认后才登记。",
+  "routes": [
+    {
+      "route": "/sale/new",
+      "screenshots": [
+        "screens/after/c-focus-sale-draft-before-switch-1024.png",
+        "screens/after/c-focus-sale-draft-retained-1024.png",
+        "screens/after/c-focus-sale-draft-close-confirm-1024.png",
+        "screens/after/c-focus-sale-draft-close-cancel-1024.png",
+        "screens/after/c-focus-sale-draft-close-list-1024.png"
+      ],
+      "before": {
+        "dialogs": [],
+        "focus": {
+          "id": ":rt:-remark",
+          "label": null,
+          "tag": "INPUT",
+          "text": ""
+        },
+        "inputs": [
+          {
+            "id": ":rt:-receiver",
+            "placeholder": "请输入收货人或部门",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "id": ":rt:-phone",
+            "placeholder": "手机、座机或国际号码",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "id": ":rt:-remark",
+            "placeholder": "选填",
+            "type": "text",
+            "value": "AUDIT-ONLY-TAB-CLOSE"
+          },
+          {
+            "id": "",
+            "placeholder": "数量",
+            "type": "number",
+            "value": "1.25"
+          },
+          {
+            "id": "",
+            "placeholder": "单价",
+            "type": "number",
+            "value": "20"
+          },
+          {
+            "id": "",
+            "placeholder": "数量",
+            "type": "number",
+            "value": "2"
+          },
+          {
+            "id": "",
+            "placeholder": "单价",
+            "type": "number",
+            "value": "20"
+          },
+          {
+            "id": "sale-discount-amount",
+            "placeholder": "0.00",
+            "type": "number",
+            "value": ""
+          }
+        ],
+        "url": "#/sale/new"
+      },
+      "retained": {
+        "dialogs": [],
+        "focus": {
+          "id": ":rr:-tab-%2Fsale%2Fnew",
+          "label": null,
+          "tag": "BUTTON",
+          "text": "新建销售单"
+        },
+        "inputs": [],
+        "url": "#/sale/new"
+      },
+      "prompted": {
+        "dialogs": [
+          {
+            "text": "离开确认\n关闭\n当前内容尚未保存，确定离开吗？\n继续编辑\n确定离开",
+            "title": "离开确认"
+          }
+        ],
+        "focus": {
+          "id": "",
+          "label": null,
+          "tag": "BUTTON",
+          "text": "关闭"
+        },
+        "inputs": [
+          {
+            "id": ":rt:-receiver",
+            "placeholder": "请输入收货人或部门",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "id": ":rt:-phone",
+            "placeholder": "手机、座机或国际号码",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "id": ":rt:-remark",
+            "placeholder": "选填",
+            "type": "text",
+            "value": "AUDIT-ONLY-TAB-CLOSE"
+          },
+          {
+            "id": "",
+            "placeholder": "数量",
+            "type": "number",
+            "value": "1.25"
+          },
+          {
+            "id": "",
+            "placeholder": "单价",
+            "type": "number",
+            "value": "20"
+          },
+          {
+            "id": "",
+            "placeholder": "数量",
+            "type": "number",
+            "value": "2"
+          },
+          {
+            "id": "",
+            "placeholder": "单价",
+            "type": "number",
+            "value": "20"
+          },
+          {
+            "id": "sale-discount-amount",
+            "placeholder": "0.00",
+            "type": "number",
+            "value": ""
+          }
+        ],
+        "url": "#/sale/new"
+      },
+      "result": "客户+两商品qty1.25/2+备注→仪表盘→返回保留；真实可见tab close产生确认→继续编辑保留原草稿→再次close/确定离开，回销售列表且新建tab已移除；无保存业务写入",
+      "businessWrite": false,
+      "humanViewed": true,
+      "cancelled": {
+        "dialogs": [],
+        "focus": {
+          "id": "",
+          "label": null,
+          "tag": "BODY",
+          "text": "极序 Flow\n仪表盘\n待办中心\n采购\n销售\n库存\n仓储\n财务\n审批中心\n会计\n报表\n系统\n6\nGL\n\nGL76c9c150-creator\n\nGL76c9c150-creator\n\n仪表盘\n新建销售单\n新建销售单\n未保存\n保存草稿\n订单信息\n客户与履约\n客户 *\n验收合成客户-GL76c9c150\n出库仓库 *\n选择仓库\n承运商\n暂无承运商，请先创建\n运费方式\n请选择\n收货信息\n从地址簿选择\n收货人\n0/30\n联系电话\n0/30\n收货地址\n0/200\n备注\n商品明细\n添加商品\n\n数量、单价按 Enter 前进，Shift+Enter 返回；末行可继续添加商品。\n\n编码\t供应商型号\t型号\t名称\t颜色\t单位\t数量\t单价 (¥)\t金额\t\nGL76c9c150P0\t供应商型号-1-LONG\t型号-1-EXTENDED\t\n验收合成：加长静音阻尼铰链（嵌入式柜门用）长名称与型号识别检查\n\t银白色\t个\t\n基本数量：1.25 个\n\t\n\n每个\n\n客户等级价：价格A\n\n\t¥25.00\t\n\nGL76c9c150P1\t供应商型号-2-LONG\t型号-2-EXTENDED\t\n验收合成五金配件 2\n\t拉丝黑\t个\t\n基本数量：2 个\n\t\n\n每个\n\n客户等级价：价格A\n\n\t¥40.00\t\n\n商品明细\n\n2 行\n\n基本单位数量\n\n3.25 个\n\n商品金额\n¥65.00\n折扣金额\n订单金额\n\n¥65.00"
+        },
+        "inputs": [
+          {
+            "id": ":rt:-receiver",
+            "placeholder": "请输入收货人或部门",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "id": ":rt:-phone",
+            "placeholder": "手机、座机或国际号码",
+            "type": "text",
+            "value": ""
+          },
+          {
+            "id": ":rt:-remark",
+            "placeholder": "选填",
+            "type": "text",
+            "value": "AUDIT-ONLY-TAB-CLOSE"
+          },
+          {
+            "id": "",
+            "placeholder": "数量",
+            "type": "number",
+            "value": "1.25"
+          },
+          {
+            "id": "",
+            "placeholder": "单价",
+            "type": "number",
+            "value": "20"
+          },
+          {
+            "id": "",
+            "placeholder": "数量",
+            "type": "number",
+            "value": "2"
+          },
+          {
+            "id": "",
+            "placeholder": "单价",
+            "type": "number",
+            "value": "20"
+          },
+          {
+            "id": "sale-discount-amount",
+            "placeholder": "0.00",
+            "type": "number",
+            "value": ""
+          }
+        ],
+        "url": "#/sale/new"
+      },
+      "finallyClosed": {
+        "dialogs": [],
+        "focus": {
+          "id": ":rr:-tab-%2Fsale",
+          "label": null,
+          "tag": "BUTTON",
+          "text": "销售订单"
+        },
+        "inputs": [],
+        "url": "#/sale?endDate=2026-10-08&startDate=2026-10-02"
+      },
+      "visualReviewer": "coverage_inventory",
+      "visualReview": "列表/表单/确认/回焦各截图已逐张人工细看；仅所列实际路径与阶段。",
+      "samplingBoundary": "cancelled.focus的BODY为卸载后的即时采样，不判持续回焦失败；observations-c-final-shared.json另一样本条件等待自动回焦完成后实际回原close按钮。"
+    }
+  ],
+  "sourceBoundary": "最终产品源码freeze、Radix dismissable-layer1.1.13/focus-scope1.1.16及Vite dedupe；root后续DialogDescription小收口之前。其它尺寸/主题、权限、pending/业务写入及硬件不外推。",
+  "browserCleanup": {
+    "closed": true,
+    "verifiedSessionList": [
+      "flowcube-impeccable-root",
+      "flowcube-impeccable-b"
+    ],
+    "ownedSessionAbsent": true,
+    "method": "finally执行owned close；后独立session list核验"
+  }
+}

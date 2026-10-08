@@ -53,8 +53,8 @@ export default function AvgCostReconciliationPage() {
     { key: 'unitCost', title: '单位成本', width: 90, align: 'right', render: v => <span className="tabular-nums">{money(Number(v))}</span> },
     { key: 'cacheQty', title: '账面数量', width: 100, align: 'right', render: v => <span className="tabular-nums">{fmtQty(v)}</span> },
     { key: 'containerQty', title: '实际库存', width: 100, align: 'right', render: v => <span className="tabular-nums">{fmtQty(v)}</span> },
-    { key: 'diffQty', title: '数量差异', width: 100, align: 'right', render: (_, r) => <span className={`tabular-nums ${r.diffQty !== 0 ? 'text-destructive font-semibold' : 'text-muted-foreground'}`}>{r.diffQty}</span> },
-    { key: 'diffValue', title: '价值差异', width: 110, align: 'right', render: (_, r) => <span className={`tabular-nums ${r.diffValue !== 0 ? 'text-destructive font-semibold' : 'text-muted-foreground'}`}>{money(r.diffValue)}</span> },
+    { key: 'diffQty', title: '数量差异', width: 100, align: 'right', render: (_, r) => <span className={`tabular-nums ${r.diffQty !== 0 ? 'text-destructive-ink font-semibold' : 'text-muted-foreground'}`}>{r.diffQty}</span> },
+    { key: 'diffValue', title: '价值差异', width: 110, align: 'right', render: (_, r) => <span className={`tabular-nums ${r.diffValue !== 0 ? 'text-destructive-ink font-semibold' : 'text-muted-foreground'}`}>{money(r.diffValue)}</span> },
     {
       key: 'drifted',
       title: '状态',
@@ -87,7 +87,7 @@ export default function AvgCostReconciliationPage() {
       />
 
       {data && data.driftedCount > 0 && (
-        <div className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-2 text-sm text-destructive">
+        <div className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-2 text-sm text-destructive-ink">
           检测到 {data.driftedCount} 项账面差异，总价值差 {money(data.totalDiffValue)}。
           请点击「刷新」重新比对，或联系管理员执行校正。
         </div>

@@ -42,9 +42,9 @@ export default function PdaDoneView({
       <div className="flex w-full max-w-xs flex-col gap-3">
         {children}
         {secondaryText && onSecondary && (
-          <Button size="lg" variant="outline" onClick={onSecondary}>{secondaryText}</Button>
+          <Button className="px-3" size="lg" variant="outline" onClick={onSecondary}>{secondaryText}</Button>
         )}
-        <Button size="lg" onClick={onAction}>{actionText}</Button>
+        <Button className="px-3" size="lg" onClick={onAction}>{actionText}</Button>
       </div>
     </div>
   )

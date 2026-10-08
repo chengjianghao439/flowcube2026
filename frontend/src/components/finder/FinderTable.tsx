@@ -32,13 +32,14 @@ export function FinderTable<T extends Record<string, unknown>>({
   const gridTemplate = columns.map(colTrack).join(' ')
 
   return (
-    <div className="w-full">
+    <div role="grid" aria-label="查询结果" aria-readonly="true" aria-busy={isLoading} className="w-full">
       {/* Column header — sticky so it stays visible while scrolling */}
       <div
+        role="row"
         className="sticky top-0 z-10 grid gap-2 border-b bg-muted px-6 py-3 text-xs font-medium text-muted-foreground backdrop-blur-sm"
         style={{ gridTemplateColumns: gridTemplate }}
       >
-        {columns.map(col => <span key={col.key} className={alignClass(col.align)}>{col.title}</span>)}
+        {columns.map(col => <span role="columnheader" key={col.key} className={alignClass(col.align)}>{col.title}</span>)}
       </div>
 
       {/* Rows */}
@@ -68,6 +69,13 @@ export function FinderTable<T extends Record<string, unknown>>({
               onClick={() => onSelect(row)}
               onDoubleClick={() => onDoubleClickRow?.(row)}
               onKeyDown={e => {
+                if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) {
+                  e.preventDefault()
+                  const rows = [...e.currentTarget.parentElement!.querySelectorAll<HTMLElement>('[role="row"][aria-selected]')]
+                  const index = rows.indexOf(e.currentTarget)
+                  const next = e.key === 'Home' ? 0 : e.key === 'End' ? rows.length - 1 : Math.min(rows.length - 1, Math.max(0, index + (e.key === 'ArrowDown' ? 1 : -1)))
+                  rows[next]?.focus()
+                }
                 if (e.key === 'Enter') onSelect(row)
                 if (e.key === ' ' && onDoubleClickRow) { e.preventDefault(); onDoubleClickRow(row) }
               }}
@@ -80,7 +88,7 @@ export function FinderTable<T extends Record<string, unknown>>({
               {columns.map(col => {
                 const raw = row[col.key]
                 return (
-                  <div key={col.key} className={cn('min-w-0 break-words leading-5', alignClass(col.align))}>
+                  <div role="gridcell" key={col.key} className={cn('min-w-0 break-words leading-5', alignClass(col.align))}>
                     {col.render
                       ? col.render(raw, row)
                       : raw != null && raw !== '' ? String(raw) : '—'}

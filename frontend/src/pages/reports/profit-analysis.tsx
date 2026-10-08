@@ -46,7 +46,7 @@ export function costBasisNote(row: {
 function SummaryCard({ label, value, hint, negative, onClick }: { label: string; value: number | string; hint: string; negative?: boolean; onClick?: () => void }) {
   const content = <>
     <p className="text-xs text-muted-foreground">{label}</p>
-    <p className={`mt-1 break-words text-2xl font-bold tabular-nums ${negative ? 'text-destructive' : 'text-foreground'}`}>{value}</p>
+    <p className={`mt-1 break-words text-2xl font-bold tabular-nums ${negative ? 'text-destructive-ink' : 'text-foreground'}`}>{value}</p>
     <p className="mt-1 text-xs leading-5 text-muted-foreground">{hint}</p>
   </>
   const className = 'card-base min-w-0 px-4 py-3 text-left'
@@ -115,7 +115,7 @@ export default function ProfitAnalysisPage() {
     return (
       <div className="space-y-0.5">
         <div className="text-muted-foreground">{money(Number(v))}</div>
-        <div className={`text-[11px] leading-4 ${note.warn ? 'text-warning' : 'text-muted-foreground'}`}>{note.text}</div>
+        <div className={`text-[11px] leading-4 ${note.warn ? 'text-warning-ink' : 'text-muted-foreground'}`}>{note.text}</div>
       </div>
     )
   }
@@ -126,7 +126,7 @@ export default function ProfitAnalysisPage() {
     { key: 'warehouseName', title: '仓库', width: 120 },
     { key: 'totalAmount', title: '销售额', width: 110, align: 'right', render: v => <span className="font-medium">{money(Number(v))}</span> },
     { key: 'costAmount', title: '成本', width: 150, align: 'right', render: costCell },
-    { key: 'grossProfit', title: '毛利', width: 110, align: 'right', render: v => <span className={`font-semibold ${Number(v) < 0 ? 'text-destructive' : 'text-success'}`}>{money(Number(v))}</span> },
+    { key: 'grossProfit', title: '毛利', width: 110, align: 'right', render: v => <span className={`font-semibold ${Number(v) < 0 ? 'text-destructive-ink' : 'text-success-ink'}`}>{money(Number(v))}</span> },
     { key: 'marginRate', title: '毛利率', width: 100, align: 'right', render: v => <Badge variant="outline">{Number(v).toFixed(1)}%</Badge> },
     { key: 'path', title: '操作', width: 120, render: v => <Button size="sm" variant="outline" onClick={() => openPath(String(v), '销售单详情')}>打开原单</Button> },
   ]
@@ -137,7 +137,7 @@ export default function ProfitAnalysisPage() {
     { key: 'totalQty', title: '销售量', width: 90, align: 'right', render: v => <span>{Number(v).toFixed(2)}</span> },
     { key: 'revenueAmount', title: '销售额', width: 110, align: 'right', render: v => <span>{money(Number(v))}</span> },
     { key: 'costAmount', title: '成本', width: 150, align: 'right', render: costCell },
-    { key: 'grossProfit', title: '毛利', width: 110, align: 'right', render: v => <span className={`font-semibold ${Number(v) < 0 ? 'text-destructive' : 'text-success'}`}>{money(Number(v))}</span> },
+    { key: 'grossProfit', title: '毛利', width: 110, align: 'right', render: v => <span className={`font-semibold ${Number(v) < 0 ? 'text-destructive-ink' : 'text-success-ink'}`}>{money(Number(v))}</span> },
     { key: 'marginRate', title: '毛利率', width: 100, align: 'right', render: v => <Badge variant="outline">{Number(v).toFixed(1)}%</Badge> },
     { key: 'path', title: '操作', width: 120, render: v => <Button size="sm" variant="outline" onClick={() => openPath(String(v), '商品管理')}>查看商品</Button> },
   ]

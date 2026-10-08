@@ -15,8 +15,8 @@ const TYPE_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
 }
 /** 语义色：danger 红 / warning 琥珀 / info 蓝 —— 表达通知的严重程度（行底色 + 图标） */
 const TYPE_STYLE: Record<string, { icon: string; row: string }> = {
-  danger:  { icon: 'text-destructive', row: 'bg-destructive/5 hover:bg-destructive/10' },
-  warning: { icon: 'text-warning', row: 'bg-warning/5 hover:bg-warning/10' },
+  danger:  { icon: 'text-destructive-ink', row: 'bg-destructive/5 hover:bg-destructive/10' },
+  warning: { icon: 'text-warning-ink', row: 'bg-warning/5 hover:bg-warning/10' },
   info:    { icon: 'text-primary', row: 'bg-primary/5 hover:bg-primary/10' },
 }
 
@@ -89,7 +89,7 @@ export default function NotificationBell() {
               </div>
               {total > 0 && (
                 <span className="text-xs text-muted-foreground">
-                  <span className="font-semibold text-destructive">{total}</span> 条待处理
+                  <span className="font-semibold text-destructive-ink">{total}</span> 条待处理
                 </span>
               )}
             </div>
@@ -97,7 +97,7 @@ export default function NotificationBell() {
             {/* 内容 */}
             {sorted.length === 0 ? (
               <div className="py-12 text-center">
-                <CheckCircle2 className="mx-auto size-8 text-success mb-2" />
+                <CheckCircle2 className="mx-auto size-8 text-success-ink mb-2" />
                 <p className="text-sm font-medium text-foreground">暂无待处理事项</p>
                 <p className="mt-0.5 text-xs text-muted-foreground">有新逾期、库存预警或待办事项时，将在此提醒</p>
               </div>

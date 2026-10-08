@@ -10,7 +10,7 @@ import type { InboundTask } from '@/types/inbound-tasks'
 import PdaHeader from '@/components/pda/PdaHeader'
 import PdaCard from '@/components/pda/PdaCard'
 import PdaFlash from '@/components/pda/PdaFlash'
-import { PdaLoading } from '@/components/pda/PdaEmptyState'
+import { PdaLoading, PdaQueryError } from '@/components/pda/PdaEmptyState'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
@@ -91,7 +91,7 @@ function ProductCard({
           <div className="min-w-0">
             <PdaProductIdentity code={product.productCode} name={product.productName} view="overview" />
           </div>
-          <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${product.remainingQty > 0 ? 'bg-primary/10 text-primary' : 'bg-emerald-500/10 text-emerald-600'}`}>
+          <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${product.remainingQty > 0 ? 'bg-primary/10 text-primary' : 'bg-success/10 text-success-ink'}`}>
             剩余 {product.remainingQty}
           </span>
         </div>
@@ -108,6 +108,7 @@ function ReceiveEditor({
   product,
   boxes,
   submitting,
+  readError,
   onChangeBox,
   onAddBox,
   onRemoveBox,
@@ -117,6 +118,7 @@ function ReceiveEditor({
   product: ProductSummary
   boxes: string[]
   submitting: boolean
+  readError: boolean
   onChangeBox: (index: number, value: string) => void
   onAddBox: () => void
   onRemoveBox: (index: number) => void
@@ -149,14 +151,14 @@ function ReceiveEditor({
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <p className="text-sm font-medium text-foreground">逐箱数量</p>
-          <Button type="button" size="sm" variant="outline" onClick={onAddBox}>+ 增加一箱</Button>
+          <Button className="px-3" type="button" size="lg" variant="outline" onClick={onAddBox}>+ 增加一箱</Button>
         </div>
 
         <div className="space-y-2">
           {boxes.map((value, index) => (
             <div key={index} className="flex items-center gap-2">
               <div className="w-14 shrink-0 text-xs text-muted-foreground">箱 {index + 1}</div>
-              <Input quantity
+              <Input quantity aria-label={`箱 ${index + 1} 数量`} data-scanner-manual="true"
                 type="number"
                 inputMode="decimal"
                 min="0"
@@ -164,12 +166,12 @@ function ReceiveEditor({
                 value={value}
                 onChange={e => onChangeBox(index, e.target.value)}
                 placeholder="输入本箱数量"
-                className="font-mono"
+                className="min-h-11 font-mono"
               />
-              <Button
+              <Button className="px-3"
                 type="button"
                 variant="ghost"
-                size="sm"
+                size="lg"
                 onClick={() => onRemoveBox(index)}
                 disabled={boxes.length === 1}
               >
@@ -198,15 +200,15 @@ function ReceiveEditor({
         </div>
         <div className="mt-1 flex items-center justify-between">
           <span className="text-muted-foreground">提交后剩余</span>
-          <span className={`font-semibold ${remainingAfter < 0 ? 'text-destructive' : 'text-foreground'}`}>{remainingAfter}</span>
+          <span className={`font-semibold ${remainingAfter < 0 ? 'text-destructive-ink' : 'text-foreground'}`}>{remainingAfter}</span>
         </div>
       </div>
 
       <div className="flex gap-2">
-        <Button type="button" variant="outline" className="flex-1" onClick={onReset} disabled={submitting}>
+        <Button size="lg" type="button" variant="outline" className="px-3 flex-1" onClick={onReset} disabled={submitting}>
           清空箱数
         </Button>
-        <Button type="button" className="flex-1" onClick={onSubmit} disabled={submitting}>
+        <Button size="lg" type="button" className="px-3 flex-1" onClick={onSubmit} disabled={submitting || readError}>
           {submitting ? '提交中…' : '打印并登记'}
         </Button>
       </div>
@@ -214,7 +216,7 @@ function ReceiveEditor({
   )
 }
 
-function ReceiveRunner({ task }: { task: InboundTask }) {
+function ReceiveRunner({ task, readError, onRetry }: { task: InboundTask; readError: boolean; onRetry: () => void }) {
   const navigate = useNavigate()
   const qc = useQueryClient()
   const { flash, ok, err, warn } = usePdaFeedback()
@@ -302,6 +304,7 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
   }
 
   function submitReceive() {
+    if (readError) { err('任务暂时无法读取，请先重试查询'); return }
     if (!activeProduct) {
       err('请先选择商品')
       return
@@ -433,6 +436,7 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
       <PdaFlash flash={flash} />
 
       <div className="flex-1 overflow-y-auto px-4 py-4 max-w-md mx-auto w-full space-y-4">
+        {readError && <PdaQueryError onRetry={onRetry} />}
         <PdaCriticalActionNotice
           blockedReason={receiveAction.blockedReason}
           pendingRecord={receiveAction.pendingRecord}
@@ -503,23 +507,23 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
 
         {activeProduct && (
           <PdaCard>
-            <button type="button" className="text-xs text-muted-foreground hover:text-foreground"
+            <button type="button" aria-expanded={batchOpen} className="min-h-11 rounded-md text-xs text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
               onClick={() => setBatchOpen(o => !o)}>
               {batchOpen ? '▲ 收起批次/效期' : '▼ 批次/效期（批次管理商品必填）'}
             </button>
             {batchOpen && (
               <div className="mt-2 grid grid-cols-1 gap-2">
-                <input data-scanner-manual="true" className="h-10 rounded-md border border-border bg-background px-3 text-sm" placeholder="批次号"
+                <input data-scanner-manual="true" className="min-h-11 rounded-md border border-border bg-background px-3 text-sm" aria-label="批次号" placeholder="批次号"
                   value={batchNo} onChange={e => setBatchNo(e.target.value)} maxLength={50} />
                 <div className="flex items-center gap-2">
                   <span className="w-16 shrink-0 text-xs text-muted-foreground">生产日期</span>
-                  <input data-scanner-manual="true" type="date" className="h-10 flex-1 rounded-md border border-border bg-background px-3 text-sm"
-                    value={mfgDate} onChange={e => setMfgDate(e.target.value)} />
+                  <input data-scanner-manual="true" type="date" className="min-h-11 flex-1 rounded-md border border-border bg-background px-3 text-sm"
+                    aria-label="生产日期" value={mfgDate} onChange={e => setMfgDate(e.target.value)} />
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="w-16 shrink-0 text-xs text-muted-foreground">效期至</span>
-                  <input data-scanner-manual="true" type="date" className="h-10 flex-1 rounded-md border border-border bg-background px-3 text-sm"
-                    value={expDate} onChange={e => setExpDate(e.target.value)} />
+                  <input data-scanner-manual="true" type="date" className="min-h-11 flex-1 rounded-md border border-border bg-background px-3 text-sm"
+                    aria-label="效期至" value={expDate} onChange={e => setExpDate(e.target.value)} />
                 </div>
                 <p className="text-xs text-muted-foreground">商品维护了保质期天数时，只填生产日期即可自动算效期</p>
               </div>
@@ -532,6 +536,7 @@ function ReceiveRunner({ task }: { task: InboundTask }) {
             product={activeProduct}
             boxes={boxes}
             submitting={submitting || receiveAction.submitBlocked}
+            readError={readError}
             onChangeBox={(index, value) => {
               setBoxes(prev => prev.map((item, idx) => idx === index ? value : item))
             }}
@@ -590,7 +595,7 @@ export default function PdaReceivePage() {
   const { id } = useParams<{ id: string }>()
   const taskId = Number(id) || 0
 
-  const { data: task, isLoading } = useQuery({
+  const { data: task, isLoading, isError, refetch } = useQuery({
     queryKey: ['pda-inbound-task', taskId],
     queryFn: () => getInboundTaskByIdApi(taskId),
     enabled: taskId > 0,
@@ -600,10 +605,12 @@ export default function PdaReceivePage() {
     return (
       <div className="min-h-screen bg-background p-6 text-center text-muted-foreground">
         无效任务
-        <button type="button" className="mt-4 block mx-auto text-primary" onClick={() => navigate('/pda/inbound')}>返回</button>
+        <button type="button" className="mt-4 block min-h-11 mx-auto rounded-md px-3 text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => navigate('/pda/inbound')}>返回</button>
       </div>
     )
   }
+
+  if (isError && !task) return <div className="min-h-screen bg-background"><PdaHeader title="收货" onBack={() => navigate('/pda/inbound')} /><div className="mx-auto max-w-md p-4"><PdaQueryError onRetry={() => { void refetch() }} /></div></div>
 
   if (isLoading || !task) {
     return (
@@ -618,7 +625,7 @@ export default function PdaReceivePage() {
     return (
       <div className="min-h-screen bg-background p-6 text-center space-y-3">
         <p className="text-muted-foreground">该收货订单尚未提交，请先在 ERP 中提交后再收货。</p>
-        <button type="button" className="text-primary font-medium" onClick={() => navigate('/pda/inbound')}>返回列表</button>
+        <button type="button" className="min-h-11 rounded-md px-3 text-primary font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => navigate('/pda/inbound')}>返回列表</button>
       </div>
     )
   }
@@ -640,12 +647,12 @@ export default function PdaReceivePage() {
               : '该收货订单已取消。'}
         </p>
         {task.status === 3 && (
-          <button type="button" className="block mx-auto text-primary font-medium" onClick={() => navigate(`/pda/putaway/${task.id}`)}>扫码上架</button>
+          <button type="button" className="block min-h-11 mx-auto rounded-md px-3 text-primary font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => navigate(`/pda/putaway/${task.id}`)}>扫码上架</button>
         )}
-        <button type="button" className="block mx-auto text-primary font-medium" onClick={() => navigate('/pda/inbound')}>返回列表</button>
+        <button type="button" className="block min-h-11 mx-auto rounded-md px-3 text-primary font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => navigate('/pda/inbound')}>返回列表</button>
       </div>
     )
   }
 
-  return <ReceiveRunner task={task} />
+  return <ReceiveRunner task={task} readError={isError} onRetry={() => { void refetch() }} />
 }

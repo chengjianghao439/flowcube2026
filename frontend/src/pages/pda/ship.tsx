@@ -1,3 +1,4 @@
+import { qty as formatQty } from '@/lib/format'
 import PdaProductIdentity from '@/components/pda/PdaProductIdentity'
 /**
  * PDA 出库确认  /pda/ship
@@ -15,7 +16,6 @@ import PdaSection from '@/components/pda/PdaSection'
 import PdaBottomBar from '@/components/pda/PdaBottomBar'
 import PdaFlash from '@/components/pda/PdaFlash'
 import { PdaLoading } from '@/components/pda/PdaEmptyState'
-import PdaStat, { PdaStatGrid } from '@/components/pda/PdaStat'
 import { Button } from '@/components/ui/button'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { getPackageByBarcodeApi } from '@/api/packages'
@@ -155,8 +155,8 @@ export default function PdaShipPage() {
       <p className="text-muted-foreground mt-2 mb-1">订单 <span className="font-mono font-semibold text-foreground">{info.taskNo}</span></p>
       <p className="text-muted-foreground mb-8">{info.customerName} 已完成发货</p>
       <div className="flex gap-3 w-full max-w-xs">
-        <Button variant="outline" className="flex-1" onClick={() => { setInfo(null); setDone(false) }}>继续出库</Button>
-        <Button className="flex-1" onClick={() => navigate('/pda')}>返回工作台</Button>
+        <Button size="lg" variant="outline" className="px-3 flex-1" onClick={() => { setInfo(null); setDone(false) }}>继续出库</Button>
+        <Button size="lg" className="px-3 flex-1" onClick={() => navigate('/pda')}>返回工作台</Button>
       </div>
     </div>
   )
@@ -268,16 +268,15 @@ export default function PdaShipPage() {
                   <SoftStatusLabel label={currentWarehouseStatusName ?? '—'} tone={currentWarehouseStatusTone} />
                 </div>
                 {!currentCanShip ? (
-                  <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
+                  <div className="mb-3 rounded-xl border border-warning/30 bg-warning/10 px-3 py-2 text-xs leading-5 text-warning-ink">
                     {shipBlockedMessage(info)}
                   </div>
                 ) : null}
-                <PdaStatGrid cols={2}>
-                  <PdaStat label="任务号" value={info.taskNo} />
-                  <PdaStat label="客户" value={info.customerName} />
-                  <PdaStat label="仓库" value={info.warehouseName} />
-                  <PdaStat label="箱数/总件" value={`${totalBoxes}箱/${totalQty.toFixed(0)}件`} accent />
-                </PdaStatGrid>
+                <dl className="space-y-3 p-4 text-sm">
+                  {[['任务号', info.taskNo], ['客户', info.customerName], ['仓库', info.warehouseName], ['箱数/总件', `${totalBoxes}箱/${formatQty(totalQty)}件`]].map(([label, value]) => <div key={label} className="grid grid-cols-[5rem_minmax(0,1fr)] gap-3">
+                    <dt className="text-muted-foreground">{label}</dt><dd className="min-w-0 font-medium [overflow-wrap:anywhere]">{value || '—'}</dd>
+                  </div>)}
+                </dl>
               </PdaSection>
 
               {/* 商品明细 */}
@@ -307,13 +306,13 @@ export default function PdaShipPage() {
                       <div className="flex items-center gap-2">
                         <span className="flex items-center gap-1">
                           {pkg.status === 2
-                            ? <><CircleCheck className="h-4 w-4 text-green-600" /><SoftStatusLabel label="已出库" tone="success" /></>
+                            ? <><CircleCheck className="h-4 w-4 text-success-ink" /><SoftStatusLabel label="已出库" tone="success" /></>
                             : <><Package className="h-4 w-4 text-muted-foreground" /><SoftStatusLabel label="待出库" tone="draft" /></>}
                         </span>
                         <p className="font-mono text-sm font-semibold text-foreground">{pkg.barcode}</p>
                         {pkg.barcode === info.barcode && <SoftStatusLabel label="当前" tone="active" />}
                       </div>
-                      <p className="text-xs text-muted-foreground">{pkg.items.reduce((s, i) => s + i.qty, 0).toFixed(0)} 件</p>
+                      <p className="text-xs text-muted-foreground">{formatQty(pkg.items.reduce((s, i) => s + i.qty, 0))} 件</p>
                     </div>
                   ))}
                 </div>

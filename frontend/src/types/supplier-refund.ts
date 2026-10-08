@@ -59,6 +59,11 @@ export interface SupplierRefund {
     refund_no: string;
     purchase_return_id: number;
     purchase_order_id: number;
+    /** Original document display snapshots; never inferred from current master data. */
+    purchase_return_no?: string;
+    purchase_order_no?: string;
+    supplier_name?: string;
+    warehouse_name?: string;
     payment_record_id: number;
     supplier_id: number;
     warehouse_id: number;

@@ -93,7 +93,7 @@ export default function KpiPage() {
   const warehouseColumns: TableColumn<KpiByWarehouseRow>[] = [
     { key: 'warehouseName', title: '仓库', width: 160, render: v => <span className="font-medium">{String(v)}</span> },
     { key: 'gmv', title: '销售净额', width: 120, align: 'right', render: v => <span className="tabular-nums">{money(Number(v))}</span> },
-    { key: 'grossProfit', title: '毛利', width: 120, align: 'right', render: v => <span className={`tabular-nums ${Number(v) < 0 ? 'text-destructive' : 'text-success'}`}>{money(Number(v))}</span> },
+    { key: 'grossProfit', title: '毛利', width: 120, align: 'right', render: v => <span className={`tabular-nums ${Number(v) < 0 ? 'text-destructive-ink' : 'text-success-ink'}`}>{money(Number(v))}</span> },
     { key: 'orderCount', title: '订单数', width: 100, align: 'right', render: v => <span className="tabular-nums">{Number(v).toLocaleString('zh-CN')}</span> },
     { key: 'avgOrderValue', title: '平均客单', width: 120, align: 'right', render: v => <span className="tabular-nums">{money(Number(v))}</span> },
     { key: 'share', title: '销售净额占比', width: 140, render: (_, r) => <span className="tabular-nums text-muted-foreground">{(totalGmv > 0 ? (r.gmv / totalGmv) * 100 : 0).toFixed(1)}%</span> },

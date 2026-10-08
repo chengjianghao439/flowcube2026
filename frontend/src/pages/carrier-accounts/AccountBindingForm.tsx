@@ -101,7 +101,7 @@ export function AccountBindingForm({ data, onSave, canEdit, saving, onDirtyChang
           )}
         </dl>
       )}
-      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+      {error && <p role="alert" className="text-sm text-destructive-ink">{error}</p>}
       {canEdit ? <div className="flex flex-wrap gap-3">
         {data.enabled ? (
           <Button type="button" variant="outline" disabled={saving} onClick={() => void submit(false)}>暂停自动下单</Button>

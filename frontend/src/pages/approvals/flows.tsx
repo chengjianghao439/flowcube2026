@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useId } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { EditModeBadge } from '@/components/shared/EditModeBadge'
+import { useDialogDraftGuard } from '@/hooks/useDialogDraftGuard'
+import { EditModeBadge, UnsavedBadge } from '@/components/shared/EditModeBadge'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { toast } from '@/lib/toast'
@@ -53,8 +54,8 @@ const emptyFlow = (): FlowDraft => ({ bizType: 'purchase_requisition', name: '',
 
 export default function ApprovalFlowsPage() {
   const { data: flows = [] } = useApprovalFlows()
-  const { mutate: createFlow } = useCreateApprovalFlow()
-  const { mutate: updateFlow } = useUpdateApprovalFlow()
+  const { mutate: createFlow, isPending: creating } = useCreateApprovalFlow()
+  const { mutate: updateFlow, isPending: updating } = useUpdateApprovalFlow()
   const { mutate: deleteFlow } = useDeleteApprovalFlow()
   const { data: roles = [] } = useQuery({ queryKey: ['roles'], queryFn: () => getRolesApi().then(r => r || []) })
   const selectableRoles = visibleRoles(roles)
@@ -65,16 +66,20 @@ export default function ApprovalFlowsPage() {
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<ApprovalFlow | null>(null)
   const [form, setForm] = useState<FlowDraft>(emptyFlow())
+  const inputId = useId()
+  const [baseline, setBaseline] = useState(form)
+  const dirty = JSON.stringify(form) !== JSON.stringify(baseline)
+  const draft = useDialogDraftGuard({ open: formOpen, identity: editing?.id ?? 'new', dirty, pending: creating || updating, onClose: () => setFormOpen(false) })
   const [deleteTarget, setDeleteTarget] = useState<ApprovalFlow | null>(null)
 
   function openCreate() {
     setEditing(null)
-    setForm(emptyFlow())
+    const next = emptyFlow(); setForm(next); setBaseline(next)
     setFormOpen(true)
   }
   function openEdit(f: ApprovalFlow) {
     setEditing(f)
-    setForm({
+    const next = {
       bizType: f.bizType,
       name: f.name,
       minAmount: String(f.minAmount),
@@ -88,7 +93,8 @@ export default function ApprovalFlowsPage() {
         departmentId: s.departmentId != null ? String(s.departmentId) : '',
         userId: s.userId != null ? String(s.userId) : '',
       })),
-    })
+    }
+    setForm(next); setBaseline(next)
     setFormOpen(true)
   }
 
@@ -115,6 +121,8 @@ export default function ApprovalFlowsPage() {
       if (s.approverType === APPROVER_TYPE.ROLE && !s.roleId) return toast.error(`第 ${s.stepOrder} 级：审批人类型为「指定角色」时，必须选择角色`)
       if (s.approverType === APPROVER_TYPE.USER && !s.userId) return toast.error(`第 ${s.stepOrder} 级：审批人类型为「指定用户」时，必须选择用户`)
     }
+    const submission = draft.beginSubmit()
+    if (!submission) return
     const payload = {
       bizType: form.bizType,
       name: form.name.trim(),
@@ -130,8 +138,8 @@ export default function ApprovalFlowsPage() {
         userId: s.approverType === APPROVER_TYPE.USER ? Number(s.userId) : null,
       })),
     }
-    const done = () => { setFormOpen(false); toast.success('已保存') }
-    const fail = (e: Error) => toast.error(e.message)
+    const done = () => { if (submission.finish()) { setFormOpen(false); toast.success('已保存') } }
+    const fail = (e: Error) => { if (submission.finish()) toast.error(e.message) }
     if (editing) updateFlow({ id: editing.id, data: payload }, { onSuccess: done, onError: fail })
     else createFlow(payload, { onSuccess: done, onError: fail })
   }
@@ -187,13 +195,14 @@ export default function ApprovalFlowsPage() {
 
       <DataTable columns={columns} data={flows} loading={false} rowKey="id" />
 
-      <Dialog open={formOpen} onOpenChange={(v) => !v && setFormOpen(false)}>
-        <DialogContent className="sm:max-w-4xl">
+      <Dialog open={formOpen} onOpenChange={v => { if (!v) draft.requestClose() }}>
+        <DialogContent ref={draft.contentRef} onFocusCapture={draft.rememberFocus} className="sm:max-w-4xl">
           <DialogHeader>
             {/* 编辑态与默认（新增）态一眼可分 */}
             <DialogTitle className="flex flex-wrap items-center gap-2">
               {editing ? '编辑审批流' : '新增审批流'}
               {editing && <EditModeBadge />}
+              <UnsavedBadge show={dirty} />
             </DialogTitle>
             {editing && (
               <p className="text-helper mt-1">
@@ -201,11 +210,12 @@ export default function ApprovalFlowsPage() {
               </p>
             )}
           </DialogHeader>
-          <div className="space-y-4 py-2">
+          <fieldset disabled={draft.locked} className="space-y-4 py-2">
             <div className="grid grid-cols-2 gap-x-5 gap-y-4">
               <div className="space-y-2">
-                <Label>业务类型</Label>
+                <Label htmlFor={`${inputId}-bizType`}>业务类型</Label>
                 <select
+                  id={`${inputId}-bizType`}
                   value={form.bizType}
                   onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setForm({ ...form, bizType: e.target.value })}
                   disabled={!!editing}
@@ -215,18 +225,18 @@ export default function ApprovalFlowsPage() {
                 </select>
               </div>
               <div className="space-y-2">
-                <Label>流程名称</Label>
-                <Input value={form.name} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, name: e.target.value })} placeholder="如：采购申请多级审批" />
+                <Label htmlFor={`${inputId}-name`}>流程名称</Label>
+                <Input id={`${inputId}-name`} value={form.name} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, name: e.target.value })} placeholder="如：采购申请多级审批" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-x-5 gap-y-4">
               <div className="space-y-2">
-                <Label>适用金额下限（含）</Label>
-                <Input type="number" min={0} value={form.minAmount} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, minAmount: e.target.value })} placeholder="0" />
+                <Label htmlFor={`${inputId}-minAmount`}>适用金额下限（含）</Label>
+                <Input id={`${inputId}-minAmount`} type="number" min={0} value={form.minAmount} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, minAmount: e.target.value })} placeholder="0" />
               </div>
               <div className="space-y-2">
-                <Label>适用金额上限（含，留空=不限）</Label>
-                <Input type="number" min={0} value={form.maxAmount} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, maxAmount: e.target.value })} placeholder="不限" />
+                <Label htmlFor={`${inputId}-maxAmount`}>适用金额上限（含，留空=不限）</Label>
+                <Input id={`${inputId}-maxAmount`} type="number" min={0} value={form.maxAmount} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, maxAmount: e.target.value })} placeholder="不限" />
               </div>
             </div>
 
@@ -240,13 +250,14 @@ export default function ApprovalFlowsPage() {
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium">第 {s.stepOrder} 级</span>
                     {form.steps.length > 1 && (
-                      <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => removeStep(i)}>移除</Button>
+                      <Button size="sm" variant="ghost" className="text-destructive-ink hover:text-destructive-ink" onClick={() => removeStep(i)}>移除</Button>
                     )}
                   </div>
                   <div className="grid grid-cols-2 gap-x-5 gap-y-4">
                     <div className="space-y-1">
-                      <Label>审批人类型</Label>
+                      <Label htmlFor={`${inputId}-step-${i}-approverType`}>第 {s.stepOrder} 级审批人类型</Label>
                       <select
+                        id={`${inputId}-step-${i}-approverType`}
                         value={s.approverType}
                         onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setStep(i, { approverType: Number(e.target.value) })}
                         className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
@@ -258,8 +269,8 @@ export default function ApprovalFlowsPage() {
                     </div>
                     {s.approverType === APPROVER_TYPE.ROLE && (
                       <div className="space-y-1">
-                        <Label>角色</Label>
-                        <select value={s.roleId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setStep(i, { roleId: e.target.value })} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                        <Label htmlFor={`${inputId}-step-${i}-roleId`}>第 {s.stepOrder} 级角色</Label>
+                        <select id={`${inputId}-step-${i}-roleId`} value={s.roleId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setStep(i, { roleId: e.target.value })} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
                           <option value="">选择角色</option>
                           {selectableRoles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
                           {s.roleId && !selectableRoles.some(r => String(r.id) === s.roleId) && <option value={s.roleId}>当前隐藏角色（保留原设置）</option>}
@@ -268,8 +279,8 @@ export default function ApprovalFlowsPage() {
                     )}
                     {s.approverType === APPROVER_TYPE.DEPT_MANAGER && (
                       <div className="space-y-1">
-                        <Label>部门（留空=申请人所属部门）</Label>
-                        <select value={s.departmentId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setStep(i, { departmentId: e.target.value })} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                        <Label htmlFor={`${inputId}-step-${i}-departmentId`}>第 {s.stepOrder} 级部门（留空=申请人所属部门）</Label>
+                        <select id={`${inputId}-step-${i}-departmentId`} value={s.departmentId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setStep(i, { departmentId: e.target.value })} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
                           <option value="">申请人所属部门</option>
                           {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
                         </select>
@@ -277,8 +288,8 @@ export default function ApprovalFlowsPage() {
                     )}
                     {s.approverType === APPROVER_TYPE.USER && (
                       <div className="space-y-1">
-                        <Label>用户</Label>
-                        <select value={s.userId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setStep(i, { userId: e.target.value })} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                        <Label htmlFor={`${inputId}-step-${i}-userId`}>第 {s.stepOrder} 级用户</Label>
+                        <select id={`${inputId}-step-${i}-userId`} value={s.userId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setStep(i, { userId: e.target.value })} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
                           <option value="">选择用户</option>
                           {users.map((u) => <option key={u.id} value={u.id}>{u.realName}</option>)}
                           {s.userId && !users.some(u => String(u.id) === s.userId) && <option value={s.userId}>当前不可用用户（保留原设置）</option>}
@@ -299,14 +310,15 @@ export default function ApprovalFlowsPage() {
               <input type="checkbox" checked={form.isActive} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, isActive: e.target.checked })} className="accent-primary" />
               <span className="text-sm">启用该流程</span>
             </label>
-          </div>
+          </fieldset>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setFormOpen(false)}>取消</Button>
-            <Button onClick={handleSave}>{editing ? '保存修改' : '保存'}</Button>
+            <Button variant="outline" onClick={draft.requestClose} disabled={draft.locked}>取消</Button>
+            <Button onClick={handleSave} disabled={draft.locked}>{editing ? '保存修改' : '保存'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
+      <ConfirmDialog {...draft.discardProps} />
       <ConfirmDialog
         open={!!deleteTarget}
         title="确认删除"

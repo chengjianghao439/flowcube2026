@@ -1,16 +1,20 @@
 // @vitest-environment jsdom
-import { act } from 'react'
+import { act, useEffect, useRef } from 'react'
 import { createRoot } from 'react-dom/client'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useNavigate, useLocation } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, expect, test, vi } from 'vitest'
 import CommercialEditor from './CommercialEditor'
+import KeepAliveSection from '@/components/shared/KeepAliveSection'
+import SaleFormPage from '../form'
+import { TabPathContext } from '@/components/layout/TabPathContext'
 import type { SaleOrder } from '@/types/sale'
 import type { CommercialBody, CommercialGroup } from '@/types/sale-commercial'
 import { useAuthStore } from '@/store/authStore'
 import { PERMISSIONS } from '@/lib/permission-codes'
-const mocks = vi.hoisted(() => ({ query: vi.fn(), preview: vi.fn(), execute: vi.fn(), get: vi.fn(), defaults: { baseURL: '/a' } }))
-vi.mock('@/api/client', () => ({ default: { defaults: mocks.defaults }, getApiClientBaseURL: () => mocks.defaults.baseURL, subscribeApiClientBaseURL: () => () => {} }))
+import { setApiClientBaseURL } from '@/api/client'
+const mocks = vi.hoisted(() => ({ query: vi.fn(), preview: vi.fn(), execute: vi.fn(), get: vi.fn(), defaults: { baseURL: '/a' }, apiListeners: new Set<() => void>() }))
+vi.mock('@/api/client', () => ({ default: { defaults: mocks.defaults }, getApiClientBaseURL: () => mocks.defaults.baseURL, subscribeApiClientBaseURL: (fn: () => void) => { mocks.apiListeners.add(fn); return () => mocks.apiListeners.delete(fn) }, setApiClientBaseURL: (url: string) => { if (mocks.defaults.baseURL !== url) { mocks.defaults.baseURL = url; mocks.apiListeners.forEach(fn => fn()) } } }))
 vi.mock('@/api/operation-requests', () => ({ getOperationRequestStatusApi: mocks.query }))
 vi.mock('@/api/sale-commercial', () => ({
   previewCommercialSaleApi: mocks.preview,
@@ -42,8 +46,9 @@ vi.mock('../form/components/SaleOrderHeaderFields', () => ({
   )
 }))
 vi.mock('@/components/finder', () => ({
+  ProductFinder: () => null,
   CustomerFinder: ({ onConfirm }: { onConfirm: (c: unknown) => void }) => (
-    <button onClick={() => onConfirm({ id: 2, name: '客户B' })}>确认客户B</button>
+    <><button onClick={() => onConfirm({ id: 2, name: '客户B' })}>确认客户B</button><button onClick={() => onConfirm({ id: 3, name: '客户C' })}>确认客户C</button></>
   )
 }))
 vi.mock('./CommercialPicker', () => ({
@@ -77,6 +82,7 @@ vi.mock('./CommercialPicker', () => ({
                     },
               name,
               code: name,
+              spec: 'M12', color: '银色', articleNumber: 'SUP-12', costPrice: 2,
               unit: name === '包装' ? '包' : kind === 'kit' ? '套' : '个',
               quantity: name === '包装' ? '2' : '1',
               price: name === 'A' ? '100' : name === 'B' ? '200' : name === '包装' ? '12.3456' : '',
@@ -98,9 +104,13 @@ function fixturePreview(b: CommercialBody) {
     id: input.kind === 'kit' ? input.kitVersionId : input.productId,
     lineKey: input.lineKey,
     kind: input.kind,
+    priceSource: input.priceSource,
+    warehouseId: input.warehouseId ?? b.warehouseId,
+    quantity: input.quantity * (input.lineKey === '包装' ? 10 : 1),
     unitPrice: input.unitPrice ?? (input.kind === 'kit' ? 100 : b.customerId === 2 ? 30 : 10),
     amount: input.lineKey === '包装' ? 24.69 : (input.unitPrice ?? (b.customerId === 2 ? 30 : 10)),
     metadata: {
+      priceCustomerId: b.customerId,
       input,
       entry:
         input.kind === 'ordinary'
@@ -120,12 +130,13 @@ function fixturePreview(b: CommercialBody) {
             }
           : null
     },
-    components: [
+    components: input.kind === 'ordinary' ? [{ productId: input.productId, productCode: `P${input.productId}`, productName: input.lineKey, baseQty: 1, unit: '个', spec: 'M12', color: '银色', articleNumber: 'SUP-12' }] : [
       { productId: 11, productCode: 'P11', productName: '共享铰链', baseQty: 1, unit: '个' },
       { productId: 12, productCode: 'P12', productName: '螺钉', baseQty: 4, unit: '个' }
     ]
   })) as unknown as CommercialGroup[]
   return {
+    customerId: b.customerId, warehouseId: b.warehouseId,
     commercialGroups: groups,
     amount: groups.reduce((s, g) => s + g.amount, 0),
     physicalItems: [
@@ -191,7 +202,7 @@ async function change(label: string, value: string) {
   })
   await flush()
 }
-async function mount(run: () => Promise<void>, order?: SaleOrder, adjust = false, onDone: () => void = () => {}) {
+async function mount(run: () => Promise<void>, order?: SaleOrder, adjust = false, onDone: () => void = () => {}, unified = false) {
   const host = document.createElement('div')
   document.body.append(host)
   const root = createRoot(host),
@@ -200,14 +211,14 @@ async function mount(run: () => Promise<void>, order?: SaleOrder, adjust = false
     await act(async () => {
       root.render(
         <QueryClientProvider client={cache}>
-          <MemoryRouter>
-            <CommercialEditor
+          <MemoryRouter initialEntries={[unified ? '/sale/new' : '/']}>
+            {unified ? <TabPathContext.Provider value="/sale/new"><SaleFormPage /></TabPathContext.Provider> : <CommercialEditor
               order={order}
               owner={owner}
               tabPath={order ? `/sale/${order.id}` : '/sale/new-kit'}
               adjust={adjust}
               onDone={onDone}
-            />
+            />}
           </MemoryRouter>
         </QueryClientProvider>
       )
@@ -252,6 +263,23 @@ test('mounted sharedcart A100 B200 ordinary30 and manual4 packaging uses server 
       { kind: 'ordinary', quantity: 2, entryUnit: '包', unitPrice: 12.3456, priceSource: 'manual' }
     ])
     expect(plan.operation.body.commercialGroups.every((g: { warehouseId: number }) => g.warehouseId === 1)).toBe(true)
+  })
+})
+test('kit unit follows authoritative preview after current master unit changes', async () => {
+  mocks.preview.mockImplementation(async (body) => {
+    const preview = fixturePreview(body)
+    for (const group of preview.commercialGroups) if (group.kind === 'kit') group.metadata.kitUnit = '箱'
+    return preview
+  })
+  await mount(async () => {
+    await click('选择客户')
+    await click('确认客户B')
+    await click('选择仓库')
+    await click('添加成套配件')
+    await click('选A')
+    const quantity = document.querySelector<HTMLInputElement>('input[aria-label="A数量"]')!
+    const row = quantity.closest('tr')!
+    expect(row.cells[2].textContent).toBe('箱')
   })
 })
 test('fresh ordinary auxiliary selection preserves known basic unit so a mistaken package choice can be changed back', async () => {
@@ -525,8 +553,6 @@ test('restored or copied Editor record queries only and cannot onDone or reset f
 })
 
 // Use the real SaleFormPage/model gate/page/editor chain for handoff identity.
-import SaleFormPage from '@/pages/sale/form'
-import { TabPathContext } from '@/components/layout/TabPathContext'
 vi.mock('@/api/sale', async original => ({
   ...await original<typeof import('@/api/sale')>(),
   getSaleDetailApi: async (id: number) => ({ ...order, id, orderNo: 'SO' + id, status: 1, totalAmount: 24.69 })
@@ -535,12 +561,20 @@ vi.mock('@/pages/sale/commercial/CommercialFulfillmentSummary', () => ({ default
 vi.mock('@/pages/sale/form/components/SaleOrderOverview', () => ({ SaleOrderOverview: () => null }))
 vi.mock('@/pages/sale/form/components/FulfillmentProgressCard', () => ({ FulfillmentProgressCard: () => null }))
 vi.mock('@/components/print/SaleOrderPrintTemplate', () => ({ PrintPreviewOverlay: () => null }))
-async function actualGate(run: (setPath: (path: string) => Promise<void>, host: HTMLElement) => Promise<void>, initialPath = '/sale/80') {
+function GateRoute({ path, active }: { path: string; active: boolean }) {
+  const navigate = useNavigate()
+  const navigation = useRef(navigate)
+  navigation.current = navigate
+  useEffect(() => { navigation.current(path) }, [path])
+  const location = useLocation()
+  return <><output data-route>{location.pathname + location.search}</output><KeepAliveSection active={active}><TabPathContext.Provider value={path}><SaleFormPage /></TabPathContext.Provider></KeepAliveSection></>
+}
+async function actualGate(run: (setPath: (path: string, active?: boolean) => Promise<void>, host: HTMLElement) => Promise<void>, initialPath = '/sale/80') {
   mocks.get.mockImplementation(async (id: number) => ({ ...order, id, orderNo: 'SO' + id, status: 1, totalAmount: 24.69 }))
   const host = document.createElement('div'); document.body.append(host)
   const root = createRoot(host), cache = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
-  async function setPath(path: string) {
-    await act(async () => root.render(<QueryClientProvider client={cache}><MemoryRouter><TabPathContext.Provider value={path}><SaleFormPage /></TabPathContext.Provider></MemoryRouter></QueryClientProvider>))
+  async function setPath(path: string, active = true) {
+    await act(async () => root.render(<QueryClientProvider client={cache}><MemoryRouter initialEntries={[initialPath]}><GateRoute path={path} active={active} /></MemoryRouter></QueryClientProvider>))
     await flush(); await flush()
   }
   try { await setPath(initialPath); await run(setPath, host) }
@@ -596,4 +630,145 @@ test('actual gate different SO creates an independent draft and leaves SO80 unkn
     expect(mocks.execute.mock.calls[1][0].requestKey).not.toBe(original.requestKey)
     expect(JSON.parse(sessionStorage.getItem('flowcube-kit-query-records-v1')!).records).toEqual([original])
   })
+})
+
+
+test('standard new sale opens the shared editor and saves ordinary plus kit as separate commercial groups', async () => {
+  await mount(async () => {
+    expect(document.body.textContent).toContain('新建销售单')
+    await click('选择客户'); await click('确认客户B'); await click('选择仓库')
+    await click('添加普通商品'); await click('选普通')
+    await click('添加成套配件'); await click('选A')
+    expect(document.querySelectorAll('tbody tr')).toHaveLength(2)
+    await click('保存草稿')
+    expect(mocks.execute.mock.calls[0][0].operation.body).toMatchObject({
+      commercialModel: 'kit-v1', commercialGroups: [{ kind: 'ordinary', productId: 11 }, { kind: 'kit', kitVersionId: 19 }]
+    })
+  }, undefined, false, () => {}, true)
+})
+test('standard new sale with ordinary auxiliary manual price keeps ordinary saving and the exact entry price', async () => {
+  await mount(async () => {
+    await click('选择客户'); await click('确认客户B'); await click('选择仓库')
+    await click('添加普通商品'); await click('选包装')
+    await click('保存草稿')
+    const body = mocks.execute.mock.calls[0][0].operation.body
+    expect(body.commercialModel).toBeUndefined()
+    expect(body.commercialGroups).toBeUndefined()
+    expect(body.items).toMatchObject([{ productId: 12, entryUnit: '包', quantity: 2, unitPrice: 12.3456, priceSource: 'manual' }])
+    expect(JSON.stringify(body)).not.toContain('priceIsBase')
+  }, undefined, false, () => {}, true)
+})
+
+test('shared new rows retain product identity, base quantity, below-cost hint and discounted total with Enter navigation', async () => {
+  await mount(async () => {
+    await click('选择客户'); await click('确认客户B'); await click('选择仓库')
+    await click('添加普通商品'); await click('选包装')
+    expect(document.body.textContent).toContain('M12')
+    expect(document.body.textContent).toContain('银色')
+    expect(document.body.textContent).toContain('SUP-12')
+    expect(document.body.textContent).toContain('折合 20个')
+    expect(document.body.textContent).toContain('低于进价')
+    await change('折扣金额', '2')
+    expect(document.body.textContent).toContain('订单金额 ¥22.69')
+    const quantity = document.querySelector<HTMLInputElement>('input[aria-label="包装数量"]')!
+    quantity.focus()
+    await act(async () => quantity.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })))
+    expect(document.activeElement).toBe(document.querySelector('input[aria-label="包装成交单价"]'))
+  }, undefined, false, () => {}, true)
+})
+test('standard new customer change resets ordinary manual quote to the new customer default while keeping kit manual quote', async () => {
+  await mount(async () => {
+    await click('选择客户'); await click('确认客户B'); await click('选择仓库')
+    await click('添加普通商品'); await click('选包装')
+    await click('添加成套配件'); await click('选A')
+    await click('选择客户'); await click('确认客户C')
+    expect(document.querySelector<HTMLInputElement>('input[aria-label="包装成交单价"]')?.value).toBe('10')
+    expect(document.querySelector<HTMLInputElement>('input[aria-label="A成交单价"]')?.value).toBe('100')
+    expect(mocks.preview.mock.calls.at(-1)?.[0].commercialGroups[0].priceSource).toBe('default')
+  }, undefined, false, () => {}, true)
+})
+
+
+test('shared new entry retains the saved draft when receipt arrives after hide/show and requires explicit navigation', async () => {
+  let finish!: (value: unknown) => void
+  mocks.execute.mockImplementation(() => new Promise(resolve => { finish = resolve }))
+  await actualGate(async (setPath, host) => {
+    await click('选择客户'); await click('确认客户B'); await click('选择仓库')
+    await click('添加普通商品'); await click('选包装'); await click('保存草稿')
+    expect(mocks.execute).toHaveBeenCalledTimes(1)
+    await setPath('/sale/new', false); await setPath('/sale/new', true)
+    await act(async () => { finish({ id: 80 }); await Promise.resolve() }); await flush()
+    expect(host.querySelector('[data-route]')?.textContent).toBe('/sale/new')
+    expect(host.querySelector<HTMLInputElement>('[aria-label="包装成交单价"]')?.value).toBe('12.3456')
+    expect([...host.querySelectorAll('button')].find(b => b.textContent === '保存草稿')!.disabled).toBe(true)
+    await click('查看已保存销售单')
+    expect(host.querySelector('[data-route]')?.textContent).toBe('/sale/80')
+  }, '/sale/new')
+})
+
+
+test('shared blank create preserves original key and body when saved ACK arrives after server A to B to A', async () => {
+  let finish!: (value: unknown) => void
+  mocks.execute.mockImplementation(() => new Promise(resolve => { finish = resolve }))
+  await actualGate(async (_, host) => {
+    await click('选择客户'); await click('确认客户B'); await click('选择仓库')
+    await click('添加普通商品'); await click('选包装'); await click('保存草稿')
+    const stored = sessionStorage.getItem('flowcube-kit-query-records-v1')
+    const original = mocks.execute.mock.calls[0][0]
+    await act(async () => { setApiClientBaseURL('/b'); setApiClientBaseURL('/a'); finish({ id: 80 }); await Promise.resolve() }); await flush()
+    expect(host.querySelector('[data-route]')?.textContent).toBe('/sale/new')
+    expect(host.textContent).toContain('原请求结果待确认')
+    expect(host.querySelector<HTMLInputElement>('[aria-label="包装成交单价"]')?.value).toBe('12.3456')
+    expect(sessionStorage.getItem('flowcube-kit-query-records-v1')).toBe(stored)
+    await click('按原请求重试')
+    expect(mocks.query).not.toHaveBeenCalled()
+    expect(mocks.execute).toHaveBeenCalledTimes(1)
+    expect(mocks.execute.mock.calls[0][0]).toEqual(original)
+  }, '/sale/new')
+})
+
+test('shared blank preview cannot apply a late quote after server A to B to A', async () => {
+  let finish!: () => void
+  mocks.preview.mockImplementation(b => new Promise(resolve => { finish = () => resolve(fixturePreview(b)) }))
+  await actualGate(async (_, host) => {
+    await click('选择客户'); await click('确认客户B'); await click('选择仓库')
+    await click('添加普通商品'); await click('选包装')
+    expect(finish).toBeTruthy()
+    await act(async () => { setApiClientBaseURL('/b'); setApiClientBaseURL('/a'); finish(); await Promise.resolve() }); await flush()
+    expect([...host.querySelectorAll('button')].find(b => b.textContent === '保存草稿')!.disabled).toBe(true)
+    expect(host.textContent).toContain('原草稿保留')
+    expect(host.querySelector<HTMLInputElement>('[aria-label="包装数量"]')?.value).toBe('2')
+    expect(mocks.execute).not.toHaveBeenCalled()
+  }, '/sale/new')
+})
+
+
+test('standard blank create accepts normal token renewal in the same session and applies its saved receipt', async () => {
+  let finish!: (value: unknown) => void
+  mocks.execute.mockImplementation(() => new Promise(resolve => { finish = resolve }))
+  await actualGate(async (_, host) => {
+    await click('选择客户'); await click('确认客户B'); await click('选择仓库')
+    await click('添加普通商品'); await click('选包装'); await click('保存草稿')
+    const session = useAuthStore.getState().sessionGeneration
+    await act(async () => { useAuthStore.getState().setTokens('renewed-test-only', null); finish({ id: 80 }); await Promise.resolve() }); await flush()
+    expect(useAuthStore.getState().sessionGeneration).toBe(session)
+    expect(host.querySelector('[data-route]')?.textContent).toBe('/sale/80')
+    expect(host.textContent).not.toContain('原请求结果待确认')
+    expect(mocks.execute).toHaveBeenCalledTimes(1)
+  }, '/sale/new')
+})
+
+
+test('shared new order reports an excessive discount and focuses its field without writing', async () => {
+  await mount(async () => {
+    await click('选择客户'); await click('确认客户B'); await click('选择仓库')
+    await click('添加普通商品'); await click('选包装')
+    await change('折扣金额', '30'); await click('保存草稿')
+    const alert = document.querySelector('[role="alert"]')!
+    expect(alert.textContent).toContain('折扣金额不能超过商品金额')
+    const link = [...alert.querySelectorAll('button')].find(b => b.textContent?.includes('折扣金额'))!
+    await act(async () => link.click())
+    expect(document.activeElement).toBe(document.querySelector('[aria-label="折扣金额"]'))
+    expect(mocks.execute).not.toHaveBeenCalled()
+  }, undefined, false, () => {}, true)
 })

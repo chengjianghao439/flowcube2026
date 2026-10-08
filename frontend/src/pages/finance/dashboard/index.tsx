@@ -84,8 +84,8 @@ function ExposureTile({ title, side, tone }: { title: string; side: AgingSide; t
       <p className="mt-1 tabular-nums text-2xl font-bold text-foreground" title={money(side.total)}>{money(side.total)}</p>
       <p className="mt-1 text-xs">
         {side.overdueAmount > 0
-          ? <span className="text-destructive">其中逾期 {money(side.overdueAmount)}（{side.overdueCount} 笔）</span>
-          : <span className="text-success">暂无逾期</span>}
+          ? <span className="text-destructive-ink">其中逾期 {money(side.overdueAmount)}（{side.overdueCount} 笔）</span>
+          : <span className="text-success-ink">暂无逾期</span>}
       </p>
     </div>
   )
@@ -118,13 +118,13 @@ function PartyList({ title, parties, emptyText }: {
                   <td className="py-1.5 text-right tabular-nums">{money(p.amount)}</td>
                   <td className="py-1.5 text-right tabular-nums">
                     {p.overdueAmount > 0
-                      ? <span className="font-medium text-destructive">{money(p.overdueAmount)}</span>
+                      ? <span className="font-medium text-destructive-ink">{money(p.overdueAmount)}</span>
                       : <span className="text-muted-foreground">—</span>}
                   </td>
                   <td className="py-1.5 text-right">
                     {p.maxOverdueDays > 0
                       ? <SoftStatusLabel label={`${p.maxOverdueDays}天`} tone={p.maxOverdueDays > 90 ? 'danger' : 'warning'} />
-                      : <span className="text-xs text-success">未到期</span>}
+                      : <span className="text-xs text-success-ink">未到期</span>}
                   </td>
                 </tr>
               ))}
@@ -379,8 +379,8 @@ export default function FinanceDashboardPage() {
                       <tr key={b.bizType} className="border-t border-border">
                         <td className="py-1.5"><SoftStatusLabel label={b.bizTypeName} tone={b.bizType === 4 ? 'warning' : 'info'} /></td>
                         <td className="py-1.5 text-right tabular-nums text-muted-foreground">{b.txCount}</td>
-                        <td className="py-1.5 text-right tabular-nums text-success">{b.inAmount > 0 ? money(b.inAmount) : '—'}</td>
-                        <td className="py-1.5 text-right tabular-nums text-destructive">{b.outAmount > 0 ? money(b.outAmount) : '—'}</td>
+                        <td className="py-1.5 text-right tabular-nums text-success-ink">{b.inAmount > 0 ? money(b.inAmount) : '—'}</td>
+                        <td className="py-1.5 text-right tabular-nums text-destructive-ink">{b.outAmount > 0 ? money(b.outAmount) : '—'}</td>
                       </tr>
                     ))}
                     {!data.byBizType.length && (

@@ -84,8 +84,8 @@ export function StatementDetailDialog({ open, onClose, statementId, type }: Prop
             <span>{detail.partyName}</span>
             <SoftStatusLabel label={detail.statusName} tone={ST_TONE[detail.status] ?? 'draft'} />
             <span>· 汇总 <span className="font-medium text-foreground">{money(detail.totalAmount)}</span></span>
-            <span>· 已核销 <span className="text-success">{money(detail.settledAmount)}</span></span>
-            {detail.balance > 0 && <span>· 未核销 <span className="font-medium text-destructive">{money(detail.balance)}</span></span>}
+            <span>· 已核销 <span className="text-success-ink">{money(detail.settledAmount)}</span></span>
+            {detail.balance > 0 && <span>· 未核销 <span className="font-medium text-destructive-ink">{money(detail.balance)}</span></span>}
             {detail.confirmedByName && <span>· 确认人 {detail.confirmedByName}</span>}
           </div>
         )}
@@ -106,9 +106,9 @@ export function StatementDetailDialog({ open, onClose, statementId, type }: Prop
                 <tr key={it.recordId} className="border-t">
                   <td className="px-2 py-1.5"><FinanceOrderLink {...it} enabled={canNavigate && it.type === type} onNavigate={onClose} /></td>
                   <td className="px-2 py-1.5 text-right tabular-nums">{money(it.totalAmount)}</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums text-success">{money(it.paidAmount)}</td>
+                  <td className="px-2 py-1.5 text-right tabular-nums text-success-ink">{money(it.paidAmount)}</td>
                   <td className="px-2 py-1.5 text-right tabular-nums">
-                    {it.balance > 0 ? <span className="text-destructive">{money(it.balance)}</span> : <span className="text-success">已结清</span>}
+                    {it.balance > 0 ? <span className="text-destructive-ink">{money(it.balance)}</span> : <span className="text-success-ink">已结清</span>}
                   </td>
                   <td className="px-2 py-1.5 text-xs text-muted-foreground">{it.dueDate ? formatDisplayDate(it.dueDate) : '—'}</td>
                   {detail.status === 1 && (

@@ -1,0 +1,41 @@
+[
+  {
+    "stage": "before",
+    "scope": "真实DashboardPage组件只读合成缓存夹具；不是完整登录/API验收",
+    "viewport": "1440x900",
+    "theme": "light",
+    "humanViewed": true,
+    "requests": [],
+    "widgets": [
+      "kpi-pending-sale"
+    ],
+    "work": true
+  },
+  {
+    "stage": "after",
+    "scope": "真实DashboardPage组件只读合成缓存夹具；不是完整登录/API验收",
+    "viewport": "1440x900",
+    "theme": "light",
+    "humanViewed": true,
+    "overflow": false,
+    "requests": [],
+    "widgets": [
+      "kpi-pending-sale"
+    ],
+    "work": false
+  },
+  {
+    "stage": "after-cancel",
+    "scope": "真实DashboardPage组件只读合成缓存夹具；不是完整登录/API验收",
+    "viewport": "1024x900",
+    "theme": "dark",
+    "humanViewed": true,
+    "body": "仪表盘\n\n按你保存的顺序查看指标、待办与个人工具。\n\n展示全部卡片\n编辑仪表盘\n\n待处理销售\n\n3\n\n待占库 + 部分占库 + 已占库",
+    "overflow": false,
+    "requests": [],
+    "widgets": [
+      "kpi-pending-sale"
+    ],
+    "work": false
+  }
+]

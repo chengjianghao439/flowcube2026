@@ -63,9 +63,9 @@ export default function ContainerDrawer({ open, onClose, item }: ContainerDrawer
           {item && (
             <div className="mt-3 grid grid-cols-3 divide-x divide-border rounded-lg border bg-muted/30">
               <StockMini label="在库" value={formatQty(item.onHand)}   unit={item.unit} color="text-primary" />
-              <StockMini label="预占" value={formatQty(item.reserved)} unit={item.unit} color="text-warning" />
+              <StockMini label="预占" value={formatQty(item.reserved)} unit={item.unit} color="text-warning-ink" />
               <StockMini label="可用" value={formatQty(item.available)} unit={item.unit}
-                color={item.available <= 0 ? 'text-destructive' : 'text-success'} />
+                color={item.available <= 0 ? 'text-destructive-ink' : 'text-success-ink'} />
             </div>
           )}
         </SheetHeader>
@@ -163,7 +163,7 @@ export default function ContainerDrawer({ open, onClose, item }: ContainerDrawer
                       )}
                       {c.expDate && (
                         <Field label="到期日期" value={c.expDate}
-                          valueClass={isExpiringSoon(c.expDate) ? 'text-warning font-medium' : undefined}
+                          valueClass={isExpiringSoon(c.expDate) ? 'text-warning-ink font-medium' : undefined}
                         />
                       )}
                       <Field label="入库时间" value={formatDisplayDateTime(c.createdAt)} className="col-span-2" />

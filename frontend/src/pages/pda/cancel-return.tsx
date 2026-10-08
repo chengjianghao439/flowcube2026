@@ -218,12 +218,12 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
   // Receipt ownership is independent of detail VIEW permission and loading.
   const recoveryUI = <>
         <PdaFlash flash={flash} />
-        {legacy && <PdaCard><p className="text-sm text-destructive">历史归还记录缺少原服务器与登录身份，不能认作当前操作；请人工核对原任务，暂勿重复扫码。</p><p className="text-xs">原记录号 {legacy.requestKey}</p></PdaCard>}
-        {(!ownerCurrent || network !== 'online') && <p role="alert" className="text-sm text-destructive">当前登录、服务器或网络不可提交，请完成正常登录 / 设备绑定后核对原记录。</p>}
-        {returnAction.error && <p role="alert" className="text-sm text-destructive">{returnAction.error}</p>}
-        {returnAction.pending && <PdaCard><p className="font-medium">归还结果待确认</p><p className="text-xs">{recoveredContext(returnAction.pending)}。按原键查询；刷新只恢复查询身份，不保存条码表单，不自动提交。</p><div className="mt-2 flex gap-2"><Button disabled={returnAction.busy} onClick={() => void recoverRow(false)}>查询原归还结果</Button><Button variant="outline" disabled={returnAction.busy || !returnAction.canRetry} onClick={() => void recoverRow(true)}>按原归还请求重试</Button></div></PdaCard>}
-        {boxAction.error && <p role="alert" className="text-sm text-destructive">{boxAction.error}</p>}
-        {boxAction.pending && <PdaCard><p className="font-medium">拆箱结果待确认</p><p className="text-xs">{recoveredContext(boxAction.pending)}。刷新只允许查询原结果。</p><div className="mt-2 flex gap-2"><Button disabled={boxAction.busy} onClick={() => void recoverBox(false)}>查询原拆箱结果</Button><Button variant="outline" disabled={boxAction.busy || !boxAction.canRetry} onClick={() => void recoverBox(true)}>按原拆箱请求重试</Button></div></PdaCard>}
+        {legacy && <PdaCard><p className="text-sm text-destructive-ink">历史归还记录缺少原服务器与登录身份，不能认作当前操作；请人工核对原任务，暂勿重复扫码。</p><p className="text-xs">原记录号 {legacy.requestKey}</p></PdaCard>}
+        {(!ownerCurrent || network !== 'online') && <p role="alert" className="text-sm text-destructive-ink">当前登录、服务器或网络不可提交，请完成正常登录 / 设备绑定后核对原记录。</p>}
+        {returnAction.error && <p role="alert" className="text-sm text-destructive-ink">{returnAction.error}</p>}
+        {returnAction.pending && <PdaCard><p className="font-medium">归还结果待确认</p><p className="text-xs">{recoveredContext(returnAction.pending)}。按原键查询；刷新只恢复查询身份，不保存条码表单，不自动提交。</p><div className="mt-2 flex gap-2"><Button className="px-3" size="lg" disabled={returnAction.busy} onClick={() => void recoverRow(false)}>查询原归还结果</Button><Button className="px-3" size="lg" variant="outline" disabled={returnAction.busy || !returnAction.canRetry} onClick={() => void recoverRow(true)}>按原归还请求重试</Button></div></PdaCard>}
+        {boxAction.error && <p role="alert" className="text-sm text-destructive-ink">{boxAction.error}</p>}
+        {boxAction.pending && <PdaCard><p className="font-medium">拆箱结果待确认</p><p className="text-xs">{recoveredContext(boxAction.pending)}。刷新只允许查询原结果。</p><div className="mt-2 flex gap-2"><Button className="px-3" size="lg" disabled={boxAction.busy} onClick={() => void recoverBox(false)}>查询原拆箱结果</Button><Button className="px-3" size="lg" variant="outline" disabled={boxAction.busy || !boxAction.canRetry} onClick={() => void recoverBox(true)}>按原拆箱请求重试</Button></div></PdaCard>}
   </>
 
   if (isError || (!isLoading && !detail)) {
@@ -251,12 +251,12 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
       <div className="max-w-md mx-auto flex-1 px-4 pb-8 space-y-4 py-4 w-full">
         {recoveryUI}
 
-        <div className={`rounded-2xl border-2 px-4 py-3 text-center transition-all ${
-          scanning ? 'border-yellow-400 bg-yellow-50' :
-          step === 'scan-container' ? 'border-primary/30 bg-primary/5' : 'border-green-400/30 bg-green-50'
+        <div className={`rounded-2xl border-2 px-4 py-3 text-center transition-all motion-reduce:transition-none ${
+          scanning ? 'border-warning/30 bg-warning/10' :
+          step === 'scan-container' ? 'border-primary/30 bg-primary/5' : 'border-success/30 bg-success/10'
         }`}>
           <p className="text-sm font-semibold text-foreground">
-            {scanning ? <span className="inline-flex items-center gap-1"><Loader2 className="h-3.5 w-3.5 animate-spin" />处理中…</span> :
+            {scanning ? <span className="inline-flex items-center gap-1"><Loader2 className="h-3.5 w-3.5 motion-safe:animate-spin" />处理中…</span> :
              step === 'scan-container' ? '扫描待归还库存条码，或待拆箱箱子条码' :
              `扫描原库位条码确认放回：${target?.suggestedLocationCode ?? ''}`}
           </p>
@@ -279,7 +279,7 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
                   {target.quantitySource === 'active_pick' ? <><p className="font-bold text-primary">本任务应归还 {target.taskReturnQty}</p><p className="text-xs text-muted-foreground">条码账面 {target.remainingQty}</p></> : <><p className="text-xs text-muted-foreground">数量</p><p className="font-bold text-primary">{target.qty}</p></>}
                 </div>
               </div>
-              <button className="text-xs text-muted-foreground hover:text-foreground"
+              <button className="min-h-11 rounded-md px-2 text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 onClick={() => { setStep('scan-container'); setTarget(null) }}
               >← 取消，重新扫条码</button>
             </div>
@@ -289,7 +289,7 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
         <div>
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">待归还库存条码（{detail.containers.length}）</p>
           {detail.containers.length === 0 && detail.packages.length === 0 && (
-            <PdaEmptyCard icon={<CircleCheck className="h-12 w-12 text-green-600" />} title="已全部归还" description="任务即将自动取消" />
+            <PdaEmptyCard icon={<CircleCheck className="h-12 w-12 text-success-ink" />} title="已全部归还" description="任务即将自动取消" />
           )}
           <div className="space-y-2">
             {detail.containers.map(c => (

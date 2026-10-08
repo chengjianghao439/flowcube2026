@@ -1,0 +1,26 @@
+[
+  {
+    "method": "GET",
+    "path": "/api/print-templates",
+    "status": 400,
+    "requestId": "52716.236"
+  },
+  {
+    "method": "GET",
+    "path": "/api/print-templates",
+    "status": 400,
+    "requestId": "52716.237"
+  },
+  {
+    "method": "GET",
+    "path": "/api/print-templates",
+    "status": 400,
+    "requestId": "52716.238"
+  },
+  {
+    "method": "GET",
+    "path": "/api/print-templates",
+    "status": 400,
+    "requestId": "52716.239"
+  }
+]

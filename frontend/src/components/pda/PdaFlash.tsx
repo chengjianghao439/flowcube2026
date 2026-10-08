@@ -14,9 +14,9 @@ interface Props {
 }
 
 const STYLE: Record<string, string> = {
-  ok:   'bg-green-100 text-green-800 border-green-200',
-  err:  'bg-red-100   text-red-800   border-red-200',
-  warn: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+  ok:   'bg-success/10 text-success-ink border-success/30',
+  err:  'bg-destructive/10 text-destructive-ink border-destructive/30',
+  warn: 'bg-warning/10 text-warning-ink border-warning/30',
 }
 
 function FlashIcon({ type }: { type: string }) {
@@ -28,7 +28,7 @@ function FlashIcon({ type }: { type: string }) {
 export default function PdaFlash({ flash, className = '' }: Props) {
   if (!flash) return null
   return (
-    <div className={`mx-4 mt-2 flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold animate-in fade-in slide-in-from-top-1 duration-150 ${STYLE[flash.type]} ${className}`}>
+    <div role={flash.type === 'err' ? 'alert' : 'status'} aria-atomic="true" className={`mx-4 mt-2 flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-1 duration-150 ${STYLE[flash.type]} ${className}`}>
       <FlashIcon type={flash.type} />
       <span className="flex-1">{flash.msg}</span>
     </div>

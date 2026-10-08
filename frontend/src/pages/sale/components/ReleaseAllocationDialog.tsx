@@ -1,5 +1,5 @@
 import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -25,6 +25,7 @@ type RowState = { checked: boolean; qty: number }
  */
 export default function ReleaseAllocationDialog({ open, orderId, items, onClose }: Props) {
   const release = useReleaseSale()
+  const submitting = useRef(false)
   const [rows, setRows] = useState<Record<number, RowState>>({})
 
   const reservedItems = items.filter(i => (i.reservedQty ?? 0) > 0)
@@ -34,7 +35,7 @@ export default function ReleaseAllocationDialog({ open, orderId, items, onClose 
   // 依赖刻意只认 open：reservedItems 是 items.filter(...) 每次渲染新建的数组，
   // 入依赖会在用户每改一次数量（父组件重渲染）时重建 rows，冲掉已勾选与已填数量。
   useEffect(() => {
-    if (!open) return
+    if (!open || submitting.current) return
     setRows(Object.fromEntries(
       reservedItems.map(i => [i.id, { checked: true, qty: i.reservedQty ?? 0 }]),
     ))
@@ -47,17 +48,20 @@ export default function ReleaseAllocationDialog({ open, orderId, items, onClose 
   const invalid = reservedItems.filter(i => rows[i.id]?.checked && !isAllocationQtyValid(rows[i.id]?.qty ?? 0, i.reservedQty ?? 0))
 
   function setRow(id: number, patch: Partial<RowState>) {
+    if (submitting.current || release.isPending) return
     setRows(prev => ({ ...prev, [id]: { ...prev[id], ...patch } }))
   }
 
   function releaseAll() {
+    if (submitting.current || release.isPending) return
     setRows(Object.fromEntries(
       reservedItems.map(i => [i.id, { checked: true, qty: i.reservedQty ?? 0 }]),
     ))
   }
 
   function handleConfirm(partial: boolean) {
-    if (!orderId) return
+    if (!orderId || submitting.current || release.isPending || (partial && (!selected.length || invalid.length > 0))) return
+    submitting.current = true
     if (partial) {
       const payload: ReserveItemOverride[] = selected.map(i => ({
         id: i.id,
@@ -65,15 +69,19 @@ export default function ReleaseAllocationDialog({ open, orderId, items, onClose 
         warehouseName: i.warehouseName ?? '',
         qty: rows[i.id].qty,
       }))
-      release.mutate({ id: orderId, items: payload }, { onSuccess: onClose })
+      release.mutate({ id: orderId, items: payload }, { onSuccess: onClose, onSettled: () => { submitting.current = false } })
     } else {
-      release.mutate({ id: orderId }, { onSuccess: onClose })
+      release.mutate({ id: orderId }, { onSuccess: onClose, onSettled: () => { submitting.current = false } })
     }
   }
 
+  function requestClose() {
+    if (!submitting.current && !release.isPending) onClose()
+  }
+
   return (
-    <Dialog open={open} onOpenChange={(next) => { if (!next) onClose() }}>
-      <DialogContent className="flex max-h-[90dvh] w-[calc(100%-2rem)] max-w-4xl flex-col gap-4 p-4 sm:p-6">
+    <Dialog open={open} onOpenChange={(next) => { if (!next) requestClose() }}>
+      <DialogContent aria-busy={release.isPending} onEscapeKeyDown={e => { if (submitting.current || release.isPending) e.preventDefault() }} className="flex max-h-[90dvh] w-[calc(100%-2rem)] max-w-4xl flex-col gap-4 p-4 sm:p-6">
         <DialogHeader><DialogTitle>取消占库</DialogTitle></DialogHeader>
         <DialogDescription>
           选择需要释放的商品并填写数量。未勾选的明细继续保留占库。
@@ -87,7 +95,8 @@ export default function ReleaseAllocationDialog({ open, orderId, items, onClose 
                   <input
                     type="checkbox"
                     checked={reservedItems.length > 0 && reservedItems.every(i => rows[i.id]?.checked)}
-                    onChange={e => setRows(Object.fromEntries(reservedItems.map(i => [i.id, { checked: e.target.checked, qty: i.reservedQty ?? 0 }])))}
+                    disabled={release.isPending}
+                    onChange={e => { if (!submitting.current && !release.isPending) setRows(Object.fromEntries(reservedItems.map(i => [i.id, { checked: e.target.checked, qty: i.reservedQty ?? 0 }]))) }}
                     aria-label="全选"
                   />
                 </th>
@@ -106,6 +115,7 @@ export default function ReleaseAllocationDialog({ open, orderId, items, onClose 
                       <input
                         type="checkbox"
                         checked={!!st.checked}
+                        disabled={release.isPending}
                         onChange={e => setRow(item.id, { checked: e.target.checked })}
                         aria-label={`选择 ${item.productName}`}
                       />
@@ -122,7 +132,7 @@ export default function ReleaseAllocationDialog({ open, orderId, items, onClose 
                         min={0}
                         max={item.reservedQty ?? 0}
                         value={st.qty ?? 0}
-                        disabled={!st.checked}
+                        disabled={release.isPending || !st.checked}
                         onChange={e => setRow(item.id, { qty: Number(e.target.value) })}
                         className={cn('h-9 text-sm tabular-nums', !isAllocationQtyValid(st.qty, item.reservedQty ?? 0) && st.checked && 'border-destructive')}
                       />
@@ -137,10 +147,10 @@ export default function ReleaseAllocationDialog({ open, orderId, items, onClose 
           </table>
         </div>
 
-        {invalid.length > 0 && <p role="alert" className="text-sm text-destructive">释放数量须大于 0、不超过已占数量，最多保留 4 位小数。</p>}
+        {invalid.length > 0 && <p role="alert" className="text-sm text-destructive-ink">释放数量须大于 0、不超过已占数量，最多保留 2 位小数。</p>}
         <DialogFooter className="gap-2 border-t pt-4 sm:space-x-0">
           <Button variant="outline" onClick={releaseAll} disabled={release.isPending}>选中全部已占数量</Button>
-          <Button variant="outline" onClick={onClose}>取消</Button>
+          <Button variant="outline" disabled={release.isPending} onClick={requestClose}>取消</Button>
           <Button disabled={release.isPending || !selected.length || invalid.length > 0} onClick={() => handleConfirm(true)}>
             {release.isPending ? '释放中…' : `释放选中 ${selected.length} 项`}
           </Button>

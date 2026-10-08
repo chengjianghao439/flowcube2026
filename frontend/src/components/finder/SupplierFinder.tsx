@@ -5,11 +5,13 @@ import { FinderModal } from './FinderModal'
 import { useSuppliers } from '@/hooks/useSuppliers'
 import type { FinderResult, FinderColumn } from '@/types/finder'
 import type { Supplier } from '@/types/suppliers'
+import type { ProductFinderReadContext } from '@/hooks/useProducts'
 
 export interface SupplierFinderProps {
   open: boolean
   onClose: () => void
   onConfirm: (result: FinderResult) => void
+  context?: ProductFinderReadContext
 }
 
 type Row = Supplier & Record<string, unknown>
@@ -20,7 +22,7 @@ const COLUMNS: FinderColumn<Row>[] = [
   { key: 'phone', title: '联系电话', width: 180 },
 ]
 
-export function SupplierFinder({ open, onClose, onConfirm }: SupplierFinderProps) {
+export function SupplierFinder({ open, onClose, onConfirm, context }: SupplierFinderProps) {
   const [keyword,    setKeyword]    = useState('')
   const [searchText, setSearchText] = useState('')
   // 只存 id：选中行一律从**当前启用列表**派生 ⇒ 后台刷新后拿到的是最新值，
@@ -39,22 +41,30 @@ export function SupplierFinder({ open, onClose, onConfirm }: SupplierFinderProps
     return () => clearTimeout(debounceRef.current)
   }, [open])
 
-  const { data, isFetching, isError, error, refetch } = useSuppliers({ pageSize: 500, keyword: searchText })
+  const { data, isFetching, isError, error, refetch } = useSuppliers({ pageSize: 500, keyword: searchText }, context ? { ...context, enabled: open && context.enabled } : undefined)
+  function current() {
+    if (!context) return true
+    if (!open || !context.enabled) return false
+    try { context.assertCurrent(); return true } catch { return false }
+  }
+  const readable = current()
 
   function handleKeywordChange(v: string) {
+    if (!current()) return
     setKeyword(v)
     setSelectedId(null)   // 搜索立刻清选择
     clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => { setSearchText(v) }, 300)
   }
 
-  const rows = ((data?.list ?? []) as Row[]).filter(r => r.isActive !== false)
+  const rows = readable ? ((data?.list ?? []) as Row[]).filter(r => r.isActive !== false) : []
   const selected = selectedId != null ? rows.find(r => r.id === selectedId) ?? null : null
   // 比较用**原始值**（不 trim），与定时器提交的原文保持同一语义，避免带空格输入时永久 pending。
   const debouncing = keyword !== searchText
 
   // 页脚「确认选择」与行双击/空格共用这一个回调，映射只写一次。
   function handleConfirm(row: Row) {
+    if (!current()) return
     onConfirm({
       id: row.id,
       name: row.name,
@@ -74,13 +84,13 @@ export function SupplierFinder({ open, onClose, onConfirm }: SupplierFinderProps
       columns={COLUMNS}
       data={rows}
       selected={selected}
-      onSelect={row => setSelectedId(row.id)}
+      onSelect={row => { if (current()) setSelectedId(row.id) }}
       onConfirm={handleConfirm}
       getRowKey={r => r.id}
-      isLoading={isFetching || debouncing}
+      isLoading={isFetching || debouncing || !readable}
       isError={isError}
       error={error}
-      onRetry={() => void refetch()}
+      onRetry={() => { if (current()) void refetch() }}
       keyword={keyword}
       onKeywordChange={handleKeywordChange}
       searchPlaceholder="搜索供应商名称、编码…"

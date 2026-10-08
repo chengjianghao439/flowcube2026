@@ -1,7 +1,7 @@
 import { useCallback, useMemo, type ReactNode } from 'react'
 import { useTableColumns, isAction } from './useTableColumns'
 import { VirtualTableBody, VIRTUAL_TABLE_THRESHOLD } from './VirtualTableBody'
-import { Inbox } from 'lucide-react'
+import { ChevronDown, Inbox } from 'lucide-react'
 import type { TableColumn } from '@/types'
 
 interface DataTableProps<T extends object> {
@@ -45,7 +45,7 @@ export default function DataTable<T extends object>({
   fluid = false,
 }: DataTableProps<T>) {
   const isSelectEnabled = !!(selectable || selectionMode)
-  const { orderedColumns, usesPercent, getColumnWidth, colgroupRef, tableRef, tableWidth, hasCustomWidths, setDraggingKey, draggingKey, moveColumn, startResize, fitColumn, resizeCleanupRef, measureWidths, savePixelWidths } = useTableColumns({ columns, fluid, columnStorageKey, isSelectEnabled, fitData: virtualized ? data : undefined })
+  const { orderedColumns, usesPercent, getColumnWidth, getPercentColumnWidth, percentMinWidth, colgroupRef, tableRef, tableWidth, hasCustomWidths, setDraggingKey, draggingKey, moveColumn, startResize, fitColumn, resizeCleanupRef, measureWidths, savePixelWidths } = useTableColumns({ columns, fluid, columnStorageKey, isSelectEnabled, fitData: virtualized ? data : undefined })
 
   // 宽表横向滚动时，操作列固定在右侧：列宽总和经常超过视口，原来的「操作」列会
   // 被挤到屏幕外，现场只能看到一个被切掉的「详」字（2026-09-17 验收 ISSUE-013）。
@@ -123,7 +123,7 @@ export default function DataTable<T extends object>({
             onDoubleClick={isAction(String(col.key), col.title) ? e => e.stopPropagation() : undefined}
             className={`overflow-hidden px-4 py-2.5 text-foreground align-middle ${
               stickyActionKey === String(col.key)
-                ? 'sticky right-0 z-10 border-l border-border bg-card group-hover:bg-muted/30'
+                ? 'sticky right-0 z-10 border-l border-border bg-card group-hover:bg-muted'
                 : ''
             }`}
           >
@@ -132,7 +132,15 @@ export default function DataTable<T extends object>({
               ? <div className={`min-w-0 overflow-x-auto ${alignClass}`}>{col.render ? (col.render(rawValue, row) as ReactNode) : textValue}</div>
               : (
                 <div className={`min-w-0 whitespace-normal [overflow-wrap:anywhere] ${alignClass}`} title={textValue}>
-                  {col.render ? (col.render(rawValue, row) as ReactNode) : textValue}
+                  {col.expandableText && typeof rawValue === 'string' && rawValue.trim().length > 0 ? (
+                    <details className="table-text-preview group/text" onDoubleClick={event => event.stopPropagation()}>
+                      <summary className="flex cursor-pointer items-start gap-1 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" title={textValue}>
+                        <span className="table-text-value min-w-0 flex-1">{col.render ? (col.render(rawValue, row) as ReactNode) : textValue}</span>
+                        <ChevronDown aria-hidden="true" className="mt-1 h-3 w-3 shrink-0 text-muted-foreground transition-transform group-open/text:rotate-180" />
+                        <span className="sr-only">展开或收起{col.title}</span>
+                      </summary>
+                    </details>
+                  ) : col.render ? (col.render(rawValue, row) as ReactNode) : textValue}
                 </div>
               )}
           </td>
@@ -145,13 +153,13 @@ export default function DataTable<T extends object>({
   const renderVirtual = virtualized && !loading && data.length >= VIRTUAL_TABLE_THRESHOLD
   const getRowKey = useCallback((row: T) => String(row[rowKey]), [rowKey])
   return (
-    <div className="rounded-lg border border-border bg-card overflow-hidden">
+    <div className="min-w-0 max-w-full rounded-lg border border-border bg-card overflow-hidden">
       <div className="overflow-x-auto" data-table-scroll>
-        <table aria-rowcount={renderVirtual ? data.length + 1 : undefined} ref={tableRef} aria-busy={loading} className="table-fixed text-sm" style={usesPercent ? { width: '100%' } : { width: tableWidth, minWidth: hasCustomWidths ? 0 : '100%' }}>
+        <table aria-rowcount={renderVirtual ? data.length + 1 : undefined} ref={tableRef} aria-busy={loading} className="table-fixed text-sm" style={usesPercent ? { width: '100%', minWidth: percentMinWidth } : { width: tableWidth, minWidth: hasCustomWidths ? 0 : '100%' }}>
           <colgroup ref={colgroupRef}>
             {isSelectEnabled && <col style={{ width: 56 }} />}
             {orderedColumns.map(col => (
-              <col key={String(col.key)} style={{ width: usesPercent ? `${getColumnWidth(col)}%` : getColumnWidth(col) }} />
+              <col key={String(col.key)} style={{ width: usesPercent ? getPercentColumnWidth(col) : getColumnWidth(col) }} />
             ))}
           </colgroup>
           <thead>
@@ -160,7 +168,7 @@ export default function DataTable<T extends object>({
                 <th scope="col" className="w-10 px-4 py-2.5">
                   <input
                     type="checkbox"
-                    aria-label="选择当前页全部行"
+                    aria-label="选择当前结果中所有可选行"
                     checked={allSelected}
                     ref={el => { if (el) el.indeterminate = someSelected }}
                     onChange={toggleAll}

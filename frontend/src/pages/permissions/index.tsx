@@ -264,7 +264,7 @@ export default function PermissionsPage() {
                       type="button"
                       title={`删除「${r.name}」`}
                       onClick={() => setDelTarget(r)}
-                      className="mr-1.5 rounded-md p-1 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 hover:bg-muted hover:text-destructive"
+                      className="mr-1.5 rounded-md p-1 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 hover:bg-muted hover:text-destructive-ink"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
@@ -323,7 +323,7 @@ export default function PermissionsPage() {
             </div>
           )}
 
-          <div className="border border-warning/20 bg-warning/5 rounded-lg p-4 text-sm text-warning">
+          <div className="border border-warning/20 bg-warning/5 rounded-lg p-4 text-sm text-warning-ink">
             提示：修改权限后，用户需要重新登录才能生效。管理员（admin）角色权限固定，不可修改；系统内置角色不可删除。
           </div>
         </section>

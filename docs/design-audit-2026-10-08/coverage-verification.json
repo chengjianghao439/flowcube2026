@@ -1,0 +1,243 @@
+{
+  "auditDate": "2026-10-08",
+  "sourceCommit": "66fa87e4a0c440270189693480673c69320bce85",
+  "sourceSnapshot": "9f06a496994943c147b39517391de5da660f84112274de9ab78c78faeca38888",
+  "snapshotBoundary": "仅inventory公开前端TS/JS allowlist，不是整个工作树或截图版本指纹",
+  "summary": {
+    "routes": 145,
+    "canonicalRoutes": 138,
+    "aliases": 6,
+    "fallbacks": 1,
+    "dynamicRoutes": 26,
+    "newRoutes": 12,
+    "authenticationRoutes": 3,
+    "pdaRoutes": 33,
+    "surfaces": 1150,
+    "componentCalls": 5517,
+    "statusComponentDefinitions": 30,
+    "parsedSourceFiles": 635,
+    "reachableSourceFiles": 630,
+    "excludedUnreachableSourceFiles": 5,
+    "actualViewed": 124,
+    "capturedRoutes": 134,
+    "overviewReviewedRoutes": 110,
+    "detailReviewedRoutes": 56,
+    "interactedRoutes": 44,
+    "reviewedSurfaces": 55,
+    "unreviewedSurfaces": 1095,
+    "groups": [
+      {
+        "group": "销售",
+        "routes": 10,
+        "surfaces": 158
+      },
+      {
+        "group": "采购",
+        "routes": 13,
+        "surfaces": 82
+      },
+      {
+        "group": "库存仓储",
+        "routes": 24,
+        "surfaces": 203
+      },
+      {
+        "group": "财务会计",
+        "routes": 32,
+        "surfaces": 260
+      },
+      {
+        "group": "基础资料",
+        "routes": 8,
+        "surfaces": 67
+      },
+      {
+        "group": "审批待办",
+        "routes": 5,
+        "surfaces": 38
+      },
+      {
+        "group": "打印物流",
+        "routes": 10,
+        "surfaces": 58
+      },
+      {
+        "group": "系统设置",
+        "routes": 10,
+        "surfaces": 82
+      },
+      {
+        "group": "PDA",
+        "routes": 33,
+        "surfaces": 202
+      }
+    ],
+    "surfaceTypes": {
+      "状态表面": 278,
+      "选择器": 324,
+      "弹窗": 306,
+      "表格状态": 93,
+      "导航/全局表面": 87,
+      "浮层": 6,
+      "抽屉": 4,
+      "命令式确认弹窗": 27,
+      "CRUD复合表面": 8,
+      "扫码输入": 17
+    }
+  },
+  "evidenceIndex": 466,
+  "checks": {
+    "inventoryCheck": "exit0",
+    "mergeEvidenceCheck": "exit0",
+    "inventoryNegativeControl": "变更generated Markdown后exit1检测stale；finally原字节还原后exit0",
+    "mergeNegativeControl": "变更managed root-final login人工查看字段后exit1检测stale；finally原字节还原后exit0",
+    "allDynamic26PathNullPatternPresent": true,
+    "allRoutesSurfacesSevenStateReview": true,
+    "allFindingF01ThroughF17Mapped": true,
+    "erpResourcePathTitleRead11": true,
+    "uniqueEvidenceIds": true,
+    "allIndexedScreenshotFilesExist": true,
+    "ownedScopedEslint": "8路径exit0",
+    "ownedDiffCheck": "exit0",
+    "finalBrowserSessionList": []
+  },
+  "ownAfterImages": {
+    "crud": 44,
+    "focus": 8,
+    "extras": 3,
+    "workspaceFinal": 5,
+    "canonicalShared": 4,
+    "total": 64,
+    "humanViewed": true
+  },
+  "componentPreviewScope": "B最终DataTable7图正常reload、原生checkbox/scrollLeft；不算businessPageAcceptance/物理横轮",
+  "remainingWithoutHumanOrOverview": [
+    {
+      "route": "/transfer/:id",
+      "kind": "dynamic",
+      "actualView": "未查看",
+      "uncoveredReason": "本批新仓3合成资源API回读403，当前scope仅仓1（erp-dynamic-review.json）；未扩大权限。尚缺合法在范围的具体调拨详情GUI，API403不替代页面权限呈现验收。"
+    },
+    {
+      "route": "/logistics/:id",
+      "kind": "dynamic",
+      "actualView": "未查看",
+      "uncoveredReason": "本批尚无合法具体运单ID/详情读取证据；不能以销售ID替代运单ID；未为视觉验收调用真实承运商取号。"
+    },
+    {
+      "route": "*",
+      "kind": "fallback",
+      "actualView": "未查看",
+      "uncoveredReason": "未打开此业务调用表面；静态可达/共享测试/页面截图不能代替实际调用条件验收"
+    },
+    {
+      "route": "/pda/adjustments",
+      "kind": "static",
+      "actualView": "已捕获；人工细看待核实",
+      "uncoveredReason": "证据只覆盖记录中的路径/状态；未开的弹窗抽屉选择器、七态、只读/撤权、迟到响应、其他尺寸/硬件仍待验"
+    },
+    {
+      "route": "/pda/adjustments/:id",
+      "kind": "dynamic",
+      "actualView": "未查看",
+      "uncoveredReason": "动态详情尚缺明确具体合成资源、当前权限与合法阶段的实际读取证据；仍按各单据/任务ID及阶段验收。"
+    },
+    {
+      "route": "/pda/cancel-return",
+      "kind": "static",
+      "actualView": "已捕获；人工细看待核实",
+      "uncoveredReason": "证据只覆盖记录中的路径/状态；未开的弹窗抽屉选择器、七态、只读/撤权、迟到响应、其他尺寸/硬件仍待验"
+    },
+    {
+      "route": "/pda/cancel-return/:id",
+      "kind": "dynamic",
+      "actualView": "未查看",
+      "uncoveredReason": "动态详情尚缺明确具体合成资源、当前权限与合法阶段的实际读取证据；仍按各单据/任务ID及阶段验收。"
+    },
+    {
+      "route": "/pda/check",
+      "kind": "static",
+      "actualView": "已捕获；人工细看待核实",
+      "uncoveredReason": "证据只覆盖记录中的路径/状态；未开的弹窗抽屉选择器、七态、只读/撤权、迟到响应、其他尺寸/硬件仍待验"
+    },
+    {
+      "route": "/pda/inbound",
+      "kind": "static",
+      "actualView": "已捕获；人工细看待核实",
+      "uncoveredReason": "证据只覆盖记录中的路径/状态；未开的弹窗抽屉选择器、七态、只读/撤权、迟到响应、其他尺寸/硬件仍待验"
+    },
+    {
+      "route": "/pda/login",
+      "kind": "static",
+      "actualView": "未查看",
+      "uncoveredReason": "未打开此业务调用表面；静态可达/共享测试/页面截图不能代替实际调用条件验收"
+    },
+    {
+      "route": "/pda/pack",
+      "kind": "static",
+      "actualView": "已捕获；人工细看待核实",
+      "uncoveredReason": "证据只覆盖记录中的路径/状态；未开的弹窗抽屉选择器、七态、只读/撤权、迟到响应、其他尺寸/硬件仍待验"
+    },
+    {
+      "route": "/pda/putaway",
+      "kind": "static",
+      "actualView": "已捕获；人工细看待核实",
+      "uncoveredReason": "证据只覆盖记录中的路径/状态；未开的弹窗抽屉选择器、七态、只读/撤权、迟到响应、其他尺寸/硬件仍待验"
+    },
+    {
+      "route": "/pda/sale-return",
+      "kind": "static",
+      "actualView": "已捕获；人工细看待核实",
+      "uncoveredReason": "证据只覆盖记录中的路径/状态；未开的弹窗抽屉选择器、七态、只读/撤权、迟到响应、其他尺寸/硬件仍待验"
+    },
+    {
+      "route": "/pda/sale-return/:id/putaway",
+      "kind": "dynamic",
+      "actualView": "未查看",
+      "uncoveredReason": "动态详情尚缺明确具体合成资源、当前权限与合法阶段的实际读取证据；仍按各单据/任务ID及阶段验收。"
+    },
+    {
+      "route": "/pda/sale-return/:id/receive",
+      "kind": "dynamic",
+      "actualView": "未查看",
+      "uncoveredReason": "动态详情尚缺明确具体合成资源、当前权限与合法阶段的实际读取证据；仍按各单据/任务ID及阶段验收。"
+    },
+    {
+      "route": "/pda/ship",
+      "kind": "static",
+      "actualView": "已捕获；人工细看待核实",
+      "uncoveredReason": "证据只覆盖记录中的路径/状态；未开的弹窗抽屉选择器、七态、只读/撤权、迟到响应、其他尺寸/硬件仍待验"
+    },
+    {
+      "route": "/pda/stockcheck",
+      "kind": "static",
+      "actualView": "已捕获；人工细看待核实",
+      "uncoveredReason": "证据只覆盖记录中的路径/状态；未开的弹窗抽屉选择器、七态、只读/撤权、迟到响应、其他尺寸/硬件仍待验"
+    },
+    {
+      "route": "/pda/stockcheck/:id",
+      "kind": "dynamic",
+      "actualView": "未查看",
+      "uncoveredReason": "动态详情尚缺明确具体合成资源、当前权限与合法阶段的实际读取证据；仍按各单据/任务ID及阶段验收。"
+    },
+    {
+      "route": "/pda/transfer",
+      "kind": "static",
+      "actualView": "已捕获；人工细看待核实",
+      "uncoveredReason": "证据只覆盖记录中的路径/状态；未开的弹窗抽屉选择器、七态、只读/撤权、迟到响应、其他尺寸/硬件仍待验"
+    },
+    {
+      "route": "/pda/transfer-in/:id",
+      "kind": "dynamic",
+      "actualView": "未查看",
+      "uncoveredReason": "动态详情尚缺明确具体合成资源、当前权限与合法阶段的实际读取证据；仍按各单据/任务ID及阶段验收。"
+    },
+    {
+      "route": "/pda/transfer-out/:id",
+      "kind": "dynamic",
+      "actualView": "未查看",
+      "uncoveredReason": "动态详情尚缺明确具体合成资源、当前权限与合法阶段的实际读取证据；仍按各单据/任务ID及阶段验收。"
+    }
+  ],
+  "evidenceBoundary": "21路由无人工/总览声明；55调用点有限记录，1095无指定用点证据；未触发状态、其他relatedRoutes、业务写入/权限/真机/打印/生产不能由共享源或截图代替"
+}

@@ -5,6 +5,7 @@ import { MemoryRouter, useLocation, useNavigate, type NavigateFunction } from 'r
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import DashboardPage from '@/pages/dashboard'
+import { DailyWork } from './DailyWork'
 import RoleWorkbenchPage from '@/pages/reports/role-workbench'
 import { KeepAliveOutlet } from '@/components/layout/KeepAliveOutlet'
 import { TabPathContext } from '@/components/layout/TabPathContext'
@@ -37,7 +38,7 @@ vi.mock('@/api/fulfillment', async importOriginal => ({
 // KeepAlive 自身与 store 使用真实实现；只替换目的页业务体，观察内存筛选/草稿是否保留。
 vi.mock('@/router/routeRegistry', async importOriginal => ({
   ...await importOriginal<typeof import('@/router/routeRegistry')>(),
-  resolveRouteComponent: (path: string) => path === '/dashboard' ? DashboardPage : DraftTarget,
+  resolveRouteComponent: (path: string) => path === '/dashboard' ? DashboardPage : path === '/reports/role-workbench' ? RoleWorkbenchPage : DraftTarget,
 }))
 
 const sale = [P.DASHBOARD_VIEW, P.SALE_ORDER_VIEW, P.CUSTOMER_VIEW]
@@ -63,9 +64,9 @@ const labels = () => [...(work()?.querySelectorAll('button') ?? [])].map(b => b.
 const groups = () => [...(work()?.querySelectorAll('h3') ?? [])].map(h => h.textContent)
 const button = (label: string) => [...host.querySelectorAll('button')].find(b => b.textContent?.trim() === label)
 async function settle() { await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)) }) }
-async function render(page: 'dashboard' | 'workbench' = 'dashboard', keepAlive = false, initial = '/dashboard') {
-  const path = page === 'dashboard' ? initial : '/reports/role-workbench'
-  await act(async () => root.render(<QueryClientProvider client={qc}><MemoryRouter initialEntries={[path]}><LocationObserver />{keepAlive ? <KeepAliveOutlet /> : <TabPathContext.Provider value={path}>{page === 'dashboard' ? <DashboardPage /> : <RoleWorkbenchPage />}</TabPathContext.Provider>}</MemoryRouter></QueryClientProvider>))
+async function render(page: 'dashboard' | 'workbench' | 'daily' = 'daily', keepAlive = false, initial = '/dashboard') {
+  const path = keepAlive || page !== 'workbench' ? initial : '/reports/role-workbench'
+  await act(async () => root.render(<QueryClientProvider client={qc}><MemoryRouter initialEntries={[path]}><LocationObserver />{keepAlive ? <KeepAliveOutlet /> : <TabPathContext.Provider value={path}>{page === 'dashboard' ? <DashboardPage /> : page === 'workbench' ? <RoleWorkbenchPage /> : <DailyWork />}</TabPathContext.Provider>}</MemoryRouter></QueryClientProvider>))
   await settle()
 }
 beforeEach(() => {
@@ -90,7 +91,7 @@ test.each([
   ['销售', sale, ['销售订单'], ['采购与销售']],
   ['仓库', warehouse, ['库存管理', '条码打印查询'], ['仓库作业', '物流与打印']],
   ['财务', finance, ['客户往来', '供应商往来'], ['财务往来']],
-] as const)('%s普通岗位无需报表权限即可从仪表盘打开常用列表', async (_, permissions, expected, expectedGroups) => {
+] as const)('%s常用工作组件沿用当前岗位的列表权限', async (_, permissions, expected, expectedGroups) => {
   login([...permissions]); await render()
   expect(labels()).toEqual(expected); expect(groups()).toEqual(expectedGroups)
   expect(hasPermission([...permissions], resolveRoutePermission('/reports/role-workbench')!, 5)).toBe(false)
@@ -123,35 +124,37 @@ test('退出及切换账号不留下旧权限入口，超级管理员退出后�
   await act(async () => login(finance, 8)); expect(labels()).toEqual(['客户往来', '供应商往来'])
   await act(async () => login(sale, 9)); expect(labels()).toEqual(['销售订单'])
 })
-test('待办中心复用相同常用工作且仍保留自身REPORT_VIEW门槛', async () => {
+test('待办中心保留常用工作且仍保留自身REPORT_VIEW门槛', async () => {
   login([...warehouse, P.REPORT_VIEW]); await render('workbench')
   expect(labels()).toEqual(['库存管理', '客户往来', '供应商往来', '条码打印查询'])
   expect(host.textContent).toContain('订单履约待办'); expect(host.textContent).toContain('财务与系统提醒')
   expect(resolveRoutePermission('/reports/role-workbench')).toBe(P.REPORT_VIEW)
 })
-test('原仪表盘卡片顺序和隐藏偏好保持，编辑不混入常用工作或保存载荷', async () => {
+test('仪表盘移除常用工作后保留卡片顺序、隐藏偏好与保存载荷', async () => {
   saved.widgets = [{ id: 'kpi-pending-sale', visible: true, w: 3 }, { id: 'kpi-pending-purchase', visible: false, w: 2 }, ...saved.widgets.filter(w => !['kpi-pending-sale', 'kpi-pending-purchase'].includes(w.id))]
-  await render(); expect(labels()).toEqual(['销售订单'])
+  await render('dashboard'); expect(work()).toBeNull()
   expect([...host.querySelectorAll('[data-widget-id]')].map(el => el.getAttribute('data-widget-id'))).toEqual(['kpi-pending-sale'])
   await act(async () => button('编辑仪表盘')!.click()); expect(work()).toBeNull()
   await act(async () => button('保存')!.click()); await settle()
   expect(saveDashboardLayoutApi).toHaveBeenCalledWith(mergeLayout(saved))
-  expect(labels()).toEqual(['销售订单'])
+  expect(work()).toBeNull()
 })
-test('快捷入口通过真实工作区保留原标签query、筛选草稿及其他单据', async () => {
+test('待办常用入口通过真实工作区保留原标签query、筛选草稿及其他单据', async () => {
   const existing = { key: '/sale', path: '/sale?keyword=old', title: '销售订单', closable: true }
   const detail = { key: '/sale/33', path: '/sale/33?focus=progress', title: 'SO-33', closable: true }
-  useWorkspaceStore.setState({ tabs: [HOME_TAB, existing, detail], activeKey: '/sale' })
-  await render('dashboard', true, existing.path)
+  const workbench = { key: '/reports/role-workbench', path: '/reports/role-workbench', title: '待办中心', closable: true }
+  login([...sale, P.REPORT_VIEW])
+  useWorkspaceStore.setState({ tabs: [HOME_TAB, workbench, existing, detail], activeKey: '/sale' })
+  await render('workbench', true, existing.path)
   const input = host.querySelector<HTMLInputElement>('input[aria-label="原标签草稿"]')!
   await act(async () => {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, '未保存的数量')
     input.dispatchEvent(new Event('input', { bubbles: true }))
   })
-  await act(async () => navigate('/dashboard')); await settle()
-  expect(labels()).toEqual(['销售订单'])
+  await act(async () => navigate('/reports/role-workbench')); await settle()
+  expect(labels()).toContain('销售订单')
   await act(async () => button('销售订单')!.click()); await settle()
   expect(host.querySelector('output')?.textContent).toBe('/sale?keyword=old')
-  expect(useWorkspaceStore.getState().tabs).toEqual([HOME_TAB, existing, detail])
+  expect(useWorkspaceStore.getState().tabs).toEqual([HOME_TAB, workbench, existing, detail])
   expect(input.value).toBe('未保存的数量'); expect(input.isConnected).toBe(true)
 })

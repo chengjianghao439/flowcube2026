@@ -1,0 +1,17 @@
+{
+  "id": 1,
+  "items": [
+    {
+      "id": 1,
+      "pickedQty": 0,
+      "productId": 1,
+      "requiredQty": 1.25
+    }
+  ],
+  "saleOrderId": 5,
+  "status": 2,
+  "statusName": "拣货中",
+  "taskNo": "WT20261008001",
+  "taskType": "sale_out",
+  "timeOrigin": 1791420883466.6
+}

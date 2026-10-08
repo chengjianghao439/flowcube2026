@@ -28,13 +28,13 @@ export default function PdaCard({
   onClick,
   padding = 'md',
 }: PdaCardProps) {
-  const base = 'rounded-2xl border transition-all'
+  const base = 'rounded-2xl border transition-all motion-reduce:transition-none'
   const state = active
     ? 'border-primary bg-primary/5'
     : done
-      ? 'border-green-200 bg-green-50/40'
+      ? 'border-success/30 bg-success/5'
       : 'border-border bg-card'
-  const interact = onClick ? 'cursor-pointer active:scale-[0.98] hover:shadow-sm' : ''
+  const interact = onClick ? 'cursor-pointer motion-safe:active:scale-[0.98] hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring' : ''
 
   const Tag = onClick ? 'button' : 'div'
 

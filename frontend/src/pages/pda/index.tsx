@@ -34,12 +34,12 @@ import { splitEndpoint } from '@/lib/pdaSplitRecovery'
 type OpTone = 'blue' | 'green' | 'orange' | 'purple' | 'teal' | 'red' | 'indigo' | 'cyan'
 
 const TONE_STYLES: Record<OpTone, { iconBg: string; iconColor: string }> = {
-  blue:   { iconBg: 'bg-blue-50',   iconColor: 'text-blue-600' },
-  green:  { iconBg: 'bg-green-50',  iconColor: 'text-green-600' },
-  orange: { iconBg: 'bg-orange-50', iconColor: 'text-orange-600' },
+  blue:   { iconBg: 'bg-info/10',   iconColor: 'text-info-ink' },
+  green:  { iconBg: 'bg-success/10',  iconColor: 'text-success-ink' },
+  orange: { iconBg: 'bg-warning/10', iconColor: 'text-warning-ink' },
   purple: { iconBg: 'bg-purple-50', iconColor: 'text-purple-600' },
   teal:   { iconBg: 'bg-teal-50',   iconColor: 'text-teal-600' },
-  red:    { iconBg: 'bg-red-50',    iconColor: 'text-red-600' },
+  red:    { iconBg: 'bg-destructive/10',    iconColor: 'text-destructive-ink' },
   indigo: { iconBg: 'bg-indigo-50', iconColor: 'text-indigo-600' },
   cyan:   { iconBg: 'bg-cyan-50',   iconColor: 'text-cyan-600' },
 }
@@ -138,7 +138,7 @@ export default function PdaWorkbench() {
             <button
               type="button"
               onClick={() => window.dispatchEvent(new Event('pda:check-update'))}
-              className="min-h-11 rounded-full border border-border px-3 py-1 text-[11px] font-medium text-muted-foreground active:scale-95"
+              className="min-h-11 rounded-full border border-border px-3 py-1 text-[11px] font-medium text-muted-foreground motion-safe:active:scale-95"
             >
               检查更新
             </button>
@@ -147,14 +147,14 @@ export default function PdaWorkbench() {
             <h1 className="text-xl font-semibold text-foreground">{greeting}，{visibleAccountIdentity(user ?? {}).name}</h1>
             <span className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${roleColor}`}>{roleLabel}</span>
           </div>
-          <p className="mt-0.5 text-sm text-slate-600">
+          <p className="mt-0.5 text-sm text-muted-foreground">
             {formatDisplayDateTime(new Date())}
           </p>
         </div>
       </div>
 
       <div className="max-w-md mx-auto px-4 py-4">
-        {hasSplitRecovery && <button type="button" className="mb-4 w-full rounded-xl border border-amber-300 bg-amber-50 p-3 text-left text-sm text-amber-900" onClick={() => navigate('/pda/split-recovery')}>拆分结果待确认 · 核对本人原请求</button>}
+        {hasSplitRecovery && <button type="button" className="mb-4 w-full rounded-xl border border-warning/30 bg-warning/10 p-3 text-left text-sm text-warning-ink" onClick={() => navigate('/pda/split-recovery')}>拆分结果待确认 · 核对本人原请求</button>}
         {/* 设备绑定状态。设备会话是硬性要求，未绑定的机器点任何作业都会被拒，
             所以这块必须显眼且常驻——否则员工只会看到一堆点不动的按钮，
             却找不到「哪里能绑定」。 */}
@@ -162,9 +162,9 @@ export default function PdaWorkbench() {
           <button
             type="button"
             onClick={() => navigate('/pda/bind')}
-            className="mb-4 w-full rounded-2xl border-2 border-destructive/40 bg-destructive/5 p-4 text-left active:scale-95 transition-all"
+            className="mb-4 w-full rounded-2xl border-2 border-destructive/40 bg-destructive/5 p-4 text-left motion-safe:active:scale-95 transition-all motion-reduce:transition-none"
           >
-            <div className="flex items-center gap-2 text-base font-semibold text-destructive">
+            <div className="flex items-center gap-2 text-base font-semibold text-destructive-ink">
               <Smartphone className="h-5 w-5" />本机尚未绑定设备
             </div>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -175,9 +175,9 @@ export default function PdaWorkbench() {
           <button
             type="button"
             onClick={() => navigate('/pda/bind')}
-            className="mb-4 w-full rounded-2xl border border-amber-500/40 bg-amber-500/5 p-3 text-left active:scale-95 transition-all"
+            className="mb-4 w-full rounded-2xl border border-warning/30 bg-warning/5 p-3 text-left motion-safe:active:scale-95 transition-all motion-reduce:transition-none"
           >
-            <p className="text-sm font-medium text-amber-600">设备授权将过期，请重新登录</p>
+            <p className="text-sm font-medium text-warning-ink">设备授权将过期，请重新登录</p>
             <p className="mt-0.5 text-xs text-muted-foreground">重新登录即可自动恢复；若仍未恢复，点击此处检查绑定状态。</p>
           </button>
         ) : null}
@@ -187,7 +187,7 @@ export default function PdaWorkbench() {
           <div className="mb-4 rounded-2xl border border-border bg-card p-3">
             <div className="mb-2 flex items-center justify-between">
               <p className="text-xs font-semibold text-foreground">待办任务</p>
-              <span className="text-xs font-semibold text-destructive tabular-nums">{totalTodo} 项</span>
+              <span className="text-xs font-semibold text-destructive-ink tabular-nums">{totalTodo} 项</span>
             </div>
             <div className="flex gap-2 overflow-x-auto pb-0.5">
               {todoItems.map(({ op, count }) => (
@@ -195,10 +195,10 @@ export default function PdaWorkbench() {
                   key={op.path}
                   type="button"
                   onClick={() => navigate(op.path)}
-                  className="flex shrink-0 items-center gap-1.5 rounded-full border border-border bg-muted/40 px-3 py-1.5 text-xs text-foreground active:scale-95 transition-all"
+                  className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border border-border bg-muted/40 px-3 py-1.5 text-xs text-foreground motion-safe:active:scale-95 transition-all motion-reduce:transition-none"
                 >
                   <span className="font-medium">{op.label}</span>
-                  <span className="font-bold text-destructive tabular-nums">{count > 99 ? '99+' : count}</span>
+                  <span className="font-bold text-destructive-ink tabular-nums">{count > 99 ? '99+' : count}</span>
                 </button>
               ))}
             </div>
@@ -206,10 +206,10 @@ export default function PdaWorkbench() {
         )}
 
         <div>
-          <p className="text-xs text-slate-600 mb-3">{roleLabel} 可用作业（{allowedOps.length} 项）</p>
+          <p className="text-xs text-muted-foreground mb-3">{roleLabel} 可用作业（{allowedOps.length} 项）</p>
           {!deviceBound ? (
             <PdaEmptyCard
-              icon={<Smartphone className="h-12 w-12 text-amber-500" />}
+              icon={<Smartphone className="h-12 w-12 text-warning-ink" />}
               title="当前 PDA 未绑定设备"
               description="系统已切换为受限模式。未绑定的机器无法执行任何作业，请先到「设备绑定」页面扫码绑定管理员生成的绑定码。"
               actionText="去绑定设备"
@@ -217,7 +217,7 @@ export default function PdaWorkbench() {
             />
           ) : permissionsMissing ? (
             <PdaEmptyCard
-              icon={<ShieldAlert className="h-12 w-12 text-amber-500" />}
+              icon={<ShieldAlert className="h-12 w-12 text-warning-ink" />}
               title="权限未加载，PDA 已切换至受限模式"
               description="未获取到权限信息，PDA 部分功能不可用。请重新登录；若仍异常，请联系管理员。"
               actionText="重新登录"
@@ -231,21 +231,21 @@ export default function PdaWorkbench() {
             />
           ) : allowedOps.length === 0 ? (
             <PdaEmptyCard
-              icon={<Ban className="h-12 w-12 text-red-500" />}
+              icon={<Ban className="h-12 w-12 text-destructive-ink" />}
               title="当前账号没有可用 PDA 作业权限"
               description="当前账号没有收货、拣货、分拣、复核、打包、出库等操作权限。请联系管理员分配权限。"
             />
           ) : (
             <>
               {/* 常用：大图标卡片直点 */}
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 gap-3 min-[360px]:grid-cols-3">
                 {commonOps.map(op => {
                   const Icon = op.icon
                   const tone = TONE_STYLES[op.tone]
                   const count = OP_TODO_KEY[op.path] ? todoCounts?.[OP_TODO_KEY[op.path] as keyof PdaTodoCounts] ?? 0 : 0
                   return (
                     <button key={op.path} onClick={() => navigate(op.path)}
-                      className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-border bg-card p-4 active:scale-95 transition-all">
+                      className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-border bg-card p-4 motion-safe:active:scale-95 transition-all motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                       <span className={`relative flex h-12 w-12 items-center justify-center rounded-xl ${tone.iconBg}`}>
                         <Icon className={`h-6 w-6 ${tone.iconColor}`} />
                         {count > 0 && (
@@ -266,21 +266,21 @@ export default function PdaWorkbench() {
                   <button
                     type="button"
                     onClick={() => setMoreOpen(v => !v)}
-                    className="flex w-full items-center justify-center gap-1 rounded-xl border border-border bg-card px-3 py-2.5 text-sm text-muted-foreground active:scale-95 transition-all"
+                    className="flex min-h-11 w-full items-center justify-center gap-1 rounded-xl border border-border bg-card px-3 py-2.5 text-sm text-muted-foreground motion-safe:active:scale-95 transition-all motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <MoreHorizontal className="h-4 w-4" />
                     更多功能
-                    <ChevronDown className={`h-4 w-4 transition-transform ${moreOpen ? 'rotate-180' : ''}`} />
+                    <ChevronDown className={`h-4 w-4 transition-transform motion-reduce:transition-none ${moreOpen ? 'rotate-180' : ''}`} />
                   </button>
                   {moreOpen && (
-                    <div className="mt-2 grid grid-cols-3 gap-3">
+                    <div className="mt-2 grid grid-cols-2 gap-3 min-[360px]:grid-cols-3">
                       {moreOps.map(op => {
                         const Icon = op.icon
                         const tone = TONE_STYLES[op.tone]
                         const count = OP_TODO_KEY[op.path] ? todoCounts?.[OP_TODO_KEY[op.path] as keyof PdaTodoCounts] ?? 0 : 0
                         return (
                           <button key={op.path} onClick={() => navigate(op.path)}
-                            className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-border bg-card p-4 active:scale-95 transition-all">
+                            className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-border bg-card p-4 motion-safe:active:scale-95 transition-all motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                             <span className={`relative flex h-12 w-12 items-center justify-center rounded-xl ${tone.iconBg}`}>
                               <Icon className={`h-6 w-6 ${tone.iconColor}`} />
                               {count > 0 && (
@@ -304,7 +304,7 @@ export default function PdaWorkbench() {
             <button
               type="button"
               onClick={() => navigate('/pda/bind')}
-              className="mt-4 flex w-full items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-2.5 text-left text-sm text-muted-foreground active:scale-95 transition-all"
+              className="mt-4 flex min-h-11 w-full items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-2.5 text-left text-sm text-muted-foreground motion-safe:active:scale-95 transition-all motion-reduce:transition-none"
             >
               <Smartphone className="h-4 w-4" />
               设备绑定：{deviceCode}

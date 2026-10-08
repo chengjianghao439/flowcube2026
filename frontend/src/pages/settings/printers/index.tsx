@@ -105,7 +105,7 @@ function BindDialog({ printer, bindings, onToggleBind, busy, onClose }: BindDial
                 <div className="font-medium">{t.label}</div>
                 <div className="mt-0.5 text-helper leading-snug">{t.desc}</div>
                 {currentCode && !isBound && (
-                  <div className="mt-1 text-xs text-warning">当前已绑：{currentCode}</div>
+                  <div className="mt-1 text-xs text-warning-ink">当前已绑：{currentCode}</div>
                 )}
                 {isBound && <div className="mt-1 text-xs font-medium text-primary">✓ 已绑定本机 · 再点解除</div>}
               </button>
@@ -456,7 +456,7 @@ export default function PrintersPage() {
           </DialogHeader>
           <div className="space-y-4">
             {listLoading && <p className="text-muted-body">正在加载本机打印机…</p>}
-            {listError && <p className="text-sm text-destructive">{listError}</p>}
+            {listError && <p className="text-sm text-destructive-ink">{listError}</p>}
             {!listLoading && !listError && systemList.length > 0 && (
               <>
                 <div>

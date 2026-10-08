@@ -5,7 +5,7 @@ import type { AxiosRequestConfig } from 'axios'
 export interface SettingItem { key_name: string; value: string | null; label: string; type: string; remark: string | null }
 export interface SettingsData { list: SettingItem[]; map: Record<string, { value: string | null; label: string; type: string }> }
 
-export const getSettingsApi = () => client.get<SettingsData>('/settings')
+export const getSettingsApi = (config?: AxiosRequestConfig) => config === undefined ? client.get<SettingsData>('/settings') : client.get<SettingsData>('/settings', config)
 export const updateSettingsApi = (data: Record<string, string>) => client.put<null>('/settings', data)
 export const getRolesApi = () => client.get<{ id: number; code: string; name: string; remark: string; is_system: number }[]>('/roles')
 export const createRoleApi = (d: { code: string; name: string; remark?: string }) => client.post<{ id: number }>('/roles', d)

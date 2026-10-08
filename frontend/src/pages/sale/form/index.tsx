@@ -100,7 +100,7 @@ export default function SaleFormPage() {
   if (pathname === '/sale/new-kit') return <NewCommercialSale tabPath={tabPath} onDone={closeTab} sourceId={typeof reorder === 'number' ? reorder : undefined} />
 
   if (isNew && typeof handlingId === 'number') return <HandlingCreateView sourceId={handlingId} tabPath={tabPath} closeTab={closeTab} />
-  if (isNew) return typeof reorder === 'number' ? <RepeatCreateView sourceId={reorder} closeTab={closeTab} tabPath={tabPath} /> : <CreateView closeTab={closeTab} tabPath={tabPath} />
+  if (isNew) return <NewCommercialSale tabPath={tabPath} onDone={id => { closeTab(); if (id) navigate(`/sale/${id}`) }} sourceId={typeof reorder === 'number' ? reorder : undefined} sourceModel="ordinary" ordinaryOnlySave />
 
   // ─── ② 查看模式 ─────────────────────────────────────────────────────────────
 
@@ -145,11 +145,6 @@ function SaleModelGate({ saleId, tabPath, closeTab }: { saleId: number; tabPath:
 // 新建视图
 // ════════════════════════════════════════════════════════════════════════════
 
-function RepeatCreateView({ sourceId, closeTab, tabPath }: { sourceId: number; closeTab: () => void; tabPath: string }) {
-  const source = useSaleReorderSource(sourceId, 'ordinary')
-  const write = useRepeatSaleCreate(sourceId, 'ordinary', source.owner, buildWorkspaceTabRegistrationFromPath(tabPath).key)
-  return <CreateView closeTab={closeTab} tabPath={tabPath} reorder={{ source, write }} />
-}
 interface HandlingCreateProps { source: ReturnType<typeof useDisposalHandlingSource>; write: ReturnType<typeof useDisposalHandlingOperation>; operationUuid: string; requestKey: string }
 function HandlingCreateView({ sourceId, tabPath, closeTab }: { sourceId: number; tabPath: string; closeTab: () => void }) {
   const source = useDisposalHandlingSource(sourceId, 1), [operationUuid] = useState(() => crypto.randomUUID()), [requestKey] = useState(() => createRequestKey('handling-sale'))
@@ -506,7 +501,7 @@ function AdjustView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<
       />
 
       <div className="flex gap-2 rounded-lg border border-warning/25 bg-warning/[0.06] px-4 py-3 text-sm leading-6 text-foreground">
-        <AlertTriangle className="mt-1 h-4 w-4 shrink-0 text-warning" />
+        <AlertTriangle className="mt-1 h-4 w-4 shrink-0 text-warning-ink" />
         <span>改单仅修改商品明细：订单客户、出库仓库与收货信息保持不变。增加数量将触发重新拣货；减少数量若涉及已拣或已打包的商品，需经仓库扫码确认放回库位 / 拆箱后方可生效。</span>
       </div>
 
@@ -644,7 +639,7 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
 
   return (
     <div className="flex flex-col gap-2.5">
-      {handoff === 'invalid' && <p role="alert" className="text-sm text-destructive">交接参数无效，请从原事项重新打开；当前只显示本单信息。</p>}
+      {handoff === 'invalid' && <p role="alert" className="text-sm text-destructive-ink">交接参数无效，请从原事项重新打开；当前只显示本单信息。</p>}
       <ActionBar
         title={order.orderNo}
         subtitle={
@@ -655,7 +650,7 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
             <ReturnSourceButton kind="sale" sourceId={order.id} sourceNo={order.orderNo} />
             <ReorderSourceButton sourceId={order.id} model="ordinary" disabled={isFetching || isError || isPaused} />
             {order.status === 5 && (
-              <Button variant="outline" className="text-destructive border-destructive/30 hover:bg-destructive/5" disabled={isPending}
+              <Button variant="outline" className="text-destructive-ink border-destructive/30 hover:bg-destructive/5" disabled={isPending}
                 onClick={() => setConfirmState({
                   open: true, title: '确认删除订单', description: '删除后订单将无法恢复。', variant: 'destructive', confirmText: '确认删除',
                   onConfirm: () => {
@@ -667,7 +662,7 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
               </Button>
             )}
             {(order.status === 1 || order.status === 2 || order.status === 3 || order.status === 6) && (
-              <Button variant="outline" className="text-destructive border-destructive/30 hover:bg-destructive/5" disabled={isPending}
+              <Button variant="outline" className="text-destructive-ink border-destructive/30 hover:bg-destructive/5" disabled={isPending}
                 onClick={() => setConfirmState({
                   open: true, title: '取消订单',
                   description: order.status === 3
@@ -724,7 +719,7 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
 
       {order.warehouseTaskAdjustmentRequestedAt && (
         <div className="flex items-center gap-2 rounded-lg border border-warning/25 bg-warning/[0.06] px-4 py-3 text-sm text-foreground">
-          <Clock className="h-4 w-4 shrink-0 text-warning" />
+          <Clock className="h-4 w-4 shrink-0 text-warning-ink" />
           改单待仓库确认：有商品的归还/拆箱还未经 PDA 扫码确认，确认完成前该订单的拣货/分拣/复核/打包/出库都会被阻止，也暂时不能再次修改订单。
         </div>
       )}
@@ -815,7 +810,7 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
                   render: (v: unknown, item: SaleOrderItem) => {
                     const shipped = Number(v ?? 0)
                     const done = shipped >= item.quantity
-                    return <span className={cn('tabular-nums', done ? 'text-success' : shipped > 0 ? 'text-primary' : 'text-muted-foreground')}>{shipped}/{item.quantity}</span>
+                    return <span className={cn('tabular-nums', done ? 'text-success-ink' : shipped > 0 ? 'text-primary' : 'text-muted-foreground')}>{shipped}/{item.quantity}</span>
                   },
                 }] : []),
                 {
@@ -828,7 +823,7 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
                           : <>{money(Number(v))}</>}
                       </div>
                       {item.belowCost && item.costPrice != null && (
-                        <div className="inline-flex items-center gap-1 text-[11px] text-destructive">
+                        <div className="inline-flex items-center gap-1 text-[11px] text-destructive-ink">
                           <AlertTriangle className="h-3 w-3" />
                           低于进价 {money(Number(item.costPrice))}
                         </div>
@@ -936,7 +931,7 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
                       <p className="text-xs text-muted-foreground">箱子总数</p>
                     </div>
                     <div className="px-4 text-center">
-                      <p className="text-2xl font-semibold tabular-nums text-success">{done}</p>
+                      <p className="text-2xl font-semibold tabular-nums text-success-ink">{done}</p>
                       <p className="text-xs text-muted-foreground">已完成</p>
                     </div>
                     <div className="px-4 text-center">

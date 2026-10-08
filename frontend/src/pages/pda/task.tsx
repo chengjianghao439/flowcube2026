@@ -1,3 +1,4 @@
+import { qty as formatQty } from '@/lib/format'
 import PdaProductIdentity from '@/components/pda/PdaProductIdentity'
 /**
  * PDA 扫码执行页 — 商品视角拣货
@@ -20,7 +21,7 @@ import PdaCard from '@/components/pda/PdaCard'
 import PdaBottomBar from '@/components/pda/PdaBottomBar'
 import PdaScanner from '@/components/pda/PdaScanner'
 import PdaFlash from '@/components/pda/PdaFlash'
-import { PdaLoading } from '@/components/pda/PdaEmptyState'
+import { PdaLoading, PdaQueryError } from '@/components/pda/PdaEmptyState'
 import { useOfflineScan } from '@/hooks/useOfflineScan'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
@@ -52,20 +53,20 @@ function SuggestionRow({ c, onTap, disabled }: {
   const kindLabel = c.containerKind === 'plastic_box' ? '塑料盒' : '库存'
   return (
     <button onClick={onTap} disabled={disabled||c.locked}
-      className={`mt-1.5 flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left text-sm transition-all active:scale-95
+      className={`mt-1.5 flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left text-sm transition-all motion-reduce:transition-none motion-safe:active:scale-95
         ${c.locked ? 'border-border bg-muted opacity-50' : 'border-primary/20 bg-primary/5 hover:bg-primary/10'}`}
     >
       <div>
         <p className="font-medium text-foreground"><MapPin className="mr-1 inline h-3.5 w-3.5 text-muted-foreground" />{c.locationCode||'无库位'}</p>
         <div className="mt-0.5 flex items-center gap-2">
           <p className="font-mono text-xs text-muted-foreground">{c.barcode}</p>
-          <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${c.containerKind === 'plastic_box' ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-700'}`}>{kindLabel}</span>
-          {c.expDate && <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">效期 {String(c.expDate).slice(0, 10)}</span>}
+          <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${c.containerKind === 'plastic_box' ? 'bg-warning/10 text-warning-ink' : 'bg-muted text-muted-foreground'}`}>{kindLabel}</span>
+          {c.expDate && <span className="rounded-full bg-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-warning-ink">效期 {String(c.expDate).slice(0, 10)}</span>}
         </div>
       </div>
       <div className="text-right">
         <p className="text-sm font-bold text-primary">{c.remainingQty}</p>
-        {c.locked && <p className="text-xs text-yellow-600">锁定</p>}
+        {c.locked && <p className="text-xs text-warning-ink">锁定</p>}
       </div>
     </button>
   )
@@ -98,15 +99,15 @@ function ProductCard({ item, onScan, scanning }: {
         </div>
         <div>
           <div className="flex justify-between text-xs text-muted-foreground mb-1">
-            <span>已拣 {item.pickedQty.toFixed(0)}</span><span>共需 {item.requiredQty.toFixed(0)}</span>
+            <span>已拣 {formatQty(item.pickedQty)}</span><span>共需 {formatQty(item.requiredQty)}</span>
           </div>
           <div className="h-1.5 rounded-full bg-muted">
-            <div className="h-1.5 rounded-full transition-all"
+            <div className="h-1.5 rounded-full transition-all motion-reduce:transition-none"
               style={{width:`${pct}%`,background:done?'hsl(var(--success))':'hsl(var(--primary))'}} />
           </div>
         </div>
         {!done && (
-          <button onClick={()=>setOpen(o=>!o)} className="text-xs text-muted-foreground hover:text-foreground">{open?'▲ 收起推荐':'▼ 查看推荐库位'}</button>
+          <button onClick={()=>setOpen(o=>!o)} className="min-h-11 rounded-md px-2 text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{open?'▲ 收起推荐':'▼ 查看推荐库位'}</button>
         )}
         {open && !done && (
           item.suggestions.length===0
@@ -232,13 +233,13 @@ export default function PdaTaskPage() {
             : null
 
   // ── Queries ───────────────────────────────────────────────────────────
-  const { data: task, isLoading, isError: taskError } = useQuery({
+  const { data: task, isLoading, isError: taskError, refetch: refetchTask } = useQuery({
     queryKey: ['pda-task', taskId],
     queryFn:  () => getTaskByIdApi(taskId),
     enabled:  taskId > 0, refetchOnWindowFocus: false,
   })
 
-  const { data: sugData, refetch: refetchSug } = useQuery({
+  const { data: sugData, isError: suggestionError, refetch: refetchSug } = useQuery({
     queryKey: ['pda-suggestions', taskId],
     queryFn:  () => getPickSuggestionsApi(taskId),
     enabled:  taskId > 0 && task?.status === 2,
@@ -351,7 +352,7 @@ export default function PdaTaskPage() {
 
   if (finished === taskId) return (
     <PdaDoneView
-      icon={<CircleCheck className="h-20 w-20 text-green-600" />}
+      icon={<CircleCheck className="h-20 w-20 text-success-ink" />}
       title="拣货完成！"
       description={`任务 ${task?.taskNo ?? `#${taskId}`} 已进入「待分拣」`}
       actionText="返回任务列表"
@@ -409,11 +410,12 @@ export default function PdaTaskPage() {
             }}
           />
           {isLoading && <PdaLoading className="h-32" />}
-          {items.map(item => (
+          {(taskError || suggestionError) && <PdaQueryError onRetry={() => { void refetchTask(); void refetchSug() }} />}
+          {!taskError && !suggestionError && items.map(item => (
             <ProductCard key={item.id} item={item} scanning={scanning}
               onScan={(b) => handleScan(b)} />
           ))}
-          {!isLoading && items.length===0 && task?.status!==2 && (
+          {!isLoading && !taskError && !suggestionError && items.length===0 && task?.status!==2 && (
             <div className="py-10 text-center"><p className="text-muted-foreground text-sm">任务状态：{task?.statusName??'…'}</p></div>
           )}
         </div>
@@ -427,7 +429,7 @@ export default function PdaTaskPage() {
         <PdaScanner
           onScan={handleScan}
           placeholder="扫描库存条码"
-          disabled={scanning || finished === taskId || pickAction.submitBlocked || readyAction.submitBlocked}
+          disabled={isLoading || taskError || suggestionError || scanning || finished === taskId || pickAction.submitBlocked || readyAction.submitBlocked}
           onDuplicate={() => err('重复扫码，请稍候')}
         />
       </PdaBottomBar>

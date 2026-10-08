@@ -359,7 +359,7 @@ function FormView({ tabPath, tabKey }: { tabPath: string; tabKey: string }) {
       />
 
       {createdReturn && <div role="status" className="rounded-md border p-3 space-y-2"><p>退货单 {createdReturn.returnNo} 已创建，可查看单据。</p><Button variant="outline" disabled={!ownerCurrent} onClick={() => openCreatedReturn(createdReturn)}>查看已创建退货单</Button></div>}
-      {(sourceError || write.error || !ownerCurrent) && <p role="alert" className="text-sm text-destructive">{sourceError || write.error || '登录或服务器已变化，草稿保留'}</p>}
+      {(sourceError || write.error || !ownerCurrent) && <p role="alert" className="text-sm text-destructive-ink">{sourceError || write.error || '登录或服务器已变化，草稿保留'}</p>}
       {write.pending && <div className="rounded-md border p-3 space-y-2"><p>原创建结果待确认。刷新只保留查询身份，不会重新提交。</p><Button disabled={write.busy} onClick={() => void write.queryOriginal().then(answer => { if (answer?.queryOnly) toast.success(`原退货单 ${answer.data.returnNo} 结果已核实，当前草稿未修改，请自行打开原单`); else if (answer && write.canApply(answer)) created(answer.data) })}>查询原创建结果</Button><Button disabled={write.busy || !write.canRetry} onClick={() => void write.retry().then(answer => { if (answer && write.canApply(answer)) created(answer.data) })}>按原创建请求重试</Button></div>}
       {write.conflict && <div className="space-y-2 rounded-md border p-3"><p>原成交版本已变化，先备份当前草稿，再重读来源；不会自动合并。</p><Button onClick={() => void backup.copy(snapshot)}>复制草稿内容</Button><Button disabled={!backup.copied} onClick={() => { if (backup.canReload()) { clearSourceBinding(); backup.invalidate() } }}>备份后清除来源</Button>{backup.text && <><textarea aria-label="退货草稿备份" readOnly value={backup.text} /><Button onClick={() => backup.acknowledge(backup.text)}>已备份草稿</Button></>}</div>}
       <fieldset disabled={locked || submitting} className="contents">
@@ -374,7 +374,7 @@ function FormView({ tabPath, tabKey }: { tabPath: string; tabKey: string }) {
               onDoubleClick={() => { setCustomerFinderOpen(false); navigate('/customers') }}
               className={cn(customerError && 'border-destructive/60 bg-destructive/5', !!boundSource && 'pointer-events-none opacity-60')}
             />
-            {customerError && <p className="text-xs text-destructive">请选择客户</p>}
+            {customerError && <p className="text-xs text-destructive-ink">请选择客户</p>}
           </div>
           <div className="space-y-1.5">
             <Label>退货仓库 *</Label>
@@ -385,7 +385,7 @@ function FormView({ tabPath, tabKey }: { tabPath: string; tabKey: string }) {
               disabled={!!boundSource}
               className={cn(warehouseError && 'border-destructive/60 bg-destructive/5')}
             />
-            {warehouseError && <p className="text-xs text-destructive">请选择仓库</p>}
+            {warehouseError && <p className="text-xs text-destructive-ink">请选择仓库</p>}
           </div>
           <div className="space-y-1.5">
             <Label>关联原销售单号</Label>
@@ -507,7 +507,7 @@ function FormView({ tabPath, tabKey }: { tabPath: string; tabKey: string }) {
                       </td>
                       <td className="py-2.5 text-right font-medium tabular-nums">{isKit ? '保存后估算' : money(item.quantity * item.unitPrice)}</td>
                       <td className="py-2.5 text-center">
-                        <Button type="button" size="sm" variant="ghost" aria-label="删除退货商品行" disabled={!!boundSource && !isKit} className="h-8 w-9 p-0 text-muted-foreground hover:text-destructive" onClick={() => removeItem(item._key)}>✕</Button>
+                        <Button type="button" size="sm" variant="ghost" aria-label="删除退货商品行" disabled={!!boundSource && !isKit} className="h-8 w-9 p-0 text-muted-foreground hover:text-destructive-ink" onClick={() => removeItem(item._key)}>✕</Button>
                       </td>
                     </tr>
                     {(item.originalQty != null || item.returnedQty != null) && (
@@ -604,7 +604,7 @@ function TaskProgressCard({ task }: { task: SaleReturn['task'] }) {
         </div>
       )}
       {!!task.rejectedQty && (
-        <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive space-y-1">
+        <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive-ink space-y-1">
           <p className="font-medium">质检发现不合格 {task.rejectedQty} 件，已隔离为待报废库存（不计入可用库存）</p>
           {(task.rejectedContainers || []).map(c => (
             <p key={c.id} className="text-muted-foreground">
@@ -752,7 +752,7 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
         rightActions={
           <>
             {(ret.status === 1 || ret.status === 2) && (
-              <Button variant="outline" className="border-destructive/30 text-destructive hover:bg-destructive/5" disabled={pending || facts.blocked} onClick={() => setCancelOpen(true)}>
+              <Button variant="outline" className="border-destructive/30 text-destructive-ink hover:bg-destructive/5" disabled={pending || facts.blocked} onClick={() => setCancelOpen(true)}>
                 <X className="h-4 w-4 mr-1" />取消
               </Button>
             )}
@@ -763,7 +763,7 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
         }
       />
 
-      {facts.error && <p role="alert" className="text-sm text-destructive">{facts.error}</p>}
+      {facts.error && <p role="alert" className="text-sm text-destructive-ink">{facts.error}</p>}
       {facts.record && <div className="rounded-md border p-3 space-y-2"><p>原{facts.record.action === 'confirm' ? '确认' : '取消'}结果待核对。该操作没有可查询的原请求结果，刷新不会重新提交。</p><Button disabled={facts.busy} onClick={() => void facts.queryFacts()}>查询当前单据</Button>{facts.fact && <><p className="text-sm">{facts.fact.text}</p><Button variant="outline" disabled={!facts.fact.satisfied || facts.busy} onClick={() => void facts.acknowledge(async () => {
         const result = await detailQuery.refetch()
         // React Query can resolve refetch with an error and retain stale data.

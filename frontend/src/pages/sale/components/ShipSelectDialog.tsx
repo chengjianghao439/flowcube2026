@@ -1,5 +1,5 @@
 import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
 import { PackageCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -20,6 +20,8 @@ interface Props {
 type RowState = { checked: boolean; qty: number }
 
 export default function ShipSelectDialog({ open, onClose, order, loading, onConfirm }: Props) {
+  const submitting = useRef(false)
+  useEffect(() => { if (!loading) submitting.current = false }, [loading])
   // 数量框拒绝超过两位小数，商品策略已加载时同时限制整数；服务端独立校验
   const allowDecimalOf = useProductQtyPolicies((order.items ?? []).map(i => i.productId))
   const undispatched = useMemo(
@@ -29,7 +31,7 @@ export default function ShipSelectDialog({ open, onClose, order, loading, onConf
   const [rows, setRows] = useState<Record<number, RowState>>({})
 
   useEffect(() => {
-    if (!open) return
+    if (!open || submitting.current) return
     setRows(Object.fromEntries(undispatched.map(item => [item.id, {
       checked: true,
       qty: clampAllocationQty((item.reservedQty ?? 0) - (item.dispatchedQty ?? 0), item.reservedQty ?? 0),
@@ -44,14 +46,22 @@ export default function ShipSelectDialog({ open, onClose, order, loading, onConf
   const invalid = selected.filter(item => !isAllocationQtyValid(rows[item.id]?.qty ?? 0, limitFor(item.id)))
   const allSelected = undispatched.length > 0 && undispatched.every(item => rows[item.id]?.checked)
 
-  const setRow = (id: number, patch: Partial<RowState>) => setRows(prev => ({
-    ...prev,
-    [id]: { ...(prev[id] ?? { checked: false, qty: limitFor(id) }), ...patch },
-  }))
+  const setRow = (id: number, patch: Partial<RowState>) => {
+    if (submitting.current || loading) return
+    setRows(prev => ({ ...prev, [id]: { ...(prev[id] ?? { checked: false, qty: limitFor(id) }), ...patch } }))
+  }
+  function requestClose() {
+    if (!submitting.current && !loading) onClose()
+  }
+  function handleConfirm() {
+    if (submitting.current || loading || !selected.length || invalid.length > 0) return
+    submitting.current = true
+    onConfirm(selected.map(item => ({ id: item.id, qty: rows[item.id].qty })))
+  }
 
   return (
-    <Dialog open={open} onOpenChange={(next) => { if (!next) onClose() }}>
-      <DialogContent className="flex max-h-[86vh] w-[min(94vw,900px)] max-w-none flex-col overflow-hidden">
+    <Dialog open={open} onOpenChange={(next) => { if (!next) requestClose() }}>
+      <DialogContent aria-busy={loading} onEscapeKeyDown={e => { if (submitting.current || loading) e.preventDefault() }} className="flex max-h-[86vh] w-[min(94vw,900px)] max-w-none flex-col overflow-hidden">
         <DialogHeader><DialogTitle className="flex items-center gap-2"><PackageCheck className="h-5 w-5 text-primary" />发起出库</DialogTitle></DialogHeader>
         <DialogDescription>
           选择本次发货商品并填写数量。未发部分保留，可稍后继续发货。
@@ -61,7 +71,7 @@ export default function ShipSelectDialog({ open, onClose, order, loading, onConf
           <table className="w-full min-w-[1560px] text-sm">
             <thead className="sticky top-0 bg-muted text-xs text-muted-foreground">
               <tr>
-                <th className="w-10 px-3 py-2"><input type="checkbox" aria-label="选择全部可出库明细" checked={allSelected} onChange={e => setRows(Object.fromEntries(undispatched.map(item => [item.id, { checked: e.target.checked, qty: limitFor(item.id) }])))} /></th>
+                <th className="w-10 px-3 py-2"><input type="checkbox" aria-label="选择全部可出库明细" disabled={loading} checked={allSelected} onChange={e => { if (!submitting.current && !loading) setRows(Object.fromEntries(undispatched.map(item => [item.id, { checked: e.target.checked, qty: limitFor(item.id) }]))) }} /></th>
                 <ProductIdentityHeaders /><th className="min-w-20 px-3 py-3 text-left">单位</th>
                 <th className="w-40 px-3 py-2 text-left">发货仓库</th>
                 <th className="w-28 px-3 py-2 text-right">已占未发</th>
@@ -74,12 +84,12 @@ export default function ShipSelectDialog({ open, onClose, order, loading, onConf
                 const invalidQty = state.checked && !isAllocationQtyValid(state.qty, limitFor(item.id))
                 return (
                   <tr key={item.id} className="border-t align-top hover:bg-muted/20">
-                    <td className="px-3 py-3 text-center"><input type="checkbox" aria-label={`选择 ${item.productName}`} checked={state.checked} onChange={e => setRow(item.id, { checked: e.target.checked })} /></td>
+                    <td className="px-3 py-3 text-center"><input type="checkbox" aria-label={`选择 ${item.productName}`} disabled={loading} checked={state.checked} onChange={e => setRow(item.id, { checked: e.target.checked })} /></td>
                     <ProductIdentityCells product={item} /><td className="px-3 py-3">{item.unit || '—'}</td>
                     <td className="px-3 py-3">{item.warehouseName || order.warehouseName}</td>
                     <td className="px-3 py-3 text-right tabular-nums">{limitFor(item.id)} {item.unit}</td>
                     <td className="px-3 py-3">
-                      <Input quantity aria-label={`${item.productName}本次出库数量`} aria-invalid={invalidQty} type="number" min={0.01} step={qtyStep(allowDecimalOf(item.productId))} max={limitFor(item.id)} value={state.qty} disabled={!state.checked}
+                      <Input quantity aria-label={`${item.productName}本次出库数量`} aria-invalid={invalidQty} type="number" min={0.01} step={qtyStep(allowDecimalOf(item.productId))} max={limitFor(item.id)} value={state.qty} disabled={loading || !state.checked}
                         onChange={e => setRow(item.id, { qty: Number(e.target.value) })}
                         className={cn('h-9 text-right tabular-nums', invalidQty && 'border-destructive')} />
                     </td>
@@ -91,12 +101,12 @@ export default function ShipSelectDialog({ open, onClose, order, loading, onConf
           </table>
         </div>
         <DialogFooter className="sm:items-center sm:justify-between">
-          <span className={cn('mr-auto text-sm text-muted-foreground', invalid.length > 0 && 'text-destructive')}>
-            {invalid.length ? `${invalid.length} 项数量无效：须大于 0、不超过已占未发量，最多 4 位小数` : `已选择 ${selected.length} 项`}
+          <span className={cn('mr-auto text-sm text-muted-foreground', invalid.length > 0 && 'text-destructive-ink')}>
+            {invalid.length ? `${invalid.length} 项数量无效：须大于 0、不超过已占未发量，最多 2 位小数` : `已选择 ${selected.length} 项`}
           </span>
-          <Button variant="outline" onClick={onClose}>取消</Button>
+          <Button variant="outline" disabled={loading} onClick={requestClose}>取消</Button>
           <Button disabled={loading || !selected.length || invalid.length > 0}
-            onClick={() => onConfirm(selected.map(item => ({ id: item.id, qty: rows[item.id].qty })))}>
+            onClick={handleConfirm}>
             {loading ? '发起中…' : '确认发起出库'}
           </Button>
         </DialogFooter>

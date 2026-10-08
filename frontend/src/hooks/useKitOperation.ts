@@ -39,8 +39,15 @@ export function useKitOperation<P, R>(
     ) => Promise<R>
     validate: (data: R, query: KitQueryRecord) => boolean
     mayWrite?: (payload: P) => boolean
+    isCurrent?: () => boolean
   }
 ) {
+  const currentGuard = useRef(options.isCurrent)
+  currentGuard.current = options.isCurrent
+  function assertCurrent() {
+    if (currentGuard.current && !currentGuard.current())
+      throw new Error('页面读取归属已变化，原请求和草稿保持冻结，请核对原来源')
+  }
   const [originalView] = useState(() => ({ scope, ...owner }))
   const currentView = useRef({ scope, ...owner })
   currentView.current = { scope, ...owner }
@@ -79,6 +86,7 @@ export function useKitOperation<P, R>(
   }, [])
   function owns(query: KitQueryRecord, generation: number) {
     try {
+      assertCurrent()
       return (
         sameView() &&
         mounted.current &&
@@ -98,6 +106,7 @@ export function useKitOperation<P, R>(
   ): KitOperationConfirmation<P, R> | null {
     if (!options.validate(data, query))
       throw new Error('原操作结果无法核对归属，请继续查询')
+    assertCurrent()
     const body = mountedBody.current
     try {
       removeKitQuery(query)
@@ -134,6 +143,7 @@ export function useKitOperation<P, R>(
     assertKitReadOwner(body.owner)
     if (options.mayWrite && !options.mayWrite(body.payload))
       throw new Error('原操作权限已变化，草稿保留')
+    assertCurrent()
     const generation = body.owner.sessionGeneration
     try {
       const data = await options.execute(body.payload, query, body.owner)
@@ -198,6 +208,7 @@ export function useKitOperation<P, R>(
       assertKitReadOwner(owner)
       if (options.mayWrite && !options.mayWrite(payload))
         throw new Error('你没有本次操作权限，草稿保留')
+      assertCurrent()
       const query: KitQueryRecord = {
         version: 1,
         draftId: crypto.randomUUID(),
@@ -235,6 +246,7 @@ export function useKitOperation<P, R>(
     const query = queryRef.current
     if (!query) return null
     return guarded(async () => {
+      assertCurrent()
       const generation = useAuthStore.getState().sessionGeneration
       if (!owns(query, generation))
         throw new Error(
@@ -255,6 +267,7 @@ export function useKitOperation<P, R>(
           skipGlobalError: true
         }
       )
+      assertCurrent()
       if (!owns(query, generation)) return null
       if (result.status === 'success') {
         if (!receiptMatches(query, result))
@@ -305,6 +318,7 @@ export function useKitOperation<P, R>(
       mounted.current &&
       (() => {
         try {
+          assertCurrent()
           assertKitReadOwner(answer.owner)
           return queryRecordOwned(answer.query)
         } catch {

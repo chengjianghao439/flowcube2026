@@ -29,11 +29,13 @@ const body = { id: 80, remark: 'sensitive draft must stay in memory' }
 function Probe({
   scope = 'original',
   use = useKitOperation,
-  auth = useAuthStore
+  auth = useAuthStore,
+  isCurrent
 }: {
   scope?: string
   use?: typeof useKitOperation
   auth?: typeof useAuthStore
+  isCurrent?: () => boolean
 }) {
   hook = use<Body, Result>(
     {
@@ -42,7 +44,7 @@ function Probe({
       sessionGeneration: auth.getState().sessionGeneration
     },
     scope,
-    { execute: mocks.execute, validate: (data) => !!data && data.id === 80 }
+    { execute: mocks.execute, validate: (data) => !!data && data.id === 80, isCurrent }
   )
   return null
 }
@@ -54,10 +56,10 @@ beforeEach(() => {
   mocks.defaults.baseURL = '/a'
   useAuthStore.getState().login('fixture', null, user)
 })
-async function mounted(run: () => Promise<void>, scope = 'original') {
+async function mounted(run: () => Promise<void>, scope = 'original', isCurrent?: () => boolean) {
   const root = createRoot(document.createElement('div'))
   try {
-    await act(async () => root.render(<Probe scope={scope} />))
+    await act(async () => root.render(<Probe scope={scope} isCurrent={isCurrent} />))
     await run()
   } finally {
     act(() => root.unmount())
@@ -312,4 +314,169 @@ test('two drafts with same resource have independent keys and late A result cann
   } finally {
     act(() => root.unmount())
   }
+})
+
+test('optional live guard blocks a new submission before storing or executing it', async () => {
+  mocks.execute.mockResolvedValue({ id: 80 })
+  await mounted(async () => {
+    await act(async () => { await hook.submit(body, identity) })
+    expect(mocks.execute).not.toHaveBeenCalled()
+    expect(hook.pending).toBeNull()
+    expect(hook.pendingPayload).toBeUndefined()
+    expect(sessionStorage.getItem(KIT_QUERY_KEY)).toBeNull()
+    expect(hook.error).toContain('草稿')
+  }, 'original', () => false)
+})
+
+test('live guard loss after POST keeps exact original key and body through late ACK, then recovery retries only after querying', async () => {
+  let current = true, complete!: (value: Result) => void
+  mocks.execute.mockImplementationOnce(() => new Promise<Result>(resolve => { complete = resolve }))
+  await mounted(async () => {
+    let pending!: Promise<unknown>
+    const submitted = { ...body }
+    act(() => { pending = hook.submit(submitted, identity) })
+    const stored = sessionStorage.getItem(KIT_QUERY_KEY)!
+    const query = mocks.execute.mock.calls[0][1]
+    submitted.remark = 'employee changed caller object after original POST'
+    current = false
+    // Returning to the same endpoint cannot restore a page guard invalidated by the transition.
+    mocks.defaults.baseURL = '/b'; mocks.defaults.baseURL = '/a'
+    await act(async () => { complete({ id: 80 }); await pending })
+    expect(hook.pending?.requestKey).toBe(query.requestKey)
+    expect(hook.pendingPayload).toEqual(body)
+    expect(hook.blocked).toBe(true)
+    expect(sessionStorage.getItem(KIT_QUERY_KEY)).toBe(stored)
+    await act(async () => {
+      await hook.queryOriginal(); await hook.retry(); await hook.submit(submitted, identity)
+    })
+    expect(mocks.query).not.toHaveBeenCalled()
+    expect(mocks.execute).toHaveBeenCalledTimes(1)
+    expect(sessionStorage.getItem(KIT_QUERY_KEY)).toBe(stored)
+    current = true
+    mocks.query.mockResolvedValueOnce({ status: 'not_found', data: null })
+    mocks.execute.mockResolvedValueOnce({ id: 80 })
+    let answer: Awaited<ReturnType<Control['retry']>> = null
+    await act(async () => { answer = await hook.retry() })
+    expect(mocks.query).toHaveBeenCalledTimes(1)
+    expect(mocks.query.mock.calls[0].slice(0, 2)).toEqual([query.requestKey, identity.action])
+    expect(mocks.execute).toHaveBeenCalledTimes(2)
+    expect(mocks.execute.mock.calls[1][0]).toEqual(body)
+    expect(mocks.execute.mock.calls[1][1]).toEqual(query)
+    expect(mocks.query.mock.invocationCallOrder[0]).toBeLessThan(mocks.execute.mock.invocationCallOrder[1])
+    expect(answer).toMatchObject({ data: { id: 80 }, payload: body, queryOnly: false })
+    expect(hook.canApply(answer!)).toBe(true)
+    expect(hook.pending).toBeNull()
+  }, 'original', () => current)
+})
+
+test.each([400, 409])('late definitive %s rejection cannot clear the original identity while live guard is false', async status => {
+  let current = true, reject!: (value: unknown) => void
+  mocks.execute.mockImplementationOnce(() => new Promise<Result>((_resolve, fail) => { reject = fail }))
+  await mounted(async () => {
+    let pending!: Promise<unknown>
+    act(() => { pending = hook.submit(body, identity) })
+    const stored = sessionStorage.getItem(KIT_QUERY_KEY)!
+    const key = hook.pending?.requestKey
+    current = false
+    await act(async () => { reject({ status, message: 'late rejection' }); await pending })
+    expect(hook.pending?.requestKey).toBe(key)
+    expect(hook.pendingPayload).toEqual(body)
+    expect(sessionStorage.getItem(KIT_QUERY_KEY)).toBe(stored)
+    expect(mocks.execute).toHaveBeenCalledTimes(1)
+  }, 'original', () => current)
+})
+
+test('live guard loss while querying cannot clear a stored original identity or retry a missing result', async () => {
+  let current = true, complete!: (value: unknown) => void
+  await mounted(async () => {
+    await submitUnknown()
+    const stored = sessionStorage.getItem(KIT_QUERY_KEY)!
+    mocks.query.mockImplementationOnce(() => new Promise(resolve => { complete = resolve }))
+    let pending!: Promise<unknown>
+    act(() => { pending = hook.retry() })
+    current = false
+    await act(async () => {
+      complete({ status: 'success', resourceType: 'sale_order', resourceId: 80, data: { id: 80 } })
+      await pending
+    })
+    expect(hook.pending).toBeTruthy()
+    expect(hook.pendingPayload).toEqual(body)
+    expect(sessionStorage.getItem(KIT_QUERY_KEY)).toBe(stored)
+    expect(mocks.execute).toHaveBeenCalledTimes(1)
+  }, 'original', () => current)
+})
+
+test('restored query-only identity remains intact under a false live guard and never reconstructs a POST body', async () => {
+  await mounted(async () => { await submitUnknown() })
+  const stored = sessionStorage.getItem(KIT_QUERY_KEY)!
+  let current = false
+  await mounted(async () => {
+    expect(hook.pendingPayload).toBeUndefined()
+    expect(hook.canRetry).toBe(false)
+    await act(async () => { await hook.queryOriginal(); await hook.retry() })
+    expect(mocks.query).not.toHaveBeenCalled()
+    expect(mocks.execute).toHaveBeenCalledTimes(1)
+    expect(sessionStorage.getItem(KIT_QUERY_KEY)).toBe(stored)
+    current = true
+    mocks.query.mockResolvedValueOnce({ status: 'not_found', data: null })
+    await act(async () => { await hook.retry() })
+    expect(mocks.query).toHaveBeenCalledTimes(1)
+    expect(mocks.execute).toHaveBeenCalledTimes(1)
+    expect(sessionStorage.getItem(KIT_QUERY_KEY)).toBe(stored)
+    mocks.query.mockResolvedValueOnce({ status: 'success', resourceType: 'sale_order', resourceId: 80, data: { id: 80 } })
+    let answer: Awaited<ReturnType<Control['queryOriginal']>> = null
+    await act(async () => { answer = await hook.queryOriginal() })
+    expect(answer).toMatchObject({ queryOnly: true, data: { id: 80 } })
+    expect(hook.canApply(answer!)).toBe(false)
+    expect(mocks.execute).toHaveBeenCalledTimes(1)
+  }, 'original', () => current)
+})
+
+test('a completed answer stops applying immediately when its live page guard changes', async () => {
+  let current = true
+  mocks.execute.mockResolvedValueOnce({ id: 80 })
+  await mounted(async () => {
+    let answer: Awaited<ReturnType<Control['submit']>> = null
+    await act(async () => { answer = await hook.submit(body, identity) })
+    expect(hook.canApply(answer!)).toBe(true)
+    current = false
+    expect(hook.canApply(answer!)).toBe(false)
+  }, 'original', () => current)
+})
+
+test('an in-flight operation uses the latest guard callback after the mounted component rerenders', async () => {
+  let complete!: (value: Result) => void
+  mocks.execute.mockImplementationOnce(() => new Promise<Result>(resolve => { complete = resolve }))
+  const root = createRoot(document.createElement('div'))
+  try {
+    await act(async () => root.render(<Probe isCurrent={() => true} />))
+    let pending!: Promise<unknown>
+    act(() => { pending = hook.submit(body, identity) })
+    const stored = sessionStorage.getItem(KIT_QUERY_KEY)!
+    await act(async () => root.render(<Probe isCurrent={() => false} />))
+    await act(async () => { complete({ id: 80 }); await pending })
+    expect(hook.pending).toBeTruthy()
+    expect(hook.pendingPayload).toEqual(body)
+    expect(sessionStorage.getItem(KIT_QUERY_KEY)).toBe(stored)
+  } finally { act(() => root.unmount()) }
+})
+
+test('guard changes during query-identity persistence prevent execute from sending a new POST', async () => {
+  let current = true
+  mocks.execute.mockResolvedValue({ id: 80 })
+  await mounted(async () => {
+    const original = Storage.prototype.setItem
+    const spy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (this: Storage, key, value) {
+      original.call(this, key, value)
+      if (key === KIT_QUERY_KEY && JSON.parse(value).records.length) current = false
+    })
+    try {
+      await act(async () => { await hook.submit(body, identity) })
+      expect(mocks.execute).not.toHaveBeenCalled()
+      expect(hook.pending).toBeTruthy()
+      expect(hook.pendingPayload).toEqual(body)
+      expect(sessionStorage.getItem(KIT_QUERY_KEY)).toContain(hook.pending!.requestKey)
+      expect(hook.error).toContain('草稿')
+    } finally { spy.mockRestore() }
+  }, 'original', () => current)
 })

@@ -1,0 +1,181 @@
+{
+  "scope": "真实DataTable组件选择列夹具，不代表四个业务页面验收",
+  "session": "flowcube-impeccable-b",
+  "initialAttempt": {
+    "url": "http://127.0.0.1:5186/@fs/Users/chengjianghao/.codex/worktrees/impeccable-system-audit/flowcube/scripts/design-audit/fluid-preview.html",
+    "viewport": [
+      768,
+      768
+    ],
+    "result": "403 Restricted",
+    "cause": "请求文件在Vite允许服务的frontend目录之外",
+    "componentRendered": false,
+    "screenshot": "screens/after/b-fluid-selection-403.png",
+    "manuallyViewed": true,
+    "layoutOrSelectionPassed": false,
+    "cleanup": {
+      "namedClose": true,
+      "globalSessionListAfterExit": [
+        "flowcube-impeccable-root"
+      ],
+      "ownSessionAbsent": true
+    }
+  },
+  "secondAttempt": {
+    "url": "http://127.0.0.1:5186/.design-audit-fluid.html",
+    "viewport": [
+      768,
+      768
+    ],
+    "result": "夹具标题已显示，DataTable未挂载",
+    "cause": "直接导入预编译react-dom_client.js不提供named export createRoot",
+    "componentRendered": false,
+    "screenshot": "screens/after/b-fluid-selection-initial-768.png",
+    "manuallyViewed": true,
+    "layoutOrSelectionPassed": false,
+    "cleanup": {
+      "namedClose": true,
+      "globalSessionListAfterExit": [
+        "flowcube-impeccable-root"
+      ],
+      "ownSessionAbsent": true
+    }
+  },
+  "componentChecks": [
+    {
+      "state": "initial-768",
+      "screenshot": "screens/after/b-fluid-selection-final-initial-768.png",
+      "manuallyViewed": true,
+      "acceptance": [
+        "final component after normal reload, no column DOM overwrite",
+        "min/table 696px",
+        "selection 56px and business 384/127.984375/128.015625",
+        "document width 768px"
+      ]
+    },
+    {
+      "state": "selected-hover-768",
+      "screenshot": "screens/after/b-fluid-selection-final-hover-768.png",
+      "manuallyViewed": true,
+      "acceptance": [
+        "normal row checkbox check updates row and all-row checkboxes",
+        "hover opaque rgb(241,245,249), no text underneath showing"
+      ]
+    },
+    {
+      "state": "selected-left-320",
+      "screenshot": "screens/after/b-fluid-selection-final-left-320.png",
+      "manuallyViewed": true,
+      "acceptance": [
+        "document width 320px",
+        "scroll container 286px, table 696px",
+        "sticky action right edge 303px",
+        "identity remains complete DOM text and can be read by horizontal scroll, not all columns visible in one frame"
+      ]
+    },
+    {
+      "state": "selected-dom-scroll-right-320",
+      "screenshot": "screens/after/b-fluid-selection-final-dom-right-320.png",
+      "manuallyViewed": true,
+      "acceptance": [
+        "actual DOM scrollLeft 410px inside table container",
+        "sticky right edge remains 303px",
+        "selection remains true",
+        "quantity and action can be read; opaque hover hides underlying identity"
+      ]
+    },
+    {
+      "state": "unselected-after-dom-scroll-320",
+      "screenshot": "screens/after/b-fluid-selection-final-dom-left-unselected-320.png",
+      "manuallyViewed": true,
+      "acceptance": [
+        "return DOM scrollLeft 0, selected state retained until normal header uncheck",
+        "normal header uncheck clears row and header state"
+      ]
+    }
+  ],
+  "chromeCounterexamples": [
+    {
+      "kind": "mixed percent/px calc ignored on col",
+      "source": "product source before compatibility fix",
+      "viewport": [
+        768,
+        768
+      ],
+      "tableWidth": 696,
+      "selectionWidth": 56,
+      "businessWidths": [
+        213.328125,
+        213.328125,
+        213.34375
+      ],
+      "expectedBusinessWidths": [
+        384,
+        128,
+        128
+      ],
+      "screenshot": "screens/after/b-fluid-selection-ready-768.png",
+      "manuallyViewed": true,
+      "passed": false
+    },
+    {
+      "kind": "sticky action hover background allowed text underneath to show",
+      "source": "product source with plain-percent DOM experiment",
+      "viewport": [
+        320,
+        844
+      ],
+      "background": "oklab(0.968429 -0.00252065 -0.00629514 / 0.3)",
+      "screenshot": "screens/after/b-fluid-selection-experiment-selected-320.png",
+      "manuallyViewed": true,
+      "passed": false
+    }
+  ],
+  "fixValidation": {
+    "redTime": "10:06:19",
+    "naturalRed": "2 of 30 component tests failed after adopting supported pure-percent col contract; actual Chrome calc/hover counterexamples above",
+    "greenTime": "10:06:49",
+    "tests": {
+      "files": 2,
+      "passed": 30
+    },
+    "scopedEslint": {
+      "files": 3,
+      "errors": 0,
+      "warnings": 0
+    },
+    "changes": [
+      "col only emits normalized plain percentage; fixed 56px selection deducted by fixed-table layout",
+      "sticky action hover background made opaque"
+    ],
+    "preserved": [
+      "computed percent minimum",
+      "getColumnWidth API",
+      "pixel widths and stored layout",
+      "drag resize and cancel semantics",
+      "selection",
+      "business callers and API"
+    ]
+  },
+  "scrollInputBoundary": {
+    "horizontalWheelCommand": "agent-browser mouse wheel 0 1000",
+    "observedWheelEvents": [],
+    "observedScrollLeft": 0,
+    "physicalHorizontalWheelPassed": false,
+    "finalScrollMethod": "set only native scroll container scrollLeft; no column DOM styles changed",
+    "auxiliaryScreenshots": [
+      "screens/after/b-fluid-selection-final-wheel-no-move-320.png",
+      "screens/after/b-fluid-selection-final-unselected-320.png"
+    ],
+    "auxiliaryScreenshotsManuallyViewed": true
+  },
+  "rawFinalDom": "evidence-b/fluid-selection-final-dom.json",
+  "finalCleanup": {
+    "namedClose": true,
+    "globalSessionListAfterExit": [],
+    "ownSessionAbsent": true,
+    "didNotCloseOtherSessions": true
+  },
+  "businessPageAcceptance": false,
+  "apiWrites": 0
+}

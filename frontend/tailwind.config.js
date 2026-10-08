@@ -37,6 +37,7 @@ export default {
         destructive: {
           DEFAULT: 'hsl(var(--destructive))',
           foreground: 'hsl(var(--destructive-foreground))',
+          ink: 'hsl(var(--destructive-ink))',
         },
         muted: {
           DEFAULT: 'hsl(var(--muted))',
@@ -60,14 +61,17 @@ export default {
         success: {
           DEFAULT: 'hsl(var(--success))',
           foreground: 'hsl(var(--success-foreground))',
+          ink: 'hsl(var(--success-ink))',
         },
         warning: {
           DEFAULT: 'hsl(var(--warning))',
           foreground: 'hsl(var(--warning-foreground))',
+          ink: 'hsl(var(--warning-ink))',
         },
         info: {
           DEFAULT: 'hsl(var(--info))',
           foreground: 'hsl(var(--info-foreground))',
+          ink: 'hsl(var(--info-ink))',
         },
         sidebar: {
           DEFAULT: 'hsl(var(--sidebar-background))',

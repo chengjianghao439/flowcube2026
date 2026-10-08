@@ -83,7 +83,7 @@ function TaskSelectStep({
                 {pct > 0 && (
                   <div>
                     <div className="flex justify-between text-xs text-muted-foreground mb-1"><span>已复核</span><span>{pct}%</span></div>
-                    <div className="h-1 rounded-full bg-muted"><div className="h-1 rounded-full bg-primary transition-all" style={{ width: `${pct}%` }} /></div>
+                    <div className="h-1 rounded-full bg-muted"><div className="h-1 rounded-full bg-primary transition-all motion-reduce:transition-none" style={{ width: `${pct}%` }} /></div>
                   </div>
                 )}
               </PdaCard>
@@ -101,8 +101,8 @@ function CheckItemRow({ item }: { item: CheckItem }) {
   const done       = matchPick
 
   return (
-    <div className={`rounded-2xl border p-4 transition-all ${
-      done ? 'border-green-200 bg-green-50/50' : 'border-border bg-card'
+    <div className={`rounded-2xl border p-4 transition-all motion-reduce:transition-none ${
+      done ? 'border-success/30 bg-success/10' : 'border-border bg-card'
     }`}>
       <div className="flex items-start justify-between mb-2">
         <div className="flex-1 min-w-0">
@@ -314,7 +314,7 @@ export default function PdaCheckPage() {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-background px-6 text-center">
         {allChecked
-          ? <CircleCheck className="mx-auto mb-6 h-20 w-20 text-green-600" />
+          ? <CircleCheck className="mx-auto mb-6 h-20 w-20 text-success-ink" />
           : <ClipboardList className="mx-auto mb-6 h-20 w-20 text-muted-foreground" />}
         <h2 className="text-2xl font-bold text-foreground">
           {allChecked ? '复核完成！' : '已保存'}
@@ -332,14 +332,14 @@ export default function PdaCheckPage() {
             to={`/pda/pack/${taskId}`} label="去打包"
           />
           {!allChecked && (
-            <Button variant="outline" className="flex-1" onClick={() => setStep('checking')}>
+            <Button size="lg" variant="outline" className="px-3 flex-1" onClick={() => setStep('checking')}>
               继续复核
             </Button>
           )}
-          <Button variant="outline" className="flex-1" onClick={() => setStep('select-task')}>
+          <Button size="lg" variant="outline" className="px-3 flex-1" onClick={() => setStep('select-task')}>
             选择任务
           </Button>
-          <Button variant="outline" className="flex-1" onClick={() => navigate('/pda')}>
+          <Button size="lg" variant="outline" className="px-3 flex-1" onClick={() => navigate('/pda')}>
             返回工作台
           </Button>
         </div>
@@ -384,14 +384,14 @@ export default function PdaCheckPage() {
 
           {taskLoading && (
             <div className="flex h-40 items-center justify-center">
-              <div className="h-7 w-7 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+              <div className="h-7 w-7 motion-safe:animate-spin rounded-full border-2 border-primary border-t-transparent" />
             </div>
           )}
           {items.map(item => (
             <CheckItemRow key={item.id} item={item} />
           ))}
           {!taskLoading && items.length > 0 && linesDone && (
-            <p className="text-center text-xs text-green-600 font-medium">✓ 各明细实核数量与拣货数量一致</p>
+            <p className="text-center text-xs text-success-ink font-medium">✓ 各明细实核数量与拣货数量一致</p>
           )}
         </div>
       </div>

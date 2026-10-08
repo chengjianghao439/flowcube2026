@@ -19,7 +19,13 @@ function truncationStyles(source: string): string[] {
   return hits
 }
 
-test('ERP/PDA 详情禁止截断，仅 PDA 总览辅助文字允许省略号', () => {
+function forbiddenCssTruncation(source: string): boolean {
+  // 仅封闭的辅助备注预览可折叠；展开态、商品身份和详情仍必须完整。
+  const permitted = /\.table-text-preview:not\(\[open\]\) \.table-text-value\s*\{\s*display:\s*-webkit-box;\s*-webkit-box-orient:\s*vertical;\s*-webkit-line-clamp:\s*2;\s*overflow:\s*hidden;\s*\}/g
+  return /text-overflow\s*:\s*ellipsis|-webkit-line-clamp\s*:\s*\d/.test(source.replace(permitted, ''))
+}
+
+test('ERP/PDA 身份与详情完整，仅总览辅助文字及可展开备注允许折叠', () => {
   const root = fileURLToPath(new URL('../', import.meta.url))
   const failures: string[] = []
   let overviewRuleChecked = false
@@ -37,12 +43,18 @@ test('ERP/PDA 详情禁止截断，仅 PDA 总览辅助文字允许省略号', (
         } else {
           for (const hit of hits) failures.push(`${relative}: ${hit}`)
         }
-      } else if (file.endsWith('.css') && /text-overflow\s*:\s*ellipsis|-webkit-line-clamp\s*:\s*\d/.test(readFileSync(file, 'utf8'))) failures.push(file)
+      } else if (file.endsWith('.css') && forbiddenCssTruncation(readFileSync(file, 'utf8'))) failures.push(file)
     }
   }
   walk(root)
   expect(overviewRuleChecked).toBe(true)
   expect(failures).toEqual([])
+})
+
+test('备注折叠反向验证：展开态、其他文字和其他行数不得被豁免', () => {
+  const permitted = '.table-text-preview:not([open]) .table-text-value { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }'
+  expect(forbiddenCssTruncation(permitted)).toBe(false)
+  for (const broken of [permitted.replace(':not([open])', ''), permitted.replace('table-text-value', 'product-name'), permitted.replace('clamp: 2', 'clamp: 1')]) expect(forbiddenCssTruncation(broken)).toBe(true)
 })
 
 test('反向验证：直接、条件、模板、子元素及内联截断都会失败，注释不误报', () => {

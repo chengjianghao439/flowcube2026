@@ -60,7 +60,7 @@ export function SettlementConfirmDialog({ open, onClose, record }: Props) {
           该应付由收货上架自动结算生成。请核对以下明细（实际上架量 × 采购单价）后确认；确认后才可登记付款。
           若结算金额后续被重算改变（补收货/退货/撤回收货），会自动打回待确认。
         </p>
-        {isError && <div role="alert" className="flex items-center justify-between gap-3 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+        {isError && <div role="alert" className="flex items-center justify-between gap-3 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive-ink">
           <span>结算明细加载失败：{error instanceof Error ? error.message : '请检查网络后重试'}</span>
           <Button variant="outline" size="sm" onClick={() => void refetch()}>重试</Button>
         </div>}
@@ -80,7 +80,7 @@ export function SettlementConfirmDialog({ open, onClose, record }: Props) {
                 </tr>
               ))}
               {settlement?.returns.map((r, i) => (
-                <tr key={`ret-${i}`} className="border-t text-destructive">
+                <tr key={`ret-${i}`} className="border-t text-destructive-ink">
                   <td className="px-2 py-1.5 text-doc-code">{r.returnNo}</td>
                   <td className="px-2 py-1.5">采购退货冲减</td>
                   <td className="px-2 py-1.5" colSpan={2}></td>
