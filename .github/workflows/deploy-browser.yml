@@ -143,8 +143,12 @@ jobs:
             ControlMaster auto
             ControlPath ~/.ssh/flowcube-%C
             ControlPersist 300
+            ServerAliveInterval 30
+            ServerAliveCountMax 10
           EOF
           chmod 600 ~/.ssh/config
+          # 仅输出连接策略；不建立连接，也不输出凭据或主机配置全文。
+          ssh -G "${{ steps.deploy_config.outputs.server_host }}" | awk '/^(controlmaster|controlpersist|serveraliveinterval|serveralivecountmax) /'
 
       - name: Add SSH known_hosts
         id: ssh_trust
@@ -187,7 +191,7 @@ jobs:
           # 1、一行输出都没有，与「SSH 连不上/密钥失效」在日志里长得完全一样。2026-09-19 11:04 起
           # 连续 3 轮部署都以「##[endgroup] 之后 3~4 秒静默 exit 1」失败，日志里没有任何可诊断信息，
           # 事后才推断出是服务器磁盘低于 6 GiB。现在先打印实际余量，再据此判定并给出可执行的处置提示。
-          DISK_USAGE="$(timeout -k 5 30 ssh -o ConnectTimeout=20 -p "${{ steps.deploy_config.outputs.server_ssh_port }}" \
+          DISK_USAGE="$(timeout -k 5 30 ssh "${SSH_COMMON[@]}" -p "${{ steps.deploy_config.outputs.server_ssh_port }}" \
             "${{ steps.deploy_config.outputs.server_user }}@${{ steps.deploy_config.outputs.server_host }}" \
             "df -Pm /tmp '${{ steps.deploy_config.outputs.server_app_path }}' | awk 'NR>1 {print \$6, \$4 \"MB\"}'")" \
             || { echo "::error::无法读取服务器磁盘余量（SSH 连接或认证失败），部署中止"; exit 1; }
@@ -211,6 +215,8 @@ jobs:
           fi
           if [ "$HTTPS_OK" != 1 ]; then
             echo '::warning::HTTPS 快路径不可用，回退分片 SCP；请记录实际传输路径与耗时'
+            # 此 runner 的复用连接可能已失效；只释放本目标的本地 master，随后重新建连。
+            timeout -k 5 10 ssh "${SSH_COMMON[@]}" -p "$SSH_PORT" -O exit "$SSH_TARGET" >/dev/null 2>&1 || true
             # ── 镜像归档上传：分片并行 ──────────────────────────────────────
             # 跨境链路有方向差异；服务器向外下载的速率不能作为 runner 向服务器上传的预算依据。
             # 分片**不改变归档字节**：服务器端按序合并后 sha256 与 runner 侧完全一致，

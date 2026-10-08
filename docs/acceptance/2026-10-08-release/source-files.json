@@ -1,8 +1,11 @@
 {
   "base": "66fa87e4a0c440270189693480673c69320bce85",
-  "excluded": ["docs/local-tooling-2026-09-04.md"],
+  "excluded": [
+    "docs/local-tooling-2026-09-04.md"
+  ],
   "self": "本文件不计入自引用摘要",
   "files": [
+    {"path":".github/workflows/deploy-browser.yml","purpose":"浏览器正式部署首连接保活与失效连接恢复","bytes":19068,"sha256":"139126811879e9f746e260b1a67ab1781019a6d7c85ec0af9f442df71f7b031b"},
     {"path":"backend/apk/version.json","purpose":"依赖一致性或三端/PDA版本同步","bytes":302,"sha256":"a671bb9b15349212b5b80e6fbb6d054b6b7823cc4376337e5c89c6409d6f0faf"},
     {"path":"backend/package-lock.json","purpose":"依赖一致性或三端/PDA版本同步","bytes":140556,"sha256":"b7ee3f255ca66c137965260e08a1e0db9f804a6479de20d2974bbf662bb4f463"},
     {"path":"backend/package.json","purpose":"依赖一致性或三端/PDA版本同步","bytes":1293,"sha256":"193dd09558276d758f725cd48bc2ce7f8290a37870e2be2bb0ff3a99797a0e12"},
@@ -705,8 +708,9 @@
     {"path":"docs/design-audit-2026-10-08/workspace-tabs-validation.md","purpose":"设计覆盖清单、合成数据截图与分项验收证据","bytes":6141,"sha256":"dd9c4eea9319291987e1cc19bf106c2e31f33f0a148b494cc54962c43ec8a44e"},
     {"path":"docs/frontend-pda-conventions.md","purpose":"业务约定、实现说明、发布说明与验收边界","bytes":176752,"sha256":"adcbdf8c9a682e70df9133166ae8434f5b391b7c7456173c0e050865134f8ab0"},
     {"path":"docs/local-preview-acceptance.md","purpose":"业务约定、实现说明、发布说明与验收边界","bytes":9049,"sha256":"b9c474513521c24494a47ec294703e810e594c927a40d022ab9c5940279ac9ac"},
+    {"path":"docs/print-deploy-ops.md","purpose":"发布连接策略与证据边界约定","bytes":61931,"sha256":"709590e438e328da56ef06e0383c535ab45969e49255d6ffc960c08992f588a1"},
     {"path":"docs/release-notes/0.13.1.md","purpose":"业务约定、实现说明、发布说明与验收边界","bytes":1418,"sha256":"2e82139dacd3f6c4d07268251902945cbce5dfefa3e306157d5d0fbf15be62d5"},
-    {"path":"docs/release-v0.13.1-result.md","purpose":"业务约定、实现说明、发布说明与验收边界","bytes":6403,"sha256":"29f7cc49d2c566dbb8e352e3b6ed6d5766e50d9a8bd9c60a82eb2095961f0d1a"},
+    {"path":"docs/release-v0.13.1-result.md","purpose":"业务约定、实现说明、发布说明与验收边界","bytes":8435,"sha256":"37bd4b1c811220ae13899726f1451bc3fb058c163a6c42843eee04c471369c15"},
     {"path":"docs/superpowers/plans/2026-10-07-kit-product-profile.md","purpose":"业务约定、实现说明、发布说明与验收边界","bytes":6206,"sha256":"aa9bc4cf88e3ae957316efa5e732b58557ca27af5589052e6aa2431ee05895e3"},
     {"path":"docs/superpowers/plans/2026-10-07-unified-sale-entry.md","purpose":"业务约定、实现说明、发布说明与验收边界","bytes":7542,"sha256":"ec7182bbaa97666d9302dde2b2e23a5375ad039c871918d57f67e7dcf9eef9ce"},
     {"path":"docs/superpowers/plans/2026-10-08-system-design-consistency.md","purpose":"业务约定、实现说明、发布说明与验收边界","bytes":2902,"sha256":"516960d204674e58479ce18f36257a0b7741212832c757989ab0928ae0cce7b5"},
@@ -983,6 +987,7 @@
     {"path":"scripts/design-audit/renew-auth.cjs","purpose":"只读覆盖扫描和证据整理工具","bytes":2035,"sha256":"8a0fac5a89928f18a376f840c3ab7ac7fbc7a8f0bb5995e1e7358783ddbf02b4"},
     {"path":"scripts/design-audit/runtime.cjs","purpose":"只读覆盖扫描和证据整理工具","bytes":3158,"sha256":"526a3e0baf08950f4e00097ef862922c7fc003201581e9d6b4883e4fc6758a58"},
     {"path":"scripts/design-audit/serialize-inventory.mjs","purpose":"只读覆盖扫描和证据整理工具","bytes":544,"sha256":"f8f09f1f7c6905bbfa51b58635734340228af509e169faf9e95f0535bf6212f9"},
+    {"path":"tests/deployment-resources.test.js","purpose":"真实 OpenSSH 首连接、失效恢复及反向破坏守卫","bytes":40297,"sha256":"c5d0dd2e078869ef09c8c3b70ca4aef4050724530d447c317e9387582cf004b8"},
     {"path":"tests/helpers/supplier-refunds-fixture.js","purpose":"受影响回归与精确测试夹具","bytes":14532,"sha256":"90fead375b7e3ab44957a9dc9ccabc22a2ace45615f856f4ef198ab11c98af7e"},
     {"path":"tests/kits-current-stock.smoke.test.js","purpose":"受影响回归与精确测试夹具","bytes":12177,"sha256":"10b69f9c5151ccb0a9018ad7c50328e21158db01ef3a5212c3c0f26fa4326387"},
     {"path":"tests/kits-foundation.smoke.test.js","purpose":"受影响回归与精确测试夹具","bytes":44708,"sha256":"10e5ce86297b3d9ff18ab8a620e99a53d2bfd794dd11159816f47b0a17c562d0"},

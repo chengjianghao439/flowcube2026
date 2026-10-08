@@ -96,6 +96,8 @@
 - `Build PDA APK` 对每次 main push 运行前置门；同版已发布时跳过构建，发布提交只改后端迁移也不会缺 PDA 运行。构建并发组绑定目标 SHA，后续提交不能取消仍在构建的发布提交；`[skip ci]` 提交仍不作发布目标。路径过滤漏触发与并发绑定由 `tests/release-orchestration.test.js` 守住。
 - 本机中转对失败的大分段先有界重试，再只把该分段拆成 256 KiB 子区间；其余已完成分段保留在本轮下载中。完整 ZIP 和原文件仍按 GitHub 摘要、大小、唯一成员及接收端 runner 预期摘要核对，不能以分段完成数代替验收；见 `tests/local_release_relay_test.py`。
 - smoke 凭据由 `ssh-smoke-stdin.sh` 经 NUL 分隔 stdin 传输，远端 shell 内建 read 后导出，不再出现在 SSH 命令参数。仍属于远程进程环境，不能将此描述为消除了所有凭据可见性。
+- 浏览器部署的复用 SSH 从首个预检连接起配置 `ServerAliveInterval 30`、`ServerAliveCountMax 10`；仅给后续命令加参数不能改变已建立 master 的策略。配置阶段通过离线 `ssh -G` 输出四项连接策略，不输出完整配置。HTTPS 接收失败进入原有界兜底前，仅释放此 runner、本目标的 master，重新建立连接。主机键、包摘要、迁移、页面门禁及回退预算保留。守卫 `tests/deployment-resources.test.js` 用真实 OpenSSH 解析和原预检脚本执行验证，删除保活项或把释放命令改为仅查询会失败。
+- 2026-10-08 第二轮部署中，中转归档已在服务器验收，而 runner 接收命令等满 1100 秒，后续复用连接的兜底命令再超时；当时未进入迁移/切换。首连接缺少应用层保活已离线复现，连接具体在哪个网络节点失效尚无抓包证据，不能据此认定某个防火墙或运营商故障。[OpenSSH 文档](https://man.openbsd.org/ssh_config#ServerAliveInterval)说明默认 0 不发送应用层保活，次数上限控制无响应连接的退出；本次发布的恢复结果另见版本结果文档。
 
 ### 2026-09-26 打印统计与打印机健康的仓库范围
 

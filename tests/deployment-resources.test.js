@@ -23,6 +23,78 @@ test('SSH host identity comes only from pinned known_hosts', () => {
   }
 })
 
+// 2026-10-08：预检创建的 master 未配置保活；接收端已验完中转包，runner 仍等满
+// 1100s，随后复用同一连接的兜底命令再超时。只给后续 slave 加 -o 不改变 master。
+// 离线使用真实 OpenSSH 解析生成配置；删除任一保活项必须使本守卫失败。
+test('浏览器部署首次建立的 SSH master 必须具有有界保活', () => {
+  const yaml = require(path.resolve(root, 'frontend/node_modules/js-yaml'))
+  const wf = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/deploy-browser.yml'), 'utf8'))
+  const key = wf.jobs.deploy.steps.find(s => /ControlMaster/.test(s.run || ''))
+  const block = key.run.match(/cat >> ~\/\.ssh\/config <<EOF\n([\s\S]*?)\nEOF/)
+  assert.ok(block, '必须把保活写入创建 master 前的主机配置')
+  const config = block[1].replace(/\$\{\{[^}]+\}\}/g, 'fixture.invalid') + '\n'
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'flowcube-ssh-master-'))
+  function verify(source) {
+    const file = path.join(dir, 'config')
+    fs.writeFileSync(file, source)
+    const r = spawnSync('ssh', ['-G', '-F', file, 'fixture.invalid'], { encoding: 'utf8', timeout: 5000 })
+    assert.equal(r.status, 0, r.stderr)
+    const values = Object.fromEntries(r.stdout.trim().split('\n').map(l => {
+      const i = l.indexOf(' '); return [l.slice(0, i), l.slice(i + 1)]
+    }))
+    assert.equal(values.controlmaster, 'auto')
+    assert.equal(values.controlpersist, '300')
+    assert.equal(values.serveraliveinterval, '30', '首连接不能沿用默认 0 秒保活')
+    assert.equal(values.serveralivecountmax, '10', '失效连接必须有界退出')
+  }
+  try {
+    verify(config)
+    for (const key of ['ServerAliveInterval', 'ServerAliveCountMax']) {
+      assert.throws(() => verify(config.replace(new RegExp('^\\s*' + key + '.*$', 'gm'), '')),
+        { code: 'ERR_ASSERTION' }, `删除 ${key} 必须使守卫失败`)
+    }
+  } finally { fs.rmSync(dir, { recursive: true, force: true }) }
+})
+
+test('磁盘预检的首个 SSH 调用必须携带保活选项', () => {
+  const yaml = require(path.resolve(root, 'frontend/node_modules/js-yaml'))
+  const wf = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/deploy-browser.yml'), 'utf8'))
+  const run = wf.jobs.deploy.steps.find(s => s.name === 'Deploy backend and frontend on server').run
+  const common = run.match(/^SSH_COMMON=\([^\n]+\)$/m)
+  const disk = run.match(/DISK_USAGE="\$\(([\s\S]*?)\)"\s*\\\n\s*\|\|/)
+  assert.ok(common && disk, '缺少原始首连接预检脚本')
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'flowcube-ssh-preflight-'))
+  const log = path.join(dir, 'arguments')
+  const script = `set -euo pipefail
+timeout() { shift 3; "$@"; }
+ssh() { printf '%s\\n' "$@" > "$PROBE_ARGUMENTS"; printf '/ 19000MB\\n'; }
+${common[0]}
+DISK_USAGE=$(${disk[1].replace(/\$\{\{[^}]+\}\}/g, 'fixture')})
+`
+  try {
+    const r = spawnSync('bash', ['-c', script], { encoding: 'utf8', timeout: 5000,
+      env: { ...process.env, PROBE_ARGUMENTS: log } })
+    assert.equal(r.status, 0, r.stderr)
+    const args = fs.readFileSync(log, 'utf8').trim().split('\n')
+    assert.ok(args.includes('ServerAliveInterval=30'), '预检创建 master 时必须就有保活')
+    assert.ok(args.includes('ServerAliveCountMax=10'), '首连接也必须有失效上限')
+  } finally { fs.rmSync(dir, { recursive: true, force: true }) }
+})
+
+test('HTTPS 接收失败后只释放本 workflow 的 master，再进入兜底传输', () => {
+  const yaml = require(path.resolve(root, 'frontend/node_modules/js-yaml'))
+  const wf = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/deploy-browser.yml'), 'utf8'))
+  const run = wf.jobs.deploy.steps.find(s => s.name === 'Deploy backend and frontend on server').run
+  function verify(source) {
+    const fallback = source.match(/if \[ "\$HTTPS_OK" != 1 \]; then([\s\S]*?)UPLOAD_STREAMS=/)
+    assert.ok(fallback, '接收失败须进入原有界兜底路径')
+    assert.match(fallback[1], /timeout -k 5 10 ssh "\$\{SSH_COMMON\[@\]\}" -p "\$SSH_PORT" -O exit "\$SSH_TARGET"[^\n]*\|\| true/,
+      '兜底不能复用刚才已失效的 master，也不能关闭其他目标的连接')
+  }
+  verify(run)
+  assert.throws(() => verify(run.replace('-O exit', '-O check')), { code: 'ERR_ASSERTION' })
+})
+
 test('服务器只读诊断 workflow 必须保持只读，且真的在采集现场信息', () => {
   const yaml = require(path.resolve(root, 'frontend/node_modules/js-yaml'))
   const file = path.join(root, '.github/workflows/server-diagnostics.yml')
