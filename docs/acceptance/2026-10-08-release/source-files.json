@@ -112,7 +112,7 @@
     {"path":"docs/design-audit-2026-10-08/observations-workspace-final.json","purpose":"设计覆盖清单、合成数据截图与分项验收证据","bytes":8465,"sha256":"380a9e808eeca04b9b36aff4fb23bc1dfe582323397d77d1b5c6955d49919122"},
     {"path":"docs/design-audit-2026-10-08/pure-text-role-files.json","purpose":"设计覆盖清单、合成数据截图与分项验收证据","bytes":4924,"sha256":"438ed207e8bc3b319ec41e52e84e7126b9699ce916038f86332bc001c6820b3e"},
     {"path":"docs/design-audit-2026-10-08/radix-compatibility.md","purpose":"设计覆盖清单、合成数据截图与分项验收证据","bytes":2279,"sha256":"e62aa04988ff77f55651e0cfc6a346d4b4546db46dbf348a044c550ed92e7022"},
-    {"path":"docs/design-audit-2026-10-08/README.md","purpose":"设计覆盖清单、合成数据截图与分项验收证据","bytes":6376,"sha256":"edd89413a4df122ff2b9aa07f64ef7b3ef5a13dbffb66f825e6416f967ad1fd7"},
+    {"path":"docs/design-audit-2026-10-08/README.md","purpose":"设计覆盖清单、合成数据截图与分项验收证据","bytes":6646,"sha256":"bb87df2f0d68043b33d8ebc2c2616d2618f27f98b8f1e26b3abc4c901e965214"},
     {"path":"docs/design-audit-2026-10-08/remaining.md","purpose":"设计覆盖清单、合成数据截图与分项验收证据","bytes":4414,"sha256":"1fd42088a109f60a97ee39b88d364bc674f28e2ffa50601ced2823978bd9e8c5"},
     {"path":"docs/design-audit-2026-10-08/root-sale-new-axe-after.json","purpose":"设计覆盖清单、合成数据截图与分项验收证据","bytes":461,"sha256":"9005f07e96b87347567ed7743fdcae24df7ed1b5521eeccf5c0808e105077126"},
     {"path":"docs/design-audit-2026-10-08/root-supplier-description-axe-final-dark.json","purpose":"设计覆盖清单、合成数据截图与分项验收证据","bytes":1868,"sha256":"c4f3423fbdb44c4eb6a61eb40266890311fc0c49c934c45cf567acb9f9f43951"},
@@ -710,7 +710,7 @@
     {"path":"docs/local-preview-acceptance.md","purpose":"业务约定、实现说明、发布说明与验收边界","bytes":9049,"sha256":"b9c474513521c24494a47ec294703e810e594c927a40d022ab9c5940279ac9ac"},
     {"path":"docs/print-deploy-ops.md","purpose":"发布连接策略与证据边界约定","bytes":61931,"sha256":"709590e438e328da56ef06e0383c535ab45969e49255d6ffc960c08992f588a1"},
     {"path":"docs/release-notes/0.13.1.md","purpose":"业务约定、实现说明、发布说明与验收边界","bytes":1418,"sha256":"2e82139dacd3f6c4d07268251902945cbce5dfefa3e306157d5d0fbf15be62d5"},
-    {"path":"docs/release-v0.13.1-result.md","purpose":"业务约定、实现说明、发布说明与验收边界","bytes":10338,"sha256":"d18cd0158c49b1c6e5b50f06882c6fe9460f1478789af6302241336a41744a9c"},
+    {"path":"docs/release-v0.13.1-result.md","purpose":"业务约定、实现说明、发布说明与验收边界","bytes":14198,"sha256":"5eac39c4f1ae96041bcf589f07c7a1b489956ed729e289848d225e1667ca38bf"},
     {"path":"docs/superpowers/plans/2026-10-07-kit-product-profile.md","purpose":"业务约定、实现说明、发布说明与验收边界","bytes":6206,"sha256":"aa9bc4cf88e3ae957316efa5e732b58557ca27af5589052e6aa2431ee05895e3"},
     {"path":"docs/superpowers/plans/2026-10-07-unified-sale-entry.md","purpose":"业务约定、实现说明、发布说明与验收边界","bytes":7542,"sha256":"ec7182bbaa97666d9302dde2b2e23a5375ad039c871918d57f67e7dcf9eef9ce"},
     {"path":"docs/superpowers/plans/2026-10-08-system-design-consistency.md","purpose":"业务约定、实现说明、发布说明与验收边界","bytes":2902,"sha256":"516960d204674e58479ce18f36257a0b7741212832c757989ab0928ae0cce7b5"},
@@ -998,5 +998,7 @@
     {"path":"tests/sale-order-capacity.test.js","purpose":"本轮销售容量修复或发布门禁回归","bytes":8030,"sha256":"75206273ded83faf0b71db2ffca48992bc08d100ff54ec527001a1415397b6db"},
     {"path":"tests/style-design-baseline.test.js","purpose":"本轮销售容量修复或发布门禁回归","bytes":1445,"sha256":"7c0954bb573b98aae7506a3efe1879c0fe459e9acc558339c7a0b079f21f3b7b"},
     {"path":"tests/supplier-refunds.test.js","purpose":"受影响回归与精确测试夹具","bytes":14281,"sha256":"31e14b268bc5956adee42305b12ec1bbc84cc517db39920fdf0a16d18a2841f0"}
-  ]
+  ],
+  "applicationSha": "f63d079dd42ead5ca7820874426eab749ab485ab",
+  "evidenceBoundary": "tag和生产镜像指向applicationSha；本清单摘要按交付文档收尾更新，后续文档提交不改变已发布应用。"
 }

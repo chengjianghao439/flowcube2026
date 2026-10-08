@@ -1,14 +1,14 @@
 # 极序 Flow 全系统设计一致性审查与重构
 
-**发布候选核对（2026-10-08）：** 用户已授权发布本批为0.13.1，正式结果以[发布记录](../release-v0.13.1-result.md)为准。下文“未提交/未发布”及旧工作树位置属于各验收批次的历史记录，不能用来判断今天的线上版本。覆盖JSON由318,964行改为每个记录一行的11,842行格式，转换前后完整JSON对象深比较相等；没有删除页面、状态、调用关系、截图或未验证记录。Markdown继续作为人工可读清单，两份生成器统一使用`serialize-inventory.mjs`，避免再次产生大量纯缩进行。
+**发布完成（2026-10-08）：** 本批0.13.1 / PDA152已发布，应用和tag为`f63d079dd42ead5ca7820874426eab749ab485ab`，同SHA必要工作流全部成功、独立线上核验12/12；失败与恢复过程及正式结果见[发布记录](../release-v0.13.1-result.md)。下文“未提交/未发布”及旧工作树位置属于各验收批次的历史记录，不能用来判断今天的线上版本。覆盖JSON由318,964行改为每个记录一行的11,842行格式，转换前后完整JSON对象深比较相等；没有删除页面、状态、调用关系、截图或未验证记录。Markdown继续作为人工可读清单，两份生成器统一使用`serialize-inventory.mjs`，避免再次产生大量纯缩进行。
 
-**后续现状（2026-10-08）：** 本轮改动已转入主目录 main 的未提交工作区，原审查工作树已归档。开发服务当前保留在 `127.0.0.1:5173` / `3000`，使用隔离预览副本；以下工作树与已停止资源描述属于原系统批次。销售统一开单集成遗漏已修复，最新全前端为265文件/2006例，另有纯普通、混合单实际保存/恢复/重开及数据库证明，见[销售增量验收](sale-entry-recovery.md)。增量未验证范围与原系统缺口分别保留。
+**后续现状（2026-10-08）：** 本轮应用改动已在主目录main提交并发布，原审查工作树已归档。开发服务当前保留在 `127.0.0.1:5173` / `3000`，使用隔离预览副本；以下工作树与已停止资源描述属于原系统批次。销售统一开单集成遗漏已修复，最终全前端为266文件/2010例，另有纯普通、混合单实际保存/恢复/重开及数据库证明，见[销售增量验收](sale-entry-recovery.md)。增量未验证范围与原系统缺口分别保留。
 
 **16:22后续修改：** 按用户要求删除仪表盘整块“常用工作”，见[增量记录](dashboard-common-work-removal.md)。本增量2文件12例、类型检查和scoped lint通过，真实组件浏览器浅深及编辑/取消复验通过。以下1877全量和两端build记录属于该删除前的系统批次，不能当作删除后的新执行结果。
 
 本轮已经建立完整的注册界面清单、横向设计基准，实施17类一致性问题的改动，并完成隔离数据下的代表页面复验、全前端回归和两端构建。**尚未达到“全部页面的全部状态、浮层和业务执行都验收通过”**；下述清单逐项保留证据与缺口，不将共享组件通过推广成所有用方通过。
 
-代码保存在独立工作树 `/Users/chengjianghao/.codex/worktrees/impeccable-system-audit/flowcube`，分支 `codex/impeccable-system-audit-20261008`，基线 `66fa87e4a0c440270189693480673c69320bce85`。改动尚未提交、推送、发布或部署；原主目录其它任务的修改保留。
+**原系统批次的历史位置：** 代码当时保存在独立工作树 `/Users/chengjianghao/.codex/worktrees/impeccable-system-audit/flowcube`，分支 `codex/impeccable-system-audit-20261008`，基线 `66fa87e4a0c440270189693480673c69320bce85`。当时改动尚未提交、推送、发布或部署；原主目录其它任务的修改保留。
 
 ## 交付入口
 
@@ -17,7 +17,7 @@
 | 全系统覆盖清单 | [coverage.md](coverage.md)、[coverage.json](coverage.json)、[routes.json](routes.json)；按九大领域列页面、用途、实际查看、问题、是否修改、验证与未覆盖原因，保留隐藏入口及每个候选用点 |
 | 按影响排序的问题 | [findings.md](findings.md)：F01–F17，说明同语义用方、差异、操作成本、采用模式、源码与证据；[assessment-a.md](assessment-a.md)、[assessment-b.md](assessment-b.md)保留初始观察 |
 | 设计基准与合理差异 | [design-baseline.md](design-baseline.md)、[radix-compatibility.md](radix-compatibility.md)；沿用蓝色品牌及现有组件，保留身份字段、业务精度、原请求核对与ERP/PDA布局差异 |
-| 实现与前后对照 | 当前工作树实际diff；[screenshots.md](screenshots.md)、[a-after.md](a-after.md)、[a-followup-overlays.md](a-followup-overlays.md)、[implementation-b.md](implementation-b.md)、[shared-components-review.md](shared-components-review.md) |
+| 实现与前后对照 | 发布应用与基线`66fa87e4`的实际diff及[逐路径范围摘要](../acceptance/2026-10-08-release/source-files.json)；[screenshots.md](screenshots.md)、[a-after.md](a-after.md)、[a-followup-overlays.md](a-followup-overlays.md)、[implementation-b.md](implementation-b.md)、[shared-components-review.md](shared-components-review.md) |
 | 检查与剩余范围 | [verification.md](verification.md)、[remaining.md](remaining.md)、[verification/](verification/)、[runtime-cleanup-final.json](runtime-cleanup-final.json) |
 
 ## 本轮实质改动
