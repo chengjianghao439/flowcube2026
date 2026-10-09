@@ -16,7 +16,7 @@
     "test:package-finish-print": "echo 'removed'"
   },
   "dependencies": {
-    "@napi-rs/canvas": "1.0.9",
+    "@napi-rs/canvas": "1.0.10",
     "@sentry/node": "^10.74.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
