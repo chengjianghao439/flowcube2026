@@ -67,6 +67,7 @@ export default function SaleQueryDialog({ open, initial, resetValues, onClose, o
     <>
       <AppDialog
         open={open}
+        captureFocusOnOpen
         onOpenChange={v => { if (!v) onClose() }}
         dialogId="sale-query"
         title="查询销售订单"
@@ -177,12 +178,12 @@ export default function SaleQueryDialog({ open, initial, resetValues, onClose, o
         </div>
       </AppDialog>
 
-      <CustomerFinder
+      <CustomerFinder compact
         open={customerOpen}
         onClose={() => setCustomerOpen(false)}
         onConfirm={r => setDraft(d => ({ ...d, customerId: r.id, customerName: r.name }))}
       />
-      <ProductFinder
+      <ProductFinder compact
         open={productOpen}
         onClose={() => setProductOpen(false)}
         onConfirm={r => setDraft(d => ({ ...d, productId: r.id, productCode: r.code ?? '', productName: r.name }))}

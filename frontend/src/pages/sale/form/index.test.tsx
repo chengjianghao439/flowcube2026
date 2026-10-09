@@ -37,6 +37,24 @@ function navigate(id: number) {
   act(() => { window.history.replaceState({}, '', `/#/sale/${id}?focus=fulfillment`); window.dispatchEvent(new HashChangeEvent('hashchange')) })
 }
 
+test('普通详情合并商品身份列，保留换算、分仓、已发进度、低价风险及全单金额', () => {
+  client.setQueryData(['sale', 12], {
+    ...order, status: 3, isMultiWarehouse: true, shippedTotalQty: 6,
+    totalAmount: 240, discountAmount: 20,
+    items: [{ id: 1, productCode: 'P-LONG', articleNumber: '供应商型号完整值', spec: '长规格完整值',
+      productName: '长商品名称完整值', color: '本色', unit: '个', entryUnit: '箱', entryQty: 2,
+      quantity: 12, unitPrice: 20, amount: 240, shippedQty: 6, warehouseName: '第二仓', belowCost: true, costPrice: 22, remark: '按箱分装' }],
+  })
+  render()
+  const table = host.querySelector<HTMLTableElement>('table')!
+  expect([...table.querySelectorAll('th')].map(th => th.textContent?.replace(/调整.*列宽/g, ''))).toEqual(['商品', '单位', '发货仓库', '数量', '已发/应发', '单价', '金额', '备注'])
+  expect(table.textContent).toContain('按箱分装')
+  const row = table.querySelector('tbody tr')!
+  for (const fact of ['P-LONG', '供应商型号完整值', '长规格完整值', '长商品名称完整值', '本色', '第二仓', '2 箱', '12 个', '6/12', '¥120.00/箱', '低于进价 ¥22.00']) expect(row.textContent).toContain(fact)
+  expect(table.closest('[data-sale-detail-items]')?.textContent).toContain('订单金额¥220.00')
+  expect(host.textContent).not.toContain('订单汇总')
+})
+
 test('发货安排独立于作业进度，切换后保留输入并暂停隐藏区块', () => {
   render()
   expect(tab('发货安排')).toBeTruthy()
@@ -107,4 +125,13 @@ test('原单退货入口达到标签上限先提示，不驱逐现有草稿', ()
   expect(button).toBeTruthy(); const before = useWorkspaceStore.getState().tabs; act(() => button.click())
   expect(useWorkspaceStore.getState().tabs).toEqual(before)
   expect(useWorkspaceStore.getState().activeKey).toBe('/sale/12')
+})
+
+test.each([false, true])('普通详情与成套沿同一现有权限显示编辑、取消、占库：%s', allowed => {
+  useAuthStore.setState({ token: 'fixture', user: { id: 5, roleId: 5, permissions: allowed ? [PERMISSIONS.SALE_ORDER_VIEW, PERMISSIONS.SALE_ORDER_UPDATE, PERMISSIONS.SALE_ORDER_CANCEL, PERMISSIONS.SALE_ORDER_RESERVE] : [PERMISSIONS.SALE_ORDER_VIEW] } as never })
+  render()
+  const labels = [...host.querySelectorAll('button')].map(button => button.textContent)
+  for (const label of ['编辑', '取消订单', '占用库存']) expect(labels.includes(label)).toBe(allowed)
+  expect(labels).not.toContain('读取最新订单')
+  expect(labels).not.toContain('刷新订单')
 })

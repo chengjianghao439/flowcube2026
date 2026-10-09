@@ -297,21 +297,9 @@ export function useKitOperation<P, R>(
       return null
     })
   }
-  return {
-    blocked: busy || !!pending || storageBlocked,
-    storageBlocked,
-    submit,
-    queryOriginal: () => queryOriginal(false),
-    retry: () => queryOriginal(true),
-    pending,
-    busy,
-    error,
-    conflict,
-    pendingPayload: mountedBody.current?.payload,
-    canRetry: !!pending && !!mountedBody.current,
-    canApply: (answer: KitOperationConfirmation<P, R>) =>
-      last.current === answer &&
-      !answer.queryOnly &&
+  // Viewing a confirmed receipt never reapplies its old payload. Ownership checks still apply.
+  function canView(answer: KitOperationConfirmation<P, R>): boolean {
+    return last.current === answer &&
       !queryRef.current &&
       !running.current &&
       sameView() &&
@@ -325,5 +313,20 @@ export function useKitOperation<P, R>(
           return false
         }
       })()
+  }
+  return {
+    blocked: busy || !!pending || storageBlocked,
+    storageBlocked,
+    submit,
+    queryOriginal: () => queryOriginal(false),
+    retry: () => queryOriginal(true),
+    pending,
+    busy,
+    error,
+    conflict,
+    pendingPayload: mountedBody.current?.payload,
+    canRetry: !!pending && !!mountedBody.current,
+    canApply: (answer: KitOperationConfirmation<P, R>) => !answer.queryOnly && canView(answer),
+    canView,
   }
 }

@@ -1,3 +1,4 @@
+import { ExistingSaleEditor } from '../commercial/ExistingSaleEditor'
 import { readHandlingSourceId, mayHandle } from '@/lib/disposalHandlingRecovery'
 import { useDisposalHandlingSource } from '@/hooks/useDisposalHandlingSource'
 import { useDisposalHandlingOperation } from '@/hooks/useDisposalHandlingOperation'
@@ -16,13 +17,13 @@ import { ordinaryReorderDrafts } from '../reorderDraft'
 import { buildWorkspaceTabRegistrationFromPath } from '@/router/workspaceRouteMeta'
 import { toast } from '@/lib/toast'
 import CommercialSalePage, { NewCommercialSale } from '../commercial/CommercialSalePage'
+import { usePermission } from '@/hooks/usePermission'
 import { useCommercialSaleRead } from '@/hooks/useCommercialSale'
 import { assertKitReadOwner } from '@/hooks/useKits'
 import { readSaleHandoff } from './handoff'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { money } from '@/lib/format'
 import { OrderEntryIssues } from '@/components/shared/OrderEntryIssues'
-import { EmptyState } from '@/components/shared/EmptyState'
 import { collectOrderIssues } from '@/lib/orderEntry'
 import { handleEntryKeyDown } from '@/lib/orderEntryNavigation'
 import KeepAliveSection from '@/components/shared/KeepAliveSection'
@@ -42,13 +43,12 @@ import { SaleOrderItemsSection } from './components/SaleOrderItemsSection'
 
 import { useState, useContext, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Activity, AlertTriangle, CalendarClock, ClipboardList, Clock, History, Loader2, PackageCheck, Pencil, Save, ScanLine, Warehouse, X } from 'lucide-react'
+import { AlertTriangle, Clock, Loader2, Pencil, Save, Warehouse, X } from 'lucide-react'
 import { PrintPreviewOverlay } from '@/components/print/SaleOrderPrintTemplate'
 import { Button }  from '@/components/ui/button'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
-import { EditModeBadge, UnsavedBadge } from '@/components/shared/EditModeBadge'
+import { UnsavedBadge } from '@/components/shared/EditModeBadge'
 import { TabPathContext } from '@/components/layout/TabPathContext'
-import { formatDisplayDateTime } from '@/lib/dateTime'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { useWorkspaceTabTitle } from '@/hooks/useWorkspaceTabTitle'
 import { ActionBar }      from '@/components/shared/ActionBar'
@@ -59,9 +59,8 @@ import ReserveAllocationDialog from '@/pages/sale/components/ReserveAllocationDi
 import ReleaseAllocationDialog from '@/pages/sale/components/ReleaseAllocationDialog'
 import { SectionCard }    from '@/components/shared/SectionCard'
 import { CustomerFinder, ProductFinder } from '@/components/finder'
-import { useCreateSale, useUpdateSale, useAdjustSale, useSaleDetail, useShipSale, useCancelSale, useDeleteSale } from '@/hooks/useSale'
+import { useCreateSale, useSaleDetail, useShipSale, useCancelSale, useDeleteSale } from '@/hooks/useSale'
 import { getSaleWorkflowStatus } from '@/lib/saleWorkflowStatus'
-import { getReceivableStatus } from '@/lib/receivableStatus'
 import DataTable from '@/components/shared/DataTable'
 import type { TableColumn } from '@/types'
 import { cn } from '@/lib/utils'
@@ -71,8 +70,12 @@ import { SaleOrderHeaderFields } from './components/SaleOrderHeaderFields'
 import { SaleOrderItemsTable } from './components/SaleOrderItemsTable'
 import { SaleOrderSummaryCard } from './components/SaleOrderSummaryCard'
 import { SaleOrderOverview } from './components/SaleOrderOverview'
-import { validateSaleForm, serializeSaleItems, type ScanRow } from './validate'
+import { SaleOrderDetailTabs, type SaleDetailTab } from './components/SaleOrderDetailTabs'
+import { SaleOrderInfoCard } from './components/SaleOrderInfoCard'
+import { SaleOrderScanDetails, SaleOrderPackingDetails, SaleOrderPickingProgress } from './components/SaleOrderWarehouseViews'
+import { validateSaleForm, serializeSaleItems } from './validate'
 import { useSaleOrderForm } from './useSaleOrderForm'
+import { useSaleEditEntry } from './useSaleEditEntry'
 
 // ─── 主页面 ───────────────────────────────────────────────────────────────────
 
@@ -306,257 +309,12 @@ function CreateView({ closeTab, tabPath, reorder, handling }: { closeTab: () => 
 // 编辑视图（草稿状态 status=1 可编辑）
 // ════════════════════════════════════════════════════════════════════════════
 
-function EditView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<typeof useSaleDetail>['data']>; tabPath: string; onDone: () => void }) {
-  const updateMutate  = useUpdateSale()
-
-  const {
-    customerId, customerName,
-    warehouseId, setWarehouseId, warehouseName, setWarehouseName,
-    remark, setRemark, carrierId, setCarrierId, shippingProduct, setShippingProduct, freightType, setFreightType,
-    receiverName, setReceiverName, receiverPhone, setReceiverPhone, receiverAddress, setReceiverAddress,
-    discountAmount, setDiscountAmount, total, discount, discountedTotal,
-    quantityRefs, carrierOptions,
-    items, priceLoading, priceErrors,
-    finderOpen, setFinderOpen, setFinderItemKey,
-    customerFinderOpen, setCustomerFinderOpen,
-    setCustomerError, setWarehouseError,
-    setInvalidItemKeys,
-    isDirty,
-    addItem, removeItem, updateItem,
-    handleCustomerConfirm, handleFinderConfirm,
-  } = useSaleOrderForm(tabPath, order)
-
-  const [validationAttempted, setValidationAttempted] = useState(false)
-  const allIssues = collectOrderIssues({ kind: 'sale', partyId: customerId, partyName: customerName, warehouseId, warehouseName, items, receiverPhone, discountAmount, priceLoading, priceErrors })
-  const issues = validationAttempted ? allIssues : []
-
-  async function handleSubmit() {
-    setValidationAttempted(true)
-    const filledItems = validateSaleForm({
-      items, customerId, customerName, warehouseId, warehouseName, receiverPhone, discountAmount, priceLoading, priceErrors,
-      setCustomerError, setWarehouseError, setInvalidItemKeys,
-    })
-    if (!filledItems) return
-    try {
-      await updateMutate.mutateAsync({
-        id: order.id,
-        customerId: +customerId, customerName,
-        warehouseId: +warehouseId, warehouseName,
-        remark: remark || undefined,
-        discountAmount: Number(discountAmount) || 0,
-        shippingProduct: shippingProduct || null,
-        carrierId: carrierId ? +carrierId : null,
-        freightType: freightType ? +freightType : null,
-        receiverName: receiverName || undefined,
-        receiverPhone: receiverPhone || undefined,
-        receiverAddress: receiverAddress || undefined,
-        items: serializeSaleItems(filledItems),
-      })
-      onDone()
-    } catch (_) {}
-  }
-
-  return (
-    <div data-order-entry onKeyDown={handleEntryKeyDown} className="flex flex-col gap-2.5">
-      <ActionBar
-        title={`${order.orderNo} · 编辑`}
-        subtitle={<><EditModeBadge /><UnsavedBadge show={isDirty} /></>}
-        rightActions={
-          <>
-            <Button variant="outline" onClick={onDone} disabled={updateMutate.isPending}>
-              取消编辑
-            </Button>
-            <Button onClick={handleSubmit} disabled={updateMutate.isPending} className="gap-1.5">
-              {updateMutate.isPending
-                ? <><Loader2 className="h-4 w-4 animate-spin" />保存中…</>
-                : <><Save className="h-4 w-4" />保存修改</>}
-            </Button>
-          </>
-        }
-      />
-
-      <OrderEntryIssues issues={issues} />
-      <SaleOrderHeaderFields
-        customerId={customerId} customerName={customerName} customerError={issues.some(i => i.target === 'party')} setCustomerFinderOpen={setCustomerFinderOpen}
-        warehouseId={warehouseId} setWarehouseId={setWarehouseId} setWarehouseName={setWarehouseName}
-        warehouseError={issues.some(i => i.target === 'warehouse')} setWarehouseError={setWarehouseError}
-        carrierId={carrierId} setCarrierId={setCarrierId} carrierOptions={carrierOptions}
-        shippingProduct={shippingProduct} setShippingProduct={setShippingProduct}
-        freightType={freightType} setFreightType={setFreightType}
-        receiverName={receiverName} setReceiverName={setReceiverName}
-        receiverPhone={receiverPhone} setReceiverPhone={setReceiverPhone}
-        receiverAddress={receiverAddress} setReceiverAddress={setReceiverAddress}
-        remark={remark} setRemark={setRemark}
-      />
-
-      {/* 商品明细：跟采购单/调拨单/退货单一致，点击"添加商品"弹出选品对话框 */}
-      <SaleOrderItemsSection hasItems={items.length > 0} onAdd={addItem}>
-          <SaleOrderItemsTable
-            items={items} invalidItemKeys={new Set(issues.flatMap(i => i.itemKey === undefined ? [] : [i.itemKey]))} quantityRefs={quantityRefs} priceLoading={priceLoading} priceErrors={priceErrors}
-            setFinderItemKey={setFinderItemKey} setFinderOpen={setFinderOpen}
-            updateItem={updateItem} removeItem={removeItem}
-          />
-      </SaleOrderItemsSection>
-
-      <SaleOrderSummaryCard items={items} total={total} discount={discount} discountedTotal={discountedTotal}
-        discountAmount={discountAmount} onDiscountChange={setDiscountAmount}
-        warningText="存在低于进价的销售行，保存后会记录到时间线" />
-
-      <ProductFinder
-        mode="sale"
-        warehouseName={warehouseName}
-        open={finderOpen}
-        warehouseId={warehouseId ? +warehouseId : null}
-        onConfirm={handleFinderConfirm}
-        onClose={() => { setFinderOpen(false); setFinderItemKey(null) }}
-      />
-
-      <CustomerFinder
-        open={customerFinderOpen}
-        onClose={() => setCustomerFinderOpen(false)}
-        onConfirm={handleCustomerConfirm}
-      />
-
-      <div className="h-4" />
-    </div>
-  )
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// 改单视图（已占库/部分占库/拣货中——增减数量/加删商品行）
-// ════════════════════════════════════════════════════════════════════════════
-
-/**
- * 改单：status∈{2,6}（占库期，未发货）走占库期改单，已占量按新明细对齐；
- * status=3（已发起出库，有关联仓库任务）走执行期改单，提交后若涉及已拣/已打包
- * 实物的归还（pending=true），后端会把任务挂起等待 PDA 扫码确认，这里只需提示、
- * 不阻塞——具体进度请去 PDA「改单确认」查看。
- */
-function AdjustView({ order, tabPath, onDone }: { order: NonNullable<ReturnType<typeof useSaleDetail>['data']>; tabPath: string; onDone: () => void }) {
-  const adjustMutate = useAdjustSale()
-
-  const {
-    customerId, customerName,
-    warehouseId, setWarehouseId, warehouseName, setWarehouseName,
-    remark, setRemark, carrierId, setCarrierId, shippingProduct, setShippingProduct, freightType, setFreightType,
-    receiverName, setReceiverName, receiverPhone, setReceiverPhone, receiverAddress, setReceiverAddress,
-    discountAmount, total, discount, discountedTotal,
-    quantityRefs, carrierOptions,
-    items, priceLoading, priceErrors,
-    finderOpen, setFinderOpen, setFinderItemKey,
-    customerFinderOpen, setCustomerFinderOpen,
-    setCustomerError, setWarehouseError,
-    setInvalidItemKeys,
-    isDirty,
-    addItem, removeItem, updateItem,
-    handleCustomerConfirm, handleFinderConfirm,
-  } = useSaleOrderForm(tabPath, order)
-
-  const [validationAttempted, setValidationAttempted] = useState(false)
-  const allIssues = collectOrderIssues({ kind: 'sale', partyId: customerId, partyName: customerName, warehouseId, warehouseName, items, receiverPhone, discountAmount, priceLoading, priceErrors })
-  const issues = validationAttempted ? allIssues.map(issue => issue.target === 'discount' ? { ...issue, message: '原单折扣超过当前商品合计，请调整商品数量或单价' } : issue) : []
-
-  async function handleSubmit() {
-    setValidationAttempted(true)
-    const filledItems = validateSaleForm({
-      items, customerId, customerName, warehouseId, warehouseName, receiverPhone, discountAmount, priceLoading, priceErrors,
-      setCustomerError, setWarehouseError, setInvalidItemKeys,
-    })
-    if (!filledItems) return
-    try {
-      await adjustMutate.mutateAsync({
-        id: order.id,
-        customerId: +customerId, customerName,
-        warehouseId: +warehouseId, warehouseName,
-        remark: remark || undefined,
-        discountAmount: Number(discountAmount) || 0,
-        carrierId: carrierId ? +carrierId : null,
-        freightType: freightType ? +freightType : null,
-        receiverName: receiverName || undefined,
-        receiverPhone: receiverPhone || undefined,
-        receiverAddress: receiverAddress || undefined,
-        items: serializeSaleItems(filledItems),
-      })
-      onDone()
-    } catch (_) {}
-  }
-
-  return (
-    <div data-order-entry onKeyDown={handleEntryKeyDown} className="flex flex-col gap-2.5">
-      <ActionBar
-        title={`${order.orderNo} · 修改订单`}
-        subtitle={<><EditModeBadge label="改单中" /><UnsavedBadge show={isDirty} /></>}
-        rightActions={
-          <>
-            <Button variant="outline" onClick={onDone} disabled={adjustMutate.isPending}>
-              <X className="h-4 w-4 mr-1" />取消
-            </Button>
-            <Button onClick={handleSubmit} disabled={adjustMutate.isPending} className="gap-1.5">
-              {adjustMutate.isPending
-                ? <><Loader2 className="h-4 w-4 animate-spin" />提交中…</>
-                : <><Save className="h-4 w-4" />提交改单</>}
-            </Button>
-          </>
-        }
-      />
-
-      <div className="flex gap-2 rounded-lg border border-warning/25 bg-warning/[0.06] px-4 py-3 text-sm leading-6 text-foreground">
-        <AlertTriangle className="mt-1 h-4 w-4 shrink-0 text-warning-ink" />
-        <span>改单仅修改商品明细：订单客户、出库仓库与收货信息保持不变。增加数量将触发重新拣货；减少数量若涉及已拣或已打包的商品，需经仓库扫码确认放回库位 / 拆箱后方可生效。</span>
-      </div>
-
-      <OrderEntryIssues issues={issues} />
-      <SaleOrderHeaderFields
-        customerId={customerId} customerName={customerName} customerError={issues.some(i => i.target === 'party')} setCustomerFinderOpen={setCustomerFinderOpen}
-        warehouseId={warehouseId} setWarehouseId={setWarehouseId} setWarehouseName={setWarehouseName}
-        warehouseError={issues.some(i => i.target === 'warehouse')} setWarehouseError={setWarehouseError}
-        carrierId={carrierId} setCarrierId={setCarrierId} carrierOptions={carrierOptions}
-        shippingProduct={shippingProduct} setShippingProduct={setShippingProduct} shippingProductDisabled
-        freightType={freightType} setFreightType={setFreightType}
-        receiverName={receiverName} setReceiverName={setReceiverName}
-        receiverPhone={receiverPhone} setReceiverPhone={setReceiverPhone}
-        receiverAddress={receiverAddress} setReceiverAddress={setReceiverAddress}
-        remark={remark} setRemark={setRemark}
-        headerReadOnly
-      />
-
-      <SaleOrderItemsSection hasItems={items.length > 0} onAdd={addItem}>
-          <SaleOrderItemsTable
-            items={items} invalidItemKeys={new Set(issues.flatMap(i => i.itemKey === undefined ? [] : [i.itemKey]))} quantityRefs={quantityRefs} priceLoading={priceLoading} priceErrors={priceErrors}
-            setFinderItemKey={setFinderItemKey} setFinderOpen={setFinderOpen}
-            updateItem={updateItem} removeItem={removeItem}
-          />
-      </SaleOrderItemsSection>
-
-      <SaleOrderSummaryCard items={items} total={total} discount={discount} discountedTotal={discountedTotal}
-        discountAmount={discountAmount} editableDiscount={false} />
-
-      <ProductFinder
-        mode="sale"
-        warehouseName={warehouseName}
-        open={finderOpen}
-        warehouseId={warehouseId ? +warehouseId : null}
-        onConfirm={handleFinderConfirm}
-        onClose={() => { setFinderOpen(false); setFinderItemKey(null) }}
-      />
-
-      <CustomerFinder
-        open={customerFinderOpen}
-        onClose={() => setCustomerFinderOpen(false)}
-        onConfirm={handleCustomerConfirm}
-      />
-
-      <div className="h-4" />
-    </div>
-  )
-}
-
-// ════════════════════════════════════════════════════════════════════════════
 // 查看视图（已有销售单详情 + 状态操作）
 // ════════════════════════════════════════════════════════════════════════════
 
 function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: string; closeTab: () => void }) {
   const { data: order, isLoading, isFetching, isPaused, isError, refetch } = useSaleDetail(saleId)
+  const { can } = usePermission()
   // Once classified, this resource stays behind the owned read even if legacy bootstrap finishes later.
   const commercialResource = useRef({ saleId, identified: false })
   if (commercialResource.current.saleId !== saleId) commercialResource.current = { saleId, identified: false }
@@ -582,7 +340,7 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
   const cancelMutate   = useCancelSale()
 
   const [printOpen, setPrintOpen] = useState(false)
-  const [detailTab, setDetailTab] = useState<'info'|'fulfillment'|'progress'|'scan'|'pack'|'log'>(() => hasHandoff ? handoff.focus : 'info')
+  const [detailTab, setDetailTab] = useState<SaleDetailTab>(() => hasHandoff ? handoff.focus : 'info')
   useEffect(() => {
     const context = readSaleHandoff(tabPath, saleId)
     if (context === 'invalid') setDetailTab('info')
@@ -598,6 +356,14 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
   const [confirmState, setConfirmState] = useState<{
     open: boolean; title: string; description: string; variant: 'default' | 'destructive'; confirmText: string; onConfirm: () => void
   }>({ open: false, title: '', description: '', variant: 'default', confirmText: '确认', onConfirm: () => {} })
+
+  const isPending = shipMutate.isPending || deleteMutate.isPending || cancelMutate.isPending
+  useSaleEditEntry(tabPath, !needsCommercialRead && !!order && !isFetching && !isPaused && !isError, () => {
+    if (order?.status === 1 && can(PERMISSIONS.SALE_ORDER_UPDATE) && !isPending) setEditing(true)
+  })
+
+  if (editing) return <ExistingSaleEditor saleId={saleId} tabPath={tabPath} onDone={() => setEditing(false)} />
+  if (adjustMode) return <ExistingSaleEditor saleId={saleId} tabPath={tabPath} adjust onDone={() => setAdjustMode(false)} />
 
   if (needsCommercialRead) return <SaleModelGate key={saleId} saleId={saleId} tabPath={tabPath} closeTab={closeTab} />
 
@@ -619,17 +385,6 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
     )
   }
 
-  // 草稿状态默认先展示只读详情，点击"编辑"再进入可编辑视图（与采购单一致）
-  if (order.status === 1 && editing) {
-    return <EditView order={order} tabPath={tabPath} onDone={() => setEditing(false)} />
-  }
-
-  // 已发起出库后仍要改单：切到独立的改单视图，提交/取消后回到只读详情
-  if (adjustMode) {
-    return <AdjustView order={order} tabPath={tabPath} onDone={() => setAdjustMode(false)} />
-  }
-
-  const isPending = shipMutate.isPending || deleteMutate.isPending || cancelMutate.isPending
   // 分仓/分批：多仓订单、或已有部分发货的订单，明细已锁定（后端拒绝改单），不进改单视图。
   // 占库期（状态2/6）无 taskId 也可改单（占库期改单）；执行期（状态3）需有 taskId。
   const canAdjust = (order.status === 2 || order.status === 3 || order.status === 6)
@@ -649,7 +404,7 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
           <>
             <ReturnSourceButton kind="sale" sourceId={order.id} sourceNo={order.orderNo} />
             <ReorderSourceButton sourceId={order.id} model="ordinary" disabled={isFetching || isError || isPaused} />
-            {order.status === 5 && (
+            {can(PERMISSIONS.SALE_ORDER_DELETE) && order.status === 5 && (
               <Button variant="outline" className="text-destructive-ink border-destructive/30 hover:bg-destructive/5" disabled={isPending}
                 onClick={() => setConfirmState({
                   open: true, title: '确认删除订单', description: '删除后订单将无法恢复。', variant: 'destructive', confirmText: '确认删除',
@@ -661,7 +416,7 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
                 <X className="h-4 w-4 mr-1" />删除订单
               </Button>
             )}
-            {(order.status === 1 || order.status === 2 || order.status === 3 || order.status === 6) && (
+            {can(PERMISSIONS.SALE_ORDER_CANCEL) && (order.status === 1 || order.status === 2 || order.status === 3 || order.status === 6) && (
               <Button variant="outline" className="text-destructive-ink border-destructive/30 hover:bg-destructive/5" disabled={isPending}
                 onClick={() => setConfirmState({
                   open: true, title: '取消订单',
@@ -678,35 +433,35 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
                 <X className="h-4 w-4 mr-1" />取消订单
               </Button>
             )}
-            {(order.status === 1 || order.status === 6) && (
+            {can(PERMISSIONS.SALE_ORDER_RESERVE) && (order.status === 1 || order.status === 6) && (
               <Button variant="outline" disabled={isPending} onClick={() => setReserveDialogOpen(true)}>
                 <Warehouse className="h-4 w-4 mr-1" />{order.status === 6 ? '补占库存' : '占用库存'}
               </Button>
             )}
-            {(order.status === 2 || order.status === 6) && (
+            {can(PERMISSIONS.SALE_ORDER_RELEASE) && (order.status === 2 || order.status === 6) && (
               <Button variant="outline" disabled={isPending} onClick={() => setReleaseDialogOpen(true)}>
                 <Warehouse className="h-4 w-4 mr-1" />取消占库
               </Button>
             )}
             {/* 打印与订单状态无关（模板只依赖订单基础信息 + 明细），每个状态都可打印，与采购单一致 */}
             <Button variant="outline" onClick={() => setPrintOpen(true)}>打印订单</Button>
-            {(order.status === 2 || order.status === 6) && (
+            {can(PERMISSIONS.SALE_ORDER_SHIP) && (order.status === 2 || order.status === 6) && (
               <Button disabled={isPending} onClick={() => setShipDialogOpen(true)}>
                 发起出库
               </Button>
             )}
             {/* 分批：履约中且仍有未派发行时可继续发剩余 */}
-            {order.status === 3 && order.hasUndispatchedItems && (
+            {can(PERMISSIONS.SALE_ORDER_SHIP) && order.status === 3 && order.hasUndispatchedItems && (
               <Button disabled={isPending} onClick={() => setShipDialogOpen(true)}>
                 继续发货
               </Button>
             )}
-            {canAdjust && (
+            {can(PERMISSIONS.SALE_ORDER_UPDATE) && canAdjust && (
               <Button variant="outline" disabled={isPending} onClick={() => setAdjustMode(true)}>
                 <Pencil className="h-4 w-4 mr-1" />修改订单
               </Button>
             )}
-            {order.status === 1 && (
+            {can(PERMISSIONS.SALE_ORDER_UPDATE) && order.status === 1 && (
               <Button variant="outline" disabled={isPending} onClick={() => setEditing(true)}>
                 <Pencil className="h-4 w-4 mr-1" />编辑
               </Button>
@@ -724,129 +479,76 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
         </div>
       )}
 
-      {/* 选项卡切换 */}
-      <div className="flex gap-1 overflow-x-auto rounded-lg border border-border bg-muted/30 p-1">
-        {([
-          ['info', '订单信息', ClipboardList],
-          ['fulfillment', '发货安排', CalendarClock],
-          ['progress', '作业进度', Activity],
-          ['scan', '拣货明细', ScanLine],
-          ['pack', '装箱进度', PackageCheck],
-          ['log', '操作记录', History],
-        ] as const).map(([key, label, Icon]) => (
-          <button
-            key={key}
-            type="button"
-            aria-pressed={detailTab === key}
-            onClick={() => setDetailTab(key)}
-            className={`flex min-w-28 flex-1 items-center justify-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-[background-color,color,box-shadow] ${
-              detailTab === key
-                ? 'bg-background text-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            <Icon className="h-4 w-4" />
-            {label}
-          </button>
-        ))}
-      </div>
+      <SaleOrderDetailTabs value={detailTab} onChange={setDetailTab} />
 
       <KeepAliveSection active={detailTab === 'info'} className="space-y-3"><>
-          {/* 基础信息 */}
-          <SectionCard title="基础信息" compact contentClassName="p-3">
-            <div className="space-y-2 text-sm">
-              <div className="grid grid-cols-1 gap-x-8 gap-y-2 sm:grid-cols-2 xl:grid-cols-6">
-                <div><span className="text-muted-foreground">客户：</span><span>{order.customerName}</span></div>
-                <div><span className="text-muted-foreground">仓库：</span><span>{order.warehouseName}</span></div>
-                <div><span className="text-muted-foreground">时间：</span><span>{formatDisplayDateTime(order.createdAt)}</span></div>
-                <div><span className="text-muted-foreground">经办人：</span><span>{order.operatorName}</span></div>
-                <div><span className="text-muted-foreground">承运商：</span><span>{order.carrier || '-'}</span></div>
-                <div><span className="text-muted-foreground">发货产品：</span><span>{order.shippingProduct || '沿用承运商配置'}</span></div>
-                <div><span className="text-muted-foreground">运费方式：</span><span>{order.freightTypeName || '-'}</span></div>
-                <div><span className="text-muted-foreground">收货人：</span><span>{order.receiverName || '-'}</span></div>
-                <div><span className="text-muted-foreground">联系电话：</span><span>{order.receiverPhone || '-'}</span></div>
-                <div className="sm:col-span-2"><span className="text-muted-foreground">收货地址：</span><span>{order.receiverAddress || '-'}</span></div>
-                <div><span className="text-muted-foreground">备注：</span><span>{order.remark || '-'}</span></div>
-                {(() => {
-                  const rs = getReceivableStatus(order)
-                  return (
-                    <div>
-                      <span className="text-muted-foreground">回款：</span>
-                      <SoftStatusLabel label={rs.label} tone={rs.tone} />
-                      {rs.dueDate && (
-                        <span className="ml-1.5 text-xs text-muted-foreground">账期至 {rs.dueDate.slice(0, 10)}</span>
-                      )}
-                    </div>
-                  )
-                })()}
-              </div>
-            </div>
-          </SectionCard>
+          <SaleOrderInfoCard order={order} />
 
           {/* 商品明细 */}
-          <SectionCard title="商品明细" compact>
-            <DataTable
-              columns={[
-                { key: 'productCode', title: '编码', width: 130 },
-                { key: 'articleNumber', title: '供应商型号', width: 110, render: v => (v as string) || '-' },
-                { key: 'spec', title: '型号', width: 110, render: v => (v as string) || '-' },
-                { key: 'productName', title: '名称', width: 180 },
-                { key: 'color', title: '颜色', width: 100, render: v => (v as string) || '-' },
-                { key: 'unit', title: '单位', width: 70, render: (_, item) => <span className="text-center">{(item.entryUnit && item.entryUnit !== item.unit) ? item.entryUnit : item.unit}</span> },
-                // 分仓订单：展示每行的发货仓库
-                ...(order.isMultiWarehouse ? [{
-                  key: 'warehouseName' as const, title: '发货仓库', width: 120,
-                  render: (v: unknown) => <span className="text-sm">{(v as string) || order.warehouseName || '-'}</span>,
-                }] : []),
-                {
-                  key: 'quantity', title: '数量', width: 120, align: 'right',
-                  render: (v, item) => (item.entryUnit && item.entryUnit !== item.unit && item.entryQty != null)
-                    ? <span className="tabular-nums">{item.entryQty} {item.entryUnit}<span className="ml-1 text-xs text-muted-foreground">（{Number(v)} {item.unit}）</span></span>
-                    : <span className="tabular-nums">{String(v)}</span>,
-                },
-                // 进入履约后展示已发/应发进度
-                ...((order.shippedTotalQty ?? 0) > 0 || order.status >= 3 ? [{
-                  key: 'shippedQty' as const, title: '已发/应发', width: 100, align: 'right' as const,
-                  render: (v: unknown, item: SaleOrderItem) => {
-                    const shipped = Number(v ?? 0)
-                    const done = shipped >= item.quantity
-                    return <span className={cn('tabular-nums', done ? 'text-success-ink' : shipped > 0 ? 'text-primary' : 'text-muted-foreground')}>{shipped}/{item.quantity}</span>
-                  },
-                }] : []),
-                {
-                  key: 'unitPrice', title: '单价', width: 130, align: 'right',
-                  render: (v, item) => (
-                    <div className="space-y-1">
-                      <div className="tabular-nums">
-                        {(item.entryUnit && item.entryUnit !== item.unit && item.entryQty && item.entryQty > 0)
-                          ? <span title={`¥${Number(v).toFixed(4)} / ${item.unit}`}>{money(item.amount / item.entryQty)}/{item.entryUnit}</span>
-                          : <>{money(Number(v))}</>}
+          <SectionCard title="商品明细" compact noPadding>
+            <div data-sale-detail-items>
+              <div data-workspace-scroll tabIndex={0} aria-label="销售商品明细" className="max-h-[min(60vh,36rem)] overflow-auto [&>div]:rounded-none [&>div]:border-0 [&>div]:overflow-visible [&_[data-table-scroll]]:overflow-visible [&_thead]:sticky [&_thead]:top-0 [&_thead]:z-10">
+                <DataTable
+                  virtualized
+                  columns={[
+                    { key: 'productName', title: '商品', width: 440, render: (_, item) => (
+                      <div className="space-y-1 whitespace-normal [overflow-wrap:anywhere]">
+                        <div className="font-medium"><span className="mr-2 font-mono text-xs text-muted-foreground">{item.productCode}</span>{item.productName}</div>
+                        {(item.spec || item.color || item.articleNumber) && <div className="text-xs text-muted-foreground">{[item.spec && `型号 ${item.spec}`, item.color && `颜色 ${item.color}`, item.articleNumber && `供应商型号 ${item.articleNumber}`].filter(Boolean).join(' · ')}</div>}
                       </div>
-                      {item.belowCost && item.costPrice != null && (
-                        <div className="inline-flex items-center gap-1 text-[11px] text-destructive-ink">
-                          <AlertTriangle className="h-3 w-3" />
-                          低于进价 {money(Number(item.costPrice))}
+                    ) },
+                    { key: 'unit', title: '单位', width: 70, render: (_, item) => <span className="text-center">{(item.entryUnit && item.entryUnit !== item.unit) ? item.entryUnit : item.unit}</span> },
+                    // 分仓订单：展示每行的发货仓库
+                    ...(order.isMultiWarehouse ? [{
+                      key: 'warehouseName' as const, title: '发货仓库', width: 120,
+                      render: (v: unknown) => <span className="text-sm">{(v as string) || order.warehouseName || '-'}</span>,
+                    }] : []),
+                    {
+                      key: 'quantity', title: '数量', width: 120, align: 'right',
+                      render: (v, item) => (item.entryUnit && item.entryUnit !== item.unit && item.entryQty != null)
+                        ? <span className="tabular-nums">{item.entryQty} {item.entryUnit}<span className="ml-1 text-xs text-muted-foreground">（{Number(v)} {item.unit}）</span></span>
+                        : <span className="tabular-nums">{String(v)}</span>,
+                    },
+                    // 进入履约后展示已发/应发进度
+                    ...((order.shippedTotalQty ?? 0) > 0 || order.status >= 3 ? [{
+                      key: 'shippedQty' as const, title: '已发/应发', width: 100, align: 'right' as const,
+                      render: (v: unknown, item: SaleOrderItem) => {
+                        const shipped = Number(v ?? 0)
+                        const done = shipped >= item.quantity
+                        return <span className={cn('tabular-nums', done ? 'text-success-ink' : shipped > 0 ? 'text-primary' : 'text-muted-foreground')}>{shipped}/{item.quantity}</span>
+                      },
+                    }] : []),
+                    {
+                      key: 'unitPrice', title: '单价', width: 130, align: 'right',
+                      render: (v, item) => (
+                        <div className="space-y-1">
+                          <div className="tabular-nums">
+                            {(item.entryUnit && item.entryUnit !== item.unit && item.entryQty && item.entryQty > 0)
+                              ? <span title={`¥${Number(v).toFixed(4)} / ${item.unit}`}>{money(item.amount / item.entryQty)}/{item.entryUnit}</span>
+                              : <>{money(Number(v))}</>}
+                          </div>
+                          {item.belowCost && item.costPrice != null && (
+                            <div className="inline-flex items-center gap-1 text-[11px] text-destructive-ink">
+                              <AlertTriangle className="h-3 w-3" />
+                              低于进价 {money(Number(item.costPrice))}
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                  ),
-                },
-                { key: 'amount', title: '金额', width: 110, align: 'right', render: v => <span className="font-semibold tabular-nums">{money(Number(v))}</span> },
-              ] satisfies TableColumn<SaleOrderItem>[]}
-              data={order.items ?? []}
-              rowKey="id"
-              emptyText="暂无商品明细"
-            />
-          </SectionCard>
-
-          <SectionCard title="订单汇总" compact>
-            <div className="flex items-center justify-between gap-8 text-sm">
-              <p className="text-muted-foreground">共 <span className="font-medium tabular-nums text-foreground">{order.items?.length ?? 0}</span> 行商品明细</p>
-              <dl className="flex items-center gap-10 text-right">
-                <div><dt className="text-xs text-muted-foreground">商品金额</dt><dd className="mt-1 tabular-nums">{money(Number(order.totalAmount))}</dd></div>
-                <div><dt className="text-xs text-muted-foreground">折扣金额</dt><dd className="mt-1 tabular-nums">{Number(order.discountAmount ?? 0) > 0 ? money(-Number(order.discountAmount)) : money(0)}</dd></div>
-                <div className="border-l pl-8"><dt className="text-xs text-muted-foreground">订单净额</dt><dd className="mt-1 text-2xl font-semibold tabular-nums">{money(Math.max(0, Number(order.totalAmount) - Number(order.discountAmount ?? 0)))}</dd></div>
-              </dl>
+                      ),
+                    },
+                    { key: 'amount', title: '金额', width: 110, align: 'right', render: v => <span className="font-semibold tabular-nums">{money(Number(v))}</span> },
+                    { key: 'remark', title: '备注', width: 180, expandableText: true },
+                  ] satisfies TableColumn<SaleOrderItem>[]}
+                  data={order.items ?? []}
+                  rowKey="id"
+                  emptyText="暂无商品明细"
+                />
+              </div>
+              <div className="flex flex-wrap items-center justify-end gap-x-6 gap-y-2 border-t px-4 py-3 text-sm">
+                <span className="mr-auto tabular-nums"><span className="text-muted-foreground">明细</span> {order.items?.length ?? 0} 行</span>
+                <span className="tabular-nums"><span className="mr-2 text-muted-foreground">折扣金额</span>{Number(order.discountAmount ?? 0) > 0 ? money(-Number(order.discountAmount)) : money(0)}</span>
+                <strong className="tabular-nums"><span className="mr-2 font-normal">订单金额</span>{money(Math.max(0, Number(order.totalAmount) - Number(order.discountAmount ?? 0)))}</strong>
+              </div>
             </div>
           </SectionCard>
         </></KeepAliveSection>
@@ -859,121 +561,15 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
           {!handoffReady || isError ? <div className="space-y-2 text-sm" role={isError ? 'alert' : 'status'}><p>{isError ? '原单读取失败，无法核对最新任务；请重新读取后交接。' : isPaused ? '网络已暂停，等待恢复后重新读取原单任务。' : '正在重新读取原单任务…'}</p>{isError && <Button variant="outline" onClick={() => { setCheckedPath(''); void refetch().then(result => { if (!result.isError) setCheckedPath(tabPath) }) }}>重新读取原单</Button>}</div> : (
             <div className="space-y-4">
               <FulfillmentProgressCard order={order} targetTaskId={handoff && handoff !== 'invalid' ? handoff.taskId : undefined} />
-              {order.taskNo && <DataTable
-                columns={[
-                  { key: 'productCode', title: '编码', width: 130 },
-                  { key: 'articleNumber', title: '供应商型号', width: 110, render: v => (v as string) || '-' },
-                  { key: 'spec', title: '型号', width: 110, render: v => (v as string) || '-' },
-                  { key: 'productName', title: '名称', width: 180 },
-                  { key: 'color', title: '颜色', width: 100, render: v => (v as string) || '-' },
-                  { key: 'unit', title: '单位', width: 70 },
-                  { key: 'quantity', title: '订单数量', width: 90, align: 'right' },
-                  { key: 'picked', title: '取货数量', width: 90, align: 'right', render: v => <span className="tabular-nums">{Number(v ?? 0)}</span> },
-                ] satisfies TableColumn<SaleOrderItem & { picked: number }>[]}
-                data={(order.items ?? []).map(item => ({ ...item, picked: (item.scans ?? []).reduce((s, sc) => s + sc.qty, 0) }))}
-                rowKey="id"
-                emptyText="暂无商品明细"
-              />}
+              <SaleOrderPickingProgress order={order} />
             </div>
           )}
           {!order.taskNo && !hasHandoff && <p className="py-8 text-center text-sm text-muted-foreground">尚未创建仓库任务，订单状态为 {getSaleWorkflowStatus(order).label}</p>}
         </div></KeepAliveSection>
 
-      <KeepAliveSection active={detailTab === 'scan'} className="space-y-3"><div className="card-base p-4">
-          {order.taskNo ? (
-            <DataTable
-              columns={[
-                { key: 'productCode', title: '编码', width: 130 },
-                { key: 'articleNumber', title: '供应商型号', width: 110, render: v => (v as string) || '-' },
-                { key: 'spec', title: '型号', width: 110, render: v => (v as string) || '-' },
-                { key: 'productName', title: '名称', width: 180 },
-                { key: 'color', title: '颜色', width: 100, render: v => (v as string) || '-' },
-                { key: 'unit', title: '单位', width: 70 },
-                { key: 'barcode', title: '条码', width: 140 },
-                { key: 'qtyLabel', title: '条码数量', width: 100 },
-                { key: 'operatorName', title: '操作人', width: 110, render: v => (v as string) || '-' },
-                { key: 'scannedAt', title: '操作时间', width: 150, render: v => v ? formatDisplayDateTime(v as string) : '-' },
-              ] satisfies TableColumn<ScanRow>[]}
-              data={(order.items ?? []).flatMap((item): ScanRow[] => {
-                const scans = item.scans ?? []
-                if (scans.length === 0) {
-                  return [{
-                    rowKey: `${item.id}`, productCode: item.productCode, articleNumber: item.articleNumber,
-                    spec: item.spec, productName: item.productName, color: item.color, unit: item.unit,
-                    barcode: '-', qtyLabel: `0/${item.quantity}`, operatorName: null, scannedAt: null,
-                  }]
-                }
-                return scans.map((sc, si) => ({
-                  rowKey: `${item.id}-${si}`, productCode: item.productCode, articleNumber: item.articleNumber,
-                  spec: item.spec, productName: item.productName, color: item.color, unit: item.unit,
-                  barcode: sc.barcode, qtyLabel: String(sc.qty), operatorName: sc.operatorName, scannedAt: sc.scannedAt,
-                }))
-              })}
-              rowKey="rowKey"
-              emptyText="暂无扫码记录"
-            />
-          ) : (
-            <p className="py-8 text-center text-sm text-muted-foreground">尚未创建仓库任务</p>
-          )}
-        </div></KeepAliveSection>
+      <KeepAliveSection active={detailTab === 'scan'} className="space-y-3"><SaleOrderScanDetails order={order} /></KeepAliveSection>
 
-      <KeepAliveSection active={detailTab === 'pack'} className="space-y-3"><div className="card-base p-4">
-          {order.taskNo ? (
-            <div className="space-y-4">
-              {(() => {
-                const pkgs = order.packages ?? []
-                const done = pkgs.filter(p => p.status === 2).length
-                const totalLines = pkgs.reduce((sum, pkg) => sum + pkg.items.length, 0)
-                return (
-                  <div className="grid grid-cols-4 divide-x rounded-lg border py-3 text-sm">
-                    <div className="px-4 text-center">
-                      <p className="text-2xl font-semibold tabular-nums">{pkgs.length}</p>
-                      <p className="text-xs text-muted-foreground">箱子总数</p>
-                    </div>
-                    <div className="px-4 text-center">
-                      <p className="text-2xl font-semibold tabular-nums text-success-ink">{done}</p>
-                      <p className="text-xs text-muted-foreground">已完成</p>
-                    </div>
-                    <div className="px-4 text-center">
-                      <p className="text-2xl font-semibold tabular-nums">{pkgs.length - done}</p>
-                      <p className="text-xs text-muted-foreground">未完成</p>
-                    </div>
-                    <div className="px-4 text-center">
-                      <p className="text-2xl font-semibold tabular-nums">{totalLines}</p>
-                      <p className="text-xs text-muted-foreground">装箱明细行数</p>
-                    </div>
-                  </div>
-                )
-              })()}
-              {(order.packages ?? []).length > 0 ? (
-                (order.packages ?? []).map(pkg => (
-                  <div key={pkg.id} className="rounded-lg border border-border/70 bg-card px-4 py-3">
-                    <div className="mb-3 flex items-center justify-between border-b pb-3 text-sm"><span className="font-mono font-medium">{pkg.barcode}</span><SoftStatusLabel label={pkg.status === 2 ? '已完成' : '未完成'} tone={pkg.status === 2 ? 'success' : 'active'} /></div>
-                    <DataTable
-                      columns={[
-                        { key: 'productCode', title: '编码', width: 130 },
-                        { key: 'articleNumber', title: '供应商型号', width: 110, render: v => (v as string) || '-' },
-                        { key: 'spec', title: '型号', width: 110, render: v => (v as string) || '-' },
-                        { key: 'productName', title: '名称', width: 180 },
-                        { key: 'color', title: '颜色', width: 100, render: v => (v as string) || '-' },
-                        { key: 'unit', title: '单位', width: 70 },
-                        { key: 'qty', title: '数量', width: 80 },
-                        { key: 'packedAt', title: '操作时间', width: 150, render: v => v ? formatDisplayDateTime(v as string) : '-' },
-                      ]}
-                      data={pkg.items.map((it, idx) => ({ ...it, rowKey: idx }))}
-                      rowKey="rowKey"
-                      emptyText="暂无装箱明细"
-                    />
-                  </div>
-                ))
-              ) : (
-                <EmptyState variant="no-data" title="暂无装箱记录" compact />
-              )}
-            </div>
-          ) : (
-            <p className="py-8 text-center text-sm text-muted-foreground">尚未创建仓库任务</p>
-          )}
-        </div></KeepAliveSection>
+      <KeepAliveSection active={detailTab === 'pack'} className="space-y-3"><SaleOrderPackingDetails order={order} /></KeepAliveSection>
 
       <KeepAliveSection active={detailTab === 'log'} className="space-y-3"><DocumentActivityPanel type="sale" id={order.id} view="log" /></KeepAliveSection>
 

@@ -20,13 +20,13 @@ const definition = z.object({
 }).strict()
 const edit = definition.partial().extend({ revision: id }).strict()
 const remove = z.object({ revision: id }).strict()
-const common = { lineKey: z.string().trim().min(1).max(100), quantity: z.number().finite(), unitPrice: z.number().finite().optional() }
+const common = { lineKey: z.string().trim().min(1).max(100), quantity: z.number().finite(), unitPrice: z.number().finite().optional(), remark: z.string().max(200).optional() }
 const kitGroup = z.object({ ...common, kind: z.literal('kit'), kitVersionId: id, priceSource: z.enum(['kit_default', 'manual']) }).strict()
 const ordinaryGroup = z.object({ ...common, kind: z.literal('ordinary'), productId: id, entryUnit:z.string().max(20).optional().nullable(),priceSource: z.enum(['default', 'manual']) }).strict()
 const preview = z.object({ customerId: id, warehouseId: id, groups: z.array(z.discriminatedUnion('kind', [kitGroup, ordinaryGroup])).min(1).max(200) }).strict()
 const queryId = z.coerce.number().int().positive().max(Number.MAX_SAFE_INTEGER)
 const listQuery = z.object({ page: z.coerce.number().finite().int().positive().max(100000).default(1), pageSize: z.coerce.number().int().positive().max(100).default(20), keyword: z.string().max(100).default('') }).strict()
-const finderQuery = listQuery.extend({ warehouseId: queryId })
+const finderQuery = listQuery.extend({ warehouseId: queryId, categoryId: queryId.optional() })
 const detailQuery = z.object({ versionId: queryId.optional() }).strict()
 const params = z.object({ id: queryId }).strict()
 module.exports = { definition, edit, remove, preview, listQuery, finderQuery, detailQuery, params }

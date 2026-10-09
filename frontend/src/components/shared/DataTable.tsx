@@ -1,7 +1,9 @@
 import { useCallback, useMemo, type ReactNode } from 'react'
 import { useTableColumns, isAction } from './useTableColumns'
 import { VirtualTableBody, VIRTUAL_TABLE_THRESHOLD } from './VirtualTableBody'
-import { ChevronDown, Inbox } from 'lucide-react'
+import { Inbox } from 'lucide-react'
+import { TableTextPreview } from './TableTextPreview'
+import { TableColumnResizeHandle } from './TableColumnResizeHandle'
 import type { TableColumn } from '@/types'
 
 interface DataTableProps<T extends object> {
@@ -133,13 +135,7 @@ export default function DataTable<T extends object>({
               : (
                 <div className={`min-w-0 whitespace-normal [overflow-wrap:anywhere] ${alignClass}`} title={textValue}>
                   {col.expandableText && typeof rawValue === 'string' && rawValue.trim().length > 0 ? (
-                    <details className="table-text-preview group/text" onDoubleClick={event => event.stopPropagation()}>
-                      <summary className="flex cursor-pointer items-start gap-1 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" title={textValue}>
-                        <span className="table-text-value min-w-0 flex-1">{col.render ? (col.render(rawValue, row) as ReactNode) : textValue}</span>
-                        <ChevronDown aria-hidden="true" className="mt-1 h-3 w-3 shrink-0 text-muted-foreground transition-transform group-open/text:rotate-180" />
-                        <span className="sr-only">展开或收起{col.title}</span>
-                      </summary>
-                    </details>
+                    <TableTextPreview title={col.title} value={textValue}>{col.render ? (col.render(rawValue, row) as ReactNode) : textValue}</TableTextPreview>
                   ) : col.render ? (col.render(rawValue, row) as ReactNode) : textValue}
                 </div>
               )}
@@ -216,27 +212,7 @@ export default function DataTable<T extends object>({
                         title={col.title}
                       >{col.title}</span>
                     )}
-                    <button
-                      type="button"
-                      aria-label={`调整${col.title}列宽`}
-                      onMouseDown={(event) => startResize(event, col)}
-                      title="拖动调整列宽，双击或按 Enter 适应内容；方向键微调"
-                      draggable={false}
-                      onClick={event => { event.preventDefault(); event.stopPropagation() }}
-                      onDoubleClick={event => { event.stopPropagation(); fitColumn(col) }}
-                      onKeyDown={event => {
-                        if (event.key === 'Enter') { event.preventDefault(); fitColumn(col) }
-                        if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-                          event.preventDefault(); event.stopPropagation()
-                          const widths = measureWidths()
-                          const key = String(col.key)
-                          savePixelWidths({ ...widths, [key]: Math.max(80, widths[key] + (event.key === 'ArrowRight' ? 1 : -1) * (event.shiftKey ? 40 : 10)) })
-                        }
-                      }}
-                      className="group/resize absolute inset-y-0 right-0 z-30 flex w-3 cursor-col-resize items-center justify-end touch-none hover:bg-primary/10 focus-visible:outline-none focus-visible:bg-primary/10 data-[resizing=true]:bg-primary/15"
-                    >
-                      <span className="pointer-events-none h-full w-px bg-border group-hover/resize:w-0.5 group-hover/resize:bg-primary group-focus-visible/resize:bg-primary group-data-[resizing=true]/resize:w-0.5 group-data-[resizing=true]/resize:bg-primary" />
-                    </button>
+                    <TableColumnResizeHandle column={col} layout={{ startResize, fitColumn, measureWidths, savePixelWidths }} />
                   </div>
                 </th>
               ))}

@@ -41,6 +41,7 @@ import type { PaperSize, PrintPageMargins, TemplateElement, TemplateLayout, Temp
 import { isZplTemplateLayout } from '@/types/print-template'
 import {
   DOC_FIELD_DEFS,
+  SALE_TOTAL_FIELD_DEFS,
   DOC_PREVIEW_ITEMS,
   DOC_PREVIEW_SAMPLE,
   LABEL_FIELD_DEFS_BY_TYPE,
@@ -1371,7 +1372,7 @@ export default function PrintTemplateEditor() {
     ? null
     : elements.find(e => e.id === selectedIds[0]) ?? null
 
-  const paletteFields = isZplLabelType(type) ? (LABEL_FIELD_DEFS_BY_TYPE[type] ?? []) : DOC_FIELD_DEFS
+  const paletteFields = isZplLabelType(type) ? (LABEL_FIELD_DEFS_BY_TYPE[type] ?? []) : type === 1 ? [...DOC_FIELD_DEFS, ...SALE_TOTAL_FIELD_DEFS] : DOC_FIELD_DEFS
   const realPreview = usePrintTemplatePreview(type, isNew || hydrated === Number(id))
   const previewData: Record<string, string> = realPreview.mapped
     ? { ...realPreview.mapped.data, companyLogo: brandLogo?.url ?? '' }

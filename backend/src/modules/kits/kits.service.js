@@ -54,13 +54,13 @@ async function loadVersions(conn, ids) {
   const [versions] = await conn.query('SELECT id,kit_id,version_no,reference_unit_price,sale_price_b,sale_price_c,sale_price_d,created_by,created_at FROM kit_definition_versions WHERE id IN (?)', [uniqueIds])
   const [rows] = await conn.query(
     `SELECT c.id,c.version_id,c.product_id,c.base_qty,c.reference_price,c.amount_weight,c.weight_source,c.sort_no,
-            p.code,p.name,p.unit,p.is_active,p.deleted_at,p.allow_decimal_qty
+            p.code,p.name,p.unit,p.spec,p.color,p.article_number,p.is_active,p.deleted_at,p.allow_decimal_qty
      FROM kit_definition_components c LEFT JOIN product_items p ON p.id=c.product_id
      WHERE c.version_id IN (?) ORDER BY c.version_id,c.sort_no,c.id`, [uniqueIds])
   const byVersion = new Map()
   for (const c of rows) {
     const list = byVersion.get(Number(c.version_id)) || []
-    list.push({ id: Number(c.id), productId: Number(c.product_id), baseQty: Number(c.base_qty), referencePrice: Number(c.reference_price), amountWeight: c.amount_weight, weightSource: c.weight_source, sortNo: Number(c.sort_no), productCode: c.code, productName: c.name, unit: c.unit, productActive: Number(c.is_active) === 1 && c.deleted_at == null && c.code != null, allowDecimal: c.allow_decimal_qty == null || Number(c.allow_decimal_qty) === 1 })
+    list.push({ id: Number(c.id), productId: Number(c.product_id), baseQty: Number(c.base_qty), referencePrice: Number(c.reference_price), amountWeight: c.amount_weight, weightSource: c.weight_source, sortNo: Number(c.sort_no), productCode: c.code, productName: c.name, unit: c.unit, spec: c.spec ?? null, color: c.color ?? null, articleNumber: c.article_number ?? null, productActive: Number(c.is_active) === 1 && c.deleted_at == null && c.code != null, allowDecimal: c.allow_decimal_qty == null || Number(c.allow_decimal_qty) === 1 })
     byVersion.set(Number(c.version_id), list)
   }
   return new Map(versions.map(v => [Number(v.id), { id: Number(v.id), kitId: Number(v.kit_id), versionNo: Number(v.version_no), referenceUnitPrice: Number(v.reference_unit_price), salePriceA: Number(v.reference_unit_price), salePriceB: v.sale_price_b == null ? null : Number(v.sale_price_b), salePriceC: v.sale_price_c == null ? null : Number(v.sale_price_c), salePriceD: v.sale_price_d == null ? null : Number(v.sale_price_d), createdBy: v.created_by == null ? null : Number(v.created_by), createdAt: v.created_at, referenceBasis: 'version_product_a_snapshot_or_explicit_weights', referenceSnapshotAt: null, referenceBasisExplanation: '组成明确提交时保存当时A价或显式权重；未提交组成而仅修改套报价时沿用原版本参考依据。createdAt仅表示该版本创建时间，原始采样时间未单独保存', components: byVersion.get(Number(v.id)) || [] }]))
@@ -74,11 +74,17 @@ async function detailIn(conn, id, versionId) {
   return definitionView(row, version)
 }
 function findById(id, versionId) { return transaction(conn => detailIn(conn, id, versionId), { readOnly: true }) }
-async function listIn(conn, { page = 1, pageSize = 20, keyword = '' }) {
+async function listIn(conn, { page = 1, pageSize = 20, keyword = '', categoryId = null }) {
   const pagination = normalizePagination({ page, pageSize: Math.min(100, pageSize) })
   const like = `%${keyword}%`
-  const [rows] = await conn.query('SELECT k.*,c.name AS category_name,s.name AS supplier_name FROM kit_definitions k LEFT JOIN product_categories c ON c.id=k.category_id LEFT JOIN supply_suppliers s ON s.id=k.supplier_id WHERE k.deleted_at IS NULL AND (k.code LIKE ? OR k.name LIKE ? OR k.spec LIKE ? OR k.color LIKE ? OR k.article_number LIKE ?) ORDER BY k.code,k.id LIMIT ? OFFSET ?', [like, like, like, like, like, pagination.pageSize, pagination.offset])
-  const [[{ total }]] = await conn.query('SELECT COUNT(*) total FROM kit_definitions WHERE deleted_at IS NULL AND (code LIKE ? OR name LIKE ? OR spec LIKE ? OR color LIKE ? OR article_number LIKE ?)', [like, like, like, like, like])
+  const filters = [like, like, like, like, like]
+  if (categoryId) {
+    const [categories] = await conn.query('SELECT id,path FROM product_categories WHERE deleted_at IS NULL')
+    const ids = [categoryId, ...categories.filter(c => c.path?.split('/').filter(Boolean).map(Number).includes(categoryId)).map(c => c.id)]
+    filters.push([...new Set(ids)])
+  }
+  const [rows] = await conn.query(`SELECT k.*,c.name AS category_name,s.name AS supplier_name FROM kit_definitions k LEFT JOIN product_categories c ON c.id=k.category_id LEFT JOIN supply_suppliers s ON s.id=k.supplier_id WHERE k.deleted_at IS NULL AND (k.code LIKE ? OR k.name LIKE ? OR k.spec LIKE ? OR k.color LIKE ? OR k.article_number LIKE ?)${categoryId ? ' AND k.category_id IN (?)' : ''} ORDER BY k.code,k.id LIMIT ? OFFSET ?`, [...filters, pagination.pageSize, pagination.offset])
+  const [[{ total }]] = await conn.query(`SELECT COUNT(*) total FROM kit_definitions k WHERE k.deleted_at IS NULL AND (k.code LIKE ? OR k.name LIKE ? OR k.spec LIKE ? OR k.color LIKE ? OR k.article_number LIKE ?)${categoryId ? ' AND k.category_id IN (?)' : ''}`, filters)
   const versions = await loadVersions(conn, rows.map(r => r.current_version_id))
   return { list: rows.map(r => definitionView(r, versions.get(Number(r.current_version_id)) || null)), pagination: { page: pagination.page, pageSize: pagination.pageSize, total: Number(total) } }
 }

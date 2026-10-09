@@ -86,7 +86,7 @@ export const routeRegistry: RouteRegistryEntry[] = [
   },
 
   {
-    path: '/sale/new-kit', title: '新建套销售', permission: PERMISSIONS.SALE_ORDER_CREATE,
+    path: '/sale/new-kit', title: '新建销售单', permission: PERMISSIONS.SALE_ORDER_CREATE,
     componentKey: 'SaleFormPage', keepAlive: true, tabIdentity: { kind: 'query-keys', keys: ['sourceId', 'handlingSourceId'] },
   },
 

@@ -57,6 +57,16 @@ function addLine(f: Fixture, overrides: Partial<CommercialInput> = {}) {
 }
 
 describe('unified new sale preserves the ordinary model and authoritative entry quote', () => {
+  it('keeps the line remark distinct from the order remark and rejects a stale remark preview', () => {
+    const f = fixture()
+    f.input.remark = '本行分箱包装'
+    f.group.metadata.input.remark = '本行分箱包装'
+    const payload = ordinaryPayload(f)
+    expect(payload.remark).toBe('保留备注')
+    expect(payload.items[0].remark).toBe('本行分箱包装')
+    f.group.metadata.input.remark = '旧备注'
+    expect(() => ordinaryPayload(f)).toThrow(/商品备注与预览不一致/)
+  })
   it('strips commercial fields and preserves all ordinary header fields', () => {
     const f = fixture()
     expect(ordinaryPayload(f)).toEqual({

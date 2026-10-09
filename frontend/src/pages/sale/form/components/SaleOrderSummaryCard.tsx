@@ -8,8 +8,10 @@ import { summarizeSaleQuantities } from '@/lib/salePresentation'
 
 export function SaleOrderSummaryCard({
   items, total, discount, discountedTotal, discountAmount, onDiscountChange,
-  editableDiscount = true, warningText,
+  editableDiscount = true, warningText, compact = false, discountError,
 }: {
+  compact?: boolean
+  discountError?: string
   items: DraftItem[]
   total: number
   discount: number
@@ -22,6 +24,32 @@ export function SaleOrderSummaryCard({
   const filled = items.filter(item => item.productId > 0)
   const quantities = summarizeSaleQuantities(filled.map(item => ({ ...item, quantity: baseQtyOf(item) })))
   const belowCost = filled.some(item => item.costPrice != null && item.unitPrice < Number(item.costPrice))
+
+  if (compact) return (
+    <SectionCard compact contentClassName="px-4 py-3">
+      <div role="group" aria-label="金额汇总" className="flex flex-wrap items-start gap-x-6 gap-y-3 text-sm">
+        <div className="flex min-h-9 flex-wrap items-center gap-x-6 gap-y-2">
+          <p className="flex items-baseline gap-2"><span className="text-muted-foreground">明细</span><span className="tabular-nums">{filled.length} 行</span></p>
+          <p className="flex items-baseline gap-2"><span className="text-muted-foreground">基本数量</span><span className="tabular-nums">{quantities.map(q => `${q.ordered} ${q.unit}`).join(' / ') || '—'}</span></p>
+        </div>
+        <div className="ml-auto flex flex-wrap items-start justify-end gap-x-6 gap-y-2">
+          <div data-entry-field="discount">
+            <div className="flex items-center gap-2">
+              <label className="text-muted-foreground" htmlFor="sale-discount-amount">折扣金额</label>
+              {editableDiscount ? <Input data-entry-field="discount" id="sale-discount-amount" aria-invalid={!!discountError} type="number" min={0} step={0.01} value={discountAmount}
+                onChange={event => onDiscountChange?.(event.target.value)} placeholder="0.00" className="h-9 w-28 text-right text-sm tabular-nums" />
+                : <span data-entry-field="discount" tabIndex={-1} className="py-2 tabular-nums text-foreground focus:outline-none focus:ring-2 focus:ring-ring" title="改单保留原折扣；明细金额不能低于该折扣">{discount > 0 ? money(-discount) : money(0)}</span>}
+            </div>
+            {discountError && <p role="alert" className="mt-1 text-xs leading-5 text-destructive-ink">{discountError}</p>}
+          </div>
+          <p className="flex items-baseline gap-3 pt-1.5"><span className="font-medium">订单金额</span><strong className="text-lg tabular-nums">{money(discountedTotal)}</strong></p>
+        </div>
+      </div>
+      {belowCost && warningText && <div className="mt-3 flex gap-2 rounded-md border border-destructive/20 bg-destructive/[0.04] px-3 py-2 text-xs leading-5 text-destructive-ink">
+        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /><span>{warningText}</span>
+      </div>}
+    </SectionCard>
+  )
 
   return (
     <SectionCard compact className="overflow-hidden" contentClassName="px-5 py-4">

@@ -1,6 +1,6 @@
 import type { CreateSaleParams, SaleOrder, SaleOrderItem } from './sale'
 import type { PrintItem } from '@/components/print/TemplateRenderer'
-export type CommercialInput = { lineKey: string; warehouseId?: number; quantity: number } & (
+export type CommercialInput = { lineKey: string; warehouseId?: number; quantity: number; remark?: string } & (
   | { kind: 'kit'; kitVersionId: number; priceSource: 'kit_default' | 'manual'; unitPrice?: number }
   | {
       kind: 'ordinary'
@@ -86,6 +86,7 @@ export interface CommercialGroup {
 export interface CommercialBody {
   commercialModel: 'kit-v1'
   expectedRevision?: number
+  expectedEditFingerprint?: string
   customerId: number
   customerName?: string
   warehouseId: number
@@ -122,7 +123,7 @@ export interface CommercialMarker {
 }
 export type CommercialOperation =
   | { action: 'create'; id?: number; body: CreateSaleParams | CommercialBody }
-  | { action: 'update' | 'adjust'; id?: number; body: CommercialBody }
+  | { action: 'update' | 'adjust'; id?: number; body: CommercialBody | CreateSaleParams }
   | {
       action: Exclude<CommercialAction, 'create' | 'update' | 'adjust'>
       id: number

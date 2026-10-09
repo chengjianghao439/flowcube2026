@@ -8,7 +8,7 @@ const { loadVersions, disabledReasons, definitionView } = require('../kits/kits.
 const { assertPrice, assertPositiveQty, amountFromPriceQuantity, allocateCents } = require('../kits/kits.composition')
 const { projectCommercialCumulative } = require('./sale.commercial-money.math')
 function identity(input) {
-  const { quantity, ...rest } = input
+  const { quantity, remark, ...rest } = input
   return JSON.stringify(Object.keys(rest).sort().map(k => [k, rest[k]]))
 }
 function snapshot(group) {
@@ -56,7 +56,7 @@ async function resolve(conn, { customerId, warehouseId, commercialGroups, scopeW
     const old = oldByKey.get(input.lineKey)
     if (old && (input.priceSource === 'manual' || (input.kind === 'kit' && !old.metadata.quote) || Number(old.metadata.priceCustomerId)===Number(customerId)) && identity(input) === identity(old.metadata.input) && (input.kind==='ordinary'?roundQty(qty*Number(old.metadata.entry.conversionRate)):qty)<=old.targetQty) {
       const targetQty = old.kind === 'ordinary' ? roundQty(qty * Number(old.metadata.entry.conversionRate)) : qty
-      keep.set(input.lineKey, { ...old, targetQty, retained: true })
+      keep.set(input.lineKey, { ...old, targetQty, retained: true, metadata: { ...old.metadata, input: { ...old.metadata.input, ...('remark' in input ? { remark: input.remark } : {}) } } })
     } else fresh.push(input)
   }
   const [[customer]] = await conn.query('SELECT id,name,is_active,price_level,price_list_id FROM sale_customers WHERE id=? AND deleted_at IS NULL'+lockSql, [customerId])

@@ -39,6 +39,8 @@ const {
   saleOperationAction,
 } = require('./sale.contracts')
 
+const { editFingerprint, assertEditBaseline } = require('./sale.edit-baseline')
+
 const operationAction = (action,id,order) => order.commercial_model === 'kit-v1' ? `sale.${action}.${Number(id)}` : saleOperationAction(action,id)
 
 const FREIGHT_TYPE = { 1:'寄付', 2:'到付', 3:'第三方付' }
@@ -687,6 +689,7 @@ async function findById(id, scopeWarehouseIds = null) {
     )
     scans = scanRows
   }
+  if (order.commercialModel !== 'kit-v1') order.editFingerprint = editFingerprint(rows[0], items)
   order.items = items.map(r=>({
     id:r.id,
     productId:r.product_id,
@@ -859,25 +862,26 @@ async function create({ customerId, warehouseId, remark,
 
 // 编辑草稿：仅在 status=1（草稿）时允许，整体替换明细行
 async function update(id, { customerId, warehouseId, remark,
-  carrierId, carrier, freightType, shippingProduct, receiverName, receiverPhone, receiverAddress, items, operator, scopeWarehouseIds = null, discountAmount, requestKey = null, commercialModel, commercialGroups, expectedRevision }) {
+  carrierId, carrier, freightType, shippingProduct, receiverName, receiverPhone, receiverAddress, items, operator, scopeWarehouseIds = null, discountAmount, requestKey = null, commercialModel, commercialGroups, expectedRevision, expectedEditFingerprint }) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
     const orderRow = await lockStatusRow(conn, { table: 'sale_orders', id, columns: 'id, status, warehouse_id, commercial_model, commercial_revision, disposal_handling_link_id', entityName: '销售单' })
     assertInScope(scopeWarehouseIds, orderRow.warehouse_id, '销售单')
     const handlingLink = await handlingGuards.readLink(conn, orderRow, 'sale_order', scopeWarehouseIds)
-    commercialStore.assertModel(orderRow,{commercialModel,expectedRevision})
-    commercialStore.assertRequestKey(orderRow.commercial_model,requestKey)
-    if(orderRow.commercial_model==='kit-v1'){
+    commercialStore.assertModel(orderRow,{commercialModel,expectedRevision,expectedEditFingerprint},{allowEdit:true})
+    commercialStore.assertRequestKey(commercialModel || orderRow.commercial_model,requestKey)
+    if(commercialModel==='kit-v1'){
       const [authRows]=await conn.query('SELECT warehouse_id FROM sale_order_items WHERE order_id=?',[id])
       for(const r of authRows)assertInScope(scopeWarehouseIds,r.warehouse_id ?? orderRow.warehouse_id,'销售单')
     }
     for (const g of commercialGroups || []) assertInScope(scopeWarehouseIds,g.warehouseId || warehouseId,'销售单')
     const requestState = await beginCreationOperationRequest(conn, {
-      requestKey, action: operationAction('update', id, orderRow), userId: operator?.userId ?? null,
-      payload: { customerId, warehouseId, remark, carrierId, carrier, freightType, shippingProduct, receiverName, receiverPhone, receiverAddress, items, discountAmount, commercialModel, commercialGroups },
+      requestKey, action: operationAction('update', id, { ...orderRow, commercial_model: commercialModel || orderRow.commercial_model }), userId: operator?.userId ?? null,
+      payload: { customerId, warehouseId, remark, carrierId, carrier, freightType, shippingProduct, receiverName, receiverPhone, receiverAddress, items, discountAmount, commercialModel, commercialGroups, ...(expectedEditFingerprint ? { expectedEditFingerprint } : {}) },
     })
     if (requestState.replay) { await conn.rollback(); return requestState.responseData }
+    await assertEditBaseline(conn,orderRow,{commercialModel,expectedRevision,expectedEditFingerprint})
     handlingGuards.assertEditable(handlingLink)
     commercialStore.assertRevision(orderRow,{expectedRevision})
     const previousDimensions = await captureDimensions(conn, 'sale', id)
@@ -922,7 +926,7 @@ async function update(id, { customerId, warehouseId, remark,
 // 因为这是唯一用户可见的"行"，WMS 侧只认按商品聚合后的净数量，详见方案说明。
 async function requestAdjustment(id, input) {
   let { items }=input
-  const {operator,requestKey,scopeWarehouseIds=null,commercialModel,commercialGroups,expectedRevision}=input
+  const {operator,requestKey,scopeWarehouseIds=null,commercialModel,commercialGroups,expectedRevision,expectedEditFingerprint}=input
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
@@ -933,13 +937,13 @@ async function requestAdjustment(id, input) {
     })
     assertInScope(scopeWarehouseIds, orderRow.warehouse_id, '销售单')
     const handlingLink = await handlingGuards.readLink(conn, orderRow, 'sale_order', scopeWarehouseIds)
-    commercialStore.assertModel(orderRow,{commercialModel,expectedRevision})
-    commercialStore.assertRequestKey(orderRow.commercial_model,requestKey)
+    commercialStore.assertModel(orderRow,{commercialModel,expectedRevision,expectedEditFingerprint},{allowEdit:true})
+    commercialStore.assertRequestKey(commercialModel || orderRow.commercial_model,requestKey)
     const [authRows] = await conn.query('SELECT warehouse_id FROM sale_order_items WHERE order_id=?',[id])
     for(const r of authRows)assertInScope(scopeWarehouseIds,r.warehouse_id ?? orderRow.warehouse_id,'销售单')
     const requestState = await beginOperationRequest(conn, {
       requestKey,
-      action: operationAction('adjust', id, orderRow),
+      action: operationAction('adjust', id, { ...orderRow, commercial_model: commercialModel || orderRow.commercial_model }),
       userId: operator?.userId ?? null,
     })
     if (requestState.replay) {
@@ -947,9 +951,10 @@ async function requestAdjustment(id, input) {
       return requestState.responseData
     }
 
+    await assertEditBaseline(conn,orderRow,{commercialModel,expectedRevision,expectedEditFingerprint})
     handlingGuards.assertEditable(handlingLink)
     commercialStore.assertRevision(orderRow,{expectedRevision})
-    if(orderRow.commercial_model==='kit-v1'){
+    if(commercialModel==='kit-v1'){
       const fixed={customerId:'customer_id',warehouseId:'warehouse_id',carrierId:'carrier_id',carrier:'carrier',freightType:'freight_type',shippingProduct:'shipping_product',receiverName:'receiver_name',receiverPhone:'receiver_phone',receiverAddress:'receiver_address',discountAmount:'discount_amount',remark:'remark'}
       for(const [field,column] of Object.entries(fixed))if(input[field]!==undefined&&String(input[field]??'')!==String(orderRow[column]??'')){
         if(['customerId','warehouseId','carrierId','freightType','discountAmount'].includes(field)&&Number(input[field]??0)===Number(orderRow[column]??0))continue
@@ -1028,6 +1033,8 @@ async function requestAdjustment(id, input) {
       const pid = Number(r.product_id)
       oldQtyByProduct.set(pid, (oldQtyByProduct.get(pid) || 0) + Number(r.quantity))
     }
+    const executionWarehouseId = Number(oldItemRows.find(r => r.warehouse_id != null)?.warehouse_id ?? orderRow.warehouse_id)
+    if (commercial && folded.some(item => Number(item.warehouseId) !== executionWarehouseId)) throw new AppError('执行期改单须保持原发货仓库',400,'SALE_ADJUSTMENT_WAREHOUSE_READ_ONLY')
     const newQtyByProduct = new Map()
     const productMeta = new Map()
     for (const item of folded) {
@@ -2100,7 +2107,8 @@ async function commercialPreview(id,input) {
     assertInScope(input.scopeWarehouseIds,order.warehouse_id,'销售单')
     const [physical]=await conn.query('SELECT warehouse_id FROM sale_order_items WHERE order_id=?',[id])
     for(const p of physical)assertInScope(input.scopeWarehouseIds,p.warehouse_id ?? order.warehouse_id,'销售单')
-    commercialStore.assertModel(order,input)
+    commercialStore.assertModel(order,input,{allowEdit:true})
+    await assertEditBaseline(conn,order,input)
     commercialStore.assertRevision(order,input)
     assertStatusAction('sale',Number(order.status)===1?'edit':'adjust',order.status)
     // Executing adjustment headers are read-only, as in the write endpoint.

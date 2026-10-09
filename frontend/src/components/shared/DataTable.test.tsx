@@ -22,6 +22,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => window.dispatchEvent(new Event('blur')))
   act(() => root?.unmount()); host.remove(); vi.restoreAllMocks()
+  vi.unstubAllGlobals()
   document.body.style.cursor = ''; document.body.style.userSelect = ''
 })
 function render(cols = columns, selectable = false) {
@@ -37,7 +38,70 @@ function move(x: number) { act(() => window.dispatchEvent(new MouseEvent('mousem
 function up(x: number) { act(() => window.dispatchEvent(new MouseEvent('mouseup', { clientX: x }))) }
 function widths() { return Array.from(host.querySelectorAll('col'), c => Number.parseFloat(c.style.width)) }
 
+// jsdom不排版：替代浏览器提供的两行截断高度与宽度，保留真实组件/ResizeObserver回调。
+function previewLayout(initialOverflow = false) {
+  let overflow = initialOverflow, width = 180
+  const observers: { callback: ResizeObserverCallback; target?: Element }[] = []
+  vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(function (this: HTMLElement) { return this.hasAttribute('data-table-text') ? width : 0 })
+  vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(function (this: HTMLElement) { return this.hasAttribute('data-table-text-measure') ? 40 : 0 })
+  vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(function (this: HTMLElement) { return this.hasAttribute('data-table-text-measure') ? (overflow ? 60 : 40) : 0 })
+  vi.stubGlobal('ResizeObserver', class {
+    record: { callback: ResizeObserverCallback; target?: Element }
+    constructor(callback: ResizeObserverCallback) { this.record = { callback }; observers.push(this.record) }
+    observe(target: Element) { this.record.target = target }
+    disconnect() { this.record.target = undefined }
+  })
+  return { resize(nextWidth: number, nextOverflow: boolean) {
+    width = nextWidth; overflow = nextOverflow
+    act(() => observers.forEach(observer => observer.target && observer.callback([{ target: observer.target, contentRect: { width } } as ResizeObserverEntry], {} as ResizeObserver)))
+    flushFrames()
+  }, observers }
+}
+
+test('未超过两行的备注直接显示，不出现展开箭头或可展开控件', () => {
+  previewLayout()
+  const remark = '短备注'
+  act(() => root!.render(<DataTable columns={[{ key: 'remark', title: '备注', expandableText: true }]} data={[{ id: 1, remark }]} />))
+  expect(host.querySelector('tbody td')!.textContent).toBe(remark)
+  expect(host.querySelector('tbody details')).toBeNull()
+  expect(host.querySelector('tbody svg')).toBeNull()
+})
+
+test('备注超过两行才出现箭头，展开不误判为短文，放宽列宽后箭头消失', () => {
+  const layout = previewLayout()
+  const remark = '列宽变化时应保留的完整备注'
+  act(() => root!.render(<DataTable columns={[{ key: 'remark', title: '备注', expandableText: true }]} data={[{ id: 1, remark }]} />))
+  expect(host.querySelector('tbody details')).toBeNull()
+  layout.resize(80, true)
+  const details = host.querySelector('tbody details') as HTMLDetailsElement
+  expect(details).not.toBeNull()
+  act(() => { details.open = true; details.dispatchEvent(new Event('toggle')) })
+  layout.resize(80, false) // 展开引起高度变化，列宽未变；仍按独立的两行预览判定。
+  expect(host.querySelector('tbody details')).toBe(details)
+  expect(details.open).toBe(true)
+  layout.resize(480, false)
+  expect(host.querySelector('tbody details')).toBeNull()
+  expect(host.querySelector('tbody td')!.textContent).toBe(remark)
+})
+
+test('隐藏零宽不清除原判定；内容变化和再次显示后重新判断，卸载解除观察', () => {
+  const layout = previewLayout(true)
+  const cols = [{ key: 'remark', title: '备注', expandableText: true }]
+  act(() => root!.render(<DataTable columns={cols} data={[{ id: 1, remark: '长备注' }]} />))
+  expect(host.querySelector('tbody details')).not.toBeNull()
+  layout.resize(0, false)
+  act(() => root!.render(<DataTable columns={cols} data={[{ id: 1, remark: '新短备注' }]} />))
+  expect(host.querySelector('tbody details')).not.toBeNull()
+  layout.resize(180, false)
+  expect(host.querySelector('tbody details')).toBeNull()
+  expect(host.querySelector('tbody td')!.textContent).toBe('新短备注')
+  act(() => root!.unmount()); root = null
+  expect(layout.observers.every(observer => !observer.target)).toBe(true)
+  expect(frames.size).toBe(0)
+})
+
 test('长备注可就地展开完整内容，商品身份仍完整显示，双击展开不打开单据', () => {
+  previewLayout(true)
   const text = '用于长文本验收的备注。'.repeat(12)
   const onDetail = vi.fn()
   const cols: TableColumn<{ id: number; name: string; remark: string }>[] = [

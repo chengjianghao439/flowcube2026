@@ -27,7 +27,7 @@ export function SaleOrderHeaderFields({
   receiverName, setReceiverName,
   receiverPhone, setReceiverPhone,
   receiverAddress, setReceiverAddress,
-  remark, setRemark, headerReadOnly = false,
+  remark, setRemark, headerReadOnly = false, compact = false, phoneError,
 }: {
   readOwner?: KitReadOwner
   warehouseReadOnly?: boolean
@@ -47,6 +47,9 @@ export function SaleOrderHeaderFields({
   remark: string; setRemark: (v: string) => void
   /** 改单（占库期/执行期）只修改商品明细：表头字段全部只读，避免「看起来能改、提交后被丢弃」 */
   headerReadOnly?: boolean
+  /** 销售开单样板局部密度，不改变其他单据表头。 */
+  compact?: boolean
+  phoneError?: string
 }) {
   const fieldId = useId()
   const selectedCarrier = carrierOptions.find(c => String(c.id) === carrierId)
@@ -64,14 +67,15 @@ export function SaleOrderHeaderFields({
   }
   return (
     <SectionVisibilityContext.Provider value={sectionActive && mayInteract()}>
-    <SectionCard title="订单信息" compact contentClassName="px-4 py-3">
-      <div className="mb-3 flex items-center gap-2 text-xs font-medium text-muted-foreground">
+    <SectionCard title="订单信息" compact contentClassName={cn('px-4 py-3', compact && '[&_input]:h-9 [&_button[id]]:min-h-9 [&_button[id]]:py-1.5 [&_label]:font-medium [&_label]:text-foreground')}>
+      {!compact && <div className="mb-3 flex items-center gap-2 text-xs font-medium text-muted-foreground">
         <UserRound className="h-3.5 w-3.5 text-primary" />客户与履约
-      </div>
+      </div>}
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
         <div data-entry-field="party" className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground">
           <Label htmlFor={`${fieldId}-customer`}>客户 *</Label>
           <PickerField id={`${fieldId}-customer`} value={customerName} placeholder="点击选择客户…" onOpen={() => apply(() => setCustomerFinderOpen(true))} onDoubleClick={() => apply(() => { setCustomerFinderOpen(false); navigate('/customers') })} disabled={headerReadOnly} className={cn('h-9', customerError && 'border-destructive/60 bg-destructive/5')} />
+          {compact && customerError && <p role="alert" className="text-xs text-destructive-ink">请选择客户</p>}
         </div>
         <div data-entry-field="warehouse" className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground">
           <Label htmlFor={`${fieldId}-warehouse`}>出库仓库 *</Label>
@@ -84,6 +88,7 @@ export function SaleOrderHeaderFields({
             disabled={headerReadOnly}
             className={cn('h-9', warehouseError && 'border-destructive/60 bg-destructive/5')}
           />}
+          {compact && warehouseError && <p role="alert" className="text-xs text-destructive-ink">请选择仓库</p>}
         </div>
         <div className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground">
           <Label htmlFor={`${fieldId}-carrier`}>承运商</Label>
@@ -117,11 +122,11 @@ export function SaleOrderHeaderFields({
       {['sf', 'deppon'].includes(selectedCarrier?.platformCode || '') && <div className="mt-3 max-w-sm space-y-1.5">
         <Label htmlFor={`${fieldId}-shipping-product`}>本单发货产品</Label>
         <ShippingProductField id={`${fieldId}-shipping-product`} platform={selectedCarrier?.platformCode} value={shippingProduct} onChange={value => apply(() => setShippingProduct(value))} defaultCode={selectedCarrier?.shippingProduct} disabled={shippingProductDisabled} />
-        <p className="text-xs text-muted-foreground">{shippingProductDisabled ? '执行期改单只修改商品明细；寄件资料在提交平台前可从运单详情补充。' : '通常沿用默认产品，航空等特殊发货按合同指定。件数由打包结果自动填写。'}</p>
+        {!compact && <p className="text-xs text-muted-foreground">{shippingProductDisabled ? '执行期改单只修改商品明细；寄件资料在提交平台前可从运单详情补充。' : '通常沿用默认产品，航空等特殊发货按合同指定。件数由打包结果自动填写。'}</p>}
       </div>}
-      <div className="my-4 border-t border-border" />
+      <div className={cn('border-t border-border', compact ? 'my-3' : 'my-4')} />
       <div className="mb-2 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground"><MapPin className="h-3.5 w-3.5 text-primary" />收货信息</div>
+        <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">{!compact && <MapPin className="h-3.5 w-3.5 text-primary" />}收货信息</div>
         {!headerReadOnly && <button type="button" onClick={openAddrBook} className="text-xs font-medium text-primary hover:underline">从地址簿选择</button>}
       </div>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-12">
@@ -132,10 +137,11 @@ export function SaleOrderHeaderFields({
         <div className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground xl:col-span-2">
           <Label htmlFor={`${fieldId}-phone`}>联系电话</Label>
           <LimitedInput id={`${fieldId}-phone`} data-entry-field="phone" aria-label="联系电话" maxLength={30} value={receiverPhone} onChange={(e: React.ChangeEvent<HTMLInputElement>) => apply(() => setReceiverPhone(e.target.value))} placeholder="手机、座机或国际号码" inputMode="tel" disabled={headerReadOnly} className="h-9" />
+          {phoneError && <p role="alert" className="text-xs text-destructive-ink">{phoneError}</p>}
         </div>
         <div className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground xl:col-span-5">
           <Label htmlFor={`${fieldId}-address`} className="inline-flex items-center gap-1.5"><Truck className="h-3.5 w-3.5 text-muted-foreground" />收货地址</Label>
-          <LimitedTextarea id={`${fieldId}-address`} maxLength={200} value={receiverAddress} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => apply(() => setReceiverAddress(e.target.value))} placeholder="请输入详细收货地址" rows={1} disabled={headerReadOnly} className="h-9 min-h-0 py-1.5" singleLine />
+          <LimitedTextarea autoGrow id={`${fieldId}-address`} maxLength={200} value={receiverAddress} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => apply(() => setReceiverAddress(e.target.value))} placeholder="请输入详细收货地址" rows={1} disabled={headerReadOnly} className="h-9 min-h-0 py-1.5" singleLine />
         </div>
         <div className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground xl:col-span-3">
           <Label htmlFor={`${fieldId}-remark`} className="inline-flex items-center gap-1.5"><MessageSquareText className="h-3.5 w-3.5 text-muted-foreground" />备注</Label>

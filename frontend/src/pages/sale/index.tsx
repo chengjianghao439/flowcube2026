@@ -135,10 +135,11 @@ export default function SalePage() {
     navigate('/sale/new')
   }
 
-  function goToDetail(order: SaleOrder) {
+  function goToDetail(order: SaleOrder, edit = false) {
     const key = `/sale/${order.id}`
-    addTab({ key, title: order.orderNo, path: key })
-    navigate(key)
+    const path = edit ? `${key}?edit=1` : key
+    addTab({ key, title: order.orderNo, path })
+    navigate(path)
   }
 
   function openConfirm(title: string, description: string, onConfirm: () => void) {
@@ -235,13 +236,13 @@ export default function SalePage() {
     { key: 'totalAmount', title: '折后金额', width: 10, align: 'right', render: (_, r) => <span className="font-medium tabular-nums whitespace-nowrap">{money(Math.max(0, r.totalAmount - (r.discountAmount ?? 0)))}</span> },
     { key: 'remark', title: '备注', expandableText: true, width: 15, render: v => (v as string) || '—' },
     { key: 'status', title: '状态', width: 8, render: (_, r) => { const ws = getSaleWorkflowStatus(r); return <SoftStatusLabel label={ws.label} tone={ws.tone} title={ws.detail} onClick={r.taskNo && r.taskId ? () => goToDetail(r) : undefined} /> } },
-    { key: 'receivableStatus', title: '回款状态', width: 8, render: (_, r) => { const rs = getReceivableStatus(r); return <SoftStatusLabel label={rs.label} tone={rs.tone} title={rs.dueDate ? `账期至 ${rs.dueDate.slice(0, 10)}` : undefined} /> } },
+    { key: 'receivableStatus', title: '回款状态', width: 8, render: (_, r) => { const rs = getReceivableStatus(r); return <SoftStatusLabel label={rs.label} tone={rs.tone} className="whitespace-nowrap" title={rs.dueDate ? `账期至 ${rs.dueDate.slice(0, 10)}` : undefined} /> } },
     { key: 'operatorName', title: '经办人', width: 7 },
     { key: 'createdAt', title: '创建时间', width: 10, render: v => formatDisplayDateTime(v) },
     { key:'id', title:'操作', width:10, render:(_,r) => <SaleRowActions row={r} anyPending={cancel.isPending || deleteMutate.isPending}
         onAsk={(title,desc,cb)=>openConfirm(title,desc,()=>{closeConfirm();cb()})}
         onReserveSale={setReserveDialogOrderId} onCancelSale={id=>cancel.mutate(id)} onDeleteSale={id=>deleteMutate.mutate(id)}
-        onViewTask={()=>goToDetail(r)} onDetail={()=>goToDetail(r)} onPrint={()=>handlePrint(r.id)} /> },
+        onViewTask={()=>goToDetail(r)} onDetail={()=>goToDetail(r)} onEdit={()=>goToDetail(r, true)} onPrint={()=>handlePrint(r.id)} /> },
   ]
 
   // ── 渲染 ─────────────────────────────────────────────────────────────────
@@ -250,7 +251,6 @@ export default function SalePage() {
       {/* 页头 */}
       <PageHeader
         title="销售订单"
-        description="销售单创建、占库与出库"
         actions={
           <>
             <Button variant="outline"
@@ -290,7 +290,9 @@ export default function SalePage() {
         columnStorageKey="sale:classic-v5"
       />}
 
-      <ListSummary total={total} unit="单" />
+      {!error && data && (data.truncated
+        ? <div role="status" className="px-1 py-3 text-xs text-warning-ink">已显示 {data.list.length.toLocaleString()} / 共 {total.toLocaleString()} 单，请缩小查询范围。</div>
+        : <ListSummary total={total} unit="单" />)}
 
       {/* 二次确认弹窗 */}
       <ConfirmDialog

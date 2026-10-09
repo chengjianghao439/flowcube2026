@@ -86,6 +86,7 @@ export interface Package {
 export interface SaleQuantitySummary { unit: string; ordered: number; reserved: number; dispatched: number; shipped: number }
 
 export interface SaleOrder {
+  editFingerprint?: string
   commercialModel?: 'kit-v1' | null
   commercialRevision?: number | null
   commercialGroups?: CommercialGroup[]
@@ -152,6 +153,7 @@ export interface SaleOrder {
   packages?: Package[]
 }
 export interface CreateSaleParams {
+  expectedEditFingerprint?: string
   disposalSource?: import('./disposal-handling').DisposalSourceInput
   customerId: number
   customerName: string

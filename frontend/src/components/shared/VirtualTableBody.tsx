@@ -10,10 +10,12 @@ interface Props<T> {
   columns: number
   getRowKey: (row: T) => string | number
   renderRow: (row: T, index: number) => RowElement
+  /** 调用方为屏幕外的受控录入行定位；默认列表不使用。 */
+  onScrollToIndexReady?: (scroll: ((index: number) => void) | null) => void
 }
 
 /** 原生表格 + 可变行高；复用工作区滚动条，数据/选择/导出仍由调用方持有。 */
-export function VirtualTableBody<T>({ data, columns, getRowKey, renderRow }: Props<T>) {
+export function VirtualTableBody<T>({ data, columns, getRowKey, renderRow, onScrollToIndexReady }: Props<T>) {
   const bodyRef = useRef<HTMLTableSectionElement>(null)
   const active = useSectionActive()
   const [margin, setMargin] = useState(0)
@@ -50,6 +52,10 @@ export function VirtualTableBody<T>({ data, columns, getRowKey, renderRow }: Pro
   }, [active, getScrollElement])
 
   const items = active ? virtualizer.getVirtualItems() : lastView.current.items
+  useLayoutEffect(() => {
+    onScrollToIndexReady?.(index => virtualizer.scrollToIndex(index, { align: 'auto' }))
+    return () => onScrollToIndexReady?.(null)
+  }, [onScrollToIndexReady, virtualizer])
   const total = active ? virtualizer.getTotalSize() : lastView.current.total
   useLayoutEffect(() => {
     if (active) {

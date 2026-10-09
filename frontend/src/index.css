@@ -92,8 +92,27 @@
 
 
 /* 表头和固定操作列表头共用不透明的同色底，横向滚动时内容不会透出。 */
-.data-table-header-surface {
+.data-table-header-surface,
+.data-table-header {
   background-color: color-mix(in srgb, hsl(var(--muted)) 30%, hsl(var(--card)) 70%);
+}
+
+/* 普通明细与选择器按销售列表表头呈现，显式采用，不覆盖特殊画布/矩阵。 */
+.data-table-header > tr {
+  border-bottom: 1px solid hsl(var(--border));
+}
+.data-table-header > tr > th {
+  @apply px-4 py-2.5 text-table-head;
+}
+.data-table-header ~ tbody > tr > td {
+  @apply px-4;
+}
+.data-table-header[data-selection-column] > tr > th:first-child,
+.data-table-header[data-selection-column] ~ tbody > tr > td:first-child {
+  @apply px-2;
+}
+.data-table-header:not([data-resizable]) > tr > th:not(:last-child) {
+  border-inline-end: 1px solid hsl(var(--border));
 }
 
 /* 仅显式选择预览的辅助文字收起；完整原文始终可通过原生 disclosure 展开。 */

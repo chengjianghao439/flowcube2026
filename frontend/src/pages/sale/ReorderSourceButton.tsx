@@ -19,7 +19,7 @@ export function ReorderSourceButton({ sourceId, model, disabled = false }: { sou
     const workspace = useWorkspaceStore.getState(), existing = workspace.tabs.find(t => t.key === registration.key)
     if (existing) { workspace.setActive(existing.key); navigate(existing.path); return }
     if (workspace.tabs.length >= MAX_WORKSPACE_TABS) { toast.warning('工作区标签已满，请先关闭不需要的页面，再按原单新建'); return }
-    if (workspace.addTab({ ...registration, title: model === 'kit-v1' ? '新建套销售' : '新建销售单' })) navigate(registration.path)
+    if (workspace.addTab({ ...registration, title: '新建销售单' })) navigate(registration.path)
   }
   return <Button variant="outline" disabled={disabled || !current} title={current ? undefined : '账号、权限或服务器已变化，请重新打开原单后再开'} onClick={open}>按这张单再开</Button>
 }

@@ -5,6 +5,13 @@ import { useRepeatSaleCreate } from '@/hooks/useRepeatSaleCreate'
 import { commercialWarehouseName } from './warehouseName'
 import { commercialUnit } from './commercialDraft'
 import { useEffect, useRef, useState } from 'react'
+import { Pencil, Warehouse, X } from 'lucide-react'
+import KeepAliveSection from '@/components/shared/KeepAliveSection'
+import { SaleOrderDetailTabs, type SaleDetailTab } from '../form/components/SaleOrderDetailTabs'
+import { DocumentActivityPanel } from '@/components/shared/DocumentActivityPanel'
+import { SaleOrderScanDetails, SaleOrderPackingDetails, SaleOrderPickingProgress } from '../form/components/SaleOrderWarehouseViews'
+import { SaleOrderInfoCard } from '../form/components/SaleOrderInfoCard'
+import { CommercialOrderItems } from './CommercialOrderItems'
 import type { SaleOrder } from '@/types/sale'
 import type { CommercialAction, CommercialOperation, CommercialWriteConfirmation } from '@/types/sale-commercial'
 import type { KitReadOwner } from '@/api/kits'
@@ -14,22 +21,21 @@ import { usePermission } from '@/hooks/usePermission'
 import { useDirtyGuard } from '@/hooks/useDirtyGuard'
 import { useWorkspaceTabTitle } from '@/hooks/useWorkspaceTabTitle'
 import { PERMISSIONS } from '@/lib/permission-codes'
-import { money } from '@/lib/format'
 import { getSaleWorkflowStatus } from '@/lib/saleWorkflowStatus'
 import { WT_STATUS_NAME } from '@/generated/status'
 import { toast } from '@/lib/toast'
 import { ActionBar } from '@/components/shared/ActionBar'
 import { Button } from '@/components/ui/button'
-import { SectionCard } from '@/components/shared/SectionCard'
+import DataTable from '@/components/shared/DataTable'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import CommercialFulfillmentSummary from './CommercialFulfillmentSummary'
-import { formatDisplayDateTime } from '@/lib/dateTime'
 import { PrintPreviewOverlay } from '@/components/print/SaleOrderPrintTemplate'
 import { FulfillmentProgressCard } from '../form/components/FulfillmentProgressCard'
 import { SaleOrderOverview } from '../form/components/SaleOrderOverview'
 import { readSaleHandoff } from '../form/handoff'
 import CommercialEditor from './CommercialEditor'
+import { useSaleEditEntry } from '../form/useSaleEditEntry'
 import CommercialShipDialog from './CommercialShipDialog'
 import { buildWorkspaceTabRegistrationFromPath } from '@/router/workspaceRouteMeta'
 const permission = {
@@ -69,6 +75,15 @@ export default function CommercialSalePage({
     [confirm, setConfirm] = useState<Exclude<CommercialAction, 'create' | 'update' | 'adjust' | 'ship'> | null>(null),
     [error, setError] = useState(''),
     [reloading, setReloading] = useState(false)
+  const [detailTab, setDetailTab] = useState<SaleDetailTab>(() => {
+    const context = readSaleHandoff(tabPath, initial.id)
+    return context && context !== 'invalid' ? context.focus : 'info'
+  })
+  useEffect(() => {
+    const context = readSaleHandoff(tabPath, order.id)
+    if (context === 'invalid') setDetailTab('info')
+    else if (context) setDetailTab(context.focus)
+  }, [tabPath, order.id])
   const { can } = usePermission(),
     write = useCommercialWrite(owner, `commercial-detail:${buildWorkspaceTabRegistrationFromPath(tabPath).key}`),
     mounted = useRef(true),
@@ -93,6 +108,15 @@ export default function CommercialSalePage({
     ownerCurrent = false
   }
   const locked = write.blocked || reloading || !ownerCurrent
+  const returning =
+    !!order.warehouseTaskCancelRequestedAt ||
+    !!order.warehouseTaskAdjustmentRequestedAt ||
+    !!order.tasks?.some((t) => t.cancelRequestedAt || t.adjustmentRequestedAt)
+  useSaleEditEntry(tabPath, true, () => {
+    if (order.status === 1 && can(PERMISSIONS.SALE_ORDER_UPDATE) && !locked && !returning) {
+      setEditor(current => current ?? { baseline: order, adjust: false })
+    }
+  })
   useDirtyGuard(tabPath, locked)
   const backup = useKitBackup(JSON.stringify({ order, owner, shipQuantities, confirm }), owner)
   const handoff = readSaleHandoff(tabPath, order.id)
@@ -162,11 +186,7 @@ export default function CommercialSalePage({
         }}
       />
     )
-  const workflow = getSaleWorkflowStatus(order),
-    returning =
-      !!order.warehouseTaskCancelRequestedAt ||
-      !!order.warehouseTaskAdjustmentRequestedAt ||
-      !!order.tasks?.some((t) => t.cancelRequestedAt || t.adjustmentRequestedAt)
+  const workflow = getSaleWorkflowStatus(order)
   const confirmed = order.commercialGroups?.some((g) => (g.dispatch?.confirmedShippedQty ?? 0) > 0)
   const canAdjust =
     [2, 3, 6].includes(order.status) &&
@@ -175,7 +195,7 @@ export default function CommercialSalePage({
     !order.isMultiWarehouse &&
     !confirmed
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-2.5">
       <ActionBar
         title={order.orderNo}
         subtitle={<SoftStatusLabel label={workflow.label} tone={workflow.tone} />}
@@ -183,44 +203,41 @@ export default function CommercialSalePage({
           <>
             <ReturnSourceButton kind="sale" sourceId={order.id} sourceNo={order.orderNo} disabled={locked} />
             <ReorderSourceButton sourceId={order.id} model="kit-v1" disabled={locked} />
-            <Button variant="outline" disabled={locked || shipOpen || !!confirm} onClick={() => void reload()}>
-              读取最新订单
-            </Button>
+            {can(permission.cancel) && [1, 2, 3, 6].includes(order.status) && (
+              <Button variant="outline" className="text-destructive-ink border-destructive/30 hover:bg-destructive/5" disabled={locked || returning} onClick={() => setConfirm('cancel')}>
+                <X className="mr-1 h-4 w-4" />{confirmed ? '关闭剩余未发' : '取消订单'}
+              </Button>
+            )}
+            {can(permission.delete) && order.status === 5 && (
+              <Button variant="outline" className="text-destructive-ink border-destructive/30 hover:bg-destructive/5" disabled={locked} onClick={() => setConfirm('delete')}>
+                <X className="mr-1 h-4 w-4" />删除订单
+              </Button>
+            )}
+            {can(permission.reserve) && [1, 6].includes(order.status) && (
+              <Button variant="outline" disabled={locked || returning} onClick={() => setConfirm('reserve')}>
+                <Warehouse className="mr-1 h-4 w-4" />{order.status === 6 ? '补占库存' : '占用库存'}
+              </Button>
+            )}
+            {can(permission.release) && [2, 6].includes(order.status) && (
+              <Button variant="outline" disabled={locked || returning} onClick={() => setConfirm('release')}>
+                <Warehouse className="mr-1 h-4 w-4" />取消占库
+              </Button>
+            )}
             <Button variant="outline" disabled={!ownerCurrent} onClick={() => setPrintOpen(true)}>
-              客户打印
+              打印订单
             </Button>
+            {can(permission.ship) && [2, 3, 6].includes(order.status) && (
+              <Button disabled={locked || returning} onClick={() => setShipOpen(true)}>
+                {order.status === 3 ? '继续发货' : '发起出库'}
+              </Button>
+            )}
             {can(PERMISSIONS.SALE_ORDER_UPDATE) && (order.status === 1 || canAdjust) && (
               <Button
                 variant="outline"
                 disabled={locked || returning}
                 onClick={() => setEditor({ baseline: order, adjust: order.status !== 1 })}
               >
-                {order.status === 1 ? '编辑订单' : '修改订单'}
-              </Button>
-            )}
-            {can(permission.reserve) && [1, 6].includes(order.status) && (
-              <Button disabled={locked || returning} onClick={() => setConfirm('reserve')}>
-                整单占库
-              </Button>
-            )}
-            {can(permission.release) && [2, 6].includes(order.status) && (
-              <Button variant="outline" disabled={locked || returning} onClick={() => setConfirm('release')}>
-                释放占库
-              </Button>
-            )}
-            {can(permission.ship) && [2, 3, 6].includes(order.status) && (
-              <Button disabled={locked || returning} onClick={() => setShipOpen(true)}>
-                安排本次发货
-              </Button>
-            )}
-            {can(permission.cancel) && [1, 2, 3, 6].includes(order.status) && (
-              <Button variant="outline" disabled={locked || returning} onClick={() => setConfirm('cancel')}>
-                {confirmed ? '关闭剩余未发' : '取消订单'}
-              </Button>
-            )}
-            {can(permission.delete) && order.status === 5 && (
-              <Button variant="outline" disabled={locked} onClick={() => setConfirm('delete')}>
-                删除订单
+                <Pencil className="mr-1 h-4 w-4" />{order.status === 1 ? '编辑' : '修改订单'}
               </Button>
             )}
           </>
@@ -283,148 +300,51 @@ export default function CommercialSalePage({
           待仓库扫码归还或确认改单。已拣货品未扫码归还前，不视为预占释放，不允许再次派发；请沿下面原任务交接入口办理。
         </p>
       )}
-      <SectionCard title="成交明细" compact>
-        <div className="overflow-auto">
-          <table className="w-full min-w-[900px] text-sm">
-            <thead className="bg-muted/40">
-              <tr>
-                <th className="p-3 text-left">商品 / 发货仓</th>
-                <th>当前目标</th>
-                <th>当前金额</th>
-                <th>原数量 / 原金额</th>
-                <th>已确认实发</th>
-                <th>待完成 / 已分配</th>
-              </tr>
-            </thead>
-            <tbody>
-              {order.commercialGroups?.map((g) => (
-                <tr key={g.id} className="border-t">
-                  <td className="p-3">
-                    <p>
-                      {g.kind === 'kit'
-                        ? `${g.kitCode} ${g.kitName}`
-                        : `${g.components[0]?.productCode} ${g.components[0]?.productName}`}{' '}
-                      · {commercialWarehouseName(order, g.warehouseId)}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {g.kind === 'kit'
-                        ? `原订单套组成 · 每套成交 ${Number(g.unitPrice).toFixed(4)}`
-                        : g.metadata.entry
-                          ? `原成交 ${g.metadata.entry.entryQty}${g.metadata.entry.entryUnit} × ${Number(g.metadata.entry.entryUnitPrice).toFixed(4)}/${g.metadata.entry.entryUnit}；1${g.metadata.entry.entryUnit}=${g.metadata.entry.conversionRate}${g.components[0]?.unit}`
-                          : `已存基本单价 ${Number(g.unitPrice).toFixed(8)}`}
-                    </p>
-                    <details className="mt-1 text-xs">
-                      <summary>原组成与分摊依据</summary>
-                      {g.components.map((c) => (
-                        <p key={c.productId}>
-                          {c.productCode} {c.productName} · 当前需求 {c.quantity}
-                          {c.unit} · 当前份额 {money(c.amount ?? 0)} · 原份额 {money(c.allocatedAmount ?? 0)}
-                        </p>
-                      ))}
-                    </details>
-                  </td>
-                  <td className="p-3 text-right">
-                    {g.targetQty}
-                    {commercialUnit(g)}
-                  </td>
-                  <td className="p-3 text-right">{money(g.amount)}</td>
-                  <td className="p-3 text-right">
-                    {g.originalQty} / {money(g.originalAmount)}
-                  </td>
-                  <td className="p-3 text-right">{g.dispatch?.confirmedShippedQty ?? 0}</td>
-                  <td className="p-3 text-right">
-                    {g.dispatch?.outstandingQty ?? 0} / {g.dispatch?.activeAllocatedQty ?? 0}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <p className="p-3 text-sm">
-          成交合计 {money(order.totalAmount)} · 折扣 {money(order.discountAmount ?? 0)}
-          。完整套已发量以原发货批次的出库确认为准；组件退货不会改写原完整套发货记录。
-        </p>
-      </SectionCard>
-      <SectionCard title="发货批次" compact>
-        <div className="space-y-2 p-3 text-sm">
-          {order.commercialDispatches?.map((f) => (
-            <p key={f.dispatchGroupId}>
-              {f.taskNo} ·{' '}
-              {order.commercialGroups?.find((g) => g.id === f.groupId)?.kitName ??
-                order.commercialGroups?.find((g) => g.id === f.groupId)?.components[0]?.productName ??
-                `原成交行 #${f.groupId}`}{' '}
-              · {f.quantity}
-              {commercialUnit(order.commercialGroups?.find((g) => g.id === f.groupId))}{' '}
-              · {commercialWarehouseName(order, f.warehouseId)} ·{' '}
-              {WT_STATUS_NAME[String(f.taskStatus) as keyof typeof WT_STATUS_NAME] ?? '未知状态'} ·{' '}
-              {f.confirmedShipped ? '已确认实发' : f.outstanding ? '待完成' : '原批次（未确认）'}
-              {!f.active && ' · 已撤销批次'}
-              {f.taskDeletedAt && ' · 任务已删除'}
-            </p>
-          ))}
-        </div>
-      </SectionCard>
-      <SectionCard title="仓库实物明细" compact>
-        <div className="space-y-2 p-3 text-sm">
-          <p className="text-muted-foreground">
-            同款配件已合并，库存预留、扫码、分拣、复核和装箱按下面的真实配件作业。订单金额以成交明细为准。
-          </p>
-          {order.items?.map((p) => (
-            <details key={p.id}>
-              <summary>
-                {p.productCode} {p.productName} · {p.quantity}
-                {p.unit} · 已占 {p.reservedQty ?? 0} · 已派发 {p.dispatchedQty ?? 0} · 已发 {p.shippedQty ?? 0}
-              </summary>
-              {p.scans?.map((s, i) => (
-                <p key={i}>
-                  {s.barcode} · {s.qty}
-                  {p.unit} · {s.operatorName}
-                </p>
-              ))}
-            </details>
-          ))}
-        </div>
-      </SectionCard>
-      <CommercialFulfillmentSummary key={order.id} id={order.id} owner={owner} groups={order.commercialGroups ?? []} />
-      {!ownerCurrent ? (
-        <p role="alert">读取来源已变化，原任务资料保留；请回原服务器核对后办理交接。</p>
-      ) : handoff === 'invalid' ? (
-        <p role="alert">交接参数无效，请从原事项重新打开。</p>
-      ) : (
-        <FulfillmentProgressCard order={order} targetTaskId={handoff ? handoff.taskId : undefined} />
-      )}
-      <SectionCard title="装箱进度" compact>
-        <div className="space-y-2 p-3 text-sm">
-          {order.packages?.map((pkg) => (
-            <details key={pkg.id}>
-              <summary>
-                {pkg.barcode} · {pkg.status === 2 ? '已完成' : '未完成'}
-              </summary>
-              {pkg.items.map((p, i) => (
-                <p key={i}>
-                  {p.productCode} {p.productName} · {p.qty}
-                  {p.unit}
-                </p>
-              ))}
-            </details>
-          ))}
-        </div>
-      </SectionCard>
-      <SectionCard title="操作记录" compact>
-        <div className="space-y-3 p-3 text-sm">
-          {order.timeline?.map((event) => (
-            <div key={event.id}>
-              <p className="font-medium">{event.title}</p>
-              <p>{event.description}</p>
-              <p className="text-muted-foreground">
-                {formatDisplayDateTime(event.createdAt)} · {event.createdByName ?? '未记录'}
-              </p>
-            </div>
-          ))}
-        </div>
-      </SectionCard>
+      {handoff === 'invalid' && <p role="alert">交接参数无效，请从原事项重新打开。</p>}
+      <SaleOrderDetailTabs value={detailTab} onChange={setDetailTab} />
+      <KeepAliveSection active={detailTab === 'info'} className="space-y-3">
+        <SaleOrderInfoCard order={order} />
+        <CommercialOrderItems order={order} />
+      </KeepAliveSection>
+      <KeepAliveSection active={detailTab === 'fulfillment'} className="space-y-3">
+        <CommercialFulfillmentSummary key={order.id} id={order.id} owner={owner} groups={order.commercialGroups ?? []} />
+      </KeepAliveSection>
+      <KeepAliveSection active={detailTab === 'progress'} className="space-y-3"><div className="card-base space-y-4 p-4">
+        {!ownerCurrent ? (
+          <p role="alert">读取来源已变化，原任务资料保留；请回原服务器核对后办理交接。</p>
+        ) : handoff === 'invalid' ? (
+          <p role="alert">交接参数无效，请从原事项重新打开。</p>
+        ) : (
+          <FulfillmentProgressCard order={order} targetTaskId={handoff ? handoff.taskId : undefined} />
+        )}
+        <SaleOrderPickingProgress order={order} />
+        {!!order.commercialDispatches?.length && <div data-sale-batches className="space-y-2">
+          <h3 className="text-sm font-semibold">发货批次</h3>
+          <DataTable virtualized rowKey="id" columns={[
+            { key: 'taskNo', title: '任务', width: 150 },
+            { key: 'productName', title: '商品', width: 260, render: value => <span className="whitespace-normal break-words">{String(value)}</span> },
+            { key: 'quantity', title: '数量', width: 100, align: 'right' },
+            { key: 'warehouse', title: '发货仓库', width: 130 },
+            { key: 'status', title: '状态', width: 100 },
+            { key: 'result', title: '发货记录', width: 220 },
+          ]} data={order.commercialDispatches.map(f => {
+            const group = order.commercialGroups?.find(g => g.id === f.groupId)
+            return { id: f.dispatchGroupId, taskNo: f.taskNo, productName: group?.kitName ?? group?.components[0]?.productName ?? `原成交行 #${f.groupId}`,
+              quantity: `${f.quantity}${commercialUnit(group)}`, warehouse: commercialWarehouseName(order, f.warehouseId),
+              status: WT_STATUS_NAME[String(f.taskStatus) as keyof typeof WT_STATUS_NAME] ?? '未知状态',
+              result: [f.confirmedShipped ? '已确认实发' : f.outstanding ? '待完成' : '原批次（未确认）', !f.active && '已撤销批次', f.taskDeletedAt && '任务已删除'].filter(Boolean).join(' · ') }
+          })} />
+        </div>}
+        {!order.taskNo && !order.tasks?.length && !order.commercialDispatches?.length && <p className="py-8 text-center text-sm text-muted-foreground">尚未创建仓库任务，订单状态为 {workflow.label}</p>}
+
+            </div></KeepAliveSection>
+      <KeepAliveSection active={detailTab === 'scan'} className="space-y-3"><p className="text-xs text-muted-foreground">订单金额以成交明细为准。</p><SaleOrderScanDetails order={order} /></KeepAliveSection>
+      <KeepAliveSection active={detailTab === 'pack'} className="space-y-3"><SaleOrderPackingDetails order={order} /></KeepAliveSection>
+      <KeepAliveSection active={detailTab === 'log'} className="space-y-3"><DocumentActivityPanel type="sale" id={order.id} view="log" readOwner={owner} /></KeepAliveSection>
       <ConfirmDialog
         open={!!confirm}
+        cancelText="返回订单"
+        variant={confirm === 'cancel' || confirm === 'delete' ? 'destructive' : 'default'}
         title={
           confirm === 'cancel'
             ? confirmed

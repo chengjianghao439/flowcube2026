@@ -106,9 +106,10 @@ export function useCommercialWrite(owner: KitReadOwner, scope?: string, isCurren
   return {
     ...write,
     pending: write.pending ? { ...write.pending, uncertain: true, operation: write.pendingPayload } : null,
-    submit: async (operation: CommercialOperation) => convert(await write.submit(operation, { kind: operation.action, action: `sale.${operation.action}${operation.id ? `.${operation.id}` : ''}`, resourceType: 'sale_order', resourceId: operation.id })),
+    submit: async (operation: CommercialOperation) => convert(await write.submit(operation, { kind: operation.action, action: `sale.${operation.action}${operation.id ? ('commercialModel' in operation.body ? `.${operation.id}` : `:${operation.id}`) : ''}`, resourceType: 'sale_order', resourceId: operation.id })),
     retry: async () => convert(await write.retry()),
     queryOriginal: async () => convert(await write.queryOriginal()),
+    canViewConfirmation: (answer: CommercialWriteConfirmation) => last.current?.public === answer && write.canView(last.current.raw),
     canApplyConfirmation: (answer: CommercialWriteConfirmation) => last.current?.public === answer && write.canApply(last.current.raw)
   }
 }

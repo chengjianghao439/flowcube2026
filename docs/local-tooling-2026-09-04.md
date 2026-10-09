@@ -139,3 +139,33 @@ FLOWCUBE_CHROME_SESSION="$(uuidgen)"
 ## 后续开发热重启候选（2026-10-03）
 
 为移除nodemon携带的未修补braces开发依赖，v0.12.0本地发布候选将 `backend` 的 `npm run dev` 改为既有Node22的 `node --watch index.js`，不改生产 `npm start`。用实际命令与合成require依赖验证文件修改能重启，退出后自有进程组已关闭；Node实测22.23.2。依赖安装/audit与上传回归通过，尚未随本版发布，详见 `docs/release-v0.12.0-result.md`。Node内置watch不自动把未加载的SQL/文档加入监听，需要调整配置时主动重启。
+
+
+## 2026-10-08 本机环境修复与版本对齐
+
+以下是本轮重新实测的结果，不沿用上面的历史快照。本轮修复本机工具环境、安装依赖和隔离测试库结构；未修改业务代码或项目 lockfile，未连接或部署生产。
+
+### 根因与已落地修复
+
+- **Docker 默认连接错误**：默认 context 原为 `default`，指向不存在的 `/var/run/docker.sock`；既有 Colima `flowcube` profile 实际可用。执行 `docker context use colima-flowcube` 后，普通 `docker info` 与 `docker ps` 已能连接。CLI 29.7.2 / daemon 29.5.2 会正常协商 API 1.54；两者版本不同没有导致本轮连接错误，不为对齐数字重启正在使用的虚拟机。`flowcube-dev-mysql8` 已用既有 `npm run dev:mysql8` 启动并达到 healthy，保留数据卷，启动动作没有执行迁移。
+- **项目工具没有自动进入 shell**：Homebrew Node 26.8.1 原来抢在已安装的 Node 22.23.2 前面，Java 21 和 Android 工具也需要手工 source。新增本机私有 `~/.config/flowcube/auto-dev-env.zsh`，由 `.zshenv`、`.zprofile`、`.zshrc` 分别覆盖非登录命令 shell、登录命令 shell与交互式 shell。通过 Git common-dir 识别主仓库和关联工作树，加载既有 `dev-env.sh`；交互式终端进入项目自动加载，离开时恢复原工具环境，并保留用户在项目内新增的 PATH 项。Node 26 保留供其他目录使用；没有修改系统 Node 链接。`.zprofile` 的三份相同 Homebrew 初始化去重为一份。
+- **已安装依赖落后于源码**：主工作区前端原装 Tailwind 3.4.19 / Vitest 3.2.7 / Capacitor 8.2.0，缺少当前 PostCSS 包；后端 `proxy-addr` 不符合清单，且残留已移除的 nodemon 依赖。通过 `npm run dev:setup` 在 Node 22 下按三端当前 lockfile 完整执行 `npm ci`，保留所有 package / lockfile。根目录、backend、frontend、desktop 与 browser-smoke 的 `npm ls --depth=0 --json` 均退出 0，无 missing / invalid / extraneous。
+- **Electron 开发二进制尚未下载**：当前 44.3.0 npm 包采用首次调用时下载二进制，`npm ci` 完成不代表二进制已在本机。非交互命令没有载入交互 shell 的代理，直连下载缓慢；本轮终止并清理了本任务的未完成下载，通过既有本机代理和官方 `@electron/get` 入口补齐 44.3.0 macOS arm64 二进制。下载缓存的 SHA256 已与 npm 包携带的官方校验值一致，实际以 `ELECTRON_RUN_AS_NODE=1` 运行该二进制返回 44.3.0。缓存与已安装二进制保留。将来 lockfile 更换 Electron 版本后仍需准备对应二进制，不能拿旧缓存代替；非交互下载可显式使用现有代理和 `ELECTRON_GET_USE_PROXY=1`，本轮未改变全局代理设置。参考：[Electron 安装与下载说明](https://www.electronjs.org/docs/latest/tutorial/installation)。
+- **Android CLI 过旧**：旧 command-line tools 12.0 无法正确理解 SDK XML v4。通过官方 SDK 仓库并存安装固定版本 `cmdline-tools;23.0`，`dev-env.sh` 改用该目录，保留旧工具用于回退。新 `android --no-metrics --sdk="$ANDROID_HOME" sdk list` 能读取已装 SDK，原 XML 版本警告不再出现。新版 `sdkmanager` 自身会提示已弃用，日常查询改用官方推荐的 `android sdk`；这是工具接口变化，不能用隐藏日志当修复。保留当前 Android 35 / Build Tools 34.0.0，它们符合项目 AGP 8.7.2 的要求。
+- **隔离测试库结构落后**：只读核对证实 `127.0.0.1:3307 / flowcube_operations20260912_test` 缺迁移 264–281。确认没有其他连接使用该库、检查这 18 个迁移的写入范围后，先做完整私有备份，再以明确 `NODE_ENV=test` 和完整 DB 变量执行现有迁移器；迁移前核对实际配置目标，18 个迁移自然完成，随后核对当前所有 SQL 文件无遗漏。本项只更新该隔离测试库；没有向开发业务库 `flowcube_dev8` 执行迁移，也没有删除或清空业务表。
+- **SSH 手工命令缺复用**：为本机 `~/.ssh/config` 的 `flowcube-prod` 补 `ControlMaster auto`、`ControlPath ~/.ssh/flowcube-%C`、`ControlPersist 120`。`ssh -G` 已确认生效；本轮没有建立生产 SSH 连接，配置验证不代表生产连通性验证。
+
+### 验证证据与边界
+
+- 新启动的登录/非登录 shell 与关联工作树均实测 Node 22.23.2、Java 21.0.12.1 和 Android CLI 路径；交互式终端往返主目录与项目显示 Node 26 → 22 → 26，Java 环境恢复，用户临时新增 PATH 项仍保留。
+- `npm run dev:check` 自然通过：后端 lint、前端 lint（0 error / 37 warning）、`tsc -p frontend/tsconfig.app.json --noEmit`、前端 **238 文件 / 1714 用例**、权限专项 **7/7**。没有将既有 lint warning 描述为零告警。
+- ERP 与 PDA 的既有构建命令均通过，输出到本轮 `/tmp/flowcube-environment-builds-*` 目录，没有覆盖仓库 `frontend/dist/`。
+- Android `./gradlew --no-daemon help` 在 Java 21 下通过（Gradle 8.11.1）。本轮没有构建或安装 APK，未作 PDA 真机验收。
+- 真实后端 app 在随机回环端口启动，`/health` 与 `/api/health` 均返回 200；实际连接池确认测试库 MySQL 8.0.46 / `+08:00`，当前迁移文件缺失数为 0；`@napi-rs/canvas` 原生模块实际生成 PNG 成功。临时 HTTP 服务、连接池和自有下载测试目录已结束/清理，没有启动 scheduler。
+- 当前 backend/frontend/desktop 的 package 与 lockfile、Android `versionName` 均为 0.13.0；这是本地文件一致性证据，不是新增发布结果。
+
+本机配置及测试库迁移前完整备份位于 `~/.config/flowcube/environment-backup-20261008-075438/`（目录 700、文件 600）。测试库备份约 35.9 MB；不提交或公开其中的私有配置与 SQL。
+
+现有已打开的终端可重新执行 `source "$HOME/.config/flowcube/dev-env.sh"`，新 shell 会自动加载；本轮没有强制重启其他任务的服务。浏览器验收任务的专属会话和专属临时 MySQL 实例由创建它们的任务负责收尾，本轮没有批量清理。
+
+参考：[Docker contexts](https://docs.docker.com/engine/manage-resources/contexts/)、[Android CLI](https://developer.android.com/tools/agents/android-cli)、[AGP 8.7 兼容性](https://developer.android.com/build/releases/agp-8-7-0-release-notes)。

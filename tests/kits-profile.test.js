@@ -123,6 +123,24 @@ function serviceFixture({ duplicate = null, historicalReceipt = null, maxNum = n
   try { service = require(serviceId) } finally { for (const [id, value] of saved) { if (value) require.cache[id] = value; else delete require.cache[id] } }
   return { service, lifecycle, inserts, generations, requests, queries, fingerprint: operationModule.exports.creationFingerprint }
 }
+test('version component reads include the complete product identity in the same bounded query', async () => {
+  const f = serviceFixture(), reads = []
+  const product = { code: 'P1', name: '组件', unit: '个', spec: 'M8×22', color: '黑色', article_number: 'ART-1', is_active: 1, allow_decimal_qty: 0, deleted_at: null }
+  const conn = { async query(sql, params) {
+    reads.push([sql, params])
+    if (sql.includes('FROM kit_definition_versions')) return [[{ id: 7, kit_id: 1, version_no: 1, reference_unit_price: 81 }]]
+    assert.match(sql, /FROM kit_definition_components/)
+    const selected = Object.fromEntries(Object.entries(product).filter(([field]) => sql.split('FROM')[0].includes(`p.${field}`)))
+    return [[{ id: 8, version_id: 7, product_id: 1, base_qty: 4, reference_price: 21, amount_weight: '84.000000', weight_source: 'product_a', sort_no: 0, ...selected }]]
+  } }
+  const versions = await f.service.loadVersions(conn, [7, 7])
+  assert.deepEqual(versions.get(7).components[0], {
+    id: 8, productId: 1, baseQty: 4, referencePrice: 21, amountWeight: '84.000000', weightSource: 'product_a', sortNo: 0,
+    productCode: 'P1', productName: '组件', unit: '个', spec: 'M8×22', color: '黑色', articleNumber: 'ART-1', productActive: true, allowDecimal: false,
+  })
+  assert.equal(reads.length, 2)
+  assert.ok(reads.every(([sql, params]) => !/INSERT|UPDATE|DELETE/.test(sql) && params[0].length === 1))
+})
 test('creation uses same-transaction K generation and ignores the client code in persistence and fingerprint', async () => {
   const f = serviceFixture()
   const result = await f.service.create({ code: 'FORGED', name: '成套', referenceUnitPrice: 7, components: parts }, { requestKey: 'stable', userId: 1 })

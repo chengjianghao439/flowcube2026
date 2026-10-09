@@ -69,7 +69,7 @@ export default function ShipSelectDialog({ open, onClose, order, loading, onConf
         </DialogDescription>
         <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-border">
           <table className="w-full min-w-[1560px] text-sm">
-            <thead className="sticky top-0 bg-muted text-xs text-muted-foreground">
+            <thead data-selection-column className="sticky top-0 data-table-header text-xs text-muted-foreground">
               <tr>
                 <th className="w-10 px-3 py-2"><input type="checkbox" aria-label="选择全部可出库明细" disabled={loading} checked={allSelected} onChange={e => { if (!submitting.current && !loading) setRows(Object.fromEntries(undispatched.map(item => [item.id, { checked: e.target.checked, qty: limitFor(item.id) }]))) }} /></th>
                 <ProductIdentityHeaders /><th className="min-w-20 px-3 py-3 text-left">单位</th>

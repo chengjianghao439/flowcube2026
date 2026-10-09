@@ -88,6 +88,8 @@ export interface AppDialogProps {
    * 登记/核销类大弹窗用它拒绝默认聚焦，避免首个可编辑字段是日期时自动展开日历遮挡明细。
    * 不传时保持 Radix 默认行为。
    */
+  /** 销售选择器显式启用：在搜索框 autoFocus 前记下触发控件。 */
+  captureFocusOnOpen?: boolean
   onOpenAutoFocus?: (event: Event) => void
   onCloseAutoFocus?: (event: Event) => void
 }
@@ -127,8 +129,9 @@ export function AppDialog({
   resizable     = true,
   onOpenAutoFocus,
   onCloseAutoFocus,
+  captureFocusOnOpen = false,
 }: AppDialogProps) {
-  const focusReturn = useDialogFocusReturn({ onOpenAutoFocus, onCloseAutoFocus })
+  const focusReturn = useDialogFocusReturn({ onOpenAutoFocus, onCloseAutoFocus, captureOpen: captureFocusOnOpen ? open : undefined })
   const { width: preferredWidth, height: preferredHeight, handleResizeMouseDown } = useResizableDialog({
     dialogId,
     defaultWidth,

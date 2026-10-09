@@ -12,7 +12,7 @@ export function SaleOrderOverview({ order }: { order: SaleOrder }) {
   const cells = [
     { label: '客户', value: order.customerName || '—', icon: Building2 },
     { label: '出库仓库', value: order.isMultiWarehouse ? '多仓履约' : (order.warehouseName || '—'), icon: Warehouse },
-    { label: commercial ? '当前成交明细' : '商品明细', value: `${lineCount} 行`, icon: PackageOpen },
+    { label: '商品明细', value: `${lineCount} 行`, icon: PackageOpen },
     { label: '订单金额', value: money(payableAmount), icon: CircleDollarSign },
   ]
   return (
@@ -25,7 +25,7 @@ export function SaleOrderOverview({ order }: { order: SaleOrder }) {
           </div>
         ))}
         <div className="flex min-w-0 items-center justify-between gap-3 px-4 py-2.5">
-          <div><p className="text-[11px] text-muted-foreground">回款状态</p><div className="mt-1"><SoftStatusLabel label={receivable.label} tone={receivable.tone} /></div></div>
+          <div><p className="text-[11px] text-muted-foreground">回款状态</p><div className="mt-1"><SoftStatusLabel label={receivable.label} tone={receivable.tone} className="whitespace-nowrap" /></div></div>
           {receivable.dueDate && <span className="text-[11px] text-muted-foreground">至 {receivable.dueDate.slice(0, 10)}</span>}
         </div>
       </div>

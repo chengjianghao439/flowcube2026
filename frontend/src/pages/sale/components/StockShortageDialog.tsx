@@ -19,7 +19,7 @@ export default function StockShortageDialog({ open, onClose, shortages }: Props)
         <DialogDescription>以下商品本次占库数量超过可用库存，请关闭后回占库弹窗调整数量：</DialogDescription>
         <div className="max-h-72 overflow-auto rounded-md border">
           <table className="w-full text-sm">
-            <thead className="sticky top-0 bg-muted text-xs text-muted-foreground">
+            <thead className="sticky top-0 data-table-header text-xs text-muted-foreground">
               <tr><th className="px-3 py-2 text-left font-medium">商品</th><th className="px-3 py-2 text-right font-medium">本次需占</th><th className="px-3 py-2 text-right font-medium">可用数量</th></tr>
             </thead>
             <tbody className="divide-y">

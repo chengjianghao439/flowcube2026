@@ -47,6 +47,12 @@ export const DOC_FIELD_DEFS: PrintFieldDef[] = [
   { key: 'itemsTable', label: '商品明细', type: 'table', defaultW: 170, defaultH: 50 },
 ]
 
+/** Only sales have order-level discounts; other document palettes retain their fields. */
+export const SALE_TOTAL_FIELD_DEFS: PrintFieldDef[] = [
+  { key: 'discountAmount', label: '折扣金额', type: 'text', defaultW: 83, defaultH: 8 },
+  { key: 'netAmount', label: '订单金额', type: 'text', defaultW: 83, defaultH: 8 },
+]
+
 /** 各标签类型可拖拽字段（type 5–10），与后端 enqueue*LabelJob 提供变量一致 */
 export const LABEL_FIELD_DEFS_BY_TYPE: Record<number, PrintFieldDef[]> = {
   5: [
@@ -234,6 +240,8 @@ export const DOC_PREVIEW_SAMPLE: Record<string, string> = {
   receiverPhone: '13812345678',
   receiverAddress: '北京市朝阳区 XX 街道 XX 号',
   totalAmount: '¥ 3,200.00',
+  discountAmount: '¥ 200.00',
+  netAmount: '¥ 3,000.00',
   remark: '请注意包装，易碎品。',
   operator: '王五',
   printDate: '2024-03-15 14:30:00',

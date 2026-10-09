@@ -47,6 +47,8 @@
 
 独立 `/api/kits` 模块按 routes → controller → service 分层，C2b当时只提供主档维护与只读预览；后续正式销售保存、履约、退货与会计接点见本文件下方C2段。列表、详情、`finder` 使用 `product.view`；创建、编辑、软删分别复用 `product.create/update/delete`。`POST /api/kits/preview` 同时要求 `sale.order.create` 与 `product.view`，在数据库 READ ONLY 事务中运行。具名 finder/preview 路由在 `/:id` 前注册。列表与 finder 入口页码须为 1–100000 的有限整数、pageSize 为 1–100，offset 最大 9999900；超界返回400，不能把 Infinity 交给 MySQL。
 
+2026-10-09销售样板：版本组件只读投影增加`spec/color/articleNumber`，与既有编码、名称、单位一起从同一次`product_items` JOIN返回，支持未选客户时直接显示全部配件商品身份。版本量、参考价、权重、可选状态、权限与200版本读取上限不改，空商品属性返回null。已存订单的组件身份仍读取原订单快照，不以此投影回填或覆盖历史资料。离线投影回归接入既有`test:kits-composition`入口。
+
 迁移 `269_kit_definitions.sql` 增加主档、不可变组成版本、版本组件三张表；索引/外键在 CREATE IF NOT EXISTS 后单独幂等补齐，并按 information_schema 的名字与列序核对，已存在但形状不一致即失败。主档当前版本用 `(id,current_version_id) → (kit_id,id)` 复合外键防串套。未软删编码唯一；停用不释放编码。2026-10-07 资料对齐后，新建编码由服务端统一取 K + 六位累计流水，编辑不修改编码；旧编码保持，软删除记录仍计入累计取号。
 
 写入必须有稳定 `X-Request-Key`。创建使用载荷指纹 action，编辑/删除使用资源 ID action；锁主档 → begin/replay → 核 revision → 业务/同 conn 回执 → commit。重放先于旧 revision 拒绝，以便本次成功后原键仍可取回原结果。新键携带过期 revision 返回 `409 KIT_REVISION_CONFLICT`，不写版本或主档；改组成/任一档售价创建新版本，改名/元资料/启停仅递增主档 revision，历史版本可通过 `GET /api/kits/:id?versionId=...` 读取，停用/软删仍可解释历史。
@@ -298,3 +300,13 @@ E7 B 提交后详情隔离：execute 首次执行与已执行重放、regenerate
 创建/修改接受旧 code 字段但不采信指定值。新建在同事务调用 generateMasterCode(K,kit_definitions)，明确编码唯一键撞号才回滚并取得新连接事务重试；不是在旧 RR 快照中重复 MAX。成功原键仍只返回原主档与版本。编码编辑只读，旧码不重排。
 
 四档售价保存在不可变版本，A 沿 reference_unit_price，B/C/D 新列可空以保留未知历史；版本 DTO 保留 NULL，资料顶层显示 NULL→A 的有效价。新建空档按独立进价和 loadPriceRates/computeTierPrices 计算；编辑 undefined 表示原档，null 表示员工明确清空后按进价计算；明确 0 必须保留，五位小数与超界拒绝。referenceUnitPrice 与 salePriceA 同传必须一致。只改价格复制原组件依据，旧版本与订单不变。
+
+2026-10-09销售样板行备注：正式商业组和新建套装预览均接受可选remark（200字符，与普通销售行一致），仍拒绝未知字段。备注存于已有metadata_json.input，不增加迁移；数量和备注不参与原报价身份比较。只改备注保留原商业组、版本、quote/entry与金额快照；旧调用省略时保留备注，显式空串清空。保留组的单次CASE UPDATE同步metadata_json，不新增逐行查询或写入，不影响物理组件/预占事实。相关离线回归接入既有test:sale-commercial与test:kits-composition入口；本地MySQL与GUI结果另记验收记录，不能据离线测试声称线上通过。
+
+### 2026-10-09 普通销售单加入套装的编辑兼容
+
+findById对历史普通单返回由当前头、全部物料行及执行数量生成的editFingerprint。普通编辑送expectedEditFingerprint；首次加入商业组时还带expectedRevision:0。update/adjust/原单commercial-preview仅在编辑上下文允许此组合，不放开create/预占/释放/发货等动作的revision要求。写事务先锁原单、核范围和请求键、处理原键回放，再读取同事务头/行比较指纹、原资格及商业revision；基线不一致409，不能覆盖另一份草稿。纯普通旧客户端不传指纹时兼容原合同，新统一编辑器总携带指纹。
+
+转换原键的动作身份按冻结载荷取sale.update.<id>/sale.adjust.<id>，成功转换后的同键请求仍可回放；新键expectedRevision0则拒绝。纯普通载荷保留sale.update:<id>/sale.adjust:<id>及既有载荷指纹结构，只有提供新的编辑基线才附expectedEditFingerprint；原商业更新载荷哈希不增expectedRevision字段，避免破坏历史回放。仓库范围在回放前核对原物料及本次目标，原状态/处置来源/改单冻结与执行差额规则保留。沿现有商业组保存、stable物料行和同任务未确认派发替换，不新增迁移、库存写入口或扫码算法。
+
+2026-10-09 发布整合：`GET /kits/finder` 的可选 `categoryId` 使用正安全整数合同，分类本身与所有后代同时约束列表和计数 SQL，且仓库范围校验先于分类查询。`test:kits-composition` 包含 `kits-finder.test.js` 的合同、参数、计数及范围回归。查询继续在只读事务中分批，不改变库存参考、价格、选择资格或业务上限。

@@ -11,7 +11,8 @@ function canRestoreFocus(target: HTMLElement) {
 }
 
 /** DialogContent/AppDialog 共用；显式草稿 handler 保留自己的回焦归属。 */
-export function useDialogFocusReturn({ onOpenAutoFocus, onCloseAutoFocus }: {
+export function useDialogFocusReturn({ onOpenAutoFocus, onCloseAutoFocus, captureOpen }: {
+  captureOpen?: boolean
   onOpenAutoFocus?: (event: Event) => void
   onCloseAutoFocus?: (event: Event) => void
 }) {
@@ -19,11 +20,21 @@ export function useDialogFocusReturn({ onOpenAutoFocus, onCloseAutoFocus }: {
   const activeRef = useRef(active)
   activeRef.current = active
   const restoreFocusRef = useRef<HTMLElement | null>(null)
+  const previousOpen = useRef(false)
+  // Sale pickers opt in: React input autoFocus runs before Radix's open event.
+  // Capture during the parent's opening render, before its portal children mount.
+  if (captureOpen !== undefined) {
+    if (captureOpen && !previousOpen.current) {
+      const target = document.activeElement
+      restoreFocusRef.current = target instanceof HTMLElement && target !== document.body ? target : null
+    }
+    previousOpen.current = captureOpen
+  }
   return {
     onOpenAutoFocus: (event: Event) => {
       // Capture before the caller changes focus or the FocusScope enters.
       const target = document.activeElement
-      restoreFocusRef.current = target instanceof HTMLElement && target !== document.body ? target : null
+      if (captureOpen === undefined) restoreFocusRef.current = target instanceof HTMLElement && target !== document.body ? target : null
       onOpenAutoFocus?.(event)
     },
     onCloseAutoFocus: (event: Event) => {

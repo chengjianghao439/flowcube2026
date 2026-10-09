@@ -1,4 +1,5 @@
 import { expect, test } from 'vitest'
+import * as format from './format'
 import { amount, money, qty } from './format'
 
 /**
@@ -41,4 +42,15 @@ test('qty 的空值口径与金额一致', () => {
   for (const value of [null, undefined, NaN, Infinity, -Infinity]) {
     expect(qty(value)).toBe('—')
   }
+})
+
+test('unit prices keep four business decimals, while amounts remain two', () => {
+  expect(format).toHaveProperty('unitPrice')
+  const price = format.unitPrice
+  expect(price(23.1234)).toBe('¥23.1234')
+  expect(price(1234.5)).toBe('¥1,234.50')
+  expect(price(0)).toBe('¥0.00')
+  expect(price(1.23456789, 8)).toBe('¥1.23456789')
+  for (const value of [null, undefined, NaN, Infinity]) expect(price(value)).toBe('—')
+  expect(money(23.1234)).toBe('¥23.12')
 })

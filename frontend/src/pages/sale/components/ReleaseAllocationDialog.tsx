@@ -89,7 +89,7 @@ export default function ReleaseAllocationDialog({ open, orderId, items, onClose 
 
         <div className="min-h-0 overflow-auto rounded-lg border border-border">
           <table className="w-full min-w-[1560px] text-sm">
-            <thead className="sticky top-0 bg-muted text-xs text-muted-foreground">
+            <thead data-selection-column className="sticky top-0 data-table-header text-xs text-muted-foreground">
               <tr>
                 <th className="w-10 px-3 py-2">
                   <input

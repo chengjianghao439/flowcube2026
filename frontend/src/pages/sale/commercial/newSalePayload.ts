@@ -67,6 +67,7 @@ export function buildNewSalePayload(body: CommercialBody, preview: CommercialPre
       resolvedInput.quantity !== input.quantity || priceIdentity(resolvedInput.priceSource) !== priceIdentity(input.priceSource) ||
       resolvedInput.unitPrice !== input.unitPrice || metadata.priceCustomerId !== body.customerId
     ) invalid('商品明细或报价客户与预览依据不一致')
+    if ((resolvedInput.remark ?? '') !== (input.remark ?? '')) invalid('商品备注与预览不一致')
     if (!Array.isArray(group.components) || group.components.length !== 1) invalid('普通商品的预览组件不完整')
     const component = group.components[0]
     if (
@@ -108,7 +109,8 @@ export function buildNewSalePayload(body: CommercialBody, preview: CommercialPre
       resolvedPriceLevel: quote?.resolvedPriceLevel ?? null,
       articleNumber: component.articleNumber,
       spec: component.spec,
-      color: component.color
+      color: component.color,
+      ...(input.remark !== undefined ? { remark: input.remark } : {})
     }
   })
   const { commercialModel: _commercialModel, expectedRevision: _expectedRevision, commercialGroups: _commercialGroups, ...head } = body

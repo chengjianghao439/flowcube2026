@@ -189,7 +189,7 @@ export default function ReserveAllocationDialog({ open, orderId, onClose, onShor
           {!readUnavailable && (
             <div className="overflow-x-auto rounded-xl border border-border">
               <table className="w-full min-w-[1560px] text-sm">
-                <thead className="sticky top-0 z-[1] bg-muted text-xs text-muted-foreground">
+                <thead data-selection-column className="sticky top-0 z-[1] data-table-header text-xs text-muted-foreground">
                   <tr>
                     <th className="w-12 px-4 py-3">
                       <input type="checkbox" checked={allChecked} disabled={reserve.isPending} onChange={e => toggleAll(e.target.checked)} aria-label="全选可占商品" />

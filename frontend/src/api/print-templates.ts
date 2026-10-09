@@ -1,9 +1,10 @@
+import { withSalePrintTotals } from '@/lib/salePrintTemplate'
 import { payloadClient as client } from './client'
 
 import type { PrintTemplate, CreateTemplateParams, UpdateTemplateParams } from '@/types/print-template'
 
-export const getPrintTemplateListApi   = (params?: { type?: number }) => client.get<PrintTemplate[]>('/print-templates', { params })
-export const getPrintTemplateDetailApi = (id: number)                  => client.get<PrintTemplate>(`/print-templates/${id}`)
+export const getPrintTemplateListApi   = (params?: { type?: number }) => client.get<PrintTemplate[]>('/print-templates', { params }).then(list => list.map(withSalePrintTotals))
+export const getPrintTemplateDetailApi = (id: number)                  => client.get<PrintTemplate>(`/print-templates/${id}`).then(withSalePrintTotals)
 export const createPrintTemplateApi    = (data: CreateTemplateParams)  => client.post<{ id: number }>('/print-templates', data)
 export const updatePrintTemplateApi    = ({ id, ...data }: UpdateTemplateParams) => client.put<null>(`/print-templates/${id}`, data)
 export const deletePrintTemplateApi    = (id: number, config?: Parameters<typeof client.delete>[1]) => client.delete<null>(`/print-templates/${id}`, config)

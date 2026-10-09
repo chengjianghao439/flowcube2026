@@ -34,6 +34,7 @@ const salePhoneRule = z.string()
   .or(z.literal(''))
 
 const ordinaryCreateSaleSchema = z.object({
+  expectedEditFingerprint: z.string().regex(/^[a-f0-9]{64}$/).optional(),
   customerId: z.number().int().positive('请选择客户'),
   customerName: z.string(),
   warehouseId: z.number().int().positive('请选择仓库'),
@@ -75,11 +76,11 @@ const ordinaryShipSaleSchema = z.object({
 })
 
 const commercialGroupSchema=z.discriminatedUnion('kind',[
-  z.object({kind:z.literal('kit'),lineKey:z.string().min(1).max(80),warehouseId:z.number().int().positive().optional(),kitVersionId:z.number().int().positive(),quantity:positiveQty.refine(Number.isSafeInteger,'套数须为整数'),unitPrice:z.number().nonnegative().optional(),priceSource:z.enum(['kit_default','manual'])}).strict(),
-  z.object({kind:z.literal('ordinary'),lineKey:z.string().min(1).max(80),warehouseId:z.number().int().positive().optional(),productId:z.number().int().positive(),entryUnit:z.string().max(20).optional().nullable(),quantity:positiveQty,unitPrice:z.number().positive().optional(),priceSource:z.enum(['default','list','manual'])}).strict(),
+  z.object({kind:z.literal('kit'),lineKey:z.string().min(1).max(80),warehouseId:z.number().int().positive().optional(),kitVersionId:z.number().int().positive(),quantity:positiveQty.refine(Number.isSafeInteger,'套数须为整数'),unitPrice:z.number().nonnegative().optional(),priceSource:z.enum(['kit_default','manual']),remark:z.string().max(200).optional()}).strict(),
+  z.object({kind:z.literal('ordinary'),lineKey:z.string().min(1).max(80),warehouseId:z.number().int().positive().optional(),productId:z.number().int().positive(),entryUnit:z.string().max(20).optional().nullable(),quantity:positiveQty,unitPrice:z.number().positive().optional(),priceSource:z.enum(['default','list','manual']),remark:z.string().max(200).optional()}).strict(),
 ])
-const commercialCreateSaleSchema=ordinaryCreateSaleSchema.omit({items:true}).extend({customerName:z.string().optional(),warehouseName:z.string().optional(),commercialModel:z.literal('kit-v1'),expectedRevision:z.number().int().positive().optional(),commercialGroups:z.array(commercialGroupSchema).min(1).max(200)}).strict()
-const commercialPreviewSchema=commercialCreateSaleSchema.extend({expectedRevision:z.number().int().positive()})
+const commercialCreateSaleSchema=ordinaryCreateSaleSchema.omit({items:true}).extend({customerName:z.string().optional(),warehouseName:z.string().optional(),commercialModel:z.literal('kit-v1'),expectedRevision:z.number().int().nonnegative().optional(),commercialGroups:z.array(commercialGroupSchema).min(1).max(200)}).strict()
+const commercialPreviewSchema=commercialCreateSaleSchema.extend({expectedRevision:z.number().int().nonnegative()})
 const commercialMarker={commercialModel:z.literal('kit-v1'),expectedRevision:z.number().int().positive()}
 // Inspect the raw marker before an ordinary object schema can strip it.
 function modelSchema(ordinary,commercial){return z.any().transform((raw,ctx)=>{if(raw?.commercialModel===undefined&&(raw?.commercialGroups!==undefined||raw?.groups!==undefined)){ctx.addIssue({code:z.ZodIssueCode.custom,message:'当前客户端暂不能处理套单，请先保留输入并更新客户端'});return z.NEVER}const schema=raw?.commercialModel===undefined?ordinary:commercial;const parsed=schema.safeParse(raw);if(!parsed.success){for(const e of parsed.error.issues)ctx.addIssue(e);return z.NEVER}return parsed.data})}

@@ -75,3 +75,22 @@ test('changing the customer re-resolves a default kit tier instead of retaining 
   assert.equal(result.groups[0].retained, undefined)
   assert.equal(result.groups[0].metadata.priceCustomerId, 1)
 })
+test('editing or clearing a line remark retains the original kit version, agreed price and money snapshot', async () => {
+  const f = fixture(), group = (await f.resolve()).groups[0]
+  const saved = [{ ...group, id: 51, metadata: { ...group.metadata, input: { ...f.input.commercialGroups[0], warehouseId: 1, remark: '原备注' } } }]
+  f.master.current_version_id = 8
+  for (const remark of ['分两箱装', '']) {
+    const input = { ...f.input, commercialGroups: [{ ...f.input.commercialGroups[0], remark }] }
+    const result = await f.resolve(input, saved)
+    assert.equal(result.groups[0].retained, true)
+    assert.equal(result.groups[0].id, 51)
+    assert.equal(result.groups[0].unitPrice, 90)
+    assert.equal(result.total, 90)
+    assert.equal(result.groups[0].metadata.input.remark, remark)
+    assert.deepEqual(result.groups[0].metadata.quote, group.metadata.quote)
+    assert.equal(saved[0].metadata.input.remark, '原备注', 'the original snapshot is not mutated')
+  }
+  const omitted = await f.resolve(f.input, saved)
+  assert.equal(omitted.groups[0].retained, true)
+  assert.equal(omitted.groups[0].metadata.input.remark, '原备注', 'old clients omitting a note preserve it')
+})

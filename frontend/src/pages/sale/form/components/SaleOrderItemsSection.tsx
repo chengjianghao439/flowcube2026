@@ -4,20 +4,23 @@ import { SectionCard } from '@/components/shared/SectionCard'
 import { Button } from '@/components/ui/button'
 
 /** 新建、编辑和改单共用的商品区域，只负责布局。 */
-export function SaleOrderItemsSection({ hasItems, onAdd, children, allowAdd = true }: {
+export function SaleOrderItemsSection({ hasItems, onAdd, children, allowAdd = true, compact = false, addError }: {
+  compact?: boolean
+  addError?: string
   allowAdd?: boolean
   hasItems: boolean
   onAdd: () => void
   children: ReactNode
 }) {
   return (
-    <SectionCard title="商品明细" compact actions={allowAdd ?
+    <SectionCard title="商品明细" compact noPadding={compact} actions={allowAdd ? <>
+      {compact && addError && <p role="alert" className="text-xs text-destructive-ink">{addError}</p>}
       <Button data-entry-add data-entry-field="add" type="button" size="sm" variant="outline" onClick={onAdd} className="gap-1.5">
         <Plus className="h-4 w-4" />添加商品
-      </Button> : undefined
+      </Button></> : undefined
     }>
-      {hasItems && <p className="mb-2 text-xs text-muted-foreground">数量、单价按 Enter 前进，Shift+Enter 返回；末行可继续添加商品。</p>}
-      {hasItems ? children : (
+      {hasItems && !compact && <p className="mb-2 text-xs text-muted-foreground">数量、单价按 Enter 前进，Shift+Enter 返回；末行可继续添加商品。</p>}
+      {hasItems ? children : compact ? <div className="flex min-h-32 items-center justify-center px-4 py-6 text-sm text-muted-foreground">尚未添加商品</div> : (
         <div className="flex items-center justify-center gap-4 py-10 text-left">
           <PackageOpen className="h-9 w-9 shrink-0 text-muted-foreground/50" />
           <div>

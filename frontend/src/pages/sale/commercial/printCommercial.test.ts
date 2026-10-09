@@ -28,9 +28,9 @@ it('customer print uses commercial packaging and four decimal quote instead of m
     '¥12.3456'
   )
 })
-it('ordinary print keeps old two decimal formatting', () => {
+it('ordinary sale print preserves the same four-decimal unit price as kit sales', () => {
   expect(
     adaptTemplatePreview({ kind: 'sale', type: 1, sourceLabel: '本单', record: { ...order, commercialModel: null } })
       .items[0].price
-  ).toBe('¥1.23')
+  ).toBe('¥1.2345')
 })

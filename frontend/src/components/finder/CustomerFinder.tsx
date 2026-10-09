@@ -12,6 +12,7 @@ import type { FinderResult, FinderColumn } from '@/types/finder'
 import type { Customer } from '@/types/customers'
 
 export interface CustomerFinderProps {
+  compact?: boolean
   readOwner?: KitReadOwner
   readGuard?: CustomerAddressGuard
   open: boolean
@@ -27,7 +28,14 @@ const COLUMNS: FinderColumn<Row>[] = [
   { key: 'phone', title: '联系电话', width: 180 },
 ]
 
-export function CustomerFinder({ open, onClose, onConfirm, readOwner, readGuard }: CustomerFinderProps) {
+const COMPACT_COLUMNS: FinderColumn<Row>[] = [
+  { key: 'code', title: '编码', width: 120, render: value => <span className="font-mono text-xs text-muted-foreground">{String(value ?? '—')}</span> },
+  { key: 'name', title: '客户名称' },
+  { key: 'contact', title: '联系人', width: 140 },
+  { key: 'phone', title: '联系电话', width: 160 },
+]
+
+export function CustomerFinder({ open, onClose, onConfirm, readOwner, readGuard, compact = false }: CustomerFinderProps) {
   const active = useSectionActive(), latest = useRef({ open, active, readGuard })
   latest.current = { open, active, readGuard }
   const current = () => latest.current.open && latest.current.active && (!latest.current.readGuard || latest.current.readGuard.isCurrent())
@@ -41,12 +49,14 @@ export function CustomerFinder({ open, onClose, onConfirm, readOwner, readGuard 
   // 只存 id：选中行一律从**当前启用列表**派生 ⇒ 后台刷新后拿到的是最新值，
   // 行被移除/停用则派生为 null，页脚自动禁用（不会回传列表之外的过期对象）。
   const [selectedId, setSelectedId] = useState<number | null>(null)
+  const confirmed = useRef(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout>>()
 
   // Reset state when dialog closes；**同时清掉未落定的 debounce**，否则旧 timer 会在重开后
   // 把 searchText 改回上一个词，而 keyword 已被清空 ⇒ 两者永久不相等、永远 pending。
   // 返回的 cleanup 在**卸载/依赖变化**时同样清 timer，避免离开页面后还残留本组件的定时器。
   useEffect(() => {
+    confirmed.current = false
     if (!open) {
       clearTimeout(debounceRef.current)
       setKeyword(''); setSearchText(''); setSelectedId(null)
@@ -58,6 +68,7 @@ export function CustomerFinder({ open, onClose, onConfirm, readOwner, readGuard 
 
   function handleKeywordChange(v: string) {
     if (readGuard && !current()) return
+    confirmed.current = false
     setKeyword(v)
     setSelectedId(null)   // 搜索立刻清选择：避免"选了一条又搜成别的，却确认了原来那条"
     clearTimeout(debounceRef.current)
@@ -73,11 +84,13 @@ export function CustomerFinder({ open, onClose, onConfirm, readOwner, readGuard 
 
   // 页脚「确认选择」与行双击/空格共用这一个回调，映射只写一次。
   function handleConfirm(row: Row) {
+    if (compact && (confirmed.current || data?.truncated || isFetching || keyword !== searchText || isError)) return
     if (readGuard && !current()) return
     if (readOwner) {
       try { assertKitReadOwner(readOwner) }
       catch (error) { toast.error(error instanceof Error ? error.message : '读取来源已变化'); return }
     }
+    if (compact) confirmed.current = true
     onConfirm({
       id: row.id,
       name: row.name,
@@ -90,11 +103,13 @@ export function CustomerFinder({ open, onClose, onConfirm, readOwner, readGuard 
 
   return (
     <FinderModal
+      compact={compact}
+      incomplete={compact && data?.truncated === true}
       open={visible}
       onClose={() => { if (!readGuard || current()) onClose() }}
       title={<span className="flex items-center gap-2"><Users className="h-4 w-4 text-primary" />选择客户</span>}
       dialogId="customer-finder"
-      columns={COLUMNS}
+      columns={compact ? COMPACT_COLUMNS : COLUMNS}
       data={visible ? rows : []}
       selected={selected}
       onSelect={row => { if (!readGuard || current()) setSelectedId(row.id) }}

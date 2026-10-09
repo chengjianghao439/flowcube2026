@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { FinderSearch } from './FinderSearch'
 import { FinderTable } from './FinderTable'
+import { FinderDataTable } from './FinderDataTable'
 import type { FinderColumn } from '@/types/finder'
 
 interface FinderModalProps<T extends Record<string, unknown>> {
@@ -32,6 +33,8 @@ interface FinderModalProps<T extends Record<string, unknown>> {
   searchPlaceholder?: string
 
   selectedLabel?: (row: T) => string
+  compact?: boolean
+  incomplete?: boolean
 }
 
 export function FinderModal<T extends Record<string, unknown>>({
@@ -39,16 +42,17 @@ export function FinderModal<T extends Record<string, unknown>>({
   columns, data, selected, onSelect, onConfirm,
   getRowKey, isLoading = false, isError = false, error, onRetry,
   keyword, onKeywordChange, searchPlaceholder,
-  selectedLabel,
+  selectedLabel, compact = false, incomplete = false,
 }: FinderModalProps<T>) {
   // 唯一判据：数据未加载/未出错，且选中行仍在当前列表（由调用方派生保证）。
   // 页脚、行双击、Space 键三个确认入口共用它，避免各写一套守卫。
-  const canConfirm = selected != null && !isLoading && !isError
-  const canConfirmRow = !isLoading && !isError
+  const canConfirm = selected != null && !isLoading && !isError && !incomplete
+  const canConfirmRow = !isLoading && !isError && !incomplete
 
   return (
     <AppDialog
       open={open}
+      captureFocusOnOpen={compact}
       onOpenChange={v => !v && onClose()}
       dialogId={dialogId}
       defaultWidth={960}
@@ -60,7 +64,7 @@ export function FinderModal<T extends Record<string, unknown>>({
       <div className="flex h-full flex-col overflow-hidden">
 
         {/* ── Search ──────────────────────────────────────────────── */}
-        <div className="shrink-0 border-b px-6 py-4">
+        <div className={compact ? "shrink-0 border-b px-4 py-3" : "shrink-0 border-b px-6 py-4"}>
           <FinderSearch
             value={keyword}
             onChange={onKeywordChange}
@@ -70,9 +74,14 @@ export function FinderModal<T extends Record<string, unknown>>({
         </div>
 
         {/* ── Table body (scrollable) ──────────────────────────────── */}
-        <div className="min-h-0 flex-1 overflow-auto">
+        <div data-table-scroll className="min-h-0 flex-1 overflow-auto">
           {isError ? (
             <QueryErrorState error={error} onRetry={() => onRetry?.()} title="加载失败" compact />
+          ) : compact ? (
+            <FinderDataTable columns={columns} data={data} selected={selected}
+              onSelect={row => { if (canConfirmRow) onSelect(row) }}
+              onConfirm={row => { if (canConfirmRow) onConfirm(row) }}
+              getRowKey={getRowKey} isLoading={isLoading} />
           ) : (
             <FinderTable
               columns={columns}
@@ -86,8 +95,10 @@ export function FinderModal<T extends Record<string, unknown>>({
           )}
         </div>
 
+        {incomplete && <p role="alert" className="shrink-0 border-t px-4 py-2 text-sm text-warning-ink">结果超过查询上限，请缩小搜索范围后选择。</p>}
+
         {/* ── Footer ──────────────────────────────────────────────── */}
-        <div className="shrink-0 border-t bg-muted/20 px-6 py-4">
+        <div className={compact ? "shrink-0 border-t px-4 py-3" : "shrink-0 border-t bg-muted/20 px-6 py-4"}>
           <div className="flex items-center justify-between gap-5">
             <div className="min-w-0 flex-1 text-sm text-muted-foreground">
               {selected && selectedLabel ? (
@@ -96,7 +107,7 @@ export function FinderModal<T extends Record<string, unknown>>({
                   <span className="break-words leading-5" title={selectedLabel(selected)}>{selectedLabel(selected)}</span>
                 </span>
               ) : (
-                '单击选择，双击直接填入'
+                compact ? (!isLoading && !isError ? `共 ${data.length} 个客户` : '') : '单击选择，双击直接填入'
               )}
             </div>
             <div className="flex shrink-0 gap-2">

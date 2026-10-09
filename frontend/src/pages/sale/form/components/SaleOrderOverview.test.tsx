@@ -6,8 +6,8 @@ import { SaleOrderOverview } from './SaleOrderOverview'
 import type { SaleOrder } from '@/types/sale'
 
 test.each([
-  { model: 'kit-v1', targets: [1, 1, 1, 2], label: '当前成交明细', count: 4 },
-  { model: 'kit-v1', targets: [1, 1, 1, 2, 0], label: '当前成交明细', count: 4 },
+  { model: 'kit-v1', targets: [1, 1, 1, 2], label: '商品明细', count: 4 },
+  { model: 'kit-v1', targets: [1, 1, 1, 2, 0], label: '商品明细', count: 4 },
   { model: undefined, targets: [1, 1, 1, 2], label: '商品明细', count: 2 }
 ])(
   'overview counts $model current rows while preserving ordinary and amount cards',

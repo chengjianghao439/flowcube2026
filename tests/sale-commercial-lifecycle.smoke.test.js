@@ -107,6 +107,44 @@ async function main() {
       const shipped=beforeShip?await beforeShip(send):await send()
       assert.deepEqual(await http(`/warehouse-tasks/${taskId}/ship`,{},{method:'PUT',pda:true,key:shipKey}),shipped,'same-key real shipment replay')
     }
+    async function verifyUnifiedEdit() {
+      await supply([[fixture.products[0],20],[fixture.products[1],40]])
+      for (const stage of ['draft','reserved','partial','executing']) {
+        const ordinaryBody={customerId:fixture.customerId,customerName:ref,warehouseId:fixture.warehouseId,warehouseName:ref,remark:'unified '+stage,items:[{productId:fixture.products[0],productCode:ref+'-0',productName:ref,unit:'个',quantity:2,unitPrice:10.1234,priceSource:'manual',remark:'saved ordinary remark'}]}
+        const created=await http('/sale',ordinaryBody,{expect:201,key:randomUUID()});fixture.sales.push(created.id)
+        let before=await http(`/sale/${created.id}`,undefined,{method:'GET'})
+        if(stage!=='draft') {
+          await http(`/sale/${created.id}/reserve`,{items:before.items.map(item=>({id:item.id,warehouseId:fixture.warehouseId,warehouseName:ref,qty:stage==='partial'?1:item.quantity}))},{key:randomUUID()})
+          if(stage==='executing')await http(`/sale/${created.id}/ship`,{items:before.items.map(item=>({id:item.id,qty:item.quantity}))},{key:randomUUID()})
+          before=await http(`/sale/${created.id}`,undefined,{method:'GET'})
+        }
+        const input={customerId:fixture.customerId,warehouseId:fixture.warehouseId,remark:before.remark,discountAmount:0,commercialModel:'kit-v1',expectedRevision:0,expectedEditFingerprint:before.editFingerprint,commercialGroups:[
+          {kind:'ordinary',lineKey:`ordinary:${before.items[0].id}`,productId:fixture.products[0],warehouseId:fixture.warehouseId,entryUnit:'个',quantity:2,unitPrice:10.1234,priceSource:'manual',remark:'saved ordinary remark'},
+          {kind:'kit',lineKey:'added-kit',kitVersionId:fixture.kits[0].currentVersionId,warehouseId:fixture.warehouseId,quantity:1,priceSource:'kit_default',remark:'added kit remark'}]}
+        const preview=await http(`/sale/${created.id}/commercial-preview`,input)
+        assert.equal(preview.amount,120.25)
+        const key=randomUUID(),path=`/sale/${created.id}${stage==='draft'?'':'/adjust'}`
+        const result=await http(path,input,{method:'PUT',key})
+        assert.deepEqual(await http(path,input,{method:'PUT',key}),result,'first unified save replays with original identity')
+        const after=await http(`/sale/${created.id}`,undefined,{method:'GET'})
+        assert.equal(after.orderNo,before.orderNo);assert.equal(after.commercialRevision,1);assert.equal(after.totalAmount,120.25)
+        assert.equal(after.items.find(item=>item.productId===fixture.products[0]).id,before.items[0].id)
+        assert.deepEqual(after.commercialGroups.map(group=>group.metadata.input.remark),['saved ordinary remark','added kit remark'])
+        const hinge=after.items.find(item=>item.productId===fixture.products[0]);assert.equal(hinge.quantity,3)
+        if(stage==='reserved'||stage==='partial')assert.equal(hinge.reservedQty,stage==='partial'?1:2)
+        if(stage==='executing') {
+          assert.equal(after.tasks.length,1);assert.equal(after.tasks[0].taskId,before.tasks[0].taskId)
+          assert.equal(after.commercialGroups.length,2)
+          assert.equal(after.commercialDispatches.length,2)
+          const task=await http(`/warehouse-tasks/${after.tasks[0].taskId}`,undefined,{method:'GET'})
+          assert.deepEqual(task.items.map(item=>[item.productId,item.requiredQty]).sort((a,b)=>a[0]-b[0]),[[fixture.products[0],3],[fixture.products[1],4]])
+        }
+        await assert.rejects(http(path,input,{method:'PUT',key:randomUUID()}),error=>error.code==='SALE_COMMERCIAL_REVISION_CONFLICT')
+        await http(`/sale/${created.id}/cancel`,{commercialModel:'kit-v1',expectedRevision:1},{key:randomUUID()})
+      }
+      console.log('[PASS] one editor adds kits to draft/reserved/partial/executing ordinary orders; saved prices, notes, physical IDs, reservations, same task and original replay remain consistent')
+    }
+    if(process.env.KIT_TEST_SLICE==='edit-parity'){await verifyUnifiedEdit();return}
     if(process.env.KIT_TEST_SLICE==='scope'){
       fixture.otherWarehouseId=await insert('INSERT INTO inventory_warehouses(code,name) VALUES (?,?)',[ref+'-other',ref+'-other'])
       fixture.guardRoleId=await insert('INSERT INTO sys_roles(code,name,is_system) VALUES (?,?,0)',[ref+'-scope',ref+'-scope'])
@@ -676,6 +714,7 @@ async function main() {
     const [oldLedger]=await q("SELECT COUNT(*) count FROM stock_reservations WHERE ref_type='sale_order' AND ref_id=? AND status=1",[ordinaryCancelled.id]);assert.equal(Number(oldLedger.count),0)
     console.log('[PASS] legacy ordinary HTTP create auxiliary unit/reserve/dispatch/actual PDA ship/source return/QA/putaway leaves AR0; unshipped cancel releases original reservation rule')
 
+    await verifyUnifiedEdit()
   } catch (error) {
     businessError = error
   } finally {

@@ -1,3 +1,6 @@
+import type { KitReadOwner } from '@/api/kits'
+import { assertKitReadOwner } from '@/hooks/useKits'
+import { useSectionActive } from '@/components/layout/SectionVisibilityContext'
 import { OrderFulfillmentPanel } from './OrderFulfillmentPanel'
 import { EmptyState } from './EmptyState'
 import type { FulfillmentType } from '@/api/fulfillment'
@@ -10,9 +13,22 @@ import { formatDisplayDateTime } from '@/lib/dateTime'
 import { Button } from '@/components/ui/button'
 import { SectionCard } from './SectionCard'
 
-export function DocumentActivityPanel({ type, id, view, extra }: { type: DocumentType; id: number; view: ActivityView; extra?: ReactNode }) {
-  const active = useActiveWorkspaceTab()
-  const query = useQuery({ queryKey: ['document-activity', type, id], queryFn: ({ signal }) => getDocumentActivityApi(type, id, signal), enabled: id > 0 && active, staleTime: 0, refetchInterval: active ? 20_000 : false })
+export function DocumentActivityPanel({ type, id, view, extra, readOwner }: { type: DocumentType; id: number; view: ActivityView; extra?: ReactNode; readOwner?: KitReadOwner }) {
+  const workspaceActive = useActiveWorkspaceTab(), sectionActive = useSectionActive()
+  let ownerCurrent = true
+  try { if (readOwner) assertKitReadOwner(readOwner) } catch { ownerCurrent = false }
+  const active = workspaceActive && (!readOwner || sectionActive) && ownerCurrent
+  const query = useQuery({
+    queryKey: readOwner ? ['document-activity', type, id, readOwner.baseURL, readOwner.userId, readOwner.sessionGeneration] : ['document-activity', type, id],
+    queryFn: async ({ signal }) => {
+      if (readOwner) assertKitReadOwner(readOwner)
+      const data = readOwner ? await getDocumentActivityApi(type, id, signal, readOwner) : await getDocumentActivityApi(type, id, signal)
+      if (readOwner) assertKitReadOwner(readOwner)
+      return data
+    },
+    enabled: id > 0 && active, staleTime: 0, refetchInterval: active ? 20_000 : false,
+  })
+  if (!ownerCurrent) return <p role="alert" className="py-8 text-center text-sm text-destructive-ink">读取来源已变化，请回原服务器核对操作记录。</p>
   if (query.isPending) return <p role="status" className="py-10 text-center text-sm text-muted-foreground">正在加载作业记录…</p>
   if (query.isError && !query.data) return <div role="alert" className="space-y-3 py-8 text-center"><p className="text-sm text-destructive-ink">{query.error.message || '记录加载失败'}</p><Button variant="outline" onClick={() => query.refetch()}>重新加载</Button></div>
   const data = query.data

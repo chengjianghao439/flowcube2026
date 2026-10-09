@@ -39,12 +39,18 @@ for (const kind of ['sale','purchase'] as const) test(`${kind}首次不报错，
  await act(async()=>root.render(<MemoryRouter initialEntries={[`/${kind}/new`]}><QueryClientProvider client={client}><TabPathContext.Provider value={`/${kind}/new`}>{kind==='sale'?<SaleFormPage/>:<PurchaseFormPage/>}</TabPathContext.Provider></QueryClientProvider></MemoryRouter>))
  expect(host.querySelector('[role="alert"]')).toBeNull()
  act(()=>[...host.querySelectorAll('button')].find(b=>b.textContent?.includes('保存草稿'))!.click())
- const alert=host.querySelector('[role="alert"]');expect(alert?.textContent).toContain('3 处')
- expect(alert?.textContent).toContain(kind==='sale'?'请选择客户':'请选择供应商')
- expect(alert?.textContent).toContain('请选择仓库')
- expect(alert?.textContent).toContain('请添加至少一条商品明细')
- const add=[...alert!.querySelectorAll('button')].find(b=>b.textContent?.includes('商品明细'))!;act(()=>add.click())
- expect(document.activeElement).toBe(host.querySelector('[data-entry-add]'))
+ if (kind === 'sale') {
+  const alerts=[...host.querySelectorAll('[role="alert"]')]
+  expect(alerts.map(alert=>alert.textContent)).toEqual(['请选择客户','请选择仓库','请添加至少一条商品明细'])
+  expect(document.activeElement).toBe(host.querySelector('[data-entry-field="party"] button'))
+ } else {
+  const alert=host.querySelector('[role="alert"]');expect(alert?.textContent).toContain('3 处')
+  expect(alert?.textContent).toContain('请选择供应商')
+  expect(alert?.textContent).toContain('请选择仓库')
+  expect(alert?.textContent).toContain('请添加至少一条商品明细')
+  const add=[...alert!.querySelectorAll('button')].find(b=>b.textContent?.includes('商品明细'))!;act(()=>add.click())
+  expect(document.activeElement).toBe(host.querySelector('[data-entry-add]'))
+ }
  }finally{await act(async()=>root.unmount());client.clear();host.remove()}
 })
 

@@ -57,3 +57,18 @@ test('恢复的大尺寸被视口限制后，拖动从实际宽高开始，并�
     expect(JSON.parse(localStorage.getItem('flowcube-dialog-size-drag-test')!).width).toBe(954)
   } finally { act(() => root.unmount()); host.remove() }
 })
+
+
+test('sale opt-in captures its opening trigger before an autofocus search input and restores it after close', async () => {
+  const host = document.createElement('div'); document.body.append(host)
+  const root = createRoot(host), trigger = document.createElement('button'); trigger.textContent = '选择客户'; document.body.append(trigger)
+  const draw = (open: boolean) => root.render(<AppDialog {...{ captureFocusOnOpen: true }} open={open} onOpenChange={() => {}} dialogId="focus-sale" title="选择客户"><input autoFocus aria-label="搜索客户" /></AppDialog>)
+  try {
+    act(() => draw(false)); trigger.focus()
+    act(() => draw(true))
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('搜索客户')
+    act(() => draw(false))
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 30)) })
+    expect(document.activeElement).toBe(trigger)
+  } finally { act(() => root.unmount()); host.remove(); trigger.remove() }
+})

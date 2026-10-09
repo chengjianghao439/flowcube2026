@@ -230,3 +230,16 @@ test.each([
     })
   }
 )
+
+test('ordinary edit unknown result queries and retries the bound legacy action', async () => {
+  mocks.execute.mockRejectedValueOnce({status:503}).mockResolvedValue(null)
+  mocks.query.mockResolvedValue({status:'not_found',data:null})
+  await mount(async () => {
+    await act(async () => { await hook.submit({action:'update',id:80,body:{customerId:1,customerName:'C',warehouseId:1,warehouseName:'W',items:[{productId:1,productCode:'P',productName:'P',unit:'个',quantity:1,unitPrice:1}]}}) })
+    expect(hook.pending?.action).toBe('sale.update:80')
+    await act(async () => { await hook.retry() })
+    expect(mocks.query.mock.calls[0][1]).toBe('sale.update:80')
+    expect(mocks.execute).toHaveBeenCalledTimes(2)
+    expect(mocks.execute.mock.calls[0][0].requestKey).toBe(mocks.execute.mock.calls[1][0].requestKey)
+  })
+})

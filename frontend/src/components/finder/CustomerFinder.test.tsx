@@ -224,3 +224,24 @@ it('★ 带首尾空格的搜索输入不会永久 pending', async () => {
   await act(async () => { await new Promise(r => setTimeout(r, 400)) })
   await selectFirstRow()           // 落定后应可选中并允许确认
 })
+
+it('sales compact finder explicitly blocks a truncated result instead of confirming a partial list', async () => {
+  vi.mocked(getCustomersApi).mockResolvedValue({ ...pageOf([row()]), pagination: {page: 1, pageSize: 5000, total: 5001}, truncated: true } as never)
+  const onConfirm = vi.fn()
+  await act(async () => root.render(<QueryClientProvider client={client}><CustomerFinder compact open onClose={() => {}} onConfirm={onConfirm} /></QueryClientProvider>))
+  await vi.waitFor(() => expect(host.textContent).toContain('请缩小搜索范围'))
+  expect(btn('确认选择')?.disabled).toBe(true)
+  expect(onConfirm).not.toHaveBeenCalled()
+})
+
+it('sales compact confirmation stays single when footer and double click fire together', async () => {
+  vi.mocked(getCustomersApi).mockResolvedValue(pageOf([row()]) as never)
+  const onConfirm = vi.fn()
+  await act(async () => root.render(<QueryClientProvider client={client}><CustomerFinder compact open onClose={() => {}} onConfirm={onConfirm} /></QueryClientProvider>))
+  await waitRow('客户甲'); await selectFirstRow()
+  await act(async () => {
+    btn('确认选择')!.click()
+    rows()[0].dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
+  })
+  expect(onConfirm).toHaveBeenCalledTimes(1)
+})

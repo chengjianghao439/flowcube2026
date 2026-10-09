@@ -1,3 +1,4 @@
+import { saleEditorTestPreview } from '../commercial/saleEditorTestFixture'
 // @vitest-environment jsdom
 /**
  * 改单（占库期）表头只读的真实交互回归。
@@ -19,6 +20,8 @@ import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { TabPathContext } from '@/components/layout/TabPathContext'
+import { useAuthStore } from '@/store/authStore'
+import { PERMISSIONS } from '@/lib/permission-codes'
 import type { SaleOrder } from '@/types/sale'
 import SaleFormPage from './index'
 
@@ -35,6 +38,16 @@ vi.mock('@/api/sale', () => ({
   createSaleApi: vi.fn(), updateSaleApi: mocks.updateSaleApi, adjustSaleApi: mocks.adjustSaleApi,
   reserveSaleApi: vi.fn(), releaseSaleApi: vi.fn(), shipSaleApi: vi.fn(), cancelSaleApi: vi.fn(), deleteSaleApi: vi.fn(),
 }))
+vi.mock('@/api/sale-commercial', async importOriginal => {
+  const actual = await importOriginal<typeof import('@/api/sale-commercial')>()
+  return { ...actual, getCommercialSaleApi: async () => client.getQueryData(['sale',12]),
+    previewCommercialSaleApi: async (body: Parameters<typeof saleEditorTestPreview>[0]) => saleEditorTestPreview(body),
+    executeCommercialSaleApi: async (plan: Parameters<typeof actual.executeCommercialSaleApi>[0]) => {
+      if (plan.operation.action === 'adjust') return mocks.adjustSaleApi({ ...plan.operation.body, id: plan.operation.id })
+      return mocks.updateSaleApi({ ...plan.operation.body, id: plan.operation.id })
+    }
+  }
+})
 vi.mock('@/api/price-lists', () => ({ getCustomerPriceApi: mocks.getCustomerPriceApi, bindCustomerApi: vi.fn() }))
 vi.mock('@/api/customers', () => ({
   getCustomersApi: mocks.getCustomersApi, createCustomerApi: vi.fn(), updateCustomerApi: vi.fn(), deleteCustomerApi: vi.fn(),
@@ -58,6 +71,7 @@ vi.mock('@/api/warehouses', () => ({
 
 
 let host: HTMLDivElement, root: Root, client: QueryClient
+let previousAuth: ReturnType<typeof useAuthStore.getState>
 
 function makeOrder(status: number): SaleOrder {
   return {
@@ -76,6 +90,8 @@ function makeOrder(status: number): SaleOrder {
 beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
   vi.clearAllMocks()
+  previousAuth = useAuthStore.getState()
+  useAuthStore.setState({ token: 'fixture', user: { id: 5, roleId: 5, permissions: [PERMISSIONS.SALE_ORDER_VIEW, PERMISSIONS.SALE_ORDER_UPDATE, PERMISSIONS.CUSTOMER_VIEW, PERMISSIONS.PRODUCT_VIEW] } as never })
   mocks.adjustSaleApi.mockResolvedValue({ adjustmentId: null, adjustmentNo: null, pending: false })
   mocks.updateSaleApi.mockResolvedValue(null)
   mocks.getCustomerPriceApi.mockResolvedValue({ salePrice: 10, priceLevel: 'A' })
@@ -86,14 +102,17 @@ beforeEach(() => {
   client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
   client.setQueryData(['sale', 12], makeOrder(2))
 })
-afterEach(() => { act(() => root.unmount()); client.clear(); host.remove(); window.history.replaceState({}, '', '/') })
+afterEach(() => { act(() => root.unmount()); client.clear(); host.remove(); window.history.replaceState({}, '', '/'); useAuthStore.setState(previousAuth) })
 
 function render() {
   act(() => root.render(
-    <MemoryRouter><QueryClientProvider client={client}>
+    <MemoryRouter initialEntries={["/sale/12"]}><QueryClientProvider client={client}>
       <TabPathContext.Provider value="/sale/12"><SaleFormPage /></TabPathContext.Provider>
     </QueryClientProvider></MemoryRouter>,
   ))
+}
+async function settleEditor() {
+  for (let step=0;step<3;step++) await act(async () => { await new Promise(resolve => setTimeout(resolve,5)) })
 }
 function buttons() { return [...host.querySelectorAll<HTMLButtonElement>('button')] }
 function button(label: string) { return buttons().find(b => b.textContent?.trim() === label)! }
@@ -109,7 +128,8 @@ function setInput(input: HTMLInputElement, value: string) {
 test('占库改单：点客户按钮不打开选择器、不发起异客户取价', async () => {
   render()
   await act(async () => { button('修改订单').click() })
-  expect(host.textContent).toContain('改单中')      // 已进入改单视图（EditModeBadge）
+  await settleEditor()
+  expect(host.textContent).toContain('修改订单')      // 已进入改单视图（EditModeBadge）
 
   const party = partyButton()
   expect(party).toBeTruthy()
@@ -123,11 +143,13 @@ test('占库改单：点客户按钮不打开选择器、不发起异客户取�
 test('占库改单：改明细仍能提交，且载荷归属原客户', async () => {
   render()
   await act(async () => { button('修改订单').click() })
+  await settleEditor()
 
-  const qty = host.querySelector<HTMLInputElement>('input[placeholder="数量"]')!
+  const qty = host.querySelector<HTMLInputElement>('input[aria-label="示例商品数量"]')!
   expect(qty.value).toBe('5')
   await act(async () => { setInput(qty, '4') })
   expect(qty.value).toBe('4')
+  await settleEditor()
 
   await act(async () => { button('提交改单').click() })
 
@@ -141,6 +163,7 @@ test('草稿编辑（正向对照）：客户按钮仍可打开选择器', async
   client.setQueryData(['sale', 12], makeOrder(1))
   render()
   await act(async () => { button('编辑').click() })
+  await settleEditor()
 
   const party = partyButton()
   expect(party.disabled).toBe(false)

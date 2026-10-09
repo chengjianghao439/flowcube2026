@@ -28,6 +28,12 @@ export function money(value: number | null | undefined): string {
   return text == null ? '—' : `¥${text}`
 }
 
+/** 成交单价最多四位；已保存的换算基本单价可显式保留八位，均不改变输入与存储。 */
+export function unitPrice(value: number | null | undefined, precision: 4 | 8 = 4): string {
+  if (value == null || !Number.isFinite(Number(value))) return '—'
+  return `¥${Number(value).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: precision })}`
+}
+
 /** 金额数值（无货币符号）：`1,234,567.00`；会计凭证借贷方金额用 */
 export function amount(value: number | null | undefined): string {
   return formatNumber(value) ?? '—'

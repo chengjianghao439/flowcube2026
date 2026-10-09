@@ -234,6 +234,7 @@ test('real auth persistence rehydrate0 + module reload recovers query-only, neve
     })
     expect(answer).toMatchObject({ queryOnly: true, data: { id: 80 } })
     expect(hook.canApply(answer!)).toBe(false)
+    expect(hook.canView(answer!)).toBe(true)
     expect(mocks.execute).toHaveBeenCalledTimes(1)
   } finally {
     act(() => root.unmount())
@@ -479,4 +480,25 @@ test('guard changes during query-identity persistence prevent execute from sendi
       expect(hook.error).toContain('草稿')
     } finally { spy.mockRestore() }
   }, 'original', () => current)
+})
+
+
+test.each(['server', 'account', 'relogin', 'scope', 'unmount'])('query-only receipt view rejects changed %s ownership', async boundary => {
+  await mounted(submitUnknown)
+  let current = true
+  let receipt: Awaited<ReturnType<Control['queryOriginal']>> = null
+  await mounted(async () => {
+    mocks.query.mockResolvedValue({ status: 'success', resourceType: 'sale_order', resourceId: 80, data: { id: 80 } })
+    await act(async () => { receipt = await hook.queryOriginal() })
+    expect(receipt?.queryOnly).toBe(true)
+    expect(hook.canView(receipt!)).toBe(true)
+    expect(hook.canApply(receipt!)).toBe(false)
+    if (boundary === 'server') mocks.defaults.baseURL = '/b'
+    if (boundary === 'account') act(() => useAuthStore.getState().login('different', null, { ...useAuthStore.getState().user!, id: 9 }))
+    if (boundary === 'relogin') act(() => useAuthStore.getState().login('new-session', null, user))
+    if (boundary === 'scope') current = false
+    if (boundary !== 'unmount') expect(hook.canView(receipt!)).toBe(false)
+  }, 'original', () => current)
+  expect(hook.canView(receipt!)).toBe(false)
+  expect(mocks.execute).toHaveBeenCalledTimes(1)
 })

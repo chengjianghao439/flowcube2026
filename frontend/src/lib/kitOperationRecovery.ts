@@ -79,7 +79,7 @@ function valid(r: KitQueryRecord): boolean {
         'delete'
       ].includes(r.kind) &&
       positiveId(r.resourceId) &&
-      r.action === `sale.${r.kind}.${r.resourceId}`
+      (r.action === `sale.${r.kind}.${r.resourceId}` || (['update','adjust'].includes(r.kind) && r.action === `sale.${r.kind}:${r.resourceId}`))
     )
   }
   if (r.resourceType === 'sale_return')

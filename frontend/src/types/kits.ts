@@ -1,4 +1,4 @@
-export interface KitComponent { id: number; productId: number; baseQty: number; referencePrice: number; amountWeight: string; weightSource: 'product_a' | 'explicit'; sortNo: number; productCode: string | null; productName: string | null; unit: string | null; productActive: boolean; allowDecimal: boolean }
+export interface KitComponent { id: number; productId: number; baseQty: number; referencePrice: number; amountWeight: string; weightSource: 'product_a' | 'explicit'; sortNo: number; productCode: string | null; productName: string | null; unit: string | null; spec?: string | null; color?: string | null; articleNumber?: string | null; productActive: boolean; allowDecimal: boolean }
 export interface KitTierPrices { salePriceA?: number | null; salePriceB?: number | null; salePriceC?: number | null; salePriceD?: number | null }
 export interface KitProductProfile {
   categoryId?: number | null; categoryName?: string | null; supplierId?: number | null; supplierName?: string | null

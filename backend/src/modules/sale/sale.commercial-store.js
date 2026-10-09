@@ -1,4 +1,5 @@
 'use strict'
+const { assertModel, assertRevision } = require('./sale.edit-baseline')
 const AppError = require('../../utils/AppError')
 const { snapshot } = require('./sale.commercial-resolver')
 const { projectCommercialCumulative } = require('./sale.commercial-money.math')
@@ -34,7 +35,7 @@ async function save(conn, orderId, revision, resolved) {
   const keep = resolved.groups.filter(g => g.retained)
   if (keep.length) {
     const cases = keep.map(() => 'WHEN ? THEN ?').join(' ')
-    await conn.query(`UPDATE sale_commercial_groups SET target_qty=CASE id ${cases} ELSE target_qty END WHERE id IN (?)`, [...keep.flatMap(g => [g.id,g.targetQty]), keep.map(g => g.id)])
+    await conn.query(`UPDATE sale_commercial_groups SET target_qty=CASE id ${cases} ELSE target_qty END,metadata_json=CASE id ${cases} ELSE metadata_json END WHERE id IN (?)`, [...keep.flatMap(g => [g.id,g.targetQty]), ...keep.flatMap(g => [g.id,JSON.stringify(g.metadata)]), keep.map(g => g.id)])
   }
   const fresh = resolved.groups.filter(g => !g.retained)
   if (fresh.length) await conn.query('INSERT INTO sale_commercial_groups (order_id,line_key,snapshot_revision,kind,warehouse_id,kit_version_id,kit_code,kit_name,original_qty,target_qty,unit_price,price_source,gross_amount,metadata_json) VALUES ?', [fresh.map(g => [orderId,g.lineKey,revision,g.kind,g.warehouseId,g.kitVersionId,g.kitCode,g.kitName,g.originalQty,g.targetQty,g.unitPrice,g.priceSource,g.grossAmount,JSON.stringify(g.metadata)])])
@@ -44,16 +45,8 @@ async function save(conn, orderId, revision, resolved) {
   if (componentRows.length) await conn.query('INSERT INTO sale_commercial_components (group_id,sale_item_id,product_id,sort_no,base_qty,required_qty,reference_price,amount_weight,allocated_amount,product_code,product_name,unit,article_number,spec,color) VALUES ?', [componentRows])
   await conn.query("UPDATE sale_orders SET commercial_model='kit-v1',commercial_revision=?,total_amount=? WHERE id=?", [revision,resolved.total,orderId])
 }
-function assertModel(row,input) {
-  if (row.commercial_model === 'kit-v1') {
-    if (input?.commercialModel !== 'kit-v1' || !Number.isSafeInteger(input.expectedRevision) || input.expectedRevision<=0) throw new AppError('当前客户端暂不能处理套单，请先保留输入并更新客户端',400,'SALE_COMMERCIAL_VERSION_REQUIRED')
-  } else if (input?.commercialModel != null) throw new AppError('普通销售单不能改成套单，请单独新建套单',400,'SALE_COMMERCIAL_MODEL_MISMATCH')
-}
 function assertRequestKey(model,requestKey) {
   if(model!=='kit-v1')return
   if(typeof requestKey!=='string'||!requestKey.trim()||requestKey.length>128||[...requestKey].some(c=>c.charCodeAt(0)<32||c.charCodeAt(0)===127))throw new AppError('本次操作缺少有效的重试凭据，请保留输入并更新客户端',400,'SALE_COMMERCIAL_REQUEST_KEY_REQUIRED')
-}
-function assertRevision(row,input) {
-  if (row.commercial_model === 'kit-v1' && Number(row.commercial_revision)!==Number(input.expectedRevision)) throw new AppError('销售单已更新，本次未保存，请保留草稿并重新核对',409,'SALE_COMMERCIAL_REVISION_CONFLICT')
 }
 module.exports = { loadGroups, view, save, assertModel, assertRevision, assertRequestKey }

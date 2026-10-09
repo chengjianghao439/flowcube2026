@@ -106,7 +106,7 @@ test('新建query先识别pathname；当前身份导入默认0量/基本单位/�
   await page('/sale/new?sourceId=80', async host => {
     expect(host.textContent).not.toContain('销售单路由无效')
     await click(host, '载入当前客户和商品')
-    expect(host.textContent).toContain('客户:当前客户'); expect(host.textContent).toContain('P3 · 当前商品')
+    expect(host.textContent).toContain('客户:当前客户'); expect(host.querySelector('[data-order-entry] tbody tr')?.textContent).toContain('P3当前商品')
     expect(host.querySelector<HTMLInputElement>('input[aria-label="当前商品成交单价"]')?.value).toBe('7.1234')
     expect(host.querySelector<HTMLSelectElement>('select[aria-label="当前商品录入单位"]')?.value).toBe('个')
     expect([...host.querySelectorAll<HTMLInputElement>('input[aria-label="当前商品数量"]')].map(i => i.value)).toEqual(['0'])
@@ -300,7 +300,7 @@ test('实际三个KeepAlive草稿隔离来源与空白；同源返回保留输�
 })
 
 
-test('R9真实报价隐藏恢复后不能应用旧价，保持草稿并可主动重新报价', async () => {
+test('R9真实报价隐藏恢复后不能应用旧价，保持草稿与手工报价', async () => {
   const adapter = apiClient.defaults.adapter
   if (typeof adapter !== 'function') throw Error('exact adapter required')
   const unknown: string[] = []
@@ -333,11 +333,11 @@ test('R9真实报价隐藏恢复后不能应用旧价，保持草稿并可主动
       expect(price.value).toBe('7.1234'); expect(price.value).not.toBe('99')
       expect(quantity.value).toBe('3')
       await input(price, '8.8888'); await flush(); expect(quotes).toBe(3)
-      await click(host, '用默认价'); expect(quotes).toBe(4)
-      expect(price.value).toBe('7.1234'); expect(quantity.value).toBe('3')
+      expect(host.textContent).not.toContain('用默认价')
+      expect(price.value).toBe('8.8888'); expect(quantity.value).toBe('3')
       const previewReads = records.filter(r => r.url === '/kits/preview')
       expect(previewReads.every(r => r.baseURL === '/a' && r._erpApiFallbackTried === true)).toBe(true)
-      expect(JSON.parse(previewReads.at(-1)!.data).groups[0]).toMatchObject({ kind: 'ordinary', quantity: 3, entryUnit: '个', priceSource: 'default' })
+      expect(JSON.parse(previewReads.at(-1)!.data).groups[0]).toMatchObject({ kind: 'ordinary', quantity: 3, entryUnit: '个', priceSource: 'manual', unitPrice: 8.8888 })
     })
   } finally { apiClient.defaults.adapter = adapter; expect(unknown).toEqual([]) }
 })

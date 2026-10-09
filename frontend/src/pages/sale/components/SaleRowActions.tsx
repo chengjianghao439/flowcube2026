@@ -1,3 +1,5 @@
+import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import type { SaleOrder } from '@/types/sale'
 
@@ -10,17 +12,24 @@ interface SaleRowActionsProps {
   onDeleteSale: (id: number) => void
   onViewTask: () => void
   onDetail: () => void
+  onEdit: () => void
   onPrint: () => void
 }
 
 export function SaleRowActions({
   row, anyPending,
   onAsk, onReserveSale, onCancelSale, onDeleteSale,
-  onViewTask, onDetail, onPrint,
+  onViewTask, onDetail, onEdit, onPrint,
 }: SaleRowActionsProps) {
+  const { can } = usePermission()
+  const canReserve = can(PERMISSIONS.SALE_ORDER_RESERVE)
+  const canUpdate = can(PERMISSIONS.SALE_ORDER_UPDATE)
+  const canCancel = can(PERMISSIONS.SALE_ORDER_CANCEL)
+  const canDelete = can(PERMISSIONS.SALE_ORDER_DELETE)
+  const canShip = can(PERMISSIONS.SALE_ORDER_SHIP)
   // 占库期（状态2/6，无 taskId 也可改单）与执行期（状态3，需 taskId）都可改单；
   // 没有取消/改单挂起中、且非多仓、零出库才允许——与详情页 canAdjust 口径一致。
-  const canAdjust = (row.status === 2 || row.status === 3 || row.status === 6)
+  const canAdjust = canUpdate && (row.status === 2 || row.status === 3 || row.status === 6)
     && !row.warehouseTaskCancelRequestedAt && !row.warehouseTaskAdjustmentRequestedAt
     && !row.executionAdjustmentBlocked && !row.isMultiWarehouse && (row.shippedTotalQty ?? 0) === 0
 
@@ -31,14 +40,14 @@ export function SaleRowActions({
     // 待占用（草稿）：动作未发生，用描边弱化 + 动态标签，避免实心按钮看起来像已占用
     return (
       <TableActionsMenu
-        primaryLabel="占库"
+        primaryLabel={canReserve ? "占库" : "详情"}
         primaryVariant="outline"
         primaryDisabled={anyPending}
-        onPrimaryClick={() => onReserveSale(row.id)}
+        onPrimaryClick={canReserve ? () => onReserveSale(row.id) : onDetail}
         items={[
-          { label: '编辑订单', onClick: onDetail },
+          ...(canUpdate ? [{ label: '编辑订单', onClick: onEdit }] : []),
           printItem,
-          { label: '取消订单', onClick: () => onAsk('取消订单', '取消后订单将变为已取消状态，是否继续？', () => onCancelSale(row.id)), destructive: true, separatorBefore: true, disabled: anyPending },
+          ...(canCancel ? [{ label: '取消订单', onClick: () => onAsk('取消订单', '取消后订单将变为已取消状态，是否继续？', () => onCancelSale(row.id)), destructive: true, separatorBefore: true, disabled: anyPending }] : []),
         ]}
       />
     )
@@ -48,16 +57,15 @@ export function SaleRowActions({
     return (
       <TableActionsMenu
         primaryVariant="outline"
-        primaryLabel="核对发货"
+        primaryLabel={canShip ? "核对发货" : "详情"}
         primaryDisabled={anyPending}
         onPrimaryClick={onDetail}
         items={[
           { label: '查看详情', onClick: onDetail },
-          { label: '占库', onClick: () => onReserveSale(row.id) },
           ...(canAdjust ? [{ label: '修改订单', onClick: onDetail, disabled: anyPending }] : []),
           printItem,
-          { label: '核对占库', onClick: onDetail, separatorBefore: true, disabled: anyPending },
-          { label: '取消订单', onClick: () => onAsk('取消订单', '将释放已占用库存并取消销售单，是否继续？', () => onCancelSale(row.id)), destructive: true, disabled: anyPending },
+          ...(can(PERMISSIONS.SALE_ORDER_RELEASE) ? [{ label: '核对占库', onClick: onDetail, separatorBefore: true, disabled: anyPending }] : []),
+          ...(canCancel ? [{ label: '取消订单', onClick: () => onAsk('取消订单', '将释放已占用库存并取消销售单，是否继续？', () => onCancelSale(row.id)), destructive: true, disabled: anyPending }] : []),
         ]}
       />
     )
@@ -68,16 +76,16 @@ export function SaleRowActions({
     return (
       <TableActionsMenu
         primaryVariant="outline"
-        primaryLabel="补占"
+        primaryLabel={canReserve ? "补占" : "详情"}
         primaryDisabled={anyPending}
-        onPrimaryClick={() => onReserveSale(row.id)}
+        onPrimaryClick={canReserve ? () => onReserveSale(row.id) : onDetail}
         items={[
-          { label: '核对发货', onClick: onDetail, disabled: anyPending },
+          ...(canShip ? [{ label: '核对发货', onClick: onDetail, disabled: anyPending }] : []),
           { label: '查看详情', onClick: onDetail },
           ...(canAdjust ? [{ label: '修改订单', onClick: onDetail, disabled: anyPending }] : []),
           printItem,
-          { label: '核对占库', onClick: onDetail, separatorBefore: true, disabled: anyPending },
-          { label: '取消订单', onClick: () => onAsk('取消订单', '将释放已占用库存并取消销售单，是否继续？', () => onCancelSale(row.id)), destructive: true, disabled: anyPending },
+          ...(can(PERMISSIONS.SALE_ORDER_RELEASE) ? [{ label: '核对占库', onClick: onDetail, separatorBefore: true, disabled: anyPending }] : []),
+          ...(canCancel ? [{ label: '取消订单', onClick: () => onAsk('取消订单', '将释放已占用库存并取消销售单，是否继续？', () => onCancelSale(row.id)), destructive: true, disabled: anyPending }] : []),
         ]}
       />
     )
@@ -85,7 +93,7 @@ export function SaleRowActions({
 
   if (row.status === 3) {
     // 分批：仍有未派发行时，「继续发货」是本状态下最主要的下一步操作
-    const canContinueShip = !!row.hasUndispatchedItems
+    const canContinueShip = canShip && !!row.hasUndispatchedItems
     return (
       <TableActionsMenu
         primaryLabel={canContinueShip ? '继续发货' : '查看'}
@@ -95,7 +103,7 @@ export function SaleRowActions({
           ...(canContinueShip ? [{ label: '查看详情', onClick: onViewTask }] : []),
           ...(canAdjust ? [{ label: '修改订单', onClick: onDetail, disabled: anyPending }] : []),
           printItem,
-          {
+          ...(canCancel ? [{
             label: '取消订单',
             onClick: () => onAsk(
               '取消订单',
@@ -105,7 +113,7 @@ export function SaleRowActions({
               () => onCancelSale(row.id),
             ),
             destructive: true, disabled: anyPending, separatorBefore: true,
-          },
+          }] : []),
         ]}
       />
     )
@@ -129,7 +137,7 @@ export function SaleRowActions({
       primaryVariant="outline"
       items={[
         printItem,
-        { label: '删除订单', onClick: () => onAsk('确认删除订单', '删除后订单将无法恢复。', () => onDeleteSale(row.id)), destructive: true, separatorBefore: true, disabled: anyPending },
+        ...(canDelete ? [{ label: '删除订单', onClick: () => onAsk('确认删除订单', '删除后订单将无法恢复。', () => onDeleteSale(row.id)), destructive: true, separatorBefore: true, disabled: anyPending }] : []),
       ]}
     />
   )

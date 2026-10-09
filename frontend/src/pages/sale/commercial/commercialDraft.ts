@@ -1,4 +1,6 @@
-import type { CommercialGroup, CommercialInput, CommercialPrintItem } from '@/types/sale-commercial'
+import { unitPrice as formatUnitPrice } from '@/lib/format'
+import type { CommercialGroup, CommercialInput, CommercialPrintItem, CommercialComponent } from '@/types/sale-commercial'
+import type { SaleOrder } from '@/types/sale'
 import type { ProductUnit } from '@/types/products'
 export interface CommercialDraftRow {
   input: CommercialInput
@@ -15,6 +17,7 @@ export interface CommercialDraftRow {
   costPrice?: number | null
   allowDecimalQty?: boolean
   saved?: CommercialGroup
+  components?: CommercialComponent[]
   packagingExpressible: boolean
 }
 export function commercialUnit(group?: CommercialGroup): string {
@@ -31,7 +34,7 @@ export function draftFromGroups(groups: CommercialGroup[]): CommercialDraftRow[]
       name: g.kind === 'kit' ? (g.kitName ?? '原套') : (g.components[0]?.productName ?? ''),
       code: g.kind === 'kit' ? (g.kitCode ?? '') : (g.components[0]?.productCode ?? ''),
       unit: g.kind === 'kit' ? commercialUnit(g) : input.kind === 'ordinary' ? (input.entryUnit ?? g.components[0]?.unit ?? '') : '',
-      quantity: String(q),
+      quantity: String(packagingExpressible ? Math.round(q * 100) / 100 : q),
       price: String(input.unitPrice ?? (g.kind === 'kit' ? g.unitPrice : (entry?.entryUnitPrice ?? g.unitPrice))),
       units: [],
       baseUnit: commercialUnit(g),
@@ -40,6 +43,28 @@ export function draftFromGroups(groups: CommercialGroup[]): CommercialDraftRow[]
       articleNumber: g.kind === 'kit' ? g.metadata.kitIdentity?.articleNumber : g.components[0]?.articleNumber,
       saved: g,
       packagingExpressible
+    }
+  })
+}
+/** Legacy storage is adapted once; both edit paths use the same input contract. */
+export function draftFromOrder(order?: SaleOrder): CommercialDraftRow[] {
+  if (!order || order.commercialModel === 'kit-v1') return draftFromGroups(order?.commercialGroups ?? [])
+  return (order.items ?? []).filter(item => item.quantity > 0).map(item => {
+    const entryUnit = item.entryUnit || item.unit
+    const rate = entryUnit === item.unit ? 1 : item.conversionRate
+    const quantity = item.entryQty ?? item.quantity
+    // Saved base price has eight digits; recover the four-digit entry quote using the saved rate.
+    // Dividing the rounded line amount by quantity would change the agreed quote.
+    const price = rate && rate > 0 ? Math.round(item.unitPrice * rate * 10000) / 10000 : NaN
+    const packagingExpressible = Number.isFinite(price) && price > 0 && Math.abs(quantity * 100 - Math.round(quantity * 100)) < 1e-6
+    return {
+      input: { kind: 'ordinary', lineKey: `ordinary:${item.id}`, productId: item.productId,
+        warehouseId: item.warehouseId ?? order.warehouseId, entryUnit, quantity,
+        priceSource: 'manual', ...(packagingExpressible ? { unitPrice: price } : {}), remark: item.remark ?? '' },
+      name: item.productName, code: item.productCode, unit: entryUnit, baseUnit: item.unit,
+      spec: item.spec, color: item.color, articleNumber: item.articleNumber, costPrice: item.costPrice,
+      quantity: String(quantity), price: packagingExpressible ? String(price) : '',
+      units: [], packagingExpressible
     }
   })
 }
@@ -82,7 +107,7 @@ export function commercialPrintRows(groups: CommercialGroup[]): CommercialPrintI
         unit: g.kind === 'kit' ? commercialUnit(g) : packaging ? entry.entryUnit : (c?.unit ?? ''),
         quantity: packaging ? entry.entryQty : g.targetQty,
         unitPrice,
-        priceText: `¥${Number(unitPrice).toFixed(g.kind === 'ordinary' && !packaging ? 8 : 4)}`,
+        priceText: formatUnitPrice(unitPrice, g.kind === 'ordinary' && !packaging ? 8 : 4),
         amount: g.amount,
         articleNumber: g.kind === 'ordinary' ? (c?.articleNumber ?? '') : (g.metadata.kitIdentity?.articleNumber ?? ''),
         spec: g.kind === 'ordinary' ? (c?.spec ?? '') : (g.metadata.kitIdentity?.spec ?? ''),

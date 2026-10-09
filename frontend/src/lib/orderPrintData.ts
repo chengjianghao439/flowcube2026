@@ -5,7 +5,7 @@
 
 import { formatDisplayDateTime, formatDisplayDate } from '@/lib/dateTime'
 import { commercialPrintRows } from '@/pages/sale/commercial/commercialDraft'
-import { money } from '@/lib/format'
+import { money, unitPrice } from '@/lib/format'
 import type { PrintItem } from '@/components/print/TemplateRenderer'
 import type { SaleOrder } from '@/types/sale'
 import type { PurchaseOrder } from '@/types/purchase'
@@ -27,6 +27,8 @@ export function mapSaleOrderToPrint(order: SaleOrder): { data: Record<string, st
       receiverPhone:   order.receiverPhone ?? '',
       receiverAddress: order.receiverAddress ?? '',
       totalAmount:     money(order.totalAmount),
+      discountAmount:  money(order.discountAmount ?? 0),
+      netAmount:       money(Math.max(0, order.totalAmount - (order.discountAmount ?? 0))),
       remark:          order.remark ?? '',
       operator:        order.operatorName ?? '',
       printDate:       formatDisplayDateTime(new Date()),
@@ -37,6 +39,7 @@ export function mapSaleOrderToPrint(order: SaleOrder): { data: Record<string, st
       unit: it.unit,
       quantity: it.quantity,
       unitPrice: Number(it.unitPrice),
+      priceText: unitPrice(Number(it.unitPrice)),
       amount: Number(it.amount),
       articleNumber: it.articleNumber ?? '',
       spec: it.spec ?? '',
