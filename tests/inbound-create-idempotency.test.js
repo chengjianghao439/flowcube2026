@@ -18,6 +18,8 @@ function fixture() {
  },beginTransaction:async()=>{},commit:async()=>{},rollback:async()=>{},release:()=>{}}
  const candidates=[{purchaseItemId:31,purchaseOrderId:3,purchaseOrderNo:'PO',supplierId:5,supplierName:'供',warehouseId:2,warehouseName:'仓',productId:7,productName:'品',remainingQty:20,unit:'个'}]
  const stubs={
+  // 创建专项不执行补打；未建模的打印边界必须明确失败，不能加载实际数据库。
+  '../print-jobs/print-jobs.reprint-intent':{beginReprintIntent:()=>assert.fail('创建专项不得补打'),completeReprintIntent:()=>assert.fail('创建专项不得补打')},
   '../../utils/warehouseScope':{assertInScope:(scope,id)=>{if(Array.isArray(scope)&&!scope.includes(id))throw Object.assign(Error('范围拒绝'),{statusCode:403})}},'../../config/db':{pool:{getConnection:async()=>conn}},'../fulfillment/fulfillment.refresh':{commitFulfillment:async c=>c.commit()},
   '../../engine/containerEngine':{},'../print-jobs/print-jobs.service':{},'../../config/env':{env:{}},'./inbound-tasks.status':{},'./inbound-tasks.putaway':{},
   './inbound-tasks.helpers':{genTaskNo:async()=>`IT-${taskCount+1}`,appendInboundEvent:async()=>{}},'./inbound-tasks.query':{loadPurchasableCandidates:async()=>candidates},

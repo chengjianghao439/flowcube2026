@@ -19,6 +19,9 @@ function fixture({ count = 2, integer = false } = {}) {
     throw new Error(sql)
   }, beginTransaction: async () => calls.push({ sql: 'begin' }), commit: async () => calls.push({ sql: 'commit' }), rollback: async () => calls.push({ sql: 'rollback' }), release: () => calls.push({ sql: 'release' }) }
   const stubs = {
+    // 无键创建走真实兼容分支；补打不在此夹具中，禁止加载其数据库依赖。
+    './inbound-tasks.create-receipt': local('./inbound-tasks.create-receipt'),
+    '../print-jobs/print-jobs.reprint-intent': { beginReprintIntent: () => assert.fail('创建专项不得补打'), completeReprintIntent: () => assert.fail('创建专项不得补打') },
     '../fulfillment/fulfillment.refresh': { commitFulfillment: async c => c.commit() }, '../../config/db': { pool: { getConnection: async () => conn } },
     '../../utils/qtyPrecision': { ...local('../../utils/qtyPrecision'), assertQtyPrecision: async (_c, rows) => { for (const row of rows) local('../../utils/qtyPrecision').assertQtyPrecisionWith({ allowDecimal: !integer }, row.qty) } },
     '../../engine/containerEngine': {}, '../print-jobs/print-jobs.service': {},
