@@ -1,3 +1,4 @@
+import { ProductPriceHistory } from './ProductPriceHistory'
 import { SectionCard } from '@/components/shared/SectionCard'
 /**
  * ProductFormPage — 商品新建 / 编辑页面（独立路由）
@@ -15,6 +16,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { toast } from '@/lib/toast'
+import { createRequestKey } from '@/lib/requestKey'
 import { qtyStep } from '@/lib/qtyStep'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { useDirtyGuard } from '@/hooks/useDirtyGuard'
@@ -48,6 +50,8 @@ export default function ProductFormPage() {
 
   const navigate = useNavigate()
   const [submitting, setSubmitting] = useState(false)
+  const [changeReason, setChangeReason] = useState('')
+  const changeIntent = useRef<{body:string;requestKey:string}|null>(null)
 
   // 编辑页每次真正打开都取一次服务端最新数据（不靠 5min 内的 fresh 缓存，否则关闭重开拿旧 revision）。
   // `isFetchedAfterMount` 用于判断「本次挂载后的取数是否已完成」：在它之前不得用缓存旧值初始化表单。
@@ -149,7 +153,7 @@ export default function ProductFormPage() {
 
   // 是否改过：与**本次打开时的快照基线**比较；后台 refetch 不改基线，故不会误报「未保存」
   const isDirty = baseline ? JSON.stringify(formRef.current) !== JSON.stringify(baseline) : false
-  useDirtyGuard(tabPath, isDirty)
+  useDirtyGuard(tabPath, isDirty || !!changeReason.trim())
 
   const priceLevels = [
     { key: 'A', field: 'salePriceA' as const, rate: priceRates.A, color: 'text-blue-600' },
@@ -198,7 +202,10 @@ export default function ProductFormPage() {
       if (editId) {
         // 用**基线 revision**（与表单初始值同源），而不是 render 时的 `product.revision`——
         // 否则「query 后台更新但表单还没重置」时会用新版本提交旧草稿而绕过 CAS。
-        await update({ id: editId, data: { ...d, isActive: form.isActive, revision: formRevisionRef.current as number } })
+        const data = { ...d, changeReason: changeReason.trim() || null, isActive: form.isActive, revision: formRevisionRef.current as number }
+        const body = JSON.stringify(data)
+        if (!changeIntent.current || changeIntent.current.body !== body) changeIntent.current = {body,requestKey:createRequestKey('product.update')}
+        await update({ id: editId, data, requestKey:changeIntent.current.requestKey })
         toast.success('商品已更新')
       } else {
         await create(d)
@@ -449,6 +456,7 @@ export default function ProductFormPage() {
         )}
       </Section>
 
+      {editId && <><label className="flex flex-wrap items-center gap-2 text-sm"><span className="text-muted-foreground">变更原因（选填）</span><Input value={changeReason} onChange={e => setChangeReason(e.target.value)} maxLength={500} disabled={submitting} className="h-9 min-w-48 flex-1" placeholder="本次改价的说明" /></label><ProductPriceHistory id={editId} /></>}
       <Section title="库存策略">
         <p className="mb-3 text-xs text-muted-foreground">通用默认补货基准（对该商品所有仓库生效）。留空表示不启用；某仓需单独设置可在「报表 → 补货建议」页按仓覆盖。</p>
         <div className="grid grid-cols-2 gap-x-6 gap-y-4">

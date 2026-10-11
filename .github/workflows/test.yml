@@ -55,6 +55,56 @@ jobs:
           docker --context colima-flowcube pull mysql:8.0
       - run: npm run smoke:go-live-owned
 
+  inbound-edit-owned:
+    name: 收货草稿编辑与运费记录（归属专属实例）
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - run: npm --prefix backend ci
+      - name: 准备本地 Docker context 与镜像
+        run: |
+          docker context create colima-flowcube --docker host=unix:///var/run/docker.sock
+          docker --context colima-flowcube pull mysql:8.0
+      - run: npm run smoke:inbound-edit-owned
+
+  retention-reprint-owned:
+    name: 日志保留期与手动补打（归属专属实例）
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - run: npm --prefix backend ci
+      - name: 准备本地 Docker context 与镜像
+        run: |
+          docker context create colima-flowcube --docker host=unix:///var/run/docker.sock
+          docker --context colima-flowcube pull mysql:8.0
+      - run: npm run smoke:retention-reprint-owned
+
+  change-records-owned:
+    name: 变更审计与调整交接（归属专属实例）
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - run: npm --prefix backend ci
+      - name: 准备本地 Docker context 与镜像
+        run: |
+          docker context create colima-flowcube --docker host=unix:///var/run/docker.sock
+          docker --context colima-flowcube pull mysql:8.0
+      - run: npm run smoke:change-records-owned
+        env:
+          FLOWCUBE_CHANGE_REGRESSIONS: '1'
+
   browser-smoke-runtime:
     name: 页面验收脚本（本地夹具真浏览器）
     runs-on: ubuntu-latest
@@ -123,6 +173,10 @@ jobs:
 
       - name: 上线验收独占实例入口守卫
         run: npm run test:go-live-runner
+      - name: 收货编辑与归属入口契约
+        run: npm run test:inbound-edit
+      - name: 变更记录与归属入口契约
+        run: npm run test:change-records
 
       - name: 契约测试 — 界面文案口径（禁用实现词/半角标点/官网双份一致/金额格式化）
         run: npm run test:copy-conventions

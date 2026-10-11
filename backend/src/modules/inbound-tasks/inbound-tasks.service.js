@@ -1,10 +1,14 @@
 const query = require('./inbound-tasks.query')
 const command = require('./inbound-tasks.command')
+const edit = require('./inbound-tasks.edit')
 const putaway = require('./inbound-tasks.putaway')
 const voidModule = require('./inbound-tasks.void')
 
 module.exports = {
   findAll: query.findAll,
+  updateDraft: edit.updateDraft,
+  getEditContext: edit.getEditContext,
+  findEditPurchasableItems: edit.findEditPurchasableItems,
   findById: query.findById,
   findPurchasableItems: query.findPurchasableItems,
   listContainers: query.listContainers,

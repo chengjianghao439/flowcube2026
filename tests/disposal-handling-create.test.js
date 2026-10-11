@@ -21,6 +21,9 @@ function load(file, deps) {
 const lazy = fn => Object.assign(fn, { lazy: true })
 const qty = load('utils/qtyPrecision.js', { './AppError': AppError })
 const scope = load('utils/warehouseScope.js', { '../config/db': {}, './AppError': AppError })
+// 新增审计依赖也加载真实实现；本套创建链不应执行编辑审计或访问真实数据库。
+const auditRequests = load('utils/operationRequest.js', { 'node:crypto': require('node:crypto'), '../config/db': {}, './AppError': AppError })
+const changeAudit = load('modules/document-activity/document-change-audit.js', { 'node:crypto': require('node:crypto'), '../../utils/AppError': AppError, '../../utils/operationRequest': auditRequests })
 const units = load('utils/unitConversion.js', { './AppError': AppError, './qtyPrecision': qty })
 const rules = load('modules/disposal/disposal.handling.rules.js', { 'node:crypto': require('node:crypto'), '../../utils/AppError': AppError, '../../utils/qtyPrecision': qty })
 const operations = load('modules/disposal/disposal.handling.operations.js', { '../../utils/AppError': AppError, './disposal.handling.rules': rules })
@@ -90,7 +93,7 @@ function fixture(type, options = {}) {
     },
   }
   const generic = { beginCreationOperationRequest: async (c, data) => { assert.equal(c, conn); calls.push('generic'); genericPayloads.push(structuredClone(data.payload)); if (options.genericReplay) return { replay: true, responseData: { id: 80 } }; state.generic = { status: 0 }; return { enabled: true, id: 1, replay: false } }, completeOperationRequest: async c => { assert.equal(c, conn); calls.push('generic-complete'); state.generic.status = 1 } }
-  const common = { '../disposal/disposal.handling.target-guards': targetGuards, './disposal.handling.target-guards': targetGuards, '../refunds/supplier-refunds.pr-gate': { assertNoPendingRefund: async () => ({ received: false }) },
+  const common = { '../document-activity/document-change-audit': changeAudit, '../disposal/disposal.handling.target-guards': targetGuards, './disposal.handling.target-guards': targetGuards, '../refunds/supplier-refunds.pr-gate': { assertNoPendingRefund: async () => ({ received: false }) },
     '../../config/db': { pool: { getConnection: async () => { connections++; return conn } } }, '../../utils/AppError': AppError, '../../utils/warehouseScope': scope, '../../utils/unitConversion': units, '../../utils/qtyPrecision': qty, '../../utils/codeGenerator': { generateDailyCode: async () => ({ sale_order: 'S', purchase_return: 'PR', inventory_disposal: 'DP' })[type] + (81 + state.heads.length) }, '../../utils/operationRequest': generic, '../../utils/statusTransition': {}, '../../constants/documentStatusRules': require('../backend/src/constants/documentStatusRules'), '../../utils/pagination': {}, '../disposal/disposal.handling.targets': targets, './disposal.handling.targets': targets }
   const saleContracts = load('modules/sale/sale.contracts.js', { zod: { z }, '../../utils/AppError': AppError, '../../utils/qtyPrecision': qty, '../disposal/disposal.handling.contracts': contracts })
   let svc

@@ -1,5 +1,5 @@
 import { QueryFormLayout } from '@/components/shared/QueryFormLayout'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AppDialog } from '@/components/shared/AppDialog'
 import OperatorSelectField from '@/components/shared/OperatorSelectField'
 import { Button } from '@/components/ui/button'
@@ -55,7 +55,11 @@ export default function InboundTaskQueryDialog({ open, initial, resetValues, onC
 
 
 
-  useEffect(() => { if (open) setDraft(initial) }, [open, initial])
+  const wasOpen = useRef(false)
+  useEffect(() => {
+    if (open && !wasOpen.current) setDraft({ ...initial })
+    wasOpen.current = open
+  }, [open, initial])
 
   function set<K extends keyof InboundTaskQueryValues>(key: K, value: InboundTaskQueryValues[K]) {
     setDraft(d => ({ ...d, [key]: value }))
@@ -69,8 +73,8 @@ export default function InboundTaskQueryDialog({ open, initial, resetValues, onC
         dialogId="inbound-task-query"
         title="查询收货订单"
         resizable={false}
-        defaultWidth={520}
-        defaultHeight={480}
+        defaultWidth={680}
+        defaultHeight={600}
         minWidth={420}
         minHeight={420}
         footer={

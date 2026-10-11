@@ -41,6 +41,7 @@ const ordinaryCreateSaleSchema = z.object({
   warehouseName: z.string(),
   discountAmount: z.number().nonnegative('折扣金额不能为负').optional(),
   remark: z.string().max(200).optional(),
+  changeReason: z.string().max(500).optional().nullable(),
   carrierId: z.number().int().positive().optional().nullable(),
   carrier: z.string().optional(),
   shippingProduct: z.string().max(32).optional().nullable(),
@@ -88,7 +89,7 @@ const createSaleSchema=modelSchema(ordinaryCreateSaleSchema.extend({disposalSour
 const reserveSaleSchema=modelSchema(ordinaryReserveSaleSchema,ordinaryReserveSaleSchema.extend(commercialMarker).strict())
 const releaseSaleSchema=modelSchema(ordinaryReleaseSaleSchema,ordinaryReleaseSaleSchema.extend(commercialMarker).strict())
 const shipSaleSchema=modelSchema(ordinaryShipSaleSchema,z.object({...commercialMarker,groups:z.array(z.object({groupId:z.number().int().positive(),qty:positiveQty}).strict()).min(1).max(200)}).strict())
-const commercialActionSchema=modelSchema(z.object({}).default({}),z.object(commercialMarker).strict())
+const commercialActionSchema=modelSchema(z.object({changeReason:z.string().max(500).optional().nullable()}).default({}),z.object({...commercialMarker,changeReason:z.string().max(500).optional().nullable()}).strict())
 
 function getNetOrderAmount(totalAmount, discountAmount) {
   const gross = Math.max(0, Number(totalAmount) || 0)

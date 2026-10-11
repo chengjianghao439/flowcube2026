@@ -5,6 +5,7 @@ const sortingBinSvc = require('../sorting-bins/sorting-bins.service')
 const { WT_EVENT, record: recordEvent } = require('./warehouse-task-events.service')
 const { logSideEffectFailure, assertTaskScope } = require('./warehouse-tasks.helpers')
 const { scopeFilter } = require('../../utils/warehouseScope')
+const { readCancelHandoff } = require('./warehouse-tasks.handoff')
 
 /**
  * PDA「拣货退回」任务池：列出所有正在拣货退回中（cancel_requested_at 非空）的任务，
@@ -44,7 +45,7 @@ async function listPendingCancelReturns(warehouseId, scopeWarehouseIds = null) {
  */
 async function getCancelReturnDetail(taskId, scopeWarehouseIds = null) {
   const [[taskRow]] = await pool.query(
-    `SELECT wt.id, wt.task_no, wt.status, wt.cancel_requested_at, wt.warehouse_id, wt.warehouse_name, wt.customer_name,
+    `SELECT wt.id, wt.task_no, wt.status, wt.sale_order_id, wt.cancel_requested_at, wt.warehouse_id, wt.warehouse_name, wt.customer_name,
             so.commercial_model
        FROM warehouse_tasks wt LEFT JOIN sale_orders so ON so.id=wt.sale_order_id
        WHERE wt.id = ? AND wt.deleted_at IS NULL`,
@@ -52,6 +53,7 @@ async function getCancelReturnDetail(taskId, scopeWarehouseIds = null) {
   )
   if (!taskRow) throw new AppError('仓库任务不存在', 404)
   assertTaskScope(taskRow, { scopeWarehouseIds })
+  const handoff = await readCancelHandoff(pool, taskRow, scopeWarehouseIds)
   const [containers] = await pool.query(
     `SELECT c.id, c.barcode, c.product_id, c.remaining_qty, c.container_type,
             c.warehouse_id, c.locked_by_task_id, c.status, c.deleted_at,
@@ -93,6 +95,7 @@ async function getCancelReturnDetail(taskId, scopeWarehouseIds = null) {
     warehouseId: Number(taskRow.warehouse_id),
     warehouseName: taskRow.warehouse_name,
     customerName: taskRow.customer_name,
+    ...handoff,
     containers: containers.map(c => ({
       containerId: Number(c.id),
       barcode: c.barcode,

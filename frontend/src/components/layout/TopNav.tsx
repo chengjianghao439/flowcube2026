@@ -1,3 +1,4 @@
+import { getInboundListWorkspacePath } from '@/lib/inboundListNavigation'
 /**
  * TopNav — 顶栏主导航（hover 下拉，两级：一级入口 + 下拉内二级分段）
  *
@@ -10,6 +11,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { ChevronDown } from 'lucide-react'
 import { getMergedPageGroup } from '@/router/mergedPageGroups'
 import { cn } from '@/lib/utils'
+import { getSaleListWorkspacePath } from '@/lib/saleListNavigation'
 import { usePermission } from '@/hooks/usePermission'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { buildWorkspaceTabRegistrationFromPath, resolveWorkspaceEntryPath } from '@/router/workspaceRouteMeta'
@@ -201,7 +203,7 @@ export function TopNav() {
     (path: string) => {
       const title = PATH_TITLES[path] ?? path
       const key = buildWorkspaceTabRegistrationFromPath(path).key
-      const target = getMergedPageGroup(path)?.tabTitle === 'group'
+      const target = path === '/sale' ? getSaleListWorkspacePath() : path === '/inbound-tasks' ? getInboundListWorkspacePath() : getMergedPageGroup(path)?.tabTitle === 'group'
         ? resolveWorkspaceEntryPath(path, useWorkspaceStore.getState().tabs.find(tab => tab.key === key), can)
         : path
       addTab({ key, title, path: target })

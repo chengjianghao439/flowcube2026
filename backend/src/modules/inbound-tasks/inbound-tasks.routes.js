@@ -7,17 +7,32 @@ const { pdaSessionRequired } = require('../../middleware/pdaSession')
 const { pdaOnly } = require('../../middleware/pdaOnly')
 const { putawaySuggestionHandler } = require('./inbound-tasks.suggestion')
 const { validateBody } = require('../../utils/route')
+const { isFreightAmount } = require('./inbound-tasks.edit-rules')
 
 const router = Router()
+
+const freightFields = {
+  freightType: z.union([z.literal(1), z.literal(2), z.literal(3)]).nullable().optional(),
+  freightAmount: z.number().finite().min(0).max(999999999999.99).refine(isFreightAmount, '运费最多保留 2 位小数').nullable().optional(),
+}
+
+const editSchema = z.object({
+  remark: z.string().max(200).optional(),
+  items: z.array(z.object({ purchaseItemId: z.number().int().positive().safe(), qty: z.number().finite().positive().max(9999999999.99) }).strict()).min(1),
+  expectedEditFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+  ...freightFields,
+}).strict()
 
 const createSchema = z.union([
   z.object({
     poId: z.number().int().positive('请选择采购单'),
+    ...freightFields,
   }),
   z.object({
     supplierId: z.number().int().positive('请选择供应商'),
     supplierName: z.string().min(1, '供应商名称不能为空'),
-    remark: z.string().optional(),
+    remark: z.string().max(200).optional(),
+    ...freightFields,
     items: z.array(
       z.object({
         purchaseItemId: z.number().int().positive('采购明细无效'),
@@ -114,6 +129,9 @@ router.get('/purchase-items', requirePermission(PERMISSIONS.INBOUND_ORDER_VIEW),
 router.get('/',              requirePermission(PERMISSIONS.INBOUND_ORDER_VIEW), ctrl.list)
 router.post('/',             requirePermission(PERMISSIONS.INBOUND_ORDER_CREATE), validateBody(createSchema), ctrl.create)
 router.get('/:id/containers', requirePermission(PERMISSIONS.INBOUND_ORDER_VIEW), ctrl.containers)
+router.get('/:id/edit-context', requirePermission(PERMISSIONS.INBOUND_ORDER_UPDATE), ctrl.editContext)
+router.get('/:id/edit-purchase-items', requirePermission(PERMISSIONS.INBOUND_ORDER_UPDATE), ctrl.editPurchaseItems)
+router.put('/:id', requirePermission(PERMISSIONS.INBOUND_ORDER_UPDATE), validateBody(editSchema), ctrl.update)
 router.get('/:id',           requirePermission(PERMISSIONS.INBOUND_ORDER_VIEW), ctrl.detail)
 router.post('/:id/submit',   requirePermission(PERMISSIONS.INBOUND_ORDER_SUBMIT), ctrl.submit)
 router.post('/:id/reprint',  requirePermission(PERMISSIONS.INBOUND_PRINT_REPRINT), validateBody(reprintSchema), ctrl.reprint)

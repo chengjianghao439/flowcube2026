@@ -1,3 +1,4 @@
+import { getInboundListWorkspacePath } from '@/lib/inboundListNavigation'
 /**
  * WorkspaceTabs — 工作区标签栏
  *
@@ -15,6 +16,7 @@ import { useRef, useState, useEffect, useId } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { X, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { getSaleListWorkspacePath } from '@/lib/saleListNavigation'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { useDirtyGuardStore } from '@/store/dirtyGuardStore'
 import { confirmDirtyLeave } from '@/lib/unsavedChanges'
@@ -128,7 +130,7 @@ export function WorkspaceTabs() {
           // 详情/表单类标签有明确归属的列表页，关闭后应回到那里，而非任意相邻标签
           const listPath = closingTab ? getRouteListPath(closingTab.path) : undefined
           if (listPath) {
-            navigate(listPath)
+            navigate(listPath === '/sale' ? getSaleListWorkspacePath() : listPath === '/inbound-tasks' ? getInboundListWorkspacePath() : listPath)
           } else {
             const newTab = useWorkspaceStore.getState().tabs.find(t => t.key === newKey)
             if (newTab) navigate(newTab.path)

@@ -1,4 +1,5 @@
 import { payloadClient as client } from './client'
+import { withRequestKeyHeaders } from '@/lib/requestKey'
 import { recordIdentityByFields } from './allRecords'
 
 import type { BarcodePrintCategory, BarcodePrintRecordPage } from '@/types/print-jobs'
@@ -13,20 +14,25 @@ export const getBarcodePrintRecordsApi = (params: {
   page?: number
   pageSize?: number
   inboundTaskId?: number
+  recovery?: boolean
   inboundTaskItemId?: number
 }) =>
-  client.get<BarcodePrintRecordPage>('/print-jobs/barcodes', { params }, barcodeRecordIdentity)
+  client.get<BarcodePrintRecordPage>('/print-jobs/barcodes', { params: { ...params, recovery: params.recovery ? '1' : undefined } }, barcodeRecordIdentity)
 
 export const reprintBarcodeRecordApi = (data: {
   category: BarcodePrintCategory
   recordId: number
-}, config?: Parameters<typeof client.post>[2]) =>
+  recovery?: boolean
+}, config?: Parameters<typeof client.post>[2], requestKey = '') =>
   client.post<{
     queued: boolean
+    category: BarcodePrintCategory
+    recordId: number
+    requestId: number
     id?: number
     printStateLabel?: string
     printerCode?: string | null
     printerName?: string | null
     statusKey?: string
     dispatchHint?: PrintQueueDispatchHint | null
-  }>('/print-jobs/barcodes/reprint', data, config)
+  }>('/print-jobs/barcodes/reprint', data, { ...config, headers: withRequestKeyHeaders(requestKey, config?.headers as Record<string, string>) })

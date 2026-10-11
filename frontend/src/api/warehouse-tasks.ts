@@ -302,12 +302,31 @@ export interface CancelReturnDetail {
   id: number
   taskNo: string
   status: number
-  cancelRequestedAt: string
+  cancelRequestedAt: string | null
   warehouseId: number
   warehouseName: string
   customerName: string | null
   containers: CancelReturnContainer[]
   packages: CancelReturnPackage[]
+  handoff?: WarehouseHandoff
+  confirmations?: WarehouseConfirmation[]
+}
+
+export interface WarehouseActor { id: number | null; name: string | null }
+export interface WarehouseHandoff {
+  reason: string | null
+  requestedBy: WarehouseActor | null
+  requestedAt: string | null
+  phase: 'pending' | 'completed' | 'unknown'
+  completedAt: string | null
+}
+export interface WarehouseConfirmation {
+  id: string
+  kind: 'container_return' | 'package_void'
+  barcode: string | null
+  qty: number | null
+  confirmedBy: WarehouseActor | null
+  confirmedAt: string | null
 }
 
 export const getCancelReturnDetailApi = (taskId: number, config?: AxiosRequestConfig) =>
@@ -372,6 +391,8 @@ export interface AdjustmentPackageVoid {
   barcode: string
   otherProductsSnapshot: { productId: number; productCode: string; productName: string; unit: string; qty: number }[]
   status: number
+  confirmedBy?: WarehouseActor | null
+  confirmedAt?: string | null
 }
 
 export interface AdjustmentContainerReturn {
@@ -381,6 +402,8 @@ export interface AdjustmentContainerReturn {
   qty: number
   suggestedLocationCode: string | null
   status: number
+  confirmedBy?: WarehouseActor | null
+  confirmedAt?: string | null
   /** 待归还容器当前剩余量（源容器；用于判断部分/整只归还） */
   containerRemainingQty: number | null
 }
@@ -409,6 +432,7 @@ export interface AdjustmentDetail {
   warehouseName: string
   customerName: string | null
   items: AdjustmentItem[]
+  handoff?: WarehouseHandoff
 }
 
 export const getAdjustmentDetailApi = (adjustmentId: number) =>

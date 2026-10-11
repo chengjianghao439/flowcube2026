@@ -73,7 +73,7 @@ async function main() {
   }
   const tryReprint = async (container) => {
     try {
-      await labels.reprintBarcodeRecord({ category: 'inbound', recordId: container.id, createdBy: 1 })
+      await labels.reprintBarcodeRecord({ category: 'inbound', recordId: container.id, createdBy: 1, requestKey: `reprint-v2-${Date.now()}-${randomRef('manual-reprint')}` })
       return { ok: true }
     } catch (e) {
       return { ok: false, code: e.code, message: e.message }

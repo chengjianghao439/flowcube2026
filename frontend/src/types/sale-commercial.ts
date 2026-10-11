@@ -84,6 +84,7 @@ export interface CommercialGroup {
   }
 }
 export interface CommercialBody {
+  changeReason?: string | null
   commercialModel: 'kit-v1'
   expectedRevision?: number
   expectedEditFingerprint?: string
@@ -120,6 +121,7 @@ export type CommercialAction = 'create' | 'update' | 'adjust' | 'ship' | 'cancel
 export interface CommercialMarker {
   commercialModel: 'kit-v1'
   expectedRevision: number
+  changeReason?: string | null
 }
 export type CommercialOperation =
   | { action: 'create'; id?: number; body: CreateSaleParams | CommercialBody }

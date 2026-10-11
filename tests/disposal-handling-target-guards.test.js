@@ -21,6 +21,9 @@ function load(file, deps) {
 const lazy = fn => Object.assign(fn, { lazy: true })
 const qty = load('utils/qtyPrecision.js', { './AppError': AppError })
 const scope = load('utils/warehouseScope.js', { '../config/db': {}, './AppError': AppError })
+// 真实审计实现使用下方同事务 SQL 夹具，不绕过新增指纹或记录写入。
+const auditRequests = load('utils/operationRequest.js', { 'node:crypto': require('node:crypto'), '../config/db': {}, './AppError': AppError })
+const changeAudit = load('modules/document-activity/document-change-audit.js', { 'node:crypto': require('node:crypto'), '../../utils/AppError': AppError, '../../utils/operationRequest': auditRequests })
 const units = load('utils/unitConversion.js', { './AppError': AppError, './qtyPrecision': qty })
 const transition = load('utils/statusTransition.js', { './AppError': AppError, './sqlIdentifier': sqlIdentifier })
 const docRules = load('constants/documentStatusRules.js', { '../utils/AppError': AppError })
@@ -49,7 +52,7 @@ function fixture(options = {}) {
     task: { id: 21, task_no: 'WT21', task_type: 'sale_out', sale_order_id: 81, return_id: null, warehouse_id: 8, status: 6, cancel_requested_at: null, adjustment_requested_at: null, deleted_at: null },
     taskItem: { id: 601, task_id: 21, product_id: 3, product_name: '商品3', unit: '个', required_qty: 2, picked_qty: 2 },
     extraItems: options.hiddenExtra ? [{ id: 502, order_id: 81, product_id: 4, product_name: '额外商品', warehouse_id: 8, unit: '个', quantity: 1, reserved_qty: options.hiddenExtra === 'unreserved' ? 0 : 1, dispatched_qty: options.hiddenExtra === 'unreserved' ? 0 : 1 }] : [],
-    durableEvents: [], genericDone: false,
+    durableEvents: [], changeEvents: [], requestFingerprint: null, genericDone: false,
   }
   let backup
   const conn = {
@@ -60,6 +63,10 @@ function fixture(options = {}) {
     query: async (raw, args = []) => {
       const sql = raw.replace(/\s+/g, ' ').trim(); sqls.push(sql)
       if (sql.includes('disposal_handling_sources')) throw Error('H3 must not query/lock source')
+      if (sql.startsWith('SELECT id,request_fingerprint FROM operation_requests WHERE request_key=')) return [[]]
+      if (sql === 'SELECT id,request_fingerprint FROM operation_requests WHERE id=? FOR SHARE') { assert.equal(Number(args[0]), 1); return [[{ id: 1, request_fingerprint: state.requestFingerprint }]] }
+      if (sql === 'UPDATE operation_requests SET request_fingerprint=? WHERE id=?') { assert.equal(Number(args[1]), 1); assert.match(args[0], /^[a-f0-9]{16}$/); state.requestFingerprint = args[0]; return [{ affectedRows: 1 }] }
+      if (sql.startsWith('INSERT INTO document_operation_events')) { assert.equal(args[0], 'sale'); assert.equal(Number(args[1]), 81); state.changeEvents.push(JSON.parse(args[7])); return [{ insertId: state.changeEvents.length }] }
       if (sql === 'SELECT * FROM disposal_handling_links WHERE id=? FOR SHARE') { assert.deepEqual(Array.from(args), [31]); calls.push('link'); return [state.link ? [project(sql, state.link)] : []] }
       if (/^SELECT .* FROM sale_orders WHERE id\s*=\s*\?.*(FOR UPDATE)?$/.test(sql) || /^SELECT .* FROM inventory_disposal_orders WHERE id\s*=\s*\?/.test(sql)) {
         assert.ok([80, 81].includes(Number(args[0]))); if (sql.endsWith('FOR UPDATE')) calls.push('head-X'); return [[project(sql, Number(args[0]) === 81 ? state.head : { ...state.head, id: 80, disposal_handling_link_id: null })]]
@@ -124,6 +131,7 @@ function fixture(options = {}) {
   const fulfillment = { captureDimensions: async () => { calls.push('dimensions'); return [] }, commitFulfillment: async c => { assert.equal(c, conn); calls.push('fulfillment'); await c.commit() } }
   const taskSvc = { createForSaleOrder: async data => { assert.equal(data.conn, conn); tasksCreated.push(data); return { taskId: 21, taskNo: 'WT21' } }, cancel: async (_id, data) => { assert.equal(data.conn, conn) } }
   const saleDeps = { ...common, './sale.commercial-dispatch': {}, './sale.edit-baseline': saleEditBaseline, './sale.commercial-store': { assertModel() {}, assertRequestKey() {}, assertRevision() {} }, './sale.commercial-resolver': {}, './sale.commercial-money': {}, '../fulfillment/fulfillment.refresh': fulfillment, '../logistics/shipping-products': {}, '../fulfillment/fulfillment.sale-items': { snapshotItemCommitments: async () => [], restoreItemCommitments: async () => {} }, './sale.presentation': {}, './sale.items': load('modules/sale/sale.items.js', {}), '../../engine/reservationEngine': { reserve: async (c, data) => { assert.equal(c, conn); calls.push('reserve'); assert.equal(data.warehouseId, state.item.warehouse_id) }, releaseByRef: async c => { assert.equal(c, conn); calls.push('release-stock') }, partialReleaseByProduct: async c => { assert.equal(c, conn); calls.push('release-stock') } }, '../../engine/containerEngine': { getStockProjection: async () => ({ available: 99 }) }, '../../utils/expectedStock': { lockExpectedPurchaseOrders: async () => {} }, '../inventory/inventory.service': {}, '../../utils/creditExposure': {}, '../credit-overrides/credit-overrides.service': {}, '../../constants/saleOrderStatus': { SALE_STATUS: { DRAFT: 1, RESERVED: 2, PICKING: 3, PARTIAL_RESERVED: 6 } }, '../../constants/settlementType': { SETTLEMENT_TYPE: {}, normalizeSettlementType: value => value, buildDueDateSql: () => ({ expr: 'NULL', params: [] }) }, '../../utils/backendTime': {}, '../warehouse-tasks/warehouse-tasks.adjust': {}, '../warehouse-tasks/warehouse-task-events.service': {}, './sale.contracts': saleContracts, '../warehouse-tasks/warehouse-tasks.service': taskSvc }
+  saleDeps['../document-activity/document-change-audit'] = changeAudit
   const sale = load('modules/sale/sale.service.js', saleDeps)
   const disposal = load('modules/disposal/disposal.service.js', { ...common, '../../engine/inventoryEngine': {}, '../../engine/containerEngine': {}, '../../utils/selfApprove': {}, './disposal.receipt': {} })
   const taskHelpers = { assertTaskScope: (task, data) => { scope.assertInScope(data.scopeWarehouseIds, task.warehouse_id); if (data.pdaWarehouseId != null && Number(data.pdaWarehouseId) !== Number(task.warehouse_id)) throw new AppError('device scope', 403) }, logSideEffectFailure: () => {}, ...Object.fromEntries(['assertTaskPickScanClosure','assertSaleReturnReverseClosure','assertTaskCheckScanClosure','assertTaskPackagingClosure','assertTaskPackagePrintClosure'].map(name => [name, async c => { assert.equal(c, conn); calls.push(name) }])) }
@@ -146,6 +154,8 @@ test('original successful edit ACK precedes linked new-edit rejection', async ()
 test('original unlinked draft edit succeeds and performs zero domain queries', async () => {
   const f = fixture({ unlinked: true }); await f.sale.update(81, f.data)
   assert.ok(f.calls.includes('rebuild')); assert.equal(f.calls.filter(c => c === 'commit').length, 1); assert.ok(f.sqls.every(sql => !/FROM disposal_handling_/.test(sql)))
+  assert.equal(f.state.changeEvents.length, 1); assert.equal(f.state.changeEvents[0].context.phase, 'draft_edit')
+  assert.equal(f.state.changeEvents[0].context.requestFingerprint, f.state.requestFingerprint)
 })
 test('linked reserve rejects changed warehouse with zero prior reserve', async () => {
   const f = fixture(); await assert.rejects(f.sale.reserveStock(81, actor, [{ id: 501, qty: 2, warehouseId: 9 }], { scopeWarehouseIds: [8, 9], requestKey: 'key' }), guarded)

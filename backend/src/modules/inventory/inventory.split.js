@@ -38,7 +38,7 @@ async function splitContainerOp(containerId, { qty, remark, printLabel, targetCo
     if (printLabel && !targetContainerId) {
       const [[row]] = await conn.query('SELECT c.barcode, c.remaining_qty, p.name AS product_name FROM inventory_containers c JOIN product_items p ON p.id=c.product_id WHERE c.id=?', [result.newContainerId])
       if (!row) throw new AppError('拆分后新库存条码不存在，无法创建标签打印任务', 500)
-      const job = await enqueueContainerLabelJob({ conn, containerId: result.newContainerId, warehouseId: result.warehouseId, data: { container_code: row.barcode, product_name: row.product_name, qty: row.remaining_qty }, createdBy: userId ?? null, jobUniqueKey: `split_cnt_${result.newContainerId}` })
+      const job = await enqueueContainerLabelJob({ conn, containerId: result.newContainerId, warehouseId: result.warehouseId, data: { container_code: row.barcode, product_name: row.product_name, qty: row.remaining_qty }, createdBy: userId ?? null, requestPurpose: 'initial', jobUniqueKey: `split_cnt_${result.newContainerId}` })
       if (!job?.id) throw new AppError(`库存条码 ${row.barcode} 的打印任务创建失败`, 500)
       if (job.unprintable) {
         if (/label render failed/.test(String(job.errorMessage || ''))) result.renderFailedCount = 1

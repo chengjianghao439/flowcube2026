@@ -1,4 +1,5 @@
 import { ExistingSaleEditor } from '../commercial/ExistingSaleEditor'
+import { getSaleListWorkspacePath } from '@/lib/saleListNavigation'
 import { readHandlingSourceId, mayHandle } from '@/lib/disposalHandlingRecovery'
 import { useDisposalHandlingSource } from '@/hooks/useDisposalHandlingSource'
 import { useDisposalHandlingOperation } from '@/hooks/useDisposalHandlingOperation'
@@ -29,6 +30,9 @@ import { handleEntryKeyDown } from '@/lib/orderEntryNavigation'
 import KeepAliveSection from '@/components/shared/KeepAliveSection'
 import { OrderFulfillmentPanel } from '@/components/shared/OrderFulfillmentPanel'
 import { DocumentActivityPanel } from '@/components/shared/DocumentActivityPanel'
+import SaleCancelDialog from '../components/SaleCancelDialog'
+import SaleCancelRecoveryNotice from '../components/SaleCancelRecoveryNotice'
+import { useDirtyGuard } from '@/hooks/useDirtyGuard'
 import { SaleOrderItemsSection } from './components/SaleOrderItemsSection'
 /**
  * SaleFormPage — 销售单新建 / 查看页面（独立路由）
@@ -93,7 +97,7 @@ export default function SaleFormPage() {
   function closeTab() {
     const { removeTab } = useWorkspaceStore.getState()
     removeTab(buildWorkspaceTabRegistrationFromPath(tabPath || '/sale/new').key)
-    navigate('/sale')
+    navigate(getSaleListWorkspacePath())
   }
 
   // ─── ① 新建模式 ─────────────────────────────────────────────────────────────
@@ -337,7 +341,9 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
   useWorkspaceTabTitle(needsCommercialRead ? undefined : order?.orderNo)
   const shipMutate     = useShipSale()
   const deleteMutate   = useDeleteSale()
-  const cancelMutate   = useCancelSale()
+  const cancelMutate   = useCancelSale(`ordinary-sale-cancel:${saleId}`)
+  const [cancelOpen, setCancelOpen] = useState(false)
+  const [cancelReason, setCancelReason] = useState('')
 
   const [printOpen, setPrintOpen] = useState(false)
   const [detailTab, setDetailTab] = useState<SaleDetailTab>(() => hasHandoff ? handoff.focus : 'info')
@@ -357,7 +363,8 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
     open: boolean; title: string; description: string; variant: 'default' | 'destructive'; confirmText: string; onConfirm: () => void
   }>({ open: false, title: '', description: '', variant: 'default', confirmText: '确认', onConfirm: () => {} })
 
-  const isPending = shipMutate.isPending || deleteMutate.isPending || cancelMutate.isPending
+  const isPending = shipMutate.isPending || deleteMutate.isPending || cancelMutate.isPending || !!cancelMutate.recovery?.blocked
+  useDirtyGuard(tabPath, isPending || !!cancelReason.trim())
   useSaleEditEntry(tabPath, !needsCommercialRead && !!order && !isFetching && !isPaused && !isError, () => {
     if (order?.status === 1 && can(PERMISSIONS.SALE_ORDER_UPDATE) && !isPending) setEditing(true)
   })
@@ -418,18 +425,7 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
             )}
             {can(PERMISSIONS.SALE_ORDER_CANCEL) && (order.status === 1 || order.status === 2 || order.status === 3 || order.status === 6) && (
               <Button variant="outline" className="text-destructive-ink border-destructive/30 hover:bg-destructive/5" disabled={isPending}
-                onClick={() => setConfirmState({
-                  open: true, title: '取消订单',
-                  description: order.status === 3
-                    ? ((order.shippedTotalQty ?? 0) > 0
-                      ? '该订单已有部分商品出库：未发货的商品明细将被删除，已出库部分保留，订单直接变为已出库状态，是否继续？'
-                      : '将同步取消关联仓库任务并释放锁定资源，是否继续？')
-                    : (order.status === 2 || order.status === 6)
-                      ? '将释放已占用库存并取消销售单，是否继续？'
-                      : '取消后订单将变为已取消状态，是否继续？',
-                  variant: 'destructive', confirmText: '确认取消',
-                  onConfirm: () => { setConfirmState(s => ({ ...s, open: false })); cancelMutate.mutate(order.id) },
-                })}>
+                onClick={() => setCancelOpen(true)}>
                 <X className="h-4 w-4 mr-1" />取消订单
               </Button>
             )}
@@ -479,6 +475,7 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
         </div>
       )}
 
+      {cancelMutate.recovery?.storageBlocked && <SaleCancelRecoveryNotice recovery={cancelMutate.recovery} onConfirmed={()=>{setCancelOpen(false);setCancelReason('')}} />}
       <SaleOrderDetailTabs value={detailTab} onChange={setDetailTab} />
 
       <KeepAliveSection active={detailTab === 'info'} className="space-y-3"><>
@@ -587,6 +584,21 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
         onConfirm={confirmState.onConfirm}
         onCancel={() => setConfirmState(s => ({ ...s, open: false }))}
       />
+      <SaleCancelDialog open={cancelOpen || !!cancelMutate.recovery?.pending} title={(order.shippedTotalQty ?? 0)>0 ? '关闭剩余未发' : '取消订单'}
+        description={(order.shippedTotalQty ?? 0)>0
+          ? '保留已出库事实并关闭剩余未发部分；已拣未发实物须在原任务扫码归还，待归还不代表预占已释放。'
+          : '取消订单并按原流程处理预占；已拣实物须由仓库在原任务逐项扫码归还。'}
+        reason={cancelReason} onReasonChange={setCancelReason} loading={cancelMutate.isPending || !!cancelMutate.recovery?.busy}
+        frozen={!!cancelMutate.recovery?.pending && !cancelMutate.recovery.busy} error={cancelMutate.recovery?.error || cancelMutate.error?.message}
+        confirmText="确认取消" onCancel={()=>{setCancelOpen(false);setCancelReason('')}}
+        onConfirm={async()=>{
+          try {
+            await cancelMutate.mutateAsync({id:order.id,changeReason:cancelReason})
+            setCancelOpen(false); setCancelReason('')
+          } catch { /* 原原因与未知原请求继续保留。 */ }
+        }}>
+        <SaleCancelRecoveryNotice recovery={cancelMutate.recovery} onConfirmed={()=>{setCancelOpen(false);setCancelReason('')}} />
+      </SaleCancelDialog>
 
       {/* 打印预览全屏遮罩 */}
       {printOpen && (

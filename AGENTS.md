@@ -93,8 +93,13 @@
 - 本地实例脚本 `start` 只启动实例（不改库结构）、迁移必须由显式 `dev:mysql8:migrate` 触发且目标固定、凭据只由 `start` 生成 → `npm run test:mysql8-dev-script`
 - 含全表清理的采购/应收修复 smoke 只允许落在**本批专属临时实例**（`npm run repair:smoke-ephemeral`），写入前必须过归属门：0600 归属文件 + 拒绝共享端口 3307/3306 + 容器/卷 `docker inspect` 本批 label 与实时端口映射 + 同运行时间窗 + **runner 进程存活** + 实例 `@@server_uuid`；不认库名后缀、`IF NOT EXISTS`、可自填 env、空表 → `npm run test:repair-smoke-instance-guard`
 - `AGENTS.md` 体积、关键章节与红线必须在默认预算内，`docs/*.md` 与 `npm run` 引用有效 → `npm run test:agents-md-guard`
+- 收货草稿编辑须核完整执行事实、原基线与同来源行锁；新建原键须绑定完整正文、未知先查询；运费仅记录 → `npm run test:inbound-edit`、`npm run smoke:inbound-edit-owned`（详见 `docs/business-semantics.md`）
 
 - 安全扫描入口/授权/会话/解析/打印/发布资源预算，必须先限流与授权再解析、放大或回放；构建与发布凭据分离 → `npm run test:security-scan-remediation`、`npm run smoke:security-scan-remediation`（边界与逐项结果见 `docs/security-scan-remediation-2026-10-06.md`）
+
+- 曾调拨永久事实与补打同意图回执不得依赖可清理日志/时间桶 → `npm run test:print`、`npm run smoke:retention-reprint-owned`（详见 `docs/inventory-transaction-invariants.md`）
+
+- 销售/价格有效差异同事务留痕、仓库交接只读、打印目的与派机分开；未知结果复用原正文/键 → `npm run test:change-records`、`npm run smoke:change-records-owned`（详见 `docs/backend-api-sql-conventions.md`、`docs/verification-commands.md`）
 
 ## 1. 协作与操作边界
 

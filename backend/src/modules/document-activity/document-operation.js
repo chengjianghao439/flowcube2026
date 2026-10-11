@@ -1,5 +1,6 @@
 // 完整路径边界保证 /purchase/12 不会匹配 /purchase/123。
 const DOCUMENT_PATHS = Object.freeze({
+  product: '/api/products', 'price-list': '/api/price-lists',
   sale: '/api/sale', purchase: '/api/purchase', inbound: '/api/inbound-tasks',
   'purchase-return': '/api/returns/purchase', 'sale-return': '/api/returns/sale',
   transfer: '/api/transfer', stockcheck: '/api/stockcheck', disposal: '/api/disposals',

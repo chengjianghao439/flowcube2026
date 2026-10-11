@@ -47,7 +47,7 @@ export function SaleRowActions({
         items={[
           ...(canUpdate ? [{ label: '编辑订单', onClick: onEdit }] : []),
           printItem,
-          ...(canCancel ? [{ label: '取消订单', onClick: () => onAsk('取消订单', '取消后订单将变为已取消状态，是否继续？', () => onCancelSale(row.id)), destructive: true, separatorBefore: true, disabled: anyPending }] : []),
+          ...(canCancel ? [{ label: '取消订单', onClick: () => onCancelSale(row.id), afterMenuClose: true, destructive: true, separatorBefore: true, disabled: anyPending }] : []),
         ]}
       />
     )
@@ -65,7 +65,7 @@ export function SaleRowActions({
           ...(canAdjust ? [{ label: '修改订单', onClick: onDetail, disabled: anyPending }] : []),
           printItem,
           ...(can(PERMISSIONS.SALE_ORDER_RELEASE) ? [{ label: '核对占库', onClick: onDetail, separatorBefore: true, disabled: anyPending }] : []),
-          ...(canCancel ? [{ label: '取消订单', onClick: () => onAsk('取消订单', '将释放已占用库存并取消销售单，是否继续？', () => onCancelSale(row.id)), destructive: true, disabled: anyPending }] : []),
+          ...(canCancel ? [{ label: '取消订单', onClick: () => onCancelSale(row.id), afterMenuClose: true, destructive: true, disabled: anyPending }] : []),
         ]}
       />
     )
@@ -85,7 +85,7 @@ export function SaleRowActions({
           ...(canAdjust ? [{ label: '修改订单', onClick: onDetail, disabled: anyPending }] : []),
           printItem,
           ...(can(PERMISSIONS.SALE_ORDER_RELEASE) ? [{ label: '核对占库', onClick: onDetail, separatorBefore: true, disabled: anyPending }] : []),
-          ...(canCancel ? [{ label: '取消订单', onClick: () => onAsk('取消订单', '将释放已占用库存并取消销售单，是否继续？', () => onCancelSale(row.id)), destructive: true, disabled: anyPending }] : []),
+          ...(canCancel ? [{ label: '取消订单', onClick: () => onCancelSale(row.id), afterMenuClose: true, destructive: true, disabled: anyPending }] : []),
         ]}
       />
     )
@@ -105,13 +105,8 @@ export function SaleRowActions({
           printItem,
           ...(canCancel ? [{
             label: '取消订单',
-            onClick: () => onAsk(
-              '取消订单',
-              (row.shippedTotalQty ?? 0) > 0
-                ? '该订单已有部分商品出库：未发货的商品明细将被删除，已出库部分保留，订单直接变为已出库状态，是否继续？'
-                : '将同步取消关联仓库任务并释放锁定资源，是否继续？',
-              () => onCancelSale(row.id),
-            ),
+            onClick: () => onCancelSale(row.id),
+            afterMenuClose: true,
             destructive: true, disabled: anyPending, separatorBefore: true,
           }] : []),
         ]}

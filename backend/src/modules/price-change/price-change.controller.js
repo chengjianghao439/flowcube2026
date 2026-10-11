@@ -41,7 +41,9 @@ const submit = async (req, res, next) => {
 
 const approve = async (req, res, next) => {
   try {
-    const result = await svc.approve(+req.params.id, getOperatorFromRequest(req))
+    const operator = getOperatorFromRequest(req)
+    const result = await svc.approve(+req.params.id, operator)
+    req.documentChangeHandled = operator.changeAuditHandled === true
     return successResponse(res, result, result.finished ? '审批通过，价格已生效' : '审批已通过本步骤')
   } catch (e) { next(e) }
 }

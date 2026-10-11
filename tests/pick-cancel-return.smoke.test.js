@@ -11,9 +11,15 @@
 const assert = require('node:assert/strict')
 
 const EXPECTED_DB = 'flowcube_plastic_box_20260929_test'
-assert.equal(process.env.DB_NAME, EXPECTED_DB, `本批用例只允许在 ${EXPECTED_DB} 运行，实际 ${process.env.DB_NAME}`)
+const ownedChangeRecords = process.env.DB_NAME === 'flowcube_changerecords20261010_test'
+if (ownedChangeRecords) {
+  const config = require('./helpers/testEnvironment').validateTestEnvironment()
+  assert.ok(![3306,3307].includes(config.port), '专属变更回归拒绝共享端口')
+} else {
+  assert.equal(process.env.DB_NAME, EXPECTED_DB, `本批用例只允许在 ${EXPECTED_DB} 运行，实际 ${process.env.DB_NAME}`)
+  assert.equal(Number(process.env.DB_PORT), 3307, '原塑料盒 CI service 使用 3307')
+}
 assert.equal(process.env.DB_HOST, '127.0.0.1', '必须走本机回环')
-assert.equal(Number(process.env.DB_PORT), 3307, '必须走本机 3307')
 
 const {
   prepareSmokeContext, login, dbQuery, randomRef,
@@ -22,6 +28,12 @@ const {
 const { acquireOwnPackageLabelPrinter, releaseOwnPackageLabelPrinter } = require('./helpers/ownedPrintFixture')
 
 async function main() {
+  if (ownedChangeRecords) {
+    const config = require('./helpers/testEnvironment').validateTestEnvironment()
+    const conn = await require('../backend/node_modules/mysql2/promise').createConnection(config)
+    try { await require('./helpers/repairInstanceOwnership').assertOwnedRepairInstance(conn, { config }) }
+    finally { await conn.end() }
+  }
   let ctx
   try {
     ctx = await prepareSmokeContext({ requestTimeoutMs: 30000 })
@@ -380,7 +392,8 @@ async function main() {
 
       // ⑪ 减量后**旧取货码补打**：数量取「当前有效」100（分层记录：入队成功与记录里的量）
       const rep = await http.post('/api/print-jobs/barcodes/reprint', {
-        token, json: { category: 'inbound', recordId: Number(t.newI.id) },
+        token, headers: { 'X-Request-Key': `reprint-v2-${Date.now()}-${key('reprint-current')}` },
+        json: { category: 'inbound', recordId: Number(t.newI.id) },
       })
       assert.ok(rep.ok, `旧码补打应成功（仍锁定于本任务）：${rep.status} ${JSON.stringify(rep.data).slice(0, 220)}`)
       const repJobId = Number(rep.data?.data?.id)
@@ -468,7 +481,8 @@ async function main() {
       assert.ok(rr.ok, `前置：归还失败：${JSON.stringify(rr.data).slice(0, 200)}`)
 
       const rep = await http.post('/api/print-jobs/barcodes/reprint', {
-        token, json: { category: 'inbound', recordId: Number(t.newI.id) },
+        token, headers: { 'X-Request-Key': `reprint-v2-${Date.now()}-${key('reprint-canceled')}` },
+        json: { category: 'inbound', recordId: Number(t.newI.id) },
       })
       assert.ok(!rep.ok, `原任务取消后不得再补打该取货标签，实际 ${rep.status} ${JSON.stringify(rep.data).slice(0, 220)}`)
     })

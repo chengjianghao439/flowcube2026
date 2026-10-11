@@ -54,3 +54,13 @@ test('unit prices keep four business decimals, while amounts remain two', () => 
   for (const value of [null, undefined, NaN, Infinity]) expect(price(value)).toBe('—')
   expect(money(23.1234)).toBe('¥23.12')
 })
+
+test('unit conversion display keeps eight decimals without changing quantity precision', () => {
+  expect(format).toHaveProperty('unitConversionRate')
+  const rate = format.unitConversionRate
+  expect(rate(1.23456789)).toBe('1.23456789')
+  expect(rate(0.00000001)).toBe('0.00000001')
+  expect(rate(12345.5)).toBe('12,345.5')
+  for (const value of [null, undefined, NaN, Infinity, 0, -1]) expect(rate(value)).toBe('—')
+  expect(qty(1.23456789)).toBe('1.23')
+})

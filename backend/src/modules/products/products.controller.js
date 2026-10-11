@@ -1,5 +1,6 @@
 const svc = require('./products.service')
 const { successResponse } = require('../../utils/response')
+const { extractRequestKey } = require('../../utils/requestKey')
 const { getOperatorFromRequest } = require('../../utils/operator')
 const { SAFE_STATION_CLIENT_ID } = require('../print-jobs/print-jobs.middleware')
 
@@ -26,7 +27,7 @@ const qtyPolicies = async (req,res,next) => {
   } catch(e){next(e)}
 }
 const create     = async (req,res,next) => { try { return successResponse(res, await svc.create(req.body), '创建成功', 201) } catch(e){next(e)} }
-const update     = async (req,res,next) => { try { await svc.update(+req.params.id, req.body, getOperatorFromRequest(req)); return successResponse(res,null,'更新成功') } catch(e){next(e)} }
+const update     = async (req,res,next) => { try { const op=getOperatorFromRequest(req);await svc.update(+req.params.id, req.body, op, extractRequestKey(req));req.documentChangeHandled=op.changeAuditHandled===true; return successResponse(res,null,'更新成功') } catch(e){next(e)} }
 const remove     = async (req,res,next) => { try { await svc.softDelete(+req.params.id); return successResponse(res,null,'删除成功') } catch(e){next(e)} }
 const printLabel = async (req,res,next) => {
   try {

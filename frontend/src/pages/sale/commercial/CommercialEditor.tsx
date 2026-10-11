@@ -83,7 +83,8 @@ export default function CommercialEditor({
     [picker, setPicker] = useState<'kit' | 'ordinary' | null>(null),
     [error, setError] = useState(''),
     [reloading, setReloading] = useState(false),
-    [discardOpen, setDiscardOpen] = useState(false)
+    [discardOpen, setDiscardOpen] = useState(false),
+    [changeReason, setChangeReason] = useState('')
   const epoch = useSyncExternalStore(subscribeSaleEntry, saleEntryEpoch)
   const [openingEpoch] = useState(saleEntryEpoch)
   const sourceCurrent = () => !ordinaryOnlySave || openingEpoch === saleEntryEpoch()
@@ -123,6 +124,7 @@ export default function CommercialEditor({
   const snapshot = JSON.stringify({
     owner,
     baseline: order,
+    changeReason,
     customerId: h.customerId,
     warehouseId: h.warehouseId,
     remark: h.remark,
@@ -318,7 +320,8 @@ export default function CommercialEditor({
     }
     try {
       assertKitReadOwner(owner)
-      const body = ordinaryOnlySave && (!order || order.commercialModel !== 'kit-v1') ? buildNewSalePayload(bodyResult.body, preview.data) : bodyResult.body
+      const submitted = { ...bodyResult.body, ...(order ? { changeReason: changeReason.trim() || null } : {}) }
+      const body = ordinaryOnlySave && (!order || order.commercialModel !== 'kit-v1') ? buildNewSalePayload(submitted, preview.data) : submitted
       if (reorder) {
         const answer = await reorder.write.submit(body)
         if (answer && activity.current.generation === generation && reorder.write.canApply(answer) && reorder.source.isActiveCurrent()) onDone(answer.id)
@@ -618,6 +621,7 @@ export default function CommercialEditor({
             </SaleEntryTable>
           </div>}
         </SectionCard>
+        {order && <label className="flex flex-wrap items-center gap-2 text-sm"><span className="text-muted-foreground">变更原因（选填）</span><Input value={changeReason} onChange={e => setChangeReason(e.target.value)} maxLength={500} className="h-9 min-w-48 flex-1" placeholder="本次改单或改价的说明" /></label>}
         <SectionCard compact contentClassName="px-4 py-3"><div role="group" aria-label="金额汇总" className="flex flex-wrap items-start gap-x-6 gap-y-3 text-sm">
           <div className="flex min-h-9 flex-wrap items-center gap-x-6 gap-y-2">
             <p className="flex items-baseline gap-2"><span className="text-muted-foreground">明细</span><span className="tabular-nums">{rows.length} 行</span></p>

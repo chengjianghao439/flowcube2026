@@ -12,6 +12,15 @@ export interface BarcodePrintJobInfo {
   printerName: string | null
   errorMessage: string | null
   dispatchReason: string | null
+  requestPurpose?: 'initial' | 'reprint' | null
+  createdById?: number | null
+  createdByName?: string | null
+  requestedCopies?: number | null
+  acknowledgedAt?: string | null
+  sourcePrintJobId?: number | null
+  refType?: string | null
+  refId?: number | null
+  refCode?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -37,6 +46,7 @@ export interface BarcodePrintRecord {
   createdAt: string
   latestJob: BarcodePrintJobInfo | null
   canReprint: boolean
+  canRecover?: boolean
   /**
    * 行级**业务状态**（入库条码才有：作废/取消/正常这类条码本身的状态）。
    * 与 `latestJob.statusKey`（**最近一次打印任务自身的结果**）是两件事，不要互相替代：

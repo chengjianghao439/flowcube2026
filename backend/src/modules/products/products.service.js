@@ -1,5 +1,7 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
+const { appendChangeAudit, assertChangeRequest, bindChangeRequest, normalizeReason } = require('../document-activity/document-change-audit')
+const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { generateMasterCode } = require('../../utils/codeGenerator')
 const { loadPriceRates, computeTierPrices } = require('../../utils/priceLevels')
 const { getInventoryDisplayProjectionSql } = require('../inventory/inventoryProjection')
@@ -406,7 +408,9 @@ async function create({ name, categoryId, supplierId, unit, spec, color, barcode
   } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
 }
 
-async function update(id, { name, categoryId, supplierId, unit, spec, color, barcode, costPrice, remark, isActive, articleNumber, salePriceA, salePriceB, salePriceC, salePriceD, batchManaged, shelfLifeDays, safetyStock, reorderPoint, units, allowDecimalQty, revision }, operator = null) {
+async function update(id, { name, categoryId, supplierId, unit, spec, color, barcode, costPrice, remark, isActive, articleNumber, salePriceA, salePriceB, salePriceC, salePriceD, batchManaged, shelfLifeDays, safetyStock, reorderPoint, units, allowDecimalQty, revision, changeReason }, operator = null, requestKey = null) {
+  normalizeReason(changeReason)
+  const intent = arguments[1]
   // 事务外的校验与派生（不依赖商品当前行的价格快照，放在事务外以缩短持锁时间）
   const { normalizedBarcode, normalizedCost } = await validateProductPayload({ name, categoryId, barcode, costPrice, currentId: id })
   const normalizedUnits = validateUnits(unit, units)
@@ -433,6 +437,11 @@ async function update(id, { name, categoryId, supplierId, unit, spec, color, bar
          FROM product_items WHERE id=? AND deleted_at IS NULL FOR UPDATE`, [id],
     )
     if (!current) throw new AppError('商品不存在', 404)
+    const action = `product.update.${Number(id)}`
+    const requestFingerprint = await assertChangeRequest(conn, { requestKey, action, userId: operator?.userId, payload: intent })
+    const requestState = await beginOperationRequest(conn, { requestKey, action, userId: operator?.userId })
+    await bindChangeRequest(conn, requestState, requestFingerprint)
+    if (requestState.replay) { if (operator) operator.changeAuditHandled = true; await conn.rollback(); return requestState.responseData }
     // **乐观锁**（2026-09-27，迁移 264）：编辑页必须回传它读取时看到的 `revision`。
     // 此前本函数无差别写 `cost_price` 与 `sale_price_a/b/c/d`，而表单**全量回传**打开时的旧值 ⇒
     // 别处刚生效的价格变更（含改价审批 cost/a/b/c/d）会被一次普通编辑**静默回退**（隔离库实测：
@@ -473,27 +482,30 @@ async function update(id, { name, categoryId, supplierId, unit, spec, color, bar
     // **不再包含 `sale`**：本函数已不修改 `sale_price`（方案三 · 止血管住覆写），
     // 若仍按 `[current.sale_price, spA]` 写历史，在两者不同值时就会记一条“sale 变成 A”的
     // **虚假变更**（实际分文未动）。`sale_price` 的变更由改价审批（change_source='approval'）记录。
+    // Read final DECIMAL values while retaining the product lock; input precision is not a second price fact.
+    const [[finalPrice]] = await conn.query('SELECT cost_price,sale_price_a,sale_price_b,sale_price_c,sale_price_d FROM product_items WHERE id=?', [id])
     const priceFields = [
-      ['a', current.sale_price_a, spA],
-      ['b', current.sale_price_b, spB],
-      ['c', current.sale_price_c, spC],
-      ['d', current.sale_price_d, spD],
-      ['cost', current.cost_price, normalizedCost],
+      ['a', current.sale_price_a, finalPrice.sale_price_a],
+      ['b', current.sale_price_b, finalPrice.sale_price_b],
+      ['c', current.sale_price_c, finalPrice.sale_price_c],
+      ['d', current.sale_price_d, finalPrice.sale_price_d],
+      ['cost', current.cost_price, finalPrice.cost_price],
     ]
-    for (const [type, oldP, newP] of priceFields) {
-      const oldV = oldP != null ? Number(oldP) : null
-      const newV = newP != null ? Number(newP) : null
-      if (oldV !== newV) {
-        await conn.query(
-          `INSERT INTO product_price_history
-             (product_id, product_code, product_name, price_type, old_price, new_price,
-              change_source, operator_id, operator_name)
-           VALUES (?,?,?,?,?,?, 'manual', ?, ?)`,
-          [id, current.code, current.name, type, oldV, newV,
-           operator?.userId || null, operator?.realName || operator?.username || null],
-        )
-      }
+    const changedPrices = priceFields.flatMap(([type,oldP,newP]) => {
+      const oldV = oldP != null ? Number(oldP) : null, newV = newP != null ? Number(newP) : null
+      return oldV === newV ? [] : [[id,current.code,current.name,type,oldV,newV,'manual',operator?.userId || null,operator?.realName || operator?.username || null,normalizeReason(changeReason)?.slice(0,255) || null]]
+    })
+    let priceHistoryIds = []
+    if (changedPrices.length) {
+      const [created] = await conn.query('INSERT INTO product_price_history (product_id,product_code,product_name,price_type,old_price,new_price,change_source,operator_id,operator_name,remark) VALUES ?', [changedPrices])
+      // The product row remains locked: all supported price writers serialize on it. Do not assume an auto-increment step of 1.
+      const [history] = await conn.query("SELECT id,price_type FROM product_price_history WHERE product_id=? AND id>=? AND change_source='manual' ORDER BY id", [id,created.insertId])
+      if (history.length !== changedPrices.length || new Set(history.map(row => row.price_type)).size !== changedPrices.length || history.some(row => !changedPrices.some(change => change[3] === row.price_type))) throw new AppError('本次价格历史关联不完整，修改已回滚',500,'PRODUCT_PRICE_HISTORY_LINK_INVALID')
+      priceHistoryIds = history.map(row => Number(row.id))
     }
+    if (operator) operator.changeAuditHandled = true
+    if (priceHistoryIds.length) await appendChangeAudit(conn, { documentType: 'product', documentId: id, title: '修改商品价格', operator, reason: changeReason, kind: 'price_history_refs', requestState, context: { phase: 'product_price_update', productId: id, requestFingerprint, priceHistoryIds } })
+    await completeOperationRequest(conn, requestState, { data: null, message: '更新成功', resourceType: 'product', resourceId: id })
     await conn.commit()
   } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
 }

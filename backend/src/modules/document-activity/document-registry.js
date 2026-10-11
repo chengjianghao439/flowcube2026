@@ -13,6 +13,8 @@ const definitions = {
   refund: [P.REFUND_ORDER_VIEW, '../refunds/refund-orders.service', 'findById'],
   expense: [P.FINANCE_EXPENSE_VIEW, '../finance/expense-claims.service', 'findById'],
   credit: [P.SALE_CREDIT_OVERRIDE_VIEW, '../credit-overrides/credit-overrides.service', 'findById'],
+  product: [P.PRODUCT_VIEW, '../products/products.service', 'findById'],
+  'price-list': [P.PRICE_LIST_VIEW, '../price-lists/price-lists.service', 'findById'],
   price: [P.PRODUCT_VIEW, '../price-change/price-change.service', 'findById'],
   plan: [P.PROCUREMENT_PLAN_VIEW, '../procurement/procurement.service', 'getPlan'],
   wave: [P.PICKING_WAVE_VIEW, '../picking-waves/picking-waves.service', 'findById'],

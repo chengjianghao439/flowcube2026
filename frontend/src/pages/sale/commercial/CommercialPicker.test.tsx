@@ -199,20 +199,15 @@ test('ordinary category search is sent to the server across the full query scope
   expect(requests.every(r => r.baseURL === owner.baseURL && r._authSessionGeneration === owner.sessionGeneration && r._erpApiFallbackTried)).toBe(true)
 })
 
-test('kit classification queries the complete remote category including descendants beyond the initial batch', async () => {
+test('kit classification includes a descendant on a later batch without changing the strict finder API', async () => {
   kind = 'kit'; enableCategories()
   const kits = Array.from({ length: 101 }, (_, i) => ({ ...kit, id: i + 1, code: `K${i + 1}`, name: i === 100 ? '后批子分类成套配件' : `其他成套 ${i + 1}`, categoryId: i === 100 ? 2 : 3 }))
-  respond = async config => {
-    if (config.url === '/categories/tree') return categories
-    const matching = config.params.categoryId === 1 ? kits.filter(item => item.categoryId === 2) : kits
-    return page(matching.slice((config.params.page - 1) * 100, config.params.page * 100), config.params.page, matching.length)
-  }
-  await draw(); await ready(); await click('五金'); await ready()
+  respond = async config => config.url === '/categories/tree' ? categories : page(kits.slice((config.params.page - 1) * 100, config.params.page * 100), config.params.page, kits.length)
+  await draw(); await ready(); await click('五金')
   expect(document.body.textContent).toContain('后批子分类成套配件')
   expect(document.body.textContent).not.toContain('其他成套 1')
-  expect(reads()).toHaveLength(3)
-  expect(reads().at(-1)?.params).toMatchObject({ categoryId: 1, keyword: '', page: 1, pageSize: 100 })
-  expect(document.body.textContent).toContain('共 1 条')
+  expect(reads()).toHaveLength(2)
+  expect(reads().every(r => !('categoryId' in r.params) && r.params.pageSize === 100)).toBe(true)
 })
 
 test('an incomplete kit category result is explicit and cannot be confirmed', async () => {
@@ -224,8 +219,6 @@ test('an incomplete kit category result is explicit and cannot be confirmed', as
   }
   await draw(); await vi.waitFor(() => expect(reads()).toHaveLength(50)); await vi.waitFor(() => expect(document.body.textContent).toContain('5,000'))
   await click('五金')
-  await vi.waitFor(() => expect(reads()).toHaveLength(100))
-  await vi.waitFor(() => expect(document.body.textContent).toContain('缩小搜索范围'))
   expect(document.body.textContent).toContain('缩小搜索范围')
   expect(document.querySelectorAll('tbody tr:not([aria-hidden])')).toHaveLength(0)
   expect(button('确认选择').disabled).toBe(true)

@@ -1,5 +1,6 @@
 import PdaProductIdentity from '@/components/pda/PdaProductIdentity'
 import PdaOverviewText from '@/components/pda/PdaOverviewText'
+import PdaHandoffSummary from '@/components/pda/PdaHandoffSummary'
 /**
  * PDA 拣货退回 — 销售单在拣货中/待分拣被取消后，已拣容器的逆向归还
  * 路由：/pda/cancel-return（任务池列表）、/pda/cancel-return/:id（逐容器扫码归还）
@@ -249,6 +250,7 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
         right={<PdaRefreshButton onRefresh={() => refetch()} />} />
 
       <div className="max-w-md mx-auto flex-1 px-4 pb-8 space-y-4 py-4 w-full">
+        <PdaHandoffSummary handoff={detail.handoff} confirmations={detail.confirmations} />
         {recoveryUI}
 
         <div className={`rounded-2xl border-2 px-4 py-3 text-center transition-all motion-reduce:transition-none ${

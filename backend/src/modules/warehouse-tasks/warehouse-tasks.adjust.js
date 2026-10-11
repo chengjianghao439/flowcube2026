@@ -8,6 +8,7 @@ const { WT_STATUS, assertWarehouseTaskAction } = require('../../constants/wareho
 const { WT_EVENT, record: recordEvent } = require('./warehouse-task-events.service')
 const { logSideEffectFailure, assertTaskScope } = require('./warehouse-tasks.helpers')
 const { scopeFilter } = require('../../utils/warehouseScope')
+const { actor, readAdjustmentHandoff } = require('./warehouse-tasks.handoff')
 
 const QTY_EPS = 1e-6
 
@@ -299,14 +300,17 @@ async function listPendingAdjustments(warehouseId, scopeWarehouseIds = null) {
 /** 改单确认详情：待拆箱箱子 + 待归还容器，供 PDA 逐项扫码确认 */
 async function getAdjustmentDetail(adjustmentId, scopeWarehouseIds = null) {
   const [[adj]] = await pool.query(
-    `SELECT soa.*, wt.task_no, wt.warehouse_name, wt.customer_name, wt.warehouse_id
+    `SELECT soa.*, wt.task_no, wt.warehouse_name, wt.customer_name, wt.warehouse_id,
+            wt.sale_order_id AS task_sale_order_id
        FROM sale_order_adjustments soa
        INNER JOIN warehouse_tasks wt ON wt.id = soa.warehouse_task_id
-      WHERE soa.id = ?`,
+      WHERE soa.id = ? AND wt.deleted_at IS NULL`,
     [adjustmentId],
   )
   if (!adj) throw new AppError('改单记录不存在', 404)
   assertTaskScope(adj, { scopeWarehouseIds })
+  if (Number(adj.sale_order_id) !== Number(adj.task_sale_order_id)) throw new AppError('改单与仓库任务来源不一致', 409, 'WAREHOUSE_TASK_HISTORY_INVALID')
+  const handoff = await readAdjustmentHandoff(pool, adj, scopeWarehouseIds)
 
   const [items] = await pool.query(
     'SELECT * FROM sale_order_adjustment_items WHERE adjustment_id=?',
@@ -341,6 +345,7 @@ async function getAdjustmentDetail(adjustmentId, scopeWarehouseIds = null) {
     taskNo: adj.task_no,
     warehouseName: adj.warehouse_name,
     customerName: adj.customer_name,
+    handoff,
     items: items.map(i => ({
       id: Number(i.id),
       productId: Number(i.product_id),
@@ -359,6 +364,8 @@ async function getAdjustmentDetail(adjustmentId, scopeWarehouseIds = null) {
           ? (typeof v.other_products_snapshot === 'string' ? JSON.parse(v.other_products_snapshot) : v.other_products_snapshot)
           : [],
         status: Number(v.status),
+        confirmedBy: actor(v.confirmed_by, v.confirmed_by_name),
+        confirmedAt: v.confirmed_at || null,
       })),
       containerReturns: returns.filter(r => Number(r.adjustment_item_id) === Number(i.id)).map(r => ({
         id: Number(r.id),
@@ -367,6 +374,8 @@ async function getAdjustmentDetail(adjustmentId, scopeWarehouseIds = null) {
         qty: Number(r.qty),
         suggestedLocationCode: r.suggested_location_code || null,
         status: Number(r.status),
+        confirmedBy: actor(r.confirmed_by, r.confirmed_by_name),
+        confirmedAt: r.confirmed_at || null,
         containerRemainingQty: r.container_remaining_qty != null ? Number(r.container_remaining_qty) : null,
       })),
     })),

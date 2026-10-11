@@ -44,6 +44,7 @@ export interface CreateProductParams {
   salePriceA?: number | null; salePriceB?: number | null; salePriceC?: number | null; salePriceD?: number | null
 }
 export interface UpdateProductParams {
+  changeReason?: string | null
   name: string; categoryId?: number | null; supplierId: number
   unit: string; spec: string; color: string
   costPrice?: number | null; remark?: string; isActive: boolean

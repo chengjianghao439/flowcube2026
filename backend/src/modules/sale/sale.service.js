@@ -40,6 +40,7 @@ const {
 } = require('./sale.contracts')
 
 const { editFingerprint, assertEditBaseline } = require('./sale.edit-baseline')
+const { appendChangeAudit, captureSaleSnapshot, assertChangeRequest, bindChangeRequest, normalizeReason } = require('../document-activity/document-change-audit')
 
 const operationAction = (action,id,order) => order.commercial_model === 'kit-v1' ? `sale.${action}.${Number(id)}` : saleOperationAction(action,id)
 
@@ -231,7 +232,7 @@ async function hydrateSaleInput(conn, { customerId, warehouseId, carrierId = nul
 }
 
 async function appendSaleEvent(conn, saleOrderId, eventType, title, description, operator = null, payload = null) {
-  await conn.query(
+  const [result] = await conn.query(
     `INSERT INTO sale_order_events (sale_order_id,event_type,title,description,payload_json,created_by,created_by_name)
      VALUES (?,?,?,?,?,?,?)`,
     [
@@ -244,6 +245,12 @@ async function appendSaleEvent(conn, saleOrderId, eventType, title, description,
       operator?.realName || null,
     ],
   )
+  return Number(result.insertId)
+}
+
+async function recordSaleChange(conn, { orderRow, before, operator, changeReason, requestState, requestFingerprint, commercial, saleEventId, phase, ...context }) {
+  const after = await captureSaleSnapshot(conn, orderRow.id, { ...orderRow, commercial_model: commercial ? 'kit-v1' : orderRow.commercial_model })
+  return appendChangeAudit(conn, { documentType: 'sale', documentId: orderRow.id, title: phase === 'draft_edit' ? '编辑订单' : phase === 'cancellation_requested' ? '取消 / 关闭未发' : '修改明细', operator, reason: changeReason, before, after, requestState, context: { phase, requestFingerprint, saleEventId, warehouseId: orderRow.warehouse_id, warehouseTaskId: orderRow.task_id || null, ...context } })
 }
 
 async function buildPricingEvents(conn, saleOrderId, items, operator) {
@@ -862,7 +869,8 @@ async function create({ customerId, warehouseId, remark,
 
 // 编辑草稿：仅在 status=1（草稿）时允许，整体替换明细行
 async function update(id, { customerId, warehouseId, remark,
-  carrierId, carrier, freightType, shippingProduct, receiverName, receiverPhone, receiverAddress, items, operator, scopeWarehouseIds = null, discountAmount, requestKey = null, commercialModel, commercialGroups, expectedRevision, expectedEditFingerprint }) {
+  carrierId, carrier, freightType, shippingProduct, receiverName, receiverPhone, receiverAddress, items, operator, scopeWarehouseIds = null, discountAmount, requestKey = null, commercialModel, commercialGroups, expectedRevision, expectedEditFingerprint, changeReason }) {
+  normalizeReason(changeReason)
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
@@ -876,16 +884,18 @@ async function update(id, { customerId, warehouseId, remark,
       for(const r of authRows)assertInScope(scopeWarehouseIds,r.warehouse_id ?? orderRow.warehouse_id,'销售单')
     }
     for (const g of commercialGroups || []) assertInScope(scopeWarehouseIds,g.warehouseId || warehouseId,'销售单')
-    const requestState = await beginCreationOperationRequest(conn, {
-      requestKey, action: operationAction('update', id, { ...orderRow, commercial_model: commercialModel || orderRow.commercial_model }), userId: operator?.userId ?? null,
-      payload: { customerId, warehouseId, remark, carrierId, carrier, freightType, shippingProduct, receiverName, receiverPhone, receiverAddress, items, discountAmount, commercialModel, commercialGroups, ...(expectedEditFingerprint ? { expectedEditFingerprint } : {}) },
-    })
-    if (requestState.replay) { await conn.rollback(); return requestState.responseData }
+    const action = operationAction('update', id, { ...orderRow, commercial_model: commercialModel || orderRow.commercial_model })
+    const payload = { customerId, warehouseId, remark, carrierId, carrier, freightType, shippingProduct, receiverName, receiverPhone, receiverAddress, items, discountAmount, commercialModel, commercialGroups, ...(expectedEditFingerprint ? { expectedEditFingerprint } : {}), ...(changeReason !== undefined ? { changeReason } : {}) }
+    const requestFingerprint = await assertChangeRequest(conn, { requestKey, action, userId: operator?.userId, payload })
+    const requestState = await beginCreationOperationRequest(conn, { requestKey, action, userId: operator?.userId ?? null, payload })
+    await bindChangeRequest(conn, requestState, requestFingerprint)
+    if (requestState.replay) { if (operator) operator.changeAuditHandled = true; await conn.rollback(); return requestState.responseData }
     await assertEditBaseline(conn,orderRow,{commercialModel,expectedRevision,expectedEditFingerprint})
     handlingGuards.assertEditable(handlingLink)
     commercialStore.assertRevision(orderRow,{expectedRevision})
     const previousDimensions = await captureDimensions(conn, 'sale', id)
     assertStatusAction('sale', 'edit', orderRow.status)
+    const before = await captureSaleSnapshot(conn, id, orderRow)
     const commercial = commercialModel === 'kit-v1' ? await commercialResolver.resolve(conn,{customerId,warehouseId,commercialGroups,scopeWarehouseIds},await commercialStore.loadGroups(conn,id,{lock:true})) : null
     if (commercial) items=commercial.items
     if (!items || !items.length) throw new AppError('至少需要一条商品明细', 400)
@@ -911,7 +921,8 @@ async function update(id, { customerId, warehouseId, remark,
       await insertSaleItems(conn, id, warehouseId, warehouseName, folded)
     }
     await restoreItemCommitments(conn, id, deliverySnapshot)
-    await appendSaleEvent(conn, id, 'updated', '编辑订单', `现有 ${items.length} 条明细`, operator)
+    const saleEventId = await appendSaleEvent(conn, id, 'updated', '编辑订单', `现有 ${items.length} 条明细`, operator)
+    await recordSaleChange(conn, { orderRow, before, operator, changeReason, requestState, requestFingerprint, commercial, saleEventId, phase: 'draft_edit' })
     if (!commercial) await buildPricingEvents(conn, id, folded, operator)
     await completeOperationRequest(conn, requestState, { data: null, message: '保存成功', resourceType: 'sale_order', resourceId: id })
     await commitFulfillment(conn, 'sale', id, previousDimensions)
@@ -926,7 +937,8 @@ async function update(id, { customerId, warehouseId, remark,
 // 因为这是唯一用户可见的"行"，WMS 侧只认按商品聚合后的净数量，详见方案说明。
 async function requestAdjustment(id, input) {
   let { items }=input
-  const {operator,requestKey,scopeWarehouseIds=null,commercialModel,commercialGroups,expectedRevision,expectedEditFingerprint}=input
+  const {operator,requestKey,scopeWarehouseIds=null,commercialModel,commercialGroups,expectedRevision,expectedEditFingerprint,changeReason}=input
+  normalizeReason(changeReason)
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
@@ -941,12 +953,13 @@ async function requestAdjustment(id, input) {
     commercialStore.assertRequestKey(commercialModel || orderRow.commercial_model,requestKey)
     const [authRows] = await conn.query('SELECT warehouse_id FROM sale_order_items WHERE order_id=?',[id])
     for(const r of authRows)assertInScope(scopeWarehouseIds,r.warehouse_id ?? orderRow.warehouse_id,'销售单')
-    const requestState = await beginOperationRequest(conn, {
-      requestKey,
-      action: operationAction('adjust', id, { ...orderRow, commercial_model: commercialModel || orderRow.commercial_model }),
-      userId: operator?.userId ?? null,
-    })
+    const action = operationAction('adjust', id, { ...orderRow, commercial_model: commercialModel || orderRow.commercial_model })
+    const { operator: _operator, requestKey: _requestKey, scopeWarehouseIds: _scope, ...intent } = input
+    const requestFingerprint = await assertChangeRequest(conn, { requestKey, action, userId: operator?.userId, payload: intent })
+    const requestState = await beginOperationRequest(conn, { requestKey, action, userId: operator?.userId ?? null })
+    await bindChangeRequest(conn, requestState, requestFingerprint)
     if (requestState.replay) {
+      if (operator) operator.changeAuditHandled = true
       await conn.rollback()
       return requestState.responseData
     }
@@ -961,6 +974,7 @@ async function requestAdjustment(id, input) {
         throw new AppError('改单仅能调整成交明细，客户、仓库和收货等订单信息须保持原值',400,'SALE_ADJUSTMENT_HEADER_READ_ONLY')
       }
     }
+    const before = await captureSaleSnapshot(conn, id, orderRow)
     const commercial = commercialModel === 'kit-v1' ? await commercialResolver.resolve(conn,{customerId:orderRow.customer_id,warehouseId:orderRow.warehouse_id,commercialGroups,scopeWarehouseIds},await commercialStore.loadGroups(conn,id,{lock:true})) : null
     if (commercial) items=commercial.items
     const previousDimensions = await captureDimensions(conn, 'sale', id)
@@ -995,7 +1009,7 @@ async function requestAdjustment(id, input) {
     if (!orderRow.task_id) {
       // 占库期改单：状态 2（已占库）/6（部分占库）尚未发货、无仓库任务，改单不再依赖 WMS 任务联动。
       // 保留已占量：改数量时已占量夹到新数量内；删商品释放其已占；加商品占 0。重建明细后重算状态 2/6。
-      return await adjustReservedWithinTransaction(conn, { orderRow, items, operator, requestState, previousDimensions, commercial })
+      return await adjustReservedWithinTransaction(conn, { orderRow, items, operator, requestState, previousDimensions, commercial, before, changeReason, requestFingerprint })
     }
 
     const [executionTasks] = await conn.query(
@@ -1133,7 +1147,8 @@ async function requestAdjustment(id, input) {
        ) WHERE soi.order_id=?`, [id],
     )
     if (!descriptors.length) {
-      await appendSaleEvent(conn, id, 'adjusted', '修改明细', '本次修改未涉及数量变化', operator)
+      const saleEventId = await appendSaleEvent(conn, id, 'adjusted', '修改明细', '本次修改未涉及数量变化', operator)
+      await recordSaleChange(conn, { orderRow, before, operator, changeReason, requestState, requestFingerprint, commercial, saleEventId, phase: 'execution_adjustment', pending: false, adjustmentId: null, adjustmentNo: null })
       const result = { adjustmentId: null, adjustmentNo: null, pending: false }
       await completeOperationRequest(conn, requestState, {
         data: result, message: '修改成功', resourceType: 'sale_order', resourceId: id,
@@ -1198,7 +1213,7 @@ async function requestAdjustment(id, input) {
       }
     }
 
-    await appendSaleEvent(
+    const saleEventId = await appendSaleEvent(
       conn, id, 'adjusted', '修改明细',
       needsPending
         ? `已提交改单 ${adjustmentNo}，等待仓库确认后生效`
@@ -1207,6 +1222,7 @@ async function requestAdjustment(id, input) {
       { adjustmentId, adjustmentNo, productCount: descriptors.length, pending: needsPending },
     )
 
+    await recordSaleChange(conn, { orderRow, before, operator, changeReason, requestState, requestFingerprint, commercial, saleEventId, phase: 'execution_adjustment', adjustmentId, adjustmentNo, pending: needsPending })
     const result = { adjustmentId, adjustmentNo, pending: needsPending }
     await completeOperationRequest(conn, requestState, {
       data: result,
@@ -1228,7 +1244,7 @@ async function requestAdjustment(id, input) {
 //   - 加商品：占 0（改完单后仍需用户去占库弹窗补占）。
 // 明细行整体删除重建（同 update() 模式），重建时按 (product, warehouse) 聚合后的数量与
 // 已占量对齐；改完重新统计所有行 reserved_qty 是否全满 → 已占库(2)/部分占库(6)。
-async function adjustReservedWithinTransaction(conn, { orderRow, items, operator, requestState, previousDimensions, commercial = null }) {
+async function adjustReservedWithinTransaction(conn, { orderRow, items, operator, requestState, previousDimensions, commercial = null, before, changeReason, requestFingerprint }) {
   const id = Number(orderRow.id)
   const folded = commercial ? commercial.items : await foldEntryItems(conn, items)
   if (!folded.length) throw new AppError('至少需要一条商品明细', 400)
@@ -1306,9 +1322,10 @@ async function adjustReservedWithinTransaction(conn, { orderRow, items, operator
     fromStatus: Number(orderRow.status), toStatus, entityName: '销售单',
   })
 
-  await appendSaleEvent(conn, id, 'adjusted', '占库期改单',
+  const saleEventId = await appendSaleEvent(conn, id, 'adjusted', '占库期改单',
     `改单完成，已占量按新明细对齐，当前${toStatus === SALE_STATUS.RESERVED ? '已全部占满' : '仍有未占部分'}`, operator)
   if (!commercial) await buildPricingEvents(conn, id, folded, operator)
+  await recordSaleChange(conn, { orderRow, before, operator, changeReason, requestState, requestFingerprint, commercial, saleEventId, phase: 'reserved_adjustment', pending: false, adjustmentId: null, adjustmentNo: null })
 
   const result = { adjustmentId: null, adjustmentNo: null, pending: false }
   await completeOperationRequest(conn, requestState, {
@@ -1903,6 +1920,7 @@ async function closeCommercialRemainder(conn, order) {
 
 // 取消订单：仅 DRAFT(1) → CANCELLED(5)
 async function cancel(id, operator, scopeWarehouseIds = null, requestKey = null, commercialInput = {}) {
+  normalizeReason(commercialInput.changeReason)
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
@@ -1913,18 +1931,21 @@ async function cancel(id, operator, scopeWarehouseIds = null, requestKey = null,
     commercialStore.assertRequestKey(orderRow.commercial_model,requestKey)
     const [authRows] = await conn.query('SELECT warehouse_id FROM sale_order_items WHERE order_id=?',[id])
     for (const r of authRows) assertInScope(scopeWarehouseIds,r.warehouse_id ?? orderRow.warehouse_id,'销售单')
-    const requestState = await beginOperationRequest(conn, {
-      requestKey,
-      action: operationAction('cancel', id, orderRow),
-      userId: operator?.userId ?? null,
-    })
+    const action = operationAction('cancel', id, orderRow)
+    const requestFingerprint = await assertChangeRequest(conn, { requestKey, action, userId: operator?.userId, payload: commercialInput })
+    const requestState = await beginOperationRequest(conn, { requestKey, action, userId: operator?.userId ?? null })
+    await bindChangeRequest(conn, requestState, requestFingerprint)
     if (requestState.replay) {
+      if (operator) operator.changeAuditHandled = true
       await conn.rollback()
       return requestState.responseData ?? null
     }
     const previousDimensions = await captureDimensions(conn, 'sale', id)
     commercialStore.assertRevision(orderRow,commercialInput)
     const rule = assertStatusAction('sale', 'cancel', orderRow.status)
+    const before = await captureSaleSnapshot(conn, id, orderRow)
+    let warehouseTaskIds = []
+    const recordCancellation = saleEventId => recordSaleChange(conn, { orderRow, before, operator, changeReason: commercialInput.changeReason, requestState, requestFingerprint, commercial: orderRow.commercial_model === 'kit-v1', saleEventId, phase: 'cancellation_requested', warehouseTaskIds })
 
     if (Number(orderRow.status) === 2 || Number(orderRow.status) === 6) {
       const [scopeRows] = await conn.query('SELECT warehouse_id FROM sale_order_items WHERE order_id = ? FOR UPDATE', [id])
@@ -1942,6 +1963,7 @@ async function cancel(id, operator, scopeWarehouseIds = null, requestKey = null,
         [id],
       )
       for (const task of tasks) assertInScope(scopeWarehouseIds, task.warehouse_id, '销售单')
+      warehouseTaskIds = tasks.filter(t => ![7, 8].includes(Number(t.status))).map(t => Number(t.id))
       const activeTasks = tasks.filter(t => ![7, 8].includes(Number(t.status)))
       const shippedTasks = tasks.filter(t => Number(t.status) === 7)
       if (!tasks.length) {
@@ -1963,7 +1985,8 @@ async function cancel(id, operator, scopeWarehouseIds = null, requestKey = null,
         await closeCommercialRemainder(conn,orderRow)
         await recomputeSaleReceivable(conn,id)
         await compareAndSetStatus(conn,{table:'sale_orders',id,fromStatus:[3],toStatus:4,entityName:'销售单'})
-        await appendSaleEvent(conn,id,'partial_ship_closed','关闭剩余未发','按真实商业实发结案，原快照保留',operator)
+        const saleEventId = await appendSaleEvent(conn,id,'partial_ship_closed','关闭剩余未发','按真实商业实发结案，原快照保留',operator)
+        await recordCancellation(saleEventId)
         await completeOperationRequest(conn,requestState,{data:null,message:'已关闭剩余未发',resourceType:'sale_order',resourceId:id})
         await commitFulfillment(conn,'sale',id,previousDimensions)
         return
@@ -2014,12 +2037,13 @@ async function cancel(id, operator, scopeWarehouseIds = null, requestKey = null,
           table: 'sale_orders', id,
           fromStatus: [3], toStatus: 4, entityName: '销售单',
         })
-        await appendSaleEvent(
+        const saleEventId = await appendSaleEvent(
           conn, id, 'partial_ship_closed', '关闭剩余未发',
           `销售单 ${orderRow.order_no} 已发部分保留，未发商品已从明细中移除，按实发结案`,
           operator,
           { removed, trimmed },
         )
+        await recordCancellation(saleEventId)
         await completeOperationRequest(conn, requestState, {
           data: null, message: '已关闭剩余未发', resourceType: 'sale_order', resourceId: id,
         })
@@ -2044,7 +2068,8 @@ async function cancel(id, operator, scopeWarehouseIds = null, requestKey = null,
       toStatus: rule.to,
       entityName: '销售单',
     })
-    await appendSaleEvent(conn, id, 'cancelled', '取消订单', `销售单已取消`, operator)
+    const saleEventId = await appendSaleEvent(conn, id, 'cancelled', '取消订单', `销售单已取消`, operator)
+    await recordCancellation(saleEventId)
     await completeOperationRequest(conn, requestState, {
       data: null, message: '已取消', resourceType: 'sale_order', resourceId: id,
     })

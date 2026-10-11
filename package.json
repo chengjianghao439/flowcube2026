@@ -23,9 +23,11 @@
     "test:party-profile": "node --test tests/party-profile.test.js tests/sale-order-capacity.test.js",
     "test:export-filters": "node --test tests/export-list-filters-passthrough.test.js",
     "test:label": "node tests/label-geometry.test.js && node tests/label-zpl.test.js && node tests/label-geometry-frontend.test.js && node --test tests/label-raster.test.js",
-    "test:print": "node tests/print-policy.test.js && node tests/print-status.test.js",
+    "test:print": "node tests/print-policy.test.js && node tests/print-status.test.js && node --test tests/retention-reprint-contract.test.js",
     "test:print-barcode-void": "node --test tests/print-barcode-void-guard.test.js",
     "test:print-purge": "node tests/print-jobs-purge.test.js",
+    "smoke:retention-reprint-owned": "bash scripts/repair-smoke-ephemeral.sh --retention-reprint",
+    "smoke:retention-reprint-runtime": "node tests/retention-reprint.smoke.test.js",
     "smoke:print-queue": "node tests/print-queue.smoke.test.js",
     "smoke:print-barcode-void": "node tests/print-barcode-void.smoke.test.js",
     "smoke:report-cost-basis": "node --test tests/report-cost-basis.smoke.test.js",
@@ -196,6 +198,13 @@
     "smoke:go-live-runtime": "node --test --test-concurrency=1 tests/db-session-timezone.smoke.test.js tests/go-live-runtime.smoke.test.js",
     "smoke:go-live-owned": "bash scripts/repair-smoke-ephemeral.sh --go-live",
     "smoke:operation-alerts": "node --test tests/operation-alerts.smoke.test.js",
-    "test:expense-pay-backfill-integration": "node --test tests/expense-pay-backfill-integration.test.js tests/expense-pay-smoke-cleanup.test.js tests/db-session-timezone.test.js"
+    "test:expense-pay-backfill-integration": "node --test tests/expense-pay-backfill-integration.test.js tests/expense-pay-smoke-cleanup.test.js tests/db-session-timezone.test.js",
+    "test:inbound-edit": "node --test tests/inbound-task-edit.test.js tests/inbound-task-edit-contract.test.js tests/inbound-task-edit-receipt.test.js tests/inbound-task-edit-sources.test.js tests/inbound-task-edit-create.test.js tests/inbound-edit-runner.test.js tests/inbound-create-idempotency.test.js",
+    "smoke:inbound-edit-runtime": "node --test --test-concurrency=1 tests/inbound-edit-runtime.smoke.test.js",
+    "smoke:inbound-edit-owned": "bash scripts/repair-smoke-ephemeral.sh --inbound-edit",
+    "test:change-records": "node --test tests/change-records-runner.test.js tests/change-records-regressions.test.js tests/change-audit.test.js tests/change-handoff.test.js tests/print-request-metadata.test.js",
+    "smoke:change-records-runtime": "node tests/change-records.smoke.test.js",
+    "smoke:change-records-regressions": "node tests/helpers/changeRecordsRegressions.js",
+    "smoke:change-records-owned": "bash scripts/repair-smoke-ephemeral.sh --change-records"
   }
 }

@@ -5,9 +5,9 @@ import { VirtualTableBody, VIRTUAL_TABLE_THRESHOLD } from '@/components/shared/V
 import { cn } from '@/lib/utils'
 
 /** Opt-in presentation for the sale customer picker; selection remains in CustomerFinder. */
-export function FinderDataTable<T extends Record<string, unknown>>({ columns, data, selected, onSelect, onConfirm, getRowKey, isLoading }: {
+export function FinderDataTable<T extends Record<string, unknown>>({ columns, data, selected, onSelect, onConfirm, getRowKey, isLoading, emptyText = '没有匹配的客户' }: {
   columns: FinderColumn<T>[]; data: T[]; selected: T | null; onSelect: (row: T) => void
-  onConfirm: (row: T) => void; getRowKey: (row: T) => number; isLoading: boolean
+  onConfirm: (row: T) => void; getRowKey: (row: T) => number; isLoading: boolean; emptyText?: string
 }) {
   const scrollToIndex = useRef<((index: number) => void) | null>(null)
   const registerScroll = useCallback((scroll: ((index: number) => void) | null) => { scrollToIndex.current = scroll }, [])
@@ -27,6 +27,6 @@ export function FinderDataTable<T extends Record<string, unknown>>({ columns, da
     <colgroup>{columns.map(col => <col key={col.key} style={{ width: col.width }} />)}</colgroup>
     <thead className="sticky top-0 z-10 data-table-header"><tr role="row">{columns.map(col => <th role="columnheader" key={col.key} className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">{col.title}</th>)}</tr></thead>
     {data.length >= VIRTUAL_TABLE_THRESHOLD ? <VirtualTableBody data={data} columns={columns.length} getRowKey={getRowKey} renderRow={renderRow} onScrollToIndexReady={registerScroll} /> : <tbody>{data.map(renderRow)}</tbody>}
-    {!data.length && <tbody><tr><td colSpan={columns.length} className="px-4 py-12 text-center text-sm text-muted-foreground">{isLoading ? '正在查询…' : '没有匹配的客户'}</td></tr></tbody>}
+    {!data.length && <tbody><tr><td colSpan={columns.length} className="px-4 py-12 text-center text-sm text-muted-foreground">{isLoading ? '正在查询…' : emptyText}</td></tr></tbody>}
   </table>
 }

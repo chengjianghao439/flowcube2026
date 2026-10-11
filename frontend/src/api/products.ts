@@ -1,4 +1,5 @@
 import { payloadClient as apiClient } from './client'
+import { createRequestKey, withRequestKeyHeaders } from '@/lib/requestKey'
 import { desktopLocalPrintRequestHeaders } from '@/lib/desktopLocalPrint'
 import type { PaginatedData, QueryParams } from '@/types'
 import type { Product, CreateProductParams, UpdateProductParams, ProductFinderResult, ProductFinderParams, ProductQtyPolicy } from '@/types/products'
@@ -13,7 +14,7 @@ export const getProductQtyPoliciesApi = async (ids: number[], config?: Parameter
 export const getProductApi        = async (id: number, config?: Parameters<typeof apiClient.get>[1]) => apiClient.get<Product>(`/products/${id}`, config)
 export const getProductsApi       = async (p: QueryParams, signal?: AbortSignal) => apiClient.get<PaginatedData<Product>>('/products', { params: p, signal })
 export const createProductApi     = async (d: CreateProductParams) => apiClient.post<{id:number}>('/products', d)
-export const updateProductApi     = async (id:number, d: UpdateProductParams) => { await apiClient.put(`/products/${id}`, d) }
+export const updateProductApi     = async (id:number, d: UpdateProductParams, requestKey=createRequestKey('product.update')) => { await apiClient.put(`/products/${id}`, d, { headers:withRequestKeyHeaders(requestKey) }) }
 export const deleteProductApi     = async (id:number, config?: Parameters<typeof apiClient.delete>[1]) => { await apiClient.delete(`/products/${id}`, config) }
 export const printProductLabelApi = async (id: number) =>
   apiClient.post<{

@@ -120,6 +120,7 @@ async function fetchOne(row) {
         const { enqueueWaybillLabelJob } = require('../print-jobs/print-jobs.label-command')
         await enqueueWaybillLabelJob({
           waybillId: row.id,
+          requestPurpose: 'initial',
           warehouseId: row.warehouse_id,
           content: res.printData.content,
           title: `面单 ${res.trackingNo}`,

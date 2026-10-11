@@ -1,3 +1,4 @@
+const { readContainerReprintSources, assertContainerReprintSource, identity } = require('../print-jobs/print-jobs.reprint-source')
 const { commitFulfillment } = require('../fulfillment/fulfillment.refresh')
 const { pool } = require('../../config/db')
 const { assertQtyPrecisionWith, assertQtyPrecision } = require('../../utils/qtyPrecision')  // 商品级数量精度开关（迁移 254）
@@ -15,7 +16,6 @@ const { env } = require('../../config/env')
 const { assertInScope } = require('../../utils/warehouseScope')
 const {
   distributePackagesToLines,
-  ensureInboundTaskExists,
   assertTaskCanSubmit,
   assertTaskCanReceive,
   assertTaskCanCancel,
@@ -25,176 +25,123 @@ const { findById, loadPurchasableCandidates } = require('./inbound-tasks.query')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { beginResourceOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
+const { beginReprintIntent, completeReprintIntent } = require('../print-jobs/print-jobs.reprint-intent')
+const { beginInboundCreate, replayInboundCreate } = require('./inbound-tasks.create-receipt')
+const { normalizeEditItems, normalizeFreight } = require('./inbound-tasks.edit-rules')
 
 
-async function createFromPoId(purchaseOrderId, scopeWarehouseIds = null) {
-  const purchaseSvc = require('../purchase/purchase.service')
-  const order = await purchaseSvc.findById(purchaseOrderId)
-  assertStatusAction('purchase', 'createInboundTask', order.status)
-  if (!order.items.length) throw new AppError('采购单无明细', 400)
-  // 跨仓校验：限仓用户只能给本仓采购单建收货任务
-  assertInScope(scopeWarehouseIds, order.warehouseId, '采购单')
-
-  // 混单收货单的 inbound_tasks.purchase_order_id 头字段为空，必须按明细行关联查找，
-  // 否则混单场景下查重会漏检，导致同一采购单被重复建单、超收。
-  const [[dup]] = await pool.query(
-    `SELECT it.id FROM inbound_tasks it
-     JOIN inbound_task_items iti ON iti.task_id = it.id
-     WHERE iti.purchase_order_id = ? AND it.deleted_at IS NULL AND it.status NOT IN (4, 5) LIMIT 1`,
-    [purchaseOrderId],
+async function insertTaskItems(conn, taskId, items) {
+  if (!items.length) return
+  await conn.query(
+    `INSERT INTO inbound_task_items (task_id,purchase_order_id,purchase_order_no,purchase_item_id,product_id,product_code,product_name,article_number,spec,color,unit,ordered_qty) VALUES ?`,
+    [items.map(item => [taskId, item.purchaseOrderId, item.purchaseOrderNo, item.purchaseItemId, item.productId, item.productCode, item.productName, item.articleNumber || null, item.spec || null, item.color || null, item.unit, item.qty])],
   )
-  if (dup) throw new AppError('该采购单已有未完结的入库任务', 400)
-
-  const conn = await pool.getConnection()
-  try {
-    await conn.beginTransaction()
-
-    // 用剩余未建单量而非采购单原始下单量：若该采购单此前已通过「混单建单」建过部分
-    // 数量的收货单（并已收讫结案），这里如果直接用 order.items[].quantity（原始下单量）
-    // 建单，会把已经收过的部分重新算一遍，造成后续收货超收、应付重复计算。
-    // 同时用 forUpdate 锁住这批采购明细行，和 createManualTask 的建单校验互斥。
-    const candidates = await loadPurchasableCandidates(conn, {
-      supplierId: order.supplierId,
-      purchaseItemIds: order.items.map(item => item.id),
-      forUpdate: true,
-    })
-    const remainingItems = candidates.filter(c => c.remainingQty > 0)
-    if (!remainingItems.length) {
-      throw new AppError('该采购单明细均已建单收讫，无需重复建单', 400)
-    }
-
-    const taskNo = await genTaskNo(conn)
-    const [r] = await conn.query(
-      `INSERT INTO inbound_tasks (task_no, purchase_order_id, purchase_order_no, supplier_name, warehouse_id, warehouse_name, status)
-       VALUES (?,?,?,?,?,?,1)`,
-      [taskNo, order.id, order.orderNo, order.supplierName, order.warehouseId, order.warehouseName],
-    )
-    const taskId = r.insertId
-    for (const item of remainingItems) {
-      await conn.query(
-        `INSERT INTO inbound_task_items (task_id, purchase_order_id, purchase_order_no, purchase_item_id, product_id, product_code, product_name, article_number, spec, color, unit, ordered_qty)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [taskId, order.id, order.orderNo, item.purchaseItemId, item.productId, item.productCode, item.productName, item.articleNumber || null, item.spec || null, item.color || null, item.unit, item.remainingQty],
-      )
-    }
-    await appendInboundEvent(conn, taskId, 'created', '创建收货订单', `收货订单 ${taskNo} 已创建，等待提交到 PDA`, null, {
-      purchaseOrderNo: order.orderNo,
-      warehouseName: order.warehouseName,
-    })
-    await commitFulfillment(conn, 'inbound', taskId)
-    return { taskId, taskNo }
-  } catch (e) {
-    await conn.rollback()
-    throw e
-  } finally {
-    conn.release()
-  }
 }
 
-async function createManualTask({ supplierId, supplierName, remark, items }, scopeWarehouseIds = null) {
-  const supplierIdN = Number(supplierId)
-  if (!Number.isFinite(supplierIdN) || supplierIdN <= 0) throw new AppError('请选择供应商', 400)
-  if (!supplierName?.trim()) throw new AppError('供应商名称不能为空', 400)
-  if (!Array.isArray(items) || items.length === 0) throw new AppError('请至少选择一条采购明细', 400)
-
-  const normalized = items.map(item => ({
-    purchaseItemId: Number(item.purchaseItemId),
-    qty: Number(item.qty),
-  }))
-
-  if (normalized.some(item => !Number.isFinite(item.purchaseItemId) || item.purchaseItemId <= 0)) {
-    throw new AppError('采购明细无效', 400)
-  }
-  if (normalized.some(item => !Number.isFinite(item.qty) || item.qty <= 0)) {
-    throw new AppError('收货数量必须大于 0', 400)
-  }
-
-  const purchaseItemIds = [...new Set(normalized.map(item => item.purchaseItemId))]
-
+async function createFromPoId(purchaseOrderId, scopeWarehouseIds = null, freightBody = {}, requestOptions = {}) {
+  if (!Number.isSafeInteger(Number(purchaseOrderId)) || Number(purchaseOrderId) <= 0) throw new AppError('请选择采购单', 400)
   const conn = await pool.getConnection()
+  let request = null, commitStarted = false
   try {
+    await conn.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED')
     await conn.beginTransaction()
+    request = await beginInboundCreate(conn, { poId: Number(purchaseOrderId), ...freightBody }, requestOptions)
+    if (request.replay) {
+      const data = await replayInboundCreate(conn, request, scopeWarehouseIds)
+      commitStarted = true; await conn.commit(); return data
+    }
+    const freight = normalizeFreight(freightBody)
+    // PO 入口不使用事务外旧 order；供应商/仓库/状态/数量全部在真实来源锁后重读。
+    const [[order]] = await conn.query('SELECT * FROM purchase_orders WHERE id = ? AND deleted_at IS NULL FOR UPDATE', [purchaseOrderId])
+    if (!order) throw new AppError('采购单不存在', 404)
+    assertStatusAction('purchase', 'createInboundTask', Number(order.status))
+    assertInScope(scopeWarehouseIds, order.warehouse_id, '采购单')
+    const [sourceItems] = await conn.query('SELECT * FROM purchase_order_items WHERE order_id = ? ORDER BY id FOR UPDATE', [purchaseOrderId])
+    if (!sourceItems.length) throw new AppError('采购单无明细', 400)
+    const [[dup]] = await conn.query(
+      `SELECT it.id FROM inbound_tasks it JOIN inbound_task_items iti ON iti.task_id = it.id
+       WHERE iti.purchase_order_id = ? AND it.deleted_at IS NULL AND it.status NOT IN (4, 5) LIMIT 1`, [purchaseOrderId],
+    )
+    if (dup) throw new AppError('该采购单已有未完结的入库任务', 400)
+    const candidates = await loadPurchasableCandidates(conn, { supplierId: Number(order.supplier_id), warehouseId: Number(order.warehouse_id), purchaseItemIds: sourceItems.map(i => Number(i.id)), scopeWarehouseIds })
+    if (candidates.length !== sourceItems.length) throw new AppError('采购来源已变化，请核对原单', 409, 'INBOUND_PURCHASE_SOURCE_INVALID')
+    const remainingItems = candidates.filter(i => i.remainingQty > 0).map(i => ({ ...i, qty: i.remainingQty }))
+    if (!remainingItems.length) throw new AppError('该采购单明细均已建单收讫，无需重复建单', 400)
+    await assertQtyPrecision(conn, remainingItems.map(i => ({ productId: i.productId, qty: i.qty, label: '应收数量' })))
+    const taskNo = await genTaskNo(conn)
+    const [result] = await conn.query(
+      `INSERT INTO inbound_tasks (task_no,purchase_order_id,purchase_order_no,supplier_name,warehouse_id,warehouse_name,status,freight_type,freight_amount) VALUES (?,?,?,?,?,?,1,?,?)`,
+      [taskNo, order.id, order.order_no, order.supplier_name, order.warehouse_id, order.warehouse_name, freight.freightType, freight.freightAmount],
+    )
+    const taskId = result.insertId
+    await insertTaskItems(conn, taskId, remainingItems)
+    await appendInboundEvent(conn, taskId, 'created', '创建收货订单', `收货订单 ${taskNo} 已创建，等待提交到 PDA`, null, { purchaseOrderNo: order.order_no, warehouseName: order.warehouse_name })
+    const data = request.enabled ? { taskId, taskNo, warehouseId: Number(order.warehouse_id), requestFingerprint: request.fingerprint } : { taskId, taskNo }
+    if (request.enabled) await completeOperationRequest(conn, request, { data, message: '收货订单已创建', resourceType: 'inbound_task', resourceId: taskId })
+    commitStarted = true
+    await commitFulfillment(conn, 'inbound', taskId)
+    return data
+  } catch (error) {
+    let rolledBack = false
+    try { await conn.rollback(); rolledBack = true } catch { /* 回滚不确定时不声明未创建。 */ }
+    if (request?.enabled && !request.replay && !commitStarted && rolledBack && error.statusCode >= 400 && error.statusCode < 500) error.data = { ...(error.data || {}), inboundCreateNotExecuted: true }
+    throw error
+  } finally { conn.release() }
+}
 
-    // 候选明细查询在事务内加锁读取（FOR UPDATE），与并发的建单请求相互排队，
-    // 避免同一采购明细在两次并发请求里都读到"还有余量"而被超额分配。
-    const candidates = await loadPurchasableCandidates(conn, {
-      supplierId: supplierIdN,
-      purchaseItemIds,
-      forUpdate: true,
-    })
+async function createManualTask(body, scopeWarehouseIds = null, requestOptions = {}) {
+  const conn = await pool.getConnection()
+  let request = null, commitStarted = false
+  try {
+    await conn.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED')
+    await conn.beginTransaction()
+    request = await beginInboundCreate(conn, body, requestOptions)
+    if (request.replay) {
+      const data = await replayInboundCreate(conn, request, scopeWarehouseIds)
+      commitStarted = true; await conn.commit(); return data
+    }
+    const { supplierId, supplierName, remark } = body
+    const supplierIdN = Number(supplierId)
+    if (!Number.isSafeInteger(supplierIdN) || supplierIdN <= 0) throw new AppError('请选择供应商', 400)
+    if (!supplierName?.trim()) throw new AppError('供应商名称不能为空', 400)
+    const normalized = normalizeEditItems(body.items)
+    const freight = normalizeFreight(body)
+    const purchaseItemIds = normalized.map(item => item.purchaseItemId)
+    const candidates = await loadPurchasableCandidates(conn, { supplierId: supplierIdN, purchaseItemIds, forUpdate: true, scopeWarehouseIds })
     if (candidates.length !== purchaseItemIds.length) throw new AppError('存在不可用的采购明细，请刷新后重试', 400)
     const candidateMap = new Map(candidates.map(c => [c.purchaseItemId, c]))
-
-    const warehouseIds = new Set()
     const taskItems = normalized.map(item => {
       const candidate = candidateMap.get(item.purchaseItemId)
-      if (!candidate) throw new AppError('存在不可用的采购明细，请刷新后重试', 400)
-      if (candidate.remainingQty < item.qty) {
-        throw new AppError(`${candidate.productName} 超出可建单数量，最多还能建 ${candidate.remainingQty}`, 400)
-      }
-      warehouseIds.add(candidate.warehouseId)
-      return {
-        ...candidate,
-        qty: item.qty,
-      }
+      if (!candidate || candidate.supplierId !== supplierIdN) throw new AppError('存在不可用的采购明细，请刷新后重试', 400)
+      if (Math.round(candidate.remainingQty * 100) < Math.round(item.qty * 100)) throw new AppError(`${candidate.productName} 超出可建单数量，最多还能建 ${candidate.remainingQty}`, 400)
+      return { ...candidate, qty: item.qty }
     })
-
-    if (warehouseIds.size !== 1) throw new AppError('同一张收货单仅支持同仓到货，请按仓库分别建单', 400)
-
-    await assertQtyPrecision(conn, taskItems.map(item => ({ productId: item.productId, qty: item.qty, label: '应收数量' })))
-    const warehouseId = taskItems[0].warehouseId
-    const warehouseName = taskItems[0].warehouseName
-    // 跨仓校验：限仓用户只能给本仓建收货任务
+    if (new Set(taskItems.map(i => i.warehouseId)).size !== 1) throw new AppError('同一张收货单仅支持同仓到货，请按仓库分别建单', 400)
+    await assertQtyPrecision(conn, taskItems.map(i => ({ productId: i.productId, qty: i.qty, label: '应收数量' })))
+    const warehouseId = taskItems[0].warehouseId, warehouseName = taskItems[0].warehouseName
     assertInScope(scopeWarehouseIds, warehouseId, '收货订单')
-    const purchaseOrders = [...new Set(taskItems.map(item => `${item.purchaseOrderId}:${item.purchaseOrderNo}`))]
+    const purchaseOrders = [...new Set(taskItems.map(i => i.purchaseOrderId))]
     const headerPurchaseOrderId = purchaseOrders.length === 1 ? taskItems[0].purchaseOrderId : null
-    const headerPurchaseOrderNo = purchaseOrders.length === 1
-      ? taskItems[0].purchaseOrderNo
-      : `${purchaseOrders.length} 单混合`
-
+    const headerPurchaseOrderNo = purchaseOrders.length === 1 ? taskItems[0].purchaseOrderNo : `${purchaseOrders.length} 单混合`
     const taskNo = await genTaskNo(conn)
-    const [r] = await conn.query(
-      `INSERT INTO inbound_tasks (task_no, purchase_order_id, purchase_order_no, supplier_name, warehouse_id, warehouse_name, status, remark)
-       VALUES (?,?,?,?,?,?,1,?)`,
-      [taskNo, headerPurchaseOrderId, headerPurchaseOrderNo, supplierName.trim(), warehouseId, warehouseName, remark?.trim() || null],
+    const [result] = await conn.query(
+      `INSERT INTO inbound_tasks (task_no,purchase_order_id,purchase_order_no,supplier_name,warehouse_id,warehouse_name,status,remark,freight_type,freight_amount) VALUES (?,?,?,?,?,?,1,?,?,?)`,
+      [taskNo, headerPurchaseOrderId, headerPurchaseOrderNo, taskItems[0].supplierName, warehouseId, warehouseName, remark?.trim() || null, freight.freightType, freight.freightAmount],
     )
-    const taskId = r.insertId
-
-    for (const item of taskItems) {
-      await conn.query(
-        `INSERT INTO inbound_task_items (task_id, purchase_order_id, purchase_order_no, purchase_item_id, product_id, product_code, product_name, article_number, spec, color, unit, ordered_qty)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [
-          taskId,
-          item.purchaseOrderId,
-          item.purchaseOrderNo,
-          item.purchaseItemId,
-          item.productId,
-          item.productCode,
-          item.productName,
-          item.articleNumber || null,
-          item.spec || null,
-          item.color || null,
-          item.unit,
-          item.qty,
-        ],
-      )
-    }
-
-    await appendInboundEvent(conn, taskId, 'created', '创建收货订单', `收货订单 ${taskNo} 已创建，等待提交到 PDA`, null, {
-      supplierName: supplierName.trim(),
-      mixedPurchaseOrders: purchaseOrders.length,
-      warehouseName,
-    })
-
+    const taskId = result.insertId
+    await insertTaskItems(conn, taskId, taskItems)
+    await appendInboundEvent(conn, taskId, 'created', '创建收货订单', `收货订单 ${taskNo} 已创建，等待提交到 PDA`, null, { supplierName: taskItems[0].supplierName, mixedPurchaseOrders: purchaseOrders.length, warehouseName })
+    const data = request.enabled ? { taskId, taskNo, warehouseId, requestFingerprint: request.fingerprint } : { taskId, taskNo }
+    if (request.enabled) await completeOperationRequest(conn, request, { data, message: '收货订单已创建', resourceType: 'inbound_task', resourceId: taskId })
+    commitStarted = true
     await commitFulfillment(conn, 'inbound', taskId)
-    return { taskId, taskNo }
-  } catch (e) {
-    await conn.rollback()
-    throw e
-  } finally {
-    conn.release()
-  }
+    return data
+  } catch (error) {
+    let rolledBack = false
+    try { await conn.rollback(); rolledBack = true } catch { /* 回滚不确定时不声明未创建。 */ }
+    if (request?.enabled && !request.replay && !commitStarted && rolledBack && error.statusCode >= 400 && error.statusCode < 500) error.data = { ...(error.data || {}), inboundCreateNotExecuted: true }
+    throw error
+  } finally { conn.release() }
 }
 
 async function submit(taskId, operator, scopeWarehouseIds = null) {
@@ -655,6 +602,7 @@ async function receive(taskId, payload, { userId, requestKey, pdaWarehouseId, sc
           qty: container.qty,
         },
         createdBy: userId ?? null,
+        requestPurpose: 'initial',
         jobUniqueKey: `inbound_receive:${taskId}:container:${container.containerId}`,
       })
       // job.unprintable：没有可用打印机，只落了一条失败记录（打印记录页可见、可补打），
@@ -709,109 +657,57 @@ async function receive(taskId, payload, { userId, requestKey, pdaWarehouseId, sc
   return result
 }
 
-async function reprint(taskId, { mode = 'task', itemId = null, barcode = null } = {}, operator = null) {
-  const normalizedMode = String(mode || 'task').trim().toLowerCase()
+async function reprint(taskId, { mode = 'task', itemId = null, barcode = null } = {}, operator = null, scopeWarehouseIds = null, { requestKey } = {}) {
+  const normalizedMode = String(mode || 'task').trim().toLowerCase(), id = Number(taskId)
   if (!['task', 'item', 'barcode'].includes(normalizedMode)) throw new AppError('补打模式无效', 400)
-  const reprintBucket = Math.floor(Date.now() / 10000)
-
+  const payload = { mode: normalizedMode, itemId: itemId == null ? null : Number(itemId), barcode: barcode == null ? null : String(barcode).trim() }
   const conn = await pool.getConnection()
   try {
-    const taskRow = await ensureInboundTaskExists(conn, taskId)
-
-    let containers = []
-    let title = '发起补打'
-    let description = ''
-    let payload = null
-
-    if (normalizedMode === 'task') {
-      const [rows] = await conn.query(
-        `SELECT id, barcode, remaining_qty, warehouse_id, product_name
-         FROM inventory_containers
-         WHERE inbound_task_id = ? AND deleted_at IS NULL AND (is_legacy = 0 OR is_legacy IS NULL)
-         ORDER BY id ASC`,
-        [taskId],
-      )
-      containers = rows
-      title = '整单补打'
-      description = `收货订单 ${taskRow.task_no} 发起整单补打`
-      payload = { mode: 'task' }
-    } else if (normalizedMode === 'item') {
-      const [[item]] = await conn.query(
-        `SELECT id, product_id, product_name
-         FROM inbound_task_items
-         WHERE id = ? AND task_id = ?`,
-        [itemId, taskId],
-      )
+    await conn.beginTransaction()
+    const taskRow = await lockStatusRow(conn, { table: 'inbound_tasks', id, columns: 'id,task_no,warehouse_id,status' })
+    if (!taskRow) throw new AppError('收货订单不存在', 404)
+    assertInScope(scopeWarehouseIds, taskRow.warehouse_id, '收货订单')
+    // 锁全部该收货单容器后再过滤模式，和撤收保持任务→容器锁序；不锁商品主数据。
+    const [all] = await conn.query(`SELECT id,barcode,remaining_qty,warehouse_id,product_id,status,is_legacy
+      FROM inventory_containers WHERE inbound_task_id=? AND deleted_at IS NULL ORDER BY id FOR UPDATE`, [id])
+    for (const container of all) assertInScope(scopeWarehouseIds, container.warehouse_id, '收货条码')
+    let containers = all.filter(c => !Number(c.is_legacy) && Number(c.status) !== CONTAINER_STATUS.VOID)
+    let title = '整单补打', description = `收货订单 ${taskRow.task_no} 发起整单补打`
+    if (normalizedMode === 'item') {
+      const [[item]] = await conn.query('SELECT id,product_id,product_name FROM inbound_task_items WHERE id=? AND task_id=?', [itemId, id])
       if (!item) throw new AppError('收货明细不存在', 404)
-      const [rows] = await conn.query(
-        `SELECT id, barcode, remaining_qty, warehouse_id, product_name
-         FROM inventory_containers
-         WHERE inbound_task_id = ? AND product_id = ? AND deleted_at IS NULL AND (is_legacy = 0 OR is_legacy IS NULL)
-         ORDER BY id ASC`,
-        [taskId, item.product_id],
-      )
-      containers = rows
-      title = '明细补打'
-      description = `收货订单 ${taskRow.task_no} 对商品 ${item.product_name} 发起补打`
-      payload = { mode: 'item', itemId: Number(item.id), productId: Number(item.product_id) }
-    } else {
-      const code = String(barcode || '').trim()
-      if (!code) throw new AppError('库存条码不能为空', 400)
-      const [rows] = await conn.query(
-        `SELECT id, barcode, remaining_qty, warehouse_id, product_name
-         FROM inventory_containers
-         WHERE inbound_task_id = ? AND barcode = ? AND deleted_at IS NULL AND (is_legacy = 0 OR is_legacy IS NULL)
-         LIMIT 1`,
-        [taskId, code],
-      )
-      containers = rows
-      title = '条码补打'
-      description = `收货订单 ${taskRow.task_no} 对库存条码 ${code} 发起补打`
-      payload = { mode: 'barcode', barcode: code }
+      containers = containers.filter(c => Number(c.product_id) === Number(item.product_id))
+      title = '明细补打'; description = `收货订单 ${taskRow.task_no} 对商品 ${item.product_name} 发起补打`
+    } else if (normalizedMode === 'barcode') {
+      if (!payload.barcode) throw new AppError('库存条码不能为空', 400)
+      containers = containers.filter(c => c.barcode === payload.barcode)
+      title = '条码补打'; description = `收货订单 ${taskRow.task_no} 对库存条码 ${payload.barcode} 发起补打`
     }
-
     if (!containers.length) throw new AppError('没有可补打的库存条码', 400)
-
-    const jobs = []
-    let noPrinterCount = 0
+    const sources = await readContainerReprintSources(conn, containers.map(c => Number(c.id)))
+    for (const source of sources) assertContainerReprintSource(source, scopeWarehouseIds)
+    if (sources.length !== containers.length) throw new AppError('补打来源已变化', 409, 'PRINT_REPRINT_SOURCE_INVALID')
+    const intent = await beginReprintIntent(conn, { requestKey, userId: operator?.userId, action: 'inbound.reprint', resourceId: id, payload, scopeWarehouseIds, sourceIdentities: sources.map(identity) })
+    if (intent.replay) { await conn.commit(); return intent.result }
+    const [products] = await conn.query('SELECT id,name FROM product_items WHERE id IN (?)', [[...new Set(containers.map(c => Number(c.product_id)))]] )
+    const names = new Map(products.map(p => [Number(p.id), p.name]))
+    const jobs = [], failedJobIds = []
     for (const container of containers) {
-      const job = await enqueueContainerLabelJob({
-        containerId: Number(container.id),
-        warehouseId: container.warehouse_id != null ? Number(container.warehouse_id) : null,
-        data: {
-          container_code: container.barcode,
-          product_name: container.product_name,
-          qty: container.remaining_qty,
-        },
-        createdBy: operator?.userId ?? null,
-        jobUniqueKey: `reprint_inbound:${taskId}:${normalizedMode}:${container.id}:${reprintBucket}`,
-      })
-      if (!job) continue
-      // 没有可用打印机时只留下记录（unprintable），不能算已完成补打
-      if (job.unprintable) { noPrinterCount += 1; continue }
-      jobs.push(job)
+      const job = await enqueueContainerLabelJob({ conn, containerId: Number(container.id), warehouseId: Number(container.warehouse_id),
+        data: { container_code: container.barcode, product_name: names.get(Number(container.product_id)) ?? null, qty: container.remaining_qty },
+        createdBy: operator?.userId ?? null, requestPurpose: 'reprint', jobUniqueKey: `manual_reprint:${intent.id}:${container.id}` })
+      if (!job) throw new AppError('补打任务未建立，请核对条码来源', 409, 'PRINT_REPRINT_SOURCE_INVALID')
+      if (job.unprintable) failedJobIds.push(Number(job.id))
+      else jobs.push(job)
     }
-
-    await appendInboundEvent(
-      pool,
-      taskId,
-      'print_requeued',
-      title,
-      `${description}，共 ${jobs.length} 条`,
-      operator,
-      { ...payload, jobIds: jobs.map(job => Number(job.id)) },
-    )
-    return {
-      taskId: Number(taskId),
-      mode: normalizedMode,
-      count: jobs.length,
-      jobIds: jobs.map(job => Number(job.id)),
-      barcodes: containers.map(item => item.barcode),
-      noPrinterCount,
-    }
-  } finally {
-    conn.release()
-  }
+    const result = { taskId: id, mode: normalizedMode, count: jobs.length, jobIds: jobs.map(job => Number(job.id)), failedJobIds,
+      containerIds: containers.map(c => Number(c.id)), barcodes: containers.map(c => c.barcode), noPrinterCount: failedJobIds.length, requestId: intent.id }
+    await appendInboundEvent(conn, id, 'print_requeued', title, `${description}，共 ${jobs.length} 条`, operator, { ...payload, jobIds: result.jobIds, failedJobIds, requestId: intent.id })
+    await completeReprintIntent(conn, intent, { resourceId: id, warehouseIds: [taskRow.warehouse_id, ...containers.map(c => c.warehouse_id)], result })
+    await conn.commit()
+    return result
+  } catch (error) { await conn.rollback(); throw error }
+  finally { conn.release() }
 }
 
 async function cancel(taskId, scopeWarehouseIds = null) {

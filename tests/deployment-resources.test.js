@@ -555,6 +555,19 @@ test('每个 smoke/test 脚本必须在 CI 里跑得到（未接线须显式豁�
         pkg.scripts['smoke:go-live-owned'] === 'bash scripts/repair-smoke-ephemeral.sh --go-live' &&
         workflowText.includes('npm run smoke:go-live-owned') &&
         fs.readFileSync(path.join(root, 'scripts/repair-smoke-ephemeral.sh'), 'utf8').includes('run_smoke smoke:go-live-runtime')) return true
+    if (name === 'smoke:inbound-edit-runtime' &&
+        pkg.scripts['smoke:inbound-edit-owned'] === 'bash scripts/repair-smoke-ephemeral.sh --inbound-edit' &&
+        workflowText.includes('npm run smoke:inbound-edit-owned') &&
+        fs.readFileSync(path.join(root, 'scripts/repair-smoke-ephemeral.sh'), 'utf8').includes('run_smoke smoke:inbound-edit-runtime')) return true
+    if (name === 'smoke:retention-reprint-runtime' &&
+        pkg.scripts['smoke:retention-reprint-owned'] === 'bash scripts/repair-smoke-ephemeral.sh --retention-reprint' &&
+        workflowText.includes('npm run smoke:retention-reprint-owned') &&
+        fs.readFileSync(path.join(root, 'scripts/repair-smoke-ephemeral.sh'), 'utf8').includes('run_smoke smoke:retention-reprint-runtime')) return true
+    if (['smoke:change-records-runtime', 'smoke:change-records-regressions'].includes(name) &&
+        pkg.scripts['smoke:change-records-owned'] === 'bash scripts/repair-smoke-ephemeral.sh --change-records' &&
+        workflowText.includes('npm run smoke:change-records-owned') &&
+        (name !== 'smoke:change-records-regressions' || /FLOWCUBE_CHANGE_REGRESSIONS:\s*['"]1['"]/.test(workflowText)) &&
+        fs.readFileSync(path.join(root, 'scripts/repair-smoke-ephemeral.sh'), 'utf8').includes(`run_smoke ${name}`)) return true
     // 有些脚本在 CI 里按文件调用（如 node --test tests/xxx.test.js）
     const files = (pkg.scripts[name].match(/[\w./-]+\.(js|sh|cjs)/g) || [])
     return files.some(f => workflowText.includes(path.basename(f)))

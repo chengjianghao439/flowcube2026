@@ -40,10 +40,17 @@ SUITE="${1:-repair}"
 case "$SUITE" in
   repair) ;;
   --go-live) DB_NAME='flowcube_golive20261006_test' ;;
+  --inbound-edit) DB_NAME='flowcube_inboundedit20261010_test' ;;
+  --retention-reprint) DB_NAME='flowcube_retentionreprint20261010_test' ;;
+  --change-records) DB_NAME='flowcube_changerecords20261010_test'; CONFIG_DIR="${TMPDIR:-/tmp}" ;;
   *) echo '[ephemeral] unsupported validation suite' >&2; exit 1 ;;
 esac
 [ "$#" -le 1 ] || { echo '[ephemeral] unsupported validation suite arguments' >&2; exit 1; }
 export LC_ALL=C
+RESOURCE_ARGS=()
+if [[ "$SUITE" = '--inbound-edit' || "$SUITE" = '--retention-reprint' || "$SUITE" = '--change-records' ]]; then
+  RESOURCE_ARGS=(--memory 768m --memory-swap 768m --cpus 1)
+fi
 
 BATCH_ID="$(date +%Y%m%d%H%M%S)-$(node -e 'process.stdout.write(require("node:crypto").randomBytes(3).toString("hex"))')"
 CTR="flowcube-repair-ephemeral-${BATCH_ID}"
@@ -126,6 +133,9 @@ cleanup() {
     if [[ -e "$DOWNLOADS_DIR" ]]; then failed=1; fi
   fi
   if [[ "$failed" != 0 && "$rc" = 0 ]]; then rc=1; fi
+  if [[ "$failed" = 0 ]]; then
+    log "cleanup confirmed: container=${CTR_CREATED}, volume=${VOL_CREATED}, ownership=${FILE_CREATED}, downloads=$([[ -n "$DOWNLOADS_DIR" ]] && echo 1 || echo 0)"
+  fi
   exit "$rc"
 }
 trap cleanup EXIT
@@ -168,7 +178,7 @@ if [[ "$VOL_BATCH" != "$BATCH_ID" || "$VOL_ROLE" != 'ephemeral-smoke' ]]; then
 fi
 VOL_CREATED=1
 
-CTR_ID="$(d create \
+CTR_ID="$(d create ${RESOURCE_ARGS[@]+"${RESOURCE_ARGS[@]}"} \
   --name "$CTR" \
   -e MYSQL_ROOT_PASSWORD="$ROOT_PW" \
   -p 127.0.0.1::3306 \
@@ -273,7 +283,7 @@ fs.writeFileSync(file, JSON.stringify({
 NODE
 FILE_CREATED=1
 
-if [[ "$SUITE" = '--go-live' ]]; then
+if [[ "$SUITE" = '--go-live' || "$SUITE" = '--inbound-edit' || "$SUITE" = '--retention-reprint' || "$SUITE" = '--change-records' ]]; then
   DOWNLOADS_DIR="$(mktemp -d "${TMPDIR:-/tmp}/flowcube-golive-downloads.XXXXXX")"
   export APP_UPDATE_DOWNLOADS_DIR="$DOWNLOADS_DIR"
   JWT_SECRET="$(node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("hex"))')"
@@ -284,8 +294,14 @@ fi
 
 log "迁移 ${DB_NAME}（目标：127.0.0.1:${HOST_PORT}）…"
 cd "$ROOT"
-NODE_ENV=test DB_HOST=127.0.0.1 DB_PORT="$HOST_PORT" DB_NAME="$DB_NAME" DB_USER=root \
-  DB_PASSWORD="$ROOT_PW" npm --prefix backend run migrate
+if [[ "$SUITE" = '--inbound-edit' || "$SUITE" = '--retention-reprint' || "$SUITE" = '--change-records' ]]; then
+  # Direct migration executor consumes only explicit synthetic env; scripts/migrate.js loads backend/.env.
+  NODE_ENV=test DB_HOST=127.0.0.1 DB_PORT="$HOST_PORT" DB_NAME="$DB_NAME" DB_USER=root \
+    DB_PASSWORD="$ROOT_PW" node -e 'require("./backend/src/database/migrate").runMigrations().catch(() => { console.error("[inbound-edit] migration failed"); process.exitCode = 1 })'
+else
+  NODE_ENV=test DB_HOST=127.0.0.1 DB_PORT="$HOST_PORT" DB_NAME="$DB_NAME" DB_USER=root \
+    DB_PASSWORD="$ROOT_PW" npm --prefix backend run migrate
+fi
 
 run_smoke() {
   NODE_ENV=test DB_HOST=127.0.0.1 DB_PORT="$HOST_PORT" DB_NAME="$DB_NAME" DB_USER=root \
@@ -299,6 +315,19 @@ if [[ "$SUITE" = '--go-live' ]]; then
   run_smoke smoke:go-live-runtime
   log '验证客户/供应商旧电话形状的条件迁移（同专属实例）…'
   FLOWCUBE_PARTY_PROFILE_MYSQL_PROOF=1 run_smoke test:party-profile
+elif [[ "$SUITE" = '--inbound-edit' ]]; then
+  log '执行收货草稿编辑、运费记录与真实并发验收（独占本批实例）…'
+  run_smoke smoke:inbound-edit-runtime
+elif [[ "$SUITE" = '--retention-reprint' ]]; then
+  log '执行日志保留期与手动补打真实链路（专属实例、打印桩）…'
+  run_smoke smoke:retention-reprint-runtime
+elif [[ "$SUITE" = '--change-records' ]]; then
+  log '执行变更审计、调整交接与打印元数据（专属合成实例、打印桩）…'
+  run_smoke smoke:change-records-runtime
+  if [[ "${FLOWCUBE_CHANGE_REGRESSIONS:-0}" = '1' ]]; then
+    log '逐套复核归属并运行受影响的既有回归（同一专属合成实例）…'
+    run_smoke smoke:change-records-regressions
+  fi
 else
   log '执行采购修复 smoke（串行第一项）…'
   run_smoke smoke:purchase-repair

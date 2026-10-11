@@ -181,16 +181,16 @@ async function main() {
       await addJob(invWithJob, `IY${code}`)
       for (const id of [boxNever, invNever]) {
         await assert.rejects(
-          () => labels.reprintBarcodeRecord({ category: 'inbound', recordId: id, createdBy: null }),
+          () => labels.reprintBarcodeRecord({ category: 'inbound', recordId: id, createdBy: 1, requestKey: `reprint-v2-${Date.now()}-${randomRef('manual-reprint')}` }),
           (e) => e.code === 'PRINT_BARCODE_NO_PRINT_RECORD',
         )
       }
       // 非唯一码（可复用空盒）即使有打印记录也从这里拒绝，指向塑料盒功能
       await assert.rejects(
-        () => labels.reprintBarcodeRecord({ category: 'inbound', recordId: reusable, createdBy: null }),
+        () => labels.reprintBarcodeRecord({ category: 'inbound', recordId: reusable, createdBy: 1, requestKey: `reprint-v2-${Date.now()}-${randomRef('manual-reprint')}` }),
         (e) => e.code === 'PRINT_BARCODE_NOT_UNIQUE',
       )
-      assert.ok((await labels.reprintBarcodeRecord({ category: 'inbound', recordId: invWithJob, createdBy: null }))?.id, '有打印记录的容器应能补打')
+      assert.ok((await labels.reprintBarcodeRecord({ category: 'inbound', recordId: invWithJob, createdBy: 1, requestKey: `reprint-v2-${Date.now()}-${randomRef('manual-reprint')}` }))?.id, '有打印记录的容器应能补打')
     })
     await check('可复用空盒不进打印记录，但在「塑料盒」功能里可重复打印', async () => {
       const box = await addContainer(`BH${code}`, 2, 'plastic_box_create')
@@ -247,7 +247,7 @@ async function main() {
       const filtered = await inboundQuery.findBarcodeRecords({ category: 'outbound', status: 'success', pageSize: 200 })
       assert.ok((filtered.list ?? []).some(r => r.recordId === withJob), '出库带状态筛选应能正常查询并命中已打印记录')
       await assert.rejects(
-        () => labels.reprintBarcodeRecord({ category: 'outbound', recordId: never, createdBy: null }),
+        () => labels.reprintBarcodeRecord({ category: 'outbound', recordId: never, createdBy: 1, requestKey: `reprint-v2-${Date.now()}-${randomRef('manual-reprint')}` }),
         (e) => e.code === 'PRINT_BARCODE_NO_PRINT_RECORD',
       )
     })

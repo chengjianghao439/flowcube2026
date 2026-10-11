@@ -1,7 +1,8 @@
 /* eslint-disable */
 // AUTO-GENERATED FILE. Do not edit manually.
 // Source: backend/src/constants/warehouseTaskStatus.js, backend/src/constants/saleOrderStatus.js,
-//         backend/src/constants/settlementType.js, backend/src/constants/documentStatusRules.js
+//         backend/src/constants/settlementType.js, backend/src/constants/documentStatusRules.js,
+//         backend/src/constants/purchaseOrderStatus.js
 // Regenerate with: node scripts/generate-status-constants.js
 
 export type StatusTone = 'draft' | 'active' | 'success' | 'danger'
@@ -398,6 +399,129 @@ export const SALE_STATUS_OPTIONS = [
   {
     "label": "部分占库",
     "value": "6"
+  }
+] as const
+
+export const PURCHASE_STATUS_NAME = {
+  "1": "草稿",
+  "2": "已提交",
+  "3": "已完成",
+  "4": "已取消",
+  "5": "待审批"
+} as const
+export const PURCHASE_ACTION_RULES = {
+  "approve": {
+    "blocked": {
+      "1": "采购单尚未提交",
+      "2": "该采购单已确认，无需审批",
+      "3": "采购单已完成",
+      "4": "采购单已取消"
+    },
+    "from": [
+      5
+    ],
+    "message": "只有待审批的采购单可以审批通过",
+    "to": 2
+  },
+  "cancel": {
+    "blocked": {
+      "3": "已完成的采购单不能取消",
+      "4": "采购单已取消"
+    },
+    "from": [
+      1,
+      2,
+      5
+    ],
+    "message": "当前状态的采购单不能取消",
+    "to": 4
+  },
+  "close": {
+    "from": [
+      2
+    ],
+    "message": "只有已提交的采购单可以关闭剩余结案",
+    "to": 3
+  },
+  "complete": {
+    "from": [
+      2
+    ],
+    "message": "只有已提交的采购单可以完成",
+    "to": 3
+  },
+  "confirm": {
+    "from": [
+      1
+    ],
+    "message": "只有草稿状态的采购单可以提交",
+    "to": 2
+  },
+  "createInboundTask": {
+    "from": [
+      2
+    ],
+    "message": "只有已确认的采购单可创建入库任务"
+  },
+  "edit": {
+    "from": [
+      1
+    ],
+    "message": "只有草稿状态的采购单可以编辑"
+  },
+  "reject": {
+    "blocked": {
+      "1": "采购单尚未提交",
+      "2": "该采购单已确认",
+      "3": "采购单已完成",
+      "4": "采购单已取消"
+    },
+    "from": [
+      5
+    ],
+    "message": "只有待审批的采购单可以驳回",
+    "to": 1
+  },
+  "reopen": {
+    "from": [
+      3
+    ],
+    "message": "只有已完成的采购单可以重新打开",
+    "to": 2
+  },
+  "withdrawConfirm": {
+    "from": [
+      2,
+      5
+    ],
+    "message": "只有已确认/待审批的采购单可以撤回",
+    "to": 1
+  }
+} as const
+export const PURCHASE_STATUS_OPTIONS = [
+  {
+    "label": "全部状态",
+    "value": ""
+  },
+  {
+    "label": "草稿",
+    "value": "1"
+  },
+  {
+    "label": "已提交",
+    "value": "2"
+  },
+  {
+    "label": "已完成",
+    "value": "3"
+  },
+  {
+    "label": "已取消",
+    "value": "4"
+  },
+  {
+    "label": "待审批",
+    "value": "5"
   }
 ] as const
 

@@ -876,6 +876,7 @@ async function finishPackage(packageId, { requestKey, userId, createdBy, scopeWa
       conn,
       packageId,
       createdBy: createdBy ?? null,
+      requestPurpose: 'initial',
       jobUniqueKey: packageLabelJobKey(packageId),
     })
     if (!job) {
@@ -1048,6 +1049,7 @@ async function printPackageLabel(packageId, { requestKey, userId, scopeWarehouse
       // 前一只箱的活跃 job（createRecord 见同 key + 同仓 + 同 jobType 即原样返回），
       // 后一只箱根本没进队、调用方却拿到「已加入打印队列」和**别人的** job。
       // 不做截断——截断会引入隐式碰撞；确实超长时由 createRecord 明确 400 拒绝，事务整体回滚。
+      requestPurpose: 'reprint',
       jobUniqueKey: requestKey ? `package_label:${packageId}:${requestKey}` : null,
     })
     if (!job) throw new AppError('箱贴未进入打印链，请检查打印配置后重试', 409, 'PACKAGE_LABEL_NOT_ENQUEUED')

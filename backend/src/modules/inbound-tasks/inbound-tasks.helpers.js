@@ -51,6 +51,8 @@ const fmtTask = r => ({
   operatorId: r.operator_id || null,
   operatorName: r.operator_name || null,
   remark: r.remark || null,
+  freightType: r.freight_type == null ? null : Number(r.freight_type),
+  freightAmount: r.freight_amount == null ? null : Number(r.freight_amount),
   submittedAt: r.submitted_at || null,
   submittedBy: r.submitted_by != null ? Number(r.submitted_by) : null,
   submittedByName: r.submitted_by_name || null,

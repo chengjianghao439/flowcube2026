@@ -1,5 +1,5 @@
 import { useVisibleQuery } from './useVisibleQuery'
-import { useRef } from 'react'
+import { useId, useRef, useState } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { getSaleListApi, getSaleDetailApi, getSaleReservePreviewApi, createSaleApi, updateSaleApi, adjustSaleApi, reserveSaleApi, releaseSaleApi, shipSaleApi, cancelSaleApi, deleteSaleApi } from '@/api/sale'
 import { useInvalidate } from '@/hooks/useInvalidate'
@@ -10,6 +10,12 @@ import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { confirmAction } from '@/lib/confirm'
 import type { CreateSaleParams, UpdateSaleParams, ReserveItemOverride, ShipItemRequest } from '@/types/sale'
+import { captureKitReadOwner } from './useKits'
+import { useKitOperation } from './useKitOperation'
+import { useActiveWorkspaceTab } from './useActiveWorkspaceTab'
+import { commercialReadConfig } from '@/api/sale-commercial'
+import { useAuthStore } from '@/store/authStore'
+import { hasPermission } from '@/lib/permissions'
 
 export const useSaleList   = (params: object, summary = false) => useVisibleQuery({ queryKey: ['sale', params, summary], queryFn: ({ signal }) => getSaleListApi(params, summary, signal) })
 export const useSaleDetail = (id: number)     => useQuery({ queryKey: ['sale', id],     queryFn: () => getSaleDetailApi(id), enabled: !!id })
@@ -112,13 +118,36 @@ export const useShipSale = () => {
   })
 }
 
-export const useCancelSale = () => {
+export const useCancelSale = (scope?: string) => {
   const invalidate = useInvalidate()
-  const keyRef = useRef(createRequestKey('sale-cancel'))
-  return useMutation({
-    mutationFn: (id: number) => cancelSaleApi(id, keyRef.current),
-    onSuccess: () => { invalidate('sale_cancel'); toast.success('订单已取消'); keyRef.current = createRequestKey('sale-cancel') },
+  const instance=useId(), [owner]=useState(captureKitReadOwner), active=useActiveWorkspaceTab()
+  type Body={id:number;changeReason?:string}
+  const write=useKitOperation<Body,null>(owner,scope || `sale-cancel-mounted:${instance}`,{
+    isCurrent:()=>active,
+    execute:(body,query,originalOwner)=>cancelSaleApi(body.id,query.requestKey,body.changeReason,commercialReadConfig(originalOwner)),
+    validate:data=>data===null,
+    mayWrite:()=>{const auth=useAuthStore.getState();return hasPermission(auth.user?.permissions,PERMISSIONS.SALE_ORDER_CANCEL,auth.user?.roleId)},
   })
+  function confirmed(){invalidate('sale_cancel');toast.success('取消已提交，请核对订单与仓库归还进度')}
+  const mutation=useMutation({
+    mutationFn:async(input:number|Body)=>{
+      const value=typeof input==='number'?{id:input}:input
+      const reason=value.changeReason?.trim()
+      const body={id:value.id,...(reason?{changeReason:reason}:{})}
+      const answer=await write.submit(body,{kind:'cancel',action:`sale.cancel:${body.id}`,resourceType:'sale_order',resourceId:body.id})
+      if(!answer || !write.canApply(answer)) throw new Error('原取消未确认，请核对当前原因与原操作结果')
+      return answer.data
+    },
+    onSuccess:confirmed,
+  })
+  async function recover(retry:boolean){
+    const answer=await(retry?write.retry():write.queryOriginal())
+    if(!answer)return false
+    if(answer.queryOnly){toast.success('原取消结果已核实，请自行刷新原单；当前输入保留');return false}
+    if(!write.canApply(answer))return false
+    confirmed();return true
+  }
+  return {...mutation,recovery:{...write,queryOriginal:()=>recover(false),retry:()=>recover(true)}}
 }
 
 export const useDeleteSale = () => {

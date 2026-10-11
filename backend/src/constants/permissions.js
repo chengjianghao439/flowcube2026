@@ -73,6 +73,7 @@ const PERMISSIONS = {
 
   INBOUND_ORDER_VIEW: 'inbound.order.view',
   INBOUND_ORDER_CREATE: 'inbound.order.create',
+  INBOUND_ORDER_UPDATE: 'inbound.order.update',
   INBOUND_ORDER_SUBMIT: 'inbound.order.submit',
   INBOUND_ORDER_CANCEL: 'inbound.order.cancel',
   INBOUND_RECEIVE_EXECUTE: 'inbound.receive.execute',

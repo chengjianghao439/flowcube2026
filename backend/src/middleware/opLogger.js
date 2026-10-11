@@ -119,6 +119,7 @@ function opLogger(req, res, next) {
     `INSERT INTO operation_logs (user_id,user_name,action,method,path,module,request_body,status_code,ip) VALUES (?,?,?,?,?,?,?,?,?)`,
     [userId(), userName(), `${req.method} ${requestPath}`, req.method, requestPath, getModule(requestPath), bodyStr, null, ip],
   ).then(([logged]) => {
+  req.operationLogId = Number(logged.insertId)
   let jsonDispatch = false
   const finalize = (body, send) => {
     const operation = resolveOperation(req.method, requestPath, res.statusCode, body)
@@ -127,15 +128,15 @@ function opLogger(req, res, next) {
       const conn = await pool.getConnection()
       try {
         await conn.beginTransaction()
-        await conn.query('UPDATE operation_logs SET user_id=?,user_name=?,status_code=? WHERE id=?',
-          [userId(), userName(), statusCode, logged.insertId])
-        if (operation) {
+        await conn.query('UPDATE operation_logs SET user_id=?,user_name=?,status_code=?,document_change_handled=? WHERE id=?',
+          [userId(), userName(), statusCode, req.documentChangeHandled === true ? 1 : null, logged.insertId])
+        if (operation && req.documentChangeHandled !== true) {
           // 仅保存明确的操作说明，不复制请求体或认证、付款等字段。
           const reason = typeof req.body?.reason === 'string' ? req.body.reason.slice(0, 500) : null
           await conn.query(
             `INSERT INTO document_operation_events
              (document_type,document_id,operation_log_id,title,description,created_by,created_by_name)
-             VALUES (?,?,?,?,?,?,?)`,
+             VALUES (?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE operation_log_id=VALUES(operation_log_id)`,
             [operation.type, operation.id, logged.insertId, operation.title, reason, userId(), actor()?.realName || userName()],
           )
         }

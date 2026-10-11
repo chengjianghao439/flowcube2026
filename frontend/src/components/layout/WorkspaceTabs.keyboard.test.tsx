@@ -124,7 +124,7 @@ test('Delete 确认关闭活动详情后回所属列表并聚焦，不关闭其�
   expect(useDirtyGuardStore.getState().pendingConfirm).not.toBeNull()
   await click(namedButton('确定离开'))
   await settle()
-  expect(location()).toBe('/sale')
+  expect(location()).toBe('/sale?keyword=原筛选')
   expect(useWorkspaceStore.getState().tabs.map(item => item.key)).toEqual(['/dashboard', '/sale', '/products'])
   expect(document.activeElement).toBe(tab('销售订单'))
 })

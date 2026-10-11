@@ -1,12 +1,16 @@
 import { ReturnSourceButton } from '@/pages/returns/ReturnSourceButton'
-import { money } from '@/lib/format'
+import { money, qty, unitPrice } from '@/lib/format'
 import { roundQuantity } from '@/lib/qtyStep'
 import { OrderEntryIssues } from '@/components/shared/OrderEntryIssues'
 import { collectOrderIssues } from '@/lib/orderEntry'
-import { handleEntryKeyDown } from '@/lib/orderEntryNavigation'
 import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
-import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
-import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
+import { PurchaseProductIdentity } from './PurchaseProductIdentity'
+import { PurchaseEntryTable } from './PurchaseEntryTable'
+import { PurchaseQuantitySummary } from './PurchaseQuantitySummary'
+import { groupPurchaseQuantities, purchaseDraftLineAmount, restorePurchaseEntryPrice, summarizePurchaseDraft } from './purchaseSummary'
+import { usePurchaseEditEntry } from './usePurchaseEditEntry'
+import { VirtualTableBody, VIRTUAL_TABLE_THRESHOLD } from '@/components/shared/VirtualTableBody'
+import { buildWorkspaceTabRegistrationFromPath } from '@/router/workspaceRouteMeta'
 /**
  * PurchaseFormPage — 采购单新建 / 查看页面（独立路由）
  *
@@ -18,9 +22,9 @@ import { productIdentityColumns } from '@/components/shared/productIdentityColum
  * 确保 keep-alive 多标签场景下路径隔离正确。
  */
 
-import { useContext, useEffect, useRef, useState } from 'react'
+import { useCallback, useContext, useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Loader2, Plus, Save, PackageOpen } from 'lucide-react'
+import { Loader2, Plus, Save } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { EditModeBadge, UnsavedBadge } from '@/components/shared/EditModeBadge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
@@ -36,6 +40,7 @@ import { dirtyItems } from '@/lib/editMode'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { confirmDirtyLeave } from '@/lib/unsavedChanges'
 import { ActionBar } from '@/components/shared/ActionBar'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { SectionCard } from '@/components/shared/SectionCard'
@@ -67,12 +72,16 @@ import { getProductApi } from '@/api/products'
 interface DraftItem extends Omit<PurchaseOrderItem, 'id' | 'amount'> {
   _key: number
   units?: ProductUnit[]   // UI-only：该商品多计量单位（供单位下拉），不发后端；后端按 product_units 折算权威
+  priceWarning?: string | null
+  originalAmount?: number
+  unitReadFailed?: boolean
 }
 
 /** 录入单位下的数量折算成基本单位量（仅前端呈现；权威折算在后端）。 */
-function baseQtyOf(item: DraftItem): number {
+function baseQtyOf(item: DraftItem): number | null {
   const u = (item.units || []).find(x => x.unitName === (item.entryUnit || item.unit))
-  const rate = u ? Number(u.conversionRate) : 1
+  const rate = (item.entryUnit || item.unit) === item.unit ? 1 : item.conversionRate ?? (u ? Number(u.conversionRate) : null)
+  if (rate == null || !Number.isFinite(rate) || rate <= 0) return null
   return roundQuantity((Number(item.quantity) || 0) * rate)
 }
 
@@ -93,7 +102,7 @@ export default function PurchaseFormPage() {
 
   function closeTab(targetPath = '/purchase') {
     const { removeTab } = useWorkspaceStore.getState()
-    removeTab(tabPath || '/purchase/new')
+    removeTab(buildWorkspaceTabRegistrationFromPath(tabPath || '/purchase/new').key)
     navigate(targetPath)
   }
 
@@ -101,17 +110,20 @@ export default function PurchaseFormPage() {
   return <DetailView purchaseId={purchaseId!} closeTab={closeTab} tabPath={tabPath} />
 }
 
-function FormView({ closeTab, tabPath, editOrder, onSaved }: {
+function FormView({ closeTab, tabPath, editOrder, onSaved, paused = false }: {
   closeTab: (targetPath?: string) => void
   tabPath: string
   editOrder?: PurchaseOrder
   onSaved?: () => void
+  paused?: boolean
 }) {
   const navigate = useNavigate()
   const createMutate = useCreatePurchase()
   const updateMutate = useUpdatePurchase()
   const isEdit = !!editOrder
   const submitting = createMutate.isPending || updateMutate.isPending
+  const formId = useId()
+  const fieldId = (field: string) => `${formId}-purchase-${field}`
 
   const [supplierId, setSupplierId] = useState(editOrder ? String(editOrder.supplierId) : '')
   const [supplierName, setSupplierName] = useState(editOrder?.supplierName ?? '')
@@ -122,11 +134,11 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
   const [items, setItems] = useState<DraftItem[]>(
     (editOrder?.items ?? []).map((it, idx) => ({
       _key: idx, productId: it.productId, productCode: it.productCode, productName: it.productName,
-      unit: it.unit, entryUnit: it.entryUnit ?? it.unit, units: [],
-      // 表单的数量/单价是「录入单位」口径：数量=entryQty(箱)，单价=每录入单位价（由 amount/entryQty 精确还原，
-      // 因后端存的 unitPrice 是每基本单位价 8.33，不能直接回显到「每箱」格子）。
+      unit: it.unit, entryUnit: it.entryUnit ?? it.unit, units: [], conversionRate: it.conversionRate,
+      // 保留历史换算快照与四位录入报价；金额只有两位，不能 amount/entryQty 反推报价。
       quantity: it.entryQty ?? it.quantity,
-      unitPrice: it.entryQty && it.entryQty > 0 ? Math.round((it.amount / it.entryQty) * 100) / 100 : it.unitPrice,
+      unitPrice: restorePurchaseEntryPrice(it).verified ? restorePurchaseEntryPrice(it).entryUnitPrice! : Number.NaN,
+      priceWarning: restorePurchaseEntryPrice(it).warning, originalAmount: it.amount,
       remark: it.remark ?? '',
       articleNumber: it.articleNumber ?? null, spec: it.spec ?? null, color: it.color ?? null,
     })),
@@ -135,21 +147,34 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
   const [finderOpen, setFinderOpen] = useState(false)
   const [finderItemKey, setFinderItemKey] = useState<number | null>(null)
   const [supplierFinderOpen, setSupplierFinderOpen] = useState(false)
+  useEffect(() => {
+    if (paused) { setFinderOpen(false); setFinderItemKey(null); setSupplierFinderOpen(false) }
+  }, [paused])
   const [submitLocked, setSubmitLocked] = useState(false)
   const [validationAttempted, setValidationAttempted] = useState(false)
   const quantityRefs = useRef<Map<number, HTMLInputElement>>(new Map())
+  const entryRef = useRef<HTMLDivElement>(null)
+  const scrollToIndex = useRef<((index: number) => void) | null>(null)
+  const focusEpoch = useRef(0)
+  const pendingFocus = useRef<string | null>(null)
+  const registerScroll = useCallback((scroll: ((index: number) => void) | null) => { scrollToIndex.current = scroll }, [])
+  const rowKey = useCallback((item: DraftItem) => item._key, [])
+  const active = useActiveWorkspaceTab(), activeRef = useRef(active)
+  activeRef.current = active
+  useEffect(() => () => { focusEpoch.current++ }, [])
   const [supplierError, setSupplierError] = useState(false)
   const [warehouseError, setWarehouseError] = useState(false)
 
 
   // 编辑态：初始值本就非空，"是否非空"不能代表"是否改过"；改成与编辑开始时的快照比较
   // 明细行只比对用户可改字段（units 是多计量单位投影，编辑态由接口异步回填）
-  const dirtyComparable = () => JSON.stringify({ supplierId, warehouseId, expectedDate, remark, items: dirtyItems(items) })
+  const dirtyComparable = () => JSON.stringify({ supplierId, warehouseId, expectedDate, remark, items: dirtyItems(items.map(({ priceWarning: _warning, originalAmount: _amount, unitReadFailed: _unitError, ...item }) => item)) })
   const editSnapshotRef = useRef(isEdit ? dirtyComparable() : null)
   const isDirty = isEdit
     ? dirtyComparable() !== editSnapshotRef.current
     : !!(supplierId || warehouseId || expectedDate || remark || items.length)
-  useDirtyGuard(tabPath, isDirty)
+  const dirtyKey = buildWorkspaceTabRegistrationFromPath(tabPath).key
+  useDirtyGuard(dirtyKey, isDirty)
 
   // 编辑态：为每个明细行商品拉多计量单位，供单位下拉回显（新建态在 handleFinderConfirm 里拉）
   useEffect(() => {
@@ -158,36 +183,67 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
     if (!productIds.length) return
     let cancelled = false
     Promise.all(productIds.map(pid =>
-      getProductApi(pid).then(p => [pid, p?.units ?? []] as [number, ProductUnit[]]).catch(() => [pid, [] as ProductUnit[]] as [number, ProductUnit[]]),
+      getProductApi(pid).then(p => [pid, { units: p?.units ?? [], failed: false }] as const).catch(() => [pid, { units: [] as ProductUnit[], failed: true }] as const),
     )).then(pairs => {
       if (cancelled) return
-      const map = new Map<number, ProductUnit[]>(pairs)
-      setItems(prev => prev.map(i => (map.has(i.productId) ? { ...i, units: map.get(i.productId)! } : i)))
+      const map = new Map<number, { units: ProductUnit[]; failed: boolean }>(pairs)
+      setItems(prev => prev.map(i => (map.has(i.productId) ? { ...i, units: map.get(i.productId)!.units, unitReadFailed: map.get(i.productId)!.failed } : i)))
     })
     return () => { cancelled = true }
   }, [editOrder])
 
   function requestLeave(proceed: () => void) {
     confirmDirtyLeave({
-      dirtyKeys: [tabPath],
+      dirtyKeys: [dirtyKey],
       proceed,
     })
+  }
+
+  const focusField = useCallback((target: string) => {
+    const field = () => [...(entryRef.current?.querySelectorAll<HTMLElement>('[data-entry-field]') ?? [])].find(el => el.dataset.entryField === target)
+    const focus = () => {
+      const container = field()
+      const control = container?.matches('input,button,select,textarea') ? container : container?.querySelector<HTMLElement>('input,button,select,textarea')
+      if (!control?.isConnected || control.closest('[hidden]')) return false
+      control.focus(); if (control instanceof HTMLInputElement) control.select()
+      control.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
+      return true
+    }
+    const index = items.findIndex(i => target.startsWith(`item-${i._key}-`))
+    if (index >= 0) scrollToIndex.current?.(index)
+    const epoch = ++focusEpoch.current
+    if (focus()) return
+    let tries = 0
+    const retry = () => {
+      if (epoch !== focusEpoch.current || !activeRef.current || !entryRef.current?.isConnected || focus() || ++tries > 30) return
+      requestAnimationFrame(retry)
+    }
+    requestAnimationFrame(retry)
+  }, [items])
+  useEffect(() => { if (pendingFocus.current) { const target = pendingFocus.current; pendingFocus.current = null; focusField(target) } }, [items, focusField])
+
+  function handleEntryKeyDown(event: KeyboardEvent<HTMLElement>) {
+    if (event.key !== 'Enter' || event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229 || event.ctrlKey || event.altKey || event.metaKey) return
+    const input = event.target
+    if (!(input instanceof HTMLInputElement) || !input.hasAttribute('data-entry-input')) return
+    const fields = items.flatMap(i => [`item-${i._key}-quantity`, `item-${i._key}-price`])
+    const index = fields.indexOf(input.dataset.entryField ?? '')
+    if (index < 0) return
+    event.preventDefault()
+    const target = fields[index + (event.shiftKey ? -1 : 1)] ?? (!event.shiftKey ? 'add' : null)
+    if (target) focusField(target)
   }
 
   const addItem = () => {
     const key = counter
     setCounter(c => c + 1)
-    setItems(p => [
-      ...p,
-      { _key: key, productId: 0, productCode: '', productName: '', unit: '', entryUnit: '', units: [], quantity: 1, unitPrice: 0, remark: '', articleNumber: null, spec: null, color: null },
-    ])
     setFinderItemKey(key)
     setFinderOpen(true)
   }
 
   const removeItem = (k: number) => setItems(p => p.filter(i => i._key !== k))
   const updateItem = (k: number, field: string, val: string | number) =>
-    setItems(p => p.map(i => (i._key === k ? { ...i, [field]: val } : i)))
+    setItems(p => p.map(i => (i._key === k ? { ...i, [field]: val, ...(field === 'unitPrice' ? { priceWarning: null } : {}), ...(field === 'entryUnit' ? { conversionRate: val === i.unit ? 1 : i.units?.find(u => u.unitName === val)?.conversionRate } : {}) } : i)))
 
   const parsePositiveInteger = (value: string) => {
     if (!value.trim()) return 0
@@ -198,33 +254,31 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
   function handleFinderConfirm(product: ProductFinderResult) {
     if (finderItemKey === null) return
     const k = finderItemKey
-    setTimeout(() => { const input = quantityRefs.current.get(k); if (input?.isConnected) { input.focus(); input.select() } }, 0)
-    setItems(prev =>
-      prev.map(i =>
-        i._key === k
-          ? {
-              ...i,
+    pendingFocus.current = `item-${k}-quantity`
+    setItems(prev => {
+      const replacement = {
+              ...(prev.find(i => i._key === k) ?? { _key: k, quantity: 1, remark: '' }),
               productId: product.id,
               productCode: product.code,
               productName: product.name,
               unit: product.unit,
               entryUnit: product.unit,   // 默认按基本单位录入；有辅助单位时可在单位下拉切换
+              conversionRate: 1, priceWarning: null, originalAmount: undefined, unitReadFailed: false,
               units: [],
               unitPrice: product.costPrice ?? 0,
               articleNumber: product.articleNumber,
               spec: product.spec,
               color: product.color,
             }
-          : i,
-      ),
-    )
+      return prev.some(i => i._key === k) ? prev.map(i => i._key === k ? replacement : i) : [...prev, replacement]
+    })
     // 拉该商品多计量单位，供单位下拉（无辅助单位则只保留基本单位、下拉不出现）
     getProductApi(product.id)
       .then(full => {
         const units = full?.units ?? []
-        setItems(prev => prev.map(i => (i._key === k && i.productId === product.id ? { ...i, units } : i)))
+        setItems(prev => prev.map(i => (i._key === k && i.productId === product.id ? { ...i, units, unitReadFailed: false } : i)))
       })
-      .catch(() => { /* 拉取失败：按基本单位录入 */ })
+      .catch(() => { setItems(prev => prev.map(i => i._key === k && i.productId === product.id ? { ...i, unitReadFailed: true } : i)) })
   }
 
   function handleSupplierConfirm(result: FinderResult) {
@@ -237,7 +291,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
   const issues = validationAttempted ? allIssues : []
 
   async function handleSubmit() {
-    if (submitLocked || submitting) return
+    if (submitLocked || submitting || paused) return
     setValidationAttempted(true)
     setSupplierError(allIssues.some(i => i.target === 'party'))
     setWarehouseError(allIssues.some(i => i.target === 'warehouse'))
@@ -249,7 +303,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
       warehouseName,
       expectedDate: expectedDate || undefined,
       remark: remark || undefined,
-      items: items.map(({ _key, units, ...rest }) => rest),
+      items: items.map(({ _key, units, priceWarning, originalAmount, unitReadFailed, conversionRate, ...rest }) => rest),
     }
     try {
       setSubmitLocked(true)
@@ -269,22 +323,50 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
     }
   }
 
-  const total = items.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
-  const totalQuantity = items.reduce((s, i) => s + i.quantity, 0)
+  const summary = summarizePurchaseDraft(items)
+
+  function renderItem(item: DraftItem) {
+    const currentRate = item.units?.find(u => u.unitName === item.entryUnit)?.conversionRate
+    const changedRate = item.entryUnit !== item.unit && item.conversionRate != null && currentRate != null && currentRate !== item.conversionRate
+    return <tr key={item._key} className="border-b border-border/40">
+      <td><PurchaseProductIdentity item={item} name={<button type="button" data-entry-field={`item-${item._key}-product`}
+        onClick={() => { setFinderItemKey(item._key); setFinderOpen(true) }}
+        className="max-w-full text-left font-medium text-foreground underline-offset-2 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [overflow-wrap:anywhere]">{item.productName}</button>} /></td>
+      <td><Input quantity type="number" min="1" step="1" data-entry-input data-entry-field={`item-${item._key}-quantity`}
+        aria-label={`${item.productName}数量`} aria-invalid={issues.some(i => i.target === `item-${item._key}-quantity`)}
+        ref={el => { if (el) quantityRefs.current.set(item._key, el); else quantityRefs.current.delete(item._key) }}
+        value={item.quantity} onChange={e => updateItem(item._key, 'quantity', parsePositiveInteger(e.target.value))}
+        className={cn(EDIT_CELL_CLASS, 'text-right tabular-nums')} />
+        {item.entryUnit && item.entryUnit !== item.unit && <div className="mt-0.5 text-right text-xs text-muted-foreground tabular-nums">{baseQtyOf(item) == null ? '换算待确认' : `= ${qty(baseQtyOf(item))} ${item.unit}`}</div>}
+      </td>
+      <td>{item.units?.some(u => !u.isBase)
+        ? <select aria-label={`${item.productName}录入单位`} value={item.entryUnit || item.unit} onChange={e => updateItem(item._key, 'entryUnit', e.target.value)} className={cn(EDIT_CELL_CLASS, 'px-1 text-center')}>
+          {!item.units.some(u => u.unitName === (item.entryUnit || item.unit)) && <option value={item.entryUnit || item.unit}>{item.entryUnit || item.unit}</option>}
+          {item.units.map(u => <option key={u.unitName} value={u.unitName}>{u.unitName}</option>)}
+        </select> : <span className="text-muted-body">{item.entryUnit || item.unit}</span>}</td>
+      <td><Input type="number" min="0" step="0.0001" data-entry-input data-entry-field={`item-${item._key}-price`}
+        aria-label={`${item.productName}单价`} aria-invalid={issues.some(i => i.target === `item-${item._key}-price`)}
+        value={Number.isFinite(item.unitPrice) ? item.unitPrice : ''} onChange={e => updateItem(item._key, 'unitPrice', e.target.value === '' ? Number.NaN : +e.target.value)} className={cn(EDIT_CELL_CLASS, 'text-right tabular-nums')} />
+        {item.priceWarning && <p role="alert" className="mt-1 text-xs text-warning-ink">{item.priceWarning}；原行金额 {money(item.originalAmount)}</p>}
+        {changedRate && <p role="alert" className="mt-1 text-xs text-warning-ink">换算已变化：当前 1 {item.entryUnit} = {currentRate} {item.unit}，保存按当前换算。</p>}
+        {item.unitReadFailed && item.entryUnit !== item.unit && <p role="alert" className="mt-1 text-xs text-warning-ink">当前单位资料读取失败，请核对换算后再保存。</p>}
+      </td>
+      <td className="text-right font-medium tabular-nums">{money(purchaseDraftLineAmount(item.quantity, item.unitPrice))}</td>
+      <td className="text-center"><Button type="button" size="sm" variant="ghost" aria-label="删除该行商品" className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive-ink" onClick={() => removeItem(item._key)}>✕</Button></td>
+    </tr>
+  }
 
   return (
-    <div data-order-entry onKeyDown={handleEntryKeyDown} className="flex flex-col gap-3">
+    <div ref={entryRef} data-order-entry onKeyDown={handleEntryKeyDown} className="flex min-w-0 flex-col gap-3">
       <ActionBar
         title={isEdit ? '编辑采购单' : '新建采购单'}
         subtitle={isEdit || isDirty ? <>{isEdit && <EditModeBadge />}<UnsavedBadge show={isDirty} /></> : undefined}
         rightActions={
           <>
-            {isEdit && (
-              <Button variant="outline" disabled={submitting || submitLocked} onClick={() => requestLeave(() => onSaved?.())}>
-                取消编辑
-              </Button>
-            )}
-            <Button onClick={handleSubmit} disabled={submitting || submitLocked} className="gap-1.5">
+            <Button variant="outline" disabled={submitting || submitLocked} onClick={() => requestLeave(() => isEdit ? onSaved?.() : closeTab())}>
+              {isEdit ? '取消编辑' : '取消'}
+            </Button>
+            <Button onClick={handleSubmit} disabled={submitting || submitLocked || paused} className="gap-1.5">
               {submitting || submitLocked ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -301,13 +383,13 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
         }
       />
 
-      <OrderEntryIssues issues={issues} />
+      <OrderEntryIssues issues={issues} onLocate={focusField} />
       <SectionCard title="订单信息" compact>
-        <div className="flex items-start gap-4">
-          <div data-entry-field="party" className="w-[272px] shrink-0 space-y-1.5">
-            <Label htmlFor="purchase-supplier">供应商 *</Label>
+        <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2 lg:grid-cols-4 [&>*]:min-w-0">
+          <div data-entry-field="party" className="space-y-1.5">
+            <Label htmlFor={fieldId('supplier')}>供应商 *</Label>
             <PickerField
-              id="purchase-supplier"
+              id={fieldId('supplier')}
               value={supplierName}
               placeholder="点击选择供应商…"
               onOpen={() => setSupplierFinderOpen(true)}
@@ -320,10 +402,10 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
             {supplierError && <p className="text-xs text-destructive-ink">请选择供应商</p>}
           </div>
 
-          <div data-entry-field="warehouse" className="w-56 shrink-0 space-y-1.5">
-            <Label htmlFor="purchase-warehouse">入库仓库 *</Label>
+          <div data-entry-field="warehouse" className="space-y-1.5">
+            <Label htmlFor={fieldId('warehouse')}>入库仓库 *</Label>
             <WarehouseSelect
-              id="purchase-warehouse"
+              id={fieldId('warehouse')}
               value={warehouseId ? +warehouseId : null}
               onChange={(id, name) => { setWarehouseId(id ? String(id) : ''); setWarehouseName(name); setWarehouseError(false) }}
               placeholder="选择仓库"
@@ -332,15 +414,15 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
             {warehouseError && <p className="text-xs text-destructive-ink">请选择仓库</p>}
           </div>
 
-          <div className="w-48 shrink-0 space-y-1.5">
-            <Label htmlFor="purchase-expected-date">预计到货日期</Label>
-            <DatePicker id="purchase-expected-date" value={expectedDate} onChange={setExpectedDate} />
+          <div className="space-y-1.5">
+            <Label htmlFor={fieldId('expected-date')}>预计到货日期</Label>
+            <DatePicker id={fieldId('expected-date')} value={expectedDate} onChange={setExpectedDate} />
           </div>
 
-          <div className="flex-1 space-y-1.5">
-            <Label htmlFor="purchase-remark">备注</Label>
+          <div className="space-y-1.5">
+            <Label htmlFor={fieldId('remark')}>备注</Label>
             <Input
-              id="purchase-remark"
+              id={fieldId('remark')}
               maxLength={50}
               value={remark}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRemark(e.target.value)}
@@ -360,136 +442,26 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
           </Button>
         }
       >
-        {items.length > 0 && <p className="mb-2 text-xs text-muted-foreground">数量、单价按 Enter 前进，Shift+Enter 返回；末行可继续添加商品。</p>}
-        {items.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border py-12 text-center">
-            <PackageOpen className="h-8 w-8 text-muted-foreground/40" />
-            <p className="text-sm text-muted-foreground">还没有商品明细，点击上方"添加商品"开始录入</p>
+        {items.length === 0 ? <p className="py-6 text-center text-sm text-muted-foreground">暂无商品明细</p> : <>
+          <div className="overflow-x-auto" data-table-scroll>
+            <PurchaseEntryTable rowCount={items.length + 1} stickyHeader={items.length >= VIRTUAL_TABLE_THRESHOLD}>
+              {items.length >= VIRTUAL_TABLE_THRESHOLD
+                ? <VirtualTableBody data={items} columns={6} getRowKey={rowKey} renderRow={renderItem} onScrollToIndexReady={registerScroll} />
+                : <tbody>{items.map(renderItem)}</tbody>}
+            </PurchaseEntryTable>
           </div>
-        ) : (
-          <>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[1320px] text-sm">
-              <thead>
-                <tr className="border-b text-table-head">
-                  <ProductIdentityHeaders />
-                  <th className="w-16 pb-2 text-center">单位</th>
-                  <th className="w-20 pb-2 text-right">数量</th>
-                  <th className="w-24 pb-2 text-right">单价 (¥)</th>
-                  <th className="w-28 pb-2 text-right">金额</th>
-                  <th className="w-10 pb-2" />
-                </tr>
-              </thead>
-              <tbody>
-                {items.map(item => (
-                  <tr key={item._key} className="border-b border-border/40">
-                    <ProductIdentityCells product={item} nameContent={<button
-                        type="button"
-                        data-entry-field={`item-${item._key}-product`}
-                        onClick={() => {
-                          setFinderItemKey(item._key)
-                          setFinderOpen(true)
-                        }}
-                        onDoubleClick={() => {
-                          setFinderOpen(false)
-                          setFinderItemKey(null)
-                          requestLeave(() => navigate('/products'))
-                        }}
-                        className={cn(
-                          EDIT_CELL_CLASS,
-                          'flex items-center overflow-hidden text-left',
-                          issues.some(i => i.target === `item-${item._key}-product`) && 'border-destructive/60 bg-destructive/5',
-                        )}
-                      >
-                        {item.productName
-                          ? <span className="break-words font-medium text-foreground">{item.productName}</span>
-                          : <span className="text-muted-foreground">点击选择商品…</span>}
-                      </button>} />
-
-                    <td className="py-2.5 text-center">
-                      {(item.units && item.units.filter(u => !u.isBase).length > 0) ? (
-                        <select
-                          value={item.entryUnit || item.unit}
-                          onChange={e => updateItem(item._key, 'entryUnit', e.target.value)}
-                          className={cn(EDIT_CELL_CLASS, 'px-1 text-center')}
-                          title="录入单位"
-                        >
-                          {(item.units || []).map(u => <option key={u.unitName} value={u.unitName}>{u.unitName}</option>)}
-                        </select>
-                      ) : (
-                        <span className="text-muted-body">{item.unit || '—'}</span>
-                      )}
-                    </td>
-
-                    <td className="py-2.5 pr-2">
-                      <Input quantity
-                        type="number"
-                        min="1"
-                        step="1"
-                        data-entry-input data-entry-field={`item-${item._key}-quantity`} aria-label={`${item.productName || '商品'}数量`} aria-invalid={issues.some(i => i.target === `item-${item._key}-quantity`)}
-                        ref={el => { if (el) quantityRefs.current.set(item._key, el); else quantityRefs.current.delete(item._key) }}
-                        placeholder="数量"
-                        value={item.quantity}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'quantity', parsePositiveInteger(e.target.value))}
-                        className={cn(EDIT_CELL_CLASS, 'text-right tabular-nums')}
-                      />
-                      {item.entryUnit && item.entryUnit !== item.unit && (
-                        <div className="mt-0.5 text-right text-[11px] text-muted-foreground tabular-nums">= {baseQtyOf(item)} {item.unit}</div>
-                      )}
-                    </td>
-
-                    <td className="py-2.5">
-                      <Input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        data-entry-input data-entry-field={`item-${item._key}-price`} aria-label={`${item.productName || '商品'}单价`} aria-invalid={issues.some(i => i.target === `item-${item._key}-price`)}
-                        placeholder="单价"
-                        value={item.unitPrice}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'unitPrice', +e.target.value)}
-                        className={cn(EDIT_CELL_CLASS, 'text-right tabular-nums')}
-                      />
-                    </td>
-
-                    <td className="py-2.5 text-right font-medium tabular-nums">
-                      {money(item.quantity * item.unitPrice)}
-                    </td>
-
-                    <td className="py-2.5 text-center">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        aria-label="删除该行商品"
-                        className="h-8 w-9 p-0 text-muted-foreground hover:text-destructive-ink"
-                        onClick={() => removeItem(item._key)}
-                      >
-                        ✕
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-3 py-2 text-sm">
+            <div className="min-w-0 space-y-1"><p className="text-muted-body">商品明细：{items.length} 行{summary.invalidLineCount > 0 && <span className="ml-2 text-warning-ink">{summary.invalidLineCount} 行待核对，金额仅含有效明细</span>}</p><PurchaseQuantitySummary groups={summary.quantityGroups} /></div>
+            <p className="tabular-nums"><span className="mr-3 text-muted-foreground">采购金额</span><strong>{money(summary.amount)}</strong></p>
           </div>
-
-          <div className="flex items-center justify-between border-t border-border pt-4">
-            <p className="text-muted-body">
-              商品明细：{items.length} 行　合计数量：{totalQuantity}
-            </p>
-            <div className="text-right">
-              <p className="text-helper">合计金额</p>
-              <p className="text-2xl font-semibold text-foreground">{money(total)}</p>
-            </div>
-          </div>
-          </>
-        )}
+        </>}
       </SectionCard>
 
       <ProductFinder
+        compact context="purchase" dialogId="purchase-product-finder"
         mode="purchase"
         warehouseName={warehouseName}
-        open={finderOpen}
+        open={finderOpen && !paused}
         warehouseId={warehouseId ? +warehouseId : null}
         onConfirm={handleFinderConfirm}
         onClose={() => {
@@ -499,7 +471,8 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
       />
 
       <SupplierFinder
-        open={supplierFinderOpen}
+        compact context="purchase" dialogId="purchase-supplier-finder"
+        open={supplierFinderOpen && !paused}
         onClose={() => setSupplierFinderOpen(false)}
         onConfirm={handleSupplierConfirm}
       />
@@ -513,7 +486,7 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
   const navigate = useNavigate()
   const isActiveTab = useActiveWorkspaceTab()
   // 采购/收货是 PDA 现场高频变化的单据，标签页常驻挂载时若不轮询容易看到陈旧的收货进度
-  const { data: order, isLoading } = usePurchaseDetail(purchaseId, { refetchInterval: isActiveTab ? 20_000 : false })
+  const { data: order, isLoading, isFetching, error, refetch } = usePurchaseDetail(purchaseId, { refetchInterval: isActiveTab ? 20_000 : false })
   useWorkspaceTabTitle(order?.orderNo)
   const confirmMutate = useConfirmPurchase()
   const withdrawConfirmMutate = useWithdrawConfirmPurchase()
@@ -522,7 +495,9 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
   const cancelMutate  = useCancelPurchase()
   const { can } = usePermission()
   const canApprove = can(PERMISSIONS.PURCHASE_ORDER_APPROVE)
+  const canEdit = can(PERMISSIONS.PURCHASE_ORDER_CREATE)
   const [editing, setEditing] = useState(false)
+  usePurchaseEditEntry(tabPath, !!order && !isLoading && !isFetching && !error, () => { if (order?.status === 1 && canEdit) setEditing(true) })
 
   const [confirmState, setConfirmState] = useState<{
     open: boolean
@@ -546,7 +521,7 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
     setConfirmState({ open: true, title, description, variant, onConfirm, confirmText })
   }
 
-  if (isLoading) {
+  if (isLoading && !order) {
     return (
       <div className="flex h-40 items-center justify-center text-muted-body">
         <Loader2 className="mr-2 h-4 w-4 animate-spin" />加载中…
@@ -554,26 +529,40 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
     )
   }
 
-  if (!order) {
+  const status = (error as { status?: number; response?: { status?: number } } | null)?.status ?? (error as { response?: { status?: number } } | null)?.response?.status
+  const accessUnavailable = status === 403 || status === 404
+  if (accessUnavailable && !(order && editing)) {
     return (
       <div className="flex h-40 flex-col items-center justify-center gap-3 text-muted-foreground">
-        <p className="text-sm">采购单不存在或已删除</p>
+        <p className="text-sm">{status === 403 ? '没有权限查看采购单' : '采购单不存在或已删除'}</p>
+        <Button variant="outline" onClick={() => closeTab()}>返回采购列表</Button>
       </div>
     )
   }
-
-  if (editing) {
-    return <FormView editOrder={order} closeTab={closeTab} tabPath={tabPath} onSaved={() => setEditing(false)} />
+  if (!order) {
+    return <QueryErrorState error={error} title="采购单加载失败" description="请重试读取采购单" onRetry={() => { void refetch() }} />
   }
 
-  const canConfirm = order.status === 1
+  const canConfirm = order.status === 1 && can(PERMISSIONS.PURCHASE_ORDER_CONFIRM)
   const hasActiveInboundTask = (order.inboundTasks ?? []).some(t => t.status !== 5)
-  const canWithdrawConfirm = (order.status === 2 || order.status === 5) && !hasActiveInboundTask
-  const canCancel  = order.status === 1 || order.status === 2 || order.status === 5
-  const isPending  = confirmMutate.isPending || withdrawConfirmMutate.isPending || cancelMutate.isPending
+  const canWithdrawConfirm = (order.status === 2 || order.status === 5) && !hasActiveInboundTask && can(PERMISSIONS.PURCHASE_ORDER_CONFIRM)
+  const canCancel = [1, 2, 5].includes(order.status) && can(PERMISSIONS.PURCHASE_ORDER_CANCEL)
+  const isPending = confirmMutate.isPending || withdrawConfirmMutate.isPending || cancelMutate.isPending || approveMutate.isPending || rejectMutate.isPending
+  const editPaused = editing && (accessUnavailable || !canEdit || order.status !== 1)
+  const pauseReason = status === 403 ? '没有权限查看采购单' : status === 404 ? '采购单不存在或已删除' : !canEdit ? '当前没有采购编辑权限' : '采购单已不是草稿，无法继续编辑'
 
   return (
     <div className="flex flex-col gap-3">
+      <div hidden={!editPaused} role={editPaused ? 'alert' : undefined} className="flex h-40 flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
+        <p>{pauseReason}</p><p>未保存编辑内容已保留，恢复后再继续。</p>
+        <div className="flex gap-2"><Button variant="outline" onClick={() => closeTab()}>返回采购列表</Button><Button variant="outline" onClick={() => { void refetch() }}>重试</Button></div>
+      </div>
+      <div hidden={!error || editPaused} role={error && !editPaused ? 'alert' : undefined} className="flex items-center justify-between gap-3 rounded-md border border-warning/30 px-3 py-2 text-sm">
+        <span>刷新失败，当前显示上次读取的数据{editing ? '；编辑内容已保留' : ''}。</span>
+        <Button size="sm" variant="outline" onClick={() => { void refetch() }}>重试</Button>
+      </div>
+      <div hidden={editPaused} className="flex min-w-0 flex-col gap-3">
+      {editing ? <FormView editOrder={order} closeTab={closeTab} tabPath={tabPath} paused={editPaused} onSaved={() => setEditing(false)} /> : <>
       <ActionBar
         title={order.orderNo}
         subtitle={<StatusBadge type="purchase" status={order.status} />}
@@ -589,7 +578,7 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
                 取消
               </Button>
             )}
-            {order.status === 1 && (
+            {order.status === 1 && canEdit && (
               <Button variant="outline" disabled={isPending} onClick={() => setEditing(true)}>
                 编辑
               </Button>
@@ -633,9 +622,14 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
         }
       />
 
-      <OrderDetailSections type="purchase" id={order.id}>
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-border pb-3 text-sm">
+        <p className="tabular-nums"><span className="mr-3 text-muted-foreground">采购金额</span><strong>{money(order.totalAmount)}</strong></p>
+        <span className="text-muted-foreground">{order.items?.length ?? 0} 行商品</span>
+        <PurchaseQuantitySummary groups={groupPurchaseQuantities(order.items ?? [], 'saved')} />
+      </div>
+      <OrderDetailSections type="purchase" id={order.id} compactTabs>
       <SectionCard title="基础信息" compact>
-        <dl className="grid grid-cols-3 gap-x-6 gap-y-3 text-sm">
+        <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2 lg:grid-cols-3 [&>*]:min-w-0">
           {[
             ['供应商',     order.supplierName],
             ['仓库',       order.warehouseName],
@@ -643,12 +637,12 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
             ['经办人',     order.operatorName],
             ['创建时间',   formatDisplayDateTime(order.createdAt)],
           ].map(([label, value]) => (
-            <div key={label}>
-              <dt className="mb-0.5 text-helper">{label}</dt>
-              <dd className="font-medium">{value}</dd>
+            <div key={label} className="flex gap-3">
+              <dt className="shrink-0 text-muted-foreground">{label}</dt>
+              <dd className="min-w-0 font-medium [overflow-wrap:anywhere]">{value}</dd>
             </div>
           ))}
-          {(order.totalOrderedQty ?? 0) > 0 && (() => {
+          {(order.totalOrderedQty ?? 0) > 0 && !!order.items?.length && order.items.every(i => i.productId === order.items![0].productId && i.unit === order.items![0].unit) && (() => {
             const ordered = order.totalOrderedQty ?? 0
             const received = order.totalReceivedQty ?? 0
             const pct = ordered > 0 ? Math.min(100, Math.round(received / ordered * 100)) : 0
@@ -656,7 +650,7 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
             return (
               <div>
                 <dt className="mb-0.5 text-helper">收货进度</dt>
-                <dd className={cn('font-medium', fullyReceived && 'text-success-ink')}>{received} / {ordered} 件</dd>
+                <dd className={cn('font-medium', fullyReceived && 'text-success-ink')}>{qty(received)} / {qty(ordered)} {order.items![0].unit}</dd>
                 <div className="mt-1.5 h-1.5 w-full max-w-32 rounded-full bg-muted">
                   <div
                     className="h-1.5 rounded-full transition-all"
@@ -667,13 +661,13 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
             )
           })()}
           {order.remark && (
-            <div className="col-span-3">
+            <div className="col-span-full min-w-0">
               <dt className="mb-0.5 text-helper">备注</dt>
-              <dd>{order.remark}</dd>
+              <dd className="whitespace-pre-wrap [overflow-wrap:anywhere]">{order.remark}</dd>
             </div>
           )}
           {!!order.inboundTasks?.length && (
-            <div className="col-span-3">
+            <div className="col-span-full min-w-0">
               <dt className="mb-0.5 text-helper">关联收货入库单</dt>
               <dd className="flex flex-wrap items-center gap-2">
                 {order.inboundTasks.map(t => {
@@ -704,42 +698,26 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
         </dl>
       </SectionCard>
 
-      <SectionCard title="商品明细" compact>
-        <DataTable
-          columns={[
-            ...productIdentityColumns(),
-            { key: 'unit', title: '单位', width: 70, render: (_, r) => <span className="text-muted-foreground">{(r.entryUnit && r.entryUnit !== r.unit) ? r.entryUnit : r.unit}</span> },
-            {
-              key: 'quantity', title: '数量', width: 120, align: 'right',
-              render: (v, r) => (r.entryUnit && r.entryUnit !== r.unit && r.entryQty != null)
-                ? <span className="tabular-nums">{r.entryQty} {r.entryUnit}<span className="ml-1 text-xs text-muted-foreground">（{Number(v)} {r.unit}）</span></span>
-                : <span className="tabular-nums">{String(v)}</span>,
-            },
-            {
-              key: 'unitPrice', title: '单价', width: 120, align: 'right',
-              render: (v, r) => {
-                const boxEntry = r.entryUnit && r.entryUnit !== r.unit && r.entryQty && r.entryQty > 0
-                const entryPrice = boxEntry ? r.amount / (r.entryQty as number) : Number(v)
-                return boxEntry
-                  ? <span className="tabular-nums" title={`¥${Number(v).toFixed(4)} / ${r.unit}`}>{money(entryPrice)}/{r.entryUnit}</span>
-                  : <span className="tabular-nums">{money(Number(v))}</span>
-              },
-            },
-            { key: 'amount', title: '金额', width: 110, align: 'right', render: v => <span className="font-semibold tabular-nums">{money(Number(v))}</span> },
-          ] satisfies TableColumn<PurchaseOrderItem>[]}
-          data={order.items ?? []}
-          rowKey="id"
-          emptyText="暂无商品明细"
-        />
-
-        <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
-          <p className="text-muted-body">
-            共 {order.items?.length ?? 0} 行商品明细
-          </p>
-          <div className="text-right">
-            <p className="text-helper">合计金额</p>
-            <p className="text-2xl font-semibold text-foreground">{money(Number(order.totalAmount))}</p>
-          </div>
+      <SectionCard title="商品明细" compact noPadding>
+        <div data-workspace-scroll tabIndex={0} aria-label="采购商品明细" className="max-h-[min(60vh,36rem)] overflow-auto [&>div]:rounded-none [&>div]:border-0 [&>div]:overflow-visible [&_[data-table-scroll]]:overflow-visible [&_thead]:sticky [&_thead]:top-0 [&_thead]:z-10">
+        <DataTable columns={[
+          { key: 'productName', title: '商品', width: 44, minWidth: 220, render: (_, item) => <PurchaseProductIdentity item={item} /> },
+          { key: 'quantity', title: '数量', width: 17, minWidth: 100, align: 'right', render: (_, item) => <div className="tabular-nums">{qty(item.entryQty ?? (item.entryUnit === item.unit || !item.entryUnit ? item.quantity : null))}
+            {!!item.entryUnit && item.entryUnit !== item.unit && <div className="text-xs text-muted-foreground">= {qty(item.quantity)} {item.unit}</div>}
+          </div> },
+          { key: 'entryUnit', title: '单位', width: 10, minWidth: 70, render: (_, item) => item.entryUnit || item.unit },
+          { key: 'unitPrice', title: '单价', width: 16, minWidth: 110, align: 'right', render: (v, item) => {
+            const restored = restorePurchaseEntryPrice(item)
+            return <span className="tabular-nums" title={`基本单位单价 ${unitPrice(Number(v), 8)} / ${item.unit}`}>{restored.verified ? unitPrice(restored.entryUnitPrice) : `${unitPrice(Number(v), 8)}/${item.unit}`}</span>
+          } },
+          { key: 'amount', title: '金额', width: 13, minWidth: 96, align: 'right', render: v => <span className="font-medium tabular-nums">{money(Number(v))}</span> },
+        ] satisfies TableColumn<PurchaseOrderItem>[]}
+          data={order.items ?? []} rowKey="id" emptyText="暂无商品明细" fluid virtualized columnStorageKey="purchase-detail-items" />
+        </div>
+        <div aria-label="采购商品明细汇总" className="flex flex-wrap items-center justify-end gap-x-6 gap-y-2 border-t border-border px-4 py-3 text-sm">
+          <span className="mr-auto tabular-nums"><span className="text-muted-foreground">明细</span> {order.items?.length ?? 0} 行</span>
+          <PurchaseQuantitySummary groups={groupPurchaseQuantities(order.items ?? [], 'saved')} />
+          <strong className="tabular-nums"><span className="mr-2 font-normal">采购金额合计</span>{money(order.totalAmount)}</strong>
         </div>
       </SectionCard>
 
@@ -789,6 +767,8 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      </>}
+      </div>
     </div>
   )
 }

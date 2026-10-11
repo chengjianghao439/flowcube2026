@@ -1,4 +1,3 @@
-import { QueryFormLayout } from '@/components/shared/QueryFormLayout'
 import { useEffect, useState } from 'react'
 import { AppDialog } from '@/components/shared/AppDialog'
 import OperatorSelectField from '@/components/shared/OperatorSelectField'
@@ -10,6 +9,7 @@ import { DatePicker } from '@/components/shared/DatePicker'
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
 import { PickerField } from '@/components/shared/PickerField'
 import { todayYmd } from '@/lib/dateTime'
+import { PURCHASE_STATUS_OPTIONS } from '@/generated/status'
 
 /** 采购查询弹窗对外的筛选值（与 URL 参数一一对应） */
 export interface PurchaseQueryValues {
@@ -54,7 +54,7 @@ export default function PurchaseQueryDialog({ open, initial, resetValues, onClos
 
 
 
-  useEffect(() => { if (open) setDraft(initial) }, [open, initial])
+  useEffect(() => { if (open) setDraft(initial); else { setSupplierOpen(false); setProductOpen(false) } }, [open, initial])
 
   function set<K extends keyof PurchaseQueryValues>(key: K, value: PurchaseQueryValues[K]) {
     setDraft(d => ({ ...d, [key]: value }))
@@ -64,12 +64,13 @@ export default function PurchaseQueryDialog({ open, initial, resetValues, onClos
     <>
       <AppDialog
         open={open}
+        captureFocusOnOpen
         onOpenChange={v => { if (!v) onClose() }}
         dialogId="purchase-query"
         title="查询采购单"
         resizable={false}
-        defaultWidth={520}
-        defaultHeight={520}
+        defaultWidth={680}
+        defaultHeight={600}
         minWidth={420}
         minHeight={420}
         footer={
@@ -82,7 +83,8 @@ export default function PurchaseQueryDialog({ open, initial, resetValues, onClos
           </div>
         }
       >
-        <QueryFormLayout>
+        <div className="grid content-start grid-cols-1 gap-x-5 gap-y-3 overflow-y-auto px-5 py-4 sm:grid-cols-2 [&>*]:min-w-0">
+          <p className="col-span-full text-sm font-semibold">订单条件</p>
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground">单号</span>
             <Input
@@ -99,11 +101,7 @@ export default function PurchaseQueryDialog({ open, initial, resetValues, onClos
             <Select value={draft.status || '__all__'} onValueChange={v => set('status', v === '__all__' ? '' : v)}>
               <SelectTrigger className="h-9"><SelectValue placeholder="全部状态" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="__all__">全部状态</SelectItem>
-                <SelectItem value="1">草稿</SelectItem>
-                <SelectItem value="2">已提交</SelectItem>
-                <SelectItem value="3">已完成</SelectItem>
-                <SelectItem value="4">已取消</SelectItem>
+                {PURCHASE_STATUS_OPTIONS.map(s => <SelectItem key={s.value} value={s.value || '__all__'}>{s.label}</SelectItem>)}
               </SelectContent>
             </Select>
           </label>
@@ -148,6 +146,7 @@ export default function PurchaseQueryDialog({ open, initial, resetValues, onClos
             />
           </label>
 
+          <p className="col-span-full border-t border-border pt-3 text-sm font-semibold">创建与备注</p>
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground">创建日期（起）</span>
             <DatePicker value={draft.startDate} max={draft.endDate || undefined}
@@ -159,7 +158,7 @@ export default function PurchaseQueryDialog({ open, initial, resetValues, onClos
               onChange={v => set('endDate', v)} className="h-9" />
           </label>
 
-          <label className="flex flex-col gap-1 col-span-2">
+          <label className="col-span-full flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground">备注</span>
             <Input
               placeholder="按订单备注内容查询…"
@@ -169,16 +168,18 @@ export default function PurchaseQueryDialog({ open, initial, resetValues, onClos
               className="h-9"
             />
           </label>
-        </QueryFormLayout>
+        </div>
       </AppDialog>
 
       <SupplierFinder
-        open={supplierOpen}
+        compact context="purchase" dialogId="purchase-query-supplier-finder"
+        open={open && supplierOpen}
         onClose={() => setSupplierOpen(false)}
         onConfirm={r => setDraft(d => ({ ...d, supplierId: r.id, supplierName: r.name }))}
       />
       <ProductFinder
-        open={productOpen}
+        compact context="purchase" mode="purchase" dialogId="purchase-query-product-finder"
+        open={open && productOpen}
         onClose={() => setProductOpen(false)}
         onConfirm={r => setDraft(d => ({ ...d, productId: r.id, productCode: r.code ?? '', productName: r.name }))}
       />

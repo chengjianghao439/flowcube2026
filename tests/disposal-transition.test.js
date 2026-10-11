@@ -121,6 +121,10 @@ function systemReceipt(receipt, context, warehouses = [8], head = { id: 11, ware
   let sent, error, reads = 0
   const pool = { query: async () => { reads++; return head ? [[head]] : [[]] } }
   const deps = { '../../utils/response': { successResponse: (_r, data) => { sent = data } }, '../../utils/operationRequest': { getScopedOperationRequestStatus: async options => { options.receiptContext.matchedAction = context.matchedAction; return receipt } }, '../packages/packages.receipt-guard': { assertPrintLabelReceiptConsistent() {} }, '../../utils/logger': {}, './system.split-device': { ensureSplitReceiptDevice() {} }, '../inventory/inventory.split-receipt': { assertSplitReceipt() {} }, '../sale/sale.commercial-receipts': { assertReceiptScope() {} }, '../../config/db': { pool } }
+  // 异域守卫使用真实 action 分派；本套处置范围/资源校验继续执行真实 disposal.receipt。
+  deps['../inbound-tasks/inbound-tasks.create-receipt'] = load('modules/inbound-tasks/inbound-tasks.create-receipt.js', { '../../utils/AppError': AppError, './inbound-tasks.edit-rules': {} })
+  deps['../inbound-tasks/inbound-tasks.edit-receipt'] = load('modules/inbound-tasks/inbound-tasks.edit-receipt.js', { '../../utils/AppError': AppError, '../../utils/warehouseScope': scope })
+  deps['../print-jobs/print-jobs.reprint-intent'] = load('modules/print-jobs/print-jobs.reprint-intent.js', { crypto: require('node:crypto'), '../../utils/AppError': AppError, '../../utils/warehouseScope': scope, '../../utils/operationRequest': {}, './print-jobs.reprint-source': {} })
   if (fs.existsSync(path.join(base, 'modules/disposal/disposal.receipt.js'))) deps['../disposal/disposal.receipt'] = load('modules/disposal/disposal.receipt.js', { '../../utils/AppError': AppError, '../../utils/warehouseScope': scope })
   const controller = load('modules/system/system.controller.js', deps)
   return controller.requestStatus({ params: { key: 'original' }, query: { action: context.requestedAction }, user: { userId: 9, warehouseIds: warehouses } }, {}, e => { error = e }).then(() => ({ sent, error, reads }))
@@ -130,11 +134,12 @@ const receiptContext = { requestedAction: 'disposal.dispose.11', matchedAction: 
 test('own status matched disposal domain rejects cross resource/wide prefix/missing head/current scope', async () => {
   for (const [value, context, warehouses, head] of [[{ ...receipt, resourceId: 12 }, receiptContext], [{ ...receipt, resourceType: 'sale_order' }, receiptContext], [receipt, { ...receiptContext, requestedAction: 'disposal' }], [receipt, { ...receiptContext, matchedAction: 'disposal.dispose.12' }], [receipt, receiptContext, []], [receipt, receiptContext, [8], null]]) {
     const r = await systemReceipt(value, context, warehouses, head); assert.ok(r.error, 'domain guard must reject instead of sending success'); assert.equal(r.sent, undefined)
+    assert.ok(r.error instanceof AppError); assert.ok(['DISPOSAL_RECEIPT_INVALID', 'WAREHOUSE_SCOPE_DENIED'].includes(r.error.code))
   }
-  const legal = await systemReceipt(receipt, receiptContext); assert.deepEqual(clean(legal.sent), receipt)
+  const legal = await systemReceipt(receipt, receiptContext); assert.equal(legal.error, undefined); assert.deepEqual(clean(legal.sent), receipt)
 })
 test('pending/not_found own query keeps original auth contract and does not read business detail or forge resource', async () => {
-  for (const status of ['pending', 'not_found']) { const data = { status, data: null }; const r = await systemReceipt(data, { requestedAction: 'disposal.dispose.11', matchedAction: status === 'pending' ? 'disposal.dispose.11' : undefined }, []); assert.deepEqual(clean(r.sent), data); assert.equal(r.reads, 0) }
+  for (const status of ['pending', 'not_found']) { const data = { status, data: null }; const r = await systemReceipt(data, { requestedAction: 'disposal.dispose.11', matchedAction: status === 'pending' ? 'disposal.dispose.11' : undefined }, []); assert.equal(r.error, undefined); assert.deepEqual(clean(r.sent), data); assert.equal(r.reads, 0) }
 })
 test('multiple scrap items lock all dimensions ascending before containers and batch ledger once', async () => {
   const f = fixture({ items: [item(3, 9), item(3, 3)] })

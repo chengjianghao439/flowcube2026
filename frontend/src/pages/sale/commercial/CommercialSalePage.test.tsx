@@ -448,6 +448,25 @@ test.each(['cancel', 'ship'] as const)('real %s dialog cannot dismiss or submit 
     expect(mocks.execute).toHaveBeenCalledTimes(1)
   }, action === 'cancel' ? actionOrder(1) : order)
 })
+test('取消原因选填，一次输入随原请求冻结并在未知结果重试原样带回', async () => {
+  allowDetailActions()
+  mocks.execute.mockRejectedValueOnce({status:503}).mockResolvedValueOnce(null)
+  await mount(async host => {
+    await click('取消订单')
+    const input=document.querySelector<HTMLTextAreaElement>('textarea[aria-label="取消原因（选填）"]')
+    expect(input).toBeTruthy()
+    await act(async()=>{
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')!.set!.call(input,'合成取消原因')
+      input!.dispatchEvent(new Event('input',{bubbles:true}))
+    })
+    await click('确认')
+    const original=mocks.execute.mock.calls[0][0]
+    expect(original.operation.body.changeReason).toBe('合成取消原因')
+    expectRecoveryVisible(host)
+    await click('按原请求重试')
+    expect(mocks.execute.mock.calls[1][0]).toEqual(original)
+  },actionOrder(1))
+})
 test('terminal business failure keeps its error and permits an explicit new action instead of unknown recovery', async () => {
   allowDetailActions()
   mocks.execute.mockRejectedValue({ status: 400, message: '业务拒绝夹具' })

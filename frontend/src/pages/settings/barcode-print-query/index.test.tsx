@@ -18,7 +18,8 @@ const rows = vi.hoisted(() => [
   // 因作废被撤回终结的任务：结果要说「未出纸」，不能说成「打印失败」
   { recordId: 7, category: 'inbound', inboundTaskId: 9, bizNo: 'IT-9', barcodeStatusKey: 'voided', latestJob: { statusKey: 'voided_job', printStateLabel: '未出纸（库存条码已作废）' } },
 ].map(row => ({ ...row, waveId: 11, waveNo: 'WAVE-11' })))
-vi.mock('@tanstack/react-query', () => ({
+vi.mock('@tanstack/react-query', async importOriginal => ({
+  ...await importOriginal<typeof import('@tanstack/react-query')>(),
   useQuery: () => ({ data: { list: rows, pagination: { total: rows.length } }, isLoading: false }),
   useMutation: () => ({ mutate: vi.fn(), isPending: false }),
   useQueryClient: () => ({ invalidateQueries: vi.fn() }),

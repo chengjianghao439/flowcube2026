@@ -13,7 +13,7 @@ const router = Router()
 // 作业页面只需 id/allowDecimal，不应为此要求开放含价格的商品主档。
 // 仍复用现有权限读取、拒绝审计与超管规则，未匹配时按 PRODUCT_VIEW 拒绝。
 const QTY_POLICY_PERMISSIONS = [
-  PERMISSIONS.PRODUCT_VIEW,
+  PERMISSIONS.PRODUCT_VIEW, PERMISSIONS.INBOUND_ORDER_UPDATE,
   PERMISSIONS.INBOUND_RECEIVE_EXECUTE, PERMISSIONS.RETURN_ORDER_EXECUTE,
   PERMISSIONS.STOCKCHECK_VIEW, PERMISSIONS.STOCKCHECK_UPDATE,
   PERMISSIONS.SALE_ORDER_CREATE, PERMISSIONS.SALE_ORDER_UPDATE,
@@ -78,7 +78,7 @@ router.get('/',       requirePermission(PERMISSIONS.PRODUCT_VIEW), ctrl.list)
 router.post('/:id/print-label', requirePermission(PERMISSIONS.PRODUCT_PRINT_LABEL), ctrl.printLabel)
 router.get('/:id',    requirePermission(PERMISSIONS.PRODUCT_VIEW), ctrl.detail)
 router.post('/',      requirePermission(PERMISSIONS.PRODUCT_CREATE), validateBody(productBase), ctrl.create)
-router.put('/:id',    requirePermission(PERMISSIONS.PRODUCT_UPDATE), validateBody(productBase.extend({ isActive: z.boolean() })), ctrl.update)
+router.put('/:id',    requirePermission(PERMISSIONS.PRODUCT_UPDATE), validateBody(productBase.extend({ isActive: z.boolean(), changeReason: z.string().max(500).optional().nullable() })), ctrl.update)
 router.delete('/:id', requirePermission(PERMISSIONS.PRODUCT_DELETE), ctrl.remove)
 
 module.exports = router

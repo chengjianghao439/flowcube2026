@@ -19,6 +19,20 @@ const {
   printStateLabel,
 } = require('./print-jobs.status')
 
+function requestMetadata(row) {
+  return {
+    requestPurpose: ['initial', 'reprint'].includes(row.request_purpose) ? row.request_purpose : null,
+    createdById: row.created_by == null ? null : Number(row.created_by),
+    createdByName: row.created_by_name ?? null,
+    requestedCopies: row.copies == null ? null : Number(row.copies),
+    acknowledgedAt: row.acknowledged_at ?? null,
+    sourcePrintJobId: row.source_print_job_id == null ? null : Number(row.source_print_job_id),
+    refType: row.ref_type ?? null,
+    refId: row.ref_id == null ? null : Number(row.ref_id),
+    refCode: row.ref_code ?? null,
+  }
+}
+
 function normalizePrintPagination({ page, pageSize }) {
   if (![page, pageSize].every(v => (typeof v === 'number' || typeof v === 'string') && Number.isSafeInteger(Number(v)) && Number(v) > 0)) {
     throw new AppError('分页参数须为有限的正整数', 400, 'PRINT_PAGINATION_INVALID')
@@ -66,6 +80,7 @@ async function findAll({ printerId, status, page = 1, pageSize = 50, scopeWareho
             j.priority, j.job_type, j.warehouse_id, j.status, j.retry_count, j.error_message,
             j.expires_at, j.acknowledged_at, j.job_unique_key, j.dispatch_reason,
             j.ref_type, j.ref_id, j.ref_code, j.dispatched_at, j.created_by, j.created_at,
+            j.request_purpose, j.created_by_name, j.source_print_job_id,
             p.code AS printer_code, p.name AS printer_name
      FROM print_jobs j
      LEFT JOIN printers p ON p.id = j.printer_id
@@ -134,7 +149,7 @@ async function listPrinterHealth(scopeWarehouseIds = null) {
   }))
 }
 
-async function findBarcodeRecords({ category, keyword = '', status, page = 1, pageSize = 20, inboundTaskId = null, inboundTaskItemId = null, scopeWarehouseIds = null } = {}) {
+async function findBarcodeRecords({ category, keyword = '', status, page = 1, pageSize = 20, inboundTaskId = null, inboundTaskItemId = null, scopeWarehouseIds = null, recovery = false } = {}) {
   const paging = normalizePrintPagination({ page, pageSize })
   page = paging.page; pageSize = paging.pageSize
   const type = String(category || '').trim().toLowerCase()
@@ -144,7 +159,7 @@ async function findBarcodeRecords({ category, keyword = '', status, page = 1, pa
   const normalizedStatus = normalizeBarcodeRecordStatus(status)
   // 仓库范围必须透传到三个子查询（2026-09-18 审计 P2）：条码补打中心会列出容器/箱贴条码、
   // 商品、供应商与库位，此前无范围过滤，限仓用户可跨仓读取。
-  if (type === 'inbound') return findInboundBarcodeRecords({ keyword, status: normalizedStatus, page, pageSize, inboundTaskId, inboundTaskItemId, scopeWarehouseIds })
+  if (type === 'inbound') return findInboundBarcodeRecords({ keyword, status: normalizedStatus, page, pageSize, inboundTaskId, inboundTaskItemId, scopeWarehouseIds, recovery })
   if (type === 'outbound') return findOutboundBarcodeRecords({ keyword, status: normalizedStatus, page, pageSize, scopeWarehouseIds })
   return findLogisticsBarcodeRecords({ keyword, status: normalizedStatus, page, pageSize, scopeWarehouseIds })
 }
@@ -251,7 +266,8 @@ function warehouseScopePredicate(scopeWarehouseIds, column) {
   return { sql: `${column} IN (?)`, params: [scopeWarehouseIds] }
 }
 
-async function findInboundBarcodeRecords({ keyword = '', status, page = 1, pageSize = 20, inboundTaskId = null, inboundTaskItemId = null, scopeWarehouseIds = null } = {}) {
+async function findInboundBarcodeRecords({ keyword = '', status, page = 1, pageSize = 20, inboundTaskId = null, inboundTaskItemId = null, scopeWarehouseIds = null, recovery = false } = {}) {
+  if (recovery && !normalizeBarcodeQueryKeyword(keyword) && !inboundTaskId && !inboundTaskItemId) throw new AppError('请输入库存条码、商品或收货单号后恢复标签', 400, 'PRINT_RECOVERY_SEARCH_REQUIRED')
   const thresholds = await getInboundClosureThresholds()
   const timeoutMinutes = Number(thresholds.printTimeoutMinutes || 30)
   const like = `%${normalizeBarcodeQueryKeyword(keyword)}%`
@@ -275,11 +291,22 @@ async function findInboundBarcodeRecords({ keyword = '', status, page = 1, pageS
     inboundFilterParams.push(...inboundScope.params)
   }
 
+  const headScope = warehouseScopePredicate(scopeWarehouseIds, 't.warehouse_id')
+  if (headScope.sql) { inboundFilterSql.push('AND (c.inbound_task_id IS NULL OR (' + headScope.sql + '))'); inboundFilterParams.push(...headScope.params) }
+  const validOriginSql = `(c.inbound_task_id IS NULL AND IFNULL(c.source_ref_type,'') <> 'inbound_task' OR
+    t.id IS NOT NULL AND t.deleted_at IS NULL
+    AND (IFNULL(c.source_ref_type,'') <> 'inbound_task' OR c.source_ref_id = c.inbound_task_id)
+    AND (SELECT COUNT(*) FROM inbound_task_items i WHERE i.task_id=c.inbound_task_id AND i.product_id=c.product_id
+      AND (c.inbound_task_item_id IS NULL OR i.id=c.inbound_task_item_id)) = 1)`
+  const historySql = recovery
+    ? `AND pj.id IS NULL AND c.source_ref_type='inbound_task' AND c.status <> ${CONTAINER_STATUS.VOID} AND ${validOriginSql}`
+    : 'AND pj.id IS NOT NULL'
   const offset = (page - 1) * pageSize
   const statusClause = inboundStatusClause(status, timeoutMinutes)
   const [rows] = await pool.query(
     `SELECT
         c.id AS record_id,
+        ${validOriginSql} AS valid_origin,
         c.barcode,
         CASE WHEN c.container_type = 2 OR c.barcode LIKE 'B%' THEN 'plastic_box' ELSE 'inventory' END AS container_kind,
         c.status AS container_status,
@@ -311,6 +338,8 @@ async function findInboundBarcodeRecords({ keyword = '', status, page = 1, pageS
         pj.created_at AS print_created_at,
         pj.updated_at AS print_updated_at,
         pj.dispatch_reason,
+        pj.request_purpose, pj.created_by, pj.created_by_name, pj.copies,
+        pj.acknowledged_at, pj.source_print_job_id, pj.ref_type, pj.ref_id, pj.ref_code,
         pj.printer_code,
         pj.printer_name
      FROM inventory_containers c
@@ -321,6 +350,8 @@ async function findInboundBarcodeRecords({ keyword = '', status, page = 1, pageS
      LEFT JOIN (
        SELECT j.id, j.ref_id, j.status, j.error_message, j.printer_id,
               j.created_at, j.updated_at, j.dispatch_reason,
+              j.request_purpose, j.created_by, j.created_by_name, j.copies,
+              j.acknowledged_at, j.source_print_job_id, j.ref_type, j.ref_code,
               pr.code AS printer_code, pr.name AS printer_name
        FROM print_jobs j
        LEFT JOIN printers pr ON pr.id = j.printer_id
@@ -340,7 +371,7 @@ async function findInboundBarcodeRecords({ keyword = '', status, page = 1, pageS
          OR IFNULL(p.name, '') LIKE ?
          OR IFNULL(t.task_no, '') LIKE ?
        )
-       AND pj.id IS NOT NULL
+       ${historySql}
        AND IFNULL(c.source_ref_type, '') <> 'plastic_box_create'
        ${statusClause.sql}
      ORDER BY c.id DESC
@@ -380,6 +411,7 @@ async function findInboundBarcodeRecords({ keyword = '', status, page = 1, pageS
             printerName: row.printer_name ?? null,
             errorMessage: row.error_message ?? null,
             dispatchReason: row.dispatch_reason ?? null,
+            ...requestMetadata(row),
             createdAt: row.print_created_at,
             updatedAt: row.print_updated_at,
           }
@@ -391,7 +423,8 @@ async function findInboundBarcodeRecords({ keyword = '', status, page = 1, pageS
       voidReason: derived.voidReasonLabel ?? null,
       // 作废容器不能再补打（业务边界 2026-09-27：只收紧 VOID）。前端按钮读这个字段禁用，
       // 但**后端接口另有独立校验**——UI 禁用挡不住直接调接口。
-      canReprint: Number(row.container_status) !== CONTAINER_STATUS.VOID,
+      canReprint: !!Number(row.valid_origin) && Number(row.container_status) !== CONTAINER_STATUS.VOID,
+      canRecover: recovery && !!Number(row.valid_origin),
     }
   })
   const [[{ total }]] = await pool.query(
@@ -418,7 +451,7 @@ async function findInboundBarcodeRecords({ keyword = '', status, page = 1, pageS
          OR IFNULL(p.name, '') LIKE ?
          OR IFNULL(t.task_no, '') LIKE ?
        )
-       AND pj.id IS NOT NULL
+       ${historySql}
        AND IFNULL(c.source_ref_type, '') <> 'plastic_box_create'
        ${statusClause.sql}`,
     [...inboundFilterParams, like, like, like, like, ...statusClause.params],
@@ -460,6 +493,8 @@ async function findOutboundBarcodeRecords({ keyword = '', status, page = 1, page
         pj.created_at AS print_created_at,
         pj.updated_at AS print_updated_at,
         pj.dispatch_reason,
+        pj.request_purpose, pj.created_by, pj.created_by_name, pj.copies,
+        pj.acknowledged_at, pj.source_print_job_id, pj.ref_type, pj.ref_id, pj.ref_code,
         pj.printer_code,
         pj.printer_name
      FROM packages p
@@ -469,6 +504,8 @@ async function findOutboundBarcodeRecords({ keyword = '', status, page = 1, page
      LEFT JOIN (
        SELECT j.id, j.ref_id, j.status, j.error_message, j.printer_id,
               j.created_at, j.updated_at, j.dispatch_reason,
+              j.request_purpose, j.created_by, j.created_by_name, j.copies,
+              j.acknowledged_at, j.source_print_job_id, j.ref_type, j.ref_code,
               pr.code AS printer_code, pr.name AS printer_name
        FROM print_jobs j
        LEFT JOIN printers pr ON pr.id = j.printer_id
@@ -520,6 +557,7 @@ async function findOutboundBarcodeRecords({ keyword = '', status, page = 1, page
             printerName: row.printer_name ?? null,
             errorMessage: row.error_message ?? null,
             dispatchReason: row.dispatch_reason ?? null,
+            ...requestMetadata(row),
             createdAt: row.print_created_at,
             updatedAt: row.print_updated_at,
           }
@@ -565,7 +603,8 @@ async function findLogisticsBarcodeRecords({ keyword = '', status, page = 1, pag
   const statusClause = genericStatusClause(status, 'j')
   const [rows] = await pool.query(
     `SELECT j.id, j.printer_id, j.status, j.error_message, j.dispatch_reason,
-            j.created_at, j.updated_at, j.ref_code, j.title, j.copies,
+            j.created_at, j.updated_at, j.ref_type, j.ref_id, j.ref_code, j.title, j.copies,
+            j.request_purpose, j.created_by, j.created_by_name, j.acknowledged_at, j.source_print_job_id,
             p.code AS printer_code, p.name AS printer_name
      FROM print_jobs j
      LEFT JOIN printers p ON p.id = j.printer_id
@@ -605,6 +644,7 @@ async function findLogisticsBarcodeRecords({ keyword = '', status, page = 1, pag
         printerName: row.printer_name ?? null,
         errorMessage: row.error_message ?? null,
         dispatchReason: row.dispatch_reason ?? null,
+        ...requestMetadata(row),
         createdAt: row.created_at,
         updatedAt: row.updated_at,
       },

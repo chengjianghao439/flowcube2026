@@ -1,4 +1,5 @@
 import { money } from '@/lib/format'
+import { PURCHASE_STATUS_NAME } from '@/generated/status'
 import { OrderStatusFilter } from '@/components/shared/OrderStatusFilter'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -28,7 +29,7 @@ import PurchaseQueryDialog, { type PurchaseQueryValues } from './PurchaseQueryDi
 import type { PurchaseOrder } from '@/types/purchase'
 import type { TableColumn } from '@/types'
 
-const STATUS_LABELS: Record<string, string> = { '1': '草稿', '2': '已提交', '3': '已完成', '4': '已取消', '5': '待审批' }
+const STATUS_LABELS: Record<string, string> = PURCHASE_STATUS_NAME
 
 /** 首次打开采购页时默认筛选的天数窗口（最近一周） */
 const DEFAULT_RANGE_DAYS = 7
@@ -49,10 +50,11 @@ export default function PurchasePage() {
     navigate('/purchase/new')
   }
 
-  function goToDetail(order: PurchaseOrder) {
+  function goToDetail(order: PurchaseOrder, edit = false) {
     const key = `/purchase/${order.id}`
-    addTab({ key, title: order.orderNo, path: key })
-    navigate(key)
+    const path = edit ? `${key}?edit=1` : key
+    addTab({ key, title: order.orderNo, path })
+    navigate(path)
   }
 
   // ── 当前生效的筛选（全部存于 URL 参数，刷新/分享可保留） ──
@@ -117,6 +119,8 @@ export default function PurchasePage() {
   const { can } = usePermission()
   const canApprove = can(PERMISSIONS.PURCHASE_ORDER_APPROVE)
   const canCreate = can(PERMISSIONS.PURCHASE_ORDER_CREATE)
+  const canConfirm = can(PERMISSIONS.PURCHASE_ORDER_CONFIRM)
+  const canCancel = can(PERMISSIONS.PURCHASE_ORDER_CANCEL)
   const { data: printDetail } = usePurchaseDetail(printId || 0)
 
   function updateParams(updates: Record<string, string | number | null | undefined>) {
@@ -239,10 +243,11 @@ export default function PurchasePage() {
             onPrimaryClick={() => goToDetail(r)}
             primaryVariant="outline"
             items={[
-              ...(r.status === 1 ? [{
+              ...(r.status === 1 && canCreate ? [{
                 label: '编辑',
-                onClick: () => goToDetail(r),
-              }, {
+                onClick: () => goToDetail(r, true),
+              }] : []),
+              ...(r.status === 1 && canConfirm ? [{
                 label: '提交',
                 onClick: () => confirm.mutate(r.id),
                 disabled: confirm.isPending,
@@ -251,7 +256,7 @@ export default function PurchasePage() {
                 label: '打印',
                 onClick: () => setPrintId(r.id),
               },
-              ...(r.status === 2 || r.status === 5 ? [{
+              ...((r.status === 2 || r.status === 5) && canConfirm ? [{
                 label: '撤回确认',
                 separatorBefore: true,
                 onClick: () => openConfirm(
@@ -281,7 +286,7 @@ export default function PurchasePage() {
               // 关闭剩余只有在已经有实收数量、且相关收货订单都已上架完成时才可能成功
               // （对应后端 closeRemaining 的两条硬性前提），条件不满足就不展示，
               // 避免对必然失败的订单（如还没收过货）诱导点击。
-              ...(r.status === 2 && r.canCloseRemaining ? [{
+              ...(r.status === 2 && r.canCloseRemaining && canConfirm ? [{
                 label: '关闭未收结案',
                 onClick: () => openConfirm(
                   '关闭未收结案',
@@ -291,7 +296,7 @@ export default function PurchasePage() {
                 ),
                 disabled: close.isPending,
               }] : []),
-              ...((r.status === 1 || r.status === 2) ? [{
+              ...([1, 2, 5].includes(r.status) && canCancel ? [{
                 label: '取消',
                 destructive: true,
                 separatorBefore: true,
@@ -314,7 +319,6 @@ export default function PurchasePage() {
     <div className="space-y-4">
       <PageHeader
         title="采购订单"
-        description="采购单用于登记与提交采购需求；实际到货请在「收货订单」中按本次到货创建收货单"
         actions={
           <>
             <Button variant="outline"
@@ -349,16 +353,20 @@ export default function PurchasePage() {
         </div>
       )}
 
-      {isError ? <QueryErrorState error={error} onRetry={() => void refetch()} /> : <DataTable
+      {isError && data && <div role="alert" className="flex items-center justify-between gap-3 rounded-md border border-warning/30 px-3 py-2 text-sm"><span>刷新失败，当前显示上次读取的数据。</span><Button size="sm" variant="outline" onClick={() => void refetch()}>重试</Button></div>}
+      {isError && !data ? <QueryErrorState error={error} onRetry={() => void refetch()} /> : <DataTable
         columns={columns}
         data={data?.list || []}
         loading={isLoading}
-        onRowDoubleClick={goToDetail}
+        onRowDoubleClick={order => goToDetail(order)}
+        virtualized
         fluid
         columnStorageKey="purchase:status-v3"
       />}
 
-      {!isError && !isLoading && data && <ListSummary total={total} unit="单" />}
+      {!isError && !isLoading && data && (data.truncated
+        ? <div role="status" className="px-1 py-3 text-xs text-warning-ink">已读取 {data.list.length.toLocaleString()} / 总匹配 {total.toLocaleString()} 单，请缩小查询范围。</div>
+        : <ListSummary total={total} unit="单" />)}
 
       {printDetail && (
         <OrderPrintOverlay

@@ -7,7 +7,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import PdaCancelReturnPage from './cancel-return'
 import PdaAdjustmentPage from './adjustment'
 import { useAuthStore } from '@/store/authStore'
-import type { CancelReturnDetail } from '@/api/warehouse-tasks'
+import type { AdjustmentDetail, CancelReturnDetail } from '@/api/warehouse-tasks'
 
 const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), defaults: { baseURL: '/fixture' } }))
 vi.mock('@/api/client', () => ({
@@ -25,10 +25,14 @@ const cancelDetail: CancelReturnDetail = {
 }
 vi.mock('@/hooks/usePdaAdjustment', () => ({
   usePdaAdjustmentDetail: () => ({
-    data: { taskNo: 'WT002', items: [{
-      containerReturns: [{ id: 9, barcode: 'I000009', qty: 1, suggestedLocationCode: 'A02', status: 1 }],
+    data: {
+      id: 2, adjustmentNo: 'ADJ002', status: 1, saleOrderId: 8, warehouseTaskId: 12,
+      taskNo: 'WT002', warehouseName: '测试仓', customerName: 'fixture', items: [{
+      id: 4, productId: 3, productCode: 'SYN-3', productName: '测试商品',
+      oldRequiredQty: 2, newRequiredQty: 1, pendingReturnQty: 1, pendingPickQty: 0, status: 1,
+      containerReturns: [{ id: 9, containerId: 7, barcode: 'I000009', qty: 1, suggestedLocationCode: 'A02', status: 1, containerRemainingQty: 1 }],
       packageVoids: [],
-    }] },
+    }] } satisfies AdjustmentDetail,
     isLoading: false, refetch: vi.fn(),
   }),
   usePdaPendingAdjustments: () => ({ data: [] }),

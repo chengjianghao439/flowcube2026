@@ -1,161 +1,100 @@
-import { ProductIdentityGridCells, ProductIdentityGridHeaders } from '@/components/shared/ProductIdentityCells'
-import { useEffect, useState } from 'react'
+import { inboundEditConfig, inboundEditOwnerCurrent, mayUpdateInbound, type InboundEditOwner } from '@/hooks/useInboundTaskEditRecovery'
+import { useEffect, useRef, useState } from 'react'
 import { AppDialog } from '@/components/shared/AppDialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
+import { InboundProductIdentity } from './InboundProductIdentity'
 import { useInboundPurchaseCandidates } from '@/hooks/useInboundTasks'
+import { verifyInboundEditPurchaseSelection, verifyInboundPurchaseSelection } from '@/api/inbound-tasks'
+import { qty as formatQty, unitPrice } from '@/lib/format'
+import { quantityInputError } from '@/lib/qtyStep'
+import { InboundEntryTable } from './InboundEntryTable'
 import type { InboundPurchaseCandidate } from '@/types/inbound-tasks'
 
-export interface PickedPurchaseItem {
-  item: InboundPurchaseCandidate
-  qty: number
-}
-
+export interface PickedPurchaseItem { item: InboundPurchaseCandidate; qty: number; qtyInput?: string; inboundItemId?: number }
 interface Props {
-  open: boolean
-  supplierId: number | null
-  /** 已选中的明细（key: purchaseItemId），用于重新打开弹窗时预填已选数量 */
-  initialSelection: Record<number, PickedPurchaseItem>
-  onClose: () => void
-  onConfirm: (rows: PickedPurchaseItem[]) => void
+  editTaskId?: number; readOwner?: InboundEditOwner; canInteract?: () => boolean
+  open: boolean; supplierId: number | null; initialSelection: Record<number, PickedPurchaseItem>
+  onClose: () => void; onConfirm: (rows: PickedPurchaseItem[]) => void
 }
-
-const GRID_COLS = 'grid-cols-[150px_160px_160px_144px_224px_112px_80px_100px_80px_80px_80px_80px_120px]'
-
-export function PurchaseItemPickerDialog({ open, supplierId, initialSelection, onClose, onConfirm }: Props) {
-  const [search, setSearch] = useState('')
-  const [keyword, setKeyword] = useState('')
-  const [qtyMap, setQtyMap] = useState<Record<number, string>>({})
-
-  const { data: candidates = [], isLoading } = useInboundPurchaseCandidates(open ? supplierId : null, keyword)
-
-  // 每次打开弹窗，用当前已选数量重新初始化草稿，保证重复打开时能看到之前选过的行
+export function PurchaseItemPickerDialog({ open, supplierId, initialSelection, onClose, onConfirm, editTaskId, readOwner, canInteract }: Props) {
+  const [search, setSearch] = useState(''), [keyword, setKeyword] = useState('')
+  const [selection, setSelection] = useState<Record<number, PickedPurchaseItem>>({})
+  const [verifyError, setVerifyError] = useState<unknown>(null), [checking, setChecking] = useState(false)
+  const generation = useRef(0)
+  const { data, isLoading, isFetching, error, refetch } = useInboundPurchaseCandidates(open ? supplierId : null, keyword, editTaskId && readOwner ? { taskId: editTaskId, owner: readOwner, visible: open } : undefined)
+  const candidates = data?.list ?? []
+  const latest = useRef({ open, canInteract, readOwner })
+  latest.current = { open, canInteract, readOwner }
+  const allowed = () => latest.current.open && (!latest.current.canInteract || latest.current.canInteract()) && (!latest.current.readOwner || inboundEditOwnerCurrent(latest.current.readOwner) && mayUpdateInbound())
+  useEffect(() => () => { latest.current.open = false; generation.current++ }, [])
+  const wasOpen = useRef(false)
   useEffect(() => {
-    if (!open) return
-    setSearch('')
-    setKeyword('')
-    const next: Record<number, string> = {}
-    for (const [id, entry] of Object.entries(initialSelection)) {
-      next[Number(id)] = String(entry.qty)
+    if (open && !wasOpen.current) {
+      setSearch(''); setKeyword(''); setSelection({ ...initialSelection }); setVerifyError(null)
     }
-    setQtyMap(next)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open])
+    wasOpen.current = open
+    generation.current += 1
+  }, [open, supplierId, initialSelection, editTaskId, readOwner])
 
-  function setLineQty(purchaseItemId: number, remainingQty: number, raw: string) {
-    const value = raw.trim()
-    if (!value) {
-      setQtyMap(prev => {
-        const next = { ...prev }
-        delete next[purchaseItemId]
+  function lineQuantity(entry: PickedPurchaseItem): number {
+    const raw = (entry.qtyInput ?? String(entry.qty)).trim()
+    if (!raw) return 0
+    const error = quantityInputError(raw), value = Number(raw)
+    if (error || !Number.isFinite(value) || value < 0) throw new Error(`${entry.item.productName}：${error || '本次收货数量不能为负数'}，请核对；原输入已保留。`)
+    if (!Number.isFinite(entry.item.remainingQty) || value > entry.item.remainingQty) throw new Error(`${entry.item.productName} 超出可建单数量，请核对；原输入已保留。`)
+    return value
+  }
+  function setLineQty(item: InboundPurchaseCandidate, raw: string) {
+    if (!allowed()) return
+    setVerifyError(null)
+    setSelection(previous => ({ ...previous, [item.purchaseItemId]: { ...previous[item.purchaseItemId], item, qty: previous[item.purchaseItemId]?.qty ?? 0, qtyInput: raw } }))
+  }
+  function blurLineQty(purchaseItemId: number) {
+    if (!allowed() || checking) return
+    const entry = selection[purchaseItemId]
+    if (!entry) return
+    try {
+      const qty = lineQuantity(entry)
+      setSelection(previous => {
+        const next = { ...previous }
+        if (qty === 0) delete next[purchaseItemId]
+        else next[purchaseItemId] = { ...entry, qty, qtyInput: String(qty) }
         return next
       })
-      return
-    }
-    const qty = Number(value.replace(/,/g, ''))
-    if (!Number.isFinite(qty) || qty < 0 || qty > remainingQty) return
-    setQtyMap(prev => ({ ...prev, [purchaseItemId]: String(qty) }))
+    } catch (failure) { setVerifyError(failure) }
   }
-
-  const selectedCount = Object.values(qtyMap).filter(v => Number(v) > 0).length
-
-  function handleConfirm() {
-    const rows: PickedPurchaseItem[] = candidates
-      .map(item => ({ item, qty: Number(qtyMap[item.purchaseItemId] || 0) }))
-      .filter(entry => Number.isFinite(entry.qty) && entry.qty > 0)
-    onConfirm(rows)
+  async function handleConfirm() {
+    if (!allowed() || !supplierId || error || isFetching || checking) return
+    const current = generation.current
+    setChecking(true); setVerifyError(null)
+    try {
+      const rows = Object.values(selection).map(row => ({ ...row, qty: lineQuantity(row) })).filter(row => row.qty > 0)
+      const latest = editTaskId && readOwner ? await verifyInboundEditPurchaseSelection(editTaskId, rows.map(row => row.item.purchaseItemId), inboundEditConfig(readOwner)) : await verifyInboundPurchaseSelection(supplierId, rows.map(row => row.item.purchaseItemId))
+      if (current !== generation.current || !open || !allowed()) return
+      const map = new Map(latest.map(item => [item.purchaseItemId, item]))
+      const invalid = rows.find(row => !map.has(row.item.purchaseItemId) || !Number.isFinite(map.get(row.item.purchaseItemId)!.remainingQty) || row.qty > map.get(row.item.purchaseItemId)!.remainingQty)
+      if (invalid) throw new Error(`${invalid.item.productName} 的采购明细已失效或可建单数量变化，请核对后修改；已选数量保持不变。`)
+      onConfirm(rows.map(row => ({ ...row, qtyInput: String(row.qty), item: map.get(row.item.purchaseItemId)! })))
+    } catch (failure) { if (current === generation.current) setVerifyError(failure) }
+    finally { setChecking(false) }
   }
-
-  return (
-    <AppDialog
-      open={open}
-      onOpenChange={v => { if (!v) onClose() }}
-      dialogId="inbound-purchase-item-picker"
-      title="选择收货商品"
-      defaultWidth={1280}
-      defaultHeight={620}
-      minWidth={860}
-      minHeight={420}
-      footer={
-        <div className="flex w-full items-center justify-between">
-          <span className="text-sm text-muted-foreground">已选 {selectedCount} 项</span>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={onClose}>取消</Button>
-            <Button onClick={handleConfirm}>确定</Button>
-          </div>
-        </div>
-      }
-    >
-      <div className="flex h-full flex-col gap-3">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center">
-          <Input
-            className="flex-1"
-            aria-label="搜索采购单或商品"
-            placeholder="按采购单号 / SKU / 商品名称搜索"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Enter') setKeyword(search.trim())
-            }}
-          />
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => setKeyword(search.trim())}>搜索</Button>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setSearch('')
-                setKeyword('')
-              }}
-            >
-              清空
-            </Button>
-          </div>
-        </div>
-
-        <div className="flex min-h-0 flex-1 flex-col overflow-auto rounded-lg border border-border">
-          <div className={`grid min-w-[1820px] ${GRID_COLS} gap-3 border-b bg-muted/30 px-4 py-3 text-xs font-medium text-muted-foreground`}>
-            <span>采购单</span>
-            <ProductIdentityGridHeaders /><span>单位</span>
-            <span>仓库</span>
-            <span className="text-right">订单数量</span>
-            <span className="text-right">已收数量</span>
-            <span className="text-right">未收数量</span>
-            <span className="text-right">单价</span>
-            <span className="text-right">本次数量</span>
-          </div>
-
-          <div className="flex-1">
-            {!isLoading && candidates.length === 0 && (
-              <div className="py-12 text-center text-sm text-muted-foreground">
-                暂无可用采购明细
-              </div>
-            )}
-
-            <div className="divide-y">
-              {candidates.map(item => (
-                <div key={item.purchaseItemId} className={`grid min-w-[1820px] ${GRID_COLS} gap-3 px-4 py-3 text-sm`}>
-                  <div className="text-doc-code">{item.purchaseOrderNo}</div>
-                  <ProductIdentityGridCells product={item} /><div>{item.unit || '—'}</div>
-                  <div className="text-muted-foreground">{item.warehouseName}</div>
-                  <div className="text-right text-muted-foreground">{item.orderedQty}</div>
-                  <div className="text-right text-muted-foreground">{item.receivedQty}</div>
-                  <div className="text-right font-medium text-foreground">{item.remainingQty}</div>
-                  <div className="text-right text-muted-foreground">{item.unitPrice.toFixed(2)}</div>
-                  <div>
-                    <Input
-                      className="text-right"
-                      placeholder="0"
-                      aria-label={`${item.purchaseOrderNo} ${item.productName}本次收货数量`}
-                      value={qtyMap[item.purchaseItemId] ?? ''}
-                      onChange={e => setLineQty(item.purchaseItemId, item.remainingQty, e.target.value)}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+  return <AppDialog open={open} onOpenChange={value => { if (!value && !checking) onClose() }} captureFocusOnOpen dialogId="inbound-purchase-item-picker" title="选择收货商品" defaultWidth={1100} defaultHeight={620} minWidth={600} minHeight={420}
+    footer={<div className="flex w-full items-center justify-between"><span className="text-sm text-muted-foreground">已选 {Object.values(selection).filter(row => Number((row.qtyInput ?? String(row.qty)).trim()) > 0).length} 项</span><div className="flex gap-2"><Button variant="outline" onClick={onClose} disabled={checking}>取消</Button><Button onClick={() => { void handleConfirm() }} disabled={!allowed() || !data || !!error || isLoading || isFetching || checking}>{checking ? '核对中…' : '确定'}</Button></div></div>}>
+    <div className="flex h-full flex-col gap-3">
+      <div className="flex items-center gap-2"><Input className="flex-1" aria-label="搜索采购单或商品" placeholder="采购单号 / SKU / 商品名称" value={search} disabled={checking} onChange={event => setSearch(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') setKeyword(search.trim()) }} /><Button variant="outline" disabled={checking} onClick={() => setKeyword(search.trim())}>搜索</Button><Button variant="outline" disabled={checking} onClick={() => { setSearch(''); setKeyword('') }}>清空</Button></div>
+      {error && <QueryErrorState compact error={error} title="采购明细读取失败" onRetry={() => { if (allowed()) void refetch() }} />}
+      {verifyError != null && <QueryErrorState compact error={verifyError} title="已选明细核对未通过" onRetry={() => { void handleConfirm() }} />}
+      {!error && data?.truncated && <p role="status" className="text-xs text-warning-ink">已读取 {data.list.length.toLocaleString()} / 总匹配 {data.pagination.total.toLocaleString()} 条采购明细；请搜索缩小范围，已选项会保留。</p>}
+      <div className="min-h-0 flex-1 overflow-auto" data-workspace-scroll>
+        {isLoading ? <p className="p-6 text-sm text-muted-foreground">加载中…</p> : !error && candidates.length === 0 ? <p className="p-6 text-center text-sm text-muted-foreground">暂无可用采购明细</p> : !error && <InboundEntryTable picker data={candidates} getRowKey={item => item.purchaseItemId} renderRow={item => <tr key={item.purchaseItemId} className="border-b border-border/40">
+          <td><InboundProductIdentity item={item} /></td>
+          <td><div className="flex min-w-0 flex-wrap items-center justify-end gap-x-2 gap-y-1">{/* 原始输入允许单独小数点；失焦与确认都严格校验，不提前转数或截断。 */}<Input inputMode="decimal" step="0.01" className="h-9 min-w-12 max-w-24 flex-1 text-right tabular-nums" placeholder="0" data-purchase-item-id={item.purchaseItemId} aria-label={`${item.purchaseOrderNo} ${item.productName}本次收货数量`} value={selection[item.purchaseItemId]?.qtyInput ?? selection[item.purchaseItemId]?.qty ?? ''} disabled={checking || !allowed()} onChange={event => setLineQty(item, event.target.value)} onBlur={() => blurLineQty(item.purchaseItemId)} /><span className="min-w-0 text-muted-body [overflow-wrap:anywhere]">{item.unit || '单位未提供'}</span></div></td>
+          <td className="font-mono text-xs">{item.purchaseOrderNo}</td><td className="text-muted-foreground">{item.warehouseName}</td>
+          <td className="text-right text-xs tabular-nums">{formatQty(item.orderedQty)} / {formatQty(item.receivedQty)} / {formatQty(item.remainingQty)} {item.unit || '单位未提供'}</td><td className="text-right tabular-nums">{unitPrice(item.unitPrice)}</td>
+        </tr>} />}
       </div>
-    </AppDialog>
-  )
+    </div>
+  </AppDialog>
 }

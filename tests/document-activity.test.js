@@ -22,6 +22,7 @@ const vm = require('node:vm')
 const path = require('node:path')
 function load(file, dependencies) {
   const context = { module: { exports: {} }, exports: {}, require: name => {
+    if (name==='./document-history-scope') return require('../backend/src/modules/document-activity/document-history-scope')
     if (Object.hasOwn(dependencies, name)) return dependencies[name]
     throw Error(`Unexpected dependency ${name}`)
   }, setImmediate, console }
@@ -36,6 +37,7 @@ test('原详情拒绝访问时不读取任何活动数据', async () => {
     '../../config/db': { pool: { query: () => { queries++; throw Error('不应查询') } } },
     './document-registry': { loadDocument: async () => { throw denied } },
     './document-operation': require('../backend/src/modules/document-activity/document-operation'),
+    './document-change-audit': { parsePayload: raw => { try { return typeof raw === 'string' ? JSON.parse(raw) : raw || null } catch { return null } } },
     './document-progress': { buildProgress: () => { throw Error('不应读取进度') } },
   })
   await assert.rejects(service.getActivity('purchase', 12, { warehouseIds: [1] }), e => e === denied)
@@ -47,7 +49,8 @@ test('业务创建事件存在时不重复展示通用创建记录', async () =>
     '../../config/db': { pool: { query: async sql => [sql.includes('document_operation_events') ? [{ id: 1, title: '创建单据', created_at: '2026-09-24 10:00:00' }] : []] } },
     './document-registry': { loadDocument: async () => ({ timeline: [{ id: 2, title: '创建订单', createdAt: '2026-09-24 10:00:00' }], tasks: [] }) },
     './document-operation': require('../backend/src/modules/document-activity/document-operation'),
-    './document-progress': { buildProgress: async () => ({ sections: [], events: [] }) },
+    './document-change-audit': { parsePayload: raw => { try { return typeof raw === 'string' ? JSON.parse(raw) : raw || null } catch { return null } } },
+    './document-progress': { buildProgress: async (_type,_id,doc) => ({ sections: [], events: [],taskIds:doc.tasks.map(task=>task.taskId) }) },
     '../fulfillment/fulfillment.service': { events: async () => [] },
   })
   const activity = await service.getActivity('sale', 1, {})
@@ -58,14 +61,15 @@ test('业务创建事件存在时不重复展示通用创建记录', async () =>
 test('关联仓库任务活动按批读取，查询次数不随任务数增长', async () => {
   const queries = []
   const service = load('backend/src/modules/document-activity/document-activity.service.js', {
-    '../../config/db': { pool: { query: async (sql, params) => { queries.push([sql, params]); return [[]] } } },
+    '../../config/db': { pool: { query: async (sql, params) => { queries.push([sql, params]); return [sql.includes('FROM warehouse_tasks') ? params[0].map(id=>({id,sale_order_id:1,warehouse_id:1})) : []] } } },
     './document-registry': { loadDocument: async () => ({ timeline: [], tasks: Array.from({ length: 12 }, (_, i) => ({ taskId: i + 1 })) }) },
     './document-operation': require('../backend/src/modules/document-activity/document-operation'),
-    './document-progress': { buildProgress: async () => ({ sections: [], events: [] }) },
+    './document-change-audit': { parsePayload: raw => { try { return typeof raw === 'string' ? JSON.parse(raw) : raw || null } catch { return null } } },
+    './document-progress': { buildProgress: async (_type,_id,doc) => ({ sections: [], events: [],taskIds:doc.tasks.map(task=>task.taskId) }) },
     '../fulfillment/fulfillment.service': { events: async () => [] },
   })
   await service.getActivity('sale', 1, {})
-  assert.equal(queries.length, 4)
+  assert.equal(queries.length, 5)
 })
 
 test('订单事件独立保存，只存动作和原因，不复制请求正文', async () => {
@@ -204,6 +208,7 @@ test('数量差额保留四位小数，不出现浮点尾数或混合单位合�
     '../inbound-tasks/inbound-tasks.status': {},
     '../../utils/inboundThresholds': {},
     '../../engine/inventoryEngine': { MOVE_TYPE: {} },
+    '../../utils/warehouseScope': {},
   })
   assert.equal(progress.difference(0.3, 0.2), 0.1)
   // 数量精度已统一为两位（0.01），差值也按两位计

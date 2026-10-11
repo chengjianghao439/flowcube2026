@@ -942,3 +942,45 @@ node --test --test-concurrency=1 tests/go-live-runtime.smoke.test.js
 GUI数据库只读核对日志 `/tmp/flowcube-kit-profile-gui-db-proof.log`，登记准确kit ID；截图 `/tmp/flowcube-kit-profile-editor-gui-final.png` 与 `/tmp/flowcube-kit-profile-prices-components-gui.png`。来源切换/权限/迟到选择/读取缓存由真实React与API配置专项证明，本轮GUI未模拟两服务器切换。不把开发热刷新重挂、自动化工具未发React input事件、测试通过或本地提交当成生产证据。完整后端/前端/PDA构建、远端CI、生产迁移/部署、真实设备与物理出纸留下一次正式发布/现场验收；本轮不推送或打tag。
 
 本轮资源收尾已核实：本任务 browser session 已从 session list 退出，专属加密登录档已删除；两个预览监听端口与登记PID均已退出，后端server/pool关闭。GUI夹具按准确账号/角色核对后停用账号并吊销全部该账号会话，live session0，私有凭据文件去掉password；专属测试数据库与真实履约审计事实保留。没有批量关闭其它浏览器或删除开发/生产数据。
+
+
+### 2026-10-10 收货草稿编辑专项
+
+`npm run test:inbound-edit` 覆盖纯规则、更新事务合同、资源回执权限/范围与专属runner归属；前端沿既有 `test:unit` 覆盖真实编辑页、列表/详情入口、取消防丢、失权/非草稿、完整800行和原键恢复。
+
+`npm run smoke:inbound-edit-owned` 仅使用本批新建的专属MySQL容器/卷，runner模式 `scripts/repair-smoke-ephemeral.sh --inbound-edit`。写入前核0600归属文件、随机回环端口（拒绝3306/3307）、实时容器/卷label和端口、运行窗口、活runner、server_uuid；随机凭据仅存进程环境。通过源码迁移执行器运行全部迁移，独立app随机回环API端口，无server.js调度器；真实两连接覆盖编辑对提交、编辑对编辑与建单对编辑的锁等待/剩余守恒，201/800行尾行保留、空/零运费及库存/账款/凭证/打印无变化。退出按本批精确ID清理专属资源，不连接原只读预览或生产实例。远端CI执行结果与部署仍需另验。
+
+
+### 2026-10-10 收货新建防重复专项
+
+沿 `npm run test:inbound-edit` 新增创建事务及原回执身份/schema守卫，保持原CI入口。前端全量 `npm run test:unit`，重点为 `useInboundTaskCreateRecovery.test.tsx`、`create.freight.test.tsx` 和 `inbound-tasks.edit.test.ts`：原body/key、WebCrypto指纹、重挂、主动查询/双查询原键重试、未知错误、首发rollback、终态清理、隐藏晚响应及账号/端点/权限隔离。
+
+真实创建扩入同一 `npm run smoke:inbound-edit-owned`，归属门和清理不变。五个API连接在真实PO/operation_requests锁等待后断言唯一头/来源行/created事件/成功回执；代理吞掉已commit的201并断连接，再查原回执/同键重放；合成触发器使回执写失败，证明整事务回滚后not_found及原键重试。权限与仓撤销仅在本批合成账号上操作，不向真实角色授予权限。GUI另用回环内存mock验证刷新/取消重开及三宽，不能代替MySQL并发证据，也不代表用户认可、CI远端或生产验证。
+
+跨窗口返修新增 `frontend/src/pages/inbound-tasks/create.cross-window.test.tsx`：真实页面与恢复hook验证另一页面确认后旧表单再次点击创建不发新键POST、无关新草稿、缺失记录、完成后重开、迟到成功/明确回滚和失败输入保留。两个React root共用同一模块；迟到响应场景以独立窗口的合法终态storage写入模拟不同浏览器realm的传播，不能据此声称实际双窗口已验。实际GUI必须另核两个独立window上下文的原键/新键请求计数、刷新/重开与已确认终态不复活，并补原键重试、过期及账号/服务器/权限边界；全部仅合成mock，不写真实业务。
+
+## 2026-10-10：日志保留期与手动补打专属回归
+
+- `npm run test:print` 包含离线意图契约与有效反向守卫（删除永久标记守卫或恢复时间桶必失败）。
+- `npm run smoke:retention-reprint-owned` 通过原 `repair-smoke-ephemeral.sh --retention-reprint` 创建命名随机端口专属MySQL；独立库 `flowcube_retentionreprint20261010_test`，实时归属门包含0600文件、容器/卷label、端口映射、UUID、时间窗及活跃runner。未知模式在Docker前拒绝。
+- `smoke:retention-reprint-runtime` 仅供上述runner间接执行，已接Tests独立job及可达守卫；直接在共享3307或无归属实例运行会在写入前拒绝。全部数据合成，打印渲染桩，无消费打印硬件、支付、开票或外部通知。
+- 用例覆盖原撤收六道边界、过期A→B→A、VOID异常了结、事件补齐旧标记及迁移幂等；真实scheduler库存日志清理；DONE/FAILED打印清理后中心/详情差异；补打首次并发、丢失响应重试、跨10秒桶、异正文、渲染失败、事件失败回滚、当前权限/范围撤回及回执查询；合成出库/物流标签回放。
+- 前端 `printReprintIntent.test.ts`、`api/reprint.test.ts` 覆盖同窗口恢复、原键重试、并发、存储失败、错回执和迟到响应。成本与票据逆向政策不属于本批修复。
+
+独立复验续修加入同一owned套件：删收货头的中心新键/原键/GET、跨单明细、VOID旧回执、有效非收货来源、普通无历史拒绝与显式恢复/范围/假来源边界、真实七天清理前后原键和旧格式键、中心/详情及撤收并发。前端新增关页清会话后原键恢复、独立模块终态消费、过期不POST、无跨页面锁拒绝；真实独立标签和关闭重开GUI接本批合成服务，响应仅由浏览器丢弃，不能把内存mock当后端证据。原生多窗口/真机走纸仍需另验。
+
+### 同事务变更与交接、打印元数据专属回归（2026-10-10）
+
+`npm run test:change-records` 运行审计与专属runner契约，不连接数据库。`npm run smoke:change-records-owned` 只新建本批 `flowcube_changerecords20261010_test`：独立具名卷/容器、随机回环端口、0600归属文件、Docker实时label/端口/创建时间、活runner及server UUID在任何业务写前核验；显式拒绝共享3306/3307。迁移来自当前源码，不加载backend.env；打印栅格桩不连接打印机，应用仅app.listen回环，不起scheduler。finally关闭API/连接池，runner仅按本轮身份清理自己的容器、卷、下载及归属文件。该入口已接CI的独立owned job，保留原修复/补打owned套件。
+
+真实场景覆盖同键并发、回放与异正文拒绝、无语义变化、旧客户端缺原因、审计写失败时业务与回执同事务回滚、商业套件/辅助单位实际快照、主档最终DECIMAL价史引用和批量价格表增改删；交接覆盖原拆箱/归还、挂起和当前范围；打印覆盖实际初打/补打、失败降级、姓名快照、旧未知目的、份数与认证客户端回报，迁移重复和未知形状拒绝。可设置 `FLOWCUBE_RETENTION_EVIDENCE_DIR` 指向本任务可写证据目录。`FLOWCUBE_CHANGE_GUI=1` 另启本批合成API对应的源码Vite和独立Chromium会话，不读取或重启既有预览服务，不导出认证状态；ERP和PDA分标签，结束关闭本任务会话。运行结果与尚未覆盖项应记任务验收报告，不以静态/构建通过替代业务或GUI证据。
+`FLOWCUBE_CHANGE_REGRESSIONS=1 npm run smoke:change-records-owned` 在本批专属实例内顺序补跑26组既有销售、预占/取消、产品价格、打印（含打印历史清理）、权限/PDA、会计和资金回归。每个测试子进程启动前重新核对实例归属；归属失效或任一套件失败立即中止后续执行。CI 的 `change-records-owned` job 启用该项，离线守卫反向确认删除实际入口或关闭回归开关会失败；运行不读取真实环境文件，不连接外部打印机或通知服务。
+
+
+### 2026-10-11 既有失败的最小收尾
+
+`npm run test:copy-conventions` 的十处失败通过调整现有用户术语和采购换算率的共享格式化入口处理；未删除规则、增加豁免或放宽断言。相关前端专项包含换算率八位精度、无效值与数量两位精度，以及收货、补打恢复和采购摘要的原断言。
+
+`npm run test:purchase-return-lock-budget` 的采购退货 VM 夹具显式补齐新增的 `reprint-source`、`reprint-intent`、`create-receipt`、`edit-rules` 和 `purchaseOrderStatus` 依赖。纯规则加载实际实现，夹具未覆盖的补打入口明确报错；原未知 require/SQL 拒绝、锁顺序、资金与数量断言保留。修前为 13/30 通过、17 项依赖加载失败；修后 30/30 通过。这是离线模型证据，不是 MySQL 或业务验收。
+
+补跑 `test:inbound-edit` 时需提供一次性合成 `JWT_SECRET`；八项初次设置失败保留为失败日志，显式合成环境重跑后 63/63。不得为此读取真实 `backend/.env`，测试目标显式限制回环及非共享端口。本轮没有执行受阻的 relatedEvents 复现、修复或相应专项；历史关联记录授权问题与整批最终验收仍未完成。

@@ -24,7 +24,7 @@ async function settle() { await act(async () => { await new Promise(r => setTime
 async function render(category: BarcodePrintCategory, keyword = '') { await act(async () => root.render(<MemoryRouter initialEntries={['/settings/barcode-print-query?category=inbound&inboundTaskId=99']}><QueryClientProvider client={qc}><TabPathContext.Provider value={`/settings/barcode-print-query?category=${category}&keyword=${keyword}`}><BarcodePrintQueryPage /></TabPathContext.Provider></QueryClientProvider></MemoryRouter>)); await settle() }
 const button = (label: string) => [...host.querySelectorAll('button')].find(b => b.textContent === label)
 test.each(['inbound', 'outbound', 'logistics'] as const)('%s五分钟缓存重开/失败/重试后才恢复操作，筛选保持', async category => {
-  qc.setQueryData(['barcode-print-records', category, '', '__all__', undefined, undefined], { list: [record(category)], pagination: { total: 1 } }); let finish!: (v: Awaited<ReturnType<typeof getBarcodePrintRecordsApi>>) => void
+  qc.setQueryData(['barcode-print-records', category, false, '', '__all__', undefined, undefined], { list: [record(category)], pagination: { total: 1 } }); let finish!: (v: Awaited<ReturnType<typeof getBarcodePrintRecordsApi>>) => void
   vi.mocked(getBarcodePrintRecordsApi).mockImplementation(() => new Promise(resolve => { finish = resolve })); await render(category)
   expect(button('重新打印')?.disabled).toBe(true); expect(button('打开收货详情')).toBeUndefined(); expect(button('打开批次详情')).toBeUndefined()
   await act(async () => finish({ list: [record(category)], pagination: { total: 1 } } as never)); await settle(); expect(button('重新打印')?.disabled).toBe(false)
@@ -33,14 +33,14 @@ test.each(['inbound', 'outbound', 'logistics'] as const)('%s五分钟缓存重�
   vi.mocked(getBarcodePrintRecordsApi).mockResolvedValue({ list: [record(category)], pagination: { total: 1 } } as never); await act(async () => button('重新读取打印记录')!.click()); await settle(); expect(button('重新打印')?.disabled).toBe(false); expect(getBarcodePrintRecordsApi).toHaveBeenLastCalledWith(expect.objectContaining({ category, keyword: '' }))
 })
 test('物流记录离线暂停和隐藏标签不补打，恢复激活会重读', async () => {
-  qc.setQueryData(['barcode-print-records', 'logistics', '', '__all__', undefined, undefined], { list: [record('logistics')], pagination: { total: 1 } }); onlineManager.setOnline(false); await render('logistics'); expect(button('重新打印')?.disabled).toBe(true)
+  qc.setQueryData(['barcode-print-records', 'logistics', false, '', '__all__', undefined, undefined], { list: [record('logistics')], pagination: { total: 1 } }); onlineManager.setOnline(false); await render('logistics'); expect(button('重新打印')?.disabled).toBe(true)
   vi.mocked(getBarcodePrintRecordsApi).mockResolvedValue({ list: [record('logistics')], pagination: { total: 1 } } as never); await act(async () => onlineManager.setOnline(true)); await settle(); expect(button('重新打印')?.disabled).toBe(false)
   controls.active = false; await render('logistics'); expect(button('重新打印')?.disabled).toBe(true); controls.active = true; await render('logistics'); expect(getBarcodePrintRecordsApi).toHaveBeenCalledTimes(2)
 })
 test('来源按钮按目标权限与安全ID，补打按真实route权限', async () => {
   controls.permissions.clear(); vi.mocked(getBarcodePrintRecordsApi).mockResolvedValue({ list: [record('inbound')], pagination: { total: 1 } } as never); await render('inbound'); expect(button('重新打印')?.disabled).toBe(true); expect(button('打开收货详情')).toBeUndefined()
-  controls.permissions.add(PERMISSIONS.INBOUND_ORDER_VIEW); controls.permissions.add(PERMISSIONS.PRINT_JOB_REPRINT); qc.setQueryData(['barcode-print-records', 'inbound', '', '__all__', undefined, undefined], { list: [record('inbound', { inboundTaskId: 1.5 })], pagination: { total: 1 } }); await settle(); expect(button('打开收货详情')).toBeUndefined()
-  qc.setQueryData(['barcode-print-records', 'inbound', '', '__all__', undefined, undefined], { list: [record('inbound')], pagination: { total: 1 } }); await settle(); await act(async () => button('打开收货详情')!.click()); expect(controls.addTab).toHaveBeenCalledWith(expect.objectContaining({ path: '/inbound-tasks/12?focus=print-batches' }))
+  controls.permissions.add(PERMISSIONS.INBOUND_ORDER_VIEW); controls.permissions.add(PERMISSIONS.PRINT_JOB_REPRINT); qc.setQueryData(['barcode-print-records', 'inbound', false, '', '__all__', undefined, undefined], { list: [record('inbound', { inboundTaskId: 1.5 })], pagination: { total: 1 } }); await settle(); expect(button('打开收货详情')).toBeUndefined()
+  qc.setQueryData(['barcode-print-records', 'inbound', false, '', '__all__', undefined, undefined], { list: [record('inbound')], pagination: { total: 1 } }); await settle(); await act(async () => button('打开收货详情')!.click()); expect(controls.addTab).toHaveBeenCalledWith(expect.objectContaining({ path: '/inbound-tasks/12?focus=print-batches' }))
 })
 test('有筛选的物流读取失败后手动重读保留关键字，不自动补打', async () => {
   vi.mocked(getBarcodePrintRecordsApi).mockRejectedValue(new Error('筛选读取失败')); await render('logistics', 'REF-119'); expect(host.textContent).toContain('关键字：REF-119')
@@ -56,4 +56,24 @@ test.each([0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1])('非法批次ID %s不生成
 })
 test.each([['success', '客户端已回报成功，请现场核对标签纸张'], ['queued', '打印结果尚待确认'], ['printing', '打印结果尚待确认'], ['failed', '先核对工作站、打印机和纸张'], ['timeout', '先核对工作站、打印机和纸张']] as const)('最近任务%s解释不冒称物理出纸', async (statusKey, text) => {
   vi.mocked(getBarcodePrintRecordsApi).mockResolvedValue({ list: [record('logistics', { latestJob: { statusKey, printStateLabel: statusKey } as never })], pagination: { total: 1 } } as never); await render('logistics'); expect(host.textContent).toContain(text); expect(reprintBarcodeRecordApi).not.toHaveBeenCalled()
+})
+
+test('查询弹窗未应用的草稿不被后台读取重置，也不提前改变已应用筛选', async () => {
+  await render('inbound', '已应用'); await act(async () => button('查询')!.click()); await settle()
+  const input = document.querySelector<HTMLInputElement>('[role="dialog"] input')!
+  expect(input.value).toBe('已应用')
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, '未应用草稿')
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  expect(input.value).toBe('未应用草稿')
+  let finish!: (v: Awaited<ReturnType<typeof getBarcodePrintRecordsApi>>) => void
+  vi.mocked(getBarcodePrintRecordsApi).mockImplementation(() => new Promise(resolve => { finish = resolve }))
+  let reading!: Promise<void>
+  await act(async () => { reading = qc.invalidateQueries({ queryKey: ['barcode-print-records'] }) })
+  await settle()
+  expect(input.value).toBe('未应用草稿')
+  expect(getBarcodePrintRecordsApi).toHaveBeenLastCalledWith(expect.objectContaining({ keyword: '已应用' }))
+  await act(async () => finish({ list: [], pagination: { total: 0 } } as never)); await reading; await settle()
+  expect(input.value).toBe('未应用草稿')
 })

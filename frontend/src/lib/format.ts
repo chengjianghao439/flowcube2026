@@ -54,3 +54,9 @@ export function qty(value: number | null | undefined): string {
   if (!Number.isFinite(n)) return '—'
   return n.toLocaleString('zh-CN', { maximumFractionDigits: 2 })
 }
+
+/** 单位换算率最多八位；不是库存数量，不按 qty() 的两位精度截断。 */
+export function unitConversionRate(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value) || value <= 0) return '—'
+  return value.toLocaleString('zh-CN', { maximumFractionDigits: 8 })
+}

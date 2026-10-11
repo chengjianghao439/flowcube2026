@@ -1,4 +1,5 @@
 import { payloadClient as client } from './client'
+import { recordIdentityByFields } from './allRecords'
 import type { PaginatedData, QueryParams } from '@/types'
 import { withRequestKeyHeaders } from '@/lib/requestKey'
 import type {
@@ -10,16 +11,29 @@ import type {
   CreateInboundTaskResult,
   CreateInboundTaskParams,
   InboundPurchaseCandidate,
+  InboundTaskEditContext,
+  UpdateInboundTaskParams,
+  UpdateInboundTaskResult,
 } from '@/types/inbound-tasks'
 
-export const getInboundTasksApi = (params: QueryParams & { status?: number | number[]; productId?: number; supplierId?: number }) =>
-  client.get<PaginatedData<InboundTask>>('/inbound-tasks', { params })
+export const getInboundTasksApi = (params: QueryParams & { status?: number | number[]; productId?: number; supplierId?: number }, config?: Parameters<typeof client.get>[1]) =>
+  client.get<PaginatedData<InboundTask>>('/inbound-tasks', { ...config, params })
 
-export const getInboundPurchaseCandidatesApi = (params: { supplierId: number; keyword?: string }) =>
-  client.get<InboundPurchaseCandidate[]>('/inbound-tasks/purchase-items', { params })
+export const getInboundPurchaseCandidatesApi = (params: { supplierId: number; keyword?: string }, config?: Parameters<typeof client.get>[1]) =>
+  client.get<PaginatedData<InboundPurchaseCandidate>>('/inbound-tasks/purchase-items', { ...config, params: { ...params, bounded: 1, page: 1, pageSize: 200 } }, recordIdentityByFields('purchaseItemId'))
 
-export const createInboundTaskApi = (data: CreateInboundTaskParams, config?: Parameters<typeof client.post>[2]) =>
-  client.post<CreateInboundTaskResult>('/inbound-tasks', data, config)
+/** 确认前按完整选中身份分批核实；草稿数量不因余量变化被自动覆盖。 */
+export async function verifyInboundPurchaseSelection(supplierId: number, ids: number[]): Promise<InboundPurchaseCandidate[]> {
+  const rows: InboundPurchaseCandidate[] = []
+  for (let start = 0; start < ids.length; start += 200) {
+    const batch = await client.get<InboundPurchaseCandidate[]>('/inbound-tasks/purchase-items', { params: { supplierId, purchaseItemIds: ids.slice(start, start + 200).join(',') }, skipGlobalError: true })
+    rows.push(...batch)
+  }
+  return rows
+}
+
+export const createInboundTaskApi = (data: CreateInboundTaskParams, config?: Parameters<typeof client.post>[2], requestKey?: string) =>
+  client.post<CreateInboundTaskResult>('/inbound-tasks', data, { ...config, headers: requestKey ? { ...config?.headers, ...withRequestKeyHeaders(requestKey) } : config?.headers })
 
 export const getInboundTaskByIdApi = (id: number, config?: Parameters<typeof client.get>[1]) =>
   client.get<InboundTask>(`/inbound-tasks/${id}`, config)
@@ -61,3 +75,24 @@ export const closeReceivingInboundApi = (id: number, config?: Parameters<typeof 
     ...config,
     headers: requestKey ? { ...config?.headers, ...withRequestKeyHeaders(requestKey) } : config?.headers,
   })
+
+export const getInboundTaskEditContextApi = (id: number, config?: Parameters<typeof client.get>[1]) =>
+  client.get<InboundTaskEditContext>(`/inbound-tasks/${id}/edit-context`, config)
+
+export const getInboundEditPurchaseCandidatesApi = (id: number, keyword: string, config?: Parameters<typeof client.get>[1]) =>
+  client.get<PaginatedData<InboundPurchaseCandidate>>(`/inbound-tasks/${id}/edit-purchase-items`, { ...config, params: { keyword, bounded: 1, page: 1, pageSize: 200 } }, recordIdentityByFields('purchaseItemId'))
+
+export async function verifyInboundEditPurchaseSelection(id: number, ids: number[], config?: Parameters<typeof client.get>[1]): Promise<InboundPurchaseCandidate[]> {
+  const rows: InboundPurchaseCandidate[] = []
+  for (let start = 0; start < ids.length; start += 200) {
+    rows.push(...await client.get<InboundPurchaseCandidate[]>(`/inbound-tasks/${id}/edit-purchase-items`, { ...config, params: { purchaseItemIds: ids.slice(start, start + 200).join(',') }, skipGlobalError: true }))
+  }
+  return rows
+}
+
+export const updateInboundTaskApi = (id: number, data: UpdateInboundTaskParams, requestKey: string, config?: Parameters<typeof client.put>[2]) =>
+  client.put<UpdateInboundTaskResult>(`/inbound-tasks/${id}`, data, { ...config, headers: { ...config?.headers, ...withRequestKeyHeaders(requestKey) } })
+
+export interface InboundReprintResult { taskId: number; mode: string; count: number; jobIds: number[]; failedJobIds: number[]; noPrinterCount: number; requestId: number }
+export const reprintInboundTaskApi = (id: number, payload: { mode: 'task' | 'item' | 'barcode'; itemId?: number; barcode?: string }, requestKey: string, config?: Parameters<typeof client.post>[2]) =>
+  client.post<InboundReprintResult>(`/inbound-tasks/${id}/reprint`, payload, { ...config, headers: withRequestKeyHeaders(requestKey, config?.headers as Record<string, string>) })

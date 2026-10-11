@@ -1,4 +1,5 @@
 import PdaOverviewText from '@/components/pda/PdaOverviewText'
+import PdaHandoffSummary from '@/components/pda/PdaHandoffSummary'
 /**
  * PDA 改单确认 — 销售单执行期改单，减量命中已拣/已打包实物时需要仓库物理确认
  * 路由：/pda/adjustments（任务池列表）、/pda/adjustments/:id（逐项扫码确认，:id 为改单记录ID）
@@ -225,6 +226,12 @@ function AdjustmentDetailPage({ adjustmentId }: { adjustmentId: number }) {
 
       <div className="max-w-md mx-auto flex-1 px-4 pb-8 space-y-4 py-4 w-full">
         <PdaFlash flash={flash} />
+        <PdaHandoffSummary handoff={detail.handoff} confirmations={detail.items.flatMap(i => [
+          ...i.packageVoids.filter(v => v.status === 2).map(v => ({id:`void-${v.id}`,kind:'package_void' as const,barcode:v.barcode,qty:null,confirmedBy:v.confirmedBy || null,confirmedAt:v.confirmedAt || null})),
+          ...i.containerReturns.filter(r => r.status === 2).map(r => ({id:`return-${r.id}`,kind:'container_return' as const,barcode:r.barcode,qty:r.qty,confirmedBy:r.confirmedBy || null,confirmedAt:r.confirmedAt || null})),
+        ])}>
+          <ul className="space-y-1">{detail.items.map(i => <li key={i.id} className="whitespace-normal break-words">{i.productCode} {i.productName} · 原应发 {i.oldRequiredQty.toFixed(2)} → 本次应发 {i.newRequiredQty.toFixed(2)}</li>)}</ul>
+        </PdaHandoffSummary>
         <PdaCriticalActionNotice
           blockedReason={returnAction.blockedReason}
           pendingRecord={returnAction.pendingRecord}

@@ -15,7 +15,7 @@ const { assertNotSelfApproval } = require('../../utils/selfApprove')
 const { normalizePagination } = require('../../utils/pagination')
 const { getPriceReferenceWarnings } = require('../../utils/priceReference')
 
-const STATUS = { 1:'草稿', 2:'已提交', 3:'已完成', 4:'已取消', 5:'待审批' }
+const { PURCHASE_STATUS_NAME: STATUS } = require('../../constants/purchaseOrderStatus')
 
 function fmtOrder(row) {
   return {

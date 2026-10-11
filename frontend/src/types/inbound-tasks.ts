@@ -111,6 +111,23 @@ export interface InboundExceptionFlags {
   hasException: boolean
 }
 
+export type InboundQuantityField = 'orderedQty' | 'receivedQty' | 'putawayQty' | 'remainingQty'
+
+export interface InboundQuantityGroup {
+  /** 本地完整原行的有效性与逐行全零事实，不以聚合净量反推。 */
+  quantityState?: Record<InboundQuantityField, { known: boolean; allZero: boolean }>
+  key: string
+  productId: number
+  productName: string
+  unit: string | null
+  spec?: string | null
+  color?: string | null
+  articleNumber?: string | null
+  orderedQty: number
+  receivedQty: number
+  putawayQty: number
+}
+
 export interface InboundTask {
   id: number
   taskNo: string
@@ -125,6 +142,9 @@ export interface InboundTask {
   operatorId: number | null
   operatorName: string | null
   remark: string | null
+  freightType?: 1 | 2 | 3 | null
+  freightAmount?: number | null
+  draftEditable?: boolean
   submittedAt?: string | null
   submittedBy?: number | null
   submittedByName?: string | null
@@ -223,6 +243,8 @@ export interface CreateInboundTaskResult {
 }
 
 export interface CreateInboundTaskParams {
+  freightType?: 1 | 2 | 3 | null
+  freightAmount?: number | null
   supplierId: number
   supplierName: string
   remark?: string
@@ -252,4 +274,21 @@ export interface InboundPurchaseCandidate {
   remainingQty: number
   receivedQty: number
   unitPrice: number
+}
+
+export interface InboundTaskEditContext {
+  task: InboundTask
+  supplierId: number
+  expectedEditFingerprint: string
+  candidates: InboundPurchaseCandidate[]
+}
+export interface UpdateInboundTaskParams {
+  freightType?: 1 | 2 | 3 | null
+  freightAmount?: number | null
+  remark?: string
+  expectedEditFingerprint: string
+  items: Array<{ purchaseItemId: number; qty: number }>
+}
+export interface UpdateInboundTaskResult extends CreateInboundTaskResult {
+  expectedEditFingerprint: string
 }

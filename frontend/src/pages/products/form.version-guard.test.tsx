@@ -133,7 +133,7 @@ test('★ 重挂载不用 fresh 旧缓存初始化（不提前可保存）；本
   vi.mocked(updateProductApi).mockResolvedValue(undefined as never)
   await act(async () => { clickButton('保存修改') })
   await vi.waitFor(() => expect(vi.mocked(updateProductApi)).toHaveBeenCalled())
-  const [, data] = vi.mocked(updateProductApi).mock.calls[0] as [number, { revision: number; salePriceA: number }]
+  const [, data] = vi.mocked(updateProductApi).mock.calls[0] as [number, { revision: number; salePriceA: number }, string?]
   expect(data.revision).toBe(2)
   expect(data.salePriceA).toBe(300)
 })
@@ -193,7 +193,7 @@ test('★ 有草稿时后台 refetch 保留草稿，且仍以原 revision 提交
   vi.mocked(updateProductApi).mockResolvedValue(undefined as never)
   await act(async () => { clickButton('保存修改') })
   await vi.waitFor(() => expect(vi.mocked(updateProductApi)).toHaveBeenCalled())
-  const [, data] = vi.mocked(updateProductApi).mock.calls[0] as [number, { revision: number; remark: string; name: string }]
+  const [, data] = vi.mocked(updateProductApi).mock.calls[0] as [number, { revision: number; remark: string; name: string }, string?]
   expect(data.revision).toBe(1)
   expect(data.remark).toBe('草稿B')        // 改的确实是备注
   expect(data.name).toBe('夹具商品264')    // 名称未被误改
@@ -210,7 +210,7 @@ test('★ 409 版本冲突时保留草稿并给出冲突提示', async () => {
   await act(async () => { clickButton('保存修改') })
   await vi.waitFor(() => expect((host.textContent ?? '').includes('本次修改未保存')).toBe(true))
   expect(remarkInput().value).toBe('草稿C')
-  const [, data] = vi.mocked(updateProductApi).mock.calls[0] as [number, { remark: string; name: string }]
+  const [, data] = vi.mocked(updateProductApi).mock.calls[0] as [number, { remark: string; name: string }, string?]
   expect(data.remark).toBe('草稿C')
   expect(data.name).toBe('夹具商品264')
 })
@@ -263,4 +263,26 @@ test('新建商品不请求详情、不报未保存，填写后可创建', async
 
   await act(async () => { clickButton('保存') })
   await vi.waitFor(() => expect(vi.mocked(createProductApi)).toHaveBeenCalled())
+})
+
+
+test('商品同一提交不明结果复用请求键，原因选填一次且改体采用新键',async()=>{
+  vi.mocked(getProductApi).mockResolvedValue(makeProduct() as never)
+  vi.mocked(updateProductApi).mockRejectedValue(new Error('connection lost'))
+  await renderAt('/products/147')
+  await vi.waitFor(()=>expect(numberValues()).toContain('150'))
+  const reason=host.querySelector('input[placeholder="本次改价的说明"]') as HTMLInputElement
+  expect(reason).not.toBeNull()
+  await typeInto(reason,'合成改价理由')
+  await act(async()=>{clickButton('保存修改')})
+  await vi.waitFor(()=>expect(vi.mocked(updateProductApi)).toHaveBeenCalledTimes(1))
+  await act(async()=>{clickButton('保存修改')})
+  await vi.waitFor(()=>expect(vi.mocked(updateProductApi)).toHaveBeenCalledTimes(2))
+  const calls=vi.mocked(updateProductApi).mock.calls
+  expect(calls[0][1].changeReason).toBe('合成改价理由')
+  expect(calls[0][2]).toBeTruthy();expect(calls[1][2]).toBe(calls[0][2])
+  await typeInto(reason,'另一个合成理由')
+  await act(async()=>{clickButton('保存修改')})
+  await vi.waitFor(()=>expect(vi.mocked(updateProductApi)).toHaveBeenCalledTimes(3))
+  expect(calls[2][2]).not.toBe(calls[0][2])
 })

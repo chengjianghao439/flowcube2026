@@ -3,6 +3,7 @@ import { act, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import DataTable from './DataTable'
+import { VirtualTableBody } from './VirtualTableBody'
 import { SectionVisibilityContext } from '@/components/layout/SectionVisibilityContext'
 const rows = Array.from({ length: 1000 }, (_, i) => ({ id: i + 1, name: `商品 ${i + 1}` }))
 const columns = [{ key: 'name', title: '名称', width: 200 }]
@@ -91,4 +92,19 @@ test('切回页面保留已滚出视口的行高测量，长列表位置不漂�
   render(); act(() => { host.scrollTop=24000; host.dispatchEvent(new Event('scroll')) })
   const height=totalHeight(); expect(height).toBe(48096)
   render(false); render(true); expect(totalHeight()).toBe(height)
+})
+
+test('显式录入虚拟行保留屏幕外焦点与输入，间隔占位仍守恒', () => {
+  function Editor() {
+    const [values, setValues] = useState<Record<number, string>>({})
+    return <table><VirtualTableBody data={rows} columns={1} getRowKey={row => row.id} preserveFocus renderRow={row => <tr key={row.id}><td><input aria-label={`数量${row.id}`} value={values[row.id] || ''} onChange={event => setValues(previous => ({ ...previous, [row.id]: event.target.value }))} /></td></tr>} /></table>
+  }
+  act(() => root.render(<Editor />))
+  const first = host.querySelector<HTMLInputElement>('[aria-label="数量1"]')!
+  act(() => { first.focus(); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(first, '3'); first.dispatchEvent(new Event('input', { bubbles: true })) })
+  act(() => { host.scrollTop = 48000 - 480; host.dispatchEvent(new Event('scroll')) })
+  expect(document.activeElement).toBe(first); expect(first.value).toBe('3'); expect(host.querySelectorAll('input').length).toBeLessThan(50)
+  expect(host.querySelector('[aria-label="数量1000"]')).not.toBeNull()
+  const total = [...host.querySelectorAll<HTMLTableRowElement>('tbody tr')].reduce((sum, row) => sum + (row.hasAttribute('aria-hidden') ? Number.parseFloat(row.cells[0].style.height) : 48), 0)
+  expect(total).toBe(48000)
 })

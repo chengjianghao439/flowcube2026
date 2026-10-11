@@ -70,6 +70,7 @@ export const PERMISSIONS = {
 
   INBOUND_ORDER_VIEW: 'inbound.order.view',
   INBOUND_ORDER_CREATE: 'inbound.order.create',
+  INBOUND_ORDER_UPDATE: 'inbound.order.update',
   INBOUND_ORDER_SUBMIT: 'inbound.order.submit',
   INBOUND_ORDER_CANCEL: 'inbound.order.cancel',
   INBOUND_RECEIVE_EXECUTE: 'inbound.receive.execute',
@@ -316,6 +317,7 @@ export const PERMISSION_GROUPS: Array<{ group: string; items: Array<{ code: Perm
       { code: PERMISSIONS.PROCUREMENT_PLAN_MANAGE, label: '生成/编辑/转采购计划' },
       { code: PERMISSIONS.INBOUND_ORDER_VIEW, label: '查看收货单' },
       { code: PERMISSIONS.INBOUND_ORDER_CREATE, label: '新建收货单' },
+      { code: PERMISSIONS.INBOUND_ORDER_UPDATE, label: '编辑收货草稿' },
       { code: PERMISSIONS.INBOUND_ORDER_SUBMIT, label: '提交收货单' },
       { code: PERMISSIONS.INBOUND_ORDER_CANCEL, label: '取消收货单' },
       { code: PERMISSIONS.INBOUND_RECEIVE_EXECUTE, label: '执行收货' },

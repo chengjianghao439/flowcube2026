@@ -3,7 +3,7 @@ import { ChevronDown } from 'lucide-react'
 import { useSectionActive } from '@/components/layout/SectionVisibilityContext'
 
 /** 只有实际被两行预览截断的辅助文字才提供展开操作。 */
-export function TableTextPreview({ title, value, children }: { title: string; value: string; children: ReactNode }) {
+export function TableTextPreview({ title, value, children, previewLines = 2 }: { title: string; value: string; children: ReactNode; previewLines?: 1 | 2 }) {
   const wrapperRef = useRef<HTMLDivElement>(null)
   const textRef = useRef<HTMLSpanElement>(null)
   const [overflow, setOverflow] = useState(false)
@@ -51,15 +51,15 @@ export function TableTextPreview({ title, value, children }: { title: string; va
       document.fonts?.removeEventListener('loadingdone', schedule)
       if (frame) window.cancelAnimationFrame(frame)
     }
-  }, [active, children])
+  }, [active, children, previewLines])
 
   return <div ref={wrapperRef} data-table-text className="relative min-w-0">
     {overflow ? <details className="table-text-preview group/text" onDoubleClick={event => event.stopPropagation()}>
       <summary className="flex cursor-pointer items-start gap-1 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" title={value}>
-        <span ref={textRef} className="table-text-value min-w-0 flex-1">{children}</span>
+        <span ref={textRef} style={{ WebkitLineClamp: previewLines }} className="table-text-value min-w-0 flex-1">{children}</span>
         <ChevronDown aria-hidden="true" className="mt-1 h-3 w-3 shrink-0 text-muted-foreground transition-transform group-open/text:rotate-180" />
         <span className="sr-only">展开或收起{title}</span>
       </summary>
-    </details> : <span ref={textRef} className="table-text-value block min-w-0">{children}</span>}
+    </details> : <span ref={textRef} style={{ WebkitLineClamp: previewLines }} className="table-text-value block min-w-0">{children}</span>}
   </div>
 }

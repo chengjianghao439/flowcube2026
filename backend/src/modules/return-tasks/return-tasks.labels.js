@@ -11,6 +11,7 @@ async function queueReturnLabels(conn, { taskId, warehouseId, productName, conta
       warehouseId,
       data: { container_code: container.barcode, product_name: productName, qty: container.qty },
       createdBy: userId ?? null,
+      requestPurpose: 'initial',
       jobUniqueKey: `return_${phase}:${taskId}:${container.containerId}:${container.status}:${container.qty}`,
     })
     // unprintable：没有可用打印机，只留下打印记录（打印记录页可见、可补打）

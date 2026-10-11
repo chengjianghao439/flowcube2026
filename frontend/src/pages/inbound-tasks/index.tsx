@@ -1,3 +1,9 @@
+import { isInboundDraftEditable } from './inboundDraftEditable'
+import { useContext } from 'react'
+import { TabPathContext } from '@/components/layout/TabPathContext'
+import { useVisibleQuery } from '@/hooks/useVisibleQuery'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
+import { blocksInboundRead, inboundReadTitle } from './readState'
 import { OrderStatusFilter } from '@/components/shared/OrderStatusFilter'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
@@ -7,12 +13,11 @@ import { PERMISSIONS } from '@/lib/permission-codes'
  */
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
 import { X } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
 import { Button } from '@/components/ui/button'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
-import { SoftStatusLabel } from '@/components/shared/StatusBadge'
+import { InboundTaskStatus } from './InboundTaskStatus'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { getInboundTasksApi } from '@/api/inbound-tasks'
 import {
@@ -43,7 +48,9 @@ export default function InboundTasksPage() {
   const { can } = usePermission()
   const navigate = useNavigate()
   const addTab = useWorkspaceStore(s => s.addTab)
-  const [searchParams, setSearchParams] = useSearchParams()
+  const tabPath = useContext(TabPathContext)
+  const [locationParams, setSearchParams] = useSearchParams()
+  const searchParams = tabPath ? new URLSearchParams(tabPath.split('?')[1] || '') : locationParams
   const [queryOpen, setQueryOpen] = useState(false)
   const submitMut = useSubmitInboundTask()
   const cancelMut = useCancelInbound()
@@ -96,11 +103,11 @@ export default function InboundTasksPage() {
   const effectiveEndDate = endDate || (rangeAll ? '' : defaultRange.end)
 
   const isActiveTab = useActiveWorkspaceTab()
-  const PAGE_SIZE = 20
+  const PAGE_SIZE = 200
   // 收货现场变化频繁，标签页常驻挂载时若不轮询容易停留在打开时的陈旧进度
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error, refetch } = useVisibleQuery({
     queryKey: ['inbound-tasks', { keyword, remark, operatorId, statusFilter, productId, supplierId, warehouseId, startDate: effectiveStartDate, endDate: effectiveEndDate }],
-    queryFn: () => getInboundTasksApi({
+    queryFn: ({ signal }) => getInboundTasksApi({
       page: 1,
       pageSize: PAGE_SIZE,
       keyword,
@@ -112,7 +119,7 @@ export default function InboundTasksPage() {
       warehouseId: warehouseId || undefined,
       startDate: effectiveStartDate || undefined,
       endDate: effectiveEndDate || undefined,
-    }),
+    }, { signal, skipGlobalError: true }),
     refetchInterval: isActiveTab ? 20_000 : false,
   })
   const total = data?.pagination?.total ?? 0
@@ -124,10 +131,10 @@ export default function InboundTasksPage() {
   // 首次打开：把默认窗口写进 URL（便于分享与回看）。筛选兜底在构造查询处，
   // 所以即使这个 effect 没跑（页签已挂载），范围也一致。
   useEffect(() => {
-    if (!startDate && !endDate && searchParams.get('range') !== 'all') {
+    if (isActiveTab && !startDate && !endDate && searchParams.get('range') !== 'all') {
       setSearchParams(upsertSearchParams(searchParams, { startDate: defaultRange.start, endDate: defaultRange.end }), { replace: true })
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 默认日期仅在列表首次激活写入；刷新不重置已应用条件。
   }, [])
 
   function openDetail(row: InboundTask) {
@@ -237,31 +244,7 @@ export default function InboundTasksPage() {
       key: 'status',
       title: '状态',
       width: 7.53,
-      render: (_, row) => {
-        const task = row as InboundTask
-        const tone = task.receiptStatus?.key === 'audited'
-          ? 'success'
-          : task.receiptStatus?.key === 'exception'
-            ? 'danger'
-            : task.receiptStatus?.key === 'draft'
-              ? 'draft'
-              : 'active'
-        return (
-          <div className="min-w-0">
-            <SoftStatusLabel label={task.receiptStatus?.label ?? INBOUND_STATUS_LABEL[task.status]} tone={tone} />
-            {task.exceptionFlags?.hasException && <p className="text-xs text-destructive-ink mt-1">打印 / 上架异常</p>}
-          </div>
-        )
-      },
-    },
-    {
-      key: 'receivedQty', title: '收货 / 上架进度', width: 14,
-      render: (_, task) => <div className="text-xs space-y-1 tabular-nums">
-        <p>应到 {task.orderedQty ?? 0} · 已收 {task.receivedQty ?? 0}</p>
-        <p>未收 {Math.max(0, (task.orderedQty ?? 0) - (task.receivedQty ?? 0))}</p>
-        <p>已上架 {task.putawayQty ?? 0} · 待上架 {task.putawaySummary?.waitingQty ?? 0}</p>
-        {task.status === 2 && <p className="text-muted-foreground">收货未结束 · 本次未结算</p>}
-      </div>,
+      render: (_, row) => <InboundTaskStatus task={row as InboundTask} onView={() => openDetail(row as InboundTask)} />,
     },
     {
       key: 'operatorName',
@@ -298,7 +281,14 @@ export default function InboundTasksPage() {
       render: (_, row) => {
         const task = row as InboundTask
         const items = []
-        if (task.receiptStatus?.key === 'draft') {
+        if (!error && isActiveTab && can(PERMISSIONS.INBOUND_ORDER_UPDATE) && isInboundDraftEditable(task)) {
+          items.push({ label: '编辑', onClick: () => {
+            if (!isInboundDraftEditable(task) || !can(PERMISSIONS.INBOUND_ORDER_UPDATE)) return
+            const path = `/inbound-tasks/${task.id}/edit`
+            addTab({ key: path, title: `编辑 ${task.taskNo}`, path }); navigate(path)
+          } })
+        }
+        if (can(PERMISSIONS.INBOUND_ORDER_SUBMIT) && task.receiptStatus?.key === 'draft') {
           items.push({
             label: '提交到 PDA',
             onClick: () => {
@@ -317,14 +307,14 @@ export default function InboundTasksPage() {
             navigate(path)
           },
         })
-        if (task.status === 2) {
+        if (can(PERMISSIONS.INBOUND_ORDER_CANCEL) && task.status === 2) {
           items.push({
             label: '结束收货',
             separatorBefore: true,
             onClick: () => setCloseTargetId(task.id),
           })
         }
-        if (task.status === 2 || task.status === 3 || task.status === 4) {
+        if (can(PERMISSIONS.INBOUND_ORDER_CANCEL) && (task.status === 2 || task.status === 3 || task.status === 4)) {
           items.push({
             label: '撤回收货',
             destructive: true,
@@ -345,7 +335,7 @@ export default function InboundTasksPage() {
             disabled: voidReceiptMut.isPending,
           })
         }
-        if (task.status === 1) {
+        if (can(PERMISSIONS.INBOUND_ORDER_CANCEL) && task.status === 1) {
           items.push({
             label: '取消',
             destructive: true,
@@ -368,7 +358,7 @@ export default function InboundTasksPage() {
               primaryLabel="详情"
               onPrimaryClick={() => openDetail(task)}
               primaryVariant="outline"
-              items={items}
+              items={items.map(item => ({ ...item, disabled: !!error || ('disabled' in item && item.disabled) }))}
             />
           </div>
         )
@@ -380,7 +370,6 @@ export default function InboundTasksPage() {
     <div className="space-y-4">
       <PageHeader
         title="收货订单"
-        description="按供应商一次到货建单；收货生成库存条码，PDA 打印并上架后计入库存"
         actions={
           <>
             <Button
@@ -421,17 +410,20 @@ export default function InboundTasksPage() {
         </div>
       )}
 
-      <DataTable
+      {error && <QueryErrorState error={error} onRetry={() => { void refetch() }} compact={!!data && !blocksInboundRead(error)} title={inboundReadTitle(error, data ? '刷新失败，当前显示上次读取的数据' : '收货列表读取失败')} />}
+      {(!error || (!!data && !blocksInboundRead(error))) && <DataTable
         columns={columns}
         data={data?.list ?? []}
         loading={isLoading}
         rowKey="id"
         fluid
+        virtualized
         columnStorageKey="inbound-tasks:v5"
         onRowDoubleClick={openDetail}
-      />
+      />}
 
-      <ListSummary total={total} unit="单" />
+      {!error && data?.truncated && <p role="status" className="text-sm text-warning-ink">已读取 {data.list.length.toLocaleString()} / 总匹配 {total.toLocaleString()} 单，数据未全部加载；请用查询缩小范围。</p>}
+      {!error && data && <ListSummary total={total} unit="单" />}
 
       <InboundTaskQueryDialog
         open={queryOpen}

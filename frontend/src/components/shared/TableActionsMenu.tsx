@@ -27,6 +27,8 @@ interface TableActionsMenuProps {
   primaryVariant?: 'default' | 'outline' | 'destructive'
   primaryDisabled?: boolean
   items: TableActionItem[]
+  /** 当前行读取不可用或消失时，由页面提供有效的焦点返回位置。 */
+  onUnavailableFocus?: () => void
 }
 
 export default function TableActionsMenu({
@@ -35,17 +37,43 @@ export default function TableActionsMenu({
   primaryVariant = 'default',
   primaryDisabled = false,
   items,
+  onUnavailableFocus,
 }: TableActionsMenuProps) {
   // 完整列表可能有数千行；用户首次展开前只保留普通按钮，避免每行预挂载 Radix 菜单树。
   // 初始化后继续保留实例，沿用页面隐藏、键盘导航、焦点归还与浮层状态保留规则。
   const [menuInitialized, setMenuInitialized] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuTrigger = useRef<HTMLButtonElement>(null)
   const focusFirstItem = useRef(false)
   const menuContent = useRef<HTMLDivElement>(null)
   const afterClose = useRef<(() => void) | null>(null)
   const active = useSectionActive()
   const activeRef = useRef(active)
   activeRef.current = active
+  const actionRoot = useRef<HTMLElement | null>(null)
+  const ownsFocus = useRef(false)
+  const unavailableFocus = useRef(onUnavailableFocus)
+  unavailableFocus.current = onUnavailableFocus
+  const hasFocusFallback = !!onUnavailableFocus
+  useEffect(() => {
+    if (!hasFocusFallback) return
+    const trackFocus = (event: FocusEvent) => {
+      const target = event.target as Node | null
+      ownsFocus.current = !!target && (!!actionRoot.current?.contains(target) || !!menuContent.current?.contains(target))
+    }
+    document.addEventListener('focusin', trackFocus)
+    return () => {
+      document.removeEventListener('focusin', trackFocus)
+      if (ownsFocus.current && activeRef.current) unavailableFocus.current?.()
+    }
+  }, [hasFocusFallback])
+  useEffect(() => {
+    if ((primaryDisabled || !items.length) && ownsFocus.current && activeRef.current) unavailableFocus.current?.()
+  }, [primaryDisabled, items.length])
   useEffect(() => { if (!active) afterClose.current = null }, [active])
+  useEffect(() => {
+    if (!items.length) { setMenuOpen(false); afterClose.current = null }
+  }, [items.length])
   useEffect(() => () => { afterClose.current = null }, [])
   // 主按钮样式：与下面拼接模式的主按钮保持完全一致（同高、同字号），避免有无下拉时大小不一
   const primaryClass = cn(
@@ -57,9 +85,9 @@ export default function TableActionsMenu({
         : 'bg-primary text-primary-foreground hover:bg-primary/90',
   )
 
-  if (items.length === 0) {
+  if (items.length === 0 && !menuInitialized) {
     return (
-      <button type="button" disabled={primaryDisabled} onClick={onPrimaryClick}
+      <button ref={node => { actionRoot.current = node }} type="button" disabled={primaryDisabled} onClick={onPrimaryClick}
         className={cn('inline-flex items-center rounded-md border border-border', primaryClass)}>
         {primaryLabel}
       </button>
@@ -67,7 +95,7 @@ export default function TableActionsMenu({
   }
 
   return (
-    <div className="inline-flex items-center rounded-md border border-border overflow-hidden">
+    <div ref={node => { actionRoot.current = node }} className="inline-flex items-center rounded-md border border-border overflow-hidden">
       <button
         type="button"
         disabled={primaryDisabled}
@@ -86,22 +114,25 @@ export default function TableActionsMenu({
           onClick={event => {
             focusFirstItem.current = event.detail === 0
             setMenuInitialized(true)
+            setMenuOpen(true)
           }}
           onKeyDown={event => {
             if (!primaryDisabled && event.key === 'ArrowDown') {
               event.preventDefault()
               focusFirstItem.current = true
               setMenuInitialized(true)
+              setMenuOpen(true)
             }
           }}
           className="px-1.5 py-1.5 text-muted-foreground hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
         >
           <ChevronDown className="size-3.5" />
         </button>
-      ) : <DropdownMenu defaultOpen>
+      ) : <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
         <DropdownMenuTrigger asChild>
           <button
             type="button"
+            ref={menuTrigger}
             disabled={primaryDisabled || items.length === 0}
             aria-label="更多操作"
             className="px-1.5 py-1.5 text-muted-foreground hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
@@ -112,8 +143,17 @@ export default function TableActionsMenu({
         <DropdownMenuContent ref={menuContent} align="end" onCloseAutoFocus={event => {
           const action = afterClose.current
           afterClose.current = null
-          if (!action || !activeRef.current) return
+          if (!activeRef.current) return
+          if (!action) {
+            if ((primaryDisabled || !items.length) && unavailableFocus.current) {
+              event.preventDefault()
+              unavailableFocus.current()
+            }
+            return
+          }
           event.preventDefault()
+          // 先回到仍挂载的触发控件，供下一弹窗记住关闭后的焦点归属。
+          menuTrigger.current?.focus({ preventScroll: true })
           action()
         }} onFocus={() => {
           // 首次按键发生在 Radix 挂载之前，补上键盘打开时应聚焦首个可用菜单项的语义。

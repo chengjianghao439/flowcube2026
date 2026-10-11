@@ -23,7 +23,7 @@ function inboundFixture({ warehouse = 8, transferred = false, outsideCandidates 
       if (sql.includes('paid_amount')) return [[]]
       if (sql.includes('SELECT DISTINCT product_id')) return [outsideCandidates ? [] : [{ product_id: 3, warehouse_id: warehouse }]]
       if (sql.includes('inventory_containers') && sql.includes('status IN')) return [outsideCandidates ? [] : [container]]
-      if (sql.includes('SELECT id FROM inventory_containers')) return [[{ id: 11 }]]
+      if (sql.includes('SELECT id, has_transfer_history FROM inventory_containers')) return [[{ id: 11 }]]
       if (sql.includes('inventory_logs')) {
         // transferred=true 表示探维度快照建立后才提交的历史；普通 RR 读会漏掉它。
         assert.deepEqual(Array.from(params[0]), [11])
@@ -65,7 +65,7 @@ test('A→B→A及已force-close VOID容器仍按全部任务容器的当前调�
     await assert.rejects(f.service.voidReceipt(21, { userId: 7 }, [8]), error => error.statusCode === 409 && error.code === 'INBOUND_TASK_CONTAINER_TRANSFERRED')
     assertNoInboundWrite(f)
     assert.match(f.calls.find(call => call.sql.includes('inventory_logs')).sql, /FOR SHARE/)
-    assert.doesNotMatch(f.calls.find(call => call.sql.includes('SELECT id FROM inventory_containers')).sql, /status IN/)
+    assert.doesNotMatch(f.calls.find(call => call.sql.includes('SELECT id, has_transfer_history FROM inventory_containers')).sql, /status IN/)
   }
 })
 test('未调拨正常收货允许撤回，在途仍拒绝，任务越范围先于库存读拒绝', async () => {
@@ -127,4 +127,51 @@ test('force-close只查询真实容器列，在途核销成功且不加回任一
   assert.ok(f.events.includes('commit')); assert.ok(!f.events.includes('dimension')); assert.ok(!f.events.includes('log'))
   assert.equal(f.recorded[0].payload.voidedContainers[0].qty, 10)
   assert.ok(f.calls.every(call => !/inventory_stock/.test(call.sql)))
+})
+
+// 收货 UI 只读契约：同一批汇总分组，显式分页不进入建单加锁路径。
+function inboundReadFixture() {
+  const calls = []
+  const pool = { async query(sql, params) {
+    calls.push({ sql, params })
+    if (sql.includes('FROM inbound_task_items') && sql.includes('GROUP BY task_id')) return [[
+      { task_id: 21, line_count: 3, ordered_qty: 5, received_qty: 3, putaway_qty: 1 },
+    ]]
+    if (sql.includes('FROM inventory_containers')) return [[]]
+    if (sql.startsWith('SELECT id, order_id FROM purchase_order_items') || sql.startsWith('SELECT * FROM purchase_order_items')) return [[{id:31,order_id:41},{id:32,order_id:41}]]
+    if (sql.startsWith('SELECT * FROM purchase_orders')) return [[{id:41,supplier_id:1,warehouse_id:8,status:2}]]
+    if (sql.includes('FROM purchase_order_items')) return [[{ purchase_item_id: 31, purchase_order_id: 41, product_id: 1, remaining_qty: 3, total_count: 5101 }]]
+    throw new Error('未覆盖读取 SQL')
+  } }
+  const query = load('modules/inbound-tasks/inbound-tasks.query.js', {
+    '../../config/db': { pool }, '../../utils/logger': {}, '../../engine/containerEngine': { CONTAINER_STATUS: statuses },
+    '../../utils/inboundThresholds': {}, '../../utils/warehouseScope': scope,
+    './inbound-tasks.status': { DEFAULT_INBOUND_THRESHOLDS: { printTimeoutMinutes: 5, putawayTimeoutHours: 24 } },
+    '../print-jobs/print-jobs.service': { EXPIRE_MESSAGE: 'timeout' },
+    './inbound-tasks.helpers': { fmtPurchasableItem: row => ({ purchaseItemId: row.purchase_item_id, remainingQty: row.remaining_qty }) },
+  })
+  return { query, pool, calls }
+}
+test('收货列表移除混合数量展示后保持闭环与全容器编辑守卫四次批量查询不随任务数增加', async () => {
+  const f = inboundReadFixture(), summaries = await f.query.loadInboundTaskClosureSummary([21, 22])
+  const summary = summaries.get(21)
+  assert.equal(summary.lineCount, 3); assert.equal(summary.orderedQty, 5)
+  assert.equal(summary.receivedQty, 3); assert.equal(summary.putawayQty, 1)
+  assert.equal(f.calls.length, 4); assert.match(f.calls[0].sql, /GROUP BY task_id/)
+  assert.doesNotMatch(f.calls[0].sql, /OVER|GROUP BY task_id, product_id/)
+})
+test('候选有界浏览稳定分页，精确核实范围过滤，建单锁采购头再锁完整明细且聚合不带LIMIT', async () => {
+  const f = inboundReadFixture()
+  const page = await f.query.findPurchasableItems({ supplierId: 1, bounded: true, page: 2, pageSize: 99999, scopeWarehouseIds: [8] })
+  assert.equal(page.pagination.total, 5101); assert.equal(page.pagination.pageSize, 200)
+  assert.match(f.calls[0].sql, /COUNT\(\*\) OVER\(\)/); assert.match(f.calls[0].sql, /ORDER BY candidate.purchase_created_at ASC, candidate.purchase_item_id ASC LIMIT \? OFFSET \?/)
+  assert.deepEqual(Array.from(f.calls[0].params).slice(-2), [200, 200])
+  await f.query.findPurchasableItems({ supplierId: 1, purchaseItemIds: '31,32', scopeWarehouseIds: [8] })
+  assert.match(f.calls[1].sql, /poi.id IN \(\?,\?\)/); assert.match(f.calls[1].sql, /po.warehouse_id IN/); assert.doesNotMatch(f.calls[1].sql, /LIMIT|FOR UPDATE/)
+  await f.query.loadPurchasableCandidates(f.pool, { supplierId: 1, purchaseItemIds: [31, 32], forUpdate: true, readPage: { pageSize: 1, offset: 0 } })
+  assert.match(f.calls[2].sql, /SELECT id, order_id FROM purchase_order_items/); assert.doesNotMatch(f.calls[2].sql, /FOR UPDATE/)
+  assert.match(f.calls[3].sql, /FROM purchase_orders.*ORDER BY id FOR UPDATE/); assert.match(f.calls[4].sql, /FROM purchase_order_items.*ORDER BY id FOR UPDATE/)
+  assert.match(f.calls[5].sql, /SUM/); assert.doesNotMatch(f.calls[5].sql, /LIMIT|FOR UPDATE|COUNT\(\*\) OVER/)
+  await assert.rejects(f.query.findPurchasableItems({ supplierId: 1, purchaseItemIds: '31 OR 1=1' }))
+  await assert.rejects(f.query.findPurchasableItems({ supplierId: 1, purchaseItemIds: Array(201).fill('31').join(',') }))
 })

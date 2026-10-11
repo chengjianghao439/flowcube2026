@@ -57,3 +57,13 @@ test('登录状态已变化时不查询旧来源或接受已有记录', async ()
   expect(mocks.get).not.toHaveBeenCalled()
   expect(host.textContent).toContain('读取来源已变化')
 })
+test('原操作记录下的仓库交接与确认资料默认收起且可展开，不增加读取入口', async () => {
+  mocks.get.mockResolvedValue({...records,sections:[{group:'log',title:'仓库交接',columns:[{key:'reason',label:'原因'},{key:'phase',label:'阶段'}],rows:[{reason:'合成交接原因',phase:'待仓库确认'}]}]})
+  await render()
+  const details=host.querySelector<HTMLDetailsElement>('[data-activity-log-section]')!
+  expect(details).toBeTruthy();expect(details.open).toBe(false)
+  expect(details.querySelector('summary')?.textContent).toContain('仓库交接')
+  await act(async()=>details.querySelector('summary')!.click())
+  expect(details.open).toBe(true);expect(details.textContent).toContain('合成交接原因')
+  expect(mocks.get).toHaveBeenCalledTimes(1)
+})

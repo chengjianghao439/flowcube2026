@@ -83,6 +83,22 @@ beforeEach(() => {
     .getState()
     .login('fixture', null, { id: 5, roleId: 1, permissions: ['*'] } as never)
 })
+test('原拣货退回页紧凑展示交接原因、申请人与实际阶段，确认事实可展开', async () => {
+  mocks.detailGet.mockResolvedValue({ ...detail, handoff:{reason:'合成退回原因',requestedBy:{id:5,name:'合成申请人'},requestedAt:'2026-10-10 10:00:00',phase:'pending',completedAt:null},
+    confirmations:[{id:'scan-1',kind:'container_return',barcode:'I1',qty:1.25,confirmedBy:{id:6,name:'合成归还人'},confirmedAt:'2026-10-10 10:30:00'}] })
+  await mount(async host => {
+    expect(host.textContent).toContain('合成退回原因')
+    expect(host.textContent).toContain('合成申请人')
+    expect(host.textContent).toContain('待仓库确认')
+    const details=host.querySelector<HTMLDetailsElement>('[data-handoff-confirmations]')!
+    expect(details).toBeTruthy(); expect(details.open).toBe(false)
+    await act(async()=>details.querySelector('summary')!.click())
+    expect(details.open).toBe(true)
+    expect(details.textContent).toContain('合成归还人')
+    expect(details.textContent).toContain('1.25')
+    expect(mocks.scan).not.toHaveBeenCalled(); expect(mocks.box).not.toHaveBeenCalled()
+  })
+})
 async function mount(run: (host: HTMLElement) => Promise<void>) {
   const host = document.createElement('div'),
     root = createRoot(host),

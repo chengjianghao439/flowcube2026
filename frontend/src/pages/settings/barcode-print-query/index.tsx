@@ -1,5 +1,7 @@
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
+import { submitReprintIntent, getReprintIntent, reprintOwnerIdentity, subscribeReprintIntents, reprintIntentRevision, listReprintIntents } from '@/lib/printReprintIntent'
 import { TabPathContext } from '@/components/layout/TabPathContext'
-import { useContext, useCallback, useMemo, useState } from 'react'
+import { useContext, useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { X } from 'lucide-react'
@@ -23,11 +25,12 @@ import { PERMISSIONS } from '@/lib/permission-codes'
 import { buildWorkspaceTabRegistrationFromPath } from '@/router/workspaceRouteMeta'
 import { resolveRouteTitle } from '@/router/routeDefinitions'
 import { formatPrintStatus } from '@/utils/displayFormatters'
+import PrintRequestDetails from './PrintRequestDetails'
 import BarcodePrintQueryDialog, { type BarcodePrintQueryValues } from './BarcodePrintQueryDialog'
 import { BARCODE_PRINT_STATUS_OPTIONS } from './constants'
 
 const CATEGORY_OPTIONS: Array<{ value: BarcodePrintCategory; label: string; hint: string }> = [
-  { value: 'inbound', label: '入库条码', hint: '库存条码标签的打印记录与补打（从未打印过的不在此列）' },
+  { value: 'inbound', label: '入库条码', hint: '库存条码标签的打印记录与补打；历史缺失时可查找有效收货来源恢复标签' },
   { value: 'outbound', label: '出库条码', hint: '出库箱贴 / L 条码的打印记录与补打' },
   { value: 'logistics', label: '物流条码', hint: '物流标签与面单的打印记录与补打' },
 ]
@@ -94,13 +97,29 @@ export default function BarcodePrintQueryPage() {
   const [keyword, setKeyword] = useState(initialKeyword)
   const [status, setStatus] = useState('__all__')
   const [queryOpen, setQueryOpen] = useState(false)
+  const [recovery, setRecovery] = useState(false)
+  const [confirm, setConfirm] = useState<{ row: BarcodePrintRecord; key: string | null; owner: string; another: boolean } | null>(null)
+  const confirmTrigger = useRef<HTMLElement | null>(null)
+  const queryTrigger = useRef<HTMLButtonElement>(null)
+  const openConfirm = useCallback((value: NonNullable<typeof confirm>) => {
+    confirmTrigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    setConfirm(value)
+  }, [])
+  useSyncExternalStore(subscribeReprintIntents, reprintIntentRevision)
+  const storedIntents = listReprintIntents().filter(info => info.resource.startsWith(`barcode:${category}:`))
   const isActiveTab = useActiveWorkspaceTab()
+  const activeTabRef = useRef(isActiveTab)
+  activeTabRef.current = isActiveTab
+  const focusQuery = useCallback(() => {
+    if (activeTabRef.current) queryTrigger.current?.focus({ preventScroll: true })
+  }, [])
   const hasInboundHandoff = category === 'inbound' && !!(initialInboundTaskId || initialInboundTaskItemId)
 
   const query = useQuery({
-    queryKey: ['barcode-print-records', category, keyword, status, initialInboundTaskId, initialInboundTaskItemId],
+    queryKey: ['barcode-print-records', category, recovery, keyword, status, initialInboundTaskId, initialInboundTaskItemId],
     queryFn: () => getBarcodePrintRecordsApi({
       category,
+      recovery: category === 'inbound' && recovery,
       keyword,
         status: status === '__all__' ? undefined : status,
       page: 1,
@@ -114,7 +133,7 @@ export default function BarcodePrintQueryPage() {
       inboundTaskId: category === 'inbound' ? initialInboundTaskId : undefined,
       inboundTaskItemId: category === 'inbound' ? initialInboundTaskItemId : undefined,
     }),
-    enabled: isActiveTab,
+    enabled: isActiveTab && (!recovery || !!keyword || !!initialInboundTaskId || !!initialInboundTaskItemId),
     staleTime: 0,
     refetchOnMount: 'always',
     retry: false,
@@ -126,7 +145,7 @@ export default function BarcodePrintQueryPage() {
   const total = query.data?.pagination?.total ?? 0
 
   // ── 查询弹窗筛选值 ──
-  const initialQuery: BarcodePrintQueryValues = { keyword, status }
+  const initialQuery = useMemo<BarcodePrintQueryValues>(() => ({ keyword, status }), [keyword, status])
   function applyQuery(v: BarcodePrintQueryValues) {
     setKeyword(v.keyword)
     setStatus(v.status);
@@ -141,10 +160,14 @@ export default function BarcodePrintQueryPage() {
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   const reprintMut = useMutation({
-    mutationFn: (row: BarcodePrintRecord) => {
+    mutationFn: ({ row, another = false, expectedKey, expectedOwner, queryOnly = false }: { row: BarcodePrintRecord; another?: boolean; expectedKey?: string | null; expectedOwner?: string; queryOnly?: boolean }) => {
       const current = query.data?.list.find(item => item.category === row.category && item.recordId === row.recordId)
-      if (!canOperate || !canReprint || !safeId(row.recordId) || !current?.canReprint) throw new Error('请先重新读取并核对打印记录')
-      return reprintBarcodeRecordApi({ category: row.category, recordId: row.recordId }, { skipGlobalError: true })
+      if (!canOperate || !canReprint || !safeId(row.recordId) || !queryOnly && !current?.canReprint) throw new Error('请先重新读取并核对打印记录')
+      const original = getReprintIntent(`barcode:${row.category}:${row.recordId}`)
+      const saved = original && 'payload' in original ? original.payload as { category?: string; recordId?: number; recovery?: boolean } : null
+      const recover = !another && saved ? saved.recovery === true : row.canRecover === true
+      const payload = { category: row.category, recordId: row.recordId, ...(recover ? { recovery: true } : {}) }
+      return submitReprintIntent(`barcode:${row.category}:${row.recordId}`, payload, (key, config) => reprintBarcodeRecordApi(payload, config, key), result => result.category === row.category && result.recordId === row.recordId && Number.isSafeInteger(result.requestId), { newIntent: another, expectedKey, expectedOwner, queryOnly })
     },
     onSuccess: (d) => {
       if (!d) return
@@ -164,7 +187,7 @@ export default function BarcodePrintQueryPage() {
       qc.invalidateQueries({ queryKey: ['print-jobs'] })
     },
     onError: (e: unknown) => {
-      toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '重新打印失败')
+      toast.error((e as { message?: string }).message ?? '补打结果未确认，请按原条码重试')
     },
   })
 
@@ -178,7 +201,7 @@ export default function BarcodePrintQueryPage() {
 
   // 解构出稳定的 mutate 与需要的状态位：直接依赖整个 reprintMut 对象会让 columns
   // 每次渲染重建（该对象引用不稳定）
-  const { mutate: reprint, isPending: reprinting, variables: reprintingRow } = reprintMut
+  const { mutate: reprint, isPending: reprinting, variables: reprintingRequest } = reprintMut
 
   const columns = useMemo<TableColumn<BarcodePrintRecord>[]>(() => {
     const bizTitle =
@@ -254,6 +277,7 @@ export default function BarcodePrintQueryPage() {
             {row.latestJob?.printerCode && (
               <div className="text-[11px] text-muted-foreground">打印机编号：{row.latestJob.printerCode}</div>
             )}
+            <PrintRequestDetails job={row.latestJob} />
             {jobNextStep(row.latestJob) && <p className="text-xs leading-5 text-muted-foreground">{jobNextStep(row.latestJob)}</p>}
           </div>
         ),
@@ -269,14 +293,20 @@ export default function BarcodePrintQueryPage() {
         title: '操作',
         width: 210,
         render: (_, row) => {
-          const isReprinting = reprinting && reprintingRow?.recordId === row.recordId
+          const isReprinting = reprinting && reprintingRequest?.row.recordId === row.recordId
+          const intent = storedIntents.find(info => info.resource === `barcode:${row.category}:${row.recordId}`) ?? null
           return (
             <TableActionsMenu
-              primaryLabel={isReprinting ? '处理中…' : '重新打印'}
+              onUnavailableFocus={focusQuery}
+              primaryLabel={isReprinting ? '处理中…' : intent ? '核对原补打' : row.canRecover ? '恢复标签' : '重新打印'}
               primaryVariant="outline"
               primaryDisabled={!canOperate || !canReprint || !safeId(row.recordId) || !row.canReprint || isReprinting}
-              onPrimaryClick={() => reprint(row)}
+              onPrimaryClick={() => {
+                if (row.canRecover && !intent) openConfirm({ row, key: null, owner: reprintOwnerIdentity(), another: false })
+                else reprint({ row })
+              }}
               items={[
+                ...(intent && canOperate && canReprint && row.canReprint && !isReprinting ? [{ label: '明确另补一份', afterMenuClose: true, onClick: () => openConfirm({ row, key: intent.key, owner: reprintOwnerIdentity(), another: true }) }] : []),
                 ...(canOperate && canViewInbound && row.category === 'inbound' && safeId(row.inboundTaskId)
                   ? [{ label: '打开收货详情', onClick: () => openPath(`/inbound-tasks/${row.inboundTaskId}?focus=print-batches`, row.bizNo || `收货订单 #${row.inboundTaskId}`) }]
                   : []),
@@ -289,7 +319,7 @@ export default function BarcodePrintQueryPage() {
         },
       },
     ]
-  }, [category, reprinting, reprintingRow, reprint, openPath, canOperate, canReprint, canViewInbound, canViewWave])
+  }, [storedIntents, category, reprinting, reprintingRequest, reprint, openPath, openConfirm, focusQuery, canOperate, canReprint, canViewInbound, canViewWave])
 
   const handoffReading = hasInboundHandoff && (query.isFetching || query.isPaused || query.isError)
   const rows = useMemo(() => handoffReading ? [] : query.data?.list ?? [], [query.data, handoffReading])
@@ -338,11 +368,11 @@ export default function BarcodePrintQueryPage() {
   }, [category, rows, canOperate])
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5" style={{ overflowAnchor: 'none' }}>
       <PageHeader
         title="条码打印查询"
         description="查询入库条码、出库条码、物流条码的打印状态，支持失败追踪与丢失补打。"
-        actions={<Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>}
+        actions={<Button ref={queryTrigger} variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>}
       />
 
       <p className="text-sm text-muted-foreground">业务完成与条码业务状态不代表已出纸；最近打印任务单独展示。客户端成功回报后仍需现场核对纸张，失败或超时先核对工作站、打印机和纸张。</p>
@@ -475,7 +505,7 @@ export default function BarcodePrintQueryPage() {
             key={item.value}
             type="button"
             onClick={() => {
-              setCategory(item.value);
+              setCategory(item.value); setRecovery(false);
             }}
             className={[
               'rounded-lg border p-4 text-left transition-colors',
@@ -511,6 +541,41 @@ export default function BarcodePrintQueryPage() {
         </div>
       )}
 
+      {category === 'inbound' && <div className="space-y-2 rounded-md border p-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <Button variant="outline" onClick={() => { setRecovery(v => !v); setStatus('__all__') }}>{recovery ? '返回打印历史' : '恢复收货标签'}</Button>
+          <p className="text-sm text-muted-foreground">{recovery ? '按库存条码、商品或收货单号查询。仅恢复有有效收货单及明细的现存条码；不新建库存。请先核对现场标签。' : '打印历史清理后，可在这里查找有效收货来源恢复标签。'}</p>
+        </div>
+        {recovery && !keyword && !initialInboundTaskId && !initialInboundTaskItemId && <Button variant="outline" onClick={() => setQueryOpen(true)}>输入恢复查询条件</Button>}
+      </div>}
+      {storedIntents.length > 0 && <div className="rounded-md border p-3 text-sm" role="status">
+        <p>存在已保留的补打意图。“核对原补打”查询或恢复原结果，不静默另建任务。未知或过期结果须核对原任务及现场纸张；确需增加一份时，请在该行操作菜单明确选择“另补一份”。</p>
+        {storedIntents.filter(info => info.phase === 'pending').map(info => <div key={info.resource} className="mt-2 flex flex-wrap items-center gap-2">
+          <span>原条码记录 #{info.resource.split(':').at(-1)}：{info.expired ? '原意图已过期，结果仍未知，禁止按旧意图重建。' : '原结果尚未确认。'}</span>
+          {'payload' in info && <Button size="sm" variant="outline" disabled={!canOperate || !canReprint || reprinting} onClick={() => {
+            const payload = info.payload as { category: BarcodePrintCategory; recordId: number; recovery?: boolean }
+            reprint({ row: { category: payload.category, recordId: payload.recordId, canRecover: payload.recovery === true } as BarcodePrintRecord, queryOnly: true })
+          }}>查询原结果</Button>}
+        </div>)}
+        {!rows.length && <p className="mt-2">历史记录缺失时，选择“恢复收货标签”并按实物条码查询有效来源。原意图在此保留，查询失败不会另建任务。</p>}
+      </div>}
+      <ConfirmDialog
+        open={!!confirm}
+        onCloseAutoFocus={event => {
+          event.preventDefault()
+          if (!activeTabRef.current) return
+          const target = confirmTrigger.current
+          confirmTrigger.current = null
+          if (target?.isConnected && !target.matches(':disabled') && target.getClientRects().length) target.focus({ preventScroll: true })
+          else queryTrigger.current?.focus({ preventScroll: true })
+        }}
+        title={confirm?.another ? '明确另补一份' : '恢复收货标签'}
+        description={`${confirm?.row.barcode ?? ''}：${confirm?.another ? '原补打可能已经入队或出纸。此操作明确创建另一份标签，请先核对原任务和现场纸张。' : '历史打印记录已缺失，将根据有效收货来源恢复此库存条码的标签。请确认现场确需标签。'}`}
+        confirmText={confirm?.another ? '确认另补一份' : '确认恢复标签'}
+        loading={reprinting}
+        onCancel={() => setConfirm(null)}
+        onConfirm={() => { if (confirm) reprint({ row: confirm.row, another: confirm.another, expectedKey: confirm.key, expectedOwner: confirm.owner }, { onSuccess: () => setConfirm(null) }) }}
+      />
       <DataTable
         virtualized
         columns={columns}

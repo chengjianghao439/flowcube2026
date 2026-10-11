@@ -103,13 +103,24 @@ function fixture({ waitBudget = false, legacy = false, orphan = false, driftPR =
     '../returns/returns.purchase-lock': locks, '../returns/returns-purchase.service': returns,
   })
   const sources = load('modules/inbound-tasks/inbound-purchase-source.js', { '../../utils/AppError': AppError, '../../utils/warehouseScope': scope })
+  // These source additions are explicit boundaries; unknown imports/SQL still fail closed.
+  const editRules = require('../backend/src/modules/inbound-tasks/inbound-tasks.edit-rules')
+  const reprintSource = load('modules/print-jobs/print-jobs.reprint-source.js', { '../../utils/AppError': AppError })
+  const unexpectedReprint = () => { throw Error('Reprint is outside the purchase-return lock fixture') }
+  const createReceipt = load('modules/inbound-tasks/inbound-tasks.create-receipt.js', {
+    '../../utils/AppError': AppError, './inbound-tasks.edit-rules': editRules,
+  })
   const inbound = load('modules/inbound-tasks/inbound-tasks.command.js', {
     '../fulfillment/fulfillment.refresh': { commitFulfillment }, '../../config/db': { pool: { getConnection: async () => conn } }, '../../utils/qtyPrecision': {}, '../../utils/AppError': AppError,
     '../../engine/containerEngine': {}, '../print-jobs/print-jobs.service': {}, './inbound-tasks.helpers': { ...sources, appendInboundEvent: async () => {} }, '../../config/env': {},
     '../../utils/warehouseScope': scope, './inbound-tasks.status': {}, './inbound-tasks.putaway': { tryFinishTask: async () => events.push('finish') }, './inbound-tasks.query': {},
     '../../utils/statusTransition': transition, '../../constants/documentStatusRules': status, '../../utils/operationRequest': request,
+    '../print-jobs/print-jobs.reprint-source': reprintSource,
+    '../print-jobs/print-jobs.reprint-intent': { beginReprintIntent: unexpectedReprint, completeReprintIntent: unexpectedReprint },
+    './inbound-tasks.create-receipt': createReceipt, './inbound-tasks.edit-rules': editRules,
   })
   const purchase = load('modules/purchase/purchase.service.js', {
+    '../../constants/purchaseOrderStatus': require('../backend/src/constants/purchaseOrderStatus'),
     '../fulfillment/fulfillment.refresh': { commitFulfillment }, '../../config/db': { pool: { getConnection: async () => conn } }, '../../utils/AppError': AppError,
     '../../utils/codeGenerator': {}, '../inbound-tasks/inbound-tasks.helpers': {}, '../inbound-tasks/inbound-tasks.query': {}, '../../utils/inboundThresholds': {},
     '../../utils/statusTransition': transition, '../../constants/documentStatusRules': status, '../../utils/operationRequest': request,
@@ -235,6 +246,7 @@ test('audit savepoint adapter preserves closeRemaining domain refusal, retry and
   }
   const adapter = createAuditInventoryTransaction(raw), conn = adapter.serviceConn
   const purchase = load('modules/purchase/purchase.service.js', {
+    '../../constants/purchaseOrderStatus': require('../backend/src/constants/purchaseOrderStatus'),
     '../fulfillment/fulfillment.refresh': { commitFulfillment: actual => actual.commit() }, '../../config/db': { pool: { getConnection: async () => conn } }, '../../utils/AppError': AppError,
     '../../utils/codeGenerator': {}, '../inbound-tasks/inbound-tasks.helpers': {}, '../inbound-tasks/inbound-tasks.query': {}, '../../utils/inboundThresholds': {},
     '../../utils/statusTransition': transition, '../../constants/documentStatusRules': status, '../../utils/operationRequest': {},

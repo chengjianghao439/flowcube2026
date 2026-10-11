@@ -19,5 +19,7 @@ export const releaseSaleApi    = (id: number, items?: ReserveItemOverride[], req
 // items 为空/不传 = 发全部未派发数量；传了 = 按明细及数量分批发货
 export const shipSaleApi       = (id: number, items?: ShipItemRequest[], requestKey?: string) =>
   client.post<null>(`/sale/${id}/ship`, items?.length ? { items } : {}, requestKey ? { headers: withRequestKeyHeaders(requestKey) } : undefined)
-export const cancelSaleApi     = (id: number, requestKey?: string) => client.post<null>(`/sale/${id}/cancel`, {}, requestKey ? { headers: withRequestKeyHeaders(requestKey) } : undefined)
+export const cancelSaleApi = (id: number, requestKey?: string, changeReason?: string, config?: Parameters<typeof client.post>[2]) =>
+  client.post<null>(`/sale/${id}/cancel`, changeReason ? { changeReason } : {}, { ...config, skipGlobalError:true,
+    ...(requestKey ? { headers:withRequestKeyHeaders(requestKey, config?.headers as Record<string,string> | undefined) } : {}) })
 export const deleteSaleApi     = (id: number, requestKey?: string) => client.delete<null>(`/sale/${id}`, requestKey ? { headers: withRequestKeyHeaders(requestKey) } : undefined)

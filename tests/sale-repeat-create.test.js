@@ -99,6 +99,12 @@ function receiptFixture(rows = [{ id: 81, commercial_model: null, head_warehouse
   const guard = load('modules/sale/sale.commercial-receipts.js', { '../../utils/warehouseScope': realScope, '../../utils/AppError': AppError })
   return { pool, guard, queries }
 }
+// 真实异域回执守卫按 action 提前返回；越仓判定仍由上面的真实销售守卫完成。
+const foreignReceiptDeps = {
+  '../inbound-tasks/inbound-tasks.create-receipt': load('modules/inbound-tasks/inbound-tasks.create-receipt.js', { '../../utils/AppError': AppError, './inbound-tasks.edit-rules': {} }),
+  '../inbound-tasks/inbound-tasks.edit-receipt': load('modules/inbound-tasks/inbound-tasks.edit-receipt.js', { '../../utils/AppError': AppError, '../../utils/warehouseScope': realScope }),
+  '../print-jobs/print-jobs.reprint-intent': load('modules/print-jobs/print-jobs.reprint-intent.js', { crypto: require('node:crypto'), '../../utils/AppError': AppError, '../../utils/warehouseScope': realScope, '../../utils/operationRequest': {}, './print-jobs.reprint-source': {} }),
+}
 test('普通sale.create本人成功回执核完整头仓及每行当前范围，空范围拒绝且NULL全仓', async () => {
   const f = receiptFixture()
   await f.guard.assertReceiptScope(f.pool, createReceipt, [8], createContext)
@@ -124,6 +130,7 @@ test('create回执缺原资源/错类型ID/宽请求或不匹配action必须fail
 test('真实本人status控制器传原action匹配和当前scope，普通create越仓不返回成功；其它旧动作不加权', async () => {
   const f = receiptFixture([{ id: 81, commercial_model: null, head_warehouse_id: 8, warehouse_id: 9 }])
   const controller = load('modules/system/system.controller.js', {
+    ...foreignReceiptDeps,
     '../../utils/operationRequest': { getScopedOperationRequestStatus: async input => { assert.equal(input.userId, 9); input.receiptContext.matchedAction = createContext.matchedAction; return createReceipt } },
     '../../config/db': { pool: f.pool }, '../sale/sale.commercial-receipts': f.guard,
     './system.split-device': { ensureSplitReceiptDevice: async () => {} }, '../inventory/inventory.split-receipt': { assertSplitReceipt: async () => {} },

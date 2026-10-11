@@ -3,6 +3,7 @@ const { getInboundPrintDispatchReasonLabel } = require('../inbound-tasks/inbound
 const { deriveInboundBarcodeStatus } = require('../print-jobs/print-jobs.status')
 const { getInboundClosureThresholds } = require('../../utils/inboundThresholds')
 const { MOVE_TYPE } = require('../../engine/inventoryEngine')
+const { scopeFilter } = require('../../utils/warehouseScope')
 const difference = (a, b) => (Math.round(Number(a || 0) * 100) - Math.round(Number(b || 0) * 100)) / 100
 const identity = [['productCode', '编码'], ['articleNumber', '供应商型号'], ['spec', '型号'], ['productName', '名称'], ['color', '颜色'], ['unit', '单位']]
 const productSql = 'i.product_code AS productCode,i.product_name AS productName,i.unit,p.article_number AS articleNumber,p.spec,p.color'
@@ -28,7 +29,7 @@ async function containerSections(condition, params, taskStatus) {
     section('print', '条码打印记录', [['barcode', '条码'], ['id', '打印任务'], ['state', '打印状态'], ['printerName', '打印机'], ['reason', '派发原因'], ['createdAt', '创建时间'], ['updatedAt', '更新时间'], ['error_message', '异常说明']], prints.map(p => ({ ...p, reason: p.reason ? getInboundPrintDispatchReasonLabel(p.reason) : null, state: deriveInboundBarcodeStatus({ ...p, inbound_task_status: taskStatus }, thresholds).printStateLabel }))),
   ]
 }
-async function warehouseTaskSections(taskIds) {
+async function warehouseTaskSections(taskIds, scopeWarehouseIds, authorizedAuditIds) {
   if (!taskIds.length) return { sections: [], events: [] }
   const [rows] = await pool.query(
     `SELECT i.id,${productSql.replace(/p\.article_number|p\.spec|p\.color/g, field => field.replace('p.', 'i.'))},t.task_no AS taskNo,t.status AS taskStatus,
@@ -46,11 +47,14 @@ async function warehouseTaskSections(taskIds) {
      FROM inventory_logs l LEFT JOIN product_items p ON p.id=l.product_id
      WHERE l.ref_type='warehouse_task' AND l.ref_id IN (?) AND l.move_type=? ORDER BY l.id DESC`, [taskIds, MOVE_TYPE.TASK_OUT])
   const [events] = await pool.query('SELECT * FROM warehouse_task_events WHERE task_id IN (?) ORDER BY id DESC', [taskIds])
+  const handoff = await require('../warehouse-tasks/warehouse-tasks.handoff').readTaskHandoffs(pool, taskIds, events, scopeWarehouseIds, authorizedAuditIds)
   const titles = { TASK_CREATED: '创建仓库任务', PICKING_STARTED: '开始拣货', PICKING_DONE: '拣货完成', SORT_PROGRESS: '分拣操作', SORT_DONE: '分拣完成', CHECK_PROGRESS: '复核操作', CHECK_DONE: '复核完成', PACK_PROGRESS: '装箱操作', PACK_DONE: '打包完成', SHIP_DONE: '确认出库', TASK_CANCELLED: '取消仓库任务', SORTING_BIN_ASSIGNED: '分配分拣格', SORTING_BIN_RELEASED: '释放分拣格', CANCEL_REQUESTED: '申请取消', CANCEL_RETURN_SCAN: '取消归还扫码', CANCEL_RETURN_BOX_SCAN: '取消归还整箱', CANCEL_FINALIZED: '取消归还完成', ADJUSTMENT_REQUESTED: '申请改单', ADJUSTMENT_REOPENED: '重新打开改单', ADJUSTMENT_RETURN_SCAN: '改单归还扫码', ADJUSTMENT_VOID_SCAN: '改单作废扫码', ADJUSTMENT_FINALIZED: '改单完成', SHORTAGE_REPORTED: '上报缺货', SHORTAGE_RESOLVED: '处理缺货' }
   const states = { 1: '待拣货', 2: '拣货中', 3: '待分拣', 4: '待复核', 5: '待打包', 6: '待出库', 7: '已出库', 8: '已取消' }
   return {
     sections: [section('progress', '实际出库记录', [['taskNo', '仓库任务'], ...identity, ['shippedQty', '出库数量'], ['operatorName', '操作人'], ['shippedAt', '出库时间']], shipments), section('progress', '仓库任务执行', [['taskNo', '仓库任务'], ...identity, ['requiredQty', '任务数量'], ['pickedQty', '已拣数量'], ['state', '任务状态']], rows.map(r => ({ ...r, state: states[r.taskStatus] || '未知' }))),
-      section('scan', '扫码取货明细', [['taskNo', '仓库任务'], ...identity, ['barcode', '条码'], ['qty', '扫码数量'], ['locationCode', '库位'], ['operatorName', '操作人'], ['scannedAt', '时间']], scans)],
+      section('scan', '扫码取货明细', [['taskNo', '仓库任务'], ...identity, ['barcode', '条码'], ['qty', '扫码数量'], ['locationCode', '库位'], ['operatorName', '操作人'], ['scannedAt', '时间']], scans),
+      ...(handoff.rows.length ? [section('log','仓库交接', [['taskNo','仓库任务'],['kind','事项'],['adjustmentNo','改单编号'],['reason','原因'],['requestedByName','申请人'],['requestedAt','申请时间'],['phase','阶段'],['completedAt','完成时间'],['packagesRemaining','待拆箱'],['containersRemaining','待归还']], handoff.rows.map(r=>({...r,reason:r.reason || '未记录',requestedByName:r.requestedBy?.name || '未记录',phase:({pending:'待仓库确认',completed:'已完成',unknown:'未记录'})[r.phase]})), '沿原任务扫码与确认进度展示；申请取消或改单不代表实物已归还。')] : []),
+      ...(handoff.confirmations.length ? [section('log','仓库确认记录', [['taskNo','仓库任务'],['handoffKind','事项'],['adjustmentNo','改单编号'],['kind','确认事项'],['barcode','条码'],['qty','数量'],['confirmedByName','确认人'],['confirmedAt','确认时间']], handoff.confirmations.map(c=>({...c,kind:c.kind==='package_void'?'拆箱':'归还',confirmedByName:c.confirmedBy?.name || '未记录'})))] : [])],
     events: events.map(e => ({ id: `warehouse-${e.id}`, title: titles[e.event_type] || '仓库作业记录', description: e.task_no, createdByName: e.operator_name, createdAt: e.created_at, source: '仓库业务事件' })),
   }
 }
@@ -74,6 +78,19 @@ async function buildProgress(type, id, doc, user) {
   const sections = []
   const events = []
   const items = doc.items || []
+  let taskIds = []
+  if (['purchase-return','sale','wave'].includes(type)) {
+    if (type === 'purchase-return') {
+      const [tasks] = await pool.query("SELECT id FROM warehouse_tasks WHERE task_type='purchase_return' AND return_id=? ORDER BY id", [id])
+      taskIds = tasks.map(task=>Number(task.id))
+    } else taskIds = (doc.tasks || []).map(task=>Number(task.taskId))
+    // Authorize before every task summary, body, scan, package or related operation is projected.
+    if (taskIds.length && !doc.activityTaskAccessChecked) {
+      const scope = scopeFilter(user?.warehouseIds ?? null,'wt.warehouse_id')
+      const [visible] = await pool.query(`SELECT wt.id FROM warehouse_tasks wt WHERE wt.id IN (?) AND wt.deleted_at IS NULL${scope.sql}`, [taskIds,...scope.params])
+      taskIds = visible.map(task=>Number(task.id))
+    }
+  }
   if (type === 'purchase') {
     const [counts] = await pool.query(
       `SELECT i.purchase_item_id AS id,SUM(i.received_qty) AS receivedQty,SUM(i.putaway_qty) AS putawayQty
@@ -104,16 +121,13 @@ async function buildProgress(type, id, doc, user) {
     }
   }
   if (type === 'wave') {
-    sections.push(section('progress', '批次概况', [['taskCount', '任务数'], ['operatorName', '责任人'], ['statusName', '批次状态']], [{ taskCount: (doc.tasks || []).length, operatorName: doc.operatorName, statusName: doc.statusName }]))
-    sections.push(section('progress', '关联销售订单', [['taskNo', '仓库任务'], ['saleOrderNo', '销售单号'], ['customerName', '客户']], doc.tasks || []))
+    const visibleIds = new Set(taskIds)
+    const visibleTasks = (doc.tasks || []).filter(task=>visibleIds.has(Number(task.taskId)))
+    sections.push(section('progress', '批次概况', [['taskCount', '任务数'], ['operatorName', '责任人'], ['statusName', '批次状态']], [{ taskCount: visibleTasks.length, operatorName: doc.operatorName, statusName: doc.statusName }]))
+    sections.push(section('progress', '关联销售订单', [['taskNo', '仓库任务'], ['saleOrderNo', '销售单号'], ['customerName', '客户']], visibleTasks))
   }
   if (['purchase-return', 'sale', 'wave'].includes(type)) {
-    let taskIds
-    if (type === 'purchase-return') {
-      const [tasks] = await pool.query("SELECT id FROM warehouse_tasks WHERE task_type='purchase_return' AND return_id=? ORDER BY id", [id])
-      taskIds = tasks.map(t => t.id)
-    } else taskIds = (doc.tasks || []).map(t => t.taskId)
-    const taskData = await warehouseTaskSections(taskIds)
+    const taskData = await warehouseTaskSections(taskIds, user?.warehouseIds ?? null, doc.activityAuditIds)
     sections.push(...taskData.sections)
     events.push(...taskData.events)
     if (type !== 'purchase-return') sections.push(...await packageSections(taskIds))
@@ -159,6 +173,6 @@ async function buildProgress(type, id, doc, user) {
     const tracks = await require('../logistics/logistics.service').getTrackEvents(id, { warehouseIds: user.warehouseIds ?? null })
     sections.push(section('progress', '物流轨迹', [['eventTime', '时间'], ['description', '轨迹说明'], ['location', '位置']], tracks))
   }
-  return { sections, events }
+  return { sections, events, taskIds }
 }
 module.exports = { buildProgress, difference }

@@ -43,6 +43,11 @@ function fmt(row, { includeAckToken = false, includeContent = true, statusKey, p
     refCode: row.ref_code ?? null,
     dispatchedAt: row.dispatched_at ?? null,
     createdBy: num(row.created_by),
+    createdById: num(row.created_by),
+    createdByName: row.created_by_name ?? null,
+    requestPurpose: ['initial', 'reprint'].includes(row.request_purpose) ? row.request_purpose : null,
+    sourcePrintJobId: num(row.source_print_job_id),
+    requestedCopies: num(row.copies),
     createdAt: row.created_at,
   }
   if (includeContent) o.content = row.content

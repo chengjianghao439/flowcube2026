@@ -160,7 +160,6 @@ export function OrderFulfillmentPanel({ type, id, readOwner, commercialGroups }:
         {type !== 'sale' && head?.originalDate && <span>首次记录日期：{head.originalDate}</span>}
         {data.delivery && pendingItems.length > 0 && <span>预计发完：{data.delivery.allDate || '待确认'}</span>}
       </div>
-      {type === 'purchase' && <p className="mt-2 text-sm text-muted-foreground">查看等待这批货的销售订单。</p>}
       {noRemaining && <p className="mt-3 text-sm text-muted-foreground">无需继续发货</p>}
       {dateEditor && <form className="mt-4 space-y-3 border-t pt-3" onSubmit={e => { e.preventDefault(); mutation.mutate({ action: 'dates', itemId, date: date || null, processingDays: days === '' ? null : Number(days), reason }) }}>
         <p className="text-sm font-medium">{itemId ? `修改商品 ${data.delivery?.items.find(item => item.id === itemId)?.productCode || itemId} 的发货安排` : type === 'sale' ? '修改整单发货安排' : '修改采购到货日期'}</p>

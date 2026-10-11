@@ -7,8 +7,12 @@ import { beforeEach, expect, test, vi } from 'vitest'
 import PurchasePage from './purchase'
 import ReturnsPage from './returns'
 import RefundsPage from './refunds'
+import InboundPage from './inbound-tasks'
 
 const fixture = vi.hoisted(() => ({ list: vi.fn() }))
+vi.mock('@/api/inbound-tasks', async original => ({ ...await original<typeof import('@/api/inbound-tasks')>(), getInboundTasksApi: fixture.list }))
+vi.mock('./inbound-tasks/CloseReceivingDialog', () => ({ default: () => null }))
+vi.mock('./inbound-tasks/InboundTaskQueryDialog', () => ({ default: () => null }))
 vi.mock('@/api/purchase', async original => ({ ...await original<typeof import('@/api/purchase')>(), getPurchaseListApi: fixture.list }))
 vi.mock('@/api/returns', async original => ({ ...await original<typeof import('@/api/returns')>(), getPurchaseReturnsApi: fixture.list, getSaleReturnsApi: fixture.list }))
 vi.mock('@/api/refund', async original => ({ ...await original<typeof import('@/api/refund')>(), getRefundListApi: fixture.list }))
@@ -20,6 +24,7 @@ vi.mock('./returns/ReturnQueryDialog', () => ({ default: () => null }))
 vi.mock('./refunds/RefundQueryDialog', () => ({ default: () => null }))
 
 const samples = [
+  { path: '/inbound-tasks', prefix: 'inbound-tasks', Component: InboundPage },
   { path: '/purchase?keyword=保留筛选', Component: PurchasePage, prefix: 'purchase' },
   { path: '/returns/purchase?keyword=保留筛选', Component: ReturnsPage, prefix: 'returns' },
   { path: '/returns/sale?keyword=保留筛选', Component: ReturnsPage, prefix: 'returns' },
@@ -58,13 +63,18 @@ test.each(samples)('$path 首次读取失败显示持续错误和重试，不显
 })
 
 test.each(samples)('$path 缓存数据刷新失败不把旧数据和旧汇总继续当当前结果', async sample => {
-  fixture.list.mockResolvedValue({ list: [{ id: 7, orderNo: '旧缓存单', returnNo: '旧缓存单', refundNo: '旧缓存单', status: 1, statusName: '草稿', amount: 1 }], pagination: { total: 1 } })
+  fixture.list.mockResolvedValue({ list: [{ id: 7, taskNo: '旧缓存单', orderNo: '旧缓存单', returnNo: '旧缓存单', refundNo: '旧缓存单', status: 1, statusName: '草稿', amount: 1 }], pagination: { total: 1 } })
   await page(sample, async (host, cache) => {
     expect(host.textContent).toContain('旧缓存单')
     fixture.list.mockRejectedValue(new Error('刷新失败夹具'))
     await act(async () => { await cache.refetchQueries({ queryKey: [sample.prefix] }) }); await flush()
-    expect(host.textContent).toContain('刷新失败夹具')
-    expect(host.textContent).not.toContain('旧缓存单')
+    if (sample.prefix === 'purchase' || sample.prefix === 'inbound-tasks') {
+      expect(host.textContent).toContain('刷新失败，当前显示上次读取的数据')
+      expect(host.textContent).toContain('旧缓存单')
+    } else {
+      expect(host.textContent).toContain('刷新失败夹具')
+      expect(host.textContent).not.toContain('旧缓存单')
+    }
     expect(host.textContent).not.toMatch(/共\s*1\s*单/)
     expect([...host.querySelectorAll('button')].some(button => button.textContent === '重试')).toBe(true)
   })

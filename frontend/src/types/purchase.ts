@@ -6,7 +6,7 @@ export interface PurchaseOrderItem {
   productCode: string
   productName: string
   unit: string
-  entryUnit?: string        // 录入单位（文档03 Phase2）；缺省=基本单位 unit。quantity/unitPrice 视作该单位下的量/价
+  entryUnit?: string        // 已保存单据的录入单位；quantity/unitPrice为基本单位口径，录入量用entryQty
   articleNumber?: string | null
   spec?: string | null
   color?: string | null

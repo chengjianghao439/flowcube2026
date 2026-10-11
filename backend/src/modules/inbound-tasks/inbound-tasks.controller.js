@@ -41,6 +41,9 @@ const purchaseItems = async (req, res, next) => {
     const data = await svc.findPurchasableItems({
       supplierId: req.query.supplierId,
       keyword: req.query.keyword || '',
+      bounded: req.query.bounded === '1',
+      page: req.query.page, pageSize: req.query.pageSize,
+      purchaseItemIds: req.query.purchaseItemIds,
       scopeWarehouseIds: req.user?.warehouseIds ?? null,
     })
     return successResponse(res, data)
@@ -49,15 +52,34 @@ const purchaseItems = async (req, res, next) => {
 
 const create = async (req, res, next) => {
   try {
+    const requestOptions = { userId: req.user?.userId, requestKey: extractRequestKey(req) }
     const data = 'poId' in req.body
-      ? await svc.createFromPoId(req.body.poId, req.user?.warehouseIds ?? null)
-      : await svc.createManualTask(req.body, req.user?.warehouseIds ?? null)
+      ? await svc.createFromPoId(req.body.poId, req.user?.warehouseIds ?? null, req.body, requestOptions)
+      : await svc.createManualTask(req.body, req.user?.warehouseIds ?? null, requestOptions)
     return successResponse(res, data, '入库任务已创建', 201)
   } catch (e) { next(e) }
 }
 
 const detail = async (req, res, next) => {
   try { return successResponse(res, await svc.findById(+req.params.id, req.user?.warehouseIds ?? null)) } catch (e) { next(e) }
+}
+
+const editContext = async (req, res, next) => {
+  try { return successResponse(res, await svc.getEditContext(+req.params.id, req.user?.warehouseIds ?? null)) } catch (e) { next(e) }
+}
+const editPurchaseItems = async (req, res, next) => {
+  try {
+    return successResponse(res, await svc.findEditPurchasableItems(+req.params.id, req.query, req.user?.warehouseIds ?? null))
+  } catch (e) { next(e) }
+}
+const update = async (req, res, next) => {
+  try {
+    const data = await svc.updateDraft(+req.params.id, req.body, {
+      userId: req.user?.userId, requestKey: extractRequestKey(req),
+      scopeWarehouseIds: req.user?.warehouseIds ?? null, operator: getOperatorFromRequest(req),
+    })
+    return successResponse(res, data, '收货草稿已保存')
+  } catch (e) { next(e) }
 }
 
 const submit = async (req, res, next) => {
@@ -71,7 +93,7 @@ const submit = async (req, res, next) => {
 const reprint = async (req, res, next) => {
   try {
     const operator = getOperatorFromRequest(req)
-    const data = await svc.reprint(+req.params.id, req.body || {}, operator)
+    const data = await svc.reprint(+req.params.id, req.body || {}, operator, req.user?.warehouseIds ?? null, { requestKey: extractRequestKey(req) })
     return successResponse(res, data, '补打任务已加入打印队列')
   } catch (e) { next(e) }
 }
@@ -129,4 +151,4 @@ const closeReceiving = async (req, res, next) => {
   } catch (e) { next(e) }
 }
 
-module.exports = { pendingContainers, list, purchaseItems, create, detail, submit, reprint, containers, receive, putaway, cancel, voidReceipt, closeReceiving }
+module.exports = { pendingContainers, list, purchaseItems, create, detail, editContext, editPurchaseItems, update, submit, reprint, containers, receive, putaway, cancel, voidReceipt, closeReceiving }

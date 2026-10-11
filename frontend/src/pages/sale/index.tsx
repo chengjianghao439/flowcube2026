@@ -13,6 +13,9 @@ import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { Button } from '@/components/ui/button'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { SaleRowActions } from './components/SaleRowActions'
+import SaleCancelDialog from './components/SaleCancelDialog'
+import SaleCancelRecoveryNotice from './components/SaleCancelRecoveryNotice'
+import { useDirtyGuard } from '@/hooks/useDirtyGuard'
 import StockShortageDialog, { type StockShortageItem } from './components/StockShortageDialog'
 import ReserveAllocationDialog from './components/ReserveAllocationDialog'
 import SaleQueryDialog, { type SaleQueryValues } from './SaleQueryDialog'
@@ -112,7 +115,10 @@ export default function SalePage() {
   const total = data?.pagination?.total ?? 0
   const [shortageDialog, setShortageDialog] = useState<{ orderId: number; shortages: StockShortageItem[] } | null>(null)
   const [reserveDialogOrderId, setReserveDialogOrderId] = useState<number | null>(null)
-  const cancel        = useCancelSale()
+  const cancel        = useCancelSale('ordinary-sale-cancel:list')
+  const [cancelOrder, setCancelOrder] = useState<SaleOrder | null>(null)
+  const [cancelReason, setCancelReason] = useState('')
+  useDirtyGuard(tabPath || '/sale',cancel.isPending || !!cancel.recovery?.blocked || !!cancelReason.trim())
   const deleteMutate  = useDeleteSale()
   const navigate  = useNavigate()
   const { addTab } = useWorkspaceStore()
@@ -239,9 +245,9 @@ export default function SalePage() {
     { key: 'receivableStatus', title: '回款状态', width: 8, render: (_, r) => { const rs = getReceivableStatus(r); return <SoftStatusLabel label={rs.label} tone={rs.tone} className="whitespace-nowrap" title={rs.dueDate ? `账期至 ${rs.dueDate.slice(0, 10)}` : undefined} /> } },
     { key: 'operatorName', title: '经办人', width: 7 },
     { key: 'createdAt', title: '创建时间', width: 10, render: v => formatDisplayDateTime(v) },
-    { key:'id', title:'操作', width:10, render:(_,r) => <SaleRowActions row={r} anyPending={cancel.isPending || deleteMutate.isPending}
+    { key:'id', title:'操作', width:10, render:(_,r) => <SaleRowActions row={r} anyPending={cancel.isPending || deleteMutate.isPending || !!cancel.recovery?.blocked}
         onAsk={(title,desc,cb)=>openConfirm(title,desc,()=>{closeConfirm();cb()})}
-        onReserveSale={setReserveDialogOrderId} onCancelSale={id=>cancel.mutate(id)} onDeleteSale={id=>deleteMutate.mutate(id)}
+        onReserveSale={setReserveDialogOrderId} onCancelSale={()=>setCancelOrder(r)} onDeleteSale={id=>deleteMutate.mutate(id)}
         onViewTask={()=>goToDetail(r)} onDetail={()=>goToDetail(r)} onEdit={()=>goToDetail(r, true)} onPrint={()=>handlePrint(r.id)} /> },
   ]
 
@@ -263,6 +269,7 @@ export default function SalePage() {
         }
       />
 
+      {cancel.recovery?.storageBlocked && <SaleCancelRecoveryNotice recovery={cancel.recovery} onConfirmed={()=>{setCancelOrder(null);setCancelReason('')}} />}
       <OrderStatusFilter label="销售状态分类" value={statusFilter}
         options={QUICK_STATUSES}
         onChange={status => updateParams({status: status || null, page: 1})} />
@@ -304,6 +311,20 @@ export default function SalePage() {
         onConfirm={confirmState.onConfirm}
         onCancel={closeConfirm}
       />
+      <SaleCancelDialog open={!!cancelOrder || !!cancel.recovery?.pending} title={(cancelOrder?.shippedTotalQty ?? 0)>0 ? '关闭剩余未发' : '取消订单'}
+        description={`${cancelOrder?.orderNo || `原订单 #${cancel.recovery?.pending?.resourceId}`}：${(cancelOrder?.shippedTotalQty ?? 0)>0 ? '保留已出库事实并关闭剩余未发部分。' : '按原流程取消订单。'}已拣实物仍需仓库在原任务扫码归还。`}
+        reason={cancelReason} onReasonChange={setCancelReason} loading={cancel.isPending || !!cancel.recovery?.busy}
+        frozen={!!cancel.recovery?.pending && !cancel.recovery.busy} error={cancel.recovery?.error || cancel.error?.message}
+        confirmText="确认取消" onCancel={()=>{setCancelOrder(null);setCancelReason('')}}
+        onConfirm={async()=>{
+          if(!cancelOrder)return
+          try {
+            await cancel.mutateAsync({id:cancelOrder.id,changeReason:cancelReason})
+            setCancelOrder(null); setCancelReason('')
+          } catch { /* 失败保留原输入与请求。 */ }
+        }}>
+        <SaleCancelRecoveryNotice recovery={cancel.recovery} onConfirmed={()=>{setCancelOrder(null);setCancelReason('')}} />
+      </SaleCancelDialog>
 
       {/* 打印预览全屏遮罩 */}
       {printOrder && (

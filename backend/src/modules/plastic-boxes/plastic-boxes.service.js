@@ -390,6 +390,7 @@ async function repack(id, { perBoxQty, boxCount, items, requestKey }, { userId =
         // 不传 product_name：让标签模板变量里的真实商品名生效（传 null 会把它覆盖成空名）
         data: { container_code: c.barcode, qty: c.qty },
         createdBy: userId ?? null,
+        requestPurpose: 'initial',
         jobUniqueKey: `repack_cnt_${c.containerId}`,
       })
       if (job?.id && !job.unprintable) {
@@ -461,6 +462,7 @@ async function printLabel(id, { userId = null, scopeWarehouseIds = null } = {}) 
       qty: row.remaining_qty,
     },
     createdBy: userId,
+    requestPurpose: 'reprint',
     jobUniqueKey: `plastic_box_label:${row.id}:${Date.now()}`,
   })
 }

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from 'react'
+import { act, StrictMode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
@@ -10,6 +10,12 @@ import { useAuthStore } from '@/store/authStore'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import type { ProductFinderResult } from '@/types/products'
 import ProductFinderModal from './ProductFinderModal'
+import { commercialReadConfig } from '@/api/sale-commercial'
+
+vi.mock('@/api/sale-commercial', async importOriginal => {
+  const actual = await importOriginal<typeof import('@/api/sale-commercial')>()
+  return { ...actual, commercialReadConfig: vi.fn(actual.commercialReadConfig) }
+})
 
 const oldAdapter = api.defaults.adapter
 const product: ProductFinderResult = {
@@ -38,6 +44,7 @@ beforeEach(() => {
   host = document.createElement('div'); document.body.append(host); root = createRoot(host)
   cache = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 300000 } } })
   active = true; open = true; requests.length = 0; releases.length = 0; confirmed.mockReset(); closed.mockReset()
+  vi.mocked(commercialReadConfig).mockClear()
   respond = async config => config.url === '/categories/tree' ? categories : page([product])
   api.defaults.adapter = (async config => {
     requests.push(config)
@@ -210,4 +217,137 @@ test('compact confirmation derives refreshed identity and price from the current
   await act(async () => { await cache.invalidateQueries({ queryKey: ['products'] }) }); await ready('更新的商品')
   await click('确认选择')
   expect(confirmed).toHaveBeenCalledWith(expect.objectContaining({ id: 41, name: '更新的商品', salePrice: 20, costPrice: 4 }))
+})
+
+async function drawPurchase() {
+  await act(async () => { root.render(<QueryClientProvider client={cache}><SectionVisibilityContext.Provider value={active}>
+    <ProductFinderModal compact context="purchase" dialogId="purchase-product-finder" open={open} mode="purchase" warehouseId={1} warehouseName="受控仓库" onConfirm={confirmed} onClose={closed} />
+  </SectionVisibilityContext.Provider></QueryClientProvider>); await new Promise(resolve => setTimeout(resolve, 10)) })
+}
+
+test('purchase compact uses a neutral context, its own dialog settings and supplier/cost payload', async () => {
+  localStorage.setItem('flowcube-dialog-size-purchase-product-finder', JSON.stringify({ width: 1080, height: 600 }))
+  await drawPurchase(); await ready()
+  expect(commercialReadConfig).not.toHaveBeenCalled()
+  expect(cache.getQueryCache().getAll().some(query => query.queryKey.includes('sale-entry'))).toBe(false)
+  expect((document.querySelector('[role="dialog"]') as HTMLElement).style.width).toBe('1080px')
+  expect(document.body.textContent).toContain('受控供应商'); expect(document.body.textContent).not.toContain('价格 A')
+  expect(document.querySelector('table')?.classList.contains('min-w-[940px]')).toBe(true)
+  expect(document.body.textContent).not.toContain('选择商品后，在这里')
+  expect(requests.every(request => request.baseURL === '/original/api' && request.automaticReplay === false)).toBe(true)
+  await act(async () => row().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })))
+  expect(confirmed).toHaveBeenCalledWith(expect.objectContaining({ id: 41, supplierId: 9, supplierName: '受控供应商', costPrice: 2 }))
+})
+
+test('purchase truncation is explicit and remote search finds a record beyond the initial bounded result', async () => {
+  respond = async config => {
+    if (config.url === '/categories/tree') return categories
+    if (config.params.keyword) return page([{ ...product, id: 5101, name: '上限外商品' }])
+    const n = Number(config.params.page)
+    return page(Array.from({ length: 200 }, (_, i) => ({ ...product, id: (n - 1) * 200 + i + 1 })), n, 5101)
+  }
+  await drawPurchase(); await ready()
+  expect(reads()).toHaveLength(25)
+  expect(document.body.textContent).toContain('已读取 5,000 / 5,101')
+  expect(document.body.textContent).toContain('缩小搜索范围')
+  await act(async () => row().click())
+  expect(button('确认选择').disabled).toBe(false); expect(confirmed).not.toHaveBeenCalled()
+  await type('范围外型号'); await ready('上限外商品')
+  expect(reads().at(-1)?.params.keyword).toBe('范围外型号')
+  expect(document.body.textContent).not.toContain('缩小搜索范围')
+  await act(async () => row('上限外商品').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })))
+  expect(confirmed).toHaveBeenCalledWith(expect.objectContaining({ id: 5101, costPrice: 2 }))
+})
+
+test('purchase confirms one current loaded product even when other matches exceed the bounded list', async () => {
+  respond = async config => {
+    if (config.url === '/categories/tree') return categories
+    const n = Number(config.params.page)
+    return page(Array.from({ length: 200 }, (_, i) => ({ ...product, id: (n - 1) * 200 + i + 1 })), n, 5101)
+  }
+  await drawPurchase(); await ready()
+  expect(document.body.textContent).toContain('已读取 5,000 / 5,101')
+  await act(async () => row().click())
+  expect(button('确认选择').disabled).toBe(false)
+  await act(async () => { row().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); row().dispatchEvent(new MouseEvent('dblclick', { bubbles: true })); button('确认选择').click() })
+  expect(confirmed).toHaveBeenCalledOnce()
+  expect(confirmed).toHaveBeenCalledWith(expect.objectContaining({ id: 1, costPrice: 2, supplierName: '受控供应商' }))
+})
+
+test('purchase source ABA preserves search but blocks every old node until a fresh reopen', async () => {
+  await drawPurchase(); await ready(); await type('保留词'); await ready(); const old = row(), before = requests.length
+  await act(async () => { setApiClientBaseURL('/other/api'); setApiClientBaseURL('/original/api') })
+  expect(document.body.textContent).toContain('读取已暂停')
+  expect(document.querySelector<HTMLInputElement>('[aria-label="搜索商品"]')!.value).toBe('保留词')
+  expect(requests).toHaveLength(before)
+  await act(async () => old.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })))
+  expect(confirmed).not.toHaveBeenCalled()
+  await click('取消'); expect(closed).toHaveBeenCalledOnce()
+  open = false; await drawPurchase(); open = true; await drawPurchase(); await ready()
+  expect(document.body.textContent).not.toContain('读取已暂停')
+  expect(document.querySelector<HTMLInputElement>('[aria-label="搜索商品"]')!.value).toBe('')
+})
+
+test.each([
+  [Object.assign(new Error('当前账号没有商品查看权限'), { response: { status: 403, data: { message: '当前账号没有商品查看权限', code: 'PERMISSION_DENIED' } } }), '没有商品查看权限'],
+  [new Error('网络连接中断'), '商品加载失败'],
+])('purchase separates forbidden and transport product reads and retries without reporting zero matches', async (error, title) => {
+  respond = async config => { if (config.url === '/categories/tree') return categories; throw error }
+  await drawPurchase(); await vi.waitFor(() => expect([...document.querySelectorAll('p.font-medium')].some(node => node.textContent === title)).toBe(true))
+  expect(document.body.textContent).not.toContain('共 0'); expect(button('确认选择').disabled).toBe(true)
+  respond = async config => config.url === '/categories/tree' ? categories : page([product])
+  await click('重试'); await ready()
+  await act(async () => row().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })))
+  expect(confirmed).toHaveBeenCalledWith(expect.objectContaining({ costPrice: 2 }))
+})
+
+test('purchase hidden during its first batch cancels continuation and restores original-scope fresh reads', async () => {
+  respond = async config => {
+    if (config.url === '/categories/tree') return categories
+    if (Number(config.params.page) === 1) await new Promise<void>(resolve => releases.push(resolve))
+    return page([{ ...product, id: Number(config.params.page) }], Number(config.params.page), 2, 1)
+  }
+  await drawPurchase(); await vi.waitFor(() => expect(reads()).toHaveLength(1))
+  active = false; await drawPurchase()
+  await act(async () => { releases[0](); await Promise.resolve() })
+  expect(reads()).toHaveLength(1)
+  active = true; await drawPurchase(); await vi.waitFor(() => expect(reads()).toHaveLength(2))
+  await act(async () => { releases[1](); await Promise.resolve() }); await ready()
+  expect(reads().map(read => read.params.page)).toEqual([1, 1, 2])
+  expect(reads().every(read => read.baseURL === '/original/api')).toBe(true)
+})
+
+test('purchase End scrolls before focusing an unmounted stable-id record and preserves selection', async () => {
+  const products = Array.from({ length: 230 }, (_, i) => ({ ...product, id: i + 1, name: `采购商品${i + 1}` }))
+  respond = async config => config.url === '/categories/tree' ? categories : page(products.slice((config.params.page - 1) * 200, config.params.page * 200), config.params.page, products.length)
+  await drawPurchase(); await ready('采购商品1')
+  const scroll = document.querySelector<HTMLElement>('[data-table-scroll]')!
+  Object.defineProperties(scroll, { clientHeight: { value: 480 }, scrollHeight: { value: 230 * 48 } })
+  scroll.scrollTo = (options?: ScrollToOptions | number, top?: number) => { scroll.scrollTop = typeof options === 'object' ? options.top ?? 0 : top ?? 0; scroll.dispatchEvent(new Event('scroll')) }
+  await act(async () => { row('采购商品1').click(); row('采购商品1').focus(); row('采购商品1').dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true })) })
+  await vi.waitFor(() => expect(document.activeElement?.getAttribute('data-finder-key')).toBe('230'))
+  expect(document.querySelectorAll('[data-finder-key]').length).toBeLessThan(50)
+  expect(button('确认选择').disabled).toBe(false)
+  await click('确认选择')
+  expect(confirmed).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }))
+})
+
+test('purchase cancel aborts a pending first batch before the parent has closed its prop', async () => {
+  respond = async config => {
+    if (config.url === '/categories/tree') return categories
+    if (Number(config.params.page) === 1) await new Promise<void>(resolve => releases.push(resolve))
+    return page([{ ...product, id: Number(config.params.page) }], Number(config.params.page), 2, 1)
+  }
+  await drawPurchase(); await vi.waitFor(() => expect(reads()).toHaveLength(1))
+  await click('取消')
+  await act(async () => { releases[0](); await Promise.resolve() })
+  expect(closed).toHaveBeenCalledOnce(); expect(reads()).toHaveLength(1)
+  expect(confirmed).not.toHaveBeenCalled()
+})
+
+test('purchase context remains readable through StrictMode effect replay', async () => {
+  await act(async () => root.render(<StrictMode><QueryClientProvider client={cache}><ProductFinderModal compact context="purchase" open mode="purchase" onConfirm={confirmed} onClose={closed} /></QueryClientProvider></StrictMode>))
+  await ready()
+  await act(async () => row().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })))
+  expect(confirmed).toHaveBeenCalledWith(expect.objectContaining({ costPrice: 2 }))
 })

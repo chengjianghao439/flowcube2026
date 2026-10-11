@@ -1,7 +1,16 @@
-import { money } from '@/lib/format'
+import { isInboundDraftEditable } from './inboundDraftEditable'
+import { INBOUND_FREIGHT_LABEL } from './inboundFreight'
+import { getInboundListWorkspacePath } from '@/lib/inboundListNavigation'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
+import { blocksInboundRead, inboundReadTitle } from './readState'
+import { InboundQuantitySummary } from './InboundQuantitySummary'
+import { areInboundQuantitiesZero, groupInboundQuantities } from './inboundQuantity'
+import { inboundExceptionReason } from './inboundException'
+import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
+import { money, unitPrice } from '@/lib/format'
 import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
-import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
-import { SectionCard } from '@/components/shared/SectionCard'
+import { InboundProductIdentity } from './InboundProductIdentity'
 /**
  * 收货订单详情 — 上架进度 / 打印
  * 收货和上架仅允许通过 PDA 完成；全部上架完成后系统自动结算应付，无需人工审核
@@ -9,7 +18,9 @@ import { SectionCard } from '@/components/shared/SectionCard'
  */
 import { useContext, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import PageHeader from '@/components/shared/PageHeader'
+import { ActionBar } from '@/components/shared/ActionBar'
+import { SectionCard } from '@/components/shared/SectionCard'
+import { ArrowLeft, CircleDollarSign, PackageCheck, Printer, Send, Undo2, X, type LucideIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { useWorkspaceStore } from '@/store/workspaceStore'
@@ -32,10 +43,6 @@ import DataTable from '@/components/shared/DataTable'
 import type { TableColumn } from '@/types'
 import type { InboundTaskItem } from '@/types/inbound-tasks'
 
-function Section({ title, children, sectionId }: { title: string; children: React.ReactNode; sectionId?: string }) {
-  return <section id={sectionId} className="scroll-mt-24"><SectionCard title={title} compact contentClassName="space-y-4">{children}</SectionCard></section>
-}
-
 type StatusTone = 'draft' | 'active' | 'success' | 'danger' | 'warning' | 'info'
 
 const PUTAWAY_TONE: Record<string, StatusTone> = {
@@ -48,13 +55,16 @@ const PRINT_TONE: Record<string, StatusTone> = {
   success: 'success', queued: 'active', printing: 'active', failed: 'danger', timeout: 'danger', cancelled: 'draft', not_started: 'draft',
 }
 
-/** 状态小卡片：标题 + 状态徽章 + 一行补充信息，三张卡统一结构，避免各写各的 */
-function StatusCard({ label, value, tone, detail }: { label: string; value: string; tone: StatusTone; detail?: React.ReactNode }) {
+/** 沿用销售摘要区的间距与图标，保留上架、结算和条码打印各自状态。 */
+function StatusCard({ label, value, tone, detail, icon: Icon }: { label: string; value: string; tone: StatusTone; detail?: React.ReactNode; icon: LucideIcon }) {
   return (
-    <div className="rounded-lg border border-border bg-card px-4 py-3 space-y-1.5">
-      <p className="text-helper">{label}</p>
-      <SoftStatusLabel label={value} tone={tone} />
-      {detail && <p className="text-helper">{detail}</p>}
+    <div className="flex min-w-0 items-center gap-2.5 px-4 py-2.5">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary"><Icon className="h-3.5 w-3.5" /></span>
+      <div className="min-w-0 space-y-1 [overflow-wrap:anywhere]">
+        <p className="text-helper">{label}</p>
+        <SoftStatusLabel label={value} tone={tone} />
+        {detail && <p className="text-helper">{detail}</p>}
+      </div>
     </div>
   )
 }
@@ -69,9 +79,10 @@ export default function InboundTaskDetailPage() {
 
   const isActiveTab = useActiveWorkspaceTab()
   // 收货现场变化频繁，标签页常驻挂载时若不轮询容易停留在打开时的陈旧进度
-  const { data: task, isLoading, refetch: refetchTask } = useInboundTaskDetail(validId, { refetchInterval: isActiveTab ? 20_000 : false })
+  const { data: task, isLoading, refetch: refetchTask, error } = useInboundTaskDetail(validId, { refetchInterval: isActiveTab ? 20_000 : false, visible: isActiveTab })
   useWorkspaceTabTitle(task?.taskNo)
 
+  const { can } = usePermission()
   const submitMut = useSubmitInboundTask()
   const cancelMut = useCancelInbound()
   const voidReceiptMut = useVoidInboundReceipt()
@@ -84,7 +95,7 @@ export default function InboundTaskDetailPage() {
   function closeTab() {
     const { removeTab } = useWorkspaceStore.getState()
     removeTab(tabPath || '/inbound-tasks')
-    navigate('/inbound-tasks')
+    navigate(getInboundListWorkspacePath())
   }
 
   async function afterMutation() {
@@ -92,6 +103,7 @@ export default function InboundTaskDetailPage() {
   }
 
   const items = Array.isArray(task?.items) ? task.items : []
+  const quantityGroups = groupInboundQuantities(items)
   const printSummary = task?.printSummary ?? null
   const putawaySummary = task?.putawaySummary ?? null
   const receiptStatus = task?.receiptStatus ?? null
@@ -107,10 +119,11 @@ export default function InboundTaskDetailPage() {
       ].filter(Boolean).join(' · ') || `${printSummary.success} / ${printSummary.total} 已成功`
     : null
 
-  const canSubmit = receiptStatus?.key === 'draft'
-  const canCancel = task?.status === 1
-  const canVoidReceipt = task?.status === 2 || task?.status === 3 || task?.status === 4
-  const canCloseReceiving = task?.status === 2
+  const canEdit = !error && isActiveTab && can(PERMISSIONS.INBOUND_ORDER_UPDATE) && isInboundDraftEditable(task)
+  const canSubmit = !error && can(PERMISSIONS.INBOUND_ORDER_SUBMIT) && receiptStatus?.key === 'draft'
+  const canCancel = !error && can(PERMISSIONS.INBOUND_ORDER_CANCEL) && task?.status === 1
+  const canVoidReceipt = !error && can(PERMISSIONS.INBOUND_ORDER_CANCEL) && (task?.status === 2 || task?.status === 3 || task?.status === 4)
+  const canCloseReceiving = !error && can(PERMISSIONS.INBOUND_ORDER_CANCEL) && task?.status === 2
   const statusTone = receiptStatus?.key === 'audited'
     ? 'success'
     : receiptStatus?.key === 'exception'
@@ -129,23 +142,60 @@ export default function InboundTaskDetailPage() {
     )
   }
 
+  if (error && (!task || blocksInboundRead(error))) {
+    return <div className="space-y-3"><QueryErrorState error={error} title={inboundReadTitle(error)} onRetry={() => { void refetchTask() }} /><Button variant="outline" onClick={closeTab}>返回收货列表</Button></div>
+  }
+
   if (isLoading || !task) {
     return <p className="p-6 text-muted-body">加载中…</p>
   }
 
   return (
-    <div className="space-y-5">
-      <PageHeader
-        title={`收货订单 ${task.taskNo}`}
-        description={
-          <span className="flex flex-wrap items-center gap-2">
-            <SoftStatusLabel label={receiptStatus?.label ?? task.statusName} tone={statusTone} />
-            <span className="text-muted-foreground">采购单 <span className="text-doc-code">{task.purchaseOrderNo ?? '混合采购'}</span></span>
-            <span className="text-muted-foreground">供应商 <span className="text-doc-code">{task.supplierName ?? '—'}</span></span>
-          </span>
-        }
-        actions={
-          <div className="flex gap-2 flex-wrap">
+    <div className="flex flex-col gap-2.5">
+      {error && <QueryErrorState compact error={error} title="刷新失败，当前显示上次读取的数据" onRetry={() => { void refetchTask() }} />}
+      <ActionBar
+        title={task.taskNo}
+        subtitle={<SoftStatusLabel label={receiptStatus?.label ?? task.statusName} tone={statusTone} />}
+        rightActions={
+          <>
+            {canEdit && <Button variant="outline" size="sm" onClick={() => {
+              if (!isInboundDraftEditable(task) || !can(PERMISSIONS.INBOUND_ORDER_UPDATE)) return
+              const path = `/inbound-tasks/${task.id}/edit`
+              useWorkspaceStore.getState().addTab({ key: path, path, title: `编辑 ${task.taskNo}` }); navigate(path)
+            }}>编辑</Button>}
+            {canCancel && (
+              <Button
+                variant="outline"
+                className="text-destructive-ink border-destructive/30 hover:bg-destructive/5"
+                size="sm"
+                disabled={cancelMut.isPending}
+                onClick={() => setCancelConfirmOpen(true)}
+              >
+                <X className="mr-1 h-4 w-4" />取消任务
+              </Button>
+            )}
+            {canVoidReceipt && (
+              <Button
+                variant="outline"
+                className="text-destructive-ink border-destructive/30 hover:bg-destructive/5"
+                size="sm"
+                disabled={voidReceiptMut.isPending}
+                onClick={() => setVoidConfirmOpen(true)}
+              >
+                <Undo2 className="mr-1 h-4 w-4" />撤回收货
+              </Button>
+            )}
+            {canCloseReceiving && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCloseReceivingConfirmOpen(true)}
+              >
+                结束收货
+              </Button>
+            )}
+            <Button variant="outline" size="sm" disabled={!!error} onClick={() => setPrintOpen(true)}><Printer className="mr-1 h-4 w-4" />打印</Button>
+            <Button variant="outline" size="sm" onClick={closeTab}><ArrowLeft className="mr-1 h-4 w-4" />返回列表</Button>
             {canSubmit && (
               <Button
                 size="sm"
@@ -164,60 +214,31 @@ export default function InboundTaskDetailPage() {
                 }}
                 disabled={submitMut.isPending}
               >
-                {submitMut.isPending ? '提交中…' : '提交到 PDA'}
+                <Send className="mr-1 h-4 w-4" />{submitMut.isPending ? '提交中…' : '提交到 PDA'}
               </Button>
             )}
-            {canCancel && (
-              <Button
-                variant="destructive"
-                size="sm"
-                disabled={cancelMut.isPending}
-                onClick={() => setCancelConfirmOpen(true)}
-              >
-                取消任务
-              </Button>
-            )}
-            {canVoidReceipt && (
-              <Button
-                variant="outline"
-                className="text-destructive-ink border-destructive/30 hover:bg-destructive/5"
-                size="sm"
-                disabled={voidReceiptMut.isPending}
-                onClick={() => setVoidConfirmOpen(true)}
-              >
-                撤回收货
-              </Button>
-            )}
-            {canCloseReceiving && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCloseReceivingConfirmOpen(true)}
-              >
-                结束收货
-              </Button>
-            )}
-            <Button variant="outline" size="sm" onClick={() => setPrintOpen(true)}>打印</Button>
-          </div>
+          </>
         }
       />
 
-      <OrderDetailSections type="inbound" id={task.id}>
-      {/* 整体状态已经在标题旁的徽章里显示过，这里不重复；只展示三个组成状态各自的进度 */}
-      <div className="grid gap-3 md:grid-cols-3">
+      <section aria-label="收货摘要" className="overflow-hidden rounded-xl border border-border bg-card">
+      <div className="grid divide-y divide-border sm:grid-cols-3 sm:divide-x sm:divide-y-0">
         <StatusCard
+          icon={PackageCheck}
           label="上架状态"
           value={putawayStatus?.label ?? '—'}
           tone={PUTAWAY_TONE[putawayStatus?.key ?? ''] ?? 'draft'}
-          detail={`待上架 ${putawaySummary?.waitingContainers ?? 0} 箱 / ${putawaySummary?.waitingQty ?? 0} · 已上架 ${putawaySummary?.storedContainers ?? 0} 箱 / ${putawaySummary?.storedQty ?? 0}`}
+          detail={`待上架 ${putawaySummary?.waitingContainers ?? 0} 条库存条码 · 已上架 ${putawaySummary?.storedContainers ?? 0} 条库存条码`}
         />
         <StatusCard
+          icon={CircleDollarSign}
           label="结算状态"
           value={auditFlowStatus?.label ?? '—'}
           tone={AUDIT_TONE[auditFlowStatus?.key ?? ''] ?? 'draft'}
           detail={task.auditedAt ? `${formatDisplayDateTime(task.auditedAt)} · ${task.auditedByName ?? '—'}` : undefined}
         />
         <StatusCard
+          icon={Printer}
           label="条码打印"
           value={printStatus?.label ?? '—'}
           tone={PRINT_TONE[printStatus?.key ?? ''] ?? 'draft'}
@@ -225,21 +246,38 @@ export default function InboundTaskDetailPage() {
         />
       </div>
 
-      {task.exceptionFlags?.hasException && <p className="text-sm text-destructive-ink">打印或上架有异常，请核对对应状态；收货阶段不受异常标识覆盖。</p>}
-      <Section title="任务明细" sectionId="task-items">
+      </section>
+
+      {inboundExceptionReason(task.exceptionFlags) && <p className="text-sm text-warning-ink">{inboundExceptionReason(task.exceptionFlags)}；请核对对应状态。</p>}
+      <OrderDetailSections type="inbound" id={task.id} compactTabs>
+      <SectionCard title="基础信息" compact contentClassName="p-3">
+        <div className="grid grid-cols-1 gap-x-8 gap-y-2 text-sm sm:grid-cols-2 xl:grid-cols-3 [&>div]:min-w-0 [&>div]:[overflow-wrap:anywhere]">
+          <div><span className="text-muted-foreground">供应商：</span>{task.supplierName ?? '—'}</div>
+          <div><span className="text-muted-foreground">仓库：</span>{task.warehouseName ?? '—'}</div>
+          <div><span className="text-muted-foreground">采购单：</span>{task.purchaseOrderId && can(PERMISSIONS.PURCHASE_ORDER_VIEW) ? <button className="text-primary underline underline-offset-2" onClick={() => { const path = `/purchase/${task.purchaseOrderId}`; useWorkspaceStore.getState().addTab({ key: path, path, title: task.purchaseOrderNo ?? '采购详情' }); navigate(path) }}>{task.purchaseOrderNo}</button> : <span>{task.purchaseOrderNo ?? '混合采购'}</span>}</div>
+          <div><span className="text-muted-foreground">时间：</span>{formatDisplayDateTime(task.createdAt)}</div>
+          <div><span className="text-muted-foreground">经办人：</span>{task.operatorName ?? '—'}</div>
+          <div><span className="text-muted-foreground">运费方式：</span>{task.freightType != null ? INBOUND_FREIGHT_LABEL[task.freightType] ?? '—' : '—'}</div>
+          <div><span className="text-muted-foreground">运费金额：</span>{task.freightAmount != null ? money(task.freightAmount) : '—'}</div>
+          <div className="sm:col-span-2 xl:col-span-3"><span className="text-muted-foreground">备注：</span>{task.remark || '—'}</div>
+        </div>
+      </SectionCard>
+      <SectionCard title="商品明细" compact noPadding>
+        <div data-workspace-scroll tabIndex={0} aria-label="收货商品明细" className="max-h-[min(60vh,36rem)] overflow-auto [&>div]:rounded-none [&>div]:border-0 [&>div]:overflow-visible [&_[data-table-scroll]]:overflow-visible [&_thead]:sticky [&_thead]:top-0 [&_thead]:z-10">
         <DataTable
           columns={[
-            ...productIdentityColumns(),
-            { key: 'unit', title: '单位', width: 70, render: v => <span className="text-muted-foreground">{(v as string) || '—'}</span> },
-            { key: 'orderedQty', title: '应到', width: 90, align: 'right', render: v => <span className="tabular-nums">{String(v)}</span> },
+            { key: 'productName', title: '商品', width: 25, minWidth: 220, render: (_, item) => <InboundProductIdentity item={{ ...item, productCode: item.productCode ?? '' }} /> },
+            { key: 'purchaseOrderNo', title: '采购来源', width: 15, minWidth: 145, render: (_, item) => item.purchaseOrderId && can(PERMISSIONS.PURCHASE_ORDER_VIEW) ? <button className="text-primary underline underline-offset-2 text-sm font-mono" onClick={() => { const path = `/purchase/${item.purchaseOrderId}`; useWorkspaceStore.getState().addTab({ key: path, path, title: item.purchaseOrderNo ?? '采购详情' }); navigate(path) }}>{item.purchaseOrderNo}</button> : item.purchaseOrderNo ?? '—' },
+            { key: 'unit', title: '单位', width: 5, minWidth: 60, render: v => <span>{(v as string) || '—'}</span> },
+            { key: 'orderedQty', title: '应到', width: 9, minWidth: 70, align: 'right', render: v => <span className="tabular-nums">{String(v)}</span> },
             {
-              key: 'receivedQty', title: '已收', width: 90, align: 'right',
+              key: 'receivedQty', title: '已收', width: 9, minWidth: 70, align: 'right',
               render: (v, r) => (
                 <span className={`tabular-nums ${(v as number) > r.orderedQty ? 'font-semibold text-destructive-ink' : ''}`}>{String(v)}</span>
               ),
             },
             {
-              key: 'lineRemain', title: '剩余', width: 90, align: 'right',
+              key: 'lineRemain', title: '剩余', width: 9, minWidth: 70, align: 'right',
               render: (v, r) => {
                 const overQty = r.receivedQty - r.orderedQty
                 return overQty > 0
@@ -247,9 +285,9 @@ export default function InboundTaskDetailPage() {
                   : <span className="text-muted-foreground tabular-nums">{String(v)}</span>
               },
             },
-            { key: 'putawayQty', title: '已上架', width: 90, align: 'right', render: v => <span className="tabular-nums">{String(v)}</span> },
-            { key: 'unitPrice', title: '单价', width: 100, align: 'right', render: v => <span className="text-muted-foreground tabular-nums">{v != null ? money(v as number) : '—'}</span> },
-            { key: 'lineAmount', title: '已上架金额', width: 110, align: 'right', render: v => <span className="font-medium tabular-nums">{v != null ? money(v as number) : '—'}</span> },
+            { key: 'putawayQty', title: '已上架', width: 9, minWidth: 70, align: 'right', render: v => <span className="tabular-nums">{String(v)}</span> },
+            { key: 'unitPrice', title: '单价', width: 10, minWidth: 90, align: 'right', render: v => <span className="tabular-nums">{v != null ? unitPrice(v as number) : '—'}</span> },
+            { key: 'lineAmount', title: '已上架金额', width: 9, minWidth: 98, align: 'right', render: v => <span className="font-semibold tabular-nums">{v != null ? money(v as number) : '—'}</span> },
           ] satisfies TableColumn<InboundTaskItem & { lineRemain: number; lineAmount: number | null }>[]}
           data={items.map(it => ({
             ...it,
@@ -259,20 +297,20 @@ export default function InboundTaskDetailPage() {
             lineAmount: it.unitPrice != null ? it.putawayQty * it.unitPrice : null,
           }))}
           rowKey="id"
+          fluid virtualized columnStorageKey="inbound-detail-items"
           emptyText="暂无商品明细"
         />
 
-        <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
-          <p className="text-muted-body">共 {items.length} 种商品</p>
-          <div className="text-right">
-            <p className="text-helper">已上架金额合计</p>
-            {task.status === 2 && <p className="text-helper">收货尚未结束，此金额不是本次已结算应付或采购结算凭证；仍可继续收货。</p>}
-            <p className="text-2xl font-semibold text-foreground">
-              {money(items.reduce((sum, it) => sum + (it.unitPrice != null ? it.putawayQty * it.unitPrice : 0), 0))}
-            </p>
-          </div>
         </div>
-      </Section>
+        <div className="flex flex-wrap items-center justify-end gap-x-6 gap-y-2 border-t border-border px-4 py-3 text-sm">
+          <span className="mr-auto tabular-nums"><span className="text-muted-foreground">明细</span> {items.length} 行</span>
+          <div className="flex min-w-0 flex-wrap items-center gap-x-6 gap-y-2 text-muted-foreground">
+            {(['orderedQty', 'receivedQty', 'putawayQty'] as const).map((field, index) => <span key={field} className="min-w-0">{(quantityGroups.length <= 3 || areInboundQuantitiesZero(quantityGroups, field)) && <span className="mr-2">{['应到', '已收', '已上架'][index]}</span>}<InboundQuantitySummary collapseZero groups={quantityGroups} field={field} label={['应到', '已收', '已上架'][index]} /></span>)}
+          </div>
+          <strong className="tabular-nums"><span className="mr-2 font-normal">已上架金额合计</span>{money(items.reduce((sum, it) => sum + (it.unitPrice != null ? it.putawayQty * it.unitPrice : 0), 0))}</strong>
+          {task.status === 2 && <p className="w-full text-sm text-muted-foreground">收货尚未结束，此金额不是本次已结算应付或采购结算凭证；仍可继续收货。</p>}
+        </div>
+      </SectionCard>
 
       </OrderDetailSections>
 

@@ -37,6 +37,7 @@ import { readSaleHandoff } from '../form/handoff'
 import CommercialEditor from './CommercialEditor'
 import { useSaleEditEntry } from '../form/useSaleEditEntry'
 import CommercialShipDialog from './CommercialShipDialog'
+import SaleCancelDialog from '../components/SaleCancelDialog'
 import { buildWorkspaceTabRegistrationFromPath } from '@/router/workspaceRouteMeta'
 const permission = {
   ship: PERMISSIONS.SALE_ORDER_SHIP,
@@ -75,6 +76,7 @@ export default function CommercialSalePage({
     [confirm, setConfirm] = useState<Exclude<CommercialAction, 'create' | 'update' | 'adjust' | 'ship'> | null>(null),
     [error, setError] = useState(''),
     [reloading, setReloading] = useState(false)
+  const [cancelReason, setCancelReason] = useState('')
   const [detailTab, setDetailTab] = useState<SaleDetailTab>(() => {
     const context = readSaleHandoff(tabPath, initial.id)
     return context && context !== 'invalid' ? context.focus : 'info'
@@ -117,8 +119,8 @@ export default function CommercialSalePage({
       setEditor(current => current ?? { baseline: order, adjust: false })
     }
   })
-  useDirtyGuard(tabPath, locked)
-  const backup = useKitBackup(JSON.stringify({ order, owner, shipQuantities, confirm }), owner)
+  useDirtyGuard(tabPath, locked || !!cancelReason.trim())
+  const backup = useKitBackup(JSON.stringify({ order, owner, shipQuantities, confirm, cancelReason }), owner)
   const handoff = readSaleHandoff(tabPath, order.id)
   async function reload(requireBackup = false, confirmation?: CommercialWriteConfirmation) {
     const confirmedHere = () =>
@@ -143,6 +145,7 @@ export default function CommercialSalePage({
       setShipQuantities({})
       setShipOpen(false)
       setConfirm(null)
+      setCancelReason('')
       backup.invalidate()
     } catch (e) {
       if (mounted.current) setError(e instanceof Error ? e.message : '重读失败，原单保留')
@@ -280,7 +283,7 @@ export default function CommercialSalePage({
           <p>版本已变化，请先复制原单上下文，再显式重读核对。</p>
           <Button
             variant="outline"
-            onClick={() => void backup.copy(JSON.stringify({ order, owner, shipQuantities, confirm }, null, 2))}
+            onClick={() => void backup.copy(JSON.stringify({ order, owner, shipQuantities, confirm, cancelReason }, null, 2))}
           >
             复制原单上下文
           </Button>
@@ -342,7 +345,7 @@ export default function CommercialSalePage({
       <KeepAliveSection active={detailTab === 'pack'} className="space-y-3"><SaleOrderPackingDetails order={order} /></KeepAliveSection>
       <KeepAliveSection active={detailTab === 'log'} className="space-y-3"><DocumentActivityPanel type="sale" id={order.id} view="log" readOwner={owner} /></KeepAliveSection>
       <ConfirmDialog
-        open={!!confirm}
+        open={!!confirm && confirm !== 'cancel'}
         cancelText="返回订单"
         variant={confirm === 'cancel' || confirm === 'delete' ? 'destructive' : 'default'}
         title={
@@ -375,6 +378,13 @@ export default function CommercialSalePage({
           if (confirm && !locked) void operation({ action: confirm, id: order.id, body: marker() })
         }}
       />
+      <SaleCancelDialog open={confirm === 'cancel'} title={confirmed ? '关闭剩余未发' : '取消订单'}
+        description={confirmed
+          ? '按已确认的本单发货记录结案，保留原成交资料与已发生收入；已拣未发实物须先扫码归还，不能把待归还视为额度释放。'
+          : '取消后保留原成交资料；已拣实物仍需仓库在原任务扫码归还，未归还不能再次派发。'}
+        reason={cancelReason} onReasonChange={setCancelReason} loading={write.busy} frozen={locked && !write.busy}
+        error={write.error} onCancel={() => { if (!locked) {setConfirm(null);setCancelReason('')} }}
+        onConfirm={() => operation({action:'cancel',id:order.id,body:{...marker(),...(cancelReason.trim() ? {changeReason:cancelReason.trim()} : {})}})} />
       {shipOpen && (
         <CommercialShipDialog
           order={order}

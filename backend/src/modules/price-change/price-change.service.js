@@ -17,6 +17,7 @@ const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransi
 const { assertStatusAction } = require('../../constants/documentStatusRules')
 const approvalEngine = require('../../engine/approvalEngine')
 const { assertNotSelfApproval } = require('../../utils/selfApprove')
+const { appendChangeAudit } = require('../document-activity/document-change-audit')
 const { normalizePagination } = require('../../utils/pagination')
 
 const STATUS = { 1: '待审批', 2: '已通过', 3: '已驳回', 4: '已取消' }
@@ -155,7 +156,7 @@ function selfApprovalIdentities(row, active) {
   return [...new Set(ids)]
 }
 
-async function applyApprovedPrice(conn, { requestId }) {
+async function applyApprovedPrice(conn, { requestId, operator = null }) {
   const [[req]] = await conn.query('SELECT * FROM price_change_requests WHERE id=?', [requestId])
   if (!req || Number(req.status) !== 2) return // 非通过态，跳过
   const column = PRICE_COLUMN[req.price_type]
@@ -183,13 +184,14 @@ async function applyApprovedPrice(conn, { requestId }) {
     `UPDATE product_items SET \`${column}\`=?, revision = revision + 1 WHERE id=? AND deleted_at IS NULL`,
     [Number(req.new_price), req.product_id],
   )
-  await conn.query(
+  const [history] = await conn.query(
     `INSERT INTO product_price_history
        (product_id, product_code, product_name, price_type, old_price, new_price, change_source, approval_id, operator_id, operator_name, remark)
      VALUES (?,?,?,?,?,?, 'approval', ?, ?, ?, ?)`,
     [req.product_id, req.product_code, req.product_name, req.price_type, actualOldPrice, Number(req.new_price),
-     req.approval_id || null, req.applicant_id || null, req.applicant_name || null, req.reason || '改价审批通过'],
+     req.approval_id || null, operator?.userId ?? operator?.operatorId ?? null, operator?.realName || operator?.operatorName || null, req.reason || null],
   )
+  await appendChangeAudit(conn, { documentType: 'price', documentId: requestId, title: '批准商品改价', operator, applicant: { id: req.applicant_id, name: req.applicant_name }, approver: operator || { id: null, name: null }, reason: req.reason, kind: 'price_history_refs', context: { phase: 'price_approval', productId: Number(req.product_id), approvalId: req.approval_id || null, priceHistoryIds: [Number(history.insertId)] } })
 }
 
 /** 审批（复用审批流）：通过/驳回/取消 都与业务状态联动。 */
@@ -212,7 +214,7 @@ async function approve(id, operator) {
     // approveStep 返回 { status }：2=实例已全部通过（此时才生效改价）
     if (r.status === 2) {
       await compareAndSetStatus(conn, { table: 'price_change_requests', id, fromStatus: 1, toStatus: 2, entityName: '改价申请' })
-      await applyApprovedPrice(conn, { requestId: Number(id) })
+      await applyApprovedPrice(conn, { requestId: Number(id), operator })
     }
     await conn.commit()
     return { id: Number(id), finished: r.status === 2 }

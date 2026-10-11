@@ -1,3 +1,4 @@
+const { lockContainerReprintSource, identity } = require('./print-jobs.reprint-source')
 const { assertBoundWarehouseInScope } = require('../../utils/warehouseScope')
 const { pool } = require('../../config/db')
 const { CONTAINER_STATUS } = require('../../engine/containerEngine')
@@ -10,7 +11,8 @@ const { getLabelZplFromDefaultTemplate } = require('./labelZplTemplate')
 const { renderLabelAsync } = require('./labelRasterService')
 const { defaultLabelLayout } = require('./labelRasterDefaults')
 const { create, createWithinTransaction } = require('./print-jobs.command')
-const { findById } = require('./print-jobs.query')
+const { findByIdWithExecutor } = require('./print-jobs.query')
+const { beginReprintIntent, completeReprintIntent } = require('./print-jobs.reprint-intent')
 const { getDispatchHintForJob } = require('./print-jobs.dispatch')
 
 async function resolveLabelPrinterId(warehouseId) {
@@ -145,6 +147,7 @@ async function recordUnprintableJob(createJob, fields) {
     content: '',
     copies: 1,
     createdBy: fields.createdBy ?? null,
+    requestPurpose: fields.requestPurpose ?? null,
     jobUniqueKey: fields.jobUniqueKey,
     refType: fields.refType ?? null,
     refId: fields.refId ?? null,
@@ -182,6 +185,7 @@ async function enqueueContainerLabelJob(payload) {
       refId: containerId,
       refCode: data.container_code,
       createdBy: payload.createdBy ?? null,
+      requestPurpose: payload.requestPurpose ?? null,
       jobUniqueKey: payload.jobUniqueKey ?? defaultLabelJobKey('container_label', containerId),
     })
   }
@@ -202,6 +206,7 @@ async function enqueueContainerLabelJob(payload) {
     refId: containerId,
     refCode: data.container_code,
     createdBy: payload.createdBy ?? null,
+    requestPurpose: payload.requestPurpose ?? null,
     jobUniqueKey: payload.jobUniqueKey ?? defaultLabelJobKey('container_label', containerId),
   }
   let label
@@ -263,6 +268,7 @@ async function enqueuePickLabelJob(payload) {
     refId: containerId,
     refCode: data?.container_code ?? null,
     createdBy: payload.createdBy ?? null,
+    requestPurpose: payload.requestPurpose ?? null,
     // 同一次取货（同一 PICK 行）重放不重复出纸
     jobUniqueKey: payload.jobUniqueKey ?? `pick_label:${scanLogId}`,
   }
@@ -357,6 +363,7 @@ async function enqueueRackLabelJob(payload) {
       content: label.content,
       copies: 1,
       createdBy: payload.createdBy ?? null,
+      requestPurpose: payload.requestPurpose ?? null,
       jobUniqueKey: payload.jobUniqueKey ?? defaultLabelJobKey('rack_label', rackId),
     })
     const dispatchHint = await getDispatchHintForJob(job.printerCode, job.id)
@@ -410,6 +417,7 @@ async function enqueueLocationLabelJob(payload) {
       content: label.content,
       copies: 1,
       createdBy: payload.createdBy ?? null,
+      requestPurpose: payload.requestPurpose ?? null,
       jobUniqueKey: payload.jobUniqueKey ?? defaultLabelJobKey('location_label', locationId),
       refType: 'warehouse_location',
       refId: Number(locationId),
@@ -457,6 +465,7 @@ async function enqueuePackageLabelJob(payload) {
       refId: Number(packageId),
       refCode: row.barcode,
       createdBy: payload.createdBy ?? null,
+      requestPurpose: payload.requestPurpose ?? null,
       jobUniqueKey: payload.jobUniqueKey ?? defaultLabelJobKey('package_label', packageId),
     })
   }
@@ -469,6 +478,7 @@ async function enqueuePackageLabelJob(payload) {
     refId: Number(packageId),
     refCode: row.barcode,
     createdBy: payload.createdBy ?? null,
+    requestPurpose: payload.requestPurpose ?? null,
     jobUniqueKey: payload.jobUniqueKey ?? defaultLabelJobKey('package_label', packageId),
   }
   let label
@@ -530,6 +540,7 @@ async function enqueueWaybillLabelJob(payload) {
       refId: waybillId,
       refCode: payload.refCode ?? null,
       createdBy: payload.createdBy ?? null,
+      requestPurpose: payload.requestPurpose ?? null,
       jobUniqueKey: payload.jobUniqueKey ?? `waybill:${waybillId}`,
     })
   }
@@ -543,6 +554,7 @@ async function enqueueWaybillLabelJob(payload) {
     content,
     copies: 1,
     createdBy: payload.createdBy ?? null,
+    requestPurpose: payload.requestPurpose ?? null,
     jobUniqueKey: payload.jobUniqueKey ?? `waybill:${waybillId}`,
     refType: 'waybill',
     refId: waybillId,
@@ -581,6 +593,7 @@ async function enqueueProductLabelJob(payload) {
     content: label.content,
     copies: 1,
     createdBy: payload.createdBy ?? null,
+    requestPurpose: payload.requestPurpose ?? null,
     jobUniqueKey: payload.jobUniqueKey ?? defaultLabelJobKey('product_label', productId),
     refType: 'product',
     refId: Number(productId),
@@ -597,16 +610,12 @@ async function enqueueProductLabelJob(payload) {
   }
 }
 
-async function reprintInboundBarcode(recordId, { createdBy = null, scopeWarehouseIds = null } = {}) {
+async function reprintInboundBarcode(recordId, { createdBy = null, scopeWarehouseIds = null, conn, requestId, recovery = false } = {}) {
   const id = Number(recordId)
   if (!Number.isFinite(id) || id <= 0) throw new AppError('入库条码不存在', 404, 'PRINT_BARCODE_RECORD_NOT_FOUND')
-  const conn = await pool.getConnection()
-  try {
-    await conn.beginTransaction()
     // 状态校验与入队必须原子：否则会出现「读到时 ACTIVE → 撤回收货提交 → 这里才入队」，
     // 为已作废容器建出打印任务，而任务一旦入队就会被客户端照常领取、打出 qty=0 的作废标签。
-    // 锁序：本函数**只取 inventory_containers 单行锁**；voidReceipt 走
-    // 「inbound_tasks → 库存维度 → 容器」，补打不取前两者，不构成环。
+    // 收货来源已由外层按任务→容器锁定；本函数复读已持有的容器锁，不取库存维度锁。
     // 刻意**不加库存维度锁**：单资源锁比多资源锁安全，加了反而开始与 putaway/void 争锁序。
     const [[row]] = await conn.query(
       `SELECT c.id, c.barcode, c.remaining_qty, c.warehouse_id, c.product_id,
@@ -625,10 +634,9 @@ async function reprintInboundBarcode(recordId, { createdBy = null, scopeWarehous
       throw new AppError('塑料盒条码不是唯一码，不在打印记录中；请在「塑料盒」页面重复打印', 400, 'PRINT_BARCODE_NOT_UNIQUE')
     }
     // 与补打中心列表同一口径：补打=重打，只对**有打印记录**的对象成立。从未打印过的容器
-    // 不会被列表列出（2026-09-14 用户决定），也不能靠直接调接口凭空造任务；那种情况请从
-    // 收货订单详情发起「整单 / 明细 / 条码补打」。
-    if (!Number(row.has_print_job)) {
-      throw new AppError('该条码没有打印记录，无法补打；从未打印过的库存条码请到收货订单详情发起补打', 400, 'PRINT_BARCODE_NO_PRINT_RECORD')
+    // 不会被列表列出（2026-09-14 用户决定），也不能靠直接调接口凭空造任务；有效收货来源的历史恢复须显式使用 recovery 模式。
+    if (!Number(row.has_print_job) && !recovery) {
+      throw new AppError('该条码没有打印记录，无法普通补打；有效收货条码可在本页选择恢复收货标签', 400, 'PRINT_BARCODE_NO_PRINT_RECORD')
     }
     // 容器已作废（撤回收货等）不得补打：打出来的是 qty=0、指向已作废容器的无效标签，
     // 而该收货单通常会重新收货并生成新条码，两张码并存会互相混淆。
@@ -704,10 +712,10 @@ async function reprintInboundBarcode(recordId, { createdBy = null, scopeWarehous
         containerId: id,
         warehouseId: row.warehouse_id != null ? Number(row.warehouse_id) : null,
         createdBy,
+        requestPurpose: 'reprint',
         data: { container_code: row.barcode },
-        jobUniqueKey: `reprint_pick:${id}:${Date.now()}`,
+        jobUniqueKey: `manual_reprint:${requestId}:${id}`,
       })
-      await conn.commit()
       return pickJob
     }
 
@@ -722,69 +730,63 @@ async function reprintInboundBarcode(recordId, { createdBy = null, scopeWarehous
         qty: row.remaining_qty,
       },
       createdBy,
-      jobUniqueKey: `reprint_container:${id}:${Date.now()}`,
+      requestPurpose: 'reprint',
+      jobUniqueKey: `manual_reprint:${requestId}:${id}`,
     })
-    await conn.commit()
     return job
-  } catch (error) {
-    await conn.rollback()
-    throw error
-  } finally {
-    conn.release()
-  }
 }
 
-async function reprintOutboundBarcode(recordId, { createdBy = null, scopeWarehouseIds = null } = {}) {
-  const id = Number(recordId)
-  if (!Number.isFinite(id) || id <= 0) throw new AppError('条码记录不存在', 404, 'PRINT_BARCODE_RECORD_NOT_FOUND')
-  // 与补打中心列表同一口径：只对已经有过打印记录的箱贴补打（见 reprintInboundBarcode 注释）。
-  const [[existing]] = await pool.query(
-    "SELECT id FROM print_jobs WHERE ref_type = 'package' AND ref_id = ? LIMIT 1",
-    [id],
-  )
+async function reprintOutboundBarcode(recordId, { createdBy, conn, requestId }) {
+  const [[existing]] = await conn.query("SELECT id FROM print_jobs WHERE ref_type = 'package' AND ref_id = ? LIMIT 1", [recordId])
   if (!existing) throw new AppError('该箱贴没有打印记录，无法补打', 400, 'PRINT_BARCODE_NO_PRINT_RECORD')
-  const [[source]] = await pool.query(
-    'SELECT wt.warehouse_id FROM packages p JOIN warehouse_tasks wt ON wt.id=p.warehouse_task_id WHERE p.id=?', [id],
-  )
-  if (!source) throw new AppError('箱贴来源不存在', 404, 'PRINT_BARCODE_RECORD_NOT_FOUND')
-  assertBoundWarehouseInScope(scopeWarehouseIds, source.warehouse_id, '出库条码')
-  return enqueuePackageLabelJob({
-    packageId: id,
-    createdBy,
-    jobUniqueKey: `reprint_package:${id}:${Date.now()}`,
+  return enqueuePackageLabelJob({ conn, packageId: recordId, createdBy, requestPurpose: 'reprint', jobUniqueKey: `manual_reprint:${requestId}:${recordId}` })
+}
+async function reprintLogisticsBarcode(recordId, { createdBy, conn, requestId }) {
+  const job = await findByIdWithExecutor(conn, recordId)
+  if (job.jobType !== 'waybill' && job.refType !== 'waybill') throw new AppError('该记录不是物流条码打印任务', 400, 'PRINT_BARCODE_CATEGORY_INVALID')
+  return createWithinTransaction(conn, {
+    printerId: job.printerId, warehouseId: job.warehouseId, jobType: 'waybill', title: job.title,
+    contentType: job.contentType, content: job.content, copies: job.copies || 1, createdBy,
+    requestPurpose: 'reprint', sourcePrintJobId: job.id,
+    dispatchReason: 'manual_reprint', refType: 'waybill', refId: job.refId, refCode: job.refCode,
+    jobUniqueKey: `manual_reprint:${requestId}:${recordId}`,
   })
 }
-
-async function reprintLogisticsBarcode(recordId, { createdBy = null, scopeWarehouseIds = null } = {}) {
-  const id = Number(recordId)
-  if (!Number.isFinite(id) || id <= 0) throw new AppError('条码记录不存在', 404, 'PRINT_BARCODE_RECORD_NOT_FOUND')
-  const job = await findById(id, scopeWarehouseIds)
-  if (job.jobType !== 'waybill' && job.refType !== 'waybill') {
-    throw new AppError('该记录不是物流条码打印任务', 400, 'PRINT_BARCODE_CATEGORY_INVALID')
-  }
-  return create({
-    printerId: job.printerId,
-    warehouseId: job.warehouseId,
-    jobType: 'waybill',
-    title: job.title,
-    contentType: job.contentType,
-    content: job.content,
-    copies: job.copies || 1,
-    createdBy,
-    dispatchReason: 'manual_reprint',
-    refType: 'waybill',
-    refId: job.refId,
-    refCode: job.refCode,
-    jobUniqueKey: `reprint_waybill:${id}:${Date.now()}`,
-  })
-}
-
-async function reprintBarcodeRecord({ category, recordId, createdBy = null, scopeWarehouseIds = null } = {}) {
-  const type = String(category || '').trim().toLowerCase()
-  if (type === 'inbound') return reprintInboundBarcode(recordId, { createdBy, scopeWarehouseIds })
-  if (type === 'outbound') return reprintOutboundBarcode(recordId, { createdBy, scopeWarehouseIds })
-  if (type === 'logistics') return reprintLogisticsBarcode(recordId, { createdBy, scopeWarehouseIds })
-  throw new AppError('条码分类无效', 400, 'PRINT_BARCODE_CATEGORY_INVALID')
+async function reprintBarcodeRecord({ category, recordId, createdBy = null, scopeWarehouseIds = null, requestKey, recovery = false } = {}) {
+  const type = String(category || '').trim().toLowerCase(), id = Number(recordId)
+  if (!['inbound', 'outbound', 'logistics'].includes(type)) throw new AppError('条码分类无效', 400, 'PRINT_BARCODE_CATEGORY_INVALID')
+  if (!Number.isSafeInteger(id) || id <= 0) throw new AppError('条码记录不存在', 404, 'PRINT_BARCODE_RECORD_NOT_FOUND')
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    let source
+    // 每次请求先锁定并核当前来源范围。箱贴保持任务→箱的既有锁序；不引入库存维度锁。
+    if (type === 'inbound') {
+      source = await lockContainerReprintSource(conn, id, scopeWarehouseIds, { recovery })
+    } else if (type === 'outbound') {
+      const [[peek]] = await conn.query('SELECT warehouse_task_id FROM packages WHERE id=?', [id])
+      if (peek) {
+        const [[head]] = await conn.query('SELECT id, warehouse_id FROM warehouse_tasks WHERE id=? FOR UPDATE', [peek.warehouse_task_id])
+        const [[pack]] = await conn.query('SELECT id,warehouse_task_id FROM packages WHERE id=? FOR UPDATE', [id])
+        if (head && pack && Number(pack.warehouse_task_id) === Number(head.id)) source = head
+      }
+    } else {
+      ;[[source]] = await conn.query('SELECT id, warehouse_id FROM print_jobs WHERE id=? FOR UPDATE', [id])
+    }
+    if (!source) throw new AppError('条码来源不存在', 404, 'PRINT_BARCODE_RECORD_NOT_FOUND')
+    assertBoundWarehouseInScope(scopeWarehouseIds, source.warehouse_id, '补打来源')
+    const intent = await beginReprintIntent(conn, { requestKey, userId: createdBy, action: 'print.barcodeReprint', resourceId: id, payload: { category: type, recordId: id, ...(recovery ? { recovery: true } : {}) }, scopeWarehouseIds, sourceIdentities: type === 'inbound' ? [identity(source)] : [] })
+    if (intent.replay) { await conn.commit(); return intent.result }
+    const execute = { inbound: reprintInboundBarcode, outbound: reprintOutboundBarcode, logistics: reprintLogisticsBarcode }[type]
+    const job = await execute(id, { createdBy, scopeWarehouseIds, conn, requestId: intent.id, recovery })
+    const dispatchHint = job && !job.unprintable ? await getDispatchHintForJob(job.printerCode, job.id, conn) : null
+    const result = job && !job.unprintable ? { queued: true, ...job, dispatchHint, category: type, recordId: id, requestId: intent.id }
+      : { queued: false, jobId: job ? Number(job.id) : null, printerCode: null, printerName: null, dispatchHint: null, category: type, recordId: id, requestId: intent.id }
+    await completeReprintIntent(conn, intent, { resourceId: id, warehouseIds: [source.warehouse_id, ...(source.source_warehouse_id == null ? [] : [source.source_warehouse_id])], result })
+    await conn.commit()
+    return result
+  } catch (error) { await conn.rollback(); throw error }
+  finally { conn.release() }
 }
 
 module.exports = {

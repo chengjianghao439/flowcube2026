@@ -1,5 +1,6 @@
 import { lazy, type ComponentType, type LazyExoticComponent } from 'react'
 import * as definitions from './routeDefinitions'
+import { hasInboundEditRecoveryForPath } from '@/hooks/useInboundTaskEditRecovery'
 export * from './routeDefinitions'
 
 export type RouteComponent = LazyExoticComponent<ComponentType>
@@ -42,6 +43,7 @@ const components: Record<definitions.RouteComponentKey, RouteComponent> = {
   TransferFormPage: lazy(() => import('@/pages/transfer/form')),
   InboundTasksPage: lazy(() => import('@/pages/inbound-tasks')),
   InboundTaskCreatePage: lazy(() => import('@/pages/inbound-tasks/create')),
+  InboundTaskEditPage: lazy(() => import('@/pages/inbound-tasks/edit')),
   InboundTaskDetailPage: lazy(() => import('@/pages/inbound-tasks/detail')),
   PickingWavesPage: lazy(() => import('@/pages/picking-waves')),
   CustomersPage: lazy(() => import('@/pages/customers')),
@@ -111,4 +113,9 @@ export function getRoutePatternByPath(path: string): RoutePatternEntry | undefin
 
 export function resolveRouteComponent(path: string): RouteComponent | undefined {
   return getRouteByPath(path)?.component ?? authenticationByPath.get(path)?.component ?? getRoutePatternByPath(path)?.component
+}
+
+/** 编辑权限声明保持不变；完整本人原请求只解除恢复壳的入口拦截。 */
+export function resolveRoutePermission(path: string) {
+  return hasInboundEditRecoveryForPath(path) ? undefined : definitions.resolveRoutePermission(path)
 }

@@ -21,7 +21,10 @@ const logger = require('../../utils/logger')
  */
 const requestStatus = async (req, res, next) => {
   try {
-    const receiptContext = { requestedAction:req.query.action }
+    const receiptContext = { requestedAction: req.query.action, requestedWarehouseId: req.query.warehouseId, requestedFingerprint: req.query.requestFingerprint }
+    await require('../inbound-tasks/inbound-tasks.create-receipt').ensureInboundCreateReceiptView(req, res, receiptContext)
+    await require('../inbound-tasks/inbound-tasks.edit-receipt').ensureInboundEditReceiptView(req, res, receiptContext)
+    await require('../print-jobs/print-jobs.reprint-intent').ensureReprintReceiptPermission(req, res, receiptContext)
     const data = await getScopedOperationRequestStatus({
       requestKey: req.params.key,
       action: req.query.action,
@@ -33,6 +36,11 @@ const requestStatus = async (req, res, next) => {
     if ([receiptContext.requestedAction, receiptContext.matchedAction].some(action => /^plastic_box\.(fill|repack)(?:\.[1-9]\d*)?$/.test(String(action ?? '')))) {
       await require('../plastic-boxes/plastic-boxes.receipt').assertPlasticBoxReceipt(require('../../config/db').pool, data, req.user?.warehouseIds ?? null, { ...receiptContext, isPda: Boolean(req.pda), pdaWarehouseId: req.pda?.warehouseId ?? null })
     }
+    // 宽prefix在实际命中收货域后也补当前VIEW，不能借其它领域query绕过。
+    await require('../inbound-tasks/inbound-tasks.create-receipt').ensureInboundCreateReceiptView(req, res, receiptContext)
+    await require('../inbound-tasks/inbound-tasks.edit-receipt').ensureInboundEditReceiptView(req, res, receiptContext)
+    await require('../inbound-tasks/inbound-tasks.create-receipt').assertInboundCreateReceipt(require('../../config/db').pool, data, req.user?.warehouseIds ?? null, receiptContext)
+    await require('../inbound-tasks/inbound-tasks.edit-receipt').assertInboundEditReceipt(require('../../config/db').pool, data, req.user?.warehouseIds ?? null, receiptContext)
     await require('../sale/sale.commercial-receipts').assertReceiptScope(require('../../config/db').pool,data,req.user?.warehouseIds ?? null,receiptContext)
     if ([receiptContext.requestedAction, receiptContext.matchedAction].some(action => String(action ?? '').startsWith('disposal.dispose'))) {
       await require('../disposal/disposal.receipt').assertDisposalReceipt(require('../../config/db').pool, data, req.user?.warehouseIds ?? null, receiptContext)
@@ -42,6 +50,8 @@ const requestStatus = async (req, res, next) => {
     // 待确认记录并当作本次成功，之后再无校验点 —— 所以这里必须与写重放用同一把闸。
     // 不改 operationRequest 的查询匹配语义，也不改写历史行；不一致时 409 要求人工核对。
     assertPrintLabelReceiptConsistent(req.query.action, data)
+    await require('../print-jobs/print-jobs.reprint-intent').ensureReprintReceiptPermission(req, res, receiptContext)
+    await require('../print-jobs/print-jobs.reprint-intent').assertReprintReceiptScope(require('../../config/db').pool, data, req.user?.warehouseIds ?? null, receiptContext)
     return successResponse(res, data, '查询成功')
   } catch (e) { next(e) }
 }

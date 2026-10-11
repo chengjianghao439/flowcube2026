@@ -323,7 +323,7 @@ async function scanOut(id, { containerBarcode }, operator, requestKey, scopeWare
     }
     // 整容器移动到调入仓，标记在途（PENDING_PUTAWAY 不计入调入仓可用库存）
     await conn.query(
-      'UPDATE inventory_containers SET warehouse_id = ?, status = ?, location_id = NULL, transfer_order_id = ? WHERE id = ?',
+      'UPDATE inventory_containers SET warehouse_id = ?, status = ?, location_id = NULL, transfer_order_id = ?, has_transfer_history = 1 WHERE id = ?',
       [toWh, CONTAINER_STATUS.PENDING_PUTAWAY, id, c.id],
     )
     const fromAfter = await syncStockFromContainers(conn, c.product_id, fromWh)
@@ -423,7 +423,7 @@ async function scanIn(id, { containerBarcode, locationId }, operator, requestKey
     const qty = Number(c.remaining_qty)
     const allocations = await allocateTransferQuantity(conn, id, c.product_id, qty, 'in')
     await conn.query(
-      'UPDATE inventory_containers SET status = ?, location_id = ?, transfer_order_id = NULL WHERE id = ?',
+      'UPDATE inventory_containers SET status = ?, location_id = ?, transfer_order_id = NULL, has_transfer_history = 1 WHERE id = ?',
       [CONTAINER_STATUS.ACTIVE, locationId, c.id],
     )
     const toAfter = await syncStockFromContainers(conn, c.product_id, toWh)
@@ -551,7 +551,7 @@ async function forceCloseInTransit(id, operator, { reason } = {}, scopeWarehouse
       throw new AppError('该调拨单已无在途库存条码，无需异常了结', 409)
     }
     await conn.query(
-      'UPDATE inventory_containers SET status = ?, transfer_order_id = NULL WHERE transfer_order_id = ? AND status = ?',
+      'UPDATE inventory_containers SET status = ?, transfer_order_id = NULL, has_transfer_history = 1 WHERE transfer_order_id = ? AND status = ?',
       [CONTAINER_STATUS.VOID, id, CONTAINER_STATUS.PENDING_PUTAWAY],
     )
     await compareAndSetStatus(conn, {

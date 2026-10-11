@@ -50,7 +50,7 @@ export const useProductFinder   = (p: ProductFinderParams, enabled=true, context
     return data
   }, enabled: enabled && (!context || context.enabled), staleTime: 0 })
 export function useCreateProduct() { const qc=useQueryClient(); return useMutation({ mutationFn:(d:CreateProductParams)=>createProductApi(d), onSuccess:()=>qc.invalidateQueries({queryKey:[K]}) }) }
-export function useUpdateProduct() { const qc=useQueryClient(); return useMutation({ mutationFn:({id,data}:{id:number;data:UpdateProductParams})=>updateProductApi(id,data), onSuccess:()=>qc.invalidateQueries({queryKey:[K]}) }) }
+export function useUpdateProduct() { const qc=useQueryClient(); return useMutation({ mutationFn:({id,data,requestKey}:{id:number;data:UpdateProductParams;requestKey?:string})=>updateProductApi(id,data,requestKey), onSuccess:()=>qc.invalidateQueries({queryKey:[K]}) }) }
 export function useDeleteProduct() {
   const qc=useQueryClient()
   return useMutation({

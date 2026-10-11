@@ -16,7 +16,7 @@ function normalizeOperator(user = {}) {
 }
 
 function getOperatorFromRequest(req) {
-  return normalizeOperator(req?.user || {})
+  return { ...normalizeOperator(req?.user || {}), operationLogId: req?.operationLogId ?? null }
 }
 
 module.exports = {

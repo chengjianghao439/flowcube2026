@@ -85,7 +85,7 @@ export default function CommercialPicker({ kind, warehouseId, owner, readGuard, 
   currentGuard.current = readGuard
   const visible = active && productPermission && (!readGuard || readGuard.isCurrent())
   const selectedCategory = categoryPermission ? categoryId : null
-  const queryCategory = selectedCategory
+  const queryCategory = kind === 'ordinary' ? selectedCategory : null
   const activity = useRef({ visible, epoch: readGuard?.epoch, kind, warehouseId, owner, search, queryCategory, retry, generation: 0 })
   if (activity.current.visible !== visible || activity.current.epoch !== readGuard?.epoch || activity.current.kind !== kind || activity.current.warehouseId !== warehouseId || activity.current.owner !== owner || activity.current.search !== search || activity.current.queryCategory !== queryCategory || activity.current.retry !== retry) {
     activity.current = { visible, epoch: readGuard?.epoch, kind, warehouseId, owner, search, queryCategory, retry, generation: activity.current.generation + 1 }

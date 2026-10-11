@@ -1,5 +1,7 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
+const { appendChangeAudit, assertChangeRequest, bindChangeRequest, normalizeReason } = require('../document-activity/document-change-audit')
+const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { priceLevelLabel } = require('../../utils/priceLevels')
 const { assertSqlIdentifier } = require('../../utils/sqlIdentifier')
 
@@ -7,6 +9,12 @@ const findAll = async () => {
   const [rows] = await pool.query(
     'SELECT id,name,remark,is_active,created_at FROM price_lists WHERE deleted_at IS NULL ORDER BY created_at DESC')
   return rows.map(r => ({ id: r.id, name: r.name, remark: r.remark, isActive: r.is_active, createdAt: r.created_at }))
+}
+
+const findById = async (id) => {
+  const [[row]] = await pool.query('SELECT id,name,created_at FROM price_lists WHERE id=? AND deleted_at IS NULL', [id])
+  if (!row) throw new AppError('价格表不存在', 404)
+  return { id:row.id,name:row.name,createdAt:row.created_at }
 }
 
 const findItems = async (listId) => {
@@ -52,24 +60,29 @@ const create = async (name, remark) => {
   return { id: r.insertId }
 }
 
-const updateItems = async (listId, items) => {
-  const [[list]] = await pool.query('SELECT id FROM price_lists WHERE id=? AND deleted_at IS NULL', [listId])
-  if (!list) throw new AppError('价格表不存在', 404)
+const updateItems = async (listId, items, { operator = null, changeReason = null, requestKey = null } = {}) => {
+  normalizeReason(changeReason)
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    await conn.query('DELETE FROM price_list_items WHERE list_id=?', [listId])
+    const [[list]] = await conn.query('SELECT id,name FROM price_lists WHERE id=? AND deleted_at IS NULL FOR UPDATE', [listId])
+    if (!list) throw new AppError('价格表不存在', 404)
+    const action = `price-list.items.${Number(listId)}`
+    const requestFingerprint = await assertChangeRequest(conn, { requestKey, action, userId: operator?.userId, payload: { items, changeReason } })
+    const requestState = await beginOperationRequest(conn, { requestKey, action, userId: operator?.userId })
+    await bindChangeRequest(conn, requestState, requestFingerprint)
+    if (requestState.replay) { if (operator) operator.changeAuditHandled = true; await conn.rollback(); return requestState.responseData }
+    const [before] = await conn.query('SELECT * FROM price_list_items WHERE list_id=? ORDER BY id FOR UPDATE', [listId])
     const validItems = items.filter(item => item.productId && item.salePrice)
-    if (validItems.length) {
-      const placeholders = validItems.map(() => '(?,?,?,?,?,?)').join(',')
-      const params = validItems.flatMap(item => [
-        listId, item.productId, item.productCode || '', item.productName || '', item.unit || '', item.salePrice
-      ])
-      await conn.query(
-        `INSERT INTO price_list_items (list_id,product_id,product_code,product_name,unit,sale_price) VALUES ${placeholders}`,
-        params,
-      )
-    }
+    await conn.query('DELETE FROM price_list_items WHERE list_id=?', [listId])
+    if (validItems.length) await conn.query(
+      'INSERT INTO price_list_items (list_id,product_id,product_code,product_name,unit,sale_price) VALUES ?',
+      [validItems.map(item => [listId, item.productId, item.productCode || '', item.productName || '', item.unit || '', item.salePrice])],
+    )
+    // Read MySQL's final DECIMAL values rather than rounding submitted prices in a second implementation.
+    const [after] = await conn.query('SELECT * FROM price_list_items WHERE list_id=? ORDER BY id', [listId])
+    await appendChangeAudit(conn, { documentType: 'price-list', documentId: listId, title: '修改价格表明细', operator, reason: changeReason, before, after, requestState, context: { phase: 'price_list_update', requestFingerprint } })
+    await completeOperationRequest(conn, requestState, { data: null, message: '价格表已更新', resourceType: 'price_list', resourceId: listId })
     await conn.commit()
   } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
 }
@@ -94,4 +107,4 @@ const bindCustomer = async (customerId, priceLevel) => {
     [normalized, customerId])
 }
 
-module.exports = { findAll, findItems, findCustomerPrice, create, updateItems, update, remove, bindCustomer }
+module.exports = { findById, findAll, findItems, findCustomerPrice, create, updateItems, update, remove, bindCustomer }

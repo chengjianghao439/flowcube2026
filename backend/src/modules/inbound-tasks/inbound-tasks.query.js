@@ -56,6 +56,8 @@ function buildTaskWithClosure(task, items = [], summary = {}, timeline = [], rec
     receivedQty,
     putawayQty,
     lineCount,
+    draftEditable: Number(task.status) === 1 && task.submittedAt == null && lineCount > 0
+      && Number(summary.executionLineCount || 0) === 0 && Number(summary.editContainerCount || 0) === 0,
     printSummary,
     putawaySummary,
     timeline,
@@ -72,26 +74,34 @@ function buildTaskWithClosure(task, items = [], summary = {}, timeline = [], rec
   return base
 }
 
-async function loadInboundTaskClosureSummary(taskIds, thresholds = DEFAULT_INBOUND_THRESHOLDS) {
+async function loadInboundTaskClosureSummary(taskIds, thresholds = DEFAULT_INBOUND_THRESHOLDS, conn = pool) {
   const ids = [...new Set((taskIds || []).map(Number).filter(id => Number.isFinite(id) && id > 0))]
   if (!ids.length) return new Map()
   const placeholders = ids.map(() => '?').join(',')
   const printTimeoutMinutes = Number(thresholds.printTimeoutMinutes || DEFAULT_INBOUND_THRESHOLDS.printTimeoutMinutes)
   const putawayTimeoutHours = Number(thresholds.putawayTimeoutHours || DEFAULT_INBOUND_THRESHOLDS.putawayTimeoutHours)
-  const [itemRows] = await pool.query(
+  const [itemRows] = await conn.query(
     `SELECT
         task_id,
         COUNT(*) AS line_count,
         COALESCE(SUM(ordered_qty), 0) AS ordered_qty,
         COALESCE(SUM(received_qty), 0) AS received_qty,
-        COALESCE(SUM(putaway_qty), 0) AS putaway_qty
+        COALESCE(SUM(putaway_qty), 0) AS putaway_qty,
+        SUM(CASE WHEN received_qty IS NULL OR putaway_qty IS NULL OR received_qty <> 0 OR putaway_qty <> 0 THEN 1 ELSE 0 END) AS execution_line_count
      FROM inbound_task_items
      WHERE task_id IN (${placeholders})
      GROUP BY task_id`,
     ids,
   )
 
-  const [containerRows] = await pool.query(
+  // 编辑门必须包括所有未删除容器，历史容器也证明已有执行事实。
+  const [editContainerRows] = await conn.query(
+    `SELECT inbound_task_id AS task_id, COUNT(*) AS edit_container_count
+     FROM inventory_containers WHERE inbound_task_id IN (${placeholders}) AND deleted_at IS NULL
+     GROUP BY inbound_task_id`, ids,
+  )
+
+  const [containerRows] = await conn.query(
     `SELECT
         c.inbound_task_id AS task_id,
         COALESCE(SUM(CASE WHEN c.status = ? THEN 1 ELSE 0 END), 0) AS waiting_containers,
@@ -125,7 +135,7 @@ async function loadInboundTaskClosureSummary(taskIds, thresholds = DEFAULT_INBOU
     ],
   )
 
-  const [printRows] = await pool.query(
+  const [printRows] = await conn.query(
     `SELECT
         c.inbound_task_id AS task_id,
         COUNT(*) AS total_jobs,
@@ -157,6 +167,8 @@ async function loadInboundTaskClosureSummary(taskIds, thresholds = DEFAULT_INBOU
 
   const map = new Map(ids.map(id => [id, {
     lineCount: 0,
+    executionLineCount: 0,
+    editContainerCount: 0,
     orderedQty: 0,
     receivedQty: 0,
     putawayQty: 0,
@@ -177,10 +189,14 @@ async function loadInboundTaskClosureSummary(taskIds, thresholds = DEFAULT_INBOU
     map.set(Number(row.task_id), {
       ...(map.get(Number(row.task_id)) || {}),
       lineCount: Number(row.line_count || 0),
+      executionLineCount: Number(row.execution_line_count || 0),
       orderedQty: Number(row.ordered_qty || 0),
       receivedQty: Number(row.received_qty || 0),
       putawayQty: Number(row.putaway_qty || 0),
     })
+  }
+  for (const row of editContainerRows) {
+    map.set(Number(row.task_id), { ...(map.get(Number(row.task_id)) || {}), editContainerCount: Number(row.edit_container_count || 0) })
   }
   for (const row of containerRows) {
     map.set(Number(row.task_id), {
@@ -206,8 +222,8 @@ async function loadInboundTaskClosureSummary(taskIds, thresholds = DEFAULT_INBOU
   return map
 }
 
-async function loadInboundTimeline(taskId) {
-  const [rows] = await pool.query(
+async function loadInboundTimeline(taskId, conn = pool) {
+  const [rows] = await conn.query(
     `SELECT * FROM inbound_task_events WHERE task_id = ? ORDER BY created_at DESC, id DESC`,
     [taskId],
   )
@@ -223,8 +239,8 @@ async function loadInboundTimeline(taskId) {
   }))
 }
 
-async function loadInboundRecentPrintJobs(taskId, thresholds = DEFAULT_INBOUND_THRESHOLDS) {
-  const [rows] = await pool.query(
+async function loadInboundRecentPrintJobs(taskId, thresholds = DEFAULT_INBOUND_THRESHOLDS, conn = pool) {
+  const [rows] = await conn.query(
     `SELECT
         j.id,
         j.status,
@@ -328,8 +344,8 @@ async function findAll({ page = 1, pageSize = 20, keyword = '', status = null, p
 
 // scopeWarehouseIds 默认 null：内部调用方（submit/void 等拿返回值）保持原行为，
 // 只有 HTTP controller 传 req.user.warehouseIds，用于挡住「知道 id 就直查详情」
-async function findById(id, scopeWarehouseIds = null) {
-  const [[row]] = await pool.query('SELECT * FROM inbound_tasks WHERE id = ? AND deleted_at IS NULL', [id])
+async function findById(id, scopeWarehouseIds = null, conn = pool) {
+  const [[row]] = await conn.query('SELECT * FROM inbound_tasks WHERE id = ? AND deleted_at IS NULL', [id])
   if (!row) throw new AppError('入库任务不存在', 404)
   assertInScope(scopeWarehouseIds, row.warehouse_id, '收货订单')
   const task = fmtTask(row)
@@ -337,7 +353,7 @@ async function findById(id, scopeWarehouseIds = null) {
   // 的取价方式保持一致，避免出现两份价格数据源
   // 多单位（文档03 Phase4b）：带出该商品的主辅助单位 + 换算率，供 PDA 收货「按箱快捷录入」
   // （率由系统给定、现场不可改；配了辅助单位才有值，否则 null 走原逐件录入）。取 sort_order 最靠前的辅助单位。
-  const [items] = await pool.query(
+  const [items] = await conn.query(
     `SELECT iti.*, poi.unit_price, poi.remark AS purchase_item_remark,
             pu.unit_name AS box_unit, pu.conversion_rate AS box_rate
      FROM inbound_task_items iti
@@ -351,24 +367,34 @@ async function findById(id, scopeWarehouseIds = null) {
   )
   const formattedItems = items.map(fmtItem)
   const thresholds = await getInboundClosureThresholds()
-  const summaryMap = await loadInboundTaskClosureSummary([id], thresholds)
-  const timeline = await loadInboundTimeline(id)
-  const recentPrintJobs = await loadInboundRecentPrintJobs(id, thresholds)
+  const summaryMap = await loadInboundTaskClosureSummary([id], thresholds, conn)
+  const timeline = await loadInboundTimeline(id, conn)
+  const recentPrintJobs = await loadInboundRecentPrintJobs(id, thresholds, conn)
   return buildTaskWithClosure(task, formattedItems, summaryMap.get(id), timeline, recentPrintJobs, thresholds)
 }
 
-/**
- * 「可建收货单的采购明细」查询——供应商已提交采购单里还没被收完的明细行，附带
- * 已分配/已收/剩余数量与单价。两处调用方共用同一份 SQL，避免各自维护一份、字段漂移：
- *   - findPurchasableItems：GET /purchase-items，前端选品弹窗按关键字浏览
- *   - createManualTask：按 purchaseItemIds 精确取行并加锁，校验+落库在同一事务内
- * forUpdate=true 时对涉及的 purchase_order_items/inbound_task_items 行加锁，
- * 使并发的建单请求相互排队，避免同一采购明细被两张收货单同时超额分配。
+/** 先锁真实采购头，再按稳定 ID 锁采购明细。聚合 SELECT 不提供来源互斥。
+ * 调用方必须在 begin 前设置 NEXT TRANSACTION READ COMMITTED，锁后汇总才能读到
+ * 等锁期间已提交的其它草稿占量，同时避免反锁其它收货任务头。
  */
-async function loadPurchasableCandidates(conn, { supplierId, keyword = '', purchaseItemIds = null, forUpdate = false, scopeWarehouseIds = null } = {}) {
+async function lockPurchasableSources(conn, purchaseItemIds) {
+  const ids = [...new Set(purchaseItemIds.map(Number))].sort((a, b) => a - b)
+  if (!ids.length || ids.some(id => !Number.isSafeInteger(id) || id <= 0)) throw new AppError('采购来源无效', 409, 'INBOUND_PURCHASE_SOURCE_INVALID')
+  const [peek] = await conn.query('SELECT id, order_id FROM purchase_order_items WHERE id IN (?) ORDER BY id', [ids])
+  if (peek.length !== ids.length) throw new AppError('采购来源缺失，请保留原单并核对', 409, 'INBOUND_PURCHASE_SOURCE_INVALID')
+  const orderIds = [...new Set(peek.map(item => Number(item.order_id)))].sort((a, b) => a - b)
+  const [orders] = await conn.query('SELECT * FROM purchase_orders WHERE id IN (?) ORDER BY id FOR UPDATE', [orderIds])
+  const [items] = await conn.query('SELECT * FROM purchase_order_items WHERE id IN (?) ORDER BY id FOR UPDATE', [ids])
+  const oldOrders = new Map(peek.map(item => [Number(item.id), Number(item.order_id)]))
+  if (orders.length !== orderIds.length || items.length !== ids.length || items.some(item => oldOrders.get(Number(item.id)) !== Number(item.order_id))) throw new AppError('采购来源归属已变化，请保留原单并核对', 409, 'INBOUND_PURCHASE_SOURCE_INVALID')
+  return { orders, items }
+}
+
+async function loadPurchasableCandidates(conn, { supplierId, keyword = '', purchaseItemIds = null, forUpdate = false, scopeWarehouseIds = null, readPage = null, excludeTaskId = null, warehouseId = null } = {}) {
   const supplierIdN = Number(supplierId)
   if (!Number.isFinite(supplierIdN) || supplierIdN <= 0) throw new AppError('请选择供应商', 400)
 
+  if (forUpdate) await lockPurchasableSources(conn, purchaseItemIds || [])
   const params = [supplierIdN]
   let whereExtra
   if (Array.isArray(purchaseItemIds) && purchaseItemIds.length) {
@@ -379,18 +405,20 @@ async function loadPurchasableCandidates(conn, { supplierId, keyword = '', purch
     whereExtra = ' AND (poi.product_code LIKE ? OR poi.product_name LIKE ? OR po.order_no LIKE ?)'
     params.push(like, like, like)
   }
-  // 采购候选明细列表按用户仓库数据范围过滤：scopeWarehouseIds 仅由列表读入口 findPurchasableItems
-  // 传入；建单流程(command.js)不传 → 不限仓，与「建单选仓自由」的既有设计一致。
+  // 候选读取和新建/编辑共同按服务器当前仓范围过滤，客户端不能指定范围。
   const scope = scopeFilter(scopeWarehouseIds, 'po.warehouse_id')
   whereExtra += scope.sql
   params.push(...scope.params)
+  if (warehouseId != null) { whereExtra += ' AND po.warehouse_id = ?'; params.push(Number(warehouseId)) }
+  const excluded = excludeTaskId == null ? '' : ' OR it.id = ?'
+  const excludedParams = excludeTaskId == null ? [] : [Number(excludeTaskId), Number(excludeTaskId), Number(excludeTaskId)]
   const havingClause = Array.isArray(purchaseItemIds) && purchaseItemIds.length ? '' : 'HAVING remaining_qty > 0'
 
-  const [rows] = await conn.query(
-    `SELECT
+  const sql = `SELECT
         poi.id AS purchase_item_id,
         po.id AS purchase_order_id,
         po.order_no AS purchase_order_no,
+        po.created_at AS purchase_created_at,
         po.supplier_id,
         po.supplier_name,
         po.warehouse_id,
@@ -406,19 +434,19 @@ async function loadPurchasableCandidates(conn, { supplierId, keyword = '', purch
         poi.quantity AS ordered_qty,
         COALESCE(SUM(
           CASE
-            WHEN it.id IS NULL OR it.deleted_at IS NOT NULL OR it.status = 5 THEN 0
+            WHEN it.id IS NULL OR it.deleted_at IS NOT NULL OR it.status = 5${excluded} THEN 0
             ELSE iti.ordered_qty
           END
         ), 0) AS assigned_qty,
         poi.quantity - COALESCE(SUM(
           CASE
-            WHEN it.id IS NULL OR it.deleted_at IS NOT NULL OR it.status = 5 THEN 0
+            WHEN it.id IS NULL OR it.deleted_at IS NOT NULL OR it.status = 5${excluded} THEN 0
             ELSE iti.ordered_qty
           END
         ), 0) AS remaining_qty,
         COALESCE(SUM(
           CASE
-            WHEN it.id IS NULL OR it.deleted_at IS NOT NULL OR it.status = 5 THEN 0
+            WHEN it.id IS NULL OR it.deleted_at IS NOT NULL OR it.status = 5${excluded} THEN 0
             ELSE iti.received_qty
           END
         ), 0) AS received_qty
@@ -433,21 +461,32 @@ async function loadPurchasableCandidates(conn, { supplierId, keyword = '', purch
         ON it.id = iti.task_id
       WHERE po.supplier_id = ?${whereExtra}
       GROUP BY
-        poi.id, po.id, po.order_no, po.supplier_id, po.supplier_name,
+        poi.id, po.id, po.order_no, po.created_at, po.supplier_id, po.supplier_name,
         po.warehouse_id, po.warehouse_name,
         poi.product_id, poi.product_code, poi.product_name, poi.article_number, poi.spec, poi.color, poi.unit,
         poi.unit_price, poi.quantity
       ${havingClause}
-      ORDER BY po.created_at ASC, poi.id ASC
-      ${forUpdate ? 'FOR UPDATE' : ''}`,
-    params,
-  )
+      ORDER BY po.created_at ASC, poi.id ASC`
+  // LIMIT 仅用于显式只读浏览；建单按 ID 加锁取齐的 SQL 与返回形状保持原样。
+  const paged = !forUpdate && readPage
+  const [rows] = await conn.query(paged ? `SELECT candidate.*, COUNT(*) OVER() AS total_count FROM (${sql}) candidate ORDER BY candidate.purchase_created_at ASC, candidate.purchase_item_id ASC LIMIT ? OFFSET ?` : sql,
+    paged ? [...excludedParams, ...params, readPage.pageSize, readPage.offset] : [...excludedParams, ...params])
+  if (paged) return { list: rows.map(fmtPurchasableItem), pagination: { page: readPage.page, pageSize: readPage.pageSize, total: Number(rows[0]?.total_count || 0) } }
 
   return rows.map(fmtPurchasableItem)
 }
 
-async function findPurchasableItems({ supplierId, keyword = '', scopeWarehouseIds = null }) {
-  return loadPurchasableCandidates(pool, { supplierId, keyword, scopeWarehouseIds })
+async function findPurchasableItems({ supplierId, keyword = '', scopeWarehouseIds = null, bounded = false, page = 1, pageSize = 200, purchaseItemIds = null }) {
+  let ids = null
+  if (purchaseItemIds != null) {
+    if (typeof purchaseItemIds !== 'string') throw new AppError('采购明细参数无效', 400)
+    const parts = purchaseItemIds.split(',')
+    if (!parts.length || parts.length > 200 || parts.some(id => !/^[1-9]\d*$/.test(id) || !Number.isSafeInteger(Number(id)))) throw new AppError('采购明细参数无效', 400)
+    ids = [...new Set(parts.map(Number))]
+  }
+  const normalized = normalizePagination({ page, pageSize: Math.min(200, Number(pageSize) || 200) })
+  if (!Number.isSafeInteger(normalized.page) || !Number.isSafeInteger(normalized.pageSize) || !Number.isSafeInteger(normalized.offset)) throw new AppError('分页参数无效或超出安全范围', 400)
+  return loadPurchasableCandidates(pool, { supplierId, keyword, scopeWarehouseIds, purchaseItemIds: ids, readPage: bounded && !ids ? normalized : null })
 }
 
 async function queryWaitingContainers(taskId) {
@@ -564,6 +603,7 @@ module.exports = {
   findById,
   findPurchasableItems,
   loadPurchasableCandidates,
+  lockPurchasableSources,
   listWaitingContainers,
   listStoredContainers,
   listContainers,

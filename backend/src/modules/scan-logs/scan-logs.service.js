@@ -256,6 +256,7 @@ async function createScanLog({
       const labelJob = await enqueuePickLabelJob({
         conn,
         scanLogId: ins.insertId,
+        requestPurpose: 'initial',
         containerId: ex.containerId,
         warehouseId: taskRow.warehouse_id,
         createdBy: operatorId || null,

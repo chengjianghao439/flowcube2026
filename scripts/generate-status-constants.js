@@ -21,6 +21,7 @@ const {
   SALE_STATUS_TERMINAL,
 } = require(path.join(root, 'backend/src/constants/saleOrderStatus'))
 const { DOCUMENT_STATUS_RULES } = require(path.join(root, 'backend/src/constants/documentStatusRules'))
+const { PURCHASE_STATUS_NAME } = require(path.join(root, 'backend/src/constants/purchaseOrderStatus'))
 const {
   SETTLEMENT_TYPE,
   SETTLEMENT_TYPE_NAME,
@@ -63,7 +64,8 @@ const lines = [
   '/* eslint-disable */',
   '// AUTO-GENERATED FILE. Do not edit manually.',
   '// Source: backend/src/constants/warehouseTaskStatus.js, backend/src/constants/saleOrderStatus.js,',
-  '//         backend/src/constants/settlementType.js, backend/src/constants/documentStatusRules.js',
+  '//         backend/src/constants/settlementType.js, backend/src/constants/documentStatusRules.js,',
+  '//         backend/src/constants/purchaseOrderStatus.js',
   '// Regenerate with: node scripts/generate-status-constants.js',
   '',
   "export type StatusTone = 'draft' | 'active' | 'success' | 'danger'",
@@ -91,6 +93,10 @@ const lines = [
   tsConst('SALE_STATUS_TERMINAL', SALE_STATUS_TERMINAL),
   tsConst('SALE_ACTION_RULES', DOCUMENT_STATUS_RULES.sale.actions),
   tsConst('SALE_STATUS_OPTIONS', [{ value: '', label: '全部状态' }, ...buildOptions(SALE_STATUS_NAME)]),
+  '',
+  tsConst('PURCHASE_STATUS_NAME', PURCHASE_STATUS_NAME),
+  tsConst('PURCHASE_ACTION_RULES', DOCUMENT_STATUS_RULES.purchase.actions),
+  tsConst('PURCHASE_STATUS_OPTIONS', [{ value: '', label: '全部状态' }, ...buildOptions(PURCHASE_STATUS_NAME)]),
   '',
   tsConst('SUPPLIER_REFUND_STATUS', { DRAFT: 1, CONFIRMED: 2, RECEIVED: 3, CANCELLED: 4 }),
   tsConst('SUPPLIER_REFUND_STATUS_NAME', DOCUMENT_STATUS_RULES.supplierRefund.statuses),

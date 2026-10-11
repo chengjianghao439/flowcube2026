@@ -17,14 +17,14 @@ beforeEach(() => { onlineManager.setOnline(true); Object.assign(globalThis, { IS
 afterEach(() => { act(() => root.unmount()); qc.clear(); host.remove(); onlineManager.setOnline(true) })
 async function render(ids: number[]) { await act(async () => root.render(<MemoryRouter initialEntries={[path(99)]}><QueryClientProvider client={qc}>{ids.map(id => <TabPathContext.Provider key={id} value={path(id)}><BarcodePrintQueryPage /></TabPathContext.Provider>)}</QueryClientProvider></MemoryRouter>)); await act(async () => { await new Promise(r => setTimeout(r, 5)) }) }
 test('真实注册的两个打印目标各用本标签原收货id发起查询，不混入全局别单', async () => { await render([12, 13]); expect(getBarcodePrintRecordsApi).toHaveBeenCalledWith(expect.objectContaining({ inboundTaskId: 12, category: 'inbound' })); expect(getBarcodePrintRecordsApi).toHaveBeenCalledWith(expect.objectContaining({ inboundTaskId: 13, category: 'inbound' })); expect(getBarcodePrintRecordsApi).not.toHaveBeenCalledWith(expect.objectContaining({ inboundTaskId: 99 })); expect(reprintBarcodeRecordApi).not.toHaveBeenCalled() })
-test('交接重新读取失败时隐藏旧缓存和补打动作，允许重试', async () => { qc.setQueryData(['barcode-print-records', 'inbound', '', '__all__', 12, undefined], { list: [record], pagination: { total: 1 } }); vi.mocked(getBarcodePrintRecordsApi).mockRejectedValue(new Error('无法读取')); await render([12]); expect(host.textContent).toContain('打印记录读取失败'); expect(host.textContent).not.toContain('I-12'); expect([...host.querySelectorAll('button')].some(b => b.textContent === '重新读取打印记录')).toBe(true); expect(reprintBarcodeRecordApi).not.toHaveBeenCalled() })
+test('交接重新读取失败时隐藏旧缓存和补打动作，允许重试', async () => { qc.setQueryData(['barcode-print-records', 'inbound', false, '', '__all__', 12, undefined], { list: [record], pagination: { total: 1 } }); vi.mocked(getBarcodePrintRecordsApi).mockRejectedValue(new Error('无法读取')); await render([12]); expect(host.textContent).toContain('打印记录读取失败'); expect(host.textContent).not.toContain('I-12'); expect([...host.querySelectorAll('button')].some(b => b.textContent === '重新读取打印记录')).toBe(true); expect(reprintBarcodeRecordApi).not.toHaveBeenCalled() })
 
 test('打印交接离线暂停时隐藏旧记录，恢复重读后才显示最新记录', async () => {
-  qc.setQueryData(['barcode-print-records', 'inbound', '', '__all__', 12, undefined], { list: [record], pagination: { total: 1 } })
+  qc.setQueryData(['barcode-print-records', 'inbound', false, '', '__all__', 12, undefined], { list: [record], pagination: { total: 1 } })
   let finish!: (value: Awaited<ReturnType<typeof getBarcodePrintRecordsApi>>) => void
   vi.mocked(getBarcodePrintRecordsApi).mockImplementation(() => new Promise(resolve => { finish = resolve }))
   onlineManager.setOnline(false); await render([12])
-  expect(qc.getQueryState(['barcode-print-records', 'inbound', '', '__all__', 12, undefined])?.fetchStatus).toBe('paused')
+  expect(qc.getQueryState(['barcode-print-records', 'inbound', false, '', '__all__', 12, undefined])?.fetchStatus).toBe('paused')
   expect(host.textContent).toContain('网络已暂停，等待恢复后重新读取打印记录')
   expect(host.textContent).not.toContain('I-12')
   await act(async () => onlineManager.setOnline(true)); await act(async () => { await new Promise(resolve => setTimeout(resolve, 5)) })

@@ -53,6 +53,8 @@ async function createRecord(exec, {
   priority: priorityIn,
   jobUniqueKey: jobUniqueKeyRaw,
   dispatchReason: dispatchReasonIn,
+  requestPurpose = null,
+  sourcePrintJobId = null,
   refType: refTypeIn,
   refId: refIdIn,
   refCode: refCodeIn,
@@ -78,6 +80,13 @@ async function createRecord(exec, {
       400,
       'PRINT_CONTENT_TYPE_UNSUPPORTED',
     )
+  }
+
+  if (requestPurpose !== null && !['initial', 'reprint'].includes(requestPurpose)) {
+    throw new AppError('打印请求目的无效', 400, 'PRINT_REQUEST_METADATA_INVALID')
+  }
+  if (sourcePrintJobId !== null && (!Number.isSafeInteger(sourcePrintJobId) || sourcePrintJobId <= 0)) {
+    throw new AppError('来源打印记录无效', 400, 'PRINT_REQUEST_METADATA_INVALID')
   }
 
   if (typeof copies !== 'number' || !Number.isInteger(copies) || copies < 1 || copies > 100) {
@@ -150,8 +159,8 @@ async function createRecord(exec, {
   let r
   try {
     ;[r] = await exec.query(
-      `INSERT INTO print_jobs (printer_id, template_id, title, content_type, content, copies, priority, job_type, warehouse_id, job_unique_key, dispatch_reason, ref_type, ref_id, ref_code, created_by, status, error_message, expires_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,DATE_ADD(NOW(), INTERVAL ? MINUTE))`,
+      `INSERT INTO print_jobs (printer_id, template_id, title, content_type, content, copies, priority, job_type, warehouse_id, job_unique_key, dispatch_reason, ref_type, ref_id, ref_code, created_by, request_purpose, created_by_name, source_print_job_id, status, error_message, expires_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,(SELECT u.real_name FROM sys_users u WHERE u.id=?),?,?,?,DATE_ADD(NOW(), INTERVAL ? MINUTE))`,
       [
         resolvedId,
         templateId || null,
@@ -168,6 +177,9 @@ async function createRecord(exec, {
         refId,
         refCode,
         createdBy || null,
+        requestPurpose,
+        createdBy || null,
+        sourcePrintJobId,
         jobStatus,
         jobError,
         ttl,

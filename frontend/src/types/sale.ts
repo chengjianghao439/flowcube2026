@@ -153,6 +153,7 @@ export interface SaleOrder {
   packages?: Package[]
 }
 export interface CreateSaleParams {
+  changeReason?: string | null
   expectedEditFingerprint?: string
   disposalSource?: import('./disposal-handling').DisposalSourceInput
   customerId: number

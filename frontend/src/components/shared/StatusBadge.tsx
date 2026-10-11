@@ -1,7 +1,7 @@
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { STATUS_TONE_CLASS, type StatusTone } from '@/lib/statusTone'
-import { SALE_STATUS_NAME, SALE_STATUS_TONE } from '@/generated/status'
+import { PURCHASE_STATUS_NAME, SALE_STATUS_NAME, SALE_STATUS_TONE } from '@/generated/status'
 import { WT_STATUS_NAME, WT_STATUS_CLASS } from '@/constants/warehouseTaskStatus'
 import type { WtStatus } from '@/constants/warehouseTaskStatus'
 
@@ -25,11 +25,11 @@ const SALE_STATUS_CONFIG = Object.fromEntries(
 /** 单据状态 → tone。颜色语义见 `@/lib/statusTone`，这里只声明每个状态属于哪一档。 */
 const DOC_TONE: Record<Exclude<OrderType, 'sale' | 'task'>, Record<number, [string, StatusTone]>> = {
   purchase: {
-    1: ['草稿', 'draft'],
-    2: ['已提交', 'active'],
-    3: ['已完成', 'success'],
-    4: ['已取消', 'danger'],
-    5: ['待审批', 'warning'],
+    1: [PURCHASE_STATUS_NAME[1], 'draft'],
+    2: [PURCHASE_STATUS_NAME[2], 'active'],
+    3: [PURCHASE_STATUS_NAME[3], 'success'],
+    4: [PURCHASE_STATUS_NAME[4], 'danger'],
+    5: [PURCHASE_STATUS_NAME[5], 'warning'],
   },
   transfer: {
     1: ['草稿', 'draft'],
