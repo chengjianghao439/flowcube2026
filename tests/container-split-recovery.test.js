@@ -188,6 +188,10 @@ function receiptFixture({ warehouse = 8, scope = [8], requested = 'inventory.con
   let error, output, validations = 0
   const pool = { async query(sql) { if (sql.includes('inventory_logs')) return [logs ? [{ warehouse_id: warehouse, container_id: 11 }, { warehouse_id: warehouse, container_id: 12 }] : []]; throw new Error('回执不得依赖之后调拨的当前容器量/仓/状态') } }
   const controller = load('modules/system/system.controller.js', {
+    // 使用真实异域 action 分派并隔离其写入依赖；不得加载实际数据库或认证配置。
+    '../inbound-tasks/inbound-tasks.create-receipt': load('modules/inbound-tasks/inbound-tasks.create-receipt.js', { '../../utils/AppError': require('../backend/src/utils/AppError'), './inbound-tasks.edit-rules': {} }),
+    '../inbound-tasks/inbound-tasks.edit-receipt': load('modules/inbound-tasks/inbound-tasks.edit-receipt.js', { '../../utils/AppError': require('../backend/src/utils/AppError'), '../../utils/warehouseScope': warehouseScope }),
+    '../print-jobs/print-jobs.reprint-intent': load('modules/print-jobs/print-jobs.reprint-intent.js', { crypto: require('node:crypto'), '../../utils/AppError': require('../backend/src/utils/AppError'), '../../utils/warehouseScope': warehouseScope, '../../utils/operationRequest': {}, './print-jobs.reprint-source': {} }),
     '../../utils/operationRequest': { getScopedOperationRequestStatus: async options => { options.receiptContext.matchedAction = 'inventory.container.split.11'; return { status: 'success', resourceType: 'inventory_container', resourceId: 11, data } } },
     '../../config/db': { pool }, '../sale/sale.commercial-receipts': { assertReceiptScope: async () => {} }, '../packages/packages.receipt-guard': { assertPrintLabelReceiptConsistent: () => {} }, '../../utils/logger': {},
     '../inventory/inventory.split-receipt': { assertSplitReceipt: (...args) => load('modules/inventory/inventory.split-receipt.js', { '../../utils/warehouseScope': warehouseScope }).assertSplitReceipt(...args) },

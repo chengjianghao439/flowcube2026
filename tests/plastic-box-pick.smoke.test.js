@@ -452,7 +452,8 @@ async function main() {
       const before = await snapshot()
 
       const rp = await http.post('/api/print-jobs/barcodes/reprint', {
-        token, json: { category: 'inbound', recordId: newI },
+        token, headers: { 'X-Request-Key': `reprint-v2-${Date.now()}-${key('reprint-pick')}` },
+        json: { category: 'inbound', recordId: newI },
       })
       assert.ok(rp.ok, `补打应成功：${JSON.stringify(rp.data).slice(0, 220)}`)
 

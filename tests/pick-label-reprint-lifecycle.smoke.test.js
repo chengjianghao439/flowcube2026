@@ -156,7 +156,7 @@ async function main() {
       token, headers: { ...pdaHeaders(), ...(k ? { 'X-Request-Key': k } : {}) }, json: { taskId, barcode },
     })
   const reprint = (containerId) =>
-    http.post('/api/print-jobs/barcodes/reprint', { token, json: { category: 'inbound', recordId: Number(containerId) } })
+    http.post('/api/print-jobs/barcodes/reprint', { token, headers: { 'X-Request-Key': `reprint-v2-${Date.now()}-${key('reprint')}` }, json: { category: 'inbound', recordId: Number(containerId) } })
 
   const containerOf = async (id) =>
     (await dbQuery(pool, 'SELECT remaining_qty, status, locked_by_task_id FROM inventory_containers WHERE id=?', [id]))[0]

@@ -81,7 +81,7 @@ async function main() {
     await sales.update(ids.sale, { ...order, shippingProduct: 'DJTK' })
     ;[[sale]] = await pool.query('SELECT shipping_product FROM sale_orders WHERE id=?', [ids.sale])
     assert.equal(sale.shipping_product, 'DJTK', '草稿编辑保存本单产品')
-    await assert.rejects(sales.update(ids.sale, { ...order, shippingProduct: '2' }), /不匹配/)
+    await assert.rejects(sales.update(ids.sale, { ...order, requestKey: code(), shippingProduct: '2' }), /不匹配/)
     ids.task = await insert("INSERT INTO warehouse_tasks(task_no,sale_order_id,sale_order_no,customer_id,customer_name,warehouse_id,warehouse_name,status) VALUES(?,?,?,?,'快递专项客户',?,'快递专项测试仓',6)", [code(), ids.sale, created.orderNo, ids.customer, ids.warehouse])
     for (let i = 0; i < 31; i++) await insert('INSERT INTO packages(barcode,warehouse_task_id,status) VALUES(?,?,2)', [code(), ids.task])
     await insert('INSERT INTO packages(barcode,warehouse_task_id,status) VALUES(?,?,3)', [code(), ids.task])
