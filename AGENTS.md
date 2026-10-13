@@ -174,6 +174,7 @@
 | `docs/business-semantics.md` | 改采购收货与上架、销售占库与 ATP、拣货到出库执行链、退货、调拨、盘点、履约刷新时 |
 | `docs/finance-permission-time.md` | 改账款与核销、凭证与结账、发票、HR 工资、权限与仓库范围、业务日期与账套隔离时 |
 | `docs/frontend-pda-conventions.md` | 改 ERP 页面/组件、列表与图表、弹窗与浮层、PDA 页面与扫码交互、登录会话与路由时 |
+| `docs/workspace-filter-return.md` | 改工作区列表筛选、详情返回、合并子页与查询作用域时 |
 | `docs/print-deploy-ops.md` | 改标签与单据打印、发布与部署链路、CI 门禁、备份恢复与服务器运维动作时 |
 | `docs/local-preview-acceptance.md` | 启动本地开发服务、做浏览器/页面验收、判断某个账号能验收哪些页面时 |
 

@@ -2,11 +2,22 @@
 import { afterEach, expect, test, vi } from 'vitest'
 import api from './client'
 import { getInventoryReservationsApi } from './inventory'
+import * as inventory from './inventory'
+import { useAuthStore } from '@/store/authStore'
 vi.mock('@/lib/pdaRuntime', () => ({ syncPdaLabelPrinterBinding: vi.fn(async () => null) }))
 vi.mock('@/api/pda-session', () => ({ ensureDeviceSession: vi.fn(), renewDeviceSession: vi.fn(async () => null) }))
 vi.mock('@/lib/apiOrigin', () => ({ applyErpApiBaseFromStorage: vi.fn() }))
 vi.mock('@/lib/toast', () => ({ toast: { error: vi.fn() } }))
 const original = api.defaults.adapter
+test('snapshot transport makes exactly one bounded request, retaining pinned config', async () => {
+  expect(inventory.getInventoryReservationSnapshotApi).toBeTypeOf('function')
+  const adapter = vi.fn(async config => ({ config, status: 200, statusText: 'OK', headers: {}, data: { success: true, data: { rows: [], snapshot: { nextOffset: 100 } } } }))
+  api.defaults.adapter = adapter
+  await inventory.getInventoryReservationSnapshotApi({ productId: 7, warehouseId: 8, offset: 100, snapshotId: 'test-token' }, { baseURL: '/fixed-api', _authSessionGeneration: useAuthStore.getState().sessionGeneration, _erpApiFallbackTried: true })
+  expect(adapter).toHaveBeenCalledOnce()
+  expect(adapter.mock.calls[0]?.[0].params).toEqual({ productId: 7, warehouseId: 8, offset: 100, snapshotId: 'test-token', readMode: 'snapshot' })
+  expect(adapter.mock.calls[0]?.[0].baseURL).toBe('/fixed-api')
+})
 afterEach(() => { api.defaults.adapter = original })
 test('预占明细显式paged只请求指定页，不被payloadClient自动取齐', async () => {
   const adapter = vi.fn(async config => ({ config, status: 200, statusText: 'OK', headers: {}, data: { success: true, data: { productId: 7, warehouseId: 8, list: [{ saleOrderId: 11 }], pagination: { page: 2, pageSize: 20, total: 100 } } } }))

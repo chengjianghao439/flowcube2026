@@ -1,3 +1,4 @@
+import { getWorkspaceListPath } from '@/lib/workspaceListNavigation'
 import { ReturnSourceButton } from '@/pages/returns/ReturnSourceButton'
 import { money, qty, unitPrice } from '@/lib/format'
 import { roundQuantity } from '@/lib/qtyStep'
@@ -103,7 +104,7 @@ export default function PurchaseFormPage() {
   function closeTab(targetPath = '/purchase') {
     const { removeTab } = useWorkspaceStore.getState()
     removeTab(buildWorkspaceTabRegistrationFromPath(tabPath || '/purchase/new').key)
-    navigate(targetPath)
+    navigate(getWorkspaceListPath(targetPath))
   }
 
   if (isNew) return <FormView closeTab={closeTab} tabPath={tabPath} />

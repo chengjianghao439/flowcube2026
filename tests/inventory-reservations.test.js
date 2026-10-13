@@ -4,10 +4,11 @@ const fs = require('node:fs')
 const path = require('node:path')
 const vm = require('node:vm')
 const root = path.join(__dirname, '../backend/src')
-const pureDependencies = new Set(['utils/AppError.js', 'utils/route.js', 'utils/response.js', 'utils/unitConversion.js', 'utils/qtyPrecision.js', 'constants/permissions.js'].map(relative => path.join(root, relative)))
+const pureDependencies = new Set(['utils/AppError.js', 'utils/route.js', 'utils/response.js', 'utils/unitConversion.js', 'utils/qtyPrecision.js', 'constants/permissions.js', 'modules/inventory/reservation.snapshots.js'].map(relative => path.join(root, relative)))
 function load(relative, replacements = {}) {
   const filename = path.join(root, relative)
-  const context = { module: { exports: {} }, require: name => {
+  const context = { module: { exports: {} }, Buffer, require: name => {
+    if (name === 'node:crypto') return require(name)
     if (Object.hasOwn(replacements, name)) return replacements[name]
     const dependency = path.resolve(path.dirname(filename), `${name}.js`)
     if (!pureDependencies.has(dependency)) throw new Error(`Unstubbed offline dependency ${relative}: ${name}`)
@@ -16,15 +17,19 @@ function load(relative, replacements = {}) {
   vm.runInNewContext(fs.readFileSync(filename, 'utf8'), context, { filename })
   return context.module.exports
 }
-function fixture({ inventoryView = true, saleView = true, purchaseView = true, scope = null, fail = false } = {}) {
+function fixture({ inventoryView = true, saleView = true, purchaseView = true, scope = null, fail = false, sources, bindingRows, activeRows } = {}) {
   const calls = [], events = []
+  let invalidateSale = false, invalidatePurchase = false
   const conn = {
     async query(sql, params = []) {
       calls.push({ sql, params: JSON.parse(JSON.stringify(params)) })
+      sql = sql.replace(/\/\*\+ MAX_EXECUTION_TIME\(8000\) \*\/ /g, '')
       if (fail && sql.includes('inventory_stock')) throw new Error('snapshot failed')
       if (/^SET |^START /.test(sql)) return [[]]
       if (sql.includes('sys_role_permissions')) return [[...(inventoryView ? [{ permission: 'inventory.view' }] : []), ...(saleView ? [{ permission: 'sale.order.view' }] : []), ...(purchaseView ? [{ permission: 'purchase.order.view' }] : [])]]
-      if (sql.includes('SELECT remaining_qty')) return [[{ remaining_qty: 15 }, { remaining_qty: 15 }]]
+      if (sql.includes('snapshot_sale_scope')) return [invalidateSale ? [] : params[0].map(id => ({ id }))]
+      if (sql.includes('snapshot_purchase_scope')) return [invalidatePurchase ? [] : params[0].map(id => ({ id }))]
+      if (sql.includes('SELECT remaining_qty')) return [activeRows ? Array.from({length:activeRows},()=>({remaining_qty:15})) : [{ remaining_qty: 15 }, { remaining_qty: 15 }]]
       if (sql.includes('FROM inventory_stock') && !sql.includes('pickable')) return [[{ quantity: 32, reserved: 50 }]]
       if (sql.includes('AS pickable')) return [[{ cache_on_hand: 32, pickable: 12 }]]
       if (sql.includes('poi.quantity AS ordered_qty')) return [[{ product_id: 7, warehouse_id: 8, purchase_order_id: 201, purchase_item_id: 301, ordered_qty: 40 }]]
@@ -32,9 +37,9 @@ function fixture({ inventoryView = true, saleView = true, purchaseView = true, s
       if (sql.includes('SELECT purchase_item_id,qty')) return [[{ purchase_item_id: 301, qty: 25 }]]
       if (sql.includes('reservation_summary')) return [[{ total_qty: 40, visible_qty: saleView ? 20 : 0, orphan_qty: 6, unknown_qty: 2 }]]
       if (sql.includes('binding_summary')) return [[{ total_qty: 33, visible_qty: saleView ? 28 : 0, orphan_qty: 0 }]]
-      if (sql.includes('visible_source_count')) return [[{ total: saleView ? 21 : 0 }]]
-      if (sql.includes('visible_source_page')) return [saleView ? [{ id: 11, order_no: 'SO11', customer_name: '可见客户', status: 2, reservation_qty: 20, binding_qty: 28, created_at: '2026-10-04 10:00:00' }] : []]
-      if (sql.includes('binding_details')) return [[
+      if (sql.includes('visible_source_count')) return [[{ total: saleView ? (sources?.length ?? 21) : 0 }]]
+      if (sql.includes('visible_source_page')) return [saleView ? (sources ?? [{ id: 11, order_no: 'SO11', customer_name: '可见客户', status: 2, reservation_qty: 20, binding_qty: 28, created_at: '2026-10-04 10:00:00' }]) : []]
+      if (sql.includes('binding_details')) return [bindingRows ?? [
         { id: 1, sale_order_id: 11, sale_order_item_id: 41, qty: 25, sale_item_valid: 1, purchase_valid: 1, purchase_visible: purchaseView ? 1 : 0, purchase_order_id: 201, purchase_item_id: 301, order_no: 'PO201', purchase_status: 2, ordered_qty: 40 },
         { id: 2, sale_order_id: 11, sale_order_item_id: 99, qty: 3, sale_item_valid: 0, purchase_valid: 0, purchase_visible: 0, purchase_order_id: 202, purchase_item_id: 302, order_no: '异常采购身份' },
       ]]
@@ -48,7 +53,8 @@ function fixture({ inventoryView = true, saleView = true, purchaseView = true, s
   const engine = load('engine/containerEngine.js', { '../utils/logger': {}, '../utils/codeGenerator': {}, '../utils/expectedStock': expected, '../utils/qtyPrecision': {} })
   const warehouse = load('utils/warehouseScope.js', { '../config/db': { pool } })
   const service = load('modules/inventory/inventory.reservations.js', { '../../config/db': { pool }, '../../engine/containerEngine': engine, '../../utils/expectedStock': expected, '../../utils/warehouseScope': warehouse })
-  return { calls, events, service, user: { userId: 9, roleId: 5, warehouseIds: scope } }
+  return { calls, events, service, user: { userId: 9, roleId: 5, warehouseIds: scope, familyId: 'fixture-session', tokenVersion: 0 },
+    revokeInventory() { inventoryView = false }, revokeSaleScope() { invalidateSale = true }, revokePurchaseScope() { invalidatePurchase = true } }
 }
 test('同一显式RR只读快照读取摘要/授权count/page/绑定；ATP不再扣绑定，已占满采购仍能追溯', async () => {
   const f = fixture({ scope: [8] })
@@ -129,4 +135,79 @@ test('实际角色缺库存查看权时忽略前端自报权限，路由也要�
   load('modules/inventory/inventory.routes.js', { express: { Router: () => router }, zod: require('../backend/node_modules/zod'), './inventory.controller': { reservations: 'reservation-handler' }, '../../middleware/pdaSession': { pdaSessionOptional: () => 'pda-optional' }, '../../middleware/auth': { authMiddleware: 'authenticated', requirePermission: permission => ({ permission }) } })
   const route = registered.find(r => r.method === 'get' && r.args[0] === '/reservations')
   assert.equal(route.args[1].permission, 'inventory.view'); assert.equal(route.args[2], 'reservation-handler')
+})
+
+function snapshotSources(n=101) { return Array.from({length:n},(_,i)=>({id:11+i,order_no:'SO-'+i,customer_name:'合成客户',status:2,reservation_qty:1,binding_qty:i?0:28,created_at:'2026-10-04 10:00:00'})) }
+test('snapshot续批不重算数量或来源，扁平绑定与源行同token且有界', async()=>{
+  const sources=snapshotSources(),f=fixture({sources,scope:[8]})
+  const first=await f.service.listReservations({productId:7,warehouseId:8,readMode:'snapshot'},f.user)
+  assert.equal(first.rows.length,100);assert.equal(first.snapshot.totalRows,102)
+  assert.equal(first.snapshot.totalSources,101);assert.equal(first.snapshot.nextOffset,100)
+  assert.equal(first.rows[1].kind,'binding')
+  sources[100].order_no='SO-并发变化'
+  const before=f.calls.length
+  const next=await f.service.listReservations({productId:7,warehouseId:8,readMode:'snapshot',snapshotId:first.snapshot.snapshotId,offset:100},f.user)
+  assert.equal(next.rows.length,2);assert.equal(next.rows[1].source.orderNo,'SO-100')
+  assert.equal(next.summary.reserved,50);assert.equal(next.snapshot.snapshotId,first.snapshot.snapshotId)
+  assert.equal(next.snapshot.readAt,first.snapshot.readAt);assert.equal(next.snapshot.nextOffset,null)
+  assert(!f.calls.slice(before).some(c=>/reservation_summary|visible_source_page|binding_details/.test(c.sql)))
+  assert(f.calls.slice(before).some(c=>c.sql.includes('snapshot_sale_scope')))
+})
+test('snapshot当前库存权限及账号/仓范围上下文变化在缓存返回前拒绝',async()=>{
+  for(const changed of ['permission','actor','scope','keyword','session']){
+    const f=fixture({sources:snapshotSources(),scope:[8]})
+    const first=await f.service.listReservations({productId:7,warehouseId:8,readMode:'snapshot'},f.user)
+    let user=f.user,keyword
+    if(changed==='permission')f.revokeInventory()
+    if(changed==='actor')user={...user,userId:10}
+    if(changed==='scope')user={...user,warehouseIds:[8,9]}
+    if(changed==='keyword')keyword='other'
+    if(changed==='session')user={...user,familyId:'another-session'}
+    await assert.rejects(f.service.listReservations({productId:7,warehouseId:8,readMode:'snapshot',snapshotId:first.snapshot.snapshotId,offset:100,keyword},user),
+      e=>e.statusCode===(changed==='permission'?403:409))
+  }
+})
+test('snapshot每批复核销售和采购当前可见范围，不泄露缓存原单',async()=>{
+  for(const which of ['sale','purchase']){
+    const f=fixture({sources:snapshotSources(),scope:[8]})
+    const first=await f.service.listReservations({productId:7,warehouseId:8,readMode:'snapshot'},f.user)
+    if(which==='sale')f.revokeSaleScope();else f.revokePurchaseScope()
+    await assert.rejects(f.service.listReservations({productId:7,warehouseId:8,readMode:'snapshot',snapshotId:first.snapshot.snapshotId,offset:0},f.user),e=>e.code==='INVENTORY_RESERVATION_SNAPSHOT_RESTART')
+  }
+})
+test('snapshot超量在来源/绑定全量构建之前拒绝，不把上限作为完整结果',async()=>{
+  const f=fixture({sources:snapshotSources(10001)})
+  await assert.rejects(f.service.listReservations({productId:7,warehouseId:8,readMode:'snapshot'},f.user),e=>e.statusCode===413)
+  assert(!f.calls.some(c=>c.sql.includes('visible_source_page')))
+  const binding=fixture({sources:snapshotSources(1),bindingRows:Array.from({length:20001},()=>({}))})
+  await assert.rejects(binding.service.listReservations({productId:7,warehouseId:8,readMode:'snapshot'},binding.user),e=>e.statusCode===413)
+})
+test('snapshot参数拒绝混合页码、数组游标、未知模式与越界偏移',async()=>{
+  for(const extra of [{readMode:'other'},{readMode:'snapshot',page:2},{readMode:'snapshot',snapshotId:['x']},{readMode:'snapshot',offset:1},{readMode:'snapshot',keyword:['x']}]){
+    const f=fixture({sources:snapshotSources(1)})
+    await assert.rejects(f.service.listReservations({productId:7,warehouseId:8,...extra},f.user),e=>e.statusCode===400)
+    assert.equal(f.calls.length,0)
+  }
+})
+
+test('snapshot每个SELECT带服务器执行预算，旧分页契约不改变',async()=>{
+  const f=fixture({sources:snapshotSources(1)})
+  await f.service.listReservations({productId:7,warehouseId:8,readMode:'snapshot'},f.user)
+  assert(f.calls.filter(c=>/^SELECT/.test(c.sql)).every(c=>c.sql.includes('MAX_EXECUTION_TIME(8000)')))
+  const old=fixture()
+  await old.service.listReservations({productId:7,warehouseId:8},old.user)
+  assert(old.calls.every(c=>!c.sql.includes('MAX_EXECUTION_TIME')))
+})
+
+test('snapshot解释helper的行读取也有硬上限，超限不能先算部分数量',async()=>{
+  const f=fixture({sources:snapshotSources(1),activeRows:50001})
+  await assert.rejects(f.service.listReservations({productId:7,warehouseId:8,readMode:'snapshot'},f.user),e=>e.statusCode===413)
+  assert(!f.calls.some(c=>c.sql.includes('reservation_summary')))
+})
+
+test('服务实例或进程切换后旧token拒绝，不重新算数量冒充续批',async()=>{
+  const f=fixture({sources:snapshotSources()}),other=fixture({sources:snapshotSources()})
+  const first=await f.service.listReservations({productId:7,warehouseId:8,readMode:'snapshot'},f.user)
+  await assert.rejects(other.service.listReservations({productId:7,warehouseId:8,readMode:'snapshot',snapshotId:first.snapshot.snapshotId,offset:100},other.user),e=>e.code==='INVENTORY_RESERVATION_SNAPSHOT_RESTART')
+  assert(!other.calls.some(c=>c.sql.includes('reservation_summary')))
 })

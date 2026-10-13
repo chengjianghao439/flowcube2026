@@ -85,6 +85,9 @@ async function barcodeRecords(req, res, next) {
 async function reprintBarcode(req, res, next) {
   try {
     const body = req.body && typeof req.body === 'object' ? req.body : {}
+    if (Object.prototype.hasOwnProperty.call(body, 'copies')) {
+      throw new AppError('此补打入口不支持指定份数，请按现有补打方式提交', 400, 'PRINT_REPRINT_COPIES_UNSUPPORTED')
+    }
     const data = await svc.reprintBarcodeRecord({
       category: body.category, recordId: body.recordId, recovery: body.recovery === true,
       scopeWarehouseIds: req.user?.warehouseIds ?? null,

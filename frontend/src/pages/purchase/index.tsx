@@ -1,8 +1,9 @@
+import { useWorkspaceSearchParams } from '@/hooks/useWorkspaceSearchParams'
 import { money } from '@/lib/format'
 import { PURCHASE_STATUS_NAME } from '@/generated/status'
 import { OrderStatusFilter } from '@/components/shared/OrderStatusFilter'
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { X } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
@@ -36,7 +37,7 @@ const DEFAULT_RANGE_DAYS = 7
 
 export default function PurchasePage() {
   const navigate   = useNavigate()
-  const [searchParams, setSearchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useWorkspaceSearchParams()
   const { addTab } = useWorkspaceStore()
 
   const [queryOpen, setQueryOpen] = useState(false)

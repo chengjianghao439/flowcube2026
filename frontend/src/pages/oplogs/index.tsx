@@ -1,6 +1,6 @@
+import { useWorkspaceSearchParams } from '@/hooks/useWorkspaceSearchParams'
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useSearchParams } from 'react-router-dom'
 import { X } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
@@ -60,7 +60,7 @@ function DetailRow({ label, value }: { label: string; value: unknown }) {
 export default function OpLogsPage() {
   const { can } = usePermission()
   const qc = useQueryClient()
-  const [searchParams, setSearchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useWorkspaceSearchParams()
   const [queryOpen, setQueryOpen] = useState(false)
   const [clearConfirm, setClearConfirm] = useState(false)
   const [detail, setDetail] = useState<OpLog | null>(null)

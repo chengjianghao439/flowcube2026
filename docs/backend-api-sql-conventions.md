@@ -21,6 +21,7 @@
 - **批量写入用 `VALUES ?`（mysql2 展开二维数组），禁止在循环里逐行 INSERT/UPDATE**：一次生成可能有上百行的路径（采购计划、工资单等）逐行走一次往返会明显变慢。**`VALUES ?` 传空数组会 `ER_PARSE_ERROR`，必须先判 `length`**；表名与列名固定、值走批量参数。2026-09-18 已在 `procurement.service.generatePlan`（每行 3 次往返 → 2 次，快照并入 INSERT）与 `hr.service.createPayroll`（N → 1）落地，实测 MySQL 8.0.46 可用。
 - 销售建单和草稿编辑复用 `sale.items.js`，每批最多 100 行使用 `VALUES ?`；`createSaleSchema` 限制单据最多 200 条明细，空数组不执行批量 SQL。
 - SQL 参数化；API 小写、连字符、复数名词。页面不分页，但传输与 SQL 保留有界批次；批次查询按主排序追加唯一 ID（库存按商品/仓库组合）保持稳定，防止相同时间或名称在不同批次重复/遗漏。后台批次复用 `normalizePagination`，导出遵循既有上限与截断告警，不能用无限大 pageSize 绕过分页。
+- 库存总览首批兼容追加 `stats.quantitiesByUnit`：同一只读SQL按基本单位精确二进制身份聚合当前筛选/仓范围的缓存展示投影，返回完整标记、覆盖维度数及单位量；沿原WHERE和参数，不改旧统计/列表/计数字段或库存判定。仅page1查询，取齐层保留首批统计，续批不重复；失败拒绝半成功，字段缺失/覆盖数不符不从多批明细猜全局量。无新路由/权限/DDL/写入或跨批快照协议；真实MySQL执行与性能另验，离线回归追加在已接CI的 confirmed-inventory.test.js。
 - `scopeFilter()` 返回的 SQL 自带前导 `AND`，应直接追加到已有 `WHERE`；不能作为裸条件加入 `conds.join(' AND ')`，否则限仓和空范围都可能出现 `AND AND`。退款列表的不限仓、限仓、空范围及筛选读取回归纳入 `smoke:refund-orders`，列表/计数使用同一授权条件，未放宽仓库范围。
 - **`role_id` 列必须与 `sys_roles.id` 同量级**：`sys_users.role_id` 与 `sys_role_permissions.role_id` 原为 TINYINT UNSIGNED（上限 255）且**无外键**，角色数超过 255 后给新角色分配权限/挂用户会 `ER_WARN_DATA_OUT_OF_RANGE`；迁移 `253_widen_role_id_columns.sql` 已对齐为 BIGINT UNSIGNED（本机测试库曾因此自毒化，表现为 round2-transfer fixture 大面积失败、看起来像代码回归）。
 - `GET /api/users?hideDevelopment=1` 与 `GET /api/users/options?hideDevelopment=1` 供所有前端过滤开发账号，列表按账号编码在 SQL 分页与总数统计前过滤；`GET /api/export/users?hideDevelopment=1` 与页面列表保持一致。缺省后端请求仍返回全部用户供测试使用。部门列表对开发账号负责人隐藏姓名但保留原 ID，避免改写审批关联。`GET /api/users/assignable-roles` 返回 `id/code/name`，`code` 供前端隐藏开发角色，实际角色授予仍由服务端权限子集校验。
@@ -348,3 +349,19 @@ findById对历史普通单返回由当前头、全部物料行及执行数量生
 销售活动的历史关联不由当前头仓、现存明细或正文里的仓库字段授权。`document-activity.service.scopeSaleHistory` 批读实际改单和未删除任务，校验准确销售归属及当前任务仓范围；缺失、错单、矛盾或不可解析关联隐藏整条事件。一次事件涉及多个任务时必须全部可读，不能部分裁剪后公开共享原因/人员。隐藏审计对应的旧销售事件摘要也不重新露出；同仓历史和当前销售的合法信息保留，管理员可见实际同单A/B任务，但坏关联仍拒绝。关联仓库操作、执行事件、扫码及箱资料使用授权任务集合；波次和采购退货的同一进度/关联操作入口也复核实际任务范围。不改变原销售详情/销售导出DTO、写事务或状态机。实库反例与详情/现有Excel边界纳入原 `smoke:change-records-owned`，离线批量授权守卫沿 `test:change-records`。
 
 `document-history-scope.js` 共用已知v1形状、实际关联与整条明细范围判定：公开叶子必须为标量（人员名/角色为字符串），只允许任务/价史ID集合数组，嵌套坏形状整条隐藏。销售/交接明细仓库ID须为正安全整数，布尔值、缺失和非规范字符串不可经Number强转获得授权，管理员也拒坏关联。销售正文自称版本而数据库版本标记缺失/不一致也不得退回摘要；真正NULL标记且正文无version的旧操作记录保留授权兼容。数字字符串形式的旧业务事件ID仅用于摘要去重，不作为正文关联授权。交接批读及直接取消/改单详情自行复核完整审计关联与改前/改后仓库，不能依赖只有销售入口传入的允许ID。波次任务数和关联订单摘要先按实际获权集合生成。改单申请及确认资料还须实际改单父销售与任务父销售一致；直接详情对矛盾关联409 `WAREHOUSE_TASK_HISTORY_INVALID`、已删除任务404，范围拒绝仍优先于资料查询。
+
+
+### 2026-10-12：预占明细连续快照读取
+
+原无readMode调用保留旧分页DTO与事务语义。新readMode=snapshot首次在同一RR只读事务捕获来源/绑定和概要，提交成功后仅进程内按100个展示行序列化分块缓存；销售来源最多10000、绑定最多20000、原解释helper的任一SELECT最多50000行，超限拒绝而不截断。新模式所有SELECT使用MAX_EXECUTION_TIME(8000)，缓存单份8MiB、总32MiB/20份/每账号2份、构建最多3个且每账号同时1个；不保留连接，不新增表或后台清理器。
+
+快照固定2分钟，不续租；token与商品/仓、原单关键词、账号/会话族/tokenVersion/当前角色三项查看权/当前仓范围绑定。每续批在新的只读事务先重新取角色权，再复核本批销售整单范围及公开采购头范围；授权变化、过期、进程切换/重启、错游标均409重新读取，不从另一快照续拼。返回扁平sale与binding行、固定readAt/expiresAt/总来源/总行数、准确offset/nextOffset。初次按keyword只筛来源列表，概要仍解释该SKU×仓完整数量，匹配来源数单列。默认旧分页、库存事实/预占/成本/在途算法都不改变。缓存容量不足503，不挤掉其它账号的活快照；同账号第三次建新快照移出该账号最旧快照。
+
+服务/路由与缓存守卫在既有test:inventory-reservations入口可达；真实MySQL、并发与规模结果由本轮独立归属实例另记，不据离线绿推定生产、完整CI或受阻relatedEvents通过。
+
+
+### 2026-10-12：当前库存估值来源兼容标注
+
+findStockDrift保持原COALESCE(NULLIF(avg_cost,0),NULLIF(cost_price,0),0)及单位成本、数量、两位价值公式；同一产品只读SELECT追加CASE来源avg_cost/cost_price/zero_fallback，以原非零选择分支标注。主档缺失仍原按0估值并标零兜底，旧DTO无来源由客户端显示未记录，不猜历史采购批次。report.avgCostReconciliation仍取原前200行、原200行差额合计，仅追加matchedRows与truncated告知返回范围，不改变财务金额口径。
+
+warehouse-tasks.ship的成本快照注释精确为本任务所发物料行在cost_snapshot首次为空时固化，已有快照保持；实际UPDATE、COALESCE与IS NULL条件未改。不同任务再发同一原销售物料行仍沿首次快照，不宣称任务独立批次成本，也不自动回填历史。

@@ -175,6 +175,25 @@ assert('采购退货导出 SQL：3 → 已执行',
   (readSrc('backend/src/modules/export/export.service.js').match(/WHEN 3 THEN '已执行'/g) || []).length === 2,
   '采购退货单与销售退货单两条导出 SQL 都要改')
 
+// 销售关联任务禁止独立取消；释放拒绝消息必须指向真实允许的销售取消入口。
+console.log('销售显式释放与取消指引')
+assert('显式释放仍仅允许已占库2和部分占库6', JSON.stringify(DOCUMENT_STATUS_RULES.sale.actions.release.from) === '[2,6]')
+for (const status of [2, 6]) {
+  assert('占库期原释放入口仍允许 '+status, assertStatusAction('sale', 'release', status).from.includes(status))
+}
+try {
+  assertStatusAction('sale', 'release', 3)
+  assert('执行中的销售单仍拒绝直接释放', false)
+} catch (e) {
+  assert('执行中的销售单直接释放仍抛400', e.statusCode === 400)
+  assert('拒绝指引从销售订单发起取消', e.message.includes('从销售订单发起取消'))
+  assert('拒绝指引保留原任务实物扫码归还', e.message.includes('已拣实物') && e.message.includes('原任务扫码归还'))
+  assert('不再引导独立取消销售关联仓库任务', !e.message.includes('请先取消仓库任务'))
+  const generatedRules = readSrc('frontend/src/generated/status.ts').match(/^export const SALE_ACTION_RULES = (\{[\s\S]*?\}) as const$/m)
+  assert('生成文件提供可解析的SALE_ACTION_RULES对象', !!generatedRules)
+  assert('生成release.blocked[3]与后端实际拒绝消息精确一致', !!generatedRules && JSON.parse(generatedRules[1]).release?.blocked?.['3'] === e.message)
+}
+
 console.log(`\n${'═'.repeat(60)}`)
 console.log(`  ${passed} passed, ${failed} failed`)
 process.exit(failed > 0 ? 1 : 0)

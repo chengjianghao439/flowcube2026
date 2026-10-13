@@ -5,9 +5,13 @@ import { withRequestKeyHeaders } from '@/lib/requestKey'
 import type { PaginatedData, QueryParams } from '@/types'
 import type { StockItem, InventoryLog, StockChangeParams, InventoryOverviewParams, InventoryOverviewResult, InventoryContainer } from '@/types/inventory'
 import type { InventoryReservationParams, InventoryReservationsResult } from '@/types/inventory'
+import type { InventoryReservationSnapshotParams, InventoryReservationSnapshotResult } from '@/types/inventory'
 
 export const getInventoryReservationsApi = (params: InventoryReservationParams, config?: AxiosRequestConfig) =>
   apiClient.get<InventoryReservationsResult>('/inventory/reservations', { ...config, params, listMode: 'paged', skipGlobalError: true })
+
+export const getInventoryReservationSnapshotApi = (params: InventoryReservationSnapshotParams, config?: AxiosRequestConfig) =>
+  apiClient.get<InventoryReservationSnapshotResult>('/inventory/reservations', { ...config, params: { ...params, readMode: 'snapshot' }, listMode: 'paged', skipGlobalError: true })
 
 export const getStockApi    = async (p: QueryParams) => apiClient.get<PaginatedData<StockItem>>('/inventory/stock', { params: p })
 export const getLogsApi     = async (p: QueryParams, signal?: AbortSignal) => apiClient.get<PaginatedData<InventoryLog>>('/inventory/logs', { params: p, signal })

@@ -1,3 +1,4 @@
+import { getWorkspaceListPath } from '@/lib/workspaceListNavigation'
 import { qty as num } from '@/lib/format'
 import { useProductQtyPolicies } from '@/hooks/useProductQtyPolicies'
 import { qtyStep } from '@/lib/qtyStep'
@@ -84,7 +85,7 @@ export default function ProcurementPlanDetailPage() {
         actions={<div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" size="sm" disabled={isFetching} onClick={() => void refetch()}>{isFetching ? '刷新中…' : '刷新需求'}</Button>
           <SoftStatusLabel label={plan.statusName} tone={PLAN_TONE[plan.status] ?? 'draft'} />
-          <Button variant="outline" size="sm" onClick={() => navigate('/procurement')}>返回列表</Button>
+          <Button variant="outline" size="sm" onClick={() => navigate(getWorkspaceListPath('/procurement'))}>返回列表</Button>
           {editable && (
             <Button variant="outline" size="sm" onClick={() => confirmAction({ title: '作废该采购计划？', description: '已转出的采购单不受影响，仅把计划头置为作废。', variant: 'destructive', onConfirm: () => cancelPlan.mutate() })} disabled={cancelPlan.isPending}>作废</Button>
           )}

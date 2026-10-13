@@ -271,8 +271,8 @@ async function shipWithinTransaction(conn, id, operator, saleData, { requestKey,
   await unlockContainersByTask(conn, id)
 
   if (!isReturnOut) {
-    // COGS 成本快照：只对本任务实发的商品固化出库时点均价（分仓/分批下各任务
-    // 独立快照，不再一次性刷全订单）。利润分析用快照口径，避免改进价导致历史毛利漂移。
+    // COGS 成本快照：本任务所发物料行仅在首次 cost_snapshot 为空时固化；
+    // 已有快照保持。利润分析用原销售行快照口径，避免改进价导致历史毛利漂移。
     for (const item of items) {
       await conn.query(
         `UPDATE sale_order_items soi

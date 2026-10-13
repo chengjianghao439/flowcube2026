@@ -1,7 +1,8 @@
+import { useWorkspaceSearchParams } from '@/hooks/useWorkspaceSearchParams'
 import { money } from '@/lib/format'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { X } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
@@ -26,7 +27,7 @@ export default function RequisitionsPage() {
   const navigate = useNavigate()
   const addTab = useWorkspaceStore(s => s.addTab)
   const { can } = usePermission()
-  const [searchParams, setSearchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useWorkspaceSearchParams()
   const [queryOpen, setQueryOpen] = useState(false)
 
   // ── 当前生效的筛选（全部存于 URL 参数，刷新/分享可保留） ──

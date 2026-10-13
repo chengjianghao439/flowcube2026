@@ -4,6 +4,7 @@ import { getInboundListWorkspacePath } from '@/lib/inboundListNavigation'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { blocksInboundRead, inboundReadTitle } from './readState'
 import { InboundQuantitySummary } from './InboundQuantitySummary'
+import { InboundInventoryHelp } from './InboundInventoryHelp'
 import { areInboundQuantitiesZero, groupInboundQuantities } from './inboundQuantity'
 import { inboundExceptionReason } from './inboundException'
 import { usePermission } from '@/hooks/usePermission'
@@ -13,7 +14,7 @@ import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
 import { InboundProductIdentity } from './InboundProductIdentity'
 /**
  * 收货订单详情 — 上架进度 / 打印
- * 收货和上架仅允许通过 PDA 完成；全部上架完成后系统自动结算应付，无需人工审核
+ * 收货和上架仅允许通过 PDA 完成；收货结束且实收全部上架后系统自动结算应付
  * 路由：/inbound-tasks/:id（多标签）
  */
 import { useContext, useState } from 'react'
@@ -56,12 +57,12 @@ const PRINT_TONE: Record<string, StatusTone> = {
 }
 
 /** 沿用销售摘要区的间距与图标，保留上架、结算和条码打印各自状态。 */
-function StatusCard({ label, value, tone, detail, icon: Icon }: { label: string; value: string; tone: StatusTone; detail?: React.ReactNode; icon: LucideIcon }) {
+function StatusCard({ label, value, tone, detail, help, icon: Icon }: { label: string; value: string; tone: StatusTone; detail?: React.ReactNode; help?: React.ReactNode; icon: LucideIcon }) {
   return (
     <div className="flex min-w-0 items-center gap-2.5 px-4 py-2.5">
       <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary"><Icon className="h-3.5 w-3.5" /></span>
       <div className="min-w-0 space-y-1 [overflow-wrap:anywhere]">
-        <p className="text-helper">{label}</p>
+        <div className="flex items-center gap-1"><p className="text-helper">{label}</p>{help}</div>
         <SoftStatusLabel label={value} tone={tone} />
         {detail && <p className="text-helper">{detail}</p>}
       </div>
@@ -226,6 +227,7 @@ export default function InboundTaskDetailPage() {
         <StatusCard
           icon={PackageCheck}
           label="上架状态"
+          help={<InboundInventoryHelp />}
           value={putawayStatus?.label ?? '—'}
           tone={PUTAWAY_TONE[putawayStatus?.key ?? ''] ?? 'draft'}
           detail={`待上架 ${putawaySummary?.waitingContainers ?? 0} 条库存条码 · 已上架 ${putawaySummary?.storedContainers ?? 0} 条库存条码`}

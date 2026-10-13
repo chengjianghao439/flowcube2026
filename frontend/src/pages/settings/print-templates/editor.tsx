@@ -1,3 +1,4 @@
+import { getWorkspaceListPath } from '@/lib/workspaceListNavigation'
 /**
  * 打印模板编辑器
  *
@@ -1892,7 +1893,7 @@ export default function PrintTemplateEditor() {
         description="从左侧拖入字段，在画布上点选/拖动/缩放调整版式（毫米坐标）；画布下方显示真实纸张尺寸，保存后打印以预览为准。"
         actions={
           // 评审次要项：保存后（尤其新建跳转）给返回列表出口
-          <Button type="button" size="sm" variant="outline" onClick={() => navigate('/settings/print-templates')}>
+          <Button type="button" size="sm" variant="outline" onClick={() => navigate(getWorkspaceListPath('/settings/print-templates'))}>
             <ArrowLeft className="mr-1 size-4" />
             返回列表
           </Button>

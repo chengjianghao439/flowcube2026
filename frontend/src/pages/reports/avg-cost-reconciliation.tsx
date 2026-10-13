@@ -14,6 +14,7 @@ import { confirmAction } from '@/lib/confirm'
 import { toast } from '@/lib/toast'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import type { TableColumn } from '@/types'
+import { CurrentValuationCost } from './CurrentValuationCost'
 
 const fmtQty = (v: unknown) => qty(v as number | null | undefined)
 
@@ -50,7 +51,7 @@ export default function AvgCostReconciliationPage() {
 
   const columns: TableColumn<AvgCostRow>[] = [
     ...productIdentityColumns(),
-    { key: 'unitCost', title: '单位成本', width: 90, align: 'right', render: v => <span className="tabular-nums">{money(Number(v))}</span> },
+    { key: 'unitCost', title: '单位成本', width: 90, align: 'right', render: (v, row) => <CurrentValuationCost value={v as number | null | undefined} source={row.unitCostSource} productName={row.productName} /> },
     { key: 'cacheQty', title: '账面数量', width: 100, align: 'right', render: v => <span className="tabular-nums">{fmtQty(v)}</span> },
     { key: 'containerQty', title: '实际库存', width: 100, align: 'right', render: v => <span className="tabular-nums">{fmtQty(v)}</span> },
     { key: 'diffQty', title: '数量差异', width: 100, align: 'right', render: (_, r) => <span className={`tabular-nums ${r.diffQty !== 0 ? 'text-destructive-ink font-semibold' : 'text-muted-foreground'}`}>{r.diffQty}</span> },
@@ -93,6 +94,9 @@ export default function AvgCostReconciliationPage() {
         </div>
       )}
 
+      {data?.truncated && typeof data.matchedRows === 'number' && data.matchedRows > data.totalRows && (
+        <p className="rounded border bg-muted/30 px-3 py-2 text-sm">当前显示 {data.totalRows} / {data.matchedRows} 行，价值差合计为已显示范围。</p>
+      )}
       {isError && !data ? (
         <QueryErrorState error={error} onRetry={() => void refetch()} title="对账加载失败" compact />
       ) : (

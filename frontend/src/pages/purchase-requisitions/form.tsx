@@ -1,3 +1,4 @@
+import { getWorkspaceListPath } from '@/lib/workspaceListNavigation'
 import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
 import { DatePicker } from '@/components/shared/DatePicker'
 import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
@@ -259,7 +260,7 @@ export default function RequisitionFormPage() {
 
   function closeTab() {
     useWorkspaceStore.getState().removeTab(tabPath)
-    navigate('/purchase-requisitions')
+    navigate(getWorkspaceListPath('/purchase-requisitions'))
   }
 
   function openConvert() {

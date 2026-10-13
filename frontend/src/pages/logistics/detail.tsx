@@ -1,3 +1,4 @@
+import { getWorkspaceListPath } from '@/lib/workspaceListNavigation'
 import { DirectShipmentDialog } from './DirectShipmentDialog'
 import { shippingProductLabel } from '@/lib/shippingProducts'
 import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
@@ -141,7 +142,7 @@ export default function LogisticsDetailPage() {
               title: '作废运单本地记录', description: `确认作废运单 ${wb?.waybillNo} 的本地记录？此操作不代表快递官方订单已取消。`, variant: 'destructive', confirmText: '确认作废',
               onConfirm: () => voidMut.mutate(wb!.id),
             })}>作废</Button>}
-            <Button variant="outline" onClick={() => nav('/logistics')}>返回列表</Button>
+            <Button variant="outline" onClick={() => nav(getWorkspaceListPath('/logistics'))}>返回列表</Button>
           </div>
         }
       />

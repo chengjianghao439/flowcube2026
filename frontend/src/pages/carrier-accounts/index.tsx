@@ -1,5 +1,6 @@
+import { useWorkspaceSearchParams } from '@/hooks/useWorkspaceSearchParams'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
@@ -20,7 +21,7 @@ import { NewAccountForm } from './NewAccountForm'
 export default function CarrierAccountsPage() {
   const navigate = useNavigate()
   const location = useLocation()
-  const [params] = useSearchParams()
+  const [params, setParams] = useWorkspaceSearchParams()
   const [carrierId, setCarrierId] = useState(params.get('carrierId') || '')
   const [chosenPlatform, setPlatform] = useState<'' | 'sf' | 'deppon'>('')
   const [keyword, setKeyword] = useState('')
@@ -46,15 +47,23 @@ export default function CarrierAccountsPage() {
   const switchTo = useCallback((id: string) => {
     setEditingData(null)
     setCreating(id === 'new'); setCarrierId(id === 'new' ? '' : id); setPlatform(''); setDirty(false); setNextSelection(null)
-  }, [])
+    const requestedId = id === 'new' ? '' : id
+    if ((params.get('carrierId') || '') !== requestedId) {
+      const next = new URLSearchParams(params)
+      if (requestedId) next.set('carrierId', requestedId)
+      else next.delete('carrierId')
+      setParams(next, { replace: true })
+    }
+  }, [params, setParams])
   useEffect(() => {
     if (location.pathname !== '/carrier-accounts' || location.key === lastRequested.current) return
     lastRequested.current = location.key
-    const requested = params.get('carrierId')
+    // 这里处理显式导航意图；工作区自身路径由路由同步 effect 随后更新。
+    const requested = new URLSearchParams(location.search).get('carrierId')
     if (!requested || requested === carrierId) return
     if (dirty) setNextSelection(requested)
     else switchTo(requested)
-  }, [params, location.pathname, location.key, carrierId, dirty, switchTo])
+  }, [location.pathname, location.search, location.key, carrierId, dirty, switchTo])
   const onBindingDirty = useCallback((value: boolean) => {
     setDirty(value)
     setEditingData(previous => value ? previous || binding.data || null : null)

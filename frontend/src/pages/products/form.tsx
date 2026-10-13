@@ -1,3 +1,4 @@
+import { getWorkspaceListPath } from '@/lib/workspaceListNavigation'
 import { ProductPriceHistory } from './ProductPriceHistory'
 import { SectionCard } from '@/components/shared/SectionCard'
 /**
@@ -233,7 +234,7 @@ export default function ProductFormPage() {
   function closeTab() {
     const { removeTab: rmTab } = useWorkspaceStore.getState()
     rmTab(tabPath)
-    navigate('/products')
+    navigate(getWorkspaceListPath('/products'))
   }
 
   // 编辑页：**本次取数成功返回前**不渲染表单——不用 fresh 缓存旧值冒充"最新数据"，

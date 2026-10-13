@@ -29,6 +29,11 @@ export interface InventoryOverviewStats {
   totalOnHand:    number
   totalReserved:  number
   totalAvailable: number
+  quantitiesByUnit?: {
+    complete: boolean
+    matchedRows: number
+    groups: { unit: string | null; onHand: number; reserved: number }[]
+  }
 }
 
 export interface InventoryOverviewItem {
@@ -54,6 +59,7 @@ export interface InventoryOverviewResult {
   stats:      InventoryOverviewStats
   list:       InventoryOverviewItem[]
   pagination: { page: number; pageSize: number; total: number }
+  truncated?: boolean
 }
 
 export interface InventoryOverviewParams {
@@ -81,6 +87,15 @@ export interface InventoryReservationSource {
 export interface InventoryReservationsResult {
   productId: number; warehouseId: number; summary: InventoryReservationSummary; list: InventoryReservationSource[]
   pagination: { page: number; pageSize: number; total: number }
+}
+
+export interface InventoryReservationSnapshotParams { productId: number; warehouseId: number; keyword?: string; snapshotId?: string; offset?: number }
+export type InventoryReservationDisplayRow =
+  | { id: string; kind: 'sale'; saleOrderId: number; source: Omit<InventoryReservationSource, 'bindings'> }
+  | { id: string; kind: 'binding'; saleOrderId: number; orderNo: string; binding: InventoryReservationSource['bindings'][number] }
+export interface InventoryReservationSnapshotResult {
+  productId: number; warehouseId: number; summary: InventoryReservationSummary; rows: InventoryReservationDisplayRow[]
+  snapshot: { snapshotId: string; readAt: string; expiresAt: string; totalRows: number; totalSources: number; offset: number; nextOffset: number | null }
 }
 
 // ─── 容器 ─────────────────────────────────────────────────────────────────────

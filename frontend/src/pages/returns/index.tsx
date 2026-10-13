@@ -1,8 +1,9 @@
+import { useWorkspaceSearchParams, useWorkspacePath } from '@/hooks/useWorkspaceSearchParams'
 import { money } from '@/lib/format'
 import { returnNet } from './sale/form/returnSourcePresentation'
 import { RecordIdentity } from '@/components/shared/RecordIdentity'
 import { useEffect, useMemo, useState } from 'react'
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { X } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
@@ -36,15 +37,15 @@ const DEFAULT_RANGE_DAYS = 7
 export default function ReturnsPage() {
   const qc = useQueryClient()
   const navigate = useNavigate()
-  const location = useLocation()
+  const ownPath = useWorkspacePath()
   const { addTab } = useWorkspaceStore()
-  const [searchParams, setSearchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useWorkspaceSearchParams()
 
   /**
    * 退货类型由路由决定：/returns/purchase 与 /returns/sale 分别挂在「采购」「销售」菜单下，
    * 各自是独立的工作区标签（筛选互不干扰）。旧地址 /returns 经 alias 落到采购退货。
    */
-  const type: ReturnType = location.pathname.startsWith('/returns/sale') ? 'sale' : 'purchase'
+  const type: ReturnType = ownPath.startsWith('/returns/sale') ? 'sale' : 'purchase'
   const partyLabel = type === 'purchase' ? '供应商' : '客户'
 
   const [queryOpen, setQueryOpen] = useState(false)

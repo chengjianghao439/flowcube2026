@@ -220,3 +220,53 @@ test('migration adds only nullable metadata, rejects unknown column/index shapes
   assert.match(s, /ORDER BY SEQ_IN_INDEX/); assert.match(s, /source_print_job_id/); assert.match(s, /shape_mismatch/); assert.match(s, /index_mismatch/)
   assert.doesNotMatch(s, /\bUPDATE\b|\bDELETE\b|\bDROP\b|\bMODIFY\b/i)
 })
+
+
+test('business barcode reprint rejects any explicit copies before service or queue access', async () => {
+  let delegated = 0
+  const controller = loader(new Map([[path.join(printDir, 'print-jobs.service.js'), {
+    reprintBarcodeRecord: async () => { delegated++; return { queued: true } },
+  }]]))(path.join(printDir, 'print-jobs.controller.js'))
+  for (const copies of [undefined, null, 0, 1, 3, -1, 1.5, 100, 101, '1', '3', [], {}, false]) {
+    let error, responded = false
+    await controller.reprintBarcode({ body: { category: 'inbound', recordId: 11, copies }, user: { userId: 7 }, headers: { 'x-request-key': 'same-original-key' } },
+      { status() { return this }, json() { responded = true } }, e => { error = e })
+    assert.equal(error?.statusCode, 400, 'explicit copies=' + String(copies))
+    assert.equal(error?.code, 'PRINT_REPRINT_COPIES_UNSUPPORTED')
+    assert.match(error.message, /不支持.*份数/)
+    assert.equal(responded, false, 'unsupported field must not produce a success response')
+    assert.equal(delegated, 0, 'reject before source lookup, intent or queue creation')
+  }
+})
+
+test('business barcode reprint omitted copies keeps legacy body and original intent key for all categories', async () => {
+  const calls = [], result = { queued: true, id: 31, requestId: 71 }
+  const controller = loader(new Map([[path.join(printDir, 'print-jobs.service.js'), {
+    reprintBarcodeRecord: async input => { calls.push(input); return result },
+  }]]))(path.join(printDir, 'print-jobs.controller.js'))
+  for (const category of ['inbound', 'outbound', 'logistics']) {
+    let response, status
+    const body = { category, recordId: 11, recovery: true }
+    await controller.reprintBarcode({ body, user: { userId: 7, warehouseIds: [4] }, headers: { 'x-request-key': 'same-original-key' } },
+      { status(v) { status = v; return this }, json(v) { response = v } }, e => { throw e })
+    assert.equal(status, 200); assert.deepEqual(response.data, result)
+    assert.deepEqual(calls.at(-1), { category, recordId: 11, recovery: true, scopeWarehouseIds: [4], createdBy: 7, requestKey: 'same-original-key' })
+    assert.deepEqual(body, { category, recordId: 11, recovery: true }, 'do not normalize or extend the old fingerprint body')
+  }
+})
+
+test('generic queue retains numeric1..100 copies independently of the business reprint restriction', async () => {
+  const f = fixture()
+  for (const copies of [1, 3, 100]) {
+    const result = await f.command.createWithinTransaction(f.conn, { ...args, copies, jobUniqueKey: 'generic-copies-' + copies })
+    assert.equal(result.requestedCopies, copies)
+  }
+  const { copies: ignored, ...withoutCopies } = args
+  const omitted = await f.command.createWithinTransaction(f.conn, { ...withoutCopies, jobUniqueKey: 'generic-default' })
+  assert.equal(omitted.requestedCopies, 1)
+  const count = f.state.jobs.size
+  for (const copies of [0, -1, 1.5, 101, null, '3']) {
+    await assert.rejects(f.command.createWithinTransaction(f.conn, { ...args, copies, jobUniqueKey: 'invalid-' + copies }), { statusCode: 400 })
+    assert.equal(f.state.jobs.size, count)
+  }
+})

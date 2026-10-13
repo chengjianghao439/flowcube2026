@@ -1,3 +1,4 @@
+import { getWorkspaceListPath } from '@/lib/workspaceListNavigation'
 import { readHandlingSourceId, handlingConfig, mayHandle, handlingQty } from '@/lib/disposalHandlingRecovery'
 import { PERMISSIONS as P } from '@/lib/permission-codes'
 import { useDisposalHandlingSource } from '@/hooks/useDisposalHandlingSource'
@@ -97,7 +98,7 @@ export default function PurchaseReturnFormPage() {
   function closeTab(targetPath = '/returns/purchase') {
     const { removeTab } = useWorkspaceStore.getState()
     removeTab(registration.key)
-    navigate(targetPath)
+    navigate(getWorkspaceListPath(targetPath))
   }
 
   const handlingId = readHandlingSourceId(tabPath)

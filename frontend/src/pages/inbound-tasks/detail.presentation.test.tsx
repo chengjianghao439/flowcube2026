@@ -3,7 +3,9 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
+import userEvent from '@testing-library/user-event'
 import { TabPathContext } from '@/components/layout/TabPathContext'
+import { SectionVisibilityContext } from '@/components/layout/SectionVisibilityContext'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import type { InboundTask, InboundTaskItem } from '@/types/inbound-tasks'
 import Page from './detail'
@@ -30,7 +32,7 @@ beforeEach(() => { vi.stubGlobal('ResizeObserver', class { observe() {} unobserv
 let cleanup: (() => Promise<void>) | undefined
 async function setup() {
   const host = document.createElement('div'); document.body.append(host); const root = createRoot(host)
-  const draw = () => act(async () => root.render(<MemoryRouter><TabPathContext.Provider value="/inbound-tasks/21"><Page /></TabPathContext.Provider></MemoryRouter>))
+  const draw = (active = true) => act(async () => root.render(<SectionVisibilityContext.Provider value={active}><div hidden={!active}><MemoryRouter><TabPathContext.Provider value="/inbound-tasks/21"><Page /></TabPathContext.Provider></MemoryRouter></div></SectionVisibilityContext.Provider>))
   cleanup = async () => { await act(async () => root.unmount()); host.remove() }
   await draw(); return { host, draw }
 }
@@ -82,4 +84,63 @@ test('详情运费方式和空/0金额仅记录，已上架金额汇总不相加
   expect(host.textContent).toContain('运费方式：到付'); expect(host.textContent).toContain('运费金额：¥12,345.00'); expect(host.querySelector('strong')?.textContent).toBe('已上架金额合计¥3.46')
   fixture.task = { ...fixture.task, freightAmount: 0 }; await draw(); expect(host.textContent).toContain('运费金额：¥0.00')
   fixture.task = { ...fixture.task, freightAmount: null, freightType: null }; await draw(); expect(host.textContent).toContain('运费金额：—'); expect(host.textContent).toContain('运费方式：—')
+})
+
+test('库存生效说明按需打开，区分保存、实收、上架与整单结算且不发起业务操作', async () => {
+  fixture.task = task(2, [{ ...line, orderedQty: 100, receivedQty: 60, putawayQty: 40 }])
+  const { host } = await setup()
+  const trigger = host.querySelector<HTMLButtonElement>('button[aria-label="库存生效说明"]')
+  expect(trigger).not.toBeNull()
+  expect(document.querySelector('[role="dialog"][aria-label="库存生效说明"]')).toBeNull()
+  trigger!.focus(); expect(document.activeElement).toBe(trigger)
+  await act(async () => trigger!.click())
+  const help = document.querySelector('[role="dialog"][aria-label="库存生效说明"]')!
+  expect(help).not.toBeNull()
+  for (const text of ['保存订单', 'PDA 实收', '扫码上架', '自动结算', '保存和打印标签不增加现货库存', '待上架库存条码', '收货中也可上架已实收条码', '现货可用量仍受销售预占影响', '收货结束且实收全部上架后']) expect(help.textContent).toContain(text)
+  expect(host.querySelector('[aria-label="已收"]')?.textContent).toContain('60')
+  expect(host.querySelector('[aria-label="已上架"]')?.textContent).toContain('40')
+  expect(host.querySelector('strong')?.textContent).toBe('已上架金额合计¥138.27')
+  await act(async () => help.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })))
+  expect(document.querySelector('[role="dialog"][aria-label="库存生效说明"]')).toBeNull()
+  expect(fixture.write).not.toHaveBeenCalled()
+})
+
+test.each([['Enter', '{Enter}'], ['Space', '[Space]']])('%s键打开库存说明，Escape关闭并把焦点还给原按钮', async (_, key) => {
+  fixture.task = task(2)
+  const { host } = await setup()
+  const user = userEvent.setup({ document })
+  const trigger = host.querySelector<HTMLButtonElement>('button[aria-label="库存生效说明"]')!
+  trigger.focus(); expect(document.activeElement).toBe(trigger)
+  await act(async () => user.keyboard(key))
+  expect(trigger.getAttribute('aria-expanded')).toBe('true')
+  expect(document.querySelector('[role="dialog"][aria-label="库存生效说明"]')?.textContent).toContain('扫码上架')
+  await act(async () => user.keyboard('{Escape}'))
+  await vi.waitFor(() => {
+    expect(document.querySelector('[role="dialog"][aria-label="库存生效说明"]')).toBeNull()
+    expect(document.activeElement).toBe(trigger)
+  })
+  expect(trigger.getAttribute('aria-expanded')).toBe('false')
+  expect(fixture.write).not.toHaveBeenCalled()
+})
+
+test('工作区隐藏说明浮层，恢复保留原展开状态及详情；关闭后再隐藏恢复不会重开', async () => {
+  fixture.task = task(2)
+  const { host, draw } = await setup()
+  const user = userEvent.setup({ document })
+  const trigger = host.querySelector<HTMLButtonElement>('button[aria-label="库存生效说明"]')!
+  const panel = () => document.querySelector('[role="dialog"][aria-label="库存生效说明"]')
+  trigger.focus(); await act(async () => user.keyboard('{Enter}'))
+  expect(panel()).not.toBeNull()
+  await draw(false); expect(panel()).toBeNull()
+  expect(host.querySelector('button[aria-label="库存生效说明"]')).toBe(trigger)
+  await draw(true); expect(panel()?.textContent).toContain('自动结算')
+  expect(host.querySelector('h1')?.textContent).toBe('IN-21')
+  expect(host.querySelector('[aria-label="已上架"]')?.textContent).toContain('1')
+  await act(async () => user.keyboard('{Escape}'))
+  await vi.waitFor(() => expect(document.activeElement).toBe(trigger))
+  expect(panel()).toBeNull()
+  await draw(false); await draw(true)
+  expect(panel()).toBeNull()
+  expect(trigger.getAttribute('aria-expanded')).toBe('false')
+  expect(fixture.write).not.toHaveBeenCalled()
 })

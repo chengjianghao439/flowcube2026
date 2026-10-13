@@ -12,6 +12,7 @@ export interface AvgCostRow {
   color: string | null
   warehouseId: number
   unitCost: number
+  unitCostSource?: 'avg_cost' | 'cost_price' | 'zero_fallback'
   cacheQty: number
   containerQty: number
   diffQty: number
@@ -26,6 +27,8 @@ export interface AvgCostResult {
   totalDiffValue: number
   totalRows: number
   list: AvgCostRow[]
+  truncated?: boolean
+  matchedRows?: number
 }
 
 export function getAvgCostReconciliationApi() {

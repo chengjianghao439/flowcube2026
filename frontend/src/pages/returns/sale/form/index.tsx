@@ -1,3 +1,4 @@
+import { getWorkspaceListPath } from '@/lib/workspaceListNavigation'
 import { money } from '@/lib/format'
 import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
 import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
@@ -95,7 +96,7 @@ export default function SaleReturnFormPage() {
   function closeTab(targetPath = '/returns/sale') {
     const { removeTab } = useWorkspaceStore.getState()
     removeTab(registration.key)
-    navigate(targetPath)
+    navigate(getWorkspaceListPath(targetPath))
   }
 
   if (isNew && new URLSearchParams(tabPath.split('?')[1] ?? '').has('handlingSourceId')) {

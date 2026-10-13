@@ -453,7 +453,7 @@ async function avgCostReconciliation({ scopeWarehouseIds = null } = {}) {
   const list = all.slice(0, 200)
   const driftedCount = list.filter(r => r.drifted).length
   const totalDiffValue = Math.round(list.reduce((s, r) => s + r.diffValue, 0) * 100) / 100
-  return { ok: driftedCount === 0, driftedCount, totalDiffValue, totalRows: list.length, list }
+  return { ok: driftedCount === 0, driftedCount, totalDiffValue, totalRows: list.length, list, matchedRows: all.length, truncated: all.length > list.length }
 }
 
 /**

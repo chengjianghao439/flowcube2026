@@ -1,7 +1,8 @@
+import { useWorkspaceSearchParams } from '@/hooks/useWorkspaceSearchParams'
 import { useEffect, useMemo, useState } from 'react'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { X } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
@@ -34,7 +35,7 @@ export default function TransferPage() {
   const qc = useQueryClient()
   const navigate = useNavigate()
   const { addTab } = useWorkspaceStore()
-  const [searchParams, setSearchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useWorkspaceSearchParams()
 
   const [queryOpen, setQueryOpen] = useState(false)
   const [confirmState, setConfirmState] = useState<{ open: boolean; title: string; description: string; onConfirm: () => void }>({ open: false, title: '', description: '', onConfirm: () => {} })

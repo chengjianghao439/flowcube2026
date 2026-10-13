@@ -1,3 +1,4 @@
+import { getWorkspaceListPath } from '@/lib/workspaceListNavigation'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
 import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
@@ -60,7 +61,7 @@ export default function TransferFormPage() {
   function closeTab(targetPath = '/transfer') {
     const { removeTab } = useWorkspaceStore.getState()
     removeTab(tabPath || '/transfer/new')
-    navigate(targetPath)
+    navigate(getWorkspaceListPath(targetPath))
   }
 
   if (isNew) return <FormView closeTab={closeTab} tabPath={tabPath} />

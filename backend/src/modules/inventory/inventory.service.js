@@ -354,6 +354,21 @@ async function getOverview({ page=1, pageSize=20, keyword='', warehouseId=null, 
     baseParams,
   )
 
+  // 分单位统计来自同一条只读 SQL，不能由多批明细拼成一个假定同步的全局数量。
+  // CAST AS BINARY 保留单位的精确身份，不按数据库默认不区分大小写的排序规则合并别名。
+  // 首批携带全局统计，续批由现有 collectAllRecords 保留首批字段，避免重复聚合。
+  const unitRows = Number(page) === 1 ? (await pool.query(
+    `SELECT MIN(p.unit) AS quantity_unit, COUNT(*) AS matched_rows,
+       COALESCE(SUM(ip.quantity), 0) AS total_on_hand,
+       COALESCE(SUM(ip.reserved), 0) AS total_reserved
+     FROM ${inventoryDisplayProjectionSql} ip
+     JOIN product_items p ON ip.product_id = p.id
+     JOIN inventory_warehouses w ON ip.warehouse_id = w.id AND w.deleted_at IS NULL
+     WHERE ${where}
+     GROUP BY CAST(p.unit AS BINARY)`,
+    baseParams,
+  ))[0] : null
+
   // 5. 分页列表
   const { pageSize: ps, offset } = normalizePagination({ page, pageSize })
   const [rows] = await pool.query(
@@ -390,6 +405,15 @@ async function getOverview({ page=1, pageSize=20, keyword='', warehouseId=null, 
       totalOnHand,
       totalReserved,
       totalAvailable: Math.max(0, totalOnHand - totalReserved),
+      ...(unitRows ? { quantitiesByUnit: {
+        complete: true,
+        matchedRows: unitRows.reduce((sum, row) => sum + Number(row.matched_rows), 0),
+        groups: unitRows.map(row => ({
+          unit: Buffer.isBuffer(row.quantity_unit) ? row.quantity_unit.toString('utf8')
+            : typeof row.quantity_unit === 'string' ? row.quantity_unit : null,
+          onHand: Number(row.total_on_hand), reserved: Number(row.total_reserved),
+        })),
+      } } : {}),
     },
     list: rows.map(r => {
       const onHand   = Number(r.quantity)
@@ -782,7 +806,10 @@ async function findStockDrift({ productId = null, warehouseId = null, scopeWareh
   // 产品信息与单位成本（批量取，避免 N+1）
   if (list.length) {
     const [pRows] = await pool.query(
-      `SELECT id, code, name, unit, article_number, spec, color, COALESCE(NULLIF(avg_cost,0), NULLIF(cost_price,0), 0) AS unit_cost
+      `SELECT id, code, name, unit, article_number, spec, color, COALESCE(NULLIF(avg_cost,0), NULLIF(cost_price,0), 0) AS unit_cost,
+         CASE WHEN NULLIF(avg_cost,0) IS NOT NULL THEN 'avg_cost'
+              WHEN NULLIF(cost_price,0) IS NOT NULL THEN 'cost_price'
+              ELSE 'zero_fallback' END AS unit_cost_source
        FROM product_items WHERE id IN (?) AND deleted_at IS NULL`,
       [list.map(r => r.productId)],
     )
@@ -803,6 +830,7 @@ async function findStockDrift({ productId = null, warehouseId = null, scopeWareh
         color: p ? (p.color || null) : null,
         warehouseId: row.warehouseId,
         unitCost,
+        unitCostSource: p ? p.unit_cost_source : 'zero_fallback',
         cacheQty,
         containerQty,
         diffQty: row.diffQty,

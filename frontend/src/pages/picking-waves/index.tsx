@@ -1,3 +1,5 @@
+import { readStringParam, upsertSearchParams } from '@/lib/urlSearchParams'
+import { useWorkspaceSearchParams } from '@/hooks/useWorkspaceSearchParams'
 import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
 import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
 /**
@@ -6,7 +8,7 @@ import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/share
  */
 import { useCallback, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { X } from 'lucide-react'
 import { toast } from '@/lib/toast'
 import { downloadExport } from '@/lib/exportDownload'
@@ -68,13 +70,13 @@ export default function PickingWavesPage() {
   const qc = useQueryClient()
   const navigate = useNavigate()
   const addTab = useWorkspaceStore(s => s.addTab)
-  const [searchParams, setSearchParams] = useSearchParams()
-  const [keyword, setKeyword] = useState('')
-  const [statusFilter, setStatusFilter] = useState<string>('')
-  const [warehouseFilter, setWarehouseFilter] = useState<number | null>(null)
-  const [warehouseName, setWarehouseName] = useState('')
-  const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate] = useState('')
+  const [searchParams, setSearchParams] = useWorkspaceSearchParams()
+  const keyword = readStringParam(searchParams, 'keyword')
+  const statusFilter = readStringParam(searchParams, 'status')
+  const warehouseFilter = Number(searchParams.get('warehouseId') || '') || null
+  const warehouseName = readStringParam(searchParams, 'warehouseName')
+  const startDate = readStringParam(searchParams, 'startDate')
+  const endDate = readStringParam(searchParams, 'endDate')
   const [queryOpen, setQueryOpen] = useState(false)
   const selectedWaveId = Number(searchParams.get('waveId') || 0) || null
   const focus = searchParams.get('focus') || ''
@@ -139,22 +141,22 @@ export default function PickingWavesPage() {
     keyword, status: statusFilter, warehouseId: warehouseFilter, warehouseName, startDate, endDate,
   }
   function applyQuery(v: WaveQueryValues) {
-    setKeyword(v.keyword)
-    setStatusFilter(v.status)
-    setWarehouseFilter(v.warehouseId)
-    setWarehouseName(v.warehouseName || '')
-    setStartDate(v.startDate)
-    setEndDate(v.endDate)
+    updateParams({ keyword: v.keyword || null, status: v.status || null,
+      warehouseId: v.warehouseId || null, warehouseName: v.warehouseName || null,
+      startDate: v.startDate || null, endDate: v.endDate || null })
     setQueryOpen(false)
   }
-  function clearAll() { setKeyword(''); setStatusFilter(''); setWarehouseFilter(null); setWarehouseName(''); setStartDate(''); setEndDate('') }
+  function updateParams(updates: Record<string, string | number | null | undefined>) {
+    setSearchParams(upsertSearchParams(searchParams, updates))
+  }
+  function clearAll() { updateParams({ keyword: null, status: null, warehouseId: null, warehouseName: null, startDate: null, endDate: null }) }
 
   const chips = [
-    warehouseFilter && { key: 'warehouse', label: `仓库：${warehouseName || warehouseFilter}`, onRemove: () => { setWarehouseFilter(null); setWarehouseName('') } },
-    startDate && { key: 'startDate', label: `创建自：${startDate}`, onRemove: () => setStartDate('') },
-    endDate && { key: 'endDate', label: `创建至：${endDate}`, onRemove: () => setEndDate('') },
-    keyword && { key: 'keyword', label: `批次号：${keyword}`, onRemove: () => setKeyword('') },
-    statusFilter && { key: 'status', label: `状态：${WAVE_STATUS_LABEL[Number(statusFilter) as WaveStatus] ?? statusFilter}`, onRemove: () => setStatusFilter('') },
+    warehouseFilter && { key: 'warehouse', label: `仓库：${warehouseName || warehouseFilter}`, onRemove: () => updateParams({ warehouseId: null, warehouseName: null }) },
+    startDate && { key: 'startDate', label: `创建自：${startDate}`, onRemove: () => updateParams({ startDate: null }) },
+    endDate && { key: 'endDate', label: `创建至：${endDate}`, onRemove: () => updateParams({ endDate: null }) },
+    keyword && { key: 'keyword', label: `批次号：${keyword}`, onRemove: () => updateParams({ keyword: null }) },
+    statusFilter && { key: 'status', label: `状态：${WAVE_STATUS_LABEL[Number(statusFilter) as WaveStatus] ?? statusFilter}`, onRemove: () => updateParams({ status: null }) },
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   const columns = useMemo<TableColumn<PickingWave>[]>(() => [

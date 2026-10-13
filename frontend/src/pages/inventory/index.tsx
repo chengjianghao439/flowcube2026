@@ -16,6 +16,9 @@ import { toast } from '@/lib/toast'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import ListSummary from '@/components/shared/ListSummary'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
+import { InventoryQuantitySummary } from './InventoryQuantitySummary'
+import { summarizeInventoryQuantities } from './inventoryQuantities'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
@@ -54,14 +57,14 @@ const emptyOp = {
 // ─── 统计卡片 ─────────────────────────────────────────────────────────────────
 
 function StatCard({ icon, label, value, sub, accent = 'text-foreground' }: {
-  icon: React.ReactNode; label: string; value: string | number; sub?: string; accent?: string
+  icon: React.ReactNode; label: string; value: React.ReactNode; sub?: string; accent?: string
 }) {
   return (
     <div className="card-base flex items-start gap-4 p-5">
       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted/60">{icon}</div>
       <div className="min-w-0 flex-1">
         <p className="text-xs font-medium text-muted-foreground">{label}</p>
-        <p className={`mt-1 text-2xl font-bold ${accent}`}>{value}</p>
+        <div className={`mt-1 text-2xl font-bold ${accent}`}>{value}</div>
         {sub && <p className="mt-0.5 text-xs text-muted-foreground">{sub}</p>}
       </div>
     </div>
@@ -147,7 +150,8 @@ export default function InventoryPage() {
   const effectiveLogStartDate = logStartDate || (logRangeAll ? '' : defaultLogRange.start)
   const effectiveLogEndDate = logEndDate || (logRangeAll ? '' : defaultLogRange.end)
 
-  const { data: overview, isLoading: overviewLoading } = useInventoryOverview({
+  const { data: overview, isLoading: overviewLoading, isFetching: overviewFetching, isPlaceholderData: overviewPlaceholder,
+    isPaused: overviewPaused, error: overviewError, refetch: retryOverview } = useInventoryOverview({
     page: 1, pageSize: PAGE_SIZE, keyword, warehouseId, categoryId,
   }, active && tab === 'overview')
   const { data: logs, isLoading: logLoading } = useLogs({
@@ -175,6 +179,9 @@ export default function InventoryPage() {
 
   const stats = overview?.stats
   const list = overview?.list ?? []
+  const quantitySummary = useMemo(() => summarizeInventoryQuantities(overview), [overview])
+  const quantityReadState = overviewError ? 'failed' : overviewPaused ? 'paused'
+    : overviewLoading || overviewFetching || overviewPlaceholder ? 'loading' : 'ready'
   /** 库存增减按财务直觉取色：入库=增(绿) · 出库=减(红) · 调整=中性标识 */
   const TYPE_TONE: Record<number, StatusTone> = { 1: 'success', 2: 'danger', 3: 'info' }
   const TYPE_NAMES: Record<number, string> = { 1: '入库', 2: '出库', 3: '调整' }
@@ -329,16 +336,17 @@ export default function InventoryPage() {
       )}
 
       <KeepAliveSection active={tab === 'overview'} className="space-y-4">
+          {overviewError && <QueryErrorState error={overviewError} title="库存数量读取失败" compact onRetry={() => { if (active && tab === 'overview') void retryOverview() }} />}
           {/* 统计卡片 */}
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             <StatCard icon={<Package className="h-5 w-5 text-muted-foreground" />} label="商品 SKU 数"
               value={overviewLoading ? '—' : (stats?.totalSkus ?? 0).toLocaleString()} sub="当前筛选条件下" />
             <StatCard icon={<Warehouse className="h-5 w-5 text-blue-500" />} label="在库数量"
-              value={overviewLoading ? '—' : formatQty(stats?.totalOnHand)} accent="text-blue-600" />
+              value={<InventoryQuantitySummary summary={quantitySummary} field="onHand" label="在库数量" readState={quantityReadState} />} accent="text-blue-600" />
             <StatCard icon={<Lock className="h-5 w-5 text-amber-500" />} label="已预占"
-              value={overviewLoading ? '—' : formatQty(stats?.totalReserved)} sub="销售单已占用" accent="text-amber-600" />
+              value={<InventoryQuantitySummary summary={quantitySummary} field="reserved" label="已预占" readState={quantityReadState} />} sub="销售单已占用" accent="text-amber-600" />
             <StatCard icon={<CheckCircle className="h-5 w-5 text-emerald-500" />} label="可用库存"
-              value={overviewLoading ? '—' : formatQty(stats?.totalAvailable)} sub="在库 − 已预占" accent="text-emerald-600" />
+              value={<InventoryQuantitySummary summary={quantitySummary} field="available" label="可用库存" readState={quantityReadState} />} sub="在库 − 已预占" accent="text-emerald-600" />
           </div>
 
           {/* 库存表格 */}
@@ -377,7 +385,9 @@ export default function InventoryPage() {
             </div>
           </div>
 
-          <ListSummary total={overviewTotal} unit="条" />
+          {quantityReadState === 'ready' && overview && (overview.truncated || list.length !== overviewTotal)
+            ? <div className="px-1 py-3 text-xs text-warning-ink" role="status">已读取 {list.length.toLocaleString()} / 匹配 {overviewTotal.toLocaleString()} 条；请缩小筛选范围后核对完整数量。</div>
+            : <ListSummary total={overviewTotal} unit="条" />}
 
           <ContainerDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} item={drawerItem} />
           <ReservationDetailsDialog open={reservationItem != null} onClose={() => setReservationItem(null)} item={reservationItem} />
