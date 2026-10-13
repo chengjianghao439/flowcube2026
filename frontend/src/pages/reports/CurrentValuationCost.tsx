@@ -16,7 +16,7 @@ export function CurrentValuationCost({ value, source, productName }: {
       aria-label={'查看' + productName + '的当前估值来源'}>{unitPrice(value)}</Button></PopoverTrigger>
     <PopoverContent aria-label={productName + '的当前估值来源'} align="end" className="w-[min(20rem,calc(100vw-2rem))] space-y-2 p-3 text-sm">
       <p className="font-medium">{detail[0]}</p><p>{detail[1]}</p>
-      <p>此页用于当前库存对账估值；历史出库成本依原销售行首次快照。</p>
+      <p>此页用于当前库存对账估值；历史出库成本依原销售行首次记录的成本。</p>
     </PopoverContent>
   </Popover>
 }

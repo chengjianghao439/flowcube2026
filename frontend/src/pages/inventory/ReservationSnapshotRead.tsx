@@ -99,7 +99,7 @@ export function ReservationSnapshotRead({ item, owner, server, generation, rende
       <Input className="h-8 w-64" aria-label="筛选销售原单" placeholder="销售单号或客户" maxLength={100} value={draft} onChange={event => setDraft(event.target.value)} />
       <Button size="sm" type="submit">查询</Button><Button size="sm" variant="outline" type="button" onClick={refresh}>刷新</Button>
     </form>
-    {query.isError || expired ? <QueryErrorState error={expired ? new Error('读取快照已过期，请重新读取') : query.error}
+    {query.isError || expired ? <QueryErrorState error={expired ? new Error('读取数据已过期，请重新读取') : query.error}
       title="预占明细读取失败" onRetry={refresh} compact />
       : !first ? <p role="status">{query.isPaused ? '网络暂不可用，等待重新读取' : '正在重新读取库存预占…'}</p> : <>
         {renderSummary(first.summary)}

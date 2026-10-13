@@ -33,7 +33,7 @@ async function listReservations(input, user) {
   const warehouseId = integer(input.warehouseId, 'warehouseId')
   const continuous = input.readMode === 'snapshot'
   if (input.readMode !== undefined && !continuous) throw new AppError('读取模式无效', 400, 'INVENTORY_RESERVATION_PARAMS_INVALID')
-  if (continuous && (input.page !== undefined || input.pageSize !== undefined)) throw new AppError('快照读取不接受页码', 400, 'INVENTORY_RESERVATION_PARAMS_INVALID')
+  if (continuous && (input.page !== undefined || input.pageSize !== undefined)) throw new AppError('连续读取参数无效，请重新打开预占明细', 400, 'INVENTORY_RESERVATION_PARAMS_INVALID')
   const keyword = continuous ? input.keyword ?? '' : ''
   if (typeof keyword !== 'string' || keyword.length > 100) throw new AppError('原单筛选无效', 400, 'INVENTORY_RESERVATION_PARAMS_INVALID')
   const offset = input.offset === undefined ? 0 : Number(input.offset)
@@ -41,7 +41,7 @@ async function listReservations(input, user) {
     || !Number.isSafeInteger(offset) || offset < 0 || offset > LIMITS.maxSources + LIMITS.maxBindings
     || (!input.snapshotId && offset !== 0))) throw new AppError('读取游标无效', 400, 'INVENTORY_RESERVATION_PARAMS_INVALID')
   if (continuous && input.snapshotId !== undefined && (typeof input.snapshotId !== 'string'
-    || !/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(input.snapshotId))) throw new AppError('快照标识无效', 400, 'INVENTORY_RESERVATION_PARAMS_INVALID')
+    || !/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(input.snapshotId))) throw new AppError('读取信息无效，请重新打开预占明细', 400, 'INVENTORY_RESERVATION_PARAMS_INVALID')
   const page = integer(input.page, 'page', 100000, 1)
   const pageSize = integer(input.pageSize, 'pageSize', 100, 20)
   if (!user || !Number.isSafeInteger(user.userId) || user.userId <= 0 || !Number.isSafeInteger(user.roleId) || user.roleId <= 0) throw new AppError('请重新登录', 401)

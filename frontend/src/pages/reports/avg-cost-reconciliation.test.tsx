@@ -43,7 +43,7 @@ test.each([['avg_cost','当前移动均价'],['cost_price','当前进价估值']
   expect(button).not.toBeNull(); expect(button?.textContent).toBe('¥0.00')
   const user = userEvent.setup()
   await act(async () => { await user.click(button!) })
-  expect(host.querySelector('[aria-label="合成商品1的当前估值来源"]')?.textContent).toContain(label); expect(host.textContent).toContain('原销售行首次快照')
+  expect(host.querySelector('[aria-label="合成商品1的当前估值来源"]')?.textContent).toContain(label); expect(host.textContent).toContain('原销售行首次记录的成本')
   draw(false); expect(host.textContent).not.toContain(label); expect(state.resync).not.toHaveBeenCalled()
 })
 
