@@ -59,15 +59,28 @@ test('sale draft identical update replays without replacing line IDs or adding e
   const [[events]] = await q("SELECT COUNT(*) n FROM sale_order_events WHERE sale_order_id=? AND event_type='updated'", [order.id])
   assert.equal(events.n, 1)
 })
-test('partially shipped close uses the same rounded line amount as a one-unit sale', async () => {
+test('partially shipped close preserves its original rounded line budget and receivable', async () => {
   const order = await sale.create({ ...payload(), requestKey: prefix + 'partial' }); saleIds.push(order.id)
+  // Freeze the real original 2.47 budget before simulating this test's one-unit shipped endpoint.
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const [[source]] = await conn.query('SELECT * FROM sale_orders WHERE id=? FOR UPDATE', [order.id])
+    await require('../backend/src/modules/sale/sale.ordinary-return-money').prepareShipment(conn, source)
+    await conn.commit()
+  } catch (error) { await conn.rollback(); throw error } finally { conn.release() }
   await q('UPDATE sale_order_items SET shipped_qty=1,dispatched_qty=1 WHERE order_id=?', [order.id])
   await q('UPDATE sale_orders SET status=3 WHERE id=?', [order.id])
   const [task] = await q("INSERT INTO warehouse_tasks(task_no,task_type,sale_order_id,warehouse_id,warehouse_name,status,sale_order_no,customer_id,customer_name) VALUES(?,'sale_out',?,?,?,7,?,?,?)", [prefix, order.id, ctx.warehouse.id, ctx.warehouse.name, order.orderNo, ctx.customer.id, ctx.customer.name])
   taskId = task.insertId
+  await q("INSERT INTO warehouse_task_items(task_id,product_id,product_code,product_name,unit,required_qty,picked_qty) VALUES(?,?,?,'审计回归商品','件',1,1)", [taskId, productId, prefix])
+  await q("INSERT INTO payment_records(type,order_id,order_no,party_name,total_amount,paid_amount,balance,status,confirm_status) VALUES(2,?,?,'审计客户',1.24,0,1.24,1,1)", [order.id, order.orderNo])
   await sale.cancel(order.id, operator, null, prefix + 'close')
   const [[row]] = await q('SELECT amount FROM sale_order_items WHERE order_id=?', [order.id])
-  assert.equal(row.amount, '1.2300')
+  // 2.47 / 2 = 1.235, half-up to cents is 1.24; do not replace the frozen budget with a fresh one-unit price.
+  assert.equal(row.amount, '1.2400')
+  const [[ar]] = await q('SELECT total_amount,balance FROM payment_records WHERE type=2 AND order_id=?', [order.id])
+  assert.deepEqual(ar, { total_amount: '1.2400', balance: '1.2400' })
 })
 test('PDA ticket rejects other JWT for work and renewal while owner works', async () => {
   const headers = ctx.pdaHeaders()

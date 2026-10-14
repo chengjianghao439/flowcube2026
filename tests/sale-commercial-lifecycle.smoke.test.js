@@ -327,7 +327,8 @@ async function main() {
       await supply([[fixture.products[0],1]])
       const od=await http(`/sale/${ordinary.id}`,undefined,{method:'GET'});await http(`/sale/${ordinary.id}/reserve`,{items:od.items.map(i=>({id:i.id,warehouseId:fixture.warehouseId,warehouseName:ref,qty:i.quantity}))});await http(`/sale/${ordinary.id}/ship`,{items:od.items.map(i=>({id:i.id,qty:i.quantity}))});const [ow]=await q('SELECT id FROM warehouse_tasks WHERE sale_order_id=?',[ordinary.id]);await actualShip(Number(ow.id))
       const os=await sourceRead(ordinary.orderNo)
-      for(const field of ['taskId','taskNo','confirmedAt','warehouseName','allowDecimalQty','source'])assert.equal(Object.hasOwn(os.items[0],field),false,'ordinary source remains original DTO')
+      for(const field of ['taskId','taskNo','confirmedAt','warehouseName','source'])assert.equal(Object.hasOwn(os.items[0],field),false,'ordinary source does not acquire KIT metadata')
+      assert.equal(os.items[0].allowDecimalQty,false,'ordinary source exposes its current integer quantity policy')
       const osr=await http('/returns/sale',{customerId:fixture.customerId,customerName:ref,warehouseId:fixture.warehouseId,warehouseName:ref,saleOrderId:ordinary.id,saleOrderNo:ordinary.orderNo,items:os.items.map(i=>({...i,quantity:1}))},{expect:201})
       fixture.metadataOrdinaryReturnId=osr.id
       const ordinarySaved=await http(`/returns/sale/${osr.id}`,undefined,{method:'GET'});assert.equal(Object.hasOwn(ordinarySaved.items[0],'source'),false);assert.equal(ordinarySaved.totalAmount,30)
@@ -421,9 +422,9 @@ async function main() {
           await a.beginTransaction();await b.beginTransaction()
           await b.query('SELECT id,received_qty,checked_qty,putaway_qty FROM return_task_items WHERE task_id=?',[rt.taskId])
           if(kit)await require('../backend/src/modules/sale/sale.commercial-returns').lockExecution(a,rt.taskId)
-          else await a.query('SELECT id FROM return_tasks WHERE id=? FOR UPDATE',[rt.taskId])
+          else await require('../backend/src/modules/sale/sale.ordinary-return-money').lockReturn(a,{taskId:rt.taskId})
           let queued;const waits=new Promise(resolve=>{queued=resolve});originalQuery=b.query.bind(b)
-          b.query=(sql,...values)=>{if(kit?sql.includes('sale_dispatch_component_money')&&sql.includes('FOR UPDATE'):sql.includes('FROM return_tasks')&&sql.includes('FOR UPDATE'))queued();return originalQuery(sql,...values)}
+          b.query=(sql,...values)=>{if(kit?sql.includes('sale_dispatch_component_money')&&sql.includes('FOR UPDATE'):sql.includes('FROM sale_ordinary_return_bases')&&sql.includes('FOR UPDATE'))queued();return originalQuery(sql,...values)}
           const op=n=>({userId:fixture.userId,pdaWarehouseId:fixture.warehouseId,scopeWarehouseIds:null,requestKey:randomUUID(),...args[n]})
           pending=(async()=>{try{const result=await rtSvc[method](b,rt.taskId,op(1));await b.commit();return result}catch(e){await b.rollback();throw e}})()
           await Promise.race([waits,new Promise((_,reject)=>{timeout=setTimeout(()=>reject(new Error('owned second transaction did not queue at source/task lock')),5000)})])

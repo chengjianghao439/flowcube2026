@@ -25,7 +25,7 @@ const ExcelJS = require('../backend/node_modules/exceljs')
 const prefix = `AF${Date.now().toString(36)}`
 let seq = 0
 const unique = () => `${prefix}${++seq}`
-const ids = { companies: [], users: [], products: [], purchases: [], tasks: [], flows: [], requests: [], warehouses: [] }
+const ids = { companies: [], users: [], roles: [], products: [], purchases: [], tasks: [], flows: [], requests: [], warehouses: [] }
 const insert = async (sql, args = []) => Number((await pool.query(sql, args))[0].insertId)
 const row = async (sql, args = []) => (await pool.query(sql, args))[0][0]
 const purchaseNet = async (companyId, purchaseId) => Number((await row(
@@ -119,7 +119,11 @@ async function purchaseFixture(operator) {
 }
 
 async function main() {
-  const admin = await user(1), operator = await user(2), normal = await user(3)
+  // Role numbers do not grant reset permission. Own an explicit role without changing seed roles.
+  const operatorRoleId = await insert('INSERT INTO sys_roles(code,name,is_system) VALUES(?,?,0)', [unique(), '审计密码管理'])
+  ids.roles.push(operatorRoleId)
+  await pool.query("INSERT INTO sys_role_permissions(role_id,permission) SELECT ?,permission FROM sys_role_permissions WHERE role_id=3 AND permission<>'user.reset_password'", [operatorRoleId])
+  const admin = await user(1), operator = await user(operatorRoleId), normal = await user(3)
   const a = await company(), b = await company()
   await manual(a, '2099-08-31', 25)
   await manual(a, '2099-09-30', 100)
@@ -157,6 +161,10 @@ async function main() {
     await rejectsCode(() => users.update(admin.userId, { realName: '审计', isActive: true, roleId: 3 }, operator), 'USER_ADMIN_PROTECTED')
   })
   await check('F07 正常管理员重置普通账号/超管自助重置与令牌失效保持可用', async () => {
+    const before = await row('SELECT password,token_version FROM sys_users WHERE id=?', [normal.userId])
+    await rejectsCode(() => users.resetPassword(normal.userId, 'Test-only-after-2026!', operator), 'PERMISSION_DENIED')
+    assert.deepEqual(await row('SELECT password,token_version FROM sys_users WHERE id=?', [normal.userId]), before)
+    await pool.query("INSERT INTO sys_role_permissions(role_id,permission) VALUES(?,'user.reset_password')", [operatorRoleId])
     const old = await row('SELECT token_version FROM sys_users WHERE id=?', [normal.userId])
     await users.resetPassword(normal.userId, 'Test-only-after-2026!', operator)
     const changed = await row('SELECT password,token_version FROM sys_users WHERE id=?', [normal.userId])
@@ -384,6 +392,10 @@ async function cleanup() {
   }
   for (const id of ids.warehouses) await pool.query('DELETE FROM inventory_warehouses WHERE id=?', [id])
   for (const id of ids.users) await pool.query('DELETE FROM sys_users WHERE id=?', [id])
+  for (const id of ids.roles) {
+    await pool.query('DELETE FROM sys_role_permissions WHERE role_id=?', [id])
+    await pool.query('DELETE FROM sys_roles WHERE id=?', [id])
+  }
 }
 
 main().catch(e => { counts.failed++; console.error(e) }).finally(async () => {

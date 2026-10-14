@@ -188,7 +188,17 @@ test('同采购跨批结算保留已付与首次账期，并扣已执行退货�
   // 已付/已执行退货作为既有账款夹具；这里只验证新批结算不抹掉原事实，不声称出款/退货实操。
   await pool.query('UPDATE payment_records SET paid_amount=50, balance=350, status=2 WHERE id=?', [paid.id])
   await pool.query('UPDATE supply_suppliers SET settlement_type=1,payment_terms_days=5 WHERE id=?', [supplier.id])
-  const returnId = await insert("INSERT INTO purchase_returns (return_no,purchase_order_id,purchase_order_no,supplier_id,supplier_name,warehouse_id,warehouse_name,total_amount,status,operator_id,operator_name) VALUES (?,?,?,?,?,?,?,?,3,?,?)", [randomUUID().slice(0, 20), f.poId, paid.order_no, supplier.id, supplier.name, warehouse.id, warehouse.name, 20, operator.userId, ref])
+  // Generate real frozen source/line proof at creation; only the already-executed state is a fixture.
+  const returned = ok(await post('/returns/purchase', { supplierId: supplier.id, supplierName: supplier.name,
+    warehouseId: warehouse.id, warehouseName: warehouse.name, purchaseOrderId: f.poId, purchaseOrderNo: paid.order_no,
+    items: [{ sourceItemId: f.purchaseItemId, productId: f.product.id, productCode: f.product.code,
+      productName: f.product.name, unit: '个', quantity: 2, unitPrice: 10 }],
+  }))
+  const returnId = returned.id
+  const frozen = await one('SELECT total_amount,cash_execution_basis FROM purchase_returns WHERE id=?', [returnId])
+  assert.equal(Number(frozen.total_amount), 20)
+  assert.ok(frozen.cash_execution_basis, 'new source return must have its actual frozen cash proof')
+  await pool.query('UPDATE purchase_returns SET status=3 WHERE id=?', [returnId])
   const secondTask = ok(await post('/inbound-tasks', { supplierId: supplier.id, supplierName: supplier.name, items: [{ purchaseItemId: f.purchaseItemId, qty: 60 }] }))
   taskIds.push(secondTask.taskId); const second = { ...f, taskId: secondTask.taskId }
   ok(await post(`/inbound-tasks/${second.taskId}/submit`))
@@ -198,6 +208,7 @@ test('同采购跨批结算保留已付与首次账期，并扣已执行退货�
   const final = await ap(f)
   assert.equal(Number(final.total_amount), 580); assert.equal(Number(final.paid_amount), 50); assert.equal(Number(final.balance), 530)
   assert.equal(final.settlement_type, paid.settlement_type); assert.deepEqual(final.due_date, paid.due_date)
+  await pool.query('DELETE FROM purchase_return_items WHERE return_id=?', [returnId])
   await pool.query('DELETE FROM purchase_returns WHERE id=?', [returnId])
 })
 test('同任务收货/上架/结案并发按任务锁串行；同键并发结案一次', async () => {

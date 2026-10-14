@@ -202,7 +202,7 @@
     "test:inbound-edit": "node --test tests/inbound-task-edit.test.js tests/inbound-task-edit-contract.test.js tests/inbound-task-edit-receipt.test.js tests/inbound-task-edit-sources.test.js tests/inbound-task-edit-create.test.js tests/inbound-edit-runner.test.js tests/inbound-create-idempotency.test.js tests/inbound-mixed-cost.test.js tests/inbound-short-receipt.test.js",
     "smoke:inbound-edit-runtime": "node --test --test-concurrency=1 tests/inbound-edit-runtime.smoke.test.js",
     "smoke:inbound-edit-owned": "bash scripts/repair-smoke-ephemeral.sh --inbound-edit",
-    "test:change-records": "node --test tests/change-records-runner.test.js tests/change-records-regressions.test.js tests/change-audit.test.js tests/change-handoff.test.js tests/print-request-metadata.test.js",
+    "test:change-records": "node --test tests/change-records-runner.test.js tests/release-regression-remainder.test.js tests/change-records-regressions.test.js tests/change-audit.test.js tests/change-handoff.test.js tests/print-request-metadata.test.js",
     "smoke:change-records-runtime": "node tests/change-records.smoke.test.js",
     "smoke:change-records-regressions": "node tests/helpers/changeRecordsRegressions.js",
     "smoke:change-records-owned": "bash scripts/repair-smoke-ephemeral.sh --change-records"
