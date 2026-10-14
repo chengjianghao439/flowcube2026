@@ -1023,3 +1023,5 @@ npm run smoke:change-records-owned
 同轮原变更owned后续product-price-history-integrity的两个失败只因仍宣称新建默认允许小数1。新默认断言对齐迁移288的0，然后仅按本用例自建准确商品ID构造允许1事实；原缺字段保留1、另一自建禁止0保留0、六轮同revision并发1×200/1×409完整价格链、软删拒绝和标签价读取全部保留。没有更改产品默认或放宽规则，未扩大到新功能审计。
 
 商品价格历史原单文件最终17/17、自然exit0，本轮准确ID清理及runner容器/卷/归属/downloads清理全部确认。选择守卫4/4、AGENTS与文档入口检查通过、diff检查及Gitleaks无泄露；本轮仅四个测试/说明路径，第三轮正式入口exit1已结束，下一轮仍须通过新完整SHA的统一发布门禁。
+
+第四轮e008408的原回归job115853617253在audit-2026-09-18.smoke中4项因旧事务夹具失败：voidReceipt/stockcheck.create当前先声明RC，而旧适配器直接把SET TRANSACTION传给已开启外层事务，随后未创建SAVEPOINT的rollback掩盖原错误。复用已有auditInventoryTransaction，在四个RC用例明确外层RC；其余仍RR，全部原库存/权限/成本/打印/会话吊销故障注入断言保留。原精确单文件32/32、自然exit0，原runner容器/卷/归属/downloads清理确认；没有销售退货confirm或Promise.all或relatedEvents调用，不涉及两项受阻探针，默认26文件CI清单不扩大。

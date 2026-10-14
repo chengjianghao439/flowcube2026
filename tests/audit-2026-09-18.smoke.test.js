@@ -37,20 +37,19 @@ async function main() {
   await conn.query('SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci')
 
   // 服务层事务映射到 SAVEPOINT，外层事务在用例结束时整体回滚 → 夹具零残留
+  const { createAuditInventoryTransaction } = require('./helpers/auditInventoryTransaction')
+  const { serviceConn: transactionConn, beginFixture } = createAuditInventoryTransaction(conn)
   // 故障注入开关：用于复现「吊销失败后重试」这类场景（见 PDA 改绑仓用例）
   let failNextSessionRevoke = false
   const serviceConn = {
+    ...transactionConn,
     query: (sql, params) => {
       if (failNextSessionRevoke && /^\s*UPDATE\s+pda_device_sessions/i.test(String(sql))) {
         failNextSessionRevoke = false
         return Promise.reject(new Error('注入的会话吊销失败'))
       }
-      return conn.query(sql, params)
+      return transactionConn.query(sql, params)
     },
-    beginTransaction: () => conn.query('SAVEPOINT service_transaction'),
-    commit: () => conn.query('RELEASE SAVEPOINT service_transaction'),
-    rollback: () => conn.query('ROLLBACK TO SAVEPOINT service_transaction'),
-    release() {},
   }
   require.cache[require.resolve(path.join(root, 'config/db'))] = {
     exports: {
@@ -176,7 +175,7 @@ async function main() {
   }
 
   const tests = []
-  const test = (name, run) => tests.push({ name, run })
+  const test = (name, run, isolation = 'REPEATABLE READ') => tests.push({ name, run, isolation })
 
   // ── P0-5 ────────────────────────────────────────────────────────────────
   test('★P0-5 在途调拨容器必须让撤回收货整单拒绝（修复前会被整只置 VOID）', async f => {
@@ -207,7 +206,7 @@ async function main() {
     assert.equal(Number(after.transfer_order_id), transferId, '在途标记必须保留，调拨单才能继续扫入')
     const [[task]] = await conn.query('SELECT status FROM inbound_tasks WHERE id=?', [taskId])
     assert.equal(Number(task.status), 3, '收货订单必须停在原状态，整单拒绝而不是部分撤销')
-  })
+  }, 'READ COMMITTED')
 
   test('P0-5 反向：没有在途调拨时撤回收货仍然正常工作（修复不能误伤）', async f => {
     const { taskId, taskItemId } = await f.inboundTask(3)
@@ -219,7 +218,7 @@ async function main() {
     assert.equal(Number(after.status), ce.CONTAINER_STATUS.VOID, '正常撤回应把容器置 VOID')
     assert.equal(Number(after.remaining_qty), 0, '正常撤回应清零数量')
     assert.equal(await f.stockQty(), 0, '缓存应同步下调到 0')
-  })
+  }, 'READ COMMITTED')
 
   // ── P0-1 ────────────────────────────────────────────────────────────────
   test('★P0-1 盘点扫码不得核销「已被拣货任务锁定」的容器（修复前会被当未扫到清零）', async f => {
@@ -255,7 +254,7 @@ async function main() {
     const binAfter = await f.containerRow(binId)
     assert.equal(Number(binAfter.remaining_qty), 5, '扫到的容器数量一致时不应产生调整')
     assert.equal(await f.stockQty(), 15, '账面必须仍是 15（料箱里的货不能被凭空核销）')
-  })
+  }, 'READ COMMITTED')
 
   test('★P0-1 对照：真正未扫到的未锁定容器仍然要按盘亏核销（修复不能放过真盘亏）', async f => {
     const { taskId } = await f.inboundTask(3)
@@ -279,7 +278,7 @@ async function main() {
     const keepAfter = await f.containerRow(keepId)
     assert.equal(Number(keepAfter.remaining_qty), 5, '扫到的容器不受影响')
     assert.equal(await f.stockQty(), 5, '账面应只保留扫到的 5')
-  })
+  }, 'READ COMMITTED')
 
   // ── P0-4 ────────────────────────────────────────────────────────────────
   test('★P0-4 补占时不得更换发货仓库（修复前会孤儿化旧仓预占并截断新仓他人预占）', async f => {
@@ -1160,8 +1159,8 @@ async function main() {
 
   let failed = 0
   try {
-    for (const { name, run } of tests) {
-      await conn.beginTransaction()
+    for (const { name, run, isolation } of tests) {
+      await beginFixture(isolation)
       try { await run(await fixture()); console.log('  [PASS]', name) }
       catch (error) { failed++; console.error('  [FAIL]', name, '\n', error.stack) }
       finally { await conn.rollback() }
