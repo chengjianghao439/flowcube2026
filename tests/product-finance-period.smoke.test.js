@@ -192,7 +192,7 @@ test('C2/C4真实履约、财务和受控来源日期跨期入账', async () => 
     const hinge = await product('hinge', 40, 7), screw = await product('screw', 5, 2)
     await purchase(hinge, 6, [2, 2, 2]); await purchase(screw, 12, [4, 4, 4])
     const kit = await http('/kits', { code: ref, name: ref, referenceUnitPrice: 100, components: [{ productId: hinge.id, baseQty: 2 }, { productId: screw.id, baseQty: 4 }] }, { expect: 201 })
-    const sale = await http('/sale', { customerId, warehouseId, commercialModel: 'kit-v1', discountAmount: 30.0101, commercialGroups: [{ kind: 'kit', lineKey: 'A', kitVersionId: kit.currentVersionId, quantity: 3, warehouseId, priceSource: 'kit_default' }] }, { expect: 201 })
+    const sale = await http('/sale', { customerId, warehouseId, commercialModel: 'kit-v1', discountAmount: 30.01, commercialGroups: [{ kind: 'kit', lineKey: 'A', kitVersionId: kit.currentVersionId, quantity: 3, warehouseId, priceSource: 'kit_default' }] }, { expect: 201 })
     own.sales.push(sale.id)
     const detail = await read(`/sale/${sale.id}`), groupId = detail.commercialGroups[0].id
     await http(`/sale/${sale.id}/reserve`, { commercialModel: 'kit-v1', expectedRevision: 1, items: detail.physicalItems.map(i => ({ id: i.id, warehouseId, warehouseName: ref, qty: i.quantity })) })
@@ -203,9 +203,9 @@ test('C2/C4真实履约、财务和受控来源日期跨期入账', async () => 
       const dispatch = await one('SELECT id FROM sale_dispatch_groups WHERE task_id=? AND confirmed_at IS NOT NULL', [taskId])
       own.dispatches.push(Number(dispatch.id))
       await controlDate('shipment', taskId, date); await controlDate('dispatch', dispatch.id, date)
-      // Independent decimal expectations: half-up(30.0101 * 100/300)=10.0034;
-      // half-up(30.0101 * 200/300)=20.0067. Do not call the product calculator.
-      assert.equal(Number((await one('SELECT total_amount FROM payment_records WHERE type=2 AND order_id=?', [sale.id])).total_amount), [89.9966, 179.9933][index])
+      // Independent cents: half-up(100 - 30.01/3)=90.00;
+      // half-up(200 - 2*30.01/3)=179.99. No product calculator computes expectations.
+      assert.equal(Number((await one('SELECT total_amount FROM payment_records WHERE type=2 AND order_id=?', [sale.id])).total_amount), [90, 179.99][index])
       await generate(index ? '202509' : '202508')
       assert.equal(await net('sale_revenue', sale.id, index ? '202509' : '202508', '1122'), [90, 89.99][index], 'period income is the difference of rounded cumulative net: 179.99 minus 90')
       assert.equal(await net('sale_cogs', sale.id, index ? '202509' : '202508', '6401'), 22)
@@ -226,32 +226,32 @@ test('C2/C4真实履约、财务和受控来源日期跨期入账', async () => 
     const closedSale = await read(`/sale/${sale.id}`)
     assert.equal(closedSale.totalAmount, 200, 'closed order shows shipped gross; AR retains the original net discount')
     assert.equal(closedSale.commercialGroups[0].id, groupId)
-    assert.equal(Number((await one('SELECT total_amount FROM payment_records WHERE type=2 AND order_id=?', [sale.id])).total_amount), 179.9933)
+    assert.equal(Number((await one('SELECT total_amount FROM payment_records WHERE type=2 AND order_id=?', [sale.id])).total_amount), 179.99)
     const frozen = await rows('SELECT order_gross_basis,discount_basis,confirmed_gross FROM sale_dispatch_groups WHERE order_id=? AND confirmed_at IS NOT NULL ORDER BY id', [sale.id])
-    assert.deepEqual(frozen.map(r => [Number(r.order_gross_basis), Number(r.discount_basis), Number(r.confirmed_gross)]), [[300, 30.0101, 100], [300, 30.0101, 100]])
+    assert.deepEqual(frozen.map(r => [Number(r.order_gross_basis), Number(r.discount_basis), Number(r.confirmed_gross)]), [[300, 30.01, 100], [300, 30.01, 100]])
     const source = (await read(`/returns/sale/source-order?orderNo=${encodeURIComponent(sale.orderNo)}`)).items.find(i => i.productId === hinge.id && i.taskId === own.tasks[0])
     assert.ok(source, 'return must select the first real shipment component')
     // Later master-price drift must not change the frozen original shipment cost.
     await rows('UPDATE product_items SET cost_price=99 WHERE id=?', [hinge.id])
     for (const [index, date] of ['2025-09-20 10:00:00', '2025-10-20 10:00:00'].entries()) {
       const returnId = await salesReturn(sale, source, 1)
-      // Gross source 40 then 80: proportional discount cumulative4 is 4.0013
-      // then 8.0027; net deltas are 35.9987 and 35.9986, NOT 35.99/35.99.
+      // Gross source 40 then 80: cumulative net rounds to 36.00 then 72.00;
+      // exact new cash deltas are 36.00 each, with original cost preserved.
       const receipt = await one('SELECT qualified_qty,refund_amount,financial_amount FROM sale_commercial_refund_receipts WHERE return_item_id IN (SELECT id FROM sale_return_items WHERE return_id=?)', [returnId])
-      assert.deepEqual([Number(receipt.qualified_qty), Number(receipt.refund_amount), Number(receipt.financial_amount)], [1, 40, [35.9987, 35.9986][index]])
+      assert.deepEqual([Number(receipt.qualified_qty), Number(receipt.refund_amount), Number(receipt.financial_amount)], [1, 40, 36])
       await controlDate('saleReturn', returnId, date)
       await generate(index ? '202510' : '202509')
       assert.equal(await net('sale_return', returnId, index ? '202510' : '202509', '1122'), -36)
       assert.equal(await net('sale_return', returnId, index ? '202510' : '202509', '1405'), 7)
       await balanced('sale_return', returnId)
-      assert.equal(Number((await one('SELECT total_amount FROM payment_records WHERE type=2 AND order_id=?', [sale.id])).total_amount), [143.9946, 107.9960][index])
+      assert.equal(Number((await one('SELECT total_amount FROM payment_records WHERE type=2 AND order_id=?', [sale.id])).total_amount), [143.99, 107.99][index])
     }
     const refunds = await one('SELECT SUM(refund_amount) AS gross,SUM(financial_amount) AS financial FROM sale_commercial_refund_receipts WHERE order_id=?', [sale.id])
-    assert.equal(Number(refunds.gross), 80); assert.equal(Number(refunds.financial), 71.9973)
+    assert.equal(Number(refunds.gross), 80); assert.equal(Number(refunds.financial), 72)
     const ar = await one('SELECT id,total_amount FROM payment_records WHERE type=2 AND order_id=?', [sale.id])
     const arRead = (await read(`/payments?type=2&orderNo=${encodeURIComponent(sale.orderNo)}`)).list.find(r => r.id === Number(ar.id))
     assert.ok(arRead); assert.equal(arRead.totalAmount, Number(ar.total_amount))
-    assert.equal(Number(ar.total_amount), 107.9960)
+    assert.equal(Number(ar.total_amount), 107.99)
     await generate()
     const beforeRepeat = await snapshotVouchers('sale_revenue', sale.id)
     const repeat = await generate()
@@ -260,7 +260,7 @@ test('C2/C4真实履约、财务和受控来源日期跨期入账', async () => 
     assert.deepEqual((await snapshotVouchers('sale_revenue', sale.id)).filter(v => v.period === '202508'), august)
     assert.deepEqual((await snapshotVouchers('sale_cogs', sale.id)).filter(v => v.period === '202508'), own.augustCost)
     await balanced('sale_revenue', sale.id); await balanced('sale_cogs', sale.id)
-    console.log('[PASS C2] split AR89.9966/179.9933; component financial4 35.9987+35.9986=71.9973, remaining AR107.9960; controlled Aug/Sep/Oct vouchers revenue90+89.99 cost22+22 reverse36+36 cost7+7; closed August unchanged')
+    console.log('[PASS C2] split AR90.00/179.99; component cash36.00+36.00=72.00, remaining AR107.99; controlled Aug/Sep/Oct vouchers revenue90+89.99 cost22+22 reverse36+36 cost7+7; closed August unchanged')
 
     const purchased = await product('progressive', 20, 10)
     const po = await purchase(purchased, 100, [2, 18], 40)

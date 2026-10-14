@@ -191,18 +191,20 @@ async function main() {
       assert.equal(activity.events.filter(event => event.payload?.version === 1).length, 1)
       return { id: p.id, history, payload: records[0].payload }
     })
-    await test('辅助单位商业减量：当前换算量与原录入依据分别留存', async () => {
+    await test('固定单位商业减量：当前数量与原价留存，新辅助单位录入拒绝', async () => {
       const p = await c.product('AUX')
       await c.pool.query("INSERT INTO product_units (product_id,unit_name,conversion_rate) VALUES (?,'箱',10)", [p.id])
-      const groups = quantity => [{ kind: 'ordinary', lineKey: 'synthetic-aux', productId: p.id, entryUnit: '箱', quantity, unitPrice: 100.0001, priceSource: 'manual' }]
-      const order = await c.ok('POST', '/sale', { ...body([]), items: undefined, commercialModel: 'kit-v1', commercialGroups: groups(1) })
+      const groups = quantity => [{ kind: 'ordinary', lineKey: 'synthetic-aux', productId: p.id, entryUnit: '个', quantity, unitPrice: 10.0001, priceSource: 'manual' }]
+      const invalid = await c.request('POST', '/sale', { ...body([]), items: undefined, commercialModel: 'kit-v1', commercialGroups: [{ ...groups(1)[0], entryUnit: '箱' }] })
+      assert.equal(invalid.status, 400); assert.equal(invalid.data.code, 'SALE_FIXED_UNIT_REQUIRED')
+      const order = await c.ok('POST', '/sale', { ...body([]), items: undefined, commercialModel: 'kit-v1', commercialGroups: groups(10) })
       const detail = await c.ok('GET', `/sale/${order.id}`)
-      await c.ok('PUT', `/sale/${order.id}`, { ...body([]), items: undefined, commercialModel: 'kit-v1', expectedRevision: detail.commercialRevision, commercialGroups: groups(0.5), changeReason: '合成辅助单位减量' })
+      await c.ok('PUT', `/sale/${order.id}`, { ...body([]), items: undefined, commercialModel: 'kit-v1', expectedRevision: detail.commercialRevision, commercialGroups: groups(5), changeReason: '合成固定单位减量' })
       const payload = (await audit('sale', order.id))[0].payload
       const group = payload.rows.find(row => row.key === 'group:synthetic-aux')
       assert.ok(group); assert.equal(group.before.quantity, '10.00'); assert.equal(group.after.quantity, '5.00')
-      assert.equal(group.before.entryQty, '1.00'); assert.equal(group.after.entryQty, '0.50', '当前换算量不能沿用旧录入1箱')
-      assert.equal(group.after.entryUnitPrice, '100.0001')
+      assert.equal(group.before.entryQty, '10.00'); assert.equal(group.after.entryQty, '5.00', '当前数量不能沿用旧录入10个')
+      assert.equal(group.after.entryUnitPrice, '10.0001')
       assert.ok(group.after.baseUnitPriceExact)
       return { id: order.id, payload }
     })

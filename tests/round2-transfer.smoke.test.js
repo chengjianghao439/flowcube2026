@@ -17,7 +17,7 @@ before(async () => {
  async function insert(sql,values){return (await q(sql,values))[0].insertId}
  const wh=[];for(let i=0;i<3;i++) wh.push(await insert('INSERT INTO inventory_warehouses(code,name) VALUES(?,?)',[suffix+'W'+i,suffix+'仓'+i]))
  const loc=[];for(let i=0;i<3;i++) loc.push(await insert('INSERT INTO warehouse_locations(warehouse_id,code,name) VALUES(?,?,?)',[wh[i],suffix+'L'+i,'审计库位']))
- const product=await insert('INSERT INTO product_items(code,name,unit,sale_price_a) VALUES(?,?,?,10)',[suffix+'P','调拨审计商品','个'])
+ const product=await insert('INSERT INTO product_items(code,name,unit,sale_price_a,allow_decimal_qty) VALUES(?,?,?,10,1)',[suffix+'P','调拨审计商品','个'])
  const role=await insert('INSERT INTO sys_roles(name,code,remark,is_system) VALUES(?,?,?,0)',[suffix,suffix,'审计独占'])
  const P=req('backend/src/constants/permissions').PERMISSIONS
  for(const permission of [P.TRANSFER_ORDER_VIEW,P.TRANSFER_ORDER_CREATE,P.TRANSFER_ORDER_CONFIRM,P.TRANSFER_ORDER_EXECUTE,P.WAREHOUSE_VIEW]) if(permission) await q('INSERT INTO sys_role_permissions(role_id,permission) VALUES(?,?)',[role,permission])

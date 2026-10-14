@@ -27,7 +27,17 @@ async function runRegressions({ proveOwnership, runSuite, files = suites }) {
   }
 }
 
+function selectSuites(requested) {
+  if (requested === undefined) return suites
+  assert.ok(typeof requested === 'string' && requested.length > 0, '定向回归须提供明确文件')
+  const files = requested.split(',')
+  const allowed = new Set([...suites, 'round2-transfer.smoke.test.js', 'product-finance-period.smoke.test.js', 'payments-default-scope.smoke.test.js'])
+  assert.ok(files.every(file => allowed.has(file)) && new Set(files).size === files.length, '定向回归仅接受唯一的登记文件')
+  return files
+}
+
 async function main() {
+  const files = selectSuites(process.env.FLOWCUBE_CHANGE_REGRESSION_FILES)
   const config = validateTestEnvironment()
   assert.equal(config.database, 'flowcube_changerecords20261010_test')
   require('./retentionReprintIsolation')
@@ -59,7 +69,7 @@ async function main() {
       code === 0 ? resolve() : reject(new Error('Owned regression failed: ' + file + ' exit=' + code))
     })
   })
-  try { await runRegressions({ proveOwnership, runSuite }) } finally { await pool.end() }
+  try { await runRegressions({ proveOwnership, runSuite, files }) } finally { await pool.end() }
 }
 if (require.main === module) main().catch(error => { console.error(error.message); process.exitCode = 1 })
-module.exports = { runRegressions, suites }
+module.exports = { runRegressions, suites, selectSuites }

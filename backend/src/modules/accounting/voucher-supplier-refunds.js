@@ -3,7 +3,8 @@
 const AppError=require('../../utils/AppError')
 const {moneyUnits,moneyText}=require('../../utils/decimalMoney')
 const {assertSqlIdentifier}=require('../../utils/sqlIdentifier')
-const {normalizeSaleLegs}=require('./voucher-sale-money')
+const {normalizeSaleLegs,decimalUnits}=require('./voucher-sale-money')
+const purchaseCash=require('../purchase/purchase.cash-money')
 const {SOURCE_TYPES,DIR}=require('../../constants/voucherSource')
 const rules=require('../refunds/supplier-refunds.rules')
 const operations=require('../refunds/supplier-refunds.operations')
@@ -40,16 +41,23 @@ function receivedIdentity(row,sets) {
     &&body.incomeAccountId===Number(row.income_account_id)&&body.refundDate===rules.date(row.refund_date)&&body.amount===rules.positiveMoney(row.amount))
   const lines=pri.filter(item=>Number(item.return_id)===Number(ret.id))
   check(lines.length>0&&new Set(lines.map(item=>Number(item.id))).size===lines.length)
+  check(!order.cash_basis||ret.cash_execution_basis)
+  let cashFact=null
+  if(ret.cash_execution_basis){
+    const original=[...poi.values()].filter(item=>Number(item.order_id)===Number(order.id))
+    const basis=purchaseCash.basisForReturn(order,ret,original)
+    cashFact=purchaseCash.validateReturn(basis,ret,lines,original)
+  }
   let six=0n
   const items=lines.map(item=>{
-    const original=poi.get(Number(item.purchase_item_id)),q=rules.quantityUnits(item.quantity),price=moneyUnits(item.unit_price)
+    const original=poi.get(Number(item.purchase_item_id)),q=rules.quantityUnits(item.quantity),price=cashFact?decimalUnits(item.unit_price,8):moneyUnits(item.unit_price)
     rules.safeId(item.id);rules.safeId(item.product_id);rules.safeId(item.purchase_item_id)
     check(original&&Number(original.order_id)===Number(order.id)&&Number(original.product_id)===Number(item.product_id)
-      &&item.unit&&original.unit===item.unit&&price>=0n&&price===moneyUnits(original.unit_price))
+      &&item.unit&&original.unit===item.unit&&price>=0n&&price===(cashFact?decimalUnits(original.unit_price,8):moneyUnits(original.unit_price)))
     six+=q*price
-    return{id:Number(item.id),purchaseItemId:Number(item.purchase_item_id),productId:Number(item.product_id),unit:item.unit,quantity:`${q/100n}.${String(q%100n).padStart(2,'0')}`,unitPrice:moneyText(price)}
+    return{id:Number(item.id),purchaseItemId:Number(item.purchase_item_id),productId:Number(item.product_id),unit:item.unit,quantity:`${q/100n}.${String(q%100n).padStart(2,'0')}`,unitPrice:cashFact?`${price/100000000n}.${String(price%100000000n).padStart(8,'0')}`:moneyText(price)}
   }).sort((a,b)=>a.id-b.id)
-  const gross=(six+50n)/100n;check(gross>0n&&gross===moneyUnits(ret.total_amount))
+  const gross=cashFact?moneyUnits(cashFact.credit):(six+50n)/100n;check(gross>0n&&gross===moneyUnits(ret.total_amount))
   const ownEntries=entries.filter(e=>Number(e.record_id)===Number(payable.id))
   check(ownEntries.length>0)
   const proofs=body.allocations.map(allocation=>{
@@ -76,7 +84,7 @@ function receivedIdentity(row,sets) {
       receipt:receipt?{id:Number(receipt.id),receiptNo:receipt.receipt_no,type:1,supplierId:Number(receipt.party_id),accountId,amount:moneyText(principal),paymentDate:date}:null,
       out:{id:Number(out.id),accountId,direction:2,bizType:2,bizId,bizNo,amount:moneyText(principal),paymentDate:date}}
   }).sort((a,b)=>a.entryId-b.entryId)
-  const identity={version:1,po:{id:Number(order.id),orderNo:order.order_no,supplierId:Number(order.supplier_id),warehouseId:Number(order.warehouse_id)},
+  const identity={version:1,...(cashFact?{cashPolicy:purchaseCash.POLICY}:{}),po:{id:Number(order.id),orderNo:order.order_no,supplierId:Number(order.supplier_id),warehouseId:Number(order.warehouse_id)},
     pr:{id:Number(ret.id),returnNo:ret.return_no,purchaseOrderId:Number(order.id),purchaseOrderNo:ret.purchase_order_no,supplierId:Number(ret.supplier_id),warehouseId:Number(ret.warehouse_id),grossAmount:moneyText(gross),items},
     ap:{id:Number(payable.id),type:1,orderId:Number(order.id),orderNo:order.order_no},entries:proofs}
   check(rules.stableJson(identity)===row.source_snapshot_json&&rules.fingerprint(row.source_snapshot_json)===row.source_fingerprint)

@@ -66,7 +66,7 @@ test('按单登记未结清查询：历史未付、部分付款、结清切换�
       assert.deepEqual(receipt.settlements.map(x => [x.orderId,x.type]), [[orderId,type],[null,type]])
       assert.deepEqual(records.map(id => { const item = statement.items.find(x => x.recordId === id); return [item.orderId,item.type] }), [[orderId,type],[null,type]])
       assert.equal(receipt.amount,80.1234); assert.equal(receipt.settledAmount,20.0123); assert.equal(receipt.balance,60.1111)
-      assert.equal(statement.totalAmount,200.2468); assert.equal(statement.settledAmount,60.0246); assert.equal(statement.balance,200.2468 - 60.0246); assert.equal(statement.balance.toFixed(4),'140.2222')
+      assert.equal(statement.totalAmount,200.2468); assert.equal(statement.settledAmount,60.0246); assert.equal(statement.balance,140.2222); assert.equal(statement.balance.toFixed(4),'140.2222')
       assert.equal(receipt.settlements[0].orderBalance,70.1111)
     })
   } finally {

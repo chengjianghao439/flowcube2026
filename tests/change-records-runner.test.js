@@ -4,6 +4,14 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const root = path.resolve(__dirname, '..')
+test('定向归属回归只接受明确测试文件，不扩大默认CI清单', () => {
+  const { selectSuites, suites } = require('./helpers/changeRecordsRegressions')
+  assert.equal(typeof selectSuites, 'function')
+  assert.deepEqual(selectSuites(), suites)
+  const files = ['round2-transfer.smoke.test.js', 'product-finance-period.smoke.test.js', 'payments-default-scope.smoke.test.js']
+  assert.deepEqual(selectSuites(files.join(',')), files)
+  for (const bad of ['../blocked.js', 'unknown.smoke.test.js', '', files[0]+','+files[0]]) assert.throws(() => selectSuites(bad))
+})
 function verify(src) {
   assert.match(src, /--change-records\) DB_NAME='flowcube_changerecords20261010_test'/)
   const lane = src.match(/elif \[\[ "\$SUITE" = '--change-records' \]\]; then([\s\S]*?)\nelse/)

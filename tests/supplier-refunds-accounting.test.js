@@ -4,6 +4,23 @@ const assert=require('node:assert/strict')
 const {fixture,required,copy,assertNoModelErrors}=require('./helpers/supplier-refunds-accounting-fixture')
 test.afterEach(assertNoModelErrors)
 async function build(f,options={}){return required(f.load('builder'),'loadSources')(f.f.conn,{companyId:1,fundId:f.ack.fundTransactionId,...options})}
+test('received cash-cents PR proof projects and generates its exact voucher',async()=>{
+  const f=await fixture('4.0000','100.0000',{cashBasis:true})
+  assert.equal((await build(f))[0].amount2,'4.00')
+  assert.equal((await f.load('accounting').settleReceivedVoucher(f.ack)).status,'generated')
+  assert.equal(f.data.acct_vouchers.length,1)
+})
+test('received cash-cents PR preserves original eight-decimal price proof',async()=>{
+  const f=await fixture('4.0000','100.0000',{cashBasis:true,price8:'100.00000001'})
+  assert.equal((await build(f))[0].amount2,'4.00')
+})
+for(const defect of ['basis','returnAmount','price'])test('received cash-cents PR proof rejects drift '+defect,async()=>{
+  const f=await fixture('4.0000','100.0000',{cashBasis:true})
+  if(defect==='basis')f.data.purchase_orders[0].cash_basis=null
+  if(defect==='returnAmount')f.data.purchase_returns[0].total_amount='99.9900'
+  if(defect==='price')f.data.purchase_return_items[0].unit_price='100.00000001'
+  await assert.rejects(build(f),e=>e.code==='ACCT_SUPPLIER_REFUND_SOURCE_INVALID')
+})
 for(const [amount,projected] of [['0.0001','0.00'],['0.0040','0.00'],['0.0049','0.00'],['0.0050','0.01'],['0.0051','0.01'],['4.0000','4.00']]){
   test('stored historical received source validates before original cent projection '+amount,async()=>{
     const f=await fixture(amount),sources=await build(f)

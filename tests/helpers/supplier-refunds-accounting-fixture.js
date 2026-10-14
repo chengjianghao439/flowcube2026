@@ -41,6 +41,18 @@ async function fixture(amount='4.0000',gross='100.0000',options={}) {
   f.data.purchase_order_items[0].unit_price=gross
   f.data.purchase_order_items[0].amount=money.moneyText(money.moneyUnits(gross)*10n)
   f.data.purchase_orders[0].total_amount=f.data.purchase_order_items[0].amount
+  if(options.price8){
+    f.data.purchase_order_items[0].unit_price=options.price8
+    f.data.purchase_return_items[0].unit_price=options.price8
+  }
+  if(options.cashBasis){
+    const cash=require('../../backend/src/modules/purchase/purchase.cash-money')
+    const po=f.data.purchase_orders[0],pr=f.data.purchase_returns[0],original=f.data.purchase_order_items,items=f.data.purchase_return_items
+    const basis=cash.freezeBasis(po,original)
+    po.cash_basis=JSON.stringify(basis)
+    const quote=cash.reserveReturn(basis,[{id:original[0].id,quantity:items[0].quantity}],[],[{purchaseItemId:original[0].id,productId:original[0].product_id,quantity:items[0].quantity}])
+    pr.cash_execution_basis=JSON.stringify(cash.freezeReturn(basis,pr,items,quote))
+  }
   if(options.creatorId)f.data.sys_users.push({...f.data.sys_users[0],id:options.creatorId,real_name:'creator'})
   const created=await f.module('service').create(body,{...f.options,...(options.creatorId?{userId:options.creatorId}:{})})
   await f.module('service').confirm(created.id,{operationUuid:baseFixture.uuid(302)},f.options)

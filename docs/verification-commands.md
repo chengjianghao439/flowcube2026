@@ -996,3 +996,18 @@ GUI数据库只读核对日志 `/tmp/flowcube-kit-profile-gui-db-proof.log`，�
 已知异常历史关联记录权限修复及其外部复现仍未执行；完整 CI 通过也不能据此宣称该问题已修复。安装验收版本仅使用合成测试数据，Windows/PDA 真机安装及实际出纸另行验收。原失败记录保留，后续候选与线上状态按完整 SHA 分别核对。
 
 恢复候选 `f0ed314c3ba4a94d47b10496b267b3a7abbc3402` 的 CI 静态 job `114552621809` 又暴露收货创建两份夹具缺少新补打领域隔离，八项在加载 JWT 配置前失败；本地无 JWT 的同命令也为 55/63。修正仅显式拒绝本夹具未建模的补打入口，收货创建继续执行原真实函数和全部原断言，不提供真实或合成生产凭据。塑料盒与拆分离线夹具无 JWT 已为23/23。完整安全离线套件在本地回环监听 EPERM 留下13项环境失败，未重试监听、未修改测试或换执行路线；原 CI 同套件通过前不得称该本地运行通过。
+
+
+### 0.13.5正常发布门禁恢复（2026-10-14）
+
+首轮569f1c1的Tests38556600337有5个job失败，Browser/PDA因门禁失败结束，未进入生产迁移或切换。旧四位实际退款/折扣、新建辅助单位销售与默认允许小数夹具不再符合当前规则；对账读取原DECIMAL四位和来源身份仍保留，余额断言使用准确140.2222而非JS浮点相减尾数。供应商退款会计读取新增cash-cents-v1采购退货证明与八位原价消费，原历史非分投影保留；新增正例先红、当前严格漂移反例与原70项通过，新八位价专项也通过。
+
+宽泛的FLOWCUBE_CHANGE_REGRESSIONS=1本机命令被自动审批拒绝且未执行，原因是未证明其整套清单不会触及两项受阻探针；没有把被拒命令转交CI或换环境执行。随后逐调用链审查，只隔离原失败的round2-transfer.smoke.test.js（TF同键扫码）、product-finance-period.smoke.test.js（顺序新kit-v1退货及受控日期）和payments-default-scope.smoke.test.js（payments/DTO/export读模型）。原helper新增显式白名单文件选择、重复/未知/空选择拒绝，默认CI清单保持原26文件，无新CI跳过。先缺选择能力红，原入口和选择守卫最终75/75绿。准确命令：
+
+```bash
+FLOWCUBE_CHANGE_REGRESSIONS=1 \
+FLOWCUBE_CHANGE_REGRESSION_FILES=round2-transfer.smoke.test.js,product-finance-period.smoke.test.js,payments-default-scope.smoke.test.js \
+npm run smoke:change-records-owned
+```
+
+这条更窄命令获自动审批通过，三个START/END均exit0，独占MySQL和原归属门保留，容器/卷/归属/downloads清理确认。另原go-live-owned的业务11/11和party-profile59/59、change-records-owned原场景均自然exit0。按分变动保留原付款/OUT/IN/分配、AP、对账、往来、并发同键、原退款、批准日凭证和闭期不变等断言；新0.0001输入精确400 CASH_PRECISION_INVALID，原资金/付款/回执不变，历史非分读取仍由原独立用例证明。两项受阻外部探针未执行或改写，GUI/真机/出纸边界不变。最终发布状态须另核新完整SHA的CI与线上，不能用以上本机结果代替。
