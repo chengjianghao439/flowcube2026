@@ -14,6 +14,7 @@ const engine = module_.exports
 function inventory({ bound = 0, reserved = 8 } = {}) {
   let quantity = 10
   return { get quantity() { return quantity }, async query(sql, args) {
+    if (sql.includes('FROM product_items') && sql.includes('allow_decimal_qty')) return [[{ id: 1, name: '合成整数商品', allow_decimal_qty: 0 }]]
     if (sql.includes('sale_order_expected_bindings')) return [[{ qty: bound }]]
     if (sql.includes('SELECT COALESCE(quantity')) return [[{ qty: quantity, quantity, reserved }]]
     if (sql.includes('SELECT quantity FROM inventory_stock')) return [[{ quantity }]]

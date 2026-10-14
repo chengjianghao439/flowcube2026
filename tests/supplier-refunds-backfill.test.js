@@ -64,11 +64,10 @@ for(const mutate of [d=>d.sys_users[0].is_active=0,d=>d.sys_users[0].deleted_at=
 test('original backfill approval self rule has no role1 or allowSelfApprove exemption',async()=>{
  const f=await fixture();const app=await apply(f);await assert.rejects(f.load('service').approve(app.id,{operatorId:9,operatorName:'self'}),e=>e.code==='FINANCE_BACKFILL_SELF_APPROVE');assert.equal(funds(f).length,0)
 })
-for(const amount of ['0.0040','0.0050'])test('real postcommit result derives zero/generated from complete single RF proof '+amount,async()=>{
+for(const amount of ['0.0100','0.0200'])test('new cent postcommit result proves actual generated voucher '+amount,async()=>{
  const f=await fixture(amount),app=await approveOnly(f),result=await f.load('service').execute(app.id,operator)
  assert.equal(funds(f).length,1);assert.equal(funds(f)[0].amount,amount);assert.equal(result.application.voucherPending,false)
- if(amount==='0.0040'){assert.equal(result.application.voucherNotRequired,true);assert.equal(result.application.voucherResult,'notRequired');assert.equal(f.data.acct_vouchers.length,0);assert.match(result.application.voucherGenerateError,/零分/)}
- else {assert.equal(result.application.voucherResult,'generated');assert.deepEqual(f.data.acct_voucher_entries.map(e=>e.amount),['0.01','0.01'])}
+ assert.equal(result.application.voucherResult,'generated');assert.deepEqual(f.data.acct_voucher_entries.map(e=>e.amount),[Number(amount).toFixed(2),Number(amount).toFixed(2)])
 })
 for(const match of ['INSERT INTO finance_account_transactions','SET executed_at = NOW()'])test('receive or execution mark write failure rolls back entire borrowed business '+match,async()=>{
  const f=await fixture(),app=await approveOnly(f),before=copy(f.data);f.fail.match=match
@@ -129,13 +128,13 @@ test('application INSERT waits only after preparation company and user locks rel
  assert.ok(events.indexOf('release')<events.lastIndexOf('begin'))
  assert.ok(!f.queries.slice(lastBegin+1,inserts).some(q=>/FOR UPDATE/.test(q.sql)&&/purchase_|supplier_refund_orders/.test(q.sql)))
 })
-test('zero result reaches actual detail and list summary as checked notRequired',async()=>{
- const f=await fixture('0.0040'),app=await approveOnly(f);await f.load('service').execute(app.id,operator)
+test('cent result reaches actual detail and list summary as generated',async()=>{
+ const f=await fixture('0.0100'),app=await approveOnly(f);await f.load('service').execute(app.id,operator)
  const detail=await f.load('service').findOne(app.id),list=await f.load('service').findAll({bizType:'supplier_refund'})
- assert.equal(detail.voucherResult,'notRequired');assert.equal(detail.voucherNotRequired,true)
- assert.equal(list.summary.voucherPending,0);assert.equal(list.list[0].voucherResult,'notRequired');assert.equal(funds(f).length,1)
+ assert.equal(detail.voucherResult,'generated');assert.equal(detail.voucherNotRequired,false)
+ assert.equal(list.summary.voucherPending,0);assert.equal(list.list[0].voucherResult,'generated');assert.equal(funds(f).length,1)
 })
-for(const amount of ['4.0000','0.0040'])test('application result-save failure stays pending after real money '+amount,async()=>{
+for(const amount of ['4.0000','0.0100'])test('application result-save failure stays pending after real money '+amount,async()=>{
  const f=await fixture(amount),app=await approveOnly(f);f.fail.match='SET voucher_generated_at'
  const result=await f.load('service').execute(app.id,operator)
  assert.equal(result.result.status,3);assert.equal(funds(f).length,1);assert.equal(result.application.voucherResult,'pending')
@@ -149,7 +148,7 @@ for(const mutate of [f=>f.data.finance_account_transactions.find(t=>t.biz_type==
  assert.ok(result.code||result.voucherError);assert.equal(funds(f).length,1)
 })
 for(const bizType of [6,2])test('extra application-bound fund cannot be ignored in real result save '+bizType,async()=>{
- const f=await fixture('0.0040'),app=await approveOnly(f);await f.load('service').execute(app.id,operator)
+ const f=await fixture('0.0100'),app=await approveOnly(f);await f.load('service').execute(app.id,operator)
  const original=funds(f)[0];f.data.finance_account_transactions.push({...copy(original),id:72,biz_type:bizType,biz_id:99,biz_no:'OTHER',backfill_id:81})
  await assert.rejects(f.load('service').regenerateVoucher(app.id,operator));assert.equal(funds(f).filter(t=>t.biz_id===61).length,1)
  assert.equal(f.data.finance_period_backfills[0].voucher_generated_at,null)
@@ -162,21 +161,21 @@ test('old payment execute retains execution-day posting instead of adopting appr
  assert.equal(result.postingPeriod,today);assert.equal(result.result.legacyPeriod,today);assert.equal(funds(f).length,0)
 })
 
-for(const amount of ['0.0040','0.0050'])test('actual exported application inspector proves correct zero/nonzero projection '+amount,async()=>{
+for(const amount of ['0.0100','0.0200'])test('actual exported application inspector proves lawful cent projection '+amount,async()=>{
  const f=await fixture(amount),app=await approveOnly(f);await f.load('service').execute(app.id,operator)
  const proof=await f.load('service').inspectBackfillVouchers(app.id,'202610')
- assert.equal(proof.ok,true);assert.equal(proof.txnCount,1);assert.equal(proof.voucherRequired,amount!=='0.0040')
+ assert.equal(proof.ok,true);assert.equal(proof.txnCount,1);assert.equal(proof.voucherRequired,true)
 })
 test('actual inspector cannot claim zero success without original FAT or approved binding',async()=>{
- const f=await fixture('0.0040'),app=await approveOnly(f);await f.load('service').execute(app.id,operator)
+ const f=await fixture('0.0100'),app=await approveOnly(f);await f.load('service').execute(app.id,operator)
  f.data.finance_account_transactions=f.data.finance_account_transactions.filter(t=>t.biz_type!==6)
  const proof=await f.load('service').inspectBackfillVouchers(app.id,'202610');assert.equal(proof.ok,false)
 })
-test('actual application controller reports checked zero without claiming voucher generation',async()=>{
- const f=await fixture('0.0040'),app=await approveOnly(f);await f.load('service').execute(app.id,operator)
+test('actual application controller reports generated cent voucher',async()=>{
+ const f=await fixture('0.0100'),app=await approveOnly(f);await f.load('service').execute(app.id,operator)
  let response,error;const res={status(){return this},json(value){response=value;return value}}
  await f.load('applicationController').regenerateVoucher({params:{id:String(app.id)},user:{userId:10,realName:'approver'}},res,e=>{error=e})
- assert.equal(error,undefined);assert.equal(response.data.voucherResult,'notRequired');assert.match(response.message,/无需.*凭证/);assert.ok(!/已生成/.test(response.message))
+ assert.equal(error,undefined);assert.equal(response.data.voucherResult,'generated');assert.match(response.message,/已生成/)
 })
 
 test('actual controller same-key replay rejects changed application reason without changing RF action body',async()=>{
@@ -214,7 +213,7 @@ test('actual application failure result obeys 260 error width while fixed cash A
 // Every real accounting consumer must share the full application-linked fund collection.
 for(const consumer of ['sourceProof','single','batch','close','executedReplay']){
   for(const bizType of [6,2])test('shared application fund uniqueness reaches actual '+consumer+' for extra biz '+bizType,async()=>{
-    const f=await fixture('0.0040'),app=await approveOnly(f)
+    const f=await fixture('0.0100'),app=await approveOnly(f)
     const first=await f.load('service').execute(app.id,operator)
     const original=f.data.finance_account_transactions.find(t=>t.id===first.result.fundTransactionId)
     f.data.finance_account_transactions.push({...copy(original),id:72,biz_type:bizType,biz_id:99,biz_no:'OTHER',backfill_id:81})
@@ -233,7 +232,7 @@ for(const consumer of ['sourceProof','single','batch','close','executedReplay'])
         await assert.rejects(engine.generateVouchers(f.f.conn,{companyId:1,period:'202610'}),e=>e.code==='ACCT_SUPPLIER_REFUND_SOURCE_INVALID')
       }finally{await f.f.conn.rollback()}
     }else if(consumer==='close'){
-      await assert.rejects(f.a.load('period').closePeriod('202610',{userId:9},1),e=>e.code==='ACCT_SUPPLIER_REFUND_SOURCE_INVALID')
+      await assert.rejects(f.a.load('period').closePeriod('202610',{userId:9},1),e=>e.code==='ACCT_SUPPLIER_REFUND_SOURCE_INVALID'||(bizType===2&&e.code==='ACCT_BUSINESS_SOURCE_INVALID'))
     }else{
       await assert.rejects(f.load('service').execute(app.id,operator),e=>e.code==='SUPPLIER_REFUND_BACKFILL_IDENTITY_CHANGED')
     }
@@ -246,7 +245,7 @@ for(const consumer of ['sourceProof','single','batch','close','executedReplay'])
 }
 for(const [field,value] of [['direction',2],['account_id',41],['amount','0.0039'],['biz_no','OTHER']]){
   test('executed application replay proves original fund '+field+' before returning original ACK',async()=>{
-    const f=await fixture('0.0040'),app=await approveOnly(f)
+    const f=await fixture('0.0100'),app=await approveOnly(f)
     const first=await f.load('service').execute(app.id,operator)
     f.data.finance_account_transactions.find(t=>t.id===first.result.fundTransactionId)[field]=value
     const before=copy(f.data)
@@ -255,7 +254,7 @@ for(const [field,value] of [['direction',2],['account_id',41],['amount','0.0039'
   })
 }
 test('valid application source reads all application funds in one exact batch and retains original ACK',async()=>{
-  const f=await fixture('0.0040'),app=await approveOnly(f)
+  const f=await fixture('0.0100'),app=await approveOnly(f)
   const first=await f.load('service').execute(app.id,operator),start=f.a.queries.length
   const sources=await f.a.load('builder').loadSources(f.f.conn,{companyId:1,fundId:first.result.fundTransactionId})
   assert.equal(sources.length,1)

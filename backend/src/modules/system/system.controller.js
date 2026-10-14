@@ -21,7 +21,7 @@ const logger = require('../../utils/logger')
  */
 const requestStatus = async (req, res, next) => {
   try {
-    const receiptContext = { requestedAction: req.query.action, requestedWarehouseId: req.query.warehouseId, requestedFingerprint: req.query.requestFingerprint }
+    const receiptContext = { requestedAction: req.query.action, requestedWarehouseId: req.query.warehouseId, requestedFingerprint: req.query.requestFingerprint, requestedKey: req.params.key, requestedUserId: req.user?.userId ?? null }
     await require('../inbound-tasks/inbound-tasks.create-receipt').ensureInboundCreateReceiptView(req, res, receiptContext)
     await require('../inbound-tasks/inbound-tasks.edit-receipt').ensureInboundEditReceiptView(req, res, receiptContext)
     await require('../print-jobs/print-jobs.reprint-intent').ensureReprintReceiptPermission(req, res, receiptContext)
@@ -31,6 +31,25 @@ const requestStatus = async (req, res, next) => {
       userId: req.user?.userId ?? null,
       receiptContext,
     })
+    if ([receiptContext.requestedAction, receiptContext.matchedAction].some(action => /^purchase\.closeRemaining(?:\.[1-9]\d*)?$/.test(String(action ?? '')))) {
+      await require('../purchase/purchase.close-receipt').assertPurchaseCloseReceipt(require('../../config/db').pool, data, req.user?.warehouseIds, receiptContext)
+    }
+    if ([receiptContext.requestedAction, receiptContext.matchedAction].some(action => /^inbound\.closeReceiving(?:\.[1-9]\d*)?$/.test(String(action ?? '')))) {
+      await require('../inbound-tasks/inbound-tasks.short-receipt').assertCloseReceivingReceipt(require('../../config/db').pool, data, req.user?.warehouseIds, receiptContext)
+    }
+    // 本人采购创建结果也须按实际命中动作核当前原采购仓；宽查询不能绕过。
+    if (/^purchase\.create(?:\.[a-f0-9]{16})?$/.test(String(receiptContext.matchedAction ?? ''))) {
+      await require('../purchase/purchase.create-receipt').assertPurchaseCreateReceipt(require('../../config/db').pool, data, req.user?.warehouseIds ?? null, receiptContext)
+    }
+    if (/^procurement\.plan\.convert(?:\.[1-9]\d*)?$/.test(String(receiptContext.matchedAction ?? ''))) {
+      await require('../procurement/procurement.convert-receipt').assertConvertReceipt(require('../../config/db').pool, data, req.user?.warehouseIds ?? null, receiptContext)
+    }
+    if (/^purchase\.requisition\.create(?:\.[a-f0-9]{16})?$/.test(String(receiptContext.matchedAction ?? ''))) {
+      await require('../purchase-requisitions/purchase-requisitions.create-receipt').assertRequisitionCreateReceipt(require('../../config/db').pool, data, req.user?.warehouseIds ?? null, receiptContext)
+    }
+    if (/^refund\.execute(?:\.[1-9]\d*)?$/.test(String(receiptContext.matchedAction ?? ''))) {
+      await require('../refunds/refund-orders.scope').assertRefundReceipt(require('../../config/db').pool, data, req.user?.warehouseIds ?? null, receiptContext)
+    }
     await require('./system.split-device').ensureSplitReceiptDevice(req, res, receiptContext.matchedAction)
     await require('../inventory/inventory.split-receipt').assertSplitReceipt(require('../../config/db').pool, data, req.user?.warehouseIds ?? null, { ...receiptContext, isPda: Boolean(req.pda), pdaWarehouseId: req.pda?.warehouseId ?? null })
     if ([receiptContext.requestedAction, receiptContext.matchedAction].some(action => /^plastic_box\.(fill|repack)(?:\.[1-9]\d*)?$/.test(String(action ?? '')))) {
@@ -42,6 +61,9 @@ const requestStatus = async (req, res, next) => {
     await require('../inbound-tasks/inbound-tasks.create-receipt').assertInboundCreateReceipt(require('../../config/db').pool, data, req.user?.warehouseIds ?? null, receiptContext)
     await require('../inbound-tasks/inbound-tasks.edit-receipt').assertInboundEditReceipt(require('../../config/db').pool, data, req.user?.warehouseIds ?? null, receiptContext)
     await require('../sale/sale.commercial-receipts').assertReceiptScope(require('../../config/db').pool,data,req.user?.warehouseIds ?? null,receiptContext)
+    if (/^sale\.(reserve|release|ship):/.test(String(receiptContext.matchedAction ?? ''))) {
+      await require('../sale/sale.ordinary-receipt').assertOrdinarySaleReceipt(require('../../config/db').pool, data, req.user?.warehouseIds ?? null, receiptContext)
+    }
     if ([receiptContext.requestedAction, receiptContext.matchedAction].some(action => String(action ?? '').startsWith('disposal.dispose'))) {
       await require('../disposal/disposal.receipt').assertDisposalReceipt(require('../../config/db').pool, data, req.user?.warehouseIds ?? null, receiptContext)
     }

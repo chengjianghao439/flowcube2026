@@ -6,7 +6,9 @@ const { roundQty, round8 } = require('../../utils/unitConversion')
 const { projectCommercialRefund } = require('./sale.commercial-money.math')
 const { refundEstimateUpperBound } = require('./sale.commercial-refund-budget')
 const { invalid } = require('./sale.commercial-money')
-const {financialRefundDelta,financialRefundEstimate}=require('./sale.commercial-financial')
+const cash=require('../../utils/cashMoney')
+const EXECUTION_CONNECTION=Symbol('commercialReturnConnection')
+const {financialTarget,financialRefundDelta,financialRefundEstimate,legacyFinancialRefundEstimate}=require('./sale.commercial-financial')
 function sourceLabels(row) {
   return {
     kind:row.kind,kitCode:row.kit_code ?? null,kitName:row.kit_name ?? null,
@@ -55,7 +57,7 @@ async function loadView(conn,order,scope) {
   return rows.map(r=>{
     assertInScope(scope,r.warehouseId,'销售退货来源')
     const actual=refunded.get(r.dispatchComponentId)||{qty:0,amount:0,financial:0}
-    return {...r,productCode:r.product_code,productName:r.product_name,unit:r.unit,articleNumber:r.article_number,spec:r.spec,color:r.color,shippedQty:r.sourceQuantity,returnedQty:sourceUsed.get(r.dispatchComponentId)||0,remainingQty:Math.max(0,roundQty(r.sourceQuantity-(sourceUsed.get(r.dispatchComponentId)||0))),unitPrice:round8(r.sourceBudgetAmount/r.sourceQuantity),refundBudget:r.sourceBudgetAmount,actualQualifiedQty:actual.qty,actualRefundGross:actual.amount,actualRefundAmount:actual.financial,sourceFinancialEstimate:financialRefundEstimate(r.financialBasis,r.sourceBudgetAmount),amountBasis:'immutable_confirmed_source_component_budget'}
+    return {...r,productCode:r.product_code,productName:r.product_name,unit:r.unit,articleNumber:r.article_number,spec:r.spec,color:r.color,shippedQty:r.sourceQuantity,returnedQty:sourceUsed.get(r.dispatchComponentId)||0,remainingQty:Math.max(0,roundQty(r.sourceQuantity-(sourceUsed.get(r.dispatchComponentId)||0))),unitPrice:round8(r.sourceBudgetAmount/r.sourceQuantity),refundBudget:r.sourceBudgetAmount,actualQualifiedQty:actual.qty,actualRefundGross:actual.amount,actualRefundAmount:actual.financial,sourceFinancialEstimate:(order.cash_policy==='cash-cents-v1'?financialRefundEstimate:legacyFinancialRefundEstimate)(r.financialBasis,r.sourceBudgetAmount),amountBasis:'immutable_confirmed_source_component_budget'}
   })
 }
 async function validate(conn,order,warehouseId,items,scope) {
@@ -93,11 +95,28 @@ async function lockExecution(conn,taskId) {
   // Discover immutable identities without taking a task/stock lock first. Lock sources in stable order.
   const [refs]=await conn.query(`SELECT DISTINCT sri.dispatch_component_id,rt.return_id FROM return_tasks rt JOIN return_task_items rti ON rti.task_id=rt.id JOIN sale_return_items sri ON sri.id=rti.return_item_id WHERE rt.id=? AND sri.dispatch_component_id IS NOT NULL ORDER BY sri.dispatch_component_id`,[taskId])
   if(!refs.length)return false
-  await conn.query('SELECT id FROM sale_dispatch_component_money WHERE id IN (?) ORDER BY id FOR UPDATE',[refs.map(r=>r.dispatch_component_id)])
-  await conn.query('SELECT id FROM sale_returns WHERE id=? FOR UPDATE',[refs[0].return_id])
-  return true
+  const [budgets]=await conn.query('SELECT id,dispatch_group_id FROM sale_dispatch_component_money WHERE id IN (?) ORDER BY id FOR UPDATE',[refs.map(r=>r.dispatch_component_id)])
+  if(budgets.length!==refs.length)invalid('原组件预算不完整')
+  const selectedIds=[...new Set(budgets.map(r=>Number(r.dispatch_group_id)))].sort((a,b)=>a-b)
+  const [selected]=await conn.query('SELECT id,order_id,order_gross_basis,discount_basis,basis_origin,confirmed_at FROM sale_dispatch_groups WHERE id IN (?) ORDER BY id FOR SHARE',[selectedIds])
+  if(selected.length!==selectedIds.length||selected.some(d=>!d.confirmed_at||!['real_confirmation','legacy_verified'].includes(d.basis_origin)))invalid('准确原出库折扣依据缺失')
+  const orderId=Number(selected[0].order_id)
+  if(selected.some(d=>Number(d.order_id)!==orderId))invalid('原组件预算来自不同销售单')
+  // Discovery can omit a newer legitimate dispatch under early RR. All normal
+  // dispatch writers copy the same first immutable basis. Only exact known PKs
+  // are locked here, never an order-wide gap range or a stock→SO lock.
+  const [known]=await conn.query('SELECT id FROM sale_dispatch_groups WHERE order_id=? AND confirmed_at IS NOT NULL ORDER BY id',[orderId])
+  const ids=[...new Set([...selectedIds,...known.map(d=>Number(d.id))])].sort((a,b)=>a-b)
+  const [proof]=await conn.query('SELECT id,order_id,order_gross_basis,discount_basis,basis_origin,confirmed_at FROM sale_dispatch_groups WHERE id IN (?) ORDER BY id FOR SHARE',[ids])
+  const g=cash.storedCashCents(selected[0].order_gross_basis,'原套单合计'),d=cash.storedCashCents(selected[0].discount_basis,'原套单折扣')
+  if(proof.length!==ids.length||proof.some(r=>Number(r.order_id)!==orderId||!r.confirmed_at||!['real_confirmation','legacy_verified'].includes(r.basis_origin)||cash.storedCashCents(r.order_gross_basis,'原套单合计')!==g||cash.storedCashCents(r.discount_basis,'原套单折扣')!==d))invalid('原套单各准确出库依据不一致')
+  const [[ret]]=await conn.query('SELECT id,sale_order_id,cash_policy FROM sale_returns WHERE id=? FOR UPDATE',[refs[0].return_id])
+  if(!ret||Number(ret.sale_order_id)!==orderId||ret.cash_policy!=='cash-cents-v1')invalid('旧已确认套单退货缺少明确分位执行意图，请核对后重新建单')
+  return {orderId,returnId:Number(ret.id),taskId:Number(taskId),basis:{orderGross:cash.cashText(g),discount:cash.cashText(d)},[EXECUTION_CONNECTION]:conn}
 }
-async function complete(conn,returnId,taskId) {
+
+async function complete(conn,returnId,taskId,context=null) {
+  if(!context||context[EXECUTION_CONNECTION]!==conn||context.returnId!==Number(returnId)||context.taskId!==Number(taskId))invalid('缺少本事务库存动作前的套单分位来源证明')
   const [qa]=await conn.query('SELECT id,return_item_id,checked_qty,rejected_qty,putaway_qty FROM return_task_items WHERE task_id=? ORDER BY id FOR UPDATE',[taskId])
   const [sourceItems]=await conn.query(`SELECT sri.id,sri.dispatch_component_id,m.source_qty,m.confirmed_amount,g.order_id FROM sale_return_items sri
     JOIN sale_dispatch_component_money m ON m.id=sri.dispatch_component_id JOIN sale_commercial_components c ON c.id=m.component_id JOIN sale_commercial_groups g ON g.id=c.group_id
@@ -105,11 +124,14 @@ async function complete(conn,returnId,taskId) {
   const qaByItem=new Map(qa.map(q=>[Number(q.return_item_id),q]))
   const items=sourceItems.map(i=>{const q=qaByItem.get(Number(i.id));if(!q)invalid('退货明细缺少真实QA行');return {...i,taskItemId:q.id,checked_qty:q.checked_qty,rejected_qty:q.rejected_qty,putaway_qty:q.putaway_qty}})
   if(!items.length)invalid('退货明细缺少原出库批次')
-  await conn.query('SELECT id FROM payment_records WHERE type=2 AND order_id=? FOR UPDATE',[items[0].order_id])
-  const [allReceipts]=await conn.query('SELECT refund_amount FROM sale_commercial_refund_receipts WHERE order_id=? ORDER BY id FOR SHARE',[items[0].order_id])
-  let financialGrossBefore=allReceipts.reduce((n,r)=>n+Math.round(Number(r.refund_amount)*100),0)/100
-  const [[basisRow]]=await conn.query('SELECT order_gross_basis,discount_basis FROM sale_dispatch_groups WHERE order_id=? AND confirmed_at IS NOT NULL ORDER BY id LIMIT 1',[items[0].order_id])
-  const financialBasis={orderGross:Number(basisRow?.order_gross_basis),discount:Number(basisRow?.discount_basis)}
+  if(Number(items[0].order_id)!==context.orderId)invalid('套单实际退货与预锁来源不一致')
+  const [[ar]]=await conn.query('SELECT id,total_amount,paid_amount,balance FROM payment_records WHERE type=2 AND order_id=? FOR UPDATE',[items[0].order_id])
+  if(ar)for(const field of ['total_amount','paid_amount','balance'])cash.storedCashCents(ar[field],`原套单应收${field}`)
+  const [allReceipts]=await conn.query('SELECT refund_amount,financial_amount FROM sale_commercial_refund_receipts WHERE order_id=? ORDER BY id FOR SHARE',[items[0].order_id])
+  let beforeCents=allReceipts.reduce((n,r)=>n+cash.storedCashCents(r.refund_amount,'原套单已退毛额'),0n),actualFinancial=allReceipts.reduce((n,r)=>n+cash.storedCashCents(r.financial_amount,'原套单已退实际净额'),0n)
+  const financialBasis=context.basis
+  if(actualFinancial!==financialTarget(financialBasis,cash.cashText(beforeCents)))invalid('原套单已退实际净额与分预算不一致，保留原账待核')
+  if(!ar&&cash.storedCashCents(financialBasis.orderGross,'原套单合计')!==cash.storedCashCents(financialBasis.discount,'原套单折扣')&&(beforeCents>0n||items.some(i=>cash.storedCashCents(i.confirmed_amount,'原组件预算')>0n)))invalid('缺少原已发正额应收互斥事实')
   const ids=[...new Set(items.map(i=>Number(i.dispatch_component_id)))]
   const [previous]=await conn.query('SELECT dispatch_component_id,return_task_item_id,qualified_qty,refund_amount FROM sale_commercial_refund_receipts WHERE dispatch_component_id IN (?) ORDER BY id FOR SHARE',[ids])
   // Only completed immutable execution proof is inspected, never another SR or
@@ -120,22 +142,22 @@ async function complete(conn,returnId,taskId) {
     for(const r of previous){const p=byId.get(Number(r.return_task_item_id));if(!p||roundQty(Number(p.checked_qty)-Number(p.rejected_qty))!==Number(r.qualified_qty)||Number(p.putaway_qty)!==Number(r.qualified_qty))invalid('既有退款回执与已完成真实合格入仓量不符')}
   }
   const used=new Map();for(const r of previous)used.set(Number(r.dispatch_component_id),roundQty((used.get(Number(r.dispatch_component_id))||0)+Number(r.qualified_qty)))
-  let totalFinancialUnits=0
+  let totalFinancialUnits=0n
   const rows=items.map(i=>{
     const qty=roundQty(Number(i.checked_qty)-Number(i.rejected_qty))
     if(qty!==Number(i.putaway_qty))invalid('合格量尚未全部真实入仓')
     const before=used.get(Number(i.dispatch_component_id))||0,after=roundQty(before+qty)
     const projection=projectCommercialRefund({sourceAmount:i.confirmed_amount,sourceQty:i.source_qty,beforeQualifiedQty:before,afterQualifiedQty:after})
     used.set(Number(i.dispatch_component_id),after)
-    const financialAfter=Math.round((financialGrossBefore+projection.refundAmount)*100)/100
-    const financial=financialRefundDelta(financialBasis,financialGrossBefore,financialAfter)
-    financialGrossBefore=financialAfter;totalFinancialUnits+=Math.round(financial*10000)
+    const afterCents=beforeCents+cash.storedCashCents(projection.refundAmount,'本次组件毛额')
+    const financial=financialRefundDelta(financialBasis,cash.cashText(beforeCents),cash.cashText(afterCents),cash.cashText(actualFinancial))
+    const delta=cash.storedCashCents(financial,'本次套单实际净额');beforeCents=afterCents;actualFinancial+=delta;totalFinancialUnits+=delta
     return [i.order_id,i.dispatch_component_id,i.id,i.taskItemId,qty,before,after,projection.refundAmount,financial]
   })
   if(rows.length)await conn.query('INSERT INTO sale_commercial_refund_receipts (order_id,dispatch_component_id,return_item_id,return_task_item_id,qualified_qty,before_qualified_qty,after_qualified_qty,refund_amount,financial_amount) VALUES ?',[rows])
   const cases=rows.map(()=>'WHEN ? THEN ?').join(' ')
   await conn.query(`UPDATE sale_return_items SET amount=CASE id ${cases} ELSE amount END WHERE return_id=?`,[...rows.flatMap(r=>[r[2],r[8]]),returnId])
-  await conn.query('UPDATE sale_returns SET total_amount=? WHERE id=?',[totalFinancialUnits/10000,returnId])
-  return totalFinancialUnits/10000
+  await conn.query('UPDATE sale_returns SET total_amount=? WHERE id=?',[cash.cashNumber(totalFinancialUnits),returnId])
+  return cash.cashNumber(totalFinancialUnits)
 }
 module.exports={sources,savedSources,loadView,validate,lockExecution,complete}

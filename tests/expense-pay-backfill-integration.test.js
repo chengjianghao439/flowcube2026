@@ -44,6 +44,7 @@ function fixture({ closed = false, replay = false, stored = null, priorFunds = [
     if (sql.includes('FROM finance_period_backfills')) return [stored ? [stored] : []]
     if (sql.includes('FROM finance_account_transactions')) return [priorFunds]
     if (sql.includes('FROM finance_accounts')) { if (sql === 'SELECT id FROM finance_accounts WHERE id=? FOR UPDATE') events.push('account'); return [[{ id: 12, company_id: 1 }]] }
+    if (sql.includes('FROM expense_claim_items')) return [[{ id: 1, amount: '300.0000' }]]
     if (sql.includes('FROM expense_claims')) return [[{ id: 81, claim_no: 'EC81', status: stored?.executed_at || replay ? 4 : 3, total_amount: '300.0000', paid_account_id: stored?.executed_at || replay ? 12 : null, paid_at: stored?.executed_at || (replay ? '2026-10-07 10:00:00' : null) }]]
     events.push(sql.startsWith('SELECT') ? 'account' : 'update'); return [{}]
   }
@@ -54,7 +55,7 @@ function fixture({ closed = false, replay = false, stored = null, priorFunds = [
   }
   const pool = {
     getConnection: async () => { events.push('connection'); return conn },
-    query: async (sql, params) => { if (sql.includes('operation_requests')) throw new Error('Receipt must use the original transaction connection'); if (!sql.includes('finance_period_backfills')) events.push('preflight'); return query(sql, params) },
+    query: async (sql, params) => { if (sql.includes('operation_requests')) throw new Error('Receipt must use the original transaction connection'); if (!sql.includes('finance_period_backfills') && !sql.includes('FROM expense_claim_items')) events.push('preflight'); return query(sql, params) },
   }
   const stubs = {
     '../../config/db': { pool },

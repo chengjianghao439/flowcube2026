@@ -36,13 +36,14 @@ async function findById(id, scopeWarehouseIds = null) {
   assertInScope(scopeWarehouseIds, rows[0].warehouse_id, '仓库任务')
   const task = fmt(rows[0])
   const inboundThresholds = await getInboundClosureThresholds()
-  const [items] = await pool.query('SELECT * FROM warehouse_task_items WHERE task_id=?', [id])
+  const [items] = await pool.query('SELECT i.*,p.allow_decimal_qty FROM warehouse_task_items i LEFT JOIN product_items p ON p.id=i.product_id WHERE i.task_id=?', [id])
   task.items = items.map(r => ({
     id: r.id,
     productId: r.product_id,
     productCode: r.product_code,
     productName: r.product_name,
     unit: r.unit,
+    allowDecimalQty: r.allow_decimal_qty == null || Number(r.allow_decimal_qty) === 1,
     articleNumber: r.article_number || null,
     spec: r.spec || null,
     color: r.color || null,

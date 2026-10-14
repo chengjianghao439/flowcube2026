@@ -1,4 +1,5 @@
 const { z } = require('zod')
+const {cashCents,cashNumber,roundCashCents}=require('../../utils/cashMoney')
 const AppError = require('../../utils/AppError')
 
 const { hasTooManyDecimals } = require('../../utils/qtyPrecision')
@@ -92,13 +93,12 @@ const shipSaleSchema=modelSchema(ordinaryShipSaleSchema,z.object({...commercialM
 const commercialActionSchema=modelSchema(z.object({changeReason:z.string().max(500).optional().nullable()}).default({}),z.object({...commercialMarker,changeReason:z.string().max(500).optional().nullable()}).strict())
 
 function getNetOrderAmount(totalAmount, discountAmount) {
-  const gross = Math.max(0, Number(totalAmount) || 0)
-  const discount = Math.max(0, Number(discountAmount) || 0)
-  return Math.round(Math.max(0, gross - discount) * 10000) / 10000
+  const gross=roundCashCents(totalAmount||0),discount=cashCents(discountAmount||0,{label:'订单折扣'})
+  return cashNumber(gross>discount?gross-discount:0n)
 }
 
 function assertDiscountWithinTotal(discountAmount, totalAmount) {
-  if (Number(discountAmount || 0) > Number(totalAmount) + 1e-6) {
+  if(cashCents(discountAmount||0,{label:'订单折扣'})>cashCents(totalAmount,{label:'订单合计'})){
     throw new AppError('折扣金额不能超过订单合计', 400, 'SALE_DISCOUNT_EXCEEDS_TOTAL')
   }
 }

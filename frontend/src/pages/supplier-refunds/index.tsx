@@ -11,7 +11,7 @@ import { useSupplierRefundRead, useRefundReadQuery } from '@/hooks/useSupplierRe
 import { useApprovalDetailHandoff } from '@/hooks/useApprovalDetailHandoff';
 import { useOwnRefundRecords } from '@/hooks/useSupplierRefundOperation';
 import { listSupplierRefundsApi, supplierRefundDetailApi } from '@/api/supplier-refunds';
-import { refundMoneyLabel, mayReadRefund } from '@/lib/supplierRefundRecovery';
+import { refundCashLabel, mayReadRefund } from '@/lib/supplierRefundRecovery';
 import { SUPPLIER_REFUND_STATUS_NAME } from '@/generated/status';
 import { PERMISSIONS as P } from '@/lib/permission-codes';
 import type { SupplierRefund } from '@/types/supplier-refund';
@@ -36,7 +36,7 @@ export default function SupplierRefundPage() {
       { key: 'refund_no', title: '退款单号', width: 260, render: (_, r) => <Button variant="link" className="h-auto whitespace-normal px-0 text-left text-doc-code" disabled={!scope.current() || !list.ready} onClick={() => { if (scope.current()) setSelected(r.id); }}>{r.refund_no}</Button> },
       { key: 'supplier_name', title: '供应商 / 仓库', width: 240, render: (_, r) => <div className="space-y-1"><p>{r.supplier_name || '原单未记录供应商名称'}</p><p className="text-xs text-muted-foreground">{r.warehouse_name || `原仓库 #${r.warehouse_id}`}</p></div> },
       { key: 'purchase_return_no', title: '关联原单', width: 200, render: (_, r) => <div className="space-y-1 text-xs"><p>采购退货 <span className="text-doc-code">{r.purchase_return_no || `#${r.purchase_return_id}`}</span></p><p className="text-muted-foreground">采购 <span className="text-doc-code">{r.purchase_order_no || `#${r.purchase_order_id}`}</span></p></div> },
-      { key: 'amount', title: '退款金额', width: 130, align: 'right', render: v => <span className="tabular-nums">{refundMoneyLabel(v)}</span> },
+      { key: 'amount', title: '退款金额', width: 130, align: 'right', render: v => <span className="tabular-nums">{refundCashLabel(v)}</span> },
       { key: 'refund_date', title: '真实银行回款日', width: 150 },
       { key: 'status', title: '业务阶段', width: 100, render: (_, r) => <SoftStatusLabel label={SUPPLIER_REFUND_STATUS_NAME[r.status] || '状态待核对'} tone={({ 1: 'draft', 2: 'active', 3: 'success', 4: 'danger' } as Record<number, StatusTone>)[r.status] || 'warning'} /> },
     ];

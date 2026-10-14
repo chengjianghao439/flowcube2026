@@ -1,5 +1,6 @@
 import type { KitReadOwner } from '@/api/kits'
 import type { CommercialGroup } from '@/types/sale-commercial'
+import { commercialUnit } from '@/pages/sale/commercial/commercialDraft'
 import { assertKitReadOwner } from '@/hooks/useKits'
 /** 订单详情的发货安排、来源解释与事项跟进；交接只导航或展开只读事实。 */
 import { explainFulfillmentAction, fulfillmentDocumentPath } from '@/lib/fulfillmentAction'
@@ -177,7 +178,7 @@ export function OrderFulfillmentPanel({ type, id, readOwner, commercialGroups }:
         {data.delivery?.commercialGroups?.map(group => {
           const savedGroup = commercialGroups.find(g => g.id === group.groupId)
           return <p key={group.groupId}>
-            {savedGroup?.kitName ?? savedGroup?.components[0]?.productName ?? '原成交行'} · 还需发 {group.remainingQty} · {group.readyDate ? `预计备齐 ${group.readyDate}` : '备齐日期未知'} · {group.readyDateExplanation}
+            {savedGroup?.kitName ?? savedGroup?.components[0]?.productName ?? '原成交行'} · 还需发 {group.remainingQty} {savedGroup ? commercialUnit(savedGroup) : '（单位待核对）'} · {group.readyDate ? `预计备齐 ${group.readyDate}` : '备齐日期未知'} · {group.readyDateExplanation}
           </p>
         }) ?? <p>成套备货安排尚未提供，备齐日期待核对。</p>}
       </div>}

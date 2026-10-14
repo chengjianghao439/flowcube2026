@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { webcrypto } from 'node:crypto'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter, useLocation } from 'react-router-dom'
@@ -38,6 +39,8 @@ async function mount() {
   await settle()
 }
 beforeEach(() => {
+ Object.defineProperty(globalThis, 'crypto', { configurable: true, value: webcrypto }); Object.defineProperty(navigator, 'locks', { configurable: true, value: { request: async (_name: string, options: unknown, fn?: (lock: object) => unknown) => (typeof options === 'function' ? options : fn!)({}) } })
+
   vi.clearAllMocks()
   localStorage.clear()
   useAuthStore.setState({ user: { id: 901, roleId: 1, permissions: [] } as unknown as User, token: 'test-token', sessionGeneration: useAuthStore.getState().sessionGeneration + 1 })
@@ -57,24 +60,28 @@ afterEach(async () => {
   localStorage.clear()
 })
 
-test('真实 hook 从无 pending 提交，经原冻结 record 兜底确认后提供原任务复核入口', async () => {
+test('任务已经待复核仍不能凭业务进度确认原请求，原键pending时保留未知', async () => {
   await mount(); await scan('P1'); await scan('A01')
   expect(api.sort).toHaveBeenCalledWith(42, [{ itemId: 9, sortedQty: 1 }], expect.any(String))
-  expect(api.task).toHaveBeenCalledWith(42, { skipGlobalError: true })
-  expect(button('去复核')).toBeTruthy()
-  await act(async () => { button('去复核')!.click() })
-  expect(host.querySelector('output')?.textContent).toBe('/pda/check/42')
+  expect(api.task).not.toHaveBeenCalled()
+  expect(button('去复核')).toBeUndefined()
+  expect(host.textContent).toContain('待确认')
+  await act(async () => { receiptResponses.forEach(resolve => resolve({ status: 'pending', data: null })) })
+  await settle()
+  expect(button('去复核')).toBeUndefined()
+  expect(host.textContent).toContain('待确认')
   expect(api.sort).toHaveBeenCalledTimes(1)
-  expect(JSON.parse(localStorage.getItem('pda_pending_request_confirmations') || '{}').records).toEqual([])
 })
 
-test('真实兜底确认后交接读取迟到，不能回写旧入口或清掉另一任务的新扫码提示', async () => {
+test('原成功回执确认后的交接读取迟到，不能回写旧入口或清掉另一任务的新扫码提示', async () => {
   let resolve!: (task: typeof task42) => void
-  api.task.mockResolvedValueOnce(task42).mockImplementationOnce(() => new Promise(r => { resolve = r }))
+  api.task.mockImplementationOnce(() => new Promise(r => { resolve = r }))
   await mount(); await scan('P1'); await scan('A01')
-  expect(api.task).toHaveBeenCalledTimes(2)
+  await act(async () => { receiptResponses.forEach(resolve => resolve({ status: 'success', data: { allSorted: true } } as never)) })
+  await settle()
+  expect(api.task).toHaveBeenCalledTimes(1)
   expect(button('去复核')).toBeUndefined()
-  // hook 已清除原 pending；读取期间发生的新扫描以新任务为准。
+  // 原成功回执已确认；交接读取期间发生的新扫描以新任务为准。
   await scan('P2')
   expect(host.textContent).toContain('WT073'); expect(host.textContent).toContain('B01')
   await act(async () => { resolve(task42) }); await settle()

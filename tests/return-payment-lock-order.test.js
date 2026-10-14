@@ -18,8 +18,8 @@ function load(file, deps) {
   return module.exports
 }
 function fixture({ movedMember = false, movedRecord = false, paid = 20, projectionRows, snapshotEmpty = false, currentExists = true, recordType = 1 } = {}) {
-  const events = [], updates = [], sqls = []
-  const record = { id: 5, type: recordType, order_id: 10, order_no: recordType === 2 ? 'SO10' : 'PO10', total_amount: 100, paid_amount: paid }
+  const events = [], updates = [], sqls = [], statementBindings = []
+  const record = { id: 5, type: recordType, order_id: 10, order_no: recordType === 2 ? 'SO10' : 'PO10', total_amount: 100, paid_amount: paid, balance: 100 - paid }
   const conn = { query: async (sql, params = []) => {
     sqls.push(sql)
     if (sql.includes('FROM payment_records WHERE')) {
@@ -33,24 +33,31 @@ function fixture({ movedMember = false, movedRecord = false, paid = 20, projecti
     }
     if (sql.includes('FROM reconciliation_statements') && sql.includes('FOR UPDATE')) { events.push(`stmt:${params[0]}`); return [[{ id: params[0], status: 2 }]] }
     if (sql.includes('FROM reconciliation_statement_items i')) {
-      if (/FOR SHARE|FOR UPDATE/.test(sql)) return [projectionRows || [{ total_amount: 90, paid_amount: paid }, { total_amount: 40, paid_amount: 10 }]]
+      if (/FOR SHARE|FOR UPDATE/.test(sql)) return [projectionRows || [{ total_amount: 90, paid_amount: paid, balance: 90 - paid }, { total_amount: 40, paid_amount: 10, balance: 30 }]]
       return [[{ total: 999, paid: 0 }]] // RR read view established before a lock wait.
     }
     if (sql.includes('SELECT status FROM reconciliation_statements')) return [[{ status: 2 }]]
     if (sql.includes('UPDATE payment_records')) { events.push('writeAP'); updates.push(params); return [{ affectedRows: 1 }] }
-    if (sql.includes('UPDATE reconciliation_statements')) { events.push('projection'); updates.push(params); return [{ affectedRows: 1 }] }
+    if (sql.includes('UPDATE reconciliation_statements')) {
+      events.push('projection'); statementBindings.push(params)
+      // Bindings may be exact DECIMAL4 text. Existing assertions inspect the
+      // stored projection value; preserve and separately test the raw binding.
+      const decimal = require('../backend/src/utils/decimalMoney')
+      updates.push(params.map((value, index) => index < 3 ? Number(decimal.moneyText(decimal.moneyUnits(value))) : value))
+      return [{ affectedRows: 1 }]
+    }
     unknown.push(`SQL ${sql}`); throw Error(`Unexpected SQL ${sql}`)
   } }
   const statements = load('modules/payments/reconciliation-statements.service.js', {
-    '../../config/db': {}, '../../utils/AppError': AppError,
+    '../../config/db': {}, '../../utils/AppError': AppError, '../../utils/cashMoney': require('../backend/src/utils/cashMoney'),
     '../../utils/codeGenerator': {}, '../../utils/decimalMoney': require('../backend/src/utils/decimalMoney'), '../../constants/settlementType': { SETTLEMENT_TYPE: { MONTHLY: 2 } }, '../../utils/pagination': {},
   })
   const helpers = load('modules/returns/returns.helpers.js', {
-    '../../utils/AppError': AppError, '../../utils/codeGenerator': {},
+    '../../utils/AppError': AppError, '../../utils/codeGenerator': {}, '../../utils/cashMoney': require('../backend/src/utils/cashMoney'),
     '../payments/payment-events.service': { PAYMENT_EVENT: {}, record: async actual => { assert.equal(actual, conn); events.push('event') } },
     '../payments/reconciliation-statements.service': statements, '../../utils/requestContext': { getRequestId: () => null },
   })
-  return { conn, helpers, statements, events, updates, sqls }
+  return { conn, helpers, statements, events, updates, sqls, statementBindings }
 }
 const input = { recordType: 1, orderId: 10, orderNo: 'PO10', returnNo: 'PR11', returnType: 'purchase', amount: 10, operator: { userId: 9 } }
 test('return adjustment locks all statements ascending before current AP; original money and event preserved', async () => {
@@ -95,6 +102,13 @@ test('current member projection retains four-decimal monetary totals instead of 
   const result = await f.statements.refreshSettlement(f.conn, 2, { currentRead: true })
   assert.equal(result.total, 0.3); assert.equal(result.paid, 0.3)
   assert.equal(f.updates[0][0], 0.3); assert.equal(f.updates[0][1], 0.3)
+})
+test('statement fixture retains exact raw DECIMAL4 bindings as well as stored values', async () => {
+  const f = fixture({ projectionRows: [{ total_amount: '0.3000', paid_amount: '0.1000' }] })
+  const result = await f.statements.refreshSettlement(f.conn, 2, { currentRead: true })
+  assert.equal(result.balance, 0.2)
+  assert.deepEqual(Array.from(f.statementBindings[0]).slice(0, 3), ['0.3000', '0.1000', '0.2000'])
+  assert.deepEqual(Array.from(f.updates[0]).slice(0, 3), [0.3, 0.1, 0.2])
 })
 const saleInput = { ...input, recordType: 2, orderNo: 'SO10', returnNo: 'SR11', returnType: 'sale' }
 test('ordinary sale return empty RR identity but current AR exists rejects before statements, money or events', async () => {

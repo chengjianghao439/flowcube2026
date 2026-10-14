@@ -1,3 +1,4 @@
+const { storedCashCents, cashNumber } = require('../../utils/cashMoney')
 const AppError = require('../../utils/AppError')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const { PAYMENT_EVENT, record: recordPaymentEvent } = require('../payments/payment-events.service')
@@ -7,9 +8,10 @@ const { getRequestId } = require('../../utils/requestContext')
 const genNo = (conn, prefix, table, col) => generateDailyCode(conn, prefix, table, col)
 
 function calcPaymentStatus(totalAmount, paidAmount) {
-  const total = Number(totalAmount || 0)
-  const paid = Number(paidAmount || 0)
-  const balance = Number((total - paid).toFixed(4))
+  const totalCents = storedCashCents(totalAmount, '原账款总额')
+  const paidCents = storedCashCents(paidAmount, '原账款已收付')
+  const paid = cashNumber(paidCents)
+  const balance = cashNumber(totalCents - paidCents)
   if (balance <= 0) return { balance, status: 3 }
   if (paid > 0) return { balance, status: 2 }
   return { balance, status: 1 }
@@ -23,7 +25,10 @@ async function adjustPaymentRecordForReturn(conn, {
   returnType,
   amount,
   operator,
+  expectedTotal = null,
+  purchaseCashProjection = null,
 }) {
+  const returnCents = storedCashCents(amount, '退货实际冲减金额')
   const params = [recordType]
   let where = 'type=?'
   if (orderId) {
@@ -76,9 +81,13 @@ async function adjustPaymentRecordForReturn(conn, {
     throw new AppError('账款或对账关系已变化，请刷新后核对退货账款', 409, 'RETURN_PAYMENT_CONTEXT_CHANGED')
   }
 
-  const currentTotal = Number(record.total_amount || 0)
-  const currentPaid = Number(record.paid_amount || 0)
-  const newTotal = Number((currentTotal - Number(amount || 0)).toFixed(4))
+  const totalCents = storedCashCents(record.total_amount, '原账款总额')
+  const paidCents = storedCashCents(record.paid_amount, '原账款已收付')
+  storedCashCents(record.balance, '原账款余额')
+  if(expectedTotal!=null&&totalCents!==storedCashCents(expectedTotal,'已发已退预计应收'))throw new AppError('原账款与冻结执行分预算不一致，请核对',409,'SALE_RETURN_NET_BASIS_REQUIRED')
+  const nextCashProjection = purchaseCashProjection ? require('../purchase/purchase.cash-money').appendReturn(purchaseCashProjection.snapshot,record.cash_projection,record.total_amount,purchaseCashProjection.fact) : null
+  const currentTotal = cashNumber(totalCents), currentPaid = cashNumber(paidCents)
+  const newTotal = cashNumber(totalCents - returnCents)
   if (newTotal < 0) {
     throw new AppError(`退货金额超出原账款总额，无法回冲`, 409)
   }
@@ -97,10 +106,12 @@ async function adjustPaymentRecordForReturn(conn, {
     [newTotal, balance, status, record.id],
   )
 
+  if (nextCashProjection) await conn.query('UPDATE payment_records SET cash_projection=? WHERE id=?',[JSON.stringify(nextCashProjection),record.id])
+
   // 对账单投影刷新（2026-08-21 审计 E.3 修复）：退货冲减 total_amount 后，
   // 若该账款属于某对账单，同事务刷新 settled_amount/状态（对齐 recordPayment 范式）。
   for (const s of stmtRows) {
-    await statementSvc.refreshSettlement(conn, s.statement_id, { currentRead: true })
+    await statementSvc.refreshSettlement(conn, s.statement_id, { currentRead: true, cashOnly: true })
   }
   await recordPaymentEvent(conn, {
     paymentRecordId: Number(record.id),
@@ -141,6 +152,7 @@ async function adjustPaymentRecordForReturn(conn, {
  *  - 账款尚未生成时（如现结应付要到收货上架完成才落库）直接放行，交由末端兜底。
  */
 async function assertReturnPaymentHeadroom(conn, { recordType, orderId = null, orderNo = null, amount, purchaseReturnId = null }) {
+  const returnCents = storedCashCents(amount, '退货预计冲减金额')
   const params = [recordType]
   let where = 'type=?'
   if (orderId) {
@@ -153,13 +165,15 @@ async function assertReturnPaymentHeadroom(conn, { recordType, orderId = null, o
     return
   }
   const [[record]] = await conn.query(
-    `SELECT total_amount, paid_amount FROM payment_records WHERE ${where} ORDER BY id DESC LIMIT 1`,
+    `SELECT total_amount, paid_amount, balance FROM payment_records WHERE ${where} ORDER BY id DESC LIMIT 1`,
     params,
   )
   if (!record) return
-  const currentTotal = Number(record.total_amount || 0)
-  const currentPaid = Number(record.paid_amount || 0)
-  const newTotal = Number((currentTotal - Number(amount || 0)).toFixed(4))
+  const totalCents = storedCashCents(record.total_amount, '原账款总额')
+  const paidCents = storedCashCents(record.paid_amount, '原账款已收付')
+  storedCashCents(record.balance, '原账款余额')
+  const currentPaid = cashNumber(paidCents)
+  const newTotal = cashNumber(totalCents - returnCents)
   if (currentPaid > newTotal) {
     const refundSource = recordType === 1 && Number.isSafeInteger(purchaseReturnId) && purchaseReturnId > 0 && Number.isSafeInteger(orderId) && orderId > 0
       ? { purchaseReturnId, purchaseOrderId: orderId } : null

@@ -2,10 +2,11 @@
 // Authoritative commercial resolution on the caller's connection, before any stock mutation.
 const AppError = require('../../utils/AppError')
 const { assertInScope } = require('../../utils/warehouseScope')
-const { assertQtyPrecision, assertQtyScale } = require('../../utils/qtyPrecision')
-const { foldEntryItemsBatch, round8, roundQty } = require('../../utils/unitConversion')
+const { assertQtyPrecision, assertQtyScale, assertQtyPrecisionWith } = require('../../utils/qtyPrecision')
+const { round8, roundQty } = require('../../utils/unitConversion')
 const { loadVersions, disabledReasons, definitionView } = require('../kits/kits.service')
 const { assertPrice, assertPositiveQty, amountFromPriceQuantity, allocateCents } = require('../kits/kits.composition')
+const { normalizeFixedSaleItems } = require('./sale.shipping-quantity')
 const { projectCommercialCumulative } = require('./sale.commercial-money.math')
 function identity(input) {
   const { quantity, remark, ...rest } = input
@@ -25,7 +26,12 @@ function materialize(groups, products, warehouses) {
       assertQtyScale(c.baseQty * g.targetQty, '套内配件数量')
       if (qty > 9999999999.99) throw new AppError('套内配件数量超出允许范围', 400, 'QTY_INVALID')
       const key = `${c.productId}:${g.warehouseId}`
-      const old = physical.get(key) || { productId: c.productId, warehouseId: g.warehouseId, quantity: 0, amountCents: 0 }
+      const unit = c.unit || products.get(c.productId).unit
+      const policy = products.get(c.productId).allow_decimal_qty
+      assertQtyPrecisionWith({ name: c.productName, allowDecimal: policy == null || Number(policy) === 1 }, qty, '本行配件数量')
+      const old = physical.get(key) || { productId: c.productId, warehouseId: g.warehouseId, quantity: 0, amountCents: 0, unit, allowDecimalQtySnapshot: 0 }
+      if (old.unit !== unit) throw new AppError('同一商品的新旧单位不同，不能合并修改数量', 409, 'SALE_FIXED_UNIT_CHANGED')
+      if (policy == null || Number(policy) === 1) old.allowDecimalQtySnapshot = 1
       old.quantity = roundQty(old.quantity + qty)
       old.amountCents += money.components[n].amountCents
       physical.set(key, old)
@@ -37,7 +43,7 @@ function materialize(groups, products, warehouses) {
     const product = products.get(p.productId), warehouse = warehouses.get(p.warehouseId)
     const unitPrice = p.quantity ? round8(p.amountCents / 100 / p.quantity) : 0
     if (unitPrice >= 10000000000 || p.quantity > 9999999999.99) throw new AppError('商品单价或数量超出允许范围', 400, 'KIT_PHYSICAL_OVERFLOW')
-    return { ...p, productCode: product.code, productName: product.name, unit: product.unit, articleNumber: product.article_number, spec: product.spec, color: product.color, warehouseName: warehouse.name, unitPrice, amount: p.amountCents / 100, entryUnit: product.unit, entryQty: p.quantity, conversionRate: 1 }
+    return { ...p, productCode: product.code, productName: product.name, unit: p.unit, articleNumber: product.article_number, spec: product.spec, color: product.color, warehouseName: warehouse.name, unitPrice, amount: p.amountCents / 100, entryUnit: p.unit, entryQty: p.quantity, conversionRate: 1 }
   })
   return { groups, items, total: totalCents / 100 }
 }
@@ -78,6 +84,18 @@ async function resolve(conn, { customerId, warehouseId, commercialGroups, scopeW
   const [productRows] = productIds.length ? await conn.query('SELECT id,code,name,unit,article_number,spec,color,allow_decimal_qty,is_active,deleted_at,sale_price_a,sale_price_b,sale_price_c,sale_price_d FROM product_items WHERE id IN (?) ORDER BY id'+lockSql, [productIds]) : [[]]
   const products = new Map(productRows.map(p => [Number(p.id), p]))
   for (const id of productIds) { const p = products.get(id); if (!p || !Number(p.is_active) || p.deleted_at) throw new AppError('组件商品不存在或已停用', 400, 'KIT_COMPONENT_UNAVAILABLE') }
+  // Unchanged original facts keep their saved rule and conversion evidence.
+  // A quantity change is a new decision: use the current fixed unit and rule.
+  for (const group of keep.values()) {
+    const original = oldByKey.get(group.lineKey)
+    if (group.targetQty === original.targetQty) continue
+    if (group.kind === 'ordinary' && (group.metadata.entry?.entryUnit !== group.components[0].unit
+      || group.components[0].unit !== products.get(group.components[0].productId).unit)) {
+      throw new AppError('历史换算单位只供原单履约与查看；修改数量须重新按当前固定单位录入', 400, 'SALE_FIXED_UNIT_REQUIRED')
+    }
+    group.metadata = { ...group.metadata, quantityPolicies: Object.fromEntries(group.components.map(c => [c.productId,
+      products.get(c.productId).allow_decimal_qty == null || Number(products.get(c.productId).allow_decimal_qty) === 1 ? 1 : 0])) }
+  }
   const ordinaryIds = fresh.filter(g => g.kind === 'ordinary').map(g => Number(g.productId)), listPrices = new Map()
   if (customer.price_list_id && ordinaryIds.length) {
     const [prices] = await conn.query('SELECT product_id,sale_price FROM price_list_items WHERE list_id=? AND product_id IN (?)', [customer.price_list_id, ordinaryIds])
@@ -102,7 +120,7 @@ async function resolve(conn, { customerId, warehouseId, commercialGroups, scopeW
     return { ...g, price,product:p,referencePrice:reference,resolvedPriceSource:listPrices.has(Number(g.productId))?'price_list':'price_level',resolvedPriceLevel:customer.price_level||'A',priceListId:customer.price_list_id||null }
   })
   const ordinary = prepared.filter(g => g.kind === 'ordinary')
-  const folded = await foldEntryItemsBatch(conn, ordinary.map(g => ({ ...g, unit: g.product.unit, unitPrice: g.price, priceIsBase:g.priceSource!=='manual' })))
+  const folded = normalizeFixedSaleItems(ordinary.map(g => ({ ...g, productName: g.product.name, unit: g.product.unit, unitPrice: g.price, allowDecimalQtySnapshot: g.product.allow_decimal_qty == null || Number(g.product.allow_decimal_qty) === 1 ? 1 : 0 })))
   const foldedByKey = new Map(folded.map(g => [g.lineKey, g]))
   const freshByKey = new Map(prepared.map(g => {
     const entry = foldedByKey.get(g.lineKey)
@@ -110,7 +128,7 @@ async function resolve(conn, { customerId, warehouseId, commercialGroups, scopeW
     if(gross>9999999999.99)throw new AppError('成交金额超出允许范围',400,'KIT_AMOUNT_OVERFLOW')
     const components = g.kind === 'kit' ? g.version.components : [{ productId: Number(g.productId), baseQty: 1, sortNo: 0, referencePrice: g.referencePrice, amountWeight: '1.000000' }]
     const amounts = g.kind === 'kit' ? allocateCents(gross, components) : [gross]
-    const group = { lineKey: g.lineKey, kind: g.kind, warehouseId: g.warehouseId, kitVersionId: g.kitVersionId || null, kitCode: g.master?.code || null, kitName: g.master?.name || null, originalQty: entry?.quantity ?? g.quantity, targetQty: entry?.quantity ?? g.quantity, unitPrice: entry?.unitPrice ?? g.price, priceSource: g.priceSource || (g.kind === 'kit' ? 'kit_default' : 'default'), grossAmount: gross, metadata: { quote:{referenceUnitPrice:g.referencePrice,resolvedPriceSource:g.resolvedPriceSource,resolvedPriceLevel:g.resolvedPriceLevel,priceListId:g.priceListId},...(g.kind==='kit'?{kitUnit:g.master.unit||'套',kitIdentity:{spec:g.master.spec||'',color:g.master.color||'',articleNumber:g.master.article_number||''}}:{}),referenceSnapshotAt:g.version?.referenceSnapshotAt ?? null,versionCreatedAt:g.version?.createdAt ?? null,referenceBasisExplanation:g.version?.referenceBasisExplanation ?? null,priceCustomerId:Number(customerId), input: fresh.find(f => f.lineKey === g.lineKey), entry: entry ? { entryUnit: entry.entryUnit, entryQty: entry.entryQty, conversionRate: entry.conversionRate, entryUnitPrice: entry.entryUnitPrice } : null }, components: components.map((c,n) => { const p = products.get(c.productId); return { ...c, requiredQty: g.kind === 'kit' ? roundQty(c.baseQty*g.quantity) : entry.quantity, allocatedAmount: amounts[n], productCode:p.code,productName:p.name,unit:p.unit,articleNumber:p.article_number,spec:p.spec,color:p.color } }) }
+    const group = { lineKey: g.lineKey, kind: g.kind, warehouseId: g.warehouseId, kitVersionId: g.kitVersionId || null, kitCode: g.master?.code || null, kitName: g.master?.name || null, originalQty: entry?.quantity ?? g.quantity, targetQty: entry?.quantity ?? g.quantity, unitPrice: entry?.unitPrice ?? g.price, priceSource: g.priceSource || (g.kind === 'kit' ? 'kit_default' : 'default'), grossAmount: gross, metadata: { quantityPolicies: Object.fromEntries(components.map(c => [c.productId, products.get(c.productId).allow_decimal_qty == null || Number(products.get(c.productId).allow_decimal_qty) === 1 ? 1 : 0])), quote:{referenceUnitPrice:g.referencePrice,resolvedPriceSource:g.resolvedPriceSource,resolvedPriceLevel:g.resolvedPriceLevel,priceListId:g.priceListId},...(g.kind==='kit'?{kitUnit:g.master.unit||'套',kitIdentity:{spec:g.master.spec||'',color:g.master.color||'',articleNumber:g.master.article_number||''}}:{}),referenceSnapshotAt:g.version?.referenceSnapshotAt ?? null,versionCreatedAt:g.version?.createdAt ?? null,referenceBasisExplanation:g.version?.referenceBasisExplanation ?? null,priceCustomerId:Number(customerId), input: fresh.find(f => f.lineKey === g.lineKey), entry: entry ? { entryUnit: entry.entryUnit, entryQty: entry.entryQty, conversionRate: entry.conversionRate, entryUnitPrice: entry.entryUnitPrice } : null }, components: components.map((c,n) => { const p = products.get(c.productId); return { ...c, requiredQty: g.kind === 'kit' ? roundQty(c.baseQty*g.quantity) : entry.quantity, allocatedAmount: amounts[n], productCode:p.code,productName:p.name,unit:p.unit,articleNumber:p.article_number,spec:p.spec,color:p.color } }) }
     return [g.lineKey, group]
   }))
   const result = materialize(commercialGroups.map(g => keep.get(g.lineKey) || freshByKey.get(g.lineKey)), products, warehouses)

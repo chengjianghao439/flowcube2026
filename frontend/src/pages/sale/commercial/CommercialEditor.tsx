@@ -6,8 +6,6 @@ import { useNavigate } from 'react-router-dom'
 import { MAX_WORKSPACE_TABS, useWorkspaceStore } from '@/store/workspaceStore'
 import type { SaleOrder } from '@/types/sale'
 import type { CommercialBody, CommercialComponent, CommercialWriteConfirmation } from '@/types/sale-commercial'
-import { getProductApi } from '@/api/products'
-import { commercialReadConfig } from '@/api/sale-commercial'
 import type { KitReadOwner } from '@/api/kits'
 import { assertKitReadOwner, useKitBackup } from '@/hooks/useKits'
 import { useCommercialPreview, useCommercialWrite, readCommercialSaleOwned } from '@/hooks/useCommercialSale'
@@ -321,7 +319,7 @@ export default function CommercialEditor({
     try {
       assertKitReadOwner(owner)
       const submitted = { ...bodyResult.body, ...(order ? { changeReason: changeReason.trim() || null } : {}) }
-      const body = ordinaryOnlySave && (!order || order.commercialModel !== 'kit-v1') ? buildNewSalePayload(submitted, preview.data) : submitted
+      const body = ordinaryOnlySave && (!order || order.commercialModel !== 'kit-v1') ? buildNewSalePayload(submitted, preview.data, order?.items) : submitted
       if (reorder) {
         const answer = await reorder.write.submit(body)
         if (answer && activity.current.generation === generation && reorder.write.canApply(answer) && reorder.source.isActiveCurrent()) onDone(answer.id)
@@ -356,27 +354,6 @@ export default function CommercialEditor({
       setReloading(false)
     }
   }
-  const unitReads = useRef(new Map<string, AbortController>())
-  useEffect(() => {
-    const reads = unitReads.current
-    return () => { reads.forEach(controller => controller.abort()); reads.clear() }
-  }, [])
-  async function loadUnits(row: CommercialDraftRow) {
-    if (row.input.kind !== 'ordinary' || row.units.length || !mayInteract() || unitReads.current.has(row.input.lineKey)) return
-    const productId = row.input.productId
-    const controller = new AbortController(), generation = activity.current.generation
-    unitReads.current.set(row.input.lineKey, controller)
-    try {
-      assertKitReadOwner(owner)
-      const product = await getProductApi(row.input.productId, { ...commercialReadConfig(owner), signal: controller.signal })
-      assertKitReadOwner(owner)
-      if (!mounted.current || controller.signal.aborted || !mayInteract() || generation !== activity.current.generation) return
-      setRows(old => old.map(currentRow => currentRow.input.lineKey === row.input.lineKey && currentRow.input.kind === 'ordinary' && currentRow.input.productId === productId
-        ? { ...currentRow, units: product?.units ?? [], allowDecimalQty: product?.allowDecimalQty } : currentRow))
-    } catch {
-      if (!controller.signal.aborted && mayInteract()) toast.error('商品单位读取失败，请重试；当前输入保留')
-    } finally { unitReads.current.delete(row.input.lineKey) }
-  }
   function renderEntryRow(item: DisplayRow) {
     const { row, component } = item
     const resolved = resolvedByKey.get(row.input.lineKey)
@@ -389,7 +366,6 @@ export default function CommercialEditor({
     const priceError = showFieldErrors ? rowIssues.find(issue => issue.lineKey === row.input.lineKey && issue.target === 'price')?.message : undefined
     const integerQuantity =
       row.input.kind === 'kit' || (row.input.kind === 'ordinary' && (row.allowDecimalQty ?? allowsDecimal(row.input.productId)) === false && row.unit === row.baseUnit)
-    const unitOptions = [...new Set([row.unit, ...(row.baseUnit ? [row.baseUnit] : []), ...row.units.map(unit => unit.unitName)])]
     return (
       <tr key={row.input.lineKey} className="border-t hover:bg-muted/20">
         <td className="p-3">
@@ -416,40 +392,21 @@ export default function CommercialEditor({
             step={integerQuantity ? 1 : 0.01}
             min={integerQuantity ? 1 : 0.01}
             value={row.quantity}
-            disabled={!row.packagingExpressible}
+            disabled={!row.packagingExpressible || (row.input.kind === 'ordinary' && row.unit !== row.baseUnit)}
             onChange={(e) => update(row.input.lineKey, { quantity: e.target.value })}
             className="h-9 w-full text-right tabular-nums"
           />
           {quantityError && <p role="alert" className="mt-1 text-xs text-destructive-ink">{quantityError}</p>}
         </td>
         <td className="p-2">
-          {row.input.kind === 'ordinary' ? (
-            <select
-              aria-label={`${row.name}录入单位`}
-              onFocus={() => void loadUnits(row)}
-              onPointerDown={() => void loadUnits(row)}
-              value={row.unit}
-              className={`h-9 w-full rounded-md border border-input bg-background px-2 ${unitOptions.length === 1 ? 'appearance-none' : ''}`}
-              onChange={(e) =>
-                update(row.input.lineKey, {
-                  unit: e.target.value,
-                  input: { ...row.input, entryUnit: e.target.value } as CommercialDraftRow['input']
-                })
-              }
-            >
-              {unitOptions.map((u) => (
-                <option key={u}>{u}</option>
-              ))}
-            </select>
-          ) : (
-            row.input.kind === 'kit' && resolved ? commercialUnit(resolved) : row.unit
-          )}
+          {row.input.kind === 'kit' && resolved ? commercialUnit(resolved) : row.unit}
         </td>
         <td data-entry-field={`item-${row.input.lineKey}-price`} className="p-2">
           <Input
             data-entry-input
             aria-invalid={!!priceError}
             ref={input => consumePendingFocus(`item-${row.input.lineKey}-price`, input)}
+            disabled={row.input.kind === 'ordinary' && row.unit !== row.baseUnit}
             aria-label={`${row.name}成交单价`}
             type="number"
             step="0.0001"

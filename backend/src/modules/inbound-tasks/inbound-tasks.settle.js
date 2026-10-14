@@ -2,6 +2,53 @@ const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { buildDueDateSql, normalizeSettlementType } = require('../../constants/settlementType')
 const { compareAndSetStatus } = require('../../utils/statusTransition')
 const { assertPurchaseSettlementSources } = require('./inbound-purchase-source')
+const cash = require('../../utils/cashMoney')
+const purchaseCash = require('../purchase/purchase.cash-money')
+
+async function recomputeCashPayable(conn,po,{sourceReadMode}) {
+  const locking=sourceReadMode==='current'?'':' FOR UPDATE'
+  // Keep the existing receipt/return current-read order. POI identity is proved
+  // by the original source assertion; no stock or receipt-state writes occur here.
+  const [received]=await conn.query(`SELECT iti.purchase_item_id AS id, iti.putaway_qty AS quantity
+    FROM inbound_tasks it JOIN inbound_task_items iti ON iti.task_id=it.id
+    JOIN purchase_order_items poi ON poi.id=iti.purchase_item_id
+    WHERE iti.purchase_order_id=? AND it.deleted_at IS NULL AND it.status<>5 AND it.audit_status=1
+    ORDER BY iti.purchase_item_id,iti.id${locking}`,[po.id])
+  const vector=new Map()
+  const {decimalUnits}=require('../accounting/voucher-sale-money')
+  for(const r of received)vector.set(Number(r.id),(vector.get(Number(r.id))||0n)+decimalUnits(r.quantity,2))
+  const audited=[...vector].map(([id,q])=>({id,quantity:`${q/100n}.${String(q%100n).padStart(2,'0')}`}))
+  const [returns]=await conn.query(`SELECT * FROM purchase_returns WHERE purchase_order_id=? AND deleted_at IS NULL AND status=3 ORDER BY id${locking}`,[po.id])
+  const [items]=returns.length?await conn.query(`SELECT * FROM purchase_return_items WHERE return_id IN (?) ORDER BY return_id,id${sourceReadMode==='current'?'':' FOR SHARE'}`,[returns.map(r=>r.id)]):[[]]
+  const facts=returns.map(r=>purchaseCash.validateReturn(po.cash_basis,r,items.filter(i=>Number(i.return_id)===Number(r.id))))
+  const projection=purchaseCash.payableProjection(po.cash_basis,audited,facts)
+  const total=cash.storedCashCents(projection.payable)
+  // Preserve statement -> AP ordering and reject old precision instead of
+  // rewriting its amounts while recomputing a new cash projection.
+  const [[located]]=await conn.query('SELECT id FROM payment_records WHERE type=1 AND order_id=?',[po.id])
+  const [members]=located?await conn.query('SELECT DISTINCT statement_id FROM reconciliation_statement_items WHERE record_id=? ORDER BY statement_id',[located.id]):[[]]
+  for(const s of members)await conn.query('SELECT id FROM reconciliation_statements WHERE id=? FOR UPDATE',[s.statement_id])
+  const [[existing]]=await conn.query('SELECT * FROM payment_records WHERE type=1 AND order_id=? FOR UPDATE',[po.id])
+  if(existing){
+    cash.storedCashCents(existing.paid_amount,'原应付已付款');cash.storedCashCents(existing.balance,'原应付余额')
+    purchaseCash.validateProjection(po.cash_basis,existing.cash_projection,existing.total_amount)
+    const [current]=await conn.query('SELECT statement_id FROM reconciliation_statement_items WHERE record_id=? ORDER BY statement_id,id FOR SHARE',[existing.id])
+    const ids=[...new Set(current.map(r=>Number(r.statement_id)))]
+    if(!located||Number(located.id)!==Number(existing.id)||ids.length!==members.length||ids.some((id,n)=>id!==Number(members[n].statement_id)))purchaseCash.review('应付对账关系已变化，请重试核对')
+  }
+  if(!existing&&total===0n)return
+  const settlement=normalizeSettlementType(po.settlement_type),due=buildDueDateSql(settlement,po.payment_terms_days,po.created_at)
+  const amount=cash.cashNumber(total)
+  await conn.query(`INSERT INTO payment_records
+    (type,order_id,order_no,party_name,total_amount,paid_amount,balance,status,confirm_status,settlement_type,due_date,cash_projection)
+    VALUES (1,?,?,?,?,0,?,1,0,?,${due.expr},?)
+    ON DUPLICATE KEY UPDATE confirm_status=CASE WHEN total_amount<>VALUES(total_amount) THEN 0 ELSE confirm_status END,
+    total_amount=VALUES(total_amount),balance=GREATEST(0,VALUES(total_amount)-paid_amount),
+    status=CASE WHEN VALUES(total_amount)>0 AND paid_amount>=VALUES(total_amount) THEN 3 WHEN paid_amount>0 THEN 2 ELSE 1 END,
+    cash_projection=VALUES(cash_projection)`,[po.id,po.order_no,po.supplier_name,amount,amount,settlement,...due.params,JSON.stringify(projection)])
+  const statementSvc=require('../payments/reconciliation-statements.service')
+  for(const s of members)await statementSvc.refreshSettlement(conn,s.statement_id,{currentRead:true,cashOnly:true})
+}
 
 /**
  * 重算并 upsert 某采购单的应付。
@@ -17,7 +64,7 @@ async function recomputePurchasePayable(conn, purchaseOrderId, { sourceReadMode 
   const poId = Number(purchaseOrderId)
   if (!Number.isFinite(poId) || poId <= 0) return
   const [[po]] = await conn.query(
-    `SELECT po.id, po.order_no, po.supplier_name, po.created_at,
+    `SELECT po.id, po.order_no, po.supplier_name, po.created_at, po.cash_basis,
             COALESCE(s.settlement_type, 2) AS settlement_type,
             COALESCE(s.payment_terms_days, 30) AS payment_terms_days
      FROM purchase_orders po
@@ -27,6 +74,7 @@ async function recomputePurchasePayable(conn, purchaseOrderId, { sourceReadMode 
   )
   if (!po) return
   await assertPurchaseSettlementSources(conn, poId)
+  if(po.cash_basis)return recomputeCashPayable(conn,po,{sourceReadMode})
   // 唯一current调用为closeRemaining：同连接已持准确PO X并设置本次RC，不反向锁IT/PRI。
   // 其他调用继续以下默认锁读；source断言、金额、确认/upsert与历史快照均共用。
   // 聚合必须走当前读（FOR UPDATE），不能用快照读。否则在默认 REPEATABLE READ 下会 lost-update：
@@ -47,7 +95,7 @@ async function recomputePurchasePayable(conn, purchaseOrderId, { sourceReadMode 
       ${sourceReadMode === 'current' ? '' : 'FOR UPDATE'}`,
     [poId],
   )
-  const grossTotal = Number(amount) || 0
+  const grossCents=cash.storedCashCents(amount,'旧已审采购毛额')
   // 同理走当前读：退货执行(status→3)与到货结算并发时，快照读会漏看已提交的退货冲减，
   // 使全量重算少减退货、应付偏大。FOR UPDATE 读最新已提交的退货金额。
   const [[{ returnedAmount }]] = await conn.query(
@@ -57,7 +105,22 @@ async function recomputePurchasePayable(conn, purchaseOrderId, { sourceReadMode 
       ${sourceReadMode === 'current' ? '' : 'FOR UPDATE'}`,
     [poId],
   )
-  const total = Math.max(0, grossTotal - (Number(returnedAmount) || 0))
+  const returnedCents=cash.storedCashCents(returnedAmount,'旧已执行退货金额')
+  const total=cash.cashNumber(grossCents>returnedCents?grossCents-returnedCents:0n)
+  // Legacy NULL is not silently upgraded. Whole-cent original flows continue;
+  // fractional persisted facts are explicitly left for review.
+  const [[legacyIdentity]]=await conn.query('SELECT id FROM payment_records WHERE type=1 AND order_id=?',[poId])
+  const [legacyMembers]=legacyIdentity?await conn.query('SELECT DISTINCT statement_id FROM reconciliation_statement_items WHERE record_id=? ORDER BY statement_id',[legacyIdentity.id]):[[]]
+  for(const s of legacyMembers)await conn.query('SELECT id FROM reconciliation_statements WHERE id=? FOR UPDATE',[s.statement_id])
+  const [[legacyRecord]]=await conn.query('SELECT * FROM payment_records WHERE type=1 AND order_id=? FOR UPDATE',[poId])
+  if(legacyRecord){
+    cash.storedCashCents(legacyRecord.total_amount,'旧应付总额')
+    cash.storedCashCents(legacyRecord.paid_amount,'旧应付已付')
+    cash.storedCashCents(legacyRecord.balance,'旧应付余额')
+    const [current]=await conn.query('SELECT statement_id FROM reconciliation_statement_items WHERE record_id=? ORDER BY statement_id,id FOR SHARE',[legacyRecord.id])
+    const ids=[...new Set(current.map(r=>Number(r.statement_id)))]
+    if(!legacyIdentity||Number(legacyIdentity.id)!==Number(legacyRecord.id)||ids.length!==legacyMembers.length||ids.some((id,n)=>id!==Number(legacyMembers[n].statement_id)))purchaseCash.review('旧应付对账关系已变化，请重试核对')
+  }
   // total<=0 时通常代表这张采购单从未真正结算过，不必造一条空的应付记录；
   // 但如果之前已经结算过（存在记录），哪怕现在归零（如撤回收货全部反冲），也要如实更新，
   // 不能让 payment_records 停留在撤回前的旧金额上。
@@ -92,6 +155,8 @@ async function recomputePurchasePayable(conn, purchaseOrderId, { sourceReadMode 
                      WHEN paid_amount > 0 THEN 2 ELSE 1 END`,
     [poId, po.order_no, po.supplier_name, total, total, settlementSnapshot, ...due.params],
   )
+  const statementSvc=require('../payments/reconciliation-statements.service')
+  for(const s of legacyMembers)await statementSvc.refreshSettlement(conn,s.statement_id,{currentRead:true,cashOnly:true})
 }
 
 /**

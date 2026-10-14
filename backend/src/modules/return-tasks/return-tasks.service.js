@@ -111,6 +111,7 @@ async function findById(id, scopeWarehouseIds = null) {
 
 // ─── 创建（由 confirmSR 调用）─────────────────────────────────────────
 async function create(conn, { returnId, returnNo, returnType, warehouseId, warehouseName, partyName, items }) {
+  await assertQtyPrecision(conn, items.map(item => ({productId:item.productId,qty:item.quantity,label:'退货任务数量'})))
   const taskNo = await genTaskNo(conn)
   const [r] = await conn.query(
     `INSERT INTO return_tasks (task_no, return_type, return_id, return_no, warehouse_id, warehouse_name, party_name, status)
@@ -159,6 +160,8 @@ async function submit(id, operator, scopeWarehouseIds = null) {
 
 // ─── PDA 收货 ────────────────────────────────────────────────────────
 async function receive(conn, taskId, { productId, packages, requestKey, userId, pdaWarehouseId = null, scopeWarehouseIds = null }) {
+  await assertTaskMoneyScope(conn,taskId,scopeWarehouseIds,pdaWarehouseId)
+  await require('../sale/sale.ordinary-return-money').lockReturn(conn,{taskId})
   const taskRow = await lockStatusRow(conn, {
     table: 'return_tasks', id: taskId,
     columns: 'id, task_no, status, warehouse_id',
@@ -342,7 +345,7 @@ function fmtSqlDate(d) {
  * check() 和 putaway() 都可能是"最后一次让任务归零"的那个动作（比如某条明细整行都不合格，
  * 从没有容器进入过待上架状态，putaway() 根本不会被调用），所以两处都要收口检查。
  */
-async function tryFinishReturnTaskPutaway(conn, taskId, taskNo, returnId) {
+async function tryFinishReturnTaskPutaway(conn, taskId, taskNo, returnId, ordinaryReturnContext=null,commercialReturnContext=null) {
   // Lock complete current RTI facts, not an aggregate over a pre-wait RR snapshot.
   // DECIMAL quantities remain hundredths; integer subtraction cannot leave a floating tail.
   const [currentItems] = await conn.query(
@@ -358,13 +361,22 @@ async function tryFinishReturnTaskPutaway(conn, taskId, taskNo, returnId) {
   })
   if (returnId) {
     const returnSvc = require('../returns/returns-sale.service')
-    await returnSvc.syncSaleReturnCompleted(conn, Number(returnId), { taskId, taskNo })
+    await returnSvc.syncSaleReturnCompleted(conn, Number(returnId), { taskId, taskNo, ordinaryReturnContext,commercialReturnContext })
   }
   return true
 }
 
+async function assertTaskMoneyScope(conn,taskId,scope,pda){
+  const [[task]]=await conn.query('SELECT warehouse_id FROM return_tasks WHERE id=? AND deleted_at IS NULL',[taskId])
+  if(!task)throw new AppError('退货任务不存在',404)
+  assertInScope(scope,task.warehouse_id,'退货任务')
+  assertPdaWarehouse(pda,task.warehouse_id)
+}
+
 async function check(conn, taskId, { productId, passedQty, rejectedQty = 0, requestKey, userId, pdaWarehouseId = null, scopeWarehouseIds = null }) {
-  await require('../sale/sale.commercial-returns').lockExecution(conn,taskId)
+  await assertTaskMoneyScope(conn,taskId,scopeWarehouseIds,pdaWarehouseId)
+  const ordinaryReturnContext=await require('../sale/sale.ordinary-return-money').lockReturn(conn,{taskId})
+  const commercialReturnContext=await require('../sale/sale.commercial-returns').lockExecution(conn,taskId)
   const taskRow = await lockStatusRow(conn, {
     table: 'return_tasks', id: taskId,
     // return_id 必须取：整行全部不合格时，本 check() 是唯一让任务归零的动作（putaway 永不被
@@ -435,7 +447,7 @@ async function check(conn, taskId, { productId, passedQty, rejectedQty = 0, requ
     })
     finalStatus = 4
     // 质检刚完成就顺带检查是否已经不需要任何物理上架（比如整行全部不合格，永远不会有容器进入待上架）
-    const finished = await tryFinishReturnTaskPutaway(conn, taskId, taskRow.task_no, taskRow.return_id)
+    const finished = await tryFinishReturnTaskPutaway(conn, taskId, taskRow.task_no, taskRow.return_id,ordinaryReturnContext,commercialReturnContext)
     if (finished) finalStatus = 5
   }
 
@@ -455,7 +467,9 @@ async function check(conn, taskId, { productId, passedQty, rejectedQty = 0, requ
 
 // ─── PDA 上架 ────────────────────────────────────────────────────────
 async function putaway(conn, taskId, { containerId, locationId, requestKey, userId, pdaWarehouseId = null, scopeWarehouseIds = null }) {
-  await require('../sale/sale.commercial-returns').lockExecution(conn,taskId)
+  await assertTaskMoneyScope(conn,taskId,scopeWarehouseIds,pdaWarehouseId)
+  const ordinaryReturnContext=await require('../sale/sale.ordinary-return-money').lockReturn(conn,{taskId})
+  const commercialReturnContext=await require('../sale/sale.commercial-returns').lockExecution(conn,taskId)
   const taskRow = await lockStatusRow(conn, {
     table: 'return_tasks', id: taskId,
     columns: 'id, task_no, status, return_id, warehouse_id',
@@ -540,7 +554,7 @@ async function putaway(conn, taskId, { containerId, locationId, requestKey, user
   }
 
   // 全部上架完成 → 退货入仓完成（不合格部分不计入待上架量，否则任务永远无法完成）
-  const finished = await tryFinishReturnTaskPutaway(conn, taskId, taskRow.task_no, taskRow.return_id)
+  const finished = await tryFinishReturnTaskPutaway(conn, taskId, taskRow.task_no, taskRow.return_id,ordinaryReturnContext,commercialReturnContext)
 
   const payload = { taskId, containerId, locationId, status: finished ? 5 : 4 }
   if (requestState.enabled) {

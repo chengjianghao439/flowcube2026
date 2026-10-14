@@ -26,8 +26,13 @@ function shipmentDate(value, orderId, taskId) {
 /** 批量读取真实出库；不存在可审计的任务事实时禁止用应收创建日猜历史。 */
 async function loadSaleShipmentFacts(conn) {
   const [orders] = await conn.query(`SELECT so.id AS soId, so.order_no, so.customer_id, so.customer_name,
-      so.commercial_model AS commercialModel, so.total_amount AS orderGross, so.discount_amount AS discount
-    FROM sale_orders so WHERE EXISTS (SELECT 1 FROM payment_records pr WHERE pr.type=2 AND pr.order_id=so.id)
+      so.warehouse_id AS warehouseId, so.cash_policy AS cashPolicy,
+      so.commercial_model AS commercialModel, so.total_amount AS orderGross, so.discount_amount AS discount,
+      b.order_id AS ordinaryBasisOrderId, b.gross_basis AS ordinaryGrossBasis,
+      b.discount_basis AS ordinaryDiscountBasis, b.net_basis AS ordinaryNetBasis,
+      b.source_snapshot AS ordinarySourceSnapshot, b.basis_origin AS ordinaryBasisOrigin
+    FROM sale_orders so LEFT JOIN sale_ordinary_return_bases b ON b.order_id=so.id
+    WHERE EXISTS (SELECT 1 FROM payment_records pr WHERE pr.type=2 AND pr.order_id=so.id)
       OR EXISTS (SELECT 1 FROM sale_order_items i WHERE i.order_id=so.id AND i.shipped_qty<>0)
       OR EXISTS (SELECT 1 FROM warehouse_tasks t WHERE t.sale_order_id=so.id AND t.task_type='sale_out' AND t.status=7 AND t.deleted_at IS NULL)`)
   const [items] = await conn.query(`SELECT id,order_id,product_id,warehouse_id,shipped_qty,unit_price,cost_snapshot FROM sale_order_items`)
@@ -44,16 +49,29 @@ async function loadSaleShipmentFacts(conn) {
   const [money] = await conn.query("SELECT task_id,order_id,SUM(confirmed_gross) AS gross,SUM(CASE WHEN basis_origin IS NULL OR basis_origin NOT IN ('real_confirmation','legacy_verified') THEN 1 ELSE 0 END) AS unknown_basis,SUM(CASE WHEN order_gross_basis IS NULL OR discount_basis IS NULL THEN 1 ELSE 0 END) AS missing_basis,MIN(order_gross_basis) AS gross_basis,MAX(order_gross_basis) AS max_gross_basis,MIN(discount_basis) AS discount_basis,MAX(discount_basis) AS max_discount_basis FROM sale_dispatch_groups WHERE confirmed_at IS NOT NULL GROUP BY task_id,order_id")
   if(money.some(m=>Number(m.unknown_basis)>0))throw sourceError(money.find(m=>Number(m.unknown_basis)>0).order_id,'原出库折扣依据尚未核对')
   const bases=new Map()
+  const cashOrders = new Set(orders.filter(order => order.cashPolicy === 'cash-cents-v1').map(order => Number(order.soId)))
   for(const m of money){
     if(Number(m.missing_basis))throw sourceError(m.order_id,'原出库折扣依据不完整')
     const gross=sourceUnits(m.gross_basis,4,m.order_id,'原出库整单原值'),discount=sourceUnits(m.discount_basis,4,m.order_id,'原出库整单折扣')
     const previous=bases.get(Number(m.order_id))
-    if(gross<=0n || gross!==sourceUnits(m.max_gross_basis,4,m.order_id,'原出库整单原值') || discount!==sourceUnits(m.max_discount_basis,4,m.order_id,'原出库整单折扣') || (previous && (previous.gross!==gross || previous.discount!==discount)))throw sourceError(m.order_id,'原出库折扣依据不一致')
+    const newCash = cashOrders.has(Number(m.order_id))
+    if((gross===0n && (!newCash || discount!==0n)) || gross!==sourceUnits(m.max_gross_basis,4,m.order_id,'原出库整单原值') || discount!==sourceUnits(m.max_discount_basis,4,m.order_id,'原出库整单折扣') || (previous && (previous.gross!==gross || previous.discount!==discount)))throw sourceError(m.order_id,'原出库折扣依据不一致')
     bases.set(Number(m.order_id),{gross,discount,orderGross:m.gross_basis,discountAmount:m.discount_basis})
   }
   for(const order of orders){
     const basis=bases.get(Number(order.soId))
     if(order.commercialModel==='kit-v1' && basis){order.orderGross=basis.orderGross;order.discount=basis.discountAmount}
+    if (order.commercialModel !== 'kit-v1' && order.ordinarySourceSnapshot != null) {
+      let snapshot
+      try { snapshot = typeof order.ordinarySourceSnapshot === 'string' ? JSON.parse(order.ordinarySourceSnapshot) : order.ordinarySourceSnapshot }
+      catch { throw sourceError(order.soId, '原成交分预算损坏') }
+      if (!snapshot || ![1, 2].includes(snapshot.version)) throw sourceError(order.soId, '原成交分预算版本无效')
+      if (snapshot?.version === 2) order.ordinaryCashBasis = {
+        order_id: order.ordinaryBasisOrderId, gross_basis: order.ordinaryGrossBasis,
+        discount_basis: order.ordinaryDiscountBasis, net_basis: order.ordinaryNetBasis,
+        source_snapshot: snapshot, basis_origin: order.ordinaryBasisOrigin,
+      }
+    }
   }
   const byTask=new Map(money.map(m=>[Number(m.task_id),m.gross]))
   for(const row of shipments)row.confirmedGross=byTask.get(Number(row.taskId)) ?? null
@@ -64,6 +82,11 @@ async function loadSaleShipmentFacts(conn) {
 function projectSaleShipments({ orders, items, shipments }, taxBySO = new Map()) {
   const byOrder = new Map(orders.map(o => [Number(o.soId), { ...o, shipments: [] }]))
   const byItem = new Map(items.map(i => [Number(i.id), i]))
+  const itemsByOrder = new Map()
+  for (const item of items) {
+    const id = Number(item.order_id), list = itemsByOrder.get(id) || []
+    list.push(item); itemsByOrder.set(id, list)
+  }
   const shipped = new Map(), seen = new Set()
   for (const s of shipments) {
     const order = byOrder.get(Number(s.soId)), item = byItem.get(Number(s.saleItemId))
@@ -85,13 +108,35 @@ function projectSaleShipments({ orders, items, shipments }, taxBySO = new Map())
   const specs = []
   for (const order of byOrder.values()) {
     order.shipments.sort((a, b) => a.date.localeCompare(b.date) || Number(a.taskId) - Number(b.taskId) || Number(a.taskItemId) - Number(b.taskItemId))
+    if (order.cashPolicy != null && order.cashPolicy !== 'cash-cents-v1') throw sourceError(order.soId, '实际金额政策标记无效')
+    const ordinaryCash = order.commercialModel === 'kit-v1' ? null : order.ordinaryCashBasis
+    if (order.cashPolicy === 'cash-cents-v1' && order.commercialModel !== 'kit-v1' && !ordinaryCash) throw sourceError(order.soId, '新实际金额政策缺少冻结原行分预算')
+    let ordinaryMoney
+    if (ordinaryCash) {
+      ordinaryMoney = require('../sale/sale.ordinary-return-money')
+      let parsed
+      try { parsed = ordinaryMoney.parseSnapshot(ordinaryCash) }
+      catch { throw sourceError(order.soId, '原成交分预算无法核对') }
+      if (Number(ordinaryCash.order_id) !== Number(order.soId) || parsed.snapshot.version !== 2) throw sourceError(order.soId, '原成交分预算不属于本单')
+      const sourceItems = new Map(parsed.snapshot.items.map(item => [Number(item.id), item]))
+      for (const item of itemsByOrder.get(Number(order.soId)) || []) {
+        const original = sourceItems.get(Number(item.id))
+        if (!original || Number(original.productId) !== Number(item.product_id)
+          || Number(original.warehouseId) !== Number(item.warehouse_id ?? order.warehouseId)
+          || sourceUnits(original.unitPrice, 8, order.soId, '原销售单价') !== sourceUnits(item.unit_price, 8, order.soId, '销售单价')) {
+          throw sourceError(order.soId, '实际销售行与冻结原分预算不一致')
+        }
+      }
+    }
+    const cashQuantities = new Map()
+    const useOrdinaryCash = ordinaryCash && (order.cashPolicy === 'cash-cents-v1' || ordinaryCash.basis_origin === 'first_real_ship')
     const periods = new Map()
     let gross = 0n, cost = 0n, previousNet = 0n, previousTax = 0n, previousCost = 0n
     const moneyTasks=new Set()
     const orderGross = sourceUnits(order.orderGross ?? 0, 4, order.soId, '整单原值')
     const discount = sourceUnits(order.discount ?? 0, 4, order.soId, '整单折扣')
     const orderTax = sourceUnits(taxBySO.get(Number(order.soId)) ?? 0, 2, order.soId, '销项税额')
-    for (const s of order.shipments) {
+    for (const [index, s] of order.shipments.entries()) {
       // 数量为百分单位；迁移187的单价保留八位，成本快照保留四位。
       if(order.commercialModel === 'kit-v1'){
         if(s.confirmedGross == null)throw sourceError(order.soId,`任务 ${s.taskId} 缺少已确认商业毛额`)
@@ -103,7 +148,22 @@ function projectSaleShipments({ orders, items, shipments }, taxBySO = new Map())
       const allocated = orderGross > 0n ? halfUp(discount * grossCents * 100n, orderGross) : 0n
       const discountApplied = allocated < discount ? allocated : discount
       const netUnits = grossCents * 100n - discountApplied
-      const net = netUnits > 0n ? halfUp(netUnits, 100n) : 0n
+      let net = netUnits > 0n ? halfUp(netUnits, 100n) : 0n
+      if (ordinaryCash) {
+        cashQuantities.set(Number(s.saleItemId), (cashQuantities.get(Number(s.saleItemId)) || 0n) + s.qty)
+        let cashNet
+        try {
+          cashNet = ordinaryMoney.shipmentCashTarget(ordinaryCash, [...cashQuantities].map(([id, quantity]) => ({ id, quantity: `${quantity / 100n}.${String(quantity % 100n).padStart(2, '0')}` })))
+        } catch { throw sourceError(order.soId, '实际出库累计量超出原分预算') }
+        if (useOrdinaryCash) net = cashNet
+        else if (order.shipments[index + 1]?.date.slice(0, 7) !== s.date.slice(0, 7) && cashNet !== net) {
+          throw sourceError(order.soId, '旧出库会计期间与现行分预算不一致，保留历史待核')
+        }
+      } else if (order.cashPolicy === 'cash-cents-v1' && order.commercialModel === 'kit-v1') {
+        const cashGross = sourceUnits(order.orderGross, 2, order.soId, '整单分预算'), cashDiscount = sourceUnits(order.discount, 2, order.soId, '整单折扣分预算')
+        if (cashDiscount > cashGross || grossCents > cashGross || (!cashGross && grossCents)) throw sourceError(order.soId, '已发商业毛额超出原分预算')
+        net = cashGross ? halfUp((cashGross - cashDiscount) * grossCents, cashGross) : 0n
+      }
       const tax = orderTax < net ? orderTax : net
       const cogs = halfUp(cost, 10000n), period = s.date.replace(/-/g, '').slice(0, 6)
       const p = periods.get(period) || { period, date: s.date, net: 0n, tax: 0n, cost: 0n }

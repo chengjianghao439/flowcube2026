@@ -42,7 +42,8 @@ async function request(refundId,body,options){
     }
     // No PO/PR/RF business lock is held while creating an application.
     const row=await context.head(conn,id,current,false),ctx=await context.context(conn,Number(row.purchase_return_id),current,false)
-    await context.frozenContext(conn,row,ctx,current,false)
+    const frozen=await context.frozenContext(conn,row,ctx,current,false)
+    context.assertActualCash(row,frozen)
     if(Number(row.status)!==2)throw rules.fail('仅已确认待收退款可申请跨期补录')
     const data=br.snapshot(row,body,options),period=data.locator.refundDate.replaceAll('-','').slice(0,6)
     const [[accountingPeriod]]=await conn.query('SELECT status FROM acct_periods WHERE company_id = ? AND period = ? FOR SHARE',[1,period])

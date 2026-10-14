@@ -63,3 +63,11 @@
 最后打印查询改动后的真实数据库复跑：打印队列 14、模板预览 30、并发守卫 123 场景通过。最终日志分别位于 `/tmp/flowcube-security-final-offline.log`、`/tmp/flowcube-security-final-all-security-db.log`、`/tmp/flowcube-security-final-frontend-*.log`、`/tmp/flowcube-security-final-contract-*.log`、`/tmp/flowcube-security-verified-smoke-*.log`；临时路径只定位本轮证据，不是可移植运行环境。
 
 本地提交范围为本批入口、权限、会话/导入、打印、供应链实现，相关迁移、守卫、CI 与主题文档；完整逐路径清单见 `security-scan-remediation-paths-2026-10-06.txt`。提交结果以该隔离分支的 Git 历史为准，不含忽略目录、依赖、真实配置或生产数据。main 仍为基线 SHA，原用户未跟踪文档及其他工作树保留。
+
+## 2026-10-13 云端指定叶范围增补
+
+通知的七类打印/超时/波次计数与五类目标在查询内加同一授权仓谓词，保留原非授权COUNT/target定位差异、公司级资金通知及调拨任一端可见规则，不增加模块VIEW或角色配置。库存导入模板的参考仓和填报行按原IMPORT权限及当前仓范围过滤，真实导入写入预算/解析/字段合同不改。
+
+raw打印由认证actor+原header请求键（否则旧body.jobUniqueKey）+完整body SHA256建立独立服务端raw namespace。operation_requests保持常量print.raw.create和actor/key身份，同键不同body409，GET权限不扩展；原POST回放检查实际job仓/creator/raw身份。原receipt清理后保留的raw打印历史仍可核同一body，failed旧任务不重新排队；无键PDA保持每次新任务，领域初打/补打业务键独立且保持。预算在hash/事务前，ackToken不返回。
+
+原test:security-scan-remediation新增六组叶/回执守卫；本轮源码+合成HTTP/MySQL/XLSX有证据，auth是内存夹具且未创建用户/凭据/角色或持久scope。测试软件排队/回执不等于实际出纸。全局0配置写授权待决、relatedEvents受阻异常历史及其指定外部探针未运行/未改写，其他CI不替代它。

@@ -17,6 +17,7 @@ export interface WarehouseTaskItem {
   spec?: string | null
   color?: string | null
   requiredQty: number
+  allowDecimalQty?: boolean
   pickedQty: number
 }
 

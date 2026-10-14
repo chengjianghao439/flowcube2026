@@ -63,6 +63,7 @@ async function generatePlan({ window = 30, horizon = 30, warehouseId = null, nam
     const { list, params } = await getProcurementPlan({ window, horizon, warehouseId, defaultLeadTime, scopeWarehouseIds, forecastMethod, includeCovered: false }, conn)
     if (!list.length) throw new AppError('当前需求已由库存、在途采购或已有计划/请购覆盖，无需重复生成', 409)
 
+    await assertQtyPrecision(conn, list.map(item => ({productId:item.productId,qty:item.suggestedQty,label:'计算后的采购计划数量'})))
     const code = await generateMasterCode(conn, 'PLAN', 'procurement_plans')
     const [r] = await conn.query(
       `INSERT INTO procurement_plans (code, name, horizon_days, forecast_method, forecast_window, default_lead_time, status, item_count, operator_id, operator_name, remark)
@@ -202,7 +203,14 @@ async function convert(planId, { itemIds, target = 'purchase', operator, request
     await conn.beginTransaction()
     await lockPlanning(conn)
     const requestState = await beginOperationRequest(conn, { requestKey, action: `procurement.plan.convert.${planId}`, userId: operator?.userId ?? null })
-    if (requestState.replay) { await conn.rollback(); return requestState.responseData }
+    if (requestState.replay) {
+      const [[receipt]] = await conn.query('SELECT resource_type,resource_id FROM operation_requests WHERE id=? FOR SHARE', [requestState.id])
+      const intent = require('./procurement.convert-receipt')
+      const proofIds = await intent.assertConvertResult(conn, { resourceType: receipt?.resource_type, resourceId: receipt?.resource_id, data: requestState.responseData }, scopeWarehouseIds, { planId, lock: true })
+      const result = intent.bindConvertResult(requestState.responseData, proofIds, intent.convertFingerprint(planId, ids, target))
+      await conn.rollback()
+      return result
+    }
 
     const plan = await lockStatusRow(conn, { table: 'procurement_plans', id: planId, columns: 'id, status, forecast_window, horizon_days, forecast_method, default_lead_time', entityName: '采购计划' })
     assertStatusAction('procurementPlan', 'convert', plan.status)
@@ -242,7 +250,7 @@ async function convert(planId, { itemIds, target = 'purchase', operator, request
           productId: Number(it.product_id), productCode: it.product_code, productName: it.product_name,
           unit: it.unit, quantity: Number(it.adjusted_qty), unitPrice: 0,
         })),
-        operator,
+        operator, scopeWarehouseIds,
       })
       for (const it of groupItems) {
         await conn.query('UPDATE procurement_plan_items SET status = ?, purchase_order_id = ? WHERE id = ?', [ITEM_STATUS.CONVERTED, po.id, it.id])
@@ -258,7 +266,7 @@ async function convert(planId, { itemIds, target = 'purchase', operator, request
     const nextStatus = Number(pending) === 0 ? PLAN_STATUS.DONE : PLAN_STATUS.PARTIAL
     await compareAndSetStatus(conn, { table: 'procurement_plans', id: planId, fromStatus: plan.status, toStatus: nextStatus, entityName: '采购计划' })
 
-    const result = { planId, planStatus: nextStatus, createdOrders }
+    const result = { planId, planStatus: nextStatus, createdOrders, ...(requestState.enabled ? { requestFingerprint: require('./procurement.convert-receipt').convertFingerprint(planId, ids, target) } : {}) }
     await completeOperationRequest(conn, requestState, { data: result, message: `已生成 ${createdOrders.length} 张采购单草稿`, resourceType: 'procurement_plan', resourceId: planId })
     await conn.commit()
     return result

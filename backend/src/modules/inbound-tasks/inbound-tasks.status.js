@@ -2,6 +2,7 @@ const AppError = require('../../utils/AppError')
 const { isStalledErrorMessage } = require('../print-jobs/print-jobs.service')
 const { DEFAULT_INBOUND_THRESHOLDS } = require('../../utils/inboundThresholds')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
+const { qtyUnits, qtyNumber } = require('./inbound-tasks.cost')
 
 const RECEIPT_STATUS_LABEL = {
   draft: '草稿',
@@ -222,10 +223,10 @@ function buildInboundPrintBatches(recentPrintJobs = []) {
  * 只是改成逐箱推进，从而能记录每箱的归属——容器带上归属后，上架时才能把 putaway_qty
  * 精确回写到它真正所属的采购明细，而不是再猜一次（审计 P1-4）。
  *
- * 一箱跨两行时（前一行只差 3 件、这箱有 10 件），归属取该箱消耗最多的那一行；
- * 上架回写会先按归属行填，填不下的部分自然退回 first-fit 兜底，总量始终守恒。
+ * 一箱跨两行时，归属仍取消耗最多的一行供旧读路径使用；sources保留完整原箱贡献，
+ * 上架成本与明细回写使用同一来源量，不再按上架顺序猜测。
  *
- * @returns {{ updates: {itemId:number, add:number}[], assignments: {lineNo:number, qty:number, itemId:number}[] }}
+ * @returns {{ updates: {itemId:number, add:number}[], assignments: {lineNo:number, qty:number, itemId:number, sources: {itemId:number, qty:number}[]}[] }}
  */
 function distributePackagesToLines(taskItems, productId, packages) {
   const allLines = taskItems.filter(i => i.productId === productId).sort((a, b) => a.id - b.id)
@@ -234,7 +235,7 @@ function distributePackagesToLines(taskItems, productId, packages) {
   // 剩余可填容量队列：与旧实现同序（未收满的行按 id 升序）
   const capacity = allLines
     .filter(i => i.receivedQty < i.orderedQty)
-    .map(line => ({ itemId: line.id, left: line.orderedQty - line.receivedQty }))
+    .map(line => ({ itemId: line.id, left: qtyUnits(line.orderedQty) - qtyUnits(line.receivedQty) }))
   const lastLineId = allLines[allLines.length - 1].id
 
   const addedByItem = new Map()
@@ -242,52 +243,54 @@ function distributePackagesToLines(taskItems, productId, packages) {
   let cursor = 0
 
   for (const pkg of packages) {
-    let pkgLeft = +pkg.qty
+    let pkgLeft = qtyUnits(pkg.qty)
     // 本箱在各行的消耗量，用于决定归属（取消耗最多的一行）
     const consumed = new Map()
 
     while (pkgLeft > 0 && cursor < capacity.length) {
       const slot = capacity[cursor]
-      if (slot.left <= 0) { cursor += 1; continue }
-      const take = Math.min(slot.left, pkgLeft)
+      if (slot.left <= 0n) { cursor += 1; continue }
+      const take = slot.left < pkgLeft ? slot.left : pkgLeft
       slot.left -= take
       pkgLeft -= take
-      consumed.set(slot.itemId, (consumed.get(slot.itemId) || 0) + take)
-      addedByItem.set(slot.itemId, (addedByItem.get(slot.itemId) || 0) + take)
-      if (slot.left <= 0) cursor += 1
+      consumed.set(slot.itemId, (consumed.get(slot.itemId) || 0n) + take)
+      addedByItem.set(slot.itemId, (addedByItem.get(slot.itemId) || 0n) + take)
+      if (slot.left <= 0n) cursor += 1
     }
 
     // 超收：供应商多发货是常见场景，不硬性拒绝。超出部分记在最后一行，
     // received_qty > ordered_qty 会在 ERP 端自然呈现为"超收"。
     // 收货侧的金额/比例双闸门与留痕见 inbound-tasks.command.js 的 assertOverReceiveAllowed。
     if (pkgLeft > 0) {
-      consumed.set(lastLineId, (consumed.get(lastLineId) || 0) + pkgLeft)
-      addedByItem.set(lastLineId, (addedByItem.get(lastLineId) || 0) + pkgLeft)
-      pkgLeft = 0
+      consumed.set(lastLineId, (consumed.get(lastLineId) || 0n) + pkgLeft)
+      addedByItem.set(lastLineId, (addedByItem.get(lastLineId) || 0n) + pkgLeft)
+      pkgLeft = 0n
     }
 
     let ownerItemId = lastLineId
-    let ownerQty = -1
+    let ownerQty = -1n
     for (const [itemId, qty] of consumed) {
       if (qty > ownerQty) { ownerQty = qty; ownerItemId = itemId }
     }
-    assignments.push({ lineNo: pkg.lineNo, qty: +pkg.qty, itemId: ownerItemId })
+    assignments.push({ lineNo: pkg.lineNo, qty: +pkg.qty, itemId: ownerItemId,
+      sources: [...consumed].map(([itemId, units]) => ({ itemId, qty: qtyNumber(units) })) })
   }
 
   const updates = [...addedByItem.entries()]
     .filter(([, add]) => add > 0)
-    .map(([itemId, add]) => ({ itemId, add }))
+    .map(([itemId, add]) => ({ itemId, add: qtyNumber(add) }))
   return { updates, assignments }
 }
 
-async function ensureInboundTaskExists(conn, taskId) {
+async function ensureInboundTaskExists(conn, taskId, scopeWarehouseIds = null) {
   const [[taskRow]] = await conn.query(
-    `SELECT id, task_no, status, audit_status, updated_at
+    `SELECT id, task_no, status, audit_status, updated_at, warehouse_id
      FROM inbound_tasks
      WHERE id = ? AND deleted_at IS NULL`,
     [taskId],
   )
   if (!taskRow) throw new AppError('收货订单不存在', 404)
+  require('../../utils/warehouseScope').assertInScope(scopeWarehouseIds, taskRow.warehouse_id, '收货订单')
   return taskRow
 }
 

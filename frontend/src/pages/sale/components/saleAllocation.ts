@@ -1,7 +1,7 @@
 import { hasQuantityPrecision, roundQuantity } from '@/lib/qtyStep'
 
-export function isAllocationQtyValid(qty: number, limit: number) {
-  return hasQuantityPrecision(qty) && qty > 0 && qty <= limit + 1e-6
+export function isAllocationQtyValid(qty: number, limit: number, allowDecimal = true) {
+  return (allowDecimal || Number.isSafeInteger(qty)) && hasQuantityPrecision(qty) && qty > 0 && qty <= limit + 1e-6
 }
 
 export function clampAllocationQty(qty: number, limit: number) {

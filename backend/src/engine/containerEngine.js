@@ -135,6 +135,7 @@ async function createContainer(conn, {
   isMixedBatch = 0,
 }) {
   assertQtyScale(initialQty, '库存条码数量')
+  await assertQtyPrecision(conn, [{ productId, qty: initialQty, label: '库存条码数量' }])
   assertNonNegativeQty(initialQty, `createContainer productId=${productId} warehouseId=${warehouseId}`)
 
   if (!sourceType || typeof sourceType !== 'string' || !ALLOWED_SOURCE_TYPES.has(sourceType)) {
@@ -208,6 +209,9 @@ async function createContainer(conn, {
  * 不同商品或不同仓库之间互不影响。
  */
 async function lockStockDimension(conn, productId, warehouseId) {
+  // Quantity policy locks precede stock/container locks. Batch callers acquire
+  // their product IDs in stable ascending order before entering this helper.
+  await assertQtyPrecision(conn, [{productId,qty:0,label:'数量策略'}])
   // 串行化点选 inventory_stock 的单行，而不是「该维度的一批容器行」。
   // 试过后者，仍然死锁：上架会把容器的 status 由 4 改成 1，在 idx_container_hot 里
   // 相当于从 status=4 段迁到 status=1 段，于是每个事务都在持有一段范围锁的同时
@@ -234,6 +238,9 @@ async function lockStockDimension(conn, productId, warehouseId) {
 async function promotePendingContainerToActive(conn, containerId, productId, warehouseId) {
   // 必须先取维度锁再改状态，理由见 lockStockDimension 注释
   await lockStockDimension(conn, productId, warehouseId)
+  const [[sourceContainer]] = await conn.query('SELECT product_id,warehouse_id,remaining_qty FROM inventory_containers WHERE id=? AND deleted_at IS NULL FOR UPDATE',[containerId])
+  if (!sourceContainer || Number(sourceContainer.product_id)!==Number(productId) || Number(sourceContainer.warehouse_id)!==Number(warehouseId)) throw new AppError('库存条码与上架商品或仓库不一致',409)
+  await assertQtyPrecision(conn,[{productId,qty:sourceContainer.remaining_qty,label:'上架条码数量'}])
   const [r] = await conn.query(
     `UPDATE inventory_containers
      SET status = ?, is_overdue = 0, putaway_flagged_overdue = 0, putaway_deadline_at = NULL
@@ -269,6 +276,7 @@ async function deductFromContainers(conn, {
 }) {
   const { roundQty } = require('../utils/unitConversion')
   assertQtyScale(qty, '扣减数量')
+  await assertQtyPrecision(conn, [{ productId, qty, label: '扣减数量' }])
   if (!(Number(qty) > 0)) throw new AppError('扣减数量必须大于零', 400, 'INVALID_DEDUCTION_QTY')
   const absQty = roundQty(Number(qty))
 
@@ -311,6 +319,7 @@ async function deductFromContainers(conn, {
     )
   }
 
+  await assertQtyPrecision(conn, containers.map(c => ({ productId, qty: c.remaining_qty, label: '来源条码实存数量' })))
   let remaining = absQty
   const deducted = []
 
@@ -361,6 +370,7 @@ async function deductFromTaskLockedContainers(conn, {
 }) {
   const { roundQty } = require('../utils/unitConversion')
   assertQtyScale(qty, '扣减数量')
+  await assertQtyPrecision(conn, [{ productId, qty, label: '扣减数量' }])
   const absQty = roundQty(Math.abs(qty))
   const tid = Number(taskId)
   if (!Number.isFinite(tid) || tid <= 0) {
@@ -385,6 +395,7 @@ async function deductFromTaskLockedContainers(conn, {
     )
   }
 
+  await assertQtyPrecision(conn, containers.map(c => ({ productId, qty: c.remaining_qty, label: '来源条码实存数量' })))
   let remaining = absQty
   const deducted = []
 
@@ -431,6 +442,7 @@ async function deductFromTaskLockedContainers(conn, {
  * @returns {number} 汇总后的库存数量
  */
 async function syncStockFromContainers(conn, productId, warehouseId) {
+  await assertQtyPrecision(conn, [{productId,qty:0,label:'数量策略'}])
   // 仅汇总指定商品+仓库维度，禁止全表扫描。
   //
   // 汇总本身必须持锁（FOR UPDATE），并发的 sync 才会在容器行上串行化。
@@ -452,6 +464,7 @@ async function syncStockFromContainers(conn, productId, warehouseId) {
     [productId, warehouseId]
   )
   const qty = Number(total)
+  await assertQtyPrecision(conn, [{ productId, qty, label: '同步库存数量' }])
 
   // INSERT ... ON DUPLICATE KEY UPDATE 自带行锁且写入的是重算后的绝对值（非增量），
   // 在上面的容器锁保护下已经足够，无需再对 inventory_stock 单独预加锁。
@@ -470,6 +483,7 @@ async function getStockProjection(conn, {
   lock = false,
   includeExpected = false,
 }) {
+  if (lock) await assertQtyPrecision(conn, [{productId,qty:0,label:'数量策略'}])
   if (lock && includeExpected) await lockExpectedPurchaseOrders(conn, [{ productId, warehouseId }])
   if (lock) {
     // 统一加锁顺序：先锁 inventory_stock 维度单行、再锁 ACTIVE 容器行，与 lockStockDimension/
@@ -484,7 +498,10 @@ async function getStockProjection(conn, {
      WHERE product_id = ? AND warehouse_id = ? AND status = ? AND deleted_at IS NULL${containerLockSql}`,
     [productId, warehouseId, CONTAINER_STATUS.ACTIVE],
   )
-  const quantity = containerRows.reduce((sum, row) => sum + Number(row.remaining_qty), 0)
+  // Persisted facts are two-decimal quantities. Sum their integer hundredths,
+  // then project available in the same units; 0.30 - 0.20 must equal 0.10.
+  const quantityUnits = containerRows.reduce((sum, row) => sum + Math.round(Number(row.remaining_qty) * 100), 0)
+  const quantity = quantityUnits / 100
 
   const stockLockSql = lock ? ' FOR UPDATE' : ''
   const [[stockRow]] = await conn.query(
@@ -506,7 +523,7 @@ async function getStockProjection(conn, {
     quantity,
     reserved,
     expected,
-    available: Math.max(0, quantity + expected - reserved),
+    available: Math.max(0, quantityUnits + Math.round(expected * 100) - Math.round(reserved * 100)) / 100,
   }
 }
 
@@ -760,6 +777,7 @@ async function adjustContainerStock(conn, {
   remark        = null,
   respectReserved = true,
 }) {
+  await assertQtyPrecision(conn, [{ productId, qty, label: '库存调整数量' }])
   const [[stockRow]] = await conn.query(
     'SELECT COALESCE(quantity, 0) AS qty FROM inventory_stock WHERE product_id=? AND warehouse_id=? FOR UPDATE',
     [productId, warehouseId]
@@ -953,6 +971,7 @@ async function extractFromPlasticBoxToTask(conn, {
 }) {
   // 与本文件其它入口一致：取整工具在函数内局部 require（避免顶层与 inventoryEngine 互相 require）
   const { roundQty } = require('../utils/unitConversion')
+  await assertQtyPrecision(conn, [{ productId, qty, label: '取货数量' }])
   await lockStockDimension(conn, productId, warehouseId)
   const [[box]] = await conn.query(
     `SELECT id, barcode, remaining_qty, status, unit, is_mixed_batch, batch_no, mfg_date, exp_date,
@@ -974,6 +993,7 @@ async function extractFromPlasticBoxToTask(conn, {
   }
   const take = roundQty(qty)
   if (!(take > 0)) throw new AppError('取货数量必须大于 0', 400)
+  await assertQtyPrecision(conn, [{productId, qty: box.remaining_qty, label: '来源塑料盒实存数量'}])
   const boxRemain = Number(box.remaining_qty)
   if (take > boxRemain) throw new AppError(`取货数量超过盒内实存（剩余 ${boxRemain}）`, 400)
 
@@ -1081,6 +1101,7 @@ async function createContainersBatch(conn, { shared, qtys }) {
   }
   const sid = Number(sourceRefId)
   if (!Number.isFinite(sid) || sid <= 0) throw new AppError('批量生成库存条码必须关联有效来源单据', 400)
+  await assertQtyPrecision(conn, list.map(q => ({ productId, qty: q, label: '每个库存条码数量' })))
   for (const q of list) {
     assertQtyScale(q, '库存条码数量')
     assertNonNegativeQty(q, `createContainersBatch productId=${productId}`)
@@ -1200,7 +1221,7 @@ async function splitContainer(conn, { containerId, qty, remark = null, targetCon
   )
   if (!row) throw new AppError('库存条码不存在', 404)
   // 原始精度已在入口校验；再按商品策略拒绝小数拆分。
-  await assertQtyPrecision(conn, [{ productId: row.product_id, qty: q, label: '拆分数量' }])
+  await assertQtyPrecision(conn, [{ productId: row.product_id, qty: q, label: '拆分数量' }, { productId: row.product_id, qty: row.remaining_qty, label: '来源条码实存数量' }])
   if (Number(row.status) !== CONTAINER_STATUS.ACTIVE) {
     throw new AppError('来源库存条码须为「在库」状态', 400)
   }
@@ -1433,6 +1454,7 @@ async function splitTaskLockedContainerForReturn(conn, { taskId, containerId, qt
     [containerId],
   )
   if (!row) throw new AppError('库存条码不存在', 404)
+  await assertQtyPrecision(conn, [{ productId: row.product_id, qty, label: '拆分归还数量' }, {productId: row.product_id, qty: row.remaining_qty, label: '来源条码实存数量'}])
   if (Number(row.locked_by_task_id) !== Number(taskId)) {
     throw new AppError('库存条码未锁定于该任务，无法拆分归还', 409)
   }
@@ -1508,6 +1530,7 @@ async function splitTaskLockedContainerForReturn(conn, { taskId, containerId, qt
 async function reserveTaskLockedContainersForReturn(conn, { taskId, productId, qty }) {
   const { roundQty } = require('../utils/unitConversion')
   assertQtyScale(qty, '待归还数量')
+  await assertQtyPrecision(conn, [{ productId, qty, label: '待归还数量' }])
   let remaining = roundQty(qty)
   if (!(remaining > 0)) return []
   const [containers] = await conn.query(

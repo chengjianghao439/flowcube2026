@@ -47,6 +47,12 @@ export const positiveRefundMoney = (v: unknown) => { const n = refundMoney(v); r
 export function inputRefundMoney(v: string): string | null { const m = /^(\d{1,10})(?:\.(\d{1,4}))?$/.exec(v); if (!m)
     return null; const n = `${BigInt(m[1])}.${(m[2] || '').padEnd(4, '0')}`; return positiveRefundMoney(n) ? n : null; }
 export const refundMoneyLabel = (v: unknown) => refundMoney(v) !== null ? `¥${v}` : '—';
+/** Preserve four-place wire identity; only new cash commitments must be exact cents. */
+export const refundCashMoney = (v: unknown): bigint | null => { const n = refundMoney(v); return n !== null && n % 100n === 0n ? n / 100n : null; };
+export function inputRefundCashMoney(v: string): string | null { if (!/^\d{1,10}(?:\.\d{1,2})?$/.test(v)) return null; const value = inputRefundMoney(v); return value !== null && refundCashMoney(value) !== null ? value : null; }
+export function refundCashLabel(v: unknown): string { const cents = refundCashMoney(v); return cents !== null ? `¥${cents / 100n}.${String(cents % 100n).padStart(2, '0')}` : refundMoney(v) !== null ? `¥${v}（待核）` : '—'; }
+export function assertRefundCashWrite(r: RefundSpec) { if (r.kind !== 'cancel' && (refundCashMoney(r.source.amount) === null || r.kind === 'create' && (!Array.isArray(r.body.allocations) || r.body.allocations.some(a => !object(a) || refundCashMoney(a.amount) === null)))) throw Error('历史退款金额含不足一分的尾差，请保留原记录核对，不会发送新请求'); }
+
 const date = (v: unknown) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && Number.isFinite(Date.parse(v + 'T00:00:00Z')) && new Date(v + 'T00:00:00Z').toISOString().slice(0, 10) === v;
 export function mayRefund(...permissions: PermissionCode[]) { const s = useAuthStore.getState(); return !!s.token && permissions.every(p => hasPermission(s.user?.permissions, p, s.user?.roleId)); }
 export const REFUND_READ_PERMISSIONS = [P.SUPPLIER_REFUND_VIEW, P.PURCHASE_ORDER_VIEW, P.RETURN_ORDER_VIEW, P.PAYMENT_VIEW] as const;
@@ -112,7 +118,7 @@ catch (e) {
     throw Error('原退款清理上下文已变化，保留已确认记录');
 } }
 export function saveRefundRecord(r: RefundRecord) { if (!validRecord(r))
-    throw Error('退款请求完整体不合法，禁止发送'); const raw = localStorage.getItem(REFUND_STORAGE), all = readRefundRecords(); if (all.length >= 30 || all.some(x => refundRecordIdentity(x) === refundRecordIdentity(r)))
+    throw Error('退款请求完整体不合法，禁止发送'); assertRefundCashWrite(r); const raw = localStorage.getItem(REFUND_STORAGE), all = readRefundRecords(); if (all.length >= 30 || all.some(x => refundRecordIdentity(x) === refundRecordIdentity(r)))
     throw Error('已有原退款待核对或容量已满，禁止新请求'); persist([...all, r], undefined, raw); }
 export function replaceRefundRecord(r: RefundRecord, next: RefundRecord) { const raw = localStorage.getItem(REFUND_STORAGE), all = readRefundRecords(), found = all.find(x => refundRecordIdentity(x) === refundRecordIdentity(r)); if (!found || canonicalRefund(found) !== canonicalRefund(r) || completeIdentity(next) !== completeIdentity(r) || !validRecord(next))
     throw Error('原退款记录已变化，请人工核对'); persist(all.map(x => x === found ? next : x), undefined, raw); }

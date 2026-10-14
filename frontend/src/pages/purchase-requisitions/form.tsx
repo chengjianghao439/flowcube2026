@@ -1,3 +1,6 @@
+import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
+import { useProcurementIntentRecovery, type RequisitionCreated } from '@/hooks/useProcurementIntentRecovery'
+import ProcurementIntentRecoveryNotice from '@/components/shared/ProcurementIntentRecoveryNotice'
 import { getWorkspaceListPath } from '@/lib/workspaceListNavigation'
 import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
 import { DatePicker } from '@/components/shared/DatePicker'
@@ -35,7 +38,7 @@ import { formatDisplayDateTime } from '@/lib/dateTime'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { useWorkspaceTabTitle } from '@/hooks/useWorkspaceTabTitle'
 import {
-  getRequisitionApi, createRequisitionApi, updateRequisitionApi, submitRequisitionApi,
+  getRequisitionApi, updateRequisitionApi, submitRequisitionApi,
   withdrawRequisitionApi, cancelRequisitionApi, approveRequisitionApi, rejectRequisitionApi, convertRequisitionApi,
 } from '@/api/purchase-requisitions'
 import type { FinderResult } from '@/types/finder'
@@ -125,6 +128,10 @@ export default function RequisitionFormPage() {
   const [expectedDate, setExpectedDate] = useState('')
   const [items, setItems] = useState<EditItem[]>([])
   const [busy, setBusy] = useState(false)
+  const active=useActiveWorkspaceTab(), creation=useProcurementIntentRecovery('requisition-create',undefined,isNew&&active)
+  const createRunning=useRef(false), inputFrozen=busy || isNew&&creation.blocked
+  const latestCreationAllowed=useRef(false);latestCreationAllowed.current=!inputFrozen
+  const mayChange=()=>!createRunning.current&&latestCreationAllowed.current
 
   // finder / 弹窗状态
   const [productFinderOpen, setProductFinderOpen] = useState(false)
@@ -180,14 +187,16 @@ export default function RequisitionFormPage() {
         return !b || it.quantity !== b.quantity || it.estimatedPrice !== b.estimatedPrice || it.suggestedSupplierId !== b.suggestedSupplierId
       })
   }, [editable, initial, title, warehouseId, expectedDate, items])
-  useDirtyGuard(tabPath, isDirty)
+  useDirtyGuard(tabPath, isDirty || isNew&&creation.blocked)
 
   function setItem(idx: number, patch: Partial<EditItem>) {
+    if(!mayChange())return
     setItems(list => list.map((it, i) => i === idx ? { ...it, ...patch } : it))
   }
-  function removeItem(idx: number) { setItems(list => list.filter((_, i) => i !== idx)) }
+  function removeItem(idx: number) { if(!mayChange())return;setItems(list => list.filter((_, i) => i !== idx)) }
 
   function onPickProduct(p: { id: number; code?: string; name: string; unit?: string; articleNumber?: string | null; spec?: string | null; color?: string | null }) {
+    if(!mayChange())return
     setItems(list => [...list, {
       productId: p.id, productCode: p.code ?? '', productName: p.name, unit: p.unit ?? '',
       articleNumber: p.articleNumber ?? null, spec: p.spec ?? null, color: p.color ?? null,
@@ -197,7 +206,7 @@ export default function RequisitionFormPage() {
   }
 
   function onPickSupplier(result: FinderResult) {
-    if (!supplierTarget) return
+    if (!supplierTarget || isNew&&!mayChange()) return
     if (supplierTarget.scope === 'item') setItem(supplierTarget.index, { suggestedSupplierId: result.id, suggestedSupplierName: result.name })
     else setConvertRows(rows => rows.map((r, i) => i === supplierTarget.index ? { ...r, supplierId: result.id, supplierName: result.name } : r))
     setSupplierTarget(null)
@@ -246,16 +255,22 @@ export default function RequisitionFormPage() {
     const payload = buildPayload(); if (!payload) return
     if (editId) await run(() => updateRequisitionApi(editId, payload), '已保存')
     else {
-      setBusy(true)
-      try {
-        const r = await createRequisitionApi(payload)
-        toast.success('采购申请单已创建')
-        const path = `/purchase-requisitions/${r!.id}`
-        useWorkspaceStore.getState().addTab({ key: path, title: `采购申请单 ${r!.requisitionNo}`, path })
-        navigate(path)
-      } catch (e) { toast.error(e instanceof Error ? e.message : '创建失败') }
-      finally { setBusy(false) }
+      if(createRunning.current || creation.blocked)return
+      createRunning.current=true;setBusy(true)
+      try { const answer=await creation.submit(payload);if(answer)created(answer.data as RequisitionCreated) }
+      catch(e){toast.error(e instanceof Error?e.message:'创建结果待确认，请查询原申请')}
+      finally{createRunning.current=false;setBusy(false)}
     }
+  }
+
+  function created(result:RequisitionCreated){
+    toast.success('采购申请单已创建')
+    if(can(PERMISSIONS.PURCHASE_REQUISITION_VIEW))viewCreated(result.id,result.requisitionNo)
+  }
+  function viewCreated(id:number,requisitionNo=''){
+    if(!can(PERMISSIONS.PURCHASE_REQUISITION_VIEW))return
+    const path=`/purchase-requisitions/${id}`
+    useWorkspaceStore.getState().addTab({key:path,title:requisitionNo?`采购申请单 ${requisitionNo}`:'采购申请单',path});navigate(path)
   }
 
   function closeTab() {
@@ -333,19 +348,21 @@ export default function RequisitionFormPage() {
         subtitle={detail ? <SoftStatusLabel label={detail.statusName} tone={detail.statusTone} /> : undefined}
         rightActions={
           <div className="flex flex-wrap gap-2">
-            {editable && canCreate && <Button onClick={handleSave} disabled={busy}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : '保存'}</Button>}
-            {editId && status === 1 && canCreate && <Button variant="outline" disabled={busy} onClick={() => runApproval(() => submitRequisitionApi(editId), '已提交审批')}>提交审批</Button>}
-            {status === 2 && canCreate && <Button variant="outline" disabled={busy} onClick={() => runApproval(() => withdrawRequisitionApi(editId as number), '已撤回')}>撤回</Button>}
-            {status === 2 && canApprove && <Button disabled={busy} onClick={() => runApproval(() => approveRequisitionApi(editId as number), '已批准')}>批准</Button>}
-            {status === 2 && canApprove && <Button variant="outline" disabled={busy} onClick={() => setRejectOpen(true)}>驳回</Button>}
-            {status === 3 && canConvert && <Button disabled={busy} onClick={openConvert}>转采购单</Button>}
+            {editable && canCreate && <Button onClick={handleSave} disabled={inputFrozen}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : '保存'}</Button>}
+            {editId && status === 1 && canCreate && <Button variant="outline" disabled={inputFrozen} onClick={() => runApproval(() => submitRequisitionApi(editId), '已提交审批')}>提交审批</Button>}
+            {status === 2 && canCreate && <Button variant="outline" disabled={inputFrozen} onClick={() => runApproval(() => withdrawRequisitionApi(editId as number), '已撤回')}>撤回</Button>}
+            {status === 2 && canApprove && <Button disabled={inputFrozen} onClick={() => runApproval(() => approveRequisitionApi(editId as number), '已批准')}>批准</Button>}
+            {status === 2 && canApprove && <Button variant="outline" disabled={inputFrozen} onClick={() => setRejectOpen(true)}>驳回</Button>}
+            {status === 3 && canConvert && <Button disabled={inputFrozen} onClick={openConvert}>转采购单</Button>}
             {editId && (status === 1 || status === 2 || status === 4) && canCreate && (
-              <Button variant="ghost" className="text-destructive-ink" disabled={busy}
+              <Button variant="ghost" className="text-destructive-ink" disabled={inputFrozen}
                 onClick={() => confirmAction({ title: '取消采购申请单', description: '确定取消这张采购申请单吗？此操作不可撤销。', onConfirm: () => runApproval(() => cancelRequisitionApi(editId), '已取消') })}>取消</Button>
             )}
           </div>
         }
       />
+
+      {isNew&&<ProcurementIntentRecoveryNotice recovery={creation} onConfirmed={answer=>{if(!answer.queryOnly)created(answer.data as RequisitionCreated)}} onViewRequisition={can(PERMISSIONS.PURCHASE_REQUISITION_VIEW)?id=>viewCreated(id):undefined}/>}
 
       {detail?.status === 4 && detail.rejectReason && (
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-2 text-sm text-destructive-ink">驳回原因：{detail.rejectReason}</div>
@@ -357,17 +374,17 @@ export default function RequisitionFormPage() {
         <div className="grid grid-cols-4 gap-x-5 gap-y-4">
           <div className="space-y-1.5">
             <Label>事由</Label>
-            <Input value={title} onChange={e => setTitle(e.target.value)} disabled={!editable || busy} maxLength={100} placeholder="选填，如「前置仓补货」" />
+            <Input value={title} onChange={e => {if(mayChange())setTitle(e.target.value)}} disabled={!editable || inputFrozen} maxLength={100} placeholder="选填，如「前置仓补货」" />
           </div>
           <div className="space-y-1.5">
             <Label>期望入库仓 *</Label>
             {editable
-              ? <WarehouseSelect value={warehouseId} onChange={(id, name) => { setWarehouseId(id); setWarehouseName(name) }} placeholder="选择期望入库仓" disabled={busy} />
+              ? <WarehouseSelect value={warehouseId} onChange={(id, name) => {if(!mayChange())return;setWarehouseId(id); setWarehouseName(name) }} placeholder="选择期望入库仓" disabled={inputFrozen} />
               : <Input value={warehouseName} disabled />}
           </div>
           <div className="space-y-1.5">
             <Label>期望到货日</Label>
-            <DatePicker value={expectedDate ? String(expectedDate).slice(0, 10) : ''} onChange={setExpectedDate} disabled={!editable || busy} />
+            <DatePicker value={expectedDate ? String(expectedDate).slice(0, 10) : ''} onChange={value=>{if(mayChange())setExpectedDate(value)}} disabled={!editable || inputFrozen} />
           </div>
           {detail && (
             <div className="space-y-1.5">
@@ -378,7 +395,7 @@ export default function RequisitionFormPage() {
         </div>
       </Section>
 
-      <Section title="采购申请明细" actions={editable && <Button size="sm" variant="outline" onClick={() => setProductFinderOpen(true)} disabled={busy}><Plus className="mr-1 h-4 w-4" />添加商品</Button>}>
+      <Section title="采购申请明细" actions={editable && <Button size="sm" variant="outline" onClick={() => setProductFinderOpen(true)} disabled={inputFrozen}><Plus className="mr-1 h-4 w-4" />添加商品</Button>}>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1500px] text-sm">
             <thead>
@@ -398,19 +415,19 @@ export default function RequisitionFormPage() {
                 <tr key={idx} className="border-b border-border/40">
                   <ProductIdentityCells product={it} /><td className="px-3 py-3">{it.unit || '—'}</td>
                   <td className="px-3 py-2 text-right">
-                    {editable ? <Input quantity type="number" step={qtyStep(allowDecimalOf(it.productId))} min="0" value={it.quantity} onChange={e => setItem(idx, { quantity: e.target.value })} disabled={busy} className="h-8 text-right tabular-nums" />
+                    {editable ? <Input quantity type="number" step={qtyStep(allowDecimalOf(it.productId))} min="0" value={it.quantity} onChange={e => setItem(idx, { quantity: e.target.value })} disabled={inputFrozen} className="h-8 text-right tabular-nums" />
                       : <span className="tabular-nums">{it.quantity}</span>}
                   </td>
                   <td className="px-3 py-2 text-right">
-                    {editable ? <Input type="number" step="0.01" min="0" value={it.estimatedPrice} onChange={e => setItem(idx, { estimatedPrice: e.target.value })} disabled={busy} className="h-8 text-right tabular-nums" placeholder="选填" />
+                    {editable ? <Input type="number" step="0.01" min="0" value={it.estimatedPrice} onChange={e => setItem(idx, { estimatedPrice: e.target.value })} disabled={inputFrozen} className="h-8 text-right tabular-nums" placeholder="选填" />
                       : <span className="tabular-nums text-muted-foreground">{it.estimatedPrice || '—'}</span>}
                   </td>
                   <td className="px-3 py-2">
-                    {editable ? <PickerField value={it.suggestedSupplierName} placeholder="选填，可转单时定" onOpen={() => setSupplierTarget({ scope: 'item', index: idx })} />
+                    {editable ? <PickerField value={it.suggestedSupplierName} placeholder="选填，可转单时定" disabled={inputFrozen} onOpen={() => setSupplierTarget({ scope: 'item', index: idx })} />
                       : <span className="text-muted-foreground">{it.suggestedSupplierName || '—'}</span>}
                   </td>
                   {!editable && <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{it.convertedQty ?? 0}</td>}
-                  {editable && <td className="px-3 py-2 text-center"><Button size="icon" variant="ghost" className="h-7 w-7 text-destructive-ink" aria-label="删除本行明细" onClick={() => removeItem(idx)} disabled={busy}><Trash2 className="h-4 w-4" /></Button></td>}
+                  {editable && <td className="px-3 py-2 text-center"><Button size="icon" variant="ghost" className="h-7 w-7 text-destructive-ink" aria-label="删除本行明细" onClick={() => removeItem(idx)} disabled={inputFrozen}><Trash2 className="h-4 w-4" /></Button></td>}
                 </tr>
               ))}
             </tbody>
@@ -432,7 +449,7 @@ export default function RequisitionFormPage() {
             <textarea aria-label="驳回原因" className="min-h-28 w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" value={rejectReason} onChange={e => setRejectReason(e.target.value)} maxLength={300} placeholder="请填写驳回原因" />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRejectOpen(false)} disabled={busy}>取消</Button>
+            <Button variant="outline" onClick={() => setRejectOpen(false)} disabled={inputFrozen}>取消</Button>
             <Button disabled={busy || !rejectReason.trim()} onClick={async () => { await runApproval(() => rejectRequisitionApi(editId as number, rejectReason.trim()), '已驳回'); setRejectOpen(false); setRejectReason('') }}>确认驳回</Button>
           </DialogFooter>
         </DialogContent>
@@ -476,8 +493,8 @@ export default function RequisitionFormPage() {
             onCheck={() => convertGuard.checkLastResult(() => { setConvertOpen(false); void refetch() })}
           />
           <DialogFooter>
-            <Button variant="outline" onClick={() => setConvertOpen(false)} disabled={busy}>取消</Button>
-            <Button disabled={busy} onClick={submitConvert}>{busy ? '生成中…' : '生成采购单'}</Button>
+            <Button variant="outline" onClick={() => setConvertOpen(false)} disabled={inputFrozen}>取消</Button>
+            <Button disabled={inputFrozen} onClick={submitConvert}>{busy ? '生成中…' : '生成采购单'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -8,7 +8,7 @@ import { useProductQtyPolicies } from '@/hooks/useProductQtyPolicies'
 import { qtyStep } from '@/lib/qtyStep'
 import { ProductIdentityCells } from '@/components/shared/ProductIdentityCells'
 import { ImportSteps } from '@/components/shared/ImportSteps'
-import { useState, useRef, useContext, useMemo } from 'react'
+import { useEffect, useState, useRef, useContext, useMemo } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Package, Warehouse, Lock, CheckCircle, X } from 'lucide-react'
 import { downloadExport } from '@/lib/exportDownload'
@@ -154,25 +154,39 @@ export default function InventoryPage() {
     isPaused: overviewPaused, error: overviewError, refetch: retryOverview } = useInventoryOverview({
     page: 1, pageSize: PAGE_SIZE, keyword, warehouseId, categoryId,
   }, active && tab === 'overview')
-  const { data: logs, isLoading: logLoading } = useLogs({
+  const { data: logs, isLoading: logLoading, isFetching: logFetching, isPaused: logPaused,
+    error: logError, refetch: retryLogs } = useLogs({
     page: 1, pageSize: PAGE_SIZE, type: logType,
     productId: logProductId ?? undefined, warehouseId: logWarehouseId ?? undefined,
     startDate: effectiveLogStartDate || undefined, endDate: effectiveLogEndDate || undefined,
   }, active && tab === 'logs')
   const overviewTotal = overview?.pagination?.total ?? 0
   const logsTotal = logs?.pagination?.total ?? 0
+  const logReadState = logPaused ? 'paused' : logFetching || logLoading ? 'loading'
+    : logError ? 'failed' : logs ? 'ready' : 'loading'
   const { data: warehouses } = useWarehousesActive()
   const { data: categoryTree = [] } = useCategoryTree()
-  const { mutate: outbound, isPending } = useOutbound()
-  const setF = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
+  const { mutate: outbound, isPending, recovery } = useOutbound({ productName: form.productName, warehouseName: form.warehouseName || (warehouses ?? []).find(w => w.id === Number(form.warehouseId))?.name || '' })
+  const opFrozen = isPending || !!recovery?.blocked
+  const outboundOutcomeKey = recovery?.lastOutcome?.requestKey
+  useEffect(() => {
+    if (recovery?.lastOutcome?.phase === 'success') { setForm(emptyOp); setOpOpen(false) }
+  }, [outboundOutcomeKey, recovery?.lastOutcome?.phase])
+  const setF = (k: string, v: string) => { if (!opFrozen) setForm(f => ({ ...f, [k]: v })) }
 
   function updateParams(updates: Record<string, string | number | null | undefined>) {
     setSearchParams(upsertSearchParams(searchParams, updates))
   }
 
-  function openOp(t: OpType) { setOpType(t); setForm(emptyOp); setOpOpen(true) }
+  function openOp(t: OpType) {
+    setOpType(t)
+    const original = recovery?.record?.body
+    setForm(original ? { ...emptyOp, productId: String(original.productId), productName: recovery.record?.display?.productName || `商品 #${original.productId}`, warehouseId: String(original.warehouseId), warehouseName: recovery.record?.display?.warehouseName || '', quantity: String(original.quantity), unitPrice: original.unitPrice == null ? '' : String(original.unitPrice), remark: original.remark || '' } : emptyOp)
+    setOpOpen(true)
+  }
   function handleOp(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
+    if (opFrozen) return
     const base = { productId: +form.productId, warehouseId: +form.warehouseId, quantity: +form.quantity, remark: form.remark || undefined }
     outbound({ ...base, supplierId: null, unitPrice: form.unitPrice ? +form.unitPrice : null }, { onSuccess: () => setOpOpen(false) })
   }
@@ -202,13 +216,13 @@ export default function InventoryPage() {
     setOverviewQueryOpen(false)
   }
 
-  const initialLogsQuery: InventoryLogsQueryValues = {
+  const initialLogsQuery = useMemo<InventoryLogsQueryValues>(() => ({
     type: logType,
     productId: logProductId, productCode: '', productName: logProductName,
     warehouseId: logWarehouseId, warehouseName: logWarehouseName || logsWarehouseName || '',
     // 日期用「当前实际生效」的范围（含默认窗口），用户打开就能看见
     startDate: effectiveLogStartDate, endDate: effectiveLogEndDate,
-  }
+  }), [logType, logProductId, logProductName, logWarehouseId, logWarehouseName, logsWarehouseName, effectiveLogStartDate, effectiveLogEndDate])
   function applyLogsQuery(v: InventoryLogsQueryValues) {
     updateParams({
       logType: v.type || null,
@@ -394,34 +408,47 @@ export default function InventoryPage() {
       </KeepAliveSection>
 
       <KeepAliveSection active={tab === 'logs'} className="space-y-4">
-          <DataTable virtualized columns={logCols} data={logs?.list ?? []} loading={logLoading} rowKey="id" />
+          {logReadState === 'failed' ? <QueryErrorState error={logError} title="库存流水读取失败" compact onRetry={() => { if (active && tab === 'logs') void retryLogs() }} />
+            : logReadState === 'paused' ? <div className="px-1 py-3 text-sm text-muted-foreground" role="status">网络已暂停，联网后继续读取流水。</div>
+              : <DataTable virtualized columns={logCols} data={logReadState === 'ready' ? logs?.list ?? [] : []} loading={logReadState === 'loading'} emptyText="暂无流水" rowKey="id" />}
 
-          <ListSummary total={logsTotal} unit="条" />
+          {logReadState === 'ready' && (logs?.truncated || logs?.list.length !== logsTotal
+            ? <div className="px-1 py-3 text-xs text-warning-ink" role="status">流水未取齐：显示前 {logs?.list.length.toLocaleString()} 条 / 匹配 {logsTotal.toLocaleString()} 条，请缩小筛选范围。</div>
+            : <ListSummary total={logsTotal} unit="条" />)}
       </KeepAliveSection>
+
+      {recovery?.blocked && <div className="rounded-md border border-warning/30 bg-warning/10 p-3 text-sm space-y-2" role="status">
+        <p>{recovery.error || recovery.message || '上次出库结果待确认，请先核对；暂勿另发出库。'}</p>
+        {recovery.record && <p className="text-xs text-muted-foreground">{recovery.record.display?.productName || `商品 #${recovery.record.body.productId}`} · {recovery.record.display?.warehouseName || `仓库 #${recovery.record.body.warehouseId}`} · 数量 {formatQty(recovery.record.body.quantity)}{recovery.record.body.remark ? ` · ${recovery.record.body.remark}` : ''}</p>}
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" disabled={recovery.busy} onClick={() => { void recovery.query().then(r => { if (r?.status === 'success') setOpOpen(false) }).catch(e => toast.error(e.message)) }}>查询上次结果</Button>
+          {recovery.record?.phase === 'pending' && <Button size="sm" variant="outline" disabled={recovery.busy || !!recovery.error} onClick={() => { void recovery.retry().then(r => { if (r?.status === 'success') setOpOpen(false) }).catch(e => toast.error(e.message)) }}>按原内容重试</Button>}
+        </div>
+      </div>}
 
       {/* 出库弹窗 */}
       <Dialog open={opOpen} onOpenChange={v => !v && setOpOpen(false)}>
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader><DialogTitle>出库</DialogTitle></DialogHeader>
           <form onSubmit={handleOp} className="space-y-4 py-2">
-            <div className="space-y-2"><Label>商品 *</Label><PickerField value={form.productName} placeholder="点击选择商品…" onOpen={() => setProductFinderOpen(true)} disabled={isPending} /></div>
+            <div className="space-y-2"><Label>商品 *</Label><PickerField value={form.productName} placeholder="点击选择商品…" onOpen={() => setProductFinderOpen(true)} disabled={opFrozen} /></div>
             <div className="space-y-2">
               <Label>仓库 *</Label>
               <WarehouseSelect
                 value={form.warehouseId ? +form.warehouseId : null}
-                onChange={(id, name) => setForm(f => ({ ...f, warehouseId: id ? String(id) : '', warehouseName: name }))}
+                onChange={(id, name) => { if (!opFrozen) setForm(f => ({ ...f, warehouseId: id ? String(id) : '', warehouseName: name })) }}
                 placeholder="选择仓库"
-                disabled={isPending}
+                disabled={opFrozen}
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2"><Label>数量 *</Label><Input quantity type="number" step={qtyStep(allowDecimalOf(Number(form.productId) || 0))} min="0" value={form.quantity} onChange={e => setF('quantity', e.target.value)} disabled={isPending} /></div>
-              <div className="space-y-2"><Label>单价</Label><Input type="number" step="0.01" min="0" value={form.unitPrice} onChange={e => setF('unitPrice', e.target.value)} disabled={isPending} placeholder="选填" /></div>
+              <div className="space-y-2"><Label>数量 *</Label><Input quantity type="number" step={qtyStep(allowDecimalOf(Number(form.productId) || 0))} min="0" value={form.quantity} onChange={e => setF('quantity', e.target.value)} disabled={opFrozen} /></div>
+              <div className="space-y-2"><Label>单价</Label><Input type="number" step="0.01" min="0" value={form.unitPrice} onChange={e => setF('unitPrice', e.target.value)} disabled={opFrozen} placeholder="选填" /></div>
             </div>
-            <div className="space-y-2"><Label>备注</Label><Input value={form.remark} onChange={e => setF('remark', e.target.value)} disabled={isPending} placeholder="选填" /></div>
+            <div className="space-y-2"><Label>备注</Label><Input value={form.remark} onChange={e => setF('remark', e.target.value)} disabled={opFrozen} placeholder="选填" /></div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setOpOpen(false)} disabled={isPending}>取消</Button>
-              <Button type="submit" disabled={isPending || !form.productId || !form.warehouseId || !form.quantity}>{isPending ? '提交中…' : '出库'}</Button>
+              <Button type="submit" disabled={opFrozen || !form.productId || !form.warehouseId || !form.quantity}>{isPending ? '提交中…' : '出库'}</Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -462,7 +489,7 @@ export default function InventoryPage() {
       </Dialog>
 
       <ProductFinder open={productFinderOpen} warehouseId={form.warehouseId ? +form.warehouseId : null}
-        onConfirm={p => { setForm(f => ({ ...f, productId: String(p.id), productName: p.name })); setProductFinderOpen(false) }}
+        onConfirm={p => { if (!opFrozen) setForm(f => ({ ...f, productId: String(p.id), productName: p.name })); setProductFinderOpen(false) }}
         onClose={() => setProductFinderOpen(false)} />
 
       <InventoryOverviewQueryDialog

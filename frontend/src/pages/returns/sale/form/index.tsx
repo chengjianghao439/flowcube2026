@@ -1,5 +1,5 @@
 import { getWorkspaceListPath } from '@/lib/workspaceListNavigation'
-import { money } from '@/lib/format'
+import { money, unitPrice } from '@/lib/format'
 import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
 import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
 import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
@@ -57,7 +57,7 @@ import { useSourceReturnFacts } from '@/hooks/useSourceReturnFacts'
 import { useKitOperation } from '@/hooks/useKitOperation'
 import { commercialReadConfig } from '@/api/sale-commercial'
 import { SourceComponents, SourceLabel } from './SourceComponents'
-import { returnNet } from './returnSourcePresentation'
+import { ordinaryNetLabel, returnNet } from './returnSourcePresentation'
 import { hasQuantityPrecision, qtyStep } from '@/lib/qtyStep'
 
 interface DraftItem {
@@ -143,6 +143,7 @@ function FormView({ tabPath, tabKey }: { tabPath: string; tabKey: string }) {
   const [items, setItems] = useState<DraftItem[]>([])
   // 「只能整数」的商品把退货数量框的 step 切成 1（迁移 254）
   const isKit = boundSource?.commercialModel === 'kit-v1'
+  const isOrdinaryNet = !isKit && boundSource?.moneyModel === 'ordinary-net-v1'
   const allowDecimalOf = useProductQtyPolicies(isKit ? [] : items.map(i => i.productId))
   const [sourceError, setSourceError] = useState(handoff === 'invalid' ? '原单交接参数无效，请核对来源；可清除后手动录入' : '')
   let ownerCurrent = true
@@ -317,7 +318,7 @@ function FormView({ tabPath, tabKey }: { tabPath: string; tabKey: string }) {
     const badItemKeys = new Set(items.filter(i => !i.productId || i.quantity <= 0).map(i => i._key))
     setInvalidItemKeys(badItemKeys)
     if (badItemKeys.size) { toast.warning('请完整填写所有明细'); return }
-    if (isKit && items.some(i => !hasQuantityPrecision(i.quantity) || (i.source?.allowDecimalQty === false && !Number.isInteger(i.quantity)) || i.quantity > (i.remainingQty ?? 0))) { setSourceError('本次申请量不能超过来源剩余额度；数量最多两位小数，整数商品只能填整数'); return }
+    if ((isKit || isOrdinaryNet) && items.some(i => !hasQuantityPrecision(i.quantity) || ((isKit ? i.source?.allowDecimalQty === false : allowDecimalOf(i.productId) === false) && !Number.isInteger(i.quantity)) || i.quantity > (i.remainingQty ?? 0))) { setSourceError('本次申请量不能超过来源剩余额度；数量最多两位小数，整数商品只能填整数'); return }
 
     try {
       setSubmitting(true)
@@ -421,12 +422,12 @@ function FormView({ tabPath, tabKey }: { tabPath: string; tabKey: string }) {
         {!boundSource && <p className="mt-3 text-xs text-muted-foreground">本系统原单请填写单号并载入；无本系统原单的旧系统退货，可手工选择客户、仓库与商品填写。</p>}
         {boundSource && (
           <div className="mt-3 rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-            已关联原单 {boundSource.orderNo}。{isKit ? '请按原成交行、实际出库批次和组件选择；原成交资料不随套定义改版变化。' : '退货单价默认取原单真实成交价，数量默认取剩余可退数量。'}
+            已关联原单 {boundSource.orderNo}。{isKit ? '请按原成交行、实际出库批次和组件选择；原成交资料不随套定义改版变化。' : isOrdinaryNet ? '可调整本次退货数量或移除不退商品；原单价仅供参考，净冲减金额提交后核定。' : '退货单价默认取原单真实成交价，数量默认取剩余可退数量。'}
           </div>
         )}
       </SectionCard>
 
-      {isKit && <SourceComponents items={boundSource!.items} disabled={locked} onSelect={selectSource} />}
+      {isKit && <SourceComponents cashProof={boundSource!} items={boundSource!.items} disabled={locked} onSelect={selectSource} />}
 
       <SectionCard
         title="退货明细"
@@ -448,8 +449,8 @@ function FormView({ tabPath, tabKey }: { tabPath: string; tabKey: string }) {
                   <ProductIdentityHeaders />
                   <th className="w-16 pb-2 text-center">单位</th>
                   <th className="w-20 pb-2 text-right">数量</th>
-                  <th className="w-24 pb-2 text-right">单价 (¥)</th>
-                  <th className="w-28 pb-2 text-right">金额</th>
+                  <th className="w-24 pb-2 text-right">{isOrdinaryNet ? '原单价参考 (¥)' : '单价 (¥)'}</th>
+                  <th className="w-28 pb-2 text-right">{isOrdinaryNet ? '净冲减金额' : '金额'}</th>
                   <th className="w-10 pb-2" />
                 </tr>
               </thead>
@@ -487,8 +488,8 @@ function FormView({ tabPath, tabKey }: { tabPath: string; tabKey: string }) {
                         <Input quantity
                           aria-label="退货数量" type="number" min="0.01" step={qtyStep(isKit ? item.source?.allowDecimalQty !== false : allowDecimalOf(item.productId))} placeholder="数量"
                           value={item.quantity}
-                          max={isKit ? item.remainingQty : undefined}
-                          disabled={!!boundSource && !isKit}
+                          max={isKit || isOrdinaryNet ? item.remainingQty : undefined}
+                          disabled={!!boundSource && !isKit && !isOrdinaryNet}
                           onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'quantity', +e.target.value)}
                           className="text-right text-sm"
                         />
@@ -506,9 +507,9 @@ function FormView({ tabPath, tabKey }: { tabPath: string; tabKey: string }) {
                           className="text-right text-sm"
                         />
                       </td>
-                      <td className="py-2.5 text-right font-medium tabular-nums">{isKit ? '保存后估算' : money(item.quantity * item.unitPrice)}</td>
+                      <td className="py-2.5 text-right font-medium tabular-nums">{isKit ? '保存后估算' : isOrdinaryNet ? '提交后核定' : money(item.quantity * item.unitPrice)}</td>
                       <td className="py-2.5 text-center">
-                        <Button type="button" size="sm" variant="ghost" aria-label="删除退货商品行" disabled={!!boundSource && !isKit} className="h-8 w-9 p-0 text-muted-foreground hover:text-destructive-ink" onClick={() => removeItem(item._key)}>✕</Button>
+                        <Button type="button" size="sm" variant="ghost" aria-label="删除退货商品行" disabled={!!boundSource && !isKit && !isOrdinaryNet} className="h-8 w-9 p-0 text-muted-foreground hover:text-destructive-ink" onClick={() => removeItem(item._key)}>✕</Button>
                       </td>
                     </tr>
                     {(item.originalQty != null || item.returnedQty != null) && (
@@ -526,8 +527,8 @@ function FormView({ tabPath, tabKey }: { tabPath: string; tabKey: string }) {
           <div className="flex items-center justify-between border-t border-border pt-4">
             <p className="text-muted-body">退货明细：{items.length} 行</p>
             <div className="text-right">
-              <p className="text-helper">合计金额</p>
-              <p className="text-2xl font-semibold text-foreground">{isKit ? '本次以保存后估算为准' : money(total)}</p>
+              <p className="text-helper">{isOrdinaryNet ? '净冲减金额' : '合计金额'}</p>
+              <p className="text-2xl font-semibold text-foreground">{isKit ? '本次以保存后估算为准' : isOrdinaryNet ? '提交后核定' : money(total)}</p>
             </div>
           </div>
           </>
@@ -695,6 +696,8 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
   })
   const ret = detailQuery.data
   const isKit = ret?.items?.some(item => item.dispatchComponentId != null) ?? false
+  const isOrdinaryNet = !isKit && ret?.moneyModel === 'ordinary-net-v1' && (ret.amountBasis === 'estimated_net' || ret.amountBasis === 'executed_net')
+  const netLabel = isOrdinaryNet ? ordinaryNetLabel(ret.amountBasis!, ret.status) : ''
   useWorkspaceTabTitle(ret?.returnNo)
   const isLoading = detailQuery.isLoading
 
@@ -808,10 +811,12 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
             { key: 'quantity', title: '数量', width: 120, align: 'right', render: (v, item) => (item.entryUnit && item.entryUnit !== item.unit && item.entryQty != null)
               ? <span className="tabular-nums">{item.entryQty} {item.entryUnit}<span className="ml-1 text-xs text-muted-foreground">（{Number(v)} {item.unit}）</span></span>
               : <span className="tabular-nums">{String(v)}</span> },
-            { key: 'unitPrice', title: '单价', width: 120, align: 'right', render: (v, item) => (item.entryUnit && item.entryUnit !== item.unit && item.entryQty && item.entryQty > 0)
-              ? <span className="tabular-nums" title={`¥${Number(v).toFixed(4)} / ${item.unit}`}>{money(item.amount / item.entryQty)}/{item.entryUnit}</span>
-              : <span className="tabular-nums">{money(Number(v))}</span> },
-            { key: 'amount', title: isKit ? (ret.status === 3 ? '实际净冲减' : '预计最多冲减') : '金额', width: 140, align: 'right', render: v => <span className="font-semibold tabular-nums">{isKit ? `¥${returnNet(Number(v))}` : money(Number(v))}</span> },
+            { key: 'unitPrice', title: isOrdinaryNet ? '原单价参考' : '单价', width: 120, align: 'right', render: (v, item) => isOrdinaryNet
+              ? <span className="tabular-nums">{unitPrice(Number(v), 8)}/{item.unit}</span>
+              : (item.entryUnit && item.entryUnit !== item.unit && item.entryQty && item.entryQty > 0)
+              ? <span className="tabular-nums" title={`${unitPrice(Number(v), 8)} / ${item.unit}`}>{unitPrice(item.amount / item.entryQty, 8)}/{item.entryUnit}</span>
+              : <span className="tabular-nums">{unitPrice(Number(v), 8)}</span> },
+            { key: 'amount', title: isKit ? (ret.status === 3 ? '实际净冲减' : '预计最多冲减') : isOrdinaryNet ? netLabel : '金额', width: 140, align: 'right', render: v => <span className="font-semibold tabular-nums">{isKit || isOrdinaryNet ? `¥${returnNet(Number(v), ret)}` : money(Number(v))}</span> },
           ] satisfies TableColumn<ReturnItem>[]}
           data={ret.items ?? []}
           rowKey="id"
@@ -820,11 +825,11 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
         <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
           <p className="text-muted-body">共 {ret.items?.length ?? 0} 行退货明细</p>
           <div className="text-right">
-            <p className="text-helper">{isKit ? (ret.status === 3 ? '本单实际净冲减' : ret.status === 4 ? '原估算（已取消，不作为冲减）' : '本单预计最多冲减') : '合计金额'}</p>
-            <p className="text-2xl font-semibold text-foreground">{isKit ? `¥${returnNet(ret.totalAmount)}` : money(Number(ret.totalAmount))}</p>
+            <p className="text-helper">{isKit ? (ret.status === 3 ? '本单实际净冲减' : ret.status === 4 ? '原估算（已取消，不作为冲减）' : '本单预计最多冲减') : isOrdinaryNet ? netLabel : '合计金额'}</p>
+            <p className="text-2xl font-semibold text-foreground">{isKit || isOrdinaryNet ? `¥${returnNet(ret.totalAmount, ret)}` : money(Number(ret.totalAmount))}</p>
           </div>
         </div>
-        {isKit && <p className="mt-3 text-xs text-muted-foreground">{ret.status === 3 ? '本单已完成，金额为系统按实际合格入仓结果确定的净冲减，保留四位；来源累计金额不是本单金额。' : '保存后为预计最多冲减；已确认、待收货或质检未完成均不代表已退款，合格入仓完成后由系统确定。'} 原分摊毛预算、实际净冲减与会计凭证两位金额分别计算；净冲减为零仍可能有退库成本。资金退款需走原退款出款流程。</p>}
+        {isKit && <p className="mt-3 text-xs text-muted-foreground">{ret.status === 3 ? '本单已完成，金额为系统按实际合格入仓结果确定的净冲减，金额以分计；来源累计金额不是本单金额。' : '保存后为预计最多冲减；已确认、待收货或质检未完成均不代表已退款，合格入仓完成后由系统确定。'} 原分摊毛预算、实际净冲减与会计凭证金额按各自业务依据核定；净冲减为零仍可能有退库成本。资金退款需走原退款出款流程。</p>}
       </SectionCard>
 
       </OrderDetailSections>

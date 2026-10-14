@@ -23,7 +23,7 @@ export function retentionHarness() {
  beforeEach(()=>{
   Object.assign(globalThis,{IS_REACT_ACT_ENVIRONMENT:true});vi.stubGlobal('ResizeObserver',class{observe(){}unobserve(){}disconnect(){}});Element.prototype.scrollIntoView=vi.fn();Element.prototype.hasPointerCapture=()=>false;Element.prototype.setPointerCapture=vi.fn();Element.prototype.releasePointerCapture=vi.fn()
   useAuthStore.getState().login('offline-fixture',null,{id:7,roleId:1,permissions:['*'],username:'fixture',realName:'合成',roleName:'测试'})
-  useWorkspaceStore.setState({tabs:[HOME_TAB],activeKey:HOME_TAB.key});useDirtyGuardStore.setState({dirtyTabs:{},pendingConfirm:null,bypassNextBlock:false});unexpected.length=0;httpData.clear();httpCalls.length=0
+  useWorkspaceStore.setState({tabs:[HOME_TAB],activeKey:HOME_TAB.key});useDirtyGuardStore.setState({dirtyTabs:{},pendingConfirm:null,bypassNextBlock:false});unexpected.length=0;httpData.clear();httpCalls.length=0;httpData.set('/auth/me',structuredClone(useAuthStore.getState().user))
   apiClient.defaults.adapter=async config=>{if(config.method==='get'&&httpData.has(config.url!)){httpCalls.push({url:config.url!,params:config.params});return {config,headers:{},status:200,statusText:'OK',data:{success:true,data:structuredClone(httpData.get(config.url!))}}}unexpected.push(String(config.method)+' '+config.url);throw new Error('Unexpected test API: '+config.url)}
   cache=new QueryClient({defaultOptions:{queries:{retry:false,staleTime:Infinity},mutations:{retry:false}}});host=document.createElement('div');document.body.append(host);root=createRoot(host)
  })

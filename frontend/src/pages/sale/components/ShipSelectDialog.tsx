@@ -1,3 +1,4 @@
+import OrdinarySaleRecoveryNotice, { type OrdinarySaleRecovery } from './OrdinarySaleRecoveryNotice'
 import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
@@ -6,7 +7,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { isAllocationQtyValid, clampAllocationQty } from './saleAllocation'
-import { useProductQtyPolicies } from '@/hooks/useProductQtyPolicies'
 import { qtyStep } from '@/lib/qtyStep'
 import type { SaleOrder, ShipItemRequest } from '@/types/sale'
 
@@ -15,15 +15,16 @@ interface Props {
   onClose: () => void
   order: SaleOrder
   loading?: boolean
+  recovery?: OrdinarySaleRecovery
   onConfirm: (items: ShipItemRequest[]) => void
 }
 type RowState = { checked: boolean; qty: number }
 
-export default function ShipSelectDialog({ open, onClose, order, loading, onConfirm }: Props) {
+export default function ShipSelectDialog({ open, onClose, order, loading, recovery, onConfirm }: Props) {
+  const frozen = !!loading || !!recovery?.blocked
   const submitting = useRef(false)
   useEffect(() => { if (!loading) submitting.current = false }, [loading])
   // 数量框拒绝超过两位小数，商品策略已加载时同时限制整数；服务端独立校验
-  const allowDecimalOf = useProductQtyPolicies((order.items ?? []).map(i => i.productId))
   const undispatched = useMemo(
     () => (order.items ?? []).filter(i => (i.dispatchedQty ?? 0) < (i.reservedQty ?? 0)),
     [order.items],
@@ -31,30 +32,30 @@ export default function ShipSelectDialog({ open, onClose, order, loading, onConf
   const [rows, setRows] = useState<Record<number, RowState>>({})
 
   useEffect(() => {
-    if (!open || submitting.current) return
+    if (!open || submitting.current || recovery?.pending) return
     setRows(Object.fromEntries(undispatched.map(item => [item.id, {
       checked: true,
       qty: clampAllocationQty((item.reservedQty ?? 0) - (item.dispatchedQty ?? 0), item.reservedQty ?? 0),
     }])))
-  }, [open, undispatched])
+  }, [open, undispatched, recovery?.pending])
 
   const limitFor = (id: number) => {
     const item = undispatched.find(row => row.id === id)
     return item ? clampAllocationQty((item.reservedQty ?? 0) - (item.dispatchedQty ?? 0), item.reservedQty ?? 0) : 0
   }
   const selected = undispatched.filter(item => rows[item.id]?.checked)
-  const invalid = selected.filter(item => !isAllocationQtyValid(rows[item.id]?.qty ?? 0, limitFor(item.id)))
+  const invalid = selected.filter(item => !isAllocationQtyValid(rows[item.id]?.qty ?? 0, limitFor(item.id), item.allowDecimalQty !== false))
   const allSelected = undispatched.length > 0 && undispatched.every(item => rows[item.id]?.checked)
 
   const setRow = (id: number, patch: Partial<RowState>) => {
-    if (submitting.current || loading) return
+    if (submitting.current || frozen) return
     setRows(prev => ({ ...prev, [id]: { ...(prev[id] ?? { checked: false, qty: limitFor(id) }), ...patch } }))
   }
   function requestClose() {
     if (!submitting.current && !loading) onClose()
   }
   function handleConfirm() {
-    if (submitting.current || loading || !selected.length || invalid.length > 0) return
+    if (submitting.current || frozen || !selected.length || invalid.length > 0) return
     submitting.current = true
     onConfirm(selected.map(item => ({ id: item.id, qty: rows[item.id].qty })))
   }
@@ -67,11 +68,12 @@ export default function ShipSelectDialog({ open, onClose, order, loading, onConf
           选择本次发货商品并填写数量。未发部分保留，可稍后继续发货。
           {order.isMultiWarehouse && ' 本单将按仓库分别创建出库任务。'}
         </DialogDescription>
+        <OrdinarySaleRecoveryNotice recovery={recovery} onConfirmed={onClose} />
         <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-border">
           <table className="w-full min-w-[1560px] text-sm">
             <thead data-selection-column className="sticky top-0 data-table-header text-xs text-muted-foreground">
               <tr>
-                <th className="w-10 px-3 py-2"><input type="checkbox" aria-label="选择全部可出库明细" disabled={loading} checked={allSelected} onChange={e => { if (!submitting.current && !loading) setRows(Object.fromEntries(undispatched.map(item => [item.id, { checked: e.target.checked, qty: limitFor(item.id) }]))) }} /></th>
+                <th className="w-10 px-3 py-2"><input type="checkbox" aria-label="选择全部可出库明细" disabled={frozen} checked={allSelected} onChange={e => { if (!submitting.current && !frozen) setRows(Object.fromEntries(undispatched.map(item => [item.id, { checked: e.target.checked, qty: limitFor(item.id) }]))) }} /></th>
                 <ProductIdentityHeaders /><th className="min-w-20 px-3 py-3 text-left">单位</th>
                 <th className="w-40 px-3 py-2 text-left">发货仓库</th>
                 <th className="w-28 px-3 py-2 text-right">已占未发</th>
@@ -81,15 +83,15 @@ export default function ShipSelectDialog({ open, onClose, order, loading, onConf
             <tbody>
               {undispatched.map(item => {
                 const state = rows[item.id] ?? { checked: false, qty: limitFor(item.id) }
-                const invalidQty = state.checked && !isAllocationQtyValid(state.qty, limitFor(item.id))
+                const invalidQty = state.checked && !isAllocationQtyValid(state.qty, limitFor(item.id), item.allowDecimalQty !== false)
                 return (
                   <tr key={item.id} className="border-t align-top hover:bg-muted/20">
-                    <td className="px-3 py-3 text-center"><input type="checkbox" aria-label={`选择 ${item.productName}`} disabled={loading} checked={state.checked} onChange={e => setRow(item.id, { checked: e.target.checked })} /></td>
+                    <td className="px-3 py-3 text-center"><input type="checkbox" aria-label={`选择 ${item.productName}`} disabled={frozen} checked={state.checked} onChange={e => setRow(item.id, { checked: e.target.checked })} /></td>
                     <ProductIdentityCells product={item} /><td className="px-3 py-3">{item.unit || '—'}</td>
                     <td className="px-3 py-3">{item.warehouseName || order.warehouseName}</td>
                     <td className="px-3 py-3 text-right tabular-nums">{limitFor(item.id)} {item.unit}</td>
                     <td className="px-3 py-3">
-                      <Input quantity aria-label={`${item.productName}本次出库数量`} aria-invalid={invalidQty} type="number" min={0.01} step={qtyStep(allowDecimalOf(item.productId))} max={limitFor(item.id)} value={state.qty} disabled={loading || !state.checked}
+                      <Input quantity aria-label={`${item.productName}本次出库数量`} aria-invalid={invalidQty} type="number" min={0.01} step={qtyStep(item.allowDecimalQty !== false)} max={limitFor(item.id)} value={state.qty} disabled={frozen || !state.checked}
                         onChange={e => setRow(item.id, { qty: Number(e.target.value) })}
                         className={cn('h-9 text-right tabular-nums', invalidQty && 'border-destructive')} />
                     </td>
@@ -105,7 +107,7 @@ export default function ShipSelectDialog({ open, onClose, order, loading, onConf
             {invalid.length ? `${invalid.length} 项数量无效：须大于 0、不超过已占未发量，最多 2 位小数` : `已选择 ${selected.length} 项`}
           </span>
           <Button variant="outline" disabled={loading} onClick={requestClose}>取消</Button>
-          <Button disabled={loading || !selected.length || invalid.length > 0}
+          <Button disabled={frozen || !selected.length || invalid.length > 0}
             onClick={handleConfirm}>
             {loading ? '发起中…' : '确认发起出库'}
           </Button>

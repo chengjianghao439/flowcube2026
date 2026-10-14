@@ -1,5 +1,6 @@
 import { useVisibleQuery } from '@/hooks/useVisibleQuery'
 import { SummaryStrip } from '@/components/shared/SummaryStrip'
+import { refundCashLabel } from '@/lib/supplierRefundRecovery'
 import { money } from '@/lib/format'
 import { useState, useEffect, useRef, useSyncExternalStore, useId } from 'react'
 import PageHeader from '@/components/shared/PageHeader'
@@ -32,6 +33,9 @@ const BIZ_TYPE_OPTIONS = [
 ] as const
 const BIZ_TYPE_NAME: Record<string, string> = Object.fromEntries(BIZ_TYPE_OPTIONS.map(([v, l]) => [v, l]))
 const DIRECTION_NAME: Record<string, string> = { '1': '收入', '2': '支出' }
+
+const isCashCent = (value: number) => Number.isFinite(Number(value)) && Number(Number(value).toFixed(2)) === Number(value)
+const cashLabel = (value: number) => !Number.isFinite(Number(value)) ? '—' : isCashCent(value) ? money(value) : `¥${String(value)}（待核）`
 
 interface TxQuery {
   accountId: string; bizType: string; direction: string
@@ -195,21 +199,21 @@ export default function FinanceTransactionsPage() {
     { key: 'partyName', title: '往来单位', width: 150, render: v => (v as string) || <span className="text-muted-foreground">—</span> },
     { key: 'amount', title: '收入', width: 120, align: 'right', render: (_, row) => {
       const t = row as AccountTransaction
-      return t.direction === 1 ? <span className="tabular-nums font-medium text-success-ink">{t.bizType===6?Number(t.amount).toFixed(4):money(t.amount)}</span> : <span className="text-muted-foreground">—</span>
+      return t.direction === 1 ? <span className="tabular-nums font-medium text-success-ink">{cashLabel(t.amount)}</span> : <span className="text-muted-foreground">—</span>
     }},
     { key: 'direction', title: '支出', width: 120, align: 'right', render: (_, row) => {
       const t = row as AccountTransaction
-      return t.direction === 2 ? <span className="tabular-nums font-medium text-destructive-ink">{money(t.amount)}</span> : <span className="text-muted-foreground">—</span>
+      return t.direction === 2 ? <span className="tabular-nums font-medium text-destructive-ink">{cashLabel(t.amount)}</span> : <span className="text-muted-foreground">—</span>
     }},
     { key: 'balanceAfter', title: '账户余额', width: 130, align: 'right', render: v => (
-      <span className={`tabular-nums ${Number(v) < 0 ? 'text-destructive-ink' : 'text-foreground'}`}>{money(v as number)}</span>
+      <span className={`tabular-nums ${Number(v) < 0 ? 'text-destructive-ink' : 'text-foreground'}`}>{cashLabel(v as number)}</span>
     )},
     { key: 'operatorName', title: '操作人', width: 100, render: v => (v as string) || <span className="text-muted-foreground">—</span> },
     { key: 'remark', title: '备注', expandableText: true, width: 200, render: v => (v as string) || <span className="text-muted-foreground">—</span> },
   ]
 
   const summary = data?.summary
-  const netAmount = summary ? summary.inAmount - summary.outAmount : 0
+  const netAmount = summary ? isCashCent(summary.inAmount) && isCashCent(summary.outAmount) ? Number((summary.inAmount - summary.outAmount).toFixed(2)) : summary.inAmount - summary.outAmount : 0
 
   return (
     <div className="space-y-4">
@@ -231,7 +235,7 @@ export default function FinanceTransactionsPage() {
         )}
       />
 
-      {summary && !isError && <SummaryStrip items={[{ label: '期间收入', value: money(summary.inAmount), tone: 'text-success-ink' }, { label: '期间支出', value: money(summary.outAmount), tone: 'text-destructive-ink' }, { label: '净额', value: money(netAmount), tone: netAmount < 0 ? 'text-destructive-ink' : 'text-foreground' }]} />}
+      {summary && !isError && <SummaryStrip items={[{ label: '期间收入', value: cashLabel(summary.inAmount), tone: 'text-success-ink' }, { label: '期间支出', value: cashLabel(summary.outAmount), tone: 'text-destructive-ink' }, { label: '净额', value: cashLabel(netAmount), tone: netAmount < 0 ? 'text-destructive-ink' : 'text-foreground' }]} />}
 
       <QueryChips chips={queryChips} onClearAll={() => { setQuery({ ...EMPTY_TX_QUERY, startDate: '', endDate: '' }); }} />
 
@@ -246,7 +250,7 @@ export default function FinanceTransactionsPage() {
           {traceCurrent && traceQuery.data && !traceData && <p>原退款单与这笔流水不符，请人工核对。</p>}
           {traceCurrent && traceData && <div className="space-y-2 text-sm">
             <p>{traceData!.refund_no} / {formatDisplayDate(traceData!.refund_date)}</p>
-            <p className="tabular-nums">回款 {traceData!.amount}</p>
+            <p className="tabular-nums">回款 {refundCashLabel(traceData!.amount)}</p>
             <p>{traceData!.voucher_generate_error || (typeof traceData!.voucher_id==='number'&&Number.isSafeInteger(traceData!.voucher_id)&&traceData!.voucher_id>0?'凭证已生成':'凭证待核对')}</p>
           </div>}
           </>}

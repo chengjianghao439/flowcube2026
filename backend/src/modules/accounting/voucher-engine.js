@@ -178,15 +178,21 @@ async function upsertVoucher(conn, spec, accountMap, allocSeq, createdBy, compan
 // ─── 事件 → 凭证规格 builders（只读业务事实） ────────────────────────────────
 
 /**
- * 事件1：采购入库结算应付。无发票：借 库存商品1405 / 贷 应付账款2202〔供应商〕，毛额=SUM(putaway×采购价)。
+ * 事件1：采购入库结算应付。新分位单按原POI预算投影已审上架量；旧单保留原量价毛额。
  * 有进项发票（Phase3 价税分离，§5.3）：借 库存商品(不含税) + 借 进项税额222101(发票税额) / 贷 应付账款(毛额含税)。
  * 应付方(2202)恒为毛额 → 与 payment_records 勾稽口径不变；税额从 1405 里拆出，库存按不含税更准。
  * taxByPO: Map<poId, 进项税额合计>。税额 clamp 至不超过毛额，避免不含税为负。
  */
-async function buildPurchaseSettle(conn, taxByPO) {
+async function buildPurchaseSettle(conn, taxByPO, { orderIds = null } = {}) {
+  // 期末核对仅检查本期来源及本期凭证锚点；普通全量生成保留原合同。
+  if (orderIds !== null && (!Array.isArray(orderIds) || orderIds.some(id => !Number.isSafeInteger(id) || id <= 0))) {
+    throw new AppError('采购凭证来源范围无效', 400)
+  }
+  if (orderIds !== null && orderIds.length === 0) return []
+  const orderFilter = orderIds === null ? '' : ' AND pr.order_id IN (?)'
   const [rows] = await conn.query(`
     SELECT pr.order_id AS poId, pr.order_no, pr.created_at AS vdate,
-           po.supplier_id, po.supplier_name,
+           po.supplier_id, po.supplier_name, po.warehouse_id, po.total_amount AS order_total, po.cash_basis,
            COALESCE((
              SELECT SUM(iti.putaway_qty * poi.unit_price)
                FROM inbound_tasks it
@@ -201,15 +207,77 @@ async function buildPurchaseSettle(conn, taxByPO) {
            ), 0) AS gross
       FROM payment_records pr
       JOIN purchase_orders po ON po.id = pr.order_id
-     WHERE pr.type = 1 AND pr.order_id IS NOT NULL`)
+     WHERE pr.type = 1 AND pr.order_id IS NOT NULL${orderFilter}`, orderIds === null ? [] : [orderIds])
   // 生成凭证前先证明来源完整（与结算侧 recomputePurchasePayable 同一套校验，这里是同一份实现）：
   // 历史脏单（purchase_item_id 为空/指向别的单/别的商品）**必须报业务错误**，不能产出 0 金额凭证——
   // 0 金额会走到 upsertVoucher 的 PURCHASE_SETTLE 分支触发自动红冲，账面应付被写掉。
   // 放在 rows.map 之前：既在「已有凭证」判定之前，也在「无既有凭证则跳过」之前。
   const { assertPurchaseSettlementSources } = require('../inbound-tasks/inbound-purchase-source')
   for (const r of rows) await assertPurchaseSettlementSources(conn, Number(r.poId))
+  const cashRows = rows.filter(row => row.cash_basis != null)
+  const cashGrossByPO = new Map()
+  if (cashRows.length) {
+    const purchaseCash = require('../purchase/purchase.cash-money')
+    const cash = require('../../utils/cashMoney')
+    const { decimalUnits } = require('./voucher-sale-money')
+    const ids = cashRows.map(row => Number(row.poId))
+    // Two batched readonly fact sets. Never project gross from the AP net cache:
+    // executed PR has its own voucher and must not be subtracted a second time.
+    const [sourceItems] = await conn.query(
+      `SELECT id, order_id, product_id, unit, quantity, unit_price, amount
+         FROM purchase_order_items WHERE order_id IN (?) ORDER BY order_id, id`, [ids],
+    )
+    const [receipts] = await conn.query(
+      `SELECT iti.purchase_order_id AS orderId, iti.purchase_item_id AS itemId,
+              iti.product_id AS productId, it.warehouse_id AS warehouseId, iti.putaway_qty AS quantity
+         FROM inbound_task_items iti JOIN inbound_tasks it ON it.id=iti.task_id
+        WHERE iti.purchase_order_id IN (?) AND it.deleted_at IS NULL
+          AND it.status<>5 AND it.audit_status=1
+        ORDER BY iti.purchase_order_id, iti.purchase_item_id, iti.id`, [ids],
+    )
+    const originalsByPO = new Map(ids.map(id => [id, new Map()]))
+    const receiptsByPO = new Map(ids.map(id => [id, []]))
+    for (const item of sourceItems) {
+      const originals = originalsByPO.get(Number(item.order_id))
+      if (!originals || originals.has(Number(item.id))) purchaseCash.review('凭证原采购明细来源重复或越界')
+      originals.set(Number(item.id), item)
+    }
+    for (const receipt of receipts) {
+      const actual = receiptsByPO.get(Number(receipt.orderId))
+      if (!actual) purchaseCash.review('凭证已审核收货来源越界')
+      actual.push(receipt)
+    }
+    for (const row of cashRows) {
+      const basis = purchaseCash.parseBasis(row.cash_basis)
+      const originals = originalsByPO.get(Number(row.poId))
+      if (Number(basis.snapshot.orderId) !== Number(row.poId)
+        || Number(basis.snapshot.supplierId) !== Number(row.supplier_id)
+        || Number(basis.snapshot.warehouseId) !== Number(row.warehouse_id)
+        || basis.gross !== cash.storedCashCents(row.order_total, '原采购合计')
+        || originals.size !== basis.snapshot.items.length) purchaseCash.review('凭证原采购身份或预算已变化')
+      const quantities = new Map()
+      for (const original of basis.snapshot.items) {
+        const source = originals.get(Number(original.id))
+        if (!source || Number(source.product_id) !== Number(original.productId) || source.unit !== original.unit
+          || decimalUnits(source.quantity, 2) !== decimalUnits(original.quantity, 2)
+          || decimalUnits(source.unit_price, 8) !== decimalUnits(original.unitPrice, 8)
+          || cash.storedCashCents(source.amount, '原采购行金额') !== basis.budgets.get(Number(original.id))) {
+          purchaseCash.review('凭证原采购行量价或分预算已变化')
+        }
+        quantities.set(Number(original.id), 0n)
+      }
+      for (const receipt of receiptsByPO.get(Number(row.poId))) {
+        const source = originals.get(Number(receipt.itemId))
+        if (!source || Number(receipt.productId) !== Number(source.product_id)
+          || Number(receipt.warehouseId) !== Number(row.warehouse_id)) purchaseCash.review('凭证实收来源或仓库不一致')
+        quantities.set(Number(source.id), quantities.get(Number(source.id)) + decimalUnits(receipt.quantity, 2))
+      }
+      const vector = Array.from(quantities, ([id, value]) => ({ id, quantity: `${value / 100n}.${String(value % 100n).padStart(2, '0')}` }))
+      cashGrossByPO.set(Number(row.poId), cash.cashNumber(purchaseCash.cashTarget(basis.snapshot, vector)))
+    }
+  }
   return rows.map(r => {
-    const gross = round2(r.gross)
+    const gross = cashGrossByPO.has(Number(r.poId)) ? cashGrossByPO.get(Number(r.poId)) : round2(r.gross)
     const tax = Math.min(round2(taxByPO.get(Number(r.poId)) || 0), gross)
     const noTax = round2(gross - tax)
     const legs = [{ code: '1405', direction: DIR.DEBIT, amount: noTax, summary: '采购入库' }]
@@ -333,6 +401,7 @@ async function buildPurchaseReturn(conn) {
  */
 async function buildSaleReturn(conn) {
   const commercialAmounts=await require('./voucher-sale-returns').loadCommercialReturnVoucherAmounts(conn)
+  const ordinaryAmounts=await require('../sale/sale.ordinary-return-money').voucherAmounts(conn)
   const [rows] = await conn.query(`
     SELECT sr.id, sr.return_no, sr.customer_id, sr.customer_name, sr.updated_at AS vdate,
            COALESCE(SUM(CASE WHEN sri.dispatch_component_id IS NOT NULL THEN cri.financial_amount ELSE (rti.checked_qty - rti.rejected_qty) * sri.unit_price END), 0) AS arAmount,
@@ -356,7 +425,8 @@ async function buildSaleReturn(conn) {
   if(Number(missing))throw new AppError('已执行成套退货缺少来源退款记录',409,'SALE_COMMERCIAL_SOURCE_INVALID')
   const specs = []
   for (const r of rows) {
-    const ar = commercialAmounts.has(Number(r.id)) ? Number(commercialAmounts.get(Number(r.id))) : round2(r.arAmount)
+    const ar = commercialAmounts.has(Number(r.id)) ? Number(commercialAmounts.get(Number(r.id)))
+      : ordinaryAmounts.has(Number(r.id)) ? Number(ordinaryAmounts.get(Number(r.id))) : round2(r.arAmount)
     const cogs = round2(r.cogsBack)
     if (ar <= 0 && cogs <= 0) continue
     const legs = []
@@ -607,6 +677,9 @@ module.exports = {
   buildSaleReturn,
   // [35] 采购结算凭证的来源完整性闸门，导出供回归直接断言
   buildPurchaseSettle,
+  // 期末完整性核对复用原资金/税额投影，只读，不另建金额口径。
+  buildFundVouchers,
+  loadTaxMaps,
   // [任务3b] 非单据应付（运费/手工）凭证来源，导出供勾稽回归直接断言
   buildUnbilledPayable,
 }

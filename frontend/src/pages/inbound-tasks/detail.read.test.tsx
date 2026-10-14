@@ -32,6 +32,6 @@ test.each([[403, '无权查看'], [404, '不存在或已删除'], [503, '读取�
 test('旧数据临时失败明确标记且暂停写操作；403/404隐藏旧敏感数据', async () => {
  fixture.task = { id: 21, taskNo: '旧收货单', status: 2, statusName: '收货中', items: [] } as unknown as InboundTask
  const ui = await setup(); fixture.error = { status: 503 }; await ui.draw()
- expect(ui.host.textContent).toContain('刷新失败，当前显示上次读取的数据'); expect(ui.host.textContent).toContain('旧收货单'); expect(ui.host.textContent).not.toContain('结束收货')
+ expect(ui.host.textContent).toContain('刷新失败，当前显示上次读取的数据'); expect(ui.host.textContent).toContain('旧收货单'); expect(ui.host.textContent).not.toContain('结束本次收货')
  for (const status of [403, 404]) { fixture.error = { status }; await ui.draw(); expect(ui.host.textContent).not.toContain('旧收货单') }
 })

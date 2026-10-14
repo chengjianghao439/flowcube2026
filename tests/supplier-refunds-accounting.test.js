@@ -5,7 +5,7 @@ const {fixture,required,copy,assertNoModelErrors}=require('./helpers/supplier-re
 test.afterEach(assertNoModelErrors)
 async function build(f,options={}){return required(f.load('builder'),'loadSources')(f.f.conn,{companyId:1,fundId:f.ack.fundTransactionId,...options})}
 for(const [amount,projected] of [['0.0001','0.00'],['0.0040','0.00'],['0.0049','0.00'],['0.0050','0.01'],['0.0051','0.01'],['4.0000','4.00']]){
-  test('actual received source validates before exact cent projection '+amount,async()=>{
+  test('stored historical received source validates before original cent projection '+amount,async()=>{
     const f=await fixture(amount),sources=await build(f)
     assert.equal(sources.length,1);assert.equal(sources[0].amount4,amount);assert.equal(sources[0].amount2,projected)
     assert.equal(sources[0].spec.sourceType,'supplier_refund_in');assert.equal(sources[0].spec.sourceId,f.ack.fundTransactionId)
@@ -119,7 +119,7 @@ test('actual closePeriod company-gate ordering reads a bad-source mutation befor
   await assert.rejects(f.load('period').closePeriod('202610',{userId:9},1),e=>e.code==='ACCT_SUPPLIER_REFUND_SOURCE_INVALID')
   const queries=f.queries.slice(from)
   assert.match(queries[0].sql,/acct_companies.*FOR UPDATE/)
-  assert.match(queries[1].sql,/supplier-refund-facts/)
+  assert.ok(queries.findIndex(q=>/supplier-refund-facts/.test(q.sql))>0,'actual RF facts follow company gate and original completeness proof')
   assert.equal(queries.some(q=>q.sql.startsWith('INSERT INTO acct_periods')),false)
   assert.equal(f.data.acct_periods.length,0)
 })
@@ -164,17 +164,15 @@ test('actual reconciliation separately consumes cash4u, per-source cents and net
   assert.equal(result.items[1].business,100);assert.equal(result.items[1].voucher,100)
   assert.deepEqual(copy(result.supplierRefunds),{cashAmount4:'0.0040',projectedAmount2:'0.00',roundingDifference4:'-0.0040',netPaid4:'99.9960',currentPaid4:'99.9960',paidDifference4:'0.0000',balanceDifference4:'0.0000',mismatchedPaymentCount:0,matched:true})
 })
-test('multiple tiny real receipts retain four-place cash and do not invent a shared cent',async()=>{
+test('legacy fractional receipt remains readable but cannot create another fractional actual receipt',async()=>{
   const f=await fixture('0.0040'),service=f.f.module('service')
   const initial=f.queries.length;await f.load('builder').loadSources(f.f.conn,{companyId:1});const oneReads=f.queries.length-initial
   const raw={...f.body,operationUuid:require('./helpers/supplier-refunds-accounting-fixture').uuid(321)}
-  const second=await service.create(raw,f.f.options)
-  await service.confirm(second.id,{operationUuid:require('./helpers/supplier-refunds-accounting-fixture').uuid(322)},f.f.options)
-  await service.receive(second.id,{operationUuid:require('./helpers/supplier-refunds-accounting-fixture').uuid(323)},{...f.f.options,postCommit:async()=>{}})
-  const from=f.queries.length,sources=await f.load('builder').loadSources(f.f.conn,{companyId:1}),reads=f.queries.length-from
-  assert.equal(sources.length,2);assert.equal(reads,oneReads)
+  await assert.rejects(service.create(raw,f.f.options),e=>e.code==='CASH_PRECISION_INVALID'&&e.statusCode===400)
+  const sources=await f.load('builder').loadSources(f.f.conn,{companyId:1})
+  assert.equal(sources.length,1);assert.ok(oneReads>0)
   const metric=await f.load('builder').reconciliation(f.f.conn,1)
-  assert.equal(metric.cashAmount4,'0.0080');assert.equal(metric.projectedAmount2,'0.00');assert.equal(metric.roundingDifference4,'-0.0080')
+  assert.equal(metric.cashAmount4,'0.0040');assert.equal(metric.projectedAmount2,'0.00');assert.equal(metric.roundingDifference4,'-0.0040')
 })
 
 test('captured cash account type remains 1001 after current account type changes',async()=>{

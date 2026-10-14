@@ -1,4 +1,5 @@
-const { assertQtyPrecision, assertQtyScale } = require('../../utils/qtyPrecision')
+const { assertTaskShipmentQuantity } = require('../sale/sale.shipping-quantity')
+const { assertQtyScale } = require('../../utils/qtyPrecision')
 const { roundQty } = require('../../utils/unitConversion')
 const { beginResourceOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { pool } = require('../../config/db')
@@ -307,7 +308,7 @@ async function addItem(packageId, { productCode, labelBarcode, qty }, { requestK
       qtyUnits = toQtyUnits(qty == null ? labelRemaining : qty)
       if (!Number.isFinite(qtyUnits) || qtyUnits <= 0) throw new AppError('数量必须大于 0', 400)
       // 精度校验要在**最终数量定下来之后**做（默认整份也走这里）：整数商品不能靠标签整份装进小数
-      await assertQtyPrecision(conn, [{ productId: product.id, qty: fromQtyUnits(qtyUnits), label: '装箱数量' }])
+      await assertTaskShipmentQuantity(conn, task.id, product.id, fromQtyUnits(qtyUnits), '装箱数量')
       if (qtyUnits > toQtyUnits(labelRemaining)) {
         throw new AppError(
           `装箱数量超过该取货标签的未装余量（已复核 ${checkedLabelQty}，已装 ${Number(packedLabel.s)}，最多可装 ${labelRemaining}）`,
@@ -321,7 +322,7 @@ async function addItem(packageId, { productCode, labelBarcode, qty }, { requestK
       )
       if (!p) throw new AppError(`商品 ${productCode} 不存在`, 404)
       product = p
-      await assertQtyPrecision(conn, [{ productId: product.id, qty, label: '装箱数量' }])
+      await assertTaskShipmentQuantity(conn, task.id, product.id, qty, '装箱数量')
       qtyUnits = toQtyUnits(qty)
       if (!Number.isFinite(qtyUnits) || qtyUnits <= 0) throw new AppError('数量必须大于 0', 400)
     }
@@ -513,7 +514,7 @@ async function removeItem(packageId, { itemId, qty }, { requestKey, userId, scop
     )
     if (!item) throw new AppError('该商品明细不存在', 404)
 
-    if (qty != null) await assertQtyPrecision(conn, [{ productId: item.product_id, qty, label: '移除数量' }])
+    if (qty != null) await assertTaskShipmentQuantity(conn, task.id, item.product_id, qty, '移除数量')
     const currentUnits = toQtyUnits(item.qty)
     const removeUnits = qty == null ? currentUnits : toQtyUnits(qty)
     if (!Number.isFinite(removeUnits) || removeUnits <= 0) throw new AppError('移除数量必须大于 0', 400)

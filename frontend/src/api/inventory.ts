@@ -21,8 +21,8 @@ export const resyncStockApi = async () => apiClient.post<{ ok: boolean; fixed: n
 // 手动出库是 changeStock 唯一还活着的分支（inbound/adjust 后端已 403 关闭，见
 // inventory.service.js 的 type !== 2 分支），其幂等键由后端 extractRequestKey 消费，
 // 故此处必须带 X-Request-Key，否则网络重试会重复扣减容器库存（2026-09-26 一致性审查 · 任务 4）。
-export const outboundApi    = async (d: StockChangeParams, requestKey?: string) =>
-  apiClient.post<unknown>('/inventory/outbound', d, requestKey ? { headers: withRequestKeyHeaders(requestKey) } : undefined)
+export const outboundApi    = async (d: StockChangeParams, requestKey?: string, config?: AxiosRequestConfig) =>
+  apiClient.post<unknown>('/inventory/outbound', d, { ...config, ...(requestKey ? { headers: { ...config?.headers, ...withRequestKeyHeaders(requestKey) } } : {}) })
 
 export const getInventoryOverviewApi = async (p: InventoryOverviewParams, signal?: AbortSignal) =>
   apiClient.get<InventoryOverviewResult>('/inventory/overview', { params: p, signal })

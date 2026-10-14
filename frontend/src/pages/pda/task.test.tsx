@@ -219,3 +219,11 @@ test('其他任务独占容器时显示任务号和释放指引，不提示直�
   expect(host.textContent).toContain('任务完成或逆向归还')
   expect(host.textContent).not.toContain('请直接扫码')
 })
+
+test.each([false, true])('原任务小数规则%s在扫码前生效且合法余量精确提交', async allowDecimalQty => {
+  const suggestions = { items: [{...SUGGESTIONS.items[0], remaining: 0.3 - 0.2, suggestions: [{...SUGGESTIONS.items[0].suggestions[0], remainingQty: 0.3}]}] }
+  api.task.mockResolvedValue({...TASK,items:[{...TASK.items[0],allowDecimalQty}]});api.sug.mockResolvedValue(suggestions)
+  await act(async () => { await qc.invalidateQueries({queryKey:['pda-task',42]});await qc.invalidateQueries({queryKey:['pda-suggestions',42]}) }); await settle(); await gunScan('I000123')
+  if (allowDecimalQty) expect(api.submitScan).toHaveBeenCalledWith(expect.objectContaining({qty:0.1}),'stable-key')
+  else {expect(api.submitScan).not.toHaveBeenCalled();expect(api.err).toHaveBeenCalledWith(expect.stringContaining('整数'))}
+})

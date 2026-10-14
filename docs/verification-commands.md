@@ -1,5 +1,9 @@
 # 开发与验证命令（全量）
 
+2026-10-14 云端 0.13.5 候选夹具维护：`test:return-payment-lock-order` 显式注入真实 `cashMoney` 并补齐原账款余额；旧锁顺序、金额与事件断言保留，另检查原始 DECIMAL4 绑定。`test:expense-pay-backfill-integration`、`test:party-profile` 与 `test:disposal-handling` 补齐新增现金行读取、真实仓库范围和普通销售冻结金额依据；未知 SQL/依赖继续拒绝。处置目标夹具使用真实净额模块、不可变合成成交快照和原已发应收，补断言关闭剩余后应收及原快照不变，不能用空 money guard 代替。
+
+云端 `umask 077` 下，`test:mysql8-dev-script`、`test:repair-smoke-instance-guard` 明确设置自己新建的假文件权限，保留宽权限负例；`smoke:nginx-headers` 仅让该测试新建的公开合成静态文件可由 Nginx worker 读取，不修改真实凭据、系统权限或全局 umask。前端全量测试的登录、工作区返回及异步按钮夹具与当前生产状态对齐；半分历史值同时断言“待核”，不改写金额。上述均不代表真实数据库闭环、实际浏览器或此前受阻探针已验。候选状态及发布阻塞见 `docs/runbooks/cloud-release-0.13.5-2026-10-14.md`。
+
 2026-10-08销售历史容量专项：`tests/sale-order-capacity.test.js`随`test:party-profile`进入现有CI static及go-live-owned实库步骤。普通运行仅离线四列条件/属性/模式和反向破坏守卫；真实SQL分支要求`FLOWCUBE_PARTY_PROFILE_MYSQL_PROOF=1`、NODE_ENV=test、非3306/3307的本批实例及完整`assertOwnedRepairInstance`证明，随机scratch schema在同UUID实例中创建/精确清理。覆盖已核旧容量、NO_BACKSLASH_ESCAPES、不同列字符集、正常/未知容量、非nullable/非NULL默认/生成列，核旧值、索引、所有非容量属性、两次重放和长收货资料保存；不能直接在共享开发/测试实例或生产执行。
 
 > **来源**：本文件由 `AGENTS.md` 的 §3 迁出（2026-09-19 文档体系重构，原文见 `docs/agents-md-archive-2026-09-19.md`），内容为无损搬运。

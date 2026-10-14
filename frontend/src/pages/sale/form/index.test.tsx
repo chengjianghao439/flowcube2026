@@ -50,7 +50,7 @@ test('普通详情合并商品身份列，保留换算、分仓、已发进度�
   expect([...table.querySelectorAll('th')].map(th => th.textContent?.replace(/调整.*列宽/g, ''))).toEqual(['商品', '单位', '发货仓库', '数量', '已发/应发', '单价', '金额', '备注'])
   expect(table.textContent).toContain('按箱分装')
   const row = table.querySelector('tbody tr')!
-  for (const fact of ['P-LONG', '供应商型号完整值', '长规格完整值', '长商品名称完整值', '本色', '第二仓', '2 箱', '12 个', '6/12', '¥120.00/箱', '低于进价 ¥22.00']) expect(row.textContent).toContain(fact)
+  for (const fact of ['P-LONG', '供应商型号完整值', '长规格完整值', '长商品名称完整值', '本色', '第二仓', '2 箱', '12 个', '6/12 个', '¥120.00/箱', '低于进价 ¥22.00']) expect(row.textContent).toContain(fact)
   expect(table.closest('[data-sale-detail-items]')?.textContent).toContain('订单金额¥220.00')
   expect(host.textContent).not.toContain('订单汇总')
 })

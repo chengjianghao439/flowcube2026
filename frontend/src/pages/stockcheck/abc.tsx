@@ -19,6 +19,7 @@ import { formatDisplayDateTime } from '@/lib/dateTime'
 import { downloadExport } from '@/lib/exportDownload'
 import { useWarehousesActive } from '@/hooks/useWarehouses'
 import { usePermission } from '@/hooks/usePermission'
+import { useGlobalPolicyWriteCapability } from '@/hooks/useGlobalPolicyWriteCapability'
 import { useDirtyGuard } from '@/hooks/useDirtyGuard'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { TabPathContext } from '@/components/layout/TabPathContext'
@@ -47,6 +48,8 @@ export default function AbcClassPage() {
   const [tab, setTab] = useState<'abc' | 'rules' | 'coverage'>('abc')
   // 0 = 全局默认（仅规则页有意义）；>0 = 具体仓库
   const [warehouseId, setWarehouseId] = useState(0)
+  const globalPolicy = useGlobalPolicyWriteCapability(canManage && tab === 'rules' && warehouseId === 0)
+  const canEditRules = canManage && (warehouseId > 0 || globalPolicy.allowed)
   const [metricType, setMetricType] = useState('sold_value')
   const [windowDays, setWindowDays] = useState(90)
 
@@ -82,7 +85,10 @@ export default function AbcClassPage() {
     })
   }, [rulesQ.data, warehouseId])
   const saveRules = useMutation({
-    mutationFn: (submitted: { warehouseId: number; rules: CycleRule[] }) => saveCycleRulesApi({ warehouseId: submitted.warehouseId, rules: submitted.rules.map(r => ({ abcClass: r.abcClass, intervalDays: r.intervalDays, batchLimit: r.batchLimit, enabled: r.enabled })) }, { skipGlobalError: true }),
+    mutationFn: (submitted: { warehouseId: number; rules: CycleRule[] }) => {
+      if (!canManage || (submitted.warehouseId === 0 && !globalPolicy.isAllowed())) throw Error('当前仅可查看全局默认规则')
+      return saveCycleRulesApi({ warehouseId: submitted.warehouseId, rules: submitted.rules.map(r => ({ abcClass: r.abcClass, intervalDays: r.intervalDays, batchLimit: r.batchLimit, enabled: r.enabled })) }, { skipGlobalError: true })
+    },
     onSuccess: (_result, submitted) => {
       toast.success('分批盘点规则已保存')
       // 保存成功后回到默认（只读）态——页面状态变化本身就是「已保存」的反馈；
@@ -211,11 +217,12 @@ export default function AbcClassPage() {
           <FilterCard>
             {warehouseSelect}
             <span className="text-sm text-muted-foreground">
-              {rulesEditing
+              {rulesEditing && canEditRules
                 ? (warehouseId > 0 ? '编辑本仓覆盖规则（不填则继承全局默认）' : '编辑全局默认规则（适用于未单独设置的所有仓库）')
-                : (warehouseId > 0 ? '查看本仓覆盖规则；点「编辑规则」后可修改。' : '查看全局默认规则；点「编辑规则」后可修改。')}
+                : (warehouseId > 0 ? '查看本仓覆盖规则。' : canEditRules ? '查看全局默认规则；点「编辑规则」后可修改。' : '全局默认只读；仅不限仓管理账号可修改。')}
             </span>
-            {rulesEditing && <EditModeBadge />}
+            {warehouseId === 0 && globalPolicy.isError && <Button size="sm" variant="outline" onClick={() => void globalPolicy.refetch()}>重试权限读取</Button>}
+            {rulesEditing && canEditRules && <EditModeBadge />}
             <UnsavedBadge show={hasUnsavedRules} />
           </FilterCard>
           <div className="overflow-x-auto rounded-lg border border-border">
@@ -234,18 +241,18 @@ export default function AbcClassPage() {
                   <tr key={r.abcClass} className="border-t border-border">
                     <td className="px-4 py-3"><SoftStatusLabel label={`${r.abcClass} 类 · ${ABC_HINT[r.abcClass]}`} tone={ABC_TONE[r.abcClass] ?? 'info'} /></td>
                     <td className="px-4 py-2 text-right">
-                      {rulesEditing
-                        ? <Input type="number" value={r.intervalDays} disabled={!canManage} onChange={(e) => patchDraft(r.abcClass, { intervalDays: Number(e.target.value) || 0 })} className="ml-auto h-9 w-28 text-right tabular-nums" />
+                      {rulesEditing && canEditRules
+                        ? <Input type="number" value={r.intervalDays} onChange={(e) => patchDraft(r.abcClass, { intervalDays: Number(e.target.value) || 0 })} className="ml-auto h-9 w-28 text-right tabular-nums" />
                         : <span className="tabular-nums">{r.intervalDays}</span>}
                     </td>
                     <td className="px-4 py-2 text-right">
-                      {rulesEditing
-                        ? <Input type="number" value={r.batchLimit} disabled={!canManage} onChange={(e) => patchDraft(r.abcClass, { batchLimit: Number(e.target.value) || 0 })} className="ml-auto h-9 w-28 text-right tabular-nums" />
+                      {rulesEditing && canEditRules
+                        ? <Input type="number" value={r.batchLimit} onChange={(e) => patchDraft(r.abcClass, { batchLimit: Number(e.target.value) || 0 })} className="ml-auto h-9 w-28 text-right tabular-nums" />
                         : <span className="tabular-nums">{r.batchLimit}</span>}
                     </td>
                     <td className="px-4 py-3 text-center">
-                      {rulesEditing
-                        ? <input type="checkbox" checked={r.enabled} disabled={!canManage} onChange={(e) => patchDraft(r.abcClass, { enabled: e.target.checked })} className="h-4 w-4 accent-primary" aria-label={`${r.abcClass} 类启用`} />
+                      {rulesEditing && canEditRules
+                        ? <input type="checkbox" checked={r.enabled} onChange={(e) => patchDraft(r.abcClass, { enabled: e.target.checked })} className="h-4 w-4 accent-primary" aria-label={`${r.abcClass} 类启用`} />
                         : <SoftStatusLabel label={r.enabled ? '启用' : '停用'} tone={activeTone(r.enabled)} />}
                     </td>
                     <td className="px-4 py-3">
@@ -257,7 +264,7 @@ export default function AbcClassPage() {
             </table>
           </div>
           <div className="flex justify-end">
-            {canManage && (rulesEditing ? (
+            {canEditRules && (rulesEditing ? (
               <>
                 <Button variant="outline" disabled={saveRules.isPending} onClick={cancelRuleEdit}>取消编辑</Button>
                 <Button className="ml-2" disabled={saveRules.isPending || !draft.length} onClick={() => saveRules.mutate({ warehouseId, rules: draft.map(r => ({ ...r })) })}>

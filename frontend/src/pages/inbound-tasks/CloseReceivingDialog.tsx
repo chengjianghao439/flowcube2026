@@ -24,9 +24,9 @@ export default function CloseReceivingDialog({ taskId, onClose, onDone }: { task
         <Button variant="outline" disabled={action.isPending || !can(PERMISSIONS.INBOUND_ORDER_CANCEL)} onClick={() => { void resolve(action.retry) }}>按原请求重试</Button>
       </div>
     </div>}
-    <ConfirmDialog open={taskId != null && !action.pendingRecord} title="结束收货"
-      description="供应商短装、不再继续收货时使用：剩余未收数量作罢。实收已全部上架时立即完成并结算；有待上架货物时，全部上架后再结算。采购剩余量另按采购单处理。"
-      confirmText="确定结束收货"
+    <ConfirmDialog open={taskId != null && !action.pendingRecord} title="结束本次收货"
+      description="本次实收全部上架后结算，未收采购余量保留，可另建批次补收。"
+      confirmText="结束本次收货"
       loading={action.isPending}
       onConfirm={() => { if (taskId != null) void resolve(() => action.submit(taskId)) }}
       onCancel={onClose} />

@@ -21,7 +21,7 @@ async function login(req, res, next) {
 async function getMe(req, res, next) {
   try {
     const user = await authService.getMe(req.user.userId)
-    return successResponse(res, user, '获取成功')
+    return successResponse(res, { ...user, hasUnrestrictedWarehouseScope: req.user.warehouseIds === null }, '获取成功')
   } catch (err) {
     next(err)
   }

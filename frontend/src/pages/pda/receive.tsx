@@ -6,7 +6,7 @@ import { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getInboundTaskByIdApi, receiveInboundApi } from '@/api/inbound-tasks'
-import type { InboundTask } from '@/types/inbound-tasks'
+import type { InboundTask, ReceiveParams } from '@/types/inbound-tasks'
 import PdaHeader from '@/components/pda/PdaHeader'
 import PdaCard from '@/components/pda/PdaCard'
 import PdaFlash from '@/components/pda/PdaFlash'
@@ -258,6 +258,9 @@ function ReceiveRunner({ task, readError, onRetry }: { task: InboundTask; readEr
       await qc.invalidateQueries({ queryKey: ['pda-inbound-task', task.id] })
       await qc.invalidateQueries({ queryKey: ['pda-inbound-tasks'] })
       if (ctx.recovered) {
+        resetBoxes(1)
+        setDuplicateArmed(null)
+        setOverReceivePrompt(null)
         // 断网重连后自动核实出来的成功，没有原始响应里的容器/打印数量，不编造具体数字
         ok('收货已确认成功，任务状态已更新。')
         return
@@ -272,20 +275,10 @@ function ReceiveRunner({ task, readError, onRetry }: { task: InboundTask; readEr
         warn(`${data.noPrinterCount} 个条码未打印，请到「打印记录」补打`)
       }
     },
-    // 网络波动导致提交结果不明时，用"目标商品的已收数量是否已经涨到本次提交后
-    // 应有的水平"来核实上一次收货请求是否其实已经生效，而不是让用户凭经验重试。
-    resolveServerState: async ({ record }) => {
-      const productId = Number(record.metadata?.productId ?? 0)
-      const expectedReceivedQty = Number(record.metadata?.expectedReceivedQty ?? NaN)
-      if (!productId || !Number.isFinite(expectedReceivedQty)) return { effective: false }
-      const latest = await getInboundTaskByIdApi(task.id, { skipGlobalError: true })
-      const line = groupProducts(latest).find(p => p.productId === productId)
-      if (!line || line.receivedQty < expectedReceivedQty) return { effective: false }
-      return {
-        effective: true,
-        data: {},
-        message: `收货已成功，${line.productName} 已收 ${line.receivedQty}。`,
-      }
+    retryExecutor: (record, requestKey, config) => {
+      const body = record.metadata?.requestBody as ReceiveParams | undefined
+      if (!body || record.metadata?.taskId !== task.id || !body.productId || !Array.isArray(body.packages) || body.packages.length === 0) throw Error('原收货内容不完整，请只查询并核对原操作')
+      return receiveInboundApi(task.id, body, requestKey, config)
     },
   })
 
@@ -353,20 +346,15 @@ function ReceiveRunner({ task, readError, onRetry }: { task: InboundTask; readEr
   }) {
     const { product, boxes: pkgs, totalQty, confirmDuplicate, overReceiveReason } = opts
     setSubmitting(true)
-    const expectedReceivedQty = product.receivedQty + totalQty
+    const requestBody: ReceiveParams = {
+      productId: product.productId, packages: pkgs.map(box => ({ qty: box.qty })),
+      confirmOverReceive: overReceiveReason ? true : undefined, overReceiveReason,
+      confirmDuplicate: confirmDuplicate || undefined, batchNo: batchNo.trim() || undefined,
+      mfgDate: mfgDate || undefined, expDate: expDate || undefined,
+    }
     void receiveAction.run(
-      (requestKey) =>
-        receiveInboundApi(task.id, {
-          productId: product.productId,
-          packages: pkgs.map((box) => ({ qty: box.qty })),
-          confirmOverReceive: overReceiveReason ? true : undefined,
-          overReceiveReason,
-          confirmDuplicate: confirmDuplicate || undefined,
-          batchNo: batchNo.trim() || undefined,
-          mfgDate: mfgDate || undefined,
-          expDate: expDate || undefined,
-        }, requestKey).then((res) => res!),
-      { productId: product.productId, expectedReceivedQty },
+      (requestKey, config, metadata) => receiveInboundApi(task.id, metadata!.requestBody as ReceiveParams, requestKey, config),
+      { taskId: task.id, productId: product.productId, productName: product.productName, requestBody },
     ).then((result) => {
       setDuplicateArmed(null)
       setOverReceivePrompt(null)
@@ -384,8 +372,7 @@ function ReceiveRunner({ task, readError, onRetry }: { task: InboundTask; readEr
           resetBoxes(1, boxFill(next))
         }
       } else {
-        // 结果待确认：清空当前箱数输入，避免用户误以为这些箱子还没提交而重复填报
-        resetBoxes(1)
+        // 原输入与原请求一起冻结，不清空或换键。
         warn('网络中断，收货结果待确认。请先确认刚才那次是否成功，再决定是否重试。')
       }
     }).catch((error: unknown) => {
@@ -453,6 +440,7 @@ function ReceiveRunner({ task, readError, onRetry }: { task: InboundTask; readEr
               if (status.status === 'failed') err(status.message || '上次收货未成功，请检查后重试')
             })
           }}
+          onRetry={receiveAction.canRetry ? () => { void receiveAction.retryPending().catch(e => err(e.message)) } : undefined}
           onClear={() => receiveAction.clearPending()}
           onDismissError={() => receiveAction.clearError()}
         />

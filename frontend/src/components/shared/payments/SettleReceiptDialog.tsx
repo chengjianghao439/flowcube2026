@@ -23,6 +23,7 @@ import { BackfillRequestDialog } from './BackfillRequestDialog'
 import { UncertainSubmitNotice } from './UncertainSubmitNotice'
 import { useIdempotentSubmit } from './useIdempotentSubmit'
 import { isBackfillApplication, useBackfillPrompt } from './backfillFlow'
+import { cashCents, cashText } from './cashCent'
 
 interface Props {
   open: boolean
@@ -41,6 +42,8 @@ interface Props {
 }
 
 const isPayableType = (t: 1 | 2) => t === 1
+
+const balanceLabel = (value: number) => value == null || !Number.isFinite(Number(value)) ? '—' : cashCents(value) == null ? `¥${String(value)}（待核）` : money(value)
 
 /**
  * 收款核销：录入一笔汇款，勾选若干待核销账款并分配金额。
@@ -150,30 +153,45 @@ export function SettleReceiptDialog({ open, onClose, type, settlementTypes, rece
                    tone: (r.status === 2 ? 'active' : 'draft') as 'active' | 'draft' }))
   }, [data, partyId, partyName, type, byStatement])
 
+  const totalUnits = cashCents(amount)
   const totalAmount = Number(amount) || 0
-  const allocatedTotal = useMemo(
-    () => Object.values(alloc).reduce((s, v) => s + (Number(v) || 0), 0),
-    [alloc],
-  )
-  const unallocated = totalAmount - allocatedTotal
+  const allocatedUnits = Object.values(alloc).reduce<bigint>((sum, value) => sum + (cashCents(value) ?? 0n), 0n)
+  const candidateBalances = useMemo(() => new Map(candidates.map(c => [c.key, cashCents(c.balance)])), [candidates])
+  const validAllocations = Object.entries(alloc).every(([id, value]) => {
+    const units = cashCents(value)
+    const balance = candidateBalances.get(Number(id))
+    // An uncertain original submission may already have consumed this balance.
+    // Keep the existing same-key retry/query contract; the server owns replay.
+    return units != null && units >= 0n && (guard.uncertain || (balance != null && units <= balance))
+  })
+  const unallocatedUnits = (totalUnits ?? 0n) - allocatedUnits
+  const allocatedTotal = Number(allocatedUnits) / 100
+  const unallocated = Number(unallocatedUnits) / 100
 
   /** 按到期日从早到晚依次填满，最后一笔可能是部分核销 */
   function autoAllocate() {
-    let left = totalAmount
+    if (totalUnits == null || totalUnits <= 0n) return
+    let left = totalUnits
     const next: Record<number, string> = {}
     for (const c of candidates) {
-      if (left <= 0) break
-      const take = Math.min(left, c.balance)
-      if (take > 0) { next[c.key] = String(Number(take.toFixed(2))); left -= take }
+      if (left <= 0n) break
+      const balance = cashCents(c.balance)
+      if (balance == null || balance <= 0n) continue
+      const take = left < balance ? left : balance
+      next[c.key] = cashText(take)
+      left -= take
     }
     setAlloc(next)
-    if (left > 0) toast.warning(`账款已全部分配完，仍有 ${money(left)} 未分配，将留作预${actionLabel}`)
+    if (left > 0n) toast.warning(candidates.some(c => cashCents(c.balance) == null)
+      ? `含待核历史余额，仅分配可核对金额；尚有 ${money(Number(left) / 100)} 未分配`
+      : `账款已全部分配完，仍有 ${money(Number(left) / 100)} 未分配，将留作预${actionLabel}`)
   }
 
   const { prompt, ask, close: closePrompt } = useBackfillPrompt()
 
   const mut = useMutation({
     mutationFn: async ({ backfillReason }: { backfillReason?: string } = {}) => {
+      if (totalUnits == null || totalUnits <= 0n || !validAllocations || unallocatedUnits < 0n) throw Object.assign(Error('金额与核销金额须按分填写且不能超过余额'), { status: 400 })
       // 继续核销：把本次的 receiptId 绑进查询 action（并在提示条上带单号，便于区分同名的两张单）
       const settleTargetId = isContinue && receipt ? receipt.id : null
       submittedReceiptIdRef.current = settleTargetId
@@ -215,7 +233,7 @@ export function SettleReceiptDialog({ open, onClose, type, settlementTypes, rece
       qc.invalidateQueries({ queryKey: ['finance-accounts'] })
       qc.invalidateQueries({ queryKey: ['finance-dashboard'] })
       const left = Number(res?.balance ?? 0)
-      toast.success(left > 0 ? `${actionLabel}登记成功，还有 ${money(left)} 未核销` : `${actionLabel}登记并核销完成`)
+      toast.success(left > 0 ? `${actionLabel}登记成功，还有 ${balanceLabel(left)} 未核销` : `${actionLabel}登记并核销完成`)
       onClose()
     },
     onError: (e) => {
@@ -237,7 +255,7 @@ export function SettleReceiptDialog({ open, onClose, type, settlementTypes, rece
     },
   })
 
-  const canSubmit = partyName.trim() && totalAmount > 0 && unallocated >= -1e-6 && !mut.isPending
+  const canSubmit = partyName.trim() && totalUnits != null && totalUnits > 0n && validAllocations && unallocatedUnits >= 0n && !mut.isPending
     && (isContinue || !!accountId)
 
   return (
@@ -320,6 +338,7 @@ export function SettleReceiptDialog({ open, onClose, type, settlementTypes, rece
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAmount(e.target.value)}
                 disabled={isContinue}
               />
+              {isContinue && totalUnits == null && <p className="text-xs text-warning-ink">原余额 ¥{String(receipt?.balance)}，含不足一分的尾差，请先核对</p>}
             </div>
             <div className="space-y-1">
               <Label>日期 *</Label>
@@ -367,10 +386,10 @@ export function SettleReceiptDialog({ open, onClose, type, settlementTypes, rece
               </span>
               <div className="flex items-center gap-3 text-xs">
                 <span className="text-muted-foreground">已分配 <span className="tabular-nums font-medium text-foreground">{money(allocatedTotal)}</span></span>
-                <span className={unallocated < -1e-6 ? 'font-semibold text-destructive-ink' : 'text-muted-foreground'}>
-                  {unallocated < -1e-6 ? `超出 ${money(-unallocated)}` : `未分配 ${money(unallocated)}`}
+                <span className={unallocatedUnits < 0n ? 'font-semibold text-destructive-ink' : 'text-muted-foreground'}>
+                  {unallocatedUnits < 0n ? `超出 ${money(-unallocated)}` : `未分配 ${money(unallocated)}`}
                 </span>
-                <Button size="sm" variant="outline" onClick={autoAllocate} disabled={!candidates.length || totalAmount <= 0}>
+                <Button size="sm" variant="outline" onClick={autoAllocate} disabled={!candidates.length || totalUnits == null || totalUnits <= 0n}>
                   自动分配
                 </Button>
               </div>
@@ -392,21 +411,24 @@ export function SettleReceiptDialog({ open, onClose, type, settlementTypes, rece
                       <SoftStatusLabel label={c.statusName} tone={c.tone} />
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      {byStatement ? '汇总' : `应${isPayableType(type) ? '付' : '收'}`} {money(c.total)}
-                      {' · '}余额 <span className="font-medium text-destructive-ink">{money(c.balance)}</span>
+                      {byStatement ? '汇总' : `应${isPayableType(type) ? '付' : '收'}`} {balanceLabel(c.total)}
+                      {' · '}余额 <span className="font-medium text-destructive-ink">{balanceLabel(c.balance)}</span>
                       {c.sub ? ` · ${c.sub}` : ''}
+                      {cashCents(c.balance) == null && <span className="ml-2 text-warning-ink">历史余额含不足一分的尾差，请先核对</span>}
                     </p>
                   </div>
                   <Input
                     type="number" min="0" step="0.01" max={c.balance}
                     className="h-10 w-40 text-right tabular-nums"
                     aria-label={`${c.label}本次核销金额`}
+                    disabled={cashCents(c.balance) == null}
                     placeholder="0.00"
                     value={alloc[c.key] ?? ''}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAlloc(p => ({ ...p, [c.key]: e.target.value }))}
                   />
                   <Button size="sm" variant="ghost" className="shrink-0"
-                    onClick={() => setAlloc(p => ({ ...p, [c.key]: String(c.balance) }))}>
+                    disabled={cashCents(c.balance) == null}
+                    onClick={() => { const cents = cashCents(c.balance); if (cents != null) setAlloc(p => ({ ...p, [c.key]: cashText(cents) })) }}>
                     全额
                   </Button>
                 </div>

@@ -14,11 +14,12 @@ const list = async (req, res, next) => {
       saleOrderId: req.query.saleOrderId || '',
       startDate: req.query.startDate || '',
       endDate: req.query.endDate || '',
+      scopeWarehouseIds: req.user?.warehouseIds ?? null,
     }), '查询成功')
   } catch (e) { next(e) }
 }
-const detail = async (req, res, next) => { try { return successResponse(res, await svc.findById(+req.params.id), '查询成功') } catch (e) { next(e) } }
-const create = async (req, res, next) => { try { return successResponse(res, await svc.create(req.body, op(req)), '创建成功', 201) } catch (e) { next(e) } }
+const detail = async (req, res, next) => { try { return successResponse(res, await svc.findById(+req.params.id, req.user?.warehouseIds ?? null), '查询成功') } catch (e) { next(e) } }
+const create = async (req, res, next) => { try { return successResponse(res, await svc.create(req.body, op(req), req.user?.warehouseIds ?? null), '创建成功', 201) } catch (e) { next(e) } }
 const submit = async (req, res, next) => { try { return successResponse(res, await svc.submit(+req.params.id, op(req)), '已提交审批') } catch (e) { next(e) } }
 const cancel = async (req, res, next) => { try { return successResponse(res, await svc.cancel(+req.params.id, op(req)), '已取消') } catch (e) { next(e) } }
 const approve = async (req, res, next) => { try { return successResponse(res, await svc.approve(+req.params.id, op(req)), '已批准') } catch (e) { next(e) } }

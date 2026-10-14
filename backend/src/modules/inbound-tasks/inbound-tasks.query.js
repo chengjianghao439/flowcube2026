@@ -24,6 +24,7 @@ const {
   ensureInboundTaskExists,
 } = require('./inbound-tasks.status')
 const { EXPIRE_MESSAGE } = require('../print-jobs/print-jobs.service')
+const { EFFECTIVE_ASSIGNED_QTY_SQL } = require('./inbound-tasks.short-receipt')
 
 function buildTaskWithClosure(task, items = [], summary = {}, timeline = [], recentPrintJobs = [], thresholds = DEFAULT_INBOUND_THRESHOLDS) {
   // 汇总数量以 summary（loadInboundTaskClosureSummary 的 SQL 聚合结果）为准，而非重新对
@@ -435,13 +436,13 @@ async function loadPurchasableCandidates(conn, { supplierId, keyword = '', purch
         COALESCE(SUM(
           CASE
             WHEN it.id IS NULL OR it.deleted_at IS NOT NULL OR it.status = 5${excluded} THEN 0
-            ELSE iti.ordered_qty
+            ELSE ${EFFECTIVE_ASSIGNED_QTY_SQL}
           END
         ), 0) AS assigned_qty,
         poi.quantity - COALESCE(SUM(
           CASE
             WHEN it.id IS NULL OR it.deleted_at IS NOT NULL OR it.status = 5${excluded} THEN 0
-            ELSE iti.ordered_qty
+            ELSE ${EFFECTIVE_ASSIGNED_QTY_SQL}
           END
         ), 0) AS remaining_qty,
         COALESCE(SUM(
@@ -489,7 +490,7 @@ async function findPurchasableItems({ supplierId, keyword = '', scopeWarehouseId
   return loadPurchasableCandidates(pool, { supplierId, keyword, scopeWarehouseIds, purchaseItemIds: ids, readPage: bounded && !ids ? normalized : null })
 }
 
-async function queryWaitingContainers(taskId) {
+async function queryWaitingContainers(taskId, scopeWarehouseIds) {
   const [rows] = await pool.query(
     `SELECT c.*, p.code AS product_code, p.name AS product_name, loc.code AS location_code
      FROM inventory_containers c
@@ -500,10 +501,11 @@ async function queryWaitingContainers(taskId) {
      ORDER BY c.id ASC`,
     [taskId, CONTAINER_STATUS.PENDING_PUTAWAY],
   )
+  for (const row of rows) assertInScope(scopeWarehouseIds, row.warehouse_id, '收货容器')
   return rows.map(fmtContainer)
 }
 
-async function queryStoredContainers(taskId) {
+async function queryStoredContainers(taskId, scopeWarehouseIds) {
   const [rows] = await pool.query(
     `SELECT c.*, p.code AS product_code, p.name AS product_name, loc.code AS location_code
      FROM inventory_containers c
@@ -514,26 +516,27 @@ async function queryStoredContainers(taskId) {
      ORDER BY c.id ASC`,
     [taskId, CONTAINER_STATUS.ACTIVE],
   )
+  for (const row of rows) assertInScope(scopeWarehouseIds, row.warehouse_id, '收货容器')
   return rows.map(fmtContainer)
 }
 
 // listWaitingContainers/listStoredContainers 各自校验任务存在，供独立调用；
 // listContainers 只校验一次，两条明细查询并行，避免重复的重量级 findById。
-async function listWaitingContainers(taskId) {
-  await ensureInboundTaskExists(pool, taskId)
-  return queryWaitingContainers(taskId)
+async function listWaitingContainers(taskId, scopeWarehouseIds = null) {
+  await ensureInboundTaskExists(pool, taskId, scopeWarehouseIds)
+  return queryWaitingContainers(taskId, scopeWarehouseIds)
 }
 
-async function listStoredContainers(taskId) {
-  await ensureInboundTaskExists(pool, taskId)
-  return queryStoredContainers(taskId)
+async function listStoredContainers(taskId, scopeWarehouseIds = null) {
+  await ensureInboundTaskExists(pool, taskId, scopeWarehouseIds)
+  return queryStoredContainers(taskId, scopeWarehouseIds)
 }
 
-async function listContainers(taskId) {
-  await ensureInboundTaskExists(pool, taskId)
+async function listContainers(taskId, scopeWarehouseIds = null) {
+  await ensureInboundTaskExists(pool, taskId, scopeWarehouseIds)
   const [waiting, stored] = await Promise.all([
-    queryWaitingContainers(taskId),
-    queryStoredContainers(taskId),
+    queryWaitingContainers(taskId, scopeWarehouseIds),
+    queryStoredContainers(taskId, scopeWarehouseIds),
   ])
   return { waiting, stored }
 }

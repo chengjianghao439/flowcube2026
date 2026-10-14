@@ -90,7 +90,7 @@ async function buildPlClosingSpec(conn, period, companyId = 1) {
   profit = engine.round2(profit)
   if (profit > 0) legs.push({ code: '4103', direction: 2, amount: profit, summary: '结转本期利润' })
   else if (profit < 0) legs.push({ code: '4103', direction: 1, amount: -profit, summary: '结转本期亏损' })
-  else return null // 收入费用恰好相抵 → 无利润可结，不产生凭证
+  // 净利润为零仍须结平非零损益科目；仅省略没有金额的 4103 差额腿。
   return {
     sourceType: SOURCE_TYPES.PERIOD_CLOSE, sourceId: Number(period), sourceNo: `结转-${period}`,
     voucherDate: end, summary: `${period} 期末损益结转`, legs,
@@ -229,6 +229,7 @@ async function closePeriod(period, operator, companyId = 1) {
   try {
     await conn.beginTransaction()
     await lockAccountingCompany(conn, companyId)
+    await require('./accounting.period-completeness').assertPeriodComplete(conn, p, companyId, engine)
     // First ordinary business snapshot follows the company X gate; no reverse RF/PR locks.
     await require('./voucher-supplier-refunds').assertPeriodCurrent(conn,p,companyId)
     const [[existing]] = await conn.query('SELECT status FROM acct_periods WHERE period = ? AND company_id = ? FOR UPDATE', [p, companyId])

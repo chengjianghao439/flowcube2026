@@ -218,7 +218,7 @@ async function sortTaskWithinTransaction(conn, id, sortedItems = null, { request
   const taskRow = await lockStatusRow(conn, {
     table: 'warehouse_tasks',
     id,
-    columns: 'id, task_no, status, sorting_bin_id, sorting_bin_code, cancel_requested_at, adjustment_requested_at, warehouse_id',
+    columns: 'id, task_no, task_type, status, sorting_bin_id, sorting_bin_code, cancel_requested_at, adjustment_requested_at, warehouse_id',
     entityName: '仓库任务',
   })
   assertTaskScope(taskRow, { scopeWarehouseIds, pdaWarehouseId })
@@ -265,7 +265,7 @@ async function sortTaskWithinTransaction(conn, id, sortedItems = null, { request
       throw new AppError('一次只能提交一张取货码，请逐张分拣', 400, 'PICK_CODE_MULTIPLE_NOT_SUPPORTED')
     }
     const [taskItems] = await conn.query(
-      'SELECT id, product_id, picked_qty, sorted_qty FROM warehouse_task_items WHERE task_id=? FOR UPDATE',
+      'SELECT id, product_id, picked_qty, sorted_qty, allow_decimal_qty_snapshot FROM warehouse_task_items WHERE task_id=? FOR UPDATE',
       [id],
     )
     const itemMap = new Map(taskItems.map(item => [Number(item.id), item]))

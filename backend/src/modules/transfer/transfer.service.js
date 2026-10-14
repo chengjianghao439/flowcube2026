@@ -45,6 +45,17 @@ async function assertTransferAvailability(conn, order) {
     }
   }
 
+  // Batch policy mutexes precede every stock/container lock. Distinct source
+  // dimensions use the same product/warehouse order as reserve/ship; input row
+  // order remains below for the existing availability check and error text.
+  const dimensions = [...merged.values()].map(item => ({
+    productId: Number(item.productId), warehouseId: Number(order.fromWarehouseId),
+  })).sort((a, b) => a.productId - b.productId || a.warehouseId - b.warehouseId)
+  await assertQtyPrecision(conn, dimensions.map(({ productId }) => ({ productId, qty: 0, label: '数量策略' })))
+  for (const { productId, warehouseId } of dimensions) {
+    await lockStockDimension(conn, productId, warehouseId)
+  }
+
   for (const item of merged.values()) {
     const { available } = await getAvailableStockForDecision(conn, {
       productId: item.productId,
@@ -307,6 +318,7 @@ async function scanOut(id, { containerBarcode }, operator, requestKey, scopeWare
     const productName = prod?.name ?? null
 
     const qty = Number(c.remaining_qty)
+    await assertQtyPrecision(conn, [{ productId: c.product_id, qty, label: '调拨条码数量' }])
     const allocations = await allocateTransferQuantity(conn, id, c.product_id, qty, 'out')
     // 复检源仓可用量（available = ACTIVE 容器合计 − reserved）≥ 本容器搬出量。
     // confirm 时校验过一次，但 confirm→scanOut 之间可能新增销售占库（reserve 只加 reserved、
@@ -421,6 +433,7 @@ async function scanIn(id, { containerBarcode, locationId }, operator, requestKey
     const productName = prod?.name ?? null
 
     const qty = Number(c.remaining_qty)
+    await assertQtyPrecision(conn, [{ productId: c.product_id, qty, label: '调拨条码数量' }])
     const allocations = await allocateTransferQuantity(conn, id, c.product_id, qty, 'in')
     await conn.query(
       'UPDATE inventory_containers SET status = ?, location_id = ?, transfer_order_id = NULL, has_transfer_history = 1 WHERE id = ?',

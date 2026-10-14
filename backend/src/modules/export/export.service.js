@@ -1181,6 +1181,7 @@ async function getAbcExportPayload(query = {}) {
 /** 授信预警申请 */
 async function getCreditOverridesExportPayload(query = {}) {
   const { list } = await collectExportRows(creditOverridesService.findAll, {
+    scopeWarehouseIds: query.scopeWarehouseIds ?? null,
     status: query.status || '',
     keyword: query.keyword || '',
     saleOrderId: query.saleOrderId || '',

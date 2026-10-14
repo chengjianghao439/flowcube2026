@@ -28,7 +28,7 @@ const accountFlat = async (req, res, next) => {
   } catch (e) { next(e) }
 }
 const accountDetail = async (req, res, next) => {
-  try { return successResponse(res, await svc.getById(+req.params.id, companyOf(req)), '查询成功') } catch (e) { next(e) }
+  try { return successResponse(res, await svc.getById(+req.params.id, undefined, companyOf(req)), '查询成功') } catch (e) { next(e) }
 }
 const accountCreate = async (req, res, next) => {
   try { return successResponse(res, await svc.create({ ...req.body, companyId: companyOf(req) }, req.user?.userId), '创建成功', 201) } catch (e) { next(e) }

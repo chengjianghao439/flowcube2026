@@ -1,3 +1,5 @@
+const cash=require('../../utils/cashMoney')
+const purchaseCash=require('./purchase.cash-money')
 const { commitFulfillment, captureDimensions } = require('../fulfillment/fulfillment.refresh')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
@@ -7,15 +9,30 @@ const { buildTaskWithClosure, loadInboundTaskClosureSummary } = require('../inbo
 const { getInboundClosureThresholds } = require('../../utils/inboundThresholds')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
-const { beginCreationOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
+const { beginCreationOperationRequest, beginResourceOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { recomputePurchasePayable } = require('../inbound-tasks/inbound-tasks.settle')
-const { foldEntryItems, round2 } = require('../../utils/unitConversion')  // 多单位折算（文档03 · 方案A，共享util）
+const { foldEntryItems, roundQty } = require('../../utils/unitConversion')  // 多单位折算（文档03 · 方案A，共享util）
 const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
 const { assertNotSelfApproval } = require('../../utils/selfApprove')
 const { normalizePagination } = require('../../utils/pagination')
 const { getPriceReferenceWarnings } = require('../../utils/priceReference')
 
 const { PURCHASE_STATUS_NAME: STATUS } = require('../../constants/purchaseOrderStatus')
+const { EFFECTIVE_ASSIGNED_QTY_SQL } = require('../inbound-tasks/inbound-tasks.short-receipt')
+const { assertPurchaseCloseReceipt } = require('./purchase.close-receipt')
+
+function receiptQuantityFields(row) {
+  const ordered = Number(row.total_ordered_qty || 0), received = Number(row.total_received_qty || 0)
+  const assigned = Number(row.total_assigned_qty || 0), putaway = Number(row.total_putaway_qty || 0)
+  const unreceived = Math.max(0, roundQty(ordered - received))
+  const open = [2, 5].includes(Number(row.status))
+  return { totalOrderedQty: ordered, totalReceivedQty: received, totalAssignedQty: assigned, totalPutawayQty: putaway,
+    remainingUnreceivedQty: unreceived, remainingReceivableQty: open ? unreceived : 0,
+    availableToCreateQty: Number(row.status) === 2 ? Math.max(0, roundQty(ordered - assigned)) : 0,
+    pendingPutawayQty: Math.max(0, roundQty(received - putaway)),
+    cancelledRemainingQty: row.closed_reason === 'short_close' ? unreceived : 0,
+    closedReason: row.closed_reason || null }
+}
 
 function fmtOrder(row) {
   return {
@@ -29,8 +46,7 @@ function fmtOrder(row) {
     statusName: STATUS[row.status],
     expectedDate: row.expected_date,
     totalAmount: Number(row.total_amount),
-    totalOrderedQty: Number(row.total_ordered_qty || 0),
-    totalReceivedQty: Number(row.total_received_qty || 0),
+    ...receiptQuantityFields(row),
     // 与 closeRemaining() 的两条硬性前提保持完全一致（相关收货订单均已上架完成 + 已有实收数量），
     // 供列表页判断是否展示"关闭剩余"入口，避免对必然失败的订单诱导点击。
     canCloseRemaining: row.pending_inbound_count !== undefined
@@ -53,7 +69,7 @@ function fmtOrder(row) {
 const PO_COLUMNS = `po.id, po.order_no, po.supplier_id, po.supplier_name, po.warehouse_id, po.warehouse_name,
   po.status, po.expected_date, po.total_amount, po.remark, po.operator_id, po.operator_name,
   po.created_at, po.updated_at, po.deleted_at, po.need_approval, po.approved_by, po.approved_by_name,
-  po.approved_at, po.reject_reason`
+  po.approved_at, po.reject_reason, po.closed_reason`
 
 const genOrderNo = conn => generateDailyCode(conn, 'PO', 'purchase_orders', 'order_no')
 
@@ -111,16 +127,19 @@ async function findAll({ page=1, pageSize=20, keyword='', status=null, productId
   const [rows] = await pool.query(
     `SELECT ${PO_COLUMNS},
        COALESCE((
-         SELECT SUM(iti.ordered_qty)
-         FROM inbound_task_items iti
-         JOIN inbound_tasks it ON it.id = iti.task_id
-         WHERE iti.purchase_order_id = po.id AND it.deleted_at IS NULL
+         SELECT SUM(poi.quantity) FROM purchase_order_items poi WHERE poi.order_id=po.id
        ), 0) AS total_ordered_qty,
+       COALESCE((SELECT SUM(${EFFECTIVE_ASSIGNED_QTY_SQL})
+         FROM inbound_task_items iti JOIN inbound_tasks it ON it.id=iti.task_id
+         WHERE iti.purchase_order_id=po.id AND it.deleted_at IS NULL AND it.status<>5),0) AS total_assigned_qty,
+       COALESCE((SELECT SUM(iti.putaway_qty)
+         FROM inbound_task_items iti JOIN inbound_tasks it ON it.id=iti.task_id
+         WHERE iti.purchase_order_id=po.id AND it.deleted_at IS NULL AND it.status<>5),0) AS total_putaway_qty,
        COALESCE((
          SELECT SUM(iti.received_qty)
          FROM inbound_task_items iti
          JOIN inbound_tasks it ON it.id = iti.task_id
-         WHERE iti.purchase_order_id = po.id AND it.deleted_at IS NULL
+         WHERE iti.purchase_order_id = po.id AND it.deleted_at IS NULL AND it.status<>5
        ), 0) AS total_received_qty,
        (
          SELECT COUNT(DISTINCT it.id)
@@ -161,13 +180,15 @@ async function findById(id, scopeWarehouseIds = null) {
   order.items = items.map(r=>({ id:r.id, productId:r.product_id, productCode:r.product_code, productName:r.product_name, unit:r.unit, articleNumber:r.article_number, spec:r.spec, color:r.color, quantity:Number(r.quantity), unitPrice:Number(r.unit_price), amount:Number(r.amount), entryUnit:r.entry_unit||r.unit, entryQty:r.entry_qty!=null?Number(r.entry_qty):Number(r.quantity), conversionRate:Number(r.conversion_rate), remark:r.remark }))
 
   const [[qty]] = await pool.query(
-    `SELECT COALESCE(SUM(iti.ordered_qty),0) AS total_ordered_qty, COALESCE(SUM(iti.received_qty),0) AS total_received_qty
+    `SELECT COALESCE(SUM(${EFFECTIVE_ASSIGNED_QTY_SQL}),0) AS total_assigned_qty,
+            COALESCE(SUM(iti.received_qty),0) AS total_received_qty,
+            COALESCE(SUM(iti.putaway_qty),0) AS total_putaway_qty
      FROM inbound_task_items iti JOIN inbound_tasks it ON it.id = iti.task_id
-     WHERE iti.purchase_order_id = ? AND it.deleted_at IS NULL`,
+     WHERE iti.purchase_order_id = ? AND it.deleted_at IS NULL AND it.status<>5`,
     [id],
   )
-  order.totalOrderedQty = Number(qty.total_ordered_qty)
-  order.totalReceivedQty = Number(qty.total_received_qty)
+  Object.assign(order, receiptQuantityFields({ ...rows[0], ...qty,
+    total_ordered_qty: roundQty(items.reduce((sum, item) => sum + Number(item.quantity), 0)) }))
 
   // 混合采购单收货单的 inbound_tasks.purchase_order_id 头字段为空，须按明细行关联查找
   const [taskRows] = await pool.query(
@@ -192,7 +213,14 @@ async function findById(id, scopeWarehouseIds = null) {
 
 // 事务内建单核心：供应商校验 + 建采购单草稿(status=1) + 明细。承接调用方 conn，不自管事务、不做幂等
 // （幂等由外层 create 的 operationRequest 负责）。供采购计划转采购(procurement.service.convert)在同一事务复用。
-async function createWithinTransaction(conn, { supplierId, supplierName, warehouseId, warehouseName, expectedDate, remark, items, operator }) {
+async function createWithinTransaction(conn, { supplierId, supplierName, warehouseId, warehouseName, expectedDate, remark, items, operator, scopeWarehouseIds = null }) {
+  assertInScope(scopeWarehouseIds, warehouseId, '采购单')
+  const [[warehouseRow]] = await conn.query(
+    'SELECT id,name,is_active FROM inventory_warehouses WHERE id=? AND deleted_at IS NULL FOR SHARE',
+    [warehouseId],
+  )
+  if (!warehouseRow) throw new AppError('仓库不存在', 404)
+  if (!Number(warehouseRow.is_active)) throw new AppError('该仓库已停用，无法新建采购单', 400)
   // 前端选择器已过滤停用供应商，这里补一道后端校验，防止绕过前端直接调 API 建单（禁用供应商未在下单流程过滤）
   const [[supplierRow]] = await conn.query(
     'SELECT is_active FROM supply_suppliers WHERE id = ? AND deleted_at IS NULL',
@@ -201,8 +229,8 @@ async function createWithinTransaction(conn, { supplierId, supplierName, warehou
   if (!supplierRow) throw new AppError('供应商不存在', 404)
   if (!supplierRow.is_active) throw new AppError('该供应商已停用，无法新建采购单', 400)
   const orderNo = await genOrderNo(conn)
-  const folded = await foldEntryItems(conn, items)
-  const total = round2(folded.reduce((s,i)=>s+i.amount,0))
+  const folded=(await foldEntryItems(conn,items)).map(i=>({...i,amount:cash.cashNumber(cash.productCents(i.quantity,i.unitPrice))}))
+  const total=cash.cashNumber(cash.sumCashCents(folded.map(i=>i.amount)))
   const [r] = await conn.query(
     `INSERT INTO purchase_orders (order_no,supplier_id,supplier_name,warehouse_id,warehouse_name,expected_date,total_amount,remark,operator_id,operator_name) VALUES (?,?,?,?,?,?,?,?,?,?)`,
     [orderNo,supplierId,supplierName,warehouseId,warehouseName,expectedDate||null,total,remark||null,operator.userId,operator.realName]
@@ -214,13 +242,18 @@ async function createWithinTransaction(conn, { supplierId, supplierName, warehou
       [orderId,item.productId,item.productCode,item.productName,item.unit,item.entryUnit,item.articleNumber||null,item.spec||null,item.color||null,item.quantity,item.entryQty,item.conversionRate,item.unitPrice,item.amount,item.remark||null]
     )
   }
+  const [cashRows]=await conn.query('SELECT id,product_id,unit,quantity,unit_price,amount FROM purchase_order_items WHERE order_id=? ORDER BY id',[orderId])
+  const basis=purchaseCash.freezeBasis({id:orderId,supplier_id:supplierId,warehouse_id:warehouseId,total_amount:total},cashRows)
+  await conn.query('UPDATE purchase_orders SET cash_basis=? WHERE id=?',[JSON.stringify(basis),orderId])
   return { id:orderId, orderNo }
 }
 
-async function create({ supplierId, supplierName, warehouseId, warehouseName, expectedDate, remark, items, operator, requestKey }) {
+async function create({ supplierId, supplierName, warehouseId, warehouseName, expectedDate, remark, items, operator, requestKey, scopeWarehouseIds = null }) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    // Current target scope precedes even a successful old-key replay.
+    assertInScope(scopeWarehouseIds, warehouseId, '采购单')
     const requestState = await beginCreationOperationRequest(conn, {
       requestKey,
       action: 'purchase.create',
@@ -228,10 +261,12 @@ async function create({ supplierId, supplierName, warehouseId, warehouseName, ex
       payload: { supplierId, supplierName, warehouseId, warehouseName, expectedDate, remark, items },
     })
     if (requestState.replay) {
+      const [[receipt]] = await conn.query('SELECT resource_type,resource_id FROM operation_requests WHERE id=? FOR SHARE', [requestState.id])
+      await require('./purchase.create-receipt').assertPurchaseCreateResult(conn, { resourceType: receipt?.resource_type, resourceId: receipt?.resource_id, data: requestState.responseData }, scopeWarehouseIds, { lock: true })
       await conn.rollback()
       return requestState.responseData
     }
-    const result = await createWithinTransaction(conn, { supplierId, supplierName, warehouseId, warehouseName, expectedDate, remark, items, operator })
+    const result = await createWithinTransaction(conn, { supplierId, supplierName, warehouseId, warehouseName, expectedDate, remark, items, operator, scopeWarehouseIds })
     // 采购价格参考（P2-3）：建单后给出最近成交价偏差预警（纯提示不阻断）
     const priceWarnings = await getPriceReferenceWarnings(items)
     if (priceWarnings.length) result.priceWarnings = priceWarnings
@@ -258,8 +293,11 @@ async function update(id, { supplierId, supplierName, warehouseId, warehouseName
     assertStatusAction('purchase', 'edit', row.status)
     const previousDimensions = await captureDimensions(conn, 'purchase', id)
     await assertNoActiveSaleBinding(conn, id, '修改采购明细')
-    const folded = await foldEntryItems(conn, items)
-    const total = round2(folded.reduce((s,i)=>s+i.amount,0))
+    const [[financial]]=await conn.query('SELECT id FROM payment_records WHERE type=1 AND order_id=? LIMIT 1 FOR SHARE',[id])
+    const [[executed]]=await conn.query('SELECT id FROM purchase_returns WHERE purchase_order_id=? AND status=3 AND deleted_at IS NULL LIMIT 1 FOR SHARE',[id])
+    if(financial||executed)throw new AppError('采购单已有执行财务事实，不能重冻原分预算，请核对原账',409,'PURCHASE_CASH_BASIS_REQUIRED')
+    const folded=(await foldEntryItems(conn,items)).map(i=>({...i,amount:cash.cashNumber(cash.productCents(i.quantity,i.unitPrice))}))
+    const total=cash.cashNumber(cash.sumCashCents(folded.map(i=>i.amount)))
     await conn.query(
       `UPDATE purchase_orders SET supplier_id=?, supplier_name=?, warehouse_id=?, warehouse_name=?, expected_date=?, total_amount=?, remark=? WHERE id=?`,
       [supplierId,supplierName,warehouseId,warehouseName,expectedDate||null,total,remark||null,id]
@@ -271,6 +309,9 @@ async function update(id, { supplierId, supplierName, warehouseId, warehouseName
         [id,item.productId,item.productCode,item.productName,item.unit,item.entryUnit,item.articleNumber||null,item.spec||null,item.color||null,item.quantity,item.entryQty,item.conversionRate,item.unitPrice,item.amount,item.remark||null]
       )
     }
+    const [cashRows]=await conn.query('SELECT id,product_id,unit,quantity,unit_price,amount FROM purchase_order_items WHERE order_id=? ORDER BY id',[id])
+    const basis=purchaseCash.freezeBasis({id,supplier_id:supplierId,warehouse_id:warehouseId,total_amount:total},cashRows)
+    await conn.query('UPDATE purchase_orders SET cash_basis=? WHERE id=?',[JSON.stringify(basis),id])
     await commitFulfillment(conn, 'purchase', id, previousDimensions)
   } catch(e){ await conn.rollback(); throw e }
   finally { conn.release() }
@@ -314,13 +355,19 @@ async function assertNoActiveSaleBinding(conn, purchaseOrderId, actionLabel) {
   )
 }
 
-async function closeRemaining(id, operator, scopeWarehouseIds = null) {
+async function closeRemaining(id, operator, scopeWarehouseIds = null, { requestKey } = {}) {
   const conn = await pool.getConnection()
   try {
     await conn.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED')
     await conn.beginTransaction()
     const row = await lockStatusRow(conn, { table: 'purchase_orders', id, columns: 'id, order_no, status, warehouse_id', entityName: '采购单' })
     assertInScope(scopeWarehouseIds, row.warehouse_id, '采购单')
+    const requestState = await beginResourceOperationRequest(conn, { requestKey, action: 'purchase.closeRemaining', userId: operator?.userId ?? null, resourceType: 'purchase_order', resourceId: Number(id) })
+    if (requestState.replay) {
+      await assertPurchaseCloseReceipt(conn, { status: 'success', resourceType: 'purchase_order', resourceId: Number(id), data: requestState.responseData }, scopeWarehouseIds, { requestedAction: `purchase.closeRemaining.${id}`, matchedAction: requestState.action })
+      await conn.rollback()
+      return requestState.responseData
+    }
     const rule = assertStatusAction('purchase', 'close', row.status)
     await assertNoActiveSaleBinding(conn, id, '结案短装')
     const [[{ pending }]] = await conn.query(
@@ -344,7 +391,10 @@ async function closeRemaining(id, operator, scopeWarehouseIds = null) {
       fromStatus: rule.from, toStatus: rule.to, entityName: '采购单',
       extraSet: { closed_reason: 'short_close' },
     })
+    const payload = { purchaseOrderId: Number(id), status: Number(rule.to), closedReason: 'short_close' }
+    await completeOperationRequest(conn, requestState, { data: payload, message: '已明确结束剩余采购，未收部分不再收货', resourceType: 'purchase_order', resourceId: Number(id) })
     await commitFulfillment(conn, 'purchase', id)
+    return payload
   } catch(e){ await conn.rollback(); throw e }
   finally { conn.release() }
 }

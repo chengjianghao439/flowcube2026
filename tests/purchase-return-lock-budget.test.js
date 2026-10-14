@@ -13,6 +13,8 @@ function load(file, deps) {
   const filename = path.join(base, file), module = { exports: {} }
   vm.runInNewContext(fs.readFileSync(filename, 'utf8'), { module, require: name => {
     if (Object.hasOwn(deps, name)) return deps[name]
+    if(name==='../purchase/purchase.cash-money'||name==='./purchase.cash-money')return require('../backend/src/modules/purchase/purchase.cash-money')
+    if(name==='../../utils/cashMoney')return require('../backend/src/utils/cashMoney')
     unknown.push(`require ${file}: ${name}`); throw Error(`Unstubbed require ${file}: ${name}`)
   } }, { filename })
   return module.exports
@@ -21,20 +23,30 @@ const transition = load('utils/statusTransition.js', { './AppError': AppError, '
 const status = load('constants/documentStatusRules.js', { '../utils/AppError': AppError })
 const warehouseStatus = load('constants/warehouseTaskStatus.js', { '../utils/AppError': AppError })
 const scope = load('utils/warehouseScope.js', { '../config/db': {}, './AppError': AppError })
+const shortReceipt = load('modules/inbound-tasks/inbound-tasks.short-receipt.js', { '../../utils/AppError': AppError, '../../utils/warehouseScope': scope, './inbound-tasks.cost': require('../backend/src/modules/inbound-tasks/inbound-tasks.cost') })
+const closeReceipt = load('modules/purchase/purchase.close-receipt.js', { '../../utils/AppError': AppError, '../../utils/warehouseScope': scope })
+const qtyPrecision = require('../backend/src/utils/qtyPrecision')
+const purchaseCash = require('../backend/src/modules/purchase/purchase.cash-money'), cash = require('../backend/src/utils/cashMoney')
 const operator = { userId: 9, realName: 'fixture' }
 const input = { supplierId: 4, supplierName: 'fixture', warehouseId: 8, warehouseName: 'fixture', purchaseOrderId: 10, purchaseOrderNo: 'PO10', operator, scopeWarehouseIds: [8], items: [{ sourceItemId: 101, productId: 3, productName: 'fixture', quantity: 3, unitPrice: 99, unit: '个' }] }
 function fixture({ waitBudget = false, legacy = false, orphan = false, driftPR = false, driftWT = false, pendingCancel = false, tasks, wrongPOWarehouse = false } = {}) {
   const events = [], sqls = [], moves = [], inserts = [], cancelOptions = [], poLockIds = [], headroomInputs = []
   let isolation = 'RR', pendingRC = false, returned = 0
-  const po = { id: 10, order_no: 'PO10', supplier_id: 4, supplier_name: 'fixture', warehouse_id: wrongPOWarehouse ? 9 : 8, status: 2 }
+  const po = { id: 10, order_no: 'PO10', supplier_id: 4, supplier_name: 'fixture', warehouse_id: wrongPOWarehouse ? 9 : 8, status: 2, total_amount:120 }
   const pr = { id: 11, return_no: 'PR11', purchase_order_id: legacy ? null : 10, purchase_order_no: legacy ? '历史文本' : 'PO10', supplier_id: 4, warehouse_id: 8, status: 2, total_amount: 8 }
-  const pri = [{ id: 21, return_id: 11, purchase_item_id: legacy && !orphan ? null : 101, product_id: 3, product_name: 'fixture', quantity: 2, unit_price: 4 }]
+  const pri = [{ id: 21, return_id: 11, purchase_item_id: legacy && !orphan ? null : 101, product_id: 3, product_name: 'fixture', quantity: 2, unit_price: 4, unit:'个',amount:8 }]
+  const createdRows=[],createdItems=[]
   const wt = tasks || [{ id: 31, task_no: 'WT31', task_type: 'purchase_return', return_id: 11, sale_order_id: null, status: 6, warehouse_id: 8 }]
   const conn = {
     beginTransaction: async () => { isolation = pendingRC ? 'RC' : 'RR'; pendingRC = false; events.push(`begin:${isolation}`) },
     commit: async () => events.push('commit'), rollback: async () => events.push('rollback'), release: () => events.push('release'),
     query: async (sql, args = []) => {
       sqls.push(sql)
+      if (sql.includes('FROM product_items') && sql.includes('allow_decimal_qty')) {
+        assert.match(sql, /ORDER BY id FOR SHARE/)
+        assert.deepEqual(Array.from(args[0]), [3])
+        return [[{ id: 3, code: 'P3', name: 'fixture', allow_decimal_qty: 0 }]]
+      }
       if (sql.includes('sale_order_expected_bindings')) return [[]]
       if (sql.startsWith('SET TRANSACTION ISOLATION LEVEL READ COMMITTED')) { pendingRC = true; events.push('nextRC'); return [{}] }
       if (sql.includes('FROM purchase_orders')) {
@@ -43,16 +55,18 @@ function fixture({ waitBudget = false, legacy = false, orphan = false, driftPR =
       }
       if (sql.includes('FROM purchase_order_items')) {
         if (sql.includes('FOR UPDATE')) { events.push('POI'); if (waitBudget) returned = 8 }
-        return [[101, 102].map(id => ({ id, product_id: 3, order_id: 10, unit_price: id === 101 ? 4 : 8, quantity: 10, received_qty: 10, returned_qty: isolation === 'RC' && pr.status !== 4 ? returned : 0 }))]
+        return [[101, 102].map(id => ({ id, product_id: 3, order_id: 10, unit_price: id === 101 ? 4 : 8, unit:'个',amount:id===101?40:80, quantity: 10, received_qty: 10, returned_qty: isolation === 'RC' && pr.status !== 4 ? returned : 0 }))]
       }
       if (sql.includes('FROM purchase_returns')) {
         if (sql.includes('SUM(')) return [[{ totalAmount: 8, returnedAmount: 0 }]]
         if (sql.includes('FOR UPDATE')) events.push('PR')
+        if(/WHERE (?:pr\.)?purchase_order_id/.test(sql))return [[pr,...createdRows].filter(r=>sql.includes('status<>4')?r.status!==4:sql.includes('status=3')?r.status===3:true).map(r=>({...r}))]
         return [[{ ...pr, purchase_order_id: driftPR && sql.includes('FOR UPDATE') ? 20 : pr.purchase_order_id }]]
       }
       if (sql.includes('FROM purchase_return_items')) {
         if (sql.includes('SUM(')) return [[{ totalAmount: 8 }]]
-        return [pri.map(item => ({ ...item, source_item_id: 101, source_order_id: 10, source_product_id: 3 }))]
+        const rows=sql.includes('JOIN purchase_returns')?[...pri,...createdItems].filter(i=>[pr,...createdRows].find(r=>r.id===i.return_id)?.status!==4):[...pri,...createdItems].filter(i=>i.return_id===Number(args[0]))
+        return [rows.map(item => ({ ...item, source_item_id: item.purchase_item_id, source_order_id: 10, source_product_id: 3 }))]
       }
       if (sql.includes('FROM warehouse_tasks')) {
         if (sql.includes('FOR UPDATE')) events.push('WT')
@@ -60,6 +74,7 @@ function fixture({ waitBudget = false, legacy = false, orphan = false, driftPR =
         return [sql.includes('LIMIT 1') ? [wt.at(-1)] : wt.map(t => ({ ...t }))]
       }
       if (sql.includes('FROM warehouse_task_items')) return [[{ id: 41, task_id: 31, purchase_return_item_id: 21, product_id: 3, product_name: 'fixture', picked_qty: 2, required_qty: 2, unit_price: 4, return_item_id: 21, return_id: 11, return_product_id: 3, return_quantity: 2 }]]
+      if(sql.startsWith('SELECT iti.purchase_item_id AS id'))return [[{id:101,quantity:10},{id:102,quantity:10}]]
       if (sql.includes('FROM inbound_task_items')) {
         if (sql.includes('receivedTotal')) return [[{ receivedTotal: 2 }]]
         if (sql.includes('AS pending')) return [[{ pending: 0 }]]
@@ -68,11 +83,12 @@ function fixture({ waitBudget = false, legacy = false, orphan = false, driftPR =
       }
       if (sql.includes('FROM inbound_tasks')) return [[{ id: 7, task_no: 'IT7', status: 2, warehouse_id: 8 }]]
       if (sql.includes('FROM sale_purchase_bindings')) return [[{ count: 0 }]]
-      if (sql.includes('FROM payment_records')) return [[{ total_amount: 100, paid_amount: 0 }]]
+      if (sql.includes('FROM payment_records')) return [[{ id:51,type:1,order_id:10,order_no:'PO10',total_amount:120,paid_amount:0,balance:120 }]]
+      if(sql.includes('UPDATE purchase_returns SET cash_execution_basis')){createdRows.find(r=>r.id===args[1]).cash_execution_basis=JSON.parse(args[0]);return [{affectedRows:1}]}
       if (sql.includes('UPDATE purchase_returns')) { pr.status = args[0]; events.push('PR:status'); return [{ affectedRows: 1 }] }
       if (sql.includes('UPDATE inbound_tasks')) { events.push('IT:status'); return [{ affectedRows: 1 }] }
-      if (sql.includes('INSERT INTO purchase_returns')) { inserts.push(args); return [{ insertId: 11 }] }
-      if (sql.includes('INSERT INTO purchase_return_items')) { inserts.push(args); return [{ insertId: 21 }] }
+      if (sql.includes('INSERT INTO purchase_returns')) { const id=12+createdRows.length;createdRows.push({id,return_no:args[0],supplier_id:args[1],warehouse_id:args[3],purchase_order_id:args[5],purchase_order_no:args[6],total_amount:args[7],status:1});inserts.push(args);return [{insertId:id}] }
+      if (sql.includes('INSERT INTO purchase_return_items')) { const id=22+createdItems.length;createdItems.push({id,return_id:args[0],purchase_item_id:args[1],product_id:args[2],unit:args[8],quantity:args[10],unit_price:args[13],amount:args[14]});inserts.push(args);return [{insertId:id}] }
       if (/INSERT|UPDATE|DELETE/.test(sql)) return [{ affectedRows: 1 }]
       unknown.push(`SQL ${sql}`); throw Error(`Unexpected SQL ${sql}`)
     },
@@ -94,6 +110,7 @@ function fixture({ waitBudget = false, legacy = false, orphan = false, driftPR =
   })
   const ship = load('modules/warehouse-tasks/warehouse-tasks.ship.js', {
     '../disposal/disposal.handling.target-guards': {}, // purchase_return has no SO/link; H3 exercised separately
+    '../../utils/qtyPrecision': qtyPrecision,
 
     '../fulfillment/fulfillment.refresh': { commitFulfillment }, '../../config/db': { pool: { getConnection: async () => conn } }, '../../utils/AppError': AppError,
     '../../engine/inventoryEngine': { MOVE_TYPE: {}, moveStock: async (actual, item) => { assert.equal(actual, conn); events.push('inventory'); moves.push(item) } },
@@ -120,6 +137,7 @@ function fixture({ waitBudget = false, legacy = false, orphan = false, driftPR =
     './inbound-tasks.create-receipt': createReceipt, './inbound-tasks.edit-rules': editRules,
   })
   const purchase = load('modules/purchase/purchase.service.js', {
+    '../inbound-tasks/inbound-tasks.short-receipt': shortReceipt, './purchase.close-receipt': closeReceipt,
     '../../constants/purchaseOrderStatus': require('../backend/src/constants/purchaseOrderStatus'),
     '../fulfillment/fulfillment.refresh': { commitFulfillment }, '../../config/db': { pool: { getConnection: async () => conn } }, '../../utils/AppError': AppError,
     '../../utils/codeGenerator': {}, '../inbound-tasks/inbound-tasks.helpers': {}, '../inbound-tasks/inbound-tasks.query': {}, '../../utils/inboundThresholds': {},
@@ -246,10 +264,11 @@ test('audit savepoint adapter preserves closeRemaining domain refusal, retry and
   }
   const adapter = createAuditInventoryTransaction(raw), conn = adapter.serviceConn
   const purchase = load('modules/purchase/purchase.service.js', {
+    '../inbound-tasks/inbound-tasks.short-receipt': shortReceipt, './purchase.close-receipt': closeReceipt,
     '../../constants/purchaseOrderStatus': require('../backend/src/constants/purchaseOrderStatus'),
     '../fulfillment/fulfillment.refresh': { commitFulfillment: actual => actual.commit() }, '../../config/db': { pool: { getConnection: async () => conn } }, '../../utils/AppError': AppError,
     '../../utils/codeGenerator': {}, '../inbound-tasks/inbound-tasks.helpers': {}, '../inbound-tasks/inbound-tasks.query': {}, '../../utils/inboundThresholds': {},
-    '../../utils/statusTransition': transition, '../../constants/documentStatusRules': status, '../../utils/operationRequest': {},
+    '../../utils/statusTransition': transition, '../../constants/documentStatusRules': status, '../../utils/operationRequest': { async beginResourceOperationRequest() { return { enabled: false, replay: false } }, async completeOperationRequest() {} },
     '../inbound-tasks/inbound-tasks.settle': { recomputePurchasePayable: async (actual, _id, opts) => { assert.equal(actual, conn); assert.equal(opts.sourceReadMode, 'current'); assert.equal(isolation, 'READ COMMITTED') } },
     '../../utils/unitConversion': {}, '../../utils/warehouseScope': scope, '../../utils/selfApprove': {}, '../../utils/pagination': {}, '../../utils/priceReference': {},
   })
@@ -297,6 +316,7 @@ test('real settle opt-in keeps source assertions/upsert but avoids reverse IT/PR
     const conn = { query: async (sql, params) => {
       sqls.push(sql)
       if (sql.includes('FROM purchase_orders')) return [[{ id: 10, order_no: 'PO10', supplier_name: 'fixture', settlement_type: 2, payment_terms_days: 30, created_at: '2026-10-04' }]]
+      if(sql.includes('FROM payment_records'))return [[]]
       if (sql.includes('AS amount')) { order.push('gross'); return [[{ amount: 100 }]] }
       if (sql.includes('AS returnedAmount')) { order.push('returned'); return [[{ returnedAmount: 8 }]] }
       if (sql.includes('INSERT INTO payment_records')) { args.push(params); return [{ affectedRows: 1 }] }
@@ -304,11 +324,11 @@ test('real settle opt-in keeps source assertions/upsert but avoids reverse IT/PR
     } }
     const settle = load('modules/inbound-tasks/inbound-tasks.settle.js', {
       '../../constants/documentStatusRules': status, '../../constants/settlementType': { normalizeSettlementType: value => value, buildDueDateSql: () => ({ expr: 'NOW()', params: [] }) },
-      '../../utils/statusTransition': transition, './inbound-purchase-source': { assertPurchaseSettlementSources: async (actual, id) => { assert.equal(actual, conn); assert.equal(id, 10); order.push('source') } },
+      '../../utils/statusTransition': transition, '../payments/reconciliation-statements.service':{refreshSettlement:async()=>{throw Error('unexpected statement in empty-members settle fixture')}}, './inbound-purchase-source': { assertPurchaseSettlementSources: async (actual, id) => { assert.equal(actual, conn); assert.equal(id, 10); order.push('source') } },
     })
     await settle.recomputePurchasePayable(conn, 10, sourceReadMode === 'current' ? { sourceReadMode } : undefined)
     assert.deepEqual(order, ['source', 'gross', 'returned']); assert.equal(args[0][3], 92)
-    assert.equal(sqls.filter(sql => sql.includes('FOR UPDATE')).length, sourceReadMode === 'current' ? 0 : 2)
+    assert.equal(sqls.filter(sql => /FROM inbound_tasks|FROM purchase_returns/.test(sql) && sql.includes('FOR UPDATE')).length, sourceReadMode === 'current' ? 0 : 2)
     assert.ok(sqls.at(-1).includes('confirm_status')); assert.ok(sqls.at(-1).includes('settlement_type'))
   }
 })

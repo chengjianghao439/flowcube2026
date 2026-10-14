@@ -28,11 +28,11 @@ function fixture(options = {}) {
   let data = {
     acct_companies:[{id:1,is_active:1}],sys_users:[{id:9,role_id:2,is_active:1,deleted_at:null,allow_self_approve:1,real_name:'fixture'}],sys_roles:[{id:2}],
     sys_role_permissions:allPermissions.map(permission=>({role_id:2,permission})),user_warehouse_scope:[{user_id:9,warehouse_id:8}],
-    purchase_orders:[{id:10,order_no:'PO10',supplier_id:4,warehouse_id:8,deleted_at:null}],
+    purchase_orders:[{id:10,order_no:'PO10',supplier_id:4,warehouse_id:8,total_amount:'30.0000',deleted_at:null}],
     purchase_returns:[{id:11,return_no:'PR11',purchase_order_id:10,purchase_order_no:'PO10',supplier_id:4,supplier_name:'fixture',warehouse_id:8,warehouse_name:'fixture',status:1,total_amount:'6.0000',deleted_at:null}],
     purchase_return_items:[{id:12,return_id:11,purchase_item_id:101,product_id:3,unit:'个',quantity:'2.00',unit_price:'3.0000',amount:'6.0000'}],
-    purchase_order_items:[{id:101,order_id:10,product_id:3,unit:'个',unit_price:'3.0000',quantity:'10.00'}],
-    payment_records:[{id:31,type:1,order_id:10,order_no:'PO10',paid_amount:'100.0000',total_amount:'100.0000'}],
+    purchase_order_items:[{id:101,order_id:10,product_id:3,unit:'个',unit_price:'3.0000',quantity:'10.00',amount:'30.0000'}],
+    payment_records:[{id:31,type:1,order_id:10,order_no:'PO10',paid_amount:'100.0000',total_amount:'100.0000',balance:'0.0000'}],
     payment_entries:[{id:21,record_id:31,amount:'100.0000',account_id:41,receipt_id:null,statement_id:null,payment_date:'2026-10-01'}],payment_receipts:[],reconciliation_statements:[],reconciliation_statement_items:[],party_ledger_events:[],acct_periods:[{company_id:1,period:'202610',status:1}],
     finance_accounts:[{id:41,company_id:1,is_active:0,deleted_at:'2026-09-01',type:1},{id:42,company_id:1,is_active:1,deleted_at:null,type:1,opening_balance:'0.0000',current_balance:'0.0000',name:'income'}],
     finance_account_transactions:[{id:51,account_id:41,direction:2,amount:'100.0000',biz_type:2,biz_id:21,biz_no:'PO10',happened_at:'2026-10-01'}],
@@ -127,7 +127,7 @@ function fixture(options = {}) {
         }
         if(sql.startsWith('SELECT r.total_amount, r.paid_amount')) {
           assert.match(sql,/WHERE i.statement_id = \? ORDER BY r.id FOR SHARE$/)
-          events.push('payment_records:S');return [state.reconciliation_statement_items.filter(r=>r.statement_id===args[0]).map(r=>{const ap=state.payment_records.find(a=>a.id===r.record_id);assert.ok(ap);return {total_amount:ap.total_amount,paid_amount:ap.paid_amount}})]
+          events.push('payment_records:S');return [state.reconciliation_statement_items.filter(r=>r.statement_id===args[0]).map(r=>{const ap=state.payment_records.find(a=>a.id===r.record_id);assert.ok(ap);return {total_amount:ap.total_amount,paid_amount:ap.paid_amount,balance:ap.balance}})]
         }
         if(sql.includes(' FROM acct_periods ')){assert.equal(args[0],'202610');assert.equal(args[1],1);events.push('acct_periods:S');return [state.acct_periods.filter(r=>r.period===args[0]&&r.company_id===args[1]).map(r=>({status:r.status}))]}
 
@@ -177,7 +177,7 @@ function fixture(options = {}) {
     }
   }
   const cache={}
-  const pure={ '../../utils/backendTime':require('../../backend/src/utils/backendTime'),'../../utils/AppError':AppError,'../../utils/decimalMoney':money,'../../utils/sqlIdentifier':ids,'../../constants/permissions':{PERMISSIONS},'node:crypto':crypto,'../../config/db':{pool:{getConnection:async()=>{events.push('pool:get');return conn},query:(sql,args)=>{events.push('pool:query');return conn.query(sql,args)}}},'../../constants/documentStatusRules':require('../../backend/src/constants/documentStatusRules') }
+  const pure={'../purchase/purchase.cash-money':require('../../backend/src/modules/purchase/purchase.cash-money'),'../accounting/voucher-sale-money':require('../../backend/src/modules/accounting/voucher-sale-money'),'../../utils/cashMoney':require('../../backend/src/utils/cashMoney'), '../../utils/backendTime':require('../../backend/src/utils/backendTime'),'../../utils/AppError':AppError,'../../utils/decimalMoney':money,'../../utils/sqlIdentifier':ids,'../../constants/permissions':{PERMISSIONS},'node:crypto':crypto,'../../config/db':{pool:{getConnection:async()=>{events.push('pool:get');return conn},query:(sql,args)=>{events.push('pool:query');return conn.query(sql,args)}}},'../../constants/documentStatusRules':require('../../backend/src/constants/documentStatusRules') }
   const domain=['rules','actor','source','operations','service','pr-gate','context','receive','postcommit','backfill-rules']
   const externalFiles={
     '../finance/finance-accounts.service':'modules/finance/finance-accounts.service.js',
@@ -203,7 +203,26 @@ function fixture(options = {}) {
     return cache[dep]=loaded.exports
   }
   function module(name){if(Object.hasOwn(cache,name))return cache[name];const filename=path.join(base,`modules/refunds/supplier-refunds.${name}.js`);if(!fs.existsSync(filename))return cache[name]={};const loaded={exports:{}};cache[name]=loaded.exports
-    vm.runInNewContext(fs.readFileSync(filename,'utf8'),{module:loaded,require:dep=>{if(Object.hasOwn(pure,dep))return pure[dep];if(Object.hasOwn(externalFiles,dep))return external(dep); const match=/^\.\/supplier-refunds\.(\w+(?:-\w+)?)$/.exec(dep);if(match&&domain.includes(match[1]))return module(match[1]);throw Error('Unstubbed F2 require '+dep)},Date,Buffer,console},{filename});return cache[name]=loaded.exports}
+    vm.runInNewContext(options.transformSource?options.transformSource(fs.readFileSync(filename,'utf8'),filename):fs.readFileSync(filename,'utf8'),{module:loaded,require:dep=>{if(Object.hasOwn(pure,dep))return pure[dep];if(Object.hasOwn(externalFiles,dep))return external(dep); const match=/^\.\/supplier-refunds\.(\w+(?:-\w+)?)$/.exec(dep);if(match&&domain.includes(match[1]))return module(match[1]);throw Error('Unstubbed F2 require '+dep)},Date,Buffer,console},{filename});return cache[name]=loaded.exports}
   return {installBackfillBoundary:value=>{pure['./supplier-refunds.backfill']=value},module,conn,get data(){return data},get state(){return committed()},events,queries,fail,external,options: {userId:9,requestKey:'fixed-key'},snapshot:()=>copy(data)}
 }
-module.exports={fixture,required,input,uuid,copy,allPermissions,AppError,money}
+// Seed immutable pre-policy facts in memory only, after ordinary legal-cent setup.
+// This does not run a new fractional cash API; current read/proof functions validate
+// every rebuilt canonical identity and historical money fact in the actual tests.
+function seedLegacyCash(f, amount, refundId=61){
+  const rules=f.module('rules'),row=f.data.supplier_refund_orders.find(r=>r.id===refundId),old=money.moneyUnits(row.amount),next=money.moneyUnits(amount)
+  const body=JSON.parse(row.create_payload_json);body.amount=money.moneyText(next);for(const a of body.allocations)a.amount=body.amount
+  row.amount=body.amount;row.create_payload_json=rules.stableJson(body);row.payload_hash=rules.fingerprint(row.create_payload_json)
+  const created=f.data.supplier_refund_operations.find(o=>o.operation_uuid===row.created_operation_uuid)
+  created.payload_json=row.create_payload_json;created.payload_hash=row.payload_hash
+  for(const a of f.data.supplier_refund_allocations.filter(a=>a.refund_id===refundId))a.amount=body.amount
+  if(Number(row.status)===3){
+    const fund=f.data.finance_account_transactions.find(t=>t.id===row.fund_transaction_id);fund.amount=body.amount
+    const account=f.data.finance_accounts.find(a=>a.id===row.income_account_id);account.current_balance=money.moneyText(money.moneyUnits(account.current_balance)-old+next);fund.balance_after=account.current_balance
+    const ap=f.data.payment_records.find(a=>a.id===row.payment_record_id);ap.paid_amount=money.moneyText(money.moneyUnits(ap.paid_amount)+old-next);ap.balance=money.moneyText(money.moneyUnits(ap.total_amount)-money.moneyUnits(ap.paid_amount))
+    for(const e of f.data.party_ledger_events.filter(e=>e.baseline_key==='supplier_refund:'+refundId))e.delta=body.amount
+    for(const op of f.data.supplier_refund_operations.filter(o=>o.refund_id===refundId&&o.action.includes('.receive.'))){const ack=JSON.parse(op.response_json);ack.amount=body.amount;op.response_json=rules.stableJson(ack)}
+  }
+  return body
+}
+module.exports={seedLegacyCash,fixture,required,input,uuid,copy,allPermissions,AppError,money}

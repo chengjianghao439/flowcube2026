@@ -1,0 +1,22 @@
+'use strict'
+// Actual source pure functions. No config/db, auth, environment or sockets.
+const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm')
+const path=require('node:path'),file=path.resolve(__dirname,'../backend/src/utils/cashMoney.js'),nativeRequire=require('node:module').createRequire(file)
+let source=fs.readFileSync(file,'utf8')
+if(process.env.CASH_CENTS_MUTANT==='fraction')source=source.replace('if (units % 100n)', 'if (false)')
+if(process.env.CASH_CENTS_MUTANT==='float_product')source=source.replace('return halfUp(decimalUnits(quantity, 2) * decimalUnits(price, 8), 100000000n)', 'return BigInt(Math.round(Number(quantity)*Number(price)*100))')
+if(process.env.CASH_CENTS_MUTANT==='legacy_round')source=source.replace('const units = moneyUnits(value)','const units = moneyUnits(stored ? Math.round(Number(value)*100)/100 : value)')
+if(process.env.CASH_CENTS_MUTANT==='unsafe_number')source=source.replace('cashCents(value) !== cents','false')
+const mod={exports:{}};vm.runInNewContext(source,{module:mod,require:p=>{assert.ok(!p.includes('config/db'));return nativeRequire(p)}})
+const m=mod.exports
+for(const input of [.0001,.001,12.3456,12.34567,'0.0067','0.30000000000000004'])test('new actual cash rejects non-cent '+input,()=>assert.throws(()=>m.cashCents(input),e=>e.statusCode===400&&e.code==='CASH_PRECISION_INVALID'))
+test('exact cents and representation zeros are accepted without numeric round',()=>{assert.equal(m.cashCents('12.3400'),1234n);assert.equal(m.cashCents(.29),29n);assert.equal(m.cashText(1234n),'12.34');assert.equal(m.cashCents('-12.3400'),-1234n)})
+test('actual input rejects binary extra decimals; caller sums original exact-cent values',()=>{assert.throws(()=>m.cashCents(.1+.2),e=>e.statusCode===400);assert.equal(m.sumCashCents([.1,.2]),30n)})
+test('stored fractional source is 409 review; original decimalMoney remains four-place',()=>{assert.throws(()=>m.storedCashCents('0.0067','AR'),e=>e.statusCode===409&&e.code==='CASH_LEGACY_PRECISION_REVIEW_REQUIRED'&&e.data.rawAmount==='0.0067');assert.equal(nativeRequire('./decimalMoney').moneyUnits('0.0067'),67n)})
+test('computed 1.005 product exactly half-ups to 1.01',()=>{assert.equal(m.productCents(1,'1.005'),101n);assert.equal(m.productCents(3,'0.3333'),100n);assert.equal(m.roundCashCents('1.005'),101n)})
+test('high-precision small prices remain valid even when actual cash0',()=>{assert.equal(m.productCents(1,'0.0001'),0n);assert.equal(m.productCents(1,'0.0049'),0n);assert.equal(m.productCents(1,'0.0067'),1n)})
+test('raw proportion allocates immutable head1 net.90 despite raw.9999',()=>{assert.equal(m.ratioCents(90n,3333000000n,9999000000n),30n);assert.equal(m.ratioCents(90n,9999000000n,9999000000n),90n)})
+test('floor cents leaves original budget remainder to exact final caller',()=>{const first=m.ratioCents(2n,1n,3n,{floor:true}),second=m.ratioCents(2n,1n,3n,{floor:true});assert.equal(first,0n);assert.equal(second,0n);assert.equal(2n-first-second,2n)})
+test('all-cent sums avoid floating .1+.2 drift; stored sum rejects fractional constituent',()=>{assert.equal(m.sumCashCents([.1,.2]),30n);assert.throws(()=>m.sumCashCents(['0.0067','0.0033'],{stored:true}),e=>e.statusCode===409)})
+test('price/quantity intermediate precision and original qty rejection remain separate',()=>{assert.equal(m.productCents('0.01','1.005'),1n);assert.throws(()=>m.productCents('1.001',1))})
+test('numeric API output must roundtrip exact cent, including large integers',()=>{assert.equal(m.cashNumber(1234n),12.34);assert.throws(()=>m.cashNumber(9007199254740991n),e=>e.code==='CASH_AMOUNT_OUT_OF_RANGE')})

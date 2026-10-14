@@ -286,3 +286,15 @@ test('商品同一提交不明结果复用请求键，原因选填一次且改�
   await vi.waitFor(()=>expect(vi.mocked(updateProductApi)).toHaveBeenCalledTimes(3))
   expect(calls[2][2]).not.toBe(calls[0][2])
 })
+
+test('新商品允许小数数量默认关闭，可显式开启', async () => {
+  await renderAt('/products/new'); await settle()
+  const checkbox = [...host.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].find(input => input.parentElement?.textContent?.includes('允许小数数量'))!
+  expect(checkbox.checked).toBe(false); await act(async () => checkbox.click()); expect(checkbox.checked).toBe(true)
+})
+test.each([false, true])('编辑保留既有小数开关%s，不套用新商品默认', async allowDecimalQty => {
+  vi.mocked(getProductApi).mockResolvedValue(makeProduct({allowDecimalQty}) as unknown as Awaited<ReturnType<typeof getProductApi>>)
+  await renderAt('/products/147'); await settle()
+  const checkbox = [...host.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].find(input => input.parentElement?.textContent?.includes('允许小数数量'))!
+  expect(checkbox.checked).toBe(allowDecimalQty)
+})

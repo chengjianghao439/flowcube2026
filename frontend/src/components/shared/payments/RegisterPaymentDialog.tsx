@@ -20,6 +20,8 @@ import { UncertainSubmitNotice } from './UncertainSubmitNotice'
 import { useIdempotentSubmit } from './useIdempotentSubmit'
 import { isBackfillApplication, useBackfillPrompt } from './backfillFlow'
 
+import { cashCents } from './cashCent'
+
 const FORM_ID = 'payment-register-form'
 
 interface Props {
@@ -43,6 +45,9 @@ export function RegisterPaymentDialog({ open, onClose, type, record }: Props) {
   const actionLabel = isPayable ? '登记付款' : '登记收款'
   const partyLabel = isPayable ? '供应商' : '客户'
   const invalidatePaymentViews = usePaymentViewInvalidation()
+
+  const balanceCents = record ? cashCents(record.balance) : null
+  const legacyBalance = !!record && balanceCents == null
 
   const [payAmount, setPayAmount] = useState('')
   const [payDate, setPayDate] = useState(todayYmd())
@@ -130,6 +135,9 @@ export function RegisterPaymentDialog({ open, onClose, type, record }: Props) {
   const handlePay = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!record || !payAmount) return
+    const cents = cashCents(payAmount)
+    if (cents == null || cents <= 0n) { toast.error('金额须大于零且最多两位小数'); return }
+    if (!guard.uncertain && (balanceCents == null || cents > balanceCents)) { toast.error(legacyBalance ? '历史余额含不足一分的尾差，请先核对' : '登记金额不能超过本笔余额'); return }
     if (!payAccountId) { toast.error('请选择资金账户'); return }
     const doPay = () => payMut.mutate({
       id: record.id, d: buildBody(),
@@ -164,7 +172,7 @@ export function RegisterPaymentDialog({ open, onClose, type, record }: Props) {
       footer={
         <div className="flex justify-end gap-2">
           <Button type="button" variant="outline" onClick={onClose}>取消</Button>
-          <Button type="submit" form={FORM_ID} disabled={payMut.isPending}>确认登记</Button>
+          <Button type="submit" form={FORM_ID} disabled={payMut.isPending || legacyBalance && !guard.uncertain}>确认登记</Button>
         </div>
       }
     >
@@ -190,7 +198,7 @@ export function RegisterPaymentDialog({ open, onClose, type, record }: Props) {
         {record && (
           <div className="mb-4 space-y-1 text-sm text-muted-foreground">
             <p>关联单号：<span className="text-doc-code-strong">{record.orderNo}</span> &nbsp;·&nbsp; {partyLabel}：{record.partyName}</p>
-            <p>余额：<span className="font-medium text-destructive-ink">{money(record.balance)}</span></p>
+            <p>余额：<span className="font-medium text-destructive-ink">{legacyBalance && record.balance != null && Number.isFinite(Number(record.balance)) ? `¥${String(record.balance)}` : money(record.balance)}</span>{legacyBalance && <span className="ml-2 text-warning-ink">历史余额含不足一分的尾差，请先核对</span>}</p>
           </div>
         )}
         <div className="grid grid-cols-2 gap-4">

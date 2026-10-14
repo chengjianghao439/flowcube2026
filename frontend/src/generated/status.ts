@@ -358,9 +358,10 @@ export const SALE_ACTION_RULES = {
   "reserve": {
     "from": [
       1,
+      3,
       6
     ],
-    "message": "只有草稿或部分占库状态可以占用库存"
+    "message": "只有草稿、部分占库或执行中的销售单可以占用库存"
   },
   "ship": {
     "from": [

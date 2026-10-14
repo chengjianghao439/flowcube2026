@@ -26,8 +26,15 @@ async function ensureBarcodeUnique(barcode, currentId = null) {
   return normalized
 }
 
+function assertDefaultStockPolicyWriteScope({ safetyStock, reorderPoint }, scopeWarehouseIds) {
+  // 两项均未填写时原 helper 不写策略；显式 0 会删除默认，仍须全局写授权。
+  if ([safetyStock, reorderPoint].every(value => value == null || value === '')) return
+  if (scopeWarehouseIds !== null) throw new AppError('仅不限仓账号可修改全局默认策略', 403, 'GLOBAL_POLICY_SCOPE_DENIED')
+}
+
 /** upsert 商品的「通用默认」补货策略（product_stock_policies.warehouse_id=0）；都为 0/空则删除该默认行。db 可传事务连接。 */
-async function upsertDefaultStockPolicy(db, productId, { safetyStock, reorderPoint }) {
+async function upsertDefaultStockPolicy(db, productId, { safetyStock, reorderPoint }, scopeWarehouseIds) {
+  assertDefaultStockPolicyWriteScope({ safetyStock, reorderPoint }, scopeWarehouseIds)
   for (const [qty, label] of [[safetyStock, '安全库存'], [reorderPoint, '补货点']]) {
     if (qty == null || qty === '') continue
     assertQtyScale(qty, label)
@@ -362,7 +369,8 @@ async function findById(id) {
   return product
 }
 
-async function create({ name, categoryId, supplierId, unit, spec, color, barcode, costPrice, remark, skuCode, articleNumber, salePriceA, salePriceB, salePriceC, salePriceD, batchManaged, shelfLifeDays, safetyStock, reorderPoint, units, allowDecimalQty }) {
+async function create({ name, categoryId, supplierId, unit, spec, color, barcode, costPrice, remark, skuCode, articleNumber, salePriceA, salePriceB, salePriceC, salePriceD, batchManaged, shelfLifeDays, safetyStock, reorderPoint, units, allowDecimalQty }, { scopeWarehouseIds } = {}) {
+  assertDefaultStockPolicyWriteScope({ safetyStock, reorderPoint }, scopeWarehouseIds)
   const { normalizedBarcode, normalizedCost } = await validateProductPayload({ name, categoryId, barcode, costPrice })
   const normalizedUnits = validateUnits(unit, units)   // 纯校验，任何非法输入在建单前就抛错
   const generatedArticle = articleNumber || null   // 供应商型号（供应商给的型号，人工填；缺失即 NULL，不再随机生成）
@@ -392,7 +400,7 @@ async function create({ name, categoryId, supplierId, unit, spec, color, barcode
         const [r] = await conn.query(
           `INSERT INTO product_items (code,sku_code,article_number,name,category_id,supplier_id,unit,spec,color,barcode,cost_price,sale_price,sale_price_a,sale_price_b,sale_price_c,sale_price_d,remark,batch_managed,shelf_life_days,allow_decimal_qty)
            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-          [code, generatedSku, generatedArticle, String(name).trim(), categoryId||null, supplierId, unit, spec, color, generatedBarcode, normalizedCost, sp, spA, spB, spC, spD, remark||null, batchManaged?1:0, shelfLifeDays||null, allowDecimalQty === false ? 0 : 1],
+          [code, generatedSku, generatedArticle, String(name).trim(), categoryId||null, supplierId, unit, spec, color, generatedBarcode, normalizedCost, sp, spA, spB, spC, spD, remark||null, batchManaged?1:0, shelfLifeDays||null, allowDecimalQty === true ? 1 : 0],
         )
         insertId = r.insertId
       } catch (e) {
@@ -402,13 +410,14 @@ async function create({ name, categoryId, supplierId, unit, spec, color, barcode
       }
     }
     await replaceProductUnits(conn, insertId, normalizedUnits)
-    await upsertDefaultStockPolicy(conn, insertId, { safetyStock, reorderPoint })
+    await upsertDefaultStockPolicy(conn, insertId, { safetyStock, reorderPoint }, scopeWarehouseIds)
     await conn.commit()
     return { id: insertId, code, skuCode: generatedSku, articleNumber: generatedArticle }
   } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
 }
 
-async function update(id, { name, categoryId, supplierId, unit, spec, color, barcode, costPrice, remark, isActive, articleNumber, salePriceA, salePriceB, salePriceC, salePriceD, batchManaged, shelfLifeDays, safetyStock, reorderPoint, units, allowDecimalQty, revision, changeReason }, operator = null, requestKey = null) {
+async function update(id, { name, categoryId, supplierId, unit, spec, color, barcode, costPrice, remark, isActive, articleNumber, salePriceA, salePriceB, salePriceC, salePriceD, batchManaged, shelfLifeDays, safetyStock, reorderPoint, units, allowDecimalQty, revision, changeReason }, operator = null, requestKey = null, { scopeWarehouseIds } = {}) {
+  assertDefaultStockPolicyWriteScope({ safetyStock, reorderPoint }, scopeWarehouseIds)
   normalizeReason(changeReason)
   const intent = arguments[1]
   // 事务外的校验与派生（不依赖商品当前行的价格快照，放在事务外以缩短持锁时间）
@@ -427,6 +436,10 @@ async function update(id, { name, categoryId, supplierId, unit, spec, color, bar
   // 新建时仍按 A 初始化（见 create）——本处只保证编辑不再覆写它。
   const conn = await pool.getConnection()
   try {
+    // All quantity writers take a current shared product lock. The exclusive
+    // lock below waits for them. RC conflict reads then see their committed
+    // facts without locking document/stock rows in a reverse lock order.
+    if (allowDecimalQty === false) await conn.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED')
     await conn.beginTransaction()
     // **当前值必须在事务内、加行锁读**（2026-09-27 收口，与审批侧 applyApprovedPrice 同范式）：
     // 旧价与「未传字段的继承」都要基于**写入瞬间**的真实值。此前用事务外的 findById 快照，
@@ -463,6 +476,9 @@ async function update(id, { name, categoryId, supplierId, unit, spec, color, bar
     const allowDecimalFlag = allowDecimalQty === undefined
       ? (current.allow_decimal_qty == null || Number(current.allow_decimal_qty) === 1 ? 1 : 0)
       : (allowDecimalQty ? 1 : 0)
+    if (allowDecimalFlag === 0 && (current.allow_decimal_qty == null || Number(current.allow_decimal_qty) === 1)) {
+      await require('./products.quantity-policy').assertCanDisableDecimals(conn, Number(id), { safetyStock, reorderPoint })
+    }
     const [upd] = await conn.query(
       `UPDATE product_items SET name=?,category_id=?,supplier_id=?,unit=?,spec=?,color=?,barcode=?,cost_price=?,sale_price_a=?,sale_price_b=?,sale_price_c=?,sale_price_d=?,remark=?,is_active=?,article_number=?,batch_managed=?,shelf_life_days=?,allow_decimal_qty=?, revision = revision + 1
        WHERE id=? AND revision=? AND deleted_at IS NULL`,
@@ -476,7 +492,7 @@ async function update(id, { name, categoryId, supplierId, unit, spec, color, bar
       throw new AppError('该商品已被他人修改，请刷新后重新编辑', 409, 'PRODUCT_VERSION_CONFLICT')
     }
     await replaceProductUnits(conn, id, normalizedUnits)
-    await upsertDefaultStockPolicy(conn, id, { safetyStock, reorderPoint })
+    await upsertDefaultStockPolicy(conn, id, { safetyStock, reorderPoint }, scopeWarehouseIds)
     // 价格变更历史（2026-08-22 功能：价格体系落地）——凡有价格列变化的写历史，可追溯。
     // 旧价一律取上面**锁内**读到的当前值，保证同一 price_type 的历史是连贯的（old = 上一条 new）。
     // **不再包含 `sale`**：本函数已不修改 `sale_price`（方案三 · 止血管住覆写），

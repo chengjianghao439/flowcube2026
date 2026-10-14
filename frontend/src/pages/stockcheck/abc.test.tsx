@@ -9,6 +9,9 @@ const mocks = vi.hoisted(() => ({ guard: vi.fn(), rules: vi.fn(), save: vi.fn() 
 vi.mock('@/hooks/useActiveWorkspaceTab', () => ({ useActiveWorkspaceTab: () => true }))
 vi.mock('@/hooks/useWarehouses', () => ({ useWarehousesActive: () => ({ data: [] }) }))
 vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: () => true }) }))
+// These existing draft tests run with an explicitly granted current scope;
+// limited/unknown scope is covered by abc.global-policy.test.tsx.
+vi.mock('@/hooks/useGlobalPolicyWriteCapability', () => ({ useGlobalPolicyWriteCapability: () => ({ allowed: true, isAllowed: () => true, isError: false }) }))
 vi.mock('@/hooks/useDirtyGuard', () => ({ useDirtyGuard: mocks.guard }))
 vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/lib/exportDownload', () => ({ downloadExport: vi.fn() }))

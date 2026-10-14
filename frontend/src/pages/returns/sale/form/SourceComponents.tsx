@@ -1,6 +1,6 @@
 import { Button } from '@/components/ui/button'
 import { formatDisplayDateTime } from '@/lib/dateTime'
-import type { ReturnSourceLabels, ReturnSourceOrderItem } from '@/api/returns'
+import type { CashMoneyProof, ReturnSourceLabels, ReturnSourceOrderItem } from '@/api/returns'
 import { returnNet } from './returnSourcePresentation'
 export function SourceLabel({
   source
@@ -24,10 +24,12 @@ export function SourceLabel({
 }
 export function SourceComponents({
   items,
+  cashProof,
   disabled,
   onSelect
 }: {
   items: ReturnSourceOrderItem[]
+  cashProof?: CashMoneyProof
   disabled: boolean
   onSelect: (item: ReturnSourceOrderItem) => void
 }) {
@@ -69,12 +71,12 @@ export function SourceComponents({
                 {Number(item.sourceBudgetAmount).toFixed(2)}
               </td>
               <td className="p-2 text-right tabular-nums">
-                {returnNet(item.sourceFinancialEstimate ?? 0)}
+                {returnNet(item.sourceFinancialEstimate ?? 0, cashProof)}
               </td>
               <td className="p-2 text-right tabular-nums">
                 {item.actualQualifiedQty ?? 0} /{' '}
                 {Number(item.actualRefundGross ?? 0).toFixed(2)} /{' '}
-                {returnNet(item.actualRefundAmount ?? 0)}
+                {returnNet(item.actualRefundAmount ?? 0, cashProof)}
               </td>
               <td className="p-2">
                 <Button

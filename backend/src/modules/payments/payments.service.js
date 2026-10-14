@@ -1,5 +1,8 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
+const { moneyUnits, moneyText } = require('../../utils/decimalMoney')
+const { cashCents, storedCashCents, cashNumber } = require('../../utils/cashMoney')
+const moneyNumber = units => cashNumber(storedCashCents(moneyText(units)))
 const { getRequestId } = require('../../utils/requestContext')
 const { beginCreationOperationRequest, beginResourceOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { PAYMENT_EVENT, record: recordPaymentEvent } = require('./payment-events.service')
@@ -174,6 +177,8 @@ async function listDebitAccountOptions(companyId = 1) {
 }
 
 async function createManual({ type, orderNo, partyName, totalAmount, dueDate, remark, debitAccountCode, settlementType }, operator, requestKey) {
+  cashCents(totalAmount, { label: '账款总额' })
+  const totalText = moneyText(moneyUnits(totalAmount))
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
@@ -217,7 +222,7 @@ async function createManual({ type, orderNo, partyName, totalAmount, dueDate, re
     const [result] = await conn.query(
       `INSERT INTO payment_records (type,order_id,order_no,party_name,total_amount,balance,confirm_status,settlement_type,due_date,remark,debit_account_code)
        VALUES (?,NULL,?,?,?,?,1,?,${due.expr},?,?)`,
-      [type, orderNo, partyName, totalAmount, totalAmount, sType, ...due.params, remark || null, isPayable ? String(debitAccountCode) : null],
+      [type, orderNo, partyName, totalText, totalText, sType, ...due.params, remark || null, isPayable ? String(debitAccountCode) : null],
     )
     const created = { id: result.insertId, settlementType: sType }
     await recordPaymentEvent(conn, {
@@ -252,6 +257,10 @@ async function createManual({ type, orderNo, partyName, totalAmount, dueDate, re
 }
 
 async function recordPayment(id, { amount, paymentDate, method, remark, accountId }, operator, requestKey, { backfill = null, conn: sharedConn = null } = {}) {
+  cashCents(amount, { label: '实际收付款金额' })
+  const amountUnits = moneyUnits(amount)
+  if (amountUnits <= 0n) throw new AppError('付款金额必须大于 0', 400)
+  const amountText = moneyText(amountUnits)
   // 跨期补录的**申请**分支（2026-09-26 一致性审查 · 任务 7）：业务日期落在已结账期间时，
   // 只落一张待审批申请单，业务数据一行不写——批准前这笔钱不进账。放在业务事务**之前**：
   // 申请单必须独立提交，若与业务同事务，「业务没写成」会把申请单一起回滚，
@@ -272,6 +281,7 @@ async function recordPayment(id, { amount, paymentDate, method, remark, accountI
       [id],
     )
     if (!target) throw new AppError('账款记录不存在', 404)
+    for (const field of ['total_amount', 'paid_amount', 'balance']) storedCashCents(target[field], `原账款${field}`)
     // 申请时的**只读**可执行性预检（2026-09-26 一致性审查 · 任务 7）：拿此刻库里的账款状态判断
     // 这笔付款现在做不做得成。为什么必须有：审批是异步的，若申请时不看，一张明摆着付不成的单子
     // （账款已付清、应付未确认、金额超余额）也会走完审批，最后停在「已批准 · 待执行」上——审批人
@@ -288,9 +298,9 @@ async function recordPayment(id, { amount, paymentDate, method, remark, accountI
         409, 'FINANCE_BACKFILL_NOT_APPLICABLE',
       )
     }
-    if (Number(target.paid_amount) + Number(amount) > Number(target.total_amount) + 1e-6) {
+    if (moneyUnits(target.paid_amount) + amountUnits > moneyUnits(target.total_amount)) {
       throw new AppError(
-        `付款金额超出账款 ${target.order_no} 的余额 ¥${Number(target.balance).toFixed(2)}`,
+        `付款金额超出账款 ${target.order_no} 的余额 ¥${moneyText(moneyUnits(target.balance))}`,
         400, 'FINANCE_BACKFILL_NOT_APPLICABLE',
       )
     }
@@ -382,28 +392,30 @@ async function recordPayment(id, { amount, paymentDate, method, remark, accountI
 
     const [[record]] = await conn.query('SELECT * FROM payment_records WHERE id=? FOR UPDATE', [id])
     if (!record) throw new AppError('账款记录不存在', 404)
+    for (const field of ['total_amount', 'paid_amount', 'balance']) storedCashCents(record[field], `原账款${field}`)
     if (record.status === 3) throw new AppError('该账款已付清', 400)
     // 应付确认闸门：自动结算的应付须财务确认后才允许登记付款（分权：仓库结算、财务确认、出纳付款）
     if (Number(record.type) === 1 && Number(record.confirm_status) !== 1) {
       throw new AppError('该应付账款尚未财务确认，请先在往来页确认结算金额后再登记付款', 409)
     }
 
-    const newPaid = Number(record.paid_amount) + amount
-    // 浮点容差与核销路径一致（DECIMAL→JS float 累加可能出现 100.00000001，严格 > 会误拒合法全额付款）
-    if (newPaid > Number(record.total_amount) + 1e-6) {
-      throw new AppError(`付款金额超出余额 ¥${Number(record.balance).toFixed(2)}`, 400)
+    const totalUnits = moneyUnits(record.total_amount)
+    const newPaidUnits = moneyUnits(record.paid_amount) + amountUnits
+    if (newPaidUnits > totalUnits) {
+      throw new AppError(`付款金额超出余额 ¥${moneyText(moneyUnits(record.balance))}`, 400)
     }
 
-    const newBalance = Math.max(0, Number(record.total_amount) - newPaid)
-    const newStatus = newBalance <= 1e-6 ? 3 : 2
+    const newBalanceUnits = totalUnits - newPaidUnits
+    const newPaid = moneyNumber(newPaidUnits), newBalance = moneyNumber(newBalanceUnits)
+    const newStatus = newBalanceUnits === 0n ? 3 : 2
     await conn.query(
       'UPDATE payment_records SET paid_amount=?,balance=?,status=? WHERE id=?',
-      [newPaid, newBalance, newStatus, id],
+      [moneyText(newPaidUnits), moneyText(newBalanceUnits), newStatus, id],
     )
     const [entryResult] = await conn.query(
       `INSERT INTO payment_entries (record_id,amount,payment_date,method,account_id,remark,operator_id,operator_name)
        VALUES (?,?,?,?,?,?,?,?)`,
-      [id, amount, paymentDate, method || null, accountId || null, remark || null, operator.operatorId, operator.operatorName],
+      [id, amountText, paymentDate, method || null, accountId || null, remark || null, operator.operatorId, operator.operatorName],
     )
     // 资金账户流水与账款登记同事务：钱记在哪个账户上必须与业务同生共死（与 receipts 路径对称）。
     // 应收(type=2)钱进来 → IN/RECEIPT；应付(type=1)钱出去 → OUT/PAYMENT。未选账户不传时跳过
@@ -412,7 +424,7 @@ async function recordPayment(id, { amount, paymentDate, method, remark, accountI
       await accountSvc.recordTransaction(conn, {
         accountId,
         direction: Number(record.type) === 2 ? accountSvc.DIRECTION.IN : accountSvc.DIRECTION.OUT,
-        amount,
+        amount: amountText,
         bizType: Number(record.type) === 2 ? accountSvc.BIZ_TYPE.RECEIPT : accountSvc.BIZ_TYPE.PAYMENT,
         bizId: entryResult.insertId,
         bizNo: record.order_no,
@@ -449,7 +461,7 @@ async function recordPayment(id, { amount, paymentDate, method, remark, accountI
     // 对账单分配核销（必刷新），但 /payments/:id/pay 直付账款是另一条入口，不刷会让对账单
     // settled_amount/状态漂移（存疑修复 2026-07-28）。statement 行已在上面按序锁住。
     for (const s of stmtRows) {
-      await statementSvc.refreshSettlement(conn, s.statement_id)
+      await statementSvc.refreshSettlement(conn, s.statement_id, { cashOnly: true })
     }
 
     // entryId 是本次付款登记写成的分录 id：跨期补录执行时要用它回填

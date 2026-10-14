@@ -193,6 +193,7 @@ test('真实模块：伪造/错配/残留证据一律在写入前拒绝', async 
   const writeEvidence = (name, obj, mode = 0o600) => {
     const file = path.join(dir, name)
     fs.writeFileSync(file, JSON.stringify(obj), { mode, flag: 'wx' })
+    fs.chmodSync(file, mode) // Negative fixture mode must not be narrowed by umask.
     return file
   }
   const conn = (uuid) => ({ query: async () => [[{ serverUuid: uuid }]] })

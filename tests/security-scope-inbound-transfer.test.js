@@ -19,6 +19,7 @@ function inboundFixture({ warehouse = 8, transferred = false, outsideCandidates 
     async beginTransaction() { events.push('begin') }, async rollback() { events.push('rollback') }, release() { events.push('release') },
     async query(sql, params = []) {
       calls.push({ sql, params })
+      if (sql === 'SET TRANSACTION ISOLATION LEVEL READ COMMITTED') return [[]]
       if (/^UPDATE/.test(sql.trim())) { events.push('write'); return [{ affectedRows: 1 }] }
       if (sql.includes('paid_amount')) return [[]]
       if (sql.includes('SELECT DISTINCT product_id')) return [outsideCandidates ? [] : [{ product_id: 3, warehouse_id: warehouse }]]
@@ -42,6 +43,8 @@ function inboundFixture({ warehouse = 8, transferred = false, outsideCandidates 
     '../../engine/containerEngine': { CONTAINER_STATUS: statuses, async lockStockDimension() { events.push('dimension') }, async getStockProjection() { return { quantity: 10, reserved: 0 } }, async syncStockFromContainers() { events.push('sync'); return 0 } },
     '../../engine/inventoryEngine': { MOVE_TYPE: { RECEIPT_VOID: 9 }, async writeInventoryLog() { events.push('log') } },
     './inbound-tasks.helpers': { async assertPurchaseOrdersOpen() {}, async appendInboundEvent() { events.push('event') } },
+    // Allocation/reopen policy has its own actual-module guard; this fixture isolates permanent transfer facts.
+    './inbound-tasks.short-receipt': { async assertShortReceiptCanReopen() {} },
     '../../utils/statusTransition': { async lockStatusRow() { return { id: 21, task_no: 'IT-OWNED', warehouse_id: 8, status: 3 } }, async compareAndSetStatus() { events.push('status') } },
     '../../constants/documentStatusRules': { assertStatusAction: () => ({ from: [3], to: 1 }) },
     './inbound-tasks.settle': { async recomputePurchasePayable() { events.push('payable') } },
@@ -77,7 +80,7 @@ test('未调拨正常收货允许撤回，在途仍拒绝，任务越范围先�
   assertNoInboundWrite(transit)
   const denied = inboundFixture()
   await assert.rejects(denied.service.voidReceipt(21, { userId: 7 }, []), error => error.statusCode === 403)
-  assert.equal(denied.calls.length, 0); assertNoInboundWrite(denied)
+  assert.deepEqual(denied.calls.map(call => call.sql), ['SET TRANSACTION ISOLATION LEVEL READ COMMITTED']); assertNoInboundWrite(denied)
 })
 function transferFixture(direction = 'out') {
   const events = [], calls = [], recorded = []
@@ -92,6 +95,7 @@ function transferFixture(direction = 'out') {
         if (sql.includes('COUNT(*)')) return [[{ pending: 0 }]]
         return [[container]]
       }
+      if (sql.includes('product_items') && sql.includes('allow_decimal_qty')) { assert.match(sql,/ORDER BY id FOR SHARE/); return [[{id:3,name:'实际主档名',allow_decimal_qty:0}]] }
       if (sql.includes('product_items')) { assert.doesNotMatch(sql, /FOR UPDATE|FOR SHARE/); return [[{ name: '实际主档名' }]] }
       if (sql.includes('warehouse_locations')) return [[{ id: 91, warehouse_id: 9 }]]
       if (sql.includes('transfer_order_items')) return [[{ id: 71, quantity: 10, deducted_qty: direction === 'out' ? 0 : 10, received_qty: sql.includes('WHERE order_id=? AND product_id=?') ? 0 : 10, product_name: '请求伪造名' }]]
@@ -107,7 +111,7 @@ function transferFixture(direction = 'out') {
     '../../constants/documentStatusRules': { assertStatusAction: () => ({}) },
     './transfer-events.service': { TRANSFER_EVENT: {}, async record(actual, event) { assert.equal(actual, conn); recorded.push(event) } },
     '../../utils/requestContext': { getRequestId: () => null }, '../../utils/operationRequest': { async completeOperationRequest() {} },
-    './transfer-requests': { async beginTransferRequest() { return { replay: false } } }, '../../utils/qtyPrecision': {},
+    './transfer-requests': { async beginTransferRequest() { return { replay: false } } }, '../../utils/qtyPrecision': require('../backend/src/utils/qtyPrecision'),
   })
   return { service, events, calls, recorded }
 }

@@ -376,7 +376,7 @@ test('作废待确认期间同样冻结入口，并显示冻结的原箱', async
   expect(text).toContain('L000007')   // 原箱码（当前是 L000008）
 })
 
-test('完成箱子待确认：定位显示该箱，且「确认/清除」落在完成箱子上而不是完成打包', async () => {
+test('完成箱子待确认：显示原箱并核原回执，不能凭人工猜测清除原记录', async () => {
   // 回归护栏：共用「当前待确认」位次的链里**必须保留 finishAction**。
   // 漏掉它会让 frozenRecord 变 null、查询/清除落到 finalizeAction —— 等于把既有的
   // 「完成箱子」恢复入口改回归了。
@@ -401,12 +401,11 @@ test('完成箱子待确认：定位显示该箱，且「确认/清除」落在�
   const confirmBtn = buttons.find(b => (b.textContent ?? '').includes('确认上次结果'))
   const clearBtn = buttons.find(b => (b.textContent ?? '').includes('清除记录'))
   expect(confirmBtn).toBeTruthy()
-  expect(clearBtn).toBeTruthy()
+  expect(clearBtn).toBeUndefined()
 
   await act(async () => { confirmBtn!.click() })
   expect(st.finishConfirmCalls).toBe(1)   // 查询走的是**完成箱子**
-  await act(async () => { clearBtn!.click() })
-  expect(st.finishClearCalls).toBe(1)     // 清除走的是**完成箱子**
+  expect(st.finishClearCalls).toBe(0)     // 清除走的是**完成箱子**
 })
 
 test('C3 完成箱子恢复：列表 status=2 不能当本次成功，必须靠原键回执', async () => {

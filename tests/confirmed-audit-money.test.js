@@ -9,9 +9,9 @@ function load(file, stubs) {
   vm.runInNewContext(fs.readFileSync(filename, 'utf8'), { module, require: id => id in stubs ? stubs[id] : fallback(id) })
   return module.exports
 }
-test('account refresh writes exact four decimal balance after signed accumulation', async () => {
+test('account refresh stores exact cent balances in compatible DECIMAL4 after signed accumulation', async () => {
   const svc = load('modules/finance/finance-accounts.service.js', { '../../config/db': {}, '../../utils/codeGenerator': {} })
-  for (const [opening, delta, expected] of [['0.1','0.2','0.3000'],['-0.2','0.1','-0.1000'],['9999999999.9998','0.0001','9999999999.9999']]) {
+  for (const [opening, delta, expected] of [['0.1','0.2','0.3000'],['-0.2','0.1','-0.1000'],['9999999999.98','0.01','9999999999.9900']]) {
     let saved
     await svc.refreshBalance({ query: async (sql, args) => {
       if (sql.includes('SELECT opening')) return [[{ opening_balance: opening }]]
@@ -21,7 +21,7 @@ test('account refresh writes exact four decimal balance after signed accumulatio
     assert.equal(saved, expected)
   }
 })
-test('receipt allocations settle exactly and reject amounts finer than four decimals', async () => {
+test('receipt allocations settle exact cents and reject fractional-cent actual cash', async () => {
   for (const bad of [false, true]) {
     let receiptWrite, recordWrites = []
     const conn = { beginTransaction: async () => {}, commit: async () => {}, rollback: async () => {}, release() {}, query: async (sql, args) => {
@@ -41,7 +41,7 @@ test('receipt allocations settle exactly and reject amounts finer than four deci
       '../accounting/finance-period.guard': { assertFinancePeriodOpen: async () => ({}) },
     })
     const run = () => svc.settle(1, { allocations: [{ recordId: 1, amount: bad ? 0.1000001 : 0.1 }, { recordId: 2, amount: 0.2 }] }, {}, 'key')
-    if (bad) await assert.rejects(run(), e => e.code === 'MONEY_PRECISION_INVALID')
+    if (bad) await assert.rejects(run(), e => e.code === 'CASH_PRECISION_INVALID')
     else {
       const result = await run()
       assert.equal(result.settledAmount, 0.3)

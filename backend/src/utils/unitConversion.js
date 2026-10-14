@@ -2,7 +2,7 @@ const AppError = require('./AppError')
 const { assertQtyPrecision, assertQtyScale } = require('./qtyPrecision')  // 商品级数量精度开关（迁移 254）
 
 /**
- * 多计量单位折算（文档03 · 方案A）——采购/销售建单落库前把「录入单位口径」折算成「基本单位口径」。
+ * 多计量单位折算（文档03 · 方案A）——采购及必要历史退货落库前把「录入单位口径」折算成「基本单位口径」。
  * 单一权威口径：库存事实层永远只用基本单位记数，换算只发生在这一步（进入库存/账款链路之前）。
  * 铁律：entry_* 三列（entry_unit/entry_qty/conversion_rate）只用于回显/打印/审计，**绝不参与库存/账款计算**。
  *
@@ -71,6 +71,7 @@ async function foldEntryItem(conn, item) {
 
 /** Batch unit metadata; same fold rule as the ordinary single-item entry. */
 async function foldEntryItemsBatch(conn, items) {
+  await assertQtyPrecision(conn, items.map((item, n) => ({ productId: item.productId, qty: item.quantity, label: `第 ${n + 1} 行录入数量` })))
   const ids = [...new Set(items.filter(i => i.entryUnit && i.entryUnit !== i.unit).map(i => Number(i.productId)))]
   const [units] = ids.length ? await conn.query('SELECT product_id,unit_name,conversion_rate FROM product_units WHERE product_id IN (?)', [ids]) : [[]]
   const out = items.map(item => {
@@ -91,11 +92,12 @@ async function foldEntryItemsBatch(conn, items) {
 
 /** 便捷：批量折算一组明细（顺序 await，含 product_units 查询）。 */
 async function foldEntryItems(conn, items) {
+  await assertQtyPrecision(conn, items.map((item, n) => ({ productId: item.productId, qty: item.quantity, label: `第 ${n + 1} 行录入数量` })))
   const out = []
   for (const item of items) out.push(await foldEntryItem(conn, item))
   // 折算完成后按商品开关校验数量精度（迁移 254）：「只允许整数」的商品，折算到基本单位
-  // 的结果必须是整数。放在这一层而不是各模块里，是为了让销售建单/改单/改单申请、采购、
-  // 退货这些录入路径共用同一条校验——漏掉任何一条都会让用户绕过开关。
+  // 的结果必须是整数。放在这一层而不是各模块里，是为了让采购和退货均验证当前商品的录入量及基础量，
+  // 退货另按原出库事实额度校验；新销售已经没有单位折算路径——漏掉任何一条都会让用户绕过开关。
   await assertQtyPrecision(conn, out.map((item, index) => ({
     productId: item.productId,
     qty: item.quantity,

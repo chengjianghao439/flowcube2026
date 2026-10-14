@@ -8,14 +8,16 @@ export interface ReturnItem { dispatchComponentId?: number | null; commercialCom
 export interface ReturnLinkedTask { id:number; taskNo:string; status:number; statusName:string; rejectedQty?:number; rejectedContainers?:RejectedContainer[] }
 export interface PurchaseReturn { id:number; returnNo:string; supplierId:number; supplierName:string; warehouseId:number; warehouseName:string; purchaseOrderId?:number|null; purchaseOrderNo?:string; status:1|2|3|4; statusName:string; totalAmount:number; remark?:string; operatorName:string; createdAt:string; items?:ReturnItem[]; task?:ReturnLinkedTask|null }
 export interface ReverseTaskContainer { id:number; barcode:string; qty:number; productId:number; productName:string }
+export interface CashMoneyProof { moneyPrecision?: 2; cashPolicy?: 'cash-cents-v1' }
+
 export interface SaleReturnReverseTask {
   id:number; taskNo:string; status:number; statusName:string
   shippedAt?:string|null; createdAt:string; containers:ReverseTaskContainer[]
 }
-export interface SaleReturn { commercialModel?: 'kit-v1'; id:number; returnNo:string; customerId:number; customerName:string; warehouseId:number; warehouseName:string; saleOrderId?:number|null; saleOrderNo?:string; status:1|2|3|4; statusName:string; totalAmount:number; remark?:string; operatorName:string; createdAt:string; items?:ReturnItem[]; task?:ReturnLinkedTask|null; reverseTask?:SaleReturnReverseTask|null }
+export interface SaleReturn extends CashMoneyProof { moneyModel?: 'ordinary-net-v1'; amountBasis?: 'estimated_net' | 'executed_net'; commercialModel?: 'kit-v1'; id:number; returnNo:string; customerId:number; customerName:string; warehouseId:number; warehouseName:string; saleOrderId?:number|null; saleOrderNo?:string; status:1|2|3|4; statusName:string; totalAmount:number; remark?:string; operatorName:string; createdAt:string; items?:ReturnItem[]; task?:ReturnLinkedTask|null; reverseTask?:SaleReturnReverseTask|null }
 export interface ReturnSourceOrderItem { dispatchComponentId?: number; commercialComponentId?: number; sourceQuantity?: number; sourceBudgetAmount?: number; sourceFinancialEstimate?: number; actualQualifiedQty?: number; actualRefundGross?: number; actualRefundAmount?: number; kind?: ReturnSourceLabels['kind']; kitCode?: string | null; kitName?: string | null; groupId?: number; lineKey?: string; taskId?: number; taskNo?: string | null; confirmedAt?: string | null; warehouseId?: number; warehouseName?: string | null; allowDecimalQty?: boolean | null; sourceItemId:number; productId:number; productCode:string; productName:string; articleNumber?:string|null; spec?:string|null; color?:string|null; unit:string; quantity:number; returnedQty:number; remainingQty:number; unitPrice:number; amount:number }
 export interface PurchaseReturnSourceOrder { id:number; orderNo:string; supplierId:number; supplierName:string; warehouseId:number; warehouseName:string; items:ReturnSourceOrderItem[] }
-export interface SaleReturnSourceOrder { commercialModel?: 'kit-v1'; commercialRevision?: number; id:number; orderNo:string; customerId:number; customerName:string; warehouseId:number; warehouseName:string; items:ReturnSourceOrderItem[] }
+export interface SaleReturnSourceOrder extends CashMoneyProof { moneyModel?: 'ordinary-net-v1'; netAmountStatus?: 'save_to_determine'; commercialModel?: 'kit-v1'; commercialRevision?: number; id:number; orderNo:string; customerId:number; customerName:string; warehouseId:number; warehouseName:string; items:ReturnSourceOrderItem[] }
 
 // ─── 退货 PDA 任务 ──────────────────────────────────────────────────
 export interface ReturnTaskItem {

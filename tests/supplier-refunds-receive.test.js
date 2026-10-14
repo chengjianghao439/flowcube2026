@@ -89,7 +89,7 @@ for(const defect of ['ap','pr','entry'])test('one ten-thousandth above current b
   if(defect==='ap')f.data.payment_records[0].paid_amount='3.9999'
   if(defect==='pr')f.data.supplier_refund_allocations.push({id:99,refund_id:99,payment_record_id:31,purchase_return_id:11,entry_id:21,amount:'2.0001',budget_state:'received'})
   if(defect==='entry')f.data.supplier_refund_allocations.push({id:99,refund_id:99,payment_record_id:31,purchase_return_id:99,entry_id:21,amount:'96.0001',budget_state:'received'})
-  const before=f.snapshot();await assert.rejects(receive(f),e=>e.code==='SUPPLIER_REFUND_BUDGET_EXCEEDED');assert.deepEqual(f.data,before)
+  const before=f.snapshot();await assert.rejects(receive(f),e=>e.code===(defect==='ap'?'CASH_LEGACY_PRECISION_REVIEW_REQUIRED':'SUPPLIER_REFUND_BUDGET_EXCEEDED'));assert.deepEqual(f.data,before)
 })
 for(const failure of ['fund','balance','ap','allocStatus','statement','ledger','event','received','operation'])test('all money and source state rolls back on '+failure,async()=>{
   const f=await prepared({mutate:d=>{d.reconciliation_statements=[{id:81,type:1,status:2,deleted_at:null}];d.reconciliation_statement_items=[{id:91,statement_id:81,record_id:31}]}})
@@ -253,9 +253,9 @@ function originalPR(f){
   const transition=load('utils/statusTransition.js',{'./AppError':AppError,'./sqlIdentifier':ids})
   const status=load('constants/documentStatusRules.js',{'../utils/AppError':AppError})
   const wt=load('constants/warehouseTaskStatus.js',{'../utils/AppError':AppError})
-  const lock=load('modules/returns/returns.purchase-lock.js',{'../../utils/AppError':AppError,'../../utils/warehouseScope':scope,'../../utils/statusTransition':transition})
+  const lock=load('modules/returns/returns.purchase-lock.js',{'../purchase/purchase.cash-money':require('../backend/src/modules/purchase/purchase.cash-money'),'../../utils/cashMoney':require('../backend/src/utils/cashMoney'),'../../utils/AppError':AppError,'../../utils/warehouseScope':scope,'../../utils/statusTransition':transition})
   return load('modules/returns/returns-purchase.service.js',{
-    '../../config/db':{pool:{getConnection:async()=>f.conn}},'../../utils/AppError':AppError,
+    '../../config/db':{pool:{getConnection:async()=>f.conn}},'../purchase/purchase.cash-money':require('../backend/src/modules/purchase/purchase.cash-money'),'../../utils/cashMoney':require('../backend/src/utils/cashMoney'),'../../utils/AppError':AppError,
     '../../utils/statusTransition':transition,'../../constants/documentStatusRules':status,
     './return-events.service':{RETURN_EVENT:{CANCELLED:'cancelled',CANCEL_REQUESTED:'cancelRequested'},record:async(conn,event)=>{assert.equal(conn,f.conn);assert.equal(event.payload.supplierRefundReceived,true);assert.match(event.description,/财务核对/)}},
     '../../constants/warehouseTaskStatus':wt,'../../utils/requestContext':{getRequestId:()=>null},'../../utils/operationRequest':{},

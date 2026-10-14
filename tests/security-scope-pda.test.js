@@ -15,12 +15,14 @@ function load(file, mocks) {
 function scope(pool) { return load('backend/src/utils/warehouseScope.js', { '../config/db': { pool } }) }
 function tx(query) { return { query, beginTransaction: async () => {}, commit: async () => {}, rollback: async () => {}, release() {} } }
 function returns(task = { id: 1, warehouse_id: 2, status: 3 }) {
-  const calls = [], pool = { query: async (sql, params) => { calls.push({ sql, params }); return [[]] } }
+  const calls = [], pool = { query: async (sql, params) => { if(sql==='SELECT warehouse_id FROM return_tasks WHERE id=? AND deleted_at IS NULL'){calls.push('scope:peek');assert.equal(params[0],task.id);return [[{warehouse_id:task.warehouse_id}]]}calls.push({ sql, params }); return [[]] } }
   const svc = load('backend/src/modules/return-tasks/return-tasks.service.js', {
     '../../config/db': { pool }, '../../utils/warehouseScope': scope(pool),
     '../../engine/containerEngine': { CONTAINER_STATUS: {} }, '../../utils/codeGenerator': {}, './return-tasks.labels': {},
     '../../utils/statusTransition': { lockStatusRow: async () => { calls.push('lock'); return task } },
-    '../sale/sale.commercial-returns': { lockExecution: async () => {} },
+    '../sale/sale.commercial-returns': { lockExecution: async () => {calls.push('kit:proof')} },
+    // Net-basis locking has separate actual-module tests; preserve this task-scope-before-replay boundary.
+    '../sale/sale.ordinary-return-money': { lockReturn: async () => {calls.push('ordinary:proof')} },
     '../../utils/operationRequest': { beginResourceOperationRequest: async () => { calls.push('receipt'); return { replay: true, responseData: { taskId: 1 } } } },
   })
   return { svc, calls, pool }
@@ -29,19 +31,19 @@ for (const method of ['receive', 'check', 'putaway']) {
   test(`return ${method} rejects user scope before replay`, async () => {
     const h = returns()
     await assert.rejects(() => h.svc[method](h.pool, 1, { requestKey: 'r', pdaWarehouseId: 2, scopeWarehouseIds: [1] }), e => e.statusCode === 403)
-    assert.deepEqual(h.calls, ['lock'])
+    assert.deepEqual(h.calls, ['scope:peek'])
   })
   test(`return ${method} requires device warehouse before replay`, async () => {
     for (const pdaWarehouseId of [null, 1]) {
       const h = returns()
       await assert.rejects(() => h.svc[method](h.pool, 1, { requestKey: 'r', pdaWarehouseId, scopeWarehouseIds: [2] }), e => e.statusCode === 403)
-      assert.deepEqual(h.calls, ['lock'])
+      assert.deepEqual(h.calls, ['scope:peek'])
     }
   })
   test(`return ${method} preserves an authorized original receipt regardless of terminal task status`, async () => {
     const h = returns({ id: 1, warehouse_id: 2, status: 5 })
     assert.equal((await h.svc[method](h.pool, 1, { requestKey: 'r', pdaWarehouseId: 2, scopeWarehouseIds: [2] })).taskId, 1)
-    assert.deepEqual(h.calls, ['lock', 'receipt'])
+    assert.deepEqual(h.calls, method==='receive'?['scope:peek','ordinary:proof','lock','receipt']:['scope:peek','ordinary:proof','kit:proof','lock','receipt'])
   })
 }
 test('return PDA queue intersects device warehouse with user scope and rejects unbound devices', async () => {

@@ -31,17 +31,26 @@ async function fixture(amount='4.0000',gross='100.0000',options={}) {
     }
   }})
   const body=baseFixture.input(301)
-  body.amount=amount;body.allocations[0].amount=amount
+  const legacy=money.moneyUnits(amount)%100n!==0n
+  body.amount=legacy?'1.0000':amount;body.allocations[0].amount=body.amount
   if(options.refundDate)body.refundDate=options.refundDate
   f.data.purchase_returns[0].total_amount=gross
   f.data.purchase_return_items[0].quantity='1.00'
   f.data.purchase_return_items[0].unit_price=gross
+  f.data.purchase_return_items[0].amount=gross
   f.data.purchase_order_items[0].unit_price=gross
+  f.data.purchase_order_items[0].amount=money.moneyText(money.moneyUnits(gross)*10n)
+  f.data.purchase_orders[0].total_amount=f.data.purchase_order_items[0].amount
   if(options.creatorId)f.data.sys_users.push({...f.data.sys_users[0],id:options.creatorId,real_name:'creator'})
   const created=await f.module('service').create(body,{...f.options,...(options.creatorId?{userId:options.creatorId}:{})})
   await f.module('service').confirm(created.id,{operationUuid:baseFixture.uuid(302)},f.options)
   const receiveBody={operationUuid:baseFixture.uuid(303),...(options.receiveReason===undefined?{}:{reason:options.receiveReason})}
   const ack=options.prepareOnly?{id:created.id}:await f.module('service').receive(created.id,receiveBody,{...f.options,postCommit:async()=>{}})
+  if(legacy){
+    const historical=baseFixture.seedLegacyCash(f,amount,created.id)
+    Object.assign(body,historical)
+    if(!options.prepareOnly)ack.amount=historical.amount
+  }
   Object.assign(f.data,{
     acct_accounts:[{id:1,company_id:1,code:'1001',name:'库存现金'},{id:2,company_id:1,code:'1002',name:'银行存款'},{id:3,company_id:1,code:'2202',name:'应付账款'}],
     acct_vouchers:[],acct_voucher_entries:[],acct_periods:[],
@@ -75,12 +84,19 @@ async function fixture(amount='4.0000',gross='100.0000',options={}) {
       if(sql.includes('DATE_FORMAT')){const period=args.at(-1);rows=rows.filter(t=>String(t.voucher_date_override||t.happened_at).replaceAll('-','').slice(0,6)===period)}
       return [rows.map(copy)]
     }
+    if(sql.startsWith('SELECT id,company_id,source_type,source_id,source_period,source_root_id,reversed_id,is_reversal,status,'))return [state.acct_vouchers.filter(v=>v.company_id===args[0]&&args[1].includes(v.source_type)).map(copy)]
+    if(sql.startsWith('SELECT e.voucher_id,e.account_id,e.account_code AS code,'))return [[]]
+    if(sql.startsWith('SELECT t.id,t.biz_type,t.direction,t.amount,t.happened_at,'))return [state.finance_account_transactions.filter(t=>[1,2,3,5].includes(t.biz_type)).map(t=>({...copy(t),source_account_id:state.finance_accounts.find(a=>a.id===t.account_id)?.id,source_account_type:state.finance_accounts.find(a=>a.id===t.account_id)?.type}))]
+    if(sql.startsWith('SELECT pr.id,pr.order_id,pr.created_at,pr.debit_account_code,'))return [[]]
     // Finite original domains have no rows in this accounting projection fixture.
     if(sql.startsWith('SELECT f.source_id AS id, COALESCE(SUM(f.tax_amount),0) tax FROM fin_invoices f')){assert.match(sql,/f.company_id = \?/);assert.equal(args.length,1);return [[]]}
     if(sql.startsWith('SELECT pr.order_id AS poId,')){assert.match(sql,/FROM payment_records pr JOIN purchase_orders po/);return [[]]}
     if(sql.startsWith('SELECT t.id AS txnId,')){assert.match(sql,/WHERE t.biz_type IN \(1, 2, 3, 5\)$/);return [[]]}
     if(sql.startsWith('SELECT id, return_no, supplier_id, supplier_name, total_amount, updated_at AS vdate FROM purchase_returns')){assert.match(sql,/WHERE status = 3 AND deleted_at IS NULL/);return [[]]}
     if(sql.startsWith('SELECT sr.id, sr.return_no, sr.customer_id,')){assert.match(sql,/WHERE sr.status = 3 AND sr.deleted_at IS NULL/);return [[]]}
+    if(sql.startsWith('SELECT sri.id FROM sale_return_items sri JOIN sale_returns sr'))return [[]]
+    if(sql.startsWith('SELECT sr.id FROM sale_returns sr LEFT JOIN sale_ordinary_return_bases'))return [[]]
+    if(sql.startsWith('SELECT r.*,sri.return_id,sri.sale_item_id'))return [[]]
     if(sql.startsWith('SELECT COUNT(*) AS missing FROM sale_return_items sri'))return [[{missing:0}]]
     if(sql.startsWith('SELECT ic.id, ic.check_no,')){assert.match(sql,/WHERE ic.status = 2 AND ic.deleted_at IS NULL/);return [[]]}
     if(sql.startsWith('SELECT pr.id, pr.order_no, pr.party_name,')){assert.match(sql,/pr.order_id IS NULL AND pr.debit_account_code IS NOT NULL$/);return [[]]}
@@ -157,17 +173,19 @@ async function fixture(amount='4.0000',gross='100.0000',options={}) {
     period:'modules/accounting/accounting.period.service.js',periodLock:'modules/accounting/accounting.period-lock.js',
     accounting:'modules/refunds/supplier-refunds.accounting.js',postcommit:'modules/refunds/supplier-refunds.postcommit.js',
     vouchers:'modules/accounting/accounting.voucher.service.js',
+    completeness:'modules/accounting/accounting.period-completeness.js',
+    ordinaryMoney:'modules/sale/sale.ordinary-return-money.js',
   }
-  const pure={crypto,'node:crypto':crypto,'../../utils/sqlIdentifier':sqlIdentifier,'../../utils/AppError':AppError,'../../utils/decimalMoney':money,'../../utils/backendTime':backendTime,
+  const pure={'../purchase/purchase.cash-money':require('../../backend/src/modules/purchase/purchase.cash-money'),'../accounting/voucher-sale-money':require('../../backend/src/modules/accounting/voucher-sale-money'),'../../utils/cashMoney':require('../../backend/src/utils/cashMoney'),crypto,'node:crypto':crypto,'../../utils/sqlIdentifier':sqlIdentifier,'../../utils/AppError':AppError,'../../utils/decimalMoney':money,'../../utils/backendTime':backendTime,
     '../refunds/supplier-refunds.backfill-rules':null,'../../constants/voucherSource':voucherSource,'../../constants/permissions':{PERMISSIONS},'../../utils/logger':{info(){},warn(){}},
     '../../config/db':{pool:{getConnection:async()=>f.conn,query:(sql,args)=>f.conn.query(sql,args)}},
-    './voucher-sale-money':saleMoney,
+    './voucher-sale-money':saleMoney,'../accounting/voucher-sale-money':saleMoney,
     './voucher-sale-periods':{SALE_TYPES:['sale_revenue','sale_cogs'],loadSaleShipmentFacts:async()=>({orders:[]}),projectSaleShipments:()=>[],reconcileSalePeriods:async()=>[]},
     '../inbound-tasks/inbound-purchase-source':{assertPurchaseSettlementSources:async()=>{throw Error('unexpected old PO source in empty boundary')}},
     './voucher-sale-returns':{loadCommercialReturnVoucherAmounts:async()=>new Map()},
     './voucher-source-revisions':{reviseSourceVoucher:()=>{throw Error('unexpected old source revision')}},
   }
-  const aliases={'./voucher-supplier-refunds':'builder','../accounting/voucher-supplier-refunds':'builder','./voucher-engine':'engine','../accounting/voucher-engine':'engine','./accounting.period.service':'period','./accounting.period-lock':'periodLock','../accounting/accounting.period-lock':'periodLock','./supplier-refunds.accounting':'accounting'}
+  const aliases={'./voucher-supplier-refunds':'builder','../accounting/voucher-supplier-refunds':'builder','./voucher-engine':'engine','../accounting/voucher-engine':'engine','./accounting.period.service':'period','./accounting.period-completeness':'completeness','../sale/sale.ordinary-return-money':'ordinaryMoney','./accounting.period-lock':'periodLock','../accounting/accounting.period-lock':'periodLock','./supplier-refunds.accounting':'accounting'}
   function load(name){
     if(Object.hasOwn(cache,name))return cache[name]
     const filename=path.join(base,files[name])

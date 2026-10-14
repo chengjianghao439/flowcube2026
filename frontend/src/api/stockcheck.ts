@@ -17,11 +17,11 @@ export const getPendingScanChecksApi = () => client.get<PendingScanCheck[]>('/st
 /** PDA 作业页：该盘点单的明细行（含账面/已扫容器数与已扫明细） */
 export const getScanCheckItemsApi = (id: number) => client.get<ScanCheckDetail>(`/stockcheck/${id}/scan-items`)
 /** 提交某行现场扫到的全部容器（整行替换语义，天然幂等；实盘数由各行实盘之和派生） */
-export const saveCheckItemScansApi = (id: number, itemId: number, scans: { barcode: string; countedQty?: number }[], requestKey?: string) =>
+export const saveCheckItemScansApi = (id: number, itemId: number, scans: { barcode: string; countedQty?: number }[], requestKey?: string, config?: Parameters<typeof client.post>[2]) =>
   client.post<{ itemId: number; scannedContainers: number; actualQty: number; bookQty: number; diffQty: number }>(
     `/stockcheck/${id}/items/${itemId}/scan`,
     { scans },
-    { skipGlobalError: true, headers: requestKey ? withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' }) : { 'X-Client': 'pda' } },
+    { ...config, skipGlobalError: true, headers: { ...config?.headers, 'X-Client': 'pda', ...(requestKey ? withRequestKeyHeaders(requestKey) : {}) } },
   )
 
 // 分批盘点 ABC / 候选（文档 08）

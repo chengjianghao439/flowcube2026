@@ -53,7 +53,7 @@ function qtyPrecisionProblem(policy, qty, label = '数量') {
   const n = Number(qty)
   if (policy.allowDecimal === false && hasFraction(n)) {
     const who = policy.name ? `商品「${policy.name}」` : '该商品'
-    return { code: CODE_INTEGER_REQUIRED, message: `${who}只能按整数出入库，${label}不能填 ${qty}` }
+    return { code: CODE_INTEGER_REQUIRED, message: `${who}仅允许整数数量，${label}不能填 ${qty}` }
   }
   return null
 }
@@ -75,12 +75,12 @@ function assertQtyPrecisionWith(policy, qty, label = '数量') {
  * @returns {Promise<Map<number, { id: number, name: string, code: string, allowDecimal: boolean }>>}
  */
 async function loadQtyPolicies(conn, productIds) {
-  const ids = [...new Set((productIds || []).map(Number).filter(Number.isInteger))]
+  const ids = [...new Set((productIds || []).map(Number).filter(Number.isInteger))].sort((a,b) => a-b)
   const out = new Map()
   for (const id of ids) out.set(id, null) // 商品不存在时保持 null，调用方按「放行」处理
   if (!ids.length) return out
   const [rows] = await conn.query(
-    'SELECT id, code, name, allow_decimal_qty FROM product_items WHERE id IN (?)',
+    'SELECT id, code, name, allow_decimal_qty FROM product_items WHERE id IN (?) ORDER BY id FOR SHARE',
     [ids],
   )
   for (const row of rows) {
@@ -102,13 +102,14 @@ async function loadQtyPolicies(conn, productIds) {
  * @param {Array<{ productId: number, qty: number|string, label?: string }>} rows
  */
 async function assertQtyPrecision(conn, rows) {
-  const list = (rows || []).filter((r) => r && r.productId != null && r.qty !== undefined && r.qty !== null)
+  const list = (rows || []).filter(r => r && r.productId != null && r.qty !== undefined && r.qty !== null)
   if (!list.length) return
   for (const row of list) assertQtyScale(row.qty, row.label || '数量')
-  const policies = await loadQtyPolicies(conn, list.map((r) => r.productId))
-  for (const row of list) {
-    assertQtyPrecisionWith(policies.get(Number(row.productId)), row.qty, row.label || '数量')
-  }
+  // The product row is the policy mutex. Current shared reads serialize with
+  // product.update's exclusive lock until this mutation transaction commits.
+  // A historical snapshot or client option can never exempt a quantity write.
+  const policies = await loadQtyPolicies(conn, list.map(r => r.productId))
+  for (const row of list) assertQtyPrecisionWith(policies.get(Number(row.productId)), row.qty, row.label || '数量')
 }
 
 module.exports = {

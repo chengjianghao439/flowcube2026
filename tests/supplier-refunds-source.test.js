@@ -70,3 +70,57 @@ test('duplicate exact OUT triple is refused before choosing a row by money/accou
  const f=fixture({mutate:d=>d.finance_account_transactions.push({...d.finance_account_transactions[0],id:52,account_id:999,amount:'0.0001',happened_at:'2026-10-02'})})
  await assert.rejects(source(f),e=>e.code==='SUPPLIER_REFUND_SOURCE_INVALID')
 })
+
+const receiveFixture = require('./helpers/supplier-refunds-receive-fixture')
+function newCashFixture(options = {}) {
+  return receiveFixture.fixture({ ...options, transformSource: source => {
+    if (process.env.SUPPLIER_RF_SOURCE_MUTANT === 'create_gate') source = source.replace('    source.assertReturnCash(ctx)\n', '')
+    if (process.env.SUPPLIER_RF_SOURCE_MUTANT === 'existing_write_gate') source = source.replace('  source.assertReturnCash(frozen.payment)\n', '')
+    if (process.env.SUPPLIER_RF_SOURCE_MUTANT === 'legacy_basis') source = source.replace('  const {items,original}=cashSource', '  if(!pr.cash_execution_basis)return\n  const {items,original}=cashSource')
+    return source
+  } })
+}
+function legacyDecimalSource(data, { centHead = false } = {}) {
+  Object.assign(data.purchase_orders[0], { total_amount: '3333.0000' })
+  Object.assign(data.purchase_order_items[0], { quantity: '10000.00', unit_price: '0.3333', amount: '3333.0000' })
+  Object.assign(data.purchase_returns[0], { total_amount: centHead ? '33.3300' : '0.3333' })
+  Object.assign(data.purchase_return_items[0], { quantity: centHead ? '100.00' : '1.00', unit_price: '0.3333', amount: centHead ? '33.3300' : '0.3333' })
+  Object.assign(data.payment_records[0], { total_amount: '3333.0000', paid_amount: '3333.0000', balance: '0.0000' })
+  data.payment_entries[0].amount = '3333.0000'; data.finance_account_transactions[0].amount = '3333.0000'
+}
+const legacyInput = () => ({ ...receiveFixture.input(), amount: '0.3300', allocations: [{ entryId: 21, amount: '0.3300' }] })
+for (const centHead of [false, true]) test('new RF refuses original PR ' + (centHead ? 'cent head with unproved executable decimal-price source' : 'subcent gross') + ' before durable facts', async () => {
+  const f = newCashFixture({ mutate: data => legacyDecimalSource(data, { centHead }) }), before = f.snapshot()
+  assert.equal((await f.module('service').getSource(11, 9)).grossAmount, centHead ? '33.3300' : '0.3333')
+  await assert.rejects(f.module('service').create(legacyInput(), f.options), e => e.statusCode === 409 && (e.code === 'CASH_LEGACY_PRECISION_REVIEW_REQUIRED' || e.code === 'PURCHASE_CASH_BASIS_REQUIRED'))
+  assert.deepEqual(f.data, before)
+})
+async function persistedLegacySource(status) {
+  // Historical source facts are seeded through the exact pre-gate VM behavior,
+  // never a live API. Only the two new source checks are absent while seeding;
+  // all canonical payload/identity/OUT, status and original ACK proofs stay real.
+  const old = receiveFixture.fixture({ mutate: legacyDecimalSource, transformSource: source => source
+    .replace('    source.assertReturnCash(ctx)\n', '')
+    .replace('  source.assertReturnCash(frozen.payment)\n', '') })
+  const svc = old.module('service'); await svc.create(legacyInput(), old.options)
+  if (status >= 2) await svc.confirm(61, { operationUuid: receiveFixture.uuid(2) }, old.options)
+  if (status === 3) await svc.receive(61, { operationUuid: receiveFixture.uuid(3) }, { ...old.options, postCommit: async () => {} })
+  return newCashFixture({ mutate: data => Object.assign(data, old.snapshot()) })
+}
+for (const status of [1, 2, 3]) test('persisted decimal-price PR keeps historical GET/ACK/replay/cancel at RF status ' + status, async () => {
+  const f = await persistedLegacySource(status), svc = f.module('service'), before = f.snapshot()
+  assert.equal((await svc.findById(61, 9)).amount, '0.3300')
+  assert.equal((await svc.getOwnOperation(receiveFixture.uuid(1), { action: 'supplier.refund.create', requestKey: 'fixed-key' }, 9)).status, 'success')
+  assert.equal((await svc.create(legacyInput(), f.options)).id, 61)
+  if (status >= 2) assert.equal((await svc.confirm(61, { operationUuid: receiveFixture.uuid(2) }, f.options)).status, 2)
+  if (status === 3) assert.equal((await svc.receive(61, { operationUuid: receiveFixture.uuid(3) }, f.options)).amount, '0.3300')
+  assert.deepEqual(f.data, before)
+  if (status < 3) {
+    const action = status === 1 ? () => svc.confirm(61, { operationUuid: receiveFixture.uuid(8) }, f.options) : () => svc.receive(61, { operationUuid: receiveFixture.uuid(8) }, { ...f.options, postCommit: async () => {} })
+    await assert.rejects(action(), e => e.statusCode === 409 && (e.code === 'CASH_LEGACY_PRECISION_REVIEW_REQUIRED' || e.code === 'PURCHASE_CASH_BASIS_REQUIRED'))
+    assert.deepEqual(f.data, before)
+    await svc.cancel(61, { operationUuid: receiveFixture.uuid(9) }, f.options)
+    assert.equal(f.data.supplier_refund_orders[0].status, 4)
+    assert.equal(f.data.finance_account_transactions.filter(t => t.biz_type === 6).length, 0)
+  }
+})

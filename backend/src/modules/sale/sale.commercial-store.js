@@ -21,11 +21,43 @@ async function save(conn, orderId, revision, resolved) {
     if (byPair.has(key)) throw new AppError('商品明细重复，无法保存套单，请保留输入并联系管理员',409,'SALE_COMMERCIAL_PHYSICAL_DUPLICATE')
     byPair.set(key, r)
   }
+  const retainedOnly = new Map()
+  for (const g of resolved.groups) for (const c of g.components) {
+    const key = `${c.productId}:${g.warehouseId}`
+    retainedOnly.set(key, (retainedOnly.get(key) ?? true) && !!g.retained)
+  }
+  const items = resolved.items.map(i => {
+    const key = `${i.productId}:${i.warehouseId}`, original = byPair.get(key)
+    // An unchanged retained group keeps its exact saved entry/price facts.
+    // A newly recorded group uses the resolver's current fixed product unit.
+    if (original && retainedOnly.get(key) && original.unit === i.unit
+      && Number(original.quantity) === Number(i.quantity) && Number(original.amount) === Number(i.amount)) {
+      return { ...i, unit: original.unit, entryUnit: original.entry_unit, entryQty: original.entry_qty,
+        conversionRate: original.conversion_rate, unitPrice: original.unit_price, amount: original.amount,
+        allowDecimalQtySnapshot: original.allow_decimal_qty_snapshot }
+    }
+    return i
+  })
+  const changedUnitIds = items.filter(i => {
+    const original = byPair.get(`${i.productId}:${i.warehouseId}`)
+    return original && (original.unit !== i.unit || (original.entry_unit ?? original.unit) !== (i.entryUnit ?? i.unit))
+  }).map(i => Number(byPair.get(`${i.productId}:${i.warehouseId}`).id))
+  if (changedUnitIds.length) {
+    // Reusing an unfulfilled draft row is safe. Once it has fulfillment or
+    // return references, changing its unit would rewrite historical facts.
+    const [history] = await conn.query(`SELECT i.id FROM sale_order_items i JOIN sale_orders o ON o.id=i.order_id
+      WHERE i.id IN (?) AND (o.status<>1 OR i.reserved_qty<>0 OR i.dispatched_qty<>0 OR i.shipped_qty<>0
+        OR EXISTS (SELECT 1 FROM warehouse_task_items ti JOIN warehouse_tasks t ON t.id=ti.task_id WHERE t.sale_order_id=i.order_id AND ti.product_id=i.product_id AND t.warehouse_id=i.warehouse_id)
+        OR EXISTS (SELECT 1 FROM sale_return_items r WHERE r.sale_item_id=i.id)
+        OR EXISTS (SELECT 1 FROM stock_reservations s WHERE s.ref_type='sale_order' AND s.ref_id=i.order_id AND s.product_id=i.product_id AND s.warehouse_id=i.warehouse_id)
+        OR EXISTS (SELECT 1 FROM sale_order_expected_bindings b WHERE b.sale_order_id=i.order_id AND b.product_id=i.product_id AND b.warehouse_id=i.warehouse_id)) LIMIT 1`, [changedUnitIds])
+    if (history.length) throw new AppError('该商品行已有履约或退货历史，不能改写原单位；请保留原行并按当前单位另建销售单',409,'SALE_FIXED_UNIT_CHANGED')
+  }
   // Never delete a historical physical row. All references (returns/reservations/tasks) retain their IDs.
   await conn.query('UPDATE sale_order_items SET quantity=0,amount=0 WHERE order_id=?', [orderId])
-  const rows = resolved.items.map(i => [byPair.get(`${i.productId}:${i.warehouseId}`)?.id || null,orderId,i.warehouseId,i.warehouseName,i.productId,i.productCode,i.productName,i.unit,i.entryUnit,i.articleNumber||null,i.spec||null,i.color||null,i.quantity,i.entryQty,i.conversionRate,i.unitPrice,i.amount])
-  if (rows.length) await conn.query(`INSERT INTO sale_order_items (id,order_id,warehouse_id,warehouse_name,product_id,product_code,product_name,unit,entry_unit,article_number,spec,color,quantity,entry_qty,conversion_rate,unit_price,amount) VALUES ?
-    ON DUPLICATE KEY UPDATE quantity=VALUES(quantity),entry_qty=VALUES(entry_qty),conversion_rate=VALUES(conversion_rate),unit_price=VALUES(unit_price),amount=VALUES(amount)`, [rows])
+  const rows = items.map(i => [byPair.get(`${i.productId}:${i.warehouseId}`)?.id || null,orderId,i.warehouseId,i.warehouseName,i.productId,i.productCode,i.productName,i.unit,i.entryUnit,i.articleNumber||null,i.spec||null,i.color||null,i.quantity,i.entryQty,i.conversionRate,i.unitPrice,i.amount,i.allowDecimalQtySnapshot ?? null])
+  if (rows.length) await conn.query(`INSERT INTO sale_order_items (id,order_id,warehouse_id,warehouse_name,product_id,product_code,product_name,unit,entry_unit,article_number,spec,color,quantity,entry_qty,conversion_rate,unit_price,amount,allow_decimal_qty_snapshot) VALUES ?
+    ON DUPLICATE KEY UPDATE unit=VALUES(unit),entry_unit=VALUES(entry_unit),quantity=VALUES(quantity),entry_qty=VALUES(entry_qty),conversion_rate=VALUES(conversion_rate),unit_price=VALUES(unit_price),amount=VALUES(amount),allow_decimal_qty_snapshot=VALUES(allow_decimal_qty_snapshot)`, [rows])
   const [physical] = await conn.query('SELECT id,product_id,warehouse_id FROM sale_order_items WHERE order_id=? ORDER BY id', [orderId])
   const ids = new Map(physical.map(p => [`${Number(p.product_id)}:${Number(p.warehouse_id)}`, Number(p.id)]))
   const retained = resolved.groups.filter(g => g.retained).map(g => g.id)

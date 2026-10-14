@@ -19,6 +19,7 @@ import PdaCard from '@/components/pda/PdaCard'
 import PdaBottomBar from '@/components/pda/PdaBottomBar'
 import PdaScanner from '@/components/pda/PdaScanner'
 import PdaFlash from '@/components/pda/PdaFlash'
+import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
 import { PdaLoading, PdaQueryError } from '@/components/pda/PdaEmptyState'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
@@ -103,17 +104,11 @@ function CheckWork({ checkId }: { checkId: number }) {
       setScanned([])
       refetch()
     },
-    // 断网重连兜底：回查该行扫码集是否已等于本次提交
-    resolveServerState: async ({ record }) => {
+    retryExecutor: (record, requestKey, config) => {
       const itemId = Number(record.metadata?.itemId)
-      const count = Number(record.metadata?.count)
-      if (!itemId) return { effective: false }
-      const d = await getScanCheckItemsApi(checkId).catch(() => null)
-      const row = d?.items.find(i => i.id === itemId)
-      if (row && row.actualQty != null && row.scannedContainerCount === count) {
-        return { effective: true, data: { scannedContainers: row.scannedContainerCount, actualQty: row.actualQty, bookQty: row.bookQty, diffQty: row.actualQty - row.bookQty }, message: '该商品扫码结果已记录' }
-      }
-      return { effective: false }
+      const body = record.metadata?.requestBody as { scans: { barcode: string; countedQty?: number }[] } | undefined
+      if (!itemId || record.metadata?.checkId !== checkId || !body || !Array.isArray(body.scans)) throw Error('原盘点内容不完整，请只查询并核对原操作')
+      return saveCheckItemScansApi(checkId, itemId, body.scans, requestKey, config)
     },
   })
 
@@ -144,12 +139,10 @@ function CheckWork({ checkId }: { checkId: number }) {
   const submit = useCallback(() => {
     if (!activeItem) return
     if (saveAction.submitBlocked) { err(saveAction.blockedReason || '当前不可提交'); return }
+    const requestBody = { scans: scanned.map(s => s.individual ? { barcode: s.barcode } : { barcode: s.barcode, countedQty: s.countedQty }) }
     saveAction.run(
-      (requestKey) => saveCheckItemScansApi(checkId, activeItem.id,
-        scanned.map(s => (s.individual ? { barcode: s.barcode } : { barcode: s.barcode, countedQty: s.countedQty })),
-        requestKey,
-      ).then(r => r as { scannedContainers: number; actualQty: number; bookQty: number; diffQty: number }),
-      { itemId: activeItem.id, count: scanned.length },
+      (requestKey, config, metadata) => saveCheckItemScansApi(checkId, Number(metadata!.itemId), (metadata!.requestBody as typeof requestBody).scans, requestKey, config),
+      { checkId, itemId: activeItem.id, productName: activeItem.productName, requestBody },
     ).catch((e: unknown) => err(formatPdaErrorMessage((e as { message?: string })?.message, '记录失败，请重试')))
   }, [activeItem, scanned, checkId, saveAction, err])
 
@@ -159,9 +152,14 @@ function CheckWork({ checkId }: { checkId: number }) {
     return totalCounted - activeItem.bookQty
   }, [activeItem, totalCounted])
 
-  if (isLoading) return <PdaLoading />
-  if (isError) return <div className="min-h-screen bg-background"><PdaHeader title="扫码盘点" onBack={() => navigate('/pda/stockcheck')} /><div className="mx-auto max-w-md p-4"><PdaQueryError onRetry={() => { void refetch() }} /></div></div>
-  if (!detail) return <div className="p-8 text-center text-muted-foreground">盘点单不存在</div>
+  const recoveryNotice = <PdaCriticalActionNotice blockedReason={saveAction.blockedReason} pendingRecord={saveAction.pendingRecord}
+    confirming={saveAction.confirming} phase={saveAction.phase} phaseMessage={saveAction.phaseMessage} lastErrorMessage={saveAction.lastErrorMessage}
+    onConfirm={() => { void saveAction.confirmPending() }} onRetry={saveAction.canRetry ? () => { void saveAction.retryPending().catch(e => err(e.message)) } : undefined}
+    onDismissError={() => saveAction.clearError()} />
+
+  if (isLoading) return <>{recoveryNotice}<PdaLoading /></>
+  if (isError) return <div className="min-h-screen bg-background"><PdaHeader title="扫码盘点" onBack={() => navigate('/pda/stockcheck')} /><div className="mx-auto max-w-md p-4">{recoveryNotice}<PdaQueryError onRetry={() => { void refetch() }} /></div></div>
+  if (!detail) return <>{recoveryNotice}<div className="p-8 text-center text-muted-foreground">盘点单不存在</div></>
 
   // ── 作业中：某商品逐只扫容器 ──
   if (activeItem) {
@@ -170,6 +168,7 @@ function CheckWork({ checkId }: { checkId: number }) {
         <PdaHeader title={activeItem.productCode || '盘点作业'} subtitle={`账面 ${activeItem.bookQty} ${activeItem.unit} · ${activeItem.bookContainerCount} 个在库条码`}
           backLabel="← 商品列表" onBack={() => { setActiveItem(null); setScanned([]) }} />
         <div className="max-w-md mx-auto flex-1 space-y-3 overflow-y-auto p-3 w-full">
+          {recoveryNotice}
           <PdaCard>
             <div className="mb-3"><PdaProductIdentity code={activeItem.productCode} name={activeItem.productName} view="detail" /></div>
             <p className="text-sm">
@@ -199,8 +198,10 @@ function CheckWork({ checkId }: { checkId: number }) {
                         type="number" min={0} max={s.bookQty} step={qtyStep(allowDecimalOf(activeItem?.productId))}
                         data-scanner-manual="true"
                         aria-label={`${s.barcode} 实盘数量`} className="min-h-11 w-20 text-right tabular-nums"
+                        disabled={saveAction.submitBlocked}
                         value={String(s.countedQty)}
                         onChange={e => {
+                          if (saveAction.submitBlocked) return
                           const v = Number(e.target.value)
                           setScanned(prev => prev.map(x => x.barcode === s.barcode ? { ...x, countedQty: Number.isFinite(v) ? v : 0 } : x))
                         }}
@@ -209,7 +210,7 @@ function CheckWork({ checkId }: { checkId: number }) {
                     </span>
                   )}
                   <button type="button" className="min-h-11 min-w-11 px-2 text-xs text-destructive-ink shrink-0"
-                    onClick={() => setScanned(prev => prev.filter(x => x.barcode !== s.barcode))}
+                    disabled={saveAction.submitBlocked} onClick={() => { if (!saveAction.submitBlocked) setScanned(prev => prev.filter(x => x.barcode !== s.barcode)) }}
                   >移除</button>
                 </div>
               ))}
@@ -218,7 +219,7 @@ function CheckWork({ checkId }: { checkId: number }) {
         </div>
         <PdaBottomBar>
           <PdaScanner onScan={(code) => { void addContainer(code) }} placeholder="扫描在架库存条码" disabled={checking || saveAction.submitBlocked} />
-          <Button size="lg" className="px-3 w-full" disabled={saveAction.phase === 'submitting' || checking} onClick={submit}>
+          <Button size="lg" className="px-3 w-full" disabled={saveAction.submitBlocked || saveAction.phase === 'submitting' || checking} onClick={submit}>
             {saveAction.phase === 'submitting' ? '提交中…' : `提交本商品（${scanned.length} 个条码 / 实盘 ${totalCounted}）`}
           </Button>
         </PdaBottomBar>
@@ -232,12 +233,14 @@ function CheckWork({ checkId }: { checkId: number }) {
     <div className="flex min-h-screen flex-col bg-background">
       <PdaHeader title={detail.checkNo} subtitle={`${detail.warehouseName} · 扫码盘点`} onBack={() => navigate('/pda/stockcheck')} />
       <div className="max-w-md mx-auto flex-1 space-y-2 overflow-y-auto p-3 w-full">
+        {recoveryNotice}
         {detail.items.length === 0 && <PdaCard><p className="py-8 text-center text-sm text-muted-foreground">该盘点单没有明细</p></PdaCard>}
         {detail.items.map(it => {
           const done = it.actualQty != null
           const diff = done && it.actualQty != null ? it.actualQty - it.bookQty : 0
           return (
-            <button key={it.id} className="w-full" onClick={() => {
+            <button key={it.id} className="w-full" disabled={saveAction.submitBlocked} onClick={() => {
+              if (saveAction.submitBlocked) return
               setActiveItem(it)
               // 断点续扫：回显已扫集（整行替换语义要求带全量重提交）
               setScanned(it.scans.map(s => ({ barcode: s.barcode, individual: s.individual, bookQty: s.countedQty, countedQty: s.countedQty })))

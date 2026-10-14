@@ -7,6 +7,8 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import TransferIn from './transfer-in'
 import TransferOut from './transfer-out'
 import TransferList from './transfer'
+import { useAuthStore } from '@/store/authStore'
+import type { User } from '@/types'
 import type { TransferOrder } from '@/api/transfer'
 
 const state = vi.hoisted(() => ({
@@ -23,6 +25,8 @@ vi.mock('@/hooks/usePdaFeedback', () => ({ usePdaFeedback: () => ({ flash: null,
 vi.mock('@/components/pda/PdaScanner', () => ({ default: () => null }))
 let root: Root, host: HTMLDivElement, qc: QueryClient
 beforeEach(() => {
+ useAuthStore.getState().login('synthetic', null, { id: 1, roleId: 1 } as User)
+
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
   vi.clearAllMocks()
   state.list = []
@@ -44,12 +48,12 @@ test('调拨列表读取失败时不把错误显示成两个空列表', async ()
   expect(host.textContent).not.toContain('暂无待出库调拨')
   expect(host.textContent).not.toContain('暂无待入库调拨')
 })
-afterEach(async () => { await act(async () => { root.unmount(); qc.clear() }); host.remove() })
+afterEach(async () => { await act(async () => { root.unmount(); qc.clear() }); host.remove(); useAuthStore.getState().logout() })
 
 test.each(['In', 'Out'])('scan%s keeps ambiguous container state pending and queries old records by bound action', async direction => {
   state.record = { action: `transfer.scan${direction}.31`, requestAction: `transfer.scan${direction}`, requestKey: 'legacy-key', label: '调拨', createdAt: '2026-09-05', metadata: { barcode: 'I123' } }
   await act(async () => root.render(<QueryClientProvider client={qc}><MemoryRouter initialEntries={['/transfer/31']}><Routes><Route path="/transfer/:id" element={direction === 'In' ? <TransferIn /> : <TransferOut />} /></Routes></MemoryRouter></QueryClientProvider>))
-  expect(state.receipt).toHaveBeenCalledWith('legacy-key', `transfer.scan${direction}.31`)
+  expect(state.receipt).toHaveBeenCalledWith('legacy-key', `transfer.scan${direction}.31`, expect.objectContaining({ automaticReplay: false, baseURL: expect.any(String) }))
   expect(state.remove).not.toHaveBeenCalled()
   expect(host.textContent).toContain('待确认')
   if (direction === 'In') expect(host.textContent).toContain('计划 10')

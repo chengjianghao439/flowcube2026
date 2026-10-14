@@ -28,11 +28,11 @@ function fixture(options = {}) {
   let data = {
     acct_companies:[{id:1,is_active:1}],sys_users:[{id:9,role_id:2,is_active:1,deleted_at:null,allow_self_approve:1,real_name:'fixture'}],sys_roles:[{id:2}],
     sys_role_permissions:allPermissions.map(permission=>({role_id:2,permission})),user_warehouse_scope:[{user_id:9,warehouse_id:8}],
-    purchase_orders:[{id:10,order_no:'PO10',supplier_id:4,warehouse_id:8,deleted_at:null}],
+    purchase_orders:[{id:10,order_no:'PO10',supplier_id:4,warehouse_id:8,total_amount:'30.0000',deleted_at:null}],
     purchase_returns:[{id:11,return_no:'PR11',purchase_order_id:10,purchase_order_no:'PO10',supplier_id:4,supplier_name:'fixture',warehouse_id:8,warehouse_name:'fixture',status:1,total_amount:'6.0000',deleted_at:null}],
     purchase_return_items:[{id:12,return_id:11,purchase_item_id:101,product_id:3,unit:'个',quantity:'2.00',unit_price:'3.0000',amount:'6.0000'}],
-    purchase_order_items:[{id:101,order_id:10,product_id:3,unit:'个',unit_price:'3.0000',quantity:'10.00'}],
-    payment_records:[{id:31,type:1,order_id:10,order_no:'PO10',paid_amount:'100.0000',total_amount:'100.0000'}],
+    purchase_order_items:[{id:101,order_id:10,product_id:3,unit:'个',unit_price:'3.0000',quantity:'10.00',amount:'30.0000'}],
+    payment_records:[{id:31,type:1,order_id:10,order_no:'PO10',paid_amount:'100.0000',total_amount:'100.0000',balance:'0.0000'}],
     payment_entries:[{id:21,record_id:31,amount:'100.0000',account_id:41,receipt_id:null,statement_id:null,payment_date:'2026-10-01'}],payment_receipts:[],reconciliation_statements:[],
     finance_accounts:[{id:41,company_id:1,is_active:0,deleted_at:'2026-09-01',type:1},{id:42,company_id:1,is_active:1,deleted_at:null,type:1}],
     finance_account_transactions:[{id:51,account_id:41,direction:2,amount:'100.0000',biz_type:2,biz_id:21,biz_no:'PO10',happened_at:'2026-10-01'}],
@@ -129,7 +129,7 @@ function fixture(options = {}) {
     }
   }
   const cache={}
-  const pure={ '../../utils/backendTime':require('../../backend/src/utils/backendTime'),'../../utils/AppError':AppError,'../../utils/decimalMoney':money,'../../utils/sqlIdentifier':ids,'../../constants/permissions':{PERMISSIONS},'node:crypto':crypto,'../../config/db':{pool:{getConnection:async()=>conn}},'../../constants/documentStatusRules':require('../../backend/src/constants/documentStatusRules') }
+  const pure={'../purchase/purchase.cash-money':require('../../backend/src/modules/purchase/purchase.cash-money'),'../accounting/voucher-sale-money':require('../../backend/src/modules/accounting/voucher-sale-money'),'../../utils/cashMoney':require('../../backend/src/utils/cashMoney'), '../../utils/backendTime':require('../../backend/src/utils/backendTime'),'../../utils/AppError':AppError,'../../utils/decimalMoney':money,'../../utils/sqlIdentifier':ids,'../../constants/permissions':{PERMISSIONS},'node:crypto':crypto,'../../config/db':{pool:{getConnection:async()=>conn}},'../../constants/documentStatusRules':require('../../backend/src/constants/documentStatusRules') }
   const domain=['rules','actor','source','operations','service','pr-gate','context']
   function module(name){if(Object.hasOwn(cache,name))return cache[name];const filename=path.join(base,`modules/refunds/supplier-refunds.${name}.js`);if(!fs.existsSync(filename))return cache[name]={};const loaded={exports:{}};cache[name]=loaded.exports
     vm.runInNewContext(fs.readFileSync(filename,'utf8'),{module:loaded,require:dep=>{if(Object.hasOwn(pure,dep))return pure[dep];const match=/^\.\/supplier-refunds\.(\w+(?:-\w+)?)$/.exec(dep);if(match&&domain.includes(match[1]))return module(match[1]);throw Error('Unstubbed F1 require '+dep)},Date,Buffer,console},{filename});return cache[name]=loaded.exports}

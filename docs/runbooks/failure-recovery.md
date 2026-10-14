@@ -156,10 +156,10 @@ curl -fsS http://127.0.0.1:3000/api/health
   请求失败（超时、404、非 200）只 `console.error` 后直接返回，**不弹窗、不阻塞**；业务功能照常跑。
   所以后端挂了不会拖垮桌面端作业，最多是没更新提示。
 - **PDA 关键作业不做离线自动重放**（刻意设计）：断网时 `useCriticalPdaAction` 直接阻断提交，防止重复；
-  已提交但结果未知的，恢复网络后先查回执（`GET /api/system/request-status/:key`）再回查业务状态兜底。
-- 现场操作不会因为后端重启丢数据：所有写操作走事务 + 幂等键（`X-Request-Key`），重试是安全的。
-- 若后端长时间不可用，桌面端只是「建单/查单」功能用不了，已登录会话（JWT 7 天）会保持，恢复后无需重登；
-  PDA 设备会话有自动续期，恢复后自动恢复。
+  已提交但结果未知的，恢复网络后查询本人原键原动作回执（`GET /api/system/request-status/:key`）。任务当前进度、旧收货箱数或相同盘点总数不能证明本次提交成功。
+- 已支持原操作恢复的 PC 手动出库、PDA 收货和盘点保存，在发送前持久化完整正文、原键及账号/服务器身份；超时、5xx、查不到、仍处理和查询失败均保留。只有原 success/failed 或首次明确4xx拒绝才能结束该次未决操作。查不到且原意图未过七天保留期（预留两分钟）、身份及正文完整时，员工可显式按原键原正文重试；不能改量或换键。其它关键 PDA 操作仅查询原结果，不由这个通用恢复入口自动执行。
+- 本地存储、Web Locks及所需WebCrypto不可用时不发送新的关键写入；原记录损坏或丢失须人工核对。删除浏览器数据、换客户端或origin可能丢失恢复证据，不能承诺所有现场写入都可安全重试。
+- 恢复还需当前有效账号、权限、服务器及PDA原设备身份。认证或设备会话已失效时需沿原机制重新登录/绑定，不能承诺后端重启后永不重登。
 
 ---
 
@@ -199,3 +199,11 @@ cat /proc/pressure/io
 - [ ] 若涉及库存：跑 `resync:inventory-stock` 或 `GET /api/inventory/check-consistency`
 - [ ] 若涉及备份恢复：`bash scripts/restore-check.sh` 通过（备份文件时间 + 导入 + 表数 + 关键表行数）。自动选最新文件时默认最多 48 小时，可用 `BACKUP_MAX_AGE_HOURS` 调整；显式传入历史文件时仅提示过期并验证其恢复能力。销售单多久没有新增与备份是否新鲜无关。
 - [ ] 若动过证书：`echo | openssl s_client -servername jixuflow.com -connect jixuflow.com:443 2>/dev/null | openssl x509 -noout -enddate`
+
+### 2026-10-13 云端第二批恢复补验与容量边界
+
+关键终态标记的安全保留、预算和时钟封存见[前端/PDA规范](../frontend-pda-conventions.md)。本次窄盘点恢复使用真实页面hook的`requestAction: stockcheck.scan`，独立首进程POST提交成功后丢弃响应、第二全新进程仅GET原结果；其SQL与零POST事实另见第二批交接证据，不以旧[1,1]夹具代替新[2,0]提交。实际设备quota耗尽、PDA WebLocks/WebCrypto、云端GUI、Windows及纸张均仍未验证；不删除pending、不重发新key、不改变后端去重保留。普通销售未知意图恢复S2未修复，relatedEvents指定异常历史权限缺口与受阻探针仍保持原边界。
+
+## 2026-10-13 第五批采购未知结果
+
+请购创建或plan.convert丢响应时保留原键和查询身份，先在原账号/服务器查询原动作回执。重挂只有查询；原提交页面仅在持完整原正文、先查not_found且原创建时刻七日减两分钟内可显式原键重试。not_found、超期、旧PR缺完整摘要、同键不同正文/selection、scope被撤均不是未执行证明；保留记录并核对原PR/plan/PO，不能换键或用当前草稿冒认原成功。服务端沿既有七日临时回执，不新增永久证明或自动修写历史。

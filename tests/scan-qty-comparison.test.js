@@ -19,7 +19,7 @@ function fixture({ mode = 'pick', required = 0.3, picked = 0.1, checked = 0, rem
     async query(sql, params) {
       if (sql.includes('CREATE TABLE')) { writes.push({ sql, params }); return [[]] }
       if (/^\s*(INSERT|UPDATE)/.test(sql)) { writes.push({ sql, params }); return [{ insertId: 12, affectedRows: 1 }] }
-      if (sql.includes('allow_decimal_qty')) return [[{ id: 7, name: '小数商品', allow_decimal_qty: 1 }]]
+      if (sql.includes('FROM product_items') && sql.includes('allow_decimal_qty')) return [[{ id: 7, name: '小数商品', allow_decimal_qty: 1 }]]
       if (sql.includes('FROM warehouse_tasks')) return [[{ id: 1, warehouse_id: 1, status: mode === 'pick' ? WT_STATUS.PICKING : WT_STATUS.CHECKING }]]
       if (sql.includes('FROM inventory_containers')) return [[{ id: 3, barcode: 'B3', product_id: 7, warehouse_id: 1, status: 1, remaining_qty: remaining, locked_by_task_id: 1 }]]
       if (sql.includes('GROUP BY item_id')) return [[{ item_id: 2, pick_sum: pickSum }]]

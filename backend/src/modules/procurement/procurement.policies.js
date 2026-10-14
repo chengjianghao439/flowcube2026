@@ -28,6 +28,7 @@ async function savePolicy({ productId, supplierId, entryUnit, packMultiple = 0, 
       if (Number(q) < 0) throw new AppError('包装倍数或起订量无效', 400)
       const baseQty = Number(q) * rate
       assertQtyScale(baseQty, `${label}折算数量`)
+      quantities.push({ productId, qty: q, label })
       quantities.push({ productId, qty: baseQty, label: `${label}折算数量` })
     }
     await assertQtyPrecision(conn, quantities)

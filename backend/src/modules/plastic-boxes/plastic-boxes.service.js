@@ -90,7 +90,7 @@ async function findById(id, scopeWarehouseIds = null) {
 // 误用不存在的 il.qty，一直 500，从未成功过）
 async function findMovements(id, scopeWarehouseIds = null) {
   await findById(id, scopeWarehouseIds)
-  return require('../inventory/inventory.service').getContainerLogs(id)
+  return require('../inventory/inventory.service').getContainerLogs(id, scopeWarehouseIds)
 }
 
 // warehouseName 由前端一并传来但这里不落库（容器只存 warehouse_id，名字查表取），

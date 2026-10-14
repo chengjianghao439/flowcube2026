@@ -207,6 +207,7 @@ async function createRecord(exec, {
 }
 
 async function create(args) {
+  if (args.rawRequest) return require('./print-jobs.raw').createRawRecord(args)
   return createRecord(pool, {
     ...args,
     reloadAfterCreate: true,

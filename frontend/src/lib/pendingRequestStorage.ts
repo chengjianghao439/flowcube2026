@@ -1,5 +1,8 @@
+import { compactTerminalAt, completeTerminalSlot } from './criticalTerminalStorage'
 const STORAGE_KEY = 'pda_pending_request_confirmations'
 const UNCLAIMED_KEY = 'pda_unclaimed_request_confirmations'
+const OWNED_PREFIX = 'pda_owned_request_v3:'
+const TERMINAL_PREFIX = 'pda_owned_terminal_v3:'
 export interface UnclaimedRequest { action: string; requestKey: string; requestAction?: string }
 let unclaimed: UnclaimedRequest[] = []
 let dirty = false
@@ -34,6 +37,41 @@ export function readPendingStorage(): { stored: unknown; unclaimed: UnclaimedReq
   return { stored, unclaimed, migrated }
 }
 export function memoryUnclaimedRequests() { return unclaimed }
+/** 新关键操作按账号和原键单独保存；登出只隐藏，不删除未确认业务身份。 */
+export function readOwnedCriticalPending(userId: number): unknown[] {
+  const result: unknown[] = []
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i)
+    if (!key?.startsWith(`${OWNED_PREFIX}${userId}:`)) continue
+    const record: unknown = JSON.parse(localStorage.getItem(key) || 'null')
+    if (!record || typeof record !== 'object' || !('requestKey' in record) || key !== `${OWNED_PREFIX}${userId}:${String(record.requestKey)}`) throw Error('原作业记录损坏，请保留记录并核对')
+    result.push(record)
+  }
+  return result
+}
+export function saveOwnedCriticalPending(userId: number, record: { requestKey: string }) {
+  const key = `${OWNED_PREFIX}${userId}:${record.requestKey}`, raw = JSON.stringify(record)
+  localStorage.setItem(key, raw)
+  if (localStorage.getItem(key) !== raw) throw Error('原作业记录保存失败，本次没有发送')
+}
+export function removeOwnedCriticalPending(userId: number, requestKey: string) {
+  const key = `${OWNED_PREFIX}${userId}:${requestKey}`
+  localStorage.removeItem(key)
+  if (localStorage.getItem(key) != null) throw Error('原作业已确认，记录尚未清理，请继续核对')
+}
+export const criticalTerminalKey = (userId: number, requestKey: string) => `${TERMINAL_PREFIX}${userId}:${requestKey}`
+export async function retainCriticalTerminal(userId: number, record: { requestKey: string }, status: 'success' | 'failed', _data?: unknown) {
+  await completeTerminalSlot(criticalTerminalKey(userId, record.requestKey), record, status)
+}
+export function readCriticalTerminal(userId: number, record: { requestKey: string }): { status: 'success' | 'failed'; data?: unknown; compact?: boolean } | null {
+  const key = criticalTerminalKey(userId, record.requestKey), compact = compactTerminalAt(key)
+  if (compact) return compact.state === 'reserved' ? null : { status: compact.state, compact: true }
+  const raw = localStorage.getItem(key)
+  if (!raw) return null
+  const parsed = JSON.parse(raw)
+  if (!parsed || !['success','failed'].includes(parsed.status) || JSON.stringify(parsed.record) !== JSON.stringify(record)) throw Error('原作业确认内容与原记录不一致，请保留记录并人工核对')
+  return { status: parsed.status, data: parsed.data }
+}
 export function saveOwnedPending(userId: number, records: unknown[]): void {
   // 隔离写失败时保留原数组，不能由新用户的 v2 内容覆盖唯一恢复来源。
   const { migrated } = readPendingStorage()

@@ -1,3 +1,4 @@
+const { assertQtyPrecision } = require('../utils/qtyPrecision')
 /**
  * Reservation Engine — 库存预占引擎
  *
@@ -14,6 +15,7 @@ const AppError = require('../utils/AppError')
 const logger = require('../utils/logger')
 const { getAvailableStockForDecision, lockStockDimension } = require('./containerEngine')
 const { getExpectedStock, reduceExpectedBindings } = require('../utils/expectedStock')
+const { roundQty } = require('../utils/unitConversion')
 
 /**
  * 收敛截断留痕：reserved 的 GREATEST/LEAST 兜底是防负数扩散的正确手段，
@@ -42,6 +44,7 @@ function logReservedClamp(context, detail) {
  */
 async function reserve(conn, { productId, productName = '该商品', warehouseId, qty,
   refType, refId, refItemId = null, refNo, includeExpected = false }) {
+  await assertQtyPrecision(conn, [{ productId, qty, label: '预占数量' }])
   const { quantity: onHand, reserved, available } = await getAvailableStockForDecision(conn, {
     productId,
     warehouseId,
@@ -62,8 +65,8 @@ async function reserve(conn, { productId, productName = '该商品', warehouseId
     ? await getExpectedStock(conn, [{ productId, warehouseId }], { lock: true })
     : null
   const bound = expected?.boundByPair.get(`${Number(productId)}:${Number(warehouseId)}`) || 0
-  const physicalReserved = Math.max(0, Number(reserved) - bound)
-  const fromExpected = Math.max(0, Number(qty) - Math.max(0, Number(onHand) - physicalReserved))
+  const physicalReserved = Math.max(0, roundQty(Number(reserved) - bound))
+  const fromExpected = Math.max(0, roundQty(Number(qty) - Math.max(0, roundQty(Number(onHand) - physicalReserved))))
   if (includeExpected && fromExpected > 1e-6 && (refType !== 'sale_order' || refItemId == null)) {
     throw new AppError('预计量占库必须指定销售明细', 400)
   }
@@ -125,6 +128,7 @@ async function releaseByRef(conn, refType, refId) {
     [refType, refId]
   )
 
+  await assertQtyPrecision(conn, rows.map(row => ({ productId: row.product_id, qty: row.qty, label: '释放预占数量' })))
   const lockedDimensions = new Set(dimensions.map(d => `${Number(d.product_id)}:${Number(d.warehouse_id)}`))
   if (rows.some(r => !lockedDimensions.has(`${Number(r.product_id)}:${Number(r.warehouse_id)}`))) {
     // 调用者旧 RR 快照可能漏掉刚新增的维度；不能持着预占行锁再补取该库存锁。
@@ -180,6 +184,7 @@ async function releaseByRef(conn, refType, refId) {
  * @param {number} [qty]      - 本次实际出库量；不传则退化为整组核销（兼容旧调用，现已无此类调用）
  */
 async function markFulfilled(conn, refType, refId, productId, warehouseId, qty = null) {
+  if (qty != null) await assertQtyPrecision(conn, [{ productId, qty, label: '履约核销数量' }])
   if (qty == null) {
     await conn.query(
       `UPDATE stock_reservations SET status=2
@@ -258,6 +263,7 @@ async function markFulfilled(conn, refType, refId, productId, warehouseId, qty =
  * @param {number} params.qty - 要释放的数量（正数）
  */
 async function partialReleaseByProduct(conn, { refType, refId, productId, warehouseId, qty }) {
+  await assertQtyPrecision(conn, [{ productId, qty, label: '释放预占数量' }])
   let remaining = Number(qty)
   if (!(remaining > 0)) return
 
@@ -325,6 +331,8 @@ async function syncReservedFromLedger(conn, productId, warehouseId) {
     [productId, warehouseId]
   )
   const qty = Number(total)
+  // Caller already holds the current product-policy and stock-dimension locks.
+  await assertQtyPrecision(conn, [{ productId, qty, label: '同步预占数量' }])
   await conn.query(
     `INSERT INTO inventory_stock (product_id, warehouse_id, quantity, reserved)
      VALUES (?,?,0,?)

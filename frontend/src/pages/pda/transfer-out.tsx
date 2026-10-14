@@ -3,7 +3,7 @@ import PdaProductIdentity from '@/components/pda/PdaProductIdentity'
  * PDA 调拨 · 调出仓扫码出库 — 路由 /pda/transfer-out/:id
  * 扫调出仓容器条码 → POST /transfer/:id/scan-out（整容器移到调入仓，标记在途）。
  */
-import { useCallback } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { ArrowUpFromLine, CircleCheck, Hourglass } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -18,6 +18,7 @@ import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
 import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
+import { captureInboundEditOwner, inboundEditOwnerCurrent } from '@/hooks/useInboundTaskEditRecovery'
 
 export default function PdaTransferOutPage() {
   const navigate = useNavigate()
@@ -25,12 +26,19 @@ export default function PdaTransferOutPage() {
   const { id } = useParams<{ id?: string }>()
   const transferId = id ? Number(id) : 0
   const { flash, ok, err, warn } = usePdaFeedback()
+  const [scanOwner] = useState(captureInboundEditOwner)
+  const mounted = useRef(true), currentTransferId = useRef(transferId), currentOrderId = useRef<number | null>(null)
+  currentTransferId.current = transferId
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
+  const currentOrder = useCallback((originalId: number) => mounted.current && currentTransferId.current === originalId
+    && currentOrderId.current === originalId && inboundEditOwnerCurrent(scanOwner), [scanOwner])
 
   const { data: order, isLoading, isError, refetch } = useQuery({
     queryKey: ['pda-transfer', transferId],
     queryFn: () => getTransferDetailApi(transferId),
     enabled: transferId > 0,
   })
+  currentOrderId.current = order?.id ?? null
 
   const scanAction = useCriticalPdaAction<TransferScanResult>({
     action: `transfer.scanOut.${transferId}`,
@@ -44,24 +52,30 @@ export default function PdaTransferOutPage() {
   })
 
   const scanMut = useMutation({
-    mutationFn: async (barcode: string) => {
-      const result = await scanAction.run((requestKey) => scanOutTransferApi(transferId, barcode, requestKey).then(r => r!), { barcode })
+    mutationFn: async ({ barcode, originalId }: { barcode: string; originalId: number }) => {
+      if (!currentOrder(originalId)) throw Error('原扫码来源已变化，请返回调拨执行重新打开')
+      const result = await scanAction.run((requestKey) => {
+        if (!currentOrder(originalId)) throw Error('原扫码来源已变化，本次不提交')
+        return scanOutTransferApi(originalId, barcode, requestKey).then(r => r!)
+      }, { barcode })
       return result
     },
-    onSuccess: (result) => {
+    onSuccess: (result, { originalId }) => {
+      if (!currentOrder(originalId)) return
       if (result.kind === 'pending') { warn('网络中断，出库结果待确认。请先确认结果，避免重复扫码。'); return }
       ok(`✓ 已出库 ${result.data.productName ?? ''} ×${result.data.qty}`)
     },
-    onError: (e: unknown) => err((e as { message?: string })?.message ?? '出库失败'),
+    onError: (e: unknown, { originalId }) => { if (currentOrder(originalId)) err((e as { message?: string })?.message ?? '出库失败') },
   })
 
   const handleScan = useCallback((raw: string) => {
     const b = raw.trim()
     if (!b) return
+    if (!currentOrder(transferId)) { err('原扫码来源已变化，请返回调拨执行重新打开'); return }
     if (!order) { err('调拨单加载中，请稍后扫码'); return }
     if (order.status !== 2 && order.status !== 3) { err('该单不在待出库，不能扫码'); return }
-    scanMut.mutate(b)
-  }, [order, scanMut, err])
+    scanMut.mutate({ barcode: b, originalId: transferId })
+  }, [order, scanMut, err, transferId, currentOrder])
 
   const recoveryNotice = (
           <PdaCriticalActionNotice
@@ -94,11 +108,21 @@ export default function PdaTransferOutPage() {
   }
   if (isError && !order) return <div className="min-h-screen bg-background"><PdaHeader title="调出仓扫码出库" onBack={() => navigate('/pda/transfer')} /><div className="mx-auto max-w-md p-4"><PdaQueryError onRetry={() => { void refetch() }} />{recoveryNotice}</div></div>
 
-  if (isLoading || !order) {
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-background">
         <PdaHeader title="调出仓扫码出库" onBack={() => navigate('/pda/transfer')} />
+        <div className="mx-auto max-w-md px-4 pt-4">{recoveryNotice}</div>
         <PdaLoading className="h-40 mt-8" />
+      </div>
+    )
+  }
+  if (!order) {
+    return (
+      <div className="min-h-screen bg-background">
+        <PdaHeader title="调出仓扫码出库" onBack={() => navigate('/pda/transfer')} />
+        <div className="mx-auto max-w-md px-4 pt-4">{recoveryNotice}</div>
+        <PdaEmptyState title="未读取到调拨单" description="请重试读取，或返回调拨执行重新选择。" actionText="重试" onAction={() => { void refetch() }} />
       </div>
     )
   }
@@ -106,6 +130,7 @@ export default function PdaTransferOutPage() {
     return (
       <div className="min-h-screen bg-background">
         <PdaHeader title="调出仓扫码出库" onBack={() => navigate('/pda/transfer')} />
+        <div className="mx-auto max-w-md px-4 pt-4">{recoveryNotice}</div>
         <PdaEmptyState icon={order.status >= 4 ? <CircleCheck className="h-12 w-12 text-success-ink" /> : <Hourglass className="h-12 w-12 text-muted-foreground" />} title={order.statusName}
           description={order.status === 1 ? '调拨单尚未派发，请先在 ERP 确认派发。' : '该调拨单不在待出库状态。'}
           actionText="返回调拨执行" onAction={() => navigate('/pda/transfer')} />
@@ -155,7 +180,7 @@ export default function PdaTransferOutPage() {
       </div>
 
       <PdaBottomBar>
-        <PdaScanner onScan={handleScan} placeholder="扫描调出仓库存条码" disabled={scanMut.isPending || scanAction.submitBlocked || isError} busy={scanMut.isPending} allowManualEntry={false} />
+        <PdaScanner onScan={handleScan} placeholder="扫描调出仓库存条码" disabled={scanMut.isPending || scanAction.submitBlocked || isError || !currentOrder(transferId)} busy={scanMut.isPending} allowManualEntry={false} />
       </PdaBottomBar>
     </div>
   )

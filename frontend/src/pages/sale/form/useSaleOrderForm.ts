@@ -8,9 +8,8 @@ import { useDirtyGuard } from '@/hooks/useDirtyGuard'
 import { useCarriersActive } from '@/hooks/useCarriers'
 import type { useSaleDetail } from '@/hooks/useSale'
 import { getCustomerPriceApi } from '@/api/price-lists'
-import { getProductApi } from '@/api/products'
 import { dirtyItems } from '@/lib/editMode'
-import type { ProductFinderResult, ProductUnit } from '@/types/products'
+import type { ProductFinderResult } from '@/types/products'
 import type { FinderResult } from '@/types/finder'
 import type { DraftItem } from './validate'
 import type { Customer } from '@/types/customers'
@@ -49,7 +48,7 @@ export function useSaleOrderForm(tabPath: string, order?: NonNullable<ReturnType
     (order?.items ?? []).map((item, i) => ({
       _key: i, productId: item.productId, productCode: item.productCode,
       productName: item.productName, articleNumber: item.articleNumber ?? null, spec: item.spec ?? null, color: item.color ?? null,
-      unit: item.unit, entryUnit: item.entryUnit ?? item.unit, units: [],
+      unit: item.unit, entryUnit: item.entryUnit ?? item.unit, conversionRate: item.conversionRate, allowDecimalQty: item.allowDecimalQty !== false, units: [],
       // 表单的数量/单价是「录入单位」口径：数量=entryQty(箱)，单价=每录入单位价（由 amount/entryQty 精确还原）
       quantity: item.entryQty ?? item.quantity,
       warehouseId: item.warehouseId ?? null, warehouseName: item.warehouseName ?? null,
@@ -87,29 +86,6 @@ export function useSaleOrderForm(tabPath: string, order?: NonNullable<ReturnType
       timers.clear()
     }
   }, [])
-  // 编辑/改单态：为每个明细行商品拉多计量单位，供单位下拉回显（新建态在 handleFinderConfirm 里拉）
-  useEffect(() => {
-    const src = order?.items ?? []
-    const productIds = [...new Set(src.filter(i => i.productId > 0).map(i => i.productId))]
-    if (!productIds.length) return
-    let cancelled = false
-    const initialRows = new Map(itemsRef.current.map(i => [i._key, { productId: i.productId, selection: productRequests.current.get(i._key) }]))
-    Promise.all(productIds.map(pid =>
-      getProductApi(pid).then(p => [pid, p?.units ?? []] as [number, ProductUnit[]]).catch(() => [pid, [] as ProductUnit[]] as [number, ProductUnit[]]),
-    )).then(pairs => {
-      if (cancelled) return
-      const map = new Map<number, ProductUnit[]>(pairs)
-      setItems(prev => prev.map(i => {
-        const initial = initialRows.get(i._key)
-        return initial?.productId === i.productId
-          && initial.selection === productRequests.current.get(i._key)
-          && map.has(i.productId)
-          ? { ...i, units: map.get(i.productId)! }
-          : i
-      }))
-    })
-    return () => { cancelled = true }
-  }, [order])
   const [priceLoading, setPriceLoading] = useState<Record<number, boolean>>({})
   useEffect(() => {
     if (!ownedRead) return
@@ -256,14 +232,6 @@ export function useSaleOrderForm(tabPath: string, order?: NonNullable<ReturnType
       if (inp) { inp.focus(); inp.select() }
     }, 0)
     focusTimers.current.add(timer)
-    // 单位查询与查价并行，且使用独立版本，手动改价不丢弃合法的单位响应。
-    void getProductApi(product.id, readOwner ? reorderConfig(readOwner) : undefined)
-      .then(full => {
-        if (!isCurrentProduct()) return
-        const units = full?.units ?? []
-        setItems(prev => prev.map(i => i._key === k ? { ...i, units } : i))
-      })
-      .catch(() => { /* 拉取失败：按基本单位录入 */ })
     const cid = customerIdRef.current
     if (cid) await lookupPrice(k, product.id, cid)
   }

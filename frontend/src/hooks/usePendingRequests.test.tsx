@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { webcrypto } from 'node:crypto'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { beforeEach, afterEach, expect, test, vi } from 'vitest'
@@ -18,9 +19,9 @@ const record = (action: string): PendingRequestRecord => ({ action, requestKey: 
 function Probe({ index }: { index: number }) { values[index] = usePendingRequests(); return null }
 function mount() { root = createRoot(document.createElement('div')); act(() => root!.render(<><Probe index={0} /><Probe index={1} /></>)) }
 function login(id: number) { act(() => useAuthStore.getState().login('test', null, { id } as User)) }
-beforeEach(() => { localStorage.clear(); receipt.status = 'pending'; receipt.fail = false; receipt.pause = null; login(1) })
+beforeEach(() => { Object.defineProperty(globalThis, 'crypto', { configurable: true, value: webcrypto }); Object.defineProperty(navigator, 'locks', { configurable: true, value: { request: async (_name: string, options: unknown, fn?: (lock: object) => unknown) => (typeof options === 'function' ? options : fn!)({}) } }); localStorage.clear(); receipt.status = 'pending'; receipt.fail = false; receipt.pause = null; login(1) })
 afterEach(() => { act(() => root?.unmount()); root = undefined; vi.restoreAllMocks(); act(() => useAuthStore.getState().logout()) })
-test('两个实例添加、替换、移除及卸载重挂共享同一份 pending', () => {
+test('两个实例添加、替换、移除及卸载重挂共享同一份 pending', async () => {
   mount()
   act(() => { values[0].addPending(record('a')); values[1].addPending(record('b')) })
   expect(values[0].records.map(r => r.action)).toEqual(['a', 'b'])
@@ -28,7 +29,7 @@ test('两个实例添加、替换、移除及卸载重挂共享同一份 pending
   act(() => values[0].addPending({ ...record('b'), requestKey: 'replacement' }))
   expect(values[1].records.find(r => r.action === 'b')?.requestKey).toBe('replacement')
   expect(values[1].pendingCount).toBe(2)
-  act(() => values[1].removePending('a'))
+  await act(async () => { await values[1].removePending('a') })
   expect(values[0].records.map(r => r.action)).toEqual(['b'])
   act(() => root!.unmount()); mount()
   expect(values[0].records.map(r => r.action)).toEqual(['b'])
@@ -62,13 +63,16 @@ test('登出存储删除失败后同一用户重新登录也不复活上一会�
   expect(values[0].pendingCount).toBe(0)
 })
 
-test('关键操作遇到存储写失败与网络超时，仍保留 pending 并禁止重复执行', async () => {
+test('关键操作存储写失败时禁止首次发送；恢复存储后超时保留原记录', async () => {
   let critical!: ReturnType<typeof useCriticalPdaAction>
   function CriticalProbe() { critical = useCriticalPdaAction<unknown>({ action: 'task.1', label: '测试操作' }); return null }
   root = createRoot(document.createElement('div'))
   act(() => root!.render(<><CriticalProbe /><Probe index={0} /></>))
   vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('quota') })
   const executor = vi.fn().mockRejectedValue(new Error('Network Error'))
+  await act(async () => { await expect(critical.run(executor)).rejects.toThrow('quota') })
+  expect(executor).not.toHaveBeenCalled()
+  vi.mocked(Storage.prototype.setItem).mockRestore()
   await act(async () => { expect((await critical.run(executor)).kind).toBe('pending') })
   expect(critical.submitBlocked).toBe(true)
   expect(values[0].pendingCount).toBe(1)
@@ -90,7 +94,7 @@ test('无归属旧数组只呈现隔离占位，换号写新记录与退出不�
   act(() => values[0].addPending(record('new-user')))
   expect(values[0].records.some(r => r.action === 'legacy-sensitive')).toBe(true)
   expect(JSON.stringify(values[0].records)).not.toContain('客户')
-  act(() => values[0].removePending('legacy-sensitive'))
+  await act(async () => { await values[0].removePending('legacy-sensitive') })
   expect(values[0].records.some(r => r.action === 'legacy-sensitive')).toBe(true)
   act(() => values[0].clearAll())
   expect(values[0].records.some(r => r.action === 'legacy-sensitive')).toBe(true)
@@ -159,7 +163,7 @@ test.each(['same-hook', 'two-hooks'])('同一事件 tick 同 action 同步占位
     first = critical[0].run(executor)
     second = critical[mode === 'same-hook' ? 0 : 1].run(executor).catch(error => error)
   })
-  expect(executor).toHaveBeenCalledTimes(1)
+  await act(async () => { await vi.waitFor(() => expect(executor).toHaveBeenCalledTimes(1)) })
   expect(await second).toBeInstanceOf(Error)
   expect((await second as Error).message).toContain('结果待确认')
   await act(async () => { release(); await first })
@@ -174,6 +178,7 @@ test('传输不确定保留未确认记录；400/409 仍按失败处理', async 
     { name: '仅中文「网络超时」无 code', err: new Error('网络超时，请稍后重试'), expect: 'pending' },
     { name: '原始 axios 英文超时', err: new Error('timeout of 15000ms exceeded'), expect: 'pending' },
     { name: 'NETWORK_ERROR(code) 断网', err: Object.assign(new Error('无法连接服务器，请检查网络与后端服务是否正常'), { code: 'NETWORK_ERROR' }), expect: 'pending' },
+    ...[500, 502, 503, 504].map(status => ({ name: `HTTP ${status}`, err: Object.assign(new Error('服务暂不可用'), { status, code: 'SERVICE_UNAVAILABLE' }), expect: 'pending' as const })),
     { name: '400 业务拒绝', err: Object.assign(new Error('参数不合法'), { code: 'BUSINESS_ERROR', status: 400 }), expect: 'failed' },
     { name: '409 冲突', err: Object.assign(new Error('来源库存条码已被拣货任务锁定，不能放货'), { code: 'CONFLICT', status: 409 }), expect: 'failed' },
   ]
@@ -185,8 +190,8 @@ test('传输不确定保留未确认记录；400/409 仍按失败处理', async 
     function P() { criticals[0] = useCriticalPdaAction<unknown>({ action: `t-${c.name}`, label: '测试操作' }); return null }
     await act(async () => { r = createRoot(document.createElement('div')); r.render(<P />) })
     const executor = vi.fn().mockRejectedValue(c.err)
-    let kind: string
-    try { kind = (await criticals[0].run(executor)).kind } catch { kind = 'failed' }
+    let kind!: string
+    await act(async () => { try { kind = (await criticals[0].run(executor)).kind } catch { kind = 'failed' } })
     expect(kind, c.name).toBe(c.expect)
     // 传输不确定必须留下未确认记录（可恢复）；业务拒绝不应留阻断
     expect(criticals[0].submitBlocked, c.name).toBe(c.expect === 'pending')

@@ -82,15 +82,15 @@ vi.mock('./CommercialPicker', () => ({
                       lineKey: name,
                       warehouseId: 1,
                       productId: name === '普通' ? 11 : 12,
-                      entryUnit: name === '包装' ? '包' : '个',
+                      entryUnit: '个',
                       quantity: name === '包装' ? 2 : 1,
                       priceSource: name === '包装' ? 'manual' : 'default',
                       ...(name === '包装' ? { unitPrice: 12.3456 } : {})
                     },
               name,
               code: name,
-              spec: 'M12', color: '银色', articleNumber: 'SUP-12', costPrice: 2,
-              unit: name === '包装' ? '包' : kind === 'kit' ? '套' : '个',
+              spec: 'M12', color: '银色', articleNumber: 'SUP-12', costPrice: 20,
+              unit: kind === 'kit' ? '套' : '个',
               quantity: name === '包装' ? '2' : '1',
               price: name === 'A' ? '100' : name === 'B' ? '200' : name === '包装' ? '12.3456' : '',
               units: kind === 'ordinary' ? [{ unitName: '包', conversionRate: 10 }] : [],
@@ -117,7 +117,7 @@ function fixturePreview(b: CommercialBody) {
     kind: input.kind,
     priceSource: input.priceSource,
     warehouseId: input.warehouseId ?? b.warehouseId,
-    quantity: input.quantity * (input.lineKey === '包装' ? 10 : 1),
+    quantity: input.quantity,
     unitPrice: input.unitPrice ?? (input.kind === 'kit' ? 100 : b.customerId === 2 ? 30 : 10),
     amount: input.lineKey === '包装' ? 24.69 : (input.unitPrice ?? (b.customerId === 2 ? 30 : 10)),
     metadata: {
@@ -128,7 +128,7 @@ function fixturePreview(b: CommercialBody) {
           ? {
               entryUnit: input.entryUnit,
               entryQty: input.quantity,
-              conversionRate: input.lineKey === '包装' ? 10 : 1,
+              conversionRate: 1,
               entryUnitPrice: input.unitPrice ?? (b.customerId === 2 ? 30 : 10)
             }
           : null,
@@ -272,7 +272,7 @@ test('mounted sharedcart A100 B200 ordinary30 and manual4 packaging uses server 
       { kind: 'kit', unitPrice: 100, quantity: 1 },
       { kind: 'kit', unitPrice: 200, quantity: 1 },
       { kind: 'ordinary', priceSource: 'default' },
-      { kind: 'ordinary', quantity: 2, entryUnit: '包', unitPrice: 12.3456, priceSource: 'manual' }
+      { kind: 'ordinary', quantity: 2, entryUnit: '个', unitPrice: 12.3456, priceSource: 'manual' }
     ])
     expect(plan.operation.body.commercialGroups.every((g: { warehouseId: number }) => g.warehouseId === 1)).toBe(true)
   })
@@ -314,29 +314,14 @@ test('成套录入直接显示全部配件，输入套数即时更新子量，�
     expect(mocks.execute.mock.calls[0][0].operation.body.commercialGroups).toEqual([{ kind: 'kit', lineKey: 'A', warehouseId: 1, kitVersionId: 19, quantity: 2, priceSource: 'manual', unitPrice: 100, remark: '分两箱装' }])
   })
 })
-test('fresh ordinary auxiliary selection preserves known basic unit so a mistaken package choice can be changed back', async () => {
+test('fresh ordinary shows only its fixed unit and does not offer auxiliary conversion', async () => {
   await mount(async () => {
-    await click('选择客户')
-    await click('确认客户B')
-    await click('选择仓库')
-    await click('添加商品')
-    await click('选普通')
-    const select = document.querySelector<HTMLSelectElement>('select[aria-label="普通录入单位"]')!
-    await act(async () => {
-      select.value = '包'
-      select.dispatchEvent(new Event('change', { bubbles: true }))
-    })
-    expect(Array.from(select.options).map((option) => option.value)).toContain('个')
-    expect(Array.from(select.options).map((option) => option.value)).toContain('包')
-    await act(async () => {
-      select.value = '个'
-      select.dispatchEvent(new Event('change', { bubbles: true }))
-    })
-    await flush()
-    expect(select.value).toBe('个')
+    await click('选择客户'); await click('确认客户B'); await click('选择仓库'); await click('添加商品'); await click('选普通'); await flush()
+    expect(document.querySelector('select[aria-label="普通录入单位"]')).toBeNull()
     expect(mocks.preview.mock.calls.at(-1)?.[0].commercialGroups[0].entryUnit).toBe('个')
   })
 })
+
 const group = {
   id: 1,
   lineKey: 'original',
@@ -684,7 +669,7 @@ test('standard new sale opens the shared editor and saves ordinary plus kit as s
     })
   }, undefined, false, () => {}, true)
 })
-test('standard new sale with ordinary auxiliary manual price keeps ordinary saving and the exact entry price', async () => {
+test('standard new sale with ordinary fixed-unit manual price keeps ordinary saving and the exact entry price', async () => {
   await mount(async () => {
     await click('选择客户'); await click('确认客户B'); await click('选择仓库')
     await click('添加商品'); await click('选包装')
@@ -692,7 +677,7 @@ test('standard new sale with ordinary auxiliary manual price keeps ordinary savi
     const body = mocks.execute.mock.calls[0][0].operation.body
     expect(body.commercialModel).toBeUndefined()
     expect(body.commercialGroups).toBeUndefined()
-    expect(body.items).toMatchObject([{ productId: 12, entryUnit: '包', quantity: 2, unitPrice: 12.3456, priceSource: 'manual' }])
+    expect(body.items).toMatchObject([{ productId: 12, entryUnit: '个', quantity: 2, unitPrice: 12.3456, priceSource: 'manual' }])
     expect(JSON.stringify(body)).not.toContain('priceIsBase')
   }, undefined, false, () => {}, true)
 })
@@ -704,7 +689,7 @@ test('shared new rows retain product identity, base quantity, below-cost hint an
     expect(document.body.textContent).toContain('M12')
     expect(document.body.textContent).toContain('银色')
     expect(document.body.textContent).toContain('SUP-12')
-    expect(document.body.textContent).toContain('折合 20个')
+    expect(document.body.textContent).not.toContain('折合 20个')
     expect(document.body.textContent).toContain('低于进价')
     await change('折扣金额', '2')
     expect(document.body.textContent).toContain('订单金额¥22.69')
@@ -1007,16 +992,16 @@ test('legacy ordinary editor can add a kit without replacing original quantity, 
   },ordinary)
 })
 
-test('saved ordinary rows reuse the batch quantity policy and reject fractional input without changing the draft', async () => {
+test('saved ordinary rows use original quantity policy and reject fractional input without changing the draft', async () => {
   mocks.qtyPolicies.mockResolvedValue([{ id: 11, allowDecimal: false }])
   const rejected = vi.spyOn(toast, 'error')
   const ordinary = { id: 80, customerId: 2, customerName: '客户B', warehouseId: 1, warehouseName: '仓1', status: 1,
-    items: [{ id: 91, productId: 11, productName: '整数商品', productCode: 'P11', unit: '个', quantity: 3, unitPrice: 21, warehouseId: 1 }] } as SaleOrder
+    items: [{ id: 91, productId: 11, productName: '整数商品', productCode: 'P11', allowDecimalQty: false, unit: '个', quantity: 3, unitPrice: 21, warehouseId: 1 }] } as SaleOrder
   try {
     await mount(async () => {
       const quantity = document.querySelector<HTMLInputElement>('input[aria-label="整数商品数量"]')!
       expect(quantity.step).toBe('1')
-      expect(mocks.qtyPolicies).toHaveBeenCalledWith([11], expect.objectContaining({ baseURL: '/a', signal: expect.any(AbortSignal) }))
+      expect(mocks.qtyPolicies).not.toHaveBeenCalled()
       await change('整数商品数量', '1.5')
       expect(quantity.value).toBe('3')
       expect(rejected).toHaveBeenCalledWith(expect.stringContaining('整数'))

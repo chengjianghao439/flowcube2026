@@ -8,6 +8,7 @@ const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransi
 const { normalizePagination } = require('../../utils/pagination')
 const approvalEngine = require('../../engine/approvalEngine')
 const { assertNotSelfApproval } = require('../../utils/selfApprove')
+const { saleDocumentScopeFilter, assertSaleDocumentInScope } = require('../../utils/saleDocumentScope')
 
 /**
  * 超额放行审批单（文档 05 Phase 2）：销售员发起「申请—审批」两步。
@@ -50,7 +51,7 @@ function fmt(row) {
  * 发起申请（草稿态）：校验销售单存在、额度确实不足，快照额度/已用/本单/超量。
  * 一张销售单不允许重复发起未结束的申请（活跃唯一性）。
  */
-async function create({ saleOrderId, reason }, operator) {
+async function create({ saleOrderId, reason }, operator, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
@@ -59,6 +60,7 @@ async function create({ saleOrderId, reason }, operator) {
       [Number(saleOrderId)],
     )
     if (!order) throw new AppError('销售单不存在', 404)
+    await assertSaleDocumentInScope(conn, scopeWarehouseIds, order.id, { entityName: '放行申请单', currentRead: true })
     if (order.credit_limit == null) throw new AppError('该客户未设置授信额度，无需超额放行申请', 400)
 
     // 活跃唯一性：该销售单已有「未结束」的申请（草稿/待审批/已批准）→ 拒绝
@@ -186,7 +188,7 @@ async function assertOwner(row, operator) {
   if (Number(row.applicant_id) !== Number(operator?.operatorId)) throw new AppError('只能操作本人发起的放行申请', 403)
 }
 
-async function findAll({ page = 1, pageSize = 20, status = '', keyword = '', saleOrderId = '', startDate = '', endDate = '' } = {}) {
+async function findAll({ page = 1, pageSize = 20, status = '', keyword = '', saleOrderId = '', startDate = '', endDate = '', scopeWarehouseIds = null } = {}) {
   const { page: p, pageSize: ps, offset } = normalizePagination({ page, pageSize })
   const conds = ['c.deleted_at IS NULL']
   const params = []
@@ -196,7 +198,9 @@ async function findAll({ page = 1, pageSize = 20, status = '', keyword = '', sal
   if (kw) { conds.push('(c.override_no LIKE ? OR c.sale_order_no LIKE ? OR c.customer_name LIKE ?)'); params.push(`%${kw}%`, `%${kw}%`, `%${kw}%`) }
   if (startDate) { conds.push('c.created_at >= ?'); params.push(`${String(startDate).slice(0, 10)} 00:00:00`) }
   if (endDate) { conds.push('c.created_at <= ?'); params.push(`${String(endDate).slice(0, 10)} 23:59:59`) }
-  const where = `WHERE ${conds.join(' AND ')}`
+  const scope = saleDocumentScopeFilter(scopeWarehouseIds, 'c.sale_order_id')
+  params.push(...scope.params)
+  const where = `WHERE ${conds.join(' AND ')}${scope.sql}`
   const [rows] = await pool.query(
     `SELECT * FROM sale_credit_overrides c ${where} ORDER BY c.created_at DESC, c.id DESC LIMIT ? OFFSET ?`,
     [...params, ps, offset],
@@ -205,9 +209,10 @@ async function findAll({ page = 1, pageSize = 20, status = '', keyword = '', sal
   return { list: rows.map(fmt), pagination: { page: p, pageSize: ps, total } }
 }
 
-async function findById(id) {
+async function findById(id, scopeWarehouseIds = null) {
   const [[row]] = await pool.query('SELECT * FROM sale_credit_overrides WHERE id=? AND deleted_at IS NULL', [Number(id)])
   if (!row) throw new AppError('放行申请单不存在', 404)
+  await assertSaleDocumentInScope(pool, scopeWarehouseIds, row.sale_order_id, { entityName: '放行申请单' })
   const detail = fmt(row)
   const conn = await pool.getConnection()
   try {

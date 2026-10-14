@@ -25,6 +25,16 @@ test('every public location retains security headers alongside its cache policy'
     const snippet = path.join(root, 'docker/nginx-security-headers.conf')
     if (fs.existsSync(snippet)) fs.copyFileSync(snippet, path.join(dir, 'snippets/security-headers.conf'))
     fs.writeFileSync(path.join(dir, 'nginx.conf'), 'events {}\nhttp { map $http_x_forwarded_proto $fc_forwarded_proto { default $scheme; } include /test/server.conf; }')
+    // Synthetic public files must be readable by the Nginx worker UID.
+    function publicFixture(directory) {
+      fs.chmodSync(directory, 0o755)
+      for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+        const file = path.join(directory, entry.name)
+        if (entry.isDirectory()) publicFixture(file)
+        else fs.chmodSync(file, 0o644)
+      }
+    }
+    publicFixture(dir)
     docker('create', '--name', name, '--add-host', 'backend:127.0.0.1', '-p', '127.0.0.1::80',
       '--entrypoint', 'nginx', process.env.NGINX_TEST_IMAGE || 'nginx:alpine', '-c', '/test/nginx.conf', '-g', 'daemon off;')
     created = true

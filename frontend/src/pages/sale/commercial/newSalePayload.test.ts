@@ -5,7 +5,7 @@ import type { CommercialBody, CommercialGroup, CommercialInput, CommercialPrevie
 
 function fixture() {
   const input: CommercialInput = {
-    lineKey: 'pack-line', kind: 'ordinary', productId: 11, entryUnit: '包', quantity: 1.5, priceSource: 'default'
+    lineKey: 'pack-line', kind: 'ordinary', productId: 11, entryUnit: '个', quantity: 1.5, priceSource: 'default'
   }
   const body: CommercialBody = {
     commercialModel: 'kit-v1', expectedRevision: 7, customerId: 3, customerName: '测试客户',
@@ -24,7 +24,7 @@ function fixture() {
     }],
     metadata: {
       input: { ...input, warehouseId: 1 }, priceCustomerId: 3,
-      entry: { entryUnit: '包', entryQty: 1.5, conversionRate: 10, entryUnitPrice: 12.345 },
+      entry: { entryUnit: '个', entryQty: 1.5, conversionRate: 1, entryUnitPrice: 1.2345 },
       quote: { referenceUnitPrice: 1.2345, resolvedPriceSource: 'price_level', resolvedPriceLevel: 'B', priceListId: null }
     }
   }
@@ -74,8 +74,8 @@ describe('unified new sale preserves the ordinary model and authoritative entry 
       remark: '保留备注', carrierId: 4, freightType: 1, shippingProduct: '标准快递',
       receiverName: '测试收件人', receiverPhone: '13800000000', receiverAddress: '测试地址',
       items: [{
-        productId: 11, productCode: 'P11', productName: '测试螺钉', unit: '个', entryUnit: '包',
-        quantity: 1.5, unitPrice: 12.345, warehouseId: 1, priceSource: 'default',
+        productId: 11, productCode: 'P11', productName: '测试螺钉', unit: '个', entryUnit: '个',
+        quantity: 1.5, unitPrice: 1.2345, warehouseId: 1, priceSource: 'default',
         resolvedPrice: 1.2345, resolvedPriceLevel: 'B', spec: 'M4', color: '银色', articleNumber: 'SUP-11'
       }]
     })
@@ -92,7 +92,7 @@ describe('unified new sale preserves the ordinary model and authoritative entry 
       inventory: { quantity: 0, reserved: 0, available: 0, required: 15, shortage: 15 }
     }]
     const item = ordinaryPayload(f).items[0]
-    expect(item).toMatchObject({ productCode: 'P11', quantity: 1.5, unitPrice: 12.345 })
+    expect(item).toMatchObject({ productCode: 'P11', quantity: 1.5, unitPrice: 1.2345 })
     expect(item).not.toHaveProperty('priceIsBase')
     expect(item).not.toHaveProperty('costPrice')
     expect(item).not.toHaveProperty('amount')
@@ -128,6 +128,11 @@ describe('unified new sale preserves the ordinary model and authoritative entry 
     f.group.metadata.entry!.entryUnitPrice = 7.8912
     f.group.metadata.quote!.referenceUnitPrice = 0
     expect(ordinaryPayload(f).items[0]).toMatchObject({ priceSource: 'manual', unitPrice: 7.8912, resolvedPrice: null })
+  })
+
+  it('rejects auxiliary units and converted previews for every new sale', () => {
+    const f = fixture(); f.input.entryUnit = '包'; Object.assign(f.group.metadata.input, { entryUnit: '包' }); Object.assign(f.group.metadata.entry!, { entryUnit: '包', conversionRate: 10 })
+    expect(() => ordinaryPayload(f)).toThrow(/录入单位/)
   })
 
   it('uses the component base unit when no entry unit was explicitly selected', () => {

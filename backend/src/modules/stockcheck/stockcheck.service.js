@@ -189,7 +189,11 @@ async function saveItemContainerScans(id, itemId, scans, operator, scopeWarehous
       resourceType: 'stockcheck',
       resourceId: id,
     })
-    if (requestState.replay) return requestState.responseData
+    if (requestState.replay) {
+      // 回放仍持有盘点头/回执行锁；归池不结束事务，必须先释放本次锁。
+      await conn.rollback()
+      return requestState.responseData
+    }
     assertStatusAction('stockcheck', 'edit', checkRow.status)
 
     const [[item]] = await conn.query(
@@ -271,6 +275,10 @@ async function create({ warehouseId, warehouseName, remark, operator, scopeWareh
   const type = Number(checkType) === 2 ? 2 : 1
   const conn = await pool.getConnection()
   try {
+    // Candidate discovery may precede a concurrent stock/policy change. The
+    // authoritative book read below must see commits made while waiting for
+    // the product policy locks, rather than a prior RR snapshot.
+    await conn.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED')
     await conn.beginTransaction()
     const checkNo = await genNo(conn)
     const [r] = await conn.query(
@@ -280,12 +288,19 @@ async function create({ warehouseId, warehouseName, remark, operator, scopeWareh
     const checkId = r.insertId
     // 盘点账面数必须与主库存事实层一致：只统计 ACTIVE 容器，不信任全容器汇总。
     // 循环抽盘(type=2)只拉命中范围的商品；全盘(type=1)拉全仓（productIds 传 null）。
-    const stocks = await listBookStocksFromActiveContainers(conn, warehouseId, type === 2 ? productIds : null)
+    const candidates = await listBookStocksFromActiveContainers(conn, warehouseId, type === 2 ? productIds : null)
+    const candidateIds = candidates.map(s => Number(s.product_id))
+    const policies = await loadQtyPolicies(conn, candidateIds)
+    // Lock the discovered products in ascending order before reading the book
+    // facts used by this check. Restrict the second read to those locked IDs;
+    // stock for a newly appearing SKU belongs to a subsequent check.
+    const stocks = candidateIds.length ? await listBookStocksFromActiveContainers(conn, warehouseId, candidateIds) : []
     if (type === 2 && !stocks.length) throw new AppError('该抽盘范围内没有有货商品，无需盘点', 400)
     // 全盘(1) 同样不能建出 0 明细的空单：PDA 扫码盘点按明细 INNER JOIN 过滤，
     // 空单在 PDA 永远不出现，ERP 打开是空白表格，单据卡在「进行中」无人能收口
     //（2026-09-17 验收 ISSUE-009：开发库 SC20260917005 就是这样卡住的）。
     if (!stocks.length) throw new AppError('该仓库当前没有在库商品，无需创建盘点单', 400)
+    for (const s of stocks) assertQtyPrecisionWith(policies.get(Number(s.product_id)), s.quantity, '盘点账面数量')
     for(const s of stocks) {
       await conn.query(`INSERT INTO inventory_check_items (check_id,product_id,product_code,product_name,unit,book_qty) VALUES (?,?,?,?,?,?)`,[checkId,s.product_id,s.product_code,s.product_name,s.unit,s.quantity])
     }    await conn.commit()
@@ -377,6 +392,8 @@ async function submit(id, operator, scopeWarehouseIds = null, requestKey = null)
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    const checkRow = await lockStatusRow(conn, { table: 'inventory_checks', id, entityName: '盘点单' })
+    assertInScope(scopeWarehouseIds, checkRow.warehouse_id, '盘点单')
     // 幂等（2026-08-22 补）：盘点提交是多表写事务，连点两次/断网重试会重复入账
     const requestState = await beginResourceOperationRequest(conn, {
       requestKey,
@@ -390,8 +407,6 @@ async function submit(id, operator, scopeWarehouseIds = null, requestKey = null)
       await conn.rollback()
       return requestState.responseData
     }
-    const checkRow = await lockStatusRow(conn, { table: 'inventory_checks', id, entityName: '盘点单' })
-    assertInScope(scopeWarehouseIds, checkRow.warehouse_id, '盘点单')
     const rule = assertStatusAction('stockcheck', 'submit', checkRow.status)
     const [itemRows] = await conn.query(
       'SELECT * FROM inventory_check_items WHERE check_id=? ORDER BY id ASC', [id])
@@ -412,6 +427,11 @@ async function submit(id, operator, scopeWarehouseIds = null, requestKey = null)
     const unfilled = check.items.filter(i=>i.actualQty===null)
     if(unfilled.length) throw new AppError(`还有 ${unfilled.length} 条明细未填写实盘数量`,400)
     check.items.forEach(item => { item.actualQty = assertValidActualQty(item.actualQty) })
+    await assertQtyPrecision(conn, check.items.flatMap(item => [
+      { productId:item.productId, qty:item.bookQty, label:'盘点账面数量' },
+      { productId:item.productId, qty:item.actualQty, label:'盘点实盘数量' },
+      { productId:item.productId, qty:item.diffQty, label:'盘点差异数量' },
+    ]))
 
     // 统一加锁顺序：先按 product_id 升序对每个被盘商品取 inventory_stock 维度锁，再做账面
     // 漂移校验(getCurrentBookQty 会 FOR UPDATE 锁容器)与调整。否则本事务是「先容器后 stock」，

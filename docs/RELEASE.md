@@ -16,7 +16,7 @@
 - 权限：`contents: write`（`GITHUB_TOKEN` 创建 Release）、`actions: read`（读取待发布实际 SHA 的 Tests 与 Security Scan 结果）。
 - Tag 推送时 CI 会校验：**`Git tag` 去掉 `v` 后**必须与 **`desktop/package.json` 的 `version`** 一致，否则失败（避免 exe / Release / 仓库版本错乱）。
 
-发版请严格使用下面「正式发布流程（唯一入口）」；`npm run release:prod` 会依次完成同提交门禁、三端发布和线上核对。正式发布后可在仓库 **Releases** 下载安装包；服务器 canonical 发布目录中的正式文件名统一为 `FlowCube-Setup-<version>.exe`。
+发版请严格使用下面「正式发布流程（唯一入口）」；`npm run release:prod` 会依次完成同提交门禁、三端发布和线上核对。正式发布后可在仓库 **Releases** 下载安装包；服务器 canonical 发布目录中的正式文件名统一为 `FlowCube-Setup-<version>.exe`。0.13.5进入288–292迁移窗口后，缺数量/退货/资金写入契约的0.13.4后端不得自动恢复写入；失败保持停写、核查迁移并向前恢复兼容产物，不能仅凭240契约或可空新列认定安全。
 
 ### 桌面安装器约束（本次问题后的固定规则）
 

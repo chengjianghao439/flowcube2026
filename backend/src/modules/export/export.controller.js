@@ -141,7 +141,7 @@ async function exportAbc(req, res, next) {
   try { await sendExport(res, await exportService.getAbcExportPayload({ ...req.query, scopeWarehouseIds: req.user?.warehouseIds ?? null })) } catch (e) { next(e) }
 }
 async function exportCreditOverrides(req, res, next) {
-  try { await sendExport(res, await exportService.getCreditOverridesExportPayload(req.query)) } catch (e) { next(e) }
+  try { await sendExport(res, await exportService.getCreditOverridesExportPayload({ ...req.query, scopeWarehouseIds: req.user?.warehouseIds ?? null })) } catch (e) { next(e) }
 }
 async function exportPickingWaves(req, res, next) {
   try { await sendExport(res, await exportService.getPickingWavesExportPayload({ ...req.query, scopeWarehouseIds: req.user?.warehouseIds ?? null })) } catch (e) { next(e) }

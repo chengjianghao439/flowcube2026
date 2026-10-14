@@ -48,11 +48,19 @@ async function scenarioRefundListScope(ctx, log) {
   const [warehouses] = await ctx.pool.query('SELECT DISTINCT warehouse_id FROM sale_orders WHERE deleted_at IS NULL ORDER BY warehouse_id LIMIT 1')
   const warehouseId = Number(warehouses[0]?.warehouse_id || 1)
   const [allRows] = await ctx.pool.query('SELECT ro.id, so.warehouse_id FROM refund_orders ro LEFT JOIN sale_orders so ON so.id = ro.sale_order_id WHERE ro.deleted_at IS NULL ORDER BY ro.created_at DESC, ro.id DESC')
+  // 独立批读所有保存行；不能将只核头仓的旧期望继续当整单授权事实。
+  const [itemRows] = await ctx.pool.query('SELECT ro.id AS refund_id, soi.warehouse_id FROM refund_orders ro JOIN sale_order_items soi ON soi.order_id=ro.sale_order_id WHERE ro.deleted_at IS NULL')
+  const itemWarehouses = new Map()
+  for (const item of itemRows) {
+    if (!itemWarehouses.has(Number(item.refund_id))) itemWarehouses.set(Number(item.refund_id), [])
+    itemWarehouses.get(Number(item.refund_id)).push(item.warehouse_id)
+  }
   for (const [label, scope] of [['不限仓', null], ['限仓', [warehouseId]], ['空范围', []]]) {
     try {
       const result = await svc.findAll({ page: 1, pageSize: 200, scopeWarehouseIds: scope })
       // 独立从未过滤行逐条判定授权，不复制被测方法的 WHERE 拼接。
-      const expected = allRows.filter(row => scope === null || scope.includes(Number(row.warehouse_id)))
+      const expected = allRows.filter(row => scope === null || (scope.includes(Number(row.warehouse_id))
+        && (itemWarehouses.get(Number(row.id)) || []).every(warehouseId => scope.includes(Number(warehouseId ?? row.warehouse_id)))))
       log.assert(`退款列表${label}计数与授权集合一致`, result.pagination.total === expected.length)
       log.assert(`退款列表${label}行与授权集合一致`, JSON.stringify(result.list.map(row => Number(row.id))) === JSON.stringify(expected.slice(0, 200).map(row => Number(row.id))))
       const filtered = await svc.findAll({ page: 1, pageSize: 200, keyword: '不存在的退款单号-范围回归', status: 1, startDate: '2040-01-01', endDate: '2040-01-02', scopeWarehouseIds: scope })

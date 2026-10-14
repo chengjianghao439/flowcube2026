@@ -4,6 +4,7 @@ const { normalizePagination } = require('../../utils/pagination')
 const NAMES = {
   OPENING_RECORD: '历史账款结转', OPENING_ADVANCE: '历史预收预付结转',
   CHARGE: '账款入账', CHARGE_ADJUSTMENT: '账款调整', RETURN: '退货冲减', REFUND: '退款',
+  SUPPLIER_REFUND_IN: '供应商退款',
 }
 function validDate(value) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false

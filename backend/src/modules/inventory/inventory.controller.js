@@ -25,6 +25,7 @@ async function trace(req, res, next) {
       sourceType: sourceType || null,
       sourceRefId: Number.isFinite(sourceRefId) && sourceRefId > 0 ? sourceRefId : null,
       includeLegacy,
+      scopeWarehouseIds: req.user?.warehouseIds ?? null,
     })
     return successResponse(res, result, '查询成功')
   } catch (e) { next(e) }
@@ -37,6 +38,7 @@ async function checkConsistency(req, res, next) {
       productId: q.productId ? +q.productId : null,
       warehouseId: q.warehouseId ? +q.warehouseId : null,
       limit: q.limit ? +q.limit : 500,
+      scopeWarehouseIds: req.user?.warehouseIds ?? null,
     })
     return successResponse(res, result, result.ok ? '缓存与容器一致' : '发现差异')
   } catch (e) { next(e) }
@@ -119,14 +121,14 @@ async function containers(req, res, next) {
     const warehouseId = req.query.warehouseId ? +req.query.warehouseId : null
     if (!productId) return res.status(400).json({ success: false, message: '缺少 productId', data: null })
     const includeLegacy = req.query.includeLegacy === '1' || req.query.includeLegacy === 'true'
-    const result = await svc.getContainers({ productId, warehouseId, includeLegacy })
+    const result = await svc.getContainers({ productId, warehouseId, includeLegacy, scopeWarehouseIds: req.user?.warehouseIds ?? null })
     return successResponse(res, result, '查询成功')
   } catch(e){next(e)}
 }
 
 async function containerLogs(req, res, next) {
   try {
-    return successResponse(res, await svc.getContainerLogs(+req.params.id), '查询成功')
+    return successResponse(res, await svc.getContainerLogs(+req.params.id, req.user?.warehouseIds ?? null), '查询成功')
   } catch(e){next(e)}
 }
 
@@ -223,14 +225,14 @@ async function stockPolicies(req, res, next) {
   try {
     const productId = req.query.productId ? +req.query.productId : null
     if (!productId) return res.status(400).json({ success: false, message: '缺少 productId', data: null })
-    const result = await svc.getStockPolicies({ productId })
+    const result = await svc.getStockPolicies({ productId, scopeWarehouseIds: req.user?.warehouseIds ?? null })
     return successResponse(res, result, '查询成功')
   } catch (e) { next(e) }
 }
 
 async function saveStockPolicies(req, res, next) {
   try {
-    const result = await svc.saveStockPolicies(req.body.items)
+    const result = await svc.saveStockPolicies(req.body.items, req.user?.warehouseIds)
     return successResponse(res, result, '保存成功')
   } catch (e) { next(e) }
 }

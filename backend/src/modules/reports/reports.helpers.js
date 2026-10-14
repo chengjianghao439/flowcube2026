@@ -117,6 +117,14 @@ function pickTopWorkbenchCard(sections) {
   }
 }
 
+// Timestamp range keeps the existing index-friendly inclusive-start/exclusive-next-day contract.
+function buildTimestampDateFilter(column, startDate, endDate) {
+  const conds = [], params = []
+  if (startDate) { conds.push(`${column} >= ?`); params.push(startDate) }
+  if (endDate) { conds.push(`${column} < DATE_ADD(?, INTERVAL 1 DAY)`); params.push(endDate) }
+  return { sql: conds.length ? ` AND ${conds.join(' AND ')}` : '', params }
+}
+
 function buildDateFilter(column, startDate, endDate) {
   const conds = []
   const params = []
@@ -166,6 +174,7 @@ module.exports = {
   sortWorkbenchSections,
   pickTopWorkbenchCard,
   buildDateFilter,
+  buildTimestampDateFilter,
   paymentStatusName,
   paymentTypeName,
   safeNum,

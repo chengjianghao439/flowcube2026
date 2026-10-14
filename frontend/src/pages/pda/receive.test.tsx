@@ -11,6 +11,7 @@
 // 后者每收一箱就成立，多商品单收到一半会被误判成已收完而整页锁死。夹具的
 // putawayStatus 必须带 key（真实响应有），否则这组回归在单测里永远不会被触发。
 import { act } from 'react'
+import { webcrypto } from 'node:crypto'
 import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -18,6 +19,8 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import type { AxiosAdapter } from 'axios'
 import apiClient from '@/api/client'
 import Page from './receive'
+import { useAuthStore } from '@/store/authStore'
+import type { User } from '@/types'
 
 const api = vi.hoisted(() => ({ task: vi.fn(), receive: vi.fn(), warn: vi.fn() }))
 
@@ -111,6 +114,11 @@ async function mountPage(task: Record<string, unknown> = TASK) {
 }
 
 beforeEach(() => {
+ Object.defineProperty(globalThis, 'crypto', { configurable: true, value: webcrypto })
+
+  Object.defineProperty(navigator, 'locks', { configurable: true, value: { request: async (_name: string, options: unknown, fn?: (lock: object) => unknown) => (typeof options === 'function' ? options : fn!)({}) } })
+  useAuthStore.getState().login('synthetic', null, { id: 1, roleId: 1 } as User)
+
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
   api.task.mockReset()
   api.receive.mockReset()

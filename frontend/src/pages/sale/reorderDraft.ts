@@ -11,13 +11,13 @@ function ordinaryDrafts(data: CurrentReorderSource, include: boolean): Omit<Draf
     const qty = include && identity.baseUnit === p.unit && validReorderQuantity(identity.baseQty, p.allowDecimalQty === false) ? identity.baseQty : 0
     const old = rows.get(p.id)
     if (old) old.quantity = Math.round((old.quantity + qty) * 100) / 100
-    else rows.set(p.id, { productId: p.id, productCode: p.code, productName: p.name, articleNumber: p.articleNumber, spec: p.spec, color: p.color, unit: p.unit, entryUnit: p.unit, units: p.units ?? [], quantity: qty, unitPrice: q.salePrice, priceSource: 'list', resolvedPrice: q.salePrice, resolvedPriceLevel: q.priceLevel, priceExplanation: q.source === 'price_list' ? { kind: 'price_list', name: q.priceLevelName } : q.source === 'price_level' ? { kind: 'price_level', name: q.priceLevelName, level: q.priceLevel } : { kind: 'unknown' }, costPrice: p.costPrice, remark: '' })
+    else rows.set(p.id, { productId: p.id, productCode: p.code, productName: p.name, articleNumber: p.articleNumber, spec: p.spec, color: p.color, unit: p.unit, entryUnit: p.unit, units: [], quantity: qty, unitPrice: q.salePrice, priceSource: 'list', resolvedPrice: q.salePrice, resolvedPriceLevel: q.priceLevel, priceExplanation: q.source === 'price_list' ? { kind: 'price_list', name: q.priceLevelName } : q.source === 'price_level' ? { kind: 'price_level', name: q.priceLevelName, level: q.priceLevel } : { kind: 'unknown' }, costPrice: p.costPrice, remark: '' })
   }
   return [...rows.values()].map(row => ({ ...row, quantity: validReorderQuantity(row.quantity) ? row.quantity : 0 }))
 }
 export const ordinaryReorderDrafts = ordinaryDrafts
 export function commercialReorderDrafts(data: CurrentReorderSource, include: boolean): CommercialDraftRow[] {
-  const ordinary = ordinaryDrafts(data, include).map(p => ({ input: { lineKey: crypto.randomUUID(), kind: 'ordinary' as const, productId: p.productId, entryUnit: p.unit, quantity: p.quantity, priceSource: 'default' as const }, name: p.productName, code: p.productCode, spec: p.spec, color: p.color, articleNumber: p.articleNumber, costPrice: p.costPrice, unit: p.unit, baseUnit: p.unit, quantity: String(p.quantity), price: String(p.unitPrice), units: p.units ?? [], allowDecimalQty: data.items.find(i => i.product?.id === p.productId)?.product?.allowDecimalQty, packagingExpressible: true }))
+  const ordinary = ordinaryDrafts(data, include).map(p => ({ input: { lineKey: crypto.randomUUID(), kind: 'ordinary' as const, productId: p.productId, entryUnit: p.unit, quantity: p.quantity, priceSource: 'default' as const }, name: p.productName, code: p.productCode, spec: p.spec, color: p.color, articleNumber: p.articleNumber, costPrice: p.costPrice, unit: p.unit, baseUnit: p.unit, quantity: String(p.quantity), price: String(p.unitPrice), units: [], allowDecimalQty: data.items.find(i => i.product?.id === p.productId)?.product?.allowDecimalQty, packagingExpressible: true }))
   const kits = data.items.flatMap(item => {
     if (item.identity.kind !== 'kit') return []
     const k = item.kit

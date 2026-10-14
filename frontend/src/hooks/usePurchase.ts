@@ -1,6 +1,6 @@
 import { useRef } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
-import { getPurchaseListApi, getPurchaseDetailApi, createPurchaseApi, updatePurchaseApi, confirmPurchaseApi, withdrawConfirmPurchaseApi, approvePurchaseApi, rejectPurchaseApi, cancelPurchaseApi, closePurchaseApi } from '@/api/purchase'
+import { getPurchaseListApi, getPurchaseDetailApi, createPurchaseApi, updatePurchaseApi, confirmPurchaseApi, withdrawConfirmPurchaseApi, approvePurchaseApi, rejectPurchaseApi, cancelPurchaseApi } from '@/api/purchase'
 import { useInvalidate } from '@/hooks/useInvalidate'
 import { createRequestKey } from '@/lib/requestKey'
 import type { CreatePurchaseParams } from '@/types/purchase'
@@ -71,10 +71,4 @@ export const useCancelPurchase = () => {
   })
 }
 
-export const useClosePurchase = () => {
-  const invalidate = useInvalidate()
-  return useMutation({
-    mutationFn: (id: number) => closePurchaseApi(id),
-    onSuccess: () => invalidate('purchase_close'),
-  })
-}
+export { useClosePurchase } from './useClosePurchase'

@@ -15,7 +15,7 @@ import { qtyStep } from '@/lib/qtyStep'
 function canExplainBaseQty(item: DraftItem): boolean {
   const entryUnit = item.entryUnit || item.unit
   if (entryUnit === item.unit) return true
-  const rate = Number(item.units?.find(unit => unit.unitName === entryUnit)?.conversionRate)
+  const rate = Number(item.conversionRate)
   return Number.isFinite(rate) && rate > 0
 }
 
@@ -72,15 +72,7 @@ export function SaleOrderItemsTable({
               </> : <span className="text-muted-foreground">点击选择商品…</span>}
             </button>
             const unitCell = <td className={compact ? 'align-top' : 'py-2.5 text-center'}>
-              {(item.units && item.units.filter(u => !u.isBase).length > 0) ? <select
-                disabled={lockedIdentity}
-                value={item.entryUnit || item.unit}
-                onChange={e => updateItem(item._key, 'entryUnit', e.target.value)}
-                className="h-9 w-full rounded-md border border-border bg-background px-1 text-center text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                title="录入单位" aria-label={`${item.productName || '商品'}录入单位`}
-              >
-                {(item.units || []).map(u => <option key={u.unitName} value={u.unitName}>{u.unitName}</option>)}
-              </select> : <span className={cn('text-muted-body', compact && 'block py-2')}>{item.entryUnit || item.unit || '—'}</span>}
+              <span className={cn('text-muted-body', compact && 'block py-2')}>{item.entryUnit || item.unit || '—'}</span>
               {item.productId > 0 && !canExplainBaseQty(item) && <p role="status" className="mt-1 text-xs text-destructive-ink">换算待确认</p>}
             </td>
             const quantityCell = <td className="px-3 py-3 align-top">
@@ -88,7 +80,7 @@ export function SaleOrderItemsTable({
                 data-entry-input data-entry-field={`item-${item._key}-quantity`} aria-invalid={!!quantityIssue || (invalidItemKeys.has(item._key) && (!Number.isFinite(item.quantity) || item.quantity <= 0))}
                 aria-describedby={quantityIssue ? quantityErrorId : undefined}
                 aria-label={`${item.productName || '商品'}数量`}
-                type="number" min="0.01" step={qtyStep(allowDecimalOf(item.productId))} placeholder="数量"
+                type="number" min="0.01" step={qtyStep(item.allowDecimalQty ?? allowDecimalOf(item.productId))} placeholder="数量"
                 value={item.quantity}
                 ref={(el: HTMLInputElement | null) => { if (el) quantityRefs.current.set(item._key, el); else quantityRefs.current.delete(item._key) }}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'quantity', parsePositiveQuantity(e.target.value))}

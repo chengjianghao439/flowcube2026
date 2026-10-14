@@ -159,7 +159,11 @@ async function depreciateAsset(conn, fa, { period, date, isDisposal = false }, a
   const totalDepr = engine.round2(Number(fa.original_cost) * (1 - Number(fa.residual_rate)))
   const remaining = engine.round2(Math.max(0, totalDepr - accum))
   const monthly = engine.round2(Number(fa.original_cost) * (1 - Number(fa.residual_rate)) / Number(fa.useful_months))
-  const actualMonthly = Math.min(monthly, remaining)
+  // Existing periods count actual ledger installments, not elapsed calendar months.
+  // Positive regular amounts absorb the rounding tail on the last installment;
+  // zero-monthly assets retain their existing behavior pending an explicit policy.
+  const actualMonthly = monthly > 0 && history.length + 1 >= Number(fa.useful_months)
+    ? remaining : Math.min(monthly, remaining)
   if (remaining === 0) {
     await conn.query('UPDATE fixed_assets SET status = 2 WHERE id = ?', [fa.id])
     return { skipped: true, accum }

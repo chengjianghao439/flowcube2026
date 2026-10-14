@@ -45,9 +45,9 @@ const DOCUMENT_STATUS_RULES = Object.freeze({
       // 改单：已占库(2)/部分占库(6) 走「占库期改单」（保留已占量，无任务）；拣货中(3) 走「执行期改单」（有任务）。
       // 已出库后不可再改——出库已经扣减实物库存、生成应收，详见 warehouse-tasks.adjust.js。
       adjust: { from: [2, 3, 6], message: '只有已占库/部分占库/拣货中的销售单可修改明细，已出库后不可修改' },
-      // 占库：草稿(1)或部分占库(6)都可补占。to 不固定，由 reserveStock 按「占完后是否全满」
-      // 动态推进到已占库(2)或部分占库(6)（compareAndSetStatus 传实际目标状态）。
-      reserve: { from: [1, 6], message: '只有草稿或部分占库状态可以占用库存' },
+      // 草稿/部分占库可补占；执行中只补原需求未占量，仍保持3，不回退仓库执行阶段。
+      // 目标状态由 reserveStock 按原阶段和累计已占量决定。
+      reserve: { from: [1, 3, 6], message: '只有草稿、部分占库或执行中的销售单可以占用库存' },
       // 取消占库：已占库(2)/部分占库(6)都可，按产品/数量释放。to 由 releaseStock 动态决定。
       release: {
         from: [2, 6],

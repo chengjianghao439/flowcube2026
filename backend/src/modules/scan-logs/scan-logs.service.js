@@ -123,7 +123,7 @@ async function createScanLog({
     }
 
     const [[itemRow]] = await conn.query(
-      'SELECT id, product_id, required_qty, picked_qty FROM warehouse_task_items WHERE id = ? AND task_id = ? FOR UPDATE',
+      'SELECT id, product_id, required_qty, picked_qty, allow_decimal_qty_snapshot FROM warehouse_task_items WHERE id = ? AND task_id = ? FOR UPDATE',
       [itemId, taskId],
     )
     if (!itemRow) throw new AppError('任务明细不存在', 404)
@@ -131,7 +131,8 @@ async function createScanLog({
       throw new AppError('商品与任务明细不一致', 400)
     }
 
-    await assertQtyPrecision(conn, [{ productId: itemRow.product_id, qty, label: '拣货数量' }])
+    await assertQtyPrecision(conn, [{ productId: itemRow.product_id,
+      qty, label: '拣货数量' }])
     // 原值通过精度校验后再归一化，避免合法的 0.3 - 0.1 / 0.1 + 0.2 被浮点尾差误拒。
     qty = roundQty(qty)
     const needRemain = roundQty(Number(itemRow.required_qty) - Number(itemRow.picked_qty))
@@ -484,6 +485,7 @@ async function createCheckScanLog({
     if (Number(itemRow.product_id) !== Number(c.product_id)) {
       throw new AppError('库存条码上的商品与任务明细不一致', 400)
     }
+    await assertQtyPrecision(conn,[{productId:itemRow.product_id,qty:addQty,label:'本次复核数量'}])
     const nextChecked = roundQty(Number(itemRow.checked_qty) + addQty)
     if (nextChecked > Number(itemRow.picked_qty)) {
       throw new AppError('复核累计将超过拣货数量', 400)

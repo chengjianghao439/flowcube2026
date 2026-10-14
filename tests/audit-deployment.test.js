@@ -19,7 +19,7 @@ function deployment(scenario, transform = source => source) {
   fs.writeFileSync(updatePath, transform(fs.readFileSync(updatePath, 'utf8')))
   for (const file of ['lib/runtime-guards.sh']) if (fs.existsSync(path.join(root, 'scripts', file))) fs.copyFileSync(path.join(root, 'scripts', file), path.join(dir, 'scripts', file))
   fs.copyFileSync(path.join(root, 'docker-compose.yml'), path.join(dir, 'docker-compose.yml'))
-  fs.writeFileSync(path.join(dir, 'scripts/release-gate.sh'), '#!/bin/bash\n[[ "$DEPLOY_TEST_SCENARIO" != gate && "$DEPLOY_TEST_SCENARIO" != ledger_gate && "$DEPLOY_TEST_SCENARIO" != ledger_retry && "$DEPLOY_TEST_SCENARIO" != rollback_failure && "$DEPLOY_TEST_SCENARIO" != first_deploy && "$DEPLOY_TEST_SCENARIO" != legacy ]]\n')
+  fs.writeFileSync(path.join(dir, 'scripts/release-gate.sh'), '#!/bin/bash\n[[ "$DEPLOY_TEST_SCENARIO" != gate && "$DEPLOY_TEST_SCENARIO" != ledger_gate && "$DEPLOY_TEST_SCENARIO" != ledger_retry && "$DEPLOY_TEST_SCENARIO" != write_contract_gate && "$DEPLOY_TEST_SCENARIO" != rollback_failure && "$DEPLOY_TEST_SCENARIO" != first_deploy && "$DEPLOY_TEST_SCENARIO" != legacy ]]\n')
   if (scenario === 'legacy') {
     fs.mkdirSync(path.join(dir, 'backend/apk'), { recursive: true })
     fs.writeFileSync(path.join(dir, 'backend/apk/version.json'), JSON.stringify({ version: '2.0.0', versionCode: 2 }))
@@ -59,11 +59,14 @@ if(cmd==='docker') {
    fs.writeFileSync(mysqlStarted,'yes');process.exit(0);
  }
  if(a.startsWith('compose up')&&a.endsWith('backend frontend')&&!args.includes('--no-deps')) {fs.appendFileSync(log,JSON.stringify(['implicit-mysql-reconcile'])+'\\n');process.exit(1);}
- if(a.includes('SELECT @@GLOBAL.log_bin_trust_function_creators')) {if(s==='ledger_retry_pre_migration')process.exit(1);console.log('0');}
+ if(a.includes('SELECT @@GLOBAL.log_bin_trust_function_creators')) {if(['ledger_retry_pre_migration','write_contract_retry_pre_migration'].includes(s))process.exit(1);console.log('0');}
  if(a.includes("table_name='db_migrations'"))console.log('1');
  if(a.includes("filename='240_party_ledger_explicit_identity.sql'"))console.log(s==='ledger_gate'?'0':'1');
  if(s==='restore_permission'&&a.includes('SET GLOBAL log_bin_trust_function_creators=0'))process.exit(1);
- if(args[0]==='image'&&args[1]==='inspect')console.log(a.includes('io.flowcube.party-ledger-contract')?(s.startsWith('ledger_retry')?'':'1'):(s==='wrong-image'?'b':'a').repeat(40));
+ if(args[0]==='image'&&args[1]==='inspect') {
+   if(a.includes('io.flowcube.quantity-return-cash-contract'))console.log(s==='write_contract_missing_target'||(s.startsWith('write_contract')&&args.at(-1).startsWith('sha256:'))?'':'1');
+   else console.log(a.includes('io.flowcube.party-ledger-contract')?(s.startsWith('ledger_retry')?'':'1'):(s==='wrong-image'?'b':'a').repeat(40));
+ }
  if(s==='load'&&args[0]==='load')process.exit(1);
  if(a.startsWith('compose ps')&&s!=='first_deploy')console.log(args.at(-1)==='backend'?'old-backend-container':'old-frontend-container');
  if(args[0]==='inspect')console.log(args.at(-1).includes('backend')?'sha256:'+'1'.repeat(64):'sha256:'+'2'.repeat(64));
@@ -137,6 +140,51 @@ test('成功部署先迁移后替换应用，并通过门禁后结束', () => {
   const load = result.commands.findIndex(c => c[0] === 'docker' && c[1] === 'load')
   const verify = result.commands.findIndex(c => c[0] === 'docker' && c.slice(1, 3).join(' ') === 'image inspect')
   assert.ok(load >= 0 && verify > load && migrate > verify, '先加载并验证 CI 镜像，再执行迁移')
+})
+
+for (const scenario of ['write_contract_gate', 'write_contract_retry_pre_migration']) {
+  test(`${scenario}: 240契约不能授权0.13.4在288–292事实后恢复写入`, () => {
+    const result = deployment(scenario)
+    assert.equal(result.status, 1, result.stdout + result.stderr)
+    assert.match(result.stderr, /保持.*停写/)
+    assert.ok(!result.commands.some(c => c.includes('--force-recreate')))
+    assert.ok(!result.commands.some(c => c[0] === 'docker' && c[1] === 'tag' && c[2].startsWith('sha256:')))
+    assert.ok(result.commands.filter(c => c.join(' ').includes('compose stop -t 60 backend')).length >= 2)
+  })
+}
+
+test('缺少新写入契约的目标镜像在停写和迁移前拒绝', () => {
+  const result = deployment('write_contract_missing_target')
+  assert.equal(result.status, 1, result.stdout + result.stderr)
+  assert.ok(!result.commands.some(c => c.join(' ').includes('compose stop') || c.join(' ').includes('npm run migrate')))
+})
+
+test('旧镜像不兼容仍可完成新后端向前发布', () => {
+  const result = deployment('write_contract_success')
+  assert.equal(result.status, 0, result.stdout + result.stderr)
+  assert.ok(result.commands.some(c => c.join(' ').includes('npm run migrate')))
+  assert.ok(result.commands.some(c => c.join(' ').includes('compose up -d --no-build --no-deps backend frontend')))
+})
+
+test('撤掉新写入回退门会恢复不兼容旧镜像，实际shell反证', () => {
+  const result = deployment('write_contract_gate', source => {
+    const changed = source.replace(' && [ "$WRITE_COMPATIBILITY_CHANGED" = \'0\' ]', '')
+    assert.notEqual(changed, source)
+    return changed
+  })
+  assert.equal(result.status, 1, result.stdout + result.stderr)
+  assert.ok(result.commands.some(c => c.includes('--force-recreate')))
+  assert.match(result.stderr, /已恢复部署前应用镜像/)
+})
+
+test('撤掉目标契约门会让未声明兼容镜像迁移，实际shell反证', () => {
+  const result = deployment('write_contract_missing_target', source => {
+    const changed = source.replace(/^  \[ "\$target_write_contract" = '1' \].*$/m, '  : # deliberately removed target contract gate')
+    assert.notEqual(changed, source)
+    return changed
+  })
+  assert.equal(result.status, 0, result.stdout + result.stderr)
+  assert.ok(result.commands.some(c => c.join(' ').includes('npm run migrate')))
 })
 
 for (const scenario of ['missing-archive', 'corrupt-archive', 'wrong-image']) {

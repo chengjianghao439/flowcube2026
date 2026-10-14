@@ -34,8 +34,8 @@ beforeEach(()=>{
 })
 afterEach(async()=>{await act(async()=>root.unmount());qc.clear();host.remove();client.defaults.adapter=oldAdapter;setApiClientBaseURL(oldServer);useAuthStore.setState({user:null,token:null});localStorage.clear();expect(unknown).toEqual([])})
 async function draw(active=true){await act(async()=>{root.render(<MemoryRouter><QueryClientProvider client={qc}><SectionVisibilityContext.Provider value={active}><Page/></SectionVisibilityContext.Provider></QueryClientProvider></MemoryRouter>)});await act(async()=>{await new Promise(r=>setTimeout(r,25))})}
-it('actual finance row preserves four places for supplier refund positive IN and exact RF trace',async()=>{
-  await draw();expect(document.body.textContent).toContain('0.0040')
+it('actual finance row preserves historical subcent raw pending and exact RF trace',async()=>{
+  await draw();expect(document.body.textContent).toContain('¥0.004（待核）')
   const button=[...document.querySelectorAll('button')].find(b=>b.textContent==='RF11');expect(button).toBeDefined()
   await act(async()=>{button!.click();await new Promise(r=>setTimeout(r,20))})
   await act(async()=>{await new Promise(r=>setTimeout(r,25))})
@@ -87,7 +87,7 @@ it('actual RF generated result uses real voucher ID without a nonexistent timest
   await act(async()=>button.click())
   await act(async()=>{await new Promise(r=>setTimeout(r,25))})
   await act(async()=>{await new Promise(r=>setTimeout(r,25))})
-  expect(document.body.textContent).toContain('回款 4.0000')
+  expect(document.body.textContent).toContain('回款 ¥4.00')
   expect(document.body.textContent).toContain('凭证已生成')
   expect(document.body.textContent).not.toContain('凭证待核对')
   expect(calls.filter(p=>p==='/supplier-refunds/11')).toHaveLength(1)
@@ -99,8 +99,20 @@ it('actual RF pending result preserves the stored error without claiming a gener
   await act(async()=>button.click())
   await act(async()=>{await new Promise(r=>setTimeout(r,25))})
   await act(async()=>{await new Promise(r=>setTimeout(r,25))})
-  expect(document.body.textContent).toContain('回款 4.0000')
+  expect(document.body.textContent).toContain('回款 ¥4.00')
   expect(document.body.textContent).toContain('凭证待生成')
   expect(document.body.textContent).not.toContain('凭证已生成')
   expect(calls.filter(p=>p==='/supplier-refunds/11')).toHaveLength(1)
+})
+
+it('new exact-cent supplier refund row and trace show cash cents while keeping canonical trace identity',async()=>{
+ transaction.amount=0.01;transaction.balanceAfter=0.01;refundAmount='0.0100';refundError='凭证待生成'
+ await draw();expect(document.body.textContent).toContain('¥0.01');expect(document.body.textContent).not.toContain('0.0100')
+ const button=[...document.querySelectorAll('button')].find(b=>b.textContent==='RF11')!
+ await act(async()=>button.click());await act(async()=>{await new Promise(r=>setTimeout(r,25))});await act(async()=>{await new Promise(r=>setTimeout(r,25))})
+ expect(document.body.textContent).toContain('回款 ¥0.01');expect(document.body.textContent).not.toContain('原退款单与这笔流水不符')
+})
+
+it('historical fractional row balance and summary stay raw pending instead of silently rounding to zero',async()=>{
+ await draw();expect(document.body.textContent).toContain('¥0.004（待核）');expect(document.body.textContent?.match(/¥0\.004（待核）/g)?.length).toBeGreaterThanOrEqual(4);expect(document.body.textContent).not.toContain('¥0.01')
 })

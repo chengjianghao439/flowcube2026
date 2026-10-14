@@ -47,6 +47,7 @@ function runScript(action, opts = {}) {
   fs.writeFileSync(scriptPath, body, { mode: 0o755 })
   if (withCred) {
     fs.writeFileSync(credPath, `${CRED_MARK}\nFLOWCUBE_DEV_MYSQL_PASSWORD=fake-user\nFLOWCUBE_DEV_JWT_SECRET=fake-jwt\n`, { mode: credMode })
+    fs.chmodSync(credPath, credMode) // Exercise the requested fake mode even with process umask 077.
   }
 
   // stub colima / docker / npm：记录每次调用；context 只在 profile 起来后才可用（保护真实顺序）

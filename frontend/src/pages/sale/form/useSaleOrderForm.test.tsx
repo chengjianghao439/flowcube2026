@@ -120,13 +120,10 @@ test('同一事件批次切换客户后选择商品仍查询新客户', async ()
   await resolve(2, price(22)); await resolve(1, price(11)); await resolve(0, price(10))
   expect(form.items[0].unitPrice).toBe(22); expect(form.priceLoading[key]).toBe(false)
 })
-test('切回同一商品仍忽略第一次选品的旧单位响应', async () => {
-  const units = [deferred<Awaited<ReturnType<typeof getProductApi>>>(), deferred<Awaited<ReturnType<typeof getProductApi>>>(), deferred<Awaited<ReturnType<typeof getProductApi>>>()]
-  units.forEach(d => vi.mocked(getProductApi).mockImplementationOnce(() => d.promise))
+test('反复选品只使用固定单位，不读取辅助单位', async () => {
   const key = await selectProduct(10); await selectProduct(20, key); await selectProduct(10, key)
-  await act(async () => units[2].resolve({ units: [{ unitName: '箱', conversionRate: 12 }] } as Awaited<ReturnType<typeof getProductApi>>))
-  await act(async () => units[0].resolve({ units: [{ unitName: '旧箱', conversionRate: 6 }] } as Awaited<ReturnType<typeof getProductApi>>))
-  expect(form.items[0].units?.[0].unitName).toBe('箱')
+  expect(getProductApi).not.toHaveBeenCalled(); expect(form.items[0].units).toEqual([])
+  expect(form.items[0].entryUnit).toBe(form.items[0].unit)
 })
 test('卸载会取消待执行的选品聚焦', async () => {
   vi.useFakeTimers()
@@ -139,25 +136,14 @@ test('卸载会取消待执行的选品聚焦', async () => {
   } finally { vi.useRealTimers() }
 })
 
-test('编辑初始单位加载不能覆盖重新选品后的单位', async () => {
-  const initialUnits = deferred<Awaited<ReturnType<typeof getProductApi>>>()
-  vi.mocked(getProductApi).mockImplementation(() => initialUnits.promise)
-  const order = {
-      customerId: 1, warehouseId: 1,
-      items: [{ productId: 10, productCode: 'P10', productName: '商品10', unit: '个', quantity: 1, unitPrice: 12, amount: 12 }],
-    } as NonNullable<Parameters<typeof useSaleOrderForm>[1]>
-  function EditHarness() {
-    form = useSaleOrderForm('/sale/1', order)
-    return null
-  }
+test('编辑回显和重新选品均不读取现行辅助单位', async () => {
+  const order = { customerId: 1, items: [{ productId: 7, quantity: 2, unitPrice: 20, unit: '个', entryUnit: '箱', entryQty: 1, conversionRate: 2 }] } as NonNullable<Parameters<typeof useSaleOrderForm>[1]>
+  function EditHarness() { form = useSaleOrderForm('/sale/1', order); return null }
   act(() => root.render(<StrictMode><EditHarness /></StrictMode>))
-  vi.mocked(getProductApi).mockResolvedValue({ units: [{ unitName: '新箱', conversionRate: 12 }] } as Awaited<ReturnType<typeof getProductApi>>)
+  expect(form.items[0].conversionRate).toBe(2); expect(getProductApi).not.toHaveBeenCalled()
   await selectProduct(10, form.items[0]._key)
-  expect(form.items[0].units?.[0].unitName).toBe('新箱')
-  await act(async () => initialUnits.resolve({ units: [{ unitName: '旧箱', conversionRate: 6 }] } as Awaited<ReturnType<typeof getProductApi>>))
-  expect(form.items[0].units?.[0].unitName).toBe('新箱')
+  expect(form.items[0].entryUnit).toBe(form.items[0].unit); expect(getProductApi).not.toHaveBeenCalled()
 })
-
 
 test('空白新建通过真实 ProductFinder 单击后确认，关闭弹窗仍回填选中行', async () => {
   function FinderHarness() {

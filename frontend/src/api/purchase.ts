@@ -12,4 +12,6 @@ export const withdrawConfirmPurchaseApi = (id: number) => client.post<null>(`/pu
 export const approvePurchaseApi = (id: number) => client.post<null>(`/purchase/${id}/approve`)
 export const rejectPurchaseApi = (id: number, reason: string) => client.post<null>(`/purchase/${id}/reject`, { reason })
 export const cancelPurchaseApi  = (id: number) => client.post<null>(`/purchase/${id}/cancel`)
-export const closePurchaseApi   = (id: number) => client.post<null>(`/purchase/${id}/close`)
+export interface ClosePurchaseResult { purchaseOrderId: number; status: 3; closedReason: 'short_close' }
+export const closePurchaseApi = (id: number, requestKey: string, config?: Parameters<typeof client.post>[2]) =>
+  client.post<ClosePurchaseResult>(`/purchase/${id}/close`, {}, { ...config, headers: { ...config?.headers, ...withRequestKeyHeaders(requestKey) } })

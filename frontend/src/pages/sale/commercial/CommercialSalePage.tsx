@@ -216,9 +216,9 @@ export default function CommercialSalePage({
                 <X className="mr-1 h-4 w-4" />删除订单
               </Button>
             )}
-            {can(permission.reserve) && [1, 6].includes(order.status) && (
+            {can(permission.reserve) && ([1, 6].includes(order.status) || (order.status === 3 && order.hasUnreservedItems)) && (
               <Button variant="outline" disabled={locked || returning} onClick={() => setConfirm('reserve')}>
-                <Warehouse className="mr-1 h-4 w-4" />{order.status === 6 ? '补占库存' : '占用库存'}
+                <Warehouse className="mr-1 h-4 w-4" />{order.status === 1 ? '占用库存' : '补占库存'}
               </Button>
             )}
             {can(permission.release) && [2, 6].includes(order.status) && (

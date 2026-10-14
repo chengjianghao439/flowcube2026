@@ -35,7 +35,7 @@ function receivedIdentity(row,sets) {
     &&Number(order.supplier_id)===Number(ret.supplier_id)&&Number(row.supplier_id)===Number(order.supplier_id)
     &&Number(row.warehouse_id)===Number(ret.warehouse_id)&&Number(row.warehouse_id)===Number(order.warehouse_id)
     &&Number(payable.type)===1&&Number(payable.order_id)===Number(order.id)&&payable.order_no===order.order_no&&row.received_at)
-  const body=rules.createBody(JSON.parse(row.create_payload_json))
+  const body=rules.frozenCreateBody(JSON.parse(row.create_payload_json))
   check(rules.stableJson(body)===row.create_payload_json&&body.operationUuid===row.created_operation_uuid&&body.purchaseReturnId===Number(ret.id)
     &&body.incomeAccountId===Number(row.income_account_id)&&body.refundDate===rules.date(row.refund_date)&&body.amount===rules.positiveMoney(row.amount))
   const lines=pri.filter(item=>Number(item.return_id)===Number(ret.id))

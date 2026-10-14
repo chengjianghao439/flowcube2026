@@ -74,16 +74,21 @@ function fixture(type, options = {}) {
       if (sql.includes('FROM inventory_warehouses')) { calls.push('master'); return [(Array.isArray(args[0]) ? args[0] : args).map(Number).includes(8) ? [{ id: 8, name: '仓8', is_active: 1 }] : []] }
       if (sql.includes('FROM product_items')) return [(Array.isArray(args[0]) ? args[0] : args).map(Number).includes(3) ? [{ ...product }] : []]
       if (sql.includes('FROM product_units')) return [[{ unit_name: '箱', conversion_rate: 3 }]]
-      if (sql.includes('FROM purchase_order_items')) return [[{ id: 101, order_id: 10, product_id: 3, unit: '个', quantity: 10, received_qty: 10, returned_qty: options.returned || 0, unit_price: 4 }]]
-      if (sql.includes('FROM purchase_orders')) return [[{ id: 10, order_no: 'PO10', supplier_id: 4, warehouse_id: 8 }]]
+      if (sql.startsWith('SELECT iti.purchase_item_id AS id, SUM(iti.putaway_qty)')) return [[]] // received but not financially audited
+      if (sql.startsWith('SELECT id,total_amount,paid_amount,balance FROM payment_records')) return [[]]
+      if (sql.startsWith('SELECT * FROM purchase_returns WHERE purchase_order_id=')) return [state.heads.filter(row => row.type === 'purchase_return' && Number(row.purchase_order_id) === Number(args[0]) && row.status !== 4).map(row => ({ ...row }))]
+      if (sql.startsWith('SELECT pri.* FROM purchase_return_items')) return [state.lines.filter(row => state.heads.some(head => head.type === 'purchase_return' && Number(head.purchase_order_id) === Number(args[0]) && head.status !== 4 && head.id === row.parent_id)).map(row => ({ ...row, return_id: row.parent_id }))]
+      if (sql.startsWith('UPDATE purchase_returns SET cash_execution_basis=')) { const head=state.heads.find(row => row.id===Number(args[1])); assert.ok(head); head.cash_execution_basis=args[0]; return [{affectedRows:1}] }
+      if (sql.includes('FROM purchase_order_items')) return [[{ id: 101, order_id: 10, product_id: 3, unit: '个', quantity: 10, received_qty: 10, returned_qty: options.returned || 0, unit_price: 4, amount: 40 }]]
+      if (sql.includes('FROM purchase_orders')) return [[{ id: 10, order_no: 'PO10', supplier_id: 4, warehouse_id: 8, total_amount: 40, cash_basis: null }]]
       if (/^INSERT INTO (sale_orders|purchase_returns|inventory_disposal_orders) /.test(sql)) {
         calls.push('target'); const no = args[0]
-        const id = 81 + state.heads.length; state.heads.push({ id, type, warehouse_id: 8, no, order_no: no, return_no: no, disposal_no: no, commercial_model: null, disposal_handling_link_id: null }); return [{ insertId: id }]
+        const id = 81 + state.heads.length; state.heads.push({ id, type, warehouse_id: 8, no, order_no: no, return_no: no, disposal_no: no, commercial_model: null, disposal_handling_link_id: null, ...(type === 'purchase_return' ? { purchase_order_id: args[5], supplier_id: args[1], total_amount: args[7], status: 1, cash_execution_basis: null } : {}) }); return [{ insertId: id }]
       }
       if (sql.startsWith('INSERT INTO sale_order_items')) {
         state.lines.push(...args[0].map((row, index) => ({ id: 501 + state.lines.length + index, parent_id: row[0], product_id: row[3], warehouse_id: row[1], unit: row[6], quantity: row[11], unit_price: row[14] }))); return [{ insertId: 999 }]
       }
-      if (sql.startsWith('INSERT INTO purchase_return_items')) { state.lines.push({ id: 502 + state.lines.length, parent_id: args[0], product_id: args[2], unit: args[8], quantity: args[10], unit_price: args[13], purchase_item_id: args[1] }); return [{ insertId: 999 }] }
+      if (sql.startsWith('INSERT INTO purchase_return_items')) { state.lines.push({ id: 502 + state.lines.length, parent_id: args[0], product_id: args[2], unit: args[8], quantity: args[10], unit_price: args[13], purchase_item_id: args[1], amount: args[14] }); return [{ insertId: 999 }] }
       if (sql.startsWith('INSERT INTO inventory_disposal_items')) { state.lines.push({ id: 503 + state.lines.length, parent_id: args[0], product_id: args[1], unit: args[4], quantity: args[5] }); return [{ insertId: 999 }] }
       if (/FROM (sale_order_items|purchase_return_items|inventory_disposal_items)/.test(sql)) return [state.lines.filter(row => Number(row.parent_id) === Number(args[0])).map(row => ({ ...row, warehouse_id: row.warehouse_id || 8 }))]
       if (/FROM (sale_orders|purchase_returns|inventory_disposal_orders)/.test(sql)) return [state.heads.filter(row => Number(row.id) === Number(args[0])).map(row => ({ ...row }))]
@@ -93,9 +98,9 @@ function fixture(type, options = {}) {
     },
   }
   const generic = { beginCreationOperationRequest: async (c, data) => { assert.equal(c, conn); calls.push('generic'); genericPayloads.push(structuredClone(data.payload)); if (options.genericReplay) return { replay: true, responseData: { id: 80 } }; state.generic = { status: 0 }; return { enabled: true, id: 1, replay: false } }, completeOperationRequest: async c => { assert.equal(c, conn); calls.push('generic-complete'); state.generic.status = 1 } }
-  const common = { '../document-activity/document-change-audit': changeAudit, '../disposal/disposal.handling.target-guards': targetGuards, './disposal.handling.target-guards': targetGuards, '../refunds/supplier-refunds.pr-gate': { assertNoPendingRefund: async () => ({ received: false }) },
+  const common = { '../../utils/cashMoney': require('../backend/src/utils/cashMoney'), '../purchase/purchase.cash-money': require('../backend/src/modules/purchase/purchase.cash-money'), './sale.shipping-quantity': require('../backend/src/modules/sale/sale.shipping-quantity'), '../document-activity/document-change-audit': changeAudit, '../disposal/disposal.handling.target-guards': targetGuards, './disposal.handling.target-guards': targetGuards, '../refunds/supplier-refunds.pr-gate': { assertNoPendingRefund: async () => ({ received: false }) },
     '../../config/db': { pool: { getConnection: async () => { connections++; return conn } } }, '../../utils/AppError': AppError, '../../utils/warehouseScope': scope, '../../utils/unitConversion': units, '../../utils/qtyPrecision': qty, '../../utils/codeGenerator': { generateDailyCode: async () => ({ sale_order: 'S', purchase_return: 'PR', inventory_disposal: 'DP' })[type] + (81 + state.heads.length) }, '../../utils/operationRequest': generic, '../../utils/statusTransition': {}, '../../constants/documentStatusRules': require('../backend/src/constants/documentStatusRules'), '../../utils/pagination': {}, '../disposal/disposal.handling.targets': targets, './disposal.handling.targets': targets }
-  const saleContracts = load('modules/sale/sale.contracts.js', { zod: { z }, '../../utils/AppError': AppError, '../../utils/qtyPrecision': qty, '../disposal/disposal.handling.contracts': contracts })
+  const saleContracts = load('modules/sale/sale.contracts.js', { '../../utils/cashMoney': require('../backend/src/utils/cashMoney'), zod: { z }, '../../utils/AppError': AppError, '../../utils/qtyPrecision': qty, '../disposal/disposal.handling.contracts': contracts })
   let svc
   if (type === 'sale_order') svc = load('modules/sale/sale.service.js', { ...common, './sale.commercial-dispatch': {}, './sale.edit-baseline': saleEditBaseline, './sale.commercial-store': { assertRequestKey() {} }, './sale.commercial-resolver': {}, './sale.commercial-money': {}, '../fulfillment/fulfillment.refresh': { commitFulfillment: async c => { assert.equal(c, conn); calls.push('fulfillment'); await c.commit() } }, '../logistics/shipping-products': {}, '../fulfillment/fulfillment.sale-items': {}, './sale.presentation': {}, './sale.items': load('modules/sale/sale.items.js', {}), '../../engine/reservationEngine': {}, '../../engine/containerEngine': {}, '../inventory/inventory.service': {}, '../../utils/expectedStock': {}, '../../utils/creditExposure': {}, '../credit-overrides/credit-overrides.service': {}, '../../constants/saleOrderStatus': {}, '../../constants/settlementType': { SETTLEMENT_TYPE: {} }, '../../constants/warehouseTaskStatus': {}, '../../utils/backendTime': {}, '../warehouse-tasks/warehouse-tasks.adjust': {}, '../warehouse-tasks/warehouse-task-events.service': {}, './sale.contracts': saleContracts })
   if (type === 'purchase_return') svc = load('modules/returns/returns-purchase.service.js', { ...common, './return-events.service': { RETURN_EVENT: { CREATED: 'created' }, record: async (c, event) => { assert.equal(c, conn); calls.push('event'); state.durableEvents.push(structuredClone(event)) } }, '../../constants/warehouseTaskStatus': {}, '../../utils/requestContext': { getRequestId: () => 'req' }, './returns.helpers': { genNo: async () => 'PR' + (81 + state.heads.length) }, './returns.purchase-lock': {} })
@@ -152,8 +157,12 @@ test('source scope/auth, UUID identity and budget fail before duplicate target c
   await assert.rejects(f.run({ ...data, disposalSource: { ...reference, expectedRevision: 2, operationUuid: '33333333-3333-4333-8333-333333333333' } }), e => e.code === 'DISPOSAL_HANDLING_BUDGET_EXCEEDED')
 })
 test('single folded basic quantity, type/warehouse and current unit/active are authoritative', async () => {
-  const f = fixture('sale_order'), data = input('sale_order'); data.items[0].entryUnit = '箱'; await f.run(data)
+  const f = fixture('sale_order'), data = input('sale_order'); data.items[0].quantity = 6; await f.run(data)
   assert.equal(f.state.links[0]?.allocated_quantity, 6)
+  const auxiliary = fixture('sale_order'), auxiliaryData = input('sale_order')
+  auxiliaryData.items[0].entryUnit = '箱'
+  await assert.rejects(auxiliary.run(auxiliaryData), e => e.code === 'SALE_FIXED_UNIT_REQUIRED')
+  assert.equal(auxiliary.state.heads.length, 0)
   for (const [type, options, changed] of [
     ['sale_order', {}, { items: [...input('sale_order').items, ...input('sale_order').items] }],
     ['sale_order', {}, { items: [{ ...input('sale_order').items[0], warehouseId: 9 }] }],

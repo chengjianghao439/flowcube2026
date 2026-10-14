@@ -1,6 +1,6 @@
 import DataTable from '@/components/shared/DataTable'
 import { SectionCard } from '@/components/shared/SectionCard'
-import { money, unitPrice } from '@/lib/format'
+import { money, qty, unitPrice } from '@/lib/format'
 import type { TableColumn } from '@/types'
 import type { SaleOrder } from '@/types/sale'
 import type { CommercialGroup, CommercialComponent } from '@/types/sale-commercial'
@@ -29,6 +29,13 @@ export function CommercialOrderItems({ order }: { order: SaleOrder }) {
     { key: 'targetQty', title: '数量', width: 120, align: 'right', render: (_, group) => <span className="tabular-nums">{group.component ? componentDisplayQuantity(group.component.baseQty, group.targetQty) ?? '—' : group.targetQty}</span> },
     { key: 'unitPrice', title: '单价', width: 130, align: 'right', render: (value, group) => group.component ? '—' : <span className="tabular-nums">{unitPrice(value as number | null | undefined, 8)}</span> },
     { key: 'amount', title: '金额', width: 110, align: 'right', render: (value, group) => group.component ? '—' : <span className="font-semibold tabular-nums">{money(Number(value))}</span> },
+    { key: 'dispatch', title: '履约数量', width: 260, render: (_, group) => group.component ? '—' : <div className="space-y-1 text-xs tabular-nums">
+      <p>原需求 {qty(group.originalQty)} {commercialUnit(group)} · 当前目标 {qty(group.targetQty)} {commercialUnit(group)}</p>
+      {group.dispatch ? <>
+        <p>已确认实发 {qty(group.dispatch.confirmedShippedQty)} {commercialUnit(group)}</p>
+        <p>在执行 {qty(group.dispatch.outstandingQty)} {commercialUnit(group)} · 未派发 {qty(group.dispatch.availableQty)} {commercialUnit(group)}</p>
+      </> : <p>实发与执行进度待核对</p>}
+    </div> },
     { key: 'remark', title: '备注', width: 180, expandableText: true },
   ]
   return <SectionCard title="商品明细" compact noPadding>

@@ -62,6 +62,7 @@ export interface CommercialGroup {
   priceSource: CommercialInput['priceSource']
   components: CommercialComponent[]
   metadata: {
+    quantityPolicies?: Record<number, number>
     kitUnit?: string
     kitIdentity?: { spec: string; color: string; articleNumber: string }
     input: CommercialInput

@@ -1,5 +1,5 @@
 import type { CommercialBody, CommercialInput, CommercialPreview } from '@/types/sale-commercial'
-import type { CreateSaleParams } from '@/types/sale'
+import type { CreateSaleParams, SaleOrderItem } from '@/types/sale'
 
 function invalid(reason: string): never {
   throw new Error(`${reason}，请保留草稿并重新核对预览`)
@@ -22,7 +22,7 @@ function priceIdentity(source: CommercialInput['priceSource']) {
   return source === 'list' ? 'default' : source
 }
 
-export function buildNewSalePayload(body: CommercialBody, preview: CommercialPreview): CreateSaleParams | CommercialBody {
+export function buildNewSalePayload(body: CommercialBody, preview: CommercialPreview, originals: SaleOrderItem[] = []): CreateSaleParams | CommercialBody {
   const inputs = body.commercialGroups
   if (!Array.isArray(inputs)) invalid('商品明细不完整')
   if (inputs.some(input => input?.kind === 'kit')) return body
@@ -77,10 +77,17 @@ export function buildNewSalePayload(body: CommercialBody, preview: CommercialPre
 
     const entry = metadata.entry
     const entryUnit = input.entryUnit ?? component.unit
+    const original = originals.find(row => input.lineKey === `ordinary:${row.id}` && row.productId === input.productId
+      && (row.warehouseId ?? body.warehouseId) === warehouseId)
+    const unchangedOriginal = !!original && entryUnit === (original.entryUnit || original.unit)
+      && input.quantity === (original.entryQty ?? original.quantity)
+      && input.priceSource === 'manual' && input.unitPrice === Math.round(original.unitPrice * (original.conversionRate || 1) * 10000) / 10000
     if (
       !textPresent(entryUnit) || !entry || entry.entryUnit !== entryUnit ||
       (resolvedInput.entryUnit ?? component.unit) !== entryUnit || !positive(entry.entryQty) ||
-      entry.entryQty !== input.quantity || !positive(entry.entryUnitPrice) || !positive(entry.conversionRate)
+      entry.entryQty !== input.quantity || !positive(entry.entryUnitPrice) || !positive(entry.conversionRate) ||
+      (!unchangedOriginal && (entry.conversionRate !== 1 || entryUnit !== component.unit)) ||
+      (unchangedOriginal && (entry.conversionRate !== (original!.conversionRate || 1) || component.unit !== original!.unit))
     ) invalid('预览的录入单位、数量或成交价无效')
     if (input.priceSource === 'manual' && (!positive(input.unitPrice) || input.unitPrice !== entry.entryUnitPrice))
       invalid('手工成交价与预览依据不一致')

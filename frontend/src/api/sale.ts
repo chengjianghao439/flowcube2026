@@ -12,13 +12,13 @@ export const createSaleApi     = (data: CreateSaleParams | CommercialBody, reque
   client.post<{ id: number; orderNo: string }>('/sale', data, config || requestKey ? { ...config, ...(requestKey ? { headers: { ...config?.headers, ...withRequestKeyHeaders(requestKey) } } : {}) } : undefined)
 export const updateSaleApi     = ({ id, ...data }: UpdateSaleParams, requestKey?: string) => client.put<null>(`/sale/${id}`, data, requestKey ? { headers: withRequestKeyHeaders(requestKey) } : undefined)
 export const adjustSaleApi     = ({ id, ...data }: UpdateSaleParams, requestKey?: string) => client.put<AdjustSaleResult>(`/sale/${id}/adjust`, data, requestKey ? { headers: withRequestKeyHeaders(requestKey) } : undefined)
-export const reserveSaleApi    = (id: number, items?: ReserveItemOverride[], confirmCreditOverride?: boolean, requestKey?: string) =>
-  client.post<null>(`/sale/${id}/reserve`, { ...(items?.length ? { items } : {}), ...(confirmCreditOverride ? { confirmCreditOverride: true } : {}) }, { skipGlobalError: true, ...(requestKey ? { headers: withRequestKeyHeaders(requestKey) } : {}) })
-export const releaseSaleApi    = (id: number, items?: ReserveItemOverride[], requestKey?: string) =>
-  client.post<null>(`/sale/${id}/release`, items?.length ? { items } : {}, requestKey ? { headers: withRequestKeyHeaders(requestKey) } : undefined)
+export const reserveSaleApi    = (id: number, items?: ReserveItemOverride[], confirmCreditOverride?: boolean, requestKey?: string, config?: Parameters<typeof client.post>[2]) =>
+  client.post<null>(`/sale/${id}/reserve`, { ...(items?.length ? { items } : {}), ...(confirmCreditOverride ? { confirmCreditOverride: true } : {}) }, { ...config, skipGlobalError: true, ...(requestKey ? { headers: withRequestKeyHeaders(requestKey, config?.headers as Record<string,string> | undefined) } : {}) })
+export const releaseSaleApi    = (id: number, items?: ReserveItemOverride[], requestKey?: string, config?: Parameters<typeof client.post>[2]) =>
+  client.post<null>(`/sale/${id}/release`, items?.length ? { items } : {}, { ...config, skipGlobalError:true, ...(requestKey ? { headers: withRequestKeyHeaders(requestKey, config?.headers as Record<string,string> | undefined) } : {}) })
 // items 为空/不传 = 发全部未派发数量；传了 = 按明细及数量分批发货
-export const shipSaleApi       = (id: number, items?: ShipItemRequest[], requestKey?: string) =>
-  client.post<null>(`/sale/${id}/ship`, items?.length ? { items } : {}, requestKey ? { headers: withRequestKeyHeaders(requestKey) } : undefined)
+export const shipSaleApi       = (id: number, items?: ShipItemRequest[], requestKey?: string, config?: Parameters<typeof client.post>[2]) =>
+  client.post<null | {tasks:{taskId:number;taskNo:string;warehouseName:string}[];partial:boolean;remaining:number}>(`/sale/${id}/ship`, items?.length ? { items } : {}, { ...config, skipGlobalError:true, ...(requestKey ? { headers: withRequestKeyHeaders(requestKey, config?.headers as Record<string,string> | undefined) } : {}) })
 export const cancelSaleApi = (id: number, requestKey?: string, changeReason?: string, config?: Parameters<typeof client.post>[2]) =>
   client.post<null>(`/sale/${id}/cancel`, changeReason ? { changeReason } : {}, { ...config, skipGlobalError:true,
     ...(requestKey ? { headers:withRequestKeyHeaders(requestKey, config?.headers as Record<string,string> | undefined) } : {}) })

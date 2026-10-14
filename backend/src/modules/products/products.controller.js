@@ -26,8 +26,8 @@ const qtyPolicies = async (req,res,next) => {
     return successResponse(res, await svc.findQtyPolicies(ids), '查询成功')
   } catch(e){next(e)}
 }
-const create     = async (req,res,next) => { try { return successResponse(res, await svc.create(req.body), '创建成功', 201) } catch(e){next(e)} }
-const update     = async (req,res,next) => { try { const op=getOperatorFromRequest(req);await svc.update(+req.params.id, req.body, op, extractRequestKey(req));req.documentChangeHandled=op.changeAuditHandled===true; return successResponse(res,null,'更新成功') } catch(e){next(e)} }
+const create     = async (req,res,next) => { try { return successResponse(res, await svc.create(req.body, { scopeWarehouseIds: req.user?.warehouseIds }), '创建成功', 201) } catch(e){next(e)} }
+const update     = async (req,res,next) => { try { const op=getOperatorFromRequest(req);await svc.update(+req.params.id, req.body, op, extractRequestKey(req), { scopeWarehouseIds: req.user?.warehouseIds });req.documentChangeHandled=op.changeAuditHandled===true; return successResponse(res,null,'更新成功') } catch(e){next(e)} }
 const remove     = async (req,res,next) => { try { await svc.softDelete(+req.params.id); return successResponse(res,null,'删除成功') } catch(e){next(e)} }
 const printLabel = async (req,res,next) => {
   try {

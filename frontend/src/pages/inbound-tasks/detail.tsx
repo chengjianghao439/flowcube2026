@@ -192,7 +192,7 @@ export default function InboundTaskDetailPage() {
                 size="sm"
                 onClick={() => setCloseReceivingConfirmOpen(true)}
               >
-                结束收货
+                结束本次收货
               </Button>
             )}
             <Button variant="outline" size="sm" disabled={!!error} onClick={() => setPrintOpen(true)}><Printer className="mr-1 h-4 w-4" />打印</Button>

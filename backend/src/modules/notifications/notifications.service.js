@@ -25,6 +25,8 @@ async function buildNotifications(scopeWarehouseIds = null, userId = null) {
   const trSc = transferScopeFilter(scopeWarehouseIds, 'from_warehouse_id', 'to_warehouse_id')
   const inSc = scopeFilter(scopeWarehouseIds, 'warehouse_id')
   const cSc = scopeFilter(scopeWarehouseIds, 'c.warehouse_id')
+  const printSc = scopeFilter(scopeWarehouseIds, 'j.warehouse_id')
+  const warehouseSc = scopeFilter(scopeWarehouseIds, 'warehouse_id')
 
   const [[{ pendingPurchase }]] = await pool.query(
     `SELECT COUNT(*) AS pendingPurchase FROM purchase_orders WHERE status IN (1,2) AND deleted_at IS NULL${poSc.sql}`,
@@ -96,7 +98,8 @@ async function buildNotifications(scopeWarehouseIds = null, userId = null) {
     inSc.params,
   )
   const [[{ failedPrintJobs }]] = await pool.query(
-    `SELECT COUNT(*) AS failedPrintJobs FROM print_jobs WHERE status = 3`,
+    `SELECT COUNT(*) AS failedPrintJobs FROM print_jobs WHERE status = 3${warehouseSc.sql}`,
+    warehouseSc.params,
   )
   const [[{ inboundPrintFailures }]] = await pool.query(
     `SELECT COUNT(*) AS inboundPrintFailures
@@ -106,8 +109,8 @@ async function buildNotifications(scopeWarehouseIds = null, userId = null) {
          (j.status = 3 AND IFNULL(j.error_message, '') <> 'no printer available')
          OR (j.status IN (0,1) AND TIMESTAMPDIFF(MINUTE, j.updated_at, NOW()) >= ?)
          OR (j.status = 3 AND IFNULL(j.error_message, '') = 'no printer available')
-       )`,
-    [printTimeoutMinutes],
+       )${printSc.sql}`,
+    [printTimeoutMinutes, ...printSc.params],
   )
   const [[failedInboundTarget]] = await pool.query(
     `SELECT c.inbound_task_id AS taskId
@@ -118,10 +121,10 @@ async function buildNotifications(scopeWarehouseIds = null, userId = null) {
          (j.status = 3 AND IFNULL(j.error_message, '') <> 'no printer available')
          OR (j.status IN (0,1) AND TIMESTAMPDIFF(MINUTE, j.updated_at, NOW()) >= ?)
          OR (j.status = 3 AND IFNULL(j.error_message, '') = 'no printer available')
-       )
+       )${printSc.sql}
      ORDER BY j.updated_at DESC
      LIMIT 1`,
-    [printTimeoutMinutes],
+    [printTimeoutMinutes, ...printSc.params],
   )
   // 待上架容器是 status=4（CONTAINER_STATUS.PENDING_PUTAWAY）。此前这里写成 `status = 0`，
   // 容器根本没有 0 状态，条件恒不成立——「打印后未上架超时」这条通知从来没有出现过，
@@ -135,8 +138,8 @@ async function buildNotifications(scopeWarehouseIds = null, userId = null) {
        AND (
          (putaway_deadline_at IS NOT NULL AND putaway_deadline_at < NOW())
          OR (putaway_deadline_at IS NULL AND TIMESTAMPDIFF(HOUR, created_at, NOW()) >= ?)
-       )`,
-    [CONTAINER_STATUS.PENDING_PUTAWAY, putawayTimeoutHours],
+       )${warehouseSc.sql}`,
+    [CONTAINER_STATUS.PENDING_PUTAWAY, putawayTimeoutHours, ...warehouseSc.params],
   )
   const [[putawayTimeoutTarget]] = await pool.query(
     `SELECT inbound_task_id AS taskId
@@ -147,10 +150,10 @@ async function buildNotifications(scopeWarehouseIds = null, userId = null) {
        AND (
          (putaway_deadline_at IS NOT NULL AND putaway_deadline_at < NOW())
          OR (putaway_deadline_at IS NULL AND TIMESTAMPDIFF(HOUR, created_at, NOW()) >= ?)
-       )
+       )${warehouseSc.sql}
      ORDER BY created_at ASC
      LIMIT 1`,
-    [CONTAINER_STATUS.PENDING_PUTAWAY, putawayTimeoutHours],
+    [CONTAINER_STATUS.PENDING_PUTAWAY, putawayTimeoutHours, ...warehouseSc.params],
   )
   const [[{ outboundPrintFailures }]] = await pool.query(
     `SELECT COUNT(*) AS outboundPrintFailures
@@ -160,8 +163,8 @@ async function buildNotifications(scopeWarehouseIds = null, userId = null) {
        (j.status = 3 AND IFNULL(j.error_message, '') <> 'no printer available')
        OR (j.status IN (0,1) AND TIMESTAMPDIFF(MINUTE, j.updated_at, NOW()) >= ?)
        OR (j.status = 3 AND IFNULL(j.error_message, '') = 'no printer available')
-     )`,
-    [printTimeoutMinutes],
+     )${printSc.sql}`,
+    [printTimeoutMinutes, ...printSc.params],
   )
   const [[failedOutboundTarget]] = await pool.query(
     `SELECT pw.id AS waveId, pw.wave_no AS waveNo, wt.task_no AS taskNo
@@ -174,38 +177,42 @@ async function buildNotifications(scopeWarehouseIds = null, userId = null) {
        (j.status = 3 AND IFNULL(j.error_message, '') <> 'no printer available')
        OR (j.status IN (0,1) AND TIMESTAMPDIFF(MINUTE, j.updated_at, NOW()) >= ?)
        OR (j.status = 3 AND IFNULL(j.error_message, '') = 'no printer available')
-     )
+     )${printSc.sql}
      ORDER BY j.updated_at DESC
      LIMIT 1`,
-    [printTimeoutMinutes],
+    [printTimeoutMinutes, ...printSc.params],
   )
   const [[{ staleWavePicking }]] = await pool.query(
     `SELECT COUNT(*) AS staleWavePicking
      FROM picking_waves
      WHERE status = 2
-       AND created_at < DATE_SUB(NOW(), INTERVAL 8 HOUR)`,
+       AND created_at < DATE_SUB(NOW(), INTERVAL 8 HOUR)${warehouseSc.sql}`,
+    warehouseSc.params,
   )
   const [[staleWavePickingTarget]] = await pool.query(
     `SELECT id AS waveId, wave_no AS waveNo
      FROM picking_waves
      WHERE status = 2
-       AND created_at < DATE_SUB(NOW(), INTERVAL 8 HOUR)
+       AND created_at < DATE_SUB(NOW(), INTERVAL 8 HOUR)${warehouseSc.sql}
      ORDER BY created_at ASC
      LIMIT 1`,
+    warehouseSc.params,
   )
   const [[{ staleWaveSorting }]] = await pool.query(
     `SELECT COUNT(*) AS staleWaveSorting
      FROM picking_waves
      WHERE status = 3
-       AND updated_at < DATE_SUB(NOW(), INTERVAL 4 HOUR)`,
+       AND updated_at < DATE_SUB(NOW(), INTERVAL 4 HOUR)${warehouseSc.sql}`,
+    warehouseSc.params,
   )
   const [[staleWaveSortingTarget]] = await pool.query(
     `SELECT id AS waveId, wave_no AS waveNo
      FROM picking_waves
      WHERE status = 3
-       AND updated_at < DATE_SUB(NOW(), INTERVAL 4 HOUR)
+       AND updated_at < DATE_SUB(NOW(), INTERVAL 4 HOUR)${warehouseSc.sql}
      ORDER BY updated_at ASC
      LIMIT 1`,
+    warehouseSc.params,
   )
   const [[{ logisticsPrintFailures }]] = await pool.query(
     `SELECT COUNT(*) AS logisticsPrintFailures
@@ -215,8 +222,8 @@ async function buildNotifications(scopeWarehouseIds = null, userId = null) {
          (j.status = 3 AND IFNULL(j.error_message, '') <> 'no printer available')
          OR (j.status IN (0,1) AND TIMESTAMPDIFF(MINUTE, j.updated_at, NOW()) >= ?)
          OR (j.status = 3 AND IFNULL(j.error_message, '') = 'no printer available')
-       )`,
-    [printTimeoutMinutes],
+       )${printSc.sql}`,
+    [printTimeoutMinutes, ...printSc.params],
   )
   // 审批待办（2026-08-22 功能）：按当前用户待审批数（userId 为空时跳过，如 scheduler 全局扫描）
   let pendingApprovals = 0

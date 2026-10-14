@@ -19,7 +19,7 @@ function assertInboundLane(src) {
 test('收货编辑只使用原归属 runner 的专属数据库和独立CI入口', () => {
   assertInboundLane(source())
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
-  assert.equal(pkg.scripts['test:inbound-edit'], 'node --test tests/inbound-task-edit.test.js tests/inbound-task-edit-contract.test.js tests/inbound-task-edit-receipt.test.js tests/inbound-task-edit-sources.test.js tests/inbound-task-edit-create.test.js tests/inbound-edit-runner.test.js tests/inbound-create-idempotency.test.js')
+  assert.equal(pkg.scripts['test:inbound-edit'], 'node --test tests/inbound-task-edit.test.js tests/inbound-task-edit-contract.test.js tests/inbound-task-edit-receipt.test.js tests/inbound-task-edit-sources.test.js tests/inbound-task-edit-create.test.js tests/inbound-edit-runner.test.js tests/inbound-create-idempotency.test.js tests/inbound-mixed-cost.test.js tests/inbound-short-receipt.test.js')
   assert.equal(pkg.scripts['smoke:inbound-edit-runtime'], 'node --test --test-concurrency=1 tests/inbound-edit-runtime.smoke.test.js')
   assert.equal(pkg.scripts['smoke:inbound-edit-owned'], 'bash scripts/repair-smoke-ephemeral.sh --inbound-edit')
   const wf = fs.readFileSync(path.join(root, '.github/workflows/test.yml'), 'utf8')

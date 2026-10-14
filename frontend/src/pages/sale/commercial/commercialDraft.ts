@@ -41,6 +41,7 @@ export function draftFromGroups(groups: CommercialGroup[]): CommercialDraftRow[]
       spec: g.kind === 'kit' ? g.metadata.kitIdentity?.spec : g.components[0]?.spec,
       color: g.kind === 'kit' ? g.metadata.kitIdentity?.color : g.components[0]?.color,
       articleNumber: g.kind === 'kit' ? g.metadata.kitIdentity?.articleNumber : g.components[0]?.articleNumber,
+      allowDecimalQty: g.kind === 'ordinary' ? undefined : false,
       saved: g,
       packagingExpressible
     }
@@ -64,6 +65,7 @@ export function draftFromOrder(order?: SaleOrder): CommercialDraftRow[] {
       name: item.productName, code: item.productCode, unit: entryUnit, baseUnit: item.unit,
       spec: item.spec, color: item.color, articleNumber: item.articleNumber, costPrice: item.costPrice,
       quantity: String(quantity), price: packagingExpressible ? String(price) : '',
+      allowDecimalQty: item.allowDecimalQty !== false,
       units: [], packagingExpressible
     }
   })
@@ -85,7 +87,7 @@ export function toCommercialInputs(rows: CommercialDraftRow[]): CommercialInput[
       row.unit === row.baseUnit &&
       !Number.isSafeInteger(quantity)
     )
-      throw new Error(`「${row.name}」基本单位数量只能是整数`)
+      throw new Error(`「${row.name}」出货数量须为整数`)
     const input = { ...row.input, quantity }
     if (input.priceSource === 'manual') input.unitPrice = positive(row.price, 4, '成交价')
     // Default quote is resolved by the server; never substitute a client-side computed price.

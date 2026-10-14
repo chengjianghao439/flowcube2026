@@ -28,6 +28,7 @@ MIGRATION_TRUST_PREVIOUS=''
 MIGRATION_STARTED=0
 MIGRATION_COMPLETED=0
 LEDGER_COMPATIBILITY_CHANGED=0
+WRITE_COMPATIBILITY_CHANGED=0
 ROLLBACK_COMPATIBILITY_VERIFIED=1
 ROLLBACK_RESULT='应用容器未切换'
 
@@ -218,6 +219,8 @@ if command -v docker >/dev/null 2>&1 && [ -f docker-compose.yml ]; then
     revision=$(docker image inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$image_ref")
     [ "$revision" = "$expected" ] || fail_deploy "${service} 镜像提交与待发布 SHA 不一致"
   done
+  target_write_contract=$(docker image inspect -f '{{index .Config.Labels "io.flowcube.quantity-return-cash-contract"}}' "flowcube-backend:${expected}")
+  [ "$target_write_contract" = '1' ] || fail_deploy '目标后端缺少迁移 288–292 的数量、退货与资金写入契约，拒绝停写和迁移'
   if [ "${SKIP_RELEASE_GATE:-0}" != '1' ]; then
     docker image inspect "${PLAYWRIGHT_IMAGE:-mcr.microsoft.com/playwright:v1.55.0-noble}" >/dev/null \
       || fail_deploy '缺少预装的浏览器门禁镜像，请在维护窗口准备；部署期间禁止拉取大型浏览器镜像'
@@ -244,8 +247,16 @@ if command -v docker >/dev/null 2>&1 && [ -f docker-compose.yml ]; then
   if [ -n "$PREVIOUS_BACKEND_IMAGE" ]; then
     previous_ledger_contract=$(docker image inspect -f '{{index .Config.Labels "io.flowcube.party-ledger-contract"}}' "$PREVIOUS_BACKEND_IMAGE")
     if [ "$previous_ledger_contract" != '1' ]; then LEDGER_COMPATIBILITY_CHANGED=1; fi
+    # 0.13.4 does not enforce current quantity policy or preserve the new return
+    # and cash execution proofs. Nullable DDL and migration 240 are insufficient.
+    # Keep this gate on retries even when migrations 288–292 already exist.
+    previous_write_contract=$(docker image inspect -f '{{index .Config.Labels "io.flowcube.quantity-return-cash-contract"}}' "$PREVIOUS_BACKEND_IMAGE")
+    if [ "$previous_write_contract" != '1' ]; then
+      WRITE_COMPATIBILITY_CHANGED=1
+      echo '==> 旧后端不具备迁移 288–292 写入契约：本次迁移窗口后失败将保持停写，须向前恢复'
+    fi
   fi
-  if [ "$LEDGER_COMPATIBILITY_CHANGED" = '0' ]; then ROLLBACK_COMPATIBILITY_VERIFIED=1; fi
+  if [ "$LEDGER_COMPATIBILITY_CHANGED" = '0' ] && [ "$WRITE_COMPATIBILITY_CHANGED" = '0' ]; then ROLLBACK_COMPATIBILITY_VERIFIED=1; fi
   migration_trust_candidate=$(mysql_admin_sql 'SELECT @@GLOBAL.log_bin_trust_function_creators')
   [[ "$migration_trust_candidate" =~ ^[01]$ ]] || fail_deploy '无法核实 MySQL 迁移权限状态'
   MIGRATION_TRUST_PREVIOUS=$migration_trust_candidate

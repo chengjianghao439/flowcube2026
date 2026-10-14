@@ -1,4 +1,6 @@
-const { moneyUnits, moneyText, moneyNumber } = require('../../utils/decimalMoney')
+const { moneyUnits, moneyText } = require('../../utils/decimalMoney')
+const { cashCents, storedCashCents, cashNumber, sumCashCents } = require('../../utils/cashMoney')
+const moneyNumber = units => cashNumber(storedCashCents(moneyText(units)))
 const { assertAllocationParty, resolveReceiptParty } = require('./party-identity')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
@@ -66,6 +68,8 @@ async function expandStatementAllocation(conn, statementId, amount, receipt) {
   if (Number(st.status) === statementSvc.ST.DRAFT) {
     throw new AppError(`${st.statement_no} 还是草稿，请先确认后再核销`, 409)
   }
+  cashCents(amount, { label: '核销金额' })
+  for (const field of ['total_amount', 'settled_amount', 'balance']) storedCashCents(st[field], `原对账单${field}`)
   const amountUnits = moneyUnits(amount)
   if (moneyUnits(st.balance) <= 0n) throw new AppError(`${st.statement_no} 已核销完毕`, 400)
   if (amountUnits > moneyUnits(st.balance)) {
@@ -73,7 +77,7 @@ async function expandStatementAllocation(conn, statementId, amount, receipt) {
   }
 
   const [items] = await conn.query(
-    `SELECT r.id, r.balance
+    `SELECT r.id, r.total_amount, r.paid_amount, r.balance
        FROM reconciliation_statement_items i
        JOIN payment_records r ON r.id = i.record_id
       WHERE i.statement_id = ? AND r.status <> 3
@@ -84,11 +88,12 @@ async function expandStatementAllocation(conn, statementId, amount, receipt) {
   let left = amountUnits
   for (const it of items) {
     if (left <= 0n) break
+    for (const field of ['total_amount', 'paid_amount', 'balance']) storedCashCents(it[field], `原账款${field}`)
     const balance = moneyUnits(it.balance)
     const take = left < balance ? left : balance
     if (take > 0n) {
-      // 精度对齐账款列 DECIMAL(14,4)：舍到 2 位会让 ¥12.3456 这类 3-4 位小数账款的分配额
-      // 大于其余额而在 applyAllocations 处被拒，或残留分厘无法结清（unit_price 可含 4 位小数）。
+      // Every selected principal and generated allocation is exact cents;
+      // historical fractional balances require review instead of rounding.
       parts.push({ recordId: Number(it.id), amount: moneyNumber(take), statementId: Number(statementId) })
       left -= take
     }
@@ -117,14 +122,18 @@ function resolveReceiptStatus(amount, settled) {
  * 「作废 / 重新申请」兜底（finance-backfills.service.cancel），不靠这里假装能保证。
  */
 async function precheckAllocations(allocations, { type, partyId = null, partyName = null } = {}) {
+  allocations.forEach(a => cashCents(a.amount, { label: '核销金额' }))
   const label = Number(type) === 1 ? '付款单' : '收款单'
   for (const alloc of allocations) {
     if (alloc.statementId) {
       const [[st]] = await pool.query(
-        'SELECT statement_no, type, party_name, status, balance FROM reconciliation_statements WHERE id = ? AND deleted_at IS NULL',
+        'SELECT statement_no, type, party_name, status, total_amount, settled_amount, balance FROM reconciliation_statements WHERE id = ? AND deleted_at IS NULL',
         [alloc.statementId],
       )
       if (!st) throw new AppError(`对账单 ${alloc.statementId} 不存在`, 404)
+      for (const field of ['total_amount', 'settled_amount', 'balance']) storedCashCents(st[field], `原对账单${field}`)
+      const [members] = await pool.query('SELECT r.total_amount,r.paid_amount,r.balance FROM reconciliation_statement_items i JOIN payment_records r ON r.id=i.record_id WHERE i.statement_id=?', [alloc.statementId])
+      for (const member of members) for (const field of ['total_amount', 'paid_amount', 'balance']) storedCashCents(member[field], `原账款${field}`)
       if (Number(st.type) !== Number(type)) {
         throw new AppError(`${st.statement_no} 与本${label}类型不符`, 400, 'FINANCE_BACKFILL_NOT_APPLICABLE')
       }
@@ -149,10 +158,11 @@ async function precheckAllocations(allocations, { type, partyId = null, partyNam
       continue
     }
     const [[record]] = await pool.query(
-      'SELECT order_no, type, party_name, status, confirm_status, balance FROM payment_records WHERE id = ?',
+      'SELECT order_no, type, party_name, status, confirm_status, total_amount, paid_amount, balance FROM payment_records WHERE id = ?',
       [alloc.recordId],
     )
     if (!record) throw new AppError(`账款记录 ${alloc.recordId} 不存在`, 404)
+    for (const field of ['total_amount', 'paid_amount', 'balance']) storedCashCents(record[field], `原账款${field}`)
     if (Number(record.type) !== Number(type)) {
       throw new AppError(`${record.order_no} 与本${label}类型不符`, 400, 'FINANCE_BACKFILL_NOT_APPLICABLE')
     }
@@ -184,6 +194,10 @@ async function precheckAllocations(allocations, { type, partyId = null, partyNam
  * 共存时不会形成环路（见 docs/claude-md-archive-2026-09-04.md 第 11 节「加锁顺序统一」）。
  */
 async function applyAllocations(conn, receipt, allocations, operator) {
+  allocations.forEach(a => cashCents(a.amount, { label: '核销金额' }))
+  storedCashCents(receipt.amount, '原收付款本金')
+  storedCashCents(receipt.settled_amount, '原收付款已核销金额')
+  if (receipt.balance != null) storedCashCents(receipt.balance, '原收付款余额')
   // 跨期闸门（2026-09-26 一致性审查 · 任务 7）由调用方在核销前完成：本函数被调用时，create 路径
   // 已持有 finance_accounts 锁，若在此处再取账套锁，就与直付路径（recordPayment：账套锁 → 账户锁）
   // 形成 ABBA 环。这里只做分配本身——补录留痕不在这里，申请单在执行入口就落了。
@@ -229,9 +243,11 @@ async function applyAllocations(conn, receipt, allocations, operator) {
     if (!Number.isFinite(alloc.amount) || alloc.amount <= 0) {
       throw new AppError('核销金额必须大于 0', 400)
     }
+    cashCents(alloc.amount, { label: '展开后核销金额' })
     const allocUnits = moneyUnits(alloc.amount)
     const [[record]] = await conn.query('SELECT * FROM payment_records WHERE id=? FOR UPDATE', [alloc.recordId])
     if (!record) throw new AppError(`账款记录 ${alloc.recordId} 不存在`, 404)
+    for (const field of ['total_amount', 'paid_amount', 'balance']) storedCashCents(record[field], `原账款${field}`)
     if (Number(record.type) !== Number(receipt.type)) {
       throw new AppError(`${record.order_no} 与本${receipt.type === 1 ? '付款' : '收款'}单类型不符`, 400)
     }
@@ -300,7 +316,7 @@ async function applyAllocations(conn, receipt, allocations, operator) {
   // touchedStatements 含显式核销的对账单与直核账款所属的对账单，两类的 statement 行都已在
   // 记录循环之前 FOR UPDATE 锁住，聚合重算不会与并发直付/核销相互丢失更新。
   for (const sid of touchedStatements) {
-    await statementSvc.refreshSettlement(conn, sid)
+    await statementSvc.refreshSettlement(conn, sid, { cashOnly: true })
   }
 
   return { allocatedTotal: moneyNumber(allocatedUnits), settledAmount: moneyNumber(newSettled), applied, receiptBalance: moneyNumber(newReceiptBalance) }
@@ -311,6 +327,8 @@ async function applyAllocations(conn, receipt, allocations, operator) {
  * 接 requestKey 幂等：核销直接改钱，连点两次或断网重试都不能重复扣。
  */
 async function create({ type, partyId, partyName, amount, paymentDate, method, accountId, remark, allocations = [] }, operator, requestKey, { backfill = null, conn: sharedConn = null } = {}) {
+  cashCents(amount, { label: '实际收付款金额' })
+  allocations.forEach(a => cashCents(a.amount, { label: '核销金额' }))
   // 跨期补录的**申请**分支（2026-09-26 一致性审查 · 任务 7）：只落一张待审批申请单，业务数据
   // 一行不写。放在业务事务**之前**——申请单必须独立提交，业务回滚不能把它一起抹掉。
   if (backfill?.mode === 'apply') {
@@ -458,6 +476,7 @@ async function create({ type, partyId, partyName, amount, paymentDate, method, a
 
 /** 用某张收付款单的剩余余额继续核销（预收款后续冲抵订单走这里） */
 async function settle(receiptId, { allocations = [] }, operator, requestKey, { backfill = null, conn: sharedConn = null } = {}) {
+  allocations.forEach(a => cashCents(a.amount, { label: '核销金额' }))
   if (!allocations.length) throw new AppError('请至少选择一笔账款进行核销', 400)
   // 跨期补录的**申请**分支（2026-09-26 一致性审查 · 任务 7）：只落待审批申请单，不进业务事务。
   // 金额是本次核销的合计（各分配额之和），不是整张单的余额。
@@ -469,6 +488,7 @@ async function settle(receiptId, { allocations = [] }, operator, requestKey, { b
     if (!target) throw new AppError('收付款单不存在', 404)
     // 申请期的只读可执行性预检：这张单本身可能已被别人核销掉一部分，逐笔账款也可能已结清。
     // 两处都查——单子余额不够与某笔账款余额不够是两种不同的拒绝理由，合并成一句申请人看不懂。
+    for (const field of ['amount', 'settled_amount', 'balance']) storedCashCents(target[field], `原收付款${field}`)
     const allocTotalUnits = allocations.reduce((sum, a) => sum + moneyUnits(a.amount), 0n)
     if (allocTotalUnits > moneyUnits(target.balance)) {
       throw new AppError(
@@ -484,7 +504,7 @@ async function settle(receiptId, { allocations = [] }, operator, requestKey, { b
       bizType: 'receipt_settle',
       bizId: Number(receiptId),
       bizNo: target.receipt_no,
-      amount: allocations.reduce((sum, a) => sum + Number(a.amount || 0), 0),
+      amount: cashNumber(sumCashCents(allocations.map(a => a.amount))),
       reason: backfill.reason,
       requestKey,
       applicantId: backfill.applicantId,

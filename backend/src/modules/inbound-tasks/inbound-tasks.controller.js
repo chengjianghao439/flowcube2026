@@ -100,7 +100,7 @@ const reprint = async (req, res, next) => {
 
 const containers = async (req, res, next) => {
   try {
-    return successResponse(res, await svc.listContainers(+req.params.id))
+    return successResponse(res, await svc.listContainers(+req.params.id, req.user?.warehouseIds ?? null))
   } catch (e) { next(e) }
 }
 

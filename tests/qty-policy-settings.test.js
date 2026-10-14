@@ -73,13 +73,13 @@ test('purchase policy rejects overprecision base quantity before rounding', asyn
   await assert.rejects(() => policyService(ctx).savePolicy({ ...policyInput, entryUnit: '箱', packMultiple: 0.01 }), decimalsError)
   assert.equal(ctx.writes.length, 0)
 })
-test('purchase policy uses base units for integer product restrictions', async () => {
+test('purchase policy rejects fractional input even when conversion would yield an integer base', async () => {
   const invalid = context({ allowDecimal: false, rate: 3 })
   await assert.rejects(() => policyService(invalid).savePolicy({ ...policyInput, entryUnit: '箱', packMultiple: 0.5 }), integerError)
   assert.equal(invalid.writes.length, 0)
   const valid = context({ allowDecimal: false, rate: 2 })
-  await policyService(valid).savePolicy({ ...policyInput, entryUnit: '箱', packMultiple: 0.5, minimumOrderQty: 1 })
-  assert.equal(valid.writes[0].params[3], 0.5)
+  await assert.rejects(() => policyService(valid).savePolicy({ ...policyInput, entryUnit: '箱', packMultiple: 0.5, minimumOrderQty: 1 }), integerError)
+  assert.equal(valid.writes.length, 0)
 })
 test('purchase policy preserves valid decimals and unrestricted zero', async () => {
   const ctx = context()
@@ -89,8 +89,9 @@ test('purchase policy preserves valid decimals and unrestricted zero', async () 
 })
 
 function stockPolicy(ctx) {
-  return load('backend/src/modules/products/products.service.js', ctx.mocks,
+  const save = load('backend/src/modules/products/products.service.js', ctx.mocks,
     '\nmodule.exports.testStockPolicy = upsertDefaultStockPolicy\n').testStockPolicy
+  return (db, productId, input) => save(db, productId, input, null)
 }
 test('stock settings reject each overprecision value before INSERT/DELETE', async () => {
   for (const field of ['safetyStock', 'reorderPoint']) {
@@ -159,7 +160,8 @@ test('procurement setting routes reject more than two decimals', () => {
 })
 
 function inventoryPolicies(ctx) {
-  return load('backend/src/modules/inventory/inventory.service.js', ctx.mocks)
+  const scope = load('backend/src/utils/warehouseScope.js', { '../config/db': ctx.mocks['../../config/db'] })
+  return load('backend/src/modules/inventory/inventory.service.js', { ...ctx.mocks, '../../utils/warehouseScope': scope })
 }
 test('warehouse stock policies validate all raw quantities before batch writes', async () => {
   for (const field of ['safetyStock', 'reorderPoint', 'targetStock']) {
@@ -167,7 +169,7 @@ test('warehouse stock policies validate all raw quantities before batch writes',
     await assert.rejects(() => inventoryPolicies(ctx).saveStockPolicies([
       { productId: 7, warehouseId: 1, safetyStock: 1 },
       { productId: 7, warehouseId: 2, [field]: 0.005 },
-    ]), decimalsError)
+    ], null), decimalsError)
     assert.equal(ctx.writes.length, 0)
   }
 })
@@ -175,7 +177,7 @@ test('warehouse stock policies apply integer rules to target quantity as well', 
   const ctx = context({ allowDecimal: false })
   await assert.rejects(() => inventoryPolicies(ctx).saveStockPolicies([
     { productId: 7, warehouseId: 1, targetStock: 1.5 },
-  ]), integerError)
+  ], null), integerError)
   assert.equal(ctx.writes.length, 0)
 })
 test('warehouse stock policies retain decimals, target zero and default fallback deletion', async () => {
@@ -184,7 +186,7 @@ test('warehouse stock policies retain decimals, target zero and default fallback
     { productId: 7, warehouseId: 1, safetyStock: 1.25, reorderPoint: 2.5, targetStock: 3.75 },
     { productId: 7, warehouseId: 2, targetStock: 0 },
     { productId: 7, warehouseId: 0 },
-  ])
+  ], null)
   assert.equal(result.saved, 2)
   assert.equal(result.deleted, 1)
   assert.equal(ctx.writes[0].params[2], 1.25)

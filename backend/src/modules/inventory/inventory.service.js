@@ -1,9 +1,9 @@
 const { beginManualStockRequest } = require('./manual-stock-request')
 const { pool } = require('../../config/db')
-const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
+const { scopeFilter, assertInScope, transferScopeFilter } = require('../../utils/warehouseScope')
 const AppError = require('../../utils/AppError')
 const { MOVE_TYPE, MOVE_TYPE_LABEL, writeInventoryLog } = require('../../engine/inventoryEngine')
-const { adjustContainerStock, SOURCE_TYPE, syncStockFromContainers } = require('../../engine/containerEngine')
+const { adjustContainerStock, SOURCE_TYPE } = require('../../engine/containerEngine')
 const { getInventoryDisplayProjectionSql } = require('./inventoryProjection')
 const { normalizePagination } = require('../../utils/pagination')
 const { getExpectedStock } = require('../../utils/expectedStock')
@@ -223,7 +223,7 @@ async function changeStock({ type, productId, warehouseId, supplierId, quantity,
     }
 
     const [[product]] = await conn.query(
-      'SELECT id, name, unit, allow_decimal_qty FROM product_items WHERE id=? AND deleted_at IS NULL', [productId],
+      'SELECT id, name, unit, allow_decimal_qty FROM product_items WHERE id=? AND deleted_at IS NULL FOR SHARE', [productId],
     )
     if (!product) throw new AppError('商品不存在', 404)
     // 「只能整数」的商品不得按小数手工调整库存（迁移 254）
@@ -443,7 +443,9 @@ async function getOverview({ page=1, pageSize=20, keyword='', warehouseId=null, 
 
 // ─── 容器列表（只读，仅返回 ACTIVE 容器）────────────────────────────────────
 
-async function getContainers({ productId, warehouseId, includeLegacy = false }) {
+async function getContainers({ productId, warehouseId, includeLegacy = false, scopeWarehouseIds = null }) {
+  if (warehouseId) assertInScope(scopeWarehouseIds, warehouseId, '库存容器')
+  const scope = scopeFilter(scopeWarehouseIds, 'c.warehouse_id')
   const conditions = [
     'c.product_id = ?',
     'c.status = 1',            // ACTIVE only
@@ -474,9 +476,9 @@ async function getContainers({ productId, warehouseId, includeLegacy = false }) 
      FROM inventory_containers c
      JOIN inventory_warehouses w ON c.warehouse_id = w.id
      LEFT JOIN warehouse_locations loc ON loc.id = c.location_id
-     WHERE ${conditions.join(' AND ')}
+     WHERE ${conditions.join(' AND ')}${scope.sql}
      ORDER BY c.created_at ASC, c.id ASC`,
-    params,
+    [...params, ...scope.params],
   )
 
   return rows.map(r => ({
@@ -507,18 +509,20 @@ async function getContainers({ productId, warehouseId, includeLegacy = false }) 
  * 库存条码（I…）与塑料盒（B…）通用——个体容器的追溯能力（原序列号追溯页，设计文档 13）
  * 就由这条时间线承接。
  */
-async function getContainerLogs(containerId) {
+async function getContainerLogs(containerId, scopeWarehouseIds = null) {
   const cid = Number(containerId)
   if (!Number.isFinite(cid) || cid <= 0) throw new AppError('库存条码无效', 400)
+  // 容器调仓后仍按每笔原流水仓授权，不用当前容器仓冒充历史范围。
+  const scope = scopeFilter(scopeWarehouseIds, 'il.warehouse_id')
   const [rows] = await pool.query(
     `SELECT il.quantity, il.move_type, il.type, il.created_at, il.remark,
             il.operator_name, il.ref_type, il.ref_no, pi.name AS product_name,
             il.log_source_type, il.log_source_ref_id
      FROM inventory_logs il
      LEFT JOIN product_items pi ON pi.id = il.product_id
-     WHERE il.container_id = ?
+     WHERE il.container_id = ?${scope.sql}
      ORDER BY il.created_at DESC, il.id DESC LIMIT 200`,
-    [cid],
+    [cid, ...scope.params],
   )
   return rows.map(r => ({
     qty: Number(r.quantity),
@@ -545,7 +549,7 @@ async function getContainerLogs(containerId) {
 /**
  * 批量解析容器来源文档（避免 N+1 查询）
  */
-async function resolveSourceDocumentsBatch(items) {
+async function resolveSourceDocumentsBatch(items, scopeWarehouseIds = null) {
   const result = new Map()
   if (!items.length) return result
 
@@ -577,9 +581,14 @@ async function resolveSourceDocumentsBatch(items) {
   for (const [sourceType, ids] of byType) {
     const sql = queries[sourceType]
     if (!sql) continue
+    const scope = sourceType === 'transfer'
+      ? transferScopeFilter(scopeWarehouseIds, 'from_warehouse_id', 'to_warehouse_id')
+      : ['inbound_task', 'stockcheck'].includes(sourceType)
+        ? scopeFilter(scopeWarehouseIds, 'warehouse_id')
+        : { sql: '', params: [] }
     try {
       const idList = [...ids]
-      const [rows] = await pool.query(sql, [idList])
+      const [rows] = await pool.query(sql + scope.sql, [idList, ...scope.params])
       for (const r of rows) {
         const key = `${sourceType}:${r.id}`
         result.set(key, rowMappers[sourceType](r))
@@ -593,14 +602,19 @@ async function resolveSourceDocumentsBatch(items) {
   if (byType.has('return')) {
     const idList = [...byType.get('return')]
     try {
-      const [srRows] = await pool.query('SELECT id, return_no, status FROM sale_returns WHERE id IN (?) AND deleted_at IS NULL', [idList])
+      const [srRows] = await pool.query('SELECT id, return_no, status, warehouse_id FROM sale_returns WHERE id IN (?) AND deleted_at IS NULL', [idList])
+      const scopedIds = Array.isArray(scopeWarehouseIds) ? new Set(scopeWarehouseIds.map(Number)) : null
+      // 保留既有销售来源优先级：隐藏外仓来源不等于可以把同ID采购退货冒充它。
+      const matchedSaleIds = new Set(srRows.map(r => Number(r.id)))
       for (const r of srRows) {
+        if (scopedIds && !scopedIds.has(Number(r.warehouse_id))) continue
         result.set(`return:${r.id}`, { kind: 'sale_return', id: r.id, no: r.return_no, status: r.status })
       }
-      const remaining = idList.filter(id => !result.has(`return:${id}`))
+      const remaining = idList.filter(id => !matchedSaleIds.has(Number(id)))
       if (remaining.length) {
-        const [prRows] = await pool.query('SELECT id, return_no, status FROM purchase_returns WHERE id IN (?) AND deleted_at IS NULL', [remaining])
+        const [prRows] = await pool.query('SELECT id, return_no, status, warehouse_id FROM purchase_returns WHERE id IN (?) AND deleted_at IS NULL', [remaining])
         for (const r of prRows) {
+          if (scopedIds && !scopedIds.has(Number(r.warehouse_id))) continue
           result.set(`return:${r.id}`, { kind: 'purchase_return', id: r.id, no: r.return_no, status: r.status })
         }
       }
@@ -620,12 +634,14 @@ async function traceByProductId(productId, {
   sourceType = null,
   sourceRefId = null,
   includeLegacy = false,
+  scopeWarehouseIds = null,
 } = {}) {
   const [[p]] = await pool.query(
     'SELECT id, code, name, unit, article_number, spec, color FROM product_items WHERE id=? AND deleted_at IS NULL',
     [productId],
   )
   if (!p) throw new AppError('商品不存在', 404)
+  const scope = scopeFilter(scopeWarehouseIds, 'c.warehouse_id')
 
   const conditions = [
     'c.product_id = ?',
@@ -658,9 +674,9 @@ async function traceByProductId(productId, {
             c.is_legacy AS isLegacy
      FROM inventory_containers c
      INNER JOIN inventory_warehouses w ON w.id = c.warehouse_id AND w.deleted_at IS NULL
-     WHERE ${conditions.join(' AND ')}
+     WHERE ${conditions.join(' AND ')}${scope.sql}
      ORDER BY c.warehouse_id ASC, c.created_at ASC, c.id ASC`,
-    params,
+    [...params, ...scope.params],
   )
 
   const summaryMap = new Map()
@@ -688,7 +704,7 @@ async function traceByProductId(productId, {
     const key = `${st}:${sri}`
     if (!grouped.has(key)) grouped.set(key, { sourceType: st, sourceRefId: sri })
   }
-  const docMap = await resolveSourceDocumentsBatch([...grouped.values()])
+  const docMap = await resolveSourceDocumentsBatch([...grouped.values()], scopeWarehouseIds)
 
   for (const r of rows) {
     const key = `${r.sourceType || 'unknown'}:${r.sourceRefId ?? 'null'}`
@@ -847,8 +863,9 @@ async function findStockDrift({ productId = null, warehouseId = null, scopeWareh
 }
 
 /** 校验容器汇总（ACTIVE）与 inventory_stock.quantity 是否一致（运维入口） */
-async function checkStockConsistency({ productId = null, warehouseId = null, limit = 500 } = {}) {
-  const { list } = await findStockDrift({ productId, warehouseId })
+async function checkStockConsistency({ productId = null, warehouseId = null, limit = 500, scopeWarehouseIds = null } = {}) {
+  if (warehouseId) assertInScope(scopeWarehouseIds, warehouseId, '库存校验')
+  const { list } = await findStockDrift({ productId, warehouseId, scopeWarehouseIds })
   const driftRows = list.filter(r => r.drifted).map(r => ({
     productId: r.productId,
     warehouseId: r.warehouseId,
@@ -870,50 +887,14 @@ async function checkStockConsistency({ productId = null, warehouseId = null, lim
  * 修复缓存漂移：仅对「存在漂移」的组合重算 inventory_stock.quantity（= syncStockFromContainers）。
  * 与 scripts/resync-inventory-stock.js 的区别：①不扫全表,只扫漂移组合(快、少锁)；
  * ②支持 scopeWarehouseIds 按数据权限限仓(非超管只修自己仓);③返回修复明细供页面展示。
- * 同一事务? 每组合一次 syncStockFromContainers(它内部 SUM FOR UPDATE + upsert 自行持锁),
- * 不同组合互不干扰,无需包大事务——与脚本行为一致,幂等可重复。
+ * 每个商品×仓维度独立事务：策略/维度锁后，同 conn 读容器与预占账并重算两缓存。
+ * 发现时的候选只用于选维度和响应，不把旧汇总写入缓存；重复执行仍幂等。
  * 纯修复动作,不改容器事实(容器是唯一真相,这里只校准缓存)。
  */
 async function resyncStock({ scopeWarehouseIds = null } = {}) {
   const { list } = await findStockDrift({ scopeWarehouseIds })
   const drifted = list.filter(r => r.drifted)
-  const fixed = []
-  for (const r of drifted) {
-    const after = await syncStockFromContainers(pool, r.productId, r.warehouseId)
-    fixed.push({ productId: r.productId, warehouseId: r.warehouseId, before: r.cacheQty, after })
-  }
-
-  // reserved 缓存与预占账对账（2026-09-17 验收修复）：
-  // quantity 修好 ≠ 可用量正确。reserved 由引擎增量维护，任何绕过引擎的写入（数据修复脚本、
-  // 人工 SQL）都会让缓存与账本脱节，而此前**没有任何入口能重建它**——实测账本 0 条有效预占、
-  // 缓存仍留 873，可用量被算成 0，占库按钮直接禁用并提示"库存不足"，把人引向完全错误的方向。
-  const { syncReservedFromLedger } = require('../../engine/reservationEngine')
-  const scS = scopeFilter(scopeWarehouseIds, 's.warehouse_id')
-  const [reservedDrift] = await pool.query(
-    `SELECT s.product_id AS productId, s.warehouse_id AS warehouseId,
-            COALESCE(s.reserved, 0) AS cacheReserved, COALESCE(r.qty, 0) AS ledgerReserved
-       FROM inventory_stock s
-       LEFT JOIN (SELECT product_id, warehouse_id, SUM(qty) AS qty
-                    FROM stock_reservations WHERE status = 1
-                   GROUP BY product_id, warehouse_id) r
-              ON r.product_id = s.product_id AND r.warehouse_id = s.warehouse_id
-      WHERE ABS(COALESCE(s.reserved, 0) - COALESCE(r.qty, 0)) > 0.0001${scS.sql}`,
-    scS.params,
-  )
-  const reservedFixed = []
-  for (const r of reservedDrift) {
-    const after = await syncReservedFromLedger(pool, r.productId, r.warehouseId)
-    reservedFixed.push({ productId: r.productId, warehouseId: r.warehouseId, before: Number(r.cacheReserved), after })
-  }
-
-  return {
-    ok: true,
-    fixed: fixed.length,
-    total: drifted.length,
-    rows: fixed,
-    reservedFixed: reservedFixed.length,
-    reservedRows: reservedFixed,
-  }
+  return require('./inventory.resync').resyncDimensions(pool, drifted, scopeWarehouseIds)
 }
 
 async function getContainerByBarcode(barcode, scopeWarehouseIds = null) {
@@ -1161,7 +1142,7 @@ async function getReplenishment(options) {
 }
 
 /** 读某商品的全部补货策略行（含 warehouse_id=0 通用默认），供策略维护界面用 */
-async function getStockPolicies({ productId }) {
+async function getStockPolicies({ productId, scopeWarehouseIds = null }) {
   const pid = Number(productId)
   if (!Number.isInteger(pid) || pid <= 0) throw new AppError('productId 无效', 400)
   const [rows] = await pool.query(
@@ -1170,8 +1151,9 @@ async function getStockPolicies({ productId }) {
      FROM product_stock_policies sp
      LEFT JOIN inventory_warehouses w ON w.id = sp.warehouse_id
      WHERE sp.product_id = ?
+       AND (? = 0 OR sp.warehouse_id = 0 OR sp.warehouse_id IN (?))
      ORDER BY sp.warehouse_id ASC`,
-    [pid],
+    [pid, Array.isArray(scopeWarehouseIds) ? 1 : 0, Array.isArray(scopeWarehouseIds) && scopeWarehouseIds.length ? scopeWarehouseIds : [0]],
   )
   return rows.map(r => ({
     productId: r.product_id,
@@ -1187,8 +1169,11 @@ async function getStockPolicies({ productId }) {
  * 批量 upsert 补货策略。items: [{ productId, warehouseId, safetyStock, reorderPoint, targetStock }]。
  * warehouseId=0 表示通用默认；全零且无目标视为清除该行（回落默认/无策略）。
  */
-async function saveStockPolicies(items) {
+async function saveStockPolicies(items, scopeWarehouseIds) {
   if (!Array.isArray(items) || !items.length) return { saved: 0, deleted: 0 }
+  if (scopeWarehouseIds !== null && (!Array.isArray(scopeWarehouseIds) || scopeWarehouseIds.some(id => !Number.isSafeInteger(id) || id <= 0))) {
+    throw new AppError('当前仓库授权无效，请重新登录后重试', 403, 'WAREHOUSE_SCOPE_REQUIRED')
+  }
   const { assertQtyScale, assertQtyPrecision } = require('../../utils/qtyPrecision')
   let saved = 0, deleted = 0
   const conn = await pool.getConnection()
@@ -1199,6 +1184,11 @@ async function saveStockPolicies(items) {
       const warehouseId = Number(it.warehouseId ?? 0)
       if (!Number.isInteger(productId) || productId <= 0) throw new AppError('productId 无效', 400)
       if (!Number.isInteger(warehouseId) || warehouseId < 0) throw new AppError('warehouseId 无效', 400)
+      // 全局默认影响所有仓，须当前认证范围明确为不限仓；整批先授权再取数量锁/写入。
+      if (warehouseId === 0 && scopeWarehouseIds !== null) {
+        throw new AppError('仅不限仓账号可修改全局默认策略', 403, 'GLOBAL_POLICY_SCOPE_DENIED')
+      }
+      if (warehouseId > 0) assertInScope(scopeWarehouseIds, warehouseId, '补货策略')
       assertQtyScale(it.safetyStock ?? 0, '安全库存')
       assertQtyScale(it.reorderPoint ?? 0, '补货点')
       if (it.targetStock != null && it.targetStock !== '') assertQtyScale(it.targetStock, '目标库存')

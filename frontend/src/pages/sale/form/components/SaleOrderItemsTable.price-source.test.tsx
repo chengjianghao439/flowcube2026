@@ -45,21 +45,11 @@ test.each([
   expect(host.textContent).toContain('240.00')
 })
 
-test('删除量价常驻小字，录入单位选择仍不改写数值', () => {
-  render(item)
-  expect(host.textContent).not.toContain('每箱')
-  expect(host.textContent).not.toContain('基本数量：')
-  const select = host.querySelector<HTMLSelectElement>('select[title="录入单位"]')!
-  act(() => { select.value = '个'; select.dispatchEvent(new Event('change', { bubbles: true })) })
-  expect(updateItem).toHaveBeenCalledWith(1, 'entryUnit', '个')
-  render({ ...item, entryUnit: '个' })
-  expect(host.textContent).not.toContain('每个')
-  expect(host.textContent).not.toContain('基本数量：')
-  render({ ...item, entryUnit: undefined, units: [] })
-  expect(host.textContent).not.toContain('每个')
-  expect(host.textContent).not.toContain('基本数量：')
+test('单位仅显示原值，没有辅助单位选择且不改写量价', () => {
+  render(item); expect(host.querySelector('select[title="录入单位"]')).toBeNull()
+  expect(host.textContent).toContain('箱'); expect(updateItem).not.toHaveBeenCalled()
+  expect(host.querySelector<HTMLInputElement>('[data-entry-field="item-1-price"]')!.value).toBe('120')
 })
-
 
 test.each([{ units: [] }, { units: [{ unitName: '箱', conversionRate: 0, isBase: false }] }, { units: [{ unitName: '箱', conversionRate: Number.NaN, isBase: false }] }])('辅助单位未获得合法换算时不把系数1当作确证量 %#', ({ units }) => {
   render({ ...item, units })
@@ -68,28 +58,14 @@ test.each([{ units: [] }, { units: [{ unitName: '箱', conversionRate: 0, isBase
   expect(host.textContent).toContain('240.00')
 })
 
-test.each([false, true].flatMap(compact => (['success', 'failure'] as const).map(outcome => ({ compact, outcome }))))('历史箱单位compact=$compact 异步$outcome保留原价与干净状态，真实换算风险仅在未取得换算时显示', async ({ compact, outcome }) => {
-  let resolve!: (product: Awaited<ReturnType<typeof getProductApi>>) => void
-  let reject!: (error: Error) => void
-  vi.mocked(getProductApi).mockImplementation(() => new Promise((yes, no) => { resolve = yes; reject = no }))
-  const order = { customerId: 1, warehouseId: 1, items: [{ productId: 10, productCode: 'P10', productName: '铰链', unit: '个', entryUnit: '箱', entryQty: 2, quantity: 24, unitPrice: 10, amount: 240 }] } as NonNullable<Parameters<typeof useSaleOrderForm>[1]>
+test.each([false, true])('历史单位compact=%s仅按原换算快照回显，保持价格和干净状态', compact => {
+  const order = { customerId: 1, warehouseId: 1, items: [{ productId: 10, productCode: 'P10', productName: '铰链', unit: '个', entryUnit: '箱', entryQty: 2, quantity: 24, conversionRate: 12, unitPrice: 10, amount: 240 }] } as NonNullable<Parameters<typeof useSaleOrderForm>[1]>
   let form!: ReturnType<typeof useSaleOrderForm>
   function SavedRows() { form = useSaleOrderForm('/sale/1', order); return <SaleOrderItemsTable {...form} compact={compact} /> }
   act(() => root.render(<MemoryRouter><SavedRows /></MemoryRouter>))
-  expect(host.textContent).toContain('换算待确认')
-  expect(form.isDirty).toBe(false)
-  await act(async () => {
-    if (outcome === 'success') resolve({ units: item.units } as Awaited<ReturnType<typeof getProductApi>>)
-    else reject(new Error('单位读取失败'))
-  })
-  expect(host.textContent.includes('换算待确认')).toBe(outcome !== 'success')
-  expect(host.textContent).not.toContain('基本数量：')
-  expect(host.textContent).not.toContain('原订单价（历史来源未留存）')
-  expect(form.isDirty).toBe(false)
-  expect(form.items[0]).toMatchObject({ quantity: 2, unitPrice: 120, entryUnit: '箱' })
-  expect(form.total).toBe(240)
+  expect(host.textContent).not.toContain('换算待确认'); expect(getProductApi).not.toHaveBeenCalled()
+  expect(form.isDirty).toBe(false); expect(form.items[0]).toMatchObject({ quantity: 2, unitPrice: 120, entryUnit: '箱', conversionRate: 12 }); expect(form.total).toBe(240)
 })
-
 
 test('紧凑明细保留商品身份、单价金额、包装换算与独立行备注', () => {
   const row = { ...item, productName: '超长名称铰链用于检查完整商品身份呈现与换行', productCode: 'P10-完整编码', articleNumber: 'H10-完整供应商型号', spec: '直臂-完整型号', color: '银色-完整颜色', remark: '按箱分装', priceExplanation: { kind: 'saved' } } as DraftItem
@@ -120,7 +96,7 @@ test('紧凑明细保留身份锁定和未知换算风险，不回退为基本�
   expect(host.textContent).not.toContain('基本数量：2 个')
   render(item, true, true)
   const unit = host.querySelector<HTMLSelectElement>('select[title="录入单位"]')!
-  expect(unit.disabled).toBe(true)
+  expect(unit).toBeNull()
   expect(host.querySelector<HTMLInputElement>('[data-entry-field="item-1-quantity"]')!.disabled).toBe(false)
 })
 

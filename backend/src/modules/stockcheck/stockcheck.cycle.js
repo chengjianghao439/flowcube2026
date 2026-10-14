@@ -1,6 +1,6 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
-const { scopeFilter } = require('../../utils/warehouseScope')
+const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
 
 // 帕累托经典切点（服务端常量，可后续暴露配置）
 const A_THRESHOLD = 0.80
@@ -15,8 +15,9 @@ const DEFAULT_BATCH_LIMIT = 200
  * 重算某仓 ABC 分类（文档 08）。默认 sold_value：近 windowDays 天出库消耗金额=picked_qty×avg_cost，
  * 帕累托排序累计≤80%→A、≤95%→B、其余→C。整仓覆盖 upsert。纯只读聚合、绝不碰库存写。
  */
-async function recomputeAbc({ warehouseId, metricType = 'sold_value', windowDays = 90 }) {
+async function recomputeAbc({ warehouseId, metricType = 'sold_value', windowDays = 90, scopeWarehouseIds = null }) {
   const wid = Number(warehouseId)
+  assertInScope(scopeWarehouseIds, wid, 'ABC分类')
   const N = Math.max(1, Number(windowDays) || 90)
   let rows
   if (metricType === 'stock_value') {
@@ -93,8 +94,9 @@ async function listAbc({ warehouseId = null, abcClass = null, scopeWarehouseIds 
  *   zone: 某库区/货架的 ACTIVE 容器涉及商品
  *   manual: 直接用传入 productIds
  */
-async function getCycleCandidates({ warehouseId, scopeType, scopeValue, productIds = null }) {
+async function getCycleCandidates({ warehouseId, scopeType, scopeValue, productIds = null, scopeWarehouseIds = null }) {
   const wid = Number(warehouseId)
+  assertInScope(scopeWarehouseIds, wid, '循环盘候选')
   if (scopeType === 'manual') {
     const ids = [...new Set((productIds || []).map(Number).filter(n => n > 0))]
     return { productIds: ids, scopeType: 'manual', scopeValue: 'manual' }
@@ -135,8 +137,9 @@ async function getCycleCandidates({ warehouseId, scopeType, scopeValue, productI
  * 读取某仓生效的循环盘频率规则（A/B/C 各一条，本仓 override 优先于 warehouse_id=0 全局默认，
  * 缺行按行业默认兜底）。warehouseId 省略/0 即读全局默认。纯只读配置。
  */
-async function getCycleRules({ warehouseId = 0 }) {
+async function getCycleRules({ warehouseId = 0, scopeWarehouseIds = null }) {
   const wid = Number(warehouseId) || 0
+  if (wid > 0) assertInScope(scopeWarehouseIds, wid, '循环盘规则')
   const [rows] = await pool.query(
     `SELECT warehouse_id, abc_class, interval_days, batch_limit, enabled
      FROM inventory_cycle_rules WHERE warehouse_id IN (?, 0)`,
@@ -167,8 +170,15 @@ async function getCycleRules({ warehouseId = 0 }) {
  * upsert 循环盘频率规则。warehouseId=0 编辑全局默认，>0 为本仓 override（COALESCE 生效）。
  * 只写配置表 inventory_cycle_rules，不碰库存/盘点执行。
  */
-async function saveCycleRules({ warehouseId = 0, rules }) {
+async function saveCycleRules({ warehouseId = 0, rules, scopeWarehouseIds }) {
   const wid = Number(warehouseId) || 0
+  if (scopeWarehouseIds !== null && (!Array.isArray(scopeWarehouseIds) || scopeWarehouseIds.some(id => !Number.isSafeInteger(id) || id <= 0))) {
+    throw new AppError('当前仓库授权无效，请重新登录后重试', 403, 'WAREHOUSE_SCOPE_REQUIRED')
+  }
+  if (wid === 0 && scopeWarehouseIds !== null) {
+    throw new AppError('仅不限仓账号可修改全局默认策略', 403, 'GLOBAL_POLICY_SCOPE_DENIED')
+  }
+  if (wid > 0) assertInScope(scopeWarehouseIds, wid, '循环盘规则')
   if (!Array.isArray(rules) || !rules.length) throw new AppError('规则不能为空', 400)
   const conn = await pool.getConnection()
   try {
@@ -189,7 +199,7 @@ async function saveCycleRules({ warehouseId = 0, rules }) {
     }
     await conn.commit()
   } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
-  return getCycleRules({ warehouseId: wid })
+  return getCycleRules({ warehouseId: wid, scopeWarehouseIds })
 }
 
 /**

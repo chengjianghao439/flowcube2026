@@ -40,6 +40,7 @@ async function create(raw,options) {
       operations.assertIdentity(replay,id)
       return operations.response(replay,row)
     }
+    source.assertReturnCash(ctx)
     await income(conn,body.incomeAccountId,true,true)
     if(Number(ctx.pr.status)!==1)throw rules.fail('仅准确采购退货草稿可新建供应商退款')
     const payment=await paymentContext(conn,ctx,true,body.allocations.map(a=>a.entryId))
@@ -75,6 +76,7 @@ async function change(action,refundId,raw,options) {
     if(replay){operations.assertIdentity(replay,id);return operations.response(replay,row)}
     const rule=assertStatusAction('supplierRefund',action,row.status)
     if(action==='confirm'){
+      require('./supplier-refunds.context').assertActualCash(row,frozen)
       if(Number(row.created_by)===currentActor.userId && !currentActor.allowSelfApprove)throw new AppError('不允许审批自己创建的退款单',403,'SELF_APPROVAL_FORBIDDEN')
       if(Number(ctx.pr.status)!==1)throw rules.fail('采购退货已不在草稿状态，请先核对')
       // Income is already held S in frozenContext; no late account lock is introduced.

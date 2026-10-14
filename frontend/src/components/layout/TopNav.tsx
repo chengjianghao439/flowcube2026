@@ -205,8 +205,7 @@ export function TopNav() {
       const target = getMergedPageGroup(path)?.tabTitle === 'group'
         ? resolveWorkspaceEntryPath(path, useWorkspaceStore.getState().tabs.find(tab => tab.key === key), can)
         : getWorkspaceListPath(path)
-      addTab({ key, title, path: target })
-      navigate(target)
+      if (addTab({ key, title, path: target })) navigate(target)
     },
     [addTab, navigate, can]
   )

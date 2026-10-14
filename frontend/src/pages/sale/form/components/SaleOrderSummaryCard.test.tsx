@@ -4,9 +4,9 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { SaleOrderSummaryCard } from './SaleOrderSummaryCard'
 import type { DraftItem } from '../validate'
 
-it('新建和改单汇总将录入单位折算后分组，不混加件与米', () => {
+it('历史汇总使用原单保存的换算率分组，不混加件与米', () => {
   const items = [
-    { _key: 1, productId: 1, unit: '件', entryUnit: '箱', quantity: 2, units: [{ unitName: '箱', conversionRate: 12 }] },
+    { _key: 1, productId: 1, unit: '件', entryUnit: '箱', quantity: 2, conversionRate: 12, units: [{ unitName: '箱', conversionRate: 12 }] },
     { _key: 2, productId: 2, unit: '米', quantity: 1.25 },
     { _key: 3, productId: 0, unit: '件', quantity: 99 },
   ] as DraftItem[]

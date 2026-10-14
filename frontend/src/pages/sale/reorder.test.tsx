@@ -108,7 +108,7 @@ test('新建query先识别pathname；当前身份导入默认0量/基本单位/�
     await click(host, '载入当前客户和商品')
     expect(host.textContent).toContain('客户:当前客户'); expect(host.querySelector('[data-order-entry] tbody tr')?.textContent).toContain('P3当前商品')
     expect(host.querySelector<HTMLInputElement>('input[aria-label="当前商品成交单价"]')?.value).toBe('7.1234')
-    expect(host.querySelector<HTMLSelectElement>('select[aria-label="当前商品录入单位"]')?.value).toBe('个')
+    expect(host.querySelector('select[aria-label="当前商品录入单位"]')).toBeNull(); expect(host.textContent).toContain('个')
     expect([...host.querySelectorAll<HTMLInputElement>('input[aria-label="当前商品数量"]')].map(i => i.value)).toEqual(['0'])
     expect(host.textContent).toContain('同一商品'); expect(host.textContent).toContain('仓库:'); expect(host.textContent).toContain('收货:')
     expect([...host.querySelectorAll('span')].some(span => span.textContent === '仓库:')).toBe(true)
@@ -123,7 +123,7 @@ test('显式带基本量只将同商品旧仓量合为15；不把原2箱当2套�
     const option = host.querySelector<HTMLInputElement>('input[type="checkbox"]'); expect(option).toBeTruthy()
     await act(async () => option!.click()); await click(host, '载入当前客户和商品')
     expect(host.querySelector<HTMLInputElement>('input[aria-label="当前商品数量"]')?.value).toBe('15')
-    expect(host.querySelector<HTMLSelectElement>('select[aria-label="当前商品录入单位"]')?.value).toBe('个')
+    expect(host.querySelector('select[aria-label="当前商品录入单位"]')).toBeNull(); expect(host.textContent).toContain('个')
   })
 })
 test('空/重复来源参数保持raw并拒绝，不加载合法来源或降级空白新建', async () => {

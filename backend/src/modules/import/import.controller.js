@@ -30,7 +30,7 @@ async function importProducts(req, res, next) {
 
 async function downloadStockTemplate(req, res, next) {
   try {
-    const workbook = await importService.buildStockTemplate()
+    const workbook = await importService.buildStockTemplate(req.user?.warehouseIds ?? null)
     sendWorkbook(res, workbook)
   } catch (error) {
     next(error)

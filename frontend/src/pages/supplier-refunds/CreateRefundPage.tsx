@@ -12,7 +12,7 @@ import { supplierRefundSourceApi } from '@/api/supplier-refunds';
 import { getActiveAccountsApi } from '@/api/finance';
 import { useSupplierRefundRead, useRefundReadQuery } from '@/hooks/useSupplierRefundRead';
 import { useSupplierRefundOperation } from '@/hooks/useSupplierRefundOperation';
-import { canonicalRefund, inputRefundMoney, refundMoney, refundMoneyLabel, mayRefund } from '@/lib/supplierRefundRecovery';
+import { canonicalRefund, inputRefundCashMoney, refundCashMoney, refundCashLabel, refundMoney, refundMoneyLabel, mayRefund } from '@/lib/supplierRefundRecovery';
 import { PERMISSIONS as P } from '@/lib/permission-codes';
 import { createRequestKey } from '@/lib/requestKey';
 import { buildWorkspaceTabRegistrationFromPath } from '@/router/workspaceRouteMeta';
@@ -31,15 +31,16 @@ function CreateRefundDraft({ purchaseReturnId, identity }: {
         throw Error('原采购退货身份不一致'); return r; }, !write.pending && !write.blocked);
     const accountRight = mayRefund(P.FINANCE_ACCOUNT_VIEW);
     const accounts = useRefundReadQuery('supplier-refund-accounts', 'active', scope, () => getActiveAccountsApi(scope.config), accountRight && !write.pending && !write.blocked);
-    const canonical = source.data?.entries.flatMap(e => { const amount = inputRefundMoney(amounts[e.entryId] || ''); return amount ? [{ entryId: e.entryId, amount }] : []; }) || [];
+    const canonical = source.data?.entries.flatMap(e => { const amount = inputRefundCashMoney(amounts[e.entryId] || ''); return amount ? [{ entryId: e.entryId, amount }] : []; }) || [];
     const sum = canonical.reduce((n, a) => n + refundMoney(a.amount)!, 0n), amount = `${sum / 10000n}.${String(sum % 10000n).padStart(4, '0')}`;
-    const ready = source.ready && accounts.ready && scope.current() && !write.blocked && mayRefund(P.SUPPLIER_REFUND_CREATE, P.FINANCE_ACCOUNT_VIEW);
+    const sourceCashReady = !!source.data && [source.data.grossAmount, source.data.availableAmount, source.data.currentPaidAmount, ...source.data.entries.flatMap(e => [e.originalAmount, e.availableAmount])].every(v => refundCashMoney(v) !== null);
+    const ready = sourceCashReady && source.ready && accounts.ready && scope.current() && !write.blocked && mayRefund(P.SUPPLIER_REFUND_CREATE, P.FINANCE_ACCOUNT_VIEW);
     async function save() {
         if (!ready || !source.data)
             return;
         const s = source.data;
-        if (!date || !accounts.data?.some(a => a.id === Number(account)) || !sum || Object.entries(amounts).some(([, v]) => v !== '' && !inputRefundMoney(v)) || sum > refundMoney(s.availableAmount)! || sum > refundMoney(s.currentPaidAmount)! || canonical.some(a => refundMoney(a.amount)! > refundMoney(s.entries.find(e => e.entryId === a.entryId)!.availableAmount)!)) {
-            setError('请填写真实日期、收入账户与准确四位分配，不能超过各自剩余额度和当前已付金额');
+        if (!date || !accounts.data?.some(a => a.id === Number(account)) || !sum || Object.entries(amounts).some(([, v]) => v !== '' && !inputRefundCashMoney(v)) || sum > refundMoney(s.availableAmount)! || sum > refundMoney(s.currentPaidAmount)! || canonical.some(a => refundMoney(a.amount)! > refundMoney(s.entries.find(e => e.entryId === a.entryId)!.availableAmount)!)) {
+            setError('请填写真实日期、收入账户与准确两位退款分配，不能超过各自剩余额度和当前已付金额');
             return;
         }
         setError('');
@@ -66,9 +67,9 @@ function CreateRefundDraft({ purchaseReturnId, identity }: {
           <p>原采购 <span className="text-doc-code">{displaySource.orderNo}</span></p>
         </div>
         <dl className="grid grid-cols-1 gap-4 rounded-lg border border-border bg-card p-4 sm:grid-cols-3">
-          <div><dt className="text-xs text-muted-foreground">退货原价总额</dt><dd className="mt-1 text-base font-semibold tabular-nums">{refundMoneyLabel(displaySource.grossAmount)}</dd></div>
-          <div><dt className="text-xs text-muted-foreground">本退货剩余额度</dt><dd className="mt-1 text-base font-semibold tabular-nums">{refundMoneyLabel(displaySource.availableAmount)}</dd></div>
-          <div><dt className="text-xs text-muted-foreground">当前净已付</dt><dd className="mt-1 text-base font-semibold tabular-nums">{refundMoneyLabel(displaySource.currentPaidAmount)}</dd></div>
+          <div><dt className="text-xs text-muted-foreground">退货原价总额</dt><dd className="mt-1 text-base font-semibold tabular-nums">{refundCashLabel(displaySource.grossAmount)}</dd></div>
+          <div><dt className="text-xs text-muted-foreground">本退货剩余额度</dt><dd className="mt-1 text-base font-semibold tabular-nums">{refundCashLabel(displaySource.availableAmount)}</dd></div>
+          <div><dt className="text-xs text-muted-foreground">当前净已付</dt><dd className="mt-1 text-base font-semibold tabular-nums">{refundCashLabel(displaySource.currentPaidAmount)}</dd></div>
         </dl>
         <p className="text-sm leading-6 text-muted-foreground">这三项是不同口径，最终可退款由系统逐笔核对。无原单、手工应付、预付无分配或历史身份不完整请人工核对。</p>
         <DataTable data={displaySource.items} rowKey="id" columns={[
@@ -78,6 +79,7 @@ function CreateRefundDraft({ purchaseReturnId, identity }: {
           { key: 'unitPrice', title: '原成交单价', width: 140, align: 'right', render: value => <span className="tabular-nums">{refundMoneyLabel(value)}</span> },
         ]} />
       </section>}
+      {source.data && !sourceCashReady && <p role="alert" className="text-sm text-warning-ink">历史来源金额含不足一分的尾差，请先核对；原值保留，不会自动凑整退款。</p>}
       <fieldset disabled={!ready || write.busy} className="space-y-4 rounded-lg border border-border bg-card p-4">
         <div className="grid max-w-3xl gap-4 sm:grid-cols-2">
           <div className="space-y-1.5"><Label htmlFor={`${fieldId}-date`}>真实银行回款日 *</Label><Input id={`${fieldId}-date`} type="date" aria-label="真实银行回款日" value={date} onChange={e => { if (scope.current()) setDate(e.target.value); }} /></div>
@@ -85,15 +87,15 @@ function CreateRefundDraft({ purchaseReturnId, identity }: {
         </div>
         <section aria-label="准确原付款分配" className="space-y-3">
           <h2 className="text-sm font-semibold">原付款分配</h2>
-          <p className="text-sm text-muted-foreground">逐笔填写退款金额（最多四位小数），不新增负付款。</p>
+          <p className="text-sm text-muted-foreground">逐笔填写退款金额（最多两位小数），不新增负付款。</p>
           {displaySource?.entries.map(e => <div key={e.entryId} className="grid gap-3 border-t border-border pt-3 sm:grid-cols-[minmax(0,1fr)_14rem]">
-            <div className="space-y-1 text-sm"><p><span className="font-medium">{e.receipt?.receiptNo || e.out.bizNo}</span> · 原分配 {e.entryId}</p><p className="text-xs text-muted-foreground">原日期 {e.paymentDate} · 原本金 {refundMoneyLabel(e.originalAmount)} · 剩余 {refundMoneyLabel(e.availableAmount)}</p></div>
+            <div className="space-y-1 text-sm"><p><span className="font-medium">{e.receipt?.receiptNo || e.out.bizNo}</span> · 原分配 {e.entryId}</p><p className="text-xs text-muted-foreground">原日期 {e.paymentDate} · 原本金 {refundCashLabel(e.originalAmount)} · 剩余 {refundCashLabel(e.availableAmount)}</p></div>
             <div className="space-y-1.5"><Label htmlFor={`${fieldId}-allocation-${e.entryId}`}>本笔退款金额</Label><Input id={`${fieldId}-allocation-${e.entryId}`} aria-label={`原付款分配${e.entryId}退款金额`} className="text-right tabular-nums" inputMode="decimal" value={amounts[e.entryId] || ''} onChange={event => { if (scope.current()) setAmounts(a => ({ ...a, [e.entryId]: event.target.value })); }} /></div>
           </div>)}
         </section>
         <div className="max-w-3xl space-y-1.5"><Label htmlFor={`${fieldId}-remark`}>退款事由</Label><Input id={`${fieldId}-remark`} aria-label="退款事由" value={remark} maxLength={500} onChange={e => { if (scope.current()) setRemark(e.target.value); }} /></div>
         {error && <p role="alert" className="text-sm text-destructive-ink">{error}</p>}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4"><p className="text-sm">{frozenDisplay ? '原请求退款合计' : '本次退款合计'} <span className="ml-2 text-base font-semibold tabular-nums">{refundMoneyLabel(displayAmount)}</span></p><Button disabled={!ready || write.busy} onClick={() => void save()}>{write.busy ? '保存中…' : '保存退款草稿'}</Button></div>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4"><p className="text-sm">{frozenDisplay ? '原请求退款合计' : '本次退款合计'} <span className="ml-2 text-base font-semibold tabular-nums">{refundCashLabel(displayAmount)}</span></p><Button disabled={!ready || write.busy} onClick={() => void save()}>{write.busy ? '保存中…' : '保存退款草稿'}</Button></div>
       </fieldset>
       <RefundRecoveryPanel write={write} />
       {write.result && <section className="space-y-2"><p role="status">退款单 {write.result.refundNo} 已创建，尚未实际收款。</p><Button onClick={openCreated}>查看已创建退款单</Button></section>}

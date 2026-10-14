@@ -20,13 +20,14 @@ const base=path.resolve(__dirname,'../backend/src')
 function load(file,deps){const filename=path.join(base,file),module={exports:{}};vm.runInNewContext(fs.readFileSync(filename,'utf8'),{module,require:name=>{if(Object.hasOwn(deps,name))return deps[name];throw Error('Unstubbed actual PR '+name)}},{filename});return module.exports}
 function original(f){
  f.returnEvents=[]
+ f.data.purchase_orders[0].total_amount='30.00';f.data.purchase_order_items[0].amount='30.00'
  const scope=load('utils/warehouseScope.js',{'../config/db':{},'./AppError':AppError})
  const transition=load('utils/statusTransition.js',{'./AppError':AppError,'./sqlIdentifier':ids})
  const status=load('constants/documentStatusRules.js',{'../utils/AppError':AppError})
  const wt=load('constants/warehouseTaskStatus.js',{'../utils/AppError':AppError})
- const lock=load('modules/returns/returns.purchase-lock.js',{'../../utils/AppError':AppError,'../../utils/warehouseScope':scope,'../../utils/statusTransition':transition})
+ const lock=load('modules/returns/returns.purchase-lock.js',{'../purchase/purchase.cash-money':require('../backend/src/modules/purchase/purchase.cash-money'),'../../utils/cashMoney':require('../backend/src/utils/cashMoney'),'../../utils/AppError':AppError,'../../utils/warehouseScope':scope,'../../utils/statusTransition':transition})
  return load('modules/returns/returns-purchase.service.js',{
-  '../../config/db':{pool:{getConnection:async()=>f.conn}},'../../utils/AppError':AppError,
+  '../../config/db':{pool:{getConnection:async()=>f.conn}},'../purchase/purchase.cash-money':require('../backend/src/modules/purchase/purchase.cash-money'),'../../utils/cashMoney':require('../backend/src/utils/cashMoney'),'../../utils/AppError':AppError,
   '../../utils/statusTransition':transition,'../../constants/documentStatusRules':status,
   './return-events.service':{RETURN_EVENT:{CONFIRMED:'confirmed',CANCELLED:'cancelled',CANCEL_REQUESTED:'cancelRequested'},record:async(_conn,event)=>{f.returnEvents.push(copy(event));f.events.push('return:event')}},
   '../../constants/warehouseTaskStatus':wt,'../../utils/requestContext':{getRequestId:()=>null},

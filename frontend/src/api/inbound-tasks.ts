@@ -45,12 +45,12 @@ export const getInboundTaskContainersApi = (id: number, config?: Parameters<type
   client.get<InboundContainersResult>(`/inbound-tasks/${id}/containers`, config)
 
 /** 仅 PDA 可调：后端 pdaOnly 校验请求头 X-Client: pda（漏带头会 403 PDA_ONLY） */
-export const receiveInboundApi = (id: number, data: ReceiveParams, requestKey?: string) =>
+export const receiveInboundApi = (id: number, data: ReceiveParams, requestKey?: string, config?: Parameters<typeof client.post>[2]) =>
   client.post<ReceivePackageResult>(`/inbound-tasks/${id}/receive`, data, {
-    skipGlobalError: true,
+    ...config, skipGlobalError: true,
     headers: requestKey
-      ? withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' })
-      : { 'X-Client': 'pda' },
+      ? withRequestKeyHeaders(requestKey, { ...config?.headers, 'X-Client': 'pda' } as Record<string, string>)
+      : { ...config?.headers, 'X-Client': 'pda' },
   })
 
 /** 仅 PDA 可调：后端校验请求头 X-Client: pda */

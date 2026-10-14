@@ -207,7 +207,7 @@ export default function CommercialPicker({ kind, warehouseId, owner, readGuard, 
         onSelect({
           input: { kind: 'ordinary', lineKey, warehouseId, productId: item.id, entryUnit: item.unit, quantity: 1, priceSource: 'default' },
           name: item.name, code: item.code, spec: product.spec, color: product.color, articleNumber: product.articleNumber, costPrice: product.costPrice,
-          unit: item.unit, quantity: '1', price: '', units: product.units ?? [], baseUnit: product.unit, allowDecimalQty: product.allowDecimalQty, packagingExpressible: true
+          unit: item.unit, quantity: '1', price: '', units: [], baseUnit: product.unit, allowDecimalQty: product.allowDecimalQty, packagingExpressible: true
         })
       }
       request.delivered = true

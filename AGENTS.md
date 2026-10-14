@@ -30,7 +30,7 @@
 - **范围校验还必须覆盖**：`GET /products/finder`、`GET /containers/overdue`、`GET /returns/{purchase,sale}/source-order`（逐行校验发货仓）、`GET /approvals/biz/:bizType/:bizId`（`BIZ_DOC_META` + `sys_role_permissions`，未知 400）、`print-jobs` 列表 / **统计 `/stats`** / **打印机健康 `/printer-health`** / 条码补打（统计与健康分别按 `print_jobs.warehouse_id` 与打印机 `printers.warehouse_id` 过滤；回归 `tests/print-jobs-warehouse-scope.smoke.test.js`）
 - **`print-jobs` 三张条码子查询分别用 `c.` / `wt.` / `j.warehouse_id`**；SQL 文本替换必须带足上下文并真跑三种范围
 - **`complete-local` 同 `complete-client`/`fail-client` 做工作站校验**；写路由必须 `requirePermission`（`fulfillment.routes.js`）
-- **数量精度是两位小数（0.01）**：所有数量列 `DECIMAL(_,2)`，用户原量及未取整换算结果超过两位先拒绝，合法值再用 `unitConversion.roundQty`；**金额/单价/授信仍旧四位**，别一起改。改动精度要 grep 全仓 `10000`（乘与除都要改）（`docs/business-semantics.md`）
+- **数量精度是两位小数（0.01）**：所有数量列 `DECIMAL(_,2)`，用户原量及未取整换算结果超过两位先拒绝，合法值再用 `unitConversion.roundQty`；订单总额及实际退货/资金/核销金额按分，单价、成本、授信限额及中间计算保持各自精度。逐项核对 `10000` 的业务含义，不机械替换（`docs/business-semantics.md`、`docs/cash-cents-policy.md`）。
 - **库存唯一事实源是 ACTIVE 容器的 `inventory_containers.remaining_qty`**，`inventory_stock.quantity` 只是缓存；唯一合法缓存写入口是 `syncStockFromContainers()`，禁止业务代码直接 UPDATE quantity（详见 `docs/inventory-transaction-invariants.md`）
 - **写操作幂等**：前端发稳定 `X-Request-Key`，后端走 `beginOperationRequest`/`completeOperationRequest`；重放返回原回执，不得重复加库存、推进状态或入账（详见 `docs/inventory-transaction-invariants.md`）
 - **批量写入用 `VALUES ?`（mysql2 二维数组）且先判空**：空数组会 `ER_PARSE_ERROR`；禁止循环内逐行 INSERT/UPDATE（`procurement.service.js`、`hr.service.js`）
@@ -52,6 +52,7 @@
 - **源码文本契约测试先去注释**：只剔整行注释（按 `//` 全剔会把 `http://127.0.0.1` 这类字面量的后半行一起砍掉，2026-09-18 实测导致守卫自我误报）；锁顺序按「上一个 `FOR UPDATE` 之后」归属；`INSERT` 列数必须与 `?` 一致
 - **`printers.service.update` 的 `status` 只允许 0/1（路由 + service 双重）**，写语句同事务行锁，缺失字段沿用现值
 - **资源级幂等 action 必须绑定单据 ID**（`action.<resourceId>`）；创建类用载荷指纹；回执查询剥尾部 `.<ID>` 取 base；调拨必须是 `transfer.scanOut.<id>` / `transfer.scanIn.<id>`（`utils/operationRequest.js`）
+- 请购create固定领域base action+原validated正文64摘要；plan.convert绑定原selection，回放先原仓scope后正文证明，unknown/cold仅查原键；沿七日TTL不承诺永久证明 → `npm run test:security-scan-remediation`（详见 `docs/backend-api-sql-conventions.md`、`docs/frontend-pda-conventions.md`）。
 - **`track_status` 含义只在 `logistics.service.js` 定义一处、导出列名「签收状态」**；运费账单匹配用 `tracking_no = ? OR JSON_CONTAINS(tracking_numbers, JSON_QUOTE(?))`
 - **共享夹具必须自洁**：`prepareSmokeContext` 把 Smoke 客户 `credit_limit` 置 NULL；`round2-transfer.smoke.test.js` 的 `after()` 清理本轮角色/权限/用户/设备
 - **前端容器必须删 `/docker-entrypoint.d/10-listen-on-ipv6-by-default.sh`**
@@ -71,6 +72,8 @@
 - 分布类图表系列数必须有界（`TOP_SERIES_LIMIT = 8` + 其他 N 个）→ `npm run test:chart-series-limit`
 - 只读路径禁止 N+1；无扫码行的明细必须按 0 拒绝（fail-open 风险）→ `npm run test:query-loop`、`npm run test:warehouse-scan-closure`
 - `fail-loud` 错误不得被调用处吞成静默跳过 → `node --test tests/accounting-voucher-mapping.test.js`
+- 结账逐来源核原业务凭证净投影、零净利仍结平非零损益腿；实际资金/报销按分，正月额资产按实际末笔补尾 → `npm run test:accounting`（详见 `docs/finance-permission-time.md`、`docs/cash-cents-policy.md`；零月额资产政策未定，不追改历史）。
+- 全仓默认策略写须原管理权限及当前不限仓；普通折扣退货同源净额累计，短装只结束本次任务，明确结束剩余采购才取消余量 → `npm run test:security-scan-remediation`、`npm run test:accounting`、`npm run test:inbound-edit`（详见对应财务、库存与业务主题文档）。
 - `logger.info/warn` 参数顺序必须是 `(msg, meta, module_)`，meta 是对象 → `npm run test:logger-args-order`
 - 前端业务日期一律走 `lib/dateTime.ts`/`lib/dateRange.ts`，禁止自拼 `getFullYear` 等 → `npm run test:frontend-date-source`
 - SQL 标识符插值必须经 `assertSqlIdentifier`/`assertSqlColumnList` → `npm run test:sql-identifier`
@@ -87,8 +90,8 @@
 - 备份导入前只把触发器残留分号移出可执行注释 → `node --test tests/restore-trigger-normalize.test.js`
 - 迁移逐条执行、触发器函数体不得残留结尾分号 → `node --test tests/migration-trigger-bodies.test.js`
 - 前端命名与呈现结构：菜单名 = 工作区标签 = 页面标题、标签 ≤7 汉字、带日期的查询弹窗必须能重置回本页默认口径、纯图标按钮必须有可读名称 → `npm run test:frontend-conventions`
-- 只允许整数的商品（`allow_decimal_qty=0`）不得按小数下单/出入库/调拨/盘点；录入类模块须走 `foldEntryItems()` → `npm run test:qty-precision`、`npm run test:qty-precision-coverage`
-- 应用部署保留既有健康且认证 TCP SQL 通过的 MySQL，切换应用须 `--no-deps`；未知实例状态提前拒绝 → `node --test tests/audit-deployment.test.js`
+- 商品级 `allow_decimal_qty` 是全数量规则，界面“允许小数数量”、新建默认关闭；所有数量录入、换算结果、库存写入和任务执行都验证当前商品策略，价格/成本/金额保持自身精度。原快照不作豁免；关闭前检查小数库存/在途/未完成业务/可退额度，拒绝不安全切换，不取整或改历史账（`docs/sale-shipping-quantity-policy.md`）。新销售固定唯一单位并走 `normalizeFixedSaleItems()`，采购/必要旧退货保留 `foldEntryItems()`；守卫 → `npm run test:qty-precision`、`npm run test:qty-precision-coverage`
+- 应用部署保留既有健康且认证 TCP SQL 通过的 MySQL，切换应用须 `--no-deps`；未知实例状态提前拒绝；288–292 迁移窗口后旧后端须同时具备数量/退货/资金写入契约，否则失败保持停写、向前恢复，不能仅凭240契约恢复写入 → `node --test tests/audit-deployment.test.js`
 - 组合页发布验收须核可见组标题与当前子视图链接；电话旧形状真实迁移回归须专属实例归属证明 → `npm run test:browser-smoke`、`npm run test:party-profile`、`npm run test:go-live-runner`
 - 本地实例脚本 `start` 只启动实例（不改库结构）、迁移必须由显式 `dev:mysql8:migrate` 触发且目标固定、凭据只由 `start` 生成 → `npm run test:mysql8-dev-script`
 - 含全表清理的采购/应收修复 smoke 只允许落在**本批专属临时实例**（`npm run repair:smoke-ephemeral`），写入前必须过归属门：0600 归属文件 + 拒绝共享端口 3307/3306 + 容器/卷 `docker inspect` 本批 label 与实时端口映射 + 同运行时间窗 + **runner 进程存活** + 实例 `@@server_uuid`；不认库名后缀、`IF NOT EXISTS`、可自填 env、空表 → `npm run test:repair-smoke-instance-guard`
@@ -173,6 +176,7 @@
 | `docs/inventory-transaction-invariants.md` | 动库存/容器/预占/引擎/状态机/幂等回执，或任何影响库存与账款一致性的代码时 |
 | `docs/business-semantics.md` | 改采购收货与上架、销售占库与 ATP、拣货到出库执行链、退货、调拨、盘点、履约刷新时 |
 | `docs/finance-permission-time.md` | 改账款与核销、凭证与结账、发票、HR 工资、权限与仓库范围、业务日期与账套隔离时 |
+| `docs/cash-cents-policy.md` | 改订单总额、实际退货净额、收付款、退款、核销或历史金额兼容时 |
 | `docs/frontend-pda-conventions.md` | 改 ERP 页面/组件、列表与图表、弹窗与浮层、PDA 页面与扫码交互、登录会话与路由时 |
 | `docs/workspace-filter-return.md` | 改工作区列表筛选、详情返回、合并子页与查询作用域时 |
 | `docs/print-deploy-ops.md` | 改标签与单据打印、发布与部署链路、CI 门禁、备份恢复与服务器运维动作时 |

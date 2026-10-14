@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 import { act } from 'react'
+import { MemoryRouter } from 'react-router-dom'
+import { useAuthStore } from '@/store/authStore'
 import { createRoot, type Root } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AxiosError, type AxiosAdapter } from 'axios'
@@ -11,14 +13,16 @@ import type { ReservePreview } from '@/types/sale'
 vi.mock('@/hooks/useProductQtyPolicies', () => ({ useProductQtyPolicies: () => () => true }))
 vi.mock('@/components/shared/WarehouseSelect', () => ({ WarehouseSelect: (props: { id?: string; value: number; disabled?: boolean; onChange: (id: number, name: string) => void }) => <select id={props.id} disabled={props.disabled} value={props.value} onChange={e => props.onChange(Number(e.target.value), '合成仓库')}><option value={1}>合成仓库</option><option value={2}>第二仓库</option></select> }))
 const preview: ReservePreview = { orderId: 7, warehouseId: 1, warehouseName: '合成仓库', items: [{ itemId: 17, productId: 27, productCode: 'SYNTHETIC-P', productName: '合成商品', unit: '个', quantity: 2, reservedQty: 0, remainToReserve: 2, currentWarehouseId: 1, currentWarehouseName: '合成仓库', warehouses: [{ warehouseId: 1, warehouseName: '合成仓库', available: 2 }, { warehouseId: 2, warehouseName: '第二仓库', available: 2 }] }] }
+let oldAuth:ReturnType<typeof useAuthStore.getState>
 let host: HTMLDivElement, root: Root, qc: QueryClient, originalAdapter: typeof client.defaults.adapter, reads: string[]
 beforeEach(() => {
+  oldAuth=useAuthStore.getState();useAuthStore.getState().login('synthetic',null,{id:9,username:'synthetic',realName:'合成操作员',roleId:1,roleName:'测试'})
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true }); reads = []; originalAdapter = client.defaults.adapter
   qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false } } })
   host = document.createElement('div'); document.body.append(host); root = createRoot(host)
 })
-afterEach(async () => { await act(async () => root.unmount()); qc.clear(); client.defaults.adapter = originalAdapter; host.remove() })
-async function mount() { await act(async () => root.render(<QueryClientProvider client={qc}><ReserveAllocationDialog open orderId={7} onClose={vi.fn()} onShortage={vi.fn()} /></QueryClientProvider>)) }
+afterEach(async () => { await act(async () => root.unmount()); qc.clear(); client.defaults.adapter = originalAdapter; host.remove();useAuthStore.setState(oldAuth) })
+async function mount() { await act(async () => root.render(<MemoryRouter><QueryClientProvider client={qc}><ReserveAllocationDialog open orderId={7} onClose={vi.fn()} onShortage={vi.fn()} /></QueryClientProvider></MemoryRouter>)) }
 const button = (name: string) => [...document.querySelectorAll<HTMLButtonElement>('button')].find(b => b.textContent?.trim() === name)!
 function validateRead(config: Parameters<AxiosAdapter>[0]) { expect(config.method).toBe('get'); expect(config.url).toBe('/sale/7/reserve-preview'); reads.push(String(config.url)) }
 function success(config: Parameters<AxiosAdapter>[0], data = preview) { return { status: 200, statusText: 'OK', headers: {}, config, data: { success: true, data } } }

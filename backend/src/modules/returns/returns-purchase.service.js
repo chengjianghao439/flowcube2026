@@ -11,7 +11,9 @@ const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
 const { foldEntryItems } = require('../../utils/unitConversion')  // 多单位折算（文档03 Phase4a，退货按箱）
 const { normalizePagination } = require('../../utils/pagination')
 const { assertNoPendingRefund } = require('../refunds/supplier-refunds.pr-gate')
-const { peekPurchaseReturn, lockPurchaseReturn } = require('./returns.purchase-lock')
+const { peekPurchaseReturn, lockPurchaseReturn, provePurchaseReturnCash } = require('./returns.purchase-lock')
+const purchaseCash = require('../purchase/purchase.cash-money')
+const cash = require('../../utils/cashMoney')
 
 // 状态名唯一口径 = documentStatusRules.purchaseReturn / 迁移 146 的列注释 / 前端筛选项（都是「已执行」）。
 // 旧名「已退货」「已退货入库」是更早的叫法，曾导致同一页面筛选写「已执行」、表格写「已退货」（2026-09-18 审计 [30]）。
@@ -88,7 +90,7 @@ async function validatePurchaseReturnItems(conn, purchaseOrderId, items, expecte
   // 过期快照，都校验通过，合计超出实际已收货量退货（金额/库存双重超退）。
   await conn.query('SELECT id FROM purchase_order_items WHERE order_id = ? FOR UPDATE', [purchaseOrderId])
   const [rows] = await conn.query(
-    `SELECT poi.id, poi.product_id, poi.quantity, poi.unit_price${expectedUnit !== null ? ", poi.unit" : ""},
+    `SELECT poi.id, poi.order_id, poi.product_id, poi.quantity, poi.unit_price, poi.unit, poi.amount,
             COALESCE((
               SELECT SUM(iti.received_qty)
               FROM inbound_task_items iti
@@ -135,6 +137,7 @@ async function validatePurchaseReturnItems(conn, purchaseOrderId, items, expecte
       throw new AppError(`商品 ${item.productName} 退货数量超出实际收货数量`, 409)
     }
   }
+  return rows
 }
 
 async function findAllPR({ page=1, pageSize=20, keyword='', status=null, productId=null, supplierId=null, warehouseId=null, operatorId=null, startDate=null, endDate=null, remark=null, scopeWarehouseIds=null }) {
@@ -200,13 +203,13 @@ async function createPR({ supplierId, supplierName, warehouseId, warehouseName, 
     let resolvedPurchaseOrderId = purchaseOrderId || null
     let sourceOrder = null
     if (!resolvedPurchaseOrderId && purchaseOrderNo) {
-      const [[row]] = await conn.query('SELECT id, order_no, supplier_id, warehouse_id FROM purchase_orders WHERE order_no=? AND deleted_at IS NULL FOR UPDATE', [purchaseOrderNo])
+      const [[row]] = await conn.query('SELECT id, order_no, supplier_id, warehouse_id, total_amount, cash_basis FROM purchase_orders WHERE order_no=? AND deleted_at IS NULL FOR UPDATE', [purchaseOrderNo])
       if (!row) throw new AppError('关联采购单不存在', 404)
       sourceOrder = row
       resolvedPurchaseOrderId = Number(row.id)
     } else if (resolvedPurchaseOrderId) {
       const [rows] = await conn.query(
-        'SELECT id, order_no, supplier_id, warehouse_id FROM purchase_orders WHERE id=? AND deleted_at IS NULL FOR UPDATE',
+        'SELECT id, order_no, supplier_id, warehouse_id, total_amount, cash_basis FROM purchase_orders WHERE id=? AND deleted_at IS NULL FOR UPDATE',
         [resolvedPurchaseOrderId],
       )
       if (!rows[0]) throw new AppError('关联采购单不存在', 404)
@@ -223,17 +226,47 @@ async function createPR({ supplierId, supplierName, warehouseId, warehouseName, 
       }
     }
     // 多单位折算（文档03 Phase4a）：入参 quantity/unitPrice 恒为录入单位口径，折算成基本单位后
-    // 再校验/落库。有源退货前端锁死数量/单价（entryUnit=基本单位→rate 1，等价旧行为）；
+    // 再校验/落库。有源退货只允许编辑原行本次基本量，单位/原价只读；
     // validatePurchaseReturnItems 用 folded（quantity 已是基本单位）比对剩余可退量、并强制覆盖 unitPrice 为源单价。
     const folded = await foldEntryItems(conn, items)
     if (!resolvedPurchaseOrderId && folded.some(item => item.sourceItemId != null)) throw new AppError('来源明细缺少准确原采购单，请先核对', 409, 'PURCHASE_RETURN_SOURCE_INVALID')
     if (handling && (!resolvedPurchaseOrderId || folded.length !== 1 || !folded[0].sourceItemId)) throw new AppError('关联退货须绑定准确原采购单及明细', 409, 'PURCHASE_RETURN_SOURCE_INVALID')
-    await validatePurchaseReturnItems(conn, resolvedPurchaseOrderId, folded, handlingContext?.source.unit ?? null)
+    const sourceItems = await validatePurchaseReturnItems(conn, resolvedPurchaseOrderId, folded, handlingContext?.source.unit ?? null)
     if (handling) await handling.validateItems(conn, handlingContext, folded, warehouseId)
     const returnNo=await genNo(conn,'PR','purchase_returns','return_no')
-    const total=folded.reduce((s,i)=>s+i.quantity*i.unitPrice,0)
+    let quote = null
+    let cashBasis = null
+    if (sourceOrder) {
+      cashBasis = sourceOrder.cash_basis || purchaseCash.legacyBasis(sourceOrder,sourceItems)
+      const [priorRows] = await conn.query('SELECT * FROM purchase_returns WHERE purchase_order_id=? AND deleted_at IS NULL AND status<>4 ORDER BY id', [sourceOrder.id])
+      const [priorItems] = await conn.query('SELECT pri.* FROM purchase_return_items pri JOIN purchase_returns pr ON pr.id=pri.return_id WHERE pr.purchase_order_id=? AND pr.deleted_at IS NULL AND pr.status<>4 ORDER BY pri.return_id,pri.id', [sourceOrder.id])
+      const active = priorRows.map(row => {
+        const own = priorItems.filter(i => Number(i.return_id) === Number(row.id))
+        return row.cash_execution_basis ? purchaseCash.validateReturn(cashBasis,row,own,sourceItems) : sourceOrder.cash_basis ? purchaseCash.review('新采购存在无冻结证明的活动退货') : purchaseCash.legacyReturn(cashBasis,row,own)
+      })
+      if (!sourceOrder.cash_basis) {
+        const [audited] = await conn.query('SELECT iti.purchase_item_id AS id, SUM(iti.putaway_qty) AS quantity FROM inbound_task_items iti JOIN inbound_tasks it ON it.id=iti.task_id WHERE iti.purchase_order_id=? AND it.deleted_at IS NULL AND it.status<>5 AND it.audit_status=1 GROUP BY iti.purchase_item_id ORDER BY iti.purchase_item_id',[sourceOrder.id])
+        const executed = active.filter(f => Number(priorRows.find(r => Number(r.id) === f.returnId).status) === 3)
+        const projection = purchaseCash.payableProjection(cashBasis,audited,executed)
+        const [accounts] = await conn.query('SELECT id,total_amount,paid_amount,balance FROM payment_records WHERE type=1 AND order_id=? ORDER BY id',[sourceOrder.id])
+        if (accounts.length>1 || !accounts.length && cash.storedCashCents(projection.payable)>0n) purchaseCash.review('旧应付缺失或不唯一')
+        if (accounts.length) {
+          const a=accounts[0],total=cash.storedCashCents(a.total_amount,'旧应付总额'),paid=cash.storedCashCents(a.paid_amount,'旧已付款'),balance=cash.storedCashCents(a.balance,'旧应付余额')
+          if (total!==cash.storedCashCents(projection.payable)||paid<0n||balance!==(total>paid?total-paid:0n)) purchaseCash.review('旧应付与准确已审/已退整价分事实不闭合')
+        }
+      }
+      quote = purchaseCash.reserveReturn(cashBasis, sourceItems.map(i => ({ id: Number(i.id), quantity: String(i.received_qty) })), active, folded)
+      if (!sourceOrder.cash_basis) quote.proof.legacyBasis = cashBasis
+    }
+    const lineAmounts = quote ? quote.items.map(i => i.amount) : folded.map(i => cash.cashNumber(cash.productCents(i.quantity, i.unitPrice)))
+    const total = cash.cashNumber(cash.sumCashCents(lineAmounts))
     const [r]=await conn.query(`INSERT INTO purchase_returns (return_no,supplier_id,supplier_name,warehouse_id,warehouse_name,purchase_order_id,purchase_order_no,total_amount,remark,operator_id,operator_name) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,[returnNo,supplierId,supplierName,warehouseId,warehouseName,resolvedPurchaseOrderId,sourceOrder?.order_no||purchaseOrderNo||null,total,remark||null,operator.userId,operator.realName])
-    for(const item of folded) await conn.query(`INSERT INTO purchase_return_items (return_id,purchase_item_id,product_id,product_code,product_name,article_number,spec,color,unit,entry_unit,quantity,entry_qty,conversion_rate,unit_price,amount) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,[r.insertId,item.sourceItemId||null,item.productId,item.productCode,item.productName,item.articleNumber||null,item.spec||null,item.color||null,item.unit,item.entryUnit,item.quantity,item.entryQty,item.conversionRate,item.unitPrice,item.quantity*item.unitPrice])
+    for(const [itemIndex,item] of folded.entries()) await conn.query(`INSERT INTO purchase_return_items (return_id,purchase_item_id,product_id,product_code,product_name,article_number,spec,color,unit,entry_unit,quantity,entry_qty,conversion_rate,unit_price,amount) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,[r.insertId,item.sourceItemId||null,item.productId,item.productCode,item.productName,item.articleNumber||null,item.spec||null,item.color||null,item.unit,item.entryUnit,item.quantity,item.entryQty,item.conversionRate,item.unitPrice,lineAmounts[itemIndex]])
+    if (quote) {
+      const [persistedItems] = await conn.query('SELECT * FROM purchase_return_items WHERE return_id=? ORDER BY id', [r.insertId])
+      const proof = purchaseCash.freezeReturn(cashBasis, { id:r.insertId, return_no:returnNo, purchase_order_id:resolvedPurchaseOrderId, supplier_id:supplierId, warehouse_id:warehouseId, total_amount:total }, persistedItems, quote)
+      await conn.query('UPDATE purchase_returns SET cash_execution_basis=? WHERE id=?', [JSON.stringify(proof),r.insertId])
+    }
     await recordReturnEvent(conn, {
       returnType: 'purchase',
       returnId: r.insertId,
@@ -269,11 +302,13 @@ async function confirmPR(id, operator = null, scopeWarehouseIds = null) {
     const identity = await peekPurchaseReturn(conn, id)
     assertInScope(scopeWarehouseIds, identity.warehouse_id, '采购退货单')
     await conn.beginTransaction()
-    const { row: retRow, items: itemRows } = await lockPurchaseReturn(conn, identity, scopeWarehouseIds)
+    const lockedReturn = await lockPurchaseReturn(conn, identity, scopeWarehouseIds)
+    const { row: retRow, items: itemRows } = lockedReturn
     assertInScope(scopeWarehouseIds, retRow.warehouse_id, '采购退货单')
     // PO S / PR X are held; this must be the first non-locking read in this transaction.
     const refundState = retRow.purchase_order_id ? await assertNoPendingRefund(conn, Number(retRow.id)) : { received: false }
     const rule = assertStatusAction('purchaseReturn', 'confirm', retRow.status)
+    await provePurchaseReturnCash(conn,lockedReturn)
     // 负余额前置拦截：已付供应商金额 > 退货冲减后应付总额时，不让退货单走到出库末端才抛 409
     // 回滚、卡在中间态。采购退货全额出库，预判额与末端冲减额一致；末端 FOR UPDATE 仍兜底。
     if (retRow.purchase_order_id) {
@@ -418,10 +453,17 @@ async function syncPurchaseReturnShipped(conn, returnId, { taskId, taskNo, opera
   const rule = assertStatusAction('purchaseReturn', 'execute', retRow.status)
 
   // 账款冲减：从应付账款中减去退货金额
-  const [[{ totalAmount }]] = await conn.query(
-    'SELECT COALESCE(SUM(quantity * unit_price), 0) AS totalAmount FROM purchase_return_items WHERE return_id = ?',
-    [returnId],
-  )
+  let fact = null
+  let totalAmount
+  if (retRow.purchase_order_id) {
+    if (!lockedPurchaseReturn?.cashFact || !lockedPurchaseReturn?.po) purchaseCash.review('采购退货执行缺少库存前锁定来源证明')
+    fact = lockedPurchaseReturn.cashFact
+    totalAmount = cash.cashNumber(cash.storedCashCents(fact.credit))
+  } else {
+    const [items] = await conn.query('SELECT quantity, unit_price, amount FROM purchase_return_items WHERE return_id=? ORDER BY id', [returnId])
+    totalAmount = cash.cashNumber(cash.sumCashCents(items.map(i => cash.cashNumber(cash.storedCashCents(i.amount,'原非来源退货行额')))))
+    if (items.some(i => cash.storedCashCents(i.amount) !== cash.productCents(i.quantity,i.unit_price))) purchaseCash.review('非来源退货金额与原量价不一致')
+  }
   if (retRow.purchase_order_id && totalAmount > 0) {
     await adjustPaymentRecordForReturn(conn, {
       recordType: 1,
@@ -431,6 +473,7 @@ async function syncPurchaseReturnShipped(conn, returnId, { taskId, taskNo, opera
       returnType: 'purchase',
       amount: Number(totalAmount),
       operator: operator || {},
+      ...(fact && lockedPurchaseReturn.po.cash_basis ? { purchaseCashProjection: { snapshot: lockedPurchaseReturn.po.cash_basis, fact } } : {}),
     })
   }
 

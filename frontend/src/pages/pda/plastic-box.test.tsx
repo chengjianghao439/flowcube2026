@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { webcrypto } from 'node:crypto'
 import { act, useEffect } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -31,6 +32,8 @@ const body = { qty: 3, printLabel: true, remark: '原载荷', targetContainerId:
 const key = () => `flowcube_pda_split_v1:${owner}`
 const seed = () => localStorage.setItem(key(), JSON.stringify({ version: 1, records: [{ accountId: owner, endpoint: 'https://plastic.invalid/api', sourceContainerId: 11, sourceBarcode: 'I11', productId: 3, warehouseId: 8, remaining: 10, action: 'inventory.container.split.11', requestKey: 'original-key', createdAt: new Date().toISOString(), body }] }))
 beforeEach(() => {
+ Object.defineProperty(globalThis, 'crypto', { configurable: true, value: webcrypto }); Object.defineProperty(navigator, 'locks', { configurable: true, value: { request: async (_name: string, options: unknown, fn?: (lock: object) => unknown) => (typeof options === 'function' ? options : fn!)({}) } })
+
   owner++; localStorage.clear(); requests.length = 0; scans.clear(); postResult = null
   setApiClientBaseURL('https://plastic.invalid/api')
   useAuthStore.getState().login('offline', null, { id: owner, roleId: 5, username: 'offline', permissions: [PERMISSIONS.INVENTORY_VIEW, PERMISSIONS.INVENTORY_CONTAINER_SPLIT] } as User)
@@ -66,6 +69,7 @@ test('三动作固定方向，返回选择/切换保留实际实例输入；隐�
 test('放入盒保留整件全量与expectedQty；未完成的来源输入切换后仍是同来源', async () => {
   await draw(); await click('整件放入盒'); await scan('I11'); await click('← 返回'); await click('整件放入盒')
   expect(host.textContent).toContain('I11'); await scan('B12'); await click('确认放货')
+  await act(async () => { await vi.waitFor(() => expect(requests.some(r => r.method === 'post')).toBe(true)) })
   const submitted = requests.find(r => r.method === 'post')!
   expect(submitted.url).toBe('/plastic-boxes/12/fill'); expect(JSON.parse(submitted.data)).toEqual({ sourceContainerId: 11, expectedSourceQty: 10 })
 })

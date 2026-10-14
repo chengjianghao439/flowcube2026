@@ -135,7 +135,7 @@ export default function PdaShipPage() {
     try {
       const res  = await getPackageByBarcodeApi(raw)
       const data = res!
-      if (warehouseStatus(data) === WT_STATUS.SHIPPED)   { err('该订单已完成出库'); return }
+      if (warehouseStatus(data) === WT_STATUS.SHIPPED)   { err('该任务已完成出库'); return }
       if (warehouseStatus(data) === WT_STATUS.CANCELLED) { err('该任务已取消'); return }
       setInfo(data)
       if (!canShip(data)) {
@@ -151,9 +151,9 @@ export default function PdaShipPage() {
   if (done && info) return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background px-6 text-center">
       <Truck className="h-16 w-16 text-primary mb-6" />
-      <h2 className="text-2xl font-bold text-foreground">出库完成！</h2>
-      <p className="text-muted-foreground mt-2 mb-1">订单 <span className="font-mono font-semibold text-foreground">{info.taskNo}</span></p>
-      <p className="text-muted-foreground mb-8">{info.customerName} 已完成发货</p>
+      <h2 className="text-2xl font-bold text-foreground">本任务出库完成！</h2>
+      <p className="text-muted-foreground mt-2 mb-1">仓库任务 <span className="font-mono font-semibold text-foreground">{info.taskNo}</span></p>
+      <p className="text-muted-foreground mb-8">本批已发往 {info.customerName}，整单进度请查看销售单。</p>
       <div className="flex gap-3 w-full max-w-xs">
         <Button size="lg" variant="outline" className="px-3 flex-1" onClick={() => { setInfo(null); setDone(false) }}>继续出库</Button>
         <Button size="lg" className="px-3 flex-1" onClick={() => navigate('/pda')}>返回工作台</Button>

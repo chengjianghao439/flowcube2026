@@ -75,6 +75,7 @@ async function receiveInTransaction(conn,refundId,raw,options) {
   if(Number(ctx.pr.status)!==1)throw rules.fail('仅准确采购退货草稿可登记新回款，请人工核对')
   const account=frozen.incomeAccount
   if(Number(account.company_id)!==1||Number(account.is_active)!==1||account.deleted_at||![1,2,3,4,5].includes(Number(account.type)))throw rules.fail('收入账户身份或可用性已变化，请核对')
+  context.assertActualCash(row,frozen)
   const amount=moneyUnits(row.amount)
   if(frozen.own.some(a=>a.budget_state!=='reserved')||new Set(frozen.own.map(a=>Number(a.entry_id))).size!==frozen.body.allocations.length
     ||frozen.own.reduce((sum,a)=>sum+moneyUnits(a.amount),0n)!==amount)throw operations.conflict()
@@ -93,7 +94,7 @@ async function receiveInTransaction(conn,refundId,raw,options) {
   if(updated.affectedRows!==1)throw operations.conflict()
   const [allocated]=await conn.query('UPDATE supplier_refund_allocations SET budget_state=? WHERE refund_id=? AND budget_state=?',['received',row.id,'reserved'])
   if(allocated.affectedRows!==frozen.own.length)throw operations.conflict()
-  for(const statementId of frozen.payment.statementIds)await statements.refreshSettlement(conn,statementId,{currentRead:true,exactMoney:true})
+  for(const statementId of frozen.payment.statementIds)await statements.refreshSettlement(conn,statementId,{currentRead:true,exactMoney:true,cashOnly:true})
   await conn.query('INSERT INTO party_ledger_events (type,party_id,party_name,record_id,order_id,document_no,event_type,delta,business_date,baseline_key) VALUES (?,?,?,?,?,?,?,?,?,?)',[
     1,Number(row.supplier_id),ctx.po.supplier_name||ctx.pr.supplier_name,Number(row.payment_record_id),Number(row.purchase_order_id),row.refund_no,'SUPPLIER_REFUND_IN',moneyText(amount),fixed.refundDate,`supplier_refund:${row.id}`,
   ])

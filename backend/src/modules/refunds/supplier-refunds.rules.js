@@ -1,4 +1,5 @@
 'use strict'
+const { cashCents } = require('../../utils/cashMoney')
 const crypto = require('node:crypto')
 const AppError = require('../../utils/AppError')
 const { beijingTodayYmd } = require('../../utils/backendTime')
@@ -43,16 +44,20 @@ function quantityUnits(value) {
 function exactBody(body,required,optional=[]) {
   if(!body || typeof body!=='object' || Array.isArray(body) || required.some(k=>!Object.hasOwn(body,k)) || Object.keys(body).some(k=>![...required,...optional].includes(k))) throw new AppError('退款参数不完整或包含不允许的字段',400,'SUPPLIER_REFUND_INPUT_INVALID')
 }
-function createBody(body) {
+function parseCreateBody(body, { actualCash = true } = {}) {
   exactBody(body,['operationUuid','purchaseReturnId','incomeAccountId','refundDate','amount','allocations'],['remark'])
   if(typeof body.refundDate!=='string' || !/^\d{4}-\d{2}-\d{2}$/.test(body.refundDate)) throw new AppError('请填写真实退款日期',400,'SUPPLIER_REFUND_INPUT_INVALID')
   date(body.refundDate)
   if(!Array.isArray(body.allocations) || !body.allocations.length || body.allocations.length>200) throw new AppError('请选择准确原付款分配',400,'SUPPLIER_REFUND_INPUT_INVALID')
-  const allocations=body.allocations.map(item=>{exactBody(item,['entryId','amount']);return{entryId:safeId(item.entryId),amount:positiveMoney(item.amount)}}).sort((a,b)=>a.entryId-b.entryId)
+  if (actualCash) cashCents(body.amount, { label: '实际供应商退款金额' })
+  const allocations=body.allocations.map(item=>{exactBody(item,['entryId','amount']);if(actualCash)cashCents(item.amount, { label: '实际退款分配金额' });return{entryId:safeId(item.entryId),amount:positiveMoney(item.amount)}}).sort((a,b)=>a.entryId-b.entryId)
   if(new Set(allocations.map(a=>a.entryId)).size!==allocations.length || allocations.reduce((n,a)=>n+moneyUnits(a.amount),0n)!==moneyUnits(body.amount)) throw new AppError('退款分配重复或合计不等于退款金额',400,'SUPPLIER_REFUND_INPUT_INVALID')
   if(body.remark!==undefined && (typeof body.remark!=='string' || body.remark.length>500)) throw new AppError('备注不合法',400,'SUPPLIER_REFUND_INPUT_INVALID')
   return {operationUuid:uuid(body.operationUuid),purchaseReturnId:safeId(body.purchaseReturnId),incomeAccountId:safeId(body.incomeAccountId),refundDate:body.refundDate,amount:positiveMoney(body.amount),allocations,...(body.remark!==undefined?{remark:body.remark}:{})}
 }
+function createBody(body) { return parseCreateBody(body) }
+// Frozen canonical bodies prove original identity; reading/releasing them never creates cash.
+function frozenCreateBody(body) { return parseCreateBody(body, { actualCash: false }) }
 function actionBody(body) {
   exactBody(body,['operationUuid'],['reason'])
   if(body.reason!==undefined && (typeof body.reason!=='string' || !body.reason.trim() || body.reason.length>500)) throw new AppError('说明不合法',400,'SUPPLIER_REFUND_INPUT_INVALID')
@@ -70,4 +75,4 @@ function identity(action,payload,userId,key) {
   const payloadJson=stableJson(payload)
   return{action,payloadJson,payloadHash:fingerprint(payloadJson),userId:safeId(userId),requestKey:requestKey(key),operationUuid:uuid(payload.operationUuid)}
 }
-module.exports={safeId,uuid,requestKey,stableJson,fingerprint,date,positiveMoney,quantityUnits,createBody,actionBody,receiveBody,identity,fail}
+module.exports={safeId,uuid,requestKey,stableJson,fingerprint,date,positiveMoney,quantityUnits,createBody,frozenCreateBody,actionBody,receiveBody,identity,fail}

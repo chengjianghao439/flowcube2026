@@ -309,7 +309,7 @@ export default function InboundTasksPage() {
         })
         if (can(PERMISSIONS.INBOUND_ORDER_CANCEL) && task.status === 2) {
           items.push({
-            label: '结束收货',
+            label: '结束本次收货',
             separatorBefore: true,
             onClick: () => setCloseTargetId(task.id),
           })

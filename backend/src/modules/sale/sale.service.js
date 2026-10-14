@@ -1,3 +1,4 @@
+const {cashNumber,sumCashCents,storedCashCents}=require('../../utils/cashMoney')
 const handlingGuards = require('../disposal/disposal.handling.target-guards')
 const commercialDispatch = require('./sale.commercial-dispatch')
 const commercialStore = require('./sale.commercial-store')
@@ -17,8 +18,9 @@ const { getStockProjection } = require('../../engine/containerEngine')
 const { lockExpectedPurchaseOrders } = require('../../utils/expectedStock')
 const { getAvailabilityByProducts } = require('../inventory/inventory.service')
 const { generateDailyCode } = require('../../utils/codeGenerator')
-const { foldEntryItems, round2 } = require('../../utils/unitConversion')  // 多单位折算（文档03 · 方案A，共享util）
-const { assertQtyPrecision } = require('../../utils/qtyPrecision')  // 商品级数量精度开关（迁移 254）
+const { round2 } = require('../../utils/unitConversion')  // 金额仍保留原精度
+const { normalizeFixedSaleItems, originalSaleItems, legacyPreviewGroups } = require('./sale.shipping-quantity')
+const { assertQtyPrecision, loadQtyPolicies } = require('../../utils/qtyPrecision')  // 商品级数量精度开关（迁移 254）
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { getCustomerCreditUsed, hasCreditOverridePermission } = require('../../utils/creditExposure')
 const creditOverrideSvc = require('../credit-overrides/credit-overrides.service')
@@ -69,6 +71,7 @@ const fmt = row => ({
   isMultiWarehouse: row.warehouse_count != null ? Number(row.warehouse_count) > 1 : false,
   // 分批：仍有未派发到仓库任务的明细行 → 履约中可「继续发货」
   hasUndispatchedItems: row.undispatched_count != null ? Number(row.undispatched_count) > 0 : false,
+  hasUnreservedItems: row.unreserved_count != null ? Number(row.unreserved_count) > 0 : false,
   closedReason: row.closed_reason || null,
   // 回款：独立于订单状态展示（月结/现结账期不同，混进状态徽章看不清）。
   // receivableStatus 为 null 表示还没生成应收记录（订单还没发过货）。
@@ -119,13 +122,14 @@ const itemAggJoin = `
            SUM(quantity) AS ordered_total_qty,
            SUM(shipped_qty) AS shipped_total_qty,
            COUNT(DISTINCT warehouse_id) AS warehouse_count,
-           SUM(CASE WHEN dispatched_qty < reserved_qty THEN 1 ELSE 0 END) AS undispatched_count
+           SUM(CASE WHEN dispatched_qty < reserved_qty THEN 1 ELSE 0 END) AS undispatched_count,
+           SUM(CASE WHEN reserved_qty < quantity THEN 1 ELSE 0 END) AS unreserved_count
     FROM sale_order_items GROUP BY order_id
   ) soi_agg ON soi_agg.order_id = so.id
 `
 const itemAggProjection = `
   soi_agg.ordered_total_qty, soi_agg.shipped_total_qty, soi_agg.warehouse_count,
-  soi_agg.undispatched_count
+  soi_agg.undispatched_count, soi_agg.unreserved_count
 `
 
 // 回款信息（不改订单状态机，独立于订单状态展示）：payment_records type=2（应收）。
@@ -187,8 +191,8 @@ async function hydrateSaleInput(conn, { customerId, warehouseId, carrierId = nul
 
   const productIds = [...new Set(items.map(item => Number(item.productId)))]
   const [products] = await conn.query(
-    `SELECT id, code, name, unit, article_number, spec, color, cost_price, is_active
-       FROM product_items WHERE id IN (?) AND deleted_at IS NULL`,
+    `SELECT id, code, name, unit, article_number, spec, color, cost_price, allow_decimal_qty, is_active
+       FROM product_items WHERE id IN (?) AND deleted_at IS NULL ORDER BY id FOR SHARE`,
     [productIds],
   )
   const productById = new Map(products.map(row => [Number(row.id), row]))
@@ -218,6 +222,7 @@ async function hydrateSaleInput(conn, { customerId, warehouseId, carrierId = nul
       color: product.color || null,
       unit: product.unit,
       costPrice: Number(product.cost_price) || 0,
+      allowDecimalQtySnapshot: product.allow_decimal_qty == null || Number(product.allow_decimal_qty) === 1 ? 1 : 0,
       warehouseId: itemWarehouseId,
       warehouseName: warehouseById.get(itemWarehouseId).name,
     }
@@ -324,14 +329,23 @@ async function syncPickingByWarehouseTaskWithinTransaction(conn, id, { taskId = 
 // 应收全量重算：应收 = SUM(shipped_qty × unit_price)，每次出库后重算 upsert。
 // 复用采购应付的幂等模式（见 inbound-tasks.settle.recomputePurchasePayable）——分批出库、
 // 退货冲减任意顺序都不会重复计账。应收视为已确认（确认闸门只针对采购自动结算的应付）。
-async function recomputeSaleReceivable(conn, saleOrderId) {
-  const [[{ amount }]] = await conn.query(
+async function recomputeSaleReceivable(conn, saleOrderId, ordinaryReturnContext=null) {
+  const [[{ amount:legacyAmount }]] = await conn.query(
     'SELECT COALESCE(SUM(shipped_qty * unit_price), 0) AS amount FROM sale_order_items WHERE order_id = ?',
     [saleOrderId],
   )
+  const amount=ordinaryReturnContext
+    ? await require('./sale.ordinary-return-money').currentShippedGross(conn,ordinaryReturnContext) : legacyAmount
   const [[model]] = await conn.query('SELECT commercial_model FROM sale_orders WHERE id=?',[saleOrderId])
-  if(model?.commercial_model === 'kit-v1')await conn.query('SELECT id FROM payment_records WHERE type=2 AND order_id=? FOR UPDATE',[saleOrderId])
+  if(model?.commercial_model!=='kit-v1'&&!ordinaryReturnContext)throw new AppError('普通销售缺少库存动作前的分位成交依据，请核对原单',409,'SALE_RETURN_NET_BASIS_REQUIRED')
+  if(model?.commercial_model === 'kit-v1'){const [[ar]]=await conn.query('SELECT id,total_amount,paid_amount,balance FROM payment_records WHERE type=2 AND order_id=? FOR UPDATE',[saleOrderId]);if(ar)for(const field of ['total_amount','paid_amount','balance'])storedCashCents(ar[field],`原套单应收${field}`)}
   const money = model?.commercial_model === 'kit-v1' ? await commercialMoney.orderMoney(conn,saleOrderId) : null
+  let ordinaryMoney=null
+  if(model?.commercial_model!=='kit-v1'&&ordinaryReturnContext){
+    const [[currentAR]]=await conn.query('SELECT id,total_amount,paid_amount,balance FROM payment_records WHERE type=2 AND order_id=? FOR UPDATE',[saleOrderId])
+    require('./sale.ordinary-return-money').assertReceivableRow(ordinaryReturnContext,currentAR)
+    ordinaryMoney=await require('./sale.ordinary-return-money').orderMoney(conn,saleOrderId,ordinaryReturnContext)
+  }
   const grossTotal = money ? money.shippedGross : Number(amount) || 0
   // 整单折扣（P2-4）：按发货比例分摊折扣到已发部分。总折扣 × (已发原值 / 订单原值)，
   // 分批发货时只扣已发那部分的折扣，未发部分留到后续批次。
@@ -343,9 +357,9 @@ async function recomputeSaleReceivable(conn, saleOrderId) {
     [saleOrderId],
   )
   const discountApplied = calculateDiscountApplied({
-    discount,
+    discount:ordinaryMoney ? ordinaryMoney.basis.discount_basis : discount,
     shippedGross: grossTotal,
-    orderGross: orderTotal,
+    orderGross: ordinaryMoney ? ordinaryMoney.basis.gross_basis : orderTotal,
   })
   // 扣除该销售单下所有「已执行(3)」的销售退货金额（与采购应付 recomputePurchasePayable 对称）。
   // 否则分批/分仓发货时，中途完成的销售退货冲减（syncSaleReturnCompleted 增量减）会被下一批
@@ -361,7 +375,9 @@ async function recomputeSaleReceivable(conn, saleOrderId) {
       WHERE sr.sale_order_id = ? AND sr.deleted_at IS NULL AND sr.status = 3`,
     [saleOrderId],
   )
-  const total = Math.max(0, grossTotal - (money ? money.returnedFinancial : (Number(returnedAmount) || 0)) - discountApplied)
+  const total = ordinaryMoney
+    ? require('./sale.ordinary-return-money').receivableTotal(ordinaryMoney.basis,amount,ordinaryMoney.returnedFinancial)
+    : money?cashNumber(storedCashCents(money.netEarned)-storedCashCents(money.returnedFinancial)):Math.max(0,grossTotal-(Number(returnedAmount)||0)-discountApplied)
   if (total <= 0) {
     const [[existing]] = await conn.query('SELECT id FROM payment_records WHERE type = 2 AND order_id = ?', [saleOrderId])
     if (!existing) return
@@ -397,7 +413,7 @@ async function recomputeSaleReceivable(conn, saleOrderId) {
 // 某个仓库任务出库完成时的回调：累加该任务实发量到对应明细行 shipped_qty、重算应收、
 // 判断整单是否全部发完（所有行 shipped_qty>=quantity）。全发完 → 3→4；否则订单留在 3（履约中）。
 // 单仓订单只有一个任务，一次就全发完，行为与旧版一致。
-async function syncShippedByWarehouseTaskWithinTransaction(conn, id, { taskId = null, taskNo = null } = {}) {
+async function syncShippedByWarehouseTaskWithinTransaction(conn, id, { taskId = null, taskNo = null,ordinaryReturnContext=null } = {}) {
   const orderRow = await lockStatusRow(conn, {
     table: 'sale_orders',
     id,
@@ -425,7 +441,7 @@ async function syncShippedByWarehouseTaskWithinTransaction(conn, id, { taskId = 
   }
 
   // 2. 应收全量重算（按实发汇总）
-  await recomputeSaleReceivable(conn, id)
+  await recomputeSaleReceivable(conn, id,ordinaryReturnContext)
 
   // 3. 判断整单是否全部发完
   const [[{ pending }]] = await conn.query(
@@ -628,7 +644,8 @@ async function findAll({ page=1, pageSize=20, keyword='', status=null, productId
               SUM(quantity) AS ordered_total_qty,
               SUM(shipped_qty) AS shipped_total_qty,
               COUNT(DISTINCT warehouse_id) AS warehouse_count,
-              SUM(CASE WHEN dispatched_qty < reserved_qty THEN 1 ELSE 0 END) AS undispatched_count
+              SUM(CASE WHEN dispatched_qty < reserved_qty THEN 1 ELSE 0 END) AS undispatched_count,
+              SUM(CASE WHEN reserved_qty < quantity THEN 1 ELSE 0 END) AS unreserved_count
        FROM sale_order_items WHERE order_id IN (?) GROUP BY order_id`,
       [pageIds],
     )
@@ -676,7 +693,7 @@ async function findById(id, scopeWarehouseIds = null) {
     shippedAt: t.shipped_at || null,
   }))
   const [items] = await pool.query(
-    `SELECT soi.*, p.cost_price
+    `SELECT soi.*, p.cost_price, p.allow_decimal_qty
      FROM sale_order_items soi
      LEFT JOIN product_items p ON p.id = soi.product_id
      WHERE soi.order_id=?`,
@@ -706,6 +723,7 @@ async function findById(id, scopeWarehouseIds = null) {
     spec:r.spec||null,
     color:r.color||null,
     unit:r.unit,
+    allowDecimalQty: r.allow_decimal_qty == null || Number(r.allow_decimal_qty) === 1,
     warehouseId: r.warehouse_id != null ? Number(r.warehouse_id) : null,
     warehouseName: r.warehouse_name || null,
     shippedQty: r.shipped_qty != null ? Number(r.shipped_qty) : 0,
@@ -831,14 +849,14 @@ async function create({ customerId, warehouseId, remark,
     items = hydrated.items
     assertNoDuplicateSaleItemLines(items, warehouseId)
     const orderNo = await genOrderNo(conn)
-    const folded = commercial ? commercial.items : await foldEntryItems(conn, items)   // 多单位折算成基本单位口径（后端权威）
+    const folded = commercial ? commercial.items : normalizeFixedSaleItems(items)   // 新销售固定单位；未变旧行仅保留原事实
     if (handling) await handling.validateItems(conn, handlingContext, folded, warehouseId)
-    const total = commercial ? commercial.total : round2(folded.reduce((s,i)=>s+i.amount,0))
+    const total = commercial ? commercial.total : cashNumber(sumCashCents(folded.map(i=>i.amount)))
     const discount = Math.max(0, Number(discountAmount) || 0)
     assertDiscountWithinTotal(discount, total)
     const [r] = await conn.query(
-      `INSERT INTO sale_orders (order_no,customer_id,customer_name,warehouse_id,warehouse_name,sale_date,total_amount,discount_amount,remark,carrier_id,carrier,freight_type,receiver_name,receiver_phone,receiver_address,shipping_product,operator_id,operator_name) VALUES (?,?,?,?,?,CURDATE(),?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [orderNo,customerId,customerName,warehouseId,warehouseName,total,discount,remark||null,carrierId||null,carrier||null,freightType||null,receiverName||null,receiverPhone||null,receiverAddress||null,shippingProduct,operator.userId,operator.realName]
+      `INSERT INTO sale_orders (order_no,customer_id,customer_name,warehouse_id,warehouse_name,sale_date,total_amount,discount_amount,remark,carrier_id,carrier,freight_type,receiver_name,receiver_phone,receiver_address,shipping_product,operator_id,operator_name,cash_policy) VALUES (?,?,?,?,?,CURDATE(),?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [orderNo,customerId,customerName,warehouseId,warehouseName,total,discount,remark||null,carrierId||null,carrier||null,freightType||null,receiverName||null,receiverPhone||null,receiverAddress||null,shippingProduct,operator.userId,operator.realName,'cash-cents-v1']
     )
     const orderId = r.insertId
     if (commercial) await commercialStore.save(conn,orderId,1,commercial)
@@ -906,8 +924,8 @@ async function update(id, { customerId, warehouseId, remark,
     shippingProduct = hydrated.shippingProduct
     items = hydrated.items
     assertNoDuplicateSaleItemLines(items, warehouseId)
-    const folded = commercial ? commercial.items : await foldEntryItems(conn, items)   // 多单位折算成基本单位口径（后端权威）
-    const total = commercial ? commercial.total : round2(folded.reduce((s, i) => s + i.amount, 0))
+    const folded = commercial ? commercial.items : normalizeFixedSaleItems(items, await originalSaleItems(conn, id))   // 新销售固定单位；未变旧行仅保留原事实
+    const total = commercial ? commercial.total : cashNumber(sumCashCents(folded.map(i=>i.amount)))
     const discount = Math.max(0, Number(discountAmount) || 0)
     assertDiscountWithinTotal(discount, total)
     const deliverySnapshot = await snapshotItemCommitments(conn, id)
@@ -1034,9 +1052,9 @@ async function requestAdjustment(id, input) {
 
     if (!items || !items.length) throw new AppError('至少需要一条商品明细', 400)
 
-    // 多单位折算成基本单位口径（后端权威）——**必须在算新旧净变化之前**：录入单位量(箱)若不先折算，
+    // 新销售固定单位；未变旧行仅保留原事实——**必须在算新旧净变化之前**：录入单位量(箱)若不先折算，
     // 会与旧明细的基本单位量(件)错配，delta 与 WMS 增减量全错。folded 之后一律按基本单位 quantity 算。
-    const folded = commercial ? commercial.items : await foldEntryItems(conn, items)
+    const folded = commercial ? commercial.items : normalizeFixedSaleItems(items, await originalSaleItems(conn, id))
 
     const [oldItemRows] = await conn.query(
       'SELECT product_id, quantity, warehouse_id, warehouse_name FROM sale_order_items WHERE order_id=?',
@@ -1062,7 +1080,7 @@ async function requestAdjustment(id, input) {
       }
     }
 
-    const total = commercial ? commercial.total : round2(folded.reduce((s, i) => s + i.amount, 0))
+    const total = commercial ? commercial.total : cashNumber(sumCashCents(folded.map(i=>i.amount)))
     assertDiscountWithinTotal(orderRow.discount_amount, total)
     await conn.query('UPDATE sale_orders SET total_amount=? WHERE id=?', [total, id])
     const deliverySnapshot = await snapshotItemCommitments(conn, id)
@@ -1086,8 +1104,8 @@ async function requestAdjustment(id, input) {
       ?? orderRow.warehouse_name
     for (const item of commercial ? [] : folded) {
       await conn.query(
-        `INSERT INTO sale_order_items (order_id,warehouse_id,warehouse_name,product_id,product_code,product_name,unit,entry_unit,article_number,spec,color,quantity,entry_qty,conversion_rate,unit_price,amount,remark,dispatched,reserved_qty,dispatched_qty) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,?)`,
-        [id, keptWarehouseId, keptWarehouseName, item.productId, item.productCode, item.productName, item.unit, item.entryUnit, item.articleNumber||null, item.spec||null, item.color||null, item.quantity, item.entryQty, item.conversionRate, item.unitPrice, item.amount, item.remark||null, item.quantity, item.quantity]
+        `INSERT INTO sale_order_items (order_id,warehouse_id,warehouse_name,product_id,product_code,product_name,unit,entry_unit,article_number,spec,color,quantity,entry_qty,conversion_rate,unit_price,amount,remark,allow_decimal_qty_snapshot,dispatched,reserved_qty,dispatched_qty) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,?)`,
+        [id, keptWarehouseId, keptWarehouseName, item.productId, item.productCode, item.productName, item.unit, item.entryUnit, item.articleNumber||null, item.spec||null, item.color||null, item.quantity, item.entryQty, item.conversionRate, item.unitPrice, item.amount, item.remark||null, item.allowDecimalQtySnapshot, item.quantity, item.quantity]
       )
     }
 
@@ -1246,7 +1264,7 @@ async function requestAdjustment(id, input) {
 // 已占量对齐；改完重新统计所有行 reserved_qty 是否全满 → 已占库(2)/部分占库(6)。
 async function adjustReservedWithinTransaction(conn, { orderRow, items, operator, requestState, previousDimensions, commercial = null, before, changeReason, requestFingerprint }) {
   const id = Number(orderRow.id)
-  const folded = commercial ? commercial.items : await foldEntryItems(conn, items)
+  const folded = commercial ? commercial.items : normalizeFixedSaleItems(items, await originalSaleItems(conn, id))
   if (!folded.length) throw new AppError('至少需要一条商品明细', 400)
 
   const [oldItemRows] = await conn.query(
@@ -1290,7 +1308,7 @@ async function adjustReservedWithinTransaction(conn, { orderRow, items, operator
   }
 
   // 重建明细：每行的 reserved_qty = min(旧已占, 新数量)
-  const total = commercial ? commercial.total : round2(folded.reduce((s, i) => s + i.amount, 0))
+  const total = commercial ? commercial.total : cashNumber(sumCashCents(folded.map(i=>i.amount)))
   assertDiscountWithinTotal(orderRow.discount_amount, total)
   await conn.query('UPDATE sale_orders SET total_amount=? WHERE id=?', [total, id])
   const deliverySnapshot = await snapshotItemCommitments(conn, id)
@@ -1304,8 +1322,8 @@ async function adjustReservedWithinTransaction(conn, { orderRow, items, operator
     const key = `${Number(item.productId)}:${whId}`
     const reservedQty = Math.min(oldReservedByKey.get(key) || 0, Number(item.quantity))
     await conn.query(
-      `INSERT INTO sale_order_items (order_id,warehouse_id,warehouse_name,product_id,product_code,product_name,unit,entry_unit,article_number,spec,color,quantity,entry_qty,conversion_rate,unit_price,amount,remark,reserved_qty,dispatched_qty) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0)`,
-      [id, whId, whName, item.productId, item.productCode, item.productName, item.unit, item.entryUnit, item.articleNumber || null, item.spec || null, item.color || null, item.quantity, item.entryQty, item.conversionRate, item.unitPrice, item.amount, item.remark || null, reservedQty],
+      `INSERT INTO sale_order_items (order_id,warehouse_id,warehouse_name,product_id,product_code,product_name,unit,entry_unit,article_number,spec,color,quantity,entry_qty,conversion_rate,unit_price,amount,remark,allow_decimal_qty_snapshot,reserved_qty,dispatched_qty) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0)`,
+      [id, whId, whName, item.productId, item.productCode, item.productName, item.unit, item.entryUnit, item.articleNumber || null, item.spec || null, item.color || null, item.quantity, item.entryQty, item.conversionRate, item.unitPrice, item.amount, item.remark || null, item.allowDecimalQtySnapshot, reservedQty],
     )
   }
 
@@ -1343,8 +1361,15 @@ async function getReservePreview(id, scopeWarehouseIds = null) {
   if (!orderRow) throw new AppError('销售单不存在', 404)
   assertInScope(scopeWarehouseIds, orderRow.warehouse_id, '销售单')
   assertStatusAction('sale', 'reserve', orderRow.status)
+  if (Number(orderRow.status) === SALE_STATUS.PICKING) {
+    const [pending] = await pool.query(
+      'SELECT id FROM warehouse_tasks WHERE sale_order_id=? AND deleted_at IS NULL AND (cancel_requested_at IS NOT NULL OR adjustment_requested_at IS NOT NULL) LIMIT 1', [id],
+    )
+    if (pending.length) throw new AppError('请先完成仓库取消或改单确认，再补占剩余库存', 409, 'SALE_RESERVATION_EXECUTION_PENDING')
+  }
   const [itemRows] = await pool.query('SELECT * FROM sale_order_items WHERE order_id = ? ORDER BY id', [id])
   if (!itemRows.length) throw new AppError('销售单无明细，无法占用库存', 400)
+  for (const item of itemRows) assertInScope(scopeWarehouseIds, item.warehouse_id ?? orderRow.warehouse_id, '销售单')
 
   const productIds = [...new Set(itemRows.map(r => r.product_id))]
   const availability = await getAvailabilityByProducts({ productIds, scopeWarehouseIds, includeExpected: true })
@@ -1398,12 +1423,14 @@ async function getReservePreview(id, scopeWarehouseIds = null) {
     }
   }
 
+  const qtyPolicies = await loadQtyPolicies(pool, itemRows.map(item => item.product_id))
   return {
     orderId: orderRow.id,
     warehouseId: Number(orderRow.warehouse_id),
     warehouseName: orderRow.warehouse_name,
     items: itemRows.map(item => ({
       itemId: item.id,
+      allowDecimalQty: qtyPolicies.get(Number(item.product_id))?.allowDecimal !== false,
       productId: item.product_id,
       productCode: item.product_code,
       productName: item.product_name,
@@ -1425,8 +1452,8 @@ async function getReservePreview(id, scopeWarehouseIds = null) {
 // ① 占用库存：仅调用 reservationEngine.reserve()，不创建仓库任务
 //
 // 按产品/按数量占库：items 指定「本次占哪些行、每行占多少」（qty 可 < quantity，未传的行不占）。
-// 占完后统计是否所有行 reserved_qty >= quantity，全满 → 已占库(2)，否则 → 部分占库(6)。
-// 支持从草稿(1)或部分占库(6)重复打开弹窗补占。
+// 草稿/部分占库补占后全满→2，否则→6；执行中补占始终保持3。
+// reserved_qty 是累计承诺，包含已履行量；只补 quantity-reserved_qty，不重复占已发部分。
 //
 // items: [{ id, warehouseId, warehouseName, qty }]（qty 为本次要占的数量，>0）
 // 先做一次全量可用量检查（不实际预占），把所有不足的商品一次性收集进错误明细。
@@ -1456,6 +1483,14 @@ async function reserveStock(id, operator, items = [], { confirmCreditOverride = 
     }
     commercialStore.assertRevision(orderRow,commercialInput)
     const rule = assertStatusAction('sale', 'reserve', orderRow.status)
+    const wasExecuting = Number(orderRow.status) === SALE_STATUS.PICKING
+    if (wasExecuting) {
+      // SO锁串行化同单动作；当前锁读不在授信客户锁之前建立旧RR快照。
+      const [pending] = await conn.query(
+        'SELECT id FROM warehouse_tasks WHERE sale_order_id=? AND deleted_at IS NULL AND (cancel_requested_at IS NOT NULL OR adjustment_requested_at IS NOT NULL) ORDER BY id FOR SHARE', [id],
+      )
+      if (pending.length) throw new AppError('请先完成仓库取消或改单确认，再补占剩余库存', 409, 'SALE_RESERVATION_EXECUTION_PENDING')
+    }
 
     // —— 信用额度校验（在锁库存之前）。客户行 FOR UPDATE 是同客户并发占库的串行化点：
     // 第二个占库事务会在此阻塞，直到第一单 COMMIT 落入在途敞口(B)，再读到的 used 已含第一单。
@@ -1583,7 +1618,7 @@ async function reserveStock(id, operator, items = [], { confirmCreditOverride = 
     for (const it of reserveItems) {
       const key = `${Number(it.product_id)}:${itemWh(it)}`
       const available = availMap.get(key) ?? 0
-      availMap.set(key, Math.max(0, available - Number(it.reserveQty)))
+      availMap.set(key, Math.max(0, Math.round(available * 100) - Math.round(Number(it.reserveQty) * 100)) / 100)
       if (available < Number(it.reserveQty)) {
         shortages.push({
           productId: it.product_id,
@@ -1626,12 +1661,12 @@ async function reserveStock(id, operator, items = [], { confirmCreditOverride = 
       )
     }
 
-    // 占完后统计：所有行 reserved_qty >= quantity → 已占库(2)，否则部分占库(6)
+    // 原执行阶段保持；累计承诺全满不代表仓库任务退回占库期。
     const [[{ unfilled }]] = await conn.query(
       'SELECT COUNT(*) AS unfilled FROM sale_order_items WHERE order_id = ? AND reserved_qty < quantity',
       [id],
     )
-    const toStatus = Number(unfilled) === 0 ? SALE_STATUS.RESERVED : SALE_STATUS.PARTIAL_RESERVED
+    const toStatus = wasExecuting ? SALE_STATUS.PICKING : (Number(unfilled) === 0 ? SALE_STATUS.RESERVED : SALE_STATUS.PARTIAL_RESERVED)
     await compareAndSetStatus(conn, {
       table: 'sale_orders',
       id,
@@ -1639,8 +1674,8 @@ async function reserveStock(id, operator, items = [], { confirmCreditOverride = 
       toStatus,
       entityName: '销售单',
     })
-    const wasPartial = Number(orderRow.status) === SALE_STATUS.PARTIAL_RESERVED
-    const nowFull = toStatus === SALE_STATUS.RESERVED
+    const wasPartial = wasExecuting || Number(orderRow.status) === SALE_STATUS.PARTIAL_RESERVED
+    const nowFull = Number(unfilled) === 0
     await appendSaleEvent(conn, id, 'reserved',
       nowFull ? (wasPartial ? '补占完成' : '确认占库') : (wasPartial ? '补充占库' : '部分占库'),
       nowFull
@@ -1727,6 +1762,7 @@ async function ship(id, operator, { itemIds = null, items = null, scopeWarehouse
         spec: r.spec || null,
         color: r.color || null,
         quantity: shipQty,
+        allowDecimalQtySnapshot: r.allow_decimal_qty_snapshot,
       })
     }
     // 「只能整数」的商品不得按小数出库（迁移 254）。先校验两位精度，
@@ -1940,6 +1976,8 @@ async function cancel(id, operator, scopeWarehouseIds = null, requestKey = null,
       await conn.rollback()
       return requestState.responseData ?? null
     }
+    const ordinaryReturnContext=orderRow.commercial_model!=='kit-v1'
+      ? await require('./sale.ordinary-return-money').assertCloseRemainder(conn,orderRow) : null
     const previousDimensions = await captureDimensions(conn, 'sale', id)
     commercialStore.assertRevision(orderRow,commercialInput)
     const rule = assertStatusAction('sale', 'cancel', orderRow.status)
@@ -1994,6 +2032,7 @@ async function cancel(id, operator, scopeWarehouseIds = null, requestKey = null,
       if (shippedTasks.length > 0) {
         const originalTotal = Number(orderRow.total_amount) || 0
         const originalDiscount = Number(orderRow.discount_amount) || 0
+        const closedCash=ordinaryReturnContext?require('./sale.ordinary-return-money').closedMoney(ordinaryReturnContext):null
         const [itemRows] = await conn.query(
           'SELECT id, product_id, product_name, quantity, shipped_qty, unit_price FROM sale_order_items WHERE order_id = ? FOR UPDATE',
           [id],
@@ -2010,7 +2049,7 @@ async function cancel(id, operator, scopeWarehouseIds = null, requestKey = null,
           } else if (shipped < qty) {
             await conn.query(
               'UPDATE sale_order_items SET quantity = ?, amount = ?, reserved_qty = ?, dispatched_qty = ? WHERE id = ?',
-              [shipped, round2(shipped * Number(item.unit_price)), shipped, shipped, item.id],
+              [shipped,closedCash?closedCash.lines.get(Number(item.id)):round2(shipped*Number(item.unit_price)),shipped,shipped,item.id],
             )
             trimmed.push({ productId: item.product_id, productName: item.product_name, fromQuantity: qty, toQuantity: shipped })
           }
@@ -2029,9 +2068,9 @@ async function cancel(id, operator, scopeWarehouseIds = null, requestKey = null,
         })
         await conn.query(
           'UPDATE sale_orders SET total_amount = ?, discount_amount = ? WHERE id = ?',
-          [total, closedDiscount, id],
+          [closedCash?closedCash.gross:total,closedCash?closedCash.discount:closedDiscount,id],
         )
-        await recomputeSaleReceivable(conn, id)
+        await recomputeSaleReceivable(conn, id,ordinaryReturnContext)
 
         await compareAndSetStatus(conn, {
           table: 'sale_orders', id,
@@ -2130,7 +2169,7 @@ async function commercialPreview(id,input) {
     const [[order]]=await conn.query('SELECT * FROM sale_orders WHERE id=? AND deleted_at IS NULL',[id])
     if(!order)throw new AppError('销售单不存在',404)
     assertInScope(input.scopeWarehouseIds,order.warehouse_id,'销售单')
-    const [physical]=await conn.query('SELECT warehouse_id FROM sale_order_items WHERE order_id=?',[id])
+    const [physical]=await conn.query('SELECT * FROM sale_order_items WHERE order_id=?',[id])
     for(const p of physical)assertInScope(input.scopeWarehouseIds,p.warehouse_id ?? order.warehouse_id,'销售单')
     commercialStore.assertModel(order,input,{allowEdit:true})
     await assertEditBaseline(conn,order,input)
@@ -2138,7 +2177,9 @@ async function commercialPreview(id,input) {
     assertStatusAction('sale',Number(order.status)===1?'edit':'adjust',order.status)
     // Executing adjustment headers are read-only, as in the write endpoint.
     const effective=Number(order.status)===1?input:{...input,customerId:Number(order.customer_id),warehouseId:Number(order.warehouse_id)}
-    const result=await require('./sale.commercial-preview').resolvePreview(conn,effective,await commercialStore.loadGroups(conn,id))
+    const saved = order.commercial_model === 'kit-v1' ? await commercialStore.loadGroups(conn,id)
+      : legacyPreviewGroups(physical, effective.commercialGroups, order)
+    const result=await require('./sale.commercial-preview').resolvePreview(conn,effective,saved)
     await conn.commit();return {...result,commercialModel:'kit-v1',commercialRevision:Number(order.commercial_revision)}
   }catch(e){await conn.rollback();throw e}finally{conn.release()}
 }

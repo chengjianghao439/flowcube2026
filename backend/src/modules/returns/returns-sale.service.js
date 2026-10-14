@@ -1,5 +1,7 @@
+const {cashNumber,sumCashCents,productCents,roundCashCents}=require('../../utils/cashMoney')
 const commercialReturns = require('../sale/sale.commercial-returns')
 const commercialStore = require('../sale/sale.commercial-store')
+const ordinaryReturnMoney = require('../sale/sale.ordinary-return-money')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
@@ -17,7 +19,7 @@ const { normalizePagination } = require('../../utils/pagination')
 // 同 returns-purchase：3 的显示名统一为「已执行」（documentStatusRules / 迁移 146 / 前端筛选项一致）
 const SR_STATUS = { 1:'草稿', 2:'已确认', 3:'已执行', 4:'已取消' }
 
-const fmtSR = r => ({ ...(Number(r.has_commercial_source) === 1 ? { commercialModel: 'kit-v1' } : {}), id:r.id, returnNo:r.return_no, customerId:r.customer_id, customerName:r.customer_name, warehouseId:r.warehouse_id, warehouseName:r.warehouse_name, saleOrderId:r.sale_order_id||null, saleOrderNo:r.sale_order_no, status:r.status, statusName:SR_STATUS[r.status], totalAmount:Number(r.total_amount), remark:r.remark, operatorId:r.operator_id, operatorName:r.operator_name, createdAt:r.created_at })
+const fmtSR = r => ({ ...(r.cash_policy===ordinaryReturnMoney.CASH_POLICY?{moneyPrecision:2,cashPolicy:r.cash_policy}:{}), ...(Number(r.has_commercial_source) === 1 ? { commercialModel: 'kit-v1' } : {}), id:r.id, returnNo:r.return_no, customerId:r.customer_id, customerName:r.customer_name, warehouseId:r.warehouse_id, warehouseName:r.warehouse_name, saleOrderId:r.sale_order_id||null, saleOrderNo:r.sale_order_no, status:r.status, statusName:SR_STATUS[r.status], totalAmount:Number(r.total_amount), remark:r.remark, operatorId:r.operator_id, operatorName:r.operator_name, createdAt:r.created_at })
 
 async function loadSaleSourceOrderByNo(orderNo, scopeWarehouseIds = null) {
   const [rows] = await pool.query(
@@ -30,9 +32,9 @@ async function loadSaleSourceOrderByNo(orderNo, scopeWarehouseIds = null) {
   // 与 sale 模块和 fulfillment.access 的既有约定一致。
   assertInScope(scopeWarehouseIds, rows[0].warehouse_id, '销售单')
   const order = rows[0]
-  if (order.commercial_model === 'kit-v1') return { id:Number(order.id),orderNo:order.order_no,customerId:Number(order.customer_id),customerName:order.customer_name,warehouseId:Number(order.warehouse_id),warehouseName:order.warehouse_name,commercialModel:order.commercial_model,commercialRevision:Number(order.commercial_revision),items:await commercialReturns.loadView(pool,order,scopeWarehouseIds) }
+  if (order.commercial_model === 'kit-v1') return { id:Number(order.id),orderNo:order.order_no,customerId:Number(order.customer_id),customerName:order.customer_name,warehouseId:Number(order.warehouse_id),warehouseName:order.warehouse_name,commercialModel:order.commercial_model,commercialRevision:Number(order.commercial_revision),...(order.cash_policy===ordinaryReturnMoney.CASH_POLICY?{moneyPrecision:2,cashPolicy:order.cash_policy}:{}),items:await commercialReturns.loadView(pool,order,scopeWarehouseIds) }
   const [items] = await pool.query(
-    `SELECT soi.*,
+    `SELECT soi.*, p.allow_decimal_qty,
             COALESCE((
               SELECT SUM(wti.picked_qty)
               FROM warehouse_task_items wti
@@ -51,7 +53,7 @@ async function loadSaleSourceOrderByNo(orderNo, scopeWarehouseIds = null) {
                 AND sr.deleted_at IS NULL
                 AND sr.status <> 4
             ), 0) AS returned_qty
-       FROM sale_order_items soi
+       FROM sale_order_items soi LEFT JOIN product_items p ON p.id=soi.product_id
       WHERE soi.order_id=?
       ORDER BY soi.id`,
     [order.id],
@@ -67,10 +69,12 @@ async function loadSaleSourceOrderByNo(orderNo, scopeWarehouseIds = null) {
     customerName: order.customer_name,
     warehouseId: Number(order.warehouse_id),
     warehouseName: order.warehouse_name,
+    ...(await ordinaryReturnMoney.sourceMetadata(pool,order.id)),
     items: items.map((row) => {
       const shippedQty = Number(row.shipped_qty || 0)
       const returnedQty = Number(row.returned_qty || 0)
       return {
+        allowDecimalQty: row.allow_decimal_qty == null || Number(row.allow_decimal_qty)===1,
         sourceItemId: Number(row.id),
         productId: Number(row.product_id),
         productCode: row.product_code,
@@ -120,6 +124,13 @@ async function validateSaleReturnItems(conn, saleOrderId, items) {
     [saleOrderId],
   )
   const sourceByItemId = new Map(rows.map((row) => [Number(row.id), row]))
+  // The earlier scope/request reads may already have established an RR view.
+  // After waiting for SOI, quota must include a concurrent creator's commit.
+  const [currentRequests]=await conn.query(`SELECT sri.sale_item_id,sri.quantity FROM sale_return_items sri
+    JOIN sale_returns sr ON sr.id=sri.return_id
+    WHERE sr.sale_order_id=? AND sr.deleted_at IS NULL AND sr.status<>4 ORDER BY sri.id FOR SHARE`,[saleOrderId])
+  const currentReturned=new Map()
+  for(const r of currentRequests)currentReturned.set(Number(r.sale_item_id),(currentReturned.get(Number(r.sale_item_id))||0)+Math.round(Number(r.quantity)*100))
   const requestedQtyBySource = new Map()
   for (const item of items) {
     if (!item.sourceItemId) {
@@ -136,7 +147,7 @@ async function validateSaleReturnItems(conn, saleOrderId, items) {
       Number(item.sourceItemId),
       Number((requestedQtyBySource.get(Number(item.sourceItemId)) || 0) + Number(item.quantity || 0)),
     )
-    const remainingQty = Number(source.shipped_qty || 0) - Number(source.returned_qty || 0)
+    const remainingQty = Number(source.shipped_qty || 0) - (currentReturned.get(Number(source.id))||0)/100
     if (Number(requestedQtyBySource.get(Number(item.sourceItemId)).toFixed(2)) > Number(remainingQty.toFixed(2))) {
       throw new AppError(`商品 ${item.productName} 退货数量超出实际发货数量`, 409)
     }
@@ -161,16 +172,21 @@ async function findAllSR({ page=1, pageSize=20, keyword='', status=null, product
   const scope = scopeFilter(scopeWarehouseIds, 'warehouse_id')
   if (scope.sql) { whereExtra += scope.sql; params.push(...scope.params) }
   const where = `deleted_at IS NULL AND (return_no LIKE ? OR customer_name LIKE ?) ${whereExtra}`
-  const [rows]=await pool.query(`SELECT sale_returns.*, EXISTS (SELECT 1 FROM sale_return_items sri WHERE sri.return_id = sale_returns.id AND sri.dispatch_component_id IS NOT NULL) AS has_commercial_source FROM sale_returns WHERE ${where} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`,[...params,ps,offset])
+  const [rows]=await pool.query(`SELECT sale_returns.*, EXISTS (SELECT 1 FROM sale_return_items sri WHERE sri.return_id = sale_returns.id AND sri.dispatch_component_id IS NOT NULL) AS has_commercial_source, EXISTS (SELECT 1 FROM sale_ordinary_return_bases b WHERE b.order_id=sale_returns.sale_order_id AND b.order_id=sale_returns.ordinary_net_basis_order_id) AS has_ordinary_net_source FROM sale_returns WHERE ${where} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`,[...params,ps,offset])
   const [[{total}]]=await pool.query(`SELECT COUNT(*) AS total FROM sale_returns WHERE ${where}`,params)
-  return { list:rows.map(fmtSR), pagination:{page,pageSize:ps,total} }
+  return { list:rows.map(r=>{
+    if(r.ordinary_net_basis_order_id!=null&&Number(r.has_ordinary_net_source)!==1)throw new AppError('退货净额来源标记需核对',409,'SALE_RETURN_NET_BASIS_REQUIRED')
+    return {...fmtSR(r),...(Number(r.has_ordinary_net_source)===1?{moneyModel:'ordinary-net-v1',amountBasis:Number(r.status)===3?'executed_net':'estimated_net',...(r.cash_policy===ordinaryReturnMoney.CASH_POLICY?{moneyPrecision:2,cashPolicy:r.cash_policy}:{})}:{})}
+  }), pagination:{page,pageSize:ps,total} }
 }
 
 async function findByIdSR(id, scopeWarehouseIds = null) {
-  const [rows]=await pool.query('SELECT * FROM sale_returns WHERE id=? AND deleted_at IS NULL',[id])
+  const [rows]=await pool.query('SELECT sr.*, EXISTS (SELECT 1 FROM sale_ordinary_return_bases b WHERE b.order_id=sr.sale_order_id AND b.order_id=sr.ordinary_net_basis_order_id) AS has_ordinary_net_source FROM sale_returns sr WHERE sr.id=? AND sr.deleted_at IS NULL',[id])
   if(!rows[0]) throw new AppError('退货单不存在',404)
   assertInScope(scopeWarehouseIds, rows[0].warehouse_id, '销售退货单')
+  if(rows[0].ordinary_net_basis_order_id!=null&&Number(rows[0].has_ordinary_net_source)!==1)throw new AppError('退货净额来源标记需核对',409,'SALE_RETURN_NET_BASIS_REQUIRED')
   const ret=fmtSR(rows[0])
+  if(Number(rows[0].has_ordinary_net_source)===1){ret.moneyModel='ordinary-net-v1';ret.amountBasis=Number(ret.status)===3?'executed_net':'estimated_net';if(rows[0].cash_policy===ordinaryReturnMoney.CASH_POLICY){ret.moneyPrecision=2;ret.cashPolicy=rows[0].cash_policy}}
   const [items]=await pool.query('SELECT * FROM sale_return_items WHERE return_id=?',[id])
   const sources=items.some(r=>r.dispatch_component_id!=null) ? await commercialReturns.savedSources(pool,id) : new Map()
   ret.items=items.map(r=>({dispatchComponentId:r.dispatch_component_id==null?null:Number(r.dispatch_component_id),commercialComponentId:r.commercial_component_id==null?null:Number(r.commercial_component_id),...(r.dispatch_component_id==null?{}:{source:sources.get(Number(r.id))||null}),id:r.id,sourceItemId:r.sale_item_id||null,productId:r.product_id,productCode:r.product_code,productName:r.product_name,articleNumber:r.article_number||null,spec:r.spec||null,color:r.color||null,unit:r.unit,entryUnit:r.entry_unit||r.unit,quantity:Number(r.quantity),entryQty:r.entry_qty!=null?Number(r.entry_qty):Number(r.quantity),conversionRate:Number(r.conversion_rate),unitPrice:Number(r.unit_price),amount:Number(r.amount)}))
@@ -295,10 +311,12 @@ async function createSR({ customerId, customerName, warehouseId, warehouseName, 
     const commercial = modelOrder?.commercial_model === 'kit-v1'
     const folded = commercial ? await commercialReturns.validate(conn,modelOrder,warehouseId,items,scopeWarehouseIds) : await foldEntryItems(conn,items)
     if (!commercial) await validateSaleReturnItems(conn,resolvedSaleOrderId,folded)
+    const netReturn = commercial ? null : await ordinaryReturnMoney.prepareCreate(conn,modelOrder,folded)
+    if(netReturn)folded.forEach((item,index)=>{item.amount=netReturn.items[index].amount})
     const returnNo=await genNo(conn,'SR','sale_returns','return_no')
-    const total=folded.reduce((s,i)=>s+(commercial?i.amount:i.quantity*i.unitPrice),0)
-    const [r]=await conn.query(`INSERT INTO sale_returns (return_no,customer_id,customer_name,warehouse_id,warehouse_name,sale_order_id,sale_order_no,total_amount,remark,operator_id,operator_name) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,[returnNo,customerId,customerName,warehouseId,warehouseName,resolvedSaleOrderId,saleOrderNo||null,total,remark||null,operator.userId,operator.realName])
-    if(folded.length)await conn.query('INSERT INTO sale_return_items (return_id,sale_item_id,product_id,product_code,product_name,article_number,spec,color,unit,entry_unit,quantity,entry_qty,conversion_rate,unit_price,amount,commercial_component_id,dispatch_component_id) VALUES ?',[folded.map(item=>[r.insertId,item.sourceItemId||null,item.productId,item.productCode,item.productName,item.articleNumber||null,item.spec||null,item.color||null,item.unit,item.entryUnit,item.quantity,item.entryQty,item.conversionRate,item.unitPrice,commercial?item.amount:item.quantity*item.unitPrice,item.commercialComponentId||null,item.dispatchComponentId||null])])
+    const total=netReturn?netReturn.total:cashNumber(commercial?sumCashCents(folded.map(i=>i.amount)):folded.reduce((n,i)=>n+productCents(i.quantity,i.unitPrice),0n))
+    const [r]=await conn.query(`INSERT INTO sale_returns (return_no,customer_id,customer_name,warehouse_id,warehouse_name,sale_order_id,sale_order_no,total_amount,remark,operator_id,operator_name,ordinary_net_basis_order_id,cash_policy) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,[returnNo,customerId,customerName,warehouseId,warehouseName,resolvedSaleOrderId,saleOrderNo||null,total,remark||null,operator.userId,operator.realName,netReturn?resolvedSaleOrderId:null,netReturn||commercial?ordinaryReturnMoney.CASH_POLICY:null])
+    if(folded.length)await conn.query('INSERT INTO sale_return_items (return_id,sale_item_id,product_id,product_code,product_name,article_number,spec,color,unit,entry_unit,quantity,entry_qty,conversion_rate,unit_price,amount,commercial_component_id,dispatch_component_id) VALUES ?',[folded.map(item=>[r.insertId,item.sourceItemId||null,item.productId,item.productCode,item.productName,item.articleNumber||null,item.spec||null,item.color||null,item.unit,item.entryUnit,item.quantity,item.entryQty,item.conversionRate,item.unitPrice,commercial||netReturn?item.amount:cashNumber(productCents(item.quantity,item.unitPrice)),item.commercialComponentId||null,item.dispatchComponentId||null])])
     await recordReturnEvent(conn, {
       returnType: 'sale',
       returnId: r.insertId,
@@ -331,10 +349,14 @@ async function confirmSR(id, operator = null, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    const [[located]]=await conn.query('SELECT warehouse_id FROM sale_returns WHERE id=? AND deleted_at IS NULL',[id])
+    if(!located)throw new AppError('销售退货单不存在',404)
+    assertInScope(scopeWarehouseIds,located.warehouse_id,'销售退货单')
+    const ordinaryBasis=await ordinaryReturnMoney.lockReturn(conn,{returnId:id,initializeLegacy:true})
     const retRow = await lockStatusRow(conn, {
       table: 'sale_returns',
       id,
-      columns: 'id, return_no, customer_id, customer_name, sale_order_id, sale_order_no, total_amount, warehouse_id, warehouse_name, status',
+      columns: 'id, return_no, customer_id, customer_name, sale_order_id, sale_order_no, total_amount, warehouse_id, warehouse_name, status, ordinary_net_basis_order_id, cash_policy',
       entityName: '销售退货单',
     })
     assertInScope(scopeWarehouseIds, retRow.warehouse_id, '销售退货单')
@@ -342,10 +364,17 @@ async function confirmSR(id, operator = null, scopeWarehouseIds = null) {
     // 负余额前置拦截：客户已付/已核销金额 > 退货冲减后应收总额时，不让退货单走到执行末端
     // （最后一箱上架）才由 adjustPaymentRecordForReturn 抛 409 回滚、卡在中间态。这里按计划
     // 全额保守预判（实际按合格量冲减，≤计划量）；末端 FOR UPDATE 校验仍兜底。
+    let ordinaryEstimate=null
     if (retRow.sale_order_id) {
       let plannedAmount=Number(retRow.total_amount||0)
+      if(ordinaryBasis){
+        if(Number(retRow.sale_order_id)!==ordinaryBasis.orderId)throw new AppError('退货来源已变化，请刷新后核对',409,'SALE_RETURN_NET_BASIS_REQUIRED')
+        ordinaryEstimate=await ordinaryReturnMoney.estimateReturn(conn,ordinaryBasis,id)
+        plannedAmount=ordinaryEstimate.total
+      }
       const [[orderModel]]=await conn.query('SELECT commercial_model FROM sale_orders WHERE id=?',[retRow.sale_order_id])
       if(orderModel?.commercial_model==='kit-v1'){
+        if(retRow.cash_policy!==ordinaryReturnMoney.CASH_POLICY)throw new AppError('旧套单草稿金额需核对，请取消后按分重新建单',409,'CASH_LEGACY_PRECISION_REVIEW_REQUIRED')
         const [[receivable]]=await conn.query('SELECT total_amount FROM payment_records WHERE type=2 AND order_id=? ORDER BY id DESC LIMIT 1',[retRow.sale_order_id])
         if(receivable)plannedAmount=Math.min(plannedAmount,Number(receivable.total_amount))
       }
@@ -355,6 +384,10 @@ async function confirmSR(id, operator = null, scopeWarehouseIds = null) {
         orderNo: retRow.sale_order_no,
         amount: plannedAmount,
       })
+    }
+    if(ordinaryEstimate){
+      if(ordinaryEstimate.items.length)await conn.query(`UPDATE sale_return_items SET amount=CASE id ${ordinaryEstimate.items.map(()=>'WHEN ? THEN ?').join(' ')} ELSE amount END WHERE return_id=?`,[...ordinaryEstimate.items.flatMap(i=>[i.id,i.amount]),id])
+      await conn.query('UPDATE sale_returns SET total_amount=?,ordinary_net_basis_order_id=?,cash_policy=? WHERE id=?',[ordinaryEstimate.total,ordinaryBasis.orderId,ordinaryReturnMoney.CASH_POLICY,id])
     }
     await compareAndSetStatus(conn, {
       table: 'sale_returns',
@@ -771,7 +804,7 @@ async function syncSaleReturnReversedWithinTransaction(conn, returnId, { taskId,
  * 销售退货入仓完成回调（由 return_tasks putaway 事务内调用）
  * 容器已通过 PDA 流程上架，此处仅做退货单状态同步和账款冲减
  */
-async function syncSaleReturnCompleted(conn, returnId, { taskId, taskNo }) {
+async function syncSaleReturnCompleted(conn, returnId, { taskId, taskNo,ordinaryReturnContext=null,commercialReturnContext=null }) {
   const retRow = await lockStatusRow(conn, {
     table: 'sale_returns',
     id: returnId,
@@ -794,7 +827,8 @@ async function syncSaleReturnCompleted(conn, returnId, { taskId, taskNo }) {
     [taskId],
   )
   const [[model]] = await conn.query('SELECT commercial_model FROM sale_orders WHERE id=?',[retRow.sale_order_id])
-  const totalAmount=model?.commercial_model === 'kit-v1' ? await commercialReturns.complete(conn,returnId,taskId) : ordinaryAmount
+  const ordinaryFinancial=model?.commercial_model === 'kit-v1' ? null : await ordinaryReturnMoney.complete(conn,returnId,taskId,ordinaryReturnContext)
+  const totalAmount=model?.commercial_model === 'kit-v1' ? await commercialReturns.complete(conn,returnId,taskId,commercialReturnContext) : ordinaryFinancial ?? cashNumber(roundCashCents(ordinaryAmount))
   if (retRow.sale_order_id && totalAmount > 0) {
     await adjustPaymentRecordForReturn(conn, {
       recordType: 2,
@@ -804,6 +838,7 @@ async function syncSaleReturnCompleted(conn, returnId, { taskId, taskNo }) {
       returnType: 'sale',
       amount: Number(totalAmount),
       operator: {},
+      expectedTotal:ordinaryReturnContext?ordinaryReturnMoney.priorReceivable(ordinaryReturnContext):null,
     })
   }
 

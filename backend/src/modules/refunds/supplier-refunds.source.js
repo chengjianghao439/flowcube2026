@@ -4,6 +4,9 @@ const actor=require('./supplier-refunds.actor')
 const {moneyUnits,moneyText}=require('../../utils/decimalMoney')
 const AppError=require('../../utils/AppError')
 const invalid=rules.fail
+const purchaseCash=require('../purchase/purchase.cash-money')
+const cash=require('../../utils/cashMoney')
+const {decimalUnits}=require('../accounting/voucher-sale-money')
 async function peek(conn,id) {
   const [[pr]]=await conn.query('SELECT id, purchase_order_id, supplier_id, warehouse_id FROM purchase_returns WHERE id=?',[id])
   if(!pr)throw invalid()
@@ -22,6 +25,14 @@ async function heads(conn,located,currentActor,current=true) {
   const [original]=await conn.query('SELECT * FROM purchase_order_items WHERE order_id=? ORDER BY id'+(current?' FOR SHARE':''),[po.id])
   if(!items.length)throw invalid()
   const byId=new Map(original.map(row=>[Number(row.id),row]))
+  if(pr.cash_execution_basis){
+    const basis=purchaseCash.basisForReturn(po,pr,original)
+    const fact=purchaseCash.validateReturn(basis,pr,items,original)
+    const gross=cash.storedCashCents(fact.credit)*100n
+    if(gross<=0n)throw invalid('原退货无正额实际分预算')
+    const frozen=items.map(row=>{const q=rules.quantityUnits(row.quantity),price=decimalUnits(row.unit_price,8);return{id:Number(row.id),purchaseItemId:Number(row.purchase_item_id),productId:Number(row.product_id),unit:row.unit,quantity:`${q/100n}.${String(q%100n).padStart(2,'0')}`,unitPrice:`${price/100000000n}.${String(price%100000000n).padStart(8,'0')}`}}).sort((a,b)=>a.id-b.id)
+    return{po,pr,gross,cashSource:{items,original},itemLabels:items.map(row=>({id:Number(row.id),productCode:row.product_code??null,productName:row.product_name??null,articleNumber:row.article_number??null,spec:row.spec??null,color:row.color??null})),identity:{version:1,cashPolicy:purchaseCash.POLICY,po:{id:Number(po.id),orderNo:po.order_no,supplierId:Number(po.supplier_id),warehouseId:Number(po.warehouse_id)},pr:{id:Number(pr.id),returnNo:pr.return_no,purchaseOrderId:Number(po.id),purchaseOrderNo:pr.purchase_order_no,supplierId:Number(pr.supplier_id),warehouseId:Number(pr.warehouse_id),grossAmount:moneyText(gross),items:frozen}}}
+  }
   let six=0n
   const frozen=items.map(row=>{
     const source=byId.get(Number(row.purchase_item_id)),qty=rules.quantityUnits(row.quantity),price=moneyUnits(row.unit_price)
@@ -34,7 +45,20 @@ async function heads(conn,located,currentActor,current=true) {
   // Quantity 2dp × price 4dp = six-place integer, round only the whole document.
   const gross=(six+50n)/100n
   if(gross<=0n || moneyUnits(pr.total_amount)!==gross)throw invalid('原退货头金额与准确原价基本量不一致，请人工核对')
-  return{po,pr,gross,itemLabels:items.map(row=>({id:Number(row.id),productCode:row.product_code??null,productName:row.product_name??null,articleNumber:row.article_number??null,spec:row.spec??null,color:row.color??null})),identity:{version:1,po:{id:Number(po.id),orderNo:po.order_no,supplierId:Number(po.supplier_id),warehouseId:Number(po.warehouse_id)},pr:{id:Number(pr.id),returnNo:pr.return_no,purchaseOrderId:Number(po.id),purchaseOrderNo:pr.purchase_order_no,supplierId:Number(pr.supplier_id),warehouseId:Number(pr.warehouse_id),grossAmount:moneyText(gross),items:frozen}}}
+  return{po,pr,gross,cashSource:{items,original},itemLabels:items.map(row=>({id:Number(row.id),productCode:row.product_code??null,productName:row.product_name??null,articleNumber:row.article_number??null,spec:row.spec??null,color:row.color??null})),identity:{version:1,po:{id:Number(po.id),orderNo:po.order_no,supplierId:Number(po.supplier_id),warehouseId:Number(po.warehouse_id)},pr:{id:Number(pr.id),returnNo:pr.return_no,purchaseOrderId:Number(po.id),purchaseOrderNo:pr.purchase_order_no,supplierId:Number(pr.supplier_id),warehouseId:Number(pr.warehouse_id),grossAmount:moneyText(gross),items:frozen}}}
+}
+// New writes must use the same immutable cash basis as PR confirmation/shipping.
+// Internal raw rows are deliberately excluded from identity/freeze and public DTOs,
+// so historical GET, acknowledgements and non-cash cancellation keep their proof.
+function assertReturnCash(context) {
+  const {po,pr,gross,cashSource}=context
+  cash.storedCashCents(pr.total_amount,'原采购退货合计')
+  cash.storedCashCents(moneyText(gross),'原采购退货毛额')
+  if(!cashSource || !Array.isArray(cashSource.items) || !Array.isArray(cashSource.original))throw invalid('缺少原采购退货执行依据，请核对')
+  const {items,original}=cashSource
+  const snapshot=purchaseCash.basisForReturn(po,pr,original)
+  const fact=pr.cash_execution_basis ? purchaseCash.validateReturn(snapshot,pr,items,original) : po.cash_basis ? purchaseCash.review('新采购退货缺少冻结证明') : purchaseCash.legacyReturn(snapshot,pr,items)
+  if(moneyUnits(fact.credit)!==gross)throw invalid('退款来源与原采购退货可执行金额不一致，请核对')
 }
 async function payments(conn,context,current=true,selectedIds=null,{currentStatements=false}={}) {
   const {po}=context
@@ -124,4 +148,4 @@ function assertBudget(context,budget,amount,allocations,ownId=null) {
 function freeze(context,allocations) {
   return{...context.identity,entries:allocations.map(a=>context.proofs.find(row=>row.entryId===a.entryId)).sort((a,b)=>a.entryId-b.entryId)}
 }
-module.exports={peek,heads,payments,budget,assertBudget,freeze}
+module.exports={peek,heads,assertReturnCash,payments,budget,assertBudget,freeze}

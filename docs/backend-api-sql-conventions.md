@@ -365,3 +365,46 @@ findById对历史普通单返回由当前头、全部物料行及执行数量生
 findStockDrift保持原COALESCE(NULLIF(avg_cost,0),NULLIF(cost_price,0),0)及单位成本、数量、两位价值公式；同一产品只读SELECT追加CASE来源avg_cost/cost_price/zero_fallback，以原非零选择分支标注。主档缺失仍原按0估值并标零兜底，旧DTO无来源由客户端显示未记录，不猜历史采购批次。report.avgCostReconciliation仍取原前200行、原200行差额合计，仅追加matchedRows与truncated告知返回范围，不改变财务金额口径。
 
 warehouse-tasks.ship的成本快照注释精确为本任务所发物料行在cost_snapshot首次为空时固化，已有快照保持；实际UPDATE、COALESCE与IS NULL条件未改。不同任务再发同一原销售物料行仍沿首次快照，不宣称任务独立批次成本，也不自动回填历史。
+
+### 2026-10-13 采购创建入口与本人回执范围
+
+采购controller在正文之后传入`scopeWarehouseIds`，新单service在写回执前核范围，并在原事务`FOR SHARE`验证仓存在、未删且启用。原键成功回放通过`purchase.create-receipt`核operation真实resource类型/ID、response.id及原PO当前仓，不复查新建资格。system本人回执入口按`receiptContext.matchedAction`实际命中的purchase.create动作调用同一核验，exact/base/宽查询皆适用；pending/not_found不虚构单据。原成功结果查询只沿现有本人授权，不增VIEW权，不扩通用receipt/role引擎。PROC03/SEC04普通合成allow/deny已实库验证，不能等同于受阻外部探针。
+
+### 2026-10-13 第三批：绑定与授权证明边界
+
+五报表时间条件与参数由`buildTimestampDateFilter`同步生成，保留原索引友好timestamp条件；九条带日期SQL按date→scope顺序，采购价趋势先productId。空范围AND1=0、不限范围null及独立无日期的库存仓价值/波次概览保持。新增纯函数捕获测试遍历11实际语句并反向恢复多余endDate，发现全部9条错位；真实SQL严格模式不关闭。
+
+委派密码重置的授权helper只接受原`withLockedTarget`锁后actor/target；当前reset权限、既有角色子集和仓范围子集均先于原UPDATE。本批只调用纯读授权helper及完整service被mock的路由，禁止实际密码/凭据测试。采购范围第二批完成的是直接`purchase.create`及本人对应创建结果查询；采购计划转单旧键在scope之前的既有残留未修，不把direct创建修复泛化到convert链。
+
+## 2026-10-13 指定范围旁路与原销售操作
+
+HTTP controller显式使用当前req.user仓范围，覆盖body/query的同名字段。采购plan.convert成功重放核原ACK所对应已转换计划行及当前PO仓，不能用新selection或整个未转换混仓计划替代原范围；本人GET按实际matched action核相同原资源。收货containers/suggestion先核任务仓，再核容器当前仓，保留既有GET动作权且不增PDA票据门。
+
+库存指定六叶和ABC/cycle四叶接scope，明确正仓请求在读写前核权限；集合在汇总/COUNT/LIMIT前过滤。历史库存流水按原流水仓，当前容器按当前仓，transfer保持任一端可见。scheduler原内部默认null全局调用不改。全局warehouseId=0默认的读取保持原VIEW，写权限尚待业务决定，不能按这轮正仓修复宣称全局写已关闭。
+
+普通销售reserve/release/ship保留原冒号action `sale.<kind>:<SO>` 与后端同键合同。PC提交冻结完整body/key/SO/action/actor/endpoint；存盘仅查询身份和正文摘要，完整正文只在提交mount内存。未知阻断三动作新键；mounted显式原重试先exact GET not_found，再在原created_at七日减两分钟时限内发送原body/key；重挂或冷进程只GET。原POST首次ship的null与GET/回放的tasks结果按既有合同分别验证，GET不猜当前任务或新操作资格，不加SALE VIEW。查询确认后用户可填写合法新批量。
+
+新增领域守卫接原security-scan-remediation；shared operationRequest匹配、既有Kit流程与金额/单位规则不改。云端实际组件+HTTP/MySQL认证边界为内存夹具，不等于真实GUI、登录撤权、PDA或纸张。逐入口和失败证据见同一云端交接包第四批；受阻relatedEvents异常历史探针未运行或改写。
+
+## 2026-10-13 第五批：请购创建与计划转换的原意图证明
+
+新的PC请购创建发稳定原键。仅此领域在既有planning锁内按actor/key读取base及旧16位候选，固定action `purchase.requisition.create`；保存对validated原wire正文计算的完整SHA256和原仓，不把service默认值或客户端自报hash纳入正文。重放先核原ACK实际本人单据与原/当前仓，再比较完整正文摘要；不同内容409，多候选或旧ACK缺完整proof要求核对，不按新body另开action。缺key旧调用保持兼容，但不提供同意图恢复保证。
+
+plan.convert指纹由原planId、purchase目标及去重排序itemIds构成；同键不同selection409。旧ACK由已转换且禁止编辑的原计划明细、PO链接及原响应组证明原selection，核完整原仓后仅在内存派生指纹，不写历史response_json。新GET带原64摘要；宽查询仍先核实际matched原范围。system按可信req.user传actor/scope，PR还传原key/warehouseId/hash，不增加VIEW；pending/not_found不猜业务成功。
+
+沿既有operation_requests七日TTL，不新增永久proof表、不改变通用匹配或Kit协议。清理后不存在永久同键正文保证；超期未知必须人工核对，客户端不能依据not_found另键提交。实际HTTP/MySQL认证、权限和scope为内存夹具，与真实登录撤权不同。领域纯守卫及system可信context反向守卫接原test:security-scan-remediation。
+
+## 2026-10-14 第六批财务写入与闭期证明
+
+金融金额输入沿既有四位decimalMoney固定点，不依赖数据库DECIMAL静默舍入或可选账户后的间接校验。手工账款/旧直付/报销create-update先验，SQL传四位文本；API与事件仍数字，直付本金/累计/余额按单位整数计算，无浮点容差清零。原缺key兼容、资源回执匹配、补录/期间/账户→对账单→账款锁合同保持，不扩为新幂等协议。
+
+期末完整性只读helper在原company X内复用voucher-engine原builder；共享engine只增加原buildFundVouchers/loadTaxMaps导出，正文、生成及金额/税口径不变。批取来源、凭证与全部分录，含自动修订/直接人工红字，不按status排除原冲销腿、不用hash相同替代分录证明。账本按company_id，来源沿原公司级合同；不补造历史、改科目分类或增加资金/AP反向锁。定向回归接原test:accounting。
+# 2026-10-14 第七批有界接口合同
+
+GET /auth/me仅增加hasUnrestrictedWarehouseScope只读布尔，严格来自当前authMiddleware的warehouseIds===null；缺失字段不授予任何写资格，不写身份/会话、不改变登录/刷新合同。inventory stock-policy、stockcheck cycle-rules及商品默认策略写入不再将缺失scope隐式当不限仓；调用方body不能覆盖可信独立上下文。保留各原route管理权限。
+
+采购结束剩余沿原POST /purchase/:id/close，原正文{}、稳定X-Request-Key，action=purchase.closeRemaining.<id>；返回{purchaseOrderId,status:3,closedReason:'short_close'}。结束本次收货仍原POST /inbound-tasks/:id/close-receiving与{taskId,status:3|4}。共享requestStatus只接两个明确领域guard，原scope/资源/DTO身份核验包含未知结果，不改变operationRequest匹配器、原键或TTL；不凭旧资源状态猜新意图成功。
+
+290新增普通销售净额basis及receipt，291增加每张SR的nullable净额意图标记（旧NULL不自动改成新净额语义），原SOI/SKU/仓/量价身份冻结；receipt以实际RTI唯一，不把SRI设唯一，允许同来源行合法分次。无向SO的外键反锁；迁移按information_schema列序/类型/默认/主键/索引/auto_increment及无额外FK/trigger形状fail-loud核，不DROP未知表、不回填或改已执行迁移。执行仅显式原guard迁移，不借preview自动bootstrap。
+
+结账采购builder可选准确orderIds在原来源断言前限定候选；本期业务日期和本期凭证关联根均纳入，原金额/税额/来源错误继续复用，不吞外层异常掩盖本期缺口。未传范围的原全量生成路径保持。

@@ -7,7 +7,7 @@ function api(){
 }
 const base={dispatchComponentId:'1',commercialComponentId:'2',sale_item_id:'3',product_id:'4',warehouse_id:'5',groupId:'6',kind:'kit',kit_code:'K',kit_name:'套',line_key:'L',task_id:'7',task_no:'WT-A',confirmed_at:'2026-10-01 12:00:00',warehouse_name:'原仓',qty_policy_product_id:4,allow_decimal_qty:0,sourceQuantity:'1.00',sourceBudgetAmount:'80.00',order_gross_basis:'100.00',discount_basis:'0.00',basis_origin:'real_confirmation'}
 for(const [name,extra,expected]of [['integer',{},false],['decimal',{allow_decimal_qty:1},true],['existing NULL flag',{allow_decimal_qty:null},true],['missing product',{qty_policy_product_id:null,allow_decimal_qty:null},null]]){
-  test(`source metadata policy ${name} uses current product convention without changing budget`,async()=>{
+  test(`source metadata policy ${name} shows current quantity policy without rewriting frozen budgets`,async()=>{
     const calls=[],conn={query:async sql=>{calls.push(sql);return [[{...base,...extra}]]}}
     const rows=await api().sources(conn,1)
     assert.equal(rows.length,1);assert.equal(rows[0].allowDecimalQty,expected)

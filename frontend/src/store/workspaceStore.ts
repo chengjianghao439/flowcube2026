@@ -1,8 +1,10 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { PATH_TITLES, resolveRouteTitle } from '@/router/routeDefinitions'
+import { PATH_TITLES, resolveRouteTitle, isRegisteredErpRoute } from '@/router/routeDefinitions'
 import { getMergedPageView } from '@/router/mergedPageGroups'
-import { buildWorkspaceTabRegistrationFromPath, mergeWorkspaceViewPaths } from '@/router/workspaceRouteMeta'
+import { buildWorkspaceTabRegistrationFromPath, mergeWorkspaceViewPaths, normalizeWorkspacePath } from '@/router/workspaceRouteMeta'
+import { useDirtyGuardStore } from './dirtyGuardStore'
+import { toast } from '@/lib/toast'
 export { PATH_TITLES } from '@/router/routeDefinitions'
 
 export interface WorkspaceTab {
@@ -21,8 +23,9 @@ export const HOME_TAB: WorkspaceTab = {
 }
 
 /** 工作区标签上限（2026-08-21 审计 C.3 修复）：keepAlive 组件实例永久累积，
- *  无上限会让内存/DOM 随使用时长单调增长。超出上限按 LRU 关闭最旧可关闭 tab。 */
+ *  无上限会让内存/DOM 随使用时长单调增长。只驱逐最近最少访问的无草稿标签。 */
 export const MAX_WORKSPACE_TABS = 30
+export const WORKSPACE_CAPACITY_MESSAGE = '打开的页面已达上限，请先保存或关闭一个页面。'
 
 function isDesktopWorkspacePath(path: string) {
   return !(path === '/pda' || path.startsWith('/pda/'))
@@ -31,6 +34,8 @@ function isDesktopWorkspacePath(path: string) {
 interface WorkspaceState {
   tabs: WorkspaceTab[]
   activeKey: string
+  /** 本次工作区访问顺序，最早在前；不跨刷新持久化。 */
+  recentKeys: string[]
   /** 添加标签，若已存在则激活并返回 true */
   addTab: (tab: Omit<WorkspaceTab, 'closable'>) => boolean
   /** 关闭标签，返回关闭后应激活的 key */
@@ -38,13 +43,43 @@ interface WorkspaceState {
   setActive: (key: string) => void
   closeOthers: (key: string) => void
   closeAll: () => void
-  syncFromLocation: (path: string, title?: string) => void
+  syncFromLocation: (path: string, title?: string) => boolean
   /**
    * 只改标签标题，不改变激活态。
    * 详情页数据到位后用它把路由兜底名（如「销售单 #3260」）换成真实业务单号；
    * 不能改用 addTab —— 那会 setActive，数据晚到时会把用户从别的标签拽回来。
    */
   updateTabTitle: (path: string, title: string) => void
+}
+
+function visitedKeys(tabs: WorkspaceTab[], recentKeys: string[], activeKey: string) {
+  const keys = new Set(tabs.map(tab => tab.key))
+  const recent = recentKeys.filter(key => keys.has(key) && key !== activeKey)
+  const known = new Set(recent)
+  return [...tabs.filter(tab => tab.key !== activeKey && !known.has(tab.key)).map(tab => tab.key), ...recent, ...(keys.has(activeKey) ? [activeKey] : [])]
+}
+
+/** 脏登记可能带 query 或合并页子路径，按原路由身份保护整个标签。 */
+function isDirtyTab(tab: WorkspaceTab) {
+  return Object.entries(useDirtyGuardStore.getState().dirtyTabs).some(([path, dirty]) => (
+    dirty && buildWorkspaceTabRegistrationFromPath(path).key === tab.key
+  ))
+}
+
+function evictionCandidates(tabs: WorkspaceTab[], recentKeys: string[]) {
+  const ordered = visitedKeys(tabs, recentKeys, '')
+  return ordered.map(key => tabs.find(item => item.key === key)).filter((item): item is WorkspaceTab => !!item && item.closable && !isDirtyTab(item))
+}
+
+function admitTab(tabs: WorkspaceTab[], recentKeys: string[], tab: WorkspaceTab): WorkspaceTab[] | null {
+  const candidates = evictionCandidates(tabs, recentKeys)
+  const removeCount = Math.max(0, tabs.length + 1 - MAX_WORKSPACE_TABS)
+  if (candidates.length < removeCount) {
+    toast.warning(WORKSPACE_CAPACITY_MESSAGE)
+    return null
+  }
+  const removeKeys = new Set(candidates.slice(0, removeCount).map(item => item.key))
+  return [...tabs.filter(item => !removeKeys.has(item.key)), tab]
 }
 
 /** 旧快捷入口与持久化标题同步新名称，不改其他单据的自定义标题。 */
@@ -89,9 +124,10 @@ export const useWorkspaceStore = create<WorkspaceState>()(
     (set, get) => ({
       tabs: [HOME_TAB],
       activeKey: HOME_TAB.key,
+      recentKeys: [HOME_TAB.key],
 
       addTab: (tab) => {
-        const { tabs } = get()
+        const { tabs, recentKeys } = get()
         if (!isDesktopWorkspacePath(tab.path)) return false
         const normalized = buildWorkspaceTabRegistrationFromPath(tab.path)
         const title = currentTabTitle(normalized.path, tab.title)
@@ -104,27 +140,22 @@ export const useWorkspaceStore = create<WorkspaceState>()(
                 : item
             )),
             activeKey: normalized.key,
+            recentKeys: visitedKeys(tabs, recentKeys, normalized.key),
           })
           return true
         }
-        // LRU 上限（2026-08-21 审计 C.3 修复）：超出 MAX_WORKSPACE_TABS 时
-        // 关闭最旧的可关闭 tab（keepAlive 组件实例随之卸载），防止无限累积。
-        let next = [...tabs, { ...tab, key: normalized.key, path: normalized.path, title, closable: true, viewPaths: mergeWorkspaceViewPaths(normalized.path, tab.viewPaths) }]
-        if (next.length > MAX_WORKSPACE_TABS) {
-          const lru = next.findIndex(t => t.closable)
-          if (lru !== -1) {
-            next = next.filter((_, i) => i !== lru)
-          }
-        }
+        const next = admitTab(tabs, recentKeys, { ...tab, key: normalized.key, path: normalized.path, title, closable: true, viewPaths: mergeWorkspaceViewPaths(normalized.path, tab.viewPaths) })
+        if (!next) return false
         set({
           tabs: next,
           activeKey: normalized.key,
+          recentKeys: visitedKeys(next, recentKeys, normalized.key),
         })
         return true
       },
 
       removeTab: (key, currentActiveKey) => {
-        const { tabs, activeKey } = get()
+        const { tabs, activeKey, recentKeys } = get()
         const effectiveActiveKey = currentActiveKey ?? activeKey
         if (key === HOME_TAB.key) return effectiveActiveKey
         const idx = tabs.findIndex(t => t.key === key)
@@ -133,42 +164,47 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         const newActive = effectiveActiveKey === key
           ? (newTabs[Math.max(0, idx - 1)]?.key ?? HOME_TAB.key)
           : effectiveActiveKey
-        set({ tabs: newTabs, activeKey: newActive })
+        set({ tabs: newTabs, activeKey: newActive, recentKeys: visitedKeys(newTabs, recentKeys, newActive) })
         return newActive
       },
 
-      setActive: (key) => set({ activeKey: key }),
+      setActive: (key) => {
+        const { tabs, recentKeys } = get()
+        if (tabs.some(tab => tab.key === key)) set({ activeKey: key, recentKeys: visitedKeys(tabs, recentKeys, key) })
+      },
 
       closeOthers: (key) => {
-        const { tabs } = get()
+        const { tabs, recentKeys } = get()
+        const kept = tabs.filter(t => !t.closable || t.key === key)
         set({
-          tabs: tabs.filter(t => !t.closable || t.key === key),
+          tabs: kept,
           activeKey: key,
+          recentKeys: visitedKeys(kept, recentKeys, key),
         })
       },
 
-      closeAll: () => set({ tabs: [HOME_TAB], activeKey: HOME_TAB.key }),
+      closeAll: () => set({ tabs: [HOME_TAB], activeKey: HOME_TAB.key, recentKeys: [HOME_TAB.key] }),
 
       syncFromLocation: (path, title) => {
-        if (!isDesktopWorkspacePath(path)) return
+        if (!isDesktopWorkspacePath(path)) return false
         const normalized = buildWorkspaceTabRegistrationFromPath(path)
-        const { tabs } = get()
+        const { tabs, recentKeys } = get()
         const existing = tabs.find((tab) => tab.key === normalized.key)
         if (!existing) {
-          set({
-            tabs: [
-              ...tabs,
-              {
-                key: normalized.key,
-                path: normalized.path,
-                title: currentTabTitle(normalized.path, title || normalized.path),
-                closable: normalized.key !== HOME_TAB.key,
-                viewPaths: mergeWorkspaceViewPaths(normalized.path),
-              },
-            ],
-            activeKey: normalized.key,
+          const next = admitTab(tabs, recentKeys, {
+            key: normalized.key,
+            path: normalized.path,
+            title: currentTabTitle(normalized.path, title || normalized.path),
+            closable: normalized.key !== HOME_TAB.key,
+            viewPaths: mergeWorkspaceViewPaths(normalized.path),
           })
-          return
+          if (!next) return false
+          set({
+            tabs: next,
+            activeKey: normalized.key,
+            recentKeys: visitedKeys(next, recentKeys, normalized.key),
+          })
+          return true
         }
         const fallbackTitle = resolveRouteTitle(normalized.path) ?? normalized.path
         // 详情页用业务单号调过 updateTabTitle 后，路由兜底名不得再覆盖回来：
@@ -178,14 +214,20 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         const keepPageTitle = existing.path.split(/[?#]/)[0] === normalized.path.split(/[?#]/)[0]
           && !!existing.title && existing.title !== fallbackTitle
         const nextTitle = currentTabTitle(normalized.path, keepPageTitle ? existing.title : (title || existing.title))
+        const viewPaths = mergeWorkspaceViewPaths(normalized.path, existing.viewPaths, existing.path)
+        const unchanged = existing.path === normalized.path && existing.title === nextTitle
+          && Object.keys(existing.viewPaths ?? {}).length === Object.keys(viewPaths ?? {}).length
+          && Object.entries(viewPaths ?? {}).every(([key, value]) => existing.viewPaths?.[key] === value)
         set({
-          tabs: tabs.map((tab) => (
+          tabs: unchanged ? tabs : tabs.map((tab) => (
             tab.key === normalized.key
-              ? { ...tab, path: normalized.path, title: nextTitle, viewPaths: mergeWorkspaceViewPaths(normalized.path, tab.viewPaths, tab.path) }
+              ? { ...tab, path: normalized.path, title: nextTitle, viewPaths }
               : tab
           )),
           activeKey: normalized.key,
+          recentKeys: visitedKeys(tabs, recentKeys, normalized.key),
         })
+        return true
       },
 
       updateTabTitle: (path, title) => {
@@ -201,12 +243,24 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       partialize: (s) => ({ tabs: s.tabs }),
       merge: (persistedState, currentState) => {
         const persisted = (persistedState as Partial<WorkspaceState> | undefined) ?? {}
+        const tabs = sanitizeTabs(persisted.tabs)
         return {
           ...currentState,
-          tabs: sanitizeTabs(persisted.tabs),
+          tabs,
           activeKey: HOME_TAB.key,
+          recentKeys: tabs.map(tab => tab.key),
         }
       },
     }
   )
 )
+
+/** 历史遍历消费前的只读预检，登录/PDA/未知地址仍由原路由负责。 */
+export function canOpenWorkspacePath(path: string) {
+  const pathname = normalizeWorkspacePath(path)
+  if (!isDesktopWorkspacePath(path) || !isRegisteredErpRoute(pathname)) return true
+  const { tabs, recentKeys } = useWorkspaceStore.getState()
+  const key = buildWorkspaceTabRegistrationFromPath(path).key
+  return tabs.some(tab => tab.key === key) || tabs.length < MAX_WORKSPACE_TABS
+    || evictionCandidates(tabs, recentKeys).length >= tabs.length + 1 - MAX_WORKSPACE_TABS
+}

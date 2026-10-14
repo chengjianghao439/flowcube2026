@@ -1,5 +1,6 @@
 import { payloadClient as apiClient } from './client'
 import type { User } from '@/types'
+import type { AxiosRequestConfig } from 'axios'
 
 export interface LoginParams {
   username: string
@@ -16,6 +17,12 @@ export interface LoginResult {
 export async function loginApi(params: LoginParams): Promise<LoginResult> {
   const res = await apiClient.post<LoginResult>('/auth/login', params)
   return res
+}
+
+/** Current request scope only; missing/legacy capability never grants global writes. */
+export async function getGlobalPolicyWriteCapabilityApi(config?: AxiosRequestConfig): Promise<boolean> {
+  const result = await apiClient.get<{ hasUnrestrictedWarehouseScope?: unknown }>('/auth/me', config)
+  return result?.hasUnrestrictedWarehouseScope === true
 }
 
 /**

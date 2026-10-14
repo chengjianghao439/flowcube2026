@@ -1,6 +1,9 @@
 const { normalizePagination } = require('../../utils/pagination')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
+const { moneyUnits, moneyText } = require('../../utils/decimalMoney')
+const { cashCents, storedCashCents, cashNumber } = require('../../utils/cashMoney')
+const moneyNumber = units => cashNumber(storedCashCents(moneyText(units)))
 const { beijingTodayYmd } = require('../../utils/backendTime')
 const { generateDailyCode, generateMasterCode } = require('../../utils/codeGenerator')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
@@ -54,16 +57,33 @@ async function refreshTotal(conn, claimId) {
   const [[agg]] = await conn.query(
     'SELECT COALESCE(SUM(amount),0) AS total FROM expense_claim_items WHERE claim_id=?', [claimId],
   )
-  await conn.query('UPDATE expense_claims SET total_amount=? WHERE id=?', [Number(agg.total), claimId])
-  return Number(agg.total)
+  storedCashCents(agg.total, '报销明细合计')
+  const totalUnits = moneyUnits(agg.total)
+  await conn.query('UPDATE expense_claims SET total_amount=? WHERE id=?', [moneyText(totalUnits), claimId])
+  return moneyNumber(totalUnits)
 }
 
-/** 明细整体替换（草稿态才允许，由调用方先校验状态） */
+function normalizeClaimItems(items) {
+  return items.map(it => {
+    cashCents(it.amount, { label: '报销明细金额' })
+    const units = moneyUnits(it.amount)
+    if (units <= 0n) throw new AppError('明细金额必须大于 0', 400)
+    return { ...it, amount: moneyText(units) }
+  })
+}
+
+async function assertStoredClaimCash(conn, claimId, total, { current = false } = {}) {
+  const [items] = await conn.query(`SELECT id,amount FROM expense_claim_items WHERE claim_id=? ORDER BY id${current ? ' FOR SHARE' : ''}`, [claimId])
+  const expected = storedCashCents(total, '原报销总额')
+  const actual = items.reduce((sum, item) => sum + storedCashCents(item.amount, '原报销明细金额'), 0n)
+  if (!items.length || actual !== expected) throw new AppError('原报销明细与总额不一致，请核对原账', 409, 'CASH_LEGACY_PRECISION_REVIEW_REQUIRED')
+}
+
+/** 明细整体替换；调用方先校验状态及全部金额，避免先写单头/删旧明细。 */
 async function replaceItems(conn, claimId, items) {
   await conn.query('DELETE FROM expense_claim_items WHERE claim_id=?', [claimId])
   for (const it of items) {
-    const amount = Number(it.amount)
-    if (!Number.isFinite(amount) || amount <= 0) throw new AppError('明细金额必须大于 0', 400)
+    const amount = it.amount
     const [[cat]] = await conn.query(
       'SELECT id,name FROM expense_categories WHERE id=? AND deleted_at IS NULL', [Number(it.categoryId)],
     )
@@ -79,6 +99,7 @@ async function replaceItems(conn, claimId, items) {
 
 async function create({ title, items = [], remark }, operator) {
   if (!items.length) throw new AppError('请至少填写一条费用明细', 400)
+  const normalizedItems = normalizeClaimItems(items)
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
@@ -88,7 +109,7 @@ async function create({ title, items = [], remark }, operator) {
        VALUES (?,?,?,?,1,?)`,
       [claimNo, title || null, operator.operatorId, operator.operatorName, remark || null],
     )
-    const total = await replaceItems(conn, r.insertId, items)
+    const total = await replaceItems(conn, r.insertId, normalizedItems)
     await conn.commit()
     return { id: r.insertId, claimNo, totalAmount: total }
   } catch (error) {
@@ -109,11 +130,13 @@ async function update(id, { title, items, remark }, operator) {
       throw new AppError('只能编辑本人提交的报销单', 403)
     }
     assertStatusAction('expenseClaim', 'edit', row.status)
-    await conn.query('UPDATE expense_claims SET title=?,remark=? WHERE id=?', [title || null, remark || null, id])
+    let normalizedItems = null
     if (Array.isArray(items)) {
       if (!items.length) throw new AppError('请至少填写一条费用明细', 400)
-      await replaceItems(conn, id, items)
+      normalizedItems = normalizeClaimItems(items)
     }
+    await conn.query('UPDATE expense_claims SET title=?,remark=? WHERE id=?', [title || null, remark || null, id])
+    if (normalizedItems) await replaceItems(conn, id, normalizedItems)
     await conn.commit()
     return { id: Number(id) }
   } catch (error) {
@@ -240,7 +263,8 @@ async function pay(id, { accountId, happenedAt, remark }, operator, requestKey =
     )
     if (!target) throw new AppError('费用报销单不存在', 404)
     assertStatusAction('expenseClaim', 'pay', target.status)
-    const preAmount = Number(target.total_amount)
+    await assertStoredClaimCash(pool, id, target.total_amount)
+    const preAmount = cashNumber(storedCashCents(target.total_amount, '原报销总额'))
     if (preAmount <= 0) throw new AppError('报销金额为 0，无需付款', 400)
 
     const applied = await tryRecordBackfillApplication({
@@ -304,7 +328,8 @@ async function pay(id, { accountId, happenedAt, remark }, operator, requestKey =
       table: 'expense_claims', id, columns: 'id, claim_no, status, total_amount, applicant_name', entityName: '费用报销单',
     })
     const rule = assertStatusAction('expenseClaim', 'pay', row.status)
-    const amount = Number(row.total_amount)
+    await assertStoredClaimCash(conn, id, row.total_amount, { current: true })
+    const amount = cashNumber(storedCashCents(row.total_amount, '原报销总额'))
     if (amount <= 0) throw new AppError('报销金额为 0，无需付款', 400)
     if (application && (row.claim_no !== application.row.biz_no || amount !== Number(application.row.amount))) throw original.conflict()
 

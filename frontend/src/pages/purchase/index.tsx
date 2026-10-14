@@ -288,14 +288,14 @@ export default function PurchasePage() {
               // （对应后端 closeRemaining 的两条硬性前提），条件不满足就不展示，
               // 避免对必然失败的订单（如还没收过货）诱导点击。
               ...(r.status === 2 && r.canCloseRemaining && canConfirm ? [{
-                label: '关闭未收结案',
+                label: '结束剩余采购',
                 onClick: () => openConfirm(
-                  '关闭未收结案',
-                  '将按已入库的实收数量结算应付并完成采购单，未收部分不再收货。',
-                  () => close.mutate(r.id, { onSettled: closeConfirm }),
-                  { confirmText: '确认结案' },
+                  '结束剩余采购',
+                  '未收采购余量将取消，不再补收；已收数量、应付与付款记录保持。',
+                  () => { void close.submit(r.id).then(result => { if (result) closeConfirm() }) },
+                  { confirmText: '结束剩余采购', variant: 'destructive' },
                 ),
-                disabled: close.isPending,
+                disabled: close.isPending || close.blocked,
               }] : []),
               ...([1, 2, 5].includes(r.status) && canCancel ? [{
                 label: '取消',
@@ -335,6 +335,15 @@ export default function PurchasePage() {
           </>
         }
       />
+
+      {close.error && <p role="alert" className="text-sm text-destructive-ink">{close.error}</p>}
+      {close.pendingRecord && <div role="status" className="rounded-md border border-border px-3 py-2 text-sm space-y-2">
+        <p>采购单 #{close.pendingRecord.resourceId} 结束剩余采购结果未确认，请先核对原提交。</p>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" disabled={close.isPending} onClick={() => void close.check().then(result => { if (result) closeConfirm() })}>查询原提交结果</Button>
+          <Button size="sm" variant="outline" disabled={close.isPending || !close.canRetry || !canConfirm} onClick={() => void close.retry().then(result => { if (result) closeConfirm() })}>按原请求重试</Button>
+        </div>
+      </div>}
 
       <OrderStatusFilter label="采购状态分类" value={statusFilter}
         options={[{value: '', label: '全部订单'}, ...Object.entries(STATUS_LABELS).map(([value, label]) => ({value, label}))]}
@@ -379,7 +388,7 @@ export default function PurchasePage() {
       )}
 
       <ConfirmDialog
-        open={confirmState.open}
+        open={confirmState.open && !(confirmState.title === '结束剩余采购' && !!close.pendingRecord)}
         title={confirmState.title}
         description={confirmState.description}
         variant={confirmState.variant ?? 'default'}

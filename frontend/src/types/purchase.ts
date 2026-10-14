@@ -30,6 +30,14 @@ export interface PurchaseOrder {
   totalAmount: number
   totalOrderedQty?: number
   totalReceivedQty?: number
+  totalAssignedQty?: number
+  totalPutawayQty?: number
+  remainingUnreceivedQty?: number
+  remainingReceivableQty?: number
+  availableToCreateQty?: number
+  pendingPutawayQty?: number
+  cancelledRemainingQty?: number
+  closedReason?: string | null
   /** 是否满足"关闭剩余"的前提（相关收货订单均已上架完成 + 已有实收数量）；仅列表接口返回 */
   canCloseRemaining?: boolean
   /** 审计 4.7：是否需审批（金额超阈值），待审批单 status=5 */

@@ -40,9 +40,9 @@ test('来源退货列表直接显示本单四位净额，按状态解释预计�
     expect(host.textContent).toContain('¥0.0050')
     expect(host.textContent).toContain('¥0.0000')
     expect(host.textContent).toContain('¥10000.0050')
-    expect(host.querySelector('[title="本单实际净冲减"]')?.textContent).toBe('¥0.0050')
+    expect(host.querySelector('[title="本单实际净冲减"]')?.textContent).toBe('¥0.0050（待核）')
     expect(host.querySelectorAll('[title="预计最多冲减；合格入仓完成后确定实际净额"]')).toHaveLength(2)
-    expect(host.querySelector('[title="已取消退货单原金额"]')?.textContent).toBe('¥0.0050')
+    expect(host.querySelector('[title="已取消退货单原金额"]')?.textContent).toBe('¥0.0050（待核）')
   })
 })
 

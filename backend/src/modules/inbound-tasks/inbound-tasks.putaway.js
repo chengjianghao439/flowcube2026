@@ -11,6 +11,7 @@ const { beginResourceOperationRequest, completeOperationRequest } = require('../
 const { settlePurchaseOnAudit } = require('./inbound-tasks.settle')
 const { reduceExpectedBindings } = require('../../utils/expectedStock')
 const { assertInScope } = require('../../utils/warehouseScope')
+const { buildPutawayContributions, movingAverageCost } = require('./inbound-tasks.cost')
 
 async function tryFinishTask(conn, taskId) {
   // 调用方持有任务行锁；阶段用当前读，不能沿用等待任务锁前的 RR 快照。
@@ -26,7 +27,8 @@ async function tryFinishTask(conn, taskId) {
   )
   if (Number(n) > 0) return
 
-  // 短装结案（closeReceiving 写入 closed_reason='short_close'）：剩余未收量已由人工作罢，
+  // 本次短装结束（closeReceiving 写入 closed_reason='short_close'）：本批不再继续收，
+  // 原采购未收承诺保留供后续任务，不能将它当作明确取消剩余采购。
   // 不能再要求「收满」才允许完结，否则任务永久卡在待上架——PDA 上没有任何可上架的容器，
   // audit_status 永远停在 0，应付账款永不生成，连带 purchase.closeRemaining 也被堵死
   // （它要求关联收货订单 audit_status=1），用户在前端完全无路可走（审计 P0-3）。
@@ -122,10 +124,14 @@ async function putaway(taskId, { containerId, locationId, deviatedFromSuggestion
     // product_id / warehouse_id 是容器的不可变字段，这里无锁预读安全，
     // 真正的状态与归属校验仍由下面的加锁读负责。
     const [[cRef]] = await conn.query(
-      'SELECT product_id, warehouse_id FROM inventory_containers WHERE id = ? AND deleted_at IS NULL',
+      'SELECT product_id, warehouse_id, inbound_task_id FROM inventory_containers WHERE id = ? AND deleted_at IS NULL',
       [containerId],
     )
     if (!cRef) throw new AppError('库存条码不存在', 404)
+    if (Number(cRef.inbound_task_id) !== Number(taskId)) throw new AppError('库存条码不属于该入库任务',400)
+    // This path also updates avg_cost: take the product X lock before any
+    // policy S/stock/container locks, avoiding concurrent S-to-X upgrades.
+    await conn.query('SELECT id FROM product_items WHERE id=? FOR UPDATE',[cRef.product_id])
     await lockStockDimension(conn, cRef.product_id, cRef.warehouse_id)
 
     const [[c]] = await conn.query(
@@ -180,38 +186,18 @@ async function putaway(taskId, { containerId, locationId, deviatedFromSuggestion
     const afterQty = await syncStockFromContainers(conn, c.product_id, c.warehouse_id)
     const beforeQty = afterQty - qty
 
-    // 移动加权成本：按该商品在本任务对应采购明细的采购单价，更新全局均价
-    //   avg = (在库量×旧均价 + 上架量×采购价) / (在库量 + 上架量)
-    // 在库量取全仓 ACTIVE 容器合计（上架后再减本次量）；查不到采购价（异常数据）则跳过。
-    // 退货/撤回不反冲均价——只随入库正向移动（业界通行简化），采购价同时快照进本条日志。
-    // 单价优先取该容器归属明细行的采购价（迁移 132 起收货时记录归属）；混单收货时同一商品
-    // 可能来自多张采购单、单价不同，按 id 取第一行会把 12 元的货按 10 元计入均价（审计 P1-4）。
-    // 无归属的历史容器仍退回原来的"取第一行"行为。
-    const ownerItemId = c.inbound_task_item_id != null ? Number(c.inbound_task_item_id) : null
-    let purchasePrice = null
-    const [[priceRow]] = ownerItemId
-      ? await conn.query(
-        `SELECT poi.unit_price
-         FROM inbound_task_items iti
-         JOIN purchase_order_items poi ON poi.id = iti.purchase_item_id
-         WHERE iti.id = ?`,
-        [ownerItemId],
-      )
-      : await conn.query(
-        `SELECT poi.unit_price
-         FROM inbound_task_items iti
-         JOIN purchase_order_items poi ON poi.id = iti.purchase_item_id
-         WHERE iti.task_id = ? AND iti.product_id = ?
-         ORDER BY iti.id LIMIT 1`,
-        [taskId, c.product_id],
-      )
-    if (priceRow && Number(priceRow.unit_price) > 0) {
-      purchasePrice = Number(priceRow.unit_price)
-      // 移动加权成本跨仓串行化：product_items 行锁是「同商品」的串行化点（先锁它）。
-      // globalQty 必须用锁定读（FOR UPDATE 当前读），否则 REPEATABLE READ 下是快照读——
-      // 两个仓同时上架同一商品时各自读到不含对方的过期 globalQty，后写覆盖先写，avg_cost 算错
-      // （审计 2026-08-30）。锁定读会与「另一仓同时上架同一商品」的极端交错成环，
-      // InnoDB 死锁检测自动回滚一方（1213），PDA 上架有幂等键 + 重试兜底，代价是偶发重试。
+    // 原箱来源贡献同时决定上架明细、预计绑定兑现、入库单价与移动加权成本。
+    // 任务锁串行化本单明细；商品X锁已经在维度/容器锁之前取得，跨仓均价仍串行。
+    const [itemRows] = await conn.query(
+      `SELECT iti.*, poi.unit_price
+       FROM inbound_task_items iti
+       JOIN purchase_order_items poi ON poi.id = iti.purchase_item_id
+       WHERE iti.task_id = ? ORDER BY iti.id`,
+      [taskId],
+    )
+    const contribution = buildPutawayContributions(c, itemRows)
+    const purchasePrice = contribution.purchasePrice
+    if (purchasePrice != null) {
       const [[prod]] = await conn.query(
         'SELECT avg_cost, cost_price FROM product_items WHERE id = ? FOR UPDATE',
         [c.product_id],
@@ -224,12 +210,10 @@ async function putaway(taskId, { containerId, locationId, deviatedFromSuggestion
            FOR UPDATE`,
           [c.product_id],
         )
-        const prevQty = Math.max(0, Number(globalQty) - qty)
-        const oldAvg = Number(prod.avg_cost ?? prod.cost_price ?? 0) || 0
-        const newAvg = prevQty > 0
-          ? (prevQty * oldAvg + qty * purchasePrice) / (prevQty + qty)
-          : purchasePrice
-        await conn.query('UPDATE product_items SET avg_cost = ? WHERE id = ?', [newAvg.toFixed(4), c.product_id])
+        // Keep the original positive-inbound moving-average policy. Source products
+        // retain six-decimal amount precision until the four-decimal final average.
+        const newAvg = movingAverageCost({ globalQty, oldAverage: prod.avg_cost ?? prod.cost_price ?? 0, contribution })
+        await conn.query('UPDATE product_items SET avg_cost = ? WHERE id = ?', [newAvg, c.product_id])
       }
     }
 
@@ -253,42 +237,17 @@ async function putaway(taskId, { containerId, locationId, deviatedFromSuggestion
       operatorName: operator?.realName || null,
     })
 
-    // 上架量回写：优先落到容器自己携带的归属明细行，剩余部分才退回 first-fit（审计 P1-4）。
-    // 收货时已经知道这箱货属于哪张采购单的哪一行，再按 id 顺序猜一遍会让 putaway_qty 落到
-    // 错误的明细上，而结算是 SUM(putaway_qty * unit_price)——单价一错，应付金额就与合同不符。
-    // 归属行填不下的部分（跨行的箱、被撤回收货改动过的行）走兜底，总量始终守恒。
-    let putLeft = qty
-    const [itemRows] = await conn.query(
-      'SELECT * FROM inbound_task_items WHERE task_id = ? ORDER BY id',
-      [taskId],
-    )
-    const applyToLine = async (row, amount) => {
-      if (amount <= 0) return 0
-      await conn.query(
-        'UPDATE inbound_task_items SET putaway_qty = putaway_qty + ? WHERE id = ?',
-        [amount, row.id],
-      )
+    if (contribution.allocations.length) {
+      const clauses = contribution.allocations.map(() => 'WHEN ? THEN ?').join(' ')
+      await conn.query(`UPDATE inbound_task_items SET putaway_qty = putaway_qty + CASE id ${clauses} END
+        WHERE task_id = ? AND id IN (?)`,
+      [...contribution.allocations.flatMap(part => [part.itemId, part.qty]), taskId, contribution.allocations.map(part => part.itemId)])
+    }
+    for (const part of contribution.allocations) {
+      const row = itemRows.find(item => Number(item.id) === part.itemId)
       if (row.purchase_item_id != null) {
-        await reduceExpectedBindings(conn, { purchaseItemId: row.purchase_item_id }, amount)
+        await reduceExpectedBindings(conn, { purchaseItemId: row.purchase_item_id }, part.qty)
       }
-      row.putaway_qty = Number(row.putaway_qty) + amount
-      putLeft -= amount
-      return amount
-    }
-
-    if (ownerItemId) {
-      const ownerRow = itemRows.find(row => Number(row.id) === ownerItemId)
-      if (ownerRow && Number(ownerRow.product_id) === Number(c.product_id)) {
-        const cap = Number(ownerRow.received_qty) - Number(ownerRow.putaway_qty)
-        await applyToLine(ownerRow, Math.min(Math.max(0, cap), putLeft))
-      }
-    }
-
-    for (const row of itemRows) {
-      if (Number(row.product_id) !== Number(c.product_id) || putLeft <= 0) continue
-      const cap = Number(row.received_qty) - Number(row.putaway_qty)
-      if (cap <= 0) continue
-      await applyToLine(row, Math.min(cap, putLeft))
     }
 
     await tryFinishTask(conn, taskId)

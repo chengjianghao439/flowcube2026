@@ -180,8 +180,8 @@ export default function ProductsPage() {
     { key:'unit', title:'单位', width:140, render:(_,r)=>{
       const aux=(r.units||[]).filter(u=>!u.isBase)
       return <div className="flex flex-wrap items-center gap-1"><span>{r.unit}</span>{aux.map(u=><span key={u.unitName} className="rounded bg-muted px-1 text-xs text-muted-foreground tabular-nums">{u.unitName}×{u.conversionRate}</span>)}{
-        // 默认是允许小数，只标出被限制的商品——「哪些不能按小数卖」是要一眼看出来的例外
-        r.allowDecimalQty === false && <span className="rounded bg-warning/10 px-1 text-xs text-warning-ink">只能整数</span>}</div>
+        // 展示当前出货数量规则；存量商品的设置不因新建默认值改变。
+        r.allowDecimalQty === false && <span className="rounded bg-warning/10 px-1 text-xs text-warning-ink">整数数量</span>}</div>
     }},
     { key:'supplierName', title:'供应商', width:140, render:v=>(v as string)||'-' },
     { key:'isActive', title:'状态', width:70, render:(_,r)=><SoftStatusLabel label={r.isActive?'启用':'停用'} tone={activeTone(r.isActive)} /> },

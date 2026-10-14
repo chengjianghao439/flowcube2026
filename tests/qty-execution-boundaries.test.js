@@ -18,6 +18,7 @@ function service(relative, { allowDecimal = 1, status = 2, allowWrites = false, 
     async query(sql,params) {
       if (/^\s*(INSERT|UPDATE|DELETE)/i.test(sql)) { writes.push(sql); if (!allowWrites) throw new Error('unexpected business write'); if(sql.includes('SET received_qty = received_qty + ?'))returnItem.received_qty=Number((returnItem.received_qty+params[0]).toFixed(2));return [{ affectedRows: 1 }] }
       reads.push(sql)
+      if(sql==='SELECT warehouse_id FROM return_tasks WHERE id=? AND deleted_at IS NULL')return [[{warehouse_id:1}]]
       if (sql.includes('product_items')) return [[{ id: 1, name: '测试商品', allow_decimal_qty: allowDecimal }]]
       if (sql.includes('return_task_items')) return [[{...returnItem}]]
       if (sql.includes('inventory_check_items')) return [[{ id: 1, product_id: 1, book_qty: 2 }]]
@@ -52,18 +53,20 @@ for (const [label, value, code, allowDecimal] of [
   ['两箱小数合计整数', 0.5, 'QTY_INTEGER_REQUIRED', 0],
 ]) {
   for (const kind of ['inbound', 'return', 'stockcheck']) {
+    const checkedValue = value
+    const checkedCode = code
     test(`${kind} ${label}在业务写入前拒绝`, async () => {
       const files = { inbound: 'modules/inbound-tasks/inbound-tasks.command.js', return: 'modules/return-tasks/return-tasks.service.js', stockcheck: 'modules/stockcheck/stockcheck.service.js' }
       const { api, conn, writes } = service(files[kind], { allowDecimal })
       const result = kind === 'inbound' ? api.receive(1, { productId: 1, packages: [{ qty: value }, { qty: value }] })
-        : kind === 'return' ? api.receive(conn, 1, { pdaWarehouseId: 1, productId: 1, packages: [{ qty: value }, { qty: value }] })
+        : kind === 'return' ? api.receive(conn, 1, { pdaWarehouseId: 1, productId: 1, packages: [{ qty: checkedValue }, { qty: checkedValue }] })
           : api.saveItemContainerScans(1, 1, [{ barcode: 'I1', countedQty: value }, { barcode: 'I2', countedQty: value }], { userId: 1 }, null, null, 1)
-      await assert.rejects(result, { code })
+      await assert.rejects(result, { code: checkedCode })
       assert.deepEqual(writes, [])
     })
   }
 }
-test('退货质检分别校验合格与不合格量，不允许小数相加绕过整数策略', async () => {
+test('退货质检分别校验合格与不合格量，不允许合计整数掩盖逐项小数', async () => {
   const { api, conn, writes } = service('modules/return-tasks/return-tasks.service.js', { allowDecimal: 0, status: 3 })
   await assert.rejects(api.check(conn, 1, { pdaWarehouseId: 1, productId: 1, passedQty: 0.5, rejectedQty: 0.5 }), { code: 'QTY_INTEGER_REQUIRED' })
   assert.deepEqual(writes, [])

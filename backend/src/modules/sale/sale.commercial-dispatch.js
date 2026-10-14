@@ -1,7 +1,7 @@
 'use strict'
 const AppError = require('../../utils/AppError')
 const { assertInScope } = require('../../utils/warehouseScope')
-const { assertQtyScale } = require('../../utils/qtyPrecision')
+const { assertQtyScale, assertQtyPrecision, loadQtyPolicies, assertQtyPrecisionWith } = require('../../utils/qtyPrecision')
 const { roundQty } = require('../../utils/unitConversion')
 const { loadGroups } = require('./sale.commercial-store')
 const { assertOutboundPhysicalAvailable } = require('../../engine/inventoryEngine')
@@ -21,12 +21,15 @@ async function select(conn, order, requested, scope) {
     if (!(qty>0) || (g.kind==='kit' && !Number.isSafeInteger(qty)) || qty>roundQty(g.targetQty-(used.get(g.id)||0))) throw new AppError('本批数量超过可发数量；套单须按整数套发货',400,'SALE_COMMERCIAL_DISPATCH_QTY')
     return { ...g,dispatchQty:qty }
   })
+  const policies=await loadQtyPolicies(conn, selected.flatMap(g => g.components.map(c => c.productId)))
   const vector=new Map()
   for (const g of selected) for (const c of g.components) {
     const qty=g.kind==='kit'?roundQty(c.baseQty*g.dispatchQty):g.dispatchQty
+    assertQtyPrecisionWith(policies.get(Number(c.productId)),qty,'本批配件发货数量')
     const old=vector.get(c.saleItemId)||{ id:c.saleItemId,qty:0,productId:c.productId,productName:c.productName,warehouseId:g.warehouseId }
     old.qty=roundQty(old.qty+qty);vector.set(c.saleItemId,old)
   }
+  await assertQtyPrecision(conn, [...vector.values()].map(i => ({productId:i.productId,qty:i.qty,label:'本批物理发货数量'})))
   for (const i of [...vector.values()].sort((a,b)=>a.productId-b.productId || a.warehouseId-b.warehouseId)) await assertOutboundPhysicalAvailable(conn,{ productId:i.productId,productName:i.productName,warehouseId:i.warehouseId,qty:i.qty,reservationRefType:'sale_order',reservationRefId:order.id })
   return { selected,items:[...vector.values()].map(i=>({id:i.id,qty:i.qty})) }
 }

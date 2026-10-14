@@ -7,6 +7,8 @@ export interface ScanLog {
 }
 
 export interface SaleOrderItem {
+  /** 原单出货数量规则；旧单未提供时允许按原事实履约。 */
+  allowDecimalQty?: boolean
   id: number
   productId: number
   productCode: string
@@ -117,6 +119,8 @@ export interface SaleOrder {
   executionAdjustmentBlocked?: boolean
   /** 仍有未派发到仓库任务的明细行 → 履约中可「继续发货」 */
   hasUndispatchedItems?: boolean
+  /** 原需求仍有未占部分；执行中补占只增加该差额，不回退订单阶段 */
+  hasUnreservedItems?: boolean
   /** partial_ship_close 表示部分发货后取消剩余、以实发结案 */
   closedReason?: string | null
   /** 回款（应收）：独立于订单状态展示，月结/现结账期不同不能混进状态徽章。
@@ -198,6 +202,7 @@ export interface ReserveWarehouseOption {
 
 /** 占库预览（GET /sale/:id/reserve-preview）：逐行商品 + 各仓可用量，供占库弹窗选仓库/数量 */
 export interface ReservePreviewItem {
+  allowDecimalQty?: boolean
   itemId: number
   productId: number
   productCode: string

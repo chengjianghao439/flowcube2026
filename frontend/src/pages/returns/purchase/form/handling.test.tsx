@@ -10,7 +10,7 @@ import { useAuthStore } from '@/store/authStore'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { SectionVisibilityContext } from '@/components/layout/SectionVisibilityContext'
 const original = client.defaults.adapter, unknown: string[] = [], calls: string[] = []
-vi.mock('@/components/finder', async () => { const actual = await vi.importActual<typeof import('@/components/finder')>('@/components/finder'); return { ...actual, ProductFinder: () => null, CustomerFinder: () => null } })
+vi.mock('@/components/finder', async () => { const actual = await vi.importActual<typeof import('@/components/finder')>('@/components/finder'); return { ...actual, ProductFinder: () => null, CustomerFinder: () => null, SupplierFinder: () => null } })
 beforeEach(() => { Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true }); localStorage.clear(); unknown.length = 0; calls.length = 0; setApiClientBaseURL('/a'); useAuthStore.getState().login('fixture', null, { id: 9, username: 'fixture', realName: 'fixture', roleId: 2, roleName: 'fixture', permissions: Object.values(P) }); client.defaults.adapter = async c => { calls.push(c.url!); let data: unknown; if(c.method === 'get' && ['/warehouses/active','/carriers/active'].includes(c.url!)) data = []; else if(c.method === 'get' && ['/disposals','/disposals/handling-sources'].includes(c.url!)) data = { list: [], pagination: { page: 1, pageSize: 20, total: 0 } }; else { unknown.push(c.method+' '+c.url); throw Error('unexpected endpoint') }; return { config: c, status:200,statusText:'OK',headers:{},data:{success:true,data} } } })
 afterEach(() => { client.defaults.adapter = original; localStorage.clear(); expect(unknown).toEqual([]) })
 async function page(path: string, run: (host: HTMLElement, show: (active: boolean) => Promise<void>) => void | Promise<void>) {
@@ -134,5 +134,49 @@ test.each(['success', 'error'])('真实PO%s隐藏恢复后旧响应不回填，�
     expect(load.disabled).toBe(true)
     await act(async () => settleCurrent()); await act(async () => { await new Promise(r => setTimeout(r, 10)) })
     expect(host.textContent).toContain('原供应商'); expect(reads).toBe(2); expect(posts).toEqual([])
+  })
+})
+
+test('PROC08 普通来源同SKU分行部分退，零数量不提交，原单价和身份保持', async () => {
+  posts.length=0;actualAdapter()
+  await page('/returns/purchase/new',async host=>{
+    await input(host.querySelector<HTMLInputElement>('[placeholder="输入原单号"]')!,'PO31');await click('载入')
+    const quantities=[...host.querySelectorAll<HTMLInputElement>('[placeholder="数量"]')]
+    expect(quantities).toHaveLength(2)
+    expect(quantities[1].disabled).toBe(false);expect(quantities[1].max).toBe('9')
+    const prices=[...host.querySelectorAll<HTMLInputElement>('[placeholder="单价"]')]
+    expect(prices.every(p=>p.disabled)).toBe(true);expect(prices[1].value).toBe('4.1234')
+    await input(quantities[0],'0');await input(quantities[1],'5')
+    expect(host.textContent).toContain('¥20.62')
+    await click('创建退货单')
+    expect(posts).toHaveLength(1)
+    expect(posts[0].data).toMatchObject({purchaseOrderId:31,purchaseOrderNo:'PO31',supplierId:7,warehouseId:8,items:[{sourceItemId:102,productId:3,unit:'个',quantity:5,unitPrice:4.1234}]})
+    expect((posts[0].data as {items:unknown[]}).items).toHaveLength(1)
+  })
+})
+test('PROC08 普通原行可移除；全零、负量和超余量不创建，精度限制不放宽',async()=>{
+  posts.length=0;actualAdapter()
+  await page('/returns/purchase/new',async host=>{
+    await input(host.querySelector<HTMLInputElement>('[placeholder="输入原单号"]')!,'PO31');await click('载入')
+    const remove=host.querySelector<HTMLButtonElement>('[aria-label="移除第 1 行退货明细"]')!
+    expect(remove.disabled).toBe(false);await act(async()=>remove.click())
+    const quantity=host.querySelector<HTMLInputElement>('[placeholder="数量"]')!
+    expect(quantity.step).toBe('0.01')
+    await input(quantity,'0');await click('创建退货单');expect(posts).toEqual([])
+    await input(quantity,'10');await click('创建退货单');expect(posts).toEqual([])
+    await input(quantity,'-1');await click('创建退货单');expect(posts).toEqual([])
+    await input(quantity,'1.001');expect(quantity.value).toBe('-1');expect(posts).toEqual([])
+  })
+})
+test('PROC08 整数商品继续拒绝小数退货输入',async()=>{
+  posts.length=0;actualAdapter()
+  const fallback=client.defaults.adapter
+  if(typeof fallback!=='function')throw Error('exact adapter required')
+  client.defaults.adapter=async c=>c.method==='get'&&c.url==='/products/qty-policies'?reply(c,[{id:3,allowDecimal:false}]):fallback(c)
+  await page('/returns/purchase/new',async host=>{
+    await input(host.querySelector<HTMLInputElement>('[placeholder="输入原单号"]')!,'PO31');await click('载入')
+    const quantity=host.querySelector<HTMLInputElement>('[placeholder="数量"]')!
+    expect(quantity.step).toBe('1');await input(quantity,'2.5');expect(quantity.value).toBe('10')
+    expect(posts).toEqual([])
   })
 })

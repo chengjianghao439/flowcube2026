@@ -1,4 +1,5 @@
 const handlingGuards = require('../disposal/disposal.handling.target-guards')
+const { assertQtyPrecision } = require('../../utils/qtyPrecision')
 const { commitFulfillment } = require('../fulfillment/fulfillment.refresh')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
@@ -64,8 +65,11 @@ async function assertCreditWithinLimit(conn, customerId, thisOrderAmount, operat
 async function shipWithinTransaction(conn, id, operator, saleData, { requestKey, scopeWarehouseIds = null, pdaWarehouseId = null, taskIdentity, purchaseReturnIdentity } = {}) {
   const saleOrderId = saleData?.saleOrderId ?? null
   let { warehouseId, items, totalAmount } = saleData || {}
+  // The wrapper's early identity check is repeated for direct internal callers;
+  // original PO/PR/WT locks and locked task-scope checks remain below.
+  if (purchaseReturnIdentity) assertTaskScope(purchaseReturnIdentity, { scopeWarehouseIds, pdaWarehouseId })
   const lockedPurchaseReturn = purchaseReturnIdentity
-    ? await lockPurchaseReturn(conn, purchaseReturnIdentity, scopeWarehouseIds) : null
+    ? await lockPurchaseReturn(conn, purchaseReturnIdentity, scopeWarehouseIds, { cashProof: true }) : null
 
   // 加锁顺序统一为「先销售单、后仓库任务」，与 sale.cancel / requestAdjustment(SO→WT) 一致，
   // 避免 ship(原 WT→SO) 与它们并发同一订单+任务时 ABBA 死锁（审计 P2）。这里只「加锁」拿 SO 快照，
@@ -166,6 +170,11 @@ async function shipWithinTransaction(conn, id, operator, saleData, { requestKey,
   // 两类「退货出库」的共同口径：都不经过分拣/复核/打包/打印，也不携带销售预占
   const isReturnOut = isPurchaseReturn || isSaleReturnReverse
 
+  {
+    const [shipmentRows] = await conn.query('SELECT product_id,product_name,picked_qty,allow_decimal_qty_snapshot FROM warehouse_task_items WHERE task_id=? ORDER BY id FOR UPDATE', [id])
+    await assertQtyPrecision(conn, shipmentRows.map(item => ({ productId: item.product_id,
+      productName: item.product_name, qty: item.picked_qty, label: '实际出库数量' })))
+  }
   await assertTaskPickScanClosure(conn, id)
   // 返货要求「整批退回客户」：预锁容器里有多少就必须扫多少（见 assertSaleReturnReverseClosure）
   if (isSaleReturnReverse) {
@@ -187,6 +196,10 @@ async function shipWithinTransaction(conn, id, operator, saleData, { requestKey,
       throw new AppError(`关联销售单 ${saleRow.order_no} 已完成出库，请勿重复操作`, 400)
     }
   }
+
+  // Ordinary net basis/source lock must precede every stock/container lock.
+  const ordinaryReturnContext = saleRow && saleRow.commercial_model !== 'kit-v1'
+    ? await require('../sale/sale.ordinary-return-money').prepareShipment(conn, saleRow) : null
 
   // 出库环节信用复查（审计 4.8）：占库时校验过一次，但占库到出库之间
   // 客户可能又开了新单、或未清应收变多，额度可能已经超限——出库确认是货物
@@ -232,6 +245,7 @@ async function shipWithinTransaction(conn, id, operator, saleData, { requestKey,
     await saleSvc.syncShippedByWarehouseTaskWithinTransaction(conn, saleOrderId, {
       taskId: Number(id),
       taskNo: taskRow.task_no,
+      ordinaryReturnContext,
     })
   }
 

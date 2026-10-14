@@ -193,18 +193,18 @@ function FormView({ tabPath, tabKey, handling }: { tabPath: string; tabKey: stri
   }
   const removeItem = (k: number) => { if (!handling) setItems(p => p.filter(i => i._key !== k)) }
   const updateItem = (k: number, field: string, val: string | number) => {
-    if (handling && (!handlingCurrent() || field !== 'quantity')) return
+    if ((boundSource && field !== 'quantity') || (handling && (!handlingCurrent() || field !== 'quantity'))) return
     setItems(p => p.map(i => (i._key === k ? { ...i, [field]: val } : i)))
   }
 
   function handleSupplierConfirm(result: FinderResult) {
-    if (locked) return
+    if (locked || boundSource) return
     setSupplier(result)
     setSupplierError(false)
   }
 
   function handleFinderConfirm(product: ProductFinderResult) {
-    if (handling) return
+    if (handling || boundSource) return
     if (finderItemKey === null) return
     const k = finderItemKey
     setItems(prev => prev.map(i => i._key === k
@@ -314,10 +314,11 @@ function FormView({ tabPath, tabKey, handling }: { tabPath: string; tabKey: stri
     setWarehouseError(missingWarehouse)
     if (missingSupplier) { toast.warning('请选择供应商'); return }
     if (missingWarehouse) { toast.warning('请选择仓库'); return }
-    if (!items.length) { toast.warning('请添加至少一条退货明细'); return }
-    const badItemKeys = new Set(items.filter(i => !i.productId || i.quantity <= 0).map(i => i._key))
+    const selectedItems = boundSource && !handling ? items.filter(i => i.quantity !== 0) : items
+    if (!selectedItems.length) { toast.warning('请填写至少一条正数退货明细'); return }
+    const badItemKeys = new Set(selectedItems.filter(i => !i.productId || !Number.isFinite(i.quantity) || i.quantity <= 0 || (boundSource && i.quantity > (i.remainingQty ?? 0))).map(i => i._key))
     setInvalidItemKeys(badItemKeys)
-    if (badItemKeys.size) { toast.warning('请完整填写所有明细'); return }
+    if (badItemKeys.size) { toast.warning('请核对退货数量，不得超过原行剩余可退数量'); return }
 
     try {
       assertKitReadOwner(owner)
@@ -328,7 +329,7 @@ function FormView({ tabPath, tabKey, handling }: { tabPath: string; tabKey: stri
         purchaseOrderId: boundSource ? boundSource.id : undefined,
         purchaseOrderNo: boundSource?.orderNo || orderNo.trim() || undefined,
         remark: remark.trim() || undefined,
-        items: items.map(({ _key, originalQty, returnedQty, remainingQty, units, ...r }) => r),
+        items: selectedItems.map(({ _key, originalQty, returnedQty, remainingQty, units, ...r }) => r),
         ...(handling?.source.data ? { disposalSource: { sourceId: handling.source.data.source.id, expectedRevision: handling.source.data.source.revision, operationUuid: handling.operationUuid } } : {}),
       }
       const res = handling?.source.data
@@ -427,7 +428,7 @@ function FormView({ tabPath, tabKey, handling }: { tabPath: string; tabKey: stri
         {!boundSource && <p className="mt-3 text-xs text-muted-foreground">本系统原单请填写单号并载入；无本系统原单的旧系统退货，可手工选择供应商、仓库与商品填写。</p>}
         {boundSource && (
           <div className="mt-3 rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-            已锚定原单 {boundSource.orderNo}。退货单价默认取原单真实成交价，数量默认取剩余可退数量。
+            已锚定原单 {boundSource.orderNo}。商品、单位和原成交价只读；可按行填写本次退货数量，填 0 或移除表示本次不退，数量不得超过剩余可退量。
           </div>
         )}
       </SectionCard>
@@ -458,7 +459,7 @@ function FormView({ tabPath, tabKey, handling }: { tabPath: string; tabKey: stri
                 </tr>
               </thead>
               <tbody>
-                {items.map(item => (
+                {items.map((item, index) => (
                   <Fragment key={item._key}>
                     <tr className={cn('border-border/40', (item.originalQty == null && item.returnedQty == null) && 'border-b')}>
                       <ProductIdentityCells product={item} nameContent={<button
@@ -488,9 +489,9 @@ function FormView({ tabPath, tabKey, handling }: { tabPath: string; tabKey: stri
                       </td>
                       <td className="py-2.5 pr-2">
                         <Input quantity
-                          type="number" min="0.01" step={qtyStep(allowDecimalOf(item.productId))} placeholder="数量"
+                          type="number" min={boundSource && !handling ? '0' : '0.01'} max={boundSource ? item.remainingQty : undefined} step={qtyStep(allowDecimalOf(item.productId))} placeholder="数量"
+                          aria-label={`第 ${index + 1} 行退货数量`}
                           value={item.quantity}
-                          disabled={!!boundSource && !handling}
                           onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'quantity', +e.target.value)}
                           className="text-right text-sm"
                         />
@@ -510,7 +511,7 @@ function FormView({ tabPath, tabKey, handling }: { tabPath: string; tabKey: stri
                       </td>
                       <td className="py-2.5 text-right font-medium tabular-nums">{money(item.quantity * item.unitPrice)}</td>
                       <td className="py-2.5 text-center">
-                        <Button type="button" size="sm" variant="ghost" disabled={!!boundSource} className="h-8 w-9 p-0 text-muted-foreground hover:text-destructive-ink" onClick={() => removeItem(item._key)}>✕</Button>
+                        <Button type="button" size="sm" variant="ghost" disabled={!!handling} aria-label={`移除第 ${index + 1} 行退货明细`} className="h-8 w-9 p-0 text-muted-foreground hover:text-destructive-ink" onClick={() => removeItem(item._key)}>✕</Button>
                       </td>
                     </tr>
                     {(item.originalQty != null || item.returnedQty != null) && (

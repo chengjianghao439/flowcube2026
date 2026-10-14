@@ -1,3 +1,4 @@
+const { assertQtyPrecision } = require('../../utils/qtyPrecision')
 const ExcelJS = require('exceljs')
 const { parseBudgetedRows } = require('./importBudget')
 const { pool } = require('../../config/db')
@@ -7,6 +8,7 @@ const { MOVE_TYPE, writeInventoryLog } = require('../../engine/inventoryEngine')
 const { adjustContainerStock, SOURCE_TYPE, getStockProjection } = require('../../engine/containerEngine')
 const { SETTLEMENT_TYPE, normalizeTermsDays } = require('../../constants/settlementType')
 const { normalizePartyProfile } = require('../../utils/partyProfile')
+const { scopeFilter } = require('../../utils/warehouseScope')
 
 // 仅导入入口使用严格枚举；历史记录读取仍由 settlementType.normalizeSettlementType 兼容旧值。
 function parseImportedSettlementType(value) {
@@ -132,12 +134,14 @@ async function importProducts({ fileBuffer }) {
   }
 }
 
-async function buildStockTemplate() {
+async function buildStockTemplate(scopeWarehouseIds = null) {
   const [products] = await pool.query(
     'SELECT code, name, unit FROM product_items WHERE deleted_at IS NULL ORDER BY code LIMIT 100',
   )
+  const scope = scopeFilter(scopeWarehouseIds, 'id')
   const [warehouses] = await pool.query(
-    'SELECT id, name FROM inventory_warehouses WHERE deleted_at IS NULL AND is_active=1',
+    `SELECT id, name FROM inventory_warehouses WHERE deleted_at IS NULL AND is_active=1${scope.sql}`,
+    scope.params,
   )
 
   const stockRows = [
@@ -218,12 +222,13 @@ async function importSingleStockRow({
       return { ok: false, error: `第${rowIndex + 2}行：库存数量无效` }
     }
 
+    await assertQtyPrecision(connection, [{ productId: product.id, qty, label: '导入库存数量' }])
     const { quantity: current } = await getStockProjection(connection, {
       productId: product.id,
       warehouseId: +warehouseId,
       lock: true,
     })
-    const diff = target - current
+    const diff = Math.round((target - current) * 100) / 100
     if (diff === 0) {
       await connection.commit()
       return { ok: true }

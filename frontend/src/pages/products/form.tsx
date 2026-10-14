@@ -21,6 +21,9 @@ import { createRequestKey } from '@/lib/requestKey'
 import { qtyStep } from '@/lib/qtyStep'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { useDirtyGuard } from '@/hooks/useDirtyGuard'
+import { usePermission } from '@/hooks/usePermission'
+import { useGlobalPolicyWriteCapability } from '@/hooks/useGlobalPolicyWriteCapability'
+import { PERMISSIONS } from '@/lib/permission-codes'
 import { ActionBar } from '@/components/shared/ActionBar'
 import { EditModeBadge, UnsavedBadge } from '@/components/shared/EditModeBadge'
 import { useProduct, useCreateProduct, useUpdateProduct } from '@/hooks/useProducts'
@@ -32,7 +35,7 @@ import type { FinderResult } from '@/types/finder'
 
 const DEFAULT_RATES = { A: 10, B: 20, C: 30, D: 40 }
 type AuxUnit = { unitName: string; conversionRate: string }
-const EMPTY_FORM = { name: '', categoryId: null as number | null, supplierId: null as number | null, unit: '', spec: '', color: '', costPrice: '' as string, salePriceA: '' as string, salePriceB: '' as string, salePriceC: '' as string, salePriceD: '' as string, remark: '', articleNumber: '', batchManaged: false, allowDecimalQty: true, shelfLifeDays: '' as string, safetyStock: '' as string, reorderPoint: '' as string, isActive: true, units: [] as AuxUnit[] }
+const EMPTY_FORM = { name: '', categoryId: null as number | null, supplierId: null as number | null, unit: '', spec: '', color: '', costPrice: '' as string, salePriceA: '' as string, salePriceB: '' as string, salePriceC: '' as string, salePriceD: '' as string, remark: '', articleNumber: '', batchManaged: false, allowDecimalQty: false, shelfLifeDays: '' as string, safetyStock: '' as string, reorderPoint: '' as string, isActive: true, units: [] as AuxUnit[] }
 
 function profitRate(cost: number, sale: number): number | null {
   if (sale <= 0 || !Number.isFinite(cost) || !Number.isFinite(sale)) return null
@@ -48,6 +51,8 @@ export default function ProductFormPage() {
   const isNew = tabPath === '/products/new'
   const editId = isNew ? null : Number(tabPath.split('/').pop())
   const isEdit = !!editId
+  const { can } = usePermission()
+  const globalPolicy = useGlobalPolicyWriteCapability(can(isNew ? PERMISSIONS.PRODUCT_CREATE : PERMISSIONS.PRODUCT_UPDATE))
 
   const navigate = useNavigate()
   const [submitting, setSubmitting] = useState(false)
@@ -182,8 +187,10 @@ export default function ProductFormPage() {
       batchManaged: form.batchManaged,
       allowDecimalQty: form.allowDecimalQty,
       shelfLifeDays: form.shelfLifeDays !== '' ? Number(form.shelfLifeDays) : null,
-      safetyStock: form.safetyStock !== '' ? Number(form.safetyStock) : null,
-      reorderPoint: form.reorderPoint !== '' ? Number(form.reorderPoint) : null,
+      ...(globalPolicy.isAllowed() ? {
+        safetyStock: form.safetyStock !== '' ? Number(form.safetyStock) : null,
+        reorderPoint: form.reorderPoint !== '' ? Number(form.reorderPoint) : null,
+      } : {}),
       salePriceA: toPrice(form.salePriceA),
       salePriceB: toPrice(form.salePriceB),
       salePriceC: toPrice(form.salePriceC),
@@ -366,11 +373,11 @@ export default function ProductFormPage() {
             <Input type="number" step="0.01" min="0.01" value={form.costPrice} onChange={e => set('costPrice', e.target.value)} disabled={submitting} />
           </div>
           <div className="space-y-1.5">
-            <Label>数量小数</Label>
+            <Label>数量规则</Label>
             <label className="flex h-10 items-center gap-2 text-sm">
               <input type="checkbox" className="h-4 w-4" checked={form.allowDecimalQty}
                 onChange={e => set('allowDecimalQty', e.target.checked)} disabled={submitting} />
-              <span className="text-muted-foreground">{form.allowDecimalQty ? '最多两位小数（如 1.25 公斤）' : '只能整数（如 3 个、2 台）'}</span>
+              <span>允许小数数量</span>
             </label>
           </div>
           <div className="space-y-1.5">
@@ -459,18 +466,18 @@ export default function ProductFormPage() {
 
       {editId && <><label className="flex flex-wrap items-center gap-2 text-sm"><span className="text-muted-foreground">变更原因（选填）</span><Input value={changeReason} onChange={e => setChangeReason(e.target.value)} maxLength={500} disabled={submitting} className="h-9 min-w-48 flex-1" placeholder="本次改价的说明" /></label><ProductPriceHistory id={editId} /></>}
       <Section title="库存策略">
-        <p className="mb-3 text-xs text-muted-foreground">通用默认补货基准（对该商品所有仓库生效）。留空表示不启用；某仓需单独设置可在「报表 → 补货建议」页按仓覆盖。</p>
+        <p className="mb-3 text-xs text-muted-foreground">{globalPolicy.allowed ? '全局默认（所有仓库）。留空不启用；按仓覆盖请到「补货建议」。' : '全局默认只读；仅不限仓管理账号可修改。'}</p>
         <div className="grid grid-cols-2 gap-x-6 gap-y-4">
           <div className="space-y-1.5">
             <Label>安全库存</Label>
-            <Input quantity type="number" step={qtyStep(form.allowDecimalQty)} min="0" value={form.safetyStock}
-              onChange={e => set('safetyStock', e.target.value)} disabled={submitting}
+            <Input quantity type="number" step={qtyStep(form.allowDecimalQty)} min="0" value={globalPolicy.allowed ? form.safetyStock : isEdit ? product?.safetyStock ?? '' : ''}
+              onChange={e => set('safetyStock', e.target.value)} disabled={submitting || !globalPolicy.allowed}
               placeholder="低于此为紧急缺货风险" />
           </div>
           <div className="space-y-1.5">
             <Label>补货点</Label>
-            <Input quantity type="number" step={qtyStep(form.allowDecimalQty)} min="0" value={form.reorderPoint}
-              onChange={e => set('reorderPoint', e.target.value)} disabled={submitting}
+            <Input quantity type="number" step={qtyStep(form.allowDecimalQty)} min="0" value={globalPolicy.allowed ? form.reorderPoint : isEdit ? product?.reorderPoint ?? '' : ''}
+              onChange={e => set('reorderPoint', e.target.value)} disabled={submitting || !globalPolicy.allowed}
               placeholder="可用+在途 低于此即出现在补货建议" />
           </div>
         </div>

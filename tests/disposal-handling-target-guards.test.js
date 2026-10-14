@@ -8,6 +8,7 @@ const vm = require('node:vm')
 const base = path.resolve(__dirname, '../backend/src')
 const AppError = require('../backend/src/utils/AppError')
 const saleEditBaseline = require('../backend/src/modules/sale/sale.edit-baseline')
+const ordinaryMoney = require('../backend/src/modules/sale/sale.ordinary-return-money')
 const sqlIdentifier = require('../backend/src/utils/sqlIdentifier')
 const { z } = require('../backend/node_modules/zod')
 function load(file, deps) {
@@ -31,7 +32,7 @@ const wtRules = load('constants/warehouseTaskStatus.js', { '../utils/AppError': 
 const rules = load('modules/disposal/disposal.handling.rules.js', { 'node:crypto': require('node:crypto'), '../../utils/AppError': AppError, '../../utils/qtyPrecision': qty })
 const guards = lazy(() => load('modules/disposal/disposal.handling.target-guards.js', { '../../utils/AppError': AppError, '../../utils/warehouseScope': scope, '../../utils/qtyPrecision': qty, './disposal.handling.rules': rules }))
 const handlingContracts = lazy(() => load('modules/disposal/disposal.handling.contracts.js', { zod: { z }, '../../utils/AppError': AppError, './disposal.handling.rules': rules }))
-const saleContracts = load('modules/sale/sale.contracts.js', { zod: { z }, '../../utils/AppError': AppError, '../../utils/qtyPrecision': qty, '../disposal/disposal.handling.contracts': handlingContracts })
+const saleContracts = load('modules/sale/sale.contracts.js', { '../../utils/cashMoney': require('../backend/src/utils/cashMoney'), zod: { z }, '../../utils/AppError': AppError, '../../utils/qtyPrecision': qty, '../disposal/disposal.handling.contracts': handlingContracts })
 const actor = { userId: 9, realName: 'offline' }
 function project(sql, row) {
   const columns = sql.match(/^SELECT (.*?) FROM /)?.[1]
@@ -53,8 +54,15 @@ function fixture(options = {}) {
     taskItem: { id: 601, task_id: 21, product_id: 3, product_name: '商品3', unit: '个', required_qty: 2, picked_qty: 2 },
     extraItems: options.hiddenExtra ? [{ id: 502, order_id: 81, product_id: 4, product_name: '额外商品', warehouse_id: 8, unit: '个', quantity: 1, reserved_qty: options.hiddenExtra === 'unreserved' ? 0 : 1, dispatched_qty: options.hiddenExtra === 'unreserved' ? 0 : 1 }] : [],
     durableEvents: [], changeEvents: [], requestFingerprint: null, genericDone: false,
+    receivable: { id: 91, total_amount: (options.shipped || 0) * 2, paid_amount: 0, balance: (options.shipped || 0) * 2 },
   }
   let backup
+  // This synthetic order has an immutable, exact cents basis frozen before its
+  // first shipment. Exercise the real money guard rather than stubbing it out.
+  state.head.cash_policy = ordinaryMoney.CASH_POLICY
+  const basis = ordinaryMoney.deriveBasis(state.head, [state.item], 'first_real_ship')
+  state.moneyBasis = { order_id: 81, gross_basis: basis.gross_basis, discount_basis: basis.discount_basis,
+    net_basis: basis.net_basis, source_snapshot: JSON.stringify(basis.snapshot), basis_origin: 'first_real_ship' }
   const conn = {
     beginTransaction: async () => { calls.push('begin'); backup = structuredClone(state); if (options.onBegin) options.onBegin(state) },
     commit: async () => { calls.push('commit'); backup = null },
@@ -67,6 +75,9 @@ function fixture(options = {}) {
       if (sql === 'SELECT id,request_fingerprint FROM operation_requests WHERE id=? FOR SHARE') { assert.equal(Number(args[0]), 1); return [[{ id: 1, request_fingerprint: state.requestFingerprint }]] }
       if (sql === 'UPDATE operation_requests SET request_fingerprint=? WHERE id=?') { assert.equal(Number(args[1]), 1); assert.match(args[0], /^[a-f0-9]{16}$/); state.requestFingerprint = args[0]; return [{ affectedRows: 1 }] }
       if (sql.startsWith('INSERT INTO document_operation_events')) { assert.equal(args[0], 'sale'); assert.equal(Number(args[1]), 81); state.changeEvents.push(JSON.parse(args[7])); return [{ insertId: state.changeEvents.length }] }
+      if (/^SELECT \* FROM sale_ordinary_return_bases WHERE order_id=\?(?: FOR SHARE| FOR UPDATE)?$/.test(sql)) { assert.equal(Number(args[0]), 81); return [[structuredClone(state.moneyBasis)]] }
+      if (sql.startsWith('SELECT sr.id,sr.sale_order_id,sr.ordinary_net_basis_order_id,sri.id AS return_item_id,r.id AS receipt_id FROM sale_returns sr ')) { assert.equal(Number(args[0]), 81); assert.ok(sql.endsWith('FOR SHARE')); return [[]] }
+      if (sql === 'SELECT id,order_id,return_item_id,return_task_item_id,qualified_qty,gross_amount,financial_amount,cash_execution_basis FROM sale_ordinary_return_receipts WHERE order_id=? ORDER BY id FOR SHARE') { assert.equal(Number(args[0]), 81); return [[]] }
       if (sql === 'SELECT * FROM disposal_handling_links WHERE id=? FOR SHARE') { assert.deepEqual(Array.from(args), [31]); calls.push('link'); return [state.link ? [project(sql, state.link)] : []] }
       if (/^SELECT .* FROM sale_orders WHERE id\s*=\s*\?.*(FOR UPDATE)?$/.test(sql) || /^SELECT .* FROM inventory_disposal_orders WHERE id\s*=\s*\?/.test(sql)) {
         assert.ok([80, 81].includes(Number(args[0]))); if (sql.endsWith('FOR UPDATE')) calls.push('head-X'); return [[project(sql, Number(args[0]) === 81 ? state.head : { ...state.head, id: 80, disposal_handling_link_id: null })]]
@@ -86,7 +97,8 @@ function fixture(options = {}) {
       }
       if (/^SELECT .* FROM warehouse_task_items WHERE task_id\s*=\s*\?/.test(sql)) { assert.equal(Number(args[0]), 21); return [state.taskItem ? (options.duplicateTaskItem ? [state.taskItem, { ...state.taskItem, id: 602 }] : [state.taskItem]).map(row => project(sql, row)) : []] }
       if (sql.startsWith('SELECT ') && sql.includes('FROM sale_order_items')) {
-        assert.equal(Number(args[0]), 81)
+        if (sql.includes('WHERE id IN (?)')) assert.deepEqual(Array.from(args[0]), [501])
+        else assert.equal(Number(args[0]), 81)
         if (sql.includes('AS whCount')) return [[{ whCount: 1, shippedAny: 0 }]]
         if (sql.includes('AS incomplete')) return [[{ incomplete: 0 }]]
         if (sql.includes('AS unfilled')) return [[{ unfilled: state.item && state.item.reserved_qty < state.item.quantity ? 1 : 0 }]]
@@ -103,7 +115,8 @@ function fixture(options = {}) {
       if (sql.includes('FROM product_items')) return [[{ id: 3, name: '商品3', code: 'P3', unit: '个', unit_value: 2, cost_price: 0, is_active: 1, allow_decimal_qty: 1 }]]
       if (sql.includes('FROM product_units')) return [[]]
       if (sql.includes('FROM sale_returns sr')) return [[{ returnedAmount: 0 }]]
-      if (sql.startsWith('INSERT INTO payment_records')) { calls.push('AR'); return [{}] }
+      if (sql === 'SELECT id,total_amount,paid_amount,balance FROM payment_records WHERE type=2 AND order_id=? FOR UPDATE') { assert.equal(Number(args[0]), 81); return [[structuredClone(state.receivable)]] }
+      if (sql.startsWith('INSERT INTO payment_records')) { assert.equal(Number(args[0]), 81); calls.push('AR'); state.receivable.total_amount = Number(args[3]); state.receivable.balance = Number(args[4]); return [{}] }
       if (sql.startsWith('INSERT INTO sale_order_events')) { state.durableEvents.push({ kind: args[1] }); return [{}] }
       if (sql === 'DELETE FROM sale_order_items WHERE order_id=?') { assert.equal(Number(args[0]), 81); calls.push('rebuild'); state.item = null; return [{}] }
       if (sql.startsWith('INSERT INTO sale_order_items')) { calls.push('rebuild'); state.item = { id: 502, order_id: 81, product_id: 3, warehouse_id: 8, unit: '个', quantity: 10, unit_price: 2, amount: 20, reserved_qty: 0 }; return [{}] }
@@ -127,7 +140,9 @@ function fixture(options = {}) {
   }
   const operation = { beginOperationRequest: async c => { assert.equal(c, conn); calls.push('request'); return options.replay ? { replay: true, responseData: { taskId: 21, status: 7, original: true } } : { enabled: true, id: 1 } }, completeOperationRequest: async c => { assert.equal(c, conn); if (options.receiptFail) throw new AppError('receipt failed', 409, 'FIXTURE_RECEIPT_FAIL'); state.genericDone = true } }
   operation.beginCreationOperationRequest = operation.beginOperationRequest; operation.beginResourceOperationRequest = operation.beginOperationRequest
-  const common = { '../../config/db': { pool: { getConnection: async () => conn, query: (...args) => conn.query(...args) } }, '../../utils/AppError': AppError, '../../utils/warehouseScope': scope, '../../utils/qtyPrecision': qty, '../../utils/statusTransition': transition, '../../constants/documentStatusRules': docRules, '../../constants/warehouseTaskStatus': wtRules, '../../utils/unitConversion': units, '../../utils/operationRequest': operation, '../../utils/pagination': {}, '../../utils/codeGenerator': {}, '../disposal/disposal.handling.target-guards': guards, './disposal.handling.target-guards': guards }
+  const common = { '../../utils/cashMoney': require('../backend/src/utils/cashMoney'), './sale.shipping-quantity': require('../backend/src/modules/sale/sale.shipping-quantity'), '../../config/db': { pool: { getConnection: async () => conn, query: (...args) => conn.query(...args) } }, '../../utils/AppError': AppError, '../../utils/warehouseScope': scope, '../../utils/qtyPrecision': qty, '../../utils/statusTransition': transition, '../../constants/documentStatusRules': docRules, '../../constants/warehouseTaskStatus': wtRules, '../../utils/unitConversion': units, '../../utils/operationRequest': operation, '../../utils/pagination': {}, '../../utils/codeGenerator': {}, '../disposal/disposal.handling.target-guards': guards, './disposal.handling.target-guards': guards }
+  common['./sale.ordinary-return-money'] = ordinaryMoney
+  common['../sale/sale.ordinary-return-money'] = ordinaryMoney
   const fulfillment = { captureDimensions: async () => { calls.push('dimensions'); return [] }, commitFulfillment: async c => { assert.equal(c, conn); calls.push('fulfillment'); await c.commit() } }
   const taskSvc = { createForSaleOrder: async data => { assert.equal(data.conn, conn); tasksCreated.push(data); return { taskId: 21, taskNo: 'WT21' } }, cancel: async (_id, data) => { assert.equal(data.conn, conn) } }
   const saleDeps = { ...common, './sale.commercial-dispatch': {}, './sale.edit-baseline': saleEditBaseline, './sale.commercial-store': { assertModel() {}, assertRequestKey() {}, assertRevision() {} }, './sale.commercial-resolver': {}, './sale.commercial-money': {}, '../fulfillment/fulfillment.refresh': fulfillment, '../logistics/shipping-products': {}, '../fulfillment/fulfillment.sale-items': { snapshotItemCommitments: async () => [], restoreItemCommitments: async () => {} }, './sale.presentation': {}, './sale.items': load('modules/sale/sale.items.js', {}), '../../engine/reservationEngine': { reserve: async (c, data) => { assert.equal(c, conn); calls.push('reserve'); assert.equal(data.warehouseId, state.item.warehouse_id) }, releaseByRef: async c => { assert.equal(c, conn); calls.push('release-stock') }, partialReleaseByProduct: async c => { assert.equal(c, conn); calls.push('release-stock') } }, '../../engine/containerEngine': { getStockProjection: async () => ({ available: 99 }) }, '../../utils/expectedStock': { lockExpectedPurchaseOrders: async () => {} }, '../inventory/inventory.service': {}, '../../utils/creditExposure': {}, '../credit-overrides/credit-overrides.service': {}, '../../constants/saleOrderStatus': { SALE_STATUS: { DRAFT: 1, RESERVED: 2, PICKING: 3, PARTIAL_RESERVED: 6 } }, '../../constants/settlementType': { SETTLEMENT_TYPE: {}, normalizeSettlementType: value => value, buildDueDateSql: () => ({ expr: 'NULL', params: [] }) }, '../../utils/backendTime': {}, '../warehouse-tasks/warehouse-tasks.adjust': {}, '../warehouse-tasks/warehouse-task-events.service': {}, './sale.contracts': saleContracts, '../warehouse-tasks/warehouse-tasks.service': taskSvc }
@@ -173,6 +188,8 @@ test('same warehouse reserve/release/partial dispatch still commit once without 
 test('linked partially shipped cancel keeps historical A/line while trimming current quantity', async () => {
   const f = fixture({ status: 3, shipped: 2, shippedTask: true }); await f.sale.cancel(81, actor, [8], 'key')
   assert.equal(f.state.head.status, 4); assert.equal(f.state.item.quantity, 2); assert.equal(f.state.link.allocated_quantity, 10); assert.equal(f.state.link.target_line_id, 501)
+  assert.equal(f.state.receivable.total_amount, 4); assert.equal(f.state.receivable.balance, 4)
+  assert.equal(JSON.parse(f.state.moneyBasis.source_snapshot).items[0].quantity, '10')
 })
 test('linked delete refuses pending physical return with no WT shared/exclusive lock', async () => {
   const f = fixture({ status: 5, pendingReturn: true }); await assert.rejects(f.sale.deleteOrder(81, actor, [8], 'key'), guarded)

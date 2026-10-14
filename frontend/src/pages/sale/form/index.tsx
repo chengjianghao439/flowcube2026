@@ -31,6 +31,7 @@ import KeepAliveSection from '@/components/shared/KeepAliveSection'
 import { OrderFulfillmentPanel } from '@/components/shared/OrderFulfillmentPanel'
 import { DocumentActivityPanel } from '@/components/shared/DocumentActivityPanel'
 import SaleCancelDialog from '../components/SaleCancelDialog'
+import OrdinarySaleRecoveryNotice from '../components/OrdinarySaleRecoveryNotice'
 import SaleCancelRecoveryNotice from '../components/SaleCancelRecoveryNotice'
 import { useDirtyGuard } from '@/hooks/useDirtyGuard'
 import { SaleOrderItemsSection } from './components/SaleOrderItemsSection'
@@ -339,7 +340,7 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
   // 直接访问或刷新 /#/sale/3260 时，标签原本是路由兜底的「销售单 #3260」（数据库主键，
   // 用户认不出是哪张单）；数据到位后换成真实单号，与「从列表点进来」保持一致。
   useWorkspaceTabTitle(needsCommercialRead ? undefined : order?.orderNo)
-  const shipMutate     = useShipSale()
+  const shipMutate     = useShipSale(saleId)
   const deleteMutate   = useDeleteSale()
   const cancelMutate   = useCancelSale(`ordinary-sale-cancel:${saleId}`)
   const [cancelOpen, setCancelOpen] = useState(false)
@@ -363,7 +364,7 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
     open: boolean; title: string; description: string; variant: 'default' | 'destructive'; confirmText: string; onConfirm: () => void
   }>({ open: false, title: '', description: '', variant: 'default', confirmText: '确认', onConfirm: () => {} })
 
-  const isPending = shipMutate.isPending || deleteMutate.isPending || cancelMutate.isPending || !!cancelMutate.recovery?.blocked
+  const isPending = shipMutate.isPending || !!shipMutate.recovery?.blocked || deleteMutate.isPending || cancelMutate.isPending || !!cancelMutate.recovery?.blocked
   useDirtyGuard(tabPath, isPending || !!cancelReason.trim())
   useSaleEditEntry(tabPath, !needsCommercialRead && !!order && !isFetching && !isPaused && !isError, () => {
     if (order?.status === 1 && can(PERMISSIONS.SALE_ORDER_UPDATE) && !isPending) setEditing(true)
@@ -398,9 +399,13 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
     && !order.warehouseTaskCancelRequestedAt && !order.warehouseTaskAdjustmentRequestedAt
     && !order.executionAdjustmentBlocked && !order.isMultiWarehouse && (order.shippedTotalQty ?? 0) === 0
   const ws = getSaleWorkflowStatus(order)
+  const reservationPending = !!order.warehouseTaskCancelRequestedAt || !!order.warehouseTaskAdjustmentRequestedAt
+    || !!order.tasks?.some(task => task.cancelRequestedAt || task.adjustmentRequestedAt)
+  const mayReserve = order.status === 1 || order.status === 6 || (order.status === 3 && !!order.hasUnreservedItems)
 
   return (
     <div className="flex flex-col gap-2.5">
+      <OrdinarySaleRecoveryNotice recovery={shipMutate.recovery} onConfirmed={()=>{setShipDialogOpen(false);setReserveDialogOpen(false);setReleaseDialogOpen(false)}} />
       {handoff === 'invalid' && <p role="alert" className="text-sm text-destructive-ink">交接参数无效，请从原事项重新打开；当前只显示本单信息。</p>}
       <ActionBar
         title={order.orderNo}
@@ -429,9 +434,9 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
                 <X className="h-4 w-4 mr-1" />取消订单
               </Button>
             )}
-            {can(PERMISSIONS.SALE_ORDER_RESERVE) && (order.status === 1 || order.status === 6) && (
-              <Button variant="outline" disabled={isPending} onClick={() => setReserveDialogOpen(true)}>
-                <Warehouse className="h-4 w-4 mr-1" />{order.status === 6 ? '补占库存' : '占用库存'}
+            {can(PERMISSIONS.SALE_ORDER_RESERVE) && mayReserve && (
+              <Button variant="outline" disabled={isPending || reservationPending} onClick={() => setReserveDialogOpen(true)}>
+                <Warehouse className="h-4 w-4 mr-1" />{order.status === 1 ? '占用库存' : '补占库存'}
               </Button>
             )}
             {can(PERMISSIONS.SALE_ORDER_RELEASE) && (order.status === 2 || order.status === 6) && (
@@ -512,7 +517,7 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
                       render: (v: unknown, item: SaleOrderItem) => {
                         const shipped = Number(v ?? 0)
                         const done = shipped >= item.quantity
-                        return <span className={cn('tabular-nums', done ? 'text-success-ink' : shipped > 0 ? 'text-primary' : 'text-muted-foreground')}>{shipped}/{item.quantity}</span>
+                        return <span className={cn('tabular-nums', done ? 'text-success-ink' : shipped > 0 ? 'text-primary' : 'text-muted-foreground')}>{shipped}/{item.quantity} {item.unit}</span>
                       },
                     }] : []),
                     {
@@ -611,6 +616,7 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
         onClose={() => setShipDialogOpen(false)}
         order={order}
         loading={shipMutate.isPending}
+        recovery={shipMutate.recovery}
         onConfirm={(items) => {
           shipMutate.mutate({ id: order.id, items }, { onSuccess: () => setShipDialogOpen(false) })
         }}

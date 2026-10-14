@@ -12,6 +12,8 @@ import { AlertTriangle, RefreshCw } from 'lucide-react'
 interface Props {
   children: ReactNode
   tabName?: string
+  scope?: 'page' | 'workspace'
+  resetKey?: string
 }
 
 interface State {
@@ -28,7 +30,11 @@ export default class TabErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     // 记录到 console，不阻塞用户
-    console.error('[TabErrorBoundary]', this.props.tabName, error.message, info.componentStack?.slice(0, 200))
+    console.error('[TabErrorBoundary]', this.props.tabName, error?.message ?? String(error), info.componentStack?.slice(0, 200))
+  }
+
+  componentDidUpdate(previous: Props) {
+    if (previous.resetKey !== this.props.resetKey && this.state.hasError) this.handleRetry()
   }
 
   handleRetry = () => {
@@ -43,10 +49,10 @@ export default class TabErrorBoundary extends Component<Props, State> {
             <AlertTriangle className="h-10 w-10 text-warning-ink" />
             <div>
               <h3 className="text-lg font-semibold text-foreground mb-2">
-                {this.props.tabName ? `「${this.props.tabName}」页面出错` : '页面出错'}
+                {this.props.scope === 'workspace' ? '工作区出错' : this.props.tabName ? `「${this.props.tabName}」页面出错` : '页面出错'}
               </h3>
               <p className="text-sm leading-6 text-muted-foreground">
-                这个页面出错了，其他页面不受影响。可以重新加载试试。
+                {this.props.scope === 'workspace' ? '工作区暂时无法显示，可以重新加载试试。' : '这个页面出错了，其他页面不受影响。可以重新加载试试。'}
               </p>
             </div>
             <button

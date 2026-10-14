@@ -1,6 +1,6 @@
 const { normalizePagination } = require('../../utils/pagination')
 const { pool } = require('../../config/db')
-const { buildDateFilter } = require('./reports.helpers')
+const { buildDateFilter, buildTimestampDateFilter } = require('./reports.helpers')
 const { SETTLEMENT_SCOPE_COLUMN, isValidSettlementType } = require('../../constants/settlementType')
 const { getInventoryDisplayProjectionSql, getProductInventoryProjectionSql } = require('../inventory/inventoryProjection')
 const { scopeFilter } = require('../../utils/warehouseScope')
@@ -40,10 +40,7 @@ async function fetchOptional(metricName, promise, fallback) {
 }
 
 async function fetchPurchaseStatsRows({ startDate, endDate, scopeWarehouseIds = null }) {
-  const dateCond = startDate && endDate
-    ? 'AND o.created_at >= ? AND o.created_at < DATE_ADD(?, INTERVAL 1 DAY)'
-    : startDate ? 'AND o.created_at >= ?' : endDate ? 'AND o.created_at < DATE_ADD(?, INTERVAL 1 DAY)' : ''
-  const dateParams = startDate && endDate ? [startDate, endDate, endDate] : [startDate, endDate].filter(Boolean)
+  const { sql: dateCond, params: dateParams } = buildTimestampDateFilter('o.created_at', startDate, endDate)
   const wh = scopeFilter(scopeWarehouseIds, 'o.warehouse_id')
 
   const byMonth = await fetchMany(
@@ -82,10 +79,7 @@ async function fetchPurchaseStatsRows({ startDate, endDate, scopeWarehouseIds = 
 }
 
 async function fetchSaleStatsRows({ startDate, endDate, scopeWarehouseIds = null }) {
-  const dateCond = startDate && endDate
-    ? 'AND o.created_at >= ? AND o.created_at < DATE_ADD(?, INTERVAL 1 DAY)'
-    : startDate ? 'AND o.created_at >= ?' : endDate ? 'AND o.created_at < DATE_ADD(?, INTERVAL 1 DAY)' : ''
-  const dateParams = startDate && endDate ? [startDate, endDate, endDate] : [startDate, endDate].filter(Boolean)
+  const { sql: dateCond, params: dateParams } = buildTimestampDateFilter('o.created_at', startDate, endDate)
   const wh = scopeFilter(scopeWarehouseIds, 'o.warehouse_id')
 
   const byMonth = await fetchMany(
@@ -125,10 +119,7 @@ async function fetchSaleStatsRows({ startDate, endDate, scopeWarehouseIds = null
 async function fetchInventoryStatsRows({ startDate, endDate, scopeWarehouseIds = null }) {
   const inventoryDisplayProjectionSql = getInventoryDisplayProjectionSql()
   const productInventoryProjectionSql = getProductInventoryProjectionSql()
-  const dateCond = startDate && endDate
-    ? 'AND l.created_at >= ? AND l.created_at < DATE_ADD(?, INTERVAL 1 DAY)'
-    : startDate ? 'AND l.created_at >= ?' : endDate ? 'AND l.created_at < DATE_ADD(?, INTERVAL 1 DAY)' : ''
-  const dateParams = startDate && endDate ? [startDate, endDate, endDate] : [startDate, endDate].filter(Boolean)
+  const { sql: dateCond, params: dateParams } = buildTimestampDateFilter('l.created_at', startDate, endDate)
   const lWh = scopeFilter(scopeWarehouseIds, 'l.warehouse_id')
   const ipWh = scopeFilter(scopeWarehouseIds, 'ip.warehouse_id')
   // 周转率 = 期内出库量 / 平均库存，平均库存 = (期初 + 期末) / 2。
@@ -150,7 +141,7 @@ async function fetchInventoryStatsRows({ startDate, endDate, scopeWarehouseIds =
        FROM ${productInventoryProjectionSql} ip
      ) s ON s.product_id = l.product_id
      WHERE p.deleted_at IS NULL ${dateCond}${lWh.sql}
-     GROUP BY l.product_id, p.code, p.name, p.unit, s.total_qty
+     GROUP BY l.product_id, p.code, p.name, p.unit, p.article_number, p.spec, p.color, s.total_qty
      ORDER BY outbound_qty DESC LIMIT 30`,
     [...dateParams, ...lWh.params],
   )
@@ -241,10 +232,7 @@ async function fetchPdaPerformanceRows(scopeWarehouseIds = null) {
 }
 
 async function fetchWavePerformanceRows({ startDate = null, endDate = null, scopeWarehouseIds = null } = {}) {
-  const dateCond = startDate && endDate
-    ? 'AND pw.created_at >= ? AND pw.created_at < DATE_ADD(?, INTERVAL 1 DAY)'
-    : startDate ? 'AND pw.created_at >= ?' : endDate ? 'AND pw.created_at < DATE_ADD(?, INTERVAL 1 DAY)' : ''
-  const dateParams = startDate && endDate ? [startDate, endDate, endDate] : [startDate, endDate].filter(Boolean)
+  const { sql: dateCond, params: dateParams } = buildTimestampDateFilter('pw.created_at', startDate, endDate)
   const wh = scopeFilter(scopeWarehouseIds, 'pw.warehouse_id')
 
   const summary = await fetchOne(
@@ -996,10 +984,7 @@ async function fetchKpiByWarehouseRows(params = {}) {
  * 无筛选条件时保留最近 12 个月（当前代码路径总是带 startDate/endDate，这里是兜底）。
  */
 async function fetchPurchasePriceTrend({ productId, startDate = null, endDate = null, scopeWarehouseIds = null }) {
-  const dateCond = startDate && endDate
-    ? 'AND o.created_at >= ? AND o.created_at < DATE_ADD(?, INTERVAL 1 DAY)'
-    : startDate ? 'AND o.created_at >= ?' : endDate ? 'AND o.created_at < DATE_ADD(?, INTERVAL 1 DAY)' : ''
-  const dateParams = startDate && endDate ? [startDate, endDate, endDate] : [startDate, endDate].filter(Boolean)
+  const { sql: dateCond, params: dateParams } = buildTimestampDateFilter('o.created_at', startDate, endDate)
   const wh = scopeFilter(scopeWarehouseIds, 'o.warehouse_id')
   const fallback = (!startDate && !endDate) ? 'AND o.created_at >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)' : ''
 

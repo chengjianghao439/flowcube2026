@@ -1,3 +1,4 @@
+const { assertQtyPrecision } = require('../../utils/qtyPrecision')
 const { commitFulfillment } = require('../fulfillment/fulfillment.refresh')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
@@ -22,7 +23,9 @@ const { findById } = require('./warehouse-tasks.query')
  * status=2 拣货中（跳过待拣货，直接可拣）
  */
 async function createForSaleOrder({ saleOrderId, saleOrderNo, customerId, customerName, warehouseId, warehouseName, items, conn: extConn }) {
-  const useConn = extConn || pool
+  if (!extConn) throw new AppError('销售出库任务须在原单事务中生成',500,'WAREHOUSE_TASK_TRANSACTION_REQUIRED')
+  const useConn = extConn
+  await assertQtyPrecision(useConn, items.map(item => ({productId:item.productId,qty:item.quantity,label:'仓库任务数量'})))
   const taskNo = await genTaskNo(useConn)
   const [r] = await useConn.query(
     `INSERT INTO warehouse_tasks (task_no,sale_order_id,sale_order_no,customer_id,customer_name,warehouse_id,warehouse_name,status,priority) VALUES (?,?,?,?,?,?,?,${WT_STATUS.PICKING},2)`,
@@ -31,8 +34,8 @@ async function createForSaleOrder({ saleOrderId, saleOrderNo, customerId, custom
   const taskId = r.insertId
   for (const item of items) {
     await useConn.query(
-      `INSERT INTO warehouse_task_items (task_id,product_id,product_code,product_name,unit,article_number,spec,color,required_qty,picked_qty) VALUES (?,?,?,?,?,?,?,?,?,0)`,
-      [taskId, item.productId, item.productCode, item.productName, item.unit, item.articleNumber || null, item.spec || null, item.color || null, item.quantity]
+      `INSERT INTO warehouse_task_items (task_id,product_id,product_code,product_name,unit,article_number,spec,color,required_qty,allow_decimal_qty_snapshot,picked_qty) VALUES (?,?,?,?,?,?,?,?,?,?,0)`,
+      [taskId, item.productId, item.productCode, item.productName, item.unit, item.articleNumber || null, item.spec || null, item.color || null, item.quantity, item.allowDecimalQtySnapshot ?? null]
     )
   }
   // 自动分配分拣格（无空闲格时忽略，不阻断任务创建）
@@ -95,6 +98,7 @@ async function createForSaleOrder({ saleOrderId, saleOrderNo, customerId, custom
  * 为采购退货创建出库任务（仅拣货→出库，无分拣/复核/打包环节）
  */
 async function createForPurchaseReturn({ returnId, returnNo, supplierName, warehouseId, warehouseName, items, conn }) {
+  await assertQtyPrecision(conn, items.map(item => ({productId:item.productId,qty:item.quantity,label:'采购退货任务数量'})))
   const taskNo = await genTaskNo(conn)
   const [r] = await conn.query(
     `INSERT INTO warehouse_tasks
@@ -149,6 +153,7 @@ const SALE_RETURN_CONTAINER_SOURCE = 'sale_return'
  *    不能只认 `locked_by_task_id`（那个字段扫码就能写，当白名单用等于没有白名单）。
  */
 async function createForSaleReturnReverse({ returnId, returnNo, customerName, warehouseId, warehouseName, items, conn }) {
+  await assertQtyPrecision(conn, items.map(item => ({productId:item.productId,qty:item.quantity,label:'返货任务数量'})))
   // 没有明细就没有可返的货：宁可不建任务，也不要建一张空任务让仓库在 PDA 上打不开。
   if (!items || items.length === 0) {
     throw new AppError('返货出库任务必须有至少一条明细，未创建任务', 500, 'SALE_RETURN_REVERSE_NO_ITEMS')

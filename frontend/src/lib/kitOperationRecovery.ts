@@ -13,7 +13,7 @@ export interface KitQueryRecord {
   requestKey: string
   action: string
   kind: string
-  resourceType: 'sale_order' | 'sale_return' | 'warehouse_task'
+  resourceType: 'sale_order' | 'sale_return' | 'warehouse_task' | 'purchase_order'
   resourceId?: number
   context?: {
     taskId: number
@@ -64,6 +64,10 @@ function valid(r: KitQueryRecord): boolean {
     )
   )
     return false
+  if (r.resourceType === 'purchase_order') {
+    return r.kind === 'close-remaining' && positiveId(r.resourceId)
+      && r.action === `purchase.closeRemaining.${r.resourceId}` && r.context === undefined
+  }
   if (r.resourceType === 'sale_order') {
     if (r.context) return false
     if (r.kind === 'create')

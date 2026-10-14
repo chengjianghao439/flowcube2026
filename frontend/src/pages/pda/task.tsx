@@ -1,3 +1,4 @@
+import { roundQuantity } from '@/lib/qtyStep'
 import { qty as formatQty } from '@/lib/format'
 import PdaProductIdentity from '@/components/pda/PdaProductIdentity'
 /**
@@ -287,7 +288,8 @@ export default function PdaTaskPage() {
         const item = task.items.find(i => i.productId === c.productId)
         if (!item) { err(formatPdaErrorMessage('该商品不属于当前任务')); return }
         if (item.pickedQty >= item.requiredQty) { err('该商品已全部拣完'); return }
-        const addQty = Math.min(c.remainingQty || 1, item.requiredQty - item.pickedQty)
+        const addQty = roundQuantity(Math.min(c.remainingQty || 1, item.requiredQty - item.pickedQty))
+        if (item.allowDecimalQty === false && !Number.isSafeInteger(addQty)) { err('原出货任务要求整数数量，请核对库存条码'); return }
         pickedName = item.productName || b
         pickedQty = addQty
         const scanResult = await pickAction.run((requestKey) =>
@@ -304,7 +306,9 @@ export default function PdaTaskPage() {
         await qc.invalidateQueries({ queryKey: ['pda-task', taskId] })
       } else {
         if (match.remaining <= 0) { err('该商品已全部拣完'); return }
-        const addQty = Math.min(container.remainingQty || 1, match.remaining)
+        const addQty = roundQuantity(Math.min(container.remainingQty || 1, match.remaining))
+        const sourceItem = task.items.find(item => item.id === match.id)
+        if (sourceItem?.allowDecimalQty === false && !Number.isSafeInteger(addQty)) { err('原出货任务要求整数数量，请核对库存条码'); return }
         pickedName = match.productName || b
         pickedQty = addQty
         const scanResult = await pickAction.run((requestKey) =>

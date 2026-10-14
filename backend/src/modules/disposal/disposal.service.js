@@ -242,7 +242,7 @@ async function create({ warehouseId, remark, items, operator, scopeWarehouseIds 
       `SELECT id, code, name, unit, allow_decimal_qty,
               COALESCE(NULLIF(avg_cost,0), NULLIF(cost_price,0), sale_price, 0) AS unit_value
          FROM product_items
-        WHERE id IN (${productIds.map(() => '?').join(',')}) AND deleted_at IS NULL`,
+        WHERE id IN (${productIds.map(() => '?').join(',')}) AND deleted_at IS NULL ORDER BY id FOR SHARE`,
       productIds,
     )
     const productMap = new Map(products.map(p => [Number(p.id), p]))
@@ -312,7 +312,7 @@ async function update(id, { warehouseId, remark, items }, scopeWarehouseIds = nu
       `SELECT id, code, name, unit, allow_decimal_qty,
               COALESCE(NULLIF(avg_cost,0), NULLIF(cost_price,0), sale_price, 0) AS unit_value
          FROM product_items
-        WHERE id IN (${productIds.map(() => '?').join(',')}) AND deleted_at IS NULL`,
+        WHERE id IN (${productIds.map(() => '?').join(',')}) AND deleted_at IS NULL ORDER BY id FOR SHARE`,
       productIds,
     )
     const productMap = new Map(products.map(p => [Number(p.id), p]))

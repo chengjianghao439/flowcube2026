@@ -26,6 +26,7 @@ function fixture(quantities) {
   const selects = []
   const conn = {
     async query(sql, params) {
+      if (sql.includes('FROM product_items')) return [[{id:7,name:'小数商品',allow_decimal_qty:1}]]
       if (sql.startsWith('UPDATE inventory_containers')) {
         writes.push({ qty: params[0], status: params[1], id: params[2] })
         return [{ affectedRows: 1 }]
@@ -87,6 +88,7 @@ function returnFixture(quantities) {
   }))
   const conn = {
     async query(sql, params) {
+      if (sql.includes('FROM product_items')) return [[{id:7,name:'小数商品',allow_decimal_qty:1}]]
       // Every requested return in these fixtures is a whole original container.
       // A write here is evidence that floating residue incorrectly split one.
       assert.doesNotMatch(sql, /^\s*(INSERT|UPDATE)/, 'whole-container return must preserve original container identity')

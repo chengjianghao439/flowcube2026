@@ -1,3 +1,6 @@
+import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
+import { useProcurementIntentRecovery, type PlanConverted } from '@/hooks/useProcurementIntentRecovery'
+import ProcurementIntentRecoveryNotice from '@/components/shared/ProcurementIntentRecoveryNotice'
 import { getWorkspaceListPath } from '@/lib/workspaceListNavigation'
 import { qty as num } from '@/lib/format'
 import { useProductQtyPolicies } from '@/hooks/useProductQtyPolicies'
@@ -6,11 +9,10 @@ import { ProcurementArrivalStatus } from '@/components/shared/ProcurementSupplyE
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { useWorkspaceTabTitle } from '@/hooks/useWorkspaceTabTitle'
-import { createRequestKey, withRequestKeyHeaders } from '@/lib/requestKey'
 import ProcurementSupplyDetails from '@/components/shared/ProcurementSupplyDetails'
 import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
 import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
-import { useState, useContext, useMemo, useRef } from 'react'
+import { useState, useContext, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { TabPathContext } from '@/components/layout/TabPathContext'
@@ -24,7 +26,7 @@ import { confirmAction } from '@/lib/confirm'
 import { useSuppliersActive } from '@/hooks/useSuppliers'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
-import { getPlanApi, updatePlanItemApi, convertPlanApi, cancelPlanApi } from '@/api/procurement'
+import { getPlanApi, updatePlanItemApi, cancelPlanApi } from '@/api/procurement'
 import type { ProcurementPlanItem } from '@/types/procurement'
 import type { StatusTone } from '@/lib/statusTone'
 
@@ -38,7 +40,7 @@ export default function ProcurementPlanDetailPage() {
   const planId = Number((tabPath || params.id || '').split('/').filter(Boolean).pop() ?? '')
   const navigate = useNavigate()
   const qc = useQueryClient()
-  const convertKey = useRef(createRequestKey('plan-convert'))
+  const active=useActiveWorkspaceTab(),conversion=useProcurementIntentRecovery('plan-convert',planId,active)
   const { can } = usePermission()
   const canManage = can(PERMISSIONS.PROCUREMENT_PLAN_MANAGE)
   const canConvert = can(PERMISSIONS.PURCHASE_ORDER_CREATE)
@@ -55,8 +57,8 @@ export default function ProcurementPlanDetailPage() {
     onError: (e: unknown) => toast.error((e as { message?: string })?.message || '保存失败'),
   })
   const convert = useMutation({
-    mutationFn: (ids: number[]) => convertPlanApi(planId, ids, { skipGlobalError: true, headers: withRequestKeyHeaders(convertKey.current) }),
-    onSuccess: (r) => { convertKey.current = createRequestKey('plan-convert'); toast.success(`已生成 ${r!.createdOrders.length} 张采购单草稿`); setSelected(new Set()); invalidate(); qc.invalidateQueries({ queryKey: ['procurement-plans'] }) },
+    mutationFn: async(ids:number[])=>{const answer=await conversion.submit({itemIds:ids});if(!answer)throw Error('原转单结果待确认');return answer.data as PlanConverted},
+    onSuccess: (r) => { toast.success(`已生成 ${r!.createdOrders.length} 张采购单草稿`); setSelected(new Set()); invalidate(); qc.invalidateQueries({ queryKey: ['procurement-plans'] }) },
     onError: (e: unknown) => toast.error((e as { message?: string })?.message || '转采购失败'),
   })
   const cancelPlan = useMutation({
@@ -70,8 +72,8 @@ export default function ProcurementPlanDetailPage() {
   const pendingIds = useMemo(() => items.filter(i => i.status === 1).map(i => i.id), [items])
   const editable = canManage && plan && (plan.status === 1 || plan.status === 2)
 
-  const toggle = (id: number) => setSelected(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })
-  const toggleAll = () => setSelected(prev => prev.size === pendingIds.length ? new Set() : new Set(pendingIds))
+  const toggle = (id: number) => {if(conversion.blocked)return;setSelected(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })}
+  const toggleAll = () => {if(conversion.blocked)return;setSelected(prev => prev.size === pendingIds.length ? new Set() : new Set(pendingIds))}
 
   if (isLoading) return <div className="p-8 text-center text-muted-foreground">加载中…</div>
   if (isError && !plan) return <QueryErrorState error={error} onRetry={() => void refetch()} title="采购计划加载失败" />
@@ -87,11 +89,12 @@ export default function ProcurementPlanDetailPage() {
           <SoftStatusLabel label={plan.statusName} tone={PLAN_TONE[plan.status] ?? 'draft'} />
           <Button variant="outline" size="sm" onClick={() => navigate(getWorkspaceListPath('/procurement'))}>返回列表</Button>
           {editable && (
-            <Button variant="outline" size="sm" onClick={() => confirmAction({ title: '作废该采购计划？', description: '已转出的采购单不受影响，仅把计划头置为作废。', variant: 'destructive', onConfirm: () => cancelPlan.mutate() })} disabled={cancelPlan.isPending}>作废</Button>
+            <Button variant="outline" size="sm" onClick={() => confirmAction({ title: '作废该采购计划？', description: '已转出的采购单不受影响，仅把计划头置为作废。', variant: 'destructive', onConfirm: () => cancelPlan.mutate() })} disabled={cancelPlan.isPending || conversion.blocked}>作废</Button>
           )}
         </div>}
       />
 
+      <ProcurementIntentRecoveryNotice recovery={conversion} onConfirmed={answer=>{if(!answer.queryOnly)setSelected(new Set());void invalidate();void qc.invalidateQueries({queryKey:['procurement-plans']});toast.success('原计划转采购已确认')}} />
       {isError && <QueryErrorState error={error} onRetry={() => void refetch()} title="刷新失败，当前显示上次读取的数据" compact />}
       <p className="text-xs text-muted-foreground">需求与覆盖读取于 {dataUpdatedAt ? formatDisplayDateTime(new Date(dataUpdatedAt).toISOString()) : '—'}；转换时仍会重新核对。</p>
       <OrderDetailSections type="plan" id={plan.id}>
@@ -100,7 +103,7 @@ export default function ProcurementPlanDetailPage() {
           <thead className="bg-muted/40 text-muted-foreground [&_th]:whitespace-nowrap">
             <tr>
               <th className="px-3 py-2 text-center font-medium">
-                {editable && canConvert && pendingIds.length > 0 && <input type="checkbox" aria-label="选择全部待处理计划明细" checked={selected.size === pendingIds.length && pendingIds.length > 0} onChange={toggleAll} className="h-4 w-4 accent-primary" />}
+                {editable && canConvert && pendingIds.length > 0 && <input type="checkbox" aria-label="选择全部待处理计划明细" disabled={conversion.blocked} checked={selected.size === pendingIds.length && pendingIds.length > 0} onChange={toggleAll} className="h-4 w-4 accent-primary" />}
               </th>
               <ProductIdentityHeaders /><th className="min-w-20 px-3 py-3 text-left">单位</th>
               <th className="px-3 py-2 text-left font-medium">仓库</th>
@@ -126,7 +129,7 @@ export default function ProcurementPlanDetailPage() {
               return (
                 <tr key={it.id} className={`border-t border-border ${it.status === 3 ? 'opacity-50' : ''}`}>
                   <td className="px-3 py-2 text-center">
-                    {editable && canConvert && pending && <input type="checkbox" aria-label={`选择 ${it.productName} ${it.warehouseName}`} checked={selected.has(it.id)} onChange={() => toggle(it.id)} className="h-4 w-4 accent-primary" />}
+                    {editable && canConvert && pending && <input type="checkbox" aria-label={`选择 ${it.productName} ${it.warehouseName}`} disabled={conversion.blocked} checked={selected.has(it.id)} onChange={() => toggle(it.id)} className="h-4 w-4 accent-primary" />}
                   </td>
                   <ProductIdentityCells product={it} /><td className="px-3 py-3">{it.unit || '—'}</td>
                   <td className="px-3 py-2">{it.warehouseName}</td>
@@ -140,13 +143,13 @@ export default function ProcurementPlanDetailPage() {
                   <td className="px-3 py-2 text-right tabular-nums">{it.currentSupply ? `${num(it.currentSupply.netRequirement)} / ${num(it.currentSupply.suggestedQty)}` : '当前需求暂不可用'}</td>
                   <td className="px-3 py-2 text-right">
                     {editable && pending
-                      ? <Input quantity aria-label={`${it.productName} ${it.warehouseName}采购量`} type="number" step={qtyStep(allowDecimalOf(it.productId))} defaultValue={it.adjustedQty} key={`${it.id}-${it.adjustedQty}`} className="ml-auto h-8 w-24 text-right tabular-nums"
-                          onBlur={(e) => { const v = Number(e.target.value); if (Number.isFinite(v) && v >= 0 && v !== it.adjustedQty) updateItem.mutate({ itemId: it.id, patch: { adjustedQty: v } }) }} />
+                      ? <Input disabled={conversion.blocked} quantity aria-label={`${it.productName} ${it.warehouseName}采购量`} type="number" step={qtyStep(allowDecimalOf(it.productId))} defaultValue={it.adjustedQty} key={`${it.id}-${it.adjustedQty}`} className="ml-auto h-8 w-24 text-right tabular-nums"
+                          onBlur={(e) => {if(conversion.blocked)return;const v = Number(e.target.value); if (Number.isFinite(v) && v >= 0 && v !== it.adjustedQty) updateItem.mutate({ itemId: it.id, patch: { adjustedQty: v } }) }} />
                       : <span className="tabular-nums">{num(it.adjustedQty)} {it.unit}</span>}
                   </td>
                   <td className="px-3 py-2">
                     {editable && pending
-                      ? <Select value={it.supplierId != null ? String(it.supplierId) : '0'} onValueChange={(v) => updateItem.mutate({ itemId: it.id, patch: { supplierId: v === '0' ? null : Number(v) } })}>
+                      ? <Select disabled={conversion.blocked} value={it.supplierId != null ? String(it.supplierId) : '0'} onValueChange={(v) => {if(!conversion.blocked)updateItem.mutate({ itemId: it.id, patch: { supplierId: v === '0' ? null : Number(v) } })}}>
                           <SelectTrigger aria-label={`${it.productName} ${it.warehouseName}供应商`} className="h-8 w-40"><SelectValue placeholder="待选" /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="0">待选供应商</SelectItem>
@@ -168,10 +171,10 @@ export default function ProcurementPlanDetailPage() {
                   <td className="px-3 py-2 text-center">
                     {it.currentSupply && <ProcurementSupplyDetails supply={it.currentSupply} snapshot={it.supplySnapshot} supplierId={it.supplierId} />}
                     {editable && pending && (
-                      <button className="text-xs text-muted-foreground hover:text-danger" onClick={() => updateItem.mutate({ itemId: it.id, patch: { ignore: true } })}>忽略</button>
+                      <button className="text-xs text-muted-foreground hover:text-danger" disabled={conversion.blocked} onClick={() => {if(!conversion.blocked)updateItem.mutate({ itemId: it.id, patch: { ignore: true } })}}>忽略</button>
                     )}
                     {editable && it.status === 3 && (
-                      <button className="text-xs text-primary" onClick={() => updateItem.mutate({ itemId: it.id, patch: { ignore: false } })}>恢复</button>
+                      <button className="text-xs text-primary" disabled={conversion.blocked} onClick={() => {if(!conversion.blocked)updateItem.mutate({ itemId: it.id, patch: { ignore: false } })}}>恢复</button>
                     )}
                   </td>
                 </tr>
@@ -184,7 +187,7 @@ export default function ProcurementPlanDetailPage() {
       {editable && canConvert && (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-xs text-muted-foreground">按供应商与仓库分组生成采购单草稿。转换时重新核对最新供给和包装规则；数量过期时先调整或忽略，切换供应商时按其包装规则重新调整数量。未选供应商的行不能转换。</p>
-          <Button disabled={selected.size === 0 || convert.isPending} onClick={() => convert.mutate([...selected])}>
+          <Button disabled={selected.size === 0 || convert.isPending || conversion.blocked} onClick={() => convert.mutate([...selected])}>
             {convert.isPending ? '转采购中…' : `转采购（${selected.size} 行）`}
           </Button>
         </div>

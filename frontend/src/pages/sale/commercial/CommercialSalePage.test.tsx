@@ -143,6 +143,19 @@ async function mount(run: (host: HTMLElement) => Promise<void>, input = order, o
     host.remove()
   }
 }
+test('商单执行中仍有未占物料时补占原量，已全部承诺则隐藏入口', async () => {
+  const user = useAuthStore.getState().user!
+  useAuthStore.setState({ user: { ...user, permissions: [...(user.permissions ?? []), PERMISSIONS.SALE_ORDER_RESERVE] } })
+  await mount(async host => {
+    expect([...host.querySelectorAll('button')].some(b => b.textContent === '补占库存')).toBe(true)
+    await click('补占库存')
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull()
+    expect(mocks.execute).not.toHaveBeenCalled()
+  }, { ...order, hasUnreservedItems: true })
+  await mount(async host => {
+    expect([...host.querySelectorAll('button')].some(b => b.textContent === '补占库存')).toBe(false)
+  }, { ...order, hasUnreservedItems: false })
+})
 test('混合详情沿普通订单六标签与基础信息布局，成交量价独立于仓库组件合计', async () => {
   const ordinary = { ...group, id: 9, kind: 'ordinary', kitCode: null, kitName: null,
     targetQty: 1.25, originalQty: 2, amount: 28.75, originalAmount: 46, unitPrice: 23,
@@ -156,7 +169,7 @@ test('混合详情沿普通订单六标签与基础信息布局，成交量价�
     expect(host.textContent).toContain('收货人：验收收货人')
     expect(host.textContent).toContain('备注：保留原备注')
     const table = host.querySelector('[data-sale-detail-items] table')!
-    expect([...table.querySelectorAll('th')].map(th => th.textContent?.replace(/调整.*列宽/g, ''))).toEqual(['商品', '单位', '数量', '单价', '金额', '备注'])
+    expect([...table.querySelectorAll('th')].map(th => th.textContent?.replace(/调整.*列宽/g, ''))).toEqual(['商品', '单位', '数量', '单价', '金额', '履约数量', '备注'])
     for (const fact of ['套A', '成套', 'P-LONG', '长商品名称完整值', '完整规格', '供应商型号', '本色', '1.25', '¥28.75']) expect(table.textContent).toContain(fact)
     expect(host.querySelector('[data-sale-detail-items]')?.textContent).toContain('订单金额¥223.75')
     expect(host.textContent).not.toContain('999.00')
@@ -562,4 +575,22 @@ test('成套操作记录沿原完整记录入口而不是仅显示订单时间�
     expect(mocks.activity.mock.calls[0][3]).toEqual(owner)
     expect(mocks.execute).not.toHaveBeenCalled()
   })
+})
+
+test('FE07 主明细同屏解释原需求10/当前6/实发2/执行1/未派发3，金额沿原投影',async()=>{
+  const changed={...order,totalAmount:600,commercialGroups:[{...group,originalQty:10,targetQty:6,amount:600,originalAmount:1000,metadata:{...group.metadata,kitUnit:'原套'},dispatch:{...group.dispatch!,confirmedShippedQty:2,outstandingQty:1,activeAllocatedQty:3,availableQty:3}}]} as SaleOrder
+  const before=JSON.stringify(changed)
+  await mount(async host=>{
+    const table=host.querySelector('[aria-label="销售商品明细"]')!
+    for(const fact of ['原需求 10 原套','当前目标 6 原套','已确认实发 2 原套','在执行 1 原套','未派发 3 原套','¥600.00'])expect(table.textContent).toContain(fact)
+    expect(table.textContent).not.toContain('¥1,000.00')
+    expect(JSON.stringify(changed)).toBe(before)
+  },changed)
+})
+test('FE07 关闭余量后仍保留原需求和真实实发，未提供dispatch不显示零事实',async()=>{
+  await mount(async host=>{
+    const table=host.querySelector('[aria-label="销售商品明细"]')!
+    for(const fact of ['原需求 10 套','当前目标 2 套','已确认实发 2 套','在执行 0 套','未派发 0 套','¥200.00'])expect(table.textContent).toContain(fact)
+  },{...order,commercialGroups:[{...group,originalQty:10,targetQty:2,dispatch:{...group.dispatch!,confirmedShippedQty:2,outstandingQty:0,activeAllocatedQty:2,availableQty:0}}]} as SaleOrder)
+  await mount(async host=>{expect(host.textContent).toContain('实发与执行进度待核对')},{...order,commercialGroups:[{...group,dispatch:undefined}]} as SaleOrder)
 })

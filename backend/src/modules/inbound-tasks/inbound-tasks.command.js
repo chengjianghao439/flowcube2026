@@ -60,7 +60,8 @@ async function createFromPoId(purchaseOrderId, scopeWarehouseIds = null, freight
     if (!sourceItems.length) throw new AppError('采购单无明细', 400)
     const [[dup]] = await conn.query(
       `SELECT it.id FROM inbound_tasks it JOIN inbound_task_items iti ON iti.task_id = it.id
-       WHERE iti.purchase_order_id = ? AND it.deleted_at IS NULL AND it.status NOT IN (4, 5) LIMIT 1`, [purchaseOrderId],
+       WHERE iti.purchase_order_id = ? AND it.deleted_at IS NULL AND it.status NOT IN (4, 5)
+         AND (it.closed_reason IS NULL OR it.closed_reason <> 'short_close') LIMIT 1`, [purchaseOrderId],
     )
     if (dup) throw new AppError('该采购单已有未完结的入库任务', 400)
     const candidates = await loadPurchasableCandidates(conn, { supplierId: Number(order.supplier_id), warehouseId: Number(order.warehouse_id), purchaseItemIds: sourceItems.map(i => Number(i.id)), scopeWarehouseIds })
@@ -466,7 +467,7 @@ async function receive(taskId, payload, { userId, requestKey, pdaWarehouseId, sc
     // 逐箱分配：既算出各明细行的实收增量（与历史 first-fit 顺序一致），又记录每箱的归属行，
     // 供下面建容器时写入 inbound_task_item_id，让上架能精确回写 putaway_qty（P1-4）。
     const { updates, assignments } = distributePackagesToLines(taskItems, productIdN, normalizedPackages)
-    const ownerByLineNo = new Map(assignments.map(a => [a.lineNo, a.itemId]))
+    const sourceByLineNo = new Map(assignments.map(a => [a.lineNo, a]))
     for (const u of updates) {
       await conn.query(
         'UPDATE inbound_task_items SET received_qty = received_qty + ? WHERE id = ?',
@@ -483,8 +484,10 @@ async function receive(taskId, payload, { userId, requestKey, pdaWarehouseId, sc
 
     // 收货全部落 待上架(PENDING_PUTAWAY)：质检/拒收功能已下线（迁移 210），不再有待质检分流。
     const containers = []
+    const containerSources = []
     for (const pkg of normalizedPackages) {
-      const ownerItemId = ownerByLineNo.get(pkg.lineNo) ?? null
+      const assignment = sourceByLineNo.get(pkg.lineNo)
+      const ownerItemId = assignment?.itemId ?? null
       const { containerId, barcode } = await createContainer(conn, {
         productId: productIdN,
         warehouseId,
@@ -503,11 +506,18 @@ async function receive(taskId, payload, { userId, requestKey, pdaWarehouseId, sc
         sourceRefNo: taskNo,
         remark: `收货待上架 ${taskNo} 第${pkg.lineNo}箱`,
       })
+      containerSources.push({ id: containerId, sources: JSON.stringify(assignment.sources) })
       containers.push({
         containerId,
         containerCode: barcode,
         qty: pkg.qty,
       })
+    }
+    if (containerSources.length) {
+      const clauses = containerSources.map(() => 'WHEN ? THEN CAST(? AS JSON)').join(' ')
+      await conn.query(`UPDATE inventory_containers SET inbound_source_quantities = CASE id ${clauses} END
+        WHERE id IN (?) AND inbound_task_id = ?`,
+      [...containerSources.flatMap(row => [row.id, row.sources]), containerSources.map(row => row.id), taskId])
     }
 
     await appendInboundEvent(
@@ -799,7 +809,7 @@ async function closeReceiving(taskId, operator, scopeWarehouseIds = null, { requ
       taskId,
       'receiving_closed',
       '提前结束收货',
-      `收货订单 ${taskRow.task_no} 已提前结束收货，剩余未收量作罢。${message}`,
+      `收货订单 ${taskRow.task_no} 已结束本次收货，未收余量保留在原采购单，可另建后续收货任务。${message}`,
       operator ? { userId: operator.userId, realName: operator.realName } : null,
       null,
     )

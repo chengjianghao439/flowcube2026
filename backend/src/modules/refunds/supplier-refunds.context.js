@@ -1,5 +1,6 @@
 'use strict'
 const rules=require('./supplier-refunds.rules')
+const {storedCashCents}=require('../../utils/cashMoney')
 const actor=require('./supplier-refunds.actor')
 const source=require('./supplier-refunds.source')
 const operations=require('./supplier-refunds.operations')
@@ -32,7 +33,7 @@ function allocationsFromSnapshot(row) {
   let body
   try{body=JSON.parse(row.create_payload_json)}catch{throw operations.conflict()}
   if(rules.stableJson(body)!==row.create_payload_json)throw operations.conflict()
-  const parsed=rules.createBody(body)
+  const parsed=rules.frozenCreateBody(body)
   if(rules.stableJson(parsed)!==row.create_payload_json || parsed.operationUuid!==row.created_operation_uuid || parsed.purchaseReturnId!==Number(row.purchase_return_id)
     || parsed.incomeAccountId!==Number(row.income_account_id) || parsed.refundDate!==rules.date(row.refund_date) || parsed.amount!==rules.positiveMoney(row.amount))throw operations.conflict()
   return parsed
@@ -63,4 +64,11 @@ async function frozenContext(conn,row,ctx,currentActor,current,options={}) {
   }
   return{payment,body,own,incomeAccount}
 }
-module.exports={company,context,paymentContext,income,head,allocationsFromSnapshot,frozenContext}
+function assertActualCash(row,frozen){
+  storedCashCents(row.amount,'原供应商退款金额')
+  source.assertReturnCash(frozen.payment)
+  for(const field of ['total_amount','paid_amount','balance'])storedCashCents(frozen.payment.ap[field],`原应付${field}`)
+  for(const allocation of frozen.own)storedCashCents(allocation.amount,'原供应商退款分配金额')
+  for(const proof of frozen.payment.proofs){storedCashCents(proof.originalAmount,'原付款分配金额');storedCashCents(proof.out.amount,'原付款资金流水金额');if(proof.receipt)storedCashCents(proof.receipt.amount,'原付款单本金')}
+}
+module.exports={assertActualCash,company,context,paymentContext,income,head,allocationsFromSnapshot,frozenContext}

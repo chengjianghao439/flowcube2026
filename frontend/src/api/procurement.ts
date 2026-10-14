@@ -9,5 +9,5 @@ export const getPlanApi = (id: number) => client.get<ProcurementPlan>(`/procurem
 export const updatePlanItemApi = (id: number, itemId: number, data: { adjustedQty?: number; supplierId?: number | null; ignore?: boolean }, config?: Parameters<typeof client.put>[2]) =>
   client.put<ProcurementPlan>(`/procurement/plans/${id}/items/${itemId}`, data, config)
 export const convertPlanApi = (id: number, itemIds: number[], config?: Parameters<typeof client.post>[2]) =>
-  client.post<{ planId: number; planStatus: number; createdOrders: { purchaseOrderId: number; orderNo: string }[] }>(`/procurement/plans/${id}/convert`, { itemIds }, config)
+  client.post<{ planId: number; planStatus: 2 | 3; requestFingerprint: string; createdOrders: { purchaseOrderId: number; orderNo: string }[] }>(`/procurement/plans/${id}/convert`, { itemIds }, config)
 export const cancelPlanApi = (id: number, config?: Parameters<typeof client.post>[2]) => client.post<null>(`/procurement/plans/${id}/cancel`, {}, config)

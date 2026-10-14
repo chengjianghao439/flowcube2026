@@ -229,16 +229,37 @@ async function assertDepartmentExists(departmentId, db = pool) {
   if (!d) throw new AppError('部门不存在', 400)
 }
 
+// Same subset boundary as role assignment and warehouse delegation; no numeric role hierarchy.
+// Called only after withLockedTarget has read the current actor/target under the user locks.
+async function assertCanResetTarget(conn, target, actor) {
+  if (Number(actor.roleId) === 1) return
+  if (Number(target.role_id) === 1) throw new AppError('只有超级管理员可以重置超级管理员密码', 403, 'USER_ADMIN_PROTECTED')
+  const [roles] = await conn.query('SELECT id FROM sys_roles WHERE id IN (?, ?) ORDER BY id FOR UPDATE', [Number(actor.roleId), Number(target.role_id)])
+  if (!roles.some(r => Number(r.id) === Number(actor.roleId))) throw new AppError('操作人角色不可用，请重新登录', 403, 'PERMISSION_DENIED')
+  const [resetPermission] = await conn.query("SELECT permission FROM sys_role_permissions WHERE role_id=? AND permission='user.reset_password' LIMIT 1", [Number(actor.roleId)])
+  if (!resetPermission.length) throw new AppError('当前账号无重置密码权限', 403, 'PERMISSION_DENIED')
+  await assertCanAssignRole(actor, Number(target.role_id), conn)
+  const [rows] = await conn.query('SELECT user_id,warehouse_id FROM user_warehouse_scope WHERE user_id IN (?, ?) ORDER BY user_id,warehouse_id', [Number(actor.userId), Number(target.id)])
+  const allowed = new Set(rows.filter(r => Number(r.user_id) === Number(actor.userId)).map(r => Number(r.warehouse_id)))
+  const requested = rows.filter(r => Number(r.user_id) === Number(target.id)).map(r => Number(r.warehouse_id))
+  if (allowed.size && (!requested.length || requested.some(id => !allowed.has(id)))) {
+    throw new AppError('不能重置超出自身仓库范围的账号密码', 403, 'USER_SCOPE_GRANT_DENIED')
+  }
+}
+
 async function resetPassword(id, newPassword, operator = null) {
   // 计算哈希在锁外；所有权限判断和写入仍在同一锁定事务内完成。
   const hashed = await bcrypt.hash(newPassword, 10)
-  return withLockedTarget(id, operator, async conn => conn.query(
+  return withLockedTarget(id, operator, async (conn, target, actor) => {
+    await assertCanResetTarget(conn, target, actor)
+    return conn.query(
     `UPDATE sys_users
         SET password = ?,
             token_version = COALESCE(token_version, 0) + 1
       WHERE id = ? AND deleted_at IS NULL`,
     [hashed, id],
-  ))
+    )
+  })
 }
 
 async function softDelete(id, operator = null) {
@@ -287,4 +308,4 @@ async function setWarehouseScope(userId, warehouseIds, operator = null) {
   })
 }
 
-module.exports = { listAssignableRoles, findAll, listOptions, findById, create, update, resetPassword, softDelete, getWarehouseScope, setWarehouseScope }
+module.exports = { listAssignableRoles, findAll, listOptions, findById, create, update, resetPassword, softDelete, getWarehouseScope, setWarehouseScope, assertCanResetTarget }

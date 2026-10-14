@@ -36,7 +36,6 @@ const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8')
 
 /** 录入类模块：必须经 foldEntryItems 折算（顺带获得数量精度校验） */
 const VIA_FOLD_ENTRY = [
-  'backend/src/modules/sale/sale.service.js',
   'backend/src/modules/purchase/purchase.service.js',
   'backend/src/modules/returns/returns-sale.service.js',
   'backend/src/modules/returns/returns-purchase.service.js',
@@ -51,9 +50,14 @@ const DIRECT = [
   'backend/src/modules/stockcheck/stockcheck.service.js',
   'backend/src/modules/inventory/inventory.service.js',
   'backend/src/engine/containerEngine.js',
+  'backend/src/engine/reservationEngine.js',
+  'backend/src/modules/import/import.service.js',
+  'backend/src/modules/procurement/procurement.service.js',
   'backend/src/modules/disposal/disposal.service.js',
   'backend/src/modules/inbound-tasks/inbound-tasks.command.js',
   'backend/src/modules/packages/packages.service.js',
+  'backend/src/modules/warehouse-tasks/warehouse-tasks.ship.js',
+  'backend/src/modules/warehouse-tasks/warehouse-tasks.command.js',
   'backend/src/modules/return-tasks/return-tasks.service.js',
   'backend/src/modules/scan-logs/scan-logs.service.js',
 ]
@@ -83,16 +87,20 @@ const DIRECT_ENTRY_POINTS = new Map([
   ['backend/src/modules/sale/sale.service.js', ['reserveStock', 'ship', 'releaseStock']],
   ['backend/src/modules/transfer/transfer.service.js', ['create', 'update']],
   ['backend/src/modules/purchase-requisitions/purchase-requisitions.service.js', ['replaceItems', 'convert']],
-  ['backend/src/modules/stockcheck/stockcheck.service.js', ['saveItemContainerScans', 'updateItems']],
+  ['backend/src/modules/stockcheck/stockcheck.service.js', ['create', 'saveItemContainerScans', 'updateItems']],
   ['backend/src/modules/inventory/inventory.service.js', ['changeStock']],
   ['backend/src/engine/containerEngine.js', ['splitContainer',
-    ...['createContainer', 'deductFromContainers', 'deductFromTaskLockedContainers', 'splitTaskLockedContainerForReturn']
-      .map(name => ({ name, guard: 'assertQtyScale' })),
+    ...['createContainer', 'createContainersBatch', 'deductFromContainers', 'deductFromTaskLockedContainers', 'splitTaskLockedContainerForReturn','reserveTaskLockedContainersForReturn','adjustContainerStock','syncStockFromContainers','promotePendingContainerToActive','extractFromPlasticBoxToTask'],
   ]],
+  ['backend/src/engine/reservationEngine.js', ['reserve','releaseByRef','markFulfilled','partialReleaseByProduct']],
+  ['backend/src/modules/import/import.service.js', ['importSingleStockRow']],
+  ['backend/src/modules/procurement/procurement.service.js', ['generatePlan','updatePlanItem']],
   ['backend/src/modules/disposal/disposal.service.js', ['create', 'update']],
   ['backend/src/modules/inbound-tasks/inbound-tasks.command.js', ['receive', 'createManualTask']],
-  ['backend/src/modules/packages/packages.service.js', ['addItem', 'removeItem']],
-  ['backend/src/modules/return-tasks/return-tasks.service.js', ['receive', 'check']],
+  ['backend/src/modules/packages/packages.service.js', ['addItem', 'removeItem'].map(name => ({ name, guard: 'assertTaskShipmentQuantity' }))],
+  ['backend/src/modules/warehouse-tasks/warehouse-tasks.command.js', ['createForSaleOrder','createForPurchaseReturn','createForSaleReturnReverse']],
+  ['backend/src/modules/warehouse-tasks/warehouse-tasks.ship.js', [{ name: 'shipWithinTransaction', guard: 'assertQtyPrecision' }]],
+  ['backend/src/modules/return-tasks/return-tasks.service.js', ['create','receive', 'check']],
   ['backend/src/modules/scan-logs/scan-logs.service.js', ['createScanLog']],
 ])
 
@@ -178,7 +186,11 @@ function assertUnitConversionCoverage(src, rel) {
       `${rel} 的 ${name} 缺少数量精度校验单条委派`)
     }
     // 保护必须在本入口的执行体中 await，且检查 out 的基本单位数量后才返回 out。
-    const precision = statements.find(node => ts.isExpressionStatement(node)
+    const rawPrecision = statements.find(node => ts.isExpressionStatement(node) && node.end < out.getStart(tree)
+      && ts.isAwaitExpression(node.expression) && callIs(node.expression.expression,'assertQtyPrecision',['conn'])
+      && /^items\.map\(/.test(text(node.expression.expression.arguments[1])))
+    assert.ok(rawPrecision, `${rel} 的 ${name} 缺少折算前原量的数量精度校验`)
+    const precision = statements.find(node => ts.isExpressionStatement(node) && node.getStart(tree) > out.end
       && ts.isAwaitExpression(node.expression)
       && callIs(node.expression.expression, 'assertQtyPrecision', ['conn']))
     const map = precision?.expression.expression.arguments[1]
@@ -241,9 +253,9 @@ test('反向验证：委派、两处尺度校验和各批量精度校验缺一�
     ['foldEntryItemsBatch', 'foldEntryItemWithRate', 'item'],
   ]
   for (const [owner, name, firstArg] of targets) {
-    const call = callsInSource(source, rel).find(call => call.owner === owner && call.name === name && call.firstArg === firstArg)
-    assert.ok(call, `${owner}/${name}/${firstArg} 反向验证不能空转`)
-    for (const mode of ['rename', 'remove', 'comment']) {
+    const matchingCalls = callsInSource(source, rel).filter(call => call.owner === owner && call.name === name && call.firstArg === firstArg)
+    assert.ok(matchingCalls.length, `${owner}/${name}/${firstArg} 反向验证不能空转`)
+    for (const call of matchingCalls) for (const mode of ['rename', 'remove', 'comment']) {
       const start = mode === 'remove' ? call.callStart : call.start
       const end = mode === 'remove' ? call.callEnd : call.end
       const replacement = mode === 'remove' ? 'undefined'
@@ -267,7 +279,7 @@ test('真实折算入口拒绝原量、未取整换算量和整数商品的小�
   for (const fold of [foldEntryItem, foldEntryItems, foldEntryItemsBatch]) {
     const input = row => fold === foldEntryItem ? row : [row]
     await assert.rejects(() => fold(conn, input({ ...item, quantity: 1.005 })), { code: 'QTY_DECIMALS_EXCEEDED' })
-    await assert.rejects(() => fold(conn, input({ ...item, quantity: 0.01, entryUnit: '箱' })), { code: 'QTY_DECIMALS_EXCEEDED' })
+    await assert.rejects(() => fold(conn, input({ ...item, quantity: 0.01, entryUnit: '箱' })), { code: fold === foldEntryItem ? 'QTY_DECIMALS_EXCEEDED' : 'QTY_INTEGER_REQUIRED' })
     const result = await fold(conn, input(item))
     assert.equal((fold === foldEntryItem ? result : result[0]).unitPrice, 1.2345)
     if (fold !== foldEntryItem) {
@@ -289,4 +301,20 @@ test('迁移文件存在且默认值为 1（存量商品行为零变化）', () 
   assert.match(sql, /allow_decimal_qty/, `${rel} 必须定义 allow_decimal_qty`)
   assert.match(sql, /TINYINT NOT NULL DEFAULT 1/, '默认值必须是 1（允许小数），否则存量商品会突然不能按小数下单')
   assert.match(sql, /information_schema\.COLUMNS/, '迁移必须幂等：先查 information_schema 再决定是否 ALTER')
+})
+
+function assertFixedSalesCoverage(src, rel) {
+  const calls = callsInSource(src, rel)
+  for (const owner of ['create', 'update', 'requestAdjustment', 'adjustReservedWithinTransaction']) {
+    assert.ok(calls.some(call => call.owner === owner && call.name === 'normalizeFixedSaleItems'), `${owner} 缺少固定单位与数量校验`)
+  }
+  assert.ok(!calls.some(call => /^foldEntryItem/.test(call.name)), '新销售不得恢复单位换算')
+}
+test('新销售全部写入口必须走固定单位校验，恢复换算或删除校验均失败', () => {
+  const rel = 'backend/src/modules/sale/sale.service.js', source = read(rel)
+  assertFixedSalesCoverage(source, rel)
+  for (const call of callsInSource(source, rel).filter(call => call.name === 'normalizeFixedSaleItems')) {
+    const mutated = source.slice(0, call.start) + 'foldEntryItems' + source.slice(call.end)
+    assert.throws(() => assertFixedSalesCoverage(mutated, rel), /固定单位|单位换算/)
+  }
 })

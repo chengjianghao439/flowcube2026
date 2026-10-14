@@ -1,3 +1,4 @@
+const { cashCents, storedCashCents, cashNumber } = require('../../utils/cashMoney')
 /**
  * 已收款退货退款单（P2-6）：专用红冲退款链路。
  *
@@ -32,7 +33,7 @@ const { PAYMENT_EVENT, record: recordPaymentEvent } = require('../payments/payme
 const statementSvc = require('../payments/reconciliation-statements.service')
 const accountSvc = require('../finance/finance-accounts.service')
 const { normalizePagination } = require('../../utils/pagination')
-const { assertInScope, scopeFilter } = require('../../utils/warehouseScope')
+const { saleDocumentScopeFilter, assertSaleDocumentInScope } = require('../../utils/saleDocumentScope')
 const { assertFinancePeriodOpen, tryRecordBackfillApplication } = require('../accounting/finance-period.guard')
 
 const STATUS = { 1: '草稿', 2: '已确认', 3: '已完成', 4: '已取消' }
@@ -78,14 +79,13 @@ async function findAll({ page = 1, pageSize = 20, keyword = '', status = null, s
   if (status) { conds.push('ro.status = ?'); params.push(Number(status)) }
   if (startDate) { conds.push('ro.created_at >= ?'); params.push(`${startDate} 00:00:00`) }
   if (endDate) { conds.push('ro.created_at <= ?'); params.push(`${endDate} 23:59:59`) }
-  // 限仓用户只能看到本仓销售单对应的退款单
-  const scope = scopeFilter(scopeWarehouseIds, 'so.warehouse_id')
+  // 列表与COUNT均先核关联SO头仓及全部保存明细仓，再分页。
+  const scope = saleDocumentScopeFilter(scopeWarehouseIds, 'ro.sale_order_id')
   params.push(...scope.params)
   const where = conds.join(' AND ') + scope.sql
-  const joins = 'LEFT JOIN sale_orders so ON so.id = ro.sale_order_id'
-  const [[{ total }]] = await pool.query(`SELECT COUNT(*) AS total FROM refund_orders ro ${joins} WHERE ${where}`, params)
+  const [[{ total }]] = await pool.query(`SELECT COUNT(*) AS total FROM refund_orders ro WHERE ${where}`, params)
   const [rows] = await pool.query(
-    `SELECT ro.* FROM refund_orders ro ${joins} WHERE ${where} ORDER BY ro.created_at DESC, ro.id DESC LIMIT ? OFFSET ?`,
+    `SELECT ro.* FROM refund_orders ro WHERE ${where} ORDER BY ro.created_at DESC, ro.id DESC LIMIT ? OFFSET ?`,
     [...params, ps, offset],
   )
   return { list: rows.map(fmt), pagination: { page, pageSize: ps, total: Number(total) } }
@@ -94,11 +94,7 @@ async function findAll({ page = 1, pageSize = 20, keyword = '', status = null, s
 async function findById(id, scopeWarehouseIds = null) {
   const [[row]] = await pool.query('SELECT * FROM refund_orders WHERE id = ? AND deleted_at IS NULL', [Number(id)])
   if (!row) throw new AppError('退款单不存在', 404)
-  // 读路径越权防护：按关联销售单仓库校验（超管/不限仓放行）
-  if (Array.isArray(scopeWarehouseIds)) {
-    const [[sale]] = await pool.query('SELECT warehouse_id FROM sale_orders WHERE id = ?', [row.sale_order_id])
-    assertInScope(scopeWarehouseIds, sale?.warehouse_id ?? null, '退款单')
-  }
+  await assertSaleDocumentInScope(pool, scopeWarehouseIds, row.sale_order_id, { entityName: '退款单' })
   return fmt(row)
 }
 
@@ -111,7 +107,7 @@ async function findById(id, scopeWarehouseIds = null) {
 async function create(d, operator, scopeWarehouseIds = null) {
   const saleOrderId = Number(d.saleOrderId)
   const saleOrderNo = String(d.saleOrderNo ?? '').trim()
-  const amount = Number(d.amount)
+  const amount = cashNumber(cashCents(d.amount, { label: '实际退款金额' }))
   if (!(Number.isInteger(saleOrderId) && saleOrderId > 0) && !saleOrderNo) {
     throw new AppError('请选择关联销售单', 400)
   }
@@ -124,15 +120,15 @@ async function create(d, operator, scopeWarehouseIds = null) {
     const cond = Number.isInteger(saleOrderId) && saleOrderId > 0 ? 'so.id = ?' : 'so.order_no = ?'
     const condParam = Number.isInteger(saleOrderId) && saleOrderId > 0 ? saleOrderId : saleOrderNo
     const [[sale]] = await conn.query(
-      `SELECT so.id AS sale_order_id, so.order_no, so.warehouse_id, so.customer_name, pr.id AS payment_record_id, pr.paid_amount
+      `SELECT so.id AS sale_order_id, so.order_no, so.warehouse_id, so.customer_name, pr.id AS payment_record_id, pr.total_amount, pr.paid_amount, pr.balance
          FROM sale_orders so
          LEFT JOIN payment_records pr ON pr.type = 2 AND pr.order_id = so.id
         WHERE ${cond} AND so.deleted_at IS NULL`,
       [condParam],
     )
     if (!sale) throw new AppError('关联销售单不存在', 404)
-    // 跨仓校验：只允许给本仓销售单建退款
-    assertInScope(scopeWarehouseIds, sale.warehouse_id, '销售单')
+    await assertSaleDocumentInScope(conn, scopeWarehouseIds, sale.sale_order_id, { entityName: '退款单', currentRead: true })
+    if (sale.payment_record_id) for (const field of ['total_amount', 'paid_amount', 'balance']) storedCashCents(sale[field], `原账款${field}`)
     const paid = Number(sale.paid_amount || 0)
     if (amount > paid + 1e-6) {
       throw new AppError(`退款金额 ¥${amount.toFixed(2)} 超过该销售单已收金额 ¥${paid.toFixed(2)}`, 400, 'REFUND_EXCEED_PAID')
@@ -159,15 +155,14 @@ async function create(d, operator, scopeWarehouseIds = null) {
 }
 
 /**
- * 锁单后按关联销售单仓库做范围校验（submit/execute/cancel 共用）。
+ * 锁单后按关联销售单头仓及全部保存明细仓做范围校验。
  * 超管/不限仓（scopeWarehouseIds 非数组）直接放行。
  */
 async function assertRefundInScope(conn, scopeWarehouseIds, refundId) {
   if (!Array.isArray(scopeWarehouseIds)) return
   const [[refund]] = await conn.query('SELECT sale_order_id FROM refund_orders WHERE id=?', [refundId])
   if (!refund?.sale_order_id) throw new AppError('退款单未关联销售单，无法校验仓库范围', 403, 'WAREHOUSE_SCOPE_DENIED')
-  const [[sale]] = await conn.query('SELECT warehouse_id FROM sale_orders WHERE id=?', [refund.sale_order_id])
-  assertInScope(scopeWarehouseIds, sale?.warehouse_id ?? null, '退款单')
+  await assertSaleDocumentInScope(conn, scopeWarehouseIds, refund.sale_order_id, { entityName: '退款单', currentRead: conn !== pool })
 }
 
 /** 确认退款：草稿 → 已确认（财务认可金额后进入可执行态） */
@@ -209,6 +204,7 @@ async function execute(id, operator, scopeWarehouseIds = null, requestKey = null
     if (!target) throw new AppError('退款单不存在', 404)
     await assertRefundInScope(pool, scopeWarehouseIds, id)
     assertStatusAction('refundOrder', 'execute', target.status)
+    storedCashCents(target.amount, '原退款金额')
     // 没有退款账户就不写资金流水，也就没有凭证来源：批准执行后只会留下一个永远补不出凭证的
     // 差异。预先拒绝，让申请人先指定退款账户。
     if (!target.account_id) {
@@ -229,12 +225,13 @@ async function execute(id, operator, scopeWarehouseIds = null, requestKey = null
       )
     }
     const [[linkedRecord]] = await pool.query(
-      'SELECT order_no, paid_amount FROM payment_records WHERE id = ?',
+      'SELECT order_no,total_amount,paid_amount,balance FROM payment_records WHERE id = ?',
       [target.payment_record_id],
     )
     if (!linkedRecord) {
       throw new AppError(`退款单 ${target.refund_no} 关联的账款记录已不存在，无法申请补录`, 409, 'FINANCE_BACKFILL_NOT_APPLICABLE')
     }
+    for (const field of ['total_amount', 'paid_amount', 'balance']) storedCashCents(linkedRecord[field], `原账款${field}`)
     if (Number(target.amount) > Number(linkedRecord.paid_amount) + 1e-6) {
       throw new AppError(
         `退款金额 ¥${Number(target.amount).toFixed(2)} 超过账款 ${linkedRecord.order_no} 当前已收金额 ¥${Number(linkedRecord.paid_amount).toFixed(2)}，无法申请补录`,
@@ -282,6 +279,12 @@ async function execute(id, operator, scopeWarehouseIds = null, requestKey = null
   const conn = sharedConn || await pool.getConnection()
   try {
     if (own) await conn.beginTransaction()
+    const row = await lockStatusRow(conn, {
+      table: 'refund_orders', id,
+      columns: 'id, refund_no, sale_order_id, sale_order_no, customer_name, amount, status, payment_record_id, account_id, refund_date',
+      entityName: '退款单',
+    })
+    await assertRefundInScope(conn, scopeWarehouseIds, id)
     // 幂等（2026-08-22 补）：执行退款是多表写事务（冲账+流水+账户出账），连点两次/断网重试会重复退钱
     const requestState = await beginResourceOperationRequest(conn, {
       requestKey,
@@ -294,12 +297,6 @@ async function execute(id, operator, scopeWarehouseIds = null, requestKey = null
       if (own) await conn.rollback()
       return requestState.responseData
     }
-    const row = await lockStatusRow(conn, {
-      table: 'refund_orders', id,
-      columns: 'id, refund_no, sale_order_id, sale_order_no, customer_name, amount, status, payment_record_id, account_id, refund_date',
-      entityName: '退款单',
-    })
-    await assertRefundInScope(conn, scopeWarehouseIds, id)
     const rule = assertStatusAction('refundOrder', 'execute', row.status)
 
     // 补录执行：核对「审批人当时批的那笔」就是「现在要执行的这笔」。
@@ -344,7 +341,8 @@ async function execute(id, operator, scopeWarehouseIds = null, requestKey = null
       }
     }
 
-    const amount = Number(row.amount)
+    const amountCents = storedCashCents(row.amount, '原退款金额')
+    const amount = cashNumber(amountCents)
     // 跨期闸门（2026-09-26 一致性审查 · 任务 7）：业务日期取退款单的 refund_date（钱实际出账
     // 的那天），未填则按今天。位置必须在下面 finance_accounts 锁之前——全局加锁顺序统一为
     // 「业务单据 → 账套锁 → 账户锁 → 对账单锁 → 账款锁」，凭证生成路径也以账套行为最外层锁。
@@ -391,14 +389,16 @@ async function execute(id, operator, scopeWarehouseIds = null, requestKey = null
       'SELECT * FROM payment_records WHERE id = ? FOR UPDATE', [row.payment_record_id],
     )
     if (!record) throw new AppError('关联账款记录不存在，无法执行退款', 404)
+    for (const field of ['total_amount', 'paid_amount', 'balance']) storedCashCents(record[field], `原账款${field}`)
     const paid = Number(record.paid_amount)
     if (amount > paid + 1e-6) {
       throw new AppError(`退款金额 ¥${amount.toFixed(2)} 超过该账款已收金额 ¥${paid.toFixed(2)}，无法退款`, 409, 'REFUND_EXCEED_PAID')
     }
 
     // 冲减已收：paid_amount 减回，balance 增大，status 重算
-    const newPaid = Number((paid - amount).toFixed(4))
-    const newBalance = Number((Number(record.total_amount) - newPaid).toFixed(4))
+    const newPaidCents = storedCashCents(record.paid_amount) - amountCents
+    const newPaid = cashNumber(newPaidCents)
+    const newBalance = cashNumber(storedCashCents(record.total_amount) - newPaidCents)
     const newStatus = newBalance <= 1e-6 ? 3 : newPaid > 0 ? 2 : 1
     await conn.query(
       'UPDATE payment_records SET paid_amount=?, balance=?, status=? WHERE id=?',
@@ -437,7 +437,7 @@ async function execute(id, operator, scopeWarehouseIds = null, requestKey = null
     // 过期存储列误拒（已核销完的账款退款后永远无法解锁回草稿）。
     // 对账单行已在函数开头按统一加锁顺序锁住，这里只做聚合重算。
     for (const s of stmtRows) {
-      await statementSvc.refreshSettlement(conn, s.statement_id)
+      await statementSvc.refreshSettlement(conn, s.statement_id, { cashOnly: true })
     }
 
     await recordPaymentEvent(conn, {

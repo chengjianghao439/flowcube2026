@@ -64,11 +64,11 @@ test.each([1, 2, 3, 4, 5] as const)('状态%s的管理入口和采购来源仍�
   const buttons = () => [...host.querySelectorAll('button')].map(button => button.textContent?.trim())
   expect(buttons().includes('提交到 PDA')).toBe(status === 1)
   expect(buttons().includes('取消任务')).toBe(status === 1)
-  expect(buttons().includes('结束收货')).toBe(status === 2)
+  expect(buttons().includes('结束本次收货')).toBe(status === 2)
   expect(buttons().includes('撤回收货')).toBe([2, 3, 4].includes(status))
   expect(buttons().includes('编辑')).toBe(false)
   fixture.permissions = new Set([PERMISSIONS.INBOUND_ORDER_VIEW]); await draw()
-  for (const label of ['提交到 PDA', '取消任务', '结束收货', '撤回收货', 'PO-31']) expect(buttons()).not.toContain(label)
+  for (const label of ['提交到 PDA', '取消任务', '结束本次收货', '撤回收货', 'PO-31']) expect(buttons()).not.toContain(label)
   expect(host.textContent).toContain('PO-31')
 })
 

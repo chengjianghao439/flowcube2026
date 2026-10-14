@@ -3,7 +3,7 @@ const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const { reserve, partialReleaseByProduct } = require('../../engine/reservationEngine')
-const { reserveTaskLockedContainersForReturn, unlockAndRelocateContainer, lockStockDimension } = require('../../engine/containerEngine')
+const { reserveTaskLockedContainersForReturn, unlockAndRelocateContainer, lockStockDimension, CONTAINER_STATUS } = require('../../engine/containerEngine')
 const { WT_STATUS, assertWarehouseTaskAction } = require('../../constants/warehouseTaskStatus')
 const { WT_EVENT, record: recordEvent } = require('./warehouse-task-events.service')
 const { logSideEffectFailure, assertTaskScope } = require('./warehouse-tasks.helpers')
@@ -433,7 +433,7 @@ async function confirmContainerReturn(returnId, { targetLocationId = null, opera
   try {
     await conn.beginTransaction()
     const [[ret]] = await conn.query(
-      `SELECT r.*, wt.id AS warehouse_task_id, wt.warehouse_id
+      `SELECT r.*, i.product_id AS adjustment_product_id, wt.id AS warehouse_task_id, wt.warehouse_id
        FROM sale_order_adjustment_container_returns r
        INNER JOIN sale_order_adjustment_items i ON i.id = r.adjustment_item_id
        INNER JOIN sale_order_adjustments soa ON soa.id = i.adjustment_id
@@ -448,7 +448,7 @@ async function confirmContainerReturn(returnId, { targetLocationId = null, opera
     // 加锁顺序（2026-09-18 审计 [27]）：本仓全局约定「先 lockStockDimension(商品,仓库) 再锁单个容器」
     // ——上架/出库/盘点/拆分/调拨都按此顺序。本函数原先直接 FOR UPDATE 容器，顺序相反，
     // 与同 (商品,仓库) 的并加上架构成 ABBA 面（上架持维度锁等容器，这里持容器等维度锁）。
-    // 维度值取自一次非锁定读（容器所属商品/仓库不会因此改变结论），随后仍以 FOR UPDATE 的读为准。
+    // 维度值先非锁定读取，拿到容器锁后再复查，变化时回滚，不能在旧维度锁下继续解锁。
     // 容器不存在时跳过维度锁，让下面的 FOR UPDATE 照旧抛 404。
     const [[dim]] = await conn.query(
       'SELECT product_id, warehouse_id FROM inventory_containers WHERE id=? AND deleted_at IS NULL',
@@ -457,16 +457,44 @@ async function confirmContainerReturn(returnId, { targetLocationId = null, opera
     if (dim) await lockStockDimension(conn, dim.product_id, dim.warehouse_id)
 
     const [[container]] = await conn.query(
-      'SELECT id, barcode, location_id, product_id, remaining_qty, locked_by_task_id FROM inventory_containers WHERE id=? FOR UPDATE',
+      `SELECT id, barcode, location_id, product_id, warehouse_id, remaining_qty, status, locked_by_task_id
+       FROM inventory_containers WHERE id=? AND deleted_at IS NULL FOR UPDATE`,
       [ret.source_container_id],
     )
     if (!container) throw new AppError('库存条码不存在', 404)
+    if (!dim || Number(container.product_id) !== Number(dim.product_id) || Number(container.warehouse_id) !== Number(dim.warehouse_id)) {
+      throw new AppError('库存条码归属已变化，请刷新后重试', 409, 'ADJUSTMENT_RETURN_CONTAINER_CHANGED')
+    }
+    const returnQty = Number(ret.qty)
+    const remainingQty = Number(container.remaining_qty)
+    if (Number(container.status) !== CONTAINER_STATUS.ACTIVE
+      || Number(container.warehouse_id) !== Number(ret.warehouse_id)
+      || Number(container.product_id) !== Number(ret.adjustment_product_id)
+      || Number(container.locked_by_task_id) !== Number(ret.warehouse_task_id)
+      || !Number.isFinite(returnQty) || returnQty <= 0
+      || !Number.isFinite(remainingQty) || remainingQty !== returnQty) {
+      throw new AppError('待归还条码与当前任务或实存数量不一致，请核对后重试', 409, 'ADJUSTMENT_RETURN_CONTAINER_INVALID')
+    }
     // 归还库位强校验：必须扫回容器当前登记的原库位（拆分出的新容器继承同一库位，故先按源容器校验再拆分）。
     // 口径与 scan-logs 的拣货退回一致：有原库位必须放回原库位；无原库位（导入/历史容器）
     // 允许放回本仓任意启用库位并写回容器（2026-09-17 续测）。
     if (container.location_id != null && Number(targetLocationId) !== Number(container.location_id)) {
       const [[originalLoc]] = await conn.query('SELECT code FROM warehouse_locations WHERE id=?', [container.location_id])
       throw new AppError(`必须放回原库位 ${originalLoc?.code ?? container.location_id}，不能放到其它库位`, 400)
+    }
+    if (container.location_id == null) {
+      if (!Number.isSafeInteger(targetLocationId) || targetLocationId <= 0) {
+        throw new AppError('请扫描本仓启用的归还库位', 400, 'ADJUSTMENT_RETURN_LOCATION_REQUIRED')
+      }
+      const [[targetLocation]] = await conn.query(
+        `SELECT id, warehouse_id FROM warehouse_locations
+         WHERE id=? AND status=1 AND deleted_at IS NULL FOR SHARE`,
+        [targetLocationId],
+      )
+      if (!targetLocation) throw new AppError('归还库位不存在或已停用', 404, 'ADJUSTMENT_RETURN_LOCATION_INVALID')
+      if (Number(targetLocation.warehouse_id) !== Number(container.warehouse_id)) {
+        throw new AppError('归还库位与任务所属仓库不一致', 400, 'ADJUSTMENT_RETURN_LOCATION_WAREHOUSE_MISMATCH')
+      }
     }
 
     const returnedContainerId = Number(ret.source_container_id)

@@ -1,301 +1,234 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { AxiosRequestConfig } from 'axios'
 import { useNetworkStatus } from './useNetworkStatus'
 import { usePendingRequests, type PendingRequestRecord } from './usePendingRequests'
 import { createRequestKey } from '@/lib/requestKey'
-import { useAuthStore } from '@/store/authStore'
 import { getOperationRequestStatusApi, type OperationRequestStatus } from '@/api/operation-requests'
+import { captureInboundEditOwner, inboundEditOwnerCurrent, inboundEditConfig } from './useInboundTaskEditRecovery'
+import { getDeviceCredential, getDeviceSession } from '@/lib/pdaDeviceBinding'
+import { isUncertainError } from '@/components/shared/payments/useIdempotentSubmit'
+import { reserveTerminalSlot, matchingCompactTerminal, cancelUnsentTerminalSlot, assertTerminalReadyForPost } from '@/lib/criticalTerminalStorage'
+import { criticalTerminalKey, readCriticalTerminal } from '@/lib/pendingRequestStorage'
 
-/**
- * 传输层「结果不确定」判定。
- *
- * 优先看 **api/client.ts 规范化后的结构化 code**：超时 → `REQUEST_TIMEOUT`、
- * 断网 → `NETWORK_ERROR`。这两个 code 才是当前调用链真正 catch 到的东西
- * （message 已被规范成中文，如「网络超时，请稍后重试」/「无法连接服务器…」）。
- * 同时兼容未规范化的原始形态（axios 英文 `timeout of …`、`ECONNABORTED` 等）。
- *
- * **只覆盖传输不确定**：4xx/5xx 等有明确服务端响应的情况不在此列，
- * 交由 confirmByServerState 按业务回执判定，避免扩大「业务失败」的语义。
- */
-function isTransientFailure(e: unknown) {
-  const err = e as { code?: string | null; message?: string | null } | null
-  const code = err?.code ?? null
-  if (code === 'REQUEST_TIMEOUT' || code === 'NETWORK_ERROR') return true
-  const message = String(err?.message ?? (e ?? ''))
-  return [
-    '无法连接服务器',
-    '请求超时',
-    '网络超时',
-    'Network Error',
-    'ERR_NETWORK',
-    'ECONNABORTED',
-    'timeout of',
-    'timed out',
-  ].some((part) => message.includes(part))
+function isUncertain(e: unknown) {
+  const error = e as { status?: number; message?: string } | null
+  if (isUncertainError(e)) return true
+  if (typeof error?.status === 'number' && error.status >= 400 && error.status < 500) return false
+  // 原始网络错误和无可证实状态码的异常均保留原身份。
+  return true
 }
+const deviceIdentity = () => ({ deviceCode: getDeviceCredential()?.deviceCode ?? null, deviceWarehouseId: getDeviceSession()?.warehouseId ?? null })
+const activeClaims = new Set<string>()
+async function bodyFingerprint(body: unknown) {
+  if (!crypto.subtle) throw Error('此客户端无法安全保存原内容，本次不发送')
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(body)))
+  return [...new Uint8Array(digest)].map(n => n.toString(16).padStart(2, '0')).join('')
+}
+const requestIdentity = (record: PendingRequestRecord) => ({ action: record.action, requestAction: record.requestAction, taskId: record.metadata?.taskId ?? null, checkId: record.metadata?.checkId ?? null, itemId: record.metadata?.itemId ?? null, body: record.metadata?.requestBody })
+const resource = (record: PendingRequestRecord) => {
+  const receive = /^inbound\.receive\.([1-9]\d*)$/.exec(record.action)
+  const count = /^stockcheck\.scan\.([1-9]\d*)$/.exec(record.action)
+  return receive ? { type: 'inbound_task', id: Number(receive[1]), kind: 'receive' } : count ? { type: 'stockcheck', id: Number(count[1]), kind: 'stockcheck' } : null
+}
+function assertReceiptIdentity(record: PendingRequestRecord, receipt: OperationRequestStatus) {
+  const expected = resource(record)
+  if (!expected) return
+  if (receipt.resourceType != null && receipt.resourceType !== expected.type || receipt.resourceId != null && receipt.resourceId !== expected.id) throw Error('返回结果与原单据不一致，请保留原记录并核对')
+  if (receipt.status === 'success' && expected.kind === 'stockcheck' && (record.endpoint || record.metadata?.itemId)) {
+    const data = receipt.data as { itemId?: unknown } | null
+    if (data?.itemId !== record.metadata?.itemId) throw Error('返回结果与原盘点商品不一致，请保留原记录并核对')
+  }
+}
+const sameDevice = (record: PendingRequestRecord) => !record.endpoint || record.deviceCode === deviceIdentity().deviceCode && record.deviceWarehouseId === deviceIdentity().deviceWarehouseId
 
 type ConfirmContext = { recovered: boolean; requestKey: string }
 export type CriticalPdaActionPhase = 'idle' | 'submitting' | 'pending' | 'confirming' | 'failed'
 export type CriticalPdaConfirmResult = OperationRequestStatus | {
-  status: 'state_confirmed'
-  data: unknown
-  message: string
+  status: 'state_confirmed'; data: unknown; message: string
 } | {
-  status: 'state_unconfirmed'
-  data: null
-  message: string
-  reason: 'receipt_missing' | 'state_not_advanced'
+  status: 'state_unconfirmed'; data: null; message: string; reason: 'receipt_missing' | 'state_not_advanced'
 }
+type ServerStateResult<T> = { effective: true; data?: T; message?: string } | { effective: false; message?: string }
+type ResolveServerState<T> = (ctx: { record: PendingRequestRecord; operationStatus?: OperationRequestStatus | null; error?: unknown }) => Promise<ServerStateResult<T> | null | undefined>
+type RecoveryExecutor<T> = (record: PendingRequestRecord, requestKey: string, config: AxiosRequestConfig) => Promise<T>
 
-type ServerStateResult<T> =
-  | { effective: true; data?: T; message?: string }
-  | { effective: false; message?: string }
-
-type ResolveServerState<T> = (ctx: {
-  record: PendingRequestRecord
-  operationStatus?: OperationRequestStatus | null
-  error?: unknown
-}) => Promise<ServerStateResult<T> | null | undefined>
-
-function stateUnconfirmedMessage(label: string, reason: 'receipt_missing' | 'state_not_advanced') {
-  if (reason === 'receipt_missing') {
-    return `${label}还没确认成功，已重新查询任务状态。请刷新后再确认，暂勿重复扫码。`
-  }
-  return `${label}还没确认成功，任务状态也没有推进。请核对当前状态后再决定是否重试。`
-}
-
-export function useCriticalPdaAction<T>({
-  action,
-  requestAction,
-  label,
-  onConfirmed,
-  resolveServerState,
-  active = true,
-}: {
-  action: string
-  requestAction?: string
-  label: string
+export function useCriticalPdaAction<T>({ action, requestAction, label, onConfirmed, active = true, retryExecutor }: {
+  action: string; requestAction?: string; label: string
   onConfirmed?: (data: T, ctx: ConfirmContext) => void | Promise<void>
+  /** 兼容调用点类型；业务当前进度不再用来确认原请求。 */
   resolveServerState?: ResolveServerState<T>
-  /** 塑料盒三动作的保留实例使用；默认沿用原行为，隐藏不自动核对/接收结果。 */
+  retryExecutor?: RecoveryExecutor<T>
   active?: boolean
 }) {
   const visibility = useRef({ active, epoch: 0 })
   if (visibility.current.active !== active) visibility.current = { active, epoch: visibility.current.epoch + 1 }
+  const mounted = useRef(true)
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
   const networkStatus = useNetworkStatus()
-  const { records, claimPending, removePending, discardUnclaimed } = usePendingRequests()
-  const pendingRecord = useMemo(
-    () => records.find((item) => item.action === action) ?? null,
-    [records, action],
-  )
-  const [confirming, setConfirming] = useState(false)
-  const [phase, setPhase] = useState<CriticalPdaActionPhase>('idle')
-  const [phaseMessage, setPhaseMessage] = useState<string | null>(null)
-  const [lastErrorMessage, setLastErrorMessage] = useState<string | null>(null)
-  const autoConfirmRef = useRef<string | null>(null)
+  const { records, claimPending, removePending, discardUnclaimed, storageError, isPendingCurrent } = usePendingRequests()
+  const matches = useMemo(() => records.filter(item => item.action === action), [records, action])
+  const observed = useRef<{ record: PendingRequestRecord; userId: number | null } | null>(null)
+  const renderOwner = captureInboundEditOwner()
+  if (matches[0]) observed.current = { record: matches[0], userId: renderOwner.userId }
+  const lostRecord = !matches[0] && observed.current?.userId === renderOwner.userId && observed.current.record.endpoint === renderOwner.baseURL ? observed.current.record : null
+  const pendingRecord = matches[0] ?? lostRecord
+  const [confirming, setConfirming] = useState(false), [phase, setPhase] = useState<CriticalPdaActionPhase>('idle')
+  const [phaseMessage, setPhaseMessage] = useState<string | null>(null), [lastErrorMessage, setLastErrorMessage] = useState<string | null>(null)
+  const autoConfirmRef = useRef<string | null>(null), flight = useRef(false)
   const statusAction = requestAction || action
-
-  const confirmByServerState = useCallback(async (
-    record: PendingRequestRecord,
-    operationStatus?: OperationRequestStatus | null,
-    error?: unknown,
-  ): Promise<CriticalPdaConfirmResult | null> => {
-    if (record.unverifiedOwner || !resolveServerState) return null
-    const serverState = await resolveServerState({ record, operationStatus, error })
-    if (!serverState?.effective) return null
-    const data = (serverState.data ?? operationStatus?.data ?? null) as T
-    removePending(action)
-    setPhase('idle')
-    setPhaseMessage(serverState.message || `${record.label}已成功，任务状态已更新。`)
-    setLastErrorMessage(null)
-    if (onConfirmed) {
-      await onConfirmed(data, {
-        recovered: true,
-        requestKey: record.requestKey,
-      })
+  const capture = useCallback((record?: PendingRequestRecord) => {
+    const owner = captureInboundEditOwner(), visible = visibility.current.epoch
+    if (record?.endpoint) {
+      if (record.action !== action || record.requestAction !== statusAction) throw Error('原操作的单据定位不一致，请保留记录并核对')
+      const expected = resource(record)
+      if (expected?.kind === 'receive' && record.metadata?.taskId !== expected.id) throw Error('原收货单定位不一致，请保留记录并核对')
+      if (expected?.kind === 'stockcheck' && (record.metadata?.checkId !== expected.id || !Number.isSafeInteger(record.metadata?.itemId) || Number(record.metadata?.itemId) <= 0)) throw Error('原盘点单或商品定位不一致，请保留记录并核对')
     }
-    return {
-      status: 'state_confirmed',
-      data,
-      message: serverState.message || `${record.label}已成功，任务状态已更新。`,
-    }
-  }, [action, onConfirmed, removePending, resolveServerState])
-
-  const confirmPending = useCallback(async (): Promise<CriticalPdaConfirmResult | null> => {
-    if (!visibility.current.active || !pendingRecord || networkStatus !== 'online' || confirming || phase === 'submitting') return null
-    const generation = useAuthStore.getState().sessionGeneration
-    const visible = visibility.current.epoch
-    const isCurrentSession = () => visibility.current.active && visibility.current.epoch === visible && useAuthStore.getState().sessionGeneration === generation
-    setConfirming(true)
-    setPhase('confirming')
-    setPhaseMessage(`正在确认${pendingRecord.label}的结果，请勿重复提交。`)
-    setLastErrorMessage(null)
-    try {
-      const status = await getOperationRequestStatusApi(
-        pendingRecord.requestKey,
-        // 老版本调拨 pending 保存固定 action；用当前单据 action 查询兼容回执，防止跨单误确认。
-        /^transfer\.scan(?:Out|In)\.[1-9]\d*$/.test(statusAction)
-          ? statusAction
-          : pendingRecord.unverifiedOwner ? requestAction || pendingRecord.requestAction || statusAction : pendingRecord.requestAction || statusAction,
-      )
-      if (!isCurrentSession()) return null
-      if (status.status === 'success') {
-        if (pendingRecord.unverifiedOwner) discardUnclaimed(action, pendingRecord.requestKey)
-        removePending(action)
-        setPhase('idle')
-        setPhaseMessage(null)
-        if (onConfirmed) {
-          await onConfirmed(status.data as T, {
-            recovered: true,
-            requestKey: pendingRecord.requestKey,
-          })
-        }
-      }
-      if (status.status === 'failed') {
-        if (pendingRecord.unverifiedOwner) discardUnclaimed(action, pendingRecord.requestKey)
-        const stateConfirmed = await confirmByServerState(pendingRecord, status)
-        if (stateConfirmed) return stateConfirmed
-        removePending(action)
-        setPhase('failed')
-        setPhaseMessage(null)
-        setLastErrorMessage(status.message || `${pendingRecord.label}提交失败，任务状态没有推进。请检查后重试。`)
-      }
-      if (status.status === 'not_found') {
-        const stateConfirmed = await confirmByServerState(pendingRecord, status)
-        if (stateConfirmed) return stateConfirmed
-        const message = pendingRecord.unverifiedOwner
-          ? '历史操作的归属与结果仍无法确认，请人工核对；确认未生效后可清除记录。'
-          : resolveServerState
-          ? stateUnconfirmedMessage(pendingRecord.label, 'receipt_missing')
-          : `${pendingRecord.label}结果还没确认。请稍后再次确认，暂勿重复扫码。`
-        setPhase('pending')
-        setPhaseMessage(message)
-        setLastErrorMessage(null)
-        return {
-          status: 'state_unconfirmed',
-          data: null,
-          message,
-          reason: 'receipt_missing',
-        }
-      }
-      if (status.status === 'pending') {
-        const stateConfirmed = await confirmByServerState(pendingRecord, status)
-        if (stateConfirmed) return stateConfirmed
-        setPhase('pending')
-        setPhaseMessage(status.message || `系统还未确认${pendingRecord.label}结果，请稍后重试确认，暂勿重复提交。`)
-      }
-      return status
-    } catch (error) {
-      if (!isCurrentSession()) return null
-      const message = error instanceof Error ? error.message : String(error ?? '')
-      if (isTransientFailure(error)) {
-        setPhase('pending')
-        setPhaseMessage(`网络波动，暂时无法确认${pendingRecord.label}结果。请恢复网络后再次确认。`)
-        return null
-      }
-      const stateConfirmed = await confirmByServerState(pendingRecord, null, error)
-      if (stateConfirmed) return stateConfirmed
-      setPhase('failed')
-      setPhaseMessage(null)
-      setLastErrorMessage(message || stateUnconfirmedMessage(pendingRecord.label, 'state_not_advanced'))
-      return null
-    } finally {
-      setConfirming(false)
-    }
-  }, [action, confirmByServerState, confirming, discardUnclaimed, networkStatus, onConfirmed, pendingRecord, phase, removePending, requestAction, resolveServerState, statusAction])
-
+    if (record?.endpoint && (record.endpoint !== owner.baseURL || !sameDevice(record))) throw Error('服务器或设备已变化，请回原服务器和设备确认上次结果')
+    if (record && isPendingCurrent && !isPendingCurrent(record)) throw Error('原请求记录已变化，请保留全部原内容并核对')
+    const current = () => mounted.current && visibility.current.active && visibility.current.epoch === visible && inboundEditOwnerCurrent(owner) && (!record || sameDevice(record) && (!isPendingCurrent || isPendingCurrent(record)))
+    return { current, config: inboundEditConfig(owner), owner }
+  }, [action, isPendingCurrent, statusAction])
+  const receiptAction = useCallback((record: PendingRequestRecord) => /^transfer\.scan(?:Out|In)\.[1-9]\d*$/.test(statusAction)
+    ? statusAction : record.unverifiedOwner ? requestAction || record.requestAction || statusAction : record.requestAction || statusAction, [requestAction, statusAction])
+  const finish = useCallback(async (record: PendingRequestRecord, status: 'success' | 'failed', data?: unknown, message?: string) => {
+    if (record.unverifiedOwner) discardUnclaimed(action, record.requestKey)
+    assertReceiptIdentity(record, { status, data, message: '' })
+    if (await removePending(action, record.requestKey, status, data, record) === false) return
+    observed.current = null
+    setPhase(status === 'success' ? 'idle' : 'failed'); setPhaseMessage(null)
+    setLastErrorMessage(status === 'failed' ? message || `${record.label}未执行，可检查原输入后重新提交。` : null)
+    if (status === 'success') await onConfirmed?.(data as T, { recovered: true, requestKey: record.requestKey })
+  }, [action, discardUnclaimed, onConfirmed, removePending])
   useEffect(() => {
-    if (!active || networkStatus !== 'online' || !pendingRecord) return
-    if (phase === 'submitting') return
+    if (!lostRecord || !active || renderOwner.userId == null || !sameDevice(lostRecord)) return
+    try {
+      const terminal = readCriticalTerminal(renderOwner.userId, lostRecord)
+      if (!terminal) { setPhase('pending'); setPhaseMessage('原记录已变化但结果尚未确认，请保留原内容并人工核对。'); return }
+      if (terminal.compact) { setPhase('pending'); setPhaseMessage('原操作已确认，请查询原结果详情；暂勿重新提交。'); return }
+      assertReceiptIdentity(lostRecord, { status: terminal.status, data: terminal.data, message: '' })
+      observed.current = null
+      setPhase(terminal.status === 'success' ? 'idle' : 'failed'); setPhaseMessage(null)
+      if (terminal.status === 'success') void onConfirmed?.(terminal.data as T, { recovered: true, requestKey: lostRecord.requestKey })
+      else setLastErrorMessage('已确认原操作未执行，可核对原输入后重新提交。')
+    } catch (e) { setPhase('pending'); setPhaseMessage((e as Error).message) }
+  }, [active, lostRecord, onConfirmed, renderOwner])
+  const query = useCallback(async (record: PendingRequestRecord, captured: ReturnType<typeof capture>) => {
+    if (record.endpoint && captured.owner.userId) await matchingCompactTerminal(criticalTerminalKey(captured.owner.userId, record.requestKey), record)
+    if (record.requestFingerprint && await bodyFingerprint(requestIdentity(record)) !== record.requestFingerprint) throw Error('原请求正文或单据定位已变化，请保留记录并人工核对')
+    if (!captured.current()) return null
+    const status = await getOperationRequestStatusApi(record.requestKey, receiptAction(record), captured.config)
+    if (!captured.current()) return null
+    assertReceiptIdentity(record, status)
+    if (status.status === 'success' || status.status === 'failed') await finish(record, status.status, status.data, status.message)
+    else {
+      setPhase('pending'); setLastErrorMessage(null)
+      setPhaseMessage(status.status === 'pending' ? status.message || '原操作仍在处理中，请稍后查询。' : '暂时查不到原提交，请保留原内容和记录继续核对，暂勿重新扫码。')
+    }
+    return status
+  }, [finish, receiptAction])
+  const confirmPending = useCallback(async (): Promise<CriticalPdaConfirmResult | null> => {
+    if (!visibility.current.active || !pendingRecord || networkStatus !== 'online' || flight.current || matches.length > 1) return null
+    let captured: ReturnType<typeof capture>
+    try { captured = capture(pendingRecord) } catch (e) { setPhaseMessage((e as Error).message); return null }
+    flight.current = true; setConfirming(true); setPhase('confirming'); setLastErrorMessage(null)
+    setPhaseMessage(`正在确认${pendingRecord.label}的结果，请勿重复提交。`)
+    try { return await query(pendingRecord, captured) }
+    catch (e) {
+      if (captured.current()) { setPhase('pending'); setPhaseMessage(`暂时无法确认${pendingRecord.label}结果。${(e as Error).message || '请稍后再次确认。'}`) }
+      return null
+    } finally { flight.current = false; if (mounted.current) setConfirming(false) }
+  }, [capture, matches.length, networkStatus, pendingRecord, query])
+  useEffect(() => {
+    if (!active || networkStatus !== 'online' || !pendingRecord || phase === 'submitting' || flight.current) return
     if (autoConfirmRef.current === pendingRecord.requestKey) return
     autoConfirmRef.current = pendingRecord.requestKey
     void confirmPending()
   }, [active, networkStatus, pendingRecord, phase, confirmPending])
-
   const blockedReason = useMemo(() => {
-    if (networkStatus !== 'online') {
-      return '网络已断开，关键操作已强制阻断。请恢复网络后再提交。'
-    }
-    if (pendingRecord) {
-      return `${pendingRecord.label} 结果待确认。请先确认结果，避免重复提交。`
-    }
+    if (storageError) return '原作业记录读取失败，请保留记录并核对，暂勿提交。'
+    if (matches.length > 1) return '存在多笔待核对原操作，请保留全部记录并人工核对。'
+    if (networkStatus !== 'online') return '网络已断开，关键操作已强制阻断。请恢复网络后再提交。'
+    if (pendingRecord) return `${pendingRecord.label} 结果待确认。请先确认结果，避免重复提交。`
     return null
-  }, [networkStatus, pendingRecord])
-
+  }, [matches.length, networkStatus, pendingRecord, storageError])
   const run = useCallback(async (
-    executor: (requestKey: string) => Promise<T>,
+    executor: (requestKey: string, config: AxiosRequestConfig, metadata?: Record<string, unknown>) => Promise<T>,
     metadata?: Record<string, unknown>,
   ): Promise<{ kind: 'success'; data: T } | { kind: 'pending'; requestKey: string }> => {
-    if (!visibility.current.active) throw new Error('请回到原作业页面再提交')
-    const visible = visibility.current.epoch
-    if (networkStatus !== 'online') {
-      throw new Error('网络已断开，关键操作不可提交')
-    }
-    if (pendingRecord) {
-      throw new Error(`${pendingRecord.label} 结果待确认，请先确认后再重试`)
-    }
-
-    const requestKey = createRequestKey(action.replace(/[^a-z0-9]+/gi, '-'))
-    const record: PendingRequestRecord = {
-      requestKey,
-      action,
-      requestAction: statusAction,
-      label,
-      createdAt: new Date().toISOString(),
-      metadata,
-    }
-    if (!claimPending(record)) throw new Error(`${label} 结果待确认，请先确认后再重试`)
-    setPhase('submitting')
-    setPhaseMessage(`${label}提交中，请保持当前页面并等待结果。`)
-    setLastErrorMessage(null)
-
+    if (!visibility.current.active) throw Error('请回到原作业页面再提交')
+    if (networkStatus !== 'online') throw Error('网络已断开，关键操作不可提交')
+    if (pendingRecord || flight.current) throw Error(`${label}结果待确认，请先确认后再重试`)
+    const initial = capture(), claimId = `${initial.owner.userId}:${initial.owner.baseURL}:${action}`
+    if (activeClaims.has(claimId)) throw Error(`${label}结果待确认，请先确认后再重试`)
+    if (!navigator.locks?.request) throw Error('此客户端无法安全保存原操作，请使用支持本地恢复的客户端')
+    activeClaims.add(claimId); flight.current = true
+    try { return await navigator.locks.request(`flowcube-pda:${claimId}`, { ifAvailable: true }, async lock => {
+      if (!lock) throw Error('另一窗口正在提交原操作，请先等待并查询原结果')
+      if (!initial.current()) throw Error('登录状态或服务器已变化，请重新核对原操作')
+      const requestKey = createRequestKey(action.replace(/[^a-z0-9]+/gi, '-'))
+      const record: PendingRequestRecord = { requestKey, action, requestAction: statusAction, label, createdAt: new Date().toISOString(), endpoint: initial.owner.baseURL, ...deviceIdentity(), metadata: metadata ? JSON.parse(JSON.stringify(metadata)) : undefined }
+      if (record.metadata?.requestBody !== undefined) record.requestFingerprint = await bodyFingerprint(requestIdentity(record))
+      if (!initial.current()) throw Error('账号或服务器已变化，本次没有发送')
+      if (!initial.owner.userId) throw Error('请先登录原账号再提交')
+      const terminalKey = criticalTerminalKey(initial.owner.userId, requestKey)
+      const reservation = await reserveTerminalSlot(terminalKey, record)
+      try {
+        if (!initial.current()) throw Error('账号或服务器已变化，本次没有发送')
+        if (!claimPending(record)) throw Error(`${label}结果待确认，请先确认后再重试`)
+      } catch (e) { await cancelUnsentTerminalSlot(terminalKey, record); throw e }
+      const captured = capture(record)
+      setPhase('submitting'); setPhaseMessage(`${label}提交中，请等待结果。`); setLastErrorMessage(null)
+      try {
+        if (!captured.current()) return { kind: 'pending' as const, requestKey }
+        assertTerminalReadyForPost(terminalKey, record, reservation)
+        const data = await executor(requestKey, captured.config, record.metadata)
+        if (!captured.current()) return { kind: 'pending' as const, requestKey }
+        assertReceiptIdentity(record, { status: 'success', data, message: '' })
+        if (await removePending(action, requestKey, 'success', data, record) === false) return { kind: 'pending' as const, requestKey }
+        observed.current = null; setPhase('idle'); setPhaseMessage(null)
+        await onConfirmed?.(data, { recovered: false, requestKey })
+        return { kind: 'success' as const, data }
+      } catch (e) {
+        if (!captured.current()) return { kind: 'pending' as const, requestKey }
+        if (isUncertain(e)) { setPhase('pending'); setPhaseMessage(`${label}结果待确认，请先确认原结果，暂勿重复提交。`); return { kind: 'pending' as const, requestKey } }
+        if (await removePending(action, requestKey, 'failed', undefined, record) === false) return { kind: 'pending' as const, requestKey }
+        observed.current = null; setPhase('failed'); setPhaseMessage(null); setLastErrorMessage((e as Error).message || `${label}未执行，请检查后重试。`)
+        throw e
+      }
+    }) } finally { flight.current = false; activeClaims.delete(claimId) }
+  }, [action, capture, claimPending, label, networkStatus, onConfirmed, pendingRecord, removePending, statusAction])
+  const retryPending = useCallback(async () => {
+    if (!pendingRecord || !retryExecutor || pendingRecord.unverifiedOwner || !pendingRecord.endpoint || !pendingRecord.requestFingerprint || flight.current || networkStatus !== 'online' || matches.length > 1) throw Error('原操作尚不能安全重试，请先核对原结果')
+    const captured = capture(pendingRecord)
+    flight.current = true; setConfirming(true)
     try {
-      const data = await executor(requestKey)
-      if (!visibility.current.active || visibility.current.epoch !== visible) { setPhase('pending'); return { kind: 'pending', requestKey } }
-      removePending(action)
-      setPhase('idle')
-      setPhaseMessage(null)
-      if (onConfirmed) {
-        await onConfirmed(data, { recovered: false, requestKey })
+      const receipt = await query(pendingRecord, captured)
+      if (receipt?.status !== 'not_found') return receipt
+      const age = Date.now() - Date.parse(pendingRecord.createdAt)
+      if (!Number.isFinite(age) || age < -120000 || age >= 7 * 86400000 - 120000) throw Error('原操作已超出安全重试时限，请只查询并人工核对')
+      if (!captured.owner.userId) throw Error('请回原账号核对原结果')
+      const terminalKey = criticalTerminalKey(captured.owner.userId, pendingRecord.requestKey)
+      const reservation = await reserveTerminalSlot(terminalKey, pendingRecord, true)
+      if (!captured.current()) return null
+      setPhase('submitting')
+      try {
+        assertTerminalReadyForPost(terminalKey, pendingRecord, reservation)
+        const data = await retryExecutor(pendingRecord, pendingRecord.requestKey, captured.config)
+        if (captured.current()) { await finish(pendingRecord, 'success', data); return { status: 'success' as const, data, message: '原操作已确认成功' } }
+      } catch (e) {
+        if (captured.current()) { setPhase('pending'); setPhaseMessage(`原操作仍待确认。${(e as Error).message || '请继续查询原结果。'}`) }
       }
-      return { kind: 'success', data }
-    } catch (error) {
-      if (!visibility.current.active || visibility.current.epoch !== visible) { setPhase('pending'); return { kind: 'pending', requestKey } }
-      const message = error instanceof Error ? error.message : String(error ?? '')
-      if (isTransientFailure(error)) {
-        setPhase('pending')
-        setPhaseMessage(`网络波动，${label}结果待确认。请先确认结果，避免重复提交。`)
-        return { kind: 'pending', requestKey }
-      }
-      const stateConfirmed = await confirmByServerState(record, null, error)
-      if (stateConfirmed) {
-        return { kind: 'success', data: stateConfirmed.data as T }
-      }
-      removePending(action)
-      setPhase('failed')
-      setPhaseMessage(null)
-      setLastErrorMessage(message || `${label}未提交成功，任务状态未能确认已推进。请检查后重试。`)
-      throw error
-    }
-  }, [action, claimPending, confirmByServerState, label, networkStatus, onConfirmed, pendingRecord, removePending, statusAction])
-
-  return {
-    networkStatus,
-    pendingRecord,
-    confirming,
-    phase,
-    phaseMessage,
-    lastErrorMessage,
-    blockedReason,
-    submitBlocked: Boolean(blockedReason),
-    run,
-    confirmPending,
+      return null
+    } finally { flight.current = false; if (mounted.current) setConfirming(false) }
+  }, [capture, finish, matches.length, networkStatus, pendingRecord, query, retryExecutor])
+  return { networkStatus, pendingRecord, confirming, phase, phaseMessage, lastErrorMessage, blockedReason, submitBlocked: Boolean(blockedReason), run, confirmPending, retryPending,
+    canRetry: !!retryExecutor && !!pendingRecord?.endpoint && !!pendingRecord.requestFingerprint && !pendingRecord.unverifiedOwner && sameDevice(pendingRecord),
     clearPending: () => {
-      if (pendingRecord?.unverifiedOwner) discardUnclaimed(action, pendingRecord.requestKey)
-      removePending(action)
+      // 新记录只能由原回执或首发明确拒绝结束；人工猜测未生效不能换键。
+      if (pendingRecord?.unverifiedOwner) { discardUnclaimed(action, pendingRecord.requestKey); void removePending(action, pendingRecord.requestKey) }
+      else setPhaseMessage('请先查询原结果；结果未确认时保留原记录，暂勿另发提交。')
     },
-    clearError: () => {
-      setLastErrorMessage(null)
-      if (phase === 'failed') setPhase('idle')
-    },
+    clearError: () => { setLastErrorMessage(null); if (phase === 'failed') setPhase('idle') },
   }
 }

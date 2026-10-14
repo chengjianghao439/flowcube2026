@@ -1,4 +1,5 @@
 const { moneyUnits, moneyText } = require('../../utils/decimalMoney')
+const { cashCents, storedCashCents, cashNumber } = require('../../utils/cashMoney')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { beijingTodayYmd } = require('../../utils/backendTime')
@@ -72,13 +73,18 @@ async function refreshBalance(conn, accountId, { asText = false } = {}) {
   const [[acc]] = await conn.query('SELECT opening_balance FROM finance_accounts WHERE id=? FOR UPDATE', [accountId])
   if (!acc) throw new AppError('账户不存在', 404)
   const [[agg]] = await conn.query(
-    `SELECT COALESCE(SUM(CASE WHEN direction = 1 THEN amount ELSE -amount END), 0) AS delta
+    `SELECT COALESCE(SUM(CASE WHEN direction = 1 THEN amount ELSE -amount END), 0) AS delta,
+            COALESCE(SUM(MOD(amount,0.01)<>0),0) AS fractional_count
        FROM finance_account_transactions WHERE account_id = ? FOR UPDATE`,
     [accountId],
   )
-  const balance = moneyText(moneyUnits(acc.opening_balance) + moneyUnits(agg.delta))
+  const openingCents = storedCashCents(acc.opening_balance, '账户原期初余额')
+  if (Number(agg.fractional_count) > 0) throw new AppError('账户存在历史非分资金流水，请核对原账', 409, 'CASH_LEGACY_PRECISION_REVIEW_REQUIRED')
+  const balanceCents = openingCents + storedCashCents(agg.delta, '账户资金流水合计')
+  const balanceNumber = cashNumber(balanceCents)
+  const balance = moneyText(moneyUnits(balanceNumber))
   await conn.query('UPDATE finance_accounts SET current_balance=? WHERE id=?', [balance, accountId])
-  return asText ? balance : Number(balance)
+  return asText ? balance : balanceNumber
 }
 
 /**
@@ -95,6 +101,7 @@ async function recordTransaction(conn, {
   voucherDateOverride = null, backfillId = null,
 }, operator = {}) {
   const id = Number(accountId)
+  cashCents(amount, { label: '实际资金流水金额' })
   const amountUnits = moneyUnits(amount)
   if (!Number.isFinite(id) || id <= 0) throw new AppError('请选择资金账户', 400)
   if (amountUnits <= 0n) throw new AppError('流水金额必须大于 0', 400)
@@ -102,6 +109,8 @@ async function recordTransaction(conn, {
   const [[acc]] = await conn.query('SELECT * FROM finance_accounts WHERE id=? AND deleted_at IS NULL FOR UPDATE', [id])
   if (!acc) throw new AppError('资金账户不存在', 404)
   if (!acc.is_active) throw new AppError(`账户「${acc.name}」已停用，不能再用于收付款`, 400)
+  storedCashCents(acc.opening_balance, '账户原期初余额')
+  storedCashCents(acc.current_balance, '账户原余额')
 
   // 先落流水，再由 refreshBalance 从全量流水重算，balance_after 取重算结果
   const [r] = await conn.query(
@@ -156,6 +165,7 @@ async function findById(id) {
 }
 
 async function create({ name, type, accountNo, bankName, holder, openingBalance = 0, sortOrder = 0, remark }, operator) {
+  cashCents(openingBalance, { label: '账户期初余额' })
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
@@ -191,7 +201,10 @@ async function update(id, { name, type, accountNo, bankName, holder, openingBala
     if (!acc) throw new AppError('资金账户不存在', 404)
 
     const nextOpening = moneyText(moneyUnits(openingBalance != null ? openingBalance : acc.opening_balance))
-    if (moneyUnits(nextOpening) !== moneyUnits(acc.opening_balance)) {
+    const openingChanged = moneyUnits(nextOpening) !== moneyUnits(acc.opening_balance)
+    if (openingChanged) {
+      cashCents(openingBalance, { label: '账户期初余额' })
+      storedCashCents(acc.opening_balance, '账户原期初余额')
       const [[{ n }]] = await conn.query(
         'SELECT COUNT(*) AS n FROM finance_account_transactions WHERE account_id=? FOR UPDATE', [id],
       )
@@ -207,7 +220,7 @@ async function update(id, { name, type, accountNo, bankName, holder, openingBala
       [String(name).trim(), Number(type), accountNo || null, bankName || null, holder || null,
        nextOpening, isActive ? 1 : 0, Number(sortOrder) || 0, remark || null, id],
     )
-    await refreshBalance(conn, id)
+    if (openingChanged) await refreshBalance(conn, id)
     await conn.commit()
     return { id: Number(id) }
   } catch (error) {
@@ -223,12 +236,14 @@ async function update(id, { name, type, accountNo, bankName, holder, openingBala
  * 不直接改余额——那样查不出「谁在什么时候把账改成了这样」。
  */
 async function adjust(id, { targetBalance, happenedAt, remark }, operator) {
+  cashCents(targetBalance, { label: '账户调整后余额' })
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
     const [[acc]] = await conn.query('SELECT * FROM finance_accounts WHERE id=? AND deleted_at IS NULL FOR UPDATE', [id])
     if (!acc) throw new AppError('资金账户不存在', 404)
 
+    storedCashCents(acc.current_balance, '账户原余额')
     const targetUnits = moneyUnits(targetBalance)
     const diffUnits = targetUnits - moneyUnits(acc.current_balance)
     if (diffUnits === 0n) throw new AppError('调整后余额与当前余额相同，无需调整', 400)

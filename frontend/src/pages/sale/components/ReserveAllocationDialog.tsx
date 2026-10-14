@@ -1,3 +1,4 @@
+import OrdinarySaleRecoveryNotice from './OrdinarySaleRecoveryNotice'
 import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
 import { money } from '@/lib/format'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
@@ -11,7 +12,6 @@ import { clampAllocationQty, isAllocationQtyValid } from './saleAllocation'
 import { cn } from '@/lib/utils'
 import { summarizeSaleQuantities } from '@/lib/salePresentation'
 import { useSaleReservePreview, useReserveSale } from '@/hooks/useSale'
-import { useProductQtyPolicies } from '@/hooks/useProductQtyPolicies'
 import { qtyStep } from '@/lib/qtyStep'
 import { ApiClientError } from '@/api/client'
 import type { StockShortageItem } from './StockShortageDialog'
@@ -30,12 +30,13 @@ type RowState = { checked: boolean; warehouseId: number; warehouseName: string; 
 /**
  * 产品占库弹窗：按产品勾选 + 按数量指定本次占多少。
  * - 每行可勾选（是否占该行），勾选后填「本次占库数量」（默认 = 未占余量）。
- * - 支持从草稿/部分占库/已占库三种状态打开（补占）。
+ * - 草稿/部分占库及执行中有未占原需求时可打开，累计已占量不因实发归零。
  * - 提交只把「勾选且 qty>0」的行传给后端 reserve。
  */
 export default function ReserveAllocationDialog({ open, orderId, onClose, onShortage }: Props) {
   const { data: preview, isLoading, isFetching, isError, error, refetch } = useSaleReservePreview(orderId ?? 0, open)
-  const reserve = useReserveSale()
+  const reserve = useReserveSale(orderId)
+  const frozen = reserve.isPending || !!reserve.recovery?.blocked
   const submitting = useRef(false)
   const rowSource = useRef<number | null>(null)
   const fieldId = useId()
@@ -45,7 +46,7 @@ export default function ReserveAllocationDialog({ open, orderId, onClose, onShor
   useEffect(() => { if (!open) rowSource.current = null }, [open])
 
   useEffect(() => {
-    if (!open || !preview || submitting.current) return
+    if (!open || !preview || submitting.current || reserve.recovery?.pending) return
     const sameSource = rowSource.current === orderId
     setRows(previous => Object.fromEntries(
       preview.items.map(i => [i.itemId, sameSource && previous[i.itemId] ? previous[i.itemId] : {
@@ -56,11 +57,10 @@ export default function ReserveAllocationDialog({ open, orderId, onClose, onShor
       }]),
     ))
     rowSource.current = orderId
-  }, [preview, orderId, open])
+  }, [preview, orderId, open, reserve.recovery?.pending])
 
   const items = useMemo(() => preview?.items ?? [], [preview])
-  // 「只能整数」的商品把占库数量框的 step 切成 1（迁移 254）
-  const allowDecimalOf = useProductQtyPolicies(items.map(i => i.productId))
+  // 使用服务端返回的当前商品数量规则，服务端仍独立校验。
   const credit = preview?.credit ?? null
 
   const selectedRows = useMemo(
@@ -87,16 +87,16 @@ export default function ReserveAllocationDialog({ open, orderId, onClose, onShor
 
   const shortRows = selectedRows.filter(i => {
     const st = rows[i.itemId]
-    return !isAllocationQtyValid(st?.qty ?? 0, Math.min(i.remainToReserve, availableFor(i.itemId, st.warehouseId)))
+    return !isAllocationQtyValid(st?.qty ?? 0, Math.min(i.remainToReserve, availableFor(i.itemId, st.warehouseId)), i.allowDecimalQty !== false)
   })
 
   function setRow(itemId: number, patch: Partial<RowState>) {
-    if (submitting.current || reserve.isPending) return
+    if (submitting.current || frozen) return
     setRows(prev => ({ ...prev, [itemId]: { ...prev[itemId], ...patch } }))
   }
 
   function toggleAll(checked: boolean) {
-    if (submitting.current || reserve.isPending) return
+    if (submitting.current || frozen) return
     setRows(Object.fromEntries(
       items.map(i => [i.itemId, {
         checked: checked && i.remainToReserve > 0,
@@ -111,7 +111,7 @@ export default function ReserveAllocationDialog({ open, orderId, onClose, onShor
   const allChecked = reservableItems.length > 0 && reservableItems.every(i => rows[i.itemId]?.checked)
 
   function handleConfirm() {
-    if (!orderId || readUnavailable || isFetching || submitting.current || reserve.isPending || !selectedRows.length || shortRows.length > 0) return
+    if (!orderId || readUnavailable || isFetching || submitting.current || frozen || !selectedRows.length || shortRows.length > 0) return
     submitting.current = true
     const payload = selectedRows.map(i => {
       const st = rows[i.itemId]
@@ -141,7 +141,7 @@ export default function ReserveAllocationDialog({ open, orderId, onClose, onShor
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) requestClose() }}>
-      <DialogContent aria-busy={reserve.isPending} onEscapeKeyDown={e => { if (submitting.current || reserve.isPending) e.preventDefault() }} className="flex max-h-[88vh] w-[min(96vw,1180px)] max-w-none flex-col gap-0 overflow-hidden p-0">
+      <DialogContent aria-busy={reserve.isPending} onEscapeKeyDown={e => { if (submitting.current || frozen) e.preventDefault() }} className="flex max-h-[88vh] w-[min(96vw,1180px)] max-w-none flex-col gap-0 overflow-hidden p-0">
         <DialogHeader className="border-b border-border px-5 py-4 pr-12">
           <DialogTitle className="flex items-center gap-3">
             <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary"><Boxes className="h-5 w-5" /></span>
@@ -152,6 +152,7 @@ export default function ReserveAllocationDialog({ open, orderId, onClose, onShor
           </DialogTitle>
         </DialogHeader>
 
+        <OrdinarySaleRecoveryNotice recovery={reserve.recovery} onConfirmed={onClose} />
         <div className="grid grid-cols-2 border-b border-border bg-muted/20 sm:grid-cols-4">
           {[
             ['商品明细', readUnavailable ? '—' : `${items.length} 行`],
@@ -192,7 +193,7 @@ export default function ReserveAllocationDialog({ open, orderId, onClose, onShor
                 <thead data-selection-column className="sticky top-0 z-[1] data-table-header text-xs text-muted-foreground">
                   <tr>
                     <th className="w-12 px-4 py-3">
-                      <input type="checkbox" checked={allChecked} disabled={reserve.isPending} onChange={e => toggleAll(e.target.checked)} aria-label="全选可占商品" />
+                      <input type="checkbox" checked={allChecked} disabled={frozen} onChange={e => toggleAll(e.target.checked)} aria-label="全选可占商品" />
                     </th>
                     <ProductIdentityHeaders /><th className="min-w-20 px-3 py-3 text-left">单位</th>
                     <th className="w-44 px-3 py-3 text-left">订购情况</th>
@@ -214,7 +215,7 @@ export default function ReserveAllocationDialog({ open, orderId, onClose, onShor
                     return (
                       <tr key={item.itemId} className={cn('border-t align-top transition-colors hover:bg-muted/15', !st.checked && 'bg-muted/[0.08]', fullyReserved && 'opacity-60')}>
                         <td className="px-4 py-4 text-center">
-                          <input type="checkbox" checked={!!st.checked} disabled={reserve.isPending || fullyReserved} onChange={e => setRow(item.itemId, { checked: e.target.checked })} aria-label={`选择 ${item.productName} ${item.spec || ''} ${item.color || ''}`} />
+                          <input type="checkbox" checked={!!st.checked} disabled={frozen || fullyReserved} onChange={e => setRow(item.itemId, { checked: e.target.checked })} aria-label={`选择 ${item.productName} ${item.spec || ''} ${item.color || ''}`} />
                         </td>
                         <ProductIdentityCells product={item} /><td className="px-3 py-3">{item.unit || '—'}</td>
                         <td className="px-3 py-4">
@@ -227,14 +228,14 @@ export default function ReserveAllocationDialog({ open, orderId, onClose, onShor
                         </td>
                         <td className="px-3 py-4">
                           <label htmlFor={`${fieldId}-warehouse-${item.itemId}`} className="mb-1.5 flex items-center gap-1.5 text-[11px] text-muted-foreground"><Warehouse className="h-3.5 w-3.5" />选择库存所在仓库</label>
-                          <WarehouseSelect id={`${fieldId}-warehouse-${item.itemId}`} value={st.warehouseId} onChange={(id, name) => { if (id == null) return; setRow(item.itemId, { warehouseId: id, warehouseName: name }) }} className="h-9 text-sm" disabled={reserve.isPending || !st.checked || Number(item.remainToReserve) < Number(item.quantity)} />
+                          <WarehouseSelect id={`${fieldId}-warehouse-${item.itemId}`} value={st.warehouseId} onChange={(id, name) => { if (id == null) return; setRow(item.itemId, { warehouseId: id, warehouseName: name }) }} className="h-9 text-sm" disabled={frozen || !st.checked || Number(item.remainToReserve) < Number(item.quantity)} />
                           {Number(item.remainToReserve) < Number(item.quantity) && (
                             <div className="mt-1 text-[11px] text-muted-foreground">该行已有预占，不能改发货仓库；如需换仓请先释放该行预占</div>
                           )}
                         </td>
                         <td className="px-3 py-4">
                           <div className="mb-1.5 text-[11px] text-muted-foreground">最多可占 {item.remainToReserve} {item.unit}</div>
-                          <Input quantity aria-label={`${item.productName}本次占库数量`} type="number" step={qtyStep(allowDecimalOf(item.productId))} min={0} max={item.remainToReserve} value={st.qty ?? 0} disabled={reserve.isPending || !st.checked} onChange={e => setRow(item.itemId, { qty: Number(e.target.value) })} className="h-9 text-right text-sm font-semibold tabular-nums" />
+                          <Input quantity aria-label={`${item.productName}本次占库数量`} type="number" step={qtyStep(item.allowDecimalQty !== false)} min={0} max={item.remainToReserve} value={st.qty ?? 0} disabled={frozen || !st.checked} onChange={e => setRow(item.itemId, { qty: Number(e.target.value) })} className="h-9 text-right text-sm font-semibold tabular-nums" />
                         </td>
                         <td className="px-4 py-4 text-right">
                           <div className={cn('text-base font-semibold tabular-nums', short && 'text-destructive-ink')}>{available} <span className="text-xs font-normal">{item.unit}</span></div>
@@ -271,7 +272,7 @@ export default function ReserveAllocationDialog({ open, orderId, onClose, onShor
           </div>
           <div className="flex gap-2">
             <Button variant="outline" disabled={reserve.isPending} onClick={requestClose}>取消</Button>
-            <Button disabled={readUnavailable || isFetching || reserve.isPending || !selectedRows.length || shortRows.length > 0} onClick={handleConfirm}>
+            <Button disabled={readUnavailable || isFetching || frozen || !selectedRows.length || shortRows.length > 0} onClick={handleConfirm}>
               {reserve.isPending ? '占用中…' : `确认占用（${selectedRows.length} 项）`}
             </Button>
           </div>

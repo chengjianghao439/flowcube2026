@@ -29,7 +29,6 @@ import {
   buildWorkspaceTabRegistration,
 } from '@/router/workspaceRouteMeta'
 import {
-  PATH_TITLES,
   isRegisteredErpRoute,
   resolveRouteComponent,
   resolveRoutePermission,
@@ -38,6 +37,7 @@ import {
 import { TabPathContext } from './TabPathContext'
 import { useCompanyStore } from '@/store/companyStore'
 import { SectionVisibilityContext } from './SectionVisibilityContext'
+import TabErrorBoundary from '@/components/shared/TabErrorBoundary'
 
 // ── 加载占位 ──────────────────────────────────────────────────────────────────
 function PageLoader() {
@@ -56,10 +56,11 @@ function PageLoader() {
 interface TabPanelProps {
   tabKey: string
   path: string
+  title: string
   isActive: boolean
 }
 
-function TabPanel({ tabKey, path, isActive }: TabPanelProps) {
+function TabPanel({ tabKey, path, title, isActive }: TabPanelProps) {
   // 首次激活前不渲染，激活后永久保留（keep-alive 核心）
   const { companyId, companyName } = useCompanyStore()
   const isAccounting = normalizePath(path).startsWith('/accounting/')
@@ -73,27 +74,29 @@ function TabPanel({ tabKey, path, isActive }: TabPanelProps) {
     // TabPathContext 向下传递该 Tab 自己的路径，供动态路由页面读取
     <TabPathContext.Provider value={path}>
       <SectionVisibilityContext.Provider value={isActive}>
-      <div
-        key={tabKey}
-        style={{ display: isActive ? 'block' : 'none' }}
-        className="h-full overflow-y-auto"
-        data-workspace-scroll
-      >
-        <div className="p-6">
-          {Comp ? (
-            <Suspense fallback={<PageLoader />}>
+        <div
+          key={tabKey}
+          style={{ display: isActive ? 'block' : 'none' }}
+          className="h-full overflow-y-auto"
+          data-workspace-scroll
+        >
+          <div className="p-6">
+            {Comp ? (
               <div key={isAccounting ? companyId : 'shared'}>
-                {isAccounting && <p className="mb-3 text-xs text-muted-foreground">当前账套：{companyName || (companyId === 1 ? '主账套' : `账套 ${companyId}`)}</p>}
-                <Comp />
+                <TabErrorBoundary tabName={title} resetKey={normalizePath(path)}>
+                  <Suspense fallback={<PageLoader />}>
+                    {isAccounting && <p className="mb-3 text-xs text-muted-foreground">当前账套：{companyName || (companyId === 1 ? '主账套' : `账套 ${companyId}`)}</p>}
+                    <Comp />
+                  </Suspense>
+                </TabErrorBoundary>
               </div>
-            </Suspense>
-          ) : (
-            <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
-              页面「{path}」不存在或已下线
-            </div>
-          )}
+            ) : (
+              <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
+                页面「{path}」不存在或已下线
+              </div>
+            )}
+          </div>
         </div>
-      </div>
       </SectionVisibilityContext.Provider>
     </TabPathContext.Provider>
   )
@@ -106,7 +109,8 @@ export function KeepAliveOutlet() {
   const { tabs, syncFromLocation } = useWorkspaceStore()
   const { can } = usePermission()
   const locationRegistration = buildWorkspaceTabRegistration(location.pathname, location.search)
-  const activeKey = locationRegistration.key
+  // 新地址必须先通过容量登记，不能临时挂载第31页后再删掉原草稿。
+  const activeKey = tabs.some(tab => tab.key === locationRegistration.key) ? locationRegistration.key : ''
 
   useLayoutEffect(() => {
     initializeWorkspaceHistoryGuard().update({
@@ -148,7 +152,10 @@ export function KeepAliveOutlet() {
     // 如果 tab 已存在（由导航发起方提前 addTab），则只激活；
     // 否则用 PATH_TITLES 或动态默认标题注册新 tab。
     const title = resolveRouteTitle(normalizedPath) ?? normalizedPath
-    syncFromLocation(tabRegistration.path, title)
+    if (!syncFromLocation(tabRegistration.path, title)) {
+      const workspace = useWorkspaceStore.getState()
+      navigate(workspace.tabs.find(tab => tab.key === workspace.activeKey)?.path ?? HOME_TAB.path, { replace: true })
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname, location.search])
 
@@ -165,27 +172,14 @@ export function KeepAliveOutlet() {
     )
   }
 
-  const renderTabs = tabs.some((tab) => tab.key === activeKey) || normalizedCurrentPath === '/' || normalizedCurrentPath === '/dashboard'
-    ? tabs
-    : [
-        ...tabs,
-        {
-          key: locationRegistration.key,
-          path: locationRegistration.path,
-          title: PATH_TITLES[normalizedCurrentPath]
-            ?? resolveRouteTitle(normalizedCurrentPath)
-            ?? normalizedCurrentPath,
-          closable: locationRegistration.key !== HOME_TAB.key,
-        },
-      ]
-
   return (
     <div className="relative h-full w-full">
-      {renderTabs.map(tab => (
+      {tabs.map(tab => (
         <TabPanel
           key={tab.key}
           tabKey={tab.key}
           path={tab.path}
+          title={tab.title}
           isActive={activeKey === tab.key}
         />
       ))}

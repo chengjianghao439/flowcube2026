@@ -3,7 +3,7 @@ const AppError = require('../../utils/AppError')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
-const { beginOperationRequest, beginCreationOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
+const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
 const { normalizePagination } = require('../../utils/pagination')
 const { assertQtyPrecision, assertQtyPrecisionWith } = require('../../utils/qtyPrecision')  // 商品级数量精度开关（迁移 254）
@@ -70,7 +70,7 @@ async function replaceItems(conn, requisitionId, items) {
     const qty = Number(it.quantity)
     if (!Number.isFinite(qty) || qty <= 0) throw new AppError('请购数量必须大于 0', 400)
     const [[p]] = await conn.query(
-      'SELECT id,code,name,unit,spec,allow_decimal_qty FROM product_items WHERE id=? AND deleted_at IS NULL',
+      'SELECT id,code,name,unit,spec,allow_decimal_qty FROM product_items WHERE id=? AND deleted_at IS NULL FOR SHARE',
       [Number(it.productId)],
     )
     if (!p) throw new AppError(`商品 ${it.productId} 不存在`, 404)
@@ -96,14 +96,30 @@ async function replaceItems(conn, requisitionId, items) {
   return refreshTotal(conn, requisitionId)
 }
 
-async function create({ title, warehouseId, expectedDate, source = 'manual', items = [], remark, requestKey }, operator) {
+async function create(input, operator, { intentBody } = {}) {
+  const { title, warehouseId, expectedDate, source = 'manual', items = [], remark, requestKey } = input
   if (!items.length) throw new AppError('请至少填写一条请购明细', 400)
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
     await lockPlanning(conn)
-    const requestState = await beginCreationOperationRequest(conn, { requestKey, action: 'purchase.requisition.create', userId: operator?.userId ?? operator?.operatorId ?? null, payload: { title, warehouseId, expectedDate, source, items, remark } })
-    if (requestState.replay) { await conn.rollback(); return requestState.responseData }
+    const intent = require('./purchase-requisitions.create-intent')
+    const userId = operator?.userId ?? operator?.operatorId ?? null
+    const fingerprint = intent.requestFingerprint(intentBody ?? Object.fromEntries(Object.entries(input).filter(([key]) => key !== 'requestKey')))
+    const candidates = await intent.readCreateCandidates(conn, { requestKey, userId, lock: true })
+    if (candidates.length > 1) throw intent.review()
+    if (candidates.length) {
+      const original = candidates[0]
+      if (Number(original.status) !== 1) throw intent.review()
+      await require('./purchase-requisitions.create-receipt').assertRequisitionCreateResult(conn, { resourceType: original.resource_type, resourceId: original.resource_id, data: original.data }, operator?.warehouseIds ?? null, { userId, warehouseId, lock: true })
+      intent.assertCreateFingerprint(original.data?.requestFingerprint, fingerprint)
+      await conn.rollback()
+      return original.data
+    }
+    const requestState = await beginOperationRequest(conn, { requestKey, action: intent.ACTION, userId })
+    // All PR creates hold the same planning lock before candidate lookup/INSERT.
+    // A replay appearing here without the inspected body proof is never accepted.
+    if (requestState.replay) throw intent.review()
     const [[wh]] = await conn.query('SELECT id,name FROM inventory_warehouses WHERE id=? AND deleted_at IS NULL', [Number(warehouseId)])
     if (!wh) throw new AppError('期望入库仓不存在', 400)
     assertInScope(operator?.warehouseIds ?? null, wh.id, '请购单')
@@ -116,7 +132,7 @@ async function create({ title, warehouseId, expectedDate, source = 'manual', ite
       [requisitionNo, title || null, wh.id, wh.name, operator.operatorId, operator.operatorName, source, expectedDate || null, remark || null],
     )
     const total = await replaceItems(conn, r.insertId, items)
-    const result = { id: r.insertId, requisitionNo, estimatedAmount: total }
+    const result = { id: r.insertId, requisitionNo, estimatedAmount: total, ...(requestState.enabled ? { requestFingerprint: fingerprint, warehouseId: Number(wh.id) } : {}) }
     await completeOperationRequest(conn, requestState, { data: result, message: '请购单已创建', resourceType: 'purchase_requisition', resourceId: r.insertId })
     await conn.commit()
     return result

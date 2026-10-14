@@ -39,6 +39,10 @@ async function create(req, res, next) {
       ...req.body,
       scopeWarehouseIds: req.user?.warehouseIds ?? null,
       createdBy: req.user?.userId ?? req.user?.id,
+      rawRequest: {
+        requestKey: req.headers ? extractRequestKey(req) : null,
+        payload: req.body ?? {},
+      },
     })
     return successResponse(res, job, '创建成功', 201)
   } catch(e) { next(e) }

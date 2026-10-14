@@ -1,5 +1,7 @@
 'use strict'
 // Commercial money adapters only; quantities remain WT/WTI and real QA facts.
+const cash=require('../../utils/cashMoney')
+const {financialTarget,assertLegacyCut}=require('./sale.commercial-financial')
 const AppError = require('../../utils/AppError')
 const { loadGroups } = require('./sale.commercial-store')
 const { snapshot } = require('./sale.commercial-resolver')
@@ -8,13 +10,17 @@ const { roundQty } = require('../../utils/unitConversion')
 function invalid(reason) { throw new AppError(`套单执行记录不完整：${reason}`,409,'SALE_COMMERCIAL_SOURCE_INVALID') }
 async function orderMoney(conn, orderId) {
   // Current reads select only evidence rows, never the source-budget mutex or another return document.
-  const [dispatch] = await conn.query('SELECT id,confirmed_gross,basis_origin FROM sale_dispatch_groups WHERE order_id=? AND confirmed_at IS NOT NULL ORDER BY id FOR SHARE', [orderId])
+  const [dispatch] = await conn.query('SELECT id,confirmed_gross,basis_origin,order_gross_basis,discount_basis FROM sale_dispatch_groups WHERE order_id=? AND confirmed_at IS NOT NULL ORDER BY id FOR SHARE', [orderId])
   if(dispatch.some(d=>!['real_confirmation','legacy_verified'].includes(d.basis_origin)))invalid('原出库批次的折扣依据尚未核对')
   if (dispatch.some(d => d.confirmed_gross == null)) invalid('原出库批次缺少成交金额')
   const [returns] = await conn.query('SELECT id,refund_amount,financial_amount FROM sale_commercial_refund_receipts WHERE order_id=? ORDER BY id FOR SHARE', [orderId])
   if(returns.some(r=>r.financial_amount==null))invalid('原退货批次缺少实际账款减少额')
-  return { returnedFinancial:returns.reduce((s,r)=>s+Math.round(Number(r.financial_amount)*10000),0)/10000, shippedGross:dispatch.reduce((s,d) => s+Math.round(Number(d.confirmed_gross)*100),0)/100,
-    returnedGross:returns.reduce((s,r) => s+Math.round(Number(r.refund_amount)*100),0)/100 }
+  const gross=dispatch.reduce((n,d)=>n+cash.storedCashCents(d.confirmed_gross,'套单已确认毛额'),0n),returned=returns.reduce((n,r)=>n+cash.storedCashCents(r.refund_amount,'套单已退毛额'),0n),actual=returns.reduce((n,r)=>n+cash.storedCashCents(r.financial_amount,'套单实际已退净额'),0n)
+  const basis=dispatch.length?{orderGross:dispatch[0].order_gross_basis,discount:dispatch[0].discount_basis}:{orderGross:0,discount:0}
+  if(dispatch.some(d=>cash.storedCashCents(d.order_gross_basis,'套单原总额')!==cash.storedCashCents(basis.orderGross)||cash.storedCashCents(d.discount_basis,'套单原折扣')!==cash.storedCashCents(basis.discount)))invalid('套单出库依据不一致')
+  if(actual!==financialTarget(basis,cash.cashText(returned)))invalid('套单已退实际净额与原分预算不一致')
+  return {returnedFinancial:cash.cashNumber(actual),shippedGross:cash.cashNumber(gross),returnedGross:cash.cashNumber(returned),netEarned:cash.cashNumber(financialTarget(basis,cash.cashText(gross))),financialBasis:basis}
+
 }
 async function prepareShipment(conn, task, sale) {
   const groups = await loadGroups(conn, sale.id, { lock:true })
@@ -23,7 +29,7 @@ async function prepareShipment(conn, task, sale) {
   if (!dispatch.length || dispatch.some(d => d.confirmed_at)) invalid('本批仓库任务缺少有效成交明细')
   // Confirmation is committed atomically with real WT7 and cannot be reversed.
   // Lock only evidence rows, not JOINed WT/group/source-budget identities.
-  const [prior] = await conn.query('SELECT group_id,quantity,order_gross_basis,discount_basis,basis_origin FROM sale_dispatch_groups WHERE order_id=? AND confirmed_at IS NOT NULL ORDER BY id FOR SHARE', [sale.id])
+  const [prior] = await conn.query('SELECT group_id,quantity,confirmed_gross,order_gross_basis,discount_basis,basis_origin FROM sale_dispatch_groups WHERE order_id=? AND confirmed_at IS NOT NULL ORDER BY id FOR SHARE', [sale.id])
   if(prior.some(d=>!['real_confirmation','legacy_verified'].includes(d.basis_origin)))invalid('原出库批次的折扣依据尚未核对')
   const shippedByGroup = new Map()
   for (const d of prior) shippedByGroup.set(Number(d.group_id),roundQty((shippedByGroup.get(Number(d.group_id))||0)+Number(d.quantity)))
@@ -41,7 +47,14 @@ async function prepareShipment(conn, task, sale) {
   const [physical] = await conn.query('SELECT product_id,unit_price FROM sale_order_items WHERE order_id=? AND warehouse_id=?', [sale.id,task.warehouse_id])
   const prices = new Map(physical.map(p => [Number(p.product_id),Number(p.unit_price)]))
   const basis=prior.length ? {orderGross:Number(prior[0].order_gross_basis),discount:Number(prior[0].discount_basis)} : {orderGross:Number(sale.total_amount),discount:Number(sale.discount_amount)}
-  if(!(basis.orderGross>0))invalid('原出库批次缺少折扣依据')
+  financialTarget(basis,0)
+  if(prior.some(d=>cash.storedCashCents(d.order_gross_basis,'原出库合计')!==cash.storedCashCents(basis.orderGross)||cash.storedCashCents(d.discount_basis,'原出库折扣')!==cash.storedCashCents(basis.discount)))invalid('原出库批次折扣依据不一致')
+  if(sale.cash_policy!=='cash-cents-v1'){
+    let cumulative=0n
+    for(const d of prior){cumulative+=cash.storedCashCents(d.confirmed_gross,'旧出库毛额');assertLegacyCut(basis,cash.cashText(cumulative))}
+    cumulative+=money.reduce((n,m)=>n+cash.storedCashCents(m.projection.grossAmount),0n)
+    assertLegacyCut(basis,cash.cashText(cumulative))
+  }
   return { money,basis, items:wti.map(i => ({ productId:Number(i.product_id),productName:i.product_name,quantity:Number(i.picked_qty),unitPrice:prices.get(Number(i.product_id)) })) }
 }
 async function confirmShipment(conn, prepared) {

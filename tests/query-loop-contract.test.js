@@ -37,6 +37,8 @@ const ALLOWLIST = new Map([
     '固定的多条引用校验 SQL（每条查一张表），不是按行遍历'],
   ['backend/src/modules/products/products.service.js::for (const [, sql] of checks) {',
     '同上：固定校验清单'],
+  ['backend/src/modules/products/products.quantity-policy.js::for (const [label, sql] of CHECKS) {',
+    '商品更新事务内，单一商品的固定 22 项依赖存在性校验；各 SQL 按商品 ID 限定并 LIMIT 1，不按业务行数查询'],
   ['backend/src/modules/suppliers/suppliers.service.js::for (const sql of checks) {',
     '同上：固定校验清单'],
   ['backend/src/modules/warehouses/warehouses.service.js::for (const sql of checks) {',
@@ -137,4 +139,5 @@ function main() {
   process.exit(problems.length ? 1 : 0)
 }
 
-main()
+module.exports = { findReadOnlyLoopQueries, ALLOWLIST }
+if (require.main === module) main()

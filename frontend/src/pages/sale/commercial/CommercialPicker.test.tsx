@@ -124,7 +124,7 @@ test.each(['hidden', 'paused'] as const)('%s picker retains search while complet
   await doubleClickRow()
   expect(selected).toHaveBeenCalledWith(expect.objectContaining({
     name: '当前商品', code: 'P41', unit: '个', baseUnit: '个', spec: 'M4', color: '银色',
-    articleNumber: 'SUP-41', costPrice: 2, allowDecimalQty: false, units: product.units,
+    articleNumber: 'SUP-41', costPrice: 2, allowDecimalQty: false, units: [],
     input: expect.objectContaining({ kind: 'ordinary', productId: 41, entryUnit: '个', priceSource: 'default', warehouseId: 1 })
   }))
   expect(requests.every(r => r.baseURL === owner.baseURL && r._authSessionGeneration === owner.sessionGeneration && r._erpApiFallbackTried)).toBe(true)

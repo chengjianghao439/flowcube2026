@@ -1,3 +1,4 @@
+const { storedCashCents } = require('../../utils/cashMoney')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { moneyUnits, moneyText } = require('../../utils/decimalMoney')
@@ -51,35 +52,36 @@ function fmt(row) {
  * 而自动进入终态（要改这条决策请显式改，不要在这里顺手改）。
  */
 function realShaped(row, { total, paid }) {
-  const realTotal = Number(total) || 0
-  const realPaid = Math.min(Number(paid) || 0, realTotal)
-  const realBalance = Math.max(0, realTotal - realPaid)
+  const totalUnits = moneyUnits(total ?? 0)
+  const paidValue = moneyUnits(paid ?? 0)
+  const paidUnits = paidValue < totalUnits ? paidValue : totalUnits
+  const realBalance = totalUnits > paidUnits ? totalUnits - paidUnits : 0n
   const status = Number(row.status) === ST.DRAFT
     ? ST.DRAFT
-    : (realBalance <= 1e-6 && realTotal > 0 ? ST.SETTLED : ST.CONFIRMED)
-  return { ...row, total_amount: realTotal, settled_amount: realPaid, balance: realBalance, status }
+    : (realBalance === 0n && totalUnits > 0n ? ST.SETTLED : ST.CONFIRMED)
+  return { ...row, total_amount: moneyText(totalUnits), settled_amount: moneyText(paidUnits), balance: moneyText(realBalance), status }
 }
 
 /**
  * 按下属明细的实际核销情况重算对账单金额与状态。
  * 每次核销后调用；调用方已在事务内并锁好对账单行。
  */
-async function refreshSettlement(conn, statementId, { currentRead = false, exactMoney = false } = {}) {
+async function refreshSettlement(conn, statementId, { currentRead = false, exactMoney = false, cashOnly = false } = {}) {
+  if (cashOnly) { currentRead = true; exactMoney = true }
   let agg
   if (currentRead) {
     // 退货调用方已按对账单→账款锁序取得成员门；直接当前读完整事实行，避免旧RR聚合。
     const [rows] = await conn.query(
-      `SELECT r.total_amount, r.paid_amount
+      `SELECT r.total_amount, r.paid_amount, r.balance
        FROM reconciliation_statement_items i
        JOIN payment_records r ON r.id = i.record_id
        WHERE i.statement_id = ? ORDER BY r.id FOR SHARE`,
       [statementId],
     )
-    const sum = exactMoney
-      ? rows.reduce((values, row) => ({ total: values.total + moneyUnits(row.total_amount), paid: values.paid + moneyUnits(row.paid_amount) }), { total: 0n, paid: 0n })
-      : rows.reduce((values, row) => ({ total: values.total + Number(row.total_amount), paid: values.paid + Number(row.paid_amount) }), { total: 0, paid: 0 })
-    // 原SQL SUM(DECIMAL)保持四位金额；当前行投影也在写回前收敛到同一精度。
-    agg = exactMoney ? sum : { total: Number(sum.total.toFixed(4)), paid: Number(sum.paid.toFixed(4)) }
+    if (cashOnly) for (const row of rows) for (const field of ['total_amount', 'paid_amount', 'balance']) storedCashCents(row[field], `原对账成员${field}`)
+    const sum = rows.reduce((values, row) => ({ total: values.total + moneyUnits(row.total_amount), paid: values.paid + moneyUnits(row.paid_amount) }), { total: 0n, paid: 0n })
+    // Preserve the original DECIMAL4 facts, including genuine historical subcents.
+    agg = exactMoney ? sum : { total: moneyText(sum.total), paid: moneyText(sum.paid) }
   } else {
     const [[row]] = await conn.query(
       `SELECT COALESCE(SUM(r.total_amount),0) AS total,
@@ -102,21 +104,16 @@ async function refreshSettlement(conn, statementId, { currentRead = false, exact
       [shaped.total, shaped.paid, shaped.balance, status, statementId])
     return shaped
   }
-  const total = Number(agg.total)
-  const paid = Math.min(Number(agg.paid), total)
-  const balance = Math.max(0, total - paid)
   const [[cur]] = await conn.query(currentRead
     ? 'SELECT status FROM reconciliation_statements WHERE id=? FOR SHARE'
     : 'SELECT status FROM reconciliation_statements WHERE id=?', [statementId])
   // 只有已确认的单据会因核销完而进入终态；草稿单不因为下属账款被别处核销就自动完成
-  const nextStatus = Number(cur.status) === ST.DRAFT
-    ? ST.DRAFT
-    : (balance <= 1e-6 && total > 0 ? ST.SETTLED : ST.CONFIRMED)
+  const shaped = realShaped(cur, agg)
   await conn.query(
     'UPDATE reconciliation_statements SET total_amount=?,settled_amount=?,balance=?,status=? WHERE id=?',
-    [total, paid, balance, nextStatus, statementId],
+    [shaped.total_amount, shaped.settled_amount, shaped.balance, shaped.status, statementId],
   )
-  return { total, paid, balance, status: nextStatus }
+  return { total: Number(shaped.total_amount), paid: Number(shaped.settled_amount), balance: Number(shaped.balance), status: shaped.status }
 }
 
 /** 某往来方在期间内、尚未进过任何对账单的月结账款 */
@@ -363,10 +360,10 @@ async function findById(id) {
   )
   // 抬头金额与状态改走实时口径，和上面的明细、列表、导出四处同源（修复前抬头读存储投影，
   // 会与自身明细对不上：明细显示已收 100，抬头却还写未核销）
-  const realTotal = items.reduce((a, x) => a + Number(x.total_amount || 0), 0)
-  const realPaid = items.reduce((a, x) => a + Number(x.paid_amount || 0), 0)
+  const realTotal = items.reduce((a, x) => a + moneyUnits(x.total_amount ?? 0), 0n)
+  const realPaid = items.reduce((a, x) => a + moneyUnits(x.paid_amount ?? 0), 0n)
   return {
-    ...fmt(realShaped(row, { total: realTotal, paid: realPaid })),
+    ...fmt(realShaped(row, { total: moneyText(realTotal), paid: moneyText(realPaid) })),
     items: items.map(x => ({
       recordId: Number(x.record_id),
       orderId: x.order_id == null ? null : Number(x.order_id),

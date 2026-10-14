@@ -29,7 +29,7 @@ export interface DraftItem extends Omit<SaleOrderItem, 'id' | 'amount'> {
   color?: string | null
   priceSource?: 'list' | 'default' | 'manual'
   priceExplanation?: PriceExplanation // UI-only：不保存、不参与脏检查
-  units?: ProductUnit[]   // UI-only：该商品多计量单位（供单位下拉），不发后端；后端按 product_units 折算权威
+  units?: ProductUnit[]   // 旧草稿兼容字段；新销售没有单位选择，不提交后端
 }
 
 /** 新建、编辑、改单共用：剥离界面字段，业务量价与原定价凭据原样提交。 */
@@ -37,10 +37,9 @@ export function serializeSaleItems(items: DraftItem[]): Array<Omit<DraftItem, '_
   return items.map(({ _key: _key, units: _units, priceExplanation: _priceExplanation, ...item }) => item)
 }
 
-/** 录入单位下的数量折算成基本单位量（仅前端呈现；权威折算在后端）。 */
+/** 原单量的展示：仅使用原单保存的换算率，新行固定单位率为 1。 */
 export function baseQtyOf(item: DraftItem): number {
-  const u = (item.units || []).find(x => x.unitName === (item.entryUnit || item.unit))
-  const rate = u ? Number(u.conversionRate) : 1
+  const rate = (item.entryUnit || item.unit) === item.unit ? 1 : Number(item.conversionRate || 1)
   return roundQuantity((Number(item.quantity) || 0) * rate)
 }
 

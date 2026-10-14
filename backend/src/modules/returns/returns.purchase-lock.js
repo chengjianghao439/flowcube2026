@@ -1,6 +1,7 @@
 const AppError = require('../../utils/AppError')
 const { assertInScope } = require('../../utils/warehouseScope')
 const { lockStatusRow } = require('../../utils/statusTransition')
+const purchaseCash = require('../purchase/purchase.cash-money')
 
 const invalidSource = () => new AppError('采购退货来源缺失或不一致，请核对原采购单和明细', 409, 'PURCHASE_RETURN_SOURCE_INVALID')
 const changedSource = () => new AppError('采购退货来源已变化，请刷新后核对', 409, 'PURCHASE_RETURN_SOURCE_CHANGED')
@@ -13,18 +14,18 @@ async function peekPurchaseReturn(conn, id) {
   return row
 }
 
-async function lockPurchaseReturn(conn, identity, scopeWarehouseIds = null) {
+async function lockPurchaseReturn(conn, identity, scopeWarehouseIds = null, { cashProof = false } = {}) {
   let po = null
   if (identity.purchase_order_id != null) {
     if (!validId(identity.purchase_order_id)) throw invalidSource()
-    const [[row]] = await conn.query('SELECT id, order_no, supplier_id, warehouse_id FROM purchase_orders WHERE id=? AND deleted_at IS NULL FOR SHARE', [identity.purchase_order_id])
+    const [[row]] = await conn.query('SELECT id, order_no, supplier_id, warehouse_id, total_amount, cash_basis FROM purchase_orders WHERE id=? AND deleted_at IS NULL FOR SHARE', [identity.purchase_order_id])
     if (!row) throw invalidSource()
     po = row
     assertInScope(scopeWarehouseIds, po.warehouse_id, '原采购单')
   }
   const row = await lockStatusRow(conn, {
     table: 'purchase_returns', id: identity.id,
-    columns: 'id, return_no, purchase_order_id, purchase_order_no, supplier_id, supplier_name, warehouse_id, warehouse_name, total_amount, status',
+    columns: 'id, return_no, purchase_order_id, purchase_order_no, supplier_id, supplier_name, warehouse_id, warehouse_name, total_amount, cash_execution_basis, status',
     entityName: '采购退货单',
   })
   if (Number(row.purchase_order_id || 0) !== Number(identity.purchase_order_id || 0)
@@ -47,7 +48,19 @@ async function lockPurchaseReturn(conn, identity, scopeWarehouseIds = null) {
     } else if (item.purchase_item_id != null) throw invalidSource()
   }
   // 无准确PO且全部明细无来源的旧单（包括仅文本单号）保持原入口，不据文本猜原单或AP。
-  return { row, items }
+  const context={row,items,po,cashFact:null}
+  if(cashProof)await provePurchaseReturnCash(conn,context)
+  return context
 }
 
-module.exports = { peekPurchaseReturn, lockPurchaseReturn }
+async function provePurchaseReturnCash(conn,context){
+  const {row,items,po}=context
+  if (po) {
+    const [original] = await conn.query('SELECT * FROM purchase_order_items WHERE order_id=? ORDER BY id FOR SHARE', [po.id])
+    const snapshot = purchaseCash.basisForReturn(po,row,original)
+    context.cashFact = row.cash_execution_basis ? purchaseCash.validateReturn(snapshot,row,items,original) : po.cash_basis ? purchaseCash.review('新采购退货缺少冻结证明') : purchaseCash.legacyReturn(snapshot,row,items)
+  }
+  return context
+}
+
+module.exports = { peekPurchaseReturn, lockPurchaseReturn, provePurchaseReturnCash }

@@ -15,12 +15,15 @@ const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { successResponse } = require('../../utils/response')
 const { CONTAINER_STATUS } = require('../../engine/containerEngine')
+const { assertInScope } = require('../../utils/warehouseScope')
+const { ensureInboundTaskExists } = require('./inbound-tasks.status')
 
 const SUGGEST_LIMIT = 5
 
-async function getPutawaySuggestion(taskId, containerId) {
+async function getPutawaySuggestion(taskId, containerId, scopeWarehouseIds = null) {
   const cid = Number(containerId)
   if (!Number.isFinite(cid) || cid <= 0) throw new AppError('库存条码无效', 400)
+  await ensureInboundTaskExists(pool, taskId, scopeWarehouseIds)
 
   const [[container]] = await pool.query(
     `SELECT id, inbound_task_id, product_id, warehouse_id, status
@@ -29,6 +32,7 @@ async function getPutawaySuggestion(taskId, containerId) {
   )
   if (!container) throw new AppError('库存条码不存在', 404)
   if (Number(container.inbound_task_id) !== Number(taskId)) throw new AppError('库存条码不属于该收货订单', 400)
+  assertInScope(scopeWarehouseIds, container.warehouse_id, '收货容器')
 
   // 同商品已落位库位（按容器数降序）
   const [sameProductLocs] = await pool.query(
@@ -80,7 +84,7 @@ async function getPutawaySuggestion(taskId, containerId) {
 
 const putawaySuggestionHandler = async (req, res, next) => {
   try {
-    const data = await getPutawaySuggestion(+req.params.id, +req.query.containerId)
+    const data = await getPutawaySuggestion(+req.params.id, +req.query.containerId, req.user?.warehouseIds ?? null)
     return successResponse(res, data, '查询成功')
   } catch (e) { next(e) }
 }

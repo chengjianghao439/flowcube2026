@@ -10,6 +10,7 @@ const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { recomputePurchasePayable } = require('./inbound-tasks.settle')
 const { findById } = require('./inbound-tasks.query')
 const { voidPendingPrintJobsForContainers } = require('../print-jobs/print-jobs.service')
+const { assertShortReceiptCanReopen } = require('./inbound-tasks.short-receipt')
 
 /**
  * 撤回收货：把已收货（含已上架、已完成自动结算）的收货订单整单打回「待收货(1)」，
@@ -22,16 +23,18 @@ const { voidPendingPrintJobsForContainers } = require('../print-jobs/print-jobs.
 async function voidReceipt(taskId, operator, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
+    await conn.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED')
     await conn.beginTransaction()
     const taskRow = await lockStatusRow(conn, {
       table: 'inbound_tasks',
       id: taskId,
-      columns: 'id, task_no, status, audit_status, warehouse_id',
+      columns: 'id, task_no, status, audit_status, warehouse_id, closed_reason',
       entityName: '收货订单',
     })
     assertInScope(scopeWarehouseIds, taskRow.warehouse_id, '收货订单')
     const rule = assertStatusAction('inboundTask', 'voidReceipt', Number(taskRow.status))
     await assertPurchaseOrdersOpen(conn, taskId, '撤回收货')
+    await assertShortReceiptCanReopen(conn, taskRow)
 
     // 已登记付款的收货单不得撤回（2026-09-26 一致性审查 · 任务 2 层 2）。
     // 本函数末尾会调 recomputePurchasePayable 按「剩余收货」全量重算该采购单应付（此处归零），

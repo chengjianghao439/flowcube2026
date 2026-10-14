@@ -34,3 +34,21 @@ it('ordinary sale print preserves the same four-decimal unit price as kit sales'
       .items[0].price
   ).toBe('¥1.2345')
 })
+it('a newly recorded fixed-unit group prints its current unit despite an older physical preview', () => {
+  const fresh = {
+    ...order,
+    commercialGroups: [{
+      ...order.commercialGroups![0],
+      originalQty: 1, targetQty: 1, amount: 10, unitPrice: 10,
+      metadata: { entry: { entryUnit: '组', entryQty: 1, conversionRate: 1, entryUnitPrice: 10 } },
+      components: [{ productCode: 'P', productName: '螺钉', unit: '组' }]
+    }]
+  } as unknown as SaleOrder
+  expect(mapSaleOrderToPrint(fresh).items[0]).toMatchObject({ unit: '组', quantity: 1, unitPrice: 10 })
+})
+it('retained historical print reads its original packaging facts across repeated previews', () => {
+  const first = mapSaleOrderToPrint(order)
+  expect(first.items[0]).toMatchObject({ unit: '包', quantity: 2 })
+  expect(mapSaleOrderToPrint(order)).toEqual(first)
+  expect(order.commercialGroups![0].metadata.entry?.conversionRate).toBe(10)
+})
