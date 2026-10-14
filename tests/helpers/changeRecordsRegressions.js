@@ -31,7 +31,7 @@ function selectSuites(requested) {
   if (requested === undefined) return suites
   assert.ok(typeof requested === 'string' && requested.length > 0, '定向回归须提供明确文件')
   const files = requested.split(',')
-  const allowed = new Set([...suites, 'round2-transfer.smoke.test.js', 'product-finance-period.smoke.test.js', 'payments-default-scope.smoke.test.js', 'finance-account-precision.smoke.test.js'])
+  const allowed = new Set([...suites, 'round2-transfer.smoke.test.js', 'product-finance-period.smoke.test.js', 'payments-default-scope.smoke.test.js', 'finance-account-precision.smoke.test.js', 'audit-inventory.smoke.test.js'])
   assert.ok(files.every(file => allowed.has(file)) && new Set(files).size === files.length, '定向回归仅接受唯一的登记文件')
   return files
 }

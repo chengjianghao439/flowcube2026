@@ -44,7 +44,7 @@ async function main() {
   async function fixture() {
     wh = await insert("INSERT INTO inventory_warehouses (code,name) VALUES (?,'库存回归仓')", [unique('W')])
     const code = unique('P')
-    const productId = await insert("INSERT INTO product_items (code,name,unit,sale_price_a,cost_price) VALUES (?,'库存回归','个',20,10)", [code])
+    const productId = await insert("INSERT INTO product_items (code,name,unit,sale_price_a,cost_price,allow_decimal_qty) VALUES (?,'库存回归','个',20,10,1)", [code])
     const poId = await insert(`INSERT INTO purchase_orders
       (order_no,supplier_id,supplier_name,warehouse_id,warehouse_name,status,operator_id,operator_name)
       VALUES (?,1,'测试供应商',?,'测试仓库',2,1,'测试')`, [unique('PO'), wh])
@@ -306,7 +306,7 @@ async function main() {
     assert.equal(await f.bindingQty(), 0)
     await assert.rejects(receipt.voidReceipt(arrival.taskId, operator), /预占/)
     assert.equal((await f.stock()).quantity, 5)
-  })
+  }, 'READ COMMITTED')
   test('F05 两采购明细快照不能把第二销售重复绑定到已满采购行', async f => {
     await conn.query('UPDATE purchase_order_items SET quantity=5 WHERE id=?', [f.poiId])
     const po2 = await insert(`INSERT INTO purchase_orders

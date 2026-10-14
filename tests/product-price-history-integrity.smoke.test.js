@@ -9,8 +9,8 @@
  *      （同一 price_type 上，每条的 `old_price` = 上一条的 `new_price`），
  *      且商品当前值 = 链上最后一条的 `new_price`。
  *      根因：`products.update` 原先在**事务外**读当前行快照，两个并发请求会各自以同一个旧价写历史。
- *   ② `allowDecimalQty` **未传**时保持原值；其中 `allow_decimal_qty IS NULL` 的既定语义是
- *      **默认允许小数**（迁移 254），不能在读裸列时被当成 0（那会把「允许」误关成「禁止」）。
+ *   ② 新建默认整数（迁移288）；`allowDecimalQty` **未传**时保持锁内原值，
+ *      明确已允许小数的商品不能因缺字段被误关成禁止。
  *   ③ 对**已软删**商品改价必须明确失败，且**不得**写单位/库存策略/价格历史等任何脏数据。
  *
  * 运行（必须显式隔离库 + 回环）：
@@ -126,16 +126,16 @@ async function main() {
     )
 
     // ── ② allowDecimalQty 未传 ⇒ 保持「锁内」原值 ────────────────────────
-    // `allow_decimal_qty` 是 **NOT NULL DEFAULT 1**（迁移 254），**列上造不出 NULL**；
-    // 代码里的 `== null ? 1` 是**防御性分支**（读裸列时不能把 NULL 当 0 而关掉小数）。
-    // 因此这里测两条**可达**路径：默认（新建 ⇒ 1）与显式关闭（0），不传该字段的编辑后都必须保持。
-    const pDefault = await newProduct('默认允许小数')
+    // 迁移288将新建默认改为0；原允许小数的事实不重写。
+    // 明确构造1与0两条可达路径，未传字段的编辑必须各自保留锁内原值。
+    const pDefault = await newProduct('明确允许小数')
     const [created1] = await dbQuery(pool, 'SELECT allow_decimal_qty FROM product_items WHERE id=?', [pDefault.id])
     log.assert(
-      '前置：新建商品 allow_decimal_qty 默认为 1（允许小数）',
-      Number(created1.allow_decimal_qty) === 1,
+      '前置：新建商品 allow_decimal_qty 默认为 0（仅整数）',
+      Number(created1.allow_decimal_qty) === 0,
       `实际 ${created1.allow_decimal_qty}`,
     )
+    await pool.query('UPDATE product_items SET allow_decimal_qty=1 WHERE id=?', [pDefault.id])
     const putDefault = await http.put(`/api/products/${pDefault.id}`, {
       token, json: { ...editPayload(pDefault, 100, await revOf(pDefault.id)), remark: '不带 allowDecimalQty' },
     })
