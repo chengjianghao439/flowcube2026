@@ -626,7 +626,7 @@ async function main() {
     console.log('[PASS] real B shipment HTTP and real A-source refund service execution wait on owned stock barrier in both orders; no lock cycle/lost refund, discounted later AR198, gross80/net72 voucher; sameSKU two sources split and B allreject completes0 (AR193.5 after A screw)')
 
     for(const closeTail of [false,true]){
-    const discounted=await svc.create({...body,discountAmount:closeTail?.0101:10,commercialGroups:closeTail?body.commercialGroups.slice(0,2):[body.commercialGroups[0]],operator:operator(),requestKey:randomUUID()});fixture.sales.push(discounted.id)
+    const discounted=await svc.create({...body,discountAmount:closeTail?.01:10,commercialGroups:closeTail?body.commercialGroups.slice(0,2):[body.commercialGroups[0]],operator:operator(),requestKey:randomUUID()});fixture.sales.push(discounted.id)
     await supply([[fixture.products[0],1],[fixture.products[1],4]])
     const discountedDetail=await http(`/sale/${discounted.id}`,undefined,{method:'GET'})
     await svc.reserveStock(discounted.id,operator(),discountedDetail.physicalItems.map(i=>({id:i.id,warehouseId:fixture.warehouseId,qty:i.quantity})),{commercialModel:'kit-v1',expectedRevision:1,requestKey:randomUUID()})
@@ -648,10 +648,10 @@ async function main() {
     const discountedContainers=await q("SELECT id FROM inventory_containers WHERE source_ref_type='sale_return' AND source_ref_id=? AND status=4",[discountedRT])
     for(const c of discountedContainers)await http(`/return-tasks/${discountedRT}/putaway`,{containerId:Number(c.id),locationId:fixture.locationId},{pda:true})
     const [discountedAR]=await q('SELECT total_amount FROM payment_records WHERE type=2 AND order_id=?',[discounted.id]);assert.equal(Number(discountedAR.total_amount),0)
-    const [discountProof]=await q('SELECT SUM(refund_amount) gross,SUM(financial_amount) financial FROM sale_commercial_refund_receipts WHERE order_id=?',[discounted.id]);assert.equal(Number(discountProof.gross),100);assert.equal(Number(discountProof.financial),closeTail?99.9966:90)
+    const [discountProof]=await q('SELECT SUM(refund_amount) gross,SUM(financial_amount) financial FROM sale_commercial_refund_receipts WHERE order_id=?',[discounted.id]);assert.equal(Number(discountProof.gross),100);assert.equal(Number(discountProof.financial),closeTail?100:90)
     const reverseDiscount=(await require('../backend/src/modules/accounting/voucher-engine').buildSaleReturn(pool)).find(v=>v.sourceId===discountedSR.id);assert.equal(reverseDiscount.legs.find(l=>l.code==='1122').amount,closeTail?100:90)
-    const [basis]=await q('SELECT order_gross_basis,discount_basis,basis_origin FROM sale_dispatch_groups WHERE order_id=? AND confirmed_at IS NOT NULL',[discounted.id]);assert.equal(Number(basis.order_gross_basis),closeTail?300:100);assert.equal(Number(basis.discount_basis),closeTail?.0101:10);assert.equal(basis.basis_origin,'real_confirmation')
-    console.log(closeTail?'[PASS] original300/discount.0101 -> A100 close AR99.9966; real paid.01 blocks confirm, real refund unlocks full source net99.9966 -> AR0':'[PASS] discounted100 less10 full qualified return retains gross100 evidence and reduces real AR90 to0')
+    const [basis]=await q('SELECT order_gross_basis,discount_basis,basis_origin FROM sale_dispatch_groups WHERE order_id=? AND confirmed_at IS NOT NULL',[discounted.id]);assert.equal(Number(basis.order_gross_basis),closeTail?300:100);assert.equal(Number(basis.discount_basis),closeTail?.01:10);assert.equal(basis.basis_origin,'real_confirmation')
+    console.log(closeTail?'[PASS] original300/discount.01 -> A100 close cash AR100; real paid.01 blocks confirm, real refund unlocks full source cash100 -> AR0':'[PASS] discounted100 less10 full qualified return retains gross100 evidence and reduces real AR90 to0')
 
     }
     const tinyKit=await http('/kits',{code:ref+'-tiny-net',name:ref+'-tiny-net',referenceUnitPrice:.02,components:[{productId:fixture.products[0],baseQty:2}]},{expect:201})
@@ -663,11 +663,12 @@ async function main() {
     for(let part=0;part<2;part++){
       const sr=await sourceCreate({customerId:fixture.customerId,customerName:ref,warehouseId:fixture.warehouseId,warehouseName:ref,saleOrderId:tiny.id,saleOrderNo:tiny.orderNo,commercialModel:'kit-v1',expectedRevision:1,items:[{...tinySource,quantity:1}],operator:operator(),requestKey:randomUUID()});tinyReturns.push(sr.id);await http(`/returns/sale/${sr.id}/confirm`,{})
       const task=(await http(`/returns/sale/${sr.id}`,undefined,{method:'GET'})).task.id;await http(`/return-tasks/${task}/receive`,{productId:tinySource.productId,packages:[{qty:1}]},{pda:true});await http(`/return-tasks/${task}/check`,{productId:tinySource.productId,passedQty:1,rejectedQty:0},{pda:true});const [c]=await q("SELECT id FROM inventory_containers WHERE source_ref_type='sale_return' AND source_ref_id=? AND status=4",[task]);await http(`/return-tasks/${task}/putaway`,{containerId:Number(c.id),locationId:fixture.locationId},{pda:true})
+      const [partCash]=await q('SELECT SUM(financial_amount) financial FROM sale_commercial_refund_receipts WHERE return_item_id IN (SELECT id FROM sale_return_items WHERE return_id=?)',[sr.id]);assert.equal(Number(partCash.financial),part?0:.01)
     }
     const tinyVouchers=(await require('../backend/src/modules/accounting/voucher-engine').buildSaleReturn(pool)).filter(v=>tinyReturns.includes(v.sourceId))
     const tinyReverse=tinyVouchers.flatMap(v=>v.legs).filter(l=>l.code==='1122').reduce((n,l)=>n+Number(l.amount),0)
-    assert.equal(tinyReverse,.01,'two actual net.005 refunds must reverse original income.01 exactly once')
-    console.log('[PASS] real .02/discount.01 source2pcs partial returns each financial.005, cumulative voucher reversal total.01')
+    assert.equal(tinyReverse,.01,'actual cumulative cash deltas .01 then0 reverse original income.01 exactly once')
+    console.log('[PASS] real .02/discount.01 source2pcs partial returns cash.01 then0, cumulative voucher reversal total.01')
 
     const auxProduct=await insert("INSERT INTO product_items(code,name,unit,sale_price_a,cost_price,allow_decimal_qty) VALUES (?,?,'个',80,10,0)",[ref+'-2',ref+'-包装组件']);fixture.products.push(auxProduct)
     await q("INSERT INTO product_units(product_id,unit_name,conversion_rate) VALUES (?,'箱',3)",[auxProduct])
@@ -689,15 +690,16 @@ async function main() {
     const [cost]=await q('SELECT wti.picked_qty,soi.cost_snapshot FROM warehouse_task_items wti JOIN warehouse_tasks wt ON wt.id=wti.task_id JOIN sale_order_items soi ON soi.order_id=wt.sale_order_id AND soi.product_id=wti.product_id AND soi.warehouse_id=wt.warehouse_id WHERE wti.task_id=?',[packTask]);assert.equal(Number(cost.picked_qty),1);assert.equal(Number(cost.cost_snapshot),10)
     const [remainingAux]=await q('SELECT quantity FROM inventory_stock WHERE product_id=? AND warehouse_id=?',[auxProduct,fixture.warehouseId]);assert.equal(Number(remainingAux.quantity),2)
     await supplyAux()
-    const mixedBox=await svc.create({customerId:fixture.customerId,warehouseId:fixture.warehouseId,commercialModel:'kit-v1',commercialGroups:[{kind:'ordinary',lineKey:'BOX',productId:auxProduct,entryUnit:'箱',quantity:1,unitPrice:1,warehouseId:fixture.warehouseId,priceSource:'manual'}],operator:operator(),requestKey:randomUUID()});fixture.sales.push(mixedBox.id)
-    const mixedDetail=await http(`/sale/${mixedBox.id}`,undefined,{method:'GET'});assert.equal(mixedDetail.totalAmount,1);assert.equal(mixedDetail.commercialGroups[0].originalQty,3);assert.deepEqual(mixedDetail.commercialGroups[0].entry,{entryUnit:'箱',entryQty:1,conversionRate:3,entryUnitPrice:1})
+    await assert.rejects(svc.create({customerId:fixture.customerId,warehouseId:fixture.warehouseId,commercialModel:'kit-v1',commercialGroups:[{kind:'ordinary',lineKey:'BOX',productId:auxProduct,entryUnit:'箱',quantity:1,unitPrice:1,warehouseId:fixture.warehouseId,priceSource:'manual'}],operator:operator(),requestKey:randomUUID()}),e=>e.status===400&&e.code==='SALE_FIXED_UNIT_REQUIRED')
+    const mixedBox=await svc.create({customerId:fixture.customerId,warehouseId:fixture.warehouseId,commercialModel:'kit-v1',commercialGroups:[{kind:'ordinary',lineKey:'BOX',productId:auxProduct,entryUnit:'个',quantity:3,unitPrice:.3333,warehouseId:fixture.warehouseId,priceSource:'manual'}],operator:operator(),requestKey:randomUUID()});fixture.sales.push(mixedBox.id)
+    const mixedDetail=await http(`/sale/${mixedBox.id}`,undefined,{method:'GET'});assert.equal(mixedDetail.totalAmount,1);assert.equal(mixedDetail.commercialGroups[0].originalQty,3);assert.deepEqual(mixedDetail.commercialGroups[0].entry,{entryUnit:'个',entryQty:3,conversionRate:1,entryUnitPrice:.3333})
     await svc.reserveStock(mixedBox.id,operator(),mixedDetail.physicalItems.map(i=>({id:i.id,warehouseId:fixture.warehouseId,qty:3})),{commercialModel:'kit-v1',expectedRevision:1,requestKey:randomUUID()})
     const boxTask=(await svc.ship(mixedBox.id,operator(),{commercialModel:'kit-v1',expectedRevision:1,groups:[{groupId:mixedDetail.commercialGroups[0].id,qty:3}],requestKey:randomUUID()})).tasks[0].taskId
     await actualShip(boxTask)
-    const [boxAR]=await q('SELECT total_amount FROM payment_records WHERE type=2 AND order_id=?',[mixedBox.id]);assert.equal(Number(boxAR.total_amount),1,'frozen entry gross1 never reverse-computes .99999999')
-    console.log('[PASS] actual purchase1 box=3 base pieces then kit consumes1/cost10/stock2 exactly once; mixed ordinary1 box at1 freezes entry/base metadata and actual full shipment AR1')
+    const [boxAR]=await q('SELECT total_amount FROM payment_records WHERE type=2 AND order_id=?',[mixedBox.id]);assert.equal(Number(boxAR.total_amount),1,'frozen cash gross1 does not revert to raw3*.3333=.9999')
+    console.log('[PASS] actual purchase1 box=3 base pieces then kit consumes1/cost10/stock2 exactly once; mixed ordinary3 fixed pieces at.3333 freezes price and full shipment cash AR1; new auxiliary sale rejected')
     await supplyAux()
-    const ordinary=await http('/sale',{customerId:fixture.customerId,customerName:ref,warehouseId:fixture.warehouseId,warehouseName:ref,items:[{productId:auxProduct,productCode:ref+'-2',productName:ref,unit:'个',entryUnit:'箱',quantity:1,unitPrice:1,priceSource:'manual'}]},{expect:201});fixture.sales.push(ordinary.id)
+    const ordinary=await http('/sale',{customerId:fixture.customerId,customerName:ref,warehouseId:fixture.warehouseId,warehouseName:ref,items:[{productId:auxProduct,productCode:ref+'-2',productName:ref,unit:'个',entryUnit:'个',quantity:3,unitPrice:.3333,priceSource:'manual'}]},{expect:201});fixture.sales.push(ordinary.id)
     const ordinaryDetail=await http(`/sale/${ordinary.id}`,undefined,{method:'GET'});assert.equal(ordinaryDetail.commercialModel,null);assert.equal(ordinaryDetail.totalAmount,1);assert.equal(ordinaryDetail.items[0].quantity,3)
     await http(`/sale/${ordinary.id}/reserve`,{items:ordinaryDetail.items.map(i=>({id:i.id,warehouseId:fixture.warehouseId,warehouseName:ref,qty:i.quantity}))})
     await http(`/sale/${ordinary.id}/ship`,{items:ordinaryDetail.items.map(i=>({id:i.id,qty:i.quantity}))})
@@ -712,7 +714,7 @@ async function main() {
     const ordinaryCancelled=await http('/sale',{customerId:fixture.customerId,customerName:ref,warehouseId:fixture.warehouseId,warehouseName:ref,items:[{productId:auxProduct,productCode:ref+'-2',productName:ref,unit:'个',quantity:1,unitPrice:1,priceSource:'manual'}]},{expect:201});fixture.sales.push(ordinaryCancelled.id)
     await http(`/sale/${ordinaryCancelled.id}/reserve`,{});await http(`/sale/${ordinaryCancelled.id}/cancel`,{})
     const [oldLedger]=await q("SELECT COUNT(*) count FROM stock_reservations WHERE ref_type='sale_order' AND ref_id=? AND status=1",[ordinaryCancelled.id]);assert.equal(Number(oldLedger.count),0)
-    console.log('[PASS] legacy ordinary HTTP create auxiliary unit/reserve/dispatch/actual PDA ship/source return/QA/putaway leaves AR0; unshipped cancel releases original reservation rule')
+    console.log('[PASS] ordinary HTTP create fixed unit/reserve/dispatch/actual test-PDA ship/source return/QA/putaway leaves cash AR0; unshipped cancel releases original reservation rule')
 
     await verifyUnifiedEdit()
   } catch (error) {
