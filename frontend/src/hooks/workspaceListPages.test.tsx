@@ -18,7 +18,7 @@ const api=vi.hoisted(()=>({transfer:vi.fn(),requisitions:vi.fn(),purchaseReturns
 vi.mock('@/api/transfer',async original=>({...await original<typeof import('@/api/transfer')>(),getTransferListApi:api.transfer}))
 vi.mock('@/api/purchase-requisitions',async original=>({...await original<typeof import('@/api/purchase-requisitions')>(),listRequisitionsApi:api.requisitions}))
 vi.mock('@/api/returns',async original=>({...await original<typeof import('@/api/returns')>(),getPurchaseReturnsApi:api.purchaseReturns,getSaleReturnsApi:api.saleReturns}))
-vi.mock('@/api/oplogs',async original=>({...await original<typeof import('@/api/oplogs')>(),getOpLogsApi:api.logs}))
+vi.mock('@/api/oplogs',async original=>({...await original<typeof import('@/api/oplogs')>(),getAllOpLogsApi:api.logs}))
 vi.mock('@/api/picking-waves',async original=>({...await original<typeof import('@/api/picking-waves')>(),getWavesApi:api.waves,getWaveByIdApi:api.wave}))
 vi.mock('@/hooks/usePermission',()=>({usePermission:()=>({can:()=>true})}))
 vi.mock('@/hooks/useWarehouses',()=>({useWarehousesActive:()=>({data:[]})}))
@@ -44,7 +44,7 @@ beforeEach(()=>{
 })
 afterEach(async()=>{await act(async()=>root.unmount());cache.clear();host.remove();disposeWorkspaceHistoryGuard();vi.unstubAllGlobals();useWorkspaceStore.setState({tabs:[HOME_TAB],activeKey:HOME_TAB.key})})
 test.each([{page:'/transfer',spy:'transfer'},{page:'/purchase-requisitions',spy:'requisitions'},{page:'/returns/purchase',spy:'purchaseReturns'},{page:'/returns/sale',spy:'saleReturns'},{page:'/oplogs',spy:'logs'}] as const)('真实列表 $page 隐藏/再返回不读取别的标签条件',async({page,spy})=>{
- await render(path(page));expect(api[spy]).toHaveBeenLastCalledWith(expect.objectContaining({keyword:query.keyword,startDate:query.startDate,endDate:query.endDate}));api[spy].mockClear();await go('/settings?keyword=OTHER')
+ await render(path(page));const applied=expect.objectContaining({keyword:query.keyword,startDate:query.startDate,endDate:query.endDate});if(spy==='logs')expect(api[spy]).toHaveBeenLastCalledWith(applied,expect.any(AbortSignal));else expect(api[spy]).toHaveBeenLastCalledWith(applied);api[spy].mockClear();await go('/settings?keyword=OTHER')
  expect(api[spy].mock.calls.every(([p])=>p.keyword===query.keyword&&p.startDate===query.startDate)).toBe(true)
  await go(getWorkspaceListPath(page));expect(new URLSearchParams(host.querySelector('[data-location]')!.textContent!.split('?')[1]).get('keyword')).toBe(query.keyword)
 })

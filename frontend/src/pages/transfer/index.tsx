@@ -1,5 +1,5 @@
 import { useWorkspaceSearchParams } from '@/hooks/useWorkspaceSearchParams'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { useNavigate } from 'react-router-dom'
@@ -8,6 +8,7 @@ import { X } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import ListSummary from '@/components/shared/ListSummary'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { AppDialog } from '@/components/shared/AppDialog'
@@ -38,8 +39,8 @@ export default function TransferPage() {
   const [searchParams, setSearchParams] = useWorkspaceSearchParams()
 
   const [queryOpen, setQueryOpen] = useState(false)
-  const [confirmState, setConfirmState] = useState<{ open: boolean; title: string; description: string; onConfirm: () => void }>({ open: false, title: '', description: '', onConfirm: () => {} })
-  const openConfirm = (title: string, description: string, onConfirm: () => void) => setConfirmState({ open: true, title, description, onConfirm })
+  const [confirmState, setConfirmState] = useState<{ open: boolean; id: number | null; title: string; description: string; onConfirm: () => void }>({ open: false, id: null, title: '', description: '', onConfirm: () => {} })
+  const openConfirm = (id: number, title: string, description: string, onConfirm: () => void) => setConfirmState({ open: true, id, title, description, onConfirm })
   const closeConfirm = () => setConfirmState(s => ({ ...s, open: false }))
   const [pendingId, setPendingId] = useState<number | null>(null)
   // 在途异常了结：必须填写原因，走独立的小弹窗（ConfirmDialog 在桌面端会切到系统原生消息框，
@@ -69,7 +70,7 @@ export default function TransferPage() {
   const effectiveEndDate = endDate || (rangeAll ? '' : defaultRange.end)
 
   const PAGE_SIZE = 20
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['transfer', { keyword, remark, operatorId, statusFilter, productId, warehouseId, effectiveStartDate, effectiveEndDate }],
     queryFn: () => getTransferListApi({
       page: 1,
@@ -85,8 +86,13 @@ export default function TransferPage() {
     }).then(r => r!),
   })
   const total = data?.pagination?.total ?? 0
+  // 旧回调与重试恢复都须核对当前列表中的原行及该动作允许的状态。
+  const currentRowsRef = useRef<TransferOrder[]>([])
+  currentRowsRef.current = !isError && !isLoading ? data?.list ?? [] : []
+  const canActOnTransfer = (id: number | null, statuses: TransferOrder['status'][]) => currentRowsRef.current.some(row => row.id === id && statuses.includes(row.status))
 
-  const mut = (fn: () => Promise<unknown>, id?: number) => {
+  const mut = (fn: () => Promise<unknown>, id: number, statuses: TransferOrder['status'][]) => {
+    if (!canActOnTransfer(id, statuses)) return
     if (id) setPendingId(id)
     fn()
       .then(() => qc.invalidateQueries({ queryKey: ['transfer'] }))
@@ -130,12 +136,12 @@ export default function TransferPage() {
   }
 
   // 查询弹窗初始值：日期用「当前实际生效」的范围（含默认窗口），用户打开就能看见
-  const initialQuery: TransferQueryValues = {
+  const initialQuery = useMemo<TransferQueryValues>(() => ({
     keyword, remark, operatorId, operatorName, status: statusFilter,
     productId, productCode, productName,
     warehouseId, warehouseName,
     startDate: effectiveStartDate, endDate: effectiveEndDate,
-  }
+  }), [keyword, remark, operatorId, operatorName, statusFilter, productId, productCode, productName, warehouseId, warehouseName, effectiveStartDate, effectiveEndDate])
 
   function applyQuery(v: TransferQueryValues) {
     updateParams({
@@ -207,15 +213,16 @@ export default function TransferPage() {
           items={[
             ...(r.status === 1 ? [{
               label: pendingId === r.id ? '处理中…' : '确认派发',
-              onClick: () => mut(() => confirmTransferApi(r.id), r.id),
+              onClick: () => mut(() => confirmTransferApi(r.id), r.id, [1]),
               disabled: pendingId === r.id,
             }] : []),
             ...((r.status === 1 || r.status === 2) ? [{
               label: pendingId === r.id ? '处理中…' : '取消',
-              onClick: () => openConfirm('取消调拨', '确认取消此调拨单？', () => mut(() => cancelTransferApi(r.id), r.id)),
+              onClick: () => openConfirm(r.id, '取消调拨', '确认取消此调拨单？', () => mut(() => cancelTransferApi(r.id), r.id, [1, 2])),
               disabled: pendingId === r.id,
               destructive: true,
               separatorBefore: true,
+              afterMenuClose: true,
             }] : []),
             ...(r.status === 3 ? [{
               label: '异常了结（运输丢失）',
@@ -223,6 +230,7 @@ export default function TransferPage() {
               disabled: pendingId === r.id,
               destructive: true,
               separatorBefore: true,
+              afterMenuClose: true,
             }] : []),
           ]}
         />
@@ -257,22 +265,25 @@ export default function TransferPage() {
         </div>
       )}
 
-      <DataTable columns={columns} data={data?.list || []} loading={isLoading} onRowDoubleClick={goToDetail} />
+      {isError ? <QueryErrorState error={error} title="调拨列表读取失败" onRetry={() => void refetch()} />
+        : <DataTable virtualized preserveFocus retainFocusedRow={confirmState.open || forceCloseState.open} columns={columns} data={data?.list || []} loading={isLoading} onRowDoubleClick={goToDetail} />}
 
-      <ListSummary total={total} unit="单" />
+      {!isError && !isLoading && data && (data.truncated
+        ? <div role="status" className="px-1 py-3 text-xs text-warning-ink">已读取 {data.list.length.toLocaleString()} / 总匹配 {total.toLocaleString()} 单，请缩小查询范围。</div>
+        : <ListSummary total={total} unit="单" />)}
 
       <ConfirmDialog
-        open={confirmState.open}
+        open={confirmState.open && canActOnTransfer(confirmState.id, [1, 2])}
         title={confirmState.title}
         description={confirmState.description}
         variant={confirmState.title.includes('取消') ? 'destructive' : 'default'}
         confirmText={confirmState.title.includes('取消') ? '确认取消' : '确认'}
-        onConfirm={() => { closeConfirm(); confirmState.onConfirm() }}
+        onConfirm={() => { if (!canActOnTransfer(confirmState.id, [1, 2])) return; closeConfirm(); confirmState.onConfirm() }}
         onCancel={closeConfirm}
       />
 
       <AppDialog
-        open={forceCloseState.open}
+        open={forceCloseState.open && canActOnTransfer(forceCloseState.id, [3])}
         onOpenChange={(v) => { if (!v && pendingId !== forceCloseState.id) setForceCloseState({ open: false, id: null }) }}
         dialogId="transfer-force-close-dialog"
         resizable={false}
@@ -290,8 +301,8 @@ export default function TransferPage() {
               variant="destructive"
               disabled={pendingId === forceCloseState.id || !forceCloseReason.trim()}
               onClick={() => {
-                if (!forceCloseState.id) return
-                mut(() => forceCloseTransferApi(forceCloseState.id!, forceCloseReason.trim()), forceCloseState.id)
+                if (!forceCloseState.id || !canActOnTransfer(forceCloseState.id, [3])) return
+                mut(() => forceCloseTransferApi(forceCloseState.id!, forceCloseReason.trim()), forceCloseState.id, [3])
                 setForceCloseState({ open: false, id: null })
               }}
             >

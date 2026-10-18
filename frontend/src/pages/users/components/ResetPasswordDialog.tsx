@@ -54,7 +54,6 @@ export default function ResetPasswordDialog({
               placeholder="至少 6 位"
               autoComplete="new-password"
               disabled={isPending}
-              autoFocus
             />
           </div>
 

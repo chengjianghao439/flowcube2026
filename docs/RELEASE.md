@@ -130,6 +130,8 @@ npm run release:verify -- --origin https://<生产域名>
 
 逐项核对 `/latest.json`、`/api/app-update/latest`、`/api/pda/version`（版本 + versionCode + 可下载）与 `/api/health`，随后实际下载 EXE/APK 并核对 SHA256；**PDA 落后或包摘要不符即视为发版未完成**（v0.9.19 曾出现浏览器/桌面已发布、PDA 停在上一版而无人发现）。PDA 补跑见 `.agents/skills/release-flowcube/SKILL.md` 的「PDA 没跟上时」。
 
+发布收尾检查（必做）：成功发布且健康、版本验收通过后，按 [DEPLOY.md「发布成功后的镜像与磁盘收尾」](DEPLOY.md#发布成功后的镜像与磁盘收尾)完成镜像引用与空间盘点，将保留集合、精确拟清理清单及已处理/待确认/无安全清理对象的结论写入本版发布结果。
+
 ## 获取 EXE
 
 打开本仓库的 GitHub **Releases** 页面（URL 形如 `https://github.com/<你的用户或组织>/<仓库名>/releases`），进入对应版本（例如 `v0.3.64`），在 **Assets** 中下载 NSIS 安装包。服务器发布目录中的安装包由 `scripts/release-desktop.js` 规范化为 `FlowCube-Setup-<version>.exe`。

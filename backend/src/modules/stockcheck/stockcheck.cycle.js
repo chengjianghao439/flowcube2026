@@ -271,12 +271,14 @@ async function getCoverage({ warehouseId = null, scopeWarehouseIds = null } = {}
     `SELECT w.id AS warehouse_id, w.name AS warehouse_name,
             a.abc_class,
             COUNT(DISTINCT a.product_id) AS total_items,
-            SUM(CASE WHEN cov.last_counted_at IS NULL OR cov.last_counted_at < DATE_SUB(NOW(), INTERVAL COALESCE(r.interval_days, CASE a.abc_class WHEN 'A' THEN 30 WHEN 'B' THEN 90 ELSE 365 END) DAY)
+            SUM(CASE WHEN COALESCE(wr.enabled, gr.enabled, 1)=1
+                      AND (cov.last_counted_at IS NULL OR cov.last_counted_at < DATE_SUB(NOW(), INTERVAL COALESCE(wr.interval_days, gr.interval_days, CASE a.abc_class WHEN 'A' THEN 30 WHEN 'B' THEN 90 ELSE 365 END) DAY))
                  THEN 1 ELSE 0 END) AS due_items
      FROM inventory_warehouses w
      JOIN product_abc_classes a ON a.warehouse_id=w.id
      LEFT JOIN inventory_count_coverage cov ON cov.warehouse_id=w.id AND cov.product_id=a.product_id
-     LEFT JOIN inventory_cycle_rules r ON r.warehouse_id IN (0, w.id) AND r.abc_class=a.abc_class AND r.enabled=1
+     LEFT JOIN inventory_cycle_rules wr ON wr.warehouse_id=w.id AND wr.abc_class=a.abc_class
+     LEFT JOIN inventory_cycle_rules gr ON gr.warehouse_id=0 AND gr.abc_class=a.abc_class
      WHERE ${whConds}
      GROUP BY w.id, w.name, a.abc_class
      ORDER BY w.name ASC, a.abc_class ASC`,

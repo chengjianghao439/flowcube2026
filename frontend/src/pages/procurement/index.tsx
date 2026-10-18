@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
+import ListSummary from '@/components/shared/ListSummary'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -81,8 +82,11 @@ export default function ProcurementPlanListPage() {
         <Button size="sm" variant="outline" onClick={() => setKeyword(search)}>搜索</Button>
         {keyword && <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword('') }}>重置</Button>}
       </FilterCard>
-      {isError && <QueryErrorState error={error} onRetry={() => void refetch()} title={data ? '刷新失败，当前显示上次读取的数据' : '采购计划加载失败'} compact />}
-      {(!isError || data) && <DataTable columns={columns} data={data?.list ?? []} loading={isLoading} />}
+      {isError ? <QueryErrorState error={error} onRetry={() => void refetch()} title="采购计划加载失败" compact />
+        : <DataTable virtualized preserveFocus columns={columns} data={data?.list ?? []} loading={isLoading} />}
+      {!isError && !isLoading && data && (data.truncated
+        ? <div role="status" className="px-1 py-3 text-xs text-warning-ink">已读取 {data.list.length.toLocaleString()} / 总匹配 {data.pagination.total.toLocaleString()} 单，请缩小查询范围。</div>
+        : <ListSummary total={data.pagination.total} unit="单" />)}
 
       <Dialog open={genOpen} onOpenChange={setGenOpen}>
         <DialogContent className="sm:max-w-2xl">

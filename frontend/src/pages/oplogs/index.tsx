@@ -1,15 +1,17 @@
 import { useWorkspaceSearchParams } from '@/hooks/useWorkspaceSearchParams'
+import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { X } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import ListSummary from '@/components/shared/ListSummary'
 import { Button } from '@/components/ui/button'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import type { StatusTone } from '@/lib/statusTone'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { getOpLogsApi, clearLogsApi } from '@/api/oplogs'
+import { getAllOpLogsApi, clearLogsApi } from '@/api/oplogs'
 import { usePermission } from '@/hooks/usePermission'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { formatDisplayDateTime, defaultRangeYmds } from '@/lib/dateTime'
@@ -60,19 +62,17 @@ function DetailRow({ label, value }: { label: string; value: unknown }) {
 export default function OpLogsPage() {
   const { can } = usePermission()
   const qc = useQueryClient()
+  const active = useActiveWorkspaceTab()
   const [searchParams, setSearchParams] = useWorkspaceSearchParams()
   const [queryOpen, setQueryOpen] = useState(false)
   const [clearConfirm, setClearConfirm] = useState(false)
-  const [detail, setDetail] = useState<OpLog | null>(null)
-  const [page, setPage] = useState(1)
+  const [detailId, setDetailId] = useState<number | null>(null)
 
   // ── 当前生效的筛选（全部存于 URL 参数，刷新/分享可保留） ──
   const keyword   = readStringParam(searchParams, 'keyword')
   const module    = readStringParam(searchParams, 'module')
   const startDate = readStringParam(searchParams, 'startDate')
   const endDate   = readStringParam(searchParams, 'endDate')
-
-  const PAGE_SIZE = 20
 
   // 默认窗口在「构造查询参数处」兜底：不依赖那个只跑一次的 effect，首次打开与切回已挂载页签范围一致。
   // 操作日志是全站增长最快的表（每次写操作一条），没有窗口时首屏要串行拉全表。
@@ -81,17 +81,18 @@ export default function OpLogsPage() {
   const effectiveStartDate = startDate || (rangeAll ? '' : defaultRange.start)
   const effectiveEndDate = endDate || (rangeAll ? '' : defaultRange.end)
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['oplogs', { page, keyword, module, effectiveStartDate, effectiveEndDate }],
-    queryFn: () => getOpLogsApi({ page, pageSize: PAGE_SIZE, keyword, module, startDate: effectiveStartDate, endDate: effectiveEndDate }),
+  const { data, isLoading, isError, error, refetch } = useQuery({
+    queryKey: ['oplogs', { keyword, module, effectiveStartDate, effectiveEndDate }],
+    queryFn: ({ signal }) => getAllOpLogsApi({ keyword, module, startDate: effectiveStartDate, endDate: effectiveEndDate }, signal),
+    enabled: active,
+    subscribed: active,
   })
+  // 详情保留原日志ID上下文，但只展示当前成功列表里同一条日志。
+  const detail = isError ? undefined : data?.list.find(row => row.id === detailId)
   const total = data?.pagination?.total ?? 0
-  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE))
-  useEffect(() => { if (data && page > pageCount) setPage(pageCount) }, [data, page, pageCount])
   const clear = useMutation({ mutationFn: clearLogsApi, onSuccess: () => qc.invalidateQueries({ queryKey: ['oplogs'] }) })
 
   function updateParams(updates: Record<string, string | number | null | undefined>) {
-    setPage(1)
     setSearchParams(upsertSearchParams(searchParams, updates))
   }
 
@@ -174,7 +175,7 @@ export default function OpLogsPage() {
       title: '操作',
       width: 100,
       render: (_, row) => (
-        <Button size="sm" variant="outline" onClick={() => setDetail(row)}>
+        <Button size="sm" variant="outline" onClick={() => setDetailId(row.id)}>
           详情
         </Button>
       ),
@@ -203,16 +204,13 @@ export default function OpLogsPage() {
           <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>
         </div>
       )}
-      <DataTable virtualized columns={columns} data={data?.list || []} loading={isLoading} />
+      {isError ? <QueryErrorState error={error} onRetry={() => { void refetch() }} /> : <>
+        <DataTable virtualized preserveFocus retainFocusedRow={detailId !== null} columns={columns} data={data?.list || []} loading={isLoading} />
 
-      <ListSummary total={total} unit="条" />
-      {pageCount > 1 && (
-        <div className="flex items-center justify-end gap-3 text-sm text-muted-foreground">
-          <Button size="sm" variant="outline" disabled={isLoading || page <= 1} onClick={() => setPage(p => p - 1)}>上一页</Button>
-          <span aria-live="polite">第 {page} / {pageCount} 页</span>
-          <Button size="sm" variant="outline" disabled={isLoading || page >= pageCount} onClick={() => setPage(p => p + 1)}>下一页</Button>
-        </div>
-      )}
+        {!isLoading && data && (data.truncated ? (
+          <p role="status" className="px-1 py-3 text-xs text-warning-ink">已加载 {data.list.length.toLocaleString()} 条，匹配 {total.toLocaleString()} 条，请缩小查询范围。</p>
+        ) : <ListSummary total={total} unit="条" />)}
+      </>}
       <ConfirmDialog
         open={clearConfirm}
         title="清理旧日志"
@@ -222,7 +220,7 @@ export default function OpLogsPage() {
         onConfirm={() => { clear.mutate(); setClearConfirm(false) }}
         onCancel={() => setClearConfirm(false)}
       />
-      <Dialog open={!!detail} onOpenChange={open => { if (!open) setDetail(null) }}>
+      <Dialog open={!!detail} onOpenChange={open => { if (!open) setDetailId(null) }}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>操作日志详情</DialogTitle>

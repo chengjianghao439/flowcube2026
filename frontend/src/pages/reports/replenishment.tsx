@@ -120,9 +120,9 @@ export default function ReplenishmentPage() {
   ]
 
   // 查询弹窗初始值
-  const initialQuery: ReplenishmentQueryValues = {
+  const initialQuery = useMemo<ReplenishmentQueryValues>(() => ({
     keyword, warehouseId, warehouseName: '', categoryId,
-  }
+  }), [keyword, warehouseId, categoryId])
   function applyQuery(v: ReplenishmentQueryValues) {
     setKeyword(v.keyword)
     setWarehouseId(v.warehouseId)

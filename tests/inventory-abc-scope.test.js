@@ -144,3 +144,66 @@ test('removing a real trace scope filter is caught by the collection expectation
   const s = services({ inventorySource: source.slice(0, start) + mutantBody + source.slice(end) })
   assert.equal((await s.inventory.traceByProductId(37, { scopeWarehouseIds: [8] })).containers.length, 2)
 })
+
+// Execute the actual relational aggregate against an in-memory SQLite database.
+// Only MySQL DATE_SUB/NOW syntax is adapted; this is not native MySQL evidence.
+function coverageFixture(rules) {
+  const { DatabaseSync } = require('node:sqlite')
+  const db = new DatabaseSync(':memory:')
+  db.exec(`CREATE TABLE inventory_warehouses (id INTEGER PRIMARY KEY,name TEXT,deleted_at TEXT,is_active INTEGER);
+    CREATE TABLE inventory_containers (warehouse_id INTEGER,status INTEGER,deleted_at TEXT);
+    CREATE TABLE product_abc_classes (warehouse_id INTEGER,product_id INTEGER,abc_class TEXT);
+    CREATE TABLE inventory_count_coverage (warehouse_id INTEGER,product_id INTEGER,last_counted_at TEXT);
+    CREATE TABLE inventory_cycle_rules (warehouse_id INTEGER,abc_class TEXT,interval_days INTEGER,enabled INTEGER,UNIQUE(warehouse_id,abc_class));
+    INSERT INTO inventory_warehouses VALUES (8,'A',NULL,1),(9,'B',NULL,1);
+    INSERT INTO inventory_containers VALUES (8,1,NULL),(9,1,NULL);
+    INSERT INTO product_abc_classes VALUES (8,37,'A'),(8,38,'A'),(9,39,'A');
+    INSERT INTO inventory_count_coverage VALUES (8,37,'2026-09-01'),(8,38,'2026-10-14');`)
+  for (const r of rules) db.prepare('INSERT INTO inventory_cycle_rules VALUES (?,?,?,?)').run(...r)
+  db.function('cutoff_days', days => new Date(Date.parse('2026-10-15T00:00:00Z') - Number(days) * 86400000).toISOString().slice(0, 10))
+  const queries = []
+  const pool = { query: async (sql, params) => {
+    queries.push({ sql, params })
+    assert.match(sql, /^\s*SELECT/)
+    const translated = sql.replace(/DATE_SUB\(NOW\(\), INTERVAL (COALESCE\([\s\S]*?\)) DAY\)/g, 'cutoff_days($1)')
+    const expanded = []; let index = 0
+    const bound = translated.replace(/\?/g, () => {
+      const value = params[index++]
+      expanded.push(...(Array.isArray(value) ? value : [value]))
+      return Array.isArray(value) ? value.map(() => '?').join(',') : '?'
+    })
+    return [db.prepare(bound).all(...expanded)]
+  } }
+  const cycle = load('backend/src/modules/stockcheck/stockcheck.cycle.js', { '../../config/db': { pool }, '../../utils/warehouseScope': warehouseScope(pool) })
+  return { cycle, queries, close: () => db.close() }
+}
+for (const [label, rules, due] of [
+  ['global only', [[0,'A',30,1]], 1],
+  ['warehouse only', [[8,'A',90,1]], 0],
+  ['warehouse period overrides global without double counting', [[0,'A',30,1],[8,'A',90,1]], 0],
+  ['two matching due rules count each SKU once', [[0,'A',30,1],[8,'A',30,1]], 1],
+  ['disabled warehouse override does not fall back to enabled global', [[0,'A',30,1],[8,'A',30,0]], 0],
+  ['enabled warehouse override replaces disabled global', [[0,'A',30,0],[8,'A',30,1]], 1],
+  ['disabled global with no override has no due obligations', [[0,'A',30,0]], 0],
+  ['missing rule retains A default', [], 1],
+]) {
+  test('coverage executes real aggregate: '+label, async () => {
+    const f = coverageFixture(rules)
+    try {
+      const [row] = await f.cycle.getCoverage({ warehouseId: 8, scopeWarehouseIds: [8] })
+      assert.equal(row.totalItems, 2); assert.equal(row.dueItems, due)
+      assert.equal(row.coverageRate, (2-due)/2*100)
+      assert.ok(row.dueItems >= 0 && row.dueItems <= row.totalItems)
+      assert.equal(f.queries.length, 1)
+    } finally { f.close() }
+  })
+}
+test('coverage keeps null, empty, own warehouse and explicit other warehouse scope', async () => {
+  const f = coverageFixture([[0,'A',30,1],[8,'A',30,1]])
+  try {
+    assert.deepEqual((await f.cycle.getCoverage({})).map(r=>r.warehouseId), [8,9])
+    assert.deepEqual(Array.from(await f.cycle.getCoverage({scopeWarehouseIds:[]})), [])
+    assert.deepEqual((await f.cycle.getCoverage({scopeWarehouseIds:[8]})).map(r=>r.warehouseId), [8])
+    assert.deepEqual(Array.from(await f.cycle.getCoverage({warehouseId:9,scopeWarehouseIds:[8]})), [])
+  } finally { f.close() }
+})

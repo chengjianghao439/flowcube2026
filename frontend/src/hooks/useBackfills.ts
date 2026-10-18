@@ -5,7 +5,9 @@ import {
   executeBackfillApi, regenerateBackfillVoucherApi,
 } from '@/api/accounting'
 import type { AxiosRequestConfig } from 'axios'
-import type { BackfillApplication, BackfillListQuery } from '@/types/accounting'
+import { collectAllRecords } from '@/api/allRecords'
+import { useCompanyStore } from '@/store/companyStore'
+import type { BackfillApplication, BackfillListQuery, BackfillListResult } from '@/types/accounting'
 
 const QK = 'acct-backfills'
 /** Opt-in immutable context only for supplier_refund; legacy kinds keep their existing calls. */
@@ -27,12 +29,25 @@ const executionId = (v: ExecutionInput) => typeof v === 'number' ? v : v.id
 const executionContext = (v: ExecutionInput) => typeof v === 'number' ? undefined : v.refundContext
 
 export type BackfillReadRow = BackfillApplication & { refundContext?: SupplierRefundBackfillContext }
-export const useBackfills = (params: BackfillListQuery, captureRefundRead?: () => SupplierRefundBackfillContext) =>
-  useQuery({ queryKey: useCompanyQueryKey([QK, 'list', params]), queryFn: async () => {
+function useBackfillList(params: BackfillListQuery, captureRefundRead?: () => SupplierRefundBackfillContext, all = false, active = true) {
+  const queryKey = useCompanyQueryKey([QK, all ? 'all' : 'list', params])
+  const companyId = queryKey[1] as number
+  return useQuery({ queryKey, ...(all ? { enabled: active, subscribed: active } : {}), queryFn: async queryContext => {
+    const signal = all ? queryContext.signal : undefined
     const context = captureRefundRead?.()
+    const config = all ? { ...context?.config, _companyScopeId: companyId, signal } : context?.config
     // Never send a fixed old-server request after its owner has changed.
-    if (context && !(context.requestCurrent?.() ?? context.current())) throw Error('原供应商退款读取上下文已变化，请主动刷新核对')
-    const result = await getBackfillsApi(params, context?.config)
+    const readPage = async (query: BackfillListQuery) => {
+      if (all && useCompanyStore.getState().companyId !== companyId) throw Error('账套已切换，请重新读取补录申请')
+      if (context && !(context.requestCurrent?.() ?? context.current())) throw Error('原供应商退款读取上下文已变化，请主动刷新核对')
+      const result = await getBackfillsApi(query, config)
+      if (all && useCompanyStore.getState().companyId !== companyId) throw Error('账套已切换，请重新读取补录申请')
+      if (all && context && !(context.requestCurrent?.() ?? context.current())) throw Error('原供应商退款读取上下文已变化，请主动刷新核对')
+      return result
+    }
+    const result: BackfillListResult & { truncated?: boolean } = all
+      ? await collectAllRecords(page => readPage({ ...params, page, pageSize: 200 }), signal)
+      : await readPage(params)
     const current = !context || context.current()
     const list: BackfillReadRow[] = result.list.flatMap(row => {
       if (row.bizType !== 'supplier_refund' || !context) return [row]
@@ -40,6 +55,13 @@ export const useBackfills = (params: BackfillListQuery, captureRefundRead?: () =
     })
     return { ...result, list }
   }, retry: captureRefundRead ? false : undefined })
+}
+export const useBackfills = (params: BackfillListQuery, captureRefundRead?: () => SupplierRefundBackfillContext) =>
+  useBackfillList(params, captureRefundRead)
+
+/** 仅跨期补录列表使用；保留旧分页读取合同与各页原退款上下文。 */
+export const useAllBackfills = (params: Omit<BackfillListQuery, 'page' | 'pageSize'>, captureRefundRead?: () => SupplierRefundBackfillContext, active = true) =>
+  useBackfillList(params, captureRefundRead, true, active)
 
 /**
  * 详情：列表接口**不返回** requestSnapshot（那是批准后重放原请求的完整入参），

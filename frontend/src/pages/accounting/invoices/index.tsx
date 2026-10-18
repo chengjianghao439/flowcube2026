@@ -21,7 +21,7 @@ import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { cn } from '@/lib/utils'
 import { toast } from '@/lib/toast'
-import { todayYmd } from '@/lib/dateTime'
+import { formatDisplayDate, todayYmd } from '@/lib/dateTime'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { useDialogDraftGuard } from '@/hooks/useDialogDraftGuard'
@@ -66,7 +66,7 @@ function InvoiceDialog({ open, invoiceType, edit, onClose }: { open: boolean; in
     setConflict(false); setInputDirty(false)
     const next = edit ? {
       invoiceCode: edit.invoiceCode ?? '', invoiceNo: edit.invoiceNo ?? '', partyName: edit.partyName, partyTaxNo: edit.partyTaxNo ?? '',
-      withTax: String(edit.amountWithTax), taxRate: String(edit.taxRate), invoiceDate: String(edit.invoiceDate).slice(0, 10), sourceNo: edit.sourceNo ?? '', remark: edit.remark ?? '',
+      withTax: String(edit.amountWithTax), taxRate: String(edit.taxRate), invoiceDate: formatDisplayDate(edit.invoiceDate, ''), sourceNo: edit.sourceNo ?? '', remark: edit.remark ?? '',
     } : { invoiceCode: '', invoiceNo: '', partyName: '', partyTaxNo: '', withTax: '', taxRate: '0.13', invoiceDate: todayYmd(), sourceNo: '', remark: '' }
     setF(next); setBaseline(next)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 打开/切换发票时建立基线，同 id 刷新不得覆盖草稿
@@ -198,7 +198,7 @@ export default function InvoicesPage() {
     { key: 'taxRate', title: '税率', width: 70, align: 'right', render: (_v, r) => `${(r.taxRate * 100).toFixed(0)}%` },
     { key: 'taxAmount', title: '税额', width: 100, align: 'right', render: (_v, r) => <span className="tabular-nums">{m(r.taxAmount)}</span> },
     { key: 'amountWithTax', title: '价税合计', width: 120, align: 'right', render: (_v, r) => <span className="tabular-nums font-medium">{m(r.amountWithTax)}</span> },
-    { key: 'invoiceDate', title: '开票日期', width: 110, render: (_v, r) => String(r.invoiceDate).slice(0, 10) },
+    { key: 'invoiceDate', title: '开票日期', width: 110, render: (_v, r) => formatDisplayDate(r.invoiceDate, '') },
     { key: 'sourceNo', title: '关联单号', width: 120, render: (_v, r) => r.sourceNo || '—' },
     { key: 'status', title: '状态', width: 90, render: (_v, r) => <SoftStatusLabel label={r.statusName} tone={statusTone(r.invoiceType, r.status)} /> },
     { key: 'actions', title: '操作', width: 190, render: (_v, r) => canManage && (

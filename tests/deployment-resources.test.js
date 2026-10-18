@@ -8,6 +8,23 @@ const { spawnSync } = require('node:child_process')
 const { gunzipSync } = require('node:zlib')
 const root = path.resolve(__dirname, '..')
 
+// A37：新增备份窗口必须增加总预算，不能挤掉旧加载/迁移/回退等待。
+// 反向验证：外层恢复 2400、删除 create/verify 任一命令或缩短 job/PDA 等待都应失败。
+test('A37 备份与回执共用有界窗口，部署与PDA预算覆盖新增时间', () => {
+  const yaml = require(path.resolve(root, 'frontend/node_modules/js-yaml'))
+  const wf = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/deploy-browser.yml'), 'utf8'))
+  const step = wf.jobs.deploy.steps.find(s => s.name === 'Deploy backend and frontend on server')
+  const update = fs.readFileSync(path.join(root, 'scripts/server-update.sh'), 'utf8')
+  const backup = update.match(/bounded (\d+) bash -c '([^']+)'/)
+  assert.ok(backup && backup[2].includes('create') && backup[2].includes('verify'), '本次创建及独立回执复核必须合用有界预算')
+  assert.equal(Number(backup[1]), 300)
+  const outer = Number(step.run.match(/timeout -k 600 (\d+) bash scripts\/server-update.sh/)[1])
+  assert.ok(outer >= 2400 + Number(backup[1]), '新增备份窗口不能占用原有部署预算')
+  const wait = fs.readFileSync(path.join(root, 'scripts/wait-release-checks.js'), 'utf8')
+  const waitMinutes = Number(wait.match(/includes\('deploy-browser.yml'\) \? (\d+) :/)[1])
+  assert.ok(waitMinutes > wf.jobs.deploy['timeout-minutes'], 'PDA 脚本等待必须长于浏览器 job')
+})
+
 // 2026-09-19：本机为盘点做了 30+ 次独立短 SSH 连接、多次被本地 timeout 强杀，把自己的出口 IP
 // 打到服务器 sshd 限流（banner 阶段超时），而同一时刻 CI 出口 IP 完全正常——诊断能力不该绑在
 // 单一来源 IP 上，因此新增 `workflow_dispatch` 的只读诊断 workflow（`.github/workflows/server-diagnostics.yml`）。
@@ -125,6 +142,7 @@ test('部署总超时穿透内层等待，清理和回退必须在强杀前执�
   fs.writeFileSync(path.join(dir, 'docker'), `#!${process.execPath}\nrequire('node:fs').writeFileSync(process.env.PROBE_PIDS, JSON.stringify([process.pid,process.ppid]));setInterval(()=>{},1000);\n`, { mode: 0o755 })
   fs.writeFileSync(path.join(dir, 'gate.sh'), `set -euo pipefail\ntrap 'echo cleanup >> "$PROBE_LOG"' EXIT\ntrap 'exit 143' TERM\n. scripts/lib/runtime-guards.sh\nDOCKER_COMMAND_TIMEOUT=20 docker run\n`)
   fs.writeFileSync(path.join(dir, 'deploy.sh'), `set -Eeuo pipefail\ntrap 'echo rollback >> "$PROBE_LOG"; exit 1' TERM ERR\nbash "$PROBE_DIR/gate.sh"\n`)
+  let failure, failed = false
   try {
     const r = spawnSync('bash', ['-c', 't=$(type -P timeout || type -P gtimeout); exec "$t" -k 2 1 bash "$PROBE_DIR/deploy.sh"'], {
       cwd: root, timeout: 7000, stdio: 'ignore', env: { ...process.env, PATH: dir + ':' + process.env.PATH,
@@ -136,12 +154,16 @@ test('部署总超时穿透内层等待，清理和回退必须在强杀前执�
     assert.match(events, /rollback/)
     const [pid] = JSON.parse(fs.readFileSync(pids, 'utf8'))
     assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' })
-  } finally {
-    if (fs.existsSync(pids)) for (const pid of JSON.parse(fs.readFileSync(pids, 'utf8'))) {
-      try { process.kill(pid, 'SIGKILL') } catch (e) { if (e.code !== 'ESRCH') throw e }
-    }
-    fs.rmSync(dir, { recursive: true, force: true })
+  } catch (error) {
+    failure = error
+    failed = true
   }
+  // Preserve the existing priority: cleanup failure wins; otherwise rethrow the assertion failure.
+  if (fs.existsSync(pids)) for (const pid of JSON.parse(fs.readFileSync(pids, 'utf8'))) {
+    try { process.kill(pid, 'SIGKILL') } catch (e) { if (e.code !== 'ESRCH') throw e }
+  }
+  fs.rmSync(dir, { recursive: true, force: true })
+  if (failed) throw failure
 })
 
 test('真实 GNU timeout 会终止挂起的 Docker 客户端进程', () => {

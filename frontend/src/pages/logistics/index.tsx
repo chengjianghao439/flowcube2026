@@ -85,10 +85,10 @@ export default function LogisticsPage() {
   function reset() { setApplied({ keyword: '', status: 'all', carrierId: null, startDate: '', endDate: '' }) }
 
   // ── 查询弹窗筛选值 ──
-  const initialQuery: WaybillQueryValues = {
+  const initialQuery = useMemo<WaybillQueryValues>(() => ({
     keyword: applied.keyword, status: applied.status === 'all' ? '' : applied.status,
     carrierId: applied.carrierId, startDate: applied.startDate, endDate: applied.endDate,
-  }
+  }), [applied.keyword, applied.status, applied.carrierId, applied.startDate, applied.endDate])
   function applyQuery(v: WaybillQueryValues) {
     setApplied({ keyword: v.keyword, status: v.status || 'all', carrierId: v.carrierId, startDate: v.startDate, endDate: v.endDate })
     setQueryOpen(false)

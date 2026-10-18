@@ -1,8 +1,9 @@
 'use strict'
 const { successResponse, errorResponse } = require('./response')
+const { lifecycle } = require('./runtimeLifecycle')
 
 /** 公开就绪探针只返回状态；短缓存与单次在途探测限制重复请求的数据库开销。 */
-function createReadinessHandler(pool, { timeoutMs = 2000, cacheMs = 1000 } = {}) {
+function createReadinessHandler(pool, { timeoutMs = 2000, cacheMs = 1000, isDraining = lifecycle.isDraining } = {}) {
   let pending = null
   let cached = null
   let expires = 0
@@ -28,6 +29,7 @@ function createReadinessHandler(pool, { timeoutMs = 2000, cacheMs = 1000 } = {})
     }
   }
   return async (_req, res) => {
+    if (isDraining()) return errorResponse(res, '服务暂不可用', 503, { status: 'unavailable' }, 'NOT_READY')
     if (!cached || Date.now() >= expires) {
       if (!pending) pending = probe().then(ready => {
         cached = { ready }
@@ -36,7 +38,7 @@ function createReadinessHandler(pool, { timeoutMs = 2000, cacheMs = 1000 } = {})
       }).finally(() => { pending = null })
       await pending
     }
-    if (cached.ready) return successResponse(res, { status: 'ready' }, 'ready')
+    if (!isDraining() && cached.ready) return successResponse(res, { status: 'ready' }, 'ready')
     return errorResponse(res, '服务暂不可用', 503, { status: 'unavailable' }, 'NOT_READY')
   }
 }

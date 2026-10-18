@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react'
 import { usePermission } from '@/hooks/usePermission'
 import { approvalSource, approvalNavigationPath, pendingApprovalRowKey, pendingApprovalProgress, pendingApprovalTime, pendingApprovalAmountLabel, pendingApprovalAmount } from '@/lib/approvalBusiness'
 import { useWorkspaceStore } from '@/store/workspaceStore'
@@ -16,16 +15,10 @@ import type { TableColumn } from '@/types'
 export default function ApprovalPendingPage() {
   const navigate = useNavigate()
   const { can } = usePermission()
-  const [page, setPage] = useState(1)
-  const pageSize = 20
-  const { data, isLoading, isFetching, isError, error, refetch } = usePendingApprovals(page, pageSize)
+  const { data, isLoading, isFetching, isError, error, refetch } = usePendingApprovals(1, 200, 'all')
 
   const list = (data?.list ?? []).map(row => ({ ...row, entryKey: pendingApprovalRowKey(row) }))
   const total = data?.pagination.total ?? 0
-  const lastPage = Math.max(1, Math.ceil(total / pageSize))
-  useEffect(() => {
-    if (data && !isFetching && !isError && page > lastPage) setPage(lastPage)
-  }, [data, isFetching, isError, page, lastPage])
   function openSource(row: PendingApproval) {
     const source = approvalSource(row.bizType, row.bizId, can)
     if (!isFetching && !isError && source.path) navigate(approvalNavigationPath(source.path, useWorkspaceStore.getState().tabs))
@@ -98,22 +91,20 @@ export default function ApprovalPendingPage() {
         title="待我审批"
         description="你可处理的审批节点与业务单级审核，点击单据号进入原单"
       />
-      {isError && <QueryErrorState error={error} onRetry={() => void refetch()} title="审批待办读取失败" compact />}
+      {isError ? <QueryErrorState error={error} onRetry={() => void refetch()} title="审批待办读取失败" compact /> : <>
       <DataTable
         columns={columns}
         data={isError ? [] : list}
         loading={isLoading || isFetching}
         rowKey="entryKey"
+        virtualized
+        preserveFocus
         emptyText={list.length === 0 && !isLoading ? '没有待你审批的单据' : undefined}
       />
-      <div className="flex items-center justify-between gap-3">
-        <ListSummary total={total} />
-        <nav aria-label="审批待办分页" className="flex items-center gap-3 text-sm">
-          <Button variant="outline" size="sm" disabled={page <= 1 || isFetching} onClick={() => setPage(p => p - 1)}>上一页</Button>
-          <span>第 {page} / {lastPage} 页</span>
-          <Button variant="outline" size="sm" disabled={page >= lastPage || isFetching || isError} onClick={() => setPage(p => p + 1)}>下一页</Button>
-        </nav>
-      </div>
+      {data && !isFetching && (data.truncated
+        ? <p role="status" className="text-sm text-muted-foreground">仅显示前 {list.length.toLocaleString()} 条，共 {total.toLocaleString()} 条，待办未全部读取；请先处理现有待办后刷新。</p>
+        : <ListSummary total={total} />)}
+      </>}
     </div>
   )
 }

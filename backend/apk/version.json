@@ -1,7 +1,7 @@
 {
-  "version": "0.13.5",
-  "versionCode": 156,
+  "version": "0.13.6",
+  "versionCode": 157,
   "filename": "app-release.apk",
-  "releaseNote": "- 本版继续仅供使用合成数据的安装验收。异常历史关联记录的仓库权限缺口仍未完成修复；不得据本版用于真实业务验收。",
-  "publishedAt": "2026-10-14T09:24:57.010Z"
+  "releaseNote": "- 本版继续仅供使用合成数据的安装验收。异常历史关联记录的仓库权限缺口仍未完成，不据此用于真实业务验收。",
+  "publishedAt": "2026-10-18T10:01:09.979Z"
 }

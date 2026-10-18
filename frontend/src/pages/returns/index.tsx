@@ -175,13 +175,13 @@ export default function ReturnsPage() {
   }
 
   // 查询弹窗初始值：日期用「当前实际生效」的范围（含默认窗口），用户打开就能看见
-  const initialQuery: ReturnQueryValues = {
+  const initialQuery = useMemo<ReturnQueryValues>(() => ({
     keyword, remark, operatorId, operatorName, status: statusFilter,
     productId, productCode, productName,
     partyId, partyName,
     warehouseId, warehouseName,
     startDate: effectiveStartDate, endDate: effectiveEndDate,
-  }
+  }), [keyword, remark, operatorId, operatorName, statusFilter, productId, productCode, productName, partyId, partyName, warehouseId, warehouseName, effectiveStartDate, effectiveEndDate])
 
   function applyQuery(v: ReturnQueryValues) {
     updateParams({

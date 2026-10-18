@@ -8,6 +8,7 @@ const path = require('node:path')
 const vm = require('node:vm')
 const { spawnSync } = require('node:child_process')
 const root = path.resolve(__dirname, '..')
+const { createRuntimeLifecycle } = require('../backend/src/utils/runtimeLifecycle')
 
 // 运行真实脚本；替换 Docker/HTTPS 等外部边界，机器人请求只写入本轮临时目录。
 function fixture(t) {
@@ -26,7 +27,7 @@ const cmd=path.basename(process.argv[1]), a=process.argv.slice(2), s=JSON.parse(
 if(cmd==='curl'){
  if(a.includes('-d')){
   fs.appendFileSync(process.env.ALERT_CAPTURE, a[a.indexOf('-d')+1]+'\\n');
-  console.log(s.sendFails ? '{"errcode":1}\\n200' : '{"errcode":0}\\n200'); process.exit(0);
+  console.log(JSON.stringify({errcode:s.replyErrcode ?? (s.sendFails ? 1 : 0)})+'\\n200'); process.exit(0);
  }
  console.log(s.publicDown && a.at(-1).startsWith('https:') ? '503' : '200'); process.exit(0);
 }
@@ -39,6 +40,7 @@ if(cmd==='timeout'){
 if(cmd==='openssl'){if(a[0]==='x509')console.log('notAfter=Nov 16 14:56:59 2030 GMT');process.exit(0);}
 if(cmd==='docker'){
  const x=a.join(' ');
+ if(s.backupMissing && a[0]==='inspect') process.exit(1);
  if(a[0]==='compose') console.log('flowcube-'+a.at(-1));
  else if(a[0]==='inspect') console.log(x.includes('.Name')?'/'+a.at(-1):x.includes('.Id')?(s.containerId||'fixture-id'):x.includes('RestartCount')?String(s.restarts||0):'running');
  else if(x.includes('Threads_connected')) console.log(s.connections||7);
@@ -54,16 +56,17 @@ process.exit(0);
   const env = { ...process.env, PATH: path.join(dir, 'bin') + ':' + process.env.PATH,
     PROJECT_DIR: dir, BACKUP_DIR: path.join(dir, 'backups'), STATE_FILE: stateFile,
     DINGTALK_WEBHOOK: 'https://example.invalid/offline-only',
+    DINGTALK_SECRET: '', DINGTALK_KEYWORD: '',
     ALERT_CAPTURE: commands, TZ: 'Asia/Shanghai' }
   return {
     dir, stateFile,
-    run(script, scenario = {}) {
+    run(script, scenario = {}, expectedStatus = 0) {
       const before = fs.existsSync(commands) ? fs.readFileSync(commands, 'utf8').trim().split('\n').length : 0
       const result = spawnSync('bash', [path.join(dir, 'scripts', script)], {
         cwd: dir, env: { ...env, ALERT_SCENARIO: JSON.stringify(scenario) },
         encoding: 'utf8', timeout: 20000,
       })
-      assert.equal(result.status, 0, result.stdout + result.stderr)
+      assert.equal(result.status, expectedStatus, result.stdout + result.stderr)
       const messages = fs.existsSync(commands) ? fs.readFileSync(commands, 'utf8').trim().split('\n').slice(before).map(JSON.parse) : []
       return { ...result, messages, text: messages.map(m => m.text.content).join('\n') }
     },
@@ -78,7 +81,8 @@ test('真实发送保留换行、引号及反斜杠，消息超过旧500字符�
     . "${root}/scripts/lib/ops-common.sh"
     curl() { while [ "$#" -gt 0 ]; do if [ "$1" = -d ]; then printf '%s' "$2" > "$ALERT_CAPTURE"; break; fi; shift; done; printf '{"errcode":0}\\n200'; }
     dingtalk_send 'https://example.invalid/offline-only' "$ALERT_MESSAGE"
-  `], { env: { ...process.env, ALERT_CAPTURE: capture, ALERT_MESSAGE: msg }, encoding: 'utf8' })
+  `], { env: { ...process.env, PROJECT_DIR: f.dir, DINGTALK_SECRET: '', DINGTALK_KEYWORD: '',
+    ALERT_CAPTURE: capture, ALERT_MESSAGE: msg }, encoding: 'utf8' })
   assert.equal(r.status, 0, r.stderr)
   assert.equal(JSON.parse(fs.readFileSync(capture, 'utf8')).text.content, msg)
 })
@@ -236,6 +240,7 @@ test('scheduler保留会话family清理与漂移，注册作业异常而非经�
   let familyCleanups = 0
   const noop = () => {}
   const modules = {
+    './utils/runtimeLifecycle': { lifecycle: createRuntimeLifecycle({ setIntervalFn: tick => { ticks.push(tick); return { unref: noop } }, clearIntervalFn: noop }) },
     './config/db': { pool: { query: async sql => { sqls.push(sql); return [[]] } } },
     './modules/auth/sessionFamilies': { cleanupSessionFamilies: async () => { familyCleanups++ } },
     './utils/logger': { info: noop, warn: noop, error: noop },
@@ -257,4 +262,227 @@ test('scheduler保留会话family清理与漂移，注册作业异常而非经�
   assert.ok(!names.includes('scheduler:dingtalk-alert'))
   assert.equal(familyCleanups, 1, '三方合并必须保留安全分支的session family清理')
   assert.ok(sqls.some(sql => sql.includes('DELETE FROM refresh_token_sessions')))
+})
+
+// Only the real PDA cleanup closure runs; every module, timer and SQL boundary is local.
+async function pdaCleanupSql() {
+  const ticks = [], sqls = [], noop = () => {}
+  const modules = {
+    './utils/runtimeLifecycle': { lifecycle: createRuntimeLifecycle({ setIntervalFn: tick => { ticks.push(tick); return { unref: noop } }, clearIntervalFn: noop }) },
+    './config/db': { pool: { query: async sql => { sqls.push(sql); return [[]] } } },
+    './utils/logger': { info: noop, warn: noop, error: noop },
+    './utils/requestContext': { runWithRequestContext: async ({ requestId }, fn) => {
+      if (requestId === 'scheduler:pda-session-cleanup') await fn()
+    } },
+  }
+  const context = { module: { exports: {} }, process: { env: {} },
+    require: name => modules[name] || new Proxy({}, { get: () => noop }),
+    setInterval: tick => { ticks.push(tick); return { unref: noop } },
+  }
+  vm.runInNewContext(fs.readFileSync(path.join(root, 'backend/src/scheduler.js'), 'utf8'), context)
+  context.module.exports.startScheduler()
+  for (const tick of ticks) await tick()
+  assert.equal(sqls.length, 1)
+  return sqls[0]
+}
+
+// A finite SQL predicate interpreter, not MySQL execution. Parse the captured WHERE
+// rather than copying the intended retention predicate into a passing mock.
+function sessionCleanupPredicate(sql, now) {
+  const migration = fs.readFileSync(path.join(root, 'backend/src/database/080_create_pda_device_sessions.sql'), 'utf8')
+  const table = migration.match(/CREATE TABLE IF NOT EXISTS pda_device_sessions \(([^]*?)\) ENGINE=/)[1]
+  const columns = new Set([...table.matchAll(/^\s+([a-z_]+)\s+(?:BIGINT|CHAR|JSON|DATETIME)/gm)].map(m => m[1]))
+  const expression = sql.match(/\bWHERE\s+([^]*?)(?:\s+LIMIT\s+\d+)?\s*$/i)[1]
+  const tokens = expression.match(/[a-z_][a-z_0-9]*|\d+|[(),<]/gi) || []
+  assert.equal(tokens.join(''), expression.replace(/\s+/g, ''), 'unsupported SQL token')
+  let cursor = 0
+  const peek = value => tokens[cursor]?.toUpperCase() === value
+  const take = value => { assert.ok(peek(value), `expected ${value}`); cursor++ }
+  function value() {
+    if (peek('COALESCE')) {
+      take('COALESCE'); take('('); const a = value(); take(','); const b = value(); take(')')
+      return row => a(row) ?? b(row)
+    }
+    if (peek('NOW')) { take('NOW'); take('('); take(')'); return () => now }
+    if (peek('DATE_SUB')) {
+      take('DATE_SUB'); take('('); take('NOW'); take('('); take(')'); take(','); take('INTERVAL')
+      const days = Number(tokens[cursor++]); assert.ok(Number.isInteger(days)); take('DAY'); take(')')
+      return () => now - days * 86400000
+    }
+    const column = tokens[cursor++]
+    assert.ok(columns.has(column), `session migration has no column ${column}`)
+    return row => row[column] ?? null
+  }
+  function atom() {
+    if (peek('(')) { take('('); const inner = or(); take(')'); return inner }
+    const a = value()
+    if (peek('<')) {
+      take('<'); const b = value()
+      return row => a(row) !== null && b(row) !== null && a(row) < b(row)
+    }
+    take('IS'); take('NOT'); take('NULL'); return row => a(row) !== null
+  }
+  function and() {
+    let left = atom()
+    while (peek('AND')) { take('AND'); const a = left, b = atom(); left = row => a(row) && b(row) }
+    return left
+  }
+  function or() {
+    let left = and()
+    while (peek('OR')) { take('OR'); const a = left, b = and(); left = row => a(row) || b(row) }
+    return left
+  }
+  const result = or(); assert.equal(cursor, tokens.length)
+  return result
+}
+
+test('PDA清理只引用真实会话列，每轮最多1000条', async () => {
+  const sql = await pdaCleanupSql()
+  sessionCleanupPredicate(sql, Date.UTC(2026, 9, 17))
+  assert.match(sql, /\bLIMIT 1000\s*$/)
+})
+
+test('PDA失效后保留30天：有效、刚过期和近期撤销均保留，严格排除边界', async () => {
+  const now = Date.UTC(2026, 9, 17), day = 86400000
+  const eligible = sessionCleanupPredicate(await pdaCleanupSql(), now)
+  const cases = [
+    { name: '有效会话即使创建很久仍保留', expires: 1, revoked: null, expected: false },
+    { name: '刚过期保留', expires: -1, revoked: null, expected: false },
+    { name: '过期恰好30天保留', expires: -30, revoked: null, expected: false },
+    { name: '过期超过30天清理', expires: -31, revoked: null, expected: true },
+    { name: '撤销恰好30天保留', expires: 1, revoked: -30, expected: false },
+    { name: '已撤销超过30天即使到期日在未来也清理', expires: 1, revoked: -31, expected: true },
+    { name: '很早过期但最近才撤销仍留审计窗口', expires: -60, revoked: -1, expected: false },
+    { name: '近期到期的旧撤销会话按撤销时刻清理', expires: -1, revoked: -31, expected: true },
+  ]
+  for (const c of cases) {
+    const row = { expires_at: now + c.expires * day, revoked_at: c.revoked === null ? null : now + c.revoked * day,
+      created_at: now - 100 * day, last_seen_at: now - 100 * day }
+    assert.equal(eligible(row), c.expected, c.name)
+  }
+})
+
+// Real shell wrapper + local curl function: no socket, credential file or real robot.
+function offlineSend(t, options = {}) {
+  const f = fixture(t), bodyFile = path.join(f.dir, 'sent-body.json'), urlFile = path.join(f.dir, 'sent-url.txt')
+  if (options.config) fs.writeFileSync(path.join(f.dir, '.env'), options.config, { mode: 0o600 })
+  const env = Object.fromEntries(['PATH', 'HOME', 'TMPDIR', 'LANG'].filter(k => process.env[k]).map(k => [k, process.env[k]]))
+  const result = spawnSync('bash', ['-c', `
+    . "$ALERT_LIB"
+    curl() {
+      local last=""
+      while [ "$#" -gt 0 ]; do
+        if [ "$1" = -d ]; then shift; printf '%s' "$1" > "$ALERT_BODY_FILE"; fi
+        last="$1"; shift
+      done
+      printf '%s' "$last" > "$ALERT_URL_FILE"
+      printf '%s\\n%s' "$ALERT_REPLY" "$ALERT_HTTP_STATUS"
+      return "$ALERT_CURL_EXIT"
+    }
+    dingtalk_send "$DINGTALK_WEBHOOK" "$ALERT_MESSAGE"
+  `], { cwd: f.dir, env: { ...env, PROJECT_DIR: f.dir,
+    ALERT_LIB: path.join(root, 'scripts/lib/ops-common.sh'),
+    DINGTALK_WEBHOOK: options.webhook || 'https://example.invalid/robot?access_token=offline-token',
+    DINGTALK_SECRET: options.secret || '', DINGTALK_KEYWORD: options.keyword || '',
+    DINGTALK_ALERT_SECRET: 'backend-setting-must-not-be-used',
+    ALERT_MESSAGE: options.message || '合成告警\n第二行 "详情" C:\\logs',
+    ALERT_REPLY: options.reply ?? '{"errcode":0}', ALERT_HTTP_STATUS: options.http || '200',
+    ALERT_CURL_EXIT: String(options.exit || 0), ALERT_BODY_FILE: bodyFile, ALERT_URL_FILE: urlFile,
+  }, encoding: 'utf8', timeout: 10000 })
+  return { ...result, url: fs.existsSync(urlFile) ? fs.readFileSync(urlFile, 'utf8') : '',
+    body: fs.existsSync(bodyFile) ? JSON.parse(fs.readFileSync(bodyFile, 'utf8')) : null }
+}
+
+test('运维钉钉HTTP200/errcode310000已可见失败，监控不确认去重', t => {
+  const r = offlineSend(t, { reply: '{"errcode":310000,"errmsg":"keywords not in content"}' })
+  assert.equal(r.status, 1)
+  assert.match(r.stderr, /钉钉告警被拒.*310000/)
+  const f = fixture(t)
+  f.run('monitor.sh', { publicDown: true, replyErrcode: 310000 })
+  const state = JSON.parse(fs.readFileSync(f.stateFile, 'utf8'))
+  assert.deepEqual(state.notified, {})
+  assert.equal(f.run('monitor.sh', { publicDown: true }).messages.length, 1)
+})
+
+test('运维钉钉拒绝HTTP错误、无效JSON、缺失/字符串errcode和传输失败', t => {
+  for (const options of [{ http: '503' }, { reply: 'not-json' }, { reply: '{}' },
+    { reply: '{"errcode":"0"}' }, { exit: 7 }]) {
+    const r = offlineSend(t, options)
+    assert.equal(r.status, 1, JSON.stringify(options))
+    assert.match(r.stderr, /ERROR/)
+  }
+})
+
+test('运维日报透出通知失败，备份主失败不被通知310000覆盖', t => {
+  const f = fixture(t)
+  f.run('monitor.sh')
+  const daily = f.run('daily-report.sh', { replyErrcode: 310000 }, 1)
+  assert.match(daily.stderr, /钉钉告警被拒.*310000/)
+  const backup = f.run('backup-db.sh', { backupMissing: true, replyErrcode: 310000 }, 1)
+  assert.match(backup.stderr, /MySQL 容器.*不存在或无法访问/)
+  assert.match(backup.stderr, /钉钉告警被拒.*310000/)
+})
+
+test('运维未配置可选加签/关键词时保留原URL和正文，不借后端密钥', t => {
+  const url = 'https://example.invalid/robot?access_token=offline%2Ftoken&flag=1'
+  const message = '原消息\n"引号" \\末尾'
+  const r = offlineSend(t, { webhook: url, message })
+  assert.equal(r.status, 0, r.stderr)
+  assert.equal(r.url, url)
+  assert.equal(r.body.text.content, message)
+})
+
+function verifyOfflineSignature(r, secret) {
+  assert.equal(r.status, 0, r.stderr)
+  const url = new URL(r.url), timestamp = url.searchParams.get('timestamp')
+  assert.match(timestamp || '', /^\d{13}$/)
+  assert.ok(Math.abs(Date.now() - Number(timestamp)) < 10000)
+  const expected = require('node:crypto').createHmac('sha256', secret).update(timestamp + '\n' + secret).digest('base64')
+  assert.equal(url.searchParams.get('sign'), expected)
+  assert.equal(url.searchParams.getAll('sign').length, 1)
+  assert.equal(url.searchParams.getAll('timestamp').length, 1)
+  assert.doesNotMatch(r.stdout + r.stderr, new RegExp(secret.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+  return url
+}
+
+test('运维可选加签按独立HMAC校验并替换旧签名，不打印密钥', t => {
+  const secret = 'offline-only-secret'
+  const r = offlineSend(t, { secret,
+    webhook: 'https://example.invalid/robot?access_token=offline-token&timestamp=1&sign=stale' })
+  const url = verifyOfflineSignature(r, secret)
+  assert.equal(url.searchParams.get('access_token'), 'offline-token')
+})
+
+test('运维可选关键词在UTF8截断后仍保留，原换行和JSON编码不受损', t => {
+  const keyword = '合成关键字', message = '内容🙂'.repeat(3000)
+  const r = offlineSend(t, { keyword, message })
+  assert.equal(r.status, 0, r.stderr)
+  assert.ok(r.body.text.content.startsWith(keyword + '\n'))
+  assert.ok(Buffer.byteLength(r.body.text.content) <= 8000)
+  assert.match(r.body.text.content, /消息过长/)
+  assert.doesNotMatch(r.body.text.content, /\uFFFD/)
+})
+
+test('运维从专属夹具.env读取可选项，环境变量优先且不执行密钥文本', t => {
+  const r = offlineSend(t, { config: 'DINGTALK_SECRET=offline-file-secret\nDINGTALK_KEYWORD=文件关键词\n' })
+  verifyOfflineSignature(r, 'offline-file-secret')
+  assert.ok(r.body.text.content.startsWith('文件关键词\n'))
+  const secret = 'offline-$(printf not-executed)-"env-secret"'
+  const override = offlineSend(t, { secret, keyword: '环境关键词',
+    config: 'DINGTALK_SECRET=offline-file-secret\nDINGTALK_KEYWORD=文件关键词\n' })
+  verifyOfflineSignature(override, secret)
+  assert.ok(override.body.text.content.startsWith('环境关键词\n'))
+})
+
+test('运维可选安全配置无效时发送前明确失败且不输出密钥', t => {
+  const secret = 'offline-invalid-url-secret'
+  const invalidUrl = offlineSend(t, { secret, webhook: 'invalid-url' })
+  assert.equal(invalidUrl.status, 1)
+  assert.match(invalidUrl.stderr, /钉钉加签失败/)
+  assert.equal(invalidUrl.url, '')
+  assert.ok(!invalidUrl.stderr.includes(secret))
+  const oversizedKeyword = offlineSend(t, { keyword: '大'.repeat(3000) })
+  assert.equal(oversizedKeyword.status, 1)
+  assert.match(oversizedKeyword.stderr, /钉钉消息编码失败/)
+  assert.equal(oversizedKeyword.url, '')
 })

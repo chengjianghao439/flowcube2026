@@ -7,10 +7,13 @@ const projection = require('../backend/src/modules/inventory/inventoryProjection
 const file = path.resolve(__dirname, '../backend/src/modules/reports/reports.query.js')
 const methods = ['fetchPurchaseStatsRows', 'fetchSaleStatsRows', 'fetchInventoryStatsRows', 'fetchWavePerformanceRows', 'fetchPurchasePriceTrend']
 const plain = value => JSON.parse(JSON.stringify(value))
-function load(code = fs.readFileSync(file, 'utf8'), dateHelpers = helpers) {
+function load(code = fs.readFileSync(file, 'utf8'), dateHelpers = helpers, turnoverRow = null) {
   const calls = [], module = { exports: {} }
   const mocks = {
-    '../../config/db': { pool: { query: async (sql, params) => { calls.push({ sql, params: plain(params) }); return [[]] } } },
+    '../../config/db': { pool: { query: async (sql, params) => {
+      calls.push({ sql, params: plain(params) })
+      return turnoverRow && sql.includes('AS inbound_qty') ? [[turnoverRow]] : [[]]
+    } } },
     './reports.helpers': dateHelpers,
     '../inventory/inventoryProjection': projection,
     '../../utils/warehouseScope': { scopeFilter: (ids, column) => !Array.isArray(ids) ? { sql: '', params: [] } : !ids.length ? { sql: ' AND 1=0', params: [] } : { sql: ` AND ${column} IN (?)`, params: [ids] } },
@@ -60,3 +63,35 @@ test('restoring the extra end-date value is detected in all nine date-dependent 
   assert.equal(invalid.length, 9)
   assert.throws(() => assert.deepEqual(invalid[0].params, expected(invalid[0], params)), assert.AssertionError)
 })
+
+// Known same-scope period endpoints and complete movements only. These aggregate
+// fixtures do not establish that today's cache is a historical endpoint, execute
+// SQL, or choose how incomplete historical windows should be presented.
+// Reverse verification: before the sign fix, five of these eight cases fail.
+const turnoverCases = [
+  { name: 'opening100 in20 out20 ending100 control', incoming: '20.00', outgoing: '20.00', ending: '100.00', average: 100, rate: 0.2, days: 150 },
+  { name: 'opening110 in20 out30 ending100', incoming: '20.00', outgoing: '30.00', ending: '100.00', average: 105, rate: 0.29, days: 105 },
+  { name: 'opening100 inbound-only20 ending120', incoming: '20.00', outgoing: '0.00', ending: '120.00', average: 110, rate: 0, days: null },
+  { name: 'opening100 outbound-only20 ending80', incoming: '0.00', outgoing: '20.00', ending: '80.00', average: 90, rate: 0.22, days: 135 },
+  { name: 'missing dates retain null days control', incoming: '20.00', outgoing: '20.00', ending: '100.00', average: 100, rate: 0.2, days: null, noDates: true },
+  { name: 'allowed two-decimal quantities opening1.25 in0.25 out0.50 ending1', incoming: '0.25', outgoing: '0.50', ending: '1.00', average: 1.125, rate: 0.44, days: 67.5 },
+  { name: 'zero endpoint average retains zero rate control', incoming: '10.00', outgoing: '10.00', ending: '0.00', average: 0, rate: 0, days: null },
+  { name: 'opening10 outbound10 ending0 has positive average', incoming: '0.00', outgoing: '10.00', ending: '0.00', average: 5, rate: 2, days: 15 },
+]
+for (const fixture of turnoverCases) {
+  test(`inventory turnover respects known endpoint conservation: ${fixture.name}`, async () => {
+    const f = load(undefined, helpers, {
+      code: 'SYN-TURNOVER', name: '合成守恒', unit: '件',
+      inbound_qty: fixture.incoming, outbound_qty: fixture.outgoing, current_qty: fixture.ending, log_count: 2,
+    })
+    const params = fixture.noDates ? {} : { startDate: '2026-09-01', endDate: '2026-09-30' }
+    const { turnover } = plain(await f.svc.fetchInventoryStatsRows(params))
+    assert.equal(f.calls.length, 2, 'only the existing turnover and warehouse valuation reads')
+    assert.match(f.calls[0].sql, /AS inbound_qty/)
+    assert.match(f.calls[1].sql, /AS total_value/)
+    assert.equal(turnover.length, 1)
+    const row = turnover[0]
+    assert.deepEqual({ currentQty: row.currentQty, avgStock: row.avgStock, turnRate: row.turnRate, turnDays: row.turnDays },
+      { currentQty: Number(fixture.ending), avgStock: fixture.average, turnRate: fixture.rate, turnDays: fixture.days })
+  })
+}

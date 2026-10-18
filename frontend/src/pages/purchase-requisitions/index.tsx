@@ -1,11 +1,13 @@
 import { useWorkspaceSearchParams } from '@/hooks/useWorkspaceSearchParams'
 import { money } from '@/lib/format'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { X } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
+import ListSummary from '@/components/shared/ListSummary'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { Button } from '@/components/ui/button'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { usePermission } from '@/hooks/usePermission'
@@ -40,7 +42,7 @@ export default function RequisitionsPage() {
   const startDate     = readStringParam(searchParams, 'startDate')
   const endDate       = readStringParam(searchParams, 'endDate')
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['requisitions', keyword, statusFilter, warehouseId, applicantId, startDate, endDate],
     queryFn: () => listRequisitionsApi({
       page: 1, pageSize: 200,
@@ -61,12 +63,12 @@ export default function RequisitionsPage() {
   }
 
   // 查询弹窗初始值
-  const initialQuery: RequisitionQueryValues = {
+  const initialQuery = useMemo<RequisitionQueryValues>(() => ({
     keyword, status: statusFilter,
     warehouseId, warehouseName,
     applicantId, applicantName,
     startDate, endDate,
-  }
+  }), [keyword, statusFilter, warehouseId, warehouseName, applicantId, applicantName, startDate, endDate])
 
   function applyQuery(v: RequisitionQueryValues) {
     updateParams({
@@ -139,14 +141,19 @@ export default function RequisitionsPage() {
         </div>
       )}
 
-      <DataTable
+      {isError ? <QueryErrorState error={error} title="采购申请读取失败" onRetry={() => void refetch()} /> : <DataTable
+        virtualized
+        preserveFocus
         columns={columns}
         data={list}
         loading={isLoading}
         rowKey="id"
         emptyText="暂无采购申请单"
         onRowDoubleClick={r => open(`/purchase-requisitions/${r.id}`, `采购申请单 ${r.requisitionNo}`)}
-      />
+      />}
+      {!isError && !isLoading && data && (data.truncated
+        ? <div role="status" className="px-1 py-3 text-xs text-warning-ink">已读取 {list.length.toLocaleString()} / 总匹配 {data.pagination.total.toLocaleString()} 单，请缩小查询范围。</div>
+        : <ListSummary total={data.pagination.total} unit="单" />)}
 
       <RequisitionQueryDialog
         open={queryOpen}

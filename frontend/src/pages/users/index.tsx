@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useAuthStore } from '@/store/authStore'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
@@ -34,7 +34,6 @@ export default function UsersPage() {
   const canDelete = can(PERMISSIONS.USER_DELETE)
 
   const [keyword, setKeyword] = useState('')
-  const [page, setPage] = useState(1)
   const [scopeTarget, setScopeTarget] = useState<{ id: number; name: string } | null>(null)
   const [search, setSearch] = useState('')
   const [showDevelopment, setShowDevelopment] = useState(false)
@@ -48,14 +47,11 @@ export default function UsersPage() {
 
   const desktop = isElectronRuntime()
   const hideDevelopment = showDevelopment && operatorRoleId === 1 ? '0' : '1'
-  const { data, isLoading, isError, error, refetch } = useUsers({ page, pageSize: 20, keyword, hideDevelopment })
+  const { data, isLoading, isError, error, refetch } = useUsers({ page: 1, pageSize: 200, keyword, hideDevelopment }, 'all')
   const total = data?.pagination?.total ?? 0
-  const pageCount = Math.max(1, Math.ceil(total / 20))
-  useEffect(() => { if (data && page > pageCount) setPage(pageCount) }, [data, page, pageCount])
   const { mutate: deleteUser, isPending: deleting } = useDeleteUser()
 
   function handleSearch() {
-    setPage(1)
     setKeyword(search)
   }
 
@@ -115,9 +111,9 @@ export default function UsersPage() {
       render: (_, row) => {
         const targetProtected = row.roleId === 1 && operatorRoleId !== 1
         const items: TableActionItem[] = []
-        if (canResetPwd && !targetProtected) items.push({ label: '重置密码', onClick: () => handleResetPassword(row) })
-        if (canUpdate && !targetProtected) items.push({ label: '仓库访问范围', onClick: () => setScopeTarget({ id: row.id, name: row.realName || row.username }) })
-        if (canDelete && !targetProtected && row.id !== currentUser?.id) items.push({ label: '删除', destructive: true, separatorBefore: true, onClick: () => handleDelete(row) })
+        if (canResetPwd && !targetProtected) items.push({ label: '重置密码', afterMenuClose: true, onClick: () => handleResetPassword(row) })
+        if (canUpdate && !targetProtected) items.push({ label: '仓库访问范围', afterMenuClose: true, onClick: () => setScopeTarget({ id: row.id, name: row.realName || row.username }) })
+        if (canDelete && !targetProtected && row.id !== currentUser?.id) items.push({ label: '删除', afterMenuClose: true, destructive: true, separatorBefore: true, onClick: () => handleDelete(row) })
         if ((!canUpdate || targetProtected) && items.length === 0) return null
         return (
           <TableActionsMenu
@@ -158,7 +154,7 @@ export default function UsersPage() {
         />
         <Button size="sm" variant="outline" onClick={handleSearch}>搜索</Button>
         {keyword && (
-          <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword(''); setPage(1) }}>
+          <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword('') }}>
             重置
           </Button>
         )}
@@ -167,7 +163,7 @@ export default function UsersPage() {
             <input
               type="checkbox"
               checked={showDevelopment}
-              onChange={event => { setShowDevelopment(event.target.checked); setPage(1) }}
+              onChange={event => { setShowDevelopment(event.target.checked) }}
               className="size-4 accent-primary"
             />
             显示开发账号
@@ -184,15 +180,13 @@ export default function UsersPage() {
             data={data?.list ?? []}
             loading={isLoading}
             rowKey="id"
+            virtualized
+            preserveFocus
+            retainFocusedRow={formOpen || resetOpen || !!deleteTarget || !!scopeTarget}
           />
-          <ListSummary total={total} unit="个" />
-          {pageCount > 1 && (
-            <div className="flex items-center justify-end gap-2 text-sm">
-              <Button size="sm" variant="outline" disabled={isLoading || page <= 1} onClick={() => setPage(p => p - 1)}>上一页</Button>
-              <span aria-live="polite">第 {page} / {pageCount} 页</span>
-              <Button size="sm" variant="outline" disabled={isLoading || page >= pageCount} onClick={() => setPage(p => p + 1)}>下一页</Button>
-            </div>
-          )}
+          {!isLoading && data && (data.truncated
+            ? <div role="status" className="px-1 py-3 text-xs text-warning-ink">已读取 {data.list.length.toLocaleString()} / 总匹配 {total.toLocaleString()} 个，请缩小查询范围。</div>
+            : <ListSummary total={total} unit="个" />)}
         </>
       )}
 

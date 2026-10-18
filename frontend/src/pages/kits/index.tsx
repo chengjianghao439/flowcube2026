@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
+import ListSummary from '@/components/shared/ListSummary'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { AppDialog } from '@/components/shared/AppDialog'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
@@ -28,15 +29,14 @@ export default function KitsPage() {
   const tabPath = useContext(TabPathContext), [locationParams] = useSearchParams(), navigate = useNavigate()
   const params = tabPath ? new URLSearchParams(tabPath.split('?')[1] || '') : locationParams
   const keyword = params.get('keyword') ?? ''
-  const rawPage = Number(params.get('page') || '1')
-  const page = Number.isSafeInteger(rawPage) && rawPage > 0 && rawPage <= 100000 ? rawPage : 1
   const [editor, setEditor] = useState<number | 'new' | null>(null), [deleting, setDeleting] = useState<KitDefinition | null>(null)
-  const query = useKits({ page, pageSize: 20, keyword })
+  const query = useKits({ page: 1, pageSize: 100, keyword })
   const total = query.data?.pagination.total ?? 0
-  function navigatePage(next: number, search = keyword) {
-    const values = new URLSearchParams()
+  function updateKeyword(search: string) {
+    const values = new URLSearchParams(params)
+    values.delete('page')
     if (search) values.set('keyword', search)
-    if (next > 1) values.set('page', String(next))
+    else values.delete('keyword')
     navigate(`/kits${values.size ? `?${values}` : ''}`)
   }
   const columns = useMemo<TableColumn<KitDefinition>[]>(() => [
@@ -58,11 +58,13 @@ export default function KitsPage() {
   ], [canUpdate, canDelete])
   return <div>
     <PageHeader title="成套配件" description="维护成套商品资料、四档售价与固定组成。已保存的销售单保留原成交资料，库存按真实组件管理。" actions={canCreate ? <Button onClick={() => setEditor('new')}>新增配件</Button> : undefined} />
-    <form key={keyword} className="mb-4 flex max-w-xl gap-2" onSubmit={event => { event.preventDefault(); const value = new FormData(event.currentTarget).get('keyword'); navigatePage(1, String(value ?? '').trim()) }}>
-      <Input name="keyword" aria-label="搜索成套配件" defaultValue={keyword} maxLength={100} autoComplete="off" placeholder="按编码、名称、型号、颜色或供应商型号搜索" /><Button variant="outline" type="submit">查询</Button>{keyword && <Button variant="ghost" type="button" onClick={() => navigatePage(1, '')}>清空</Button>}
+    <form key={keyword} className="mb-4 flex max-w-xl gap-2" onSubmit={event => { event.preventDefault(); const value = new FormData(event.currentTarget).get('keyword'); updateKeyword(String(value ?? '').trim()) }}>
+      <Input name="keyword" aria-label="搜索成套配件" defaultValue={keyword} maxLength={100} autoComplete="off" placeholder="按编码、名称、型号、颜色或供应商型号搜索" /><Button variant="outline" type="submit">查询</Button>{keyword && <Button variant="ghost" type="button" onClick={() => updateKeyword('')}>清空</Button>}
     </form>
-    {query.isError ? <QueryErrorState error={query.error} title="成套配件加载失败" onRetry={() => void query.refetch()} /> : <KitsTable columns={columns} data={query.data?.list ?? EMPTY_KITS} loading={query.isLoading} emptyText="暂无成套配件；有维护权限的员工可添加固定商品组成。" columnStorageKey="kits-v2" />}
-    <div className="flex flex-wrap items-center justify-between gap-3 py-3 text-xs text-muted-foreground"><span role="status">共 {total} 条 · 第 {page} 页</span><div className="flex gap-2"><Button size="sm" variant="outline" disabled={page <= 1 || query.isFetching} onClick={() => navigatePage(page - 1)}>上一页</Button><Button size="sm" variant="outline" disabled={page * 20 >= total || query.isFetching} onClick={() => navigatePage(page + 1)}>下一页</Button></div></div>
+    {query.isError ? <QueryErrorState error={query.error} title="成套配件加载失败" onRetry={() => void query.refetch()} /> : <KitsTable columns={columns} data={query.data?.list ?? EMPTY_KITS} loading={query.isLoading} emptyText="暂无成套配件；有维护权限的员工可添加固定商品组成。" columnStorageKey="kits-v2" virtualized preserveFocus retainFocusedRow={editor != null || !!deleting} />}
+    {!query.isError && !query.isLoading && query.data && (query.data.truncated
+      ? <div role="status" className="px-1 py-3 text-xs text-warning-ink">已读取 {query.data.list.length.toLocaleString()} / 总匹配 {total.toLocaleString()} 条，请缩小查询范围。</div>
+      : <ListSummary total={total} />)}
     {editor != null && <KitEditor key={editor} id={editor} source={query.readOwner} onClose={() => setEditor(null)} />}
     {deleting && <DeleteKitDialog initial={deleting} readOwner={query.readOwner} onClose={() => setDeleting(null)} />}
   </div>

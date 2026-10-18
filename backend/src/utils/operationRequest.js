@@ -1,4 +1,5 @@
 const crypto = require('node:crypto')
+const { lifecycle } = require('./runtimeLifecycle')
 const { pool } = require('../config/db')
 const AppError = require('./AppError')
 
@@ -348,14 +349,8 @@ async function cleanupExpiredRequests({ ttlDays = 7 } = {}) {
 /**
  * 启动定期 TTL 清理（每 6 小时一次）
  */
-let cleanupTimer = null
-
 function startCleanupSweeper({ intervalMs = 6 * 60 * 60 * 1000, ttlDays = 7 } = {}) {
-  if (cleanupTimer) return
-  cleanupTimer = setInterval(() => cleanupExpiredRequests({ ttlDays }), intervalMs)
-  cleanupTimer.unref() // 不阻止进程退出
-  // 启动时立即执行一次
-  void cleanupExpiredRequests({ ttlDays })
+  lifecycle.startTask('operation-request-cleanup', () => cleanupExpiredRequests({ ttlDays }), intervalMs, { immediate: true })
 }
 
 module.exports = {

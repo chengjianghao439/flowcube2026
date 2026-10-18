@@ -37,7 +37,11 @@ function actualAdapter(options:{page2?:boolean;history?:boolean;scrap?:boolean;r
   if(c.method==='get'&&c.url==='/warehouses/active')return reply(c,[{id:8,name:'原仓'}])
   if(c.method==='get'&&c.url==='/products/3')return reply(c,product)
   if(c.method==='get'&&c.url==='/products/qty-policies'&&c.params.ids==='3')return reply(c,[{id:3,allowDecimal:true}])
-  if(c.method==='get'&&c.url==='/disposals/handling-sources')return reply(c,{list:[{...source,id:c.params.page===2?12:11,links:options.release?[{...source.links[0],state:'ACTIVE',executedQuantity:2,releasedQuantity:0}]:source.links}],pagination:{page:c.params.page,pageSize:20,total:options.page2?21:1}})
+  if(c.method==='get'&&c.url==='/disposals/handling-sources'){
+   const page=Number(c.params.page),pageSize=Math.min(100,Number(c.params.pageSize)),current={...source,links:options.release?[{...source.links[0],state:'ACTIVE',executedQuantity:2,releasedQuantity:0}]:source.links}
+   const list=options.page2?Array.from({length:21},(_,index)=>index===0?current:{...source,id:11+index,intentUuid:`00000000-0000-4000-8000-${String(11+index).padStart(12,'0')}`,links:[],budget:{intentionQuantity:10,allocatedQuantity:0,releasedQuantity:0,availableQuantity:10,actualExecutedQuantity:0,progress:'待关联'}}):[current]
+   return reply(c,{list:list.slice((page-1)*pageSize,page*pageSize),pagination:{page,pageSize,total:list.length}})
+  }
   if(c.method==='get'&&c.url==='/disposals/handling-sources/11')return reply(c,{...source,handlingType:options.scrap?3:1})
   if(c.method==='get'&&c.url==='/disposals')return reply(c,{list:options.history?[{id:19,disposalNo:'DP19',status:3,statusName:'已批准',warehouseName:'历史仓',totalValue:15.1234,operatorName:'历史制单人',createdAt:'2026-10-04 12:00:00'}]:[],pagination:{page:1,pageSize:20,total:options.history?1:0}})
   if(c.method==='get'&&c.url==='/disposals/19/conversion-snapshot')return reply(c,{snapshot:options.historical??snapshot,snapshotFingerprint:'a'.repeat(64),conversion:null})
@@ -67,13 +71,13 @@ test.each(['sourceNo=', 'sourceType=', 'sourceNo=&sourceNo=', 'sourceType=&sourc
   for (const key of ['sourceNo', 'sourceType']) expect(params.getAll(key)).toEqual(original.getAll(key))
   expect(registration.key).not.toBe(buildWorkspaceTabRegistrationFromPath('/disposals/new?handlingSourceId=11').key)
 })
-test('真实来源页服务端Q/A/E/R与第二页；TERMINATED R0也不解除，无VIEWmeta不造链接',async()=>{
+test('真实来源页服务端Q/A/E/R与连续结果；TERMINATED R0也不解除，无VIEWmeta不造链接',async()=>{
  posts.length=0;configs.length=0;actualAdapter({page2:true})
  await page('/disposals',async host=>{
   expect(host.textContent).toContain('部分执行');expect(host.textContent).toContain('可关联 8 个');expect(host.querySelector('a[href*="sale"]')).toBeNull()
   expect([...host.querySelectorAll('button')].find(b=>b.textContent==='核对解除')!.disabled).toBe(true)
-  await click('下一页');expect(host.textContent).toContain('第 2 / 2 页')
-  expect(configs.filter(c=>c.url==='/disposals/handling-sources').map(c=>[c.params.page,c.listMode])).toEqual([[1,'paged'],[2,'paged']]);expect(posts).toEqual([])
+  expect(host.textContent).toContain('共 21 条');expect(host.textContent).not.toMatch(/上一页|下一页/)
+  expect(configs.filter(c=>c.url==='/disposals/handling-sources').map(c=>[c.params.page,c.params.pageSize,c.listMode])).toEqual([[1,100,'paged']]);expect(posts).toEqual([])
  })
 })
 test('实际意图商品Finder+员工基本量保存完整body，不把库存参考量当意图',async()=>{

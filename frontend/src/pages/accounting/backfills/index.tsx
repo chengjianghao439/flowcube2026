@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react'
+import { RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import ListSummary from '@/components/shared/ListSummary'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { amount } from '@/lib/format'
@@ -22,7 +23,7 @@ import { PERMISSIONS } from '@/lib/permission-codes'
 import { getActiveAccountsApi } from '@/api/finance'
 import { useWarehousesActive } from '@/hooks/useWarehouses'
 import {
-  useBackfills, useBackfillDetail, useApproveBackfill, useRejectBackfill, useCancelBackfill,
+  useAllBackfills, useBackfillDetail, useApproveBackfill, useRejectBackfill, useCancelBackfill,
   useExecuteBackfill, useRegenerateBackfillVoucher, type SupplierRefundBackfillContext,
 } from '@/hooks/useBackfills'
 import type { TableColumn } from '@/types'
@@ -47,11 +48,6 @@ import {
  *
  * 可见范围由后端决定（持审批权限看全部，否则只看自己提交的），本页不再二次过滤。
  */
-/**
- * 一页 50 条 + 翻页。历史申请只会越积越多，若一页写死一个固定的大数字（早期是 200），
- * 超过这个数之后**旧申请永远翻不到**——待审批的单子被埋在第二页之外，审批人看不见就等于没人批。
- */
-const PAGE_SIZE = 50
 type BackfillTarget = BackfillApplication & { refundContext?: SupplierRefundBackfillContext }
 
 /** 状态 → 展示。已批准要分「还没记账成功」与「已记账」两种，否则审批人看不出卡在哪 */
@@ -371,18 +367,11 @@ export default function BackfillsPage() {
 
   const [status, setStatus] = useState<number | ''>('')
   const [bizType, setBizType] = useState('')
-  const [page, setPage] = useState(1)
-  const query = useMemo(() => ({ status, bizType, page, pageSize: PAGE_SIZE }), [status, bizType, page])
-  const { data, isLoading, isFetching, refetch } = useBackfills(query, captureRefundRead)
+  const query = useMemo(() => ({ status, bizType }), [status, bizType])
+  const { data, isLoading, isFetching, isError, error, refetch } = useAllBackfills(query, captureRefundRead, active)
   const list = (data?.list ?? []).filter(row => row.bizType !== 'supplier_refund' || !!row.refundContext?.current())
-  const summary = data?.summary
+  const summary = !isError && !isLoading ? data?.summary : undefined
   const total = data?.pagination?.total ?? 0
-  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE))
-
-  // 筛选一改结果集就变了，还停在第 3 页多半直接空白 —— 一律回到第一页
-  function changeFilter(apply: () => void) { apply(); setPage(1) }
-  // 单子被批完/作废后总数变小，页码可能已越过末页：拉回最后一页，别停在空白页上
-  useEffect(() => { if (page > pageCount) setPage(pageCount) }, [page, pageCount])
 
   // 快照里只存资金账户 id 与仓库 id，审批人要看见**名字**才能核对；
   // 账户若已停用就不在 active 列表里，那时退回显示 #id，不假装知道它是哪个
@@ -523,14 +512,14 @@ export default function BackfillsPage() {
       )}
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <Select value={status === '' ? 'all' : String(status)} onValueChange={v => changeFilter(() => setStatus(v === 'all' ? '' : Number(v)))}>
+        <Select value={status === '' ? 'all' : String(status)} onValueChange={v => setStatus(v === 'all' ? '' : Number(v))}>
           <SelectTrigger className="h-9 w-36"><SelectValue placeholder="状态" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">全部状态</SelectItem>
             {BACKFILL_STATUS_OPTIONS.map(o => <SelectItem key={o.value} value={String(o.value)}>{o.label}</SelectItem>)}
           </SelectContent>
         </Select>
-        <Select value={bizType || 'all'} onValueChange={v => changeFilter(() => setBizType(v === 'all' ? '' : v))}>
+        <Select value={bizType || 'all'} onValueChange={v => setBizType(v === 'all' ? '' : v)}>
           <SelectTrigger className="h-9 w-40"><SelectValue placeholder="业务类型" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">全部业务</SelectItem>
@@ -539,25 +528,15 @@ export default function BackfillsPage() {
         </Select>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
-        <span>共 {total} 条{total > 0 && ` · 第 ${page} / ${pageCount} 页`}</span>
-        {pageCount > 1 && (
-          <div className="flex items-center gap-1">
-            <Button variant="outline" size="sm" className="h-8" disabled={page <= 1 || isFetching} onClick={() => setPage(p => Math.max(1, p - 1))}>
-              <ChevronLeft className="mr-1 h-4 w-4" />上一页
-            </Button>
-            <Button variant="outline" size="sm" className="h-8" disabled={page >= pageCount || isFetching} onClick={() => setPage(p => Math.min(pageCount, p + 1))}>
-              下一页<ChevronRight className="ml-1 h-4 w-4" />
-            </Button>
-          </div>
+      <div className="card-base p-2">
+        {isError ? <QueryErrorState error={error} onRetry={() => { void refetch() }} /> : (
+          <DataTable virtualized preserveFocus retainFocusedRow={!!(detailRow || approveTarget || rejectTarget || cancelTarget || executeTarget || regenTarget)} columns={columns} data={list} loading={isLoading} emptyText="暂无补录申请" columnStorageKey="acct-backfills" />
         )}
       </div>
 
-      <div className="card-base p-2">
-        <DataTable columns={columns} data={list} loading={isLoading} emptyText="暂无补录申请" columnStorageKey="acct-backfills" />
-      </div>
-
-      <ListSummary total={total} />
+      {!isError && !isLoading && data && (data.truncated ? (
+        <p role="status" className="px-1 py-3 text-xs text-warning-ink">已加载 {list.length.toLocaleString()} 条，匹配 {total.toLocaleString()} 条，请缩小查询范围。</p>
+      ) : <ListSummary total={total} />)}
 
       {/* ── 详情：审批人要据此核对原单号、金额、原因，以及原请求快照里钱怎么走 ── */}
       <Dialog open={targetOpen(detailRow)} onOpenChange={v => { if (!v) clearTarget('detail', detailRow, setDetailRow) }}>

@@ -68,6 +68,24 @@ read_dingtalk_webhook() {
   fi
 }
 
+# 运维机器人可选安全设置；环境变量优先，其次项目 .env 的同名纯文本值。
+# 只读这两个键，不 source/eval 配置，也不借用后端 DINGTALK_ALERT_* 的密钥。
+read_dingtalk_option() {
+  local key="$1" project_dir="${2:-/opt/flowcube}" value
+  case "$key" in
+    DINGTALK_SECRET) value="${DINGTALK_SECRET:-}" ;;
+    DINGTALK_KEYWORD) value="${DINGTALK_KEYWORD:-}" ;;
+    *) return 1 ;;
+  esac
+  if [ -n "$value" ]; then
+    printf '%s\n' "$value"
+    return 0
+  fi
+  if [ -f "$project_dir/.env" ]; then
+    grep -E "^${key}=" "$project_dir/.env" 2>/dev/null | head -1 | cut -d= -f2- || true
+  fi
+}
+
 # 推送到钉钉的消息/日志统一时间戳（2026-08-27 部署时发现缺失：ops-common.sh 里没有
 # ts() 定义，而 server-update.sh 的 fail_deploy 经公共库调 $(ts) 会 command not found，
 # 部署失败告警的时间戳缺失。各运维脚本内置的同名 ts() 会覆盖此定义，行为不变）
@@ -96,16 +114,23 @@ dingtalk_send() {
     echo "[$(ts)] [WARN] 未配置钉钉 webhook，告警未发送（见 .env.example 的 DINGTALK_WEBHOOK）：${msg}" >&2
     return 2
   fi
-  local body resp http_code payload
+  local body resp http_code payload secret keyword signed_webhook
+  secret="$(read_dingtalk_option DINGTALK_SECRET "${PROJECT_DIR:-/opt/flowcube}")"
+  keyword="$(read_dingtalk_option DINGTALK_KEYWORD "${PROJECT_DIR:-/opt/flowcube}")"
   # Node 22 是宿主运维依赖；正确编码真实换行/引号/反斜杠，不能删除字符破坏排版。
-  if ! body="$(printf '%s' "$msg" | node "$FLOWCUBE_OPS_LIB_DIR/ops-alerts.js" encode)"; then
+  if ! body="$(printf '%s' "$msg" | DINGTALK_KEYWORD="$keyword" node "$FLOWCUBE_OPS_LIB_DIR/ops-alerts.js" encode)"; then
     echo "[$(ts)] [ERROR] 钉钉消息编码失败，未发送" >&2
+    return 1
+  fi
+  # 密钥仅经进程环境传入，不进命令行参数或日志；无密钥时保留原 URL 字节。
+  if ! signed_webhook="$(printf '%s' "$webhook" | DINGTALK_SECRET="$secret" node "$FLOWCUBE_OPS_LIB_DIR/ops-alerts.js" signed-url)"; then
+    echo "[$(ts)] [ERROR] 钉钉加签失败，未发送" >&2
     return 1
   fi
   # 末行是 HTTP 状态码，其余是响应体
   if ! resp="$(curl -s -m 10 -w '\n%{http_code}' -H 'Content-Type: application/json' \
       -d "$body" \
-      "$webhook" 2>/dev/null)"; then
+      "$signed_webhook" 2>/dev/null)"; then
     echo "[$(ts)] [ERROR] 钉钉告警发送失败（curl 未能完成，检查网络与 webhook 可达性）：${msg}" >&2
     return 1
   fi

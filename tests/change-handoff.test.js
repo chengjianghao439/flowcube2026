@@ -5,7 +5,10 @@ const path = require('node:path')
 const vm = require('node:vm')
 const { createRequire } = require('node:module')
 const root = path.resolve(__dirname, '..')
+const runtimeLifecycleFile = path.join(root, 'backend/src/utils/runtimeLifecycle.js')
+const { createRuntimeLifecycle } = require(runtimeLifecycleFile)
 function load(relative, pool, transform = source => source) {
+  const lifecycle = createRuntimeLifecycle()
   const stubs = {
     '../../config/db': { pool }, '../fulfillment/fulfillment.refresh': {},
     '../../utils/statusTransition': {}, '../../engine/reservationEngine': {}, '../../engine/containerEngine': {},
@@ -20,6 +23,7 @@ function load(relative, pool, transform = source => source) {
   }
   const cache = new Map()
   function read(filename) {
+    if (filename === runtimeLifecycleFile) return { lifecycle }
     if (cache.has(filename)) return cache.get(filename).exports
     const actual = createRequire(filename), module = { exports:{} }; cache.set(filename, module)
     vm.runInNewContext(`(function(require,module,exports){${transform(fs.readFileSync(filename,'utf8'),filename)}\n})`, { process, console, Buffer }, { filename })(name => {
@@ -32,6 +36,22 @@ function load(relative, pool, transform = source => source) {
   }
   return read(path.join(root,relative))
 }
+
+test('递归VM夹具保留真实生命周期能力且各次加载独立', async () => {
+  const operationFile = path.join(root, 'backend/src/utils/operationRequest.js')
+  const expose = (source, file) => file === operationFile ? `${source}\nmodule.exports.fixtureLifecycle = lifecycle` : source
+  const first = load('backend/src/utils/operationRequest.js', {}, expose).fixtureLifecycle
+  const second = load('backend/src/utils/operationRequest.js', {}, expose).fixtureLifecycle
+  for (const method of ['isDraining', 'beginDrain', 'startTask', 'stopTasks', 'waitForTasks']) assert.equal(typeof first[method], 'function')
+  assert.notEqual(first, second)
+  assert.equal(first.isDraining(), false)
+  first.beginDrain()
+  assert.equal(first.isDraining(), true)
+  assert.equal(second.isDraining(), false)
+  await first.waitForTasks()
+  await second.waitForTasks()
+})
+
 const adj = { id:9, adjustment_no:'SYN-ADJ', sale_order_id:5, task_sale_order_id:5, warehouse_task_id:7, warehouse_id:2, status:1,
   requested_by:11, requested_by_name:'合成申请人', requested_at:'2026-10-10 10:00:00', completed_at:null }
 const auditRow = (row, context = {phase:'cancellation_requested',warehouseTaskIds:[7],adjustmentId:9}) => ({

@@ -11,6 +11,8 @@ const { env } = require('./config/env')
 const { buildCorsOptions } = require('./config/cors')
 const { successResponse } = require('./utils/response')
 const { createReadinessHandler } = require('./utils/readiness')
+const { createDrainMiddleware } = require('./utils/runtimeLifecycle')
+const { httpDrain } = require('./utils/httpDrain')
 const { pool } = require('./config/db')
 
 // ─── 启动安全校验 ─────────────────────────────────────────────────────────────
@@ -61,6 +63,9 @@ app.get('/api/health', (req, res) => {
 
 // 部署与服务监控验证应用自己的连接池；存活探针仍不依赖数据库。
 app.get('/api/ready', createReadinessHandler(pool))
+
+// 已进入的请求继续完成；退出期间拒绝新业务，避免继续借用待关闭的连接池。
+app.use(createDrainMiddleware())
 
 // ─── 全局 API 限流 ─────────────────────────────────────────────────────────────
 // 防异常爆刷的基础防护。阈值默认宽松，兼容同一客户出口 IP（NAT）下多台 PDA / 桌面端并发；
@@ -205,5 +210,8 @@ app.use((req, res) => {
 // ─── 全局错误处理（必须最后注册）─────────────────────────────────────────────
 
 app.use(errorHandler)
+
+// Observe existing async middleware/controllers, including work after a client disconnect.
+httpDrain.trackAppHandlers(app)
 
 module.exports = app

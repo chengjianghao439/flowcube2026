@@ -28,8 +28,8 @@ jobs:
   deploy:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    # 故障预算：检查 30 + 构建 20 + artifact 3 + 部署 160 + 清理 3；job 另留 4 分钟。
-    timeout-minutes: 220
+    # 故障预算：检查 30 + 构建 20 + artifact 3 + 部署 165 + 清理 3；job 另留 3 分钟。
+    timeout-minutes: 224
 
     steps:
       - name: Checkout code
@@ -160,9 +160,9 @@ jobs:
         run: bash scripts/setup-ci-ssh-trust.sh
 
       - name: Deploy backend and frontend on server
-        # 故障预算：HTTPS/中转尝试 1145s + 上传 2700s + 合并 610s + 等锁 1800s + 部署/回退 3000s + 预检等 300s。
-        # 总计 9555s（约 160 分钟）；故障上限覆盖安全回退，不是正常耗时目标。
-        timeout-minutes: 160
+        # 故障预算：HTTPS/中转尝试 1145s + 上传 2700s + 合并 610s + 等锁 1800s + 部署/回退 3300s + 预检等 300s。
+        # 总计 9855s（约 165 分钟）；新增迁移前备份独占 300s，不挤占原部署或回退预算。
+        timeout-minutes: 165
         shell: bash
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -277,7 +277,7 @@ jobs:
           # 发布门禁（release-gate）随部署执行：页面烟雾 + 对账回跳。凭据由 GitHub Secrets 注入，
           # 服务器不再 SKIP_RELEASE_GATE=1——坏版本（渲染错误/路由失效）会在部署时被当场拦下。
           # 600 秒清理窗口覆盖两轮健康等待(420s)、Docker 管理/清理和失败通知。
-          FLOWCUBE_DEPLOY_TIMEOUT_GROUP=1 DEPLOY_LOCK_FD=9 SKIP_GIT_PULL=1 timeout -k 600 2400 bash scripts/server-update.sh
+          FLOWCUBE_DEPLOY_TIMEOUT_GROUP=1 DEPLOY_LOCK_FD=9 SKIP_GIT_PULL=1 timeout -k 600 2700 bash scripts/server-update.sh
           EOF
 
       - name: Remove this run's temporary upload

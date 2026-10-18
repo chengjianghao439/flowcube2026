@@ -1,6 +1,12 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { getPendingSortingBinTasksApi, assignSortingBinApi } from '@/api/warehouse-tasks'
+import { collectAllRecords } from '@/api/allRecords'
+import { getApiClientBaseURL } from '@/api/client'
+import { useAuthStore } from '@/store/authStore'
+import DataTable from '@/components/shared/DataTable'
+import type { TableColumn } from '@/types'
+import type { PendingSortingBinTask } from '@/api/warehouse-tasks'
 import { useSectionActive } from '@/components/layout/SectionVisibilityContext'
 import { createRequestKey } from '@/lib/requestKey'
 import { toast } from '@/lib/toast'
@@ -15,16 +21,29 @@ interface Props {
   onAssigned?: () => void
 }
 
+function readIdentity() {
+  const state = useAuthStore.getState()
+  return JSON.stringify([state.sessionGeneration, state.user?.id, state.user?.roleId, state.user?.permissions, getApiClientBaseURL()])
+}
+
 export default function AssignSortingBinDialog({ open, onClose, warehouseId, taskId, onAssigned }: Props) {
   const qc = useQueryClient()
   const active = useSectionActive()
-  const [page, setPage] = useState(1)
   const requestKeys = useRef(new Map<number, string>())
-  useEffect(() => { if (open) setPage(1) }, [open, warehouseId, taskId])
   const query = useQuery({
-    queryKey: ['sorting-bin-pending', warehouseId, taskId, taskId ? 1 : page],
-    queryFn: () => getPendingSortingBinTasksApi({ warehouseId: warehouseId ?? undefined, ...(taskId ? { taskId } : {}), page: taskId ? 1 : page, pageSize: 20 }),
+    queryKey: ['sorting-bin-pending', warehouseId, taskId, taskId ? 1 : 'all'],
+    queryFn: ({ signal }) => {
+      if (taskId) return getPendingSortingBinTasksApi({ warehouseId: warehouseId ?? undefined, taskId, page: 1, pageSize: 20 })
+      const identity = readIdentity()
+      return collectAllRecords(async (page, pageSize = 200) => {
+        if (identity !== readIdentity()) throw new Error('待分配任务读取上下文已变化，请重试')
+        const result = await getPendingSortingBinTasksApi({ warehouseId: warehouseId ?? undefined, page, pageSize })
+        if (identity !== readIdentity()) throw new Error('待分配任务读取上下文已变化，请重试')
+        return result
+      }, signal)
+    },
     enabled: open && active,
+    subscribed: open && active,
     staleTime: 0,
     refetchOnMount: 'always',
   })
@@ -49,9 +68,15 @@ export default function AssignSortingBinDialog({ open, onClose, warehouseId, tas
   })
   const pending = query.isError ? undefined : query.data
   const rows = pending?.list.filter(task => !taskId || (task.id === taskId && task.warehouseId === warehouseId)) ?? []
-  const canAssign = open && active && !query.isFetching && !query.isError && !mutation.isPending
+  const canAssign = open && active && query.isSuccess && !query.isFetching && !query.isPaused && !mutation.isPending
+  const eligibleIds = useRef(new Set<number>())
+  eligibleIds.current = new Set(canAssign ? rows.map(task => task.id) : [])
   const total = pending?.pagination.total ?? 0
-  const maxPage = Math.max(1, Math.ceil(total / 20))
+  const columns: TableColumn<PendingSortingBinTask>[] = [
+    { key: 'taskNo', title: '任务', render: (_, task) => <div><p className="font-medium">{task.taskNo}</p><p className="text-xs text-muted-foreground">{task.statusName}</p></div> },
+    { key: 'warehouseName', title: '仓库 / 客户', render: (_, task) => <div>{task.warehouseName}<p className="text-xs text-muted-foreground">{task.customerName}</p></div> },
+    { key: 'id', title: '操作', width: 100, render: (_, task) => <Button size="sm" disabled={!canAssign} onClick={() => { if (eligibleIds.current.has(task.id)) mutation.mutate(task.id) }}>补分配</Button> },
+  ]
 
   return <Dialog open={open} onOpenChange={next => { if (!next) onClose() }}>
     <DialogContent className="max-w-2xl">
@@ -61,20 +86,8 @@ export default function AssignSortingBinDialog({ open, onClose, warehouseId, tas
       {query.isError && <div role="alert" className="text-sm">读取失败：{query.error.message}<Button variant="outline" size="sm" onClick={() => void query.refetch()}>重试</Button></div>}
       {pending && !query.isFetching && rows.length === 0 && <p role="status" className="text-sm text-muted-foreground">{taskId ? '已刷新：该任务已不符合补分配条件或不在可访问范围内，请返回订单刷新进度。' : '当前筛选范围内没有待分配任务。'}</p>}
       {taskId && <Button variant="outline" size="sm" disabled={query.isFetching || mutation.isPending} onClick={() => void query.refetch()}>刷新任务</Button>}
-      {pending && rows.length > 0 && <div className="max-h-96 divide-y overflow-y-auto rounded-md border">
-        {rows.map(task => <div key={task.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
-          <div className="min-w-0">
-            <p className="font-medium">{task.taskNo} <span className="font-normal text-muted-foreground">{task.statusName}</span></p>
-            <p className="text-xs text-muted-foreground">{task.warehouseName} · {task.customerName}</p>
-          </div>
-          <Button size="sm" disabled={!canAssign} onClick={() => { if (canAssign) mutation.mutate(task.id) }}>补分配</Button>
-        </div>)}
-      </div>}
-      {pending && !taskId && total > 20 && <div className="flex items-center justify-end gap-2 text-sm">
-        <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(value => value - 1)}>上一页</Button>
-        <span>{page} / {maxPage}</span>
-        <Button variant="outline" size="sm" disabled={page >= maxPage} onClick={() => setPage(value => value + 1)}>下一页</Button>
-      </div>}
+      {pending && rows.length > 0 && <div data-workspace-scroll className="max-h-96 overflow-y-auto rounded-md border"><DataTable columns={columns} data={rows} virtualized preserveFocus /></div>}
+      {pending && !query.isFetching && !taskId && <p role="status" className="text-xs text-muted-foreground">{pending.truncated ? `仅显示前 ${rows.length.toLocaleString()} 条，共 ${total.toLocaleString()} 条，候选未全部读取；请缩小仓库范围或处理后重新打开。` : `共 ${total.toLocaleString()} 条待分配任务`}</p>}
     </DialogContent>
   </Dialog>
 }

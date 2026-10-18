@@ -1,3 +1,4 @@
+const { lifecycle } = require('../../utils/runtimeLifecycle')
 const { scopeFilter } = require('../../utils/warehouseScope')
 const crypto = require('crypto')
 const { requireClientIdentity } = require('../printers/print-client-auth')
@@ -253,7 +254,7 @@ function startPrintJobSweeper() {
   const ms = raw === 0 ? 0 : Number.isFinite(raw) && raw > 0 ? raw : 60_000
   if (ms <= 0) return
   const tick = () => {
-    expireStaleJobs().catch((e) => {
+    const expiry = expireStaleJobs().catch((e) => {
       logger.error(
         '打印任务过期扫描失败，队列可能存在卡住的 pending/printing 任务',
         e instanceof Error ? e : new Error(String(e)),
@@ -261,7 +262,7 @@ function startPrintJobSweeper() {
         'PrintJobs',
       )
     })
-    reclaimJobsFromOfflineClients()
+    const reclaim = reclaimJobsFromOfflineClients()
       .then((n) => {
         if (n > 0) {
           logger.warn(
@@ -279,7 +280,7 @@ function startPrintJobSweeper() {
           'PrintJobs',
         )
       })
-    purgeFinishedJobs()
+    const purge = purgeFinishedJobs()
       .then((n) => {
         if (n > 0) {
           logger.info('已清理历史打印任务', { purged: n, degradation: 'print_job_retention_purge' }, 'PrintJobs')
@@ -293,16 +294,10 @@ function startPrintJobSweeper() {
           'PrintJobs',
         )
       })
+    // Each branch handles its usual error independently; drain waits for all three.
+    return Promise.allSettled([expiry, reclaim, purge])
   }
-  tick()
-  // unref：这是常驻的后台清扫循环，没有请求时不该拖住进程退出。项目里另外三处定时器
-  // （scheduler.startWorker / operationRequest.startCleanupSweeper / procurement 快照清理）
-  // 都已 unref，唯独这里漏了，于是任何加载过 app 的进程都会被它吊住事件循环。
-  // 2026-09-26 实测：smoke 套件断言全部跑完、退出码已定，进程仍存活约 2 分钟直到被外部
-  // 信号杀掉（此时 lsof 已无残留 MySQL/HTTP 连接，纯是这个 interval 撑着）。
-  // unref 不影响常驻服务：server 有 listen socket 保持进程存活。
-  const timer = setInterval(tick, ms)
-  if (timer.unref) timer.unref()
+  lifecycle.startTask('print-job-sweeper', tick, ms, { immediate: true })
 }
 
 // 已完成/失败的历史打印任务，超过保留窗口（默认 30 天）后物理删除，防 print_jobs 无界增长。

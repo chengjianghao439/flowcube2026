@@ -134,11 +134,11 @@ export default function ProductsPage() {
   }, [supplierData])
 
   // 查询弹窗初始值
-  const initialQuery: ProductQueryValues = {
+  const initialQuery = useMemo<ProductQueryValues>(() => ({
     keyword, categoryId: catFilter, status: statusFilter,
     supplierId, supplierName,
     minPrice, maxPrice,
-  }
+  }), [keyword, catFilter, statusFilter, supplierId, supplierName, minPrice, maxPrice])
   function applyQuery(v: ProductQueryValues) {
     updateParams({
       keyword: v.keyword || null,

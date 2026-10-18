@@ -25,12 +25,18 @@ const { test } = require('node:test')
 const assert = require('node:assert/strict')
 const path = require('node:path')
 
-// 这两条闭环所在的模块链会加载 backend/src/config/env.js，它强制要求 ≥32 位的 JWT_SECRET。
-// 本测试既不起服务也不校验证签，故在 require 之前生成一个随机值占位——
-// **不在测试里硬编码任何密钥**（既不写进仓库，也避免被 gitleaks 当成凭据误伤）。
-if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
-  process.env.JWT_SECRET = require('node:crypto').randomBytes(32).toString('hex')
+// 纯函数夹具只安装禁止调用的数据库边界，不执行真实配置。
+const offlineDbPath = require.resolve('../backend/src/config/db')
+let unexpectedDbCalls = 0
+function unexpectedDbCall() {
+  unexpectedDbCalls++
+  throw new Error('Pure fixture must not call the database')
 }
+require.cache[offlineDbPath] = { id: offlineDbPath, filename: offlineDbPath, loaded: true, exports: {
+  pool: { query: unexpectedDbCall, execute: unexpectedDbCall, getConnection: unexpectedDbCall },
+} }
+require('node:test').after(() => assert.equal(unexpectedDbCalls, 0, 'No swallowed DB calls in pure fixture'))
+
 
 const {
   assertTaskPickScanClosure,

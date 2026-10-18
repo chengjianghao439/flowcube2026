@@ -4,7 +4,7 @@ import { money } from '@/lib/format'
 import KeepAliveSection from '@/components/shared/KeepAliveSection'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { X } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
@@ -42,9 +42,9 @@ export default function InventoryAgingPage() {
   const list = agingQ.data?.list ?? []
   const expiryList = expiryQ.data?.list ?? []
 
-  const initialQuery: InventoryAgingQueryValues = {
+  const initialQuery = useMemo<InventoryAgingQueryValues>(() => ({
     keyword, warehouseId, warehouseName: '', staleDays,
-  }
+  }), [keyword, warehouseId, staleDays])
   function applyQuery(v: InventoryAgingQueryValues) {
     setKeyword(v.keyword)
     setWarehouseId(v.warehouseId)

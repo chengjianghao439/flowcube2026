@@ -5,9 +5,13 @@ const path = require('node:path')
 const vm = require('node:vm')
 const { createRequire } = require('node:module')
 const root = path.resolve(__dirname, '..')
+const runtimeLifecycleFile = path.join(root, 'backend/src/utils/runtimeLifecycle.js')
+const { createRuntimeLifecycle } = require(runtimeLifecycleFile)
 function loadService(relative, stubs, transform = source => source) {
+  const lifecycle = createRuntimeLifecycle()
   const cached = new Map()
   function load(filename) {
+    if (filename === runtimeLifecycleFile) return { lifecycle }
     if (cached.has(filename)) return cached.get(filename).exports
     const actual = createRequire(filename), module = { exports: {} }; cached.set(filename, module)
     vm.runInNewContext(`(function(require,module,exports){${transform(fs.readFileSync(filename, 'utf8'), filename)}\n})`, { Buffer, process, console }, { filename })(name => {
@@ -20,6 +24,21 @@ function loadService(relative, stubs, transform = source => source) {
   }
   return load(path.join(root, relative))
 }
+
+test('递归VM夹具保留真实生命周期能力且各次加载独立', async () => {
+  const operationFile = path.join(root, 'backend/src/utils/operationRequest.js')
+  const expose = (source, file) => file === operationFile ? `${source}\nmodule.exports.fixtureLifecycle = lifecycle` : source
+  const first = loadService('backend/src/utils/operationRequest.js', { '../../config/db': { pool: {} } }, expose).fixtureLifecycle
+  const second = loadService('backend/src/utils/operationRequest.js', { '../../config/db': { pool: {} } }, expose).fixtureLifecycle
+  for (const method of ['isDraining', 'beginDrain', 'startTask', 'stopTasks', 'waitForTasks']) assert.equal(typeof first[method], 'function')
+  assert.notEqual(first, second)
+  assert.equal(first.isDraining(), false)
+  first.beginDrain()
+  assert.equal(first.isDraining(), true)
+  assert.equal(second.isDraining(), false)
+  await first.waitForTasks()
+  await second.waitForTasks()
+})
 
 function fixture({ failAudit = false } = {}) {
   const queries = [], before = [{ product_id: 7, product_code: 'SYN-7', product_name: '合成商品', unit: '件', sale_price: '1.2345' }]

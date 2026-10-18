@@ -177,13 +177,13 @@ export default function SalePage() {
   }
 
   // 查询弹窗初始值：日期用「当前实际生效」的范围（含默认窗口），用户打开就能看见
-  const initialQuery: SaleQueryValues = {
+  const initialQuery = useMemo<SaleQueryValues>(() => ({
     keyword, remark, operatorId, operatorName, status: statusFilter,
     productId, productCode, productName,
     customerId, customerName,
     warehouseId, warehouseName,
     startDate: effectiveStartDate, endDate: effectiveEndDate,
-  }
+  }), [keyword, remark, operatorId, operatorName, statusFilter, productId, productCode, productName, customerId, customerName, warehouseId, warehouseName, effectiveStartDate, effectiveEndDate])
 
   function applyQuery(v: SaleQueryValues) {
     updateParams({

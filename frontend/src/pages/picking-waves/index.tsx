@@ -137,9 +137,9 @@ export default function PickingWavesPage() {
   }, [addTab, navigate])
 
   // ── 查询弹窗筛选值 ──
-  const initialQuery: WaveQueryValues = {
+  const initialQuery = useMemo<WaveQueryValues>(() => ({
     keyword, status: statusFilter, warehouseId: warehouseFilter, warehouseName, startDate, endDate,
-  }
+  }), [keyword, statusFilter, warehouseFilter, warehouseName, startDate, endDate])
   function applyQuery(v: WaveQueryValues) {
     updateParams({ keyword: v.keyword || null, status: v.status || null,
       warehouseId: v.warehouseId || null, warehouseName: v.warehouseName || null,

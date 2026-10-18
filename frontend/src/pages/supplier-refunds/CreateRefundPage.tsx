@@ -12,12 +12,16 @@ import { supplierRefundSourceApi } from '@/api/supplier-refunds';
 import { getActiveAccountsApi } from '@/api/finance';
 import { useSupplierRefundRead, useRefundReadQuery } from '@/hooks/useSupplierRefundRead';
 import { useSupplierRefundOperation } from '@/hooks/useSupplierRefundOperation';
-import { canonicalRefund, inputRefundCashMoney, refundCashMoney, refundCashLabel, refundMoney, refundMoneyLabel, mayRefund } from '@/lib/supplierRefundRecovery';
+import { canonicalRefund, inputRefundCashMoney, refundCashMoney, refundCashLabel, refundMoney, mayRefund } from '@/lib/supplierRefundRecovery';
 import { PERMISSIONS as P } from '@/lib/permission-codes';
 import { createRequestKey } from '@/lib/requestKey';
 import { buildWorkspaceTabRegistrationFromPath } from '@/router/workspaceRouteMeta';
 import { MAX_WORKSPACE_TABS, useWorkspaceStore } from '@/store/workspaceStore';
 import { RefundRecoveryPanel } from './RecoveryPanel';
+// 原价沿 DECIMAL(18,8) 的十位整数与来源四/八位文本展示，不参与现金或回执解析。
+function sourceUnitPriceLabel(value: unknown): string {
+    return typeof value === 'string' && /^\d{1,10}\.(?:\d{4}|\d{8})$/.test(value) ? `¥${value}` : '—';
+}
 function CreateRefundDraft({ purchaseReturnId, identity }: {
     purchaseReturnId: number;
     identity: string;
@@ -76,7 +80,7 @@ function CreateRefundDraft({ purchaseReturnId, identity }: {
           { key: 'productId', title: '商品编码', width: 160, render: (_, item) => displaySource?.itemLabels?.find(l => l.id === item.id)?.productCode || '历史编码未记录' },
           { key: 'id', title: '商品名称与规格', render: (_, item) => { const label = displaySource?.itemLabels?.find(l => l.id === item.id); return <div className="space-y-1"><p>{label?.productName || '历史商品名称未记录，请人工核对'}</p>{(label?.articleNumber || label?.spec || label?.color) && <p className="text-xs text-muted-foreground">{[label.articleNumber && `供应商型号 ${label.articleNumber}`, label.spec && `型号 ${label.spec}`, label.color && `颜色 ${label.color}`].filter(Boolean).join(' · ')}</p>}<p className="text-xs text-muted-foreground">原退货行 {item.id} / 原采购行 {item.purchaseItemId}</p></div> } },
           { key: 'quantity', title: '基本量', width: 120, align: 'right', render: (_, item) => <span className="tabular-nums">{item.quantity} {item.unit}</span> },
-          { key: 'unitPrice', title: '原成交单价', width: 140, align: 'right', render: value => <span className="tabular-nums">{refundMoneyLabel(value)}</span> },
+          { key: 'unitPrice', title: '原成交单价', width: 140, align: 'right', render: value => <span className="tabular-nums">{sourceUnitPriceLabel(value)}</span> },
         ]} />
       </section>}
       {source.data && !sourceCashReady && <p role="alert" className="text-sm text-warning-ink">历史来源金额含不足一分的尾差，请先核对；原值保留，不会自动凑整退款。</p>}

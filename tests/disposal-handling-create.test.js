@@ -22,7 +22,7 @@ const lazy = fn => Object.assign(fn, { lazy: true })
 const qty = load('utils/qtyPrecision.js', { './AppError': AppError })
 const scope = load('utils/warehouseScope.js', { '../config/db': {}, './AppError': AppError })
 // 新增审计依赖也加载真实实现；本套创建链不应执行编辑审计或访问真实数据库。
-const auditRequests = load('utils/operationRequest.js', { 'node:crypto': require('node:crypto'), '../config/db': {}, './AppError': AppError })
+const auditRequests = load('utils/operationRequest.js', { './runtimeLifecycle': { lifecycle: require('../backend/src/utils/runtimeLifecycle').createRuntimeLifecycle() }, 'node:crypto': require('node:crypto'), '../config/db': {}, './AppError': AppError })
 const changeAudit = load('modules/document-activity/document-change-audit.js', { 'node:crypto': require('node:crypto'), '../../utils/AppError': AppError, '../../utils/operationRequest': auditRequests })
 const units = load('utils/unitConversion.js', { './AppError': AppError, './qtyPrecision': qty })
 const rules = load('modules/disposal/disposal.handling.rules.js', { 'node:crypto': require('node:crypto'), '../../utils/AppError': AppError, '../../utils/qtyPrecision': qty })

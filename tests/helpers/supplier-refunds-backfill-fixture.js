@@ -2,6 +2,7 @@
 // Actual backfills/guard/RF/F3 modules; exact VM requires and finite SQL, no real IO.
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),assert=require('node:assert/strict'),crypto=require('node:crypto')
 const accountingFixture=require('./supplier-refunds-accounting-fixture')
+const {createRuntimeLifecycle}=require('../../backend/src/utils/runtimeLifecycle')
 const AppError=require('../../backend/src/utils/AppError')
 const {PERMISSIONS:P}=require('../../backend/src/constants/permissions')
 const time=require('../../backend/src/utils/backendTime'),operator=require('../../backend/src/utils/operator')
@@ -14,6 +15,7 @@ const appErrorWidth=Number(/`voucher_generate_error` VARCHAR\((\d+)\)/.exec(sche
 const capability=(object,name)=>{assert.equal(typeof object[name],'function','F4 actual '+name+' capability must exist');return object[name]}
 function assertNoModelErrors(){accountingFixture.assertNoModelErrors();assert.deepEqual(modelErrors.splice(0),[],'F4 swallowed unknown require/SQL')}
 async function fixture(amount='4.0000',options={}){
+  const lifecycle=createRuntimeLifecycle(options.runtimeTimers)
   const a=await accountingFixture.fixture(amount,'100.0000',{prepareOnly:true,refundDate:'2026-09-01',...options}),f=a.f
   f.data.finance_period_backfills=[]
   f.data.acct_periods=[{company_id:1,period:'202609',status:2},{company_id:1,period:'202610',status:0},{company_id:1,period:'202611',status:0}]
@@ -94,7 +96,7 @@ async function fixture(amount='4.0000',options={}){
   const cache={},routes=[]
   const router={use(...handlers){routes.push({method:'use',handlers})}}
   for(const method of ['get','post'])router[method]=(url,...handlers)=>routes.push({method,url,handlers})
-  const pure={'../purchase/purchase.cash-money':require('../../backend/src/modules/purchase/purchase.cash-money'),'../accounting/voucher-sale-money':require('../../backend/src/modules/accounting/voucher-sale-money'),'../../utils/cashMoney':require('../../backend/src/utils/cashMoney'),express:{Router:()=>router},'../../utils/route':require('../../backend/src/utils/route'),'../../utils/response':require('../../backend/src/utils/response'),'../../utils/requestKey':require('../../backend/src/utils/requestKey'),'node:crypto':crypto,crypto,'../../utils/AppError':AppError,'./AppError':AppError,'../../config/db':{pool},'../config/db':{pool},'../../constants/permissions':{PERMISSIONS:P},'../../utils/backendTime':time,'../../utils/operator':operator,'../../utils/logger':{info(){},warn(){}},'../../middleware/auth':{authMiddleware:(_q,_s,n)=>n(),requirePermission:code=>Object.assign((_q,_s,n)=>n(),{permission:code}),hasPermission:()=>{throw Error('unexpected request auth')}},
+  const pure={'./runtimeLifecycle':{lifecycle},'../purchase/purchase.cash-money':require('../../backend/src/modules/purchase/purchase.cash-money'),'../accounting/voucher-sale-money':require('../../backend/src/modules/accounting/voucher-sale-money'),'../../utils/cashMoney':require('../../backend/src/utils/cashMoney'),express:{Router:()=>router},'../../utils/route':require('../../backend/src/utils/route'),'../../utils/response':require('../../backend/src/utils/response'),'../../utils/requestKey':require('../../backend/src/utils/requestKey'),'node:crypto':crypto,crypto,'../../utils/AppError':AppError,'./AppError':AppError,'../../config/db':{pool},'../config/db':{pool},'../../constants/permissions':{PERMISSIONS:P},'../../utils/backendTime':time,'../../utils/operator':operator,'../../utils/logger':{info(){},warn(){}},'../../middleware/auth':{authMiddleware:(_q,_s,n)=>n(),requirePermission:code=>Object.assign((_q,_s,n)=>n(),{permission:code}),hasPermission:()=>{throw Error('unexpected request auth')}},
     '../payments/payments.service':{recordPayment:async(_id,_body,_actor,_key,opts)=>({entryId:21,legacyPeriod:opts.backfill.postingPeriod})},'../payments/payment-receipts.service':{create:()=>{throw Error('unexpected old receipt')},settle:async(id,body,actor,key,opts)=>{assert.equal(options.oldSettlement,true);assert.equal(id,22);assert.deepEqual(copy(body),{});assert.equal(key,'old-fixed');return{id:22,legacyPeriod:opts.backfill.postingPeriod}}},'../refunds/refund-orders.service':{execute:()=>{throw Error('unexpected customer refund')}},'./accounting.voucher.service':{generatePeriodVouchers:()=>{if(options.oldPayment)throw new AppError('fixture F4 write failure old payment generator',503,'FIXTURE_OLD_GENERATOR');throw Error('unexpected whole-period generation for RF')}}}
   const aliases={'./finance-backfills.service':'service','./finance-period.guard':'guard','../accounting/finance-period.guard':'guard','../../utils/operationRequest':'operation','../refunds/supplier-refunds.backfill':'backfill','./supplier-refunds.backfill-rules':'backfillRules','../refunds/supplier-refunds.backfill-rules':'backfillRules'}
   function load(name){
@@ -118,6 +120,6 @@ async function fixture(amount='4.0000',options={}){
     }},{filename});return cache[name]=module.exports
   }
   f.installBackfillBoundary(load('backfill'))
-  return {a,f,load,routes,events,queries,fail,approvedDate,body:{operationUuid:accountingFixture.uuid(901),reason:'收到原退款'},options:{userId:9,requestKey:'refund-backfill-fixed'},get data(){return f.data},get state(){return f.state}}
+  return {a,f,load,lifecycle,routes,events,queries,fail,approvedDate,body:{operationUuid:accountingFixture.uuid(901),reason:'收到原退款'},options:{userId:9,requestKey:'refund-backfill-fixed'},get data(){return f.data},get state(){return f.state}}
 }
 module.exports={fixture,capability,assertNoModelErrors,copy,uuid:accountingFixture.uuid,P}

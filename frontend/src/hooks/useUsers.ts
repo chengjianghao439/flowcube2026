@@ -8,6 +8,7 @@ import {
   deleteUserApi,
 } from '@/api/users'
 import type { QueryParams } from '@/types'
+import { useSectionActive } from '@/components/layout/SectionVisibilityContext'
 import type { CreateUserParams, UpdateUserParams } from '@/types/users'
 
 const QUERY_KEY = 'users'
@@ -20,10 +21,13 @@ function invalidateOrganizationUsers(qc: QueryClient) {
   ])
 }
 
-export function useUsers(params: QueryParams) {
+export function useUsers(params: QueryParams, mode: 'paged' | 'all' = 'paged') {
+  const active = useSectionActive()
   return useQuery({
-    queryKey: [QUERY_KEY, params],
-    queryFn: () => getUsersApi(params),
+    queryKey: mode === 'all' ? [QUERY_KEY, 'all', params] : [QUERY_KEY, params],
+    queryFn: context => getUsersApi(params, mode, mode === 'all' ? context.signal : undefined),
+    enabled: mode === 'all' ? active : undefined,
+    subscribed: mode === 'all' ? active : undefined,
   })
 }
 

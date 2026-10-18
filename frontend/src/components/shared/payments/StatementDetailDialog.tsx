@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { money } from '@/lib/format'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
@@ -43,7 +44,7 @@ export function StatementDetailDialog({ open, onClose, statementId, type }: Prop
     queryFn: () => getStatementDetailApi(statementId!),
     enabled: active && open && statementId != null,
   })
-  const detail = query.data?.id === statementId && query.data.type === type ? query.data : undefined
+  const detail = !query.isError && query.data?.id === statementId && query.data.type === type ? query.data : undefined
   const canNavigate = open && active && !!detail && !query.isFetching && !query.isPaused && !query.isError
   const removeItemMut = useMutation({
     mutationFn: ({ id, recordId }: { id:number; recordId:number }) => removeStatementItemApi(id, recordId),
@@ -54,6 +55,18 @@ export function StatementDetailDialog({ open, onClose, statementId, type }: Prop
       toast.success('已移出对账单')
     },
   })
+
+  // 已关闭或失去当前读取资格的旧按钮闭包不能沿旧单据继续提交。
+  const mounted = useRef(true)
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
+  const current = useRef({ detail, ready: canNavigate, pending: removeItemMut.isPending })
+  current.current = { detail, ready: canNavigate, pending: removeItemMut.isPending }
+  function removeVerified(id: number, recordId: number) {
+    const state = current.current
+    if (!mounted.current || !state.ready || state.pending || state.detail?.id !== id || state.detail.type !== type || state.detail.status !== 1
+      || !state.detail.items.some(item => item.recordId === recordId && item.type === type)) return
+    removeItemMut.mutate({ id, recordId })
+  }
 
   return (
     <AppDialog
@@ -68,8 +81,11 @@ export function StatementDetailDialog({ open, onClose, statementId, type }: Prop
       footer={
         <div className="flex justify-end gap-2">
           {detail && detail.status !== 1 && (
-            <Button variant="outline"
-              onClick={() => downloadExport(`/export/statements/${detail.id}`, {}).catch(e => toast.error((e as Error).message))}>
+            <Button variant="outline" disabled={!canNavigate}
+              onClick={() => {
+                if (!mounted.current || !current.current.ready || current.current.detail?.id !== detail.id || current.current.detail.type !== type) return
+                void downloadExport(`/export/statements/${detail.id}`, {}).catch(e => toast.error((e as Error).message))
+              }}>
               导出对账单（发对方核对）
             </Button>
           )}
@@ -113,8 +129,8 @@ export function StatementDetailDialog({ open, onClose, statementId, type }: Prop
                   <td className="px-2 py-1.5 text-xs text-muted-foreground">{it.dueDate ? formatDisplayDate(it.dueDate) : '—'}</td>
                   {detail.status === 1 && (
                     <td className="px-2 py-1.5 text-right">
-                      <Button size="sm" variant="ghost"
-                        onClick={() => removeItemMut.mutate({ id: detail.id, recordId: it.recordId })}>
+                      <Button size="sm" variant="ghost" disabled={!canNavigate || removeItemMut.isPending}
+                        onClick={() => removeVerified(detail.id, it.recordId)}>
                         移出
                       </Button>
                     </td>

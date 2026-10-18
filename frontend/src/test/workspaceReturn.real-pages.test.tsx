@@ -24,7 +24,7 @@ vi.mock('@/api/products',async original=>({...await original<typeof import('@/ap
 vi.mock('@/api/purchase-requisitions',async original=>({...await original<typeof import('@/api/purchase-requisitions')>(),listRequisitionsApi:edge.requisitions,getRequisitionApi:edge.requisition}))
 vi.mock('@/api/transfer',async original=>({...await original<typeof import('@/api/transfer')>(),getTransferListApi:edge.transfers,getTransferDetailApi:edge.transfer}))
 vi.mock('@/api/returns',async original=>({...await original<typeof import('@/api/returns')>(),getPurchaseReturnsApi:edge.purchaseReturns,getPurchaseReturnDetailApi:edge.purchaseReturn,getSaleReturnsApi:edge.saleReturns,getSaleReturnDetailApi:edge.saleReturn}))
-vi.mock('@/api/oplogs',async original=>({...await original<typeof import('@/api/oplogs')>(),getOpLogsApi:edge.logs,clearLogsApi:edge.writes}))
+vi.mock('@/api/oplogs',async original=>({...await original<typeof import('@/api/oplogs')>(),getOpLogsApi:edge.logs,getAllOpLogsApi:edge.logs,clearLogsApi:edge.writes}))
 vi.mock('@/api/carriers',async original=>({...await original<typeof import('@/api/carriers')>(),getCarriersActiveApi:async()=>[]}))
 vi.mock('@/api/settings',async original=>({...await original<typeof import('@/api/settings')>(),getSettingsApi:async()=>({map:{}})}))
 vi.mock('@/hooks/useWarehouses',()=>({useWarehousesActive:()=>({data:[]})}))

@@ -58,6 +58,7 @@
 - **前端容器必须删 `/docker-entrypoint.d/10-listen-on-ipv6-by-default.sh`**
 - **回退/还原逐个写全路径、不得 `||` 兜底猜路径**，改完立即 `git status --short`
 - **生产机上批量删除/清理前先确认云盘 IO，并分批执行**：该机云盘有已知读写受限。动手前看 `iostat -x 1 2`（`%util`/`await`/`aqu-sz`）与 `vmstat`（`wa`）；分批删除（每批 ≤200MB、间隔数秒）并用 `ionice -c3 nice -n19`；避开 MySQL 写入高峰与部署进行中。2026-09-19 一次删除 1.9G 后系统极端缓慢、只能靠控制台重启恢复（`docs/deploy-disk-precheck-2026-09-19.md`）
+- **成功发版并通过健康验收后必须盘点镜像与磁盘，记录保留、拟清理及待确认结论**；镜像身份、恢复兼容性、精确清单和永久删除确认按 `docs/DEPLOY.md`「发布成功后的镜像与磁盘收尾」执行，沿用本节低 IO 约束。
 - **服务器 SSH 访问必须复用连接**（`-o ControlMaster=auto -o ControlPath=… -o ControlPersist=…`），并把多条只读查询合并进一次会话；反复新建短连接会被 sshd 限流（2026-09-19 实测：本机 IP 被限流数十分钟，同期 HTTPS 仍正常）
 - **改共用函数或路由契约后，发版前统一跑全量套件**（调用点补 `X-Client-Id`）；调试故障所需的最小验证可提前跑
 - **普通资金登记用共享锁、补录与结账用排他锁**：`lockAccountingCompanyShared`（`FOR SHARE`）vs `lockAccountingCompany`（`FOR UPDATE`）；**全排他就会让并发登记排队、全共享就会让结账挡不住写入**——两侧别"顺手统一"。加锁顺序固定「账套→账户→对账单→账款」。`acct_periods` 主键是 `(company_id, period)`、**没有 `id` 列**（`accounting.period-lock.js`；回归 `tests/finance-period-lock-order.smoke.test.js`，已接 CI）

@@ -2,6 +2,7 @@
 
 const fs = require('node:fs')
 const path = require('node:path')
+const crypto = require('node:crypto')
 
 function writeState(filename, value) {
   const temp = filename + '.' + process.pid + '.tmp'
@@ -25,10 +26,16 @@ function readState(filename) {
   return state
 }
 
-function encodeMessage(content) {
+function encodeMessage(content, keyword = '') {
   const limit = 8000
+  const suffix = '\n…消息过长，余下内容请查看监控日志。'
+  keyword = String(keyword).trim()
+  if (keyword) {
+    const prefix = keyword + '\n'
+    if (Buffer.byteLength(prefix) > limit - Buffer.byteLength(suffix)) throw new Error('运维关键词过长')
+    if (!content.startsWith(prefix)) content = prefix + content
+  }
   if (Buffer.byteLength(content) > limit) {
-    const suffix = '\n…消息过长，余下内容请查看监控日志。'
     let prefix = '', bytes = 0
     for (const char of content) {
       bytes += Buffer.byteLength(char)
@@ -38,6 +45,18 @@ function encodeMessage(content) {
     content = prefix + suffix
   }
   return JSON.stringify({ msgtype: 'text', text: { content } })
+}
+
+// 与后端机器人一致的 timestamp + "\n" + secret HMAC-SHA256/base64 算法。
+// URLSearchParams 负责编码并替换旧签名；未配置时不重写原 URL。
+function buildSignedUrl(webhook, secret, timestamp = Date.now()) {
+  secret = String(secret || '').trim()
+  if (!secret) return webhook
+  const url = new URL(webhook)
+  const signature = crypto.createHmac('sha256', secret).update(`${timestamp}\n${secret}`, 'utf8').digest('base64')
+  url.searchParams.set('timestamp', String(timestamp))
+  url.searchParams.set('sign', signature)
+  return url.toString()
 }
 
 function backupSummary(dir, now) {
@@ -149,7 +168,8 @@ function dailyReport(input, stateFile, backupDir, now) {
 if (require.main === module) {
   try {
     const [command, ...args] = process.argv.slice(2)
-    if (command === 'encode') process.stdout.write(encodeMessage(fs.readFileSync(0, 'utf8')))
+    if (command === 'encode') process.stdout.write(encodeMessage(fs.readFileSync(0, 'utf8'), process.env.DINGTALK_KEYWORD))
+    else if (command === 'signed-url') process.stdout.write(buildSignedUrl(fs.readFileSync(0, 'utf8'), process.env.DINGTALK_SECRET))
     else if (command === 'accepted') process.exit(JSON.parse(fs.readFileSync(0, 'utf8')).errcode === 0 ? 0 : 1)
     else if (command === 'monitor') process.stdout.write(prepareMonitor(args[0], fs.readFileSync(0, 'utf8'), Number(args[1]), Number(args[2]), Number(args[3]), args[4]))
     else if (command === 'ack') acknowledgeMonitor(args[0], Number(args[1]))
@@ -162,4 +182,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { encodeMessage, prepareMonitor, acknowledgeMonitor, dailyReport }
+module.exports = { encodeMessage, buildSignedUrl, prepareMonitor, acknowledgeMonitor, dailyReport }

@@ -163,13 +163,13 @@ export default function PurchasePage() {
   }
 
   // 查询弹窗初始值：日期用「当前实际生效」的范围（含默认窗口），用户打开就能看见
-  const initialQuery: PurchaseQueryValues = {
+  const initialQuery = useMemo<PurchaseQueryValues>(() => ({
     keyword, remark, operatorId, operatorName, status: statusFilter,
     productId, productCode, productName,
     supplierId, supplierName,
     warehouseId, warehouseName,
     startDate: effectiveStartDate, endDate: effectiveEndDate,
-  }
+  }), [keyword, remark, operatorId, operatorName, statusFilter, productId, productCode, productName, supplierId, supplierName, warehouseId, warehouseName, effectiveStartDate, effectiveEndDate])
 
   function applyQuery(v: PurchaseQueryValues) {
     updateParams({
@@ -259,6 +259,7 @@ export default function PurchasePage() {
               },
               ...((r.status === 2 || r.status === 5) && canConfirm ? [{
                 label: '撤回确认',
+                afterMenuClose: true,
                 separatorBefore: true,
                 onClick: () => openConfirm(
                   '撤回确认',
@@ -271,6 +272,7 @@ export default function PurchasePage() {
               // 待审批(5)单：审批通过/驳回（审计 4.7），需 purchase.order.approve 权限
               ...(r.status === 5 && canApprove ? [{
                 label: '审批通过',
+                afterMenuClose: true,
                 onClick: () => openConfirm(
                   '审批通过',
                   '通过后该采购单可创建收货订单。',
@@ -280,6 +282,7 @@ export default function PurchasePage() {
                 disabled: approve.isPending,
               }, {
                 label: '驳回',
+                afterMenuClose: true,
                 destructive: true,
                 onClick: () => setRejectTarget(r),
                 disabled: reject.isPending,
@@ -289,6 +292,7 @@ export default function PurchasePage() {
               // 避免对必然失败的订单（如还没收过货）诱导点击。
               ...(r.status === 2 && r.canCloseRemaining && canConfirm ? [{
                 label: '结束剩余采购',
+                afterMenuClose: true,
                 onClick: () => openConfirm(
                   '结束剩余采购',
                   '未收采购余量将取消，不再补收；已收数量、应付与付款记录保持。',
@@ -299,6 +303,7 @@ export default function PurchasePage() {
               }] : []),
               ...([1, 2, 5].includes(r.status) && canCancel ? [{
                 label: '取消',
+                afterMenuClose: true,
                 destructive: true,
                 separatorBefore: true,
                 onClick: () => openConfirm(

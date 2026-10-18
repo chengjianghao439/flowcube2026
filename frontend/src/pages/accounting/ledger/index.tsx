@@ -15,7 +15,7 @@ import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { cn } from '@/lib/utils'
 import { useTrialBalance, useAccountLedger } from '@/hooks/useLedger'
 import type { TrialBalanceRow } from '@/types/accounting'
-import { beijingPeriod } from '@/lib/dateTime'
+import { beijingPeriod, formatDisplayDate } from '@/lib/dateTime'
 
 // 统一走 lib/format 的 amount（会计口径：千分位 + 两位小数、不带 ¥）
 const m = amount
@@ -47,7 +47,7 @@ function LedgerDialog({ accountId, code, name, period, onClose }: { accountId: n
                 </tr>
                 {data.list.map((e, i) => (
                   <tr key={i} className="border-t border-border/40">
-                    <td className="px-3 py-2 whitespace-nowrap">{String(e.voucherDate).slice(0, 10)}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">{formatDisplayDate(e.voucherDate, '')}</td>
                     <td className="px-3 py-2 font-mono text-doc-code-muted">{e.voucherNo}</td>
                     <td className="px-3 py-2">{e.summary || '—'}{e.auxName ? <span className="text-muted-foreground"> · {e.auxName}</span> : ''}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{cell(e.debit)}</td>

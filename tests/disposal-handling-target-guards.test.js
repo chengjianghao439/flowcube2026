@@ -23,7 +23,7 @@ const lazy = fn => Object.assign(fn, { lazy: true })
 const qty = load('utils/qtyPrecision.js', { './AppError': AppError })
 const scope = load('utils/warehouseScope.js', { '../config/db': {}, './AppError': AppError })
 // 真实审计实现使用下方同事务 SQL 夹具，不绕过新增指纹或记录写入。
-const auditRequests = load('utils/operationRequest.js', { 'node:crypto': require('node:crypto'), '../config/db': {}, './AppError': AppError })
+const auditRequests = load('utils/operationRequest.js', { './runtimeLifecycle': { lifecycle: require('../backend/src/utils/runtimeLifecycle').createRuntimeLifecycle() }, 'node:crypto': require('node:crypto'), '../config/db': {}, './AppError': AppError })
 const changeAudit = load('modules/document-activity/document-change-audit.js', { 'node:crypto': require('node:crypto'), '../../utils/AppError': AppError, '../../utils/operationRequest': auditRequests })
 const units = load('utils/unitConversion.js', { './AppError': AppError, './qtyPrecision': qty })
 const transition = load('utils/statusTransition.js', { './AppError': AppError, './sqlIdentifier': sqlIdentifier })

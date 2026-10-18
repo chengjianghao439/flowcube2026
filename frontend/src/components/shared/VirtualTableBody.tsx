@@ -8,6 +8,7 @@ type RowElement = ReactElement<HTMLAttributes<HTMLTableRowElement> & RefAttribut
 interface Props<T> {
   data: T[]
   preserveFocus?: boolean
+  retainFocusedRow?: boolean
   columns: number
   getRowKey: (row: T) => string | number
   renderRow: (row: T, index: number) => RowElement
@@ -16,7 +17,7 @@ interface Props<T> {
 }
 
 /** 原生表格 + 可变行高；复用工作区滚动条，数据/选择/导出仍由调用方持有。 */
-export function VirtualTableBody<T>({ data, columns, getRowKey, renderRow, onScrollToIndexReady, preserveFocus = false }: Props<T>) {
+export function VirtualTableBody<T>({ data, columns, getRowKey, renderRow, onScrollToIndexReady, preserveFocus = false, retainFocusedRow = false }: Props<T>) {
   const bodyRef = useRef<HTMLTableSectionElement>(null)
   const [focusedKey, setFocusedKey] = useState<string | number | null>(null)
   const focusedIndex = preserveFocus && focusedKey != null ? data.findIndex(row => getRowKey(row) === focusedKey) : -1
@@ -78,7 +79,7 @@ export function VirtualTableBody<T>({ data, columns, getRowKey, renderRow, onScr
     const index = Number((event.target as HTMLElement).closest('tr')?.getAttribute('data-index'))
     if (data[index]) setFocusedKey(getRowKey(data[index]))
   } : undefined} onBlurCapture={preserveFocus ? event => {
-    if (!(event.relatedTarget instanceof Node) || !bodyRef.current?.contains(event.relatedTarget)) setFocusedKey(null)
+    if (!retainFocusedRow && (!(event.relatedTarget instanceof Node) || !bodyRef.current?.contains(event.relatedTarget))) setFocusedKey(null)
   } : undefined}>
     {top > 0 && <tr aria-hidden="true"><td colSpan={columns} style={{ height: top, padding: 0, border: 0 }} /></tr>}
     {items.map((item, position) => {

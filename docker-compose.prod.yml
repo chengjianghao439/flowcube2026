@@ -25,7 +25,7 @@ services:
       CORS_ALLOW_NULL_ORIGIN: "0"
     # 生产环境应添加健康启动延迟
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/ready',r=>process.exit(r.statusCode===200?0:1)).setTimeout(5000,function(){this.destroy()}).on('error',()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3000/api/ready',r=>process.exit(r.statusCode===200?0:1)).setTimeout(5000,function(){this.destroy()}).on('error',()=>process.exit(1))"]
       interval: 30s
       timeout: 10s
       retries: 3

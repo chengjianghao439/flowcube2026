@@ -50,14 +50,16 @@ pool.getConnection = async () => {
 boundPoolAcquisition(pool, { timeoutMs: env.DB_ACQUIRE_TIMEOUT_MS })
 
 async function testConnection() {
+  let conn
   try {
-    const conn = await pool.getConnection()
+    conn = await pool.getConnection()
     await conn.ping()
-    conn.release()
     console.log('[DB] 数据库连接成功')
   } catch (err) {
     console.error('[DB] 数据库连接失败:', err.message)
-    process.exit(1)
+    throw err
+  } finally {
+    conn?.release()
   }
 }
 

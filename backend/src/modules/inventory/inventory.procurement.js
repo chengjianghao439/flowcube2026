@@ -1,3 +1,4 @@
+const { lifecycle } = require('../../utils/runtimeLifecycle')
 const { pool } = require('../../config/db')
 const { scopeFilter } = require('../../utils/warehouseScope')
 const { beijingYmdAddDays, beijingTodayYmd } = require('../../utils/backendTime')
@@ -9,8 +10,7 @@ const { normalizePagination } = require('../../utils/pagination')
 const AppError = require('../../utils/AppError')
 const { createProcurementSnapshots, restart } = require('./procurement.snapshots')
 const snapshots = createProcurementSnapshots()
-const snapshotCleanup = setInterval(() => snapshots.prune(), 30000)
-snapshotCleanup.unref()
+lifecycle.startTask('procurement-snapshots', () => snapshots.prune(), 30000)
 
 // Every source contributes once: converted plan lines disappear; only unconverted PR
 // remainder remains; converted quantities are represented by live draft/expected POs.

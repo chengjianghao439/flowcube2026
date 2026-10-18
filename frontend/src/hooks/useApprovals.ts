@@ -63,15 +63,15 @@ export function useDeleteApprovalFlow() {
 }
 
 /** 待我审批列表 */
-export function usePendingApprovals(page: number, pageSize = 20) {
+export function usePendingApprovals(page: number, pageSize = 20, mode: 'paged' | 'all' = 'paged') {
   const scope = useApprovalReadScope()
   const active = useActiveWorkspaceTab()
   const { can } = usePermission()
   const enabled = active && can(PENDING_APPROVAL_PERMISSIONS)
   const query = useQuery({
-    queryKey: [PENDING_KEY, scope.key, page, pageSize],
+    queryKey: mode === 'all' ? [PENDING_KEY, scope.key, 'all'] : [PENDING_KEY, scope.key, page, pageSize],
     queryFn: async ({ signal }) => {
-      const result = await listPendingApprovalsApi({ page, pageSize }, 'paged', { signal, baseURL: scope.server, _authSessionGeneration: scope.generation, _erpApiFallbackTried: true })
+      const result = await listPendingApprovalsApi({ page, pageSize }, mode === 'all' ? false : 'paged', { signal, baseURL: scope.server, _authSessionGeneration: scope.generation, _erpApiFallbackTried: true })
       if (!scope.isCurrent()) throw new Error('审批待办读取上下文已变化，请重试')
       return result
     }, enabled, subscribed: enabled, placeholderData: undefined, staleTime: 0,

@@ -4,7 +4,7 @@ import { PERMISSIONS } from '@/lib/permission-codes'
  * 库位管理页
  * 路由：/locations
  */
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
@@ -100,9 +100,9 @@ export default function LocationsPage() {
   })
 
   // ── 查询弹窗筛选值 ──
-  const initialQuery: LocationQueryValues = {
+  const initialQuery = useMemo<LocationQueryValues>(() => ({
     keyword, warehouseId: warehouseFilter, status: statusFilter, zone: zoneFilter,
-  }
+  }), [keyword, warehouseFilter, statusFilter, zoneFilter])
   function applyQuery(v: LocationQueryValues) {
     setKeyword(v.keyword)
     setWarehouseFilter(v.warehouseId)

@@ -123,8 +123,8 @@ async function fetchInventoryStatsRows({ startDate, endDate, scopeWarehouseIds =
   const lWh = scopeFilter(scopeWarehouseIds, 'l.warehouse_id')
   const ipWh = scopeFilter(scopeWarehouseIds, 'ip.warehouse_id')
   // 周转率 = 期内出库量 / 平均库存，平均库存 = (期初 + 期末) / 2。
-  // 期初 = 期末 + 期内入库 − 期内出库（流水 quantity 恒为正数，方向由 type 区分），
-  // 即平均库存 = 期末 + (入库 − 出库) / 2。期内只有 1 条流水时没有库存观测点，
+  // 期初 = 期末 − 期内入库 + 期内出库（流水 quantity 恒为正数，方向由 type 区分），
+  // 即平均库存 = 期末 + (出库 − 入库) / 2。期内只有 1 条流水时没有库存观测点，
   // 期初退化失败，这类商品在 JS 侧标记 turnDays=null 降级展示。
   const periodDays = startDate && endDate ? Math.max(1, Math.round((Date.parse(endDate) - Date.parse(startDate)) / 86400000) + 1) : null
 
@@ -162,8 +162,8 @@ async function fetchInventoryStatsRows({ startDate, endDate, scopeWarehouseIds =
     const outboundQty = Number(r.outbound_qty)
     const inboundQty = Number(r.inbound_qty)
     const currentQty = Number(r.current_qty)
-    // 期初 = 期末 + 期内入库 − 期内出库；只有一条流水（log_count=1）时无期内库存观测点
-    const openingQty = currentQty + inboundQty - outboundQty
+    // 期初 = 期末 − 期内入库 + 期内出库；只有一条流水（log_count=1）时无期内库存观测点
+    const openingQty = currentQty - inboundQty + outboundQty
     const avgStock = (openingQty + currentQty) / 2
     // 展示用比率保留两位小数；周转天数用未舍入比率计算，避免舍入误差被放大
     const rawRate = avgStock > 0 ? outboundQty / avgStock : 0

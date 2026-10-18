@@ -5,7 +5,7 @@ import { useApprovalDetailHandoff } from '@/hooks/useApprovalDetailHandoff'
 import { ApprovalHandoffNotice } from '@/components/shared/ApprovalHandoffNotice'
 import { getDisposalDetailApi } from '@/api/disposal'
 import { money } from '@/lib/format'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { X } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
@@ -54,11 +54,11 @@ export default function DisposalPage() {
   })
   const total = data?.pagination?.total ?? 0
 
-  const initialQuery: DisposalQueryValues = {
+  const initialQuery = useMemo<DisposalQueryValues>(() => ({
     keyword, status: statusFilter,
     warehouseId: warehouseFilter, warehouseName,
     startDate, endDate,
-  }
+  }), [keyword, statusFilter, warehouseFilter, warehouseName, startDate, endDate])
   function applyQuery(v: DisposalQueryValues) {
     setKeyword(v.keyword)
     setStatusFilter(v.status)

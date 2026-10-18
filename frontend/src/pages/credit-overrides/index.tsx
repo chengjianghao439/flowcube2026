@@ -160,7 +160,7 @@ export default function CreditOverridesPage() {
   }
 
   // 查询弹窗初始值
-  const initialQuery: CreditOverrideQueryValues = { keyword, status, startDate, endDate }
+  const initialQuery = useMemo<CreditOverrideQueryValues>(() => ({ keyword, status, startDate, endDate }), [keyword, status, startDate, endDate])
 
   function applyQuery(v: CreditOverrideQueryValues) {
     updateParams({

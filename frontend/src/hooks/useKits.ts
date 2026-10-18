@@ -30,7 +30,7 @@ export function useKits(params: KitListParams) {
     queryKey: ['kits', 'list', readOwner.baseURL, readOwner.userId, readOwner.sessionGeneration, params],
     queryFn: async ({ signal }) => {
       assertKitReadOwner(readOwner)
-      const result = await getKitsApi(params, signal, readOwner)
+      const result = await getKitsApi(params, signal, readOwner, 'all')
       assertKitReadOwner(readOwner)
       return result
     },

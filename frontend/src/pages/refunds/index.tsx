@@ -1,5 +1,5 @@
 import { money } from '@/lib/format'
-import { useId, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 import { DatePicker } from '@/components/shared/DatePicker'
 import { X } from 'lucide-react'
 import { toast } from '@/lib/toast'
@@ -57,7 +57,7 @@ export default function RefundsPage() {
   const total = data?.pagination?.total ?? 0
 
   // ── 查询弹窗筛选值 ──
-  const initialQuery: RefundQueryValues = { keyword, status: statusFilter, startDate, endDate }
+  const initialQuery = useMemo<RefundQueryValues>(() => ({ keyword, status: statusFilter, startDate, endDate }), [keyword, statusFilter, startDate, endDate])
   function applyQuery(v: RefundQueryValues) {
     setKeyword(v.keyword)
     setStatusFilter(v.status)

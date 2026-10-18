@@ -47,7 +47,7 @@ function fixture({ items = [item()], state = 3, replay = false, failStock = fals
       return [{ affectedRows: 1 }]
     },
   }
-  const requests = load('utils/operationRequest.js', { '../config/db': {}, './AppError': AppError })
+  const requests = load('utils/operationRequest.js', { './runtimeLifecycle': { lifecycle: require('../backend/src/utils/runtimeLifecycle').createRuntimeLifecycle() }, '../config/db': {}, './AppError': AppError })
   const deps = {
     './disposal.handling.target-guards': handlingGuards,
     '../../config/db': { pool: { getConnection: async () => conn } }, '../../utils/AppError': AppError,

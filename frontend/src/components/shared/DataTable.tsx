@@ -12,6 +12,10 @@ interface DataTableProps<T extends object> {
   loading?: boolean
   /** 达到 200 行时仅渲染可见行，选择和导出仍使用完整数据。 */
   virtualized?: boolean
+  /** 虚拟行内有键盘操作时保留聚焦行，失焦后恢复普通可视范围。 */
+  preserveFocus?: boolean
+  /** 行内打开模态时暂存原聚焦行，供关闭后的原按钮回焦。 */
+  retainFocusedRow?: boolean
   rowKey?: keyof T
   emptyText?: string
   /** 兼容旧用法：等价于 selectionMode="multiple" */
@@ -38,7 +42,7 @@ interface DataTableProps<T extends object> {
 }
 
 export default function DataTable<T extends object>({
-  columns, data, loading = false, virtualized = false,
+  columns, data, loading = false, virtualized = false, preserveFocus = false, retainFocusedRow = false,
   rowKey = 'id' as keyof T, emptyText = '暂无数据',
   selectable = false, selectionMode, selectedIds, onSelectChange, onSelectionChange, selectableCheck,
   onRowDoubleClick,
@@ -218,7 +222,7 @@ export default function DataTable<T extends object>({
               ))}
             </tr>
           </thead>
-          {renderVirtual ? <VirtualTableBody data={data} columns={colCount} getRowKey={getRowKey} renderRow={renderRow} /> : <tbody>
+          {renderVirtual ? <VirtualTableBody data={data} columns={colCount} getRowKey={getRowKey} renderRow={renderRow} preserveFocus={preserveFocus} retainFocusedRow={retainFocusedRow} /> : <tbody>
             {loading ? (
               // Skeleton rows
               Array.from({ length: 5 }).map((_, i) => (

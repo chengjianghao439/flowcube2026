@@ -4,7 +4,7 @@ import { PERMISSIONS } from '@/lib/permission-codes'
  * 货架管理
  * 路由：/racks
  */
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { X } from 'lucide-react'
 import { toast } from '@/lib/toast'
@@ -67,9 +67,9 @@ export default function RacksPage() {
   }
 
   // ── 查询弹窗筛选值 ──
-  const initialQuery: RackQueryValues = {
+  const initialQuery = useMemo<RackQueryValues>(() => ({
     keyword, warehouseId: warehouseFilter, warehouseName, zone: zoneFilter,
-  }
+  }), [keyword, warehouseFilter, warehouseName, zoneFilter])
   function applyQuery(v: RackQueryValues) {
     setKeyword(v.keyword)
     setWarehouseFilter(v.warehouseId)

@@ -204,7 +204,7 @@ export default function InventoryPage() {
   const overviewWarehouseName = warehouseId ? (warehouseName || (warehouses ?? []).find((w: { id: number; name: string }) => w.id === warehouseId)?.name) || null : null
   const logsWarehouseName = logWarehouseId ? (warehouses ?? []).find((w: { id: number; name: string }) => w.id === logWarehouseId)?.name ?? null : null
   // ── 查询弹窗初始值 / 应用 ──
-  const initialOverviewQuery: InventoryOverviewQueryValues = { keyword, categoryId, warehouseId, warehouseName: warehouseName || '' }
+  const initialOverviewQuery = useMemo<InventoryOverviewQueryValues>(() => ({ keyword, categoryId, warehouseId, warehouseName: warehouseName || '' }), [keyword, categoryId, warehouseId, warehouseName])
   function applyOverviewQuery(v: InventoryOverviewQueryValues) {
     updateParams({
       keyword: v.keyword || null,

@@ -1,5 +1,5 @@
 import { QueryFormLayout } from '@/components/shared/QueryFormLayout'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AppDialog } from '@/components/shared/AppDialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -33,7 +33,11 @@ export default function OpLogQueryDialog({ open, initial, resetValues, onClose, 
   const [draft, setDraft] = useState<OpLogQueryValues>(EMPTY)
   const resetDraft = () => ({ ...EMPTY, ...resetValues })
 
-  useEffect(() => { if (open) setDraft(initial) }, [open, initial])
+  const wasOpen = useRef(false)
+  useEffect(() => {
+    if (open && !wasOpen.current) setDraft({ ...initial })
+    wasOpen.current = open
+  }, [open, initial])
 
   function set<K extends keyof OpLogQueryValues>(key: K, value: OpLogQueryValues[K]) {
     setDraft(d => ({ ...d, [key]: value }))

@@ -15,6 +15,8 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { SOURCE_TYPES } = require('../../constants/voucherSource')
+const { moneyUnits, moneyText } = require('../../utils/decimalMoney')
+const { roundCashCents, cashNumber } = require('../../utils/cashMoney')
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100
 
@@ -296,34 +298,42 @@ async function getBalanceSheet({ period, companyId = 1 }) {
 /** 现金流量表（简版）：从资金流水 finance_account_transactions 归集经营活动现金流 */
 async function getCashFlow({ period }) {
   const { start, end } = periodRange(period)
+  // 资金事实沿现有公司级共享口径；不按当前账户/退款状态或凭证补录日期过滤。
   const [rows] = await pool.query(`
     SELECT biz_type, direction, COALESCE(SUM(amount),0) amt
       FROM finance_account_transactions
      WHERE happened_at BETWEEN ? AND ?
      GROUP BY biz_type, direction`, [start, end])
-  const sum = (bt, d) => round2(rows.filter(r => r.biz_type === bt && r.direction === d).reduce((s, r) => s + Number(r.amt), 0))
+  const sum = (bt, d) => {
+    const units = rows.filter(r => r.biz_type === bt && r.direction === d)
+      .reduce((total, r) => total + moneyUnits(r.amt), 0n)
+    // 历史非分先按原桶汇总再显示到分；负历史聚合保留 Math.round 的负半分向零。
+    return units < 0n ? -((-units + 49n) / 100n) : roundCashCents(moneyText(units))
+  }
   const inflowReceipt = sum(1, 1)          // 收款流入
+  const inflowSupplierRefund = sum(6, 1)   // 供应商退款流入，按真实资金流水只计一次
   const outflowPayment = sum(2, 2)         // 付款流出
   const outflowExpense = sum(3, 2)         // 报销流出
   const outflowRefund = sum(5, 2)          // 退款流出（2026-08-21 审计修复：此前不进现金流桶）
   const otherIn = sum(4, 1)                // 余额调整(收)
   const otherOut = sum(4, 2)               // 余额调整(付)
-  const operatingIn = round2(inflowReceipt)
-  const operatingOut = round2(outflowPayment + outflowExpense + outflowRefund)
-  const net = round2(operatingIn - operatingOut + otherIn - otherOut)
+  const operatingIn = inflowReceipt + inflowSupplierRefund
+  const operatingOut = outflowPayment + outflowExpense + outflowRefund
+  const net = operatingIn - operatingOut + otherIn - otherOut
   return {
     period, start, end,
     rows: [
-      { name: '一、经营活动现金流入', amount: operatingIn, bold: true },
-      { name: '　　销售收款', amount: inflowReceipt },
-      { name: '二、经营活动现金流出', amount: operatingOut, bold: true },
-      { name: '　　采购/供应商付款', amount: outflowPayment },
-      { name: '　　费用报销', amount: outflowExpense },
-      ...(outflowRefund ? [{ name: '　　退款', amount: outflowRefund }] : []),
-      ...(otherIn || otherOut ? [{ name: '三、其他（账户调整）', amount: round2(otherIn - otherOut) }] : []),
-      { name: '经营活动现金流量净额', amount: net, bold: true },
+      { name: '一、经营活动现金流入', amount: cashNumber(operatingIn), bold: true },
+      { name: '　　销售收款', amount: cashNumber(inflowReceipt) },
+      { name: '　　供应商退款', amount: cashNumber(inflowSupplierRefund) },
+      { name: '二、经营活动现金流出', amount: cashNumber(operatingOut), bold: true },
+      { name: '　　采购/供应商付款', amount: cashNumber(outflowPayment) },
+      { name: '　　费用报销', amount: cashNumber(outflowExpense) },
+      ...(outflowRefund ? [{ name: '　　退款', amount: cashNumber(outflowRefund) }] : []),
+      ...(otherIn || otherOut ? [{ name: '三、其他（账户调整）', amount: cashNumber(otherIn - otherOut) }] : []),
+      { name: '经营活动现金流量净额', amount: cashNumber(net), bold: true },
     ],
-    net,
+    net: cashNumber(net),
   }
 }
 

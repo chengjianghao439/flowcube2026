@@ -2,6 +2,7 @@
  * 极序 Flow 定时任务调度器
  */
 
+const { lifecycle } = require('./utils/runtimeLifecycle')
 const { startCleanupSweeper } = require('./utils/operationRequest')
 const { pool } = require('./config/db')
 const logger = require('./utils/logger')
@@ -27,21 +28,9 @@ const bool = (name, def) => {
  * 让 worker 内所有 logger 输出可追溯到具体调度任务。
  */
 function startWorker(name, fn, intervalMs) {
-  let running = false
-  const tick = async () => {
-    if (running) return
-    running = true
-    try {
-      await runWithRequestContext({ requestId: `scheduler:${name}` }, fn)
-    } catch (e) {
-      logger.error(`[scheduler] ${name} 执行异常`, e, {}, 'Scheduler')
-    } finally {
-      running = false
-    }
-  }
-  const timer = setInterval(tick, intervalMs)
-  if (timer.unref) timer.unref()
-  return timer
+  lifecycle.startTask(`scheduler:${name}`, () => runWithRequestContext({ requestId: `scheduler:${name}` }, fn), intervalMs, {
+    onError: e => logger.error(`[scheduler] ${name} 执行异常`, e, {}, 'Scheduler'),
+  })
 }
 
 function startScheduler() {
@@ -95,10 +84,11 @@ function startScheduler() {
   }, num('EVENT_LOG_CLEAN_INTERVAL_MS', 6 * 60 * 60 * 1000))
 
   // PDA 设备会话 TTL（2026-08-22 扫描）：过期/吊销会话无清理任务，表随设备数缓慢膨胀。
-  // 只清「已过期且 30 天前」的记录——活跃会话靠心跳续期，不会误删。
+  // 已撤销从撤销时刻、未撤销从过期时刻保留 30 天；未到期的有效会话不清理。
+  // 每轮最多 1000 条，不引用会话表不存在的 updated_at，也不以创建/心跳时间代替失效时间。
   startWorker('pda-session-cleanup', async () => {
     await pool.query(
-      'DELETE FROM pda_device_sessions WHERE (expires_at < NOW() OR revoked_at IS NOT NULL) AND updated_at < DATE_SUB(NOW(), INTERVAL 30 DAY)',
+      'DELETE FROM pda_device_sessions WHERE (expires_at < NOW() OR revoked_at IS NOT NULL) AND COALESCE(revoked_at, expires_at) < DATE_SUB(NOW(), INTERVAL 30 DAY) LIMIT 1000',
     )
   }, num('PDA_SESSION_CLEAN_INTERVAL_MS', 24 * 60 * 60 * 1000))
 

@@ -22,11 +22,28 @@
  */
 
 const path = require('path')
+
+// 纯函数夹具只安装禁止调用的数据库边界，不执行真实配置。
+const offlineDbPath = require.resolve('../backend/src/config/db')
+let unexpectedDbCalls = 0
+function unexpectedDbCall() {
+  unexpectedDbCalls++
+  throw new Error('Pure fixture must not call the database')
+}
+require.cache[offlineDbPath] = { id: offlineDbPath, filename: offlineDbPath, loaded: true, exports: {
+  pool: { query: unexpectedDbCall, execute: unexpectedDbCall, getConnection: unexpectedDbCall },
+} }
+require('node:test').after(() => assert.equal(unexpectedDbCalls, 0, 'No swallowed DB calls in pure fixture'))
+
+// 导出模块的导入链会到达 auth，但本测试不认证；仅缓存惰性环境边界，
+// 真实 config/env 及 dotenv 继续由执行围栏禁止。
+const offlineEnvPath = require.resolve('../backend/src/config/env')
+require.cache[offlineEnvPath] = { id: offlineEnvPath, filename: offlineEnvPath, loaded: true, exports: {
+  env: Object.freeze({ NODE_ENV: 'test', IS_PROD: false }),
+} }
 const { test } = require('node:test')
 const assert = require('node:assert/strict')
 
-// 纯单元测试：仅为满足 config/env 的启动校验，不参与任何鉴权，也不连接数据库。
-process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-only-secret-not-used-for-auth-0123456789'
 
 const exportService = require(path.resolve(__dirname, '../backend/src/modules/export/export.service'))
 

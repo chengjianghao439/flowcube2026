@@ -1,12 +1,27 @@
-import { payloadClient as apiClient } from './client'
+import rawApiClient, { payloadClient as apiClient } from './client'
+import { collectAllRecords } from './allRecords'
+import { useAuthStore } from '@/store/authStore'
 import type { PaginatedData, QueryParams } from '@/types'
 import type { SysUser, CreateUserParams, UpdateUserParams } from '@/types/users'
 
-export async function getUsersApi(params: QueryParams): Promise<PaginatedData<SysUser>> {
-  // 用户管理有显式翻页；跳过通用客户端的“取齐全部页”行为，保留服务端分页与总数。
+export async function getUsersApi(params: QueryParams, mode: 'paged' | 'all' = 'paged', signal?: AbortSignal): Promise<PaginatedData<SysUser>> {
+  // 管理列表显式取齐；其它选择器保留原单批读取及后端范围过滤。
   const hideDevelopment = params.hideDevelopment === '0' ? '0' : '1'
-  const res = await apiClient.get<PaginatedData<SysUser>>('/users', { params: { ...params, hideDevelopment }, listMode: 'summary' })
-  return res
+  if (mode === 'paged') return apiClient.get<PaginatedData<SysUser>>('/users', { params: { ...params, hideDevelopment }, listMode: 'summary', ...(signal ? { signal } : {}) })
+  const auth = useAuthStore.getState()
+  const owner = { baseURL: rawApiClient.defaults.baseURL ?? '/api', sessionGeneration: auth.sessionGeneration, userId: auth.user?.id ?? null }
+  const fixedParams = { ...params, hideDevelopment }
+  const assertOwner = () => {
+    const current = useAuthStore.getState()
+    if (current.sessionGeneration !== owner.sessionGeneration || (current.user?.id ?? null) !== owner.userId) throw new Error('登录账号或登录状态已变化，请重新读取用户列表')
+    if ((rawApiClient.defaults.baseURL ?? '/api') !== owner.baseURL) throw new Error('服务器已切换，请重新读取用户列表')
+  }
+  return collectAllRecords(async (page, pageSize = 200, snapshotId) => {
+    assertOwner()
+    const result = await apiClient.get<PaginatedData<SysUser>>('/users', { params: { ...fixedParams, page, pageSize, ...(snapshotId ? { snapshotId } : {}) }, baseURL: owner.baseURL, _authSessionGeneration: owner.sessionGeneration, _erpApiFallbackTried: true, listMode: 'paged', ...(signal ? { signal } : {}) })
+    assertOwner()
+    return result
+  }, signal)
 }
 
 export interface UserOption {

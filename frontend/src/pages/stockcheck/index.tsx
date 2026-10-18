@@ -5,6 +5,7 @@ import { toast } from '@/lib/toast'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import ListSummary from '@/components/shared/ListSummary'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -36,7 +37,7 @@ export default function StockCheckPage() {
   const [abcClass, setAbcClass] = useState<'A'|'B'|'C'>('A')
   const [createLocked, setCreateLocked] = useState(false)
 
-  const { data, isLoading } = useCheckList({ page: 1, pageSize: 20, keyword })
+  const { data, isLoading, error, refetch } = useCheckList({ page: 1, pageSize: 20, keyword })
   const total = data?.pagination?.total ?? 0
   const { data: warehouses } = useWarehousesActive()
   const create = useCreateCheck()
@@ -81,8 +82,11 @@ export default function StockCheckPage() {
         <Button size="sm" variant="outline" onClick={()=>{ setKeyword(search); }}>搜索</Button>
         {keyword && <Button size="sm" variant="ghost" onClick={()=>{ setSearch(''); setKeyword(''); }}>重置</Button>}
       </FilterCard>
-      <DataTable columns={columns} data={data?.list||[]} loading={isLoading} />
-      <ListSummary total={total} unit="单" />
+      {error ? <QueryErrorState error={error} onRetry={()=>void refetch()} />
+        : <DataTable virtualized preserveFocus retainFocusedRow={detailId !== null} columns={columns} data={data?.list||[]} loading={isLoading} />}
+      {!error && !isLoading && data && (data.truncated
+        ? <div role="status" className="px-1 py-3 text-xs text-warning-ink">已读取 {data.list.length.toLocaleString()} / 总匹配 {total.toLocaleString()} 单，请缩小查询范围。</div>
+        : <ListSummary total={total} unit="单" />)}
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="sm:max-w-2xl">

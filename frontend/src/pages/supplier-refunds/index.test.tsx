@@ -20,8 +20,8 @@ const detail = { id: 61, refund_no: 'RF61', purchase_return_id: 11, purchase_ord
 let status = 1, confirmAllowed = true, delaySource: Promise<void> | null = null, voucherError: string | null = null, oldVoucher: number | null = null;
 const response = (c: InternalAxiosRequestConfig, data: unknown) => ({ config: c, headers: {}, status: 200, statusText: 'OK', data: { success: true, data } });
 beforeEach(() => { Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true }); localStorage.clear(); calls.length = 0; unknown.length = 0; status = 1; confirmAllowed = true; delaySource = null; voucherError = null; oldVoucher = null; setApiClientBaseURL('/a'); useAuthStore.getState().login('fixture', null, { id: 9, username: 'fixture', realName: 'fixture', roleId: 2, roleName: 'fixture', permissions: ['supplier.refund.view', 'supplier.refund.create', 'supplier.refund.confirm', 'supplier.refund.receive', 'purchase.order.view', 'return.order.view', 'payment.view', 'finance.account.view'] }); useWorkspaceStore.setState({ tabs: [], activeKey: '/supplier-refunds' }); client.defaults.adapter = async (c) => { calls.push(c); if (c.method === 'get' && c.url === '/supplier-refunds') {
-    expect(c.params).toEqual({ page: 1, pageSize: 20 });
-    return response(c, { list: [{ ...detail, status }], total: 1, page: 1, pageSize: 20 });
+    expect(c.params).toEqual({ page: 1, pageSize: 200 });
+    return response(c, { list: [{ ...detail, status }], total: 1, page: 1, pageSize: 200 });
 } if (c.method === 'get' && c.url === '/supplier-refunds/source') {
     expect(c.params).toEqual({ purchaseReturnId: 11 });
     if (delaySource)

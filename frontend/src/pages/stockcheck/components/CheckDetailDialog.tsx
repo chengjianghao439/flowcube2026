@@ -1,8 +1,9 @@
 import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
 import { ProductIdentityGridCells, ProductIdentityGridHeaders } from '@/components/shared/ProductIdentityCells'
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { toast } from '@/lib/toast'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,6 +15,12 @@ import { confirmDirtyLeave } from '@/lib/unsavedChanges'
 import type { CheckItem } from '@/types/stockcheck'
 
 interface Props { open: boolean; onClose: () => void; checkId: number | null }
+interface ActualDraft {
+  checkId: number
+  actuals: Record<number, string>
+  baseline: Record<number, string>
+  fieldErrors: Record<number, string>
+}
 
 function showActionError(error: unknown) {
   const message = error instanceof Error ? error.message : ''
@@ -21,12 +28,22 @@ function showActionError(error: unknown) {
 }
 
 export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
-  const { data: check, isLoading } = useCheckDetail(checkId||0)
+  const { data: loadedCheck, isLoading, error, refetch } = useCheckDetail(checkId||0)
+  const check = !error && loadedCheck?.id === checkId ? loadedCheck : undefined
+  const currentEditableId = useRef<number | null>(null)
+  currentEditableId.current = open && check?.status === 1 ? check.id : null
+  const canOperate = currentEditableId.current !== null
+  const readStatus = (error as { status?: number; response?: { status?: number } } | null)?.status
+    ?? (error as { response?: { status?: number } } | null)?.response?.status
+  const readTitle = readStatus === 403 ? '无权查看盘点单' : readStatus === 404 ? '盘点单不存在或已删除' : '盘点单读取失败'
   const updateItems = useUpdateCheckItems()
   const submit = useSubmitCheck()
   const refreshItem = useRefreshCheckItem()
   const cancel = useCancelCheck()
-  const [actuals, setActuals] = useState<Record<number, string>>({})
+  const [draft, setDraft] = useState<ActualDraft | null>(null)
+  const currentDraft = draft?.checkId === checkId ? draft : null
+  const actuals = currentDraft?.actuals ?? {}
+  const fieldErrors = currentDraft?.fieldErrors ?? {}
   // 「只能整数」的商品把实盘数量框的 step 切成 1（迁移 254）
   const allowDecimalOf = useProductQtyPolicies((check?.items ?? []).map(i => i.productId))
   const [submitConfirm, setSubmitConfirm] = useState(false)
@@ -34,16 +51,31 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
   const [saveLocked, setSaveLocked] = useState(false)
   const [submitLocked, setSubmitLocked] = useState(false)
   const [cancelLocked, setCancelLocked] = useState(false)
-  const [fieldErrors, setFieldErrors] = useState<Record<number, string>>({})
-
   useEffect(() => {
     if(check?.items) {
-      const m: Record<number,string> = {}
-      check.items.forEach(i=>{ m[i.id] = i.actualQty!=null ? String(i.actualQty) : '' })
-      setActuals(m)
-      setFieldErrors({})
+      setDraft(previous => {
+        if (previous?.checkId === check.id && (saveLocked || Object.entries(previous.baseline).some(([id, value]) => (previous.actuals[Number(id)] ?? '') !== value))) return previous
+        const values: Record<number, string> = {}, baseline: Record<number, string> = {}
+        check.items!.forEach(item => {
+          values[item.id] = item.actualQty != null ? String(item.actualQty) : ''
+          if (!item.scanDriven) baseline[item.id] = values[item.id]
+        })
+        return { checkId: check.id, actuals: values, baseline, fieldErrors: {} }
+      })
     }
-  }, [check])
+  }, [check, saveLocked])
+
+  useEffect(() => {
+    setSubmitConfirm(false)
+    setCancelConfirm(false)
+  }, [checkId, error, open, check?.status])
+
+  function setActuals(update: (previous: Record<number, string>) => Record<number, string>) {
+    setDraft(previous => previous?.checkId === checkId ? { ...previous, actuals: update(previous.actuals) } : previous)
+  }
+  function setFieldErrors(update: (previous: Record<number, string>) => Record<number, string>) {
+    setDraft(previous => previous?.checkId === checkId ? { ...previous, fieldErrors: update(previous.fieldErrors) } : previous)
+  }
 
   function parseActualQty(raw: string) {
     if (raw.trim() === '') return 0
@@ -52,14 +84,9 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
   }
 
   const hasUnsavedChanges = useMemo(() => {
-    if (!check?.items?.length || check.status !== 1) return false
-    return check.items.some(item => {
-      if (item.scanDriven) return false
-      const current = actuals[item.id] ?? ''
-      const original = item.actualQty != null ? String(item.actualQty) : ''
-      return current !== original
-    })
-  }, [actuals, check])
+    if (!currentDraft) return false
+    return Object.entries(currentDraft.baseline).some(([id, value]) => (currentDraft.actuals[Number(id)] ?? '') !== value)
+  }, [currentDraft])
 
   function validateActuals() {
     if (!check?.items?.length) return { ok: true as const, items: [] as { id: number; actualQty: number }[] }
@@ -116,12 +143,12 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
     confirmDirtyLeave({
       isDirty: hasUnsavedChanges,
       willNavigate: false,
-      proceed: onClose,
+      proceed: () => { setDraft(null); onClose() },
     })
   }
 
   const handleSave = async () => {
-    if(!check || saveLocked || updateItems.isPending) return
+    if(!check || currentEditableId.current !== check.id || saveLocked || updateItems.isPending) return
     const validation = validateActuals()
     if (!validation.ok) {
       toast.warning(validation.message || '实盘数量必须大于或等于 0')
@@ -133,7 +160,12 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
     }
     try {
       setSaveLocked(true)
+      const savedValues = { ...actuals }
       await updateItems.mutateAsync({ id:check.id, items: validation.items })
+      setDraft(previous => previous?.checkId === check.id ? {
+        ...previous,
+        baseline: { ...previous.baseline, ...Object.fromEntries(validation.items.map(item => [item.id, savedValues[item.id] ?? ''])) },
+      } : previous)
       toast.success('保存成功')
     } catch (error) {
       showActionError(error)
@@ -143,7 +175,7 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
   }
 
   const handleSubmit = async () => {
-    if(!check || submitLocked || submit.isPending) return
+    if(!check || currentEditableId.current !== check.id || submitLocked || submit.isPending) return
     const validation = validateActuals()
     if (!validation.ok) {
       toast.warning(validation.message || '实盘数量必须大于或等于 0，修正后才能提交')
@@ -162,10 +194,15 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
 
   // 盘点期间该商品发生过出入库时（提交会被后端 409 拦截），刷新该行账面数并要求重盘
   const handleRefreshItem = async (itemId: number) => {
-    if (!check || refreshItem.isPending) return
+    if (!check || currentEditableId.current !== check.id || refreshItem.isPending) return
     try {
       const data = await refreshItem.mutateAsync({ id: check.id, itemId })
-      setActuals(prev => ({ ...prev, [itemId]: '' }))
+      setDraft(previous => previous?.checkId === check.id ? {
+        ...previous,
+        actuals: { ...previous.actuals, [itemId]: '' },
+        baseline: { ...previous.baseline, [itemId]: '' },
+        fieldErrors: { ...previous.fieldErrors, [itemId]: '' },
+      } : previous)
       toast.success(`「${data.productName}」账面已刷新为 ${data.bookQty}，请重新盘点该商品`)
     } catch (error) {
       showActionError(error)
@@ -173,7 +210,7 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
   }
 
   const handleCancel = async () => {
-    if(!check || cancelLocked || cancel.isPending) return
+    if(!check || currentEditableId.current !== check.id || cancelLocked || cancel.isPending) return
     try {
       setCancelLocked(true)
       await cancel.mutateAsync(check.id)
@@ -188,17 +225,17 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
   return (
     <>
     <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) requestClose() }}>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="grid-cols-1 max-w-6xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
             盘点单详情
             {check && <SoftStatusLabel label={check.statusName} tone={check.status===1?'active':check.status===2?'success':'danger'} />}
           </DialogTitle>
         </DialogHeader>
-        <OrderDetailSections type="stockcheck" id={checkId || 0}>
-
-        {isLoading && <p className="text-center py-8 text-muted-foreground">加载中…</p>}
+        {error && <QueryErrorState error={error} title={readTitle} onRetry={() => { void refetch() }} />}
+        {!error && isLoading && <p className="text-center py-8 text-muted-foreground">加载中…</p>}
         {check && (
+          <OrderDetailSections type="stockcheck" id={checkId || 0}>
           <div className="space-y-4">
             <div className="grid grid-cols-3 gap-x-6 gap-y-3 rounded-lg bg-muted/30 p-4 text-sm">
               <div><span className="text-muted-foreground">盘点单号：</span><span className="text-doc-code-strong">{check.checkNo}</span></div>
@@ -219,7 +256,7 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
                 const actualRaw = actuals[item.id]
                 const actual = actualRaw!==''&&actualRaw!==undefined ? parseFloat(actualRaw) : null
                 const hasError = !!fieldErrors[item.id]
-                const diff = item.scanDriven
+                const diff = item.scanDriven || check.status !== 1
                   ? (item.diffQty ?? null)
                   : (actual!=null && !hasError ? actual - item.bookQty : null)
                 return (
@@ -272,10 +309,10 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
               })}
             </div>
           </div>
+          </OrderDetailSections>
         )}
-        </OrderDetailSections>
         <DialogFooter className="gap-2">
-          {check?.status===1 && <>
+          {canOperate && <>
             <Button variant="outline" onClick={handleSave} disabled={updateItems.isPending || saveLocked}>保存实盘数</Button>
             <Button onClick={() => {
               const validation = validateActuals()
@@ -292,7 +329,7 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
       </DialogContent>
     </Dialog>
     <ConfirmDialog
-      open={submitConfirm}
+      open={canOperate && submitConfirm}
       title="确认提交盘点"
       description="将批量调整库存至实盘数量，此操作不可撤销。"
       confirmText="确认提交"
@@ -301,7 +338,7 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
       onCancel={() => setSubmitConfirm(false)}
     />
     <ConfirmDialog
-      open={cancelConfirm}
+      open={canOperate && cancelConfirm}
       title="取消盘点"
       description="确认取消本次盘点？"
       variant="destructive"

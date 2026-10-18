@@ -130,7 +130,7 @@ export default function CreateDisposalDialog({ open, onClose, mode = 'create', h
 
   return (
     <Dialog open={open && (!handling || (handling.source.current && handling.source.active))} onOpenChange={(next) => { if (!next) onClose() }}>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="grid-cols-1 max-w-6xl max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle>{mode === 'create' ? '新建报废单' : '滞销建议'}</DialogTitle></DialogHeader>
         {!disposalOwnerCurrent(owner) ? <p role="alert">账号、权限或服务器已变化。原圈选保留，不转入当前上下文；请关闭本页后重新查看最新建议。</p> : <div className="space-y-4 py-2">
           <p className="text-sm text-muted-foreground">有效库存条码余量是当前实物在库。参考量沿原口径扣除账面预占，可能为零或负数；它不是新的出库预算。参考价依平均成本→成本参考价→销售参考价兜底，全部在库与圈选数量分别估值，不是成交价。</p>

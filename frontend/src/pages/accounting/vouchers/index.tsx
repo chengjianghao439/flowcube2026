@@ -26,7 +26,7 @@ import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { cn } from '@/lib/utils'
 import { toast } from '@/lib/toast'
-import { todayYmd, beijingPeriod } from '@/lib/dateTime'
+import { todayYmd, beijingPeriod, formatDisplayDate } from '@/lib/dateTime'
 import { downloadExport } from '@/lib/exportDownload'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
@@ -45,7 +45,7 @@ import {
 import VoucherQueryDialog, { type VoucherQueryValues } from './VoucherQueryDialog'
 
 const PAGE_SIZE = 20
-const fmtDate = (v: string) => (v ? String(v).slice(0, 10) : '')
+const fmtDate = (v: string) => formatDisplayDate(v, '')
 const statusTone = (s: number) => (s === 3 ? 'danger' : s === 2 ? 'active' : 'success')
 
 // ─── 勾稽对账卡片 ─────────────────────────────────────────────────────────────

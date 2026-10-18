@@ -3,6 +3,7 @@ import { money } from '@/lib/format'
 import { useState, forwardRef, useImperativeHandle } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import DataTable from '@/components/shared/DataTable'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import TableActionsMenu, { type TableActionItem } from '@/components/shared/TableActionsMenu'
 import { Button } from '@/components/ui/button'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
@@ -74,7 +75,7 @@ export const StatementPanel = forwardRef<StatementPanelHandle, Props>(function S
     ...(query.minAmount ? { minAmount: query.minAmount } : {}),
     ...(query.maxAmount ? { maxAmount: query.maxAmount } : {}),
   }
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['payment-statements', { type, query }],
     queryFn: () => getStatementsApi({ ...exportParams, pageSize: 500 }),
     enabled: active,
@@ -157,7 +158,9 @@ export const StatementPanel = forwardRef<StatementPanelHandle, Props>(function S
         </div>
       )}
 
-      <DataTable columns={columns} data={data?.list || []} loading={isLoading} rowKey="id" />
+      {isError ? <QueryErrorState error={error} onRetry={() => { void refetch() }} /> : (
+        <DataTable columns={columns} data={data?.list || []} loading={isLoading} rowKey="id" />
+      )}
 
       <PaymentQueryDialog
         open={queryOpen}

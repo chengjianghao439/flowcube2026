@@ -212,7 +212,7 @@ if command -v docker >/dev/null 2>&1 && [ -f docker-compose.yml ]; then
   # docker load 要解压全部层：首次加载一个新镜像时在慢盘上可能超过 10 分钟。
   # 2026-09-16 发 v0.9.17 时就卡在这里——600 秒整被 bounded 强杀（exit code 124，
   # 日志停在"加载并验证 CI 应用镜像"之后、没有任何 docker 输出），重跑时层已存在所以只要 9 秒。
-  # 放宽到 1800 秒：外层部署 timeout 为 2400 秒（GNU timeout 到点后 -k 600 强杀），仍能容纳。
+  # 放宽到 1800 秒：外层部署 timeout 为 2700 秒（另留 -k 600 回退），含独立 300 秒备份窗口。
   DOCKER_COMMAND_TIMEOUT=1800 docker load -i "$archive"
   for service in backend frontend; do
     image_ref="flowcube-${service}:${expected}"
@@ -257,6 +257,18 @@ if command -v docker >/dev/null 2>&1 && [ -f docker-compose.yml ]; then
     fi
   fi
   if [ "$LEDGER_COMPATIBILITY_CHANGED" = '0' ] && [ "$WRITE_COMPATIBILITY_CHANGED" = '0' ]; then ROLLBACK_COMPATIBILITY_VERIFIED=1; fi
+  # 本次全新目录及回执绑定候选 SHA、实际 MySQL 和迁移前记录；不借用 cron 旧备份。
+  backup_dir="${BACKUP_DIR:-$ROOT/backups}"
+  mkdir -p "$backup_dir" || fail_deploy '无法创建迁移前备份目录；不得继续迁移'
+  backup_run_dir=$(umask 077; mktemp -d "$backup_dir/pre-migrate-${expected}-XXXXXXXX") \
+    || fail_deploy '无法创建本次私有迁移前备份目录；不得继续迁移'
+  backup_mysql_id=$(docker compose ps -aq mysql)
+  [ -n "$backup_mysql_id" ] && [[ "$backup_mysql_id" != *$'\n'* ]] || fail_deploy '迁移前备份来源 MySQL 不唯一'
+  # create 和 verify 合用 300 秒；内部 240/20 秒截止预留子进程结束时间。
+  if ! bounded 300 bash -c 'node "$1" create "$2" "$3" "$4" && node "$1" verify "$2" "$3" "$4"' \
+      sh "$SCRIPT_DIR/lib/pre-migrate-backup.js" "$expected" "$backup_mysql_id" "$backup_run_dir"; then
+    fail_deploy '本次迁移前备份或备份回执失败；旧备份不能替代，不执行迁移；未证明可恢复'
+  fi
   migration_trust_candidate=$(mysql_admin_sql 'SELECT @@GLOBAL.log_bin_trust_function_creators')
   [[ "$migration_trust_candidate" =~ ^[01]$ ]] || fail_deploy '无法核实 MySQL 迁移权限状态'
   MIGRATION_TRUST_PREVIOUS=$migration_trust_candidate
@@ -294,9 +306,4 @@ if command -v docker >/dev/null 2>&1 && [ -f docker-compose.yml ]; then
   exit 0
 fi
 
-[ "${FLOWCUBE_MIGRATION_WRITES_PAUSED:-0}" = '1' ] || fail_deploy '非 Docker 部署须先停止业务服务和定时任务，确认停写后设置 FLOWCUBE_MIGRATION_WRITES_PAUSED=1；不会自动操作未知的进程管理器'
-echo '==> 非 Docker：安装依赖并迁移，进程重启由现有进程管理器负责'
-cd backend
-if [ -f package-lock.json ]; then npm ci --omit=dev; else npm install --omit=dev; fi
-npm run migrate
-echo '==> 请通过现有 pm2/systemd 重启并验证；本分支不提供自动镜像回退'
+fail_deploy '非 Docker 部署尚无可核实的迁移前备份来源与回执契约；拒绝自动安装或迁移，请在维护窗口建立并验证专用流程'

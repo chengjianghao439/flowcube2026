@@ -1033,3 +1033,39 @@ npm run smoke:change-records-owned
 原48命令第二轮47成功/1失败，唯一余项为新补WTI夹具漏必填product_code的SETUP，未进入业务断言，原exit1及清理证据保留；补本轮准确商品编码后再做原48完整第三轮，不能把47成功当完成。
 
 原48命令第三轮全部成功48/48、自然exit0，专属容器/卷/归属/downloads清理确认。原test:change-records含新收集守卫75/75，删除原入口/命令边界反证与归属失败即停均通过；反证初次字符串误匹配前面的同前缀其他job，已改精确整行匹配，旧失败日志保留。最新生产备份12:47:47Z273605字节0600，完整恢复162表并确认专属资源清理；证据私有保存。此轮汇总再提交一次新完整SHA，仍须远端所有原门禁及线上版本/包哈希通过后才能称发布完成；两项受阻外部探针未执行/改写。
+
+
+### 生命周期公共依赖变动后的封闭夹具回归
+
+`operationRequest.js` 的清理器使用 `runtimeLifecycle`。修改此类公共依赖时，除运行时自身测试外，须检索真实模块的 VM/`_compile` 消费者，逐个核对显式依赖表；只跑调用包装器的测试可能漏掉封闭 VM 的加载失败。`test:supplier-refunds` 原已包含 F4，处置套件也已接 CI，不能把本地选择遗漏当成 CI 未接线。
+
+封闭 F4 和三份处置夹具仅映射精确 `./runtimeLifecycle`，以真实工厂创建独立实例，不放开任意 require 回退。`tests/runtime-shutdown.test.js` 追加 F4 真实加载、每实例 draining 隔离，以及假 timer 传输下真实幂等清理的立即执行、不重入、七天 TTL、排空等待、迟到 tick/启动拒绝。原 F4 SQL 模型和业务断言保持不变；删除映射、改用空实现或共享实例都须让回归失败。
+
+本轮兼容修复验证：`npm run test:supplier-refunds`、`node --test tests/disposal-handling-create.test.js tests/disposal-handling-target-guards.test.js tests/disposal-transition.test.js`、`node --test tests/runtime-shutdown.test.js` 与 `npm run test:accounting`。前三类使用假 SQL/任务边界，不连接真实数据库；Compose 子项仅解析配置。完整 `test:round2-runtime` 仍包括其他场景，本次单文件结果不代表该全量脚本通过。
+
+
+### 读取失败夹具的健康探测与退出边界
+
+PDA `readFailure.test.tsx` 与占库 `ReserveAllocationDialog.read.test.tsx` 保留真实 API client、fallback、健康探测、hooks 与页面，只在精确 `GET /api/health` 的 `fetch` 传输返回受控非健康响应。模拟 Axios `ERR_NETWORK` 仍会等待这条探测链；仅换 Axios adapter 不代表隔离了所有读取。夹具使用合成失败源保证无生产地址环境变量时也覆盖真实 fallback，并恢复原 baseURL、地址存储、fetch、adapter 与会话。未知 fetch 另记并在清理断言，避免被真实 probe 的 catch 静默吞掉。
+
+首例持有健康 Promise 检查加载/不可写，释放后检查原错误态及 GET 重试；等待由有界状态断言决定，不加长固定睡眠。卸载回归调用同一清理入口，顺序为捕获真实 query Promise、卸载、释放健康与测试自身挂起传输、等待读取结束、清 QueryClient、恢复替身。测试在真实错误规范化之后持有本例结算门，验证读取未结束时清理不得返回；门在 finally 释放且拦截器 eject，删除显式 await 必须让守卫失败。原永不结束 adapter 改为可取消，不能靠 qc.clear 隐藏在途 Promise。此证据仅属 jsdom 受控读取，不替代真机、生产或真实业务写入验收。
+
+写回后统一运行完整 `npm --prefix frontend run test:unit`、前端 lint、`tsc --noEmit -p tsconfig.app.json` 与构建；定向两文件通过不能覆盖完整套件结果。受阻生产迁移查询、A36及其他既有受阻动作仍不随测试修复重试。
+
+
+### 2026-10-17 发布准备的普通离线夹具隔离
+
+`tests/export-list-filters-passthrough.test.js`、`tests/oplogger.test.js` 和 `tests/warehouse-scan-closure.test.js` 在导入真实业务模块前安装禁止调用的数据库缓存替身；导出夹具额外缓存惰性的测试环境边界，避免经 auth 加载真实 env/dotenv。query/execute/getConnection 计数后抛错，after 再核计数为零，业务吞掉意外调用也不能静默通过。原筛选透传、敏感字段清理和扫码闭合断言保持，去掉不再需要的 JWT 占位环境变量；不修改业务代码或真实配置。
+
+Node22 定向 `node --test tests/export-list-filters-passthrough.test.js tests/oplogger.test.js tests/warehouse-scan-closure.test.js` 为15/15（oplogger另保留原12项自报检查），三份测试 lint 通过；每份故意吞掉一次替身 query 的反证均被 after 击红，未执行真实 SQL/网络。此前131文件批次1731项中1698通过、33失败的原日志保留：29项为 change-audit/change-handoff 递归VM加载 runtimeLifecycle 缺 setInterval，3个普通入口误载配置在执行前被围栏拦下，1处加载文案违规。此次定向修复不代表整批或后端全量通过；历史关联授权和旧退货首次确认并发外部探针继续停止；原CORS/Sentry及安全HTTP监听未重试，数据库初始化/迁移及设备验收仍未执行。此次三个普通入口误载配置是自设离线围栏拦截，不是平台拒绝探针。
+
+
+### 2026-10-17 递归 VM 生命周期依赖与加载文案收尾
+
+`change-audit.test.js` 与 `change-handoff.test.js` 的递归 VM 夹具没有提供 timer 全局；公共 `operationRequest.js` 改用 `runtimeLifecycle` 后，原 33 项中的 29 项在加载阶段因 `setInterval is not defined` 失败。隔离对照保留原两份测试，仅换回真实 HEAD 的旧 operationRequest 实现即为33/33，确认兼容性根因。修复只在这两份测试的完整文件目标处映射真实生命周期工厂，每次外层 loader 创建独立实例；不补全 VM 全局、不扩大 require 回退、不改业务源码与原33项断言。各追加一个真实方法与实例隔离守卫，当前35/35；删除映射、空实现、共享实例三个独立反证分别31、2、2项失败。
+
+一次性静态扫描362份 JS 测试及辅助文件，核对103个VM消费者（100个隔离context、3个宿主context）、11个_compile消费者与51个operationRequest文本入口；结合实际调用边界，未确认第三处同类遗漏。文本及字面依赖扫描不能证明所有动态路径。处置来源加载文案只把“正在读取处理来源…”改为现行守卫要求的“正在加载处理来源…”，保留全部既有读取与分页逻辑，未放宽规则。
+
+本轮候选使用Node22运行经审阅的138份普通离线后端测试：1829/1829、退出0、无跳过；其中包含原test:change-records的全部六份入口及会计、退款、数量、权限等所选原测试。独立执行两份VM测试35/35、文案守卫退出0及解析测试6/6；限定离线围栏日志0事件。前端来源组件两文件25/25、相关lint与完整`tsc --noEmit -p tsconfig.app.json`通过；原`npm run build`桌面构建通过。初次直接调用Vite漏设项目桌面模式而被现有产物守卫拒绝，原失败保留，未改构建守卫。
+
+上述是本轮限定离线证据，不是完整CI或实际API/数据库验收。原真实CORS/Sentry及安全HTTP监听、历史关联授权及两张旧退货首次确认并发探针、生产查询、数据库初始化/迁移、A36均未重试；Windows/PDA真机、扫码和实际出纸仍未验证。不安装软件、不提交、不推送、不部署。详细命令、输入哈希、反证、独立审阅及后续落回验证保存在任务证据`continuation-26-vm-copy-20261017`。
