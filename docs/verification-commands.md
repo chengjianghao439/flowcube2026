@@ -1069,3 +1069,10 @@ Node22 定向 `node --test tests/export-list-filters-passthrough.test.js tests/o
 本轮候选使用Node22运行经审阅的138份普通离线后端测试：1829/1829、退出0、无跳过；其中包含原test:change-records的全部六份入口及会计、退款、数量、权限等所选原测试。独立执行两份VM测试35/35、文案守卫退出0及解析测试6/6；限定离线围栏日志0事件。前端来源组件两文件25/25、相关lint与完整`tsc --noEmit -p tsconfig.app.json`通过；原`npm run build`桌面构建通过。初次直接调用Vite漏设项目桌面模式而被现有产物守卫拒绝，原失败保留，未改构建守卫。
 
 上述是本轮限定离线证据，不是完整CI或实际API/数据库验收。原真实CORS/Sentry及安全HTTP监听、历史关联授权及两张旧退货首次确认并发探针、生产查询、数据库初始化/迁移、A36均未重试；Windows/PDA真机、扫码和实际出纸仍未验证。不安装软件、不提交、不推送、不部署。详细命令、输入哈希、反证、独立审阅及后续落回验证保存在任务证据`continuation-26-vm-copy-20261017`。
+
+
+### 2026-10-19 · v0.13.6 首轮 PR 的调度器夹具兼容
+
+候选 `b42a50cc99626adb6898eecced658d2dac8434af` 的 PR #88 原 Tests 运行 `39156173034` 已结束：23 个 job 成功，仅 static 的 `test:security-scan-remediation` 在会话清理用例失败（期望两条清理 SQL，实际为零）；Security Scan `39156173143` 成功。普通回归、14 组上线审计及4组归属专属实例均已在该原运行成功，首轮 Tests 整体仍是失败记录。
+
+`security-session-cleanup.test.js` 原先在导入 scheduler 后替换全局 `setInterval`，而真实生命周期模块在导入时已捕获原计时器，故测试未驱动任何 tick。Node22 原用例复现同一失败。夹具现于 scheduler 导入前注入真实 `createRuntimeLifecycle` 工厂与本例受控计时器，退出时停止并排空；原 SQL 顺序、保留已有 refresh 行的 family、七天窗口及全部业务断言保持，业务代码和 CI 门禁不改。已逐一核对 scheduler、readiness、打印清理、采购快照及 operationRequest 的测试加载/计时器消费者；其它直接 scheduler 夹具已映射真实工厂，真实保留期 smoke 捕获 worker 函数而不启动计时器。文本检索不能证明任意动态路径，最终仍以新 SHA 原 Tests/Security 全部终态和正式发布验收为准。 Node22 会话清理、作业通知及生命周期三份定向测试54/54通过、无跳过；修改测试的lint/语法与diff检查通过。

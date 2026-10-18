@@ -3,6 +3,12 @@ const { test } = require('node:test')
 const assert = require('node:assert/strict')
 process.env.JWT_SECRET = 'security-session-cleanup-fixture-secret-only-20261006'
 const callbacks = [], queries = []
+const { createRuntimeLifecycle } = require('../backend/src/utils/runtimeLifecycle')
+// The scheduler captures its lifecycle at import; inject the real factory with a local clock first.
+const runtime = createRuntimeLifecycle({
+  setIntervalFn(callback) { callbacks.push(callback); return { unref() {} } },
+  clearIntervalFn() {},
+})
 const families = [{ family_id: 'old-empty', old: true }, { family_id: 'old-retained', old: true }, { family_id: 'recent-empty', old: false }]
 const sessions = [{ family_id: 'old-retained', revoked_at: new Date(), created_at: new Date() }]
 const pool = { query: async sql => {
@@ -14,6 +20,7 @@ const pool = { query: async sql => {
 } }
 function substitute(relative, exports) { const id = require.resolve(relative); require.cache[id] = { id, filename: id, loaded: true, exports } }
 substitute('../backend/src/config/db', { pool })
+substitute('../backend/src/utils/runtimeLifecycle', { lifecycle: runtime })
 substitute('../backend/src/utils/operationRequest', { startCleanupSweeper() {} })
 substitute('../backend/src/utils/logger', { info() {}, error() {} })
 substitute('../backend/src/utils/requestContext', { runWithRequestContext: async (ctx, fn) => { if (ctx.requestId === 'scheduler:refresh-session-cleanup') return fn() } })
@@ -21,10 +28,9 @@ substitute('../backend/src/modules/logistics/logistics.worker', { runFetchWaybil
 substitute('../backend/src/modules/fulfillment/fulfillment.worker', { runFulfillmentSync() {} })
 substitute('../backend/src/modules/fulfillment/fulfillment.refresh', { runFulfillmentRefresh() {} })
 const scheduler = require('../backend/src/scheduler')
-test('scheduler removes only old families without any retained refresh row after existing JTI cleanup', async () => {
-  const interval = global.setInterval
-  global.setInterval = callback => { callbacks.push(callback); return { unref() {} } }
-  try { scheduler.startScheduler() } finally { global.setInterval = interval }
+test('scheduler removes only old families without any retained refresh row after existing JTI cleanup', async t => {
+  t.after(async () => { runtime.stopTasks(); await runtime.waitForTasks() })
+  scheduler.startScheduler()
   for (const fn of callbacks) await fn()
   assert.equal(queries.length, 2, 'refresh retention gains one exact family cleanup')
   assert.match(queries[0], /DELETE FROM refresh_token_sessions/)
