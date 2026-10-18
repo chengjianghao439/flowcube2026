@@ -1,7 +1,7 @@
 ---
 name: impeccable
 description: "Use when the user wants to design, redesign, shape, critique, audit, polish, clarify, distill, harden, optimize, adapt, animate, colorize, extract, or otherwise improve a frontend interface. Covers websites, landing pages, dashboards, product UI, app shells, components, forms, settings, onboarding, and empty states. Handles UX review, visual hierarchy, information architecture, cognitive load, accessibility, performance, responsive behavior, theming, anti-patterns, typography, fonts, spacing, layout, alignment, color, motion, micro-interactions, UX copy, error states, edge cases, and reusable design systems or tokens. Also use for bland designs that need to become bolder or more delightful, or loud designs that should become quieter. Not for backend-only or non-UI tasks."
-license: Apache 2.0 (upstream: https://github.com/pbakaus/impeccable)
+license: "Apache 2.0 (upstream: https://github.com/pbakaus/impeccable)"
 ---
 
 Designs and iterates production-grade frontend interfaces. Real working code, committed design choices, exceptional craft.
