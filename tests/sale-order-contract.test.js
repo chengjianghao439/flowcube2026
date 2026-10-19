@@ -71,13 +71,10 @@ test('销售明细有服务端上限，批量写入保持行顺序且每批不�
   assert.deepEqual(queries.flatMap(([, params]) => params[0].map(row => row[3])), items.map(item => item.productId))
 })
 
-test('占库契约保留一次性授信放行确认', () => {
-  const parsed = reserveSaleSchema.parse({
-    confirmCreditOverride: true,
-    items: [{ id: 3, warehouseId: 9, warehouseName: '分仓', qty: 1.25 }],
-  })
-  assert.equal(parsed.confirmCreditOverride, true)
-  assert.equal(parsed.items[0].qty, 1.25)
+test('占库契约拒绝旧直放标记，保留明细占库输入', () => {
+  for (const confirmCreditOverride of [true,false]) assert.throws(()=>reserveSaleSchema.parse({confirmCreditOverride}))
+  const parsed = reserveSaleSchema.parse({items:[{id:3,warehouseId:9,warehouseName:'分仓',qty:1.25}]})
+  assert.equal(parsed.items[0].qty,1.25)
 })
 
 test('发货契约支持按明细数量并兼容旧 itemIds', () => {
@@ -122,22 +119,23 @@ test('订单写操作幂等动作绑定订单 ID', () => {
 
 test('授信审批只覆盖原客户、原额度、原订单金额及获批超额范围', () => {
   const approved = {
+    basis_hash: "frozen",
     customer_id: 8,
     credit_limit: 1000,
     this_amount: 300,
     over_amount: 80,
   }
   assert.equal(isApprovedOverrideApplicable(approved, {
-    customerId: 8, creditLimit: 1000, thisAmount: 300, overAmount: 60,
+    basisHash: "frozen", customerId: 8, creditLimit: 1000, thisAmount: 300, overAmount: 60,
   }), true)
   assert.equal(isApprovedOverrideApplicable(approved, {
-    customerId: 8, creditLimit: 1000, thisAmount: 301, overAmount: 80,
+    basisHash: "frozen", customerId: 8, creditLimit: 1000, thisAmount: 301, overAmount: 80,
   }), false)
   assert.equal(isApprovedOverrideApplicable(approved, {
-    customerId: 9, creditLimit: 1000, thisAmount: 300, overAmount: 80,
+    basisHash: "frozen", customerId: 9, creditLimit: 1000, thisAmount: 300, overAmount: 80,
   }), false)
   assert.equal(isApprovedOverrideApplicable(approved, {
-    customerId: 8, creditLimit: 1000, thisAmount: 300, overAmount: 81,
+    basisHash: "frozen", customerId: 8, creditLimit: 1000, thisAmount: 300, overAmount: 81,
   }), false)
 })
 

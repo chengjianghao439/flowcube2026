@@ -16,6 +16,10 @@ export interface CreditOverride {
   statusName: string
   statusTone: string
   rejectReason: string | null
+  canManage?: boolean
+  canApprove?: boolean
+  currentTaskId?: number | null
+  isSelfApproval?: boolean
   createdAt: string
   approval?: {
     instanceId: number

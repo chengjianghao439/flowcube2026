@@ -127,6 +127,8 @@ export default function CreditOverridesPage() {
   const searchParams = tabPath ? new URLSearchParams(tabPath.split('?')[1] || '') : urlParams
   const [queryOpen, setQueryOpen] = useState(false)
   const [rejectTarget, setRejectTarget] = useState<CreditOverride | null>(null)
+  const [approveTarget, setApproveTarget] = useState<CreditOverride | null>(null)
+  const [approveReason, setApproveReason] = useState('')
   const [rejectReason, setRejectReason] = useState('')
 
   // ── 当前生效的筛选（全部存于 URL 参数，刷新/分享可保留） ──
@@ -137,7 +139,7 @@ export default function CreditOverridesPage() {
 
   const [createOpen, setCreateOpen] = useState(false)
   const [manualDetailOpen, setManualDetailOpen] = useState(false)
-  const handoff = useApprovalDetailHandoff('/credit-overrides', PERMISSIONS.SALE_CREDIT_OVERRIDE_VIEW, getCreditOverrideApi, createOpen || queryOpen || !!rejectTarget || manualDetailOpen)
+  const handoff = useApprovalDetailHandoff('/credit-overrides', PERMISSIONS.SALE_CREDIT_OVERRIDE_VIEW, getCreditOverrideApi, createOpen || queryOpen || !!rejectTarget || !!approveTarget || manualDetailOpen)
 
   const { data, isLoading, isError, error, refetch } = useCreditOverrides({
     page: 1,
@@ -149,7 +151,7 @@ export default function CreditOverridesPage() {
   })
   const { mutate: submit } = useSubmitCreditOverride()
   const { mutate: cancel } = useCancelCreditOverride()
-  const { mutate: approve } = useApproveCreditOverride()
+  const { mutate: approve, isPending: approving } = useApproveCreditOverride()
   const { mutate: reject, isPending: rejecting } = useRejectCreditOverride()
 
   const list = useMemo(() => data?.list ?? [], [data])
@@ -213,12 +215,12 @@ export default function CreditOverridesPage() {
         const els: React.ReactNode[] = [<OrderActivityDialog onOpenChange={setManualDetailOpen} key="detail" type="credit" id={row.id} title={row.overrideNo} fields={[
           ['销售单', row.saleOrderNo], ['客户', row.customerName], ['本单净额', money(row.thisAmount)], ['授信额度', money(row.creditLimit)], ['超额金额', money(row.overAmount)], ['状态', row.statusName], ['申请人', row.applicantName], ['申请原因', row.reason], ['驳回原因', row.rejectReason],
         ]} />]
-        if (row.status === 1) els.push(<Button key="submit" size="sm" variant="outline" onClick={() => submit(row.id, { onSuccess: () => toast.success('已提交审批'), onError: (e: Error) => toast.error(e.message) })}>提交</Button>)
-        if (row.status === 2 && canApply) els.push(<Button key="ap" size="sm" variant="outline" onClick={() => approve(row.id, { onSuccess: () => toast.success('已批准'), onError: (e: Error) => toast.error(e.message) })}>批准</Button>)
-        if (row.status === 2 && canApply) els.push(<Button key="rj" size="sm" variant="ghost" className="text-destructive-ink" onClick={() => {
+        if (row.status === 1 && row.canManage) els.push(<Button key="submit" size="sm" variant="outline" onClick={() => submit(row.id, { onSuccess: () => toast.success('已提交审批'), onError: (e: Error) => toast.error(e.message) })}>提交</Button>)
+        if (row.status === 2 && row.canApprove && row.currentTaskId && canApply) els.push(<Button key="ap" size="sm" variant="outline" onClick={() => {setApproveTarget(row);setApproveReason('')}}>批准</Button>)
+        if (row.status === 2 && row.canApprove && row.currentTaskId && canApply) els.push(<Button key="rj" size="sm" variant="ghost" className="text-destructive-ink" onClick={() => {
           setRejectTarget(row); setRejectReason('')
         }}>驳回</Button>)
-        if (row.status === 1 || row.status === 2 || row.status === 4) els.push(<Button key="cx" size="sm" variant="ghost" onClick={() => confirmAction({ title: '取消申请', description: '确定取消这张放行申请吗？', onConfirm: () => cancel(row.id, { onSuccess: () => toast.success('已取消'), onError: (e: Error) => toast.error(e.message) }) })}>取消</Button>)
+        if (row.canManage && [1,2,3,4].includes(row.status)) els.push(<Button key="cx" size="sm" variant="ghost" onClick={() => confirmAction({ title: '取消申请', description: '确定取消这张放行申请吗？', onConfirm: () => cancel(row.id, { onSuccess: () => toast.success('已取消'), onError: (e: Error) => toast.error(e.message) }) })}>取消</Button>)
         return <div className="flex gap-1">{els}</div>
       },
     },
@@ -263,6 +265,15 @@ export default function CreditOverridesPage() {
       )}
       {total > 0 && <ListSummary total={total} />}
 
+      <Dialog open={!!approveTarget} onOpenChange={open => {if (!open && !approving) setApproveTarget(null)}}>
+        <DialogContent><DialogHeader><DialogTitle>{approveTarget?.isSelfApproval ? '自行审批' : '批准当前节点'}</DialogTitle><DialogDescription>核对当前申请后审批；自行审批必须填写原因。</DialogDescription></DialogHeader>
+          <textarea aria-label="审批原因" value={approveReason} onChange={e=>setApproveReason(e.target.value)} maxLength={500} className="min-h-24 rounded-md border p-2" />
+          <DialogFooter><Button variant="outline" disabled={approving} onClick={()=>setApproveTarget(null)}>取消</Button><Button disabled={approving || (approveTarget?.isSelfApproval && !approveReason.trim())} onClick={()=>{
+            if (!approveTarget?.currentTaskId) return
+            approve({id:approveTarget.id,expectedTaskId:approveTarget.currentTaskId,reason:approveReason},{onSuccess:()=>{setApproveTarget(null);toast.success('当前节点已批准')},onError:(e:Error)=>toast.error(e.message)})
+          }}>确认批准</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
       <ApprovalHandoffNotice {...handoff} />
       {handoff.data && <OrderActivityDialog type="credit" id={handoff.data.id} title={handoff.data.overrideNo} open={handoff.open} hideTrigger onOpenChange={open => { if (!open) handoff.close() }} fields={[
         ['销售单', handoff.data.saleOrderNo], ['客户', handoff.data.customerName], ['本单净额', money(handoff.data.thisAmount)], ['授信额度', money(handoff.data.creditLimit)], ['超额金额', money(handoff.data.overAmount)], ['状态', handoff.data.statusName], ['申请人', handoff.data.applicantName], ['申请原因', handoff.data.reason], ['驳回原因', handoff.data.rejectReason],
@@ -278,7 +289,7 @@ export default function CreditOverridesPage() {
           </div>
           <DialogFooter><Button variant="outline" disabled={rejecting} onClick={() => setRejectTarget(null)}>取消</Button><Button variant="destructive" disabled={rejecting || !rejectReason.trim()} onClick={() => {
             if (!rejectTarget) return
-            reject({ id: rejectTarget.id, reason: rejectReason.trim() }, { onSuccess: () => { toast.success('已驳回'); setRejectTarget(null) }, onError: (e: Error) => toast.error(e.message) })
+            reject({ id: rejectTarget.id, expectedTaskId: rejectTarget.currentTaskId!, reason: rejectReason.trim() }, { onSuccess: () => { toast.success('已驳回'); setRejectTarget(null) }, onError: (e: Error) => toast.error(e.message) })
           }}>{rejecting ? '提交中…' : '确认驳回'}</Button></DialogFooter>
         </DialogContent>
       </Dialog>

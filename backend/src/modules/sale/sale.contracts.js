@@ -54,7 +54,7 @@ const ordinaryCreateSaleSchema = z.object({
 })
 
 const ordinaryReserveSaleSchema = z.object({
-  confirmCreditOverride: z.boolean().optional(),
+  confirmCreditOverride: z.never().optional(),
   items: z.array(z.object({
     id: z.number().int().positive(),
     warehouseId: z.number().int().positive(),
@@ -110,7 +110,7 @@ function saleOperationAction(action, saleOrderId) {
 }
 
 function isApprovedOverrideApplicable(approved, current) {
-  if (!approved || !current) return false
+  if (!approved || !current || !approved.basis_hash || approved.basis_hash !== current.basisHash) return false
   const sameMoney = (left, right) => Math.abs(Number(left) - Number(right)) <= 0.005
   return Number(approved.customer_id) === Number(current.customerId)
     && sameMoney(approved.credit_limit, current.creditLimit)

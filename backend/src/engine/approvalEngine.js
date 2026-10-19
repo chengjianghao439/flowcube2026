@@ -13,7 +13,7 @@ const { canSelfApprove } = require('../utils/selfApprove')
  *     startApproval 时把每节点的「命中审批人集合」解析并快照到 approval_instance_task_approvers
  *     （排除申请人本人，除非该账号被授予 sys_users.allow_self_approve）；「任一命中审批人可批」
  *     等同或签，此后流程/人员改配不影响运行中的实例。
- *   - 申请人默认不得审批自己的单（豁免见 utils/selfApprove）；超管 role_id=1 恒可代批
+ *   - 申请人默认不得审批自己的单（豁免见 utils/selfApprove）；授信必须命中节点，其他业务超管 role_id=1 可代批
  *     （approver_name 记录实际经办人）。
  *   - 终态（驳回/撤销）后允许重新发起：引擎只认 status=1 审批中的活跃实例。
  *
@@ -102,12 +102,13 @@ async function startApproval(conn, { bizType, bizId, amount, applicantId, applic
   const resolved = []
   // 申请人默认不能出现在自己的审批人名单里；被授予「允许自行审批」的账号除外
   // （单人/小团队场景，否则这里会直接把提交动作卡死，见 utils/selfApprove 的说明）。
-  const applicantMayApproveSelf = await canSelfApprove(applicantId)
+  const applicantMayApproveSelf = await canSelfApprove(applicantId, conn)
   for (const step of flow.steps) {
-    const userIds = await resolveApproverUserIds(conn, {
+    let userIds = await resolveApproverUserIds(conn, {
       approverType: step.approver_type, roleId: step.role_id,
       departmentId: step.department_id, userId: step.user_id, applicantId,
     })
+    if (bizType === 'sale_credit_override') userIds = await require('../modules/credit-overrides/credit-overrides.policy').eligibleUserIds(conn,userIds,bizId)
     const others = applicantMayApproveSelf ? userIds : userIds.filter(id => id !== Number(applicantId))
     if (!others.length) {
       throw new AppError(`审批流「${flow.name}」第 ${step.step_order} 级没有可用的审批人（或审批人即申请人本人），请检查流程配置或相关用户/部门设置`, 400)
@@ -139,9 +140,9 @@ async function startApproval(conn, { bizType, bizId, amount, applicantId, applic
   return { instanceId, flowName: flow.name, totalSteps: resolved.length }
 }
 
-/** 校验 operator 是否命中当前节点的审批人快照（超管恒可）。 */
-async function assertCanApproveTask(conn, taskId, operator) {
-  if (Number(operator?.roleId) === 1) return
+/** 校验当前节点快照；授信不提供管理员代批豁免。 */
+async function assertCanApproveTask(conn, taskId, operator, requireAssignment = false) {
+  if (!requireAssignment && Number(operator?.roleId) === 1) return
   const [[row]] = await conn.query(
     'SELECT id FROM approval_instance_task_approvers WHERE task_id=? AND user_id=? LIMIT 1',
     [taskId, Number(operator?.userId)],
@@ -156,7 +157,7 @@ async function assertCanApproveTask(conn, taskId, operator) {
 async function approveStep(conn, { instanceId, operator, comment }) {
   const inst = await lockActiveInstance(conn, instanceId)
   const currentTask = await lockCurrentTask(conn, inst)
-  await assertCanApproveTask(conn, currentTask.id, operator)
+  await assertCanApproveTask(conn, currentTask.id, operator, inst.biz_type === 'sale_credit_override')
 
   const [r] = await conn.query(
     `UPDATE approval_instance_tasks SET status=2, approver_name=?, action_at=NOW(), comment=?
@@ -185,7 +186,7 @@ async function approveStep(conn, { instanceId, operator, comment }) {
 async function rejectStep(conn, { instanceId, operator, comment }) {
   const inst = await lockActiveInstance(conn, instanceId)
   const currentTask = await lockCurrentTask(conn, inst)
-  await assertCanApproveTask(conn, currentTask.id, operator)
+  await assertCanApproveTask(conn, currentTask.id, operator, inst.biz_type === 'sale_credit_override')
   if (!String(comment || '').trim()) throw new AppError('请填写驳回原因', 400)
 
   const [r] = await conn.query(
@@ -243,15 +244,16 @@ async function lockCurrentTask(conn, inst) {
 }
 
 /** 取某业务单据的活跃实例（审批中）及其节点，供业务判断是否走引擎/查进度。无则返回 null。 */
-async function getActiveInstanceByBiz(conn, { bizType, bizId }) {
+async function getActiveInstanceByBiz(conn, { bizType, bizId, currentRead = false }) {
+  const lockSql = currentRead ? ' FOR SHARE' : ''
   const [rows] = await conn.query(
-    'SELECT * FROM approval_instances WHERE biz_type=? AND biz_id=? AND status=1 ORDER BY id DESC LIMIT 1',
+    `SELECT * FROM approval_instances WHERE biz_type=? AND biz_id=? AND status=1 ORDER BY id DESC LIMIT 1${lockSql}`,
     [bizType, Number(bizId)],
   )
   const inst = rows[0]
   if (!inst) return null
   const [tasks] = await conn.query(
-    'SELECT * FROM approval_instance_tasks WHERE instance_id=? ORDER BY step_order ASC',
+    `SELECT * FROM approval_instance_tasks WHERE instance_id=? ORDER BY step_order ASC${lockSql}`,
     [inst.id],
   )
   return { instance: inst, tasks }

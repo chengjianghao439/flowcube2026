@@ -30,15 +30,4 @@ async function getCustomerCreditUsed(conn, customerId, { excludeSaleOrderId = nu
   return Math.round((Number(a.used) + Number(b.used_open)) * 10000) / 10000
 }
 
-/** 当前操作者是否有超额放行权限（回查角色权限，自包含不依赖中间件；超管 roleId=1 恒有） */
-async function hasCreditOverridePermission(conn, operator) {
-  if (Number(operator?.roleId) === 1) return true
-  if (operator?.roleId == null) return false
-  const [rows] = await conn.query(
-    'SELECT 1 FROM sys_role_permissions WHERE role_id=? AND permission=? LIMIT 1',
-    [operator.roleId, 'sale.credit.override'],
-  )
-  return rows.length > 0
-}
-
-module.exports = { getCustomerCreditUsed, hasCreditOverridePermission }
+module.exports = { getCustomerCreditUsed }

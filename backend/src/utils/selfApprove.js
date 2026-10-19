@@ -18,11 +18,11 @@ const AppError = require('./AppError')
  * 不做缓存：审批是低频动作，且缓存会让「刚收回某人的自批权」延迟生效——
  * 内控收紧必须立即生效，不能等 TTL。
  */
-async function canSelfApprove(userId) {
+async function canSelfApprove(userId, db = pool) {
   const id = Number(userId)
   if (!Number.isFinite(id) || id <= 0) return false
-  const [[row]] = await pool.query(
-    'SELECT allow_self_approve FROM sys_users WHERE id=? AND deleted_at IS NULL LIMIT 1',
+  const [[row]] = await db.query(
+    'SELECT allow_self_approve FROM sys_users WHERE id=? AND deleted_at IS NULL LIMIT 1' + (db === pool ? '' : ' FOR SHARE'),
     [id],
   )
   return Number(row?.allow_self_approve) === 1

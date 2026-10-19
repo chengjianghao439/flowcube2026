@@ -64,8 +64,9 @@ function approvals({ applicant = 9, viewAll = false, present = true } = {}) {
     if (sql.includes('expense_claims')) return [present ? [{ applicant_id: applicant }] : []]
     throw new Error(`Unexpected SQL ${sql}`)
   } }, pool = { getConnection: async () => conn }
+  const saleScope = load('backend/src/utils/saleDocumentScope.js', { './warehouseScope': { assertInScope: () => { throw new Error('expense approval must not read sale scope') } } })
   return { calls, svc: load('backend/src/modules/approvals/approvals.service.js', {
-    '../../config/db': { pool }, '../../utils/warehouseScope': {},
+    '../../config/db': { pool }, '../../utils/warehouseScope': {}, '../../utils/saleDocumentScope': saleScope,
     '../../engine/approvalEngine': { getLatestInstanceByBiz: async () => { calls.push('approval'); return { instance: {}, tasks: [] } } },
   }) }
 }

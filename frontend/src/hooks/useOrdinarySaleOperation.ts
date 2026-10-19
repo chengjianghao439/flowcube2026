@@ -10,7 +10,7 @@ import { captureInboundEditOwner, inboundEditOwnerCurrent, inboundEditConfig, su
 import type { ReserveItemOverride, ShipItemRequest } from '@/types/sale'
 
 export type OrdinarySaleKind = 'reserve' | 'release' | 'ship'
-export type OrdinarySaleBody = { items?: ReserveItemOverride[] | ShipItemRequest[]; confirmCreditOverride?: boolean }
+export type OrdinarySaleBody = { items?: ReserveItemOverride[] | ShipItemRequest[] }
 export interface OrdinarySaleQuery {
   version: 1; userId: number; baseURL: string; saleId: number; kind: OrdinarySaleKind; action: string
   path: string; method: 'post'; requestKey: string; createdAt: number; bodyHash: string
@@ -114,7 +114,7 @@ export function useOrdinarySaleOperation(saleId: number, active = true) {
     let received = false
     try {
       const body = original.body, config = inboundEditConfig(owner)
-      const result = r.kind === 'reserve' ? await reserveSaleApi(r.saleId, body.items as ReserveItemOverride[] | undefined, body.confirmCreditOverride, r.requestKey, config)
+      const result = r.kind === 'reserve' ? await reserveSaleApi(r.saleId, body.items as ReserveItemOverride[] | undefined, r.requestKey, config)
         : r.kind === 'release' ? await releaseSaleApi(r.saleId, body.items as ReserveItemOverride[] | undefined, r.requestKey, config)
           : await shipSaleApi(r.saleId, body.items as ShipItemRequest[] | undefined, r.requestKey, config)
       capture(r)

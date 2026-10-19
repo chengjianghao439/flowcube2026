@@ -1076,3 +1076,7 @@ Node22 定向 `node --test tests/export-list-filters-passthrough.test.js tests/o
 候选 `b42a50cc99626adb6898eecced658d2dac8434af` 的 PR #88 原 Tests 运行 `39156173034` 已结束：23 个 job 成功，仅 static 的 `test:security-scan-remediation` 在会话清理用例失败（期望两条清理 SQL，实际为零）；Security Scan `39156173143` 成功。普通回归、14 组上线审计及4组归属专属实例均已在该原运行成功，首轮 Tests 整体仍是失败记录。
 
 `security-session-cleanup.test.js` 原先在导入 scheduler 后替换全局 `setInterval`，而真实生命周期模块在导入时已捕获原计时器，故测试未驱动任何 tick。Node22 原用例复现同一失败。夹具现于 scheduler 导入前注入真实 `createRuntimeLifecycle` 工厂与本例受控计时器，退出时停止并排空；原 SQL 顺序、保留已有 refresh 行的 family、七天窗口及全部业务断言保持，业务代码和 CI 门禁不改。已逐一核对 scheduler、readiness、打印清理、采购快照及 operationRequest 的测试加载/计时器消费者；其它直接 scheduler 夹具已映射真实工厂，真实保留期 smoke 捕获 worker 函数而不启动计时器。文本检索不能证明任意动态路径，最终仍以新 SHA 原 Tests/Security 全部终态和正式发布验收为准。 Node22 会话清理、作业通知及生命周期三份定向测试54/54通过、无跳过；修改测试的lint/语法与diff检查通过。
+
+## 2026-10-19 授信审批一致性回归
+
+`npm run test:approval-list-batches` 继续检查原待办/范围，并追加 `tests/credit-approval-consistency.test.js` 的业务负例、商业内容绑定、自批资格与锁后当前节点读取。`npm run smoke:credit-override` 串行运行原申请专项和 `tests/credit-approval-consistency.smoke.test.js`；后者仅可在显式测试环境/专属合成实例中执行，覆盖当前开关、业务权/范围、同键及不同键真实事务并发、逐节点审计、普通仓管实际部分出库与预占守恒。仅箱贴完成使用合成ACK，不作真机/出纸或独立验收结论。迁移294不占293且不授角色权限；详细边界见 [授信审批一致性](credit-approval-consistency-2026-10-19.md)。

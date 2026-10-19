@@ -10,6 +10,7 @@ function load(relative, deps, transform = source => source) {
   const filename = path.join(base, relative), module = { exports: {} }
   vm.runInNewContext(transform(fs.readFileSync(filename, 'utf8')), { module, require: name => {
     if (Object.hasOwn(deps, name)) return deps[name]
+    if(name==='node:crypto')return require('node:crypto')
     if(name==='../../utils/cashMoney')return require('../backend/src/utils/cashMoney')
     throw Error(`未 stub 依赖 ${name}`)
   } }, { filename })
@@ -30,6 +31,7 @@ function fixture({ lines = [1, 2], header = 1, replay = false, status = 1, missi
     async query(sql, params = []) {
       queries.push({ sql, params: copy(params) })
       if (/COUNT\(\*\)/.test(sql)) return [[{ total: 1 }]]
+      if (/FROM sale_customers/.test(sql)) return [[{name:sale.customer_name,credit_limit:sale.credit_limit}]]
       if (/FROM sale_orders/.test(sql)) return [missingSale ? [] : [sale]]
       if (/FROM sale_order_items/.test(sql)) return [lines.map(warehouse_id => ({ warehouse_id, quantity: zeroQuantity ? 0 : 1 }))]
       if (/SELECT.*FROM refund_orders/.test(sql)) return [[refund]]
@@ -62,6 +64,8 @@ function fixture({ lines = [1, 2], header = 1, replay = false, status = 1, missi
     '../../utils/warehouseScope': warehouseScope, '../../utils/saleDocumentScope': saleScope,
     '../accounting/finance-period.guard': { async assertFinancePeriodOpen() { events.push('period'); if (periodClosed) throw new AppError('期间已结账', 409, 'FINANCE_PERIOD_CLOSED'); return {} }, async tryRecordBackfillApplication() { events.push('backfill'); return { id: 91 } } },
   })
+  const creditPolicy = { ...require('../backend/src/modules/credit-overrides/credit-overrides.policy'),async orderBasis(){return 'synthetic-basis'},async loadActor(){return {...actor,warehouseIds:null,permissions:[],allowSelfApprove:false}} }
+  const creditActions = load('modules/credit-overrides/credit-overrides.actions.js',{'../../config/db':{pool},'../../utils/AppError':AppError,'../../engine/approvalEngine':{},'../../utils/saleDocumentScope':saleScope,'../../utils/operationRequest':{},'./credit-overrides.policy':creditPolicy})
   const creditSvc = load('modules/credit-overrides/credit-overrides.service.js', {
     '../../config/db': { pool }, '../../utils/AppError': AppError, '../../utils/codeGenerator': { async generateDailyCode() { events.push('number'); return 'CO31' } },
     '../../utils/creditExposure': { async getCustomerCreditUsed() { return 0 } }, '../sale/sale.contracts': { getNetOrderAmount: (total, discount) => total - discount, isApprovedOverrideApplicable: () => true },
@@ -69,6 +73,7 @@ function fixture({ lines = [1, 2], header = 1, replay = false, status = 1, missi
     '../../utils/pagination': { normalizePagination: ({ page = 1, pageSize = 20 }) => ({ page, pageSize, offset: (page - 1) * pageSize }) },
     '../../utils/saleDocumentScope': saleScope,
     '../../engine/approvalEngine': { INSTANCE_STATUS: { APPROVED: 3 }, async getLatestInstanceByBiz() { events.push('approval-read'); return null }, async startApproval() { events.push('approval-write'); return { instanceId: 61 } }, async getActiveInstanceByBiz() { return null } },
+    './credit-overrides.actions':creditActions, './credit-overrides.policy':creditPolicy,
     '../../utils/selfApprove': { async assertNotSelfApproval(applicantId, actorId) { if (applicantId === actorId) throw new AppError('不能自批', 403) } },
   })
   return { db, pool, queries, events, refundSvc, creditSvc }
@@ -205,7 +210,7 @@ test('反向移除本人回执scope门，既定越仓反例立即无法拒绝', 
 })
 test('信用controller只用认证用户仓范围，不接受query/body自称scope', async () => {
   const calls = [], service = { async findAll(...a) { calls.push(['list', ...a]); return {} }, async findById(...a) { calls.push(['detail', ...a]); return {} }, async create(...a) { calls.push(['create', ...a]); return {} } }
-  const ctrl = load('modules/credit-overrides/credit-overrides.controller.js', { './credit-overrides.service': service, '../../utils/response': { successResponse() {} }, '../../utils/operator': { getOperatorFromRequest: () => actor } })
+  const ctrl = load('modules/credit-overrides/credit-overrides.controller.js', { '../../utils/requestKey':require('../backend/src/utils/requestKey'), './credit-overrides.service': service, '../../utils/response': { successResponse() {} }, '../../utils/operator': { getOperatorFromRequest: () => actor } })
   for (const warehouseIds of [[1], [], null]) {
     await ctrl.list({ query: { scopeWarehouseIds: null }, user: { warehouseIds } }, {}, e => { throw e })
     await ctrl.detail({ params: { id: 31 }, user: { warehouseIds } }, {}, e => { throw e })

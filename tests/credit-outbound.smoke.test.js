@@ -11,7 +11,7 @@
  *
  *   1. 客户有信用额度且未超限 → 放行
  *   2. 客户信用超限且操作者无 override 权限 → 拦（CREDIT_LIMIT_EXCEEDED）
- *   3. 客户信用超限但操作者超管（roleId=1）→ 放行（超管恒有 override）
+ *   3. 客户信用超限时管理员和旧直放权均不能绕过审批
  *   4. 客户无信用额度（NULL）→ 放行
  *   5. 已用额度计入未清应收（payment_records type=2）→ 有欠款即算已用
  */
@@ -58,13 +58,13 @@ async function main() {
     }
     log.assert('★ 超限且无 override 权限 → 拦截（CREDIT_LIMIT_EXCEEDED）', blocked, '')
 
-    // 3. 超限但操作者是超管（roleId=1）→ 放行
-    await assertCreditWithinLimit(conn, customerId, 1200, { userId: 1, roleId: 1 })
-    log.assert('超限但超管操作 → 放行', true, '')
-
-    // 3b. 超限但有 override 权限的角色（role 4 销售员）→ 放行
-    await assertCreditWithinLimit(conn, customerId, 1200, { userId: 9, roleId: 4 })
-    log.assert('超限但有 sale.credit.override 权限 → 放行', true, '')
+    // 3. 管理员或旧直放权也必须先完成审批。
+    for (const roleId of [1,4]) {
+      let denied=false
+      try { await assertCreditWithinLimit(conn,customerId,1200,{userId:9,roleId}) }
+      catch(e) { denied=e.code==='CREDIT_LIMIT_EXCEEDED' }
+      log.assert(`超限角色${roleId}不能绕过审批`,denied,'')
+    }
 
     // 4. 客户无信用额度 → 放行
     await assertCreditWithinLimit(conn, noLimitId, 99999, { userId: 9, roleId: 5 })

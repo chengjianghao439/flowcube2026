@@ -6,10 +6,11 @@ const AppError = require('../../utils/AppError')
 const { moveStock, MOVE_TYPE } = require('../../engine/inventoryEngine')
 const { unlockContainersByTask } = require('../../engine/containerEngine')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
-const { getCustomerCreditUsed, hasCreditOverridePermission } = require('../../utils/creditExposure')
+const { getCustomerCreditUsed } = require('../../utils/creditExposure')
 const { isValidTransition, assertWarehouseTaskAction } = require('../../constants/warehouseTaskStatus')
 const { WT_EVENT, record: recordEvent } = require('./warehouse-task-events.service')
 const { beginResourceOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
+const creditOverrideSvc = require('../credit-overrides/credit-overrides.service')
 const { getNetOrderAmount, getOutstandingOrderAmount } = require('../sale/sale.contracts')
 const {
   logSideEffectFailure,
@@ -25,7 +26,7 @@ const { peekPurchaseReturn, lockPurchaseReturn } = require('../returns/returns.p
 
 /**
  * 出库信用复查（审计 4.8）。客户行 FOR UPDATE 锁住，防止同客户并发出库都读到旧已用值。
- * 其它订单已用额度 + 本单折后未收敞口 > 限额时拦截（除非操作者有 sale.credit.override 权限）。
+ * 其它订单已用额度 + 本单折后未收敞口 > 限额时拦截（只有有效已批准申请可例外）。
  * 抽成独立函数便于单测。
  */
 async function assertCreditWithinLimit(conn, customerId, thisOrderAmount, operator, excludeSaleOrderId = null) {
@@ -47,10 +48,11 @@ async function assertCreditWithinLimit(conn, customerId, thisOrderAmount, operat
   const limit = Number(cust.credit_limit)
   if (used + thisOrder > limit) {
     const overBy = Math.round((used + thisOrder - limit) * 100) / 100
-    const allowOverride = await hasCreditOverridePermission(conn, operator)
+    const [[order]] = excludeSaleOrderId == null ? [[]] : await conn.query('SELECT * FROM sale_orders WHERE id=? FOR SHARE', [Number(excludeSaleOrderId)])
+    const allowOverride = order && await creditOverrideSvc.hasApprovedOverride(excludeSaleOrderId, { conn, order, customerId, creditLimit: limit, thisAmount: getNetOrderAmount(order.total_amount, order.discount_amount), overAmount: overBy })
     if (!allowOverride) {
       throw new AppError(
-        `客户信用额度不足，无法出库（已用 ${used} + 本单 ${thisOrder} > 限额 ${limit}，超出 ${overBy}）。请先收款或由有权限的人确认后重试`,
+        `客户信用额度不足，无法出库（已用 ${used} + 本单 ${thisOrder} > 限额 ${limit}，超出 ${overBy}）。请先收款或申请超额审批后重试`,
         409,
         'CREDIT_LIMIT_EXCEEDED',
         { creditLimit: limit, used, thisOrder, overBy },
@@ -80,9 +82,13 @@ async function shipWithinTransaction(conn, id, operator, saleData, { requestKey,
     saleRow = await lockStatusRow(conn, {
       table: 'sale_orders',
       id: saleOrderId,
-      columns: 'id, status, order_no, customer_id, total_amount, discount_amount, commercial_model, warehouse_id, disposal_handling_link_id',
+      columns: 'id, status, order_no, customer_id, total_amount, discount_amount, commercial_model, commercial_revision, warehouse_id, disposal_handling_link_id',
       entityName: '销售单',
     })
+    // Establish the customer serialization gate before any RR consistent read.
+    // Otherwise a waiting shipment could retain exposure from before another
+    // order committed its reservation. No stock or other order row is locked here.
+    if (saleRow.customer_id != null) await conn.query('SELECT id, credit_limit FROM sale_customers WHERE id=? FOR UPDATE',[saleRow.customer_id])
   }
 
   const taskRow = await lockStatusRow(conn, {

@@ -133,8 +133,8 @@ test('真实普通详情的部分实发4保留原需求10，补占弹窗只提�
   expect(dialog()!.querySelector<HTMLButtonElement>('[role="combobox"]')?.disabled).toBe(true)
   await act(async () => dialogButton('确认占用（1 项）').click()); await settleEditor()
   expect(mocks.reserveSaleApi).toHaveBeenCalledOnce()
-  expect(mocks.reserveSaleApi.mock.calls[0].slice(0, 3)).toEqual([12, [{ id: 9, warehouseId: 1, warehouseName: '示例仓库', qty: 6 }], undefined])
-  expect(mocks.reserveSaleApi.mock.calls[0][3]).toMatch(/^sale-reserve-/)
+  expect(mocks.reserveSaleApi.mock.calls[0].slice(0, 2)).toEqual([12, [{ id: 9, warehouseId: 1, warehouseName: '示例仓库', qty: 6 }]])
+  expect(mocks.reserveSaleApi.mock.calls[0][2]).toMatch(/^sale-reserve-/)
 })
 
 test('关闭并重开补占保持未写事实，原需求不被弹窗打开或返回改写', async () => {
