@@ -25,8 +25,9 @@ const { env } = require('../src/config/env')
 
 const strict = process.argv.includes('--strict')
 
-/** 运行时自建表（代码里 CREATE TABLE IF NOT EXISTS，非迁移建的表）——对账时豁免 */
-const KNOWN_RUNTIME_TABLES = new Set(['db_migrations', 'pda_error_logs', 'pda_undo_logs'])
+/** 运行时自建表（代码里 CREATE TABLE IF NOT EXISTS，非迁移建的表）——对账时豁免。
+ *  pda_error_logs / pda_undo_logs 已由迁移 293 正式声明，不再豁免。 */
+const KNOWN_RUNTIME_TABLES = new Set(['db_migrations'])
 
 /**
  * 「活跃期唯一键」契约：代码与业务真正依赖的唯一性，靠 active_unique_guard 生成列实现

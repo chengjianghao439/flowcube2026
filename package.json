@@ -205,6 +205,9 @@
     "test:change-records": "node --test tests/change-records-runner.test.js tests/release-regression-remainder.test.js tests/change-records-regressions.test.js tests/change-audit.test.js tests/change-handoff.test.js tests/print-request-metadata.test.js",
     "smoke:change-records-runtime": "node tests/change-records.smoke.test.js",
     "smoke:change-records-regressions": "node tests/helpers/changeRecordsRegressions.js",
-    "smoke:change-records-owned": "bash scripts/repair-smoke-ephemeral.sh --change-records"
+    "smoke:change-records-owned": "bash scripts/repair-smoke-ephemeral.sh --change-records",
+    "test:pda-audit-log-migration": "node --test tests/pda-audit-log-migration.test.js",
+    "smoke:pda-audit-log-migration-runtime": "node --test tests/pda-audit-log-migration.smoke.test.js",
+    "smoke:pda-audit-log-migration-owned": "bash scripts/repair-smoke-ephemeral.sh --pda-audit-log-migration"
   }
 }

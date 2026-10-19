@@ -10,6 +10,14 @@
 > **何时必须读**：要跑某个具体 smoke/test 回归、确认某项检查需要哪些环境变量、或判断某个改动该跑哪些套件时。
 > **常驻速查**：`AGENTS.md` §3 只留验证执行时机、「按改动影响选命令」的表格与 DB 测试环境要求；细节一律看本文件。
 
+### PDA 293 专项
+
+- `npm run test:pda-audit-log-migration`：离线加载真实 service、SQL 分句与迁移模块，数据库/env 边界显式 stub；验证编号、两表先检、原写入字段/精度/缺表降级、schema 对账及 180 天策略、CI 与 runner 独立入口。该命令不连接数据库或启动应用。
+- `npm run smoke:pda-audit-log-migration-owned`：既有 `repair-smoke-ephemeral.sh --pda-audit-log-migration` 专属模式。仅本机 Unix Docker，显式新建带本批 label 的容器与数据卷，回环随机非 3306/3307 端口、`flowcube_pdaaudit293_test`、0600 归属文件、活 runner 与实时 server_uuid；每次场景写入前复核完整归属。只用已有 `mysql:8.0` 镜像（`--pull=never`），不读取真实 `backend/.env`；显式注入合成测试配置并由真实 `runMigrations()` 完整迁移当前目录，然后执行 PDA 专项。结束按精确归属清理并逐项复核；不会启动应用或 GUI。
+- `npm run smoke:pda-audit-log-migration-runtime`：仅供上条 runner 调用，缺归属即拒绝。测试只重置本批一次性库的两张 PDA 表与 293 测试回执，不是运维回退命令。覆盖 fresh/legacy/缺一表、两表任一畸形均在首个 DDL 前拒绝、signed/null/default/EXTRA/主键/索引形状、Unicode/NULL/小数/时间戳 epoch/高自增/既有注释保全、CREATE/CONVERT/ADD INDEX 后中断及真实迁移重入。另以三条合成旧错误记录比较全部原始字段/epoch、计数与真实异常报表（含原 NULL 时间记录可见），查询降级必须失败。UTC 与 +08:00 在真正迁移连接设置并读取 `@@session.time_zone`；复合主键分别观察列与索引谓词，防止组合漂移掩盖索引守卫。
+
+上述两个外层入口分别接入 Tests CI static 与独立 owned job；CI 配置存在不等于云端执行通过。本专项不执行 relatedEvents 权限探针、其它业务 smoke、共享 3307、生产迁移或真机验收。正式发版前的全量回归、生产元数据、PDA/扫码/实际出纸须单独报告。
+
 执行时机按 `AGENTS.md` §3：连续开发期间记录各项改动的待验证范围，发版前在最终代码上集中运行受影响端的构建、专项和全量回归。调试故障或即时验收可提前做必要的最小验证；验证后若继续修改，只补跑受影响检查。未运行的项目标记为待发版前验证。
 
 ---

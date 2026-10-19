@@ -803,21 +803,11 @@ async function findByTask(taskId, scopeWarehouseIds = null) {
 
 /**
  * 记录错误扫码事件（不写 scan_logs，写单独的 pda_error_logs）
- * 如果表不存在则自动创建（轻量级，避免迁移依赖）
+ * 表结构由迁移 293_pda_audit_logs_formal_schema.sql 管理；请求路径不得执行任何 DDL。
+ * 写入失败（含未迁移的库）只降级记日志，不影响扫码主流程。
  */
 async function logScanError({ taskId, barcode, reason, operatorId, operatorName }) {
   try {
-    await pool.query(
-      `CREATE TABLE IF NOT EXISTS pda_error_logs (
-        id            INT AUTO_INCREMENT PRIMARY KEY,
-        task_id       INT,
-        barcode       VARCHAR(64),
-        reason        VARCHAR(255),
-        operator_id   INT,
-        operator_name VARCHAR(64),
-        created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
-    )
     await pool.query(
       `INSERT INTO pda_error_logs (task_id, barcode, reason, operator_id, operator_name)
        VALUES (?,?,?,?,?)`,
@@ -841,19 +831,6 @@ async function logUndo({ taskId, itemId, barcode, prevQty, newQty, operatorId, o
   assertQtyScale(prevQty, '撤销前数量')
   assertQtyScale(newQty, '撤销后数量')
   try {
-    await pool.query(
-      `CREATE TABLE IF NOT EXISTS pda_undo_logs (
-        id            INT AUTO_INCREMENT PRIMARY KEY,
-        task_id       INT,
-        item_id       INT,
-        barcode       VARCHAR(64),
-        prev_qty      DECIMAL(10,2),
-        new_qty       DECIMAL(10,2),
-        operator_id   INT,
-        operator_name VARCHAR(64),
-        created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
-    )
     await pool.query(
       `INSERT INTO pda_undo_logs (task_id, item_id, barcode, prev_qty, new_qty, operator_id, operator_name)
        VALUES (?,?,?,?,?,?,?)`,
@@ -940,17 +917,7 @@ async function getStats({ startDate, endDate, scopeWarehouseIds = null } = {}) {
 async function getAnomalyReport({ startDate, endDate, scopeWarehouseIds = null } = {}) {
   const { sql: dateFilter, params: dateParams } = buildLogReadFilter({ startDate, endDate, scopeWarehouseIds }, 'sl', 'created_at')
 
-  // 确保表存在
-  await pdaOptionalQuery('anomaly.ensurePdaErrorLogs', pool.query(`CREATE TABLE IF NOT EXISTS pda_error_logs (
-    id INT AUTO_INCREMENT PRIMARY KEY, task_id INT, barcode VARCHAR(64),
-    reason VARCHAR(255), operator_id INT, operator_name VARCHAR(64),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`), null)
-  await pdaOptionalQuery('anomaly.ensurePdaUndoLogs', pool.query(`CREATE TABLE IF NOT EXISTS pda_undo_logs (
-    id INT AUTO_INCREMENT PRIMARY KEY, task_id INT, item_id INT, barcode VARCHAR(64),
-    prev_qty DECIMAL(10,2), new_qty DECIMAL(10,2), operator_id INT, operator_name VARCHAR(64),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`), null)
+  // 表由迁移 293 创建；缺表时下方各查询经 pdaOptionalQuery 返回明确降级值。
 
   // 1. 按操作员统计错误
   const [byOperator] = await pdaOptionalQuery('anomaly.byOperator', pool.query(

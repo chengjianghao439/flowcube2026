@@ -86,12 +86,12 @@ async function main() {
     for (const day of [dates.yesterday, dates.tomorrow]) await addInbound(warehouses[0], day, getStatusRule('inboundTask','finish').to)
     await addInbound(warehouses[1], today, getStatusRule('inboundTask','finish').to)
     await addInbound(warehouses[0], today, getStatusRule('inboundTask','finish').to, true)
-    // 使用产品既有服务建表并记录首条真实日志；保留建表状态供下次回归复用。
+    // 两表由迁移 293 建立；此处经产品既有服务写入首条真实日志。
     await scans.logScanError({ taskId: a, barcode: mark, reason: mark, operatorId: users[0], operatorName: mark })
     await scans.logUndo({ taskId: a, itemId: 1, barcode: mark, prevQty: 2, newQty: 1, operatorId: users[0], operatorName: mark })
     const [[firstError]] = await pool.query('SELECT COUNT(*) AS n FROM pda_error_logs WHERE barcode=?', [mark])
     const [[firstUndo]] = await pool.query('SELECT COUNT(*) AS n FROM pda_undo_logs WHERE barcode=?', [mark])
-    log.assert('既有服务按需建表并成功写入错误及撤销日志', Number(firstError.n) === 1 && Number(firstUndo.n) === 1)
+    log.assert('迁移建表后既有服务成功写入错误及撤销日志', Number(firstError.n) === 1 && Number(firstUndo.n) === 1)
     // 固定日期字段，覆盖北京时间 00:00:00 / 23:59:59 及相邻日。
     await pool.query('UPDATE pda_error_logs SET created_at=? WHERE barcode=?', [`${today} 00:00:00`, mark])
     await pool.query('UPDATE pda_undo_logs SET created_at=? WHERE barcode=?', [`${today} 00:00:00`, mark])

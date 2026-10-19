@@ -590,6 +590,10 @@ test('每个 smoke/test 脚本必须在 CI 里跑得到（未接线须显式豁�
         workflowText.includes('npm run smoke:change-records-owned') &&
         (name !== 'smoke:change-records-regressions' || /FLOWCUBE_CHANGE_REGRESSIONS:\s*['"]1['"]/.test(workflowText)) &&
         fs.readFileSync(path.join(root, 'scripts/repair-smoke-ephemeral.sh'), 'utf8').includes(`run_smoke ${name}`)) return true
+    if (name === 'smoke:pda-audit-log-migration-runtime' &&
+        pkg.scripts['smoke:pda-audit-log-migration-owned'] === 'bash scripts/repair-smoke-ephemeral.sh --pda-audit-log-migration' &&
+        workflowText.includes('npm run smoke:pda-audit-log-migration-owned') &&
+        fs.readFileSync(path.join(root, 'scripts/repair-smoke-ephemeral.sh'), 'utf8').includes('run_smoke smoke:pda-audit-log-migration-runtime')) return true
     // 有些脚本在 CI 里按文件调用（如 node --test tests/xxx.test.js）
     const files = (pkg.scripts[name].match(/[\w./-]+\.(js|sh|cjs)/g) || [])
     return files.some(f => workflowText.includes(path.basename(f)))
