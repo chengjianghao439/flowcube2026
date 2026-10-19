@@ -118,12 +118,12 @@ const PERMISSIONS = {
   SALE_ORDER_CANCEL: 'sale.order.cancel',
   SALE_ORDER_DELETE: 'sale.order.delete',
 
-  // 客户授信：view 看用信、manage 调额度(财务风控)、override 超额一次性放行(销售)。敏感，override 服务端校验。
+  // 旧直放码仅保留兼容历史授权数据；占库及出库均不再接受该码绕过审批。
   SALE_CREDIT_VIEW: 'sale.credit.view',
   SALE_CREDIT_OVERRIDE: 'sale.credit.override',
-  // 超额放行申请单（文档 05 Phase 2）：销售员发起「申请—审批」两步，审批通过后占库自动放行。
-  // apply/view 是销售员自助链路（seed 给销售角色 3）；审批走多级审批流引擎，不依赖这些权限码。
+  // 申请与审批分权；审批仍须查看、待办、节点资格、自批设置及整单仓范围。
   SALE_CREDIT_OVERRIDE_APPLY: 'sale.credit.override.apply',
+  SALE_CREDIT_OVERRIDE_APPROVE: 'sale.credit.override.approve',
   SALE_CREDIT_OVERRIDE_VIEW: 'sale.credit.override.view',
 
   RETURN_ORDER_VIEW: 'return.order.view',

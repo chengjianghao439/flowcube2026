@@ -14,15 +14,18 @@ async function main() {
   try {
     const admin = await login(http, 'smoke_admin', 'SmokeAdmin123!')
     const adminToken = admin.token || admin.data?.token
-    const permissions = ['sale.order.create','sale.order.view','sale.order.update','sale.order.reserve','sale.order.release','sale.order.ship','sale.order.cancel','sale.credit.override','sale.credit.override.apply','sale.credit.override.view','approval.task.view']
+    const permissions = ['sale.order.create','sale.order.view','sale.order.update','sale.order.reserve','sale.order.release','sale.order.ship','sale.order.cancel','sale.credit.override','sale.credit.override.apply','sale.credit.override.approve','sale.credit.override.view','approval.task.view']
     const [role] = await pool.query('INSERT INTO sys_roles (code,name,is_system) VALUES (?,?,0)', [ref, '合成授信回归'])
     await pool.query('INSERT INTO sys_role_permissions (role_id,permission) VALUES ?', [permissions.map(p => [role.insertId,p])])
+    const [financeRole] = await pool.query('INSERT INTO sys_roles (code,name,is_system) VALUES (?,?,0)', [ref+'Finance', '合成仅审批财务'])
+    const financePermissions = ['sale.credit.view','sale.credit.override.view','sale.credit.override.approve','approval.task.view']
+    await pool.query('INSERT INTO sys_role_permissions (role_id,permission) VALUES ?', [financePermissions.map(p => [financeRole.insertId,p])])
     async function user(suffix, self, roleId = role.insertId) {
       const [r] = await pool.query('INSERT INTO sys_users (username,password,real_name,role_id,role_name,is_active,allow_self_approve) VALUES (?,?,?,?,?,1,?)', [ref+suffix,bcrypt.hashSync('SyntheticCredit123!',4),'合成'+suffix,roleId,'合成授信回归',self])
       const signed = await login(http,ref+suffix,'SyntheticCredit123!')
       return { id:r.insertId,token:signed.token || signed.data?.token }
     }
-    const applicant = await user('Applicant',1), reviewer = await user('Reviewer',0)
+    const applicant = await user('Applicant',1), reviewer = await user('Reviewer',0,financeRole.insertId)
     const [customer] = await pool.query('INSERT INTO sale_customers (code,name,credit_limit) VALUES (?,?,1)',[ref,'合成授信客户'])
     const totalAmount=50000+customer.insertId*10,unitPrice=totalAmount/2,overAmount=totalAmount-1
     const [product] = await pool.query("INSERT INTO product_items (code,name,unit,sale_price_a,cost_price,avg_cost) VALUES (?,?,'个',?,5,5)",[ref,'合成授信商品',unitPrice])
@@ -55,6 +58,18 @@ async function main() {
     const pending = async(token=applicant.token)=>(await http.get('/api/approvals/pending?pageSize=100',{token})).data.data
     const intent = (task,reason='合成自行审批原因')=>({expectedTaskId:task,reason})
     const approve = (task,token=applicant.token,key=`${ref}-${task}`,reason='合成自行审批原因')=>http.post(`/api/credit-overrides/${id}/approve`,{token,json:intent(task,reason),headers:{'X-Request-Key':key}})
+    await check('财务有独立审批权但没有申请权，不能创建、提交或取消申请',async()=>{
+      for(const url of ['/api/credit-overrides',`/api/credit-overrides/${id}/submit`,`/api/credit-overrides/${id}/cancel`]) {
+        expectStatus(await http.post(url,{token:reviewer.token,json:{saleOrderId:orderId,reason:'合成越权申请'}}),403)
+      }
+      const [rows]=await pool.query('SELECT permission FROM sys_role_permissions WHERE role_id=?',[financeRole.insertId])
+      assert.ok(!rows.some(r=>r.permission==='sale.credit.override.apply'))
+    })
+    await check('申请权和自批开关不能代替独立审批权成为节点候选',async()=>{
+      await pool.query("DELETE FROM sys_role_permissions WHERE role_id=? AND permission='sale.credit.override.approve'",[role.insertId])
+      try { expectStatus(await http.post(`/api/credit-overrides/${id}/submit`,{token:applicant.token}),400);assert.equal((await detail()).status,1) }
+      finally { await pool.query("INSERT INTO sys_role_permissions (role_id,permission) VALUES (?,'sale.credit.override.approve')",[role.insertId]) }
+    })
     await check('唯一候选未开自批时不能提交或自动审批',async()=>{
       await pool.query('UPDATE sys_users SET allow_self_approve=0 WHERE id=?',[applicant.id])
       expectStatus(await http.post(`/api/credit-overrides/${id}/submit`,{token:applicant.token}),400)
@@ -67,6 +82,14 @@ async function main() {
       assert.ok((await pending()).list.some(r=>r.bizId===id && r.bizType==='sale_credit_override'))
     })
     let task=(await detail()).currentTaskId
+    await check('已有节点快照也不能让仅申请的销售自批；待办和按钮共同拒绝',async()=>{
+      await pool.query("DELETE FROM sys_role_permissions WHERE role_id=? AND permission='sale.credit.override.approve'",[role.insertId])
+      try {
+        assert.equal((await detail()).canApprove,false)
+        assert.ok(!(await pending()).list.some(r=>r.bizId===id && r.bizType==='sale_credit_override'))
+        expectStatus(await approve(task),403)
+      } finally { await pool.query("INSERT INTO sys_role_permissions (role_id,permission) VALUES (?,'sale.credit.override.approve')",[role.insertId]) }
+    })
     await check('管理员未命中节点也不能代批或跳级',async()=>{expectStatus(await approve(task,adminToken),403)})
     await check('本人开关关闭后待办、按钮和执行共同拒绝',async()=>{
       await pool.query('UPDATE sys_users SET allow_self_approve=0 WHERE id=?',[applicant.id])
@@ -124,10 +147,14 @@ async function main() {
     await check('合法自批逐级推进，不自动批准余下节点',async()=>{expectStatus(await approve((await detail()).currentTaskId),200);assert.equal((await detail()).status,2)})
     let reviewerTask=(await detail(reviewer.token)).currentTaskId
     await check('有效开关不代替当前业务权限',async()=>{
-      await pool.query("DELETE FROM sys_role_permissions WHERE role_id=? AND permission='sale.credit.override.apply'",[role.insertId])
+      await pool.query("DELETE FROM sys_role_permissions WHERE role_id=? AND permission='sale.credit.override.approve'",[financeRole.insertId])
       assert.equal((await detail(reviewer.token)).canApprove,false)
       expectStatus(await approve(reviewerTask,reviewer.token),403)
-      await pool.query("INSERT INTO sys_role_permissions (role_id,permission) VALUES (?,'sale.credit.override.apply')",[role.insertId])
+      await pool.query("INSERT INTO sys_role_permissions (role_id,permission) VALUES (?,'sale.credit.override.approve')",[financeRole.insertId])
+    })
+    await check('无申请权的合法财务同时出现在待办、按钮及准确审批节点',async()=>{
+      const d=await detail(reviewer.token);assert.equal(d.canApprove,true);assert.equal(d.canManage,false);assert.equal(d.currentTaskId,reviewerTask)
+      assert.ok((await pending(reviewer.token)).list.some(r=>r.bizId===id && r.bizType==='sale_credit_override'))
     })
     await check('节点资格和仓库范围共同生效',async()=>{
       await pool.query('INSERT INTO user_warehouse_scope (user_id,warehouse_id) VALUES (?,?)',[reviewer.id,Number(ctx.warehouse.id)+999999])
@@ -142,6 +169,11 @@ async function main() {
       assert.deepEqual(rows.map(r=>Number(r.is_self_approval)),[1,1,1,0])
       assert.deepEqual(rows.map(r=>Number(r.approver_id)),[applicant.id,applicant.id,applicant.id,reviewer.id])
       assert.ok(rows.every(r=>r.action==='approve' && r.action_at && r.reason && Number(r.sale_order_id)===orderId && Number(r.applicant_id)===applicant.id && r.authorization_basis))
+      for(const row of rows){
+        const basis=typeof row.authorization_basis==='string'?JSON.parse(row.authorization_basis):row.authorization_basis
+        assert.ok(basis.requiredPermissions.includes('sale.credit.override.approve'))
+        assert.ok(!basis.requiredPermissions.includes('sale.credit.override.apply'))
+      }
     })
     const {assertCreditWithinLimit}=require('../backend/src/modules/warehouse-tasks/warehouse-tasks.ship')
     await check('已批准订单允许普通仓管出库信用闸，无直放权',async()=>{

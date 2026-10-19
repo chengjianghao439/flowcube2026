@@ -234,7 +234,7 @@ async function listPending({ page = 1, pageSize = 20 }, user) {
   try {
     await conn.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ')
     await conn.query('START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY')
-    const required = [...new Set([P.APPROVAL_TASK_VIEW, P.FINANCE_EXPENSE_VIEW_ALL, ...Object.values(BIZ_DOC_META).map(m => m.permission), ...Object.values(DOCUMENT_PENDING_META).map(m => m.approvePermission), ...SUPPLIER_REFUND_PENDING.permissions, P.SALE_CREDIT_OVERRIDE_APPLY])]
+    const required = [...new Set([P.APPROVAL_TASK_VIEW, P.FINANCE_EXPENSE_VIEW_ALL, ...Object.values(BIZ_DOC_META).map(m => m.permission), ...Object.values(DOCUMENT_PENDING_META).map(m => m.approvePermission), ...SUPPLIER_REFUND_PENDING.permissions, P.SALE_CREDIT_OVERRIDE_APPROVE])]
     const [permissions] = await conn.query('SELECT permission FROM sys_role_permissions WHERE role_id=? AND permission IN (?)', [roleId, required])
     const held = new Set(permissions.map(row => row.permission))
     const can = permission => roleId === 1 || held.has(permission)
@@ -250,7 +250,7 @@ async function listPending({ page = 1, pageSize = 20 }, user) {
       const branchParams = [bizType, userId]
       if (!can(P.APPROVAL_TASK_VIEW) || !can(meta.permission)) conds.push('1=0')
       if (bizType === 'sale_credit_override') {
-        if (!can(P.SALE_CREDIT_OVERRIDE_APPLY)) conds.push('1=0')
+        if (!can(P.SALE_CREDIT_OVERRIDE_APPROVE)) conds.push('1=0')
         conds.push('d.status=2', '(?=1 OR i.applicant_id<>?)',
           'EXISTS (SELECT 1 FROM sale_credit_approval_proofs credit_proof WHERE credit_proof.override_id=d.id AND credit_proof.sale_order_id=d.sale_order_id AND (credit_proof.expires_at IS NULL OR credit_proof.expires_at>NOW()))',
           'EXISTS (SELECT 1 FROM sale_orders credit_order WHERE credit_order.id=d.sale_order_id AND credit_order.deleted_at IS NULL AND credit_order.status IN (1,2,3,6))')

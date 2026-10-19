@@ -2,7 +2,7 @@ const crypto = require('node:crypto')
 const AppError = require('../../utils/AppError')
 const { PERMISSIONS: P } = require('../../constants/permissions')
 
-const ACTION_PERMISSIONS = [P.SALE_CREDIT_OVERRIDE_VIEW, P.SALE_CREDIT_OVERRIDE_APPLY, P.APPROVAL_TASK_VIEW]
+const ACTION_PERMISSIONS = [P.SALE_CREDIT_OVERRIDE_VIEW, P.SALE_CREDIT_OVERRIDE_APPROVE, P.APPROVAL_TASK_VIEW]
 
 async function loadActor(db, userId, current = false) {
   const lock = current ? ' FOR SHARE' : ''
@@ -25,7 +25,7 @@ function canAct(actor, applicantId) {
 
 function assertAction(actor, applicantId, comment) {
   if (actor.userId === Number(applicantId) && !actor.allowSelfApprove) throw new AppError('该账号未开启允许自行审批', 403, 'SELF_APPROVAL_DENIED')
-  if (!canAct(actor, applicantId)) throw new AppError('缺少授信申请审批及查看权限', 403, 'CREDIT_APPROVAL_DENIED')
+  if (!canAct(actor, applicantId)) throw new AppError('缺少授信审批、查看或待办权限', 403, 'CREDIT_APPROVAL_DENIED')
   if (actor.userId === Number(applicantId) && !String(comment || '').trim()) throw new AppError('自行审批必须填写原因', 400, 'SELF_APPROVAL_REASON_REQUIRED')
 }
 

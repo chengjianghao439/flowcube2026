@@ -1079,4 +1079,4 @@ Node22 定向 `node --test tests/export-list-filters-passthrough.test.js tests/o
 
 ## 2026-10-19 授信审批一致性回归
 
-`npm run test:approval-list-batches` 继续检查原待办/范围，并追加 `tests/credit-approval-consistency.test.js` 的业务负例、商业内容绑定、自批资格与锁后当前节点读取。`npm run smoke:credit-override` 串行运行原申请专项和 `tests/credit-approval-consistency.smoke.test.js`；后者仅可在显式测试环境/专属合成实例中执行，覆盖当前开关、业务权/范围、同键及不同键真实事务并发、逐节点审计、普通仓管实际部分出库与预占守恒。仅箱贴完成使用合成ACK，不作真机/出纸或独立验收结论。迁移294不占293且不授角色权限；详细边界见 [授信审批一致性](credit-approval-consistency-2026-10-19.md)。
+`npm run test:approval-list-batches` 继续检查原待办/范围，并追加 `tests/credit-approval-consistency.test.js` 的业务负例、商业内容绑定、自批资格与锁后当前节点读取。`npm run smoke:credit-override` 串行运行默认岗位迁移回归、原申请专项和 `tests/credit-approval-consistency.smoke.test.js`；后者仅可在显式测试环境/专属合成实例中执行，覆盖当前开关、独立申请/审批权限、范围、同键及不同键真实事务并发、逐节点审计、普通仓管实际部分出库与预占守恒。仅箱贴完成使用合成ACK，不作真机/出纸或独立验收结论。迁移294不占293且不授角色权限；295岗位回归以连接临时表影射真实结构，不更改现有角色/用户，覆盖完整默认差量、自定义保留、编码、重放与回滚。`test:permissions` 新增独立审批纯规则反例，前端全量包含申请/审批按钮分权。详见 [授信审批一致性](credit-approval-consistency-2026-10-19.md) 与 [岗位及客户范围边界](role-defaults-approval-2026-10-19.md)。

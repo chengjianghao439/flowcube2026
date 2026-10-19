@@ -122,6 +122,7 @@ function CreateDialog({ open, onClose }: { open: boolean; onClose: () => void })
 export default function CreditOverridesPage() {
   const { can } = usePermission()
   const canApply = can(PERMISSIONS.SALE_CREDIT_OVERRIDE_APPLY)
+  const canApprove = can(PERMISSIONS.SALE_CREDIT_OVERRIDE_APPROVE)
   const tabPath = useContext(TabPathContext)
   const [urlParams, setSearchParams] = useSearchParams()
   const searchParams = tabPath ? new URLSearchParams(tabPath.split('?')[1] || '') : urlParams
@@ -216,8 +217,8 @@ export default function CreditOverridesPage() {
           ['销售单', row.saleOrderNo], ['客户', row.customerName], ['本单净额', money(row.thisAmount)], ['授信额度', money(row.creditLimit)], ['超额金额', money(row.overAmount)], ['状态', row.statusName], ['申请人', row.applicantName], ['申请原因', row.reason], ['驳回原因', row.rejectReason],
         ]} />]
         if (row.status === 1 && row.canManage) els.push(<Button key="submit" size="sm" variant="outline" onClick={() => submit(row.id, { onSuccess: () => toast.success('已提交审批'), onError: (e: Error) => toast.error(e.message) })}>提交</Button>)
-        if (row.status === 2 && row.canApprove && row.currentTaskId && canApply) els.push(<Button key="ap" size="sm" variant="outline" onClick={() => {setApproveTarget(row);setApproveReason('')}}>批准</Button>)
-        if (row.status === 2 && row.canApprove && row.currentTaskId && canApply) els.push(<Button key="rj" size="sm" variant="ghost" className="text-destructive-ink" onClick={() => {
+        if (row.status === 2 && row.canApprove && row.currentTaskId && canApprove) els.push(<Button key="ap" size="sm" variant="outline" onClick={() => {setApproveTarget(row);setApproveReason('')}}>批准</Button>)
+        if (row.status === 2 && row.canApprove && row.currentTaskId && canApprove) els.push(<Button key="rj" size="sm" variant="ghost" className="text-destructive-ink" onClick={() => {
           setRejectTarget(row); setRejectReason('')
         }}>驳回</Button>)
         if (row.canManage && [1,2,3,4].includes(row.status)) els.push(<Button key="cx" size="sm" variant="ghost" onClick={() => confirmAction({ title: '取消申请', description: '确定取消这张放行申请吗？', onConfirm: () => cancel(row.id, { onSuccess: () => toast.success('已取消'), onError: (e: Error) => toast.error(e.message) }) })}>取消</Button>)
