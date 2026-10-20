@@ -211,7 +211,7 @@ export default function CreditOverridesPage() {
       key: 'status',
       title: '状态',
       width: 220,
-      render: (_, row) => <div className="space-y-1"><SoftStatusLabel label={row.statusName} tone={row.approvalValidity==='invalid' ? 'warning' : (row.statusTone as 'draft' | 'warning' | 'success' | 'danger')} />{row.approvalInvalidReason && <p className="whitespace-normal text-xs text-muted-foreground">{row.approvalInvalidReason}</p>}</div>,
+      render: (_, row) => <div className="space-y-1"><SoftStatusLabel label={row.statusName} tone={row.approvalValidity==='invalid' ? 'warning' : (row.statusTone as 'draft' | 'warning' | 'success' | 'danger')} />{(row.requestInvalidReason || row.approvalInvalidReason) && <p className="whitespace-normal text-xs text-muted-foreground">{row.requestInvalidReason || row.approvalInvalidReason}</p>}</div>,
     },
     { key: 'reason', title: '申请原因', width: 220, render: (v, row) => <div className="space-y-1 py-1"><p className="whitespace-normal break-words">{String(v || '—')}</p>{row.rejectReason && <p className="whitespace-normal break-words text-xs text-destructive-ink">驳回：{row.rejectReason}</p>}</div> },
     { key: 'applicantName', title: '申请人', width: 100 },
@@ -221,7 +221,7 @@ export default function CreditOverridesPage() {
       width: 200,
       render: (_, row) => {
         const els: React.ReactNode[] = [<OrderActivityDialog onOpenChange={setManualDetailOpen} key="detail" type="credit" id={row.id} title={row.overrideNo} fields={[
-          ['销售单', row.saleOrderNo], ['客户', row.customerName], ['本单净额', money(row.thisAmount)], ['授信额度', money(row.creditLimit)], ['超额金额', money(row.overAmount)], ['状态', row.statusName], ['批准效力', row.approvalInvalidReason || (row.approvalValidity==='valid'?'当前有效':null)], ['申请人', row.applicantName], ['申请原因', row.reason], ['驳回原因', row.rejectReason],
+          ['销售单', row.saleOrderNo], ['客户', row.customerName], ['本单净额', money(row.thisAmount)], ['授信额度', money(row.creditLimit)], ['超额金额', money(row.overAmount)], ['状态', row.statusName], ['申请效力', row.requestInvalidReason || row.approvalInvalidReason || (row.approvalValidity==='valid'?'当前有效':null)], ['申请人', row.applicantName], ['申请原因', row.reason], ['驳回原因', row.rejectReason],
         ]} />]
         if (canApply && row.canReapply) els.push(<Button key="reapply" size="sm" variant="outline" onClick={()=>{setReapplySource(row);setCreateOpen(true)}}>重新申请</Button>)
         if (row.status === 1 && row.canManage) els.push(<Button key="submit" size="sm" variant="outline" onClick={() => submit(row.id, { onSuccess: () => toast.success('已提交审批'), onError: (e: Error) => toast.error(e.message) })}>提交</Button>)
@@ -285,7 +285,7 @@ export default function CreditOverridesPage() {
       </Dialog>
       <ApprovalHandoffNotice {...handoff} />
       {handoff.data && <OrderActivityDialog type="credit" id={handoff.data.id} title={handoff.data.overrideNo} open={handoff.open} hideTrigger onOpenChange={open => { if (!open) handoff.close() }} fields={[
-        ['销售单', handoff.data.saleOrderNo], ['客户', handoff.data.customerName], ['本单净额', money(handoff.data.thisAmount)], ['授信额度', money(handoff.data.creditLimit)], ['超额金额', money(handoff.data.overAmount)], ['状态', handoff.data.statusName], ['批准效力', handoff.data.approvalInvalidReason || (handoff.data.approvalValidity==='valid'?'当前有效':null)], ['申请人', handoff.data.applicantName], ['申请原因', handoff.data.reason], ['驳回原因', handoff.data.rejectReason],
+        ['销售单', handoff.data.saleOrderNo], ['客户', handoff.data.customerName], ['本单净额', money(handoff.data.thisAmount)], ['授信额度', money(handoff.data.creditLimit)], ['超额金额', money(handoff.data.overAmount)], ['状态', handoff.data.statusName], ['申请效力', handoff.data.requestInvalidReason || handoff.data.approvalInvalidReason || (handoff.data.approvalValidity==='valid'?'当前有效':null)], ['申请人', handoff.data.applicantName], ['申请原因', handoff.data.reason], ['驳回原因', handoff.data.rejectReason],
       ]} />}
       <Dialog open={!!rejectTarget} onOpenChange={open => { if (!open && !rejecting) setRejectTarget(null) }}>
         <DialogContent className="max-w-lg">

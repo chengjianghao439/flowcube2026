@@ -148,7 +148,7 @@
     "smoke:credit-outbound": "node tests/credit-outbound.smoke.test.js",
     "smoke:purchase-approval": "node tests/purchase-approval.smoke.test.js",
     "smoke:approval-flow": "node tests/approval-flow.smoke.test.js",
-    "smoke:credit-override": "node tests/credit-override.smoke.test.js && node tests/credit-approval-consistency.smoke.test.js && node --test tests/credit-approval-reapply.smoke.test.js",
+    "smoke:credit-override": "node tests/credit-override.smoke.test.js && node tests/credit-approval-consistency.smoke.test.js && node --test tests/credit-approval-reapply.smoke.test.js && node --test tests/credit-pending-expiry.smoke.test.js",
     "check:schema": "node backend/scripts/schema-reconcile.js",
     "check:schema:strict": "node backend/scripts/schema-reconcile.js --strict",
     "test:hr-tax": "node tests/hr-tax.smoke.test.js",
