@@ -105,7 +105,7 @@ class PreflightTests(unittest.TestCase):
             self.assertEqual(self.p.parse_switch(value, 'global.switch'), 0)
         for value in ('ON', 'on', 'On', '1', 1):
             self.assertEqual(self.p.parse_switch(value, 'global.switch'), 1)
-        for value in (True, False, None, '', ' ', ' ON ', 'true', 'false', 'yes', '2', 2, 0.0, [], {}):
+        for value in (True, False, None, '', ' ', ' ON ', 'true', 'false', 'yes', 'oﬀ', 'ＯＮ', '\nOFF', '2', 2, 0.0, [], {}):
             with self.subTest(value=value):
                 self.failure(self.p.parse_switch, value, 'global.switch')
 

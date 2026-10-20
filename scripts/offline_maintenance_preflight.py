@@ -37,7 +37,7 @@ All other normalized fields/documents must match exactly. Unsupported Compose ru
 features fail closed rather than being silently ignored. build/depends_on are Compose
 orchestration fields, checked for candidate drift; they have no container-inspect field.
 Boolean normalization applies only to MySQL switch globals: int 0/1 (not bool/float),
-or case-insensitive exact strings OFF/ON/0/1. Whitespace, null and other values fail.
+or ASCII case-insensitive exact strings OFF/ON/0/1. Whitespace, null and others fail.
 CORS environment strings compare literally, including true -> false; no truthiness.
 All diagnostic text is allowlisted; untrusted keys/strings/stderr/exception text are
 redacted. Equal-looking redactions still carry an explicit 'different' difference.
@@ -156,7 +156,7 @@ def require_equal(check, actual, expected):
 def parse_switch(value, check):
     if type(value) is int and value in (0, 1):
         return value
-    if type(value) is str and value.upper() in ('OFF', 'ON', '0', '1'):
+    if type(value) is str and value.isascii() and value.upper() in ('OFF', 'ON', '0', '1'):
         return {'OFF': 0, 'ON': 1, '0': 0, '1': 1}[value.upper()]
     raise PreflightFailure(check, value, 'OFF/0 or ON/1 required')
 
