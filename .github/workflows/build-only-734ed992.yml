@@ -1,0 +1,60 @@
+name: FlowCube fixed SHA build only
+
+on:
+  push:
+    branches: [codex/release-build-only-734ed992]
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+concurrency:
+  group: flowcube-build-only-734ed992
+  cancel-in-progress: false
+
+jobs:
+  build-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout exact application commit
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: 734ed9924a3b6d3051962a3f06f81f5a04fc4213
+          persist-credentials: false
+
+      - name: Setup Node 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+
+      - name: Verify exact source and existing CI gates
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = 734ed9924a3b6d3051962a3f06f81f5a04fc4213
+          GITHUB_REF=refs/heads/main GITHUB_SHA=734ed9924a3b6d3051962a3f06f81f5a04fc4213 node scripts/wait-release-checks.js
+
+      - name: Build exact application images
+        run: |
+          set -euo pipefail
+          GITHUB_SHA=734ed9924a3b6d3051962a3f06f81f5a04fc4213 \
+            DEPLOY_IMAGE_OUTPUT="${RUNNER_TEMP}/flowcube-images.tar.gz" \
+            bash scripts/build-deploy-images.sh
+          GITHUB_SHA=734ed9924a3b6d3051962a3f06f81f5a04fc4213 \
+            FLOWCUBE_IMAGE_REPORT_DIR="${RUNNER_TEMP}/image-reports" \
+            bash scripts/generate-image-sbom.sh "${RUNNER_TEMP}/flowcube-images.tar.gz"
+
+      - name: Retain build artifacts and provenance
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: build-only-734ed992-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/flowcube-images.tar.gz
+            ${{ runner.temp }}/image-reports/
+          compression-level: 0
+          retention-days: 3
+          if-no-files-found: error
