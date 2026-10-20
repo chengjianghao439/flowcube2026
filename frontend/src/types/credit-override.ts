@@ -20,6 +20,15 @@ export interface CreditOverride {
   canApprove?: boolean
   currentTaskId?: number | null
   isSelfApproval?: boolean
+  approvalValidity?: 'valid' | 'invalid'
+  approvalInvalidReasonCode?: string | null
+  approvalInvalidReason?: string | null
+  canReapply?: boolean
+  supersededBy?: number | null
+  expiresAt?: string | null
+  currentOrderAmount?: number | null
+  currentCustomerName?: string | null
+  currentOrderStatus?: number | null
   createdAt: string
   approval?: {
     instanceId: number

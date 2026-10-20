@@ -173,7 +173,7 @@ export default function ReserveAllocationDialog({ open, orderId, onClose, onShor
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning-ink" />
               <span>
                 客户授信将超额：额度 {money(credit.creditLimit)}，已用 {money(credit.used)}，本单 {money(credit.thisOrder)}，超出约 {money(credit.overAmount)}。
-                占库时若无放行权限将被拦截，可先发起{' '}
+                超额占库须先取得有效批准；原批准失效时可重新发起{' '}
                 <a href="#/credit-overrides" className="font-medium text-primary underline underline-offset-2">超额放行申请</a>。
               </span>
             </p>

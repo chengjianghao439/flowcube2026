@@ -127,7 +127,7 @@ export function useOrdinarySaleOperation(saleId: number, active = true) {
       // Only a first, definitive rejection ends a request. A retry's 4xx cannot prove the original did not commit.
       if (!received && first && typeof failure.status === 'number' && failure.status >= 400 && failure.status < 500 && failure.status !== 408
         && failure.code !== 'REQUEST_IN_PROGRESS' && !failure.data?.uncertain
-        && (failure.status !== 409 || ['CREDIT_LIMIT_EXCEEDED','SALE_RESERVATION_EXECUTION_PENDING'].includes(failure.code ?? ''))) await finish(r,'failed',null)
+        && (failure.status !== 409 || ['CREDIT_LIMIT_EXCEEDED','CREDIT_APPROVAL_INVALID','SALE_RESERVATION_EXECUTION_PENDING'].includes(failure.code ?? ''))) await finish(r,'failed',null)
       throw e
     }
   }

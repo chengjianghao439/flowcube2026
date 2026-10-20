@@ -33,6 +33,10 @@ function assertAction(actor, applicantId, comment) {
 // must not invalidate approval of the unchanged order.
 async function orderBasis(db, order) {
   const [items] = await db.query('SELECT id, product_id, warehouse_id, unit, quantity, unit_price FROM sale_order_items WHERE order_id=? ORDER BY id FOR SHARE', [Number(order.id)])
+  return hashOrderBasis(order, items)
+}
+
+function hashOrderBasis(order, items) {
   const text = value => value == null ? null : String(value)
   const basis = [Number(order.id), Number(order.customer_id), Number(order.warehouse_id), text(order.total_amount), text(order.discount_amount), order.commercial_model || null, Number(order.commercial_revision || 0),
     items.map(r => [Number(r.id), Number(r.product_id), Number(r.warehouse_id ?? order.warehouse_id), r.unit, text(r.quantity), text(r.unit_price)])]
@@ -54,4 +58,4 @@ async function eligibleUserIds(db, userIds, bizId) {
   return rows.map(row => Number(row.id))
 }
 
-module.exports = { ACTION_PERMISSIONS, loadActor, canAct, assertAction, orderBasis, eligibleUserIds }
+module.exports = { ACTION_PERMISSIONS, loadActor, canAct, assertAction, orderBasis, hashOrderBasis, eligibleUserIds }
