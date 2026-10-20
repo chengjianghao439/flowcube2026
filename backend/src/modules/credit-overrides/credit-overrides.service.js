@@ -2,18 +2,20 @@ const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const { getCustomerCreditUsed } = require('../../utils/creditExposure')
-const { getNetOrderAmount, isApprovedOverrideApplicable } = require('../sale/sale.contracts')
+const { getNetOrderAmount } = require('../sale/sale.contracts')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
-const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
+const { compareAndSetStatus } = require('../../utils/statusTransition')
 const { normalizePagination } = require('../../utils/pagination')
 const approvalEngine = require('../../engine/approvalEngine')
-const { assertNotSelfApproval } = require('../../utils/selfApprove')
+const actions = require('./credit-overrides.actions')
+const policy = require('./credit-overrides.policy')
+const validity = require('./credit-overrides.validity')
 const { saleDocumentScopeFilter, assertSaleDocumentInScope } = require('../../utils/saleDocumentScope')
 
 /**
  * 超额放行审批单（文档 05 Phase 2）：销售员发起「申请—审批」两步。
  *
- * 场景：占库时客户额度不足，销售员若无 sale.credit.override 权限，可发起一张放行申请单，
+ * 场景：客户额度不足必须发起放行申请；任何身份都不能直接放行，
  * 走多级审批流（biz_type='sale_credit_override'），审批通过后该销售单占库自动放行。
  *
  * 状态机：1草稿 → 2待审批 → 3已批准 / 4已驳回 / 5已取消（2/3 由审批流引擎实例驱动）。
@@ -51,32 +53,37 @@ function fmt(row) {
  * 发起申请（草稿态）：校验销售单存在、额度确实不足，快照额度/已用/本单/超量。
  * 一张销售单不允许重复发起未结束的申请（活跃唯一性）。
  */
-async function create({ saleOrderId, reason }, operator, scopeWarehouseIds = null) {
+async function create({ saleOrderId, reason, expiresAt }, operator, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
     const [[order]] = await conn.query(
-      'SELECT o.id, o.order_no, o.total_amount, o.discount_amount, o.customer_id, o.status, c.name AS customer_name, c.credit_limit FROM sale_orders o JOIN sale_customers c ON c.id=o.customer_id WHERE o.id=? AND o.deleted_at IS NULL',
+      'SELECT * FROM sale_orders WHERE id=? AND deleted_at IS NULL FOR UPDATE',
       [Number(saleOrderId)],
     )
     if (!order) throw new AppError('销售单不存在', 404)
     await assertSaleDocumentInScope(conn, scopeWarehouseIds, order.id, { entityName: '放行申请单', currentRead: true })
-    if (order.credit_limit == null) throw new AppError('该客户未设置授信额度，无需超额放行申请', 400)
+    const [[customer]] = await conn.query('SELECT name,credit_limit FROM sale_customers WHERE id=? AND deleted_at IS NULL FOR UPDATE', [Number(order.customer_id)])
+    if (!customer) throw new AppError('客户不存在', 404)
+    if (![1,2,3,6].includes(Number(order.status))) throw new AppError('当前销售单不可申请授信', 409)
+    if (customer.credit_limit == null) throw new AppError('该客户未设置授信额度，无需超额放行申请', 400)
 
-    // 活跃唯一性：该销售单已有「未结束」的申请（草稿/待审批/已批准）→ 拒绝
-    const [[active]] = await conn.query(
-      'SELECT id FROM sale_credit_overrides WHERE sale_order_id=? AND status IN (1,2,3) AND deleted_at IS NULL LIMIT 1',
-      [Number(saleOrderId)],
-    )
-    if (active) throw new AppError('该销售单已存在进行中或已批准的放行申请，请勿重复发起', 409, 'CREDIT_OVERRIDE_DUPLICATE')
+    const active = await validity.activeForOrder(conn,saleOrderId)
+    const inProgress = active.find(r=>Number(r.status)===1 || (Number(r.status)===2 && !validity.inactivePending(r)))
+    if (inProgress) throw new AppError(`该销售单已有${Number(inProgress.status)===1?'草稿':'待审批'}申请 ${inProgress.override_no}，请先查看或处理该申请`,409,'CREDIT_OVERRIDE_DUPLICATE')
 
     // 快照信用口径（占库校验同款：未清应收 + 在途敞口）。本单尚为草稿(1)不占用信用。
-    const used = await getUsedCredit(conn, Number(order.customer_id))
+    const used = await getCustomerCreditUsed(conn, Number(order.customer_id), { excludeSaleOrderId: order.id })
     const thisAmount = getNetOrderAmount(order.total_amount, order.discount_amount)
-    const limit = Number(order.credit_limit)
+    const limit = Number(customer.credit_limit)
     const overAmount = Math.max(0, Math.round((used + thisAmount - limit) * 100) / 100)
     if (overAmount <= 0) {
       throw new AppError('该销售单当前未超授信额度，无需放行申请', 400)
+    }
+    const basisHash = await policy.orderBasis(conn,order)
+    const current = {order,basisHash,customerId:order.customer_id,creditLimit:limit,thisAmount,overAmount}
+    if (active.some(r=>Number(r.status)===3 && validity.evaluate(r,current).valid)) {
+      throw new AppError('该销售单已有有效批准，请按原批准继续操作，无需重复申请',409,'CREDIT_OVERRIDE_DUPLICATE')
     }
 
     const overrideNo = await generateDailyCode(conn, 'CO', 'sale_credit_overrides', 'override_no')
@@ -84,9 +91,11 @@ async function create({ saleOrderId, reason }, operator, scopeWarehouseIds = nul
       `INSERT INTO sale_credit_overrides
         (override_no, sale_order_id, sale_order_no, customer_id, customer_name, credit_limit, used_credit, this_amount, over_amount, reason, applicant_id, applicant_name, status)
        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1)`,
-      [overrideNo, order.id, order.order_no, Number(order.customer_id), order.customer_name, limit, used, thisAmount, overAmount,
+      [overrideNo, order.id, order.order_no, Number(order.customer_id), customer.name, limit, used, thisAmount, overAmount,
         String(reason || '').trim() || null, Number(operator.operatorId), operator.operatorName],
     )
+    if (expiresAt && (!Number.isFinite(Date.parse(expiresAt)) || Date.parse(expiresAt) <= Date.now())) throw new AppError('有效截止时间必须在将来',400)
+    await conn.query('INSERT INTO sale_credit_approval_proofs (override_id,sale_order_id,basis_hash,expires_at) VALUES (?,?,?,?)', [r.insertId,order.id,basisHash,expiresAt ? new Date(expiresAt) : null])
     await conn.commit()
     return { id: r.insertId, overrideNo, overAmount }
   } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
@@ -97,11 +106,11 @@ async function submit(id, operator) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const row = await lockStatusRow(conn, {
-      table: 'sale_credit_overrides', id,
-      columns: 'id, status, applicant_id, sale_order_id, over_amount', entityName: '放行申请单',
-    })
-    await assertOwner(row, operator)
+    const {row, order} = await actions.lockRequest(conn,id)
+    const actor = await policy.loadActor(conn,operator.userId ?? operator.operatorId,true)
+    await assertSaleDocumentInScope(conn,actor.warehouseIds,order.id,{currentRead:true})
+    await assertOwner(row, actor)
+    await actions.assertBasis(conn,order,row)
     const rule = assertStatusAction('creditOverride', 'submit', row.status)
     await compareAndSetStatus(conn, { table: 'sale_credit_overrides', id, fromStatus: rule.from, toStatus: rule.to, entityName: '放行申请单' })
 
@@ -110,7 +119,7 @@ async function submit(id, operator) {
       bizId: id,
       amount: Number(row.over_amount),
       applicantId: Number(row.applicant_id),
-      applicantName: operator.operatorName,
+      applicantName: row.applicant_name,
     })
     if (!inst) throw new AppError('未匹配授信放行审批流程，请联系管理员配置后重新提交', 409, 'CREDIT_APPROVAL_FLOW_REQUIRED')
     await conn.commit()
@@ -118,63 +127,19 @@ async function submit(id, operator) {
   } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
 }
 
-/** 审批通过：推进引擎节点；实例最终通过 → 申请单 2→3 已批准。 */
-async function approve(id, operator) {
-  const conn = await pool.getConnection()
-  try {
-    await conn.beginTransaction()
-    const row = await lockStatusRow(conn, {
-      table: 'sale_credit_overrides', id, columns: 'id, status, applicant_id', entityName: '放行申请单',
-    })
-    await assertNotSelfApproval(row.applicant_id, operator.operatorId, '不能审批自己发起的放行申请')
-    const rule = assertStatusAction('creditOverride', 'approve', row.status)
+async function approve(id, operator, intent) { return actions.act(id, 'approve', intent, operator) }
+async function reject(id, intent, operator) { return actions.act(id, 'reject', intent, operator) }
 
-    const active = await approvalEngine.getActiveInstanceByBiz(conn, { bizType: 'sale_credit_override', bizId: id })
-    if (active) {
-      const r = await approvalEngine.approveStep(conn, { instanceId: active.instance.id, operator, comment: null })
-      if (Number(r.status) === approvalEngine.INSTANCE_STATUS.APPROVED) {
-        await compareAndSetStatus(conn, { table: 'sale_credit_overrides', id, fromStatus: rule.from, toStatus: rule.to, entityName: '放行申请单' })
-        await conn.query('UPDATE sale_credit_overrides SET reject_reason=NULL WHERE id=?', [id])
-      }
-      await conn.commit()
-      return { id: Number(id), status: Number(r.status) === approvalEngine.INSTANCE_STATUS.APPROVED ? rule.to : row.status, multiLevel: true, approvalStatus: r.status }
-    }
-    throw new AppError('该放行申请缺少审批流程，请取消后重新提交', 409, 'CREDIT_APPROVAL_FLOW_REQUIRED')
-  } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
-}
-
-/** 驳回：引擎驳回实例 + 申请单 → 已驳回。 */
-async function reject(id, { reason }, operator) {
-  const conn = await pool.getConnection()
-  try {
-    await conn.beginTransaction()
-    const row = await lockStatusRow(conn, {
-      table: 'sale_credit_overrides', id, columns: 'id, status, applicant_id', entityName: '放行申请单',
-    })
-    await assertNotSelfApproval(row.applicant_id, operator.operatorId, '不能驳回自己发起的放行申请')
-    if (!String(reason || '').trim()) throw new AppError('请填写驳回原因', 400)
-    const rule = assertStatusAction('creditOverride', 'reject', row.status)
-
-    const active = await approvalEngine.getActiveInstanceByBiz(conn, { bizType: 'sale_credit_override', bizId: id })
-    if (!active) throw new AppError('该放行申请缺少审批流程，请取消后重新提交', 409, 'CREDIT_APPROVAL_FLOW_REQUIRED')
-    await approvalEngine.rejectStep(conn, { instanceId: active.instance.id, operator, comment: reason })
-    await compareAndSetStatus(conn, { table: 'sale_credit_overrides', id, fromStatus: rule.from, toStatus: rule.to, entityName: '放行申请单' })
-    await conn.query('UPDATE sale_credit_overrides SET reject_reason=? WHERE id=?', [String(reason).trim(), id])
-    await conn.commit()
-    return { id: Number(id), status: rule.to }
-  } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
-}
-
-/** 取消：草稿/待审批/已驳回 → 已取消；有进行中审批实例一并撤销。 */
+/** 取消：草稿/待审批/已批准/已驳回 → 已取消；有进行中审批实例一并撤销。 */
 async function cancel(id, operator) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const row = await lockStatusRow(conn, {
-      table: 'sale_credit_overrides', id, columns: 'id, status, applicant_id', entityName: '放行申请单',
-    })
-    await assertOwner(row, operator)
-    const active = await approvalEngine.getActiveInstanceByBiz(conn, { bizType: 'sale_credit_override', bizId: id })
+    const {row,order} = await actions.lockRequest(conn,id)
+    const actor = await policy.loadActor(conn,operator.userId ?? operator.operatorId,true)
+    await assertSaleDocumentInScope(conn,actor.warehouseIds,order.id,{currentRead:true})
+    await assertOwner(row, actor)
+    const active = await approvalEngine.getActiveInstanceByBiz(conn, { bizType: 'sale_credit_override', bizId: id, currentRead: true })
     if (active) await approvalEngine.cancelInstance(conn, { instanceId: active.instance.id, operator })
     const rule = assertStatusAction('creditOverride', 'cancel', row.status)
     await compareAndSetStatus(conn, { table: 'sale_credit_overrides', id, fromStatus: rule.from, toStatus: rule.to, entityName: '放行申请单' })
@@ -185,10 +150,10 @@ async function cancel(id, operator) {
 
 async function assertOwner(row, operator) {
   if (Number(operator?.roleId) === 1) return
-  if (Number(row.applicant_id) !== Number(operator?.operatorId)) throw new AppError('只能操作本人发起的放行申请', 403)
+  if (Number(row.applicant_id) !== Number(operator?.userId ?? operator?.operatorId)) throw new AppError('只能操作本人发起的放行申请', 403)
 }
 
-async function findAll({ page = 1, pageSize = 20, status = '', keyword = '', saleOrderId = '', startDate = '', endDate = '', scopeWarehouseIds = null } = {}) {
+async function findAll({ page = 1, pageSize = 20, status = '', keyword = '', saleOrderId = '', startDate = '', endDate = '', scopeWarehouseIds = null, actorId = null } = {}) {
   const { page: p, pageSize: ps, offset } = normalizePagination({ page, pageSize })
   const conds = ['c.deleted_at IS NULL']
   const params = []
@@ -206,14 +171,14 @@ async function findAll({ page = 1, pageSize = 20, status = '', keyword = '', sal
     [...params, ps, offset],
   )
   const [[{ total }]] = await pool.query(`SELECT COUNT(*) AS total FROM sale_credit_overrides c ${where}`, params)
-  return { list: rows.map(fmt), pagination: { page: p, pageSize: ps, total } }
+  return { list: await validity.decorate(pool,await actions.decorate(pool, rows.map(fmt), actorId)), pagination: { page: p, pageSize: ps, total } }
 }
 
-async function findById(id, scopeWarehouseIds = null) {
+async function findById(id, scopeWarehouseIds = null, actorId = null) {
   const [[row]] = await pool.query('SELECT * FROM sale_credit_overrides WHERE id=? AND deleted_at IS NULL', [Number(id)])
   if (!row) throw new AppError('放行申请单不存在', 404)
   await assertSaleDocumentInScope(pool, scopeWarehouseIds, row.sale_order_id, { entityName: '放行申请单' })
-  const detail = fmt(row)
+  const [detail] = await validity.decorate(pool,await actions.decorate(pool, [fmt(row)], actorId))
   const conn = await pool.getConnection()
   try {
     const got = await approvalEngine.getLatestInstanceByBiz(conn, { bizType: 'sale_credit_override', bizId: Number(id) })
@@ -240,19 +205,14 @@ async function findById(id, scopeWarehouseIds = null) {
 /** 供 sale.service 占库放行判断：已批准申请的客户、额度和金额快照仍覆盖当前超额敞口。 */
 async function hasApprovedOverride(saleOrderId, current = {}) {
   const db = current.conn || pool
-  const [[row]] = await db.query(
-    `SELECT id, customer_id, credit_limit, this_amount, over_amount
-     FROM sale_credit_overrides
-     WHERE sale_order_id=? AND status=3 AND deleted_at IS NULL
-     ORDER BY id DESC LIMIT 1`,
-    [Number(saleOrderId)],
-  )
-  return isApprovedOverrideApplicable(row, current) ? Number(row.id) : null
-}
-
-/** 信用口径同款（避免循环依赖 sale.service，此处内联：未清应收 + 在途敞口） */
-async function getUsedCredit(conn, customerId) {
-  return getCustomerCreditUsed(conn, customerId)
+  const row = await validity.latestApproved(db,saleOrderId)
+  if (!row) return null
+  const order = current.order
+  if (!order || ![1,2,3,6].includes(Number(order.status)) || Number(order.id)!==Number(saleOrderId)) return null
+  const basisHash = await policy.orderBasis(db,order)
+  const state = validity.evaluate(row,{...current,basisHash})
+  if (!state.valid && current.explainInvalid) throw validity.invalidError(row,state)
+  return state.valid ? Number(row.id) : null
 }
 
 module.exports = {

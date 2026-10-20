@@ -122,6 +122,7 @@ test('credit overrides without a matching approval flow fail closed and leave dr
     await ctx.pool.query("UPDATE approval_flows SET is_active=0 WHERE biz_type='sale_credit_override'")
     await ctx.pool.query('UPDATE sale_customers SET credit_limit=1 WHERE id=?', [ctx.customer.id])
     const [order] = await ctx.pool.query('INSERT INTO sale_orders (order_no,customer_id,customer_name,warehouse_id,warehouse_name,total_amount,discount_amount,status,operator_id,operator_name) VALUES (?,?,?,?,?,100,0,1,?,?)', [prefix + 'SO', ctx.customer.id, 'Audit synthetic', ctx.warehouse.id, 'Audit warehouse', applicant.id, 'Audit applicant'])
+    await ctx.pool.query("INSERT INTO sale_order_items (order_id,product_id,product_code,product_name,unit,quantity,unit_price,amount,warehouse_id,warehouse_name) VALUES (?,?,?,'Audit synthetic','个',1,100,100,?,?)",[order.insertId,ctx.product.id,ctx.product.code,ctx.warehouse.id,ctx.warehouse.name])
     const created = await ctx.http.post('/api/credit-overrides', { token: applicant.token, json: { saleOrderId: order.insertId, reason: 'Audit missing flow' } })
     assert.equal(created.status, 201)
     const id = created.data.data.id

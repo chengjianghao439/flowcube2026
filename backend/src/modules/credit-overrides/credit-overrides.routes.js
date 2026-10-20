@@ -9,9 +9,11 @@ const router = Router()
 
 const createSchema = z.object({
   saleOrderId: z.number().int().positive('请选择销售单'),
-  reason: z.string().max(500).optional(),
+  reason: z.string().trim().min(1, '请填写超额原因').max(500),
+  expiresAt: z.string().datetime().optional(),
 })
-const rejectSchema = z.object({ reason: z.string().min(1, '请填写驳回原因').max(300) })
+const approvalSchema = z.object({ expectedTaskId: z.number().int().positive().optional(), reason: z.string().trim().max(500).optional() })
+const rejectSchema = approvalSchema.extend({ reason: z.string().trim().min(1, '请填写驳回原因').max(300) })
 
 router.use(authMiddleware)
 router.get('/',             requirePermission(PERMISSIONS.SALE_CREDIT_OVERRIDE_VIEW), ctrl.list)
@@ -19,9 +21,9 @@ router.get('/:id',          requirePermission(PERMISSIONS.SALE_CREDIT_OVERRIDE_V
 router.post('/',            requirePermission(PERMISSIONS.SALE_CREDIT_OVERRIDE_APPLY), validateBody(createSchema), ctrl.create)
 router.post('/:id/submit',  requirePermission(PERMISSIONS.SALE_CREDIT_OVERRIDE_APPLY), ctrl.submit)
 router.post('/:id/cancel',  requirePermission(PERMISSIONS.SALE_CREDIT_OVERRIDE_APPLY), ctrl.cancel)
-// 审批入口用 apply 码（业务相关用户即可），真正「谁是审批人」由引擎按流程配置硬校验
-// （超管 roleId=1 恒可代批）。不给 apply 权限的只读角色即使有 view 也批不了。
-router.post('/:id/approve', requirePermission(PERMISSIONS.SALE_CREDIT_OVERRIDE_APPLY), ctrl.approve)
+// 沿用既有 apply 路由码，不增默认授权；独立审批码及岗位赋权待用户确认。
+// service 再核当前业务/查看/待办权限、自批设置、仓范围与准确节点；管理员也须命中节点。
+router.post('/:id/approve', requirePermission(PERMISSIONS.SALE_CREDIT_OVERRIDE_APPLY), validateBody(approvalSchema), ctrl.approve)
 router.post('/:id/reject',  requirePermission(PERMISSIONS.SALE_CREDIT_OVERRIDE_APPLY), validateBody(rejectSchema), ctrl.reject)
 
 module.exports = router

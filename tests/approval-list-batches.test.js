@@ -20,6 +20,11 @@ function loadService(db) {
   const context = { module: { exports: {} }, require: name => {
     if (name === '../../config/db') return { pool: db }
     if (name === '../../engine/approvalEngine') return engine
+    if (name === '../../utils/saleDocumentScope') {
+      const helper={module:{exports:{}},require:n=>n==='./warehouseScope'?{assertInScope:()=>{}}:require('../backend/src/utils/'+n.replace('./',''))}
+      vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../backend/src/utils/saleDocumentScope.js'),'utf8'),helper)
+      return helper.module.exports
+    }
     if (name === '../../utils/warehouseScope') {
       const scopeContext = { module: { exports: {} }, require: n => n === '../config/db' ? { pool: db } : require('../backend/src/utils/AppError') }
       vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../backend/src/utils/warehouseScope.js'), 'utf8'), scopeContext)

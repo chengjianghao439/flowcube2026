@@ -130,7 +130,7 @@ export type CommercialOperation =
   | {
       action: Exclude<CommercialAction, 'create' | 'update' | 'adjust'>
       id: number
-      body: CommercialMarker & { groups?: { groupId: number; qty: number }[]; confirmCreditOverride?: boolean }
+      body: CommercialMarker & { groups?: { groupId: number; qty: number }[] }
     }
 /** Mounted request plan; third batch can persist/query this exact original identity. */
 export interface CommercialOperationPlan {

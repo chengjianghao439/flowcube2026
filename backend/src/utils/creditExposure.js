@@ -30,15 +30,28 @@ async function getCustomerCreditUsed(conn, customerId, { excludeSaleOrderId = nu
   return Math.round((Number(a.used) + Number(b.used_open)) * 10000) / 10000
 }
 
-/** 当前操作者是否有超额放行权限（回查角色权限，自包含不依赖中间件；超管 roleId=1 恒有） */
-async function hasCreditOverridePermission(conn, operator) {
-  if (Number(operator?.roleId) === 1) return true
-  if (operator?.roleId == null) return false
-  const [rows] = await conn.query(
-    'SELECT 1 FROM sys_role_permissions WHERE role_id=? AND permission=? LIMIT 1',
-    [operator.roleId, 'sale.credit.override'],
-  )
-  return rows.length > 0
+// Fixed-size batch for approved-request lists. Same A+B source predicates as
+// above; subtract each order's contribution before converting exact DECIMAL4.
+async function getCustomerCreditUsedForOrders(db, orders) {
+  if (!orders.length) return new Map()
+  const { moneyUnits, moneyNumber } = require('./decimalMoney')
+  const customerIds = [...new Set(orders.map(o => Number(o.customer_id)))]
+  const [rows] = await db.query(`SELECT customer_id,order_id,SUM(amount) AS used FROM (
+    SELECT so.customer_id,so.id AS order_id,pr.balance AS amount
+    FROM payment_records pr JOIN sale_orders so ON so.id=pr.order_id
+    WHERE pr.type=2 AND pr.status IN (1,2) AND so.customer_id IN (?)
+    UNION ALL
+    SELECT so.customer_id,so.id,GREATEST(0,(so.total_amount-COALESCE(so.discount_amount,0))-COALESCE(pr.total_amount,0))
+    FROM sale_orders so LEFT JOIN payment_records pr ON pr.type=2 AND pr.order_id=so.id
+    WHERE so.customer_id IN (?) AND so.status IN (2,3,6) AND so.deleted_at IS NULL
+  ) credit_parts GROUP BY customer_id,order_id`, [customerIds,customerIds])
+  const totals = new Map(), own = new Map()
+  for (const r of rows) {
+    const amount = moneyUnits(r.used ?? 0)
+    totals.set(Number(r.customer_id),(totals.get(Number(r.customer_id)) || 0n)+amount)
+    own.set(Number(r.order_id),amount)
+  }
+  return new Map(orders.map(o => [Number(o.id),moneyNumber((totals.get(Number(o.customer_id)) || 0n)-(own.get(Number(o.id)) || 0n))]))
 }
 
-module.exports = { getCustomerCreditUsed, hasCreditOverridePermission }
+module.exports = { getCustomerCreditUsed, getCustomerCreditUsedForOrders }

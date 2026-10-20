@@ -6,9 +6,7 @@ import { useInvalidate } from '@/hooks/useInvalidate'
 import { toast } from '@/lib/toast'
 import { ApiClientError } from '@/api/client'
 import { createRequestKey } from '@/lib/requestKey'
-import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
-import { confirmAction } from '@/lib/confirm'
 import type { CreateSaleParams, UpdateSaleParams, ReserveItemOverride, ShipItemRequest } from '@/types/sale'
 import { captureKitReadOwner } from './useKits'
 import { useKitOperation } from './useKitOperation'
@@ -17,7 +15,6 @@ import { commercialReadConfig } from '@/api/sale-commercial'
 import { useAuthStore } from '@/store/authStore'
 import { hasPermission } from '@/lib/permissions'
 import { useOrdinarySaleOperation, type OrdinarySaleBody, type OrdinarySaleKind } from './useOrdinarySaleOperation'
-import { captureInboundEditOwner, inboundEditOwnerCurrent } from './useInboundTaskEditRecovery'
 
 export const useSaleList   = (params: object, summary = false) => useVisibleQuery({ queryKey: ['sale', params, summary], queryFn: ({ signal }) => getSaleListApi(params, summary, signal) })
 export const useSaleDetail = (id: number)     => useQuery({ queryKey: ['sale', id],     queryFn: () => getSaleDetailApi(id), enabled: !!id })
@@ -61,7 +58,7 @@ export const useAdjustSale = () => {
   })
 }
 
-type ReserveVariables = {id:number;items?:ReserveItemOverride[];confirmCreditOverride?:boolean}
+type ReserveVariables = {id:number;items?:ReserveItemOverride[];}
 type ReleaseVariables = {id:number;items?:ReserveItemOverride[]}
 type ShipVariables = {id:number;items?:ShipItemRequest[]}
 const ordinaryEvents = {reserve:'sale_reserve',release:'sale_reserve',ship:'sale_ship'} as const
@@ -76,25 +73,15 @@ function useOrdinaryMutation<P extends {id:number}>(saleId:number | null | undef
   async function recover(retry:boolean){const answer=await(retry?write.retry():write.queryOriginal());if(answer.status==='success' && 'query' in answer){invalidate(ordinaryEvents[answer.query.kind]);toast.success('原操作已确认成功，请核对原订单')}return answer}
   return {...mutation,recovery:{...write,queryOriginal:()=>recover(false),retry:()=>recover(true)}}
 }
-// 三动作共用原订单未决闸门；授信明确拒绝后的授权是员工确认的新意图。
-export const useReserveSale = (saleId?:number | null) => {
-  const {can}=usePermission()
-  const mutation=useOrdinaryMutation<ReserveVariables>(saleId,'reserve',v=>({... (v.items?.length?{items:v.items}:{}),...(v.confirmCreditOverride?{confirmCreditOverride:true}:{})}),(e,variables)=>{
-    if(e instanceof ApiClientError && e.code==='STOCK_SHORTAGE')return
-    if(e instanceof ApiClientError && e.code==='CREDIT_LIMIT_EXCEEDED'){
-      const d=(e.data??{}) as {creditLimit?:number;used?:number;thisOrder?:number;overBy?:number}, originalOwner=captureInboundEditOwner()
-      if(can(PERMISSIONS.SALE_CREDIT_OVERRIDE)) confirmAction({title:'客户授信额度不足',description:`授信额度 ${d.creditLimit}，已用 ${d.used}，本单 ${d.thisOrder}，超出 ${d.overBy}。确认授权超额放行、继续占库？`,confirmText:'授权放行',variant:'destructive',onConfirm:()=>{
-        const auth=useAuthStore.getState()
-        if(!inboundEditOwnerCurrent(originalOwner) || !hasPermission(auth.user?.permissions,PERMISSIONS.SALE_CREDIT_OVERRIDE,auth.user?.roleId)){toast.error('原账号、服务器或授权权限已变化，请重新核对');return}
-        mutation.mutate({...variables,confirmCreditOverride:true})
-      }})
-      else toast.error(`客户授信额度不足，超出 ${d.overBy}，你无放行权限`)
-      return
-    }
-    toast.error(e instanceof Error?e.message:'占库结果待确认，请查询原操作')
-  })
-  return mutation
-}
+// 超额仅能走申请审批；保留原请求结果恢复，不提供直接授权重试。
+export const useReserveSale = (saleId?:number | null) => useOrdinaryMutation<ReserveVariables>(saleId,'reserve',v=>v.items?.length?{items:v.items}:{},e=>{
+  if(e instanceof ApiClientError && e.code==='STOCK_SHORTAGE')return
+  if(e instanceof ApiClientError && e.code==='CREDIT_LIMIT_EXCEEDED'){
+    toast.error('客户授信额度不足，请在超额放行申请中提交审批，批准后再占库')
+    return
+  }
+  toast.error(e instanceof Error?e.message:'占库结果待确认，请查询原操作')
+})
 export const useReleaseSale = (saleId?:number | null) => useOrdinaryMutation<ReleaseVariables>(saleId,'release',v=>v.items?.length?{items:v.items}:{})
 export const useShipSale = (saleId?:number | null) => useOrdinaryMutation<ShipVariables>(saleId,'ship',v=>v.items?.length?{items:v.items}:{})
 

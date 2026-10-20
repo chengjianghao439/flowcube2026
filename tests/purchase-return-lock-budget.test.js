@@ -114,7 +114,7 @@ function fixture({ waitBudget = false, legacy = false, orphan = false, driftPR =
 
     '../fulfillment/fulfillment.refresh': { commitFulfillment }, '../../config/db': { pool: { getConnection: async () => conn } }, '../../utils/AppError': AppError,
     '../../engine/inventoryEngine': { MOVE_TYPE: {}, moveStock: async (actual, item) => { assert.equal(actual, conn); events.push('inventory'); moves.push(item) } },
-    '../../engine/containerEngine': { unlockContainersByTask: async () => {} }, '../../utils/statusTransition': transition, '../../utils/creditExposure': {}, '../../constants/warehouseTaskStatus': warehouseStatus,
+    '../../engine/containerEngine': { unlockContainersByTask: async () => {} }, '../../utils/statusTransition': transition, '../../utils/creditExposure': {}, '../credit-overrides/credit-overrides.service': { hasApprovedOverride: async () => { throw Error('purchase return must not request sale credit approval') } }, '../../constants/warehouseTaskStatus': warehouseStatus,
     './warehouse-task-events.service': { WT_EVENT: {}, record: async () => {} }, '../../utils/operationRequest': request, '../sale/sale.contracts': {},
     './warehouse-tasks.helpers': { assertTaskScope: row => scope.assertInScope([8], row.warehouse_id), assertTaskPickScanClosure: async () => {}, logSideEffectFailure: () => {} }, './warehouse-tasks.query': {},
     '../returns/returns.purchase-lock': locks, '../returns/returns-purchase.service': returns,

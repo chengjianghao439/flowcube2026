@@ -270,8 +270,8 @@ const DOCUMENT_STATUS_RULES = Object.freeze({
       },
       reject: { from: [2], to: 4, message: '只有待审批的放行申请可以驳回' },
       cancel: {
-        from: [1, 2, 4], to: 5, message: '当前状态的放行申请不能取消',
-        blocked: { 3: '已批准的放行申请不能取消（已生效放行）', 5: '该放行申请已取消' },
+        from: [1, 2, 3, 4], to: 5, message: '当前状态的放行申请不能取消',
+        blocked: { 5: '该放行申请已取消' },
       },
     },
   },

@@ -22,7 +22,7 @@ const { round2 } = require('../../utils/unitConversion')  // 金额仍保留原�
 const { normalizeFixedSaleItems, originalSaleItems, legacyPreviewGroups } = require('./sale.shipping-quantity')
 const { assertQtyPrecision, loadQtyPolicies } = require('../../utils/qtyPrecision')  // 商品级数量精度开关（迁移 254）
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
-const { getCustomerCreditUsed, hasCreditOverridePermission } = require('../../utils/creditExposure')
+const { getCustomerCreditUsed } = require('../../utils/creditExposure')
 const creditOverrideSvc = require('../credit-overrides/credit-overrides.service')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { SALE_STATUS, SALE_STATUS_NAME } = require('../../constants/saleOrderStatus')
@@ -1457,7 +1457,7 @@ async function getReservePreview(id, scopeWarehouseIds = null) {
 //
 // items: [{ id, warehouseId, warehouseName, qty }]（qty 为本次要占的数量，>0）
 // 先做一次全量可用量检查（不实际预占），把所有不足的商品一次性收集进错误明细。
-async function reserveStock(id, operator, items = [], { confirmCreditOverride = false, scopeWarehouseIds = null, requestKey = null, commercialModel, expectedRevision } = {}) {
+async function reserveStock(id, operator, items = [], { scopeWarehouseIds = null, requestKey = null, commercialModel, expectedRevision } = {}) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
@@ -1506,22 +1506,22 @@ async function reserveStock(id, operator, items = [], { confirmCreditOverride = 
       if (used + thisOrder > limit) {
         const overBy = Math.round((used + thisOrder - limit) * 100) / 100
         const approvedOverrideId = await creditOverrideSvc.hasApprovedOverride(id, {
+          explainInvalid: true,
           conn,
           customerId: orderRow.customer_id,
           creditLimit: limit,
           thisAmount: thisOrder,
+          order: orderRow,
           overAmount: overBy,
         })
-        const allowOverride = approvedOverrideId != null || (confirmCreditOverride && await hasCreditOverridePermission(conn, operator))
+        const allowOverride = approvedOverrideId != null
         if (!allowOverride) {
           throw new AppError('客户授信额度不足', 409, 'CREDIT_LIMIT_EXCEEDED', { creditLimit: limit, used, thisOrder, overBy })
         }
-        const via = approvedOverrideId != null
-          ? `已批准放行申请单 CO#${approvedOverrideId} 自动放行`
-          : '一次性授权放行'
+        const via = `已批准放行申请单 CO#${approvedOverrideId} 放行`
         await appendSaleEvent(conn, id, 'credit_override', '超额授信放行',
           `额度 ${limit}，已用 ${used}，本单 ${thisOrder}，超出 ${overBy}，${via}`, operator,
-          { creditLimit: limit, used, thisOrder, overBy, via: approvedOverrideId != null ? 'approved_override' : 'manual_override', approvedOverrideId })
+          { creditLimit: limit, used, thisOrder, overBy, via: 'approved_override', approvedOverrideId })
       }
     }
 

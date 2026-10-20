@@ -65,7 +65,7 @@ test('报销真实页面原批准回调成功才刷新统一待办，错误仍�
 
 function CreditActions() {
   const submit = useSubmitCreditOverride(), cancel = useCancelCreditOverride(), approve = useApproveCreditOverride(), reject = useRejectCreditOverride()
-  return <><button onClick={() => submit.mutate(11)}>submit</button><button onClick={() => cancel.mutate(11)}>cancel</button><button onClick={() => approve.mutate(11)}>approve</button><button onClick={() => reject.mutate({ id: 11, reason: '测试原因' })}>reject</button></>
+  return <><button onClick={() => submit.mutate(11)}>submit</button><button onClick={() => cancel.mutate(11)}>cancel</button><button onClick={() => approve.mutate({id:11,expectedTaskId:91})}>approve</button><button onClick={() => reject.mutate({ id: 11, expectedTaskId:91, reason: '测试原因' })}>reject</button></>
 }
 function button(label: string, area: ParentNode = host) {
   const found = [...area.querySelectorAll<HTMLButtonElement>('button')].find(b => b.textContent?.trim() === label)

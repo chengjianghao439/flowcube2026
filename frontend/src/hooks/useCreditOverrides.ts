@@ -7,6 +7,7 @@ import {
   cancelCreditOverrideApi,
   approveCreditOverrideApi,
   rejectCreditOverrideApi,
+  type CreditApprovalIntent,
 } from '@/api/credit-overrides'
 import type { CreateCreditOverrideParams } from '@/types/credit-override'
 import { useInvalidate } from './useInvalidate'
@@ -51,11 +52,11 @@ export function useCancelCreditOverride() {
 export function useApproveCreditOverride() {
   const qc = useQueryClient()
   const invalidate = useInvalidate()
-  return useMutation({ mutationFn: (id: number) => approveCreditOverrideApi(id), onSuccess: () => { invalidate('approval_pending_changed'); return qc.invalidateQueries({ queryKey: [QUERY_KEY] }) } })
+  return useMutation({ mutationFn: (intent: CreditApprovalIntent) => approveCreditOverrideApi(intent), onSuccess: () => { invalidate('approval_pending_changed'); return qc.invalidateQueries({ queryKey: [QUERY_KEY] }) } })
 }
 
 export function useRejectCreditOverride() {
   const qc = useQueryClient()
   const invalidate = useInvalidate()
-  return useMutation({ mutationFn: ({ id, reason }: { id: number; reason: string }) => rejectCreditOverrideApi(id, reason), onSuccess: () => { invalidate('approval_pending_changed'); return qc.invalidateQueries({ queryKey: [QUERY_KEY] }) } })
+  return useMutation({ mutationFn: (intent: CreditApprovalIntent) => rejectCreditOverrideApi(intent), onSuccess: () => { invalidate('approval_pending_changed'); return qc.invalidateQueries({ queryKey: [QUERY_KEY] }) } })
 }

@@ -6,7 +6,7 @@
  *
  * 覆盖语义：
  *   1. 客户授信不足且操作者无 override 权限 → 占库硬拦截（CREDIT_LIMIT_EXCEEDED）。
- *   2. 销售员（role 3，有 apply 权限）发起放行申请 → 草稿 → 提交 → 走多级审批流。
+ *   2. 合成业务用户（role 3，测试内补齐 apply 权限）发起放行申请 → 草稿 → 提交 → 走多级审批流。
  *   3. 审批人批准 → 申请单已批准（3）。
  *   4. ★ 核心：该销售单再有任意用户（无 override 权限）占库 → 自动放行成功。
  *   5. 另一张未申请的销售单（同客户超限）占库 → 仍拦截。
@@ -140,11 +140,12 @@ async function main() {
       log.assert('提交后待审批 + 建审批实例', submitR.ok && submitR.data?.data?.multiLevel === true, JSON.stringify(submitR.data))
 
       // 申请人自批被拒（routes 权限通过，但 service/引擎校验）
-      const selfApprove = await http.post(`/api/credit-overrides/${applyId}/approve`, { token: salesToken })
+      const [[task]]=await pool.query('SELECT t.id FROM approval_instance_tasks t JOIN approval_instances i ON i.id=t.instance_id WHERE i.biz_type=\'sale_credit_override\' AND i.biz_id=? AND t.step_order=i.current_step',[applyId])
+      const selfApprove = await http.post(`/api/credit-overrides/${applyId}/approve`, { token: salesToken, json:{expectedTaskId:task.id,reason:'合成自批'}, headers:{'X-Request-Key':`self-${ref}`} })
       log.assert('申请人自批被拒', !selfApprove.ok && selfApprove.status === 403, `${selfApprove.status} ${JSON.stringify(selfApprove.data)}`)
 
       // 超管批准 → 申请单已批准
-      const approveR = await http.post(`/api/credit-overrides/${applyId}/approve`, { token: adminToken })
+      const approveR = await http.post(`/api/credit-overrides/${applyId}/approve`, { token: adminToken, json:{expectedTaskId:task.id},headers:{'X-Request-Key':`approve-${ref}`} })
       log.assert('审批通过 → 申请单已批准(3)', approveR.ok && approveR.data?.data?.status === 3, JSON.stringify(approveR.data))
 
       const detail = await http.get(`/api/credit-overrides/${applyId}`, { token: salesToken })

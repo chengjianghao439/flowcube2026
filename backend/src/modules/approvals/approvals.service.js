@@ -4,6 +4,7 @@ const approvalEngine = require('../../engine/approvalEngine')
 const refundActor = require('../refunds/supplier-refunds.actor')
 const { PERMISSIONS: P } = require('../../constants/permissions')
 const { assertInScope, scopeFilter } = require('../../utils/warehouseScope')
+const { saleDocumentScopeFilter, assertSaleDocumentInScope } = require('../../utils/saleDocumentScope')
 const { assertSqlIdentifier } = require('../../utils/sqlIdentifier')
 
 /**
@@ -233,7 +234,7 @@ async function listPending({ page = 1, pageSize = 20 }, user) {
   try {
     await conn.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ')
     await conn.query('START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY')
-    const required = [...new Set([P.APPROVAL_TASK_VIEW, P.FINANCE_EXPENSE_VIEW_ALL, ...Object.values(BIZ_DOC_META).map(m => m.permission), ...Object.values(DOCUMENT_PENDING_META).map(m => m.approvePermission), ...SUPPLIER_REFUND_PENDING.permissions])]
+    const required = [...new Set([P.APPROVAL_TASK_VIEW, P.FINANCE_EXPENSE_VIEW_ALL, ...Object.values(BIZ_DOC_META).map(m => m.permission), ...Object.values(DOCUMENT_PENDING_META).map(m => m.approvePermission), ...SUPPLIER_REFUND_PENDING.permissions, P.SALE_CREDIT_OVERRIDE_APPLY])]
     const [permissions] = await conn.query('SELECT permission FROM sys_role_permissions WHERE role_id=? AND permission IN (?)', [roleId, required])
     const held = new Set(permissions.map(row => row.permission))
     const can = permission => roleId === 1 || held.has(permission)
@@ -248,6 +249,17 @@ async function listPending({ page = 1, pageSize = 20 }, user) {
       const conds = [meta.softDelete ? 'd.deleted_at IS NULL' : '1=1']
       const branchParams = [bizType, userId]
       if (!can(P.APPROVAL_TASK_VIEW) || !can(meta.permission)) conds.push('1=0')
+      if (bizType === 'sale_credit_override') {
+        if (!can(P.SALE_CREDIT_OVERRIDE_APPLY)) conds.push('1=0')
+        conds.push('d.status=2', '(?=1 OR i.applicant_id<>?)',
+          'NOT EXISTS (SELECT 1 FROM sale_credit_overrides newer WHERE newer.sale_order_id=d.sale_order_id AND newer.id>d.id)',
+          'EXISTS (SELECT 1 FROM sale_credit_approval_proofs credit_proof WHERE credit_proof.override_id=d.id AND credit_proof.sale_order_id=d.sale_order_id AND (credit_proof.expires_at IS NULL OR credit_proof.expires_at>NOW()))',
+          'EXISTS (SELECT 1 FROM sale_orders credit_order WHERE credit_order.id=d.sale_order_id AND credit_order.deleted_at IS NULL AND credit_order.status IN (1,2,3,6))')
+        branchParams.push(selfApproval,userId)
+        const saleScope = saleDocumentScopeFilter(scope,'d.sale_order_id')
+        if (saleScope.sql) conds.push(saleScope.sql.replace(/^ AND /,''))
+        branchParams.push(...saleScope.params)
+      }
       if (meta.warehouseCol) {
         const warehouseCol = assertSqlIdentifier(meta.warehouseCol, 'approval document warehouse')
         const filter = scopeFilter(scope, `d.${warehouseCol}`)
@@ -367,6 +379,11 @@ async function getBizApproval({ bizType, bizId, user = null, scopeWarehouseIds =
       const [[doc]] = await conn.query(
         `SELECT ${warehouseCol} AS wh FROM ${table} WHERE id=? LIMIT 1`, [bizId])
       if (doc) assertInScope(scopeWarehouseIds, doc.wh, meta.name)
+    }
+    if (bizType === 'sale_credit_override') {
+      const [[credit]] = await conn.query('SELECT sale_order_id FROM sale_credit_overrides WHERE id=? AND deleted_at IS NULL',[bizId])
+      if (!credit) throw new AppError('放行申请不存在',404)
+      await assertSaleDocumentInScope(conn,scopeWarehouseIds,credit.sale_order_id)
     }
     if (meta.authorize) await meta.authorize(conn, { bizId, user })
     const got = await approvalEngine.getLatestInstanceByBiz(conn, { bizType, bizId })

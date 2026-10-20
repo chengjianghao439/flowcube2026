@@ -1,3 +1,4 @@
+import { withRequestKeyHeaders } from '@/lib/requestKey'
 import { payloadClient as apiClient } from './client'
 import type { PaginatedData } from '@/types'
 import type { CreditOverride, CreateCreditOverrideParams } from '@/types/credit-override'
@@ -13,5 +14,6 @@ export const createCreditOverrideApi = (d: CreateCreditOverrideParams) =>
 
 export const submitCreditOverrideApi = (id: number) => apiClient.post<unknown>(`/credit-overrides/${id}/submit`)
 export const cancelCreditOverrideApi = (id: number) => apiClient.post<unknown>(`/credit-overrides/${id}/cancel`)
-export const approveCreditOverrideApi = (id: number) => apiClient.post<unknown>(`/credit-overrides/${id}/approve`)
-export const rejectCreditOverrideApi = (id: number, reason: string) => apiClient.post<unknown>(`/credit-overrides/${id}/reject`, { reason })
+export type CreditApprovalIntent = { id: number; expectedTaskId: number; reason?: string }
+export const approveCreditOverrideApi = ({id,...body}: CreditApprovalIntent) => apiClient.post<unknown>(`/credit-overrides/${id}/approve`, body, { headers: withRequestKeyHeaders(`credit-approve-${id}-${body.expectedTaskId}`) })
+export const rejectCreditOverrideApi = ({id,...body}: CreditApprovalIntent) => apiClient.post<unknown>(`/credit-overrides/${id}/reject`, body, { headers: withRequestKeyHeaders(`credit-reject-${id}-${body.expectedTaskId}`) })
