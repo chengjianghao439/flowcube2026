@@ -28,6 +28,7 @@ def load():
     return module
 
 
+TARGET = '415f70650da5cf575e3a1b9ed5e726e4a7aa1544'  # synthetic-use target; any 40-hex works
 REQUIRE_COMPOSE = os.environ.get('PREFLIGHT_REQUIRE_COMPOSE') == '1'
 REAL_COMPOSE = REQUIRE_COMPOSE or os.environ.get('PREFLIGHT_REAL_COMPOSE') == '1'
 
@@ -298,7 +299,7 @@ class PreflightTests(unittest.TestCase):
 
     def test_original_preconditions_preserved_and_fail_closed(self):
         guards = {
-            'targetSha': self.p.APP_SHA, 'preparedTargetSha': self.p.APP_SHA,
+            'targetSha': TARGET, 'preparedTargetSha': TARGET,
             'archiveSha256': 'a'*64, 'preparedArchiveSha256': 'a'*64,
             'mysqlVersion': '8.0.45', 'containerIdsMatch': True, 'allRunningNoRestarts': True,
             'trackedDiff': False, 'cachedDiff': False, 'freeDiskMiB': 7000,
@@ -309,23 +310,23 @@ class PreflightTests(unittest.TestCase):
             'globals': {'innodb_fast_shutdown': '1', 'log_bin_trust_function_creators': 'OFF'},
             'permissionForecast': {'deleted': [], 'added': sorted([list(p) for p in self.p.STRICT_ADDS]),
                                    'protectedRoles': sorted(self.p.PROTECTED_ROLE_CODES), 'warehouseManagerCount': 0}}
-        self.p.check_guards(guards)
+        self.p.check_guards(guards, TARGET)
         for key, value in [('mysqlVersion', '8.0.46'), ('freeDiskMiB', 5000), ('enabledEvents', 1),
                            ('pendingMigrations', []), ('targetSha', 'b'*40), ('containerIdsMatch', False)]:
             bad = copy.deepcopy(guards)
             bad[key] = value
-            self.failure(self.p.check_guards, bad)
+            self.failure(self.p.check_guards, bad, TARGET)
         bad = copy.deepcopy(guards)
         bad['permissionForecast']['deleted'] = [['sales', 'example']]
-        self.failure(self.p.check_guards, bad)
+        self.failure(self.p.check_guards, bad, TARGET)
         bad = copy.deepcopy(guards)
         bad['permissionForecast']['added'] += [['sales', 'example']]
-        self.failure(self.p.check_guards, bad)
-        self.failure(self.p.check_guards, {})
+        self.failure(self.p.check_guards, bad, TARGET)
+        self.failure(self.p.check_guards, {}, TARGET)
 
     def guards(self):
         return {
-            'targetSha': self.p.APP_SHA, 'preparedTargetSha': self.p.APP_SHA,
+            'targetSha': TARGET, 'preparedTargetSha': TARGET,
             'archiveSha256': 'a'*64, 'preparedArchiveSha256': 'a'*64,
             'mysqlVersion': '8.0.45', 'containerIdsMatch': True, 'allRunningNoRestarts': True,
             'trackedDiff': False, 'cachedDiff': False, 'freeDiskMiB': 7000,
@@ -370,7 +371,7 @@ class PreflightTests(unittest.TestCase):
     def test_whole_preflight_accepts_exact_three_service_combinations(self):
         bundle, outputs = self.bundle()
         with patch.object(self.p, 'compose_config', side_effect=outputs) as compose:
-            result = self.p.preflight(bundle)
+            result = self.p.preflight(bundle, TARGET)
         self.assertEqual(compose.call_count, 6)
         self.assertEqual(result['status'], 'passed')
         self.assertFalse(result['productionMutationStarted'])
@@ -386,7 +387,7 @@ class PreflightTests(unittest.TestCase):
             for config in document['services'].values():
                 config['build'] = {'context': str(root.resolve() / 'build'), 'dockerfile': 'Dockerfile'}
         with patch.object(self.p, 'compose_config', side_effect=outputs):
-            self.assertEqual(self.p.preflight(bundle)['status'], 'passed')
+            self.assertEqual(self.p.preflight(bundle, TARGET)['status'], 'passed')
 
     def test_success_does_not_write_evidence_or_input_files(self):
         bundle, outputs = self.bundle()
@@ -395,8 +396,11 @@ class PreflightTests(unittest.TestCase):
         paths = [evidence_file] + self.files
         before = {str(p): p.read_bytes() for p in paths}
         output = io.StringIO()
-        with patch.object(self.p, 'compose_config', side_effect=outputs), contextlib.redirect_stdout(output):
-            self.assertEqual(self.p.main(['--evidence', str(evidence_file)]), 0)
+        with patch.object(self.p, 'compose_config', side_effect=outputs), \
+                patch.object(self.p, 'verify_target_scope') as scope, contextlib.redirect_stdout(output):
+            self.assertEqual(self.p.main(['--evidence', str(evidence_file), '--target-sha', TARGET]), 0)
+        scope.assert_called_once()
+        self.assertEqual(scope.call_args[0][0], TARGET)
         self.assertEqual({str(p): p.read_bytes() for p in paths}, before)
         self.assertEqual(json.loads(output.getvalue())['status'], 'passed')
 
@@ -407,7 +411,7 @@ class PreflightTests(unittest.TestCase):
             for document in outputs[2:4]:
                 document['services']['backend']['environment']['CORS_ALLOW_NULL_ORIGIN'] = value
             with patch.object(self.p, 'compose_config', side_effect=outputs) as compose:
-                record = self.failure(self.p.preflight, bundle)
+                record = self.failure(self.p.preflight, bundle, TARGET)
             self.assertEqual(record['check'], 'backend.environment')
             self.assertEqual(compose.call_count, 4)  # frontend is never evaluated after failure
 
@@ -416,7 +420,7 @@ class PreflightTests(unittest.TestCase):
         for key in ('inputs', 'candidateInputs'):
             bundle['services']['mysql'][key]['files'][1]['label'] = '/snapshot/app/prod.yml'
         with patch.object(self.p, 'compose_config', side_effect=outputs) as compose:
-            self.failure(self.p.preflight, bundle)
+            self.failure(self.p.preflight, bundle, TARGET)
         compose.assert_not_called()
 
     def test_all_cli_schema_failures_hide_untrusted_input(self):
@@ -424,8 +428,9 @@ class PreflightTests(unittest.TestCase):
         for value in ('invalid-synthetic-secret', '[]', '{}', '{"guards": "synthetic-secret"}'):
             evidence.write_text(value)
             output, errors = io.StringIO(), io.StringIO()
-            with contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors):
-                self.assertEqual(self.p.main(['--evidence', str(evidence)]), 1)
+            with contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors), \
+                    patch.object(self.p, 'verify_target_scope'):
+                self.assertEqual(self.p.main(['--evidence', str(evidence), '--target-sha', TARGET]), 1)
             self.assertEqual(json.loads(output.getvalue())['status'], 'failed')
             self.assertNotIn('synthetic-secret', output.getvalue() + errors.getvalue())
             self.assertEqual(errors.getvalue(), '')
@@ -536,6 +541,130 @@ class PreflightTests(unittest.TestCase):
             self.files[1].write_text('services:\n  backend:\n    environment:\n      CORS_ALLOW_NULL_ORIGIN: "0"\n')
             wrong = self.p.compose_config(self.inputs)
             self.failure(self.p.compare_candidate, 'backend', merged, wrong)
+
+
+class TargetShaContract(unittest.TestCase):
+    """Release target is passed in; business code must equal the reviewed baseline."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.p = load()
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.repo = Path(self.temp.name)
+        self.env = dict(os.environ, GIT_AUTHOR_NAME='t', GIT_AUTHOR_EMAIL='t@t', GIT_COMMITTER_NAME='t',
+                        GIT_COMMITTER_EMAIL='t@t', GIT_CONFIG_NOSYSTEM='1')
+        self.git('init', '-q')
+        (self.repo / 'backend').mkdir()
+        (self.repo / 'backend/app.js').write_text('business\n')
+        self.baseline = self.commit('baseline')
+
+    def git(self, *args):
+        return subprocess.run(['git', '-C', str(self.repo)] + list(args), check=True, env=self.env,
+                              capture_output=True, text=True).stdout.strip()
+
+    def commit(self, message):
+        self.git('add', '-A')
+        self.git('commit', '-q', '--allow-empty', '-m', message)
+        return self.git('rev-parse', 'HEAD')
+
+    def scope(self, target):
+        with patch.object(self.p, 'BUSINESS_BASELINE_SHA', self.baseline):
+            return self.p.verify_target_scope(target, self.repo)
+
+    def failure(self, fn, *args):
+        with self.assertRaises(self.p.PreflightFailure) as caught:
+            fn(*args)
+        return caught.exception.record
+
+    def test_no_hardcoded_release_sha_remains(self):
+        self.assertFalse(hasattr(self.p, 'APP_SHA'))
+        self.assertEqual(self.p.BUSINESS_BASELINE_SHA, '734ed9924a3b6d3051962a3f06f81f5a04fc4213')
+        source = SCRIPT.read_text()
+        shas = set(__import__('re').findall(r'\b[0-9a-f]{40}\b', source))
+        self.assertEqual(shas, {self.p.BUSINESS_BASELINE_SHA})
+
+    def test_happy_path_only_preflight_files_changed(self):
+        for name in sorted(self.p.TARGET_ALLOWED_CHANGES):
+            path = self.repo / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('tooling\n')
+        target = self.commit('tooling')
+        self.assertEqual(self.scope(target), sorted(self.p.TARGET_ALLOWED_CHANGES))
+        self.assertEqual(self.scope(self.baseline), [])
+
+    def test_business_file_change_is_rejected(self):
+        (self.repo / 'scripts').mkdir()
+        (self.repo / 'scripts/offline_maintenance_preflight.py').write_text('tooling\n')
+        (self.repo / 'backend/app.js').write_text('changed business\n')
+        record = self.failure(self.scope, self.commit('sneaky'))
+        self.assertEqual(record['check'], 'target.business_changes_since_baseline')
+
+    def test_added_or_deleted_business_file_is_rejected(self):
+        (self.repo / 'backend/new.js').write_text('x\n')
+        self.failure(self.scope, self.commit('add'))
+        self.git('reset', '-q', '--hard', self.baseline)
+        (self.repo / 'backend/app.js').unlink()
+        self.failure(self.scope, self.commit('delete'))
+
+    def test_unknown_target_or_missing_repo_fails_closed(self):
+        self.assertEqual(self.failure(self.scope, 'f' * 40)['check'], 'target.git_diff')
+        with patch.object(self.p, 'BUSINESS_BASELINE_SHA', self.baseline):
+            self.failure(self.p.verify_target_scope, self.baseline, self.repo / 'absent')
+
+    def test_invalid_target_is_rejected_before_git(self):
+        with patch.object(subprocess, 'run', side_effect=AssertionError('ran git')):
+            for bad in (None, '', '415f7065', 'g' * 40, 'HEAD', '--output=x'):
+                self.assertEqual(self.failure(self.p.verify_target_scope, bad, self.repo)['check'], 'target.sha')
+
+    def run_main(self, argv, env_target=None):
+        env = {k: v for k, v in os.environ.items() if k != self.p.TARGET_SHA_ENV}
+        if env_target:
+            env[self.p.TARGET_SHA_ENV] = env_target
+        output, errors = io.StringIO(), io.StringIO()
+        with patch.dict(os.environ, env, clear=True), contextlib.redirect_stdout(output), \
+                contextlib.redirect_stderr(errors):
+            status = self.p.main(argv)
+        self.assertEqual(errors.getvalue(), '')
+        return status, json.loads(output.getvalue())
+
+    def test_missing_target_fails_closed(self):
+        evidence = self.repo / 'evidence.json'
+        evidence.write_text('{}')
+        with patch.object(self.p, 'preflight', side_effect=AssertionError('ran without target')):
+            status, record = self.run_main(['--evidence', str(evidence)])
+        self.assertEqual(status, 1)
+        self.assertEqual(record['check'], 'arguments.target_sha')
+
+    def test_target_from_env_and_conflict(self):
+        evidence = self.repo / 'evidence.json'
+        evidence.write_text('{}')
+        with patch.object(self.p, 'BUSINESS_BASELINE_SHA', self.baseline), \
+                patch.object(self.p, 'preflight', return_value={'status': 'passed'}) as run:
+            status, _ = self.run_main(['--evidence', str(evidence), '--repo', str(self.repo)], self.baseline)
+            self.assertEqual(status, 0)
+            self.assertEqual(run.call_args[0][1], self.baseline)
+            status, record = self.run_main(['--evidence', str(evidence), '--repo', str(self.repo),
+                                            '--target-sha', 'a' * 40], self.baseline)
+        self.assertEqual((status, record['check']), (1, 'arguments.target_sha'))
+
+    def test_business_change_blocks_cli_before_evidence(self):
+        (self.repo / 'backend/app.js').write_text('changed\n')
+        target = self.commit('business')
+        with patch.object(self.p, 'BUSINESS_BASELINE_SHA', self.baseline), \
+                patch.object(self.p, 'preflight', side_effect=AssertionError('evidence checked')):
+            status, record = self.run_main(['--evidence', '/absent.json', '--repo', str(self.repo),
+                                            '--target-sha', target])
+        self.assertEqual((status, record['check']), (1, 'target.business_changes_since_baseline'))
+
+    def test_target_must_match_release_data(self):
+        guards = {'targetSha': 'b' * 40, 'preparedTargetSha': 'b' * 40}
+        self.assertEqual(self.failure(self.p.check_guards, guards, 'a' * 40)['check'], 'guards.targetSha')
+        guards = {'targetSha': 'a' * 40, 'preparedTargetSha': 'b' * 40}
+        self.assertEqual(self.failure(self.p.check_guards, guards, 'a' * 40)['check'], 'guards.preparedTargetSha')
+        self.failure(self.p.check_guards, {}, None)
 
 
 if __name__ == '__main__':
