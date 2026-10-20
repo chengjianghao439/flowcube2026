@@ -444,6 +444,26 @@ class PreflightTests(unittest.TestCase):
         changed['Config']['Healthcheck'] = {'Test': ['NONE']}
         self.failure(self.p.compare_runtime, 'backend', self.document, changed, self.image)
 
+    def test_null_or_empty_volumes_mean_no_volumes(self):
+        for image_volumes in (None, {}):
+            for compose_volumes in (None, []):
+                image = copy.deepcopy(self.image)
+                image['Config']['Volumes'] = image_volumes
+                document = copy.deepcopy(self.document)
+                document['services']['backend']['volumes'] = compose_volumes
+                self.p.compare_runtime('backend', document, self.runtime, image)
+        # Counter-examples: a real unexpected volume still fails.
+        image = copy.deepcopy(self.image)
+        image['Config']['Volumes'] = None
+        changed = copy.deepcopy(self.runtime)
+        changed['Mounts'] = [{'Type': 'volume', 'Name': 'surprise', 'Source': '/var/lib/docker/volumes/surprise',
+                              'Destination': '/data', 'RW': True}]
+        self.failure(self.p.compare_runtime, 'backend', self.document, changed, image)
+        image['Config']['Volumes'] = {'/data': {}}
+        self.failure(self.p.compare_runtime, 'backend', self.document, self.runtime, image)
+        image['Config']['Volumes'] = ['/data']
+        self.failure(self.p.compare_runtime, 'backend', self.document, self.runtime, image)
+
     def test_realistic_health_ports_mounts_and_limits_match(self):
         self.service.update({'ports': [{'target': 3000, 'published': '3000', 'host_ip': '127.0.0.1', 'protocol': 'tcp', 'mode': 'ingress'}],
                              'healthcheck': {'test': ['CMD', 'check'], 'interval': '1m30s', 'retries': 3},

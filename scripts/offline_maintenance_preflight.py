@@ -293,7 +293,7 @@ def normalize_document_paths(document, inputs):
                 for key in ('context', 'dockerfile'):
                     if key in build:
                         build[key] = project_path(build[key], local, original)
-            for mount in config.get('volumes', []):
+            for mount in config.get('volumes') or []:
                 if mount.get('type') == 'bind':
                     mount['source'] = project_path(mount['source'], local, original)
     except (KeyError, TypeError, ValueError, AttributeError, OSError):
@@ -477,8 +477,12 @@ def compare_runtime(service, document, runtime, image, path_map=None):
 
 
 def check_mounts(service, config, document, runtime, defaults, path_map):
+    # docker inspect reports Config.Volumes as null (or {}) when the image declares none.
+    image_volumes = defaults.get('Volumes') or {}
+    if not isinstance(image_volumes, dict):
+        raise PreflightFailure(service + '.mounts.image_volumes_schema', 'invalid', 'object or null')
     expected = {}
-    for mount in config.get('volumes', []):
+    for mount in config.get('volumes') or []:
         if set(mount) - {'type', 'source', 'target', 'read_only', 'bind', 'volume'}:
             raise PreflightFailure(service + '.mounts.supported', mount, 'simple bind or volume')
         if mount.get('bind', {}) not in ({}, {'create_host_path': True}):
@@ -500,13 +504,13 @@ def check_mounts(service, config, document, runtime, defaults, path_map):
         target = mount['Destination']
         if mount['Type'] == 'bind':
             require_equal(service + '.mounts.propagation', mount.get('Propagation', 'rprivate'), 'rprivate')
-        if target not in expected and target in defaults.get('Volumes', {}):
+        if target not in expected and target in image_volumes:
             # Image-created anonymous volume identity is not deterministic.
             require_equal(service + '.mounts.image_volume', [mount['Type'], mount['RW']], ['volume', True])
             continue
         actual[target] = [mount['Type'], mount.get('Name') if mount['Type'] == 'volume' else mount['Source'], mount['RW']]
     require_equal(service + '.mounts', actual, expected)
-    missing_image_volumes = set(defaults.get('Volumes', {})) - set(expected) - {m['Destination'] for m in runtime['Mounts']}
+    missing_image_volumes = set(image_volumes) - set(expected) - {m['Destination'] for m in runtime['Mounts']}
     require_equal(service + '.mounts.image_volume_presence', sorted(missing_image_volumes), [])
 
 
