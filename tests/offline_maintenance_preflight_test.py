@@ -609,6 +609,78 @@ class TargetShaContract(unittest.TestCase):
         (self.repo / 'backend/app.js').unlink()
         self.failure(self.scope, self.commit('delete'))
 
+    LOCK = 'frontend/package-lock.json'
+
+    def write_lock(self, packages, extra=None):
+        path = self.repo / self.LOCK
+        path.parent.mkdir(parents=True, exist_ok=True)
+        doc = {'name': 'flowcube-frontend', 'lockfileVersion': 3, 'packages': packages}
+        doc.update(extra or {})
+        path.write_text(json.dumps(doc, indent=2) + '\n')
+
+    def lock_baseline(self):
+        self.packages = {
+            '': {'name': 'flowcube-frontend', 'dependencies': {'axios': '^1.0.0'}},
+            'node_modules/axios': {'version': '1.20.0', 'integrity': 'sha512-a'},
+            'node_modules/follow-redirects': {'version': '1.16.0', 'resolved': 'https://r/fr-1.16.0.tgz',
+                                              'integrity': 'sha512-old', 'license': 'MIT'},
+        }
+        self.write_lock(self.packages)
+        self.baseline = self.commit('lock baseline')
+
+    def bumped(self):
+        packages = copy.deepcopy(self.packages)
+        packages['node_modules/follow-redirects'].update(
+            version='1.16.1', resolved='https://r/fr-1.16.1.tgz', integrity='sha512-new')
+        return packages
+
+    def test_lockfile_only_follow_redirects_bump_passes(self):
+        self.lock_baseline()
+        self.write_lock(self.bumped())
+        self.assertEqual(self.scope(self.commit('bump')), [self.LOCK])
+
+    def test_lockfile_other_package_change_is_rejected(self):
+        self.lock_baseline()
+        packages = self.bumped()
+        packages['node_modules/axios']['version'] = '1.21.0'
+        record = self.failure(self.scope, self.commit_lock(packages))
+        self.assertEqual(record['check'], 'target.lockfile_other_packages')
+
+    def test_lockfile_added_package_is_rejected(self):
+        self.lock_baseline()
+        packages = self.bumped()
+        packages['node_modules/evil'] = {'version': '1.0.0'}
+        self.assertEqual(self.failure(self.scope, self.commit_lock(packages))['check'],
+                         'target.lockfile_other_packages')
+
+    def test_lockfile_allowed_package_extra_field_change_is_rejected(self):
+        self.lock_baseline()
+        packages = self.bumped()
+        packages['node_modules/follow-redirects']['dependencies'] = {'evil': '*'}
+        self.assertEqual(self.failure(self.scope, self.commit_lock(packages))['check'],
+                         'target.lockfile_allowed_package_fields')
+
+    def test_lockfile_top_level_change_is_rejected(self):
+        self.lock_baseline()
+        self.write_lock(self.bumped(), {'requires': False})
+        self.assertEqual(self.failure(self.scope, self.commit('top'))['check'], 'target.lockfile_other_fields')
+
+    def test_lockfile_bump_with_business_change_still_rejected(self):
+        self.lock_baseline()
+        self.write_lock(self.bumped())
+        (self.repo / 'backend/app.js').write_text('changed business\n')
+        self.assertEqual(self.failure(self.scope, self.commit('mixed'))['check'],
+                         'target.business_changes_since_baseline')
+
+    def test_other_lockfile_is_not_allowlisted(self):
+        (self.repo / 'backend/package-lock.json').write_text('{}\n')
+        self.assertEqual(self.failure(self.scope, self.commit('backend lock'))['check'],
+                         'target.business_changes_since_baseline')
+
+    def commit_lock(self, packages):
+        self.write_lock(packages)
+        return self.commit('lock change')
+
     def test_unknown_target_or_missing_repo_fails_closed(self):
         self.assertEqual(self.failure(self.scope, 'f' * 40)['check'], 'target.git_diff')
         with patch.object(self.p, 'BUSINESS_BASELINE_SHA', self.baseline):

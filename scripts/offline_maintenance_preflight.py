@@ -6,7 +6,7 @@ Usage: python3 -B scripts/offline_maintenance_preflight.py --evidence evidence.j
 --target-sha (or env PREFLIGHT_TARGET_SHA) is REQUIRED; there is no built-in release SHA.
 It must equal guards.targetSha/preparedTargetSha, and `git diff --name-only` between the
 reviewed business baseline (BUSINESS_BASELINE_SHA) and the target may only touch
-TARGET_ALLOWED_CHANGES. --repo defaults to this script's checkout; both commits must
+TARGET_ALLOWED_CHANGES (plus allowlisted lockfile package bumps). --repo defaults to this script's checkout; both commits must
 exist locally (no fetch is performed). Missing git/commit fails closed.
 Only subprocesses: local `docker compose ... config --format json` and local
 `git diff --name-only <baseline> <target>` (no daemon/SSH/SQL/network).
@@ -71,6 +71,13 @@ TARGET_ALLOWED_CHANGES = frozenset((
     'tests/offline_maintenance_preflight_test.py',
     '.github/workflows/offline-preflight.yml',
 ))
+# Security-only lockfile bumps allowed after the baseline review. Inside each lockfile,
+# only the listed package entries may differ, and only in version/resolved/integrity;
+# every other byte of parsed JSON must equal the baseline.
+LOCKFILE_ALLOWED_PACKAGES = {
+    'frontend/package-lock.json': frozenset(('node_modules/follow-redirects', 'node_modules/vite')),
+}
+LOCKFILE_ALLOWED_FIELDS = frozenset(('version', 'resolved', 'integrity'))
 TARGET_SHA_ENV = 'PREFLIGHT_TARGET_SHA'
 # From the retained official verification. Registry index, platform manifest and
 # image config/runtime ID are different layers and are never compared to each other.
@@ -229,12 +236,61 @@ def git_changed_files(repo, baseline, target, timeout=30):
     return sorted(line for line in result.stdout.splitlines() if line)
 
 
+def git_file_json(repo, sha, path, timeout=30):
+    # Read-only and fixed-shape: only `git show <sha>:<allowlisted lockfile>` is ever run.
+    require_sha(sha, 'target.sha')
+    if path not in LOCKFILE_ALLOWED_PACKAGES:
+        raise PreflightFailure('target.lockfile', 'not allowlisted', 'allowlisted lockfile')
+    args = ['git', '-C', str(repo), 'show', f'{sha}:{path}']
+    env = {'PATH': os.environ.get('PATH', os.defpath), 'GIT_CONFIG_NOSYSTEM': '1',
+           'GIT_TERMINAL_PROMPT': '0', 'HOME': os.environ.get('HOME', '/nonexistent')}
+    try:
+        result = subprocess.run(args, timeout=timeout, env=env,
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    except (subprocess.TimeoutExpired, OSError):
+        raise PreflightFailure('target.lockfile', 'unavailable', path) from None
+    if result.returncode:
+        raise PreflightFailure('target.lockfile', 'missing', path)
+    try:
+        return json.loads(result.stdout)
+    except ValueError:
+        raise PreflightFailure('target.lockfile', 'invalid json', path) from None
+
+
+def verify_lockfile_change(repo, baseline, target, path):
+    """Only allowlisted package entries may change, and only version/resolved/integrity."""
+    before, after = git_file_json(repo, baseline, path), git_file_json(repo, target, path)
+    allowed = LOCKFILE_ALLOWED_PACKAGES[path]
+    if not isinstance(before, dict) or not isinstance(after, dict) \
+            or not isinstance(before.get('packages'), dict) or not isinstance(after.get('packages'), dict):
+        raise PreflightFailure('target.lockfile', 'invalid structure', path)
+    rest_before = {k: v for k, v in before.items() if k != 'packages'}
+    rest_after = {k: v for k, v in after.items() if k != 'packages'}
+    require_equal('target.lockfile_other_fields', rest_after == rest_before, True)
+    names = set(before['packages']) | set(after['packages'])
+    unexpected = sorted(n for n in names if n not in allowed
+                        and before['packages'].get(n) != after['packages'].get(n))
+    require_equal('target.lockfile_other_packages', unexpected, [])
+    for name in sorted(allowed):
+        old, new = before['packages'].get(name), after['packages'].get(name)
+        if not isinstance(old, dict) or not isinstance(new, dict):
+            require_equal('target.lockfile_allowed_package_present', name if old != new else None, None)
+            continue
+        strip = lambda entry: {k: v for k, v in entry.items() if k not in LOCKFILE_ALLOWED_FIELDS}
+        require_equal('target.lockfile_allowed_package_fields', strip(new) == strip(old), True)
+
+
 def verify_target_scope(target, repo):
-    """Target may differ from the reviewed business baseline only in preflight tooling."""
+    """Target may differ from the reviewed business baseline only in preflight tooling
+    and the allowlisted security lockfile bumps."""
     require_sha(target, 'target.sha')
     changed = git_changed_files(repo, BUSINESS_BASELINE_SHA, target)
-    outside = [name for name in changed if name not in TARGET_ALLOWED_CHANGES]
+    outside = [name for name in changed
+               if name not in TARGET_ALLOWED_CHANGES and name not in LOCKFILE_ALLOWED_PACKAGES]
     require_equal('target.business_changes_since_baseline', outside, [])
+    for name in changed:
+        if name in LOCKFILE_ALLOWED_PACKAGES:
+            verify_lockfile_change(repo, BUSINESS_BASELINE_SHA, target, name)
     return changed
 
 
