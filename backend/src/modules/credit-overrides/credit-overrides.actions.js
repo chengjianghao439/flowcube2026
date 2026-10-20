@@ -17,8 +17,15 @@ async function lockRequest(conn, id) {
 }
 
 async function assertBasis(conn, order, row) {
-  const [[proof]] = await conn.query('SELECT * FROM sale_credit_approval_proofs WHERE override_id=? AND sale_order_id=? AND (expires_at IS NULL OR expires_at>NOW()) FOR SHARE', [row.id, order.id])
-  if (!proof || ![1, 2, 3, 6].includes(Number(order.status)) || Number(order.customer_id) !== Number(row.customer_id) || proof.basis_hash !== await policy.orderBasis(conn, order)) {
+  const [[proof]] = await conn.query('SELECT * FROM sale_credit_approval_proofs WHERE override_id=? AND sale_order_id=? FOR SHARE', [row.id, order.id])
+  const basisHash = proof ? await policy.orderBasis(conn,order) : null
+  // Current locking reads are required: lockRequest's initial identity lookup
+  // may have opened an RR snapshot before waiting for the sale-order lock.
+  const [newer] = await conn.query('SELECT id FROM sale_credit_overrides WHERE sale_order_id=? AND id>? ORDER BY id DESC LIMIT 1 FOR SHARE',[order.id,row.id])
+  const [[clock]] = await conn.query('SELECT (expires_at IS NOT NULL AND expires_at<=NOW()) AS proof_expired FROM sale_credit_approval_proofs WHERE override_id=? AND sale_order_id=? FOR SHARE',[row.id,order.id])
+  if (Number(row.status)===2 && Number(clock?.proof_expired)===1) throw new AppError('待审批申请已过期，不能继续审批。请按当前销售单重新申请，无需先取消历史申请',409,'CREDIT_APPROVAL_EXPIRED')
+  if (newer.length) throw new AppError('已有更新的申请，原申请仅保留历史，不能继续提交或审批',409,'CREDIT_APPROVAL_SUPERSEDED')
+  if (!proof || Number(clock?.proof_expired)===1 || ![1, 2, 3, 6].includes(Number(order.status)) || Number(order.customer_id) !== Number(row.customer_id) || proof.basis_hash !== basisHash) {
     throw new AppError('申请已过期或销售单已变化，请取消原申请并重新申请', 409, 'CREDIT_APPROVAL_BASIS_INVALID')
   }
   return proof
@@ -79,7 +86,8 @@ async function decorate(db, rows, userId) {
     JOIN sale_orders so ON so.id=c.sale_order_id AND so.deleted_at IS NULL AND so.status IN (1,2,3,6)
     JOIN approval_instance_tasks t ON t.instance_id=i.id AND t.step_order=i.current_step AND t.status=1
     JOIN approval_instance_task_approvers a ON a.task_id=t.id AND a.user_id=?
-    WHERE i.biz_type='sale_credit_override' AND i.status=1 AND i.biz_id IN (?)${scope.sql}`, [actor.userId, rows.map(r => r.id),...scope.params])
+    WHERE i.biz_type='sale_credit_override' AND i.status=1 AND i.biz_id IN (?)
+      AND NOT EXISTS (SELECT 1 FROM sale_credit_overrides newer WHERE newer.sale_order_id=c.sale_order_id AND newer.id>c.id)${scope.sql}`, [actor.userId, rows.map(r => r.id),...scope.params])
   const byId = new Map(tasks.map(t => [Number(t.biz_id), Number(t.task_id)]))
   return rows.map(row => ({ ...row, currentTaskId: byId.get(row.id) || null,
     canApprove: row.status === 2 && byId.has(row.id) && policy.canAct(actor, row.applicantId),

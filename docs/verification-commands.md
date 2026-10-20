@@ -1080,3 +1080,5 @@ Node22 定向 `node --test tests/export-list-filters-passthrough.test.js tests/o
 ## 2026-10-19 授信审批一致性回归
 
 `npm run test:approval-list-batches` 保留原待办/范围检查，并运行 `credit-approval-consistency.test.js` 与 `credit-approval-validity.test.js`，覆盖业务负例、商业内容、自批/当前节点、失效原因和固定批量效力读取。`npm run smoke:credit-override` 串行运行默认岗位迁移、原申请、审批一致性和失效重申回归；仅限显式测试环境/专属合成实例，覆盖独立申请/审批权限、实时自批/范围、同键及异键并发、节点审计、普通仓管部分出库、预占守恒、改价/过期/无证明旧批准直接重申、有效/进行中防重复、并发只建一单、原历史保留及不自动复活旧批准。295岗位回归用连接临时表影射真实结构，逐条固定删除23项/增加8项及完整前后差集、自定义保留、稳定编码、重放与回滚；本次同步不改295或任何已有迁移。`test:permissions` 包含独立审批纯规则反例；前端全量包含申请/审批按钮分权、失效重新申请和明确409恢复，未知结果恢复门不变。仅箱贴完成为合成ACK，不作真机/出纸或独立验收结论。详见 [授信审批一致性](credit-approval-consistency-2026-10-19.md) 与 [岗位及客户范围边界](role-defaults-approval-2026-10-19.md)。
+
+同一`smoke:credit-override`现追加`credit-pending-expiry.smoke.test.js`：过期待审列表/详情、直接及并发重申、原历史保留、拒绝过期审批和占库、未过期正例、证明锁等待跨截止时间及旧节点不恢复。API定位最小申请人的仓库目录/待办403，并保留有权账号目录正例。前端全量含`ReserveAllocationDialog.authorization.test.tsx`的闭合网络调用与真实403展示/提交正例，及`index.pending-expiry.test.tsx`的列表、普通/交接详情、显式重申和无申请权反例；不以组件测试代替真实业务或独立验收。

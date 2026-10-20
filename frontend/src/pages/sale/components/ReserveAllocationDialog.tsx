@@ -5,7 +5,6 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { Loader2, AlertTriangle, Boxes, PackageSearch, Warehouse } from 'lucide-react'
 import { clampAllocationQty, isAllocationQtyValid } from './saleAllocation'
@@ -212,6 +211,7 @@ export default function ReserveAllocationDialog({ open, orderId, onClose, onShor
                     const pickable = pickableFor(item.itemId, st.warehouseId)
                     const short = st.checked && available < (st.qty ?? 0)
                     const fullyReserved = item.remainToReserve <= 0
+                    const warehouseLocked = frozen || !st.checked || Number(item.remainToReserve) < Number(item.quantity)
                     return (
                       <tr key={item.itemId} className={cn('border-t align-top transition-colors hover:bg-muted/15', !st.checked && 'bg-muted/[0.08]', fullyReserved && 'opacity-60')}>
                         <td className="px-4 py-4 text-center">
@@ -228,7 +228,14 @@ export default function ReserveAllocationDialog({ open, orderId, onClose, onShor
                         </td>
                         <td className="px-3 py-4">
                           <label htmlFor={`${fieldId}-warehouse-${item.itemId}`} className="mb-1.5 flex items-center gap-1.5 text-[11px] text-muted-foreground"><Warehouse className="h-3.5 w-3.5" />选择库存所在仓库</label>
-                          <WarehouseSelect id={`${fieldId}-warehouse-${item.itemId}`} value={st.warehouseId} onChange={(id, name) => { if (id == null) return; setRow(item.itemId, { warehouseId: id, warehouseName: name }) }} className="h-9 text-sm" disabled={frozen || !st.checked || Number(item.remainToReserve) < Number(item.quantity)} />
+                          <select role="combobox" id={`${fieldId}-warehouse-${item.itemId}`} value={st.warehouseId} onChange={e=>{
+                            if(warehouseLocked)return
+                            const warehouse=item.warehouses.find(w=>w.warehouseId===Number(e.target.value))
+                            if(warehouse)setRow(item.itemId,{warehouseId:warehouse.warehouseId,warehouseName:warehouse.warehouseName})
+                          }} className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50" disabled={warehouseLocked}>
+                            {!item.warehouses.some(w=>w.warehouseId===st.warehouseId) && <option value={st.warehouseId} disabled>{st.warehouseName}</option>}
+                            {item.warehouses.map(w=><option key={w.warehouseId} value={w.warehouseId}>{w.warehouseName}</option>)}
+                          </select>
                           {Number(item.remainToReserve) < Number(item.quantity) && (
                             <div className="mt-1 text-[11px] text-muted-foreground">该行已有预占，不能改发货仓库；如需换仓请先释放该行预占</div>
                           )}

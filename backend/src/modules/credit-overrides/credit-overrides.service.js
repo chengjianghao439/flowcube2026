@@ -69,7 +69,7 @@ async function create({ saleOrderId, reason, expiresAt }, operator, scopeWarehou
     if (customer.credit_limit == null) throw new AppError('该客户未设置授信额度，无需超额放行申请', 400)
 
     const active = await validity.activeForOrder(conn,saleOrderId)
-    const inProgress = active.find(r=>[1,2].includes(Number(r.status)))
+    const inProgress = active.find(r=>Number(r.status)===1 || (Number(r.status)===2 && !validity.inactivePending(r)))
     if (inProgress) throw new AppError(`该销售单已有${Number(inProgress.status)===1?'草稿':'待审批'}申请 ${inProgress.override_no}，请先查看或处理该申请`,409,'CREDIT_OVERRIDE_DUPLICATE')
 
     // 快照信用口径（占库校验同款：未清应收 + 在途敞口）。本单尚为草稿(1)不占用信用。

@@ -252,6 +252,7 @@ async function listPending({ page = 1, pageSize = 20 }, user) {
       if (bizType === 'sale_credit_override') {
         if (!can(P.SALE_CREDIT_OVERRIDE_APPROVE)) conds.push('1=0')
         conds.push('d.status=2', '(?=1 OR i.applicant_id<>?)',
+          'NOT EXISTS (SELECT 1 FROM sale_credit_overrides newer WHERE newer.sale_order_id=d.sale_order_id AND newer.id>d.id)',
           'EXISTS (SELECT 1 FROM sale_credit_approval_proofs credit_proof WHERE credit_proof.override_id=d.id AND credit_proof.sale_order_id=d.sale_order_id AND (credit_proof.expires_at IS NULL OR credit_proof.expires_at>NOW()))',
           'EXISTS (SELECT 1 FROM sale_orders credit_order WHERE credit_order.id=d.sale_order_id AND credit_order.deleted_at IS NULL AND credit_order.status IN (1,2,3,6))')
         branchParams.push(selfApproval,userId)

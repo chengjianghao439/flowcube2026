@@ -21,6 +21,8 @@ export interface CreditOverride {
   currentTaskId?: number | null
   isSelfApproval?: boolean
   approvalValidity?: 'valid' | 'invalid'
+  requestValidity?: 'pending' | 'expired' | 'superseded'
+  requestInvalidReason?: string | null
   approvalInvalidReasonCode?: string | null
   approvalInvalidReason?: string | null
   canReapply?: boolean

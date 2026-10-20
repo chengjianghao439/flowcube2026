@@ -56,3 +56,15 @@ for(const size of [1,100])test(`批准列表${size}行固定4次补充读取，�
   assert.equal(calls.length,4);assert.equal(result.length,size)
   assert.ok(result.every(r=>r.approvalValidity==='valid' && r.canReapply===false))
 })
+
+test('100行混合待审过期与有效批准仍固定4次读取，过期不能保留旧审批按钮',async()=>{
+ const orders=Array.from({length:100},(_,i)=>({id:i+1,customer_id:7,warehouse_id:1,total_amount:'20.0000',discount_amount:'0.00',status:1,current_credit_limit:1}))
+ const items=orders.map(o=>({order_id:o.id,id:o.id,product_id:9,warehouse_id:1,unit:'个',quantity:'2.00',unit_price:'10.0000'}))
+ const meta=orders.map((o,i)=>({...approved,id:o.id,status:i<50?2:3,sale_order_id:o.id,proof_order_id:o.id,proof_expired:i<50?1:0,basis_hash:policy.hashOrderBasis(o,[items[i]])}))
+ const rows=meta.map(r=>({id:r.id,status:r.status,statusName:r.status===2?'待审批':'已批准',canApprove:true,currentTaskId:r.id+100}));let calls=0
+ const db={query:async sql=>{calls++;if(sql.includes('FROM sale_credit_overrides'))return[meta];if(sql.includes('SELECT so.*'))return[orders];if(sql.includes('FROM sale_order_items'))return[items];if(sql.includes('credit_parts GROUP BY'))return[[]];throw Error('Unexpected SQL '+sql)}}
+ const result=await validity.decorate(db,rows)
+ assert.equal(calls,4)
+ for(const r of result.slice(0,50)){assert.equal(r.status,2);assert.equal(r.statusName,'已过期');assert.equal(r.requestValidity,'expired');assert.equal(r.canReapply,true);assert.equal(r.canApprove,false);assert.equal(r.currentTaskId,null)}
+ assert.ok(result.slice(50).every(r=>r.approvalValidity==='valid' && r.canReapply===false))
+})

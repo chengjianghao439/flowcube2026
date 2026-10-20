@@ -49,15 +49,23 @@ function invalidError(row, result) {
 
 async function activeForOrder(db, id) {
   const [rows] = await db.query(`${APPROVAL_SELECT} WHERE c.sale_order_id=? AND c.status IN (1,2,3) AND c.deleted_at IS NULL ORDER BY c.id DESC FOR UPDATE`,[Number(id)])
+  // NOW in the locking query was sampled before any proof-lock wait. Evaluate
+  // again only after those locks are held, using the same database clock.
+  if (rows.length) {
+    const [proofs] = await db.query('SELECT override_id,(expires_at IS NOT NULL AND expires_at<=NOW()) AS proof_expired FROM sale_credit_approval_proofs WHERE override_id IN (?) FOR SHARE',[rows.map(r=>r.id)])
+    const expired = new Map(proofs.map(p=>[Number(p.override_id),p.proof_expired]))
+    for (const r of rows) r.proof_expired = expired.get(Number(r.id)) ?? 0
+  }
   return rows
 }
+const inactivePending = row => Number(row.status)===2 && (!!row.superseded_by || Number(row.proof_expired)===1)
 async function latestApproved(db, id) {
   const [[row]] = await db.query(`${APPROVAL_SELECT} WHERE c.sale_order_id=? AND c.status=3 AND c.deleted_at IS NULL ORDER BY c.id DESC LIMIT 1 FOR SHARE`,[Number(id)])
   return row || null
 }
 
 async function decorate(db, rows) {
-  const ids = rows.filter(r=>r.status===3).map(r=>r.id)
+  const ids = rows.filter(r=>[2,3].includes(r.status)).map(r=>r.id)
   if (!ids.length) return rows
   const [meta] = await db.query(`${APPROVAL_SELECT} WHERE c.id IN (?)`,[ids])
   const orderIds = [...new Set(meta.map(r=>Number(r.sale_order_id)))]
@@ -69,18 +77,29 @@ async function decorate(db, rows) {
   for (const i of items) { const key=Number(i.order_id);if(!byItems.has(key))byItems.set(key,[]);byItems.get(key).push(i) }
   const byId = new Map(meta.map(r=>[Number(r.id),r]))
   return rows.map(row=>{
-    if(row.status!==3)return row
+    if(![2,3].includes(row.status))return row
     const r=byId.get(row.id), order=byOrder.get(Number(r?.sale_order_id)), lines=byItems.get(Number(order?.id)) || []
     if(!r)return row
     const amount=order?getNetOrderAmount(order.total_amount,order.discount_amount):0
     const limit=order?.current_credit_limit
+    const overAmount=Math.max(0,Math.round(((used.get(Number(order?.id)) || 0)+amount-Number(limit || 0))*100)/100)
+    const shared={supersededBy:r.superseded_by?Number(r.superseded_by):null,expiresAt:r.expires_at,
+      currentOrderAmount:order?amount:null,currentCustomerName:order?.customer_name || null,currentOrderStatus:order?Number(order.status):null}
+    if(row.status===2){
+      const expired=Number(r.proof_expired)===1, superseded=!!r.superseded_by
+      const inactive=expired || superseded
+      return {...row,...shared,statusName:expired?'已过期':superseded?'已被新申请替代':row.statusName,
+        requestValidity:expired?'expired':superseded?'superseded':'pending',
+        requestInvalidReason:expired?`待审批申请已过期：已超过有效截止时间。${superseded?'已有更新的申请，请查看新申请进度。':'请按当前销售单重新申请，无需先取消历史申请。'}`:superseded?'已有更新的申请，原申请仅保留审批历史，不能继续审批。':null,
+        canReapply:expired&&!superseded&&allowed(order)&&limit!=null&&overAmount>0,
+        ...(inactive?{canApprove:false,currentTaskId:null}:{})}
+    }
     const state=evaluate(r,{order,customerId:order?.customer_id,creditLimit:limit,thisAmount:amount,
-      overAmount:Math.max(0,Math.round(((used.get(Number(order?.id)) || 0)+amount-Number(limit || 0))*100)/100),
+      overAmount,
       basisHash:order && lines.length?policy.hashOrderBasis(order,lines):null})
     return {...row,statusName:state.valid?row.statusName:'已批准（已失效）',approvalValidity:state.valid?'valid':'invalid',
       approvalInvalidReasonCode:state.reasonCode,approvalInvalidReason:state.message,canReapply:state.canReapply,
-      supersededBy: r.superseded_by?Number(r.superseded_by):null,expiresAt:r.expires_at,
-      currentOrderAmount:order?amount:null,currentCustomerName:order?.customer_name || null,currentOrderStatus:order?Number(order.status):null}
+      ...shared}
   })
 }
-module.exports = { evaluate,invalidError,activeForOrder,latestApproved,decorate }
+module.exports = { evaluate,invalidError,activeForOrder,inactivePending,latestApproved,decorate }
