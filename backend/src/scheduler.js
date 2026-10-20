@@ -102,7 +102,7 @@ function startScheduler() {
     await cleanupSessionFamilies()
   }, num('REFRESH_SESSION_CLEAN_INTERVAL_MS', 24 * 60 * 60 * 1000))
 
-  // PDA 现场错误扫码/撤销流水清理（2026-08-30 审计）：两张运行时自建表无 TTL，随 PDA 作业无界增长。
+  // PDA 现场错误扫码/撤销流水清理（2026-08-30 审计）：两表（迁移 293 建表，含 created_at 索引）无 TTL 会随 PDA 作业无界增长。
   // 保留 180 天（与 scan_logs 一致），异常查询只查短期窗口。
   startWorker('pda-anomaly-log-cleanup', async () => {
     for (const t of ['pda_error_logs', 'pda_undo_logs']) {
