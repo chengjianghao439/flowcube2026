@@ -1,8 +1,15 @@
 #!/usr/bin/env python3
 """Read-only OFFLINE maintenance preflight, repaired from the task-3 temporary script.
 
-Usage: python3 -B scripts/offline_maintenance_preflight.py --evidence evidence.json
-Only subprocess: local `docker compose ... config --format json` (no daemon/SSH/SQL).
+Usage: python3 -B scripts/offline_maintenance_preflight.py --evidence evidence.json \
+         --target-sha <40-hex release commit> [--repo <local git checkout>]
+--target-sha (or env PREFLIGHT_TARGET_SHA) is REQUIRED; there is no built-in release SHA.
+It must equal guards.targetSha/preparedTargetSha, and `git diff --name-only` between the
+reviewed business baseline (BUSINESS_BASELINE_SHA) and the target may only touch
+TARGET_ALLOWED_CHANGES. --repo defaults to this script's checkout; both commits must
+exist locally (no fetch is performed). Missing git/commit fails closed.
+Only subprocesses: local `docker compose ... config --format json` and local
+`git diff --name-only <baseline> <target>` (no daemon/SSH/SQL/network).
 Never edits evidence, Compose files, locks, deployment state, or the database.
 Keep the seven retained server temporary files and the old deployment lock intact.
 If an operator calls stop, send no more commands (including follow-up reads); hand
@@ -57,7 +64,14 @@ import re
 import subprocess
 import sys
 
-APP_SHA = '734ed9924a3b6d3051962a3f06f81f5a04fc4213'
+# Business code version reviewed by acceptance. The release target is passed in at run time.
+BUSINESS_BASELINE_SHA = '734ed9924a3b6d3051962a3f06f81f5a04fc4213'
+TARGET_ALLOWED_CHANGES = frozenset((
+    'scripts/offline_maintenance_preflight.py',
+    'tests/offline_maintenance_preflight_test.py',
+    '.github/workflows/offline-preflight.yml',
+))
+TARGET_SHA_ENV = 'PREFLIGHT_TARGET_SHA'
 # From the retained official verification. Registry index, platform manifest and
 # image config/runtime ID are different layers and are never compared to each other.
 MYSQL_INDEX_DIGEST = 'sha256:7dcddc01f13bab2f15cde676d44d01f61fc9f99fe7785e86196dfc07d358ae2b'
@@ -188,6 +202,40 @@ def run(args, cwd=None, timeout=30, env=None):
         # No arguments, stdout, stderr or exception strings escape to diagnostics.
         raise PreflightFailure('compose.execute', {'returncode': result.returncode}, {'returncode': 0})
     return result.stdout
+
+
+def require_sha(value, check):
+    if not isinstance(value, str) or not re.fullmatch('[a-f0-9]{40}', value):
+        raise PreflightFailure(check, 'missing or invalid', 'full 40-hex commit SHA required')
+    return value
+
+
+def git_changed_files(repo, baseline, target, timeout=30):
+    # Read-only and fixed-shape: only `git diff --name-only <sha> <sha>` is ever run.
+    require_sha(baseline, 'target.baseline_sha')
+    require_sha(target, 'target.sha')
+    args = ['git', '-C', str(repo), 'diff', '--no-renames', '--name-only', baseline, target, '--']
+    env = {'PATH': os.environ.get('PATH', os.defpath), 'GIT_CONFIG_NOSYSTEM': '1',
+           'GIT_TERMINAL_PROMPT': '0', 'HOME': os.environ.get('HOME', '/nonexistent')}
+    try:
+        result = subprocess.run(args, timeout=timeout, env=env,
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    except subprocess.TimeoutExpired:
+        raise PreflightFailure('target.git_diff', 'timeout', 0) from None
+    except OSError:
+        raise PreflightFailure('target.git_diff', 'unavailable', 0) from None
+    if result.returncode:
+        raise PreflightFailure('target.git_diff', {'returncode': result.returncode}, {'returncode': 0})
+    return sorted(line for line in result.stdout.splitlines() if line)
+
+
+def verify_target_scope(target, repo):
+    """Target may differ from the reviewed business baseline only in preflight tooling."""
+    require_sha(target, 'target.sha')
+    changed = git_changed_files(repo, BUSINESS_BASELINE_SHA, target)
+    outside = [name for name in changed if name not in TARGET_ALLOWED_CHANGES]
+    require_equal('target.business_changes_since_baseline', outside, [])
+    return changed
 
 
 def compose_config(inputs):
@@ -514,14 +562,15 @@ def check_mounts(service, config, document, runtime, defaults, path_map):
     require_equal(service + '.mounts.image_volume_presence', sorted(missing_image_volumes), [])
 
 
-def check_guards(guards):
+def check_guards(guards, target_sha):
     """Original final preconditions, from saved facts only. No writes or SQL calls.
 
     permissionForecast must come from the original baseline/known-role forecast,
     not from selecting five desired grants. This offline consumer cannot attest
     freshness/authenticity of operator-collected facts or predict a live database.
     """
-    expected = {'targetSha': APP_SHA, 'preparedTargetSha': APP_SHA, 'mysqlVersion': '8.0.45',
+    require_sha(target_sha, 'target.sha')
+    expected = {'targetSha': target_sha, 'preparedTargetSha': target_sha, 'mysqlVersion': '8.0.45',
                 'containerIdsMatch': True, 'allRunningNoRestarts': True, 'trackedDiff': False,
                 'cachedDiff': False, 'enabledEvents': 0, 'xaRecoverEmpty': True,
                 'tableEngines': {t: 'InnoDB' for t in TABLES},
@@ -545,8 +594,8 @@ def check_guards(guards):
     require_equal('guards.permission_forecast.warehouse_manager_count', forecast.get('warehouseManagerCount'), 0)
 
 
-def preflight(evidence):
-    check_guards(evidence.get('guards', {}))
+def preflight(evidence, target_sha):
+    check_guards(evidence.get('guards', {}), target_sha)
     services = evidence.get('services', {})
     require_equal('evidence.services', sorted(services), ['backend', 'frontend', 'mysql'])
     verify_mysql_image(evidence.get('targetMysqlImageInspect', {}))
@@ -562,24 +611,32 @@ def preflight(evidence):
         compare_runtime(service, current, runtime, item['imageInspect'],
                         (str(Path(inputs['projectDirectory']).resolve()), inputs['workingDirectory']))
     return {'status': 'passed', 'check': 'offline.preconditions', 'scope': 'read-only snapshot verified',
-            'targetSha': APP_SHA, 'productionMutationStarted': False, 'productionServiceMutationStarted': False}
+            'targetSha': target_sha, 'businessBaselineSha': BUSINESS_BASELINE_SHA,
+            'productionMutationStarted': False, 'productionServiceMutationStarted': False}
 
 
 def main(argv=None):
     # Disable argparse's raw argument/error echo; help contains only static text.
     parser = argparse.ArgumentParser(description=__doc__, exit_on_error=False)
     parser.add_argument('--evidence')
+    parser.add_argument('--target-sha')
+    parser.add_argument('--repo')
     try:
         args, unknown = parser.parse_known_args(argv)
         if unknown or not args.evidence:
             raise PreflightFailure('arguments.evidence', 'missing', 'required')
+        target = args.target_sha or os.environ.get(TARGET_SHA_ENV)
+        if args.target_sha and os.environ.get(TARGET_SHA_ENV) and args.target_sha != os.environ[TARGET_SHA_ENV]:
+            raise PreflightFailure('arguments.target_sha', 'conflicting values', 'one target')
+        require_sha(target, 'arguments.target_sha')
+        verify_target_scope(target, args.repo or Path(__file__).resolve().parents[1])
         try:
             evidence = json.loads(Path(args.evidence).read_text())
             if not isinstance(evidence, dict):
                 raise ValueError()
         except (OSError, ValueError):
             raise PreflightFailure('evidence.read', 'unavailable', 'valid JSON object') from None
-        result = preflight(evidence)
+        result = preflight(evidence, target)
     except PreflightFailure as exc:
         print(json.dumps(exc.record, ensure_ascii=False))
         return 1
