@@ -8,12 +8,12 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import Page from './index'
 import api, { getApiClientBaseURL, setApiClientBaseURL } from '@/api/client'
 
-const rights = vi.hoisted(() => ({ apply: true }))
+const rights = vi.hoisted(() => ({ apply: true, approve: false }))
 const toasts = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn(), warning: vi.fn() }))
-vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: (code: string) => code === 'sale.credit.override.apply' && rights.apply }) }))
+vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: (code: string) => code === 'sale.credit.override.apply' ? rights.apply : code === 'sale.credit.override.approve' && rights.approve }) }))
 vi.mock('@/lib/toast', () => ({ toast: toasts }))
 let root: Root, host: HTMLDivElement, cache: QueryClient, currentSearch = ''
-let created = false, submitted = false, failCreate = false, why = '销售单内容已变更'
+let created = false, submitted = false, failCreate = false, pending = false, why = '销售单内容已变更'
 const writes: Array<{ path: string; body: Record<string, unknown> }> = [], unexpected: string[] = []
 const oldAdapter = api.defaults.adapter, oldEnv = api.defaults.env, oldBase = getApiClientBaseURL()
 const original = { id:1,overrideNo:'CO-OLD',saleOrderId:111,saleOrderNo:'SO-PARTIAL',customerId:22,customerName:'合成部分占库客户',thisAmount:30,currentOrderAmount:33,currentCustomerName:'当前客户',creditLimit:1,usedCredit:0,overAmount:29,reason:'原申请原因',applicantId:7,applicantName:'合成申请人',status:3,statusName:'已批准（已失效）',statusTone:'success',createdAt:'2026-10-19T01:00:00Z',canReapply:true,canManage:true,approvalValidity:'invalid' }
@@ -22,7 +22,7 @@ const transport = async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = new URL(request.url), path = url.pathname
   let data: unknown, responseStatus = 200
   if(request.method === 'GET' && path === '/api/credit-overrides') {
-    data = { list:[created ? {...original,id:2,overrideNo:'CO-NEW',reason:'新的审批原因',status:submitted?2:1,statusName:submitted?'待审批':'草稿',approvalValidity:undefined,canReapply:false} : {...original,approvalInvalidReason:`原批准已失效：${why}。`}],pagination:{page:1,pageSize:200,total:1} }
+    data = { list:[pending ? {...original,status:2,statusName:'待审批',canReapply:false,canApprove:true,currentTaskId:77,approvalValidity:undefined} : created ? {...original,id:2,overrideNo:'CO-NEW',reason:'新的审批原因',status:submitted?2:1,statusName:submitted?'待审批':'草稿',approvalValidity:undefined,canReapply:false} : {...original,approvalInvalidReason:`原批准已失效：${why}。`}],pagination:{page:1,pageSize:200,total:1} }
   } else if(request.method === 'GET' && path === '/api/finance/accounts/active') data = []
   else if(request.method === 'POST' && ['/api/credit-overrides','/api/credit-overrides/2/submit'].includes(path)) {
     const text = await request.clone().text(), body = text ? JSON.parse(text) : {}
@@ -49,7 +49,7 @@ async function reason() {
 }
 beforeEach(()=>{
   Object.assign(globalThis,{IS_REACT_ACT_ENVIRONMENT:true})
-  localStorage.clear();writes.length=0;unexpected.length=0;created=false;submitted=false;failCreate=false;rights.apply=true;why='销售单内容已变更'
+  localStorage.clear();writes.length=0;unexpected.length=0;created=false;submitted=false;failCreate=false;pending=false;rights.apply=true;rights.approve=false;why='销售单内容已变更'
   Object.values(toasts).forEach(m=>m.mockClear())
   setApiClientBaseURL('http://credit-reapply.test/api');api.defaults.adapter='fetch';api.defaults.env={...oldEnv,fetch:transport}
   vi.stubGlobal('ResizeObserver',class {observe(){}unobserve(){}disconnect(){}})
@@ -78,8 +78,16 @@ test.each(['销售单内容已变更','已超过有效截止时间','缺少原�
 })
 
 test('仅有审批或查看资格不能获得重新申请按钮',async()=>{
-  rights.apply=false;await mount();expect(host.textContent).toContain('已失效')
+  rights.apply=false;rights.approve=true;await mount();expect(host.textContent).toContain('已失效')
   expect([...host.querySelectorAll('button')].some(n=>n.textContent==='重新申请')).toBe(false)
+})
+
+test.each([[true,false],[false,true]])('同步后的待审按钮分权：申请权%s，独立审批权%s',async(apply,approve)=>{
+  rights.apply=apply;rights.approve=approve;pending=true;await mount()
+  const labels=[...host.querySelectorAll('button')].map(n=>n.textContent?.trim())
+  expect(labels.includes('批准')).toBe(approve);expect(labels.includes('驳回')).toBe(approve)
+  expect(labels.includes('发起申请')).toBe(apply);expect(labels.includes('重新申请')).toBe(false)
+  expect(writes).toHaveLength(0)
 })
 
 test('并发产生待审批申请时显示服务端原因，保留本次填写且不取消历史单',async()=>{

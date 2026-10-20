@@ -6,7 +6,7 @@
  *
  * 覆盖语义：
  *   1. 客户授信不足且操作者无 override 权限 → 占库硬拦截（CREDIT_LIMIT_EXCEEDED）。
- *   2. 合成业务用户（role 3，测试内补齐 apply 权限）发起放行申请 → 草稿 → 提交 → 走多级审批流。
+ *   2. 合成业务用户（隔离采购角色3，测试补申请权，无审批权）发起申请 → 草稿 → 提交 → 多级审批。
  *   3. 审批人批准 → 申请单已批准（3）。
  *   4. ★ 核心：该销售单再有任意用户（无 override 权限）占库 → 自动放行成功。
  *   5. 另一张未申请的销售单（同客户超限）占库 → 仍拦截。
@@ -66,10 +66,10 @@ async function main() {
       [flowRow.id, adminUserId],
     )
 
-    // 建销售员（role 3，153 迁移已 seed purchase.*；本测试需要 sale.* 与 credit override apply）
+    // 真实种子3是采购员；仅在隔离夹具补本用例申请权，不代表销售默认或审批权。
     const ref = randomRef('CO-').slice(0, 6)
     const salesman = await createUser(pool, { username: `smoke_sales_${ref}`, realName: 'Smoke销售员', roleId: 3 })
-    // 授销售员相关权限（建销售单/占库/发起申请）
+    // 合成业务用户补建销售单/占库/发起申请，财务审批不靠这组权限。
     await pool.query('INSERT IGNORE INTO sys_role_permissions (role_id, permission) VALUES (3, ?), (3, ?), (3, ?), (3, ?)',
       ['sale.order.create', 'sale.order.reserve', 'sale.credit.override.apply', 'sale.credit.override.view'])
     const salesLogin = await login(http, salesman.username, 'SmokePwd123!')

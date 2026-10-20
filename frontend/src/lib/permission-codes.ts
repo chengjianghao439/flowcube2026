@@ -118,6 +118,7 @@ export const PERMISSIONS = {
   SALE_CREDIT_VIEW: 'sale.credit.view',
   SALE_CREDIT_OVERRIDE: 'sale.credit.override',
   SALE_CREDIT_OVERRIDE_APPLY: 'sale.credit.override.apply',
+  SALE_CREDIT_OVERRIDE_APPROVE: 'sale.credit.override.approve',
   SALE_CREDIT_OVERRIDE_VIEW: 'sale.credit.override.view',
 
   RETURN_ORDER_VIEW: 'return.order.view',
@@ -359,8 +360,8 @@ export const PERMISSION_GROUPS: Array<{ group: string; items: Array<{ code: Perm
       { code: PERMISSIONS.SALE_ORDER_CANCEL, label: '取消销售单' },
       { code: PERMISSIONS.SALE_ORDER_DELETE, label: '删除销售单' },
       { code: PERMISSIONS.SALE_CREDIT_VIEW, label: '查看客户授信' },
-      { code: PERMISSIONS.SALE_CREDIT_OVERRIDE, label: '超额授信放行（一次性）' },
       { code: PERMISSIONS.SALE_CREDIT_OVERRIDE_APPLY, label: '发起超额放行申请' },
+      { code: PERMISSIONS.SALE_CREDIT_OVERRIDE_APPROVE, label: '审批超额放行申请' },
       { code: PERMISSIONS.SALE_CREDIT_OVERRIDE_VIEW, label: '查看超额放行申请' },
       { code: PERMISSIONS.RETURN_ORDER_VIEW, label: '查看退货单' },
       { code: PERMISSIONS.RETURN_ORDER_CREATE, label: '新建退货单' },

@@ -10,12 +10,14 @@ import Page from './index'
 import KeepAliveSection from '@/components/shared/KeepAliveSection'
 import api, { getApiClientBaseURL, setApiClientBaseURL } from '@/api/client'
 
-vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: () => false }) }))
+const grants = vi.hoisted(() => new Set<string>())
+vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: (code: string) => grants.has(code) }) }))
 vi.mock('@/lib/toast', () => ({ toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn() } }))
 
 const spec = { path: '/credit-overrides?keyword=URL-APPLIED&status=2&startDate=2026-10-01&endDate=2026-10-15&keep=1', api: '/api/credit-overrides', key: 'credit-overrides', urlFilters: true }
 let host: HTMLDivElement, root: Root, cache: QueryClient
 let currentSearch = '', version = 1, failRead = false
+let approvalRow = false, backendCanApprove = true
 const requests: URL[] = [], unexpected: string[] = []
 const oldAdapter = api.defaults.adapter, oldEnv = api.defaults.env, oldBase = getApiClientBaseURL()
 const oldScroll = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollIntoView')
@@ -28,7 +30,7 @@ const transport = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => 
   }
   requests.push(url)
   const data = url.pathname === '/api/finance/accounts/active' ? [] : {
-    list: [{ id: 1, overrideNo: `CO-SYN-${version}`, saleOrderId: 10, saleOrderNo: 'SO-SYN', customerId: 11, customerName: '合成客户', creditLimit: 100, usedCredit: 90, thisAmount: 20, overAmount: 10, reason: '合成原因', applicantId: 1, applicantName: '合成申请人', status: 3, statusName: '已批准', statusTone: 'success', rejectReason: null, createdAt: '2026-10-15T02:00:00Z' }],
+    list: [{ id: 1, overrideNo: `CO-SYN-${version}`, saleOrderId: 10, saleOrderNo: 'SO-SYN', customerId: 11, customerName: '合成客户', creditLimit: 100, usedCredit: 90, thisAmount: 20, overAmount: 10, reason: '合成原因', applicantId: 1, applicantName: '合成申请人', status: approvalRow ? 2 : 3, statusName: approvalRow ? '待审批' : '已批准', statusTone: 'success', canApprove: backendCanApprove, currentTaskId: 91, canManage: false, rejectReason: null, createdAt: '2026-10-15T02:00:00Z' }],
     pagination: { page: 1, pageSize: 200, total: 1 },
   }
   const failed = failRead && url.pathname === spec.api
@@ -47,6 +49,20 @@ async function draw(active = true, tick = 0) {
   await flush()
 }
 const flush = async () => { await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)) }) }
+
+test.each([
+  { permission: 'sale.credit.override.approve', qualified: true, apply: false, approve: true },
+  { permission: 'sale.credit.override.apply', qualified: true, apply: true, approve: false },
+  { permission: 'sale.credit.override.approve', qualified: false, apply: false, approve: false },
+])('申请和审批按钮按独立权限及后台资格显示：$permission，资格=$qualified', async ({ permission, qualified, apply, approve }) => {
+  grants.add(permission); approvalRow = true; backendCanApprove = qualified
+  await draw()
+  await vi.waitFor(async () => { await flush(); expect(query().state.status).toBe('success') })
+  const buttons = () => [...host.querySelectorAll('button')].map(node => node.textContent?.trim())
+  expect(buttons().includes('发起申请')).toBe(apply)
+  expect(buttons().includes('批准')).toBe(approve)
+  expect(buttons().includes('驳回')).toBe(approve)
+})
 const dialog = () => document.querySelector<HTMLElement>('[role="dialog"]')!
 const keyword = () => dialog().querySelector<HTMLInputElement>('[placeholder="请输入关键字…"]')!
 const dates = () => [...dialog().querySelectorAll<HTMLInputElement>('[placeholder="yyyy-mm-dd"]')]
@@ -97,6 +113,7 @@ async function refresh(failed = false) {
 beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
   localStorage.clear(); requests.length = 0; unexpected.length = 0; transport.mockClear(); version = 1; failRead = false
+  grants.clear(); approvalRow = false; backendCanApprove = true
   setApiClientBaseURL('http://query-drafts.test/api')
   api.defaults.adapter = 'fetch'; api.defaults.env = { ...oldEnv, fetch: transport }
   vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} })
