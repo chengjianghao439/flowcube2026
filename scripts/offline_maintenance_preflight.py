@@ -23,7 +23,8 @@ Evidence schema (private local JSON, never commit real evidence):
              interpolation: {explicit frozen Compose interpolation variables}}
     candidateInputs: same shape, for a separately prepared prospective snapshot;
                      ordered original file labels MUST remain identical.
-  targetMysqlImageInspect: saved image inspect of the verified official target.
+  targetMysqlImageInspect: saved image inspect of the locally loaded mysql:8.0.46
+                           (verified by image ID; RepoDigests not required).
 
 Explicit ordered file declarations are mandatory and verified against inspect labels.
 No default prod file; the supplemental file need not define frontend. Compose itself
@@ -36,7 +37,8 @@ bind sources and build context/dockerfile paths beneath each declared snapshot r
 are projected to its original workingDirectory. Environment/command strings and
 external absolute paths are never rewritten or ignored.
 
-Only MySQL image may change: local 8.0.45 reference -> exact verified 8.0.46 reference.
+Only MySQL image may change: local 8.0.45 reference -> local mysql:8.0.46 tag with
+pull_policy: never (no registry pull), verified by runtime image ID.
 All other normalized fields/documents must match exactly. Unsupported Compose runtime
 features fail closed rather than being silently ignored. build/depends_on are Compose
 orchestration fields, checked for candidate drift; they have no container-inspect field.
@@ -61,7 +63,13 @@ APP_SHA = '734ed9924a3b6d3051962a3f06f81f5a04fc4213'
 MYSQL_INDEX_DIGEST = 'sha256:7dcddc01f13bab2f15cde676d44d01f61fc9f99fe7785e86196dfc07d358ae2b'
 MYSQL_MANIFEST_DIGEST = 'sha256:62fb722c78b24245ddff1796a0fcee4a49cc5b87e0aaaf20c92d1da9e0a2497b'
 MYSQL_IMAGE_ID = 'sha256:6cd09145362dfe6831b14545de3d5fd6cc75c37cfd6ef8561429c1fc73518b39'
-MYSQL_TARGET = 'docker.io/library/mysql:8.0.46@' + MYSQL_INDEX_DIGEST
+# The production host loaded mysql:8.0.46 from a file and cannot reliably reach
+# the official registry. The pin therefore uses the LOCAL tag with pull_policy
+# never (no network pull) and identity is proven by the runtime image ID alone.
+# Registry references (name@digest) are rejected: Compose would try to pull them.
+MYSQL_TARGET = 'mysql:8.0.46'
+MYSQL_TARGET_TAGS = {'mysql:8.0.46', 'docker.io/library/mysql:8.0.46'}
+MYSQL_TARGET_PULL_POLICY = 'never'
 MYSQL_CURRENT_REFS = {'flowcube-mysql-current:8.0.45', 'mysql:8.0.45', 'docker.io/library/mysql:8.0.45'}
 APPROVED_MIGRATIONS = {
     '293_pda_audit_logs_formal_schema.sql': '56a84651472c7524e8ffca08df7b474fea42227a7bf1922daafe9369569ac4d5',
@@ -83,7 +91,7 @@ SAFE_KEYS = set(('environment services image name restart command entrypoint wor
                  'innodb_fast_shutdown log_bin_trust_function_creators actual expected '
                  'status returncode type count Id Config Env Cmd Entrypoint WorkingDir '
                  'User Labels HostConfig Image RestartPolicy Memory NanoCpus PidsLimit '
-                 'source target published protocol host_ip backend frontend mysql').split())
+                 'pull_policy never source target published protocol host_ip backend frontend mysql').split())
 SAFE_TEXT = {'OFF', 'ON', 'off', 'on', 'true', 'false', '0', '1', 'running', 'InnoDB',
              'linux', 'amd64', 'missing', 'present', 'valid JSON object', 'invalid JSON',
              'command failed', 'timeout', 'unavailable', 'different', 'required',
@@ -306,18 +314,24 @@ def compare_candidate(service, current, candidate, current_inputs=None, candidat
         if old_service['image'] not in MYSQL_CURRENT_REFS:
             raise PreflightFailure('mysql.current.reference', old_service['image'], sorted(MYSQL_CURRENT_REFS))
         require_equal('mysql.target.reference', new_service['image'], MYSQL_TARGET)
+        require_equal('mysql.target.pull_policy', new_service.get('pull_policy', 'missing'),
+                      MYSQL_TARGET_PULL_POLICY)
         new_service['image'] = old_service['image']
+        if 'pull_policy' in old_service:
+            new_service['pull_policy'] = old_service['pull_policy']
+        else:
+            new_service.pop('pull_policy')
     require_equal(service + '.candidate.non_image_configuration', new, old)
 
 
 def verify_mysql_image(image):
     require_equal('mysql.target.runtime_image_id', image.get('Id'), MYSQL_IMAGE_ID)
     require_equal('mysql.target.platform', [image.get('Os'), image.get('Architecture')], ['linux', 'amd64'])
-    references = image.get('RepoDigests', [])
-    valid = {'mysql@' + MYSQL_INDEX_DIGEST, 'docker.io/library/mysql@' + MYSQL_INDEX_DIGEST,
-             'mysql@' + MYSQL_MANIFEST_DIGEST, 'docker.io/library/mysql@' + MYSQL_MANIFEST_DIGEST}
-    if not isinstance(references, list) or not any(ref in valid for ref in references):
-        raise PreflightFailure('mysql.target.repo_digest', references, sorted(valid))
+    # A file-loaded image carries no RepoDigests; the local tag must point at
+    # exactly this image ID. RepoDigests are intentionally not required.
+    tags = image.get('RepoTags')
+    if not isinstance(tags, list) or not any(tag in MYSQL_TARGET_TAGS for tag in tags):
+        raise PreflightFailure('mysql.target.local_tag', 'missing', 'present')
     env = environment_map(image.get('Config', {}).get('Env'), 'mysql.target.environment')
     require_equal('mysql.target.version', env.get('MYSQL_VERSION'), '8.0.46-1.el9')
 

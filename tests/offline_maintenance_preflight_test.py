@@ -2,6 +2,8 @@
 
 Run: python3 -B tests/offline_maintenance_preflight_test.py
 Set PREFLIGHT_REAL_COMPOSE=1 to additionally exercise local `compose config`.
+Set PREFLIGHT_REQUIRE_COMPOSE=1 (CI) to make those Docker tests mandatory: they
+then fail instead of skipping when Docker Compose is unavailable.
 """
 import ast
 import contextlib
@@ -24,6 +26,21 @@ def load():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+REQUIRE_COMPOSE = os.environ.get('PREFLIGHT_REQUIRE_COMPOSE') == '1'
+REAL_COMPOSE = REQUIRE_COMPOSE or os.environ.get('PREFLIGHT_REAL_COMPOSE') == '1'
+
+
+def real_compose(test):
+    if REQUIRE_COMPOSE:
+        def wrapper(self):
+            probe = subprocess.run(['docker', 'compose', 'version'], capture_output=True, text=True)
+            self.assertEqual(probe.returncode, 0, 'Docker Compose is required (PREFLIGHT_REQUIRE_COMPOSE=1)')
+            return test(self)
+        wrapper.__name__ = test.__name__
+        return wrapper
+    return unittest.skipUnless(REAL_COMPOSE, 'optional local Compose parser check')(test)
 
 
 class LegacyRegression(unittest.TestCase):
@@ -216,8 +233,10 @@ class PreflightTests(unittest.TestCase):
         current = {'services': {'mysql': {'image': 'flowcube-mysql-current:8.0.45', 'environment': {'TZ': 'Asia/Shanghai'}}}}
         candidate = copy.deepcopy(current)
         candidate['services']['mysql']['image'] = self.p.MYSQL_TARGET
+        candidate['services']['mysql']['pull_policy'] = 'never'
         self.p.compare_candidate('mysql', current, candidate)
-        for image in ('mysql:8.0.46', 'mysql:8.0.47', 'mysql:8.0.46@sha256:' + 'f'*64, 'other/mysql:8.0.46'):
+        for image in ('mysql:8.0.47', 'mysql:8.0.46@sha256:' + 'f'*64, 'other/mysql:8.0.46',
+                      'docker.io/library/mysql:8.0.46@' + self.p.MYSQL_INDEX_DIGEST):
             candidate['services']['mysql']['image'] = image
             self.failure(self.p.compare_candidate, 'mysql', current, candidate)
         candidate['services']['mysql']['image'] = self.p.MYSQL_TARGET
@@ -232,14 +251,36 @@ class PreflightTests(unittest.TestCase):
                      {**self.document, 'name': 'changed'})
 
     def test_mysql_target_digest_layers_are_checked_against_their_own_layer(self):
-        image = {'Id': self.p.MYSQL_IMAGE_ID, 'RepoDigests': ['mysql@' + self.p.MYSQL_INDEX_DIGEST],
+        image = {'Id': self.p.MYSQL_IMAGE_ID, 'RepoTags': ['mysql:8.0.46'], 'RepoDigests': [],
                  'Os': 'linux', 'Architecture': 'amd64', 'Config': {'Env': ['MYSQL_VERSION=8.0.46-1.el9']}}
         self.p.verify_mysql_image(image)
-        for key,value in [('Id', self.p.MYSQL_INDEX_DIGEST), ('RepoDigests', ['mysql@' + self.p.MYSQL_IMAGE_ID]),
-                          ('Architecture', 'arm64')]:
+        for key,value in [('Id', self.p.MYSQL_INDEX_DIGEST), ('Id', 'sha256:' + 'e'*64),
+                          ('RepoTags', []), ('RepoTags', ['mysql:8.0.45']), ('Architecture', 'arm64')]:
             bad = copy.deepcopy(image)
             bad[key] = value
             self.failure(self.p.verify_mysql_image, bad)
+
+    def test_mysql_pin_uses_local_image_without_registry_pull(self):
+        current = {'services': {'mysql': {'image': 'flowcube-mysql-current:8.0.45'}}}
+        good = {'services': {'mysql': {'image': self.p.MYSQL_TARGET, 'pull_policy': 'never'}}}
+        self.p.compare_candidate('mysql', current, good)
+        # Counter-examples: the old registry@digest proposal, a missing pull policy,
+        # or any policy that may contact the registry must all be rejected.
+        old_proposal = {'services': {'mysql': {'image': 'docker.io/library/mysql:8.0.46@' + self.p.MYSQL_INDEX_DIGEST}}}
+        self.failure(self.p.compare_candidate, 'mysql', current, old_proposal)
+        for policy in (None, 'always', 'missing', 'if_not_present', 'build'):
+            bad = copy.deepcopy(good)
+            if policy is None:
+                del bad['services']['mysql']['pull_policy']
+            else:
+                bad['services']['mysql']['pull_policy'] = policy
+            self.failure(self.p.compare_candidate, 'mysql', current, bad)
+        # A file-loaded image has no RepoDigests and must still verify by image ID.
+        loaded = {'Id': self.p.MYSQL_IMAGE_ID, 'RepoTags': ['mysql:8.0.46'], 'Os': 'linux',
+                  'Architecture': 'amd64', 'Config': {'Env': ['MYSQL_VERSION=8.0.46-1.el9']}}
+        self.p.verify_mysql_image(loaded)
+        impostor = dict(loaded, Id='sha256:' + 'd'*64)
+        self.failure(self.p.verify_mysql_image, impostor)
 
     def test_cli_errors_are_structured_and_silent_about_paths(self):
         output, errors = io.StringIO(), io.StringIO()
@@ -314,7 +355,7 @@ class PreflightTests(unittest.TestCase):
                               'inspect': runtime, 'imageInspect': image}
             documents[name] = {'name': 'fixture', 'services': {name: config},
                                'networks': {'default': {'name': 'fixture_default'}}}
-        target = {'Id': self.p.MYSQL_IMAGE_ID, 'RepoDigests': ['mysql@' + self.p.MYSQL_INDEX_DIGEST],
+        target = {'Id': self.p.MYSQL_IMAGE_ID, 'RepoTags': ['mysql:8.0.46'], 'RepoDigests': [],
                   'Os': 'linux', 'Architecture': 'amd64', 'Config': {'Env': ['MYSQL_VERSION=8.0.46-1.el9']}}
         bundle = {'guards': self.guards(), 'services': services, 'targetMysqlImageInspect': target}
         outputs = []
@@ -322,6 +363,7 @@ class PreflightTests(unittest.TestCase):
             candidate = copy.deepcopy(documents[name])
             if name == 'mysql':
                 candidate['services'][name]['image'] = self.p.MYSQL_TARGET
+                candidate['services'][name]['pull_policy'] = 'never'
             outputs.extend([documents[name], candidate])
         return bundle, outputs
 
@@ -420,10 +462,10 @@ class PreflightTests(unittest.TestCase):
                                   {'Type': 'bind', 'Source': '/snapshot/app', 'Destination': '/snapshot-root', 'RW': False}]
         self.p.compare_runtime('backend', self.document, self.runtime, self.image, (str(self.root.resolve()), '/snapshot/app'))
 
-    @unittest.skipUnless(os.environ.get('PREFLIGHT_REAL_COMPOSE') == '1', 'optional local Compose parser check')
+    @real_compose
     def test_two_snapshot_directories_preserve_path_semantics_and_reject_real_changes(self):
         inputs = []
-        for directory, image in [('current', 'flowcube-mysql-current:8.0.45'), ('candidate', self.p.MYSQL_TARGET)]:
+        for directory, image in [('current', 'flowcube-mysql-current:8.0.45'), ('candidate', self.p.MYSQL_TARGET + '\n    pull_policy: never')]:
             root = self.root / directory
             root.mkdir()
             (root / 'build').mkdir()
@@ -461,7 +503,7 @@ class PreflightTests(unittest.TestCase):
         current_with_env['services']['mysql']['environment'] = {'DATA_PATH': '/snapshot/app/data'}
         self.failure(self.p.compare_candidate, 'mysql', current_with_env, changed_document, *inputs)
 
-    @unittest.skipUnless(os.environ.get('PREFLIGHT_REAL_COMPOSE') == '1', 'optional local Compose parser check')
+    @real_compose
     def test_real_compose_merge_indentation_and_wrong_prod(self):
         for indent in (2, 4):
             self.files[0].write_text('services:\n' + ' '*indent + 'backend:\n' + ' '*(indent*2) + 'image: fixture/backend:old\n' +

@@ -1,0 +1,44 @@
+# 离线维护预检脚本的专项测试（scripts/offline_maintenance_preflight.py）。
+# PREFLIGHT_REQUIRE_COMPOSE=1：依赖真实 Docker Compose 的测试必须真跑，
+# 没有 Docker 就直接失败；另外输出里出现任何 skipped 也判失败。
+# 只在 GitHub 自带的临时机器上跑，不连任何服务器。
+name: Offline preflight tests
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/offline_maintenance_preflight.py'
+      - 'tests/offline_maintenance_preflight_test.py'
+      - '.github/workflows/offline-preflight.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/offline_maintenance_preflight.py'
+      - 'tests/offline_maintenance_preflight_test.py'
+      - '.github/workflows/offline-preflight.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    name: 离线预检专项测试（含真实 Docker Compose）
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - name: Docker Compose 版本
+        run: docker compose version
+      - name: 跑专项测试（Docker 测试不许跳过）
+        env:
+          PREFLIGHT_REQUIRE_COMPOSE: '1'
+        run: |
+          set -o pipefail
+          python3 -B -m unittest -v tests.offline_maintenance_preflight_test 2>&1 | tee preflight-test.log
+          if grep -Eq 'skipped|skip' preflight-test.log; then
+            echo '::error::有测试被跳过，Docker 测试必须真跑'; exit 1
+          fi
+          grep -E 'test_real_compose_merge_indentation_and_wrong_prod .* ok$' preflight-test.log
+          grep -E 'test_two_snapshot_directories_preserve_path_semantics_and_reject_real_changes .* ok$' preflight-test.log
