@@ -5,7 +5,7 @@ import { OrderActivityDialog } from '@/components/shared/OrderActivityDialog'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { money } from '@/lib/format'
 import { RecordIdentity } from '@/components/shared/RecordIdentity'
-import { useContext, useMemo, useState } from 'react'
+import { useContext, useEffect, useMemo, useState } from 'react'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { useSearchParams } from 'react-router-dom'
 import { X } from 'lucide-react'
@@ -37,18 +37,25 @@ import type { TableColumn } from '@/types'
 
 
 /** 发起申请弹窗：按销售单号/客户搜索草稿销售单，选中后发起 */
-function CreateDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+function CreateDialog({ open, onClose, source, onCreated }: { open: boolean; onClose: () => void; source: CreditOverride | null; onCreated: (no: string) => void }) {
   const [kw, setKw] = useState('')
-  const [sales, setSales] = useState<Array<{ id: number; orderNo: string; customerName: string; totalAmount: number; status: number }>>([])
+  const [sales, setSales] = useState<Array<{ id: number; orderNo: string; customerName: string; totalAmount: number }>>([])
   const [picked, setPicked] = useState<number | null>(null)
   const [reason, setReason] = useState('')
 
   const { mutate: create, isPending } = useCreateCreditOverride()
+  useEffect(() => {
+    if (!open) return
+    setKw(source?.saleOrderNo || '')
+    setSales(source ? [{id:source.saleOrderId,orderNo:source.saleOrderNo,customerName:source.currentCustomerName || source.customerName,totalAmount:source.currentOrderAmount ?? source.thisAmount}] : [])
+    setPicked(source?.saleOrderId || null)
+    setReason('')
+  },[open,source])
 
   const search = async (e: React.FormEvent) => {
     e.preventDefault()
-    const r = await getSaleListApi({ page: 1, pageSize: 10, keyword: kw, status: 1 })
-    setSales(r.list)
+    const r = await getSaleListApi({ page: 1, pageSize: 10, keyword: kw })
+    setSales(r.list.filter(s=>[1,2,3,6].includes(s.status)))
     setPicked(null)
   }
 
@@ -57,7 +64,7 @@ function CreateDialog({ open, onClose }: { open: boolean; onClose: () => void })
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
       <DialogContent className="flex max-h-[90dvh] w-[calc(100%-2rem)] max-w-2xl flex-col overflow-y-auto">
-        <DialogHeader><DialogTitle>发起超额放行申请</DialogTitle><DialogDescription>选择销售单并说明超额原因，提交后进入审批。</DialogDescription></DialogHeader>
+        <DialogHeader><DialogTitle>{source ? '重新申请超额放行' : '发起超额放行申请'}</DialogTitle><DialogDescription>{source ? '旧申请与审批记录保留。新申请按当前销售单重新核对，创建后仍须提交审批。' : '选择销售单并说明超额原因，创建后在列表中提交审批。'}</DialogDescription></DialogHeader>
         <div className="min-w-0 space-y-4 py-2">
           <form onSubmit={search} className="flex items-center gap-2">
             <Input aria-label="搜索销售单号或客户" placeholder="销售单号 / 客户名" value={kw} onChange={e => setKw(e.target.value)} className="flex-1" />
@@ -90,7 +97,7 @@ function CreateDialog({ open, onClose }: { open: boolean; onClose: () => void })
             </div>
           )}
           {sales.length === 0 && kw && (
-            <EmptyState variant="no-result" title="未找到草稿状态的销售单" description="" compact />
+            <EmptyState variant="no-result" title="未找到可申请的销售单" description="请输入完整销售单号再次查询" compact />
           )}
           {pickedSale && (
             <div className="rounded-md border border-warning/30 bg-warning/5 px-3 py-2 text-sm">
@@ -109,10 +116,10 @@ function CreateDialog({ open, onClose }: { open: boolean; onClose: () => void })
           <Button
             disabled={!picked || !reason.trim() || isPending}
             onClick={() => create({ saleOrderId: picked!, reason: reason.trim() }, {
-              onSuccess: (r) => { onClose(); toast.success(`已发起申请单 ${r.overrideNo}，待审批`) },
+              onSuccess: (r) => { onCreated(r.overrideNo); onClose(); toast.success(`已创建申请单 ${r.overrideNo}，请提交审批`) },
               onError: (e: Error) => toast.error(e.message),
             })}
-          >提交申请</Button>
+          >创建申请</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -138,6 +145,7 @@ export default function CreditOverridesPage() {
   const endDate   = readStringParam(searchParams, 'endDate')
 
   const [createOpen, setCreateOpen] = useState(false)
+  const [reapplySource, setReapplySource] = useState<CreditOverride | null>(null)
   const [manualDetailOpen, setManualDetailOpen] = useState(false)
   const handoff = useApprovalDetailHandoff('/credit-overrides', PERMISSIONS.SALE_CREDIT_OVERRIDE_VIEW, getCreditOverrideApi, createOpen || queryOpen || !!rejectTarget || !!approveTarget || manualDetailOpen)
 
@@ -202,8 +210,8 @@ export default function CreditOverridesPage() {
     {
       key: 'status',
       title: '状态',
-      width: 90,
-      render: (_, row) => <SoftStatusLabel label={row.statusName} tone={(row.statusTone as 'draft' | 'warning' | 'success' | 'danger')} />,
+      width: 220,
+      render: (_, row) => <div className="space-y-1"><SoftStatusLabel label={row.statusName} tone={row.approvalValidity==='invalid' ? 'warning' : (row.statusTone as 'draft' | 'warning' | 'success' | 'danger')} />{row.approvalInvalidReason && <p className="whitespace-normal text-xs text-muted-foreground">{row.approvalInvalidReason}</p>}</div>,
     },
     { key: 'reason', title: '申请原因', width: 220, render: (v, row) => <div className="space-y-1 py-1"><p className="whitespace-normal break-words">{String(v || '—')}</p>{row.rejectReason && <p className="whitespace-normal break-words text-xs text-destructive-ink">驳回：{row.rejectReason}</p>}</div> },
     { key: 'applicantName', title: '申请人', width: 100 },
@@ -213,8 +221,9 @@ export default function CreditOverridesPage() {
       width: 200,
       render: (_, row) => {
         const els: React.ReactNode[] = [<OrderActivityDialog onOpenChange={setManualDetailOpen} key="detail" type="credit" id={row.id} title={row.overrideNo} fields={[
-          ['销售单', row.saleOrderNo], ['客户', row.customerName], ['本单净额', money(row.thisAmount)], ['授信额度', money(row.creditLimit)], ['超额金额', money(row.overAmount)], ['状态', row.statusName], ['申请人', row.applicantName], ['申请原因', row.reason], ['驳回原因', row.rejectReason],
+          ['销售单', row.saleOrderNo], ['客户', row.customerName], ['本单净额', money(row.thisAmount)], ['授信额度', money(row.creditLimit)], ['超额金额', money(row.overAmount)], ['状态', row.statusName], ['批准效力', row.approvalInvalidReason || (row.approvalValidity==='valid'?'当前有效':null)], ['申请人', row.applicantName], ['申请原因', row.reason], ['驳回原因', row.rejectReason],
         ]} />]
+        if (canApply && row.canReapply) els.push(<Button key="reapply" size="sm" variant="outline" onClick={()=>{setReapplySource(row);setCreateOpen(true)}}>重新申请</Button>)
         if (row.status === 1 && row.canManage) els.push(<Button key="submit" size="sm" variant="outline" onClick={() => submit(row.id, { onSuccess: () => toast.success('已提交审批'), onError: (e: Error) => toast.error(e.message) })}>提交</Button>)
         if (row.status === 2 && row.canApprove && row.currentTaskId && canApply) els.push(<Button key="ap" size="sm" variant="outline" onClick={() => {setApproveTarget(row);setApproveReason('')}}>批准</Button>)
         if (row.status === 2 && row.canApprove && row.currentTaskId && canApply) els.push(<Button key="rj" size="sm" variant="ghost" className="text-destructive-ink" onClick={() => {
@@ -235,7 +244,7 @@ export default function CreditOverridesPage() {
           <>
             <Button variant="outline" onClick={() => downloadExport('/export/credit-overrides').catch(e => toast.error((e as Error).message))}>导出</Button>
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
-            {canApply ? <Button onClick={() => setCreateOpen(true)}>发起申请</Button> : undefined}
+            {canApply ? <Button onClick={() => {setReapplySource(null);setCreateOpen(true)}}>发起申请</Button> : undefined}
           </>
         }
       />
@@ -276,7 +285,7 @@ export default function CreditOverridesPage() {
       </Dialog>
       <ApprovalHandoffNotice {...handoff} />
       {handoff.data && <OrderActivityDialog type="credit" id={handoff.data.id} title={handoff.data.overrideNo} open={handoff.open} hideTrigger onOpenChange={open => { if (!open) handoff.close() }} fields={[
-        ['销售单', handoff.data.saleOrderNo], ['客户', handoff.data.customerName], ['本单净额', money(handoff.data.thisAmount)], ['授信额度', money(handoff.data.creditLimit)], ['超额金额', money(handoff.data.overAmount)], ['状态', handoff.data.statusName], ['申请人', handoff.data.applicantName], ['申请原因', handoff.data.reason], ['驳回原因', handoff.data.rejectReason],
+        ['销售单', handoff.data.saleOrderNo], ['客户', handoff.data.customerName], ['本单净额', money(handoff.data.thisAmount)], ['授信额度', money(handoff.data.creditLimit)], ['超额金额', money(handoff.data.overAmount)], ['状态', handoff.data.statusName], ['批准效力', handoff.data.approvalInvalidReason || (handoff.data.approvalValidity==='valid'?'当前有效':null)], ['申请人', handoff.data.applicantName], ['申请原因', handoff.data.reason], ['驳回原因', handoff.data.rejectReason],
       ]} />}
       <Dialog open={!!rejectTarget} onOpenChange={open => { if (!open && !rejecting) setRejectTarget(null) }}>
         <DialogContent className="max-w-lg">
@@ -294,7 +303,7 @@ export default function CreditOverridesPage() {
         </DialogContent>
       </Dialog>
 
-      <CreateDialog open={createOpen} onClose={() => setCreateOpen(false)} />
+      <CreateDialog open={createOpen} source={reapplySource} onClose={() => setCreateOpen(false)} onCreated={no=>updateParams({status:'1',keyword:no,startDate:null,endDate:null})} />
 
       <CreditOverrideQueryDialog
         open={queryOpen}

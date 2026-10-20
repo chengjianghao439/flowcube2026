@@ -49,7 +49,7 @@ async function assertCreditWithinLimit(conn, customerId, thisOrderAmount, operat
   if (used + thisOrder > limit) {
     const overBy = Math.round((used + thisOrder - limit) * 100) / 100
     const [[order]] = excludeSaleOrderId == null ? [[]] : await conn.query('SELECT * FROM sale_orders WHERE id=? FOR SHARE', [Number(excludeSaleOrderId)])
-    const allowOverride = order && await creditOverrideSvc.hasApprovedOverride(excludeSaleOrderId, { conn, order, customerId, creditLimit: limit, thisAmount: getNetOrderAmount(order.total_amount, order.discount_amount), overAmount: overBy })
+    const allowOverride = order && await creditOverrideSvc.hasApprovedOverride(excludeSaleOrderId, { conn, order, customerId, creditLimit: limit, thisAmount: getNetOrderAmount(order.total_amount, order.discount_amount), overAmount: overBy, explainInvalid: true })
     if (!allowOverride) {
       throw new AppError(
         `客户信用额度不足，无法出库（已用 ${used} + 本单 ${thisOrder} > 限额 ${limit}，超出 ${overBy}）。请先收款或申请超额审批后重试`,

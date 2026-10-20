@@ -35,7 +35,7 @@ function fixture({ lines = [1, 2], header = 1, replay = false, status = 1, missi
       if (/FROM sale_orders/.test(sql)) return [missingSale ? [] : [sale]]
       if (/FROM sale_order_items/.test(sql)) return [lines.map(warehouse_id => ({ warehouse_id, quantity: zeroQuantity ? 0 : 1 }))]
       if (/SELECT.*FROM refund_orders/.test(sql)) return [[refund]]
-      if (/SELECT.*FROM sale_credit_overrides/.test(sql)) return sql.includes('status IN') ? [[]] : [[credit]]
+      if (/^\s*SELECT\b/.test(sql) && /FROM sale_credit_overrides/.test(sql)) return sql.includes('status IN') ? [[]] : [[credit]]
       if (/FROM reconciliation_statement_items/.test(sql)) return [[]]
       if (/FROM payment_records/.test(sql)) return [[{ id: 41, order_no: 'SO11', total_amount:100, paid_amount:paid, balance:100-paid }]]
       if (/INSERT INTO refund_orders/.test(sql)) { events.push('refund-create'); return [{ insertId: 21 }] }
@@ -74,6 +74,7 @@ function fixture({ lines = [1, 2], header = 1, replay = false, status = 1, missi
     '../../utils/saleDocumentScope': saleScope,
     '../../engine/approvalEngine': { INSTANCE_STATUS: { APPROVED: 3 }, async getLatestInstanceByBiz() { events.push('approval-read'); return null }, async startApproval() { events.push('approval-write'); return { instanceId: 61 } }, async getActiveInstanceByBiz() { return null } },
     './credit-overrides.actions':creditActions, './credit-overrides.policy':creditPolicy,
+    './credit-overrides.validity':require('../backend/src/modules/credit-overrides/credit-overrides.validity'),
     '../../utils/selfApprove': { async assertNotSelfApproval(applicantId, actorId) { if (applicantId === actorId) throw new AppError('不能自批', 403) } },
   })
   return { db, pool, queries, events, refundSvc, creditSvc }

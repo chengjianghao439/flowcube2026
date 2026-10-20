@@ -1079,4 +1079,4 @@ Node22 定向 `node --test tests/export-list-filters-passthrough.test.js tests/o
 
 ## 2026-10-19 授信审批一致性回归
 
-`npm run test:approval-list-batches` 继续检查原待办/范围，并追加 `tests/credit-approval-consistency.test.js` 的业务负例、商业内容绑定、自批资格与锁后当前节点读取。`npm run smoke:credit-override` 串行运行原申请专项和 `tests/credit-approval-consistency.smoke.test.js`；后者仅可在显式测试环境/专属合成实例中执行，覆盖当前开关、业务权/范围、同键及不同键真实事务并发、逐节点审计、普通仓管实际部分出库与预占守恒。仅箱贴完成使用合成ACK，不作真机/出纸或独立验收结论。迁移294不占293且不授角色权限；详细边界见 [授信审批一致性](credit-approval-consistency-2026-10-19.md)。
+`npm run test:approval-list-batches` 继续检查原待办/范围，并运行 `credit-approval-consistency.test.js` 与 `credit-approval-validity.test.js`，覆盖业务负例、商业内容、自批/当前节点、失效原因和固定批量效力读取。`npm run smoke:credit-override` 串行运行原申请专项、`credit-approval-consistency.smoke.test.js` 和 `credit-approval-reapply.smoke.test.js`；仅限显式测试环境/专属合成实例，覆盖实时开关/权限/范围、同键及异键并发、节点审计、普通仓管部分出库、预占守恒，以及改价/过期/无证明旧批准直接重申、有效/进行中防重复、并发只建一单、原审批历史保留和不自动复活旧批准。仅箱贴完成为合成ACK，不作真机/出纸或独立验收结论。前端全量包含重新申请真实页面交互与明确失效409不锁住新操作；未改未知结果恢复门。迁移294不占293且不授角色权限；详见 [授信审批一致性](credit-approval-consistency-2026-10-19.md)。

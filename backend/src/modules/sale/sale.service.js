@@ -1506,6 +1506,7 @@ async function reserveStock(id, operator, items = [], { scopeWarehouseIds = null
       if (used + thisOrder > limit) {
         const overBy = Math.round((used + thisOrder - limit) * 100) / 100
         const approvedOverrideId = await creditOverrideSvc.hasApprovedOverride(id, {
+          explainInvalid: true,
           conn,
           customerId: orderRow.customer_id,
           creditLimit: limit,

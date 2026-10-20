@@ -2,13 +2,14 @@ const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const { getCustomerCreditUsed } = require('../../utils/creditExposure')
-const { getNetOrderAmount, isApprovedOverrideApplicable } = require('../sale/sale.contracts')
+const { getNetOrderAmount } = require('../sale/sale.contracts')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { compareAndSetStatus } = require('../../utils/statusTransition')
 const { normalizePagination } = require('../../utils/pagination')
 const approvalEngine = require('../../engine/approvalEngine')
 const actions = require('./credit-overrides.actions')
 const policy = require('./credit-overrides.policy')
+const validity = require('./credit-overrides.validity')
 const { saleDocumentScopeFilter, assertSaleDocumentInScope } = require('../../utils/saleDocumentScope')
 
 /**
@@ -67,12 +68,9 @@ async function create({ saleOrderId, reason, expiresAt }, operator, scopeWarehou
     if (![1,2,3,6].includes(Number(order.status))) throw new AppError('当前销售单不可申请授信', 409)
     if (customer.credit_limit == null) throw new AppError('该客户未设置授信额度，无需超额放行申请', 400)
 
-    // 活跃唯一性：该销售单已有「未结束」的申请（草稿/待审批/已批准）→ 拒绝
-    const [[active]] = await conn.query(
-      'SELECT id FROM sale_credit_overrides WHERE sale_order_id=? AND status IN (1,2,3) AND deleted_at IS NULL LIMIT 1',
-      [Number(saleOrderId)],
-    )
-    if (active) throw new AppError('该销售单已存在进行中或已批准的放行申请，请勿重复发起', 409, 'CREDIT_OVERRIDE_DUPLICATE')
+    const active = await validity.activeForOrder(conn,saleOrderId)
+    const inProgress = active.find(r=>[1,2].includes(Number(r.status)))
+    if (inProgress) throw new AppError(`该销售单已有${Number(inProgress.status)===1?'草稿':'待审批'}申请 ${inProgress.override_no}，请先查看或处理该申请`,409,'CREDIT_OVERRIDE_DUPLICATE')
 
     // 快照信用口径（占库校验同款：未清应收 + 在途敞口）。本单尚为草稿(1)不占用信用。
     const used = await getCustomerCreditUsed(conn, Number(order.customer_id), { excludeSaleOrderId: order.id })
@@ -81,6 +79,11 @@ async function create({ saleOrderId, reason, expiresAt }, operator, scopeWarehou
     const overAmount = Math.max(0, Math.round((used + thisAmount - limit) * 100) / 100)
     if (overAmount <= 0) {
       throw new AppError('该销售单当前未超授信额度，无需放行申请', 400)
+    }
+    const basisHash = await policy.orderBasis(conn,order)
+    const current = {order,basisHash,customerId:order.customer_id,creditLimit:limit,thisAmount,overAmount}
+    if (active.some(r=>Number(r.status)===3 && validity.evaluate(r,current).valid)) {
+      throw new AppError('该销售单已有有效批准，请按原批准继续操作，无需重复申请',409,'CREDIT_OVERRIDE_DUPLICATE')
     }
 
     const overrideNo = await generateDailyCode(conn, 'CO', 'sale_credit_overrides', 'override_no')
@@ -92,7 +95,7 @@ async function create({ saleOrderId, reason, expiresAt }, operator, scopeWarehou
         String(reason || '').trim() || null, Number(operator.operatorId), operator.operatorName],
     )
     if (expiresAt && (!Number.isFinite(Date.parse(expiresAt)) || Date.parse(expiresAt) <= Date.now())) throw new AppError('有效截止时间必须在将来',400)
-    await conn.query('INSERT INTO sale_credit_approval_proofs (override_id,sale_order_id,basis_hash,expires_at) VALUES (?,?,?,?)', [r.insertId,order.id,await policy.orderBasis(conn,order),expiresAt ? new Date(expiresAt) : null])
+    await conn.query('INSERT INTO sale_credit_approval_proofs (override_id,sale_order_id,basis_hash,expires_at) VALUES (?,?,?,?)', [r.insertId,order.id,basisHash,expiresAt ? new Date(expiresAt) : null])
     await conn.commit()
     return { id: r.insertId, overrideNo, overAmount }
   } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
@@ -168,14 +171,14 @@ async function findAll({ page = 1, pageSize = 20, status = '', keyword = '', sal
     [...params, ps, offset],
   )
   const [[{ total }]] = await pool.query(`SELECT COUNT(*) AS total FROM sale_credit_overrides c ${where}`, params)
-  return { list: await actions.decorate(pool, rows.map(fmt), actorId), pagination: { page: p, pageSize: ps, total } }
+  return { list: await validity.decorate(pool,await actions.decorate(pool, rows.map(fmt), actorId)), pagination: { page: p, pageSize: ps, total } }
 }
 
 async function findById(id, scopeWarehouseIds = null, actorId = null) {
   const [[row]] = await pool.query('SELECT * FROM sale_credit_overrides WHERE id=? AND deleted_at IS NULL', [Number(id)])
   if (!row) throw new AppError('放行申请单不存在', 404)
   await assertSaleDocumentInScope(pool, scopeWarehouseIds, row.sale_order_id, { entityName: '放行申请单' })
-  const [detail] = await actions.decorate(pool, [fmt(row)], actorId)
+  const [detail] = await validity.decorate(pool,await actions.decorate(pool, [fmt(row)], actorId))
   const conn = await pool.getConnection()
   try {
     const got = await approvalEngine.getLatestInstanceByBiz(conn, { bizType: 'sale_credit_override', bizId: Number(id) })
@@ -202,18 +205,14 @@ async function findById(id, scopeWarehouseIds = null, actorId = null) {
 /** 供 sale.service 占库放行判断：已批准申请的客户、额度和金额快照仍覆盖当前超额敞口。 */
 async function hasApprovedOverride(saleOrderId, current = {}) {
   const db = current.conn || pool
-  const [[row]] = await db.query(
-    `SELECT c.id,c.customer_id,c.credit_limit,c.this_amount,c.over_amount,p.basis_hash
-     FROM sale_credit_overrides c JOIN sale_credit_approval_proofs p ON p.override_id=c.id AND p.sale_order_id=c.sale_order_id
-     WHERE c.sale_order_id=? AND c.status=3 AND c.deleted_at IS NULL
-       AND (p.expires_at IS NULL OR p.expires_at>NOW())
-       AND EXISTS (SELECT 1 FROM approval_instances i WHERE i.biz_type='sale_credit_override' AND i.biz_id=c.id AND i.status=2)
-     ORDER BY c.id DESC LIMIT 1 FOR SHARE`, [Number(saleOrderId)])
+  const row = await validity.latestApproved(db,saleOrderId)
   if (!row) return null
   const order = current.order
   if (!order || ![1,2,3,6].includes(Number(order.status)) || Number(order.id)!==Number(saleOrderId)) return null
   const basisHash = await policy.orderBasis(db,order)
-  return isApprovedOverrideApplicable(row,{...current,basisHash}) ? Number(row.id) : null
+  const state = validity.evaluate(row,{...current,basisHash})
+  if (!state.valid && current.explainInvalid) throw validity.invalidError(row,state)
+  return state.valid ? Number(row.id) : null
 }
 
 module.exports = {
