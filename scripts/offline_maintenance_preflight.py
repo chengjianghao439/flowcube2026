@@ -31,6 +31,10 @@ resolves YAML, inheritance, env_file, interpolation, merge precedence and defaul
 Use a complete local copy of required referenced files; --env-file /dev/null disables
 implicit .env, and ambient shell/DOCKER_HOST/COMPOSE_FILE variables are not inherited.
 Candidate input files must already exist: this tool does NOT create/replace the pin.
+Separate current/candidate snapshot directories are supported. Only normalized
+bind sources and build context/dockerfile paths beneath each declared snapshot root
+are projected to its original workingDirectory. Environment/command strings and
+external absolute paths are never rewritten or ignored.
 
 Only MySQL image may change: local 8.0.45 reference -> exact verified 8.0.46 reference.
 All other normalized fields/documents must match exactly. Unsupported Compose runtime
@@ -254,8 +258,49 @@ def service_config(document, service):
         raise PreflightFailure(service + '.compose.service', 'missing', 'required') from None
 
 
-def compare_candidate(service, current, candidate):
-    old, new = copy.deepcopy(current), copy.deepcopy(candidate)
+def project_path(value, local, original):
+    """Relocate a known path field using explicit snapshot provenance, by boundary."""
+    if not isinstance(value, str):
+        return value
+    local = local.rstrip('/')
+    original = original.rstrip('/')
+    if value == local:
+        return original or '/'
+    if value.startswith(local + '/'):
+        return original + value[len(local):]
+    return value
+
+
+def normalize_document_paths(document, inputs):
+    """Canonicalize only Compose path fields; keep every setting in comparison."""
+    result = copy.deepcopy(document)
+    try:
+        local = str(Path(inputs['projectDirectory']).resolve(strict=True))
+        original = inputs['workingDirectory']
+        if not isinstance(original, str) or not original.startswith('/'):
+            raise ValueError()
+        for config in result['services'].values():
+            build = config.get('build')
+            if isinstance(build, dict):
+                for key in ('context', 'dockerfile'):
+                    if key in build:
+                        build[key] = project_path(build[key], local, original)
+            for mount in config.get('volumes', []):
+                if mount.get('type') == 'bind':
+                    mount['source'] = project_path(mount['source'], local, original)
+    except (KeyError, TypeError, ValueError, AttributeError, OSError):
+        raise PreflightFailure('compose.path_projection.schema', 'missing', 'required') from None
+    return result
+
+
+def compare_candidate(service, current, candidate, current_inputs=None, candidate_inputs=None):
+    if (current_inputs is None) != (candidate_inputs is None):
+        raise PreflightFailure('compose.path_projection.inputs', 'missing', 'required')
+    if current_inputs is not None:
+        old = normalize_document_paths(current, current_inputs)
+        new = normalize_document_paths(candidate, candidate_inputs)
+    else:
+        old, new = copy.deepcopy(current), copy.deepcopy(candidate)
     old_service, new_service = service_config(old, service), service_config(new, service)
     if service == 'mysql':
         if old_service['image'] not in MYSQL_CURRENT_REFS:
@@ -432,8 +477,7 @@ def check_mounts(service, config, document, runtime, defaults, path_map):
         elif kind == 'bind':
             if path_map:
                 local, original = path_map
-                if source.startswith(local.rstrip('/') + '/'):
-                    source = original.rstrip('/') + source[len(local.rstrip('/')):]
+                source = project_path(source, local, original)
         else:
             raise PreflightFailure(service + '.mounts.type', kind, 'bind or volume')
         expected[mount['target']] = [kind, source, not mount.get('read_only', False)]
@@ -496,7 +540,7 @@ def preflight(evidence):
         current = compose_config(inputs)
         candidate = compose_config(candidate_inputs)
         require_equal(service + '.compose.project', runtime['Config']['Labels']['com.docker.compose.project'], current['name'])
-        compare_candidate(service, current, candidate)
+        compare_candidate(service, current, candidate, inputs, candidate_inputs)
         compare_runtime(service, current, runtime, item['imageInspect'],
                         (str(Path(inputs['projectDirectory']).resolve()), inputs['workingDirectory']))
     return {'status': 'passed', 'check': 'offline.preconditions', 'scope': 'read-only snapshot verified',

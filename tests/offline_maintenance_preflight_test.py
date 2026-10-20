@@ -333,6 +333,19 @@ class PreflightTests(unittest.TestCase):
         self.assertEqual(result['status'], 'passed')
         self.assertFalse(result['productionMutationStarted'])
 
+    def test_whole_preflight_uses_snapshot_path_projection(self):
+        bundle, outputs = self.bundle()
+        candidate_root = self.root / 'candidate'
+        candidate_root.mkdir()
+        for name, item in bundle['services'].items():
+            item['candidateInputs']['projectDirectory'] = str(candidate_root)
+        for index, document in enumerate(outputs):
+            root = self.root if index % 2 == 0 else candidate_root
+            for config in document['services'].values():
+                config['build'] = {'context': str(root.resolve() / 'build'), 'dockerfile': 'Dockerfile'}
+        with patch.object(self.p, 'compose_config', side_effect=outputs):
+            self.assertEqual(self.p.preflight(bundle)['status'], 'passed')
+
     def test_success_does_not_write_evidence_or_input_files(self):
         bundle, outputs = self.bundle()
         evidence_file = self.root / 'evidence.json'
@@ -395,15 +408,58 @@ class PreflightTests(unittest.TestCase):
                              'stop_grace_period': '30s', 'mem_limit': '1073741824', 'cpus': 1.0,
                              'volumes': [{'type': 'bind', 'source': str(self.root.resolve()) + '/config',
                                           'target': '/etc/config', 'read_only': True, 'bind': {'create_host_path': True}},
-                                         {'type': 'volume', 'source': 'data', 'target': '/data'}]})
+                                         {'type': 'volume', 'source': 'data', 'target': '/data'},
+                                         {'type': 'bind', 'source': str(self.root.resolve()), 'target': '/snapshot-root', 'read_only': True}]})
         self.document['volumes'] = {'data': {'name': 'fixture_data'}}
         self.runtime['HostConfig'].update({'PortBindings': {'3000/tcp': [{'HostIp': '127.0.0.1', 'HostPort': '3000'}]},
                                           'Memory': 1073741824, 'NanoCpus': 1000000000})
         self.runtime['Config'].update({'ExposedPorts': {'3000/tcp': {}}, 'StopTimeout': 30,
                                       'Healthcheck': {'Test': ['CMD', 'check'], 'Interval': 90000000000, 'Retries': 3}})
         self.runtime['Mounts'] = [{'Type': 'bind', 'Source': '/snapshot/app/config', 'Destination': '/etc/config', 'RW': False},
-                                  {'Type': 'volume', 'Source': '/engine/internal', 'Name': 'fixture_data', 'Destination': '/data', 'RW': True}]
+                                  {'Type': 'volume', 'Source': '/engine/internal', 'Name': 'fixture_data', 'Destination': '/data', 'RW': True},
+                                  {'Type': 'bind', 'Source': '/snapshot/app', 'Destination': '/snapshot-root', 'RW': False}]
         self.p.compare_runtime('backend', self.document, self.runtime, self.image, (str(self.root.resolve()), '/snapshot/app'))
+
+    @unittest.skipUnless(os.environ.get('PREFLIGHT_REAL_COMPOSE') == '1', 'optional local Compose parser check')
+    def test_two_snapshot_directories_preserve_path_semantics_and_reject_real_changes(self):
+        inputs = []
+        for directory, image in [('current', 'flowcube-mysql-current:8.0.45'), ('candidate', self.p.MYSQL_TARGET)]:
+            root = self.root / directory
+            root.mkdir()
+            (root / 'build').mkdir()
+            file = root / 'main.yml'
+            file.write_text('services:\n  mysql:\n    image: ' + image + '\n'
+                            '    build:\n      context: ./build\n      dockerfile: Dockerfile\n'
+                            '    volumes:\n      - ./data:/data\n      - ./:/app\n')
+            entry = copy.deepcopy(self.inputs)
+            entry['projectDirectory'] = str(root)
+            entry['files'] = [{'label': '/snapshot/app/main.yml', 'path': str(file)}]
+            inputs.append(entry)
+        current, candidate = [self.p.compose_config(value) for value in inputs]
+        # The genuine failure in the previous implementation is independent of
+        # parser formatting: Docker has made two equal relative paths absolute.
+        self.assertNotEqual(current['services']['mysql']['build']['context'],
+                            candidate['services']['mysql']['build']['context'])
+        self.p.compare_candidate('mysql', current, candidate, *inputs)
+        original = (self.root / 'candidate/main.yml').read_text()
+        for changed in (original.replace('./data:/data', './other-data:/data'),
+                        original.replace('context: ./build', 'context: ./other-build'),
+                        original.replace('dockerfile: Dockerfile', 'dockerfile: Otherfile'),
+                        original.replace('./data:/data', str(self.root / 'candidate-other/data') + ':/data'),
+                        original.replace('./data:/data', '/external/changed-data:/data')):
+            (self.root / 'candidate/main.yml').write_text(changed)
+            changed_document = self.p.compose_config(inputs[1])
+            self.failure(self.p.compare_candidate, 'mysql', current, changed_document, *inputs)
+        external_current, external_candidate = copy.deepcopy(current), copy.deepcopy(candidate)
+        for document in (external_current, external_candidate):
+            document['services']['mysql']['volumes'][0]['source'] = '/external/unchanged-data'
+        self.p.compare_candidate('mysql', external_current, external_candidate, *inputs)
+        # Relocation must never rewrite arbitrary env/command strings.
+        changed_document = copy.deepcopy(candidate)
+        changed_document['services']['mysql']['environment'] = {'DATA_PATH': str(self.root / 'candidate/data')}
+        current_with_env = copy.deepcopy(current)
+        current_with_env['services']['mysql']['environment'] = {'DATA_PATH': '/snapshot/app/data'}
+        self.failure(self.p.compare_candidate, 'mysql', current_with_env, changed_document, *inputs)
 
     @unittest.skipUnless(os.environ.get('PREFLIGHT_REAL_COMPOSE') == '1', 'optional local Compose parser check')
     def test_real_compose_merge_indentation_and_wrong_prod(self):
