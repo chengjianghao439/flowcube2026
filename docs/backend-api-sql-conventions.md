@@ -33,6 +33,12 @@
 - 后端启动不自动迁移；本地显式 migrate。生产由部署脚本执行，不能把两者混为一谈。
 - 数据库列注释可能过期，状态含义以常量和执行代码为准。不能凭历史迁移文本认定生产已经存在某列。
 
+### PDA 显式日志接口的失败反馈（2026-10-20）
+
+`POST /scan-logs/error` 与 `/scan-logs/undo` 的 barcode 最多64个 Unicode 字符，与 utf8mb4 VARCHAR(64) 的字符语义一致；包含中文和补充平面字符，不按 UTF-16 长度误拒绝，不截断或隐式改写输入。65/80字符在路由校验直接400「条码不能超过64个字符」，不执行INSERT。两控制器固定传入独立的 `{ strict: true }` 选项，写入异常交原统一错误处理，不返回「已记录」；原错误类型与错误信封保留。共享 `logScanError` / `logUndo` 默认仍是可选副作用，写入失败记录降级后正常返回；数量校验仍在降级try之前。
+
+当前后端直接调用者为两个日志控制器；PDA拣货通过 `useOfflineScan` 异步记录错误，不等日志请求完成。专属API回归使用真实路由/controller/service/errorHandler与真实MySQL，仅鉴权为合成上下文；不据此声称重新验过真实登录/设备授权或业务库存事务。无迁移修改、无字段扩容、无历史数据改写或清理。验证入口与证据边界见 `docs/verification-commands.md`。
+
 ### PDA 审计日志正式迁移（293）
 
 `293_pda_audit_logs_formal_schema.sql` 接管 `pda_error_logs` / `pda_undo_logs`。先对两表全部读取 `information_schema.TABLES/COLUMNS/STATISTICS/TABLE_CONSTRAINTS` 并完成失败守卫，之后才允许任一 CREATE/ALTER。缺表可建；已有表须是已知 InnoDB、signed INT、nullable/default/EXTRA/列序与原数量 DECIMAL(10,2)、TIMESTAMP 形状。主键、具名索引同时核名字、列序、唯一性、前缀、方向、可见性与表达式；同名异形、未知列/索引/约束即失败，不自动修复。已有表仅允许已知 utf8mb4 排序规则转换和补缺失索引，中断后只接受该迁移产生的已知中间形状。

@@ -590,6 +590,10 @@ test('每个 smoke/test 脚本必须在 CI 里跑得到（未接线须显式豁�
         workflowText.includes('npm run smoke:change-records-owned') &&
         (name !== 'smoke:change-records-regressions' || /FLOWCUBE_CHANGE_REGRESSIONS:\s*['"]1['"]/.test(workflowText)) &&
         fs.readFileSync(path.join(root, 'scripts/repair-smoke-ephemeral.sh'), 'utf8').includes(`run_smoke ${name}`)) return true
+    if (name === 'smoke:pda-audit-log-api-runtime' &&
+        pkg.scripts['smoke:pda-audit-log-api-owned'] === 'bash scripts/repair-smoke-ephemeral.sh --pda-audit-log-api' &&
+        workflowText.includes('npm run smoke:pda-audit-log-api-owned') &&
+        fs.readFileSync(path.join(root, 'scripts/repair-smoke-ephemeral.sh'), 'utf8').includes('run_smoke smoke:pda-audit-log-api-runtime')) return true
     if (name === 'smoke:pda-audit-log-migration-runtime' &&
         pkg.scripts['smoke:pda-audit-log-migration-owned'] === 'bash scripts/repair-smoke-ephemeral.sh --pda-audit-log-migration' &&
         workflowText.includes('npm run smoke:pda-audit-log-migration-owned') &&

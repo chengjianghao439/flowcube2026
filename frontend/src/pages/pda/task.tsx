@@ -6,7 +6,7 @@ import PdaProductIdentity from '@/components/pda/PdaProductIdentity'
  * 路由：/pda/task/:id  (独立全屏，不走 AppLayout)
  */
 import { MapPin, CircleCheck } from 'lucide-react'
-import { useState, useRef } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { parseBarcode } from '@/utils/barcode'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -133,9 +133,11 @@ export default function PdaTaskPage() {
   const { id }    = useParams<{ id: string }>()
   const taskId    = Number(id) || 0
   const qc        = useQueryClient()
-  const { submitScan, logError } = useOfflineScan()
-
   const { flash, ok, err, warn }  = usePdaFeedback()
+  const onLogFailure = useCallback((error: unknown) => {
+    err(formatPdaActionError(error, '扫码日志保存失败，请稍后重试'))
+  }, [err])
+  const { submitScan, logError } = useOfflineScan(onLogFailure)
   const [scanning, setScanning]   = useState(false)
   const [finished, setFinished] = useState<number | null>(null)
   const [sortTask, setSortTask] = useState<{ id: number; taskNo: string } | null>(null)

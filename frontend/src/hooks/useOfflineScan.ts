@@ -36,7 +36,7 @@ interface UndoPayload {
   productName: string
 }
 
-export function useOfflineScan() {
+export function useOfflineScan(onLogFailure?: (error: unknown) => void) {
   const user          = useAuthStore(s => s.user)
 
   // 返回后端回执本身：**扫码流程与语义不变**，只是把本来就拿到的响应交给调用方。
@@ -49,10 +49,11 @@ export function useOfflineScan() {
     }) as Promise<T>
   }, [])
 
-  // 记录错误扫码（静默，不影响流程）
+  // 页面接管时使用原反馈区域；否则沿用全局提示。始终不等待、不阻断扫码。
   const logError = useCallback((payload: ErrorPayload): void => {
-    client.post('/scan-logs/error', payload, { skipGlobalError: true }).catch(() => { /* 静默失败 */ })
-  }, [])
+    client.post('/scan-logs/error', payload, { skipGlobalError: Boolean(onLogFailure) })
+      .catch(error => { onLogFailure?.(error) })
+  }, [onLogFailure])
 
   // 记录撤销操作
   const logUndo = useCallback((payload: UndoPayload): void => {
@@ -62,8 +63,8 @@ export function useOfflineScan() {
       barcode: payload.barcode,
       prevQty: payload.prevQty,
       newQty:  payload.newQty,
-    }, { skipGlobalError: true }).catch(() => { /* 静默失败 */ })
-  }, [])
+    }, { skipGlobalError: Boolean(onLogFailure) }).catch(error => { onLogFailure?.(error) })
+  }, [onLogFailure])
 
   return { submitScan, logError, logUndo, currentUser: user }
 }

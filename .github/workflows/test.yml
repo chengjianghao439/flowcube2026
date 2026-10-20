@@ -39,6 +39,22 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
+  pda-audit-log-api-owned:
+    name: PDA日志接口（归属专属实例）
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - run: npm --prefix backend ci
+      - name: 准备本地 Docker context 与镜像
+        run: |
+          docker context create colima-flowcube --docker host=unix:///var/run/docker.sock
+          docker --context colima-flowcube pull mysql:8.0
+      - run: npm run smoke:pda-audit-log-api-owned
+
   pda-audit-log-migration-owned:
     name: PDA审计日志迁移（归属专属实例）
     runs-on: ubuntu-latest
@@ -566,6 +582,8 @@ jobs:
       - name: 单元测试 — 订单记录归属与数据范围（无需 DB）
         run: npm run test:document-activity
 
+      - name: PDA日志接口字符边界与失败反馈
+        run: npm run test:pda-audit-log-api
       - name: PDA审计日志迁移离线契约
         run: npm run test:pda-audit-log-migration
 

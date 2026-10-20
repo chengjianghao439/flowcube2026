@@ -20,16 +20,21 @@ const createSchema = z.object({
   locationCode: z.string().max(20).optional(),
 })
 
+// MySQL utf8mb4 VARCHAR(64) counts Unicode characters, not UTF-16 code units.
+const auditBarcodeSchema = z.string().min(1).refine(value => Array.from(value).length <= 64, {
+  message: '条码不能超过64个字符',
+})
+
 const errorSchema = z.object({
   taskId:  z.number().int().positive().optional(),
-  barcode: z.string().min(1),
+  barcode: auditBarcodeSchema,
   reason:  z.string().min(1).max(255),
 })
 
 const undoSchema = z.object({
   taskId:  z.number().int().positive(),
   itemId:  z.number().int().positive(),
-  barcode: z.string().min(1),
+  barcode: auditBarcodeSchema,
   prevQty: z.number(),
   newQty:  z.number(),
 })

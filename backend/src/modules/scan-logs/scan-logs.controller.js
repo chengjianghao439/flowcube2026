@@ -85,7 +85,7 @@ const logError = async (req, res, next) => {
       ...req.body,
       operatorId:   operator.operatorId,
       operatorName: operator.operatorName,
-    })
+    }, { strict: true })
     return successResponse(res, null, '错误日志已记录', 201)
   } catch (e) { next(e) }
 }
@@ -97,7 +97,7 @@ const logUndo = async (req, res, next) => {
       ...req.body,
       operatorId:   operator.operatorId,
       operatorName: operator.operatorName,
-    })
+    }, { strict: true })
     return successResponse(res, null, '撤销日志已记录', 201)
   } catch (e) { next(e) }
 }

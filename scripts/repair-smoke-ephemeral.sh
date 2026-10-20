@@ -43,16 +43,17 @@ case "$SUITE" in
   --inbound-edit) DB_NAME='flowcube_inboundedit20261010_test' ;;
   --retention-reprint) DB_NAME='flowcube_retentionreprint20261010_test' ;;
   --change-records) DB_NAME='flowcube_changerecords20261010_test'; CONFIG_DIR="${TMPDIR:-/tmp}" ;;
+  --pda-audit-log-api) DB_NAME='flowcube_pdaauditapi_test'; CONFIG_DIR="${TMPDIR:-/tmp}" ;;
   --pda-audit-log-migration) DB_NAME='flowcube_pdaaudit293_test'; CONFIG_DIR="${TMPDIR:-/tmp}" ;;
   *) echo '[ephemeral] unsupported validation suite' >&2; exit 1 ;;
 esac
 [ "$#" -le 1 ] || { echo '[ephemeral] unsupported validation suite arguments' >&2; exit 1; }
 export LC_ALL=C
 RESOURCE_ARGS=()
-if [[ "$SUITE" = '--inbound-edit' || "$SUITE" = '--retention-reprint' || "$SUITE" = '--change-records' || "$SUITE" = '--pda-audit-log-migration' ]]; then
+if [[ "$SUITE" = '--inbound-edit' || "$SUITE" = '--retention-reprint' || "$SUITE" = '--change-records' || "$SUITE" = '--pda-audit-log-migration' || "$SUITE" = '--pda-audit-log-api' ]]; then
   RESOURCE_ARGS=(--memory 768m --memory-swap 768m --cpus 1)
 fi
-if [[ "$SUITE" = '--pda-audit-log-migration' ]]; then
+if [[ "$SUITE" = '--pda-audit-log-migration' || "$SUITE" = '--pda-audit-log-api' ]]; then
   RESOURCE_ARGS+=(--pull=never)
 fi
 
@@ -287,7 +288,7 @@ fs.writeFileSync(file, JSON.stringify({
 NODE
 FILE_CREATED=1
 
-if [[ "$SUITE" = '--go-live' || "$SUITE" = '--inbound-edit' || "$SUITE" = '--retention-reprint' || "$SUITE" = '--change-records' || "$SUITE" = '--pda-audit-log-migration' ]]; then
+if [[ "$SUITE" = '--go-live' || "$SUITE" = '--inbound-edit' || "$SUITE" = '--retention-reprint' || "$SUITE" = '--change-records' || "$SUITE" = '--pda-audit-log-migration' || "$SUITE" = '--pda-audit-log-api' ]]; then
   DOWNLOADS_DIR="$(mktemp -d "${TMPDIR:-/tmp}/flowcube-golive-downloads.XXXXXX")"
   export APP_UPDATE_DOWNLOADS_DIR="$DOWNLOADS_DIR"
   JWT_SECRET="$(node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("hex"))')"
@@ -298,7 +299,7 @@ fi
 
 log "迁移 ${DB_NAME}（目标：127.0.0.1:${HOST_PORT}）…"
 cd "$ROOT"
-if [[ "$SUITE" = '--inbound-edit' || "$SUITE" = '--retention-reprint' || "$SUITE" = '--change-records' || "$SUITE" = '--pda-audit-log-migration' ]]; then
+if [[ "$SUITE" = '--inbound-edit' || "$SUITE" = '--retention-reprint' || "$SUITE" = '--change-records' || "$SUITE" = '--pda-audit-log-migration' || "$SUITE" = '--pda-audit-log-api' ]]; then
   # Direct migration executor consumes only explicit synthetic env; scripts/migrate.js loads backend/.env.
   NODE_ENV=test DB_HOST=127.0.0.1 DB_PORT="$HOST_PORT" DB_NAME="$DB_NAME" DB_USER=root \
     DB_PASSWORD="$ROOT_PW" node -e 'require("./backend/src/database/migrate").runMigrations().catch(() => { console.error("[inbound-edit] migration failed"); process.exitCode = 1 })'
@@ -332,6 +333,9 @@ elif [[ "$SUITE" = '--change-records' ]]; then
     log '逐套复核归属并运行受影响的既有回归（同一专属合成实例）…'
     run_smoke smoke:change-records-regressions
   fi
+elif [[ "$SUITE" = '--pda-audit-log-api' ]]; then
+  log '执行PDA日志接口追加写入、字符边界和失败反馈（专属实例，无删行）…'
+  run_smoke smoke:pda-audit-log-api-runtime
 elif [[ "$SUITE" = '--pda-audit-log-migration' ]]; then
   log '执行PDA293双表预检、重入和历史日志保全（专属实例，无应用/GUI/权限探针）…'
   run_smoke smoke:pda-audit-log-migration-runtime
