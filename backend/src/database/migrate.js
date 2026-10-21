@@ -51,7 +51,21 @@ function checkMigrationGaps(files) {
   return { gaps, duplicates, newDuplicates }
 }
 
-async function runMigrations({ checkGapsOnly = false } = {}) {
+// SQL assertions return one untruncated diagnostic per row. MySQL SIGNAL's
+// short MESSAGE_TEXT cannot carry a complete multi-role permission difference.
+async function executeMigrationStatements(conn, sql, filename) {
+  for (const statement of splitSqlStatements(sql)) {
+    const [rows] = await conn.query(statement)
+    const errors = Array.isArray(rows) ? rows.filter(row => typeof row?.migration_error === 'string') : []
+    if (errors.length) {
+      const error = new Error(`[Migrate] ${filename}\n${errors.map(row => row.migration_error).join('\n')}`)
+      error.code = 'MIGRATION_PREFLIGHT_FAILED'
+      throw error
+    }
+  }
+}
+
+async function runMigrations({ checkGapsOnly = false, through } = {}) {
   const cfg = {
     host: env.DB_HOST,
     port: env.DB_PORT,
@@ -82,6 +96,9 @@ async function runMigrations({ checkGapsOnly = false } = {}) {
     console.log(`[Migrate] 编号校验完成：共 ${files.length} 个迁移文件，${newDuplicates.length ? `新增重复 ${newDuplicates.length} 个（将失败）` : '无新增重复'}，${duplicates.length ? `历史重复 ${duplicates.length} 个，` : '无历史重复，'}${gaps.length ? `缺号 ${gaps.length} 个` : '编号连续'}`)
     return { gaps, duplicates, newDuplicates, files: files.length }
   }
+  // Explicit prefix execution for isolated fixture preparation. Default runs
+  // every migration, including strict production-baseline assertions.
+  if (through !== undefined && !files.includes(through)) throw new Error(`未知迁移终点：${through}`)
 
   const conn = await mysql2.createConnection(cfg)
   try {
@@ -109,6 +126,7 @@ async function runMigrations({ checkGapsOnly = false } = {}) {
     // 先执行按编号排序的 SQL 建表迁移，保证基础表存在后再做增量 ALTER
     let ran = 0
     for (const file of files) {
+      if (through !== undefined && file > through) break
       const [[existing]] = await conn.query(
         'SELECT id FROM db_migrations WHERE filename=?', [file]
       )
@@ -118,9 +136,7 @@ async function runMigrations({ checkGapsOnly = false } = {}) {
       // 逐条执行：整文件当一条多语句发送时，非末条 CREATE TRIGGER 的函数体会把
       // 结尾分号一起写进 ACTION_STATEMENT，导出成无法导入的 `... ); */;;`（见
       // sqlStatements.js 说明与 2026-09-14 备份恢复演练事故）。
-      for (const statement of splitSqlStatements(sql)) {
-        await conn.query(statement)
-      }
+      await executeMigrationStatements(conn, sql, file)
       await conn.query('INSERT INTO db_migrations (filename) VALUES (?)', [file])
       console.log(`[Migrate] ✓ ${file}`)
       ran++
@@ -131,9 +147,12 @@ async function runMigrations({ checkGapsOnly = false } = {}) {
     } else {
       console.log(`[Migrate] 完成，共执行 ${ran} 个迁移文件`)
     }
+  } catch (error) {
+    try { await conn.rollback() } catch (rollbackError) { error.rollbackError = rollbackError }
+    throw error
   } finally {
     await conn.end()
   }
 }
 
-module.exports = { runMigrations, checkMigrationGaps }
+module.exports = { runMigrations, checkMigrationGaps, executeMigrationStatements }

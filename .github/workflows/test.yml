@@ -390,7 +390,7 @@ jobs:
             CREATE DATABASE IF NOT EXISTS flowcube_plastic_box_20260929_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 
       - name: 数据库迁移 — 本批专库
-        run: npm --prefix backend run migrate
+        run: node tests/helpers/prepareQaRoleTestDatabase.js
 
       - name: 批 A 塑料盒作业流 — 放货 / 混批 / 还原整件（27 项断言）
         run: npm run smoke:plastic-box-batch-a
@@ -621,7 +621,7 @@ jobs:
             CREATE DATABASE IF NOT EXISTS flowcube_integration_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 
       - name: 数据库迁移 — smoke 库
-        run: npm --prefix backend run migrate
+        run: node tests/helpers/prepareQaRoleTestDatabase.js
 
       - name: 数量两位精度 — 实际拆分守恒与迁移重放
         run: npm run smoke:qty-precision
@@ -645,7 +645,7 @@ jobs:
         run: npm run smoke:price-list-bind-customer
 
       - name: 数据库迁移 — 集成库
-        run: npm --prefix backend run migrate
+        run: node tests/helpers/prepareQaRoleTestDatabase.js
         env:
           DB_NAME: flowcube_integration_test
 
@@ -852,7 +852,7 @@ jobs:
           node-version: "22"
       - run: npm --prefix backend ci
       - name: 迁移独立专项测试库
-        run: npm --prefix backend run migrate
+        run: node tests/helpers/prepareQaRoleTestDatabase.js
       - run: npm run smoke:${{ matrix.suite }}
 
   consistency-audit-20260926:
@@ -884,7 +884,7 @@ jobs:
           node-version: "22"
       - run: npm --prefix backend ci
       - name: 迁移独占审计测试库
-        run: npm --prefix backend run migrate
+        run: node tests/helpers/prepareQaRoleTestDatabase.js
       - name: 退货、跨期补录、应付、权限与幂等闭环
         run: npm run smoke:audit-20260926
       # 2026-09-26 一致性审查确认修复的四项，同一独占库内串行执行（每项自建夹具、自洁）

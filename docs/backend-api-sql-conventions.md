@@ -430,3 +430,12 @@ GET /auth/me仅增加hasUnrestrictedWarehouseScope只读布尔，严格来自当
 分类详情、更新、删除与状态切换的路径 `id` 共用 `validateParams`：只接受无前导零的正十进制整数字符串，且转换后必须满足 `Number.isSafeInteger`。非法编号返回 400 `VALIDATION_ERROR`，不进入 service；合法编号不存在仍沿原 404。认证与各路由原有分类查看、更新、删除权限先于编号校验，`/tree`、`/flat`、`/leaves` 保留在 `/:id` 之前。
 
 `node --test tests/categories-route-params.test.js` 使用真实 HTTP、Express 路由、认证/权限/参数中间件、controller 与统一错误处理，service 和认证持久层为隔离夹具；不连接数据库，不替代真实登录或数据库验收。
+
+
+### 已认可角色296：严格基线与完整诊断
+
+296冻结用户认可的13角色元数据及完整before/after，仅35撤/3增，001—295不变。当前锁读整角色和授权范围后做binary逐项比较，本次事务显式RR以保护插入gap；任一角色差异均在授权写入前整体失败。全部目标重读后，13条同版精确修订回执与授权同事务；只有完整回执+完整after可原SQL重放。后改权、缺失/额外角色、同数换权、未知回执/半应用均不静默保留。
+
+迁移SQL每条异常独立返回 `migration_error`，附角色、预期/实际数量及完整字段/权限差异；`migrate.js` 逐条执行并把所有诊断组成错误、rollback，不登记失败迁移。SQL另有CHECK守卫，普通直接SQL客户端也在授权写入前失败，不使用忽略错误的客户端。`through` 仅是显式程序化迁移终点；默认仍执行所有文件，包括严格296，不因test环境自动跳过基线。
+
+新库CI的合成角色准备与正式迁移分离：测试入口严格核环境、精确种子、禁用默认用户及空业务后才装载认可before；生产没有自动重置角色的通道。具体验证和保留范围见 `docs/qa-remediation-2026-10-21.md`。

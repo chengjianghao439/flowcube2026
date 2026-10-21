@@ -629,7 +629,7 @@ R2 服务器订阅补正可定向运行 `bash scripts/with-dev-env.sh npm --pref
 
 先红证据分别为 `/tmp/go-live-r3-backend-red.log`（旧pool双连接读取及路由单权）、`/tmp/go-live-r3-frontend-red.log`（document NULL身份拒绝/层级与rowkey）、`/tmp/go-live-r3-invalidation-red.log`（原成功回调未刷新统一待办）；均自然exit1。这些证据仅证明离线源码/组件行为，不代表MySQL、EXPLAIN、真实GUI/仓库或生产；全批统一lint/类型/构建和数据库现场验收另行执行。
 
-最终离线服务9项自然exit0见 `/tmp/go-live-r3-approval-green.log`；与首批原单草稿/详情、默认API取齐及R2服务器setter相邻回归合计前端9文件89项自然exit0见 `/tmp/go-live-r3-frontend-final.log`。反向把role1误设为自批豁免，目标自批用例自然exit1（`/tmp/go-live-r3-self-guard-reverse.log`），恢复产品字节后再次9项通过。SQL标识符、只读查询循环、权限、路由、轮询及主题文档守卫分别验证，不代替上述真实业务链边界。
+最终离线服务9项自然exit0见 `/tmp/go-live-r3-approval-green.log`；与首批原单草稿/详情、默认API取齐及R2服务器setter相邻回归合计前端9文件90项自然exit0见 `/tmp/go-live-r3-frontend-final.log`。反向把role1误设为自批豁免，目标自批用例自然exit1（`/tmp/go-live-r3-self-guard-reverse.log`），恢复产品字节后再次9项通过。SQL标识符、只读查询循环、权限、路由、轮询及主题文档守卫分别验证，不代替上述真实业务链边界。
 
 六类成功动作缓存接线补正：`useApprovals.invalidation.test.tsx` 真实授信hook、改价页面及请购form的13个新增动作，409/网络未知后不刷新，真实成功才失效两待办key；原3项保留。先自然exit1（13红/3绿）见 `/tmp/go-live-r3-engine-invalidation-red.log`，修后16项自然exit0见 `/tmp/go-live-r3-engine-invalidation-green.log`。请购沿真实form.run/refetch链，不虚构专用hook；改价未finished保留原商品缓存规则，草稿创建不启动引擎。
 
@@ -1102,8 +1102,17 @@ Node22 定向 `node --test tests/export-list-filters-passthrough.test.js tests/o
 
 ## 2026-10-21 QA 候选验证
 
-新增 `npm run test:qa-remediation` 在Tests static job执行分类真实Express资源参数与税务服务期间边界，外部身份/DB隔离，76项。前端新真实组件测试由原全量test:unit发现。首轮快照395文件3600项通过及两端lint、正确项目tsc、ERP/PDA构建保留为阶段记录，不代表正式验收。
+首轮新增 `npm run test:qa-remediation` 在Tests static job执行分类真实Express资源参数与税务服务期间边界，外部身份/DB隔离，原76项；认可角色后扩为90项，见下方296专项。前端新真实组件测试由原全量test:unit发现。首轮快照395文件3600项通过及两端lint、正确项目tsc、ERP/PDA构建保留为阶段记录，不代表正式验收。
 
 续办按运维事实撤回第5条后，原 `security-scope-reconciliation-pagination.test.js` 恢复基线，仍沿既有安全套件运行；本轮与导出筛选共19项通过。只读/原往来权限保留3文件33项通过；报税明确“金额全0+空列表”真实hooks/表格形状及相邻用例2文件16项通过。本轮最终全量394文件3593项通过，前端lint、正确项目tsc及ERP/PDA构建通过。真实浏览器分别查看验收基线及候选，均未复现崩溃、console error与page error均0。不能据此写成正式原故障已解决。
 
-本地预览仅本任务具label的专属新库、随机回环端口、完整295迁移与合成身份，不连接生产；不启动scheduler、显式关闭相关外呼worker/告警。只使用命名会话并close核验、按归属清理预览资源。最终检查结果和阶段边界见 [QA实测记录](qa-remediation-2026-10-21.md)，岗位待认可表见 [正式岗位核对](qa-role-review-2026-10-21.md)。独立测试环境、完整后端业务矩阵、同SHA CI及真机/实物分别验收。
+本地预览仅本任务具label的专属新库、随机回环端口、完整295迁移与合成身份，不连接生产；不启动scheduler、显式关闭相关外呼worker/告警。只使用命名会话并close核验、按归属清理预览资源。最终检查结果和阶段边界见 [QA实测记录](qa-remediation-2026-10-21.md)，岗位认可基线见 [正式岗位核对](qa-role-review-2026-10-21.md)。独立测试环境、完整后端业务矩阵、同SHA CI及真机/实物分别验收。
+
+
+### 2026-10-21 已认可角色296专项
+
+`test:qa-remediation` 增加 `qa-role-migration.test.js`（诊断/回滚/认可表比对/显式前缀/CLI完整输出）及 `qa-role-test-fixture.test.js`（非测试目标、同数漂移、已有活跃用户/业务拒绝、精确种子准备及已有296不重置）；连同原分类/期间共90项。`smoke:credit-override` 保留全部原入口，串行增加 `qa-role-migration.smoke.test.js` 与 `qa-role-concurrency.smoke.test.js`，共40项新增MySQL/真实HTTP门及并发回归。33条有效撤权逐项200→403，7角色12报表全403；controller/身份存储为合成边界，权限读实际迁移表。
+
+CI五处新库初始化显式使用 `tests/helpers/prepareQaRoleTestDatabase.js`：NODE_ENV=test、回环且独立test库名，001—295后还需精确旧12种子、仅禁用默认admin、空业务，才能装载认可13角色before，再执行普通296。已有296只运行后续普通迁移，不重置权限。生产默认迁移不会调用此入口，也不接受未知新库默认集合；不能把测试准备当作正式初始化工具。专属实例runner继续核归属及资源收尾，准备失败即停并清理，旧普通迁移步骤保留。
+
+真实新建归属实例的 `smoke:pda-audit-log-migration-owned` 40项在完整296初始化后通过且确认清理；原完整授信链、28项权限、56项相邻契约、19项归属守卫分别通过，不把它们算成同一层证据。所有运行只用本任务新建回环实例及合成数据，不读真实env或访问生产。
