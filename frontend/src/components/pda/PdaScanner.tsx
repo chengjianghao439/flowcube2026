@@ -15,6 +15,8 @@ import { useRef, useState, useCallback, useEffect } from 'react'
 import { Loader2, Keyboard, ScanLine, PauseCircle } from 'lucide-react'
 import { usePdaScanner } from '@/hooks/usePdaScanner'
 
+const MANUAL_REPEAT_WINDOW_MS = 1000
+
 export type PdaScanOutcome = 'accepted' | 'rejected' | 'ignored' | { kind: 'pending'; requestKey: string }
 export interface PdaScanResolution { requestKey: string; outcome: 'accepted' | 'rejected' }
 
@@ -57,6 +59,7 @@ export default function PdaScanner({
   current.current = { disabled, resolution }
   const mounted = useRef(true)
   const flight = useRef(false)
+  const lastManualScan = useRef<{ barcode: string; time: number } | null>(null)
   const manualEpoch = useRef(0)
   const manualOpen = useRef(false)
   const focusTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -107,6 +110,15 @@ export default function PdaScanner({
   // 同一业务入口；同步闸门覆盖React重渲染前的连续Enter和广播。
   const handleScan = useCallback(async (code: string, source: 'manual' | 'hardware') => {
     if (!code || current.current.disabled || flight.current || pending.current) return
+    if (source === 'manual') {
+      const now = Date.now()
+      // 立即拒绝也可能已结束 await；跨事件循环的同码连按仍静默丢弃，保留原反馈和手输。
+      if (lastManualScan.current?.barcode === code && now - lastManualScan.current.time < MANUAL_REPEAT_WINDOW_MS) {
+        setFocusRequest(n => n + 1)
+        return
+      }
+      lastManualScan.current = { barcode: code, time: now }
+    }
     flight.current = true
     const epoch = manualEpoch.current
     if (focusTimer.current) clearTimeout(focusTimer.current)
@@ -134,6 +146,7 @@ export default function PdaScanner({
   function enterManualMode() {
     if (paused) return
     const epoch = ++manualEpoch.current
+    lastManualScan.current = null
     manualOpen.current = true
     setManualMode(true)
     setManualValue('')

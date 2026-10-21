@@ -6,6 +6,8 @@ const path = require('node:path')
 const { randomBytes } = require('node:crypto')
 const { execFile } = require('node:child_process')
 const { promisify } = require('node:util')
+const vm = require('node:vm')
+const { createRequire } = require('node:module')
 const { configureTestEnvironment, validateTestEnvironment } = require('./helpers/testEnvironment')
 configureTestEnvironment()
 const mysql = require('../backend/node_modules/mysql2/promise')
@@ -14,6 +16,20 @@ const approved = require('./fixtures/qa-roles-approved-20261021.json').roles
 const root = path.resolve(__dirname, '..')
 const bootstrapSql = fs.readFileSync(path.join(root, 'backend/src/database/bootstrap/new-install-role-defaults.sql'), 'utf8')
 const exec = promisify(execFile)
+const json = value => typeof value === 'string' ? JSON.parse(value) : value
+
+// Only the database boundary is supplied. Parse/validation/formatting are the
+// actual service implementation, on this test's freshly bootstrapped schema.
+function printModule(relative, conn) {
+  const filename = path.join(root, 'backend/src', relative)
+  const localRequire = createRequire(filename)
+  const module_ = { exports: {} }
+  vm.runInNewContext(fs.readFileSync(filename, 'utf8'), {
+    module: module_, process, Buffer,
+    require: id => id === '../../config/db' ? { pool: conn } : localRequire(id),
+  }, { filename })
+  return module_.exports
+}
 
 // These schemas are created by this process, never reused, and dropped by exact
 // generated name in finally. The caller must supply an isolated test instance.
@@ -46,6 +62,18 @@ async function projection(conn) {
 test('真实新库CLI走001—295及新SQL后正常执行严格296，最终13角色精确after；重跑不改库', async () => schema(async ({ conn, name }) => {
   const result = await cli(name)
   assert.match(result.stdout, /新库初始化完成/)
+  const templates = printModule('modules/print-templates/print-templates.service.js', conn)
+  const list = await templates.findAll()
+  const sale = list.find(t => t.name === '默认销售订单模板' && t.type === 1)
+  assert.ok(sale?.isDefault, 'fresh installation must expose the default sale document through the real template list')
+  assert.ok(Array.isArray(sale.layout.elements))
+  assert.deepEqual(await templates.findById(sale.id), sale)
+  const productLabel = list.find(t => t.type === 8 && t.isDefault)
+  assert.ok(Array.isArray(productLabel?.layout.elements))
+  assert.equal(productLabel.layout.elements.find(e => e.fieldKey === 'spec').label, '型号')
+  const labels = printModule('modules/print-jobs/labelZplTemplate.js', conn)
+  const zpl = await labels.getLabelZplFromDefaultTemplate(8, { product_code: 'QA-SEED-8', product_name: '新库模板测试', spec: '测试型号' })
+  assert.match(zpl, /^\^XA[\s\S]*\^GFA[\s\S]*\^XZ$/)
   const state = await projection(conn)
   assert.deepEqual(state.roles.map(r => ({ ...r, id: Number(r.id), is_system: Number(r.is_system) })), approved.map(({ id, code, name, remark, is_system }) => ({ id, code, name, remark, is_system })))
   assert.deepEqual(state.permissions.map(r => `${Number(r.role_id)}:${r.permission}`).sort(), approved.flatMap(r => r.after.map(p => `${r.id}:${p}`)).sort())
@@ -58,6 +86,53 @@ test('真实新库CLI走001—295及新SQL后正常执行严格296，最终13角
   assert.deepEqual(await projection(conn), state)
   await runMigrations({ connection: conn })
   assert.deepEqual(await projection(conn), state, 'ordinary upgrade replay cannot reset customized/new role state')
+}))
+
+test('297只修复219造成的完整已知内置种子，保留自定义/未知/截断布局与默认选择，重放无变化', async () => schema(async ({ conn }) => {
+  for (const file of ['020_print_templates.sql', '079_seed_default_print_templates.sql', '214_seed_location_label_template.sql']) {
+    await executeMigrationStatements(conn, fs.readFileSync(path.join(root, 'backend/src/database', file), 'utf8'), file)
+  }
+  const [[original]] = await conn.query('SELECT layout_json FROM print_templates WHERE type=8')
+  const layout = json(original.layout_json)
+  const customized = JSON.parse(JSON.stringify(layout))
+  customized.elements[0].width = 68
+  await conn.query('UPDATE print_templates SET layout_json=? WHERE type=8', [JSON.stringify(customized)])
+  // Exercise the historical migration itself, including its JSON string bug.
+  await executeMigrationStatements(conn, fs.readFileSync(path.join(root, 'backend/src/database/219_print_spec_label_rename.sql'), 'utf8'), '219_print_spec_label_rename.sql')
+  const [[customizedRow]] = await conn.query('SELECT layout_json FROM print_templates WHERE type=8')
+  const known = JSON.parse(JSON.stringify(layout))
+  known.elements.find(e => e.fieldKey === 'spec').label = '型号'
+  const broken = JSON.stringify({ elements: JSON.stringify(known.elements) })
+  await conn.query('UPDATE print_templates SET layout_json=?,is_default=0 WHERE type=8', [broken])
+  await conn.query('INSERT INTO print_templates(name,type,paper_size,layout_json,is_default,created_by) VALUES ?', [[
+    ['员工默认标签', 8, 'thermal75', JSON.stringify(known), 1, 'qa-template'],
+    ['默认产品条码标签模板', 8, 'thermal75', JSON.stringify(json(customizedRow.layout_json)), 0, null],
+    ['默认产品条码标签模板', 8, 'thermal75', JSON.stringify({ elements: JSON.stringify(known.elements).slice(0, 300) + ']' }), 0, null],
+    ['默认产品条码标签模板', 8, 'thermal75', JSON.stringify({ elements: JSON.stringify(known.elements), extra: 'unknown' }), 0, null],
+    ['默认产品条码标签模板', 8, 'thermal75', broken, 0, 'qa-template'],
+    ['自定义名称', 8, 'thermal75', broken, 0, null],
+    ['默认产品条码标签模板', 8, 'thermal58', broken, 0, null],
+    ['默认产品条码标签模板', 9, 'thermal75', broken, 0, null],
+  ]])
+  const [before] = await conn.query('SELECT * FROM print_templates ORDER BY id')
+  const target = before.find(t => t.type === 8)
+  const repairSql = fs.readFileSync(path.join(root, 'backend/src/database/297_fix_builtin_product_label_layout.sql'), 'utf8')
+  await executeMigrationStatements(conn, repairSql, '297_fix_builtin_product_label_layout.sql')
+  const [after] = await conn.query('SELECT * FROM print_templates ORDER BY id')
+  assert.deepEqual(json(after.find(t => t.id === target.id).layout_json), known)
+  for (const row of after) {
+    const old = before.find(t => t.id === row.id)
+    if (row.id !== target.id) assert.deepEqual(row, old, `unknown/customized template ${row.id} must remain unchanged`)
+    else for (const key of Object.keys(old).filter(k => !['layout_json', 'updated_at'].includes(k))) assert.deepEqual(row[key], old[key], key)
+  }
+  await executeMigrationStatements(conn, repairSql, '297_fix_builtin_product_label_layout.sql')
+  assert.deepEqual((await conn.query('SELECT * FROM print_templates ORDER BY id'))[0], after)
+  // Unknown invalid layouts remain explicit failures; listing validation is not relaxed.
+  const templates = printModule('modules/print-templates/print-templates.service.js', conn)
+  const fixed = await templates.findById(target.id)
+  assert.equal(fixed.isDefault, false)
+  assert.equal(fixed.layout.elements.find(e => e.fieldKey === 'spec').label, '型号')
+  await assert.rejects(templates.findAll(), /标签模板须使用画布布局/)
 }))
 
 for (const [kind, sql] of [

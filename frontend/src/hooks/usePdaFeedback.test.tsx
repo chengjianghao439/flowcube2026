@@ -22,3 +22,26 @@ test('错误保持可读并宣告，明确清除后消失', async () => {
     expect(host.textContent).not.toContain('读取中断')
   } finally { await act(async () => { root.unmount() }); vi.useRealTimers() }
 })
+
+test('错误取消旧反馈的定时清除，下一条反馈替换且卸载会清理定时器', async () => {
+  Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
+  vi.useFakeTimers()
+  const host = document.createElement('div'), root = createRoot(host)
+  function Harness() {
+    const { flash, err, ok } = usePdaFeedback({ sound: false, vibrate: false })
+    return <><button onClick={() => ok('查询成功')}>成功</button><button onClick={() => err('未找到，请核对条码后重试')}>错误</button><PdaFlash flash={flash} /></>
+  }
+  try {
+    await act(async () => root.render(<Harness />))
+    await act(async () => { host.querySelectorAll('button')[0].click(); vi.advanceTimersByTime(1000) })
+    await act(async () => host.querySelectorAll('button')[1].click())
+    await act(async () => vi.advanceTimersByTime(5100))
+    expect(host.querySelector('[role="alert"]')?.textContent).toBe('未找到，请核对条码后重试')
+    await act(async () => host.querySelectorAll('button')[0].click())
+    expect(host.querySelector('[role="alert"]')).toBeNull()
+    expect(host.querySelector('[role="status"]')?.textContent).toBe('查询成功')
+    expect(vi.getTimerCount()).toBe(1)
+    await act(async () => root.unmount())
+    expect(vi.getTimerCount()).toBe(0)
+  } finally { await act(async () => root.unmount()); vi.useRealTimers() }
+})

@@ -9,7 +9,7 @@ beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
   host = document.createElement('div'); document.body.append(host); root = createRoot(host)
 })
-afterEach(async () => { await act(async () => root.unmount()); host.remove() })
+afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.useRealTimers() })
 async function manual(value: string) {
   await act(async () => { [...host.querySelectorAll('button')].find(b => b.textContent === '手动输入')!.click() })
   const input = host.querySelector<HTMLInputElement>('[data-scanner-manual]')!
@@ -22,6 +22,51 @@ async function manual(value: string) {
 async function enter(input: HTMLInputElement) {
   await act(async () => { input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })) })
 }
+
+test('立即拒绝后跨事件循环快速同码回车静默去重，保留原码和聚焦全选', async () => {
+  const onScan = vi.fn(() => 'rejected' as const), onDuplicate = vi.fn()
+  await act(async () => root.render(<PdaScanner onScan={onScan} onDuplicate={onDuplicate} />))
+  const input = await manual('UITEST123')
+  await enter(input)
+  expect(input.readOnly).toBe(false)
+  await enter(input)
+  expect(onScan).toHaveBeenCalledTimes(1)
+  expect(onDuplicate).not.toHaveBeenCalled()
+  expect(input.value).toBe('UITEST123'); expect(document.activeElement).toBe(input)
+  expect(input.selectionStart).toBe(0); expect(input.selectionEnd).toBe(9)
+})
+
+test('一秒内重复点击确认静默去重后恢复输入焦点与全选', async () => {
+  const onScan = vi.fn(() => 'rejected' as const), onDuplicate = vi.fn()
+  await act(async () => root.render(<PdaScanner onScan={onScan} onDuplicate={onDuplicate} />))
+  const input = await manual('UITEST123'); await enter(input)
+  const confirm = [...host.querySelectorAll('button')].find(button => button.textContent === '确认')!
+  // jsdom.click 不自动模拟浏览器按下按钮时的移焦，显式先还原真实按钮焦点。
+  confirm.focus(); input.setSelectionRange(9, 9)
+  expect(document.activeElement).toBe(confirm)
+  await act(async () => confirm.click())
+  expect(onScan).toHaveBeenCalledTimes(1)
+  expect(onDuplicate).not.toHaveBeenCalled()
+  expect(input.value).toBe('UITEST123'); expect(document.activeElement).toBe(input)
+  expect(input.selectionStart).toBe(0); expect(input.selectionEnd).toBe(9)
+})
+
+test('快速修正为不同条码可立即提交，同码满一秒后允许主动重试', async () => {
+  vi.useFakeTimers()
+  const onScan = vi.fn((_barcode: string) => 'rejected' as const)
+  await act(async () => root.render(<PdaScanner onScan={onScan} />))
+  const input = await manual('UITEST123'); await enter(input)
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, 'I000123')
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  await enter(input)
+  expect(onScan.mock.calls.map(call => call[0])).toEqual(['UITEST123', 'I000123'])
+  await act(async () => vi.advanceTimersByTime(999)); await enter(input)
+  expect(onScan).toHaveBeenCalledTimes(2)
+  await act(async () => vi.advanceTimersByTime(1)); await enter(input)
+  expect(onScan).toHaveBeenCalledTimes(3)
+})
 
 test('手输等实际异步结果，连续Enter只调用一次，失败保留原值并聚焦全选', async () => {
   let finish!: (result: 'rejected') => void

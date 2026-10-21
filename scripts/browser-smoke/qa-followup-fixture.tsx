@@ -10,6 +10,7 @@ import { KeepAliveOutlet } from '../../frontend/src/components/layout/KeepAliveO
 import { AppToast } from '../../frontend/src/components/shared/AppToast'
 import Pick from '../../frontend/src/pages/pda/task'
 import Sort from '../../frontend/src/pages/pda/sort'
+import Inventory from '../../frontend/src/pages/pda/inventory-query'
 import Forbidden from '../../frontend/src/pages/403'
 import { PERMISSIONS as P } from '../../frontend/src/lib/permission-codes'
 import { initDeviceBinding, saveDeviceCredential, saveDeviceSession } from '../../frontend/src/lib/pdaDeviceBinding'
@@ -24,7 +25,9 @@ useAuthStore.getState().login('synthetic-qa-token', null, {
   permissions: [P.PRINT_TEMPLATE_VIEW, ...(mode === 'template-allowed' ? [P.PRINT_TEMPLATE_MANAGE] : [])],
 })
 useWorkspaceStore.setState({ tabs: [HOME_TAB], activeKey: HOME_TAB.key })
-const calls: Array<{ method?: string; url?: string }> = []
+const calls: Array<{ method?: string; url?: string; at: number }> = []
+const feedback: Array<{ pattern: number | number[]; at: number }> = []
+Object.defineProperty(navigator, 'vibrate', { configurable: true, value: (pattern: number | number[]) => { feedback.push({ pattern, at: Date.now() }); return true } })
 const errors: string[] = []
 window.addEventListener('error', event => errors.push(event.message))
 window.addEventListener('unhandledrejection', event => errors.push(String(event.reason)))
@@ -36,7 +39,7 @@ function reject(config: InternalAxiosRequestConfig): never {
   })
 }
 api.defaults.adapter = async config => {
-  calls.push({ method: config.method, url: config.url })
+  calls.push({ method: config.method, url: config.url, at: Date.now() })
   let data: unknown
   if (config.url === '/warehouse-tasks/7') data = {
     id: 7, taskNo: 'WT-QA-007', status: 2, statusName: '待拣货', customerName: '合成验收',
@@ -44,6 +47,9 @@ api.defaults.adapter = async config => {
   }
   else if (config.url === '/warehouse-tasks/7/pick-suggestions') data = { items: [{ id: 9, productId: 3, productCode: 'P003', productName: '合成测试商品', unit: '个', requiredQty: 2, pickedQty: 0, remaining: 2, suggestions: [] }] }
   else if (config.url === '/sorting-bins') data = []
+  else if (config.url === '/inventory/query-by-barcode') data = config.params?.barcode === 'I000011'
+    ? [{ containerId: 11, barcode: 'I000011', productId: 3, productName: '合成测试商品', warehouseName: '合成仓', remainingQty: 2, containerStatus: 'stored', containerKind: 'inventory', unit: '个' }]
+    : []
   else if (config.url === '/sorting-bins/scan' || config.url?.startsWith('/inventory/containers/barcode/')) {
     await new Promise<void>(resolve => { releaseLookup = resolve })
     if (config.url === '/sorting-bins/scan') data = null
@@ -62,6 +68,7 @@ function Harness() {
   return <><Routes>
     <Route path="/pda/task/:id" element={<Pick />} />
     <Route path="/pda/sort" element={<Sort />} />
+    <Route path="/pda/inventory-query" element={<Inventory />} />
     <Route path="/403" element={<Forbidden />} />
     <Route path="*" element={<KeepAliveOutlet />} />
   </Routes><AppToast placement="pda" /></>
@@ -81,7 +88,7 @@ window.__qaInspect = () => {
     viewport: { width: window.innerWidth, height: window.innerHeight },
     route: location.hash, input: input ? { value: input.value, readOnly: input.readOnly, focused: document.activeElement === input, start: input.selectionStart, end: input.selectionEnd } : null,
     alerts: alerts.map(alert => alert.textContent), topFeedback: alerts.length === 1 && header?.nextElementSibling === alerts[0],
-    toasts: document.querySelectorAll('.fc-toast').length, calls, errors,
+    toasts: document.querySelectorAll('.fc-toast').length, calls, feedback, errors,
     title: document.querySelector('h1')?.textContent, save: [...document.querySelectorAll('button')].some(button => button.textContent === '保存'),
   }
 }

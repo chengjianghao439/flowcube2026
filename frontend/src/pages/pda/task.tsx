@@ -32,7 +32,7 @@ import PdaNextStep from '@/components/pda/PdaNextStep'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { WT_STATUS } from '@/constants/warehouseTaskStatus'
 import { stateConfirmedMessage, taskReachedStatus } from '@/lib/pdaCriticalState'
-import { formatPdaActionError, formatPdaErrorMessage } from '@/utils/displayFormatters'
+import { formatPdaActionError, formatPdaErrorMessage, PDA_INVENTORY_NOT_FOUND } from '@/utils/displayFormatters'
 
 /**
  * 拣货扫码回执（批 B1/B2）：`picked` 仅在「扫盒取货」分支出现——新取货码 + 数量 + 打印状态。
@@ -264,7 +264,7 @@ export default function PdaTaskPage() {
     const b = barcode.trim()
     if (!b || !task?.items?.length) return 'ignored'
     if (parseBarcode(b).type !== 'container') {
-      err(`${b} 识别失败，请重扫`)
+      err(PDA_INVENTORY_NOT_FOUND)
       logError({ taskId, barcode: b, reason: `条码格式无效：${b}` })
       return 'rejected'
     }

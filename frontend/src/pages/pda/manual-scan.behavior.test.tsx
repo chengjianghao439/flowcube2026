@@ -118,10 +118,47 @@ async function mountPick() {
 test('拣货：手输UITEST123格式拒绝后顶部反馈，原码保留并聚焦全选', async () => {
   await mountPick(); const input = await inputBarcode('UITEST123'); await enter(input)
   const alert = host.querySelector('[role="alert"]')
-  expect(alert?.textContent).toContain('识别失败')
+  expect(alert?.textContent).toBe(notFound)
   expect(host.querySelector('header')?.nextElementSibling).toBe(alert)
   await retained(input, 'UITEST123')
   expect(requests.filter(r => r.url === '/scan-logs')).toHaveLength(0)
+})
+test('拣货：格式错误跨两次回车周期只记录一次扫错且不重复反馈震动', async () => {
+  const vibration = vi.fn()
+  const originalVibrate = Object.getOwnPropertyDescriptor(navigator, 'vibrate')
+  Object.defineProperty(navigator, 'vibrate', { configurable: true, value: vibration })
+  try {
+    await mountPick(); const input = await inputBarcode('UITEST123')
+    await enter(input); await enter(input)
+    expect(requests.filter(r => r.url === '/scan-logs/error')).toHaveLength(1)
+    expect(vibration).toHaveBeenCalledTimes(1)
+    expect(host.querySelectorAll('[role="alert"]')).toHaveLength(1)
+    expect(host.querySelector('[role="alert"]')?.textContent).toBe(notFound)
+    await retained(input, 'UITEST123')
+  } finally {
+    if (originalVibrate) Object.defineProperty(navigator, 'vibrate', originalVibrate)
+    else Reflect.deleteProperty(navigator, 'vibrate')
+  }
+})
+
+test.each([{ name: '拣货', page: 'pick' }, { name: '分拣', page: 'sort' }, { name: '库存查询', page: 'inventory' }])('$name：扫码错误超过五秒仍保留，等待下一次反馈', async ({ page }) => {
+  lookup = () => page === 'sort' ? null : []
+  if (page === 'pick') await mountPick()
+  else await mount(page === 'sort' ? <Sort /> : <Inventory />)
+  // 必须在 err 创建清除定时器之前接管时钟，才能发现未来误改为一秒自动清除。
+  vi.useFakeTimers()
+  try {
+    const input = await inputBarcode('UITEST123')
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+      await vi.advanceTimersByTimeAsync(15)
+    })
+    const message = host.querySelector('[role="alert"]')?.textContent
+    expect(message).toContain('未找到')
+    await act(async () => vi.advanceTimersByTime(5100))
+    expect(host.querySelector('[role="alert"]')?.textContent).toBe(message)
+    expect(host.querySelectorAll('[role="alert"]')).toHaveLength(1)
+  } finally { vi.useRealTimers() }
 })
 test('拣货：合法形状的不存在条码在查询结束前双回车只查一次，拒绝后保留手输', async () => {
   const pending = deferred(); lookup = () => pending.promise

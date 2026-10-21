@@ -165,7 +165,23 @@ ssh flowcube-prod 'cd /opt/flowcube && git rev-parse --short HEAD'
 
 ## 全新空库初始化
 
-只在首次安装且目标 schema 没有任何对象时运行。先创建独立的新 schema，准备本版候选构建和受保护的运行配置，停止应用、scheduler 与 worker；迁移账号须能看到目标库全部对象并具备迁移所需权限。通过受保护环境显式注入 `DB_HOST`、`DB_PORT`、`DB_USER`、`DB_PASSWORD`、`DB_NAME` 与正常后端运行配置（包括 `JWT_SECRET`），再在仓库根用 Node22执行：
+只在首次安装且目标 schema 没有任何对象时运行。先创建独立的新 schema，准备本版候选构建和受保护的运行配置，停止应用、scheduler 与 worker。使用 Node 22，并从受保护的进程环境或密钥注入配置；初始化命令不读取 `.env`，不能依赖工作目录中已有的配置文件。
+
+| 必需环境变量 | 要求 |
+|---|---|
+| `DB_HOST` | 显式指定已核对的新库所在数据库主机 |
+| `DB_PORT` | 显式指定数据库 TCP 端口 |
+| `DB_USER` | 本次初始化的数据库迁移账号 |
+| `DB_PASSWORD` | 必须显式注入该迁移账号的口令；不写进命令、日志或文档 |
+| `DB_NAME` | 已创建且没有任何对象的目标 schema 名称 |
+| `JWT_SECRET` | 必须从环境注入，至少 32 个字符；初始化器会加载正常后端运行配置 |
+| `NODE_ENV` | 正式部署设为 `production`，下列生产条件校验同样适用于新装脚本 |
+| `APP_PUBLIC_URL` | `NODE_ENV=production` 时必填且非空；从既有部署配置注入正式公开入口 |
+| `TRUST_PROXY` | `NODE_ENV=production` 时必须为 `1`，遵守现有后端反向代理配置要求 |
+
+生产模式下 `DB_PASSWORD` 还必须非空；不通过切换运行模式绕过配置检查。其它正常后端运行配置按部署环境提供，不使用应用运行账号的默认值猜测目标库。迁移账号须能在 `information_schema` 看到目标库全部对象，并具备目标 schema 的 `SELECT`、`INSERT`、`UPDATE`、`DELETE`、`CREATE`、`ALTER`、`DROP`、`INDEX`、`REFERENCES`、`CREATE TEMPORARY TABLES` 和 `TRIGGER` 权限；其中 `TRIGGER` 用于既有往来明细触发器迁移。若服务启用二进制日志且 `log_bin_trust_function_creators=0`，还须由数据库管理员提供迁移所需的触发器创建权限窗口（现行迁移前置检查接受 `SUPER` 或全局管理员）；不要临时扩大应用运行账号权限来跳过检查。
+
+配置完成后在仓库根执行：
 
 ```bash
 node backend/scripts/bootstrap-new-database.js
@@ -178,6 +194,8 @@ docker compose run --rm --no-deps backend node scripts/bootstrap-new-database.js
 ```
 
 入口先核 `information_schema`，任一表（包括空 `db_migrations`）、视图、例程、触发器或事件均在写入前拒绝。通过后在同一连接执行原001—295；新的独立初始化SQL严格核历史默认12角色的完整元数据/权限及禁用默认管理员、空业务，只接受精确种子，再安装用户认可的13角色before。最后调用普通完整迁移执行严格296及后续迁移，最终必须是认可的13角色after和13条296修订回执。初始化成功后才继续原部署与管理员引导流程。普通 `npm --prefix backend run migrate` 不会调用此初始化器，直接对空库运行仍会在296按严格基线失败；已有库升级必须继续使用普通迁移。
+
+迁移297只订正219把内置产品条码标签的 `elements` 数组写成字符串造成的已知完整种子错误，不改变模板校验或岗位授权。初始化后须用管理员核对打印模板列表可见“默认销售订单模板”，并打开默认销售模板预览；数据库专项同时通过真实列表服务与默认产品标签的光栅/ZPL生成。自定义、未知或截断模板不会被297猜测覆盖，仍需按具体报错核对，实际走纸另验。
 
 首次初始化失败时保留目标库与完整错误输出，保持停写并核对实际迁移阶段。DDL可能已经提交，初始化入口不提供续跑；重跑会因非空schema拒绝。确认首次安装尚无业务后，另建空schema重新执行，原中断库留作诊断；不得删除现有/中断库的表或迁移记录、伪造296回执或覆盖授权来绕过前置。已有业务库在296出现任何漂移时，依原基线逐项核对、取得明确修复范围后处理，此新库命令不能用于修复。首次部署的备份、同SHA门禁与迁移失败停写规则照常适用。
 
