@@ -147,7 +147,7 @@ export default function PdaSortPage() {
     try {
       const res = await scanProductForSortApi(code)
       const result = res
-      if (!result) { err('无拣货中订单，请核对条码'); return 'rejected' }
+      if (!result) { err('未找到可分拣的商品或取货码，请核对条码后重试'); return 'rejected' }
       if (!result.sortingBinCode) { err(`任务 ${result.taskNo} 待分配分拣格，请联系主管补分配，刷新后重新扫商品`); return 'rejected' }
       const isPickCode = Boolean(result.isPickCode)
       setHint({

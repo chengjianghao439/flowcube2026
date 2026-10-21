@@ -46,6 +46,51 @@ test('SQL错误也整体回滚，原始错误保持，不登记迁移', async ()
   assert.ok(!calls.includes('COMMIT'))
   assert.ok(!calls.some(s => s.startsWith('INSERT INTO db_migrations')))
 })
+test('同一执行单元逐条等待SQL完成后才登记；失败后不派发后续语句', async () => {
+  const calls = []
+  let finishFirst
+  const conn = {
+    async query(sql, params) {
+      calls.push([sql, params])
+      if (sql === 'DO first') await new Promise(resolve => { finishFirst = resolve })
+      return [[]]
+    },
+  }
+  const execute = runner(conn, '').executeMigrationStatements
+  const pending = execute(conn, 'DO first; DO second;', filename, { recordMigration: true })
+  assert.deepEqual(calls.map(c => c[0]), ['DO first'])
+  finishFirst()
+  await pending
+  assert.deepEqual(calls.map(c => c[0]), ['DO first', 'DO second', 'INSERT INTO db_migrations (filename) VALUES (?)'])
+  assert.deepEqual(Array.from(calls.at(-1)[1]), [filename])
+  calls.length = 0
+  const failure = new Error('stop here')
+  conn.query = async sql => { calls.push([sql]); throw failure }
+  await assert.rejects(execute(conn, 'DO first; DO forbidden;', filename, { recordMigration: true }), error => error === failure)
+  assert.deepEqual(calls.map(c => c[0]), ['DO first'])
+})
+
+test('原始语句辅助函数仍不默认写入迁移记录', async () => {
+  const calls = [], conn = { async query(sql) { calls.push(sql); return [[]] } }
+  await runner(conn, '').executeMigrationStatements(conn, 'DO first; DO second;', filename)
+  assert.deepEqual(calls, ['DO first', 'DO second'])
+})
+
+test('借用连接保持原顺序执行，由所有者统一回滚与关闭', async () => {
+  const calls = [], failure = new Error('borrowed connection failure')
+  const conn = {
+    async query(sql) { calls.push(sql); if (sql === 'DO fail') throw failure; return [[]] },
+    async rollback() { calls.push('ROLLBACK') }, async end() { calls.push('END') },
+  }
+  await runner(conn, 'DO success;').runMigrations({ connection: conn })
+  assert.ok(calls.some(sql => sql.startsWith('INSERT INTO db_migrations')))
+  assert.ok(!calls.includes('END'))
+  calls.length = 0
+  await assert.rejects(runner(conn, 'DO fail; DO forbidden;').runMigrations({ connection: conn }), error => error === failure)
+  assert.ok(!calls.includes('ROLLBACK'))
+  assert.ok(!calls.includes('END'))
+  assert.ok(!calls.includes('DO forbidden'))
+})
 test('完整认可夹具逐权限匹配文档，不以数量替代；撤35增3，7角色撤整项报表', () => {
   const text = fs.readFileSync(path.join(root, fixture.approved_document), 'utf8')
   const parts = text.split(/^### (\d+) (.+?)（([^）]+)）\n/m)

@@ -1116,3 +1116,9 @@ Node22 定向 `node --test tests/export-list-filters-passthrough.test.js tests/o
 CI五处新库初始化显式使用 `tests/helpers/prepareQaRoleTestDatabase.js`：NODE_ENV=test、回环且独立test库名，001—295后还需精确旧12种子、仅禁用默认admin、空业务，才能装载认可13角色before，再执行普通296。已有296只运行后续普通迁移，不重置权限。生产默认迁移不会调用此入口，也不接受未知新库默认集合；不能把测试准备当作正式初始化工具。专属实例runner继续核归属及资源收尾，准备失败即停并清理，旧普通迁移步骤保留。
 
 真实新建归属实例的 `smoke:pda-audit-log-migration-owned` 40项在完整296初始化后通过且确认清理；原完整授信链、28项权限、56项相邻契约、19项归属守卫分别通过，不把它们算成同一层证据。所有运行只用本任务新建回环实例及合成数据，不读真实env或访问生产。
+
+### 2026-10-21 QA 验收续修的验证入口
+
+`npm run smoke:qa-role-upgrade` 使用显式独立测试环境，串行执行岗位迁移 MySQL/HTTP 反例、持久表并发与新库初始化实测。测试自行创建随机 schema 并按原名清理；不能指向生产或共享开发库。Tests CI 将其放在独立的“岗位权限与空库初始化（独立数据库）”job，先显式准备认可的合成改前集合，再真实执行反例，不受回归门禁前序步骤失败影响。原授信业务链保留在 `smoke:credit-override`，不重复执行已拆出的岗位专项。
+
+`npm run test:qa-remediation` 增加新装入口的离线顺序、非空对象拒绝与错误停止测试。新装的实际操作命令与中断边界见 `docs/DEPLOY.md`；测试准备脚本不是部署初始化入口。CI 配置、运行结果和独立验收结论分别记录。

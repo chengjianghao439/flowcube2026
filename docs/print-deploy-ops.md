@@ -275,3 +275,7 @@ PDA 会话表由迁移 `080_create_pda_device_sessions.sql` 创建，只有 `exp
 `npm run test:round2-runtime` 加入 `tests/runtime-shutdown.test.js`，沿现有 Tests CI 接线。新增用例在 VM 中执行实际入口/工具，所有 app、SQL 与调度任务依赖均为本地 fake；子进程信号只发给本测试创建的合成进程，不加载真实 dotenv/app/mysql2。覆盖 ready 缓存/在途竞态、停止与排空、不重入、重复信号、启动中退出、任务/HTTP/关池挂起、关池失败及超时非零；三支打印清理不能因一支失败而提前完成。反向破坏与审查证据见本轮独立核验报告。真实数据库、容器停止、生产、PDA、扫码及实际出纸均未验证；发版前仍须按现行完整门禁与正式授权执行。
 
 HTTP 连接关闭还不能证明业务 Promise 已完成。路由装配完成后，`httpDrain` 遍历现有 Express 4 路由、中间件与错误层，保持原 handler 的 this、参数、arity、next 和拒绝语义，只登记返回 Promise 的执行期。退出必须等这些异步工作动态归零，客户端提前断开或已经回包都不能提前放行；等待仍受同一 25 秒期限约束。归零检查留到下一事件循环，使原有 unhandledRejection 策略先决定致命错误，避免关池成功掩盖失败。这是当前 Express 4 返回 Promise 的业务链保障；不把未返回/未登记的独立尽力而为通知或日志视为持久化完成承诺。
+
+### 2026-10-21 QA 岗位回归 CI 分离
+
+岗位撤权的真实 MySQL/HTTP 反例、并发回滚和空库初始化由 Tests 的独立“岗位权限与空库初始化（独立数据库）”job执行，使用独立服务数据库及本轮随机生成的认证配置；不登记 N+1 白名单。`smoke:credit-override` 保留原授信业务回归，新岗位专项转到 `smoke:qa-role-upgrade`。新装与已有系统升级的入口和严格拒绝边界见 `docs/DEPLOY.md`。推送候选分支不代表合并、部署或验收通过。

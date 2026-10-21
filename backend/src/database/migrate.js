@@ -53,7 +53,7 @@ function checkMigrationGaps(files) {
 
 // SQL assertions return one untruncated diagnostic per row. MySQL SIGNAL's
 // short MESSAGE_TEXT cannot carry a complete multi-role permission difference.
-async function executeMigrationStatements(conn, sql, filename) {
+async function executeMigrationStatements(conn, sql, filename, { recordMigration = false } = {}) {
   for (const statement of splitSqlStatements(sql)) {
     const [rows] = await conn.query(statement)
     const errors = Array.isArray(rows) ? rows.filter(row => typeof row?.migration_error === 'string') : []
@@ -63,9 +63,12 @@ async function executeMigrationStatements(conn, sql, filename) {
       throw error
     }
   }
+  // The migration and its success receipt are one sequential write work unit.
+  // Raw SQL callers retain the original helper behavior unless explicitly opted in.
+  if (recordMigration) await conn.query('INSERT INTO db_migrations (filename) VALUES (?)', [filename])
 }
 
-async function runMigrations({ checkGapsOnly = false, through } = {}) {
+async function runMigrations({ checkGapsOnly = false, through, connection } = {}) {
   const cfg = {
     host: env.DB_HOST,
     port: env.DB_PORT,
@@ -100,7 +103,7 @@ async function runMigrations({ checkGapsOnly = false, through } = {}) {
   // every migration, including strict production-baseline assertions.
   if (through !== undefined && !files.includes(through)) throw new Error(`未知迁移终点：${through}`)
 
-  const conn = await mysql2.createConnection(cfg)
+  const conn = connection || await mysql2.createConnection(cfg)
   try {
     // 先确保迁移记录表存在
     await conn.query(`
@@ -136,8 +139,7 @@ async function runMigrations({ checkGapsOnly = false, through } = {}) {
       // 逐条执行：整文件当一条多语句发送时，非末条 CREATE TRIGGER 的函数体会把
       // 结尾分号一起写进 ACTION_STATEMENT，导出成无法导入的 `... ); */;;`（见
       // sqlStatements.js 说明与 2026-09-14 备份恢复演练事故）。
-      await executeMigrationStatements(conn, sql, file)
-      await conn.query('INSERT INTO db_migrations (filename) VALUES (?)', [file])
+      await executeMigrationStatements(conn, sql, file, { recordMigration: true })
       console.log(`[Migrate] ✓ ${file}`)
       ran++
     }
@@ -148,10 +150,13 @@ async function runMigrations({ checkGapsOnly = false, through } = {}) {
       console.log(`[Migrate] 完成，共执行 ${ran} 个迁移文件`)
     }
   } catch (error) {
-    try { await conn.rollback() } catch (rollbackError) { error.rollbackError = rollbackError }
+    // A borrowed connection's caller owns transaction cleanup and lifetime.
+    if (!connection) {
+      try { await conn.rollback() } catch (rollbackError) { error.rollbackError = rollbackError }
+    }
     throw error
   } finally {
-    await conn.end()
+    if (!connection) await conn.end()
   }
 }
 

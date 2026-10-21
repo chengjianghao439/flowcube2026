@@ -156,6 +156,7 @@ jobs:
       - run: agent-browser install --with-deps
       - run: npm run test:dirty-navigation
       - run: npm run test:style-compat
+      - run: npm run smoke:qa-followup-browser
 
   desktop-download-compat:
     name: 桌面下载失败路径与补丁契约
@@ -428,6 +429,49 @@ jobs:
       # 缺箱 404 不留回执、设备仓与限仓范围、历史错误回执经写重放与查询入口双拦、回执写入故障整体回滚）
       - name: 批 C4 — 打包完成与箱贴补打的幂等 / 范围 / 回执（8 项断言）
         run: npm run smoke:pack-done-replay
+
+  qa-role-upgrade:
+    name: 岗位权限与空库初始化（独立数据库）
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: flowcube_qa_roles_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
+    env:
+      NODE_ENV: test
+      DB_HOST: 127.0.0.1
+      DB_PORT: "3306"
+      DB_USER: root
+      DB_PASSWORD: root
+      DB_NAME: flowcube_qa_roles_test
+      APP_UPDATE_DOWNLOADS_DIR: /tmp/flowcube-qa-role-downloads
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - name: Setup Node 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: 安装后端依赖
+        run: npm --prefix backend ci
+      - name: 生成本轮合成测试认证配置
+        run: node -e "require('fs').appendFileSync(process.env.GITHUB_ENV, 'JWT_SECRET=' + require('crypto').randomBytes(32).toString('hex') + '\n')"
+      - name: 装载认可的合成权限改前集合并执行严格升级
+        run: node tests/helpers/prepareQaRoleTestDatabase.js
+      - name: 真实MySQL与HTTP反例、并发回滚及空库新装
+        run: npm run smoke:qa-role-upgrade
 
   regression:
     name: 回归门禁（smoke + 集成）

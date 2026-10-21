@@ -163,6 +163,24 @@ cat ~/.ssh/flowcube_deploy_ed25519
 ssh flowcube-prod 'cd /opt/flowcube && git rev-parse --short HEAD'
 ```
 
+## 全新空库初始化
+
+只在首次安装且目标 schema 没有任何对象时运行。先创建独立的新 schema，准备本版候选构建和受保护的运行配置，停止应用、scheduler 与 worker；迁移账号须能看到目标库全部对象并具备迁移所需权限。通过受保护环境显式注入 `DB_HOST`、`DB_PORT`、`DB_USER`、`DB_PASSWORD`、`DB_NAME` 与正常后端运行配置（包括 `JWT_SECRET`），再在仓库根用 Node22执行：
+
+```bash
+node backend/scripts/bootstrap-new-database.js
+```
+
+该命令不读取 `.env`，缺少任一显式数据库配置即拒绝。若用本版候选后端镜像并由 compose 注入完整配置，等价入口为：
+
+```bash
+docker compose run --rm --no-deps backend node scripts/bootstrap-new-database.js
+```
+
+入口先核 `information_schema`，任一表（包括空 `db_migrations`）、视图、例程、触发器或事件均在写入前拒绝。通过后在同一连接执行原001—295；新的独立初始化SQL严格核历史默认12角色的完整元数据/权限及禁用默认管理员、空业务，只接受精确种子，再安装用户认可的13角色before。最后调用普通完整迁移执行严格296及后续迁移，最终必须是认可的13角色after和13条296修订回执。初始化成功后才继续原部署与管理员引导流程。普通 `npm --prefix backend run migrate` 不会调用此初始化器，直接对空库运行仍会在296按严格基线失败；已有库升级必须继续使用普通迁移。
+
+首次初始化失败时保留目标库与完整错误输出，保持停写并核对实际迁移阶段。DDL可能已经提交，初始化入口不提供续跑；重跑会因非空schema拒绝。确认首次安装尚无业务后，另建空schema重新执行，原中断库留作诊断；不得删除现有/中断库的表或迁移记录、伪造296回执或覆盖授权来绕过前置。已有业务库在296出现任何漂移时，依原基线逐项核对、取得明确修复范围后处理，此新库命令不能用于修复。首次部署的备份、同SHA门禁与迁移失败停写规则照常适用。
+
 ## 应急发布
 
 优先手动触发 GitHub Actions 的 workflow_dispatch，仍须通过同 SHA 检查。直接运行服务器脚本时，需显式指定已验证提交，并提供 Node 22、GITHUB_REPOSITORY 和具有 Actions 读取权限的 GITHUB_TOKEN（通过受保护环境注入）：

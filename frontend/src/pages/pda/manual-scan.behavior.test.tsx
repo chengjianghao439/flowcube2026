@@ -3,7 +3,7 @@ import { webcrypto } from 'node:crypto'
 import { AxiosError, type InternalAxiosRequestConfig } from 'axios'
 import { act, type ReactElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import api, { setApiClientBaseURL } from '@/api/client'
@@ -17,6 +17,7 @@ import Split from './split'
 import Fill from './fill'
 import PlasticBox from './plastic-box'
 import Workbench from './index'
+import Pick from './task'
 
 // 真实页面、Scanner、React Query、API拦截器、反馈与原请求恢复均保留；只隔离设备和网络。
 const device = vi.hoisted(() => ({ bound: true }))
@@ -45,8 +46,8 @@ function deferred() {
 }
 const visible = (element: Element) => !element.closest('[hidden]')
 const manualInput = () => [...host.querySelectorAll<HTMLInputElement>('[data-scanner-manual][aria-label^="手动输入："]')].find(visible)
-async function mount(page: ReactElement) {
-  await act(async () => root.render(<QueryClientProvider client={qc}><MemoryRouter>{page}<AppToast placement="pda" /></MemoryRouter></QueryClientProvider>))
+async function mount(page: ReactElement, initialEntry = '/') {
+  await act(async () => root.render(<QueryClientProvider client={qc}><MemoryRouter initialEntries={[initialEntry]}>{page}<AppToast placement="pda" /></MemoryRouter></QueryClientProvider>))
   await settle()
 }
 async function settle() { await act(async () => { await new Promise(resolve => setTimeout(resolve, 15)) }) }
@@ -89,6 +90,7 @@ beforeEach(() => {
     else if (config.url === '/pda/todo-counts') data = await todos(config)
     else if (config.url?.startsWith('/system/request-status/')) data = await receipt(config)
     else if (config.url === '/warehouse-tasks/7') data = await task(config)
+    else if (config.url === '/warehouse-tasks/7/pick-suggestions') data = { items: [] }
     else if (config.method === 'put' || config.method === 'post') data = await write(config)
     else if (config.url === '/sorting-bins/scan' || config.url === '/inventory/query-by-barcode' || config.url?.startsWith('/inventory/containers/barcode/') || config.url?.startsWith('/packages/barcode/')) data = await lookup(config)
     else throw Error(`禁止未声明的网络端点 ${config.method} ${config.url}`)
@@ -109,6 +111,59 @@ const pages = [
   { name: '拆分', page: <Split />, code: 'I000011', result: source },
   { name: '放货来源', page: <Fill />, code: 'I000011', result: source },
 ]
+async function mountPick() {
+  task = () => ({ id: 7, taskNo: 'WT007', status: 2, statusName: '待拣货', items: [{ id: 9, productId: 3, requiredQty: 2, pickedQty: 0 }] })
+  await mount(<Routes><Route path="/pda/task/:id" element={<Pick />} /></Routes>, '/pda/task/7')
+}
+test('拣货：手输UITEST123格式拒绝后顶部反馈，原码保留并聚焦全选', async () => {
+  await mountPick(); const input = await inputBarcode('UITEST123'); await enter(input)
+  const alert = host.querySelector('[role="alert"]')
+  expect(alert?.textContent).toContain('识别失败')
+  expect(host.querySelector('header')?.nextElementSibling).toBe(alert)
+  await retained(input, 'UITEST123')
+  expect(requests.filter(r => r.url === '/scan-logs')).toHaveLength(0)
+})
+test('拣货：合法形状的不存在条码在查询结束前双回车只查一次，拒绝后保留手输', async () => {
+  const pending = deferred(); lookup = () => pending.promise
+  await mountPick(); const input = await inputBarcode('I123456'); await enter(input); await enter(input)
+  const lookups = requests.filter(r => r.url?.startsWith('/inventory/containers/barcode/'))
+  expect(lookups).toHaveLength(1); expect(manualInput()).toBe(input); expect(input.readOnly).toBe(true)
+  await act(async () => { try { rejected(lookups[0]) } catch (error) { pending.reject(error) } }); await settle()
+  expect(host.querySelector('[role="alert"]')?.textContent).toContain('库存条码')
+  await retained(input, 'I123456')
+  expect(requests.filter(r => r.url === '/scan-logs')).toHaveLength(0)
+})
+test.each(['success', 'failed'])('拣货：未知扫码不清原码，原键%s回执后才清理或恢复手输', async result => {
+  lookup = () => source; write = config => config.url === '/scan-logs' ? rejected(config, 503, '网络中断', 'SERVICE_UNAVAILABLE') : null
+  await mountPick(); const input = await inputBarcode('I000011'); await enter(input)
+  await vi.waitFor(() => expect(host.textContent).toContain('结果待确认'))
+  expect(manualInput()).toBe(input); expect(input.readOnly).toBe(true)
+  await enter(input)
+  receipt = () => ({ status: result, data: { id: 7 }, message: '已确认原结果' })
+  await vi.waitFor(() => expect([...host.querySelectorAll('button')].some(button => button.textContent === '确认上次结果' && !button.disabled)).toBe(true))
+  await act(async () => { [...host.querySelectorAll('button')].find(button => button.textContent === '确认上次结果')!.click() }); await settle()
+  if (result === 'success') await vi.waitFor(() => expect(manualInput()).toBeUndefined())
+  else { await retained(input, 'I000011'); expect(input.readOnly).toBe(false) }
+  const writes = requests.filter(r => r.url === '/scan-logs')
+  expect(writes).toHaveLength(1)
+  expect(requests.filter(r => r.url?.startsWith('/system/request-status/')).every(r => r.url?.includes(String(writes[0].headers.get('X-Request-Key'))))).toBe(true)
+})
+test('拣货：自动核对原键为明确失败时恢复手输，不依赖已消失的查询按钮', async () => {
+  lookup = () => source
+  write = config => config.url === '/scan-logs' ? rejected(config, 503, '网络中断', 'SERVICE_UNAVAILABLE') : null
+  receipt = () => ({ status: 'failed', data: null, message: '原拣货未执行' })
+  await mountPick(); const input = await inputBarcode('I000011'); await enter(input)
+  await vi.waitFor(() => expect(input.readOnly).toBe(false))
+  await retained(input, 'I000011')
+  expect(requests.filter(r => r.url === '/scan-logs')).toHaveLength(1)
+})
+test('分拣：找不到UITEST123时使用未找到提示，保留手输且不提交分拣', async () => {
+  lookup = () => null
+  await mount(<Sort />); const input = await inputBarcode('UITEST123'); await enter(input)
+  expect(host.querySelector('[role="alert"]')?.textContent).toBe('未找到可分拣的商品或取货码，请核对条码后重试')
+  await retained(input, 'UITEST123')
+  expect(requests.filter(r => r.method === 'put')).toHaveLength(0)
+})
 test.each(pages)('$name：真实查询失败保留手输原码、聚焦全选且只显示页面反馈', async ({ page, code, name }) => {
   await mount(page); const input = await inputBarcode(code); await enter(input)
   const alert = host.querySelector('[role="alert"]')
@@ -124,6 +179,27 @@ test.each(pages)('$name：异步未结束保留输入，连续Enter不重复，�
   expect(requests.filter(r => r.url !== '/sorting-bins' && r.url !== '/warehouse-tasks/return-out-pending')).toHaveLength(1)
   await act(async () => pending.resolve(result)); await settle()
   await vi.waitFor(() => expect(manualInput()).toBeUndefined())
+})
+
+test('分拣恢复入口挂载前手输已只读，不能以只读作为可点击的依据', async () => {
+  lookup = () => product; write = config => rejected(config, 503, '网络中断', 'SERVICE_UNAVAILABLE')
+  await mount(<Sort />); await enter(await inputBarcode('P003'))
+  const lockGate = deferred()
+  const originalLocks = navigator.locks
+  Object.defineProperty(navigator, 'locks', { configurable: true, value: { request: async (name: string, options: unknown, fn?: (lock: object) => unknown) => {
+    if (name.startsWith('flowcube-pda:')) await lockGate.promise
+    return (typeof options === 'function' ? options : fn!)({})
+  } } })
+  try {
+    const input = await inputBarcode('A01'); await enter(input)
+    expect(input.readOnly).toBe(true)
+    expect([...host.querySelectorAll('button')].find(button => button.textContent === '确认上次结果')).toBeUndefined()
+    await act(async () => lockGate.resolve(null))
+    await vi.waitFor(() => expect([...host.querySelectorAll('button')].some(button => visible(button) && button.textContent === '确认上次结果' && !button.disabled)).toBe(true))
+  } finally {
+    await act(async () => lockGate.resolve(null)); await settle()
+    Object.defineProperty(navigator, 'locks', { configurable: true, value: originalLocks })
+  }
 })
 
 test.each([
@@ -213,7 +289,9 @@ test.each([
   await mount(page)
   if (name === '分拣') await enter(await inputBarcode('P003'))
   const input = await inputBarcode(code); await enter(input)
-  await vi.waitFor(() => expect(input.readOnly).toBe(true))
+  // 只读也覆盖原键持久化前的提交阶段；真实恢复入口挂载且可点击才可核原结果。
+  await vi.waitFor(() => expect([...host.querySelectorAll('button')].some(button => visible(button) && button.textContent === '确认上次结果' && !button.disabled)).toBe(true))
+  expect(input.readOnly).toBe(true)
   receipt = () => ({ status: result, data: { allSorted: false, progress: '2/4' }, message: '已确认原结果' })
   await act(async () => { [...host.querySelectorAll('button')].find(b => b.textContent === '确认上次结果')!.click() }); await settle()
   if (result === 'success') {
