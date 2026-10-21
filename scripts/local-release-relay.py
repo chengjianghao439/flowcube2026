@@ -403,24 +403,8 @@ class Relay:
 
 
 def main():
-    relay = None
-    def interrupted(signum, frame):
-        raise KeyboardInterrupt()
-    signal.signal(signal.SIGTERM, interrupted)
-    try:
-        relay = Relay(os.environ)
-        relay.preflight()
-        if os.environ.get('FLOWCUBE_RELAY_PREFLIGHT_ONLY') != '1':
-            relay.watch()
-        return 0
-    except KeyboardInterrupt:
-        return 130
-    except (RuntimeError, ValueError, OSError, subprocess.SubprocessError):
-        print('relay: failed; inspect workflow status and sanitized relay stages', flush=True)
-        return 1
-    finally:
-        if relay:
-            relay.close()
+    print("旧 Mac 中转入口已停用；使用 docs/manual-release.md 的 GitHub 手动流程", file=sys.stderr)
+    return 1
 
 if __name__ == '__main__':
     raise SystemExit(main())

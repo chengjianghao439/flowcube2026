@@ -1,309 +1,128 @@
 #!/usr/bin/env bash
-# 服务器只加载 CI 镜像、迁移和切换；不安全的数据库回退保持停写。
+# Installed trusted executor. Receiver owns authentication; no Git, engine changes or rollback.
 set -Eeuo pipefail
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+SCRIPT_DIR="${RELEASE_TOOLS_DIR:?fixed installed tools required}"
+ROOT="${PROJECT_DIR:?actual Compose project directory required}"
 cd "$ROOT"
-SCRIPT_DIR="$ROOT/scripts"
-PROJECT_DIR="${PROJECT_DIR:-$ROOT}"
-LOCK_FILE="${DEPLOY_LOCK_FILE:-/tmp/flowcube-deploy.lock}"
-LOCK_TIMEOUT="${DEPLOY_LOCK_TIMEOUT:-1800}"
-
-# CI 在 checkout/reset 前持同一把锁，并把已打开的 fd 9 传给本脚本。
-if [ "${DEPLOY_LOCK_FD:-}" = "9" ]; then
-  flock -n 9 || { echo '!! 无法继承部署锁 fd 9' >&2; exit 1; }
-else
-  exec 9>"$LOCK_FILE"
-  flock -w "$LOCK_TIMEOUT" 9 || { echo '!! 等待部署锁超时' >&2; exit 1; }
+# shellcheck source=scripts/lib/runtime-guards.sh
+. "$SCRIPT_DIR/lib/runtime-guards.sh"
+: "${EXPECTED_COMMIT:?verified full SHA required}" "${COMPOSE_FILE:?actual Compose combination required}"
+: "${COMPOSE_PROJECT_NAME:?actual Compose project required}" "${COMPOSE_ENV_FILES:?private environment file required}"
+: "${MYSQL_EXPECTED_VERSION:?existing engine version required}" "${MYSQL_EXPECTED_IMAGE_ID:?existing engine image required}"
+: "${RELEASE_STATE_DIR:?receiver state directory required}"
+[[ "$EXPECTED_COMMIT" =~ ^[a-f0-9]{40}$ ]]
+[[ "$EXPECTED_BACKEND_ID" =~ ^sha256:[a-f0-9]{64}$ ]]
+[[ "$EXPECTED_FRONTEND_ID" =~ ^sha256:[a-f0-9]{64}$ ]]
+exec 9>"$RELEASE_STATE_DIR/application.lock"
+flock -w 1800 9 || { echo '!! 等待应用部署锁超时' >&2; exit 1; }
+if [ -n "${RELEASE_GATE_ENV_FILE:-}" ]; then
+  set -a
+  # Operator-owned secret file; never sourced from an upload.
+  # shellcheck source=/dev/null
+  . "$RELEASE_GATE_ENV_FILE"
+  set +a
 fi
-trap 'DEPLOY_EXIT_CODE=$?; flock -u 9; exit "$DEPLOY_EXIT_CODE"' EXIT
-echo "==> 获得部署锁，开始部署（PID $$）"
-. "$SCRIPT_DIR/lib/ops-common.sh"
-
-DOCKER_DEPLOY=0
-APPLICATION_SWITCHED=0
-PREVIOUS_BACKEND_IMAGE=''
-PREVIOUS_FRONTEND_IMAGE=''
+for name in SMOKE_USERNAME SMOKE_PASSWORD SMOKE_LIMITED_USERNAME SMOKE_LIMITED_PASSWORD; do
+  [ -n "${!name:-}" ] || { echo "!! 缺少 ${name}，不开始加载、停写或迁移" >&2; exit 1; }
+done
+WRITE_WINDOW=0
 MIGRATION_CONTAINER=''
-MIGRATION_TRUST_PREVIOUS=''
-MIGRATION_STARTED=0
-MIGRATION_COMPLETED=0
-LEDGER_COMPATIBILITY_CHANGED=0
-WRITE_COMPATIBILITY_CHANGED=0
-ROLLBACK_COMPATIBILITY_VERIFIED=1
-ROLLBACK_RESULT='应用容器未切换'
-
-wait_for_health() {
-  local attempts="${HEALTH_CHECK_ATTEMPTS:-30}" delay="${HEALTH_CHECK_DELAY:-2}" i endpoint="${1:-/api/ready}"
-  for ((i=1; i<=attempts; i++)); do
-    if curl -fsS --max-time 5 "http://127.0.0.1:3000${endpoint}" >/dev/null 2>&1; then return 0; fi
-    sleep "$delay"
-  done
-  echo '!! 后端业务就绪检查超时' >&2
-  return 1
-}
-
-wait_for_frontend() {
-  local attempts="${HEALTH_CHECK_ATTEMPTS:-30}" delay="${HEALTH_CHECK_DELAY:-2}" i html
-  for ((i=1; i<=attempts; i++)); do
-    if html=$(curl -fsS --max-time 5 http://127.0.0.1:8080/) && [[ "$html" == *'<title>极序 Flow</title>'* ]]; then return 0; fi
-    sleep "$delay"
-  done
-  echo '!! 前端响应检查超时' >&2
-  return 1
-}
-
-assert_mysql_ready() {
-  local mysql_id="$1" mysql_state sql_result
-  mysql_state=$(DOCKER_COMMAND_TIMEOUT=5 docker inspect -f '{{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' "$mysql_id") || return 1
-  [ "$mysql_state" = 'running healthy' ] || return 1
-  # The image healthcheck can accept a temporary socket-only server or denied
-  # authentication. Require TCP and SQL on this exact container; secrets expand
-  # only inside it, never into host arguments or deployment output.
-  sql_result=$(DOCKER_COMMAND_TIMEOUT=5 docker exec "$mysql_id" sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql --protocol=TCP -h127.0.0.1 -P3306 --connect-timeout=2 -uroot --database="$MYSQL_DATABASE" --batch --skip-column-names -e "SELECT 1"' 2>/dev/null) || return 1
-  [ "$sql_result" = '1' ]
-}
-
-ensure_mysql_ready() {
-  local mysql_id mysql_image attempt deadline
-  mysql_id=$(docker compose ps -aq mysql) || fail_deploy '无法核实 MySQL 容器，业务保持原状态'
-  [[ "$mysql_id" != *$'\n'* ]] || fail_deploy 'MySQL 存在多个容器，须维护窗口核对；不自动恢复或重建'
-  if [ -n "$mysql_id" ]; then
-    assert_mysql_ready "$mysql_id" || fail_deploy '现有 MySQL 未同时通过 running/healthy 与 TCP 认证 SQL，须维护窗口核对；不自动恢复或重建'
-    echo '==> 保留现有 MySQL 容器，健康与 TCP 认证 SQL 已通过'
-    return 0
-  fi
-  # A routine application deployment never reconciles a running database with
-  # a newer Compose pin. Only first start may use the declared locally cached pin.
-  mysql_image=$(docker compose config --images mysql) || fail_deploy '无法读取首次启动的 MySQL 固定镜像引用'
-  [[ "$mysql_image" =~ ^[a-zA-Z0-9._/:+-]+@sha256:[a-f0-9]{64}$ ]] || fail_deploy '首次启动 MySQL 必须声明唯一固定摘要镜像'
-  docker image inspect "$mysql_image" >/dev/null 2>&1 || fail_deploy '本机缺少首次启动 MySQL 的固定镜像，请在维护窗口预装；部署期间禁止联网拉取或降级 tag'
-  DOCKER_COMMAND_TIMEOUT=150 docker compose up -d --no-build --no-deps --pull never --wait --wait-timeout 120 mysql
-  mysql_id=$(docker compose ps -aq mysql) || fail_deploy '无法核实首次启动后的 MySQL 容器'
-  [ -n "$mysql_id" ] && [[ "$mysql_id" != *$'\n'* ]] || fail_deploy '首次启动后须存在唯一 MySQL 容器'
-  # Initial image health can precede final TCP/auth readiness. This bounded wait
-  # only observes the first-started container; it never starts or repairs it again.
-  deadline=$((SECONDS + 30))
-  for ((attempt=1; attempt<=15; attempt++)); do
-    if assert_mysql_ready "$mysql_id"; then return 0; fi
-    if [ "$attempt" -ge 15 ] || [ "$SECONDS" -ge "$deadline" ]; then break; fi
-    sleep 2
-  done
-  fail_deploy '首次启动 MySQL 未通过健康与 TCP 认证 SQL，须维护窗口核对；不自动恢复或重建'
-}
-
-# 创建触发器需要管理员提供短暂的迁移窗口；不授予应用 SUPER，不永久放宽配置。
-mysql_admin_sql() {
-  docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot --database="$MYSQL_DATABASE" --batch --skip-column-names -e "$1"' sh "$1"
-}
-restore_migration_permissions() {
-  [ -n "$MIGRATION_TRUST_PREVIOUS" ] || return 0
-  mysql_admin_sql "SET GLOBAL log_bin_trust_function_creators=$MIGRATION_TRUST_PREVIOUS" || return 1
-  MIGRATION_TRUST_PREVIOUS=''
-}
-
-rollback_deployment() {
-  [ "$DOCKER_DEPLOY" = '1' ] || return 0
-  local failed=0 services=() legacy_manifest
-  # 首次回退可能仍是只认识 version.json 的旧镜像；该旧 API 已支持 filename。
-  # published 指向实际已发布的不可变包，不能让 Git 目标版本配上旧固定 APK。
-  if [ -f backend/apk/published-version.json ]; then
-    legacy_manifest=$(mktemp backend/apk/.publish-pda-XXXXXX) || failed=1
-    if [ -n "${legacy_manifest:-}" ]; then
-      if cp backend/apk/published-version.json "$legacy_manifest" && chmod 644 "$legacy_manifest" && mv "$legacy_manifest" backend/apk/version.json; then :
-      else failed=1; rm -f "$legacy_manifest"; fi
-    fi
-  fi
-  if [ -n "$PREVIOUS_BACKEND_IMAGE" ]; then
-    docker tag "$PREVIOUS_BACKEND_IMAGE" flowcube-backend:latest || failed=1
-    services+=(backend)
-  elif [ "$APPLICATION_SWITCHED" = '1' ]; then
-    docker compose rm -s -f backend || failed=1
-  fi
-  if [ -n "$PREVIOUS_FRONTEND_IMAGE" ]; then
-    docker tag "$PREVIOUS_FRONTEND_IMAGE" flowcube-frontend:latest || failed=1
-    services+=(frontend)
-  elif [ "$APPLICATION_SWITCHED" = '1' ]; then
-    docker compose rm -s -f frontend || failed=1
-  fi
-  if [ "${#services[@]}" -gt 0 ]; then
-    if [ "$APPLICATION_SWITCHED" = '1' ]; then
-      docker compose up -d --no-build --no-deps --force-recreate "${services[@]}" || failed=1
-    fi
-    # 旧镜像可能尚无ready接口；仅回退验证允许使用原有存活检查。
-    if [ -n "$PREVIOUS_BACKEND_IMAGE" ]; then wait_for_health /api/health || failed=1; fi
-    if [ -n "$PREVIOUS_FRONTEND_IMAGE" ]; then wait_for_frontend || failed=1; fi
-    ROLLBACK_RESULT='已恢复部署前应用镜像并检查健康；数据库迁移未回滚'
-  else
-    ROLLBACK_RESULT='首次部署没有旧应用镜像；本次应用容器已停止或尚未启动'
-  fi
-  if [ "$failed" != '0' ]; then
-    ROLLBACK_RESULT='应用回退或回退后健康检查失败，需要人工恢复；数据库迁移未回滚'
-    return 1
-  fi
-}
-
 fail_deploy() {
-  local reason="$1"
   trap - ERR INT TERM HUP
+  # A failed migration or switched application must never resume writes automatically.
+  if [ "$WRITE_WINDOW" = 1 ]; then
+    DOCKER_COMMAND_TIMEOUT=90 docker compose stop -t 60 backend || echo '!! 停写失败，运维须立即阻断写入' >&2
+  fi
   if [ -n "$MIGRATION_CONTAINER" ]; then
-    DOCKER_COMMAND_TIMEOUT=20 docker rm -f "$MIGRATION_CONTAINER" >/dev/null 2>&1 \
-      || echo '!! 迁移容器清理失败，需人工核对其状态与迁移记录' >&2
+    DOCKER_COMMAND_TIMEOUT=20 docker rm -f "$MIGRATION_CONTAINER" >/dev/null 2>&1 || true
   fi
-  if ! restore_migration_permissions; then
-    echo '!! 迁移权限恢复失败，旧应用保持停写，需恢复 MySQL log_bin_trust_function_creators 后人工恢复服务' >&2
-    exit 1
-  fi
-  if [ "$ROLLBACK_COMPATIBILITY_VERIFIED" != '1' ] || { [ "$MIGRATION_STARTED" = '1' ] && [ "$MIGRATION_COMPLETED" != '1' ]; }; then
-    DOCKER_COMMAND_TIMEOUT=90 docker compose stop -t 60 backend \
-      || echo '!! 后端停止失败，须立即人工阻断写入' >&2
-    ROLLBACK_RESULT='保持业务停写：须完成并核实迁移后启动兼容的新后端，禁止恢复不兼容旧镜像；数据库未回滚'
-  else
-    rollback_deployment || true
-  fi
-  echo "!! 部署失败：${reason}；${ROLLBACK_RESULT}" >&2
-  # 告警发送结果**不得改变本脚本的退出码**：这里是 set -e，而 dingtalk_send 在未配置 webhook
-  # 或发送失败时会返回非 0（2026-09-18 审计修复）。不显式吞掉的话，调用失败会在下面 exit 1
-  # 之前中断，把「部署失败」的退出码从 1 变成 2（CI 的 audit-deployment 用例就按 1 断言）。
-  # 告警失败本身已由 dingtalk_send 写 stderr，运维在部署日志里看得到。
-  dingtalk_send "$(read_dingtalk_webhook "$PROJECT_DIR")" "🔴 FlowCube 部署失败（$(ts)）：${reason}；${ROLLBACK_RESULT}" || true
+  echo '!! 发布失败，已停止；不自动回滚、不恢复旧镜像。由运维核对收据并用备份恢复。' >&2
   exit 1
 }
-trap 'fail_deploy "第 ${LINENO} 行执行失败（exit=$?）"' ERR
-trap 'fail_deploy "部署收到中断或超时信号"' INT TERM HUP
-
-assert_expected_commit() {
-  local expected="${EXPECTED_COMMIT:-${GITHUB_SHA:-}}" current
-  [ -n "$expected" ] || fail_deploy '部署必须提供通过门禁的 EXPECTED_COMMIT'
-  if [ -n "$expected" ]; then
-    [[ "$expected" =~ ^[a-fA-F0-9]{40}$ ]] || fail_deploy 'EXPECTED_COMMIT 格式无效'
-    current=$(git rev-parse HEAD)
-    [ "$current" = "$expected" ] || fail_deploy '服务器提交与通过门禁的提交不一致'
-  fi
+trap fail_deploy ERR INT TERM HUP
+compose() { docker compose --project-directory "$ROOT" "$@"; }
+assert_mysql_ready() {
+  local id state identity sql
+  id=$(compose ps -aq mysql)
+  [ -n "$id" ] && [[ "$id" != *$'\n'* ]] || { echo '!! 现有 MySQL 不唯一或缺失，不自动首次启动或重建' >&2; return 1; }
+  state=$(DOCKER_COMMAND_TIMEOUT=5 docker inspect -f '{{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' "$id")
+  [ "$state" = 'running healthy' ]
+  identity=$(docker inspect -f '{{.Image}}' "$id")
+  [ "$identity" = "$MYSQL_EXPECTED_IMAGE_ID" ]
+  sql=$(DOCKER_COMMAND_TIMEOUT=5 docker exec "$id" sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql --no-defaults --protocol=TCP -h127.0.0.1 -P3306 --connect-timeout=2 -uroot --database="$MYSQL_DATABASE" --batch --skip-column-names -e "SELECT CONCAT(1, CHAR(9), VERSION())"' 2>/dev/null)
+  [ "$sql" = "$(printf '1\t%s' "$MYSQL_EXPECTED_VERSION")" ]
+  if [ -n "${MYSQL_ID:-}" ]; then [ "$id" = "$MYSQL_ID" ]; fi
+  MYSQL_ID=$id
 }
-
-expected="${EXPECTED_COMMIT:-${GITHUB_SHA:-}}"
-[[ "$expected" =~ ^[a-fA-F0-9]{40}$ ]] || fail_deploy '必须提供合法 EXPECTED_COMMIT'
-# CI 已在连接服务器之前检查，只有它继承已持有的 fd 9；人工入口重新查询 GitHub。
-if [ "${DEPLOY_LOCK_FD:-}" != '9' ]; then
-  GITHUB_REF=refs/heads/main GITHUB_SHA="$expected" node scripts/wait-release-checks.js
-fi
-if [ "${SKIP_GIT_PULL:-0}" != '1' ]; then git pull --rebase --autostash origin main; fi
-assert_expected_commit
-
-if command -v docker >/dev/null 2>&1 && [ -f docker-compose.yml ]; then
-  . "$SCRIPT_DIR/lib/runtime-guards.sh"
-  DOCKER_DEPLOY=1
-  # 保存容器真正运行的 image ID，不能假设 latest 仍指向旧镜像。
-  backend_id=$(docker compose ps -aq backend)
-  frontend_id=$(docker compose ps -aq frontend)
-  if [ -n "$backend_id" ]; then PREVIOUS_BACKEND_IMAGE=$(docker inspect -f '{{.Image}}' "$backend_id"); fi
-  if [ -n "$frontend_id" ]; then PREVIOUS_FRONTEND_IMAGE=$(docker inspect -f '{{.Image}}' "$frontend_id"); fi
-
-  # 不允许回退到宿主编译：2 核生产机只接收 CI 已构建的产物。
-  archive="${DEPLOY_IMAGE_ARCHIVE:-}"
-  checksum="${DEPLOY_IMAGE_SHA256:-}"
-  [ -n "$archive" ] && [ -s "$archive" ] || fail_deploy '缺少 CI 镜像归档，请通过 Deploy Browser App 发布'
-  [[ "$checksum" =~ ^[a-f0-9]{64}$ ]] || fail_deploy '镜像归档摘要无效'
-  avail_mb=$(df -Pm "$ROOT" | awk 'NR==2 {print $4}')
-  [[ "$avail_mb" =~ ^[0-9]+$ ]] && [ "$avail_mb" -ge 4096 ] || fail_deploy '可用磁盘不足 4096 MB，拒绝加载；不自动清理回退镜像'
-  actual_checksum=$(bounded 120 sha256sum "$archive")
-  [ "${actual_checksum%% *}" = "$checksum" ] || fail_deploy 'CI 镜像归档摘要不匹配'
-  echo '==> 加载并验证 CI 应用镜像（旧应用仍在运行）...'
-  # docker load 要解压全部层：首次加载一个新镜像时在慢盘上可能超过 10 分钟。
-  # 2026-09-16 发 v0.9.17 时就卡在这里——600 秒整被 bounded 强杀（exit code 124，
-  # 日志停在"加载并验证 CI 应用镜像"之后、没有任何 docker 输出），重跑时层已存在所以只要 9 秒。
-  # 放宽到 1800 秒：外层部署 timeout 为 2700 秒（另留 -k 600 回退），含独立 300 秒备份窗口。
-  DOCKER_COMMAND_TIMEOUT=1800 docker load -i "$archive"
+assert_images() {
+  local service expected actual revision contract
   for service in backend frontend; do
-    image_ref="flowcube-${service}:${expected}"
-    revision=$(docker image inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$image_ref")
-    [ "$revision" = "$expected" ] || fail_deploy "${service} 镜像提交与待发布 SHA 不一致"
+    if [ "$service" = backend ]; then expected=$EXPECTED_BACKEND_ID; else expected=$EXPECTED_FRONTEND_ID; fi
+    actual=$(docker image inspect -f '{{.Id}}' "flowcube-$service:$EXPECTED_COMMIT")
+    revision=$(docker image inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$actual")
+    [ "$actual" = "$expected" ] || return 1
+    [ "$revision" = "$EXPECTED_COMMIT" ] || return 1
   done
-  target_write_contract=$(docker image inspect -f '{{index .Config.Labels "io.flowcube.quantity-return-cash-contract"}}' "flowcube-backend:${expected}")
-  [ "$target_write_contract" = '1' ] || fail_deploy '目标后端缺少迁移 288–292 的数量、退货与资金写入契约，拒绝停写和迁移'
-  if [ "${SKIP_RELEASE_GATE:-0}" != '1' ]; then
-    docker image inspect "${PLAYWRIGHT_IMAGE:-mcr.microsoft.com/playwright:v1.55.0-noble}" >/dev/null \
-      || fail_deploy '缺少预装的浏览器门禁镜像，请在维护窗口准备；部署期间禁止拉取大型浏览器镜像'
-  fi
-  for service in backend frontend; do docker tag "flowcube-${service}:${expected}" "flowcube-${service}:latest"; done
-  assert_expected_commit
-  ensure_mysql_ready
-  # 迁移 238 的历史结转需要一致的停写边界；backend 内含 scheduler/worker。
-  # 迁移前失败可以恢复旧服务；部分 DDL 或首次引入新记账契约后禁止旧后端恢复写入。
-  APPLICATION_SWITCHED=1
-  ROLLBACK_COMPATIBILITY_VERIFIED=0
-  echo '==> 暂停业务写入，建立数据库迁移窗口...'
-  DOCKER_COMMAND_TIMEOUT=90 docker compose stop -t 60 backend
-  migration_table_exists=$(mysql_admin_sql "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='db_migrations'")
-  [[ "$migration_table_exists" =~ ^[01]$ ]] || fail_deploy '无法核实数据库迁移记录'
-  ledger_compatible=0
-  if [ "$migration_table_exists" = '1' ]; then
-    ledger_compatible=$(mysql_admin_sql "SELECT COUNT(*) FROM db_migrations WHERE filename='240_party_ledger_explicit_identity.sql'")
-  fi
-  [[ "$ledger_compatible" =~ ^[01]$ ]] || fail_deploy '无法核实往来明细兼容状态'
-  if [ "$ledger_compatible" = '0' ]; then LEDGER_COMPATIBILITY_CHANGED=1; fi
-  # 上次迁移成功而页面门禁失败时，数据库已升级但停着的仍可能是旧镜像。
-  # 以实际回退镜像的契约标签复核，不能只看迁移记录就允许下一次回退。
-  if [ -n "$PREVIOUS_BACKEND_IMAGE" ]; then
-    previous_ledger_contract=$(docker image inspect -f '{{index .Config.Labels "io.flowcube.party-ledger-contract"}}' "$PREVIOUS_BACKEND_IMAGE")
-    if [ "$previous_ledger_contract" != '1' ]; then LEDGER_COMPATIBILITY_CHANGED=1; fi
-    # 0.13.4 does not enforce current quantity policy or preserve the new return
-    # and cash execution proofs. Nullable DDL and migration 240 are insufficient.
-    # Keep this gate on retries even when migrations 288–292 already exist.
-    previous_write_contract=$(docker image inspect -f '{{index .Config.Labels "io.flowcube.quantity-return-cash-contract"}}' "$PREVIOUS_BACKEND_IMAGE")
-    if [ "$previous_write_contract" != '1' ]; then
-      WRITE_COMPATIBILITY_CHANGED=1
-      echo '==> 旧后端不具备迁移 288–292 写入契约：本次迁移窗口后失败将保持停写，须向前恢复'
-    fi
-  fi
-  if [ "$LEDGER_COMPATIBILITY_CHANGED" = '0' ] && [ "$WRITE_COMPATIBILITY_CHANGED" = '0' ]; then ROLLBACK_COMPATIBILITY_VERIFIED=1; fi
-  # 本次全新目录及回执绑定候选 SHA、实际 MySQL 和迁移前记录；不借用 cron 旧备份。
-  backup_dir="${BACKUP_DIR:-$ROOT/backups}"
-  mkdir -p "$backup_dir" || fail_deploy '无法创建迁移前备份目录；不得继续迁移'
-  backup_run_dir=$(umask 077; mktemp -d "$backup_dir/pre-migrate-${expected}-XXXXXXXX") \
-    || fail_deploy '无法创建本次私有迁移前备份目录；不得继续迁移'
-  backup_mysql_id=$(docker compose ps -aq mysql)
-  [ -n "$backup_mysql_id" ] && [[ "$backup_mysql_id" != *$'\n'* ]] || fail_deploy '迁移前备份来源 MySQL 不唯一'
-  # create 和 verify 合用 300 秒；内部 240/20 秒截止预留子进程结束时间。
-  if ! bounded 300 bash -c 'node "$1" create "$2" "$3" "$4" && node "$1" verify "$2" "$3" "$4"' \
-      sh "$SCRIPT_DIR/lib/pre-migrate-backup.js" "$expected" "$backup_mysql_id" "$backup_run_dir"; then
-    fail_deploy '本次迁移前备份或备份回执失败；旧备份不能替代，不执行迁移；未证明可恢复'
-  fi
-  migration_trust_candidate=$(mysql_admin_sql 'SELECT @@GLOBAL.log_bin_trust_function_creators')
-  [[ "$migration_trust_candidate" =~ ^[01]$ ]] || fail_deploy '无法核实 MySQL 迁移权限状态'
-  MIGRATION_TRUST_PREVIOUS=$migration_trust_candidate
-  mysql_admin_sql 'SET GLOBAL log_bin_trust_function_creators=1'
-  echo '==> 用新镜像的一次性容器执行迁移...'
-  MIGRATION_CONTAINER="flowcube-migrate-$$-$(date +%s)"
-  MIGRATION_STARTED=1
-  DOCKER_COMMAND_TIMEOUT=300 docker compose run --rm --no-deps --name "$MIGRATION_CONTAINER" backend npm run migrate
-  MIGRATION_COMPLETED=1
-  MIGRATION_CONTAINER=''
-  restore_migration_permissions
-  assert_expected_commit
-
-  echo '==> 切换 backend / frontend...'
-  APPLICATION_SWITCHED=1
-  DOCKER_COMMAND_TIMEOUT=120 docker compose up -d --no-build --no-deps backend frontend
-  wait_for_health
-  wait_for_frontend
-  if [ "${SKIP_RELEASE_GATE:-0}" = '1' ]; then
-    echo '!! 已显式跳过页面门禁；常规 CI 部署不可使用此选项'
-  else
-    PRESERVE_DEPLOY_IMAGES=1 bash scripts/release-gate.sh
-  fi
-
-  # 公网证书/页面检查也在部署事务内，失败走同一回退路径。
-  if [ -n "${DEPLOY_PUBLIC_ORIGIN:-}" ]; then
-    [[ "$DEPLOY_PUBLIC_ORIGIN" == https://* ]] || fail_deploy '公网部署地址必须使用 HTTPS'
-    curl -fsS --max-time 20 "${DEPLOY_PUBLIC_ORIGIN%/}/api/ready" >/dev/null
-    public_html=$(curl -fsS --max-time 20 "${DEPLOY_PUBLIC_ORIGIN%/}/")
-    [[ "$public_html" == *'<title>极序 Flow</title>'* ]] || fail_deploy '公网前端页面检查失败'
-  fi
-  assert_expected_commit
-  bash scripts/install-cron.sh >/dev/null 2>&1 || echo '!! cron 同步失败，请手动检查'
-  echo '==> 部署完成，健康检查与发布门禁已通过'
+  contract=$(docker image inspect -f '{{index .Config.Labels "io.flowcube.quantity-return-cash-contract"}}' "$EXPECTED_BACKEND_ID")
+  [ "$contract" = 1 ] || { echo '!! 目标后端缺少数量/退货/资金写入契约，拒绝停写和迁移' >&2; return 1; }
+}
+check_health() {
+  local attempt html
+  for attempt in {1..30}; do
+    if curl -fsS --max-time 5 http://127.0.0.1:3000/api/ready >/dev/null; then break; fi
+    [ "$attempt" -lt 30 ]; sleep 2
+  done
+  for attempt in {1..30}; do
+    html=$(curl -fsS --max-time 5 http://127.0.0.1:8080/) || html=''
+    if [[ "$html" == *'<title>极序 Flow</title>'* ]]; then break; fi
+    [ "$attempt" -lt 30 ]; sleep 2
+  done
+}
+assert_mysql_ready
+if [ "${1:-}" = verify-current ]; then
+  for service in backend frontend; do
+    id=$(compose ps -q "$service"); [ -n "$id" ]
+    if [ "$service" = backend ]; then expected=$EXPECTED_BACKEND_ID; else expected=$EXPECTED_FRONTEND_ID; fi
+    [ "$(docker inspect -f '{{.Image}}' "$id")" = "$expected" ]
+    [ "$(docker image inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$expected")" = "$EXPECTED_COMMIT" ]
+  done
+  check_health
   exit 0
 fi
-
-fail_deploy '非 Docker 部署尚无可核实的迁移前备份来源与回执契约；拒绝自动安装或迁移，请在维护窗口建立并验证专用流程'
+[ "$#" -eq 0 ]
+: "${DEPLOY_IMAGE_ARCHIVE:?authenticated CI archive required}" "${DEPLOY_IMAGE_SHA256:?authenticated archive digest required}"
+: "${RELEASE_SOURCE_DIR:?authenticated target smoke scripts required}" "${BACKUP_DIR:?operator-approved backup path required}"
+avail_mb=$(df -Pm "$ROOT" | awk 'NR==2 {print $4}')
+echo "==> 应用目录可用空间：${avail_mb} MB；最低 4096 MB"
+[[ "$avail_mb" =~ ^[0-9]+$ ]] || fail_deploy
+[ "$avail_mb" -ge 4096 ] || fail_deploy
+checksum=$(bounded 120 sha256sum "$DEPLOY_IMAGE_ARCHIVE")
+[ "${checksum%% *}" = "$DEPLOY_IMAGE_SHA256" ]
+DOCKER_COMMAND_TIMEOUT=1800 docker load -i "$DEPLOY_IMAGE_ARCHIVE"
+assert_images
+# Never change log_bin_trust_function_creators or any other database parameter.
+# If existing privileges cannot run the target's own migrations, fail and request separate maintenance approval.
+docker image inspect "$PLAYWRIGHT_IMAGE" >/dev/null
+assert_mysql_ready
+WRITE_WINDOW=1
+DOCKER_COMMAND_TIMEOUT=90 compose stop -t 60 backend
+backup_run_dir=$(umask 077; mktemp -d "$BACKUP_DIR/pre-migrate-${EXPECTED_COMMIT}-XXXXXXXX")
+# Fresh snapshot/independent receipt verification, same 300-second budget; never borrow a cron backup.
+# Inner bash expands only its fixed positional arguments.
+# shellcheck disable=SC2016
+bounded 300 bash -c 'node "$1" create "$2" "$3" "$4" && node "$1" verify "$2" "$3" "$4"' \
+  sh "$SCRIPT_DIR/lib/pre-migrate-backup.js" "$EXPECTED_COMMIT" "$MYSQL_ID" "$backup_run_dir"
+MIGRATION_CONTAINER="flowcube-migrate-$$-$(date +%s)"
+DOCKER_COMMAND_TIMEOUT=300 compose run --rm --no-deps --pull never --name "$MIGRATION_CONTAINER" backend npm run migrate
+MIGRATION_CONTAINER=''
+assert_mysql_ready
+DOCKER_COMMAND_TIMEOUT=120 compose up -d --no-build --no-deps --pull never backend frontend
+check_health
+# Resource-bounded automatic smoke remains distinct from operations and human browser QA.
+bash "$SCRIPT_DIR/release-gate.sh"
+[[ "$DEPLOY_PUBLIC_ORIGIN" == https://* ]]
+curl -fsS --max-time 20 "${DEPLOY_PUBLIC_ORIGIN%/}/api/ready" >/dev/null
+public_html=$(curl -fsS --max-time 20 "${DEPLOY_PUBLIC_ORIGIN%/}/")
+[[ "$public_html" == *'<title>极序 Flow</title>'* ]]
+assert_mysql_ready
+echo '==> 执行器与自动 smoke 完成；仍待运维检查和 QA 真浏览器人工验收'

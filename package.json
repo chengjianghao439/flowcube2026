@@ -211,6 +211,7 @@
     "smoke:pda-audit-log-api-owned": "bash scripts/repair-smoke-ephemeral.sh --pda-audit-log-api",
     "test:pda-audit-log-migration": "node --test tests/pda-audit-log-migration.test.js",
     "smoke:pda-audit-log-migration-runtime": "node --test tests/pda-audit-log-migration.smoke.test.js",
-    "smoke:pda-audit-log-migration-owned": "bash scripts/repair-smoke-ephemeral.sh --pda-audit-log-migration"
+    "smoke:pda-audit-log-migration-owned": "bash scripts/repair-smoke-ephemeral.sh --pda-audit-log-migration",
+    "test:manual-release": "python3 -B -m unittest -v tests.manual_release_test && node --test tests/manual-release-gates.test.js tests/manual-release-workflows.test.js"
   }
 }

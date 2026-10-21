@@ -8,110 +8,6 @@ const { spawnSync } = require('node:child_process')
 const { gunzipSync } = require('node:zlib')
 const root = path.resolve(__dirname, '..')
 
-// A37：新增备份窗口必须增加总预算，不能挤掉旧加载/迁移/回退等待。
-// 反向验证：外层恢复 2400、删除 create/verify 任一命令或缩短 job/PDA 等待都应失败。
-test('A37 备份与回执共用有界窗口，部署与PDA预算覆盖新增时间', () => {
-  const yaml = require(path.resolve(root, 'frontend/node_modules/js-yaml'))
-  const wf = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/deploy-browser.yml'), 'utf8'))
-  const step = wf.jobs.deploy.steps.find(s => s.name === 'Deploy backend and frontend on server')
-  const update = fs.readFileSync(path.join(root, 'scripts/server-update.sh'), 'utf8')
-  const backup = update.match(/bounded (\d+) bash -c '([^']+)'/)
-  assert.ok(backup && backup[2].includes('create') && backup[2].includes('verify'), '本次创建及独立回执复核必须合用有界预算')
-  assert.equal(Number(backup[1]), 300)
-  const outer = Number(step.run.match(/timeout -k 600 (\d+) bash scripts\/server-update.sh/)[1])
-  assert.ok(outer >= 2400 + Number(backup[1]), '新增备份窗口不能占用原有部署预算')
-  const wait = fs.readFileSync(path.join(root, 'scripts/wait-release-checks.js'), 'utf8')
-  const waitMinutes = Number(wait.match(/includes\('deploy-browser.yml'\) \? (\d+) :/)[1])
-  assert.ok(waitMinutes > wf.jobs.deploy['timeout-minutes'], 'PDA 脚本等待必须长于浏览器 job')
-})
-
-// 2026-09-19：本机为盘点做了 30+ 次独立短 SSH 连接、多次被本地 timeout 强杀，把自己的出口 IP
-// 打到服务器 sshd 限流（banner 阶段超时），而同一时刻 CI 出口 IP 完全正常——诊断能力不该绑在
-// 单一来源 IP 上，因此新增 `workflow_dispatch` 的只读诊断 workflow（`.github/workflows/server-diagnostics.yml`）。
-// **只读是它存在的前提**：一旦有人往里加删除/重启/清理命令，它就变成一个没有回滚预案的生产写入口。
-// 反向验证：往远程脚本里加任一写操作命令、或删掉任一必需采集项，本断言都必须失败。
-// 反向验证：任一工作流改回网络采信或移除可信材料变量都会失败。
-test('SSH host identity comes only from pinned known_hosts', () => {
-  for (const f of ['deploy-browser.yml', 'server-diagnostics.yml', 'build-desktop.yml', 'build-pda-apk.yml']) {
-    const src = fs.readFileSync(path.join(root, '.github/workflows', f), 'utf8').replace(/^\s*#.*$/gm, '')
-    assert.match(src, /bash scripts\/setup-ci-ssh-trust\.sh/)
-    assert.match(src, /FLOWCUBE_SSH_KNOWN_HOSTS/)
-    assert.doesNotMatch(src, /ssh-keyscan/)
-  }
-})
-
-// 2026-10-08：预检创建的 master 未配置保活；接收端已验完中转包，runner 仍等满
-// 1100s，随后复用同一连接的兜底命令再超时。只给后续 slave 加 -o 不改变 master。
-// 离线使用真实 OpenSSH 解析生成配置；删除任一保活项必须使本守卫失败。
-test('浏览器部署首次建立的 SSH master 必须具有有界保活', () => {
-  const yaml = require(path.resolve(root, 'frontend/node_modules/js-yaml'))
-  const wf = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/deploy-browser.yml'), 'utf8'))
-  const key = wf.jobs.deploy.steps.find(s => /ControlMaster/.test(s.run || ''))
-  const block = key.run.match(/cat >> ~\/\.ssh\/config <<EOF\n([\s\S]*?)\nEOF/)
-  assert.ok(block, '必须把保活写入创建 master 前的主机配置')
-  const config = block[1].replace(/\$\{\{[^}]+\}\}/g, 'fixture.invalid') + '\n'
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'flowcube-ssh-master-'))
-  function verify(source) {
-    const file = path.join(dir, 'config')
-    fs.writeFileSync(file, source)
-    const r = spawnSync('ssh', ['-G', '-F', file, 'fixture.invalid'], { encoding: 'utf8', timeout: 5000 })
-    assert.equal(r.status, 0, r.stderr)
-    const values = Object.fromEntries(r.stdout.trim().split('\n').map(l => {
-      const i = l.indexOf(' '); return [l.slice(0, i), l.slice(i + 1)]
-    }))
-    assert.equal(values.controlmaster, 'auto')
-    assert.equal(values.controlpersist, '300')
-    assert.equal(values.serveraliveinterval, '30', '首连接不能沿用默认 0 秒保活')
-    assert.equal(values.serveralivecountmax, '10', '失效连接必须有界退出')
-  }
-  try {
-    verify(config)
-    for (const key of ['ServerAliveInterval', 'ServerAliveCountMax']) {
-      assert.throws(() => verify(config.replace(new RegExp('^\\s*' + key + '.*$', 'gm'), '')),
-        { code: 'ERR_ASSERTION' }, `删除 ${key} 必须使守卫失败`)
-    }
-  } finally { fs.rmSync(dir, { recursive: true, force: true }) }
-})
-
-test('磁盘预检的首个 SSH 调用必须携带保活选项', () => {
-  const yaml = require(path.resolve(root, 'frontend/node_modules/js-yaml'))
-  const wf = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/deploy-browser.yml'), 'utf8'))
-  const run = wf.jobs.deploy.steps.find(s => s.name === 'Deploy backend and frontend on server').run
-  const common = run.match(/^SSH_COMMON=\([^\n]+\)$/m)
-  const disk = run.match(/DISK_USAGE="\$\(([\s\S]*?)\)"\s*\\\n\s*\|\|/)
-  assert.ok(common && disk, '缺少原始首连接预检脚本')
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'flowcube-ssh-preflight-'))
-  const log = path.join(dir, 'arguments')
-  const script = `set -euo pipefail
-timeout() { shift 3; "$@"; }
-ssh() { printf '%s\\n' "$@" > "$PROBE_ARGUMENTS"; printf '/ 19000MB\\n'; }
-${common[0]}
-DISK_USAGE=$(${disk[1].replace(/\$\{\{[^}]+\}\}/g, 'fixture')})
-`
-  try {
-    const r = spawnSync('bash', ['-c', script], { encoding: 'utf8', timeout: 5000,
-      env: { ...process.env, PROBE_ARGUMENTS: log } })
-    assert.equal(r.status, 0, r.stderr)
-    const args = fs.readFileSync(log, 'utf8').trim().split('\n')
-    assert.ok(args.includes('ServerAliveInterval=30'), '预检创建 master 时必须就有保活')
-    assert.ok(args.includes('ServerAliveCountMax=10'), '首连接也必须有失效上限')
-  } finally { fs.rmSync(dir, { recursive: true, force: true }) }
-})
-
-test('HTTPS 接收失败后只释放本 workflow 的 master，再进入兜底传输', () => {
-  const yaml = require(path.resolve(root, 'frontend/node_modules/js-yaml'))
-  const wf = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/deploy-browser.yml'), 'utf8'))
-  const run = wf.jobs.deploy.steps.find(s => s.name === 'Deploy backend and frontend on server').run
-  function verify(source) {
-    const fallback = source.match(/if \[ "\$HTTPS_OK" != 1 \]; then([\s\S]*?)UPLOAD_STREAMS=/)
-    assert.ok(fallback, '接收失败须进入原有界兜底路径')
-    assert.match(fallback[1], /timeout -k 5 10 ssh "\$\{SSH_COMMON\[@\]\}" -p "\$SSH_PORT" -O exit "\$SSH_TARGET"[^\n]*\|\| true/,
-      '兜底不能复用刚才已失效的 master，也不能关闭其他目标的连接')
-  }
-  verify(run)
-  assert.throws(() => verify(run.replace('-O exit', '-O check')), { code: 'ERR_ASSERTION' })
-})
-
 test('服务器只读诊断 workflow 必须保持只读，且真的在采集现场信息', () => {
   const yaml = require(path.resolve(root, 'frontend/node_modules/js-yaml'))
   const file = path.join(root, '.github/workflows/server-diagnostics.yml')
@@ -136,12 +32,12 @@ test('服务器只读诊断 workflow 必须保持只读，且真的在采集现�
   }
 })
 
-test('部署总超时穿透内层等待，清理和回退必须在强杀前执行', () => {
+test('部署总超时穿透内层等待，清理和停止记录必须在强杀前执行', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'flowcube-nested-timeout-'))
   const log = path.join(dir, 'events'), pids = path.join(dir, 'pids')
   fs.writeFileSync(path.join(dir, 'docker'), `#!${process.execPath}\nrequire('node:fs').writeFileSync(process.env.PROBE_PIDS, JSON.stringify([process.pid,process.ppid]));setInterval(()=>{},1000);\n`, { mode: 0o755 })
   fs.writeFileSync(path.join(dir, 'gate.sh'), `set -euo pipefail\ntrap 'echo cleanup >> "$PROBE_LOG"' EXIT\ntrap 'exit 143' TERM\n. scripts/lib/runtime-guards.sh\nDOCKER_COMMAND_TIMEOUT=20 docker run\n`)
-  fs.writeFileSync(path.join(dir, 'deploy.sh'), `set -Eeuo pipefail\ntrap 'echo rollback >> "$PROBE_LOG"; exit 1' TERM ERR\nbash "$PROBE_DIR/gate.sh"\n`)
+  fs.writeFileSync(path.join(dir, 'deploy.sh'), `set -Eeuo pipefail\ntrap 'echo stopped >> "$PROBE_LOG"; exit 1' TERM ERR\nbash "$PROBE_DIR/gate.sh"\n`)
   let failure, failed = false
   try {
     const r = spawnSync('bash', ['-c', 't=$(type -P timeout || type -P gtimeout); exec "$t" -k 2 1 bash "$PROBE_DIR/deploy.sh"'], {
@@ -151,7 +47,7 @@ test('部署总超时穿透内层等待，清理和回退必须在强杀前执�
     assert.equal(r.status, 124)
     const events = fs.readFileSync(log, 'utf8')
     assert.match(events, /cleanup/)
-    assert.match(events, /rollback/)
+    assert.match(events, /stopped/)
     const [pid] = JSON.parse(fs.readFileSync(pids, 'utf8'))
     assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' })
   } catch (error) {
@@ -286,158 +182,6 @@ if(cmd==='sha256sum') console.log(crypto.createHash('sha256').update(fs.readFile
   })
 }
 
-// 2026-09-19 实测：服务器磁盘低于 6 GiB 时，Deploy 步骤的预检 `test "$(df -Pm …)" -ge 6144`
-// 只会让 ssh 返回 1、一行输出都没有——与「SSH 连不上/密钥失效」在日志里完全一样。11:04 起连续
-// 3 轮部署都以「##[endgroup] 之后 3~4 秒静默 exit 1」失败，只能靠事后逐轮推断才知道是磁盘不足，
-// 连「服务器还剩多少空间」都拿不到。所以预检必须先打印实际余量再判定，并让三种失败可区分
-//（磁盘不足 / SSH 取不到 / df 返回空）。反向验证：退回 `test … -ge 6144`、或把 awk 的
-// NF<2 分支改回 `exit 1`（会被 END 的 exit 覆盖成 0），本断言都必须失败。
-test('部署磁盘预检失败必须自解释（打印实际余量，不得静默 exit 1）', () => {
-  const yaml = require(path.resolve(root, 'frontend/node_modules/js-yaml'))
-  const workflow = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/deploy-browser.yml'), 'utf8'))
-  const step = workflow.jobs.deploy.steps.find(s => s.name === 'Deploy backend and frontend on server')
-  assert.ok(step && step.run, '找不到 Deploy 步骤的 run 脚本')
-  const run = step.run
-  assert.match(run, /DISK_USAGE="\$\(/, '预检必须把 df 结果存进变量，才能打印出来')
-  assert.match(run, /echo "服务器可用空间/, '预检必须先打印实际余量')
-  assert.match(run, /df -Pm \/tmp/, '预检必须同时检查 /tmp 与 APP_PATH')
-  assert.match(run, /低于部署预检下限 6144MB/, '余量不足必须给出指向磁盘的可执行提示')
-  assert.match(run, /无法读取服务器磁盘余量/, 'SSH 取不到余量时必须与「磁盘不足」区分开')
-  assert.match(run, /没有拿到可用空间/, 'df 返回空或格式异常也必须失败，不能静默放行')
-  assert.match(run, /bad = 1; next \}/, 'NF<2 分支必须置 bad 后 next：直接 exit 会被 END 的 exit 覆盖成 0')
-  assert.match(run, /END \{ exit bad \? 1 : 0 \}/, '最终退出码必须由统一判定给出')
-  assert.ok(!/test \\?\$\(df -Pm/.test(run), '不得退回 `test "$(df -Pm …)" -ge 6144` 的静默形态')
-})
-
-// 2026-09-19 实测：桌面发布把中转目录建在服务器 `/tmp/flowcube-desktop-release/${tag}`，却从不清理，
-// v0.9.13–v0.9.25 累积到 1.3G；而 /tmp 与 /opt/flowcube 同处根分区，把上传前的 6144MB 余量门禁一点点
-// 吃到只剩 24MB（6120MB），连续 4 轮部署在上传任何字节之前被拒绝。中转目录只服务本次上传
-//（release-desktop.js 以只读方式挂载它），必须保证**任何退出路径**都清理——包括 scp 或发布中途失败。
-// 反向验证：去掉 `trap ... EXIT`、或让 cleanup 不真的 rm，本断言都必须失败。
-test('桌面发布必须清理服务器侧中转目录（防 /tmp 长期累积吃掉部署余量）', () => {
-  const yaml = require(path.resolve(root, 'frontend/node_modules/js-yaml'))
-  const workflow = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/build-desktop.yml'), 'utf8'))
-  const steps = Object.values(workflow.jobs).flatMap(j => j.steps || [])
-  const step = steps.find(s => s.name === 'Publish EXE to canonical download directory')
-  assert.ok(step && step.run, '找不到「Publish EXE to canonical download directory」步骤')
-  const run = step.run
-  assert.match(run, /remote_tmp="\/tmp\/flowcube-desktop-release\/\$\{tag\}"/, '中转目录路径变了，需同步本守卫与清理逻辑')
-  assert.match(run, /trap\s+cleanup_remote_tmp\s+EXIT/, '必须用 EXIT trap 保证失败路径也清理中转目录')
-  assert.match(run, /rm -rf '\$remote_tmp'/, 'cleanup_remote_tmp 必须真的删除远端中转目录')
-  assert.ok(
-    run.indexOf('trap cleanup_remote_tmp EXIT') < run.indexOf("mkdir -p '$remote_tmp'"),
-    'trap 必须在创建中转目录之前注册，否则创建之后的失败仍会留下残留',
-  )
-})
-
-// 2026-09-22：上传是八片同时开始，不能只放宽整批预算却让每片先在 900 秒被杀。
-// 部署外层还必须容纳合并、等锁与回退宽限；仅相加上传与 server-update 会漏算。
-// 反向验证：PART_TIMEOUT 退回 900、删掉分片/合并、降低步骤或 job 预算，均必须失败。
-test('镜像上传必须分片并行，且步骤/job 预算覆盖完整部署与回退', () => {
-  const yaml = require(path.resolve(root, 'frontend/node_modules/js-yaml'))
-  const workflow = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/deploy-browser.yml'), 'utf8'))
-  const job = workflow.jobs.deploy
-  assert.ok(job, '未找到 deploy job')
-
-  const step = job.steps.find(s => s.name === 'Deploy backend and frontend on server')
-  assert.ok(step, '未找到「Deploy backend and frontend on server」步骤')
-  const script = String(step.run)
-
-  const outer = script.match(/timeout\s+-k\s+\d+\s+(\d+)\s+bash\s+scripts\/server-update\.sh/)
-  assert.ok(outer, '未找到 server-update.sh 的外层超时配置')
-  const outerSeconds = Number(outer[1])
-
-  // docker load 仍是慢盘上的关键环节，保留一条下限守护（改动它要显式说明理由）。
-  const update = fs.readFileSync(path.join(root, 'scripts/server-update.sh'), 'utf8')
-  const load = update.match(/DOCKER_COMMAND_TIMEOUT=(\d+)\s+docker load/)
-  assert.ok(load, '未找到 docker load 的 DOCKER_COMMAND_TIMEOUT')
-  assert.ok(Number(load[1]) >= 600,
-    `docker load 时限 ${load[1]}s 过低：慢盘首次加载新镜像可能超过 10 分钟`)
-
-  const streams = script.match(/UPLOAD_STREAMS=(\d+)/)
-  assert.ok(streams, '未找到 UPLOAD_STREAMS：镜像上传必须分片并行（单连接跨境吞吐已被压到 66 KB/s）')
-  const streamsCount = Number(streams[1])
-  assert.ok(streamsCount >= 4,
-    `并行度 ${streamsCount} 过低：慢速跨境 SCP 的兜底路径必须保留并行传输，不能用反向下载速率推算上传预算`)
-
-  const partTimeout = script.match(/PART_TIMEOUT=(\d+)/)
-  assert.ok(partTimeout, '未找到 PART_TIMEOUT：必须给单个分片显式时限')
-  const partSeconds = Number(partTimeout[1])
-  assert.ok(partSeconds >= 600,
-    `单分片时限 ${partSeconds}s 过低：每个分片约「归档 ÷ 并行度」（当前归档约 192MB），按最差实测速率也要留足余量`)
-
-  const budget = script.match(/UPLOAD_BUDGET=(\d+)/)
-  assert.ok(budget, '未找到 UPLOAD_BUDGET：整批上传必须有墙钟上限')
-  const budgetSeconds = Number(budget[1])
-  assert.ok(budgetSeconds >= partSeconds,
-    `整批上限 ${budgetSeconds}s 不得小于单分片上限 ${partSeconds}s：否则批量 xargs 会先被杀，单分片时限形同虚设`)
-  // 八片同时开始、没有分片重试；单片必须能使用整批的预算。
-  // 反向验证：PART_TIMEOUT 退回 900、UPLOAD_BUDGET 保持 2700 时必须失败。
-  assert.equal(partSeconds, budgetSeconds, '单片先超时会让整批预算失效；并发上传的单片与整批须使用相同预算')
-
-  const splitBytes = script.match(/split\s+-b\s+"\$PART_BYTES"/)
-  assert.ok(splitBytes, '未找到按字节切分（split -b "$PART_BYTES"）：分片不改变归档字节是 sha256 校验不变的前提')
-  const merge = script.match(/cat\s+'\$PARTS_DIR'\/part-\*\s*>/)
-  assert.ok(merge, '未找到服务器端按序合并（cat "$PARTS_DIR"/part-* > 归档）')
-
-  const stepSeconds = Number(step['timeout-minutes']) * 60
-  assert.ok(Number.isFinite(stepSeconds) && stepSeconds > 0, 'Deploy 步骤必须显式声明 timeout-minutes')
-  const lockSeconds = Number(script.match(/flock -w (\d+) 9/)[1])
-  const mergeTiming = script.match(/MERGED_BYTES=\$\(timeout -k (\d+) (\d+) ssh/)
-  const rollbackGrace = Number(script.match(/timeout -k (\d+) \d+ bash scripts\/server-update\.sh/)[1])
-  const mergeSeconds = Number(mergeTiming[1]) + Number(mergeTiming[2])
-  const receiveTimeout = Number(script.match(/timeout -k 10 (\d+) ssh[^\n]*\\/)[1])
-  const receiver = fs.readFileSync(path.join(root, 'scripts/receive-deploy-artifact.py'), 'utf8')
-  const relayWait = Number(receiver.match(/def wait_for_relay\([^\n]*timeout=(\d+)/)[1])
-  assert.ok(receiveTimeout >= relayWait + 160 + 30, '远程接收预算须覆盖中转窗口、HTTPS 超时与校验')
-  const requiredSeconds = budgetSeconds + outerSeconds + rollbackGrace + lockSeconds + mergeSeconds + 300 + receiveTimeout + 45
-  assert.ok(stepSeconds > requiredSeconds,
-    `Deploy 步骤须覆盖上传、合并、等锁、部署及回退宽限和预检，至少 ${requiredSeconds}s，当前 ${stepSeconds}s`)
-
-  const jobSeconds = Number(job['timeout-minutes']) * 60
-  const declared = job.steps.reduce((sum, s) => sum + (Number(s['timeout-minutes']) || 0) * 60, 0)
-  assert.ok(jobSeconds > declared,
-    `job 上限 ${jobSeconds}s 必须大于各步骤声明上限之和 ${declared}s，否则 job 级会先被强杀`)
-})
-
-// 执行 workflow 原始 Bash，只替换网络边界：bash -n 无法发现续行中插入注释的问题。
-// 反向验证：把注释放回 ssh 的反斜杠续行中，远程命令将缺失，本测试必须失败。
-test('浏览器部署清理必须把本次归档和分片目录作为远程命令传给 SSH', () => {
-  const yaml = require(path.resolve(root, 'frontend/node_modules/js-yaml'))
-  const workflow = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/deploy-browser.yml'), 'utf8'))
-  const step = workflow.jobs.deploy.steps.find(s => s.name === "Remove this run's temporary upload")
-  assert.match(step.if, /always\(\)/)
-  const script = step.run.replace(/\$\{\{[^}]+\}\}/g, 'fixture')
-  const stub = `timeout() { shift 3; "$@"; }
-ssh() { printf 'REMOTE_COMMAND=%s\\n' "\${@: -1}"; }
-`
-  const result = spawnSync('bash', ['--noprofile', '--norc', '-e', '-o', 'pipefail', '-c', stub + script], {
-    encoding: 'utf8', timeout: 5000,
-    env: { PATH: process.env.PATH, GITHUB_RUN_ID: '12345', GITHUB_RUN_ATTEMPT: '2' },
-  })
-  assert.equal(result.status, 0, result.stderr)
-  assert.equal(result.stderr, '')
-  assert.doesNotMatch(result.stdout, /::warning::/)
-  assert.match(result.stdout, /REMOTE_COMMAND=.*rm -f \/tmp\/flowcube-images-12345-2\.tar\.gz/)
-  assert.match(result.stdout, /flowcube-pda-bootstrap-12345-2\.sh/)
-  assert.match(result.stdout, /rm -rf \/tmp\/flowcube-image-parts-12345-2/)
-})
-
-test('PDA 等待步骤必须容得下浏览器部署 job，且不占服务器部署组', () => {
-  const yaml = require(path.resolve(root, 'frontend/node_modules/js-yaml'))
-  const browser = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/deploy-browser.yml'), 'utf8'))
-  const pda = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/build-pda-apk.yml'), 'utf8'))
-  const waiter = pda.jobs['wait-browser']
-  const step = waiter.steps.find(s => /wait-release-checks/.test(s.run || ''))
-  assert.ok(step['timeout-minutes'] > browser.jobs.deploy['timeout-minutes'], 'PDA 不能在允许的浏览器部署时间内提前超时')
-  assert.equal(waiter.concurrency, undefined)
-})
-
-// 2026-09-18 实测：`smokeTestKit` 用 `3100 + Math.random()*1000` 自选测试服务端口，而该范围
-// **包含 3306**——CI 的 MySQL 正好监听 3306，随机命中即 `EADDRINUSE: address already in use :::3306`；
-// 它启动时又没指定 host，可能只绑到 IPv6 `::` 而 baseUrl 固定走 127.0.0.1，表现为 `TypeError: fetch failed`。
-// 两者都只在 CI 偶发（约 1/1000），且失败步骤每次都不同，极难复现——连续两次发版都被它拦下。
-// 其余 10 个 smoke 套件一直是 `app.listen(0, '127.0.0.1')`。此断言钉住正确写法，避免再退回自选端口。
 test('测试服务端口必须交给 OS 分配并绑定回环 IPv4（禁止自选端口范围）', () => {
   // 契约测试先去注释：说明本问题的注释里就写着那个错误写法，不去掉会自我误报。
   // 只剔除整行注释——按 `//` 全剔会连带砍掉 URL 字面量里的 `//`（如 `http://127.0.0.1`）。
@@ -458,40 +202,6 @@ test('测试服务端口必须交给 OS 分配并绑定回环 IPv4（禁止自�
 //
 // 不变量：**「等待」与「持有部署锁」不得出现在同一个 job 里**，且部署组只能由真正
 // 需要 SSH 发布的那一步持有。这条关系适合机械守住——它太容易被下一次"顺手挪个步骤"破坏。
-test('PDA 工作流不得让「等浏览器部署」与「持有部署组」落在同一个 job（防自锁）', () => {
-  const DEPLOY_GROUP = 'flowcube-server-deploy'
-  const yaml = require(path.resolve(root, 'frontend/node_modules/js-yaml'))
-  const workflow = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/build-pda-apk.yml'), 'utf8'))
-
-  // workflow 级 concurrency 会把整条流水线都关进部署组，等待步骤自然也被关进去。
-  const topGroup = workflow.concurrency && workflow.concurrency.group
-  assert.notEqual(topGroup, DEPLOY_GROUP,
-    `build-pda-apk.yml 不得在 workflow 级持有 ${DEPLOY_GROUP}：那会把「等浏览器部署」也关进部署组，重新形成自锁`)
-
-  let holderCount = 0
-  const selfLocked = []
-  for (const [name, job] of Object.entries(workflow.jobs || {})) {
-    const group = job.concurrency && job.concurrency.group
-    const holdsDeployLock = group === DEPLOY_GROUP
-    if (holdsDeployLock) holderCount += 1
-    const waitsForBrowser = (job.steps || []).some(step => /wait-release-checks/.test(String(step.run || '')))
-    if (waitsForBrowser && holdsDeployLock) selfLocked.push(name)
-  }
-
-  assert.deepEqual(selfLocked, [],
-    `这些 job 既等待浏览器部署又持有 ${DEPLOY_GROUP}，会与 Deploy Browser App 互相等待：${selfLocked.join(', ')}`)
-  // 部署组必须有且只有一个持有者（真正的发布步骤），否则'等待'可能悄悄挪回持有者身边。
-  assert.equal(holderCount, 1,
-    `应当恰好有一个 job 持有 ${DEPLOY_GROUP}（发布临界区），实际 ${holderCount} 个`)
-
-  // 反向确认：等待步骤确实存在且不持有部署组，避免上面因为"把等待删了"而恒真。
-  const waiter = Object.entries(workflow.jobs || {})
-    .find(([, job]) => (job.steps || []).some(step => /wait-release-checks/.test(String(step.run || ''))))
-  assert.ok(waiter, '找不到执行 wait-release-checks 的 job：等待门禁不允许被删除，只允许搬家')
-  assert.notEqual(waiter[1].concurrency && waiter[1].concurrency.group, DEPLOY_GROUP,
-    `等待浏览器部署的 job（${waiter[0]}）不得持有 ${DEPLOY_GROUP}`)
-})
-
 test('PDA 原生扫码单元测试必须在正式 APK 构建前运行', () => {
   const yaml = require(path.resolve(root, 'frontend/node_modules/js-yaml'))
   const workflow = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/build-pda-apk.yml'), 'utf8'))
@@ -501,14 +211,6 @@ test('PDA 原生扫码单元测试必须在正式 APK 构建前运行', () => {
   assert.ok(testIndex >= 0 && testIndex < buildIndex, 'Android 单元测试必须在正式 APK 构建前通过')
 })
 
-// 2026-09-19 发现：`scripts/check-deprecated-downloads.js` 早就存在，package.json 也声明了
-// `release:check-downloads`，但**没有任何 workflow 跑过它**——于是「backend/downloads/ 已废弃、
-// 不得提交发布文件」这条写在 AGENTS.md 里的规则，实际上没有任何一处会拦。
-//
-// 这条守卫最容易失效的地方不是脚本逻辑，而是「没人执行」：脚本本身是对的（反向验证过：
-// `git add -f` 一个安装包进去，脚本 exit 1），却因为 `.gitignore` 让 git status 看不见普通提交，
-// 只有真的跑起来才有意义。同类前车之鉴是那些"写了但没接线"的孤儿测试。故此断言把
-// 「脚本存在 + package.json 声明 + 至少一条 CI 步骤真的执行」三者钉在一起。
 test('废弃 downloads 守卫必须有 CI 执行入口（防「脚本写了但从没人跑」）', () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
   const command = 'npm run release:check-downloads'

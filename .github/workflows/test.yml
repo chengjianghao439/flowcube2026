@@ -39,6 +39,16 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
+  manual-release-export:
+    name: 手动发版镜像归档（隔离合成Docker）
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+      - run: bash scripts/manual-release/test-docker-export.sh
+
   pda-audit-log-api-owned:
     name: PDA日志接口（归属专属实例）
     runs-on: ubuntu-latest
@@ -252,6 +262,9 @@ jobs:
 
       - name: 审计回归 — 工具隔离、发布门禁、原生更新与退货扫码
         run: npm run test:audit-tooling && npm run test:audit-client && npm run test:prelaunch-runtime && npm run test:round2-runtime
+
+      - name: 手动离线发版 — 身份/审批/整包/重复/失败门禁（无生产连接）
+        run: npm run test:manual-release
 
       - name: 发布工具回归 — Release 附件上传（超时/重试/落地校验）与发版后线上核对
         run: npm run test:release-tooling

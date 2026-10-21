@@ -26,6 +26,10 @@ test('临时Git仓库拒未合入引用/错workflow分支，允许主线历史SH
     assert.notEqual(run(overrides).status, 0)
   }
   assert.equal(run({ RELEASE_CHECKOUT_REF: main }).status, 0)
+  assert.equal(run({ RELEASE_MANUAL_ONLY: '1', GITHUB_RUN_ATTEMPT: '1', RELEASE_CHECKOUT_REF: main }).status, 0)
+  for (const input of ['', 'main', 'v1.0.0', main.slice(0, 8), main + ';id']) assert.notEqual(run({ RELEASE_MANUAL_ONLY: '1', GITHUB_RUN_ATTEMPT: '1', RELEASE_CHECKOUT_REF: input }).status, 0)
+  for (const event of ['push', 'workflow_run', 'workflow_call', 'pull_request']) assert.notEqual(run({ RELEASE_MANUAL_ONLY: '1', GITHUB_RUN_ATTEMPT: '1', RELEASE_CHECKOUT_REF: main, GITHUB_EVENT_NAME: event }).status, 0)
+  assert.notEqual(run({ RELEASE_MANUAL_ONLY: '1', GITHUB_RUN_ATTEMPT: '2', RELEASE_CHECKOUT_REF: main }).status, 0)
   assert.equal(JSON.parse(run({ RELEASE_CHECKOUT_REF: 'v1.0.0' }).stdout).sha, main)
   assert.equal(run({ GITHUB_EVENT_NAME: 'push', GITHUB_REF: 'refs/tags/v1.0.0', GITHUB_SHA: main }).status, 0)
   assert.notEqual(run({ GITHUB_EVENT_NAME: 'push', GITHUB_REF: 'refs/tags/v1.0.0', GITHUB_SHA: evil }).status, 0)

@@ -1,99 +1,71 @@
+# Manual release only. No push, workflow_run or workflow_call publication.
 name: Build PDA APK
 'on':
-  push:
-    branches:
-      - main
   workflow_dispatch:
     inputs:
       checkout_ref:
-        description: 仅支持 main、main 历史中的完整 SHA 或 v* tag；运行分支必须为 main，且同 SHA 浏览器部署已通过。
-        required: false
+        description: 必须填写 main 历史中完整的 40 位 SHA；不接受分支、标签或短 SHA。
+        required: true
+        type: string
+      approval_comment_id:
+        description: 老大在 GitHub 回复 发 加完整 SHA 的评论 ID。
+        required: true
+        type: string
+      backup_comment_id:
+        description: 同一主题内，运维先提交的备份就绪评论 ID。
+        required: true
         type: string
 permissions:
   contents: read
   actions: read
+  issues: read
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 jobs:
   resolve-release-target:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.run_attempt == 1
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
+    timeout-minutes: 35
     outputs:
       sha: ${{ steps.target.outputs.sha }}
-      main_sha: ${{ steps.target.outputs.main_sha }}
+      main_sha: ${{ github.workflow_sha }}
+      artifact_id: ${{ steps.checks.outputs.artifact-id }}
     steps:
-      - name: Checkout trusted target resolver
+      - name: Checkout immutable trusted release tools
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
-          ref: main
+          ref: ${{ github.workflow_sha }}
           fetch-depth: 0
           persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
       - name: Validate immutable release target
         id: target
         env:
-          RELEASE_CHECKOUT_REF: ${{ github.event.inputs.checkout_ref }}
+          RELEASE_MANUAL_ONLY: '1'
+          RELEASE_CHECKOUT_REF: ${{ inputs.checkout_ref }}
         run: node scripts/resolve-release-target.cjs
-  preflight:
-    runs-on: ubuntu-latest
-    outputs:
-      should_build: ${{ steps.gate.outputs.should_build }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
-        with:
-          ref: ${{ needs.resolve-release-target.outputs.sha }}
-          persist-credentials: false
-      - name: 版本清单一致性（构建前快失败）
-        shell: bash
-        run: |
-          set -euo pipefail
-          JSON_NAME="$(node -p "require('./backend/apk/version.json').version")"
-          JSON_CODE="$(node -p "require('./backend/apk/version.json').versionCode")"
-          GRADLE_NAME="$(sed -n 's/.*versionName "\([^"]*\)".*/\1/p' frontend/android/app/build.gradle | head -1)"
-          GRADLE_CODE="$(sed -n 's/.*versionCode \([0-9]*\).*/\1/p' frontend/android/app/build.gradle | head -1)"
-          echo "version.json=${JSON_NAME}/${JSON_CODE} build.gradle=${GRADLE_NAME}/${GRADLE_CODE}"
-          if [ "$JSON_NAME" != "$GRADLE_NAME" ] || [ "$JSON_CODE" != "$GRADLE_CODE" ]; then
-            echo "::error::backend/apk/version.json 与 build.gradle 不一致，PDA 无法正确检测更新；请用 bump-version.sh 一次性同步三端与 PDA 版本后再发版。"
-            exit 1
-          fi
-      - name: 目标版本是否已发布
-        id: gate
-        shell: bash
+      - name: Verify GitHub approval, Tests and actual npm audit jobs
         env:
-          ERP_ORIGIN_VAR: ${{ vars.VITE_ERP_PRODUCTION_ORIGIN }}
-        run: |
-          set -euo pipefail
-          target_name="$(node -p "require('./backend/apk/version.json').version")"
-          target_code="$(node -p "require('./backend/apk/version.json').versionCode")"
-          origin="${ERP_ORIGIN_VAR:-}"
-          [ -n "$origin" ] || origin="$(node scripts/read-deploy-config.js erpOrigin 2>/dev/null || true)"
-          if [ -z "$origin" ]; then
-            echo "无法确定生产 origin，按需要构建处理（后续发布步骤会自行校验）。"
-            echo "should_build=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          live="$(curl -fsSL -H 'Cache-Control: no-cache' "${origin%/}/api/pda/version?_=$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" || true)"
-          live_name="$(printf '%s' "$live" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{console.log(JSON.parse(s).data?.version||'')}catch{console.log('')}})")"
-          live_code="$(printf '%s' "$live" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{console.log(JSON.parse(s).data?.versionCode||'')}catch{console.log('')}})")"
-          echo "目标 ${target_name}/${target_code} · 线上已发布 ${live_name:-未知}/${live_code:-未知}"
-          if [ "$live_name" = "$target_name" ] && [ "$live_code" = "$target_code" ]; then
-            echo "该版本（${target_name} / versionCode ${target_code}）已经发布，跳过本次构建。"
-            echo "同一 versionCode 不允许换成不同字节的安装包（客户端不会因此更新）；需要新安装包请先提升版本号。"
-            echo "should_build=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "should_build=true" >> "$GITHUB_OUTPUT"
-          fi
-    needs: resolve-release-target
+          GITHUB_TOKEN: ${{ github.token }}
+          TARGET_SHA: ${{ steps.target.outputs.sha }}
+          APPROVAL_COMMENT_ID: ${{ inputs.approval_comment_id }}
+          BACKUP_COMMENT_ID: ${{ inputs.backup_comment_id }}
+          RELEASE_CHECKS_OUTPUT: checks.json
+        run: node scripts/manual-release/verify-gates.cjs
+      - name: Retain verified gate evidence
+        id: checks
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: manual-release-checks
+          path: checks.json
+          retention-days: 7
+          if-no-files-found: error
   build-pda:
     needs:
       - resolve-release-target
-      - preflight
-    if: needs.preflight.outputs.should_build == 'true'
     runs-on: ubuntu-latest
-    concurrency:
-      group: build-pda-ci-${{ needs.resolve-release-target.outputs.sha }}
-      cancel-in-progress: true
     outputs:
       sha: ${{ steps.target.outputs.sha }}
       version: ${{ steps.target.outputs.version }}
@@ -114,6 +86,12 @@ jobs:
           path: release-gate-source
           sparse-checkout: scripts
           sparse-checkout-cone-mode: true
+      - name: Validate public PDA origin
+        env:
+          PDA_ORIGIN: ${{ vars.VITE_ERP_PRODUCTION_ORIGIN }}
+        run: >-
+          node -e 'const u=new URL(process.env.PDA_ORIGIN);
+          if(u.protocol!=="https:"||u.username||u.password||u.pathname!=="/"||u.search||u.hash)process.exit(1)'
       - name: Resolve target commit
         id: target
         shell: bash
@@ -122,46 +100,13 @@ jobs:
           sha="$(git rev-parse HEAD)"
           version="$(node -p "require('./backend/apk/version.json').version")"
           version_code="$(node -p "require('./backend/apk/version.json').versionCode")"
-          echo "sha=${sha}" >> "$GITHUB_OUTPUT"
-          echo "version=${version}" >> "$GITHUB_OUTPUT"
-          echo "version_code=${version_code}" >> "$GITHUB_OUTPUT"
+          {
+            echo "sha=${sha}"
+            echo "version=${version}"
+            echo "version_code=${version_code}"
+          } >> "$GITHUB_OUTPUT"
           echo "目标提交：${sha}（触发事件 ${{ github.event_name }}，触发 SHA ${{ github.sha }}）"
           echo "目标版本：${version} / ${version_code}"
-      - name: Resolve deploy config
-        id: deploy_config
-        shell: bash
-        env:
-          ERP_ORIGIN_VAR: ${{ vars.VITE_ERP_PRODUCTION_ORIGIN }}
-          SERVER_HOST_VAR: ${{ vars.FLOWCUBE_SERVER_HOST }}
-          SERVER_USER_VAR: ${{ vars.FLOWCUBE_SERVER_USER }}
-          SERVER_SSH_PORT_VAR: ${{ vars.FLOWCUBE_SERVER_SSH_PORT }}
-          SERVER_APP_PATH_VAR: ${{ vars.FLOWCUBE_SERVER_APP_PATH }}
-        run: |
-          set -euo pipefail
-          if node scripts/read-deploy-config.js >/tmp/flowcube-deploy-config.json 2>/tmp/flowcube-deploy-config.err; then
-            echo "erp_origin=$(node scripts/read-deploy-config.js erpOrigin)" >> "$GITHUB_OUTPUT"
-            echo "server_host=$(node scripts/read-deploy-config.js server.host)" >> "$GITHUB_OUTPUT"
-            echo "server_user=$(node scripts/read-deploy-config.js server.user)" >> "$GITHUB_OUTPUT"
-            echo "server_ssh_port=$(node scripts/read-deploy-config.js server.sshPort)" >> "$GITHUB_OUTPUT"
-            echo "server_app_path=$(node scripts/read-deploy-config.js server.appPath)" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          ERP_ORIGIN="${ERP_ORIGIN_VAR:-}"
-          [ -n "$ERP_ORIGIN" ] || { echo "::error::缺少部署配置：设置 deploy/production.local.json 或 GitHub Variable VITE_ERP_PRODUCTION_ORIGIN"; cat /tmp/flowcube-deploy-config.err || true; exit 1; }
-          SERVER_HOST="${SERVER_HOST_VAR:-$(node -e "const u=new URL(process.argv[1]); console.log(u.hostname)" "$ERP_ORIGIN")}"
-          SERVER_USER="${SERVER_USER_VAR:-root}"
-          SERVER_SSH_PORT="${SERVER_SSH_PORT_VAR:-22}"
-          SERVER_APP_PATH="${SERVER_APP_PATH_VAR:-/opt/flowcube}"
-          echo "erp_origin=$ERP_ORIGIN" >> "$GITHUB_OUTPUT"
-          echo "server_host=$SERVER_HOST" >> "$GITHUB_OUTPUT"
-          echo "server_user=$SERVER_USER" >> "$GITHUB_OUTPUT"
-          echo "server_ssh_port=$SERVER_SSH_PORT" >> "$GITHUB_OUTPUT"
-          echo "server_app_path=$SERVER_APP_PATH" >> "$GITHUB_OUTPUT"
-      - name: Validate build inputs
-        shell: bash
-        run: |
-          set -euo pipefail
-          [ -n "${{ steps.deploy_config.outputs.erp_origin }}" ] || { echo "::error::缺少 erp_origin，PDA 包无法指向生产 API"; exit 1; }
       - name: Setup Node.js
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
@@ -178,7 +123,7 @@ jobs:
         working-directory: ./frontend
         env:
           VITE_CAPACITOR: 1
-          VITE_ERP_PRODUCTION_ORIGIN: ${{ steps.deploy_config.outputs.erp_origin }}
+          VITE_ERP_PRODUCTION_ORIGIN: ${{ vars.VITE_ERP_PRODUCTION_ORIGIN }}
         run: npm run pda:sync
       - name: Test Android native scanner
         working-directory: ./frontend/android
@@ -246,6 +191,7 @@ jobs:
           path: out/
           if-no-files-found: error
           retention-days: 7
+    timeout-minutes: 35
   sign-pda:
     needs:
       - resolve-release-target
@@ -254,6 +200,7 @@ jobs:
     permissions:
       contents: read
       actions: read
+      issues: read
     outputs:
       artifact_id: ${{ steps.signed_apk.outputs.artifact-id }}
     steps:
@@ -262,6 +209,18 @@ jobs:
         with:
           ref: ${{ needs.resolve-release-target.outputs.main_sha }}
           persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Recheck boss approval and current gates before signing secrets
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          TARGET_SHA: ${{ needs.resolve-release-target.outputs.sha }}
+          APPROVAL_COMMENT_ID: ${{ inputs.approval_comment_id }}
+          BACKUP_COMMENT_ID: ${{ inputs.backup_comment_id }}
+          RELEASE_CHECKS_OUTPUT: signing-checks.json
+        run: node scripts/manual-release/verify-gates.cjs
       - name: Download exact unsigned APK artifact
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
         with:
@@ -284,67 +243,94 @@ jobs:
           PDA_SIGNING_STORE_PASSWORD: ${{ secrets.PDA_SIGNING_STORE_PASSWORD }}
           PDA_SIGNING_KEY_ALIAS: ${{ secrets.PDA_SIGNING_KEY_ALIAS }}
           PDA_SIGNING_KEY_PASSWORD: ${{ secrets.PDA_SIGNING_KEY_PASSWORD }}
-        run: |-
+        run: >-
           set -euo pipefail
+
           key="$RUNNER_TEMP/flowcube-release.keystore"
+
           trap 'rm -f "$key" "$RUNNER_TEMP/flowcube-aligned.apk"' EXIT
+
           test -n "$PDA_SIGNING_KEYSTORE_BASE64"
+
           printf '%s' "$PDA_SIGNING_KEYSTORE_BASE64" | base64 --decode > "$key"
+
           chmod 600 "$key"
+
           shopt -s nullglob
+
           files=(unsigned/*.apk)
+
           test "${#files[@]}" -eq 1
+
           mkdir -p out
+
           signed_apk="out/$(basename "${files[0]}")"
+
           "$ANDROID_HOME/build-tools/35.0.0/zipalign" -p -f 4 "${files[0]}" "$RUNNER_TEMP/flowcube-aligned.apk"
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" sign --ks "$key" --ks-key-alias "$PDA_SIGNING_KEY_ALIAS" --ks-pass env:PDA_SIGNING_STORE_PASSWORD --key-pass env:PDA_SIGNING_KEY_PASSWORD --out "$signed_apk" "$RUNNER_TEMP/flowcube-aligned.apk"
+
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" sign --ks "$key" --ks-key-alias "$PDA_SIGNING_KEY_ALIAS" --ks-pass
+          env:PDA_SIGNING_STORE_PASSWORD --key-pass env:PDA_SIGNING_KEY_PASSWORD --out "$signed_apk"
+          "$RUNNER_TEMP/flowcube-aligned.apk"
+
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$signed_apk"
+
           # APK delivery does not use incremental-install V4 sidecars. Remove only
+
           # the regular sidecar this signing invocation generated; all other entries fail provenance.
+
           if [[ -e "$signed_apk.idsig" || -L "$signed_apk.idsig" ]]; then
             test -f "$signed_apk.idsig" && test ! -L "$signed_apk.idsig"
             rm -- "$signed_apk.idsig"
           fi
+
           cp unsigned/version.json out/version.json
       - name: Bind signed APK provenance
         env:
           TARGET_SHA: ${{ needs.resolve-release-target.outputs.sha }}
         run: node scripts/release-artifact-manifest.cjs write out .apk
-      - name: Upload signed APK artifact
+      - name: Download verified gate evidence
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          artifact-ids: ${{ needs.resolve-release-target.outputs.artifact_id }}
+          path: gate
+          merge-multiple: true
+      - name: Package signed APK and complete source identity
+        env:
+          TARGET_SHA: ${{ needs.resolve-release-target.outputs.sha }}
+        run: >-
+          mkdir -p payload
+
+          cp out/*.apk payload/app.apk
+
+          cp out/version.json payload/version.json
+
+          git worktree add --detach "$RUNNER_TEMP/pda-source" "$TARGET_SHA"
+
+          python3 -B scripts/manual-release/make-bundle.py pda "$RUNNER_TEMP/pda-source" payload gate/checks.json
+          "$RUNNER_TEMP/release.tar"
+      - name: Upload signed full release bundle
         id: signed_apk
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: flowcube-pda-apk
-          path: out/
-          if-no-files-found: error
+          name: pda-release-bundle
+          path: ${{ runner.temp }}/release.tar
           retention-days: 7
-  wait-browser:
-    needs:
-      - resolve-release-target
-      - build-pda
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout immutable trusted release tools
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
-        with:
-          ref: ${{ needs.resolve-release-target.outputs.main_sha }}
-          persist-credentials: false
-      - name: Wait for verified browser deployment on this commit
-        timeout-minutes: 230
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          REQUIRE_BROWSER_DEPLOY: '1'
-          GITHUB_SHA: ${{ needs.build-pda.outputs.sha }}
-        run: node scripts/wait-release-checks.js
+          if-no-files-found: error
+    environment: manual-release
+    timeout-minutes: 40
   publish-pda:
     needs:
       - resolve-release-target
-      - build-pda
       - sign-pda
-      - wait-browser
-    if: github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.run_attempt == 1
     runs-on: ubuntu-latest
+    timeout-minutes: 215
+    environment: manual-release
+    permissions:
+      contents: read
+      actions: read
+      issues: read
+      id-token: write
     concurrency:
       group: flowcube-server-deploy
       cancel-in-progress: false
@@ -352,159 +338,35 @@ jobs:
       - name: Checkout immutable trusted release tools
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
-          ref: ${{ needs.resolve-release-target.outputs.main_sha }}
+          ref: ${{ github.workflow_sha }}
+          fetch-depth: 0
           persist-credentials: false
-      - name: Download APK artifact
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Recheck live GitHub gates and authenticated approval
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          TARGET_SHA: ${{ needs.resolve-release-target.outputs.sha }}
+          APPROVAL_COMMENT_ID: ${{ inputs.approval_comment_id }}
+          BACKUP_COMMENT_ID: ${{ inputs.backup_comment_id }}
+          RELEASE_CHECKS_OUTPUT: current-checks.json
+        run: node scripts/manual-release/verify-gates.cjs
+      - name: Download this run exact release bundle
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
         with:
           artifact-ids: ${{ needs.sign-pda.outputs.artifact_id }}
-          path: out
+          path: bundle
           merge-multiple: true
-      - name: Verify signed APK SHA, run and bytes
+      - name: Verify target SHA, locks and full bundle before secrets
         env:
           TARGET_SHA: ${{ needs.resolve-release-target.outputs.sha }}
-        run: node scripts/release-artifact-manifest.cjs verify out .apk
-      - name: Validate downloaded APK
-        shell: bash
-        run: |
-          set -euo pipefail
-          EXPECTED_VERSION="${{ needs.build-pda.outputs.version }}"
-          APK_PATH="$(ls -1 out/*.apk 2>/dev/null | head -n 1 || true)"
-          [ -n "$APK_PATH" ] || { echo "::error::未取到构建产物（artifact flowcube-pda-apk）；构建阶段可能失败或被取消。"; ls -la out || true; exit 1; }
-          echo "APK_PATH=${APK_PATH}"
-          case "$(basename "$APK_PATH")" in
-            *"${EXPECTED_VERSION}"*) ;;
-            *) echo "::error::产物文件名与目标版本 ${EXPECTED_VERSION} 不匹配：$(basename "$APK_PATH")"; exit 1 ;;
-          esac
-          test -s "$APK_PATH"
-          echo "APK_BASENAME=$(basename "$APK_PATH")" >> "$GITHUB_ENV"
-          echo "APK_PATH=${APK_PATH}" >> "$GITHUB_ENV"
-      - name: Resolve target commit
-        id: target
-        shell: bash
-        run: |-
-          set -euo pipefail
-          test "$TARGET_SHA" = "${{ needs.build-pda.outputs.sha }}"
-          echo "sha=$TARGET_SHA" >> "$GITHUB_OUTPUT"
+        run: python3 -B scripts/manual-release/verify-local.py bundle/release.tar verified current-checks.json
+      - name: Direct restricted SSH transfer from GitHub runner
         env:
-          TARGET_SHA: ${{ needs.resolve-release-target.outputs.sha }}
-      - name: Resolve deploy config
-        id: deploy_config
-        shell: bash
-        env:
-          ERP_ORIGIN_VAR: ${{ vars.VITE_ERP_PRODUCTION_ORIGIN }}
-          SERVER_HOST_VAR: ${{ vars.FLOWCUBE_SERVER_HOST }}
-          SERVER_USER_VAR: ${{ vars.FLOWCUBE_SERVER_USER }}
-          SERVER_SSH_PORT_VAR: ${{ vars.FLOWCUBE_SERVER_SSH_PORT }}
-          SERVER_APP_PATH_VAR: ${{ vars.FLOWCUBE_SERVER_APP_PATH }}
-        run: |
-          set -euo pipefail
-          if node scripts/read-deploy-config.js >/tmp/flowcube-deploy-config.json 2>/tmp/flowcube-deploy-config.err; then
-            echo "erp_origin=$(node scripts/read-deploy-config.js erpOrigin)" >> "$GITHUB_OUTPUT"
-            echo "server_host=$(node scripts/read-deploy-config.js server.host)" >> "$GITHUB_OUTPUT"
-            echo "server_user=$(node scripts/read-deploy-config.js server.user)" >> "$GITHUB_OUTPUT"
-            echo "server_ssh_port=$(node scripts/read-deploy-config.js server.sshPort)" >> "$GITHUB_OUTPUT"
-            echo "server_app_path=$(node scripts/read-deploy-config.js server.appPath)" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          ERP_ORIGIN="${ERP_ORIGIN_VAR:-}"
-          [ -n "$ERP_ORIGIN" ] || { echo "::error::缺少部署配置：设置 deploy/production.local.json 或 GitHub Variable VITE_ERP_PRODUCTION_ORIGIN"; cat /tmp/flowcube-deploy-config.err || true; exit 1; }
-          SERVER_HOST="${SERVER_HOST_VAR:-$(node -e "const u=new URL(process.argv[1]); console.log(u.hostname)" "$ERP_ORIGIN")}"
-          SERVER_USER="${SERVER_USER_VAR:-root}"
-          SERVER_SSH_PORT="${SERVER_SSH_PORT_VAR:-22}"
-          SERVER_APP_PATH="${SERVER_APP_PATH_VAR:-/opt/flowcube}"
-          echo "erp_origin=$ERP_ORIGIN" >> "$GITHUB_OUTPUT"
-          echo "server_host=$SERVER_HOST" >> "$GITHUB_OUTPUT"
-          echo "server_user=$SERVER_USER" >> "$GITHUB_OUTPUT"
-          echo "server_ssh_port=$SERVER_SSH_PORT" >> "$GITHUB_OUTPUT"
-          echo "server_app_path=$SERVER_APP_PATH" >> "$GITHUB_OUTPUT"
-      - name: Validate deploy inputs
-        shell: bash
-        run: |
-          set -euo pipefail
-          [ -n "${{ steps.deploy_config.outputs.erp_origin }}" ] || { echo "::error::缺少 erp_origin"; exit 1; }
-          [ -n "${{ steps.deploy_config.outputs.server_host }}" ] || { echo "::error::缺少 server_host"; exit 1; }
-          [ -n "${{ steps.deploy_config.outputs.server_user }}" ] || { echo "::error::缺少 server_user"; exit 1; }
-          [ -n "${{ steps.deploy_config.outputs.server_app_path }}" ] || { echo "::error::缺少 server_app_path"; exit 1; }
-          [ -n "${{ secrets.SSH_PRIVATE_KEY }}" ] || { echo "::error::缺少 Actions Secret: SSH_PRIVATE_KEY"; exit 1; }
-      - name: Setup SSH agent
-        shell: bash
-        env:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-        run: |
-          set -euo pipefail
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          KEY_FILE=~/.ssh/flowcube_ci_key
-          printf '%s\n' "$SSH_PRIVATE_KEY" > "$KEY_FILE"
-          chmod 600 "$KEY_FILE"
-          eval "$(ssh-agent -s)"
-          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
-          echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
-          ssh-add "$KEY_FILE"
-      - name: Add SSH known_hosts
-        id: ssh_trust
-        shell: bash
-        env:
-          FLOWCUBE_SSH_HOST: ${{ steps.deploy_config.outputs.server_host }}
-          FLOWCUBE_SSH_PORT: ${{ steps.deploy_config.outputs.server_ssh_port }}
+          FLOWCUBE_SSH_HOST: ${{ vars.FLOWCUBE_SERVER_HOST }}
+          FLOWCUBE_SSH_PORT: ${{ vars.FLOWCUBE_SERVER_SSH_PORT }}
+          FLOWCUBE_RELEASE_USER: ${{ vars.FLOWCUBE_RELEASE_USER }}
           FLOWCUBE_SSH_KNOWN_HOSTS: ${{ vars.FLOWCUBE_SSH_KNOWN_HOSTS }}
-        run: bash scripts/setup-ci-ssh-trust.sh
-      - name: Publish PDA APK to server
-        shell: bash
-        env:
-          TARGET_SHA: ${{ steps.target.outputs.sha }}
-          GITHUB_TOKEN: ${{ github.token }}
-          DEPLOY_ARTIFACT_ID: ${{ needs.sign-pda.outputs.artifact_id }}
-        run: |
-          set -euo pipefail
-          APK_PATH="${APK_PATH}"
-          VERSION_JSON="out/version.json"
-          REMOTE="${{ steps.deploy_config.outputs.server_user }}@${{ steps.deploy_config.outputs.server_host }}"
-          PORT="${{ steps.deploy_config.outputs.server_ssh_port }}"
-          APP_PATH="${{ steps.deploy_config.outputs.server_app_path }}"
-          # 每次运行使用独立上传路径；只发布挂载目录的产物，不重建应用或修改服务器 Git。
-          SSHO="-o ServerAliveInterval=30 -o ServerAliveCountMax=6"
-          UPLOAD_PREFIX="/tmp/flowcube-pda-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          trap 'ssh $SSHO -p "$PORT" "$REMOTE" "rm -f ${UPLOAD_PREFIX}.apk ${UPLOAD_PREFIX}.json" >/dev/null 2>&1 || true' EXIT
-          bash scripts/transfer-release-asset.sh "$APK_PATH" "$REMOTE" "$PORT" "${UPLOAD_PREFIX}.apk"
-          scp $SSHO -P "$PORT" "$VERSION_JSON" "$REMOTE:${UPLOAD_PREFIX}.json"
-          ssh $SSHO -p "$PORT" "$REMOTE" <<EOF
-          set -euo pipefail
-          cd "$APP_PATH"
-          exec 9>/tmp/flowcube-deploy.lock
-          flock -w 1800 9
-          test "\$(git rev-parse HEAD)" = "${TARGET_SHA}"
-          trap 'rm -f "${UPLOAD_PREFIX}.apk" "${UPLOAD_PREFIX}.json"' EXIT
-          bash scripts/publish-pda.sh "${UPLOAD_PREFIX}.apk" "${UPLOAD_PREFIX}.json" backend/apk
-          EOF
-      - name: Verify live PDA update endpoint
-        shell: bash
-        run: |
-          set -euo pipefail
-          EXPECTED_VERSION="$(node -p "require('./out/version.json').version")"
-          EXPECTED_CODE="$(node -p "require('./out/version.json').versionCode")"
-          VERSION_JSON=""
-          for attempt in {1..30}; do
-            if VERSION_JSON="$(curl -fsSL -H 'Cache-Control: no-cache' "${{ steps.deploy_config.outputs.erp_origin }}/api/pda/version?_=${GITHUB_RUN_ID}-${attempt}")"; then
-              break
-            fi
-            echo "PDA version endpoint not ready, retry ${attempt}/30"
-            sleep 2
-          done
-          test -n "$VERSION_JSON"
-          echo "$VERSION_JSON"
-          ACTUAL_VERSION="$(node -e "const j=JSON.parse(process.argv[1]); console.log(j.data?.version || '')" "$VERSION_JSON")"
-          ACTUAL_CODE="$(node -e "const j=JSON.parse(process.argv[1]); console.log(j.data?.versionCode || '')" "$VERSION_JSON")"
-          DOWNLOAD_URL="$(node -e "const j=JSON.parse(process.argv[1]); console.log(j.data?.downloadUrl || '')" "$VERSION_JSON")"
-          test "$ACTUAL_VERSION" = "$EXPECTED_VERSION"
-          test "$ACTUAL_CODE" = "$EXPECTED_CODE"
-          printf '%s' "$DOWNLOAD_URL" | grep -F "code=${EXPECTED_CODE}" >/dev/null
-          for attempt in {1..30}; do
-            if curl -fsSI -H 'Cache-Control: no-cache' "$DOWNLOAD_URL" | tee /tmp/pda-download-head.txt; then
-              break
-            fi
-            echo "PDA download endpoint not ready, retry ${attempt}/30"
-            sleep 2
-          done
-          grep -Fi "x-flowcube-pda-version-code: ${EXPECTED_CODE}" /tmp/pda-download-head.txt >/dev/null
+          FLOWCUBE_RELEASE_SSH_KEY: ${{ secrets.FLOWCUBE_RELEASE_SSH_KEY }}
+        run: python3 -B scripts/manual-release/send-bundle.py bundle/release.tar

@@ -6,6 +6,9 @@ const git = (...args) => execFileSync('git', args, { encoding: 'utf8', stdio: ['
 
 function resolveReleaseTarget(env = process.env) {
   const event = env.GITHUB_EVENT_NAME
+  if (env.RELEASE_MANUAL_ONLY === '1') {
+    if (env.GITHUB_EVENT_NAME !== 'workflow_dispatch' || env.GITHUB_REF !== 'refs/heads/main' || env.GITHUB_RUN_ATTEMPT !== '1' || !/^[a-f0-9]{40}$/.test(env.RELEASE_CHECKOUT_REF || '')) throw Error('Manual main dispatch with an explicit full SHA is required')
+  }
   const ref = env.GITHUB_REF || ''
   const releaseTag = /^refs\/tags\/v\d+\.\d+\.\d+$/.test(ref)
   if (!['push', 'workflow_dispatch'].includes(event) || (ref !== 'refs/heads/main' && !(event === 'push' && releaseTag))) {

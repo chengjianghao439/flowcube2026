@@ -16,7 +16,7 @@
 - 权限：`contents: write`（`GITHUB_TOKEN` 创建 Release）、`actions: read`（读取待发布实际 SHA 的 Tests 与 Security Scan 结果）。
 - Tag 推送时 CI 会校验：**`Git tag` 去掉 `v` 后**必须与 **`desktop/package.json` 的 `version`** 一致，否则失败（避免 exe / Release / 仓库版本错乱）。
 
-发版请严格使用下面「正式发布流程（唯一入口）」；`npm run release:prod` 会依次完成同提交门禁、三端发布和线上核对。正式发布后可在仓库 **Releases** 下载安装包；服务器 canonical 发布目录中的正式文件名统一为 `FlowCube-Setup-<version>.exe`。0.13.5进入288–292迁移窗口后，缺数量/退货/资金写入契约的0.13.4后端不得自动恢复写入；失败保持停写、核查迁移并向前恢复兼容产物，不能仅凭240契约或可空新列认定安全。
+网页和PDA发布改用下文手动流程；旧本机串联入口已停用。正式发布后可在仓库 **Releases** 下载安装包；服务器 canonical 发布目录中的正式文件名统一为 `FlowCube-Setup-<version>.exe`。0.13.5进入288–292迁移窗口后，缺数量/退货/资金写入契约的0.13.4后端不得自动恢复写入；失败保持停写、核查迁移并向前恢复兼容产物，不能仅凭240契约或可空新列认定安全。
 
 ### 桌面安装器约束（本次问题后的固定规则）
 
@@ -76,61 +76,11 @@ Electron 使用 `file://` 打开页面时没有浏览器域名，旧逻辑会默
 
 本地桌面打包示例：`VITE_ERP_PRODUCTION_ORIGIN=https://api.example.com npm run dist:win --prefix desktop`。
 
-## Browser 自动部署（main 推送后浏览器直接看到新版本）
+## 网页与 PDA 手动发布
 
-工作流：`.github/workflows/deploy-browser.yml`（**Deploy Browser App**）。
+执行 [GitHub 手动离线发版](manual-release.md)：运维备份并问老大、老大本人明确批准完整SHA并手动触发、运维检查、QA真浏览器人工验收。合并/push不发布，网页与PDA不串联自动触发。旧Mac入口已停用；不再运行release:prod，也不设置skip gate或自动回滚后门。
 
-- 触发：`push` 到 `main`，或手动 `workflow_dispatch`
-- 前置门禁：等待实际待发布 SHA 的 Tests 与 Security Scan 全部成功，失败、取消或超时均不部署。
-- 目标：服务器获得部署锁后同步至该 SHA，再执行 `scripts/server-update.sh`；不得跳过发布门禁。
-- 结果：GitHub runner 构建 SHA 标记的镜像，通过 SSH 传输并核验归档摘要和镜像 revision；生产保存运行中镜像，只加载 CI 产物，等待 MySQL 健康，暂停业务写入并执行迁移，再切换应用并验证接口、页面和公网入口。数据库兼容时失败恢复旧镜像；迁移未完成或旧镜像不支持 240 记账契约时保持停写，核实后恢复兼容新后端，DDL 不回滚。
-- PDA 首次迁移时先保存旧 APK 的已发布清单；新 APK 经独立构建校验、同 SHA 浏览器部署成功后，才由 `scripts/publish-pda.sh` 原子发布。
-- `Build PDA APK` 构建前有 `preflight` 前置门：先校验 `backend/apk/version.json` 与 `build.gradle` 一致（不一致直接失败，不白构建），再比对线上 `/api/pda/version`——目标版本号 + versionCode 都已发布时整条构建跳过并记为成功。`publish-pda.sh` 不允许「同一 versionCode 换成不同字节的安装包」（客户端不会因此更新），所以发版后再改 `frontend/**` 触发的构建会被跳过而不是白跑 4 分钟再失败；**要发新包必须先提升版本号**。手动补跑用 `gh workflow run build-pda-apk.yml --ref main -f checkout_ref=<发布提交 SHA>`。
-
-### 需要的 Actions 配置
-
-- Secrets
-  - `SSH_PRIVATE_KEY`
-  - `SMOKE_USERNAME`、`SMOKE_PASSWORD`（服务器页面与对账回跳门禁账号）
-  - `SMOKE_LIMITED_USERNAME`、`SMOKE_LIMITED_PASSWORD`（长期保留的受限权限验收账号，仅仪表盘和收货查看；使用随机口令，不复用源码测试口令）
-
-说明：
-
-- 本地服务器配置由不入 Git 的 `deploy/production.local.json` 提供；CI 使用工作流声明的 `VITE_ERP_PRODUCTION_ORIGIN` 和 `FLOWCUBE_SERVER_*` Variables。
-- 如果缺少 `SSH_PRIVATE_KEY`，浏览器自动部署不会生效；此时即使 `main` 已更新，线上页面也仍会停在旧版本
-- 建议同时阅读 [docs/DEPLOY.md](/Users/chengjianghao/flowcube/docs/DEPLOY.md)，后续统一从 `npm run release:prod` 发版
-
-## 正式发布流程（唯一入口）
-
-以下以仓库克隆在 `~/flowcube` 为例，将 `origin` 换成你的远端即可。
-
-1. 进入项目根目录：`cd ~/flowcube`
-2. 同步主分支：`git pull --ff-only origin main`
-3. 先编写 `docs/release-notes/<version>.md`，再同步三端 package/lock 和 PDA 版本（同版本重跑不重复增加 versionCode）：
-   ```bash
-   bash .agents/skills/release-flowcube/scripts/bump-version.sh <version>
-   ```
-4. 提交待发布代码：
-   ```bash
-   # 根据已核对的提交范围，用 git add -- 逐路径暂存；不要夹带不明旧改动。
-   git diff --cached --stat
-   git diff --cached --check
-   git commit -m "release: bump version"
-   ```
-5. 运行唯一正式入口：
-   ```bash
-   npm run release:prod
-   ```
-
-`release:prod` 在 push 前离线校验 GitHub Actions 的可信主机键是否包含部署域名和端口，再预检本机现有代理（`HTTPS_PROXY`）与 `flowcube-prod` SSH 别名，启动原 CI artifact 自动中转并保持 Mac 在线；缺配置就停下。入口随后推送 main、等待同 SHA 检查/浏览器/PDA、推送新 tag、等待对应 tag 桌面发布和线上核对。PDA 对每次 main push 都建立运行，同版由前置门跳过构建。中转的大分段断流会缩小失败区间重试，保留已完成分段。CI 内的 HTTPS/SCP 只作故障回退，不是另一套人工发布命令。仅全部通过才返回成功。发布后可重复只读验收：
-
-```bash
-npm run release:verify -- --origin https://<生产域名>
-```
-
-逐项核对 `/latest.json`、`/api/app-update/latest`、`/api/pda/version`（版本 + versionCode + 可下载）与 `/api/health`，随后实际下载 EXE/APK 并核对 SHA256；**PDA 落后或包摘要不符即视为发版未完成**（v0.9.19 曾出现浏览器/桌面已发布、PDA 停在上一版而无人发现）。PDA 补跑见 `.agents/skills/release-flowcube/SKILL.md` 的「PDA 没跟上时」。
-
-发布收尾检查（必做）：成功发布且健康、版本验收通过后，按 [DEPLOY.md「发布成功后的镜像与磁盘收尾」](DEPLOY.md#发布成功后的镜像与磁盘收尾)完成镜像引用与空间盘点，将保留集合、精确拟清理清单及已处理/待确认/无安全清理对象的结论写入本版发布结果。
+桌面Windows构建/tag发布保持独立；main上的桌面job只是验证构建。它不构成网页或PDA批准，也不能替代各自手动运行。桌面变更、旧key清单与停用另外审批，不能为启用新网页/PDA路径自动删除旧key。
 
 ## 获取 EXE
 
@@ -152,24 +102,11 @@ npm run release:verify -- --origin https://<生产域名>
 
 ## 异常处理
 
-若 Release 里没有 EXE 或版本不对：
+网页/PDA失败立即停止，先由运维核对保留的run/版本收据、实际容器状态及备份；未知结果不重跑，无自动回滚。桌面附件恢复仍按独立原包摘要及Release身份核对，不允许借恢复入口触发网页/PDA。
 
-1. 打开 GitHub **Actions**，进入 **Build Desktop Installer** 对应运行记录。
-2. 确认该次运行状态为 **success**；若为失败，展开 **Build desktop installer**（`npm run dist:win`）与 **electron-builder** 日志排查。
-3. 确认本次发版是 **推送 tag** 触发的运行（仅 `main` 推送不会上传 Release，但会保留 workflow artifact 供排错）。
-4. 若失败在 **Upload EXE to Release**：GitHub 附件存储偶发的 `HTTP 500 Error saving asset` 由 `scripts/publish-release-asset.cjs` 自动重试；仍失败时按日志处置，并从服务器 `/versions/v<版本>/` 取回 **CI 构建的同一份 exe**（先复算 sha256 与 `latest.json` 一致）补传：
-   ```bash
-   node scripts/publish-release-asset.cjs --tag v<版本> --version <版本> --file <exe>
-   ```
-   该脚本会在附件校验通过后才把 Release 从草稿转正。不要在本机重新构建 exe；**正式包、清单或附件已写入后**不要重跑 tag 构建，重构建可能生成不同字节并使摘要对不上。若 tag 首次运行在这些写入之前就因传输失败，可核对 tag 与原发布 SHA 后重跑同一工作流 attempt，详见发布技能的「传输故障」。
+## 禁止绕过门禁
 
-## 本地跳过检查（仅应急）
-
-```bash
-SKIP_GIT_SYNC_CHECK=1 npm run dist:win --prefix desktop
-```
-
-不推荐用于正式发布。
+网页/PDA没有本机应急发版或skip gate入口。失败先核收据，运维按批准备份恢复；不能临时降低audit阈值、自动回滚或重复上传同版本。
 
 ## 本机标签 RAW（ZPL）
 

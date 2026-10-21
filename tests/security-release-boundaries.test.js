@@ -28,7 +28,7 @@ test('PDA构建没有签名密钥，fresh签名job不运行Gradle或npm', () => 
   assert.doesNotMatch(JSON.stringify(wf.jobs['sign-pda']), /gradlew|npm /)
   assert.match(JSON.stringify(wf.jobs['sign-pda']), /apksigner/)
   for (const step of wf.jobs['publish-pda'].steps.filter(s => s.uses?.startsWith('actions/checkout'))) {
-    assert.equal(step.with.ref, '${{ needs.resolve-release-target.outputs.main_sha }}')
+    assert.equal(step.with.ref, '${{ github.workflow_sha }}')
     assert.equal(step.with['persist-credentials'], false)
   }
 })
@@ -96,7 +96,7 @@ test('Gradle发行归档固定官方SHA256', () => {
   const step = workflow('build-desktop.yml').jobs.build.steps.find(s => s.name === 'Build desktop installer')
   assert.equal(step.env.GITHUB_SHA, '${{ needs.resolve-release-target.outputs.sha }}')
   assert.match(step.run, /cat \.git-build-sha/)
-  const build = workflow('deploy-browser.yml').jobs.deploy.steps.find(s => s.name === 'Build application images on GitHub runner')
+  const build = workflow('deploy-browser.yml').jobs.build.steps.find(s => s.name === 'Build application images on GitHub runner')
   assert.match(build.run, /generate-image-sbom\.sh/)
   assert.match(read('scripts/generate-image-sbom.sh'), /anchore\/syft[^\s]*@sha256:[a-f0-9]{64}/)
   assert.doesNotMatch(read('scripts/generate-image-sbom.sh'), /docker\.sock/)

@@ -52,39 +52,41 @@ test('两组凭据完整时使用显式值，保留受限账号的 403 与授权
   assert.match(source, /await setHashAndConfirm\('\/inbound-tasks\/new'\)/)
 })
 
-test('部署工作流从 Secrets 注入并无损转义、转发两组烟雾凭据', () => {
-  const workflow = fs.readFileSync(path.join(root, '.github/workflows/deploy-browser.yml'), 'utf8')
-  const block = workflow.match(/          printf -v REMOTE_COMMAND[^\n]*(?:\n[^\n]*)*? bash -s\n/)?.[0]
-  assert.ok(block, '远程命令必须保持逐项 %q 转义')
-  const env = { ...process.env }
-  for (const name of Object.keys(credentials)) {
-    assert.ok(workflow.includes(name + ': ${{ secrets.' + name + ' }}'), `${name} 未从 Secrets 注入`)
-    env[name] = `fixture ' \" $() \` ; spaces ${name}`
-  }
-  assert.match(workflow, /bash scripts\/ssh-smoke-stdin\.sh/)
-  assert.doesNotMatch(block, /SMOKE_(?:LIMITED_)?(?:USERNAME|PASSWORD)=/)
-  // 执行真实转发脚本；ssh 替身先清远程环境，只有 stdin 传送的凭据可以被探针读到。
-  const shell = 'ssh() { env -i PATH="$PATH" bash -c "${@: -1}"; }; export -f ssh\n' +
-    block.replace(/\$\{\{[^}]+\}\}/g, 'fixture') + '\nbash scripts/ssh-smoke-stdin.sh fixture "$REMOTE_COMMAND" <<\'REMOTE_PROBE\'\n' +
-    JSON.stringify(process.execPath) + ' -e \'process.stdout.write(JSON.stringify(Object.fromEntries(' +
-    JSON.stringify(Object.keys(credentials)) + '.map(k => [k, process.env[k]]))))\'\nREMOTE_PROBE\n'
-  const result = spawnSync('bash', ['-c', shell], { env, encoding: 'utf8', timeout: 5000 })
-  assert.equal(result.status, 0, result.stderr)
-  assert.deepEqual(JSON.parse(result.stdout), Object.fromEntries(Object.keys(credentials).map(name => [name, env[name]])))
+// Real executor prefix only, ending before load/stop/migrate. Synthetic private
+// configuration stays on the server side of the protocol; no SSH or Docker call.
+// The lock boundary is synthetic here; actual flock concurrency has its own receiver test.
+const os=require('node:os')
+const quote=value=>"'"+value.replace(/'/g,"'\\''")+"'"
+function executorPrefix(t,values) {
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'flowcube-private-smoke-'))
+ t.after(()=>fs.rmSync(dir,{recursive:true,force:true}))
+ const file=path.join(dir,'smoke.env')
+ fs.writeFileSync(file,Object.entries(values).map(([key,value])=>key+'='+quote(value)).join('\n')+'\n',{mode:0o600})
+ const prefix=fs.readFileSync(path.join(root,'scripts/server-update.sh'),'utf8').split('WRITE_WINDOW=0')[0]
+ const env={PATH:process.env.PATH,RELEASE_TOOLS_DIR:path.join(root,'scripts'),PROJECT_DIR:dir,
+  RELEASE_STATE_DIR:dir,COMPOSE_FILE:path.join(dir,'fixture.yml'),COMPOSE_PROJECT_NAME:'fixture',
+  COMPOSE_ENV_FILES:path.join(dir,'fixture.env'),MYSQL_EXPECTED_VERSION:'synthetic',MYSQL_EXPECTED_IMAGE_ID:'synthetic',
+  EXPECTED_COMMIT:'a'.repeat(40),EXPECTED_BACKEND_ID:'sha256:'+'b'.repeat(64),EXPECTED_FRONTEND_ID:'sha256:'+'c'.repeat(64),
+  RELEASE_GATE_ENV_FILE:file}
+ return {prefix:'flock() { return 0; }\n'+prefix,env}
+}
+test('两组smoke凭据由预装私有文件读取，特殊字符不进入SSH或GitHub产物',t=>{
+ const yaml=require('../frontend/node_modules/js-yaml')
+ const workflow=yaml.load(fs.readFileSync(path.join(root,'.github/workflows/deploy-browser.yml'),'utf8'))
+ for(const name of Object.keys(credentials))assert.doesNotMatch(JSON.stringify(workflow),new RegExp(name))
+ const values=Object.fromEntries(Object.keys(credentials).map(name=>[name,`fixture ' \" $() \` ; spaces ${name}`]))
+ const {prefix,env}=executorPrefix(t,values)
+ const probe=quote(process.execPath)+' -e '+quote('process.stdout.write(JSON.stringify(Object.fromEntries('+JSON.stringify(Object.keys(credentials))+'.map(k=>[k,process.env[k]]))))')
+ const result=spawnSync('bash',['-c',prefix+'\n'+probe],{env,encoding:'utf8',timeout:5000})
+ assert.equal(result.status,0,result.stderr)
+ assert.deepEqual(JSON.parse(result.stdout),values)
 })
-
-test('部署步骤在首次 SSH、上传和迁移前校验所有烟雾 Secrets', () => {
-  const workflow = fs.readFileSync(path.join(root, '.github/workflows/deploy-browser.yml'), 'utf8')
-  const step = workflow.split('- name: Deploy backend and frontend on server')[1]
-  const prefix = step.split('run: |')[1].split('BOOTSTRAP_SCRIPT=')[0]
-  assert.doesNotMatch(prefix, /\b(?:ssh|scp)\s|server-update\.sh/)
-  for (const name of Object.keys(credentials)) {
-    const env = { PATH: process.env.PATH, ...credentials, [name]: '' }
-    const result = spawnSync('bash', ['-c', prefix], { env, encoding: 'utf8', timeout: 5000 })
-    assert.notEqual(result.status, 0, `${name} 缺失时必须拒绝部署`)
-    assert.match(result.stderr, new RegExp(name))
-    assert.doesNotMatch(result.stderr, /fixture-main-password|fixture-limited-password/)
-  }
-  const result = spawnSync('bash', ['-c', prefix], { env: { PATH: process.env.PATH, ...credentials }, encoding: 'utf8', timeout: 5000 })
-  assert.equal(result.status, 0, result.stderr)
+test('任一私有smoke凭据缺失时，真实执行器在load/停写/迁移前拒绝',t=>{
+ for(const name of Object.keys(credentials)){
+  const {prefix,env}=executorPrefix(t,{...credentials,[name]:''})
+  const result=spawnSync('bash',['-c',prefix+'\necho SHOULD_NOT_REACH'],{env,encoding:'utf8',timeout:5000})
+  assert.notEqual(result.status,0,`${name}缺失须拒绝`)
+  assert.match(result.stderr,new RegExp(name));assert.doesNotMatch(result.stdout,/SHOULD_NOT_REACH/)
+  assert.doesNotMatch(result.stderr,/fixture-main-password|fixture-limited-password/)
+ }
 })

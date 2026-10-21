@@ -232,7 +232,7 @@ exit 0\n`)
   })
 }
 
-test('两端使用本轮 artifact，中转源必须在正式发布前就可下载', () => {
+test('桌面保留本轮artifact；PDA改用签名后整包的精确artifact身份', () => {
   const yaml = require(path.join(root, 'frontend/node_modules/js-yaml'))
   const desktop = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/build-desktop.yml'), 'utf8'))
   const steps = Object.values(desktop.jobs).flatMap(job => job.steps || [])
@@ -247,42 +247,15 @@ test('两端使用本轮 artifact，中转源必须在正式发布前就可下�
   assert.match(pda.jobs['build-pda'].outputs.artifact_id, /steps\.apk_artifact\.outputs\.artifact-id/)
   assert.match(pda.jobs['sign-pda'].outputs.artifact_id, /steps\.signed_apk\.outputs\.artifact-id/)
   assert.ok(pda.jobs['publish-pda'].needs.includes('sign-pda'))
-  const pdaPublish = pda.jobs['publish-pda'].steps.find(s => s.name === 'Publish PDA APK to server')
-  assert.match(pdaPublish.run, /bash scripts\/transfer-release-asset\.sh/)
-  assert.match(pdaPublish.env.DEPLOY_ARTIFACT_ID, /needs\.sign-pda\.outputs\.artifact_id/)
+  const publishSteps = pda.jobs['publish-pda'].steps
+  const download = publishSteps.find(s => s.with?.['artifact-ids'])
+  assert.match(download.with['artifact-ids'], /needs\.sign-pda\.outputs\.artifact_id/)
+  const verify = publishSteps.findIndex(s => s.run?.includes('verify-local.py'))
+  const transfer = publishSteps.findIndex(s => s.run?.includes('send-bundle.py'))
+  assert.ok(verify >= 0 && transfer > verify)
+  assert.doesNotMatch(JSON.stringify(pda.jobs['publish-pda']), /transfer-release-asset|SCP|DEPLOY_ARTIFACT_ID/)
 })
 
-for (const scenario of ['https', 'fallback', 'fallback-failed']) {
-  test(`workflow 传输分支：${scenario}`, () => {
-    const yaml = require(path.join(root, 'frontend/node_modules/js-yaml'))
-    const wf = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/deploy-browser.yml'), 'utf8'))
-    const run = wf.jobs.deploy.steps.find(s => s.name === 'Deploy backend and frontend on server').run
-    assert.ok(run.includes('HTTPS_OK=0'), '必须有 HTTPS 快路径')
-    const block = run.slice(run.indexOf('RECEIVER_SCRIPT='), run.indexOf('timeout -k 5 60 scp -o ConnectTimeout=20'))
-      .replace(/\$\{\{[^}]+\}\}/g, 'fixture')
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'flowcube-transfer-branch-'))
-    fs.writeFileSync(path.join(dir, 'flowcube-images.tar.gz'), '0123456789abcdef')
-    const stub = `
-SSH_TARGET=fixture; SSH_PORT=22; SSH_COMMON=(); IMAGE_ARCHIVE=/tmp/fixture; IMAGE_SHA256=fixture; ARCHIVE_BYTES=16
-timeout() { shift 3; "$@"; }
-scp() { echo 'SCP_HELPER'; }
-node() { printf '%s\\n' 'https://fixture.test/?sig=fixture-secret'; }
-stat() { echo 16; }
-ssh() {
- case "\${@: -1}" in
-  python3*) read -r signed; [[ "$signed" == *fixture-secret ]] || return 10; [ "$SCENARIO" = https ];;
-  cat*) echo 16;;
-  *) return 0;;
- esac
-}
-xargs() { cat >/dev/null; echo 'SCP_FALLBACK'; [ "$SCENARIO" != fallback-failed ]; }
-`
-    try {
-      const r = spawnSync('bash', ['-e', '-o', 'pipefail', '-c', stub + block], { encoding: 'utf8', timeout: 5000,
-        env: { ...process.env, SCENARIO: scenario, RUNNER_TEMP: dir, GITHUB_RUN_ID: '123', GITHUB_RUN_ATTEMPT: '1', DEPLOY_ARTIFACT_ID: '456' } })
-      assert.equal(r.status, scenario === 'fallback-failed' ? 1 : 0, r.stdout + r.stderr)
-      assert.equal(r.stdout.includes('SCP_FALLBACK'), scenario !== 'https')
-      assert.doesNotMatch(r.stdout + r.stderr, /fixture-secret/)
-    } finally { fs.rmSync(dir, { recursive: true, force: true }) }
-  })
-}
+// Removed the old browser HTTPS/SCP fallback branch contract: the application
+// workflows now have one authenticated stdin transfer. Its actual send/receive,
+// interruption and refusal behavior is exercised by test:manual-release.

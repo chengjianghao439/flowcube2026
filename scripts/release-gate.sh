@@ -1,14 +1,23 @@
 #!/usr/bin/env bash
-# 生产验收按顺序执行；限制辅助容器，失败由 server-update 回退应用。
+# 自动 smoke 按顺序执行；不是 QA 人工验收。失败停止，不自动回滚。
 set -euo pipefail
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+TOOL_DIR="${RELEASE_TOOLS_DIR:-$(cd "$(dirname "$0")" && pwd)}"
+ROOT="${RELEASE_SOURCE_DIR:-$(cd "$TOOL_DIR/.." && pwd)}"
 cd "$ROOT"
-. "$ROOT/scripts/lib/runtime-guards.sh"
+# shellcheck source=scripts/lib/runtime-guards.sh
+. "$TOOL_DIR/lib/runtime-guards.sh"
+if [ -n "${RELEASE_GATE_ENV_FILE:-}" ]; then
+  set -a
+  # Operator-owned private configuration, never an uploaded script.
+  # shellcheck source=/dev/null
+  . "$RELEASE_GATE_ENV_FILE"
+  set +a
+fi
 PLAYWRIGHT_IMAGE="${PLAYWRIGHT_IMAGE:-mcr.microsoft.com/playwright:v1.55.0-noble}"
 export PAGE_SMOKE_BASE_URL="${SMOKE_BASE_URL:-http://127.0.0.1:8080}"
 export SMOKE_USERNAME="${SMOKE_USERNAME:-}" SMOKE_PASSWORD="${SMOKE_PASSWORD:-}"
 export SMOKE_LIMITED_USERNAME="${SMOKE_LIMITED_USERNAME:-}" SMOKE_LIMITED_PASSWORD="${SMOKE_LIMITED_PASSWORD:-}"
-[ -f docker-compose.yml ] || { echo '!! 未找到 docker-compose.yml' >&2; exit 1; }
+[ -n "${COMPOSE_FILE:-}" ] || [ -f docker-compose.yml ] || { echo '!! 未找到 docker-compose.yml' >&2; exit 1; }
 [ -n "$SMOKE_USERNAME" ] && [ -n "$SMOKE_PASSWORD" ] || { echo '!! 缺少 SMOKE_USERNAME / SMOKE_PASSWORD' >&2; exit 1; }
 [ -n "$SMOKE_LIMITED_USERNAME" ] && [ -n "$SMOKE_LIMITED_PASSWORD" ] || { echo '!! 缺少 SMOKE_LIMITED_USERNAME / SMOKE_LIMITED_PASSWORD' >&2; exit 1; }
 
@@ -34,7 +43,7 @@ if [[ ! "$avail_mb" =~ ^[0-9]+$ ]] || [ "$avail_mb" -lt 4096 ]; then
 fi
 
 echo '==> 检查旧桌面下载目录是否被误用...'
-if command -v node >/dev/null 2>&1; then bounded 30 node scripts/check-deprecated-downloads.js; fi
+if [ -z "${RELEASE_SOURCE_DIR:-}" ] && command -v node >/dev/null 2>&1; then bounded 30 node "$TOOL_DIR/check-deprecated-downloads.js"; fi
 echo '==> 运行报表烟雾检查...'
 DOCKER_COMMAND_TIMEOUT=120 docker compose exec -T backend npm run smoke:reports
 
@@ -53,7 +62,7 @@ for script in smoke-pages.node.js smoke-reconciliation-jumps.node.js; do
     -e PLAYWRIGHT_BROWSER_NAME=chromium -e PLAYWRIGHT_SKIP_BROWSER_INSTALL=1 \
     -e PLAYWRIGHT_RUNTIME_DIR=/opt/flowcube-browser-smoke \
     -v "$gate_runtime":/opt/flowcube-browser-smoke:ro \
-    -v "$ROOT":"$ROOT" -w "$ROOT" "$PLAYWRIGHT_IMAGE" \
+    -v "$ROOT":"$ROOT":ro -w "$ROOT" "$PLAYWRIGHT_IMAGE" \
     timeout -k 10 840 node "scripts/$script"
 done
 echo '==> 发布门禁通过'

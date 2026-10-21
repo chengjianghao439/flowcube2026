@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Scan exported image bytes with a reviewed scanner; never expose Docker socket or credentials.
 set -euo pipefail
-cd "$(dirname "$0")/.."
+TOOL_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "${FLOWCUBE_BUILD_ROOT:-$TOOL_DIR/..}"
 archive="${1:?image archive is required}"
 reports="${FLOWCUBE_IMAGE_REPORT_DIR:?FLOWCUBE_IMAGE_REPORT_DIR is required}"
 sha="${GITHUB_SHA:?GITHUB_SHA is required}"
@@ -26,4 +27,4 @@ for service in backend frontend; do
   docker image inspect --format '{{.Id}}' "flowcube-$service:$sha" > "$reports/$service.image-id"
   rm -f "$scan_dir/$service.tar"
 done
-node scripts/write-image-provenance.cjs "$archive" "$reports"
+node "$TOOL_DIR/write-image-provenance.cjs" "$archive" "$reports"

@@ -1,5 +1,7 @@
 # 开发与验证命令（全量）
 
+手动离线发版专项：`npm run test:manual-release` 只用合成归档、临时Git仓库、测试RSA钥匙和替身GitHub API/Docker/HTTP，验证授权身份、完整SHA、整包、防重放与非人工触发拒绝；不会SSH或接触正式系统。另跑 `node --test tests/audit-deployment.test.js tests/deployment-resources.test.js tests/release-orchestration.test.js tests/security-release-target.test.js tests/security-release-boundaries.test.js tests/security-release-artifact.test.js` 保留备份/资源护栏。操作和证据边界见 [手动发版](manual-release.md)。
+
 2026-10-14 云端 0.13.5 候选夹具维护：`test:return-payment-lock-order` 显式注入真实 `cashMoney` 并补齐原账款余额；旧锁顺序、金额与事件断言保留，另检查原始 DECIMAL4 绑定。`test:expense-pay-backfill-integration`、`test:party-profile` 与 `test:disposal-handling` 补齐新增现金行读取、真实仓库范围和普通销售冻结金额依据；未知 SQL/依赖继续拒绝。处置目标夹具使用真实净额模块、不可变合成成交快照和原已发应收，补断言关闭剩余后应收及原快照不变，不能用空 money guard 代替。
 
 云端 `umask 077` 下，`test:mysql8-dev-script`、`test:repair-smoke-instance-guard` 明确设置自己新建的假文件权限，保留宽权限负例；`smoke:nginx-headers` 仅让该测试新建的公开合成静态文件可由 Nginx worker 读取，不修改真实凭据、系统权限或全局 umask。前端全量测试的登录、工作区返回及异步按钮夹具与当前生产状态对齐；半分历史值同时断言“待核”，不改写金额。上述均不代表真实数据库闭环、实际浏览器或此前受阻探针已验。候选状态及发布阻塞见 `docs/runbooks/cloud-release-0.13.5-2026-10-14.md`。
